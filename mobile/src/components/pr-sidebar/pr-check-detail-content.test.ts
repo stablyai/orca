@@ -25,6 +25,7 @@ describe('presentCheckDetail', () => {
     const content = presentCheckDetail(
       details({ conclusion: 'failure', title: 'Build failed', summary: '   ' })
     )
+
     expect(content.summaryLines).toEqual(['failure', 'Build failed'])
   })
 
@@ -42,6 +43,7 @@ describe('presentCheckDetail', () => {
         }))
       })
     )
+
     expect(content.annotations).toHaveLength(20)
     expect(content.annotationsTruncated).toBe(true)
     expect(content.annotations[0]).toMatchObject({
@@ -67,6 +69,7 @@ describe('presentCheckDetail', () => {
         ]
       })
     )
+
     expect(content.annotations[0].locator).toBe('Annotation')
   })
 
@@ -114,6 +117,7 @@ describe('presentCheckDetail', () => {
         ]
       })
     )
+
     expect(content.jobsLabel).toBe('Failed jobs')
     expect(content.jobs).toHaveLength(1)
     expect(content.jobs[0]).toMatchObject({ name: 'failing-job', logTail: 'error: boom' })
@@ -139,6 +143,7 @@ describe('presentCheckDetail', () => {
         ]
       })
     )
+
     expect(content.jobsLabel).toBe('Jobs')
     expect(content.jobs).toHaveLength(1)
   })

@@ -42,23 +42,29 @@ export class PairedRuntimeBrowserClientHostRegistry<
     if (this.closed) {
       return Promise.reject(new Error('paired_runtime_browser_client_host_registry_closed'))
     }
+
     return this.enqueue(input.environmentId, async () => {
       if (this.closed) {
         throw new Error('paired_runtime_browser_client_host_registry_closed')
       }
+
       const existing = this.hosts.get(input.environmentId)
+
       if (existing?.cleanupPending) {
         throw new Error('paired_runtime_browser_client_host_cleanup_pending')
       }
+
       if (
         existing?.pairingRevision === input.pairingRevision &&
         existing.authorityRuntimeId === input.authorityRuntimeId
       ) {
         return existing.authority
       }
+
       if (existing?.pairingRevision === input.pairingRevision) {
         existing.authorityRuntimeId = input.authorityRuntimeId
         existing.authority = existing.composition.replaceAuthority(input)
+
         try {
           return await existing.authority
         } catch (error) {
@@ -66,8 +72,10 @@ export class PairedRuntimeBrowserClientHostRegistry<
           throw error
         }
       }
+
       if (existing) {
         let settled = false
+
         try {
           settled = await existing.composition.close(
             new Error('Browser client host environment authority was replaced')
@@ -76,14 +84,18 @@ export class PairedRuntimeBrowserClientHostRegistry<
           this.retainCleanupTombstone(input.environmentId, existing)
           throw error
         }
+
         if (!settled) {
           this.retainCleanupTombstone(input.environmentId, existing)
           throw new Error('paired_runtime_browser_client_host_cleanup_pending')
         }
+
         this.hosts.delete(input.environmentId)
       }
+
       const composition = this.options.createComposition(input)
       const authority = composition.start()
+
       const record = {
         pairingRevision: input.pairingRevision,
         authorityRuntimeId: input.authorityRuntimeId,
@@ -91,7 +103,9 @@ export class PairedRuntimeBrowserClientHostRegistry<
         authority,
         cleanupPending: false
       }
+
       this.hosts.set(input.environmentId, record)
+
       try {
         return await authority
       } catch (error) {
@@ -108,10 +122,13 @@ export class PairedRuntimeBrowserClientHostRegistry<
   ): Promise<boolean> {
     return this.enqueue(environmentId, async () => {
       const record = this.hosts.get(environmentId)
+
       if (!record) {
         return false
       }
+
       await record.authority
+
       return record.composition.retirePage(browserPageId, pageHostGeneration)
     })
   }
@@ -127,19 +144,24 @@ export class PairedRuntimeBrowserClientHostRegistry<
    */
   async retireEnvironment(environmentId: string, error?: Error): Promise<boolean> {
     const pendingCleanup: Promise<void>[] = []
+
     try {
       return await this.enqueue(environmentId, async () => {
         const record = this.hosts.get(environmentId)
+
         try {
           const settled = await this.closeEnvironmentRecord(environmentId, error)
+
           if (!settled && record) {
             pendingCleanup.push(record.composition.whenClosed())
           }
+
           return settled
         } catch (closeError) {
           if (record) {
             pendingCleanup.push(record.composition.whenClosed())
           }
+
           throw closeError
         }
       })
@@ -150,56 +172,68 @@ export class PairedRuntimeBrowserClientHostRegistry<
 
   private async closeEnvironmentRecord(environmentId: string, error?: Error): Promise<boolean> {
     const record = this.hosts.get(environmentId)
+
     if (!record) {
       return false
     }
+
     let settled = false
+
     try {
       settled = await record.composition.close(error)
     } catch (closeError) {
       this.retainCleanupTombstone(environmentId, record)
       throw closeError
     }
+
     if (settled && this.hosts.get(environmentId) === record) {
       this.hosts.delete(environmentId)
     } else if (!settled) {
       this.retainCleanupTombstone(environmentId, record)
     }
+
     return settled
   }
 
   close(): Promise<void> {
     this.closed = true
     this.closePromise ??= this.closeAllEnvironments()
+
     return this.closePromise
   }
 
   private enqueue<T>(environmentId: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.operations.get(environmentId) ?? Promise.resolve()
     const result = previous.then(operation, operation)
+
     const tracked = result.then(
       () => undefined,
       () => undefined
     )
+
     this.operations.set(environmentId, tracked)
     void tracked.finally(() => {
       if (this.operations.get(environmentId) === tracked) {
         this.operations.delete(environmentId)
       }
     })
+
     return result
   }
 
   private async closeAllEnvironments(): Promise<void> {
     const environmentIds = new Set([...this.hosts.keys(), ...this.operations.keys()])
+
     const results = await Promise.allSettled(
       [...environmentIds].map((environmentId) =>
         this.closeEnvironment(environmentId, new Error('Browser client host registry is closed'))
       )
     )
+
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : []
     )
+
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Browser client host registry cleanup failed')
     }
@@ -211,6 +245,7 @@ export class PairedRuntimeBrowserClientHostRegistry<
     error: unknown
   ): Promise<void> {
     const cleanupSettled = await record.composition.close(asError(error)).catch(() => false)
+
     if (cleanupSettled && this.hosts.get(environmentId) === record) {
       this.hosts.delete(environmentId)
     } else {
@@ -225,6 +260,7 @@ export class PairedRuntimeBrowserClientHostRegistry<
     if (record.cleanupPending) {
       return
     }
+
     record.cleanupPending = true
     void record.composition
       .whenClosed()

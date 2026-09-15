@@ -13,11 +13,13 @@ function runHook(dir: string, extraEnv: NodeJS.ProcessEnv = {}) {
   writeFileSync(script, codexInternals.getManagedScript('posix'))
   chmodSync(script, 0o755)
   const clean: NodeJS.ProcessEnv = {}
+
   for (const [k, v] of Object.entries(process.env)) {
     if (!k.startsWith('ORCA_')) {
       clean[k] = v
     }
   }
+
   return spawnSync('/bin/sh', [script], {
     input: '{"hook_event_name":"SubagentStop","agent_id":"child"}\n',
     env: { ...clean, ...extraEnv },
@@ -47,10 +49,12 @@ describe('managed hook outside an Orca terminal', () => {
 
   it('endpoint points at a path that does not exist: silent, exit 0', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-stale-'))
+
     const res = runHook(dir, {
       ORCA_AGENT_HOOK_ENDPOINT: join(dir, 'gone', 'deeper', 'endpoint.env'),
       ORCA_PANE_KEY: 'tab:0'
     })
+
     expect(res.status).toBe(0)
     expect(res.stdout).toBe('')
     expect(res.stderr).toBe('')

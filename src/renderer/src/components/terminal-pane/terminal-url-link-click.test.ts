@@ -5,8 +5,11 @@ import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
 const COLS = 157
+
 const ROWS = 59
+
 const INDENT = ''
+
 const FULL_URL = [
   'http://127.0.0.1:8765/orca-double-open-repro-wrapped/',
   Array.from({ length: 79 }, (_value, index) => `seg${String(index + 1).padStart(4, '0')}`).join(
@@ -15,9 +18,11 @@ const FULL_URL = [
   '?marker=wrap-test&n=001&pad=',
   'x'.repeat(120)
 ].join('')
+
 const URL_ROWS = Array.from({ length: Math.ceil(FULL_URL.length / COLS) }, (_value, index) =>
   FULL_URL.slice(index * COLS, (index + 1) * COLS)
 )
+
 const FRAMED_ROW_STARTS = [
   0,
   FULL_URL.indexOf('seg0008/'),
@@ -29,6 +34,7 @@ const FRAMED_ROW_STARTS = [
   FULL_URL.indexOf('test&n=001'),
   FULL_URL.length - 19
 ]
+
 const FRAMED_URL_ROWS = FRAMED_ROW_STARTS.map((start, index) =>
   FULL_URL.slice(start, FRAMED_ROW_STARTS[index + 1])
 )
@@ -45,6 +51,7 @@ function makeBufferLine(
   const prefix = options.prefix ?? INDENT
   const suffix = options.suffix ?? ''
   const text = `${prefix}${fragment}`.padEnd(cols - suffix.length) + suffix
+
   return {
     isWrapped: options.isWrapped ?? false,
     length: cols,
@@ -64,6 +71,7 @@ function makeBufferLine(
           )
         )
       }
+
       return text.slice(startColumn, endColumn)
     }
   } as IBufferLine
@@ -85,18 +93,22 @@ function makeTerminal(options?: {
   const rows = options?.rows ?? ROWS
   const urlRows = options?.urlRows ?? URL_ROWS
   const registrations: ListenerRegistration[] = []
+
   const ownerWindow = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   }
+
   const ownerDocument = {
     defaultView: ownerWindow,
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   }
+
   const screen = {
     getBoundingClientRect: () => ({ left: 0, top: 0, width: cols * 10, height: rows * 10 })
   }
+
   const element = {
     ownerDocument,
     querySelector: vi.fn(() => screen),
@@ -107,7 +119,9 @@ function makeTerminal(options?: {
     ),
     removeEventListener: vi.fn()
   }
+
   const clearSelection = vi.fn()
+
   return {
     terminal: {
       cols,
@@ -139,6 +153,7 @@ function mouseEventForRow(
   options: { altKey?: boolean; plain?: boolean } = {}
 ): MouseEvent {
   let defaultPrevented = false
+
   return {
     button: 0,
     metaKey: !options.plain,
@@ -189,6 +204,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     const fallback = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
+
     expect(fallback).toBeDefined()
     fallback!(event)
 
@@ -205,6 +221,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     const { terminal, registrations } = makeTerminal()
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
     const event = mouseEventForRow(3)
+
     const fallback = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
@@ -224,6 +241,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       lineSuffix: '│ ',
       softWrapped: false
     })
+
     const event = mouseEventForRow(0)
 
     expect(
@@ -245,10 +263,12 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     const linePrefix = ' │   '
     const lineSuffix = '│ '
     const contentWidth = cols - linePrefix.length - lineSuffix.length
+
     const fullWidthRows = Array.from(
       { length: Math.ceil(FULL_URL.length / contentWidth) },
       (_value, index) => FULL_URL.slice(index * contentWidth, (index + 1) * contentWidth)
     )
+
     const { terminal } = makeTerminal({
       cols,
       urlRows: fullWidthRows,
@@ -276,10 +296,12 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     const lineSuffix = '│ '
     const contentWidth = cols - linePrefix.length - lineSuffix.length
     const longUrl = `http://example.com/${'a'.repeat(contentWidth * 20)}`
+
     const urlRows = Array.from(
       { length: Math.ceil(longUrl.length / contentWidth) },
       (_value, index) => longUrl.slice(index * contentWidth, (index + 1) * contentWidth)
     )
+
     const { terminal } = makeTerminal({
       cols,
       urlRows,
@@ -310,6 +332,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     const secondRow = `${nestedQuery}${'b'.repeat(contentWidth - nestedQuery.length)}`
     const urlRows = [firstRow, secondRow, 'tail']
     const fullUrl = urlRows.join('')
+
     const { terminal } = makeTerminal({
       cols,
       urlRows,
@@ -337,6 +360,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       lineSuffix: '│ ',
       softWrapped: false
     })
+
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
 
     expect(
@@ -351,9 +375,11 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
 
     openUrlMock.mockReset()
+
     const fallback = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
+
     fallback!(mouseEventForRow(1))
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
@@ -361,6 +387,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
 
   it('does not join a complete URL to multiple unrelated framed rows', () => {
     const unrelatedFilledRow = 'a'.repeat(103)
+
     const { terminal } = makeTerminal({
       cols: 110,
       urlRows: ['http://example.com/', unrelatedFilledRow, 'unrelated'],
@@ -388,11 +415,13 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       urlRows: ['Repo: https://github.com/stablyai/orca/', 'Description: 123'],
       softWrapped: false
     })
+
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
 
     const fallback = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
+
     fallback!(mouseEventForRow(0))
 
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -403,16 +432,19 @@ describe('hard-wrapped terminal HTTP clicks', () => {
   it('still joins a URL hard-wrapped at the row edge without native wrap metadata', () => {
     const cols = 40
     const url = 'https://example.com/very/long/path/segments/that/continue/more'
+
     const { terminal, registrations } = makeTerminal({
       cols,
       urlRows: [url.slice(0, cols), url.slice(cols)],
       softWrapped: false
     })
+
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
 
     const fallback = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
+
     fallback!(mouseEventForRow(0))
 
     expect(openUrlMock).toHaveBeenCalledOnce()
@@ -433,9 +465,11 @@ describe('hard-wrapped terminal HTTP clicks', () => {
 
   it('temporarily suppresses PTY mouse reporting for a primed OSC link', () => {
     const { terminal, registrations } = makeTerminal({ urlRows: ['OSC label'] })
+
     const terminalWithLinkifier = terminal as unknown as {
       _core: { linkifier: { _currentLink: unknown } }
     }
+
     terminalWithLinkifier._core = {
       linkifier: { _currentLink: { link: 'https://example.com/osc' } }
     }
@@ -473,6 +507,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     const { terminal, registrations } = makeTerminal()
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
     const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+
     const mouseUp = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options !== undefined
     )?.[1]
@@ -489,6 +524,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
   it('owns a plain HTTP link click without opening until an action is chosen', () => {
     const request = vi.fn()
     const { terminal, registrations } = makeTerminal()
+
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
       getLinkActionContext: () => ({
@@ -499,10 +535,13 @@ describe('hard-wrapped terminal HTTP clicks', () => {
         focusTerminal: vi.fn()
       })
     })
+
     const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+
     const mouseUp = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
+
     const event = mouseEventForRow(0, { plain: true })
 
     mouseDown!(event)
@@ -516,14 +555,18 @@ describe('hard-wrapped terminal HTTP clicks', () => {
 
   it('does not suppress a plain HTTP link when action popovers are disabled', () => {
     const { terminal, registrations } = makeTerminal()
+
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
       getLinkActionContext: () => null
     })
+
     const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+
     const mouseUp = registrations.find(
       ([name, _listener, options]) => name === 'mouseup' && options === undefined
     )?.[1]
+
     const event = mouseEventForRow(0, { plain: true })
 
     mouseDown!(event)

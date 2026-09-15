@@ -56,6 +56,7 @@ export function HostRemoveDialog({
     if (target.kind !== 'ssh') {
       return null
     }
+
     return resolveSshHostRemoval({
       targetId: target.targetId,
       repos,
@@ -99,7 +100,9 @@ export function HostRemoveDialog({
     if (target.kind !== 'ssh') {
       return
     }
+
     setBusy(true)
+
     try {
       if (deleteWorkspaces && sshResolution) {
         // Connected → real remote removal; offline/ghost → local forget.
@@ -107,6 +110,7 @@ export function HostRemoveDialog({
           sshResolution,
           isConnected ? 'delete-remote' : 'forget-local'
         )
+
         // Why: don't remove the SSH target (and report success) while some of its
         // workspaces failed to clear — that would strand ghost rows behind a
         // now-gone host. Surface the failure and keep the target so the user can
@@ -115,6 +119,7 @@ export function HostRemoveDialog({
           if (mountedRef.current) {
             setBusy(false)
           }
+
           toast.error(
             translate(
               'auto.components.sidebar.HostRemoveDialog.workspacesFailed',
@@ -122,13 +127,17 @@ export function HostRemoveDialog({
               { count: failedIds.length }
             )
           )
+
           return
         }
       }
+
       await removeSshTarget(target.targetId)
+
       if (mountedRef.current) {
         onOpenChange(false)
       }
+
       toast.success(
         translate('auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e', 'Removed {{value0}}', {
           value0: label

@@ -28,6 +28,7 @@ function findWslSourceHomeKey(
   distro: string
 ): string | undefined {
   const normalized = distro.trim().toLowerCase()
+
   return Object.keys(wsl ?? {}).find((key) => key.trim().toLowerCase() === normalized)
 }
 
@@ -40,8 +41,10 @@ export function buildCodexSessionSourceHomeControl(
   // Why: a WSL scope with no selected distro can't target a per-distro history
   // home, so fall back to the host control rather than a null distro key.
   const wslDistro = runtimeScope.kind === 'wsl' ? runtimeScope.distro?.trim() : undefined
+
   if (wslDistro) {
     const existingKey = findWslSourceHomeKey(sourceHome?.wsl, wslDistro)
+
     return {
       runtimeLabel: `${wslDistro}: ~/.codex`,
       value: (existingKey ? sourceHome?.wsl?.[existingKey] : undefined) ?? '',
@@ -55,6 +58,7 @@ export function buildCodexSessionSourceHomeControl(
         })
     }
   }
+
   return {
     runtimeLabel: '~/.codex',
     value: sourceHome?.host ?? '',
@@ -70,19 +74,24 @@ function saveCodexSessionSourceHome(
 ): void {
   const current = settings.codexSessionSourceHome ?? {}
   const trimmed = args.value.trim()
+
   if (args.runtime === 'host') {
     updateSettings({ codexSessionSourceHome: { ...current, host: trimmed || undefined } })
+
     return
   }
+
   const nextWsl = { ...current.wsl }
   // Why: reuse an existing case-insensitive match so we never leave a stale
   // duplicate key behind when the caller passes a differently-cased distro.
   const targetKey = findWslSourceHomeKey(nextWsl, args.distro) ?? args.distro
+
   if (trimmed) {
     nextWsl[targetKey] = trimmed
   } else {
     delete nextWsl[targetKey]
   }
+
   updateSettings({
     codexSessionSourceHome: {
       ...current,
@@ -140,6 +149,7 @@ export function AgentSessionSourceHomeInput({
               commit()
               e.currentTarget.blur()
             }
+
             if (e.key === 'Escape') {
               setDraft(value)
               e.currentTarget.blur()

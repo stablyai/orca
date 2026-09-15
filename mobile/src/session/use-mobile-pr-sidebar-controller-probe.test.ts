@@ -13,6 +13,7 @@ vi.mock('./github-pr-rpc', () => ({
   fetchPRForBranch: vi.fn(),
   fetchWorkItemDetails: vi.fn()
 }))
+
 vi.mock('../source-control/mobile-pr-link', () => ({
   fetchWorktreeLinkedPR: vi.fn(async () => null)
 }))
@@ -26,6 +27,7 @@ let captured: MobilePrSidebarController | null = null
 
 function Harness(props: Parameters<typeof useMobilePrSidebarController>[0]) {
   captured = useMobilePrSidebarController(props)
+
   return null
 }
 

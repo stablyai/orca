@@ -77,6 +77,7 @@ export function getBrowserViewportPreset(
   if (!id) {
     return null
   }
+
   return BROWSER_VIEWPORT_PRESETS.find((p) => p.id === id) ?? null
 }
 

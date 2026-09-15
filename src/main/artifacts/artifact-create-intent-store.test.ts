@@ -25,12 +25,14 @@ vi.mock('../../shared/child-process/run-process', () => ({
 }))
 
 const createdPaths: string[] = []
+
 const scope: ArtifactShareScope = {
   cloudUserId: 'user-a',
   cloudProfileId: 'cloud-a',
   cloudOrganizationId: 'org-a',
   apiOrigin: 'https://share.onorca.dev'
 }
+
 const body = {
   content: '<h1>Original</h1>',
   contentType: 'text/html' as const,
@@ -48,6 +50,7 @@ describe('artifact create intent store', () => {
   it('retains the first key and exact request until the matching create completes', async () => {
     const userDataPath = await createUserDataPath()
     const sourceKey = String.raw`C:\repo\report.html`
+
     const first = getOrCreateArtifactCreateIntent(
       'local-profile',
       userDataPath,
@@ -56,6 +59,7 @@ describe('artifact create intent store', () => {
       'key-a',
       body
     )
+
     const retry = getOrCreateArtifactCreateIntent(
       'local-profile',
       userDataPath,
@@ -93,6 +97,7 @@ describe('artifact create intent store', () => {
 
   it('bounds unresolved payload storage without dropping an existing intent', async () => {
     const userDataPath = await createUserDataPath()
+
     for (let index = 0; index < MAX_PENDING_ARTIFACT_CREATES; index += 1) {
       getOrCreateArtifactCreateIntent(
         'local-profile',
@@ -182,16 +187,21 @@ describe('artifact create intent store', () => {
       if (spec.program.endsWith('whoami.exe')) {
         return { ...ok, stdout: '"USER","S-1-5-21-1000"' }
       }
+
       const args = spec.args ?? []
+
       if (args.length > 1) {
         return ok // /reset and the /grant:r pass
       }
+
       // The verify pass re-reads the DACL; answer with the three protected inheritable rules.
       const rules = ['host\\me', 'NT AUTHORITY\\SYSTEM', 'BUILTIN\\Administrators'].map(
         (name, index) => (index === 0 ? `${args[0]} ${name}:(OI)(CI)(F)` : `   ${name}:(OI)(CI)(F)`)
       )
+
       return { ...ok, stdout: `${rules.join('\r\n')}\r\n\r\nSuccessfully processed 1 files\r\n` }
     })
+
     try {
       const userDataPath = await createUserDataPath()
       getOrCreateArtifactCreateIntent(
@@ -216,6 +226,7 @@ describe('artifact create intent store', () => {
         .mocked(runProcessSync)
         .mock.calls.map(([spec]) => spec)
         .filter((spec) => spec.program.endsWith('icacls.exe'))
+
       expect(aclCalls.filter((spec) => spec.args?.includes('/reset'))).toHaveLength(1)
       // The child intent files rely on inheritance, so the directory rules must carry (OI)(CI).
       const grant = aclCalls.find((spec) => spec.args?.includes('/grant:r'))
@@ -224,6 +235,7 @@ describe('artifact create intent store', () => {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
+
       vi.mocked(runProcessSync).mockReset()
     }
   })
@@ -298,10 +310,12 @@ describe('artifact create intent store', () => {
 
   it('persists an escaped artifact within the recovery limit', async () => {
     const userDataPath = await createUserDataPath()
+
     const nearLimitBody = {
       ...body,
       content: '"'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 2))
     }
+
     expect(
       artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...nearLimitBody })
     ).toBeLessThanOrEqual(ARTIFACT_MAX_REQUEST_BYTES)
@@ -378,5 +392,6 @@ describe('artifact create intent store', () => {
 async function createUserDataPath(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), 'orca-artifact-create-intents-'))
   createdPaths.push(path)
+
   return path
 }

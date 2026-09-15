@@ -68,6 +68,7 @@ export function useNativeChatPickerState(args: {
     setCaret,
     setActiveSuggestion
   } = args
+
   const profile = useMemo(() => getNativeChatAgentProfile(agent), [agent])
   const skillPickerTriggered = isSkillPickerTriggered(draft.slice(0, caret), profile)
   const discovery = useNativeChatSkills(agent, terminalTabId, skillPickerTriggered)
@@ -76,6 +77,7 @@ export function useNativeChatPickerState(args: {
   const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
   const skillOriginRef = useRef<string | null>(null)
   const lastOpenKeyRef = useRef<string | null>(null)
+
   const autocomplete = useMemo(
     () =>
       deriveComposerAutocomplete(
@@ -111,9 +113,12 @@ export function useNativeChatPickerState(args: {
   useEffect(() => {
     if (autocomplete.mode !== 'slash') {
       lastOpenKeyRef.current = null
+
       return
     }
+
     const openKey = `${dismissalContext}:${autocomplete.triggerKey}`
+
     if (lastOpenKeyRef.current !== openKey) {
       lastOpenKeyRef.current = openKey
       emitNativeChatPickerOpened({ agent, prefix: autocomplete.prefix })
@@ -125,11 +130,14 @@ export function useNativeChatPickerState(args: {
       if (autocomplete.mode !== 'slash') {
         return
       }
+
       const result = applyPickerSuggestion(draft, caret, item)
+
       if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
         const from = result.caret - result.insertedToken.length - 1
         textareaRef.current.insertSkill(from, caret, result.insertedToken)
       }
+
       setDraft(result.draft)
       setCaret(result.caret)
       setActiveSuggestion(0)
@@ -146,19 +154,24 @@ export function useNativeChatPickerState(args: {
   const handleDraftOrCaretChange = useCallback(
     (value: string, nextCaret: number) => {
       const firstToken = value.split(/\s/, 1)[0] ?? ''
+
       if (skillOriginRef.current && firstToken !== skillOriginRef.current) {
         skillOriginRef.current = null
       }
+
       if (!dismissed || dismissed.context !== dismissalContext) {
         return
       }
+
       // Why: a single edit that replaces the dismissed token wholesale (e.g.
       // select-all + paste) is a new trigger occurrence even though a trigger
       // character lands back on the same draft position.
       if (editReplacesTriggerToken(draft, value, dismissed.triggerKey)) {
         setDismissed(null)
+
         return
       }
+
       const next = deriveComposerAutocomplete(
         value,
         nextCaret,
@@ -169,6 +182,7 @@ export function useNativeChatPickerState(args: {
         null,
         sessionSkillNames
       )
+
       if (next.mode !== 'slash' || next.triggerKey !== dismissed.triggerKey) {
         setDismissed(null)
       }
@@ -184,14 +198,18 @@ export function useNativeChatPickerState(args: {
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )
+
       emitNativeChatSendClassified({ agent, outcome })
+
       return outcome
     },
     [agent, agentCommands, profile]
   )
+
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null
   }, [])
+
   const dismiss = useCallback(
     (triggerKey: string) => setDismissed({ context: dismissalContext, triggerKey }),
     [dismissalContext]

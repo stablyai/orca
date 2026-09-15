@@ -41,6 +41,7 @@ describe('requestLazyChunkRecoveryReload', () => {
   it('joins the preload checkpoint before navigating when no override is supplied', async () => {
     const order: string[] = []
     let flush: () => void = () => undefined
+
     const awaitBeforeUnloadCheckpoint = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -50,7 +51,9 @@ describe('requestLazyChunkRecoveryReload', () => {
           }
         })
     )
+
     vi.stubGlobal('api', { app: { awaitBeforeUnloadCheckpoint } })
+
     const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {
       order.push('reload')
       window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))

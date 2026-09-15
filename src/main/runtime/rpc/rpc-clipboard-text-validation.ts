@@ -14,6 +14,7 @@ export async function assertRpcClipboardTextWriteWithinLimit(text: string): Prom
     if (isClipboardTextWriteTooLargeError(error)) {
       throw new InvalidArgumentError(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
     }
+
     throw error
   }
 }

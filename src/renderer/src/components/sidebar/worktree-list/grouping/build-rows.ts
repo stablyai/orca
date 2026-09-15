@@ -77,11 +77,13 @@ export function buildRows(
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
+
   const cyclicLineageIds = nestLineage
     ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     : new Set<string>()
 
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
+
   for (const creation of pendingCreations) {
     const list = pendingByRepo.get(creation.repoId) ?? []
     list.push(creation)
@@ -100,11 +102,14 @@ export function buildRows(
   const pinnedSectionWorktrees = nestLineage
     ? getPinnedSectionWorktrees(worktrees, lineageById, worktreeMap)
     : worktrees.filter((worktree) => worktree.isPinned)
+
   const pinnedSectionIds = new Set(pinnedSectionWorktrees.map(getWorktreeHostIdentity))
+
   const naturalWorktrees =
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !pinnedSectionIds.has(getWorktreeHostIdentity(worktree)))
+
   // Why the full set: under the default pinned policy a pinned worktree exists
   // only in the Pinned section, and its host is part of whether the sidebar is
   // mixed at all. Scoping to naturalWorktrees left pinned remotes unlabelled.
@@ -114,6 +119,7 @@ export function buildRows(
     hostLabelById,
     defaultHostId
   )
+
   // Why here and not per section: a notice row can land in the pinned section
   // instead of its project's own, and the host ambiguity it resolves belongs to
   // the project either way. repoMap is the unfiltered universe; the candidate
@@ -125,6 +131,7 @@ export function buildRows(
     projectIndex,
     hostLabelById
   )
+
   const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
     groupBy,
     worktrees: naturalWorktrees,
@@ -135,6 +142,7 @@ export function buildRows(
     settings,
     projectGrouping
   })
+
   emitPinnedGroup(
     pinnedSectionWorktrees,
     repoMap,
@@ -151,6 +159,7 @@ export function buildRows(
     noticeHostContextLabelByRepoId,
     mixedWorktreeHostContextLabels
   )
+
   if (groupBy === 'none') {
     // Why folder workspaces gate this too: an account with only folder
     // workspaces rendered nothing at all in flat mode before (#15362).
@@ -176,6 +185,7 @@ export function buildRows(
         ),
         worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
       })
+
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
         appendWorktreeRows(result, naturalWorktrees, repoMap, lineageById, worktreeMap, {
           nestLineage,
@@ -185,6 +195,7 @@ export function buildRows(
           hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
           cyclicLineageIds
         })
+
         for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
           compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
         )) {
@@ -192,6 +203,7 @@ export function buildRows(
         }
       }
     }
+
     return result
   }
 
@@ -237,6 +249,7 @@ export function buildRows(
       sectionContext,
       groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
     )
+
     return result
   }
 

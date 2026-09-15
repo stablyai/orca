@@ -44,9 +44,11 @@ export function createKeyedTrailingEdgeCoalescer(
 
   const clear = (key: string): void => {
     const entry = pending.get(key)
+
     if (!entry) {
       return
     }
+
     clearTimeout(entry.timer)
     pending.delete(key)
   }
@@ -58,9 +60,11 @@ export function createKeyedTrailingEdgeCoalescer(
 
   const arm = (key: string): ReturnType<typeof setTimeout> => {
     const timer = setTimeout(() => fire(key), options.flushMs)
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+
     return timer
   }
 
@@ -68,16 +72,21 @@ export function createKeyedTrailingEdgeCoalescer(
     schedule(key: string): void {
       const now = Date.now()
       const existing = pending.get(key)
+
       if (existing) {
         // Cap total delay so sustained churn can't starve the emit forever.
         if (now - existing.firstScheduledAt >= options.maxWaitMs) {
           fire(key)
+
           return
         }
+
         clearTimeout(existing.timer)
         existing.timer = arm(key)
+
         return
       }
+
       pending.set(key, { timer: arm(key), firstScheduledAt: now })
     },
     cancel(key: string): void {
@@ -99,6 +108,7 @@ export function createKeyedTrailingEdgeCoalescer(
       for (const entry of pending.values()) {
         clearTimeout(entry.timer)
       }
+
       pending.clear()
     }
   }

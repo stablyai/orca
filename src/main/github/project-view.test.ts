@@ -211,6 +211,7 @@ describe('parseProjectPaste', () => {
 
   it('rejects oversized valid-looking URLs without parsing the secret-bearing tail', () => {
     const secret = 'project-url-secret'
+
     const input = [
       'https://github.com/orgs/acme/projects/42?',
       secret,
@@ -224,6 +225,7 @@ describe('parseProjectPaste', () => {
 describe('resolveProjectRef', () => {
   it('rejects oversized project refs with a metadata-only validation error', async () => {
     const secret = 'project-url-secret'
+
     const input = [
       'https://github.com/orgs/acme/projects/42?',
       secret,

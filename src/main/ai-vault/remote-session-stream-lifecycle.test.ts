@@ -7,8 +7,10 @@ describe('stream lifetime and retained document work', () => {
   it('aborts a newline-free record at the byte ceiling and closes the source', async () => {
     let closed = false
     let reads = 0
+
     async function* bytes() {
       const chunk = Buffer.alloc(1024 * 1024, 'x')
+
       try {
         for (; reads < 100;) {
           reads++
@@ -18,6 +20,7 @@ describe('stream lifetime and retained document work', () => {
         closed = true
       }
     }
+
     const lines = streamedSessionContentLines(bytes())
     await expect(lines.next()).rejects.toThrow('record exceeds 10485760 byte limit')
     expect(reads).toBe(11)
@@ -26,6 +29,7 @@ describe('stream lifetime and retained document work', () => {
 
   it('releases the source when a line consumer finishes early', async () => {
     let closed = false
+
     async function* bytes() {
       try {
         yield Buffer.from('one\ntwo\n')
@@ -34,14 +38,17 @@ describe('stream lifetime and retained document work', () => {
         closed = true
       }
     }
+
     for await (const line of streamedSessionContentLines(bytes())) {
       expect(line).toBe('one')
       break
     }
+
     await vi.waitFor(() => expect(closed).toBe(true))
   })
   it('propagates disk failure and closes the source', async () => {
     let closed = false
+
     async function* bytes() {
       try {
         yield Buffer.from('one\n')
@@ -50,6 +57,7 @@ describe('stream lifetime and retained document work', () => {
         closed = true
       }
     }
+
     await expect(
       (async () => {
         for await (const _ of streamedSessionContentLines(bytes())) {
@@ -62,6 +70,7 @@ describe('stream lifetime and retained document work', () => {
   it('cancellation discards a document fold and releases its source', async () => {
     const controller = new AbortController()
     let closed = false
+
     async function* bytes() {
       try {
         yield Buffer.from('{"messages":[{"role":"user"}')
@@ -71,6 +80,7 @@ describe('stream lifetime and retained document work', () => {
         closed = true
       }
     }
+
     await expect(
       readStreamedSessionDocument({
         bytes: bytes(),
@@ -87,11 +97,13 @@ describe('stream lifetime and retained document work', () => {
   })
   it('holds one filesystem slot for the stream lifetime and releases it on return', async () => {
     let entered = 0
+
     async function* bytes() {
       entered++
       yield Buffer.from('a')
       yield Buffer.from('b')
     }
+
     const provider = limitRemoteScanFilesystemConcurrency(
       {
         readDir: async () => [],
@@ -101,8 +113,10 @@ describe('stream lifetime and retained document work', () => {
       },
       1
     )
+
     const first = provider.readTranscriptBytes!('/one')[Symbol.asyncIterator](),
       second = provider.readTranscriptBytes!('/two')[Symbol.asyncIterator]()
+
     await first.next()
     const pending = second.next()
     await Promise.resolve()

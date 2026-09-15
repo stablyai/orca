@@ -8,11 +8,13 @@ import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRow
 import { FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS } from './use-file-explorer-ignored-paths'
 
 const getRuntimeGitIgnoredPathsMock = vi.hoisted(() => vi.fn())
+
 vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitIgnoredPaths: getRuntimeGitIgnoredPathsMock
 }))
 
 const initialAppState = useAppStore.getInitialState()
+
 const relativePaths = Array.from({ length: 5_000 }, (_, index) => `src/generated-${index}.ts`)
 
 function useProjection(query: string) {
@@ -107,6 +109,7 @@ describe('file explorer ignored-path query debounce', () => {
     const hook = renderHook(({ dirCache }) => useTreeProjection(dirCache), {
       initialProps: { dirCache: treeDirCache() }
     })
+
     expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
 
     hook.rerender({ dirCache: treeDirCache() })

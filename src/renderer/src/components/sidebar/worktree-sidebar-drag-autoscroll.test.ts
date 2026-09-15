@@ -213,6 +213,7 @@ describe('refreshWorktreeSidebarDragSession', () => {
       reorderDraggedIds: ['child'],
       reorderUnitDraggedIds: ['child']
     }
+
     const rects: WorktreeSidebarDragRect[] = [
       { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 80 },
       { worktreeId: 'child', groupIndex: 1, top: 88, bottom: 128 },
@@ -275,6 +276,7 @@ function makeDragElement(
     ['data-worktree-drag-group-key', groupKey],
     ['data-worktree-drag-group-index', groupIndex]
   ])
+
   const virtualRowElement = virtualRow
     ? ({
         getAttribute: (name: string) =>
@@ -282,6 +284,7 @@ function makeDragElement(
         getBoundingClientRect: () => ({ top: virtualRow.top })
       } as unknown as HTMLElement)
     : null
+
   return {
     getAttribute: (name: string) => attributes.get(name) ?? null,
     getBoundingClientRect: () => ({ top, bottom, height: bottom - top }),

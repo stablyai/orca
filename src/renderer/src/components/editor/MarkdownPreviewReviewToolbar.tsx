@@ -20,6 +20,7 @@ export function MarkdownPreviewReviewToolbar({
     unsentMarkdownReviewScope,
     clearDeliveredDiffComments
   } = foundation
+
   const { scrollToReviewNote, handleCopyMarkdownReviewNotes } = reviewActions
 
   return (
@@ -29,6 +30,7 @@ export function MarkdownPreviewReviewToolbar({
         className="markdown-review-toolbar-button"
         onClick={() => {
           const firstNote = markdownReviewNotes[0]
+
           if (firstNote) {
             scrollToReviewNote(firstNote)
           }

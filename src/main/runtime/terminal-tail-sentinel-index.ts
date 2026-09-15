@@ -41,13 +41,16 @@ export function getTerminalTailSentinelFullScanCount(): number {
 /** Ascending indices of sentinel-matching lines; full-scans an unseen array. */
 export function getTerminalTailSentinelMatches(lines: readonly string[]): readonly number[] {
   const cached = sentinelMatchesByTailLines.get(lines)
+
   if (cached) {
     return cached
   }
+
   sentinelFullScanCount += 1
   const matches: number[] = []
   collectSentinelMatches(lines, 0, matches)
   sentinelMatchesByTailLines.set(lines, matches)
+
   return matches
 }
 
@@ -77,18 +80,23 @@ export function carryTerminalTailSentinelMatches(
   if (nextLines === previousLines) {
     return
   }
+
   const matches: number[] = []
+
   if (carriedCount > 0) {
     const carriedEnd = carriedSourceStart + carriedCount
+
     for (const index of getTerminalTailSentinelMatches(previousLines)) {
       if (index >= carriedEnd) {
         break
       }
+
       if (index >= carriedSourceStart) {
         matches.push(index - carriedSourceStart)
       }
     }
   }
+
   collectSentinelMatches(nextLines, carriedCount, matches)
   sentinelMatchesByTailLines.set(nextLines, matches)
 }

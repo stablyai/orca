@@ -84,10 +84,12 @@ export function LinearAgentSkillSetupPrompt({
   const [setupDialogOpen, setSetupDialogOpen] = useState(false)
   const [setupCheckResult, setSetupCheckResult] = useState<SetupCheckResult>('idle')
   const [activeSetupCheckIdentity, setActiveSetupCheckIdentity] = useState<string | null>(null)
+
   const agentRuntime = useMemo(
     () => getLinearPromptAgentRuntime(settings, currentPlatform, remote, projectRuntime),
     [currentPlatform, projectRuntime, remote, settings]
   )
+
   const setupCheckIdentity = useMemo(
     () =>
       getLinearPromptSetupCheckIdentity({
@@ -98,33 +100,42 @@ export function LinearAgentSkillSetupPrompt({
       }),
     [agentRuntime, projectRuntime, remote, settings?.activeRuntimeEnvironmentId]
   )
+
   const currentSetupCheckIdentityRef = useRef(setupCheckIdentity)
   const cliRefreshGenerationRef = useRef(0)
   currentSetupCheckIdentityRef.current = setupCheckIdentity
+
   const skillDiscoveryTarget = useMemo(
     () => getLinearPromptSkillDiscoveryTarget(agentRuntime, projectRuntime),
     [agentRuntime, projectRuntime]
   )
+
   const localDismissStorageKey = getLocalDismissStorageKey(agentRuntime)
+
   const [localDismissed, setLocalDismissed] = useState(() =>
     readLocalDismissed(localDismissStorageKey)
   )
+
   const [previousDismissStorageKey, setPreviousDismissStorageKey] = useState(localDismissStorageKey)
+
   // Why: dismissal is scoped to the selected runtime, so read the new key before
   // paint rather than briefly showing the previous runtime's prompt state.
   if (localDismissStorageKey !== previousDismissStorageKey) {
     setPreviousDismissStorageKey(localDismissStorageKey)
     setLocalDismissed(readLocalDismissed(localDismissStorageKey))
   }
+
   const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linked,
     discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const command = useMemo(
     () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
     [agentRuntime]
   )
+
   const installedCommand = useMemo(
     () =>
       buildSkillCommandForRuntime(
@@ -133,11 +144,13 @@ export function LinearAgentSkillSetupPrompt({
       ),
     [agentRuntime, skill.installed, skill.skills]
   )
+
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
     currentPlatform,
     settings,
     agentRuntime
   )
+
   const writeCliStatusIfCurrent = useCallback(
     (requestIdentity: string, requestGeneration: number, write: () => void): void => {
       if (
@@ -159,21 +172,27 @@ export function LinearAgentSkillSetupPrompt({
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     const requestIdentity = setupCheckIdentity
     const requestGeneration = ++cliRefreshGenerationRef.current
+
     const writeIfCurrent = (write: () => void): void => {
       writeCliStatusIfCurrent(requestIdentity, requestGeneration, write)
     }
+
     if (!linked) {
       writeIfCurrent(() => {
         setCliStatus(null)
         setCliLoading(false)
       })
+
       return
     }
+
     setCliLoading(true)
+
     try {
       const nextStatus = await (agentRuntime.runtime === 'wsl'
         ? window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
         : window.api.cli.getInstallStatus())
+
       writeIfCurrent(() => setCliStatus(nextStatus))
     } catch {
       writeIfCurrent(() => setCliStatus(null))
@@ -190,37 +209,46 @@ export function LinearAgentSkillSetupPrompt({
   const setupReady = linked && !cliLoading && !skill.loading && cliAvailable && skill.installed
   const missingSetup = linked && !localDismissed && !cliLoading && !skill.loading && !setupReady
   const explicitCheckMatchesContext = activeSetupCheckIdentity === setupCheckIdentity
+
   const showCheckingModal =
     surface === 'modal' &&
     setupDialogOpen &&
     setupCheckResult === 'checking' &&
     explicitCheckMatchesContext
+
   const showSuccessModal =
     surface === 'modal' &&
     setupDialogOpen &&
     setupCheckResult === 'ready' &&
     explicitCheckMatchesContext
+
   const showSetupModal = setupDialogOpen && (missingSetup || showCheckingModal || showSuccessModal)
 
   useEffect(() => {
     if (setupCheckResult === 'idle') {
       return
     }
+
     if (!explicitCheckMatchesContext) {
       setSetupCheckResult('idle')
       setActiveSetupCheckIdentity(null)
+
       return
     }
+
     // Why: refreshes update CLI and skill state independently, so success is
     // promoted only after the current render observes both ready for this target.
     if (setupCheckResult === 'checking' && setupReady) {
       setSetupCheckResult('ready')
+
       return
     }
+
     if (missingSetup) {
       setSetupCheckResult('idle')
     }
   }, [explicitCheckMatchesContext, missingSetup, setupCheckResult, setupReady])
+
   const dismissPermanently = (): void => {
     localStorage.setItem(localDismissStorageKey, '1')
     setLocalDismissed(true)
@@ -247,6 +275,7 @@ export function LinearAgentSkillSetupPrompt({
           'auto.components.sidebar.LinearAgentSkillSetupPrompt.successDescription',
           'Agents can now read and update linked Linear tickets from this workspace.'
         )
+
   const snoozeForSession = (): void => {
     snoozeLinearAgentSkillSetupReminderToast(localDismissStorageKey)
     setSetupDialogOpen(false)
@@ -262,6 +291,7 @@ export function LinearAgentSkillSetupPrompt({
     remote,
     agentRuntime
   )
+
   const openSetupDialog = useCallback(() => setSetupDialogOpen(true), [])
 
   useLinearAgentSkillSetupReminderToast({
@@ -303,9 +333,11 @@ export function LinearAgentSkillSetupPrompt({
         }
         onBeforeOpenTerminal={async () => {
           const requestIdentity = setupCheckIdentity
+
           const writeIfCurrent = (write: () => void): void => {
             writeCliStatusForIdentity(requestIdentity, write)
           }
+
           const nextStatus =
             agentRuntime.runtime === 'wsl'
               ? await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
@@ -314,6 +346,7 @@ export function LinearAgentSkillSetupPrompt({
                     writeIfCurrent(() => setCliStatus(nextCliStatus))
                   }
                 })
+
           if (agentRuntime.runtime === 'wsl') {
             writeIfCurrent(() => setCliStatus(nextStatus))
           }
@@ -323,24 +356,32 @@ export function LinearAgentSkillSetupPrompt({
             setActiveSetupCheckIdentity(setupCheckIdentity)
             setSetupCheckResult('checking')
             await Promise.all([refreshCliStatus(), skill.refresh()])
+
             return
           }
+
           await refreshCliStatus()
           await skill.refresh()
         }}
         onOpenChange={(open) => {
           if (open) {
             setSetupDialogOpen(true)
+
             return
           }
+
           if (showSuccessModal) {
             closeSuccessModal()
+
             return
           }
+
           if (surface === 'modal') {
             snoozeForSession()
+
             return
           }
+
           setSetupDialogOpen(false)
         }}
         onDismissPermanently={dismissPermanently}

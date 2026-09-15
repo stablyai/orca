@@ -6,18 +6,22 @@ const WORKTREE_CONTEXT_SOURCE = readFileSync(
   join(__dirname, 'source-control/listing/use-worktree-context.ts'),
   'utf8'
 )
+
 const PR_GENERATION_SOURCE = readFileSync(
   join(__dirname, 'source-control/review/use-pull-request-generation.ts'),
   'utf8'
 )
+
 const CREATE_REVIEW_COMPOSER_SOURCE = readFileSync(
   join(__dirname, 'source-control/review/use-create-review-composer.ts'),
   'utf8'
 )
+
 const STATUS_REFRESH_SOURCE = readFileSync(
   join(__dirname, 'source-control/sync/use-status-refresh.ts'),
   'utf8'
 )
+
 const BASE_REF_DEFAULT_SOURCE = readFileSync(
   join(__dirname, 'source-control/sync/use-base-ref-default.ts'),
   'utf8'
@@ -28,6 +32,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -38,6 +43,7 @@ describe('SourceControl host-context boundaries', () => {
       'const handleGeneratePullRequestFieldsForActive = useCallback(',
       'const handleCancelGeneratePullRequestFieldsForActive = useCallback('
     )
+
     expect(generateSection).toContain('runtimeTargetSettings: activeRepoSettings')
     expect(generateSection).toContain('settings: context.runtimeTargetSettings')
 
@@ -46,6 +52,7 @@ describe('SourceControl host-context boundaries', () => {
       'const handleCancelGeneratePullRequestFieldsForActive = useCallback(',
       'const handlePullRequestGenerationSeedRestored = useCallback('
     )
+
     expect(cancelSection).toContain('settings: record.context.runtimeTargetSettings')
 
     const refreshSection = sourceBetween(
@@ -53,6 +60,7 @@ describe('SourceControl host-context boundaries', () => {
       'const refreshGitStatusAfterPullRequestGeneration = useCallback(',
       '  return {'
     )
+
     expect(refreshSection).toContain('settings: context.runtimeTargetSettings')
     expect(refreshSection).not.toContain('settings: activeRepoSettings')
   })
@@ -63,12 +71,14 @@ describe('SourceControl host-context boundaries', () => {
       '} = useCreatePullRequestDialogFields({',
       'const handleGeneratePullRequestFieldsClick = useCallback'
     )
+
     expect(composerCall).toContain('settings: activeRepoSettings')
 
     const hookSource = readFileSync(
       join(__dirname, 'use-create-pull-request-field-generation.ts'),
       'utf8'
     )
+
     const requestContext = sourceBetween(hookSource, 'const requestContext = {', 'const seed = {')
     expect(requestContext).toContain('settings,')
     expect(requestContext).not.toContain('useAppStore.getState().settings')
@@ -80,6 +90,7 @@ describe('SourceControl host-context boundaries', () => {
       'const activeRepoSettings = useMemo(',
       'const activeRepoRuntimeEnvironmentId'
     )
+
     expect(ownerSettingsSection).not.toContain('activeRepo ?? null')
     expect(ownerSettingsSection).toContain(
       '[activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]'
@@ -90,15 +101,18 @@ describe('SourceControl host-context boundaries', () => {
       '// Why: reset to null so that effectiveBaseRef becomes falsy until the IPC',
       '  return defaultBaseRef'
     )
+
     expect(baseRefSection).toContain(
       'getRuntimeRepoBaseRefDefault(\n      { activeRuntimeEnvironmentId: activeRepoRuntimeEnvironmentId },\n      activeRepoId'
     )
     const dependencyBlock = sourceBetween(baseRefSection, '  }, [', '  ])')
+
     const dependencyEntries = dependencyBlock
       .split('\n')
       .slice(1)
       .map((line) => line.trim().replace(/,$/, ''))
       .filter((line) => line.length > 0 && !line.startsWith('//'))
+
     expect(dependencyEntries).toEqual([
       'activeRepoConnectionId',
       'activeRepoExecutionHostId',

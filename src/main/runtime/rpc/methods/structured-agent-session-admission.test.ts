@@ -36,6 +36,7 @@ describe('admission revoked while a session is still open', () => {
       const response = await call(method, params, STRUCTURED_CLIENT, SETTING_OFF)
 
       expect(response).toMatchObject({ ok: true })
+
       // `unsubscribe` retires runtime-owned subscriptions rather than calling the host, so its
       // result payload is the observable effect.
       if (hostCall === 'unsubscribe') {

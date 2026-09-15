@@ -21,13 +21,17 @@ export function rekeyBrowserRouteSessionPage(
   retirePreparedPage: (page: BrowserRoutePageAuthority) => boolean
 ): BrowserRouteSessionRekey | null {
   const state = live.get(previous.partition)
+
   if (!state || next.partition !== previous.partition) {
     return null
   }
+
   const page = state.pages.rekey(previous, next)
+
   if (!page) {
     return null
   }
+
   return {
     page,
     routeSession: {

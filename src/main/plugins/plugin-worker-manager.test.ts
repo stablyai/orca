@@ -13,6 +13,7 @@ type TestWorker = PluginWorkerHandle & {
 
 function worker(lastActivity = Date.now()): TestWorker {
   const exitCallbacks: ((code: number | null) => void)[] = []
+
   return {
     commands: ['run'],
     invokeCommand: vi.fn(async () => null),
@@ -68,9 +69,11 @@ afterEach(() => {
 describe('PluginWorkerManager capacity', () => {
   it('atomically counts in-flight starts against maxActive', async () => {
     const starts: { key: string; resolve: (handle: TestWorker) => void }[] = []
+
     const factory = vi.fn<PluginWorkerFactory>(
       ({ pluginId }) => new Promise((resolve) => starts.push({ key: pluginId, resolve }))
     )
+
     const subject = manager(factory, { maxActive: 1 })
 
     const first = subject.ensureActive(spec('one'))
@@ -97,9 +100,11 @@ describe('PluginWorkerManager capacity', () => {
 
   it('removes a cancelled waiter without disturbing FIFO order', async () => {
     const starts: { key: string; resolve: (handle: TestWorker) => void }[] = []
+
     const factory = vi.fn<PluginWorkerFactory>(
       ({ pluginId }) => new Promise((resolve) => starts.push({ key: pluginId, resolve }))
     )
+
     const subject = manager(factory, { maxActive: 1 })
     const first = subject.ensureActive(spec('one'))
     const cancelled = subject.ensureActive(spec('two'))
@@ -122,12 +127,15 @@ describe('PluginWorkerManager capacity', () => {
   it('releases a failed start so the next FIFO waiter can run', async () => {
     vi.useFakeTimers()
     const secondWorker = worker()
+
     const factory = vi.fn<PluginWorkerFactory>(async ({ pluginId }) => {
       if (pluginId === 'one') {
         throw new Error('ready failed')
       }
+
       return secondWorker
     })
+
     const subject = manager(factory, { maxActive: 1 })
     const first = subject.ensureActive(spec('one'))
     const firstSettled = first.catch(() => undefined)
@@ -150,6 +158,7 @@ describe('PluginWorkerManager capacity', () => {
           })
         })
     )
+
     const subject = manager(factory)
     const activation = subject.ensureActive(spec('starting'))
     await flush()
@@ -164,12 +173,15 @@ describe('PluginWorkerManager capacity', () => {
 
   it('disposes running workers and rejects queued waiters', async () => {
     const first = worker()
+
     const factory = vi.fn<PluginWorkerFactory>(async ({ pluginId }) => {
       if (pluginId === 'one') {
         return first
       }
+
       return new Promise<PluginWorkerHandle>(() => undefined)
     })
+
     const subject = manager(factory, { maxActive: 1 })
     await subject.ensureActive(spec('one'))
     const queued = subject.ensureActive(spec('two'))
@@ -187,6 +199,7 @@ describe('PluginWorkerManager capacity', () => {
 describe('PluginWorkerManager restart policy', () => {
   it('cancels a stale in-flight revision instead of joining it by plugin key', async () => {
     const currentWorker = worker()
+
     const factory = vi.fn<PluginWorkerFactory>(({ rootDir, signal }) => {
       if (rootDir === '/plugins/old') {
         return new Promise((_resolve, reject) => {
@@ -195,8 +208,10 @@ describe('PluginWorkerManager restart policy', () => {
           })
         })
       }
+
       return Promise.resolve(currentWorker)
     })
+
     const subject = manager(factory)
     const oldSpec = { ...spec('demo'), rootDir: '/plugins/old', manifestRevision: 'old' }
     const newSpec = { ...spec('demo'), rootDir: '/plugins/new', manifestRevision: 'new' }
@@ -216,12 +231,15 @@ describe('PluginWorkerManager restart policy', () => {
 
   it('retries startup failures at 500/2000/5000ms before errored', async () => {
     vi.useFakeTimers()
+
     const factory = vi.fn<PluginWorkerFactory>(async () => {
       throw new Error('not ready')
     })
+
     const subject = manager(factory)
     const activation = subject.ensureActive(spec('demo'))
     let failure: unknown
+
     const settled = activation.catch((error) => {
       failure = error
     })
@@ -248,12 +266,15 @@ describe('PluginWorkerManager restart policy', () => {
   it('joins triggers during backoff without resetting restart history', async () => {
     vi.useFakeTimers()
     const ready = worker()
+
     const factory = vi.fn<PluginWorkerFactory>(async () => {
       if (factory.mock.calls.length === 1) {
         throw new Error('first start failed')
       }
+
       return ready
     })
+
     const subject = manager(factory)
     const first = subject.ensureActive(spec('demo'))
     await flush()
@@ -317,9 +338,11 @@ describe('PluginWorkerManager idle reap', () => {
   it('does not reap a worker while an event handler is still in flight', async () => {
     const busy = worker(100)
     busy.inFlightCount = () => 1
+
     const subject = manager(vi.fn<PluginWorkerFactory>().mockResolvedValue(busy), {
       idleReapMs: 100
     })
+
     await subject.ensureActive(spec('demo'))
 
     subject.reapIdle(10_000)
@@ -332,10 +355,12 @@ describe('PluginWorkerManager idle reap', () => {
   it('disposes an idle worker and activates a fresh generation on demand', async () => {
     const first = worker(100)
     const second = worker(1_000)
+
     const factory = vi
       .fn<PluginWorkerFactory>()
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(second)
+
     const subject = manager(factory, { idleReapMs: 100 })
     await subject.ensureActive(spec('demo'))
 
@@ -356,15 +381,19 @@ describe('PluginWorkerManager idle reap', () => {
           finishShutdown = resolve
         })
     )
+
     const subject = manager(vi.fn<PluginWorkerFactory>().mockResolvedValue(idle), {
       idleReapMs: 100
     })
+
     await subject.ensureActive(spec('demo'))
     subject.reapIdle(201)
     let disposed = false
+
     const disposal = subject.disposeAll().then(() => {
       disposed = true
     })
+
     await flush()
     expect(disposed).toBe(false)
 

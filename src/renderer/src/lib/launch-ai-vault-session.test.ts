@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
+
 const mockCreateEmptySplitGroup = vi.fn()
+
 const mockQueueTabStartupCommand = vi.fn()
+
 const mockSetActiveTabType = vi.fn()
+
 const mockSetTabBarOrder = vi.fn()
+
 const runtimeMocks = vi.hoisted(() => ({
   createWebRuntimeSessionTerminal: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn<() => string | null>(() => null),
@@ -66,6 +71,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     mockCreateTab.mockImplementation((worktreeId: string) => {
       const tab = { id: `tab-${(mockState.tabsByWorktree[worktreeId] ?? []).length + 1}` }
       mockState.tabsByWorktree[worktreeId] = [...(mockState.tabsByWorktree[worktreeId] ?? []), tab]
+
       return tab
     })
     mockCreateEmptySplitGroup.mockReturnValue('group-new')
@@ -188,6 +194,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     if (result.tabId === null) {
       await expect(result.runtimeLaunch).resolves.toEqual({ status: 'created' })
     }
+
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
   })
 })

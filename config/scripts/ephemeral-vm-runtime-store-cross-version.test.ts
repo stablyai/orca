@@ -5,12 +5,15 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, expect, test } from 'vitest'
 
 const targetRoot = process.env.STA_4274_TARGET_ROOT
+
 const operation = process.env.STA_4274_OPERATION
+
 const ownedDirs: string[] = []
 
 function makeOwnedDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   ownedDirs.push(dir)
+
   return dir
 }
 
@@ -84,36 +87,47 @@ test.skipIf(!targetRoot || !operation)(`STA-4274 ${operation ?? 'disabled'}`, as
   if (!targetRoot || !operation) {
     throw new Error('STA_4274_TARGET_ROOT and STA_4274_OPERATION are required')
   }
+
   const userDataPath = process.env.STA_4274_USER_DATA_PATH ?? makeOwnedDir('sta-4274-')
+
   const moduleUrl = pathToFileURL(
     resolve(targetRoot, 'src/shared/ephemeral-vm-runtime-store.ts')
   ).href
+
   const store = await import(/* @vite-ignore */ moduleUrl)
 
   if (operation === 'write-legacy') {
     store.upsertEphemeralVmRuntime(userDataPath, ordinary)
+
     return
   }
+
   if (operation === 'write-mixed') {
     store.upsertEphemeralVmRuntime(userDataPath, ordinary)
     store.upsertEphemeralVmRuntime(userDataPath, provisionedRoot)
+
     return
   }
+
   if (operation === 'read') {
     const runtimes = store.listEphemeralVmRuntimes(userDataPath)
     expect(runtimes.map((record: { id: string }) => record.id)).toEqual([
       'provisioned-root-runtime',
       'ordinary-runtime'
     ])
+
     return
   }
+
   if (operation === 'read-rollback-projection') {
     const runtimes = store.listEphemeralVmRuntimes(userDataPath)
     expect(runtimes).toHaveLength(2)
     expect(runtimes[0].recipe).not.toHaveProperty('checkoutMode')
     expect(runtimes[0].recipeResult).toMatchObject({ schemaVersion: 1 })
+
     return
   }
+
   if (operation === 'mutate-lifecycle') {
     store.updateEphemeralVmRuntimeStatus(userDataPath, 'ordinary-runtime', {
       status: 'suspended',
@@ -135,10 +149,13 @@ test.skipIf(!targetRoot || !operation)(`STA-4274 ${operation ?? 'disabled'}`, as
         '})'
       ].join('\n')
     )
+
     const serviceUrl = pathToFileURL(
       resolve(targetRoot, 'src/main/ephemeral-vm-runtime-service.ts')
     ).href
+
     const service = await import(/* @vite-ignore */ serviceUrl)
+
     const result = await service.cleanupEphemeralVmRuntime({
       userDataPath,
       repoPath,
@@ -151,13 +168,16 @@ test.skipIf(!targetRoot || !operation)(`STA-4274 ${operation ?? 'disabled'}`, as
       },
       now: 3_000
     })
+
     expect(result).toMatchObject({
       ok: true,
       runtime: { status: 'cleaned', cleanupStatus: 'succeeded' }
     })
     expect(existsSync(proofPath)).toBe(true)
+
     return
   }
+
   if (operation === 'read-after-downgrade') {
     expect(store.listEphemeralVmRuntimes(userDataPath)).toEqual([
       expect.objectContaining({
@@ -172,13 +192,17 @@ test.skipIf(!targetRoot || !operation)(`STA-4274 ${operation ?? 'disabled'}`, as
       }),
       expect.objectContaining({ id: 'ordinary-runtime', status: 'suspended' })
     ])
+
     return
   }
+
   if (operation === 'read-legacy') {
     expect(
       store.listEphemeralVmRuntimes(userDataPath).map((record: { id: string }) => record.id)
     ).toEqual(['ordinary-runtime'])
+
     return
   }
+
   throw new Error(`Unknown operation: ${operation}`)
 })

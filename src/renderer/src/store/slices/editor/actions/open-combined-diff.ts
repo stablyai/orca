@@ -14,13 +14,16 @@ export function createOpenCombinedDiff(
       const id = areaFilter
         ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
         : `${worktreeId}::all-diffs::uncommitted`
+
       const label = areaFilter
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
+
       set((s) => {
         const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+
         const branchCompare =
           !areaFilter &&
           branchSummary?.status === 'ready' &&
@@ -29,29 +32,37 @@ export function createOpenCombinedDiff(
           branchSummary.mergeBase
             ? toBranchCompareSnapshot(branchSummary)
             : undefined
+
         const branchEntriesSnapshot = branchCompare
           ? (s.gitBranchChangesByWorktree[worktreeId] ?? [])
           : undefined
+
         const relevantEntries =
           entriesSnapshot ??
           (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
             return areaFilter === undefined || entry.area === areaFilter
           })
+
         const skippedConflicts = relevantEntries
           .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
           .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
+
         // Why: snapshot entries at open time so a later commit can't yank them and force a rebuild that loses loaded content + scroll position.
         const uncommittedEntriesSnapshot = relevantEntries
+
         const id = areaFilter
           ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
           : `${worktreeId}::all-diffs::uncommitted`
+
         const label = areaFilter
           ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
               areaFilter
             ] ?? 'All Changes')
           : 'All Changes'
+
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           return {
             openFiles: s.openFiles.map((f) =>
@@ -77,6 +88,7 @@ export function createOpenCombinedDiff(
             activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
           }
         }
+
         const newFile: OpenFile = {
           id,
           filePath: worktreePath,
@@ -96,6 +108,7 @@ export function createOpenCombinedDiff(
           conflict: undefined,
           runtimeEnvironmentId
         }
+
         return {
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,
@@ -113,6 +126,7 @@ export function createOpenCombinedDiff(
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
         const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           return {
             openFiles: s.openFiles.map((f) =>
@@ -135,6 +149,7 @@ export function createOpenCombinedDiff(
             activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
           }
         }
+
         const newFile: OpenFile = {
           id,
           filePath: worktreePath,
@@ -152,6 +167,7 @@ export function createOpenCombinedDiff(
           conflictReview: undefined,
           runtimeEnvironmentId
         }
+
         return {
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,
@@ -172,12 +188,15 @@ export function createOpenCombinedDiff(
     openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject, message) => {
       const commitCompare = toCommitCompareSnapshot(compare, subject, message)
       const id = `${worktreeId}::all-diffs::commit::${commitCompare.commitOid}`
+
       const label = subject
         ? `Commit ${commitCompare.compareRef}: ${subject}`
         : `Commit ${commitCompare.compareRef}`
+
       set((s) => {
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           return {
             openFiles: s.openFiles.map((f) =>
@@ -217,6 +236,7 @@ export function createOpenCombinedDiff(
           conflictReview: undefined,
           runtimeEnvironmentId
         }
+
         return {
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,

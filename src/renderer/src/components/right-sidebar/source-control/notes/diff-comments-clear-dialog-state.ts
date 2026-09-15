@@ -14,9 +14,11 @@ export function countPendingDiffCommentsClear(
   if (!pending || pending.worktreeId !== activeWorktreeId) {
     return 0
   }
+
   if (pending.kind === 'all') {
     return comments.length
   }
+
   return comments.filter((comment) => comment.filePath === pending.filePath).length
 }
 
@@ -27,12 +29,15 @@ export function resolvePendingDiffCommentsClear(args: {
   isClearing: boolean
 }): PendingDiffCommentsClear | null {
   const { activeWorktreeId, isClearing, pending, pendingCount } = args
+
   if (!pending || isClearing) {
     return pending
   }
+
   if (pending.worktreeId !== activeWorktreeId || pendingCount === 0) {
     return null
   }
+
   return pending
 }
 
@@ -43,9 +48,12 @@ export function formatPendingDiffCommentsClearDescription(
   if (!pending) {
     return ''
   }
+
   const noun = count === 1 ? 'note' : 'notes'
+
   if (pending.kind === 'all') {
     return `Clear ${count} ${noun} from this workspace?`
   }
+
   return `Clear ${count} ${noun} from ${pending.filePath}?`
 }

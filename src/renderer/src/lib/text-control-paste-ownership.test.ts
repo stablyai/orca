@@ -14,6 +14,7 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+
   return textarea
 }
 

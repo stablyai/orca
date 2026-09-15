@@ -36,6 +36,7 @@ export function getSshRemotePtyLeases(
   targetId?: string
 ): SshRemotePtyLease[] {
   const leases = state.sshRemotePtyLeases ?? []
+
   return leases.filter((lease) => targetId === undefined || lease.targetId === targetId)
 }
 
@@ -46,17 +47,22 @@ export function upsertSshRemotePtyLease(
 ): void {
   operations.state.sshRemotePtyLeases ??= []
   const normalizedLease = { ...lease }
+
   if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {
     delete normalizedLease.leafId
   }
+
   // Why: store target-local pty ids in leases so reconnect can call relay pty.attach with raw ids (app ids are global).
   normalizedLease.ptyId = operations.toStoredPtyId(normalizedLease.targetId, normalizedLease.ptyId)
   const now = Date.now()
+
   const existingIndex = operations.state.sshRemotePtyLeases.findIndex(
     (entry) => entry.targetId === normalizedLease.targetId && entry.ptyId === normalizedLease.ptyId
   )
+
   const existing =
     existingIndex !== -1 ? operations.state.sshRemotePtyLeases[existingIndex] : undefined
+
   // NOTE: a relay numbers its PTYs from `pty-1` on every start, so after a relay restart this
   // match can be an id RECYCLED onto a different shell rather than the same lease. When the
   // caller names its own pane the merge below overwrites the stale identity; when it omits those
@@ -67,12 +73,14 @@ export function upsertSshRemotePtyLease(
   const definedLease = Object.fromEntries(
     Object.entries(normalizedLease).filter(([, value]) => value !== undefined)
   ) as typeof normalizedLease
+
   const next: SshRemotePtyLease = {
     ...existing,
     ...definedLease,
     createdAt: existing?.createdAt ?? normalizedLease.createdAt ?? now,
     updatedAt: normalizedLease.updatedAt ?? now
   }
+
   // A relay renumbers from `pty-1` on every start, so `existing` can be a RECYCLED id. Route
   // retirement belongs to the shell that lost, never to whatever claims the id next — drop both
   // marks the moment this id is claimed live again, and let supersession re-derive them below.
@@ -80,11 +88,13 @@ export function upsertSshRemotePtyLease(
     delete next.supersededBy
     delete next.relayIdRecycled
   }
+
   if (existingIndex !== -1) {
     operations.state.sshRemotePtyLeases[existingIndex] = next
   } else {
     operations.state.sshRemotePtyLeases.push(next)
   }
+
   supersedeSiblingLeasesForPane(operations, next, now)
   operations.flush()
 }
@@ -100,13 +110,16 @@ function updateSshRemotePtyLeaseStates(
   const shouldClearBindings = leaseStateWithdrawsBinding(state)
   const leasesToClear: SshRemotePtyLease[] = []
   operations.state.sshRemotePtyLeases ??= []
+
   for (const lease of operations.state.sshRemotePtyLeases) {
     if (lease.targetId !== targetId || (ptyIds && !ptyIds.has(lease.ptyId))) {
       continue
     }
+
     if (state === 'attached' && lease.state === 'terminated') {
       continue
     }
+
     // `expired` says the CLIENT lost its route, never that the shell died - and a reattach that
     // named this exact pty and succeeded is the one thing that can settle which it was. Without
     // this edge a lease that proved itself alive stayed `expired` for good, which silently exempted
@@ -118,18 +131,22 @@ function updateSshRemotePtyLeaseStates(
     if (state === 'attached' && lease.state === 'expired' && !ptyIds) {
       continue
     }
+
     if (state === 'detached' && lease.state !== 'attached') {
       continue
     }
+
     if (lease.state !== state) {
       const reclaimed = state === 'attached' && lease.state === 'expired'
       lease.state = state
       lease.updatedAt = now
+
       if (state === 'attached') {
         lease.lastAttachedAt = now
       } else if (state === 'detached') {
         lease.lastDetachedAt = now
       }
+
       if (reclaimed) {
         // Route retirement belongs to the shell that lost the pane. This lease just proved it is
         // that shell, so `attached` may never carry a supersession mark - the same invariant
@@ -137,19 +154,24 @@ function updateSshRemotePtyLeaseStates(
         delete lease.supersededBy
         delete lease.relayIdRecycled
       }
+
       changed = true
     }
+
     if (shouldClearBindings) {
       leasesToClear.push(lease)
     }
   }
+
   const bindingsChanged = shouldClearBindings
     ? operations.clearBindingsForLeases(targetId, leasesToClear)
     : false
+
   // Why after the scrub: it is the scrub that makes the tombstones unreachable.
   const tombstonesPruned = shouldClearBindings
     ? pruneRetiredSshRemotePtyLeaseTombstones(operations, targetId)
     : false
+
   return changed || bindingsChanged || tombstonesPruned
 }
 
@@ -190,6 +212,7 @@ export async function markSshRemotePtyLeasesAttachedAsync(
   ptyIds: readonly string[]
 ): Promise<void> {
   const relayPtyIds = new Set(ptyIds.map((ptyId) => operations.toStoredPtyId(targetId, ptyId)))
+
   if (updateSshRemotePtyLeaseStates(operations, targetId, 'attached', relayPtyIds)) {
     await operations.flushDurableStateOrThrowAsync()
   }
@@ -208,39 +231,52 @@ export function markSshRemotePtyLease(
   options?: MarkSshRemotePtyLeaseOptions
 ): void {
   const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
+
   const lease = operations.state.sshRemotePtyLeases?.find(
     (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
   )
+
   if (!lease) {
     return
   }
+
   const recycledChanged = options?.relayIdRecycled === true && lease.relayIdRecycled !== true
+
   if (recycledChanged) {
     lease.relayIdRecycled = true
   }
+
   const shouldClearBindings = leaseStateWithdrawsBinding(state)
+
   if (lease.state === state) {
     const bindingsCleared =
       shouldClearBindings && operations.clearBindingsForLeases(targetId, [lease])
+
     const tombstonesPruned =
       shouldClearBindings && pruneRetiredSshRemotePtyLeaseTombstones(operations, targetId)
+
     if (bindingsCleared || tombstonesPruned || recycledChanged) {
       operations.flush()
     }
+
     return
   }
+
   const now = Date.now()
   lease.state = state
   lease.updatedAt = now
+
   if (state === 'attached') {
     lease.lastAttachedAt = now
   } else if (state === 'detached') {
     lease.lastDetachedAt = now
   }
+
   if (shouldClearBindings) {
     operations.clearBindingsForLeases(targetId, [lease])
     pruneRetiredSshRemotePtyLeaseTombstones(operations, targetId)
   }
+
   operations.flush()
 }
 
@@ -250,14 +286,17 @@ export function removeSshRemotePtyLease(
   ptyId: string
 ): void {
   const relayPtyId = operations.toStoredPtyId(targetId, ptyId)
+
   const leases = (operations.state.sshRemotePtyLeases ?? []).filter(
     (lease) => lease.targetId === targetId && lease.ptyId === relayPtyId
   )
+
   const before = operations.state.sshRemotePtyLeases?.length ?? 0
   operations.clearBindingsForLeases(targetId, leases)
   operations.state.sshRemotePtyLeases = (operations.state.sshRemotePtyLeases ?? []).filter(
     (lease) => lease.targetId !== targetId || lease.ptyId !== relayPtyId
   )
+
   if (operations.state.sshRemotePtyLeases.length !== before) {
     // Why: the lease may have been the last claim on a dangling metadata row (#17775).
     invalidateLocalWorktreeMetadataPruneInputs()
@@ -275,6 +314,7 @@ export function removeSshRemotePtyLeases(
   operations.state.sshRemotePtyLeases = operations.state.sshRemotePtyLeases.filter(
     (lease) => lease.targetId !== targetId
   )
+
   if (operations.state.sshRemotePtyLeases.length !== before) {
     // Why: the leases may have been the last claim on dangling metadata rows (#17775).
     invalidateLocalWorktreeMetadataPruneInputs()

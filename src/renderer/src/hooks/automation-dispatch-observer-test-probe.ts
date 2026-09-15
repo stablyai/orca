@@ -9,6 +9,7 @@ export function countUnchangedObserverHistoryReads(
   if (!subscriber) {
     throw new Error('agent status observer was not registered')
   }
+
   let historyReads = 0
   state.agentStatusByPaneKey = {
     [TARGET_PANE_KEY]: {
@@ -19,6 +20,7 @@ export function countUnchangedObserverHistoryReads(
       stateStartedAt: Date.now() + 1,
       get stateHistory() {
         historyReads += 1
+
         return []
       }
     }
@@ -26,5 +28,6 @@ export function countUnchangedObserverHistoryReads(
   subscriber()
   historyReads = 0
   subscriber()
+
   return historyReads
 }

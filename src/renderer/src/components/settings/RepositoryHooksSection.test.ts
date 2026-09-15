@@ -52,6 +52,7 @@ function renderRepositoryHooksSection(args: {
       })
     )
   })
+
   return { container, root }
 }
 
@@ -145,6 +146,7 @@ describe('RepositoryHooksSection setup startup policy', () => {
     const waitSwitch = rendered.container.querySelector<HTMLElement>(
       '[role="switch"][aria-label="Wait for setup to complete before starting agent"]'
     )
+
     expect(waitSwitch).toBeTruthy()
 
     act(() => waitSwitch?.click())

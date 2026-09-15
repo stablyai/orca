@@ -67,43 +67,55 @@ export function createCodexSessionMigrationScheduler(args: {
         requestedGeneration,
         pendingScheduledRunGeneration ?? requestedGeneration
       )
+
       for (const scanDate of requestedScanDates) {
         pendingScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
       }
+
       pendingFullScan ||= requestedFullScan
     }
+
     if (args.isQuitting() || !args.isEligible()) {
       return
     }
+
     if (migrationTask) {
       // Why: delayed launches and resumed account transitions must survive an older active pass.
       rerunRequested ||= rerunIfActive || activeRunStopObserved
+
       return
     }
+
     const isScheduledRun = pendingScheduledRunGeneration !== null
     const activeScheduledRunGeneration = pendingScheduledRunGeneration
     const runScanDates = [...pendingScanDates.values()].sort(compareCodexSessionBackfillDates)
     let preparationNeedsFullScan = false
+
     if (isScheduledRun) {
       pendingScheduledRunGeneration = null
       // Why: preparation persists these dates so an abnormal exit still yields a
       // bounded recovery window instead of another full-tree walk.
       preparationNeedsFullScan = args.prepareScheduledRun?.(runScanDates) === true
     }
+
     const fullScanRequired = pendingFullScan || preparationNeedsFullScan
     const scanDates = !fullScanRequired && runScanDates.length > 0 ? runScanDates : undefined
     pendingScanDates.clear()
     pendingFullScan = false
     activeRunStopObserved = false
     rerunRequested = false
+
     const shouldStop = (): boolean => {
       const stopped = args.isQuitting() || !args.isEligible()
       activeRunStopObserved ||= stopped
+
       return stopped
     }
+
     const systemCodexHomePathOverride = args.resolveSystemCodexHomePathOverride()
     let stoppedBackfill = false
     let incompleteBackfill = true
+
     const task = args
       .startBackfill(
         {
@@ -124,15 +136,18 @@ export function createCodexSessionMigrationScheduler(args: {
       .then((result) => {
         stoppedBackfill = isStoppedMigrationResult(result)
         incompleteBackfill = isIncompleteBackfillResult(result)
+
         if (stoppedBackfill || shouldStop()) {
           return
         }
+
         return args.startIndexHeal({ shouldStop }, systemCodexHomePathOverride)
       })
       .catch((error: unknown) => {
         console.warn('[codex-session-migration] Background session migration failed:', error)
       })
       .then(() => undefined)
+
     migrationTask = task
     void task.finally(() => {
       if (migrationTask === task) {
@@ -141,16 +156,19 @@ export function createCodexSessionMigrationScheduler(args: {
         const shouldRerun = rerunRequested || scheduledRunIncomplete
         rerunRequested = false
         activeRunStopObserved = false
+
         if ((shouldRerun || incompleteBackfill) && isScheduledRun) {
           pendingScheduledRunGeneration = Math.max(
             activeScheduledRunGeneration!,
             pendingScheduledRunGeneration ?? activeScheduledRunGeneration!
           )
           pendingFullScan ||= fullScanRequired
+
           for (const scanDate of scanDates ?? []) {
             pendingScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
           }
         }
+
         if (
           isScheduledRun &&
           !incompleteBackfill &&
@@ -160,6 +178,7 @@ export function createCodexSessionMigrationScheduler(args: {
         ) {
           args.finishScheduledRun?.()
         }
+
         if (shouldRerun) {
           requestRun()
         }
@@ -170,10 +189,12 @@ export function createCodexSessionMigrationScheduler(args: {
   const armScheduledRun = (generation?: number): void => {
     scheduledTimer = setTimeout(() => {
       scheduledTimer = null
+
       if (generation !== undefined) {
         const currentDate = getCodexSessionBackfillDate()
         scheduledScanDates.set(toCodexSessionBackfillDateKey(currentDate), currentDate)
       }
+
       const scanDates = [...scheduledScanDates.values()].sort(compareCodexSessionBackfillDates)
       scheduledScanDates.clear()
       const fullScanRequired = scheduledFullScan
@@ -187,6 +208,7 @@ export function createCodexSessionMigrationScheduler(args: {
     if (scheduledTimer) {
       clearTimeout(scheduledTimer)
     }
+
     scheduledRunGeneration += 1
     scheduledFullScan ||= fullScanRequired
     const launchDate = getCodexSessionBackfillDate()
@@ -199,10 +221,13 @@ export function createCodexSessionMigrationScheduler(args: {
       if (args.isQuitting() || activeLaunches.has(leaseId)) {
         return
       }
+
       if (earlyPtyExits.consumeAfter(leaseId, startedSequence)) {
         scheduleRun(true)
+
         return
       }
+
       activeLaunches.set(leaseId, startedAt)
       scheduleRun(fullScanRequired)
     },
@@ -210,14 +235,19 @@ export function createCodexSessionMigrationScheduler(args: {
       if (args.isQuitting() || ignoredLaunches.has(leaseId)) {
         return
       }
+
       if (ignoredPtyExits.matchesAfter(leaseId, startedSequence)) {
         return
       }
+
       const earlyExit = earlyPtyExits.consumeAfter(leaseId, startedSequence)
+
       if (earlyExit) {
         ignoredPtyExits.record(leaseId, earlyExit.sequence)
+
         return
       }
+
       ignoredLaunches.add(leaseId)
     },
     finishLaunch(leaseId, exitSequence): void {
@@ -225,22 +255,30 @@ export function createCodexSessionMigrationScheduler(args: {
         if (exitSequence !== undefined) {
           ignoredPtyExits.record(leaseId, exitSequence)
         }
+
         return
       }
+
       const startedAt = activeLaunches.get(leaseId)
+
       if (!startedAt) {
         if (exitSequence !== undefined) {
           earlyPtyExits.record(leaseId, exitSequence)
         }
+
         return
       }
+
       activeLaunches.delete(leaseId)
+
       if (args.isQuitting()) {
         return
       }
+
       for (const scanDate of getCodexSessionBackfillDatesBetween(startedAt, new Date())) {
         scheduledScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
       }
+
       scheduleRun()
     },
     scheduleInitialRun(): void {
@@ -261,6 +299,7 @@ function isIncompleteBackfillResult(result: unknown): boolean {
   if (!result || typeof result !== 'object') {
     return true
   }
+
   return (
     isStoppedMigrationResult(result) ||
     readPositiveResultCount(result, 'failedFiles') ||
@@ -271,5 +310,6 @@ function isIncompleteBackfillResult(result: unknown): boolean {
 
 function readPositiveResultCount(result: object, key: string): boolean {
   const value = key in result ? (result as Record<string, unknown>)[key] : undefined
+
   return typeof value === 'number' && value > 0
 }

@@ -10,10 +10,12 @@ import type { WorktreeItemRow } from '../listing/renderable-rows'
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange)
+
   return () => document.removeEventListener('visibilitychange', onChange)
 }
 
 const DOCUMENT_HIDDEN_KEY = '__document_hidden__'
+
 const NOTHING_TO_TRACK_KEY = '__hidden__'
 
 // Reports which sidebar rows are on screen so the GitHub PR/CI coordinator can refresh
@@ -36,11 +38,14 @@ export function useVisiblePrRefreshReporting(args: {
     virtualItems,
     scrollRef
   } = args
+
   const [documentVisibilityRevision, setDocumentVisibilityRevision] = useState(0)
   const lastVisibleRefreshKeyRef = useRef('')
+
   const reportVisibleGitHubPRRefreshCandidates = useAppStore(
     (s) => s.reportVisibleGitHubPRRefreshCandidates
   )
+
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const rightSidebarShowsPR = useAppStore((s) => rightSidebarShowsPullRequestData(s))
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
@@ -52,8 +57,10 @@ export function useVisiblePrRefreshReporting(args: {
         if (document.visibilityState !== 'visible') {
           // Why: row identity may be unchanged after a hidden window; reset the key so PR/CI rows refresh.
           lastVisibleRefreshKeyRef.current = DOCUMENT_HIDDEN_KEY
+
           return
         }
+
         setDocumentVisibilityRevision((revision) => revision + 1)
       }),
     []
@@ -62,39 +69,52 @@ export function useVisiblePrRefreshReporting(args: {
   useEffect(() => {
     if (document.visibilityState !== 'visible') {
       lastVisibleRefreshKeyRef.current = DOCUMENT_HIDDEN_KEY
+
       return
     }
+
     const currentWorktree = currentWorktreeId ? (worktreeMap.get(currentWorktreeId) ?? null) : null
+
     // Why: this reporter feeds the GitHub coordinator; GitLab-only MR panels refresh via hosted-review paths.
     const sidebarWorktreeHasGitHubReview =
       currentWorktree !== null &&
       ((currentWorktree.linkedGitLabMR ?? null) === null ||
         (currentWorktree.linkedPR ?? null) !== null)
+
     const shouldTrackSidebarWorktree = rightSidebarShowsPR && sidebarWorktreeHasGitHubReview
+
     const shouldTrackVisibleRows =
       groupBy === 'pr-status' ||
       (newCardStyle
         ? cardProps.includes('status')
         : cardProps.includes('pr') || cardProps.includes('ci'))
+
     if (!shouldTrackVisibleRows && !shouldTrackSidebarWorktree) {
       if (lastVisibleRefreshKeyRef.current !== NOTHING_TO_TRACK_KEY) {
         lastVisibleRefreshKeyRef.current = NOTHING_TO_TRACK_KEY
         reportVisibleGitHubPRRefreshCandidates([], Date.now())
       }
+
       return
     }
+
     const scrollEl = scrollRef.current
+
     if (!scrollEl) {
       return
     }
+
     const viewportTop = scrollEl.scrollTop
     const viewportBottom = viewportTop + scrollEl.clientHeight
+
     const visibleRows = virtualItems
       .filter((item) => item.start < viewportBottom && item.end > viewportTop)
       .map((item) => renderRows[item.index])
       .filter((row): row is WorktreeItemRow => row?.type === 'item')
       .filter((row) => row.repo?.kind === 'git' && !row.worktree.isBare && row.worktree.branch)
+
     const visibleWorktreeIds = new Set(visibleRows.map((row) => row.worktree.id))
+
     if (
       shouldTrackSidebarWorktree &&
       currentWorktree &&
@@ -103,17 +123,22 @@ export function useVisiblePrRefreshReporting(args: {
     ) {
       visibleWorktreeIds.add(currentWorktree.id)
     }
+
     const visibleIdentity = visibleRows
       .map((row) => `${row.worktree.id}:${row.worktree.branch}:${row.worktree.linkedPR ?? ''}`)
       .join('|')
+
     const sidebarIdentity =
       shouldTrackSidebarWorktree && currentWorktree
         ? `${currentWorktree.id}:${currentWorktree.branch}:${currentWorktree.linkedPR ?? ''}`
         : ''
+
     const key = `${visibleIdentity}:${sidebarIdentity}:${sshConnectedGeneration}:${prVisibleRefreshGeneration}:${cardProps.join(',')}`
+
     if (!key || key === lastVisibleRefreshKeyRef.current) {
       return
     }
+
     lastVisibleRefreshKeyRef.current = key
     reportVisibleGitHubPRRefreshCandidates(Array.from(visibleWorktreeIds), Date.now())
   }, [

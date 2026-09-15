@@ -51,20 +51,28 @@ export function useBrowserPageWebviewUrlSync({
 }): void {
   useLayoutEffect(() => {
     applyBrowserPageViewportLayout(browserTabId, { paintable: isPaintable, active: isActive })
+
     const syncChromeInset = (): void => {
       const header = chromeHeaderRef.current
+
       if (!header) {
         return
       }
+
       syncBrowserPageChromeInset(browserTabId, header.offsetHeight)
     }
+
     syncChromeInset()
+
     const resizeObserver =
       typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncChromeInset)
+
     const header = chromeHeaderRef.current
+
     if (header) {
       resizeObserver?.observe(header)
     }
+
     return () => {
       resizeObserver?.disconnect()
     }
@@ -73,26 +81,34 @@ export function useBrowserPageWebviewUrlSync({
 
   useEffect(() => {
     const webview = webviewRef.current
+
     if (!webview) {
       return
     }
+
     const normalizedUrl = normalizeBrowserNavigationUrl(browserTabUrl)
+
     if (!normalizedUrl) {
       return
     }
+
     // Why: navigation events set both the store URL and this ref; a match means the change came from navigation, so skip to avoid a redirect infinite loop.
     if (lastKnownWebviewUrlRef.current === normalizedUrl) {
       return
     }
+
     let liveUrl: string | null = null
+
     try {
       liveUrl = webview.getURL() || null
     } catch {
       // Why: a newly attached guest can reject getURL(); skip so a transient error isn't misread as a mismatch and force-navigated.
       return
     }
+
     const normalizedLiveUrl = liveUrl ? (normalizeBrowserNavigationUrl(liveUrl) ?? liveUrl) : null
     const declaredSrc = webview.getAttribute('src')
+
     if (
       normalizedLiveUrl !== normalizedUrl &&
       webview.src !== normalizedUrl &&
@@ -102,8 +118,10 @@ export function useBrowserPageWebviewUrlSync({
       trackNextLoadingEventRef.current = normalizedUrl !== ORCA_BROWSER_BLANK_URL
       lastKnownWebviewUrlRef.current = normalizedUrl
       webview.src = normalizedUrl
+
       if (normalizedUrl !== ORCA_BROWSER_BLANK_URL) {
         keepAddressBarFocusRef.current = false
+
         if (document.activeElement === addressBarInputRef.current) {
           focusWebviewNow()
         }
@@ -126,11 +144,14 @@ export function useBrowserPageWebviewUrlSync({
 
     const detectChromiumErrorPage = (): void => {
       const webview = webviewRef.current
+
       if (!webview) {
         return
       }
+
       try {
         const currentUrl = webview.getURL() || webview.src || ''
+
         if (!isChromiumErrorPage(currentUrl)) {
           return
         }

@@ -15,11 +15,17 @@ import { describe, expect, it } from 'vitest'
 import { _internals } from './legacy-wsl-runtime-auth-drain'
 
 const SOURCE_AUTH = '{"tokens":{"expires_at":2000}}\n'
+
 const TARGET_AUTH = '{"tokens":{"expires_at":1000}}\n'
+
 const SOURCE_CREDENTIALS = '{"server":{"access_token":"source"}}\n'
+
 const RETIRED_SESSION = '{"session":"retired"}\n'
+
 const LATER_SESSION = '{"session":"later"}\n'
+
 const now = new Date()
+
 const SESSION_SEGMENTS = [
   'sessions',
   String(now.getFullYear()),
@@ -46,6 +52,7 @@ function runInspect(root: string, legacyHome: string, markerPath: string): numbe
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20_000 }
     )
+
     return 0
   } catch (error) {
     return (error as { status?: number }).status ?? -1
@@ -82,6 +89,7 @@ describe.skipIf(process.platform === 'win32')('legacy WSL auth drain rollback re
     writeFileSync(targetAuthPath, TARGET_AUTH)
 
     expect(runInspect(root, legacyHome, markerPath)).toBe(0)
+
     const apply = (targetHash: string, promote: string, retire: string, bridge: string): void => {
       execFileSync(
         '/bin/sh',

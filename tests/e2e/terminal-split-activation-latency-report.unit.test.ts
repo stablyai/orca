@@ -95,6 +95,7 @@ function createMainProbeEvents(): SplitLatencyMainProbeEvent[] {
 describe('terminal split activation latency report', () => {
   it('attributes main-process phases to the matching source and child PTYs', () => {
     const stamps = mergeSplitLatencyMainProbeEvents(createRendererStamps(), createMainProbeEvents())
+
     const sample = createSplitLatencySample({
       phase: 'measured',
       iteration: 0,
@@ -126,6 +127,7 @@ describe('terminal split activation latency report', () => {
 
   it('embeds revision identity and summarizes the attributed phases', () => {
     const stamps = mergeSplitLatencyMainProbeEvents(createRendererStamps(), createMainProbeEvents())
+
     const sample = createSplitLatencySample({
       phase: 'measured',
       iteration: 0,
@@ -135,7 +137,9 @@ describe('terminal split activation latency report', () => {
       ptyExitObserved: true,
       cleanupError: null
     })
+
     const revision = { headSha: 'a'.repeat(40), dirty: false }
+
     const result = buildBenchmarkReport({
       label: 'candidate',
       revision,
@@ -175,6 +179,7 @@ describe('terminal split activation latency report', () => {
       createRendererStamps(),
       createMainProbeEvents().filter((event) => event.kind !== 'pty-write-cr')
     )
+
     const sample = createSplitLatencySample({
       phase: 'measured',
       iteration: 0,

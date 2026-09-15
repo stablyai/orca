@@ -31,6 +31,7 @@ export function normalizeStoredWebOverrides(
   if (value === undefined) {
     return {}
   }
+
   if (!isJsonObject(value)) {
     diagnostics.push({
       severity: 'error',
@@ -39,10 +40,12 @@ export function normalizeStoredWebOverrides(
         value0: section
       })
     })
+
     return {}
   }
 
   const overrides: KeybindingOverrides = {}
+
   for (const [actionId, rawBindings] of Object.entries(value)) {
     if (!isKeybindingActionId(actionId)) {
       diagnostics.push({
@@ -57,6 +60,7 @@ export function normalizeStoredWebOverrides(
       })
       continue
     }
+
     if (
       !Array.isArray(rawBindings) ||
       !rawBindings.every((binding) => typeof binding === 'string')
@@ -73,7 +77,9 @@ export function normalizeStoredWebOverrides(
       })
       continue
     }
+
     const normalized = normalizeKeybindingArrayForAction(actionId, rawBindings)
+
     if (!Array.isArray(normalized)) {
       const error = normalized.ok ? 'Unable to parse shortcut.' : normalized.error
       diagnostics.push({
@@ -88,8 +94,10 @@ export function normalizeStoredWebOverrides(
       })
       continue
     }
+
     overrides[actionId] = normalized
   }
+
   return overrides
 }
 
@@ -100,6 +108,7 @@ export function normalizeWebPlatformOverrides(
   if (value === undefined) {
     return {}
   }
+
   if (!isJsonObject(value)) {
     diagnostics.push({
       severity: 'error',
@@ -109,10 +118,12 @@ export function normalizeWebPlatformOverrides(
         'platforms must be an object with darwin, linux, or win32 sections.'
       )
     })
+
     return {}
   }
 
   const result: Partial<Record<KeybindingPlatform, KeybindingOverrides>> = {}
+
   for (const [platform, overrides] of Object.entries(value)) {
     if (!WEB_KEYBINDING_PLATFORMS.includes(platform as KeybindingPlatform)) {
       diagnostics.push({
@@ -126,12 +137,14 @@ export function normalizeWebPlatformOverrides(
       })
       continue
     }
+
     result[platform as KeybindingPlatform] = normalizeStoredWebOverrides(
       overrides,
       `platforms.${platform}`,
       diagnostics
     )
   }
+
   return result
 }
 
@@ -141,9 +154,11 @@ export function removeConflictingWebOverrides(
   diagnostics: KeybindingFileDiagnostic[]
 ): KeybindingOverrides {
   let next = { ...overrides }
+
   for (let attempt = 0; attempt < 20; attempt++) {
     const conflicts = findKeybindingConflicts(platform, next)
     const conflictingOverrides = new Set<KeybindingActionId>()
+
     for (const conflict of conflicts) {
       for (const actionId of conflict.actionIds) {
         if (Object.hasOwn(next, actionId)) {
@@ -151,12 +166,15 @@ export function removeConflictingWebOverrides(
         }
       }
     }
+
     if (conflictingOverrides.size === 0) {
       return next
     }
+
     for (const actionId of conflictingOverrides) {
       delete next[actionId]
     }
+
     diagnostics.push({
       severity: 'error',
       message: translate(
@@ -170,5 +188,6 @@ export function removeConflictingWebOverrides(
       )
     })
   }
+
   return next
 }

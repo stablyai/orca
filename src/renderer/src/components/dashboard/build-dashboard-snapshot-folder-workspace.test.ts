@@ -10,9 +10,13 @@ import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-das
 import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
 
 const NOW = 2_000_000_000
+
 const WORKSPACE_ID = folderWorkspaceKey('folder-1')
+
 const TAB_ID = 'folder-tab'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
 function folderWorkspace(): FolderWorkspace {
@@ -192,9 +196,11 @@ describe('buildDashboardSnapshot folder workspaces', () => {
 
     const snapshot = buildDashboardSnapshot(mixedState, NOW)
     const expected = { attention: 0, working: 0, done: 0, idle: 0 }
+
     for (const card of snapshot.cards) {
       expected[card.bucket] += 1
     }
+
     expect(
       snapshot.cards.find((card) => card.paneKey === makePaneKey('title-tab', LEAF_ID))
     ).toMatchObject({
@@ -237,6 +243,7 @@ describe('buildDashboardSnapshot folder workspaces', () => {
 
     const snapshot = buildDashboardSnapshot(structuredState, NOW)
     const expected = { attention: 0, working: 0, done: 0, idle: 0 }
+
     for (const card of snapshot.cards) {
       expected[card.bucket] += 1
     }

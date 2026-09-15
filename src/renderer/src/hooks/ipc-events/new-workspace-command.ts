@@ -14,6 +14,7 @@ export function buildNewWorkspaceShortcutModalData(
 ): NewWorkspaceShortcutModalData {
   const linearIssue =
     state.activeView === 'tasks' ? (state.taskPageData.openLinearIssue ?? null) : null
+
   if (!linearIssue) {
     return { telemetrySource: 'shortcut' }
   }
@@ -32,5 +33,6 @@ export function openNewWorkspaceFromShortcut(
   if (state.activeModal === 'new-workspace-composer') {
     return
   }
+
   state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
 }

@@ -8,10 +8,12 @@ const summarizeSkillMarkdown = vi.hoisted(() => vi.fn())
 
 vi.mock('../../shared/skill-metadata', async (importOriginal) => {
   const original = await importOriginal<typeof SkillMetadata>()
+
   return {
     ...original,
     summarizeSkillMarkdown: (markdown: string) => {
       summarizeSkillMarkdown(markdown)
+
       return original.summarizeSkillMarkdown(markdown)
     }
   }

@@ -27,6 +27,7 @@ function authority(options: {
 }): { call: ReturnType<typeof vi.fn>; writes: { method: string; params: unknown }[] } {
   const writes: { method: string; params: unknown }[] = []
   const connectionId = options.repoConnectionId ?? null
+
   const call = vi.fn(async (method: string, params?: Record<string, unknown>) => {
     if (method === 'automation.show') {
       return ok({
@@ -34,18 +35,23 @@ function authority(options: {
         owner: { selector: { kind: 'ssh', targetId: 'box-0', targetGeneration: 3 } }
       })
     }
+
     if (method === 'repo.show') {
       return ok({ repo: { id: 'r1', connectionId } })
     }
+
     if (method === 'ssh.listTargetSummaries') {
       if (options.targetSummaryError) {
         throw options.targetSummaryError
       }
+
       return ok({ targets: options.registered })
     }
+
     if (method === 'automation.create' || method === 'automation.update') {
       writes.push({ method, params: params ?? {} })
       const destination = (params as { destination?: never } | undefined)?.destination
+
       if (destination) {
         const sshTargetGeneration = (): number | undefined => options.generationAtWrite
         assertAutomationDestination(destination, { sshTargetGeneration })
@@ -57,10 +63,13 @@ function authority(options: {
           destination
         )
       }
+
       return ok({ automation: { id: 'a1' } })
     }
+
     return ok({})
   })
+
   return { call, writes }
 }
 
@@ -119,6 +128,7 @@ describe('CLI automation writes fence the host they land on', () => {
       repoConnectionId: 'box-1',
       targetSummaryError: new Error('rpc timeout')
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await expect(
@@ -139,6 +149,7 @@ describe('CLI automation writes fence the host they land on', () => {
       generationAtWrite: 8,
       repoConnectionId: 'box-1'
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await expect(
@@ -160,6 +171,7 @@ describe('CLI automation writes fence the host they land on', () => {
       generationAtWrite: 7,
       repoConnectionId: 'box-1'
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await AUTOMATION_HANDLERS['automations edit']!({
@@ -184,6 +196,7 @@ describe('CLI automation writes fence the host they land on', () => {
       registered: [{ id: 'box-1', label: 'box 1' }],
       repoConnectionId: 'box-1'
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await AUTOMATION_HANDLERS['automations edit']!({

@@ -61,6 +61,7 @@ describe('NativeChatImageAttachments', () => {
         FakeIntersectionObserver.instances.push(this)
       }
     }
+
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
 
     const container = document.createElement('div')
@@ -139,6 +140,7 @@ describe('NativeChatImageAttachments', () => {
   it('retries a failed thumbnail after the image cache refreshes', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
+
     const props = {
       blocks: [{ type: 'image-ref' as const, path: '/repo/image.png' }],
       runtimeContext: runtimeContext('wt-1')
@@ -166,6 +168,7 @@ describe('NativeChatImageAttachments', () => {
 
   it('keeps the observed element stable while a preview is materialized', async () => {
     let callback: IntersectionObserverCallback | undefined
+
     class FakeIntersectionObserver {
       readonly observe = vi.fn()
       readonly unobserve = vi.fn()
@@ -175,6 +178,7 @@ describe('NativeChatImageAttachments', () => {
         callback = nextCallback
       }
     }
+
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
 
     const container = document.createElement('div')
@@ -191,9 +195,11 @@ describe('NativeChatImageAttachments', () => {
 
     const observedElement = container.firstElementChild
     expect(observedElement).not.toBeNull()
+
     if (!observedElement || !callback) {
       throw new Error('image preview did not register visibility observation')
     }
+
     const notifyVisibility = callback
     await act(async () => {
       notifyVisibility(

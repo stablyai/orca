@@ -40,7 +40,9 @@ export function normalizeWorkspaceCleanupBrowseState(value: unknown): WorkspaceC
   if (value == null) {
     return createDefaultWorkspaceCleanupBrowseState()
   }
+
   const raw = asRecord(value)
+
   return {
     version: WORKSPACE_CLEANUP_BROWSE_STATE_VERSION,
     filters: normalizeWorkspaceCleanupFilterState(raw.filters),

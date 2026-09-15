@@ -35,11 +35,13 @@ function nameMatchesSessionId(name: string, sessionId: string): boolean {
 
 function matchesRequestedSession(path: string, sessionIds: Map<string, number>): boolean {
   const name = sessionFileName(path)
+
   for (const sessionId of sessionIds.keys()) {
     if (nameMatchesSessionId(name, sessionId)) {
       return true
     }
   }
+
   return false
 }
 
@@ -51,7 +53,9 @@ function createScan(root: string): ScanGeneration {
     waiters: new Set(),
     settled: false
   }
+
   inFlightScans.set(root, scan)
+
   return scan
 }
 
@@ -65,15 +69,19 @@ function removeWaiter(scan: ScanGeneration, waiter: ScanWaiter): boolean {
   if (!scan.waiters.delete(waiter)) {
     return false
   }
+
   if (waiter.signal && waiter.onAbort) {
     waiter.signal.removeEventListener('abort', waiter.onAbort)
   }
+
   const count = scan.sessionIdRefCounts.get(waiter.sessionId)
+
   if (count === 1) {
     scan.sessionIdRefCounts.delete(waiter.sessionId)
   } else if (count) {
     scan.sessionIdRefCounts.set(waiter.sessionId, count - 1)
   }
+
   return true
 }
 
@@ -81,10 +89,13 @@ function settleScan(scan: ScanGeneration, outcome: { paths: string[] } | { error
   if (scan.settled) {
     return
   }
+
   scan.settled = true
   clearScan(scan)
+
   for (const waiter of scan.waiters) {
     removeWaiter(scan, waiter)
+
     if ('paths' in outcome) {
       waiter.resolve(outcome.paths)
     } else {
@@ -101,6 +112,7 @@ function startScan(scan: ScanGeneration): void {
       readDirectory: (dirPath) => readDirectory(dirPath, scan.controller.signal),
       signal: scan.controller.signal
     })
+
     void promise.then(
       (paths) => settleScan(scan, { paths }),
       (error: unknown) => settleScan(scan, { error })
@@ -116,25 +128,32 @@ function waitForScan(
   signal?: AbortSignal
 ): Promise<string[]> {
   signal?.throwIfAborted()
+
   return new Promise<string[]>((resolve, reject) => {
     const waiter: ScanWaiter = { sessionId, resolve, reject, signal }
     scan.waiters.add(waiter)
     scan.sessionIdRefCounts.set(sessionId, (scan.sessionIdRefCounts.get(sessionId) ?? 0) + 1)
+
     if (!signal) {
       return
     }
+
     waiter.onAbort = () => {
       if (!removeWaiter(scan, waiter)) {
         return
       }
+
       reject(signal.reason ?? new Error('Codex session scan aborted'))
+
       if (!scan.settled && scan.waiters.size === 0) {
         scan.settled = true
         clearScan(scan)
         scan.controller.abort()
       }
     }
+
     signal.addEventListener('abort', waiter.onAbort, { once: true })
+
     if (signal.aborted) {
       waiter.onAbort()
     }
@@ -150,9 +169,11 @@ async function scanRoot(
   const existing = inFlightScans.get(root)
   const scan = existing ?? createScan(root)
   const pending = waitForScan(scan, sessionId, signal)
+
   if (!existing) {
     startScan(scan)
   }
+
   return { paths: await pending, joined: Boolean(existing) }
 }
 
@@ -168,9 +189,12 @@ export async function findWslCodexSessionPath(
 ): Promise<string | null> {
   const first = await scanRoot(root, sessionId, signal)
   const firstHit = findSessionPath(first.paths, sessionId)
+
   if (firstHit || !first.joined) {
     return firstHit
   }
+
   const refreshed = await scanRoot(root, sessionId, signal)
+
   return findSessionPath(refreshed.paths, sessionId)
 }

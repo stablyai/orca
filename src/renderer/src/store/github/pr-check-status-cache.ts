@@ -66,9 +66,11 @@ export function applyCachedChecksStatus(
     ),
     `${alias.repoPath}::pr-checks::${pr.number}`
   ]
+
   const checksEntry = checksCacheKeys
     .map((key) => state.checksCache[key])
     .find((entry) => entry?.data)
+
   if (
     checksEntry?.data &&
     checksEntry.headSha &&
@@ -78,5 +80,6 @@ export function applyCachedChecksStatus(
   ) {
     return { ...pr, checksStatus: deriveCheckStatusFromChecks(checksEntry.data) }
   }
+
   return pr
 }

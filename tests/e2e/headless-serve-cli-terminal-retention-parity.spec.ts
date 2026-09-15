@@ -39,6 +39,7 @@ import {
 } from './helpers/host-created-terminal-retention-oracle'
 
 const scratch = createRetentionFixtureDirectory()
+
 const fixturePath = writeRetentionFixture(scratch)
 
 test.afterAll(() => {
@@ -54,9 +55,11 @@ function createPairedRuntimeCall(page: Page, environmentId: string): RuntimeRpcC
           method,
           params
         })
+
         if (!response.ok) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
+
         return response.result
       },
       { environmentId, method, params }
@@ -87,6 +90,7 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
 }, testInfo) => {
   test.setTimeout(600_000)
   const host = await launchHeadlessPairedRuntimeHost()
+
   const client = await launchPairedElectronClient(
     host.offer,
     testInfo,
@@ -95,14 +99,17 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
     await host.dispose()
     throw error
   })
+
   const clientPageErrors: string[] = []
   client.page.on('pageerror', (error) => clientPageErrors.push(String(error)))
   const call = createPairedRuntimeCall(client.page, client.environmentId)
+
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
       path: testRepoPath,
       kind: 'git'
     })
+
     let worktreeId = ''
     await expect
       .poll(
@@ -110,7 +117,9 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
           const listed = await host.client.call<{ worktrees: { id: string }[] }>('worktree.list', {
             repo: `id:${added.result.repo.id}`
           })
+
           worktreeId = listed.result.worktrees[0]?.id ?? ''
+
           return worktreeId
         },
         { timeout: 30_000, message: 'Serve host never listed a worktree for the seeded repo' }
@@ -137,6 +146,7 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
       fixturePath,
       path.join(scratch, 'headless-first.log')
     )
+
     const published = await readHostTerminalInventory(call, worktreeId)
     expect(published.tabIds, 'serve host never published the CLI-created terminal').toContain(
       first.tabId
@@ -159,6 +169,7 @@ test('keeps every host-created CLI terminal on a windowless serve host', async (
       fixturePath,
       path.join(scratch, 'headless-second.log')
     )
+
     expect(second.ptyId).not.toBe(first.ptyId)
     await waitForClientTab(client.page, worktreeId, toWebTerminalSurfaceTabId(second.tabId))
 

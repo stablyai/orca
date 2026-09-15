@@ -65,6 +65,7 @@ function makeState(): DirectSshTerminalBindingState {
 describe('clearDirectSshTerminalBindings', () => {
   it('clears exact Git and folder workspace bindings in one projection', () => {
     const state = makeState()
+
     const result = clearDirectSshTerminalBindings(
       state,
       new Set(['repo::/ssh-work', 'folder::ssh-work'])
@@ -111,11 +112,13 @@ describe('clearDirectSshTerminalBindings', () => {
 
   it('re-arms reconnectable disconnects without erasing retry history', () => {
     const state = makeState()
+
     const authority = {
       targetId: 'target',
       providerEpoch: 'epoch-1',
       connectionGeneration: 1
     }
+
     state.directSshPaneRetryByTabId['ssh-live'] = {
       attemptId: 'attempt-1',
       authority,
@@ -174,6 +177,7 @@ describe('clearDirectSshTerminalBindings', () => {
       sortEpoch: 9
     })
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })

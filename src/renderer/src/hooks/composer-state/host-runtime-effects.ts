@@ -74,19 +74,25 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     if (isRemote && selectedRepoSshStatus !== 'connected') {
       return
     }
+
     let cancelled = false
+
     const detect = isRemote
       ? ensureRemoteDetectedAgents(connectionId!)
       : runtimeEnvironmentId
         ? ensureRuntimeDetectedAgents(runtimeEnvironmentId)
         : ensureDetectedAgents()
+
     void detect.then((ids) => {
       if (cancelled) {
         return
       }
+
       const enabledIds = filterEnabledTuiAgents(ids, disabledTuiAgents)
+
       if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && enabledIds.length > 0) {
         const firstInCatalogOrder = getAgentCatalog().find((a) => enabledIds.includes(a.id))
+
         if (firstInCatalogOrder) {
           setTuiAgent(firstInCatalogOrder.id)
         }
@@ -95,6 +101,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
         setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -186,15 +193,20 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
 
   const onConnectSelectedRepo = useCallback(async (): Promise<void> => {
     const targetId = selectedRepoConnectionIdRef.current
+
     if (!targetId) {
       return
     }
+
     const liveState = useAppStore.getState()
     const liveRepo = liveState.repos.find((repo) => repo.id === repoIdRef.current)
+
     if (liveRepo?.connectionId !== targetId) {
       return
     }
+
     const liveStatus = liveState.sshConnectionStates.get(targetId)?.status ?? null
+
     if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
       return
     }
@@ -214,12 +226,15 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     if (!folderTargetConnectionId) {
       return
     }
+
     const liveStatus = useAppStore
       .getState()
       .sshConnectionStates.get(folderTargetConnectionId)?.status
+
     if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus ?? null)) {
       return
     }
+
     try {
       await window.api.ssh.connect({ targetId: folderTargetConnectionId })
     } catch (error) {

@@ -235,21 +235,27 @@ describe('createHostedReview', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: 'abc refs/remotes/origin/main\n', stderr: '' }
       }
+
       if (args[0] === 'log' && args.includes('--pretty=%s')) {
         return { stdout: 'Feature title\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- Feature title\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
     createGitHubPullRequestMock.mockResolvedValue({
@@ -308,6 +314,7 @@ describe('createHostedReview', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'other-branch\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -336,9 +343,11 @@ describe('createHostedReview', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -585,21 +594,27 @@ describe('createHostedReview', () => {
         if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
           return { stdout: 'feature\n', stderr: '' }
         }
+
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+
         if (args[0] === 'show-ref') {
           return { stdout: 'abc refs/remotes/origin/main\n', stderr: '' }
         }
+
         if (args[0] === 'log' && args.includes('--pretty=%s')) {
           return { stdout: 'Feature title\n', stderr: '' }
         }
+
         if (args[0] === 'log') {
           return { stdout: '- Feature title\n', stderr: '' }
         }
+
         return { stdout: '', stderr: '' }
       })
     }
+
     getSshGitProviderMock.mockReturnValue(remoteGit)
 
     await expect(

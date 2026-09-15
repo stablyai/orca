@@ -28,6 +28,7 @@ let inProcessOperations: WslTranscriptFsProcessOperations | null = null
 
 function runInProcess<T>(request: WslTranscriptFsReusableProcessCall): Promise<T> {
   inProcessOperations ??= new WslTranscriptFsProcessOperations()
+
   return inProcessOperations
     .execute({ ...request, id: 0 })
     .then((value) => decodeWslTranscriptFsProcessValue(request.operation, value)) as Promise<T>
@@ -37,11 +38,14 @@ const clientsByLane = new Map<string, WslTranscriptFsProcessClient>()
 
 function getLaneClient(laneKey: string): WslTranscriptFsProcessClient {
   const existing = clientsByLane.get(laneKey)
+
   if (existing) {
     return existing
   }
+
   const client = new WslTranscriptFsProcessClient(forkWslTranscriptFsProcess)
   clientsByLane.set(laneKey, client)
+
   return client
 }
 
@@ -53,6 +57,7 @@ export function runWslTranscriptFsProcess<T>(
   if (inVitestWorker()) {
     return runInProcess<T>(request)
   }
+
   return getLaneClient(laneKey).run<T>(request, signal)
 }
 
@@ -66,6 +71,7 @@ export function openWslTranscriptFsProcess(
     // handle branch, mirroring non-UNC ownership.
     return open(path, 'r')
   }
+
   return getLaneClient(laneKey).open(path, signal)
 }
 
@@ -76,6 +82,7 @@ export function readWslTranscriptFsProcess(
   signal: AbortSignal
 ): Promise<Buffer> {
   const owner = wslTranscriptFsHandleOwners.get(handle)
+
   return owner
     ? owner.read(handle, position, length, signal)
     : Promise.reject(invalidTranscriptHandleError())
@@ -95,5 +102,6 @@ export function resetWslTranscriptFsProcessClientForTests(): void {
   for (const client of clientsByLane.values()) {
     client.dispose()
   }
+
   clientsByLane.clear()
 }

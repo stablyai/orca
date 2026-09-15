@@ -6,8 +6,11 @@ import {
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 
 const MAX_ID_LENGTH = 4_096
+
 const HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
+
 const WORKSPACE_KINDS = new Set(['worktree', 'folder'])
+
 const REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
 
 function isString(value: unknown, maxLength: number, allowEmpty = false): value is string {
@@ -22,10 +25,13 @@ function isReview(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const review = value as Record<string, unknown>
+
   return (
     typeof review.number === 'number' &&
     Number.isFinite(review.number) &&
@@ -39,7 +45,9 @@ export function isDashboardWorkspace(value: unknown): value is DashboardWorkspac
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const workspace = value as Record<string, unknown>
+
   return (
     isString(workspace.repoId, MAX_ID_LENGTH) &&
     isString(workspace.worktreeId, MAX_ID_LENGTH) &&
@@ -74,8 +82,10 @@ export function admitDashboardWorkspaces(value: unknown): DashboardWorkspace[] |
   if (value === undefined) {
     return undefined
   }
+
   if (!Array.isArray(value) || value.length > DASHBOARD_MAX_MAP_WORKSPACES) {
     return null
   }
+
   return value.filter(isDashboardWorkspace)
 }

@@ -25,6 +25,7 @@ async function tempFile(initial: string): Promise<string> {
   tempRoots.push(root)
   const filePath = join(root, 'rollout.jsonl')
   await writeFile(filePath, initial)
+
   return filePath
 }
 
@@ -33,6 +34,7 @@ async function tempFile(initial: string): Promise<string> {
 async function pendingFilePath(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-pending-'))
   tempRoots.push(root)
+
   return join(root, 'rollout.jsonl')
 }
 
@@ -71,10 +73,12 @@ function codexLifecycleLine(
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('timed out waiting for condition')
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }
@@ -84,6 +88,7 @@ describe('subscribeNativeChatTranscript', () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
     const snapshots: NativeChatMessage[][] = []
     const appends: NativeChatMessage[][] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -109,6 +114,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('delivers an empty initial snapshot so clients do not remain loading', async () => {
     const filePath = await tempFile('')
     const snapshots: NativeChatMessage[][] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -126,6 +132,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('replays and appends provider-authored turn lifecycle markers', async () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
     const lifecycles: NativeChatTurnLifecycle[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -155,6 +162,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('emits Codex task_complete even when the frame has no visible messages', async () => {
     const filePath = await tempFile(codexLifecycleLine('task_started'))
     const lifecycles: NativeChatTurnLifecycle[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'ignored',
@@ -166,6 +174,7 @@ describe('subscribeNativeChatTranscript', () => {
       },
       onAppend: (messages, lifecycle) => {
         expect(messages).toEqual([])
+
         if (lifecycle) {
           lifecycles.push(lifecycle)
         }
@@ -188,9 +197,11 @@ describe('subscribeNativeChatTranscript', () => {
     const filePath = await tempFile(
       codexLifecycleLine('task_started') + codexLifecycleLine('turn_aborted')
     )
+
     let snapshot:
       | { messages: NativeChatMessage[]; lifecycle: NativeChatTurnLifecycle | undefined }
       | undefined
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'ignored',
@@ -218,6 +229,7 @@ describe('subscribeNativeChatTranscript', () => {
         codexLifecycleLine('turn_aborted', 'turn-1') +
         codexLifecycleLine('task_started', 'turn-2')
     )
+
     const result = await readNativeChatTranscriptTail({
       agent: 'codex',
       sessionId: 'ignored',
@@ -241,6 +253,7 @@ describe('subscribeNativeChatTranscript', () => {
         content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }]
       }
     })}\n`
+
     const noise = `${JSON.stringify({
       type: 'user',
       uuid: 'note-1',
@@ -250,7 +263,9 @@ describe('subscribeNativeChatTranscript', () => {
         content: [{ type: 'text', text: '<system-reminder>continue</system-reminder>' }]
       }
     })}\n`
+
     const filePath = await tempFile(claudeEndTurnLine('a-1', 'done') + toolResult + noise)
+
     const result = await readNativeChatTranscriptTail({
       agent: 'claude',
       sessionId: 'ignored',
@@ -264,6 +279,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('emits a bulk append in bounded ordered batches', async () => {
     const filePath = await tempFile('')
     const batches: NativeChatMessage[][] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -271,6 +287,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: (messages) => batches.push(messages),
       debounceMs: 5
     })
+
     await new Promise((resolve) => setTimeout(resolve, 20))
     await appendFile(
       filePath,
@@ -290,6 +307,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('drops one oversized record without retaining or blocking the next append', async () => {
     const filePath = await tempFile('')
     const seen: NativeChatMessage[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -297,6 +315,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: (messages) => seen.push(...messages),
       debounceMs: 5
     })
+
     await new Promise((resolve) => setTimeout(resolve, 20))
     await appendFile(
       filePath,
@@ -313,8 +332,10 @@ describe('subscribeNativeChatTranscript', () => {
     const transcript = Array.from({ length: 800 }, (_unused, index) =>
       claudeLine(`u-${index}`, 'user', `message-${index}-${'x'.repeat(100)}`)
     ).join('')
+
     const filePath = await tempFile(transcript)
     const snapshots: { ids: string[]; hasMore: boolean }[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -334,6 +355,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('keeps an explicit zero-limit snapshot empty instead of reading unbounded', async () => {
     const filePath = await tempFile(claudeLine('u-0', 'user', 'hello'))
     const snapshots: { ids: string[]; hasMore: boolean }[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -356,15 +378,18 @@ describe('subscribeNativeChatTranscript', () => {
         claudeLine(`page-${index}`, 'user', `message-${index}`)
       ).join('')
     )
+
     const newest = await readNativeChatTranscriptTail({
       agent: 'claude',
       sessionId: 'ignored',
       filePath,
       limit: 3
     })
+
     if ('error' in newest) {
       throw new Error(newest.error)
     }
+
     const older = await readNativeChatTranscriptTail({
       agent: 'claude',
       sessionId: 'ignored',
@@ -383,10 +408,13 @@ describe('subscribeNativeChatTranscript', () => {
 
   it('decodes multi-chunk records once into the bounded tail order', async () => {
     const large = 'x'.repeat(200_000)
+
     const filePath = await tempFile(
       claudeLine('u-large-1', 'user', large) + claudeLine('u-large-2', 'user', large)
     )
+
     const snapshots: { ids: string[]; hasMore: boolean }[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -492,6 +520,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: () => {},
       debounceMs: 5
     })
+
     expect(getActiveNativeChatWatcherCount()).toBe(before + 1)
 
     sub.unsubscribe()
@@ -559,6 +588,7 @@ describe('subscribeNativeChatTranscript', () => {
     const filePath = await tempFile(
       claudeLine('u-1', 'user', 'old') + claudeLine('a-1', 'assistant', 'old-reply')
     )
+
     const seen: NativeChatMessage[] = []
 
     const sub = await subscribeNativeChatTranscript({
@@ -587,6 +617,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('detects same-size and larger in-place transcript replacement', async () => {
     const filePath = await tempFile(claudeLine('u-old', 'user', 'old'))
     const seen: NativeChatMessage[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -594,6 +625,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: (messages) => seen.push(...messages),
       debounceMs: 5
     })
+
     await waitFor(() => seen.some((message) => message.id === 'u-old'))
 
     await writeFile(filePath, claudeLine('u-new', 'user', 'new'))
@@ -611,6 +643,7 @@ describe('subscribeNativeChatTranscript', () => {
     const replacementPath = `${filePath}.replacement`
     const seen: NativeChatMessage[] = []
     const replacements: string[][] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -624,6 +657,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: (messages) => seen.push(...messages),
       debounceMs: 5
     })
+
     await waitFor(() => seen.some((message) => message.id === 'atomic-old'))
 
     await writeFile(replacementPath, claudeLine('atomic-new', 'user', 'replacement'))
@@ -643,6 +677,7 @@ describe('subscribeNativeChatTranscript', () => {
     const replacementPath = `${filePath}.replacement`
     const before = getActiveNativeChatWatcherCount()
     const seen: NativeChatMessage[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -650,6 +685,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: (messages) => seen.push(...messages),
       debounceMs: 0
     })
+
     await waitFor(() => seen.some((message) => message.id === 'race-old'))
 
     await writeFile(replacementPath, claudeLine('race-new', 'user', 'replacement'))
@@ -667,6 +703,7 @@ describe('subscribeNativeChatTranscript', () => {
   it('recovers after an unlink/recreate gap outlasts the fast retry window', async () => {
     const filePath = await tempFile(claudeLine('unlink-old', 'user', 'old'))
     const seen: NativeChatMessage[] = []
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'ignored',
@@ -674,6 +711,7 @@ describe('subscribeNativeChatTranscript', () => {
       onAppend: (messages) => seen.push(...messages),
       debounceMs: 0
     })
+
     await waitFor(() => seen.some((message) => message.id === 'unlink-old'))
 
     await rm(filePath)
@@ -689,11 +727,13 @@ describe('subscribeNativeChatTranscript', () => {
 
   it('returns a no-op unsubscribe when the file cannot be resolved', async () => {
     const before = getActiveNativeChatWatcherCount()
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: '',
       onAppend: () => {}
     })
+
     expect(sub.watching).toBe(false)
     expect(getActiveNativeChatWatcherCount()).toBe(before)
     // Must not throw.
@@ -736,6 +776,7 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
 
   it('returns a no-op (no resolve poll) for a blank session id with no explicit file', async () => {
     const before = getActiveNativeChatWatcherCount()
+
     const sub = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: '   ',

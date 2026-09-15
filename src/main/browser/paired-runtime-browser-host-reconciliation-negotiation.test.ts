@@ -37,6 +37,7 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'browser-host',
           close,
@@ -66,6 +67,7 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'browser-host',
           close: vi.fn(),
@@ -88,6 +90,7 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'browser-host',
           close: vi.fn(),
@@ -107,6 +110,7 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'browser-host',
           close: vi.fn(),
@@ -134,6 +138,7 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks.push(args[4] as RemoteRuntimeSubscriptionCallbacks)
+
         return {
           requestId: `browser-host-${callbacks.length}`,
           close: vi.fn(),
@@ -167,6 +172,7 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return { requestId: 'browser-host', close, sendBinary: () => false, sendRequest: vi.fn() }
       }
     )

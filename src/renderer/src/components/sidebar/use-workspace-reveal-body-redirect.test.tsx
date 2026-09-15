@@ -17,10 +17,12 @@ vi.mock('@/store', () => ({
 
 function Host({ agentsBodyShowing }: { agentsBodyShowing: boolean }): null {
   useWorkspaceRevealBodyRedirect(agentsBodyShowing)
+
   return null
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -41,6 +43,7 @@ describe('useWorkspaceRevealBodyRedirect', () => {
       root.render(<Host agentsBodyShowing />)
     })
     const seen: unknown[] = []
+
     const listener = (event: Event): void => {
       seen.push(event instanceof CustomEvent ? event.detail : null)
     }

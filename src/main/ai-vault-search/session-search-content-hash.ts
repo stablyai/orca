@@ -5,6 +5,7 @@ import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers
 // file under a new session id, so one conversation lands N times in results.
 // The shared opening prefix is what identifies the copy; the tail diverges.
 const CONTENT_HASH_MESSAGE_LIMIT = 8
+
 // One shared opening prompt is not evidence of a fork; two turns is.
 const CONTENT_HASH_MIN_MESSAGES = 2
 
@@ -23,10 +24,12 @@ export function foldContentHash(
   messages: readonly TranscriptMessage[]
 ): SessionContentHash {
   let { hash, count } = previous
+
   for (const message of messages) {
     if (count >= CONTENT_HASH_MESSAGE_LIMIT) {
       break
     }
+
     hash = createHash('sha256')
       .update(hash ?? '')
       .update('\0')
@@ -36,6 +39,7 @@ export function foldContentHash(
       .digest('hex')
     count += 1
   }
+
   return { hash, count }
 }
 

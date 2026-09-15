@@ -16,6 +16,7 @@ export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeRe
   ipcMain.handle('codexConfigSync:status', (): CodexConfigSyncStatus => {
     const systemHomePath = getSystemCodexHomePath()
     const mirrored = runtimeHome.getMirroredHostHomePathForStatus()
+
     if (mirrored.kind === 'unavailable') {
       // Why: do not throw — the settings pane catches thrown status errors and
       // would show nothing at all. Report the stall so the user sees why.
@@ -25,7 +26,9 @@ export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeRe
         systemConfigPath: join(systemHomePath, 'config.toml')
       }
     }
+
     const runtimeHomePath = mirrored.homePath
+
     if (!runtimeHomePath) {
       // Why: the system default runs Codex directly against ~/.codex, so there
       // is no mirror that can fall behind. Reporting on the shared home here
@@ -36,6 +39,7 @@ export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeRe
         systemConfigPath: join(systemHomePath, 'config.toml')
       }
     }
+
     return getCodexConfigSyncStatus({ runtimeHomePath, systemHomePath })
   })
 }

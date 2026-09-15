@@ -14,6 +14,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
   protected async performQuitAndInstall(): Promise<void> {
     if (this.quitAndInstallInProgress) {
       recordUpdaterLifecycle('quit_and_install_ignored', { reason: 'already-in-progress' })
+
       return
     }
 
@@ -23,10 +24,13 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
     }
 
     const pendingVersion = this.getPendingInstallVersion()
+
     if (this.deferHeadlessServeInstall('install', pendingVersion)) {
       return
     }
+
     const linuxPackageType = getLinuxPackageType()
+
     if (linuxPackageType === 'deb' || linuxPackageType === 'rpm') {
       recordUpdaterLifecycle('linux_package_manual_install_required', {
         packageType: linuxPackageType,
@@ -34,8 +38,10 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
       })
       // The preload prepares renderer state before invoking; explicitly release it when main refuses.
       this.mainWindowRef?.webContents.send('updater:quitAndInstallAborted')
+
       return
     }
+
     if (linuxPackageType === 'unusable') {
       recordUpdaterLifecycle(
         'linux_package_marker_unusable',
@@ -49,8 +55,10 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
         ...(pendingVersion ? { version: pendingVersion } : {})
       })
+
       return
     }
+
     this.quitAndInstallInProgress = true
 
     markMacQuitAndInstallInFlight()
@@ -93,16 +101,19 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
           this.resetQuitForUpdateState()
           // Why: a bare return would exit this span Success and hide the aborted install from tracing.
           span.fail('Could not persist the supervised serve update handoff')
+
           return
         }
 
         recordUpdaterLifecycle('quit_and_install_invoking_native', {
           version: pendingVersion || null
         })
+
         // Why: defensive — never call quitAndInstall if recovery/reset already cleared the handoff.
         if (!this.quitAndInstallInProgress) {
           return
         }
+
         // Why: mark before the call so a sync 'error' during quitAndInstall can recover; pre-native errors must not look like install failure.
         this.quitAndInstallNativeInvoked = true
         // Why: invoke before killAllPty/removing close listeners so a sync 'error' can recover while windows and PTYs are intact.
@@ -120,6 +131,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
               ? this.currentStatus.message
               : 'quitAndInstall returned without invoking the installer'
           )
+
           return
         }
 
@@ -129,6 +141,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         for (const win of BrowserWindow.getAllWindows()) {
           win.removeAllListeners('close')
         }
+
         span.addEvent('window_close_listeners_removed', {
           windowCount: BrowserWindow.getAllWindows().length
         })
@@ -154,8 +167,10 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
             message: 'Update install cleanup failed after commit; install already applied'
           }
         )
+
         return
       }
+
       const quitAndInstallNativeInvokedBeforeReset = this.quitAndInstallNativeInvoked
       failServeUpdateHandoff('Could not invoke the native updater.')
       this.resetQuitForUpdateState()
@@ -186,6 +201,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
     ) {
       return false
     }
+
     failServeUpdateHandoff('The native updater rejected the install request.')
     this.resetQuitForUpdateState()
     recordUpdaterLifecycle(
@@ -200,6 +216,7 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
       state: 'error',
       message: this.withInstallFailureCause(this.getPreCommitInstallFailureMessage(), error)
     })
+
     return true
   }
 }

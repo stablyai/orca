@@ -29,6 +29,7 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
     error instanceof Error && 'code' in error ? (error as { code: unknown }).code : undefined,
     error instanceof Error ? error.message : String(error)
   ]
+
   for (const candidate of candidates) {
     if (
       typeof candidate === 'string' &&
@@ -37,18 +38,22 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
       return candidate as AgentSessionWireRefusalCode
     }
   }
+
   return null
 }
 
 function precommitRefusal(error: unknown): AgentSessionWireRefusal {
   const code = wireRefusalCode(error)
+
   if (code) {
     return { code, message: 'Orca cannot open a structured agent chat for this workspace.' }
   }
+
   const message = error instanceof Error ? error.message : String(error)
   // A code-less failure here is often a defect, not a policy answer; the refusal keeps the user
   // moving, the log keeps the cause findable.
   console.warn('[agent-session] create refused before it committed anything', error)
+
   return {
     code: UNCODED_PRECOMMIT_REFUSAL_CODE,
     message: `Orca could not prepare a structured agent chat for this workspace: ${message}`

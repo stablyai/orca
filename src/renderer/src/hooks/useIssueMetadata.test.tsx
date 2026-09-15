@@ -19,6 +19,7 @@ const linearMocks = vi.hoisted(() => ({
 }))
 
 const runtimeMocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
+
 const githubMocks = vi.hoisted(() => ({ listLabels: vi.fn() }))
 
 vi.mock('@/runtime/runtime-linear-project-client', () => ({
@@ -85,6 +86,7 @@ describe('useIssueMetadata hooks', () => {
 
     function LabelsProbe(): null {
       labels = useRepoLabels(null, 'folder-repo-id').data
+
       return null
     }
 
@@ -108,6 +110,7 @@ describe('useIssueMetadata hooks', () => {
         runtimeEnvironmentId: ' env-explicit ',
         activeRuntimeEnvironmentId: 'env-active'
       }).data
+
       return null
     }
 
@@ -134,6 +137,7 @@ describe('useIssueMetadata hooks', () => {
       // Fresh settings object each render — the storm trigger.
       const metadata = useTeamStates('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
       states = metadata.data
+
       return null
     }
 
@@ -154,6 +158,7 @@ describe('useIssueMetadata hooks', () => {
       renders += 1
       const metadata = useTeamStates('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
       error = metadata.error
+
       return null
     }
 
@@ -176,6 +181,7 @@ describe('useIssueMetadata hooks', () => {
       renders += 1
       const metadata = useTeamLabels('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
       error = metadata.error
+
       return null
     }
 
@@ -198,6 +204,7 @@ describe('useIssueMetadata hooks', () => {
       renders += 1
       const metadata = useTeamMembers('team-1', { activeRuntimeEnvironmentId: null }, 'ws-1')
       error = metadata.error
+
       return null
     }
 
@@ -220,12 +227,14 @@ describe('useIssueMetadata hooks', () => {
           { id: 'be-done', name: 'Done' }
         ]
       }
+
       if (teamId === 'team-fe') {
         return [
           { id: 'fe-todo', name: 'Todo' },
           { id: 'fe-review', name: 'In Review' }
         ]
       }
+
       return []
     })
 
@@ -235,7 +244,9 @@ describe('useIssueMetadata hooks', () => {
         { activeRuntimeEnvironmentId: null },
         'ws-1'
       )
+
       states = metadata.data as { id: string; name: string }[]
+
       return null
     }
 

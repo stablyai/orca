@@ -13,6 +13,7 @@ import {
 import type { BrowserRoutePageGuestIdentity } from './browser-route-page-authority'
 
 const partition = `persist:orca-browser-v1-${'a'.repeat(64)}`
+
 let stagingRoot = ''
 
 beforeEach(async () => {
@@ -79,13 +80,17 @@ function createHarness(
 ) {
   const uploadStaging = options.uploadStaging ?? new BrowserClientUploadStaging(stagingRoot)
   const automationCalls: { params: { files?: unknown } }[] = []
+
   const executeAutomation = vi.fn(async (input: { params: { files?: unknown } }) => {
     automationCalls.push(input)
+
     return { uploaded: true }
   })
+
   const retireRendererPage = vi.fn(async () => {})
   const releaseRouteSession = vi.fn(() => {})
   const releaseNetworkRoute = vi.fn(async () => {})
+
   const executor = new BrowserClientPageCommandExecutor({
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-a',
@@ -121,6 +126,7 @@ function createHarness(
     fileChannel: options.fileChannel,
     uploadStaging
   } as never)
+
   return {
     executor,
     executeAutomation,
@@ -149,6 +155,7 @@ function negotiatedTransport(contents: string): BrowserClientFileChannelTranspor
         _meta: {}
       }) as never
   })
+
   return transport
 }
 
@@ -225,6 +232,7 @@ describe('client-placed browser.upload routing', () => {
 
   it('retires the guest and releases the route when the staged copies cannot be removed', async () => {
     const transport = negotiatedTransport('remote-bytes')
+
     const { executor, retireRendererPage, releaseRouteSession, releaseNetworkRoute } =
       createHarness({
         fileChannel: transport,
@@ -239,6 +247,7 @@ describe('client-placed browser.upload routing', () => {
           }
         })
       })
+
     await executor.handle(createPage, new AbortController().signal)
     await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
 
@@ -265,6 +274,7 @@ describe('client-placed browser.upload routing', () => {
 
   it('reports staged copies the close could not remove', async () => {
     const transport = negotiatedTransport('remote-bytes')
+
     const { executor } = createHarness({
       fileChannel: transport,
       uploadStaging: new BrowserClientUploadStaging(stagingRoot, {
@@ -276,6 +286,7 @@ describe('client-placed browser.upload routing', () => {
         }
       })
     })
+
     await executor.handle(createPage, new AbortController().signal)
     await executor.handle(uploadCommand(['docs/report.pdf']), new AbortController().signal)
     // The busy directory fails the close command, so the copies are still staged at shutdown.

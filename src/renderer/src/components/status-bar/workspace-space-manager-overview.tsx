@@ -31,6 +31,7 @@ export function WorkspaceSpaceManagerOverview({
     sourceRows,
     zoomedWorktree
   } = model
+
   return (
     <>
       <div className="grid overflow-hidden rounded-lg border border-border/65 bg-background/35 md:grid-cols-4 md:divide-x md:divide-border/60">

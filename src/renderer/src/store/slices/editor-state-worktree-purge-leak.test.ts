@@ -23,6 +23,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -43,7 +44,9 @@ globalThis.window = { api: mockApi }
 import { createTestStore, seedStore, makeWorktree, makeOpenFile } from './store-test-helpers'
 
 const WT = 'repo1::/path/wt1'
+
 const FILE_A = '/path/wt1/a.ts'
+
 const FILE_B = '/path/wt1/b.ts'
 
 function seedEditorState(store: ReturnType<typeof createTestStore>): void {

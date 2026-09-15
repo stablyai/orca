@@ -5,10 +5,12 @@ import { spawnShellWithFallback, type WindowsShellSpawnAttempt } from './local-p
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   return () => Object.defineProperty(process, 'platform', { configurable: true, value: original })
 }
 
 let restorePlatform: (() => void) | null = null
+
 afterEach(() => {
   restorePlatform?.()
   restorePlatform = null
@@ -16,7 +18,9 @@ afterEach(() => {
 })
 
 const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD = 'C:\\Windows\\System32\\cmd.exe'
 
 function makeFakePty(): pty.IPty {
@@ -56,6 +60,7 @@ describe('spawnShellWithFallback on Windows', () => {
       if (shellPath === PWSH7) {
         throw new Error(ACCESS_DENIED_5)
       }
+
       return makeFakePty()
     }) as unknown as typeof pty.spawn
 
@@ -103,6 +108,7 @@ describe('spawnShellWithFallback on Windows', () => {
       if (shellPath === CMD) {
         return makeFakePty()
       }
+
       throw new Error(ACCESS_DENIED_5)
     }) as unknown as typeof pty.spawn
 
@@ -130,9 +136,11 @@ describe('spawnShellWithFallback on Windows', () => {
       makeAttempt(WINDOWS_POWERSHELL),
       makeAttempt(CMD)
     ]
+
     const ptySpawn = vi.fn(() => {
       throw new Error(ACCESS_DENIED_5)
     }) as unknown as typeof pty.spawn
+
     const previousVersion = process.env.ORCA_APP_VERSION
     process.env.ORCA_APP_VERSION = '1.4.178-test'
 

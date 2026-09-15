@@ -31,6 +31,7 @@ export function computerUseErrorRecoveryData(
           'Do not retry the click if it already took effect; otherwise bring the target window forward and use fresh state before trying again.'
         )
       }
+
       return recoverWith(
         'Retry once with `--restore-window`.',
         'If `--restore-window` was already used, stop retrying restore; bring the app forward manually, check permissions, or prefer `set-value` for editable fields.'

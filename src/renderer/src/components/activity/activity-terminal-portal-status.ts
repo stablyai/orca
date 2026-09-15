@@ -18,26 +18,33 @@ function findActivityTerminalPane(
   leafId: string
 ): { foundAnyPane: boolean; pane: HTMLElement | null } {
   let foundAnyPane = false
+
   for (const candidate of root.querySelectorAll<HTMLElement>('[data-leaf-id]')) {
     foundAnyPane = true
+
     if (candidate.dataset.leafId === leafId) {
       return { foundAnyPane, pane: candidate }
     }
   }
+
   return { foundAnyPane, pane: null }
 }
 
 function hasInlineDisplayNoneBetween(element: HTMLElement, root: HTMLElement): boolean {
   let current: HTMLElement | null = element
+
   while (current) {
     if (current.style.display === 'none') {
       return true
     }
+
     if (current === root) {
       return false
     }
+
     current = current.parentElement
   }
+
   return false
 }
 
@@ -47,6 +54,7 @@ function hasUnhiddenSiblingPane(root: HTMLElement, selectedPane: HTMLElement): b
       return true
     }
   }
+
   return false
 }
 
@@ -55,33 +63,42 @@ function getSelectedActivityTerminalPortalStatus(
   paneKey: string
 ): ActivityTerminalPortalDomStatus {
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return { ready: false, unavailable: true }
   }
+
   let selectedRoot: HTMLElement | null = null
+
   for (const candidate of target.querySelectorAll<HTMLElement>('[data-terminal-tab-id]')) {
     if (candidate.dataset.terminalTabId === parsed.tabId) {
       selectedRoot = candidate
       break
     }
   }
+
   if (!selectedRoot) {
     return { ready: false, unavailable: false }
   }
 
   const { foundAnyPane, pane: selectedPane } = findActivityTerminalPane(selectedRoot, parsed.leafId)
+
   if (!selectedPane) {
     return { ready: false, unavailable: foundAnyPane }
   }
 
   const unavailable = hasInlineDisplayNoneBetween(selectedPane, selectedRoot)
   const hasUnisolatedSibling = hasUnhiddenSiblingPane(selectedRoot, selectedPane)
+
   const isVisibleRoot =
     !unavailable && (selectedPane.offsetParent !== null || selectedPane.getClientRects().length > 0)
+
   const hasPtyBinding =
     selectedPane.hasAttribute('data-pty-id') ||
     selectedPane.querySelector<HTMLElement>('[data-pty-id]') !== null
+
   const hasXtermScreen = selectedPane.querySelector<HTMLElement>('.xterm-screen') !== null
+
   return {
     ready: isVisibleRoot && !hasUnisolatedSibling && hasPtyBinding && hasXtermScreen,
     unavailable
@@ -98,6 +115,7 @@ export function useActivityTerminalPortalStatus(
     paneKey: null,
     status: 'loading'
   })
+
   // Why: portal churn replaces every subscription identity, so the burst budget must outlive it.
   const readinessLatchRef = useRef<ActivityPortalReadinessLatch | null>(null)
 
@@ -112,17 +130,22 @@ export function useActivityTerminalPortalStatus(
       if (disposed) {
         return
       }
+
       pendingStatus = status
+
       if (readinessFrame !== null) {
         return
       }
+
       readinessFrame = requestAnimationFrame(() => {
         readinessFrame = null
         const nextStatus = pendingStatus
         pendingStatus = null
+
         if (disposed || nextStatus === null) {
           return
         }
+
         setReadiness((prev) =>
           prev.target === target && prev.paneKey === paneKey && prev.status === nextStatus
             ? prev
@@ -133,10 +156,12 @@ export function useActivityTerminalPortalStatus(
 
     const disposeFrame = (): void => {
       disposed = true
+
       if (readinessFrame !== null) {
         cancelAnimationFrame(readinessFrame)
         readinessFrame = null
       }
+
       if (readinessReleaseTimer !== null) {
         window.clearTimeout(readinessReleaseTimer)
         readinessReleaseTimer = null
@@ -145,10 +170,13 @@ export function useActivityTerminalPortalStatus(
 
     if (!target || !paneKey) {
       scheduleReadiness('loading')
+
       return disposeFrame
     }
+
     if (forceUnavailable) {
       scheduleReadiness('unavailable')
+
       return disposeFrame
     }
 
@@ -157,10 +185,12 @@ export function useActivityTerminalPortalStatus(
     const updateReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
       const nextStatus = readinessLatch.next(status)
       scheduleReadiness(nextStatus)
+
       if (readinessReleaseTimer !== null) {
         window.clearTimeout(readinessReleaseTimer)
         readinessReleaseTimer = null
       }
+
       if (nextStatus !== status) {
         // Why: a quiet loading pane has no mutation to release the burst latch on its own.
         readinessReleaseTimer = window.setTimeout(
@@ -172,14 +202,19 @@ export function useActivityTerminalPortalStatus(
 
     const checkReadiness = (): void => {
       const status = getSelectedActivityTerminalPortalStatus(target, paneKey)
+
       if (status.unavailable) {
         updateReadiness('unavailable')
+
         return
       }
+
       if (status.ready) {
         updateReadiness('ready')
+
         return
       }
+
       updateReadiness('loading')
     }
 
@@ -214,6 +249,7 @@ export function useActivityTerminalLoadingLabel(loading: boolean): boolean {
 
   if (visibleLoading !== loading) {
     setVisibleLoading(loading)
+
     if (visible) {
       setVisible(false)
     }
@@ -223,7 +259,9 @@ export function useActivityTerminalLoadingLabel(loading: boolean): boolean {
     if (!loading) {
       return
     }
+
     const timer = setTimeout(() => setVisible(true), ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS)
+
     return () => clearTimeout(timer)
   }, [loading])
 

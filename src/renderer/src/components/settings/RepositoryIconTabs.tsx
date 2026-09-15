@@ -44,9 +44,11 @@ export function RepositoryIconTabs({
   const handleUploadImage = async () => {
     try {
       const result = await window.api.shell.pickRepoIconImage()
+
       if (!result || !mountedRef.current) {
         return
       }
+
       onSetIcon({
         type: 'image',
         src: result.dataUrl,
@@ -67,6 +69,7 @@ export function RepositoryIconTabs({
 
   const handleUseWebsiteFavicon = () => {
     const src = faviconUrlFromWebsite(website)
+
     if (!src) {
       toast.error(
         translate(
@@ -74,8 +77,10 @@ export function RepositoryIconTabs({
           'Enter a valid website URL.'
         )
       )
+
       return
     }
+
     onSetIcon({
       type: 'image',
       src,

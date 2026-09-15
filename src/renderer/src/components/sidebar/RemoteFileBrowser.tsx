@@ -22,6 +22,7 @@ type RemoteFileBrowserProps = (
 }
 
 const FILE_HINT_MS = 2000
+
 const FILE_HINT_TEXT = "Files can't be opened as a project"
 
 export function RemoteFileBrowser({
@@ -50,6 +51,7 @@ export function RemoteFileBrowser({
       clearTimeout(fileHintTimerRef.current)
       fileHintTimerRef.current = null
     }
+
     setFileHint(false)
   }, [])
 
@@ -79,9 +81,11 @@ export function RemoteFileBrowser({
       if (node !== null) {
         return
       }
+
       // Why: browse generations and timers are scoped to this picker owner; clear them when it detaches.
       invalidateBrowseRequests()
       cancelPreviewWork()
+
       for (const timerRef of [fileHintTimerRef, clickTimerRef]) {
         if (timerRef.current) {
           clearTimeout(timerRef.current)
@@ -97,14 +101,18 @@ export function RemoteFileBrowser({
       const gen = ++genRef.current
       setLoading(true)
       setError(null)
+
       try {
         const result = await fetchListing(dirPath)
+
         if (gen !== genRef.current) {
           return
         }
+
         setResolvedPath(result.resolvedPath)
         setEntries(result.entries)
         setPathFlavor(result.pathFlavor)
+
         // Only bare `~` yields the home dir itself; `~/sub` resolves elsewhere and must not overwrite the home anchor.
         if (dirPath === '~') {
           homePathRef.current = result.resolvedPath
@@ -113,6 +121,7 @@ export function RemoteFileBrowser({
         if (gen !== genRef.current) {
           return
         }
+
         setError(err instanceof Error ? err.message : String(err))
         setEntries([])
       } finally {
@@ -150,6 +159,7 @@ export function RemoteFileBrowser({
     if (resolvedPath === '/') {
       return
     }
+
     navigate(parentPath(resolvedPath, pathFlavor))
   }, [resolvedPath, navigate, pathFlavor])
 
@@ -159,6 +169,7 @@ export function RemoteFileBrowser({
     if (fileHintTimerRef.current) {
       clearTimeout(fileHintTimerRef.current)
     }
+
     setFileHint(true)
     fileHintTimerRef.current = setTimeout(() => {
       setFileHint(false)
@@ -180,11 +191,14 @@ export function RemoteFileBrowser({
       if (preview?.loading) {
         return
       }
+
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current)
       }
+
       clickTimerRef.current = setTimeout(() => {
         clickTimerRef.current = null
+
         if (entry.isDirectory) {
           navigate(joinPath(listParentPath, entry.name, pathFlavor))
         } else {
@@ -201,10 +215,12 @@ export function RemoteFileBrowser({
       if (!entry.isDirectory || preview?.loading) {
         return
       }
+
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current)
         clickTimerRef.current = null
       }
+
       onSelect(joinPath(listParentPath, entry.name, pathFlavor))
     },
     [listParentPath, onSelect, preview?.loading, pathFlavor]

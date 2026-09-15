@@ -52,9 +52,11 @@ export function useWorkspaceCleanupScanLifecycle({
           if (!mountedRef.current || !options.notifyWhenReady || openRef.current) {
             return
           }
+
           if (latestReadyToastScanAtRef.current === result.scannedAt) {
             return
           }
+
           latestReadyToastScanAtRef.current = result.scannedAt
           toast.success(
             translate(
@@ -100,28 +102,35 @@ export function useWorkspaceCleanupScanLifecycle({
     if (!open) {
       wasOpenRef.current = false
       autoScanAttemptedForOpenRef.current = false
+
       return
     }
+
     if (!wasOpenRef.current) {
       wasOpenRef.current = true
       autoScanAttemptedForOpenRef.current = false
       onFreshOpen()
     }
+
     // Why: reopening mid-batch keeps the deletion progress view; a broad scan
     // started here would be discarded by the removal's scan invalidation, so
     // skip it while a removal batch is running.
     if (removalInFlight || removalInFlightRef.current) {
       return
     }
+
     if (autoScanAttemptedForOpenRef.current) {
       return
     }
+
     autoScanAttemptedForOpenRef.current = true
+
     if (loading) {
       // Why: reopening mid-scan adopts the stream already feeding the store;
       // starting another broad scan here would duplicate it once it settles.
       return
     }
+
     hydrateThenScan()
   }, [hydrateThenScan, loading, onFreshOpen, open, removalInFlight, removalInFlightRef])
 

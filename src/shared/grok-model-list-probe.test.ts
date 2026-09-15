@@ -33,6 +33,7 @@ describe('parseGrokModelList', () => {
     const parsed = parseGrokModelList(
       'Available models:\n  * grok-build\n  * grok-4.5 (default)\n  * grok-mini\n'
     )
+
     expect(parsed.map(({ id, isDefault }) => [id, isDefault])).toEqual([
       ['grok-build', undefined],
       ['grok-4.5', true],
@@ -76,6 +77,7 @@ describe('parseGrokModelList', () => {
     const parsed = parseGrokModelList(
       'Available models:\n  * grok-4.5 (default)\n  * grok-build(beta)\n'
     )
+
     expect(parsed.map(({ id }) => id)).toEqual(['grok-4.5', 'grok-build'])
   })
 
@@ -88,6 +90,7 @@ describe('parseGrokModelList', () => {
     const parsed = parseGrokModelList(
       'Available models:\n  * grok-4.5 (default)\n  * grok-build\n  * grok-4.5\n'
     )
+
     expect(parsed.map(({ id }) => id)).toEqual(['grok-4.5', 'grok-build'])
   })
 
@@ -145,6 +148,7 @@ describe('parseGrokModelList', () => {
       'Available models:\n  * \n  *\n  * grok-4.5\n',
       'Available models:\n  * (default)\n'
     ]
+
     for (const stdout of stdouts) {
       for (const model of parseGrokModelList(stdout)) {
         expect(model.id.length).toBeGreaterThan(0)

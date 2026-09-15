@@ -24,6 +24,7 @@ export type LandingPreflightIssueOptions = {
 
 export function hasGitHubBackedProject(repos: readonly Repo[]): boolean {
   const projection = projectHostSetupProjectionFromRepos(repos)
+
   return projection.projects.some((project) => project.providerIdentity?.provider === 'github')
 }
 

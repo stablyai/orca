@@ -3,9 +3,11 @@ import { createRemoteWorkspaceSnapshotArrivalCoordinator } from './remote-worksp
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -36,9 +38,11 @@ it('does not reuse a generation while an aborted operation is still settling', a
     await firstCanFinish.promise
     firstStillCurrent = coordinator.isCurrent('target-a', arrival)
   })
+
   await coordinator.run('target-a', async (arrival) => {
     arrivals.push(arrival)
   })
+
   const third = coordinator.run('target-a', async (arrival) => {
     arrivals.push(arrival)
     await thirdCanFinish.promise

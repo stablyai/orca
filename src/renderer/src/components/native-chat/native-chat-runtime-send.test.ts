@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Mock the IO seam so the test stays pure: we only assert the write order and
 // the inter-write delay, not the local-vs-remote pty branching.
 const sendRuntimePtyInput = vi.fn()
+
 const sendRuntimePtyInputVerified = vi.fn()
+
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args),
   sendRuntimePtyInputVerified: (...args: unknown[]) => sendRuntimePtyInputVerified(...args)
@@ -29,6 +31,7 @@ import {
 import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
 
 const SETTINGS = {} as Parameters<typeof sendNativeChatMessage>[0]
+
 const PTY = 'pty-1'
 
 function expectWriteOrder(calls: unknown[][], expected: string[]): void {
@@ -392,6 +395,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'describe', [
       '/tmp/orca-paste-image.png'
     ])
+
     handle.cancel()
     vi.runAllTimers()
 
@@ -443,6 +447,7 @@ describe('sendNativeChatAskAnswer', () => {
       { raw: '2' },
       { text: 'custom answer' }
     ])
+
     expect(handle.settleAfterMs).toBe(
       2 * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
     )

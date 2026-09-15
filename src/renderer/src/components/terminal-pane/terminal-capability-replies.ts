@@ -8,6 +8,7 @@ import {
 import { guardParserHandler } from './terminal-parser-handler-guard'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
+
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 type TerminalCapabilityRepliesDeps = {
@@ -28,6 +29,7 @@ function getTerminalScreenElement(
   if (typeof terminal.element?.querySelector !== 'function') {
     return null
   }
+
   return terminal.element.querySelector('.xterm-screen') ?? null
 }
 
@@ -37,10 +39,13 @@ function measureCellPixels(
   if (terminal.cols <= 0 || terminal.rows <= 0) {
     return null
   }
+
   const rect = getTerminalScreenElement(terminal)?.getBoundingClientRect()
+
   if (!rect || !(rect.width > 0) || !(rect.height > 0)) {
     return null
   }
+
   return {
     width: Math.max(1, Math.round(rect.width / terminal.cols)),
     height: Math.max(1, Math.round(rect.height / terminal.rows))
@@ -67,12 +72,15 @@ function sendTerminalOscColorQueryRepliesForSlots(
   sendInput: (data: string) => boolean | void
 ): boolean {
   const replies = terminalOscColorQueryReplies(terminal.options.theme ?? {}, slots)
+
   if (!replies) {
     return false
   }
+
   for (const reply of replies) {
     sendInput(reply)
   }
+
   return true
 }
 
@@ -81,35 +89,45 @@ export function createTerminalPixelSizeQueryResponder(
   sendInput: (data: string) => boolean | void
 ): (data: string) => void {
   let pending = ''
+
   const respond = (reportsWindowPixels: boolean): void => {
     const cell = measureCellPixels(terminal)
+
     if (!cell) {
       return
     }
+
     const width = cell.width * (reportsWindowPixels ? terminal.cols : 1)
     const height = cell.height * (reportsWindowPixels ? terminal.rows : 1)
     sendInput(`\x1b[${reportsWindowPixels ? 4 : 6};${height};${width}t`)
   }
+
   return (data) => {
     const input = pending + data
     pending = input.endsWith('\x1b') || input.endsWith('\x1b[') ? input.slice(-2) : ''
     let offset = 0
+
     while (offset < input.length) {
       const queryIndex = input.indexOf('\x1b[', offset)
+
       if (queryIndex === -1) {
         break
       }
+
       const query = input.slice(queryIndex, queryIndex + 5)
+
       if (query === '\x1b[14t') {
         respond(true)
         offset = queryIndex + 5
         continue
       }
+
       if (query === '\x1b[16t') {
         respond(false)
         offset = queryIndex + 5
         continue
       }
+
       offset = queryIndex + 2
     }
   }
@@ -125,11 +143,13 @@ export function installTerminalCapabilityReplyHandlers(
         if (!isPrimaryDeviceAttributesQuery(params)) {
           return false
         }
+
         // Why: restored scrollback may contain old DA1 queries; answering those
         // into the fresh shell recreates the stray-input leak this handler fixes.
         if (!deps.isReplaying()) {
           deps.sendInput(deps.da1Response ?? DEFAULT_DA1_RESPONSE)
         }
+
         return true
       })
     ),
@@ -137,12 +157,15 @@ export function installTerminalCapabilityReplyHandlers(
       10,
       guardParserHandler('osc-10-color-query', (data) => {
         const slots = terminalOscColorQuerySlotsForBody(10, data.trim())
+
         if (!slots) {
           return false
         }
+
         if (deps.isReplaying()) {
           return true
         }
+
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
       })
     ),
@@ -150,12 +173,15 @@ export function installTerminalCapabilityReplyHandlers(
       11,
       guardParserHandler('osc-11-color-query', (data) => {
         const slots = terminalOscColorQuerySlotsForBody(11, data.trim())
+
         if (!slots) {
           return false
         }
+
         if (deps.isReplaying()) {
           return true
         }
+
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
       })
     )

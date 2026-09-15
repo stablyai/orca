@@ -28,9 +28,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((promiseResolve) => {
     resolve = promiseResolve
   })
+
   return { promise, resolve }
 }
 
@@ -163,9 +165,11 @@ describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
     const repoId = 'repo-id'
     const branch = 'feature/test'
     const cacheableRequest = deferred<PRCheckDetail[]>()
+
     const forcedChecks = [
       { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
     ]
+
     mockApi.gh.prChecks
       .mockReturnValueOnce(cacheableRequest.promise)
       .mockResolvedValueOnce(forcedChecks)
@@ -173,6 +177,7 @@ describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
     const cacheable = store
       .getState()
       .fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
+
     const forced = store
       .getState()
       .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
@@ -199,14 +204,17 @@ describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
     const repoId = 'repo-id'
     const branch = 'feature/test'
     const request = deferred<PRCheckDetail[]>()
+
     const checks = [
       { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
     ]
+
     mockApi.gh.prChecks.mockReturnValueOnce(request.promise)
 
     const first = store
       .getState()
       .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
+
     const second = store
       .getState()
       .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
@@ -257,6 +265,7 @@ describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
     const checksCacheKey = `${repoPath}::pr-checks::12`
+
     const cachedChecks = [
       { name: 'build', status: 'completed', conclusion: 'failure', url: null } as const
     ]
@@ -285,6 +294,7 @@ describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
     const checksCacheKey = `${repoPath}::pr-checks::12`
+
     const oldHeadChecks = [
       { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
     ]

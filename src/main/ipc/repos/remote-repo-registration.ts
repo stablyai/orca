@@ -20,6 +20,7 @@ export async function addRemoteRepoFromPath(
   }
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const gitProvider = getSshGitProvider(args.connectionId)
+
   if (!gitProvider) {
     return { error: `SSH connection "${args.connectionId}" not found or not connected` }
   }
@@ -37,6 +38,7 @@ export async function addRemoteRepoFromPath(
         normalizeRuntimePathForComparison(repo.path) ===
           normalizeRuntimePathForComparison(resolvedPath)
     )
+
   if (existing) {
     return { repo: existing, alreadyExisted: true }
   }
@@ -44,8 +46,10 @@ export async function addRemoteRepoFromPath(
   if (args.kind !== 'folder') {
     try {
       const check = await gitProvider.isGitRepoAsync(resolvedPath)
+
       if (check.isRepo) {
         repoKind = 'git'
+
         if (check.rootPath) {
           resolvedPath = check.rootPath
         }
@@ -56,6 +60,7 @@ export async function addRemoteRepoFromPath(
       if (err instanceof Error && err.message.includes('Not a valid git repository')) {
         return { error: err.message }
       }
+
       return { error: `Not a valid git repository: ${args.remotePath}` }
     }
   }
@@ -68,14 +73,17 @@ export async function addRemoteRepoFromPath(
         normalizeRuntimePathForComparison(repo.path) ===
           normalizeRuntimePathForComparison(resolvedPath)
     )
+
   if (existingAfterRootResolve) {
     return { repo: existingAfterRootResolve, alreadyExisted: true }
   }
 
   const folderName = getRemoteRepoFolderName(resolvedPath)
   let displayName = args.displayName || folderName
+
   if (!args.displayName && (args.remotePath === '~' || args.remotePath === '~/')) {
     const sshTarget = store.getSshTarget(args.connectionId)
+
     if (sshTarget) {
       displayName = sshTarget.label
     }
@@ -86,6 +94,7 @@ export async function addRemoteRepoFromPath(
     kind: repoKind,
     executionHostId: toSshExecutionHostId(args.connectionId)
   })
+
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
@@ -108,6 +117,7 @@ export async function addRemoteRepoFromPath(
 
   store.addRepo(repo)
   const mux = getActiveMultiplexer(args.connectionId)
+
   if (mux) {
     mux.notify('session.registerRoot', { rootPath: resolvedPath })
   }
@@ -117,8 +127,10 @@ export async function addRemoteRepoFromPath(
 
 function getRemoteRepoFolderName(remotePath: string): string {
   const trimmed = remotePath.replace(/[\\/]+$/, '')
+
   if (!trimmed) {
     return remotePath
   }
+
   return trimmed.split(/[\\/]/).at(-1) || remotePath
 }

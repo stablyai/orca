@@ -24,6 +24,7 @@ describe('session command updates', () => {
     })
     changed.mockClear()
     expect(adapter.readCommands('session-1')).toBeUndefined()
+
     const frame = {
       type: 'system',
       subtype: 'commands_changed',
@@ -32,6 +33,7 @@ describe('session command updates', () => {
       skills: ['plugin:check'],
       terminal_slash_commands: ['doctor']
     }
+
     claude.connections[0].handlers.onMessage?.(frame)
     await tick()
     expect(adapter.readCommands('session-1')).toEqual([{ name: 'plugin:check', kind: 'skill' }])
@@ -53,6 +55,7 @@ it.each([
 ])('seeds the pre-prompt catalog from control initialization: %j', async ({ commands }) => {
   const claude = fakeClaude({ initProof: 'session-start', initCommands: commands })
   const adapter = adapterFor(claude)
+
   try {
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     const described = commands[0]?.description
@@ -98,11 +101,15 @@ it('keeps a buffered stream catalog newer than the initialization response', asy
         session_id: PROVIDER_SESSION_ID,
         commands: [{ name: 'fresh' }]
       })
+
       return getSettings(...settingsArgs)
     }
+
     return connection
   }
+
   const adapter = adapterFor(claude)
+
   try {
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     expect(adapter.readCommands('session-1')?.map(({ name }) => name)).toEqual(['fresh'])

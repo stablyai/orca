@@ -47,6 +47,7 @@ export function FirstPromptCard({
     if (fullTextRef.current != null) {
       return Promise.resolve(fullTextRef.current)
     }
+
     if (loadPromiseRef.current) {
       return loadPromiseRef.current
     }
@@ -54,13 +55,16 @@ export function FirstPromptCard({
     if (!canLoadFullFirstPrompt({ executionHostId, filePath })) {
       // Deps can change to a non-loadable session after mount started `loading`.
       setLoading(false)
+
       return Promise.resolve(null)
     }
+
     const getFirstUserPrompt = window.api.aiVault.getFirstUserPrompt
 
     const generation = generationRef.current
     const isStale = (): boolean => generationRef.current !== generation
     let timeoutId: number | undefined
+
     const deadline = new Promise<null>((resolve) => {
       timeoutId = window.setTimeout(() => {
         resolve(null)
@@ -81,32 +85,39 @@ export function FirstPromptCard({
         if (isStale()) {
           return null
         }
+
         // A timed-out read lands here as null and falls back to the preview text.
         const prompt = result?.prompt?.trim() || null
         fullTextRef.current = prompt
         setFullText(prompt)
+
         return prompt
       })
       .catch(() => {
         if (isStale()) {
           return null
         }
+
         fullTextRef.current = null
         setFullText(null)
+
         return null
       })
       .finally(() => {
         window.clearTimeout(timeoutId)
+
         // A stale settle must not clear the live request's dedupe handle.
         if (isStale()) {
           return
         }
+
         setLoading(false)
         // Left null on timeout/failure so a later copy click can retry.
         loadPromiseRef.current = null
       })
 
     loadPromiseRef.current = promise
+
     return promise
   }, [agent, codexHome, executionHostId, filePath, sessionId])
 
@@ -115,6 +126,7 @@ export function FirstPromptCard({
   // session.id so session switches remount with fresh state.
   useEffect(() => {
     void loadFullPrompt()
+
     return () => {
       generationRef.current += 1
       // Why: the bump above makes the in-flight request stale, and a stale settle
@@ -137,9 +149,11 @@ export function FirstPromptCard({
     void loadFullPrompt()
       .then((loaded) => {
         const copyText = (loaded ?? previewText).trim()
+
         if (!copyText) {
           return
         }
+
         return window.api.ui.writeClipboardText(copyText).then(() => {
           setCopied(true)
           toast.success(promptCopiedLabel(loaded ? 'first-user-prompt' : preview?.source))
@@ -221,12 +235,14 @@ function promptSectionLabel(source: AiVaultSessionPromptPreview['source'] | unde
       'First prompt'
     )
   }
+
   if (source === 'preview-window') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionDetails.recentPrompt',
       'Recent prompt'
     )
   }
+
   return translate('auto.components.right.sidebar.AiVaultSessionDetails.prompt', 'Prompt')
 }
 
@@ -237,12 +253,14 @@ function copyPromptLabel(source: AiVaultSessionPromptPreview['source'] | undefin
       'Copy first prompt'
     )
   }
+
   if (source === 'preview-window') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionDetails.copyRecentPrompt',
       'Copy recent prompt'
     )
   }
+
   return translate('auto.components.right.sidebar.AiVaultSessionDetails.copyPrompt', 'Copy prompt')
 }
 

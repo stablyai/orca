@@ -13,20 +13,25 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
       session.hiddenOutputRestorePtyId !== expectedPtyId
     ) {
       session.resetHiddenOutputRestoreIfPtyChanged()
+
       return
     }
+
     const rearmedRemoteRestore =
       opts.rearmRemote !== false &&
       !opts.quiet &&
       session.canUseHiddenOutputSnapshot(expectedPtyId) &&
       session.rearmRemoteHiddenOutputRestoreInsteadOfWarning(expectedPtyId, 'abandon-deadline')
+
     const pendingChunks = session.hiddenOutputRestorePendingOverflow
       ? []
       : session.hiddenOutputRestorePendingChunks.slice()
+
     const hadPendingOverflow = session.hiddenOutputRestorePendingOverflow
     const replayingSnapshot = session.hiddenOutputRestoreReplayingSnapshot
     session.hiddenOutputRestoreReplayingSnapshot = null
     session.hiddenOutputRestoreGeneration += 1
+
     if (
       session.hiddenOutputSnapshotScrollRestore?.valid &&
       session.hiddenOutputSnapshotScrollRestore.ptyId === expectedPtyId
@@ -34,6 +39,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
       // Why: flood abandonment stops recovery bookkeeping, but its already-queued replay must keep the rebuild bracket and final pin.
       session.hiddenOutputSnapshotScrollRestore.generation = session.hiddenOutputRestoreGeneration
     }
+
     session.hiddenOutputRestoreInFlight = null
     session.hiddenOutputRestoreNeeded = false
     session.hiddenOutputRestorePtyId = null
@@ -64,22 +70,28 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
     else if (!rearmedRemoteRestore) {
       session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
     }
+
     if (hadPendingOverflow) {
       return
     }
+
     const replayedSeq = typeof replayingSnapshot?.seq === 'number' ? replayingSnapshot.seq : null
     let pendingData = ''
+
     for (const chunk of pendingChunks) {
       const sliced =
         replayedSeq === null ? chunk.data : session.getChunkDataAfterSnapshot(chunk, replayedSeq)
+
       pendingData += sliced ?? chunk.data
     }
+
     if (replayingSnapshot && replayedSeq !== null) {
       session.setRestoredSnapshotBaseline(
         expectedPtyId,
         replayingSnapshot,
         replayingSnapshot.paintsContent === true
       )
+
       for (const chunk of pendingChunks) {
         if (typeof chunk.seq === 'number' && session.restoredSnapshotExpectedStartSeq !== null) {
           session.restoredSnapshotExpectedStartSeq = Math.max(
@@ -89,6 +101,7 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
         }
       }
     }
+
     if (pendingData) {
       session.writePtyOutputToXterm(pendingData, true)
     }

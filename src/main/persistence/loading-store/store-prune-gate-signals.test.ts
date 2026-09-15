@@ -28,6 +28,7 @@ vi.mock('electron', () => ({
 }))
 
 const { Store } = await import('./store')
+
 const {
   __resetLocalWorktreeMetadataPruneGateForTests,
   isLocalWorktreeMetadataPruneDue,
@@ -35,6 +36,7 @@ const {
 } = await import('../../local-worktree-metadata-prune-gate')
 
 const REPO_ID = 'repo-1'
+
 const WORKTREE_ID = `${REPO_ID}::/tmp/worktree-a`
 
 const stores: InstanceType<typeof Store>[] = []
@@ -48,6 +50,7 @@ afterEach(() => {
   for (const store of stores.splice(0)) {
     store.flush()
   }
+
   vi.restoreAllMocks()
 })
 
@@ -55,6 +58,7 @@ function createStore(): InstanceType<typeof Store> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-prune-gate-')))
   const store = new Store({ dataFile: join(dir, 'orca-data.json') })
   stores.push(store)
+
   return store
 }
 

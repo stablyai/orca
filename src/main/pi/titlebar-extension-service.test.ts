@@ -32,6 +32,7 @@ const homedirOverride = vi.hoisted(() => ({ current: '' as string }))
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: () => homedirOverride.current || actual.homedir()
@@ -43,12 +44,14 @@ import { getPiTitlebarExtensionSource } from './titlebar-extension-source'
 
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
+
   return join(userDataDir, rootDir, ptyId)
 }
 
 function legacySourceOverlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
   const hashed = createHash('sha256').update(`source:${sourceAgentDir}`).digest('hex').slice(0, 32)
+
   return join(userDataDir, rootDir, hashed)
 }
 
@@ -59,6 +62,7 @@ describe('PiTitlebarExtensionService', () => {
         if (name === 'userData') {
           return userDataDir
         }
+
         throw new Error(`unexpected app.getPath(${name})`)
       }
     })
@@ -134,18 +138,22 @@ describe('PiTitlebarExtensionService', () => {
       'orca-titlebar-spinner.ts',
       'user-ext'
     ])
+
     const statusExtensionSource = readFileSync(
       join(piHome, 'extensions', 'orca-agent-status.ts'),
       'utf-8'
     )
+
     const titlebarExtensionSource = readFileSync(
       join(piHome, 'extensions', 'orca-titlebar-spinner.ts'),
       'utf-8'
     )
+
     const prefillExtensionSource = readFileSync(
       join(piHome, 'extensions', 'orca-prefill.ts'),
       'utf-8'
     )
+
     expect(statusExtensionSource).toContain('@orca-managed-pi-extension')
     expect(statusExtensionSource).toContain('/hook/pi')
     expect(statusExtensionSource).toContain('process.title')
@@ -329,6 +337,7 @@ describe('PiTitlebarExtensionService', () => {
     vi.resetModules()
     vi.doMock('node:fs', async (importOriginal) => {
       const actual = await importOriginal<typeof fsModule>()
+
       return {
         ...actual,
         lstatSync: (path: Parameters<typeof actual.lstatSync>[0]) => {
@@ -336,6 +345,7 @@ describe('PiTitlebarExtensionService', () => {
             failNextWalStat = false
             throw new Error('transient lstat failure')
           }
+
           return actual.lstatSync(path)
         }
       }
@@ -521,6 +531,7 @@ describe('PiTitlebarExtensionService', () => {
       'omp-managed-status-extension',
       'orca-agent-status.ts'
     )
+
     expect(readFileSync(userStatusPath, 'utf-8')).toBe(userStatusExtension)
     expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(fallbackStatusPath)
     expect(readFileSync(fallbackStatusPath, 'utf-8')).toContain('@orca-managed-pi-extension')
@@ -531,6 +542,7 @@ describe('PiTitlebarExtensionService', () => {
     'writes bundled extensions through a symlinked user extensions dir',
     () => {
       const realExtensionsDir = mkdtempSync(join(tmpdir(), 'orca-real-pi-extensions-'))
+
       try {
         writeFileSync(join(realExtensionsDir, 'real-user-ext.ts'), 'real user extension')
         rmSync(join(piHome, 'extensions'), { recursive: true, force: true })
@@ -587,6 +599,7 @@ describe('PiTitlebarExtensionService', () => {
       mkdirSync(join(agentDir, 'extensions', `${tag}-ext`), { recursive: true })
       writeFileSync(join(agentDir, 'extensions', `${tag}-ext`, 'ext.ts'), `${tag} user extension`)
       writeFileSync(join(agentDir, 'auth.json'), `${tag} secret token`)
+
       return agentDir
     }
 
@@ -596,6 +609,7 @@ describe('PiTitlebarExtensionService', () => {
       seedAgentDir(fakeHome, '.omp', 'omp')
 
       homedirOverride.current = fakeHome
+
       try {
         const svc = new PiTitlebarExtensionService()
         const env = svc.buildPtyEnv('pty-pi-both', undefined, 'pi')
@@ -620,6 +634,7 @@ describe('PiTitlebarExtensionService', () => {
       seedAgentDir(fakeHome, '.omp', 'omp')
 
       homedirOverride.current = fakeHome
+
       try {
         const svc = new PiTitlebarExtensionService()
         const env = svc.buildPtyEnv('pty-omp-both', undefined, 'omp')
@@ -653,6 +668,7 @@ describe('PiTitlebarExtensionService', () => {
       expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
 
       homedirOverride.current = fakeHome
+
       try {
         const svc = new PiTitlebarExtensionService()
         const env = svc.buildPtyEnv('pty-omp-empty', undefined, 'omp')
@@ -679,11 +695,14 @@ describe('PiTitlebarExtensionService', () => {
       expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
 
       homedirOverride.current = fakeHome
+
       try {
         const svc = new PiTitlebarExtensionService()
+
         const piEnv = svc.buildPtyEnv('pty-bare-pi', undefined, 'pi', {
           materializeDefaultHome: false
         })
+
         const ompEnv = svc.buildPtyEnv('pty-bare-omp', undefined, 'omp', {
           materializeDefaultHome: false
         })
@@ -716,6 +735,7 @@ describe('PiTitlebarExtensionService', () => {
         isSymbolicLink: () => true,
         isDirectory: () => true
       }
+
       expect(isSafeDescendCandidate(junctionLike)).toBe(false)
     })
 
@@ -745,6 +765,7 @@ describe('PiTitlebarExtensionService', () => {
     const svc = new PiTitlebarExtensionService() as unknown as {
       safeRemoveOverlay: (p: string, kind: 'pi' | 'omp') => void
     }
+
     svc.safeRemoveOverlay(piHome, 'pi')
     svc.safeRemoveOverlay(piHome, 'omp')
     svc.safeRemoveOverlay('/', 'pi')

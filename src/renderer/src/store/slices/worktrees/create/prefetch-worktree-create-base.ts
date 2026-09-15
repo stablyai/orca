@@ -10,13 +10,16 @@ export function createPrefetchWorktreeCreateBase(
   return async (repoId, baseBranch) => {
     try {
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+
       if (target.kind === 'local') {
         await window.api.worktrees.prefetchCreateBase({
           repoId,
           ...(baseBranch ? { baseBranch } : {})
         })
+
         return
       }
+
       await callRuntimeRpc(
         target,
         'worktree.prefetchCreateBase',

@@ -6,7 +6,9 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 
 const virtualWindow = vi.hoisted(() => ({ startIndex: 0, visibleCount: 4 }))
+
 const animationFrames = new Map<number, FrameRequestCallback>()
+
 let nextAnimationFrameId = 1
 
 vi.mock('@tanstack/react-virtual', () => {
@@ -18,8 +20,10 @@ vi.mock('@tanstack/react-virtual', () => {
   }): number[] => {
     const start = Math.max(0, range.startIndex - range.overscan)
     const end = Math.min(range.count - 1, range.endIndex + range.overscan)
+
     return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index)
   }
+
   return {
     defaultRangeExtractor,
     useVirtualizer: (options: {
@@ -38,6 +42,7 @@ vi.mock('@tanstack/react-virtual', () => {
         options.count - 1,
         virtualWindow.startIndex + virtualWindow.visibleCount - 1
       )
+
       const indexes =
         options.count === 0
           ? []
@@ -47,7 +52,9 @@ vi.mock('@tanstack/react-virtual', () => {
               overscan: 1,
               count: options.count
             })
+
       const size = options.estimateSize(0)
+
       return {
         getTotalSize: () => Math.max(0, options.count * size + (options.count - 1) * options.gap),
         getVirtualItems: () =>
@@ -87,12 +94,14 @@ vi.mock('./WorkspaceKanbanStatusLane', () => ({
 }))
 
 const { default: WorkspaceKanbanLaneGrid } = await import('./WorkspaceKanbanLaneGrid')
+
 const { extractWorkspaceKanbanLaneRange } = await import('./workspace-kanban-lane-range')
 
 const STATUSES = Array.from({ length: 21 }, (_, index) => ({
   id: `state-${String(index + 1).padStart(2, '0')}`,
   label: `State ${index + 1}`
 }))
+
 const REPO_MAP = new Map<string, Repo>()
 
 function makeGrid(activeWorktreeIdentity: string | null = null): React.JSX.Element {
@@ -137,9 +146,11 @@ function mountedStatusIds(container: HTMLElement): string[] {
 function flushNextAnimationFrame(): void {
   const next = animationFrames.entries().next().value as [number, FrameRequestCallback] | undefined
   expect(next).toBeDefined()
+
   if (!next) {
     return
   }
+
   animationFrames.delete(next[0])
   act(() => next[1](performance.now()))
 }
@@ -151,6 +162,7 @@ beforeEach(() => {
     const id = nextAnimationFrameId
     nextAnimationFrameId += 1
     animationFrames.set(id, callback)
+
     return id
   })
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
@@ -220,6 +232,7 @@ describe('WorkspaceKanbanLaneGrid', () => {
 
   it('hydrates at most one mounted lane per animation frame', () => {
     const { container } = renderGrid()
+
     const renderedLaneCount = (): number =>
       container.querySelectorAll('[data-render-cards="true"]').length
 

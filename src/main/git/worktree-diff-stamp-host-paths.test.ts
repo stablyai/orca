@@ -13,6 +13,7 @@ vi.mock('fs/promises', () => ({
 import { readWorktreeDiffStamp } from './source-control/worktree-diff-stamp'
 
 const slashed = (value: unknown): string => String(value).replaceAll('\\', '/')
+
 const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 // Why this file: git in a WSL distro reports the worktree as `/mnt/c/...`, and the gitdir resolve
@@ -24,13 +25,16 @@ describe('readWorktreeDiffStamp on a drvfs-spelled WSL worktree', () => {
     statMock.mockReset()
     readFileMock.mockImplementation(async (target: string) => {
       const value = slashed(target)
+
       if (value === 'C:/repo/wt/.git') {
         return 'gitdir: /mnt/c/repo/.git/worktrees/wt\n'
       }
+
       // Detached HEAD, so the stamp needs no ref-store walk.
       if (value === 'C:/repo/.git/worktrees/wt/HEAD') {
         return `${'a'.repeat(40)}\n`
       }
+
       throw missing()
     })
     statMock.mockImplementation(async (target: string) =>

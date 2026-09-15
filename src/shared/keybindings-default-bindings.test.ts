@@ -64,6 +64,7 @@ describe('keybindings', () => {
       alt: false,
       shift: true
     }
+
     const ctrlChord = { ...macChord, meta: false, control: true }
     expect(keybindingMatchesAction('editor.addReviewNote', macChord, 'darwin')).toBe(true)
     expect(keybindingMatchesAction('editor.addReviewNote', ctrlChord, 'linux')).toBe(true)
@@ -77,6 +78,7 @@ describe('keybindings', () => {
       alt: true,
       shift: false
     }
+
     expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'linux')).toBe(false)
     expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'win32')).toBe(false)
   })
@@ -90,6 +92,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     const controlF = { ...commandF, meta: false, control: true }
 
     expect(keybindingMatchesAction('browser.find', commandF, 'darwin')).toBe(true)
@@ -208,6 +211,7 @@ describe('keybindings', () => {
       'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
       'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
     })
+
     for (const [actionId, bindings] of Object.entries(LEGACY_TAB_SWITCH_BINDINGS)) {
       expect(
         getEffectiveKeybindingsForAction(actionId as KeybindingActionId, 'darwin', {
@@ -271,7 +275,9 @@ describe('keybindings', () => {
       alt: true,
       shift: false
     }
+
     expect(keybindingMatchesAction('tab.closeAll', macComposedCloseAll, 'darwin')).toBe(true)
+
     const linuxCloseAll = {
       key: 'w',
       code: 'KeyW',
@@ -280,6 +286,7 @@ describe('keybindings', () => {
       alt: true,
       shift: false
     }
+
     expect(keybindingMatchesAction('tab.closeAll', linuxCloseAll, 'linux')).toBe(true)
     expect(
       keybindingMatchesAction('tab.closeAll', linuxCloseAll, 'linux', undefined, {
@@ -306,6 +313,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     expect(keybindingMatchesAction('tab.close', macComposedCloseAll, 'darwin')).toBe(false)
     expect(keybindingMatchesAction('tab.closeAll', macCloseActive, 'darwin')).toBe(false)
 
@@ -355,6 +363,7 @@ describe('keybindings', () => {
       alt: true,
       shift: true
     }
+
     expect(keybindingFromInput(macComposedMaximize, 'darwin')).toEqual({
       ok: true,
       value: 'Mod+Alt+Shift+A'

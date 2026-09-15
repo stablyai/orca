@@ -16,6 +16,7 @@ describe('os-opened markdown wiring', () => {
     const captureIndex = index.indexOf(
       'state.osOpenedMarkdownFiles.capture(argv, publishOsOpenedMarkdownFiles)'
     )
+
     const serveGuardIndex = index.indexOf('if (!shouldActivateDesktopForSecondInstance(argv)) {')
 
     expect(captureIndex).toBeGreaterThanOrEqual(0)
@@ -31,6 +32,7 @@ describe('os-opened markdown wiring', () => {
     const preventDefaultIndex = index.indexOf('event.preventDefault()', handlerIndex)
     const nextRegistrationIndex = index.indexOf('app.on(', handlerIndex + 1)
     expect(preventDefaultIndex).toBeGreaterThan(handlerIndex)
+
     if (nextRegistrationIndex !== -1) {
       expect(preventDefaultIndex).toBeLessThan(nextRegistrationIndex)
     }

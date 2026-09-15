@@ -14,6 +14,7 @@ export type ActivePluginCommand = PluginHostListEntry['commands'][number] & {
 }
 
 export type PluginPanelsFetchStatus = 'idle' | 'loading' | 'ready' | 'error'
+
 export type PluginPanelHealth = 'healthy' | 'error'
 
 type PluginPanelsState = {
@@ -26,20 +27,26 @@ type PluginPanelsState = {
 }
 
 let pluginListGeneration = 0
+
 let pluginListRetryAttempt = 0
+
 let pluginListRetryTimer: ReturnType<typeof setTimeout> | null = null
+
 const PLUGIN_LIST_MAX_RETRIES = 2
 
 function schedulePluginListRetry(generation: number): void {
   if (pluginListRetryAttempt >= PLUGIN_LIST_MAX_RETRIES) {
     pluginListRetryAttempt = 0
+
     return
   }
+
   pluginListRetryAttempt += 1
   const delayMs = 250 * 2 ** (pluginListRetryAttempt - 1)
   pluginListRetryTimer = setTimeout(() => {
     pluginListRetryTimer = null
     const state = usePluginPanelsStore.getState()
+
     if (generation === pluginListGeneration && state.fetchStatus === 'error') {
       void state.fetchPlugins()
     }
@@ -55,16 +62,21 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
     // Why: preload may predate the plugins namespace (web client pairing an
     // older desktop build); treat a missing bridge as "no plugins" fail-soft.
     const pluginsApi = window.api?.plugins
+
     if (!pluginsApi) {
       if (generation === pluginListGeneration) {
         pluginListRetryAttempt = 0
         set({ fetchStatus: 'ready', plugins: [], panelErrors: {} })
       }
+
       return
     }
+
     set({ fetchStatus: 'loading' })
+
     try {
       const plugins = await pluginsApi.list()
+
       if (generation === pluginListGeneration) {
         pluginListRetryAttempt = 0
         set((state) => ({
@@ -86,10 +98,12 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   setPlugins: (plugins) => {
     pluginListGeneration += 1
     pluginListRetryAttempt = 0
+
     if (pluginListRetryTimer) {
       clearTimeout(pluginListRetryTimer)
       pluginListRetryTimer = null
     }
+
     set((state) => ({
       plugins,
       fetchStatus: 'ready',
@@ -99,11 +113,13 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   setPanelHealth: (tabKey, health) => {
     set((state) => {
       const panelErrors = { ...state.panelErrors }
+
       if (health === 'error') {
         panelErrors[tabKey] = true
       } else {
         delete panelErrors[tabKey]
       }
+
       return { panelErrors }
     })
   }
@@ -114,6 +130,7 @@ function retainInstalledPanelErrors(
   plugins: readonly PluginHostListEntry[]
 ): Record<string, true> {
   const installed = collectInstalledPluginTabKeys(plugins)
+
   return Object.fromEntries(
     Object.entries(panelErrors).filter(([tabKey]) => installed.has(tabKey))
   ) as Record<string, true>
@@ -125,9 +142,11 @@ let changeSubscriptionStarted = false
  *  (install/remove/enable/dev-reload); safe to call repeatedly. */
 export function ensurePluginPanelsLoaded(): void {
   const { fetchStatus, fetchPlugins } = usePluginPanelsStore.getState()
+
   if (fetchStatus === 'idle') {
     void fetchPlugins()
   }
+
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
     changeSubscriptionStarted = true
     window.api.plugins.onChanged(() => {
@@ -199,6 +218,7 @@ export function usePluginPanels(): ActivePluginPanel[] {
   useEffect(() => {
     ensurePluginPanelsLoaded()
   }, [])
+
   // Why: derive in useMemo (not the selector) so the store snapshot stays
   // referentially stable and doesn't retrigger useSyncExternalStore loops.
   return useMemo(() => collectActivePluginPanels(plugins), [plugins])
@@ -210,6 +230,7 @@ export function usePluginCommands(): ActivePluginCommand[] {
   useEffect(() => {
     ensurePluginPanelsLoaded()
   }, [])
+
   return useMemo(() => collectActivePluginCommands(plugins), [plugins])
 }
 
@@ -220,5 +241,6 @@ export function useEditablePluginCommands(): ActivePluginCommand[] {
   useEffect(() => {
     ensurePluginPanelsLoaded()
   }, [])
+
   return useMemo(() => collectEditablePluginCommands(plugins), [plugins])
 }

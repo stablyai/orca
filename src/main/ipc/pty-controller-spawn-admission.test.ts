@@ -16,45 +16,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -74,14 +90,17 @@ describe('registerPtyHandlers', () => {
     const incarnationId = 'incarnation-renderer-early-exit'
     const runtime = new OrcaRuntimeService()
     const registerRuntimePty = vi.spyOn(runtime, 'registerPty')
+
     const provider = createAgentClaimProvider({
       spawn: vi.fn(async () => {
         runtime.onPtySpawned(ptyId, incarnationId)
         runtime.onPtyExit(ptyId, 0, incarnationId)
+
         return { id: ptyId, incarnationId }
       }),
       authoritativeOwnerListings: false
     })
+
     const store = { persistPtyBinding: vi.fn() }
     setLocalPtyProvider(provider as never)
     registerPtyHandlers(
@@ -107,10 +126,12 @@ describe('registerPtyHandlers', () => {
 
     expect(store.persistPtyBinding).not.toHaveBeenCalled()
     expect(registerRuntimePty).not.toHaveBeenCalled()
+
     const internals = runtime as unknown as {
       earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
+
     expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
     clearProviderPtyState(ptyId)
@@ -122,19 +143,24 @@ describe('registerPtyHandlers', () => {
       cwd: string
       title: string
     }[] = []
+
     const physicalSpawn = vi.fn(async () => {
       const result = { id: 'pty-local-claim', incarnationId: 'incarnation-local-claim' }
       sessions.push({ ...result, cwd: '/tmp/worktree', title: 'Codex' })
+
       return result
     })
+
     const provider = createAgentClaimProvider({
       sessions,
       spawn: physicalSpawn,
       authoritativeOwnerListings: false
     })
+
     Object.assign(provider, { routesFreshSpawnsToLocalProvider: true })
     setLocalPtyProvider(provider as never)
     const controller = registerAgentClaimController()
+
     const request = {
       cols: 80,
       rows: 24,
@@ -159,14 +185,19 @@ describe('registerPtyHandlers', () => {
     'recovers degraded fresh-spawn routing before %s chooses daemon host semantics',
     async (entryPoint) => {
       let degraded = true
+
       const daemonSpawn = vi.fn(async (options: { sessionId?: string }) => ({
         id: options.sessionId ?? 'unexpected-fallback-id'
       }))
+
       const provider = createAgentClaimProvider({ spawn: daemonSpawn })
+
       const recoverFreshSpawnRouting = vi.fn(async () => {
         degraded = false
+
         return true
       })
+
       Object.defineProperties(provider, {
         routesFreshSpawnsToLocalProvider: {
           configurable: true,
@@ -177,6 +208,7 @@ describe('registerPtyHandlers', () => {
       setLocalPtyProvider(provider as never)
       const controller = registerAgentClaimController()
       const worktreeId = 'repo::/tmp/recovered-daemon-routing'
+
       const spawnArgs = {
         cols: 80,
         rows: 24,
@@ -200,14 +232,19 @@ describe('registerPtyHandlers', () => {
   )
   it('recovers degraded routing for a fresh runtime session with a stable id', async () => {
     let degraded = true
+
     const daemonSpawn = vi.fn(async (options: { sessionId?: string; isNewSession?: boolean }) => ({
       id: options.sessionId ?? 'unexpected-fallback-id'
     }))
+
     const provider = createAgentClaimProvider({ spawn: daemonSpawn })
+
     const recoverFreshSpawnRouting = vi.fn(async () => {
       degraded = false
+
       return true
     })
+
     Object.defineProperties(provider, {
       routesFreshSpawnsToLocalProvider: {
         configurable: true,
@@ -278,15 +315,18 @@ describe('registerPtyHandlers', () => {
     const physicalSpawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'unexpected-spawn'
     }))
+
     const provider = createAgentClaimProvider({ spawn: physicalSpawn })
     setLocalPtyProvider(provider as never)
     const controller = registerAgentClaimController()
+
     const request = {
       cols: 80,
       rows: 24,
       worktreeId: 'repo::/tmp/operation-retry',
       agentSessionCreateOperationId: 'a'.repeat(43)
     }
+
     await controller.spawn(request)
     openCodeClearPtyMock.mockClear()
     piClearPtyMock.mockClear()
@@ -308,6 +348,7 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-recovered-owner',
       surface: recoveredAgentSurface
     }
+
     const provider = createAgentClaimProvider({
       sessions: [
         {
@@ -320,6 +361,7 @@ describe('registerPtyHandlers', () => {
       ],
       livePtyIds: new Set([owner.ptyId])
     })
+
     setLocalPtyProvider(provider as never)
     const controller = registerAgentClaimController()
 
@@ -343,6 +385,7 @@ describe('registerPtyHandlers', () => {
   })
   it('releases an adopted-owner fence when that owner exits during admission', async () => {
     const incarnationId = 'incarnation-adopted-exit'
+
     const owner: AgentSessionOwnerBinding = {
       claim: recoveredAgentClaim,
       generation: 'generation-adopted-exit',
@@ -350,7 +393,9 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-adopted-exit',
       surface: recoveredAgentSurface
     }
+
     const runtime = new OrcaRuntimeService()
+
     const provider = createAgentClaimProvider({
       sessions: [
         {
@@ -363,10 +408,12 @@ describe('registerPtyHandlers', () => {
       ],
       livePtyIds: new Set([owner.ptyId])
     })
+
     provider.listProcesses.mockImplementation(async () => {
       if (provider.listProcesses.mock.calls.length > 1) {
         runtime.onPtyExit(owner.ptyId, 0, incarnationId)
       }
+
       return [
         {
           id: owner.ptyId,
@@ -379,6 +426,7 @@ describe('registerPtyHandlers', () => {
     })
     setLocalPtyProvider(provider as never)
     registerPtyHandlers(mainWindow as never, runtime)
+
     const controller = (
       runtime as unknown as {
         ptyController: { spawn(args: Record<string, unknown>): Promise<unknown> }
@@ -397,6 +445,7 @@ describe('registerPtyHandlers', () => {
     const internals = runtime as unknown as {
       earlyExitedPtyIncarnations: Map<string, string | null>
     }
+
     expect(internals.earlyExitedPtyIncarnations.has(owner.ptyId)).toBe(false)
   })
   it('rejects stale exits immediately after SSH reconnect restores an incarnation', () => {
@@ -418,6 +467,7 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-owner-without-incarnation',
       surface: recoveredAgentSurface
     }
+
     const provider = createAgentClaimProvider({
       sessions: [
         {
@@ -428,6 +478,7 @@ describe('registerPtyHandlers', () => {
         }
       ]
     })
+
     setLocalPtyProvider(provider as never)
     const controller = registerAgentClaimController()
 

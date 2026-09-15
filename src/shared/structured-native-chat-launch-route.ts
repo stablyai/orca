@@ -72,27 +72,36 @@ export function resolveStructuredNativeChatSupport(
   if (input.executionHostId !== 'local') {
     return { supported: false, blocker: 'remote-execution-host' }
   }
+
   if (input.reusesTerminal === true) {
     return { supported: false, blocker: 'reused-terminal' }
   }
+
   if (!isAgentSessionHandleProvider(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
   }
+
   if (input.workspaceKind === 'floating') {
     return { supported: false, blocker: 'floating-workspace' }
   }
+
   if (input.requiresTuiLaunchCustomization === true) {
     return { supported: false, blocker: 'tui-launch-customization' }
   }
+
   const projectRuntime = input.projectRuntime
+
   if (projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl') {
     return { supported: false, blocker: 'project-runtime' }
   }
+
   if (input.hostCapabilities === null) {
     return { supported: false, blocker: 'runtime-capability-unknown' }
   }
+
   if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
     return { supported: false, blocker: 'runtime-capability' }
   }
+
   return { supported: true }
 }

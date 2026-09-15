@@ -45,15 +45,19 @@ export function getTaskProviderCompletedSteps(readiness: TaskProviderReadiness):
   const skillRequired = readiness.skillInstalled !== undefined
   const total = skillRequired ? 3 : 2
   let completed = 0
+
   if (readiness.connected) {
     completed += 1
   }
+
   if (skillRequired && readiness.skillInstalled) {
     completed += 1
   }
+
   if (readiness.visible) {
     completed += 1
   }
+
   return { completed, total }
 }
 
@@ -61,7 +65,9 @@ export function isTaskProviderReady(readiness: TaskProviderReadiness): boolean {
   if (isTaskProviderChecking(readiness) || readiness.unavailable) {
     return false
   }
+
   const { completed, total } = getTaskProviderCompletedSteps(readiness)
+
   return completed === total
 }
 
@@ -71,21 +77,27 @@ export function getTaskProviderSetupStatus(
   if (!readiness.visible) {
     return 'hidden'
   }
+
   if (isTaskProviderChecking(readiness)) {
     return 'checking'
   }
+
   if (readiness.unavailable) {
     return 'unavailable'
   }
+
   if (isTaskProviderReady(readiness)) {
     return 'ready'
   }
+
   if (!readiness.connected) {
     return 'connect-required'
   }
+
   if (readiness.skillInstalled === false) {
     return 'skill-required'
   }
+
   // Fallback if a future readiness field can leave connected+skill true but not ready.
   return 'incomplete'
 }
@@ -97,9 +109,11 @@ export function getIncompleteVisibleTaskProviders(
 ): TaskProvider[] {
   return providers.filter((provider) => {
     const readiness = readinessByProvider[provider]
+
     if (!readiness.visible || isTaskProviderChecking(readiness)) {
       return false
     }
+
     return !isTaskProviderReady(readiness)
   })
 }

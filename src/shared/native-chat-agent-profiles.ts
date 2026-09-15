@@ -59,7 +59,9 @@ export function getTextDrivenNativeChatCommands(
   if (!agent) {
     return []
   }
+
   const names = new Set(getNativeChatAgentProfile(agent)?.textDrivenCommands ?? [])
+
   return names.size === 0
     ? []
     : getVerifiedNativeChatCommands(agent).filter((command) => names.has(command.name))
@@ -74,9 +76,12 @@ export function getHostClaimedNativeChatCommands(
   agent: AgentType
 ): readonly SlashCommandSuggestion[] {
   const profile = getNativeChatAgentProfile(agent)
+
   if (profile?.expandsSlashCommandsFromText) {
     return []
   }
+
   const passedThrough = new Set(profile?.textDrivenCommands ?? [])
+
   return getVerifiedNativeChatCommands(agent).filter((command) => !passedThrough.has(command.name))
 }

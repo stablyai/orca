@@ -8,9 +8,11 @@ describe('workerRelease on a retained resource whose process exited', () => {
 
   it('does not release a terminal the user took over', async () => {
     const { dispatchId } = await harness.startSettledWorker('succeeded')
+
     const takeover = (await harness.call('orchestration.workerTerminalUserInput', {
       paneKey: harness.workerPaneKey
     })) as { changed: number }
+
     expect(takeover.changed).toBe(1)
     expect(harness.db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe(
       'user_owned'
@@ -18,6 +20,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
 
     // The agent process later exits on its own; the user's pane and scrollback remain.
     harness.inspectProcessLiveness.mockResolvedValue('exited')
+
     const receipt = (await harness.call('orchestration.workerRelease', {
       dispatch: dispatchId
     })) as { state: string; reason?: string; archive: unknown }
@@ -39,6 +42,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
         .run(ownershipState, resource.id)
 
       harness.inspectProcessLiveness.mockResolvedValue('exited')
+
       const receipt = (await harness.call('orchestration.workerRelease', {
         dispatch: dispatchId
       })) as { state: string }
@@ -57,6 +61,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
     expect(harness.db.getWorkerTerminalArchive(dispatchId)).toBeFalsy()
 
     harness.inspectProcessLiveness.mockResolvedValue('exited')
+
     const receipt = (await harness.call('orchestration.workerRelease', {
       dispatch: dispatchId
     })) as { state: string; archive: { status: string | null } | null }
@@ -73,6 +78,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
 
     // retain deletes the archive and parks the row in `retained`: still no route back to `requested`.
     await harness.call('orchestration.workerRetain', { dispatch: dispatchId })
+
     const receipt = (await harness.call('orchestration.workerRelease', {
       dispatch: dispatchId
     })) as { state: string }
@@ -92,6 +98,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
     })
 
     harness.inspectProcessLiveness.mockResolvedValue('exited')
+
     const receipt = (await harness.call('orchestration.workerRelease', {
       dispatch: dispatchId
     })) as { state: string }

@@ -11,6 +11,7 @@ import { makeWorktreeMeta, store, syncSinglePty } from '../orca-runtime-test-fix
 describe('OrcaRuntimeService', () => {
   it('keeps pinned and unread worktrees when active rows fill the mobile summary limit', async () => {
     setPlatform('win32')
+
     const remoteRepo = {
       id: 'repo-pinned-limit',
       path: '/remote',
@@ -19,6 +20,7 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-pinned-limit'
     }
+
     const activeWorktrees = Array.from({ length: 199 }, (_, index) => ({
       path: `relative/active-${String(index).padStart(3, '0')}`,
       head: `head-${index}`,
@@ -26,7 +28,9 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }))
+
     const pinnedPath = 'relative/zzz-pinned'
+
     const pinnedWorktree = {
       path: pinnedPath,
       head: 'pinned',
@@ -34,19 +38,24 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const unreadPath = 'relative/zzz-unread'
+
     const unreadWorktree = {
       ...pinnedWorktree,
       path: unreadPath,
       head: 'unread',
       branch: 'refs/heads/unread'
     }
+
     const pinnedId = `${remoteRepo.id}::${pinnedPath}`
     const unreadId = `${remoteRepo.id}::${unreadPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [pinnedId]: makeWorktreeMeta({ isPinned: true }),
       [unreadId]: makeWorktreeMeta({ isUnread: true })
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -54,10 +63,12 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     }
+
     registerSshGitProvider('ssh-pinned-limit', {
       listWorktrees: vi.fn().mockResolvedValue([...activeWorktrees, pinnedWorktree, unreadWorktree])
     } as never)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         activeWorktrees.map((worktree, index) => ({

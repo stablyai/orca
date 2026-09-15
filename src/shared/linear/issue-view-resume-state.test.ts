@@ -20,6 +20,7 @@ function filter(overrides: Partial<LinearIssueAttributeFilter> = {}): LinearIssu
 }
 
 const FILTER_A = filter({ stateIds: ['state-a'], priorities: [1] })
+
 const FILTER_B = filter({ labelIds: ['label-b'], assignee: { kind: 'user', id: 'user-b' } })
 
 describe('resolveLinearIssueViewResumeState', () => {
@@ -320,6 +321,7 @@ describe('startup sequences', () => {
 
   it('persists the full map when a workspace switch happens during startup', () => {
     const restored = resolveLinearIssueViewResumeState(persisted)
+
     // Linear resolves workspace-b mid-startup and the user edits its filter there.
     const edited = setLinearWorkspaceIssueFilter(
       restored.filtersByWorkspaceId,

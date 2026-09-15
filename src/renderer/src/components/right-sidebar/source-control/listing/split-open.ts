@@ -16,6 +16,7 @@ export function isSourceControlSplitOpenModifier(
   isMac: boolean
 ): boolean {
   const platformPrimary = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+
   return platformPrimary || event.shiftKey || event.altKey
 }
 

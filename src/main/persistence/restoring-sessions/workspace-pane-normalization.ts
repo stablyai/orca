@@ -55,15 +55,19 @@ export function normalizeWorkspaceSessionPaneIdentities(
   const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
   const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
   let tabsById: ReturnType<typeof createLazyTerminalTabLookup> | null = null
+
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const normalized = normalizeTerminalLayoutSnapshotForPersistence(
       layout,
       priorLayoutsByTabId[tabId]
     )
+
     terminalLayoutsByTabId[tabId] = normalized.snapshot
     leafIdByInputLeafIdByTabId.set(tabId, normalized.leafIdByInputLeafId)
+
     if (!options.skipAliasTabIds?.has(tabId)) {
       tabsById ??= createLazyTerminalTabLookup(session)
+
       const tabAliasEntries = registerLegacyPaneKeyAliasesForTab({
         tabId,
         tab: tabsById.get(tabId),
@@ -71,27 +75,34 @@ export function normalizeWorkspaceSessionPaneIdentities(
         normalizedLayout: normalized.snapshot,
         leafIdByInputLeafId: normalized.leafIdByInputLeafId
       })
+
       // Why: old split layouts can generate enough alias rows to exceed V8's argument limit if spread into push().
       for (const entry of tabAliasEntries) {
         legacyPaneKeyAliasEntries.push(entry)
       }
     }
+
     const leafIdByPtyId = new Map<string, string>()
     const duplicatePtyIds = new Set<string>()
+
     for (const [leafId, ptyId] of Object.entries(normalized.snapshot.ptyIdsByLeafId ?? {})) {
       if (duplicatePtyIds.has(ptyId)) {
         continue
       }
+
       if (leafIdByPtyId.has(ptyId)) {
         leafIdByPtyId.delete(ptyId)
         duplicatePtyIds.add(ptyId)
         continue
       }
+
       leafIdByPtyId.set(ptyId, leafId)
     }
+
     leafIdByPtyIdByTabId.set(tabId, leafIdByPtyId)
     changed ||= normalized.changed
   }
+
   return {
     session: changed ? { ...session, terminalLayoutsByTabId } : session,
     changed,
@@ -113,40 +124,53 @@ export function remapSshRemotePtyLeaseLeafIds(
   hostIdsWithWorkspaceSessions: ReadonlySet<ExecutionHostId> = new Set(remapsByHostId.keys())
 ): { leases: SshRemotePtyLease[]; changed: boolean } {
   let changed = false
+
   const nextLeases = leases.map((lease) => {
     if (lease.leafId === undefined) {
       return lease
     }
+
     const hostId = toSshExecutionHostId(lease.targetId)
+
     // Legacy unpartitioned state kept SSH panes in local; only fall back when this host has no partition.
     const remap =
       remapsByHostId.get(hostId) ??
       (hostIdsWithWorkspaceSessions.has(hostId)
         ? undefined
         : remapsByHostId.get(LOCAL_EXECUTION_HOST_ID))
+
     const remappedLeafId = lease.tabId
       ? remap?.leafIdByInputLeafIdByTabId.get(lease.tabId)?.get(lease.leafId)
       : undefined
+
     const leafIdForPty = lease.tabId
       ? remap?.leafIdByPtyIdByTabId.get(lease.tabId)?.get(lease.ptyId)
       : undefined
+
     const nextLeafId = remappedLeafId ?? leafIdForPty
+
     if (nextLeafId) {
       if (nextLeafId === lease.leafId) {
         return lease
       }
+
       changed = true
+
       return { ...lease, leafId: nextLeafId }
     }
+
     if (isTerminalLeafId(lease.leafId)) {
       return lease
     }
+
     changed = true
     const next = { ...lease }
     // Why: unmatched legacy leaf ids are ambiguous after migration; don't re-persist them as durable pane identity.
     delete next.leafId
+
     return next
   })
+
   return { leases: nextLeases, changed }
 }
 
@@ -156,10 +180,12 @@ function mergeAcknowledgementLeafIdMapsByTabId(
   source: Map<string, Map<string, string>>
 ): Map<string, Map<string, string>> {
   const merged = new Map(target)
+
   for (const [tabId, leafIds] of source) {
     const existing = merged.get(tabId)
     merged.set(tabId, existing ? new Map([...leafIds, ...existing]) : new Map(leafIds))
   }
+
   return merged
 }
 
@@ -170,6 +196,7 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
 } {
   const crossHostTabIds = findCrossHostPaneTabIds(state)
+
   const normalizedSession = normalizeWorkspaceSessionPaneIdentities(
     state.workspaceSession,
     {},
@@ -177,25 +204,33 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
       skipAliasTabIds: crossHostTabIds
     }
   )
+
   let acknowledgementLeafIdByInputLeafIdByTabId = normalizedSession.leafIdByInputLeafIdByTabId
+
   const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
     [LOCAL_EXECUTION_HOST_ID, normalizedSession]
   ])
+
   const hostSessionLegacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
+
   // Why: SSH/runtime hosts keep their own session blob, and their legacy leaves need the same UUID
   // rewrite — otherwise their leases and read markers still point at `pane:1` after migration.
   const normalizedHostSessions = state.workspaceSessionsByHostId
     ? { ...state.workspaceSessionsByHostId }
     : undefined
+
   let hostSessionsChanged = false
+
   if (normalizedHostSessions) {
     for (const hostId of Object.keys(
       normalizedHostSessions
     ) as (keyof typeof normalizedHostSessions)[]) {
       const hostSession = normalizedHostSessions[hostId]
+
       if (!hostSession) {
         continue
       }
+
       const normalizedHostSession = normalizeWorkspaceSessionPaneIdentities(
         hostSession,
         {},
@@ -203,23 +238,29 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
           skipAliasTabIds: crossHostTabIds
         }
       )
+
       normalizedHostSessions[hostId] = normalizedHostSession.session
       remapsByHostId.set(hostId, normalizedHostSession)
       acknowledgementLeafIdByInputLeafIdByTabId = mergeAcknowledgementLeafIdMapsByTabId(
         acknowledgementLeafIdByInputLeafIdByTabId,
         normalizedHostSession.leafIdByInputLeafIdByTabId
       )
+
       for (const entry of normalizedHostSession.legacyPaneKeyAliasEntries) {
         hostSessionLegacyPaneKeyAliasEntries.push(entry)
       }
+
       hostSessionsChanged ||= normalizedHostSession.changed
     }
   }
+
   const remappedLeases = remapSshRemotePtyLeaseLeafIds(
     state.sshRemotePtyLeases ?? [],
     remapsByHostId
   )
+
   const mergedMigrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
+
   const mergedLegacyPaneKeyAliasEntries = mergeLegacyPaneKeyAliasEntries([
     ...normalizeLegacyPaneKeyAliasEntries(state.legacyPaneKeyAliasEntries),
     ...legacyMigrationUnsupportedRowsToAliasEntries(state.migrationUnsupportedPtyEntries ?? []),
@@ -227,26 +268,32 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     ...hostSessionLegacyPaneKeyAliasEntries
     // Rows an older build wrote for a now-colliding tab id would keep the ambiguous routing alive.
   ]).filter((entry) => !crossHostTabIds.has(parsePaneKey(entry.stablePaneKey)?.tabId ?? ''))
+
   const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
     state.ui?.acknowledgedAgentsByPaneKey,
     withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
   )
+
   const remappedActivityCutoffs = remapActivityClearedAtPaneKeys(
     state.ui?.activityClearedAtByPaneKey,
     withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
   )
+
   const remappedManualUnread = remapManuallyUnreadTurnPaneKeys(
     state.ui?.manuallyUnreadTurnsByPaneKey,
     withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
   )
+
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],
     mergedMigrationUnsupportedEntries
   )
+
   const legacyAliasesChanged = !legacyPaneKeyAliasEntriesEqual(
     state.legacyPaneKeyAliasEntries ?? [],
     mergedLegacyPaneKeyAliasEntries
   )
+
   if (
     !normalizedSession.changed &&
     !hostSessionsChanged &&
@@ -264,6 +311,7 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
       legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
     }
   }
+
   return {
     state: {
       ...state,

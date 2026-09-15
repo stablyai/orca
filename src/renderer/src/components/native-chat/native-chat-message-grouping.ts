@@ -59,6 +59,7 @@ export function orderNativeChatMessages(messages: NativeChatMessage[]): NativeCh
  *  are handed out FIFO to calls. */
 function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResultBlock[] {
   const results: NativeChatToolResultBlock[] = []
+
   for (const message of messages) {
     for (const block of message.blocks) {
       if (isToolResultBlock(block)) {
@@ -66,6 +67,7 @@ function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResult
       }
     }
   }
+
   return results
 }
 
@@ -82,6 +84,7 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
   let resultCursor = 0
 
   const items: NativeChatRenderItem[] = []
+
   for (const message of ordered) {
     const nonToolBlocks: NativeChatBlock[] = []
     const steps: NativeChatToolStep[] = []
@@ -89,9 +92,11 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
         const result = resultQueue[resultCursor] ?? null
+
         if (result) {
           resultCursor += 1
         }
+
         steps.push({ call: block, result })
       } else if (isToolResultBlock(block)) {
         // Results are emitted as steps from the call side; skip standalone ones.
@@ -104,6 +109,7 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
     if (nonToolBlocks.length > 0) {
       items.push({ kind: 'message', id: message.id, message, blocks: nonToolBlocks })
     }
+
     for (const [index, step] of steps.entries()) {
       items.push({
         kind: 'tool-step',
@@ -114,5 +120,6 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
       })
     }
   }
+
   return items
 }

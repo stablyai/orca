@@ -30,16 +30,20 @@ export function useNativeChatLinkActions(
 ): NativeChatLinkActions {
   const openFileLink = useNativeChatFileLinkClick(context)
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
+
   const scopeKey = JSON.stringify([
     context?.worktreeId,
     context?.runtimeEnvironmentId,
     scope.sessionId
   ])
+
   const [previousScopeKey, setPreviousScopeKey] = useState(scopeKey)
+
   if (previousScopeKey !== scopeKey || (!scope.isVisible && linkActionRequest !== null)) {
     setPreviousScopeKey(scopeKey)
     setLinkActionRequest(null)
   }
+
   const closeLinkActions = useCallback((dismissed?: LinkActionRequest) => {
     setLinkActionRequest((current) => closeLinkActionRequest(current, dismissed))
   }, [])
@@ -49,15 +53,20 @@ export function useNativeChatLinkActions(
       if (!context) {
         return
       }
+
       const route = routeNativeChatHref(href)
+
       if (route.kind === 'file') {
         openFileLink?.(event, href)
+
         return
       }
+
       // mailto: and other schemes keep the anchor's default handling.
       if (route.kind !== 'web' || !/^https?:/i.test(route.url)) {
         return
       }
+
       // Read at click time: settings and workspace ownership must not re-render the transcript.
       const state = useAppStore.getState()
       const sourceOwner = resolveNativeChatHttpLinkSourceOwner(state, context.worktreeId)

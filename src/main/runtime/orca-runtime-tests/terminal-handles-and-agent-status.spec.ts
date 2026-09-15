@@ -20,7 +20,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+
     let process = {
       id: 'reused-pty-id',
       incarnationId: 'inc-old',
@@ -30,6 +32,7 @@ describe('OrcaRuntimeService', () => {
       worktreeId: TEST_WORKTREE_ID,
       wslDistro: null
     }
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -66,6 +69,7 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -132,6 +136,7 @@ describe('OrcaRuntimeService', () => {
       sortOrder: 0,
       createdAt: 1
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -156,6 +161,7 @@ describe('OrcaRuntimeService', () => {
         [`duplicate-b:${HEADLESS_SECOND_LEAF_ID}`]: 'inc-duplicate'
       }
     })
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     runtime.setPtyController({
       write: () => true,
@@ -197,6 +203,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: (ptyId, data) => {
         writesByPty.set(ptyId, [...(writesByPty.get(ptyId) ?? []), data])
+
         return true
       },
       kill: () => true,
@@ -235,6 +242,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -324,6 +332,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -390,9 +399,11 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     const [tabId, leafId] = created.paneKey?.split(':') ?? []
+
     if (!tabId || !leafId) {
       throw new Error('expected stable pane identity')
     }
+
     const syncSurface = (ptyId: string | null): void => {
       runtime.syncWindowGraph(1, {
         tabs: [
@@ -520,6 +531,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'OC | zsh'
@@ -593,6 +605,7 @@ describe('OrcaRuntimeService', () => {
   // name, and timing out means it never did.
   it('does not treat a bare Cursor title as an agent behind a wrapper foreground', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       runtime.setPtyController({
@@ -644,6 +657,7 @@ describe('OrcaRuntimeService', () => {
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude'
     })
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<
@@ -654,10 +668,13 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('pty-bg')
+
     expect(pty).toBeDefined()
+
     if (!pty) {
       throw new Error('expected runtime PTY record')
     }
+
     pty.lastAgentStatus = 'working'
     runtime.setPtyController(null)
 

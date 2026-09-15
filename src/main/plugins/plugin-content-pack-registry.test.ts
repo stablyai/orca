@@ -27,6 +27,7 @@ describe('PluginContentPackRegistry', () => {
       ),
       writeFile(join(rootDir, 'locales', 'valid.json'), JSON.stringify({ settings: 'Ajustes' }))
     ])
+
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'mixed-content',
@@ -43,6 +44,7 @@ describe('PluginContentPackRegistry', () => {
       },
       capabilities: []
     })
+
     const plugin: ValidDiscoveredPlugin = {
       pluginKey: 'orca-samples.mixed-content',
       rootDir,
@@ -51,6 +53,7 @@ describe('PluginContentPackRegistry', () => {
       contentHash: null,
       isDev: true
     }
+
     const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => false)
 
     await registry.reconcile([plugin], () => true)
@@ -70,6 +73,7 @@ describe('PluginContentPackRegistry', () => {
         JSON.stringify({ schemaVersion: 1, id: 'bad', name: 'Bad', create: 'create', resume: 'up' })
       )
     ])
+
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'mixed-recipes',
@@ -84,10 +88,13 @@ describe('PluginContentPackRegistry', () => {
       },
       capabilities: []
     })
+
     const content = await hashPluginTree(rootDir)
+
     if (!content.ok) {
       throw new Error(content.error)
     }
+
     const plugin: ValidDiscoveredPlugin = {
       pluginKey: 'orca-samples.mixed-recipes',
       rootDir,
@@ -97,6 +104,7 @@ describe('PluginContentPackRegistry', () => {
       contentHash: null,
       isDev: true
     }
+
     const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => false)
 
     await registry.reconcile([plugin], () => true)
@@ -122,6 +130,7 @@ describe('PluginContentPackRegistry', () => {
         })
       )
     ])
+
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'kill-race',
@@ -136,10 +145,13 @@ describe('PluginContentPackRegistry', () => {
       },
       capabilities: []
     })
+
     const content = await hashPluginTree(rootDir)
+
     if (!content.ok) {
       throw new Error(content.error)
     }
+
     const plugin: ValidDiscoveredPlugin = {
       pluginKey: 'orca-samples.kill-race',
       rootDir,
@@ -149,6 +161,7 @@ describe('PluginContentPackRegistry', () => {
       contentHash: null,
       isDev: true
     }
+
     let killed = false
     const registry = new PluginContentPackRegistry(new PluginContentVerifier(), () => killed)
 

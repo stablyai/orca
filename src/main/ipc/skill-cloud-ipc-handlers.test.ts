@@ -18,29 +18,36 @@ vi.mock('electron', () => ({
   app: { getPath: () => '/test/user-data' },
   BrowserWindow: { getAllWindows: () => [] }
 }))
+
 vi.mock('./skill-ipc-main-window', () => ({
   handleMainWindowSkillIpc: (channel: string, handler: (...args: unknown[]) => unknown) =>
     handlers.set(channel, handler)
 }))
+
 vi.mock('./skill-install-management-ipc-handlers', () => ({
   registerSkillInstallManagementIpcHandlers: registerInstallManagementMock
 }))
+
 vi.mock('../skills/skill-cloud-install-target', () => ({
   classifySkillCloudInstallTarget: classifyInstallTargetMock
 }))
+
 vi.mock('../skills/skill-runtime-capability', () => ({
   supportsSkillRuntimeBundleInstall: vi.fn(),
   supportsSkillRuntimeCancellation: vi.fn(),
   supportsSkillRuntimeInstall: vi.fn()
 }))
+
 vi.mock('../skills/skill-cloud-grant-installation', () => ({
   installSkillBundleCloudGrant: vi.fn(),
   installSkillCloudGrant: installSkillCloudGrantMock
 }))
+
 vi.mock('./skill-install-progress-ipc', () => ({
   sendBundleInstallProgress: vi.fn(),
   sendSkillInstallProgress: vi.fn()
 }))
+
 vi.mock('./runtime-environment-transport-routing', () => ({ callRuntimeEnvironment: vi.fn() }))
 
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'

@@ -13,9 +13,11 @@ function inspectProcessMethod() {
   const method = eraseRpcMethods(TERMINAL_QUERY_METHODS).find(
     (entry) => entry.name === 'terminal.inspectProcess'
   )
+
   if (!method) {
     throw new Error('terminal.inspectProcess is not registered')
   }
+
   return method
 }
 
@@ -24,12 +26,15 @@ async function callRegisteredHandler(
 ): Promise<{ terminal: string; options: unknown }> {
   const method = inspectProcessMethod()
   const parsed = (method.params as ZodType).parse(params)
+
   const inspectTerminalProcess = vi.fn(async () => ({
     foregroundProcess: null,
     hasChildProcesses: false
   }))
+
   await method.handler(parsed, { runtime: { inspectTerminalProcess } } as never)
   const [terminal, options] = inspectTerminalProcess.mock.calls[0] as unknown as [string, unknown]
+
   return { terminal, options }
 }
 

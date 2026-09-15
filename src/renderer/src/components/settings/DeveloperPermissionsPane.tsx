@@ -27,6 +27,7 @@ import {
 } from './developer-permission-status'
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
+
 export { getDeveloperPermissionsPaneSearchEntries } from './developer-permissions-search'
 
 type DeveloperPermissionsPaneProps = {
@@ -237,6 +238,7 @@ export function DeveloperPermissionsPane({
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
       refreshSequenceRef.current += 1
@@ -247,8 +249,10 @@ export function DeveloperPermissionsPane({
     const refreshId = refreshSequenceRef.current + 1
     refreshSequenceRef.current = refreshId
     setLoading(true)
+
     try {
       const nextStates = await window.api.developerPermissions.getStatus()
+
       if (mountedRef.current && refreshId === refreshSequenceRef.current) {
         setStates(nextStates)
       }
@@ -280,21 +284,28 @@ export function DeveloperPermissionsPane({
     const onFocus = (): void => {
       void refresh()
     }
+
     window.addEventListener('focus', onFocus)
+
     return () => window.removeEventListener('focus', onFocus)
   }, [refresh])
 
   const request = async (id: DeveloperPermissionId): Promise<void> => {
     setPendingId(id)
+
     try {
       const result = await window.api.developerPermissions.request({ id })
+
       if (!mountedRef.current) {
         return
       }
+
       await refresh()
+
       if (!mountedRef.current) {
         return
       }
+
       showDeveloperPermissionRequestNotice(result, () => {
         void window.api.developerPermissions.openSettings({ id: 'local-network' })
       })

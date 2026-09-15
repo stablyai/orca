@@ -15,6 +15,7 @@ export function upsertBoundedAgentHookStatus(
   options: { maxPanes?: number; now?: number } = {}
 ): AgentHookStatusCacheEviction[] {
   const maxPanes = options.maxPanes ?? MAX_AGENT_HOOK_STATUS_CACHE_PANES
+
   if (!Number.isSafeInteger(maxPanes) || maxPanes < 1) {
     throw new RangeError('Agent hook status cache limit must be a positive safe integer')
   }
@@ -23,18 +24,24 @@ export function upsertBoundedAgentHookStatus(
   state.lastStatusByPaneKey.set(entry.paneKey, entry)
   const evicted: AgentHookStatusCacheEviction[] = []
   const now = options.now ?? Date.now()
+
   while (state.lastStatusByPaneKey.size > maxPanes) {
     const paneKey = selectEvictionCandidate(state, entry.paneKey, now)
+
     if (!paneKey) {
       break
     }
+
     const cached = state.lastStatusByPaneKey.get(paneKey)
+
     if (!cached) {
       break
     }
+
     evicted.push({ paneKey, entry: cached })
     clearPaneCacheState(state, paneKey)
   }
+
   return evicted
 }
 
@@ -44,20 +51,25 @@ function selectEvictionCandidate(
   now: number
 ): string | undefined {
   let oldestFallback: string | undefined
+
   for (const [paneKey, entry] of state.lastStatusByPaneKey) {
     if (paneKey === currentPaneKey) {
       continue
     }
+
     oldestFallback ??= paneKey
+
     if (entry.payload.state === 'done' || isStaleStatus(entry, now)) {
       return paneKey
     }
   }
+
   return oldestFallback
 }
 
 function isStaleStatus(entry: AgentHookEventPayload, now: number): boolean {
   const receivedAt = (entry as AgentHookEventPayload & { receivedAt?: unknown }).receivedAt
+
   return (
     typeof receivedAt === 'number' &&
     Number.isFinite(receivedAt) &&

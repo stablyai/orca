@@ -22,6 +22,7 @@ describe('orderNativeChatMessages', () => {
       msg({ id: 'a', timestamp: 10 }),
       msg({ id: 'n', timestamp: null })
     ])
+
     expect(ordered.map((m) => m.id)).toEqual(['n', 'a', 'b'])
   })
 
@@ -30,6 +31,7 @@ describe('orderNativeChatMessages', () => {
       msg({ id: 'z', timestamp: 5 }),
       msg({ id: 'a', timestamp: 5 })
     ])
+
     expect(ordered.map((m) => m.id)).toEqual(['a', 'z'])
   })
 
@@ -39,6 +41,7 @@ describe('orderNativeChatMessages', () => {
       msg({ id: NATIVE_CHAT_STREAMING_ID, timestamp: null }),
       msg({ id: 'real-user', role: 'user', timestamp: 10 })
     ])
+
     expect(ordered.map((m) => m.id)).toEqual(['real-user', 'streaming', 'pending:abc'])
   })
 })
@@ -49,6 +52,7 @@ describe('buildNativeChatRenderItems', () => {
       msg({ id: 'u', role: 'user', timestamp: 1, blocks: [{ type: 'text', text: 'hi' }] }),
       msg({ id: 'a', role: 'assistant', timestamp: 2, blocks: [{ type: 'text', text: 'hello' }] })
     ])
+
     expect(items.map((i) => i.id)).toEqual(['u', 'a'])
     expect(items[0]?.kind).toBe('message')
   })
@@ -68,12 +72,15 @@ describe('buildNativeChatRenderItems', () => {
         blocks: [{ type: 'tool-result', output: 'file.txt' }]
       })
     ])
+
     const steps = items.filter((i) => i.kind === 'tool-step')
     expect(steps).toHaveLength(1)
     const step = steps[0]
+
     if (step?.kind !== 'tool-step') {
       throw new Error('expected tool-step')
     }
+
     expect(step.step.call.name).toBe('Bash')
     expect(step.step.result?.output).toBe('file.txt')
   })
@@ -87,10 +94,13 @@ describe('buildNativeChatRenderItems', () => {
         blocks: [{ type: 'tool-call', name: 'Read', input: {} }]
       })
     ])
+
     const step = items.find((i) => i.kind === 'tool-step')
+
     if (step?.kind !== 'tool-step') {
       throw new Error('expected tool-step')
     }
+
     expect(step.step.result).toBeNull()
   })
 
@@ -106,11 +116,14 @@ describe('buildNativeChatRenderItems', () => {
         ]
       })
     ])
+
     expect(items.map((i) => i.kind)).toEqual(['message', 'tool-step'])
     const message = items[0]
+
     if (message?.kind !== 'message') {
       throw new Error('expected message')
     }
+
     expect(message.blocks).toEqual([{ type: 'text', text: 'running it' }])
   })
 })

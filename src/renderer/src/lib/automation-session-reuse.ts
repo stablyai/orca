@@ -23,9 +23,11 @@ export function findReusableAutomationSession(args: {
 }): ReusableAutomationSession | null {
   const { automationId, agentId, worktreeId, currentRunId, runs, state } = args
   const worktreeTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+
   const terminalTabIds = new Set(
     worktreeTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
   )
+
   const candidates = runs
     .filter(
       (run) =>
@@ -40,10 +42,12 @@ export function findReusableAutomationSession(args: {
 
   for (const run of candidates) {
     const exactPane = findReusableExactRunPane({ state, terminalTabIds, agentId, run })
+
     if (exactPane) {
       return exactPane
     }
   }
+
   return null
 }
 
@@ -61,17 +65,23 @@ function findReusableExactRunPane({
   if (!run.terminalPaneKey || !run.terminalPtyId) {
     return null
   }
+
   const parsed = parsePaneKey(run.terminalPaneKey)
+
   if (!parsed || !terminalTabIds.has(parsed.tabId)) {
     return null
   }
+
   const entry = state.agentStatusByPaneKey[run.terminalPaneKey]
+
   if (!entry || !isReusableAgentStatus(entry, agentId)) {
     return null
   }
+
   if (!isRunPtyLiveInPane(state, parsed.tabId, parsed.leafId, run.terminalPtyId)) {
     return null
   }
+
   return { tabId: parsed.tabId, ptyId: run.terminalPtyId, paneKey: run.terminalPaneKey }
 }
 
@@ -79,6 +89,7 @@ function isReusableAgentStatus(entry: AgentStatusEntry, agentId: TuiAgent): bool
   if (entry.state !== 'done') {
     return false
   }
+
   return !entry.agentType || entry.agentType === 'unknown' || entry.agentType === agentId
 }
 
@@ -91,6 +102,8 @@ function isRunPtyLiveInPane(
   if (!state.ptyIdsByTabId[tabId]?.includes(ptyId)) {
     return false
   }
+
   const layoutPtyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+
   return layoutPtyId === undefined || layoutPtyId === ptyId
 }

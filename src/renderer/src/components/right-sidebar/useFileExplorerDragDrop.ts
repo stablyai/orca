@@ -125,9 +125,11 @@ export function useFileExplorerDragDrop({
       (e: React.DragEvent) => {
         const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
         const isNative = e.dataTransfer.types.includes('Files')
+
         if (!isInternal && !isNative) {
           return
         }
+
         e.preventDefault()
         e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy'
         startDragEdgeScroll(e.clientY)
@@ -137,10 +139,13 @@ export function useFileExplorerDragDrop({
     onDragEnter: useCallback((e: React.DragEvent) => {
       const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
       const isNative = !isInternal && e.dataTransfer.types.includes('Files')
+
       if (!isInternal && !isNative) {
         return
       }
+
       e.preventDefault()
+
       if (isInternal) {
         rootDragCounterRef.current += 1
         setIsRootDragOver(true)
@@ -153,15 +158,19 @@ export function useFileExplorerDragDrop({
       (_e: React.DragEvent) => {
         // Decrement both counters since we cannot inspect types on dragleave
         rootDragCounterRef.current -= 1
+
         if (rootDragCounterRef.current <= 0) {
           rootDragCounterRef.current = 0
           setIsRootDragOver(false)
         }
+
         nativeRootDragCounterRef.current -= 1
+
         if (nativeRootDragCounterRef.current <= 0) {
           nativeRootDragCounterRef.current = 0
           setIsNativeDragOver(false)
         }
+
         // Why: the edge auto-scroll rAF loop re-schedules itself as long as the
         // last recorded cursor Y sits in an edge zone. If the drag leaves the
         // explorer (dragged out of window, ESC-cancelled, or dropped elsewhere)
@@ -184,12 +193,16 @@ export function useFileExplorerDragDrop({
         // not the React drop handler. We only clear native drag visual state
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
+
         if (worktreePath) {
           const dragPaths = readWorkspaceFileDragPaths(e.dataTransfer)
+
           if (dragPaths.status === 'rejected') {
             toast.error(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+
             return
           }
+
           for (const sourcePath of dragPaths.paths) {
             handleMoveDrop(sourcePath, worktreePath)
           }
@@ -204,6 +217,7 @@ export function useFileExplorerDragDrop({
     expanded,
     toggleDir
   })
+
   return {
     handleMoveDrop,
     handleDragExpandDir,

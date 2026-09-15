@@ -34,6 +34,7 @@ export function FeatureSetupInlineTerminal({
   const setupRuntime = runtimeContext ?? activeSkillRuntime
   const agentRuntime = getOnboardingFeatureSetupAgentRuntime(setupRuntime)
   const copiedCommand = buildSkillCommandForRuntime(command, agentRuntime)
+
   const prepareCommandForShell = useCallback(
     (terminalCommand: string, effectiveShell: string | undefined) =>
       buildSkillSetupTerminalCommand(terminalCommand, effectiveShell, agentRuntime),
@@ -49,6 +50,7 @@ export function FeatureSetupInlineTerminal({
     if (terminalOpenedTrackedRef.current) {
       return
     }
+
     terminalOpenedTrackedRef.current = true
     track('onboarding_feature_setup_terminal_opened', selectionTelemetry)
   }, [selectionTelemetry])
@@ -58,11 +60,14 @@ export function FeatureSetupInlineTerminal({
       if (terminalInteractedTrackedRef.current) {
         return
       }
+
       const isMac = navigator.userAgent.includes('Mac')
       const isContinueShortcut = event?.key === 'Enter' && (isMac ? event.metaKey : event.ctrlKey)
+
       if (isContinueShortcut) {
         return
       }
+
       // Why: auto-insert focuses the terminal programmatically; only count
       // direct terminal activity, not the global continue shortcut.
       terminalInteractedTrackedRef.current = true

@@ -23,6 +23,7 @@ export function getPluginActivationState(
   if (lists.disabledPlugins.includes(qualifiedKey)) {
     return 'disabled'
   }
+
   return lists.pluginConsents[qualifiedKey] === currentConsentFingerprint ? 'approved' : 'pending'
 }
 
@@ -34,6 +35,7 @@ export function needsReconsent(
   lists: PluginConsentLists
 ): boolean {
   const recorded = lists.pluginConsents[qualifiedKey]
+
   return recorded !== undefined && recorded !== currentConsentFingerprint
 }
 
@@ -41,7 +43,9 @@ export function normalizePluginConsents(value: unknown): Record<string, string> 
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return {}
   }
+
   const consents: Record<string, string> = {}
+
   for (const [key, hash] of Object.entries(value)) {
     if (
       typeof hash === 'string' &&
@@ -52,6 +56,7 @@ export function normalizePluginConsents(value: unknown): Record<string, string> 
       consents[key] = hash
     }
   }
+
   return consents
 }
 
@@ -59,6 +64,7 @@ export function normalizePluginIdList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   return [
     ...new Set(
       value.filter(

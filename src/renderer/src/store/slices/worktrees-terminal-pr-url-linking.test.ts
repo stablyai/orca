@@ -35,6 +35,7 @@ describe('worktree remote runtime mutations', () => {
   it('waits for branch confirmation before linking a terminal PR URL for a known push target', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -46,6 +47,7 @@ describe('worktree remote runtime mutations', () => {
         remoteUrl: 'https://github.com/acme/orca.git'
       }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -72,6 +74,7 @@ describe('worktree remote runtime mutations', () => {
       fallbackPRSource: 'explicit',
       reason: 'active'
     })
+
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -86,6 +89,7 @@ describe('worktree remote runtime mutations', () => {
   it('ignores a terminal URL matching current GitHub PR suppression', () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -94,6 +98,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: null,
       suppressedGitHubPR: 42
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -115,6 +120,7 @@ describe('worktree remote runtime mutations', () => {
   it('allows terminal observation of a different PR than the suppressed one', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 43 })
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -127,6 +133,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -140,6 +147,7 @@ describe('worktree remote runtime mutations', () => {
       slug: { owner: 'acme', repo: 'orca' },
       number: 43
     })
+
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -154,12 +162,14 @@ describe('worktree remote runtime mutations', () => {
   it('rechecks GitHub PR suppression after branch confirmation resolves', async () => {
     const store = createTestStore()
     let resolveLookup: (value: { number: number } | null) => void = () => {}
+
     const fetchPRForBranch = vi.fn(
       () =>
         new Promise<{ number: number } | null>((resolve) => {
           resolveLookup = resolve
         })
     )
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -171,6 +181,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -191,6 +202,7 @@ describe('worktree remote runtime mutations', () => {
     } as Partial<AppState>)
 
     resolveLookup({ number: 42 })
+
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -201,6 +213,7 @@ describe('worktree remote runtime mutations', () => {
   it('waits for branch confirmation before linking a same-repo terminal PR URL', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -211,6 +224,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -235,6 +249,7 @@ describe('worktree remote runtime mutations', () => {
       fallbackPRSource: 'explicit',
       reason: 'active'
     })
+
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -249,12 +264,14 @@ describe('worktree remote runtime mutations', () => {
   it('does not persist a terminal PR URL when the linked PR changes before branch confirmation resolves', async () => {
     const store = createTestStore()
     let resolveLookup: (value: { number: number } | null) => void = () => {}
+
     const fetchPRForBranch = vi.fn(
       () =>
         new Promise<{ number: number } | null>((resolve) => {
           resolveLookup = resolve
         })
     )
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -265,6 +282,7 @@ describe('worktree remote runtime mutations', () => {
         branchName: 'feature/pr-link'
       }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -285,6 +303,7 @@ describe('worktree remote runtime mutations', () => {
     } as Partial<AppState>)
 
     resolveLookup({ number: 42 })
+
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -296,10 +315,12 @@ describe('worktree remote runtime mutations', () => {
   it('does not persist a terminal PR URL when the linked PR changes while push target lookup resolves', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+
     let resolvePushTarget: (value: {
       baseBranch: string
       pushTarget: { remoteName: string; branchName: string }
     }) => void = () => {}
+
     mockApi.worktrees.resolvePrBase.mockImplementationOnce(
       () =>
         new Promise<{
@@ -309,12 +330,14 @@ describe('worktree remote runtime mutations', () => {
           resolvePushTarget = resolve
         })
     )
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/worktrees/orca',
       branch: 'refs/heads/feature/pr-link'
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -346,6 +369,7 @@ describe('worktree remote runtime mutations', () => {
       baseBranch: 'main',
       pushTarget: { remoteName: 'origin', branchName: 'feature/pr-link' }
     })
+
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -357,6 +381,7 @@ describe('worktree remote runtime mutations', () => {
   it('does not link an arbitrary same-repo terminal PR URL for a known push target when lookup misses', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue(null)
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -368,6 +393,7 @@ describe('worktree remote runtime mutations', () => {
         remoteUrl: 'https://github.com/acme/orca.git'
       }
     })
+
     store.setState({
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
@@ -396,12 +422,14 @@ describe('worktree remote runtime mutations', () => {
   it('uses branch confirmation before linking a differently named terminal PR URL', async () => {
     const store = createTestStore()
     const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/worktrees/orca',
       branch: 'refs/heads/feature/pr-link'
     })
+
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({ baseBranch: 'main' })
     store.setState({
       repos: [

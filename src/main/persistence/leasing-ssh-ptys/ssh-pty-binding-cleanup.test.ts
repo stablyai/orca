@@ -17,6 +17,7 @@ function fixture(count: number) {
     sortOrder: i,
     createdAt: 1
   }))
+
   const leases: SshRemotePtyLease[] = Array.from({ length: count }, (_, i) => ({
     targetId: 'ssh-one',
     ptyId: `pty-${i}`,
@@ -26,6 +27,7 @@ function fixture(count: number) {
     createdAt: 1,
     updatedAt: 1
   }))
+
   return {
     state,
     leases,
@@ -113,6 +115,7 @@ describe('SSH binding cleanup indexing', () => {
   it('keeps every binding when no lease names its PTY', () => {
     // A bucket miss must fail closed: leak a stale id rather than unbind a live pane.
     const operations = fixture(2)
+
     for (const lease of operations.leases) {
       lease.ptyId = `unrelated-${lease.ptyId}`
     }

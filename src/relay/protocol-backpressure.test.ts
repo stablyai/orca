@@ -18,18 +18,22 @@ function createScheduler(): {
 } {
   let nextHandle = 1
   const callbacks = new Map<number, () => void>()
+
   return {
     schedule: (callback) => {
       const handle = nextHandle++
       callbacks.set(handle, callback)
+
       return handle
     },
     cancel: (handle) => callbacks.delete(handle as number),
     runNext: () => {
       const entry = callbacks.entries().next().value as [number, () => void] | undefined
+
       if (!entry) {
         throw new Error('No decoder continuation scheduled')
       }
+
       callbacks.delete(entry[0])
       entry[1]()
     },
@@ -110,6 +114,7 @@ describe('relay FrameDecoder bounded turns', () => {
     const byteSeen: number[] = []
     const first = frame(1, 'one')
     const second = frame(2, 'two')
+
     const byteDecoder = new FrameDecoder((decoded) => byteSeen.push(decoded.id), undefined, {
       maxFramesPerTurn: 64,
       maxBytesPerTurn: first.length,
@@ -125,6 +130,7 @@ describe('relay FrameDecoder bounded turns', () => {
     const timeScheduler = createScheduler()
     const timeSeen: number[] = []
     let nowCalls = 0
+
     const timeDecoder = new FrameDecoder((decoded) => timeSeen.push(decoded.id), undefined, {
       maxFramesPerTurn: 64,
       maxBytesPerTurn: MAX_MESSAGE_SIZE + HEADER_LENGTH,
@@ -143,6 +149,7 @@ describe('relay FrameDecoder bounded turns', () => {
   it('releases its pause epoch when continuation scheduling throws', () => {
     const pause = vi.fn()
     const resume = vi.fn()
+
     const decoder = new FrameDecoder(() => {}, undefined, {
       maxFramesPerTurn: 1,
       pause,
@@ -165,11 +172,13 @@ describe('relay FrameDecoder bounded turns', () => {
     const onError = vi.fn()
     const pause = vi.fn()
     const resume = vi.fn()
+
     const decoder = new FrameDecoder(
       (decoded) => {
         if (decoded.id === 2) {
           throw new Error('frame owner failed')
         }
+
         seen.push(decoded.id)
       },
       onError,
@@ -204,11 +213,13 @@ describe('relay FrameDecoder bounded turns', () => {
     const errors: Error[] = []
     const seen: DecodedFrame[] = []
     const pause = vi.fn()
+
     const decoder = new FrameDecoder(
       (decoded) => seen.push(decoded),
       (error) => errors.push(error),
       { pause }
     )
+
     const valid = frame(2, 'complete')
 
     decoder.feed(valid.subarray(0, HEADER_LENGTH + 2))
@@ -234,11 +245,13 @@ describe('relay FrameDecoder bounded turns', () => {
     const scheduler = createScheduler()
     const errors: Error[] = []
     const seen: number[] = []
+
     const decoder = new FrameDecoder(
       (decoded) => seen.push(decoded.id),
       (error) => errors.push(error),
       { schedule: scheduler.schedule, cancelScheduled: scheduler.cancel }
     )
+
     const oversizedLength = MAX_MESSAGE_SIZE + 1
     const header = Buffer.alloc(HEADER_LENGTH)
     header[0] = MessageType.Regular
@@ -259,12 +272,14 @@ describe('relay FrameDecoder bounded turns', () => {
     const seen: number[] = []
     const resume = vi.fn()
     const cancel = vi.fn(scheduler.cancel)
+
     const decoder = new FrameDecoder((decoded) => seen.push(decoded.id), undefined, {
       maxFramesPerTurn: 1,
       schedule: scheduler.schedule,
       cancelScheduled: cancel,
       resume
     })
+
     const second = frame(2, 'residue')
 
     decoder.feed(Buffer.concat([frame(1), second]))

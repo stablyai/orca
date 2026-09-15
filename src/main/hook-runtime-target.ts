@@ -18,6 +18,7 @@ export function getHookRuntimeTarget(
         ? { wslDistro: projectRuntime.repair.preferredRuntime.distro }
         : undefined
     }
+
     return projectRuntime.runtime.kind === 'wsl'
       ? { wslDistro: projectRuntime.runtime.distro }
       : undefined
@@ -31,11 +32,13 @@ export function getHookWslContext(
   runtimeTarget?: HookRuntimeTarget
 ): { distro: string | null; linuxPath: string } | null {
   const pathInfo = parseWslPath(cwd)
+
   if (pathInfo) {
     return pathInfo
   }
 
   const wslDistro = runtimeTarget?.wslDistro?.trim()
+
   if (!wslDistro) {
     return null
   }

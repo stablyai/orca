@@ -31,22 +31,37 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-adoption-telemetry-event', () => moduleFactories.daemonAdoptionTelemetryEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -131,6 +146,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const gate = await import('../claude-accounts/live-pty-gate')
     defaultListSessionsSessions.push({ sessionId: 'claude-alive' })
     gate.seedLiveClaudePtysFromPersistence(['claude-alive', 'claude-dead'])
+
     try {
       await mod.initDaemonPtyProvider()
 
@@ -182,9 +198,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     probeSocketExistsMock.mockImplementation((p?: string) => p?.endsWith('daemon-v9.sock') ?? false)
     mockOnlyDaemonSocketAlive('daemon-v9.sock')
     let resolveDiscovery!: (sessions: { sessionId: string }[]) => void
+
     const discovery = new Promise<{ sessionId: string }[]>((resolve) => {
       resolveDiscovery = resolve
     })
+
     listProcessesControl.current = () => discovery
     const abortController = new AbortController()
 
@@ -359,16 +377,19 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const legacyUnlinks = unlinkSyncMock.mock.calls.filter(
       ([p]) => typeof p === 'string' && (p.includes('.token') || p.includes('.pid'))
     )
+
     expect(legacyUnlinks).toEqual([])
   })
 
   it('cleans up legacy daemon pid/token files when the probe fails and the process is gone', async () => {
     const mod = await importFresh()
     readFileSyncMock.mockReturnValue('{"pid":123}')
+
     // Why: spy process.kill to force a deterministic ESRCH instead of relying on an unallocated real pid.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw new Error('ESRCH')
     })
+
     parseDaemonPidFileMock.mockReturnValue({ pid: 999_999, startedAtMs: null })
 
     try {
@@ -380,6 +401,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const tokenUnlinks = unlinkSyncMock.mock.calls.filter(
       ([p]) => typeof p === 'string' && p.includes('.token')
     )
+
     expect(tokenUnlinks.length).toBeGreaterThan(0)
   })
 })

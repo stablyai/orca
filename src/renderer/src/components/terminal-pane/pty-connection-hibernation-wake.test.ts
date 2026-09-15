@@ -34,8 +34,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -56,6 +59,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -65,6 +69,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -85,6 +90,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -95,9 +101,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -107,9 +115,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -118,6 +128,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -149,11 +160,13 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     // Hibernation only targets hidden panes, so the exit lands while not visible and the wake must wait for the reveal.
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
     })
+
     const pane = createPane(2)
     const paneKey = `tab-1:${leafIdForPane(2)}`
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
@@ -174,6 +187,7 @@ describe('connectPanePty', () => {
       noteVisibilityResume: () => void
       dispose: () => void
     }
+
     await flushAsyncTicks()
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
@@ -195,9 +209,11 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+
     const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
       | { command?: string }
       | undefined
+
     expect(resumeConnectOptions?.command).toContain('--resume')
     expect(resumeConnectOptions?.command).toContain('sess-hibernated-1')
 
@@ -214,10 +230,12 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
     })
+
     const pane = createPane(2)
     const paneKey = `tab-1:${leafIdForPane(2)}`
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
@@ -238,6 +256,7 @@ describe('connectPanePty', () => {
       wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
       dispose: () => void
     }
+
     await flushAsyncTicks()
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
@@ -258,9 +277,11 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+
     const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
       | { command?: string }
       | undefined
+
     expect(resumeConnectOptions?.command).toContain('--resume')
     expect(resumeConnectOptions?.command).toContain('sess-hibernated-bg')
 
@@ -277,10 +298,12 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
     })
+
     const pane = createPane(2)
     const paneKey = `tab-1:${leafIdForPane(2)}`
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
@@ -301,6 +324,7 @@ describe('connectPanePty', () => {
       wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
       dispose: () => void
     }
+
     await flushAsyncTicks()
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('tab-pty')
 
@@ -318,9 +342,11 @@ describe('connectPanePty', () => {
 
     // Arming consumed the latched wake — the --resume spawned with no reveal and no second wake event.
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+
     const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
       | { command?: string }
       | undefined
+
     expect(resumeConnectOptions?.command).toContain('--resume')
     expect(resumeConnectOptions?.command).toContain('sess-hibernated-race')
   })
@@ -329,10 +355,12 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
+
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
     })
+
     const paneKey = `tab-1:${leafIdForPane(2)}`
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
       paneKey,
@@ -346,6 +374,7 @@ describe('connectPanePty', () => {
       updatedAt: 1,
       origin: 'worktree-sleep'
     }
+
     const binding = connectPanePty(
       createPane(2) as never,
       createManager(1) as never,
@@ -353,6 +382,7 @@ describe('connectPanePty', () => {
     ) as unknown as {
       wakeHibernatedAgentIfArmed: () => string | null
     }
+
     await flushAsyncTicks()
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
@@ -389,6 +419,7 @@ describe('connectPanePty', () => {
       updatedAt: 1,
       origin: 'worktree-sleep'
     }
+
     const binding = connectPanePty(
       createPane(2) as never,
       createManager(1) as never,
@@ -397,6 +428,7 @@ describe('connectPanePty', () => {
         isVisibleRef: { current: false }
       }) as never
     ) as unknown as { wakeHibernatedAgentIfArmed: () => string | null }
+
     await flushAsyncTicks()
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
@@ -430,6 +462,7 @@ describe('connectPanePty', () => {
       updatedAt: 1,
       origin: 'worktree-sleep'
     }
+
     const binding = connectPanePty(
       createPane(2) as never,
       createManager(1) as never,
@@ -437,6 +470,7 @@ describe('connectPanePty', () => {
     ) as unknown as {
       wakeHibernatedAgentIfArmed: () => string | null
     }
+
     await flushAsyncTicks()
 
     expect(binding.wakeHibernatedAgentIfArmed()).toBeNull()
@@ -448,10 +482,12 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: true }
     })
+
     const pane = createPane(2)
     const paneKey = `tab-1:${leafIdForPane(2)}`
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
@@ -471,6 +507,7 @@ describe('connectPanePty', () => {
       noteVisibilityResume: () => void
       dispose: () => void
     }
+
     await flushAsyncTicks()
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
@@ -483,9 +520,11 @@ describe('connectPanePty', () => {
 
     // No second reveal was needed: the foreground pane resumed its recorded session directly from the arm-time wake.
     expect(transport.connect.mock.calls.length).toBeGreaterThan(connectCallsBeforeExit)
+
     const resumeConnectOptions = transport.connect.mock.calls.at(-1)?.[0] as
       | { command?: string }
       | undefined
+
     expect(resumeConnectOptions?.command).toContain('--resume')
     expect(resumeConnectOptions?.command).toContain('sess-hibernated-2')
 
@@ -502,10 +541,12 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true),
       isVisibleRef: { current: false }
     })
+
     const pane = createPane(2)
     const paneKey = `tab-1:${leafIdForPane(2)}`
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
@@ -525,6 +566,7 @@ describe('connectPanePty', () => {
       noteVisibilityResume: () => void
       dispose: () => void
     }
+
     await flushAsyncTicks()
 
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
@@ -556,11 +598,14 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
     const pane = createPane(2)
+
     const userInputListeners = new Set<() => void>()
+
     ;(pane.terminal as unknown as { _core: unknown })._core = {
       coreService: {
         onUserInput: vi.fn((listener: () => void) => {
           userInputListeners.add(listener)
+
           return { dispose: () => userInputListeners.delete(listener) }
         })
       }
@@ -569,6 +614,7 @@ describe('connectPanePty', () => {
     const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
       dispose: () => void
     }
+
     await flushAsyncTicks()
     expect(userInputListeners.size).toBeGreaterThan(0)
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
@@ -583,6 +629,7 @@ describe('connectPanePty', () => {
     for (const listener of userInputListeners) {
       listener()
     }
+
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
 
     binding.dispose()

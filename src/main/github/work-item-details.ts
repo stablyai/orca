@@ -29,6 +29,7 @@ function localGitOptionArgs(options: LocalGitExecOptions = {}): [] | [LocalGitEx
 
 async function withWorkItemDetailsPermit<T>(operation: () => Promise<T>): Promise<T> {
   await acquire()
+
   try {
     return await operation()
   } finally {
@@ -47,6 +48,7 @@ async function getPRChecksForDetails(
   if (!repository) {
     return []
   }
+
   try {
     return await getPRChecks(
       repoPath,
@@ -59,6 +61,7 @@ async function getPRChecksForDetails(
     )
   } catch (error) {
     console.warn('getWorkItemDetails PR checks failed:', error)
+
     return []
   }
 }
@@ -79,6 +82,7 @@ export async function getWorkItemDetails(
     localGitOptions,
     preference
   )
+
   if (!item) {
     return null
   }
@@ -98,6 +102,7 @@ export async function getWorkItemDetails(
         connectionId,
         localGitOptions
       )
+
       if (collapsed) {
         return {
           item: enrichItemDisplayAvatars(item, [
@@ -111,6 +116,7 @@ export async function getWorkItemDetails(
           timelineItems: collapsed.timelineItems
         }
       }
+
       const [{ body, comments, assignees, timelineItems }, participants] = await Promise.all([
         getIssueBodyAndComments(
           repoPath,
@@ -121,6 +127,7 @@ export async function getWorkItemDetails(
         ),
         getWorkItemParticipants(repoPath, item, resolvedRepository, connectionId, localGitOptions)
       ])
+
       const mentionParticipants = await getMentionParticipants(
         repoPath,
         item,
@@ -130,6 +137,7 @@ export async function getWorkItemDetails(
         connectionId,
         localGitOptions
       )
+
       return {
         item: enrichItemDisplayAvatars(item, mentionParticipants),
         body,

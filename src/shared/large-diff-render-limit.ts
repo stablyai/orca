@@ -1,4 +1,5 @@
 export const MAX_RENDERED_DIFF_LINES_PER_SIDE = 120_000
+
 export const MAX_RENDERED_DIFF_COMBINED_CHARACTERS = 6_000_000
 
 export type LargeDiffRenderLimitReason = 'line-count' | 'character-count'
@@ -37,11 +38,13 @@ export function countLinesEmptyAsZero(content: string): number {
   }
 
   let lineCount = 1
+
   for (let index = 0; index < content.length; index += 1) {
     if (content.charCodeAt(index) === 10) {
       lineCount += 1
     }
   }
+
   return lineCount
 }
 
@@ -59,25 +62,31 @@ export function countLinesEmptyAsZeroUpToLimit(
   }
 
   let lineCount = 1
+
   for (let index = 0; index < content.length; index += 1) {
     if (content.charCodeAt(index) !== 10) {
       continue
     }
+
     lineCount += 1
+
     if (lineCount > maxLines) {
       return { count: lineCount, exceeded: true }
     }
   }
+
   return { count: lineCount, exceeded: false }
 }
 
 export function countLinesLikeSplit(content: string): number {
   let lineCount = 1
+
   for (let index = 0; index < content.length; index += 1) {
     if (content.charCodeAt(index) === 10) {
       lineCount += 1
     }
   }
+
   return lineCount
 }
 
@@ -103,7 +112,9 @@ export function getLargeDiffRenderLimitFromCounts({
     original: originalLineCount,
     modified: modifiedLineCount
   }
+
   const characterCount = originalCharacterCount + modifiedCharacterCount
+
   const limits = {
     maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
     maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
@@ -144,6 +155,7 @@ export function getLargeDiffRenderLimit({
   modifiedContent
 }: LargeDiffRenderLimitInput): LargeDiffRenderLimit {
   const characterCount = originalContent.length + modifiedContent.length
+
   const limits = {
     maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
     maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
@@ -163,6 +175,7 @@ export function getLargeDiffRenderLimit({
     originalContent,
     MAX_RENDERED_DIFF_LINES_PER_SIDE
   )
+
   const modifiedLineCount = countLinesEmptyAsZeroUpToLimit(
     modifiedContent,
     MAX_RENDERED_DIFF_LINES_PER_SIDE

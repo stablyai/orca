@@ -1,7 +1,9 @@
 import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 
 const CONNECTION_DIAGNOSTICS_ENDPOINT = 'https://www.onorca.dev/v1/feedback'
+
 const SUBMISSION_TIMEOUT_MS = 10_000
+
 const MAX_SUBMISSION_BYTES = 64 * 1024
 
 export type ConnectionDiagnosticsSubmission = {
@@ -20,6 +22,7 @@ export async function submitConnectionDiagnostics(
   const report = boundConnectionDiagnosticsReport(submission.report)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), SUBMISSION_TIMEOUT_MS)
+
   try {
     const response = await fetchImpl(CONNECTION_DIAGNOSTICS_ENDPOINT, {
       method: 'POST',
@@ -36,6 +39,7 @@ export async function submitConnectionDiagnostics(
       }),
       signal: controller.signal
     })
+
     return response.ok ? { ok: true } : { ok: false, error: `status ${response.status}` }
   } catch (error) {
     return {
@@ -58,25 +62,33 @@ export function boundConnectionDiagnosticsReport(
   if (utf8Bytes(report) <= maxBytes) {
     return report
   }
+
   const lines = report.split('\n')
   const historyIndex = lines.findIndex((line) => line.startsWith('Recent connection history ('))
+
   if (historyIndex === -1) {
     return clampUtf8TextPrefix(report, maxBytes)
   }
+
   const header = lines.slice(0, historyIndex)
   const events = lines.slice(historyIndex + 1)
   let kept: string[] = []
+
   for (let index = events.length - 1; index >= 0; index--) {
     const candidateEvents = [events[index]!, ...kept]
     const candidate = formatBoundedReport(header, candidateEvents, events.length)
+
     if (utf8Bytes(candidate) > maxBytes) {
       break
     }
+
     kept = candidateEvents
   }
+
   if (kept.length === 0 && events.length > 0) {
     return formatReportWithTruncatedNewestEvent(header, events, maxBytes)
   }
+
   return clampUtf8TextPrefix(formatBoundedReport(header, kept, events.length), maxBytes)
 }
 
@@ -88,19 +100,24 @@ function formatReportWithTruncatedNewestEvent(
   const history = `Recent connection history (1 newest event; ${events.length - 1} older omitted):`
   const prefix = [...header, history].join('\n') + '\n'
   const availableBytes = maxBytes - utf8Bytes(prefix)
+
   if (availableBytes <= 0) {
     return clampUtf8TextPrefix(prefix, maxBytes)
   }
+
   const marker = ' … [truncated]'
   const markerBytes = utf8Bytes(marker)
+
   if (availableBytes <= markerBytes) {
     return clampUtf8TextPrefix(prefix, maxBytes)
   }
+
   return `${prefix}${clampUtf8TextPrefix(events.at(-1)!, availableBytes - markerBytes)}${marker}`
 }
 
 function formatBoundedReport(header: string[], events: string[], totalEvents: number): string {
   const omitted = totalEvents - events.length
+
   return [
     ...header,
     `Recent connection history (${events.length} newest events; ${omitted} older omitted):`,

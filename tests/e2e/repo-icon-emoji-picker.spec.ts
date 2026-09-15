@@ -21,6 +21,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<void> {
   }, repoId)
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+
   if (await maybeLaterButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await maybeLaterButton.click()
   }
@@ -66,6 +67,7 @@ test.describe('Repository icon emoji picker', () => {
       .poll(
         async () => {
           const current = await getStoreState<Repo[]>(orcaPage, 'repos')
+
           return current.find((entry) => entry.id === repo.id)?.repoIcon
         },
         { timeout: 5_000, message: 'repo icon did not persist the picked emoji' }

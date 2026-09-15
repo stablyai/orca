@@ -18,20 +18,25 @@ type NoticeCallback = (payload: { promptCount: number }, acknowledge: () => void
 const subscribeToMacosTccPromptNotice = vi.hoisted(() =>
   vi.fn<(_: unknown, onNotice: NoticeCallback) => () => void>(() => vi.fn())
 )
+
 const toastWarning = vi.hoisted(() => vi.fn())
 
 vi.mock('./macos-tcc-prompt-notice-subscription', () => ({
   dismissMacosTccPromptNotice: vi.fn(),
   subscribeToMacosTccPromptNotice
 }))
+
 vi.mock('sonner', () => ({ toast: { warning: toastWarning } }))
 
 const initialAppState = useAppStore.getInitialState()
+
 const initialPluginLanguagePackState = usePluginLanguagePackStore.getInitialState()
+
 let root: Root | null = null
 
 function NoticeProbe(): null {
   useMacosTccPromptNotice()
+
   return null
 }
 
@@ -48,6 +53,7 @@ afterEach(async () => {
     await act(async () => root?.unmount())
     root = null
   }
+
   useAppStore.setState(initialAppState, true)
   usePluginLanguagePackStore.setState(initialPluginLanguagePackState, true)
 })
@@ -78,8 +84,10 @@ it('isolates plugin language-pack discovery from its parent render path', async 
     settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' }
   })
   let parentRenderCount = 0
+
   function ParentProbe(): React.JSX.Element {
     parentRenderCount += 1
+
     return createElement(MacosTccPromptNoticeHost)
   }
 
@@ -105,9 +113,11 @@ it('connects the notice to the macOS prompt and keeps it open until closed', asy
   await act(async () => {
     root?.render(createElement(I18nextProvider, { i18n }, createElement(NoticeProbe)))
   })
+
   const showNotice = subscribeToMacosTccPromptNotice.mock.calls[0]?.[1] as
     | NoticeCallback
     | undefined
+
   const acknowledge = vi.fn()
 
   showNotice?.({ promptCount: 1 }, acknowledge)
@@ -119,9 +129,11 @@ it('connects the notice to the macOS prompt and keeps it open until closed', asy
         'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
     })
   )
+
   const options = toastWarning.mock.calls[0]?.[1] as
     | { duration?: number; onDismiss?: () => void }
     | undefined
+
   expect(options?.duration).toBe(Infinity)
   expect(acknowledge).not.toHaveBeenCalled()
   options?.onDismiss?.()
@@ -137,9 +149,11 @@ it('acknowledges when opening Settings closes the notice', async () => {
   await act(async () => {
     root?.render(createElement(I18nextProvider, { i18n }, createElement(NoticeProbe)))
   })
+
   const showNotice = subscribeToMacosTccPromptNotice.mock.calls[0]?.[1] as
     | NoticeCallback
     | undefined
+
   const acknowledge = vi.fn()
 
   showNotice?.({ promptCount: 1 }, acknowledge)
@@ -147,6 +161,7 @@ it('acknowledges when opening Settings closes the notice', async () => {
   const options = toastWarning.mock.calls[0]?.[1] as
     | { action?: { onClick: () => void } }
     | undefined
+
   options?.action?.onClick()
   expect(acknowledge).toHaveBeenCalledOnce()
   expect(useAppStore.getState().settingsNavigationTarget).toEqual({

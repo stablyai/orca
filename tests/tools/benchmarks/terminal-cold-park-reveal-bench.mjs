@@ -46,16 +46,20 @@ import {
 } from '../../../config/scripts/windows-apphang-repro/repro-timing.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
+
 const scenarioTimeoutMs = 300_000
 
 // Short enough that a tab parks within a few seconds of being hidden, long
 // enough that the warm arm can reliably reveal before it elapses.
 const PARK_DELAY_MS = 1_500
+
 const WARM_REVEAL_AFTER_MS = 300
+
 const COLD_PARK_CONFIRM_TIMEOUT_MS = 15_000
 
 function parseArgs() {
   const args = { label: 'run', cycles: 8, scrollbackLines: 0, reportPath: null, keep: false }
+
   for (const arg of process.argv.slice(2)) {
     if (arg === '--help' || arg === '-h') {
       console.log(
@@ -63,11 +67,14 @@ function parseArgs() {
       )
       process.exit(0)
     }
+
     if (arg === '--keep') {
       args.keep = true
       continue
     }
+
     const [name, value] = arg.split('=', 2)
+
     if (name === '--label') {
       args.label = value?.trim() || 'run'
     } else if (name === '--cycles') {
@@ -78,6 +85,7 @@ function parseArgs() {
       args.reportPath = value
     }
   }
+
   return args
 }
 
@@ -92,6 +100,7 @@ function createShortUserDataDirectory() {
   mkdirSync(shortRoot, { recursive: true })
   const userDataDir = mkdtempSync(path.join(shortRoot, 'ud-'))
   createCompletedOnboardingProfile(userDataDir)
+
   return userDataDir
 }
 
@@ -111,11 +120,13 @@ function createLocalRepoFixture() {
   git(repoPath, 'add', '.')
   git(repoPath, 'commit', '-m', 'init', '--no-gpg-sign')
   const worktreePaths = []
+
   for (const name of ['wt-one', 'wt-two']) {
     const worktreePath = path.join(baseDir, name)
     git(repoPath, 'worktree', 'add', worktreePath, '-b', name)
     worktreePaths.push(worktreePath)
   }
+
   return { baseDir, repoPath, worktreePaths }
 }
 
@@ -126,14 +137,18 @@ async function setupWorkspaces(page, fixture) {
       page.evaluate(
         async ({ repoPath, importedWorktreePaths }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is unavailable.')
           }
+
           await store.getState().fetchSettings?.()
           const addResult = await window.api.repos.add({ path: repoPath, kind: 'git' })
+
           if ('error' in addResult) {
             throw new Error(addResult.error)
           }
+
           await store.getState().fetchRepos()
           const state = store.getState()
           const repo = state.repos.find((c) => c.path === repoPath) ?? addResult.repo
@@ -151,6 +166,7 @@ async function setupWorkspaces(page, fixture) {
           nextState.setShowActiveOnly(false)
           nextState.setActiveView('terminal')
           const worktrees = nextState.worktreesByRepo[repo.id] ?? []
+
           return {
             repoId: repo.id,
             worktrees: worktrees.map((w) => ({
@@ -174,22 +190,28 @@ async function clickWorktreeCard(page, worktreeId) {
       page.evaluate((id) => {
         const rows = Array.from(document.querySelectorAll('[data-worktree-id]'))
         const row = rows.find((c) => c.getAttribute('data-worktree-id') === id)
+
         if (!row) {
           return null
         }
+
         row.scrollIntoView({ block: 'center', inline: 'nearest' })
         const surface = row.querySelector('[data-worktree-card-surface="true"]') ?? row
         const bounds = surface.getBoundingClientRect()
+
         if (bounds.width <= 0 || bounds.height <= 0) {
           return null
         }
+
         return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
       }, worktreeId),
     rendererActionTimeoutMs
   )
+
   if (!rect) {
     throw new Error(`Could not find rendered worktree card for ${worktreeId}`)
   }
+
   await runWithTimeout(
     `click worktree card ${worktreeId}`,
     () => page.mouse.click(rect.x, rect.y),
@@ -204,6 +226,7 @@ async function activateWorktreeTerminal(page, worktreeId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         return state?.activeWorktreeId === id && state.activeTabType === 'terminal'
       }, worktreeId),
     Boolean,
@@ -219,12 +242,15 @@ async function waitForBoundTerminal(page, worktreeId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         const tabId =
           state?.activeWorktreeId === id && state.activeTabType === 'terminal'
             ? state.activeTabId
             : (state?.activeTabIdByWorktree?.[id] ?? null)
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
         return pane?.container?.dataset?.ptyId ?? null
       }, worktreeId),
     Boolean,
@@ -240,33 +266,42 @@ async function waitForBoundTerminal(page, worktreeId) {
 async function primeScrollback(page, worktreeId, lineCount) {
   const ptyId = await page.evaluate((id) => {
     const state = window.__store?.getState?.()
+
     const tabId =
       state?.activeWorktreeId === id && state.activeTabType === 'terminal'
         ? state.activeTabId
         : (state?.activeTabIdByWorktree?.[id] ?? null)
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
     return pane?.container?.dataset?.ptyId ?? null
   }, worktreeId)
+
   if (!ptyId) {
     throw new Error(`No pty to prime for ${worktreeId}`)
   }
+
   // A single command that emits many numbered 80-col lines. seq is POSIX-ish;
   // fall back handled by awk for portability.
   const cmd = `awk 'BEGIN{for(i=0;i<${lineCount};i++)printf "%04d %s\\n", i, "cold-park-scrollback-priming-line-padding-to-eighty-cols-000000"}'\n`
   await page.evaluate(({ id, c }) => window.api.pty.write(id, c), { id: ptyId, c: cmd })
+
   return await pollUntil(
     `scrollback primed ${worktreeId}`,
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         const tabId =
           state?.activeWorktreeId === id && state.activeTabType === 'terminal'
             ? state.activeTabId
             : (state?.activeTabIdByWorktree?.[id] ?? null)
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
         const content = pane?.serializeAddon?.serialize?.() ?? ''
+
         return content.length
       }, worktreeId),
     (len) => Number.isFinite(len) && len > lineCount * 40,
@@ -278,6 +313,7 @@ async function primeScrollback(page, worktreeId, lineCount) {
 function activeTabIdFor(page, worktreeId) {
   return page.evaluate((id) => {
     const state = window.__store?.getState?.()
+
     return (
       (state?.activeWorktreeId === id && state.activeTabType === 'terminal'
         ? state.activeTabId
@@ -296,6 +332,7 @@ async function timeReveal(page, targetId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         return state?.activeWorktreeId === id && state.activeTabType === 'terminal'
       }, targetId),
     Boolean,
@@ -308,12 +345,15 @@ async function timeReveal(page, targetId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         const tabId =
           state?.activeWorktreeId === id && state.activeTabType === 'terminal'
             ? state.activeTabId
             : (state?.activeTabIdByWorktree?.[id] ?? null)
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
         return pane?.container?.isConnected ? (pane?.container?.dataset?.ptyId ?? null) : null
       }, targetId),
     Boolean,
@@ -330,6 +370,7 @@ async function timeReveal(page, targetId) {
     rendererActionTimeoutMs
   )
   const paintSettleMs = Date.now() - t0
+
   return { activationMs, ptyBindMs, paintSettleMs }
 }
 
@@ -342,11 +383,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function isTabParked(page, tabId) {
   return page.evaluate((id) => {
     const handleIds = window.__terminalParkingDebug?.parkedTabIds?.()
+
     if (Array.isArray(handleIds)) {
       return { source: 'handle', parked: handleIds.includes(id) }
     }
+
     // Fallback (no debug handle): a parked tab's manager leaves __paneManagers.
     const managerGone = !(window.__paneManagers && window.__paneManagers.has(id))
+
     return { source: 'manager', parked: managerGone }
   }, tabId)
 }
@@ -356,10 +400,13 @@ async function debugSnapshot(page, tabId, worktreeId) {
     ({ id, wtId }) => {
       const state = window.__store?.getState?.()
       const tabsByWorktree = state?.tabsByWorktree ?? {}
+
       const tab = Object.values(tabsByWorktree)
         .flat()
         .find((t) => t?.id === id)
+
       const wtTabs = tabsByWorktree[wtId] ?? []
+
       return {
         handlePresent: typeof window.__terminalParkingDebug?.parkedTabIds === 'function',
         parkDelayMs: window.__terminalParkingDebug?.parkDelayMs ?? null,
@@ -382,11 +429,14 @@ async function debugSnapshot(page, tabId, worktreeId) {
 async function runColdCycle(page, primaryId, targetId, wantDebug, scrollbackLines) {
   await activateWorktreeTerminal(page, targetId)
   await waitForBoundTerminal(page, targetId)
+
   if (scrollbackLines > 0) {
     await primeScrollback(page, targetId, scrollbackLines)
   }
+
   const targetTabId = await activeTabIdFor(page, targetId)
   await activateWorktreeTerminal(page, primaryId)
+
   const parked = await pollUntil(
     `cold-park ${targetTabId}`,
     () => isTabParked(page, targetTabId),
@@ -397,8 +447,10 @@ async function runColdCycle(page, primaryId, targetId, wantDebug, scrollbackLine
     () => true,
     () => false
   )
+
   const diag = wantDebug ? await debugSnapshot(page, targetTabId, targetId) : null
   const timings = await timeReveal(page, targetId)
+
   return { ...timings, parkedConfirmed: parked, diag }
 }
 
@@ -407,23 +459,29 @@ async function runColdCycle(page, primaryId, targetId, wantDebug, scrollbackLine
 async function runWarmCycle(page, primaryId, targetId, scrollbackLines) {
   await activateWorktreeTerminal(page, targetId)
   await waitForBoundTerminal(page, targetId)
+
   if (scrollbackLines > 0) {
     await primeScrollback(page, targetId, scrollbackLines)
   }
+
   const targetTabId = await activeTabIdFor(page, targetId)
   await activateWorktreeTerminal(page, primaryId)
   await sleep(WARM_REVEAL_AFTER_MS)
   const parked = await isTabParked(page, targetTabId)
   const timings = await timeReveal(page, targetId)
+
   return { ...timings, parkedConfirmed: parked?.parked === true }
 }
 
 function summarize(values) {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b)
+
   if (!sorted.length) {
     return null
   }
+
   const at = (f) => sorted[Math.min(sorted.length - 1, Math.round(f * (sorted.length - 1)))]
+
   return {
     count: sorted.length,
     median: Math.round(at(0.5)),
@@ -434,9 +492,11 @@ function summarize(values) {
 
 function summarizeArm(name, samples) {
   const fields = {}
+
   for (const key of ['activationMs', 'ptyBindMs', 'paintSettleMs']) {
     fields[key] = summarize(samples.map((s) => s[key]))
   }
+
   return {
     name,
     samples: samples.length,
@@ -448,6 +508,7 @@ function summarizeArm(name, samples) {
 async function main() {
   const args = parseArgs()
   const startedAt = Date.now()
+
   const report = {
     label: args.label,
     startedAt: new Date(startedAt).toISOString(),
@@ -458,11 +519,13 @@ async function main() {
     summaries: [],
     cleanupErrors: []
   }
+
   let fixture = null
   let userDataDir = null
   let launched = null
   let browser = null
   let page = null
+
   try {
     fixture = createLocalRepoFixture()
     const cdpPort = await pickFreePort()
@@ -481,6 +544,7 @@ async function main() {
     await installRendererProbe(page)
     const setup = await setupWorkspaces(page, fixture)
     let worktrees = setup.worktrees
+
     // Why: worktree registration/fetch can lag the setup evaluate return; poll
     // the store until the two external worktrees materialize before asserting.
     if (worktrees.length < 2) {
@@ -497,6 +561,7 @@ async function main() {
               .catch(() => undefined)
             const state = window.__store?.getState?.()
             const list = state?.worktreesByRepo?.[repoId] ?? []
+
             return list.map((w) => ({
               id: w.id,
               path: w.path,
@@ -509,9 +574,11 @@ async function main() {
         500
       )
     }
+
     if (worktrees.length < 2) {
       throw new Error(`Expected >=2 worktrees, got ${worktrees.length}`)
     }
+
     const primary = worktrees.find((w) => w.isMainWorktree) ?? worktrees[0]
     const target = worktrees.find((w) => w.id !== primary.id)
     await activateWorktreeTerminal(page, primary.id)
@@ -529,11 +596,13 @@ async function main() {
       () => true,
       () => false
     )
+
     report.parkingDebugHandlePresent = debugReady
 
     const cold = []
     const warm = []
     console.log(`[cold-park] running ${args.cycles} cold + ${args.cycles} warm cycles`)
+
     for (let i = 0; i < args.cycles; i++) {
       warm.push(
         await runWithTimeout(
@@ -542,17 +611,21 @@ async function main() {
           scenarioTimeoutMs
         )
       )
+
       const coldResult = await runWithTimeout(
         `cold cycle ${i}`,
         () => runColdCycle(page, primary.id, target.id, i === 0, args.scrollbackLines),
         scenarioTimeoutMs
       )
+
       if (i === 0 && coldResult.diag) {
         report.firstColdDiag = coldResult.diag
         console.log(`[cold-park] first-cold diag: ${JSON.stringify(coldResult.diag)}`)
       }
+
       cold.push(coldResult)
     }
+
     report.arms.cold = cold
     report.arms.warm = warm
     report.summaries.push(summarizeArm('cold', cold))
@@ -560,26 +633,33 @@ async function main() {
     report.finalDiagnostics = await collectRendererDiagnostics(page)
   } finally {
     report.elapsedMs = Date.now() - startedAt
+
     if (browser) {
       await browser.close().catch(() => undefined)
     }
+
     if (launched) {
       try {
         await stopDevApp(launched.child)
       } catch (error) {
         report.cleanupErrors.push(error instanceof Error ? error.message : String(error))
       }
+
       report.appLogsTail = launched.logs.slice(-60)
     }
+
     if (!args.keep) {
       if (fixture) {
         safeRemoveLocalDirectory(fixture.baseDir, report.cleanupErrors)
       }
+
       if (userDataDir) {
         safeRemoveLocalDirectory(userDataDir, report.cleanupErrors)
       }
     }
+
     const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-')
+
     const reportPath = path.resolve(
       args.reportPath ??
         path.join(
@@ -591,19 +671,23 @@ async function main() {
           `cold-park-${args.label}-${stamp}.json`
         )
     )
+
     mkdirSync(path.dirname(reportPath), { recursive: true })
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
     console.log(`[cold-park] report=${reportPath}`)
     const coldArm = report.summaries.find((s) => s.name === 'cold')
+
     if (coldArm && coldArm.parkedConfirmed < coldArm.samples) {
       console.log(
         `[cold-park] WARNING: only ${coldArm.parkedConfirmed}/${coldArm.samples} cold reveals were confirmed parked — treat unconfirmed samples with caution`
       )
     }
+
     for (const summary of report.summaries) {
       console.log(
         `[cold-park] ${summary.name}: samples=${summary.samples} parkedConfirmed=${summary.parkedConfirmed}/${summary.samples}`
       )
+
       for (const [field, stats] of Object.entries(summary.fields)) {
         if (stats) {
           console.log(

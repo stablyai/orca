@@ -31,17 +31,22 @@ export function parseHostFlag(
   if (!flags.has('host')) {
     return undefined
   }
+
   const raw = flags.get('host')
+
   if (typeof raw !== 'string' || raw.length === 0) {
     throw new RuntimeClientError('invalid_argument', 'Missing value for --host')
   }
+
   const parsed = parseExecutionHostId(raw)
+
   if (!parsed) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Invalid --host value: ${raw}. Expected local, ssh:<target-id>, or runtime:<environment-id>.`
     )
   }
+
   return parsed
 }
 
@@ -54,15 +59,19 @@ export async function resolveHostFlagEnvironmentId(
   selection: HostFlagRoutingSelection
 ): Promise<string | null> {
   const host = parseHostFlag(flags)
+
   if (host?.kind !== 'runtime') {
     return null
   }
+
   const [{ listEnvironments, resolveEnvironment }, { getDefaultUserDataPath }] = await Promise.all([
     import('./runtime/environments.js'),
     import('./runtime-client.js')
   ])
+
   const userDataPath = getDefaultUserDataPath()
   const known = listEnvironments(userDataPath)
+
   // Why: --environment has always taken a name or an id, and the name is what people and agents
   // actually know. Requiring the raw uuid here made the obvious spelling fail; accept either and
   // canonicalize to the id so stored host ids still compare correctly downstream.
@@ -70,6 +79,7 @@ export async function resolveHostFlagEnvironmentId(
     known.map((candidate) => ({ id: candidate.id, name: candidate.name })),
     host.environmentId
   )
+
   if (!environment) {
     // Why: `runtime:<id>` is a host id that also appears in stored rows, so it resolves by id
     // only — unlike --environment, which also accepts a name. Say so, and hand back the ids an
@@ -91,14 +101,17 @@ export async function resolveHostFlagEnvironmentId(
       }
     )
   }
+
   if (selection.pairingCode) {
     throw new RuntimeClientError(
       'invalid_argument',
       `--host ${host.id} already selects a paired Orca server; use either --host runtime:<id> or --pairing-code, not both.`
     )
   }
+
   if (selection.environmentSelector) {
     const selected = resolveEnvironment(userDataPath, selection.environmentSelector.value)
+
     if (selected.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
@@ -106,6 +119,7 @@ export async function resolveHostFlagEnvironmentId(
       )
     }
   }
+
   return environment.id
 }
 
@@ -117,9 +131,11 @@ export function hostFilterMatchesHostId(
   candidateHostId: string | null | undefined
 ): boolean {
   const candidate = normalizeExecutionHostId(candidateHostId)
+
   if (candidate === filter.id) {
     return true
   }
+
   return filter.kind === 'runtime' && candidate === LOCAL_EXECUTION_HOST_ID
 }
 
@@ -132,18 +148,23 @@ export async function resolveHostFlagTarget(
   client: RuntimeClient
 ): Promise<ParsedExecutionHost | undefined> {
   const host = parseHostFlag(flags)
+
   if (host?.kind !== 'ssh') {
     return host
   }
+
   const [{ listEnvironments }, { getDefaultUserDataPath }] = await Promise.all([
     import('./runtime/environments.js'),
     import('./runtime-client.js')
   ])
+
   const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
     id: candidate.id,
     name: candidate.name
   }))
+
   const targetId = await resolveSshHostTargetId(client, host.targetId, environments)
+
   return parseExecutionHostId(toSshExecutionHostId(targetId)) ?? host
 }
 
@@ -156,9 +177,11 @@ function assertEnvironmentNameUnambiguous(
   flag: string
 ): void {
   const ambiguous = ambiguousEnvironments(environments, name)
+
   if (ambiguous.length === 0) {
     return
   }
+
   throw new RuntimeClientError(
     'invalid_argument',
     `Ambiguous Orca server in ${flag}: ${ambiguous.length} paired servers are named ${name}. Use the environment id.`,
@@ -183,13 +206,16 @@ export async function assertEnvironmentSelectorResolvable(
     import('./runtime/environments.js'),
     import('./runtime-client.js')
   ])
+
   const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
     id: candidate.id,
     name: candidate.name
   }))
+
   if (findEnvironmentByName(environments, selector)) {
     return
   }
+
   assertEnvironmentNameUnambiguous(environments, selector, `--environment ${selector}`)
   const sshTargets = await listSshTargetsForSuggestion()
   throw new RuntimeClientError(

@@ -8,6 +8,7 @@ export type GitHubApiRepositoryResolution =
 
 // Why: renderer/RPC overrides reach authenticated REST paths.
 const OWNER_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/
+
 const REPOSITORY_SLUG_RE = /^[A-Za-z0-9._-]+$/
 
 export function isValidGitHubApiRepository(repository: GitHubOwnerRepo): boolean {

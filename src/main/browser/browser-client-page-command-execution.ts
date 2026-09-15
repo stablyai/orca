@@ -26,17 +26,22 @@ export async function navigateBrowserClientPageCommand(
   if (event.command.type !== 'navigate') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   const page = requireCommandPage(pages, event)
   assertBrowserClientPageCommandNotAborted(signal)
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const normalized = normalizeBrowserNavigationUrl(event.command.url)
+
   if (!normalized || normalized.startsWith('file:')) {
     throw new BrowserClientPageCommandError('browser_client_page_navigation_invalid')
   }
+
   const navigated = await routeWebContents.navigateGuest(page.lifecycleClaim, normalized)
+
   if (!navigated) {
     throw new BrowserClientPageCommandError('browser_client_page_navigation_failed')
   }
+
   page.inventory = updateBrowserClientPageInventoryCurrentUrl(page.inventory, normalized)
 }
 
@@ -63,10 +68,12 @@ export async function executeBrowserClientPageAutomationCommand(
   if (event.command.type !== 'automation') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   const page = requireCommandPage(pages, event)
   assertBrowserClientPageCommandNotAborted(signal)
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const method = event.command.method
+
   const run = (params: Record<string, unknown>): Promise<unknown> =>
     execute(
       {
@@ -79,14 +86,17 @@ export async function executeBrowserClientPageAutomationCommand(
       },
       signal
     )
+
   if (!requiresBrowserClientFileChannel(method)) {
     return run(event.command.params)
   }
+
   if (method !== 'browser.upload') {
     // Why: v1 has no way to honor an agent-supplied download path on the remote workspace, and
     // resolving it on the desktop is the defect this channel exists to remove.
     throw new BrowserClientPageCommandError('browser_client_download_path_unsupported')
   }
+
   return executeBrowserClientUploadCommand({
     event,
     params: event.command.params,
@@ -101,6 +111,7 @@ function requireCommandPage(
   event: BrowserClientHostCommandEvent
 ): BrowserClientRetainedPage {
   const page = pages.get(event.browserPageId)
+
   if (
     !page ||
     page.generation !== event.pageHostGeneration ||
@@ -110,5 +121,6 @@ function requireCommandPage(
   ) {
     throw new BrowserClientPageCommandError('browser_client_page_generation_stale')
   }
+
   return page
 }

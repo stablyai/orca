@@ -17,9 +17,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/components/ui/button', async () => {
   const ReactModule = await import('react')
+
   return {
     Button: (props: CapturedButtonProps) => {
       mocks.buttons.push(props)
+
       return ReactModule.createElement('button', { disabled: props.disabled }, props.children)
     }
   }
@@ -27,6 +29,7 @@ vi.mock('@/components/ui/button', async () => {
 
 vi.mock('@/components/ui/dialog', async () => {
   const ReactModule = await import('react')
+
   return {
     Dialog: ({ open, children }: { open: boolean; children?: React.ReactNode }) =>
       open ? ReactModule.createElement('div', null, children) : null,

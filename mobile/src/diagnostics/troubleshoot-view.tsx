@@ -14,6 +14,7 @@ import {
 import { colors, spacing } from '../theme/mobile-theme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
 export type CheckResult = {
@@ -50,10 +51,12 @@ export function TroubleshootView({
 }) {
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
   const toggleSection = useCallback(
     (id: string) => setExpandedId((prev) => (prev === id ? null : id)),
     []
   )
+
   return (
     <View ref={rootRef} style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>

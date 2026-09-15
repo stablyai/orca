@@ -33,11 +33,14 @@ describe('getVisibleFileExplorerWorktreePath', () => {
 describe('shouldResetFileExplorerForVisibleWorktree', () => {
   it('preserves explorer state across hide and reopen of the same worktree', () => {
     let lastResetWorktreePath: string | null = null
+
     const shouldReset = (visibleWorktreePath: string | null): boolean => {
       if (shouldResetFileExplorerForVisibleWorktree(lastResetWorktreePath, visibleWorktreePath)) {
         lastResetWorktreePath = visibleWorktreePath
+
         return true
       }
+
       return false
     }
 

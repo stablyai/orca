@@ -18,9 +18,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
   it('uses immediate reveal only for newly fetched ui:activateWorktree targets', async () => {
     const activateAndRevealWorktree = vi.fn()
     let worktreeKnown = false
+
     const fetchWorktrees = vi.fn().mockImplementation(async () => {
       worktreeKnown = true
     })
+
     const activateWorktreeListenerRef: {
       current:
         | ((data: {
@@ -33,6 +35,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -55,6 +58,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
             if (id === 'wt-existing') {
               return { id, repoId: 'repo-1' }
             }
+
             return worktreeKnown && id === 'wt-new' ? { id, repoId: 'repo-1' } : undefined
           }),
           activeWorktreeId: 'wt-old',
@@ -138,6 +142,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
             }) => void
           ) => {
             activateWorktreeListenerRef.current = listener
+
             return () => {}
           },
           onCreateTerminal: () => () => {},
@@ -279,21 +284,26 @@ describe('useIpcEvents CLI-created worktree activation', () => {
   it('routes local and runtime worktree events to their owning hosts', async () => {
     const fetchWorktrees = vi.fn()
     const fetchWorktreeLineage = vi.fn()
+
     // Mutable so the test can drop the runtime mid-run and prove the local flag
     // is origin-based, not a sample of runtime state.
     const mockSettings: { activeRuntimeEnvironmentId: string | null; terminalFontSize: number } = {
       activeRuntimeEnvironmentId: 'env-1',
       terminalFontSize: 13
     }
+
     let localWorktreesOnChanged: ((data: { repoId: string }) => void) | undefined
     let runtimeOnResponse: ((response: unknown) => void) | undefined
+
     const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
       runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     })
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -383,6 +393,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         worktrees: {
           onChanged: (callback: (data: { repoId: string }) => void) => {
             localWorktreesOnChanged = callback
+
             return () => {}
           },
           onBaseStatus: () => () => {},
@@ -501,9 +512,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       },
       expect.any(Object)
     )
+
     if (!localWorktreesOnChanged) {
       throw new Error('Expected local worktree event callback')
     }
+
     localWorktreesOnChanged({ repoId: 'repo-1' })
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -526,9 +539,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     fetchWorktrees.mockClear()
     fetchWorktreeLineage.mockClear()
     mockSettings.activeRuntimeEnvironmentId = null
+
     if (!runtimeOnResponse) {
       throw new Error('Expected runtime client event callbacks')
     }
+
     runtimeOnResponse({
       ok: true,
       result: { type: 'worktreesChanged', repoId: 'repo-1' }

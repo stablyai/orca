@@ -7,12 +7,14 @@ import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contra
 import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 
 const terminalHtmlSource = readTerminalWebViewHtmlSource()
+
 const reflowSource = readFileSync(
   new URL('./terminal-webview-reflow-injected.ts', import.meta.url),
   'utf8'
 )
 
 type Cell = { isBgDefault: () => boolean; isInverse: () => number }
+
 type MetricsNotification = {
   type: string
   cursorY: number
@@ -23,6 +25,7 @@ type MetricsNotification = {
 
 function makeLine(text = '', styledColumns: number[] = []) {
   const styled = new Set(styledColumns)
+
   return {
     isWrapped: false,
     length: 10,
@@ -36,6 +39,7 @@ function makeLine(text = '', styledColumns: number[] = []) {
 
 function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScreen = false) {
   const notifications: Record<string, unknown>[] = []
+
   const buffer = {
     cursorY: 2,
     viewportY: 3,
@@ -43,14 +47,17 @@ function runMetrics(lines: (ReturnType<typeof makeLine> | undefined)[], altScree
     getLine: (index: number) => lines[index - 3],
     getNullCell: () => ({})
   }
+
   const context = {
     notifications,
     notify: (message: Record<string, unknown>) => notifications.push(message),
     term: { buffer: { active: buffer }, cols: 10, rows: lines.length }
   }
+
   new Script(
     `${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}\nemitKeyboardAvoidanceMetrics();`
   ).runInNewContext(context)
+
   return notifications[0] as MetricsNotification
 }
 
@@ -62,6 +69,7 @@ function runTerminalMetrics(term: Terminal) {
     notify: (message: Record<string, unknown>) => notifications.push(message),
     term
   })
+
   return notifications[0] as MetricsNotification
 }
 
@@ -100,6 +108,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
 
     for (const { name, data, expected } of cases) {
       const term = new Terminal({ cols: 10, rows: 8 })
+
       try {
         await write(term, `\x1b[8;1H${data}`)
         expect(runTerminalMetrics(term), name).toMatchObject({ contentBottomRow: expected })
@@ -111,6 +120,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
 
   it('tracks the real xterm viewport and alternate screen', async () => {
     const term = new Terminal({ cols: 10, rows: 4, scrollback: 100 })
+
     try {
       await write(term, 'header\r\n\r\n\r\n\r\nfooter')
       expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 3, altScreen: false })
@@ -125,6 +135,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
 
   it('follows real xterm resize and reset state', async () => {
     const term = new Terminal({ cols: 10, rows: 8 })
+
     try {
       await write(term, '\x1b[8;1Hfooter')
       expect(runTerminalMetrics(term)).toMatchObject({ contentBottomRow: 7 })
@@ -139,6 +150,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
 
   it('keeps real xterm metrics compatible with old payloads', async () => {
     const term = new Terminal({ cols: 10, rows: 8 })
+
     try {
       await write(term, '\x1b[8;1Hfooter\x1b[2;1H')
       const { cursorY, rows, altScreen } = runTerminalMetrics(term)
@@ -157,10 +169,12 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     for (let cycle = 0; cycle < 25; cycle += 1) {
       const term = new Terminal({ cols: 10, rows: 4 })
       let emissions = 0
+
       const observer = term.onWriteParsed(() => {
         runTerminalMetrics(term)
         emissions += 1
       })
+
       try {
         await write(term, `cycle ${cycle}`)
         expect(emissions).toBeGreaterThan(0)

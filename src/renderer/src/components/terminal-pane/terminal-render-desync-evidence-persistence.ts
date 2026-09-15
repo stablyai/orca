@@ -11,10 +11,12 @@ import type { SentinelEvidence } from './terminal-render-desync-sentinel'
 export async function persistCorruptEvidence(entry: SentinelEvidence): Promise<string | null> {
   const pngDataUrl = entry.livePngDataUrl
   const bufferText = entry.bufferText
+
   try {
     if (!pngDataUrl || bufferText == null) {
       throw new Error('Render-desync evidence payload was released before persistence')
     }
+
     const persisted = await window.api.app.writeTerminalRenderDesyncEvidence({
       captureId: entry.captureId,
       phase: 'corrupt',
@@ -30,10 +32,13 @@ export async function persistCorruptEvidence(entry: SentinelEvidence): Promise<s
         bufferText
       }
     })
+
     entry.persistedDirectory = persisted.directory
+
     return persisted.directory
   } catch (error) {
     console.error('[terminal] could not persist render-desync evidence; leaving pane intact', error)
+
     return null
   } finally {
     // Why: persistence owns a successful payload, while a failed write leaves
@@ -62,5 +67,6 @@ export async function persistHealedReference(
 export function createCaptureId(paneKey: string): string {
   const panePart = paneKey.replace(/[^a-zA-Z0-9_-]/g, '-')
   const nonce = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
+
   return `${Date.now()}-${panePart}-${nonce}`
 }

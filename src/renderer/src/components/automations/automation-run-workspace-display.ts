@@ -22,6 +22,7 @@ export function getAutomationRunWorkspaceDisplay({
       muted: true
     }
   }
+
   if (worktree) {
     return {
       rowLabel: worktree.displayName,
@@ -32,8 +33,10 @@ export function getAutomationRunWorkspaceDisplay({
   }
 
   const previousName = run.workspaceDisplayName?.trim()
+
   if (previousName) {
     const deletedLabel = `${previousName} (no longer available)`
+
     return {
       rowLabel: previousName,
       detailLabel: deletedLabel,

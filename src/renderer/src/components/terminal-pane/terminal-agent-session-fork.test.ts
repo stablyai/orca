@@ -3,15 +3,21 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const mockLaunchAgentInNewTab = vi.fn()
+
 const mockActivateAndRevealWorktree = vi.fn()
+
 const mockCreateWorktree = vi.fn()
+
 const mockToast = {
   error: vi.fn(),
   message: vi.fn(),
   success: vi.fn()
 }
+
 const mockWriteClipboardText = vi.fn(async () => undefined)
+
 const mockMarkTrusted = vi.fn(async () => undefined)
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const store = {
@@ -180,6 +186,7 @@ describe('forkAgentSessionFromPane', () => {
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
+
     await vi.waitFor(() => expect(mockActivateAndRevealWorktree).toHaveBeenCalled())
 
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
@@ -205,6 +212,7 @@ describe('forkAgentSessionFromPane', () => {
       pasteDraftAfterLaunch: false,
       structuredSettlement: Promise.resolve({ kind: 'refused-then-legacy', primaryTabId: 'tab-2' })
     })
+
     const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
       await import('./terminal-agent-session-fork')
 
@@ -214,6 +222,7 @@ describe('forkAgentSessionFromPane', () => {
       worktreeId: 'wt-1',
       groupId: null
     })
+
     await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
     expect(mockToast.success).toHaveBeenCalledOnce()
     expect(mockWriteClipboardText).not.toHaveBeenCalled()
@@ -260,6 +269,7 @@ describe('forkAgentSessionFromPane', () => {
         pasteDraftAfterLaunch: false,
         structuredSettlement: Promise.resolve(settlement)
       })
+
       const { startAgentSessionFork, prepareAgentSessionForkFromPane } =
         await import('./terminal-agent-session-fork')
 
@@ -269,6 +279,7 @@ describe('forkAgentSessionFromPane', () => {
         worktreeId: 'wt-1',
         groupId: null
       })
+
       // Why: the worktree already exists; a false return would keep the dialog open for a second fork.
       await expect(startAgentSessionFork(prepared!)).resolves.toBe(true)
       expect(mockToast.success).not.toHaveBeenCalled()

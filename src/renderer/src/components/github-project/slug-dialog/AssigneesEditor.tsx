@@ -27,6 +27,7 @@ export function AssigneesEditor({
   // every parent render — depending on it directly would refire the IPC for
   // every unrelated re-render while the popover is open.
   const seedKey = useMemo(() => selected.slice().sort().join(','), [selected])
+
   const metadata = useRepoAssigneesBySlug(
     open ? owner : null,
     open ? repo : null,
@@ -34,6 +35,7 @@ export function AssigneesEditor({
     sourceSettings,
     host
   )
+
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>
@@ -65,6 +67,7 @@ export function AssigneesEditor({
         ) : (
           metadata.data.map((u) => {
             const isOn = selected.includes(u.login)
+
             return (
               <button
                 key={u.login}

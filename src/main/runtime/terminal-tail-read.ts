@@ -10,6 +10,7 @@ export function terminalReadLimit(limit: number | undefined, defaultLimit: numbe
   if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) {
     return defaultLimit
   }
+
   return Math.min(Math.max(1, Math.floor(limit)), MAX_TERMINAL_READ_LIMIT)
 }
 
@@ -18,11 +19,13 @@ function trimTerminalPreviewToCharacterBudget(
   characterBudget: number
 ): { tail: string[]; limited: boolean; omittedLineCount: number; slicedFirstLine: boolean } {
   let totalCharacters = lines.reduce((sum, line) => sum + line.length, 0)
+
   if (totalCharacters <= characterBudget) {
     return { tail: lines, limited: false, omittedLineCount: 0, slicedFirstLine: false }
   }
 
   let omittedLineCount = 0
+
   while (
     omittedLineCount < lines.length &&
     totalCharacters - lines[omittedLineCount].length >= characterBudget
@@ -30,9 +33,11 @@ function trimTerminalPreviewToCharacterBudget(
     totalCharacters -= lines[omittedLineCount].length
     omittedLineCount += 1
   }
+
   const tail = omittedLineCount > 0 ? lines.slice(omittedLineCount) : [...lines]
 
   let slicedFirstLine = false
+
   if (tail.length > 0 && totalCharacters > characterBudget) {
     tail[0] = tail[0].slice(totalCharacters - characterBudget)
     slicedFirstLine = true
@@ -57,6 +62,7 @@ export function readTerminalTail(args: {
 
   if (typeof args.cursor === 'number' && args.cursor >= 0) {
     const limit = terminalReadLimit(args.limit, MAX_TERMINAL_READ_LIMIT)
+
     if (args.cursor > latestCursor) {
       return {
         handle: args.handle,
@@ -70,12 +76,14 @@ export function readTerminalTail(args: {
         returnedLineCount: 0
       }
     }
+
     // Why: cursor reads return completed lines only, so a partial isn't delivered once as "hel" then again as "hello" after the newline.
     const startCursor = Math.max(args.cursor, oldestCursor)
     const startIndex = startCursor - oldestCursor
     const available = args.completedLines.slice(startIndex)
     const tail = available.slice(0, limit)
     const nextCursor = startCursor + tail.length
+
     return {
       handle: args.handle,
       status: args.status,
@@ -93,17 +101,22 @@ export function readTerminalTail(args: {
   const limit = terminalReadLimit(args.limit, DEFAULT_TERMINAL_READ_LIMIT)
   const allLines = buildTailLines(args.previewLines, args.partialLine)
   const lineBoundedTail = allLines.slice(-limit)
+
   const charBoundedTail = trimTerminalPreviewToCharacterBudget(
     lineBoundedTail,
     MAX_TERMINAL_PREVIEW_CHARS
   )
+
   const lineBoundedStartIndex = Math.max(0, allLines.length - lineBoundedTail.length)
   const charBoundedStartIndex = lineBoundedStartIndex + charBoundedTail.omittedLineCount
+
   const hasPageableOmittedCompletedLines =
     Math.min(args.completedLineCount, charBoundedStartIndex) > 0 ||
     (charBoundedTail.slicedFirstLine && charBoundedStartIndex < args.completedLineCount)
+
   // Why: a long partial line trimmed by the char budget can't be recovered via nextCursor, since cursor reads only page completed lines.
   const truncatedByNonPageablePartial = charBoundedTail.limited && !hasPageableOmittedCompletedLines
+
   return {
     handle: args.handle,
     status: args.status,
@@ -124,11 +137,14 @@ export function shouldFallbackToVisibleTerminalSnapshot(
   if (typeof opts.cursor === 'number') {
     return false
   }
+
   if (read.tail.length === 0) {
     return false
   }
+
   const hasSubstantialBlankTail =
     read.limited === true || read.truncated || read.tail.length >= DEFAULT_TERMINAL_READ_LIMIT
+
   return hasSubstantialBlankTail && read.tail.every((line) => line.trim().length === 0)
 }
 
@@ -144,10 +160,12 @@ export function buildVisibleSnapshotReadFallback(
 ): RuntimeTerminalRead {
   const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
   const lineBoundedTail = visibleLines.slice(-lineLimit)
+
   const charBoundedTail = trimTerminalPreviewToCharacterBudget(
     lineBoundedTail,
     MAX_TERMINAL_PREVIEW_CHARS
   )
+
   return {
     ...read,
     tail: charBoundedTail.tail,

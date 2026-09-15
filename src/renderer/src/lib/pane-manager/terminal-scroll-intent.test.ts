@@ -42,6 +42,7 @@ function createTerminal({
       terminal.buffer.active.viewportY = line
     })
   }
+
   return terminal
 }
 
@@ -62,14 +63,18 @@ class TestElement extends EventTarget {
   closest(selector: string): TestElement | null {
     for (const candidate of selector.split(',')) {
       const trimmed = candidate.trim()
+
       if (!trimmed.startsWith('.')) {
         continue
       }
+
       const className = trimmed.slice(1)
+
       if (this.classList.contains(className)) {
         return this
       }
     }
+
     return this.parentElement?.closest(selector) ?? null
   }
 
@@ -80,10 +85,13 @@ class TestElement extends EventTarget {
         value: this
       })
     }
+
     const result = super.dispatchEvent(event)
+
     if (event.bubbles && this.parentElement) {
       this.parentElement.dispatchEvent(event)
     }
+
     return result
   }
 }
@@ -119,6 +127,7 @@ describe('terminal scroll intent', () => {
       ...createTerminal({ viewportY: 42, baseY: 100 }),
       clear: vi.fn()
     }
+
     markTerminalPinnedViewport(terminal)
 
     clearTerminalScrollbackAndFollowOutput(terminal)
@@ -212,6 +221,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('Element', TestElement)
@@ -236,6 +246,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('Element', TestElement)
@@ -259,6 +270,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.useFakeTimers()
@@ -295,6 +307,7 @@ describe('terminal scroll intent', () => {
 
     const remountedTerminal = createTerminal({ viewportY: 0, baseY: 0 })
     const remountedHost = new TestElement() as unknown as HTMLElement
+
     const remountedDisposable = attachTerminalScrollIntentTracking(
       remountedTerminal,
       remountedHost,
@@ -317,20 +330,24 @@ describe('terminal scroll intent', () => {
     vi.stubGlobal('Element', TestElement)
     const firstTerminal = createTerminal({ viewportY: 76, baseY: 100 })
     const firstHost = new TestElement() as unknown as HTMLElement
+
     const firstDisposable = attachTerminalScrollIntentTracking(
       firstTerminal,
       firstHost,
       'leaf-remount-replay'
     )
+
     markTerminalPinnedViewport(firstTerminal)
 
     const remountedTerminal = createTerminal({ viewportY: 0, baseY: 0 })
     const remountedHost = new TestElement() as unknown as HTMLElement
+
     const remountedDisposable = attachTerminalScrollIntentTracking(
       remountedTerminal,
       remountedHost,
       'leaf-remount-replay'
     )
+
     const intent = captureTerminalStructuralScrollIntent(remountedTerminal)
 
     expect(intent).toMatchObject({
@@ -354,22 +371,26 @@ describe('terminal scroll intent', () => {
     vi.stubGlobal('Element', TestElement)
     const firstTerminal = createTerminal({ viewportY: 10, baseY: 20 })
     const firstHost = new TestElement() as unknown as HTMLElement
+
     const firstDisposable = attachTerminalScrollIntentTracking(
       firstTerminal,
       firstHost,
       'leaf-growing-pin'
     )
+
     markTerminalPinnedViewport(firstTerminal)
 
     firstTerminal.buffer.active.baseY = 30
     syncTerminalScrollIntentFromViewport(firstTerminal)
     const remountedTerminal = createTerminal({ viewportY: 0, baseY: 0 })
     const remountedHost = new TestElement() as unknown as HTMLElement
+
     const remountedDisposable = attachTerminalScrollIntentTracking(
       remountedTerminal,
       remountedHost,
       'leaf-growing-pin'
     )
+
     const intent = captureTerminalStructuralScrollIntent(remountedTerminal)
     remountedTerminal.buffer.active.viewportY = 30
     remountedTerminal.buffer.active.baseY = 30
@@ -386,22 +407,26 @@ describe('terminal scroll intent', () => {
   it('persists native pinned growth on disposal for the next keyed replay', () => {
     vi.stubGlobal('Element', TestElement)
     const firstTerminal = createTerminal({ viewportY: 76, baseY: 100 })
+
     const firstDisposable = attachTerminalScrollIntentTracking(
       firstTerminal,
       new TestElement() as unknown as HTMLElement,
       'leaf-dispose-growth'
     )
+
     markTerminalPinnedViewport(firstTerminal)
     firstTerminal.buffer.active.baseY = 120
 
     firstDisposable.dispose()
 
     const remountedTerminal = createTerminal({ viewportY: 0, baseY: 0 })
+
     const remountedDisposable = attachTerminalScrollIntentTracking(
       remountedTerminal,
       new TestElement() as unknown as HTMLElement,
       'leaf-dispose-growth'
     )
+
     const intent = captureTerminalStructuralScrollIntent(remountedTerminal)
     remountedTerminal.buffer.active.viewportY = 200
     remountedTerminal.buffer.active.baseY = 200
@@ -417,19 +442,23 @@ describe('terminal scroll intent', () => {
   it('does not let an old terminal disposal overwrite its keyed successor', () => {
     vi.stubGlobal('Element', TestElement)
     const firstTerminal = createTerminal({ viewportY: 76, baseY: 100 })
+
     const firstDisposable = attachTerminalScrollIntentTracking(
       firstTerminal,
       new TestElement() as unknown as HTMLElement,
       'leaf-dispose-successor'
     )
+
     markTerminalPinnedViewport(firstTerminal)
 
     const successor = createTerminal({ viewportY: 100, baseY: 100 })
+
     const successorDisposable = attachTerminalScrollIntentTracking(
       successor,
       new TestElement() as unknown as HTMLElement,
       'leaf-dispose-successor'
     )
+
     markTerminalFollowOutput(successor)
     firstTerminal.buffer.active.baseY = 150
     firstDisposable.dispose()
@@ -529,6 +558,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     const terminal = createTerminal({ viewportY: 100, baseY: 100 })
@@ -547,6 +577,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -562,9 +593,11 @@ describe('terminal scroll intent', () => {
     markTerminalFollowOutput(replacement)
     firstTerminalIsCurrent = false
     await Promise.resolve()
+
     while (frameCallbacks.length > 0) {
       frameCallbacks.shift()?.(16)
     }
+
     vi.advanceTimersByTime(80)
 
     expect(getTerminalScrollIntentKind(replacement)).toBe('followOutput')
@@ -584,6 +617,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -600,9 +634,11 @@ describe('terminal scroll intent', () => {
     expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
 
     await Promise.resolve()
+
     while (frameCallbacks.length) {
       frameCallbacks.shift()?.(16)
     }
+
     vi.advanceTimersByTime(80)
 
     expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
@@ -613,6 +649,7 @@ describe('terminal scroll intent', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -627,9 +664,11 @@ describe('terminal scroll intent', () => {
 
     terminal.buffer.active.viewportY = 60
     await Promise.resolve()
+
     while (frameCallbacks.length) {
       frameCallbacks.shift()?.(16)
     }
+
     vi.advanceTimersByTime(80)
 
     expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
@@ -653,6 +692,7 @@ describe('terminal scroll intent', () => {
       restoreTerminalStructuralScrollIntent(terminal, snapshot)
       expect(terminal.buffer.active.viewportY).toBe(terminal.buffer.active.baseY)
     }
+
     expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
   })
 
@@ -770,11 +810,13 @@ describe('terminal scroll intent', () => {
       terminal.buffer.active.viewportY = 0
       terminal.scrollToLine.mockClear()
       enforceTerminalCurrentScrollIntent(terminal)
+
       if (expectedLine === null) {
         expect(terminal.scrollToBottom).toHaveBeenCalled()
       } else {
         expect(terminal.scrollToLine).toHaveBeenLastCalledWith(expectedLine)
       }
+
       disposable.dispose()
     }
   )
@@ -809,10 +851,12 @@ describe('terminal scroll intent', () => {
   it('keeps rebuild wheel intent when xterm classifies the same event as mouse input', async () => {
     vi.stubGlobal('requestAnimationFrame', () => 0)
     vi.stubGlobal('Element', TestElement)
+
     const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture({
       viewportY: 80,
       baseY: 100
     })
+
     const host = new TestElement() as unknown as HTMLElement
     const disposable = attachTerminalScrollIntentTracking(terminal, host)
     markTerminalPinnedViewport(terminal)
@@ -865,22 +909,28 @@ describe('terminal scroll intent', () => {
   function createTerminalWithInputCapture(args: { viewportY: number; baseY: number }) {
     const capturedInput: { listener: ((data: string) => void) | null } = { listener: null }
     const capturedUserInput: { listener: (() => void) | null } = { listener: null }
+
     const terminal = createTerminal(args) as ReturnType<typeof createTerminal> & {
       onData?: (listener: (data: string) => void) => { dispose: () => void }
       _core?: { coreService: { onUserInput: (listener: () => void) => { dispose: () => void } } }
     }
+
     terminal.onData = (listener: (data: string) => void) => {
       capturedInput.listener = listener
+
       return { dispose: vi.fn() }
     }
+
     terminal._core = {
       coreService: {
         onUserInput: (listener: () => void) => {
           capturedUserInput.listener = listener
+
           return { dispose: vi.fn() }
         }
       }
     }
+
     return { terminal, capturedInput, capturedUserInput }
   }
 })

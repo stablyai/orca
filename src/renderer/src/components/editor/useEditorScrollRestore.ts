@@ -14,6 +14,7 @@ export function useEditorScrollRestore(
   // Save scroll position with trailing throttle and synchronous unmount snapshot.
   useLayoutEffect(() => {
     const container = scrollContainerRef.current
+
     if (!container) {
       return
     }
@@ -24,6 +25,7 @@ export function useEditorScrollRestore(
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
+
       throttleTimer = setTimeout(() => {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
         throttleTimer = null
@@ -31,6 +33,7 @@ export function useEditorScrollRestore(
     }
 
     container.addEventListener('scroll', onScroll, { passive: true })
+
     return () => {
       // Why: During React StrictMode double-mount (or rapid mount/unmount before
       // Tiptap renders content), the container has zero scrollable height and
@@ -40,9 +43,11 @@ export function useEditorScrollRestore(
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       }
+
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
+
       container.removeEventListener('scroll', onScroll)
     }
   }, [scrollContainerRef, scrollCacheKey])
@@ -51,6 +56,7 @@ export function useEditorScrollRestore(
   useLayoutEffect(() => {
     const container = scrollContainerRef.current
     const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+
     if (!container || targetScrollTop === undefined) {
       return
     }
@@ -72,12 +78,14 @@ export function useEditorScrollRestore(
       }
 
       attempts += 1
+
       if (attempts < 30) {
         frameId = window.requestAnimationFrame(tryRestore)
       }
     }
 
     tryRestore()
+
     return () => window.cancelAnimationFrame(frameId)
     // Why: `editor` is included so the effect re-runs when the Tiptap editor
     // instance becomes available (non-null). With `immediatelyRender: false`,

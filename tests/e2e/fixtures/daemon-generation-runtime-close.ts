@@ -11,6 +11,7 @@ async function dispatchSyntheticExitClose(options: {
 }): Promise<void> {
   const { dispatcher, worktreeId, tabId, publicationEpoch, terminal, requestId, connection } =
     options
+
   const request = {
     id: requestId,
     authToken: 'fixture-only',
@@ -23,6 +24,7 @@ async function dispatchSyntheticExitClose(options: {
       terminal
     }
   }
+
   const response = connection
     ? await new Promise<Awaited<ReturnType<RpcDispatcher['dispatch']>>>((resolve, reject) => {
         void dispatcher
@@ -39,16 +41,19 @@ async function dispatchSyntheticExitClose(options: {
           .catch(reject)
       })
     : await dispatcher.dispatch(request)
+
   if (!response.ok) {
     throw new Error(
       `Synthetic close ${requestId} failed: ${response.error.code}: ${response.error.message} ${JSON.stringify(response.error.data ?? null)}`
     )
   }
+
   const result = response.result as {
     refused?: unknown
     refusalReason?: unknown
     snapshotRepublished?: unknown
   }
+
   if (
     result.refused !== true ||
     result.refusalReason !== 'live-host-pty' ||
@@ -78,6 +83,7 @@ export async function dispatchFixtureCloseBursts(options: {
       })
     )
   )
+
   for (const profile of ['a', 'b']) {
     await Promise.all(
       targetEntries.map(([tabId, claim], index) =>

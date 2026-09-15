@@ -7,6 +7,7 @@ import type { AndroidSdkPaths } from '../android/android-sdk-discovery'
 // The AVD boot spawns the emulator detached (not via the command runner).
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, spawn: vi.fn(() => ({ on: () => {}, unref: () => {} })) }
 })
 
@@ -27,18 +28,23 @@ const RUNNING_ADB =
 function defaultRunner(): ReturnType<typeof vi.fn> {
   return vi.fn(async (binary: string, args: readonly string[]) => {
     const a = args.join(' ')
+
     if (binary === SDK.adb && a === 'devices -l') {
       return ok(RUNNING_ADB)
     }
+
     if (binary === SDK.emulator && a === '-list-avds') {
       return ok('Pixel_7\nPixel_Tablet')
     }
+
     if (binary === SDK.adb && a === '-s emulator-5554 emu avd name') {
       return ok('Pixel_7\nOK')
     }
+
     if (binary === SDK.adb && a === '-s emulator-5554 shell wm size') {
       return ok('Physical size: 1080x2400')
     }
+
     return ok('')
   })
 }
@@ -76,6 +82,7 @@ describe('AndroidEmulatorBackend', () => {
       runner: runner as unknown as AndroidCommandRunner,
       sdk: null
     })
+
     expect(android.isSupportedOnHost()).toBe(false)
   })
 
@@ -169,12 +176,15 @@ describe('AndroidEmulatorBackend', () => {
   it('runs exec as an adb shell command and returns stdout', async () => {
     runner.mockImplementation(async (binary: string, args: readonly string[]) => {
       const a = args.join(' ')
+
       if (binary === SDK.adb && a === 'devices -l') {
         return ok(RUNNING_ADB)
       }
+
       if (binary === SDK.adb && a === '-s emulator-5554 shell getprop ro.build.version.sdk') {
         return ok('34')
       }
+
       return ok('')
     })
     const result = await backend(runner).exec('emulator-5554', 'getprop ro.build.version.sdk')
@@ -205,17 +215,22 @@ describe('AndroidEmulatorBackend', () => {
   it('dumps the accessibility tree from the device', async () => {
     runner.mockImplementation(async (binary: string, args: readonly string[]) => {
       const a = args.join(' ')
+
       if (binary === SDK.adb && a === 'devices -l') {
         return ok(RUNNING_ADB)
       }
+
       if (binary === SDK.adb && a === '-s emulator-5554 shell cat /sdcard/window_dump.xml') {
         return ok('<hierarchy><node text="Hi"/></hierarchy>')
       }
+
       return ok('')
     })
+
     const tree = (await backend(runner).accessibilityTree('emulator-5554')) as {
       children: { text?: string }[]
     }
+
     expect(tree.children[0]).toMatchObject({ text: 'Hi' })
   })
 
@@ -223,10 +238,13 @@ describe('AndroidEmulatorBackend', () => {
     let bootStarted = false
     vi.mocked(spawn).mockImplementation(() => {
       bootStarted = true
+
       return { on: () => {}, unref: () => {} } as unknown as ReturnType<typeof spawn>
     })
+
     const bootRunner = vi.fn(async (binary: string, args: readonly string[]) => {
       const a = args.join(' ')
+
       if (binary === SDK.adb && a === 'devices -l') {
         return ok(
           bootStarted
@@ -234,14 +252,18 @@ describe('AndroidEmulatorBackend', () => {
             : 'List of devices attached'
         )
       }
+
       if (binary === SDK.adb && a === '-s emulator-5556 shell getprop sys.boot_completed') {
         return ok('1')
       }
+
       if (binary === SDK.emulator && a === '-list-avds') {
         return ok('Pixel_Tablet')
       }
+
       return ok('')
     })
+
     const serial = await backend(bootRunner).ensureBooted('Pixel_Tablet')
     expect(serial).toBe('emulator-5556')
     expect(spawn).toHaveBeenCalledWith(
@@ -253,6 +275,7 @@ describe('AndroidEmulatorBackend', () => {
 
   it('startSession boots, ensures the jar, returns an h264 session, and tears it down', async () => {
     const close = vi.fn()
+
     const android = new AndroidEmulatorBackend({
       runner: runner as unknown as AndroidCommandRunner,
       sdk: SDK,
@@ -268,6 +291,7 @@ describe('AndroidEmulatorBackend', () => {
         handle: { close }
       })
     })
+
     const info = await android.startSession('emulator-5554')
     expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
     await android.stopHelperForDevice('emulator-5554')

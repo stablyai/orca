@@ -33,23 +33,30 @@ export function reconcileMissingWorkerTerminal(
   reason: string
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!dispatch || !worker) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
+
     if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
       this.db.exec('COMMIT')
+
       return worker
     }
 
     const activeDispatch = dispatch.status === 'pending' || dispatch.status === 'dispatched'
     const stopWasPending = worker.state === 'stopping' || worker.state === 'stop_unknown'
+
     if (activeDispatch) {
       const failureCount = dispatch.failure_count + 1
+
       const dispatchStatus: DispatchStatus =
         failureCount >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed'
+
       transitionLifecycleWithDb(this.db, {
         entity: 'dispatch',
         id: dispatchId,
@@ -62,10 +69,12 @@ export function reconcileMissingWorkerTerminal(
           capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
         }
       })
+
       if (!stopWasPending) {
         const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
         reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
         const task = this.getTask(dispatch.task_id)
+
         if (
           task &&
           ['dispatched', 'blocked'].includes(task.status) &&
@@ -84,8 +93,10 @@ export function reconcileMissingWorkerTerminal(
           })
         }
       }
+
       this.closeQuestionsForDispatch(dispatchId)
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -98,6 +109,7 @@ export function reconcileMissingWorkerTerminal(
       }
     })
     this.db.exec('COMMIT')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')

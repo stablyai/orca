@@ -12,10 +12,13 @@ export function isSafeTimerDelayMs(value: unknown): value is number {
 export function parsePositiveSafeIntegerText(raw: string): number | null {
   const trimmed = raw.trim()
   const value = Number(trimmed)
+
   if (!Number.isSafeInteger(value) || value <= 0) {
     return null
   }
+
   const exactValue = parseExactIntegerNumericText(trimmed)
+
   return exactValue === BigInt(value) ? value : null
 }
 
@@ -27,6 +30,7 @@ export function parsePositiveSafeIntegerText(raw: string): number | null {
 // text (orchestration ask) use parsePositiveSafeIntegerText instead.
 export function parsePositiveSafeIntegerNumericText(raw: string): number | null {
   const value = Number(raw)
+
   return Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
@@ -38,22 +42,30 @@ function parseExactIntegerNumericText(raw: string): bigint | null {
   ) {
     return BigInt(raw.startsWith('+') ? raw.slice(1) : raw)
   }
+
   const match = /^\+?(\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?$/.exec(raw)
+
   if (!match) {
     return null
   }
+
   const [whole = '', fraction = ''] = match[1].split('.')
   const digits = `${whole}${fraction}`.replace(/^0+/, '') || '0'
   const shift = Number(match[2] ?? 0) - fraction.length
+
   if (!Number.isSafeInteger(shift)) {
     return null
   }
+
   if (shift >= 0) {
     return BigInt(digits) * 10n ** BigInt(shift)
   }
+
   const removedDigits = -shift
+
   if (removedDigits > digits.length || !digits.endsWith('0'.repeat(removedDigits))) {
     return null
   }
+
   return BigInt(digits.slice(0, -removedDigits) || '0')
 }

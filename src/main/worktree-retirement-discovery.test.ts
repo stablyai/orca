@@ -10,6 +10,7 @@ import {
 } from './worktree-retirement-discovery'
 
 const FIRST = MARINE_CREATURES[0].toLowerCase()
+
 const SECOND = MARINE_CREATURES[1].toLowerCase()
 
 describe('extractBucketLeafCandidates', () => {
@@ -62,10 +63,12 @@ describe('discoverRetiredWorktreeNames', () => {
     run: (home: string) => Promise<void>
   ): Promise<void> {
     const home = await mkdtemp(join(tmpdir(), 'orca-retirement-home-'))
+
     try {
       for (const bucket of buckets) {
         await mkdir(join(home, '.claude', 'projects', bucket), { recursive: true })
       }
+
       await run(home)
     } finally {
       await rm(home, { force: true, recursive: true })
@@ -93,6 +96,7 @@ describe('discoverRetiredWorktreeNames', () => {
         home,
         env: {}
       })
+
       expect(retired.names).toEqual(new Set([FIRST]))
     })
   })
@@ -105,6 +109,7 @@ describe('discoverRetiredWorktreeNames', () => {
         home,
         env: {}
       })
+
       expect(retired.names).toEqual(new Set([FIRST]))
     })
   })
@@ -116,6 +121,7 @@ describe('discoverRetiredWorktreeNames', () => {
         home,
         env: {}
       })
+
       expect(retired.names).toEqual(new Set([FIRST]))
     })
   })
@@ -129,6 +135,7 @@ describe('discoverRetiredWorktreeNames', () => {
         home,
         env: {}
       })
+
       expect(retired.names).toEqual(new Set([FIRST]))
     })
   })
@@ -143,6 +150,7 @@ describe('discoverRetiredWorktreeNames', () => {
         // to `wsl.exe`, so on a Windows runner this unit test would boot the developer's distro.
         resolveWslHome: async () => null
       })
+
       expect(retired.names).toEqual(new Set([FIRST]))
     })
   })
@@ -156,6 +164,7 @@ describe('discoverRetiredWorktreeNames', () => {
           home,
           env: {}
         })
+
         expect(retired.names).toEqual(new Set([SECOND]))
       }
     )
@@ -166,11 +175,13 @@ describe('discoverRetiredWorktreeNames', () => {
     await withFakeHome([`-Users-ada-w-${SECOND}`], async (home) => {
       try {
         await mkdir(join(configDir, 'projects', `-Users-ada-w-${FIRST}`), { recursive: true })
+
         const retired = await discoverRetiredWorktreeNames({
           workspaceRoots: ['/Users/ada/w'],
           home,
           env: { CLAUDE_CONFIG_DIR: configDir }
         })
+
         // The override relocates the whole state root, so the default home is not also scanned.
         expect(retired.names).toEqual(new Set([FIRST]))
       } finally {
@@ -189,12 +200,14 @@ describe('discoverRetiredWorktreeNames', () => {
         await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
           recursive: true
         })
+
         const retired = await discoverRetiredWorktreeNames({
           workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'],
           home,
           env: {},
           resolveWslHome: async (distro) => (distro === 'Ubuntu' ? distroHome : null)
         })
+
         expect(retired.names).toEqual(new Set([FIRST]))
       } finally {
         await rm(distroHome, { force: true, recursive: true })
@@ -213,6 +226,7 @@ describe('discoverRetiredWorktreeNames', () => {
           env: {},
           resolveWslHome: async () => null
         })
+
         expect(retired.names).toEqual(new Set([FIRST]))
       }
     )
@@ -223,11 +237,13 @@ describe('discoverRetiredWorktreeNames', () => {
     await withFakeHome([], async (home) => {
       try {
         await mkdir(join(root, SECOND), { recursive: true })
+
         const retired = await discoverRetiredWorktreeNames({
           workspaceRoots: [root],
           home,
           env: {}
         })
+
         expect(retired.names).toEqual(new Set([SECOND]))
       } finally {
         await rm(root, { force: true, recursive: true })

@@ -22,6 +22,7 @@ export function useIntegrationCardPresentation(): IntegrationCardPresentation {
 
 export function useIntegrationCardShellClass(className?: string): string {
   const presentation = useIntegrationCardPresentation()
+
   return cn(
     presentation === 'setup-guide'
       ? 'bg-transparent px-4 py-3'
@@ -35,6 +36,7 @@ export function IntegrationCardGroup(props: {
   className?: string
 }): React.JSX.Element {
   const presentation = useIntegrationCardPresentation()
+
   return (
     <div
       className={cn(
@@ -51,6 +53,7 @@ export function IntegrationCardGroup(props: {
 
 export function useIntegrationSubordinateRowClass(className?: string): string {
   const presentation = useIntegrationCardPresentation()
+
   return cn(
     presentation === 'setup-guide'
       ? 'border-t border-border/40 px-0 py-2 first:border-t-0'
@@ -61,6 +64,7 @@ export function useIntegrationSubordinateRowClass(className?: string): string {
 
 export function useIntegrationCommandRowClass(): string {
   const presentation = useIntegrationCardPresentation()
+
   return cn(
     'flex items-center gap-2 font-mono text-xs',
     presentation === 'setup-guide'

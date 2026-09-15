@@ -53,7 +53,9 @@ vi.mock('@/store', () => {
   ) => unknown) & {
     getState: () => Record<string, unknown>
   }
+
   useAppStore.getState = () => mockStore.state
+
   return { useAppStore }
 })
 
@@ -154,8 +156,11 @@ vi.mock('./WorktreeContextMenu', () => ({
 }))
 
 const TAB_ID = 'tabP'
+
 const PANE_ROOT = `${TAB_ID}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`
+
 const PANE_CHILD = `${TAB_ID}:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`
+
 const PANE_ROOT_2 = `${TAB_ID}:cccccccc-cccc-4ccc-8ccc-cccccccccccc`
 
 function makeRepo(): Repo {
@@ -215,6 +220,7 @@ function makeAgentEntry(
   orchestration?: AgentStatusOrchestrationContext
 ): AgentStatusEntry {
   const now = Date.now()
+
   return {
     state: 'working',
     prompt,
@@ -247,6 +253,7 @@ function setAgentLineageState(options: {
   collapsedGroups?: Set<string>
 }): void {
   const repo = makeRepo()
+
   const parent = makeWorktree({
     id: 'parent',
     instanceId: 'parent-instance',
@@ -254,6 +261,7 @@ function setAgentLineageState(options: {
     branch: 'parent-branch',
     sortOrder: 20
   })
+
   const child = makeWorktree({
     id: 'child',
     instanceId: 'child-instance',
@@ -261,6 +269,7 @@ function setAgentLineageState(options: {
     branch: 'child-branch',
     sortOrder: 10
   })
+
   const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
     [PANE_ROOT]: makeAgentEntry(PANE_ROOT, 'PARENT_AGENT_PROMPT'),
     [PANE_CHILD]: makeAgentEntry(PANE_CHILD, 'CHILD_AGENT_PROMPT', {
@@ -269,6 +278,7 @@ function setAgentLineageState(options: {
       parentPaneKey: PANE_ROOT
     })
   }
+
   if (options.secondRootAgent) {
     agentStatusByPaneKey[PANE_ROOT_2] = makeAgentEntry(PANE_ROOT_2, 'SECOND_ROOT_PROMPT')
   }
@@ -283,11 +293,13 @@ function setAgentLineageState(options: {
       // what makes WorktreeList's `rows` useMemo (keyed on the Set identity)
       // recompute buildRenderableRows and flip the parent's render-row.
       const set = new Set(mockStore.state.collapsedGroups as Set<string>)
+
       if (set.has(key)) {
         set.delete(key)
       } else {
         set.add(key)
       }
+
       mockStore.state.collapsedGroups = set
     }),
 
@@ -390,6 +402,7 @@ async function renderWorktreeList(): Promise<{ container: HTMLDivElement; root: 
       <WorktreeList scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
     )
   })
+
   return { container, root }
 }
 

@@ -16,10 +16,13 @@ type Props = {
 // WorktreeCardAgents.
 export function WorktreeAgentList({ agents, now, unvisited }: Props) {
   const nodes = useMemo(() => flattenAgentRowLineage(agents), [agents])
+
   const summaryAgents = useMemo(() => {
     const lineage = buildAgentRowLineageTree(agents)
+
     return lineage.childrenByParentPaneKey.size > 0 ? lineage.rootRows : agents
   }, [agents])
+
   const [expanded, setExpanded] = useState(false)
   const usesSummary = summaryAgents.length > 1
 

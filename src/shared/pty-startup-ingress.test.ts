@@ -6,8 +6,11 @@ import {
 } from './pty-startup-ingress'
 
 const COLORS = { foreground: '#2e3434', background: '#ffffff' }
+
 const FOREGROUND_REPLY = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
+
 const BACKGROUND_REPLY = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+
 // The two echo shapes a cooked POSIX tty produces for a written reply: ECHOCTL
 // caret forms, and readline eating `ESC ]` / ST while self-inserting the rest.
 const POSIX_COOKED_ECHOES = [
@@ -36,6 +39,7 @@ function createHarness(
     },
     onEmission: (emission) => emissions.push(emission)
   })
+
   return { ingress, writes, emissions }
 }
 
@@ -52,6 +56,7 @@ describe('PtyStartupIngress', () => {
       colors: COLORS,
       deadlineMs: 5_000
     }
+
     expect(parsePtyStartupIngressIntent(intent)).toEqual(intent)
     expect(parsePtyStartupIngressIntent({ ...intent, deadlineMs: 30_001 })).toBeUndefined()
   })
@@ -59,6 +64,7 @@ describe('PtyStartupIngress', () => {
   it('recognizes BEL/ST queries at every split and answers both in order', () => {
     vi.useFakeTimers()
     const query = '\x1b]10;?\x07\x1b]11;?\x1b\\'
+
     for (let split = 0; split <= query.length; split += 1) {
       const { ingress, writes, emissions } = createHarness()
       ingress.accept(query.slice(0, split))
@@ -90,6 +96,7 @@ describe('PtyStartupIngress', () => {
   it('matches each echo across every split without skipping an earlier FIFO candidate', () => {
     const foregroundEcho = ']10;rgb:2e2e/3434/3434\\'
     const backgroundEcho = ']11;rgb:ffff/ffff/ffff\\'
+
     for (const projected of [foregroundEcho, backgroundEcho]) {
       for (let split = 0; split <= projected.length; split += 1) {
         const { ingress, emissions } = createHarness({ projection: true })
@@ -154,14 +161,17 @@ describe('PtyStartupIngress', () => {
 
   it('consumes a native ConPTY color query before any downstream responder at every split', () => {
     const query = '\x1b]11;?\x1b\\'
+
     for (let split = 0; split <= query.length; split += 1) {
       const writes: string[] = []
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         ownerBackend: 'windows-conpty',
         write: (data) => writes.push(data),
         onEmission: (emission) => emissions.push(emission)
       })
+
       ingress.closeQueryAuthority()
       ingress.accept(query.slice(0, split))
       ingress.accept(query.slice(split))
@@ -178,6 +188,7 @@ describe('PtyStartupIngress', () => {
   it('keeps native ConPTY startup authority until it can answer with owner-supplied colors', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'windows-conpty',
@@ -195,15 +206,19 @@ describe('PtyStartupIngress', () => {
 
   it('keeps a split native ConPTY query private across close, expiry, and snapshot barriers', () => {
     vi.useFakeTimers()
+
     for (const barrier of ['close', 'expire', 'snapshot'] as const) {
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         ...(barrier === 'expire' ? { intent: { colors: COLORS, deadlineMs: 5_000 } } : {}),
         ownerBackend: 'windows-conpty',
         write: () => {},
         onEmission: (emission) => emissions.push(emission)
       })
+
       ingress.accept('\x1b]10;')
+
       if (barrier === 'close') {
         ingress.closeQueryAuthority()
       } else if (barrier === 'expire') {
@@ -211,6 +226,7 @@ describe('PtyStartupIngress', () => {
       } else {
         ingress.snapshotBarrier()
       }
+
       expect(emissions, barrier).toEqual([])
 
       ingress.accept('?\x07')
@@ -222,11 +238,13 @@ describe('PtyStartupIngress', () => {
     }
 
     const malformedEmissions: PtyIngressEmission[] = []
+
     const malformed = new PtyStartupIngress({
       ownerBackend: 'windows-conpty',
       write: () => {},
       onEmission: (emission) => malformedEmissions.push(emission)
     })
+
     malformed.accept('\x1b]10;')
     malformed.snapshotBarrier()
     malformed.accept('not-a-query\x07')
@@ -236,6 +254,7 @@ describe('PtyStartupIngress', () => {
 
   it('releases a partial query immediately when source authority closes', () => {
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -253,25 +272,30 @@ describe('PtyStartupIngress', () => {
   it('keeps POSIX, WSL, malformed, and unrelated output unchanged', () => {
     const input = 'typed\x1b[A\x1b]12;?\x1b\\\x1b]10;not-a-query\x07'
     vi.useFakeTimers()
+
     for (const ownerBackend of ['posix-pty', 'windows-wsl'] as const) {
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         ownerBackend,
         write: () => {},
         onEmission: (emission) => emissions.push(emission)
       })
+
       ingress.accept(`\x1b]10;?\x07${input}`)
       expect(visible(emissions)).toBe(`\x1b]10;?\x07${input}`)
     }
 
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const nativeIngress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'windows-conpty',
       write: (data) => writes.push(data),
       onEmission: (emission) => emissions.push(emission)
     })
+
     vi.advanceTimersByTime(5_001)
     nativeIngress.accept(`${input}\x1b]10;?\x07`)
 
@@ -284,6 +308,7 @@ describe('PtyStartupIngress', () => {
     // the slave input queue, so the program still reads it; a second write would
     // arrive on its stdin as unsolicited input once it is raw.
     vi.useFakeTimers()
+
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const writes: string[] = []
       const emissions: PtyIngressEmission[] = []
@@ -314,9 +339,11 @@ describe('PtyStartupIngress', () => {
     // Why this shape: an agent pane is launched by writing a command into an interactive
     // shell, so the tty echo of Orca's reply never arrives at the head of a read (#12112).
     vi.useFakeTimers()
+
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const replies: string[] = []
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         intent: { colors: COLORS, deadlineMs: 5_000 },
         ownerBackend: 'posix-pty',
@@ -344,6 +371,7 @@ describe('PtyStartupIngress', () => {
     // after the BEL — which parks xterm in an OSC that never terminates.
     vi.useFakeTimers()
     const burst = '\x1b]10;?\x07\x1b]11;?\x07'
+
     for (let split = 0; split <= burst.length; split += 1) {
       const { ingress, writes, emissions } = createHarness()
       ingress.accept(burst.slice(0, split))
@@ -404,6 +432,7 @@ describe('PtyStartupIngress', () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -425,6 +454,7 @@ describe('PtyStartupIngress', () => {
   it('keeps the synchronous write for ConPTY-hosted wsl.exe panes', () => {
     // Why: a Windows-hosted pty must be answered before conhost's own responder.
     const writes: string[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'windows-wsl',
@@ -442,11 +472,14 @@ describe('PtyStartupIngress', () => {
     // at offset 0, so a single byte of program output ahead of it made every torn
     // boundary leak the reply verbatim — the exact #12112 symptom the fix targets.
     vi.useFakeTimers()
+
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const echo = echoOf(FOREGROUND_REPLY)
+
       for (let split = 1; split < echo.length; split += 1) {
         const writes: string[] = []
         const emissions: PtyIngressEmission[] = []
+
         const ingress = new PtyStartupIngress({
           intent: { colors: COLORS, deadlineMs: 5_000 },
           ownerBackend: 'posix-pty',
@@ -473,6 +506,7 @@ describe('PtyStartupIngress', () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -496,6 +530,7 @@ describe('PtyStartupIngress', () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -521,6 +556,7 @@ describe('PtyStartupIngress', () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -550,6 +586,7 @@ describe('PtyStartupIngress', () => {
     let failWrites = true
     const emissions: PtyIngressEmission[] = []
     const writes: string[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -557,6 +594,7 @@ describe('PtyStartupIngress', () => {
         if (failWrites) {
           throw new Error('EIO')
         }
+
         writes.push(data)
       },
       onEmission: (emission) => emissions.push(emission)
@@ -580,6 +618,7 @@ describe('PtyStartupIngress', () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
@@ -594,6 +633,7 @@ describe('PtyStartupIngress', () => {
     // A trailing `^` is a strict prefix of the caret projection, so every one of these
     // reads returns holding a candidate.
     let printed = ''
+
     for (let read = 0; read < 8; read += 1) {
       const chunk = `${'line of output\r\n'.repeat(4_000)}^`
       printed += chunk
@@ -612,9 +652,11 @@ describe('PtyStartupIngress', () => {
     // chunking finer than the budget.
     vi.useFakeTimers()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
+
     for (const chunkSize of [1, 2, 3, 5, 13]) {
       const writes: string[] = []
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         intent: { colors: COLORS, deadlineMs: 5_000 },
         ownerBackend: 'posix-pty',
@@ -625,9 +667,11 @@ describe('PtyStartupIngress', () => {
       ingress.accept('\x1b]10;?\x07')
       vi.advanceTimersByTime(0)
       expect(writes).toEqual([FOREGROUND_REPLY])
+
       for (let at = 0; at < echo.length; at += chunkSize) {
         ingress.accept(echo.slice(at, at + chunkSize))
       }
+
       ingress.drainAndClose()
 
       expect({ chunkSize, visible: visible(emissions) }).toEqual({ chunkSize, visible: '' })
@@ -639,11 +683,13 @@ describe('PtyStartupIngress', () => {
     // the wait — these are. If one stopped releasing, the window would become a
     // real stall rather than a bet on the next read.
     vi.useFakeTimers()
+
     const cutShort: Record<string, (ingress: PtyStartupIngress) => void> = {
       snapshotBarrier: (ingress) => ingress.snapshotBarrier(),
       drainAndClose: (ingress) => ingress.drainAndClose(),
       startupDeadline: () => vi.advanceTimersByTime(5_000)
     }
+
     for (const [name, cut] of Object.entries(cutShort)) {
       const { ingress, writes, emissions } = createHarness()
       ingress.accept('\x1b]10;?\x07')
@@ -683,6 +729,7 @@ describe('PtyStartupIngress', () => {
     // jitter reinstates the leak on exactly the links Orca has to work over.
     vi.useFakeTimers()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
+
     for (const gapMs of [50, 200, 400]) {
       const { ingress, writes, emissions } = createHarness()
       ingress.accept('\x1b]10;?\x07')
@@ -748,6 +795,7 @@ describe('PtyStartupIngress', () => {
     // duplicate reply corrupts a parser already mid-read.
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: COLORS, deadlineMs: 5_000 },
       ownerBackend: 'windows-conpty',
@@ -755,6 +803,7 @@ describe('PtyStartupIngress', () => {
         if (data === BACKGROUND_REPLY) {
           throw new Error('EIO')
         }
+
         writes.push(data)
       },
       onEmission: (emission) => emissions.push(emission)

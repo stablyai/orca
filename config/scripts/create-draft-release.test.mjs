@@ -257,6 +257,7 @@ describe('createDraftRelease', () => {
 
   it('restores the published body when publication lands between the check and the patch', async () => {
     const log = vi.fn()
+
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
@@ -290,6 +291,7 @@ describe('createDraftRelease', () => {
 
   it('leaves a body written after the patch in place instead of rolling it back', async () => {
     const log = vi.fn()
+
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
@@ -348,6 +350,7 @@ describe('createDraftRelease', () => {
 
   it('paginates through every release page before choosing the previous release', async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => release(`mobile-v0.0.${index}`))
+
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(firstPage))

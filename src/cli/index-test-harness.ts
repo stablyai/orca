@@ -36,18 +36,22 @@ export async function createRuntimeClientModuleMock(mocks: RuntimeClientModuleMo
       environmentSelector?: string | null
     ) {
       mocks.runtimeClientConstructorMock(remotePairingCode, environmentSelector)
+
       const effectivePairingCode =
         remotePairingCode === undefined
           ? (process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING)
           : remotePairingCode
+
       const effectiveEnvironment =
         environmentSelector === undefined ? process.env.ORCA_ENVIRONMENT : environmentSelector
+
       if (effectivePairingCode && effectiveEnvironment) {
         throw new RuntimeClientError(
           'invalid_argument',
           'Use either --pairing-code or --environment, not both.'
         )
       }
+
       this.isRemote = Boolean(effectivePairingCode || effectiveEnvironment)
     }
   }
@@ -63,6 +67,7 @@ export async function createRuntimeClientModuleMock(mocks: RuntimeClientModuleMo
 
 export async function createChildProcessModuleMock(spawnMock: Mock) {
   const { EventEmitter } = await import('node:events')
+
   return {
     spawn: spawnMock.mockImplementation(() => {
       const child = Object.assign(new EventEmitter(), {
@@ -74,10 +79,12 @@ export async function createChildProcessModuleMock(spawnMock: Mock) {
         },
         kill: vi.fn()
       })
+
       process.nextTick(() => {
         child.emit('exit', 0, null)
         child.emit('close', 0, null)
       })
+
       return child
     })
   }
@@ -158,41 +165,49 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
 
   afterEach(() => {
     vi.restoreAllMocks()
+
     if (originalTerminalHandle === undefined) {
       delete process.env.ORCA_TERMINAL_HANDLE
     } else {
       process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
     }
+
     if (originalUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = originalUserDataPath
     }
+
     if (originalDevCliInvocation === undefined) {
       delete process.env.ORCA_DEV_CLI_INVOCATION
     } else {
       process.env.ORCA_DEV_CLI_INVOCATION = originalDevCliInvocation
     }
+
     if (originalPairingCode === undefined) {
       delete process.env.ORCA_PAIRING_CODE
     } else {
       process.env.ORCA_PAIRING_CODE = originalPairingCode
     }
+
     if (originalRemotePairing === undefined) {
       delete process.env.ORCA_REMOTE_PAIRING
     } else {
       process.env.ORCA_REMOTE_PAIRING = originalRemotePairing
     }
+
     if (originalEnvironment === undefined) {
       delete process.env.ORCA_ENVIRONMENT
     } else {
       process.env.ORCA_ENVIRONMENT = originalEnvironment
     }
+
     if (originalWorkspaceId === undefined) {
       delete process.env.ORCA_WORKSPACE_ID
     } else {
       process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
     }
+
     if (originalWorktreeId === undefined) {
       delete process.env.ORCA_WORKTREE_ID
     } else {

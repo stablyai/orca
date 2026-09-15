@@ -37,21 +37,26 @@ type WatcherSubscription = {
 // dir and touches a file in it; consecutive missed deliveries mean event
 // delivery is dead, so exit and let the host respawn a fresh process.
 const CANARY_INTERVAL_MS = 10_000
+
 const CANARY_EVENT_TIMEOUT_MS = 5_000
+
 const CANARY_MAX_MISSES = 2
 
 async function startCanary(getStableActivityRevision: () => number | null): Promise<void> {
   const configuredCanaryDir = process.env.ORCA_WATCHER_CANARY_DIR
   let canaryDir: string
   let lastEventAt = 0
+
   try {
     canaryDir = configuredCanaryDir ?? mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
     const watcher = await import('@parcel/watcher')
+
     // Why: pin the Windows backend like the main subscriptions do, so the
     // canary never probes for Watchman.
     const opts = (
       process.platform === 'win32' ? { backend: 'windows' } : {}
     ) as ParcelWatcher.Options
+
     await watcher.subscribe(
       canaryDir,
       (err) => {
@@ -63,12 +68,15 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
     )
   } catch (err) {
     process.stderr.write(`[parcel-watcher-process] canary unavailable: ${errorMessage(err)}\n`)
+
     return
   }
+
   process.on('exit', () => {
     if (configuredCanaryDir) {
       return
     }
+
     try {
       rmSync(canaryDir, { recursive: true, force: true })
     } catch {
@@ -82,28 +90,38 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
     // crawl, which legitimately starves canary delivery. Only apply the 5 s
     // event SLA after every requested subscription has finished crawling.
     const activityRevision = getStableActivityRevision()
+
     if (activityRevision === null) {
       misses = 0
+
       return
     }
+
     const probedAt = Date.now()
+
     try {
       writeFileSync(join(canaryDir, 'canary.txt'), String(probedAt))
     } catch {
       return
     }
+
     setTimeout(() => {
       // A root may start crawling after this probe was written. Invalidate the
       // probe instead of misclassifying lifecycle work as a delivery deadlock.
       if (getStableActivityRevision() !== activityRevision) {
         misses = 0
+
         return
       }
+
       if (lastEventAt >= probedAt) {
         misses = 0
+
         return
       }
+
       misses++
+
       if (misses >= CANARY_MAX_MISSES) {
         process.stderr.write(
           '[parcel-watcher-process] event delivery wedged (canary starved); restarting watcher process\n'
@@ -126,14 +144,17 @@ function main(): void {
   const sendEventWithBackpressure = (message: WatcherToHostMessage): Promise<void> => {
     return new Promise((resolve) => {
       let settled = false
+
       const finish = (): void => {
         if (!settled) {
           settled = true
           resolve()
         }
       }
+
       try {
         const accepted = process.send?.(message, finish)
+
         if (accepted !== false) {
           finish()
         }
@@ -170,6 +191,7 @@ function main(): void {
     nativeLifecycleTail = new Promise((resolve) => {
       release = resolve
     })
+
     return ready.then(operation).finally(() => release())
   }
 
@@ -190,15 +212,19 @@ function main(): void {
         send({ op: 'watch-error', id, message: errorMessage(deliveryError) })
       }
     )
+
     eventDeliveries.set(id, eventDelivery)
+
     try {
       const subscription = await runNativeWatcherLifecycleExclusive(async () => {
         if (!subscriptions.has(id)) {
           return null
         }
+
         activeSubscriptionCrawlId = id
         beginSubscriptionCrawl()
         send({ op: 'subscribe-started', id })
+
         try {
           if (opts.mode === 'shallow') {
             // Why: registration succeeding proves nothing on a host whose
@@ -207,18 +233,23 @@ function main(): void {
             if (!(await detectShallowWatchDelivery())) {
               throw new Error('Shallow watcher delivery unavailable on this host')
             }
+
             return startShallowWatcher(dir, opts.include ?? [], eventDelivery.enqueue, (error) =>
               send({ op: 'watch-error', id, message: errorMessage(error) })
             )
           }
+
           const watcher = await import('@parcel/watcher')
+
           return await watcher.subscribe(
             dir,
             (err, events) => {
               if (err) {
                 send({ op: 'watch-error', id, message: errorMessage(err) })
+
                 return
               }
+
               eventDelivery.enqueue(events)
             },
             opts as ParcelWatcher.Options
@@ -228,13 +259,16 @@ function main(): void {
           finishSubscriptionCrawl()
         }
       })
+
       // An unsubscribe can remove the record while subscribe() is crawling.
       // Only advertise it as live if it is still owned by this process.
       const stillOwned = subscriptions.has(id)
+
       if (stillOwned) {
         liveSubscriptionIds.add(id)
         send({ op: 'subscribed', id })
       }
+
       return subscription
     } catch (err) {
       const stillOwned = subscriptions.has(id)
@@ -242,9 +276,11 @@ function main(): void {
       eventDeliveries.delete(id)
       subscriptions.delete(id)
       liveSubscriptionIds.delete(id)
+
       if (stillOwned) {
         send({ op: 'subscribe-failed', id, message: errorMessage(err) })
       }
+
       return null
     }
   }
@@ -258,6 +294,7 @@ function main(): void {
     liveSubscriptionIds.delete(id)
     eventDeliveries.get(id)?.close()
     eventDeliveries.delete(id)
+
     try {
       // Why: Parcel already serializes crawl and teardown on one backend mutex.
       // Mirror that ordering here so neither operation can mask a canary miss.
@@ -269,10 +306,12 @@ function main(): void {
       const message = errorMessage(err)
       process.stderr.write(`[parcel-watcher-process] unsubscribe ${id} failed: ${message}\n`)
       send({ op: 'unsubscribe-failed', id, message })
+
       return
     } finally {
       subscriptionActivityRevision++
     }
+
     send({ op: 'unsubscribed', id })
   }
 
@@ -285,8 +324,10 @@ function main(): void {
       eventDeliveries.get(id)?.close()
       eventDeliveries.delete(id)
       send({ op: 'cancel-requires-restart', id })
+
       return
     }
+
     // Why: cancel can race a crawl that already finished. Reuse unsubscribe
     // teardown so a live native handle is released instead of leaked (Windows
     // keeps the worktree locked while the handle stays open).
@@ -297,17 +338,22 @@ function main(): void {
     if (!message || typeof message !== 'object') {
       return
     }
+
     if (message.op === 'subscribe') {
       subscriptions.set(
         message.id,
         handleSubscribe(message.id, message.dir, message.opts, message.delivery)
       )
+
       return
     }
+
     if (message.op === 'unsubscribe') {
       void handleUnsubscribe(message.id)
+
       return
     }
+
     if (message.op === 'cancel-subscribe') {
       handleCancelSubscribe(message.id)
     }
@@ -317,6 +363,7 @@ function main(): void {
     if (pendingSubscriptionCrawls > 0 || liveSubscriptionIds.size === 0) {
       return null
     }
+
     return subscriptionActivityRevision
   })
 

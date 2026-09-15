@@ -41,11 +41,14 @@ function comparableBody(body: AgentJournalMessageItem | undefined): boolean {
 function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmission[] {
   const { items, submissions } = journal.snapshot()
   const bodies = new Map(items.map((item) => [item.itemId, item.body]))
+
   return submissions.filter((submission) => {
     if (submission.dispatchState !== 'pending' && submission.dispatchState !== 'unknown') {
       return false
     }
+
     const body = bodies.get(agentJournalSubmissionKey(submission.clientMessageId))
+
     return comparableBody(body?.kind === 'message' ? body : undefined)
   })
 }
@@ -58,6 +61,7 @@ function unseenHistory(
 ): ProviderHistoryWindow {
   const snapshot = journal.snapshot()
   const committed = new Set(snapshot.items.map((item) => item.itemId))
+
   // Accepted submissions alias their provider item to the optimistic `orca:*`
   // row, so the rendered item id alone does not identify the provider history
   // already consumed by the journal.
@@ -66,6 +70,7 @@ function unseenHistory(
       committed.add(submission.providerItemId)
     }
   }
+
   return {
     ...history,
     items: history.items.filter((item) => !committed.has(agentJournalItemKey(item.identity)))
@@ -82,10 +87,13 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
   history: ProviderHistoryWindow
 }): Promise<string[]> {
   const submissions = comparableSubmissions(input.journal)
+
   if (submissions.length === 0) {
     return []
   }
+
   const settled: string[] = []
+
   for (const outcome of reconcileSubmissions({
     submissions,
     history: unseenHistory(input.journal, input.history)
@@ -93,6 +101,7 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
     if (outcome.outcome === 'unknown') {
       continue
     }
+
     await input.journal.resolveDispatch(
       outcome.outcome === 'accepted'
         ? {
@@ -112,5 +121,6 @@ export async function reconcileJournalSubmissionsAgainstHistory(input: {
     )
     settled.push(outcome.clientMessageId)
   }
+
   return settled
 }

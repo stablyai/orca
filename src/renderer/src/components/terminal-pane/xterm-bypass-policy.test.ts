@@ -50,6 +50,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
       event({ key: 'a', code: 'KeyA', metaKey: true }),
       event({ key: 't', code: 'KeyT', metaKey: true })
     ]
+
     for (const e of cases) {
       expect(shouldBypassXtermKeyboardEvent(e, opts)).toBe(false)
     }
@@ -181,6 +182,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     candidateKeyGuardActive: false,
     pendingCandidateKeyReleaseActive: false
   }
+
   const composing = {
     isMac: true,
     isLinux: false,

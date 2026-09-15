@@ -2,8 +2,11 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const setTabGroupSplitRatioMock = vi.fn()
+
 const recordFeatureInteractionMock = vi.fn()
+
 const setDragRootNodeMock = vi.fn()
+
 const useAppStoreMock = vi.fn(
   (
     selector: (state: {
@@ -16,6 +19,7 @@ const useAppStoreMock = vi.fn(
       setTabGroupSplitRatio: setTabGroupSplitRatioMock
     })
 )
+
 vi.mock('../../store', () => ({
   useAppStore: (
     selector: (state: {
@@ -61,6 +65,7 @@ function invokeComponent(element: ReactElementLike): unknown {
   if (typeof element.type === 'function') {
     return element.type(element.props)
   }
+
   return element
 }
 
@@ -74,6 +79,7 @@ describe('TabGroupSplitLayout', () => {
 
   function getLayoutWrapper(element: ReturnType<typeof TabGroupSplitLayout>) {
     const dndContext = asElement(element.props.children)
+
     return React.Children.toArray(dndContext.props.children as React.ReactNode)[0]
   }
 
@@ -81,10 +87,13 @@ describe('TabGroupSplitLayout', () => {
     const layoutWrapperChildren = React.Children.toArray(
       asElement(getLayoutWrapper(element)).props.children as React.ReactNode
     )
+
     const splitBody = layoutWrapperChildren[1]
+
     const splitNodeElement = React.Children.only(
       asElement(splitBody).props.children as React.ReactNode
     )
+
     return invokeComponent(asElement(splitNodeElement))
   }
 
@@ -97,6 +106,7 @@ describe('TabGroupSplitLayout', () => {
     })
 
     const tabGroupPanelElement = asElement(getSplitNodeElement(element))
+
     return tabGroupPanelElement.props as {
       groupId: string
       worktreeId: string
@@ -165,10 +175,12 @@ describe('TabGroupSplitLayout', () => {
     const rootChildren = rootElement.props.children as unknown[]
     const leftChild = asElement(rootChildren[0]).props.children
     const rightChild = asElement(rootChildren[2]).props.children
+
     const leftPanelProps = asElement(invokeComponent(asElement(leftChild))).props as {
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
     }
+
     const rightPanelProps = asElement(invokeComponent(asElement(rightChild))).props as {
       reserveClosedExplorerToggleSpace: boolean
       reserveCollapsedSidebarHeaderSpace: boolean
@@ -203,6 +215,7 @@ describe('TabGroupSplitLayout', () => {
     })
 
     const rootElement = asElement(getSplitNodeElement(element))
+
     const resizeHandle = asElement((rootElement.props.children as unknown[])[1])
 
     ;(resizeHandle.props.onResizeStart as () => void)()

@@ -39,6 +39,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     refreshCanPaste,
     activeSessionTab
   } = scope
+
   const handlePaste = useMobileTerminalPaste({
     client,
     activeHandle,
@@ -92,6 +93,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
+
     const refresh = () => {
       void Promise.all([
         Clipboard.hasStringAsync().catch(() => false),
@@ -102,7 +104,9 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
         }
       })
     }
+
     refresh()
+
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
       if (s === 'active') {
         refresh()
@@ -110,6 +114,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
         terminalRefs.current.get(activeHandleRef.current)?.cancelSelect()
       }
     })
+
     return () => {
       mounted = false
       sub.remove()
@@ -118,14 +123,18 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
 
   useEffect(() => {
     const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
+
     if (!shouldLoadAgentOptions) {
       setCreateTabAgentLoadState('idle')
       setCreateTabAgentOptions([])
+
       return
     }
+
     if (!client || connState !== 'connected') {
       setCreateTabAgentLoadState('idle')
       setCreateTabAgentOptions([])
+
       return
     }
 
@@ -138,9 +147,11 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
         client,
         worktreeId
       })
+
       if (stale) {
         return
       }
+
       setCreateTabAgentOptions(options)
       setCreateTabAgentLoadState('loaded')
     })().catch(() => {
@@ -154,6 +165,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       stale = true
     }
   }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
+
   return {
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,

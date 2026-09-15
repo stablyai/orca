@@ -16,6 +16,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_AGENT_TEAMS_SHIM_DIR',
   'ORCA_REMOTE_CLI_BIN_DIR'
 ] as const
+
 export const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 
 /**
@@ -35,6 +36,7 @@ export function stubMissingDaemonCwd(): {
   const missingDaemonCwd = join(tmpdir(), 'orca-daemon-cwd-that-does-not-exist')
   const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(missingDaemonCwd)
   const chdirSpy = vi.spyOn(process, 'chdir').mockImplementation(() => {})
+
   return {
     chdirSpy: chdirSpy as unknown as Mock<(directory: string) => void>,
     restoreCwdStubs: () => {
@@ -60,6 +62,7 @@ export type MockPtyProcess = {
 export function mockPtyProcess(pid = 12345): MockPtyProcess {
   const onDataListeners: ((data: string) => void)[] = []
   const onExitListeners: ((e: { exitCode: number }) => void)[] = []
+
   return {
     pid,
     write: vi.fn(),
@@ -68,10 +71,12 @@ export function mockPtyProcess(pid = 12345): MockPtyProcess {
     process: 'zsh',
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn((cb: (e: { exitCode: number }) => void) => {
       onExitListeners.push(cb)
+
       return { dispose: vi.fn() }
     }),
     _simulateData: (data: string) => onDataListeners.forEach((cb) => cb(data)),
@@ -112,6 +117,7 @@ export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
     state.userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-subprocess-test-'))
     process.env.ORCA_USER_DATA_PATH = state.userDataPath
     delete process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
+
     for (const key of ORCA_SHELL_WRAPPER_ENV) {
       savedWrapperEnv[key] = process.env[key]
       delete process.env[key]
@@ -124,18 +130,22 @@ export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     if (previousPowerlevelWizardDisable === undefined) {
       delete process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
     } else {
       process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV] = previousPowerlevelWizardDisable
     }
+
     rmSync(state.userDataPath, { recursive: true, force: true })
+
     for (const key of ORCA_SHELL_WRAPPER_ENV) {
       if (savedWrapperEnv[key] === undefined) {
         delete process.env[key]
       } else {
         process.env[key] = savedWrapperEnv[key]
       }
+
       delete savedWrapperEnv[key]
     }
   })

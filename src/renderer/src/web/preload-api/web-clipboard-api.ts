@@ -32,6 +32,7 @@ export function blobToBase64(blob: Blob): Promise<string> {
       const commaIndex = result.indexOf(',')
       resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1))
     }
+
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read clipboard image'))
     reader.readAsDataURL(blob)
   })
@@ -44,28 +45,36 @@ export function assertClipboardImageBlobWithinLimit(blob: Blob): void {
 export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
   assertClipboardImageBlobWithinLimit(blob)
   const bitmap = await createImageBitmap(blob)
+
   try {
     assertClipboardImageDimensionsWithinLimit(bitmap)
     const canvas = document.createElement('canvas')
     canvas.width = bitmap.width
     canvas.height = bitmap.height
     const context = canvas.getContext('2d')
+
     if (!context || canvas.width <= 0 || canvas.height <= 0) {
       throw new Error('Clipboard image could not be decoded')
     }
+
     context.drawImage(bitmap, 0, 0)
+
     return await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((png) => {
         if (!png) {
           reject(new Error('Clipboard image could not be encoded as PNG'))
+
           return
         }
+
         try {
           assertClipboardImageBlobWithinLimit(png)
         } catch (error) {
           reject(error)
+
           return
         }
+
         resolve(png)
       }, 'image/png')
     })
@@ -78,16 +87,21 @@ async function readClipboardImageBlob(): Promise<Blob | null> {
   const clipboard = navigator.clipboard as
     | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
     | undefined
+
   if (!clipboard?.read) {
     return null
   }
+
   const items = await clipboard.read()
+
   for (const item of items) {
     const imageType = item.types.find((type) => type.startsWith('image/'))
+
     if (imageType) {
       return item.getType(imageType)
     }
   }
+
   return null
 }
 
@@ -96,11 +110,14 @@ async function readClipboardImageBlob(): Promise<Blob | null> {
  *  the full image is still being uploaded to the runtime. */
 export async function readClipboardImageThumbnail(): Promise<ClipboardImageThumbnail | null> {
   const blob = await readClipboardImageBlob()
+
   if (!blob) {
     return null
   }
+
   assertClipboardImageBlobWithinLimit(blob)
   const bitmap = await createImageBitmap(blob)
+
   try {
     assertClipboardImageDimensionsWithinLimit(bitmap)
     const thumbnailSize = clipboardImageThumbnailSize(bitmap)
@@ -108,10 +125,13 @@ export async function readClipboardImageThumbnail(): Promise<ClipboardImageThumb
     canvas.width = thumbnailSize.width
     canvas.height = thumbnailSize.height
     const context = canvas.getContext('2d')
+
     if (!context) {
       return null
     }
+
     context.drawImage(bitmap, 0, 0, thumbnailSize.width, thumbnailSize.height)
+
     return { dataUrl: canvas.toDataURL('image/png'), height: bitmap.height, width: bitmap.width }
   } finally {
     bitmap.close()
@@ -122,38 +142,49 @@ export async function readClipboardImagePngBase64(): Promise<string | null> {
   const clipboard = navigator.clipboard as
     | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
     | undefined
+
   if (!clipboard?.read) {
     return null
   }
+
   const items = await clipboard.read()
+
   for (const item of items) {
     const imageType = item.types.find((type) => type.startsWith('image/'))
+
     if (!imageType) {
       continue
     }
+
     const blob = await item.getType(imageType)
     assertClipboardImageBlobWithinLimit(blob)
     const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
+
     return blobToBase64(pngBlob)
   }
+
   return null
 }
 
 export async function writeWebClipboardText(text: string): Promise<void> {
   await assertClipboardTextWriteWithinLimitWithYield(text)
   const clipboard = navigator.clipboard
+
   if (typeof clipboard?.writeText === 'function') {
     try {
       await clipboard.writeText(text)
+
       return
     } catch (error) {
       // Preserve the current user-activation turn for the synchronous fallback.
       if (copyClipboardTextViaExecCommand(text)) {
         return
       }
+
       throw error
     }
   }
+
   if (!copyClipboardTextViaExecCommand(text)) {
     throw new Error('Clipboard write is unavailable in this browser context')
   }
@@ -166,12 +197,15 @@ export async function saveClipboardImageAsTempFileInRuntime(
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
     throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
   }
+
   const connectionId = args?.connectionId ?? null
+
   const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
     'clipboard.startImageUpload',
     { expectedBase64Length: contentBase64.length, connectionId },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
+
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
@@ -183,10 +217,12 @@ export async function saveClipboardImageAsTempFileInRuntime(
         CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
       )
     }
+
     throw new Error(startResponse.error.message)
   }
 
   const { uploadId } = startResponse.result
+
   try {
     for (
       let offset = 0;
@@ -206,6 +242,7 @@ export async function saveClipboardImageAsTempFileInRuntime(
         CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
       )
     }
+
     return await callRuntimeResult<string>(
       'clipboard.commitImageUpload',
       { uploadId },

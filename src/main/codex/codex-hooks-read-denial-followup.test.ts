@@ -27,9 +27,11 @@ const denials = vi.hoisted(() => {
       if (typeof target !== 'string' || !state.paths.has(target)) {
         return
       }
+
       const error: NodeJS.ErrnoException = new Error(
         `EACCES: permission denied, ${syscall} '${target}'`
       )
+
       error.code = 'EACCES'
       error.errno = -13
       error.syscall = syscall
@@ -37,19 +39,25 @@ const denials = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   const guardRead = (fn: unknown, syscall: string): unknown => {
     const original = fn as (...args: unknown[]) => unknown
+
     const wrapped = (...args: unknown[]): unknown => {
       denials.check(args[0], syscall)
+
       return original(...args)
     }
+
     return Object.assign(wrapped, original)
   }
+
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: guardRead(actual.readFileSync, 'read'),
@@ -57,12 +65,15 @@ vi.mock('node:fs', async (importOriginal) => {
     // permission denial does not hide the file, it only refuses its contents.
     openSync: Object.assign((...args: unknown[]): unknown => {
       const flags = args[1]
+
       if (flags === undefined || (typeof flags === 'string' && flags.startsWith('r'))) {
         denials.check(args[0], 'open')
       }
+
       return (actual.openSync as (...a: unknown[]) => unknown)(...args)
     }, actual.openSync)
   }
+
   return { ...patched, default: patched }
 })
 
@@ -72,15 +83,19 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: homedirMock }
 })
 
 const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -94,6 +109,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   realFs.mkdirSync(join(fakeHomeDir, '.codex'), { recursive: true })
@@ -103,11 +119,13 @@ afterEach(() => {
   denials.reset()
   realFs.rmSync(fakeHomeDir, { recursive: true, force: true })
   realFs.rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -120,8 +138,10 @@ describe('an unreadable legacy hooks.json must not clear managed trust or its le
     vi.resetModules()
     vi.doMock('./codex-managed-trust-reconciliation', async (importOriginal) => {
       const actual = await importOriginal<typeof CodexManagedTrustReconciliation>()
+
       return { ...actual, removeCodexManagedHookTrustEntries: removeSpy }
     })
+
     try {
       // The removal only fires when a real-home grant is on record — without
       // this the branch is inert and the test proves nothing either way.

@@ -38,21 +38,27 @@ function classifyHookProcessResult(
   context: { hookName: string; cwd: string; timeoutMs: number }
 ): HookProcessOutcome {
   const streams = `${result.stdout}\n${result.stderr}`
+
   if (result.timedOut) {
     const message = `Hook timed out after ${context.timeoutMs}ms.`
     console.error(`[hooks] ${context.hookName} hook failed in ${context.cwd}:`, message)
+
     return { success: false, output: `${streams}\n${message}`.trim() }
   }
+
   if (result.code !== 0) {
     const message = `Command failed with exit code ${result.code}.`
     console.error(`[hooks] ${context.hookName} hook failed in ${context.cwd}:`, message)
+
     return {
       success: false,
       output: `${streams}\n${message}`.trim(),
       ...(typeof result.code === 'number' ? { exitCode: result.code } : {})
     }
   }
+
   console.log(`[hooks] ${context.hookName} hook completed in ${context.cwd}`)
+
   return { success: true, output: streams.trim() }
 }
 
@@ -81,6 +87,7 @@ function hookProcessError(
 ): HookProcessOutcome {
   const code = 'code' in error ? error.code : undefined
   console.error(`[hooks] ${context.hookName} hook failed in ${context.cwd}:`, error.message)
+
   return {
     success: false,
     output: `${stdout}\n${stderr}\n${error.message}`.trim(),
@@ -95,6 +102,7 @@ function hookSpawnFailure(
 ): HookProcessOutcome {
   const message = error instanceof Error ? error.message : String(error)
   console.error(`[hooks] ${context.hookName} hook failed in ${context.cwd}:`, message)
+
   return { success: false, output: message }
 }
 
@@ -113,12 +121,14 @@ export { parseOrcaYaml }
  */
 export function loadHooks(repoPath: string): OrcaHooks | null {
   const yamlPath = join(repoPath, 'orca.yaml')
+
   if (!existsSync(yamlPath)) {
     return null
   }
 
   try {
     const content = readFileSync(yamlPath, 'utf-8')
+
     return parseOrcaYaml(content)
   } catch {
     return null
@@ -146,13 +156,16 @@ const RECOGNIZED_ORCA_YAML_KEYS = new Set([
 export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
     const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
+
     for (const line of iterateLfScriptLines(content)) {
       // Why: match bare `key:` at end-of-line too, since a mapping with a block value on the next line is valid YAML.
       const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
+
       if (m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])) {
         return true
       }
     }
+
     return false
   } catch {
     return false
@@ -161,6 +174,7 @@ export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
 
 export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
   const hooksRoot = worktreePath ?? repo.path
+
   return getEffectiveHooksFromConfig(repo, loadHooks(hooksRoot))
 }
 
@@ -173,6 +187,7 @@ export function getSetupCommandSource(
   const yamlSetup = yamlHooks?.scripts.setup?.trim()
   const localSetup = repo.hookSettings?.scripts.setup?.trim()
   const rawPolicy = repo.hookSettings?.commandSourcePolicy
+
   const policy = resolveHookCommandSourcePolicy(rawPolicy, {
     hasLocalScript: Boolean(localSetup)
   })
@@ -220,14 +235,17 @@ export function runHook(
     // Why: hook scripts run inside WSL, so translate the ORCA_* Windows UNC paths to Linux paths.
     const envVars = getSetupEnvVars(repo, cwd)
     const wslEnv: Record<string, string> = {}
+
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
+
     // Why: same unattended-git guard as the non-WSL branch below (issue
     // #7652) — only the guard flags and any indexed git-config protocol are
     // meant to reach the guest; askpass stays host-side, same as before.
     const guardedEnv = promptGuardShellEnv(wslEnv)
     const guestEnv: Record<string, string> = { ...wslEnv }
+
     for (const [key, value] of Object.entries(guardedEnv)) {
       if (
         value !== undefined &&
@@ -266,16 +284,21 @@ export function runHook(
     // removal open.
     let settled = false
     let deadline: NodeJS.Timeout | undefined
+
     const settle = (result: HookProcessOutcome): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (deadline) {
         clearTimeout(deadline)
       }
+
       resolve(result)
     }
+
     // Why `spawn` and not `exec` (#19334 follow-up): `detached` is a spawn-only option — `exec`
     // accepts and ignores it, so the shell never became a group leader and the group signal below
     // had nothing to reach. Passing `shell` as a string keeps Node's own platform invocation, which
@@ -294,10 +317,12 @@ export function runHook(
       // process groups in this sense and where `detached` means a new console instead.
       ...(process.platform === 'win32' ? {} : { detached: true })
     })
+
     const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
     child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
+
     // Why listeners that do nothing: an unhandled `error` on a stream is an uncaught exception, and
     // in the Electron main process that is the whole app. `exec` never covered this either — its
     // only `error` listener is on the child — so this is a pre-existing gap, closed the way
@@ -305,6 +330,7 @@ export function runHook(
     for (const stream of [child.stdin, child.stdout, child.stderr]) {
       stream?.on('error', () => {})
     }
+
     child.on('error', (error) => {
       settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
     })
@@ -322,6 +348,7 @@ export function runHook(
         )
       )
     })
+
     // Why guarded: a spawn failure can settle before the deadline is armed, and arming one on a
     // finished run would later signal a pid that is gone — and may by then belong to something else.
     if (!settled) {

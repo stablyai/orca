@@ -15,6 +15,7 @@ export function registerComputerUsePermissionHandlers(): void {
     ): Promise<ComputerUsePermissionSetupResult> => {
       const { openComputerUsePermissions } =
         await import('../computer/macos-computer-use-permissions')
+
       return openComputerUsePermissions(args?.id)
     }
   )
@@ -23,6 +24,7 @@ export function registerComputerUsePermissionHandlers(): void {
     async (): Promise<ComputerUsePermissionStatusResult> => {
       const { getComputerUsePermissionStatus } =
         await import('../computer/macos-computer-use-permissions')
+
       return getComputerUsePermissionStatus()
     }
   )
@@ -31,6 +33,7 @@ export function registerComputerUsePermissionHandlers(): void {
     async (): Promise<ComputerUsePermissionResetResult> => {
       const { resetComputerUsePermissions } =
         await import('../computer/macos-computer-use-permissions')
+
       return resetComputerUsePermissions()
     }
   )

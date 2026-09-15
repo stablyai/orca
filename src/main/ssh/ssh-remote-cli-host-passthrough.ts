@@ -5,7 +5,9 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getCanonicalUserDataPath } from '../persistence'
 import { resolveHostCliKillTimeoutMs } from './ssh-host-cli-deadline'
+
 export { resolveHostCliKillTimeoutMs } from './ssh-host-cli-deadline'
+
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import {
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
@@ -105,12 +107,15 @@ export function buildHostCliEnv(args: {
   artifactInput?: RemoteArtifactInput
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
+
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
     const value = args.remoteEnv[key]
+
     if (typeof value === 'string' && value.length > 0) {
       env[key] = value
     }
   }
+
   // Why: bind the subprocess to this app instance's runtime metadata (dev and
   // parallel instances use non-default userData dirs).
   env.ORCA_USER_DATA_PATH = args.userDataPath
@@ -131,6 +136,7 @@ export function buildHostCliEnv(args: {
   delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
   delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
   delete env[REMOTE_ARTIFACT_INPUT_ENV]
+
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
     env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
@@ -138,13 +144,17 @@ export function buildHostCliEnv(args: {
       args.runtimeAuthority.connectionIncarnation
     env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV] = args.runtimeAuthority.attachmentId
   }
+
   if (args.artifactInput) {
     const sourceKey = args.runtimeAuthority
       ? sshArtifactSourceKey(args.runtimeAuthority.targetId, args.artifactInput.sourceKey)
       : args.artifactInput.sourceKey
+
     env[REMOTE_ARTIFACT_INPUT_ENV] = JSON.stringify({ ...args.artifactInput, sourceKey })
   }
+
   env.ELECTRON_RUN_AS_NODE = '1'
+
   return env
 }
 
@@ -157,6 +167,7 @@ export async function runHostOrcaCliPassthrough(
   const execPath = options.execPath ?? process.execPath
   let cliEntryPath: string
   let userDataPath: string
+
   try {
     cliEntryPath =
       options.cliEntryPath ??
@@ -176,10 +187,12 @@ export async function runHostOrcaCliPassthrough(
       `Host CLI environment unavailable: ${err instanceof Error ? err.message : String(err)}`
     )
   }
+
   const hostEnv = options.hostEnv ?? process.env
   const spawn = options.spawn ?? nodeSpawn
   const entryExists = options.entryExists ?? existsSync
   const killTimeoutMs = options.killTimeoutMs ?? resolveHostCliKillTimeoutMs(request.argv)
+
   if (!isSafeTimerDelayMs(killTimeoutMs)) {
     throw new RangeError(
       `Host CLI kill timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -201,6 +214,7 @@ export async function runHostOrcaCliPassthrough(
 
   return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {
     let settled = false
+
     const child = spawn(execPath, [cliEntryPath, ...request.argv], {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -214,24 +228,29 @@ export async function runHostOrcaCliPassthrough(
       if (settled) {
         return
       }
+
       settled = true
+
       try {
         child.kill('SIGKILL')
       } catch {
         // best effort — process may already be gone
       }
+
       resolve({
         stdout: stdout.toString(),
         stderr: `${stderr.toString()}Orca CLI bridge timed out after ${killTimeoutMs}ms on the host.\n`,
         exitCode: 1
       })
     }, killTimeoutMs)
+
     killTimer.unref?.()
 
     child.on('error', (err) => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(killTimer)
       // Why: failure to launch (ENOENT, EACCES) means the host CLI is not
@@ -249,6 +268,7 @@ export async function runHostOrcaCliPassthrough(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(killTimer)
       resolve({
@@ -262,6 +282,7 @@ export async function runHostOrcaCliPassthrough(
       child.stdin.on('error', () => {
         // Why: the CLI may exit without draining stdin; EPIPE here is routine.
       })
+
       if (request.stdin !== undefined) {
         child.stdin.end(request.stdin)
       } else {
@@ -282,19 +303,24 @@ class CappedOutputCollector {
     if (this.truncated) {
       return
     }
+
     const remaining = this.maxBytes - this.bytes
+
     if (chunk.length >= remaining) {
       this.chunks.push(chunk.subarray(0, remaining))
       this.bytes = this.maxBytes
       this.truncated = true
+
       return
     }
+
     this.chunks.push(chunk)
     this.bytes += chunk.length
   }
 
   toString(): string {
     const text = Buffer.concat(this.chunks).toString('utf8')
+
     return this.truncated ? `${text}\n[orca ssh cli] output truncated\n` : text
   }
 }

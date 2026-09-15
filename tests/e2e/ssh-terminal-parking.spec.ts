@@ -17,6 +17,7 @@ import {
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500
 
 async function terminalTailContains(page: Page, marker: string): Promise<boolean> {
@@ -25,15 +26,19 @@ async function terminalTailContains(page: Page, marker: string): Promise<boolean
     const manager = tabId ? window.__paneManagers?.get(tabId) : undefined
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const buffer = pane?.terminal?.buffer?.active
+
     if (!buffer) {
       return false
     }
+
     const firstRow = Math.max(0, buffer.length - 200)
+
     for (let row = buffer.length - 1; row >= firstRow; row -= 1) {
       if (buffer.getLine(row)?.translateToString(true).includes(expected) === true) {
         return true
       }
     }
+
     return false
   }, marker)
 }
@@ -55,6 +60,7 @@ test.describe('SSH terminal hidden view parking', () => {
   }, testInfo: TestInfo) => {
     test.setTimeout(240_000)
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -65,9 +71,11 @@ test.describe('SSH terminal hidden view parking', () => {
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const sshPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
       const sshTabId = await getActiveTabId(orcaPage)
+
       if (!sshTabId) {
         throw new Error('SSH terminal tab did not become active')
       }
+
       const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
       expect(snapshot.panes[0]?.ptyId).toBe(sshPtyId)
 
@@ -108,6 +116,7 @@ test.describe('SSH terminal hidden view parking', () => {
               const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, {
                 scrollbackRows: 5_000
               })
+
               return snapshot?.data ?? ''
             }, sshPtyId),
           {

@@ -19,13 +19,17 @@ async function captureEvidence(page: Page, name: string, locator?: Locator): Pro
   if (process.env.ORCA_CAPTURE_EVIDENCE !== '1') {
     return
   }
+
   const outputDir = resolve(process.cwd(), 'pr-evidence')
   mkdirSync(outputDir, { recursive: true })
   const path = resolve(outputDir, name)
+
   if (locator) {
     await locator.screenshot({ path })
+
     return
   }
+
   await page.screenshot({ path })
 }
 
@@ -61,11 +65,14 @@ test.describe('Worktree Lineage', () => {
           [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
             (element) => element.dataset.worktreeId === worktreeId
           )
+
         const parent = rowFor(parentId)
         const child = rowFor(childId)
+
         if (!parent || !child) {
           return null
         }
+
         return {
           parentTop: parent.getBoundingClientRect().top,
           childTop: child.getBoundingClientRect().top
@@ -73,6 +80,7 @@ test.describe('Worktree Lineage', () => {
       },
       { parentId, childId }
     )
+
     expect(positions).not.toBeNull()
     expect(positions!.childTop).toBeGreaterThan(positions!.parentTop)
 
@@ -83,9 +91,11 @@ test.describe('Worktree Lineage', () => {
     await parentRow.getByRole('button', { name: 'Show 1 child workspace' }).click()
     await orcaPage.evaluate(async (childId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       // Why: this test covers lineage row rendering. Clearing through the
       // store keeps it focused on the render contract instead of nested
       // context-menu hit testing.
@@ -96,6 +106,7 @@ test.describe('Worktree Lineage', () => {
         () =>
           orcaPage.evaluate((childId) => {
             const store = window.__store
+
             return Boolean(store?.getState().worktreeLineageById[childId])
           }, childId),
         {
@@ -122,6 +133,7 @@ test.describe('Worktree Lineage', () => {
           parentRow.boundingBox(),
           childRow.boundingBox()
         ])
+
         return parentBox && childBox ? childBox.y > parentBox.y : false
       })
       .toBe(true)
@@ -136,9 +148,11 @@ test.describe('Worktree Lineage', () => {
     await orcaPage.evaluate(
       ({ parentId, childId }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         store.setState((current) => ({
           worktreesByRepo: Object.fromEntries(
             Object.entries(current.worktreesByRepo).map(([repoId, repoWorktrees]) => [
@@ -176,11 +190,14 @@ test.describe('Worktree Lineage', () => {
           [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
             (element) => element.dataset.worktreeId === worktreeId
           )
+
         const parent = rowFor(parentId)
         const child = rowFor(childId)
+
         if (!parent || !child) {
           return null
         }
+
         return {
           parentTop: parent.getBoundingClientRect().top,
           childTop: child.getBoundingClientRect().top
@@ -188,6 +205,7 @@ test.describe('Worktree Lineage', () => {
       },
       { parentId, childId }
     )
+
     expect(positions).not.toBeNull()
     expect(positions!.childTop).toBeGreaterThan(positions!.parentTop)
   })
@@ -215,9 +233,11 @@ test.describe('Worktree Lineage', () => {
     const { parentId, childId } = await seedLineageScenario(orcaPage)
     await orcaPage.evaluate((parentId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.setState((current) => ({
         worktreesByRepo: Object.fromEntries(
           Object.entries(current.worktreesByRepo).map(([repoId, worktrees]) => [
@@ -234,9 +254,11 @@ test.describe('Worktree Lineage', () => {
 
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.setState({
         shutdownWorktreeBrowsers: async (worktreeId: string) => {
           store.setState((current) => ({
@@ -257,9 +279,11 @@ test.describe('Worktree Lineage', () => {
     })
 
     await worktreeOption(orcaPage, parentId).click({ button: 'right' })
+
     const sleepSubtree = orcaPage.getByRole('menuitem', {
       name: 'Sleep with Descendants (1)'
     })
+
     await expect(sleepSubtree).toBeVisible()
     await expect(sleepSubtree).toBeEnabled()
     await expect(orcaPage.getByRole('menuitem', { name: 'Delete with Descendants…' })).toBeVisible()
@@ -271,6 +295,7 @@ test.describe('Worktree Lineage', () => {
         orcaPage.evaluate(
           ({ parentTabId, childTabId }) => {
             const state = window.__store?.getState()
+
             return {
               parentPtys: state?.ptyIdsByTabId[parentTabId],
               childPtys: state?.ptyIdsByTabId[childTabId]

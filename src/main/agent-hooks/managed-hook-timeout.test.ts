@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: homedirMock.mockImplementation(actual.homedir)
@@ -112,6 +113,7 @@ const JSON_INSTALLERS = [
 ] as const
 
 const MANAGED_HOOKS_DIR_NEEDLE = '/.orca/agent-hooks/'
+
 // Why: statusLine is not a hook — Claude's schema has no timeout field (type/command/padding/refreshInterval), and a slow statusline can't block agent turns.
 const STATUSLINE_SCRIPT_NEEDLE = '-statusline.'
 
@@ -125,6 +127,7 @@ function countManagedCarriersWithTimeout(
   expectedTimeout: number,
   isManagedCarrier = (value: string): boolean => {
     const normalized = value.replaceAll('\\', '/')
+
     return (
       normalized.includes(MANAGED_HOOKS_DIR_NEEDLE) &&
       !normalized.includes(STATUSLINE_SCRIPT_NEEDLE)
@@ -138,14 +141,18 @@ function countManagedCarriersWithTimeout(
       0
     )
   }
+
   if (node === null || typeof node !== 'object') {
     return 0
   }
+
   const record = node as Record<string, unknown>
   let found = 0
+
   const carrier = [record.command, record.bash, record.powershell].find(
     (value): value is string => typeof value === 'string' && isManagedCarrier(value)
   )
+
   if (carrier !== undefined) {
     const timeout = typeof record.timeout === 'number' ? record.timeout : record.timeoutSec
     expect(typeof timeout, `managed carrier "${carrier}" is missing a config timeout`).toBe(
@@ -154,9 +161,11 @@ function countManagedCarriersWithTimeout(
     expect(timeout as number).toBe(expectedTimeout)
     found += 1
   }
+
   for (const value of Object.values(record)) {
     found += countManagedCarriersWithTimeout(value, expectedTimeout, isManagedCarrier)
   }
+
   return found
 }
 
@@ -190,10 +199,12 @@ describe('managed agent hook timeouts', () => {
   it('writes a config-level timeout on local-only Droid hooks', () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'orca-droid-hook-timeout-'))
     homedirMock.mockReturnValue(homeDir)
+
     try {
       const status = new DroidHookService().install()
       expect(status.state).toBe('installed')
       const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8'))
+
       const carriers = countManagedCarriersWithTimeout(
         config,
         MANAGED_HOOK_TIMEOUT_SECONDS,
@@ -201,6 +212,7 @@ describe('managed agent hook timeouts', () => {
           command.replaceAll('\\', '/').includes(MANAGED_HOOKS_DIR_NEEDLE) ||
           (process.platform === 'win32' && command.includes('-EncodedCommand'))
       )
+
       expect(carriers).toBeGreaterThan(0)
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
@@ -210,19 +222,23 @@ describe('managed agent hook timeouts', () => {
 
   it('bounds every generated POSIX curl wrapper with --connect-timeout and --max-time', async () => {
     let curlWrappersChecked = 0
+
     for (const { agent, install } of JSON_INSTALLERS) {
       const { sftp, fs } = createFakeSftp()
       await install(sftp)
+
       for (const [path, content] of fs.files) {
         if (!path.endsWith('.sh')) {
           continue
         }
+
         expect(content, `${agent} wrapper missing curl transport`).toContain('curl')
         expect(content, `${agent} wrapper missing --connect-timeout`).toContain('--connect-timeout')
         expect(content, `${agent} wrapper missing --max-time`).toContain('--max-time')
         curlWrappersChecked += 1
       }
     }
+
     const kimi = createFakeSftp()
     await new KimiHookService().installRemote(kimi.sftp, REMOTE_HOME)
     const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/kimi-hook.sh`)!
@@ -241,10 +257,12 @@ describe('managed agent hook timeouts', () => {
       for (const socket of openSockets.splice(0)) {
         socket.destroy()
       }
+
       if (server) {
         server.close()
         server = null
       }
+
       if (tempDir) {
         rmSync(tempDir, { recursive: true, force: true })
         tempDir = null
@@ -269,10 +287,12 @@ describe('managed agent hook timeouts', () => {
           },
           stdio: ['pipe', 'ignore', 'ignore']
         })
+
         const timeout = setTimeout(() => {
           child.kill('SIGKILL')
           reject(new Error('hook script exceeded test timeout'))
         }, 10_000)
+
         child.on('error', (error) => {
           clearTimeout(timeout)
           reject(error)
@@ -307,7 +327,9 @@ describe('managed agent hook timeouts', () => {
           // Accept the connection and hold it open without ever replying.
           openSockets.push(socket)
         })
+
         server = stallingServer
+
         const port = await new Promise<number>((resolve) => {
           stallingServer.listen(0, '127.0.0.1', () => {
             const address = stallingServer.address()

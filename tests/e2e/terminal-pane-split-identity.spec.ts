@@ -23,6 +23,7 @@ import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-moun
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
@@ -81,6 +82,7 @@ test.describe('Terminal Panes', () => {
   }) => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const activeLeafId = snapshot.activeLeafId ?? snapshot.panes[0]?.leafId
+
     if (!activeLeafId) {
       throw new Error('No active pane leaf id found')
     }
@@ -98,9 +100,11 @@ test.describe('Terminal Panes', () => {
   test('terminal context menu copies the stable pane ID', async ({ orcaPage }) => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const leafId = snapshot.panes[0]?.leafId
+
     if (!leafId) {
       throw new Error('No terminal pane leaf id found')
     }
+
     const expectedPaneKey = `${snapshot.tabId}:${leafId}`
 
     await openTerminalContextMenu(orcaPage)

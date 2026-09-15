@@ -4,6 +4,7 @@ import { runProcess } from '../../shared/child-process/run-process'
 export const ORCA_TAB_SESSION_PREFIX = 'orca-tab-'
 
 const SWEEP_TIMEOUT_MS = 5_000
+
 const SWEEP_MAX_OUTPUT_BYTES = 256 * 1024
 
 type SessionListEnvelope = {
@@ -12,15 +13,19 @@ type SessionListEnvelope = {
 
 function parseSessionNames(stdout: string): string[] {
   let envelope: SessionListEnvelope
+
   try {
     envelope = JSON.parse(stdout) as SessionListEnvelope
   } catch {
     return []
   }
+
   const sessions = envelope?.data?.sessions
+
   if (!Array.isArray(sessions)) {
     return []
   }
+
   return sessions.filter((name): name is string => typeof name === 'string' && name.length > 0)
 }
 
@@ -55,7 +60,9 @@ export async function sweepOrphanedAgentBrowserSessions(options: {
   if (!options.ownsSocketDirectory || process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP === '1') {
     return []
   }
+
   let listed: string[]
+
   try {
     const result = await runProcess({
       program: options.binaryPath,
@@ -64,16 +71,19 @@ export async function sweepOrphanedAgentBrowserSessions(options: {
       timeoutMs: SWEEP_TIMEOUT_MS,
       maxOutputBytes: SWEEP_MAX_OUTPUT_BYTES
     })
+
     listed = result.timedOut ? [] : parseSessionNames(result.stdout)
   } catch {
     return []
   }
 
   const closed: string[] = []
+
   for (const sessionName of listed) {
     if (!sessionName.startsWith(ORCA_TAB_SESSION_PREFIX) || options.isSessionLive?.(sessionName)) {
       continue
     }
+
     try {
       await runProcess({
         program: options.binaryPath,
@@ -87,5 +97,6 @@ export async function sweepOrphanedAgentBrowserSessions(options: {
       // A daemon that died mid-sweep needs no closing.
     }
   }
+
   return closed
 }

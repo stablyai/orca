@@ -56,6 +56,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
     ): Promise<GeneratePullRequestFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
       const baseSettings = store.getSettings()
+
       const requestSettings = {
         ...baseSettings,
         ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
@@ -63,6 +64,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
           ? { agentCmdOverrides: args.agentCmdOverrides }
           : {})
       }
+
       const resolvedSettings = args.sourceControlAiResolvedParams
         ? { ok: true as const, params: args.sourceControlAiResolvedParams }
         : resolveCommitMessageSettings(
@@ -71,25 +73,32 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
             'pullRequest',
             await getRepoForSourceControlAi(store, args)
           )
+
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           return {
             success: false,
             error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
           }
         }
+
         const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args)
+
         const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
           meta: issueMeta,
           provider: args.provider,
           repoPath: args.worktreePath,
           connectionId: args.connectionId
         })
+
         let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+
         try {
           const currentBody = await resolveHostedReviewBodyForGeneration({
             body: args.body,
@@ -98,6 +107,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
             provider: args.provider,
             useTemplate: args.useTemplate
           })
+
           context = await getPullRequestDraftContext(
             (argv, commandOptions) =>
               commandOptions?.timeoutMs !== undefined
@@ -119,15 +129,18 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
               error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
           }
         }
+
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
+
         const linkedIssueDetails = await linkedIssueDetailsPromise
         context = {
           ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
           ...(args.provider ? { provider: args.provider } : {}),
           ...(linkedIssueDetails ? { linkedIssueDetails } : {})
         }
+
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -138,12 +151,15 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args, worktreePath)
+
       const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
         meta: issueMeta,
         provider: args.provider,
@@ -151,7 +167,9 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
         connectionId: args.connectionId,
         localGitOptions: gitOptions
       })
+
       let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+
       try {
         const currentBody = await resolveHostedReviewBodyForGeneration({
           body: args.body,
@@ -160,6 +178,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
           provider: args.provider,
           useTemplate: args.useTemplate
         })
+
         context = await getPullRequestDraftContext(
           (argv, options) =>
             gitExecFileAsync(argv, {
@@ -183,23 +202,28 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
           error: error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
         }
       }
+
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }
+
       const linkedIssueDetails = await linkedIssueDetailsPromise
       context = {
         ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
         ...(args.provider ? { provider: args.provider } : {}),
         ...(linkedIssueDetails ? { linkedIssueDetails } : {})
       }
+
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,
         getLocalAgentRuntimeTarget(gitOptions)
       )
+
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
+
       return generatePullRequestFieldsFromContext(
         context,
         resolvedSettings.params,
@@ -213,12 +237,16 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           return
         }
+
         await provider.cancelGenerateCommitMessage(args.worktreePath, 'pull-request-fields')
+
         return
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       cancelGeneratePullRequestFieldsLocal(worktreePath)
     }

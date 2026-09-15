@@ -60,6 +60,7 @@ describe('redactor — provider-key fingerprints', () => {
             }
           ]
         })
+
         const out = JSON.stringify(redactSpan(span))
         expect(out).not.toContain(raw)
         expect(out).toContain(`[redacted:${tag}]`)
@@ -76,6 +77,7 @@ describe('redactor — provider-key fingerprints', () => {
             cause: `Error: provider rejected request ${raw}\n  at handler (file.ts:1:1)`
           }
         })
+
         const out = JSON.stringify(redactSpan(span))
         expect(out).not.toContain(raw)
         expect(out).toContain(`[redacted:${tag}]`)
@@ -92,6 +94,7 @@ describe('redactor — provider-key fingerprints', () => {
             cause: `Invalid token: ${raw}`
           }
         })
+
         const out = JSON.stringify(redactSpan(span))
         expect(out).not.toContain(raw)
       })
@@ -171,6 +174,7 @@ describe('redactor — attribute-key blocklist', () => {
       secret: 'plain-secret',
       keep: 'ok'
     })
+
     expect(out).not.toHaveProperty('token')
     expect(out).not.toHaveProperty('api_key')
     expect(out).not.toHaveProperty('password')
@@ -193,6 +197,7 @@ describe('redactor — attribute-key blocklist', () => {
       serverSecretKey: 'plain-server',
       keep: 'ok'
     }) as Record<string, unknown>
+
     expect(out).not.toHaveProperty('ANTHROPIC_API_KEY')
     expect(out).not.toHaveProperty('client_secret')
     expect(out).not.toHaveProperty('accessToken')
@@ -226,6 +231,7 @@ describe('redactor — attribute-key blocklist', () => {
         }
       }
     }) as { request: { headers: Record<string, unknown> } }
+
     expect(out.request.headers).not.toHaveProperty('authorization')
     expect(out.request.headers).not.toHaveProperty('cookie')
     expect(out.request.headers.keep).toBe('ok')
@@ -240,6 +246,7 @@ describe('redactor — server mode adds install_id keys', () => {
       distinct_id: 'ghi',
       keep: 'me'
     }
+
     const client = redactAttributes(before, 'client')
     const server = redactAttributes(before, 'server')
 
@@ -258,6 +265,7 @@ describe('redactor — server mode adds install_id keys', () => {
     const out = redactValue({ context: { install_id: 'abc', keep: 'me' } }, 'server') as {
       context: Record<string, unknown>
     }
+
     expect(out.context).not.toHaveProperty('install_id')
     expect(out.context.keep).toBe('me')
   })
@@ -269,6 +277,7 @@ describe('redactor — recursive value redaction', () => {
       string,
       Record<string, string>
     >
+
     expect(out.outer.inner).not.toContain(SECRETS.anthropic)
     expect(out.outer.inner).toContain('[redacted:anthropic-key]')
   })
@@ -292,6 +301,7 @@ describe('redactor — idempotence', () => {
       'FOO=bar',
       'plain text'
     ]
+
     for (const c of cases) {
       const once = redactString(c)
       const twice = redactString(once)
@@ -317,6 +327,7 @@ describe('redactor — span shape', () => {
     const before = makeSpan({
       attributes: { token: SECRETS.anthropic }
     })
+
     const beforeStr = JSON.stringify(before)
     redactSpan(before)
     expect(JSON.stringify(before)).toBe(beforeStr)

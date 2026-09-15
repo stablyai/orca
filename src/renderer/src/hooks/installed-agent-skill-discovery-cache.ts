@@ -18,13 +18,17 @@ let cachedDiscoveryByTarget = new Map<string, CachedDiscovery>()
 
 function readUnexpired(key: string): CachedDiscovery | null {
   const cached = cachedDiscoveryByTarget.get(key)
+
   if (!cached) {
     return null
   }
+
   if (cached.expiresAt <= Date.now()) {
     cachedDiscoveryByTarget.delete(key)
+
     return null
   }
+
   return cached
 }
 
@@ -37,11 +41,14 @@ export function peekInstalledAgentSkillDiscoveryCache(key: string): SkillDiscove
 
 export function readInstalledAgentSkillDiscoveryCache(key: string): SkillDiscoveryResult | null {
   const cached = readUnexpired(key)
+
   if (!cached) {
     return null
   }
+
   cachedDiscoveryByTarget.delete(key)
   cachedDiscoveryByTarget.set(key, cached)
+
   return cached.result
 }
 
@@ -54,11 +61,14 @@ export function writeInstalledAgentSkillDiscoveryCache(
     result,
     expiresAt: Date.now() + INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS
   })
+
   while (cachedDiscoveryByTarget.size > INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX) {
     const oldestKey = cachedDiscoveryByTarget.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     cachedDiscoveryByTarget.delete(oldestKey)
   }
 }

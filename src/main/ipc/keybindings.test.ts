@@ -52,9 +52,11 @@ const snapshot: KeybindingFileSnapshot = {
 
 function getHandler(channel: string): (...args: unknown[]) => unknown {
   const call = handleMock.mock.calls.find(([registeredChannel]) => registeredChannel === channel)
+
   if (!call) {
     throw new Error(`No handler registered for ${channel}`)
   }
+
   return call[1] as (...args: unknown[]) => unknown
 }
 

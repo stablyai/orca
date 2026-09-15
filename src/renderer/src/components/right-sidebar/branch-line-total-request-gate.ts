@@ -9,8 +9,10 @@ const branchLineTotalMergeBaseByWorktree = new Map<string, string>()
 export function setBranchLineTotalMergeBase(worktreeId: string, mergeBase: string | null): void {
   if (!mergeBase) {
     branchLineTotalMergeBaseByWorktree.delete(worktreeId)
+
     return
   }
+
   branchLineTotalMergeBaseByWorktree.set(worktreeId, mergeBase)
 }
 

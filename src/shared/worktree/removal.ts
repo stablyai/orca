@@ -69,6 +69,7 @@ export function isProvenLiveStructuredSessionRemovalError(error: string): boolea
 
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {
   const reason = lockReason?.trim()
+
   return new Error(
     reason
       ? `${LOCKED_WORKTREE_REMOVAL_PREFIX} Lock reason: ${reason}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.`
@@ -93,14 +94,19 @@ export function isLockedWorktreeRemovalError(error: string): boolean {
 
 export function getLockedWorktreeRemovalReason(error: string): string | null {
   const prefixIndex = error.indexOf(`${LOCKED_WORKTREE_REMOVAL_PREFIX} Lock reason: `)
+
   if (prefixIndex === -1) {
     return null
   }
+
   const reasonStart = prefixIndex + `${LOCKED_WORKTREE_REMOVAL_PREFIX} Lock reason: `.length
+
   const recoverySuffix =
     '. Run git worktree unlock <worktree-path> from its repository, then retry deletion.'
+
   const suffixIndex = error.indexOf(recoverySuffix, reasonStart)
   const reason = error.slice(reasonStart, suffixIndex === -1 ? undefined : suffixIndex).trim()
+
   return reason || null
 }
 
@@ -117,6 +123,7 @@ export function classifyWorktreeForceDeleteReason(
     // unlocked explicitly rather than folded into Orca's dirty-file force path.
     return null
   }
+
   // Why (#11960): this must be decided before the `force` guard below. The ordinary
   // delete confirmation already passes force:true to skip the dirty-file prompt, but
   // it does NOT waive PTY-stop proof — so `force` alone is no evidence that the user
@@ -124,23 +131,28 @@ export function classifyWorktreeForceDeleteReason(
   if (isUnstoppedPtyRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'unstopped-pty'
   }
+
   // Same placement and the same reason: decided BEFORE the `force` guard, because an ordinary
   // desktop delete already passes force:true to skip the dirty-file prompt and that says nothing
   // about whether the user has waived closing a live agent session. Only the waiver itself does.
   if (isRunningAgentSessionRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'running-agent-session'
   }
+
   if (force) {
     return null
   }
+
   if (error.includes('Worktree is no longer registered with Git but its directory remains')) {
     return 'orphan-directory'
   }
+
   if (
     error.includes('Worktree is no longer registered with Git and its directory is already gone')
   ) {
     return 'missing-registration'
   }
+
   if (
     error.includes('Worktree has uncommitted or untracked changes') ||
     error.includes('contains modified or untracked files') ||
@@ -148,6 +160,7 @@ export function classifyWorktreeForceDeleteReason(
   ) {
     return 'dirty'
   }
+
   return null
 }
 

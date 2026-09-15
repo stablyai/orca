@@ -23,7 +23,9 @@
 // installer would embed the same uninstaller, and the receipt could not tell.
 // Release is x64-only `--win` with `win.target` unset (so `["nsis"]`) today.
 const { createHash } = require('node:crypto')
+
 const { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs')
+
 const { basename, dirname } = require('node:path')
 
 // app-builder-lib names the intermediate uninstaller `<installer basename>__uninstaller.exe`.
@@ -52,6 +54,7 @@ function relayNsisUninstaller({
   if (!isNsisUninstallerArtifact(filePath)) {
     return 'not-uninstaller'
   }
+
   try {
     // Import wins over export: the rebuild pass must embed the signed bytes even
     // though it also regenerates an unsigned uninstaller of its own.
@@ -59,16 +62,21 @@ function relayNsisUninstaller({
       if (!fs.existsSync(signedPath)) {
         return 'signed-missing'
       }
+
       fs.copyFileSync(signedPath, filePath)
       const digest = createHash('sha256').update(fs.readFileSync(filePath)).digest('hex')
       fs.writeFileSync(`${signedPath}${EMBEDDED_RECEIPT_SUFFIX}`, digest)
+
       return 'imported'
     }
+
     if (exportPath) {
       fs.mkdirSync(dirname(exportPath), { recursive: true })
       fs.copyFileSync(filePath, exportPath)
+
       return 'exported'
     }
+
     return 'idle'
   } catch (error) {
     return `failed: ${error.message}`
@@ -93,8 +101,10 @@ function signWindowsUninstallerViaSignPath(configuration) {
     exportPath: process.env.ORCA_WIN_UNINSTALLER_EXPORT_PATH || undefined,
     signedPath: process.env.ORCA_WIN_UNINSTALLER_SIGNED_PATH || undefined
   }
+
   const verdict = relayNsisUninstaller(paths)
   const message = VERDICT_MESSAGES[verdict]
+
   if (message) {
     console.log(`[win-uninstaller-signing] ${message(paths)}`)
   } else if (verdict.startsWith('failed')) {

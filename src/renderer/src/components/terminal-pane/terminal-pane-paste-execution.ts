@@ -28,6 +28,7 @@ export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePas
 
 export function formatClipboardImagePasteError(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
+
   return `Image paste failed: ${detail}`
 }
 
@@ -43,6 +44,7 @@ export function createTerminalPanePasteExecution(
     tabId,
     worktreeId
   } = controller
+
   const isPanePasteTargetMounted = (
     pane: ManagedPane,
     transport: PtyTransport | undefined,
@@ -67,8 +69,10 @@ export function createTerminalPanePasteExecution(
     const connectionId = getConnectionId(worktreeId) ?? null
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
+
     const keyboardOwnedPaste =
       source === 'keyboard' || source === 'paste-event' || source === 'app-menu'
+
     const plan = await planTerminalPasteWithYield({
       text,
       source,
@@ -90,6 +94,7 @@ export function createTerminalPanePasteExecution(
       forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
       terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
     })
+
     const execution = await executeTerminalPastePlan(plan, {
       pasteText: (pasteText, pasteOptions) =>
         pasteTerminalText(pane.terminal, pasteText, pasteOptions),
@@ -98,6 +103,7 @@ export function createTerminalPanePasteExecution(
         if (!isPanePasteTargetMounted(pane, transport, ptyId)) {
           return false
         }
+
         return isTerminalPanePasteFocusCurrent({
           requireSameFocusedElement: keyboardOwnedPaste,
           activeElementAtDispatch,
@@ -106,13 +112,17 @@ export function createTerminalPanePasteExecution(
       },
       canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
     })
+
     if (execution.status !== 'pasted') {
       setTerminalError(formatTerminalPasteExecutionError(execution.reason))
+
       return
     }
+
     if (text) {
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
     }
+
     if (options?.recoverImagePasteWebglAtlas) {
       scheduleImagePasteWebglAtlasRecovery()
     }
@@ -125,10 +135,12 @@ export function createTerminalPanePasteExecution(
       .readClipboardText
   ): void => {
     const connectionId = getConnectionId(worktreeId) ?? null
+
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
       useAppStore.getState(),
       worktreeId
     )
+
     const activeElementAtDispatch = document.activeElement
     void pasteTerminalClipboard({
       readClipboardText,

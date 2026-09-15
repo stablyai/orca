@@ -17,9 +17,11 @@ type Deferred<T> = {
 
 function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -39,12 +41,15 @@ async function settle(): Promise<void> {
 function resolvedSpec() {
   const currents: (() => boolean)[] = []
   const unsubscribes: ReturnType<typeof vi.fn>[] = []
+
   const subscribe = vi.fn(async (isCurrent: () => boolean) => {
     currents.push(isCurrent)
     const unsubscribe = vi.fn()
     unsubscribes.push(unsubscribe)
+
     return { unsubscribe }
   })
+
   return {
     currents,
     spec: { subscribe } satisfies WindowVisibilitySubscriptionSpec,
@@ -130,6 +135,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     const longHideMs =
       WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS *
       WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_BACKOFF_LIMIT
+
     vi.advanceTimersByTime(longHideMs)
     setDocumentVisibility('visible')
     await settle()
@@ -145,9 +151,11 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     const first = resolvedSpec()
     const second = resolvedSpec()
     const onVisibilityResume = vi.fn()
+
     const dispose = installWindowVisibilitySubscriptionParking([first.spec, second.spec], {
       onVisibilityResume
     })
+
     await settle()
 
     setDocumentVisibility('hidden')
@@ -166,6 +174,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     const first = resolvedSpec()
     const active = resolvedSpec()
     const third = resolvedSpec()
+
     const dispose = installWindowVisibilitySubscriptionParking(
       [first.spec, active.spec, third.spec],
       {
@@ -173,6 +182,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
         visibilityResumeStaggerMs: 50
       }
     )
+
     await settle()
     expect(
       [first.subscribe, active.subscribe, third.subscribe].map((mock) => mock.mock.calls.length)
@@ -215,6 +225,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     const active = resolvedSpec()
     const third = resolvedSpec()
     const parkDelayMs = 100
+
     const dispose = installWindowVisibilitySubscriptionParking(
       [first.spec, active.spec, third.spec],
       {
@@ -223,6 +234,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
         visibilityResumeStaggerMs: 1_000
       }
     )
+
     await settle()
 
     setDocumentVisibility('hidden')
@@ -256,6 +268,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     const third = resolvedSpec()
     const error = new Error('active start failed')
     const onSubscribeError = vi.fn()
+
     const dispose = installWindowVisibilitySubscriptionParking(
       [first.spec, { ...active.spec, onSubscribeError }, third.spec],
       {
@@ -263,6 +276,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
         visibilityResumeStaggerMs: 50
       }
     )
+
     await settle()
     active.subscribe.mockRejectedValueOnce(error)
 
@@ -284,6 +298,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     setDocumentVisibility('hidden')
     const harness = resolvedSpec()
     const onVisibilityResume = vi.fn()
+
     const dispose = installWindowVisibilitySubscriptionParking([harness.spec], {
       onVisibilityResume
     })
@@ -326,19 +341,24 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     const firstUnsubscribe = vi.fn()
     const secondUnsubscribe = vi.fn()
     const currents: (() => boolean)[] = []
+
     const subscribe = vi
       .fn((isCurrent: () => boolean) => {
         currents.push(isCurrent)
+
         return first.promise
       })
       .mockImplementationOnce((isCurrent) => {
         currents.push(isCurrent)
+
         return first.promise
       })
       .mockImplementationOnce((isCurrent) => {
         currents.push(isCurrent)
+
         return second.promise
       })
+
     const dispose = installWindowVisibilitySubscriptionParking([{ subscribe }])
 
     setDocumentVisibility('hidden')
@@ -378,12 +398,14 @@ describe('installWindowVisibilitySubscriptionParking', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
     const initialUnsubscribe = vi.fn()
     const replacementError = new Error('temporary reconnect failure')
+
     const subscribe = vi
       .fn<WindowVisibilitySubscriptionSpec['subscribe']>()
       .mockResolvedValueOnce({ unsubscribe: initialUnsubscribe })
       .mockRejectedValueOnce(replacementError)
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
       .mockRejectedValueOnce(replacementError)
+
     const onSubscribeError = vi.fn()
     const dispose = installWindowVisibilitySubscriptionParking([{ subscribe, onSubscribeError }])
     await settle()
@@ -415,6 +437,7 @@ describe('installWindowVisibilitySubscriptionParking', () => {
   it('isolates unsubscribe failures across entries', async () => {
     const onUnsubscribeError = vi.fn()
     const secondUnsubscribe = vi.fn()
+
     const first: WindowVisibilitySubscriptionSpec = {
       subscribe: async () => ({
         unsubscribe: () => {
@@ -423,9 +446,11 @@ describe('installWindowVisibilitySubscriptionParking', () => {
       }),
       onUnsubscribeError
     }
+
     const second: WindowVisibilitySubscriptionSpec = {
       subscribe: async () => ({ unsubscribe: secondUnsubscribe })
     }
+
     const dispose = installWindowVisibilitySubscriptionParking([first, second])
     await settle()
 

@@ -12,8 +12,10 @@ export function initializeBrowserClientHostId(profileDirectory: string): void {
     // Why not overwrite: a renderer already carries the earlier value, and two ids for one host
     // means the renderer stops recognizing the pages it is hosting.
     console.warn('[browser-client-host] hosting identity was read before startup resolved it')
+
     return
   }
+
   browserHostClientId = readOrCreateBrowserHostClientId(profileDirectory)
 }
 
@@ -28,5 +30,6 @@ export function getBrowserClientHostId(): string {
   // Why a mint rather than a throw: without a resolved profile the id is only process-local, which
   // costs tab survival across a relaunch but still hosts every page of this session.
   browserHostClientId ??= randomUUID()
+
   return browserHostClientId
 }

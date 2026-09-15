@@ -12,6 +12,7 @@ export type LocalWindowsTerminalRuntimeOptions = {
 
 export function isWslShellName(shellPath: string | undefined): boolean {
   const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
+
   return shellName === 'wsl.exe' || shellName === 'wsl'
 }
 
@@ -21,9 +22,11 @@ export function getHostShellForProjectRuntime(
   fallbackHostShell = 'powershell.exe'
 ): string {
   const candidate = requestedShell ?? settingsShell
+
   if (candidate && !isWslShellName(candidate)) {
     return candidate
   }
+
   return fallbackHostShell
 }
 
@@ -36,6 +39,7 @@ export function resolveLocalWindowsTerminalRuntimeOptions(args: {
   const settingsShell = args.settings?.terminalWindowsShell
   const settingsWslDistro = args.settings?.terminalWindowsWslDistro ?? null
   const projectRuntime = args.projectRuntime
+
   if (!projectRuntime) {
     return {
       shellOverride: args.requestedShellOverride ?? settingsShell,
@@ -94,8 +98,10 @@ export function resolveLocalWindowsTerminalShellOverrideForTab(args: {
   if (args.explicitShellOverride !== undefined) {
     return args.explicitShellOverride
   }
+
   if (args.isWslWorktree) {
     return 'wsl.exe'
   }
+
   return args.defaultWindowsShell
 }

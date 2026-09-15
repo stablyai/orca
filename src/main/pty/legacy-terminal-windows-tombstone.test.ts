@@ -22,6 +22,7 @@ describe('legacy terminal Windows tombstone text', () => {
   const makeUserDataDir = (): string => {
     const userData = mkdtempSync(join(tmpdir(), 'orca-legacy-shim-win-'))
     tempRoots.push(userData)
+
     return userData
   }
 
@@ -75,6 +76,7 @@ describe('legacy terminal Windows tombstone text', () => {
       const offending = readFileSync(join(win32Dir, `${command}.cmd`), 'utf8')
         .split('\r\n')
         .filter((line) => /^\s*rem\b/i.test(line) && line.includes('%'))
+
       expect(offending, `rem comments with percent expressions: ${offending.join(' | ')}`).toEqual(
         []
       )
@@ -245,6 +247,7 @@ describe('legacy terminal Windows tombstone text', () => {
       const cmd = readFileSync(join(win32Dir, `${command}.cmd`), 'utf8')
       expect(cmd).toContain('if not defined PATH goto :orca_path_walked')
       expect(cmd).toContain('if not defined orca_clean_path goto :orca_candidates_walked')
+
       for (const [guard, loop] of [
         ['if not defined PATH goto :orca_path_walked', 'for %%P in ("%PATH:;='],
         [

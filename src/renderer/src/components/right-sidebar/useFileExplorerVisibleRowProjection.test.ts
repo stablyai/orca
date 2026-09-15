@@ -24,9 +24,11 @@ function row(relativePath: string, isDirectory = false, depth?: number): TreeNod
 
 function cache(childrenByPath: Record<string, TreeNode[]>): Record<string, DirCache> {
   const dirCache: Record<string, DirCache> = {}
+
   for (const [path, children] of Object.entries(childrenByPath)) {
     dirCache[path] = { children }
   }
+
   return dirCache
 }
 
@@ -274,6 +276,7 @@ describe('file explorer visible row projection', () => {
 
   it('rejects oversized file-name filter queries before scanning recursive paths', () => {
     const oversizedQuery = 'secret-file-filter'.repeat(FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES)
+
     const nameFilter = {
       query: oversizedQuery,
       relativePaths: ['src/FileExplorer.tsx', 'docs/secret-file-filter.md']

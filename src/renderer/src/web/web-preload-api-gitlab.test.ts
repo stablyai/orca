@@ -23,11 +23,13 @@ describe('web GitLab preload API', () => {
       ipcRenderer: { invoke: vi.fn() }
     }))
     const globals = installBrowserGlobals('Linux')
+
     const { glApi } = (await import(
       new URL('../../../preload/gitlab.ts', import.meta.url).href
     )) as {
       glApi: Record<string, unknown>
     }
+
     const { installWebPreloadApi } = await import('./web-preload-api')
 
     installWebPreloadApi()
@@ -37,11 +39,13 @@ describe('web GitLab preload API', () => {
 
   it('routes every runtime-backed GitLab method through the expected RPC method', async () => {
     type GitLabApi = NonNullable<PreloadApi['gl']>
+
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -274,6 +278,7 @@ describe('web GitLab preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -291,6 +296,7 @@ describe('web GitLab preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
     const api = globals.window.api
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'gitlab',
@@ -369,6 +375,7 @@ describe('web GitLab preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -402,6 +409,7 @@ describe('web GitLab preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'gitlab.listMRs') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -412,6 +420,7 @@ describe('web GitLab preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'gitlab.listIssues') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -422,6 +431,7 @@ describe('web GitLab preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'gitlab.workItemByPath') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -430,6 +440,7 @@ describe('web GitLab preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -454,12 +465,14 @@ describe('web GitLab preload API', () => {
       page: 1,
       perPage: 50
     })
+
     const issues = await api.gl.listIssues({
       repoPath: '/workspace/repo',
       state: 'opened',
       assignee: '@me',
       limit: 50
     })
+
     const item = await api.gl.workItemByPath({
       repoPath: '/workspace/repo',
       host: 'gitlab.example.com',
@@ -467,6 +480,7 @@ describe('web GitLab preload API', () => {
       iid: 7,
       type: 'issue'
     })
+
     await api.gl.closeMR({ repoPath: '/workspace/repo', iid: 7 })
 
     expect(mergeRequests.items).toEqual([{ id: 'mr-1', type: 'mr', number: 1 }])

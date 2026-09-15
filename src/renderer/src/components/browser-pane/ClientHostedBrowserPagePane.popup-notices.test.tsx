@@ -72,6 +72,7 @@ function emitPopup(overrides: Partial<PopupEvent> = {}): void {
     action: 'blocked',
     ...overrides
   }
+
   act(() => popups.emit(event))
 }
 

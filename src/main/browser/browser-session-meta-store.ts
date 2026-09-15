@@ -30,9 +30,12 @@ export function loadBrowserSessionMeta(
   try {
     const raw = readFileSync(resolveMetadataPath(), 'utf-8')
     const data = JSON.parse(raw)
+
     const legacyPendingCookieDbPath =
       typeof data?.pendingCookieDbPath === 'string' ? data.pendingCookieDbPath : null
+
     const pendingCookieImports: Record<string, PendingBrowserCookieImport> = {}
+
     if (data && typeof data.pendingCookieImports === 'object' && data.pendingCookieImports) {
       for (const [partition, entry] of Object.entries(data.pendingCookieImports)) {
         if (
@@ -46,9 +49,11 @@ export function loadBrowserSessionMeta(
         }
       }
     }
+
     if (legacyPendingCookieDbPath && !pendingCookieImports[defaultPartition]) {
       pendingCookieImports[defaultPartition] = legacyPendingCookieDbPath
     }
+
     return {
       defaultSource: data?.defaultSource ?? null,
       pendingCookieDbPath: legacyPendingCookieDbPath,

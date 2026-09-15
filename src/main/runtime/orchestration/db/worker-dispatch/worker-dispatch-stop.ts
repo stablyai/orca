@@ -23,6 +23,7 @@ export function isDispatchProcessCurrent(
   }
 ): boolean {
   const dispatch = this.getDispatchContextById(params.dispatchId)
+
   return Boolean(
     dispatch?.assignee_pane_key &&
     params.paneKey &&
@@ -41,24 +42,33 @@ export function beginWorkerStop(
   | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | ({ disposition: 'context_only' } & ContextOnlyDispatchReleaseResult) {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
+
     if (!worker) {
       const released = releaseContextOnlyDispatch(this.db, dispatch, 'stopped')
+
       if (!released.alreadySettled) {
         this.closeQuestionsForDispatch(dispatchId)
       }
+
       this.db.exec('COMMIT')
+
       return { disposition: 'context_only', ...released }
     }
+
     if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
       this.db.exec('COMMIT')
+
       return { disposition: 'already_settled', worker, dispatch }
     }
+
     // Why `stopping` under a DIFFERENT epoch is accepted: a stop whose runtime died mid-flight
     // leaves the row here forever, and refusing the re-issue was the only operator escape
     // (#16904). Re-running the stop earns the honest outcome — settled, or `stop_unknown`, from
@@ -71,12 +81,14 @@ export function beginWorkerStop(
     // escalate it. Same predicate as that reader, so both agree on whose stop this is.
     const stopStrandedByAnotherRuntime =
       worker.state === 'stopping' && worker.runtime_epoch !== runtimeEpoch
+
     if (!['ready', 'start_unknown'].includes(worker.state) && !stopStrandedByAnotherRuntime) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} cannot stop from ${worker.state}.`
       )
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -100,6 +112,7 @@ export function beginWorkerStop(
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')
+
     return {
       disposition: 'stopping',
       worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow,
@@ -113,12 +126,15 @@ export function beginWorkerStop(
 
 export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
+
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -126,6 +142,7 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
       to: 'stopped',
       projection: { stage: 'process_stopped', updated_at: new Date().toISOString() }
     })
+
     if (['pending', 'dispatched'].includes(dispatch.status)) {
       transitionLifecycleWithDb(this.db, {
         entity: 'dispatch',
@@ -135,8 +152,10 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
         projection: { completed_at: new Date().toISOString(), last_failure: 'stopped' }
       })
     }
+
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.db.exec('COMMIT')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -149,25 +168,31 @@ export function reconcileFederatedWorkerStop(
   dispatchId: string
 ): WorkerDispatchRow {
   const transaction = beginLifecycleWriteTransaction(this.db, 'federated_worker_stop_reconcile')
+
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
+
     if (!worker || !dispatch || !this.getFederatedDispatch(dispatchId)) {
       throw new OrchestrationError(
         'dispatch_not_found',
         `Federated Dispatch ${dispatchId} was not found.`
       )
     }
+
     if (worker.state === 'stopped') {
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return worker
     }
+
     if (!['stopping', 'stop_unknown'].includes(worker.state)) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Federated Dispatch ${dispatchId} cannot reconcile stop from ${worker.state}.`
       )
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -179,6 +204,7 @@ export function reconcileFederatedWorkerStop(
         updated_at: new Date().toISOString()
       }
     })
+
     if (['pending', 'dispatched'].includes(dispatch.status)) {
       transitionLifecycleWithDb(this.db, {
         entity: 'dispatch',
@@ -191,8 +217,10 @@ export function reconcileFederatedWorkerStop(
         }
       })
     }
+
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     commitLifecycleWriteTransaction(this.db, transaction)
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     rollbackLifecycleWriteTransaction(this.db, transaction)
@@ -205,12 +233,15 @@ export function resumeFederatedWorkerForTerminalRelay(
   dispatchId: string
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
+
     if (!worker || !dispatch || worker.state !== 'stopping') {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: dispatchId,
@@ -219,6 +250,7 @@ export function resumeFederatedWorkerForTerminalRelay(
       projection: { stage: 'remote_report_pending', updated_at: new Date().toISOString() }
     })
     const task = this.getTask(dispatch.task_id)
+
     if (task?.status === 'blocked') {
       transitionLifecycleWithDb(this.db, {
         entity: 'task',
@@ -227,7 +259,9 @@ export function resumeFederatedWorkerForTerminalRelay(
         to: 'dispatched'
       })
     }
+
     this.db.exec('COMMIT')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -241,10 +275,13 @@ export function markWorkerStopUnknown(
   reason: string
 ): WorkerDispatchRow {
   const worker = this.getWorkerDispatch(dispatchId)
+
   if (!worker || worker.state !== 'stopping') {
     throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
   }
+
   this.db.exec('SAVEPOINT mark_worker_stop_unknown')
+
   try {
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
@@ -258,6 +295,7 @@ export function markWorkerStopUnknown(
       }
     })
     this.db.exec('RELEASE mark_worker_stop_unknown')
+
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK TO mark_worker_stop_unknown')

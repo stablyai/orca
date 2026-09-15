@@ -49,9 +49,11 @@ async function pinnedScrollbackTerminal(): Promise<TerminalWithBufferService> {
     scrollback: 1000,
     allowProposedApi: true
   }) as TerminalWithBufferService
+
   await writeLines(term, 100, 'before')
   term.scrollLines(-30)
   markTerminalPinnedViewport(term)
+
   return term
 }
 
@@ -87,6 +89,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
       scrollback: 1000,
       allowProposedApi: true
     }) as TerminalWithBufferService
+
     await writeLines(term, 30, 'line')
     const buffer = term.buffer.active
 
@@ -119,6 +122,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
     const buffer = term.buffer.active
     term.scrollLines(-5)
     let viewportSeenByOnData = -1
+
     const subscription = term.onData(() => {
       viewportSeenByOnData = buffer.viewportY
     })
@@ -137,8 +141,10 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
       cols: 40,
       allowProposedApi: true
     }) as TerminalWithBufferService
+
     expect(term._core?.coreService?.onUserInput).toBeTypeOf('function')
     let userInputCount = 0
+
     const subscription = term._core?.coreService?.onUserInput?.(() => {
       userInputCount += 1
     })
@@ -172,6 +178,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
       scrollback: 1000,
       allowProposedApi: true
     }) as TerminalWithBufferService
+
     await writeLines(term, 30, 'line')
     const bufferService = term._core?._bufferService
     expect(typeof bufferService?.isUserScrolling).toBe('boolean')
@@ -192,6 +199,7 @@ describe('xterm native user-scrolling contract (vendored 6.1.0-beta.303)', () =>
       scrollback: 1000,
       allowProposedApi: true
     }) as TerminalWithBufferService
+
     await writeLines(term, 30, 'line')
     term.scrollLines(-5)
     expect(term._core?._bufferService?.isUserScrolling).toBe(true)
@@ -220,40 +228,49 @@ function manualSettleScheduler(): {
   liveTimerCount: () => number
 } {
   type FakeTimer = { run: () => void; dueAt: number; dead: boolean }
+
   const timers: FakeTimer[] = []
   let nowMs = 0
   let scheduleCount = 0
   let cancelCount = 0
+
   return {
     now: () => nowMs,
     scheduleSettle: (run, delayMs) => {
       const timer: FakeTimer = { run, dueAt: nowMs + delayMs, dead: false }
       timers.push(timer)
       scheduleCount += 1
+
       return () => {
         if (!timer.dead) {
           cancelCount += 1
         }
+
         timer.dead = true
       }
     },
     advance: (ms) => {
       nowMs += ms
+
       // A regression that re-arms with no delay would otherwise spin here and
       // read as a stuck CI job rather than a failing assertion.
       for (let fired = 0; ; fired += 1) {
         if (fired > 1_000) {
           throw new Error('settle scheduler livelocked: zero-delay re-arm loop')
         }
+
         let due: FakeTimer | null = null
+
         for (const timer of timers) {
           if (!timer.dead && timer.dueAt <= nowMs && (!due || timer.dueAt < due.dueAt)) {
             due = timer
           }
         }
+
         if (!due) {
           return
         }
+
         due.dead = true
         due.run()
       }
@@ -277,10 +294,12 @@ async function pinnedTerminalWithRestore(): Promise<{
 }> {
   const term = await pinnedScrollbackTerminal()
   const scheduler = manualSettleScheduler()
+
   const restore = installTerminalLiveScrollbackRestore(term, {
     now: scheduler.now,
     scheduleSettle: scheduler.scheduleSettle
   })
+
   return {
     term,
     advance: scheduler.advance,
@@ -333,6 +352,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     ]) {
       await write(term, sequence)
     }
+
     // Grow the buffer so a spurious bottom-offset restore would be visible.
     await writeLines(term, 200, 'after')
     expect(scheduleCount()).toBe(0)
@@ -356,12 +376,14 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     const { term, advance, bottomOffset } = await pinnedTerminalWithRestore()
 
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(60)}`)
+
     // Each frame lands inside the quiet period, so the pin must not fire yet.
     for (let frame = 0; frame < 5; frame += 1) {
       advance(SETTLE_MS - 60)
       expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
       await write(term, 'after\r\n'.repeat(40))
     }
+
     advance(SETTLE_MS)
 
     expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
@@ -629,6 +651,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
       scrollback: 1000,
       allowProposedApi: true
     }) as TerminalWithBufferService
+
     await writeLines(term, 100, 'before')
     markTerminalFollowOutput(term)
     const scheduler = manualSettleScheduler()
@@ -646,6 +669,7 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
   it('cancels an armed pin on dispose', async () => {
     const term = await pinnedScrollbackTerminal()
     const scheduler = manualSettleScheduler()
+
     const restore = installTerminalLiveScrollbackRestore(term, {
       now: scheduler.now,
       scheduleSettle: scheduler.scheduleSettle
@@ -699,11 +723,13 @@ describe('live scrollback-erase pin wiring', () => {
     const registrations: StubRegistration[] = []
     const handlers: ((params: (number | number[])[]) => boolean)[] = []
     let parsedDisposed = false
+
     const target = {
       get buffer() {
         if (options.throwOnBuffer) {
           throw new Error('buffer is gone')
         }
+
         return { active: { type: 'normal', viewportY: 10, baseY: 50 } }
       },
       parser: {
@@ -714,6 +740,7 @@ describe('live scrollback-erase pin wiring', () => {
           const registration: StubRegistration = { id, disposed: false }
           registrations.push(registration)
           handlers.push(handler)
+
           return {
             dispose: () => {
               registration.disposed = true
@@ -727,6 +754,7 @@ describe('live scrollback-erase pin wiring', () => {
         }
       })
     }
+
     return {
       target: target as Parameters<typeof installTerminalLiveScrollbackRestore>[0],
       registrations,
@@ -756,6 +784,7 @@ describe('live scrollback-erase pin wiring', () => {
       expect(() => handler([3])).not.toThrow()
       expect(handler([3])).toBe(false)
     }
+
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
   })
@@ -773,6 +802,7 @@ describe('live scrollback-erase pin wiring', () => {
     const restore = installTerminalLiveScrollbackRestore({
       buffer: { active: { type: 'normal', viewportY: 10, baseY: 50 } }
     } as Parameters<typeof installTerminalLiveScrollbackRestore>[0])
+
     expect(() => restore.dispose()).not.toThrow()
   })
 })

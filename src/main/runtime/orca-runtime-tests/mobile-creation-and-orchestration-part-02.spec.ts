@@ -13,6 +13,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('delivers pending mail via notifyMessageArrived when the recipient is already idle', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -31,6 +32,7 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+
       const message = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
@@ -59,6 +61,7 @@ describe('OrcaRuntimeService', () => {
 
   it('points a Run mailbox at its live-idle coordinator without replaying pending rows', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -79,6 +82,7 @@ describe('OrcaRuntimeService', () => {
         coordinator_pane_key: `${terminal.tabId}:${terminal.leafId}`
       })
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+
       const message = db.insertMessage({
         from: 'term_worker',
         to: 'run:run_mailbox',
@@ -120,6 +124,7 @@ describe('OrcaRuntimeService', () => {
 
   it('repoints worker_done when a stale waiter wakes without consuming it', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -147,6 +152,7 @@ describe('OrcaRuntimeService', () => {
         typeFilter: ['worker_done'],
         timeoutMs: 60_000
       })
+
       db.insertMessage({
         from: 'term_final_worker',
         to: 'run:run_stale_waiter',
@@ -171,6 +177,7 @@ describe('OrcaRuntimeService', () => {
         write.mock.calls.filter(
           ([, payload]) => typeof payload === 'string' && payload.includes('orchestration check')
         )
+
       expect(pointers()).toHaveLength(1)
       expect(pointers()[0]?.[1]).toContain('You have 1 orchestration message')
 
@@ -185,6 +192,7 @@ describe('OrcaRuntimeService', () => {
 
   it('repoints on the retry edge when live idle won the send race', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -224,6 +232,7 @@ describe('OrcaRuntimeService', () => {
           }
         ).leaves.values()
       ][0]
+
       leaf.lastAgentStatus = 'idle'
       leaf.lastAgentStatusObservedLive = true
 
@@ -240,6 +249,7 @@ describe('OrcaRuntimeService', () => {
 
   it('leaves later delivery to the idle edge instead of polling a working mailbox', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -283,6 +293,7 @@ describe('OrcaRuntimeService', () => {
 
   it('points restored mail when a live-idle PTY remounts after the repair edge', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -324,6 +335,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not keep retrying when every pending row was already pointed', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -364,6 +376,7 @@ describe('OrcaRuntimeService', () => {
 
   it('repoints pending rows restored with a live-idle coordinator', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -403,6 +416,7 @@ describe('OrcaRuntimeService', () => {
 
   it('stops a pending repoint after its database closes', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new OrchestrationDb(':memory:')
@@ -494,11 +508,13 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     bindSinglePtyRun(db, terminal.handle)
     runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+
     const message = db.insertMessage({
       from: 'sender',
       to: terminal.handle,
       subject: 'while working'
     })
+
     write.mockClear()
 
     runtime.notifyMessageArrived(terminal.handle, 'status')
@@ -513,6 +529,7 @@ describe('OrcaRuntimeService', () => {
 
   it('delivers on a first live idle frame that follows a seeded idle with no transition', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -529,11 +546,13 @@ describe('OrcaRuntimeService', () => {
       const [terminal] = (await runtime.listTerminals()).terminals
       bindSinglePtyRun(db, terminal.handle)
       runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+
       const message = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'restored idle'
       })
+
       runtime.notifyMessageArrived(terminal.handle, 'status')
       await Promise.resolve()
       write.mockClear()
@@ -557,6 +576,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not push on a cold-restore seeded idle status with no live observation', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -575,11 +595,13 @@ describe('OrcaRuntimeService', () => {
       // Why: the persisted title is historical — the agent may have gone busy
       // across the relaunch, so a seeded 'idle' must not authorize a PTY write.
       runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex done' })
+
       const message = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'seeded idle'
       })
+
       write.mockClear()
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
@@ -606,6 +628,7 @@ describe('OrcaRuntimeService', () => {
 
   it('lets a resolved check consume its rows before a later same-tick notify pushes', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -633,13 +656,16 @@ describe('OrcaRuntimeService', () => {
       const consumed = runtime
         .waitForMessage(mailbox, { timeoutMs: 5_000 })
         .then(() => db.getUnreadMessages(mailbox).map((row) => (row.read = 1)))
+
       const first = db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'pulled' })
       runtime.notifyMessageArrived(terminal.handle, 'status')
+
       const second = db.insertMessage({
         from: 'sender',
         to: terminal.handle,
         subject: 'also pulled'
       })
+
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
       await consumed

@@ -30,6 +30,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   // Why: committed shapes are rasterized once into this offscreen layer; the live
   // paint blits it instead of re-stroking every committed shape each pointermove.
   const committedLayerRef = useRef<HTMLCanvasElement | null>(null)
+
   if (committedLayerRef.current === null) {
     committedLayerRef.current = document.createElement('canvas')
   }
@@ -46,9 +47,11 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   // Track the content-box size so the canvas matches the frozen backdrop exactly.
   useEffect(() => {
     const root = rootRef.current
+
     if (!root) {
       return undefined
     }
+
     const measure = () => {
       const rect = root.getBoundingClientRect()
       const dpr = window.devicePixelRatio || 1
@@ -60,6 +63,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
           : { width: rect.width, height: rect.height, dpr }
       )
     }
+
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(root)
@@ -67,6 +71,7 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     // CSS box, so ResizeObserver won't fire — window resize (which Chromium emits
     // on dpr changes) re-measures the dpr so the canvas repaints at the new scale.
     window.addEventListener('resize', measure)
+
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measure)
@@ -77,9 +82,11 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   // size) change — not on every in-progress pointermove.
   useEffect(() => {
     const layer = committedLayerRef.current
+
     if (!layer) {
       return
     }
+
     renderCommittedLayer(layer, doc.shapes, size.width, size.height, size.dpr)
   }, [doc.shapes, size])
 
@@ -88,12 +95,15 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   useEffect(() => {
     const canvas = canvasRef.current
     const layer = committedLayerRef.current
+
     if (!canvas || !layer) {
       return undefined
     }
+
     const handle = requestAnimationFrame(() => {
       blitMarkupScene(canvas, layer, inProgress, size.width, size.height, size.dpr)
     })
+
     return () => cancelAnimationFrame(handle)
   }, [doc.shapes, inProgress, size])
 
@@ -102,12 +112,15 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     if (!pendingText) {
       return undefined
     }
+
     const handle = requestAnimationFrame(() => textInputRef.current?.focus())
+
     return () => cancelAnimationFrame(handle)
   }, [pendingText])
 
   const undo = useCallback(() => setDoc((current) => undoShape(current)), [])
   const redo = useCallback(() => setDoc((current) => redoShape(current)), [])
+
   const clear = useCallback(() => {
     // Why: also drop any open text input / in-progress stroke so a clear leaves a
     // truly clean slate — otherwise a pending input blur can re-add text.
@@ -136,9 +149,11 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
       const at = pendingText
       setPendingText(null)
       const trimmed = text.trim()
+
       if (!at || trimmed.length === 0) {
         return
       }
+
       setDoc((document) =>
         commitShape(document, {
           id: createBrowserUuid(),

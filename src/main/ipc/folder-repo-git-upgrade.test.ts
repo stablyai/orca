@@ -20,10 +20,12 @@ const { statCalls, readdirSpy, gitProbes } = vi.hoisted(() => ({
 
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRepo>()
+
   return {
     ...actual,
     isGitRepo: (path: string) => {
       gitProbes.push(path)
+
       return actual.isGitRepo(path)
     }
   }
@@ -31,14 +33,17 @@ vi.mock('../git/repo', async (importOriginal) => {
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
+
   return {
     ...actual,
     stat: (path: string, ...rest: never[]) => {
       statCalls.push(path)
+
       return actual.stat(path, ...rest)
     },
     readdir: (path: string, ...rest: never[]) => {
       readdirSpy(path)
+
       return actual.readdir(path, ...rest)
     }
   }
@@ -47,12 +52,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 vi.mock('./worktree-remote', () => ({
   notifyWorktreesChanged: vi.fn()
 }))
+
 vi.mock('./repos/repos-changed-notification', () => ({
   notifyReposChanged: vi.fn()
 }))
+
 vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
+
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn(async () => {})
 }))
@@ -86,6 +94,7 @@ function makeWindow(): TestWindow {
     isMinimized: () => false,
     webContents: { send: vi.fn() }
   }
+
   return window
 }
 
@@ -115,10 +124,13 @@ function makeStore(
     getRepo: vi.fn((id: string) => repos.find((repo) => repo.id === id)),
     updateRepo: vi.fn((id: string, updates: Partial<Repo>) => {
       const repo = repos.find((candidate) => candidate.id === id)
+
       if (!repo) {
         return null
       }
+
       Object.assign(repo, updates)
+
       return repo
     }),
     getSettings: () => ({})
@@ -126,6 +138,7 @@ function makeStore(
 }
 
 const POLL_MS = 25
+
 const IDLE_POLL_MS = 250
 
 function gitInit(repoPath: string): void {
@@ -161,6 +174,7 @@ describe('folder repo git upgrade watch', () => {
   /** Why: a tick that spawns git can outrun a fixed wait on a loaded machine. */
   async function waitForStats(count: number): Promise<void> {
     const deadline = Date.now() + 5_000
+
     while (statCalls.length < count && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_MS))
     }
@@ -219,6 +233,7 @@ describe('folder repo git upgrade watch', () => {
     const repoPath = join(root, 'notebook')
     await mkdir(repoPath)
     gitInit(repoPath)
+
     const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })], {
       [`folder-repo::${repoPath}`]: { displayName: 'notebook' },
       [`folder-repo::${repoPath}::workspace:11111111-1111-1111-1111-111111111111`]: {
@@ -240,10 +255,12 @@ describe('folder repo git upgrade watch', () => {
     await mkdir(repoPath)
     gitInit(repoPath)
     const workspaceId = `folder-repo::${repoPath}::workspace:11111111-1111-1111-1111-111111111111`
+
     const worktreeMeta: Record<string, unknown> = {
       [`folder-repo::${repoPath}`]: { displayName: 'notebook-cleanup' },
       [workspaceId]: { displayName: 'draft' }
     }
+
     const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })], worktreeMeta)
 
     startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
@@ -266,6 +283,7 @@ describe('folder repo git upgrade watch', () => {
     const repoPath = join(root, 'solo')
     await mkdir(repoPath)
     gitInit(repoPath)
+
     const store = makeStore([makeRepo({ id: 'folder-repo', path: repoPath })], {
       [`folder-repo::${repoPath}`]: { displayName: 'solo' }
     })
@@ -395,6 +413,7 @@ describe('folder repo git upgrade watch', () => {
     const pathB = join(root, 'project-b')
     await mkdir(pathA)
     await mkdir(pathB)
+
     const store = makeStore([
       makeRepo({ id: 'repo-a', path: pathA }),
       makeRepo({ id: 'repo-b', path: pathB })
@@ -433,6 +452,7 @@ describe('folder repo git upgrade watch', () => {
     const sshPath = join(root, 'ssh-project')
     await mkdir(sshPath)
     gitInit(sshPath)
+
     const store = makeStore([
       makeRepo({ id: 'ssh-repo', path: sshPath, connectionId: 'conn-1' }),
       makeRepo({ id: 'wsl-repo', path: '\\\\wsl$\\Ubuntu\\home\\user\\project' }),
@@ -454,6 +474,7 @@ describe('folder repo git upgrade watch', () => {
     const repos = store.getRepos()
     store.getRepos = () => {
       listCalls++
+
       return repos
     }
 
@@ -545,11 +566,13 @@ describe('folder repo git upgrade watch', () => {
 
   it('costs one .git stat per folder project per tick and never lists a directory', async () => {
     const paths = ['a', 'b', 'c'].map((name) => join(root, name))
+
     for (const repoPath of paths) {
       await mkdir(repoPath)
       // Sibling dirs a parent-directory scan would have to stat on every tick.
       await mkdir(join(repoPath, 'nested'))
     }
+
     const store = makeStore(
       paths.map((repoPath, index) => makeRepo({ id: `repo-${index}`, path: repoPath }))
     )
@@ -567,6 +590,7 @@ describe('folder repo git upgrade watch', () => {
     const perPath = paths.map(
       (repoPath) => statCalls.filter((call) => call === join(repoPath, '.git')).length
     )
+
     expect(Math.min(...perPath)).toBeGreaterThanOrEqual(2)
     expect(Math.max(...perPath) - Math.min(...perPath)).toBeLessThanOrEqual(1)
     expect(new Set(statCalls)).toEqual(new Set(paths.map((repoPath) => join(repoPath, '.git'))))

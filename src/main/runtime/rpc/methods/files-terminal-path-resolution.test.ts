@@ -19,6 +19,7 @@ describe('files.resolveTerminalPath RPC', () => {
         isDirectory: false
       })
     } as unknown as OrcaRuntimeService
+
     return { runtime, dispatcher: new RpcDispatcher({ runtime, methods: FILE_METHODS }) }
   }
 

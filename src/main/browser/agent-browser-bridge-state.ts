@@ -37,11 +37,13 @@ export abstract class AgentBrowserBridgeState {
     protected readonly options: AgentBrowserBridgeOptions = {}
   ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
+
     const processEnvironment = createAgentBrowserProcessEnvironment({
       inheritedEnv: process.env,
       platform: process.platform,
       userDataPath: app.getPath('userData')
     })
+
     this.agentBrowserEnv = processEnvironment.env
     this.ownsAgentBrowserSocketDirectory = processEnvironment.ownsSocketDirectory
     const idleTimeoutMs = Number(this.agentBrowserEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS)
@@ -56,6 +58,7 @@ export abstract class AgentBrowserBridgeState {
     try {
       const { webContents } = require('electron')
       const target = webContents.fromId(webContentsId)
+
       return target && !target.isDestroyed() ? target : null
     } catch {
       return null

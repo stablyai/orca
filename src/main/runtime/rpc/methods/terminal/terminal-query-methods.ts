@@ -86,6 +86,7 @@ export const TERMINAL_QUERY_METHODS = [
           : {}),
         ...(params.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       }
+
       return {
         process: await runtime.inspectTerminalProcess(
           params.terminal,

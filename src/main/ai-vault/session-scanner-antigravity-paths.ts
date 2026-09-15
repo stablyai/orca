@@ -1,12 +1,15 @@
 import { dirname, join } from 'node:path'
 
 const ANTIGRAVITY_TRANSCRIPT_FILE = 'transcript.jsonl'
+
 const ANTIGRAVITY_SYSTEM_DIR = '.system_generated'
+
 const ANTIGRAVITY_LOGS_DIR = 'logs'
 
 export function antigravityConversationIdFromTranscriptPath(filePath: string): string | null {
   const segments = pathSegments(filePath)
   const transcriptIndex = segments.length - 1
+
   if (
     segments[transcriptIndex] !== ANTIGRAVITY_TRANSCRIPT_FILE ||
     segments[transcriptIndex - 1] !== ANTIGRAVITY_LOGS_DIR ||
@@ -14,6 +17,7 @@ export function antigravityConversationIdFromTranscriptPath(filePath: string): s
   ) {
     return null
   }
+
   return segments[transcriptIndex - 3] ?? null
 }
 
@@ -27,9 +31,11 @@ export function shouldDescendAntigravityBrainDirectory(name: string, depth: numb
   if (depth === 0) {
     return true
   }
+
   if (depth === 1) {
     return name === ANTIGRAVITY_SYSTEM_DIR
   }
+
   return depth === 2 && name === ANTIGRAVITY_LOGS_DIR
 }
 

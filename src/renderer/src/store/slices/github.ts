@@ -23,6 +23,7 @@ import { createStaleWorktreeRefreshActions } from '../github/stale-worktree-refr
 import { createRefreshRoutingActions } from '../github/refresh-routing-actions'
 import { createRefreshEventActions } from '../github/refresh-event-actions'
 import { createRefreshSweepActions } from '../github/refresh-sweep-actions'
+
 export type GitHubSlice = GitHubSliceContract
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -43,6 +44,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   expireGitHubPRRefreshState: (cacheKey, token, now = Date.now()) => {
     const currentState = get()
     const currentRefreshState = currentState.prRefreshStates[cacheKey]
+
     if (
       !currentRefreshState ||
       !ACTIVE_PR_REFRESH_STATUSES.has(currentRefreshState.status) ||
@@ -53,8 +55,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     ) {
       return
     }
+
     set((s) => {
       const state = s.prRefreshStates[cacheKey]
+
       if (
         !state ||
         !ACTIVE_PR_REFRESH_STATUSES.has(state.status) ||
@@ -65,8 +69,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       ) {
         return s
       }
+
       const nextStates = { ...s.prRefreshStates }
       delete nextStates[cacheKey]
+
       return { prRefreshStates: nextStates }
     })
   },
@@ -91,6 +97,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   initGitHubCache: async () => {
     try {
       const persisted = await window.api.cache.getGitHub()
+
       if (persisted) {
         set({
           prCache: evictStaleEntries(persisted.pr || {}),

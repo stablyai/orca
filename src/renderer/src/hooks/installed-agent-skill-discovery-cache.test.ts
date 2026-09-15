@@ -62,6 +62,7 @@ describe('installed agent skill discovery cache', () => {
     // Why: Map.set on an existing key keeps its original insertion order, so a
     // target rescanned on every focus event would still evict ahead of colder ones.
     writeInstalledAgentSkillDiscoveryCache('hot', result(0))
+
     for (let index = 1; index < INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX; index += 1) {
       writeInstalledAgentSkillDiscoveryCache(`target-${index}`, result(index))
     }

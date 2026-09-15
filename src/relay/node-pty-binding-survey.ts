@@ -44,6 +44,7 @@ import {
 
 /** Bounded so a wedged loader delays one spawn rejection, not the relay. */
 const LOAD_PROBE_TIMEOUT_MS = 10_000
+
 const TOOLCHAIN_PROBE_TIMEOUT_MS = 5_000
 
 /** node-pty's own search order, so the file surveyed is the file it would have opened. */
@@ -56,6 +57,7 @@ function bindingBaseName(platform: NodeJS.Platform): string {
   if (platform !== 'win32') {
     return 'pty'
   }
+
   return Number(release().split('.')[2]) >= 18309 ? 'conpty' : 'pty'
 }
 
@@ -66,15 +68,18 @@ export function surveyNodePtyBinding(
   const name = bindingBaseName(host.platform)
   const searched = bindingSearchDirs(host.platform, host.arch)
   let bindingPath: string | null = null
+
   try {
     for (const dir of searched) {
       for (const root of [nodePtyDir, join(nodePtyDir, 'lib')]) {
         const candidate = join(root, dir, `${name}.node`)
+
         if (existsSync(candidate)) {
           bindingPath = candidate
           break
         }
       }
+
       if (bindingPath) {
         break
       }
@@ -82,7 +87,9 @@ export function surveyNodePtyBinding(
   } catch {
     return null
   }
+
   const built = readNodeGypBuildRecord(nodePtyDir)
+
   return {
     moduleDir: nodePtyDir,
     bindingPath,
@@ -106,14 +113,17 @@ export function readNodeGypBuildRecord(nodePtyDir: string): {
 } {
   try {
     const raw = readFileSync(join(nodePtyDir, 'build', 'config.gypi'), 'utf8')
+
     // node-gyp prefixes the JSON with `# Do not edit…` comment lines.
     const body = raw
       .split('\n')
       .filter((line) => !line.trim().startsWith('#'))
       .join('\n')
+
     const variables = (JSON.parse(body) as { variables?: Record<string, unknown> }).variables
     const nodeAbi = variables?.node_module_version
     const arch = variables?.target_arch
+
     return {
       nodeAbi: nodeAbi === undefined || nodeAbi === null ? null : String(nodeAbi),
       arch: typeof arch === 'string' && arch.length > 0 ? arch : null
@@ -133,6 +143,7 @@ async function probeNodePtyLoader(
   nodePtyDir: string
 ): Promise<Pick<NodePtyDiagnosisInput, 'loaderError' | 'probeSignal' | 'unverifiableBecause'>> {
   let result
+
   try {
     result = await runProcess({
       program: process.execPath,
@@ -144,7 +155,9 @@ async function probeNodePtyLoader(
       unverifiableBecause: `the node-pty load probe could not be started (${(error as Error).message})`
     }
   }
+
   const outcome = readNodePtyProbeOutcome(result)
+
   switch (outcome.kind) {
     case 'loaderError':
       return { loaderError: outcome.message }
@@ -169,12 +182,14 @@ async function probeRelayBuildToolchain(
   if (platform !== 'linux') {
     return null
   }
+
   try {
     const result = await runProcess({
       program: '/bin/sh',
       args: ['-c', buildToolchainProbeCommand()],
       timeoutMs: TOOLCHAIN_PROBE_TIMEOUT_MS
     })
+
     return result.timedOut ? null : parseBuildToolchainProbe(result.stdout)
   } catch {
     return null
@@ -185,6 +200,7 @@ function readErrorMessage(error: unknown): string | null {
   if (error instanceof Error) {
     return error.message
   }
+
   return typeof error === 'string' && error.length > 0 ? error : null
 }
 
@@ -199,6 +215,7 @@ export async function collectNodePtyUnavailableDiagnosis(options: {
   const abi = detectNativeHostAbi()
   const host: NodePtyUnavailableHost = { ...abi, nodeVersion: process.version }
   const requireError = readErrorMessage(options.error)
+
   if (!options.nodePtyDir) {
     return diagnoseNodePtyUnavailable({
       host,
@@ -207,9 +224,12 @@ export async function collectNodePtyUnavailableDiagnosis(options: {
       unverifiableBecause: 'the relay could not locate its node-pty install directory'
     })
   }
+
   const survey = surveyNodePtyBinding(options.nodePtyDir, host)
   const probed = survey?.bindingPath ? await probeNodePtyLoader(options.nodePtyDir) : {}
+
   const toolchain =
     survey && !survey.bindingPath ? await probeRelayBuildToolchain(host.platform) : null
+
   return diagnoseNodePtyUnavailable({ ...probed, host, survey, requireError, toolchain })
 }

@@ -29,6 +29,7 @@ export async function readAiVaultFirstUserPrompt(
   args: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
   const filePath = args.filePath.trim()
+
   if (!filePath || !args.agent) {
     return { prompt: null }
   }
@@ -36,6 +37,7 @@ export async function readAiVaultFirstUserPrompt(
   // Why: transcript bodies live on the session host. Remote rows are skipped
   // (same posture as listSubagentSessions); UI falls back to preview text.
   const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { prompt: null }
   }
@@ -43,6 +45,7 @@ export async function readAiVaultFirstUserPrompt(
   // Why: partial/corrupt transcripts make parsers throw. Resolve null like every
   // other unavailable case instead of rejecting the IPC call.
   let session: AiVaultSession | null
+
   try {
     session = await withFullFirstUserPromptCapture(() =>
       parseSessionForFullFirstUserPrompt({
@@ -57,6 +60,7 @@ export async function readAiVaultFirstUserPrompt(
   }
 
   const prompt = session?.firstUserPrompt?.trim() || null
+
   return { prompt }
 }
 
@@ -71,6 +75,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
   // earliest user row (worker list-scan path only joins newest messages).
   if (args.agent === 'opencode') {
     const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
+
     if (fromSynthetic) {
       return parseOpenCodeSqliteSession({
         dbPath: fromSynthetic.dbPath,
@@ -78,6 +83,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
         platform: process.platform
       })
     }
+
     if (args.sessionId) {
       return parseOpenCodeSqliteSession({
         dbPath: args.filePath,
@@ -88,6 +94,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
   }
 
   const file = await fileWithMtimeForPath(args.filePath, args.agent)
+
   if (!file) {
     return null
   }
@@ -121,6 +128,7 @@ async function fileWithMtimeForPath(
     // 'scan' matches the parser this feeds, so the two halves of one re-parse
     // share a lane instead of the stat jumping the live-transcript queue.
     const info = await wslGatedStat(filePath, 'scan')
+
     return {
       path: filePath,
       mtimeMs: info.mtimeMs,

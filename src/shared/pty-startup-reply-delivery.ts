@@ -40,9 +40,11 @@ type ExpectedEcho = { projections: readonly EchoProjection[]; remainingBytes: nu
 // per-read budget is then spent inside the echo itself. This is a backstop against a
 // pathological stream, set well above any splash an echo could arrive behind.
 const ECHO_SEARCH_BUDGET_BYTES = 256 * 1024
+
 // Why far tighter past the deadline: a reply still on the wire at expiry deserves the
 // read or two its echo takes, but nothing beyond it — see reset().
 const ECHO_POST_DEADLINE_BUDGET_BYTES = 512
+
 // Live replies make the queue session-lived, so cap it under query floods.
 const MAX_TRACKED_ECHOES = 64
 
@@ -69,27 +71,35 @@ export class PtyStartupReplyDelivery {
     if (this.closed) {
       return false
     }
+
     const projections = replyEchoProjections(reply, this.ownerBackend)
+
     // Why register before the write: node-pty can synchronously re-enter onData, so the
     // echo can arrive inside `writeProvider` itself.
     const expected: ExpectedEcho | null =
       projections.length > 0 ? { projections, remainingBytes: ECHO_SEARCH_BUDGET_BYTES } : null
+
     if (expected) {
       this.expectedEchoes.push(expected)
     }
+
     try {
       this.writeProvider(reply)
+
       if (this.expectedEchoes.length > MAX_TRACKED_ECHOES) {
         this.expectedEchoes.shift()
       }
+
       return true
     } catch {
       // Why splice by identity, not pop: the write above can re-enter onData and retire a
       // different projection, so the last slot is not necessarily ours.
       const index = expected ? this.expectedEchoes.indexOf(expected) : -1
+
       if (index !== -1) {
         this.expectedEchoes.splice(index, 1)
       }
+
       return false
     }
   }
@@ -98,17 +108,22 @@ export class PtyStartupReplyDelivery {
   matchEcho(data: string): PtyStartupReplyEchoMatch {
     let best: PtyStartupReplyEchoMatch = { kind: 'none' }
     let bestIndex = -1
+
     for (const [index, expected] of this.expectedEchoes.entries()) {
       const match = locateEcho(expected.projections, data)
+
       if (isBetterEchoMatch(match, best)) {
         best = match
         bestIndex = index
       }
     }
+
     if (best.kind === 'complete') {
       this.expectedEchoes.splice(bestIndex, 1)
+
       return best
     }
+
     return best
   }
 
@@ -119,10 +134,13 @@ export class PtyStartupReplyDelivery {
   chargeEchoSearch(byteCount: number): void {
     for (let index = this.expectedEchoes.length - 1; index >= 0; index -= 1) {
       const expected = this.expectedEchoes[index]
+
       if (!expected) {
         continue
       }
+
       expected.remainingBytes -= byteCount
+
       if (expected.remainingBytes <= 0) {
         this.expectedEchoes.splice(index, 1)
       }

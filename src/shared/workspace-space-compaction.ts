@@ -10,6 +10,7 @@ export function compactWorkspaceSpaceItems(items: WorkspaceSpaceItem[]): {
   const sorted = [...items].sort(
     (a, b) => b.sizeBytes - a.sizeBytes || a.name.localeCompare(b.name)
   )
+
   if (sorted.length <= WORKSPACE_SPACE_MAX_TOP_LEVEL_ITEMS) {
     return {
       topLevelItems: sorted,
@@ -20,9 +21,11 @@ export function compactWorkspaceSpaceItems(items: WorkspaceSpaceItem[]): {
 
   const visible = sorted.slice(0, WORKSPACE_SPACE_MAX_TOP_LEVEL_ITEMS - 1)
   let omittedSizeBytes = 0
+
   for (let index = visible.length; index < sorted.length; index += 1) {
     omittedSizeBytes += sorted[index].sizeBytes
   }
+
   const other: WorkspaceSpaceItem = {
     name: 'Other',
     path: '',

@@ -7,9 +7,11 @@ import type {
 export const NESTED_REPO_TELEMETRY_MAX_REPO_COUNT = 500
 
 export const NESTED_REPO_TELEMETRY_SURFACES = ['onboarding', 'sidebar'] as const
+
 export type NestedRepoTelemetrySurface = (typeof NESTED_REPO_TELEMETRY_SURFACES)[number]
 
 export const NESTED_REPO_TELEMETRY_RUNTIME_KINDS = ['local', 'runtime', 'ssh'] as const
+
 export type NestedRepoTelemetryRuntimeKind = (typeof NESTED_REPO_TELEMETRY_RUNTIME_KINDS)[number]
 
 export const NESTED_REPO_SCAN_RESULTS = [
@@ -18,6 +20,7 @@ export const NESTED_REPO_SCAN_RESULTS = [
   'no_nested_repos',
   'scan_failed'
 ] as const
+
 export type NestedRepoScanTelemetryResult = (typeof NESTED_REPO_SCAN_RESULTS)[number]
 
 export const NESTED_REPO_IMPORT_ACTIONS = [
@@ -26,12 +29,15 @@ export const NESTED_REPO_IMPORT_ACTIONS = [
   'open_as_folder',
   'back'
 ] as const
+
 export type NestedRepoImportTelemetryAction = (typeof NESTED_REPO_IMPORT_ACTIONS)[number]
 
 export const NESTED_REPO_IMPORT_OUTCOMES = ['success', 'partial_failure', 'failed'] as const
+
 export type NestedRepoImportTelemetryOutcome = (typeof NESTED_REPO_IMPORT_OUTCOMES)[number]
 
 export const NESTED_REPO_COUNT_BUCKETS = ['0', '1', '2-3', '4-7', '8-15', '16+'] as const
+
 export type NestedRepoCountBucket = (typeof NESTED_REPO_COUNT_BUCKETS)[number]
 
 type NestedRepoTelemetryBase = {
@@ -78,6 +84,7 @@ export function capNestedRepoTelemetryCount(count: number): number {
   if (!Number.isFinite(count)) {
     return 0
   }
+
   return Math.max(0, Math.min(NESTED_REPO_TELEMETRY_MAX_REPO_COUNT, Math.floor(count)))
 }
 
@@ -85,26 +92,33 @@ function normalizeNestedRepoTelemetryCount(count: number): number {
   if (!Number.isFinite(count)) {
     return 0
   }
+
   return Math.max(0, Math.floor(count))
 }
 
 export function bucketNestedRepoTelemetryCount(count: number): NestedRepoCountBucket {
   const capped = capNestedRepoTelemetryCount(count)
+
   if (capped === 0) {
     return '0'
   }
+
   if (capped === 1) {
     return '1'
   }
+
   if (capped <= 3) {
     return '2-3'
   }
+
   if (capped <= 7) {
     return '4-7'
   }
+
   if (capped <= 15) {
     return '8-15'
   }
+
   return '16+'
 }
 
@@ -118,11 +132,13 @@ export function shouldEmitNestedRepoImportSubmitTelemetry(args: {
 
 export function createNestedRepoTelemetryAttemptId(): string {
   const cryptoApi = globalThis.crypto
+
   if (typeof cryptoApi?.randomUUID === 'function') {
     return cryptoApi.randomUUID()
   }
 
   const bytes = new Uint8Array(16)
+
   if (typeof cryptoApi?.getRandomValues === 'function') {
     cryptoApi.getRandomValues(bytes)
   } else {
@@ -135,6 +151,7 @@ export function createNestedRepoTelemetryAttemptId(): string {
   bytes[6] = (bytes[6] & 0x0f) | 0x40
   bytes[8] = (bytes[8] & 0x3f) | 0x80
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`
 }
 
@@ -145,6 +162,7 @@ export function buildNestedRepoScanTelemetry(args: {
   scan: NestedRepoScanResult | null
 }): NestedRepoScanTelemetry {
   const foundCount = capNestedRepoTelemetryCount(args.scan?.repos.length ?? 0)
+
   const result: NestedRepoScanTelemetryResult =
     args.scan === null
       ? 'scan_failed'
@@ -179,6 +197,7 @@ export function buildNestedRepoImportActionTelemetry(args: {
   const rawSelectedCount = normalizeNestedRepoTelemetryCount(args.selectedCount)
   const foundCount = capNestedRepoTelemetryCount(args.foundCount)
   const selectedCount = capNestedRepoTelemetryCount(args.selectedCount)
+
   return {
     attempt_id: args.attemptId,
     surface: args.surface,
@@ -209,6 +228,7 @@ export function buildNestedRepoImportResultTelemetry(args: {
   const alreadyKnownCount = capNestedRepoTelemetryCount(args.result?.alreadyKnownCount ?? 0)
   const failedCount = capNestedRepoTelemetryCount(args.result?.failedCount ?? selectedCount)
   const acceptedCount = importedCount + alreadyKnownCount
+
   const outcome: NestedRepoImportTelemetryOutcome =
     acceptedCount === 0 ? 'failed' : failedCount > 0 ? 'partial_failure' : 'success'
 

@@ -25,14 +25,17 @@ export async function discoverRemoteSourceCandidates(args: {
   const walked = args.source.fixedChildFileSegments
     ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
     : await walkRemoteSessionFiles(args.source, args.context, args.issues)
+
   const partition = args.source.partitionSubagentTranscripts?.(walked) ?? null
   const paths = partition ? partition.sessionFilePaths : walked
+
   const files = await mapRemoteScanBatches(
     paths,
     REMOTE_DISCOVERY_CONCURRENCY,
     (path) => statRemoteCandidateFile(path, args.source, args.context, args.issues),
     args.context.signal
   )
+
   return files
     .filter((file): file is FileWithMtime => Boolean(file))
     .map((file) => ({
@@ -59,10 +62,13 @@ async function statRemoteCandidateFile(
       signal: context.signal
     }
   )
+
   if (!file || !source.contentDependencyPath) {
     return file
   }
+
   const sidecarPath = source.contentDependencyPath(path)
+
   // Recorded beside the transcript's own stat, never folded into it: one key
   // cannot mean both "the transcript grew" and "the sibling changed".
   return { ...file, sidecar: await observeRemoteSidecar(source, context, sidecarPath, issues) }
@@ -89,6 +95,7 @@ async function observeRemoteSidecar(
       issues,
       { missingIsExpected: true, signal: context.signal, rethrowFailures: true }
     )
+
     return sidecar
       ? { path: sidecarPath, mtimeMs: sidecar.mtimeMs, sizeBytes: sidecar.sizeBytes ?? 0 }
       : 'none'
@@ -104,14 +111,18 @@ async function listRemoteFixedChildFiles(
 ): Promise<string[]> {
   throwIfAiVaultScanCancelled(context.signal)
   let entries
+
   try {
     entries = await context.provider.readDir(source.rootDir)
   } catch (err) {
     throwIfAiVaultScanCancelled(context.signal)
     recordRemoteDirectoryIssue(source, context.executionHostId, issues, source.rootDir, err)
+
     return []
   }
+
   const segments = source.fixedChildFileSegments ?? []
+
   // Why: Antigravity's transcript path is fixed. Constructing it avoids three
   // serialized SSH readDir round trips for every conversation directory.
   return entries
@@ -129,19 +140,23 @@ async function walkRemoteSessionFiles(
 ): Promise<string[]> {
   throwIfAiVaultScanCancelled(context.signal)
   let entries
+
   try {
     entries = await context.provider.readDir(dirPath)
   } catch (err) {
     throwIfAiVaultScanCancelled(context.signal)
     recordRemoteDirectoryIssue(source, context.executionHostId, issues, dirPath, err)
+
     return []
   }
 
   const extensions = new Set(source.extensions)
   const files: string[] = []
+
   for (const entry of entries) {
     throwIfAiVaultScanCancelled(context.signal)
     const fullPath = joinRemotePath(context.hostPlatform, dirPath, entry.name)
+
     if (
       entry.isDirectory &&
       !entry.isSymlink &&
@@ -150,6 +165,7 @@ async function walkRemoteSessionFiles(
       files.push(...(await walkRemoteSessionFiles(source, context, issues, fullPath, depth + 1)))
       continue
     }
+
     if (
       !entry.isSymlink &&
       extensions.has(extname(entry.name).toLowerCase()) &&
@@ -158,6 +174,7 @@ async function walkRemoteSessionFiles(
       files.push(fullPath)
     }
   }
+
   return files
 }
 

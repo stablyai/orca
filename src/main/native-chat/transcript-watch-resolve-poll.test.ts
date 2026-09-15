@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HostReadableTranscriptPathModule from './host-readable-transcript-path'
+
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),
   observe: vi.fn(),
@@ -14,14 +15,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./session-file-resolver', () => ({
   resolveSessionFilePath: mocks.resolve
 }))
+
 vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install
 }))
+
 vi.mock('./host-readable-transcript-path', async (importOriginal) => {
   const actual = await importOriginal<typeof HostReadableTranscriptPathModule>()
+
   return { ...actual, toHostReadableTranscriptPath: mocks.toHostReadable }
 })
+
 vi.mock('./wsl-transcript-running-observer', () => ({
   observeRunningWslDistros: mocks.observe
 }))
@@ -44,6 +49,7 @@ describe('native chat transcript resolve polling', () => {
     mocks.stopObservation.mockReset()
     mocks.observe.mockReset().mockImplementation((callback) => {
       mocks.observation = callback
+
       return mocks.stopObservation
     })
     mocks.toHostReadable.mockReset().mockResolvedValue(null)
@@ -66,6 +72,7 @@ describe('native chat transcript resolve polling', () => {
       resolvePollIntervalMs: 10,
       onAppend: () => {}
     })
+
     expect(mocks.resolve).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(100)
@@ -83,6 +90,7 @@ describe('native chat transcript resolve polling', () => {
 
   it('retries WSL translation from shared observations, never installing the raw guest path', async () => {
     setPlatform('win32')
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'session-id',
@@ -153,6 +161,7 @@ describe('native chat transcript resolve polling', () => {
       resolvePollIntervalMs: 10,
       onAppend: () => {}
     })
+
     expect(subscription.watching).toBe(true)
 
     await vi.advanceTimersByTimeAsync(20)
@@ -185,6 +194,7 @@ describe('native chat transcript resolve polling', () => {
           deps.signal?.addEventListener('abort', () => reject(deps.signal?.reason), { once: true })
         })
     )
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'session-id',
@@ -211,6 +221,7 @@ describe('native chat transcript resolve polling', () => {
     )
     const controller = new AbortController()
     const cancelled = new Error('setup cancelled')
+
     const setup = subscribeNativeChatTranscript(
       {
         agent: 'codex',
@@ -228,9 +239,11 @@ describe('native chat transcript resolve polling', () => {
 
   it('tears down a watcher returned after initial setup is cancelled', async () => {
     mocks.resolve.mockResolvedValue('/transcript.jsonl')
+
     const installControl: {
       finish?: (subscription: { unsubscribe: () => void; watching: boolean }) => void
     } = {}
+
     const unsubscribe = vi.fn()
     mocks.install.mockImplementation(
       () =>
@@ -240,6 +253,7 @@ describe('native chat transcript resolve polling', () => {
     )
     const controller = new AbortController()
     const cancelled = new Error('setup cancelled')
+
     const setup = subscribeNativeChatTranscript(
       {
         agent: 'codex',
@@ -248,6 +262,7 @@ describe('native chat transcript resolve polling', () => {
       },
       controller.signal
     )
+
     await vi.waitFor(() => expect(mocks.install).toHaveBeenCalledOnce())
 
     controller.abort(cancelled)

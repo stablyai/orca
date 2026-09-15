@@ -54,8 +54,10 @@ export class RelayReconnectListener {
     if (this.credentialFile !== undefined && !this.endpointCredentialPublished) {
       relayLogLine('[relay] Client arrived before the endpoint credential was published; refusing')
       socket.destroy()
+
       return
     }
+
     setupDaemonHandshake(socket, {
       launchVersion: this.launchVersion,
       endpointCredential: this.endpointCredential,
@@ -82,15 +84,18 @@ export class RelayReconnectListener {
     this.callbacks.cancelGrace('socket client accepted')
 
     const drainWaiters = new Set<() => void>()
+
     const flushDrainWaiters = (): void => {
       for (const callback of Array.from(drainWaiters)) {
         drainWaiters.delete(callback)
         callback()
       }
     }
+
     socket.on('drain', flushDrainWaiters)
     socket.on('close', flushDrainWaiters)
     socket.on('error', flushDrainWaiters)
+
     const clientId = this.dispatcher.attachClient(
       (data, onSettled) => {
         if (!socket.destroyed) {
@@ -98,7 +103,9 @@ export class RelayReconnectListener {
             onSettled(error ? { ok: false, error } : { ok: true })
           })
         }
+
         onSettled({ ok: false, error: new Error('Relay socket is closed') })
+
         return false
       },
       {
@@ -109,9 +116,12 @@ export class RelayReconnectListener {
         waitWriteDrain: (callback) => {
           if (socket.destroyed) {
             callback()
+
             return
           }
+
           drainWaiters.add(callback)
+
           return () => drainWaiters.delete(callback)
         }
       },
@@ -123,10 +133,13 @@ export class RelayReconnectListener {
       },
       { pauseReads: () => socket.pause(), resumeReads: () => socket.resume() }
     )
+
     this.socketClients.set(socket, clientId)
+
     if (leftover.length > 0) {
       this.dispatcher.feedClient(clientId, leftover)
     }
+
     socket.on('data', (chunk: Buffer) => {
       this.callbacks.cancelGrace('socket client data')
       this.dispatcher.feedClient(clientId, chunk)
@@ -136,10 +149,13 @@ export class RelayReconnectListener {
   private handleSocketClose(socket: Socket): void {
     const clientId = this.socketClients.get(socket)
     this.socketClients.delete(socket)
+
     if (clientId !== undefined) {
       this.dispatcher.detachClient(clientId, 'peer-closed')
     }
+
     relayLogLine(`[relay] Socket client closed (clients=${this.socketClients.size})`)
+
     if (this.socketClients.size === 0) {
       this.callbacks.onLastClientClosed()
     }

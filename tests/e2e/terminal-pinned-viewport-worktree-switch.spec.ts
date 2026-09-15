@@ -40,6 +40,7 @@ async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
     store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -55,17 +56,21 @@ async function pinActiveTerminalNearBottom(page: Page): Promise<{
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!tabId || !pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const target = pane.container.querySelector<HTMLElement>('.xterm') ?? pane.container
     target.dispatchEvent(
       new WheelEvent('wheel', {
@@ -81,6 +86,7 @@ async function pinActiveTerminalNearBottom(page: Page): Promise<{
     pane.container
       .querySelector<HTMLElement>('.xterm-viewport')
       ?.dispatchEvent(new Event('scroll', { bubbles: true }))
+
     return { tabId, targetViewportY, baseY: buffer.baseY }
   })
 }
@@ -95,10 +101,12 @@ async function sampleTerminalViewportDuringReturn(
       new Promise<ViewportSample[]>((resolve) => {
         const samples: ViewportSample[] = []
         const startedAt = performance.now()
+
         const sample = (): void => {
           const manager = window.__paneManagers?.get(tabId)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
           const buffer = pane?.terminal?.buffer?.active
+
           if (buffer) {
             samples.push({
               at: Math.round(performance.now() - startedAt),
@@ -106,12 +114,16 @@ async function sampleTerminalViewportDuringReturn(
               baseY: buffer.baseY
             })
           }
+
           if (performance.now() - startedAt >= durationMs) {
             resolve(samples)
+
             return
           }
+
           requestAnimationFrame(sample)
         }
+
         requestAnimationFrame(sample)
       }),
     { tabId, durationMs }
@@ -126,10 +138,13 @@ test.describe('Terminal pinned viewport worktree switch', () => {
     await waitForSessionReady(orcaPage)
     await closeFeatureTips(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'pinned viewport repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }

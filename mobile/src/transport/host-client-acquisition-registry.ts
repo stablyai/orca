@@ -5,22 +5,28 @@ export class HostClientAcquisitionRegistry {
 
   acquire(hostId: string, acquisition: HostClientAcquisition): number {
     let active = this.acquisitions.get(hostId)
+
     if (!active) {
       active = new Set()
       this.acquisitions.set(hostId, active)
     }
+
     active.add(acquisition)
+
     return active.size
   }
 
   release(hostId: string, acquisition: HostClientAcquisition): number | null {
     const active = this.acquisitions.get(hostId)
+
     if (!active?.delete(acquisition)) {
       return null
     }
+
     if (active.size === 0) {
       this.acquisitions.delete(hostId)
     }
+
     return active.size
   }
 

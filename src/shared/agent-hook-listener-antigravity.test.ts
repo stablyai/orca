@@ -40,6 +40,7 @@ describe('shared agent-hook-listener', () => {
         },
         'production'
       )
+
       expect(started?.payload, `payload ${JSON.stringify(payload)}`).toMatchObject({
         state: 'working',
         agentType: 'antigravity'
@@ -61,6 +62,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(started?.payload).toMatchObject({ state: 'working', agentType: 'antigravity' })
   })
 
@@ -111,6 +113,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(started?.payload).toMatchObject({
       state: 'working',
       prompt: 'run tests',
@@ -133,6 +136,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool?.payload).toMatchObject({
       state: 'working',
       prompt: 'run tests',
@@ -168,6 +172,7 @@ describe('shared agent-hook-listener', () => {
   it('reads Antigravity user requests from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
+
     try {
       writeFileSync(
         transcriptPath,
@@ -206,6 +211,7 @@ describe('shared agent-hook-listener', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-large-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
     const requestText = 'Fix the failing test\n'.repeat(300)
+
     try {
       writeFileSync(
         transcriptPath,
@@ -230,12 +236,14 @@ describe('shared agent-hook-listener', () => {
       expect(started?.payload.prompt).toContain('Fix the failing test')
       expect(started?.payload.prompt).not.toContain('<USER_REQUEST>')
       expect(started?.payload.prompt).not.toContain('</USER_REQUEST>')
+
       const usedRequestWrapperMatch = matchSpy.mock.calls.some(
         ([pattern]) =>
           pattern instanceof RegExp &&
           pattern.source.includes('<USER_REQUEST>') &&
           pattern.source.includes('[\\s\\S]')
       )
+
       expect(usedRequestWrapperMatch).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
@@ -245,6 +253,7 @@ describe('shared agent-hook-listener', () => {
   it('keeps the cached Antigravity prompt instead of rescanning the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-cached-prompt-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
+
     try {
       writeFileSync(
         transcriptPath,
@@ -265,6 +274,7 @@ describe('shared agent-hook-listener', () => {
         },
         'production'
       )
+
       expect(started?.payload.prompt).toBe('First request')
 
       writeFileSync(
@@ -310,6 +320,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(question?.payload).toMatchObject({
       state: 'waiting',
       agentType: 'antigravity',
@@ -332,6 +343,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(permission?.payload).toMatchObject({
       state: 'waiting',
       agentType: 'antigravity',
@@ -377,6 +389,7 @@ describe('shared agent-hook-listener', () => {
   it('normalizes Antigravity Stop hooks and reads final text from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-transcript-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
+
     try {
       writeFileSync(
         transcriptPath,
@@ -432,6 +445,7 @@ describe('shared agent-hook-listener', () => {
 
   it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
     const transcriptPath = '/tmp/antigravity-non-idle-transcript.jsonl'
+
     const stop = normalizeHookPayload(
       state,
       'antigravity',
@@ -442,6 +456,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(stop?.payload.state).toBe('working')
 
     const nextTool = normalizeHookPayload(
@@ -468,6 +483,7 @@ describe('shared agent-hook-listener', () => {
 
   it('ignores late Antigravity tool hooks after a completed Stop for the same transcript', () => {
     const transcriptPath = '/tmp/antigravity-transcript.jsonl'
+
     const done = normalizeHookPayload(
       state,
       'antigravity',
@@ -478,6 +494,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(done?.payload.state).toBe('done')
 
     const lateTool = normalizeHookPayload(

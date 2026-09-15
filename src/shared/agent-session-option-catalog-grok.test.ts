@@ -12,6 +12,7 @@ import { parseBuiltSessionOptionCommand } from './native-chat-session-option-com
 
 function grokEffortOption(modelId = 'grok-4.6'): CatalogOption {
   const model = GROK_SESSION_OPTION_CATALOG.models.find((candidate) => candidate.id === modelId)!
+
   return model.options.find((option) => option.id === 'effort')!
 }
 
@@ -56,6 +57,7 @@ describe('grok session option catalog', () => {
 
   it('offers only effort values the shared option labels localize', () => {
     const localized = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+
     for (const model of GROK_SESSION_OPTION_CATALOG.models) {
       for (const value of effortValues(grokEffortOption(model.id))) {
         expect(localized).toContain(value)
@@ -72,6 +74,7 @@ describe('grok session option catalog', () => {
 
   it('treats a successful discovery as authoritative, unlike the other agents', () => {
     expect(GROK_SESSION_OPTION_CATALOG.discoveredModelsAreAuthoritative).toBe(true)
+
     for (const agent of ['claude', 'codex', 'gemini', 'cursor'] as const) {
       expect(getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative).toBeUndefined()
     }
@@ -242,9 +245,11 @@ describe('grok agentArgsOverride', () => {
 describe('grok mid-session commands', () => {
   it('round-trips the model command through the built-command parser', () => {
     const midSession = GROK_SESSION_OPTION_CATALOG.modelApply.midSession!
+
     if (midSession.kind !== 'command') {
       throw new Error('grok model changes must be a typed command, not an agent picker')
     }
+
     expect(midSession.build('grok-4.5')).toBe('/model grok-4.5')
     expect(parseBuiltSessionOptionCommand(midSession.build, '/model grok-4.5')).toBe('grok-4.5')
     expect(parseBuiltSessionOptionCommand(midSession.build, '/effort low')).toBeNull()
@@ -252,9 +257,11 @@ describe('grok mid-session commands', () => {
 
   it('round-trips the effort command', () => {
     const midSession = grokEffortOption().apply.midSession!
+
     if (midSession.kind !== 'command') {
       throw new Error('grok effort changes must be a typed command')
     }
+
     expect(midSession.build('low')).toBe('/effort low')
     expect(parseBuiltSessionOptionCommand(midSession.build, '/effort low')).toBe('low')
     expect(parseBuiltSessionOptionCommand(midSession.build, '/effort ')).toBeNull()
@@ -263,10 +270,13 @@ describe('grok mid-session commands', () => {
 
 describe('mergeDiscoveredAuthoritativeModels', () => {
   const seed = GROK_SESSION_OPTION_CATALOG.models
+
   const discovered = (...ids: string[]): CatalogModel[] =>
     ids.map((id) => ({ id, label: id, options: [] }))
+
   const mergedEffortValues = (model: CatalogModel): string[] => {
     const effort = model.options.find((option) => option.id === 'effort')
+
     return effort?.kind.type === 'select' ? effort.kind.choices.map((choice) => choice.value) : []
   }
 
@@ -274,6 +284,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
     const merged = mergeDiscoveredAuthoritativeModels(seed, [
       { id: 'grok-4.5', label: 'Grok 4.5 (live)', options: [] }
     ])
+
     expect(merged).toHaveLength(1)
     expect(merged[0]).toMatchObject({ id: 'grok-4.5', label: 'Grok 4.5 (live)' })
     // Its own narrower menu, not the default row's — 4.5 has no xhigh tier.
@@ -287,6 +298,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
       { id: 'grok-4.5', label: 'Grok 4.5', options: [] },
       { id: 'grok-5', label: 'Grok 5', isDefault: true, options: [] }
     ])
+
     expect(merged.map(({ id, isDefault }) => [id, isDefault])).toEqual([
       ['grok-4.5', undefined],
       ['grok-5', true]
@@ -305,6 +317,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
       { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true, options: seed[0].options },
       { id: 'grok-lite', label: 'Grok Lite', options: [] }
     ]
+
     const merged = mergeDiscoveredAuthoritativeModels(multiSeed, discovered('grok-lite'))
     expect(merged.map(({ id }) => id)).toEqual(['grok-lite'])
     expect(merged[0].options).toEqual([])
@@ -329,6 +342,7 @@ describe('mergeDiscoveredAuthoritativeModels', () => {
       { id: 'legacy', label: 'Legacy', options: [] },
       { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true, options: seed[0].options }
     ]
+
     const merged = mergeDiscoveredAuthoritativeModels(multiSeed, discovered('grok-build'))
     expect(merged[0].options.map(({ id }) => id)).toEqual(['effort'])
   })

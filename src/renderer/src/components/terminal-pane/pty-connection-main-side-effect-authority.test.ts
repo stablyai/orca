@@ -39,8 +39,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -61,6 +64,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -70,6 +74,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -90,6 +95,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -100,9 +106,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -112,9 +120,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -123,6 +133,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -184,9 +195,11 @@ describe('connectPanePty', () => {
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
 
       expect(createdTransportOptions[0]).toBeDefined()
+
       for (const callback of SIDE_EFFECT_PARSER_CALLBACKS) {
         expect(createdTransportOptions[0]?.[callback]).toBeUndefined()
       }
+
       // Lifecycle callbacks stay on the transport; only side-effect parsing moves to the fact consumer.
       expect(createdTransportOptions[0]?.onPtySpawn).toBeTypeOf('function')
       expect(createdTransportOptions[0]?.onPtyExit).toBeTypeOf('function')
@@ -203,6 +216,7 @@ describe('connectPanePty', () => {
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
 
       expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))
+
       for (const callback of SIDE_EFFECT_PARSER_CALLBACKS) {
         expect(createdTransportOptions[0]?.[callback]).toBeTypeOf('function')
       }
@@ -254,11 +268,13 @@ describe('connectPanePty', () => {
       transportFactoryQueue.push(transport)
 
       const deps = createDeps()
+
       const binding = connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
         deps as never
       )
+
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
       onPtySpawn('pty-fact-2')
 
@@ -407,6 +423,7 @@ describe('connectPanePty', () => {
         slug: { owner: 'acme', repo: 'orca' },
         number: 42
       }
+
       handler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-fact-pr',
         seq: 1,
@@ -424,6 +441,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-authority-bytes'
         }
       )
@@ -500,6 +518,7 @@ describe('connectPanePty', () => {
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
       const paneKey = makePaneKey('tab-1', LEAF_1)
+
       const claudeStatus = {
         paneKey,
         state: 'done' as const,
@@ -509,6 +528,7 @@ describe('connectPanePty', () => {
         agentType: 'claude' as const,
         stateHistory: []
       }
+
       mockStoreState.tabsByWorktree = {
         'wt-1': [{ id: 'tab-1', ptyId: null, launchAgent: 'claude' }]
       }
@@ -545,6 +565,7 @@ describe('connectPanePty', () => {
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
       const paneKey = makePaneKey('tab-1', LEAF_1)
+
       const unknownStatus = {
         paneKey,
         state: 'working' as const,
@@ -554,6 +575,7 @@ describe('connectPanePty', () => {
         agentType: 'unknown' as const,
         stateHistory: []
       }
+
       mockStoreState.retainedAgentsByPaneKey[paneKey] = { agentType: 'claude' }
       mockStoreState.agentStatusByPaneKey[paneKey] = unknownStatus
 
@@ -623,6 +645,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-authority-cc-bytes'
         }
       )
@@ -659,6 +682,7 @@ describe('connectPanePty', () => {
       for (const callback of SIDE_EFFECT_PARSER_CALLBACKS) {
         expect(createdTransportOptions[0]?.[callback]).toBeTypeOf('function')
       }
+
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
       onPtySpawn('pty-prehydration')
 

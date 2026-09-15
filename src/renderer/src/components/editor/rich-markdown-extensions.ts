@@ -64,6 +64,7 @@ export function createRichMarkdownExtensions({
   if (htmlSuperscriptLinks && !htmlSuperscriptLinkContext) {
     throw new Error('HTML superscript links require a document interaction context')
   }
+
   const extensions: AnyExtension[] = [
     // Why: rich-mode detection must use the exact same markdown extension set as
     // the live editor. If these drift, Orca can claim a document is editable in
@@ -122,11 +123,13 @@ export function createRichMarkdownExtensions({
 
           const img = document.createElement('img')
           img.draggable = false
+
           for (const [key, value] of Object.entries(HTMLAttributes)) {
             if (key !== 'src' && value != null && value !== false) {
               img.setAttribute(key, String(value))
             }
           }
+
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
@@ -137,20 +140,26 @@ export function createRichMarkdownExtensions({
             releaseImageLease?.()
             releaseImageLease = undefined
             const fp = this.storage.filePath as string
+
             const runtimeContext = this.storage.runtimeContext as
               | RuntimeFileOperationArgs
               | undefined
+
             const contextVersionAtLoad = getImageContextVersion(this.storage)
+
             if (src && fp) {
               releaseImageLease = acquireLocalImageSrcLease(src, fp, undefined, runtimeContext)
               void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
                 if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
                   return
                 }
+
                 if (resolved) {
                   img.src = resolved
+
                   return
                 }
+
                 // Why: local image paths must stay behind IPC/runtime
                 // authorization; a failed load should render missing, not
                 // hand the raw path back to Chromium.
@@ -171,11 +180,14 @@ export function createRichMarkdownExtensions({
           const unsubscribe = onImageCacheInvalidated(() => {
             loadImage(currentSrc)
           })
+
           const reloadForContextChange = (): void => {
             currentContextVersion = getImageContextVersion(this.storage)
             loadImage(currentSrc)
           }
+
           const reloadListeners = this.storage.reloadListeners
+
           if (reloadListeners instanceof Set) {
             reloadListeners.add(reloadForContextChange)
           }
@@ -186,20 +198,25 @@ export function createRichMarkdownExtensions({
               if (updatedNode.type.name !== 'image') {
                 return false
               }
+
               const newSrc = updatedNode.attrs.src as string | undefined
               const nextContextVersion = getImageContextVersion(this.storage)
+
               if (newSrc !== currentSrc || nextContextVersion !== currentContextVersion) {
                 currentSrc = newSrc
                 currentContextVersion = nextContextVersion
                 loadImage(newSrc)
               }
+
               return true
             },
             destroy: () => {
               releaseImageLease?.()
+
               if (reloadListeners instanceof Set) {
                 reloadListeners.delete(reloadForContextChange)
               }
+
               unsubscribe()
             }
           }
@@ -266,5 +283,6 @@ export function createRichMarkdownExtensions({
 
 function getImageContextVersion(storage: Record<string, unknown>): number {
   const version = storage.contextVersion
+
   return typeof version === 'number' ? version : 0
 }

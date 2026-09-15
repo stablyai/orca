@@ -27,22 +27,27 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       if (candidate.type !== 'markdown') {
         return true
       }
+
       // Why: the tab list's isDirty can lag behind a phone draft; the local
       // markdown doc state is the authority on unsaved edits.
       const doc = deps.markdownDocs.get(candidate.id)
+
       return !(doc?.status === 'ready' && doc.isDirty)
     })
 
   const bulkClose = async (anchor: MobileSessionTab, mode: BulkTabCloseMode) => {
     const targets = selectClosable(anchor.id, mode)
+
     const activeWasTargeted = targets.some(
       (candidate) => candidate.id === deps.activeSessionTabIdRef.current
     )
+
     // Why: activate the anchor before the per-tab close round-trips so the user
     // never sits on a dying tab or an empty pane while the loop runs.
     if (activeWasTargeted) {
       deps.switchSessionTab(anchor)
     }
+
     for (const target of targets) {
       await deps.closeSessionTab(target)
     }
@@ -53,9 +58,11 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       anchorTabId == null
         ? undefined
         : deps.sessionTabsRef.current.find((candidate) => candidate.id === anchorTabId)
+
     if (!anchor) {
       return []
     }
+
     return BULK_TAB_CLOSE_ACTIONS.filter(
       ({ mode }) => selectClosable(anchor.id, mode).length > 0
     ).map(({ mode, label }) => ({
@@ -83,6 +90,7 @@ export function createCloseWithBulkActions(
       destructive: true,
       onPress: () => {
         dismiss()
+
         if (target) {
           void closeSessionTab(target)
         }

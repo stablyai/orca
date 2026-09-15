@@ -9,12 +9,19 @@ import { OrcaRuntimeService } from './orca-runtime'
 // Folder projects back several workspaces with ONE directory; only the
 // `::workspace:<uuid>` suffix separates them, so runtime PTY identity must keep it.
 const REPO_ID = 'repo-1'
+
 const FOLDER_PATH = '/tmp/folder-project'
+
 const ROOT_ID = `${REPO_ID}::${FOLDER_PATH}`
+
 const WORKSPACE_A = `${ROOT_ID}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`
+
 const WORKSPACE_B = `${ROOT_ID}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`
+
 const PTY_A = `${WORKSPACE_A}@@pty-a`
+
 const PTY_B = `${WORKSPACE_B}@@pty-b`
+
 const LEAF_B = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
 const REPO = {
@@ -66,6 +73,7 @@ function createRuntimeInternals(
     [WORKSPACE_A]: { hostId: 'local' },
     [WORKSPACE_B]: { hostId: 'local' }
   }
+
   const store = {
     getRepos: () => [REPO],
     getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
@@ -73,18 +81,21 @@ function createRuntimeInternals(
     getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
     setWorktreeMeta: (worktreeId: string, patch: Record<string, unknown>) => {
       meta[worktreeId] = { ...meta[worktreeId], ...patch }
+
       return meta[worktreeId]
     },
     getWorkspaceSession: () => options.session ?? getDefaultWorkspaceSession(),
     setWorkspaceSession: () => {},
     flushOrThrow: () => {}
   } as never
+
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     stopAndWait: async (ptyId: string) => {
       runtime.onPtyExit(ptyId, -1)
+
       return true
     },
     getForegroundProcess: async () => null,
@@ -93,6 +104,7 @@ function createRuntimeInternals(
         ? (options.processLists.shift() ?? [])
         : (options.sessions ?? OWNED_CONTROLLER_SESSIONS)
   } as never)
+
   return runtime as unknown as RuntimeInternals
 }
 
@@ -110,6 +122,7 @@ async function raceAgainstMicrotaskDrain(pending: Promise<unknown>): Promise<str
 describe('folder workspaces sharing one directory', () => {
   it('keeps each workspace instance bound to its own controller PTY', async () => {
     const internals = createRuntimeInternals()
+
     const resolvedWorktrees = [WORKSPACE_A, WORKSPACE_B].map((id) =>
       internals.buildResolvedWorktreeFromId(id)
     )
@@ -122,6 +135,7 @@ describe('folder workspaces sharing one directory', () => {
 
   it('selects only the targeted workspace instance from a controller inventory', async () => {
     const internals = createRuntimeInternals()
+
     const resolvedWorktrees = [WORKSPACE_A, WORKSPACE_B].map((id) =>
       internals.buildResolvedWorktreeFromId(id)
     )
@@ -138,12 +152,14 @@ describe('folder workspaces sharing one directory', () => {
     const firstId = `${ROOT_ID}/duplicate/`
     const equivalentId = `${ROOT_ID}/duplicate`
     const laterId = `${ROOT_ID}/later`
+
     const internals = createRuntimeInternals({
       sessions: [
         { id: 'later-owner-pty', worktreeId: laterId, cwd: FOLDER_PATH, title: 'shell' },
         { id: 'duplicate-owner-pty', worktreeId: equivalentId, cwd: FOLDER_PATH, title: 'shell' }
       ]
     })
+
     const resolvedWorktrees = [firstId, equivalentId, laterId].map((id) =>
       internals.buildResolvedWorktreeFromId(id)
     )
@@ -155,20 +171,26 @@ describe('folder workspaces sharing one directory', () => {
 
   it('stops indexing after a sparse owner match', async () => {
     const ownerId = `${ROOT_ID}/first`
+
     const internals = createRuntimeInternals({
       sessions: [{ id: 'sparse-owner-pty', worktreeId: ownerId, cwd: FOLDER_PATH, title: 'shell' }]
     })
+
     let identityReads = 0
+
     const resolvedWorktrees = [ownerId, `${ROOT_ID}/unused-a`, `${ROOT_ID}/unused-b`].map((id) => {
       const worktree = internals.buildResolvedWorktreeFromId(id)
+
       if (!worktree || typeof worktree !== 'object') {
         throw new Error(`Failed to resolve ${id}`)
       }
+
       return Object.defineProperty(worktree, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           identityReads += 1
+
           return id
         }
       })
@@ -183,13 +205,17 @@ describe('folder workspaces sharing one directory', () => {
   it('keeps parsed and raw identity domains distinct', async () => {
     const parsedId = `${ROOT_ID}/collision`
     const rawId = `${REPO_ID}\0${FOLDER_PATH}/collision`
+
     const internals = createRuntimeInternals({
       sessions: [{ id: 'raw-owner-pty', worktreeId: rawId, cwd: FOLDER_PATH, title: 'shell' }]
     })
+
     const parsedWorktree = internals.buildResolvedWorktreeFromId(parsedId)
+
     if (!parsedWorktree || typeof parsedWorktree !== 'object') {
       throw new Error(`Failed to resolve ${parsedId}`)
     }
+
     const rawWorktree = { ...parsedWorktree, id: rawId }
 
     await internals.refreshPtyWorktreeRecordsWithControllerInventory([parsedWorktree, rawWorktree])
@@ -199,10 +225,12 @@ describe('folder workspaces sharing one directory', () => {
 
   it('bounds provider and persisted worktree resolution to linear identity reads', async () => {
     const worktreeCount = 128
+
     const worktreeIds = Array.from(
       { length: worktreeCount },
       (_, index) => `${ROOT_ID}/worktree-${index}`
     )
+
     const persistedSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: Object.fromEntries(
@@ -219,6 +247,7 @@ describe('folder workspaces sharing one directory', () => {
         ])
       ) as never
     }
+
     const internals = createRuntimeInternals({
       session: persistedSession,
       sessions: worktreeIds.map((worktreeId, index) => ({
@@ -228,17 +257,22 @@ describe('folder workspaces sharing one directory', () => {
         title: 'shell'
       }))
     })
+
     let identityReads = 0
+
     const resolvedWorktrees = worktreeIds.map((id) => {
       const worktree = internals.buildResolvedWorktreeFromId(id)
+
       if (!worktree || typeof worktree !== 'object') {
         throw new Error(`Failed to resolve ${id}`)
       }
+
       return Object.defineProperty(worktree, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           identityReads += 1
+
           return id
         }
       })
@@ -267,6 +301,7 @@ describe('folder workspaces sharing one directory', () => {
 
   it('resolves a persisted terminal surface while a sibling instance also has tabs', () => {
     const paneKey = makePaneKey('tab-b', LEAF_B)
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -278,6 +313,7 @@ describe('folder workspaces sharing one directory', () => {
       } as never,
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-b' }
     }
+
     const internals = createRuntimeInternals({ session })
 
     expect(
@@ -295,6 +331,7 @@ describe('folder workspaces sharing one directory', () => {
     const internals = createRuntimeInternals({
       sessions: [{ id: 'legacy-cwd-pty', cwd: `${FOLDER_PATH}/src`, title: 'legacy' }]
     })
+
     const resolvedWorktrees = [WORKSPACE_A, WORKSPACE_B].map((id) =>
       internals.buildResolvedWorktreeFromId(id)
     )
@@ -312,6 +349,7 @@ describe('folder workspaces sharing one directory', () => {
     const internals = createRuntimeInternals({
       processLists: [[{ id: PTY_A, worktreeId: WORKSPACE_A, cwd: FOLDER_PATH, title: 'a' }], []]
     })
+
     const events: RuntimeClientEvent[] = []
     internals.onClientEvent((event) => events.push(event))
 

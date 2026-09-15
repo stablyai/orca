@@ -10,14 +10,20 @@ import {
 import { FEATURE_WALL_SETUP_STEP_IDS } from './feature-wall-setup-steps'
 
 export const featureEducationSourceSchema = z.enum(FEATURE_EDUCATION_SOURCES)
+
 export const featureEducationContextualTourIdSchema = z.enum(FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS)
+
 export const setupGuideSourceSchema = z.enum(SETUP_GUIDE_SOURCES)
+
 export const setupGuideCloseOutcomeSchema = z.enum(SETUP_GUIDE_CLOSE_OUTCOMES)
+
 export const setupGuideStepIdSchema = z.enum(FEATURE_WALL_SETUP_STEP_IDS)
+
 export const setupGuideStepIdOrNoneSchema = z.enum([
   ...FEATURE_WALL_SETUP_STEP_IDS,
   'none'
 ] as const)
+
 export const terminalPaneSplitSourceSchema = z.enum(TERMINAL_PANE_SPLIT_SOURCES)
 
 export const contextualTourShownSchema = z
@@ -121,7 +127,9 @@ export const editorExternalChangeConflictActionSchema = z
   .strict()
 
 export const directSshReconnectCountSchema = z.number().int().min(0).max(1_000_000)
+
 export const directSshReconnectDurationSchema = z.number().int().min(0).max(86_400_000)
+
 export const directSshReconnectOperationSchema = z
   .object({
     mode: z.enum(['reconnect', 'prepare_only']),

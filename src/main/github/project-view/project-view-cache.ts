@@ -15,12 +15,16 @@ function rememberProjectViewCacheEntry<K, V>(
   if (cache.has(key)) {
     cache.delete(key)
   }
+
   cache.set(key, value)
+
   while (cache.size > maxEntries) {
     const oldest = cache.keys().next()
+
     if (oldest.done) {
       break
     }
+
     cache.delete(oldest.value)
   }
 }
@@ -29,16 +33,21 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
   if (!cache.has(key)) {
     return undefined
   }
+
   const value = cache.get(key) as V
   rememberProjectViewCacheEntry(cache, key, value)
+
   return value
 }
 
 // Why: plain module locals so HMR code swaps re-run capability probes instead of carrying a stale "unsupported" flag.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
+
 // Why: keyed per owner (not a process-global flag) so one owner's capability gap doesn't poison others that DO support Issue.parent (bug-scan finding 2).
 const parentFieldRetriedByOwner = new Map<string, true>()
+
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
+
 // Why: in-flight promise per owner so concurrent fetchAllItems callers share one probe instead of each racing a duplicate first-page probe.
 export const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
@@ -52,6 +61,7 @@ export function ownerScopeKey(
   host?: string
 ): string {
   const base = `${owner}\u0000${ownerType}`
+
   return `${base}\u0000${githubProjectHost(host)}`
 }
 

@@ -49,6 +49,7 @@ describe('automation-list-search', () => {
       { id: '1', name: 'Auto PR', project: 'orca', prompt: 'nudge' },
       { id: '2', name: 'Nightly', project: 'mobile', prompt: 'ship' }
     ]
+
     // Why: oversized paste must leave the list unfiltered, not blank it.
     expect(filterByAutomationListSearch(items, oversized, (item) => item)).toBe(items)
   })
@@ -78,11 +79,13 @@ describe('automation-list-search', () => {
 
   it('caps indexed field length so huge prompts stay bounded', () => {
     const prompt = `${'x'.repeat(AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS)}unique-tail-token`
+
     const index = buildAutomationListSearchIndex({
       name: 'Nightly',
       project: 'mobile',
       prompt
     })
+
     expect(index.prompt.length).toBe(AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS)
     expect(automationListSearchIndexMatches(index, 'unique-tail-token')).toBe(false)
     expect(automationListSearchIndexMatches(index, 'xxxx')).toBe(true)
@@ -115,11 +118,13 @@ describe('automation-list-search', () => {
     expect(buildAutomationProjectSearchText({ displayName: 'orca', path: '/tmp/orca' })).toBe(
       'orca /tmp/orca'
     )
+
     const index = buildAutomationListSearchIndex({
       name: 'Orphan',
       project: buildAutomationProjectSearchText({}),
       prompt: 'hi'
     })
+
     expect(automationListSearchIndexMatches(index, 'unknown')).toBe(true)
   })
 
@@ -137,9 +142,11 @@ describe('automation-list-search', () => {
       host: 'build-box',
       prompt: 'Assign reviewers for open PRs'
     }
+
     for (const query of ['assignment', 'ORCA', 'login-retry', 'claude', 'build-box', 'reviewers']) {
       expect(automationListSearchFieldsMatch(fields, query)).toBe(true)
     }
+
     expect(automationListSearchFieldsMatch(fields, 'missing')).toBe(false)
   })
 
@@ -152,6 +159,7 @@ describe('automation-list-search', () => {
       host: 'h'.repeat(10_000),
       prompt: 'x'.repeat(10_000)
     })
+
     expect(index.name.length).toBe(AUTOMATION_LIST_SEARCH_NAME_MAX_CODE_UNITS)
     expect(index.project.length).toBe(AUTOMATION_LIST_SEARCH_PROJECT_MAX_CODE_UNITS)
     expect(index.workspace.length).toBe(AUTOMATION_LIST_SEARCH_WORKSPACE_MAX_CODE_UNITS)
@@ -170,11 +178,13 @@ describe('automation-list-search', () => {
 
   it('fingerprints the new axes and caps the prompt before hashing', () => {
     const base = { name: 'A', project: 'p1', workspace: 'w1', agent: 'g1', host: 'h1', prompt: 'x' }
+
     for (const field of ['workspace', 'agent', 'host'] as const) {
       expect(buildAutomationListSearchFingerprint([base])).not.toBe(
         buildAutomationListSearchFingerprint([{ ...base, [field]: 'changed' }])
       )
     }
+
     // Two prompts differing only past the cap are one row set as far as search is concerned.
     const prefix = 'y'.repeat(AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS)
     expect(buildAutomationListSearchFingerprint([{ ...base, prompt: `${prefix}tail-a` }])).toBe(
@@ -187,6 +197,7 @@ describe('automation-list-search', () => {
       { name: 'A', project: 'p', prompt: 'one' },
       { name: 'B', project: 'p', prompt: 'two' }
     ]
+
     expect(buildAutomationListSearchFingerprint(rows, ['a', 'b'])).not.toBe(
       buildAutomationListSearchFingerprint(rows, ['b', 'a'])
     )
@@ -198,6 +209,7 @@ describe('automation-list-search', () => {
       project: 'orca / main',
       prompt: 'Assign reviewers for open PRs'
     }
+
     expect(automationListSearchFieldsMatch(fields, 'assignment')).toBe(true)
     expect(automationListSearchFieldsMatch(fields, 'ORCA')).toBe(true)
     expect(automationListSearchFieldsMatch(fields, 'reviewers')).toBe(true)
@@ -210,6 +222,7 @@ describe('automation-list-search', () => {
       { id: '2', name: 'Nightly deploy', project: 'mobile', prompt: 'ship apk' },
       { id: '3', name: 'PR nudge', project: 'orca', prompt: 'remind reviewers' }
     ]
+
     const indexes = items.map((item) =>
       buildAutomationListSearchIndex({
         name: item.name,
@@ -217,6 +230,7 @@ describe('automation-list-search', () => {
         prompt: item.prompt
       })
     )
+
     expect(
       filterByActiveAutomationListSearchQuery(items, indexes, 'apk').map((item) => item.id)
     ).toEqual(['2'])
@@ -244,6 +258,7 @@ describe('automation-list-search', () => {
       { name: 'A', project: 'p1', prompt: 'one' },
       { name: 'B', project: 'p2', prompt: 'two' }
     ]
+
     expect(buildAutomationListSearchFingerprint(sources)).toBe(
       buildAutomationListSearchFingerprint([
         { name: 'A', project: 'p1', prompt: 'one' },

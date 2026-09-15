@@ -20,13 +20,18 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 const journals = createTrackedJournalOpener()
+
 let root: string
+
 let clock = 1_000
+
 let epochs = 0
+
 let journal: AgentSessionJournal
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -54,6 +59,7 @@ beforeEach(async () => {
     now: tick,
     mintEpoch: () => {
       epochs += 1
+
       return `epoch-${epochs}`
     }
   })
@@ -74,8 +80,10 @@ it.each([1, 100, 200])('serializes each of %i unchanged forward page items once'
     if (value && typeof value === 'object' && 'itemId' in value && 'body' in value) {
       itemSerializations++
     }
+
     return Reflect.apply(stringify, JSON, [value, ...args])
   }) as typeof JSON.stringify
+
   try {
     const result = readAgentSessionHistory(
       journal,
@@ -87,6 +95,7 @@ it.each([1, 100, 200])('serializes each of %i unchanged forward page items once'
       },
       snapshot
     )
+
     expect(result.ok).toBe(true)
     expect(result.page.items).toHaveLength(count)
     expect(itemSerializations).toBe(count)

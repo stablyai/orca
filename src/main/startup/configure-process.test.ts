@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => {
   const paths = new Map<string, string>([['appData', '/tmp/app-data']])
+
   return {
     app: {
       getPath: vi.fn((name: string) => paths.get(name) ?? ''),
@@ -44,11 +45,13 @@ describe('patchPackagedProcessPath', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     if (originalHome === undefined) {
       delete process.env.HOME
     } else {
       process.env.HOME = originalHome
     }
+
     if (originalPath === undefined) {
       delete process.env.PATH
     } else {
@@ -153,9 +156,11 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     const segments = (process.env.PATH ?? '').split(':')
+
     const offsets = getSystemCliInstallDirectories('linux', '/home/tester').map((directory) =>
       segments.indexOf(directory)
     )
+
     expect(offsets.every((offset) => offset >= 0)).toBe(true)
     expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
   })
@@ -183,9 +188,11 @@ describe('patchPackagedProcessPath', () => {
     const localBin = segments.indexOf(join('/home/tester', '.local/bin'))
     // Still reachable — that is what the seeding is for (#829).
     expect(localBin).toBeGreaterThan(-1)
+
     for (const systemDir of ['/usr/bin', '/bin', '/usr/local/bin']) {
       expect(segments.indexOf(systemDir)).toBeLessThan(localBin)
     }
+
     expect(segments.indexOf(join('/home/tester', 'bin'))).toBeGreaterThan(
       segments.indexOf('/usr/bin')
     )
@@ -208,11 +215,13 @@ describe('patchPackagedProcessPath', () => {
     const seeded = getVersionManagerBinPaths({ platform: 'linux', homePath: '/home/tester' })
     const shimDirs = seeded.filter((dir) => !genericUserBinDirs.includes(dir))
     expect(shimDirs).not.toHaveLength(0)
+
     // Why these keep leading: an nvm/mise/asdf user's runtime must beat a
     // system install, which is the reason this seeding is ordered at all.
     for (const dir of shimDirs) {
       expect(segments.indexOf(dir)).toBeLessThan(segments.indexOf('/usr/bin'))
     }
+
     // Why these do not: the same list carries the generic user bin dirs, which
     // hold whatever was last installed there rather than a managed toolchain.
     for (const dir of genericUserBinDirs) {
@@ -272,21 +281,25 @@ describe('configureDevUserDataPath', () => {
       configureDevUserDataPath(true)
     } finally {
       rmSync(tempRoot, { recursive: true, force: true })
+
       if (originalE2EUserDataDir === undefined) {
         delete process.env.ORCA_E2E_USER_DATA_DIR
       } else {
         process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
       }
+
       if (originalE2EHomeDir === undefined) {
         delete process.env.ORCA_E2E_HOME_DIR
       } else {
         process.env.ORCA_E2E_HOME_DIR = originalE2EHomeDir
       }
+
       if (originalHome === undefined) {
         delete process.env.HOME
       } else {
         process.env.HOME = originalHome
       }
+
       if (originalUserProfile === undefined) {
         delete process.env.USERPROFILE
       } else {
@@ -417,6 +430,7 @@ describe('configureElectronNetworkCompatibility', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-compat-'))
     tempDirs.push(userDataPath)
     writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
+
     return userDataPath
   }
 
@@ -424,6 +438,7 @@ describe('configureElectronNetworkCompatibility', () => {
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     if (originalEnvValue === undefined) {
       delete process.env.ORCA_DISABLE_HTTP2
     } else {
@@ -606,6 +621,7 @@ describe('enableMainProcessGpuFeatures', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     if (originalE2EUserDataDir === undefined) {
       delete process.env.ORCA_E2E_USER_DATA_DIR
     } else {
@@ -738,6 +754,7 @@ describe('enableMainProcessGpuFeatures', () => {
       } else {
         process.env.WAYLAND_DISPLAY = originalWaylandDisplay
       }
+
       if (originalSessionType === undefined) {
         delete process.env.XDG_SESSION_TYPE
       } else {
@@ -782,11 +799,13 @@ describe('enableMainProcessGpuFeatures', () => {
       } else {
         process.env.WAYLAND_DISPLAY = originalWaylandDisplay
       }
+
       if (originalSessionType === undefined) {
         delete process.env.XDG_SESSION_TYPE
       } else {
         process.env.XDG_SESSION_TYPE = originalSessionType
       }
+
       if (originalOzoneHint === undefined) {
         delete process.env.ELECTRON_OZONE_PLATFORM_HINT
       } else {

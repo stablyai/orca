@@ -5,11 +5,13 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const { verifyPackagedPluginResources } = require('./verify-packaged-plugin-resources.cjs')
 
 describe('verify packaged plugin resources', () => {
   it('accepts exact launch bytes copied into a packaged resources directory', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
+
     try {
       await cp(
         join(process.cwd(), 'resources', 'plugins', 'launch'),
@@ -25,6 +27,7 @@ describe('verify packaged plugin resources', () => {
 
   it('rejects mutated bytes in the packaged output', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
+
     try {
       const launchRoot = join(resourcesDir, 'plugins', 'launch')
       await cp(join(process.cwd(), 'resources', 'plugins', 'launch'), launchRoot, {
@@ -52,16 +55,20 @@ describe('verify packaged plugin resources', () => {
 
   it('rejects a CRLF checkout of the launch tree', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-packaged-plugins-'))
+
     try {
       const launchRoot = join(resourcesDir, 'plugins', 'launch')
       await cp(join(process.cwd(), 'resources', 'plugins', 'launch'), launchRoot, {
         recursive: true
       })
+
       for (const entry of await readdir(launchRoot, { recursive: true })) {
         const path = join(launchRoot, entry)
+
         if (!(await stat(path)).isFile()) {
           continue
         }
+
         await writeFile(path, (await readFile(path, 'utf8')).replace(/\r?\n/g, '\r\n'))
       }
 

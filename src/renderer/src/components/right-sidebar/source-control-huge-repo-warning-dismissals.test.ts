@@ -28,9 +28,11 @@ describe('source-control huge repo warning dismissals', () => {
     expect(markHugeRepoWarningDismissed(retainedProbe)).toBe(true)
 
     const churnCount = HUGE_REPO_WARNING_DISMISSAL_MAX_WORKTREES * 8
+
     for (let i = 0; i < churnCount; i += 1) {
       expect(markHugeRepoWarningDismissed(probe(`worktree-${i}`))).toBe(true)
       expect(hasDismissedHugeRepoWarning(retainedProbe)).toBe(true)
+
       if (i % HUGE_REPO_WARNING_DISMISSAL_MAX_WORKTREES === 0) {
         expect(getHugeRepoWarningStateCountForTests()).toBeLessThanOrEqual(
           HUGE_REPO_WARNING_DISMISSAL_MAX_WORKTREES

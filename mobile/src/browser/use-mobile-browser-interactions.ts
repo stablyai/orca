@@ -23,13 +23,19 @@ import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 
 import { useMobileBrowserCommands } from './use-mobile-browser-commands'
+
 const TAP_SLOP = 16
+
 const SCROLL_START_SLOP = 22
+
 const LONG_PRESS_MS = 550
+
 const WHEEL_INTERVAL_MS = 70
 
 type BrowserPageParams = { worktree: string; page: string }
+
 type PanGesture = { x: number; y: number; offsetX: number; offsetY: number }
+
 type SendBrowserRequest = (
   method: string,
   params?: Record<string, unknown>,
@@ -86,9 +92,11 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
     startPointRef,
     zoomRef
   } = args
+
   const rightClickSentRef = useRef(false)
   const lastWheelRef = useRef({ dx: 0, dy: 0, at: 0 })
   const wheelGestureIdRef = useRef(0)
+
   const {
     mapTouchPoint,
     sendDialogCommand,
@@ -116,17 +124,22 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
   const handleResponderGrant = useCallback(
     (event: GestureResponderEvent) => {
       const pinch = createPinchGesture(event, frameGeometry, zoomRef.current)
+
       if (pinch) {
         clearLongPressTimer()
         pinchRef.current = pinch
         panRef.current = null
         startPointRef.current = null
+
         return
       }
+
       const startPoint = readLocalTouchPoint(event.nativeEvent)
+
       if (!startPoint) {
         return
       }
+
       startPointRef.current = { x: startPoint.x, y: startPoint.y, t: Date.now() }
       rightClickSentRef.current = false
       scrollingRef.current = false
@@ -144,13 +157,17 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
       clearLongPressTimer()
       longPressTimerRef.current = setTimeout(() => {
         const start = startPointRef.current
+
         if (!start) {
           return
         }
+
         const point = mapTouchPoint(start.x, start.y)
+
         if (!point) {
           return
         }
+
         rightClickSentRef.current = true
         void sendPointerClick(point, 'right')
         onToast('Right click')
@@ -164,38 +181,51 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
       const startedPinch = pinchRef.current
         ? null
         : createPinchGesture(event, frameGeometry, zoomRef.current)
+
       if (startedPinch) {
         clearLongPressTimer()
         pinchRef.current = startedPinch
         panRef.current = null
         startPointRef.current = null
       }
+
       const activePinch = pinchRef.current
       const nextPinch = activePinch ? updatePinchZoom(event, frameGeometry, activePinch) : null
+
       if (nextPinch) {
         clearLongPressTimer()
         zoomRef.current = nextPinch
         setZoom(nextPinch)
+
         return
       }
+
       if (activePinch) {
         pinchRef.current = null
       }
+
       const moved = Math.hypot(gesture.dx, gesture.dy)
+
       if (moved > TAP_SLOP) {
         clearLongPressTimer()
       }
+
       const activePan = panRef.current
+
       if (activePan && frameGeometry) {
         const currentPoint = readLocalTouchPoint(event.nativeEvent)
+
         if (!currentPoint) {
           return
         }
+
         if (!scrollingRef.current && moved <= TAP_SLOP) {
           return
         }
+
         scrollingRef.current = true
         startPointRef.current = null
+
         const nextZoom = clampBrowserZoomState(
           {
             scale: zoomRef.current.scale,
@@ -206,34 +236,47 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
           MIN_ZOOM,
           MAX_ZOOM
         )
+
         zoomRef.current = nextZoom
         setZoom(nextZoom)
+
         return
       }
+
       if (!scrollingRef.current) {
         if (moved <= SCROLL_START_SLOP) {
           return
         }
+
         scrollingRef.current = true
         startPointRef.current = null
       }
+
       const now = Date.now()
+
       if (now - lastWheelRef.current.at < WHEEL_INTERVAL_MS) {
         return
       }
+
       const deltaX = gesture.dx - lastWheelRef.current.dx
       const deltaY = gesture.dy - lastWheelRef.current.dy
+
       if (Math.abs(deltaX) + Math.abs(deltaY) < 8) {
         return
       }
+
       const currentPoint = readLocalTouchPoint(event.nativeEvent)
+
       if (!currentPoint) {
         return
       }
+
       const point = mapTouchPoint(currentPoint.x, currentPoint.y)
+
       if (!point) {
         return
       }
+
       lastWheelRef.current = { dx: gesture.dx, dy: gesture.dy, at: now }
       sendWheel(point, deltaX, deltaY, wheelGestureIdRef.current)
     },
@@ -249,15 +292,19 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
       startPointRef.current = null
       const wasScrolling = scrollingRef.current
       scrollingRef.current = false
+
       if (!start || rightClickSentRef.current || wasScrolling) {
         return
       }
+
       const moved = Math.hypot(gesture.dx, gesture.dy)
+
       if (moved <= TAP_SLOP && Date.now() - start.t < LONG_PRESS_MS) {
         // Why: native browser taps resolve at touch-up. Using touch-down makes
         // tiny finger drift feel like the click lands left/up of the finger.
         const release = readLocalTouchPoint(event.nativeEvent) ?? start
         const point = mapTouchPoint(release.x, release.y)
+
         if (point) {
           void sendPointerClick(point, 'left')
         }

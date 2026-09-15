@@ -8,6 +8,7 @@ import { build as buildVite } from 'vite'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 afterAll(() => {
@@ -194,11 +195,13 @@ async function runFixture(): Promise<FixtureResult> {
   writeFileSync(fixturePath, buildFixtureMain(importPath, resultPath, sourceCookiesPath))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
+
   for (let attempt = 1; ; attempt += 1) {
     rmSync(resultPath, { force: true })
     // Why a fresh profile per attempt: a launch that never reached `ready` may have left the
     // Chromium profile mid-initialization, and reusing it would bias the retry.
     const electronArgs = [fixturePath, `--user-data-dir=${join(root, `profile-${attempt}`)}`]
+
     const run = spawnSync(
       executable,
       process.platform === 'linux'
@@ -206,12 +209,16 @@ async function runFixture(): Promise<FixtureResult> {
         : electronArgs,
       { encoding: 'utf8', env, timeout: 60_000 }
     )
+
     const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
+
     if (attempt < FIXTURE_LAUNCH_ATTEMPTS && neverReachedElectronReady(fixtureResult)) {
       continue
     }
+
     expect(run.error).toBeUndefined()
     expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
     return JSON.parse(fixtureResult) as FixtureResult
   }
 }

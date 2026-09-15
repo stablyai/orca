@@ -16,8 +16,10 @@ export function recoverProductionTerminalRefs() {
       ) {
         seenTerminals.add(candidate)
         terminals.push(candidate)
+
         return true
       }
+
       if (
         candidate &&
         typeof candidate.getPanes === 'function' &&
@@ -26,11 +28,13 @@ export function recoverProductionTerminalRefs() {
         for (const pane of candidate.getPanes() ?? []) {
           remember(pane?.terminal)
         }
+
         return true
       }
     } catch {
       // Production objects can expose disposed getters while React cleans up.
     }
+
     return false
   }
 
@@ -38,20 +42,26 @@ export function recoverProductionTerminalRefs() {
     if (!candidate || typeof candidate !== 'object' || seenObjects.has(candidate)) {
       return
     }
+
     seenObjects.add(candidate)
+
     if (remember(candidate) || depth <= 0 || candidate instanceof Node) {
       return
     }
+
     if (candidate instanceof Map || candidate instanceof Set) {
       for (const value of candidate.values()) {
         inspect(value, depth - 1)
       }
+
       return
     }
+
     for (const key of Object.keys(candidate).slice(0, 80)) {
       if (key === 'return' || key === 'child' || key === 'sibling' || key.startsWith('__react')) {
         continue
       }
+
       try {
         inspect(candidate[key], depth - 1)
       } catch {
@@ -63,24 +73,30 @@ export function recoverProductionTerminalRefs() {
   for (const xterm of document.querySelectorAll('.xterm')) {
     let root = xterm
     let fiberKey = null
+
     while (root && !fiberKey) {
       fiberKey = Object.keys(root).find(
         (key) => key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')
       )
+
       if (!fiberKey) {
         root = root.parentElement
       }
     }
+
     let fiber = fiberKey && root ? root[fiberKey] : null
     let ancestorCount = 0
+
     while (fiber && ancestorCount < 80) {
       let hook = fiber.memoizedState
       let hookCount = 0
+
       while (hook && hookCount < 600) {
         inspect(hook.memoizedState, 5)
         hook = hook.next
         hookCount++
       }
+
       inspect(fiber.memoizedProps, 3)
       fiber = fiber.return
       ancestorCount++
@@ -90,6 +106,7 @@ export function recoverProductionTerminalRefs() {
   // Why: packaged builds omit the E2E manager exposure, but a buffer oracle
   // is required to distinguish real render corruption from valid TUI rewrites.
   window.__terminalGarbleTerminals = terminals
+
   return terminals.map((terminal) => ({
     cols: terminal.cols,
     rows: terminal.rows,

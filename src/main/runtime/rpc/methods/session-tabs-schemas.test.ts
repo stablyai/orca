@@ -86,6 +86,7 @@ describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
         ratio: 0.5
       }
     })
+
     expect(parsed.root).toMatchObject({ type: 'split', direction: 'horizontal' })
   })
 
@@ -96,6 +97,7 @@ describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
   it('rejects an over-deep tree instead of overflowing the stack', () => {
     // Build a tree deeper than the cap (64) without recursion in the test.
     let node: unknown = { type: 'leaf', leafId: 'x' }
+
     for (let i = 0; i < 5000; i++) {
       node = {
         type: 'split',
@@ -104,6 +106,7 @@ describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
         second: { type: 'leaf', leafId: 'y' }
       }
     }
+
     expect(() => UpdatePaneLayout.parse({ worktree: WT, tabId: 'tab', root: node })).toThrow()
   })
 

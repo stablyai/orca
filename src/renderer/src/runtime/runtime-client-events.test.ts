@@ -8,10 +8,13 @@ describe('subscribeRuntimeClientEvents', () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
     const unsubscribe = vi.fn()
     let capturedOnResponse: ((response: unknown) => void) | undefined
+
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { unsubscribe, sendBinary: vi.fn() }
     })
+
     const onEvent = vi.fn()
     const onError = vi.fn()
 
@@ -39,6 +42,7 @@ describe('subscribeRuntimeClientEvents', () => {
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
+
     capturedOnResponse({
       ok: true,
       result: { type: 'ready', subscriptionId: 'sub-1' }
@@ -88,15 +92,19 @@ describe('subscribeRuntimeClientEvents', () => {
 
   it('forwards automationsChanged and still drops event types it does not know', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
+
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     })
+
     const onEvent = vi.fn()
     const onError = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
 
     await subscribeRuntimeClientEvents('env-1', onEvent, onError)
+
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
@@ -112,10 +120,13 @@ describe('subscribeRuntimeClientEvents', () => {
 
   it('signals a replay-tagged response so event-derived state can resync after a reconnect', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
+
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     })
+
     const onEvent = vi.fn()
     const onReplayed = vi.fn()
 
@@ -126,6 +137,7 @@ describe('subscribeRuntimeClientEvents', () => {
     })
 
     await subscribeRuntimeClientEvents('env-1', onEvent, vi.fn(), onReplayed)
+
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
@@ -155,17 +167,22 @@ describe('subscribeRuntimeClientEvents', () => {
 
   it('forwards every host terminal sleep disposition through the response decoder', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
+
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
     })
+
     const onEvent = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
 
     await subscribeRuntimeClientEvents('env-1', onEvent)
+
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
+
     for (const phase of ['started', 'committed', 'cancelled', 'woken'] as const) {
       capturedOnResponse({
         ok: true,
@@ -190,16 +207,21 @@ describe('subscribeRuntimeClientEvents', () => {
 
   it('preserves full SSH authority in retained snapshots and live client events', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
+
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { subscriptionId: 'sub-1', unsubscribe: vi.fn() }
     })
+
     const onEvent = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
     await subscribeRuntimeClientEvents('env-1', onEvent)
+
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
+
     capturedOnResponse({
       ok: true,
       result: {
@@ -268,14 +290,18 @@ describe('subscribeRuntimeClientEvents', () => {
 
   it('rejects a partial runtime authority instead of retaining it', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
+
     const subscribe = vi.fn(async (_args, nextCallbacks) => {
       capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+
       return { subscriptionId: 'sub-1', unsubscribe: vi.fn() }
     })
+
     const onEvent = vi.fn()
     const onError = vi.fn()
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
     await subscribeRuntimeClientEvents('env-1', onEvent, onError)
+
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }

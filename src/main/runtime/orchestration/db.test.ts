@@ -31,6 +31,7 @@ describe('OrchestrationDb', () => {
 
   function createDb(): OrchestrationDb {
     db = new OrchestrationDb(':memory:')
+
     return db
   }
 
@@ -47,6 +48,7 @@ describe('OrchestrationDb', () => {
 
     it('persists explicit task display metadata', () => {
       const d = createDb()
+
       const task = d.createTask({
         runId,
         spec: 'full details',
@@ -61,6 +63,7 @@ describe('OrchestrationDb', () => {
 
     it('persists the creating terminal handle for task-created worktrees', () => {
       const d = createDb()
+
       const task = d.createTask({
         runId,
         spec: 'spawn related workspace',
@@ -301,16 +304,20 @@ describe('OrchestrationDb', () => {
 
     it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
       const d = createDb()
+
       const firstTask = d.createTask({
         runId,
         spec: 'first'
       })
+
       const first = createRootDispatch(d, firstTask.id, 'term_a')
       d.completeDispatch(first.id)
+
       const secondTask = d.createTask({
         runId,
         spec: 'second'
       })
+
       const second = createRootDispatch(d, secondTask.id, 'term_a')
       d.completeDispatch(second.id)
 
@@ -358,11 +365,14 @@ describe('OrchestrationDb', () => {
   describe('decision gates', () => {
     it('creates a gate and blocks the task', () => {
       const d = createDb()
+
       const task = d.createTask({
         runId,
         spec: 'needs approval'
       })
+
       createRootDispatch(d, task.id, 'term_a')
+
       const gate = d.createGate({
         taskId: task.id,
         question: 'Proceed?',
@@ -424,6 +434,7 @@ describe('OrchestrationDb', () => {
   describe('coordinator runs', () => {
     it('creates and retrieves a coordinator run', () => {
       const d = createDb()
+
       const run = d.createCoordinatorRun({
         spec: 'build feature',
         coordinatorHandle: 'coord',
@@ -438,6 +449,7 @@ describe('OrchestrationDb', () => {
 
     it('updates coordinator run status', () => {
       const d = createDb()
+
       const run = d.createCoordinatorRun({
         spec: 'work',
         coordinatorHandle: 'coord'
@@ -518,6 +530,7 @@ describe('OrchestrationDb', () => {
   describe('heartbeat + thread helpers (fresh schema)', () => {
     it('insertMessage accepts type = heartbeat', () => {
       const d = createDb()
+
       const msg = d.insertMessage({
         runId,
         from: 'worker',
@@ -526,6 +539,7 @@ describe('OrchestrationDb', () => {
         type: 'heartbeat',
         payload: JSON.stringify({ taskId: 'task_x', dispatchId: 'ctx_x' })
       })
+
       expect(msg.type).toBe('heartbeat')
     })
 
@@ -603,6 +617,7 @@ describe('OrchestrationDb', () => {
         d.createTask({ runId, spec: 'legacy' }).id,
         'term_legacy'
       )
+
       setDispatchTimes(d, legacy.id, '2026-07-12T12:00:00.000Z', '2026-07-12T12:05:00.000Z')
 
       // Genuinely hung: dispatched + heartbeated at 10:00, ~2h before threshold.
@@ -635,6 +650,7 @@ describe('OrchestrationDb', () => {
         d.createTask({ runId, spec: 'midnight' }).id,
         'term_midnight'
       )
+
       setDispatchTimes(d, ctx.id, '2026-05-04 00:04:00')
 
       const stale = d.getStaleDispatches('2026-05-04T00:00:00.000Z')
@@ -656,6 +672,7 @@ describe('OrchestrationDb', () => {
 
     it('getThreadMessagesFor returns only same-thread replies to a handle', () => {
       const d = createDb()
+
       const outbound = d.insertMessage({
         runId,
         from: 'worker',
@@ -664,6 +681,7 @@ describe('OrchestrationDb', () => {
         type: 'decision_gate',
         body: 'yes or no?'
       })
+
       // Reply in the same thread addressed to the worker
       const reply = d.insertMessage({
         runId,
@@ -673,6 +691,7 @@ describe('OrchestrationDb', () => {
         body: 'yes',
         threadId: outbound.id
       })
+
       // Distractor: different thread, same recipient
       d.insertMessage({
         runId,
@@ -707,6 +726,7 @@ describe('OrchestrationDb', () => {
       // so migration temp directories must close before recursive cleanup.
       db?.close()
       db = undefined
+
       if (tempDir) {
         rmSync(tempDir, { recursive: true, force: true })
       }
@@ -787,6 +807,7 @@ describe('OrchestrationDb', () => {
         .run()
       raw.pragma('user_version = 0')
       raw.close()
+
       return dbPath
     }
 
@@ -817,11 +838,13 @@ describe('OrchestrationDb', () => {
 
       // (c) Indexes still attached to messages post-rebuild.
       const sqlite = (d as unknown as { db: Database.Database }).db
+
       const indexes = sqlite
         .prepare(
           `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name NOT LIKE 'sqlite_%'`
         )
         .all() as { name: string }[]
+
       const names = new Set(indexes.map((r) => r.name))
       expect(names.has('idx_messages_id')).toBe(true)
       expect(names.has('idx_inbox')).toBe(true)
@@ -851,6 +874,7 @@ describe('OrchestrationDb', () => {
         type: 'worker_done',
         senderPaneKey: 'tab_1:leaf_1'
       })
+
       expect(d.getMessageById(msg.id)?.sender_pane_key).toBe('tab_1:leaf_1')
     })
 

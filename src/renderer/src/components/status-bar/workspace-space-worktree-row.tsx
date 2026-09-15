@@ -54,11 +54,13 @@ export function WorkspaceSpaceWorktreeRow({
   const deleteError = deleteState?.error ?? null
   const canForceDelete = deleteState?.canForceDelete ?? false
   const canDelete = isWorkspaceSpaceRowReadyToDelete(worktree, decisionDetails) && !isDeleting
+
   const handleForceDelete = (event: React.MouseEvent<HTMLButtonElement>): void => {
     event.preventDefault()
     event.stopPropagation()
     onForceDelete()
   }
+
   const row = (
     <div
       role="button"
@@ -69,6 +71,7 @@ export function WorkspaceSpaceWorktreeRow({
         if (event.key !== 'Enter' && event.key !== ' ') {
           return
         }
+
         event.preventDefault()
         onInspect()
       }}

@@ -82,6 +82,7 @@ describe('resolveActiveSessionTab', () => {
       [terminalTab('agent', true), browserTab('browser', false)],
       { pendingActiveSessionTabId: null, selectedSessionTabId: 'browser' }
     )
+
     expect(restored.activeTab?.id).toBe('browser')
   })
 

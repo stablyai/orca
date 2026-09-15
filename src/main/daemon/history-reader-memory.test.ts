@@ -40,6 +40,7 @@ function createSession(sessionId: string): { basePath: string; sessionPath: stri
       exitCode: null
     })
   )
+
   return { basePath, sessionPath }
 }
 
@@ -143,12 +144,14 @@ describe('terminal history restore memory limits', () => {
   // and the terminal restored blank. Same user-visible loss as the retired byte cap.
   it('restores a checkpoint carrying more OSC links than the retired structural-token cap', async () => {
     const { basePath, sessionPath } = createSession('many-osc-links')
+
     const oscLinks = Array.from({ length: 150_000 }, (_, index) => ({
       row: index,
       startCol: 0,
       endCol: 40,
       uri: `https://example.com/build/${index}`
     }))
+
     writeFileSync(join(sessionPath, 'checkpoint.json'), checkpoint({ oscLinks }))
 
     const restore = await new HistoryReader(basePath).detectColdRestore('many-osc-links')

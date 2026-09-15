@@ -40,9 +40,11 @@ export async function createWorkspaceFromComposerSource(
   if (args.selection.kind === 'branch') {
     return createBranchWorkspace({ ...args, selection: args.selection })
   }
+
   if (args.selection.kind === 'new-branch') {
     return createNewBranchWorkspace({ ...args, selection: args.selection })
   }
+
   return createWorkItemWorkspace({ ...args, selection: args.selection })
 }
 
@@ -59,6 +61,7 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
       }
     }
   }
+
   if (item.provider === 'gitlab') {
     return {
       provider: 'gitlab',
@@ -71,6 +74,7 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
       }
     }
   }
+
   return {
     provider: 'linear',
     source: {
@@ -106,12 +110,15 @@ async function createWorkItemWorkspace(args: {
   let compareBaseRef = selection.compareBaseRef
   let pushTarget = selection.pushTarget
   let branchNameOverride = selection.branchNameOverride
+
   if (!baseBranch && item.provider !== 'linear' && (item.type === 'pr' || item.type === 'mr')) {
     const repoId = item.repoId ?? targetRepoId
+
     const resolved =
       item.type === 'pr'
         ? await resolveComposerPrBase({ client, repoId, prNumber: item.number }).catch(() => null)
         : await resolveComposerMrBase({ client, repoId, mrIid: item.number }).catch(() => null)
+
     if (resolved) {
       baseBranch = resolved.baseBranch
       compareBaseRef = resolved.compareBaseRef
@@ -133,9 +140,11 @@ async function createWorkItemWorkspace(args: {
     pushTarget,
     nameIsAutoManaged: args.nameIsAutoManaged
   })
+
   // buildTaskWorkspaceCreateParams computes the name; reuse it as the retry base
   // so collisions still append -2, -3, ... like the blank path does.
   const baseName = String(params.name)
+
   return createWorktreeWithNameRetry({
     client,
     baseName,
@@ -165,14 +174,18 @@ async function createBranchWorkspace(args: {
     nameIsAutoManaged,
     note
   } = args
+
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
   const comment = note?.trim()
   const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
+
   const applyCommon = (params: WorkspaceCreateParams): WorkspaceCreateParams => {
     Object.assign(params, agentLaunchCreateFields(createdWithAgentId))
+
     if (comment) {
       params.comment = comment
     }
+
     return params
   }
 
@@ -184,6 +197,7 @@ async function createBranchWorkspace(args: {
       draft: workspaceName,
       fallback: selection.localBranchName
     })
+
     return createWorktreeWithNameRetry({
       client,
       baseName,
@@ -209,6 +223,7 @@ async function createBranchWorkspace(args: {
     draft: workspaceName,
     fallback: selection.branchNameOverride || selection.localBranchName
   })
+
   return createWorktreeWithNameRetry({
     client,
     baseName,
@@ -223,9 +238,11 @@ async function createBranchWorkspace(args: {
           ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
           : {})
       }
+
       if (selection.branchNameOverride) {
         params.branchNameOverride = candidate
       }
+
       return applyCommon(params)
     }
   })
@@ -252,9 +269,11 @@ async function createNewBranchWorkspace(args: {
     nameIsAutoManaged,
     note
   } = args
+
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
   const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
   const comment = note?.trim()
+
   // A brand-new branch off the repo's default base. The typed name is kept as the
   // git branch (via branchNameOverride) so a slash like `feature/login` survives;
   // the runtime sanitizes the worktree folder from the same name. The retry base is
@@ -274,9 +293,11 @@ async function createNewBranchWorkspace(args: {
           : {}),
         ...agentLaunchCreateFields(createdWithAgentId)
       }
+
       if (comment) {
         params.comment = comment
       }
+
       return params
     }
   })

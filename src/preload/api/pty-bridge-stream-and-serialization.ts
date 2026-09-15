@@ -42,25 +42,33 @@ export const ptyStreamAndSerializationApi = {
         droppedOutput?: boolean
       }
     ) => callback(data)
+
     ipcRenderer.on('pty:data', listener)
+
     return () => ipcRenderer.removeListener('pty:data', listener)
   },
   onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
       callback(data)
+
     ipcRenderer.on('pty:replay', listener)
+
     return () => ipcRenderer.removeListener('pty:replay', listener)
   },
   onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, event: PtyModelRestoreNeededEvent) =>
       callback(event)
+
     ipcRenderer.on('pty:modelRestoreNeeded', listener)
+
     return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
   },
   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>
       callback(batch)
+
     ipcRenderer.on('pty:sideEffect', listener)
+
     return () => ipcRenderer.removeListener('pty:sideEffect', listener)
   },
   getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
@@ -86,12 +94,15 @@ export const ptyStreamAndSerializationApi = {
         ptySourceDisowned?: true
       }
     ) => callback(data)
+
     ipcRenderer.on('pty:exit', listener)
+
     return () => ipcRenderer.removeListener('pty:exit', listener)
   },
   onSpawned: (callback: (data: { id: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { id: string }) => callback(data)
     ipcRenderer.on('pty:spawned', listener)
+
     return () => ipcRenderer.removeListener('pty:spawned', listener)
   },
   onSerializeBufferRequest: (
@@ -109,12 +120,15 @@ export const ptyStreamAndSerializationApi = {
         opts?: { scrollbackRows?: number }
       }
     ) => callback(data)
+
     ipcRenderer.on('pty:serializeBuffer:request', listener)
+
     return () => ipcRenderer.removeListener('pty:serializeBuffer:request', listener)
   },
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
     ipcRenderer.on('pty:clearBuffer:request', listener)
+
     return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
   },
   sendSerializedBuffer: (

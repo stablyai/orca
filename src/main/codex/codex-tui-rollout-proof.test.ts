@@ -11,6 +11,7 @@ import {
 } from './codex-tui-rollout-proof'
 
 const THREAD = '019fd900-77aa-7c19-8bd0-2b3c4d5e6f70'
+
 const OTHER_THREAD = '019fd900-77aa-7c19-8bd0-2b3c4d5e6f71'
 
 describe('Codex TUI rollout proof', () => {
@@ -47,6 +48,7 @@ describe('Codex TUI rollout proof', () => {
       yield `/other/sessions/2026/08/11/rollout-now-${THREAD}.jsonl`
       yield `/pinned/sessions/2026/08/11/rollout-now-${THREAD}.jsonl`
     }
+
     const readSessionMetaId = vi.fn(async () => THREAD)
 
     await expect(
@@ -59,6 +61,7 @@ describe('Codex TUI rollout proof', () => {
     const files = async function* (): AsyncGenerator<string> {
       yield `/pinned/sessions/2026/08/11/rollout-now-${THREAD}_019fd900-77aa-7c19-8bd0-2b3c4d5e6f71.jsonl`
     }
+
     const readSessionMetaId = vi.fn(async () => THREAD)
 
     await expect(
@@ -68,6 +71,7 @@ describe('Codex TUI rollout proof', () => {
 
   it('skips a rollout file that vanishes mid-scan instead of aborting the proof', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-rollout-proof-'))
+
     try {
       const day = join(root, 'sessions', '2026', '08', '11')
       await mkdir(day, { recursive: true })
@@ -79,6 +83,7 @@ describe('Codex TUI rollout proof', () => {
       // Listed but already deleted by the time the scan reads it — Codex prunes
       // and rewrites rollout files while the scan runs.
       const vanished = join(day, `rollout-gone-${THREAD}.jsonl`)
+
       const files = async function* (): AsyncGenerator<string> {
         yield vanished
         yield real
@@ -96,6 +101,7 @@ describe('Codex TUI rollout proof', () => {
     const files = async function* (): AsyncGenerator<string> {
       yield `/pinned/sessions/2026/08/11/rollout-now-${THREAD}.jsonl`
     }
+
     await expect(
       resolvePinnedCodexRolloutProof('/pinned', THREAD, {
         listFiles: files,

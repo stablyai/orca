@@ -81,10 +81,13 @@ function readSsh2DefaultServerHostKeyAlgorithms(): string[] | null {
     const constants = require('ssh2/lib/protocol/constants.js') as {
       DEFAULT_SERVER_HOST_KEY?: unknown
     }
+
     const list = constants?.DEFAULT_SERVER_HOST_KEY
+
     if (Array.isArray(list) && list.length > 0 && list.every((a) => typeof a === 'string')) {
       return [...(list as string[])]
     }
+
     console.warn('[ssh] ssh2 default host key list has an unexpected shape; leaving its defaults')
   } catch (error) {
     // A future ssh2 could move the file. Leaving its defaults keeps connections working; the only
@@ -94,6 +97,7 @@ function readSsh2DefaultServerHostKeyAlgorithms(): string[] | null {
       error
     )
   }
+
   return null
 }
 
@@ -123,10 +127,12 @@ export function orderServerHostKeyAlgorithms(
   isHostKeyAlias = false
 ): string[] | undefined {
   const known = new Set<string>(storedKeyTypes)
+
   for (const entry of entries) {
     if (entry.marker === 'revoked') {
       continue
     }
+
     // Reuse the matcher's own host logic rather than re-implementing pattern/hash matching here.
     const outcome = matchKnownHosts([entry], {
       host,
@@ -135,13 +141,16 @@ export function orderServerHostKeyAlgorithms(
       key: entry.key,
       isHostKeyAlias
     })
+
     if (outcome === 'match') {
       known.add(entry.keyType)
     }
   }
+
   if (known.size === 0) {
     return undefined
   }
+
   // A known_hosts entry names the KEY type, which is not always the negotiated ALGORITHM name: one
   // `ssh-rsa` key is offered as rsa-sha2-512, rsa-sha2-256 or ssh-rsa depending on the signature
   // algorithm. Promoting only the literal name would leave the RSA host we know behind ed25519,
@@ -150,10 +159,13 @@ export function orderServerHostKeyAlgorithms(
     (algorithm) =>
       known.has(algorithm) || (known.has('ssh-rsa') && algorithm.startsWith('rsa-sha2-'))
   )
+
   if (preferred.length === 0) {
     return undefined
   }
+
   const preferredSet = new Set(preferred)
+
   return [...preferred, ...supported.filter((algorithm) => !preferredSet.has(algorithm))]
 }
 
@@ -190,7 +202,9 @@ export function createHostKeyVerifier(
       // This path already runs from the verifier's own catch; a reporting failure must not become
       // a throw that leaves the handshake hanging instead of denied.
     }
+
     verify(false)
+
     return undefined
   }
 
@@ -200,9 +214,12 @@ export function createHostKeyVerifier(
         // No decision is reported: nobody is waiting on this attempt, and reporting would let a
         // superseded verifier overwrite the live attempt's outcome.
         verify(false)
+
         return undefined
       }
+
       const keyType = readHostKeyType(key)
+
       if (!keyType) {
         // A key whose own header we cannot read is not something to reason about further.
         return deny(
@@ -211,7 +228,9 @@ export function createHostKeyVerifier(
           'The host offered a key that could not be read as an SSH host key.'
         )
       }
+
       const fingerprint = hostKeyFingerprintOf(key)
+
       const decision = decideHostKey({
         knownHostsOutcome: matchKnownHosts(deps.entries, {
           host: deps.host,
@@ -241,6 +260,7 @@ export function createHostKeyVerifier(
           fingerprint
         })
       }
+
       // `prompt` is unreachable in this phase; treating it as a denial keeps the fail-closed
       // property if it ever becomes reachable before the dialog exists.
       verify(decision.action === 'accept' || decision.action === 'accept-and-remember')
@@ -250,6 +270,7 @@ export function createHostKeyVerifier(
       // interpret.
       return deny(verify, 'unknown', 'The host key could not be checked.')
     }
+
     return undefined
   }
 }

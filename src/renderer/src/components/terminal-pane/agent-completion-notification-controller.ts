@@ -12,7 +12,9 @@ import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
 type CompletionSource = 'hook' | 'title' | 'process-exit'
 
 const COMPLETION_REPLAY_GUARD_MS = 1_000
+
 const HOOK_DONE_QUIET_MS = 1_500
+
 const CODEX_ATTENTION_QUIET_MS = 1_500
 
 type CompletionState = {
@@ -58,9 +60,11 @@ export function createAgentCompletionNotificationController({
     if (state.workingStatusObserved) {
       return `turn:${state.currentTurn}`
     }
+
     if (processState.lastForegroundAgent) {
       return `process:${processState.processSession}`
     }
+
     return `${source}:${state.currentTurn}:${processState.processSession}`
   }
 
@@ -77,9 +81,11 @@ export function createAgentCompletionNotificationController({
     const timestamp = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
       : payload.stateStartedAt
+
     if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
       return null
     }
+
     return completionIdentityFor(payload.state, payload.agentType, timestamp)
   }
 
@@ -96,9 +102,11 @@ export function createAgentCompletionNotificationController({
 
   function hookAttentionToken(payload: AgentCompletionStatusSnapshot): string {
     const identity = hookCompletionIdentity(payload)
+
     if (identity) {
       return `identity:${identity}`
     }
+
     return [
       'turn',
       String(state.currentTurn),
@@ -116,16 +124,20 @@ export function createAgentCompletionNotificationController({
     if (!completionIdentity) {
       return false
     }
+
     if (
       completionIdentity.source === 'hook' &&
       identityScope.hasConsumedIdentity(completionIdentity.identity)
     ) {
       return true
     }
+
     const previous = identityScope.getLast()
+
     if (!previous) {
       return false
     }
+
     if (previous.source === completionIdentity.source) {
       return (
         previous.identity === completionIdentity.identity ||
@@ -136,6 +148,7 @@ export function createAgentCompletionNotificationController({
           ))
       )
     }
+
     return (
       previous.agentIdentity !== null &&
       completionIdentity.agentIdentity !== null &&
@@ -158,23 +171,29 @@ export function createAgentCompletionNotificationController({
     if (source !== 'hook' && state.pendingHookDoneTimer !== null) {
       return false
     }
+
     if (state.requiresFreshWorking || state.lastCompletedTurn === state.currentTurn) {
       return false
     }
+
     if (!options.isLive() || !processState.hasAgentRunEvidence) {
       return false
     }
+
     const now = Date.now()
     const token = completionToken(source)
+
     if (
       token === state.lastCompletionToken &&
       now - state.lastCompletionAt < COMPLETION_REPLAY_GUARD_MS
     ) {
       return false
     }
+
     if (completionIdentityAlreadyNotified(optionsOverride.completionIdentity)) {
       return false
     }
+
     state.lastCompletionToken = token
     state.lastCompletionAt = now
     state.lastCompletedTurn = state.currentTurn
@@ -182,8 +201,10 @@ export function createAgentCompletionNotificationController({
     state.workingStatusObserved = false
     // Why: any committed completion ends the turn, so a debounced Codex attention from an earlier pause must not fire after it.
     clearPendingCodexAttention()
+
     if (optionsOverride.completionIdentity) {
       identityScope.setLast(optionsOverride.completionIdentity)
+
       if (optionsOverride.completionIdentity.lastTurnCompletedAtNotified !== undefined) {
         identityScope.rememberTurnCompletedAt(
           optionsOverride.completionIdentity.lastTurnCompletedAtNotified
@@ -192,6 +213,7 @@ export function createAgentCompletionNotificationController({
         identityScope.clearStampedTail()
       }
     }
+
     if (
       source === 'hook' &&
       optionsOverride.agentStatus &&
@@ -199,6 +221,7 @@ export function createAgentCompletionNotificationController({
     ) {
       options.dispatchHookLifecycle?.(optionsOverride.agentStatus)
     }
+
     if (optionsOverride.quietedHookDone === true || source === 'process-exit') {
       // Why: confirmed process death is independent completion evidence; keep its provenance so stale hook rows can't veto it later.
       options.dispatchCompletion(title, {
@@ -217,6 +240,7 @@ export function createAgentCompletionNotificationController({
     } else {
       options.dispatchCompletion(title)
     }
+
     return true
   }
 
@@ -231,34 +255,44 @@ export function createAgentCompletionNotificationController({
     if (!options.dispatchAttention || !options.isLive() || !processState.hasAgentRunEvidence) {
       return
     }
+
     const token = hookAttentionToken(payload)
+
     if (token === state.lastAttentionToken) {
       return
     }
+
     state.lastAttentionToken = token
     // Why: the visual "needs input" status updates immediately; only the OS attention notification is debounced (Codex, below).
     options.dispatchHookLifecycle?.(payload)
+
     if (payload.agentType === 'codex') {
       // Why: an auto-resolved Codex "Approve for me" cancels this pending notification via a later hook; scoped to Codex so other agents notify at once.
       clearPendingCodexAttention()
       state.pendingCodexAttentionTimer = setTimeout(() => {
         state.pendingCodexAttentionTimer = null
+
         if (!options.isLive() || !processState.hasAgentRunEvidence) {
           return
         }
+
         dispatchAttentionNotification(payload)
       }, CODEX_ATTENTION_QUIET_MS)
+
       return
     }
+
     dispatchAttentionNotification(payload)
   }
 
   function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
     state.pendingHookDoneTitle = title
     state.pendingHookDonePayload = payload
+
     if (state.pendingHookDoneTimer !== null) {
       return
     }
+
     // Why: goal/mission agents can report a temporary done between milestones; wait a short quiet window so resumed work can cancel it.
     state.pendingHookDoneTimer = setTimeout(() => {
       state.pendingHookDoneTimer = null
@@ -266,6 +300,7 @@ export function createAgentCompletionNotificationController({
       const pendingPayload = state.pendingHookDonePayload
       state.pendingHookDoneTitle = null
       state.pendingHookDonePayload = null
+
       if (pendingTitle) {
         const hookIdentity = pendingPayload ? hookCompletionIdentity(pendingPayload) : null
         dispatchCompletion('hook', pendingTitle, {
@@ -290,6 +325,7 @@ export function createAgentCompletionNotificationController({
       clearTimeout(state.pendingHookDoneTimer)
       state.pendingHookDoneTimer = null
     }
+
     state.pendingHookDoneTitle = null
     state.pendingHookDonePayload = null
   }

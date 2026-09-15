@@ -10,19 +10,24 @@ export class SkillUploadOperationLifecycle {
 
   enter(assertAvailable: () => void): () => void {
     assertAvailable()
+
     if (this.inFlight === 0) {
       this.operationsSettled = new Promise<void>((resolve) => {
         this.resolveOperationsSettled = resolve
       })
     }
+
     this.inFlight += 1
     let left = false
+
     return () => {
       if (left) {
         return
       }
+
       left = true
       this.inFlight -= 1
+
       if (this.inFlight === 0) {
         const resolve = this.resolveOperationsSettled
         this.resolveOperationsSettled = null
@@ -39,6 +44,7 @@ export class SkillUploadOperationLifecycle {
       releaseTurn = resolve
     })
     await previousTurn
+
     try {
       assertAvailable()
     } catch (error) {
@@ -46,6 +52,7 @@ export class SkillUploadOperationLifecycle {
       leaveOperation()
       throw error
     }
+
     return () => {
       releaseTurn()
       leaveOperation()

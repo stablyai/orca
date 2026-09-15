@@ -38,6 +38,7 @@ describe('agent map filtering', () => {
 
   it('applies state and host filters independently', () => {
     const hidden = card({ paneKey: 'hidden', repoId: 'hidden', hostKind: 'ssh', unseen: true })
+
     const visible = filterAgentMapCards({
       cards: [hidden],
       enabledStates: new Set(['done']),

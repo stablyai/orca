@@ -7,6 +7,7 @@ vi.mock('@/lib/new-workspace', () => ({
 }))
 
 const RECORDED_HOME = '/tmp/orca/codex-accounts/aaaa/home'
+
 const SELECTED_HOME = '/tmp/orca/codex-accounts/bbbb/home'
 
 type DropRepinState = Pick<

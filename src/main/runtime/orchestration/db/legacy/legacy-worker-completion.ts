@@ -20,10 +20,13 @@ export function findLegacyWorkerCompletion(
   }
 ): MessageRow | undefined {
   const principal = this.getLegacyCompatibilityPrincipal(params.principalId)
+
   if (!principal || principal.role !== 'worker' || !principal.dispatch_id) {
     throw new OrchestrationError('request_mismatch', 'Legacy worker principal was not found.')
   }
+
   const runAddress = `run:${principal.run_id}`
+
   const rows = this.db
     .prepare(
       `SELECT * FROM messages
@@ -45,23 +48,27 @@ export function findLegacyWorkerCompletion(
       params.body,
       params.payload
     ) as MessageRow[]
+
   const matches = rows.filter((message) => {
     try {
       const payload = JSON.parse(message.payload ?? '{}') as {
         taskId?: unknown
         dispatchId?: unknown
       }
+
       return payload.taskId === params.taskId && payload.dispatchId === principal.dispatch_id
     } catch {
       return false
     }
   })
+
   if (matches.length > 1) {
     throw new OrchestrationError(
       'operation_unknown',
       'Multiple matching legacy worker completions exist.'
     )
   }
+
   return matches[0] ? exposeMessageTimestamps(matches[0]) : undefined
 }
 
@@ -90,6 +97,7 @@ export function setLegacyCompatibilityPrincipalStatus(
        WHERE id = ? AND status = 'committed'`
     )
     .run(status, id)
+
   return this.getLegacyCompatibilityPrincipal(id)
 }
 
@@ -112,12 +120,14 @@ export function requireCommittedLegacyPrincipal(
   role?: LegacyPrincipalRole
 ): LegacyCompatibilityPrincipalRow {
   const principal = this.getLegacyCompatibilityPrincipal(principalId)
+
   if (!principal || principal.status !== 'committed' || (role && principal.role !== role)) {
     throw new OrchestrationError(
       'request_mismatch',
       `Legacy compatibility principal ${principalId} is not committed for this operation.`
     )
   }
+
   return principal
 }
 
@@ -127,6 +137,7 @@ export function requireLegacyMailPrincipal(
   role?: LegacyPrincipalRole
 ): LegacyCompatibilityPrincipalRow {
   const principal = this.getLegacyCompatibilityPrincipal(principalId)
+
   if (
     !principal ||
     !['committed', 'settled'].includes(principal.status) ||
@@ -137,6 +148,7 @@ export function requireLegacyMailPrincipal(
       `Legacy compatibility principal ${principalId} cannot access retained mail.`
     )
   }
+
   return principal
 }
 

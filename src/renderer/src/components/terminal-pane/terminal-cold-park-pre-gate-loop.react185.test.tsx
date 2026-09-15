@@ -19,6 +19,7 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
+
   return {
     ...actual,
     useMemo: ((calculate, dependencies) =>
@@ -30,6 +31,7 @@ vi.mock('react', async () => {
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     activeGroupIdByWorktree: {} as Record<string, string | undefined>,
     groupsByWorktree: {} as Record<string, TabGroup[]>,
@@ -47,6 +49,7 @@ vi.mock('../../store', async () => {
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
     setActiveWorktree: () => {}
   }))
+
   return { useAppStore }
 })
 
@@ -57,15 +60,18 @@ vi.mock('../native-chat/use-native-chat-toggle-shortcut', () => ({
 vi.mock('./TerminalOverlaySlot', () => ({
   TerminalOverlaySlot: () => {
     harness.slotRenders += 1
+
     return null
   }
 }))
 
 vi.mock('./terminal-parked-tab-watchers', async () => {
   const { useAppStore } = await import('../../store')
+
   return {
     canWatcherCoverParkedTerminalTab: () => {
       harness.coverageCalls += 1
+
       return harness.coverageCalls % 2 === 1
     },
     disposeParkedTerminalWatchersForWorktree: () => {},
@@ -75,9 +81,11 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
     }) => {
       harness.syncCalls += 1
       harness.renderedParkedSets.push([...args.parkedTabIds].sort())
+
       if (args.parkedTabIds.size === 0) {
         return
       }
+
       ;(
         useAppStore as unknown as {
           setState: (update: (state: ParkingStoreState) => Partial<ParkingStoreState>) => void
@@ -114,6 +122,7 @@ import { useAppStore } from '../../store'
 import TerminalPaneOverlayLayer from './TerminalPaneOverlayLayer'
 
 const TAB_IDS = ['tab-a', 'tab-b'] as const
+
 const GROUP_ID = 'group-a'
 
 type ParkingStoreState = {
@@ -155,6 +164,7 @@ function unifiedTerminalTab(id: string): Tab {
 function renderProductionLayer(root: Root, coldParkTerminalPanes = true): unknown {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   let thrown: unknown = null
+
   try {
     act(() => {
       root.render(
@@ -171,7 +181,9 @@ function renderProductionLayer(root: Root, coldParkTerminalPanes = true): unknow
   } catch (error) {
     thrown = error
   }
+
   consoleError.mockRestore()
+
   return thrown
 }
 
@@ -213,6 +225,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     } catch {
       // A failed initial commit leaves no mounted tree to clean up.
     }
+
     root = undefined
     container.remove()
   })

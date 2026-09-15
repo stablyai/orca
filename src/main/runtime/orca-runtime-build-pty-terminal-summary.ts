@@ -20,6 +20,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     const title = getLatestPtyTitle(pty)
     const pane = parsePaneKey(pty.paneKey ?? '')
     const orphaned = !pty.tabId || !pane || pane.tabId !== pty.tabId
+
     return {
       handle: this.issuePtyHandle(pty),
       ptyId: pty.ptyId,
@@ -52,6 +53,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
   } {
     this.assertGraphReady()
     const record = this.handles.get(handle)
+
     if (!record || record.runtimeId !== this.runtimeId) {
       // A structured worker's handle is not stale — nothing went dead. It names a live agent
       // session that simply has no terminal, and saying `terminal_handle_stale` sent callers
@@ -59,14 +61,17 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       // `isTerminalRunningAgent`, the identity probe) answer for it BEFORE reaching here.
       throw structuredWorkerTerminalRefusal(handle, this._orchestrationDb)
     }
+
     if (record.rendererGraphEpoch !== this.rendererGraphEpoch) {
       throw new Error('terminal_handle_stale')
     }
 
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
+
     if (!leaf || leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration) {
       throw new Error('terminal_handle_stale')
     }
+
     return { record, leaf }
   }
 
@@ -75,41 +80,54 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     pty: RuntimePtyWorktreeRecord
   } | null {
     let record = this.handles.get(handle)
+
     if (!record) {
       const ptyId = [...this.handleByPtyId.entries()].find(
         ([, mappedHandle]) => mappedHandle === handle
       )?.[0]
+
       const pty = ptyId ? this.ptysById.get(ptyId) : null
+
       if (pty) {
         // Why: graph reload clears renderer handle records, but runtime-owned PTY handles remain the caller's control identity.
         this.issuePtyHandle(pty)
         record = this.handles.get(handle)
       }
     }
+
     if (!record || record.runtimeId !== this.runtimeId || !record.tabId.startsWith('pty:')) {
       return null
     }
+
     if (!record.ptyId) {
       return null
     }
+
     const pty = this.ptysById.get(record.ptyId)
+
     if (!pty || pty.ptyId !== record.ptyId) {
       return null
     }
+
     // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
     this.handleByPtyId.set(record.ptyId, handle)
+
     return { record, pty }
   }
 
   protected assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {
     const runtimePty = this.getLivePtyForHandle(handle)
+
     if (runtimePty) {
       if (runtimePty.pty.ptyId !== expectedPtyId) {
         throw new Error('terminal_handle_stale')
       }
+
       return
     }
+
     const { leaf } = this.getLiveLeafForHandle(handle)
+
     if (leaf.ptyId !== expectedPtyId) {
       throw new Error('terminal_handle_stale')
     }
@@ -136,8 +154,10 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
   protected issueHandle(leaf: RuntimeLeafRecord): string {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const existingHandle = this.handleByLeafKey.get(leafKey)
+
     if (existingHandle) {
       const existingRecord = this.handles.get(existingHandle)
+
       if (
         existingRecord &&
         existingRecord.rendererGraphEpoch === this.rendererGraphEpoch &&
@@ -149,17 +169,22 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     }
 
     const preAllocatedHandle = this.adoptPreAllocatedHandle(leaf)
+
     if (preAllocatedHandle) {
       return preAllocatedHandle
     }
+
     const incarnationId = leaf.ptyId ? (this.ptysById.get(leaf.ptyId)?.incarnationId ?? null) : null
     const retained = leaf.ptyId ? this.handleByPtyIncarnation.get(leaf.ptyId) : undefined
+
     if (retained && leaf.ptyId && retained.incarnationId !== incarnationId) {
       this.invalidatePtyIncarnationHandle(leaf.ptyId)
     } else if (retained) {
       this.bindPtyIncarnationHandle(retained, leaf)
+
       return retained.handle
     }
+
     const handle = `term_${randomUUID()}`
     this.syntheticTerminalHandles.add(handle)
     this.handles.set(handle, {
@@ -173,9 +198,11 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       ptyGeneration: leaf.ptyGeneration
     })
     this.handleByLeafKey.set(leafKey, handle)
+
     if (leaf.ptyId) {
       this.handleByPtyIncarnation.set(leaf.ptyId, { handle, incarnationId, leafKey })
     }
+
     return handle
   }
 }

@@ -62,6 +62,7 @@ describe('matchWorktreePaletteReview title null-safety', () => {
       title: 'Fix the thing',
       provider: 'github'
     } as unknown as MatcherReview
+
     const match = matchWorktreePaletteReview(review, 'thing', 'thing')
     expect(match).not.toBeNull()
     expect(match?.text).toBe('Fix the thing')
@@ -78,12 +79,14 @@ describe('matchWorktreePaletteReview title null-safety', () => {
 describe('searchWorktrees with a titleless cached review (Cmd+J palette crash path)', () => {
   it('does not throw when the checks-review cache entry has no title', () => {
     const worktree = makeWorktree()
+
     const titlelessReview = {
       number: 7,
       provider: 'github',
       state: 'open',
       url: 'https://example.test/pr/7'
     } as unknown as HostedReviewInfo
+
     const checksReviewByWorktree = new Map<Worktree, HostedReviewInfo | null>([
       [worktree, titlelessReview]
     ])

@@ -6,14 +6,18 @@
 import { isMacPlatform } from './native-chat-shortcut'
 
 export const MIN_CHAT_FONT_SCALE = 0.8
+
 export const MAX_CHAT_FONT_SCALE = 1.6
+
 export const DEFAULT_CHAT_FONT_SCALE = 1
+
 export const CHAT_FONT_SCALE_STEP = 0.1
 
 /** Clamp a scale into the readable band and round away float drift so repeated
  *  steps land on clean tenths (e.g. 0.7999999 -> 0.8). */
 export function clampChatFontScale(scale: number): number {
   const clamped = Math.min(MAX_CHAT_FONT_SCALE, Math.max(MIN_CHAT_FONT_SCALE, scale))
+
   return Math.round(clamped * 100) / 100
 }
 
@@ -37,9 +41,11 @@ export function chatFontScaleActionForEvent(
   isMac: boolean
 ): ChatFontScaleAction {
   const primary = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+
   if (!primary) {
     return null
   }
+
   switch (e.key) {
     case '=':
     case '+':
@@ -61,6 +67,7 @@ export function chatFontScaleShortcutLabels(isMac = isMacPlatform()): {
   reset: string
 } {
   const mod = isMac ? '⌘' : 'Ctrl+'
+
   return {
     increase: `${mod}+`,
     decrease: `${mod}-`,

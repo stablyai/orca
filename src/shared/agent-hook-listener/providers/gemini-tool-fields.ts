@@ -17,20 +17,25 @@ export function extractGeminiToolFields(
     eventName === 'PostToolUse'
   ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.args) ??
       deriveToolInputPreview(toolName, hookPayload.input)
+
     return toolUpdate(
       { toolName, toolInput },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'args', 'input']) }
     )
   }
+
   if (eventName === 'AfterAgent') {
     const message = readString(hookPayload, 'prompt_response')
+
     if (message) {
       return { lastAssistantMessage: message }
     }
   }
+
   return {}
 }

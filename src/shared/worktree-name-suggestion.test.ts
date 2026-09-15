@@ -7,6 +7,7 @@ import {
 } from './worktree-name-suggestion'
 
 const pickFirst = () => 0
+
 const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
 
 describe('suggestionPathBasename', () => {
@@ -51,6 +52,7 @@ describe('selectSuggestedCreatureName', () => {
       ...MARINE_CREATURES.map((name) => name.toLowerCase()),
       ...MARINE_CREATURES.map((name) => `${name.toLowerCase()}-2`)
     ]
+
     expect(selectSuggestedCreatureName(allUsed, pickFirst)).toBe(`${lower(0)}-3`)
   })
 

@@ -46,6 +46,7 @@ async function seedActivityThread(
   await page.evaluate(
     ({ thread, title, state, message, startedAt }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
@@ -71,16 +72,19 @@ async function seedActivityThreadsForSplitPanes(
   snapshot: PaneIdentitySnapshot
 ): Promise<[SeededActivityThread, SeededActivityThread]> {
   const [firstPane, secondPane] = snapshot.panes
+
   if (!firstPane || !secondPane) {
     throw new Error('Activity pane isolation test needs two split panes')
   }
 
   const now = Date.now()
+
   const first: SeededActivityThread = {
     paneKey: `${snapshot.tabId}:${firstPane.leafId}`,
     leafId: firstPane.leafId,
     prompt: `ACTIVITY_UUID_LEFT_${now}`
   }
+
   const second: SeededActivityThread = {
     paneKey: `${snapshot.tabId}:${secondPane.leafId}`,
     leafId: secondPane.leafId,
@@ -110,14 +114,17 @@ async function seedActivityThreadsForSplitPanes(
 async function enableInlineAgentCards(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
+
     if (!state.worktreeCardProperties.includes('inline-agents')) {
       state.toggleWorktreeCardProperty('inline-agents')
     }
+
     state.closeActivityPage()
   })
 }
@@ -128,6 +135,7 @@ async function enableActivityAgentsView(page: Page): Promise<void> {
     const settings = await window.api.settings.set({
       agentsSidebarIntroShown: true
     })
+
     window.__store?.setState({ settings })
   })
 }
@@ -135,9 +143,11 @@ async function enableActivityAgentsView(page: Page): Promise<void> {
 async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<void> {
   const agentsGroup = page.getByRole('group', { name: 'Agents' }).first()
   const collapsedSummary = agentsGroup.getByRole('button', { name: /^Expand \d+ agents?:/ })
+
   if (await collapsedSummary.isVisible()) {
     await collapsedSummary.click()
   }
+
   const agentRow = agentsGroup.getByRole('treeitem').filter({ hasText: prompt }).first()
   await expect(agentRow).toBeVisible({ timeout: 10_000 })
   await agentRow.click()
@@ -146,6 +156,7 @@ async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<v
 async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return {
         activeWorktreeId: null,
@@ -159,10 +170,13 @@ async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection>
 
     const state = store.getState()
     const activeWorktreeId = state.activeWorktreeId ?? null
+
     const activeGroupId = activeWorktreeId
       ? (state.activeGroupIdByWorktree[activeWorktreeId] ?? null)
       : null
+
     const activeTabId = state.activeTabId ?? null
+
     const activePane = activeTabId
       ? (window.__paneManagers?.get(activeTabId)?.getActivePane?.() ?? null)
       : null
@@ -185,21 +199,27 @@ function terminalPaneForLeaf(page: Page, leafId: string) {
 async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerminal> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree for split-group terminal setup')
     }
+
     const sourceGroupId =
       state.activeGroupIdByWorktree[worktreeId] ?? state.groupsByWorktree[worktreeId]?.[0]?.id
+
     if (!sourceGroupId) {
       throw new Error('No source group for split-group terminal setup')
     }
 
     const groupId = state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
+
     if (!groupId) {
       throw new Error('Failed to create split group')
     }
@@ -208,6 +228,7 @@ async function createTerminalInNewSplitGroup(page: Page): Promise<SplitGroupTerm
     state.focusGroup(worktreeId, groupId)
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return { sourceGroupId, groupId, tabId: tab.id }
   })
 }
@@ -218,9 +239,11 @@ test.describe('Activity Agent Pane Isolation', () => {
     await enableActivityAgentsView(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+
     const hasPaneManager = await waitForActiveTerminalManager(orcaPage, 30_000)
       .then(() => true)
       .catch(() => false)
+
     test.skip(
       !hasPaneManager,
       'Electron automation in this environment never mounts the live TerminalPane manager, so Activity pane isolation would only fail on harness setup.'
@@ -346,15 +369,19 @@ test.describe('Activity Agent Pane Isolation', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
     const secondGroupSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const secondGroupPane = secondGroupSnapshot.panes[0]
+
     if (!secondGroupPane) {
       throw new Error('Split-group terminal did not mount a pane')
     }
+
     const now = Date.now()
+
     const splitGroupThread: SeededActivityThread = {
       paneKey: `${secondGroupSnapshot.tabId}:${secondGroupPane.leafId}`,
       leafId: secondGroupPane.leafId,
       prompt: `ACTIVITY_UUID_SPLIT_GROUP_${now}`
     }
+
     await seedActivityThread(
       orcaPage,
       splitGroupThread,

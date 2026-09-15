@@ -48,13 +48,17 @@ type PiStateTitleMatch = {
  */
 function matchPiStateTitle(title: string): PiStateTitleMatch | null {
   const match = PI_STATE_TITLE_RE.exec(title)
+
   if (!match) {
     return null
   }
+
   const marker = match[2]
+
   if (marker !== ':' && marker !== '!' && marker !== '>') {
     return null
   }
+
   return {
     brand: match[1],
     brandIndex: match.index + match[0].indexOf(match[1]),
@@ -66,6 +70,7 @@ function matchPiStateTitle(title: string): PiStateTitleMatch | null {
 /** Status a Pi/OMP native state title asserts, or null when the title carries no marker. */
 export function getPiStateTitleStatus(title: string): AgentStatus | null {
   const match = matchPiStateTitle(title)
+
   return match ? PI_STATE_MARKER_STATUS[match.marker] : null
 }
 
@@ -76,24 +81,29 @@ export function getPiStateTitleStatus(title: string): AgentStatus | null {
  */
 export function clearPiStateWorkingMarker(title: string): string | null {
   const match = matchPiStateTitle(title)
+
   if (!match || PI_STATE_MARKER_STATUS[match.marker] !== 'working') {
     return null
   }
+
   return `${title.slice(0, match.markerIndex)}${PI_IDLE_MARKER}${title.slice(match.markerIndex + 1)}`
 }
 
 /** The state marker owns identity too; its label may mention another agent. */
 export function getPiStateTitleBrand(title: string): 'Pi' | 'OMP' | null {
   const match = matchPiStateTitle(title)
+
   return match ? (match.brand === 'OMP' ? 'OMP' : 'Pi') : null
 }
 
 /** Rebrand only the protocol prefix, preserving wrappers and the opaque session label. */
 export function rebrandPiStateTitle(title: string, brand: string): string | null {
   const match = matchPiStateTitle(title)
+
   if (!match) {
     return null
   }
+
   return (
     title.slice(0, match.brandIndex) + brand + title.slice(match.brandIndex + match.brand.length)
   )

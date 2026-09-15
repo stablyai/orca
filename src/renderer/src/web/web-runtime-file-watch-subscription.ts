@@ -40,7 +40,9 @@ export async function subscribeWebRuntimeFileWatch({
     if (unwatchAttempt) {
       return unwatchAttempt
     }
+
     unwatchStarted = true
+
     const attempt = call(
       'files.unwatch',
       { subscriptionId: remoteSubscriptionId! },
@@ -50,11 +52,14 @@ export async function subscribeWebRuntimeFileWatch({
         if (response.ok === false) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
+
         const retries = teardownRetries.get(teardownKey)
         retries?.delete(retryRemoteUnwatch)
+
         if (retries?.size === 0) {
           teardownRetries.delete(teardownKey)
         }
+
         dropLocalSubscription()
       })
       .catch((error: unknown) => {
@@ -65,7 +70,9 @@ export async function subscribeWebRuntimeFileWatch({
         unwatchAttempt = null
         unwatchStarted = false
       })
+
     unwatchAttempt = attempt
+
     return attempt
   }
 
@@ -73,10 +80,13 @@ export async function subscribeWebRuntimeFileWatch({
     if (unwatchStarted) {
       return
     }
+
     if (!remoteSubscriptionId) {
       dropLocalSubscription()
+
       return
     }
+
     const retries = teardownRetries.get(teardownKey) ?? new Set()
     retries.add(retryRemoteUnwatch)
     teardownRetries.set(teardownKey, retries)
@@ -88,18 +98,24 @@ export async function subscribeWebRuntimeFileWatch({
     onResponse: (response) => {
       transportInterrupted = false
       const nextSubscriptionId = getFileWatchSubscriptionId(response)
+
       if (nextSubscriptionId) {
         remoteSubscriptionId = nextSubscriptionId
+
         if (stopped) {
           unwatchAndDropLocalSubscription()
+
           return
         }
       }
+
       if (isFileWatchStartingResponse(response)) {
         return
       }
+
       if (!stopped) {
         callbacks.onResponse(response)
+
         if (pendingReplayResync && nextSubscriptionId && response.ok) {
           pendingReplayResync = false
           callbacks.onResponse(createFileWatchReplayOverflowResponse(response, params))
@@ -121,14 +137,18 @@ export async function subscribeWebRuntimeFileWatch({
     onTransportInterrupted: () => {
       transportInterrupted = true
       remoteSubscriptionId = null
+
       if (!stopped) {
         return
       }
+
       const retries = teardownRetries.get(teardownKey)
       retries?.delete(retryRemoteUnwatch)
+
       if (retries?.size === 0) {
         teardownRetries.delete(teardownKey)
       }
+
       dropLocalSubscription()
     },
     onTransportReplayed: () => {
@@ -136,6 +156,7 @@ export async function subscribeWebRuntimeFileWatch({
       pendingReplayResync = true
     }
   }
+
   handle = await subscribe(wrappedCallbacks)
 
   return {
@@ -143,7 +164,9 @@ export async function subscribeWebRuntimeFileWatch({
       if (stopped) {
         return
       }
+
       stopped = true
+
       if (remoteSubscriptionId) {
         unwatchAndDropLocalSubscription()
       } else if (transportInterrupted) {
@@ -158,7 +181,9 @@ function getFileWatchSubscriptionId(response: RuntimeRpcResponse<unknown>): stri
   if (!response.ok || !response.result || typeof response.result !== 'object') {
     return null
   }
+
   const subscriptionId = (response.result as { subscriptionId?: unknown }).subscriptionId
+
   return typeof subscriptionId === 'string' ? subscriptionId : null
 }
 
@@ -171,6 +196,7 @@ function createFileWatchReplayOverflowResponse(
   events: { kind: 'overflow'; absolutePath: string }[]
 }> {
   const worktree = (params as { worktree?: unknown } | null)?.worktree
+
   return {
     id: readyResponse.id,
     ok: true,

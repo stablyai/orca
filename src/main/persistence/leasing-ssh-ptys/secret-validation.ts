@@ -1,5 +1,6 @@
 export function isLegacyOpenCodeSessionCookie(value: string): boolean {
   const trimmed = value.trim()
+
   return (
     trimmed.startsWith('Fe26.2**') ||
     trimmed.split(';').some((pair) => /^(?:auth|__Host-auth)=\S+$/i.test(pair.trim()))

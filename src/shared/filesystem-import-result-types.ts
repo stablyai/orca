@@ -33,4 +33,5 @@ export type ImportItemResult =
 // Why: staging crosses IPC to the renderer and back into the streamer, so the
 // shape lives in shared and every layer names the same type.
 export type StagedExternalImportSource = StagedRuntimeUploadSource
+
 export type StagedExternalImportEntry = StagedRuntimeUploadEntry

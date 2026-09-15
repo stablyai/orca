@@ -24,6 +24,7 @@ import { ALL_AUTOMATION_HOSTS_FILTER } from '../../../../shared/automation-host-
 import { getDefaultSettings } from '../../../../shared/constants'
 
 export const REPO_ID = 'repo-1'
+
 export const WORKSPACE_ID = 'workspace-1'
 
 export function makeAutomation(overrides: Partial<Automation> = {}): Automation {
@@ -61,6 +62,7 @@ export function makeAutomationListRow(
 ): AutomationListRow {
   const automation = overrides.automation ?? makeAutomation()
   const hostStableKey = overrides.hostStableKey ?? 'host:desktop:self'
+
   return {
     key: overrides.key ?? automationListRowKey(hostStableKey, automation.id),
     automation,
@@ -200,6 +202,7 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
   const repo = makeRepo()
   const worktree = makeWorktree()
   const noop = (): void => undefined
+
   return {
     state: {
       repos: [repo],

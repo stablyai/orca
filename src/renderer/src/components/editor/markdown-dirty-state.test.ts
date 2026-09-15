@@ -42,9 +42,11 @@ function shouldSyncPropIntoEditor(
   if (propContent === lastCommittedMarkdown) {
     return false
   }
+
   if (currentMarkdown === propContent) {
     return false
   }
+
   return true
 }
 
@@ -53,8 +55,10 @@ function shouldSyncPropIntoEditor(
  */
 function simulateOnCreate(diskContent: string): string {
   const editor = createEditor(diskContent)
+
   try {
     normalizeEmptyListItems(editor)
+
     return editor.getMarkdown()
   } finally {
     editor.destroy()
@@ -100,6 +104,7 @@ describe('trailing newline does not cause false dirty state', () => {
 describe('document soft-break round-trip', () => {
   it('keeps consecutive source lines in one paragraph', () => {
     const editor = createEditor('Line one\nLine two\nLine three')
+
     try {
       const before = countParagraphs(editor)
       normalizeEmptyListItems(editor)
@@ -122,6 +127,7 @@ describe('document soft-break round-trip', () => {
 
   it('does not modify content without soft breaks', () => {
     const editor = createEditor('# Title\n\nBody text')
+
     try {
       const docBefore = editor.state.doc.toJSON()
       normalizeEmptyListItems(editor)
@@ -162,6 +168,7 @@ describe('real edits are detected as dirty', () => {
   it('ProseMirror transaction produces a dirty diff', () => {
     const diskContent = '# README\n\nOriginal text'
     const editor = createEditor(diskContent)
+
     try {
       normalizeEmptyListItems(editor)
 
@@ -180,6 +187,7 @@ describe('real edits are detected as dirty', () => {
   it('deleting content produces a dirty diff', () => {
     const diskContent = '# Title\n\nParagraph to keep\n\nParagraph to delete'
     const editor = createEditor(diskContent)
+
     try {
       normalizeEmptyListItems(editor)
 
@@ -205,5 +213,6 @@ function countParagraphs(editor: Editor): number {
       count++
     }
   })
+
   return count
 }

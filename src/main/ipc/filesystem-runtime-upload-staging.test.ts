@@ -7,6 +7,7 @@ import type * as RuntimeImportLimits from './runtime-import-limits'
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits
 
 vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
+
 // Why: real ceilings are gigabytes, and truncate() is not sparse on NTFS, so a
 // literal over-limit fixture would allocate that much on Windows CI.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({

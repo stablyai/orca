@@ -68,10 +68,12 @@ export function PRCommentsSection({
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
   const body = details?.body ?? ''
+
   const comments = useMemo(
     () => (details && !isPrSidebarDetailsPlaceholder(details) ? details.comments : []),
     [details]
   )
+
   const isPr = details != null && !detailsFailed && details.item.type === 'pr'
 
   // Per-card action bundle (stable callbacks from the hook) — built once so the
@@ -93,31 +95,38 @@ export function PRCommentsSection({
         : undefined,
     [actions, isPr, prRepo]
   )
+
   const canComment = isPr && actions !== undefined && canAddRootComment(prState)
 
   const [filter, setFilter] = useState<PRCommentAudienceFilter>('all')
+
   const counts = useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
     [botAuthorOverrides, comments]
   )
+
   const visible = useMemo(
     () => filterPRCommentsByAudience(comments, filter, botAuthorOverrides),
     [botAuthorOverrides, comments, filter]
   )
+
   const groups = useMemo(() => groupPRComments(visible), [visible])
   const now = useNow(60_000, comments.length > 0)
 
   // Bounded render window; reset to the first page when the user selects another filter.
   const [limit, setLimit] = useState(COMMENT_PAGE)
+
   const selectFilter = (nextFilter: PRCommentAudienceFilter): void => {
     if (nextFilter === filter) {
       return
     }
+
     // Why: paging belongs to the filter-tab event, so reset it in the same batch
     // instead of briefly rendering the new filter with the previous page size.
     setLimit(COMMENT_PAGE)
     setFilter(nextFilter)
   }
+
   const shownGroups = groups.slice(0, limit)
   const remaining = groups.length - shownGroups.length
 
@@ -161,6 +170,7 @@ export function PRCommentsSection({
                   <View style={styles.audienceTabs}>
                     {PR_COMMENT_AUDIENCE_FILTERS.map((tab) => {
                       const active = tab.value === filter
+
                       return (
                         <Pressable
                           key={tab.value}
@@ -240,6 +250,7 @@ function CommentGroupView({
   now: number
 }) {
   const [expanded, setExpanded] = useState(false)
+
   const cards =
     group.kind === 'thread'
       ? [
@@ -265,6 +276,7 @@ function CommentGroupView({
   const root = getPRCommentGroupRoot(group)
   const count = getPRCommentGroupCount(group)
   const Chevron = expanded ? ChevronDown : ChevronRight
+
   return (
     <View style={styles.group}>
       <Pressable

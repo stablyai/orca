@@ -49,6 +49,7 @@ describe('sortPRChecks', () => {
       check({ name: 'pending', status: 'in_progress', conclusion: null }),
       check({ name: 'broke', conclusion: 'failure' })
     ]
+
     expect(sortPRChecks(checks).map((c) => c.name)).toEqual(['broke', 'pending', 'ok'])
   })
   it('is stable within a bucket', () => {
@@ -56,6 +57,7 @@ describe('sortPRChecks', () => {
       check({ name: 'a', conclusion: 'failure' }),
       check({ name: 'b', conclusion: 'failure' })
     ]
+
     expect(sortPRChecks(checks).map((c) => c.name)).toEqual(['a', 'b'])
   })
 })
@@ -67,6 +69,7 @@ describe('firstFailingCheckKey', () => {
       check({ name: 'broke', checkRunId: 2, conclusion: 'failure' }),
       check({ name: 'also-broke', checkRunId: 3, conclusion: 'cancelled' })
     ])
+
     expect(firstFailingCheckKey(checks)).toBe(prCheckKey(check({ checkRunId: 2 })))
   })
   it('returns null when nothing is failing', () => {
@@ -92,6 +95,7 @@ describe('summarizePRChecks', () => {
       check({ status: 'in_progress', conclusion: null }),
       check({ conclusion: 'failure' })
     ])
+
     expect(summary).toMatchObject({
       total: 3,
       passed: 1,
@@ -117,6 +121,7 @@ describe('summarizePRChecks', () => {
       check({ conclusion: 'neutral' }),
       check({ conclusion: 'neutral' })
     ])
+
     expect(summary).toMatchObject({
       total: 2,
       passed: 0,
@@ -132,6 +137,7 @@ describe('summarizePRChecks', () => {
       check({ conclusion: 'success' }),
       check({ conclusion: 'skipped' })
     ])
+
     expect(summary).toMatchObject({ total: 3, passed: 3, outcome: 'success' })
     expect(summary.label).toBe('3 passed')
   })
@@ -162,6 +168,7 @@ describe('getPRReviewerRows', () => {
     const rows = getPRReviewerRows({
       reviewRequests: [{ login: 'alice', name: 'Alice', avatarUrl: 'a' }]
     })
+
     expect(rows).toEqual([
       {
         login: 'alice',
@@ -179,6 +186,7 @@ describe('getPRReviewerRows', () => {
         { login: 'carol', state: 'CHANGES_REQUESTED' }
       ]
     })
+
     expect(rows.map((r) => [r.login, r.stateLabel, r.token])).toEqual([
       ['bob', 'Approved', 'statusGreen'],
       ['carol', 'Changes requested', 'statusRed']
@@ -189,6 +197,7 @@ describe('getPRReviewerRows', () => {
       reviewRequests: [{ login: 'alice', name: null, avatarUrl: '' }],
       latestReviews: [{ login: 'alice', state: 'APPROVED' }]
     })
+
     expect(rows).toHaveLength(1)
     expect(rows[0].stateLabel).toBe('Requested')
   })

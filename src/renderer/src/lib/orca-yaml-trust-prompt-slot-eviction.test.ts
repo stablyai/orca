@@ -10,7 +10,9 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const hooksCheckMock = vi.fn()
+
 const readIssueCommandMock = vi.fn()
+
 const runtimeEnvironmentTransportCallMock = vi.fn()
 
 // Why: a hand-rolled openModal double would decide the eviction outcome under test.
@@ -23,6 +25,7 @@ function createStateBackedByRealModalSlot(): {
     repos: [{ id: 'repo-1', displayName: 'Repo One' }],
     trustedOrcaHooks: {}
   } as unknown as Partial<AppState>)
+
   return { store, state: store.getState() }
 }
 
@@ -66,6 +69,7 @@ describe('orca.yaml trust prompt evicted from the modal slot', () => {
     store.getState().openModal('worktree-palette')
 
     const result = await settleOrReport(decision)
+
     if (result === 'run') {
       runSetup()
     }

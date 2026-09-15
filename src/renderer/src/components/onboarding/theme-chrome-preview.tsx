@@ -24,6 +24,7 @@ export function ChromePreview({ variant }: { variant: GlobalSettings['theme'] })
       </div>
     )
   }
+
   return <ChromeMock dark={variant === 'dark'} />
 }
 
@@ -37,6 +38,7 @@ function ChromeMock({ dark }: { dark: boolean }) {
   const rowDim = dark ? 'bg-white/5' : 'bg-black/5'
   const tab = dark ? 'bg-[#1d2026] border-white/5' : 'bg-white border-black/5'
   const accent = 'bg-violet-500/80'
+
   return (
     <div className={cn('flex size-full', bg)}>
       <div className={cn('flex w-[34%] flex-col gap-1 border-r p-1.5', sidebar, sidebarBorder)}>

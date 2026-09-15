@@ -26,23 +26,30 @@ export function findUnhydratedHostMirrorForPane(
   state: AppStoreState
 ): UnhydratedHostMirror | null {
   const tabId = record.tabId ?? parsePaneKey(record.paneKey)?.tabId ?? null
+
   if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
     return null
   }
+
   // Why: once the mirror retracts the tab the host has spoken — the pane is
   // gone, and ordinary recovery owns it again.
   const worktreeTabs = state.tabsByWorktree[record.worktreeId] ?? []
+
   if (!worktreeTabs.some((tab) => tab.id === tabId)) {
     return null
   }
+
   // Why: a published PTY handle for the tab is the mirror having spoken for it,
   // whatever the individual leaf's fate.
   if ((state.ptyIdsByTabId[tabId]?.length ?? 0) > 0) {
     return null
   }
+
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, record.worktreeId)
+
   if (environmentId && hasHostSessionMirrorHydrated(environmentId, record.worktreeId)) {
     return null
   }
+
   return { environmentId }
 }

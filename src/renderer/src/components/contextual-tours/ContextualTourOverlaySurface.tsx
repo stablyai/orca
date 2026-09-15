@@ -29,6 +29,7 @@ import { translate } from '@/i18n/i18n'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 const SKIP_BUTTON_SELECTOR = 'button[aria-label^="Skip"], button[aria-label="Dismiss tour"]'
 
 export type ActiveTourRenderState = {
@@ -64,6 +65,7 @@ if (typeof window !== 'undefined') {
   const guardedWindow = window as Window & {
     __orcaContextualTourGlobalKeyGuardInstalled?: boolean
   }
+
   if (!guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled) {
     guardedWindow.__orcaContextualTourGlobalKeyGuardInstalled = true
     window.addEventListener('keydown', handleContextualTourGlobalKeyDown, true)
@@ -87,10 +89,13 @@ export function ContextualTourOverlaySurface({
   onOverlayKeyDownCapture
 }: ContextualTourOverlaySurfaceProps): JSX.Element {
   const arrowRef = useRef<SVGSVGElement | null>(null)
+
   const [floatingPosition, setFloatingPosition] = useState<ContextualTourFloatingPosition | null>(
     null
   )
+
   const panelHostSlot = panelHost?.getAttribute('data-slot')
+
   const hostedPanelClass = cn(
     PANEL_BASE_CLASSES,
     PANEL_ANIMATION_CLASSES,
@@ -98,6 +103,7 @@ export function ContextualTourOverlaySurface({
       ? 'absolute z-[80] w-[min(20rem,calc(100%-1.5rem))]'
       : 'absolute z-[80] w-[min(20rem,calc(100%-2rem))]'
   )
+
   const floatingPanelClass = cn(
     PANEL_BASE_CLASSES,
     PANEL_ANIMATION_CLASSES,
@@ -105,6 +111,7 @@ export function ContextualTourOverlaySurface({
   )
 
   const stepKey = `${activeTourId}-${renderState.progress.current}`
+
   const defaultPrimaryAction = {
     kind: renderState.isLastStep ? 'complete' : 'next',
     label: renderState.isLastStep
@@ -114,9 +121,12 @@ export function ContextualTourOverlaySurface({
           'Next'
         )
   } satisfies ContextualTourStepAction
+
   const primaryAction =
     renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)
+
   const showTargetRings = renderState.targetPulse === true
+
   const targetRingStyle = showTargetRings
     ? ({
         left: renderState.rect.left,
@@ -125,6 +135,7 @@ export function ContextualTourOverlaySurface({
         height: renderState.rect.height
       } satisfies CSSProperties)
     : undefined
+
   const unresolvedPanelPosition = {
     left: 0,
     top: 0,
@@ -134,14 +145,17 @@ export function ContextualTourOverlaySurface({
   useLayoutEffect(() => {
     const panelElement = panelRef.current
     const arrowElement = arrowRef.current
+
     if (!panelElement || !arrowElement) {
       setFloatingPosition(null)
+
       return
     }
 
     // Why: hide only until the new step's first measurement; autoUpdate then
     // tracks the target continuously, so the panel never blinks mid-step.
     setFloatingPosition(null)
+
     return watchContextualTourFloatingPosition({
       arrowElement,
       floatingElement: panelElement,
@@ -290,12 +304,14 @@ export function handleContextualTourOverlayKeyDown(event: KeyboardEvent<HTMLDivE
 
 export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEvent): void {
   const activeTourId = useAppStore.getState().activeContextualTourId
+
   if (!activeTourId || event.key !== 'Escape') {
     return
   }
 
   const overlay = document.querySelector<HTMLElement>('[data-contextual-tour-overlay]')
   const focusRoot = document.querySelector<HTMLElement>('[data-contextual-tour-panel]') ?? overlay
+
   if (!overlay || !focusRoot) {
     return
   }
@@ -303,6 +319,7 @@ export function handleContextualTourGlobalKeyDown(event: globalThis.KeyboardEven
   event.preventDefault()
   event.stopImmediatePropagation()
   const skipButton = focusRoot.querySelector<HTMLButtonElement>(SKIP_BUTTON_SELECTOR)
+
   if (skipButton) {
     skipButton.click()
   }

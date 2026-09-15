@@ -39,10 +39,12 @@ export function createWorktreeVisibilitySourceMutation(
         ) === visibility
     }
   }
+
   const match =
     source.kind === 'built-in'
       ? ({ kind: 'built-in', id: source.id } as const)
       : ({ kind: 'custom', id: source.source.id } as const)
+
   return {
     updates: {
       worktreeVisibilitySourcePreferences: buildWorktreeSourcePreferenceUpdate(

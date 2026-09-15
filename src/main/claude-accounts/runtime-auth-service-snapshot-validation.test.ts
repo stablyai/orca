@@ -22,6 +22,7 @@ vi.mock('./oauth-refresh', () => createOauthRefreshMock())
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -42,11 +43,13 @@ describe('ClaudeRuntimeAuthService', () => {
   it('treats corrupt system-default snapshots as missing and clears owned runtime auth', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const runtimeConfigPath = join(testState.fakeHomeDir, '.claude.json')
+
     const snapshotPath = join(
       testState.userDataDir,
       'claude-runtime-auth',
       'system-default-auth.json'
     )
+
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
     mkdirSync(join(testState.userDataDir, 'claude-runtime-auth'), { recursive: true })
     writeFileSync(snapshotPath, '{not-json', 'utf-8')
@@ -58,15 +61,18 @@ describe('ClaudeRuntimeAuthService', () => {
     )
     testState.scopedKeychainCredentials = managedCredentials
     testState.legacyKeychainCredentials = managedCredentials
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -86,11 +92,13 @@ describe('ClaudeRuntimeAuthService', () => {
   it('treats wrong-shaped system-default snapshots as missing and clears owned runtime auth', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const runtimeConfigPath = join(testState.fakeHomeDir, '.claude.json')
+
     const snapshotPath = join(
       testState.userDataDir,
       'claude-runtime-auth',
       'system-default-auth.json'
     )
+
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
     mkdirSync(join(testState.userDataDir, 'claude-runtime-auth'), { recursive: true })
     writeFileSync(
@@ -112,15 +120,18 @@ describe('ClaudeRuntimeAuthService', () => {
     )
     testState.scopedKeychainCredentials = managedCredentials
     testState.legacyKeychainCredentials = managedCredentials
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -139,11 +150,13 @@ describe('ClaudeRuntimeAuthService', () => {
 
   it('treats snapshots missing all keychain credential fields as invalid', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+
     const snapshotPath = join(
       testState.userDataDir,
       'claude-runtime-auth',
       'system-default-auth.json'
     )
+
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
     mkdirSync(join(testState.userDataDir, 'claude-runtime-auth'), { recursive: true })
     writeFileSync(
@@ -158,15 +171,18 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(runtimeCredentialsPath, managedCredentials, 'utf-8')
     testState.scopedKeychainCredentials = managedCredentials
     testState.legacyKeychainCredentials = managedCredentials
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -185,11 +201,13 @@ describe('ClaudeRuntimeAuthService', () => {
   it('treats snapshots missing credentialsJson as invalid and clears missing-managed runtime auth', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const runtimeConfigPath = join(testState.fakeHomeDir, '.claude.json')
+
     const snapshotPath = join(
       testState.userDataDir,
       'claude-runtime-auth',
       'system-default-auth.json'
     )
+
     const staleManagedCredentials = createClaudeCredentialsJson('managed@example.com', 'managed')
     const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
@@ -212,12 +230,14 @@ describe('ClaudeRuntimeAuthService', () => {
     )
     testState.scopedKeychainCredentials = staleManagedCredentials
     testState.legacyKeychainCredentials = staleManagedCredentials
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath, { email: 'managed@example.com' })
       ],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -246,12 +266,14 @@ describe('ClaudeRuntimeAuthService', () => {
     )
     testState.scopedKeychainCredentials = staleManagedCredentials
     testState.legacyKeychainCredentials = staleManagedCredentials
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath, { email: 'managed@example.com' })
       ],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -276,12 +298,14 @@ describe('ClaudeRuntimeAuthService', () => {
     )
     testState.scopedKeychainCredentials = externalCredentials
     testState.legacyKeychainCredentials = externalCredentials
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath, { email: 'managed@example.com' })
       ],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -300,15 +324,18 @@ describe('ClaudeRuntimeAuthService', () => {
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
     writeFileSync(runtimeCredentialsPath, systemCredentials, 'utf-8')
     writeFileSync(runtimeConfigPath, `${JSON.stringify({})}\n`, 'utf-8')
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials,
       'null\n'
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -333,14 +360,17 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(runtimeConfigPath, '{not-json', 'utf-8')
     testState.scopedKeychainCredentials = systemCredentials
     testState.legacyKeychainCredentials = systemCredentials
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -367,14 +397,17 @@ describe('ClaudeRuntimeAuthService', () => {
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
     writeFileSync(runtimeCredentialsPath, systemCredentials, 'utf-8')
     writeFileSync(runtimeConfigPath, '[]', 'utf-8')
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -397,15 +430,18 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(runtimeConfigPath, '{not-json', 'utf-8')
     testState.scopedKeychainCredentials = systemCredentials
     testState.legacyKeychainCredentials = systemCredentials
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials,
       `${JSON.stringify(managedOauthAccount)}\n`
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -443,15 +479,18 @@ describe('ClaudeRuntimeAuthService', () => {
     )
     testState.scopedKeychainCredentials = systemCredentials
     testState.legacyKeychainCredentials = systemCredentials
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials,
       'null\n'
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -484,15 +523,18 @@ describe('ClaudeRuntimeAuthService', () => {
       `${JSON.stringify({ oauthAccount: systemOauthAccount })}\n`,
       'utf-8'
     )
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials,
       '{"accountUuid":"account-1","emailAddress":"user@example.com"}\n'
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -524,15 +566,18 @@ describe('ClaudeRuntimeAuthService', () => {
       `${JSON.stringify({ oauthAccount: systemOauthAccount })}\n`,
       'utf-8'
     )
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials,
       '{"accountUuid":"account-1"}\n'
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)]
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')

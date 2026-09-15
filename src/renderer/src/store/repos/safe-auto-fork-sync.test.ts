@@ -9,7 +9,9 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { safeAutoForkSyncAttempts, scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const gitSyncFork = vi.fn()
 
 const RUNTIME_REPO: Repo = {

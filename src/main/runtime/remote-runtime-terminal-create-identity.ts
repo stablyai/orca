@@ -13,5 +13,6 @@ export function deriveRemoteRuntimeTerminalCreateHandle(
     .update('\0')
     .update(clientMutationId)
     .digest('hex')
+
   return `term_${digest.slice(0, 32)}`
 }

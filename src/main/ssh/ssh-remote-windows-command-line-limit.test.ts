@@ -17,8 +17,11 @@ import {
 } from './ssh-relay-upload-stage-commands'
 
 const windows = getRemoteHostPlatform('win32-x64')
+
 const owner = '.sftp-namespace-123e4567e89b12d3a456426614174000'
+
 const pool = 'C:\\Users\\orca\\.orca-remote\\.upload-stages'
+
 const stage: RelayUploadStageSlot = {
   poolDir: pool,
   slotName: 'slot-0',
@@ -68,13 +71,16 @@ describe('Windows remote command line limit', () => {
       { length: 200 },
       (_unused, index) => `Write-Output ${index}; $slot = 'C:\\Users\\orca\\stage-${index}'`
     ).join('\n')
+
     const command = powerShellCommand(script)
     expect(command.length).toBeLessThanOrEqual(CMD_EXE_COMMAND_LINE_MAX_CHARS)
     expect(decodeRemotePowerShellScript(command)).toBe(script)
+
     const bootstrap = Buffer.from(
       command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)$/u)?.[1] ?? '',
       'base64'
     ).toString('utf16le')
+
     const payload = bootstrap.match(/FromBase64String\('([A-Za-z0-9+/=]+)'\)/u)?.[1] ?? ''
     expect(gunzipSync(Buffer.from(payload, 'base64')).toString('utf-8')).toBe(script)
     expect(bootstrap).toContain('Invoke-Expression $OrcaScriptText')
@@ -82,10 +88,13 @@ describe('Windows remote command line limit', () => {
 
   it('refuses a script no encoding can fit instead of letting cmd.exe reject it', () => {
     let seed = 12345
+
     const incompressible = Array.from({ length: 60_000 }, () => {
       seed = (seed * 1103515245 + 12345) % 2147483648
+
       return String.fromCharCode(97 + (seed % 26))
     }).join('')
+
     expect(() => powerShellCommand(`Write-Output '${incompressible}'`)).toThrow(
       /Orca budgets 8000 for a line sshd hands to cmd\.exe/u
     )

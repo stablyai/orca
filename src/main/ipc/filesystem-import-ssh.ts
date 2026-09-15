@@ -28,15 +28,18 @@ export async function importExternalPathsSsh(
 
   const connManager = getSshConnectionManager()
   const conn = connManager?.getConnection(connectionId)
+
   if (!conn) {
     throw new Error(`No SSH connection for "${connectionId}"`)
   }
 
   const state = conn.getState()
+
   if (state.status !== 'connected') {
     if (state.status === 'reconnecting') {
       throw new Error('SSH connection is reconnecting — please try again in a moment')
     }
+
     throw new Error('SSH connection is not active — please reconnect and try again')
   }
 
@@ -51,15 +54,19 @@ export async function importExternalPathsSsh(
 
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
+
   if (!provider.openFileUploadSession) {
     throw new Error('Remote file upload is unavailable. Reconnect the SSH target and retry.')
   }
+
   options?.assertCurrent?.()
   const uploadSession = await provider.openFileUploadSession()
+
   // Why: filename legality follows the remote filesystem, not the client's OS.
   const remotePathFlavor: RemotePathFlavor = isWindowsAbsolutePathLike(destDir)
     ? 'windows'
     : 'posix'
+
   try {
     for (const sourcePath of sourcePaths) {
       const result = await importOneSourceSsh(
@@ -71,7 +78,9 @@ export async function importExternalPathsSsh(
         remotePathFlavor,
         options?.assertCurrent
       )
+
       results.push(result)
+
       if (result.status === 'imported') {
         // Why: destPath is a remote POSIX path (e.g. /home/user/foo/bar.txt).
         // Node's basename() uses the OS separator, which on Windows would
@@ -100,6 +109,7 @@ async function importOneSourceSsh(
   authorizeExternalPath(resolvedSource)
 
   const originalName = basename(resolvedSource)
+
   try {
     assertSafeRemotePathSegment(originalName, remotePathFlavor)
   } catch (error) {
@@ -111,12 +121,14 @@ async function importOneSourceSsh(
   }
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>
+
   try {
     sourceStat = await lstat(resolvedSource)
   } catch (error) {
     if (isENOENT(error)) {
       return { sourcePath, status: 'skipped', reason: 'missing' }
     }
+
     if (
       error instanceof Error &&
       'code' in error &&
@@ -125,6 +137,7 @@ async function importOneSourceSsh(
     ) {
       return { sourcePath, status: 'skipped', reason: 'permission-denied' }
     }
+
     return {
       sourcePath,
       status: 'failed',
@@ -143,14 +156,17 @@ async function importOneSourceSsh(
   const isDir = sourceStat.isDirectory()
 
   let createdDestDir: string | null = null
+
   try {
     const rootRealPath = isDir ? await captureLocalUploadRoot(resolvedSource, sourceStat) : null
+
     if (isDir && (await preScanSshImportDirectory(resolvedSource, remotePathFlavor))) {
       return { sourcePath, status: 'skipped', reason: 'symlink' }
     }
 
     // Why: local inspection can outlive a HUB SSH session; revalidate before the first remote write.
     assertCurrent?.()
+
     const finalName = await deconflictName(
       provider,
       destDir,
@@ -158,6 +174,7 @@ async function importOneSourceSsh(
       reservedNames,
       assertCurrent
     )
+
     const destPath = `${destDir}/${finalName}`
     const renamed = finalName !== originalName
 
@@ -197,6 +214,7 @@ async function importOneSourceSsh(
         // Best effort; a replacement session must never inherit cleanup from the retired owner.
       }
     }
+
     return {
       sourcePath,
       status: 'failed',
@@ -213,6 +231,7 @@ async function deconflictName(
   assertCurrent?: () => void
 ): Promise<string> {
   assertCurrent?.()
+
   if (
     !(await remotePathExists(provider, `${destDir}/${originalName}`)) &&
     !reservedNames.has(originalName)
@@ -227,6 +246,7 @@ async function deconflictName(
 
   let candidate = `${stem} copy${ext}`
   assertCurrent?.()
+
   if (
     !(await remotePathExists(provider, `${destDir}/${candidate}`)) &&
     !reservedNames.has(candidate)
@@ -235,15 +255,18 @@ async function deconflictName(
   }
 
   let counter = 2
+
   while (counter < 10000) {
     candidate = `${stem} copy ${counter}${ext}`
     assertCurrent?.()
+
     if (
       !(await remotePathExists(provider, `${destDir}/${candidate}`)) &&
       !reservedNames.has(candidate)
     ) {
       return candidate
     }
+
     counter += 1
   }
 
@@ -262,10 +285,12 @@ async function ensureDropStagingDir(
   await provider.createDir(parent)
   const gitignorePath = `${parent}/.gitignore`
   assertCurrent?.()
+
   if (!(await remotePathExists(provider, gitignorePath))) {
     assertCurrent?.()
     await provider.writeFile(gitignorePath, '*\n!.gitignore\n')
   }
+
   assertCurrent?.()
   await provider.createDir(destDir)
 }
@@ -276,11 +301,13 @@ async function remotePathExists(
 ): Promise<boolean> {
   try {
     await provider.stat(remotePath)
+
     return true
   } catch (error) {
     if (isRemoteMissingError(error)) {
       return false
     }
+
     throw error
   }
 }
@@ -289,7 +316,9 @@ function isRemoteMissingError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   const code = (error as NodeJS.ErrnoException).code
+
   return (
     code === 'ENOENT' ||
     /\b(ENOENT|ENOTDIR)\b|no such file or directory|cannot find (?:the )?(?:file|path)|(?:file|path) not found/i.test(

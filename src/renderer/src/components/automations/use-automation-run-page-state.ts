@@ -37,6 +37,7 @@ export function useAutomationRunPageState({
     terminalLayoutsByTabId,
     ptyIdsByTabId
   } = store
+
   const {
     isLoading,
     automationHostTargetKey,
@@ -53,6 +54,7 @@ export function useAutomationRunPageState({
     isDetailOpen,
     setIsDetailOpen
   } = local
+
   const { selected, selectedRow } = list
   const { selectedRuns, selectedAutomationRunPage } = setup
 
@@ -60,15 +62,19 @@ export function useAutomationRunPageState({
     if (!isDetailOpen || pendingAutomationRunNavigation) {
       return
     }
+
     const hasSelectedLocal = selectedRow?.key
       ? list.visibleRows.some((row) => row.key === selectedRow.key)
       : selectedId !== null && selectedRow !== null
+
     const hasSelectedExternal =
       selectedExternalKey !== null &&
       list.externalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
+
     if (hasSelectedLocal || hasSelectedExternal) {
       return
     }
+
     setIsDetailOpen(false)
     setSelectedAutomationRunPageId(null)
     setSelectedExternalRunPage(null)
@@ -90,47 +96,61 @@ export function useAutomationRunPageState({
     if (!pendingAutomationRunNavigation || isLoading) {
       return
     }
+
     const pending = pendingAutomationRunNavigation
+
     const pendingTargetKey = getAutomationHostTargetKey(
       getAutomationTargetFromHostId(pending.hostId)
     )
+
     if (automationHostTargetKey !== pendingTargetKey) {
       return
     }
+
     const pendingAutomation = automations.find(
       (automation) => automation.id === pending.automationId
     )
+
     if (selectedExternalKey !== null) {
       selectExternalKey(null)
     }
+
     if (!pendingAutomation) {
       setSelectedId(pending.automationId)
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
+
       if (pageView === 'run') {
         setPageView('runs')
       }
+
       toast.message(
         translate(
           'auto.components.automations.AutomationsPage.pendingAutomationMissing',
           'Automation no longer available.'
         )
       )
+
       return
     }
+
     if (selectedId !== pending.automationId) {
       setSelectedId(pending.automationId)
       setIsDetailOpen(true)
+
       return
     }
+
     if (!pending.runId) {
       setIsDetailOpen(true)
       setActivePaneTab('overview')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
       setPageView('automations')
+
       return
     }
+
     if (
       selectedAutomationRuns.notice &&
       selectedAutomationRuns.automationId === pending.automationId
@@ -139,28 +159,37 @@ export function useAutomationRunPageState({
       setActivePaneTab('runs')
       setSelectedAutomationRunPageId(null)
       setPendingAutomationRunNavigation(null)
+
       if (pageView === 'run') {
         setPageView('runs')
       }
+
       return
     }
+
     if (selectedAutomationRuns.automationId !== pending.automationId) {
       return
     }
+
     setIsDetailOpen(true)
     setActivePaneTab('runs')
     const pendingRun = selectedRuns.find((run) => run.id === pending.runId)
+
     if (pendingRun) {
       setSelectedAutomationRunPageId(pending.runId)
       setPendingAutomationRunNavigation(null)
       setPageView('run')
+
       return
     }
+
     setSelectedAutomationRunPageId(null)
     setPendingAutomationRunNavigation(null)
+
     if (pageView === 'run') {
       setPageView('runs')
     }
+
     toast.message(
       translate(
         'auto.components.automations.AutomationsPage.pendingAutomationRunMissing',
@@ -189,6 +218,7 @@ export function useAutomationRunPageState({
 
   const activeTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
+
     for (const tabs of Object.values(unifiedTabsByWorktree)) {
       for (const tab of tabs) {
         if (tab.contentType === 'terminal') {
@@ -196,8 +226,10 @@ export function useAutomationRunPageState({
         }
       }
     }
+
     return ids
   }, [unifiedTabsByWorktree])
+
   const selectedAutomationRunPageWorktree = selectedAutomationRunPage?.workspaceId
     ? selectedRow
       ? (worktreeForRow(
@@ -207,15 +239,18 @@ export function useAutomationRunPageState({
         ) ?? null)
       : (worktreeMap.get(selectedAutomationRunPage.workspaceId) ?? null)
     : null
+
   const selectedAutomationRunPageWorkspaceDisplay = selectedAutomationRunPage
     ? getAutomationRunWorkspaceDisplay({
         run: selectedAutomationRunPage,
         worktree: selectedAutomationRunPageWorktree
       })
     : null
+
   const selectedAutomationRunPageOpenTabId = selectedAutomationRunPage
     ? getAutomationRunOpenTabId(selectedAutomationRunPage)
     : null
+
   const selectedAutomationRunPageViewState = selectedAutomationRunPage
     ? getAutomationRunViewState({
         run: selectedAutomationRunPage,
@@ -234,9 +269,11 @@ export function useAutomationRunPageState({
         })
       })
     : null
+
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
+
   const isSelectedAutomationRunPageRerunPending =
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
 

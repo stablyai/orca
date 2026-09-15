@@ -15,6 +15,7 @@ describe('shouldIgnoreMonacoContentChange', () => {
     const filePath = '/repo/seed.spec.ts'
 
     beginProgrammaticContentSync(filePath)
+
     try {
       expect(
         shouldIgnoreMonacoContentChange({

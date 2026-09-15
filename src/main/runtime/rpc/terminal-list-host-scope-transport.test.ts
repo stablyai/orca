@@ -35,6 +35,7 @@ describe('terminal.list RPC boundary', () => {
       listTerminals: vi.fn(async () => LIST_RESULT),
       getRuntimeId: () => 'runtime-a'
     }
+
     const dispatcher = new RpcDispatcher({ runtime: runtime as never, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch({

@@ -22,13 +22,16 @@ export function registerRendererOwnedAgentStatusPane(
   environmentId: string
 ): () => void {
   const existing = panesByPaneKey.get(paneKey)
+
   // Why: a remount re-registers the same pane; keep the earned claim unless the
   // pane moved to another runtime environment (then its bytes are a new stream).
   const entry: RendererOwnedAgentStatusPane = {
     environmentId,
     hasClientWrite: existing?.environmentId === environmentId && existing.hasClientWrite
   }
+
   panesByPaneKey.set(paneKey, entry)
+
   // Why identity-checked: a replacement mount registers before the superseded
   // pane's dispose runs, and paneKey is `${tabId}:${leafId}` — shared across that
   // handoff. An unconditional delete would strip the live pane's claim for good,
@@ -42,9 +45,11 @@ export function registerRendererOwnedAgentStatusPane(
 
 export function markRendererOwnedAgentStatusWrite(paneKey: string): void {
   const existing = panesByPaneKey.get(paneKey)
+
   if (!existing || existing.hasClientWrite) {
     return
   }
+
   existing.hasClientWrite = true
 }
 

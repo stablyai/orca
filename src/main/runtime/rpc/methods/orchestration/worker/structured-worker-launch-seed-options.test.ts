@@ -16,6 +16,7 @@ vi.mock('../../orchestration-structured-worker-session', () => ({
 }))
 
 const { createStructuredWorkerSessionForWorktree } = await import('./worker-topology')
+
 const { prepareStructuredAgentSessionCreateForWorktree } =
   await import('../../structured-agent-session-create')
 
@@ -29,6 +30,7 @@ async function createWith(launchPreferences?: Record<string, string>) {
     ...(launchPreferences ? { launchPreferences } : {}),
     effects: []
   })
+
   return createStructuredWorkerSession.mock.calls[0]?.[0] ?? {}
 }
 
@@ -81,6 +83,7 @@ describe('the create the seed options land in', () => {
       caller: { callerKey: 'orchestration:dispatch:ctx_1' },
       ...(options ? { options } : {})
     })
+
     return prepared.attachParams
   }
 

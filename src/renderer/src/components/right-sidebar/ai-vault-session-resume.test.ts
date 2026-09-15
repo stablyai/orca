@@ -109,6 +109,7 @@ function makeWorktreeInfo(
 }
 
 const HOST_SESSION_FILE = '/Users/ada/.claude/projects/-repo-orca/session-1.jsonl'
+
 const WSL_SESSION_FILE =
   '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-repo-orca\\session-1.jsonl'
 
@@ -597,6 +598,7 @@ describe('aiVaultSessionRowResumeGating', () => {
       messageCount: 0,
       previewMessages: [{ role: 'user' as const, text: 'hello', timestamp: null }]
     }
+
     expect(aiVaultSessionRowResumeGating(previewOnlySession, unblocked)).toEqual({
       resumeDisabled: false,
       canCopyResumeCommand: true

@@ -1,6 +1,7 @@
 import { runProcess } from '../../shared/child-process/run-process'
 
 const LOCAL_COMMAND_LOOKUP_TIMEOUT_MS = 5_000
+
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
 
 function runLocalProviderCommand(
@@ -12,6 +13,7 @@ function runLocalProviderCommand(
     if (result.timedOut) {
       throw new Error(options.timeoutMessage)
     }
+
     if (result.code !== 0) {
       throw new Error(
         result.stderr.trim() || `Command exited with code ${result.code ?? 'unknown'}.`
@@ -22,6 +24,7 @@ function runLocalProviderCommand(
 
 export async function isExternalAutomationCommandOnPath(command: string): Promise<boolean> {
   const finder = process.platform === 'win32' ? 'where' : 'which'
+
   try {
     // Why: these probes run while loading Automations; a wedged PATH shim must
     // not keep the list IPC pending forever.
@@ -29,6 +32,7 @@ export async function isExternalAutomationCommandOnPath(command: string): Promis
       timeoutMs: LOCAL_COMMAND_LOOKUP_TIMEOUT_MS,
       timeoutMessage: `Command lookup timed out after ${LOCAL_COMMAND_LOOKUP_TIMEOUT_MS}ms.`
     })
+
     return true
   } catch {
     return false

@@ -10,6 +10,7 @@ export type ParsedWorktreeId = {
 }
 
 export const FOLDER_WORKSPACE_INSTANCE_SEPARATOR = '::workspace:'
+
 const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
   `${FOLDER_WORKSPACE_INSTANCE_SEPARATOR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f-]{36}$`
 )
@@ -24,6 +25,7 @@ export function getRepoMainWorktreeId(repo: Pick<Repo, 'id' | 'path'>): string {
 
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
+
   return separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
 }
 
@@ -35,9 +37,11 @@ export function getRepoIdFromWorktreeId(worktreeId: string): string {
  */
 export function worktreeIdComparisonKey(worktreeId: string): string | null {
   const parsed = splitWorktreeId(worktreeId)
+
   if (!parsed || !parsed.repoId || !parsed.worktreePath) {
     return null
   }
+
   return `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${normalizeRuntimePathForComparison(
     parsed.worktreePath
   )}`
@@ -52,14 +56,17 @@ export function worktreeIdComparisonKey(worktreeId: string): string | null {
  */
 export function worktreeIdsEqual(left: string, right: string): boolean {
   const leftKey = worktreeIdComparisonKey(left)
+
   return leftKey === null ? left === right : leftKey === worktreeIdComparisonKey(right)
 }
 
 export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
+
   if (separatorIdx === -1) {
     return null
   }
+
   return {
     repoId: worktreeId.slice(0, separatorIdx),
     worktreePath: worktreeId.slice(separatorIdx + WORKTREE_ID_SEPARATOR.length)
@@ -68,9 +75,11 @@ export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
 
 export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktreeId | null {
   const parsed = splitWorktreeId(worktreeId)
+
   if (!parsed) {
     return null
   }
+
   return {
     repoId: parsed.repoId,
     // Why: folder projects can have multiple workspace sessions backed by the
@@ -83,9 +92,12 @@ export function splitWorktreeIdForFilesystem(worktreeId: string): ParsedWorktree
 export function getWorktreePathBasenameFromId(worktreeId: string): string | null {
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const normalizedPath = parsed?.worktreePath.trim().replace(/[\\/]+$/g, '') ?? ''
+
   if (!normalizedPath) {
     return null
   }
+
   const basename = normalizedPath.split(/[\\/]/).findLast(Boolean)?.trim()
+
   return basename || null
 }

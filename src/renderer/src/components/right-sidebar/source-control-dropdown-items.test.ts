@@ -32,6 +32,7 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 }
       })
     )
+
     const kinds = items.map((item) => item.kind)
     expect(kinds).toEqual([
       'commit',
@@ -55,9 +56,11 @@ describe('resolveDropdownItems', () => {
     const items = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 } })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.commit.disabled).toBe(true)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.commit_sync.disabled).toBe(true)
@@ -73,9 +76,11 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.commit.disabled).toBe(false)
     expect(byKind.commit_push.disabled).toBe(false)
     expect(byKind.commit_sync.disabled).toBe(false)
@@ -90,9 +95,11 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.disabled).toBe(false)
     expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.commit_push.disabled).toBe(true)
@@ -108,9 +115,11 @@ describe('resolveDropdownItems', () => {
         hasCurrentBranch: false
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.title).toBe('Check out a branch before pushing commits')
     expect(byKind.publish.label).toBe('No Branch')
     expect(byKind.publish.title).toBe('Check out a branch before publishing commits')
@@ -123,9 +132,11 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.publish.disabled).toBe(true)
   })
 
@@ -133,9 +144,11 @@ describe('resolveDropdownItems', () => {
     const items = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 3, behind: 2 } })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.label).toBe('Push (3)')
     expect(byKind.force_push.label).toBe('Force Push (3)')
     expect(byKind.pull.label).toBe('Pull (2)')
@@ -150,6 +163,7 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -185,6 +199,7 @@ describe('resolveDropdownItems', () => {
         }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -231,6 +246,7 @@ describe('resolveDropdownItems', () => {
         }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -248,9 +264,11 @@ describe('resolveDropdownItems', () => {
     const items = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 } })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.label).toBe('Push')
     expect(byKind.force_push.label).toBe('Force Push')
     expect(byKind.pull.label).toBe('Pull')
@@ -271,6 +289,7 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 }
       })
     )
+
     for (const entry of items) {
       if (entry.kind !== 'separator') {
         expect(entry.disabled).toBe(true)
@@ -285,15 +304,18 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     const rebaseItems = resolveDropdownItems(
       inputs({
         conflictOperation: 'rebase',
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     const mergeByKind = Object.fromEntries(
       mergeItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     const rebaseByKind = Object.fromEntries(
       rebaseItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -328,6 +350,7 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     const rebaseItems = resolveDropdownItems(
       inputs({
         conflictOperation: 'rebase',
@@ -335,6 +358,7 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     const abortMerge = items.find((entry) => entry.kind === 'abort_merge')
     const abortRebase = rebaseItems.find((entry) => entry.kind === 'abort_rebase')
 
@@ -380,9 +404,11 @@ describe('resolveDropdownItems', () => {
     const items = resolveDropdownItems(
       inputs({ stagedCount: 1, hasMessage: true, upstreamStatus: undefined })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     const loadingBlocked = [
       'commit_push',
       'commit_sync',
@@ -391,10 +417,12 @@ describe('resolveDropdownItems', () => {
       'sync',
       'publish'
     ] as const
+
     for (const kind of loadingBlocked) {
       expect(byKind[kind].disabled).toBe(true)
       expect(byKind[kind].title).toBe('Checking branch status…')
     }
+
     // Commit itself does not depend on upstream — it remains enabled when
     // staged + message are present and no commit is in flight.
     expect(byKind.commit.disabled).toBe(false)
@@ -418,9 +446,11 @@ describe('resolveDropdownItems', () => {
         branchCommitsAhead: 2
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
     expect(byKind.push.disabled).toBe(false)
     expect(byKind.force_push.label).toBe('Force Push (2)')
@@ -444,6 +474,7 @@ describe('resolveDropdownItems', () => {
         rebaseBaseRef: 'origin/main'
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -463,6 +494,7 @@ describe('resolveDropdownItems', () => {
         rebaseBaseRef: 'origin/main'
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -480,9 +512,11 @@ describe('resolveDropdownItems', () => {
         branchCommitsAhead: 0
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.publish.label).toBe('Publish Branch')
     expect(byKind.publish.title).toBe('Publish this branch to origin')
     expect(byKind.publish.disabled).toBe(false)
@@ -496,9 +530,11 @@ describe('resolveDropdownItems', () => {
         branchCommitsAhead: 0
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.publish.label).toBe('Publish Branch')
     expect(byKind.publish.title).toBe('Publish this branch to origin')
     expect(byKind.publish.disabled).toBe(false)
@@ -511,9 +547,11 @@ describe('resolveDropdownItems', () => {
         prState: 'merged'
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
     expect(byKind.push.disabled).toBe(false)
     expect(byKind.force_push.title).toBe(
@@ -539,9 +577,11 @@ describe('resolveDropdownItems', () => {
         canPushLinkedReviewWithoutUpstream: true
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.commit_push.disabled).toBe(false)
     expect(byKind.push.title).toBe('Push updates to the linked review branch')
     expect(byKind.push.disabled).toBe(false)
@@ -565,9 +605,11 @@ describe('resolveDropdownItems', () => {
         canPushLinkedReviewWithoutUpstream: true
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.push.disabled).toBe(false)
     expect(byKind.push.title).toBe('Push this branch and set an upstream if needed')
     expect(byKind.force_push.disabled).toBe(false)
@@ -588,9 +630,11 @@ describe('resolveDropdownItems', () => {
         prState: 'open'
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.commit_push.title).toBe('Linked review branch target is unavailable')
     expect(byKind.push.title).toBe('Linked review branch target is unavailable')
@@ -609,9 +653,11 @@ describe('resolveDropdownItems', () => {
         isPRStateLoading: true
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.publish.label).toBe('PR Status')
     expect(byKind.publish.title).toBe('Checking PR status…')
     expect(byKind.publish.disabled).toBe(true)
@@ -628,9 +674,11 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.commit_push.label).toBe('Commit & Push')
     expect(byKind.commit_sync.label).toBe('Commit & Sync')
     // Sanity check: plain counterparts still carry counts.
@@ -642,12 +690,15 @@ describe('resolveDropdownItems', () => {
     const behindOnly = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 2 } })
     )
+
     const diverged = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 1, behind: 2 } })
     )
+
     const behindOnlyByKind = Object.fromEntries(
       behindOnly.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     const divergedByKind = Object.fromEntries(
       diverged.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -675,6 +726,7 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
       branchName: args.branchName,
       upstreamStatus: args.upstreamStatus
     })
+
     const upstreamStatus = resolveHostedReviewActionUpstreamStatus({
       hasHostedReviewLink: true,
       hasResolvableHostedReviewPushTargetLink: true,
@@ -683,6 +735,7 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
       canUseHostedReviewPushTarget,
       upstreamStatus: args.upstreamStatus
     })
+
     const items = resolveDropdownItems(
       inputs({
         stagedCount: 1,
@@ -693,6 +746,7 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget
       })
     )
+
     return Object.fromEntries(
       items.filter((e): e is DropdownItem => e.kind !== 'separator').map((e) => [e.kind, e])
     )
@@ -708,6 +762,7 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
         behind: 2
       }
     })
+
     expect(byKind.push.disabled).toBe(false)
     expect(byKind.push.title).not.toBe('Linked review branch target is unavailable')
     expect(byKind.force_push.disabled).toBe(false)
@@ -726,6 +781,7 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
         behind: 0
       }
     })
+
     expect(byKind.push.disabled).toBe(true)
     expect(byKind.push.title).toBe('Linked review branch target is unavailable')
     expect(byKind.force_push.disabled).toBe(true)

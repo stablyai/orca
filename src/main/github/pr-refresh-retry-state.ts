@@ -30,6 +30,7 @@ export class PRRefreshRetryState {
     const failures = (this.errorBackoff.get(key)?.failures ?? 0) + 1
     const retryAt = Date.now() + lookupBackoffDelayMs(failures)
     this.errorBackoff.set(key, { failures, retryAt })
+
     return retryAt
   }
 
@@ -37,7 +38,9 @@ export class PRRefreshRetryState {
     if (outcome.kind !== 'upstream-error') {
       return outcome
     }
+
     const cooldownUntil = outcome.retryDisabledUntil
+
     return {
       ...outcome,
       nextAutoRetryAt: cooldownUntil !== undefined ? Math.max(retryAt, cooldownUntil) : retryAt

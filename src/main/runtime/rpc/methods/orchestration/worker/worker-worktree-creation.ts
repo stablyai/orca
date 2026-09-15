@@ -45,6 +45,7 @@ export async function createWorkerWorktree(args: {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
+
   const created = await runtime.createManagedWorktree({
     repoSelector: params.repo ?? coordinatorWorktree.repoId,
     name: params.name as string,
@@ -71,6 +72,7 @@ export async function createWorkerWorktree(args: {
       callerTerminalHandle: params.from
     }
   })
+
   const terminalHandle = created.startupTerminal?.handle
   effects.push({
     kind: 'worktree',
@@ -84,6 +86,7 @@ export async function createWorkerWorktree(args: {
     effects,
     residualResources: effects
   })
+
   const setupReceipt = {
     requested: setupDecision,
     effective: setupDecision,
@@ -92,13 +95,17 @@ export async function createWorkerWorktree(args: {
     startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
     state: created.setupReceipt?.state ?? 'not_configured'
   }
+
   if (args.withAgentTerminal && !terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
+
   const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
     includeVisualLayouts: false
   })
+
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
+
   for (const terminal of listed.terminals) {
     effects.push({
       kind: 'terminal',
@@ -117,9 +124,11 @@ export async function createWorkerWorktree(args: {
       leafId: terminal.leafId
     })
   }
+
   const setupTerminal = effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'setup'
   )
+
   effects.push({
     kind: 'setup',
     action: setupDecision,
@@ -131,6 +140,7 @@ export async function createWorkerWorktree(args: {
     state: setupReceipt.state,
     terminalId: setupTerminalHandle ?? setupTerminal?.id
   })
+
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,

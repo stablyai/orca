@@ -29,14 +29,17 @@ export function useNewWorkspaceExecutionTarget(args: {
   const { client, connectionId, visible } = args
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
+
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
     null
   )
+
   const sshGate = deriveWorkspaceSshGate({
     connectionId,
     state: sshState,
     connecting: connectingTargetId === connectionId
   })
+
   const detectedAgentIds =
     detectedAgentIdsState?.connectionId === connectionId &&
     (connectionId === null || sshGate.status === 'connected')
@@ -47,6 +50,7 @@ export function useNewWorkspaceExecutionTarget(args: {
     if (!visible || !client || !connectionId) {
       return
     }
+
     let stale = false
     void client
       .sendRequest('ssh.getState', { targetId: connectionId })
@@ -54,9 +58,11 @@ export function useNewWorkspaceExecutionTarget(args: {
         if (stale) {
           return
         }
+
         if (!response.ok) {
           throw new Error(response.error.message)
         }
+
         const state = (response as RpcSuccess).result as { state?: SshConnectionState | null }
         setSshState(state.state ?? fallbackSshState(connectionId, 'disconnected', null))
       })
@@ -71,6 +77,7 @@ export function useNewWorkspaceExecutionTarget(args: {
           )
         }
       })
+
     return () => {
       stale = true
     }
@@ -80,12 +87,14 @@ export function useNewWorkspaceExecutionTarget(args: {
     if (!visible || !client || (connectionId && sshGate.status !== 'connected')) {
       return
     }
+
     let stale = false
     void (async () => {
       try {
         const response = connectionId
           ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
           : await client.sendRequest('preflight.detectAgents')
+
         if (!stale) {
           setDetectedAgentIdsState({
             connectionId,
@@ -98,6 +107,7 @@ export function useNewWorkspaceExecutionTarget(args: {
         }
       }
     })()
+
     return () => {
       stale = true
     }
@@ -107,17 +117,21 @@ export function useNewWorkspaceExecutionTarget(args: {
     if (!client || !connectionId) {
       return
     }
+
     setConnectingTargetId(connectionId)
     setSshState(fallbackSshState(connectionId, 'connecting', null))
+
     try {
       const response = await client.sendRequest(
         'ssh.connect',
         { targetId: connectionId },
         { timeoutMs: 120_000 }
       )
+
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+
       const result = (response as RpcSuccess).result as { state?: SshConnectionState | null }
       setSshState(result.state ?? fallbackSshState(connectionId, 'connected', null))
     } catch (error) {

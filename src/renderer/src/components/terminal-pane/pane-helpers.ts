@@ -11,12 +11,16 @@ export function focusActivePane(manager: PaneManager): void {
   if (typeof document !== 'undefined' && document.querySelector('[data-tab-rename-input="true"]')) {
     return
   }
+
   const activeElement = typeof document === 'undefined' ? null : document.activeElement
+
   if (shouldPreserveEditableFocus(activeElement)) {
     return
   }
+
   const panes = manager.getPanes()
   const activePane = manager.getActivePane() ?? panes[0]
+
   if (activePane) {
     focusPanePreservingOverlays(activePane)
   }
@@ -49,9 +53,11 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (!(element instanceof HTMLElement)) {
     return false
   }
+
   if (element.classList.contains('xterm-helper-textarea') || element.closest('.xterm')) {
     return false
   }
+
   // Why: deferred fit/focus work can run after inline rename or settings
   // fields take focus. Layout maintenance must not blur user edits closed.
   return (

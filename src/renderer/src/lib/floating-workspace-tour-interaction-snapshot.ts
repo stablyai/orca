@@ -18,11 +18,13 @@ export function createFloatingWorkspaceTourInteractionSnapshot(args: {
     args.featureInteractions,
     'floating-workspace'
   )
+
   if (!args.persistedUIReady) {
     return {
       recordFeatureInteractionForTour: true
     }
   }
+
   return {
     wasPreviouslyInteracted,
     persisted: args.recordFeatureInteraction('floating-workspace'),

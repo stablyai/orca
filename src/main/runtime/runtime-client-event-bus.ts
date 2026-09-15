@@ -23,12 +23,15 @@ export class RuntimeClientEventBus {
     options?: { consumesTerminalSideEffects?: boolean }
   ): () => void {
     this.listeners.add(listener)
+
     if (options?.consumesTerminalSideEffects === false) {
       this.excludedTerminalSideEffectListeners.add(listener)
     } else {
       this.titleGateKeysByListener.set(listener, new Map())
     }
+
     this.deps.onConsumerAvailabilityChanged()
+
     return () => {
       this.listeners.delete(listener)
       this.excludedTerminalSideEffectListeners.delete(listener)
@@ -47,9 +50,12 @@ export class RuntimeClientEventBus {
       (listener) => {
         if (event.type !== 'terminalSideEffects') {
           listener(event)
+
           return
         }
+
         const filtered = this.filterTerminalSideEffects(listener, event)
+
         if (filtered) {
           listener(filtered)
         }
@@ -69,23 +75,31 @@ export class RuntimeClientEventBus {
     event: Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }>
   ): Extract<RuntimeClientEvent, { type: 'terminalSideEffects' }> | null {
     const titleGateKeys = this.titleGateKeysByListener.get(listener)
+
     if (!titleGateKeys) {
       return null
     }
+
     const facts = event.batch.facts.filter((fact) => {
       if (fact.kind !== 'title') {
         return true
       }
+
       const gateKey = this.deps.makeTitleGateKey(fact.rawTitle, fact.normalizedTitle)
+
       if (titleGateKeys.get(event.batch.ptyId) === gateKey) {
         return false
       }
+
       titleGateKeys.set(event.batch.ptyId, gateKey)
+
       return true
     })
+
     if (facts.length === 0) {
       return null
     }
+
     return facts.length === event.batch.facts.length
       ? event
       : { ...event, batch: { ...event.batch, facts } }

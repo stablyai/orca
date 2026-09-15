@@ -38,9 +38,11 @@ describe('requestGuestOpenCodeOverlayDir', () => {
   it("reports 'unavailable' for an older guest bundle and for teardown, without warning", async () => {
     for (const code of [-32601, 'CONNECTION_LOST', 'DISPOSED']) {
       const d = deps()
+
       const { mux } = fakeMux(async () => {
         throw Object.assign(new Error('nope'), { code })
       })
+
       await expect(requestGuestOpenCodeOverlayDir(mux, d, 'Ubuntu')).resolves.toEqual({
         kind: 'unavailable'
       })
@@ -50,9 +52,11 @@ describe('requestGuestOpenCodeOverlayDir', () => {
 
   it("warns but still reports 'unavailable' on an unexpected failure", async () => {
     const d = deps()
+
     const { mux } = fakeMux(async () => {
       throw new Error('boom')
     })
+
     await expect(requestGuestOpenCodeOverlayDir(mux, d, 'Ubuntu')).resolves.toEqual({
       kind: 'unavailable'
     })

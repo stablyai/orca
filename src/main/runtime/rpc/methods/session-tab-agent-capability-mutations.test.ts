@@ -83,6 +83,7 @@ describe('session tab structured capability mutations', () => {
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
         CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ])
+
       const response = await fixture.dispatch(method.name, method.params('claude-session'))
 
       expect(response.ok).toBe(true)
@@ -127,12 +128,14 @@ describe('session tab structured capability mutations', () => {
     async (method) => {
       const snapshot = agentSnapshot()
       const closeMobileSessionTab = vi.fn().mockResolvedValue({ closed: true })
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
         listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
         closeMobileSessionTab
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
       const replies: string[] = []
       await dispatcher.dispatchStreaming(
@@ -170,12 +173,14 @@ function createFixture(
   options: { clientKind?: 'mobile' | 'runtime'; structuredNativeChatEnabled?: boolean } = {}
 ) {
   const snapshot = agentSnapshot()
+
   const calls = {
     closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true }),
     activateMobileSessionTab: vi.fn().mockResolvedValue(snapshot),
     moveMobileSessionTab: vi.fn().mockResolvedValue({ moved: true }),
     setMobileSessionTabProps: vi.fn().mockResolvedValue({ updated: true })
   }
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
@@ -186,12 +191,15 @@ function createFixture(
     }),
     ...calls
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
   const context: RpcDispatchStreamingOptions = {
     clientKind: options.clientKind ?? 'runtime',
     pairedDeviceId: 'paired-client',
     clientCapabilities: capabilities
   }
+
   return {
     calls,
     dispatch: async (method: string, params: unknown) => {
@@ -201,6 +209,7 @@ function createFixture(
         (response) => replies.push(response),
         context
       )
+
       return JSON.parse(replies[0]!)
     }
   }
@@ -215,6 +224,7 @@ function agentSnapshot() {
     agent: 'codex' as const,
     isActive: true
   }
+
   const claudeTab = {
     ...codexTab,
     id: 'claude-session',
@@ -223,6 +233,7 @@ function agentSnapshot() {
     agent: 'claude',
     isActive: false
   }
+
   return {
     worktree: 'wt-1',
     publicationEpoch: 'epoch-1',

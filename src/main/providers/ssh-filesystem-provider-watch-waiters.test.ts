@@ -5,6 +5,7 @@ import { registerSshFilesystemWatch, type WatchRegistration } from './ssh-filesy
 describe('registerSshFilesystemWatch waiters', () => {
   it('removes ten thousand cancelled callers while one registration anchor remains', async () => {
     let resolveWatch: () => void = () => undefined
+
     const mux = {
       request: vi.fn(
         () =>
@@ -14,7 +15,9 @@ describe('registerSshFilesystemWatch waiters', () => {
       ),
       notify: vi.fn()
     } as unknown as SshChannelMultiplexer
+
     const registrations = new Map<string, WatchRegistration>()
+
     const watch = (signal?: AbortSignal) =>
       registerSshFilesystemWatch({
         mux,
@@ -24,8 +27,10 @@ describe('registerSshFilesystemWatch waiters', () => {
         signal,
         disposed: () => false
       })
+
     const anchor = watch()
     const controllers = Array.from({ length: 10_000 }, () => new AbortController())
+
     const cancelled = controllers.map((controller) =>
       watch(controller.signal).catch((error) => error)
     )
@@ -33,6 +38,7 @@ describe('registerSshFilesystemWatch waiters', () => {
     for (const controller of controllers) {
       controller.abort()
     }
+
     await Promise.all(cancelled)
 
     expect(registrations.values().next().value?.setupWaiters.waiterCount).toBe(1)

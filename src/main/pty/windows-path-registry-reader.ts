@@ -11,7 +11,9 @@ export type WindowsPathRegistryRead = {
 }
 
 const MACHINE_ENVIRONMENT_KEY = 'SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment'
+
 const USER_ENVIRONMENT_KEY = 'Environment'
+
 const PATH_VALUE = 'Path'
 
 let windowsRegistryLoader = loadWindowsNativeRegistry
@@ -23,16 +25,21 @@ function readRegistryPath(
 ): WindowsPathRegistryRead {
   try {
     const values = registry.getRegistryKey(root, key)
+
     if (!values || typeof values !== 'object') {
       return { failed: true, value: null }
     }
+
     const matchingEntry = Object.entries(values).find(
       ([name]) => name.toLowerCase() === PATH_VALUE.toLowerCase()
     )
+
     if (!matchingEntry) {
       return { failed: false, value: '' }
     }
+
     const entry = matchingEntry[1]
+
     if (
       !entry ||
       (entry.type !== WINDOWS_REG_SZ && entry.type !== WINDOWS_REG_EXPAND_SZ) ||
@@ -40,6 +47,7 @@ function readRegistryPath(
     ) {
       return { failed: true, value: null }
     }
+
     return { failed: false, value: entry.value }
   } catch {
     return { failed: true, value: null }
@@ -48,6 +56,7 @@ function readRegistryPath(
 
 export function readWindowsPathRegistry(): WindowsPathRegistryRead[] {
   let registry: WindowsNativeRegistryModule
+
   try {
     registry = windowsRegistryLoader()
   } catch {
@@ -56,6 +65,7 @@ export function readWindowsPathRegistry(): WindowsPathRegistryRead[] {
       { failed: true, value: null }
     ]
   }
+
   return [
     readRegistryPath(registry, registry.HK.LM, MACHINE_ENVIRONMENT_KEY),
     readRegistryPath(registry, registry.HK.CU, USER_ENVIRONMENT_KEY)

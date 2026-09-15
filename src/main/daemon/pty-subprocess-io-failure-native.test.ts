@@ -29,11 +29,13 @@ describePosix('failed-I/O teardown with a real native PTY', () => {
             env: { TERM: 'xterm-256color', PATH: '/usr/bin:/bin' }
           }
         )
+
         const fd = (native as pty.IPty & { fd: number }).fd
         let exited = false
         native.onExit(() => {
           exited = true
         })
+
         const handle = createDaemonPtySubprocessHandle({
           process: native,
           shellPath: '/bin/sh',
@@ -44,9 +46,11 @@ describePosix('failed-I/O teardown with a real native PTY', () => {
           sessionId: 'native-io-failure',
           startupAgentRecognition: null
         })
+
         const host = new TerminalHost({ spawnSubprocess: () => handle })
         let output = ''
         const onExit = vi.fn()
+
         try {
           await host.createOrAttach({
             sessionId: 'native-io-failure',
@@ -65,14 +69,17 @@ describePosix('failed-I/O teardown with a real native PTY', () => {
           await vi.waitFor(() => expect(output).toContain('reply:roundtrip'), { timeout: 3000 })
           host.pauseProducer('native-io-failure')
           expect(process.kill(native.pid, 0)).toBe(true)
+
           const failure = vi.spyOn(native, operation).mockImplementation(() => {
             throw new Error('injected I/O failure')
           })
+
           if (operation === 'write') {
             handle.write('ignored')
           } else {
             handle.resize(100, 30)
           }
+
           failure.mockRestore()
 
           await host.kill('native-io-failure', { immediate })
@@ -87,6 +94,7 @@ describePosix('failed-I/O teardown with a real native PTY', () => {
           if (!exited) {
             native.kill('SIGKILL')
           }
+
           await vi.waitFor(() => expect(exited).toBe(true), { timeout: 3000 })
           await host.dispose()
         }

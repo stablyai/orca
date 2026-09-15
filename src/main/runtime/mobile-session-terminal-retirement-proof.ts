@@ -23,6 +23,7 @@ export function preserveTerminalRetirementProofs(
   if (!existing || existing.worktree !== snapshot.worktree) {
     return snapshot
   }
+
   if (
     existing.worktreeInstanceId !== undefined &&
     snapshot.worktreeInstanceId !== undefined &&
@@ -30,13 +31,16 @@ export function preserveTerminalRetirementProofs(
   ) {
     return snapshot
   }
+
   const identified =
     snapshot.worktreeInstanceId === undefined && existing.worktreeInstanceId !== undefined
       ? { ...snapshot, worktreeInstanceId: existing.worktreeInstanceId }
       : snapshot
+
   if (!existing.retiredTerminalSurfaces?.length) {
     return identified
   }
+
   return {
     ...identified,
     retiredTerminalSurfaces: dropRetirementProofsForLiveSurfaces(

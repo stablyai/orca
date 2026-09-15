@@ -29,6 +29,7 @@ it('hydrates a runtime owner default when refreshing its repositories', async ()
                   : method === 'project.list'
                     ? { projects: [] }
                     : { setups: [] }
+
           return Promise.resolve({
             ok: true,
             result,

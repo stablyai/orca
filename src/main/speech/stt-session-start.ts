@@ -30,11 +30,14 @@ export async function startSttDictation(
     if (state.startingOwner !== owner) {
       throw new Error('dictation_already_active')
     }
+
     return
   }
+
   if ((state.worker || state.cloudSession) && state.activeOwner && state.activeOwner !== owner) {
     throw new Error('dictation_already_active')
   }
+
   state.starting = true
   state.startingOwner = owner
   state.startingModelId = modelId
@@ -42,10 +45,12 @@ export async function startSttDictation(
 
   try {
     await startSttSession(state, modelId, sink, hotwordsFilePath, owner)
+
     if (state.canceledOwners.delete(owner)) {
       await stopSttDictation(state, owner, { cancelStarting: false })
       throw new Error('dictation_canceled')
     }
+
     state.activeOwner = owner
   } finally {
     state.starting = false
@@ -63,6 +68,7 @@ async function startSttSession(
   owner: string
 ): Promise<void> {
   const manifest = getCatalogModel(modelId)
+
   if (!manifest) {
     throw new Error(`Unknown model: ${modelId}`)
   }
@@ -73,22 +79,28 @@ async function startSttSession(
       await stopSttDictation(state, owner, { cancelStarting: false })
       await teardownSttWorker(state, existingWorker)
     }
+
     const modelState = await state.modelManager.getModelState(modelId)
+
     if (modelState.status !== 'ready') {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
+
     state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
     state.activeModelId = modelId
     state.activeHotwordsFilePath = undefined
     state.eventSink = sink
     sink({ type: 'ready' })
+
     return
   }
 
   if (state.cloudSession) {
     await stopSttDictation(state, owner, { cancelStarting: false })
   }
+
   const reusableWorker = state.worker
+
   if (
     reusableWorker &&
     state.activeModelId === modelId &&
@@ -97,11 +109,13 @@ async function startSttSession(
   ) {
     if (!state.activeOwner) {
       const modelState = await state.modelManager.getModelState(modelId)
+
       if (modelState.status !== 'ready') {
         await teardownSttWorker(state, reusableWorker)
         throw new Error(`Model not ready: ${modelState.status}`)
       }
     }
+
     if (
       state.worker === reusableWorker &&
       state.activeModelId === modelId &&
@@ -110,6 +124,7 @@ async function startSttSession(
     ) {
       state.eventSink = sink
       sink({ type: 'ready' })
+
       return
     }
   }
@@ -119,7 +134,9 @@ async function startSttSession(
     await stopSttDictation(state, owner, { cancelStarting: false })
     await teardownSttWorker(state, existingWorker)
   }
+
   const modelState = await state.modelManager.getModelState(modelId)
+
   if (modelState.status !== 'ready') {
     throw new Error(`Model not ready: ${modelState.status}`)
   }
@@ -127,6 +144,7 @@ async function startSttSession(
   const worker = new Worker(getSttWorkerPath(), {
     workerData: { sherpaModulePath: getSherpaModulePath() }
   })
+
   state.worker = worker
   state.activeModelId = modelId
   state.activeHotwordsFilePath = hotwordsFilePath
@@ -156,9 +174,11 @@ async function startSttSession(
     cleanupActiveSttWorkerLifecycleListeners(state)
     worker.removeAllListeners()
     void worker.terminate()
+
     if (state.worker === worker) {
       handleSttWorkerFailure(state)
     }
+
     throw error
   }
 }

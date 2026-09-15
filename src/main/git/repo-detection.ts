@@ -21,20 +21,24 @@ export function isGitRepo(path: string): boolean {
   }
 
   const gitProbeResult = probeGitRepo(path)
+
   if (gitProbeResult === 'repo') {
     return true
   }
+
   if (gitProbeResult === 'not-repo') {
     return false
   }
 
   const markerScan = scanGitMarkerSync(path)
+
   if (markerScan.status === 'valid' && !warnedMarkerFallbackThisSession) {
     warnedMarkerFallbackThisSession = true
     console.warn('[isGitRepo] git rev-parse could not confirm repo; accepted via .git marker', {
       path
     })
   }
+
   return markerScan.status === 'valid'
 }
 
@@ -46,9 +50,11 @@ function probeGitRepo(path: string): GitRepoProbeResult {
     const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
+
     if (insideWorkTree === 'true') {
       return 'repo'
     }
+
     if (insideWorkTree !== 'false') {
       return 'indeterminate'
     }
@@ -60,9 +66,11 @@ function probeGitRepo(path: string): GitRepoProbeResult {
     const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
       cwd: path
     }).trim()
+
     if (bareRepo === 'true') {
       return 'repo'
     }
+
     if (bareRepo !== 'false') {
       return 'indeterminate'
     }
@@ -78,22 +86,28 @@ export function getGitRepoRoot(path: string): string {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return path
     }
+
     const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
+
     if (insideWorkTree === 'true') {
       const root = gitExecFileSync(['rev-parse', '--show-toplevel'], {
         cwd: path
       }).trim()
+
       return normalizeGitRepoRootForInputPath(path, root)
     }
   } catch {
     // Fall through to preserving the original path.
   }
+
   const markerScan = scanGitMarkerSync(path)
+
   if (markerScan.status === 'valid') {
     return normalizeGitRepoRootForInputPath(path, markerScan.rootPath)
   }
+
   return path
 }
 
@@ -107,24 +121,31 @@ export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return null
     }
+
     if (gitExecFileSync(['rev-parse', '--is-inside-work-tree'], { cwd: path }).trim() !== 'true') {
       return null
     }
+
     const [gitDir, commonDir] = gitExecFileSync(['rev-parse', '--git-dir', '--git-common-dir'], {
       cwd: path
     })
       .split('\n')
       .map((line) => line.trim())
+
     if (!gitDir || !commonDir) {
       return null
     }
+
     const absoluteCommonDir = canonicalizeGitDirPath(resolve(path, commonDir))
+
     if (canonicalizeGitDirPath(resolve(path, gitDir)) === absoluteCommonDir) {
       return null
     }
+
     if (basename(absoluteCommonDir) !== '.git') {
       return null
     }
+
     return getGitRepoRoot(dirname(absoluteCommonDir))
   } catch {
     return null
@@ -133,9 +154,11 @@ export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
 
 export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
   const inputWsl = parseWslUncPath(inputPath)
+
   if (inputWsl && rootPath.startsWith('/')) {
     // Why: persist the UNC root so later Git calls keep routing through the WSL runner.
     return toWindowsWslPath(rootPath, inputWsl.distro)
   }
+
   return normalizeRuntimePathSeparators(rootPath)
 }

@@ -15,9 +15,11 @@ import {
 // Re-auth a little early so a send never spends its one retry on a token that
 // expired between the check and the request.
 const SESSION_RENEWAL_MARGIN_MS = 60_000
+
 // Why: a gateway that refuses this host's proof refuses the identical next one,
 // so without this every dispatch pays two full handshake round trips to relearn it.
 const HANDSHAKE_REFUSAL_TTL_MS = 30_000
+
 // Why: the handshake routes sit behind a per-IP bucket. Backing off keeps this
 // host from spending the whole bucket on challenges it will never get to use.
 const HANDSHAKE_RATE_LIMIT_TTL_MS = 60_000
@@ -44,6 +46,7 @@ const SessionResponseSchema = z
   .strict()
 
 export type PushSession = { token: string; expiresAt: number }
+
 export type PushSessionOutcome = { ok: true; session: PushSession } | PushGatewayFailure
 
 type PushGatewaySessionOptions = {
@@ -80,17 +83,22 @@ export class PushGatewaySession {
     if (staleToken !== null && this.session?.token === staleToken) {
       this.session = null
     }
+
     const cached = this.session
+
     if (cached && cached.expiresAt - SESSION_RENEWAL_MARGIN_MS > this.now()) {
       return { ok: true, session: cached }
     }
+
     if (this.negative && this.negative.until > this.now()) {
       return { ok: false, reason: this.negative.reason }
     }
+
     // Concurrent sends must not each burn a challenge; share one handshake.
     this.pending ??= this.open().finally(() => {
       this.pending = null
     })
+
     return await this.pending
   }
 
@@ -100,9 +108,11 @@ export class PushGatewaySession {
       { v: 1, hostPublicKeyB64: this.keypair.publicKeyB64 },
       ChallengeResponseSchema
     )
+
     if (!challenge.ok) {
       return this.remember(challenge)
     }
+
     const proofB64 = answerPushHostChallenge(challenge.value, {
       gatewayOrigin: this.origin,
       hostFingerprint: this.hostFingerprint,
@@ -110,24 +120,30 @@ export class PushGatewaySession {
       hostSecretKey: this.keypair.secretKey,
       now: this.now
     })
+
     if (!proofB64) {
       // A challenge this host cannot answer is a refusal, not a dropped packet.
       return this.remember({ ok: false, reason: 'rejected' })
     }
+
     const parsed = await this.handshakePost(
       '/v1/host/session',
       { v: 1, challengeId: challenge.value.challengeId, proofB64 },
       SessionResponseSchema
     )
+
     if (!parsed.ok) {
       return this.remember(parsed)
     }
+
     if (parsed.value.hostFingerprint !== this.hostFingerprint) {
       // The gateway answered for some other host; that token is never usable here.
       return this.remember({ ok: false, reason: 'rejected' })
     }
+
     this.session = { token: parsed.value.sessionToken, expiresAt: parsed.value.expiresAt }
     this.negative = null
+
     return { ok: true, session: this.session }
   }
 
@@ -137,13 +153,16 @@ export class PushGatewaySession {
     schema: TSchema
   ): Promise<{ ok: true; value: z.infer<TSchema> } | PushGatewayFailure> {
     const response = await postPushGatewayJson(this.fetchImpl, `${this.origin}${path}`, body)
+
     if (response.ok && response.response.status === 429) {
       await cancelUnreadResponseBody(response.response)
       // Rate limiting refuses the moment, not this host: back off, stay retryable
       // so register reports gateway_unreachable and send keeps its one retry.
       this.negative = { until: this.now() + HANDSHAKE_RATE_LIMIT_TTL_MS, reason: 'unreachable' }
+
       return { ok: false, reason: 'unreachable' }
     }
+
     return await readPushGatewayJson(response, schema)
   }
 
@@ -152,6 +171,7 @@ export class PushGatewaySession {
     if (failure.reason === 'rejected') {
       this.negative = { until: this.now() + HANDSHAKE_REFUSAL_TTL_MS, reason: 'rejected' }
     }
+
     return failure
   }
 }

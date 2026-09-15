@@ -24,20 +24,30 @@ import {
 import { skillInstallStateKey } from './skill-install-provenance'
 
 const LOCK_RETRY_MS = 50
+
 const LOCK_STALE_MS = 30 * 60 * 1000
+
 const MAX_STARTUP_LOCKS = 128
+
 const LOCK_NAME = /^[a-f0-9]{64}\.lock$/
+
 const LEGACY_OWNER_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.owner$/
+
 const CANDIDATE_LOCK_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.candidate$/
+
 const RELEASED_LOCK_NAME = /^[a-f0-9]{64}\.lock\.[a-f0-9-]{36}\.released$/
+
 const OWNER_ENTRY_NAME = /^([a-f0-9-]{36})\.owner$/
+
 const RELEASE_ENTRY_NAME = /^([a-f0-9-]{36})\.released$/
+
 const activeLockTokens = new Set<string>()
 
 function ownerIsReclaimable(owner: SkillInstallLockOwner): boolean {
   if (owner.pid === process.pid && !activeLockTokens.has(owner.token)) {
     return true
   }
+
   return !skillInstallLockOwnerProcessIsAlive(owner)
 }
 
@@ -46,25 +56,31 @@ async function removeObservedLegacyFile(path: string): Promise<void> {
     await unlink(path)
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
+
     if (code === 'ENOENT') {
       return
     }
+
     if (
       (code === 'EISDIR' || code === 'EPERM') &&
       (await stat(path).catch(() => null))?.isDirectory()
     ) {
       return
     }
+
     throw error
   }
 }
 
 async function removeStaleLegacyLock(path: string): Promise<void> {
   const lockStat = await stat(path).catch(() => null)
+
   if (!lockStat?.isFile()) {
     return
   }
+
   const owner = await readSkillInstallLockOwner(path)
+
   if (owner ? ownerIsReclaimable(owner) : Date.now() - lockStat.mtimeMs >= LOCK_STALE_MS) {
     await removeObservedLegacyFile(path)
   }
@@ -72,36 +88,48 @@ async function removeStaleLegacyLock(path: string): Promise<void> {
 
 async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Promise<void> {
   const lockStat = await stat(path).catch(() => null)
+
   if (!lockStat?.isDirectory()) {
     return
   }
+
   const entries = await readdir(path, { withFileTypes: true }).catch(() => null)
+
   if (!entries) {
     return
   }
+
   const releasedTokens = new Set(
     entries.flatMap((entry) => {
       const match = entry.isFile() ? RELEASE_ENTRY_NAME.exec(entry.name) : null
+
       return match?.[1] ? [match[1]] : []
     })
   )
+
   let mayRemoveDirectory = releasedTokens.size > 0
+
   for (const entry of entries) {
     const match = entry.isFile() ? OWNER_ENTRY_NAME.exec(entry.name) : null
+
     if (!match?.[1]) {
       continue
     }
+
     const ownerPath = join(path, entry.name)
     const owner = await readSkillInstallLockOwner(ownerPath)
     const ownerStat = owner ? null : await stat(ownerPath).catch(() => null)
+
     const reclaimable =
       releasedTokens.has(match[1]) ||
       (owner
         ? ownerIsReclaimable(owner)
         : Boolean(ownerStat && Date.now() - ownerStat.mtimeMs >= incompleteStaleMs))
+
     if (!reclaimable) {
       return
     }
+
     await unlink(ownerPath).catch((error) => {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error
@@ -109,6 +137,7 @@ async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Pr
     })
     mayRemoveDirectory = true
   }
+
   for (const token of releasedTokens) {
     await unlink(join(path, `${token}.released`)).catch((error) => {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -116,11 +145,14 @@ async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Pr
       }
     })
   }
+
   if (!mayRemoveDirectory && Date.now() - lockStat.mtimeMs < incompleteStaleMs) {
     return
   }
+
   await rmdir(path).catch((error) => {
     const code = (error as NodeJS.ErrnoException).code
+
     if (code !== 'ENOENT' && code !== 'ENOTEMPTY' && code !== 'EEXIST') {
       throw error
     }
@@ -129,6 +161,7 @@ async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Pr
 
 async function removeStaleLock(path: string): Promise<void> {
   const lockStat = await stat(path).catch(() => null)
+
   if (lockStat?.isDirectory()) {
     await removeStaleLockDirectory(path)
   } else if (lockStat?.isFile()) {
@@ -142,12 +175,15 @@ export async function reclaimDeadSkillInstallLocks(stateDirectory: string): Prom
   truncated: boolean
 }> {
   const directory = join(stateDirectory, 'locks')
+
   const entries = await readdir(directory, { withFileTypes: true }).catch((error) => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return []
     }
+
     throw error
   })
+
   const locks = entries
     .filter(
       (entry) =>
@@ -157,7 +193,9 @@ export async function reclaimDeadSkillInstallLocks(stateDirectory: string): Prom
         (entry.isDirectory() && RELEASED_LOCK_NAME.test(entry.name))
     )
     .sort((left, right) => left.name.localeCompare(right.name))
+
   let reclaimed = 0
+
   for (const lock of locks.slice(0, MAX_STARTUP_LOCKS)) {
     const path = join(directory, lock.name)
     await (LEGACY_OWNER_NAME.test(lock.name)
@@ -167,10 +205,12 @@ export async function reclaimDeadSkillInstallLocks(stateDirectory: string): Prom
         : RELEASED_LOCK_NAME.test(lock.name)
           ? reclaimReleasedSkillInstallLock(path)
           : removeStaleLock(path))
+
     if (!(await stat(path).catch(() => null))) {
       reclaimed += 1
     }
   }
+
   return {
     scanned: Math.min(locks.length, MAX_STARTUP_LOCKS),
     reclaimed,
@@ -188,6 +228,7 @@ async function writeOwnerRecord(
   writer?: (handle: FileHandle, value: string) => Promise<void>
 ): Promise<void> {
   const handle = await open(path, 'wx', 0o600)
+
   try {
     await (
       writer ??
@@ -203,6 +244,7 @@ async function writeOwnerRecord(
 
 async function markReleased(path: string): Promise<void> {
   const handle = await open(path, 'wx', 0o600)
+
   try {
     await handle.sync()
   } finally {
@@ -219,11 +261,13 @@ export async function acquireSkillInstallLock(input: {
 }): Promise<() => Promise<void>> {
   await mkdir(dirname(input.path), { recursive: true, mode: 0o700 })
   const deadline = Date.now() + (input.timeoutMs ?? 5_000)
+
   const owner: SkillInstallLockOwner = {
     token: randomUUID(),
     pid: process.pid,
     createdAt: Date.now()
   }
+
   const ownerRecord = JSON.stringify(owner)
   const candidatePath = `${input.path}.${owner.token}.candidate`
   const candidateOwnerPath = join(candidatePath, `${owner.token}.owner`)
@@ -232,8 +276,10 @@ export async function acquireSkillInstallLock(input: {
   await mkdir(candidatePath, { mode: 0o700 })
   activeLockTokens.add(owner.token)
   let published = false
+
   try {
     await writeOwnerRecord(candidateOwnerPath, ownerRecord, input.writeOwner)
+
     for (;;) {
       try {
         await (input.publishLock ?? rename)(candidatePath, input.path)
@@ -243,19 +289,24 @@ export async function acquireSkillInstallLock(input: {
         if (!(await stat(candidatePath).catch(() => null))?.isDirectory()) {
           throw error
         }
+
         if (await stat(input.path).catch(() => null)) {
           await removeStaleLock(input.path)
         }
+
         if (!(await stat(input.path).catch(() => null))) {
           if (Date.now() >= deadline) {
             throw error
           }
+
           await new Promise<void>((resolve) => setTimeout(resolve, LOCK_RETRY_MS))
           continue
         }
+
         if (Date.now() >= deadline) {
           throw new SkillInstallOperationError(SKILL_INSTALL_BUSY_FAILURE)
         }
+
         await new Promise<void>((resolve) => setTimeout(resolve, LOCK_RETRY_MS))
       }
     }
@@ -266,27 +317,34 @@ export async function acquireSkillInstallLock(input: {
       await rmdir(candidatePath).catch(() => undefined)
     }
   }
+
   let releasePromise: Promise<void> | null = null
+
   return () => {
     releasePromise ??= (async () => {
       try {
         if ((await readSkillInstallLockOwner(ownerPath))?.token !== owner.token) {
           return
         }
+
         await markReleased(join(input.path, `${owner.token}.released`))
+
         try {
           await rename(input.path, releasedPath)
         } catch (error) {
           if ((await readSkillInstallLockOwner(ownerPath))?.token === owner.token) {
             throw error
           }
+
           return
         }
+
         await cleanupReleasedSkillInstallLock(releasedPath, owner.token, input.removeLock)
       } finally {
         activeLockTokens.delete(owner.token)
       }
     })()
+
     return releasePromise
   }
 }

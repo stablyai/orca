@@ -48,6 +48,7 @@ describe('startFirstWindowStartupServices', () => {
   it('opens the provider gate when daemon startup finishes without waiting for hooks', async () => {
     let resolveDaemon!: () => void
     let resolveHooks!: () => void
+
     const started = startFirstWindowStartupServices({
       startDaemonPtyProvider: () =>
         new Promise<void>((resolve) => {
@@ -60,6 +61,7 @@ describe('startFirstWindowStartupServices', () => {
       onDaemonError: vi.fn(),
       onAgentHookServerError: vi.fn()
     })
+
     await Promise.resolve()
 
     let allServicesReady = false
@@ -126,6 +128,7 @@ describe('startFirstWindowStartupServices', () => {
       const started = startFirstWindowStartupServices({
         startDaemonPtyProvider: (signal) => {
           daemonSignal = signal
+
           return new Promise<void>((resolve) => {
             resolveDaemon = resolve
           })
@@ -169,6 +172,7 @@ describe('startFirstWindowStartupServices', () => {
       const started = startFirstWindowStartupServices({
         startDaemonPtyProvider: (signal) => {
           daemonSignal = signal
+
           return new Promise<void>(() => {})
         },
         startAgentHookServer: () => Promise.resolve(),

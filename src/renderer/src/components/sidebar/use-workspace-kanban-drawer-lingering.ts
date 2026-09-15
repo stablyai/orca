@@ -7,10 +7,14 @@ export function useWorkspaceKanbanDrawerLingering(open: boolean): boolean {
   useEffect(() => {
     if (open) {
       setLingering(true)
+
       return
     }
+
     const timer = window.setTimeout(() => setLingering(false), WORKSPACE_BOARD_CLOSE_LINGER_MS)
+
     return () => window.clearTimeout(timer)
   }, [open])
+
   return lingering
 }

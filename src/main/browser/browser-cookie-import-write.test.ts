@@ -25,6 +25,7 @@ function recordingStore() {
   const writeCookieIdentity = vi.fn<(identity: CookieClearIdentity) => Promise<void>>(
     async () => undefined
   )
+
   return { writeCookieIdentity }
 }
 

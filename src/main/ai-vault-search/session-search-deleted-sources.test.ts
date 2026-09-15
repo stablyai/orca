@@ -21,7 +21,9 @@ import { SessionSearchStore } from './session-search-store'
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 
 let harness: SessionSearchIndexerHarness
+
 let store: SessionSearchStore
+
 let removed: string[]
 
 beforeEach(async () => {
@@ -136,6 +138,7 @@ it.skipIf(!CAN_DENY_READ)('keeps rows under a directory that refuses to list', a
   const hidden = join(blocked, 'hidden.jsonl')
   await writeFile(hidden, '{}')
   await chmod(blocked, 0o000)
+
   try {
     const result = await retire([hidden])
     expect(result.retired).toEqual([])
@@ -152,6 +155,7 @@ it.skipIf(!CAN_DENY_READ)('keeps rows under a directory that refuses to list', a
 it('keeps rows when a directory answers with a transport failure', async () => {
   const root = harness.roots.claudeProjectsDir ?? ''
   const held = join(harness.claudeProjectDir, 'one.jsonl')
+
   for (const listing of [
     { listed: false as const, code: 'EIO', message: 'input/output error' },
     { listed: false as const, code: 'ETIMEDOUT', message: 'the mount stopped answering' },
@@ -160,6 +164,7 @@ it('keeps rows when a directory answers with a transport failure', async () => {
     const result = await retire([held], {
       listings: readerAnswering({ [harness.claudeProjectDir]: listing })
     })
+
     expect(result.retired).toEqual([])
     expect(result.degradedRoots).toEqual([{ root, reason: listing.message }])
   }
@@ -300,11 +305,14 @@ it('does not index a source whose messages the channel cannot reach', () => {
 // sharing one are a single read and then map lookups.
 it('caps the directories one pass reads, not the rows it answers', async () => {
   const roots = [harness.claudeProjectDir]
+
   const inside = (folder: string, name: string): string =>
     join(harness.claudeProjectDir, folder, name)
+
   for (const folder of ['one', 'two', 'three']) {
     await mkdir(join(harness.claudeProjectDir, folder), { recursive: true })
   }
+
   // Four rows in each of three directories: three reads, twelve answers.
   const paths = ['one', 'two', 'three'].flatMap((folder) =>
     ['a', 'b', 'c', 'd'].map((name) => inside(folder, name))
@@ -326,11 +334,14 @@ it.skipIf(!CAN_DENY_READ)(
   async () => {
     const locked = join(harness.claudeProjectDir, 'locked')
     await mkdir(locked, { recursive: true })
+
     const blocked = Array.from({ length: 520 }, (_unused, index) =>
       join(locked, `locked-${index}.jsonl`)
     )
+
     const deleted = join(harness.claudeProjectDir, 'deleted.jsonl')
     await chmod(locked, 0o000)
+
     try {
       const result = await retire([...blocked, deleted], { directoryLimit: 512 })
 

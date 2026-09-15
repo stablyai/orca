@@ -19,6 +19,7 @@ function hasValidCatalogSshAuthority(
   if (!('expectedAuthority' in args)) {
     return false
   }
+
   return isAdmissibleDirectSshAuthority(args.expectedAuthority)
 }
 
@@ -26,7 +27,9 @@ function repoHostContradictsConnection(repo: Repo): boolean {
   if (!repo.executionHostId || !repo.connectionId) {
     return false
   }
+
   const explicitHost = parseExecutionHostId(repo.executionHostId)
+
   return explicitHost?.kind !== 'ssh' || explicitHost.targetId !== repo.connectionId
 }
 
@@ -40,6 +43,7 @@ function getConsistentRepoCatalogForHost(
       (getRepoExecutionHostId(repo) === host.id ||
         (host.kind === 'ssh' && repo.connectionId === host.targetId))
   )
+
   return hasContradiction ? null : repos.filter((repo) => getRepoExecutionHostId(repo) === host.id)
 }
 
@@ -48,6 +52,7 @@ export async function listReposForExecutionHost(
   args: ListReposForExecutionHostArgs
 ): Promise<HostRepoCatalogSnapshot> {
   const parsedHost = parseExecutionHostId(args?.executionHostId)
+
   const rejected = (
     reason: Extract<HostRepoCatalogSnapshot, { authoritative: false }>['reason']
   ): HostRepoCatalogSnapshot => ({
@@ -55,49 +60,64 @@ export async function listReposForExecutionHost(
     executionHostId: args.executionHostId,
     reason
   })
+
   if (!parsedHost || parsedHost.kind === 'runtime') {
     return rejected('rejected')
   }
+
   if (parsedHost.kind === 'local') {
     if ('expectedAuthority' in args) {
       return rejected('rejected')
     }
+
     const repos = getConsistentRepoCatalogForHost(store.getRepos(), parsedHost)
+
     if (!repos) {
       return rejected('rejected')
     }
+
     return {
       authoritative: true,
       authority: { kind: 'local', executionHostId: LOCAL_EXECUTION_HOST_ID },
       repos: structuredClone(repos)
     }
   }
+
   if (
     !hasValidCatalogSshAuthority(args) ||
     args.expectedAuthority.targetId !== parsedHost.targetId
   ) {
     return rejected('rejected')
   }
+
   const authority = { ...args.expectedAuthority }
+
   if (!isCurrentSshProviderAuthority(authority)) {
     return rejected('stale')
   }
+
   const provider = getSshGitProvider(parsedHost.targetId)
+
   if (!provider) {
     return rejected('unavailable')
   }
+
   const matchingRepos = getConsistentRepoCatalogForHost(store.getRepos(), parsedHost)
+
   if (!matchingRepos) {
     return rejected('rejected')
   }
+
   const repos = structuredClone(matchingRepos)
   await Promise.resolve()
+
   if (
     getSshGitProvider(parsedHost.targetId) !== provider ||
     !isCurrentSshProviderAuthority(authority)
   ) {
     return rejected('stale')
   }
+
   return {
     authoritative: true,
     authority: {

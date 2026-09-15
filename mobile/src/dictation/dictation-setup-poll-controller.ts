@@ -40,6 +40,7 @@ export class DictationSetupPollController {
     if (this.disposed || !this.isEligible()) {
       return Promise.resolve()
     }
+
     return new Promise((resolve) => {
       this.refreshWaiters.push(resolve)
       this.requestRefresh(true)
@@ -57,6 +58,7 @@ export class DictationSetupPollController {
     if (this.disposed) {
       return
     }
+
     const wasEligible = this.isEligible()
     const wasPolling = this.state.polling
     this.state = { ...this.state, ...next }
@@ -64,16 +66,22 @@ export class DictationSetupPollController {
     if (!this.isEligible()) {
       this.immediateRefreshPending = false
       this.clearTimer()
+
       return
     }
+
     if (!wasEligible) {
       this.requestRefresh(true)
+
       return
     }
+
     if (!this.state.polling) {
       this.clearTimer()
+
       return
     }
+
     if (!wasPolling) {
       this.scheduleRefresh()
     }
@@ -86,8 +94,10 @@ export class DictationSetupPollController {
   private requestRefresh(immediate: boolean): void {
     if (this.inFlight) {
       this.immediateRefreshPending ||= immediate
+
       return
     }
+
     this.clearTimer()
     this.inFlight = true
     void this.runRefresh()
@@ -98,6 +108,7 @@ export class DictationSetupPollController {
     // its result stale.
     const revisionAtStart = this.pollingRevision
     let shouldContinue: RefreshResult
+
     try {
       shouldContinue = await this.refresh()
     } catch {
@@ -112,16 +123,22 @@ export class DictationSetupPollController {
     if (shouldContinue !== undefined && this.pollingRevision === revisionAtStart) {
       this.state.polling = shouldContinue
     }
+
     if (this.disposed || !this.isEligible()) {
       this.resolveRefreshWaiters()
+
       return
     }
+
     if (this.immediateRefreshPending) {
       this.immediateRefreshPending = false
       this.requestRefresh(true)
+
       return
     }
+
     this.resolveRefreshWaiters()
+
     if (this.state.polling) {
       this.scheduleRefresh()
     }
@@ -131,6 +148,7 @@ export class DictationSetupPollController {
     if (this.timer !== null || this.inFlight || !this.isEligible() || !this.state.polling) {
       return
     }
+
     this.timer = setTimeout(() => {
       this.timer = null
       this.requestRefresh(false)
@@ -146,6 +164,7 @@ export class DictationSetupPollController {
 
   private resolveRefreshWaiters(): void {
     const waiters = this.refreshWaiters.splice(0)
+
     for (const resolve of waiters) {
       resolve()
     }

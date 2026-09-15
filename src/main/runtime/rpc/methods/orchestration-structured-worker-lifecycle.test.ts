@@ -7,6 +7,7 @@ const hostRef: { current: unknown } = { current: null }
 vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
+
 vi.mock('./orchestration-structured-worker-session', () => ({
   releaseStructuredWorkerSession: vi.fn()
 }))
@@ -18,6 +19,7 @@ const {
   readStructuredWorkerJournal,
   stopStructuredWorker
 } = await import('./orchestration-structured-worker-lifecycle')
+
 const { readArchivedWorkerOutput } = await import('./orchestration/worker/worker-archive-read')
 
 const IDENTITY: StructuredWorkerIdentity = {
@@ -61,6 +63,7 @@ function installHost(options: {
           }
         }
       : options.record
+
   let closed = false
   hostRef.current = {
     deps: { store: { getRecord: () => record } },
@@ -75,6 +78,7 @@ function installHost(options: {
       if (options.historyThrows) {
         throw new Error('agent_session_not_attached')
       }
+
       return { ok: true, page: { items: options.items ?? ITEMS, hasOlder: false } }
     }
   }
@@ -136,10 +140,12 @@ describe('structured worker stop', () => {
   ])('retains without positive exit evidence: %j', async (options) => {
     installHost({ ...options, close: async () => {} })
     const retireStructuredAgentSessionTabFromSnapshot = vi.fn()
+
     const result = await stopStructuredWorker(IDENTITY, 'd1', {
       forgetStructuredSessionMail: vi.fn(),
       retireStructuredAgentSessionTabFromSnapshot
     })
+
     expect(result).toMatchObject({ stopped: false, closeAttempted: true })
     expect(retireStructuredAgentSessionTabFromSnapshot).not.toHaveBeenCalled()
   })
@@ -194,6 +200,7 @@ describe('structured worker output', () => {
 
   it('round-trips the journal through the archive and back out of a released read', () => {
     installHost({})
+
     const live = readStructuredWorkerJournal({
       identity: IDENTITY,
       dispatchId: 'd1',
@@ -201,9 +208,11 @@ describe('structured worker output', () => {
       liveness: 'live',
       agent: 'claude'
     })
+
     expect(live.source).toBe('transcript')
     const archive = captureStructuredWorkerArchive(IDENTITY, 'claude')
     hostRef.current = null
+
     const archived = readArchivedStructuredJournal({
       dispatchId: 'd1',
       workerState: 'succeeded',
@@ -212,6 +221,7 @@ describe('structured worker output', () => {
       releaseState: 'released',
       archive
     })
+
     expect(archived.source).toBe('transcript')
     expect(archived.archived).toBe(true)
     expect(archived.transcript?.messages).toHaveLength(1)
@@ -256,6 +266,7 @@ describe('structured worker output', () => {
     // `unverifiable` — no attached provider child in this generation — while the journal is still
     // readable, and a coordinator reading `running` waits on a worker that may already be gone.
     installHost({})
+
     const read = readStructuredWorkerJournal({
       identity: IDENTITY,
       dispatchId: 'd1',
@@ -263,12 +274,14 @@ describe('structured worker output', () => {
       liveness: 'unverifiable',
       agent: 'claude'
     })
+
     expect(read.status.terminal).toBe('unknown')
     expect(read.status.liveness).toBe('unverifiable')
   })
 
   it('carries each proven verdict through unchanged', () => {
     installHost({})
+
     const live = readStructuredWorkerJournal({
       identity: IDENTITY,
       dispatchId: 'd1',
@@ -276,7 +289,9 @@ describe('structured worker output', () => {
       liveness: 'live',
       agent: 'claude'
     })
+
     expect(live.status).toMatchObject({ terminal: 'running', liveness: 'live' })
+
     const exited = readStructuredWorkerJournal({
       identity: IDENTITY,
       dispatchId: 'd1',
@@ -284,12 +299,14 @@ describe('structured worker output', () => {
       liveness: 'exited',
       agent: 'claude'
     })
+
     expect(exited.status).toMatchObject({ terminal: 'exited', liveness: 'exited' })
   })
 
   it('states that a settled release is exited', () => {
     installHost({})
     const archive = captureStructuredWorkerArchive(IDENTITY, 'claude')
+
     const archived = readArchivedStructuredJournal({
       dispatchId: 'd1',
       workerState: 'succeeded',
@@ -298,6 +315,7 @@ describe('structured worker output', () => {
       releaseState: 'released',
       archive
     })
+
     expect(archived.status).toMatchObject({ terminal: 'exited', liveness: 'exited' })
   })
 
@@ -307,6 +325,7 @@ describe('structured worker output', () => {
     // the same worktree while the original provider child may still be attached.
     installHost({})
     const archive = captureStructuredWorkerArchive(IDENTITY, 'claude')
+
     for (const releaseState of ['unknown', 'releasing'] as const) {
       const archived = readArchivedStructuredJournal({
         dispatchId: 'd1',
@@ -316,6 +335,7 @@ describe('structured worker output', () => {
         releaseState,
         archive
       })
+
       expect(archived.status).toMatchObject({ terminal: 'unknown', liveness: 'unverifiable' })
     }
   })
@@ -326,6 +346,7 @@ describe('structured worker output', () => {
     // knows whether the close landed.
     installHost({})
     const archive = captureStructuredWorkerArchive(IDENTITY, 'claude')
+
     const db = {
       getWorkerTerminalArchive: () => ({
         dispatch_id: 'd1',
@@ -335,6 +356,7 @@ describe('structured worker output', () => {
         created_at: '2026-09-05 00:00:00'
       })
     }
+
     const read = async (releaseState: string) =>
       readArchivedWorkerOutput({
         db: db as never,
@@ -346,6 +368,7 @@ describe('structured worker output', () => {
           release_state: releaseState
         } as never
       })
+
     expect((await read('unknown')).status).toMatchObject({
       terminal: 'unknown',
       liveness: 'unverifiable'
@@ -361,6 +384,7 @@ describe('structured worker output', () => {
     // worker's life, so a coordinator paging a growing journal resumed at the newest items and
     // skipped the middle without a word.
     installHost({ items: ITEMS })
+
     const first = readStructuredWorkerJournal({
       identity: IDENTITY,
       dispatchId: 'd1',
@@ -368,6 +392,7 @@ describe('structured worker output', () => {
       liveness: 'live',
       agent: 'claude'
     })
+
     installHost({
       items: [
         {

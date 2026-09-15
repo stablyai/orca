@@ -5,6 +5,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
+
 const smokeScript = path.join(projectDir, 'config', 'scripts', 'computer-use-smoke.mjs')
 
 describe('computer-use smoke script', () => {
@@ -90,6 +91,7 @@ describe('computer-use smoke script', () => {
 
   it('skips background apps that report window_not_found instead of failing smoke', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+
     const cliPath = writeFakeSnapshotCli(
       root,
       [
@@ -150,6 +152,7 @@ function writeFakeListAppsCli(root, apps) {
     'utf8'
   )
   chmodSync(cliPath, 0o755)
+
   return cliPath
 }
 
@@ -186,5 +189,6 @@ function writeFakeSnapshotCli(root, apps, options = {}) {
     'utf8'
   )
   chmodSync(cliPath, 0o755)
+
   return cliPath
 }

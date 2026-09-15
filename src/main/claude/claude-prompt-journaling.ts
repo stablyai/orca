@@ -23,6 +23,7 @@ export function journalClaudePrompt(
   event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>
 ): void {
   const identities: AgentJournalItemIdentity[] = []
+
   if (event.prompt.kind === 'question') {
     for (const question of claudeQuestionItems({
       sessionId: event.sessionId,
@@ -37,10 +38,12 @@ export function journalClaudePrompt(
       sessionId: event.sessionId,
       promptKey: event.prompt.promptKey
     })
+
     identities.push(identity)
     deps.sink.appendItem(identity, claudeApprovalItem(event.prompt))
     deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
   }
+
   deps.promptItems.set(event.prompt.promptKey, identities)
   deps.sink.publish()
 }

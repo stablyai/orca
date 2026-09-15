@@ -5,6 +5,7 @@ const { ghExecFileAsyncMock } = vi.hoisted(() => ({ ghExecFileAsyncMock: vi.fn()
 vi.mock('../git/runner', () => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
+
 import { diagnoseGhAuth, parseAuthStatus } from './auth-diagnose'
 
 describe('parseAuthStatus', () => {
@@ -22,6 +23,7 @@ describe('parseAuthStatus', () => {
   - Token: gho_************************************
   - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
 `
+
     const accounts = parseAuthStatus(text)
     expect(accounts).toHaveLength(2)
     expect(accounts[0]).toMatchObject({
@@ -45,6 +47,7 @@ describe('parseAuthStatus', () => {
   - Active account: true
   - Token scopes: 'project', 'read:org', 'repo'
 `
+
     const accounts = parseAuthStatus(text)
     expect(accounts).toHaveLength(1)
     expect(accounts[0]).toMatchObject({
@@ -62,6 +65,7 @@ describe('parseAuthStatus', () => {
   - Active account: true
   - Token scopes: 'repo'
 `
+
     const [acc] = parseAuthStatus(text)
     expect(acc.envToken).toBe('GH_TOKEN')
     expect(acc.source).toBe('env')
@@ -82,6 +86,7 @@ ghe.acme.io
   - Active account: true
   - Token scopes: 'project', 'repo'
 `
+
     const accounts = parseAuthStatus(text)
     expect(accounts.map((a) => a.host)).toEqual(['github.com', 'ghe.acme.io'])
     expect(accounts.map((a) => a.user)).toEqual(['alice', 'bob'])
@@ -108,6 +113,7 @@ ghe.acme.io
   - Active account: true
   - Token scopes: 'project'
 `
+
     const accounts = parseAuthStatus(text)
     expect(accounts).toHaveLength(1)
     expect(accounts[0].host).toBe('github.acme.io')

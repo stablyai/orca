@@ -105,9 +105,11 @@ describe('worktree-nav-history slice: recordWorktreeVisit', () => {
 
   it('caps the history at 50 entries, evicting oldest', () => {
     const store = createHistoryStore()
+
     for (let i = 0; i < 60; i++) {
       store.getState().recordWorktreeVisit(`w${i}`)
     }
+
     const state = store.getState()
     expect(state.worktreeNavHistory).toHaveLength(50)
     // Oldest 10 are evicted; the head is the most recent.
@@ -160,6 +162,7 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     const activated: string[] = []
     setWorktreeNavActivator((id) => {
       activated.push(id as string)
+
       return { primaryTabId: null }
     })
 
@@ -179,6 +182,7 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     const activated: string[] = []
     setWorktreeNavActivator((id) => {
       activated.push(id as string)
+
       return { primaryTabId: null }
     })
 
@@ -198,6 +202,7 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     const activated: string[] = []
     setWorktreeNavActivator((id) => {
       activated.push(id as string)
+
       return { primaryTabId: null }
     })
 

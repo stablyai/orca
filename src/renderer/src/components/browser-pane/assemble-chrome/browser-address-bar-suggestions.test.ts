@@ -83,6 +83,7 @@ describe('browser address bar suggestions', () => {
 
   it('rejects oversized pasted values before scoring history or building a search URL', () => {
     const oversizedValue = 'secret-browser-address'.repeat(BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES)
+
     const throwingHistory = [
       {
         get url(): string {
@@ -126,6 +127,7 @@ describe('browser address bar suggestions', () => {
   describe('history scoring', () => {
     const now = 1_700_000_000_000
     const hoursAgo = (hours: number): number => now - hours * 60 * 60 * 1000
+
     // The synthetic top row is composition, not scoring; ranking asserts on history only.
     const historyUrls = (suggestions: readonly { isSearch: boolean; url: string }[]): string[] =>
       suggestions.filter((suggestion) => !suggestion.isSearch).map((suggestion) => suggestion.url)
@@ -316,6 +318,7 @@ describe('workspace document suggestions', () => {
       ],
       workspaceDocHistory: [DOC_ENTRY]
     })
+
     expect(rows.map((row) => row.title)).toEqual(['Quarterly Report', 'Example'])
     expect(rows[0]?.docLocation).toEqual(DOC_ENTRY.docLocation)
     // The row's selection identity is the document's path, never a preview URL.
@@ -329,6 +332,7 @@ describe('workspace document suggestions', () => {
       browserUrlHistory: [],
       workspaceDocHistory: [DOC_ENTRY]
     })
+
     expect(rows.some((row) => row.docLocation)).toBe(true)
 
     const byPath = buildBrowserAddressBarSuggestions({
@@ -336,6 +340,7 @@ describe('workspace document suggestions', () => {
       browserUrlHistory: [],
       workspaceDocHistory: [DOC_ENTRY]
     })
+
     expect(byPath.some((row) => row.docLocation)).toBe(true)
   })
 

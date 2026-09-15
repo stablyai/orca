@@ -24,6 +24,7 @@ export function GitHistoryCommitContextMenu({
       getClientCreationActionPolicy(state, state.activeWorktreeId)['managed-browser'].state ===
       'enabled'
   )
+
   return (
     <ContextMenuContent className="w-56">
       {managedBrowserCreationEnabled ? (

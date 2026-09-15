@@ -28,6 +28,7 @@ export function applyWebSessionTabsStorePatch(
   let mirroredAgentStatusChanged = false
   // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
   let patchCommitted = false
+
   const acceptedNotificationStatuses: {
     paneKey: string
     worktreeId: string
@@ -43,30 +44,38 @@ export function applyWebSessionTabsStorePatch(
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
     const patch = buildPatch(state)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
+
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
+
       const snapshots = Array.isArray(agentStatusSnapshots)
         ? agentStatusSnapshots
         : [agentStatusSnapshots]
+
       for (const snapshot of snapshots) {
         for (const surface of snapshot.tabs) {
           if (surface.type !== 'terminal') {
             continue
           }
+
           const remapped = remapHostAgentStatus(surface)
           const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
+
           const turnCompletedAt = remapped
             ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)
             : undefined
+
           if (remapped?.state === 'done' && turnCompletedAt === undefined) {
             hostWorkingClientBoundaryByPaneKey.delete(remapped.paneKey)
           }
+
           // Client OSC owns display state; the host hook stream carries background-turn stamps.
           const clientOwnedNotification = Boolean(
             remapped &&
             isClientAuthoritativeAgentStatusPane(remapped.paneKey) &&
             (remapped.state === 'working' || turnCompletedAt !== undefined)
           )
+
           if (
             !remapped ||
             (!clientOwnedNotification &&
@@ -76,14 +85,19 @@ export function applyWebSessionTabsStorePatch(
           ) {
             continue
           }
+
           const notificationStatus = clientOwnedNotification ? remapped : accepted
+
           if (!notificationStatus) {
             continue
           }
+
           const currentClientStateStartedAt = clientOwnedNotification
             ? state.agentStatusByPaneKey[notificationStatus.paneKey]?.stateStartedAt
             : undefined
+
           let localStateStartedAt = currentClientStateStartedAt
+
           if (
             clientOwnedNotification &&
             notificationStatus.state === 'working' &&
@@ -93,6 +107,7 @@ export function applyWebSessionTabsStorePatch(
               const retainedBoundary = hostWorkingClientBoundaryByPaneKey.get(
                 notificationStatus.paneKey
               )
+
               if (
                 !retainedBoundary ||
                 retainedBoundary.hostStateStartedAt !== notificationStatus.stateStartedAt ||
@@ -106,8 +121,10 @@ export function applyWebSessionTabsStorePatch(
                   clientStateStartedAt: currentClientStateStartedAt,
                   stamped: false
                 })
+
                 if (hostWorkingClientBoundaryByPaneKey.size > HOST_WORKING_CLIENT_BOUNDARY_LIMIT) {
                   const oldestPaneKey = hostWorkingClientBoundaryByPaneKey.keys().next().value
+
                   if (oldestPaneKey !== undefined) {
                     hostWorkingClientBoundaryByPaneKey.delete(oldestPaneKey)
                   }
@@ -117,6 +134,7 @@ export function applyWebSessionTabsStorePatch(
               const retainedBoundary = hostWorkingClientBoundaryByPaneKey.get(
                 notificationStatus.paneKey
               )
+
               if (
                 retainedBoundary?.hostStateStartedAt === notificationStatus.stateStartedAt &&
                 retainedBoundary.hostPrompt === notificationStatus.prompt
@@ -126,9 +144,11 @@ export function applyWebSessionTabsStorePatch(
               }
             }
           }
+
           if (!allowCompletionNotification && notificationStatus.state !== 'working') {
             continue
           }
+
           acceptedNotificationStatuses.push({
             paneKey: notificationStatus.paneKey,
             worktreeId: notificationStatus.worktreeId ?? snapshot.worktree,
@@ -145,7 +165,9 @@ export function applyWebSessionTabsStorePatch(
         }
       }
     }
+
     patchCommitted = true
+
     return patch
   }
 
@@ -155,19 +177,23 @@ export function applyWebSessionTabsStorePatch(
     if (!patchCommitted) {
       throw error
     }
+
     console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
   }
 
   const settleHostMirror = createHostSessionMirrorSettle(hostMirrorVerdict)
+
   try {
     if (mirroredAgentStatusChanged) {
       useAppStore.getState().scheduleAgentStatusFreshness()
     }
+
     for (const status of acceptedNotificationStatuses) {
       observeAgentHookCompletionForNotification(status)
     }
   } catch (error) {
     console.warn('[web-session-tabs-sync] post-patch bookkeeping failed:', error)
   }
+
   return settleHostMirror
 }

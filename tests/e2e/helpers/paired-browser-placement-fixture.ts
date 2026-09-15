@@ -44,6 +44,7 @@ export async function startPlacementFixtureServer(): Promise<{
       '<!doctype html><html><head><title>placement-marker</title></head><body><h1 id="marker">placement-marker</h1></body></html>'
     )
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -51,6 +52,7 @@ export async function startPlacementFixtureServer(): Promise<{
       resolve()
     })
   })
+
   return {
     close: () => closeServer(server),
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/placement`
@@ -74,6 +76,7 @@ export async function findPairedWorktreeId(page: Page, repoPath: string): Promis
           .find((worktree) => worktree.path === path)?.id ?? null,
       repoPath
     )
+
   await expect
     .poll(read, {
       timeout: 60_000,
@@ -81,9 +84,11 @@ export async function findPairedWorktreeId(page: Page, repoPath: string): Promis
     })
     .not.toBeNull()
   const worktreeId = await read()
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -91,20 +96,27 @@ export async function readPanes(page: Page, worktreeId: string): Promise<PaneSna
   return page.evaluate((id) => {
     const state = window.__store?.getState()
     const layoutGroupIds: string[] = []
+
     const visitLayout = (node: unknown): void => {
       if (!node || typeof node !== 'object') {
         return
       }
+
       const leaf = node as { groupId?: string; type?: string }
+
       if (leaf.type === 'leaf' && leaf.groupId) {
         layoutGroupIds.push(leaf.groupId)
+
         return
       }
+
       const split = node as { first?: unknown; second?: unknown }
       visitLayout(split.first)
       visitLayout(split.second)
     }
+
     visitLayout(state?.layoutByWorktree[id] ?? null)
+
     return {
       activeGroupId: state?.activeGroupIdByWorktree[id] ?? null,
       groups: (state?.groupsByWorktree[id] ?? []).map((group) => ({
@@ -126,9 +138,11 @@ export async function readPanes(page: Page, worktreeId: string): Promise<PaneSna
 
 export function requireGroup(panes: PaneSnapshot, groupId: string): PaneGroup {
   const group = panes.groups.find((candidate) => candidate.id === groupId)
+
   if (!group) {
     throw new Error(`Group ${groupId} missing from ${JSON.stringify(panes)}`)
   }
+
   return group
 }
 
@@ -150,6 +164,7 @@ export async function waitForGroupTabCount(
       .poll(
         async () => {
           const panes = await readPanes(page, worktreeId)
+
           return panes.groups.find((group) => group.id === groupId)?.tabOrder.length ?? -1
         },
         { timeout: 90_000, message }
@@ -162,6 +177,7 @@ export async function waitForGroupTabCount(
       { cause: error }
     )
   }
+
   return readPanes(page, worktreeId)
 }
 
@@ -179,6 +195,7 @@ export async function pushHostSnapshot(
     .poll(
       async () => {
         const panes = await readPanes(fixture.client.page, fixture.worktreeId)
+
         return panes.tabs.some((tab) => tab.label.includes(title))
       },
       {
@@ -197,9 +214,11 @@ export async function openRemoteBrowserTab(
   await page.evaluate(
     async ({ groupId, url }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Paired client store unavailable')
       }
+
       state.setBrowserDefaultUrl(url)
       await state.openNewBrowserTabInActiveWorkspace(groupId)
     },
@@ -214,17 +233,21 @@ export async function setUpPairedFixture(
   const fixtureServer = await startPlacementFixtureServer()
   let host: HeadlessPairedRuntimeHost | null = null
   let client: PairedElectronClient | null = null
+
   try {
     host = await launchHeadlessPairedRuntimeHost()
     await host.client.call('repo.add', { path: repoPath, kind: 'git' })
     const terminalHandles: string[] = []
+
     for (const title of ['Placement Alpha', 'Placement Beta']) {
       const created = await host.client.call<{ terminal: { handle: string } }>('terminal.create', {
         worktree: `path:${repoPath}`,
         title
       })
+
       terminalHandles.push(created.result.terminal.handle)
     }
+
     client = await launchPairedElectronClient(host.offer, testInfo, 'STA-4150 split-pane placement')
     const worktreeId = await findPairedWorktreeId(client.page, repoPath)
     await client.page.evaluate(
@@ -239,9 +262,11 @@ export async function setUpPairedFixture(
         async () => {
           const panes = await readPanes(client!.page, worktreeId)
           const group = panes.groups[0]
+
           if (!group) {
             return 0
           }
+
           return group.tabOrder.filter(
             (tabId) => panes.tabs.find((tab) => tab.id === tabId)?.contentType === 'terminal'
           ).length
@@ -254,11 +279,14 @@ export async function setUpPairedFixture(
       .toBeGreaterThanOrEqual(2)
     const panes = await readPanes(client.page, worktreeId)
     const rootGroupId = panes.groups[0]?.id
+
     if (!rootGroupId) {
       throw new Error('Paired worktree has no tab group after adoption')
     }
+
     const resolvedHost = host
     const resolvedClient = client
+
     return {
       client: resolvedClient,
       dispose: async () => {

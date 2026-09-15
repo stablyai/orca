@@ -80,6 +80,7 @@ export function filterAiVaultSessions(
 
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
+
   const workspaceMatchers =
     filters.scope === 'workspace'
       ? filters.activeWorktreePaths.map(createAiVaultWorkspaceMatcher)
@@ -89,6 +90,7 @@ export function filterAiVaultSessions(
     if (!agentSet.has(session.agent)) {
       return false
     }
+
     // Hide plain empty sessions, but keep sessions with resumable content
     // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
     // sessions that still carry recoverable content (queued prompts /
@@ -100,26 +102,33 @@ export function filterAiVaultSessions(
     ) {
       return false
     }
+
     if (filters.scope === 'workspace') {
       const cwd = session.cwd
       const normalizedCwd = cwd ? normalizeRuntimePathForComparison(cwd) : null
+
       if (normalizedCwd === null || !workspaceMatchers.some((matches) => matches(normalizedCwd))) {
         return false
       }
     }
+
     if (filters.scope === 'project') {
       if (!filters.activeProjectKey) {
         return false
       }
+
       if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
         return false
       }
     }
+
     return matchesQuery(session, parsedQuery, filters)
   })
+
   if (filtered.length < 2) {
     return filtered
   }
+
   return filtered
     .map((session) => ({ session, time: sessionSortTime(session, filters.sort) }))
     .sort((left, right) => right.time - left.time)
@@ -139,6 +148,7 @@ export function groupAiVaultSessions(
   for (const session of sessions) {
     const { key, label } = getGroupIdentity(session, group, options)
     const existing = groups.get(key)
+
     if (existing) {
       existing.sessions.push(session)
     } else {
@@ -153,14 +163,17 @@ export function folderLabel(pathValue: string | null): string {
   if (!pathValue) {
     return 'Unknown location'
   }
+
   // NFC so one folder renders the same header whichever spelling (macOS NFD vs
   // agent-recorded NFC) reaches the group first.
   const parts = normalizeRuntimePathSeparators(pathValue.normalize('NFC'))
     .split('/')
     .filter(Boolean)
+
   if (parts.length >= 2) {
     return parts.slice(-2).join('/')
   }
+
   return parts[0] ?? pathValue
 }
 
@@ -191,6 +204,7 @@ export function agentLabel(agent: AiVaultAgent): string {
 export function parseVaultQuery(query: string): ParsedQuery {
   const split = splitAiVaultSearchQuery(query)
   const fold = (values: readonly string[]): string[] => values.map((value) => value.toLowerCase())
+
   return {
     terms: fold(split.terms),
     repoTerms: fold(split.repoTerms),
@@ -224,16 +238,20 @@ export function matchesAiVaultQueryOperators(
 ): boolean {
   if (operators.repoTerms.length > 0) {
     const repoLabel = (target.repoLabel ?? folderLabel(target.cwd)).toLowerCase()
+
     if (operators.repoTerms.some((term) => !repoLabel.includes(term.toLowerCase()))) {
       return false
     }
   }
+
   if (operators.pathTerms.length > 0) {
     const pathSearch = `${target.cwd ?? ''} ${target.filePath}`.toLowerCase()
+
     if (operators.pathTerms.some((term) => !pathSearch.includes(term.toLowerCase()))) {
       return false
     }
   }
+
   return true
 }
 
@@ -256,11 +274,14 @@ function matchesQuery(
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
+
     if (parsed.terms.some((term) => !searchable.includes(term))) {
       return false
     }
   }
+
   const sessionProject = filters.sessionProjectById?.get(session.id)
+
   return matchesAiVaultQueryOperators(
     {
       cwd: session.cwd,
@@ -276,6 +297,7 @@ function matchesQuery(
 
 function sessionSortTime(session: AiVaultSession, sort: AiVaultSort): number {
   const value = sort === 'created' ? session.createdAt : session.updatedAt
+
   return Date.parse(value ?? session.modifiedAt)
 }
 
@@ -290,8 +312,10 @@ function getGroupIdentity(
   if (group === 'agent') {
     return { key: session.agent, label: agentLabel(session.agent) }
   }
+
   if (group === 'project') {
     const sessionProject = options.sessionProjectById?.get(session.id)
+
     if (sessionProject) {
       return {
         key: sessionProject.key,
@@ -302,16 +326,20 @@ function getGroupIdentity(
       }
     }
   }
+
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
 }
 
 function createAiVaultWorkspaceMatcher(workspacePath: string): (normalizedCwd: string) => boolean {
   const matches = createNormalizedPathInsideOrEqualMatcher(workspacePath)
   const workspaceWslPath = parseWslUncPath(workspacePath)
+
   if (!workspaceWslPath) {
     return matches
   }
+
   // WSL transcripts record Linux cwd even when the workspace uses a UNC path.
   const matchesLinux = createNormalizedPathInsideOrEqualMatcher(workspaceWslPath.linuxPath)
+
   return (cwd) => matches(cwd) || matchesLinux(cwd)
 }

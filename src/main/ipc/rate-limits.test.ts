@@ -21,6 +21,7 @@ function makeCodexAccounts() {
   const consumeCurrentRateLimitResetCredit = vi.fn(() =>
     Promise.resolve({ outcome: 'noCredit', state: {} as RateLimitState })
   )
+
   return {
     service: { consumeCurrentRateLimitResetCredit } as unknown as CodexAccountService,
     consumeCurrentRateLimitResetCredit
@@ -35,9 +36,11 @@ function makeService(): {
 } {
   const refresh = vi.fn(() => Promise.resolve({} as RateLimitState))
   const refreshGrok = vi.fn(() => Promise.resolve({} as RateLimitState))
+
   const consumeCodexRateLimitResetCredit = vi.fn(() =>
     Promise.resolve({ outcome: 'noCredit', state: {} as RateLimitState })
   )
+
   const service = {
     getState: vi.fn(() => ({}) as RateLimitState),
     refresh,
@@ -49,6 +52,7 @@ function makeService(): {
     fetchInactiveClaudeAccountsOnOpen: vi.fn(() => Promise.resolve()),
     fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve())
   }
+
   return {
     service: service as unknown as RateLimitService,
     refresh,

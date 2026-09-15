@@ -9,7 +9,9 @@ function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean
   if (left === right) {
     return true
   }
+
   const keys = Object.keys(left) as (keyof NativeChatMessage)[]
+
   return (
     keys.length === Object.keys(right).length &&
     keys.every(
@@ -25,21 +27,27 @@ export function createNativeChatMessageListProjection(): (
 ) => NativeChatMessage[] {
   let previous: NativeChatMessage[] = []
   let byId = new Map<string, NativeChatMessage>()
+
   return (messages) => {
     const folded = stripNoiseMessages(foldToolMessages(orderNativeChatMessages(messages)))
+
     const next = folded.map((message) => {
       const prior = byId.get(message.id)
+
       // Folding clones historical tool runs even when every contributing block is unchanged.
       return prior && sameMessage(prior, message) ? prior : message
     })
+
     if (
       next.length === previous.length &&
       next.every((message, index) => message === previous[index])
     ) {
       return previous
     }
+
     previous = next
     byId = new Map(next.map((message) => [message.id, message]))
+
     return next
   }
 }

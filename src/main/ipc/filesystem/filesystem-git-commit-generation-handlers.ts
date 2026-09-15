@@ -46,6 +46,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
     ): Promise<GenerateCommitMessageResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
       const baseSettings = store.getSettings()
+
       const requestSettings = {
         ...baseSettings,
         ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
@@ -53,6 +54,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
           ? { agentCmdOverrides: args.agentCmdOverrides }
           : {})
       }
+
       const resolvedSettings = args.sourceControlAiResolvedParams
         ? { ok: true as const, params: args.sourceControlAiResolvedParams }
         : resolveCommitMessageSettings(
@@ -61,34 +63,43 @@ export function registerFilesystemGitCommitGenerationHandlers(
             'commitMessage',
             await getRepoForSourceControlAi(store, args)
           )
+
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           return {
             success: false,
             error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
           }
         }
+
         let context
+
         try {
           context = await provider.getStagedCommitContext(args.worktreePath)
         } catch (error) {
           console.error('[filesystem] Failed to read remote staged commit context:', error)
+
           return {
             success: false,
             error: 'Failed to read staged changes.'
           }
         }
+
         if (!context) {
           return { success: false, error: 'No staged changes to summarize.' }
         }
+
         context = withLinkedIssueDraftContext(
           context,
           resolveSourceControlAiLinkedIssue(store, args)
         )
+
         return generateCommitMessageFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -97,13 +108,17 @@ export function registerFilesystemGitCommitGenerationHandlers(
           missingBinaryLocation: 'remote PATH'
         })
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       let context
+
       try {
         context = await getStagedCommitContext(worktreePath, {
           ...gitOptions,
@@ -111,26 +126,32 @@ export function registerFilesystemGitCommitGenerationHandlers(
         })
       } catch (error) {
         console.error('[filesystem] Failed to read staged commit context:', error)
+
         return {
           success: false,
           error: 'Failed to read staged changes.'
         }
       }
+
       if (!context) {
         return { success: false, error: 'No staged changes to summarize.' }
       }
+
       context = withLinkedIssueDraftContext(
         context,
         resolveSourceControlAiLinkedIssue(store, args, worktreePath)
       )
+
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,
         getLocalAgentRuntimeTarget(gitOptions)
       )
+
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
+
       return generateCommitMessageFromContext(
         context,
         resolvedSettings.params,
@@ -144,12 +165,16 @@ export function registerFilesystemGitCommitGenerationHandlers(
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           return
         }
+
         await provider.cancelGenerateCommitMessage(args.worktreePath, 'commit-message')
+
         return
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       cancelGenerateCommitMessageLocal(worktreePath)
     }

@@ -4,14 +4,18 @@ import { pathToFileURL } from 'node:url'
 import { assertPackagedNodePtyCapability } from './packaged-node-pty-capability-oracle.mjs'
 
 const EVIDENCE_PREFIX = 'ORCA_NODE_PTY_CAPABILITY_EVIDENCE='
+
 const PROBE_TIMEOUT_MS = 45_000
+
 const MAX_DIAGNOSTIC_CHARS = 8_000
 
 function executableArgument(argv) {
   const value = argv.find((arg) => arg.startsWith('--exe='))?.slice('--exe='.length)
+
   if (!value) {
     throw new Error('usage: windows-pty-native-capability-smoke --exe=<packaged Orca.exe>')
   }
+
   return path.resolve(value)
 }
 
@@ -23,6 +27,7 @@ export function packagedProbeInvocation(executable, environment = process.env) {
   const resolvedExecutable = path.resolve(executable)
   const resourcesDir = path.join(path.dirname(resolvedExecutable), 'resources')
   const probe = path.join(import.meta.dirname, 'packaged-node-pty-capability-probe.cjs')
+
   return {
     program: resolvedExecutable,
     args: [probe, '--exercise', resourcesDir, process.execPath],
@@ -45,9 +50,11 @@ export function formatProbeFailure(result) {
 
 function parseEvidence(stdout) {
   const line = stdout.split(/\r?\n/).find((candidate) => candidate.startsWith(EVIDENCE_PREFIX))
+
   if (!line) {
     throw new Error(`packaged probe did not emit ${EVIDENCE_PREFIX}`)
   }
+
   return JSON.parse(line.slice(EVIDENCE_PREFIX.length))
 }
 
@@ -55,10 +62,12 @@ async function main() {
   if (process.platform !== 'win32') {
     throw new Error('windows-pty-native-capability-smoke requires a physical Windows host')
   }
+
   const executable = executableArgument(process.argv.slice(2))
   const require = createRequire(import.meta.url)
   const { runProcess } = require(checkoutRunProcessPath())
   const result = await runProcess(packagedProbeInvocation(executable))
+
   if (result.code !== 0 || result.timedOut) {
     throw new Error(formatProbeFailure(result))
   }

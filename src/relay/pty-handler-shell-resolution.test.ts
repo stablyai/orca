@@ -60,9 +60,11 @@ describe('PtyHandler', () => {
       configurable: true,
       value: 'win32'
     })
+
     const resolveDefaultShellSpy = vi
       .spyOn(ptyShellUtils, 'resolveDefaultShell')
       .mockReturnValue('/default-shell')
+
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
@@ -98,9 +100,11 @@ describe('PtyHandler', () => {
       configurable: true,
       value: 'linux'
     })
+
     const resolveDefaultShellSpy = vi
       .spyOn(ptyShellUtils, 'resolveDefaultShell')
       .mockReturnValue('/default-shell')
+
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
@@ -128,6 +132,7 @@ describe('PtyHandler', () => {
       configurable: true,
       value: 'win32'
     })
+
     try {
       await expect(
         dispatcher.callRequest('pty.spawn', {
@@ -155,9 +160,11 @@ describe('PtyHandler', () => {
         configurable: true,
         value: 'win32'
       })
+
       const resolveGitBashSpy = vi
         .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
         .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+
       try {
         await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride })
 
@@ -183,9 +190,11 @@ describe('PtyHandler', () => {
       configurable: true,
       value: 'win32'
     })
+
     const resolveGitBashSpy = vi
       .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
       .mockReturnValue(null)
+
     try {
       await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, shellOverride: 'bash' })
 
@@ -205,9 +214,11 @@ describe('PtyHandler', () => {
       configurable: true,
       value: 'win32'
     })
+
     const resolveGitBashSpy = vi
       .spyOn(gitBash, 'resolveWindowsGitBashShellPath')
       .mockReturnValue('C:\\Program Files\\Git\\bin\\bash.exe')
+
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
@@ -236,6 +247,7 @@ describe('PtyHandler', () => {
       configurable: true,
       value: 'win32'
     })
+
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,

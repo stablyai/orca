@@ -14,11 +14,13 @@ export function emitRepoAdded(
   if (alreadyExisted) {
     return
   }
+
   // Why: read cohort AFTER store.addRepo() so the just-added repo is counted (docs/onboarding-funnel-cohort-addendum.md §Read-vs-write ordering).
   const props = {
     method,
     ...(isGitRepo === undefined ? {} : { is_git_repo: isGitRepo }),
     ...getCohortAtEmit()
   }
+
   track('repo_added', props)
 }

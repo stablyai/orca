@@ -39,10 +39,15 @@ import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 
 const PARK_DELAY_MS = 2_000
+
 const LIVE_PAINT_BUDGET_MS = 12_000
+
 const REVEAL_BUDGET_MS = 20_000
+
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-parked-reveal-'))
+
 const fixturePath = path.join(scratch, 'parked-reveal-terminal.mjs')
+
 writeFileSync(
   fixturePath,
   [
@@ -81,6 +86,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -107,9 +113,11 @@ async function callEnvironment<TResult>(
         method,
         params
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -129,6 +137,7 @@ async function createHostTerminal(
   worktreeId: string
 ): Promise<HostTerminal> {
   const sinkPath = path.join(scratch, `sink-${randomUUID()}.log`)
+
   const result = await callEnvironment<{ tab: { id: string; terminal: string | null } }>(
     page,
     environmentId,
@@ -141,11 +150,14 @@ async function createHostTerminal(
       navigation: 'caller'
     }
   )
+
   if (!result.tab.terminal) {
     throw new Error('host session terminal was not created')
   }
+
   // Why: the host answers with a `tabId::leafId` surface id; client tabs mirror the parent tab.
   const hostTabId = result.tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
+
   return {
     hostTabId,
     sinkPath,
@@ -190,6 +202,7 @@ async function readActivePaneGrid(
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane ? { cols: pane.terminal.cols, rows: pane.terminal.rows } : null
   }, webTabId)
 }
@@ -200,6 +213,7 @@ async function readPaneContent(page: Page, webTabId: string): Promise<string> {
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane?.serializeAddon?.serialize?.() ?? ''
   }, webTabId)
 }
@@ -215,6 +229,7 @@ async function readPaneDiagnostics(
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
       const state = window.__store?.getState()
       const tab = (state?.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === webTabId)
+
       return {
         mounted: Boolean(manager),
         ptyId: pane?.container?.dataset?.ptyId ?? null,
@@ -239,18 +254,22 @@ async function waitForPaneMarker(
   budgetMs: number
 ): Promise<boolean> {
   const deadline = Date.now() + budgetMs
+
   while (Date.now() < deadline) {
     if ((await readPaneContent(page, webTabId)).includes(marker)) {
       return true
     }
+
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
+
   return false
 }
 
 function readPtyGridFromContent(content: string): { cols: number; rows: number } | null {
   const sizes = [...content.matchAll(/(?:READY|SIZE):(\d+)x(\d+)/g)]
   const last = sizes.at(-1)
+
   return last ? { cols: Number(last[1]), rows: Number(last[2]) } : null
 }
 
@@ -281,15 +300,18 @@ async function probeInteractivity(
   await focusActiveTerminalInput(page)
   await page.keyboard.type(token)
   await page.keyboard.press('Enter')
+
   const paintedLive = await waitForPaneMarker(
     page,
     target.webTabId,
     `LINE:${token}`,
     LIVE_PAINT_BUDGET_MS
   )
+
   const paneGrid = await readActivePaneGrid(page, target.webTabId)
   const diagnostics = await readPaneDiagnostics(page, worktreeId, target.webTabId)
   let paintedAfterFlip = paintedLive
+
   if (!paintedLive) {
     await openClientTab(page, worktreeId, flipTo.webTabId)
     await openClientTab(page, worktreeId, target.webTabId)
@@ -300,7 +322,9 @@ async function probeInteractivity(
       LIVE_PAINT_BUDGET_MS
     )
   }
+
   const sink = readSink(target.sinkPath)
+
   return {
     name,
     restoredBuffer,
@@ -325,6 +349,7 @@ async function expectStillMounted(page: Page, webTabId: string, label: string): 
 /** Logged unconditionally: on failure this line is the whole diagnosis. */
 function logResult(result: ScenarioResult): ScenarioResult {
   console.log(`[paired-reveal] ${JSON.stringify(result)}`)
+
   return result
 }
 
@@ -333,10 +358,12 @@ async function seedScenario(
   worktreeId: string
 ): Promise<{ target: HostTerminal; decoys: HostTerminal[] }> {
   const target = await createHostTerminal(client.page, client.environmentId, worktreeId)
+
   const decoys = [
     await createHostTerminal(client.page, client.environmentId, worktreeId),
     await createHostTerminal(client.page, client.environmentId, worktreeId)
   ]
+
   await openClientTab(client.page, worktreeId, target.webTabId)
   await expect
     .poll(() => readPaneContent(client.page, target.webTabId), {
@@ -344,6 +371,7 @@ async function seedScenario(
       message: 'target terminal never painted its READY marker'
     })
     .toContain('READY:')
+
   return { target, decoys }
 }
 
@@ -359,14 +387,18 @@ test('paired client keeps revealed remote terminals interactive', async ({
   const client = await launchPairedElectronClient(offer, testInfo, 'parked-reveal')
   const createdTerminals: string[] = []
   const results: ScenarioResult[] = []
+
   try {
     const worktreeId = await orcaPage.evaluate(() => {
       const id = window.__store?.getState().activeWorktreeId
+
       if (!id) {
         throw new Error('headed host has no active worktree')
       }
+
       return id
     })
+
     await expect
       .poll(
         () =>
@@ -434,6 +466,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
           async () =>
             client.page.evaluate(async (selector) => {
               const response = await window.api.runtimeEnvironments.connect({ selector })
+
               return response.ok
             }, client.environmentId),
           { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }
@@ -474,11 +507,13 @@ test('paired client keeps revealed remote terminals interactive', async ({
     } else {
       process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = previousParkDelay
     }
+
     for (const terminal of createdTerminals) {
       await callEnvironment(client.page, client.environmentId, 'terminal.closeTab', {
         terminal
       }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 })

@@ -34,18 +34,23 @@ export class CodexBackgroundTaskTracker {
 
   observe(event: CodexBackgroundTaskEvent): boolean {
     const itemEvent = event.method === 'item/started' || event.method === 'item/completed'
+
     if (itemEvent) {
       this.commands.observe(event)
     }
+
     const frame = readCodexBackgroundTaskFrame(event, this.primaryThreadId)
+
     if (!frame) {
       return itemEvent ? this.refresh() : false
     }
+
     if (frame.kind === 'subagent') {
       this.executions.register(frame.agentThreadId, frame.label, frame.parentTurnId)
     } else if (frame.threadId !== this.primaryThreadId) {
       this.executions.observeTurn(frame.threadId, frame.turnId, frame.state)
     }
+
     // A primary-turn frame only prompts a republish: turn end reveals children,
     // it never settles them. Codex `spawn_agent` children keep reporting well
     // past their parent turn, so nothing here may sweep the roster.
@@ -55,16 +60,19 @@ export class CodexBackgroundTaskTracker {
   clear(): boolean {
     this.executions.clear()
     this.commands.clear()
+
     return this.refresh()
   }
 
   private tasks(): AgentSessionBackgroundTask[] {
     const children = this.executions.workingChildren()
+
     const agents: AgentSessionBackgroundTask[] = children.map((child, index) => ({
       id: `codex-agent:${child.agentThreadId}`,
       kind: 'agent',
       ...(child.label ? { description: boundSubagentField(child.label, index) } : {})
     }))
+
     return [
       ...agents,
       ...this.commands.tasks(new Set(children.map((child) => child.agentThreadId)), (threadId) =>
@@ -76,13 +84,16 @@ export class CodexBackgroundTaskTracker {
   private refresh(): boolean {
     const tasks = this.tasks()
     const fingerprint = JSON.stringify(tasks)
+
     if (fingerprint === this.publishedFingerprint) {
       return false
     }
+
     this.publishedFingerprint = fingerprint
     this.publishedState = tasks.length
       ? { state: 'monitoring', tasks, supportsStopAll: false }
       : null
+
     return true
   }
 }

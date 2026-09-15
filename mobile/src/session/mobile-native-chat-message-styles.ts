@@ -2,6 +2,7 @@ import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const TEXT_SIZE = 17
+
 export const MONO_SIZE = 12
 
 export const styles = StyleSheet.create({

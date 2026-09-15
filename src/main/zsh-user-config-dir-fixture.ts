@@ -13,5 +13,6 @@ export function makeUserZdotdir(parent: string, ...segments: string[]): string {
   const dir = join(parent, ...segments)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, '.zshrc'), '')
+
   return dir
 }

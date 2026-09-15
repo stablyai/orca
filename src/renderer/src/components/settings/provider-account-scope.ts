@@ -15,6 +15,7 @@ export type ProviderRateLimitScope = {
 /** Accounts-pane scope while a remote server owns the roster (#8186). */
 export function getRemoteAccountsPaneScope(serverName: string | null): ProviderAccountScope {
   const name = serverName?.trim()
+
   return {
     // Why: the saved-server list is still empty on first paint, and the generic
     // fallback is already a noun phrase — interpolating it would render
@@ -40,6 +41,7 @@ export function getProviderAccountScope(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): ProviderAccountScope {
   const runtimeId = settings?.activeRuntimeEnvironmentId?.trim()
+
   if (runtimeId) {
     return {
       label: translate(
@@ -53,6 +55,7 @@ export function getProviderAccountScope(
       )
     }
   }
+
   return {
     label: getLocalExecutionHostLabel(),
     description: translate(
@@ -67,6 +70,7 @@ export function getProviderRateLimitScope(
   providerLabel: string
 ): ProviderRateLimitScope {
   const runtimeId = settings?.activeRuntimeEnvironmentId?.trim()
+
   if (runtimeId) {
     return {
       label: translate(
@@ -81,6 +85,7 @@ export function getProviderRateLimitScope(
       )
     }
   }
+
   return {
     label: getLocalExecutionHostLabel(),
     description: translate(

@@ -26,16 +26,20 @@ export async function resumeHeldStructuredAgentSession(input: {
   ) => Promise<AgentSessionMutationResult<AgentSessionAttachResult>>
 }): Promise<void> {
   const record = input.deps.store.getRecord(input.sessionId)
+
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+
   if (!adapterSupportsRecord(input.deps.adapter, record)) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   const params = structuredAgentSessionResumeParams(
     record,
     structuredAgentSessionResumeOperationId(input.now())
   )
+
   if (!params) {
     throw new Error(
       record.lease.unreconciled
@@ -45,7 +49,9 @@ export async function resumeHeldStructuredAgentSession(input: {
           : 'agent_session_ownership_unknown'
     )
   }
+
   const attached = await input.attach(params)
+
   if (!attached.ok) {
     throw new Error(attached.refusal.code)
   }

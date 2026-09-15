@@ -53,7 +53,9 @@ const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
 )
 
 export const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
+
 export const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
+
 export const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 
 export function getSettingsSectionId(
@@ -65,6 +67,7 @@ export function getSettingsSectionId(
     // Why: Settings renders one collapsed pane per project, so resolve a repoId target to its project's representative section.
     return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
   }
+
   return pane
 }
 
@@ -81,16 +84,22 @@ export function getSettingsNavGroupDefinitionsForSearch(
   if (query.trim() === '') {
     return SETTINGS_NAV_GROUPS
   }
+
   const seenGroupIds = new Set<string>()
+
   return sections.flatMap((section) => {
     if (section.id.startsWith('repo-') || seenGroupIds.has(section.group)) {
       return []
     }
+
     const group = SETTINGS_NAV_GROUP_BY_ID.get(section.group)
+
     if (!group) {
       return []
     }
+
     seenGroupIds.add(section.group)
+
     return [group]
   })
 }
@@ -100,12 +109,14 @@ export function hasReadyVoiceModel(
   modelStates: readonly SpeechModelState[]
 ): boolean {
   const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
+
   if (
     voiceSettings.sttModel !== '' &&
     modelStates.some((state) => state.id === voiceSettings.sttModel && state.status === 'ready')
   ) {
     return true
   }
+
   return modelStates.some((state) => state.status === 'ready')
 }
 
@@ -122,13 +133,17 @@ export function getSettingsScrollTarget(
 export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
   // Why: the pane is swapped in wholesale, so a subsection deep link only nudges inner scroll when the pane exceeds the viewport.
   const target = getSettingsScrollTarget(targetId, container)
+
   if (!target) {
     return
   }
+
   if (!container) {
     target.scrollIntoView({ block: 'start' })
+
     return
   }
+
   const containerRect = container.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
   const targetTop = targetRect.top - containerRect.top + container.scrollTop
@@ -160,9 +175,12 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   if (target.isContentEditable) {
     return true
   }
+
   const tag = target.tagName
+
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }

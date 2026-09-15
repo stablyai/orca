@@ -51,9 +51,11 @@ const secondSkill: DiscoveredSkill = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -82,6 +84,7 @@ function setup(
   })
 ) {
   let progressListener: ((progress: SkillShareProgress) => void) | null = null
+
   const skills = {
     listManagedInstalls: vi.fn().mockResolvedValue({ status: 'ok', value: installs }),
     prepareShare: vi
@@ -92,9 +95,11 @@ function setup(
     releaseShare: vi.fn().mockResolvedValue(undefined),
     onShareProgress: vi.fn((listener) => {
       progressListener = listener
+
       return () => undefined
     })
   }
+
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -108,9 +113,11 @@ function setup(
       }
     }
   })
+
   const view = render(
     <SkillShareDialog skills={selectedSkills} open onOpenChange={() => undefined} />
   )
+
   return {
     skills,
     emitProgress: (progress: SkillShareProgress) => progressListener?.(progress),
@@ -258,6 +265,7 @@ describe('SkillShareDialog', () => {
         bundleDigest: 'd'.repeat(64)
       }
     ]
+
     const { skills } = setup(installs, false, [skill, secondSkill])
 
     await screen.findByRole('heading', { name: 'Publish new skill bundle version' })

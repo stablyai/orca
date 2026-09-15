@@ -6,7 +6,9 @@ const AUTH_PRESERVATION_TIMEOUT_MS = 2_000
 
 type CodexRuntimeAuthSync = Pick<CodexRuntimeHomeService, 'syncForCurrentSelection'> &
   Partial<Pick<CodexRuntimeHomeService, 'syncActiveWslSelectionsBeforeRestart'>>
+
 type ClaudeRuntimeAuthSync = Pick<ClaudeRuntimeAuthService, 'syncForCurrentSelection'>
+
 type ShutdownStore = Pick<Store, 'flushPendingOrThrowAsync'>
 
 type AuthPreservationStep =
@@ -31,6 +33,7 @@ export async function preserveAgentAuthBeforeRestart({
   const wslCodexPreservation = runWslCodexPreservationStep(codexRuntimeHome)
 
   const claudeRemainingMs = remainingLifecycleTime(startedAt)
+
   if (claudeRuntimeAuth && claudeRemainingMs > 0) {
     await runWithinLifecycleTimeout(
       'Claude auth preservation',
@@ -48,6 +51,7 @@ export async function preserveAgentAuthBeforeRestart({
         remainingLifecycleTime(startedAt)
       )
     : Promise.resolve()
+
   await Promise.all([wslCodexPreservation, storePreservation])
 }
 
@@ -79,6 +83,7 @@ async function runWithinLifecycleTimeout(
   timeoutMs: number
 ): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   const operation = Promise.resolve()
     .then(run)
     .catch((error) => {
@@ -92,8 +97,10 @@ async function runWithinLifecycleTimeout(
   })
 
   const result = await Promise.race([operation.then(() => 'done' as const), timeoutResult])
+
   if (result === 'timeout') {
     logStepTimeout(step, timeoutMs)
+
     return
   }
 
@@ -116,5 +123,6 @@ function describeErrorKind(error: unknown): string {
   if (error instanceof Error) {
     return error.name || 'Error'
   }
+
   return typeof error
 }

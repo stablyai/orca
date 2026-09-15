@@ -34,37 +34,47 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
       setRevealed({ claude: false, opencode: false, codex: false })
       setClaudeIdx(0)
       setClaudeFading(false)
+
       return
     }
+
     if (reducedMotion) {
       setRevealed({ claude: true, opencode: true, codex: true })
+
       return
     }
+
     const timeouts: number[] = []
+
     const schedule = (fn: () => void, delay: number): void => {
       timeouts.push(window.setTimeout(fn, delay))
     }
+
     schedule(() => setRevealed((r) => ({ ...r, claude: true })), 700)
     schedule(() => setRevealed((r) => ({ ...r, opencode: true })), 1200)
     schedule(() => setRevealed((r) => ({ ...r, codex: true })), 1900)
 
     let idx = 0
+
     // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
     // no-op so revealing the window resumes the cycle instead of skipping an
     // activity; `idx` lives outside the timer, so the reveal picks up where it left off.
     const stopCycle = installWindowVisibilityInterval({
       run: () => {
         setClaudeFading(true)
+
         const swap = window.setTimeout(() => {
           idx = (idx + 1) % CLAUDE_ACTIVITIES.length
           setClaudeIdx(idx)
           setClaudeFading(false)
         }, 280)
+
         timeouts.push(swap)
       },
       runOnVisible: () => {},
       intervalMs: 2400
     })
+
     return () => {
       timeouts.forEach((id) => window.clearTimeout(id))
       stopCycle()
@@ -176,9 +186,11 @@ function AgentRow(props: {
 
 function ClaudeActivityLine(props: { activity: ClaudeActivity }): JSX.Element {
   const a = props.activity
+
   if (a.kind === 'msg') {
     return <span>{a.text}</span>
   }
+
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 truncate">
       <span className="inline-flex items-center gap-1 font-semibold text-muted-foreground">
@@ -212,6 +224,7 @@ function Skel(props: { widthPct: number }): JSX.Element {
 function SupportedAgentsMarquee(props: { reducedMotion: boolean }): JSX.Element {
   const trackRef = useRef<HTMLDivElement | null>(null)
   const agentCatalog = getAgentCatalog()
+
   return (
     <div className="relative -mx-1 mb-1 border-b border-border pb-2 pt-1 overflow-hidden">
       <div

@@ -14,18 +14,23 @@ export function registerAdvertisedUrlRefresh(getMainWindow: () => BrowserWindow 
     if (!persistedStore) {
       return
     }
+
     for (const targetId of getConnectionIdsForWorktree(persistedStore, worktreeId)) {
       const session = activeSessions.get(targetId)
+
       if (!session) {
         continue
       }
+
       const scanner = session.getPortScanner()
+
       if (scanner) {
         // Why: watcher changes can arrive before the next SSH scan refreshes listener PIDs, so don't validate PIDs against cached scanner rows.
         broadcastDetectedPorts(getMainWindow, targetId, scanner.getDetectedPorts(targetId), {
           validatePid: false
         })
       }
+
       broadcastPortForwards(getMainWindow, targetId)
     }
   })

@@ -12,13 +12,16 @@ describe('RelayDispatcher client close cause', () => {
     // owner's grace and hand its session to someone else while it is still there.
     const detachListener = vi.fn()
     const settlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const dispatcher = new RelayDispatcher(
       (_data, onSettled) => {
         settlements.push(onSettled)
+
         return true
       },
       { supportsWriteCallback: true }
     )
+
     try {
       dispatcher.onClientDetached(detachListener)
 
@@ -36,6 +39,7 @@ describe('RelayDispatcher client close cause', () => {
   it('reports a detach the transport observed as a peer close', () => {
     const detachListener = vi.fn()
     const dispatcher = new RelayDispatcher(() => true)
+
     try {
       dispatcher.onClientDetached(detachListener)
       const clientId = dispatcher.attachClient(() => true)
@@ -53,6 +57,7 @@ describe('RelayDispatcher client close cause', () => {
   it('defaults an unqualified detach to the cautious answer', () => {
     const detachListener = vi.fn()
     const dispatcher = new RelayDispatcher(() => true)
+
     try {
       dispatcher.onClientDetached(detachListener)
       const clientId = dispatcher.attachClient(() => true)

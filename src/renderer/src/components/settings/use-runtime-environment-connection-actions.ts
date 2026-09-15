@@ -36,11 +36,13 @@ export function useRuntimeEnvironmentConnectionActions({
   ): Promise<boolean> => {
     setDisconnectingId(environment.id)
     setSwitchError(null)
+
     try {
       await window.api.runtimeEnvironments.disconnect({ selector: environment.id })
       // Why: disconnect is non-destructive; keep the saved server but show the
       // user that this live client is no longer attached to it.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
+
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
@@ -60,13 +62,16 @@ export function useRuntimeEnvironmentConnectionActions({
           )
         )
       }
+
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to disconnect server.'
+
       if (mountedRef.current) {
         setSwitchError(message)
         toast.error(message)
       }
+
       return false
     } finally {
       if (mountedRef.current) {
@@ -80,16 +85,19 @@ export function useRuntimeEnvironmentConnectionActions({
   ): Promise<boolean> => {
     setConnectingId(environment.id)
     setSwitchError(null)
+
     try {
       const response = await window.api.runtimeEnvironments.connect({
         selector: environment.id,
         timeoutMs: 15_000
       })
+
       const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
       const compatibility = evaluateHostDetails(runtimeStatus)
       // Why: row Connect is reachability only. The Advanced selector is the
       // explicit default-host control and should be the only active-server path.
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
+
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
@@ -102,14 +110,18 @@ export function useRuntimeEnvironmentConnectionActions({
           }
         }))
       }
+
       if (compatibility.kind === 'blocked') {
         const message = describeRuntimeCompatBlock(compatibility)
+
         if (mountedRef.current) {
           setSwitchError(message)
           toast.error(message)
         }
+
         return false
       }
+
       const store = useAppStore.getState()
       // Why: Connect is not the Active Server selector anymore, but connected
       // hosts should still contribute their projects/workspaces to the sidebar.
@@ -120,6 +132,7 @@ export function useRuntimeEnvironmentConnectionActions({
         (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
         (options) => useAppStore.getState().fetchWorktreeLineage(options)
       )
+
       if (mountedRef.current) {
         toast.success(
           translate(
@@ -129,11 +142,13 @@ export function useRuntimeEnvironmentConnectionActions({
           )
         )
       }
+
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to connect server.'
       const remoteControl = extractRuntimeTransportDiagnostics(error)
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
+
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
@@ -148,6 +163,7 @@ export function useRuntimeEnvironmentConnectionActions({
         setSwitchError(message)
         toast.error(message)
       }
+
       return false
     } finally {
       if (mountedRef.current) {
@@ -160,12 +176,15 @@ export function useRuntimeEnvironmentConnectionActions({
     if (value === NO_RUNTIME_VALUE) {
       return false
     }
+
     setSwitchingValue(value)
     setSwitchError(null)
+
     try {
       const switched = await setActiveRuntimeEnvironmentPreference(
         allowLocalRuntime && value === LOCAL_RUNTIME_VALUE ? null : value
       )
+
       if (switched) {
         if (mountedRef.current) {
           toast.success(
@@ -176,18 +195,23 @@ export function useRuntimeEnvironmentConnectionActions({
             )
           )
         }
+
         return true
       }
+
       if (mountedRef.current) {
         setSwitchError('Could not switch servers. Fix the issue and try again.')
       }
+
       return false
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to switch servers.'
+
       if (mountedRef.current) {
         setSwitchError(message)
         toast.error(message)
       }
+
       return false
     } finally {
       if (mountedRef.current) {

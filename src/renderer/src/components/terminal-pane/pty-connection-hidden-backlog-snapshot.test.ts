@@ -46,8 +46,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -73,6 +76,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -82,6 +86,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -102,6 +107,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -112,9 +118,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -124,9 +132,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -135,6 +145,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -163,9 +174,11 @@ describe('connectPanePty', () => {
   it('restores overflowed hidden remote runtime output from its serialized snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     // Why: with the skip grammar gone, remote-runtime model restore is latched by background-queue overflow, not per-chunk scanning.
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible remote output\r\n'
@@ -178,9 +191,11 @@ describe('connectPanePty', () => {
     })
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'remote:env-1@@terminal-1'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
@@ -215,9 +230,11 @@ describe('connectPanePty', () => {
   it('preserves the painted normal buffer when a successful hidden restore has no image', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible remote output\r\n'
     transport.serializeBuffer = vi.fn()
@@ -234,6 +251,7 @@ describe('connectPanePty', () => {
     })
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'remote:env-1@@terminal-1'
     })
     transportFactoryQueue.push(transport)
@@ -254,15 +272,19 @@ describe('connectPanePty', () => {
     const restoreWrites = pane.terminal.write.mock.calls
       .slice(writeStart)
       .map(([data]) => String(data))
+
     const paintedFrame = Array.from({ length: 8 }, (_, index) => `painted-frame-${index + 1}`).join(
       '\r\n'
     )
+
     const actual = await renderHeadlessTerminalState([paintedFrame, ...restoreWrites], 120, 4)
+
     const expected = await renderHeadlessTerminalState(
       [paintedFrame, ...restoreWrites.filter((data) => data === live)],
       120,
       4
     )
+
     expect(actual).toEqual(expected)
     // The imageless snapshot skips the repaint, but the gap still happened — so
     // the pen is grounded anyway, with the live-path constant since nothing
@@ -276,23 +298,30 @@ describe('connectPanePty', () => {
   it('defers inactive split-pane plain hidden output restore until the pane returns', async () => {
     const { resetHiddenOutputRestoreSchedulerForTests } =
       await import('./hidden-output-restore-scheduler')
+
     let disposable: { dispose: () => void } | null = null
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
+
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
       } = { current: null }
+
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
       transportFactoryQueue.push(transport)
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       getMainBufferSnapshot.mockResolvedValue({
         data: 'inactive snapshot\r\n',
         cols: 100,
@@ -340,23 +369,30 @@ describe('connectPanePty', () => {
   it('drops a deferred inactive hidden restore when the pane is hidden again', async () => {
     const { resetHiddenOutputRestoreSchedulerForTests } =
       await import('./hidden-output-restore-scheduler')
+
     let disposable: { dispose: () => void } | null = null
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
+
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
       } = { current: null }
+
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
       transportFactoryQueue.push(transport)
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       getMainBufferSnapshot.mockResolvedValue({
         data: 'inactive snapshot\r\n',
         cols: 100,
@@ -399,9 +435,11 @@ describe('connectPanePty', () => {
   it('retries null remote snapshots for overflowed hidden runtime output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.serializeBuffer = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({
       data: 'remote recovered snapshot\r\n',
       cols: 120,
@@ -411,6 +449,7 @@ describe('connectPanePty', () => {
     })
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'remote:env-1@@terminal-1'
     })
     transportFactoryQueue.push(transport)
@@ -461,17 +500,22 @@ describe('connectPanePty', () => {
   it('emits the alt-screen unstick when the pane is on alt and the model is not', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -508,17 +552,22 @@ describe('connectPanePty', () => {
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -530,9 +579,11 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false }
     })
+
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
@@ -557,17 +608,22 @@ describe('connectPanePty', () => {
   it('rebuilds normal and alternate buffers from an authoritative alternate snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after-altscreen\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -581,9 +637,11 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false }
     })
+
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
@@ -607,9 +665,11 @@ describe('connectPanePty', () => {
       buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false }),
       expect.any(Function)
     )
+
     const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
       (call) => call[0]
     )
+
     expect(writes.indexOf('preserved-shell-history\r\n')).toBeLessThan(
       writes.indexOf(
         buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false })
@@ -630,12 +690,15 @@ describe('connectPanePty', () => {
     let onData: ConnectCallbacks['onData']
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       onData = callbacks.onData
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     getMainBufferSnapshot.mockResolvedValue({
       data: 'TOO-WIDE-ALT-FRAME',
@@ -666,8 +729,10 @@ describe('connectPanePty', () => {
       markerSeq: hidden.length + 1
     })
     ;(deps.isVisibleRef as { current: boolean }).current = true
+
     const { requestTerminalBacklogRecovery } =
       await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
     requestTerminalBacklogRecovery(pane.terminal as never)
     await flushAsyncTicks(20)
 
@@ -682,17 +747,22 @@ describe('connectPanePty', () => {
   it('drains foreground output after a renderer-sourced hidden-backlog snapshot without seq', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after-renderer-fallback\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -704,9 +774,11 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false }
     })
+
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
@@ -729,17 +801,22 @@ describe('connectPanePty', () => {
   it('slices abandoned pending chunks against a replay that already painted', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const snapshot = createDeferred<{
       data: string
       cols: number
@@ -747,6 +824,7 @@ describe('connectPanePty', () => {
       seq: number
       pendingDeliveryStartSeq: number
     }>()
+
     getMainBufferSnapshot.mockReturnValue(snapshot.promise)
     const hidden = 'hidden-codex-output\r\n'
     const coveredLive = 'LIVE_DUP_LINE\r\n'
@@ -754,10 +832,12 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false },
       startup: { command: 'codex' }
     })
+
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
     expect(capturedDataCallback.current).not.toBeNull()
@@ -779,6 +859,7 @@ describe('connectPanePty', () => {
       if (callback) {
         heldCallbacks.push(callback)
       }
+
       void data
     })
     snapshot.resolve({

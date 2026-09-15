@@ -40,9 +40,11 @@ import {
 } from './helpers/host-created-terminal-retention-oracle'
 
 const scratch = createRetentionFixtureDirectory()
+
 const fixturePath = writeRetentionFixture(scratch)
 
 const CLI_PANE_SESSION_ID = 'local-cli-retention-cli-pane'
+
 const ABSENT_PANE_SESSION_ID = 'local-cli-retention-absent-pane'
 
 test.afterAll(() => {
@@ -86,21 +88,27 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   // The shipped CLI's own transport, against this app's profile: no pairing.
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
+
   const call: RuntimeRpcCall = async <TResult>(method: string, params: unknown) =>
     (await client.call<TResult>(method, params)).result
+
   const createdHandles: string[] = []
 
   try {
     const { worktreeId, unrelatedWorktreeId } = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
       const active = state?.activeWorktreeId
+
       if (!state || !active) {
         throw new Error('Host has no active worktree')
       }
+
       const unrelated = state.allWorktrees().find((worktree) => worktree.id !== active)
+
       if (!unrelated) {
         throw new Error('Host fixture needs a second worktree for the unrelated-workspace control')
       }
+
       return { worktreeId: active, unrelatedWorktreeId: unrelated.id }
     })
 
@@ -110,12 +118,14 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     // PRECONDITION: the RENDERER owns this workspace's publication, so the CLI
     // tab created next inherits the renderer epoch instead of a headless one.
     const rendererTabId = await createHostRendererTerminalTab(orcaPage, worktreeId)
+
     const rendererOwned = await readHostInventoryWhenTabAppears(
       call,
       worktreeId,
       rendererTabId,
       'Host never published the renderer terminal tab'
     )
+
     expect(
       rendererOwned.publicationEpoch,
       'the attached-window topology requires a renderer-owned publication; a headless epoch takes a different, already-correct path'
@@ -128,13 +138,16 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       fixturePath,
       path.join(scratch, 'local-target.log')
     )
+
     createdHandles.push(cli.handle)
+
     const unrelated = await createHostCliTerminal(
       call,
       unrelatedWorktreeId,
       fixturePath,
       path.join(scratch, 'local-unrelated.log')
     )
+
     createdHandles.push(unrelated.handle)
 
     // The graph sync a following CLI dispatch drives.
@@ -148,6 +161,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       secondRendererTabId,
       'Host never republished with the second renderer tab'
     )
+
     expect(
       afterSync.tabIds,
       'the renderer graph sync pruned the CLI-created terminal out of the host session inventory'
@@ -226,6 +240,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       .toBe(2)
     await orcaPage.evaluate(() => {
       window.dispatchEvent(new Event('beforeunload'))
+
       return window.api.session.flush()
     })
 
@@ -244,6 +259,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       orcaPage.evaluate(
         ({ worktreeId, cliTabId }) => {
           const tabs = window.__store?.getState().tabsByWorktree[worktreeId] ?? []
+
           return {
             tabIds: tabs.map((tab) => tab.id),
             resumeTabIds: tabs.filter((tab) => tab.launchAgent === 'claude').map((tab) => tab.id),
@@ -252,6 +268,7 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
         },
         { worktreeId, cliTabId: cli.tabId }
       )
+
     // CONTROL: the absent pane's record must be replayed, which is what makes
     // the CLI pane's silence below evidence instead of a sweep that never ran.
     await expect

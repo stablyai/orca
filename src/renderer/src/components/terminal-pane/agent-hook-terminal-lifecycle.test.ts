@@ -31,6 +31,7 @@ describe('agent hook terminal lifecycle', () => {
     const staleHandler = vi.fn()
     const replacementHandler = vi.fn()
     const unregisterStale = registerAgentHookTerminalLifecycleHandler('tab-2:leaf-2', staleHandler)
+
     const unregisterReplacement = registerAgentHookTerminalLifecycleHandler(
       'tab-2:leaf-2',
       replacementHandler

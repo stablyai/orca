@@ -26,12 +26,14 @@ describe('orchestration migration behavior', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     databases.push(db)
+
     return { db, runtime }
   }
 
   it('lists an explicitly selected legacy Run without binding or mutation', async () => {
     const { db, runtime } = createRuntime()
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'pre-upgrade work' })
+
     const taskList = ORCHESTRATION_METHODS.find(
       (method) => method.name === 'orchestration.taskList'
     )!
@@ -54,6 +56,7 @@ describe('orchestration migration behavior', () => {
 
   it('formats legacy terminal inspection as read-only without consuming mail', async () => {
     const { db, runtime } = createRuntime()
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'term_worker',
@@ -61,6 +64,7 @@ describe('orchestration migration behavior', () => {
       subject: 'still working',
       body: 'Tests are running.'
     })
+
     const check = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.check')!
 
     const inspected = (await check.handler(
@@ -79,12 +83,14 @@ describe('orchestration migration behavior', () => {
     const { db, runtime } = createRuntime()
     // A consuming check refuses a handle with no live pane before it reads any mail.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_legacy:leaf_legacy')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coord',
       subject: 'still working'
     })
+
     const check = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.check')!
 
     await expect(
@@ -99,12 +105,14 @@ describe('orchestration migration behavior', () => {
 
   it('rejects replies to legacy mail without marking or inserting rows', async () => {
     const { db, runtime } = createRuntime()
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'term_worker',
       to: 'term_coord',
       subject: 'legacy question'
     })
+
     const reply = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.reply')!
 
     await expect(
@@ -126,11 +134,13 @@ describe('orchestration migration behavior', () => {
 
   it('rejects a pre-contract worker_done before message or lifecycle mutation', async () => {
     const { db, runtime } = createRuntime()
+
     const run = db.createRun({
       objective: 'legacy worker',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'legacy worker', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
@@ -165,11 +175,13 @@ describe('orchestration migration behavior', () => {
 
   it('rejects a connected server missing the contract before home or remote effects', async () => {
     const { db, runtime } = createRuntime()
+
     const run = db.createRun({
       objective: 'mixed-version worker',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'environment_windows',
@@ -212,11 +224,13 @@ describe('orchestration migration behavior', () => {
 
   it('rejects a connected server missing federation support before Task mutation', async () => {
     const { db, runtime } = createRuntime()
+
     const run = db.createRun({
       objective: 'unsupported worker',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'environment_windows',
@@ -256,15 +270,18 @@ describe('orchestration migration behavior', () => {
 
   it('runs one real contract preflight before federated attach', async () => {
     const db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'federated worker',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:tab'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
     databases.push(db)
 
     const calls: { method: string; params: unknown }[] = []
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: {
         resolve: () => ({
@@ -274,6 +291,7 @@ describe('orchestration migration behavior', () => {
         }),
         call: async (_selector, method, params) => {
           calls.push({ method, params })
+
           if (method === 'status.get') {
             return {
               id: 'status',
@@ -288,6 +306,7 @@ describe('orchestration migration behavior', () => {
               _meta: { runtimeId: runtime.getRuntimeId() }
             } satisfies RuntimeRpcResponse<unknown>
           }
+
           return {
             id: 'attach',
             ok: true,
@@ -301,6 +320,7 @@ describe('orchestration migration behavior', () => {
         }
       } satisfies OrchestrationEnvironmentTransport
     })
+
     runtime.setOrchestrationDb(db)
 
     const result = await startFederatedWorker({

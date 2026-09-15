@@ -30,6 +30,7 @@ describe('AgentHookServer listener replay', () => {
   it('keeps Codex lead state terminal after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
@@ -53,6 +54,7 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       vi.setSystemTime(1_500)
+
       const applied = server.inferInterrupt({
         paneKey: PANE,
         baselineUpdatedAt: baseline.receivedAt,
@@ -109,6 +111,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not infer an interrupt while a subagent child is still working', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -129,6 +132,7 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       vi.setSystemTime(1_500)
+
       const applied = server.inferInterrupt({
         paneKey: PANE,
         baselineUpdatedAt: baseline.receivedAt,
@@ -148,6 +152,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not infer an interrupt while Claude reports a background shell', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -207,8 +212,10 @@ describe('AgentHookServer listener replay', () => {
   it('blocks local HTTP interrupt inference for provider-owned work without exposing transport metadata', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -267,6 +274,7 @@ describe('AgentHookServer listener replay', () => {
   it('uses replayed Claude background metadata only before a live observation', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -375,6 +383,7 @@ describe('AgentHookServer listener replay', () => {
   it('carries idle subagent rows through an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -394,6 +403,7 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       vi.setSystemTime(1_500)
+
       const applied = server.inferInterrupt({
         paneKey: PANE,
         baselineUpdatedAt: baseline.receivedAt,
@@ -417,6 +427,7 @@ describe('AgentHookServer listener replay', () => {
   it('preserves an inferred interrupted row when OpenCode immediately reports SessionIdle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
@@ -481,6 +492,7 @@ describe('AgentHookServer listener replay', () => {
   it('rejects inferred interrupts when a same-millisecond prompt update changed the row', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -530,6 +542,7 @@ describe('AgentHookServer listener replay', () => {
     (agentType) => {
       vi.useFakeTimers()
       vi.setSystemTime(1_000)
+
       try {
         const server = new AgentHookServer()
         server.ingestRemote(
@@ -544,6 +557,7 @@ describe('AgentHookServer listener replay', () => {
         const baseline = server.getStatusSnapshot()[0]
 
         vi.setSystemTime(1_500)
+
         const applied = server.inferInterrupt({
           paneKey: PANE,
           baselineUpdatedAt: baseline.receivedAt,
@@ -572,6 +586,7 @@ describe('AgentHookServer listener replay', () => {
     (agentType) => {
       vi.useFakeTimers()
       vi.setSystemTime(1_000)
+
       try {
         const server = new AgentHookServer()
         server.ingestRemote(
@@ -586,6 +601,7 @@ describe('AgentHookServer listener replay', () => {
         const baseline = server.getStatusSnapshot()[0]
 
         vi.setSystemTime(1_500)
+
         const applied = server.inferInterrupt({
           paneKey: PANE,
           baselineUpdatedAt: baseline.receivedAt,
@@ -614,6 +630,7 @@ describe('AgentHookServer listener replay', () => {
   it('rejects Ctrl+C inference for Droid', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -628,6 +645,7 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       vi.setSystemTime(1_500)
+
       const applied = server.inferInterrupt({
         paneKey: PANE,
         baselineUpdatedAt: baseline.receivedAt,

@@ -127,6 +127,7 @@ export function createCloseContinuityGraphFixture({
 
   const syncSplitFixtureGraph = () => {
     markSiblingPtyIncluded()
+
     const splitLayout = {
       root: {
         type: 'split' as const,
@@ -141,6 +142,7 @@ export function createCloseContinuityGraphFixture({
         [SIBLING_LEAF_ID]: SIBLING_PTY_ID
       }
     }
+
     const session = getSession()
     setSession({
       ...session,

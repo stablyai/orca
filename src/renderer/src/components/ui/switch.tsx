@@ -5,9 +5,12 @@ import { cn } from '@/lib/utils'
 
 const trackClassName =
   'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent p-0.5 transition-colors data-[state=checked]:bg-foreground data-[state=unchecked]:bg-muted-foreground/30'
+
 const thumbClassName =
   'pointer-events-none block size-3.5 translate-x-0 rounded-full bg-background shadow-sm transition-transform data-[state=checked]:translate-x-4'
+
 const compactTrackClassName = 'h-3.5 w-6 border-0 p-0.5'
+
 const compactThumbClassName = 'size-2.5 data-[state=checked]:translate-x-2.5'
 
 type SwitchProps = React.ComponentProps<typeof SwitchPrimitive.Root> & {
@@ -47,6 +50,7 @@ function SwitchIndicator({
   ...props
 }: SwitchIndicatorProps) {
   const state = checked ? 'checked' : 'unchecked'
+
   return (
     <span
       aria-hidden="true"

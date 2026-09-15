@@ -15,14 +15,19 @@ function isTelemetryConsentState(x: unknown): x is TelemetryConsentState {
   if (!x || typeof x !== 'object') {
     return false
   }
+
   const e = (x as { effective?: unknown }).effective
+
   if (e === 'enabled' || e === 'pending_banner') {
     return true
   }
+
   if (e === 'disabled') {
     const r = (x as { reason?: unknown }).reason
+
     return r === 'do_not_track' || r === 'orca_disabled' || r === 'ci' || r === 'user_opt_out'
   }
+
   return false
 }
 
@@ -47,6 +52,7 @@ export function setOptIn(optedIn: boolean): Promise<void> {
     )
   } catch (err) {
     console.warn('[telemetry] IPC setOptIn threw synchronously', err)
+
     return Promise.resolve()
   }
 }
@@ -55,9 +61,11 @@ export function setOptIn(optedIn: boolean): Promise<void> {
 export async function getConsentState(): Promise<TelemetryConsentState> {
   try {
     const result = await window.api?.telemetryGetConsentState?.()
+
     return isTelemetryConsentState(result) ? result : { effective: 'pending_banner' }
   } catch (err) {
     console.warn('[telemetry] IPC getConsentState failed', err)
+
     return { effective: 'pending_banner' }
   }
 }
@@ -73,6 +81,7 @@ export function acknowledgeBanner(): Promise<void> {
     )
   } catch (err) {
     console.warn('[telemetry] IPC acknowledgeBanner threw synchronously', err)
+
     return Promise.resolve()
   }
 }

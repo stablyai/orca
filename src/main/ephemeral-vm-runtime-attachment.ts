@@ -12,12 +12,15 @@ export function attachEphemeralVmRuntimeToWorkspace(args: {
   const runtime = listEphemeralVmRuntimes(args.userDataPath).find(
     (entry) => entry.id === args.runtimeId
   )
+
   if (!runtime) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
   }
+
   if (['cleanup_pending', 'cleanup_failed', 'cleaned'].includes(runtime.status)) {
     throw new Error(`Cannot attach cleaned ephemeral VM runtime: ${args.runtimeId}`)
   }
+
   return updateEphemeralVmRuntimeStatus(args.userDataPath, args.runtimeId, {
     status: 'running',
     workspaceId: args.workspaceId

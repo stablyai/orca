@@ -54,18 +54,23 @@ export class CdpDomFocusReplay {
   ): Promise<Record<string, unknown> | undefined> {
     if (this.webContents.isDestroyed()) {
       this.responder.sendError(clientId, 'Browser tab is no longer available', client)
+
       return undefined
     }
+
     try {
       const result = await this.debuggerChannel.sendDebuggerCommand(
         'DOM.focus',
         params,
         effectiveSessionId
       )
+
       this.responder.sendResult(clientId, result, client)
+
       return { ...params }
     } catch (err) {
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+
       return undefined
     }
   }
@@ -79,16 +84,20 @@ export class CdpDomFocusReplay {
     const pendingFocus = this.pendingDomFocusBySession.get(effectiveSessionId)
     this.pendingDomFocusBySession.delete(effectiveSessionId)
     const pendingFocusParams = pendingFocus ? await pendingFocus : undefined
+
     // Why: the client can disconnect while DOM.focus is in flight; don't replay its
     // focus or forward its insert into the live page once it is no longer active.
     if (!this.responder.isActiveClient(client)) {
       return
     }
+
     if (pendingFocusParams) {
       if (this.webContents.isDestroyed()) {
         this.responder.sendError(clientId, 'Browser tab is no longer available', client)
+
         return
       }
+
       try {
         await this.debuggerChannel.sendDebuggerCommand(
           'DOM.focus',
@@ -97,14 +106,17 @@ export class CdpDomFocusReplay {
         )
       } catch (err) {
         this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+
         return
       }
+
       // Why: the replay DOM.focus also awaited a round-trip; bail if the client vanished
       // during it so its insert never lands in the live page.
       if (!this.responder.isActiveClient(client)) {
         return
       }
     }
+
     this.debuggerChannel.forwardCommand(
       client,
       clientId,

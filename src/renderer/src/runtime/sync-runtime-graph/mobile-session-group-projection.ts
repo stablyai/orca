@@ -19,20 +19,26 @@ export function applyUnifiedEditorTabIdsToLegacyOrder(
   inputs: Pick<MobileSessionWorktreeInputs, 'unifiedTabs'>
 ): VisibleTabRef[] {
   const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(inputs)
+
   if (unifiedEditorTabs.length === 0) {
     return [...order]
   }
+
   const firstUnifiedTabByFileId = new Map<string, string>()
+
   for (const tab of unifiedEditorTabs) {
     if (!firstUnifiedTabByFileId.has(tab.entityId)) {
       firstUnifiedTabByFileId.set(tab.entityId, tab.id)
     }
   }
+
   return order.map((item) => {
     if (item.type !== 'editor' || item.tabId) {
       return item
     }
+
     const tabId = firstUnifiedTabByFileId.get(item.id)
+
     return tabId ? { ...item, tabId } : item
   })
 }
@@ -47,14 +53,17 @@ export function appendFallbackEditorTabsToGroups(
   if (fallbackTabs.length === 0) {
     return tabGroups
   }
+
   const result = [...(tabGroups ?? [])]
   const sourceGroupsById = new Map(sourceGroups.map((group) => [group.id, group]))
   const groupIndexById = new Map(result.map((group, index) => [group.id, index]))
+
   const firstTargetGroupId =
     result[0]?.id ??
     (activeGroupId && sourceGroupsById.has(activeGroupId) ? activeGroupId : null) ??
     sourceGroups[0]?.id ??
     null
+
   const fallbackTabIdSet = new Set(fallbackTabs.map((tab) => tab.tabId))
 
   for (const fallback of fallbackTabs) {
@@ -63,40 +72,54 @@ export function appendFallbackEditorTabsToGroups(
       (activeGroupId && (groupIndexById.has(activeGroupId) || sourceGroupsById.has(activeGroupId))
         ? activeGroupId
         : firstTargetGroupId)
+
     if (!targetGroupId) {
       continue
     }
+
     let targetIndex = groupIndexById.get(targetGroupId)
+
     if (targetIndex === undefined) {
       const sourceGroup = sourceGroupsById.get(targetGroupId)
+
       const group: RuntimeMobileSessionTabGroup = {
         id: targetGroupId,
         activeTabId: sourceGroup?.activeTabId ?? null,
         tabOrder: [],
         recentTabIds: sourceGroup?.recentTabIds ?? []
       }
+
       targetIndex = result.length
       groupIndexById.set(targetGroupId, targetIndex)
       result.push(group)
     }
+
     const group = result[targetIndex]!
+
     if (!group.tabOrder.includes(fallback.tabId)) {
       result[targetIndex] = { ...group, tabOrder: [...group.tabOrder, fallback.tabId] }
     }
   }
+
   if (result.length === 0) {
     return tabGroups
   }
+
   const activeFallbackTabId = activeTabId && fallbackTabIdSet.has(activeTabId) ? activeTabId : null
+
   return result.map((group) => {
     const tabOrder = [...group.tabOrder]
     const tabOrderSet = new Set(tabOrder)
+
     const activeFallbackTabIdForGroup =
       activeFallbackTabId && tabOrderSet.has(activeFallbackTabId) ? activeFallbackTabId : null
+
     const activeTabIdForGroup =
       activeFallbackTabIdForGroup ??
       (group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null)
+
     const recentTabIds = (group.recentTabIds ?? []).filter((tabId) => tabOrderSet.has(tabId))
+
     if (
       activeFallbackTabId &&
       tabOrderSet.has(activeFallbackTabId) &&
@@ -104,6 +127,7 @@ export function appendFallbackEditorTabsToGroups(
     ) {
       recentTabIds.push(activeFallbackTabId)
     }
+
     return { ...group, activeTabId: activeTabIdForGroup, tabOrder, recentTabIds }
   })
 }
@@ -115,19 +139,24 @@ function getOrderedTabGroups(
   const byId = new Map(groups.map((group) => [group.id, group]))
   const seen = new Set<string>()
   const ordered: TabGroup[] = []
+
   for (const groupId of collectTabGroupLayoutIds(layout)) {
     const group = byId.get(groupId)
+
     if (!group || seen.has(group.id)) {
       continue
     }
+
     seen.add(group.id)
     ordered.push(group)
   }
+
   for (const group of groups) {
     if (!seen.has(group.id)) {
       ordered.push(group)
     }
   }
+
   return ordered
 }
 
@@ -135,6 +164,7 @@ function buildLegacyNavOrderView(
   inputs: MobileSessionWorktreeInputs
 ): Parameters<typeof getActiveTabNavOrder>[0] {
   const { worktreeId } = inputs
+
   return {
     activeGroupIdByWorktree: inputs.activeGroupId ? { [worktreeId]: inputs.activeGroupId } : {},
     groupsByWorktree: { [worktreeId]: inputs.groups },
@@ -155,6 +185,7 @@ export function buildMobileSessionGroupProjection(
   tabGroupLayout?: TabGroupLayoutNode | null
 } {
   const groups = inputs.groups
+
   if (groups.length === 0) {
     return {
       order: applyUnifiedEditorTabIdsToLegacyOrder(
@@ -171,8 +202,10 @@ export function buildMobileSessionGroupProjection(
   const browserIds = new Set(ids.browserIds)
   const order: VisibleTabRef[] = []
   const tabGroups: RuntimeMobileSessionTabGroup[] = []
+
   for (const group of getOrderedTabGroups(groups, inputs.tabGroupLayout)) {
     const groupTabs = inputs.unifiedTabs.filter((tab) => tab.groupId === group.id)
+
     const visibleOrder = getGroupVisibleTabOrder(
       group,
       groupTabs,
@@ -182,14 +215,18 @@ export function buildMobileSessionGroupProjection(
       new Set(),
       true
     )
+
     if (visibleOrder.length === 0) {
       continue
     }
+
     const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
     const tabOrderSet = new Set(tabOrder)
+
     for (const item of visibleOrder) {
       order.push(item)
     }
+
     tabGroups.push({
       id: group.id,
       activeTabId:
@@ -198,7 +235,9 @@ export function buildMobileSessionGroupProjection(
       recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
     })
   }
+
   const validGroupIds = new Set(tabGroups.map((group) => group.id))
+
   return {
     order,
     tabGroups,
@@ -208,18 +247,24 @@ export function buildMobileSessionGroupProjection(
 
 export function collectTabGroupLayoutIds(layout: TabGroupLayoutNode | undefined): string[] {
   const result: string[] = []
+
   const visit = (node: TabGroupLayoutNode | undefined): void => {
     if (!node) {
       return
     }
+
     if (node.type === 'leaf') {
       result.push(node.groupId)
+
       return
     }
+
     visit(node.first)
     visit(node.second)
   }
+
   visit(layout)
+
   return result
 }
 
@@ -230,13 +275,17 @@ export function pruneTabGroupLayout(
   if (!layout) {
     return null
   }
+
   if (layout.type === 'leaf') {
     return validGroupIds.has(layout.groupId) ? layout : null
   }
+
   const first = pruneTabGroupLayout(layout.first, validGroupIds)
   const second = pruneTabGroupLayout(layout.second, validGroupIds)
+
   if (first && second) {
     return { ...layout, first, second }
   }
+
   return first ?? second
 }

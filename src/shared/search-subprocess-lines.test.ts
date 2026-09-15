@@ -7,12 +7,14 @@ describe('SearchSubprocessLineAccumulator', () => {
     const lines: string[] = []
     const from = vi.spyOn(Buffer, 'from')
     let copies: number
+
     try {
       parser.push('first🐋\n\nlast\n', (line) => lines.push(line))
       copies = from.mock.calls.length
     } finally {
       from.mockRestore()
     }
+
     expect(copies).toBe(0)
     expect(lines).toEqual(['first🐋', '', 'last'])
     expect(parser.finish()).toBeNull()

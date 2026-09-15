@@ -31,16 +31,19 @@ describe('pty buffer serializer registry', () => {
   it('tracks a remounted quiet title source even when the stale owner unregisters later', async () => {
     const { registerPtySerializer, registerPtyTitleSource } =
       await import('./pty-buffer-serializer')
+
     const oldDispose = vi.fn()
     const newDispose = vi.fn()
 
     const unregisterOldSerializer = registerPtySerializer('pty-1', () => null)
+
     const unregisterOldTitle = registerPtyTitleSource(
       'pty-1',
       () => ({ dispose: oldDispose }) satisfies IDisposable
     )
 
     const unregisterNewSerializer = registerPtySerializer('pty-1', () => null)
+
     const unregisterNewTitle = registerPtyTitleSource(
       'pty-1',
       () => ({ dispose: newDispose }) satisfies IDisposable
@@ -63,10 +66,13 @@ describe('pty buffer serializer registry', () => {
   it('returns null when a remount replaces an in-flight serializer', async () => {
     const { registerPtySerializer } = await import('./pty-buffer-serializer')
     let resolveOld: ((value: { data: string; cols: number; rows: number }) => void) | undefined
+
     const oldResult = new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
       resolveOld = resolve
     })
+
     registerPtySerializer('pty-1', () => oldResult)
+
     const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
       .calls[0]?.[0]
 
@@ -87,6 +93,7 @@ describe('pty buffer serializer registry', () => {
       rows: 24,
       seq: 42
     }))
+
     const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
       .calls[0]?.[0]
 

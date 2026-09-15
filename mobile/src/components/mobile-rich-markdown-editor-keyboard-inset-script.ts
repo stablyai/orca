@@ -6,6 +6,7 @@ export function normalizeMobileRichMarkdownKeyboardInset(value: number): number 
   if (!Number.isFinite(value)) {
     return null
   }
+
   return Math.max(0, Math.round(value))
 }
 

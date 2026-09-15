@@ -14,9 +14,11 @@ const validRequest = {
 
 function writeSchema(name: string) {
   const method = ARTIFACT_METHODS.find((candidate) => candidate.name === name)
+
   if (!method?.params) {
     throw new Error(`Missing ${name} schema`)
   }
+
   return method.params
 }
 

@@ -17,9 +17,11 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
+
     if (!['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')) {
       return null
     }
+
     let armed = false
     let observedMarker = false
     let settled = false
@@ -32,6 +34,7 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
     let hardTimer: NodeJS.Timeout | null = null
     let ingestTimer: NodeJS.Timeout | null = null
     let resolveRender!: () => void
+
     const rendered = new Promise<void>((resolve) => {
       resolveRender = resolve
     })
@@ -41,51 +44,63 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
         clearTimeout(quietTimer)
         quietTimer = null
       }
+
       if (hardTimer) {
         clearTimeout(hardTimer)
         hardTimer = null
       }
+
       if (ingestTimer) {
         clearTimeout(ingestTimer)
         ingestTimer = null
       }
     }
+
     const finish = (): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearGateTimers()
       resolveRender()
     }
+
     const armQuietTimer = (): void => {
       // Why: the quiet window measures the agent going still after a *complete* paste.
       // Silence during ingest is not settlement, so it cannot start the clock.
       if (!ingested) {
         return
       }
+
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
+
       quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
     }
+
     const armHardTimer = (): void => {
       if (hardTimer) {
         clearTimeout(hardTimer)
       }
+
       hardTimer = setTimeout(
         finish,
         CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
       )
     }
+
     const armIngestTimer = (): void => {
       if (ingested || ingestTimer) {
         return
       }
+
       ingestTimer = setTimeout(
         () => {
           ingestTimer = null
           ingested = true
+
           if (observedMarker) {
             armQuietTimer()
           }
@@ -93,21 +108,27 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
         Math.max(0, ingestDeadlineAt - Date.now())
       )
     }
+
     const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
       if (!armed || settled) {
         return
       }
+
       if (!observedMarker) {
         const combined = markerCarry + data
         markerCarry = combined.slice(-(CLAUDE_AGENT_PROMPT_RENDER_MARKER.length - 1))
+
         if (!combined.includes(CLAUDE_AGENT_PROMPT_RENDER_MARKER)) {
           return
         }
+
         observedMarker = true
         armHardTimer()
       }
+
       armQuietTimer()
     })
+
     return {
       arm: () => {
         armed = true
@@ -119,6 +140,7 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
         if (settled) {
           return
         }
+
         await rendered
       },
       dispose: () => {

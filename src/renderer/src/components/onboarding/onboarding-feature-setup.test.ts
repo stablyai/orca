@@ -35,6 +35,7 @@ const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME
 ])
+
 const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
@@ -79,6 +80,7 @@ function createDeps(
 } {
   const storage = new Map<string, string>()
   const clipboardWrites: string[] = []
+
   return {
     storage,
     clipboardWrites,
@@ -164,6 +166,7 @@ describe('onboarding feature setup runner', () => {
     vi.stubGlobal('window', {
       api: { cli: { getInstallStatus, install, getWslInstallStatus, installWsl } }
     })
+
     const deps = createOnboardingFeatureSetupDeps({
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
@@ -275,6 +278,7 @@ describe('onboarding feature setup runner', () => {
 
   it('keeps invasive Browser Use and Computer Use setup untouched when only Orchestration is selected', async () => {
     const deps = createDeps()
+
     const selection: OnboardingFeatureSetupSelection = {
       browserUse: false,
       computerUse: false,
@@ -359,7 +363,9 @@ describe('onboarding feature setup runner', () => {
         { id: 'screenshots', status: 'not-granted' }
       ]
     }
+
     const openComputerUsePermissionSetup = vi.fn(async () => OPENED_COMPUTER_USE_SETUP)
+
     const deps = createDeps({
       getComputerUsePermissionStatus: vi.fn(async () => unavailableStatus),
       openComputerUsePermissionSetup
@@ -385,8 +391,10 @@ describe('onboarding feature setup runner', () => {
       currentTarget: '/tmp/other-orca',
       detail: '/usr/local/bin/orca points to a different launcher.'
     }
+
     const showCliRegistrationPrompt = vi.fn(async () => undefined)
     const installCli = vi.fn(async () => INSTALLED_CLI_STATUS)
+
     const deps = createDeps({
       getCliStatus: vi.fn(async () => staleStatus),
       showCliRegistrationPrompt,
@@ -413,6 +421,7 @@ describe('onboarding feature setup runner', () => {
       pathConfigured: null,
       detail: 'Orca could not read the Windows user PATH registry value.'
     }
+
     const deps = createDeps({ getCliStatus: vi.fn(async () => unknownStatus) })
 
     const result = await runOnboardingFeatureSetup(

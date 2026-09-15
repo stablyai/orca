@@ -36,12 +36,14 @@ describe('terminal.subscribe blank-tab background mount', () => {
     const controller = new AbortController()
     controller.abort()
     const requestRendererTerminalTabMount = vi.fn(() => true)
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue(null),
       requestRendererTerminalTabMount,
       waitForLeafPtyId: vi.fn(),
       readTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -69,10 +71,13 @@ describe('terminal.subscribe blank-tab background mount', () => {
     const registry = createSubscriptionRegistryDouble()
     const callOrder: string[] = []
     const unsubscribeData = vi.fn()
+
     const requestRendererTerminalTabMount = vi.fn(() => {
       callOrder.push('request-mount')
+
       return true
     })
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       requestRendererTerminalTabMount,
@@ -81,6 +86,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
       handleMobileUnsubscribe: vi.fn(),
       subscribeToTerminalData: vi.fn(() => {
         callOrder.push('subscribe-data')
+
         return unsubscribeData
       }),
       readTerminal: vi.fn().mockResolvedValue({ tail: ['stale preview'], truncated: false }),
@@ -98,6 +104,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -127,6 +134,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
   it('does not request a renderer tab mount when an attached terminal is legitimately blank', async () => {
     const registry = createSubscriptionRegistryDouble()
     const requestRendererTerminalTabMount = vi.fn(() => true)
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       requestRendererTerminalTabMount,
@@ -146,6 +154,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -173,6 +182,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
     const registry = createSubscriptionRegistryDouble()
     const requestRendererTerminalTabMount = vi.fn(() => true)
     const waitForRendererTerminalSerializer = vi.fn()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       requestRendererTerminalTabMount,
@@ -199,6 +209,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(

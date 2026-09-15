@@ -24,20 +24,25 @@ function getErrorCode(error: unknown, seen = new Set<object>()): string | null {
   if (typeof error !== 'object' || error === null || seen.has(error)) {
     return null
   }
+
   seen.add(error)
   // Why: only a mapped code ends the walk — an unmapped wrapper code would otherwise mask a nested EACCES/ENOSPC.
   const code = 'code' in error ? error.code : undefined
+
   if (typeof code === 'string') {
     const normalizedCode = code.toUpperCase()
+
     if (ERROR_CLASS_BY_CODE[normalizedCode]) {
       return normalizedCode
     }
   }
+
   return 'cause' in error ? getErrorCode(error.cause, seen) : null
 }
 
 export function classifyRuntimeRpcStartFailure(error: unknown): RuntimeRpcStartErrorClass {
   const code = getErrorCode(error)
+
   return (code && ERROR_CLASS_BY_CODE[code]) || 'unknown'
 }
 
@@ -51,12 +56,14 @@ function describeRuntimeRpcStartFailure(error: unknown): string {
             'runtimeRpc.startupFailure.unknownCause',
             'No additional error details were available.'
           )
+
   const normalized =
     raw.trim() ||
     translateMain(
       'runtimeRpc.startupFailure.unknownCause',
       'No additional error details were available.'
     )
+
   return normalized.length <= MAX_VISIBLE_CAUSE_LENGTH
     ? normalized
     : `${normalized.slice(0, MAX_VISIBLE_CAUSE_LENGTH - 1)}…`
@@ -94,6 +101,7 @@ const GUIDANCE_BY_ERROR_CLASS: Readonly<
 function createRuntimeRpcStartupFailureDialogOptions(error: unknown): MessageBoxOptions {
   const cause = describeRuntimeRpcStartFailure(error)
   const { key, fallback } = GUIDANCE_BY_ERROR_CLASS[classifyRuntimeRpcStartFailure(error)]
+
   return {
     type: 'error',
     buttons: [translateMain('runtimeRpc.startupFailure.continueButton', 'Continue without CLI')],
@@ -115,6 +123,7 @@ function createRuntimeRpcStartupFailureDialogOptions(error: unknown): MessageBox
 
 export function recordRuntimeRpcStartFailure(error: unknown): void {
   console.error('[runtime] Failed to start local RPC transport:', error)
+
   try {
     track('runtime_rpc_start_failed', {
       error_class: classifyRuntimeRpcStartFailure(error)
@@ -128,21 +137,27 @@ function waitForWindowToShow(parentWindow: BrowserWindow): Promise<boolean> {
   if (parentWindow.isDestroyed()) {
     return Promise.resolve(false)
   }
+
   const parentWebContents = parentWindow.webContents
+
   if (parentWebContents.isDestroyed()) {
     return Promise.resolve(false)
   }
+
   if (parentWindow.isVisible()) {
     return Promise.resolve(true)
   }
+
   return new Promise((resolve) => {
     const settle = (visible: boolean): void => {
       parentWindow.removeListener('show', onShow)
       parentWebContents.removeListener('destroyed', onDestroyed)
       resolve(visible)
     }
+
     const onShow = (): void =>
       settle(!parentWindow.isDestroyed() && !parentWebContents.isDestroyed())
+
     const onDestroyed = (): void => settle(false)
     parentWindow.once('show', onShow)
     // Why: keep this failure-only waiter off the crowded BrowserWindow `closed` event.
@@ -157,6 +172,7 @@ export async function showRuntimeRpcStartupFailureDialog(
   if (!(await waitForWindowToShow(parentWindow))) {
     return
   }
+
   try {
     await dialog.showMessageBox(parentWindow, createRuntimeRpcStartupFailureDialogOptions(error))
   } catch (dialogError) {

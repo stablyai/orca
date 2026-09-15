@@ -22,6 +22,7 @@ describe('Codex structured Fast mode dispatch', () => {
       }),
       'turn/start': () => ({ turn: { id: 'turn-fast' } })
     })
+
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -72,15 +73,19 @@ describe('Codex structured Fast mode dispatch', () => {
         if (discovery === 'transient') {
           throw new Error('catalog temporarily unavailable')
         }
+
         return {
           data: [{ model: 'gpt-live', supportedReasoningEfforts: [] }],
           nextCursor: null
         }
       }
+
       const listModels = vi.fn<Route>().mockImplementationOnce(unavailableCatalog)
+
       if (discovery === 'absent') {
         listModels.mockImplementationOnce(unavailableCatalog)
       }
+
       listModels.mockImplementation(() => ({
         data: [
           {
@@ -91,10 +96,12 @@ describe('Codex structured Fast mode dispatch', () => {
         ],
         nextCursor: null
       }))
+
       const codex = fakeCodex({
         'model/list': listModels,
         'turn/start': () => ({ turn: { id: 'turn-recovered' } })
       })
+
       const adapter = adapterFor(codex)
       await expect(
         adapter.acquire({
@@ -123,11 +130,13 @@ describe('Codex structured Fast mode dispatch', () => {
       expect(options).toMatchObject({
         current: { fastMode: true }
       })
+
       if (discovery === 'absent') {
         expect(options.fastModeSupport).toBeUndefined()
         expect(options.models[0]?.supportsFastMode).toBeUndefined()
         options = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
       }
+
       expect(options).toMatchObject({
         models: [expect.objectContaining({ supportsFastMode: true })],
         fastModeSupport: { supported: true },

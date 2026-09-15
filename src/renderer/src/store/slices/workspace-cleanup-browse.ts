@@ -33,9 +33,11 @@ export const createWorkspaceCleanupBrowseSlice: StateCreator<
     set((state) => ({
       workspaceCleanupBrowse: typeof next === 'function' ? next(state.workspaceCleanupBrowse) : next
     }))
+
     if (persistTimer !== null) {
       clearTimeout(persistTimer)
     }
+
     persistTimer = setTimeout(() => {
       persistTimer = null
       // Why dismissals ride along: the legacy wire schema requires the field,

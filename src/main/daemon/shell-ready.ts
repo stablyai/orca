@@ -26,6 +26,7 @@ const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 
 function getShellReadyWrapperBaseDir(): string {
   const userDataPath = process.env[ORCA_USER_DATA_PATH_ENV]
+
   // Why a base dir of its own rather than the legacy `shell-ready/`: daemons of
   // older builds still write that path unconditionally, so leaving it to them
   // keeps this build's content-addressed trees out of their reach.
@@ -44,12 +45,14 @@ let cachedShellReadyWrapperRoot: { baseDir: string; root: string } | null = null
 
 export function getShellReadyWrapperRoot(): string {
   const baseDir = getShellReadyWrapperBaseDir()
+
   if (cachedShellReadyWrapperRoot?.baseDir !== baseDir) {
     cachedShellReadyWrapperRoot = {
       baseDir,
       root: resolveShellWrapperRoot(baseDir, buildDaemonShellReadyWrapperFiles)
     }
   }
+
   return cachedShellReadyWrapperRoot.root
 }
 
@@ -74,7 +77,9 @@ function ensureShellReadyWrappers(): boolean {
   if (process.platform === 'win32') {
     return false
   }
+
   const root = getShellReadyWrapperRoot()
+
   // Why existence alone decides, with no per-process flag: the root is keyed by
   // a hash of the exact bytes we would write, so a tree that is present and
   // non-empty is a tree this build wrote. Rewriting it would replace a live file
@@ -84,6 +89,7 @@ function ensureShellReadyWrappers(): boolean {
       buildDaemonShellReadyWrapperFiles(root),
       '[daemon/shell-ready]'
     )
+
     if (!written || !shellReadyWrappersExist()) {
       // Why no flag to reset: the next launch re-checks the files themselves, so
       // a half-written tree is retried without any extra bookkeeping.
@@ -98,11 +104,13 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   if (process.platform === 'win32') {
     return env.ORCA_TERMINAL_WINDOWS_SHELL || 'powershell.exe'
   }
+
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+
   // Why fish: markerless, its startup command is written before fish's reader owns
   // the PTY and the launch is lost under slow prompts like Starship (STA-3417).
   return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
@@ -134,11 +142,13 @@ export function getShellLaunchConfig(
     if (features.length === 0) {
       return UNWRAPPED
     }
+
     if (!ensureShellReadyWrappers()) {
       // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
       // zsh skip the user's whole config. Losing Orca's features is recoverable.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
+
     return {
       args: ['-l'],
       env: {
@@ -154,6 +164,7 @@ export function getShellLaunchConfig(
     if (features.length === 0 || !ensureShellReadyWrappers()) {
       return UNWRAPPED
     }
+
     return {
       args: ['--rcfile', join(getShellReadyWrapperRoot(), 'bash', 'rcfile')],
       env: {

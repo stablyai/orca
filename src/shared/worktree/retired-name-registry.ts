@@ -33,15 +33,20 @@ export function creatureNameAtTier(poolName: string, tier: number): string {
  *  names: `fix-login-2` must not read as retired just because tier 2 is spent. */
 export function creatureNameTier(name: string): number | null {
   const normalized = name.trim().toLowerCase()
+
   if (CREATURE_POOL_NAMES.has(normalized)) {
     return 1
   }
+
   const match = /^(.+)-([1-9]\d{0,5})$/.exec(normalized)
+
   if (!match || !CREATURE_POOL_NAMES.has(match[1])) {
     return null
   }
+
   // `nautilus-1` is not the tier-1 name — the bare name is — so it stays explicit.
   const tier = Number(match[2])
+
   return tier >= 2 ? tier : null
 }
 
@@ -56,12 +61,16 @@ export function clampExhaustedTiers(value: unknown): number {
 export function createRetiredNameLookup(registry: RetiredNameRegistry): (name: string) => boolean {
   const explicit = new Set(registry.names)
   const exhaustedTiers = clampExhaustedTiers(registry.exhaustedTiers)
+
   return (name) => {
     const normalized = name.trim().toLowerCase()
+
     if (explicit.has(normalized)) {
       return true
     }
+
     const tier = creatureNameTier(normalized)
+
     return tier !== null && tier <= exhaustedTiers
   }
 }
@@ -72,6 +81,7 @@ function tierIsComplete(names: ReadonlySet<string>, tier: number): boolean {
       return false
     }
   }
+
   return true
 }
 
@@ -83,15 +93,19 @@ function tierIsComplete(names: ReadonlySet<string>, tier: number): boolean {
 export function compactRetiredNames(registry: RetiredNameRegistry): RetiredNameRegistry {
   let exhaustedTiers = clampExhaustedTiers(registry.exhaustedTiers)
   const names = new Set(registry.names)
+
   while (exhaustedTiers < MAX_EXHAUSTED_TIERS && tierIsComplete(names, exhaustedTiers + 1)) {
     exhaustedTiers += 1
   }
+
   for (const name of names) {
     const tier = creatureNameTier(name)
+
     if (tier !== null && tier <= exhaustedTiers) {
       names.delete(name)
     }
   }
+
   return { exhaustedTiers, names: [...names] }
 }
 
@@ -103,11 +117,13 @@ export function addRetiredNames(
 ): RetiredNameRegistry | null {
   const isRetired = createRetiredNameLookup(registry)
   const added: string[] = []
+
   for (const name of incoming) {
     if (!isRetired(name)) {
       added.push(name)
     }
   }
+
   return added.length === 0
     ? null
     : compactRetiredNames({

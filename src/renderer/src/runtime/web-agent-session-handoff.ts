@@ -33,6 +33,7 @@ export function recordWebAgentSessionHandoff(args: WebAgentSessionHandoff): void
   ) {
     return
   }
+
   handoffByProvisionalTab.set(handoffKey(args), {
     hostTabId: args.hostTabId,
     hostTerminalHandle: args.hostTerminalHandle,
@@ -53,6 +54,7 @@ export function isWebAgentSessionHandoffPostCreateSnapshotConfirmed(
 export function confirmWebAgentSessionHandoffAfterCreate(args: WebAgentSessionHandoff): void {
   const key = handoffKey(args)
   const handoff = handoffByProvisionalTab.get(key)
+
   if (
     handoff?.hostTabId === args.hostTabId &&
     handoff.hostTerminalHandle === args.hostTerminalHandle
@@ -70,6 +72,7 @@ export function clearWebAgentSessionHandoffsForWorktree(
   worktreeId: string
 ): void {
   const prefix = `${environmentId}\0${worktreeId}\0`
+
   for (const key of handoffByProvisionalTab.keys()) {
     if (key.startsWith(prefix)) {
       handoffByProvisionalTab.delete(key)
@@ -79,6 +82,7 @@ export function clearWebAgentSessionHandoffsForWorktree(
 
 export function clearWebAgentSessionHandoffsForEnvironment(environmentId: string): void {
   const prefix = `${environmentId}\0`
+
   for (const key of handoffByProvisionalTab.keys()) {
     if (key.startsWith(prefix)) {
       handoffByProvisionalTab.delete(key)

@@ -16,7 +16,9 @@ function dispatch(
     body: 'Finished.',
     ...partial
   }
+
   buffer.record(event)
+
   return buffer.getMissedSince(0).at(-1) as ReplayableMobileNotification
 }
 
@@ -108,9 +110,11 @@ describe('MobileNotificationReplayBuffer', () => {
     // `57 >= 2` cuts everything, and catch-up stays dead until the new process
     // dispatches 57 notifications. The epoch is what makes the two distinguishable.
     const previousRun = new MobileNotificationReplayBuffer()
+
     for (let i = 0; i < 57; i++) {
       dispatch(previousRun, { notificationId: `old:${i}` })
     }
+
     const staleWatermark = 57
     const staleEpoch = previousRun.epoch
 

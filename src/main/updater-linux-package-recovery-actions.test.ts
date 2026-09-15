@@ -15,6 +15,7 @@ const {
   resetHandlers
 } = vi.hoisted(() => {
   const updaterHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
+
   const autoUpdaterMock = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
@@ -29,6 +30,7 @@ const {
     setFeedURL: vi.fn(),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       updaterHandlers.set(event, [...(updaterHandlers.get(event) ?? []), handler])
+
       return autoUpdaterMock
     }),
     emit: (event: string, ...args: unknown[]) => {
@@ -37,6 +39,7 @@ const {
       }
     }
   }
+
   return {
     appMock: { isPackaged: true, getVersion: vi.fn(() => '1.0.51'), on: vi.fn(), quit: vi.fn() },
     autoUpdaterMock,
@@ -60,30 +63,40 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
+
 vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }))
+
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
+
 vi.mock('./ipc/pty', () => ({ killAllPty: vi.fn() }))
+
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
+
 vi.mock('./updater-nudge', () => ({
   fetchNudge: vi.fn().mockResolvedValue(null),
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
+
 vi.mock('./updater-prerelease-feed', () => ({
   fetchNewerReleaseTagsWithReadiness: vi.fn().mockResolvedValue({ tags: [], state: 'no-newer' }),
   getReleaseDownloadUrl: vi.fn(() => 'https://example.invalid/download')
 }))
+
 vi.mock('./update-install-exit-watchdog', () => ({
   armUpdateInstallExitWatchdog: vi.fn(),
   disarmUpdateInstallExitWatchdog: vi.fn()
 }))
+
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+
 vi.mock('./linux-update-package-type', () => ({
   getLinuxPackageType: () => 'deb',
   getLinuxRootPackageType: () => 'deb',
   isExternallyManagedLinuxInstall: () => false
 }))
+
 vi.mock('./linux-package-update-recovery', () => ({
   captureLinuxPackageArtifact: vi.fn(() => getTrackedLinuxPackageArtifactMock()),
   clearTrackedLinuxPackageArtifact: clearTrackedLinuxPackageArtifactMock,
@@ -99,6 +112,7 @@ const ARTIFACT = {
   path: '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb',
   sha512: 'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
 }
+
 const MANUAL_INSTALL_STATUS = {
   state: 'error',
   message: 'Quit Orca before running the system package install command.',
@@ -148,6 +162,7 @@ describe('linux package recovery actions', () => {
     updater.setupAutoUpdater({ webContents: { send } } as never, {
       getLastUpdateCheckAt: () => Date.now()
     })
+
     return { send, updater }
   }
 
@@ -158,6 +173,7 @@ describe('linux package recovery actions', () => {
     autoUpdaterMock.checkForUpdates.mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => autoUpdaterMock.emit('update-available', { version }))
+
       return Promise.resolve(null)
     })
     updater.checkForUpdatesFromMenu()
@@ -206,6 +222,7 @@ describe('linux package recovery actions', () => {
       reason: 'manual-install-required',
       version: '1.0.61'
     }
+
     expect(resolveLinuxPackageInstallInstructionsMock.mock.calls).toEqual([[recovery], [recovery]])
     expect(resolveLinuxPackageRevealTargetMock.mock.calls).toEqual([[recovery], [recovery]])
     expect(showItemInFolderMock).toHaveBeenCalledTimes(2)

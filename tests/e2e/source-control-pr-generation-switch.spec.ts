@@ -31,9 +31,11 @@ async function waitForPrGenerationStored(page: Page, worktreeId: string): Promis
       () =>
         page.evaluate((worktreeId) => {
           const records = window.__store?.getState().pullRequestGenerationRecords ?? {}
+
           const record = Object.values(records).find(
             (candidate) => candidate.context.worktreeId === worktreeId
           )
+
           return {
             status: record?.status ?? null,
             title: record?.result?.title ?? null
@@ -56,9 +58,11 @@ async function waitForPrGenerationHydrated(page: Page, worktreeId: string): Prom
       () =>
         page.evaluate((worktreeId) => {
           const records = window.__store?.getState().pullRequestGenerationRecords ?? {}
+
           const record = Object.values(records).find(
             (candidate) => candidate.context.worktreeId === worktreeId
           )
+
           return {
             status: record?.status ?? null,
             title: record?.result?.title ?? null,
@@ -84,6 +88,7 @@ async function waitForCommitGenerationStored(page: Page, worktreeId: string): Pr
         page.evaluate((worktreeId) => {
           const records = window.__store?.getState().commitMessageGenerationRecords ?? {}
           const record = records[worktreeId]
+
           return {
             status: record?.status ?? null,
             message: record?.message ?? null
@@ -111,6 +116,7 @@ async function waitForCommitGenerationHydrated(page: Page, worktreeId: string): 
         page.evaluate((worktreeId) => {
           const records = window.__store?.getState().commitMessageGenerationRecords ?? {}
           const record = records[worktreeId]
+
           return {
             status: record?.status ?? null,
             message: record?.message ?? null,
@@ -155,8 +161,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+
     const { primaryWorktreeId, prWorktreeId, prWorktreePath, primaryBranch } =
       await seedCreatePrComposer(orcaPage)
+
     createBranchCommit(prWorktreePath)
 
     const screenshotDir = path.join(
@@ -164,6 +172,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'validation-screenshots',
       `checks-pr-generation-switch-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -174,9 +183,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await installDelayedPrGenerator(orcaPage, generatorScriptPath, callLogPath, primaryBranch)
 
     await openChecks(orcaPage, prWorktreeId)
+
     const generate = orcaPage.getByRole('button', {
       name: 'Generate pull request details with AI'
     })
+
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
@@ -218,8 +229,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+
     const { primaryWorktreeId, prWorktreeId, prWorktreePath, primaryBranch } =
       await seedCreatePrComposer(orcaPage)
+
     createBranchCommit(prWorktreePath)
 
     const screenshotDir = path.join(
@@ -227,6 +240,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'validation-screenshots',
       `pr-generation-switch-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -237,9 +251,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await installDelayedPrGenerator(orcaPage, generatorScriptPath, callLogPath, primaryBranch)
 
     await openSourceControl(orcaPage, prWorktreeId)
+
     const generate = orcaPage.getByRole('button', {
       name: 'Generate pull request details with AI'
     })
+
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
@@ -251,21 +267,26 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         return readLog(callLogPath)
       })
       .toContain('start')
+
     const pendingEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         rightSidebarTab: state?.rightSidebarTab
       }
     })
+
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '01-pr-generation-pending-on-a.png')
     })
 
     await openSourceControl(orcaPage, primaryWorktreeId)
     await expect(orcaPage.getByText('Generated PR title after switch')).toHaveCount(0)
+
     const switchedEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         visibleGeneratedTitle: document.body.textContent?.includes(
@@ -273,6 +294,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )
       }
     })
+
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '02-switched-to-b-no-generated-fields.png')
     })
@@ -290,8 +312,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
       'Generated PR body after switch'
     )
+
     const finalEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         title: (document.querySelector('[aria-label="Pull request title"]') as HTMLInputElement)
@@ -301,6 +325,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )?.value
       }
     })
+
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '03-returned-to-a-generated-fields.png')
     })
@@ -327,6 +352,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'validation-screenshots',
       `pr-generation-remount-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -337,9 +363,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await installDelayedPrGenerator(orcaPage, generatorScriptPath, callLogPath, primaryBranch)
 
     await openSourceControl(orcaPage, prWorktreeId)
+
     const generate = orcaPage.getByRole('button', {
       name: 'Generate pull request details with AI'
     })
+
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
@@ -382,8 +410,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+
     const { primaryWorktreeId, commitWorktreeId, commitWorktreePath } =
       await seedCommitMessageComposer(orcaPage)
+
     createStagedCommitMessageChange(commitWorktreePath)
 
     const screenshotDir = path.join(
@@ -391,6 +421,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'validation-screenshots',
       `commit-message-generation-switch-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -406,9 +437,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         .getByTestId('source-control-entry')
         .getByText('e2e-commit-message-generation.txt', { exact: true })
     ).toBeVisible({ timeout: 10_000 })
+
     const generate = orcaPage.getByRole('button', {
       name: 'Generate commit message with AI'
     })
+
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
@@ -420,8 +453,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         return readLog(callLogPath)
       })
       .toContain('start')
+
     const pendingEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         commitMessage: (
@@ -429,6 +464,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )?.value
       }
     })
+
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '01-commit-message-generation-pending-on-a.png')
     })
@@ -438,8 +474,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect(
       orcaPage.getByRole('button', { name: 'Stop generating commit message' })
     ).toHaveCount(0)
+
     const switchedEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         visibleGeneratedMessage: document.body.textContent?.includes(
@@ -447,6 +485,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )
       }
     })
+
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '02-switched-to-b-no-generated-commit-message.png')
     })
@@ -461,8 +500,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'Generated commit message after switch\n\nGenerated from staged e2e-commit-message-generation.txt after switching worktrees',
       { timeout: 10_000 }
     )
+
     const finalEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         commitMessage: (
@@ -470,6 +511,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )?.value
       }
     })
+
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '03-returned-to-a-generated-commit-message.png')
     })
@@ -496,6 +538,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'validation-screenshots',
       `commit-message-generation-remount-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -506,9 +549,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await installDelayedCommitMessageGenerator(orcaPage, generatorScriptPath, callLogPath)
 
     await openSourceControl(orcaPage, commitWorktreeId)
+
     const generate = orcaPage.getByRole('button', {
       name: 'Generate commit message with AI'
     })
+
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
@@ -564,6 +609,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       'validation-screenshots',
       `clean-empty-state-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -578,13 +624,17 @@ test.describe('Source Control AI PR generation worktree switching', () => {
           // workers. Keep DOM assertions inside the reseeded poll instead of
           // racing unrelated real git-status refreshes after the poll settles.
           await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
+
           return orcaPage.evaluate(() => {
             const emptyStateVisible =
               document.body.textContent?.includes('No changes on this branch') === true
+
             const commitMessageInput = document.querySelector('[aria-label="Commit message"]')
+
             const commitAiButton = document.querySelector(
               '[aria-label="Generate commit message with AI"]'
             )
+
             return {
               emptyStateVisible,
               hasCommitMessageInput: commitMessageInput !== null,

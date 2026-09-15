@@ -21,6 +21,7 @@ export function claimBrowserRouteGuestLifecycle(
   ) {
     return null
   }
+
   return Object.freeze({
     registration: Object.freeze({ ...registration }),
     guestAuthority: state.guestAuthority,

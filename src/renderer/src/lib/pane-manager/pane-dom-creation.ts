@@ -39,6 +39,7 @@ export function createPaneDOM(
   container.appendChild(xtermContainer)
 
   const userOpts = options.terminalOptions?.(id) ?? {}
+
   const terminalOpts: ITerminalOptions = {
     ...buildDefaultTerminalOptions(),
     ...userOpts
@@ -80,6 +81,7 @@ export function createPaneDOM(
           linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
           linkTooltip.style.display = ''
           const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
+
           if (formatted && typeof formatted === 'object' && 'then' in formatted) {
             void formatted.then(
               (nextText) => {
@@ -106,6 +108,7 @@ export function createPaneDOM(
       focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
     })
   }
+
   const paneMouseEnterHandler = (event: MouseEvent): void => onMouseEnter(id, event)
 
   const pane: ManagedPaneInternal = {

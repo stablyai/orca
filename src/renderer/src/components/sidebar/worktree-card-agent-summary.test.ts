@@ -94,6 +94,7 @@ describe('worktree card agent summary', () => {
     done.state = 'done'
     done.entry.state = 'done'
     done.entry.workingMode = undefined
+
     const interrupted = {
       ...done,
       paneKey: 'tab-1:leaf-2',

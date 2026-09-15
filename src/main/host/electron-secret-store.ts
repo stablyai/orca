@@ -26,6 +26,7 @@ export class ElectronSecretStore implements SecretStore {
         ? 'The OS keyring is unavailable, so secrets are stored unencrypted. Install and unlock gnome-keyring or kwallet to seal them.'
         : 'The OS keychain is unavailable, so secrets are stored unencrypted.'
     }
+
     // Why this is not folded into isEncryptionAvailable(): on Linux with no keyring,
     // Electron falls back to `basic_text`, which "encrypts" with a hardcoded password.
     // It round-trips, so sealing and unsealing genuinely work and must keep working —
@@ -40,16 +41,21 @@ function describeLinuxBackendGap(): string | null {
   if (process.platform !== 'linux') {
     return null
   }
+
   const probe = (safeStorage as Partial<typeof safeStorage>).getSelectedStorageBackend
+
   if (typeof probe !== 'function') {
     return null
   }
+
   let backend: string
+
   try {
     backend = probe.call(safeStorage)
   } catch {
     return null
   }
+
   return backend === 'basic_text'
     ? 'Secrets are obfuscated with a built-in key, not protected by the OS keyring. Install and unlock gnome-keyring or kwallet, then restart Orca, to seal them properly.'
     : null

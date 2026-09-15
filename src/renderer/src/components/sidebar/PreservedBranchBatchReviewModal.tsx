@@ -11,7 +11,9 @@ function isPreservedBranchCleanup(value: unknown): value is PreservedBranchClean
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const branch = value as Partial<PreservedBranchCleanup>
+
   return (
     typeof branch.worktreeId === 'string' &&
     typeof branch.branchName === 'string' &&

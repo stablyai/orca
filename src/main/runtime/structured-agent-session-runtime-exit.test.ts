@@ -26,6 +26,7 @@ describe('structured session runtime provider-exit wiring', () => {
 
   afterEach(async () => {
     await stopStructuredAgentSessionRuntime()
+
     if (root) {
       await rm(root, { recursive: true, force: true })
       root = null
@@ -35,11 +36,14 @@ describe('structured session runtime provider-exit wiring', () => {
   it('reacquires through the production callback and accepts a distinct next message', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-runtime-provider-exit-'))
     operations = 0
+
     const connections: {
       connection: CodexAppServerConnection
       handlers: CodexAppServerConnectionHandlers
     }[] = []
+
     let turn = 0
+
     const openConnection = (async (_launch, handlers = {}) => {
       const connection: CodexAppServerConnection = {
         pid: 4321,
@@ -48,12 +52,15 @@ describe('structured session runtime provider-exit wiring', () => {
           if (method === 'thread/start') {
             return { thread: { id: 'thread-runtime-exit' } }
           }
+
           if (method === 'thread/resume') {
             return { thread: { id: (params as { threadId: string }).threadId } }
           }
+
           if (method === 'turn/start') {
             return { turn: { id: `turn-${++turn}` } }
           }
+
           if (method === 'model/list') {
             return {
               data: [
@@ -69,6 +76,7 @@ describe('structured session runtime provider-exit wiring', () => {
               nextCursor: null
             }
           }
+
           return {}
         },
         notify: () => {},
@@ -76,9 +84,12 @@ describe('structured session runtime provider-exit wiring', () => {
         respondWithError: () => {},
         close: async () => true
       }
+
       connections.push({ connection, handlers })
+
       return connection
     }) as typeof openCodexAppServerConnection
+
     const host = await ensureStructuredAgentSessionHost({
       stateDirectory: root,
       hostId: 'local',
@@ -90,14 +101,17 @@ describe('structured session runtime provider-exit wiring', () => {
       openCodexConnection: openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
     const attached = await host.attach({ callerKey: 'runtime-test' }, attachParams)
+
     if (!attached.ok) {
       throw new Error(
         JSON.stringify({ refusal: attached.refusal, connections: connections.length })
       )
     }
+
     await host.hold(SESSION, 'desktop-chat:1')
     const exitedFence = host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const exited = connections[0]
@@ -106,10 +120,13 @@ describe('structured session runtime provider-exit wiring', () => {
     await vi.waitFor(() => expect(connections).toHaveLength(2))
     const recoveredFence = host.deps.store.getRecord(SESSION)?.lease.runtimeFence
     expect(recoveredFence).toBeGreaterThan(exitedFence)
+
     if (recoveredFence === undefined) {
       throw new Error('recovered lease omitted its fence')
     }
+
     const body = hostTestMessage('continue with a distinct message')
+
     const envelope = {
       sessionId: SESSION,
       clientOperationId: operationId(),
@@ -134,10 +151,12 @@ describe('structured session runtime provider-exit wiring', () => {
   it('does not reacquire when the production exit callback comes from a requested close', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-runtime-requested-close-'))
     operations = 0
+
     const connections: {
       connection: CodexAppServerConnection
       handlers: CodexAppServerConnectionHandlers
     }[] = []
+
     const openConnection = (async (_launch, handlers = {}) => {
       const connection: CodexAppServerConnection = {
         pid: 4321,
@@ -146,12 +165,15 @@ describe('structured session runtime provider-exit wiring', () => {
           if (method === 'thread/start') {
             return { thread: { id: 'thread-runtime-close' } }
           }
+
           if (method === 'thread/resume') {
             return { thread: { id: (params as { threadId: string }).threadId } }
           }
+
           if (method === 'turn/start') {
             return { turn: { id: 'turn-close' } }
           }
+
           if (method === 'model/list') {
             return {
               data: [
@@ -167,6 +189,7 @@ describe('structured session runtime provider-exit wiring', () => {
               nextCursor: null
             }
           }
+
           return {}
         },
         notify: () => {},
@@ -174,12 +197,16 @@ describe('structured session runtime provider-exit wiring', () => {
         respondWithError: () => {},
         close: async () => {
           handlers.onExit?.(new Error('requested close'))
+
           return true
         }
       }
+
       connections.push({ connection, handlers })
+
       return connection
     }) as typeof openCodexAppServerConnection
+
     const host = await ensureStructuredAgentSessionHost({
       stateDirectory: root,
       hostId: 'local',
@@ -191,14 +218,17 @@ describe('structured session runtime provider-exit wiring', () => {
       openCodexConnection: openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
     const attached = await host.attach({ callerKey: 'runtime-test' }, attachParams)
+
     if (!attached.ok) {
       throw new Error(
         JSON.stringify({ refusal: attached.refusal, connections: connections.length })
       )
     }
+
     await host.hold(SESSION, 'desktop-chat:requested-close')
 
     await stopStructuredAgentSessionRuntime()
@@ -222,6 +252,7 @@ describe('structured session runtime provider-exit wiring', () => {
       openCodexConnection: openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     await restarted.restoreReadableSessions()
     const history = restarted.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
@@ -234,19 +265,25 @@ describe('structured session runtime provider-exit wiring', () => {
   it('waits for an in-flight recovery before tearing down the runtime', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-runtime-recovery-shutdown-'))
     let releaseRecovery!: () => void
+
     const recoveryReleased = new Promise<void>((resolve) => {
       releaseRecovery = resolve
     })
+
     const connections: {
       connection: CodexAppServerConnection
       handlers: CodexAppServerConnectionHandlers
     }[] = []
+
     let opens = 0
+
     const openConnection = (async (_launch, handlers = {}) => {
       opens += 1
+
       if (opens === 2) {
         await recoveryReleased
       }
+
       const connection: CodexAppServerConnection = {
         pid: 4321 + opens,
         closed: false,
@@ -254,12 +291,15 @@ describe('structured session runtime provider-exit wiring', () => {
           if (method === 'thread/start') {
             return { thread: { id: 'thread-runtime-shutdown' } }
           }
+
           if (method === 'thread/resume') {
             return { thread: { id: (params as { threadId: string }).threadId } }
           }
+
           if (method === 'turn/start') {
             return { turn: { id: 'turn-shutdown' } }
           }
+
           if (method === 'model/list') {
             return {
               data: [
@@ -275,6 +315,7 @@ describe('structured session runtime provider-exit wiring', () => {
               nextCursor: null
             }
           }
+
           return {}
         },
         notify: () => {},
@@ -282,9 +323,12 @@ describe('structured session runtime provider-exit wiring', () => {
         respondWithError: () => {},
         close: async () => true
       }
+
       connections.push({ connection, handlers })
+
       return connection
     }) as typeof openCodexAppServerConnection
+
     const host = await ensureStructuredAgentSessionHost({
       stateDirectory: root,
       hostId: 'local',
@@ -296,6 +340,7 @@ describe('structured session runtime provider-exit wiring', () => {
       openCodexConnection: openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
     const attached = await host.attach({ callerKey: 'runtime-test' }, attachParams)
@@ -305,9 +350,11 @@ describe('structured session runtime provider-exit wiring', () => {
     await vi.waitFor(() => expect(opens).toBe(2))
 
     let stopped = false
+
     const stopping = stopStructuredAgentSessionRuntime().then(() => {
       stopped = true
     })
+
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(stopped).toBe(false)
     releaseRecovery()
@@ -320,11 +367,14 @@ describe('structured session runtime provider-exit wiring', () => {
     // callback AFTER host teardown has already run.
     root = await mkdtemp(join(tmpdir(), 'orca-runtime-backstop-exit-'))
     operations = 0
+
     const connections: {
       connection: CodexAppServerConnection
       handlers: CodexAppServerConnectionHandlers
     }[] = []
+
     let closeAttempts = 0
+
     const openConnection: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
       const connection: CodexAppServerConnection = {
         pid: 4321,
@@ -333,12 +383,15 @@ describe('structured session runtime provider-exit wiring', () => {
           if (method === 'thread/start') {
             return { thread: { id: 'thread-runtime-backstop' } }
           }
+
           if (method === 'thread/resume') {
             return { thread: { id: (params as { threadId: string }).threadId } }
           }
+
           if (method === 'turn/start') {
             return { turn: { id: 'turn-backstop' } }
           }
+
           if (method === 'model/list') {
             return {
               data: [
@@ -354,6 +407,7 @@ describe('structured session runtime provider-exit wiring', () => {
               nextCursor: null
             }
           }
+
           return {}
         },
         notify: () => {},
@@ -361,16 +415,22 @@ describe('structured session runtime provider-exit wiring', () => {
         respondWithError: () => {},
         close: async () => {
           closeAttempts += 1
+
           if (closeAttempts === 1) {
             return false
           }
+
           handlers.onExit?.(new Error('adapter backstop close'))
+
           return true
         }
       }
+
       connections.push({ connection, handlers })
+
       return connection
     }
+
     const host = await ensureStructuredAgentSessionHost({
       stateDirectory: root,
       hostId: 'local',
@@ -382,6 +442,7 @@ describe('structured session runtime provider-exit wiring', () => {
       openCodexConnection: openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const attachParams = hostTestAttachParams(null, { providerHandle: undefined })
     attachParams.envelope.clientOperationId = operationId()
     expect(await host.attach({ callerKey: 'runtime-test' }, attachParams)).toMatchObject({

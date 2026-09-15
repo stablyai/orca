@@ -19,6 +19,7 @@ export function getJiraSummaryLookupErrorCode(error: unknown): JiraSummaryLookup
     (error && typeof error === 'object' && 'code' in error)
   ) {
     const code = (error as { code?: unknown }).code
+
     if (
       code === 'disconnected' ||
       code === 'auth' ||
@@ -28,7 +29,9 @@ export function getJiraSummaryLookupErrorCode(error: unknown): JiraSummaryLookup
       return code
     }
   }
+
   const message = error instanceof Error ? error.message : String(error)
   const match = message.match(/jira_summary_lookup:(disconnected|auth|not-found|read-failed)/)
+
   return (match?.[1] as JiraSummaryLookupErrorCode | undefined) ?? null
 }

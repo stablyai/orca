@@ -7,6 +7,7 @@ export const STATUS_METHODS = [
     params: null,
     handler: (_params, { runtime, pairedDeviceId }) => {
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
+
       return {
         ...runtime.getStatus(),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),

@@ -12,9 +12,11 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 export function wslTranscriptFsRouteKey(path: string): string {
   const normalized = path.replace(/\\/g, '/')
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)/i)
+
   if (match) {
     return `${match[1].toLowerCase()}/${match[2].trim().toLowerCase()}`
   }
+
   return parseWslUncPath(path)?.distro.trim().toLowerCase() ?? path
 }
 

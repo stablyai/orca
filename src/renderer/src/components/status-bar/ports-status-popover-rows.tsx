@@ -35,6 +35,7 @@ function PortAction({
 }): React.JSX.Element {
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
     onClick(event)
+
     if (event.detail > 0) {
       event.currentTarget.blur()
     }
@@ -83,11 +84,14 @@ export function PortRow({
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+
   const runtimeTarget = useWorktreeRuntimeTarget(
     port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
   )
+
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const canStop = canStopWorkspacePort(port)
+
   const openBrowserLabel = translate(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
     'Open in Browser'
@@ -97,6 +101,7 @@ export function PortRow({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
+
       const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
         settings,
         // Why: keyboard activations have detail=0; only pointer clicks carry
@@ -104,6 +109,7 @@ export function PortRow({
         event: event.detail > 0 ? event : null,
         isMac: navigator.userAgent.includes('Mac')
       })
+
       void openWorkspacePortInBrowser({
         port,
         activeWorktreeId,
@@ -156,20 +162,26 @@ export function PortRow({
   const handleStop = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
+
       if (!canStopWorkspacePort(port)) {
         return
       }
+
       recordFeatureInteraction('ports')
+
       const run = async (): Promise<void> => {
         const result = await killWorkspacePortForTarget(runtimeTarget, {
           repoId: port.owner.repoId,
           pid: port.pid,
           port: port.port
         })
+
         if (!result.ok) {
           toast.error(result.reason)
+
           return
         }
+
         toast.success(
           translate(
             'auto.components.status.bar.ports.status.popover.rows.acdb6df590',
@@ -177,12 +189,14 @@ export function PortRow({
             { value0: port.port }
           )
         )
+
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
           replaceWorkspacePortScans,
           getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
+
         if (!refreshResult.ok) {
           toast.error(
             translate(
@@ -195,6 +209,7 @@ export function PortRow({
           )
         }
       }
+
       void run()
     },
     [
@@ -272,6 +287,7 @@ export function WorkspaceGroupRows({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       const ownerPort = group.ports[0]
+
       if (!ownerPort || !goToWorkspacePortOwner(ownerPort)) {
         toast.error(
           translate(

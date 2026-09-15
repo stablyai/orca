@@ -137,6 +137,7 @@ describe('openAiVaultSessionLogInOrca', () => {
         }
       ]
     })
+
     getStateMock.mockReturnValue(state)
 
     await openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })

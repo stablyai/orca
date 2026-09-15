@@ -10,7 +10,9 @@ type FunctionDefinition = {
 }
 
 const TASKS_ROUTE = '../../app/h/[hostId]/tasks.tsx'
+
 const FOUNDATION_SOURCE = 'mobile-tasks-legacy-foundation.tsx'
+
 const LEGACY_STYLE_SOURCE = 'mobile-tasks-legacy-styles.ts'
 
 function parseSource(relativePath: string): ts.SourceFile {
@@ -33,24 +35,32 @@ function normalized(node: ts.Node, sourceFile: ts.SourceFile): string {
 
 function functionBody(sourceFile: ts.SourceFile, functionName: string): ts.Block {
   let match: ts.Block | null = null
+
   function visit(node: ts.Node): void {
     if (ts.isFunctionDeclaration(node) && node.name?.text === functionName && node.body) {
       match = node.body
+
       return
     }
+
     ts.forEachChild(node, visit)
   }
+
   visit(sourceFile)
+
   if (!match) {
     throw new Error(`Missing Mobile Tasks function: ${functionName}`)
   }
+
   return match
 }
 
 function hookDefinitions(): Map<string, FunctionDefinition> {
   const definitions = new Map<string, FunctionDefinition>()
+
   for (const relativePath of MOBILE_TASKS_SOURCE_FILES) {
     const sourceFile = parseSource(relativePath)
+
     function visit(node: ts.Node): void {
       if (
         ts.isFunctionDeclaration(node) &&
@@ -59,10 +69,13 @@ function hookDefinitions(): Map<string, FunctionDefinition> {
       ) {
         definitions.set(node.name.text, { body: node.body, sourceFile })
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(sourceFile)
   }
+
   return definitions
 }
 
@@ -70,7 +83,9 @@ function assignedHookName(statement: ts.Statement): string | null {
   if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) {
     return null
   }
+
   const initializer = statement.declarationList.declarations[0]?.initializer
+
   return initializer && ts.isCallExpression(initializer) && ts.isIdentifier(initializer.expression)
     ? initializer.expression.text
     : null
@@ -80,7 +95,9 @@ function isModelDestructure(statement: ts.Statement): boolean {
   if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) {
     return false
   }
+
   const declaration = statement.declarationList.declarations[0]
+
   return (
     declaration != null &&
     ts.isObjectBindingPattern(declaration.name) &&
@@ -96,23 +113,29 @@ function flattenStageStatements(
   active: ReadonlySet<string>
 ): string[] {
   const signatures: string[] = []
+
   for (const statement of definition.body.statements) {
     if (ts.isReturnStatement(statement) || isModelDestructure(statement)) {
       continue
     }
+
     const nestedName = assignedHookName(statement)
     const nestedDefinition = nestedName ? definitions.get(nestedName) : undefined
+
     if (nestedName && nestedDefinition) {
       if (active.has(nestedName)) {
         throw new Error(`Recursive Mobile Tasks statement stage: ${nestedName}`)
       }
+
       signatures.push(
         ...flattenStageStatements(nestedDefinition, definitions, new Set([...active, nestedName]))
       )
       continue
     }
+
     signatures.push(normalized(statement, definition.sourceFile))
   }
+
   return signatures
 }
 
@@ -120,22 +143,28 @@ export function readFlattenedMobileTasksCoreStatements(): string[] {
   const definitions = hookDefinitions()
   const route = parseSource(TASKS_ROUTE)
   const signatures: string[] = []
+
   for (const statement of functionBody(route, 'MobileTasksScreen').statements) {
     if (ts.isReturnStatement(statement)) {
       continue
     }
+
     const stageName = assignedHookName(statement)
     const definition = stageName ? definitions.get(stageName) : undefined
+
     if (!stageName || !definition) {
       throw new Error('Unexpected Mobile Tasks route statement')
     }
+
     signatures.push(...flattenStageStatements(definition, definitions, new Set([stageName])))
   }
+
   return signatures
 }
 
 function foundationSources(): string[] {
   const foundation = parseSource(FOUNDATION_SOURCE)
+
   const sources = foundation.statements.flatMap((statement) => {
     if (
       !ts.isExportDeclaration(statement) ||
@@ -144,11 +173,14 @@ function foundationSources(): string[] {
     ) {
       return []
     }
+
     const base = statement.moduleSpecifier.text.replace(/^\.\//, '')
+
     return [`${base}.ts`, `${base}.tsx`].filter((candidate) =>
       MOBILE_TASKS_SOURCE_FILES.includes(candidate)
     )
   })
+
   return [...sources, LEGACY_STYLE_SOURCE]
 }
 
@@ -163,8 +195,10 @@ function printedDeclaration(node: ts.Node, sourceFile: ts.SourceFile, printer: t
 export function readMobileTasksDeclarationSignatures(): string[] {
   const printer = ts.createPrinter({ removeComments: true })
   const signatures: string[] = []
+
   for (const relativePath of foundationSources()) {
     const sourceFile = parseSource(relativePath)
+
     for (const statement of sourceFile.statements) {
       if (
         (ts.isFunctionDeclaration(statement) ||
@@ -179,6 +213,7 @@ export function readMobileTasksDeclarationSignatures(): string[] {
         )
         continue
       }
+
       if (ts.isVariableStatement(statement)) {
         for (const declaration of statement.declarationList.declarations) {
           if (ts.isIdentifier(declaration.name) && declaration.name.text !== 'styles') {
@@ -190,5 +225,6 @@ export function readMobileTasksDeclarationSignatures(): string[] {
       }
     }
   }
+
   return signatures.sort()
 }

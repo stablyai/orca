@@ -20,9 +20,11 @@ export class AndroidSdkState {
 
   require(): AndroidSdkPaths {
     const sdk = this.resolve()
+
     if (!sdk) {
       throw new EmulatorError('emulator_error', SDK_MISSING)
     }
+
     return sdk
   }
 }

@@ -51,15 +51,19 @@ export function SkillBundleInstallFlow(props: {
   const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
+
   const allSkillIds = useMemo(
     () => props.version.manifest.skills.map((skill) => skill.id),
     [props.version.manifest.skills]
   )
+
   const [selectedSkillIds, setSelectedSkillIds] = useState(() => new Set(allSkillIds))
   const [replaceSkillIds, setReplaceSkillIds] = useState<Set<string>>(() => new Set())
+
   const [destinationPreview, setDestinationPreview] = useState<SkillBundleInstallPreview | null>(
     null
   )
+
   const [result, setResult] = useState<SkillBundleInstallResult | null>(null)
   const [environmentId, setEnvironmentId] = useState('local')
   const [scope, setScope] = useState<'global' | 'workspace'>('global')
@@ -67,17 +71,22 @@ export function SkillBundleInstallFlow(props: {
   // would freeze the picker on whichever machine was selected first.
   const [providerChoice, setProviderChoice] = useState<Set<SkillInstallProviderId> | null>(null)
   const [workspace, setWorkspace] = useState('')
+
   const [executionTarget, setExecutionTarget] = useState<{ kind: 'wsl'; distro: string } | null>(
     null
   )
+
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const installProgress = useSkillInstallProgress()
+
   const detectedAgents = useSkillInstallDetectedAgents({
     environmentId,
     wslDistro: executionTarget?.distro ?? null
   })
+
   const providers = providerChoice ?? defaultSelectedSkillProviders(detectedAgents)
+
   const riskSummary = useMemo(
     () => summarizeSkillInstallRisk(checklistItemsFromVersion(props.version), selectedSkillIds),
     [props.version, selectedSkillIds]
@@ -87,6 +96,7 @@ export function SkillBundleInstallFlow(props: {
     () => skillInstallWorkspaceChoices({ environmentId, folderWorkspaces, repos, worktreesByRepo }),
     [environmentId, folderWorkspaces, repos, worktreesByRepo]
   )
+
   const sshConnections = useMemo(
     () =>
       [...sshTargetLabels.entries()].map(([id, label]) => ({
@@ -104,14 +114,17 @@ export function SkillBundleInstallFlow(props: {
 
   const destination = (): SkillInstallDestination | null => {
     const choice = workspaceChoices.find((candidate) => candidate.id === workspace)
+
     if (scope === 'workspace' && !choice) {
       return null
     }
+
     if (scope === 'workspace') {
       return choice?.kind === 'worktree'
         ? { scope: 'workspace', worktreeId: choice.id }
         : { scope: 'workspace', folderWorkspaceId: choice!.id }
     }
+
     return environmentId.startsWith('ssh:')
       ? {
           scope: 'global',
@@ -125,25 +138,31 @@ export function SkillBundleInstallFlow(props: {
     reusePreview = true
   ): Promise<void> => {
     const target = destination()
+
     if (!target || requestedIds.size === 0) {
       setError(
         target
           ? translate('auto.components.skills.install.selectSkill', 'Select at least one skill.')
           : translate('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.')
       )
+
       return
     }
+
     setBusy(true)
     props.onBusyChange(true)
     setError(null)
+
     try {
       const selectedSkills = props.version.manifest.skills
         .filter((skill) => requestedIds.has(skill.id))
         .map((skill) => ({ id: skill.id, name: skill.name, digest: skill.digest }))
+
       let checked =
         reusePreview && destinationPreview && sameSelection(destinationPreview, requestedIds)
           ? destinationPreview
           : null
+
       if (!checked) {
         const operation = await window.api.skills.previewBundleInstall({
           ...(environmentId === 'local' || environmentId.startsWith('ssh:')
@@ -159,18 +178,24 @@ export function SkillBundleInstallFlow(props: {
           selectedSkills,
           destination: target
         })
+
         if (operation.status === 'unsupported') {
           setError(operation.message)
+
           return
         }
+
         checked = operation.value
         setDestinationPreview(checked)
+
         if (checked.skills.some((skill) => CONFLICT_STATES.has(skill.currentState))) {
           return
         }
       }
+
       const operationId = crypto.randomUUID()
       installProgress.begin(operationId)
+
       const operation = await window.api.skills.installBundleShare({
         shareId: props.shareId,
         versionId: props.version.versionId,
@@ -188,6 +213,7 @@ export function SkillBundleInstallFlow(props: {
               : ('keep-local' as const)
           }))
       })
+
       if (operation.status === 'unsupported') {
         setError(operation.message)
       } else if (operation.status !== 'ok') {
@@ -201,6 +227,7 @@ export function SkillBundleInstallFlow(props: {
         )
       } else {
         setResult(operation.value)
+
         if (
           operation.value.skills.some((skill) =>
             ['installed', 'updated', 'unchanged'].includes(skill.status)
@@ -228,10 +255,12 @@ export function SkillBundleInstallFlow(props: {
     if (!installProgress.activeOperationId) {
       return
     }
+
     const cancelled = await window.api.skills.cancelInstall({
       operationId: installProgress.activeOperationId,
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
+
     if (!cancelled.cancelled) {
       setError(
         translate(
@@ -259,11 +288,13 @@ export function SkillBundleInstallFlow(props: {
           onToggleSkill={(id, selected) => {
             setSelectedSkillIds((current) => {
               const next = new Set(current)
+
               if (selected) {
                 next.add(id)
               } else {
                 next.delete(id)
               }
+
               return next
             })
             resetPreview()
@@ -275,11 +306,13 @@ export function SkillBundleInstallFlow(props: {
           onToggleReplace={(id, replace) =>
             setReplaceSkillIds((current) => {
               const next = new Set(current)
+
               if (replace) {
                 next.add(id)
               } else {
                 next.delete(id)
               }
+
               return next
             })
           }

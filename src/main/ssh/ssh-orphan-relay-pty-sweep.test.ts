@@ -18,7 +18,9 @@ import {
 import { RELAY_PTY_SWEEP_MIN_AGE_MS } from '../../shared/ssh-relay-pty-ownership-proof'
 
 const TARGET = 'target-1'
+
 const OURS = 'client-instance-ours'
+
 // A stable pane id is a UUID; anything else is stripped before supersede can match on it.
 const LEAF = '11111111-2222-4333-8444-555555555555'
 
@@ -48,14 +50,17 @@ function createHarness(
   leases: SshRemotePtyLease[] = []
 ): { provider: IPtyProvider; store: Store; shutdown: ReturnType<typeof vi.fn> } {
   const shutdown = vi.fn().mockResolvedValue(undefined)
+
   const provider = {
     listProcesses: vi.fn().mockResolvedValue(processes),
     shutdown
   } as unknown as IPtyProvider
+
   const store = {
     getSshRemotePtyLeases: vi.fn().mockReturnValue(leases),
     reconcileSshRemotePtyLeasesForTarget: vi.fn()
   } as unknown as Store
+
   return { provider, store, shutdown }
 }
 
@@ -112,6 +117,7 @@ describe('sweepOrphanedRelayPtys', () => {
     const harness = createHarness([hostEntry()])
     harness.provider.listProcesses = vi.fn().mockImplementation(async () => {
       clock += 1
+
       return [hostEntry()]
     })
 
@@ -122,6 +128,7 @@ describe('sweepOrphanedRelayPtys', () => {
         passBudgetMs: 60_000,
         shouldContinue: () => {
           clock += 20
+
           return true
         }
       })
@@ -160,6 +167,7 @@ describe('sweepOrphanedRelayPtys', () => {
       ...lease('pty-1', 'terminated'),
       pendingKill: { requestedAt: 1, incarnationId: 'inc-1', attempts: 0 }
     } as SshRemotePtyLease
+
     const harness = createHarness([hostEntry()], [tombstoned])
 
     await run(harness)
@@ -207,6 +215,7 @@ describe('sweepOrphanedRelayPtys', () => {
         }
       ]
     } as unknown as PersistedState
+
     const operations: SshPtyLeaseOperations = {
       state,
       toStoredPtyId: (_targetId, ptyId) => ptyId,
@@ -216,6 +225,7 @@ describe('sweepOrphanedRelayPtys', () => {
       flush: () => {},
       flushDurableStateOrThrowAsync: async () => {}
     }
+
     // The same pane re-leases under a new relay id; pty-1 is expired, never terminated.
     upsertSshRemotePtyLease(operations, {
       targetId: TARGET,
@@ -315,6 +325,7 @@ describe('sweepOrphanedRelayPtys', () => {
     let alive = true
     vi.mocked(harness.provider.listProcesses).mockImplementation(async () => {
       alive = false
+
       return [hostEntry()]
     })
 

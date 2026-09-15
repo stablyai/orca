@@ -25,7 +25,9 @@ const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo 
 )
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
@@ -35,6 +37,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -44,6 +47,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -53,6 +57,7 @@ vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -62,9 +67,11 @@ vi.mock('react', async (importOriginal) => {
 vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -91,11 +98,14 @@ describe('connectPanePty', () => {
   it('stops re-arming the hidden output restore once the pane binding is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -103,6 +113,7 @@ describe('connectPanePty', () => {
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -120,15 +131,18 @@ describe('connectPanePty', () => {
     // times the chain cycled — no timing or memory heuristics needed.
     let visibilityReads = 0
     let visible = false
+
     const isVisibleRef = {
       get current() {
         visibilityReads += 1
+
         return visible
       },
       set current(next: boolean) {
         visible = next
       }
     }
+
     const deps = buildPaneConnectionDeps(() => mockStoreState, { isVisibleRef })
 
     const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)

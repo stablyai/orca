@@ -58,7 +58,9 @@ function dispatchKeyDown(target: HTMLElement, init: KeyboardEventInit): Keyboard
     bubbles: true,
     cancelable: true
   })
+
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -115,6 +117,7 @@ describe('installEditorFindShortcut', () => {
       code: 'KeyF',
       metaKey: true
     })
+
     const repeatEvent = dispatchKeyDown(fixture.input, {
       key: 'f',
       code: 'KeyF',
@@ -155,6 +158,7 @@ describe('installEditorFindShortcut', () => {
       code: 'KeyF',
       metaKey: true
     })
+
     const customEvent = dispatchKeyDown(fixture.input, {
       key: 'g',
       code: 'KeyU',
@@ -190,6 +194,7 @@ describe('installEditorFindShortcut', () => {
     const getAction = vi.fn((_id: string) => ({ run }))
     container.appendChild(input)
     document.body.appendChild(container)
+
     const dispose = installMonacoEditorFindShortcut({
       getAction,
       getContainerDomNode: () => container
@@ -218,6 +223,7 @@ describe('installEditorAddReviewNoteShortcut', () => {
       metaKey: true,
       shiftKey: true
     })
+
     const repeatEvent = dispatchKeyDown(input, {
       key: 'a',
       code: 'KeyA',
@@ -225,6 +231,7 @@ describe('installEditorAddReviewNoteShortcut', () => {
       shiftKey: true,
       repeat: true
     })
+
     const unrelatedEvent = dispatchKeyDown(input, { key: 'a', code: 'KeyA', metaKey: true })
 
     expect(defaultEvent.defaultPrevented).toBe(true)
@@ -233,12 +240,14 @@ describe('installEditorAddReviewNoteShortcut', () => {
     expect(onAddReviewNote).toHaveBeenCalledTimes(1)
 
     shortcutState.keybindings = { 'editor.addReviewNote': ['Mod+Shift+K'] }
+
     const overriddenEvent = dispatchKeyDown(input, {
       key: 'k',
       code: 'KeyK',
       metaKey: true,
       shiftKey: true
     })
+
     expect(overriddenEvent.defaultPrevented).toBe(true)
     expect(onAddReviewNote).toHaveBeenCalledTimes(2)
 
@@ -289,6 +298,7 @@ describe('installOpenDraftAddReviewNoteGuard', () => {
       metaKey: true,
       shiftKey: true
     })
+
     const repeat = dispatchKeyDown(input, {
       key: 'a',
       code: 'KeyA',
@@ -296,6 +306,7 @@ describe('installOpenDraftAddReviewNoteGuard', () => {
       shiftKey: true,
       repeat: true
     })
+
     const unrelated = dispatchKeyDown(input, { key: 'a', code: 'KeyA', metaKey: true })
 
     expect(first.defaultPrevented).toBe(true)
@@ -305,12 +316,14 @@ describe('installOpenDraftAddReviewNoteGuard', () => {
     expect(onDownstreamKeyDown).toHaveBeenCalledTimes(1)
 
     dispose()
+
     const afterDispose = dispatchKeyDown(input, {
       key: 'a',
       code: 'KeyA',
       metaKey: true,
       shiftKey: true
     })
+
     expect(afterDispose.defaultPrevented).toBe(false)
   })
 })
@@ -377,12 +390,15 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     const fixture = createDiffNavigationFixture()
 
     const defaultEvent = dispatchKeyDown(fixture.input, { key: 'F7', code: 'F7' })
+
     const customEvent = dispatchKeyDown(fixture.input, {
       key: 'g',
       code: 'KeyG',
       metaKey: true
     })
+
     fixture.dispose()
+
     const disposedEvent = dispatchKeyDown(fixture.input, {
       key: 'g',
       code: 'KeyG',

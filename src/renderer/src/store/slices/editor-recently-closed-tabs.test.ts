@@ -19,6 +19,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -29,9 +30,11 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
 function withCountedEntityIdReads(tabs: readonly Tab[], onRead: () => void): Tab[] {
   return tabs.map((tab) => {
     const { entityId, ...rest } = tab
+
     return Object.defineProperty(rest, 'entityId', {
       get: () => {
         onRead()
+
         return entityId
       },
       enumerable: true,
@@ -113,6 +116,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
 
   it('restores the exact same-path owner instead of moving the local editor', () => {
     const store = createEditorTabsStore()
+
     const localId = store.getState().openFile({
       filePath: '/repo/notes.md',
       relativePath: 'notes.md',
@@ -120,6 +124,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       language: 'markdown',
       mode: 'edit'
     })
+
     const remoteId = store.getState().openFile({
       filePath: '/repo/notes.md',
       relativePath: 'notes.md',
@@ -128,6 +133,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       runtimeEnvironmentId: 'env-1',
       mode: 'edit'
     })
+
     store.getState().setTabBarOrder('wt-1', [localId, remoteId])
 
     store.getState().closeFile(remoteId)
@@ -140,6 +146,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
 
   it('keeps same-path edit and diff tabs as separate entities on reopen', () => {
     const store = createEditorTabsStore()
+
     const editId = store.getState().openFile({
       filePath: '/repo/notes.md',
       relativePath: 'notes.md',
@@ -147,6 +154,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       language: 'markdown',
       mode: 'edit'
     })
+
     store.getState().openDiff('wt-1', '/repo/notes.md', 'notes.md', 'markdown', false)
     const diffId = 'wt-1::diff::unstaged::notes.md'
     store.getState().setTabBarOrder('wt-1', [editId, diffId])
@@ -160,6 +168,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
 
   it('keeps close-all editor snapshots positioned for reopen', () => {
     const store = createEditorTabsStore()
+
     const firstId = store.getState().openFile({
       filePath: '/repo/first.md',
       relativePath: 'first.md',
@@ -167,6 +176,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       language: 'markdown',
       mode: 'edit'
     })
+
     const middleId = store.getState().openFile({
       filePath: '/repo/middle.md',
       relativePath: 'middle.md',
@@ -174,6 +184,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       language: 'markdown',
       mode: 'edit'
     })
+
     const lastId = store.getState().openFile({
       filePath: '/repo/last.md',
       relativePath: 'last.md',
@@ -181,6 +192,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       language: 'markdown',
       mode: 'edit'
     })
+
     store.getState().setTabBarOrder('wt-1', [firstId, middleId, lastId])
 
     store.getState().closeAllFiles()
@@ -193,6 +205,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
   it('captures close-all snapshot positions without rescanning tab state per closed tab', () => {
     const countEntityIdReads = (fileCount: number): number => {
       const store = createEditorTabsStore()
+
       for (let index = 0; index < fileCount; index += 1) {
         store.getState().openFile(
           {
@@ -205,6 +218,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
           { preview: false }
         )
       }
+
       let reads = 0
       store.setState({
         unifiedTabsByWorktree: {
@@ -226,6 +240,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
         groupId: expect.any(String),
         groupIndex: 0
       })
+
       return reads
     }
 
@@ -245,6 +260,7 @@ describe('createEditorSlice recently closed editor tabs', () => {
       }
     } as unknown as Partial<AppState>)
     const sharedPath = '/home/me/.zshrc'
+
     const openShared = (worktreeId: string): string =>
       store.getState().openFile({
         filePath: sharedPath,

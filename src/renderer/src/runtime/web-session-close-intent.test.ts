@@ -12,6 +12,7 @@ import {
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
 
 const WT = 'repo::/wt'
+
 const OWNER = { environmentId: 'runtime-a', pairingRevision: 1 }
 
 afterEach(() => resetWebSessionCloseIntentForTests())

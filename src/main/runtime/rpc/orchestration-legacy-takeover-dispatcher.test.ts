@@ -14,10 +14,15 @@ import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const WORKER_HANDLE = 'term_legacy_worker'
+
 const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
+
 const COORDINATOR_HANDLE = 'term_legacy_coord'
+
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
+
 const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
+
 const CURRENT_COORDINATOR_PANE = 'tab_current:55555555-5555-4555-8555-555555555555'
 
 type Harness = {
@@ -30,12 +35,14 @@ type Harness = {
 }
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 afterEach(() => {
   for (const database of databases.splice(0)) {
     database.close()
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -46,11 +53,13 @@ function createHarness(): Harness {
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   before.close()
 
@@ -82,14 +91,18 @@ function createHarness(): Harness {
   )
   vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((proof) => {
     const validWorker = proof?.terminalHandle === WORKER_HANDLE && proof.paneKey === WORKER_PANE
+
     const validCoordinator =
       proof?.terminalHandle === COORDINATOR_HANDLE && proof.paneKey === COORDINATOR_PANE
+
     const validCurrentCoordinator =
       proof?.terminalHandle === CURRENT_COORDINATOR_HANDLE &&
       proof.paneKey === CURRENT_COORDINATOR_PANE
+
     if ((!validWorker && !validCoordinator && !validCurrentCoordinator) || !proof?.launchToken) {
       return null
     }
+
     return {
       hostScope: { kind: 'local', hostId: 'local' },
       terminalHandle: proof.terminalHandle as string,
@@ -99,6 +112,7 @@ function createHarness(): Harness {
     }
   })
   vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
   return {
     db,
     runtime,
@@ -114,6 +128,7 @@ function evidence(
 ): OrchestrationCompatibilityEvidence {
   const worker = role === 'worker'
   const currentCoordinator = role === 'current-coordinator'
+
   return {
     terminalHandle: worker
       ? WORKER_HANDLE
@@ -149,6 +164,7 @@ function request(
 
 function counts(db: OrchestrationDb): Record<string, number> {
   const sqlite = (db as unknown as { db: Database.Database }).db
+
   return Object.fromEntries(
     [
       'messages',
@@ -334,6 +350,7 @@ describe('legacy compatibility after explicit takeover', () => {
         'post-takeover-ask'
       )
     )
+
     const messageId = (response as { result?: { messageId?: string } }).result?.messageId
 
     expect(response).toMatchObject({
@@ -359,6 +376,7 @@ describe('legacy compatibility after explicit takeover', () => {
         )
       )
     ).resolves.toMatchObject({ ok: true })
+
     const pendingAsk = await harness.dispatcher.dispatch(
       request(
         'orchestration.ask',
@@ -372,7 +390,9 @@ describe('legacy compatibility after explicit takeover', () => {
         'pending-before-takeover'
       )
     )
+
     const questionId = (pendingAsk as { result: { messageId: string } }).result.messageId
+
     const unrelated = harness.db.insertMessage({
       runId: harness.adoptedRunId,
       from: WORKER_HANDLE,
@@ -380,8 +400,10 @@ describe('legacy compatibility after explicit takeover', () => {
       subject: 'peer-only',
       deliveryContract: 'legacy_direct'
     })
+
     const currentRequest = (method: string, params: unknown, invocationId: string) =>
       request(method, params, evidence('current-coordinator'), invocationId)
+
     const takeoverParams = {
       id: harness.adoptedRunId,
       from: CURRENT_COORDINATOR_HANDLE,
@@ -391,6 +413,7 @@ describe('legacy compatibility after explicit takeover', () => {
     const takeover = await harness.dispatcher.dispatch(
       currentRequest('orchestration.runUse', takeoverParams, 'explicit-takeover')
     )
+
     const repeated = await harness.dispatcher.dispatch(
       currentRequest('orchestration.runUse', takeoverParams, 'explicit-takeover-repeat')
     )
@@ -421,6 +444,7 @@ describe('legacy compatibility after explicit takeover', () => {
         'read-promoted-question'
       )
     )
+
     expect(promoted).toMatchObject({
       ok: true,
       result: {
@@ -471,6 +495,7 @@ describe('legacy compatibility after explicit takeover', () => {
         'current-coordinator-to-legacy-worker'
       )
     )
+
     expect(followUp).toMatchObject({
       ok: true,
       result: {
@@ -481,6 +506,7 @@ describe('legacy compatibility after explicit takeover', () => {
         }
       }
     })
+
     const workerFollowUp = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -489,6 +515,7 @@ describe('legacy compatibility after explicit takeover', () => {
         'legacy-worker-check-after-takeover'
       )
     )
+
     expect(workerFollowUp).toMatchObject({
       ok: true,
       result: {
@@ -496,9 +523,11 @@ describe('legacy compatibility after explicit takeover', () => {
         legacyCompatibility: { ackMessageIds: [expect.any(String)] }
       }
     })
+
     const [followUpMessageId] = (
       workerFollowUp as { result: { legacyCompatibility: { ackMessageIds: string[] } } }
     ).result.legacyCompatibility.ackMessageIds
+
     await expect(
       harness.dispatcher.dispatch(
         request(
@@ -593,9 +622,11 @@ describe('injected dispatch from a legacy-adopted coordinator', () => {
     )
     vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(harness.runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+
     const sendPrompt = vi
       .spyOn(harness.runtime, 'sendTerminalAgentPrompt')
       .mockResolvedValue({ handle: COORDINATOR_ALIAS_HANDLE, accepted: true, bytesWritten: 1 })
+
     const task = harness.db.createTask({ spec: 'self inject', runId: harness.adoptedRunId })
 
     const response = await harness.dispatcher.dispatch(

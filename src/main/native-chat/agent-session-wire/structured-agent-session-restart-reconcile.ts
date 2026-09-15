@@ -22,18 +22,22 @@ export function createRestartReconciler(deps: {
   now: () => number
 }): (sessionId: string) => Promise<AgentSessionWireRefusal | null> {
   let pending: Promise<void> | null = null
+
   return async (sessionId) => {
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
       return null
     }
+
     if (!pending) {
       const run = reconcileCurrentLeases(deps)
       pending = run.finally(() => {
         pending = null
       })
     }
+
     try {
       await pending
+
       return null
     } catch (error) {
       return classifyStoreFailure(
@@ -59,10 +63,12 @@ async function reconcileCurrentLeases(deps: {
       ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
       now: deps.now()
     })
+
     if (!deps.store.listRecords().some((record) => record.lease.unreconciled)) {
       return
     }
   }
+
   // An outgoing runtime can still be writing during restart; preserve the record and retry later.
   throw new Error('execution_owner_reconciling')
 }

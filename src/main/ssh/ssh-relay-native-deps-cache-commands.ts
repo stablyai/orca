@@ -18,12 +18,19 @@ import {
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
 export const RELAY_NATIVE_CACHE_LINKED = '__ORCA_NATIVE_CACHE__LINKED'
+
 export const RELAY_NATIVE_CACHE_SEEDED = '__ORCA_NATIVE_CACHE__SEEDED'
+
 export const RELAY_NATIVE_CACHE_MISS = '__ORCA_NATIVE_CACHE__MISS'
+
 export const RELAY_NATIVE_CACHE_PROMOTED = '__ORCA_NATIVE_CACHE__PROMOTED'
+
 export const RELAY_NATIVE_CACHE_NOT_PROMOTED = '__ORCA_NATIVE_CACHE__NOT_PROMOTED'
+
 export const RELAY_NATIVE_CACHE_LIST_OK = '__ORCA_NATIVE_CACHE__LIST_OK'
+
 export const RELAY_NATIVE_CACHE_REFS_OK = '__ORCA_NATIVE_CACHE__REFS_OK'
+
 export const RELAY_NATIVE_CACHE_REFS_ERR = '__ORCA_NATIVE_CACHE__REFS_ERR'
 
 /**
@@ -55,6 +62,7 @@ function cachePaths(paths: RelayNativeDepsCachePaths): {
   root: string
 } {
   const { host, remoteHome, relayDir, key } = paths
+
   return {
     base: relayNativeDepsCacheBaseDir(host, remoteHome),
     entry: relayNativeDepsCacheEntryDir(host, remoteHome, key),
@@ -77,11 +85,13 @@ export function ensureRelayNativeDepsCacheCommand(
   deps: Readonly<Record<string, string>>
 ): string {
   const { entry, target, nodeModules, root } = cachePaths(paths)
+
   // Why grep the sibling's manifest: an older Orca pinned different versions, and a
   // toolchain-skip host wrote one with node-pty removed. Both must fail to qualify.
   const depGuards = Object.entries(deps).map(
     ([name, version]) => `grep -F -q ${shellEscape(`"${name}":"${version}"`)} "$pj" || continue`
   )
+
   return [
     `cache=${shellEscape(entry)}`,
     `target=${shellEscape(target)}`,
@@ -127,6 +137,7 @@ export function ensureRelayNativeDepsCacheCommand(
 export function promoteRelayNativeDepsCacheCommand(paths: RelayNativeDepsCachePaths): string {
   const { base, entry, target, nodeModules } = cachePaths(paths)
   const notPromoted = `printf '%s\\n' ${RELAY_NATIVE_CACHE_NOT_PROMOTED}`
+
   return [
     `base=${shellEscape(base)}`,
     `cache=${shellEscape(entry)}`,
@@ -163,6 +174,7 @@ export function listRelayNativeDepsCacheEntriesCommand(
   remoteHome: string
 ): string {
   const base = relayNativeDepsCacheBaseDir(host, remoteHome)
+
   return [
     `base=${shellEscape(base)}`,
     `[ -d "$base" ] || { printf '%s\\n' ${RELAY_NATIVE_CACHE_LIST_OK}; exit 0; }`,
@@ -193,6 +205,7 @@ export function listRelayNativeDepsCacheReferencesCommand(
   remoteHome: string
 ): string {
   const root = remoteInstallRootDir(host, remoteHome)
+
   return [
     `root=${shellEscape(root)}`,
     `[ -d "$root" ] || { printf '%s\\n' ${RELAY_NATIVE_CACHE_REFS_OK}; exit 0; }`,

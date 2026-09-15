@@ -13,8 +13,11 @@ import {
 } from './native-chat-session-transport'
 
 const nativeChatReadSession = vi.fn()
+
 const nativeChatSubscribe = vi.fn()
+
 const runtimeEnvironmentsCall = vi.fn()
+
 const runtimeEnvironmentsSubscribe = vi.fn()
 
 const ENV = 'env-1'
@@ -157,13 +160,17 @@ describe('runtime subscribe', () => {
     const unsubscribe = vi.fn()
     let count = 0
     let onResponse: (r: { ok: boolean; result?: unknown }) => void = () => {}
+
     let onClose: () => void = () => {}
+
     runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
       count += 1
       onResponse = callbacks.onResponse
       onClose = callbacks.onClose ?? (() => {})
+
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
     })
+
     return {
       unsubscribe,
       deliver: (frame, ok = true) => onResponse(ok ? { ok: true, result: frame } : { ok: false }),
@@ -356,6 +363,7 @@ describe('runtime subscribe', () => {
       { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
       vi.fn()
     )
+
     await flush()
     stop()
     await flush()
@@ -371,6 +379,7 @@ describe('runtime subscribe', () => {
 
   it('re-subscribes after a mid-stream drop and stops reconnecting on teardown', async () => {
     vi.useFakeTimers()
+
     try {
       markRuntimeEnvironmentCompatible(ENV)
       const { drop, subscribeCount } = stubSubscribe()
@@ -380,6 +389,7 @@ describe('runtime subscribe', () => {
         { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
         vi.fn()
       )
+
       await vi.advanceTimersByTimeAsync(0)
       expect(subscribeCount()).toBe(1)
 
@@ -398,8 +408,10 @@ describe('runtime subscribe', () => {
 
   it('keeps retrying when a reconnect subscribe rejects', async () => {
     vi.useFakeTimers()
+
     try {
       markRuntimeEnvironmentCompatible(ENV)
+
       const attempts: {
         callbacks: {
           onResponse: (response: { ok: boolean; result?: unknown }) => void
@@ -408,6 +420,7 @@ describe('runtime subscribe', () => {
         resolve: (handle: { unsubscribe: () => void; sendBinary: () => void }) => void
         reject: (error: Error) => void
       }[] = []
+
       runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
         return new Promise((resolve, reject) => attempts.push({ callbacks, resolve, reject }))
       })
@@ -434,8 +447,10 @@ describe('runtime subscribe', () => {
 
   it('closes and retries when an established reconnect returns an error envelope', async () => {
     vi.useFakeTimers()
+
     try {
       markRuntimeEnvironmentCompatible(ENV)
+
       const attempts: {
         callbacks: {
           onResponse: (response: { ok: boolean; result?: unknown }) => void
@@ -443,9 +458,11 @@ describe('runtime subscribe', () => {
         }
         unsubscribe: ReturnType<typeof vi.fn>
       }[] = []
+
       runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
         const unsubscribe = vi.fn()
         attempts.push({ callbacks, unsubscribe })
+
         return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
       })
       const transport = getNativeChatSessionTransport(ENV)
@@ -473,16 +490,20 @@ describe('runtime subscribe', () => {
 
   it('closes an out-of-order stale handle without replacing the active reconnect', async () => {
     vi.useFakeTimers()
+
     try {
       markRuntimeEnvironmentCompatible(ENV)
+
       const attempts: {
         callbacks: { onClose?: () => void }
         resolve: (handle: { unsubscribe: () => void; sendBinary: () => void }) => void
       }[] = []
+
       runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
         return new Promise((resolve) => attempts.push({ callbacks, resolve }))
       })
       const transport = getNativeChatSessionTransport(ENV)
+
       const stop = transport.subscribe(
         { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
         vi.fn()
@@ -509,6 +530,7 @@ describe('runtime subscribe', () => {
     markRuntimeEnvironmentCompatible(ENV)
     const unsubscribe = vi.fn()
     let resolveHandle: (h: unknown) => void = () => {}
+
     runtimeEnvironmentsSubscribe.mockImplementation(
       () => new Promise((resolve) => (resolveHandle = resolve))
     )
@@ -519,6 +541,7 @@ describe('runtime subscribe', () => {
       { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
       onAppended
     )
+
     stop() // teardown before the subscribe promise resolves
     resolveHandle({ unsubscribe, sendBinary: vi.fn() })
     await Promise.resolve()
@@ -560,6 +583,7 @@ describe('runtime readSession error mapping', () => {
     const compatBlock = Object.assign(new Error('runtime too old'), {
       code: RUNTIME_COMPAT_BLOCK_CODE
     })
+
     expect(toRuntimeNativeChatErrorMessage(compatBlock)).toEqual(tooOld)
 
     expect(toRuntimeNativeChatErrorMessage(new Error('request timed out'))).toBe(generic)

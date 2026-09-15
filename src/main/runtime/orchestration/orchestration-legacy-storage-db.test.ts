@@ -19,6 +19,7 @@ describe('OrchestrationDb legacy contract storage', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -28,6 +29,7 @@ describe('OrchestrationDb legacy contract storage', () => {
   function createCutoverFixture(): LegacyStorageCutoverFixture {
     const created = createLegacyStorageCutoverFixture()
     tempDir = created.tempDir
+
     return created.fixture
   }
 
@@ -40,6 +42,7 @@ describe('OrchestrationDb legacy contract storage', () => {
     const fixture = createCutoverFixture()
     db = new OrchestrationDb(fixture.dbPath)
     const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
+
     const worker = db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       dispatchId: fixture.legacyDispatchId,
@@ -50,6 +53,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       launchTokenHash: 'legacy_launch_hash',
       processIncarnation: 'process_1'
     })
+
     const coordinator = db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       role: 'coordinator',
@@ -59,6 +63,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       launchTokenHash: 'coord_launch_hash',
       processIncarnation: 'process_coord'
     })
+
     return {
       fixture,
       adoptedRunId,
@@ -101,12 +106,14 @@ describe('OrchestrationDb legacy contract storage', () => {
       run_id: adoptedRunId,
       delivery_contract: 'legacy_direct'
     })
+
     for (const messageId of fixture.malformedRejectionMessageIds) {
       expect(db.getMessageById(messageId)).toMatchObject({
         run_id: adoptedRunId,
         delivery_contract: 'legacy_direct'
       })
     }
+
     expect(
       sqlite.prepare('SELECT * FROM deliveries WHERE id = ?').get(fixture.legacyDeliveryId)
     ).toMatchObject({
@@ -155,6 +162,7 @@ describe('OrchestrationDb legacy contract storage', () => {
   it('fails closed when an adopted coordinator handle becomes a current-contract worker', () => {
     const state = openAdoptedFixture()
     expect(db!.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([state.adoptedRunId])
+
     const task = db!.createTask({
       runId: state.adoptedRunId,
       spec: 'mixed contract worker identity',
@@ -232,6 +240,7 @@ describe('OrchestrationDb legacy contract storage', () => {
 
   it('returns complete addressed legacy history without changing read state', () => {
     const state = openAdoptedFixture()
+
     const unread = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -239,6 +248,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       to: 'term_legacy_worker',
       subject: 'unread history'
     })
+
     db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -262,6 +272,7 @@ describe('OrchestrationDb legacy contract storage', () => {
     const state = openAdoptedFixture()
     const taskId = db!.getDispatchContextById(state.fixture.legacyDispatchId)!.task_id
     const payload = JSON.stringify({ taskId, dispatchId: state.fixture.legacyDispatchId })
+
     const completion = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -330,6 +341,7 @@ describe('OrchestrationDb legacy contract storage', () => {
         consumerGeneration: 0
       }
     })
+
     expect(bound).toMatchObject({ coordinator_handle: 'term_legacy_coord' })
     expect(
       db!.bindRun({
@@ -401,6 +413,7 @@ describe('OrchestrationDb legacy contract storage', () => {
 
   it('promotes only mail addressed to the replaced legacy coordinator', () => {
     const state = openAdoptedFixture()
+
     const coordinatorMail = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -408,6 +421,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       to: 'term_legacy_coord',
       subject: 'coordinator outcome'
     })
+
     const workerMail = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -435,6 +449,7 @@ describe('OrchestrationDb legacy contract storage', () => {
 
   it('commits legacy messages, lifecycle effects, and invocation receipts exactly once', () => {
     const state = openAdoptedFixture()
+
     const params = {
       principalId: state.workerPrincipalId,
       operationKey: 'invocation_1',
@@ -468,6 +483,7 @@ describe('OrchestrationDb legacy contract storage', () => {
 
   it('reconstructs a matching pre-receipt settlement without changing its persisted outcome', () => {
     const state = openAdoptedFixture()
+
     const accepted = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -476,6 +492,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       subject: 'Completed',
       type: 'worker_done'
     })
+
     expect(
       db!.settleWorkerReport({
         taskId: db!.getDispatchContextById(state.fixture.legacyDispatchId)!.task_id,
@@ -515,6 +532,7 @@ describe('OrchestrationDb legacy contract storage', () => {
   it('reconstructs a read pre-takeover completion through its original legacy route', () => {
     const state = openAdoptedFixture()
     const taskId = db!.getDispatchContextById(state.fixture.legacyDispatchId)!.task_id
+
     const accepted = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -524,6 +542,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       body: 'accepted before takeover',
       type: 'worker_done'
     })
+
     db!.markAsRead([accepted.id])
     db!.settleWorkerReport({
       taskId,
@@ -575,6 +594,7 @@ describe('OrchestrationDb legacy contract storage', () => {
     const state = openAdoptedFixture()
     const taskId = db!.getDispatchContextById(state.fixture.legacyDispatchId)!.task_id
     const payload = JSON.stringify({ taskId, dispatchId: state.fixture.legacyDispatchId })
+
     const foreign = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -585,6 +605,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       type: 'worker_done',
       payload
     })
+
     db!.settleWorkerReport({
       taskId,
       dispatchId: state.fixture.legacyDispatchId,
@@ -661,6 +682,7 @@ describe('OrchestrationDb legacy contract storage', () => {
 
   it('uses invocation identity for repeated asks and atomically conflicts divergent replies', () => {
     const state = openAdoptedFixture()
+
     const ask = {
       principalId: state.workerPrincipalId,
       operationKey: 'ask_invocation_1',
@@ -670,8 +692,10 @@ describe('OrchestrationDb legacy contract storage', () => {
       options: ['yes', 'no'],
       recipientHandle: 'term_legacy_coord'
     }
+
     const first = db!.commitLegacyAskOperation(ask)
     const replay = db!.commitLegacyAskOperation(ask)
+
     const repeated = db!.commitLegacyAskOperation({
       ...ask,
       operationKey: 'ask_invocation_2'
@@ -694,6 +718,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       askerHandle: 'term_legacy_worker',
       question: 'Inherited?'
     })
+
     const sqlite = (db as unknown as { db: Database.Database }).db
     sqlite
       .prepare(
@@ -703,6 +728,7 @@ describe('OrchestrationDb legacy contract storage', () => {
          WHERE id = ?`
       )
       .run(inherited.message.id)
+
     const inheritedAsk = {
       ...ask,
       operationKey: 'ask_inherited_1',
@@ -711,12 +737,15 @@ describe('OrchestrationDb legacy contract storage', () => {
       options: [],
       existingQuestionId: inherited.message.id
     }
+
     const adopted = db!.commitLegacyAskOperation(inheritedAsk)
+
     const distinct = db!.commitLegacyAskOperation({
       ...inheritedAsk,
       operationKey: 'ask_inherited_2',
       payloadHash: 'ask_inherited_payload_2'
     })
+
     expect(adopted.message.id).toBe(inherited.message.id)
     expect(distinct.message.id).not.toBe(inherited.message.id)
 
@@ -728,6 +757,7 @@ describe('OrchestrationDb legacy contract storage', () => {
       questionId: first.message.id,
       body: 'yes'
     }
+
     const answered = db!.commitLegacyReplyOperation(reply)
     const answerReplay = db!.commitLegacyReplyOperation(reply)
     expect(answerReplay).toMatchObject({
@@ -759,18 +789,21 @@ describe('OrchestrationDb legacy contract storage', () => {
     ).toThrow(/different answer/)
 
     const currentTask = db!.createTask({ runId: state.adoptedRunId, spec: 'current retry' })
+
     const currentDispatch = db!.createDispatchContext({
       taskId: currentTask.id,
       assigneeHandle: 'term_current_retry',
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
+
     const currentQuestion = db!.createQuestion({
       runId: state.adoptedRunId,
       dispatchId: currentDispatch.id,
       askerHandle: 'term_current_retry',
       question: 'Current question?'
     })
+
     expect(() =>
       db!.commitLegacyReplyOperation({
         ...reply,

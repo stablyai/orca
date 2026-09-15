@@ -16,6 +16,7 @@ function safeLocalPort(remotePort: number): number {
   if (remotePort < 1024) {
     return remotePort + 10000
   }
+
   return remotePort
 }
 
@@ -173,14 +174,18 @@ function PortForwardForm({
 
       if (Number.isNaN(rPort) || rPort < 1 || rPort > 65535) {
         setError('Remote port must be 1\u201365535')
+
         return
       }
+
       if (Number.isNaN(lPort) || lPort < 1 || lPort > 65535) {
         setError('Local port must be 1\u201365535')
+
         return
       }
 
       setSubmitting(true)
+
       try {
         await (mode === 'edit' && editId
           ? window.api.ssh.updatePortForward({
@@ -201,6 +206,7 @@ function PortForwardForm({
         onClose()
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         if (msg.includes('EADDRINUSE') || msg.includes('already in use')) {
           setError(`Port ${lPort} is already in use. Choose a different local port.`)
         } else if (msg.includes('EACCES') || msg.includes('permission denied')) {
@@ -209,6 +215,7 @@ function PortForwardForm({
           setError(msg)
         }
       }
+
       setSubmitting(false)
     },
     [mode, editId, remotePort, localPort, remoteHost, label, targetId, onClose]
@@ -230,6 +237,7 @@ function PortForwardForm({
               setRemotePort(val)
               const prev = Number.parseInt(remotePort, 10)
               const cur = Number.parseInt(localPort, 10)
+
               if (!localPort || cur === prev || cur === safeLocalPort(prev)) {
                 const parsed = Number.parseInt(val, 10)
                 setLocalPort(Number.isNaN(parsed) ? '' : safeLocalPort(parsed).toString())

@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -188,9 +193,11 @@ describe('LocalPtyProvider', () => {
     it('does not destroy after an intentional Windows shutdown kill', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const killSpy = vi.fn()
+
       const destroySpy = vi.fn(() => {
         killSpy()
       })
+
       spawnMock.mockReturnValue({
         ...mockProc,
         kill: killSpy,
@@ -212,9 +219,11 @@ describe('LocalPtyProvider', () => {
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
       let settled = false
+
       const shutdown = provider.shutdown(id, { immediate: true }).finally(() => {
         settled = true
       })
+
       await Promise.resolve()
 
       expect(killSpy).toHaveBeenCalledWith('SIGKILL')
@@ -229,6 +238,7 @@ describe('LocalPtyProvider', () => {
       const killSpy = vi.fn(() => {
         queueMicrotask(() => exitCb?.({ exitCode: 137 }))
       })
+
       mockProc.kill = killSpy
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
@@ -243,6 +253,7 @@ describe('LocalPtyProvider', () => {
 
     it('escalates graceful shutdown before orphan cleanup disables the kill handle', async () => {
       vi.useFakeTimers()
+
       try {
         const killSpy = vi.fn()
         mockProc.kill = killSpy
@@ -283,6 +294,7 @@ describe('LocalPtyProvider', () => {
 
     it('force-kills a POSIX PTY that ignores graceful shutdown', async () => {
       vi.useFakeTimers()
+
       try {
         const killSpy = vi.fn()
         mockProc.kill = killSpy
@@ -304,13 +316,16 @@ describe('LocalPtyProvider', () => {
 
     it('retries a rejected graceful-deadline SIGKILL before the physical timeout', async () => {
       vi.useFakeTimers()
+
       try {
         let forceAttempts = 0
+
         const killSpy = vi.fn((signal: string) => {
           if (signal === 'SIGKILL' && forceAttempts++ === 0) {
             throw new Error('transient force-kill failure')
           }
         })
+
         mockProc.kill = killSpy
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
@@ -348,6 +363,7 @@ describe('LocalPtyProvider', () => {
 
     it('rejects a physical-exit timeout but retains the owner for a successful retry', async () => {
       vi.useFakeTimers()
+
       try {
         const killSpy = vi.fn()
         mockProc.kill = killSpy
@@ -385,6 +401,7 @@ describe('LocalPtyProvider', () => {
 
     it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
       vi.useFakeTimers()
+
       try {
         const { id } = await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
 
@@ -414,12 +431,14 @@ describe('LocalPtyProvider', () => {
             }
           })
       )
+
       const spawnArgs = {
         cols: 80,
         rows: 24,
         sessionId: 'stable-agent-session',
         launchAgent: 'claude' as const
       }
+
       const spawnCallsBefore = spawnMock.mock.calls.length
       const { id } = await provider.spawn(spawnArgs)
 
@@ -445,6 +464,7 @@ describe('LocalPtyProvider', () => {
             }
           })
       )
+
       const { id } = await provider.spawn({
         cols: 80,
         rows: 24,
@@ -470,11 +490,13 @@ describe('LocalPtyProvider', () => {
               if (deps?.ownsRoot?.() ?? true) {
                 terminateDescendants()
               }
+
               killRoot()
               resolve()
             }
           })
       )
+
       const { id } = await provider.spawn({
         cols: 80,
         rows: 24,

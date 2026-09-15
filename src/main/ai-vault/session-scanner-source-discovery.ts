@@ -49,6 +49,7 @@ function agentDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   const rootDirs = source.rootDirs(options, wslHomeDirs)
+
   const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
     discoverFiles({
       rootDir,
@@ -60,6 +61,7 @@ function agentDiscoveries(
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate
     })
+
   return source.mergeRootDiscoveries
     ? [mergedDiscovery(agent, rootDirs, limit, discover)]
     : rootDirs.map(discover)
@@ -74,9 +76,11 @@ async function mergedDiscovery(
   discover: (rootDir: string) => Promise<SessionFileDiscovery>
 ): Promise<SessionFileDiscovery> {
   const discoveries = await Promise.all(rootDirs.map(discover))
+
   const files = discoveries
     .flatMap((discovery) => discovery.files)
     .sort((left, right) => right.mtimeMs - left.mtimeMs)
     .slice(0, limit)
+
   return { agent, rootDir: rootDirs.join(delimiter), files }
 }

@@ -16,24 +16,30 @@ export function resolveOwnedClaudeManagedAuthPath(
 ): string | null {
   const rootPath = getClaudeManagedAccountsRoot()
   const resolvedCandidate = resolve(candidatePath)
+
   if (!existsSync(resolvedCandidate) || !existsSync(rootPath)) {
     return null
   }
+
   try {
     if (lstatSync(resolvedCandidate).isSymbolicLink()) {
       return null
     }
+
     const canonicalCandidate = realpathSync(resolvedCandidate)
     const canonicalRoot = realpathSync(rootPath)
+
     if (
       canonicalCandidate === canonicalRoot ||
       !canonicalCandidate.startsWith(canonicalRoot + sep)
     ) {
       return null
     }
+
     const relativePath = relative(canonicalRoot, canonicalCandidate)
     const relativeParts = relativePath.split(sep)
     const escaped = relativePath.startsWith('..') || relativePath.includes(`..${sep}`)
+
     if (
       escaped ||
       relativeParts.length !== 2 ||
@@ -42,14 +48,18 @@ export function resolveOwnedClaudeManagedAuthPath(
     ) {
       return null
     }
+
     const markerPath = join(canonicalCandidate, MANAGED_AUTH_MARKER)
     const markerValid = isManagedAuthMarkerValid(markerPath, accountId)
+
     if (!markerValid && options.adoptLegacyMarker) {
       writeFileSync(markerPath, `${accountId}\n`, { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
     }
+
     if (!markerValid && !isManagedAuthMarkerValid(markerPath, accountId)) {
       return null
     }
+
     return canonicalCandidate
   } catch {
     return null
@@ -61,10 +71,12 @@ export function readClaudeManagedAuthFile(
   filename: '.credentials.json' | 'oauth-account.json'
 ): string | null {
   const filePath = resolve(managedAuthPath, filename)
+
   try {
     if (!isOwnedChildFile(managedAuthPath, filePath)) {
       return null
     }
+
     return readFileSync(filePath, 'utf-8')
   } catch {
     return null
@@ -77,9 +89,11 @@ export function writeClaudeManagedAuthFile(
   contents: string
 ): void {
   const filePath = resolve(managedAuthPath, filename)
+
   if (existsSync(filePath) && !isOwnedChildFile(managedAuthPath, filePath)) {
     throw new Error('Managed Claude auth child file is not owned by Orca.')
   }
+
   writeFileAtomically(filePath, contents, { mode: 0o600 })
 }
 
@@ -92,6 +106,7 @@ function isManagedAuthMarkerValid(markerPath: string, accountId: string): boolea
     ) {
       return false
     }
+
     return readFileSync(markerPath, 'utf-8').trim() === accountId
   } catch {
     return false
@@ -106,7 +121,9 @@ function isOwnedChildFile(managedAuthPath: string, filePath: string): boolean {
   ) {
     return false
   }
+
   const canonicalAuthPath = realpathSync(managedAuthPath)
   const canonicalFilePath = realpathSync(filePath)
+
   return canonicalFilePath.startsWith(canonicalAuthPath + sep)
 }

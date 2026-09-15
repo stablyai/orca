@@ -33,6 +33,7 @@ function getPreferredFolderExecutionHostId(
   if (executionHostId) {
     return executionHostId
   }
+
   return state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
     ? (state.activeWorkspaceExecutionHostId ?? undefined)
     : undefined
@@ -63,10 +64,13 @@ function findFolderProjectGroup(
     folderWorkspaceId,
     executionHostId
   )
+
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, preferredHostId)
+
   if (!folderWorkspace) {
     return null
   }
+
   return findIndexedProjectGroupOwner(
     state.projectGroups,
     folderWorkspace.projectGroupId,
@@ -81,9 +85,11 @@ function getRestoredRuntimeHostForFolderWorkspace(
   // Why: runtime folder catalogs load after session hydration; the saved
   // per-host session partition is the only owner evidence during that gap.
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+
   const parsed = parseExecutionHostId(
     state.restoredRuntimeHostIdByWorkspaceSessionKey?.[workspaceKey]
   )
+
   return parsed?.kind === 'runtime' ? parsed : null
 }
 
@@ -94,12 +100,15 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
 ): string | null {
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId, executionHostId)
+
   const parsed = parseExecutionHostId(
     folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
   )
+
   if (parsed?.kind === 'runtime') {
     return parsed.environmentId
   }
+
   if (
     parsed?.kind === 'local' ||
     parsed?.kind === 'ssh' ||
@@ -108,10 +117,13 @@ export function getRuntimeEnvironmentIdForFolderWorkspace(
   ) {
     return null
   }
+
   const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
+
   if (restoredRuntimeHost) {
     return restoredRuntimeHost.environmentId
   }
+
   return getSingleFocusedRuntimeEnvironmentId(state)
 }
 
@@ -122,15 +134,19 @@ export function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
 ): string | null {
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId, executionHostId)
+
   const parsed = parseExecutionHostId(
     folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
   )
+
   if (parsed) {
     return parsed.kind === 'runtime' ? parsed.environmentId : null
   }
+
   if (folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()) {
     return null
   }
+
   return getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)?.environmentId ?? null
 }
 
@@ -144,25 +160,35 @@ export function getExecutionHostIdForFolderWorkspace(
     folderWorkspaceId,
     executionHostId
   )
+
   const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, preferredHostId)
   const projectGroup = findFolderProjectGroup(state, folderWorkspaceId, preferredHostId)
+
   const parsed = parseExecutionHostId(
     folderWorkspace?.executionHostId ?? projectGroup?.executionHostId
   )
+
   if (parsed) {
     return parsed.id
   }
+
   const connectionId = folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()
+
   if (connectionId) {
     return toSshExecutionHostId(connectionId)
   }
+
   if (preferredHostId && folderWorkspace) {
     return preferredHostId
   }
+
   const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
+
   if (restoredRuntimeHost) {
     return restoredRuntimeHost.id
   }
+
   const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
+
   return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
 }

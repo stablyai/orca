@@ -8,9 +8,12 @@ export function retireClientPageCommandLedger(
   if (retirement.placement.kind !== 'client') {
     return
   }
+
   const state = leasesByClientId.get(retirement.placement.browserHostClientId)
+
   if (state?.lease.browserHostGeneration !== retirement.placement.browserHostGeneration) {
     return
   }
+
   state.commandLedger?.retirePage(retirement.browserPageId, retirement.placement.pageHostGeneration)
 }

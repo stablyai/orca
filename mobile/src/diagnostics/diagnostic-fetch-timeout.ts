@@ -8,6 +8,7 @@ export function startDiagnosticFetchTimeout(timeoutMs: number): DiagnosticFetchT
   const controller = new AbortController()
   let disposed = false
   let timedOut = false
+
   let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
     timer = null
     timedOut = true
@@ -18,11 +19,14 @@ export function startDiagnosticFetchTimeout(timeoutMs: number): DiagnosticFetchT
     if (disposed) {
       return
     }
+
     disposed = true
+
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+
     if (!controller.signal.aborted) {
       controller.abort()
     }

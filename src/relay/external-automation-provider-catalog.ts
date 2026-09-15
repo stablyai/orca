@@ -29,12 +29,15 @@ export class ExternalAutomationProviderCatalog {
     error: string | null
   }> {
     const provider = externalAutomationProvider(params?.provider)
+
     const [commandAvailable, jobsResult] = await Promise.allSettled([
       this.isCommandAvailable(provider),
       this.readJobs(provider)
     ])
+
     const jobs = jobsResult.status === 'fulfilled' ? jobsResult.value : []
     const available = commandAvailable.status === 'fulfilled' && commandAvailable.value
+
     return {
       jobs,
       hermesAvailable: provider === 'hermes' && available,
@@ -45,11 +48,13 @@ export class ExternalAutomationProviderCatalog {
 
   private async isCommandAvailable(command: string): Promise<boolean> {
     const finder = process.platform === 'win32' ? 'where' : 'which'
+
     try {
       await this.runCommand(finder, [command], {
         encoding: 'utf-8',
         timeout: 5000
       })
+
       return true
     } catch {
       return false
@@ -58,30 +63,37 @@ export class ExternalAutomationProviderCatalog {
 
   private async readJobs(provider: ExternalAutomationProvider): Promise<unknown[]> {
     const jobsFile = provider === 'hermes' ? HERMES_JOBS_FILE : OPENCLAW_JOBS_FILE
+
     if (!existsSync(jobsFile)) {
       return []
     }
+
     const content = await readFile(jobsFile, 'utf-8')
     const parsed = JSON.parse(content) as unknown
+
     const jobs = Array.isArray(parsed)
       ? parsed
       : isRecord(parsed) && Array.isArray(parsed.jobs)
         ? parsed.jobs
         : []
+
     if (provider !== 'hermes') {
       return jobs
     }
+
     return Promise.all(
       jobs.map(async (job) => {
         if (!isRecord(job) || typeof job.id !== 'string') {
           return job
         }
+
         const runsPage = await this.listRuns({
           provider: 'hermes',
           jobId: job.id,
           page: 1,
           pageSize: 0
         })
+
         return {
           ...job,
           run_count: runsPage.total,

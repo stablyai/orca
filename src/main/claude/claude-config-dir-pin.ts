@@ -9,6 +9,7 @@ export function defaultClaudeConfigDir(env: NodeJS.ProcessEnv = process.env): st
 function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
   const left = resolve(a)
   const right = resolve(b)
+
   return platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
@@ -30,8 +31,10 @@ export function claudeConfigDirEnvPatch(
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
   const resolved = accountHome.trim()
+
   if (!resolved || samePath(resolved, defaultClaudeConfigDir(env), platform)) {
     return {}
   }
+
   return { CLAUDE_CONFIG_DIR: resolved }
 }

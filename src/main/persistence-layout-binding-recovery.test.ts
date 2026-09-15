@@ -21,6 +21,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -35,9 +36,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -203,9 +206,11 @@ describe('Store', () => {
 
     const root = store.getWorkspaceSession().terminalLayoutsByTabId.tab1.root
     const leafId = root?.type === 'leaf' ? root.leafId : null
+
     if (leafId === null) {
       throw new Error('Expected normalized leaf')
     }
+
     expect(isTerminalLeafId(leafId)).toBe(true)
     expect(leafId).not.toBe(TEST_LEAF_1)
     expect(leafId).not.toBe(TEST_LEAF_2)

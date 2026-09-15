@@ -22,27 +22,36 @@ export function getClientWorktreeCreateCandidate(value: string, attempt: number)
 function generatedNameIdentity(value: string): { poolName: string; tier: number } | null {
   const normalized = value.trim().toLowerCase()
   const canonicalTier = creatureNameTier(normalized)
+
   if (canonicalTier !== null) {
     const poolName =
       canonicalTier === 1 ? normalized : normalized.slice(0, normalized.lastIndexOf('-'))
+
     return { poolName, tier: canonicalTier }
   }
+
   let poolName = normalized
   let tier = 1
   let suffixCount = 0
+
   for (;;) {
     const match = /-(\d{1,6})$/.exec(poolName)
+
     if (!match) {
       break
     }
+
     const suffix = Number(match[1])
+
     if (suffix < 2 || tier + suffix - 1 > 999_999) {
       return null
     }
+
     tier += suffix - 1
     suffixCount += 1
     poolName = poolName.slice(0, match.index)
   }
+
   return suffixCount > 1 && CREATURE_POOL_NAMES.has(poolName) ? { poolName, tier } : null
 }
 
@@ -56,9 +65,11 @@ export function getGeneratedWorktreeCreateRetryCandidate(
   minimumTier = 1
 ): string {
   const identity = generatedNameIdentity(value)
+
   if (!identity) {
     return getClientWorktreeCreateCandidate(value, attempt)
   }
+
   return creatureNameAtTier(identity.poolName, Math.max(identity.tier, minimumTier) + attempt)
 }
 

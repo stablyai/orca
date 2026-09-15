@@ -46,18 +46,22 @@ function createParentWindow(
   const webContents = Object.assign(new EventEmitter(), {
     isDestroyed: () => webContentsDestroyed
   })
+
   const parentWindow = Object.assign(new EventEmitter(), {
     isDestroyed: () => destroyed,
     isVisible: () => visible
   }) as unknown as FakeParentWindow
+
   Object.defineProperty(parentWindow, 'webContents', {
     get: () => {
       if (destroyed) {
         throw new Error('Object has been destroyed')
       }
+
       return webContents
     }
   })
+
   return parentWindow
 }
 
@@ -202,6 +206,7 @@ describe('runtime RPC startup failure reporting', () => {
 
   it('waits until the app window is visible', async () => {
     const parentWindow = createParentWindow(false)
+
     const reporting = showRuntimeRpcStartupFailureDialog(
       parentWindow,
       new Error('metadata write failed')
@@ -238,6 +243,7 @@ describe('runtime RPC startup failure reporting', () => {
 
   it('drops the pending dialog and its listeners when the window closes first', async () => {
     const parentWindow = createParentWindow(false)
+
     const reporting = showRuntimeRpcStartupFailureDialog(
       parentWindow,
       new Error('metadata write failed')

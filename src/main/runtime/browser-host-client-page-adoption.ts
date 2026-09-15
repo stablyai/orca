@@ -34,15 +34,19 @@ export function selectAdoptableClientHostedPages(
     if (page.state !== 'active') {
       return false
     }
+
     if (page.workspaceId === undefined) {
       return false
     }
+
     if (page.browserHostClientId !== input.browserHostClientId) {
       return false
     }
+
     if (page.authorityRuntimeId === input.authorityRuntimeId) {
       return false
     }
+
     return !input.hasRuntimePage(page.browserPageId)
   })
 }
@@ -80,15 +84,19 @@ export function buildClientPageAdoptionIntents(input: {
   const ordered = [...input.pages].sort(
     (left, right) => left.pageHostGeneration - right.pageHostGeneration
   )
+
   const baseGeneration = ordered.reduce(
     (highest, page) => Math.max(highest, page.pageHostGeneration),
     0
   )
+
   return ordered.flatMap((page, index) => {
     const executionHostKey = input.executionHostKeyByWorkspaceId.get(page.workspaceId)
+
     if (executionHostKey === undefined) {
       return []
     }
+
     return [
       Object.freeze({
         authorityRuntimeId: input.authority.authorityRuntimeId,
@@ -140,16 +148,20 @@ export async function adoptBrowserHostClientPages(
   if (intents.length === 0) {
     return []
   }
+
   const grants = intents.map((intent) => ({
     intent,
     grant: dependencies.state.executionHostGrants.retain(intent.executionHostKey)
   }))
+
   await dependencies.reconciliations
     .adopt(dependencies.state, intents, options)
     .catch(() => undefined)
   const adopted: string[] = []
+
   for (const { intent, grant } of grants) {
     const placement = dependencies.placements.getPlacement(intent.browserPageId)
+
     if (
       placement?.kind === 'client' &&
       placement.pageHostGeneration === intent.pageHostGeneration &&
@@ -165,5 +177,6 @@ export async function adoptBrowserHostClientPages(
       grant.release()
     }
   }
+
   return adopted
 }

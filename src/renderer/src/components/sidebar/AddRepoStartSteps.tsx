@@ -99,6 +99,7 @@ export function AddRepoLocalStartStep({
   const browseActionRef = useRef<HTMLButtonElement | null>(null)
   const actionsRef = useRef<HTMLDivElement | null>(null)
   const actionsUnavailable = isAdding || actionsDisabled
+
   const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     isSshLikely,
     onBrowse,
@@ -127,12 +128,15 @@ export function AddRepoLocalStartStep({
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
       return
     }
+
     const buttons = Array.from(
       actionsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-add-repo-action]') ?? []
     )
+
     if (buttons.length === 0) {
       return
     }
+
     const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
     const delta = event.key === 'ArrowDown' ? 1 : -1
     const nextIndex = (currentIndex + delta + buttons.length) % buttons.length
@@ -143,8 +147,10 @@ export function AddRepoLocalStartStep({
   const handleActionsBlur = (event: React.FocusEvent<HTMLDivElement>): void => {
     if (!(event.relatedTarget instanceof HTMLButtonElement)) {
       setSelectedKind(null)
+
       return
     }
+
     if (!event.relatedTarget.matches('button[data-add-repo-action]')) {
       setSelectedKind(null)
     }

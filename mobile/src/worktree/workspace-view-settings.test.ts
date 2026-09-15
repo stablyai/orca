@@ -50,6 +50,7 @@ describe('applyDesktopViewSettings', () => {
       hideSleepingWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
+
     expect(next).toEqual({
       ...base,
       groupMode: 'prStatus',
@@ -114,6 +115,7 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
       { hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] },
       { ...next, hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] }
     )
+
     expect(update).toEqual({
       hideSleepingWorkspaces: false,
       hideDefaultBranchWorkspace: false,

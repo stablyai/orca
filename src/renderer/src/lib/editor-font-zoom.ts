@@ -1,5 +1,7 @@
 const EDITOR_FONT_ZOOM_MIN = -6
+
 const EDITOR_FONT_ZOOM_MAX = 18
+
 const EDITOR_FONT_ZOOM_STEP = 1
 
 export type EditorZoomDirection = 'in' | 'out' | 'reset'
@@ -12,9 +14,11 @@ export function nextEditorFontZoomLevel(current: number, direction: EditorZoomDi
   if (direction === 'reset') {
     return 0
   }
+
   if (direction === 'in') {
     return clampEditorFontZoomLevel(current + EDITOR_FONT_ZOOM_STEP)
   }
+
   return clampEditorFontZoomLevel(current - EDITOR_FONT_ZOOM_STEP)
 }
 

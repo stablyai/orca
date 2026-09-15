@@ -52,20 +52,25 @@ export function snapshotCodexRuntimeSettingsBaseline(
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
     // Why: record an empty baseline even for a missing runtime config, so Codex's first write still diffs and promotes.
     const observation = observeAgentStateFile(runtimeTomlPath)
+
     if (observation.kind === 'indeterminate') {
       throw observation.error
     }
+
     const runtimeConfig = observation.kind === 'present' ? observation.value : ''
     const conflicts = options.conflicts ?? new Map<string, CodexSettingsConflict>()
     const runtimeValues = readPromotedSettingValuesFromContent(runtimeConfig)
     const settings = new Map<string, string | null>()
+
     for (const key of PROMOTED_STRUCTURED_KEYS) {
       const value = runtimeValues.get(key)
+
       if (!conflicts.has(key) && !value?.multiline) {
         // Why: explicit nulls distinguish a schema-aware absence from a key added by a later schema.
         settings.set(key, value?.raw ?? null)
       }
     }
+
     writeCodexSettingsBaseline(runtimeHomePath, {
       settings,
       conflicts,
@@ -110,6 +115,7 @@ export function promoteCodexRuntimeSettingsToSystem(
   } catch (error) {
     // Why: promotion is best-effort launch prep; a malformed file must not block Codex launch.
     console.warn('[codex-settings-promotion] failed to promote runtime settings', error)
+
     return null
   }
 }
@@ -120,31 +126,39 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const { runtimeHomePath, systemHomePath } = homes
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
   const systemTomlPath = join(systemHomePath, 'config.toml')
+
   if (resolve(runtimeTomlPath) === resolve(systemTomlPath)) {
     return emptyPromotionPlan()
   }
+
   const runtimeTomlObservation = observeAgentStateFile(runtimeTomlPath)
+
   if (runtimeTomlObservation.kind === 'absent') {
     return emptyPromotionPlan()
   }
+
   if (runtimeTomlObservation.kind === 'indeterminate') {
     // Why: the caller turns a throw into the existing "stall and retry" null. An
     // empty plan here would instead let the mirror proceed against a runtime
     // config nobody read.
     throw runtimeTomlObservation.error
   }
+
   // Why: without a baseline, a stale runtime scalar looks like a fresh in-Codex change; skip until the mirror writes one.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
+
   if (baselineObservation.kind === 'indeterminate') {
     // Why: an empty plan here lets the mirror proceed and write the system value
     // back over an in-Codex edit this baseline would have identified. The caller
     // turns a throw into the existing stall-and-retry null.
     throw new Error('Codex settings baseline could not be read')
   }
+
   const baseline = baselineObservation.kind === 'present' ? baselineObservation.baseline : null
   const updates = new Map<string, string>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
+
   if (baseline) {
     collectPromotionChanges({
       baseline,
@@ -155,6 +169,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       runtimeValuesToPreserve
     })
   }
+
   // Why: registration tables reconcile against the mirrored-table baseline, which
   // is legitimately empty before the first mirror — a table Orca never made
   // canonical is an addition, never a removal it must honor. Scalars still need a
@@ -162,6 +177,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)) {
     return { conflicts, runtimeValuesToPreserve }
   }
+
   // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
@@ -177,10 +193,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // dangling-link target, or itself). Registration reconciliation runs without
   // a baseline and skips that read, so here it IS the live guard.
   const writeTargetObservation = observeAgentStateFile(writeTarget.path)
+
   if (writeTargetObservation.kind === 'indeterminate') {
     throw writeTargetObservation.error
   }
+
   const targetExists = writeTargetObservation.kind === 'present'
+
   // Why: seeding a brand-new ~/.codex/config.toml from the promoted keys alone
   // would leave a skeleton the next mirror treats as authoritative, deleting
   // every other runtime setting (mcp_servers, features). With no system config
@@ -189,7 +208,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     writeTargetObservation.kind === 'present'
       ? writeTargetObservation.value
       : extractOrdinaryCodexSettings(runtimeTomlObservation.value)
+
   const withPromotedSettings = upsertPromotedSettingsInContent(systemContent, updates)
+
   // Why: plan against the content actually being edited, not a second read of the
   // source — when the system config is seeded from the runtime, its registration
   // tables are already present and re-appending them would duplicate the table.
@@ -201,17 +222,22 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       baseline?.registrations ?? new Map()
     )
   )
+
   if (nextContent === systemContent) {
     return { conflicts, runtimeValuesToPreserve }
   }
+
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // Why: \\wsl$ 9P symlink metadata is unreliable; write through the existing file to preserve the WSL-side inode.
     writeFileSync(writeTarget.path, nextContent, 'utf-8')
+
     return { conflicts, runtimeValuesToPreserve }
   }
+
   writeFileAtomically(writeTarget.path, nextContent, {
     mode: writeTarget.mode
   })
+
   return { conflicts, runtimeValuesToPreserve }
 }
 
@@ -228,13 +254,16 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
   for (const key of PROMOTED_STRUCTURED_KEYS) {
     const runtimeRaw = getComparableRaw(context.runtimeValues.get(key))
     const systemRaw = getComparableRaw(context.systemValues.get(key))
+
     if (runtimeRaw === undefined || systemRaw === undefined) {
       continue
     }
 
     const existingConflict = context.baseline.conflicts.get(key)
+
     if (existingConflict || !context.baseline.settings.has(key)) {
       const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
+
       if (resolution.action === 'promote-runtime') {
         context.updates.set(key, resolution.raw)
       } else if (resolution.action === 'preserve') {
@@ -242,16 +271,19 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
         context.conflicts.set(key, resolution.conflict)
         context.runtimeValuesToPreserve.set(key, runtimeRaw)
       }
+
       continue
     }
 
     if (runtimeRaw === null || runtimeRaw === context.baseline.settings.get(key)) {
       continue
     }
+
     // Why: ~/.codex remains source of truth when both sides changed from a known baseline.
     if (systemRaw !== context.baseline.settings.get(key)) {
       continue
     }
+
     context.updates.set(key, runtimeRaw)
   }
 }
@@ -260,6 +292,7 @@ function getComparableRaw(value: TopLevelSettingValue | undefined): string | nul
   if (!value) {
     return null
   }
+
   return value.multiline ? undefined : value.raw
 }
 

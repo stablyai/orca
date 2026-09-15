@@ -8,12 +8,14 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
     const scopeCount = [flags.has('all'), flags.has('tasks'), flags.has('messages')].filter(
       Boolean
     ).length
+
     if (scopeCount !== 1) {
       throw new RuntimeClientError(
         'invalid_argument',
         'Choose exactly one reset scope: --all, --tasks, or --messages.'
       )
     }
+
     const result = await callOrchestrationMutation<{ reset: string }>(
       client,
       flags,
@@ -24,6 +26,7 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
         messages: flags.has('messages') ? true : undefined
       }
     )
+
     printResult(result, json, (value) => `Reset: ${value.reset}`)
   }
 }

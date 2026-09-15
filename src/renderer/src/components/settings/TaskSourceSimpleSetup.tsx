@@ -17,6 +17,7 @@ function getConnectStepState(props: ConnectStepProps): 'in-progress' | 'done' | 
   if (props.checking) {
     return 'in-progress'
   }
+
   return props.connected ? 'done' : 'pending'
 }
 

@@ -29,6 +29,7 @@ const initialInput = {
   authorityConnectionIdentity: 'authority-record-a',
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-a'
 }
+
 const replacementInput = {
   authorityConnectionIdentity: 'authority-record-b',
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
@@ -116,6 +117,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
         pageReconciliationProtocolVersion: undefined
       }
     })
+
     const composition = rig.createComposition()
     await composition.start()
 
@@ -137,6 +139,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
       pageInventoryProtocolVersion: undefined,
       pageReconciliationProtocolVersion: undefined
     }
+
     const rig = createRig({ pageInventory: [], replacementAuthority: legacyAuthority })
     const composition = rig.createComposition()
     await composition.start()
@@ -286,6 +289,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
   it('waits out the grace instead of tearing down when the authority was replaced', async () => {
     vi.useFakeTimers()
+
     try {
       const rig = createRig()
       const composition = rig.createComposition()
@@ -304,6 +308,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
   it('tears the composition down once the grace expires with no replacement', async () => {
     vi.useFakeTimers()
+
     try {
       const rig = createRig()
       const composition = rig.createComposition()
@@ -324,6 +329,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
   it('cancels the grace when the replacement authority actually arrives', async () => {
     vi.useFakeTimers()
+
     try {
       const rig = createRig()
       const composition = rig.createComposition()
@@ -344,6 +350,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
   it('cancels the grace when the composition closes for another reason', async () => {
     vi.useFakeTimers()
+
     try {
       const rig = createRig()
       const composition = rig.createComposition()
@@ -363,6 +370,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
   it('arms one deadline for a burst of mismatch errors', async () => {
     vi.useFakeTimers()
+
     try {
       const rig = createRig()
       const composition = rig.createComposition()
@@ -383,6 +391,7 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
 
   it('still tears down immediately for a host error that is not a replacement', async () => {
     vi.useFakeTimers()
+
     try {
       const rig = createRig()
       const composition = rig.createComposition()
@@ -484,12 +493,16 @@ function createRig(
   const authorityReplacementWait = new BrowserClientHostAuthorityReplacementWait(
     options.authorityReplacementGraceMs ?? 1_000
   )
+
   const order: string[] = []
   let onPageUnavailable = (_browserPageId: string, _pageHostGeneration: number): void => {}
+
   let settleHandlers = (): void => {}
+
   const handlersSettled = new Promise<void>((resolve) => {
     settleHandlers = resolve
   })
+
   const createRoutes = (replacement = false) => ({
     retain: vi.fn(),
     suspend: vi.fn(() => {
@@ -498,6 +511,7 @@ function createRig(
     reconnect: vi.fn(async () => {}),
     retire: vi.fn(async () => {
       order.push(replacement ? 'retire-replacement-routes' : 'retire-routes')
+
       if (!replacement && options.routeRetireError) {
         throw options.routeRetireError
       }
@@ -506,15 +520,19 @@ function createRig(
       order.push(replacement ? 'close-replacement-routes' : 'close-routes')
     })
   })
+
   const routes = createRoutes()
   const replacementRoutes = createRoutes(true)
+
   const executor = {
     handle: vi.fn(async () => {
       order.push('handle-command')
+
       return { status: 'completed' as const }
     }),
     retirePage: vi.fn(async () => {
       order.push('retire-executor-page')
+
       return true
     }),
     hasUnresolvedPage: vi.fn(() => false),
@@ -530,11 +548,13 @@ function createRig(
     snapshotPageInventory: vi.fn(() => options.pageInventory ?? [retainedPageInventory()]),
     close: vi.fn(async () => {
       order.push('close-executor')
+
       if (options.executorCloseError) {
         throw options.executorCloseError
       }
     })
   }
+
   type HostOptions = {
     getPageInventory?: () => readonly unknown[]
     onAuthority?: (next: BrowserClientHostLeaseAuthority) => void
@@ -546,7 +566,9 @@ function createRig(
       signal: AbortSignal
     ) => Promise<{ status: 'completed' | 'failed'; errorCode?: string }>
   }
+
   const hostOptionsHistory: HostOptions[] = []
+
   const hosts: {
     start: ReturnType<typeof vi.fn>
     retirePage: ReturnType<typeof vi.fn>
@@ -555,35 +577,45 @@ function createRig(
     refreshPageInventory: ReturnType<typeof vi.fn>
     close: ReturnType<typeof vi.fn>
   }[] = []
+
   let replacementInventory: readonly unknown[] = []
+
   const makeHost = (callbacks: HostOptions, replacement: boolean) => ({
     start: vi.fn(async () => {
       const nextAuthority = replacement
         ? (options.replacementAuthority ?? replacementAuthority)
         : authority
+
       if (replacement) {
         replacementInventory = callbacks.getPageInventory?.() ?? []
         order.push('attach-replacement-inventory')
       }
+
       callbacks.onAuthority?.(nextAuthority)
+
       return nextAuthority
     }),
     retirePage: vi.fn(async () => {
       order.push('retire-dispatcher-page')
+
       return true
     }),
     forgetPage: vi.fn(() => {
       order.push('forget-dispatcher-page')
+
       return true
     }),
     whenHandlersSettled: vi.fn(() => handlersSettled),
     refreshPageInventory: vi.fn(async () => {}),
     close: vi.fn(async () => {
       order.push(replacement ? 'close-replacement-host' : 'close-host')
+
       return replacement ? true : (options.hostSettled ?? true)
     })
   })
+
   const onError = vi.fn()
+
   return {
     order,
     authorityReplacementWait,
@@ -613,10 +645,12 @@ function createRig(
             replacement ? (options.replacementAuthority ?? replacementAuthority) : authority
           )
           order.push(replacement ? 'activate-replacement-routes' : 'activate-routes')
+
           return replacement ? replacementRoutes : routes
         },
         createExecutor: (_input, executorOptions) => {
           onPageUnavailable = executorOptions.onPageUnavailable
+
           return executor
         },
         createHost: (input, callbacks) => {
@@ -624,6 +658,7 @@ function createRig(
           hostOptionsHistory.push(callbacks)
           const host = makeHost(callbacks, replacement)
           hosts.push(host)
+
           return host
         },
         onClosing: () => {
@@ -678,10 +713,13 @@ function deferred<T>(): {
   reject: (error: Error) => void
 } {
   let resolve = (_value: T): void => {}
+
   let reject = (_error: Error): void => {}
+
   const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, resolve, reject }
 }

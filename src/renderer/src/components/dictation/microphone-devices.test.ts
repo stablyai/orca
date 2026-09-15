@@ -166,6 +166,7 @@ describe('openMicrophoneCaptureStream', () => {
   it('skips the doomed attempt when enumeration proves the device is gone', async () => {
     const fallbackStream = { id: 'default' } as unknown as MediaStream
     const getUserMedia = vi.fn().mockResolvedValue(fallbackStream)
+
     const enumerateDevices = vi
       .fn()
       .mockResolvedValue([{ deviceId: 'mic-1', kind: 'audioinput', label: 'Built-in' }])
@@ -190,6 +191,7 @@ describe('openMicrophoneCaptureStream', () => {
   it('captures on the relabeled device after an id rotation', async () => {
     const stream = { id: 'healed' } as unknown as MediaStream
     const getUserMedia = vi.fn().mockResolvedValue(stream)
+
     const enumerateDevices = vi
       .fn()
       .mockResolvedValue([{ deviceId: 'fresh-id', kind: 'audioinput', label: 'Yeti' }])
@@ -212,6 +214,7 @@ describe('openMicrophoneCaptureStream', () => {
 
   it('still falls back when the device vanishes after enumeration', async () => {
     const fallbackStream = { id: 'default' } as unknown as MediaStream
+
     const getUserMedia = vi
       .fn()
       .mockRejectedValueOnce(new DOMException('gone', 'OverconstrainedError'))

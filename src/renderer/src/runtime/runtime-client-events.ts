@@ -35,6 +35,7 @@ export async function subscribeRuntimeClientEvents(
       onError
     }
   )
+
   return { unsubscribe: handle.unsubscribe }
 }
 
@@ -46,35 +47,46 @@ function handleRuntimeClientEventResponse(
 ): void {
   if (response.ok === false) {
     onError(response.error)
+
     return
   }
+
   if (isRuntimeSubscriptionReplayResponse(response)) {
     onReplayedAfterReconnect?.()
   }
+
   const message = response.result as RuntimeClientEventStreamMessage
+
   if (message.type === 'ready') {
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
+
       if (state) {
         onEvent({ type: 'sshStateChanged', targetId: sshState.targetId, state })
       } else {
         onError(new Error('Invalid retained SSH connection state'))
       }
     }
+
     return
   }
+
   if (message.type === 'end') {
     return
   }
+
   if (message.type === 'sshStateChanged') {
     const state = admitSshConnectionState(message.state, message.targetId)
+
     if (state) {
       onEvent({ type: 'sshStateChanged', targetId: message.targetId, state })
     } else {
       onError(new Error('Invalid retained SSH connection state'))
     }
+
     return
   }
+
   if (isRuntimeClientEvent(message)) {
     onEvent(message)
   }

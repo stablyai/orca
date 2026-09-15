@@ -26,10 +26,15 @@ import {
 const PORTAL_READY_REAPPLY_ATTEMPTS = 32
 
 const WORKTREE_ID = 'wt-1'
+
 const TAB_ID = 'tab-react185'
+
 const OTHER_TAB_ID = 'tab-react185-other'
+
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+
 const LEAF_C = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1'
 
 const thread = (tabId: string, leafId: string): ActivityPortalThreadRef => ({
@@ -40,7 +45,9 @@ const thread = (tabId: string, leafId: string): ActivityPortalThreadRef => ({
 
 // Same-tab panes share one TerminalPane and swap via isolatedPaneKey.
 const PANE_A = thread(TAB_ID, LEAF_A)
+
 const PANE_B = thread(TAB_ID, LEAF_B)
+
 // Cross-tab panes use separate TerminalPanes, so staging applies.
 const PANE_C = thread(OTHER_TAB_ID, LEAF_C)
 
@@ -71,11 +78,13 @@ function installAnimationFrameController(): {
     const frameId = nextFrameId
     nextFrameId += 1
     callbacks.set(frameId, callback)
+
     return frameId
   })
   vi.stubGlobal('cancelAnimationFrame', (frameId: number): void => {
     callbacks.delete(frameId)
   })
+
   return {
     async flush() {
       const queued = Array.from(callbacks.values())
@@ -84,6 +93,7 @@ function installAnimationFrameController(): {
         for (const callback of queued) {
           callback(performance.now())
         }
+
         await Promise.resolve()
       })
     },
@@ -93,6 +103,7 @@ function installAnimationFrameController(): {
 
 function installMutationObserverController(): { notify: () => void } {
   const callbacks = new Map<MutationObserver, MutationCallback>()
+
   class ControlledMutationObserver implements MutationObserver {
     constructor(callback: MutationCallback) {
       callbacks.set(this, callback)
@@ -108,7 +119,9 @@ function installMutationObserverController(): { notify: () => void } {
       return []
     }
   }
+
   vi.stubGlobal('MutationObserver', ControlledMutationObserver)
+
   return {
     notify() {
       for (const [observer, callback] of callbacks) {
@@ -136,16 +149,20 @@ async function flushPortalReadiness(
     await act(async () => {
       await Promise.resolve()
     })
+
     if (frames.pending() === 0) {
       await act(async () => {
         await Promise.resolve()
       })
+
       if (frames.pending() === 0) {
         return true
       }
     }
+
     await frames.flush()
   }
+
   return frames.pending() === 0
 }
 
@@ -154,20 +171,24 @@ function renderPortaledTerminalPane(target: HTMLElement, tabId: string, leafIds:
   const isolatedLeafId = leafIds[0]
   const tabRoot = document.createElement('div')
   tabRoot.dataset.terminalTabId = tabId
+
   for (const leafId of leafIds) {
     const pane = document.createElement('div')
     pane.dataset.leafId = leafId
     pane.setAttribute('data-pty-id', `pty-${leafId}`)
     pane.appendChild(Object.assign(document.createElement('div'), { className: 'xterm-screen' }))
+
     if (leafId !== isolatedLeafId) {
       pane.style.display = 'none'
     }
+
     Object.defineProperty(pane, 'getClientRects', {
       value: () => (leafId === isolatedLeafId ? [{}] : []),
       configurable: true
     })
     tabRoot.appendChild(pane)
   }
+
   target.replaceChildren(tabRoot)
 }
 
@@ -178,14 +199,18 @@ async function runActivityPortalPage(args: {
   leafIdsByTabId: Record<string, string[]>
 }): Promise<{ displayedPaneKey: string | null; renders: number }> {
   const { selectedThread, initialDisplayed, leafIdsByTabId } = args
+
   const slotEls = {
     primary: document.createElement('div'),
     secondary: document.createElement('div')
   }
+
   document.body.append(slotEls.primary, slotEls.secondary)
+
   const threadsByPaneKey = new Map(
     [selectedThread, initialDisplayed].map((entry) => [entry.paneKey, entry])
   )
+
   let renders = 0
   let displayedPaneKey: string | null = initialDisplayed.paneKey
 
@@ -204,6 +229,7 @@ async function runActivityPortalPage(args: {
     })
 
     const descriptors: ActivityTerminalPortalTarget[] = []
+
     if (visibleThread) {
       descriptors.push({
         slotId: activeSlotId,
@@ -215,6 +241,7 @@ async function runActivityPortalPage(args: {
         active: true
       })
     }
+
     if (stagedThread) {
       descriptors.push({
         slotId: inactiveSlotId,
@@ -231,11 +258,14 @@ async function runActivityPortalPage(args: {
     useLayoutEffect(() => {
       slotEls.primary.replaceChildren()
       slotEls.secondary.replaceChildren()
+
       for (const tabId of Object.keys(leafIdsByTabId)) {
         const routed = findActivityTerminalPortal(descriptors, { worktreeId: WORKTREE_ID, tabId })
+
         if (!routed) {
           continue
         }
+
         const isolatedLeafId = routed.paneKey.slice(routed.paneKey.indexOf(':') + 1)
         const leafIds = leafIdsByTabId[tabId]
         renderPortaledTerminalPane(routed.target, tabId, [
@@ -249,6 +279,7 @@ async function runActivityPortalPage(args: {
       slotEls[activeSlotId],
       visibleThread?.paneKey ?? null
     )
+
     const stagedStatus = useActivityTerminalPortalStatus(
       slotEls[inactiveSlotId],
       stagedThread?.paneKey ?? null
@@ -264,20 +295,26 @@ async function runActivityPortalPage(args: {
         stagedPortalReady: stagedStatus === 'ready',
         stagedPortalUnavailable: stagedStatus === 'unavailable'
       })
+
       if (swap?.kind === 'clear') {
         setDisplayed(null)
+
         return
       }
+
       if (swap?.kind === 'swap-staged') {
         setActiveSlotId(inactiveSlotId)
         setDisplayed(swap.paneKey)
+
         return
       }
+
       if (swap?.kind === 'settle-visible') {
         setDisplayed(swap.paneKey)
       }
       // Mirror ActivityPrototypePage's swap dependencies.
     }, [inactiveSlotId, stagedStatus, stagedThread, visibleStatus, visibleThread])
+
     return null
   }
 
@@ -286,6 +323,7 @@ async function runActivityPortalPage(args: {
     root.render(<ActivityPortalPage />)
     await new Promise((resolve) => setTimeout(resolve, 40))
   })
+
   return { displayedPaneKey, renders }
 }
 
@@ -310,6 +348,7 @@ describe('Activity portal pane switching', () => {
       initialDisplayed: PANE_A,
       leafIdsByTabId: { [TAB_ID]: [LEAF_A, LEAF_B], [OTHER_TAB_ID]: [LEAF_C] }
     })
+
     expect(result.displayedPaneKey).toBe(PANE_C.paneKey)
     expect(result.renders).toBeLessThan(50)
   })
@@ -319,10 +358,12 @@ describe('Activity portal pane switching', () => {
     const frames = installAnimationFrameController()
     const target = document.createElement('div')
     document.body.append(target)
+
     // Alternate hidden and ambiguous DOM states so ready remains unreachable.
     const buildRoot = (hiddenLeafId: string | null): void => {
       const tabRoot = document.createElement('div')
       tabRoot.dataset.terminalTabId = TAB_ID
+
       for (const leafId of [LEAF_A, LEAF_B]) {
         const pane = document.createElement('div')
         pane.dataset.leafId = leafId
@@ -330,14 +371,18 @@ describe('Activity portal pane switching', () => {
         pane.appendChild(
           Object.assign(document.createElement('div'), { className: 'xterm-screen' })
         )
+
         if (leafId === hiddenLeafId) {
           pane.style.display = 'none'
         }
+
         Object.defineProperty(pane, 'getClientRects', { value: () => [{}], configurable: true })
         tabRoot.appendChild(pane)
       }
+
       target.replaceChildren(tabRoot)
     }
+
     buildRoot(LEAF_A)
 
     let renders = 0
@@ -354,12 +399,14 @@ describe('Activity portal pane switching', () => {
         if (renders > RENDER_CAP) {
           return
         }
+
         if (status === 'unavailable') {
           buildRoot(null)
         } else if (status === 'loading') {
           buildRoot(LEAF_A)
         }
       })
+
       return null
     }
 
@@ -367,9 +414,11 @@ describe('Activity portal pane switching', () => {
     await act(async () => {
       root.render(<ActivityTerminalSlot />)
     })
+
     for (let frame = 0; frame < 20 && frames.pending() > 0; frame += 1) {
       await frames.flush()
     }
+
     const settledRenders = renders
     await frames.flush()
 
@@ -384,9 +433,11 @@ describe('Activity portal pane switching', () => {
     const mutations = installMutationObserverController()
     const target = document.createElement('div')
     document.body.append(target)
+
     const buildRoot = (mode: 'hidden' | 'sibling' | 'ready'): void => {
       const tabRoot = document.createElement('div')
       tabRoot.dataset.terminalTabId = TAB_ID
+
       for (const leafId of [LEAF_A, LEAF_B]) {
         const pane = document.createElement('div')
         pane.dataset.leafId = leafId
@@ -394,17 +445,22 @@ describe('Activity portal pane switching', () => {
         pane.appendChild(
           Object.assign(document.createElement('div'), { className: 'xterm-screen' })
         )
+
         if (mode === 'hidden' && leafId === LEAF_A) {
           pane.style.display = 'none'
         }
+
         if (mode === 'ready' && leafId === LEAF_B) {
           pane.style.display = 'none'
         }
+
         Object.defineProperty(pane, 'getClientRects', { value: () => [{}], configurable: true })
         tabRoot.appendChild(pane)
       }
+
       target.replaceChildren(tabRoot)
     }
+
     buildRoot('hidden')
 
     const statuses: ActivityPortalReadinessStatus[] = []
@@ -412,6 +468,7 @@ describe('Activity portal pane switching', () => {
     function ActivityTerminalSlot(): null {
       const status = useActivityTerminalPortalStatus(target, PANE_A.paneKey)
       statuses.push(status)
+
       return null
     }
 
@@ -428,6 +485,7 @@ describe('Activity portal pane switching', () => {
     // deliveries below ACTIVITY_PORTAL_READINESS_MAX_FLIPS transitions.
     let sawSiblingLoading = false
     let sawLatchedSibling = false
+
     for (
       let flip = 0;
       flip < ACTIVITY_PORTAL_READINESS_MAX_FLIPS * 4 && !sawLatchedSibling;
@@ -440,9 +498,11 @@ describe('Activity portal pane switching', () => {
         mutations.notify()
       })
       expect(await flushPortalReadiness(frames)).toBe(true)
+
       if (mode !== 'sibling') {
         continue
       }
+
       // Transition-local evidence: an unlatched subscription answers sibling DOM with 'loading',
       // so the latch is only proven once a sibling transition that previously emitted 'loading'
       // stops doing so and leaves 'unavailable' standing.
@@ -452,12 +512,14 @@ describe('Activity portal pane switching', () => {
         sawLatchedSibling = true
       }
     }
+
     expect(sawLatchedSibling).toBe(true)
     expect(statuses.at(-1)).toBe('unavailable')
 
     // Why: under CI load MutationObserver may miss one replaceChildren; re-apply ready DOM
     // and keep draining until attach is observed.
     let sawReady = false
+
     for (let attempt = 0; attempt < PORTAL_READY_REAPPLY_ATTEMPTS && !sawReady; attempt += 1) {
       await act(async () => {
         buildRoot('ready')
@@ -467,6 +529,7 @@ describe('Activity portal pane switching', () => {
       await flushPortalFramesUntil(frames, () => statuses.at(-1) === 'ready')
       sawReady = statuses.at(-1) === 'ready'
     }
+
     expect(statuses.at(-1)).toBe('ready')
   })
 })

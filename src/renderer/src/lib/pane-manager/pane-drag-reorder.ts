@@ -50,8 +50,10 @@ export function createDragReorderState(): DragReorderState {
 export function cancelActivePaneDrag(state: DragReorderState): void {
   if (state.cleanupActiveDrag) {
     state.cleanupActiveDrag(false)
+
     return
   }
+
   hideDropOverlay(state)
   state.dragSourcePaneId = null
   state.currentDropTarget = null
@@ -68,16 +70,20 @@ export function isPaneDropNoOp(
   if (sourcePaneId === targetPaneId) {
     return true
   }
+
   const source = panes.get(sourcePaneId)
   const target = panes.get(targetPaneId)
+
   if (!source || !target) {
     return true
   }
 
   const parent = target.container.parentElement
+
   if (!parent?.classList.contains('pane-split')) {
     return false
   }
+
   if (source.container.parentElement !== parent) {
     return false
   }
@@ -85,15 +91,18 @@ export function isPaneDropNoOp(
   const children = findPaneChildren(parent)
   const targetIndex = children.indexOf(target.container)
   const sourceIndex = children.indexOf(source.container)
+
   if (targetIndex === -1 || sourceIndex === -1) {
     return false
   }
 
   const isVerticalSplit = parent.classList.contains('is-vertical')
   const zoneIsHorizontal = zone === 'top' || zone === 'bottom'
+
   if (zoneIsHorizontal === isVerticalSplit) {
     return false
   }
+
   return zone === 'right' || zone === 'bottom'
     ? sourceIndex === targetIndex + 1
     : sourceIndex === targetIndex - 1
@@ -110,12 +119,16 @@ export function handlePaneDrop(
   if (sourcePaneId === targetPaneId) {
     return
   }
+
   const panes = callbacks.getPanes()
+
   if (isPaneDropNoOp(sourcePaneId, targetPaneId, zone, panes)) {
     return
   }
+
   const source = panes.get(sourcePaneId)
   const target = panes.get(targetPaneId)
+
   if (!source || !target) {
     return
   }
@@ -130,6 +143,7 @@ export function handlePaneDrop(
   for (const p of panes.values()) {
     callbacks.safeFit(p)
   }
+
   callbacks.applyPaneOpacity()
   callbacks.applyDividerStyles()
   updateMultiPaneState(callbacks)
@@ -143,6 +157,7 @@ export function showDropOverlay(state: DragReorderState): void {
     document.body.appendChild(overlay)
     state.dropOverlay = overlay
   }
+
   state.dropOverlay.style.display = 'none'
 }
 

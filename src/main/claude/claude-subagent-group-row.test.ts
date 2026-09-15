@@ -11,6 +11,7 @@ function entry(id: string, state: NativeChatSubagentEntry['state']): NativeChatS
 function sentence(agents: readonly NativeChatSubagentEntry[]): string {
   const body = claudeSubagentGroupBody('turn-1', agents)
   const block = body.kind === 'message' ? body.blocks[0] : undefined
+
   return block && block.type === 'text' ? block.text : ''
 }
 

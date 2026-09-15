@@ -19,26 +19,39 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+
 export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
+
 const MAX_DASHBOARD_SUBAGENTS = 100
+
 const MAX_DASHBOARD_REPO_ICONS = 500
+
 // Why: sanitizing an image icon base64-decodes the whole data URI to read a
 // 24-byte header, and the renderer republishes the same icons every 250 ms.
 const MAX_CACHED_ICON_SRC_BYTES = 8 * 1024 * 1024
+
 const imageIconValidity = new BoundedMap<string, boolean>({
   maxEntries: MAX_DASHBOARD_REPO_ICONS,
   maxBytes: MAX_CACHED_ICON_SRC_BYTES,
   sizeOf: (_valid, key) => key.length * 2
 })
+
 const MAX_ID_LENGTH = 4_096
+
 const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
+
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
+
 const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
+
 const DASHBOARD_HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
+
 const DASHBOARD_WORKSPACE_KINDS = new Set(['worktree', 'folder'])
+
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
+
 const DASHBOARD_HOST_PLATFORMS = new Set([
   'aix',
   'android',
@@ -52,7 +65,9 @@ const DASHBOARD_HOST_PLATFORMS = new Set([
   'sunos',
   'win32'
 ])
+
 const WINDOWS_SHIFT_ENTER_ENCODINGS = new Set(['alt-enter', 'csi-u'])
+
 const WINDOWS_INPUT_RECORD_PASTE_NEWLINES = new Set(['alt-enter', 'csi-u'])
 
 function isBoundedString(value: unknown, maxLength: number, allowEmpty = false): value is string {
@@ -71,7 +86,9 @@ export function isDashboardRevealAgentArgs(value: unknown): value is DashboardRe
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const args = value as Record<string, unknown>
+
   return (
     isBoundedString(args.repoId, MAX_ID_LENGTH) &&
     isBoundedString(args.worktreeId, MAX_ID_LENGTH) &&
@@ -93,6 +110,7 @@ export function isDashboardSleepWorkspaceArgs(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   return isBoundedString((value as Record<string, unknown>).worktreeId, MAX_ID_LENGTH)
 }
 
@@ -100,7 +118,9 @@ export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot 
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const snapshot = value as Record<string, unknown>
+
   return (
     isFiniteNumber(snapshot.generatedAt) &&
     Array.isArray(snapshot.cards) &&
@@ -131,8 +151,10 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
+
   const snapshot = value as Record<string, unknown>
   const workspaces = admitDashboardWorkspaces(snapshot.workspaces)
+
   if (
     !isFiniteNumber(snapshot.generatedAt) ||
     !Array.isArray(snapshot.cards) ||
@@ -145,7 +167,9 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
   ) {
     return null
   }
+
   const cards = snapshot.cards.filter(isDashboardCard)
+
   return {
     snapshot: {
       ...(snapshot as unknown as DashboardSnapshot),
@@ -162,10 +186,13 @@ function isDashboardRepoIcons(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const entries = Object.entries(value as Record<string, unknown>)
+
   return (
     entries.length <= MAX_DASHBOARD_REPO_ICONS &&
     entries.every(
@@ -178,10 +205,13 @@ function isDashboardReview(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const review = value as Record<string, unknown>
+
   return (
     isFiniteNumber(review.number) &&
     review.number > 0 &&
@@ -194,6 +224,7 @@ function isDashboardSubagents(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
+
   return (
     Array.isArray(value) &&
     value.length <= MAX_DASHBOARD_SUBAGENTS &&
@@ -201,7 +232,9 @@ function isDashboardSubagents(value: unknown): boolean {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
         return false
       }
+
       const subagent = entry as Record<string, unknown>
+
       return (
         isBoundedString(subagent.id, MAX_ID_LENGTH) &&
         isBoundedString(subagent.name, MAX_LABEL_LENGTH, true) &&
@@ -215,15 +248,20 @@ function isDashboardSubagents(value: unknown): boolean {
 /** Memoizes only the image branch, whose cost is proportional to payload size. */
 function isIcon(icon: unknown): boolean {
   const key = imageIconCacheKey(icon)
+
   if (key === null) {
     return sanitizeRepoIcon(icon) !== undefined
   }
+
   const cached = imageIconValidity.get(key)
+
   if (cached !== undefined) {
     return cached
   }
+
   const valid = sanitizeRepoIcon(icon) !== undefined
   imageIconValidity.set(key, valid)
+
   return valid
 }
 
@@ -232,7 +270,9 @@ function imageIconCacheKey(icon: unknown): string | null {
   if (!icon || typeof icon !== 'object' || Array.isArray(icon)) {
     return null
   }
+
   const candidate = icon as Record<string, unknown>
+
   // Why: `source` and `src` are the only fields an image icon can be rejected
   // on — `label` is normalized rather than rejected — so they alone key it.
   // Length-prefixed because a valid `src` may contain whitespace, so a plain
@@ -248,7 +288,9 @@ function isDashboardCard(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const card = value as Record<string, unknown>
+
   return (
     isBoundedString(card.paneKey, MAX_ID_LENGTH) &&
     (card.ptyId === null || isBoundedString(card.ptyId, MAX_ID_LENGTH)) &&
@@ -300,10 +342,13 @@ function isDashboardTerminalInput(value: unknown): boolean {
   if (value === undefined) {
     return true
   }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const input = value as Record<string, unknown>
+
   return (
     typeof input.hostPlatform === 'string' &&
     DASHBOARD_HOST_PLATFORMS.has(input.hostPlatform) &&

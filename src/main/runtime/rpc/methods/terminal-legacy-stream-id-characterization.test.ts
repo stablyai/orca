@@ -18,6 +18,7 @@ function request(params: unknown): RpcRequest {
 describe('legacy terminal subscription stream IDs', () => {
   it('allocates binary and JSON subscriptions from one monotonically increasing owner', async () => {
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = {
       getRuntimeId: () => 'runtime',
       resolveLeafForHandle: vi.fn(() => ({ ptyId: 'pty' })),
@@ -36,6 +37,7 @@ describe('legacy terminal subscription stream IDs', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as Partial<OrcaRuntimeService>
+
     const dispatcher = new RpcDispatcher({
       runtime: runtime as OrcaRuntimeService,
       methods: TERMINAL_METHODS
@@ -43,6 +45,7 @@ describe('legacy terminal subscription stream IDs', () => {
 
     const subscribeBinary = async (terminal: string, clientId: string) => {
       const messages: string[] = []
+
       const pending = dispatcher.dispatchStreaming(
         request({
           terminal,
@@ -52,31 +55,39 @@ describe('legacy terminal subscription stream IDs', () => {
         (message) => messages.push(message),
         { connectionId: `connection-${clientId}`, sendBinary: () => {} }
       )
+
       await vi.waitFor(() =>
         expect(messages.some((message) => JSON.parse(message).result?.type === 'subscribed')).toBe(
           true
         )
       )
+
       const subscribed = messages
         .map((message) => JSON.parse(message))
         .find((message) => message.result?.type === 'subscribed')
+
       const streamId = subscribed?.result?.streamId
+
       if (typeof streamId !== 'number') {
         throw new Error('Missing legacy binary stream ID')
       }
+
       runtime.cleanupSubscription?.(`${terminal}:${clientId}`)
       await pending
+
       return streamId
     }
 
     const first = await subscribeBinary('terminal-a', 'client-a')
 
     const jsonMessages: string[] = []
+
     const jsonPending = dispatcher.dispatchStreaming(
       request({ terminal: 'terminal-json', client: { id: 'client-json', type: 'desktop' } }),
       (message) => jsonMessages.push(message),
       { connectionId: 'connection-json' }
     )
+
     await vi.waitFor(() =>
       expect(
         jsonMessages.some((message) => JSON.parse(message).result?.type === 'scrollback')

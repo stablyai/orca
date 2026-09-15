@@ -11,6 +11,7 @@ const SDK: AndroidSdkPaths = {
 }
 
 const ok: AndroidCommandResult = { stdout: 'ok', stderr: '', code: 0 }
+
 const fail: AndroidCommandResult = { stdout: '', stderr: 'device offline', code: 1 }
 
 describe('android input commands', () => {

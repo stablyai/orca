@@ -47,12 +47,15 @@ export function buildExpectedEntries(plan: CodexManagedTrustGrantPlan): Expected
  *  RPC key may not overwrite, leaving conflicting logical trust behind. */
 export function removeSelfComputedTrustBeforeGrant(plan: CodexManagedTrustGrantPlan): void {
   const trustStates = readHookTrustEntries(plan.tomlPath)
+
   const ownedKeys = plan.managedEntries
     .map((entry) => {
       const key = computeTrustKey(entry)
+
       return trustStates.get(key)?.trustedHash === computeTrustedHash(entry) ? key : null
     })
     .filter((key): key is string => key !== null)
+
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(plan.tomlPath, ownedKeys)
   }
@@ -66,25 +69,34 @@ export function findLedgerGrant(
   currentStamp: CodexTrustGrantBinaryStamp | null
 ): CodexTrustEntry[] | null {
   const home = readCodexTrustGrantLedgerHomeMatchingStamp(plan.runtimeHomePath, currentStamp)
+
   if (!home) {
     return null
   }
+
   let trustStates: ReturnType<typeof readHookTrustEntries>
+
   try {
     trustStates = readHookTrustEntries(plan.tomlPath)
   } catch {
     return null
   }
+
   const entries: CodexTrustEntry[] = []
+
   for (const { entry, normalizedKey, signature } of expected) {
     const recorded = home.entries[normalizedKey]
+
     if (!recorded || recorded.signature !== signature) {
       return null
     }
+
     if (trustStates.get(normalizedKey)?.trustedHash !== recorded.trustedHash) {
       return null
     }
+
     entries.push({ ...entry, trustedHash: recorded.trustedHash })
   }
+
   return entries
 }

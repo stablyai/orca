@@ -9,11 +9,17 @@ import {
 } from './terminal-parked-watcher-reconciliation'
 
 const TAB_ID = 'tab-1'
+
 const WORKTREE_ID = 'repo::/worktree'
+
 const FIRST_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const FIRST_PTY_ID = 'remote:env-1@@terminal-1'
+
 const OLD_SECOND_PTY_ID = 'remote:env-1@@terminal-2'
+
 const NEW_SECOND_PTY_ID = 'remote:env-1@@terminal-3'
 
 afterEach(() => {

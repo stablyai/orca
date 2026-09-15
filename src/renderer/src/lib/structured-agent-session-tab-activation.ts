@@ -8,12 +8,15 @@ export function activateStructuredAgentSessionTab(args: {
   tabId: string
 }): boolean {
   const state = useAppStore.getState()
+
   const tab = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
     (candidate) => candidate.id === args.tabId && candidate.contentType === 'agent-session'
   )
+
   if (!tab) {
     return false
   }
+
   state.focusGroup(args.worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)
@@ -26,6 +29,7 @@ export function activateStructuredAgentSessionTab(args: {
       tabId: `agent-session:${tab.entityId}`
     }
   )
+
   return true
 }
 
@@ -37,6 +41,7 @@ export function activateStructuredAgentSessionById(args: {
     (candidate) =>
       candidate.contentType === 'agent-session' && candidate.entityId === args.sessionId
   )
+
   return tab
     ? activateStructuredAgentSessionTab({ worktreeId: args.worktreeId, tabId: tab.id })
     : false

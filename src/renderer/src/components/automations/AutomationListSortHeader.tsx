@@ -17,6 +17,7 @@ export function AutomationListSortHeader({
 }): React.JSX.Element {
   const active = sort?.field === field
   const direction = active ? sort.direction : null
+
   // Why: one interpolated key per direction — word order and punctuation around
   // the column name differ per language.
   const sortedLabel =
@@ -33,6 +34,7 @@ export function AutomationListSortHeader({
             { value0: label }
           )
         : null
+
   return (
     <button
       type="button"

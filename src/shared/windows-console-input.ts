@@ -24,21 +24,27 @@ export function openWindowsConsoleInput(
   deps: OpenWindowsConsoleInputDeps = {}
 ): WindowsConsoleInput | 'inherit' {
   const platform = deps.platform ?? process.platform
+
   if (platform !== 'win32') {
     return 'inherit'
   }
+
   const openSync = deps.openSync ?? ((path: string, flags: string) => fsOpenSync(path, flags))
   const closeSync = deps.closeSync ?? fsCloseSync
+
   try {
     const fd = openSync(WINDOWS_CONSOLE_INPUT_DEVICE, 'r+')
     let disposed = false
+
     return {
       fd,
       dispose: () => {
         if (disposed) {
           return
         }
+
         disposed = true
+
         try {
           closeSync(fd)
         } catch {
@@ -56,6 +62,7 @@ export function stdioForWindowsInteractiveChild(
   deps: OpenWindowsConsoleInputDeps = {}
 ): { stdio: WindowsInteractiveChildStdio; dispose: () => void } {
   const opened = openWindowsConsoleInput(deps)
+
   return opened === 'inherit'
     ? {
         stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],

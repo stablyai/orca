@@ -14,13 +14,17 @@ export function buildRichMarkdownImageInsertContent(
   const image: JSONContent = { type: 'image', attrs }
   const imageType = editor.schema.nodes.image
   const doc = editor.state.doc
+
   if (!imageType || pos < 0 || pos > doc.content.size) {
     return image
   }
+
   const $pos = doc.resolve(pos)
   const index = $pos.index()
+
   if ($pos.parent.canReplaceWith(index, index, imageType)) {
     return image
   }
+
   return { type: 'paragraph', content: [image] }
 }

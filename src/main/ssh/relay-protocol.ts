@@ -23,11 +23,15 @@ export {
   FRAME_DECODER_MAX_TURN_MS,
   FRAME_DECODER_MAX_RETAINED_BYTES
 }
+
 export type { DecodedFrame, FrameDecoderOptions } from '../../shared/relay-frame-decoder'
 
 export const RELAY_VERSION = '0.1.0'
+
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
+
 export const RELAY_SENTINEL_TIMEOUT_MS = 10_000
+
 export const RELAY_REMOTE_DIR = '.orca-remote'
 
 /** Message type byte. */
@@ -38,6 +42,7 @@ export const MessageType = {
 
 /** Keepalive/timeout (VS Code ProtocolConstants). */
 export const KEEPALIVE_SEND_MS = 5_000
+
 export const TIMEOUT_MS = 20_000
 
 // ── Relay error codes ───────────────────────────────────────────────
@@ -76,11 +81,15 @@ export function isGitResponseStreamMarker(value: unknown): value is GitResponseS
   if (typeof value !== 'object' || value === null || !('__orcaGitResponseStream' in value)) {
     return false
   }
+
   const marker = (value as { __orcaGitResponseStream?: unknown }).__orcaGitResponseStream
+
   if (typeof marker !== 'object' || marker === null) {
     return false
   }
+
   const fields = marker as Record<string, unknown>
+
   return (
     Number.isInteger(fields.streamId) &&
     (fields.streamId as number) > 0 &&
@@ -144,6 +153,7 @@ export function encodeFrame(
   header.writeUInt32BE(id, 1)
   header.writeUInt32BE(ack, 5)
   header.writeUInt32BE(payload.length, 9)
+
   return Buffer.concat([header, payload])
 }
 
@@ -153,9 +163,11 @@ export function encodeJsonRpcFrame(msg: JsonRpcMessage, id: number, ack: number)
 
 export function prepareJsonRpcPayload(msg: JsonRpcMessage): PreparedJsonRpcPayload {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
+
   if (payload.length > MAX_MESSAGE_SIZE) {
     throw new Error(`Message too large: ${payload.length} bytes (max ${MAX_MESSAGE_SIZE})`)
   }
+
   return Object.freeze({ byteLength: payload.length, [JSON_RPC_PAYLOAD_BYTES]: payload })
 }
 
@@ -174,9 +186,11 @@ export function encodeKeepAliveFrame(id: number, ack: number): Buffer {
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const text = payload.toString('utf-8')
   const msg = JSON.parse(text) as JsonRpcMessage
+
   if (msg.jsonrpc !== '2.0') {
     throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
+
   return msg
 }
 
@@ -195,6 +209,7 @@ export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatfo
   const normalizedArch = arch.toLowerCase().trim()
 
   let relayOs: string | null = null
+
   if (normalizedOs === 'linux') {
     relayOs = 'linux'
   } else if (normalizedOs === 'darwin') {
@@ -209,6 +224,7 @@ export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatfo
   }
 
   let relayArch: string | null = null
+
   if (normalizedArch === 'x86_64' || normalizedArch === 'amd64' || normalizedArch === 'x64') {
     relayArch = 'x64'
   } else if (normalizedArch === 'aarch64' || normalizedArch === 'arm64') {
@@ -218,5 +234,6 @@ export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatfo
   if (!relayOs || !relayArch) {
     return null
   }
+
   return `${relayOs}-${relayArch}` as RelayPlatform
 }

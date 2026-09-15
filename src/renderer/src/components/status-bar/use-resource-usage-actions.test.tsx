@@ -13,9 +13,13 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
+
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
+
 vi.mock('../../store', () => ({ useAppStore: { getState: () => ({}) } }))
+
 vi.mock('../../store/selectors', () => ({ getAllWorktreesFromState: () => mocks.worktrees }))
+
 vi.mock('../sidebar/delete-worktree-flow', () => ({ runWorktreeDelete: vi.fn() }))
 
 import { useResourceUsageActions } from './use-resource-usage-actions'
@@ -56,6 +60,7 @@ beforeEach(() => {
   mocks.activateAndRevealWorktree.mockReset()
   mocks.worktrees = [{ id: 'repo::/notes', hostId: 'ssh:box' }]
 })
+
 afterEach(cleanup)
 
 describe('Resource Manager row navigation', () => {

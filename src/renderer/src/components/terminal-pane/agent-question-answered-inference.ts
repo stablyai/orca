@@ -28,6 +28,7 @@ function inferQuestionAnsweredFromEntry(
   entry: AgentStatusEntry | undefined
 ): boolean {
   const now = deps.now ?? Date.now
+
   if (
     !entry ||
     entry.state !== 'waiting' ||
@@ -37,6 +38,7 @@ function inferQuestionAnsweredFromEntry(
   ) {
     return false
   }
+
   void deps.inferQuestionAnswered({
     paneKey: deps.paneKey,
     baselineUpdatedAt: entry.updatedAt,
@@ -44,6 +46,7 @@ function inferQuestionAnsweredFromEntry(
     baselinePrompt: entry.prompt,
     baselineAgentType: entry.agentType
   })
+
   return true
 }
 
@@ -75,10 +78,13 @@ export function createAgentQuestionAnsweredInference({
       if (!isPotentialQuestionAnsweredSubmitInput(data)) {
         return
       }
+
       const entry = getStatusEntry()
+
       if (!entry || !isQuestionAnsweredSubmitInput(data, entry.interactivePrompt)) {
         return
       }
+
       inferQuestionAnsweredFromEntry({ paneKey, getStatusEntry, inferQuestionAnswered, now }, entry)
     }
   }

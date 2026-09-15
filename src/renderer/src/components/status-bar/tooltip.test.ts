@@ -6,6 +6,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 vi.mock('@/lib/agent-catalog', async () => {
   const ReactActual = await vi.importActual<typeof ReactModule>('react')
+
   return {
     AgentIcon: ({ agent }: { agent: string }) =>
       ReactActual.createElement('span', { 'data-agent-icon': agent })
@@ -15,9 +16,11 @@ vi.mock('@/lib/agent-catalog', async () => {
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
     let result = fallback
+
     for (const [key, value] of Object.entries(values ?? {})) {
       result = result.replace(`{{${key}}}`, value)
     }
+
     return result
   }
 }))
@@ -104,6 +107,7 @@ describe('provider usage error copy', () => {
       error:
         'Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.'
     })
+
     const gemini = provider({
       provider: 'gemini',
       error: 'Gemini CLI credentials not found'
@@ -123,6 +127,7 @@ describe('provider usage error copy', () => {
       provider: 'kimi',
       error: 'Kimi credentials-file is invalid'
     })
+
     const opencodeGo = provider({
       provider: 'opencode-go',
       error: 'Please log in before refreshing usage.'
@@ -319,6 +324,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
+
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Pro', window: p.buckets![0] },
@@ -336,6 +342,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
+
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
@@ -358,6 +365,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
+
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
@@ -376,6 +384,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
+
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
@@ -412,6 +421,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
+
     // Compact path uses p.session directly — independent of getWindowSections.
     expect(p.session?.usedPercent).toBe(80)
     // getWindowSections (detail path) returns bucket rows, not session label.
@@ -440,6 +450,7 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
+
     const sections = getWindowSections(p)
     expect(sections).toHaveLength(2)
     expect(sections[0].label).toBe('Pro')
@@ -452,6 +463,7 @@ describe('ProviderPanel reset rendering', () => {
   it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 3, 20, 0))
+
     const p = provider({
       status: 'ok',
       session: null,
@@ -473,6 +485,7 @@ describe('ProviderPanel reset rendering', () => {
   it('renders MiniMax session as usedPercent so the value matches the bar', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+
     const p = provider({
       provider: 'minimax',
       status: 'ok',
@@ -495,6 +508,7 @@ describe('ProviderPanel reset rendering', () => {
   it('clamps MiniMax session to 100% used when usedPercent reports 100', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+
     const p = provider({
       provider: 'minimax',
       status: 'ok',
@@ -515,6 +529,7 @@ describe('ProviderPanel reset rendering', () => {
   it('clamps over-100 usedPercent to 100% used in the panel', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+
     const p = provider({
       provider: 'minimax',
       status: 'ok',

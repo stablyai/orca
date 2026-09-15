@@ -28,34 +28,45 @@ export function quarantineCorruptDaemonPidRecord(
   contents: string
 ): string {
   const salvagedPid = salvagePidFromCorruptDaemonRecord(contents)
+
   if (salvagedPid !== null && inspectProcessLiveness(salvagedPid).status !== 'exited') {
     const reason = `the daemon pid file could not be parsed and salvaged pid ${salvagedPid} may still be running: ${name}`
     console.warn(`[daemon] Keeping corrupt daemon pid record: ${reason}`)
+
     return reason
   }
+
   const recordPath = join(runtimeDir, name)
   let modifiedAtMs: number
+
   try {
     modifiedAtMs = statSync(recordPath).mtimeMs
   } catch {
     const reason = `the daemon pid file could not be parsed or aged: ${name}`
     console.warn(`[daemon] ${reason}`)
+
     return reason
   }
+
   // A future mtime (clock adjustment) reads as negative age and is treated as fresh.
   if (Date.now() - modifiedAtMs < QUARANTINE_MIN_RECORD_AGE_MS) {
     const reason = `the daemon pid file could not be parsed and was written too recently to quarantine: ${name}`
     console.warn(`[daemon] Keeping corrupt daemon pid record: ${reason}`)
+
     return reason
   }
+
   try {
     renameSync(recordPath, join(runtimeDir, `${name}.corrupt`))
   } catch {
     const reason = `the daemon pid file could not be parsed or quarantined: ${name}`
     console.warn(`[daemon] ${reason}`)
+
     return reason
   }
+
   const reason = `the daemon pid file could not be parsed and was quarantined: ${name}`
   console.warn(`[daemon] ${reason}`)
+
   return reason
 }

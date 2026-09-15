@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
 describe('orchestration mailbox filtered waiters', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -33,9 +34,11 @@ describe('orchestration mailbox filtered waiters', () => {
     const db = createDatabase('orca-mailbox-filtered-run-backlog-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Filtered Run backlog')
+
     for (let index = 0; index < 50; index += 1) {
       insertDirectRunMessage(db, run.id, `Status ${index}`)
     }
+
     const question = db.insertMessage({
       from: 'term_worker',
       to: TERMINAL_HANDLE,
@@ -43,6 +46,7 @@ describe('orchestration mailbox filtered waiters', () => {
       type: 'question',
       runId: run.id
     })
+
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(TERMINAL_HANDLE, question.id)
@@ -51,10 +55,12 @@ describe('orchestration mailbox filtered waiters', () => {
     expect(checked).toMatchObject({ runId: run.id, count: 50 })
     expect(checked.messages).not.toContainEqual(expect.objectContaining({ id: question.id }))
     expect(db.getMessageById(question.id)?.to_handle).toBe(`run:${run.id}`)
+
     const next = await checkBoundMailbox(harness.runtime, {
       ack: checked.deliveryId!,
       types: 'question'
     })
+
     expect(next.messages).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: question.id })])
     )
@@ -66,15 +72,19 @@ describe('orchestration mailbox filtered waiters', () => {
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Filtered reconciliation wake')
     const waiting = checkBoundMailbox(harness.runtime, { wait: true, types: 'question' })
+
     const internals = harness.runtime as unknown as {
       messageWaitersByHandle: Map<string, Set<unknown>>
     }
+
     await vi.waitFor(() => {
       expect(internals.messageWaitersByHandle.has(`run:${run.id}`)).toBe(true)
     })
+
     for (let index = 0; index < 50; index += 1) {
       insertDirectRunMessage(db, run.id, `Status before question ${index}`)
     }
+
     const question = db.insertMessage({
       from: 'term_worker',
       to: TERMINAL_HANDLE,
@@ -82,6 +92,7 @@ describe('orchestration mailbox filtered waiters', () => {
       type: 'question',
       runId: run.id
     })
+
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(TERMINAL_HANDLE, question.id)
@@ -92,10 +103,12 @@ describe('orchestration mailbox filtered waiters', () => {
     expect(checked).toMatchObject({ runId: run.id, count: 50 })
     expect(checked.messages).not.toContainEqual(expect.objectContaining({ id: question.id }))
     expect(db.getMessageById(question.id)?.to_handle).toBe(`run:${run.id}`)
+
     const next = await checkBoundMailbox(harness.runtime, {
       ack: checked.deliveryId!,
       types: 'question'
     })
+
     expect(next.messages).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: question.id })])
     )
@@ -105,17 +118,21 @@ describe('orchestration mailbox filtered waiters', () => {
   it('drains persisted Dispatch pages before installing a filtered waiter', async () => {
     const db = createDatabase('orca-mailbox-filtered-dispatch-backlog-')
     const harness = createRuntime(db)
+
     const run = db.createRun({
       objective: 'Filtered Dispatch backlog',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
+
     for (let index = 0; index < 50; index += 1) {
       insertDirectRunMessage(db, run.id, `Worker status ${index}`)
     }
+
     const question = db.insertMessage({
       from: 'term_coordinator',
       to: TERMINAL_HANDLE,
@@ -128,10 +145,12 @@ describe('orchestration mailbox filtered waiters', () => {
     expect(checked).toMatchObject({ runId: run.id, dispatchId: dispatch.id, count: 50 })
     expect(checked.messages).not.toContainEqual(expect.objectContaining({ id: question.id }))
     expect(db.getMessageById(question.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
+
     const next = await checkBoundMailbox(harness.runtime, {
       ack: checked.deliveryId!,
       types: 'question'
     })
+
     expect(next.messages).toEqual([expect.objectContaining({ id: question.id })])
     db.close()
   })

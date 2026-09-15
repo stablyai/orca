@@ -47,9 +47,11 @@ describe('buildMobilePrChipSummary', () => {
   it('surfaces the PR number and state badge', () => {
     const summary = buildMobilePrChipSummary(ready(pr({ state: 'draft' }), [check('success')]))
     expect(summary.kind).toBe('ready')
+
     if (summary.kind !== 'ready') {
       return
     }
+
     expect(summary.number).toBe(7701)
     expect(summary.stateLabel).toBe('Draft')
   })
@@ -59,9 +61,11 @@ describe('buildMobilePrChipSummary', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('success'), check('skipped')])
     )
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup).toEqual({ kind: 'passed', text: '3/3', token: 'statusGreen' })
   })
 
@@ -69,17 +73,21 @@ describe('buildMobilePrChipSummary', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('action_required')])
     )
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup).toEqual({ kind: 'failing', text: '1 failing', token: 'statusRed' })
   })
 
   it('distinguishes checks that resolved to nothing actionable from having no checks', () => {
     const summary = buildMobilePrChipSummary(ready(pr(), [check('neutral')]))
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup).toEqual({
       kind: 'none',
       text: 'Unresolved checks',
@@ -91,17 +99,21 @@ describe('buildMobilePrChipSummary', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('failure'), check(null, 'in_progress')])
     )
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup).toEqual({ kind: 'failing', text: '1 failing', token: 'statusRed' })
   })
 
   it('shows running when nothing has failed yet', () => {
     const summary = buildMobilePrChipSummary(ready(pr(), [check('success'), check(null, 'queued')]))
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup).toEqual({ kind: 'running', text: '1 running', token: 'statusAmber' })
   })
 
@@ -109,25 +121,31 @@ describe('buildMobilePrChipSummary', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr({ mergeable: 'CONFLICTING' }), [check('success')])
     )
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup.kind).toBe('conflict')
   })
 
   it('reports no checks when the list is empty', () => {
     const summary = buildMobilePrChipSummary(ready(pr(), []))
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.rollup).toEqual({ kind: 'none', text: 'No checks', token: 'textSecondary' })
   })
 
   it('passes through the unresolved comment count', () => {
     const summary = buildMobilePrChipSummary(ready(pr(), [check('success')]), 3)
+
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
+
     expect(summary.commentCount).toBe(3)
   })
 })
@@ -158,6 +176,7 @@ describe('countUnresolvedReviewThreads', () => {
       comment({ id: 4, threadId: 't3' }),
       comment({ id: 5 })
     ]
+
     expect(countUnresolvedReviewThreads(comments)).toBe(2)
   })
 })

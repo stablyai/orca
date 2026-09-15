@@ -8,10 +8,12 @@ const counter = vi.hoisted(() => ({ splitCalls: 0 }))
 // loop used to repeat once per repo. Counting it makes the O(repos x rows) regression observable.
 vi.mock('../../shared/worktree/id', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeIdModule>()
+
   return {
     ...actual,
     splitWorktreeId: (worktreeId: string): ParsedWorktreeId | null => {
       counter.splitCalls += 1
+
       return actual.splitWorktreeId(worktreeId)
     }
   }
@@ -27,13 +29,16 @@ const makeStore = (
 ): { store: never; metaScans: () => number } => {
   let metaScans = 0
   const meta = Object.fromEntries(worktreeIds.map((id) => [id, {}]))
+
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => {
       metaScans += 1
+
       return meta
     }
   }
+
   return { store: store as never, metaScans: () => metaScans }
 }
 
@@ -49,14 +54,18 @@ describe('getLocalRepoForRegisteredWorktree', () => {
     // Worst case: the owning repo is last, so every earlier repo used to force a full rescan.
     const repoCount = 10
     const rowCount = 200
+
     const repos = Array.from({ length: repoCount }, (_, i) => ({
       id: `repo-${i}`,
       path: `/repos/repo-${i}`
     }))
+
     const target = '/repos/repo-9/wt-last'
+
     const worktreeIds = Array.from({ length: rowCount }, (_, i) =>
       worktreeId(`repo-${i % repoCount}`, `/repos/wt-${i}`)
     )
+
     worktreeIds[rowCount - 1] = worktreeId(`repo-${repoCount - 1}`, target)
     const { store, metaScans } = makeStore(repos, worktreeIds)
 
@@ -98,6 +107,7 @@ describe('getLocalRepoForRegisteredWorktree', () => {
         worktreeId('last', '/wt/shared'),
         worktreeId('middle', '/wt/shared')
       ])
+
       // getRepos order decides, not the meta table's insertion order.
       expect(getLocalRepoForRegisteredWorktree(store, '/wt/shared', '/wt/shared')?.id).toBe(
         'middle'
@@ -109,12 +119,14 @@ describe('getLocalRepoForRegisteredWorktree', () => {
         [{ id: 'remote', path: '/repos/remote', connectionId: 'm4air' }, ...repos],
         [worktreeId('remote', '/wt/one'), worktreeId('middle', '/wt/one')]
       )
+
       expect(getLocalRepoForRegisteredWorktree(store, '/wt/one', '/wt/one')?.id).toBe('middle')
 
       const onlyRemote = makeStore(
         [{ id: 'remote', path: '/repos/remote', connectionId: 'm4air' }],
         [worktreeId('remote', '/wt/one')]
       )
+
       expect(
         getLocalRepoForRegisteredWorktree(onlyRemote.store, '/wt/one', '/wt/one')
       ).toBeUndefined()

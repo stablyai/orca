@@ -42,6 +42,7 @@ export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
+
 const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
 export class TerminalHost {
@@ -77,6 +78,7 @@ export class TerminalHost {
 
   async createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
     this.assertCreateOrAttachAllowed(opts)
+
     for (
       let inFlight = this.pendingCreations.get(opts.sessionId);
       inFlight !== undefined;
@@ -88,15 +90,18 @@ export class TerminalHost {
       await Promise.race([inFlight, rejectOnAbort(opts.cancelSignal, opts.sessionId)])
       this.assertCreateOrAttachAllowed(opts)
     }
+
     this.assertCreateOrAttachAllowed(opts)
 
     let settleCreation: () => void = () => {}
+
     this.pendingCreations.set(
       opts.sessionId,
       new Promise<void>((resolve) => {
         settleCreation = resolve
       })
     )
+
     try {
       return await createOrAttachClaimedAgentSession({
         options: opts,
@@ -108,9 +113,11 @@ export class TerminalHost {
           ),
         createOrAttach: async (options) => {
           this.assertCreateOrAttachAllowed(options)
+
           if (options.agentSessionGeneration && this.sessions.get(options.sessionId)?.isAlive) {
             throw new Error('agent_session_claim_unavailable')
           }
+
           return await createOrAttachTerminalSession(options, {
             sessions: this.sessions,
             assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
@@ -125,6 +132,7 @@ export class TerminalHost {
               : {}),
             onSessionExit: (sessionId, generation) => {
               const session = this.sessions.get(sessionId)
+
               if (session) {
                 pruneRetiredPtyIncarnations(this.retiredIncarnations)
                 this.retiredIncarnations.set(sessionId, {
@@ -133,6 +141,7 @@ export class TerminalHost {
                   expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
                 })
               }
+
               this.agentSessionOwners.release(sessionId, generation)
               this.agentSessionGenerations.forget(sessionId, generation)
               this.reapSession(sessionId)
@@ -150,6 +159,7 @@ export class TerminalHost {
     if (this.creationFenced) {
       throw new Error('Terminal host is shutting down')
     }
+
     if (opts.isCanceled?.()) {
       throw new TerminalAttachCanceledError(opts.sessionId)
     }
@@ -170,9 +180,11 @@ export class TerminalHost {
   // Why null-not-throw (unlike write/resize): pause/resume are best-effort hints against a session that may have exited.
   pauseProducer(sessionId: string): void {
     const session = this.sessions.get(sessionId)
+
     if (!session || !session.isAlive) {
       return
     }
+
     session.pauseProducer()
   }
 
@@ -182,23 +194,28 @@ export class TerminalHost {
 
   kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
     const pending = this.sessionTeardown.get(sessionId)
+
     if (pending) {
       return Promise.resolve(
         opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
       )
     }
+
     const session = this.getAliveSession(sessionId)
     const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
     this.killedTombstones.record(sessionId)
+
     return Promise.resolve(killed)
   }
 
   // Why: dispose a dead session's emulator so exited terminals don't pin their scrollback window for the daemon's life.
   private reapSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
+
     if (!session || session.isAlive) {
       return
     }
+
     session.dispose()
     this.sessions.delete(sessionId)
     this.onSessionReaped?.(sessionId)
@@ -225,9 +242,11 @@ export class TerminalHost {
   // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
   getForegroundProcess(sessionId: string): string | null {
     const session = this.sessions.get(sessionId)
+
     if (!session || !session.isAlive) {
       return null
     }
+
     return session.getForegroundProcess()
   }
 
@@ -237,6 +256,7 @@ export class TerminalHost {
   ): Promise<TerminalHostProcessInspection> {
     pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const session = this.sessions.get(sessionId)
+
     if (
       (!session || !session.isAlive) &&
       !(
@@ -247,6 +267,7 @@ export class TerminalHost {
       // Preserve the historical synchronous missing-session failure.
       throw new SessionNotFoundError(sessionId)
     }
+
     return inspectTerminalHostProcess({
       sessionId,
       session: session?.isAlive ? session : null,
@@ -315,9 +336,11 @@ export class TerminalHost {
 
   dispose(): Promise<void> {
     this.creationFenced = true
+
     if (this.disposePromise) {
       return this.disposePromise
     }
+
     const disposePromise = this.disposeSessions()
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
@@ -326,6 +349,7 @@ export class TerminalHost {
         this.disposePromise = null
       }
     })
+
     return disposePromise
   }
 
@@ -334,15 +358,18 @@ export class TerminalHost {
       // No spawn may publish a session after teardown completes.
       await Promise.all(this.pendingCreations.values())
     }
+
     await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
   }
 
   private getAliveSession(sessionId: string): Session {
     const session = this.sessions.get(sessionId)
+
     if (!session || !session.isAlive) {
       throw new SessionNotFoundError(sessionId)
     }
+
     return session
   }
 }

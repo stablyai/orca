@@ -53,6 +53,7 @@ export const CLIENT_UI_METHODS = [
     params: NativeChatSessionOptionsMutation,
     handler: (params, { runtime }) => {
       runtime.updateClientNativeChatSessionOptions(params)
+
       return { ok: true as const }
     }
   }),

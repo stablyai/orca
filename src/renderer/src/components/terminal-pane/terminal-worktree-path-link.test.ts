@@ -71,6 +71,7 @@ describe('resolveKnownWorktreeRootPathLink', () => {
     const firstState = createState({
       repo: [{ id: 'wt-1', path: '/repo/feature' }]
     })
+
     const nextState = createState({
       repo: [{ id: 'wt-2', path: '/repo/feature' }]
     })

@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { runListFilesScanMock } = vi.hoisted(() => ({ runListFilesScanMock: vi.fn() }))
 
 vi.mock('./fs-list-files-fallback-chain', () => ({ runListFilesScan: runListFilesScanMock }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
 
 import {
@@ -50,6 +51,7 @@ describe('Integration: an over-budget fs.listFiles reply (#12547)', () => {
 
     let relayFeed: (data: Buffer) => void
     const clientDataCallbacks: ((data: Buffer) => void)[] = []
+
     const clientTransport: MultiplexerTransport = {
       write: (data: Buffer) => {
         setImmediate(() => relayFeed?.(data))
@@ -59,6 +61,7 @@ describe('Integration: an over-budget fs.listFiles reply (#12547)', () => {
       },
       onClose: () => {}
     }
+
     dispatcher = new RelayDispatcher((data: Buffer) => {
       writtenFrames.push(data.length)
       setImmediate(() => {
@@ -66,6 +69,7 @@ describe('Integration: an over-budget fs.listFiles reply (#12547)', () => {
           cb(data)
         }
       })
+
       return true
     })
     relayFeed = (data: Buffer) => dispatcher.feed(data)

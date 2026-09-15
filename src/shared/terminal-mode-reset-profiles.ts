@@ -5,11 +5,15 @@
 
 // Why: SerializeAddon replays mode bits assuming reattach to a live TUI, but Orca restores against a fresh shell with none, so stale bits (e.g. focus reporting rings the bell on click) must be reset.
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
+
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+
 // Why: abandoned byte-gap replay drains live chunks, so a dropped intensity reset must not style them (STA-4042).
 export const RESET_GRAPHIC_RENDITION = '\x1b[0m'
+
 // Last so a dead process cannot leave stale attributes in the DECSC register.
 const SAVE_GROUNDED_CURSOR = '\x1b7'
+
 // Every mouse mode the daemon can re-arm from a snapshot: protocols 9/1000/1002/1003 + SGR encodings 1006/1016.
 export const RESET_MOUSE_REPORTING =
   '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
@@ -96,16 +100,20 @@ export function buildSnapshotReplayPrologue(args: {
   // normal-buffer payload, which carries its own history.
   const clear = args.targetAlternateScreen ? '\x1b[2J\x1b[H' : '\x1b[2J\x1b[3J\x1b[H'
   const ground = `${REPLAY_BASELINE_TERMINAL_RESET}${REPLAY_BASELINE_BUFFER_RESET}`
+
   if (args.paneOnAlternateScreen === args.targetAlternateScreen) {
     return `${ground}${clear}${SAVE_GROUNDED_CURSOR}`
   }
+
   const bufferSwitch = args.targetAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l'
+
   return `${ground}${bufferSwitch}${ground}${clear}${SAVE_GROUNDED_CURSOR}`
 }
 
 // Why: DECTCEM applies in emission order, so the payload's last ?25l/?25h is the cursor state the TUI left.
 export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
   const hideIndex = payload.lastIndexOf('\x1b[?25l')
+
   return hideIndex !== -1 && hideIndex > payload.lastIndexOf('\x1b[?25h')
 }
 

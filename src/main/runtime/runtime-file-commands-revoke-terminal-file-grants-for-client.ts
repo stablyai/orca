@@ -26,6 +26,7 @@ export class RuntimeFileCommandsWithRevokeTerminalFileGrantsForClient extends Ru
 
   protected releaseTerminalFileGrant(id: string, grant: TerminalFileGrant): void {
     this.terminalFileGrants.delete(id)
+
     if (grant.expiryTimer) {
       clearTimeout(grant.expiryTimer)
       grant.expiryTimer = undefined
@@ -36,6 +37,7 @@ export class RuntimeFileCommandsWithRevokeTerminalFileGrantsForClient extends Ru
     if (grant.expiryTimer) {
       clearTimeout(grant.expiryTimer)
     }
+
     grant.expiryTimer = setTimeout(
       () => {
         if (this.terminalFileGrants.get(grant.id) === grant && grant.expiresAt <= Date.now()) {
@@ -59,10 +61,13 @@ export class RuntimeFileCommandsWithRevokeTerminalFileGrantsForClient extends Ru
       absolutePath,
       clientId
     )
+
     if (isMobileBinaryPath(grant.absolutePath)) {
       throw new Error('binary_file')
     }
+
     let content: string
+
     if (grant.connectionId) {
       const provider = await this.assertRemoteTerminalFileGrantFreshForRead(grant)
       content = await this.readRemoteTerminalArtifactFile(
@@ -72,12 +77,14 @@ export class RuntimeFileCommandsWithRevokeTerminalFileGrantsForClient extends Ru
       )
     } else {
       const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+
       try {
         content = await readLocalTerminalArtifactFileFromHandle(handle, grant)
       } finally {
         await handle.close()
       }
     }
+
     this.refreshTerminalFileGrant(grant)
     const truncated = truncateMobileFilePreview(content)
 
@@ -103,22 +110,28 @@ export class RuntimeFileCommandsWithRevokeTerminalFileGrantsForClient extends Ru
       absolutePath,
       clientId
     )
+
     if (grant.connectionId) {
       const provider = await this.assertRemoteTerminalFileGrantFreshForRead(grant)
       this.refreshTerminalFileGrant(grant)
+
       return assertPreviewWithinTransportBudget(
         await this.readRemoteTerminalArtifactPreview(provider, grant, maxContentBytes),
         maxContentBytes
       )
     }
+
     const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+
     try {
       const preview = await readLocalTerminalArtifactPreviewFromHandle(
         handle,
         grant,
         maxContentBytes
       )
+
       this.refreshTerminalFileGrant(grant)
+
       return assertPreviewWithinTransportBudget(preview, maxContentBytes)
     } finally {
       await handle.close()

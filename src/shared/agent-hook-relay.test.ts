@@ -76,6 +76,7 @@ describe('isRemoteAgentHooksEnabled', () => {
 
 describe('restoreShedStatusFields', () => {
   const roster = [{ id: 'child-1', agentType: 'reviewer', state: 'working' as const, startedAt: 1 }]
+
   const cached: ParsedAgentStatusPayload = {
     state: 'working',
     prompt: 'p',
@@ -84,6 +85,7 @@ describe('restoreShedStatusFields', () => {
     lastAssistantMessage: 'cached message',
     interactivePrompt: '{"questions":["old"]}'
   }
+
   const shed: ParsedAgentStatusPayload = { state: 'done', prompt: 'p', agentType: 'claude' }
 
   it('restores a matching shed roster, so a done pane is not falsely hibernation-eligible', () => {
@@ -97,11 +99,13 @@ describe('restoreShedStatusFields', () => {
   it('does not restore a shed roster across a prompt identity change', () => {
     expect(AGENT_HOOK_SHED_FIELDS_KEY).toBe('shedFields')
     const nextTurn = { ...shed, prompt: 'next prompt' }
+
     const restored = restoreShedStatusFields(
       nextTurn,
       ['lastAssistantMessage', createShedSubagentsField(roster)],
       cached
     )
+
     expect(restored.lastAssistantMessage).toBeUndefined()
     expect(restored.subagents).toBeUndefined()
     expect(restored).toBe(nextTurn)
@@ -111,11 +115,13 @@ describe('restoreShedStatusFields', () => {
     const changedRoster = [
       { id: 'child-2', agentType: 'reviewer', state: 'working' as const, startedAt: 2 }
     ]
+
     const restored = restoreShedStatusFields(
       shed,
       [createShedSubagentsField(changedRoster)],
       cached
     )
+
     expect(restored.subagents).toBeUndefined()
     expect(restored).toBe(shed)
   })

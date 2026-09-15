@@ -23,11 +23,14 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     const queueKey = `${ptyId}\u0000${generation}`
     const previous = this.agentPromptSubmissionTailByPtyId.get(queueKey) ?? Promise.resolve()
     const submission = previous.catch(() => undefined).then(submit)
+
     const tail = submission.then(
       () => undefined,
       () => undefined
     )
+
     this.agentPromptSubmissionTailByPtyId.set(queueKey, tail)
+
     try {
       return await submission
     } finally {
@@ -51,6 +54,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     waitTextOverride?: string
   ): RuntimeTerminalAgentStatusSnapshot {
     const snapshot = this.terminalAgentStatus.getSnapshot(handle, expectedPtyId)
+
     return waitTextOverride === undefined ? snapshot : { ...snapshot, waitText: waitTextOverride }
   }
 
@@ -73,24 +77,30 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
   protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {
     const pty = this.ptysById.get(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
+
     if (
       recoverCompletedHook &&
       (!handle || this.getFreshExplicitAgentStatusForPty(handle, ptyId)?.status !== 'idle')
     ) {
       return
     }
+
     const incarnationId = pty?.incarnationId
     const generation = recoverCompletedHook ? this.getPtyLifecycleGeneration(ptyId) : null
     const titleObservedAt = pty?.lastOscTitleAt ?? null
     const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
+
     if (!pty?.connected || !foregroundRead) {
       if (!recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
       }
+
       return
     }
+
     void foregroundRead.then((result) => {
       const current = this.ptysById.get(ptyId)
+
       if (
         current !== pty ||
         !current.connected ||
@@ -99,9 +109,11 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       ) {
         return
       }
+
       if (current.lastOscTitleAt !== titleObservedAt && current.lastAgentStatus !== null) {
         return
       }
+
       if (
         recoverCompletedHook &&
         (!current.lastAgentStatusObservedLive ||
@@ -109,10 +121,13 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       ) {
         return
       }
+
       if (recoverCompletedHook && current.lastOscTitleAt !== titleObservedAt) {
         this.confirmPtyAgentExit(ptyId, true)
+
         return
       }
+
       if (
         result.controller === this.ptyController &&
         result.available &&
@@ -123,22 +138,29 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
           recoverCompletedHook && recognizeAgentProcess(result.process)?.agent === 'codex'
             ? 'idle'
             : undefined
+
         const restoredStatus = this.ptyTitleTrackersByPtyId
           .get(ptyId)
           ?.tracker.restoreLastAgentExit(confirmedStatus)
+
         if (restoredStatus !== null && restoredStatus !== undefined) {
           current.lastAgentStatus = restoredStatus
+
           if (restoredStatus === 'idle') {
             this.resolvePtyTuiIdleWaiters(current, ptyId)
           }
+
           for (const leaf of this.getLeavesForPty(ptyId)) {
             if (leaf.lastAgentStatus !== null) {
               continue
             }
+
             // Why: the foreground agent disproved the neutral title's exit signal; keep runtime delivery state aligned with the restored tracker.
             leaf.lastAgentStatus = restoredStatus
+
             if (restoredStatus === 'idle') {
               this.resolveTuiIdleWaiters(leaf)
+
               // Why gated like every other delivery edge: a neutral-title restoration can
               // reinstate `idle` from a name-only title, which is not evidence a turn ended.
               if (this.checkDeliverySettledAndArmRecheck(leaf)) {
@@ -147,8 +169,10 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
             }
           }
         }
+
         return
       }
+
       if (!recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
       }
@@ -203,15 +227,18 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     const explicit = this.getFreshExplicitAgentStatusForPty(handle, ptyId)
     const explicitFloor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
     const lifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
+
     const ptyStatus =
       lifecycle || explicitFloor === undefined
         ? (this.ptysById.get(ptyId)?.lastAgentStatus ?? null)
         : null
+
     const lifecycleIsNewer =
       lifecycle &&
       (!explicit ||
         lifecycle.updatedAt > explicit.updatedAt ||
         (lifecycle.updatedAt === explicit.updatedAt && lifecycle.status === 'permission'))
+
     const waitText = waitTextCache
       ? readAgentPromptWaitText(
           waitTextCache,
@@ -219,12 +246,15 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
           () => this.getTerminalAgentStatusSnapshot(handle, ptyId).waitText
         )
       : undefined
+
     const terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId, waitText)
+
     const status = this.hasAuthoritativeTerminalWaitPermission(terminal, explicit, lifecycle)
       ? 'permission'
       : lifecycleIsNewer
         ? lifecycle.status
         : (explicit?.status ?? ptyStatus ?? null)
+
     return {
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
@@ -248,6 +278,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
   protected getFreshExplicitAgentStatusForPty(handle: string, ptyId: string) {
     const explicit = this.getFreshExplicitAgentStatusForHandle(handle)
     const floor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
+
     return explicit && (floor === undefined || explicit.updatedAt > floor) ? explicit : null
   }
 }

@@ -46,6 +46,7 @@ async function detectAgentsForConnection(
   connectionId: string | null | undefined
 ): Promise<TuiAgent[]> {
   const store = useAppStore.getState()
+
   return typeof connectionId === 'string'
     ? await store.ensureRemoteDetectedAgents(connectionId)
     : await store.ensureDetectedAgents()
@@ -65,7 +66,9 @@ async function resolveSavedAgentOverride(
   if (!savedAgent) {
     return { kind: 'launch-default' }
   }
+
   const detectedAgents = await detectAgentsForConnection(connectionId)
+
   if (!isAgentAvailable(savedAgent, detectedAgents)) {
     toast.error(
       translate(
@@ -73,8 +76,10 @@ async function resolveSavedAgentOverride(
         'Saved checks agent is not available on this workspace host.'
       )
     )
+
     return { kind: 'blocked' }
   }
+
   return { kind: 'agent', agent: savedAgent }
 }
 
@@ -85,24 +90,30 @@ async function pickExistingWorktreeAgent(
 ): Promise<TuiAgent | null> {
   const connectionId = getConnectionId(worktreeId) ?? repoConnectionId ?? null
   const detectedAgents = await detectAgentsForConnection(connectionId)
+
   if (savedAgent) {
     if (isAgentAvailable(savedAgent, detectedAgents)) {
       return savedAgent
     }
+
     toast.error(
       translate(
         'auto.lib.fix.checks.agent.launch.4c7f783a7a',
         'Saved checks agent is not available on this workspace host.'
       )
     )
+
     return null
   }
+
   const settings = useAppStore.getState().settings
+
   const agent = pickSourceControlLaunchAgent({
     defaultAgent: settings?.defaultTuiAgent,
     detectedAgents,
     disabledAgents: settings?.disabledTuiAgents
   })
+
   if (!agent) {
     toast.error(
       translate(
@@ -111,22 +122,27 @@ async function pickExistingWorktreeAgent(
       )
     )
   }
+
   return agent
 }
 
 export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
   const store = useAppStore.getState()
   const repo = store.repos.find((candidate) => candidate.id === args.repoId) ?? null
+
   const recipe = resolveSourceControlActionRecipe({
     settings: store.settings,
     repo,
     actionId: 'fixChecks'
   })
+
   const savedAgentId = readSourceControlLaunchRecipeAgentId(recipe)
+
   const commandInput = renderSourceControlActionCommandTemplate(
     recipe.commandInputTemplate ?? DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.fixChecks,
     { basePrompt: args.basePrompt }
   ).trim()
+
   if (!commandInput) {
     toast.error(
       translate(
@@ -134,6 +150,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
         'Fix checks prompt is empty. Update Source Control AI settings.'
       )
     )
+
     return false
   }
 
@@ -141,9 +158,12 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     args.worktreeId || !args.item
       ? null
       : findGithubPrWorkspaceAttachment(store.allWorktrees(), args.repoId, args.item.number)
+
   const targetWorktreeId = args.worktreeId ?? attachedWorkspace?.id ?? null
+
   if (targetWorktreeId) {
     const targetWorktree = store.allWorktrees().find((worktree) => worktree.id === targetWorktreeId)
+
     if (!targetWorktree) {
       toast.error(
         translate(
@@ -151,17 +171,22 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
           'Unable to find the workspace attached to these checks.'
         )
       )
+
       return false
     }
+
     const targetConnectionId = getConnectionId(targetWorktreeId) ?? repo?.connectionId ?? null
+
     const agent = await pickExistingWorktreeAgent(
       targetWorktreeId,
       savedAgentId,
       repo?.connectionId
     )
+
     if (!agent) {
       return false
     }
+
     const launchPlatform = resolveSourceControlLaunchPlatform({
       connectionId: targetConnectionId,
       worktreePath: targetWorktree.path,
@@ -169,6 +194,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
         ? undefined
         : getLocalProjectExecutionRuntimeContext(store, targetWorktreeId, CLIENT_PLATFORM)
     })
+
     if (!launchPlatform) {
       toast.error(
         translate(
@@ -176,16 +202,21 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
           'Unable to resolve the workspace launch platform.'
         )
       )
+
       return false
     }
+
     const agentArgsPlan = planAgentCliArgsSuffix(
       recipe.agentArgs,
       launchPlatform === 'win32' ? 'powershell' : 'posix'
     )
+
     if (!agentArgsPlan.ok) {
       toast.error(agentArgsPlan.error)
+
       return false
     }
+
     // launchAgentInNewTab below creates the surface; seeding here would add a stray shell.
     if (!activateAndRevealWorktree(targetWorktreeId, { providesInitialSurface: true })) {
       toast.error(
@@ -194,8 +225,10 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
           'Unable to open the workspace attached to these checks.'
         )
       )
+
       return false
     }
+
     const result = launchAgentInNewTab({
       agent,
       worktreeId: targetWorktreeId,
@@ -206,6 +239,7 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       launchPlatform,
       launchSource: args.launchSource
     })
+
     if (!result) {
       toast.error(
         translate(
@@ -213,11 +247,14 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
           'Could not build the agent launch command.'
         )
       )
+
       return false
     }
+
     if (result.tabId) {
       focusTerminalTabSurface(result.tabId)
     }
+
     return true
   }
 
@@ -228,10 +265,12 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
         'Unable to find a workspace for these checks.'
       )
     )
+
     return false
   }
 
   const agentOverride = await resolveSavedAgentOverride(savedAgentId, repo?.connectionId)
+
   if (agentOverride.kind === 'blocked') {
     return false
   }

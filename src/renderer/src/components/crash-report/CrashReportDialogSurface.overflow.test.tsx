@@ -58,6 +58,7 @@ afterEach(() => cleanup())
 describe('CrashReportDialogSurface overflow containment', () => {
   it('keeps unbroken diagnostic output inside the dialog grid', async () => {
     const unbrokenError = 'A'.repeat(1000)
+
     const { container } = render(
       <CrashReportDialogSurface
         open
@@ -67,6 +68,7 @@ describe('CrashReportDialogSurface overflow containment', () => {
         onReportChange={() => {}}
       />
     )
+
     await waitFor(() => expect(viewer).toHaveBeenCalledOnce())
 
     const dialog = container.querySelector('[role="dialog"]')
@@ -78,6 +80,7 @@ describe('CrashReportDialogSurface overflow containment', () => {
     const gridChild = Array.from(dialog?.children ?? []).find((child) =>
       child.contains(output ?? null)
     )
+
     expect(gridChild?.className).toContain('min-w-0')
     expect(output?.parentElement?.className).toContain('min-w-0')
   })

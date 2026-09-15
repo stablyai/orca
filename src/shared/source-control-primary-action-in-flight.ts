@@ -11,6 +11,7 @@ export function resolveSourceControlPrimaryActionDuringRemoteOp(
 ): SourceControlPrimaryActionDecision {
   const { inFlightRemoteOpKind, hasUnresolvedConflicts } = inputs
   const candidate = resolveWithoutRemoteOp({ ...inputs, isRemoteOperationActive: false })
+
   const inFlightIsPrimaryKind =
     inFlightRemoteOpKind === 'push' ||
     inFlightRemoteOpKind === 'pull' ||

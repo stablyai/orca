@@ -20,9 +20,13 @@ import {
 } from '../../../shared/editor-save-events'
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+
 const LANDED_RELOAD_GUARD_VALUE = 'doc-before-the-reload'
+
 const Comp: ComponentType = () => null
+
 const chunkParseError = (): SyntaxError => new SyntaxError("Unexpected token ']'")
+
 const chunkFetchError = (): TypeError =>
   new TypeError('Failed to fetch dynamically imported module: file://redacted/chunk.js')
 
@@ -30,12 +34,14 @@ function spyOnReload(): ReturnType<typeof vi.fn> {
   const reload = vi.fn()
   // happy-dom's location.reload is a no-op that would otherwise log; replace it.
   vi.spyOn(window.location, 'reload').mockImplementation(reload)
+
   return reload
 }
 
 function stubCrashReportsBreadcrumb(): ReturnType<typeof vi.fn> {
   const recordBreadcrumb = vi.fn()
   Object.assign(window, { api: { crashReports: { recordBreadcrumb } } })
+
   return recordBreadcrumb
 }
 
@@ -64,10 +70,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   vi.useRealTimers()
+
   if (savedSessionStorageDescriptor) {
     Object.defineProperty(window, 'sessionStorage', savedSessionStorageDescriptor)
     savedSessionStorageDescriptor = undefined
   }
+
   try {
     delete (window as unknown as { api?: unknown }).api
     window.sessionStorage.clear()
@@ -79,6 +87,7 @@ afterEach(() => {
 describe('loadLazyWithRetry', () => {
   it('retries with exponential backoff (250ms, 500ms) and then resolves', async () => {
     const reload = spyOnReload()
+
     const factory = vi
       .fn()
       .mockRejectedValueOnce(chunkParseError())
@@ -159,10 +168,12 @@ describe('loadLazyWithRetry', () => {
     const factory = vi.fn(() => Promise.reject(error))
 
     const loaded = loadLazyWithRetry(factory, { retries: 2, baseDelayMs: 250 })
+
     const assertion = expect(loaded).rejects.toMatchObject({
       name: 'LazyChunkLoadError',
       cause: error
     })
+
     await vi.advanceTimersByTimeAsync(5000)
     await assertion
 
@@ -178,10 +189,12 @@ describe('loadLazyWithRetry', () => {
     const factory = vi.fn(() => Promise.reject(error))
 
     const loaded = loadLazyWithRetry(factory, { retries: 0 })
+
     const assertion = expect(loaded).rejects.toMatchObject({
       name: 'LazyChunkLoadError',
       cause: error
     })
+
     await vi.advanceTimersByTimeAsync(5000)
     await assertion
 
@@ -200,6 +213,7 @@ describe('loadLazyWithRetry', () => {
       retries: 0,
       reloadKey: 'rich-markdown-editor'
     })
+
     const assertion = expect(loaded).rejects.toMatchObject({ name: 'LazyChunkLoadError' })
     await vi.advanceTimersByTimeAsync(1)
     await assertion
@@ -243,10 +257,12 @@ describe('loadLazyWithRetry', () => {
     const factory = vi.fn(() => Promise.reject(error))
 
     const loaded = loadLazyWithRetry(factory, { retries: 1, baseDelayMs: 100 })
+
     const settled = loaded.then(
       () => null,
       (rejection: unknown) => rejection
     )
+
     await vi.advanceTimersByTimeAsync(5000)
     const caught = await settled
 
@@ -353,10 +369,12 @@ describe('loadLazyWithRetry', () => {
     const factory = vi.fn(() => Promise.reject(chunkParseError()))
 
     const loaded = loadLazyWithRetry(factory, { retries: 0, reloadKey: 'rich-markdown-editor' })
+
     const settled = loaded.then(
       () => null,
       (rejection: unknown) => rejection
     )
+
     await vi.advanceTimersByTimeAsync(1)
 
     expect(await settled).toMatchObject({ reloadKey: 'rich-markdown-editor' })
@@ -378,22 +396,28 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       hotExitBackups: 0,
       restartLatchAtNavigation: false
     }
+
     const cleanupBypass = registerUpdaterBeforeUnloadBypass()
 
     const dirtyTabGuard = (event: Event): void => {
       if (isIntentionalAppRestartInProgress()) {
         return
       }
+
       preventUnloadAndScheduleShutdownCheckpointReset(event, window)
     }
+
     const hotExitBackup = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPrepareHotExitDetail>).detail
       detail.claim()
       harness.hotExitBackups += 1
+
       if (options.hotExitBackupFails === true) {
         detail.reject('Some unsaved editor changes cannot be backed up before restart.')
+
         return
       }
+
       detail.resolve()
     }
 
@@ -403,6 +427,7 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       harness.restartLatchAtNavigation = isIntentionalAppRestartInProgress()
       const accepted = window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
       harness.navigations.push(accepted ? 'landed' : 'cancelled')
+
       if (!accepted) {
         window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
       }
@@ -413,6 +438,7 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       window.removeEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, hotExitBackup)
       cleanupBypass()
     }
+
     return harness
   }
 
@@ -464,6 +490,7 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
       retries: 0,
       reloadKey: 'rich-markdown-editor'
     })
+
     let settled: unknown = 'pending'
     void loaded.then(
       (value) => {
@@ -547,8 +574,10 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
     const reload = vi.fn(() => {
       window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
     })
+
     vi.spyOn(window.location, 'reload').mockImplementation(reload)
     const error = chunkParseError()
+
     const attempt = async (): Promise<unknown> => {
       let settled: unknown = 'pending'
       void loadLazyWithRetry(() => Promise.reject(error), { retries: 0 }).then(
@@ -560,6 +589,7 @@ describe('loadLazyWithRetry recovery reload vs the dirty-editor-tab unload veto'
         }
       )
       await vi.advanceTimersByTimeAsync(50)
+
       return settled
     }
 

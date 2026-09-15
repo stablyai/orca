@@ -25,38 +25,62 @@ import type {
 const journals = createTrackedJournalOpener()
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-handoff'
+
 const PLAIN_RESIDUE = 'session-plain-residue'
+
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let journal: Awaited<ReturnType<typeof openAgentSessionJournal>>
+
 let coordinator: StructuredAgentSessionHandoffCoordinator
+
 let statuses: AgentSessionHandoffStatus[]
+
 type TransportMock<K extends keyof StructuredAgentSessionHandoffTransport> = ReturnType<
   typeof vi.fn<
     Extract<NonNullable<StructuredAgentSessionHandoffTransport[K]>, (...args: never[]) => unknown>
   >
 >
+
 let launchTui: TransportMock<'launchTui'>
+
 let waitForTuiExit: TransportMock<'waitForTuiExit'>
+
 let closeTuiOwner: TransportMock<'closeTuiOwner'>
+
 let waitForTuiIdleOrExit: TransportMock<'waitForTuiIdleOrExit'>
+
 let reproveTuiOwner: TransportMock<'reproveTuiOwner'>
+
 let stopFailedTuiLaunch: TransportMock<'stopFailedTuiLaunch'>
+
 let acquireNativeStop: ReturnType<typeof vi.fn<(turnId: string) => Promise<boolean>>>
+
 let acquireNativeCalls: number
+
 let stopRecoveredOwner: TransportMock<'stopRecoveredOwner'>
+
 let operations: number
+
 type HistoryCatchup = (sessionId: string, fence: number) => Promise<void>
+
 let prepareTuiHistoryCatchup: ReturnType<typeof vi.fn<HistoryCatchup>>
+
 let recoverTuiHistoryCatchup: ReturnType<typeof vi.fn<HistoryCatchup>>
+
 let activateTuiHistoryCatchup: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>
+
 let stopTuiHistoryCatchup: ReturnType<typeof vi.fn<(sessionId: string) => void>>
 
 function operationId(): string {
   operations += 1
+
   return `${NOW}-${operations.toString(16).padStart(32, '0')}`
 }
 
@@ -99,6 +123,7 @@ async function establishNativeOwner(): Promise<void> {
     operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'initial' },
     now: NOW
   })
+
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId: SESSION,
@@ -141,6 +166,7 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
           record.lease.runtimeFence,
           record.lease.ownerProcess?.spawnToken ?? record.lease.reservedSpawnToken ?? 'recovered'
         )
+
         return { ...owner, process: record.lease.ownerProcess ?? owner.process }
       },
       probeRecoveredOwner: async () => 'dead',
@@ -164,6 +190,7 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
         process: process(input.spawnToken, 4300 + acquireNativeCalls),
         now: NOW
       })
+
       return store.proveOwner({
         sessionId: input.sessionId,
         fence: input.fence,
@@ -244,11 +271,14 @@ describe('structured session handoff failure handling', () => {
   it('parks a stopped native cleanup failure in manual recovery without launching TUI', async () => {
     const operation = operationId()
     const cleanupError = new Error('journal drain failed')
+
     const acknowledgeNativeRelease = vi.fn((sessionId: string) => {
       expect(store.getRecord(sessionId)?.lease.handoffStage).toBe('old-owner-stopped')
     })
+
     const retainOwner = vi.fn()
     const releaseOwner = vi.fn()
+
     const context = createStructuredHandoffFlowContext({
       deps: {
         store,
@@ -294,9 +324,11 @@ describe('structured session handoff failure handling', () => {
       setStatus: (_sessionId, status) => statuses.push(status),
       requireRecord: (sessionId) => {
         const record = store.getRecord(sessionId)
+
         if (!record) {
           throw new Error('missing record')
         }
+
         return record
       }
     })
@@ -347,6 +379,7 @@ describe('structured session ownership recovery on restore', () => {
 
   it('finishes a live new-owner-proving stage after restart', async () => {
     const operation = operationId()
+
     let record = await setStoredAgentSessionHandoffStage(store, {
       sessionId: SESSION,
       fence: 1,
@@ -354,6 +387,7 @@ describe('structured session ownership recovery on restore', () => {
       handoffOperationId: operation,
       now: NOW
     })
+
     record = await stopStoredAgentSessionOwnerForHandoff(store, {
       sessionId: SESSION,
       expectedFence: record.lease.runtimeFence,
@@ -414,6 +448,7 @@ describe('structured session ownership recovery on restore', () => {
       now: NOW
     })
     const handoffOperation = operationId()
+
     let interrupted = await setStoredAgentSessionHandoffStage(store, {
       sessionId: SESSION,
       fence: 1,
@@ -421,6 +456,7 @@ describe('structured session ownership recovery on restore', () => {
       handoffOperationId: handoffOperation,
       now: NOW
     })
+
     interrupted = await stopStoredAgentSessionOwnerForHandoff(store, {
       sessionId: SESSION,
       expectedFence: interrupted.lease.runtimeFence,

@@ -12,10 +12,12 @@ export function createWslWatcherStartup(): {
   let settled = false
   let resolve!: () => void
   let reject!: (error: Error) => void
+
   const ready = new Promise<void>((done, fail) => {
     resolve = done
     reject = fail
   })
+
   return {
     ready,
     get settled() {
@@ -25,7 +27,9 @@ export function createWslWatcherStartup(): {
       if (settled) {
         return
       }
+
       settled = true
+
       if (error) {
         reject(error)
       } else {
@@ -47,6 +51,7 @@ export function createWslWatcherProcessExit(
   let physicalExited = false
   let stopRequested = false
   const physicalExit = new PhysicalExitTracker()
+
   const markPhysicalExit = (): void => {
     if (!physicalExited) {
       physicalExited = true
@@ -54,11 +59,14 @@ export function createWslWatcherProcessExit(
       onPhysicalExit?.()
     }
   }
+
   const requestStop = (): void => {
     if (physicalExited || stopRequested) {
       return
     }
+
     stopRequested = true
+
     try {
       if (!child.kill()) {
         throw new Error('WSL watcher process rejected the termination signal')
@@ -68,6 +76,7 @@ export function createWslWatcherProcessExit(
       throw error
     }
   }
+
   const requestStopBestEffort = (): void => {
     try {
       requestStop()
@@ -75,6 +84,7 @@ export function createWslWatcherProcessExit(
       // The awaited owner retries and retains the child on failure.
     }
   }
+
   const stopAndWait = async (): Promise<void> => {
     try {
       requestStop()
@@ -84,8 +94,10 @@ export function createWslWatcherProcessExit(
         physicalExit.exitedPromise
       )
     }
+
     await waitForPhysicalExit(worktreePath, physicalExit)
   }
+
   return { markPhysicalExit, requestStopBestEffort, stopAndWait }
 }
 

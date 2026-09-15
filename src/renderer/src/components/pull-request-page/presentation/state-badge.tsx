@@ -15,10 +15,12 @@ export function getSolidStateTone(item: GitHubWorkItem): string {
     if (item.state === 'merged') {
       return 'bg-purple-600 text-white'
     }
+
     if (item.state === 'draft') {
       return 'bg-slate-500 text-white'
     }
   }
+
   return item.state === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
 }
 

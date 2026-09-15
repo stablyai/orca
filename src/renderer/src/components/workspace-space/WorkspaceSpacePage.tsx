@@ -15,17 +15,21 @@ export default function WorkspaceSpacePage(): React.JSX.Element {
       if (event.key !== 'Escape') {
         return
       }
+
       // Why: confirmation dialogs own Escape first; page-level Escape should
       // only leave the full Space surface when no modal or popover is active.
       if (hasVisibleOverlay()) {
         return
       }
+
       const target = event.target as HTMLElement | null
+
       if (
         target?.matches('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
       ) {
         return
       }
+
       event.preventDefault()
       closeSpacePage()
     }
@@ -33,6 +37,7 @@ export default function WorkspaceSpacePage(): React.JSX.Element {
     // Why: tooltips can consume Escape before bubble listeners see it. Capture
     // keeps the first Escape reliable while still deferring to real overlays.
     window.addEventListener('keydown', handleKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [closeSpacePage])
 

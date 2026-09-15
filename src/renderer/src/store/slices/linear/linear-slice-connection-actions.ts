@@ -33,22 +33,27 @@ export function createLinearConnectionActions(
     testLinearConnection: async (workspaceId) => {
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
+
       try {
         const result = (await linearTestConnection(get().settings, workspaceId)) as
           | { ok: true; viewer: LinearViewer }
           | { ok: false; error: string }
+
         if (
           !isCurrentLinearMutation(requestGeneration) ||
           !isCurrentLinearRuntimeContext(contextKey, get().settings)
         ) {
           return result
         }
+
         const status = await linearStatus(get().settings)
+
         if (
           isCurrentLinearMutation(requestGeneration) &&
           isCurrentLinearRuntimeContext(contextKey, get().settings)
         ) {
           const prev = get().linearStatus
+
           if (linearStatusScopeSignature(prev) !== linearStatusScopeSignature(status)) {
             invalidateLinearCaches()
             set({
@@ -72,9 +77,11 @@ export function createLinearConnectionActions(
             set({ linearStatusChecked: true, linearStatusContextKey: contextKey })
           }
         }
+
         return result
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Test failed'
+
         return { ok: false as const, error: message }
       }
     },
@@ -82,8 +89,10 @@ export function createLinearConnectionActions(
     connectLinear: async (apiKey: string) => {
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
+
       try {
         const result = await linearConnect(get().settings, apiKey)
+
         if (
           result.ok &&
           isCurrentLinearMutation(requestGeneration) &&
@@ -104,6 +113,7 @@ export function createLinearConnectionActions(
             linearCustomViewProjectCache: {}
           })
           const status = await linearStatus(get().settings)
+
           if (
             !isCurrentLinearMutation(requestGeneration) ||
             !isCurrentLinearRuntimeContext(contextKey, get().settings)
@@ -116,6 +126,7 @@ export function createLinearConnectionActions(
               )
             }
           }
+
           set({
             linearStatus: status,
             linearStatusChecked: true,
@@ -130,9 +141,11 @@ export function createLinearConnectionActions(
             )
           }
         }
+
         return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Connection failed'
+
         return { ok: false as const, error: message }
       }
     },
@@ -141,12 +154,14 @@ export function createLinearConnectionActions(
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       const status = await linearSelectWorkspace(get().settings, workspaceId)
+
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
       ) {
         return
       }
+
       invalidateLinearCaches()
       set({
         linearStatus: status,
@@ -170,12 +185,14 @@ export function createLinearConnectionActions(
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       await linearDisconnect(get().settings)
+
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
       ) {
         return
       }
+
       invalidateLinearCaches()
       set({
         linearStatus: { connected: false, viewer: null },
@@ -199,19 +216,23 @@ export function createLinearConnectionActions(
       const requestGeneration = beginLinearMutation()
       const contextKey = getProviderRuntimeContextKey(get().settings)
       await linearDisconnectWorkspace(get().settings, workspaceId)
+
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
       ) {
         return
       }
+
       const status = await linearStatus(get().settings)
+
       if (
         !isCurrentLinearMutation(requestGeneration) ||
         !isCurrentLinearRuntimeContext(contextKey, get().settings)
       ) {
         return
       }
+
       invalidateLinearCaches()
       set({
         linearStatus: status,

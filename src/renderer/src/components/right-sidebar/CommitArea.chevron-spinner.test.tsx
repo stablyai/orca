@@ -28,6 +28,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
 
 function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
+
   return {
     worktreeId: 'wt-1',
     groupId: 'group-1',
@@ -87,6 +88,7 @@ describe('CommitArea chevron spinner', () => {
         inFlightRemoteOpKind: 'fetch'
       })
     )
+
     expect(chevron).toContain('animate-spin')
     expect(primary).not.toContain('animate-spin')
   })
@@ -101,6 +103,7 @@ describe('CommitArea chevron spinner', () => {
         inFlightRemoteOpKind: 'push'
       })
     )
+
     expect(primary).toContain('animate-spin')
     expect(chevron).not.toContain('animate-spin')
   })
@@ -115,6 +118,7 @@ describe('CommitArea chevron spinner', () => {
         inFlightRemoteOpKind: 'sync'
       })
     )
+
     expect(primary).toContain('animate-spin')
     expect(chevron).not.toContain('animate-spin')
   })
@@ -129,6 +133,7 @@ describe('CommitArea chevron spinner', () => {
         inFlightRemoteOpKind: 'force_push'
       })
     )
+
     expect(primary).toContain('Force Push')
     expect(primary).toContain('animate-spin')
     expect(chevron).not.toContain('animate-spin')
@@ -144,6 +149,7 @@ describe('CommitArea chevron spinner', () => {
         inFlightRemoteOpKind: 'fetch'
       })
     )
+
     expect(primary).not.toContain('animate-spin')
     expect(chevron).toContain('animate-spin')
   })

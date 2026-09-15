@@ -74,9 +74,11 @@ export function TerminalShortcutSettings({
 }: Props): React.JSX.Element {
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
+
   const [shortcutLayout, setShortcutLayout] = useState<TerminalAccessoryLayout>(
     getDefaultTerminalAccessoryLayout
   )
+
   const layoutWriteChainRef = useRef<Promise<void>>(Promise.resolve())
   const layoutWriteSeqRef = useRef(0)
   const pendingLayoutWritesRef = useRef(0)
@@ -99,6 +101,7 @@ export function TerminalShortcutSettings({
       if (pendingLayoutWritesRef.current > 0 || refreshSeq !== layoutWriteSeqRef.current) {
         return
       }
+
       setShortcutLayout({
         orderedBuiltInIds: layout.orderedBuiltInIds,
         visibleBuiltInIds: layout.visibleBuiltInIds
@@ -130,6 +133,7 @@ export function TerminalShortcutSettings({
       if (pendingCustomKeysWritesRef.current > 0 || refreshSeq !== customKeysWriteSeqRef.current) {
         return
       }
+
       setCustomKeys(keys)
     })
   }, [])
@@ -139,6 +143,7 @@ export function TerminalShortcutSettings({
       setCustomKeys((current) => {
         const updated = current.filter((k) => k.id !== key.id)
         persistCustomKeys(updated)
+
         return updated
       })
     },
@@ -159,6 +164,7 @@ export function TerminalShortcutSettings({
         refreshCustomKeys()
       }
     })
+
     return () => sub.remove()
   }, [refreshShortcutLayout, refreshCustomKeys])
 
@@ -167,6 +173,7 @@ export function TerminalShortcutSettings({
       setShortcutLayout((current) => {
         const next = setTerminalAccessoryBuiltInVisible(current, id, visible)
         persistLayout(next)
+
         return next
       })
     },
@@ -178,6 +185,7 @@ export function TerminalShortcutSettings({
       setShortcutLayout((current) => {
         const next = reorderTerminalAccessoryBuiltInIds(current, orderedKeys)
         persistLayout(next)
+
         return next
       })
     },
@@ -194,14 +202,19 @@ export function TerminalShortcutSettings({
     (orderedKeys: string[]) => {
       setCustomKeys((current) => {
         const byId = new Map(current.map((key) => [key.id, key]))
+
         const reordered = orderedKeys.flatMap((id) => {
           const key = byId.get(id)
+
           return key ? [key] : []
         })
+
         if (reordered.length !== current.length) {
           return current
         }
+
         persistCustomKeys(reordered)
+
         return reordered
       })
     },
@@ -212,10 +225,13 @@ export function TerminalShortcutSettings({
     () => new Set(shortcutLayout.visibleBuiltInIds),
     [shortcutLayout.visibleBuiltInIds]
   )
+
   const orderedAccessoryKeys = useMemo(() => {
     const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
+
     return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
       const key = byId.get(id)
+
       return key ? [key] : []
     })
   }, [shortcutLayout.orderedBuiltInIds])

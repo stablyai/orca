@@ -14,6 +14,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoSlug: vi.fn().mockResolvedValue({ owner: 'acme', repo: 'orca' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('github.repoSlug', { repo: 'repo-1' }))
@@ -30,6 +31,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getGitHubRateLimit: vi.fn().mockResolvedValue({ ok: true, snapshot: { core: {} } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('github.rateLimit', { force: true }))
@@ -43,6 +45,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       listRepoWorkItems: vi.fn().mockResolvedValue({ items: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -63,6 +66,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       listRepoIssues: vi.fn().mockResolvedValue([{ number: 7, title: 'Bug' }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -78,6 +82,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoWorkItem: vi.fn().mockResolvedValue({ number: 12, type: 'pr' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -93,6 +98,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoWorkItemByOwnerRepo: vi.fn().mockResolvedValue({ number: 12, type: 'pr' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -119,6 +125,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoWorkItemDetails: vi.fn().mockResolvedValue({ body: 'Details' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -134,6 +141,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       countRepoWorkItems: vi.fn().mockResolvedValue(3)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -150,9 +158,11 @@ describe('github RPC methods', () => {
       listRepoLabels: vi.fn().mockResolvedValue(['bug']),
       listRepoAssignableUsers: vi.fn().mockResolvedValue([{ login: 'octo' }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const labels = await dispatcher.dispatch(makeRequest('github.listLabels', { repo: 'repo-1' }))
+
     const users = await dispatcher.dispatch(
       makeRequest('github.listAssignableUsers', { repo: 'repo-1' })
     )
@@ -168,6 +178,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoPRChecks: vi.fn().mockResolvedValue([])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -197,6 +208,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoPRCheckDetails: vi.fn().mockResolvedValue(null)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
     const controller = new AbortController()
 
@@ -223,6 +235,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getRepoPRComments: vi.fn().mockResolvedValue([])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -250,6 +263,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       setRepoPRCommentReaction: vi.fn().mockResolvedValue(true)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -280,6 +294,7 @@ describe('github RPC methods', () => {
         modifiedIsBinary: false
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -311,6 +326,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       resolveRepoReviewThread: vi.fn().mockResolvedValue(true)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -335,6 +351,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       setRepoPRFileViewed: vi.fn().mockResolvedValue(true)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -361,6 +378,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateRepoPRTitle: vi.fn().mockResolvedValue(true)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -384,6 +402,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateRepoPRDetails: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -412,6 +431,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       mergeRepoPR: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -435,6 +455,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       setRepoPRAutoMerge: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -459,6 +480,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       markRepoPRReadyForReview: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -482,6 +504,7 @@ describe('github RPC methods', () => {
       requestRepoPRReviewers: vi.fn().mockResolvedValue({ ok: true }),
       removeRepoPRReviewers: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const requestResponse = await dispatcher.dispatch(
@@ -492,6 +515,7 @@ describe('github RPC methods', () => {
         prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
       })
     )
+
     const removeResponse = await dispatcher.dispatch(
       makeRequest('github.removePRReviewers', {
         repo: 'repo-1',
@@ -520,6 +544,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateRepoPRState: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -549,6 +574,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       createRepoIssue: vi.fn().mockResolvedValue({ ok: true, number: 3, url: 'https://gh/3' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -568,6 +594,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       createRepoIssue: vi.fn().mockResolvedValue({ ok: true, number: 4, url: 'https://gh/4' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -592,6 +619,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateRepoIssue: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -614,6 +642,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       addRepoIssueComment: vi.fn().mockResolvedValue({ ok: true, comment: { id: 1 } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -638,6 +667,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       addRepoPRReviewComment: vi.fn().mockResolvedValue({ ok: true, comment: { id: 2 } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -670,6 +700,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       addRepoPRReviewCommentReply: vi.fn().mockResolvedValue({ ok: true, comment: { id: 4 } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -702,6 +733,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       listGitHubProjectViews: vi.fn().mockResolvedValue({ ok: true, views: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -729,11 +761,13 @@ describe('github RPC methods', () => {
         .mockResolvedValue({ ok: true, users: [{ login: 'octo' }] }),
       listGitHubIssueTypesBySlug: vi.fn().mockResolvedValue({ ok: true, types: [{ id: 'it-1' }] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const labels = await dispatcher.dispatch(
       makeRequest('github.project.listLabelsBySlug', { owner: 'acme', repo: 'orca' })
     )
+
     const users = await dispatcher.dispatch(
       makeRequest('github.project.listAssignableUsersBySlug', {
         owner: 'acme',
@@ -741,6 +775,7 @@ describe('github RPC methods', () => {
         seedLogins: ['octo']
       })
     )
+
     const issueTypes = await dispatcher.dispatch(
       makeRequest('github.project.listIssueTypesBySlug', { owner: 'acme', repo: 'orca' })
     )
@@ -762,6 +797,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       getGitHubProjectViewTable: vi.fn().mockResolvedValue({ ok: true, data: { rows: [] } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -794,6 +830,7 @@ describe('github RPC methods', () => {
         item: { number: 9, title: 'Bug' }
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -822,6 +859,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateGitHubProjectItemField: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -847,6 +885,7 @@ describe('github RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateGitHubIssueTypeBySlug: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
     const response = await dispatcher.dispatch(

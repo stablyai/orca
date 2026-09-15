@@ -60,10 +60,13 @@ function formatGrace(minutes: number): string {
   if (minutes <= 0) {
     return 'No grace'
   }
+
   if (minutes < 60) {
     return `${minutes} minutes`
   }
+
   const hours = minutes / 60
+
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
 }
 
@@ -124,25 +127,32 @@ export function AutomationDetail({
       </div>
     )
   }
+
   const usageSummary = summarizeAutomationRunUsage(runs)
+
   const usageCoverage =
     usageSummary.knownRuns > 0
       ? `${usageSummary.knownRuns}/${runs.length} runs`
       : usageSummary.unavailableRuns > 0
         ? 'Unavailable'
         : 'No runs'
+
   const agentLabel =
     getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
       : workspaceName
+
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
+
   const hostDisplay = getAutomationHostDetailDisplay({
     automation,
     entry: hostEntry,
     hostLabelById
   })
+
   const runNowDisabled = runNowAvailability?.canRunNow === false
 
   return (

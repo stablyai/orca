@@ -22,6 +22,7 @@ export function findMarkdownPreviewSourceOpenFile(
 
   if (params.sourceFileId) {
     const idMatch = openFiles.find((file) => file.id === params.sourceFileId && ownerMatches(file))
+
     return (
       idMatch ??
       openFiles.find(
@@ -44,6 +45,7 @@ export function findMarkdownPreviewOpenedEditFileId(
   params: { filePath: string; worktreeId: string }
 ): string {
   const activeFileId = activeFileIdByWorktree[params.worktreeId]
+
   const activeFile = openFiles.find(
     (file) =>
       file.id === activeFileId &&
@@ -51,9 +53,11 @@ export function findMarkdownPreviewOpenedEditFileId(
       file.worktreeId === params.worktreeId &&
       file.mode === 'edit'
   )
+
   if (activeFile) {
     return activeFile.id
   }
+
   return (
     openFiles.find(
       (file) =>
@@ -80,9 +84,11 @@ function formatMarkdownPreviewRootPath(rootPath: string): string {
   if (rootPath === '') {
     return '/'
   }
+
   if (/^[A-Za-z]:$/.test(rootPath)) {
     return `${rootPath}/`
   }
+
   return rootPath
 }
 
@@ -91,6 +97,7 @@ export function deriveMarkdownPreviewSourceRoot(
   relativePath: string | null | undefined
 ): string {
   const normalizedFilePath = normalizeMarkdownPreviewAbsolutePath(filePath)
+
   const normalizedRelativePath =
     relativePath && !isMarkdownPreviewAbsolutePathLike(relativePath)
       ? normalizeMarkdownPreviewRelativePath(relativePath)
@@ -98,6 +105,7 @@ export function deriveMarkdownPreviewSourceRoot(
 
   if (normalizedRelativePath) {
     const suffix = `/${normalizedRelativePath}`
+
     if (normalizedFilePath.endsWith(suffix)) {
       return formatMarkdownPreviewRootPath(normalizedFilePath.slice(0, -suffix.length))
     }
@@ -123,6 +131,7 @@ function findWorktreeForMarkdownPreviewPath(
         const normalizedWorktreePathLength = normalizeMarkdownPreviewAbsolutePath(
           worktree.path
         ).length
+
         if (normalizedWorktreePathLength > bestMatchLength) {
           bestMatch = worktree
           bestMatchLength = normalizedWorktreePathLength
@@ -143,14 +152,18 @@ export function findMarkdownPreviewTargetWorktree(
   if (sourceWorktree && relativePathInsideRoot(sourceWorktree.path, absolutePath) !== null) {
     return sourceWorktree
   }
+
   return findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath, (worktree) => {
     const connectionId = getConnectionIdForFile(worktree.id, absolutePath)
+
     if (sourceOwner.kind === 'local') {
       return connectionId === null
     }
+
     if (sourceOwner.kind === 'ssh') {
       return connectionId === sourceOwner.connectionId
     }
+
     return false
   })
 }

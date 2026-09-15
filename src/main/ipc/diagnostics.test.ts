@@ -31,6 +31,7 @@ const {
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     mkdirSync: mkdirSyncMock,
@@ -57,11 +58,13 @@ import { registerDiagnosticsHandlers } from './diagnostics'
 
 function captureHandlers(): void {
   handlers.clear()
+
   for (const call of handleMock.mock.calls) {
     const [channel, handler] = call as [
       string,
       typeof handlers extends Map<string, infer V> ? V : never
     ]
+
     handlers.set(channel, handler)
   }
 }
@@ -118,6 +121,7 @@ describe('diagnostics IPC handlers', () => {
       bundleSubmissionId: 'bundleabcdefghijklmnop',
       payload: '{"type":"bundle-header"}\n{"safe":true}\n'
     })
+
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     readFileSyncMock.mockReturnValue(bundle.payload)
     const collect = handlers.get('diagnostics:collectBundle')!
@@ -140,10 +144,12 @@ describe('diagnostics IPC handlers', () => {
       bundleSubmissionId: 'bundleabcdefghijklmnop',
       payload: '{"type":"bundle-header"}\n{"safe":true}\n'
     })
+
     const globalOverrides = globalThis as {
       ORCA_BUILD_IDENTITY?: 'stable'
       ORCA_DIAGNOSTICS_TOKEN_URL?: string
     }
+
     globalOverrides.ORCA_BUILD_IDENTITY = 'stable'
     globalOverrides.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://official.example.com/diagnostics/token'
     process.env.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://attacker.example.com/diagnostics/token'
@@ -188,6 +194,7 @@ describe('diagnostics IPC handlers', () => {
     const upload = handlers.get('diagnostics:uploadBundle')!
     showMessageBoxMock.mockImplementation(async () => {
       await discard({}, bundle.bundleSubmissionId)
+
       return { response: 0 }
     })
 
@@ -203,6 +210,7 @@ describe('diagnostics IPC handlers', () => {
       bundleSubmissionId: 'bundleabcdefghijklmnop',
       payload: '{"original":true}\n'
     })
+
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     readFileSyncMock.mockReturnValue('{"edited":true}\n')
     const collect = handlers.get('diagnostics:collectBundle')!
@@ -259,6 +267,7 @@ describe('diagnostics IPC handlers', () => {
 
   it('expires retained bundle previews without another diagnostics call', async () => {
     vi.useFakeTimers()
+
     try {
       const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
       collectDiagnosticBundleMock.mockReturnValue(bundle)
@@ -299,6 +308,7 @@ describe('diagnostics IPC handlers', () => {
       bytes: 37,
       spanCount: 1
     })
+
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     const collect = handlers.get('diagnostics:collectBundle')!
 
@@ -314,6 +324,7 @@ describe('diagnostics IPC handlers', () => {
       bundleSubmissionId: 'bundleabcdefghijklmnop',
       payload: '{"secret":"retained in main"}\n'
     })
+
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     const collect = handlers.get('diagnostics:collectBundle')!
 

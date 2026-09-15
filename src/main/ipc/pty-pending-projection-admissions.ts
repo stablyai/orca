@@ -22,9 +22,11 @@ export function compactPendingProjectionAdmissions(
   if (state.projectionAdmissionsTransferred) {
     return { projectionAdmissionsTransferred: true }
   }
+
   const ids = Array.from(
     new Set((state.projectionAdmissionIds ?? []).filter((id) => options.isPending(id)))
   )
+
   return ids.length > 0 ? { projectionAdmissionIds: ids } : {}
 }
 
@@ -35,14 +37,19 @@ export function appendPendingProjectionAdmission(
 ): PendingProjectionAdmissions {
   if (state.projectionAdmissionsTransferred) {
     options.transfer([id], 'pending-projection-cap')
+
     return { projectionAdmissionsTransferred: true }
   }
+
   const compacted = compactPendingProjectionAdmissions(state, options)
   const ids = [...(compacted.projectionAdmissionIds ?? []), id]
+
   if (ids.length <= PTY_PENDING_PROJECTION_ADMISSION_MAX_IDS) {
     return { projectionAdmissionIds: ids }
   }
+
   options.transfer(ids, 'pending-projection-cap')
+
   return { projectionAdmissionsTransferred: true }
 }
 

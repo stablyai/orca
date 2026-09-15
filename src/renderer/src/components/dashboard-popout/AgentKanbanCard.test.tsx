@@ -10,11 +10,13 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentKanbanCard } from './AgentKanbanCard'
 
 const agentIconRender = vi.fn()
+
 const agentStateDotRender = vi.fn()
 
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => {
     agentIconRender()
+
     return <span data-testid="agent-icon" />
   }
 }))
@@ -22,6 +24,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/components/AgentStateDot', () => ({
   AgentStateDot: ({ state }: { state: string }) => {
     agentStateDotRender(state)
+
     return <span data-testid="state-dot" />
   }
 }))
@@ -88,6 +91,7 @@ describe('AgentKanbanCard', () => {
       dotState: 'waiting',
       askSummary: 'Approve deploy?'
     })
+
     const { container, rerender } = renderCard({ card: attentionCard, now: 2_000 })
 
     expect(screen.queryByTestId('state-dot')).not.toBeInTheDocument()
@@ -185,20 +189,25 @@ describe('AgentKanbanCard', () => {
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
     })
+
     expect(attention.firstElementChild?.className).toContain('border-agent-question/40')
 
     cleanup()
+
     const { container: done } = renderCard({
       card: card({ bucket: 'done', dotState: 'done', unseen: true }),
       now: 2_000
     })
+
     expect(done.firstElementChild?.className).toContain('border-emerald-500/40')
 
     cleanup()
+
     const { container: idle } = renderCard({
       card: card({ bucket: 'idle', dotState: 'done', unseen: false }),
       now: 2_000
     })
+
     const idleClassName = idle.firstElementChild?.className ?? ''
     expect(idleClassName).toContain('border-border/60')
     expect(idleClassName).not.toContain('emerald')
@@ -243,11 +252,14 @@ describe('AgentKanbanCard', () => {
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
     const onOpenTerminal = vi.fn()
+
     const initial = card({
       startedAt: 1_000,
       subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
     })
+
     const repoIcon: RepoIcon = { type: 'lucide', name: 'Rocket' }
+
     const { rerender } = render(
       <TooltipProvider>
         <AgentKanbanCard
@@ -258,6 +270,7 @@ describe('AgentKanbanCard', () => {
         />
       </TooltipProvider>
     )
+
     expect(agentIconRender).toHaveBeenCalledTimes(1)
     expect(screen.getByText('1m')).toBeInTheDocument()
 
@@ -309,6 +322,7 @@ describe('AgentKanbanCard', () => {
   it('rerenders when the repo icon changes', () => {
     const onOpenTerminal = vi.fn()
     const initial = card({ startedAt: 1_000 })
+
     const { rerender } = render(
       <TooltipProvider>
         <AgentKanbanCard
@@ -319,6 +333,7 @@ describe('AgentKanbanCard', () => {
         />
       </TooltipProvider>
     )
+
     expect(agentIconRender).toHaveBeenCalledTimes(1)
 
     rerender(

@@ -23,6 +23,7 @@ export function DictationController() {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
+
   const {
     start: startCapture,
     stop: stopCapture,
@@ -58,16 +59,19 @@ export function DictationController() {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture()
+
       try {
         await window.api.speech.stopDictation(sessionId)
       } catch {
         // Swallow stop errors — the worker may already be torn down.
       }
+
       // Why: stopDictation() resolves on main-process completion, while final
       // transcript delivery is renderer IPC. Wait for this session's stopped
       // event so old finals cannot be mistaken for the next dictation run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
       const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
+
       if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
         toast.message(
           translate(
@@ -76,14 +80,17 @@ export function DictationController() {
           )
         )
       }
+
       insertionTargetRef.current = null
       finalTranscriptReceivedRef.current = false
       insertedFinalTranscriptRef.current = ''
       intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
+
       if (activeSessionIdRef.current === sessionId) {
         activeSessionIdRef.current = null
       }
+
       dictationStateRef.current = 'idle'
       setDictationState('idle')
       setPartialTranscript('')
@@ -97,6 +104,7 @@ export function DictationController() {
     }
 
     const modelId = settings?.voice?.sttModel
+
     if (!modelId) {
       toast('No speech model selected. Download one in Settings > Voice.', {
         action: {
@@ -110,11 +118,13 @@ export function DictationController() {
           }
         }
       })
+
       return
     }
 
     if (!settings?.voice?.enabled) {
       toast('Voice dictation is disabled. Enable it in Settings > Voice.')
+
       return
     }
 
@@ -137,6 +147,7 @@ export function DictationController() {
       // Why: worker startup can take seconds after idle teardown. Capture first
       // and buffer locally so speech during "Starting..." is not discarded.
       const preferredMicrophoneDeviceId = settings?.voice?.microphoneDeviceId ?? null
+
       const captureResult = await startCapture({
         bufferAudio: true,
         sessionId,
@@ -146,6 +157,7 @@ export function DictationController() {
           if (dictationRunRef.current !== runId) {
             return
           }
+
           toast.message(
             translate(
               'auto.components.dictation.DictationController.micDisconnected',
@@ -155,7 +167,9 @@ export function DictationController() {
           stopDictationRef.current?.()
         }
       })
+
       captureStarted = true
+
       if (captureResult?.fellBackToDefaultMicrophone) {
         // Why: a stop requested during startup tears this capture down below, so the
         // notice would describe a fallback that never records anything.
@@ -174,37 +188,46 @@ export function DictationController() {
       } else {
         micFallbackNotifiedForRef.current = null
       }
+
       if (stopRequestedDuringStartRef.current) {
         stopCapture({ preserveBufferedAudio: true })
       }
+
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
         stopCapture()
         insertionTargetRef.current = null
+
         return
       }
 
       await window.api.speech.startDictation(modelId, undefined, sessionId)
+
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
         insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         drainStoppedSession(sessionId)
+
         return
       }
 
       await flushBufferedAudio()
+
       if (dictationRunRef.current !== runId) {
         discardBufferedAudio()
         insertionTargetRef.current = null
         stopCapture()
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         drainStoppedSession(sessionId)
+
         return
       }
+
       if (stopRequestedDuringStartRef.current) {
         await finishDictationSession(sessionId)
+
         return
       }
 
@@ -215,11 +238,14 @@ export function DictationController() {
       if (dictationRunRef.current !== runId) {
         return
       }
+
       await window.api.speech.stopDictation(sessionId).catch(() => undefined)
       drainStoppedSession(sessionId)
+
       if (captureStarted) {
         stopCapture()
       }
+
       discardBufferedAudio()
       const message = String(err)
       insertionTargetRef.current = null
@@ -230,11 +256,14 @@ export function DictationController() {
       insertedFinalTranscriptRef.current = ''
       activeSessionIdRef.current = null
       setPartialTranscript('')
+
       if (message.includes('dictation_canceled')) {
         dictationStateRef.current = 'idle'
         setDictationState('idle')
+
         return
       }
+
       dictationStateRef.current = 'error'
       setDictationState('error')
       showDictationStartErrorToast(message)
@@ -260,6 +289,7 @@ export function DictationController() {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture({ preserveBufferedAudio: true })
+
       return
     }
 
@@ -268,9 +298,11 @@ export function DictationController() {
     }
 
     const sessionId = activeSessionIdRef.current
+
     if (!sessionId) {
       return
     }
+
     await finishDictationSession(sessionId)
   }, [finishDictationSession, setDictationState, stopCapture])
 
@@ -282,6 +314,7 @@ export function DictationController() {
   // the keyDown so Cmd+E doesn't reach xterm or trigger system shortcuts).
   useEffect(() => {
     const mode = settings?.voice?.dictationMode ?? 'toggle'
+
     if (mode !== 'toggle') {
       return
     }
@@ -294,6 +327,7 @@ export function DictationController() {
       ) {
         return
       }
+
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
         void stopDictation()
       } else {
@@ -302,6 +336,7 @@ export function DictationController() {
     }
 
     const cleanup = window.api.ui.onDictationKeyDown(handleKeyDown)
+
     return cleanup
   }, [
     settings?.voice?.dictationMode,
@@ -313,30 +348,39 @@ export function DictationController() {
 
   useEffect(() => {
     const canDictate = (): boolean => Boolean(settings?.voice?.enabled && settings.voice.sttModel)
+
     const handleControl = (event: Event): void => {
       if (!canDictate() || dictationStateRef.current === 'stopping') {
         return
       }
+
       const action = (event as CustomEvent<DictationControlAction>).detail
+
       if (action === 'start') {
         if (dictationStateRef.current === 'idle') {
           void startDictation()
         }
+
         return
       }
+
       if (action === 'stop') {
         if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
           void stopDictation()
         }
+
         return
       }
+
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
         void stopDictation()
       } else {
         void startDictation()
       }
     }
+
     document.addEventListener(DICTATION_CONTROL_EVENT, handleControl)
+
     return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
   }, [settings?.voice?.enabled, settings?.voice?.sttModel, startDictation, stopDictation])
 
@@ -356,6 +400,7 @@ export function DictationController() {
       if (data.sessionId !== activeSessionIdRef.current) {
         return
       }
+
       setPartialTranscript(data.text)
     })
 
@@ -363,14 +408,17 @@ export function DictationController() {
       if (data.sessionId !== activeSessionIdRef.current || !data.text) {
         return
       }
+
       setPartialTranscript('')
       finalTranscriptReceivedRef.current = true
       const target = insertionTargetRef.current
+
       if (target) {
         const textToInsert = formatFinalTranscriptSegment(
           data.text,
           insertedFinalTranscriptRef.current
         )
+
         insertText(textToInsert, target)
         insertedFinalTranscriptRef.current += textToInsert
       } else if (!intentionalTargetCancellationRef.current) {
@@ -391,6 +439,7 @@ export function DictationController() {
       if (data.sessionId !== activeSessionIdRef.current) {
         return
       }
+
       const sessionId = data.sessionId
       erroredSessionIdsRef.current.add(sessionId)
       dictationRunRef.current += 1

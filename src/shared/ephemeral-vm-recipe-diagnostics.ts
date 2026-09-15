@@ -17,14 +17,19 @@ export function getEphemeralVmRecipeResultWarnings(
   result: EphemeralVmRecipeResult
 ): EphemeralVmRecipeResultWarning[] {
   const connection = getEphemeralVmRecipeResultConnection(result)
+
   if (connection.type !== 'orca-server') {
     return []
   }
+
   const pairing = parsePairingCode(connection.pairingCode)
+
   if (!pairing) {
     return []
   }
+
   const warnings: EphemeralVmRecipeResultWarning[] = []
+
   if (isPublicInsecureWebSocketEndpoint(pairing.endpoint)) {
     warnings.push({
       id: 'recipe.result.endpoint.public_ws',
@@ -32,6 +37,7 @@ export function getEphemeralVmRecipeResultWarnings(
       remediation: 'Use wss://, a private network, or an authenticated tunnel for public endpoints.'
     })
   }
+
   return warnings
 }
 
@@ -39,6 +45,7 @@ export function redactEphemeralVmRecipeDiagnosticText(text: string): string {
   if (!text) {
     return text
   }
+
   return stripCredentialsFromMessage(text)
     .replace(/orca:\/\/pair\?code=[A-Za-z0-9_-]+/g, 'orca://pair?code=[redacted]')
     .replace(
@@ -51,6 +58,7 @@ export function redactEphemeralVmRecipeResultForDiagnostics(
   result: EphemeralVmRecipeResult
 ): EphemeralVmRecipeResult {
   const userData = result.userData ? redactJsonObject(result.userData) : undefined
+
   if ('connection' in result) {
     return {
       ...result,
@@ -58,6 +66,7 @@ export function redactEphemeralVmRecipeResultForDiagnostics(
       ...(userData ? { userData } : {})
     }
   }
+
   return {
     ...result,
     pairingCode: 'orca://pair?code=[redacted]',
@@ -69,6 +78,7 @@ function redactConnection(connection: EphemeralVmRecipeConnection): EphemeralVmR
   if (connection.type === 'orca-server') {
     return { ...connection, pairingCode: 'orca://pair?code=[redacted]' }
   }
+
   return {
     ...connection,
     target: {
@@ -82,19 +92,23 @@ function redactConnection(connection: EphemeralVmRecipeConnection): EphemeralVmR
 
 function isPublicInsecureWebSocketEndpoint(endpoint: string): boolean {
   let parsed: URL
+
   try {
     parsed = new URL(endpoint)
   } catch {
     return false
   }
+
   if (parsed.protocol !== 'ws:') {
     return false
   }
+
   return !isLocalOrPrivateHostname(parsed.hostname)
 }
 
 function isLocalOrPrivateHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+
   if (
     normalized === 'localhost' ||
     normalized.endsWith('.localhost') ||
@@ -102,18 +116,25 @@ function isLocalOrPrivateHostname(hostname: string): boolean {
   ) {
     return true
   }
+
   if (normalized === '::1' || normalized.startsWith('fe80:') || normalized.startsWith('fd')) {
     return true
   }
+
   const ipv4 = normalized.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+
   if (!ipv4) {
     return false
   }
+
   const octets = ipv4.slice(1).map((part) => Number(part))
+
   if (octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
     return false
   }
+
   const [first = 0, second = 0] = octets
+
   return (
     first === 10 ||
     first === 127 ||
@@ -136,9 +157,11 @@ function redactJsonValue(value: JsonValue): JsonValue {
   if (Array.isArray(value)) {
     return value.map(redactJsonValue)
   }
+
   if (value && typeof value === 'object') {
     return redactJsonObject(value)
   }
+
   return value
 }
 

@@ -25,11 +25,13 @@ export const AiVaultSearchSourceSchema = z.object({
   filePath: z.string().optional(),
   codexHome: z.string().optional()
 })
+
 export const AiVaultSearchEvidenceSchema = z.object({
   snippet: z.string(),
   role: z.enum(['user', 'assistant', 'tool', 'system', 'unknown']),
   timestamp: z.string().nullable()
 })
+
 // Older hosts may omit attribution; the desktop stamps remote answers.
 const executionHostIdSchema = z.string().min(1)
 
@@ -51,27 +53,33 @@ export const AiVaultSearchHitSchema = z
   .refine((hit) => hit.source.presence === 'present' || hit.resumeCommand === undefined, {
     message: 'Only present sources may have a resume command'
   })
+
 export const AiVaultSearchPageSchema = z.object({
   cursor: z.string().nullable(),
   hasMore: z.boolean()
 })
+
 export const AiVaultSearchTruncationSchema = z.object({
   candidates: z.boolean(),
   snippets: z.number().int().nonnegative(),
   query: z.boolean(),
   freshness: z.boolean()
 })
+
 const routeSchema = z.enum(['phrase', 'and', 'or', 'typo+phrase', 'typo+and', 'typo+or'])
+
 export const AiVaultSearchPlannerReportSchema = z.object({
   route: routeSchema,
   repairedTerms: z.array(z.string()).optional(),
   scope: z.enum(['conversation', 'all'])
 })
+
 export const AiVaultSearchDebugSchema = z.object({
   route: routeSchema,
   repairedTerms: z.array(z.string()).optional(),
   plannerReport: AiVaultSearchPlannerReportSchema
 })
+
 export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('results'),
@@ -93,7 +101,9 @@ export const AiVaultSearchResponseSchema = z.discriminatedUnion('kind', [
     reason: z.enum(['disabled', 'not-ready', 'no-service'])
   })
 ])
+
 export const AiVaultSearchStatusRequestSchema = z.object({})
+
 export const AiVaultSearchStatusSchema = z.object({
   enabled: z.boolean(),
   phase: z.enum(['idle', 'indexing', 'current', 'degraded', 'closed']),

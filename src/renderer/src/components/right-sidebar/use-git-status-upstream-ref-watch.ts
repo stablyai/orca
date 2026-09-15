@@ -13,7 +13,9 @@ export function useGitStatusUpstreamRefWatch(args: {
   const runtimeEnvironmentId = args.worktreeId
     ? getRightSidebarWorktreeRuntimeSettings(args.worktreeId).activeRuntimeEnvironmentId
     : null
+
   const connectionId = args.worktreeId ? (getConnectionId(args.worktreeId) ?? undefined) : undefined
+
   const scope =
     args.enabled && args.executionHostId
       ? `${args.executionHostId}\0${runtimeEnvironmentId}\0${args.worktreeId}\0${args.worktreePath}`
@@ -24,9 +26,11 @@ export function useGitStatusUpstreamRefWatch(args: {
       if (!scope || !args.executionHostId || !args.worktreeId || !args.worktreePath) {
         return
       }
+
       const upstreamName = status.upstreamStatus?.hasUpstream
         ? status.upstreamStatus.upstreamName
         : undefined
+
       void setRuntimeGitStatusUpstreamRefWatch(
         {
           settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
@@ -55,9 +59,11 @@ export function useGitStatusUpstreamRefWatch(args: {
     if (!scope || !args.executionHostId || !args.worktreeId || !args.worktreePath) {
       return
     }
+
     const executionHostId = args.executionHostId
     const worktreeId = args.worktreeId
     const worktreePath = args.worktreePath
+
     return () => {
       void setRuntimeGitStatusUpstreamRefWatch(
         {

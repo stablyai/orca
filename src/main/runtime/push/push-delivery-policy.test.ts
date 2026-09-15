@@ -7,9 +7,11 @@ afterEach(() => vi.useRealTimers())
 it('does not send or consume cooldown while the desktop is active', async () => {
   const reg = registration()
   reg.filter = { ...reg.filter, onlyWhenDesktopAway: true }
+
   const { dispatcher, sends } = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: reg }]
   })
+
   dispatcher.enqueue(notification({ desktopAway: false, emittedAt: 10_000 }))
   dispatcher.enqueue(notification({ desktopAway: true, emittedAt: 10_001 }))
   await flush()
@@ -34,10 +36,12 @@ it('expires per phone at the boundary, preserves leases across persistence, and 
 it('rechecks expiry before a retry', async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(10)
+
   const { dispatcher, sends, runRetry } = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration({ expiresAt: 20 }) }],
     sendImpl: async () => ({ ok: false, reason: 'unreachable' }) as never
   })
+
   dispatcher.enqueue(notification())
   await flush()
   vi.setSystemTime(20)

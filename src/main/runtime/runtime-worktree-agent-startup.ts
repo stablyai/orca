@@ -25,6 +25,7 @@ import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type WorktreeStartupDraftPaste = { agent: TuiAgent; content: string }
+
 export type WorktreeStartupFollowup = { expectedProcess: string; prompt: string }
 
 type StartupEnvironment = {
@@ -41,24 +42,30 @@ export async function buildWorktreeStartupForDraft(
   draftPaste?: WorktreeStartupDraftPaste
 } | null> {
   const content = environment.draft.trim()
+
   if (!content) {
     return null
   }
+
   const { repo, settings } = environment
   const preferredAgent = environment.requestedAgent ?? settings.defaultTuiAgent
+
   // Why: `blank` is an explicit shell-only preference, so linked drafts must not auto-pick an agent.
   if (preferredAgent === 'blank') {
     return null
   }
+
   let agent =
     isTuiAgent(preferredAgent) && isTuiAgentEnabled(preferredAgent, settings.disabledTuiAgents)
       ? preferredAgent
       : null
+
   if (!agent) {
     let detected: string[] = []
     // Why: detection has to run on the machine that will run the agent, and SSH ownership has two
     // spellings — the raw field probes this client for an `executionHostId: 'ssh:*'`-only repo.
     const sshConnectionId = getRepoSshConnectionId(repo)
+
     try {
       // Why: startup-draft fallback can run from sparse runtime launch envs too.
       detected = sshConnectionId
@@ -67,19 +74,23 @@ export async function buildWorktreeStartupForDraft(
     } catch {
       detected = []
     }
+
     agent = pickTuiAgent(null, detected.filter(isTuiAgent), settings.disabledTuiAgents)
   }
+
   if (!agent) {
     return null
   }
 
   const isRemote = repoIsRemote(repo)
   const platform = environment.getLaunchPlatform()
+
   const shell = resolveLocalWindowsAgentStartupShell({
     platform,
     isRemote,
     terminalWindowsShell: settings.terminalWindowsShell
   })
+
   const launchArgs = {
     agent,
     cmdOverrides: settings.agentCmdOverrides ?? {},
@@ -89,7 +100,9 @@ export async function buildWorktreeStartupForDraft(
     shell,
     isRemote
   }
+
   const draftPlan = buildAgentDraftLaunchPlan({ ...launchArgs, draft: content })
+
   if (draftPlan) {
     return {
       agent,
@@ -103,14 +116,17 @@ export async function buildWorktreeStartupForDraft(
       }
     }
   }
+
   const startupPlan = buildAgentStartupPlan({
     ...launchArgs,
     prompt: '',
     allowEmptyPromptLaunch: true
   })
+
   if (!startupPlan) {
     return null
   }
+
   return {
     agent,
     startup: {
@@ -136,12 +152,15 @@ export function buildWorktreeStartupForAgent(
   }
 ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
   const { agent, repo, settings } = environment
+
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
+
   const platform = environment.getLaunchPlatform()
   const isRemote = repoIsRemote(repo)
   const sessionOptions = environment.toSessionOptions(environment.launchPreferences)
+
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: environment.prompt ?? '',
@@ -159,9 +178,11 @@ export function buildWorktreeStartupForAgent(
     isRemote,
     allowEmptyPromptLaunch: true
   })
+
   if (!startupPlan) {
     throw new Error(`Could not build launch command for ${agent}.`)
   }
+
   return {
     agent,
     startup: {
@@ -188,9 +209,11 @@ export async function markLocalWorktreeTrusted(
   workspacePath: string
 ): Promise<void> {
   const preset = TUI_AGENT_CONFIG[agent].preflightTrust
+
   if (!preset) {
     return
   }
+
   try {
     if (preset === 'cursor') {
       markCursorWorkspaceTrusted(workspacePath)
@@ -211,9 +234,11 @@ export async function markRemoteWorktreeTrusted(
   workspacePath: string
 ): Promise<void> {
   const preset = TUI_AGENT_CONFIG[agent].preflightTrust
+
   if (!preset) {
     return
   }
+
   try {
     await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
   } catch {

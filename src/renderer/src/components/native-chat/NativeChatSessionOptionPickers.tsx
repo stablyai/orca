@@ -76,6 +76,7 @@ function PickerTrigger(props: {
           value0: props.tooltipLabel,
           value1: props.label
         })
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -121,6 +122,7 @@ function DescriptorMenuRows(props: {
   invokeAction: () => void
 }): React.JSX.Element {
   const { descriptor, pending, setValue, invokeAction } = props
+
   // Why: flip-only without a baseline is an action — never claim On/Off.
   if (descriptor.action?.type === 'toggle-command') {
     return (
@@ -131,6 +133,7 @@ function DescriptorMenuRows(props: {
       </DropdownMenuItem>
     )
   }
+
   // Why: agent-picker opens the TUI; it is not a set of radio choices.
   if (descriptor.action?.type === 'agent-picker') {
     return (
@@ -142,6 +145,7 @@ function DescriptorMenuRows(props: {
       </DropdownMenuItem>
     )
   }
+
   // Why one switch row and not On/Off: the option is binary, so a single control
   // carries it. The row owns the label, which is why the caller drops its header.
   // The value always renders; the marker is what keeps an unpicked one from
@@ -151,6 +155,7 @@ function DescriptorMenuRows(props: {
     const label = nativeChatSessionOptionLabel(descriptor)
     const marker = sessionOptionValueMarker(descriptor)
     const markerId = `session-option-marker-${descriptor.id}`
+
     return (
       <DropdownMenuItem
         role="switch"
@@ -182,6 +187,7 @@ function DescriptorMenuRows(props: {
       </DropdownMenuItem>
     )
   }
+
   return (
     <DropdownMenuRadioGroup
       aria-label={nativeChatSessionOptionLabel(descriptor)}
@@ -229,10 +235,13 @@ function NativeChatSessionOptionPickersInner({
   const [pendingId, setPendingId] = useState<string | null>(null)
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const options = sortNativeChatSessionOptions(snapshot)
+
   if (!surface || !model) {
     return null
   }
+
   const requestedModelSequence = pickerRequest?.id === model.id ? pickerRequest.sequence : null
+
   const requestedOptionsSequence = options.some((descriptor) => descriptor.id === pickerRequest?.id)
     ? (pickerRequest?.sequence ?? null)
     : null
@@ -240,6 +249,7 @@ function NativeChatSessionOptionPickersInner({
   const setOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
     runSurfaceCall(descriptor.id, setPendingId, () => surface.setOption(descriptor.id, value))
   }
+
   const invokeAction = (descriptor: SessionOptionDescriptor): void => {
     runSurfaceCall(descriptor.id, setPendingId, () => surface.invokeAction(descriptor.id))
   }
@@ -247,6 +257,7 @@ function NativeChatSessionOptionPickersInner({
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
   const modelTooltip = translate('components.native-chat.composer.model', 'Model')
   const optionsTooltip = nativeChatOptionsPillTitle(options)
+
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
@@ -292,6 +303,7 @@ function NativeChatSessionOptionPickersInner({
           <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-60">
             {options.map((descriptor, index) => {
               const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason)
+
               return (
                 <div key={descriptor.id}>
                   {index > 0 ? <DropdownMenuSeparator /> : null}

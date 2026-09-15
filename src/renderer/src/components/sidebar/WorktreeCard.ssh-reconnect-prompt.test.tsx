@@ -7,19 +7,31 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
 
 let WorktreeCard: typeof WorktreeCardComponent
+
 let sshConnectionStates = new Map<string, { status: string }>()
+
 let sshTargetLabels = new Map<string, string>()
+
 let removedSshTargetLabels = new Map<string, string>()
+
 let runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
+
 let runtimeEnvironments: { id: string; name: string }[] = []
+
 let sshStateByEnvironment = new Map()
+
 let worktreesByRepo: Record<string, Worktree[]> = {}
+
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 
 vi.mock('@/store', () => ({
@@ -221,14 +233,17 @@ describe('WorktreeCard SSH reconnect prompt', () => {
   it('marks a runtime-host worktree disconnected once a probe finds it unreachable', () => {
     runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     runtimeStatusByEnvironmentId.set('env-1', { status: null })
+
     const runtimeRepo: Repo = {
       ...makeRepo(),
       connectionId: undefined,
       executionHostId: 'runtime:env-1'
     }
+
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
+
     expect(markup).toContain('Remote Mac disconnected')
   })
 
@@ -236,14 +251,17 @@ describe('WorktreeCard SSH reconnect prompt', () => {
   // remote card destructive and dimmed between launch and the first probe answering.
   it('leaves a runtime-host worktree undimmed before its first probe answers', () => {
     runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
+
     const runtimeRepo: Repo = {
       ...makeRepo(),
       connectionId: undefined,
       executionHostId: 'runtime:env-1'
     }
+
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
+
     expect(markup).not.toContain('Remote Mac disconnected')
     expect(markup).toContain('Project on Remote Mac')
     expect(markup).not.toContain('opacity-60')
@@ -264,6 +282,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
         isActive={false}
       />
     )
+
     const buildLinuxMarkup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree()}
@@ -286,11 +305,13 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       removedTargetLabels: new Map(),
       targetsHydrated: true
     })
+
     const worktree = {
       ...makeWorktree(),
       hostId: 'ssh:ssh-target-1' as const,
       runtimeOwnerEnvironmentId: 'hub-1'
     }
+
     worktreesByRepo = { 'repo-1': [worktree] }
 
     const markup = renderToStaticMarkup(

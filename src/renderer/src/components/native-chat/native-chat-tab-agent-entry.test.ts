@@ -25,11 +25,13 @@ function entry(
 describe('findTabAgentEntry (#19 selector)', () => {
   it('returns the entry whose paneKey carries the tab id prefix', () => {
     const target = entry({ paneKey: 'tab-1:leaf-a', agentType: 'claude' })
+
     const map: Record<string, AgentStatusEntry> = {
       'tab-0:leaf-z': entry({ paneKey: 'tab-0:leaf-z' }),
       'tab-1:leaf-a': target,
       'tab-2:leaf-b': entry({ paneKey: 'tab-2:leaf-b' })
     }
+
     expect(findTabAgentEntry(map, 'tab-1')).toBe(target)
   })
 
@@ -37,16 +39,19 @@ describe('findTabAgentEntry (#19 selector)', () => {
     const map: Record<string, AgentStatusEntry> = {
       'tab-0:leaf-z': entry({ paneKey: 'tab-0:leaf-z' })
     }
+
     expect(findTabAgentEntry(map, 'tab-1')).toBeUndefined()
   })
 
   it('returns the first matching pane (deterministic insertion order)', () => {
     const first = entry({ paneKey: 'tab-1:leaf-a' })
     const second = entry({ paneKey: 'tab-1:leaf-b' })
+
     const map: Record<string, AgentStatusEntry> = {
       'tab-1:leaf-a': first,
       'tab-1:leaf-b': second
     }
+
     expect(findTabAgentEntry(map, 'tab-1')).toBe(first)
   })
 
@@ -54,17 +59,20 @@ describe('findTabAgentEntry (#19 selector)', () => {
     const map: Record<string, AgentStatusEntry> = {
       'tab-10:leaf-a': entry({ paneKey: 'tab-10:leaf-a' })
     }
+
     // `tab-1:` prefix must not match `tab-10:` — the colon delimiter guards this.
     expect(findTabAgentEntry(map, 'tab-1')).toBeUndefined()
   })
 
   it('resolves identically to the whole-map scan, including the empty-tabid fallback', () => {
     const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+
     const target = entry({
       paneKey,
       agentType: 'claude',
       providerSession: { key: 'session_id', id: 'sess-abc' }
     })
+
     const map: Record<string, AgentStatusEntry> = {
       'tab-0:other': entry({ paneKey: 'tab-0:other', agentType: 'codex' }),
       [paneKey]: target
@@ -72,6 +80,7 @@ describe('findTabAgentEntry (#19 selector)', () => {
 
     // Old path: scan whole map, then fall back to `${tabId}:` when absent.
     const oldEntry = findTabAgentEntry(map, 'tab-1')
+
     const oldResolution = resolveNativeChatSession({
       paneKey: oldEntry?.paneKey ?? 'tab-1:',
       launchAgent: 'claude',
@@ -81,6 +90,7 @@ describe('findTabAgentEntry (#19 selector)', () => {
 
     // New path: narrowed selector returns the same entry; same resolution.
     const newEntry = findTabAgentEntry(map, 'tab-1')
+
     const newResolution = resolveNativeChatSession({
       paneKey: newEntry?.paneKey ?? 'tab-1:',
       launchAgent: 'claude',

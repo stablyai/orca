@@ -15,6 +15,7 @@ export const PROJECT_RUNTIME_METHODS = [
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
+
       return { projects: runtime.listProjects() }
     }
   }),
@@ -30,6 +31,7 @@ export const PROJECT_RUNTIME_METHODS = [
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
+
       return { setups: runtime.listProjectHostSetups() }
     }
   }),

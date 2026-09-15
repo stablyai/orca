@@ -66,26 +66,32 @@ export function useWorktreeJumpPaletteQuickActions({
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
     const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
+
     if (!repoIdForComposer) {
       return
     }
+
     void state.prefetchWorktreeCreateBase(repoIdForComposer)
   }, [])
+
   const openCreateWorkspaceAction = useCallback(() => {
     prefetchCreateWorkspaceBaseForComposer()
     queueMicrotask(() =>
       openModal('new-workspace-composer', { telemetrySource: 'command_palette' })
     )
   }, [openModal, prefetchCreateWorkspaceBaseForComposer])
+
   const deleteActiveWorkspaceAction = useCallback(() => {
     const {
       activeView: currentView,
       activeWorktreeId: currentWorktreeId,
       activeWorkspaceExecutionHostId
     } = useAppStore.getState()
+
     if (currentView !== 'terminal' || !currentWorktreeId) {
       return
     }
+
     queueMicrotask(() =>
       runWorktreeDelete(
         currentWorktreeId,
@@ -93,10 +99,12 @@ export function useWorktreeJumpPaletteQuickActions({
       )
     )
   }, [])
+
   const openAddQuickCommandAction = useCallback(() => {
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget])
+
   const buildQuickActionContext = useCallback(
     () =>
       buildCmdJQuickActionContext({
@@ -119,6 +127,7 @@ export function useWorktreeJumpPaletteQuickActions({
       openNewTerminalTabInActiveWorkspace
     ]
   )
+
   // Why: buildQuickActionContext() reads the store imperatively, so these voided values are the
   // memo's real inputs — each one is read (some transitively, e.g. runtimeStatusByEnvironmentId
   // via the managed-browser creation policy) while availability is computed.
@@ -135,6 +144,7 @@ export function useWorktreeJumpPaletteQuickActions({
     void settings?.activeRuntimeEnvironmentId
     void runtimeStatusByEnvironmentId
     const context = buildQuickActionContext()
+
     return actionResults.filter((action) => action.isAvailable(context).available)
   }, [
     actionResults,
@@ -151,6 +161,7 @@ export function useWorktreeJumpPaletteQuickActions({
     settings?.activeRuntimeEnvironmentId,
     runtimeStatusByEnvironmentId
   ])
+
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(
     () =>
       rankCmdJMiddleResults({
@@ -164,8 +175,10 @@ export function useWorktreeJumpPaletteQuickActions({
       ),
     [availableActionResults, deferredQuery, settingsResults]
   )
+
   return { prefetchCreateWorkspaceBaseForComposer, buildQuickActionContext, middleItems }
 }
 
 export { getUnavailableQuickActionMessage }
+
 export type WorktreeJumpPaletteQuickActions = ReturnType<typeof useWorktreeJumpPaletteQuickActions>

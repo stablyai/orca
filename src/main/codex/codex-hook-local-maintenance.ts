@@ -33,9 +33,11 @@ export async function refreshCodexRuntimeUserHooksExclusively(
   // rewrites the runtime files they are keyed against.
   promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
+
   if (!config) {
     // Why: disabled launch prep once called remove(); preserve that legacy cleanup even when runtime hooks.json is malformed.
     await cleanupLegacyManagedHookRepresentations()
+
     return {
       agent: 'codex',
       state: 'error',
@@ -47,6 +49,7 @@ export async function refreshCodexRuntimeUserHooksExclusively(
 
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
+
   if (!hookPlan) {
     return {
       agent: 'codex',
@@ -56,6 +59,7 @@ export async function refreshCodexRuntimeUserHooksExclusively(
       detail: 'Could not read system Codex hooks.json'
     }
   }
+
   config.hooks = hookPlan.hooks
   writeCodexHooksJson(configPath, hookPlan.hooks)
 
@@ -82,9 +86,11 @@ export async function refreshCodexRuntimeUserHooksExclusively(
       detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
     }
   }
+
   snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
   await cleanupLegacyManagedHookRepresentations()
+
   return getStatus(runtimeHomePath)
 }
 
@@ -94,9 +100,11 @@ export async function removeCodexHooksExclusively(
   const configPath = getConfigPath()
   const configExists = existsSync(configPath)
   const config = readHooksJson(configPath)
+
   if (!config) {
     // Why: a malformed hooks.json shouldn't strand old hooks in ~/.codex or the legacy profile after disabling.
     await cleanupLegacyManagedHookRepresentations()
+
     return {
       agent: 'codex',
       state: 'error',
@@ -109,18 +117,22 @@ export async function removeCodexHooksExclusively(
   const nextHooks = { ...config.hooks }
   // Why: same broad matcher as install() so stale entries from older builds get cleaned even if scriptPath moved.
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
+
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       // Why: a non-array event value would make removeManagedCommands throw; skip it.
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
       nextHooks[eventName] = cleaned
     }
   }
+
   if (configExists) {
     // Why: remove() may be the only repair path for a file whose top-level plugin metadata makes Codex reject hooks.json.
     writeCodexHooksJson(configPath, nextHooks)

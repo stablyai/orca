@@ -36,58 +36,73 @@ export function collectLinkedLinearIssueRefsFromWorktrees(
 ): LinkedLinearIssueRef[] {
   const selectedWorkspaceId =
     options?.workspaceId && options.workspaceId !== 'all' ? options.workspaceId : null
+
   const workspaceIdByOrgKey = new Map<string, string>()
+
   for (const workspace of options?.workspaces ?? []) {
     if (workspace.organizationUrlKey) {
       workspaceIdByOrgKey.set(workspace.organizationUrlKey.toLowerCase(), workspace.id)
     }
   }
+
   const byIdentifier = new Map<string, LinkedLinearIssueRef[]>()
 
   for (const worktree of worktrees) {
     if (worktree.isArchived) {
       continue
     }
+
     // Why: links can be stored as a URL or in any casing; the Linear read needs the bare identifier.
     const identifier = normalizeLinearIdentifier(worktree.linkedLinearIssue)
+
     if (!identifier) {
       continue
     }
+
     const organizationUrlKey =
       worktree.linkedLinearIssueOrganizationUrlKey?.trim() ||
       parseLinearIssueInput(worktree.linkedLinearIssue ?? '')?.organizationUrlKey
+
     const sourceContext = worktree.linkedTaskSourceContext
+
     const sourceWorkspaceId =
       sourceContext?.providerIdentity?.provider === 'linear'
         ? sourceContext.providerIdentity.workspaceId
         : null
+
     const workspaceId =
       worktree.linkedLinearIssueWorkspaceId?.trim() ||
       sourceWorkspaceId?.trim() ||
       (organizationUrlKey
         ? (workspaceIdByOrgKey.get(organizationUrlKey.toLowerCase()) ?? null)
         : null)
+
     if (selectedWorkspaceId && workspaceId && workspaceId !== selectedWorkspaceId) {
       continue
     }
+
     const ref: LinkedLinearIssueRef = {
       identifier,
       workspaceId,
       ...(organizationUrlKey ? { organizationUrlKey } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {})
     }
+
     const sourceScope = sourceContext ? getTaskSourceCacheScope(sourceContext) : ''
     const refScope = `${workspaceId ?? ''}::${organizationUrlKey?.toLowerCase() ?? ''}::${sourceScope}`
     const existing = byIdentifier.get(identifier)
+
     if (!existing) {
       byIdentifier.set(identifier, [ref])
       continue
     }
+
     if (
       existing.some((candidate) => {
         const candidateSourceScope = candidate.sourceContext
           ? getTaskSourceCacheScope(candidate.sourceContext)
           : ''
+
         return (
           `${candidate.workspaceId ?? ''}::${candidate.organizationUrlKey?.toLowerCase() ?? ''}::${candidateSourceScope}` ===
           refScope
@@ -96,6 +111,7 @@ export function collectLinkedLinearIssueRefsFromWorktrees(
     ) {
       continue
     }
+
     const unscopedIndex = existing.findIndex(
       (candidate) =>
         !candidate.workspaceId &&
@@ -103,6 +119,7 @@ export function collectLinkedLinearIssueRefsFromWorktrees(
         (candidate.sourceContext ? getTaskSourceCacheScope(candidate.sourceContext) : '') ===
           sourceScope
     )
+
     if ((workspaceId || organizationUrlKey) && unscopedIndex !== -1) {
       existing[unscopedIndex] = ref
     } else if (!workspaceId && !organizationUrlKey) {
@@ -111,6 +128,7 @@ export function collectLinkedLinearIssueRefsFromWorktrees(
           (candidate.sourceContext ? getTaskSourceCacheScope(candidate.sourceContext) : '') ===
           sourceScope
       )
+
       if (!hasSameSourceScope) {
         existing.push(ref)
       }
@@ -129,6 +147,7 @@ export function filterLinearIssuesForInOrcaWorkspace(
   if (!workspaceId || workspaceId === 'all') {
     return [...issues]
   }
+
   return issues.filter((issue) => !issue.workspaceId || issue.workspaceId === workspaceId)
 }
 
@@ -137,9 +156,11 @@ export function filterLinearIssuesBySearchQuery(
   query: string
 ): LinearIssue[] {
   const trimmed = query.trim().toLowerCase()
+
   if (!trimmed) {
     return [...issues]
   }
+
   return issues.filter((issue) => {
     return (
       issue.identifier.toLowerCase().includes(trimmed) ||
@@ -154,6 +175,7 @@ export function linkedLinearIssueRefsSignature(refs: readonly LinkedLinearIssueR
   return refs
     .map((ref) => {
       const sourceScope = ref.sourceContext ? getTaskSourceCacheScope(ref.sourceContext) : ''
+
       return `${ref.identifier.toUpperCase()}::${ref.workspaceId ?? ''}::${ref.organizationUrlKey?.toLowerCase() ?? ''}::${sourceScope}`
     })
     .sort()
@@ -176,5 +198,6 @@ export async function readLinkedLinearIssuesWithLimit(
       }
     })
   )
+
   return results
 }

@@ -13,6 +13,7 @@ vi.mock('node:fs/promises', () => ({
   realpath: mocks.realpath,
   stat: mocks.stat
 }))
+
 vi.mock('./git-operation-lock', () => ({
   runWithGitOperationLock: mocks.runWithGitOperationLock
 }))
@@ -20,6 +21,7 @@ vi.mock('./git-operation-lock', () => ({
 import { runWithGitFetchHeadLock } from './git-fetch-head-lock'
 
 const GIT_DIR_ENTRY = { isDirectory: () => true, isFile: () => false }
+
 const GIT_FILE_ENTRY = { isDirectory: () => false, isFile: () => true }
 
 function lockKeys(): string[] {
@@ -35,16 +37,20 @@ function mockLayout(entries: Record<string, string | null>): void {
   const spell = (target: unknown): string => String(target).replaceAll('\\', '/')
   mocks.stat.mockImplementation(async (target: string) => {
     const entry = entries[spell(target)]
+
     if (entry === undefined) {
       throw new Error(`ENOENT ${spell(target)}`)
     }
+
     return entry === null ? GIT_DIR_ENTRY : GIT_FILE_ENTRY
   })
   mocks.readFile.mockImplementation(async (target: string) => {
     const entry = entries[spell(target)]
+
     if (!entry) {
       throw new Error(`ENOENT ${spell(target)}`)
     }
+
     return entry
   })
 }
@@ -105,11 +111,13 @@ describe('FETCH_HEAD lock key derivation', () => {
   it('puts a padded gitfile pointer in the same lane as its bare spelling', async () => {
     usePlatform('darwin')
     mocks.stat.mockResolvedValue(GIT_FILE_ENTRY)
+
     const gitfile = (payload: string): void => {
       mocks.readFile.mockImplementation(async (target: string) => {
         if (String(target).endsWith('commondir')) {
           throw new Error('no commondir')
         }
+
         return `gitdir:${payload}\n`
       })
     }
@@ -207,6 +215,7 @@ describe('FETCH_HEAD lock key derivation', () => {
       if (String(target).endsWith('commondir')) {
         throw new Error('no commondir')
       }
+
       return 'gitdir: /home/me/repo/.git/worktrees/wt\n'
     })
 
@@ -242,6 +251,7 @@ describe('FETCH_HEAD lock key derivation', () => {
       controller.signal,
       async () => 0
     )
+
     // A caller-supplied reason must not change how callers classify the failure.
     controller.abort(new TypeError('cancelled by user'))
 
@@ -264,6 +274,7 @@ describe('FETCH_HEAD lock key derivation', () => {
       controller.signal,
       async () => 0
     )
+
     await vi.waitFor(() => expect(mocks.stat).toHaveBeenCalled())
     controller.abort()
 

@@ -18,12 +18,15 @@ export function useNativeChatCanSend(ptyId: string | null): boolean {
         if (event.ptyId !== ptyId) {
           return
         }
+
         setDriverTick((n) => n + 1)
       }),
     [ptyId]
   )
+
   return useMemo(() => {
     void driverTick
+
     return deriveNativeChatCanSend(ptyId ? getDriverForPty(ptyId) : null)
   }, [ptyId, driverTick])
 }

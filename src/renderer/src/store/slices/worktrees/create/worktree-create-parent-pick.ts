@@ -30,8 +30,10 @@ export function resolveWorktreeCreateParent(
   const picked = requestedParentWorktreeId
     ? getIndexedWorktreeById(state.worktreesByRepo, requestedParentWorktreeId)
     : undefined
+
   const usable = picked && !picked.isArchived && picked.repoId === repoId ? picked.id : undefined
   const pickedDisplayName = picked ? resolveWorktreeDisplayName(picked).trim() : null
+
   if (usable) {
     return {
       parentWorkspace: worktreeWorkspaceKey(usable),
@@ -40,7 +42,9 @@ export function resolveWorktreeCreateParent(
       staleBeforeCreate: false
     }
   }
+
   const activeScope = parseWorkspaceKey(state.activeWorkspaceKey ?? '')
+
   return {
     parentWorkspace:
       activeScope?.type === 'folder'
@@ -58,13 +62,17 @@ function parentLabel(state: AppState, parent: WorktreeCreateParentPick): string 
   if (parent.pickedDisplayName !== null) {
     return parent.pickedDisplayName || null
   }
+
   const scope = parent.parentWorkspace ? parseWorkspaceKey(parent.parentWorkspace) : null
+
   if (scope?.type !== 'folder') {
     return null
   }
+
   const workspace = state.folderWorkspaces?.find(
     (candidate) => candidate.id === scope.folderWorkspaceId
   )
+
   return workspace?.name.trim() || null
 }
 

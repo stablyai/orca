@@ -38,6 +38,7 @@ export function TerminalTabSplitMenuSection({
     if (!isActive) {
       onActivate(tabId)
     }
+
     requestActiveTerminalPaneSplit({ tabId, direction })
   }
 

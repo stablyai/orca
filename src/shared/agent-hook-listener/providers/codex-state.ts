@@ -18,10 +18,12 @@ export function getOrCreateCodexSubagentRoster(
   paneKey: string
 ): CodexSubagentRoster {
   let roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+
   if (!roster) {
     roster = new Map()
     state.codexSubagentRosterByPaneKey.set(paneKey, roster)
   }
+
   return roster
 }
 
@@ -30,10 +32,12 @@ export function getOrCreateCodexSubagentTranscriptState(
   paneKey: string
 ): CodexSubagentTranscriptState {
   let transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+
   if (!transcriptState) {
     transcriptState = createCodexSubagentTranscriptState()
     state.codexSubagentTranscriptByPaneKey.set(paneKey, transcriptState)
   }
+
   return transcriptState
 }
 
@@ -47,9 +51,11 @@ export function seedCodexStateFromSnapshot(
   payload: Pick<ParsedAgentStatusPayload, 'model' | 'state' | 'subagents'>
 ): void {
   const snapshots = payload.subagents ?? []
+
   if (snapshots.length > 0 && !state.codexSubagentRosterByPaneKey.has(paneKey)) {
     seedCodexSubagentRoster(getOrCreateCodexSubagentRoster(state, paneKey), snapshots)
   }
+
   if (!state.codexLeadStateByPaneKey.has(paneKey)) {
     // Why: child hooks after restart omit the root model; seed it from durable status before they can overwrite the cache.
     state.codexLeadStateByPaneKey.set(paneKey, {
@@ -78,9 +84,11 @@ export function codexLeadStateForHookEvent(
   if (eventName === 'Stop') {
     return 'done'
   }
+
   if (eventName === 'PermissionRequest') {
     return 'waiting'
   }
+
   if (
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
@@ -89,6 +97,7 @@ export function codexLeadStateForHookEvent(
   ) {
     return 'working'
   }
+
   return undefined
 }
 
@@ -111,19 +120,24 @@ export function reconcileRemoteCodexState(
   if (agentId && !payload.subagents && !state.codexSubagentRosterByPaneKey.has(paneKey)) {
     return payload
   }
+
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+
   if (payload.subagents) {
     seedCodexSubagentRoster(roster, payload.subagents)
   }
+
   if (agentId) {
     if (eventName === 'SubagentStop') {
       finishCodexSubagent(roster, agentId)
     }
   } else {
     const leadState = codexLeadStateForHookEvent(eventName)
+
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
       roster.clear()
     }
+
     if (leadState) {
       const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
       state.codexLeadStateByPaneKey.set(paneKey, {
@@ -134,15 +148,18 @@ export function reconcileRemoteCodexState(
   }
 
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
+
   if (!lead) {
     return payload
   }
+
   // Child lifecycle hooks commonly omit the root prompt. Preserve the last known
   // turn label while merging their roster/state so relay restarts do not blank it.
   const prompt =
     agentId && payload.prompt.length === 0 && previous?.agentType === 'codex'
       ? previous.prompt
       : payload.prompt
+
   return {
     ...payload,
     prompt,

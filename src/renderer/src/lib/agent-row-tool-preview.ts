@@ -21,10 +21,13 @@ export function formatAgentToolPreview(
   if (!showsAgentToolPreview(state)) {
     return ''
   }
+
   const toolName = entry.toolName?.trim() ?? ''
   const toolInput = entry.toolInput?.trim() ?? ''
+
   if (toolName && toolInput) {
     return `${toolName}: ${toolInput}`
   }
+
   return toolName
 }

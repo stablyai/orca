@@ -15,6 +15,7 @@ export function getWorktreeRemovalOptionsKey(
   // Why: a Force Delete retry must not coalesce onto the in-flight attempt that
   // just failed the PTY gate — it would inherit that failure instead of retrying.
   const ptyKey = args.allowUnverifiedPtyStop === true ? 'allow-unverified-pty' : 'require-pty-stop'
+
   return `${forceKey}:${archiveKey}:${ptyKey}`
 }
 

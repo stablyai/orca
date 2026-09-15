@@ -19,6 +19,7 @@ export function getSettingsSetupGuideProgress(progress: {
   stepDone: Partial<Record<FeatureWallSetupStepId, boolean>>
 }): SettingsSetupGuideProgress {
   const doneCount = FEATURE_WALL_SETUP_STEPS.filter((step) => progress.stepDone[step.id]).length
+
   const firstIncompleteStepId =
     doneCount === FEATURE_WALL_SETUP_STEPS.length
       ? null

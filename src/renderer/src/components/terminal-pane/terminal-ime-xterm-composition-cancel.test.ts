@@ -16,11 +16,14 @@ function openTerminal(): {
   const terminal = new Terminal()
   terminal.open(container)
   const textarea = terminal.textarea
+
   if (!textarea) {
     throw new Error('xterm helper textarea was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, textarea }
 }
 
@@ -42,6 +45,7 @@ function dispatchProcessKeydown(textarea: HTMLTextAreaElement): void {
     isComposing: true,
     bubbles: true
   })
+
   Object.defineProperty(keydown, 'keyCode', { value: 229 })
   textarea.dispatchEvent(keydown)
 }
@@ -75,14 +79,17 @@ describe('xterm IME composition cancellation', () => {
     const { emitted, terminal, textarea } = openTerminal()
 
     dispatchCompositionEvent(textarea, 'compositionstart')
+
     for (const preedit of ['c', 'ce', 'ces', 'cesh', 'ceshi']) {
       updatePreedit(textarea, preedit)
       await nextEventLoop()
     }
+
     for (const preedit of ['cesh', 'ces', 'ce', 'c']) {
       updatePreedit(textarea, preedit)
       await nextEventLoop()
     }
+
     // Final Backspace: Chromium clears the preedit and ends the composition
     // with empty data; the last non-empty compositionupdate was 'c'.
     dispatchProcessKeydown(textarea)
@@ -100,11 +107,13 @@ describe('xterm IME composition cancellation', () => {
     const { emitted, terminal, textarea } = openTerminal()
 
     dispatchCompositionEvent(textarea, 'compositionstart')
+
     for (const preedit of ['nihao', 'niha', 'nih', 'ni', 'n']) {
       dispatchCompositionEvent(textarea, 'compositionupdate', preedit)
       textarea.value = preedit
       await nextEventLoop()
     }
+
     textarea.value = ''
     dispatchCompositionEvent(textarea, 'compositionend')
     await nextEventLoop()

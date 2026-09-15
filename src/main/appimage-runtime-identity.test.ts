@@ -22,6 +22,7 @@ function appImageHeader(machine: number): Buffer {
   header.set([0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01])
   header.set([0x41, 0x49, 0x02], 8)
   header.writeUInt16LE(machine, 18)
+
   return header
 }
 
@@ -43,6 +44,7 @@ function createFixture(appDirName = '.mount_Orca123', machine = 0x3e) {
     packageMarkerPath,
     JSON.stringify({ name: 'orca-compiled-output', type: 'commonjs', private: true })
   )
+
   return {
     root,
     appImagePath,

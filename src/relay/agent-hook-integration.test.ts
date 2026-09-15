@@ -31,6 +31,7 @@ import { AgentHookServer } from '../main/agent-hooks/server'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 
 const LEAF_7 = '77777777-7777-4777-8777-777777777777'
+
 const LEAF_9 = '99999999-9999-4999-8999-999999999999'
 
 describe('Integration: relay hook server → mux → AgentHookServer.ingestRemote', () => {
@@ -84,6 +85,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
     dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
       const replayed = hookServer.replayCachedPayloadsForPanes()
+
       return { replayed }
     })
 
@@ -129,6 +131,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     })
 
     const { port, token } = hookServer.getCoordinates()
+
     const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
       method: 'POST',
       headers: {
@@ -144,15 +147,18 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
         payload: { hook_event_name: 'UserPromptSubmit', prompt: 'roundtrip' }
       })
     })
+
     expect(res.status).toBe(204)
 
     // Why: dispatcher → transport setImmediate → mux feed → handler all run
     // on the next tick(s); spin until our sink captures the event or we
     // hit a generous timeout.
     const start = Date.now()
+
     while (events.length === 0 && Date.now() - start < 1500) {
       await new Promise((r) => setImmediate(r))
     }
+
     expect(events).toHaveLength(1)
     expect(events[0].paneKey).toBe(`tab-7:${LEAF_7}`)
     expect(events[0].connectionId).toBe('conn-test')
@@ -168,6 +174,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       events.push({ payload: event.payload })
     })
     const { port, token } = hookServer.getCoordinates()
+
     const post = (payload: Record<string, unknown>): Promise<Response> =>
       fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
@@ -189,9 +196,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     ).resolves.toMatchObject({ status: 204 })
 
     const start = Date.now()
+
     while (events.length < 2 && Date.now() - start < 1500) {
       await new Promise((resolve) => setImmediate(resolve))
     }
+
     expect(events).toHaveLength(2)
     expect(events[1].payload.state).toBe('done')
     expect(events[1].payload.lastAssistantMessage).toBeUndefined()
@@ -200,6 +209,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
   it('clears remote Claude permission when the approved tool starts with matching identity', async () => {
     const { port, token } = hookServer.getCoordinates()
+
     const postClaude = async (payload: Record<string, unknown>): Promise<Response> =>
       fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
@@ -238,9 +248,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     ).resolves.toMatchObject({ status: 204 })
 
     const start = Date.now()
+
     while (orcaServer.getStatusSnapshot()[0]?.state !== 'working' && Date.now() - start < 1500) {
       await new Promise((r) => setImmediate(r))
     }
+
     expect(orcaServer.getStatusSnapshot()).toEqual([
       expect.objectContaining({
         paneKey: `tab-7:${LEAF_7}`,
@@ -255,6 +267,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
   it('clears remote Claude permission when its teammate idles', async () => {
     const { port, token } = hookServer.getCoordinates()
+
     const postClaude = (payload: Record<string, unknown>): Promise<Response> =>
       fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
@@ -282,9 +295,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     await postClaude({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
 
     const start = Date.now()
+
     while (orcaServer.getStatusSnapshot()[0]?.state !== 'working' && Date.now() - start < 1500) {
       await new Promise((resolve) => setImmediate(resolve))
     }
+
     expect(orcaServer.getStatusSnapshot()[0]).toMatchObject({
       paneKey: `tab-9:${LEAF_9}`,
       connectionId: 'conn-test',
@@ -297,6 +312,7 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
 
   it('clears remote Claude permission when approved PostToolUse matches the preceding tool use id', async () => {
     const { port, token } = hookServer.getCoordinates()
+
     const postClaude = async (payload: Record<string, unknown>): Promise<Response> =>
       fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
@@ -339,9 +355,11 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     ).resolves.toMatchObject({ status: 204 })
 
     const start = Date.now()
+
     while (orcaServer.getStatusSnapshot()[0]?.state !== 'working' && Date.now() - start < 1500) {
       await new Promise((r) => setImmediate(r))
     }
+
     expect(orcaServer.getStatusSnapshot()).toEqual([
       expect.objectContaining({
         paneKey: `tab-7:${LEAF_7}`,
@@ -380,23 +398,28 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     // Why: spin until the live notification arrives so the replay request
     // below produces a strictly-second event in `events`.
     const liveStart = Date.now()
+
     while (events.length === 0 && Date.now() - liveStart < 1500) {
       await new Promise((r) => setImmediate(r))
     }
+
     expect(events).toHaveLength(1)
 
     const result = (await mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD)) as {
       replayed: number
     }
+
     expect(result.replayed).toBe(1)
 
     // Why: relay-side replay produces a fresh notification; spin until it
     // arrives so the assertion below proves the round-trip (relay → wire →
     // mux → ingestRemote → listener) rather than just the relay-side count.
     const replayStart = Date.now()
+
     while (events.length < 2 && Date.now() - replayStart < 1500) {
       await new Promise((r) => setImmediate(r))
     }
+
     expect(events).toHaveLength(2)
     expect(events[1].paneKey).toBe(`tab-9:${LEAF_9}`)
   })

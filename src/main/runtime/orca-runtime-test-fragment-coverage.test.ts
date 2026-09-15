@@ -6,10 +6,12 @@ import { describe, expect, it } from 'vitest'
 // because orca-runtime.test.ts imports them. A fragment left out of that list never runs and
 // nothing fails, so the import list is the coverage boundary and has to be checked.
 const ENTRYPOINT = 'orca-runtime.test.ts'
+
 const FRAGMENT_DIR = 'orca-runtime-tests'
 
 function importedFragments(): string[] {
   const source = readFileSync(join(import.meta.dirname, ENTRYPOINT), 'utf8')
+
   return [...source.matchAll(/await import\('\.\/orca-runtime-tests\/([\w-]+)\.spec'\)/g)]
     .map((match) => `${match[1]}.spec.ts`)
     .sort()

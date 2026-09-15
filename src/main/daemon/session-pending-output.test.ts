@@ -7,6 +7,7 @@ import { Session } from './session'
 
 function createMockSubprocess() {
   let onData: ((data: string) => void) | null = null
+
   return {
     pid: 12345,
     getForegroundProcess: (): string | null => null,
@@ -42,6 +43,7 @@ function createSession(subprocess = createMockSubprocess()): Session {
     subprocess,
     shellReadySupported: false
   })
+
   return session
 }
 

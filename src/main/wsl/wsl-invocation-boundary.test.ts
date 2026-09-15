@@ -28,11 +28,14 @@ const ALLOWLIST: readonly string[] = readFileSync(
   .filter((line) => line.length > 0 && !line.startsWith('#'))
 
 const SOURCE_ROOT = resolve(__dirname, '../..')
+
 // Why the trailing slash: a bare 'main/wsl' prefix also exempts main/wsl.ts,
 // main/wsl-availability.ts and main/wsl-unc-delete.ts -- three files that spawn
 // wsl.exe directly. Caught by testing the guard against a planted call site.
 const OWNER_DIRECTORY = 'main/wsl/'
+
 const IGNORED = new Set(['node_modules', 'dist', 'out', 'build', '.git', '__fixtures__'])
+
 /**
  * A spawn site: the `wsl.exe` literal reaches a child process.
  *
@@ -67,19 +70,24 @@ function isTestFile(path: string): boolean {
 
 function collectSourceFiles(root: string): string[] {
   const found: string[] = []
+
   for (const entry of readdirSync(root)) {
     if (IGNORED.has(entry) || entry.startsWith('.')) {
       continue
     }
+
     const path = join(root, entry)
+
     if (statSync(path).isDirectory()) {
       found.push(...collectSourceFiles(path))
       continue
     }
+
     if (/\.tsx?$/.test(entry)) {
       found.push(path)
     }
   }
+
   return found
 }
 
@@ -95,6 +103,7 @@ function collectSourceFiles(root: string): string[] {
  */
 function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   const bound = new Set<string>()
+
   // Covers `const x = 'wsl.exe'`, a ternary picking it, and `binary: 'wsl.exe'`.
   // `const x =`, and the class-field spellings (`private readonly x =`). `[^=]`
   // rather than `[^=;\n]` so a Prettier-wrapped ternary still binds.
@@ -103,9 +112,11 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   )) {
     bound.add(match[1]!)
   }
+
   for (const match of source.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*[^,;\n]*['"`]wsl\.exe['"`]/g)) {
     bound.add(match[1]!)
   }
+
   // Assignment with no declarator: `this.binary = 'wsl.exe'`, and the split
   // form `let shellPath: string` ... `shellPath = 'wsl.exe'`, which a
   // declarator-anchored pattern cannot see. `[^;]{0,200}?` so a wrapped
@@ -115,14 +126,17 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   )) {
     bound.add(match[1]!)
   }
+
   // A helper that hands back the binary is a spawn site one hop away, and the
   // hop is untrackable by regex -- but only when this file also spawns
   // something. Returning the name as terminal metadata is not a spawn.
   if (/\breturn\s+['"`]wsl\.exe['"`]/.test(source) && /\b\w*(?:spawn|exec)\w*\s*\(/i.test(source)) {
     return true
   }
+
   for (const name of bound) {
     const identifier = name.replace(/[$]/g, '\\$&')
+
     // The identifier reaching a call opener, a spawn-style field, or the first
     // argument of a spawn-style call.
     if (
@@ -138,6 +152,7 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -146,33 +161,42 @@ function passesComparedWslShellPathToSpawnSpec(source: string): boolean {
     /\bbasename\(\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)\.toLowerCase\(\)\s*===\s*['"`]wsl\.exe['"`]/g
   )) {
     const shellPath = match[1]!.replace(/[.$]/g, '\\$&')
+
     const spawnCall = new RegExp(
       `\\b\\w*(?:spawn|exec|run)\\w*\\s*\\(\\s*(?:${shellPath}\\b|\\{[\\s\\S]{0,2000}?\\bshellPath\\s*:\\s*${shellPath}\\b)`,
       'i'
     )
+
     if (spawnCall.test(source)) {
       return true
     }
   }
+
   return false
 }
 
 function findSpawnSites(): string[] {
   const offenders = new Set<string>()
+
   for (const path of collectSourceFiles(SOURCE_ROOT)) {
     const relativePath = relative(SOURCE_ROOT, path).replace(/\\/g, '/')
+
     if (isTestFile(relativePath) || relativePath.startsWith(OWNER_DIRECTORY)) {
       continue
     }
+
     const source = readFileSync(path, 'utf8')
+
     for (const match of source.matchAll(/['"`]wsl\.exe['"`]/g)) {
       // Collapse the preceding whitespace so a call broken across lines by the
       // formatter still reads as one opener.
       const preceding = source.slice(Math.max(0, match.index - 60), match.index)
+
       if (SPAWN_OPENER.test(preceding.replace(/\s+/g, ' ').replace(/ $/, ''))) {
         offenders.add(relativePath)
       }
     }
+
     if (
       bindsWslBinaryToASpawnedIdentifier(source) ||
       passesComparedWslShellPathToSpawnSpec(source)
@@ -180,6 +204,7 @@ function findSpawnSites(): string[] {
       offenders.add(relativePath)
     }
   }
+
   return [...offenders].sort()
 }
 
@@ -217,10 +242,13 @@ function collectRunnerCallArguments(source: string): CallRange[] {
   const blanked = blankStringContents(source)
   const calls: CallRange[] = []
   const callees = new Set(['runWslProcess'])
+
   for (const alias of source.matchAll(/\brunWslProcess\s+as\s+(\w+)/g)) {
     callees.add(alias[1]!)
   }
+
   const callPattern = new RegExp(`\\b(?:${[...callees].join('|')})\\s*\\(`, 'g')
+
   for (const match of blanked.matchAll(callPattern)) {
     // The WHOLE argument list, not the first `{...}`: with
     // `Object.assign({ loginPath }, { script })` the payload sits in the second
@@ -228,12 +256,15 @@ function collectRunnerCallArguments(source: string): CallRange[] {
     // script and no bashism -- which reads exactly like a clean call.
     const open = match.index + match[0].length - 1
     let depth = 0
+
     for (let index = open; index < blanked.length; index += 1) {
       const char = blanked[index]
+
       if (char === '(') {
         depth += 1
       } else if (char === ')') {
         depth -= 1
+
         if (depth === 0) {
           calls.push({ text: source.slice(open, index + 1), start: open, end: index + 1 })
           break
@@ -241,24 +272,30 @@ function collectRunnerCallArguments(source: string): CallRange[] {
       }
     }
   }
+
   return calls
 }
 
 describe('bash-only payloads declare their interpreter', () => {
   const offenders: string[] = []
+
   for (const path of collectSourceFiles(SOURCE_ROOT)) {
     const relativePath = relative(SOURCE_ROOT, path).replace(/\\/g, '/')
+
     // The runner's own file documents these constructs; it does not run them.
     if (isTestFile(relativePath) || relativePath.startsWith(OWNER_DIRECTORY)) {
       continue
     }
+
     // Strip comments: a comment naming runWslProcess and quoting `set -euo
     // pipefail` to explain why it was removed would otherwise flag the file,
     // and a bash script written to a guest file is not a runner payload.
     const source = stripComments(readFileSync(path, 'utf8'))
+
     if (!source.includes('runWslProcess')) {
       continue
     }
+
     // Fail closed. A desynced lexer finds zero calls, and "zero calls" is
     // indistinguishable from "zero violations" -- this guard passed a planted
     // dash payload for exactly that reason, because one regex literal earlier
@@ -267,12 +304,15 @@ describe('bash-only payloads declare their interpreter', () => {
       offenders.push(relativePath)
       continue
     }
+
     const calls = collectRunnerCallArguments(source)
+
     // Per-call: an unpinned payload sitting beside a pinned one.
     if (calls.some(({ text }) => BASHISM.test(text) && !text.includes("shell: 'bash'"))) {
       offenders.push(relativePath)
       continue
     }
+
     // Anything that is not a plain object literal is judged unreadable, and an
     // unreadable call must pin bash.
     //
@@ -292,8 +332,10 @@ describe('bash-only payloads declare their interpreter', () => {
       const body = text.replace(/^\(/, '')
       const firstBrace = body.indexOf('{')
       const prefix = firstBrace === -1 ? body : body.slice(0, firstBrace)
+
       return /\?[^.:]|\.\.\./.test(prefix) || /\bas\s+[A-Za-z{]/.test(body)
     }
+
     // No `includes("shell: 'bash'")` escape here: in `cond ? {pinned} : {not}`
     // the pin belongs to one branch and the substring test cannot tell which,
     // so a pinned branch excused an unpinned one. An exotic call therefore
@@ -302,6 +344,7 @@ describe('bash-only payloads declare their interpreter', () => {
       offenders.push(relativePath)
       continue
     }
+
     // An opaque payload is judged by the whole file, minus anything already
     // declared bash.
     //
@@ -327,12 +370,15 @@ describe('bash-only payloads declare their interpreter', () => {
         (m): [number, number] => [m.index, m.index + m[0].length]
       )
     ]
+
     const masked = source.split('')
+
     for (const [from, to] of pinnedRanges) {
       for (let index = from; index < to; index += 1) {
         masked[index] = ' '
       }
     }
+
     const unpinnedRegion = masked.join('')
     // A spread hides every key, `script` and `shell` alike, so it has to count
     // as carrying a script -- otherwise `runWslProcess({ ...spec })` is a hole
@@ -343,6 +389,7 @@ describe('bash-only payloads declare their interpreter', () => {
     // alias scan misses collects nothing at all. If the file carries a bashism
     // and the guard cannot see any call object, that is unreadable, not clean.
     const unreadable = calls.length === 0
+
     if (
       BASHISM.test(unpinnedRegion) &&
       (unreadable || scriptCalls.some(({ text }) => !text.includes("shell: 'bash'")))

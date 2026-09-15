@@ -70,6 +70,7 @@ export type CodexAppServerRpc = {
 }
 
 const JSON_RPC_METHOD_NOT_FOUND = -32601
+
 const STDERR_TAIL_MAX_BYTES = 8192
 
 /** Codex answering "no such method" is the only response that proves the RPC
@@ -78,7 +79,9 @@ export function isCodexMethodNotFoundError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
     return false
   }
+
   const { code, message } = error as { code?: unknown; message?: unknown }
+
   return (
     code === JSON_RPC_METHOD_NOT_FOUND ||
     /method not found/i.test(typeof message === 'string' ? message : '')
@@ -98,12 +101,15 @@ export async function runCodexAppServerSession<T>(
   // Why: a default-home grant must run against the real ~/.codex, so strip an
   // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
   const childEnv: NodeJS.ProcessEnv = { ...process.env, ...invocation.env }
+
   for (const key of invocation.envToDelete ?? []) {
     delete childEnv[key]
   }
+
   const pairedEnv = invocation.cliPath
     ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
     : childEnv
+
   const child = spawnImpl(invocation.command, invocation.args, {
     env: pairedEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -114,6 +120,7 @@ export async function runCodexAppServerSession<T>(
   let exited = false
   let nextRequestId = 1
   let timedOut = false
+
   const pending = new Map<
     number,
     { resolve: (r: JsonRpcResponse) => void; reject: (e: Error) => void }
@@ -125,6 +132,7 @@ export async function runCodexAppServerSession<T>(
       resolve()
     })
   })
+
   // Why: 'error' fires instead of 'exit' when the spawn itself fails
   // (ENOENT); surface it to every in-flight request or they wait forever.
   let spawnError: Error | null = null
@@ -155,11 +163,15 @@ export async function runCodexAppServerSession<T>(
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         return
       }
+
       const message = parsed as JsonRpcResponse
+
       if (typeof message.id !== 'number') {
         return
       }
+
       const waiter = pending.get(message.id)
+
       if (waiter) {
         pending.delete(message.id)
         waiter.resolve(message)
@@ -173,18 +185,23 @@ export async function runCodexAppServerSession<T>(
     for (const waiter of pending.values()) {
       waiter.reject(error)
     }
+
     pending.clear()
   }
 
   let rejectDeadline: (error: Error) => void = () => {}
+
   const deadlinePromise = new Promise<never>((_resolve, reject) => {
     rejectDeadline = reject
   })
+
   const deadline = setTimeout(() => {
     timedOut = true
+
     const error = new CodexAppServerTimeoutError(
       `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
     )
+
     killCodexAppServerProcessTree(child)
     failPending(error)
     rejectDeadline(error)
@@ -196,9 +213,11 @@ export async function runCodexAppServerSession<T>(
 
   function notify(method: string, params?: Record<string, unknown>): void {
     const payload: Record<string, unknown> = { method }
+
     if (params !== undefined) {
       payload.params = params
     }
+
     try {
       sendLine(payload)
     } catch {
@@ -210,19 +229,25 @@ export async function runCodexAppServerSession<T>(
     if (spawnError) {
       throw spawnError
     }
+
     if (timedOut) {
       throw new CodexAppServerTimeoutError('codex app-server session already timed out')
     }
+
     if (exited) {
       throw buildEarlyExitError()
     }
+
     const id = nextRequestId++
+
     const response = await new Promise<JsonRpcResponse>((resolve, reject) => {
       pending.set(id, { resolve, reject })
       const payload: Record<string, unknown> = { method, id }
+
       if (params !== undefined) {
         payload.params = params
       }
+
       try {
         sendLine(payload)
       } catch (error) {
@@ -230,16 +255,19 @@ export async function runCodexAppServerSession<T>(
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     })
+
     if (response.error) {
       if (isCodexMethodNotFoundError(response.error)) {
         throw new CodexAppServerUnsupportedError(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )
       }
+
       throw new Error(
         `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`
       )
     }
+
     return response.result
   }
 
@@ -249,6 +277,7 @@ export async function runCodexAppServerSession<T>(
         `codex CLI does not support the app-server subcommand: ${stderrTail.trim().slice(0, 400)}`
       )
     }
+
     return new Error(
       `codex app-server exited before completing the session${stderrTail ? `: ${stderrTail.trim().slice(0, 400)}` : ''}`
     )
@@ -260,8 +289,10 @@ export async function runCodexAppServerSession<T>(
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
       })
       notify('initialized')
+
       return body({ request: requestRpc, notify })
     }
+
     // Why: the timeout owns the whole callback, including time between RPCs;
     // killing the child alone cannot settle a callback awaiting unrelated work.
     return await Promise.race([session(), deadlinePromise])
@@ -276,6 +307,7 @@ export async function runCodexAppServerSession<T>(
         `codex CLI does not support the app-server subcommand: ${stderrTail.trim().slice(0, 400)}`
       )
     }
+
     throw error
   } finally {
     try {
@@ -283,15 +315,18 @@ export async function runCodexAppServerSession<T>(
     } catch {
       // stdin may already be destroyed after a kill; reaping below still runs.
     }
+
     if (!exited) {
       // Why: the server exits promptly on stdin EOF; the grace period only
       // bounds a wedged child before the guaranteed SIGKILL reap.
       await waitForProcessExitUntil(exitPromise, 1500)
+
       if (!exited) {
         killCodexAppServerProcessTree(child)
         await waitForProcessExitUntil(exitPromise, 1000)
       }
     }
+
     clearTimeout(deadline)
   }
 }

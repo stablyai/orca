@@ -14,6 +14,7 @@ function body(text: string): AgentJournalMessageItem {
 
 function fakeDb() {
   const rows = new Map<string, { mailbox_handle: string; operation_id: string }>()
+
   return {
     rows,
     getStructuredPointerOperation: (handle: string) => rows.get(handle),
@@ -30,6 +31,7 @@ describe('structured pointer operation id', () => {
 
   it('reuses one id for the same batch', () => {
     const db = fakeDb()
+
     const first = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -38,6 +40,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
+
     const second = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -46,12 +49,14 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 2_000
     })
+
     expect(second.operationId).toBe(first.operationId)
     expect(second.payloadFingerprint).toBe(first.payloadFingerprint)
   })
 
   it('re-mints when the batch grows', () => {
     const db = fakeDb()
+
     const first = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -60,6 +65,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
+
     const grown = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -68,11 +74,13 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2', 'm3'],
       now: 1_500
     })
+
     expect(grown.operationId).not.toBe(first.operationId)
   })
 
   it('never re-mints an ambiguous batch after the host replay window expires', () => {
     const db = fakeDb()
+
     const first = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -81,6 +89,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
+
     const aged = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -89,6 +98,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000 + AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS + 1
     })
+
     expect(aged.operationId).toBe(first.operationId)
   })
 
@@ -98,6 +108,7 @@ describe('structured pointer operation id', () => {
     // its ledger answer — `accepted`, with no turn sent — and the lane then marks the NEW mail
     // delivered. The worker is never told, and the mail is gone.
     const db = fakeDb()
+
     const first = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -106,6 +117,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
+
     const different = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -114,12 +126,14 @@ describe('structured pointer operation id', () => {
       messageIds: ['m3', 'm4'],
       now: 1_100
     })
+
     expect(different.operationId).not.toBe(first.operationId)
     expect(different.payloadFingerprint).toBe(first.payloadFingerprint)
   })
 
   it('re-mints when a retained batch is reordered or partly consumed', () => {
     const db = fakeDb()
+
     const first = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -128,6 +142,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
+
     const shifted = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -136,11 +151,13 @@ describe('structured pointer operation id', () => {
       messageIds: ['m2', 'm3'],
       now: 1_100
     })
+
     expect(shifted.operationId).not.toBe(first.operationId)
   })
 
   it('re-mints when the mailbox moves to a different session', () => {
     const db = fakeDb()
+
     const first = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -149,6 +166,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_000
     })
+
     const moved = resolveStructuredPointerOperation({
       db,
       mailboxHandle: 'dispatch:d1',
@@ -157,6 +175,7 @@ describe('structured pointer operation id', () => {
       messageIds: ['m1', 'm2'],
       now: 1_100
     })
+
     expect(moved.operationId).not.toBe(first.operationId)
   })
 })

@@ -25,6 +25,7 @@ export async function closeMR(
     projectRef,
     async (projectRef, repoFlag) => {
       await acquire()
+
       try {
         await glabExecFileAsync(
           [
@@ -37,13 +38,16 @@ export async function closeMR(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         // Why: glab exits non-zero when the MR is already closed — treat as success.
         if (msg.toLowerCase().includes('already')) {
           return { ok: true }
         }
+
         return { ok: false, error: msg }
       } finally {
         release()
@@ -69,6 +73,7 @@ export async function reopenMR(
     projectRef,
     async (projectRef, repoFlag) => {
       await acquire()
+
       try {
         await glabExecFileAsync(
           [
@@ -81,12 +86,15 @@ export async function reopenMR(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         if (msg.toLowerCase().includes('already')) {
           return { ok: true }
         }
+
         return { ok: false, error: msg }
       } finally {
         release()
@@ -113,10 +121,12 @@ export async function mergeMR(
     projectRef,
     async (projectRef, repoFlag) => {
       await acquire()
+
       try {
         // Why: omitting both --squash and --rebase yields a regular merge commit.
         const methodFlag =
           method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : []
+
         await glabExecFileAsync(
           [
             'mr',
@@ -130,6 +140,7 @@ export async function mergeMR(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

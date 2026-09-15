@@ -6,13 +6,16 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runProcess } from '../../../src/shared/child-process/run-process'
 
 const require = createRequire(import.meta.url)
+
 const probePath = require.resolve('./packaged-node-pty-capability-probe.cjs')
+
 const {
   buildGrandchildLaunch,
   createFixtureServer,
   isOneShotMode,
   reportFixtureObservation
 } = require(probePath)
+
 const originalSystemRoot = process.env.SystemRoot
 
 afterEach(() => {

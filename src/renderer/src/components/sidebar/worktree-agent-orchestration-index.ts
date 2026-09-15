@@ -44,6 +44,7 @@ const EMPTY_SOURCE = {}
 // Why frozen: these are shared by every card, so an accidental write would
 // corrupt unrelated worktrees rather than fail locally.
 export const EMPTY_WORKTREE_AGENT_ORCHESTRATION: RuntimeOrchestrationRecord = Object.freeze({})
+
 export const EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX: ReadonlyMap<
   string,
   RuntimeOrchestrationRecord
@@ -57,9 +58,13 @@ function createRecord(): RuntimeOrchestrationRecord {
 }
 
 let runtimeEntriesCache: RuntimeEntriesCache | null = null
+
 let tabMembershipCache: TabMembershipCache | null = null
+
 let paneWorktreeProjectionCache: PaneWorktreeProjectionCache | null = null
+
 let orchestrationIndexCache: OrchestrationIndexCache | null = null
+
 let indexBuildCount = 0
 
 export function releaseWorktreeAgentOrchestrationIndexCache(): void {
@@ -97,19 +102,23 @@ function projectPaneWorktreeIds(
   ) {
     return paneWorktreeProjectionCache.paneWorktreeIds
   }
+
   const paneWorktreeIds: (string | undefined)[] = []
+
   for (const [paneKey] of runtimeEntries) {
     paneWorktreeIds.push(
       agentStatusByPaneKey[paneKey]?.worktreeId,
       retainedAgentsByPaneKey[paneKey]?.worktreeId
     )
   }
+
   paneWorktreeProjectionCache = {
     runtimeSource,
     liveSource: agentStatusByPaneKey,
     retainedSource: retainedAgentsByPaneKey,
     paneWorktreeIds
   }
+
   return paneWorktreeIds
 }
 
@@ -120,14 +129,17 @@ function hasSameOrderedValues(
   if (previous === next) {
     return true
   }
+
   if (previous.length !== next.length) {
     return false
   }
+
   for (let index = 0; index < next.length; index += 1) {
     if (previous[index] !== next[index]) {
       return false
     }
   }
+
   return true
 }
 
@@ -138,11 +150,14 @@ function reuseRecordIfOrderedEqual(
   if (!previous) {
     return next
   }
+
   const previousEntries = Object.entries(previous)
   const nextEntries = Object.entries(next)
+
   if (previousEntries.length !== nextEntries.length) {
     return next
   }
+
   for (let index = 0; index < nextEntries.length; index += 1) {
     if (
       previousEntries[index]?.[0] !== nextEntries[index]?.[0] ||
@@ -151,6 +166,7 @@ function reuseRecordIfOrderedEqual(
       return next
     }
   }
+
   return previous
 }
 
@@ -160,13 +176,16 @@ function getWorktreeIdsByTabId(
   if (tabMembershipCache?.tabsSource === tabsByWorktree) {
     return tabMembershipCache.worktreeIdsByTabId
   }
+
   // Why a Set per tab: the same tab id can appear under more than one worktree,
   // and each of those worktrees must still see the pane's orchestration.
   const worktreeIdsByTabId = new Map<string, Set<string>>()
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     for (const tab of tabs ?? []) {
       const tabId = tab.id
       const existing = worktreeIdsByTabId.get(tabId)
+
       if (existing) {
         existing.add(worktreeId)
       } else {
@@ -174,7 +193,9 @@ function getWorktreeIdsByTabId(
       }
     }
   }
+
   tabMembershipCache = { tabsSource: tabsByWorktree, worktreeIdsByTabId }
+
   return worktreeIdsByTabId
 }
 
@@ -188,17 +209,22 @@ function buildIndex(
   const recordsByWorktree = new Map<string, RuntimeOrchestrationRecord>()
 
   let projectionCursor = 0
+
   for (const [paneKey, orchestration] of runtimeEntries) {
     const parsed = parsePaneKey(paneKey)
+
     const parsedParent = orchestration.parentPaneKey
       ? parsePaneKey(orchestration.parentPaneKey)
       : null
+
     const targets = new Set<string>()
+
     if (parsed) {
       for (const worktreeId of worktreeIdsByTabId.get(parsed.tabId) ?? []) {
         targets.add(worktreeId)
       }
     }
+
     // Why: child agent terminals can be attributed to a worktree before their
     // tab reaches this renderer, or after the row has been retained as done.
     // The parent link must still reach that worktree card.
@@ -207,33 +233,40 @@ function buildIndex(
         targets.add(worktreeId)
       }
     }
+
     const liveWorktreeId = paneWorktreeIds[projectionCursor]
     const retainedWorktreeId = paneWorktreeIds[projectionCursor + 1]
     projectionCursor += 2
+
     if (typeof liveWorktreeId === 'string') {
       targets.add(liveWorktreeId)
     }
+
     if (typeof retainedWorktreeId === 'string') {
       targets.add(retainedWorktreeId)
     }
 
     for (const worktreeId of targets) {
       let record = recordsByWorktree.get(worktreeId)
+
       if (!record) {
         record = createRecord()
         recordsByWorktree.set(worktreeId, record)
       }
+
       record[paneKey] = orchestration
     }
   }
 
   const previousRecords = orchestrationIndexCache?.recordsByWorktree
+
   for (const [worktreeId, record] of recordsByWorktree) {
     recordsByWorktree.set(
       worktreeId,
       reuseRecordIfOrderedEqual(previousRecords?.get(worktreeId), record)
     )
   }
+
   return recordsByWorktree
 }
 
@@ -253,6 +286,7 @@ export function selectWorktreeAgentOrchestrationIndex(
 ): ReadonlyMap<string, RuntimeOrchestrationRecord> {
   const runtimeAgentOrchestrationByPaneKey =
     state.runtimeAgentOrchestrationByPaneKey ?? EMPTY_SOURCE
+
   // Why cached separately from the index: enumerating the context map is the
   // per-publication cost this index exists to remove, and the entry list stays
   // valid across the live/retained churn the projection absorbs.
@@ -262,7 +296,9 @@ export function selectWorktreeAgentOrchestrationIndex(
       entries: Object.entries(runtimeAgentOrchestrationByPaneKey)
     }
   }
+
   const runtimeEntries = runtimeEntriesCache.entries
+
   // Why here rather than before the enumeration: with no contexts the index is
   // empty whatever the other slices hold, and callers rely on them staying unread.
   if (runtimeEntries.length === 0) {
@@ -271,16 +307,19 @@ export function selectWorktreeAgentOrchestrationIndex(
     tabMembershipCache = null
     paneWorktreeProjectionCache = null
     orchestrationIndexCache = null
+
     return EMPTY_WORKTREE_AGENT_ORCHESTRATION_INDEX
   }
 
   const tabsByWorktree = state.tabsByWorktree ?? EMPTY_SOURCE
+
   const paneWorktreeIds = projectPaneWorktreeIds(
     runtimeAgentOrchestrationByPaneKey,
     runtimeEntries,
     state.agentStatusByPaneKey ?? EMPTY_SOURCE,
     state.retainedAgentsByPaneKey ?? EMPTY_SOURCE
   )
+
   if (
     orchestrationIndexCache?.runtimeSource === runtimeAgentOrchestrationByPaneKey &&
     orchestrationIndexCache.tabsSource === tabsByWorktree &&
@@ -289,6 +328,7 @@ export function selectWorktreeAgentOrchestrationIndex(
     // Why adopt the equal array: the remaining cards on this publication then compare by
     // identity instead of walking it again.
     orchestrationIndexCache.paneWorktreeIds = paneWorktreeIds
+
     return orchestrationIndexCache.recordsByWorktree
   }
 
@@ -300,6 +340,7 @@ export function selectWorktreeAgentOrchestrationIndex(
     paneWorktreeIds,
     recordsByWorktree
   }
+
   return recordsByWorktree
 }
 

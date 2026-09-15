@@ -17,6 +17,7 @@ vi.mock('../windows-process-tree-kill', () => ({
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+
   return {
     ...actual,
     spawn: vi.fn(actual.spawn)
@@ -36,6 +37,7 @@ beforeEach(() => {
 describe('generateCommitMessageFromContext', () => {
   it('caps local agent output before buffering unbounded data', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -44,6 +46,7 @@ describe('generateCommitMessageFromContext', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = generateCommitMessageFromContext(
@@ -76,6 +79,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('passes prepared provider environment to local agent subprocesses', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -84,6 +88,7 @@ describe('generateCommitMessageFromContext', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = generateCommitMessageFromContext(
@@ -124,6 +129,7 @@ describe('generateCommitMessageFromContext', () => {
     await withPlatform('win32', async () => {
       process.env.ORCA_HOST_ONLY_SECRET = 'do-not-leak'
       const listeners = new Map<string, (value: unknown) => void>()
+
       const child = {
         pid: 123,
         kill: vi.fn(),
@@ -132,6 +138,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
+
       spawnMock.mockReturnValue(child as never)
 
       const pending = generateCommitMessageFromContext(
@@ -188,9 +195,11 @@ describe('generateCommitMessageFromContext', () => {
   it('routes Windows batch-script agent commands through cmd.exe', async () => {
     const originalComSpec = process.env.ComSpec
     process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
+
     try {
       await withPlatform('win32', async () => {
         const listeners = new Map<string, (value: unknown) => void>()
+
         const child = {
           pid: 123,
           kill: vi.fn(),
@@ -199,6 +208,7 @@ describe('generateCommitMessageFromContext', () => {
           stdin: { end: vi.fn() },
           on: vi.fn((event, callback) => listeners.set(event, callback))
         }
+
         spawnMock.mockReturnValue(child as never)
 
         const pending = generateCommitMessageFromContext(

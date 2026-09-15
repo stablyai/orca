@@ -9,10 +9,12 @@ import type { UnifiedSessionRow, UnifiedWorktreeRow } from './resource-usage-mer
 
 vi.mock('@/store', () => {
   const storeState = {}
+
   const useAppStore = Object.assign(
     (selector: (state: typeof storeState) => unknown) => selector(storeState),
     { getState: () => storeState }
   )
+
   return { useAppStore }
 })
 

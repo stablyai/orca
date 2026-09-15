@@ -10,6 +10,7 @@ function isExecutable(filePath, platform, access = accessSync) {
 
   try {
     access(filePath, constants.X_OK)
+
     return true
   } catch {
     return false
@@ -24,9 +25,11 @@ function quoteWindowsArg(value) {
 // cmd.exe cannot resolve. This is the migration pattern for any setup script feeding a native exe.
 function posixShellPathToNativeWindowsPath(value) {
   const driveMatch = value.match(/^\/([A-Za-z])\/(.*)$/)
+
   if (driveMatch) {
     return `${driveMatch[1].toUpperCase()}:\\${driveMatch[2].replace(/\//g, '\\')}`
   }
+
   return value
 }
 
@@ -46,6 +49,7 @@ function spawnOptionalSetup(spawn, setupPath, worktreePath, platform, env) {
         windowsVerbatimArguments: true
       }
     )
+
     return
   }
 
@@ -63,6 +67,7 @@ export function runInternalDevSetup({
   spawn = spawnSync
 } = {}) {
   const setupPath = env.ORCA_INTERNAL_DEV_SETUP?.trim()
+
   if (!setupPath || !exists(setupPath) || !isExecutable(setupPath, platform, access)) {
     return 0
   }

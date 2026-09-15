@@ -23,9 +23,11 @@ export default function PaletteFilterChips({
 }): React.JSX.Element | null {
   const chips = useMemo<Chip[]>(() => {
     const hostLabels = new Map(model.hosts.map((host) => [host.id, host.label]))
+
     const repositoryLabels = new Map(
       model.repositories.map((repository) => [repository.id, repository.label])
     )
+
     return [
       ...filter.hostIds.map((id) => ({
         field: 'host' as const,

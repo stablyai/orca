@@ -21,10 +21,12 @@ const inFlightRequests = new WeakMap<RpcClient, Map<string, Map<string, SingleFl
 function makeDeferred(): Deferred {
   let resolve!: (value: RpcResponse) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<RpcResponse>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -35,11 +37,14 @@ export function sendSingleFlightRequest(
   params?: unknown
 ): Promise<RpcResponse> {
   let requestsByHost = inFlightRequests.get(client)
+
   if (!requestsByHost) {
     requestsByHost = new Map()
     inFlightRequests.set(client, requestsByHost)
   }
+
   let requestsByKind = requestsByHost.get(hostId)
+
   if (!requestsByKind) {
     requestsByKind = new Map()
     requestsByHost.set(hostId, requestsByKind)
@@ -54,6 +59,7 @@ export function sendSingleFlightRequest(
   }
 
   const existing = requestsByKind.get(requestKind)
+
   if (existing) {
     // A read is already on the wire: don't fire a duplicate now, but don't drop this trigger either.
     // Record (or refresh) a single trailing follow-up that runs once the current read settles.
@@ -62,6 +68,7 @@ export function sendSingleFlightRequest(
     } else {
       existing.followUp = { deferred: makeDeferred(), params }
     }
+
     return existing.followUp.deferred.promise
   }
 
@@ -72,10 +79,13 @@ export function sendSingleFlightRequest(
     if (requestsByKind.get(requestKind) !== entry) {
       return
     }
+
     requestsByKind.delete(requestKind)
+
     if (requestsByKind.size === 0) {
       requestsByHost.delete(hostId)
     }
+
     if (requestsByHost.size === 0) {
       inFlightRequests.delete(client)
     }
@@ -86,17 +96,22 @@ export function sendSingleFlightRequest(
   // the next one.
   const onSettled = (): void => {
     const followUp = entry.followUp
+
     if (!followUp) {
       cleanup()
+
       return
     }
+
     entry.followUp = null
     let next: Promise<RpcResponse>
+
     try {
       next = client.sendRequest(requestKind, followUp.params)
     } catch (error) {
       next = Promise.reject(error)
     }
+
     entry.current = next
     next.then(
       (response) => followUp.deferred.resolve(response),
@@ -106,5 +121,6 @@ export function sendSingleFlightRequest(
   }
 
   void entry.current.then(onSettled, onSettled)
+
   return entry.current
 }

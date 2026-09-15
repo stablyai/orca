@@ -8,13 +8,17 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings'
 type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
+
 const shortcuts = vi.hoisted(() => ({ list: [] as string[] }))
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
+
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
     React_.createElement(React_.Fragment, null, children)
+
   const OpenContext = React_.createContext(false)
+
   return {
     DropdownMenu: ({ open, children }: { open: boolean; children?: React.ReactNode }) =>
       React_.createElement(OpenContext.Provider, { value: open }, children),
@@ -28,6 +32,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
           .filter((child): child is string => typeof child === 'string')
           .join('')
       )
+
       return React_.createElement(React_.Fragment, null, children)
     },
     DropdownMenuSub: passthrough,
@@ -36,12 +41,16 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuTrigger: passthrough,
     DropdownMenuItem: (props: ItemProps) => {
       items.list.push(props)
+
       return React.createElement(React.Fragment, null, props.children)
     }
   }
 })
+
 vi.mock('@/i18n/i18n', () => ({ translate: vi.fn((_key: string, fallback: string) => fallback) }))
+
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+
 vi.mock('./terminal-context-menu-dismiss', () => ({
   shouldIgnoreTerminalMenuPointerDownOutside: () => false
 }))
@@ -52,6 +61,7 @@ function childrenText(children: React.ReactNode): string {
       if (typeof child === 'string') {
         return child
       }
+
       return React.isValidElement<{ children?: React.ReactNode }>(child)
         ? childrenText(child.props.children)
         : ''
@@ -103,6 +113,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onCopyAgentSessionId: vi.fn(),
     ...overrides
   }
+
   return renderToStaticMarkup(React.createElement(TerminalContextMenu, props))
 }
 
@@ -136,6 +147,7 @@ describe('TerminalContextMenu', () => {
     const copyContextItem = items.list.find(
       (item) => childrenText(item.children) === 'Copy Context'
     )
+
     expect(copyContextItem).toBeDefined()
 
     copyContextItem?.onSelect?.()
@@ -154,6 +166,7 @@ describe('TerminalContextMenu', () => {
     const handoffItem = items.list.find(
       (item) => childrenText(item.children) === 'Continue in New Session…'
     )
+
     expect(handoffItem).toBeDefined()
 
     handoffItem?.onSelect?.()
@@ -173,6 +186,7 @@ describe('TerminalContextMenu', () => {
     const item = items.list.find(
       (candidate) => childrenText(candidate.children) === 'Copy Session ID'
     )
+
     expect(item).toBeDefined()
     expect(
       items.list
@@ -194,6 +208,7 @@ describe('TerminalContextMenu', () => {
     vi.stubGlobal('navigator', {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     })
+
     const keybindings = {
       'terminal.copySelection': ['Ctrl+Shift+C', 'Ctrl+Insert', 'Ctrl+C'],
       'terminal.selectAll': ['Ctrl+Shift+A'],
@@ -213,6 +228,7 @@ describe('TerminalContextMenu', () => {
 
   it('labels commands and add actions by their owning host', () => {
     const onAddQuickCommand = vi.fn()
+
     const rendered = renderMenu({
       onAddQuickCommand,
       quickCommandHosts: [
@@ -253,6 +269,7 @@ describe('TerminalContextMenu', () => {
     const addItems = items.list.filter(
       (item) => childrenText(item.children) === 'Add to {{value0}}…'
     )
+
     addItems.forEach((item) => item.onSelect?.())
     expect(onAddQuickCommand.mock.calls.map(([hostId]) => hostId)).toEqual([
       'local',
@@ -281,6 +298,7 @@ describe('TerminalContextMenu', () => {
 
   it('passes hosted identity when running a command', () => {
     const onQuickCommand = vi.fn()
+
     const command = {
       id: 'review',
       label: 'Remote review',
@@ -289,6 +307,7 @@ describe('TerminalContextMenu', () => {
       prompt: 'Review this change',
       scope: { type: 'global' as const }
     }
+
     renderMenu({
       onQuickCommand,
       quickCommandHosts: [

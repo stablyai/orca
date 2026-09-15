@@ -27,6 +27,7 @@ export function sameOpenFiles(a: readonly OpenFile[], b: readonly OpenFile[]): b
   if (a.length !== b.length) {
     return false
   }
+
   return a.every((file, index) => openFileEqual(file, b[index]!))
 }
 
@@ -40,17 +41,22 @@ export function webSessionOpenFilesForWorktree(
   if (!batchContext) {
     return state.openFiles.filter((file) => file.worktreeId === worktreeId)
   }
+
   let index = batchContext.openFilesIndex
+
   if (!index || index.source !== state.openFiles) {
     const byWorktree = new Map<string, OpenFile[]>()
+
     for (const file of state.openFiles) {
       const bucket = byWorktree.get(file.worktreeId) ?? []
       bucket.push(file)
       byWorktree.set(file.worktreeId, bucket)
     }
+
     index = { source: state.openFiles, byWorktree }
     batchContext.openFilesIndex = index
   }
+
   return index.byWorktree.get(worktreeId) ?? []
 }
 
@@ -63,15 +69,19 @@ export function advanceWebSessionOpenFilesIndex(
   worktreeId: string
 ): void {
   const index = batchContext?.openFilesIndex
+
   if (!index || index.source === nextOpenFiles) {
     return
   }
+
   const bucket: OpenFile[] = []
+
   for (const file of nextOpenFiles) {
     if (file.worktreeId === worktreeId) {
       bucket.push(file)
     }
   }
+
   index.byWorktree.set(worktreeId, bucket)
   index.source = nextOpenFiles
 }
@@ -79,11 +89,13 @@ export function advanceWebSessionOpenFilesIndex(
 /** Mirrors `openFiles.find()` first-wins lookup, which duplicate ids make observable. */
 export function firstOpenFileByIdForWorktree(files: readonly OpenFile[]): Map<string, OpenFile> {
   const byId = new Map<string, OpenFile>()
+
   for (const file of files) {
     if (!byId.has(file.id)) {
       byId.set(file.id, file)
     }
   }
+
   return byId
 }
 
@@ -115,9 +127,11 @@ export function tabEqual(a: Tab, b: Tab): boolean {
 export function sameUnifiedTabs(a: readonly Tab[] | undefined, b: readonly Tab[] | null): boolean {
   const left = a ?? []
   const right = b ?? []
+
   if (left.length !== right.length) {
     return false
   }
+
   return left.every((tab, index) => tabEqual(tab, right[index]!))
 }
 
@@ -137,9 +151,11 @@ export function sameGroups(
 ): boolean {
   const left = a ?? []
   const right = b ?? []
+
   if (left.length !== right.length) {
     return false
   }
+
   return left.every((group, index) => groupEqual(group, right[index]!))
 }
 
@@ -147,8 +163,10 @@ export function toVisibleTabType(tab: Tab): WebSessionTabsSyncState['activeTabTy
   if (tab.contentType === 'agent-session') {
     return 'agent-session'
   }
+
   if (tab.contentType === 'browser' || tab.contentType === 'terminal') {
     return tab.contentType
   }
+
   return 'editor'
 }

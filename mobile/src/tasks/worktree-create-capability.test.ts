@@ -18,19 +18,24 @@ type StatusOutcome =
 
 function statusClient(outcomes: StatusOutcome[]): RpcClient {
   let call = 0
+
   return {
     sendRequest: async () => {
       const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
       call += 1
+
       if (outcome === 'cutover') {
         throw new LogicalClientCutoverError()
       }
+
       if (outcome === 'error') {
         throw new Error('offline')
       }
+
       const result = Array.isArray(outcome)
         ? { capabilities: outcome, hostPlatform: 'darwin' }
         : { ...outcome, hostPlatform: 'darwin' }
+
       return {
         id: '1',
         ok: true,

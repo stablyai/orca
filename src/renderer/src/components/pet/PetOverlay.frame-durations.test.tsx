@@ -53,6 +53,7 @@ function renderPetOverlay(): { container: HTMLDivElement; root: Root } {
   act(() => {
     root.render(<PetOverlay />)
   })
+
   return { container, root }
 }
 
@@ -81,6 +82,7 @@ describe('PetOverlay per-frame sprite durations', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -105,6 +107,7 @@ describe('PetOverlay per-frame sprite durations', () => {
     const spriteDiv = Array.from(container.querySelectorAll('div')).find(
       (div) => div.style.backgroundImage !== ''
     )
+
     expect(spriteDiv?.style.animation).toContain('6.6s')
     expect(spriteDiv?.style.animation).toContain('step-end')
     expect(spriteDiv?.style.animation).toContain('infinite')

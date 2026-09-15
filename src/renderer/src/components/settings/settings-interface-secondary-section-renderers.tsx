@@ -9,6 +9,7 @@ import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderAppearanceSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, interactions, navigation, view } = context
+
   return (
     <SettingsSection
       id="appearance"
@@ -38,6 +39,7 @@ export function renderAppearanceSettingsSection(context: SettingsRenderContext):
 
 export function renderInputSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation } = context
+
   return (
     <SettingsSection
       id="input"
@@ -57,6 +59,7 @@ export function renderNotificationsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="notifications"
@@ -76,6 +79,7 @@ export function renderNotificationsSettingsSection(
 
 export function renderShortcutsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { navigation, view } = context
+
   return (
     <SettingsSection
       id="shortcuts"
@@ -97,6 +101,7 @@ export function renderShortcutsSettingsSection(context: SettingsRenderContext): 
 
 export function renderStatsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { navigation, view } = context
+
   return (
     <SettingsSection
       id="stats"

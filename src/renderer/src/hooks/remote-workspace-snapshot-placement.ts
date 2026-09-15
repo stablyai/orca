@@ -15,6 +15,7 @@ export function resolveDirectSshSnapshotWorktreeIds(
   authority: DirectSshAuthority
 ): Set<string> {
   const expectedHostId = toSshExecutionHostId(authority.targetId)
+
   const worktreeIds = new Set(
     resolveDirectSshTargetScope({
       targetId: authority.targetId,
@@ -27,6 +28,7 @@ export function resolveDirectSshSnapshotWorktreeIds(
       restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
     }).gitWorktreeIds
   )
+
   // A host-qualified worktree can become placeable before duplicate repo rows reconcile.
   for (const worktree of [
     ...Object.values(state.worktreesByRepo).flat(),
@@ -36,6 +38,7 @@ export function resolveDirectSshSnapshotWorktreeIds(
       worktreeIds.add(worktree.id)
     }
   }
+
   return worktreeIds
 }
 
@@ -64,6 +67,7 @@ function snapshotPathsArePlaceable(
   const resolveWorktreeId = uniqueWorktreeIdByPath(
     resolveDirectSshSnapshotWorktreeIds(state, authority)
   )
+
   return worktreePaths.every((worktreePath) => resolveWorktreeId(worktreePath) !== null)
 }
 
@@ -108,58 +112,78 @@ export async function waitForSnapshotWorktreePlacement(
   if (signal?.aborted || !isCurrent()) {
     return false
   }
+
   if (
     worktreePaths.length === 0 ||
     snapshotPathsArePlaceable(store.getState(), authority, worktreePaths)
   ) {
     return true
   }
+
   if (!store.subscribe) {
     return false
   }
+
   const { promise, resolve } = Promise.withResolvers<boolean>()
   let observedCatalog = captureSnapshotPlacementCatalog(store.getState())
   let unsubscribe = (): void => {}
+
   let timer: ReturnType<typeof setTimeout> | null = null
   let settled = false
+
   const finish = (placed: boolean): void => {
     if (settled) {
       return
     }
+
     settled = true
+
     if (timer !== null) {
       clearTimeout(timer)
     }
+
     signal?.removeEventListener('abort', onAbort)
     unsubscribe()
     resolve(placed)
   }
+
   const onAbort = (): void => finish(false)
   timer = setTimeout(() => finish(false), timeoutMs)
   signal?.addEventListener('abort', onAbort, { once: true })
+
   const subscribedUnsubscribe = store.subscribe((state) => {
     if (!isCurrent()) {
       finish(false)
+
       return
     }
+
     const nextCatalog = captureSnapshotPlacementCatalog(state)
+
     if (!snapshotPlacementCatalogChanged(observedCatalog, nextCatalog)) {
       return
     }
+
     observedCatalog = nextCatalog
+
     if (snapshotPathsArePlaceable(state, authority, worktreePaths)) {
       finish(true)
     }
   })
+
   unsubscribe = subscribedUnsubscribe
+
   if (settled) {
     subscribedUnsubscribe()
   }
+
   if (signal?.aborted || !isCurrent()) {
     finish(false)
   }
+
   if (snapshotPathsArePlaceable(store.getState(), authority, worktreePaths)) {
     finish(true)
   }
+
   return promise
 }

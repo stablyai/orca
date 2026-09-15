@@ -19,7 +19,9 @@ type EnrichmentOptions = {
 // once per repo location per app session — hydrateRepo serves the persisted
 // value in between, and a relaunch picks up config changes.
 const attemptedLocations = new Set<string>()
+
 let enrichmentInFlight: Promise<void> | null = null
+
 let rerunRequested = false
 
 // Why the execution host and not connectionId: a runtime repo has no connectionId, so a
@@ -40,10 +42,13 @@ async function enrichRepoGitUsernamesInBackground(
       !repo.connectionId &&
       !attemptedLocations.has(getRepoLocationKey(repo))
   )
+
   let changed = false
+
   for (const repo of candidates) {
     attemptedLocations.add(getRepoLocationKey(repo))
     const { username, authoritative } = await resolveLocalGitUsernameDetailed(repo.path)
+
     // Why: a non-authoritative '' means a probe timed out and says nothing
     // about the account — keep the persisted value. An authoritative result
     // (including '') is the current truth: it must also CLEAR a stale
@@ -51,10 +56,12 @@ async function enrichRepoGitUsernamesInBackground(
     if (!authoritative && !username) {
       continue
     }
+
     if (store.setResolvedRepoGitUsername(repo, username)) {
       changed = true
     }
   }
+
   if (changed) {
     options.onChanged?.()
   }
@@ -73,14 +80,17 @@ export function enrichRepoGitUsernames(
     // Why: a repo added mid-pass would otherwise be dropped until some later
     // repos:list happens to fire — queue one follow-up pass instead.
     rerunRequested = true
+
     return
   }
+
   enrichmentInFlight = enrichRepoGitUsernamesInBackground(store, options)
     .catch((error: unknown) => {
       console.error('[repo-username] Failed to enrich git usernames:', error)
     })
     .finally(() => {
       enrichmentInFlight = null
+
       if (rerunRequested) {
         rerunRequested = false
         enrichRepoGitUsernames(store, options)

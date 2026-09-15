@@ -1,5 +1,6 @@
 import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'
 import { useEffect } from 'react'
+
 export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) {
   const {
     closeTaskPage,
@@ -26,6 +27,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     newLinearIssueOpen,
     newJiraIssueOpen
   } = model
+
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
@@ -40,11 +42,14 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     ) {
       return
     }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') {
         return
       }
+
       const target = event.target
+
       if (!(target instanceof HTMLElement)) {
         return
       }
@@ -67,14 +72,18 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
       ) {
         event.preventDefault()
         target.blur()
+
         return
       }
+
       event.preventDefault()
       closeTaskPage()
     }
+
     window.addEventListener('keydown', onKeyDown, {
       capture: true
     })
+
     return () =>
       window.removeEventListener('keydown', onKeyDown, {
         capture: true
@@ -93,9 +102,11 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
+
     if (!linearStatusReady) {
       void checkLinearConnection()
     }
+
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
@@ -118,7 +129,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
   const nextModel = model as typeof model & {
     githubTasksBusy: typeof githubTasksBusy
   }
+
   nextModel.githubTasksBusy = githubTasksBusy
+
   return nextModel
 }
+
 export type TaskPageGlobalEffectsModel = ReturnType<typeof useTaskPageGlobalEffects>

@@ -31,16 +31,21 @@ describe('review Markdown unclosed tags', () => {
       '<a x<',
       '<a'
     ]
+
     let seed = 17
+
     const random = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
       return seed
     }
+
     for (let index = 0; index < 5000; index++) {
       const text = Array.from(
         { length: 1 + (random() % 40) },
         () => parts[random() % parts.length]
       ).join('')
+
       expect(stripHtmlTags(text), text).toBe(text.replace(ORIGINAL_TAGS, ''))
     }
   })

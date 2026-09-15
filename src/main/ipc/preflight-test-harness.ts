@@ -81,8 +81,10 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   isCommandOnLocalPathMock.mockReset()
   isCommandOnLocalPathMock.mockImplementation(async (command: string) => {
     const finder = process.platform === 'win32' ? 'where' : 'which'
+
     try {
       const { stdout } = await execFileAsyncMock(finder, [command])
+
       return String(stdout)
         .split(/\r?\n/)
         .map((line) => line.trim())

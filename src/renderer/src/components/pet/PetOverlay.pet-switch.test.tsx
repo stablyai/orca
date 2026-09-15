@@ -79,6 +79,7 @@ describe('PetOverlay pet switching', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null

@@ -61,12 +61,14 @@ export function registerAgentHookHandlers(
     if (typeof request !== 'object' || request === null) {
       return false
     }
+
     return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
   })
   ipcMain.handle('agentStatus:inferQuestionAnswered', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
       return false
     }
+
     return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
   ipcMain.handle(

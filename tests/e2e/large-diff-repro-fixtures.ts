@@ -37,20 +37,25 @@ export function createIsolatedLargeDiffRepo(): IsolatedLargeDiffRepo {
 
 export function buildLargeTypeScriptFile(lineCount: number): string {
   const lines: string[] = []
+
   for (let i = 0; i < lineCount; i += 1) {
     lines.push(`export const largeDiffValue${i} = ${i}`)
   }
+
   return `${lines.join('\n')}\n`
 }
 
 function buildLocaleLikeJson(fileIndex: number, entryCount: number): string {
   const lines = ['{']
+
   for (let i = 0; i < entryCount; i += 1) {
     const value = `locale ${fileIndex} original ${i} `.repeat(5).trim()
     const comma = i + 1 === entryCount ? '' : ','
     lines.push(`  "entry_${String(i).padStart(5, '0')}": "${value}"${comma}`)
   }
+
   lines.push('}')
+
   return `${lines.join('\n')}\n`
 }
 
@@ -59,11 +64,13 @@ function modifyLocaleLikeJson(content: string, fileIndex: number): string {
   const changedLineIndex = 3200 + fileIndex
   lines[changedLineIndex] = lines[changedLineIndex].replace('original', 'updated')
   lines.splice(changedLineIndex + 4, 1)
+
   return lines.join('\n')
 }
 
 function buildSourceLikeFile(fileIndex: number, lineCount: number, revision: number): string {
   const lines: string[] = []
+
   for (let i = 0; i < lineCount; i += 1) {
     const changed = i % 12 === 0
     lines.push(
@@ -72,6 +79,7 @@ function buildSourceLikeFile(fileIndex: number, lineCount: number, revision: num
         : `export const value_${fileIndex}_${i} = 'base ${'payload '.repeat(6).trim()}'`
     )
   }
+
   return `${lines.join('\n')}\n`
 }
 
@@ -87,6 +95,7 @@ export function createIsolatedManyFileStagedDiffRepo(
 
   mkdirSync(path.join(repoPath, 'src'), { recursive: true })
   const relativePaths: string[] = []
+
   for (let fileIndex = 0; fileIndex < fileCount; fileIndex += 1) {
     const relativePath = path.posix.join('src', `module-${String(fileIndex).padStart(4, '0')}.ts`)
     writeFileSync(
@@ -95,6 +104,7 @@ export function createIsolatedManyFileStagedDiffRepo(
     )
     relativePaths.push(relativePath)
   }
+
   runGit(repoPath, ['add', '-A'])
   runGit(repoPath, ['commit', '-m', 'Initial many-file fixture'])
 
@@ -104,6 +114,7 @@ export function createIsolatedManyFileStagedDiffRepo(
       buildSourceLikeFile(fileIndex, lineCount, 1)
     )
   }
+
   runGit(repoPath, ['add', '-A'])
 
   return { repoPath, relativePaths }
@@ -116,9 +127,12 @@ export function createIsolatedStagedLocaleDiffRepo(): IsolatedStagedLocaleDiffRe
   runGit(repoPath, ['config', 'user.name', 'E2E Test'])
 
   mkdirSync(path.join(repoPath, 'src', 'locales'), { recursive: true })
+
   const toAbsoluteFsPath = (relativePosixPath: string): string =>
     path.join(repoPath, ...relativePosixPath.split(path.posix.sep))
+
   const relativePaths: string[] = []
+
   for (let fileIndex = 0; fileIndex < 5; fileIndex += 1) {
     const relativePath = path.posix.join('src', 'locales', `locale-${fileIndex}.json`)
     const absolutePath = toAbsoluteFsPath(relativePath)
@@ -126,6 +140,7 @@ export function createIsolatedStagedLocaleDiffRepo(): IsolatedStagedLocaleDiffRe
     writeFileSync(absolutePath, original)
     relativePaths.push(relativePath)
   }
+
   runGit(repoPath, ['add', '-A'])
   runGit(repoPath, ['commit', '-m', 'Initial locale fixture'])
 
@@ -134,6 +149,7 @@ export function createIsolatedStagedLocaleDiffRepo(): IsolatedStagedLocaleDiffRe
     const original = buildLocaleLikeJson(fileIndex, 3600)
     writeFileSync(absolutePath, modifyLocaleLikeJson(original, fileIndex))
   }
+
   runGit(repoPath, ['add', '-A'])
 
   return { repoPath, relativePaths }

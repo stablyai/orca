@@ -6,9 +6,11 @@ import {
 import { __setWindowsPathRegistryLoaderForTests } from './windows-path-registry-reader'
 
 const CREATE_PROCESS_DELAY_MS = 160
+
 const delayedExecFileSync = vi.hoisted(() =>
   vi.fn(() => {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, CREATE_PROCESS_DELAY_MS)
+
     return '    Path    REG_EXPAND_SZ    C:\\Delayed'
   })
 )
@@ -32,11 +34,13 @@ describe('persisted Windows PATH process creation', () => {
   }> {
     let lastTick = performance.now()
     let maxGapMs = 0
+
     const timer = setInterval(() => {
       const now = performance.now()
       maxGapMs = Math.max(maxGapMs, now - lastTick - 5)
       lastTick = now
     }, 5)
+
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     const startedAt = performance.now()
@@ -44,6 +48,7 @@ describe('persisted Windows PATH process creation', () => {
     const callMs = performance.now() - startedAt
     await new Promise((resolve) => setTimeout(resolve, 20))
     clearInterval(timer)
+
     return { callMs, maxGapMs, result }
   }
 
@@ -69,6 +74,7 @@ describe('persisted Windows PATH process creation', () => {
         Path: { type: 1, value: root === 1 ? 'C:\\Machine' : 'C:\\User' }
       })
     }))
+
     const native = readPersistedWindowsPathSegments({
       platform: 'win32',
       env: { SystemRoot: 'C:\\Windows' }

@@ -10,10 +10,13 @@ export function fenceBrowserHostLease(
   if (leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
     return
   }
+
   leasesByClientId.delete(state.lease.browserHostClientId)
+
   for (const route of state.routes) {
     fenceRoute(route, reason === 'replaced' ? 'lease_replaced' : 'lease_released')
   }
+
   state.executionHostGrants.clear()
   state.commandLedger?.close()
   state.fence.resolve(reason)
@@ -27,8 +30,10 @@ export function fenceBrowserHostRoute(
   state.releaseGrantLink?.()
   state.releaseGrantLink = undefined
   state.lease.routes.delete(state)
+
   if (routesByKey.get(state.key)?.token === state.token) {
     routesByKey.delete(state.key)
   }
+
   state.fence.resolve(reason)
 }

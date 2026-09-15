@@ -97,6 +97,7 @@ export function ProjectGroupCreateWorkspaceButton({
     'Create workspace for {{value0}}',
     { value0: label }
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -117,9 +118,11 @@ export function ProjectGroupCreateWorkspaceButton({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
+
             if (disabled) {
               return
             }
+
             onCreate(projectGroup)
           }}
         >

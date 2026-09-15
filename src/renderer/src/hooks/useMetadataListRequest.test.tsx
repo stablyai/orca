@@ -7,9 +7,11 @@ import { useMetadataListRequest } from './useMetadataListRequest'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -19,6 +21,7 @@ describe('useMetadataListRequest', () => {
   it('treats only null as disabled', async () => {
     const store = createMetadataRequestStore<string[]>()
     let loads = 0
+
     const view = renderHook(() =>
       useMetadataListRequest({
         cacheKey: '',
@@ -26,6 +29,7 @@ describe('useMetadataListRequest', () => {
         errorFallback: 'Failed to load metadata',
         load: async () => {
           loads += 1
+
           return ['loaded']
         }
       })
@@ -40,6 +44,7 @@ describe('useMetadataListRequest', () => {
     const store = createMetadataRequestStore<string[]>()
     const first = deferred<string[]>()
     const second = deferred<string[]>()
+
     const view = renderHook(
       ({ cacheKey }: { cacheKey: string | null }) =>
         useMetadataListRequest({

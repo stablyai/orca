@@ -240,11 +240,13 @@ describe('useOpenTabSearch', () => {
   it('keeps the active runtime host when worktree ids collide', () => {
     const runtimeHost = 'runtime:host-1' as const
     const localWorktree = { ...makeWorktree('wt-1', 'Local'), hostId: 'local' as const }
+
     const runtimeWorktree = {
       ...makeWorktree('wt-1', 'Runtime'),
       hostId: runtimeHost,
       path: '/runtime/wt-1'
     }
+
     seedStore(
       {
         activeWorkspaceExecutionHostId: runtimeHost,
@@ -267,11 +269,13 @@ describe('useOpenTabSearch', () => {
 
   it('resolves a hosted worktree when the active host is unknown', () => {
     const runtimeHost = 'runtime:host-1' as const
+
     const runtimeWorktree = {
       ...makeWorktree('wt-1', 'Runtime'),
       hostId: runtimeHost,
       path: '/runtime/wt-1'
     }
+
     const localWorktree = { ...makeWorktree('wt-1', 'Local'), hostId: 'local' as const }
     seedStore(
       {
@@ -295,11 +299,13 @@ describe('useOpenTabSearch', () => {
 
   it('returns tabs for a remote-only worktree when the active host is unknown', () => {
     const sshHost = 'ssh:remote-1' as const
+
     const remoteWorktree = {
       ...makeWorktree('wt-1', 'Remote'),
       hostId: sshHost,
       path: '/remote/wt-1'
     }
+
     seedStore({
       activeWorkspaceExecutionHostId: null,
       repos: [{ ...repo, executionHostId: sshHost, path: '/remote/repo-1' }],

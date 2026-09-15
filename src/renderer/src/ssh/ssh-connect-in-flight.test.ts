@@ -70,6 +70,7 @@ describe('ssh connect in-flight registry', () => {
   describe('trackSshConnect', () => {
     it('holds the lock while the request is pending and clears it on resolve', async () => {
       let settle: (value: string) => void = () => {}
+
       const request = trackSshConnect(
         'ssh-a',
         new Promise<string>((resolve) => {
@@ -99,6 +100,7 @@ describe('ssh connect in-flight registry', () => {
     // for this host fire a second connect — a second credential prompt on a gated target.
     it('keeps the lock after a UI timeout abandons the wait, so a second dial is suppressed', async () => {
       vi.useFakeTimers()
+
       try {
         const request = trackSshConnect('ssh-a', new Promise<string>(() => {}))
         const uiWait = withUiConnectTimeout(request, SSH_RECONNECT_UI_TIMEOUT_MS)
@@ -117,12 +119,14 @@ describe('ssh connect in-flight registry', () => {
     // explicit end. Its release must not unlock a later connect on the same target.
     it('ignores a settle whose lock was already cleared, so a later connect keeps its lock', async () => {
       let settleAbandoned: (value: string) => void = () => {}
+
       const abandoned = trackSshConnect(
         'ssh-a',
         new Promise<string>((resolve) => {
           settleAbandoned = resolve
         })
       )
+
       resetSshConnectInFlightForTests()
 
       const listener = vi.fn()

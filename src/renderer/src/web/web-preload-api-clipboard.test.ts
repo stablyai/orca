@@ -15,6 +15,7 @@ function installExecCommandClipboardDocument(execCommandResult = true): {
   const setData = vi.fn()
   const createElement = vi.fn()
   const appendChild = vi.fn()
+
   const execCommand = vi.fn((command: string) => {
     if (command === 'copy') {
       for (const listener of listeners.slice()) {
@@ -25,8 +26,10 @@ function installExecCommandClipboardDocument(execCommandResult = true): {
         })
       }
     }
+
     return execCommandResult
   })
+
   vi.stubGlobal('document', {
     execCommand,
     addEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
@@ -42,6 +45,7 @@ function installExecCommandClipboardDocument(execCommandResult = true): {
     createElement,
     body: { appendChild }
   })
+
   return { appendChild, createElement, execCommand, setData }
 }
 
@@ -55,6 +59,7 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
       settled = true
     }
   )
+
   return () => settled
 }
 
@@ -93,12 +98,14 @@ function installClipboardImageBlob(blob: Blob): {
   read: ReturnType<typeof vi.fn>
 } {
   const getType = vi.fn().mockResolvedValue(blob)
+
   const read = vi.fn().mockResolvedValue([
     {
       types: [blob.type || 'image/png'],
       getType
     }
   ])
+
   vi.stubGlobal('navigator', {
     userAgent: 'Linux',
     hardwareConcurrency: 8,
@@ -107,6 +114,7 @@ function installClipboardImageBlob(blob: Blob): {
       read
     }
   })
+
   return { getType, read }
 }
 
@@ -271,6 +279,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'clipboard.startImageUpload') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -279,6 +288,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'clipboard.appendImageUploadChunk') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -287,6 +297,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -302,8 +313,10 @@ describe('web UI preload API', () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
+
     const { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } =
       await import('./preload-api/web-clipboard-api')
+
     const contentBase64 = `${'A'.repeat(CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS)}AAAA`
     installClipboardImageBase64(contentBase64)
     installWebPreloadApi()
@@ -348,6 +361,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'clipboard.startImageUpload') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -356,6 +370,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -401,6 +416,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,
@@ -416,8 +432,10 @@ describe('web UI preload API', () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
+
     const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS } =
       await import('./preload-api/web-clipboard-api')
+
     installClipboardImageBase64('A'.repeat(CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS + 4))
     installWebPreloadApi()
 
@@ -434,6 +452,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'clipboard.startImageUpload') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -442,6 +461,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'clipboard.appendImageUploadChunk') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -450,6 +470,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -482,6 +503,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'clipboard.startImageUpload') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -490,6 +512,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'clipboard.commitImageUpload') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -498,6 +521,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -533,6 +557,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -559,13 +584,16 @@ describe('web UI preload API', () => {
 
   it('rejects oversized clipboard image source blobs before FileReader or upload work', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
+
     const readAsDataURL = vi.fn(() => {
       throw new Error('FileReader should not receive oversized clipboard image data')
     })
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -582,9 +610,11 @@ describe('web UI preload API', () => {
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
     const { MAX_CLIPBOARD_IMAGE_SOURCE_BYTES } = await import('./preload-api/web-clipboard-api')
+
     const clipboard = installClipboardImageBlob(
       new Blob([new Uint8Array(MAX_CLIPBOARD_IMAGE_SOURCE_BYTES + 1)], { type: 'image/png' })
     )
+
     vi.stubGlobal(
       'FileReader',
       class {
@@ -605,13 +635,16 @@ describe('web UI preload API', () => {
   it('rejects oversized decoded clipboard images before canvas conversion', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const close = vi.fn()
+
     const readAsDataURL = vi.fn(() => {
       throw new Error('FileReader should not receive oversized decoded image data')
     })
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,

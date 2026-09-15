@@ -6,5 +6,6 @@ export function buildPersistedClosedTerminalTabTombstones(
   map: WorkspaceSessionState['closedTerminalTabTombstonesByTabId']
 ): WorkspaceSessionState['closedTerminalTabTombstonesByTabId'] {
   const pruned = pruneClosedTerminalTabTombstones(map, Date.now())
+
   return Object.keys(pruned).length > 0 ? pruned : undefined
 }

@@ -45,9 +45,11 @@ export function PRFilesCombinedDiffViewer({
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
   const diffEntrySignature = useMemo(
     () =>
       JSON.stringify(
@@ -62,6 +64,7 @@ export function PRFilesCombinedDiffViewer({
       ),
     [files]
   )
+
   const entries = useMemo(
     () => getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry)),
     // Why: diffEntrySignature captures every file field that feeds the branch entries,
@@ -70,19 +73,24 @@ export function PRFilesCombinedDiffViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [diffEntrySignature]
   )
+
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
+
   // Why: an inline arrow here re-keys every mounted row's comment decorator on every render.
   const getCommentableLineNumbers = useCallback(
     (section: DiffSection): readonly number[] | undefined =>
       fileByPath.get(section.path)?.reviewCommentLineNumbers,
     [fileByPath]
   )
+
   const inlineReviewComments = useMemo(
     () => buildInlineReviewComments(comments, repoId, prNumber),
     [comments, prNumber, repoId]
   )
+
   // Why: section contents are fetched through sourceContext, so local and remote hosts must not share cache entries.
   const sourceScope = sourceContext?.hostId ?? LOCAL_EXECUTION_HOST_ID
+
   const entrySignature = useMemo(
     () =>
       JSON.stringify({
@@ -96,6 +104,7 @@ export function PRFilesCombinedDiffViewer({
       }),
     [baseSha, diffEntrySignature, headSha, prNumber, prRepo, repoId, sourceScope]
   )
+
   const viewStateKey = useMemo(
     () =>
       [repoId || repoPath, prNumber, prRepo ? githubRepoIdentityKey(prRepo) : '', sourceScope].join(
@@ -103,6 +112,7 @@ export function PRFilesCombinedDiffViewer({
       ),
     [prNumber, prRepo, repoId, repoPath, sourceScope]
   )
+
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(false)
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
@@ -128,6 +138,7 @@ export function PRFilesCombinedDiffViewer({
     generationRef.current += 1
     setEntryRevision((revision) => revision + 1)
     const cached = prFilesDiffViewStateCache.get(viewStateKey)
+
     if (cached && cached.entrySignature === entrySignature) {
       const restoredSections = cached.sections
       loadedIndicesRef.current = new Set(
@@ -141,6 +152,7 @@ export function PRFilesCombinedDiffViewer({
       setActiveTreeSectionKey(cached.activeTreeSectionKey)
       pendingRestoreScrollTopRef.current =
         prFilesDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+
       return
     }
 
@@ -187,10 +199,12 @@ export function PRFilesCombinedDiffViewer({
 
   const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature, sections })
+
   const visibleActiveTreeSectionKey =
     activeTreeSectionKey && sectionIndexByKey.has(activeTreeSectionKey)
       ? activeTreeSectionKey
       : null
+
   const viewedSectionKeys = useMemo(
     () => new Set(files.filter(isPRFileViewed).map((file) => getPRFileSectionKey(file.path))),
     [files]
@@ -201,14 +215,17 @@ export function PRFilesCombinedDiffViewer({
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {
       const section = sections[index]
+
       if (!section) {
         return 88
       }
+
       return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
     },
     overscan: PR_DIFF_OVERSCAN,
     getItemKey: (index) => {
       const section = sections[index]
+
       return section
         ? `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${entryRevision}`
         : `${index}:${entryRevision}`
@@ -243,6 +260,7 @@ export function PRFilesCombinedDiffViewer({
         toggleSection,
         scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
       })
+
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
       }
@@ -286,11 +304,14 @@ export function PRFilesCombinedDiffViewer({
   const renderViewedCheckbox = useCallback(
     (section: DiffSection) => {
       const file = fileByPath.get(section.path)
+
       if (!file) {
         return null
       }
+
       const viewed = isPRFileViewed(file)
       const pending = pendingViewedPaths.has(file.path)
+
       return (
         <PRViewedCheckbox
           checked={viewed}
@@ -334,9 +355,11 @@ export function PRFilesCombinedDiffViewer({
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
+
               if (!section) {
                 return null
               }
+
               return (
                 <div
                   key={virtualItem.key}

@@ -17,14 +17,17 @@ export function resolveUsagePercentageDisplayChangeNoticeDismissed(args: {
   if (args.rawDismissed === true) {
     return true
   }
+
   if (!args.isExistingProfile) {
     return true
   }
+
   // Why: choosing remaining is the discovery path; re-teaching the default flip
   // would only interrupt someone who already adapted.
   if (args.rawUsagePercentageDisplay === 'remaining') {
     return true
   }
+
   return false
 }
 

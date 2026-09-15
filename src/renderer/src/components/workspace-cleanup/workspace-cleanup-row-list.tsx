@@ -39,6 +39,7 @@ export type WorkspaceCleanupRowListState = {
 export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): React.JSX.Element {
   const { rows, loading, hasScanned, scannedCount } = props
   const settled = !loading && hasScanned
+
   return (
     <>
       {settled && scannedCount === 0 ? (

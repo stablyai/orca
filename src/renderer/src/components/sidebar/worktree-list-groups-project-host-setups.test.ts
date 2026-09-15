@@ -62,6 +62,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/design-assets',
       displayName: 'design-assets'
     }
+
     const otherWorktree: Worktree = {
       ...worktree,
       id: 'wt-other',
@@ -69,8 +70,10 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/design-assets-feature',
       displayName: 'palette'
     }
+
     const buildHeaders = (extraWorktrees: Worktree[], extraRepos: Repo[]) => {
       const worktrees = [worktree, remoteWorktree, ...extraWorktrees]
+
       const rows = buildRows(
         'repo',
         worktrees,
@@ -95,6 +98,7 @@ describe('buildRows with pinned worktrees', () => {
         [],
         { projects: [project], projectHostSetups }
       )
+
       return rows.filter((row) => row.type === 'header')
     }
 
@@ -119,6 +123,7 @@ describe('buildRows with pinned worktrees', () => {
         remoteUrl: 'git@git.company.test:team/sample-app.git'
       }
     }
+
     const sshRepo: Repo = {
       ...repo,
       id: 'ssh-sample-app',
@@ -131,6 +136,7 @@ describe('buildRows with pinned worktrees', () => {
         remoteUrl: 'https://git.company.test/team/sample-app.git'
       }
     }
+
     const runtimeRepo: Repo = {
       ...repo,
       id: 'runtime-sample-app',
@@ -143,25 +149,30 @@ describe('buildRows with pinned worktrees', () => {
         remoteUrl: 'ssh://git@git.company.test/team/sample-app.git'
       }
     }
+
     const localWorktree: Worktree = {
       ...worktree,
       id: 'wt-local-sample-app',
       repoId: localRepo.id,
       path: '/Users/alice/work/sample-app-feature'
     }
+
     const sshWorktree: Worktree = {
       ...worktree,
       id: 'wt-ssh-sample-app',
       repoId: sshRepo.id,
       path: '/home/alice/src/sample-app-feature'
     }
+
     const runtimeWorktree: Worktree = {
       ...worktree,
       id: 'wt-runtime-sample-app',
       repoId: runtimeRepo.id,
       path: '/workspace/sample-app-feature'
     }
+
     const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo, runtimeRepo])
+
     const rows = buildRows(
       'repo',
       [localWorktree, sshWorktree, runtimeWorktree],
@@ -218,6 +229,7 @@ describe('buildRows with pinned worktrees', () => {
         remoteUrl: 'https://git.company.test/team/sample-app.git'
       }
     }
+
     const sshRepo: Repo = {
       ...repo,
       id: 'ssh-sample-app',
@@ -230,25 +242,30 @@ describe('buildRows with pinned worktrees', () => {
         remoteUrl: 'https://git.company.test/team/sample-app.git'
       }
     }
+
     const localFirst: Worktree = {
       ...worktree,
       id: 'wt-local-first',
       repoId: localRepo.id,
       path: '/Users/alice/work/sample-app-a'
     }
+
     const sshWorktree: Worktree = {
       ...worktree,
       id: 'wt-ssh',
       repoId: sshRepo.id,
       path: '/home/alice/src/sample-app-b'
     }
+
     const localSecond: Worktree = {
       ...worktree,
       id: 'wt-local-second',
       repoId: localRepo.id,
       path: '/Users/alice/work/sample-app-c'
     }
+
     const projection = projectHostSetupProjectionFromRepos([localRepo, sshRepo])
+
     const rows = buildRows(
       'repo',
       [localFirst, sshWorktree, localSecond],
@@ -303,6 +320,7 @@ describe('buildRows with pinned worktrees', () => {
       displayName: 'Analytics',
       sourceRepoIds: ['repo-analytics']
     }
+
     const analyticsRepo: Repo = {
       ...repo,
       id: 'repo-analytics',
@@ -310,12 +328,14 @@ describe('buildRows with pinned worktrees', () => {
       displayName: 'analytics',
       upstream: { owner: 'stablyai', repo: 'analytics' }
     }
+
     const analyticsWorktree: Worktree = {
       ...worktree,
       id: 'wt-analytics',
       repoId: analyticsRepo.id,
       displayName: 'analytics'
     }
+
     const analyticsSetup: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: analyticsRepo.id,
@@ -324,6 +344,7 @@ describe('buildRows with pinned worktrees', () => {
       path: analyticsRepo.path,
       displayName: analyticsRepo.displayName
     }
+
     const repoOrder = new Map([
       [repo.id, 0],
       [remoteRepo.id, 1],
@@ -375,6 +396,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('splits same-host checkouts of one project into separate per-setup groups', () => {
     const repoB: Repo = { ...repo, id: 'repo-2', path: '/tmp/orca-2', displayName: 'orca-2' }
+
     const worktreeB: Worktree = {
       ...worktree,
       id: 'wt-2',
@@ -382,6 +404,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-2-feature',
       displayName: 'feature-b'
     }
+
     const localSetupB: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: repoB.id,
@@ -389,6 +412,7 @@ describe('buildRows with pinned worktrees', () => {
       path: repoB.path,
       displayName: repoB.displayName
     }
+
     const rows = buildRows(
       'repo',
       [worktree, worktreeB],
@@ -442,6 +466,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-b',
       displayName: 'orca-b'
     }
+
     const localWorktreeB: Worktree = {
       ...worktree,
       id: 'wt-local-b',
@@ -449,6 +474,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-b-feature',
       displayName: 'feature-b'
     }
+
     const localSetupB: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: localRepoB.id,
@@ -456,6 +482,7 @@ describe('buildRows with pinned worktrees', () => {
       path: localRepoB.path,
       displayName: localRepoB.displayName
     }
+
     const rows = buildRows(
       'repo',
       [worktree, localWorktreeB, remoteWorktree],
@@ -498,6 +525,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('counts projection twins for one directory as one checkout', () => {
     const runtimeHostId = 'runtime:m2-air'
+
     const runtimeRepo: Repo = {
       ...remoteRepo,
       id: 'repo-runtime',
@@ -505,12 +533,14 @@ describe('buildRows with pinned worktrees', () => {
       connectionId: undefined,
       executionHostId: runtimeHostId
     }
+
     const runtimeWorktree: Worktree = {
       ...remoteWorktree,
       id: 'wt-runtime',
       repoId: runtimeRepo.id,
       path: '/home/alice/orca-runtime-feature'
     }
+
     const runtimeSetup: ProjectHostSetup = {
       ...projectHostSetups[1]!,
       id: runtimeRepo.id,
@@ -519,12 +549,14 @@ describe('buildRows with pinned worktrees', () => {
       hostId: runtimeHostId,
       executionHostId: runtimeHostId
     }
+
     const derivedSetup: ProjectHostSetup = {
       ...projectHostSetups[1]!,
       hostId: runtimeHostId,
       connectionId: 'intel mac',
       executionHostId: runtimeHostId
     }
+
     const authoritativeSetup: ProjectHostSetup = {
       ...derivedSetup,
       id: 'setup-authoritative',
@@ -532,6 +564,7 @@ describe('buildRows with pinned worktrees', () => {
       connectionId: null,
       executionHostId: 'ssh:intel%20mac'
     }
+
     const grouping = {
       projects: [{ ...project, sourceRepoIds: [remoteRepo.id, runtimeRepo.id] }],
       projectHostSetups: [runtimeSetup, derivedSetup, authoritativeSetup]
@@ -561,12 +594,14 @@ describe('buildRows with pinned worktrees', () => {
 
   it('keeps Git hosts grouped when folder setups share the project identity', () => {
     const windowsHostId = 'runtime:windows-server'
+
     const windowsRepo: Repo = {
       ...repo,
       id: 'repo-windows',
       path: 'C:\\Users\\neil\\orca\\orca',
       executionHostId: windowsHostId
     }
+
     const folderRepoA: Repo = {
       ...repo,
       id: 'folder-qa-a',
@@ -574,12 +609,14 @@ describe('buildRows with pinned worktrees', () => {
       displayName: 'pr11751-folder-qa',
       kind: 'folder'
     }
+
     const folderRepoB: Repo = {
       ...folderRepoA,
       id: 'folder-qa-b',
       path: '/tmp/pr11767-runtime-folder',
       displayName: 'pr11767-runtime-folder'
     }
+
     const setups: ProjectHostSetup[] = [
       projectHostSetups[0]!,
       { ...projectHostSetups[0]!, id: 'projection-twin' },
@@ -609,7 +646,9 @@ describe('buildRows with pinned worktrees', () => {
         kind: 'folder'
       }
     ]
+
     const repos = [repo, remoteRepo, windowsRepo, folderRepoA, folderRepoB]
+
     const grouping = {
       projects: [{ ...project, sourceRepoIds: repos.map((entry) => entry.id) }],
       projectHostSetups: setups
@@ -626,6 +665,7 @@ describe('buildRows with pinned worktrees', () => {
         grouping
       )
     )
+
     expect(new Set(groupKeys)).toEqual(new Set(['project:github:stablyai/orca']))
   })
 
@@ -636,6 +676,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-runtime-b',
       displayName: 'orca-runtime-b'
     }
+
     const runtimeWorktreeB: Worktree = {
       ...worktree,
       id: 'wt-runtime-b',
@@ -643,6 +684,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-runtime-b-feature',
       displayName: 'feature-runtime-b'
     }
+
     // Why: a `provisioned` (recipe-created ephemeral) copy shares the project's
     // remote identity but must not split the user's real checkout into two
     // headers; it nests under the project. See #6320 / #5374.
@@ -654,6 +696,7 @@ describe('buildRows with pinned worktrees', () => {
       displayName: runtimeRepoB.displayName,
       setupMethod: 'provisioned'
     }
+
     const rows = buildRows(
       'repo',
       [worktree, runtimeWorktreeB],
@@ -704,6 +747,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-b',
       displayName: 'orca-b'
     }
+
     const localWorktreeB: Worktree = {
       ...worktree,
       id: 'wt-local-b',
@@ -711,6 +755,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-b-feature',
       displayName: 'feature-b'
     }
+
     const localSetupB: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: localRepoB.id,
@@ -718,12 +763,14 @@ describe('buildRows with pinned worktrees', () => {
       path: localRepoB.path,
       displayName: localRepoB.displayName
     }
+
     const runtimeRepoB: Repo = {
       ...repo,
       id: 'repo-runtime-b',
       path: '/tmp/orca-runtime-b',
       displayName: 'orca-runtime-b'
     }
+
     const runtimeWorktreeB: Worktree = {
       ...worktree,
       id: 'wt-runtime-b',
@@ -731,6 +778,7 @@ describe('buildRows with pinned worktrees', () => {
       path: '/tmp/orca-runtime-b-feature',
       displayName: 'feature-runtime-b'
     }
+
     const runtimeSetupB: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: runtimeRepoB.id,
@@ -739,6 +787,7 @@ describe('buildRows with pinned worktrees', () => {
       displayName: runtimeRepoB.displayName,
       setupMethod: 'provisioned'
     }
+
     const rows = buildRows(
       'repo',
       [worktree, localWorktreeB, runtimeWorktreeB],

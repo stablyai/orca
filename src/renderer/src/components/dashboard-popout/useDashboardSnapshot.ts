@@ -8,6 +8,7 @@ import {
 import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
 
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 250
+
 const TOPOLOGY_REFRESH_MAX_WAIT_MS = 1_000
 
 /** Which column each card sits in — the only thing a view transition should
@@ -53,12 +54,15 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       if (topologyRefreshTimer) {
         clearTimeout(topologyRefreshTimer)
       }
+
       const now = Date.now()
       topologyRefreshStartedAt ??= now
+
       const remainingMaxWait = Math.max(
         0,
         TOPOLOGY_REFRESH_MAX_WAIT_MS - (now - topologyRefreshStartedAt)
       )
+
       topologyRefreshTimer = setTimeout(
         () => {
           topologyRefreshTimer = null
@@ -74,7 +78,9 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         clearTimeout(staleRefreshTimer)
         staleRefreshTimer = null
       }
+
       let nextDeadline = Number.POSITIVE_INFINITY
+
       for (const card of next.cards) {
         if (
           card.statusUpdatedAt !== undefined &&
@@ -85,6 +91,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
           nextDeadline = Math.min(nextDeadline, card.statusUpdatedAt + AGENT_STATUS_STALE_AFTER_MS)
         }
       }
+
       if (Number.isFinite(nextDeadline)) {
         staleRefreshTimer = setTimeout(
           requestTopologyRefresh,
@@ -102,9 +109,11 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         incoming.repoIconsByRepoId === undefined && retainedRepoIconsRef.current
           ? { ...incoming, repoIconsByRepoId: retainedRepoIconsRef.current }
           : incoming
+
       if (next.repoIconsByRepoId !== undefined) {
         retainedRepoIconsRef.current = next.repoIconsByRepoId
       }
+
       snapshotRef.current = next
       scheduleStaleRefresh(next)
       const nextSignature = columnSignature(next)
@@ -112,6 +121,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       columnSignatureRef.current = nextSignature
 
       const startViewTransition = document.startViewTransition?.bind(document)
+
       if (
         !layoutChanged ||
         prefersReducedMotion() ||
@@ -119,8 +129,10 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         !startViewTransition
       ) {
         setSnapshot(next)
+
         return
       }
+
       // flushSync so the DOM reflects `next` synchronously inside the transition
       // callback — the browser captures the "after" state from it.
       startViewTransition(() => {
@@ -129,6 +141,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
     }
 
     const unsubscribe = window.api.dashboard.onSnapshot(apply)
+
     const unsubscribeStatus = window.api.agentStatus.onSet((event) => {
       if (
         typeof event.connectionId === 'string' &&
@@ -136,17 +149,22 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       ) {
         return
       }
+
       const result = patchDashboardSnapshotFromAgentStatus(snapshotRef.current, event)
+
       if (!result.matched) {
         if (snapshotRef.current.generatedAt !== 0) {
           requestTopologyRefresh()
         }
+
         return
       }
+
       if (result.snapshot !== snapshotRef.current) {
         apply(result.snapshot)
       }
     })
+
     const unsubscribeClear = window.api.agentStatus.onClear((event) => {
       if ('transient' in event && event.transient) {
         transientClearWatermarks.set(
@@ -154,16 +172,21 @@ export function useDashboardSnapshot(): DashboardSnapshot {
           Math.max(transientClearWatermarks.get(event.connectionId) ?? -1, event.clearedAt)
         )
       }
+
       requestTopologyRefresh()
     })
+
     void window.api.dashboard.requestSnapshot()
+
     return () => {
       unsubscribe()
       unsubscribeStatus()
       unsubscribeClear()
+
       if (topologyRefreshTimer) {
         clearTimeout(topologyRefreshTimer)
       }
+
       if (staleRefreshTimer) {
         clearTimeout(staleRefreshTimer)
       }

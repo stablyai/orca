@@ -19,13 +19,17 @@ export function openAnnotationLocation(params: {
   const { worktreeId, path, line, revealRafRef, revealInnerRafRef } = params
   const store = useAppStore.getState()
   const worktree = findWorktreeById(store.worktreesByRepo, worktreeId)
+
   if (!worktree) {
     return
   }
+
   const resolvedPath = resolveAnnotationPathInsideWorktree(worktree.path, path)
+
   if (!resolvedPath) {
     return
   }
+
   const { absolutePath, relativePath } = resolvedPath
 
   // Why: reuse the shared activation path so an annotation jump lands in the

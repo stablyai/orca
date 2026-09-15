@@ -9,6 +9,7 @@ import {
 
 /** A pane that actually replays scrollback when its turn comes. */
 const replaying = (): Mock<() => boolean> => vi.fn(() => true)
+
 /** A pane whose guards decline — hidden, disposed, or superseded restore. */
 const declining = (): Mock<() => boolean> => vi.fn(() => false)
 
@@ -81,6 +82,7 @@ describe('hidden output restore scheduler', () => {
     for (const hiddenPane of hiddenPanes) {
       scheduleHiddenOutputRestore({}, hiddenPane, 'inactive')
     }
+
     scheduleHiddenOutputRestore({}, visibleRestore, 'inactive')
 
     vi.advanceTimersByTime(16)
@@ -88,6 +90,7 @@ describe('hidden output restore scheduler', () => {
     for (const hiddenPane of hiddenPanes) {
       expect(hiddenPane).toHaveBeenCalledTimes(1)
     }
+
     expect(visibleRestore).toHaveBeenCalledTimes(1)
   })
 
@@ -124,8 +127,10 @@ describe('hidden output restore scheduler', () => {
   it('does not re-enter a pane queued by a restore that ran in the same drain', () => {
     const requeued = declining()
     const target = {}
+
     const reschedulingRestore = vi.fn(() => {
       scheduleHiddenOutputRestore(target, requeued, 'inactive')
+
       return false
     })
 

@@ -15,6 +15,7 @@ function clearStaleBodyPointerEvents(): void {
   if (document.body.style.pointerEvents !== 'none' || hasActiveRadixModal()) {
     return
   }
+
   document.body.style.pointerEvents = ''
 }
 
@@ -26,6 +27,7 @@ export function useRadixBodyPointerEventsRecovery(): void {
       if (frameId !== null) {
         return
       }
+
       frameId = requestAnimationFrame(() => {
         frameId = null
         clearStaleBodyPointerEvents()
@@ -46,6 +48,7 @@ export function useRadixBodyPointerEventsRecovery(): void {
 
     return () => {
       observer.disconnect()
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }

@@ -21,6 +21,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<void> {
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
   // Why: first-run announcements can cover the settings pane on fresh profiles.
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+
   if (await maybeLaterButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await maybeLaterButton.click()
   }
@@ -41,9 +42,11 @@ function combineJamo(pending: string, key: string): { commit?: string; compose: 
     '나+ㄷ': { compose: '낟' },
     '낟+ㅏ': { commit: '나', compose: '다' }
   }
+
   if (!pending) {
     return { compose: key }
   }
+
   // Why: like a real IME, a non-joinable key commits the pending text and
   // starts a fresh composition with just the new key.
   return joins[`${pending}+${key}`] ?? { commit: pending, compose: key }
@@ -83,25 +86,31 @@ async function typeHangulGanadaSlowly(
       }, 0)
     })
   })
+
   const takeClobbered = (): Promise<boolean> =>
     page.evaluate(() => {
       const w = window as unknown as { __imeClobbered?: boolean }
       const clobbered = w.__imeClobbered === true
       w.__imeClobbered = false
+
       return clobbered
     })
 
   let committed = ''
   let pending = ''
+
   for (const key of ['ㄱ', 'ㅏ', 'ㄴ', 'ㅏ', 'ㄷ', 'ㅏ']) {
     if (await takeClobbered()) {
       committed = await input.inputValue()
       pending = ''
     }
+
     const { commit, compose } = combineJamo(pending, key)
+
     if (commit) {
       committed += commit
     }
+
     const compositionText = `${committed}${compose}`
     await session.send('Input.imeSetComposition', {
       text: compositionText,
@@ -153,6 +162,7 @@ test.describe('Repository Display Name IME composition', () => {
       .poll(
         async () => {
           const current = await getStoreState<Repo[]>(orcaPage, 'repos')
+
           return current.find((entry) => entry.id === repo.id)?.displayName
         },
         { timeout: 5_000, message: 'display name did not persist to the store' }

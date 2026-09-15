@@ -31,9 +31,11 @@ function suggestForms(selector: string): string[] {
       ? []
       : [`id:${selector.slice(3)}::<absolute-path>`, 'path:<absolute-path>']
   }
+
   if (PREFIXES.some((prefix) => selector.startsWith(prefix))) {
     return []
   }
+
   return selector.startsWith('/') || /^[A-Za-z]:[\\/]/.test(selector)
     ? [`path:${selector}`]
     : [`id:${selector}::<absolute-path>`, `name:${selector}`, `branch:${selector}`]
@@ -41,6 +43,7 @@ function suggestForms(selector: string): string[] {
 
 export function worktreeSelectorRecovery(selector: string): WorktreeSelectorRecovery {
   const suggestions = suggestForms(selector)
+
   return {
     selector,
     validSelectorForms: WORKTREE_SELECTOR_FORMS,

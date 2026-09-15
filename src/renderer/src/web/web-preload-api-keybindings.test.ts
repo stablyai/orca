@@ -30,12 +30,14 @@ describe('web keybindings preload API', () => {
       actionId: 'worktree.palette',
       bindings: []
     })
+
     expect(disabled.overrides['worktree.palette']).toEqual([])
 
     const reset = await api.keybindings.setAction({
       actionId: 'worktree.palette',
       bindings: null
     })
+
     expect(reset.overrides['worktree.palette']).toBeUndefined()
   }, 15_000)
 

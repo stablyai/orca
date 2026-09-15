@@ -39,8 +39,11 @@ test.use({
 })
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'codex-inline-live-block-fixture.cjs')
+
 const FRAME_RE = /CODEX_FRAME_(\d+)/g
+
 const INPUT_BOX_MARKER = 'INPUT_BOX_READY_MARKER'
+
 // The fixture ticks every 60ms; allow a generous parse/delivery lag while
 // still rejecting a frozen frame from before the hide.
 const MAX_VISIBLE_FRAME_LAG = 50
@@ -58,9 +61,11 @@ type RevealProbe = {
 
 function latestFrame(text: string): number {
   let latest = -1
+
   for (const match of text.matchAll(FRAME_RE)) {
     latest = Math.max(latest, Number(match[1]))
   }
+
   return latest
 }
 
@@ -80,29 +85,37 @@ async function probeRevealedPane(page: Page, tabId: string): Promise<RevealProbe
     async ({ tabId }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         return null
       }
+
       const ptyId = pane.container.dataset.ptyId ?? null
       const terminal = pane.terminal
       const buffer = terminal.buffer.active
       const screenRows: string[] = []
+
       for (let i = 0; i < terminal.rows; i += 1) {
         const line = buffer.getLine(buffer.viewportY + i)
         screenRows.push(line ? line.translateToString(true) : '')
       }
+
       let proposed: { cols: number; rows: number } | null = null
+
       try {
         proposed = pane.fitAddon.proposeDimensions() ?? null
       } catch {
         proposed = null
       }
+
       let appliedPtySize: { cols: number; rows: number } | null = null
+
       try {
         appliedPtySize = ptyId ? ((await window.api.pty.getSize(ptyId)) ?? null) : null
       } catch {
         appliedPtySize = null
       }
+
       return {
         ptyId,
         viewportY: buffer.viewportY,
@@ -131,21 +144,26 @@ function measureBandInkRatio(
 ): number {
   const png = PNG.sync.read(screenshot)
   const colorCounts = new Map<number, number>()
+
   for (let offset = 0; offset < png.data.length; offset += 32) {
     const key =
       ((png.data[offset] ?? 0) << 16) |
       ((png.data[offset + 1] ?? 0) << 8) |
       (png.data[offset + 2] ?? 0)
+
     colorCounts.set(key, (colorCounts.get(key) ?? 0) + 1)
   }
+
   let backgroundKey = 0
   let backgroundCount = -1
+
   for (const [key, count] of colorCounts) {
     if (count > backgroundCount) {
       backgroundKey = key
       backgroundCount = count
     }
   }
+
   const backgroundRed = (backgroundKey >> 16) & 0xff
   const backgroundGreen = (backgroundKey >> 8) & 0xff
   const backgroundBlue = backgroundKey & 0xff
@@ -153,28 +171,35 @@ function measureBandInkRatio(
   const yEnd = Math.min(png.height, Math.ceil(png.height * bandBottomFraction))
   let ink = 0
   let total = 0
+
   for (let y = yStart; y < yEnd; y += 1) {
     for (let x = 0; x < png.width; x += 1) {
       const offset = (y * png.width + x) * 4
+
       const diff =
         Math.abs((png.data[offset] ?? 0) - backgroundRed) +
         Math.abs((png.data[offset + 1] ?? 0) - backgroundGreen) +
         Math.abs((png.data[offset + 2] ?? 0) - backgroundBlue)
+
       total += 1
+
       if (diff > 48) {
         ink += 1
       }
     }
   }
+
   return total > 0 ? ink / total : 0
 }
 
 async function forceWebglOnActiveTab(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state?.settings) {
       throw new Error('Store unavailable')
     }
+
     window.__store?.setState({
       settings: {
         ...state.settings,
@@ -182,12 +207,14 @@ async function forceWebglOnActiveTab(page: Page): Promise<void> {
       }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     window.__paneManagers?.get(tabId ?? '')?.setTerminalGpuAcceleration?.('on')
   })
 }
@@ -199,13 +226,17 @@ async function paneClipRect(
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       return null
     }
+
     const rect = pane.container.getBoundingClientRect()
+
     if (rect.width < 10 || rect.height < 10) {
       return null
     }
+
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
   }, tabId)
 }
@@ -213,6 +244,7 @@ async function paneClipRect(
 async function isTerminalPaneMounted(page: Page, tabId: string): Promise<boolean> {
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
+
     return Boolean(manager && manager.getPanes().length > 0)
   }, tabId)
 }
@@ -221,6 +253,7 @@ function describeProbe(probe: RevealProbe | null): string {
   if (!probe) {
     return 'pane not mounted'
   }
+
   return JSON.stringify(
     {
       viewportY: probe.viewportY,
@@ -239,9 +272,11 @@ function describeProbe(probe: RevealProbe | null): string {
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     state.setActiveTabType('terminal')
     state.setActiveTab(targetTabId)
@@ -257,15 +292,19 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('createActiveTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
+
   await expect
     .poll(() => getActiveTabId(page), {
       timeout: 5_000,
@@ -274,6 +313,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     .toBe(tabId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
+
   return tabId
 }
 
@@ -303,12 +343,15 @@ async function startStreamingInlineTui(
   await ensureTerminalVisible(page)
   const heartbeatPath = testInfo.outputPath(`codex-inline-heartbeat-${Date.now()}.txt`)
   const command = `node ${JSON.stringify(FIXTURE_PATH)} ${JSON.stringify(heartbeatPath)} ${options.historyLinesPerSecond ?? 4} ${options.seedLines ?? 120}`
+
   const tabId = await page.evaluate(
     ({ worktreeId, command }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('startStreamingInlineTui: window.__store is unavailable')
       }
+
       const state = store.getState()
       const tab = state.createTab(worktreeId, undefined, undefined, { launchAgent: 'codex' })
       state.queueTabStartupCommand(tab.id, {
@@ -322,10 +365,12 @@ async function startStreamingInlineTui(
       })
       state.setActiveTab(tab.id)
       state.setActiveTabType('terminal')
+
       return tab.id
     },
     { worktreeId, command }
   )
+
   await expect
     .poll(() => getActiveTabId(page), {
       timeout: 5_000,
@@ -349,9 +394,11 @@ async function startStreamingInlineTui(
   // Capture the PTY id only after the fixture streams: agent quick-launch can
   // respawn the tab's PTY when the startup command binds.
   const ptyId = (await probeRevealedPane(page, tabId))?.ptyId
+
   if (!ptyId) {
     throw new Error('streaming tab did not bind a PTY')
   }
+
   return {
     worktreeId,
     tabId,
@@ -382,21 +429,28 @@ async function assertRevealConvergence(
     .poll(
       async () => {
         lastProbe = await probeRevealedPane(page, tabId)
+
         if (!lastProbe) {
           return 'pane-not-mounted'
         }
+
         if (lastProbe.viewportY !== lastProbe.baseY) {
           return `viewport-stranded viewportY=${lastProbe.viewportY} baseY=${lastProbe.baseY}`
         }
+
         const screen = lastProbe.screenRows.join('\n')
+
         if (!screen.includes(INPUT_BOX_MARKER)) {
           return 'input-box-row-missing'
         }
+
         const visibleFrame = latestFrame(screen)
         const liveFrame = heartbeatFrame(heartbeatPath)
+
         if (visibleFrame < 0 || liveFrame - visibleFrame > MAX_VISIBLE_FRAME_LAG) {
           return `stale-frame visible=${visibleFrame} live=${liveFrame}`
         }
+
         return 'converged'
       },
       {
@@ -424,13 +478,16 @@ async function assertRevealConvergence(
   const convergedFrame = latestFrame(
     (await probeRevealedPane(page, tabId))?.screenRows.join('\n') ?? ''
   )
+
   await expect
     .poll(
       async () => {
         const probe = await probeRevealedPane(page, tabId)
+
         if (!probe || probe.viewportY !== probe.baseY) {
           return -1
         }
+
         return latestFrame(probe.screenRows.join('\n'))
       },
       {
@@ -467,6 +524,7 @@ async function assertRevealConvergence(
     .poll(
       async () => {
         const shot = await page.screenshot({ clip: clip! })
+
         return measureBandInkRatio(shot, bandTop, 1)
       },
       {
@@ -487,25 +545,30 @@ async function resizeAppWindow(
   // after heavy renderer work like a worktree switch; the resize itself is
   // idempotent-safe to attempt again.
   let lastError: unknown = null
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await electronApp.evaluate(
         ({ BrowserWindow }, { deltaWidth, deltaHeight }) => {
           const window = BrowserWindow.getAllWindows()[0]
+
           if (!window) {
             throw new Error('No Electron window')
           }
+
           const [width, height] = window.getSize()
           window.setSize(width + deltaWidth, height + deltaHeight)
         },
         { deltaWidth, deltaHeight }
       )
+
       return
     } catch (error) {
       lastError = error
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
   }
+
   throw lastError
 }
 
@@ -513,8 +576,10 @@ async function resizeAppWindow(
 // conditions the field failures occur under, deterministically.
 async function withCpuThrottle<T>(page: Page, rate: number, run: () => Promise<T>): Promise<T> {
   const session = await page.context().newCDPSession(page)
+
   try {
     await session.send('Emulation.setCPUThrottlingRate', { rate })
+
     return await run()
   } finally {
     await session.send('Emulation.setCPUThrottlingRate', { rate: 1 }).catch(() => {})
@@ -538,6 +603,7 @@ test.describe('Inline TUI reveal convergence', () => {
   }, testInfo) => {
     test.setTimeout(120_000)
     const setup = await startStreamingInlineTui(orcaPage, testInfo)
+
     try {
       // Tab B hides tab A. Reveal quickly — inside the cold-park delay — so
       // the reveal exercises the hidden-delivery-gate restore, not parking.
@@ -562,9 +628,11 @@ test.describe('Inline TUI reveal convergence', () => {
     electronApp
   }, testInfo) => {
     test.setTimeout(120_000)
+
     const setup = await startStreamingInlineTui(orcaPage, testInfo, {
       historyLinesPerSecond: 20
     })
+
     try {
       // Surface hide: switch to ANOTHER WORKTREE (the field action), which
       // suspends rendering and takes the heavy resume path on return.
@@ -591,10 +659,12 @@ test.describe('Inline TUI reveal convergence', () => {
     orcaPage
   }, testInfo) => {
     test.setTimeout(480_000)
+
     const setup = await startStreamingInlineTui(orcaPage, testInfo, {
       historyLinesPerSecond: 30,
       seedLines: 8_000
     })
+
     try {
       // Tab B hides tab A; the decoy then hides tab B so B (most recently
       // hidden) takes the #8262 last-active exemption and tab A cold-parks.
@@ -604,11 +674,13 @@ test.describe('Inline TUI reveal convergence', () => {
       // The field failure is periodic, not every reveal — cycle the park →
       // stream → reveal boundary and require convergence every time.
       const CYCLES = 6
+
       for (let cycle = 0; cycle < CYCLES; cycle += 1) {
         if (cycle > 0) {
           await activateTerminalTab(orcaPage, tabBId)
           await activateTerminalTab(orcaPage, decoyTabId)
         }
+
         await waitForTabParked(orcaPage, setup.tabId, { parkDelayMs: PARKING_DELAY_MS })
 
         // Accumulate a field-sized backlog against the parked (unmounted)
@@ -636,11 +708,14 @@ test.describe('Inline TUI reveal convergence', () => {
     orcaPage
   }, testInfo) => {
     test.setTimeout(150_000)
+
     const setup = await startStreamingInlineTui(orcaPage, testInfo, {
       historyLinesPerSecond: 10
     })
+
     try {
       const tabBId = await createActiveTerminalTab(orcaPage, setup.worktreeId)
+
       // Rapid flapping drives the hidden-delivery gate claim/release IPC and
       // the hidden-output restore against each other at varied phases — the
       // desync class behind "bytes dropped on a visible pane" field freezes.
@@ -650,6 +725,7 @@ test.describe('Inline TUI reveal convergence', () => {
         await activateTerminalTab(orcaPage, setup.tabId)
         await orcaPage.waitForTimeout(50 + ((flap * 7) % 5) * 90)
       }
+
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await assertRevealConvergence(orcaPage, testInfo, setup, 'tab-flapping-reveal')
     } finally {
@@ -661,10 +737,12 @@ test.describe('Inline TUI reveal convergence', () => {
     orcaPage
   }, testInfo) => {
     test.setTimeout(150_000)
+
     const setup = await startStreamingInlineTui(orcaPage, testInfo, {
       historyLinesPerSecond: 10,
       seedLines: 4_000
     })
+
     try {
       const otherWorktreeId = await switchToOtherWorktree(orcaPage, setup.worktreeId)
       test.skip(!otherWorktreeId, 'test session has a single worktree; cannot surface-flap')
@@ -692,9 +770,11 @@ test.describe('Inline TUI reveal convergence', () => {
     electronApp
   }, testInfo) => {
     test.setTimeout(180_000)
+
     const setup = await startStreamingInlineTui(orcaPage, testInfo, {
       historyLinesPerSecond: 20
     })
+
     try {
       await createActiveTerminalTab(orcaPage, setup.worktreeId)
       await createActiveTerminalTab(orcaPage, setup.worktreeId)

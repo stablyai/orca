@@ -56,6 +56,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -71,6 +72,7 @@ vi.mock('./runtime-environment-request-connections', async () => {
     closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
   })
 })
+
 vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
   retirePairedRuntimeBrowserClientHostEnvironment:
     retirePairedRuntimeBrowserClientHostEnvironmentMock
@@ -87,6 +89,7 @@ const handler = channelHandlerLookup(handleMock)
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -140,9 +143,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const destroyedListenerRemoved = vi.fn()
+
     const subscribe = handler<
       {
         selector: string
@@ -152,6 +157,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const result = await subscribe(
       {
         sender: {
@@ -173,6 +179,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const remove = handler<{ selector: string }, { removed: { id: string; name: string } }>(
       'runtimeEnvironments:remove'
     )
+
     expect(remove(null, { selector: added.environment.id })).toMatchObject({
       removed: { id: added.environment.id, name: 'desk' }
     })
@@ -183,6 +190,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(
       await unsubscribe({ sender: { id: 1 } }, { subscriptionId: result.subscriptionId })
     ).toEqual({
@@ -196,13 +204,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     // handle it believed was open, so every later subscribe wrote into a socket
     // main no longer owned — blank, wedged remote terminals after a reconnect.
     registerRuntimeEnvironmentHandlers(store as never)
+
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
       onClose: () => void
     } | null = null
+
     const close = vi.fn(() => {
       transportCallbacks?.onClose()
     })
+
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       async (
         _environment: unknown,
@@ -212,6 +223,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         callbacks: NonNullable<typeof transportCallbacks>
       ) => {
         transportCallbacks = callbacks
+
         return { requestId: 'multiplex-1', close, sendBinary: vi.fn() }
       }
     )
@@ -220,13 +232,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const senderSend = vi.fn()
+
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const subscribed = await subscribe(
       {
         sender: {
@@ -248,6 +263,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
       'runtimeEnvironments:disconnect'
     )
+
     disconnect(null, { selector: added.environment.id })
 
     const closeEvents = senderSend.mock.calls.filter(
@@ -255,6 +271,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         call[0] === 'runtimeEnvironments:subscriptionEvent' &&
         (call[1] as { type?: string }).type === 'close'
     )
+
     expect(closeEvents).toEqual([
       [
         'runtimeEnvironments:subscriptionEvent',
@@ -272,10 +289,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
       streamCount += 1
       const requestId = `stream-${streamCount}`
+
       return {
         requestId,
         close: () => {
           closeCalls.push(requestId)
+
           if (requestId === 'stream-1') {
             throw new Error('socket teardown exploded')
           }
@@ -288,13 +307,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const senderSend = vi.fn()
+
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const sender = {
       sender: {
         id: 1,
@@ -304,6 +326,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         removeListener: vi.fn()
       }
     }
+
     await subscribe(sender, {
       selector: added.environment.id,
       method: 'terminal.multiplex',
@@ -320,6 +343,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
       'runtimeEnvironments:disconnect'
     )
+
     expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
 
     expect(closeCalls).toEqual(['stream-1', 'stream-2'])
@@ -333,6 +357,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'sibling-sub' })).toEqual({
       unsubscribed: false
     })
@@ -343,10 +368,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     // close arriving on a disposed render frame would otherwise throw out through
     // the transport's onClose and into the WebSocket close handler.
     registerRuntimeEnvironmentHandlers(store as never)
+
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
       onClose: () => void
     } | null = null
+
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       async (
         _environment: unknown,
@@ -356,6 +383,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         callbacks: NonNullable<typeof transportCallbacks>
       ) => {
         transportCallbacks = callbacks
+
         return { requestId: 'host-closed-stream', close: vi.fn(), sendBinary: vi.fn() }
       }
     )
@@ -364,6 +392,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const senderSend = vi.fn((_channel: string, payload: { type: string }) => {
@@ -371,10 +400,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         throw new Error('Render frame was disposed')
       }
     })
+
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     await subscribe(
       {
         sender: {
@@ -403,6 +434,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'host-closed-sub' })).toEqual(
       {
         unsubscribed: false
@@ -420,6 +452,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementation(async () => {
       streamCount += 1
       const requestId = `stream-${streamCount}`
+
       return {
         requestId,
         close: () => closedStreams.push(requestId),
@@ -431,9 +464,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const deliveredCloses: string[] = []
+
     const senderSend = vi.fn(
       (_channel: string, payload: { subscriptionId: string; type: string }) => {
         if (payload.type === 'close') {
@@ -441,11 +476,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         }
       }
     )
+
     let probeShouldThrow = false
+
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const sender = {
       sender: {
         id: 1,
@@ -453,6 +491,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           if (probeShouldThrow) {
             throw new Error('WebContents liveness probe exploded')
           }
+
           return false
         },
         send: senderSend,
@@ -460,6 +499,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         removeListener: vi.fn()
       }
     }
+
     await subscribe(sender, {
       selector: added.environment.id,
       method: 'terminal.multiplex',
@@ -478,6 +518,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const disconnect = handler<{ selector: string }, { disconnected: { id: string } }>(
       'runtimeEnvironments:disconnect'
     )
+
     expect(() => disconnect(null, { selector: added.environment.id })).not.toThrow()
 
     // Both transports still closed even though every notifyClosed probe threw.
@@ -487,10 +528,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+
     let transportCallbacks: {
       onResponse: (response: Record<string, unknown>) => void
       onClose: () => void
     } | null = null
+
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       async (
         _environment: unknown,
@@ -500,6 +543,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         callbacks: NonNullable<typeof transportCallbacks>
       ) => {
         transportCallbacks = callbacks
+
         return { requestId: 'multiplex-2', close: vi.fn(), sendBinary: vi.fn() }
       }
     )
@@ -508,13 +552,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const senderSend = vi.fn()
+
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     await subscribe(
       {
         sender: {

@@ -18,6 +18,7 @@ import { useMobileStructuredPromptResponses } from './use-mobile-structured-prom
 type PromptResponses = ReturnType<typeof useMobileStructuredPromptResponses>
 
 let currentHook: PromptResponses | null = null
+
 let renderer: ReactTestRenderer | null = null
 
 function groupedPrompt(itemId: string, revision: number): AgentJournalRenderItem {
@@ -62,9 +63,11 @@ function sessionState(prompt: AgentJournalRenderItem): StructuredAgentSessionSta
 function projectedResponse(prompt: AgentJournalRenderItem, draft: PromptResponses['groupedDraft']) {
   const projected = projectStructuredQuestion(prompt, draft)
   const response = projected?.optionTokens[0]
+
   if (!response) {
     throw new Error('Grouped question did not project an option response')
   }
+
   return response
 }
 
@@ -81,6 +84,7 @@ function Probe(props: {
     mutate: props.mutate,
     onSendError: vi.fn()
   })
+
   return null
 }
 
@@ -88,6 +92,7 @@ function hook(): PromptResponses {
   if (!currentHook) {
     throw new Error('Hook probe is not mounted')
   }
+
   return currentHook
 }
 
@@ -105,14 +110,17 @@ describe('useMobileStructuredPromptResponses', () => {
     'does not let a completed grouped response clear %s draft',
     async (_, nextSession, nextPrompt) => {
       const firstPrompt = groupedPrompt('item-a', 1)
+
       let resolveMutation!: (
         value: StructuredAgentSessionMutationResult<AgentSessionPromptResult>
       ) => void
+
       const pendingMutation = new Promise<
         StructuredAgentSessionMutationResult<AgentSessionPromptResult>
       >((resolve) => {
         resolveMutation = resolve
       })
+
       const mutate = vi.fn(() => pendingMutation) as unknown as StructuredAgentSessionMutate
 
       act(() => {

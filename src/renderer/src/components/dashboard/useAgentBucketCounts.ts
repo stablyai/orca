@@ -47,6 +47,7 @@ export function resetAgentBucketCountStateForTests(): void {
 
 export function selectAgentBucketCountState(s: AppState): AgentBucketCountState {
   const previous = previousState
+
   if (
     previous !== null &&
     previous.repos === s.repos &&
@@ -66,6 +67,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
   ) {
     return previous
   }
+
   previousState = {
     repos: s.repos,
     worktreesByRepo: s.worktreesByRepo,
@@ -83,6 +85,7 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     agentStatusEpoch: s.agentStatusEpoch,
     settings: null
   }
+
   return previousState
 }
 
@@ -97,6 +100,7 @@ export function useAgentBucketCounts(): AgentBucketCounts {
   // the cache keeps every other worktree's rows without rerunning its row pipeline.
   const cacheRef = useRef<ReturnType<typeof createDashboardBucketCountsCache>>(undefined!)
   cacheRef.current ??= createDashboardBucketCountsCache()
+
   return useMemo(() => {
     // Why Date.now() is read here and not a dep: idle-decay tracks agentStatusEpoch
     // ticks (carried in `state`), matching useDashboardData. That epoch doubles as the

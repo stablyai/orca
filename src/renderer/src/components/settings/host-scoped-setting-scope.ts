@@ -19,11 +19,13 @@ export function buildHostScopeChoices(
   clientDefaultLabel: string
 ): HostScopeChoice[] {
   const choices: HostScopeChoice[] = [{ scope: CLIENT_DEFAULT_SCOPE, label: clientDefaultLabel }]
+
   for (const host of hosts) {
     if (host.id !== LOCAL_EXECUTION_HOST_ID) {
       choices.push({ scope: host.id, label: host.label })
     }
   }
+
   return choices
 }
 

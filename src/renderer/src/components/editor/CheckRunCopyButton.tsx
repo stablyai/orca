@@ -14,6 +14,7 @@ export function CheckRunCopyButton({
   label: string
 }): React.JSX.Element {
   const { canCopy, copyText, status } = useClipboardTextCopyFeedback(text)
+
   const accessibleLabel =
     status === 'copied'
       ? translate('auto.components.editor.CheckRunCopyButton.copied', 'Copied')

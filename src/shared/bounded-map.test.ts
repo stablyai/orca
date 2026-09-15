@@ -38,6 +38,7 @@ describe('BoundedMap', () => {
       maxBytes: 10,
       sizeOf: (v) => v.length
     })
+
     m.set('a', 'xxxxx') // 5
     m.set('b', 'yyyyy') // 5 -> total 10 (exactly at cap)
     expect(m.retainedBytes).toBe(10)
@@ -54,6 +55,7 @@ describe('BoundedMap', () => {
       maxBytes: 4,
       sizeOf: (v) => v.length
     })
+
     expect(m.set('a', 'ok')).toBe(true)
     expect(m.set('big', 'toolong')).toBe(false)
     expect(m.has('a')).toBe(true)
@@ -66,6 +68,7 @@ describe('BoundedMap', () => {
       maxBytes: 100,
       sizeOf: (v) => v.length
     })
+
     m.set('a', 'xxx') // 3
     m.set('a', 'x') // overwrite -> 1
     expect(m.retainedBytes).toBe(1)
@@ -81,6 +84,7 @@ describe('BoundedMap', () => {
       maxEntryBytes: 4,
       sizeOf: (v) => v.length
     })
+
     expect(m.set('a', 'ok')).toBe(true)
     expect(m.set('b', 'toolong')).toBe(false) // 7 > maxEntryBytes 4, though aggregate has room
     expect(m.has('a')).toBe(true)
@@ -89,6 +93,7 @@ describe('BoundedMap', () => {
 
   it('never reports success for an entry it did not retain', () => {
     const onEvict = vi.fn()
+
     // maxEntryBytes above maxBytes previously admitted an entry, then evicted it (and everything
     // else) to satisfy the aggregate — set() returned true for a key the map no longer held.
     const m = new BoundedMap<string, string>({
@@ -98,6 +103,7 @@ describe('BoundedMap', () => {
       sizeOf: (v) => v.length,
       onEvict
     })
+
     m.set('s1', 'x')
     m.set('s2', 'y')
     expect(m.set('big', 'xxxx')).toBe(false)
@@ -114,6 +120,7 @@ describe('BoundedMap', () => {
       maxBytes: 10,
       sizeOf: (v) => (v === 'bad' ? Number.NaN : v.length)
     })
+
     expect(m.set('ok', 'abc')).toBe(true)
     expect(m.set('nan', 'bad')).toBe(false)
     expect(m.set('neg', 'x')).toBe(true)
@@ -140,6 +147,7 @@ describe('BoundedMap', () => {
       maxEntryBytes: 4,
       sizeOf: (v) => v.length
     })
+
     m.set('k', 'old')
     expect(m.set('k', 'muchlonger')).toBe(false)
     expect(m.get('k')).toBe('old')
@@ -151,10 +159,12 @@ describe('BoundedMap', () => {
     m.set('a', 1)
     m.set('b', 2)
     const seen: string[] = []
+
     for (const k of m.keys()) {
       seen.push(k)
       m.get(k) // reorders the backing map mid-iteration
     }
+
     expect(seen).toEqual(['a', 'b'])
     expect(m.entries()).toEqual([
       ['a', 1],
@@ -186,6 +196,7 @@ describe('BoundedMap', () => {
       maxBytes: Number.MAX_SAFE_INTEGER,
       sizeOf: (v) => v
     })
+
     expect(m.set('a', Number.MAX_SAFE_INTEGER)).toBe(true)
     // would overflow the aggregate past MAX_SAFE_INTEGER -> rejected, ledger untouched
     expect(m.set('b', 1)).toBe(false)
@@ -199,11 +210,13 @@ describe('BoundedMap', () => {
       ['a', Number.MAX_SAFE_INTEGER - 1],
       ['b', 1]
     ])
+
     const m = new BoundedMap<string, string>({
       maxEntries: 10,
       maxBytes: Number.MAX_SAFE_INTEGER,
       sizeOf: (_v, k) => weights.get(k) ?? 0
     })
+
     m.set('a', 'A')
     m.set('b', 'B')
     weights.set('b', 3) // next weight for 'b' exceeds the remaining headroom
@@ -236,6 +249,7 @@ describe('BoundedMap', () => {
       maxBytes: 6,
       sizeOf: (v) => v.length
     })
+
     m.set(1, 'aa')
     m.set(2, 'bb')
     expect(m.set(Number.NaN, 'cc')).toBe(true)
@@ -250,9 +264,11 @@ describe('BoundedMap', () => {
         if (v === 'boom') {
           throw new Error('measure failed')
         }
+
         return v.length
       }
     })
+
     expect(m.set('ok', 'abc')).toBe(true)
     expect(() => m.set('bad', 'boom')).not.toThrow()
     expect(m.set('bad', 'boom')).toBe(false)
@@ -269,6 +285,7 @@ describe('BoundedMap', () => {
         throw new Error('dispose failed')
       }
     })
+
     m.set('a', 'x')
     m.set('b', 'y')
     m.set('c', 'z')
@@ -280,16 +297,19 @@ describe('BoundedMap', () => {
 
   it('reports failure when a reentrant onEvict evicts the just-admitted key', () => {
     let reentered = false
+
     const m: BoundedMap<string, string> = new BoundedMap<string, string>({
       maxEntries: 1,
       onEvict: () => {
         if (reentered) {
           return
         }
+
         reentered = true
         m.set('x', 'x') // nested set evicts the outer call's entry
       }
     })
+
     m.set('a', 'a')
     const admitted = m.set('c', 'c')
     // set() must never claim success for a key the map no longer holds
@@ -298,17 +318,20 @@ describe('BoundedMap', () => {
 
   it('runs every disposal even when one onEvict throws', () => {
     const disposed: string[] = []
+
     const m = new BoundedMap<string, string>({
       maxEntries: 10,
       maxBytes: 2,
       sizeOf: (v) => v.length,
       onEvict: (_v, k) => {
         disposed.push(k)
+
         if (k === 'a') {
           throw new Error('dispose failed')
         }
       }
     })
+
     m.set('a', 'x')
     m.set('b', 'y')
     expect(() => m.set('c', 'zz')).toThrow('dispose failed')

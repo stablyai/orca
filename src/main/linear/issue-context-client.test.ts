@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
 
 const getClients = vi.fn()
+
 const getStatus = vi.fn()
+
 const isAuthError = vi.fn()
+
 const clearToken = vi.fn()
 
 vi.mock('./linear-request-concurrency', () => ({
@@ -90,9 +93,11 @@ describe('Linear agent issue context client', () => {
 
   it('keeps implicit multi-workspace search working when an unrelated workspace fails', async () => {
     const failingRequest = vi.fn().mockRejectedValue(new Error('fetch failed'))
+
     const workingRequest = vi.fn().mockResolvedValue({
       data: { searchIssues: { nodes: [rawIssue('ENG-123')] } }
     })
+
     getClients.mockReturnValue([
       makeEntry({
         workspaceId: 'workspace-stale',
@@ -128,6 +133,7 @@ describe('Linear agent issue context client', () => {
     const workingRequest = vi.fn().mockResolvedValue({
       data: { searchIssues: { nodes: [rawIssue('ENG-123')] } }
     })
+
     getStatus.mockReturnValue({
       workspaces: [
         {
@@ -150,6 +156,7 @@ describe('Linear agent issue context client', () => {
       if (workspaceId === 'workspace-stale') {
         throw new Error('Could not decrypt Linear credential')
       }
+
       return [
         makeEntry({
           workspaceId: 'workspace-good',
@@ -242,6 +249,7 @@ describe('Linear agent issue context client', () => {
       if (workspaceId === 'workspace-selected') {
         throw new Error('Could not decrypt Linear credential')
       }
+
       return []
     })
     const { resolveIssue } = await import('./issue-context-client')
@@ -270,6 +278,7 @@ describe('Linear agent issue context client', () => {
       if (workspaceId === 'workspace-selected') {
         throw new Error('Could not decrypt Linear credential')
       }
+
       return []
     })
     const { searchLinearIssuesForAgents } = await import('./issue-context-client')
@@ -317,6 +326,7 @@ describe('Linear agent issue context client', () => {
           })
         ]
       }
+
       return []
     })
     const { searchLinearIssuesForAgents } = await import('./issue-context-client')
@@ -342,6 +352,7 @@ describe('Linear agent issue context client', () => {
           })
         ]
       }
+
       return []
     })
     const { resolveIssue } = await import('./issue-context-client')

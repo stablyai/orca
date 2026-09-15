@@ -141,6 +141,7 @@ describe('orca linear CLI handlers', () => {
         workspaceErrors: []
       }
     }
+
     queueFixtures(callMock, okFixture('req_list', listResult))
     await main(['linear', 'list-issues', '--limit', '1'], '/tmp/repo')
     expect(vi.mocked(console.log).mock.calls[0][0]).toContain('truncated: showing 1')
@@ -494,9 +495,11 @@ describe('orca linear CLI handlers', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
+
     const payload = JSON.parse(String(vi.mocked(console.log).mock.calls[0][0])) as {
       error: { code: string }
     }
+
     expect(payload.error.code).toBe('linear_invalid_write_id')
   })
 
@@ -766,14 +769,17 @@ function mockStdin(isTTY: boolean, chunks: string[]): { restore: () => void } {
     for (const chunk of chunks) {
       yield chunk
     }
+
     return undefined
   }
+
   return {
     restore: () => {
       Object.defineProperty(stdin, 'isTTY', {
         configurable: true,
         value: previousIsTTY
       })
+
       if (previousAsyncIterator) {
         ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = previousAsyncIterator
       } else {

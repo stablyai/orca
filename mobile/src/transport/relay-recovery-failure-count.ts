@@ -15,6 +15,7 @@ export class RelayRecoveryFailureCount {
 
   record(resetFirst: boolean): number {
     this.update((resetFirst ? 0 : this.count) + 1)
+
     return this.count
   }
 
@@ -30,6 +31,7 @@ export class RelayRecoveryFailureCount {
     if (this.count === count) {
       return
     }
+
     this.count = count
     this.reporter?.(count)
   }

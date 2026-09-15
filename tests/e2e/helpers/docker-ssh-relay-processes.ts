@@ -49,12 +49,14 @@ function parseRelayProcessRows(output: string): RelayProcessRow[] {
   if (!output) {
     return []
   }
+
   return output.split('\n').map((line) => {
     const [type, rawPid, rawParentPid, cwd] = line.split('\t')
     // Why: Number('') is 0, so empty pid/ppid (e.g. vanished /proc status) must
     // throw and let expect.poll retry instead of accepting parentPid: 0.
     const pid = Number(rawPid)
     const parentPid = Number(rawParentPid)
+
     if (
       (type !== 'relay' && type !== 'watcher') ||
       rawPid === undefined ||
@@ -67,6 +69,7 @@ function parseRelayProcessRows(output: string): RelayProcessRow[] {
     ) {
       throw new Error(`Unexpected Docker SSH relay process row: ${line}`)
     }
+
     return { type, pid, parentPid, cwd }
   })
 }
@@ -75,9 +78,11 @@ export function readDockerSshRelayProcessSnapshot(
   target: DockerSshRelayTarget
 ): DockerSshRelayProcessSnapshot | null {
   const groups = readDockerSshRelayProcessSnapshots(target)
+
   if (groups.length > 1) {
     throw new Error(`Expected one Docker SSH relay process group, found ${groups.length}`)
   }
+
   return groups[0] ?? null
 }
 
@@ -87,14 +92,18 @@ export function readDockerSshRelayProcessSnapshots(
   const rows = parseRelayProcessRows(
     execDockerSshRelayTargetCommand(target, LIST_RELAY_PROCESSES_COMMAND)
   )
+
   const relays = rows.filter((row) => row.type === 'relay')
+
   const groups = relays.flatMap((relay) => {
     const watcherPids = rows
       .filter((row) => row.type === 'watcher' && row.parentPid === relay.pid)
       .map((row) => row.pid)
       .sort((left, right) => left - right)
+
     return watcherPids.length > 0 ? [{ relayPid: relay.pid, watcherPids, relayDir: relay.cwd }] : []
   })
+
   return groups.sort((left, right) => left.relayPid - right.relayPid)
 }
 
@@ -103,9 +112,11 @@ export function signalDockerSshRelayWatchers(
   snapshot: DockerSshRelayProcessSnapshot
 ): void {
   const { relayPid, watcherPids } = snapshot
+
   if (!Number.isInteger(relayPid) || watcherPids.some((pid) => !Number.isInteger(pid))) {
     throw new Error('Docker SSH relay process IDs must be integers')
   }
+
   execDockerSshRelayTargetCommand(
     target,
     [
@@ -134,9 +145,11 @@ export function terminateDockerSshRelay(
   snapshot: DockerSshRelayProcessSnapshot
 ): void {
   const { relayPid } = snapshot
+
   if (!Number.isInteger(relayPid)) {
     throw new Error('Docker SSH relay process ID must be an integer')
   }
+
   execDockerSshRelayTargetCommand(
     target,
     [
@@ -158,6 +171,7 @@ export function isDockerSshRelayPidRunning(
   if (!Number.isInteger(relayPid)) {
     return false
   }
+
   const result = execDockerSshRelayTargetCommand(
     target,
     `proc=/proc/${relayPid}; ` +
@@ -167,6 +181,7 @@ export function isDockerSshRelayPidRunning(
       '[[ " ${argv[*]:2} " = *" --detached "* ]]; then echo ALIVE; else echo DEAD; fi; ' +
       'else echo DEAD; fi'
   )
+
   return result === 'ALIVE'
 }
 
@@ -175,13 +190,16 @@ export function readDockerSshRelayArtifactState(
   relayDir: string
 ): DockerSshRelayArtifactState {
   const quotedDir = shellQuote(relayDir)
+
   const output = execDockerSshRelayTargetCommand(
     target,
     `test -f ${quotedDir}/.install-complete && marker=yes || marker=no; ` +
       `test -f ${quotedDir}/relay-watcher.js && watcher=yes || watcher=no; ` +
       'printf "%s %s" "$marker" "$watcher"'
   )
+
   const [marker, watcher] = output.split(' ')
+
   return { installComplete: marker === 'yes', relayWatcher: watcher === 'yes' }
 }
 

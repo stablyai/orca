@@ -18,6 +18,7 @@ import type {
   DirectSshWorktreeOwner as WorktreeOwner
 } from './direct-ssh-target-scope-types'
 import { indexDirectSshOwnerRows } from './direct-ssh-target-owner-index'
+
 export type {
   DirectSshGitRepoRef,
   DirectSshTargetScope,
@@ -38,29 +39,38 @@ function addHostEvidence(evidence: HostEvidence, rawHostId: string | null | unde
   if (!rawHostId?.trim()) {
     return
   }
+
   const host = parseExecutionHostId(rawHostId)
+
   if (!host) {
     evidence.ambiguous = true
+
     return
   }
+
   if (host.kind === 'runtime' && host.environmentId === 'unresolved-owner') {
     evidence.ambiguous = true
+
     return
   }
+
   evidence.hosts.add(host.id)
 }
 
 function resolveRepoEvidence(repo: RepoOwner): HostEvidence {
   const evidence = newHostEvidence()
   addHostEvidence(evidence, repo.executionHostId)
+
   if (repo.connectionId?.trim()) {
     evidence.hosts.add(toSshExecutionHostId(repo.connectionId.trim()))
   }
+
   evidence.hosts =
     evidence.hosts.size === 0 && !evidence.ambiguous
       ? new Set([getRepoExecutionHostId(repo)])
       : evidence.hosts
   evidence.contradictory = evidence.hosts.size > 1
+
   return evidence
 }
 
@@ -79,17 +89,21 @@ function addRepoDerivedEvidence(
   const repoHosts = new Set<ExecutionHostId>()
   const repoHostCounts = new Map<ExecutionHostId, number>()
   let hasInvalidRepo = false
+
   for (const repo of repoRows) {
     const repoEvidence = resolveRepoEvidence(repo)
     hasInvalidRepo ||= repoEvidence.ambiguous
     evidence.contradictory ||= repoEvidence.contradictory
+
     for (const host of repoEvidence.hosts) {
       repoHosts.add(host)
       repoHostCounts.set(host, (repoHostCounts.get(host) ?? 0) + 1)
     }
   }
+
   if (explicitHosts.size > 0) {
     const exactHosts = [...explicitHosts].filter((host) => repoHosts.has(host))
+
     if (exactHosts.length > 0) {
       for (const host of exactHosts) {
         evidence.hosts.add(host)
@@ -107,6 +121,7 @@ function addRepoDerivedEvidence(
   } else if (repoHosts.size > 1) {
     evidence.ambiguous = true
   }
+
   evidence.ambiguous ||= hasInvalidRepo
 }
 
@@ -119,8 +134,10 @@ function resolveWorktreeEvidence(
   const repoIds = new Set(rows.map((row) => row.repoId))
   evidence.ambiguous ||= repoIds.size !== 1
   const explicitHosts = new Set<ExecutionHostId>()
+
   for (const row of rows) {
     const parsedHost = parseExecutionHostId(row.hostId)
+
     if (row.hostId?.trim() && !parsedHost) {
       evidence.ambiguous = true
     } else if (parsedHost?.kind === 'runtime' && parsedHost.environmentId === 'unresolved-owner') {
@@ -129,23 +146,29 @@ function resolveWorktreeEvidence(
       explicitHosts.add(parsedHost.id)
       evidence.hosts.add(parsedHost.id)
     }
+
     const runtimeOwner = row.runtimeOwnerEnvironmentId?.trim()
+
     if (runtimeOwner) {
       evidence.hosts.add(toRuntimeExecutionHostId(runtimeOwner))
     }
   }
+
   for (const repoId of repoIds) {
     const repoRows = repoRowsById.get(repoId)
+
     if (repoRows) {
       addRepoDerivedEvidence(evidence, repoRows, explicitHosts)
     } else if (explicitHosts.size === 0) {
       evidence.ambiguous = true
     }
   }
+
   const restored = input.restoredRuntimeHostIdByWorkspaceSessionKey
   addHostEvidence(evidence, restored?.[rows[0].id])
   addHostEvidence(evidence, restored?.[worktreeWorkspaceKey(rows[0].id)])
   evidence.contradictory ||= evidence.hosts.size > 1
+
   return evidence
 }
 
@@ -156,24 +179,30 @@ function getFolderCandidateRepos(
   scopeConnectionId: string | null
 ): RepoOwner[] {
   const groupIds = getProjectGroupSubtreeIds(groups, folder.projectGroupId)
+
   const groupRepos = repos.filter(
     (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
   )
+
   const pathRepos = repos.filter(
     (repo) =>
       !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
       isPathInsideOrEqual(folder.folderPath, repo.path)
   )
+
   if (scopeConnectionId) {
     return [
       ...groupRepos,
       ...pathRepos.filter((repo) => (repo.connectionId ?? null) === scopeConnectionId)
     ]
   }
+
   if (groupRepos.length === 0) {
     return pathRepos
   }
+
   const groupConnections = new Set(groupRepos.map((repo) => repo.connectionId ?? null))
+
   return [
     ...groupRepos,
     ...pathRepos.filter((repo) => groupConnections.has(repo.connectionId ?? null))
@@ -188,12 +217,15 @@ function resolveFolderEvidence(
   const evidence = newHostEvidence()
   const folderConnection = folder.connectionId?.trim() || null
   const groupConnection = group?.connectionId?.trim() || null
+
   if (folderConnection) {
     evidence.hosts.add(toSshExecutionHostId(folderConnection))
   }
+
   if (groupConnection) {
     evidence.hosts.add(toSshExecutionHostId(groupConnection))
   }
+
   addHostEvidence(evidence, group?.executionHostId)
   addHostEvidence(
     evidence,
@@ -201,17 +233,21 @@ function resolveFolderEvidence(
   )
 
   const scopeConnection = folderConnection ?? groupConnection
+
   const candidateRepos = getFolderCandidateRepos(
     folder,
     input.projectGroups ?? [],
     input.repos,
     scopeConnection
   )
+
   const repoOwnerKeys = new Set<string>()
+
   for (const repo of candidateRepos) {
     const repoEvidence = resolveRepoEvidence(repo)
     evidence.ambiguous ||= repoEvidence.ambiguous
     evidence.contradictory ||= repoEvidence.contradictory
+
     for (const host of repoEvidence.hosts) {
       const ownerKey = JSON.stringify([repo.id, host])
       evidence.ambiguous ||= repoOwnerKeys.has(ownerKey)
@@ -219,13 +255,17 @@ function resolveFolderEvidence(
       evidence.hosts.add(host)
     }
   }
+
   const hasSshOwner = [...evidence.hosts].some(
     (hostId) => parseExecutionHostId(hostId)?.kind === 'ssh'
   )
+
   const hasConnectionOwner =
     Boolean(scopeConnection) || candidateRepos.some((repo) => Boolean(repo.connectionId?.trim()))
+
   evidence.ambiguous ||= !group || (hasSshOwner && !hasConnectionOwner)
   evidence.contradictory ||= evidence.hosts.size > 1
+
   return evidence
 }
 
@@ -241,16 +281,22 @@ export function resolveDirectSshTargetScope(
   for (const [repoId, rows] of repoRowsById) {
     const matchingRows = rows.filter((repo) => {
       const evidence = resolveRepoEvidence(repo)
+
       if (evidence.contradictory) {
         contradictoryOwnerCount++
+
         return false
       }
+
       if (evidence.ambiguous) {
         ambiguousOwnerCount++
+
         return false
       }
+
       return evidence.hosts.has(expectedHost)
     })
+
     if (matchingRows.length === 1) {
       gitRepos.push({ repoId, executionHostId: expectedHost })
     } else if (matchingRows.length > 1) {
@@ -261,8 +307,10 @@ export function resolveDirectSshTargetScope(
   const gitWorktreeIds = new Set<string>()
   const terminalWorkspaceKeys = new Set<string>()
   const lineageWorkspaceKeys = new Set<ReturnType<typeof worktreeWorkspaceKey>>()
+
   for (const [worktreeId, rows] of collectWorktreeRows(input)) {
     const evidence = resolveWorktreeEvidence(input, rows, repoRowsById)
+
     if (evidence.contradictory) {
       contradictoryOwnerCount++
     } else if (evidence.ambiguous || evidence.hosts.size === 0) {
@@ -276,17 +324,22 @@ export function resolveDirectSshTargetScope(
 
   const folderRowsById = indexDirectSshOwnerRows(input.folderWorkspaces ?? [])
   const groupRowsById = indexDirectSshOwnerRows(input.projectGroups ?? [])
+
   for (const [folderId, rows] of folderRowsById) {
     if (rows.length !== 1) {
       ambiguousOwnerCount++
       continue
     }
+
     const groupRows = groupRowsById.get(rows[0].projectGroupId) ?? []
+
     if (groupRows.length > 1) {
       ambiguousOwnerCount++
       continue
     }
+
     const evidence = resolveFolderEvidence(input, rows[0], groupRows[0])
+
     if (evidence.contradictory) {
       contradictoryOwnerCount++
     } else if (evidence.ambiguous || evidence.hosts.size === 0) {

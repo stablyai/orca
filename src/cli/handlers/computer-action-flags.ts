@@ -27,6 +27,7 @@ export function getComputerWindowTargetFlags(flags: Map<string, string | boolean
   const windowId = getOptionalNonNegativeIntegerFlag(flags, 'window-id')
   const windowIndex = getOptionalNonNegativeIntegerFlag(flags, 'window-index')
   validateExclusiveWindowTarget(windowId, windowIndex)
+
   return {
     ...(windowId !== undefined ? { windowId } : {}),
     ...(windowIndex !== undefined ? { windowIndex } : {})
@@ -65,6 +66,7 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
 } {
   const rawModifiers = flags.get('modifiers')
   const modifiers = typeof rawModifiers === 'string' ? rawModifiers : undefined
+
   const result = {
     elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
     x: getOptionalNumberFlag(flags, 'x'),
@@ -73,14 +75,18 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
     mouseButton: getOptionalStringFlag(flags, 'mouse-button'),
     modifiers
   }
+
   validateElementOrCoordinates('Click', result.elementIndex, result.x, result.y)
   validateMouseButton(result.mouseButton)
+
   if (modifiers !== undefined) {
     const message = computerUseClickModifiersValidationMessage(modifiers)
+
     if (message) {
       throw new RuntimeClientError('invalid_argument', message)
     }
   }
+
   return result
 }
 
@@ -108,8 +114,10 @@ export function getComputerScrollActionFlags(flags: Map<string, string | boolean
     direction: getRequiredStringFlag(flags, 'direction'),
     pages: getOptionalPositiveNumberFlag(flags, 'pages')
   }
+
   validateElementOrCoordinates('Scroll', result.elementIndex, result.x, result.y)
   validateScrollDirection(result.direction)
+
   return result
 }
 
@@ -129,7 +137,9 @@ export function getComputerDragActionFlags(flags: Map<string, string | boolean>)
     toX: getOptionalNumberFlag(flags, 'to-x'),
     toY: getOptionalNumberFlag(flags, 'to-y')
   }
+
   validateDragTarget(result)
+
   return result
 }
 
@@ -144,9 +154,11 @@ export function getComputerKeyActionFlags(flags: Map<string, string | boolean>):
 } {
   const key = getRequiredStringFlag(flags, 'key')
   const message = computerUsePressKeyValidationMessage(key)
+
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
+
   return { key }
 }
 
@@ -155,9 +167,11 @@ export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean
 } {
   const key = getRequiredStringFlag(flags, 'key')
   const message = computerUseHotkeyValidationMessage(key)
+
   if (message) {
     throw new RuntimeClientError('invalid_argument', message)
   }
+
   return { key }
 }
 
@@ -178,6 +192,7 @@ async function getTextPayload(
   name: 'text' | 'value'
 ): Promise<string> {
   const stdinFlag = `${name}-stdin`
+
   if (flags.has(stdinFlag)) {
     if (flags.has(name)) {
       throw new RuntimeClientError(
@@ -185,12 +200,16 @@ async function getTextPayload(
         `Use either --${name} or --${stdinFlag}, not both`
       )
     }
+
     const payload = await readStdin()
+
     if (name === 'text' && payload.length === 0) {
       throw new RuntimeClientError('invalid_argument', 'Missing text from stdin')
     }
+
     return payload
   }
+
   return name === 'value'
     ? getRequiredStringFlagAllowingEmpty(flags, name)
     : getRequiredStringFlag(flags, name)
@@ -200,10 +219,13 @@ async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
   }
+
   const chunks: Buffer[] = []
+
   for await (const chunk of process.stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
+
   return Buffer.concat(chunks).toString('utf8')
 }
 
@@ -212,12 +234,15 @@ function getOptionalPositiveNumberFlag(
   name: string
 ): number | undefined {
   const value = getOptionalNumberFlag(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   if (value <= 0) {
     throw new RuntimeClientError('invalid_argument', `Invalid positive number for --${name}`)
   }
+
   return value
 }
 
@@ -226,8 +251,10 @@ function getRequiredNonNegativeIntegerFlag(
   name: string
 ): number {
   const value = getOptionalNonNegativeIntegerFlag(flags, name)
+
   if (value === undefined) {
     throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
   }
+
   return value
 }

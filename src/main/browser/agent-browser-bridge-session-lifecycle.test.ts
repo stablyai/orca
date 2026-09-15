@@ -17,6 +17,7 @@ const {
 }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -25,15 +26,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -42,12 +47,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -121,6 +128,7 @@ describe('AgentBrowserBridge', () => {
     ownSocketDirectory()
     lstatSyncMock.mockReturnValue({})
     vi.useFakeTimers()
+
     try {
       const closeKill = vi.fn()
       execFileMock.mockImplementation(
@@ -128,15 +136,19 @@ describe('AgentBrowserBridge', () => {
           if (args.includes('close')) {
             return { kill: closeKill }
           }
+
           if (args.includes('snapshot')) {
             cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+
             return { kill: vi.fn() }
           }
+
           throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
         }
       )
 
       const promise = bridge.snapshot()
+
       const rejection = expect(promise).rejects.toMatchObject({
         code: 'browser_owner_unavailable',
         message:
@@ -162,8 +174,10 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return
         }
+
         cb(killedError, '', '')
       }
     )
@@ -191,6 +205,7 @@ describe('AgentBrowserBridge', () => {
     const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('close')
     )
+
     expect(closeCall?.[2]).toMatchObject({ timeout: 5_000 })
   })
 
@@ -214,6 +229,7 @@ describe('AgentBrowserBridge', () => {
     const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('close')
     )
+
     expect(closeCall?.[2]).toMatchObject({ timeout: 5_000 })
   })
 
@@ -228,20 +244,27 @@ describe('AgentBrowserBridge', () => {
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
+
         if (args.includes('close')) {
           if (!releaseDestroyClose) {
             releaseDestroyClose = () => {
               cb(null, JSON.stringify({ success: true, data: null }), '')
             }
+
             return
           }
+
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return
         }
+
         if (args.includes('snapshot')) {
           cb(null, JSON.stringify({ success: true, data: { snapshot: 'after-destroy' } }), '')
+
           return
         }
+
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
     )
@@ -249,6 +272,7 @@ describe('AgentBrowserBridge', () => {
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }
     ).destroySession('orca-tab-tab-1')
+
     const nextSnapshot = bridge.snapshot()
 
     await Promise.resolve()
@@ -273,13 +297,17 @@ describe('AgentBrowserBridge', () => {
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
+
         if (args.includes('close') && !releaseStaleClose) {
           releaseStaleClose = () => {
             cb(null, JSON.stringify({ success: true, data: null }), '')
           }
+
           return { kill: vi.fn() }
         }
+
         cb(null, JSON.stringify({ success: true, data: null }), '')
+
         return { kill: vi.fn() }
       }
     )
@@ -322,6 +350,7 @@ describe('AgentBrowserBridge', () => {
 
     const killedError = Object.assign(new Error('killed'), { killed: true })
     let resolveRunningCommand: (() => void) | null = null
+
     const activeChild = {
       kill: vi.fn(() => {
         resolveRunningCommand?.()
@@ -332,13 +361,18 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('snapshot')) {
           resolveRunningCommand = () => cb(killedError, '', '')
+
           return activeChild
         }
+
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return { kill: vi.fn() }
         }
+
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+
         return { kill: vi.fn() }
       }
     )
@@ -375,6 +409,7 @@ describe('AgentBrowserBridge', () => {
     const firstSnapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('snapshot')
     )
+
     expect(firstSnapshotCall![1]).toContain('--cdp')
 
     // Simulate process swap: update tab mapping + notify bridge
@@ -391,6 +426,7 @@ describe('AgentBrowserBridge', () => {
     const snapshotCalls = execFileMock.mock.calls.filter((c: unknown[]) =>
       (c[1] as string[]).includes('snapshot')
     )
+
     expect(snapshotCalls.length).toBeGreaterThanOrEqual(2)
     const lastSnapshotArgs = snapshotCalls.at(-1)![1] as string[]
     // After process swap + session destroy, the new session must re-init with --cdp
@@ -424,11 +460,13 @@ describe('AgentBrowserBridge', () => {
     const routeCalls = commandCalls.filter(
       (args) => args.includes('network') && args.includes('route')
     )
+
     expect(routeCalls).toHaveLength(0)
 
     const unrouteCall = commandCalls.find(
       (args) => args.includes('network') && args.includes('unroute')
     )
+
     expect(unrouteCall).toBeDefined()
     expect(unrouteCall).toContain('--cdp')
   })
@@ -460,6 +498,7 @@ describe('AgentBrowserBridge', () => {
     const routeCalls = commandCalls.filter(
       (args) => args.includes('network') && args.includes('route')
     )
+
     expect(routeCalls).toHaveLength(1)
     expect(routeCalls[0]).toContain('https://new.example/**')
     expect(routeCalls[0]).not.toContain('https://old.example/**')
@@ -502,6 +541,7 @@ describe('AgentBrowserBridge', () => {
 
     const sessions = (bridge as unknown as { sessions: Map<string, { lastCommandAt: number }> })
       .sessions
+
     const session = sessions.get('orca-tab-tab-1')!
     session.lastCommandAt = Date.now() - 11 * 60 * 1000
 
@@ -517,6 +557,7 @@ describe('AgentBrowserBridge', () => {
     const routeCalls = commandCalls.filter(
       (args) => args.includes('network') && args.includes('route')
     )
+
     expect(routeCalls).toHaveLength(1)
     expect(routeCalls[0]).toContain('https://api.example/**')
   })
@@ -558,6 +599,7 @@ describe('AgentBrowserBridge', () => {
 
   it('bounds concurrent helper retirements during runtime shutdown', async () => {
     const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+
     for (let index = 0; index < 6; index++) {
       sessions.set(`orca-tab-tab-${index}`, {
         proxy: { stop: vi.fn(async () => {}) },
@@ -582,6 +624,7 @@ describe('AgentBrowserBridge', () => {
           activeRetirements--
           cb(null, JSON.stringify({ success: true, data: null }), '')
         })
+
         return { kill: vi.fn() }
       }
     )
@@ -602,13 +645,17 @@ describe('AgentBrowserBridge', () => {
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         commandCalls.push(args)
+
         if (args.includes('close') && !releaseStaleClose) {
           releaseStaleClose = () => {
             cb(null, JSON.stringify({ success: true, data: null }), '')
           }
+
           return { kill: vi.fn() }
         }
+
         cb(null, JSON.stringify({ success: true, data: null }), '')
+
         return { kill: vi.fn() }
       }
     )
@@ -622,6 +669,7 @@ describe('AgentBrowserBridge', () => {
         ) => Promise<void>
       }
     ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+
     await vi.waitFor(() => expect(releaseStaleClose).not.toBeNull())
 
     const destroyAllPromise = bridge.destroyAllSessions()
@@ -647,7 +695,9 @@ describe('AgentBrowserBridge', () => {
         if (!args.includes('close')) {
           throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
         }
+
         releaseClose = () => cb(null, JSON.stringify({ success: true, data: null }), '')
+
         return { kill: vi.fn() }
       }
     )
@@ -661,6 +711,7 @@ describe('AgentBrowserBridge', () => {
         ) => Promise<void>
       }
     ).restartSessionForTarget('orca-tab-tab-1', 'tab-1', 100)
+
     await vi.waitFor(() => expect(releaseClose).not.toBeNull())
 
     const shutdown = bridge.destroyAllSessions()
@@ -690,6 +741,7 @@ describe('AgentBrowserBridge', () => {
     const closeCall = execFileMock.mock.calls.findLast((c: unknown[]) =>
       (c[1] as string[]).includes('close')
     )
+
     expect((closeCall![2] as { timeout: number }).timeout).toBeLessThanOrEqual(5_000)
   })
 

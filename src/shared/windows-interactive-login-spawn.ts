@@ -15,6 +15,7 @@ export type WindowsHostInteractiveLoginSpawn = {
 }
 
 const PID_RELAY_WAIT_TIMEOUT_MS = 2_000
+
 const PID_RELAY_POLL_INTERVAL_MS = 25
 
 function encodeUtf8(value: string): string {
@@ -24,7 +25,9 @@ function encodeUtf8(value: string): string {
 function buildPidRelayScript(command: string, args: string[], pidFilePath: string): string {
   const decode =
     'function Read-OrcaValue([string]$Value) { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Value)) }'
+
   const encodedArgs = args.map((arg) => `(Read-OrcaValue '${encodeUtf8(arg)}')`).join(',')
+
   return [
     decode,
     `$Command = Read-OrcaValue '${encodeUtf8(command)}'`,
@@ -39,6 +42,7 @@ function buildPidRelayScript(command: string, args: string[], pidFilePath: strin
 function readPidFile(pidFilePath: string): number | null {
   try {
     const pid = Number.parseInt(readFileSync(pidFilePath, 'utf8').trim(), 10)
+
     return Number.isSafeInteger(pid) && pid > 0 ? pid : null
   } catch {
     return null
@@ -47,19 +51,26 @@ function readPidFile(pidFilePath: string): number | null {
 
 function waitForPidFile(pidFilePath: string): Promise<number | null> {
   const current = readPidFile(pidFilePath)
+
   if (current !== null) {
     return Promise.resolve(current)
   }
+
   const deadline = Date.now() + PID_RELAY_WAIT_TIMEOUT_MS
+
   return new Promise((resolve) => {
     const poll = (): void => {
       const pid = readPidFile(pidFilePath)
+
       if (pid !== null || Date.now() >= deadline) {
         resolve(pid)
+
         return
       }
+
       setTimeout(poll, PID_RELAY_POLL_INTERVAL_MS)
     }
+
     setTimeout(poll, PID_RELAY_POLL_INTERVAL_MS)
   })
 }
@@ -70,6 +81,7 @@ export function buildWindowsHostInteractiveLoginSpawn(
 ): WindowsHostInteractiveLoginSpawn {
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${randomUUID()}.pid`)
+
   const powershell = win32.join(
     process.env.SystemRoot ?? 'C:\\Windows',
     'System32',
@@ -77,7 +89,9 @@ export function buildWindowsHostInteractiveLoginSpawn(
     'v1.0',
     'powershell.exe'
   )
+
   const script = buildPidRelayScript(spawnCmd, spawnArgs, pidFilePath)
+
   // Why: `-EncodedCommand` is not execution-policy gated (only `-File` is), so `-ExecutionPolicy
   // Bypass` was a no-op — and it is one of the most heavily EDR-flagged PowerShell tokens. The
   // base64 stays: `wrapWindowsStartWait` sends this through `cmd.exe /c start`, whose
@@ -88,6 +102,7 @@ export function buildWindowsHostInteractiveLoginSpawn(
     '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')
   ])
+
   return {
     command: wrapped.spawnCmd,
     args: wrapped.spawnArgs,

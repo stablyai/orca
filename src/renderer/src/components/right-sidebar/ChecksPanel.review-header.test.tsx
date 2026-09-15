@@ -44,6 +44,7 @@ function renderHeader({
   modifierHintDestination?: ChecksPanelHostedReviewModifierDestination
 } = {}): string {
   const isGitLab = provider === 'gitlab'
+
   return renderToStaticMarkup(
     <ChecksPanelReviewHeader
       review={{

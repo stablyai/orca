@@ -26,6 +26,7 @@ it('normalizes a history bound and drops anything that is not one', () => {
   expect(
     resolveAiVaultSearchSettings({ aiVaultSearch: { enabled: true, historyDays: 30.7 } })
   ).toEqual({ enabled: true, historyDays: 30 })
+
   // A fractional day floors to zero, which would read as "all history" on one
   // side and "cutoff is now" on the other.
   for (const historyDays of [0.4, 0, -30, Number.NaN] as const) {
@@ -33,6 +34,7 @@ it('normalizes a history bound and drops anything that is not one', () => {
       { enabled: true, historyDays: null }
     )
   }
+
   expect(
     resolveAiVaultSearchSettings({ aiVaultSearch: { enabled: true, historyDays: 999_999 } })
   ).toEqual({ enabled: true, historyDays: 3_650 })

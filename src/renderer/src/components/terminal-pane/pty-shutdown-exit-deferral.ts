@@ -12,8 +12,11 @@ const deferredExitCallbacksByPtyId = new Map<
   string,
   Set<(settlement: PtyShutdownSettlement) => void>
 >()
+
 const committedExitExpiresAtByPtyId = new Map<string, number>()
+
 const committedPendingSettlements = new Set<string>()
+
 const hostSleepDispositionByPtyId = new Map<
   string,
   {
@@ -25,9 +28,12 @@ const hostSleepDispositionByPtyId = new Map<
     ptyId: string
   }
 >()
+
 // Why: RPC and transport streams can reorder a committed exit; 30 seconds covers delayed delivery while 512 bounds abandoned guards.
 const COMMITTED_EXIT_GRACE_MS = 30_000
+
 const COMMITTED_EXIT_MAX = 512
+
 const HOST_SLEEP_DISPOSITION_GRACE_MS = 30_000
 
 function pruneCommittedExitGuards(now = Date.now()): void {
@@ -36,11 +42,14 @@ function pruneCommittedExitGuards(now = Date.now()): void {
       committedExitExpiresAtByPtyId.delete(ptyId)
     }
   }
+
   while (committedExitExpiresAtByPtyId.size > COMMITTED_EXIT_MAX) {
     const oldestPtyId = committedExitExpiresAtByPtyId.keys().next().value
+
     if (typeof oldestPtyId !== 'string') {
       break
     }
+
     committedExitExpiresAtByPtyId.delete(oldestPtyId)
   }
 }
@@ -60,6 +69,7 @@ function installHostSleepDisposition(
   const installed = { ...disposition } as NonNullable<
     ReturnType<typeof hostSleepDispositionByPtyId.get>
   >
+
   hostSleepDispositionByPtyId.set(key, installed)
   scheduleHostSleepDispositionExpiry(key, installed)
 }
@@ -71,6 +81,7 @@ function scheduleHostSleepDispositionExpiry(
   if (disposition.expiryTimer !== undefined) {
     clearTimeout(disposition.expiryTimer)
   }
+
   disposition.expiryTimer = setTimeout(
     () => {
       expireHostSleepDisposition(key, disposition)
@@ -86,11 +97,14 @@ function expireHostSleepDisposition(
   if (hostSleepDispositionByPtyId.get(key) !== disposition) {
     return
   }
+
   if (disposition.expiryTimer !== undefined) {
     clearTimeout(disposition.expiryTimer)
   }
+
   disposition.snapshot?.rollback()
   hostSleepDispositionByPtyId.delete(key)
+
   if (disposition.phase === 'pending') {
     settleDeferredPtyShutdownExits([disposition.ptyId], 'rolled-back')
   }
@@ -98,10 +112,12 @@ function expireHostSleepDisposition(
 
 export function markCommittedPtyShutdowns(ptyIds: readonly string[]): void {
   const expiresAt = Date.now() + COMMITTED_EXIT_GRACE_MS
+
   for (const ptyId of ptyIds) {
     committedExitExpiresAtByPtyId.delete(ptyId)
     committedExitExpiresAtByPtyId.set(ptyId, expiresAt)
   }
+
   pruneCommittedExitGuards()
 }
 
@@ -127,21 +143,29 @@ export function consumeCommittedPtyShutdownExit(
 ): boolean {
   pruneCommittedExitGuards()
   pruneHostSleepDispositions()
+
   if (runtimeEnvironmentId) {
     const hostKey = hostSleepPtyKey(runtimeEnvironmentId, ptyId)
+
     if (hostSleepDispositionByPtyId.get(hostKey)?.phase === 'committed') {
       const disposition = hostSleepDispositionByPtyId.get(hostKey)
+
       if (disposition?.expiryTimer !== undefined) {
         clearTimeout(disposition.expiryTimer)
       }
+
       hostSleepDispositionByPtyId.delete(hostKey)
+
       return true
     }
   }
+
   if (!committedExitExpiresAtByPtyId.has(ptyId)) {
     return false
   }
+
   committedExitExpiresAtByPtyId.delete(ptyId)
+
   return true
 }
 
@@ -150,6 +174,7 @@ export function isHostPtySleepPending(
   runtimeEnvironmentId?: string | null
 ): boolean {
   pruneHostSleepDispositions()
+
   return Boolean(
     runtimeEnvironmentId &&
     hostSleepDispositionByPtyId.get(hostSleepPtyKey(runtimeEnvironmentId, ptyId))?.phase ===
@@ -162,29 +187,40 @@ export function applyHostWorktreeTerminalSleepState(
   event: Extract<RuntimeClientEvent, { type: 'worktreeTerminalSleepState' }>
 ): void {
   pruneHostSleepDispositions()
+
   const remotePtyIds = event.terminalHandles.map((handle) =>
     toRemoteRuntimePtyId(handle, runtimeEnvironmentId)
   )
+
   if (event.phase === 'started') {
     const newlyPendingPtyIds = remotePtyIds.filter((ptyId) => {
       const key = hostSleepPtyKey(runtimeEnvironmentId, ptyId)
       const existing = hostSleepDispositionByPtyId.get(key)
+
       if (!shouldApplyHostSleepPhase(key, event.generation, event.phase, existing)) {
         return false
       }
+
       if (existing?.generation === event.generation && existing.phase === 'pending') {
         existing.expiresAt = Date.now() + HOST_SLEEP_DISPOSITION_GRACE_MS
         scheduleHostSleepDispositionExpiry(key, existing)
+
         return false
       }
+
       existing?.snapshot?.rollback()
+
       if (existing?.expiryTimer !== undefined) {
         clearTimeout(existing.expiryTimer)
       }
+
       hostSleepDispositionByPtyId.delete(key)
+
       return true
     })
+
     const snapshots = unregisterPtyDataHandlers(newlyPendingPtyIds)
+
     for (const ptyId of newlyPendingPtyIds) {
       installHostSleepDisposition(hostSleepPtyKey(runtimeEnvironmentId, ptyId), {
         generation: event.generation,
@@ -194,25 +230,32 @@ export function applyHostWorktreeTerminalSleepState(
         ptyId
       })
     }
+
     return
   }
+
   if (event.phase === 'committed') {
     // Why: commit is self-contained so a client that subscribed after `started` still classifies the ordered terminal exit as reversible.
     const committedPtyIds: string[] = []
+
     for (const ptyId of remotePtyIds) {
       const key = hostSleepPtyKey(runtimeEnvironmentId, ptyId)
       const existing = hostSleepDispositionByPtyId.get(key)
+
       if (!shouldApplyHostSleepPhase(key, event.generation, event.phase, existing)) {
         continue
       }
+
       if (existing?.generation === event.generation) {
         existing.snapshot?.commit()
       } else {
         existing?.snapshot?.rollback()
       }
+
       if (existing?.expiryTimer !== undefined) {
         clearTimeout(existing.expiryTimer)
       }
+
       installHostSleepDisposition(hostSleepPtyKey(runtimeEnvironmentId, ptyId), {
         generation: event.generation,
         phase: 'committed',
@@ -221,36 +264,48 @@ export function applyHostWorktreeTerminalSleepState(
       })
       committedPtyIds.push(ptyId)
     }
+
     settleDeferredPtyShutdownExits(committedPtyIds, 'committed')
+
     return
   }
+
   const committedOnWakePtyIds: string[] = []
   const rolledBackPtyIds: string[] = []
+
   for (const ptyId of remotePtyIds) {
     const key = hostSleepPtyKey(runtimeEnvironmentId, ptyId)
     const disposition = hostSleepDispositionByPtyId.get(key)
+
     if (!shouldApplyHostSleepPhase(key, event.generation, event.phase, disposition)) {
       continue
     }
+
     if (disposition?.generation !== event.generation) {
       continue
     }
+
     const commitMissedSleep = event.phase === 'woken' && disposition.phase === 'pending'
+
     if (commitMissedSleep) {
       disposition.snapshot?.commit()
     } else {
       disposition.snapshot?.rollback()
     }
+
     if (disposition?.expiryTimer !== undefined) {
       clearTimeout(disposition.expiryTimer)
     }
+
     hostSleepDispositionByPtyId.delete(key)
+
     if (commitMissedSleep) {
       committedOnWakePtyIds.push(ptyId)
     } else {
       rolledBackPtyIds.push(ptyId)
     }
   }
+
   settleDeferredPtyShutdownExits(committedOnWakePtyIds, 'committed')
   settleDeferredPtyShutdownExits(rolledBackPtyIds, 'rolled-back')
 }
@@ -274,14 +329,18 @@ export function settleDeferredPtyShutdownExits(
 ): void {
   for (const ptyId of ptyIds) {
     const callbacks = deferredExitCallbacksByPtyId.get(ptyId)
+
     if (!callbacks) {
       continue
     }
+
     deferredExitCallbacksByPtyId.delete(ptyId)
+
     if (settlement === 'committed') {
       // Why: replay classifies the old exit; retaining its guard could misclassify a same-ID session woken immediately afterward.
       committedExitExpiresAtByPtyId.delete(ptyId)
     }
+
     for (const callback of callbacks) {
       try {
         callback(settlement)

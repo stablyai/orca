@@ -14,6 +14,7 @@ export function clearSessionCommitDraftForWorktree(worktreeId: string): void {
   if (!(worktreeId in sessionCommitDraftsByWorktree)) {
     return
   }
+
   const next = { ...sessionCommitDraftsByWorktree }
   delete next[worktreeId]
   sessionCommitDraftsByWorktree = next

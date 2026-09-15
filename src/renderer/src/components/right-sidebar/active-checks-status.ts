@@ -13,10 +13,12 @@ const REQUIRED_INPUT_KEYS = [
   'repos',
   'prCache'
 ] as const satisfies readonly (keyof AppState)[]
+
 const OPTIONAL_INPUT_KEYS = [
   'settings',
   'hostedReviewCache'
 ] as const satisfies readonly (keyof AppState)[]
+
 /** @internal Every store field getActiveChecksStatus may read; the cache invalidates on any of them. */
 export const ACTIVE_CHECKS_STATUS_INPUT_KEYS = [
   ...REQUIRED_INPUT_KEYS,
@@ -25,6 +27,7 @@ export const ACTIVE_CHECKS_STATUS_INPUT_KEYS = [
 
 type ActiveChecksStatusState = Pick<AppState, (typeof REQUIRED_INPUT_KEYS)[number]> &
   Partial<Pick<AppState, (typeof OPTIONAL_INPUT_KEYS)[number]>>
+
 type ActiveChecksStatusInputs = {
   [K in (typeof ACTIVE_CHECKS_STATUS_INPUT_KEYS)[number]]: ActiveChecksStatusState[K]
 }
@@ -51,19 +54,25 @@ function hasSameInputs(inputs: ActiveChecksStatusInputs, state: ActiveChecksStat
       return false
     }
   }
+
   return true
 }
 
 export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
   const cached = activeChecksStatusCache
+
   if (cached && hasSameInputs(cached.inputs, state)) {
     return cached.status
   }
+
   const status = computeActiveChecksStatus(state)
+
   const inputs = Object.fromEntries(
     ACTIVE_CHECKS_STATUS_INPUT_KEYS.map((key) => [key, state[key]])
   ) as ActiveChecksStatusInputs
+
   activeChecksStatusCache = { inputs, status }
+
   return status
 }
 
@@ -71,16 +80,19 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
   const activeWorktree = state.activeWorktreeId
     ? (getWorktreeMapFromState(state).get(state.activeWorktreeId) ?? null)
     : null
+
   if (!activeWorktree) {
     return null
   }
 
   const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
+
   if (!activeRepo) {
     return null
   }
 
   const branch = branchDisplayName(activeWorktree.branch)
+
   if (!branch) {
     return null
   }
@@ -96,6 +108,7 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
     activeRepo.executionHostId,
     true
   )
+
   const hostedReviewCacheKey = getHostedReviewCacheKey(
     activeRepo.path,
     branch,
@@ -105,10 +118,13 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
     activeRepo.executionHostId,
     true
   )
+
   const hostedReview = state.hostedReviewCache?.[hostedReviewCacheKey]?.data ?? null
+
   if (hostedReview && hostedReview.provider !== 'github') {
     return hostedReview.status
   }
+
   if (
     (activeWorktree.linkedGitLabMR ?? null) !== null ||
     (activeWorktree.linkedBitbucketPR ?? null) !== null ||
@@ -117,10 +133,13 @@ function computeActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus 
   ) {
     return null
   }
+
   const branchPR = state.prCache[prCacheKey]?.data ?? null
+
   if (branchPR && !isGitHubPRSuppressed(activeWorktree, branchPR.number)) {
     return branchPR.checksStatus
   }
+
   return hostedReview?.provider === 'github' &&
     !isGitHubPRSuppressed(activeWorktree, hostedReview.number)
     ? hostedReview.status

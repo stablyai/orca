@@ -13,13 +13,18 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { acquireWebviewsDragPassthrough } from '@/components/browser-pane/host-guest/webview-drag-passthrough'
 
 const GRANT_ID = 'a'.repeat(32)
+
 // The draw-tool hint's own storage key; the hook that owns it keeps it private.
 const MARKUP_DRAW_HINT_SEEN_KEY = 'orca.browser.markup-draw-hint-seen'
+
 const ENTRY_RELATIVE_PATH = 'docs/reports/index.html'
+
 const ABSOLUTE_PATH = '/repo/docs/reports/index.html'
 
 const clipboard = vi.hoisted(() => ({ writes: [] as string[] }))
+
 const grabCalls: { browserPageId: string; enabled: boolean }[] = []
+
 const osOpens: string[] = []
 
 vi.mock('@/lib/doc-preview-grants', () => ({
@@ -74,6 +79,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
 vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: (_context: unknown, filePath: string) => {
     store.downloads.push(filePath)
+
     return Promise.resolve()
   }
 }))
@@ -94,6 +100,7 @@ const storeState = {
   recordFeatureInteraction: () => undefined,
   openFile: (file: unknown) => {
     store.openedFiles.push(file)
+
     return 'file-1'
   },
   updateBrowserPageState: (pageId: string, updates: { title?: string }) => {
@@ -106,6 +113,7 @@ const storeState = {
   browserKagiSessionLink: null,
   convertBrowserPage: (pageId: string, target: unknown) => {
     store.conversions.push({ pageId, target })
+
     return { id: 'converted-1' }
   }
 }
@@ -152,6 +160,7 @@ async function renderPreview(
   await act(async () => {
     webview?.dispatchEvent(new Event('did-stop-loading'))
   })
+
   return webview as StubWebview
 }
 
@@ -166,12 +175,14 @@ function stubHistory(
   webview.goBack = goBack
   webview.goForward = goForward
   webview.reload = vi.fn()
+
   return { goBack, goForward }
 }
 
 function button(container: HTMLDivElement, label: string): HTMLButtonElement {
   const element = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
   expect(element).not.toBeNull()
+
   return element as HTMLButtonElement
 }
 
@@ -192,6 +203,7 @@ describe('HtmlDocPreview browser chrome', () => {
       ui: {
         writeClipboardText: (text: string) => {
           clipboard.writes.push(text)
+
           return Promise.resolve()
         },
         writeClipboardImage: () => Promise.resolve()
@@ -199,6 +211,7 @@ describe('HtmlDocPreview browser chrome', () => {
       shell: {
         openFilePath: (filePath: string) => {
           osOpens.push(filePath)
+
           return Promise.resolve(true)
         }
       },
@@ -206,6 +219,7 @@ describe('HtmlDocPreview browser chrome', () => {
         unregisterGuest: () => Promise.resolve(),
         setGrabMode: (args: { browserPageId: string; enabled: boolean }) => {
           grabCalls.push(args)
+
           return Promise.resolve({ ok: true })
         },
         cancelGrab: () => Promise.resolve(true),
@@ -224,17 +238,21 @@ describe('HtmlDocPreview browser chrome', () => {
       act(() => root.unmount())
       mounted = false
     }
+
     container.remove()
   })
 
   it('counts document guests in the workspace budget and restores only on activation', async () => {
     const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
+
     const { worktreeHoldsLiveBrowserGuests, selectBrowserGuestEvictionWorktreeIds } =
       await import('../host-guest/browser-guest-worktree-retention')
+
     const { destroyWorktreeBrowserGuests } = await import('@/store/slices/browser-webview-cleanup')
     const guest = await renderPreview(container, root)
     expect(hasLiveBrowserGuest('preview-1')).toBe(true)
     expect(await renderPreview(container, root, { isActive: false })).toBe(guest)
+
     const page: BrowserPage = {
       id: 'preview-1',
       workspaceId: 'browser-1',
@@ -249,8 +267,10 @@ describe('HtmlDocPreview browser chrome', () => {
       createdAt: 1,
       docLocation: { kind: 'workspace-doc', worktreeId: 'wt-1', filePath: ABSOLUTE_PATH }
     }
+
     const browsers: BrowserWorkspace[] = [{ ...page, id: 'browser-1', pageIds: [page.id] }]
     const pages: Record<string, BrowserPage[]> = { 'browser-1': [page] }
+
     const evicted = selectBrowserGuestEvictionWorktreeIds({
       orderedWorktreeIds: ['wt-1'],
       activeWorktreeId: 'wt-2',
@@ -259,6 +279,7 @@ describe('HtmlDocPreview browser chrome', () => {
       isEvictable: () => true,
       holdsLiveGuests: () => worktreeHoldsLiveBrowserGuests(browsers, pages, hasLiveBrowserGuest)
     })
+
     expect(evicted).toEqual(['wt-1'])
     await act(async () => {
       destroyWorktreeBrowserGuests({ 'wt-1': browsers }, pages, 'wt-1')
@@ -293,9 +314,11 @@ describe('HtmlDocPreview browser chrome', () => {
 
     expect(webview.getAttribute('src')).toContain('orca-preview')
     const withoutGuest = container.cloneNode(true) as HTMLElement
+
     for (const guest of withoutGuest.querySelectorAll('webview')) {
       guest.remove()
     }
+
     expect(withoutGuest.innerHTML).not.toContain('orca-preview')
   })
 
@@ -326,11 +349,14 @@ describe('HtmlDocPreview browser chrome', () => {
     const originalAppendChild = HTMLElement.prototype.appendChild
     HTMLElement.prototype.appendChild = function <T extends Node>(node: T): T {
       const element = node as unknown as HTMLElement
+
       if (element.tagName?.toLowerCase() === 'webview') {
         appendedPointerEvents.push(element.style.pointerEvents)
       }
+
       return originalAppendChild.call(this, node) as T
     }
+
     const release = acquireWebviewsDragPassthrough()
 
     try {
@@ -383,9 +409,11 @@ describe('HtmlDocPreview browser chrome', () => {
     await act(async () => {
       button(container, 'Edit address').click()
     })
+
     const input = container.querySelector<HTMLInputElement>(
       '[data-browser-chrome-address-slot] input'
     )
+
     expect(input).not.toBeNull()
     expect(input?.value).toBe(ENTRY_RELATIVE_PATH)
 
@@ -409,9 +437,11 @@ describe('HtmlDocPreview browser chrome', () => {
     await act(async () => {
       button(container, 'Edit address').click()
     })
+
     const input = container.querySelector<HTMLInputElement>(
       '[data-browser-chrome-address-slot] input'
     )
+
     await act(async () => {
       input!.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
@@ -442,11 +472,13 @@ describe('HtmlDocPreview browser chrome', () => {
         new window.PointerEvent('pointerdown', { bubbles: true, button: 0 })
       )
     })
+
     const absoluteCopy = [...document.querySelectorAll('[role="menuitem"]')].find(
       (item) =>
         item.textContent?.includes('Copy file path') &&
         !item.textContent.includes('Copy relative path')
     )
+
     expect(absoluteCopy).toBeDefined()
 
     await act(async () => {
@@ -598,9 +630,11 @@ describe('HtmlDocPreview browser chrome', () => {
         new window.PointerEvent('pointerdown', { bubbles: true, button: 0 })
       )
     })
+
     const relativeCopy = [...document.querySelectorAll('[role="menuitem"]')].find((item) =>
       item.textContent?.includes('Copy relative path')
     )
+
     expect(relativeCopy).toBeDefined()
 
     await act(async () => {

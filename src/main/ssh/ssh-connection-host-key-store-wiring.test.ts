@@ -21,6 +21,7 @@ const VALID_ED25519_HOST_KEY = Buffer.from(
   'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq',
   'base64'
 )
+
 /** A second, different key for the same host — the shape of an impersonation. */
 const OTHER_ED25519_HOST_KEY = Buffer.from(
   'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7',
@@ -28,11 +29,14 @@ const OTHER_ED25519_HOST_KEY = Buffer.from(
 )
 
 let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
+
 let presentedHostKey: Buffer
+
 let hostKeyAccepted: boolean | undefined
 
 vi.mock('ssh2', () => {
   const utils = { parseKey: vi.fn(() => new Error('parse failed')) }
+
   class MockSshClient {
     setNoDelay = vi.fn()
     _sock: Socket | undefined = new Socket()
@@ -54,6 +58,7 @@ vi.mock('ssh2', () => {
           | { hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined }
           | undefined
       )?.hostVerifier
+
       hostKeyAccepted = undefined
       hostVerifier?.(presentedHostKey, (ok) => {
         hostKeyAccepted = ok
@@ -66,7 +71,9 @@ vi.mock('ssh2', () => {
       }, 0)
     }
   }
+
   class MockBaseAgent {}
+
   return {
     Client: MockSshClient,
     BaseAgent: MockBaseAgent,
@@ -116,11 +123,14 @@ afterEach(() => {
 async function waitForStoredKeys(count: number): Promise<unknown[]> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const trusted = await loadTrustedHostKeys()
+
     if (trusted.length >= count) {
       return trusted
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+
   return loadTrustedHostKeys()
 }
 

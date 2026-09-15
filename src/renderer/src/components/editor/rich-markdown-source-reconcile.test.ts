@@ -103,10 +103,13 @@ describe('reconcileSerializedMarkdown', () => {
 
   it('bounds diff work for replacement-heavy edits instead of using the 1s library default', () => {
     let now = 0
+
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => {
       now += 10
+
       return now
     })
+
     const baseCanonical = 'a'.repeat(20_000)
     const edited = 'b'.repeat(20_000)
 
@@ -220,6 +223,7 @@ describe('reconcileSerializedMarkdown', () => {
     // Simulate the commit helper advancing the refs: originalSource := reconciled1,
     // baseCanonical := edited1. The second edit must still preserve the markup.
     const edited2 = edited1.replace('# Title A', '# Title AB')
+
     const reconciled2 = reconcileSerializedMarkdown({
       originalSource: reconciled1,
       baseCanonical: edited1,
@@ -336,9 +340,11 @@ describe('reconcileSerializedMarkdown', () => {
     // Invariant: the reconciled bytes render exactly to `edited` — the change is
     // never silently relocated to the wrong occurrence or dropped.
     expect(fakeCanonicalize(reconciled).trimEnd()).toBe(edited.trimEnd())
+
     // Either the source-preserving path landed it, or it cleanly fell back.
     const landedInStyle =
       reconciled.includes('_alpha edited_') && reconciled.split('_beta_').length === 3
+
     expect(landedInStyle || reconciled === edited).toBe(true)
   })
 
@@ -347,14 +353,17 @@ describe('reconcileSerializedMarkdown', () => {
     // Build a mostly-Chinese doc with non-canonical `_`/`*` markers and edit a position that
     // previously threw; every such edit must reconcile and stay render-equal to `edited`.
     const lines: string[] = []
+
     for (let i = 0; i < 20; i++) {
       lines.push(`_强调${i}_ 😀 café 这是一段包含很多中文字符的文本内容用来测试多字节偏移问题`)
     }
+
     const originalSource = `# 标题\n\n${lines.join('\n')}\n`
     const baseCanonical = fakeCanonicalize(originalSource)
 
     // Sweep insert positions so we exercise the offsets that used to overshoot the byte target.
     const chars = [...baseCanonical]
+
     for (let pos = 5; pos < chars.length - 5; pos += 3) {
       const inserted = ['插', '😀', 'é'][Math.floor(pos / 3) % 3]
       const edited = `${chars.slice(0, pos).join('')}${inserted}${chars.slice(pos).join('')}`
@@ -371,6 +380,7 @@ describe('reconcileSerializedMarkdown', () => {
     const lines = Array.from({ length: 8 }, (_, i) => `_强调${i}_ ascii segment ${i} 中文 tail`)
     const originalSource = `# 标题\n\n${lines.join('\n')}\n`
     const baseCanonical = fakeCanonicalize(originalSource)
+
     // Why: the first hunk changes the UTF-8/code-unit delta before the second seed is decoded.
     const edited = baseCanonical
       .replace('segment 1', 'segment 1 🚀🚀')
@@ -432,6 +442,7 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     // The reported case: a 1-char H1 edit must not rewrite untouched markup.
     const originalSource =
       '# Title\n\n_emphasis_ and __strong__\n\n* one\n* two\n* three\n\n_more emphasis_\n'
+
     const baseCanonical = serialize(originalSource)!
     const edited = baseCanonical.replace('# Title', '# Title!')
 
@@ -453,6 +464,7 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     ]) {
       expect(reconciled).toContain(preserved)
     }
+
     // The edit landed, and nothing else was re-canonicalized.
     expect(reconciled).toContain('# Title!')
     expect(reconciled).not.toContain('*emphasis*')
@@ -477,6 +489,7 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       edited,
       roundTrip: (md) => {
         roundTripCalls += 1
+
         return serialize(md)
       }
     })
@@ -502,6 +515,7 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       edited,
       roundTrip: (md) => {
         roundTripCalls += 1
+
         return serialize(md)
       }
     })
@@ -527,6 +541,7 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
       edited,
       roundTrip: (md) => {
         roundTripCalls += 1
+
         return serialize(md)
       }
     })

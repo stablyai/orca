@@ -20,6 +20,7 @@ describe('rich markdown code block languages', () => {
   it('refreshes cached labels when a plugin replaces the active resource bundle', async () => {
     const id = 'plugin:test.rich-markdown-languages' as const
     const resourceLanguage = pluginLanguageResourceId(id)
+
     const pack = (plainText: string) => ({
       id,
       resourceLanguage,
@@ -33,6 +34,7 @@ describe('rich markdown code block languages', () => {
         }
       }
     })
+
     setRendererPluginLanguagePacks([pack('Plugin plain text')])
     await i18n.changeLanguage(resourceLanguage)
     const firstLanguages = getCodeBlockLanguages()

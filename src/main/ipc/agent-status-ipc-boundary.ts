@@ -37,14 +37,19 @@ export function resolveAgentStatusBinding(
   runtime: AgentStatusRuntimeEnrichment | undefined
 ): FleetEvidenceBinding {
   const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+
   if (!terminalHandle) {
     return { kind: 'unresolved', reason: 'pane_not_bound' }
   }
+
   const processIncarnation = runtime?.getTerminalProcessIncarnation(terminalHandle)
+
   if (!processIncarnation) {
     return { kind: 'unresolved', reason: 'incarnation_unbound' }
   }
+
   const dispatchId = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)?.dispatchId
+
   return dispatchId
     ? { kind: 'worker', dispatchId, terminalHandle, paneKey, processIncarnation }
     : { kind: 'pane', terminalHandle, paneKey, processIncarnation }
@@ -64,20 +69,24 @@ export function resolveObservedAgentStatusBinding(
   observed: ObservedAgentStatusPaneIdentity
 ): FleetEvidenceBinding {
   const current = resolveAgentStatusBinding(paneKey, runtime)
+
   if (observed.kind === 'unobserved' || current.kind === 'unresolved') {
     return current
   }
+
   if (
     current.terminalHandle !== observed.terminalHandle ||
     current.processIncarnation !== observed.processIncarnation
   ) {
     return { kind: 'unresolved', reason: 'stale_incarnation' }
   }
+
   const terminal = {
     terminalHandle: observed.terminalHandle,
     paneKey,
     processIncarnation: observed.processIncarnation
   }
+
   return observed.dispatchId
     ? { kind: 'worker', dispatchId: observed.dispatchId, ...terminal }
     : { kind: 'pane', ...terminal }
@@ -103,8 +112,10 @@ export function enrichAgentStatusIpcPayload(
   if (!runtime) {
     return data
   }
+
   const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
   const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
+
   return {
     ...data,
     ...(terminalHandle ? { terminalHandle } : {}),

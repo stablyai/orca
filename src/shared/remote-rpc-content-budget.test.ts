@@ -19,6 +19,7 @@ describe('remoteRpcContentBudget', () => {
     const result = { content: '\n'.repeat(64 * 1024), isBinary: false }
     const bytes = Buffer.byteLength(JSON.stringify(result), 'utf8')
     const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
+
     try {
       expect(remoteRpcResultExceedsContentBudget(result, bytes, ['content'])).toBe(false)
       const firstCalls = charCodeAt.mock.calls.length
@@ -34,8 +35,10 @@ describe('remoteRpcContentBudget', () => {
   it('reuses raw measurements for a shared oversized result', () => {
     const result = { content: 'A'.repeat(4 * 1024 * 1024), isBinary: false }
     const byteLength = vi.spyOn(Buffer, 'byteLength')
+
     const contentMeasurementCalls = () =>
       byteLength.mock.calls.filter(([value]) => value === result.content).length
+
     try {
       expect(remoteRpcResultExceedsContentBudget(result, result.content.length, ['content'])).toBe(
         true
@@ -70,6 +73,7 @@ describe('remoteRpcContentBudget', () => {
 
   it('charges an escape-dense echoed request id to a file preview reply', () => {
     const id = '\u0001'.repeat(8_192)
+
     const replyBytes = (contentBytes: number) =>
       Buffer.byteLength(
         JSON.stringify({

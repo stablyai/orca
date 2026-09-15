@@ -4,13 +4,20 @@ import { buildWslExecArgs } from '../../../src/shared/wsl-login-shell-command'
 
 /** A WSL-only path makes the stub marker proof that the pane ran in the distro. */
 const WSL_STUB_PATH = '/usr/local/bin/golden-stub-agent'
+
 const WSL_STUB_AGENT_LINK = '/usr/local/bin/codex'
+
 const WSL_STUB_BACKUP_PATH = '/usr/local/bin/golden-stub-agent.orca-e2e-backup'
+
 /** mkdir is atomic in the distro, so the lock dir serializes overlapping invocations. */
 const WSL_STUB_LOCK_PATH = '/usr/local/bin/golden-stub-agent.orca-e2e-lock'
+
 const WSL_STUB_LINK_MARKER = `${WSL_STUB_LOCK_PATH}/created-codex-link`
+
 const WSL_STUB_STAGED_MARKER = `${WSL_STUB_LOCK_PATH}/staged-stub`
+
 const WSL_STUB_LOCK_STALE_MINUTES = 10
+
 const WSL_STUB_LOCK_WAIT_SECONDS = 60
 
 // Undoes a lock holder that died mid-run, so its leftovers cannot poison later invocations.
@@ -53,18 +60,23 @@ const STAGE_CODEX_LINK_IF_MISSING_SCRIPT =
 // `;` between steps so the lock is released even when a restore step fails.
 function buildRestoreScript(stage: WslGoldenStubAgentStage): string {
   const steps: string[] = []
+
   if (stage.ownsStubPath) {
     const removed = stage.createdCodexLink
       ? `${WSL_STUB_AGENT_LINK} ${WSL_STUB_PATH}`
       : WSL_STUB_PATH
+
     steps.push(`rm -f ${removed}`)
+
     if (stage.backedUpStub) {
       steps.push(`mv ${WSL_STUB_BACKUP_PATH} ${WSL_STUB_PATH}`)
     }
   }
+
   if (stage.heldLock) {
     steps.push(`rm -rf ${WSL_STUB_LOCK_PATH}`)
   }
+
   return steps.join(' ; ')
 }
 
@@ -82,6 +94,7 @@ export async function getFirstWslDistro(page: Page): Promise<string | null> {
     available: await window.api.wsl.isAvailable(),
     distros: await window.api.wsl.listDistros()
   }))
+
   return wsl.available ? (wsl.distros[0] ?? null) : null
 }
 
@@ -100,28 +113,34 @@ export function stageWslGoldenStubAgent(distro: string): WslGoldenStubAgentStage
     ownsStubPath: false,
     heldLock: false
   }
+
   try {
     if (runInWslAsRoot(distro, ACQUIRE_LOCK_SCRIPT).trim() !== 'acquired') {
       return null
     }
+
     stage.heldLock = true
     stage.backedUpStub = runInWslAsRoot(distro, BACKUP_EXISTING_STUB_SCRIPT).trim() === 'backed-up'
     stage.ownsStubPath = true
     runInWslAsRoot(distro, STAGE_SCRIPT)
     stage.createdCodexLink =
       runInWslAsRoot(distro, STAGE_CODEX_LINK_IF_MISSING_SCRIPT).trim() === 'created'
+
     return stage
   } catch {
     removeWslGoldenStubAgent(distro, stage)
+
     return null
   }
 }
 
 export function removeWslGoldenStubAgent(distro: string, stage: WslGoldenStubAgentStage): void {
   const script = buildRestoreScript(stage)
+
   if (!script) {
     return
   }
+
   try {
     runInWslAsRoot(distro, script)
     stage.heldLock = false
@@ -135,23 +154,30 @@ export function removeWslGoldenStubAgent(distro: string, stage: WslGoldenStubAge
 export async function useWslRuntimeForActiveProject(page: Page, distro: string): Promise<void> {
   await page.evaluate(async (wslDistro) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Orca store is unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree')
     }
+
     const activeWorktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === worktreeId)
+
     const activeProject = state.projects.find((project) =>
       activeWorktree ? project.sourceRepoIds.includes(activeWorktree.repoId) : false
     )
+
     if (!activeProject) {
       throw new Error('No active project')
     }
+
     await state.updateProject(activeProject.id, {
       localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
     })

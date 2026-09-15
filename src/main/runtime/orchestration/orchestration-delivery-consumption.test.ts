@@ -9,14 +9,18 @@ describe('mailbox delivery consumption', () => {
 
   function setup() {
     db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'Retired delivery',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
+
     const insert = (subject: string) =>
       db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject })
+
     return { run, params, insert }
   }
 
@@ -24,6 +28,7 @@ describe('mailbox delivery consumption', () => {
     const { run, params } = setup()
     const task = db.createTask({ runId: run.id, spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'worker')
+
     const insert = (type: 'heartbeat' | 'worker_done') =>
       db.insertMessage({
         runId: run.id,
@@ -33,6 +38,7 @@ describe('mailbox delivery consumption', () => {
         type,
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
       })
+
     insert('heartbeat')
     const first = db.getOrCreateRunDelivery(params)!
     const done = insert('worker_done')
@@ -125,17 +131,20 @@ describe('mailbox delivery consumption', () => {
       const task = db.createTask({ runId: run.id, spec: 'worker mail' })
       const dispatch = createRootDispatch(db, task.id, 'worker')
       const mailboxHandle = `dispatch:${dispatch.id}`
+
       const message = db.insertMessage({
         runId: run.id,
         from: 'term_coord',
         to: mailboxHandle,
         subject: 'worker mail'
       })
+
       const workerParams = {
         ...params,
         mailboxHandle,
         consumerGeneration: dispatch.consumer_generation
       }
+
       db.getOrCreateMailboxDelivery(workerParams)!
       db[method]([message.id])
       expect(db.hasOutstandingMailboxDelivery(mailboxHandle)).toBe(false)

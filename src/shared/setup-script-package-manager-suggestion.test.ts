@@ -64,6 +64,7 @@ describe('package manager setup script suggestions', () => {
 
   it('does not check lockfiles when packageManager declares the setup command', async () => {
     const fileExistsCalls: string[] = []
+
     const candidates = await inspectSetupScriptImportCandidates(
       makeReader({
         'package.json': JSON.stringify({ packageManager: 'pnpm@9.15.0' })
@@ -71,6 +72,7 @@ describe('package manager setup script suggestions', () => {
       {
         fileExists: async (relativePath) => {
           fileExistsCalls.push(relativePath)
+
           return true
         }
       }
@@ -91,14 +93,17 @@ describe('package manager setup script suggestions', () => {
   it('uses file existence checks instead of reading lockfile contents', async () => {
     const readCalls: string[] = []
     const fileExistsCalls: string[] = []
+
     const candidates = await inspectSetupScriptImportCandidates(
       async (relativePath) => {
         readCalls.push(relativePath)
+
         return relativePath === 'package.json' ? JSON.stringify({ scripts: { dev: 'vite' } }) : null
       },
       {
         fileExists: async (relativePath) => {
           fileExistsCalls.push(relativePath)
+
           return relativePath === 'pnpm-lock.yaml'
         }
       }

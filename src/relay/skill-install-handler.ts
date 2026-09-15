@@ -109,6 +109,7 @@ export class SkillInstallHandler {
   private registerHandlers(): void {
     this.dispatcher.onRequest(SKILL_SSH_RELAY_INSTALL_METHOD, async (params, context) => {
       const input = SkillSshInstallParamsSchema.parse(params)
+
       return this.executeSkillOperation(() =>
         executeSkillInstallRequest(input.request, {
           authority: this.authority(input.workspace),
@@ -124,6 +125,7 @@ export class SkillInstallHandler {
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_INSTALL_BUNDLE_METHOD, async (params, context) => {
       const input = SkillSshInstallBundleParamsSchema.parse(params)
+
       return this.executeSkillOperation(async () => {
         try {
           return await executeSkillBundleInstallRequest(input.request, {
@@ -144,10 +146,12 @@ export class SkillInstallHandler {
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_GET_INSTALL_PROGRESS_METHOD, async (params) => {
       const input = SkillSshInstallProgressParamsSchema.parse(params)
+
       return this.installProgress.get(input.operationId) ?? null
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_PREVIEW_METHOD, async (params) => {
       const input = SkillSshPreviewParamsSchema.parse(params)
+
       return this.executeSkillOperation(() =>
         previewSharedSkillInstall(input.request, {
           authority: this.authority(input.workspace),
@@ -159,6 +163,7 @@ export class SkillInstallHandler {
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD, async (params) => {
       const input = SkillSshPreviewBundleParamsSchema.parse(params)
+
       return this.executeSkillOperation(() =>
         previewSharedSkillBundleInstall(input.request, {
           authority: this.authority(input.workspace),
@@ -170,6 +175,7 @@ export class SkillInstallHandler {
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_REMOVE_METHOD, async (params) => {
       const input = SkillSshRemoveParamsSchema.parse(params)
+
       return this.executeSkillOperation(() =>
         removeSharedSkillInstall(input.request, {
           authority: this.authority(input.workspace),
@@ -181,6 +187,7 @@ export class SkillInstallHandler {
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_LIST_METHOD, async (params) => {
       const input = SkillSshListParamsSchema.parse(params)
+
       return this.listManagedInstalls(input.workspaces)
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD, (params) =>
@@ -194,6 +201,7 @@ export class SkillInstallHandler {
     )
     this.dispatcher.onRequest(SKILL_SSH_RELAY_CANCEL_UPLOAD_METHOD, async (params) => {
       await this.uploads.cancel(SkillUploadCommitRequestSchema.parse(params).uploadId)
+
       return { ok: true }
     })
   }
@@ -212,12 +220,15 @@ export class SkillInstallHandler {
   private async executeSkillOperation<T>(operation: () => Promise<T>): Promise<T> {
     try {
       await this.recovery
+
       return await operation()
     } catch (error) {
       const failure = skillInstallFailureFromError(error)
+
       if (!failure) {
         throw error
       }
+
       throw new SkillInstallOperationError(failure, { cause: error })
     }
   }
@@ -231,17 +242,22 @@ export class SkillInstallHandler {
   ): Promise<ManagedSkillInstall[]> {
     await this.recovery
     const installs = await listManagedSkillInstalls(join(this.stateDirectory, 'skill-installs'))
+
     return installs.flatMap((install): ManagedSkillInstall[] => {
       if (install.scope === 'global') {
         return [{ ...install, destination: { scope: 'global', executionTarget: { kind: 'host' } } }]
       }
+
       const prefix = `workspace:${SSH_SKILL_ENVIRONMENT_ID}:`
+
       const workspace = workspaces.find(
         (candidate) => install.destinationIdentity === `${prefix}${candidate.id}`
       )
+
       if (!workspace) {
         return []
       }
+
       return [
         {
           ...install,
@@ -258,9 +274,11 @@ export class SkillInstallHandler {
 export async function detectRelaySkillProviders(): Promise<string[]> {
   const runtime = process.platform
   const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
+
   const found = await Promise.all(
     probes.map(async (command) => ({ command, found: await isCommandOnPathForRelay(command) }))
   )
+
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     new Set(found.filter((item) => item.found).map((item) => item.command)),

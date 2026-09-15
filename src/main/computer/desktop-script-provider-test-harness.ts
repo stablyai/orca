@@ -3,6 +3,7 @@ import type { DesktopScriptRuntimeHost } from './desktop-script-runtime-host'
 
 const { execFileMock, operationFiles, mkdtempMock, rmMock, writeFileMock } = vi.hoisted(() => {
   const files = new Map<string, string>()
+
   return {
     execFileMock: vi.fn(),
     operationFiles: files,
@@ -31,6 +32,7 @@ export async function createDesktopScriptProviderClient(
   runtimeHost: DesktopScriptRuntimeHost | null = null
 ) {
   const { DesktopScriptProviderClient } = await import('./desktop-script-provider-client')
+
   return new DesktopScriptProviderClient(platform, executablePath, runtimeHost)
 }
 
@@ -67,15 +69,20 @@ export function mockBridgeResponse(
 ): void {
   execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
     const operationPath = _args?.at(-1)
+
     if (inspectOperation && typeof operationPath === 'string') {
       const operation = operationFiles.get(operationPath)
+
       if (!operation) {
         throw new Error(`Missing mocked operation file: ${operationPath}`)
       }
+
       inspectOperation(JSON.parse(operation) as Record<string, unknown>)
     }
+
     const done = callback as (error: Error | null, stdout: string, stderr: string) => void
     done(null, JSON.stringify(response), '')
+
     return null as never
   })
 }
@@ -85,6 +92,7 @@ export function mockBridgeProcessFailure(streams: string | { stdout?: string; st
   execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
     const done = callback as (error: Error | null, stdout: string, stderr: string) => void
     done(new Error('Command failed'), stdout, stderr)
+
     return null as never
   })
 }

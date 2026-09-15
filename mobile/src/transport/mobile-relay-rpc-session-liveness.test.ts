@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 const fakes = vi.hoisted(() => ({
   linkOptions: null as null | {
     onHello(value: unknown): void
@@ -43,6 +44,7 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
     requestTimeoutMs: 30_000,
     onLog
   })
+
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
     ok: true,
@@ -86,6 +88,7 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
   )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
   fakes.sendText.mockClear()
+
   return session
 }
 

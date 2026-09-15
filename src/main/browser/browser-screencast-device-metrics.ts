@@ -19,8 +19,10 @@ export function createBrowserScreencastDeviceMetrics(
   const clearDeviceMetricsOverride = async (): Promise<void> => {
     if (webContents.isDestroyed() || !dbg.isAttached()) {
       deviceMetricsOverridden = false
+
       return
     }
+
     await sendDebuggerCommand(dbg, 'Emulation.clearDeviceMetricsOverride')
     deviceMetricsOverridden = false
   }
@@ -28,12 +30,15 @@ export function createBrowserScreencastDeviceMetrics(
   const applyDeviceMetricsOverride = async (): Promise<void> => {
     const viewportWidth = positiveInteger(options.viewportWidth)
     const viewportHeight = positiveInteger(options.viewportHeight)
+
     if (!viewportWidth || !viewportHeight) {
       if (deviceMetricsOverridden) {
         await clearDeviceMetricsOverride()
       }
+
       return
     }
+
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
     // Why: Back/Forward and cross-process navigations can drop emulation while
     // the screencast remains attached. Reapply before fallback captures so the

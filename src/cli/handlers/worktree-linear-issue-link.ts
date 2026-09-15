@@ -11,6 +11,7 @@ export function getOptionalLinearIssueLinkFlag(
   options: { allowNull?: boolean } = {}
 ): LinearIssueLinkUpdates | undefined {
   const value = getPresentStringFlag(flags, name)
+
   if (value === undefined) {
     return undefined
   }
@@ -22,6 +23,7 @@ export function getOptionalLinearIssueLinkFlag(
         'Omit --linear-issue on create, or pass a Linear issue identifier or URL.'
       )
     }
+
     return { ...LINEAR_ISSUE_LINK_CLEARED }
   }
 
@@ -30,6 +32,7 @@ export function getOptionalLinearIssueLinkFlag(
   // is a mistyped argument, not a request to unlink. Only the literal `null`
   // clears, and that is handled above.
   const updates = value.trim() === '' ? null : buildLinearIssueLinkUpdates(value)
+
   if (!updates) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -47,9 +50,12 @@ function getPresentStringFlag(
   if (!flags.has(name)) {
     return undefined
   }
+
   const value = flags.get(name)
+
   if (typeof value === 'string' && value.length > 0) {
     return value
   }
+
   throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
 }

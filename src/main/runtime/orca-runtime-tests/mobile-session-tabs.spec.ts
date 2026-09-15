@@ -127,6 +127,7 @@ describe('OrcaRuntimeService', () => {
     const [left, right] = result.tabs
     expect(left?.type).toBe('terminal')
     expect(right?.type).toBe('terminal')
+
     if (left?.type === 'terminal' && right?.type === 'terminal') {
       expect(left.terminal).not.toBe(right.terminal)
     }
@@ -180,6 +181,7 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const tab = result.tabs[0]
     expect(tab?.type).toBe('terminal')
+
     if (tab?.type !== 'terminal' || tab.status !== 'ready') {
       throw new Error('expected ready terminal tab')
     }
@@ -524,18 +526,23 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
     }
+
     const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
       metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
       return metaById[worktreeId]
     })
+
     const activateWorktree = vi.fn()
     const worktreesChanged = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
     } as never)
+
     runtime.setNotifier({
       worktreesChanged,
       reposChanged: vi.fn(),
@@ -567,8 +574,10 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
     }
+
     const activateWorktree = vi.fn()
     const resumeSleepingAgents = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
@@ -591,6 +600,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     } as never)
+
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),

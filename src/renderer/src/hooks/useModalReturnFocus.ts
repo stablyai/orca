@@ -41,6 +41,7 @@ export function useModalReturnFocus(visible: boolean): {
       cancelAnimationFrame(outerFrameRef.current)
       outerFrameRef.current = null
     }
+
     if (innerFrameRef.current !== null) {
       cancelAnimationFrame(innerFrameRef.current)
       innerFrameRef.current = null
@@ -51,10 +52,13 @@ export function useModalReturnFocus(visible: boolean): {
 
   const focusCapturedElement = useCallback((): boolean => {
     const target = capturedElementRef.current
+
     if (!isRestorableFocusedElement(target) || !target.isConnected) {
       return false
     }
+
     target.focus()
+
     return document.activeElement === target || target.contains(document.activeElement)
   }, [])
 
@@ -65,12 +69,16 @@ export function useModalReturnFocus(visible: boolean): {
         outerFrameRef.current = null
         innerFrameRef.current = requestAnimationFrame(() => {
           innerFrameRef.current = null
+
           for (const selector of selectors) {
             const target = document.querySelector(selector) as HTMLElement | null
+
             if (!target) {
               continue
             }
+
             target.focus()
+
             if (document.activeElement === target || target.contains(document.activeElement)) {
               return
             }
@@ -87,6 +95,7 @@ export function useModalReturnFocus(visible: boolean): {
     if (focusCapturedElement()) {
       return
     }
+
     focusFirstMatchingSurface([
       '.monaco-editor textarea',
       '.rich-markdown-editor[contenteditable="true"]',
@@ -98,6 +107,7 @@ export function useModalReturnFocus(visible: boolean): {
     if (focusCapturedElement()) {
       return
     }
+
     focusFirstMatchingSurface(['[data-orca-emulator-frame="true"] [tabindex]'])
   }, [focusCapturedElement, focusFirstMatchingSurface])
 
@@ -114,27 +124,33 @@ export function useModalReturnFocus(visible: boolean): {
     const state = useAppStore.getState()
     const worktreeId = state.activeWorktreeId
     const tabType = state.activeTabType
+
     const activeElement =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
+
     const browserPageId =
       worktreeId && tabType === 'browser'
         ? ((state.browserTabsByWorktree[worktreeId] ?? []).find(
             (workspace) => workspace.id === state.activeBrowserTabId
           )?.activePageId ?? null)
         : null
+
     const terminalTabId =
       worktreeId && tabType === 'terminal'
         ? (state.activeTabIdByWorktree[worktreeId] ?? state.activeTabId)
         : null
+
     const terminalLeafId = terminalTabId
       ? (state.terminalLayoutsByTabId[terminalTabId]?.activeLeafId ?? null)
       : null
+
     // Why: this can be called from Radix onOpenAutoFocus, before focus moves
     // into the dialog, preserving address-bar/editor/simulator identity.
     const browserTarget =
       tabType === 'browser' && activeElement?.closest('[data-orca-browser-address-bar="true"]')
         ? 'address-bar'
         : 'webview'
+
     capturedElementRef.current = isRestorableFocusedElement(activeElement) ? activeElement : null
     capturedRef.current = {
       tabType,
@@ -150,15 +166,18 @@ export function useModalReturnFocus(visible: boolean): {
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
       cancelFrames()
+
       if (!capturedRef.current) {
         captureReturnFocus()
       }
+
       skipRef.current = false
     }
 
     if (!visible && wasVisibleRef.current) {
       const action = resolveModalReturnFocusAction(skipRef.current ? null : capturedRef.current)
       capturedRef.current = null
+
       if (action.kind === 'browser') {
         cancelFrames()
         requestBrowserFocus({ pageId: action.pageId, target: action.target })
@@ -172,6 +191,7 @@ export function useModalReturnFocus(visible: boolean): {
       } else if (action.kind === 'surface') {
         focusFallbackSurface()
       }
+
       capturedElementRef.current = null
     }
 

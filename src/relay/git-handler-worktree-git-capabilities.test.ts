@@ -37,6 +37,7 @@ describe('relay worktree Git capabilities', () => {
             })
           )
         }
+
         return Promise.resolve({ stdout: WORKTREE_LIST_OUTPUT, stderr: '' })
       })
 
@@ -61,14 +62,18 @@ describe('relay worktree Git capabilities', () => {
             })
           )
         }
+
         return Promise.resolve({ stdout: WORKTREE_LIST_OUTPUT, stderr: '' })
       })
+
     const firstGit = mockOldGit(handler)
     const replacementDispatcher = createMockDispatcher()
+
     const replacementHandler = new GitHandler(
       replacementDispatcher as unknown as RelayDispatcher,
       new RelayContext()
     )
+
     const replacementGit = mockOldGit(replacementHandler)
 
     await dispatcher.callRequest('git.listWorktrees', { repoPath: '/repo' })
@@ -89,6 +94,7 @@ describe('relay worktree Git capabilities', () => {
             stderr: ''
           })
         }
+
         if (args.includes('--path-format=absolute')) {
           return Promise.reject(
             Object.assign(new Error('unknown option: --path-format=absolute'), {
@@ -96,6 +102,7 @@ describe('relay worktree Git capabilities', () => {
             })
           )
         }
+
         return Promise.resolve({
           stdout: '/repo\n/git-store/project.git\n',
           stderr: ''

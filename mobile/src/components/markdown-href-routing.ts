@@ -11,8 +11,10 @@ function withLineSuffix(pathText: string, line: number | null): string {
 
 export function routeMarkdownHref(href: string): MarkdownHrefRoute {
   const route = routeNativeChatHref(href)
+
   if (route.kind !== 'file') {
     return route
   }
+
   return { kind: 'file', pathText: withLineSuffix(route.pathText, route.line) }
 }

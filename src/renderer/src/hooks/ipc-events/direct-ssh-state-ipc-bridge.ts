@@ -10,6 +10,7 @@ import {
 } from '../direct-ssh-state-routing'
 import type { DirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydration'
+
 export function registerDirectSshStateIpcBridge(
   unsubs: (() => void)[],
   runtime: DirectSshBridgeRuntime
@@ -21,40 +22,50 @@ export function registerDirectSshStateIpcBridge(
     terminalActions,
     prepareAndSync
   } = runtime
+
   const sshStateWatermarkByTargetId = new Map<string, number>()
+
   const pendingPortHydrationByTargetId = new Map<
     string,
     { receivedForwardPush: boolean; receivedDetectedPush: boolean }
   >()
+
   const hydrateSshPorts = (targetId: string, authority: DirectSshAuthority): void => {
     const pendingPortHydration = {
       receivedForwardPush: false,
       receivedDetectedPush: false
     }
+
     pendingPortHydrationByTargetId.set(targetId, pendingPortHydration)
+
     const isHydrationAuthorityCurrent = (): boolean =>
       !runtime.isStopped() && directSshAuthoritiesEqual(currentAuthority(targetId), authority)
+
     const forwardHydration = window.api.ssh.listPortForwards({ targetId }).then((forwards) => {
       if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedForwardPush) {
         useAppStore.getState().setPortForwards(targetId, forwards)
       }
     })
+
     const detectedHydration = window.api.ssh.listDetectedPorts({ targetId }).then((detected) => {
       if (isHydrationAuthorityCurrent() && !pendingPortHydration.receivedDetectedPush) {
         useAppStore.getState().setDetectedPorts(targetId, detected)
       }
     })
+
     void Promise.allSettled([forwardHydration, detectedHydration]).then(() => {
       if (pendingPortHydrationByTargetId.get(targetId) === pendingPortHydration) {
         pendingPortHydrationByTargetId.delete(targetId)
       }
     })
   }
+
   let applySshConnectionStateChange!: (
     targetId: string,
     state: SshConnectionState,
     origin: DirectSshConnectedStateOrigin
   ) => void
+
   void hydrateDirectSshInitialState(runtime, sshStateWatermarkByTargetId, (targetId, state) =>
     applySshConnectionStateChange(targetId, state, 'initial-hydration')
   )
@@ -72,9 +83,11 @@ export function registerDirectSshStateIpcBridge(
   unsubs.push(
     window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
       const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
+
       if (pendingPortHydration) {
         pendingPortHydration.receivedForwardPush = true
       }
+
       useAppStore.getState().setPortForwards(targetId, forwards)
     })
   )
@@ -82,9 +95,11 @@ export function registerDirectSshStateIpcBridge(
   unsubs.push(
     window.api.ssh.onDetectedPortsChanged(({ targetId, ports }) => {
       const pendingPortHydration = pendingPortHydrationByTargetId.get(targetId)
+
       if (pendingPortHydration) {
         pendingPortHydration.receivedDetectedPush = true
       }
+
       useAppStore.getState().setDetectedPorts(targetId, ports)
     })
   )
@@ -96,12 +111,14 @@ export function registerDirectSshStateIpcBridge(
     watermark: number
   ): void => {
     let pendingDeadline: { timer: ReturnType<typeof setTimeout>; settle: () => void } | undefined
+
     const deadline = new Promise<null>((resolve) => {
       const settle = (): void => resolve(null)
       const timer = setTimeout(settle, 5_000)
       pendingDeadline = { timer, settle }
       runtime.addDeadline(pendingDeadline)
     })
+
     void Promise.race([window.api.ssh.getState({ targetId }).catch(() => null), deadline])
       .then((latest) => {
         if (
@@ -113,7 +130,9 @@ export function registerDirectSshStateIpcBridge(
         ) {
           return
         }
+
         const current = useAppStore.getState().sshConnectionStates?.get(targetId)
+
         if (
           current?.status !== initiatingState.status ||
           latest.status !== initiatingState.status ||
@@ -127,6 +146,7 @@ export function registerDirectSshStateIpcBridge(
         ) {
           return
         }
+
         applySshConnectionStateChange(
           targetId,
           {
@@ -164,17 +184,22 @@ export function registerDirectSshStateIpcBridge(
       store.setDetectedPorts(targetId, [])
 
       store.clearDirectSshTargetPtyBindings(targetId)
+
       return
     }
 
     if (state.status !== 'connected') {
       return
     }
+
     const authority = currentAuthority(targetId)
+
     if (!authority) {
       reconcileSshAuthority(targetId, state, origin, sshStateWatermarkByTargetId.get(targetId) ?? 0)
+
       return
     }
+
     const previousAuthority =
       previous?.status === 'connected' &&
       previous.providerEpoch &&
@@ -185,6 +210,7 @@ export function registerDirectSshStateIpcBridge(
             connectionGeneration: previous.connectionGeneration
           }
         : null
+
     routeDirectSshConnectedState(
       {
         coordinator: reconnectCoordinator,
@@ -204,6 +230,7 @@ export function registerDirectSshStateIpcBridge(
       },
       { authority, previousAuthority, origin }
     )
+
     if (origin === 'initial-hydration') {
       hydrateSshPorts(targetId, authority)
     }
@@ -221,6 +248,7 @@ export function registerDirectSshStateIpcBridge(
       (sshStateWatermarkByTargetId.get(data.targetId) ?? 0) + 1
     )
     latestSshTargetStateEventByTargetId.set(data.targetId, stateEventId)
+
     if (!store.sshTargetLabels.has(data.targetId)) {
       window.api.ssh
         .listTargets()
@@ -229,15 +257,21 @@ export function registerDirectSshStateIpcBridge(
           if (latestSshTargetStateEventByTargetId.get(data.targetId) !== stateEventId) {
             return
           }
+
           latestSshTargetStateEventByTargetId.delete(data.targetId)
+
           if (runtime.isStopped()) {
             return
           }
+
           const latestStore = useAppStore.getState()
+
           if (!targets.some((target) => target.id === data.targetId)) {
             latestStore.clearRemovedSshTargetState(data.targetId)
+
             return
           }
+
           latestStore.setSshTargetsMetadata(targets)
           applySshConnectionStateChange(data.targetId, state, 'push')
         })
@@ -250,6 +284,7 @@ export function registerDirectSshStateIpcBridge(
             applySshConnectionStateChange(data.targetId, state, 'push')
           }
         })
+
       return
     }
 

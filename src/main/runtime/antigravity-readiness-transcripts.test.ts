@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
 }))
 
 const FIXTURE_DIR = join(__dirname, '__fixtures__')
+
 const EVIDENCE_DOC = join(
   __dirname,
   '..',
@@ -35,12 +36,16 @@ const EVIDENCE_DOC = join(
   'reference',
   'antigravity-readiness-evidence.md'
 )
+
 // Why asymmetric: a ready verdict has to survive the settle window, while a refusal only has to
 // hold for one poll. Keeping the refusal short keeps seven transcripts off the suite's clock.
 const READY_TIMEOUT_MS = 2_000
+
 const REFUSAL_TIMEOUT_MS = 600
+
 /** Antigravity's binary, as Orca launches and probes it (`tui-agent-config.ts` detectCmd). */
 const ANTIGRAVITY_COMMAND = 'agy'
+
 // String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
 // control byte in source, which is unreadable and survives badly in diffs.
 const ESC = String.fromCharCode(27)
@@ -173,11 +178,13 @@ async function readinessVerdict(
     foregroundProcess: ANTIGRAVITY_COMMAND,
     data: transcript
   })
+
   try {
     const result = (await runtime.waitForTerminal(handle, {
       condition: 'tui-idle',
       timeoutMs
     })) as { satisfied?: boolean; blockedReason?: unknown }
+
     return {
       ready: result.satisfied === true,
       blockedReason: result.blockedReason ?? null,
@@ -199,6 +206,7 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
     // need re-reading. The correct answer stays in `expectReady` and in the test's name.
     const shipped =
       transcript.knownDefect === undefined ? transcript.expectReady : !transcript.expectReady
+
     const verdictName =
       transcript.knownDefect === undefined
         ? `${label} → ${transcript.expectReady ? 'ready' : 'not ready'}`
@@ -213,6 +221,7 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
           readFileSync(path, 'utf8'),
           transcript.expectReady ? READY_TIMEOUT_MS : REFUSAL_TIMEOUT_MS
         )
+
         // A silent dialog carries no blocked-signal wording, so the assertion is only that Orca
         // does not call the pane ready and type a prompt into a dialog that owns the screen.
         expect({ ready: verdict.ready, outcome: verdict.outcome }).toMatchObject({
@@ -234,6 +243,7 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
     // Why a test: the doc is the operator's checklist. A name that drifts out of it is a
     // transcript nobody will capture, and a case that silently skips forever.
     const doc = readFileSync(EVIDENCE_DOC, 'utf8')
+
     for (const transcript of TRANSCRIPTS) {
       expect(doc).toContain(`${transcript.name}.txt`)
     }
@@ -243,11 +253,13 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
     const missing = TRANSCRIPTS.filter(
       (transcript) => !existsSync(fixturePath(transcript.name))
     ).map((transcript) => `${transcript.name}.txt`)
+
     if (missing.length > 0) {
       console.info(
         `Antigravity transcripts: ${TRANSCRIPTS.length - missing.length}/${TRANSCRIPTS.length} captured. Missing: ${missing.join(', ')}`
       )
     }
+
     expect(missing.length).toBeLessThanOrEqual(TRANSCRIPTS.length)
   })
 })
@@ -268,6 +280,7 @@ describe('scaffold self-check', () => {
       ].join('\n'),
       READY_TIMEOUT_MS
     )
+
     expect(verdict.ready).toBe(true)
   })
 
@@ -276,6 +289,7 @@ describe('scaffold self-check', () => {
       'Do you trust this workspace directory?\nPress t to trust\n',
       REFUSAL_TIMEOUT_MS
     )
+
     expect(verdict.ready).toBe(false)
   })
 })

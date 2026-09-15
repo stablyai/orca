@@ -26,21 +26,26 @@ function matchingSnapshotRows(
 ): ProcessTableRow[] {
   const expected = new Map(snapshot.descendants.map((row) => [row.pid, row]))
   const rowsByPid = new Map<number, ProcessTableRow[]>()
+
   for (const live of table) {
     const rows = rowsByPid.get(live.pid)
+
     if (rows) {
       rows.push(live)
     } else {
       rowsByPid.set(live.pid, [live])
     }
   }
+
   return [...expected.entries()].flatMap(([pid, row]) => {
     const rows = rowsByPid.get(pid)
+
     if (rejectDuplicatePids && rows?.length !== 1) {
       // Duplicate PID rows make this non-atomic process-table read ambiguous;
       // never signal or count either identity as proof of liveness.
       return []
     }
+
     return (rows ?? []).filter((live) => live.startedAt === row.startedAt && live.pgid === row.pgid)
   })
 }
@@ -51,11 +56,13 @@ function hasDuplicateSnapshotPids(
 ): boolean {
   const expected = new Set(snapshot.descendants.map((row) => row.pid))
   const counts = new Map<number, number>()
+
   for (const live of table) {
     if (expected.has(live.pid)) {
       counts.set(live.pid, (counts.get(live.pid) ?? 0) + 1)
     }
   }
+
   return [...counts.values()].some((count) => count > 1)
 }
 
@@ -93,16 +100,19 @@ export async function terminateDescendantSnapshotWithVerdict(
   let forced = false
   let signalled = !deps.requireIdentityBeforeSignal
   let missingObservations = 0
+
   if (signalled) {
     for (const row of snapshot.descendants) {
       sendSignal(row.pid, 'SIGTERM')
     }
   }
+
   while (Date.now() < deadline) {
     const capture = await readProcessTableBeforeDeadline(
       readTable,
       deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
     )
+
     // A read that missed its own deadline is not an answer, and surrendering on
     // the first slow one spends none of the window this verification was given:
     // on a loaded host that reported a tree unverifiable without ever seeing it.
@@ -113,7 +123,9 @@ export async function terminateDescendantSnapshotWithVerdict(
         await waitForDelay(50)
         continue
       }
+
       const live = matchingSnapshotRows(snapshot, capture.rows, deps.requireIdentityBeforeSignal)
+
       if (live.length === 0) {
         // Before a signal has been sent, an empty identity match means the
         // snapshotted descendants already exited or were replaced. Signalling
@@ -122,14 +134,18 @@ export async function terminateDescendantSnapshotWithVerdict(
           // A single process-table read can race a fork or return a partial
           // view; require two bounded absences before claiming the tree gone.
           missingObservations += 1
+
           if (missingObservations < 2) {
             await waitForDelay(50)
             continue
           }
         }
+
         return 'exited'
       }
+
       missingObservations = 0
+
       if (!signalled) {
         // Revalidate every identity immediately before the first signal. A PID
         // can be recycled between the original walk and close, so never signal
@@ -137,10 +153,13 @@ export async function terminateDescendantSnapshotWithVerdict(
         for (const row of live) {
           sendSignal(row.pid, 'SIGTERM')
         }
+
         signalled = true
       }
+
       if (!forced && Date.now() >= deadline - verifyMs + graceMs) {
         forced = true
+
         for (const row of live) {
           // A row a walk re-derived from a live root is ours whatever second it
           // was born in, which start time alone can never establish for one born
@@ -161,25 +180,32 @@ export async function terminateDescendantSnapshotWithVerdict(
         }
       }
     }
+
     await waitForDelay(50)
   }
+
   const finalCapture = await readProcessTableBeforeDeadline(
     readTable,
     deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
   )
+
   if (!finalCapture) {
     return 'unverifiable'
   }
+
   if (deps.requireIdentityBeforeSignal && hasDuplicateSnapshotPids(snapshot, finalCapture.rows)) {
     return 'unverifiable'
   }
+
   const finalLive = matchingSnapshotRows(
     snapshot,
     finalCapture.rows,
     deps.requireIdentityBeforeSignal
   )
+
   if (finalLive.length > 0) {
     return 'live'
   }
+
   return deps.requireIdentityBeforeSignal && missingObservations < 2 ? 'unverifiable' : 'exited'
 }

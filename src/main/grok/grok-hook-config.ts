@@ -45,7 +45,9 @@ export function buildInstalledGrokConfig(
     if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -56,10 +58,12 @@ export function buildInstalledGrokConfig(
   for (const event of GROK_EVENTS) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       ...event.definition,
       hooks: [buildManagedCommandHook(command)]
     }
+
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 

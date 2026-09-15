@@ -13,11 +13,15 @@ function unprobedExceeds(content: string, mimeType: string | undefined): boolean
   if (!isKnownRasterImageMimeType(mimeType)) {
     return false
   }
+
   const prefix = referenceDecodeBase64Prefix(content, RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES)
+
   if (!prefix) {
     return false
   }
+
   const dimensions = readRasterImageDimensions(prefix)
+
   return dimensions !== null && !isRasterImagePreviewDimensions(dimensions)
 }
 
@@ -28,10 +32,12 @@ const { dimensionReadLengths } = vi.hoisted(() => ({ dimensionReadLengths: [] as
 
 vi.mock('./raster-image-dimensions', async (importOriginal) => {
   const actual = await importOriginal<typeof RasterImageDimensionsModule>()
+
   return {
     ...actual,
     readRasterImageDimensions: (bytes: Uint8Array) => {
       dimensionReadLengths.push(bytes.byteLength)
+
       return actual.readRasterImageDimensions(bytes)
     }
   }
@@ -39,27 +45,34 @@ vi.mock('./raster-image-dimensions', async (importOriginal) => {
 
 // ── Reference decoder: the pre-change implementation, verbatim ──────────────────────────────────
 const BASE64_PADDING = -2
+
 const INVALID_BASE64 = -1
 
 function base64Value(code: number): number {
   if (code >= 65 && code <= 90) {
     return code - 65
   }
+
   if (code >= 97 && code <= 122) {
     return code - 71
   }
+
   if (code >= 48 && code <= 57) {
     return code + 4
   }
+
   if (code === 43) {
     return 62
   }
+
   if (code === 47) {
     return 63
   }
+
   if (code === 61) {
     return BASE64_PADDING
   }
+
   return INVALID_BASE64
 }
 
@@ -73,36 +86,47 @@ function referenceWriteQuartet(
   quartet: readonly number[]
 ): { bytesWritten: number; padded: boolean } | null {
   const [a, b, c, d] = quartet
+
   if (a === undefined || b === undefined || a < 0 || b < 0) {
     return null
   }
+
   if (c === BASE64_PADDING) {
     if (d !== BASE64_PADDING) {
       return null
     }
+
     if (offset < output.length) {
       output[offset] = (a << 2) | (b >> 4)
     }
+
     return { bytesWritten: Math.min(1, output.length - offset), padded: true }
   }
+
   if (c === undefined || c < 0) {
     return null
   }
+
   if (offset < output.length) {
     output[offset] = (a << 2) | (b >> 4)
   }
+
   if (offset + 1 < output.length) {
     output[offset + 1] = ((b & 15) << 4) | (c >> 2)
   }
+
   if (d === BASE64_PADDING) {
     return { bytesWritten: Math.min(2, output.length - offset), padded: true }
   }
+
   if (d === undefined || d < 0) {
     return null
   }
+
   if (offset + 2 < output.length) {
     output[offset + 2] = ((c & 3) << 6) | d
   }
+
   return { bytesWritten: Math.min(3, output.length - offset), padded: false }
 }
 
@@ -115,24 +139,33 @@ function referenceDecodeBase64Prefix(content: string, maxBytes: number): Uint8Ar
 
   for (let index = 0; index < content.length && outputLength < capacity; index += 1) {
     const code = content.charCodeAt(index)
+
     if (isWhitespace(code)) {
       continue
     }
+
     if (padded) {
       return null
     }
+
     const value = base64Value(code)
+
     if (value === INVALID_BASE64) {
       return null
     }
+
     quartet.push(value)
+
     if (quartet.length !== 4) {
       continue
     }
+
     const decoded = referenceWriteQuartet(output, outputLength, quartet)
+
     if (!decoded) {
       return null
     }
+
     outputLength += decoded.bytesWritten
     padded = decoded.padded
     quartet.length = 0
@@ -142,15 +175,20 @@ function referenceDecodeBase64Prefix(content: string, maxBytes: number): Uint8Ar
     if (quartet.length === 1 || quartet.includes(BASE64_PADDING)) {
       return null
     }
+
     while (quartet.length < 4) {
       quartet.push(BASE64_PADDING)
     }
+
     const decoded = referenceWriteQuartet(output, outputLength, quartet)
+
     if (!decoded) {
       return null
     }
+
     outputLength += decoded.bytesWritten
   }
+
   return output.subarray(0, outputLength)
 }
 
@@ -162,9 +200,11 @@ function pngBytes(totalBytes: number, width: number, height: number): Buffer {
   bytes.write('IHDR', 12, 'ascii')
   bytes.writeUInt32BE(width, 16)
   bytes.writeUInt32BE(height, 20)
+
   for (let index = 24; index < bytes.length; index += 1) {
     bytes[index] = (index * 31 + 7) & 0xff
   }
+
   return bytes
 }
 
@@ -176,6 +216,7 @@ function jpegBytes(
   trailingBytes = 4096
 ): Buffer {
   const parts: Buffer[] = [Buffer.from([0xff, 0xd8])]
+
   for (let written = 0; written < metadataBytes;) {
     const size = Math.min(65_533, metadataBytes - written)
     const header = Buffer.alloc(4)
@@ -184,6 +225,7 @@ function jpegBytes(
     parts.push(header, Buffer.alloc(size))
     written += size
   }
+
   const sof = Buffer.alloc(11)
   sof.writeUInt16BE(0xffc0)
   sof.writeUInt16BE(8, 2)
@@ -191,6 +233,7 @@ function jpegBytes(
   sof.writeUInt16BE(height, 5)
   sof.writeUInt16BE(width, 7)
   parts.push(sof, Buffer.alloc(trailingBytes))
+
   return Buffer.concat(parts)
 }
 
@@ -199,6 +242,7 @@ function gifBytes(width: number, height: number): Buffer {
   gif.write('GIF89a', 0, 'ascii')
   gif.writeUInt16LE(width, 6)
   gif.writeUInt16LE(height, 8)
+
   return gif
 }
 
@@ -211,6 +255,7 @@ function webpBytes(width: number, height: number): Buffer {
   webp.writeUInt32LE(10, 16)
   webp.writeUIntLE(width - 1, 24, 3)
   webp.writeUIntLE(height - 1, 27, 3)
+
   return webp
 }
 
@@ -267,10 +312,12 @@ describe('decodeBase64Prefix', () => {
         const expected = referenceDecodeBase64Prefix(content, maxBytes)
         const actual = decodeBase64Prefix(content, maxBytes)
         const detail = `${label} @ maxBytes=${maxBytes}`
+
         if (expected === null) {
           expect(actual, detail).toBeNull()
           continue
         }
+
         expect(actual, detail).not.toBeNull()
         expect(Array.from(actual!), detail).toEqual(Array.from(expected))
       }
@@ -326,6 +373,7 @@ describe('exceedsRasterImagePreviewLimits', () => {
       'image/svg+xml',
       undefined
     ]
+
     const fixtures = [
       ...DECODE_FIXTURES,
       { label: 'over-limit png', content: pngBytes(24, 32_769, 1).toString('base64') },
@@ -334,6 +382,7 @@ describe('exceedsRasterImagePreviewLimits', () => {
       { label: 'over-limit jpeg', content: jpegBytes(70_000, 40_000, 40_000).toString('base64') },
       { label: 'over-limit webp', content: webpBytes(40_000, 40_000).toString('base64') }
     ]
+
     for (const { label, content } of fixtures) {
       for (const mimeType of mimeTypes) {
         expect(exceedsRasterImagePreviewLimits(content, mimeType), `${label} / ${mimeType}`).toBe(

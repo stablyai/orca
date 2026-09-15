@@ -50,6 +50,7 @@ export class RemoteBrowserStreamLiveness {
     this.clearDeadline()
     const readyAt = this.readyAt
     this.readyAt = null
+
     return readyAt !== null && Date.now() - readyAt >= REMOTE_BROWSER_STREAM_HEALTHY_MS
   }
 

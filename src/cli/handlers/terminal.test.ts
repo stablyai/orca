@@ -16,12 +16,14 @@ describe('terminal close CLI', () => {
 
   it('keeps the default close RPC unchanged', async () => {
     process.exitCode = undefined
+
     const call = vi.fn().mockResolvedValue({
       id: 'req-close',
       ok: true,
       result: { close: { handle: 'term-1', tabId: 'tab-1', ptyKilled: true } },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal close']({
@@ -41,6 +43,7 @@ describe('terminal close CLI', () => {
 
   it('reports an unverifiable PTY stop as a failing JSON outcome', async () => {
     process.exitCode = undefined
+
     const close = {
       handle: 'term-remote',
       tabId: 'tab-1',
@@ -48,12 +51,14 @@ describe('terminal close CLI', () => {
       ptyStopVerdict: 'unverifiable' as const,
       ptyStopReason: 'its SSH provider is no longer registered'
     }
+
     const call = vi.fn().mockResolvedValue({
       id: 'req-close',
       ok: true,
       result: { close },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal close']({
@@ -76,12 +81,14 @@ describe('terminal close CLI', () => {
 
   it('reports a live PTY stop as a failing human outcome', async () => {
     process.exitCode = undefined
+
     const close = {
       handle: 'term-live',
       tabId: 'tab-1',
       ptyKilled: false,
       ptyStopVerdict: 'live' as const
     }
+
     const call = vi.fn().mockResolvedValue({ result: { close } })
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -99,6 +106,7 @@ describe('terminal close CLI', () => {
   it('routes --tab to the durable whole-tab RPC', async () => {
     process.exitCode = undefined
     const parsed = parseArgs(['terminal', 'close', '--terminal', 'term-1', '--tab'])
+
     const call = vi.fn().mockResolvedValue({
       result: {
         close: {
@@ -109,6 +117,7 @@ describe('terminal close CLI', () => {
         }
       }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal close']({
@@ -125,9 +134,11 @@ describe('terminal close CLI', () => {
 
   it('routes --worktree --all to authoritative durable bulk close', async () => {
     const parsed = parseArgs(['terminal', 'close', '--worktree', 'id:repo::/worktree', '--all'])
+
     const call = vi.fn().mockResolvedValue({
       result: { closed: 2, stopped: 3, retiredSurfaces: true }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal close']({
@@ -144,6 +155,7 @@ describe('terminal close CLI', () => {
 
   it('fails JSON when bulk close cannot verify every PTY stopped', async () => {
     process.exitCode = undefined
+
     const call = vi.fn().mockResolvedValue({
       result: {
         closed: 2,
@@ -153,6 +165,7 @@ describe('terminal close CLI', () => {
         ptyStopReason: 'the SSH host disconnected'
       }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal close']({
@@ -289,6 +302,7 @@ describe('terminal send CLI', () => {
         }
       }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
@@ -335,6 +349,7 @@ describe('terminal send CLI', () => {
         }
       }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
@@ -371,6 +386,7 @@ describe('terminal send CLI', () => {
         }
       }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
     process.exitCode = undefined
     const client = promptClient(call, true)
@@ -397,6 +413,7 @@ describe('terminal send CLI', () => {
     const call = vi.fn().mockResolvedValue({
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 1 } }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
@@ -453,6 +470,7 @@ describe('terminal send CLI', () => {
         }
       }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
@@ -484,7 +502,9 @@ describe('terminal send CLI', () => {
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 8 } },
       _meta: { runtimeId: 'old-runtime-after-restart' }
     }
+
     const call = vi.fn().mockResolvedValue(response)
+
     const client = {
       call,
       getCliStatus: vi.fn().mockResolvedValue({
@@ -497,6 +517,7 @@ describe('terminal send CLI', () => {
         }
       })
     } as unknown as RuntimeClient
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const error = await TERMINAL_HANDLERS['terminal send']({
@@ -540,6 +561,7 @@ describe('terminal send CLI', () => {
     const call = vi.fn().mockResolvedValue({
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
@@ -582,6 +604,7 @@ describe('terminal send CLI', () => {
         }
       }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
@@ -653,13 +676,16 @@ describe('terminal send CLI', () => {
           }
         }
       })
+
     const client = promptClient(call, true)
+
     const flags = new Map<string, string | true>([
       ['terminal', 'term-1'],
       ['text', 'retry safely'],
       ['enter', true],
       ['retry-request', '22222222-2222-4222-8222-222222222222']
     ])
+
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await expect(

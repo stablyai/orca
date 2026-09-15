@@ -14,10 +14,12 @@ describe('WatcherSupervisorCapacityWait', () => {
     const releases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () =>
       reserveWatcherChild()
     )
+
     expect(releases.every(Boolean)).toBe(true)
     const capacity = new WatcherSupervisorCapacityWait()
     const anchor = capacity.wait()
     const controllers = Array.from({ length: 10_000 }, () => new AbortController())
+
     const cancelled = controllers.map((controller) =>
       capacity.wait(controller.signal).catch((error) => error)
     )
@@ -25,6 +27,7 @@ describe('WatcherSupervisorCapacityWait', () => {
     for (const controller of controllers) {
       controller.abort()
     }
+
     await Promise.all(cancelled)
 
     expect(capacity.waiterCount).toBe(1)

@@ -51,12 +51,14 @@ function producedPair(producer: string, error: unknown): TransportErrorPair {
 
 function frameError(producer: string, frame: string): TransportErrorPair {
   const parsed = parseRemoteRuntimeRpcFrame(frame)
+
   return producedPair(producer, parsed.type === 'error' ? parsed.error : parsed)
 }
 
 // Why: these two live behind socket callbacks / module-private helpers that a unit test cannot
 // reach, so their close-code shapes are reproduced here rather than derived.
 const CLOSE_REASON = Buffer.from('server restarting')
+
 const EMPTY_CLOSE_REASON = Buffer.from('')
 
 const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
@@ -401,6 +403,7 @@ const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })
 
 function matchingRecoverableFragment(message: string): string | null {
   const lowered = message.toLowerCase()
+
   return RECOVERABLE_MESSAGE_FRAGMENTS.find((fragment) => lowered.includes(fragment)) ?? null
 }
 
@@ -423,6 +426,7 @@ describe('transport error code/message classification agreement', () => {
       (pair) =>
         `${pair.producer}: code "${pair.code}" classifies fatal but its message matches recoverable fragment "${matchingRecoverableFragment(pair.message)}" — either add "${pair.code}" to RECOVERABLE_CODES in remote-runtime-client-error-classification.ts, or change the message so it no longer reads as a transient connection failure.`
     )
+
     expect(violations).toEqual([])
   })
 
@@ -435,6 +439,7 @@ describe('transport error code/message classification agreement', () => {
       (pair) =>
         `${pair.producer}: code "${pair.code}" is not the queue-overload code but its message reads as queue overload — either raise it with RUNTIME_RPC_QUEUE_OVERLOAD_CODE, or change the message.`
     )
+
     expect(violations).toEqual([])
   })
 
@@ -446,6 +451,7 @@ describe('transport error code/message classification agreement', () => {
       (pair) =>
         `${pair.producer}: expected message-only classification ${pair.recoverable} — untyped producers have no code, so removing a fragment from RECOVERABLE_MESSAGE_FRAGMENTS strands them.`
     )
+
     expect(misclassified).toEqual([])
   })
 
@@ -453,12 +459,14 @@ describe('transport error code/message classification agreement', () => {
     const allMessages = [...CODED_TRANSPORT_ERRORS, ...CODELESS_TRANSPORT_ERRORS].map((pair) =>
       pair.message.toLowerCase()
     )
+
     const unbacked = RECOVERABLE_MESSAGE_FRAGMENTS.filter(
       (fragment) => !allMessages.some((message) => message.includes(fragment))
     ).map(
       (fragment) =>
         `recoverable fragment "${fragment}" matches no producer in this corpus — add the producer that emits it, or drop the fragment.`
     )
+
     expect(unbacked).toEqual([])
   })
 
@@ -467,12 +475,14 @@ describe('transport error code/message classification agreement', () => {
     // producer raises it. Kept recoverable defensively.
     const codesWithoutProducer = new Set(['reconnecting'])
     const corpusCodes = new Set(CODED_TRANSPORT_ERRORS.map((pair) => pair.code))
+
     const unbacked = [...RECOVERABLE_CODES]
       .filter((code) => !corpusCodes.has(code) && !codesWithoutProducer.has(code))
       .map(
         (code) =>
           `recoverable code "${code}" matches no producer in this corpus — add the producer that raises it so its message is checked, or declare it producer-less here.`
       )
+
     expect(unbacked).toEqual([])
   })
 

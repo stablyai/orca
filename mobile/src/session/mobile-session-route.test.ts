@@ -12,18 +12,22 @@ const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.m
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
   let state = initialState
+
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
       stateListeners.add(listener)
+
       return () => stateListeners.delete(listener)
     }),
     dispatch: vi.fn(),
     getState: () => state
   }
+
   return {
     navigation,
     setState(nextState: HostStackNavigationState) {
       state = nextState
+
       for (const listener of stateListeners) {
         listener()
       }
@@ -75,6 +79,7 @@ describe('mobile session route', () => {
   it('mounts the host before replacing it with the session route', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
+
     const target = mobileSessionRouteTarget({
       hostId: 'host/one',
       worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',

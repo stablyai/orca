@@ -44,8 +44,10 @@ export function createSshWorktreeMetaIndex(
   entries: [string, WorktreeMeta][]
 ): SshWorktreeMetaIndex {
   const index: SshWorktreeMetaIndex = new Map()
+
   for (const [worktreeId, meta] of entries) {
     let parsed: { repoId: string; worktreePath: string }
+
     try {
       parsed = parseWorktreeId(worktreeId)
     } catch (err) {
@@ -62,6 +64,7 @@ export function createSshWorktreeMetaIndex(
     candidates.push({ id: worktreeId, path: parsed.worktreePath, meta })
     index.set(parsed.repoId, candidates)
   }
+
   return index
 }
 
@@ -103,6 +106,7 @@ export function listDisconnectedSshWorktrees(
   const byWorktreeId = new Map<string, Worktree>()
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
+
   for (const candidate of metaIndex.get(repo.id) ?? []) {
     if (
       (candidate.meta.hostId && candidate.meta.hostId !== expectedHostId) ||
@@ -110,14 +114,18 @@ export function listDisconnectedSshWorktrees(
     ) {
       continue
     }
+
     const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, candidate.meta)
+
     const meta =
       Object.keys(ownershipUpdates).length > 0
         ? { ...candidate.meta, ...ownershipUpdates }
         : candidate.meta
+
     if (Object.keys(ownershipUpdates).length > 0) {
       writeWorktreeMetaForHost(store, candidate.id, expectedHostId, ownershipUpdates)
     }
+
     // Why: synthesized rows carry no branch, so the title would fall through to the DESKTOP's basename()
     // applied to a REMOTE path — a Windows remote then renders its whole C:\... path as the name. Rows must
     // stay per-directory (repo.displayName would title every row identically), so use the separator-agnostic
@@ -128,9 +136,11 @@ export function listDisconnectedSshWorktrees(
       meta,
       getWorktreePathBasenameFromId(candidate.id) ?? undefined
     )
+
     byWorktreeId.delete(worktree.id)
     byWorktreeId.set(worktree.id, worktree)
   }
+
   return [...byWorktreeId.values()]
 }
 
@@ -143,28 +153,35 @@ export function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
+
   // Why: a prunable registration has no working directory (issue #8389); only this listing omits it — cleanup flows list separately.
   const liveWorktrees = dedupeWorktreesByPath(
     preserveFolderUpgradeWorktreePath(repo, gitWorktrees).filter(
       (gitWorktree) => !gitWorktree.prunable
     )
   )
+
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...liveWorktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )
+
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     // Why: the locator-keyed row is only a stand-in for a missing host snapshot, so don't read it when we have one.
     const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
+
     const meta =
       readWorktreeMetaForRepo(store, worktreeId, repo) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+
     const detected = toDetectedWorktree({
       repo,
       worktree,
@@ -174,6 +191,7 @@ export function buildDetectedGitWorktrees(
       isLegacyRepoForVisibility,
       worktreeVisibilitySourceMatcher
     })
+
     if (!detected.visible) {
       return detected
     }
@@ -185,10 +203,12 @@ export function buildDetectedGitWorktrees(
       allMeta,
       repoOwnerCount
     )
+
     // Why: backfill hands back the same object when it wrote nothing, and both builders are pure over it.
     if (backfilledMeta === meta) {
       return detected
     }
+
     return toDetectedWorktree({
       repo,
       worktree: mergeWorktree(repo.id, gitWorktree, backfilledMeta, repo.displayName),
@@ -199,6 +219,7 @@ export function buildDetectedGitWorktrees(
       worktreeVisibilitySourceMatcher
     })
   })
+
   return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
 }
 
@@ -209,5 +230,6 @@ export function stampAndMergeVisibleDetectedWorktree(
   allMetaOverride?: Record<string, WorktreeMeta>
 ) {
   const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id, allMetaOverride)
+
   return mergeWorktree(repo.id, detected, meta, repo.displayName)
 }

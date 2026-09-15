@@ -50,30 +50,36 @@ export function useWarpThemeImport(
   async function previewSource(source: WarpThemeImportSource): Promise<WarpThemeImportPreview> {
     setLoading(true)
     setApplyError(null)
+
     try {
       const result = await window.api.settings.previewWarpThemeImport(source)
+
       // Why: a dismissed native picker keeps whatever preview was already
       // showing instead of wiping it with an empty result.
       if (mountedRef.current && !result.canceled) {
         setPreview(result)
         setSelectedThemeIds(new Set(result.themes.map((theme) => theme.id)))
       }
+
       return result
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
           : translate('auto.components.settings.useWarpThemeImport.unknown_error', 'Unknown error')
+
       const failure: WarpThemeImportPreview = {
         found: false,
         themes: [],
         skippedFiles: [],
         error: message
       }
+
       if (mountedRef.current) {
         setPreview(failure)
         setSelectedThemeIds(new Set())
       }
+
       return failure
     } finally {
       if (mountedRef.current) {
@@ -97,6 +103,7 @@ export function useWarpThemeImport(
     // Why: go straight to the native picker and only surface the modal once
     // there is a selection to preview — canceling leaves settings untouched.
     const result = await previewSource({ kind: 'chooseFile' })
+
     if (mountedRef.current && !result.canceled) {
       setOpen(true)
     }
@@ -105,11 +112,13 @@ export function useWarpThemeImport(
   function handleToggleTheme(id: string): void {
     setSelectedThemeIds((current) => {
       const next = new Set(current)
+
       if (next.has(id)) {
         next.delete(id)
       } else {
         next.add(id)
       }
+
       return next
     })
   }
@@ -123,13 +132,17 @@ export function useWarpThemeImport(
     if (!preview?.found || !settings || selectedThemeIds.size === 0) {
       return
     }
+
     const selectedThemes = preview.themes.filter((theme) => selectedThemeIds.has(theme.id))
     const byId = new Map<string, TerminalCustomTheme>()
+
     for (const theme of normalizeTerminalCustomThemes(settings.terminalCustomThemes)) {
       byId.set(theme.id, theme)
     }
+
     const newThemeCount = selectedThemes.filter((theme) => !byId.has(theme.id)).length
     const overflowCount = byId.size + newThemeCount - MAX_TERMINAL_CUSTOM_THEMES
+
     if (overflowCount > 0) {
       setApplyError(
         overflowCount === 1
@@ -144,14 +157,17 @@ export function useWarpThemeImport(
               { value0: MAX_TERMINAL_CUSTOM_THEMES, value1: overflowCount }
             )
       )
+
       return
     }
+
     for (const theme of selectedThemes) {
       const { selectionValue: _selectionValue, ...themeRecord } = theme
       byId.set(themeRecord.id, themeRecord)
     }
 
     setApplyError(null)
+
     try {
       await updateSettings({
         terminalCustomThemes: normalizeTerminalCustomThemes([...byId.values()])
@@ -184,6 +200,7 @@ export function useWarpThemeImport(
               'auto.components.settings.useWarpThemeImport.import_failed',
               'Failed to import themes'
             )
+
       if (mountedRef.current) {
         setApplyError(message)
       }
@@ -192,6 +209,7 @@ export function useWarpThemeImport(
 
   function handleOpenChange(newOpen: boolean): void {
     setOpen(newOpen)
+
     if (!newOpen) {
       setPreview(null)
       setLoading(false)

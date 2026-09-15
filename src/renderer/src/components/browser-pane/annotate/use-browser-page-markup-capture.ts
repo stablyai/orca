@@ -12,13 +12,17 @@ export function useBrowserPageMarkupCapture(
   return useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const webview = webviewRef.current
+
       if (!webview) {
         return null
       }
+
       const rect = webview.getBoundingClientRect()
+
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
+
       return {
         source: { kind: 'webview', webview },
         cssWidth: rect.width,

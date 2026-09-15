@@ -36,10 +36,13 @@ describe('orchestration Run list compatibility', () => {
          FROM run_numbers`
       )
       .run(runCount)
+
     const method = ORCHESTRATION_RUN_METHODS.find(
       (candidate) => candidate.name === 'orchestration.runList'
     )!
+
     const params = method.params!.parse({})
+
     const result = (await method.handler(params, {
       runtime: { getOrchestrationDb: () => db }
     } as never)) as { runs: unknown[] }

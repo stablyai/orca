@@ -24,8 +24,10 @@ export class RuntimeWatcherPoolLifecycle {
     if (isolated) {
       this.isolatedRoots.delete(root)
       this.failedQuarantineRoots.add(root)
+
       return
     }
+
     this.isolatedRoots.add(root)
   }
 

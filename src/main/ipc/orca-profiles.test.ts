@@ -98,10 +98,12 @@ describe('registerOrcaProfileHandlers', () => {
       activeProfileId: 'local-default',
       profiles: [{ id: 'local-default', name: 'Personal' }]
     }
+
     const createState = {
       ...listState,
       profile: { id: 'local-work', name: 'Work' }
     }
+
     getOrcaProfileListStateMock.mockReturnValue(listState)
     createLocalOrcaProfileMock.mockReturnValue(createState)
 
@@ -120,6 +122,7 @@ describe('registerOrcaProfileHandlers', () => {
   it('reports multiProfileUi when the env flag is set', async () => {
     const previous = process.env.ORCA_MULTI_PROFILE_UI
     process.env.ORCA_MULTI_PROFILE_UI = '1'
+
     try {
       getOrcaProfileListStateMock.mockReturnValue({
         activeProfileId: 'local-default',
@@ -182,6 +185,7 @@ describe('registerOrcaProfileHandlers', () => {
     const flush = vi.fn(() => {
       throw new Error('flush_failed')
     })
+
     getOrcaProfileListStateMock.mockReturnValue({
       activeProfileId: 'local-default',
       profiles: []
@@ -208,6 +212,7 @@ describe('registerOrcaProfileHandlers', () => {
     const switchProfile = Promise.resolve(
       handlers.get('orcaProfiles:switch')?.(null, { profileId: 'local-work' })
     )
+
     const rejection = expect(switchProfile).rejects.toThrow('orca_profile_persistence_timeout')
     await vi.advanceTimersByTimeAsync(20_000)
     await rejection
@@ -242,6 +247,7 @@ describe('registerOrcaProfileHandlers', () => {
 
   it('transfers projects between inactive profiles after flushing active state', async () => {
     const flush = vi.fn()
+
     const result = {
       status: 'transferred',
       mode: 'copy',
@@ -251,6 +257,7 @@ describe('registerOrcaProfileHandlers', () => {
       targetRepoId: 'repo-2',
       targetProjectId: 'repo:repo-2'
     }
+
     getOrcaProfileListStateMock.mockReturnValue({
       activeProfileId: 'personal',
       profiles: []
@@ -284,6 +291,7 @@ describe('registerOrcaProfileHandlers', () => {
   it('moves a project out of the active profile and relaunches into the target profile', async () => {
     const flush = vi.fn()
     const onBeforeRelaunch = vi.fn()
+
     const result = {
       status: 'transferred',
       mode: 'move',
@@ -293,6 +301,7 @@ describe('registerOrcaProfileHandlers', () => {
       targetRepoId: 'repo-1',
       targetProjectId: 'repo:repo-1'
     }
+
     getOrcaProfileListStateMock.mockReturnValue({
       activeProfileId: 'personal',
       profiles: []

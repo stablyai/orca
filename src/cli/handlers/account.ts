@@ -57,14 +57,17 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
   if (block.accounts.length === 0) {
     return `No managed ${label} accounts.`
   }
+
   const activeAccountIds = new Set([
     block.activeAccountId,
     block.activeAccountIdsByRuntime?.host,
     ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
   ])
+
   const lines = block.accounts.map(
     (account) => `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
   )
+
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
@@ -73,12 +76,15 @@ function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     process.platform === 'win32' && env.Path !== undefined && env.PATH === undefined
       ? 'Path'
       : 'PATH'
+
   const currentEntries = (env[pathKey] ?? '').split(delimiter).filter(Boolean)
   const existing = new Set(currentEntries)
   const missing = getVersionManagerBinPaths().filter((entry) => !existing.has(entry))
+
   if (missing.length > 0) {
     env[pathKey] = [...missing, ...currentEntries].join(delimiter)
   }
+
   return env
 }
 
@@ -98,6 +104,7 @@ async function runAgentLoginInTerminal(
     const resolvedCommand = resolveCliCommand(command)
     let spawnCmd: string
     let spawnArgs: string[]
+
     try {
       ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args))
     } catch (error) {
@@ -113,8 +120,10 @@ async function runAgentLoginInTerminal(
             )
           : error
       )
+
       return
     }
+
     // Why paired after the seed: addAgentNodePaths prepends the *newest* version
     // manager bin, which is not necessarily where this CLI lives. Pairing last puts
     // the CLI's own node in front of that seed (stablyai/orca#10932).
@@ -122,8 +131,10 @@ async function runAgentLoginInTerminal(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
+
     const consoleStdio = stdioForWindowsInteractiveChild(json)
     let child: ReturnType<typeof spawn>
+
     try {
       child = spawn(spawnCmd, spawnArgs, {
         // Why: JSON mode reserves stdout for the response envelope while keeping
@@ -134,6 +145,7 @@ async function runAgentLoginInTerminal(
     } finally {
       consoleStdio.dispose()
     }
+
     session.child = child
     child.once('error', (error) =>
       rejectPromise(
@@ -147,10 +159,13 @@ async function runAgentLoginInTerminal(
     )
     child.once('exit', (code) => {
       session.child = null
+
       if (code === 0) {
         resolvePromise()
+
         return
       }
+
       rejectPromise(
         new RuntimeClientError(
           'internal',
@@ -167,12 +182,14 @@ async function cleanupClaudeLoginArtifacts(
   restoreLegacyCredentials: boolean
 ): Promise<void> {
   const errors: unknown[] = []
+
   if (process.platform === 'darwin') {
     try {
       await deleteActiveClaudeKeychainCredentialsStrict(configDir)
     } catch (error) {
       errors.push(error)
     }
+
     if (restoreLegacyCredentials) {
       try {
         await (legacyCredentials
@@ -183,11 +200,13 @@ async function cleanupClaudeLoginArtifacts(
       }
     }
   }
+
   try {
     rmSync(configDir, { recursive: true, force: true })
   } catch (error) {
     errors.push(error)
   }
+
   if (errors.length > 0) {
     throw new AggregateError(errors, 'Failed to clean up Claude login artifacts.')
   }
@@ -196,13 +215,16 @@ async function cleanupClaudeLoginArtifacts(
 /** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
   const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
+
   const session: InteractiveLoginSession = {
     child: null,
     registering: false,
     terminationPromise: null
   }
+
   let legacyCredentials: string | null = null
   let restoreLegacyCredentials = false
+
   const result = await withInteractiveLoginCleanup(
     session,
     async () => {
@@ -213,6 +235,7 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
         legacyCredentials = await readActiveClaudeKeychainCredentialsStrict()
         restoreLegacyCredentials = true
       }
+
       await runAgentLoginInTerminal(
         'claude',
         ['auth', 'login', '--claudeai'],
@@ -223,6 +246,7 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
         session
       )
       session.registering = true
+
       return client.call<ClaudeRateLimitAccountsState>('accounts.addClaudeFromConfigDir', {
         configDir,
         ...(process.platform === 'darwin'
@@ -235,17 +259,20 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
       })
     }
   )
+
   printResult(result, json, (state) => formatAccountsBlock('Claude', state))
 }
 
 /** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
+
   const session: InteractiveLoginSession = {
     child: null,
     registering: false,
     terminationPromise: null
   }
+
   const result = await withInteractiveLoginCleanup(
     session,
     async () => {
@@ -262,11 +289,13 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
         session
       )
       session.registering = true
+
       return client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
         sourceHome: codexHome
       })
     }
   )
+
   printResult(result, json, (state) => formatAccountsBlock('Codex', state))
 }
 
@@ -286,6 +315,7 @@ function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string)
 
 async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
   const status = await client.call<RuntimeStatus>('status.get')
+
   if (!status.result.capabilities?.includes(ACCOUNT_IMPORT_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
@@ -298,6 +328,7 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
+
     // Why: a valueless `--agent` parses as boolean true; defaulting it to claude
     // would silently run a full OAuth login for the provider the user did not ask for.
     if (agentFlag !== undefined && typeof agentFlag !== 'string') {
@@ -306,13 +337,16 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
         'Missing a value for --agent. Use `--agent claude` or `--agent codex`.'
       )
     }
+
     const agent = agentFlag ?? 'claude'
+
     if (agent !== 'claude' && agent !== 'codex') {
       throw new RuntimeClientError(
         'invalid_argument',
         `Unsupported --agent "${agent}". Use "claude" or "codex".`
       )
     }
+
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     // Why: fail on runtime version skew before burning a full OAuth round trip.
     await assertAccountImportSupported(ctx)
@@ -322,11 +356,13 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account list': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
     const { client, json } = ctx
+
     // Why: this command renders no usage numbers, so skip the forced provider
     // refresh — it is one serial network round-trip per managed account.
     const result = await client.call<AccountsListSnapshot>('accounts.list', {
       refreshUsage: false
     })
+
     printResult(
       result,
       json,

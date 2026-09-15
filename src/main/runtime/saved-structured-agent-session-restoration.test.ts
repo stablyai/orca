@@ -5,6 +5,7 @@ import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-
 
 function tab(input: Partial<Tab> & Pick<Tab, 'id'>): Tab {
   const { id, ...overrides } = input
+
   return {
     id,
     entityId: input.entityId ?? id,

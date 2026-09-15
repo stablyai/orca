@@ -7,6 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback<T>(callback: T) {
@@ -20,16 +21,19 @@ vi.mock('react', async () => {
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
+
       if (!(stateIndex in reactHookRuntime.states)) {
         reactHookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         reactHookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(reactHookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [reactHookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -94,6 +98,7 @@ async function renderTitleRename(props: {
 }): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./WorktreeTitleInlineRename')
+
   return module.WorktreeTitleInlineRename({
     displayName: 'Feature workspace',
     onRename: vi.fn(),
@@ -105,13 +110,17 @@ function expandNode(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map(expandNode)
   }
+
   const el = node as ReactElementLike
+
   if (typeof el.type === 'function') {
     return expandNode(el.type(el.props))
   }
+
   return {
     ...el,
     props: {
@@ -123,23 +132,31 @@ function expandNode(node: unknown): unknown {
 
 function findElementsByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     const el = current as ReactElementLike
+
     if (el.type === typeName) {
       results.push(el)
     }
+
     visit(el.props?.children)
   }
+
   visit(node)
+
   return results
 }
 
@@ -160,7 +177,9 @@ function pressInputKey(
     preventDefault: vi.fn(),
     stopPropagation: vi.fn()
   }
+
   ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+
   return event
 }
 
@@ -174,9 +193,11 @@ describe('WorktreeTitleInlineRename beginEditing', () => {
     const onBeginEditingConsumed = vi.fn()
 
     await renderTitleRename({ beginEditing: true, onBeginEditingConsumed })
+
     const rerender = expandNode(
       await renderTitleRename({ beginEditing: false, onBeginEditingConsumed })
     )
+
     const inputs = findElementsByType(rerender, 'input')
 
     expect(onBeginEditingConsumed).toHaveBeenCalledTimes(1)
@@ -189,6 +210,7 @@ describe('WorktreeTitleInlineRename beginEditing', () => {
     const onBeginEditingConsumed = vi.fn()
 
     await renderTitleRename({ beginEditing: true, disabled: true, onBeginEditingConsumed })
+
     const rerender = expandNode(
       await renderTitleRename({ beginEditing: false, disabled: true, onBeginEditingConsumed })
     )
@@ -202,10 +224,13 @@ describe('WorktreeTitleInlineRename beginEditing', () => {
     const onRename = vi.fn()
 
     await renderTitleRename({ beginEditing: true, onBeginEditingConsumed, onRename })
+
     let rerender = expandNode(
       await renderTitleRename({ beginEditing: false, onBeginEditingConsumed, onRename })
     )
+
     let input = findElementsByType(rerender, 'input')[0]
+
     ;(input.props.onChange as (event: { target: { value: string } }) => void)({
       target: { value: '日本語 workspace' }
     })

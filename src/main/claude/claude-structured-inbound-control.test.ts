@@ -27,17 +27,20 @@ function permissionOptions(
 function callbacksFor() {
   const prompts = new ClaudePromptRegistry()
   const emit = vi.fn()
+
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId: 'session-1',
     prompts,
     emit
   })
+
   return { prompts, emit, canUseTool, onUserDialog }
 }
 
 describe('Claude permission callbacks', () => {
   it('registers a decodable can_use_tool as a durable prompt and settles it from the registry', async () => {
     const control = callbacksFor()
+
     const answered = control.canUseTool(
       'Bash',
       { command: 'git status' },
@@ -60,6 +63,7 @@ describe('Claude permission callbacks', () => {
 
   it('denies a malformed permission request without registering a prompt', async () => {
     const control = callbacksFor()
+
     const answered = control.canUseTool(
       '',
       {},
@@ -78,11 +82,13 @@ describe('Claude permission callbacks', () => {
   it('settles a pending prompt with null and forgets it when the abort signal fires', async () => {
     const control = callbacksFor()
     const controller = new AbortController()
+
     const answered = control.canUseTool(
       'Bash',
       { command: 'ls' },
       permissionOptions('perm-3', 'tool-3', controller.signal)
     )
+
     expect(control.prompts.find('perm-3')).not.toBeNull()
 
     controller.abort()
@@ -116,11 +122,13 @@ describe('Claude permission callbacks', () => {
 
   it('settles every in-flight prompt with null when the registry is cleared', async () => {
     const control = callbacksFor()
+
     const first = control.canUseTool(
       'Bash',
       { command: 'a' },
       permissionOptions('perm-5', 'tool-5', new AbortController().signal)
     )
+
     const second = control.canUseTool(
       'Bash',
       { command: 'b' },
@@ -152,11 +160,13 @@ describe('Claude permission callbacks', () => {
     expect(new Set(Object.keys(CLAUDE_BLOCKING_CONTROL_CALLBACKS))).toEqual(
       new Set([CLAUDE_CAN_USE_TOOL_SUBTYPE, CLAUDE_REQUEST_USER_DIALOG_SUBTYPE])
     )
+
     const callbacks = buildClaudePermissionCallbacks({
       sessionId: 'session-1',
       prompts: new ClaudePromptRegistry(),
       emit: vi.fn()
     }) as unknown as Record<string, unknown>
+
     for (const callbackName of Object.values(CLAUDE_BLOCKING_CONTROL_CALLBACKS)) {
       expect(typeof callbacks[callbackName], `${callbackName} must be wired`).toBe('function')
     }

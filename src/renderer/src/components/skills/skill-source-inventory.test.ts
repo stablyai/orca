@@ -45,12 +45,14 @@ describe('summarizeSkillSources', () => {
     const shared = skill({ rootPaths: ['/other', '/other', '/unknown'] })
     const home = source()
     const other = source({ path: '/other' })
+
     const entries = summarizeSkillSources(
       result({
         sources: [home, other, other, source({ path: '/OTHER' })],
         skills: [shared, shared, skill({ rootPaths: [home.path, home.path] })]
       })
     )
+
     expect(entries.map((entry) => entry.skillCount)).toEqual([3, 2, 2, 0])
     expect(entries[0].source).toBe(home)
     expect(entries[1].source).toBe(other)
@@ -59,13 +61,16 @@ describe('summarizeSkillSources', () => {
 
   it('does not scan every skill again for each source', () => {
     let rootReads = 0
+
     const skills = Array.from({ length: 1000 }, () => ({
       ...skill(),
       get rootPath() {
         rootReads++
+
         return '/home/dev/.agents/skills'
       }
     }))
+
     const sources = Array.from({ length: 87 }, (_, index) => source({ id: `${index}` }))
     const entries = summarizeSkillSources(result({ skills, sources }))
     expect(entries.every((entry) => entry.skillCount === 1000)).toBe(true)
@@ -79,6 +84,7 @@ describe('summarizeSkillSources', () => {
         throw new Error('No source needs a count')
       }
     }
+
     expect(summarizeSkillSources(null)).toEqual([])
     expect(summarizeSkillSources(result({ skills: [unused] }))).toEqual([])
   })
@@ -98,12 +104,14 @@ describe('summarizeSkillSources', () => {
 
   it('counts a symlinked skill under every root that reached it', () => {
     const shared = source({ id: 'repo', path: '/repo/.agents/skills', sourceKind: 'repo' })
+
     const entries = summarizeSkillSources(
       result({
         sources: [source(), shared],
         skills: [skill({ rootPaths: ['/home/dev/.agents/skills', '/repo/.agents/skills'] })]
       })
     )
+
     expect(entries.map((entry) => entry.skillCount)).toEqual([1, 1])
   })
 
@@ -117,6 +125,7 @@ describe('summarizeSkillSources', () => {
         ]
       })
     )
+
     expect(entries.map((entry) => entry.status)).toEqual(['missing', 'remote-repo', 'unavailable'])
     expect(scannedSkillSourceCount(entries)).toBe(0)
   })
@@ -131,6 +140,7 @@ describe('summarizeSkillSources', () => {
         skills: [skill()]
       })
     )
+
     expect(entries.map((entry) => entry.status)).toEqual(['unavailable'])
     expect(scannedSkillSourceCount(entries)).toBe(0)
   })
@@ -139,6 +149,7 @@ describe('summarizeSkillSources', () => {
     const entries = summarizeSkillSources(
       result({ sources: [source(), source({ id: 'gone', exists: false })] })
     )
+
     expect(scannedSkillSourceCount(entries)).toBe(1)
   })
 })

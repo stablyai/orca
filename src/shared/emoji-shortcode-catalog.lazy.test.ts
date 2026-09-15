@@ -6,6 +6,7 @@ import emojiShortcodes from 'emojibase-data/en/shortcodes/emojibase.json'
 async function importConfiguredCatalog() {
   const catalog = await import('./emoji-shortcode-catalog.js')
   catalog.setEmojiShortcodeDatasetLoader(() => emojiShortcodes)
+
   return catalog
 }
 
@@ -33,6 +34,7 @@ describe('emoji shortcode catalog laziness', () => {
   it('leaves the main-process worktree namer importing only the deferred entry points', () => {
     // A cross-project import would drag src/main into the shared tsconfig, so assert on source.
     const worktreeLogic = readFileSync(join(__dirname, '../main/ipc/worktree-logic.ts'), 'utf8')
+
     const catalogImport = worktreeLogic.match(
       /import \{([^}]*)\} from '[^']*emoji-shortcode-catalog'/
     )

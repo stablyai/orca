@@ -48,25 +48,33 @@ export function useTabBarItemProjection({
     activeTabType,
     expandedPaneByTabId
   } = props
+
   const terminalMap = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
+
   const editorMap = useMemo(
     () => new Map((editorFiles ?? []).map((file) => [file.tabId ?? file.id, file])),
     [editorFiles]
   )
+
   const browserMap = useMemo(
     () => new Map((browserTabs ?? []).map((tab) => [tab.id, tab])),
     [browserTabs]
   )
+
   const agentSessionMap = useMemo(
     () => new Map((agentSessionTabs ?? []).map((tab) => [tab.id, tab])),
     [agentSessionTabs]
   )
+
   const terminalIds = useMemo(() => tabs.map((tab) => tab.id), [tabs])
+
   const editorFileIds = useMemo(
     () => editorFiles?.map((file) => file.tabId ?? file.id) ?? [],
     [editorFiles]
   )
+
   const browserTabIds = useMemo(() => browserTabs?.map((tab) => tab.id) ?? [], [browserTabs])
+
   const simulatorTabIds = useMemo(
     () =>
       unifiedTabs
@@ -74,10 +82,12 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
   )
+
   const orderedItems = useMemo(
     () =>
       buildOrderedTabItems({
@@ -107,13 +117,17 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
+
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
+
   const dropIndicatorByVisibleId = useMemo(
     () => buildTabDropIndicators(orderedItems, activeIndicator),
     [activeIndicator, orderedItems]
   )
+
   const activeVisibleTabId = useMemo(
     () =>
       findActiveVisibleTabId(orderedItems, {
@@ -132,6 +146,7 @@ export function useTabBarItemProjection({
       orderedItems
     ]
   )
+
   const tabStripLayoutKey = useMemo(
     () =>
       buildTabStripLayoutKey(

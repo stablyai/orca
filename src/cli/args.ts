@@ -9,6 +9,7 @@ import {
 } from '../shared/cli-argument-boundary'
 
 export { specPaths }
+
 export type { CommandSpec }
 
 export type ParsedArgs = {
@@ -18,18 +19,24 @@ export type ParsedArgs = {
 }
 
 export const GLOBAL_FLAGS = CLI_GLOBAL_FLAGS
+
 const GLOBAL_VALUE_FLAGS = new Set(CLI_GLOBAL_VALUE_FLAGS)
+
 export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
+
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
   const existing = flags.get(name)
+
   if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
     flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
+
     return
   }
+
   flags.set(name, value)
 }
 
@@ -40,6 +47,7 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
+
     if (!token.startsWith('--')) {
       commandPath.push(token)
       continue
@@ -50,27 +58,33 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     // itself starts with `--` (e.g. `--text=--help`); the space-separated form
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
+
     if (equalsIndex !== -1) {
       setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
     const flag = assignment
+
     if (BOOLEAN_FLAGS.has(flag)) {
       flags.set(flag, true)
       continue
     }
+
     // Why: a pre-command flag must not consume a registry-resolvable command path.
     if (commandPath.length === 0 && i + 1 === commandIndex) {
       flags.set(flag, true)
       continue
     }
+
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
+
     if (!hasNext || next.startsWith('--')) {
       flags.set(flag, true)
       continue
     }
+
     setFlagValue(flags, flag, next)
     i += 1
   }
@@ -82,9 +96,11 @@ export function resolveHelpPath(parsed: ParsedArgs): string[] | null {
   if (parsed.commandPath[0] === 'help') {
     return parsed.commandPath.slice(1)
   }
+
   if (parsed.flags.has('help')) {
     return parsed.commandPath
   }
+
   return null
 }
 
@@ -96,9 +112,11 @@ export function matches(actual: string[], expected: string[]): boolean {
 
 export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   const joined = commandPath.join(' ')
+
   if (['open', 'status'].includes(commandPath[0])) {
     return false
   }
+
   if (
     [
       'account',
@@ -121,6 +139,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   ) {
     return false
   }
+
   return ![
     'tab list',
     'tab create',
@@ -136,6 +155,7 @@ export function effectiveAllowedFlags(spec: CommandSpec): string[] {
   if (spec.argumentMode === 'passthrough') {
     return []
   }
+
   return [
     ...new Set([
       ...GLOBAL_FLAGS,
@@ -187,21 +207,26 @@ export function isCommandGroup(commandPath: string[]): boolean {
 export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
+
     // Why: aliased paths still need canonicalization when there are no positionals.
     if (positionalArgs.length === 0 && !spec.aliases) {
       continue
     }
+
     // Why: canonicalize aliases before validation and dispatch so both use one key.
     for (const base of specPaths(spec)) {
       // Why: `< 0` (not `<= 0`) so an exact base match with zero positionals
       // still canonicalizes an aliased path; upper bound guards over-consumption.
       const positionalCount = parsed.commandPath.length - base.length
+
       if (positionalCount < 0 || positionalCount > positionalArgs.length) {
         continue
       }
+
       if (!matches(parsed.commandPath.slice(0, base.length), base)) {
         continue
       }
+
       const flags = new Map(parsed.flags)
       const values = parsed.commandPath.slice(base.length)
       // Why: validation runs inside main's error-reporting path, so normalization
@@ -210,13 +235,16 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
       const positionalFlagConflicts = providedPositionals.filter((name) => flags.has(name))
       values.forEach((value, index) => {
         const name = positionalArgs[index]
+
         if (!flags.has(name)) {
           flags.set(name, value)
         }
       })
+
       return { commandPath: spec.path, flags, positionalFlagConflicts }
     }
   }
+
   return parsed
 }
 
@@ -229,6 +257,7 @@ export function findCommandSpec(
 
 export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs): void {
   const spec = findCommandSpec(specs, parsed.commandPath)
+
   if (!spec) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -247,11 +276,14 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   }
 
   const pageAllowed = supportsBrowserPageFlag(spec.path)
+
   for (const [flag, value] of parsed.flags) {
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
+
     if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {
       throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)
     }
+
     if (!isGlobalFlag && !spec.allowedFlags.includes(flag) && !(flag === 'page' && pageAllowed)) {
       throw new RuntimeClientError(
         'invalid_argument',

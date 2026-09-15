@@ -65,6 +65,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
   const notifyHostState = (hostId: string, state: ConnectionState) =>
     notifyHostStateListeners(stateListenersRef.current, hostId, state)
+
   const notifyAllHosts = () => notifyAllHostListeners(allHostsListenersRef.current)
 
   const closeEntry = useCallback((hostId: string, options: CloseEntryOptions) => {
@@ -72,18 +73,22 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     const acquisitionCount = acquisitionsRef.current.count(hostId)
     pendingOpensRef.current.cancel(hostId)
     retrySchedulerRef.current?.cancel(hostId)
+
     if (options.preserveAcquisitions && acquisitionCount > 0) {
       pendingAcquisitionsRef.current.set(hostId, acquisitionCount)
     } else {
       acquisitionsRef.current.clear(hostId)
       pendingAcquisitionsRef.current.delete(hostId)
     }
+
     if (!options.preserveAcquisitions) {
       manualDemandRef.current.delete(hostId)
     }
+
     if (options.forgetPrimedHost) {
       primedHostsRef.current.delete(hostId)
     }
+
     entry?.unsubState()
     entry?.unsubConnectionPath()
     storeRef.current.delete(hostId)
@@ -95,9 +100,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const openEntry = useCallback(
     (hostId: string, allowUnowned = false): Promise<StoreEntry | null> => {
       const retryScheduler = retrySchedulerRef.current
+
       if (!retryScheduler) {
         throw new Error('host retry scheduler not initialized')
       }
+
       return openHostClientEntry(
         {
           store: storeRef.current,
@@ -114,6 +121,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
         if (entry) {
           manualDemandRef.current.delete(hostId)
         }
+
         return entry
       })
     },
@@ -138,15 +146,20 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       if (host) {
         primedHostsRef.current.set(hostId, host)
       }
+
       const acquisitionCount = acquisitionsRef.current.acquire(hostId, acquisition)
       const existing = storeRef.current.get(hostId)
+
       if (existing) {
         existing.refCount = acquisitionCount
+
         return existing.client
       }
+
       pendingAcquisitionsRef.current.set(hostId, acquisitionCount)
       // Trigger async open; returns null this tick — consumers re-call acquire() from an effect that re-runs on state changes.
       void openEntry(hostId)
+
       return null
     },
     [openEntry]
@@ -160,6 +173,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const refreshHostClient = useCallback(
     (hostId: string) => {
       closeEntry(hostId, { forgetPrimedHost: true, preserveAcquisitions: true })
+
       if ((pendingAcquisitionsRef.current.get(hostId) ?? 0) > 0) {
         void openEntry(hostId)
       }
@@ -184,18 +198,24 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: no idle-close on refcount→0 — transient nav gaps flashed false 'disconnected', so keep sockets alive while foregrounded.
   const release = useCallback((hostId: string, acquisition: HostClientAcquisition) => {
     const acquisitionCount = acquisitionsRef.current.release(hostId, acquisition)
+
     if (acquisitionCount === null) {
       return
     }
+
     const entry = storeRef.current.get(hostId)
+
     if (entry) {
       entry.refCount = acquisitionCount
+
       return
     }
+
     if (acquisitionCount > 0) {
       pendingAcquisitionsRef.current.set(hostId, acquisitionCount)
     } else {
       pendingAcquisitionsRef.current.delete(hostId)
+
       if (!manualDemandRef.current.has(hostId)) {
         pendingOpensRef.current.cancel(hostId)
         retrySchedulerRef.current?.cancel(hostId)
@@ -206,20 +226,27 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const releaseAndCloseIfUnused = useCallback(
     (hostId: string, acquisition: HostClientAcquisition) => {
       const acquisitionCount = acquisitionsRef.current.release(hostId, acquisition)
+
       if (acquisitionCount === null) {
         if (acquisitionsRef.current.count(hostId) === 0) {
           closeEntry(hostId, { forgetPrimedHost: false, preserveAcquisitions: false })
         }
+
         return
       }
+
       const entry = storeRef.current.get(hostId)
+
       if (entry) {
         entry.refCount = acquisitionCount
+
         if (entry.refCount === 0) {
           closeEntry(hostId, { forgetPrimedHost: false, preserveAcquisitions: false })
         }
+
         return
       }
+
       if (acquisitionCount > 0) {
         pendingAcquisitionsRef.current.set(hostId, acquisitionCount)
       } else {
@@ -234,9 +261,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       const entry = storeRef.current.get(hostId)
       const acquisitionCount = acquisitionsRef.current.count(hostId)
       const hasPendingOpen = pendingOpensRef.current.getActivePromise(hostId) !== null
+
       if (!entry && acquisitionCount === 0 && !hasPendingOpen) {
         return
       }
+
       if (acquisitionCount === 0) {
         closeEntry(hostId, { forgetPrimedHost: false, preserveAcquisitions: false })
       }
@@ -248,29 +277,36 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
       const logical = entry?.client as Partial<StableLogicalRpcClient> | undefined
+
       if (entry && shouldPreserveActiveRelay(entry, logical)) {
         // Keep a Relay-active host on its existing recovery state; rebuilding the
         // facade starts the unreachable direct endpoint before Relay can race it.
         entry.client.notifyForeground('app-resume')
+
         return
       }
+
       // Why: ownership survives explicit close/re-pair while observers never become synthetic owners.
       const savedRefCount = acquisitionsRef.current.count(hostId)
       manualDemandRef.current.add(hostId)
+
       if (entry) {
         entry.unsubState()
         entry.unsubConnectionPath()
         entry.client.close()
         storeRef.current.delete(hostId)
       }
+
       pendingOpensRef.current.cancel(hostId)
       retrySchedulerRef.current?.cancel(hostId)
+
       if (savedRefCount > 0) {
         pendingAcquisitionsRef.current.set(
           hostId,
           Math.max(savedRefCount, pendingAcquisitionsRef.current.get(hostId) ?? 0)
         )
       }
+
       // Why: Retry must read amber for the whole reopen, not grey-then-amber.
       notifyHostState(hostId, 'connecting')
       await openEntry(hostId, true)
@@ -300,12 +336,14 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const store = storeRef.current
+
     return () => {
       pendingOpensRef.current.cancelAll()
       retrySchedulerRef.current?.cancelAll()
       acquisitionsRef.current.clearAll()
       manualDemandRef.current.clear()
       pendingAcquisitionsRef.current.clear()
+
       for (const [hostId] of store) {
         closeEntry(hostId, { forgetPrimedHost: true, preserveAcquisitions: false })
       }
@@ -318,8 +356,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       for (const hostId of pendingAcquisitionsRef.current.keys()) {
         retrySchedulerRef.current?.expedite(hostId)
       }
+
       for (const [hostId, entry] of storeRef.current) {
         recordConnectionRevival(hostId, reason)
+
         try {
           entry.client.notifyForeground(reason)
         } catch {
@@ -367,8 +407,10 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
 export function useRpcClientContext(): RpcClientContextValue {
   const ctx = useContext(Ctx)
+
   if (!ctx) {
     throw new Error('useHostClient must be used inside <RpcClientProvider>')
   }
+
   return ctx
 }

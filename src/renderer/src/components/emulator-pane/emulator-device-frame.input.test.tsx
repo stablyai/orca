@@ -48,12 +48,16 @@ class FakeWebSocket {
   send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
     if (data instanceof Uint8Array) {
       this.sent.push(data)
+
       return
     }
+
     if (ArrayBuffer.isView(data)) {
       this.sent.push(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))
+
       return
     }
+
     if (data instanceof ArrayBuffer) {
       this.sent.push(new Uint8Array(data))
     }
@@ -66,6 +70,7 @@ class FakeWebSocket {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -110,9 +115,11 @@ function renderFrame(props?: {
 
 function getScreen(): HTMLDivElement {
   const screen = container.querySelector<HTMLDivElement>('[aria-label="Emulator screen"]')
+
   if (!screen) {
     throw new Error('Emulator screen not rendered')
   }
+
   screen.getBoundingClientRect = () =>
     ({
       bottom: 200,
@@ -126,6 +133,7 @@ function getScreen(): HTMLDivElement {
       toJSON: () => ({})
     }) as DOMRect
   screen.setPointerCapture = vi.fn()
+
   return screen
 }
 
@@ -137,6 +145,7 @@ function pointerEvent(type: string, init: PointerInit): Event {
     clientY: { value: init.clientY },
     pointerId: { value: init.pointerId ?? 1 }
   })
+
   return event
 }
 
@@ -154,6 +163,7 @@ function wheelEvent(init: {
     deltaX: { value: init.deltaX },
     deltaY: { value: init.deltaY }
   })
+
   return event
 }
 
@@ -170,6 +180,7 @@ function keyEvent(
     metaKey: { value: init.metaKey ?? false },
     shiftKey: { value: init.shiftKey ?? false }
   })
+
   return event
 }
 
@@ -180,14 +191,17 @@ function pasteEvent(text: string): Event {
       getData: vi.fn((type: string) => (type === 'text' ? text : ''))
     }
   })
+
   return event
 }
 
 function decodedSentMessages(tag: number): unknown[] {
   const ws = FakeWebSocket.instances[0]
+
   if (!ws) {
     return []
   }
+
   return ws.sent
     .filter((frame) => frame[0] === tag)
     .map((frame) => JSON.parse(new TextDecoder().decode(frame.subarray(1))))

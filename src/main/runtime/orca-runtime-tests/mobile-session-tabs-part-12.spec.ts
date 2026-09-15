@@ -13,6 +13,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('rejects startup prompts for agents that require post-ready stdin', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -21,6 +22,7 @@ describe('OrcaRuntimeService', () => {
         agentCmdOverrides: {}
       })
     } as never)
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -41,6 +43,7 @@ describe('OrcaRuntimeService', () => {
   it('uses portable Unix quoting for mobile agent launch commands in WSL project runtimes', async () => {
     await withPlatform('win32', async () => {
       const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getProjects: () => [
@@ -62,6 +65,7 @@ describe('OrcaRuntimeService', () => {
           localWindowsRuntimeDefault: { kind: 'windows-host' }
         })
       } as never)
+
       runtime.setPtyController({
         spawn,
         write: () => true,
@@ -87,6 +91,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps PowerShell quoting for mobile agent launch commands in Windows host runtimes', async () => {
     await withPlatform('win32', async () => {
       const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getProjects: () => [
@@ -108,6 +113,7 @@ describe('OrcaRuntimeService', () => {
           localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
         })
       } as never)
+
       runtime.setPtyController({
         spawn,
         write: () => true,
@@ -133,6 +139,7 @@ describe('OrcaRuntimeService', () => {
   it('uses cmd.exe quoting for mobile agent launch commands in local Windows host runtimes', async () => {
     await withPlatform('win32', async () => {
       const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-cmd' })
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getProjects: () => [
@@ -155,6 +162,7 @@ describe('OrcaRuntimeService', () => {
           terminalWindowsShell: 'cmd.exe'
         })
       } as never)
+
       runtime.setPtyController({
         spawn,
         write: () => true,
@@ -179,6 +187,7 @@ describe('OrcaRuntimeService', () => {
 
   it('publishes headless mobile session agent identity with synthesized PTY status', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -187,6 +196,7 @@ describe('OrcaRuntimeService', () => {
         agentCmdOverrides: {}
       })
     } as never)
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -198,6 +208,7 @@ describe('OrcaRuntimeService', () => {
     const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       agent: 'claude'
     })
+
     runtime.onPtyData('pty-agent', '\x1b]0;✳ Claude Code\x07', Date.now())
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
@@ -220,6 +231,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rejects disabled mobile session agent launches before spawning', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -228,6 +240,7 @@ describe('OrcaRuntimeService', () => {
         agentCmdOverrides: {}
       })
     } as never)
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -246,6 +259,7 @@ describe('OrcaRuntimeService', () => {
 
   it('validates mobile terminal insertion anchors before resolving agent launch commands', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -254,6 +268,7 @@ describe('OrcaRuntimeService', () => {
         agentCmdOverrides: {}
       })
     } as never)
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -290,6 +305,7 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
+
     const send = vi.fn((_channel: string, payload: { requestId: string; activate?: boolean }) => {
       ipcMain.emit(
         'terminal:tabCreateReply',
@@ -341,6 +357,7 @@ describe('OrcaRuntimeService', () => {
         }
       )
     })
+
     webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -465,6 +482,7 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
+
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -505,6 +523,7 @@ describe('OrcaRuntimeService', () => {
         { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Terminal' }
       )
     })
+
     webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -527,6 +546,7 @@ describe('OrcaRuntimeService', () => {
     const createRequests = send.mock.calls.filter(
       ([channel]) => channel === 'terminal:requestTabCreate'
     )
+
     expect(createRequests).toHaveLength(1)
     expect(second).toBe(first)
     expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer' })
@@ -550,6 +570,7 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
+
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -590,6 +611,7 @@ describe('OrcaRuntimeService', () => {
         { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Terminal' }
       )
     })
+
     webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -602,6 +624,7 @@ describe('OrcaRuntimeService', () => {
       activate: false,
       clientMutationId: 'mutation-lost-response'
     })
+
     // Why: the phone retries the same key when the create response was lost; within the retention window it must reuse the terminal.
     const retried = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
       activate: false,
@@ -611,6 +634,7 @@ describe('OrcaRuntimeService', () => {
     const createRequests = send.mock.calls.filter(
       ([channel]) => channel === 'terminal:requestTabCreate'
     )
+
     expect(createRequests).toHaveLength(1)
     expect(retried).toBe(first)
   })

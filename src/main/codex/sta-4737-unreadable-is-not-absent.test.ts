@@ -36,6 +36,7 @@ const denials = vi.hoisted(() => {
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, ${syscall} '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = syscall
@@ -43,13 +44,16 @@ const denials = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   const guard = (fn: unknown, syscall: string): unknown => {
     const original = fn as (...args: unknown[]) => unknown
+
     const wrapped = (...args: unknown[]): unknown => {
       if (
         denials.has(args[0]) ||
@@ -59,10 +63,13 @@ vi.mock('node:fs', async (importOriginal) => {
       ) {
         denials.fail(args[0] as string, syscall)
       }
+
       return original(...args)
     }
+
     return Object.assign(wrapped, original)
   }
+
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: guard(actual.readFileSync, 'read'),
@@ -76,6 +83,7 @@ vi.mock('node:fs', async (importOriginal) => {
       actual.existsSync
     )
   }
+
   return { ...patched, default: patched }
 })
 
@@ -88,6 +96,7 @@ vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: homedirMock }
 })
 
@@ -95,18 +104,26 @@ const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
 const { syncSystemConfigIntoLegacySharedCodexHome, syncSystemConfigIntoManagedCodexHome } =
   await import('./codex-config-mirror')
+
 const { promoteCodexRuntimeSettingsToSystem, snapshotCodexRuntimeSettingsBaseline } =
   await import('./config-settings-promotion')
+
 const { syncCodexGlobalInstructionsIntoManagedHome } = await import('./codex-home-paths')
+
 const { markCopiedResource } = await import('./codex-managed-home-resource-copy-marker')
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 const systemHome = (): string => join(fakeHomeDir, '.codex')
+
 const systemConfigPath = (): string => join(systemHome(), 'config.toml')
+
 const runtimeHome = (): string => join(userDataDir, 'codex-runtime-home', 'home')
+
 const runtimeConfigPath = (): string => join(runtimeHome(), 'config.toml')
 
 beforeEach(() => {
@@ -120,6 +137,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   realFs.mkdirSync(systemHome(), { recursive: true })
@@ -130,11 +148,13 @@ afterEach(() => {
   denials.reset()
   realFs.rmSync(fakeHomeDir, { recursive: true, force: true })
   realFs.rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -170,6 +190,7 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
     vi.resetModules()
     vi.doMock('./config-settings-promotion', async (importOriginal) => {
       const actual = await importOriginal<typeof CodexSettingsPromotion>()
+
       return {
         ...actual,
         // Promotion already read the file successfully and had nothing to do.
@@ -179,6 +200,7 @@ describe('STA-4737 the config mirror must not overwrite a runtime config it coul
         })
       }
     })
+
     try {
       const mirror = await import('./codex-config-mirror')
       denials.deny(runtimeConfigPath())
@@ -269,6 +291,7 @@ describe('STA-4737 the resource sync must not delete a mirror whose source it co
     realFs.writeFileSync(targetPath, MIRRORED, 'utf-8')
     // Orca owns this copy, which is what entitles the sync to remove it.
     markCopiedResource(runtimeHome(), AGENTS_ENTRY, sourcePath)
+
     return { sourcePath, targetPath }
   }
 

@@ -77,6 +77,7 @@ export function parseArgs(argv) {
   // Distinguish "--install-dir omitted" from "--install-dir with no value": the
   // latter must fail rather than silently fall back to a non-isolated install.
   const errors = validate(opts, argv.includes('--install-dir'))
+
   return { ...opts, errors }
 }
 
@@ -84,6 +85,7 @@ export function parseArgs(argv) {
 function defaultInstallDir() {
   const localAppData =
     process.env.LOCALAPPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Local')
+
   return path.join(localAppData, 'Programs', 'Orca')
 }
 
@@ -93,13 +95,16 @@ function pathsOverlap(a, b) {
     .resolve(a)
     .replace(/[\\/]+$/, '')
     .toLowerCase()
+
   const nb = path
     .resolve(b)
     .replace(/[\\/]+$/, '')
     .toLowerCase()
+
   if (na === nb) {
     return true
   }
+
   return na.startsWith(`${nb}\\`) || nb.startsWith(`${na}\\`)
 }
 
@@ -116,10 +121,13 @@ function looksLikeHarnessInstall(dir) {
  */
 export function validateInstallDir(installDir) {
   const errors = []
+
   if (!path.isAbsolute(installDir)) {
     errors.push(`--install-dir must be an absolute path (got "${installDir}")`)
+
     return errors
   }
+
   if (/\s/.test(installDir)) {
     errors.push(
       `--install-dir must not contain spaces (got "${installDir}"). The NSIS installer's ` +
@@ -127,6 +135,7 @@ export function validateInstallDir(installDir) {
         `be passed. Choose a spaces-free location (e.g. C:\\OrcaE2E).`
     )
   }
+
   if (pathsOverlap(installDir, defaultInstallDir())) {
     errors.push(
       `--install-dir "${installDir}" overlaps the default install location ` +
@@ -134,8 +143,10 @@ export function validateInstallDir(installDir) {
         `real install is never touched.`
     )
   }
+
   if (existsSync(installDir)) {
     let entries = []
+
     try {
       entries = readdirSync(installDir)
     } catch (err) {
@@ -145,8 +156,10 @@ export function validateInstallDir(installDir) {
         `--install-dir "${installDir}" could not be read (${err.message}). ` +
           `Refusing to treat an unreadable directory as safe to overwrite.`
       )
+
       return errors
     }
+
     if (entries.length > 0 && !looksLikeHarnessInstall(installDir)) {
       errors.push(
         `--install-dir "${installDir}" is a non-empty directory that does not look like a ` +
@@ -155,47 +168,60 @@ export function validateInstallDir(installDir) {
       )
     }
   }
+
   return errors
 }
 
 function validate(opts, installDirFlagPresent) {
   const errors = []
+
   if (!opts.from && !opts.fromRelease) {
     errors.push('Missing base installer: pass --from <path> or --from-release <tag>')
   }
+
   if (opts.from && opts.fromRelease) {
     errors.push('Pass only one of --from / --from-release')
   }
+
   if (!opts.to && !opts.toRelease) {
     errors.push('Missing update installer: pass --to <path> or --to-release <tag>')
   }
+
   if (opts.to && opts.toRelease) {
     errors.push('Pass only one of --to / --to-release')
   }
+
   if (!opts.expect) {
     errors.push('Missing --expect <cold-restore|survival>')
   } else if (!VALID_PROFILES.has(opts.expect)) {
     errors.push(`Invalid --expect "${opts.expect}" (expected cold-restore or survival)`)
   }
+
   if (!Number.isFinite(opts.soakSeconds) || opts.soakSeconds < 0) {
     errors.push('--soak-seconds must be a non-negative number')
   }
+
   if (installDirFlagPresent && opts.installDir === undefined) {
     errors.push('--install-dir requires a path value')
   } else if (opts.installDir !== undefined) {
     errors.push(...validateInstallDir(opts.installDir))
   }
+
   return errors
 }
 
 function takeValue(argv, flag) {
   const idx = argv.indexOf(flag)
+
   if (idx === -1) {
     return undefined
   }
+
   const value = argv[idx + 1]
+
   if (value === undefined || value.startsWith('--')) {
     return undefined
   }
+
   return value
 }

@@ -64,6 +64,7 @@ const ASSIGNMENT: RelayAssignment = {
   assignmentEpoch: 1,
   lease: 'lease-token'
 }
+
 const TICKET = 'T'.repeat(43)
 
 function ack(overrides: Partial<RelayHostHelloAckMessage> = {}): RelayHostHelloAckMessage {
@@ -99,6 +100,7 @@ function createOrigin(): {
   const keypair = nacl.box.keyPair()
   const owned: string[] = []
   const released: string[] = []
+
   const origin = new RelayControlOrigin({
     assignment: ASSIGNMENT,
     relayJwt: 'relay-jwt',
@@ -112,6 +114,7 @@ function createOrigin(): {
     onDrain: vi.fn(),
     onClose: vi.fn()
   })
+
   return { origin, owned, released }
 }
 

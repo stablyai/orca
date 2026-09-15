@@ -44,6 +44,7 @@ export type HooksConfig = {
 
 // Why: host-level backstop timeout for status hooks, independent of the curl --max-time and Copilot's timeoutSec (#4633).
 export const MANAGED_HOOK_TIMEOUT_SECONDS = 10
+
 export const MANAGED_HOOK_TIMEOUT_MILLISECONDS = MANAGED_HOOK_TIMEOUT_SECONDS * 1000
 
 // Nested command hook for the Claude-shaped `hooks: [...]` schema (Claude, Codex, Gemini, Droid, Grok, Command Code, Devin).
@@ -71,6 +72,7 @@ export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
   const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
+
   // Why: installs use .cmd/.ps1 (Windows) or .sh (SSH/POSIX); match all so a platform switch still sweeps stale hooks.
   const needles = [
     `agent-hooks/${scriptFileName}`,
@@ -78,22 +80,27 @@ export function createManagedCommandMatcher(
     `agent-hooks/${scriptStem}.ps1`,
     `agent-hooks/${scriptStem}.sh`
   ]
+
   return (command) => {
     if (!command) {
       return false
     }
+
     const decodedCommand = decodePowerShellEncodedCommand(command)
     const searchText = decodedCommand ? `${command}\n${decodedCommand}` : command
     const normalizedCommand = searchText.replaceAll('\\', '/')
+
     return needles.some((needle) => normalizedCommand.includes(needle))
   }
 }
 
 function decodePowerShellEncodedCommand(command: string): string | null {
   const match = command.match(/\s-EncodedCommand\s+(\S+)/i)
+
   if (!match) {
     return null
   }
+
   try {
     return Buffer.from(match[1], 'base64').toString('utf16le')
   } catch {
@@ -125,17 +132,21 @@ export function wrapWindowsHookCommand(
 ): string {
   // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
   const quoted = quotePowerShellString(scriptPath)
+
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
+
   const fallback =
     options.fallbackStdout === undefined
       ? ''
       : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
+
   // Why the order: answer first (a gate event reads silence as deny), then the shared
   // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
   // pipe, and ReadToEnd would strand the launcher there forever (#11549).
   const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+
   return wrapWindowsPowerShellEncodedCommand(command)
 }
 
@@ -199,6 +210,7 @@ export function removeManagedCommands(
     const directCommandKeys = ['command', 'bash', 'powershell'] as const
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
+
     const hasManagedNestedHook =
       hasNestedHooks &&
       definition.hooks!.some((hook) => hookHasManagedCommand(hook, isManagedCommand))
@@ -208,6 +220,7 @@ export function removeManagedCommands(
     }
 
     const nextDefinition: HookDefinition = { ...definition }
+
     for (const key of directManagedKeys) {
       delete nextDefinition[key]
     }
@@ -216,6 +229,7 @@ export function removeManagedCommands(
       const filteredHooks = definition.hooks!.filter(
         (hook) => !hookHasManagedCommand(hook, isManagedCommand)
       )
+
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks
       } else {
@@ -226,6 +240,7 @@ export function removeManagedCommands(
     const hasCommandAfterCleanup =
       directCommandKeys.some((key) => typeof nextDefinition[key] === 'string') ||
       (Array.isArray(nextDefinition.hooks) && nextDefinition.hooks.length > 0)
+
     if (!hasCommandAfterCleanup) {
       return []
     }
@@ -236,6 +251,7 @@ export function removeManagedCommands(
 
 function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
   const args = Array.isArray(hook.args) ? hook.args : []
+
   return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
 }
 
@@ -263,6 +279,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
         if (process.platform !== 'win32') {
           chmodSync(scriptPath, 0o755)
         }
+
         return
       }
     } catch {
@@ -271,12 +288,15 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   }
 
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
+
   try {
     writeScriptWithAclRetry(tmpPath, content)
+
     // Why: chmod before rename so the canonical path is never visible non-executable, else the POSIX guard skips the hook.
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)
     }
+
     renameSync(tmpPath, scriptPath)
   } finally {
     if (existsSync(tmpPath)) {
@@ -298,11 +318,13 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
       try {
         grantDirAcl(dirname(scriptPath))
         writeFileSync(scriptPath, content, 'utf-8')
+
         return
       } catch {
         // icacls failure is not actionable; re-throw the original EPERM
       }
     }
+
     throw error
   }
 }
@@ -322,6 +344,7 @@ export function writeHooksJson(
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+
   const existingMode =
     options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 
@@ -341,12 +364,14 @@ export function writeHooksJson(
 
   try {
     writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
+
     // Why: single rolling backup — one file, no accumulation in ~/.claude.
     // Protects against a merge-logic bug producing bad JSON; the original is
     // always recoverable from <configPath>.bak until the next write.
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
+
     renameSync(tmpPath, writePath)
   } finally {
     // Clean up temp file if rename failed.

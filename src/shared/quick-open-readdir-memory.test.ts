@@ -12,6 +12,7 @@ const tempRoots: string[] = []
 async function makeRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-quick-open-budget-'))
   tempRoots.push(root)
+
   return root
 }
 

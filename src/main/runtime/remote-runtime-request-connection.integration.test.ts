@@ -17,6 +17,7 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
+
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
 
 // worktree.create routes through the runtime's clientMutationId idempotency
@@ -31,6 +32,7 @@ describe('remote runtime request connection integration', () => {
     async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-request-'))
       const repoPath = join(userDataPath, 'repo')
+
       const repos: Repo[] = [
         {
           id: 'repo-1',
@@ -43,6 +45,7 @@ describe('remote runtime request connection integration', () => {
           kind: 'git'
         }
       ]
+
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
@@ -52,6 +55,7 @@ describe('remote runtime request connection integration', () => {
         onClientDisconnected: () => {},
         listRepos: () => repos
       } as unknown as OrcaRuntimeService
+
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -60,16 +64,22 @@ describe('remote runtime request connection integration', () => {
       })
 
       await server.start()
+
       try {
         const offer = server.createPairingOffer({ name: 'integration', scope: 'runtime' })
+
         if (!offer.available) {
           throw new Error('pairing unavailable')
         }
+
         const pairing = parsePairingCode(offer.pairingUrl)
+
         if (!pairing) {
           throw new Error('invalid pairing')
         }
+
         const connection = new RemoteRuntimeRequestConnection(pairing)
+
         try {
           await expect(
             connection.request('repo.list', undefined, REMOTE_RUNTIME_REQUEST_TIMEOUT_MS)
@@ -93,6 +103,7 @@ describe('remote runtime request connection integration', () => {
     async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-request-events-'))
       const repoPath = join(userDataPath, 'repo')
+
       const repo: Repo = {
         id: 'repo-1',
         path: repoPath,
@@ -103,6 +114,7 @@ describe('remote runtime request connection integration', () => {
         worktreeBaseRef: 'main',
         kind: 'git'
       }
+
       const worktrees: unknown[] = [
         {
           id: 'repo-1::main',
@@ -113,8 +125,10 @@ describe('remote runtime request connection integration', () => {
           isMainWorktree: true
         }
       ]
+
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'events-runtime-test',
@@ -140,10 +154,12 @@ describe('remote runtime request connection integration', () => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
             throw new Error('repo_not_found')
           }
+
           return repo
         },
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
+
           return () => clientEventListeners.delete(listener)
         },
         listDetectedManagedWorktrees: () => ({
@@ -162,13 +178,17 @@ describe('remote runtime request connection integration', () => {
             displayName: name || 'created',
             isMainWorktree: false
           }
+
           worktrees.push(worktree)
+
           for (const listener of clientEventListeners) {
             listener({ type: 'worktreesChanged', repoId: repo.id })
           }
+
           return { worktree }
         }
       } as unknown as OrcaRuntimeService
+
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -177,17 +197,22 @@ describe('remote runtime request connection integration', () => {
       })
 
       await server.start()
+
       try {
         const offer = server.createPairingOffer({ name: 'integration', scope: 'runtime' })
+
         if (!offer.available) {
           throw new Error('pairing unavailable')
         }
+
         const pairing = parsePairingCode(offer.pairingUrl)
+
         if (!pairing) {
           throw new Error('invalid pairing')
         }
 
         const events: RuntimeClientEventStreamMessage[] = []
+
         const subscription = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
           pairing,
           'runtime.clientEvents.subscribe',
@@ -204,8 +229,10 @@ describe('remote runtime request connection integration', () => {
             }
           }
         )
+
         const desktop = new RemoteRuntimeRequestConnection(pairing)
         const mobile = new RemoteRuntimeRequestConnection(pairing)
+
         try {
           await waitFor(() => events.some((event) => event.type === 'ready'))
 
@@ -268,6 +295,7 @@ describe('remote runtime request connection integration', () => {
       const worktreeId = 'repo-1::C:\\repo\\feature'
       const ptyId = `${worktreeId}@@pty-1`
       let sleepSnapshot: RuntimeClientEvent[] = []
+
       const launchDraftResolutionSnapshot: RuntimeClientEvent[] = [
         {
           type: 'nativeChatLaunchDraftResolved',
@@ -276,11 +304,13 @@ describe('remote runtime request connection integration', () => {
           createdAt: 7
         }
       ]
+
       const emit = (event: RuntimeClientEvent): void => {
         for (const listener of clientEventListeners) {
           listener(event)
         }
       }
+
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
@@ -304,6 +334,7 @@ describe('remote runtime request connection integration', () => {
         onClientDisconnected: () => {},
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
+
           return () => clientEventListeners.delete(listener)
         },
         getTerminalSleepClientEventSnapshot: () => sleepSnapshot,
@@ -335,6 +366,7 @@ describe('remote runtime request connection integration', () => {
               terminalHandles: ['terminal-handle-1']
             }
           ]
+
           return {
             stopped: 1,
             stoppedPtyIds: [ptyId],
@@ -343,6 +375,7 @@ describe('remote runtime request connection integration', () => {
           }
         }
       } as unknown as OrcaRuntimeService
+
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -351,16 +384,22 @@ describe('remote runtime request connection integration', () => {
       })
 
       await server.start()
+
       try {
         const offer = server.createPairingOffer({ name: 'remote-sleep', scope: 'runtime' })
+
         if (!offer.available) {
           throw new Error('pairing unavailable')
         }
+
         const pairing = parsePairingCode(offer.pairingUrl)
+
         if (!pairing) {
           throw new Error('invalid pairing')
         }
+
         const clientEvents: RuntimeClientEventStreamMessage[][] = [[], []]
+
         const subscriptions = await Promise.all(
           clientEvents.map((events) =>
             subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
@@ -381,14 +420,18 @@ describe('remote runtime request connection integration', () => {
             )
           )
         )
+
         const requester = new RemoteRuntimeRequestConnection(pairing)
+
         try {
           await waitFor(() =>
             clientEvents.every((events) => events.some((e) => e.type === 'ready'))
           )
+
           for (const events of clientEvents) {
             expect(events).toContainEqual(launchDraftResolutionSnapshot[0])
           }
+
           await expect(
             requester.request(
               'terminal.sleep',
@@ -405,6 +448,7 @@ describe('remote runtime request connection integration', () => {
                 events.filter((event) => event.type === 'worktreeTerminalSleepState').length === 2
             )
           )
+
           for (const events of clientEvents) {
             expect(
               events
@@ -412,7 +456,9 @@ describe('remote runtime request connection integration', () => {
                 .map((event) => event.phase)
             ).toEqual(['started', 'committed'])
           }
+
           const reconnectedEvents: RuntimeClientEventStreamMessage[] = []
+
           const reconnected = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
             pairing,
             'runtime.clientEvents.subscribe',
@@ -429,6 +475,7 @@ describe('remote runtime request connection integration', () => {
               }
             }
           )
+
           try {
             await waitFor(() => reconnectedEvents.some((event) => event.type === 'ready'))
             expect(
@@ -457,6 +504,7 @@ describe('remote runtime request connection integration', () => {
           }
         } finally {
           requester.close()
+
           for (const subscription of subscriptions) {
             subscription.close()
           }
@@ -474,6 +522,7 @@ describe('remote runtime request connection integration', () => {
     async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-shared-control-'))
       const repoPath = join(userDataPath, 'repo')
+
       const repo: Repo = {
         id: 'repo-1',
         path: repoPath,
@@ -484,6 +533,7 @@ describe('remote runtime request connection integration', () => {
         worktreeBaseRef: 'main',
         kind: 'git'
       }
+
       const worktrees: unknown[] = [
         {
           id: 'repo-1::main',
@@ -494,11 +544,13 @@ describe('remote runtime request connection integration', () => {
           isMainWorktree: true
         }
       ]
+
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const accountsListeners = new Set<(snapshot: unknown) => void>()
       const notificationListeners = new Set<(event: unknown) => void>()
       const sessionTabListeners = new Set<(snapshot: unknown) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+
       const sessionTabSnapshot = {
         worktree: 'wt-1',
         publicationEpoch: 'epoch-1',
@@ -508,6 +560,7 @@ describe('remote runtime request connection integration', () => {
         activeTabType: null,
         tabs: []
       }
+
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'shared-runtime-test',
@@ -548,6 +601,7 @@ describe('remote runtime request connection integration', () => {
         onClientDisconnected: () => {},
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
+
           return () => clientEventListeners.delete(listener)
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
@@ -563,16 +617,19 @@ describe('remote runtime request connection integration', () => {
         },
         onAccountsChanged: (listener: (snapshot: unknown) => void) => {
           accountsListeners.add(listener)
+
           return () => accountsListeners.delete(listener)
         },
         onNotificationDispatched: (listener: (event: unknown) => void) => {
           notificationListeners.add(listener)
+
           return () => notificationListeners.delete(listener)
         },
         listMobileSessionTabs: () => sessionTabSnapshot,
         listAllMobileSessionTabs: () => [sessionTabSnapshot],
         onMobileSessionTabsChanged: (listener: (snapshot: unknown) => void) => {
           sessionTabListeners.add(listener)
+
           return () => sessionTabListeners.delete(listener)
         },
         watchFileExplorer: async () => () => {},
@@ -581,6 +638,7 @@ describe('remote runtime request connection integration', () => {
           if (selector !== repo.id && selector !== `id:${repo.id}`) {
             throw new Error('repo_not_found')
           }
+
           return repo
         },
         listDetectedManagedWorktrees: () => ({
@@ -599,13 +657,17 @@ describe('remote runtime request connection integration', () => {
             displayName: name || 'created',
             isMainWorktree: false
           }
+
           worktrees.push(worktree)
+
           for (const listener of clientEventListeners) {
             listener({ type: 'worktreesChanged', repoId: repo.id })
           }
+
           return { worktree }
         }
       } as unknown as OrcaRuntimeService
+
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,
@@ -614,18 +676,23 @@ describe('remote runtime request connection integration', () => {
       })
 
       await server.start()
+
       try {
         const offer = server.createPairingOffer({ name: 'integration', scope: 'runtime' })
+
         if (!offer.available) {
           throw new Error('pairing unavailable')
         }
+
         const pairing = parsePairingCode(offer.pairingUrl)
+
         if (!pairing) {
           throw new Error('invalid pairing')
         }
 
         const events: RuntimeClientEventStreamMessage[] = []
         const shared = new RemoteRuntimeSharedControlConnection(pairing)
+
         const subscription = await shared.subscribe<RuntimeClientEventStreamMessage>(
           'runtime.clientEvents.subscribe',
           undefined,
@@ -641,6 +708,7 @@ describe('remote runtime request connection integration', () => {
             }
           }
         )
+
         try {
           await waitFor(() => events.some((event) => event.type === 'ready'))
 
@@ -671,6 +739,7 @@ describe('remote runtime request connection integration', () => {
           )
 
           const mixedEvents: unknown[] = []
+
           const mixedMethods = [
             ['runtime.clientEvents.subscribe', undefined],
             ['session.tabs.subscribe', { worktree: 'id:wt-1' }],
@@ -678,9 +747,11 @@ describe('remote runtime request connection integration', () => {
             ['notifications.subscribe', undefined],
             ['files.watch', { worktree: 'id:wt-1' }]
           ] as const
+
           const mixedSubscriptions = await Promise.all(
             Array.from({ length: 30 }, (_value, index) => {
               const [method, params] = mixedMethods[index % mixedMethods.length]!
+
               return shared.subscribe(method, params, REMOTE_RUNTIME_REQUEST_TIMEOUT_MS, {
                 onResponse: (response) => {
                   if (response.ok) {
@@ -693,6 +764,7 @@ describe('remote runtime request connection integration', () => {
               })
             })
           )
+
           await waitFor(
             () => subscriptionCleanups.size >= mixedSubscriptions.length + 1,
             5000,
@@ -704,6 +776,7 @@ describe('remote runtime request connection integration', () => {
             () => `cleanup count ${subscriptionCleanups.size}, event count ${mixedEvents.length}`
           )
           expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
+
           for (const mixed of mixedSubscriptions) {
             mixed.close()
           }
@@ -723,7 +796,9 @@ describe('remote runtime request connection integration', () => {
               )
             )
           )
+
           expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
+
           for (const extra of extraSubscriptions) {
             extra.close()
           }
@@ -745,12 +820,15 @@ async function waitFor(
   describeTimeout?: () => string
 ): Promise<void> {
   const start = Date.now()
+
   while (Date.now() - start < timeoutMs) {
     if (predicate()) {
       return
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+
   throw new Error(
     `Timed out waiting for condition${describeTimeout ? `: ${describeTimeout()}` : ''}`
   )

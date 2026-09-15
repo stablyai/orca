@@ -31,6 +31,7 @@ const SETTINGS = {
 function gateSettingsGetter(): (() => ClaudeManagedAccountGateSettings) | undefined {
   const deps: Record<string, unknown> = installed.deps ?? {}
   const get = deps['getClaudeManagedAccountGateSettings']
+
   return typeof get === 'function' ? (get as () => ClaudeManagedAccountGateSettings) : undefined
 }
 

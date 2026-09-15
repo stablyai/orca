@@ -26,6 +26,7 @@ class FakeProcess extends EventEmitter {
   send(message: WslTranscriptFsProcessRequest, callback?: (error: Error | null) => void): boolean {
     this.sent.push(message)
     callback?.(null)
+
     return true
   }
 
@@ -48,6 +49,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\one' },
       new AbortController().signal
     )
+
     child.respond({ id: child.sent[0].id, ok: true, value: true })
     await expect(first).resolves.toBe(true)
 
@@ -59,6 +61,7 @@ describe('WSL transcript filesystem process client', () => {
       },
       new AbortController().signal
     )
+
     child.respond({ id: child.sent[1].id, ok: true, value: 'body' })
 
     await expect(second).resolves.toBe('body')
@@ -70,10 +73,12 @@ describe('WSL transcript filesystem process client', () => {
   it('kills an aborted process and uses a replacement for later work', async () => {
     const firstChild = new FakeProcess()
     const replacement = new FakeProcess()
+
     const factory = vi
       .fn<() => ChildProcess>()
       .mockReturnValueOnce(fakeChild(firstChild))
       .mockReturnValueOnce(fakeChild(replacement))
+
     const client = new WslTranscriptFsProcessClient(factory)
     const controller = new AbortController()
     const reason = new Error('deadline expired')
@@ -82,6 +87,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'stat', path: '\\\\wsl.localhost\\Ubuntu\\stalled' },
       controller.signal
     )
+
     controller.abort(reason)
 
     await expect(stalled).rejects.toBe(reason)
@@ -91,6 +97,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'access', path: '\\\\wsl.localhost\\Fedora\\later' },
       new AbortController().signal
     )
+
     replacement.respond({ id: replacement.sent[0].id, ok: true, value: true })
     await expect(later).resolves.toBe(true)
     expect(factory).toHaveBeenCalledTimes(2)
@@ -135,6 +142,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\later' },
       signal
     )
+
     owner.respond({ id: owner.sent[6].id, ok: true, value: true })
     await expect(later).resolves.toBe(true)
     expect(factory).toHaveBeenCalledOnce()
@@ -192,10 +200,12 @@ describe('WSL transcript filesystem process client', () => {
   it('rejects a granted request if the helper exits before it sends', async () => {
     const child = new FakeProcess()
     const replacement = new FakeProcess()
+
     const factory = vi
       .fn<() => ChildProcess>()
       .mockReturnValueOnce(fakeChild(child))
       .mockReturnValueOnce(fakeChild(replacement))
+
     const client = new WslTranscriptFsProcessClient(factory)
     const signal = new AbortController().signal
 
@@ -240,6 +250,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\after-close' },
       signal
     )
+
     owner.respond({ id: owner.sent[3].id, ok: true, value: true })
     await expect(later).resolves.toBe(true)
     expect(factory).toHaveBeenCalledOnce()
@@ -250,25 +261,31 @@ describe('WSL transcript filesystem process client', () => {
   it('invalidates lane handles and serves queued work from a replacement', async () => {
     const owner = new FakeProcess()
     const healthy = new FakeProcess()
+
     const factory = vi
       .fn<() => ChildProcess>()
       .mockReturnValueOnce(fakeChild(owner))
       .mockReturnValueOnce(fakeChild(healthy))
+
     const client = new WslTranscriptFsProcessClient(factory)
+
     const opening = client.open(
       '\\\\wsl.localhost\\Ubuntu\\transcript',
       new AbortController().signal
     )
+
     owner.respond({ id: owner.sent[0].id, ok: true, value: 9 })
     const handle = await opening
     const controller = new AbortController()
     const reason = new Error('read deadline')
 
     const stalled = client.read(handle, 0, 1, controller.signal)
+
     const other = client.run<boolean>(
       { operation: 'access', path: '\\\\wsl.localhost\\Fedora\\healthy' },
       new AbortController().signal
     )
+
     controller.abort(reason)
 
     await expect(stalled).rejects.toBe(reason)
@@ -288,6 +305,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'access', path: '\\\\wsl.localhost\\Fedora\\later' },
       new AbortController().signal
     )
+
     healthy.respond({ id: healthy.sent[1].id, ok: true, value: true })
     await expect(later).resolves.toBe(true)
     client.dispose()
@@ -297,16 +315,20 @@ describe('WSL transcript filesystem process client', () => {
     vi.useFakeTimers()
     const owner = new FakeProcess()
     const healthy = new FakeProcess()
+
     const factory = vi
       .fn<() => ChildProcess>()
       .mockReturnValueOnce(fakeChild(owner))
       .mockReturnValueOnce(fakeChild(healthy))
+
     const client = new WslTranscriptFsProcessClient(factory)
+
     try {
       const opening = client.open(
         '\\\\wsl.localhost\\Ubuntu\\transcript',
         new AbortController().signal
       )
+
       owner.respond({ id: owner.sent[0].id, ok: true, value: 12 })
       const handle = await opening
       const closing = client.close(handle)
@@ -334,16 +356,20 @@ describe('WSL transcript filesystem process client', () => {
     vi.useFakeTimers()
     const child = new FakeProcess()
     const replacement = new FakeProcess()
+
     const factory = vi
       .fn<() => ChildProcess>()
       .mockReturnValueOnce(fakeChild(child))
       .mockReturnValueOnce(fakeChild(replacement))
+
     const client = new WslTranscriptFsProcessClient(factory)
+
     try {
       const first = client.run<boolean>(
         { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\one' },
         new AbortController().signal
       )
+
       child.respond({ id: child.sent[0].id, ok: true, value: true })
       await expect(first).resolves.toBe(true)
 
@@ -354,6 +380,7 @@ describe('WSL transcript filesystem process client', () => {
         { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\two' },
         new AbortController().signal
       )
+
       replacement.respond({ id: replacement.sent[0].id, ok: true, value: true })
       await expect(later).resolves.toBe(true)
       expect(factory).toHaveBeenCalledTimes(2)
@@ -366,10 +393,12 @@ describe('WSL transcript filesystem process client', () => {
   it('surfaces child transport faults as unavailable gate refusals', async () => {
     const child = new FakeProcess()
     const client = new WslTranscriptFsProcessClient(() => fakeChild(child))
+
     const pending = client.run(
       { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\dead' },
       new AbortController().signal
     )
+
     child.emit('exit', 9)
     await expect(pending).rejects.toMatchObject({
       name: 'WslTranscriptFsError',
@@ -381,10 +410,12 @@ describe('WSL transcript filesystem process client', () => {
   it('names the killing signal instead of a null exit code', async () => {
     const child = new FakeProcess()
     const client = new WslTranscriptFsProcessClient(() => fakeChild(child))
+
     const pending = client.run(
       { operation: 'access', path: '\\\\wsl.localhost\\Ubuntu\\killed' },
       new AbortController().signal
     )
+
     // A signal-terminated child reports code null; the message must carry the signal.
     child.emit('exit', null, 'SIGKILL')
     await expect(pending).rejects.toMatchObject({
@@ -398,6 +429,7 @@ describe('WSL transcript filesystem process client', () => {
   it('reconstructs filesystem errors with their Node error code', async () => {
     const child = new FakeProcess()
     const client = new WslTranscriptFsProcessClient(() => fakeChild(child))
+
     const pending = client.run(
       { operation: 'stat', path: '\\\\wsl.localhost\\Ubuntu\\missing' },
       new AbortController().signal
@@ -426,10 +458,12 @@ describe('WSL transcript filesystem process client', () => {
   it('restores Stats and Dirent methods after IPC serialization', async () => {
     const child = new FakeProcess()
     const client = new WslTranscriptFsProcessClient(() => fakeChild(child))
+
     const stats = client.run<Stats>(
       { operation: 'stat', path: '\\\\wsl.localhost\\Ubuntu\\file' },
       new AbortController().signal
     )
+
     child.respond({
       id: child.sent[0].id,
       ok: true,
@@ -442,6 +476,7 @@ describe('WSL transcript filesystem process client', () => {
       { operation: 'readdir', path: '\\\\wsl.localhost\\Ubuntu\\dir' },
       new AbortController().signal
     )
+
     child.respond({
       id: child.sent[1].id,
       ok: true,

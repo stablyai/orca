@@ -19,6 +19,7 @@ export function dismissSourceControlEntryFailureToast(worktreeId: string | null)
   if (!entryFailureSlotOwner || entryFailureSlotOwner.worktreeId !== worktreeId) {
     return
   }
+
   entryFailureSlotOwner = null
   toast.dismiss(ENTRY_FAILURE_TOAST_ID)
 }
@@ -110,10 +111,13 @@ export function showSourceControlEntryFailureToast({
                 // retry that re-fails inside that window would take the re-raised toast with it. The
                 // caller owns this slot instead: it dismisses on success and re-raises on failure.
                 event.preventDefault()
+
                 if (useAppStore.getState().activeWorktreeId !== worktreeId) {
                   dismissSourceControlEntryFailureToast(worktreeId)
+
                   return
                 }
+
                 onRetry()
               }
             }

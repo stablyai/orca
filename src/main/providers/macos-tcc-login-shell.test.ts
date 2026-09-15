@@ -10,12 +10,15 @@ const { existsSyncMock, userInfoMock, runProcessMock, ptyProbeMock } = vi.hoiste
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
+
 vi.mock('node:os', () => ({ userInfo: userInfoMock }))
+
 // Why mock the chokepoint: encoding, kill signal, output cap and closing stdin
 // are its contract now, so this suite asserts the PAM probe's argv and verdict.
 vi.mock('../../shared/child-process/run-process', () => ({
   runProcess: (...args: unknown[]) => Promise.resolve(runProcessMock(...args))
 }))
+
 vi.mock('./macos-login-session-pty-probe', async (importOriginal) => ({
   ...(await importOriginal<typeof LoginSessionPtyProbe>()),
   runMacosLoginSessionPtyProbe: ptyProbeMock
@@ -35,7 +38,9 @@ const ACCEPTED_RESULT = {
   stderr: '',
   timedOut: false
 }
+
 const REJECTED_RESULT = { code: 1, signal: null, stdout: '', stderr: '', timedOut: false }
+
 const TIMED_OUT_RESULT = {
   code: null,
   signal: 'SIGKILL' as const,
@@ -43,8 +48,11 @@ const TIMED_OUT_RESULT = {
   stderr: '',
   timedOut: true
 }
+
 const ACCEPTED_OUTCOME = { ok: true, conclusive: true, reason: 'accepted' } as const
+
 const REJECTED_OUTCOME = { ok: false, conclusive: true, reason: 'rejected' } as const
+
 const itOnPosixHost = process.platform === 'win32' ? it.skip : it
 
 describe('wrapShellSpawnForMacosTccAttribution', () => {
@@ -76,11 +84,13 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
+
     if (origDisable === undefined) {
       delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
     } else {
       process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
     }
+
     vi.restoreAllMocks()
     vi.clearAllMocks()
   })
@@ -198,6 +208,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     let attempt = 0
     runProcessMock.mockImplementation(() => {
       attempt += 1
+
       // A one-off PAM hiccup that login(1) reports as a deterministic rejection.
       return attempt === 1 ? REJECTED_RESULT : ACCEPTED_RESULT
     })
@@ -268,6 +279,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     let attempt = 0
     runProcessMock.mockImplementation(() => {
       attempt += 1
+
       return attempt === 1 ? TIMED_OUT_RESULT : ACCEPTED_RESULT
     })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -537,11 +549,13 @@ describe('probeMacosLoginSessionAlive', () => {
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
+
     if (origDisable === undefined) {
       delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
     } else {
       process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
     }
+
     vi.restoreAllMocks()
     vi.clearAllMocks()
   })

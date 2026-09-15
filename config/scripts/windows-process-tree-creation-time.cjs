@@ -22,10 +22,13 @@ function assertWindowsProcessTreeCreationTime({ module, platform = process.platf
   if (platform !== 'win32') {
     return
   }
+
   const supported = module?.supportedProcessDataFlags
+
   if (typeof supported === 'number' && (supported & CREATION_TIME_FLAG) !== 0) {
     return
   }
+
   throw new Error(
     [
       '@vscode/windows-process-tree does not report CreationTime support',

@@ -10,45 +10,61 @@ import { join } from 'node:path'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -87,16 +103,20 @@ describe('registerPtyHandlers', () => {
       const spawnGate = makeDeferred()
       daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => {
         await spawnGate.promise
+
         return { id: options.sessionId ?? 'daemon-pty' }
       })
+
       try {
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         const spawnPromise = handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           sessionId: 'daemon-session',
           initiallyHidden: true
         }) as Promise<{ id: string }>
+
         // Let the handler run up to the awaited provider.spawn.
         await Promise.resolve()
         mainWindow.webContents.send.mockClear()
@@ -147,14 +167,17 @@ describe('registerPtyHandlers', () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)
+
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp',
           initiallyHidden: true
         })) as { id: string }
+
         mainWindow.webContents.send.mockClear()
 
         expect(isHiddenRendererPty(spawnResult.id)).toBe(true)
@@ -174,13 +197,16 @@ describe('registerPtyHandlers', () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)
+
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         mainWindow.webContents.send.mockClear()
 
         expect(isHiddenRendererPty(spawnResult.id)).toBe(false)
@@ -198,6 +224,7 @@ describe('registerPtyHandlers', () => {
     it('answers DA1 from the model on the first chunk of a hidden-at-spawn PTY', async () => {
       // End-to-end through a REAL runtime: spawn-marked → first chunk dropped → emulator parses query → replies; main answers, the renderer never saw the bytes.
       const daemon = installObservableDaemonTestProvider()
+
       const runtime = new OrcaRuntimeService({
         getRepo: () => undefined,
         getRepos: () => [],
@@ -221,6 +248,7 @@ describe('registerPtyHandlers', () => {
       } as never)
 
       registerPtyHandlers(mainWindow as never, runtime as never)
+
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -242,11 +270,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       mainWindow.webContents.send.mockClear()
 
       // 3 MB in one entry: the scrollback-scaled cap (2 MB default) drops to O(1) memory; one restore marker fires, droppedOutput routes to the snapshot repaint.
@@ -286,11 +316,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never, undefined, undefined, (() => settings) as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         mainWindow.webContents.send.mockClear()
 
         mockProc.emitData('x'.repeat(3 * 1024 * 1024))
@@ -318,11 +350,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const writeListener = getPtyWriteListener()
 
       writeListener(mainWindowIpcEvent, {
@@ -356,6 +390,7 @@ describe('registerPtyHandlers', () => {
       process.env.SHELL = '/opt/homebrew/bin/bash'
 
       registerPtyHandlers(mainWindow as never)
+
       const result = await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -379,6 +414,7 @@ describe('registerPtyHandlers', () => {
       )
     } finally {
       warnSpy.mockRestore()
+
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -426,6 +462,7 @@ describe('registerPtyHandlers', () => {
       )
     } finally {
       warnSpy.mockRestore()
+
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {

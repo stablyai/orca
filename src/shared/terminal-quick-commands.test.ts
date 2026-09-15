@@ -233,6 +233,7 @@ describe('terminal quick commands', () => {
       { id: 'first', label: 'First', command: 'echo first', appendEnter: true },
       { id: 'second', label: 'Second', command: 'echo second', appendEnter: true }
     ])
+
     const edited = { ...first!, label: 'Edited' }
 
     expect(
@@ -311,6 +312,7 @@ describe('terminal quick commands', () => {
       command: 'git status',
       appendEnter: true
     }
+
     const agent = {
       id: 'agent',
       label: 'Agent',
@@ -343,6 +345,7 @@ describe('flattenTerminalQuickCommand', () => {
       command: 'git status',
       appendEnter: true
     } as const
+
     expect(flattenTerminalQuickCommand(command)).toBe(command)
   })
 
@@ -353,6 +356,7 @@ describe('flattenTerminalQuickCommand', () => {
       command: 'cd packages\nbun run build\ncd ..',
       appendEnter: true
     })
+
     expect(result.command).toBe('cd packages; bun run build; cd ..')
   })
 
@@ -363,6 +367,7 @@ describe('flattenTerminalQuickCommand', () => {
       command: 'echo one\n\n\necho two',
       appendEnter: true
     })
+
     expect(result.command).toBe('echo one; echo two')
   })
 
@@ -373,6 +378,7 @@ describe('flattenTerminalQuickCommand', () => {
       command: 'echo one\r\necho two',
       appendEnter: true
     })
+
     expect(result.command).toBe('echo one; echo two')
   })
 
@@ -383,6 +389,7 @@ describe('flattenTerminalQuickCommand', () => {
       command: '\n  echo one  \n\n  echo two\n',
       appendEnter: true
     })
+
     expect(result.command).toBe('echo one; echo two')
   })
 })

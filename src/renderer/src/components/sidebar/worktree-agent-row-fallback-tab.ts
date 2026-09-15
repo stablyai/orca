@@ -11,9 +11,11 @@ export function tabFromWorktreeAttributedStatusEntry(
   effectiveStartedAt: number
 ): TerminalTab | null {
   const parsed = parsePaneKey(entry.paneKey)
+
   if (!parsed || !entry.worktreeId) {
     return null
   }
+
   return {
     id: parsed.tabId,
     ptyId: null,

@@ -8,6 +8,7 @@ export function useFocusedSettingsHostClients(hostIds: string[]) {
   useFocusEffect(
     useCallback(() => {
       setFocused(true)
+
       return () => setFocused(false)
     }, [])
   )
@@ -15,5 +16,6 @@ export function useFocusedSettingsHostClients(hostIds: string[]) {
   const clients = useAllHostClients(focused ? hostIds : [], {
     closeUnusedOnRelease: true
   })
+
   return { clients, focused }
 }

@@ -167,18 +167,22 @@ describe('ActivityThreadListPane virtualization', () => {
   it('restores caller-held collapse state across remounts', () => {
     // Models the sidebar: the caller owns the Set and provides it via context.
     let collapsed: ReadonlySet<string> = new Set<string>()
+
     const collapseState = (): ActivityThreadCollapseState => ({
       collapsedGroupKeys: collapsed,
       onToggleGroupCollapse: (groupKey: string) => {
         const next = new Set(collapsed)
+
         if (next.has(groupKey)) {
           next.delete(groupKey)
         } else {
           next.add(groupKey)
         }
+
         collapsed = next
       }
     })
+
     renderPane(root, { threads: makeManyThreads(), collapseState: collapseState() })
     const header = container.querySelector('[role="button"]') as HTMLElement
     act(() => {
@@ -197,6 +201,7 @@ describe('ActivityThreadListPane virtualization', () => {
   it('disarms a stale deferred restore instead of yanking the viewport on late growth', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const scrollTopRef = { current: 360 }
       // Mounts with a list too small to contain the saved offset (it shrank).

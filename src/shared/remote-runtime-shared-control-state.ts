@@ -39,9 +39,11 @@ export function rejectSharedControlPendingRequest(
   error: Error
 ): void {
   const pending = pendingRequests.get(requestId)
+
   if (!pending) {
     return
   }
+
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
   releaseRemoteRuntimePreparedRequest(pending)
@@ -54,9 +56,11 @@ export function resolveSharedControlPendingResponse(
   response: RuntimeRpcResponse<unknown>
 ): void {
   const pending = pendingRequests.get(requestId)
+
   if (!pending) {
     return
   }
+
   pendingRequests.delete(requestId)
   clearTimeout(pending.timeout)
   releaseRemoteRuntimePreparedRequest(pending)
@@ -72,6 +76,7 @@ export function refreshSharedControlPendingRequestTimeouts(
     if (!pending.refreshTimeoutOnKeepalive) {
       continue
     }
+
     const timeout = pending.timeout as ReturnType<typeof setTimeout> & { refresh?: () => void }
     timeout.refresh?.()
   }
@@ -82,6 +87,7 @@ export function rejectAllSharedControlPendingRequests(
   error?: Error
 ): void {
   const closeError = error ?? remoteRuntimeUnavailableError()
+
   for (const [requestId, pending] of pendingRequests) {
     clearTimeout(pending.timeout)
     pendingRequests.delete(requestId)
@@ -107,11 +113,14 @@ export function finishSharedControlSubscription(
   if (subscription.closed) {
     return
   }
+
   subscription.closed = true
   subscriptions.delete(subscription.requestId)
+
   if (error) {
     subscription.callbacks.onError(error)
   }
+
   if (notifyClose) {
     subscription.callbacks.onClose?.()
   }
@@ -141,23 +150,31 @@ export function handleSharedControlSubscriptionResponse(
   // remote subscription, so a later close must finish locally instead of
   // waiting forever for an id that will never arrive.
   subscription.awaitingResubscribe = false
+
   if (!response.ok) {
     subscription.sent = false
   }
+
   if (response.ok) {
     const subscriptionId = getSubscriptionId(response.result)
+
     if (subscriptionId) {
       subscription.remoteSubscriptionId = subscriptionId
     }
   }
+
   let delivered = response
+
   if (subscription.pendingReplayTag) {
     subscription.pendingReplayTag = false
+
     if (response.ok) {
       delivered = tagRuntimeSubscriptionReplayResponse(response)
     }
   }
+
   subscription.callbacks.onResponse(delivered)
+
   if (response.ok && isEndResult(response.result)) {
     finishSharedControlSubscription(subscriptions, subscription, false)
   }
@@ -179,7 +196,9 @@ export function closeSharedControlSocketState(args: {
     )
     rejectAllSharedControlPendingRequests(args.pendingRequests, args.error)
   }
+
   markSharedControlSubscriptionsUnsent(args.subscriptions)
+
   try {
     args.socketCleanup?.()
     args.ws?.close()
@@ -198,12 +217,16 @@ export function scheduleSharedControlReconnect(args: {
   if (args.current || args.intentionallyClosed) {
     return { timer: args.current, reconnectAttempt: args.reconnectAttempt }
   }
+
   const delay = withReconnectJitter(
     args.delaysMs[Math.min(args.reconnectAttempt, args.delaysMs.length - 1)]
   )
+
   const timer = setTimeout(args.open, delay)
+
   if (typeof timer.unref === 'function') {
     timer.unref()
   }
+
   return { timer, reconnectAttempt: args.reconnectAttempt + 1 }
 }

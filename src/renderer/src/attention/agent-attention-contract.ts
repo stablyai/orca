@@ -26,6 +26,7 @@ export function readAgentAttentionUnreadReason(
   if (marker === undefined || marker === false) {
     return null
   }
+
   return marker === true ? 'legacy' : marker
 }
 

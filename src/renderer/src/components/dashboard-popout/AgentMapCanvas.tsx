@@ -77,6 +77,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const containerRef = useRef<HTMLDivElement>(null)
     const svgRef = useRef<SVGSVGElement>(null)
     const nodeRefs = useRef(new Map<string, SVGGElement>())
+
     const dragRef = useRef<{
       pointerId: number
       point: AgentMapViewport['center']
@@ -84,22 +85,28 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       worldPerPixelX: number
       worldPerPixelY: number
     } | null>(null)
+
     const viewportFrameRef = useRef<number | null>(null)
     const pendingViewportRef = useRef<AgentMapViewport | null>(null)
     const interactionBoundsRef = useRef<DOMRect | null>(null)
     const hasShownProjectsRef = useRef(layout.projects.length > 0)
     const { held, hold, release: releaseHold, clearDrag } = useAgentMapPointerHold(dragRef)
+
     const clearInteractionBounds = useCallback(() => {
       interactionBoundsRef.current = null
     }, [])
+
     const size = useAgentMapCanvasSize(containerRef, clearInteractionBounds)
+
     const [viewport, setViewport] = useState<AgentMapViewport>({
       center: { x: layout.width / 2, y: layout.height / 2 },
       zoom: 1
     })
+
     const prefersReducedMotion = usePrefersReducedMotion()
     const motionLayout = useAgentMapMotionLayout(layout, prefersReducedMotion)
     const viewportRef = useRef(viewport)
+
     const { contextMenus, onOpenProjectContextMenu, onOpenWorkspaceContextMenu } =
       useAgentMapContextMenus({
         enabled: workspaceContextMenusEnabled,
@@ -108,12 +115,15 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
         onSpawnAgent,
         onSleepWorkspace
       })
+
     const { center, zoom } = viewport
     const agents = useMemo(() => agentMapAgents(layout), [layout])
+
     const navigableAgents = useMemo(
       () => navigableAgentMapAgents(layout, zoom, allowAggregation, selectedPaneKey),
       [allowAggregation, layout, selectedPaneKey, zoom]
     )
+
     const hasProjects = layout.projects.length > 0
     const aspect = size.width / Math.max(1, size.height)
     const baseWidth = Math.max(layout.width, layout.height * aspect)
@@ -124,8 +134,10 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const labelScale = Math.max(1, 1 / mapScale)
     const viewBox = `${center.x - viewWidth / 2} ${center.y - viewHeight / 2} ${viewWidth} ${viewHeight}`
     const focusZoom = agentFocusZoom(layout, size.width, size.height)
+
     const resolveFocusZoom = useCallback((): number => {
       const bounds = containerRef.current?.getBoundingClientRect()
+
       return bounds && bounds.width > 0 && bounds.height > 0
         ? agentFocusZoom(layout, bounds.width, bounds.height)
         : focusZoom
@@ -137,12 +149,14 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       interactionBoundsRef.current = null
       setViewport(next)
     }, [])
+
     const { animate: animateViewport, stop: stopViewportTransition } =
       useAgentMapViewportTransition({
         durationMs: AGENT_FOCUS_DURATION_MS,
         reducedMotion: prefersReducedMotion,
         onFrame: commitViewport
       })
+
     useAgentMapSelectedFocus({
       agents,
       selectedPaneKey,
@@ -151,6 +165,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       animateViewport,
       stopViewportTransition
     })
+
     const applyViewport = useCallback(
       (next: AgentMapViewport): void => {
         stopViewportTransition()
@@ -158,19 +173,23 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       },
       [commitViewport, stopViewportTransition]
     )
+
     const scheduleViewport = useCallback(
       (next: AgentMapViewport): void => {
         stopViewportTransition()
         viewportRef.current = next
         pendingViewportRef.current = next
+
         if (viewportFrameRef.current !== null) {
           return
         }
+
         viewportFrameRef.current = requestAnimationFrame(() => {
           viewportFrameRef.current = null
           interactionBoundsRef.current = null
           const pending = pendingViewportRef.current
           pendingViewportRef.current = null
+
           if (pending) {
             setViewport(pending)
           }
@@ -178,9 +197,11 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       },
       [stopViewportTransition]
     )
+
     const fit = useCallback((): void => {
       applyViewport({ center: { x: layout.width / 2, y: layout.height / 2 }, zoom: 1 })
     }, [applyViewport, layout.height, layout.width])
+
     const focusProject = useCallback(
       (project: AgentMapProjectRing): void => {
         const projectWidth = project.radius * 2.5
@@ -196,6 +217,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       },
       [applyViewport, baseHeight, baseWidth]
     )
+
     useImperativeHandle(forwardedRef, () => ({ fit, focusProject }), [fit, focusProject])
 
     useEffect(() => {
@@ -219,8 +241,10 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onSelectAgent(agent.card)
+
           return
         }
+
         const direction =
           event.key === 'ArrowLeft'
             ? { x: -1, y: 0 }
@@ -231,9 +255,11 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
                 : event.key === 'ArrowDown'
                   ? { x: 0, y: 1 }
                   : null
+
         if (!direction) {
           return
         }
+
         event.preventDefault()
         const next = nextDirectionalAgent(agent, navigableAgents, direction)
         nodeRefs.current.get(next?.card.paneKey ?? '')?.focus()
@@ -244,28 +270,37 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const zoomAt = useCallback(
       (nextZoom: number, clientX?: number, clientY?: number): void => {
         const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+
         if (clientX === undefined || clientY === undefined) {
           applyViewport({ ...viewportRef.current, zoom: clampedZoom })
+
           return
         }
+
         const bounds =
           interactionBoundsRef.current ?? svgRef.current?.getBoundingClientRect() ?? null
+
         if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
           applyViewport({ ...viewportRef.current, zoom: clampedZoom })
+
           return
         }
+
         interactionBoundsRef.current = bounds
         const current = viewportRef.current
         const currentWidth = baseWidth / current.zoom
         const currentHeight = baseHeight / current.zoom
+
         const anchorX =
           current.center.x -
           currentWidth / 2 +
           ((clientX - bounds.left) / bounds.width) * currentWidth
+
         const anchorY =
           current.center.y -
           currentHeight / 2 +
           ((clientY - bounds.top) / bounds.height) * currentHeight
+
         const nextWidth = baseWidth / clampedZoom
         const nextHeight = baseHeight / clampedZoom
         const xRatio = (clientX - bounds.left) / bounds.width
@@ -285,10 +320,13 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       if (!hasProjects) {
         return
       }
+
       const svg = svgRef.current
+
       if (!svg) {
         return
       }
+
       const handleWheel = (event: WheelEvent): void => {
         event.preventDefault()
         zoomAt(
@@ -297,7 +335,9 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
           event.clientY
         )
       }
+
       svg.addEventListener('wheel', handleWheel, { passive: false })
+
       return () => svg.removeEventListener('wheel', handleWheel)
     }, [hasProjects, zoomAt])
 
@@ -320,6 +360,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               if (event.button !== 0 || dragRef.current) {
                 return
               }
+
               if (
                 (event.target as Element).closest(
                   '[data-agent-map-agent], .agent-map-worktree-ring'
@@ -327,10 +368,13 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               ) {
                 return
               }
+
               const bounds = event.currentTarget.getBoundingClientRect()
+
               if (bounds.width <= 0 || bounds.height <= 0) {
                 return
               }
+
               const current = viewportRef.current
               dragRef.current = {
                 pointerId: event.pointerId,
@@ -344,13 +388,17 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
             }}
             onPointerMove={(event) => {
               const drag = dragRef.current
+
               if (!drag) {
                 releaseHold()
+
                 return
               }
+
               if (drag.pointerId !== event.pointerId) {
                 return
               }
+
               scheduleViewport({
                 center: {
                   x: drag.center.x - (event.clientX - drag.point.x) * drag.worldPerPixelX,

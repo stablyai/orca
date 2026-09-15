@@ -45,12 +45,15 @@ export function settingsForGitHubRepoOwner(
   if (!repo) {
     return settings
   }
+
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   if (parsed?.kind === 'runtime') {
     return settings
       ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
+
   // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
   return settings
     ? { ...settings, activeRuntimeEnvironmentId: null }
@@ -64,8 +67,10 @@ export function settingsForGitHubFocusedRepoOwner(
   if (!repo?.executionHostId && !repo?.connectionId) {
     return settings
   }
+
   return settingsForGitHubRepoOwner(settings, repo)
 }
+
 export function getWorkItemsCacheKeyForOwner(
   state: Partial<Pick<AppState, 'repos' | 'settings'>>,
   repoId: string,
@@ -74,6 +79,7 @@ export function getWorkItemsCacheKeyForOwner(
   repoPath?: string
 ): string {
   const repo = findRepoForGitHubOwner(state, repoId, repoPath ?? '')
+
   return workItemsCacheKey(
     repoId,
     limit,
@@ -90,6 +96,7 @@ export function getGitHubWorkItemSourceHostId(
   if (sourceContext?.provider === 'github') {
     return sourceContext.hostId
   }
+
   return repo
     ? (normalizeExecutionHostId(getGitHubFocusedRepoOwnerHostId(state.settings, repo)) ?? undefined)
     : undefined
@@ -103,6 +110,7 @@ export function getGitHubWorkItemSourceCacheScope(
   if (sourceContext?.provider === 'github') {
     return getTaskSourceCacheScope(sourceContext)
   }
+
   return getGitHubWorkItemSourceHostId(state, repo, sourceContext)
 }
 
@@ -117,6 +125,7 @@ export function getGitHubWorkItemSourceSettings(
       ...getTaskSourceRuntimeSettings(sourceContext)
     } as AppState['settings']
   }
+
   return settingsForGitHubFocusedRepoOwner(settings, repo)
 }
 
@@ -131,6 +140,7 @@ export function getGitHubRepoSourceSettings(
       ...getTaskSourceRuntimeSettings(sourceContext)
     } as AppState['settings']
   }
+
   return settingsForGitHubRepoOwner(settings, repo)
 }
 
@@ -143,6 +153,7 @@ export function getGitHubWorkItemRequestContext(
 ): GitHubWorkItemRequestContext {
   if (sourceContext?.provider === 'github') {
     const parsedHost = parseExecutionHostId(sourceContext.hostId)
+
     if (parsedHost?.kind === 'runtime') {
       return {
         repoId,
@@ -155,7 +166,9 @@ export function getGitHubWorkItemRequestContext(
       }
     }
   }
+
   const runtimeRepo = getRuntimeRepoTarget(state, repoPath, settings)
+
   return {
     repoId,
     repoPath,
@@ -184,6 +197,7 @@ export function listGitHubWorkItemsForRepo(
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gh.listWorkItems({
     repoPath: context.repoPath,
     repoId: context.repoId,
@@ -206,6 +220,7 @@ export function countGitHubWorkItemsForRepo(
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gh.countWorkItems({
     repoPath: context.repoPath,
     repoId: context.repoId,
@@ -218,6 +233,8 @@ export function isGitHubUnavailableWorkItemsError(error: unknown): boolean {
   if (error instanceof RuntimeRpcCallError && error.code !== 'runtime_error') {
     return false
   }
+
   const message = error instanceof Error ? error.message : String(error)
+
   return classifyGitHubUnavailable(message) !== null
 }

@@ -10,6 +10,7 @@ import type { GlobalSettings } from './global-settings-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
+
   return {
     ...base,
     defaultTuiAgent: 'codex' as const,
@@ -78,6 +79,7 @@ describe('source-control AI action recipes', () => {
       operation: 'commitMessage',
       discoveryHostKey: 'local'
     })
+
     expect(result.ok && result.value.params.agentId).toBe('codex')
     expect(result.ok && result.value.params.model).toBe('gpt-5.5')
   })
@@ -90,6 +92,7 @@ describe('source-control AI action recipes', () => {
       agentId: 'claude',
       selectedModelByAgent: { codex: 'gpt-5.5', claude: 'sonnet' }
     }
+
     const result = resolveSourceControlAiForOperation({
       settings: base,
       repo: {
@@ -266,6 +269,7 @@ describe('source-control AI action recipes', () => {
         }
       }
     }
+
     const legacy = projectSourceControlAiToLegacyCommitMessageAi(source)
 
     const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(source, legacy)
@@ -296,6 +300,7 @@ describe('source-control AI action recipes', () => {
         }
       }
     }
+
     const legacy = {
       ...projectSourceControlAiToLegacyCommitMessageAi(source),
       enabled: false
@@ -334,6 +339,7 @@ describe('source-control AI action recipes', () => {
         }
       }
     }
+
     const legacy = {
       ...projectSourceControlAiToLegacyCommitMessageAi(source),
       customPrompt: 'rollback changed commit prompt'
@@ -365,6 +371,7 @@ describe('source-control AI action recipes', () => {
         }
       }
     }
+
     const legacy = {
       ...projectSourceControlAiToLegacyCommitMessageAi(source),
       agentId: 'custom' as const,

@@ -44,9 +44,11 @@ describe('TerminalAdvancedSection scrollback rows', () => {
 
   function getScrollbackRowsInput(): HTMLInputElement {
     const input = container.querySelector<HTMLInputElement>('input[type="number"]')
+
     if (!input) {
       throw new Error('scrollback rows input not found')
     }
+
     return input
   }
 

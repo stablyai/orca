@@ -25,6 +25,7 @@ const roots: string[] = []
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-marketplace-installer-'))
   roots.push(root)
+
   return root
 }
 
@@ -71,15 +72,18 @@ async function setup(): Promise<{
   sourceId: string
 }> {
   const root = await tempRoot()
+
   const service = new PluginMarketplaceService({
     pluginsDataDir: join(root, 'plugins-data'),
     fetcher: async () => ({ marketplaceCommit: 'f'.repeat(40), marketplace: marketplace() })
   })
+
   const added = await service.addSource({
     kind: 'git',
     url: 'https://github.com/community/plugins.git',
     ref: 'main'
   })
+
   return {
     root,
     marketplace: service,
@@ -101,6 +105,7 @@ beforeEach(() => {
   git.checkout.mockReset()
   git.checkout.mockImplementation(async ({ destination }: { destination: string }) => {
     await writeCurrentPlugin(destination)
+
     return git.commit
   })
 })
@@ -125,6 +130,7 @@ describe('PluginMarketplaceInstaller', () => {
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     expect(result).toMatchObject({ ok: true, resolvedCommit: 'a'.repeat(40) })
     const lock = await readPluginLockfile(join(root, 'plugins'))
     expect(lock.plugins['community.notes']?.source).toEqual({
@@ -170,6 +176,7 @@ describe('PluginMarketplaceInstaller', () => {
     const firstPreview = await installer.preview(sourceId, 'community.notes')
     const firstInstall = await installer.install(firstPreview)
     expect(firstInstall.ok).toBe(true)
+
     if (!firstInstall.ok) {
       return
     }

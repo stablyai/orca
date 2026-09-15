@@ -25,9 +25,11 @@ export async function waitForAutomationRerunPendingVisibility(
   pendingStartedAt: number
 ): Promise<void> {
   const remainingMs = getAutomationRerunPendingRemainingMs({ pendingStartedAt })
+
   if (remainingMs <= 0) {
     return
   }
+
   await new Promise<void>((resolve) => window.setTimeout(resolve, remainingMs))
 }
 
@@ -41,6 +43,7 @@ export function canRerunAutomationRun({
   if (!automation || run.automationId !== automation.id) {
     return false
   }
+
   return (
     run.status === 'dispatch_failed' ||
     run.status === 'skipped_unavailable' ||
@@ -58,6 +61,7 @@ export function getAutomationRunViewState({
   terminalTargetExists: boolean
 }): AutomationRunViewState {
   const hasTerminalIdentity = Boolean(run.terminalPaneKey && run.terminalPtyId)
+
   if (run.workspaceId && workspaceExists && terminalTargetExists) {
     return {
       availability: 'terminal',

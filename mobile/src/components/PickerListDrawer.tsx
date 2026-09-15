@@ -35,6 +35,7 @@ export function PickerListDrawer<T extends PickerListItem>({
     if (visible) {
       setClosing(false)
     }
+
     return () => {
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current)
@@ -53,6 +54,7 @@ export function PickerListDrawer<T extends PickerListItem>({
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current)
       }
+
       setClosing(true)
       closeTimerRef.current = setTimeout(() => {
         closeTimerRef.current = null
@@ -83,6 +85,7 @@ export function PickerListDrawer<T extends PickerListItem>({
         ItemSeparatorComponent={PickerSeparator}
         renderItem={({ item }) => {
           const selected = item.id === selectedId
+
           return (
             <Pressable
               style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}

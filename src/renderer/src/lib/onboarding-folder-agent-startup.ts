@@ -28,6 +28,7 @@ function getClientPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Windows')) {
     return 'win32'
   }
+
   return navigator.userAgent.includes('Mac') ? 'darwin' : 'linux'
 }
 
@@ -36,6 +37,7 @@ export function buildOnboardingFolderAgentStartup(
   nativeChatTranscriptIsLocalReadable = true
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
+
   if (
     !settings ||
     !agent ||
@@ -58,6 +60,7 @@ export function buildOnboardingFolderAgentStartup(
     platform: getClientPlatform(),
     allowEmptyPromptLaunch: true
   })
+
   if (!startupPlan) {
     return undefined
   }
@@ -100,5 +103,6 @@ export function buildDismissedOnboardingFolderAgentStartup(
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
+
   return buildOnboardingFolderAgentStartup(settings, nativeChatTranscriptIsLocalReadable)
 }

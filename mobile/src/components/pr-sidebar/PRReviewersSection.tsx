@@ -27,6 +27,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   // phase 2 failed (no body/comments/reviews landed).
   const loadingDetails = details === null
   const detailsFailed = details != null && isPrSidebarDetailsPlaceholder(details)
+
   const authoritativeRows = useMemo(
     () =>
       details?.item && !isPrSidebarDetailsPlaceholder(details)
@@ -34,6 +35,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
         : [],
     [details]
   )
+
   const [pickerOpen, setPickerOpen] = useState(false)
 
   // The authoritative requested-set drives optimistic resolution; an optimistic
@@ -42,6 +44,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
     () => new Set(authoritativeRows.map((r) => r.login.toLowerCase())),
     [authoritativeRows]
   )
+
   const isRequested = (login: string): boolean =>
     actions.resolveReviewerRequested(login, authoritativeRequested.has(login.toLowerCase()))
 
@@ -53,6 +56,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   const seededLogins = useMemo(() => {
     const logins = authoritativeRows.map((r) => r.login)
     const author = details?.item?.author
+
     return author ? [author, ...logins] : logins
   }, [authoritativeRows, details])
 
@@ -81,6 +85,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
       ) : (
         rows.map((row) => {
           const busy = actions.isBusy({ kind: 'reviewer', login: row.login })
+
           return (
             <View key={row.login} style={styles.row}>
               <View style={styles.rowMain}>

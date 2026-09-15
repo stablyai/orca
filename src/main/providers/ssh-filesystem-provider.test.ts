@@ -20,6 +20,7 @@ type MockMultiplexer = {
 
 function createMockMux(): MockMultiplexer {
   const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
+
   return {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
@@ -27,11 +28,14 @@ function createMockMux(): MockMultiplexer {
     onNotificationByMethod: vi.fn(
       (method: string, handler: (params: Record<string, unknown>) => void) => {
         let set = methodHandlers.get(method)
+
         if (!set) {
           set = new Set()
           methodHandlers.set(method, set)
         }
+
         set.add(handler)
+
         return () => set!.delete(handler)
       }
     ),
@@ -41,6 +45,7 @@ function createMockMux(): MockMultiplexer {
     _methodHandlers: methodHandlers,
     _emitMethod: (method, params) => {
       const set = methodHandlers.get(method)
+
       if (set) {
         for (const handler of Array.from(set)) {
           handler(params)
@@ -69,6 +74,7 @@ describe('SshFilesystemProvider', () => {
         { name: 'src', isDirectory: true, isSymlink: false },
         { name: 'README.md', isDirectory: false, isSymlink: false }
       ]
+
       mux.request.mockResolvedValue(entries)
 
       const result = await provider.readDir('/home/user/project')
@@ -181,6 +187,7 @@ describe('SshFilesystemProvider', () => {
   describe('writeFileBase64', () => {
     it('writes decoded bytes through SFTP', async () => {
       const written: Buffer[] = []
+
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
@@ -191,10 +198,12 @@ describe('SshFilesystemProvider', () => {
         }),
         destroy: vi.fn()
       }
+
       const sftp = {
         createWriteStream: vi.fn(() => writeStream),
         end: vi.fn()
       }
+
       provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
       await provider.writeFileBase64('/home/user/logo.png', 'cG5n')
@@ -232,10 +241,12 @@ describe('SshFilesystemProvider', () => {
         }),
         destroy: vi.fn()
       }
+
       const sftp = {
         createWriteStream: vi.fn(() => writeStream),
         end: vi.fn()
       }
+
       provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
       await provider.writeFileBase64Chunk('/home/user/logo.png', 'cG5n', true)
@@ -263,6 +274,7 @@ describe('SshFilesystemProvider', () => {
         ),
         end: vi.fn()
       }
+
       provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
       await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
@@ -283,6 +295,7 @@ describe('SshFilesystemProvider', () => {
         ),
         end: vi.fn()
       }
+
       provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
       await expect(
@@ -298,8 +311,10 @@ describe('SshFilesystemProvider', () => {
       const createWriteStream = vi.fn(() => {
         const stream = new PassThrough()
         stream.resume()
+
         return stream
       })
+
       const sftp = { createWriteStream, end: vi.fn() }
       const createSftp = vi.fn().mockResolvedValue(sftp)
       provider = new SshFilesystemProvider('conn-1', mux as never, createSftp as never)
@@ -368,6 +383,7 @@ describe('SshFilesystemProvider', () => {
 
     it('falls back to SFTP lstat when connected to an older relay', async () => {
       mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+
       const sftp = {
         lstat: vi.fn((_path: string, callback: (err: Error | undefined, stats: unknown) => void) =>
           callback(undefined, {
@@ -379,6 +395,7 @@ describe('SshFilesystemProvider', () => {
         ),
         end: vi.fn()
       }
+
       provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
       await expect(provider.lstat('/home/user/link.txt')).resolves.toEqual({
@@ -399,6 +416,7 @@ describe('SshFilesystemProvider', () => {
       omittedTopLevelItemCount: 0,
       omittedTopLevelSizeBytes: 0
     }
+
     const controller = new AbortController()
     mux.request.mockResolvedValue(result)
 
@@ -481,6 +499,7 @@ describe('SshFilesystemProvider', () => {
       rootPath: '/home/user/project',
       caseSensitive: true
     }
+
     const result = await provider.search(opts)
     expect(mux.request).toHaveBeenCalledWith('fs.search', opts)
     expect(result).toEqual(searchResult)
@@ -566,6 +585,7 @@ describe('SshFilesystemProvider', () => {
 
     it('rejects promptly when the watch signal aborts during setup', async () => {
       let resolveWatch: () => void = () => {}
+
       mux.request.mockImplementationOnce(
         (_method, _params, options?: { signal?: AbortSignal }) =>
           new Promise<void>((resolve, reject) => {
@@ -576,6 +596,7 @@ describe('SshFilesystemProvider', () => {
                 const error = new Error('Request "fs.watch" was cancelled') as Error & {
                   name: string
                 }
+
                 error.name = 'AbortError'
                 reject(error)
               },
@@ -584,6 +605,7 @@ describe('SshFilesystemProvider', () => {
           })
       )
       const controller = new AbortController()
+
       const pendingWatch = provider.watch('/home/user/project', vi.fn(), {
         signal: controller.signal
       })
@@ -597,6 +619,7 @@ describe('SshFilesystemProvider', () => {
 
     it('keeps shared setup alive when only its first caller aborts', async () => {
       let resolveWatch: () => void = () => {}
+
       let physicalSignal: AbortSignal | undefined
       mux.request.mockImplementationOnce(
         (_method, _params, options?: { signal?: AbortSignal }) =>
@@ -612,6 +635,7 @@ describe('SshFilesystemProvider', () => {
       const firstWatch = provider.watch('/home/user/project', first, {
         signal: firstController.signal
       })
+
       const secondWatch = provider.watch('/home/user/project', second)
       firstController.abort()
 
@@ -720,9 +744,11 @@ describe('SshFilesystemProvider', () => {
       const second = vi.fn()
       const firstTerminal = vi.fn()
       const secondTerminal = vi.fn()
+
       const unsubFirst = await provider.watch('C:\\Repo', first, {
         onTerminalError: firstTerminal
       })
+
       const unsubSecond = await provider.watch('c:/repo/', second, {
         onTerminalError: secondTerminal
       })
@@ -751,6 +777,7 @@ describe('SshFilesystemProvider', () => {
 
     it('shares an in-flight same-root watch setup across concurrent subscribers', async () => {
       let resolveWatch: () => void = () => {}
+
       mux.request.mockImplementationOnce(
         () =>
           new Promise<void>((resolve) => {
@@ -891,6 +918,7 @@ describe('SshFilesystemProvider', () => {
 
     it('unwatches when disposed while fs.watch setup is still resolving', async () => {
       let resolveWatch: () => void = () => {}
+
       mux.request.mockImplementationOnce(
         () =>
           new Promise<void>((resolve) => {

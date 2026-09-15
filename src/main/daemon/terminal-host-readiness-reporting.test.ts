@@ -11,6 +11,7 @@ import { TerminalHost } from './terminal-host'
  */
 function createSubprocess(): SubprocessHandle & { exit: () => void } {
   let onExit: ((code: number) => void) | null = null
+
   return {
     pid: 4242,
     shellPath: '/opt/homebrew/bin/zsh',
@@ -34,8 +35,10 @@ describe('TerminalHost readiness reporting', () => {
   let host: TerminalHost
   let subprocess: ReturnType<typeof createSubprocess> | undefined
   const events: { event: string; details: Record<string, unknown> }[] = []
+
   const spawnSubprocess = vi.fn(() => {
     subprocess = createSubprocess()
+
     return subprocess
   })
 

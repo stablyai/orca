@@ -50,11 +50,15 @@ export function BrowserHomePageSetting({
         onSubmit={(event) => {
           event.preventDefault()
           const trimmed = value.trim()
+
           if (!trimmed) {
             onSave(null)
+
             return
           }
+
           const normalized = normalizeBrowserNavigationUrl(trimmed)
+
           if (normalized && normalized !== ORCA_BROWSER_BLANK_URL) {
             onSave(normalized)
             toast.success(

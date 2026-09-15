@@ -27,6 +27,7 @@ const execFileAsync = promisify(execFile)
 async function gitTreeShaOf(directory: string): Promise<string> {
   const gitDir = await mkdtemp(join(tmpdir(), 'orca-skill-hash-'))
   temporaryDirectories.push(gitDir)
+
   const env = {
     ...process.env,
     GIT_DIR: gitDir,
@@ -35,14 +36,17 @@ async function gitTreeShaOf(directory: string): Promise<string> {
     GIT_CONFIG_GLOBAL: join(gitDir, 'no-config'),
     GIT_CONFIG_SYSTEM: join(gitDir, 'no-config')
   }
+
   await execFileAsync('git', ['init', '--quiet'], { env, cwd: directory })
   await execFileAsync('git', ['add', '-A'], { env, cwd: directory })
   const { stdout } = await execFileAsync('git', ['write-tree'], { env, cwd: directory })
+
   return stdout.trim()
 }
 
 function snapshot(releaseRevision: number, markdown: string): SkillKnownSnapshot {
   const observed = describeObservedSkillFile('SKILL.md', Buffer.from(markdown), false)
+
   const file: SkillBundleFileIdentity = {
     path: observed.path,
     size: observed.size,
@@ -52,6 +56,7 @@ function snapshot(releaseRevision: number, markdown: string): SkillKnownSnapshot
     textNormalizedSha256: observed.textNormalizedSha256,
     identitySha256: observed.identitySha256
   }
+
   return {
     releaseRevision,
     packageDigest: skillPackageDigest([file]),
@@ -69,19 +74,24 @@ async function fixture() {
   await mkdir(skillResourceRoot, { recursive: true })
 
   const oldMarkdown = '---\nname: orca-cli\ndescription: Old official guide.\n---\n\n# Old\n'
+
   const currentMarkdown =
     '---\nname: orca-cli\ndescription: Current official guide.\n---\n\n# Current\n'
+
   const newerMarkdown = '---\nname: orca-cli\ndescription: Newer official guide.\n---\n\n# Newer\n'
+
   const snapshots = [
     snapshot(1, oldMarkdown),
     snapshot(2, currentMarkdown),
     snapshot(3, newerMarkdown)
   ]
+
   const current: SkillCurrentBundleEntry = {
     name: 'orca-cli',
     sourcePath: 'skills/orca-cli',
     ...snapshots[1]
   }
+
   await Promise.all([
     mkdir(join(homeDir, '.agents'), { recursive: true }).then(() =>
       writeFile(
@@ -127,8 +137,10 @@ async function fixture() {
     const directory = join(rootPath, 'orca-cli')
     await mkdir(directory, { recursive: true })
     await writeFile(join(directory, 'SKILL.md'), markdown)
+
     return directory
   }
+
   return {
     root,
     homeDir,
@@ -228,10 +240,12 @@ describe('read-only skill freshness inventory', () => {
     // HEAD, wrote its lock, and no shipped bundle knows that revision yet.
     const test = await fixture()
     const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+
     const canonical = await test.writeSkill(
       join(test.homeDir, '.agents', 'skills'),
       upstreamMarkdown
     )
+
     await writeSkillLockHash(test.homeDir, await gitTreeShaOf(canonical))
 
     const inventory = await inventorySkillFreshness({
@@ -254,10 +268,12 @@ describe('read-only skill freshness inventory', () => {
 
   it('reads up to date after the OS drops a sidecar into an untouched install', async () => {
     const test = await fixture()
+
     const directory = await test.writeSkill(
       join(test.homeDir, '.agents', 'skills'),
       test.currentMarkdown
     )
+
     // What one Finder visit leaves behind. Sorts before SKILL.md, which is what made the
     // index-aligned snapshot comparison miss and report the copy as modified.
     await writeFile(join(directory, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
@@ -284,21 +300,25 @@ describe('read-only skill freshness inventory', () => {
     // it back into the hash on the accident of its name, and the copy the CLI just wrote
     // would read "may be modified".
     const test = await fixture()
+
     const legacy = describeObservedSkillFile(
       'references/legacy.md',
       Buffer.from('dropped after rev 1\n'),
       false
     )
+
     const registryPath = join(test.resourceRoot, 'skills', 'snapshot-registry.json')
     const registry = JSON.parse(await readFile(registryPath, 'utf8'))
     registry.skills['orca-cli'][0].files.push(legacy)
     await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`)
 
     const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+
     const canonical = await test.writeSkill(
       join(test.homeDir, '.agents', 'skills'),
       upstreamMarkdown
     )
+
     // The lock records the source tree — SKILL.md alone, no leftover.
     const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
     await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
@@ -327,10 +347,12 @@ describe('read-only skill freshness inventory', () => {
     // wrote would be reported as a failed update.
     const test = await fixture()
     const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+
     const canonical = await test.writeSkill(
       join(test.homeDir, '.agents', 'skills'),
       upstreamMarkdown
     )
+
     const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
     await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
     await mkdir(join(canonical, 'agents'), { recursive: true })
@@ -356,10 +378,12 @@ describe('read-only skill freshness inventory', () => {
     // A clean install would then read "may be modified" and its update run report failure.
     const test = await fixture()
     const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+
     const canonical = await test.writeSkill(
       join(test.homeDir, '.agents', 'skills'),
       upstreamMarkdown
     )
+
     await mkdir(join(canonical, 'references'), { recursive: true })
     await writeFile(
       join(canonical, 'references', 'new.md'),
@@ -387,10 +411,12 @@ describe('read-only skill freshness inventory', () => {
     // nothing. Offering it promises a button that can never finish. A sidecar must not
     // make the placement unidentifiable and retire that guard.
     const test = await fixture()
+
     const canonical = await test.writeSkill(
       join(test.homeDir, '.agents', 'skills'),
       test.oldMarkdown
     )
+
     await mkdir(join(canonical, 'agents'), { recursive: true })
     await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
     // The fixture's synthetic tree sha for revision 2 — the revision on disk is 1.
@@ -435,10 +461,12 @@ describe('read-only skill freshness inventory', () => {
   it('does not let the lock vouch for a same-name copy outside the placements it wrote', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+
     const independent = await test.writeSkill(
       join(test.homeDir, '.claude', 'skills'),
       '---\nname: orca-cli\n---\n\nAnother tool.\n'
     )
+
     await writeSkillLockHash(test.homeDir, await gitTreeShaOf(independent))
 
     const inventory = await inventorySkillFreshness({
@@ -482,10 +510,12 @@ describe('read-only skill freshness inventory', () => {
     'deduplicates a provider alias to the canonical copy',
     async () => {
       const test = await fixture()
+
       const canonical = await test.writeSkill(
         join(test.homeDir, '.agents', 'skills'),
         test.oldMarkdown
       )
+
       const claudeRoot = join(test.homeDir, '.claude', 'skills')
       await mkdir(claudeRoot, { recursive: true })
       await symlink(canonical, join(claudeRoot, 'orca-cli'))
@@ -510,12 +540,14 @@ describe('read-only skill freshness inventory', () => {
       const test = await fixture()
       await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
       const shared = await test.writeSkill(join(test.root, 'shared'), test.currentMarkdown)
+
       const repos = await Promise.all(
         ['one', 'two'].map(async (id) => {
           const repoPath = join(test.root, `repo-${id}`)
           const root = join(repoPath, '.agents', 'skills')
           await mkdir(root, { recursive: true })
           await symlink(shared, join(root, 'orca-cli'))
+
           return { id, path: repoPath } as unknown as Repo
         })
       )
@@ -548,6 +580,7 @@ describe('read-only skill freshness inventory', () => {
         if (path === inaccessiblePath) {
           throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
         }
+
         return import('node:fs/promises').then(({ lstat }) => lstat(path))
       }
     })
@@ -576,6 +609,7 @@ describe('read-only skill freshness inventory', () => {
         if (path === inaccessiblePath) {
           throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
         }
+
         return import('node:fs/promises').then(({ lstat }) => lstat(path))
       }
     })
@@ -601,6 +635,7 @@ describe('read-only skill freshness inventory', () => {
       const test = await fixture()
       await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
       let repos: Repo[] = []
+
       if (kind === 'repo') {
         const repoPath = join(test.root, 'repo')
         await test.writeSkill(join(repoPath, '.agents', 'skills'), test.currentMarkdown)
@@ -629,6 +664,7 @@ describe('read-only skill freshness inventory', () => {
     // not ours, not the user's to delete, and left amber with no action available.
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+
     const pluginRoot = join(
       test.homeDir,
       '.codex',
@@ -637,6 +673,7 @@ describe('read-only skill freshness inventory', () => {
       'openai-bundled',
       'orca-cli'
     )
+
     await mkdir(pluginRoot, { recursive: true })
     await writeFile(join(pluginRoot, 'SKILL.md'), '---\nname: orca-cli\n---\n\nAnother tool.\n')
 
@@ -666,6 +703,7 @@ describe('read-only skill freshness inventory', () => {
     // closed, which is what keeps "unrecognized" meaningful.
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+
     const withSidecarRoot = join(
       test.homeDir,
       '.codex',
@@ -675,6 +713,7 @@ describe('read-only skill freshness inventory', () => {
       'modified',
       'orca-cli'
     )
+
     await mkdir(withSidecarRoot, { recursive: true })
     await writeFile(join(withSidecarRoot, 'SKILL.md'), test.currentMarkdown)
     await writeFile(join(withSidecarRoot, 'README.md'), 'Neighbouring file Orca never shipped\n')
@@ -746,6 +785,7 @@ describe('read-only skill freshness inventory', () => {
       repos: [],
       resourceRoot: test.resourceRoot
     })
+
     expect(inventory.installations[0]?.status).toBe('outdated')
   })
 
@@ -778,6 +818,7 @@ describe('read-only skill freshness inventory', () => {
   it('reports the repository scan limit without withholding the global update', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+
     const repos = Array.from(
       { length: MAXIMUM_REPOSITORY_SKILL_ROOTS / 2 + 1 },
       (_, index) => ({ id: `repo-${index}`, path: join(test.root, `repo-${index}`) }) as Repo
@@ -803,6 +844,7 @@ describe('read-only skill freshness inventory', () => {
   it('scans a real-shaped plugin cache completely and leaves eligibility unchanged', async () => {
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+
     const packageRoot = join(
       test.homeDir,
       '.codex',
@@ -812,6 +854,7 @@ describe('read-only skill freshness inventory', () => {
       'orca-cli',
       '1.0.0'
     )
+
     await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
     await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills/"}\n')
     const pluginSkill = await test.writeSkill(join(packageRoot, 'skills'), test.currentMarkdown)
@@ -882,11 +925,13 @@ describe('read-only skill freshness inventory', () => {
       await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
       const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
       await mkdir(pluginCache, { recursive: true })
+
       // Why: the production bound, not an injected one — #10918 is the real constant
       // collapsing the scan to the cache root, and only a real cache proves that path.
       const entries = Array.from({ length: MAXIMUM_PLUGIN_SCAN_ENTRIES + 1 }, (_, index) =>
         join(pluginCache, `entry-${index}`)
       )
+
       for (let index = 0; index < entries.length; index += 512) {
         await Promise.all(entries.slice(index, index + 512).map((path) => writeFile(path, '')))
       }

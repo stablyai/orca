@@ -6,6 +6,7 @@ import { DaemonClient } from './client'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
+
 type DaemonServerInternals = {
   preparations: {
     pending: Map<string, Set<{ canceled: boolean }>>
@@ -24,12 +25,15 @@ describe('daemon async spawn cancellation', () => {
   beforeEach(async () => {
     directory = mkdtempSync(join(tmpdir(), 'daemon-async-spawn-cancel-'))
     let markSpawnStarted: () => void = () => {}
+
     spawnStarted = new Promise<void>((resolve) => {
       markSpawnStarted = resolve
     })
+
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
+
     server = new DaemonServer({
       socketPath: getDaemonSocketPath(directory),
       tokenPath: join(directory, 'daemon.token'),
@@ -37,6 +41,7 @@ describe('daemon async spawn cancellation', () => {
         subprocess = createMockSubprocess()
         markSpawnStarted()
         await spawnGate
+
         return subprocess
       }
     })
@@ -63,6 +68,7 @@ describe('daemon async spawn cancellation', () => {
         cols: 80,
         rows: 24
       })
+
       const canceled = expect(create).rejects.toThrow('Attach canceled for session canceled-spawn')
       await spawnStarted
 
@@ -85,6 +91,7 @@ describe('daemon async spawn cancellation', () => {
         rows: 24
       })
       .catch(() => undefined)
+
     await spawnStarted
 
     client.disconnect()
@@ -106,6 +113,7 @@ describe('daemon async spawn cancellation', () => {
       { sessionId: 'timed-out-spawn', cols: 80, rows: 24 },
       10
     )
+
     await spawnStarted
 
     await expect(create).rejects.toThrow('timed out')
@@ -117,12 +125,14 @@ describe('daemon async spawn cancellation', () => {
 
   it('reaps a subprocess after the client aborts its request', async () => {
     const abort = new AbortController()
+
     const create = client.request(
       'createOrAttach',
       { sessionId: 'aborted-spawn', cols: 80, rows: 24 },
       30_000,
       abort.signal
     )
+
     await spawnStarted
 
     abort.abort()
@@ -139,15 +149,18 @@ describe('daemon async spawn cancellation', () => {
       cols: 80,
       rows: 24
     })
+
     // Only queues behind the create once that create is actually in flight.
     await spawnStarted
     const abort = new AbortController()
+
     const attach = client.request(
       'createOrAttach',
       { sessionId: 'shared-session', cols: 80, rows: 24, attachOnly: true },
       30_000,
       abort.signal
     )
+
     const daemon = server as unknown as DaemonServerInternals
     // Attach-only used to register nothing, so the daemon could not match the
     // cancel and the client dropped its only timeout.
@@ -166,13 +179,16 @@ describe('daemon async spawn cancellation', () => {
       cols: 80,
       rows: 24
     })
+
     const abort = new AbortController()
+
     const second = client.request(
       'createOrAttach',
       { sessionId: 'shared-session', cols: 80, rows: 24 },
       30_000,
       abort.signal
     )
+
     await spawnStarted
     const daemon = server as unknown as DaemonServerInternals
     await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
@@ -196,6 +212,7 @@ describe('daemon async spawn cancellation', () => {
         rows: 24
       })
       .catch(() => undefined)
+
     await spawnStarted
 
     const shutdown = server.shutdown()

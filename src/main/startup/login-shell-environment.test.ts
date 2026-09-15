@@ -9,9 +9,13 @@ import {
 } from './login-shell-environment'
 
 const originalHome = process.env.HOME
+
 const originalZdotdir = process.env.ZDOTDIR
+
 const SHELL_ONLY_VARIABLE = 'ORCA_TEST_LOGIN_SHELL_ONLY'
+
 const originalShellOnlyValue = process.env[SHELL_ONLY_VARIABLE]
+
 let testHome: string | null = null
 
 // Why: this case spawns a REAL login shell, so it can only run against one the
@@ -29,21 +33,25 @@ const realShell = REAL_SHELL_CANDIDATES.find((candidate) => existsSync(candidate
 
 afterEach(async () => {
   resetLoginShellEnvironmentCacheForTests()
+
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {
     process.env.HOME = originalHome
   }
+
   if (originalZdotdir === undefined) {
     delete process.env.ZDOTDIR
   } else {
     process.env.ZDOTDIR = originalZdotdir
   }
+
   if (originalShellOnlyValue === undefined) {
     delete process.env[SHELL_ONLY_VARIABLE]
   } else {
     process.env[SHELL_ONLY_VARIABLE] = originalShellOnlyValue
   }
+
   if (testHome) {
     await rm(testHome, { recursive: true, force: true })
     testHome = null
@@ -80,6 +88,7 @@ describe('resolveLoginShellEnvironment', () => {
         shellOverride: shell.path,
         force: true
       })
+
       expect(environment[SHELL_ONLY_VARIABLE]).toBe('shell-only')
     }
   )

@@ -15,6 +15,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -38,6 +39,7 @@ describe('WorktreeVisibilitySourceList', () => {
       addedAt: 0,
       worktreeBasePath: '.claude/worktrees'
     }
+
     const worktrees = [
       {
         path: '/repo/.claude/worktrees/review',
@@ -68,6 +70,7 @@ describe('WorktreeVisibilitySourceList', () => {
 
   it('offers a reset when a project override already matches the global value', async () => {
     const onUseDefault = vi.fn()
+
     const repo: Repo = {
       id: 'repo-1',
       path: '/repo',
@@ -76,6 +79,7 @@ describe('WorktreeVisibilitySourceList', () => {
       addedAt: 0,
       worktreeVisibilitySourcePreferences: { builtIn: { claude: 'show' } }
     }
+
     act(() => {
       root.render(
         <WorktreeVisibilitySourceList
@@ -96,6 +100,7 @@ describe('WorktreeVisibilitySourceList', () => {
     const reset = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Use global for Claude Code"]'
     )
+
     expect(reset).not.toBeNull()
     expect(container.querySelectorAll('button[aria-label^="Use global for "]')).toHaveLength(1)
     expect(reset?.closest('[data-source-row]')?.textContent).not.toContain(

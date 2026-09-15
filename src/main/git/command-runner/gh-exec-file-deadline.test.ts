@@ -21,6 +21,7 @@ function mockChild(pid = 4321): ChildProcess {
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -60,6 +61,7 @@ describe('gh exec deadline', () => {
       const pending = ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
         timeout: 15_000
       })
+
       const rejection = expect(pending).rejects.toThrow('timed out')
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
 
@@ -80,6 +82,7 @@ describe('gh exec deadline', () => {
     const child = mockChild()
     spawnMock.mockImplementation(() => {
       queueMicrotask(() => settleChild(child, 'HTTP/2.0 204 No Content\r\n'))
+
       return child
     })
 
@@ -100,6 +103,7 @@ describe('gh exec deadline', () => {
     const child = mockChild()
     spawnMock.mockImplementation(() => {
       queueMicrotask(() => settleChild(child, '['.padEnd(64, 'x')))
+
       return child
     })
 

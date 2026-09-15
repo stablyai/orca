@@ -176,6 +176,7 @@ describe('isUnchangedDiffSectionReload', () => {
       originalIsBinary: true,
       modifiedIsBinary: true
     }
+
     expect(
       isUnchangedDiffSectionReload(
         loaded('', '', { diffResult: binary }),

@@ -41,6 +41,7 @@ function configuredArgsError(detail: string): Error {
 
 function splitOption(token: string): { flag: string; inlineValue?: string } {
   const separator = token.indexOf('=')
+
   return separator > 0
     ? { flag: token.slice(0, separator), inlineValue: token.slice(separator + 1) }
     : { flag: token }
@@ -52,33 +53,44 @@ export function resolveCodexStructuredAppServerArgs(
   shell: AgentStartupShell
 ): string[] {
   const parsed = tokenizeStartupCommand(configuredArgs.trim(), shell)
+
   if (!parsed.ok) {
     throw configuredArgsError(parsed.error)
   }
+
   const divergent = parsed.spans.find((span) => span.divergesFromShell)
+
   if (divergent) {
     throw configuredArgsError(configuredArgs.slice(divergent.start, divergent.end))
   }
+
   const result: string[] = []
+
   for (let index = 0; index < parsed.tokens.length; index += 1) {
     const token = parsed.tokens[index]
     const { flag, inlineValue } = splitOption(token)
+
     if (BOOLEAN_FLAGS.has(flag) && inlineValue === undefined) {
       result.push(flag)
       continue
     }
+
     if (!VALUE_FLAGS.has(flag)) {
       throw configuredArgsError(token || 'an empty positional argument')
     }
+
     const value = inlineValue ?? parsed.tokens[++index]
+
     if (value === undefined || value.length === 0) {
       throw configuredArgsError(`${flag} requires a value`)
     }
+
     if (EFFORT_FLAGS.has(flag)) {
       result.push('-c', `model_reasoning_effort=${value}`)
     } else {
       result.push(flag, value)
     }
   }
+
   return result
 }

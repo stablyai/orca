@@ -19,13 +19,19 @@ import { clearNoEffectiveUpstreamStatusCache } from './git-status-upstream-negat
 type GitCall = Parameters<GitExec>
 
 const execFileAsync = promisify(execFile)
+
 const MERGE_BASE = '0123456789abcdef0123456789abcdef01234567'
+
 const OTHER_MERGE_BASE = 'fedcba9876543210fedcba9876543210fedcba98'
+
 // Untracked additions ride on top of the ranged diff, so the fixture needs a real file.
 const UNTRACKED_FILE = 'notes.md'
+
 const UNTRACKED_LINES = 4
+
 // No fixture path here looks like test or generated code, so it is all source.
 const NO_LINES = { added: 0, removed: 0 }
+
 const STATUS_OUTPUT = [
   '# branch.oid 1111111111111111111111111111111111111111',
   '# branch.head (detached)',
@@ -47,6 +53,7 @@ function streamGitFromCapture(git: GitExec): RelayGitStreamExec {
       disableOptionalLocks: options.disableOptionalLocks,
       signal: options.signal
     })
+
     return { stoppedEarly: options.onStdout(stdout) === true }
   }
 }
@@ -61,12 +68,15 @@ function createMockGit(overrides: {
     if (args.includes('status')) {
       return { stdout: overrides.status ?? STATUS_OUTPUT, stderr: '' }
     }
+
     if (isRangedNumstat(args)) {
       return overrides.ranged ? overrides.ranged() : { stdout: '12\t5\tsrc/a.ts\n', stderr: '' }
     }
+
     if (args.includes('diff')) {
       return { stdout: overrides.areaNumstat ?? '3\t2\tsrc/a.ts\n', stderr: '' }
     }
+
     throw new Error(`Unexpected git command: ${args.join(' ')}`)
   })
 }
@@ -78,6 +88,7 @@ const realGitExec: GitExec = async (args, cwd, opts) => {
     ...(opts?.signal ? { signal: opts.signal } : {}),
     ...(opts?.timeout ? { timeout: opts.timeout } : {})
   })
+
   return { stdout, stderr }
 }
 
@@ -120,6 +131,7 @@ async function seedBranchFixture(repo: string): Promise<string> {
   runFixtureGit(repo, ['mv', 'old-name.txt', 'new-name.txt'])
   await fs.writeFile(path.join(repo, 'tracked.txt'), 'a\nb\nc\nd\ne\nf\n')
   await fs.writeFile(path.join(repo, UNTRACKED_FILE), 'n1\nn2\nn3\nn4\n')
+
   return mergeBase
 }
 
@@ -182,6 +194,7 @@ describe('getStatusOp branch line total', () => {
       { length: 6 },
       (_, index) => `1 A. N... 100644 100644 100644 000000 111111 generated-${index}.txt`
     ).join('\n')
+
     const git = createMockGit({ status: manyEntries })
 
     const result = await getStatusOp(git, streamGitFromCapture(git), {
@@ -232,6 +245,7 @@ describe('getStatusOp branch line total', () => {
       ranged: () => {
         const error: Error & { killed?: boolean } = new Error('spawn git ETIMEDOUT')
         error.killed = true
+
         return Promise.reject(error)
       }
     })
@@ -253,6 +267,7 @@ describe('getStatusOp branch line total', () => {
       if (args.includes('status')) {
         throw new Error('fatal: not a git repository')
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -288,6 +303,7 @@ describe('getStatusOp branch line total', () => {
 
     expect(Object.hasOwn(result, 'branchLineTotal')).toBe(false)
     expect(rangedDiffCalls(git.mock.calls)).toEqual([])
+
     for (const [args] of git.mock.calls) {
       expect(args).not.toContain(String(value))
     }
@@ -295,11 +311,14 @@ describe('getStatusOp branch line total', () => {
 
   it('answers a rejected merge base with the byte-identical no-merge-base response', async () => {
     const gitWithout = createMockGit({})
+
     const withoutParam = await getStatusOp(gitWithout, streamGitFromCapture(gitWithout), {
       worktreePath: tmpDir
     })
+
     clearGitStatusLineStatsCache()
     const gitRejected = createMockGit({})
+
     const rejectedParam = await getStatusOp(gitRejected, streamGitFromCapture(gitRejected), {
       worktreePath: tmpDir,
       branchLineTotalMergeBase: '--upload-pack=x'
@@ -313,19 +332,23 @@ describe('getStatusOp branch line total', () => {
 
   it('rejects an aborted scan instead of resolving a partial total', async () => {
     const controller = new AbortController()
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: STATUS_OUTPUT, stderr: '' }
       }
+
       if (isRangedNumstat(args)) {
         controller.abort()
         const error = new Error('The operation was aborted.')
         error.name = 'AbortError'
         throw error
       }
+
       if (args.includes('diff')) {
         return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -347,6 +370,7 @@ describe('getStatusOp branch line total', () => {
       worktreePath: tmpDir,
       branchLineTotalMergeBase: MERGE_BASE
     })
+
     const reused = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir,
       branchLineTotalMergeBase: MERGE_BASE,
@@ -371,13 +395,17 @@ describe('getStatusOp branch line total', () => {
       if (args.includes('status')) {
         return { stdout: STATUS_OUTPUT, stderr: '' }
       }
+
       if (isRangedNumstat(args)) {
         await new Promise((resolve) => setTimeout(resolve, 20))
+
         return { stdout: '12\t5\tsrc/a.ts\n', stderr: '' }
       }
+
       if (args.includes('diff')) {
         return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -410,6 +438,7 @@ describe('getStatusOp branch line total', () => {
       worktreePath: tmpDir,
       branchLineTotalMergeBase: MERGE_BASE
     })
+
     const moved = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir,
       branchLineTotalMergeBase: OTHER_MERGE_BASE,
@@ -436,6 +465,7 @@ describe('getStatusOp branch line total', () => {
         worktreePath: tmpDir,
         branchLineTotalMergeBase: MERGE_BASE
       })
+
       // An old server's payload and a new server's "not known exact" payload are
       // the same thing on the wire: no key at all.
       const overTheWire = JSON.parse(JSON.stringify(result)) as {
@@ -459,6 +489,7 @@ describe('getStatusOp branch line total', () => {
       const statusArgs = git.mock.calls
         .map(([args]) => args)
         .filter((args) => args.includes('status'))
+
       expect(statusArgs).toHaveLength(1)
       expect(statusArgs[0]).not.toContain(MERGE_BASE)
     })

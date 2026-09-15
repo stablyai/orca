@@ -22,20 +22,25 @@ async function createBrowserTab(
   const tab = await page.evaluate(
     ({ targetWorktreeId, targetUrl }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         return null
       }
+
       const browserTab = state.createBrowserTab(targetWorktreeId, targetUrl, {
         title: 'Local TLS',
         activate: true
       })
+
       return { id: browserTab.id, pageId: browserTab.activePageId ?? null }
     },
     { targetWorktreeId: worktreeId, targetUrl: url }
   )
+
   if (!tab?.pageId) {
     throw new Error('Failed to create local TLS browser page')
   }
+
   return { id: tab.id, pageId: tab.pageId }
 }
 
@@ -43,9 +48,11 @@ async function switchToBrowserTab(page: Page, worktreeId: string, browserTabId: 
   await page.evaluate(
     ({ targetWorktreeId, targetBrowserTabId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         return
       }
+
       if (
         !(state.browserTabsByWorktree[targetWorktreeId] ?? []).some(
           (tab) => tab.id === targetBrowserTabId
@@ -53,6 +60,7 @@ async function switchToBrowserTab(page: Page, worktreeId: string, browserTabId: 
       ) {
         return
       }
+
       state.setActiveBrowserTab(targetBrowserTabId)
       state.setActiveTabType('browser')
     },
@@ -75,10 +83,13 @@ async function readBrowserHeading(page: Page, browserTabId: string): Promise<str
     const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
       (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
     )
+
     const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       return null
     }
+
     try {
       return await webview.executeJavaScript('document.querySelector("h1")?.textContent ?? null')
     } catch {
@@ -97,10 +108,13 @@ async function readBrowserState(
       const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
         (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
       )
+
       const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
       if (!webview) {
         return null
       }
+
       try {
         return await webview.executeJavaScript(`window.${targetStateName} ?? null`)
       } catch {
@@ -116,10 +130,13 @@ async function reloadBrowserGuest(page: Page, browserTabId: string): Promise<voi
     const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
       (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
     )
+
     const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
     }
+
     webview.reload()
   }, browserTabId)
 }
@@ -137,6 +154,7 @@ test.describe('local HTTPS certificate trust', () => {
     const firstServer = await startLocalHttpsServer()
     const secondPortServer = await startLocalHttpsServer()
     const siblingProbeServer = await startLocalHttpProbeServer(firstServer)
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
       const firstTab = await createBrowserTab(orcaPage, worktreeId, firstServer.schemeLessUrl)

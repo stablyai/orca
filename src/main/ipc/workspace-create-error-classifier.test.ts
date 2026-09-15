@@ -12,6 +12,7 @@ describe('classifyWorkspaceCreateError', () => {
     const err = new Error(
       'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
     )
+
     expect(classifyWorkspaceCreateError(err)).toBe('base_ref_missing')
   })
 
@@ -24,6 +25,7 @@ describe('classifyWorkspaceCreateError', () => {
     const err = new Error(
       'Could not find an available worktree name for "feature". Pick a different worktree name.'
     )
+
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
   })
 
@@ -31,6 +33,7 @@ describe('classifyWorkspaceCreateError', () => {
     const err = new Error(
       'Branch "feature/foo" already exists locally. Pick a different branch name.'
     )
+
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
   })
 
@@ -48,6 +51,7 @@ describe('classifyWorkspaceCreateError', () => {
     const err = Object.assign(new Error("EACCES: permission denied, mkdir '/tmp/x'"), {
       code: 'EACCES'
     })
+
     expect(classifyWorkspaceCreateError(err)).toBe('permission_denied')
   })
 

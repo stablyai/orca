@@ -77,10 +77,13 @@ export class ClaudePromptRegistry {
     const toolUseId = readClaudePromptString(registration.toolUseId)
     const toolName = readClaudePromptString(registration.toolName)
     const input = isClaudePromptRecord(registration.input) ? registration.input : null
+
     if (!toolUseId || !toolName || !input) {
       return null
     }
+
     const questions = toolName === 'AskUserQuestion' ? claudePromptQuestions(input) : []
+
     const prompt: ClaudePendingPrompt = {
       requestId: registration.requestId,
       promptKey: registration.requestId,
@@ -94,7 +97,9 @@ export class ClaudePromptRegistry {
       settle: registration.settle,
       turnId: registration.turnId ?? null
     }
+
     this.prompts.set(prompt.promptKey, prompt)
+
     return prompt
   }
 
@@ -103,9 +108,11 @@ export class ClaudePromptRegistry {
     if (!this.prompts.has(prompt.promptKey)) {
       return false
     }
+
     const observation = this.cancellationObservations.get(prompt)
     this.forget(prompt)
     observation?.resolve()
+
     return true
   }
 
@@ -126,6 +133,7 @@ export class ClaudePromptRegistry {
   find(itemId: string): { prompt: ClaudePendingPrompt; questionId?: string } | null {
     const binding = this.journalBindings.get(itemId)
     const prompt = this.prompts.get(binding?.address ?? itemId)
+
     return prompt
       ? { prompt, ...(binding?.questionId ? { questionId: binding.questionId } : {}) }
       : null
@@ -133,23 +141,29 @@ export class ClaudePromptRegistry {
 
   claim(itemId: string, kind?: 'approval' | 'question'): ClaudePromptClaim | null {
     const found = this.find(itemId)
+
     if (!found || this.claims.has(found.prompt) || (kind && found.prompt.kind !== kind)) {
       return null
     }
+
     const claim = { itemId, found }
     this.claims.set(found.prompt, claim)
+
     return claim
   }
 
   claimBound(itemId: string, turnId: string): ClaudePromptClaim | null {
     const binding = this.journalBindings.get(itemId)
     const prompt = binding ? this.prompts.get(binding.address) : undefined
+
     if (!binding || !prompt || binding.turnId !== turnId || this.claims.has(prompt)) {
       return null
     }
+
     const found = { prompt, ...(binding.questionId ? { questionId: binding.questionId } : {}) }
     const claim = { itemId, found }
     this.claims.set(prompt, claim)
+
     return claim
   }
 
@@ -162,6 +176,7 @@ export class ClaudePromptRegistry {
 
   ownsBoundClaim(claim: ClaudePromptClaim, itemId: string, turnId: string): boolean {
     const binding = this.journalBindings.get(itemId)
+
     return (
       claim.itemId === itemId &&
       this.claims.get(claim.found.prompt) === claim &&
@@ -181,29 +196,37 @@ export class ClaudePromptRegistry {
     if (!this.ownsClaim(claim)) {
       return null
     }
+
     let observation = this.cancellationObservations.get(claim.found.prompt)
+
     if (!observation) {
       let resolve = (): void => {}
+
       const promise = new Promise<void>((settled) => {
         resolve = settled
       })
+
       observation = { promise, resolve }
       this.cancellationObservations.set(claim.found.prompt, observation)
     }
+
     return observation.promise
   }
 
   cancel(requestId: string): ClaudePendingPrompt | null {
     const prompt = this.prompts.get(requestId) ?? null
+
     if (prompt) {
       this.forget(prompt)
     }
+
     return prompt
   }
 
   forget(prompt: ClaudePendingPrompt): void {
     this.claims.delete(prompt)
     this.prompts.delete(prompt.promptKey)
+
     for (const [itemId, binding] of this.journalBindings) {
       if (binding.address === prompt.promptKey) {
         this.journalBindings.delete(itemId)
@@ -216,9 +239,11 @@ export class ClaudePromptRegistry {
     this.prompts.clear()
     this.journalBindings.clear()
     this.claims.clear()
+
     for (const prompt of pending) {
       this.cancellationObservations.get(prompt)?.resolve()
     }
+
     return pending
   }
 }

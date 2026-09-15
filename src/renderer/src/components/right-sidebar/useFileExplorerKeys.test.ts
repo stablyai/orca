@@ -17,9 +17,11 @@ class FakeHTMLElement {
     if (this.editableMatch && selector.includes('input')) {
       return this
     }
+
     if (this.ignoredControlMatch && selector.includes('data-ignore-file-explorer-keys="true"')) {
       return this
     }
+
     return null
   }
 }

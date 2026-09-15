@@ -49,9 +49,11 @@ type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string
 
 function getHandler(channel: string): SpeechDownloadHandler {
   const call = handleMock.mock.calls.find((entry) => entry[0] === channel)
+
   if (!call) {
     throw new Error(`${channel} handler not registered`)
   }
+
   return call[1] as SpeechDownloadHandler
 }
 
@@ -68,9 +70,11 @@ describe('registerSpeechHandlers', () => {
     const clearProgressCallback = vi.fn()
     const progressCallbacks: ((modelId: string, progress: number) => void)[] = []
     let resolveDownload: () => void = () => {}
+
     const manager = {
       setProgressCallback: vi.fn((callback: (modelId: string, progress: number) => void) => {
         progressCallbacks.push(callback)
+
         return clearProgressCallback
       }),
       downloadModel: vi.fn(
@@ -80,13 +84,16 @@ describe('registerSpeechHandlers', () => {
           })
       )
     }
+
     const send = vi.fn()
+
     const window = {
       isDestroyed: vi.fn(() => false),
       webContents: { send },
       once: vi.fn(),
       off: vi.fn()
     }
+
     getSpeechModelManagerMock.mockReturnValue(manager)
     fromWebContentsMock.mockReturnValue(window)
     registerSpeechHandlers({} as never)
@@ -107,7 +114,9 @@ describe('registerSpeechHandlers', () => {
   it('clears the model download progress callback when the window closes', async () => {
     const clearProgressCallback = vi.fn()
     let resolveDownload: () => void = () => {}
+
     const closeHandlers: (() => void)[] = []
+
     const manager = {
       setProgressCallback: vi.fn(() => clearProgressCallback),
       downloadModel: vi.fn(
@@ -117,6 +126,7 @@ describe('registerSpeechHandlers', () => {
           })
       )
     }
+
     const window = {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
@@ -125,6 +135,7 @@ describe('registerSpeechHandlers', () => {
       }),
       off: vi.fn()
     }
+
     getSpeechModelManagerMock.mockReturnValue(manager)
     fromWebContentsMock.mockReturnValue(window)
     registerSpeechHandlers({} as never)

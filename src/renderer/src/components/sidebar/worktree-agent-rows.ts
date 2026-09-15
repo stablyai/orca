@@ -33,20 +33,25 @@ function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefin
   if (!node) {
     return 0
   }
+
   if (node.type === 'leaf') {
     return 1
   }
+
   return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
 }
 
 function seenStablePaneKeysForTab(seenPaneKeys: Set<string>, tabId: string): string[] {
   const keys: string[] = []
+
   for (const paneKey of seenPaneKeys) {
     const parsed = parsePaneKey(paneKey)
+
     if (parsed?.tabId === tabId) {
       keys.push(paneKey)
     }
   }
+
   return keys
 }
 
@@ -56,16 +61,20 @@ function isRetainedLegacyAliasOfSeenStablePane(args: {
   seenPaneKeys: Set<string>
 }): boolean {
   const legacy = parseLegacyNumericPaneKey(args.paneKey)
+
   if (!legacy) {
     return false
   }
+
   const stablePaneKeys = seenStablePaneKeysForTab(args.seenPaneKeys, legacy.tabId)
+
   if (stablePaneKeys.length === 0) {
     return false
   }
 
   const layout = args.terminalLayoutsByTabId?.[legacy.tabId]
   const leafId = resolveRuntimePaneTitleLeafId(layout, legacy.numericPaneId)
+
   if (leafId) {
     return args.seenPaneKeys.has(makePaneKey(legacy.tabId, leafId))
   }
@@ -85,23 +94,30 @@ function markSeenPaneKeyForCurrentTab(args: {
   if (!args.paneKey) {
     return
   }
+
   const parsed = parsePaneKey(args.paneKey)
+
   if (parsed) {
     if (args.currentTabsById.has(parsed.tabId)) {
       args.seenPaneKeys.add(args.paneKey)
     }
+
     return
   }
 
   const legacy = parseLegacyNumericPaneKey(args.paneKey)
+
   if (!legacy || !args.currentTabsById.has(legacy.tabId)) {
     return
   }
+
   args.seenPaneKeys.add(args.paneKey)
+
   const leafId = resolveRuntimePaneTitleLeafId(
     args.terminalLayoutsByTabId?.[legacy.tabId],
     legacy.numericPaneId
   )
+
   if (leafId) {
     args.seenPaneKeys.add(makePaneKey(legacy.tabId, leafId))
   }
@@ -117,9 +133,11 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
 }): void {
   const markEntry = (entry: AgentStatusEntry): void => {
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
+
     if (rowEntry.state !== 'done') {
       return
     }
+
     // Why: completed worker rows can be attributed to a child pane while the
     // visible parent pane still has a stale spinner title.
     markSeenPaneKeyForCurrentTab({
@@ -133,6 +151,7 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
   for (const entry of args.entries) {
     markEntry(entry)
   }
+
   for (const retained of args.retained) {
     markEntry(retained.entry)
   }
@@ -153,12 +172,16 @@ export function buildWorktreeAgentRows(args: {
   const currentTabsById = new Map(args.tabs.map((tab) => [tab.id, tab] as const))
 
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
+
   for (const entry of args.entries) {
     const parsed = parsePaneKey(entry.paneKey)
+
     if (!parsed) {
       continue
     }
+
     const bucket = entriesByTabId.get(parsed.tabId)
+
     if (bucket) {
       bucket.push(entry)
     } else {
@@ -171,14 +194,17 @@ export function buildWorktreeAgentRows(args: {
   for (const tab of args.tabs) {
     const explicitEntries = entriesByTabId.get(tab.id) ?? []
     const hasLivePty = tabHasLivePty(ptyIdsByTabId, tab.id)
+
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
       const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+
       const shouldDecay =
         !isFresh &&
         (rowEntry.state === 'working' ||
           rowEntry.state === 'blocked' ||
           rowEntry.state === 'waiting')
+
       const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
       rows.push({
         paneKey: rowEntry.paneKey,
@@ -212,16 +238,21 @@ export function buildWorktreeAgentRows(args: {
     if (seenPaneKeys.has(entry.paneKey)) {
       continue
     }
+
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
     const startedAt = effectiveWorktreeAgentRowStartedAt(rowEntry)
     const tab = tabFromWorktreeAttributedStatusEntry(rowEntry, startedAt)
+
     if (!tab) {
       continue
     }
+
     const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+
     const shouldDecay =
       !isFresh &&
       (rowEntry.state === 'working' || rowEntry.state === 'blocked' || rowEntry.state === 'waiting')
+
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
@@ -243,6 +274,7 @@ export function buildWorktreeAgentRows(args: {
     if (seenPaneKeys.has(ra.entry.paneKey)) {
       continue
     }
+
     if (
       isRetainedLegacyAliasOfSeenStablePane({
         paneKey: ra.entry.paneKey,
@@ -252,10 +284,12 @@ export function buildWorktreeAgentRows(args: {
     ) {
       continue
     }
+
     const rowEntry = entryWithRuntimeOrchestration(
       ra.entry,
       args.runtimeAgentOrchestrationByPaneKey
     )
+
     const tab = currentTabsById.get(ra.tab.id) ?? ra.tab
     rows.push({
       paneKey: rowEntry.paneKey,
@@ -271,5 +305,6 @@ export function buildWorktreeAgentRows(args: {
   // Why: hook pings can rebuild the live entry list in a different iteration
   // order. Equal-start agents still need a deterministic sidebar order.
   rows.sort(compareWorktreeAgentRows)
+
   return rows
 }

@@ -48,6 +48,7 @@ describe('worker transcript reads', () => {
       transcriptPath,
       limit: 2
     })
+
     expect(initial).toMatchObject({
       ok: true,
       messages: [
@@ -56,11 +57,13 @@ describe('worker transcript reads', () => {
       ],
       limited: true
     })
+
     if (!initial.ok) {
       throw new Error('Expected the initial transcript page')
     }
 
     await appendFile(transcriptPath, `{malformed}\n${codexMessage('four', 'fourth')}\n`)
+
     const appended = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'session-exact',
@@ -87,15 +90,18 @@ describe('worker transcript reads', () => {
       transcriptPath,
       `${codexMessage('one', 'original transcript with enough padding for equal-size rewrite')}\n`
     )
+
     const initial = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'session-exact',
       transcriptPath,
       limit: 10
     })
+
     if (!initial.ok) {
       throw new Error('Expected the original transcript page')
     }
+
     const before = await stat(transcriptPath, { bigint: true })
     const replacementLine = `${codexMessage('other', 'unrelated rewrite')}\n`
     const replacement = replacementLine.padEnd(initial.nextOffset + extraBytes, ' ')
@@ -198,6 +204,7 @@ describe('worker transcript reads', () => {
       offset: 0,
       limit: 2
     })
+
     expect(oversized).toMatchObject({
       ok: true,
       messages: [],
@@ -207,12 +214,15 @@ describe('worker transcript reads', () => {
         'Transcript scanning stopped at the bounded byte limit; continue with the cursor.'
       ])
     })
+
     if (!oversized.ok) {
       throw new Error('Expected the oversized transcript page')
     }
+
     expect(oversized.nextOffset).toBe(8 * 1024 * 1024)
 
     await appendFile(transcriptPath, `\n${codexMessage('after', 'after oversized')}\n`)
+
     const continued = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'session-exact',

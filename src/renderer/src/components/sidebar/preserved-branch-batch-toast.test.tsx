@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     openModal: vi.fn(),
     forceDeletePreservedBranch: vi.fn()
   }
+
   return { state }
 })
 
@@ -30,6 +31,7 @@ vi.mock('@/store', () => {
     (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
     { getState: () => mocks.state }
   )
+
   return { useAppStore }
 })
 
@@ -48,11 +50,13 @@ const mountedRoots: Root[] = []
 function renderToastBody(): HTMLElement {
   const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]
     ?.description as React.ReactElement
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   mountedRoots.push(root)
   act(() => root.render(description))
+
   return container
 }
 
@@ -70,9 +74,11 @@ async function clickButton(container: HTMLElement, label: string): Promise<void>
   const button = [...container.querySelectorAll('button')].find(
     (element) => element.textContent?.trim() === label
   )
+
   if (!button) {
     throw new Error(`button "${label}" not found`)
   }
+
   await act(async () => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await Promise.resolve()
@@ -81,9 +87,11 @@ async function clickButton(container: HTMLElement, label: string): Promise<void>
 
 async function clickCheckbox(id: string): Promise<void> {
   const checkbox = document.getElementById(id)
+
   if (!checkbox) {
     throw new Error(`checkbox "${id}" not found`)
   }
+
   await act(async () => {
     checkbox.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await Promise.resolve()
@@ -110,6 +118,7 @@ describe('showPreservedBranchBatchToast', () => {
       { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' },
       { worktreeId: 'repo-b::two', branchName: 'feature/two', expectedHead: 'head-two' }
     ]
+
     showPreservedBranchBatchToast(12, branches)
     const body = renderToastBody()
 
@@ -168,6 +177,7 @@ describe('showPreservedBranchBatchToast', () => {
 
   it('serializes branch deletion within one repository', async () => {
     let resolveFirst: (result: { ok: true; deleted: true }) => void = () => {}
+
     mocks.state.forceDeletePreservedBranch
       .mockReset()
       .mockReturnValueOnce(
@@ -176,6 +186,7 @@ describe('showPreservedBranchBatchToast', () => {
         })
       )
       .mockResolvedValueOnce({ ok: true, deleted: true })
+
     const deletion = forceDeletePreservedBranchBatch([
       { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' },
       { worktreeId: 'repo-a::two', branchName: 'feature/two', expectedHead: 'head-two' }

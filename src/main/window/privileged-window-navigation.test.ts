@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const openExternal = vi.fn()
+
 vi.mock('electron', () => ({
   shell: { openExternal: (url: string) => openExternal(url) }
 }))
@@ -10,6 +11,7 @@ import { installPrivilegedWindowNavigationPolicy } from './privileged-window-nav
 describe('privileged window navigation policy', () => {
   function createFixture(currentUrl: string) {
     const handlers = new Map<string, (...args: unknown[]) => void>()
+
     const contents = {
       getURL: () => currentUrl,
       setWindowOpenHandler: vi.fn(),
@@ -17,17 +19,22 @@ describe('privileged window navigation policy', () => {
         handlers.set(event, handler)
       })
     }
+
     installPrivilegedWindowNavigationPolicy(contents as never)
+
     return {
       willNavigate(url: string) {
         const event = { preventDefault: vi.fn() }
         const handler = handlers.get('will-navigate')
+
         // Why: the allow-cases assert preventDefault was *not* called, so a missing
         // handler would pass them vacuously.
         if (!handler) {
           throw new Error('no will-navigate handler was registered')
         }
+
         handler(event, url)
+
         return event
       }
     }
@@ -40,6 +47,7 @@ describe('privileged window navigation policy', () => {
   it('lets the packaged renderer document reload itself', () => {
     const appUrl =
       'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+
     const event = createFixture(appUrl).willNavigate(appUrl)
 
     expect(event.preventDefault).not.toHaveBeenCalled()
@@ -49,6 +57,7 @@ describe('privileged window navigation policy', () => {
   it('still blocks and hands off an external http target', () => {
     const appUrl =
       'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+
     const event = createFixture(appUrl).willNavigate('https://example.com/')
 
     expect(event.preventDefault).toHaveBeenCalled()
@@ -72,6 +81,7 @@ describe('privileged window navigation policy', () => {
   it('blocks a foreign file host and a data: URL that reuse the renderer path', () => {
     const appUrl =
       'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+
     const fixture = createFixture(appUrl)
 
     expect(
@@ -88,6 +98,7 @@ describe('privileged window navigation policy', () => {
   it('still blocks navigation to an unrelated local file', () => {
     const appUrl =
       'file:///Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'
+
     const event = createFixture(appUrl).willNavigate('file:///Users/someone/.ssh/id_rsa')
 
     expect(event.preventDefault).toHaveBeenCalled()

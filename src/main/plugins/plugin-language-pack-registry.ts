@@ -40,6 +40,7 @@ export class PluginLanguagePackRegistry {
     isApproved: (plugin: ValidDiscoveredPlugin) => boolean
   ): Promise<void> {
     const candidates: ValidDiscoveredPlugin[] = []
+
     for (const plugin of discovered) {
       if (
         !isInvalidDiscoveredPlugin(plugin) &&
@@ -49,12 +50,14 @@ export class PluginLanguagePackRegistry {
         candidates.push(plugin)
       }
     }
+
     const results = await mapWithConcurrency(
       candidates,
       LANGUAGE_PACK_LOAD_CONCURRENCY,
       async (plugin): Promise<LanguageLoadResult> => {
         try {
           await this.contentVerifier.verify(plugin)
+
           const packs = await Promise.all(
             plugin.manifest.contributes.languagePacks.map(async (contribution) => {
               const text = await readContainedPluginArtifactText(
@@ -62,11 +65,15 @@ export class PluginLanguagePackRegistry {
                 contribution.path,
                 PLUGIN_LANGUAGE_PACK_MAX_BYTES
               )
+
               const parsed = parsePluginLanguagePackArtifact(text)
+
               if (!parsed.ok) {
                 throw new Error(`language pack "${contribution.locale}" ${parsed.error}`)
               }
+
               const id = `plugin:${plugin.pluginKey}/${contribution.locale}` as const
+
               return {
                 id,
                 resourceLanguage: pluginLanguageResourceId(id),
@@ -76,6 +83,7 @@ export class PluginLanguagePackRegistry {
               }
             })
           )
+
           return { pluginKey: plugin.pluginKey, packs }
         } catch (error) {
           return {
@@ -85,8 +93,10 @@ export class PluginLanguagePackRegistry {
         }
       }
     )
+
     this.packs = results.flatMap((result) => ('packs' in result ? result.packs : []))
     this.errors.clear()
+
     for (const result of results) {
       if ('error' in result) {
         this.errors.set(result.pluginKey, result.error)

@@ -15,6 +15,7 @@ export function projectStructuredAgentSessionMessages(
 ): NativeChatMessage[] {
   const optimistic = reconcileStructuredAgentSessionOutbox(outbox, submissions)
   const journalled = new Set(items.map((item) => item.itemId))
+
   return [
     ...projectItems(items),
     ...optimistic

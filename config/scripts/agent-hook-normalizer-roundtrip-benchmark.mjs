@@ -28,9 +28,11 @@ const TYPES_SOURCE = readFileSync(
 
 function readMirroredConstant(name) {
   const match = TYPES_SOURCE.match(new RegExp(`${name}\\s*=\\s*([0-9_]+)`))
+
   if (!match) {
     throw new Error(`agent-status-types.ts no longer defines ${name}; re-sync this benchmark.`)
   }
+
   return Number(match[1].replaceAll('_', ''))
 }
 
@@ -39,6 +41,7 @@ function readMirroredConstant(name) {
 const ASSISTANT_MESSAGE_CAP = readMirroredConstant('AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH')
 
 const ITERATIONS = Number.parseInt(process.env.ORCA_HOOK_NORM_BENCH_ITERATIONS ?? '400', 10)
+
 const WARMUP = Number.parseInt(process.env.ORCA_HOOK_NORM_BENCH_WARMUP ?? '200', 10)
 
 for (const [name, value] of [
@@ -51,6 +54,7 @@ for (const [name, value] of [
 }
 
 const STRUCTURAL_TOKENS = 4096
+
 const NESTING_DEPTH = 16
 
 // Mirror of assertJsonTextStructureWithinLimits — the per-character scan the
@@ -60,8 +64,10 @@ function scanJsonStructure(content) {
   let depth = 0
   let inString = false
   let escaped = false
+
   for (let index = 0; index < content.length; index += 1) {
     const character = content[index]
+
     if (inString) {
       if (escaped) {
         escaped = false
@@ -70,12 +76,15 @@ function scanJsonStructure(content) {
       } else if (character === '"') {
         inString = false
       }
+
       continue
     }
+
     if (character === '"') {
       inString = true
       continue
     }
+
     if (
       character !== '{' &&
       character !== '}' &&
@@ -86,12 +95,16 @@ function scanJsonStructure(content) {
     ) {
       continue
     }
+
     structuralTokens += 1
+
     if (structuralTokens > STRUCTURAL_TOKENS) {
       throw new Error('structuralTokens')
     }
+
     if (character === '{' || character === '[') {
       depth += 1
+
       if (depth > NESTING_DEPTH) {
         throw new Error('nestingDepth')
       }
@@ -106,23 +119,30 @@ function normalizeField(value, maxLength) {
   if (typeof value !== 'string') {
     return undefined
   }
+
   let normalized = ''
   let newlineRun = 0
+
   for (let index = 0; index < value.length && normalized.length < maxLength; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
       if (code === 13 && value.charCodeAt(index + 1) === 10) {
         index += 1
       }
+
       if (newlineRun < 2) {
         normalized += '\n'
       }
+
       newlineRun += 1
       continue
     }
+
     newlineRun = 0
     normalized += value[index]
   }
+
   return normalized
 }
 
@@ -141,6 +161,7 @@ function normalizeObject(payload) {
 function validateViaRoundTrip(payload) {
   const json = JSON.stringify(payload)
   scanJsonStructure(json)
+
   return normalizeObject(JSON.parse(json))
 }
 
@@ -164,26 +185,35 @@ function measure(fn, payload) {
   for (let index = 0; index < WARMUP; index += 1) {
     fn(payload)
   }
+
   const samples = []
+
   for (let round = 0; round < 5; round += 1) {
     const start = performance.now()
+
     for (let index = 0; index < ITERATIONS; index += 1) {
       fn(payload)
     }
+
     samples.push((performance.now() - start) / ITERATIONS)
   }
+
   samples.sort((a, b) => a - b)
+
   return samples[2]
 }
 
 const rows = []
+
 for (const kb of [4, 16, 64, 256]) {
   const payload = makePayload(kb * 1024)
   const before = validateViaRoundTrip(payload)
   const after = validateDirect(payload)
+
   if (JSON.stringify(before) !== JSON.stringify(after)) {
     throw new Error(`normalizer mismatch at ${kb} KB`)
   }
+
   rows.push({
     label: `${kb} KB`,
     beforeUs: measure(validateViaRoundTrip, payload) * 1000,
@@ -192,13 +222,17 @@ for (const kb of [4, 16, 64, 256]) {
 }
 
 const pad = (value, width) => String(value).padStart(width)
+
 console.log('Agent-status payload validation, per hook event')
+
 console.log(
   `field cap=${ASSISTANT_MESSAGE_CAP} iterations=${ITERATIONS} warmup=${WARMUP} (median of 5 rounds)`
 )
+
 console.log(
   `${pad('payload', 9)} ${pad('round trip', 12)} ${pad('direct', 10)} ${pad('speedup', 9)}`
 )
+
 for (const row of rows) {
   console.log(
     `${pad(row.label, 9)} ${pad(`${row.beforeUs.toFixed(1)} us`, 12)} ${pad(`${row.afterUs.toFixed(1)} us`, 10)} ${pad(`${(row.beforeUs / row.afterUs).toFixed(1)}x`, 9)}`
@@ -208,13 +242,18 @@ for (const row of rows) {
 // A single large tool result is inherited across the turn, so every later event
 // re-pays the round trip on bytes that were already validated once.
 const TURN_EVENTS = 20
+
 const inherited = makePayload(200 * 1024)
+
 const beforeTurnMs = (measure(validateViaRoundTrip, inherited) * TURN_EVENTS).toFixed(2)
+
 const afterTurnMs = (measure(validateDirect, inherited) * TURN_EVENTS).toFixed(2)
+
 console.log(
   `\nOne 200 KB tool result, inherited across ${TURN_EVENTS} later events in the same turn:` +
     `\n  round trip ${beforeTurnMs} ms total   direct ${afterTurnMs} ms total`
 )
+
 console.log(
   '\nThe direct path is flat because the field normalizer stops at the cap; the\nround trip is linear in the raw payload, which is bounded only by the 1 MB\nhook request limit.'
 )

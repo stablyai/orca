@@ -1,17 +1,21 @@
 export function foldWorkspaceNameWhitespaceToHyphen(input: string): string {
   let result = ''
   let pendingHyphen = false
+
   for (let index = 0; index < input.length; index += 1) {
     if (isWorkspaceNameWhitespace(input.charCodeAt(index))) {
       pendingHyphen = true
       continue
     }
+
     if (pendingHyphen) {
       result += '-'
       pendingHyphen = false
     }
+
     result += input[index]
   }
+
   return result
 }
 
@@ -22,33 +26,43 @@ export function collectCompactWorkspaceWords(
 ): string[] {
   const words: string[] = []
   let tokenStart = -1
+
   for (let index = 0; index <= input.length; index += 1) {
     const isEnd = index === input.length
+
     if (!isEnd && startsWithHttpUrl(input, index)) {
       index = finishCompactWorkspaceToken(input, tokenStart, index, words, maxWords, stopWords)
       tokenStart = -1
+
       while (index < input.length && !isWorkspaceNameWhitespace(input.charCodeAt(index))) {
         index += 1
       }
+
       if (words.length >= maxWords) {
         break
       }
+
       continue
     }
+
     if (!isEnd && !isCompactWorkspaceWordSeparator(input.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
+
     if (tokenStart !== -1) {
       finishCompactWorkspaceToken(input, tokenStart, index, words, maxWords, stopWords)
       tokenStart = -1
+
       if (words.length >= maxWords) {
         break
       }
     }
   }
+
   return words
 }
 
@@ -63,10 +77,13 @@ function finishCompactWorkspaceToken(
   if (tokenStart === -1 || words.length >= maxWords) {
     return tokenEnd
   }
+
   const word = input.slice(tokenStart, tokenEnd)
+
   if (word && !stopWords.has(word.toLowerCase())) {
     words.push(word)
   }
+
   return tokenEnd
 }
 
@@ -81,11 +98,13 @@ function startsWithAsciiInsensitive(input: string, index: number, prefix: string
   if (index + prefix.length > input.length) {
     return false
   }
+
   for (let offset = 0; offset < prefix.length; offset += 1) {
     if (toLowerAsciiCode(input.charCodeAt(index + offset)) !== prefix.charCodeAt(offset)) {
       return false
     }
   }
+
   return true
 }
 

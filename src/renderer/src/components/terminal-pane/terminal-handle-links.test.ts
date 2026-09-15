@@ -69,10 +69,12 @@ function makeBufferLine(text: string, options: { isWrapped?: boolean } = {}): Te
     ) => {
       if (outColumns) {
         outColumns.length = 0
+
         for (let index = startColumn; index <= endColumn; index++) {
           outColumns.push(index)
         }
       }
+
       return text.slice(startColumn, endColumn)
     }
   }
@@ -96,12 +98,14 @@ async function collectLinks(
     },
     clearSelection: vi.fn()
   }
+
   const provider = createTerminalHandleLinkProvider({
     getTerminal: () => terminal as never,
     getRuntimeEnvironmentId: () => runtimeEnvironmentId,
     linkTooltip: { textContent: '', style: { display: '' } } as unknown as HTMLElement,
     getLinkActionContext: () => linkActionContext ?? null
   })
+
   return await new Promise<ILink[]>((resolve) => {
     provider.provideLinks(bufferLineNumber, (links) => resolve(links ?? []))
   })
@@ -267,6 +271,7 @@ describe('createTerminalHandleLinkProvider', () => {
                 result: { dispatch: { assignee_handle: 'term_worker' } }
               })
             }
+
             return Promise.resolve({
               ok: true,
               result: { focus: { handle: 'term_worker', tabId: 'tab-1', worktreeId: 'wt-1' } }
@@ -308,6 +313,7 @@ describe('createTerminalHandleLinkProvider', () => {
 
   it('defers a plain terminal-handle click to the action popover', async () => {
     const request = vi.fn()
+
     const links = await collectLinks([makeBufferLine('Worker: term_worker')], 1, null, {
       paneId: 4,
       pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
@@ -568,6 +574,7 @@ describe('createTerminalHandleLinkProvider', () => {
           result: { dispatch: { assignee_handle: 'term_worker' } }
         })
       }
+
       return Promise.resolve({
         ok: true,
         result: { focus: { handle: 'term_worker', tabId: 'tab-env-1', worktreeId: 'wt-env-1' } }
@@ -670,6 +677,7 @@ describe('createTerminalHandleLinkProvider', () => {
           result: { dispatch: { assignee_handle: 'term_remote' } }
         })
       }
+
       return Promise.resolve({
         ok: true,
         result: { focus: { handle: 'term_remote', tabId: 'tab-remote', worktreeId: 'wt-remote' } }

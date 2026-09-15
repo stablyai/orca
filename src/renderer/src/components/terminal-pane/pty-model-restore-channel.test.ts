@@ -15,6 +15,7 @@ describe('pty model-restore channel routing', () => {
     onModelRestoreNeeded = vi.fn(
       (callback: (event: { id: string; reason: string; markerSeq?: number }) => void) => {
         channelCallback ??= callback
+
         return () => {}
       }
     )

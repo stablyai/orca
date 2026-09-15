@@ -33,6 +33,7 @@ function installHost(): { emit: (type: string) => void; unsubscribed: () => bool
     release: () => {},
     subscribe: (subscription: { emit: JournalEmit }) => {
       emitter = subscription.emit
+
       return () => {
         disposed = true
       }
@@ -52,6 +53,7 @@ function installHost(): { emit: (type: string) => void; unsubscribed: () => bool
       }
     }
   } as never)
+
   return {
     emit: (type: string) => emitter?.({ type }),
     unsubscribed: () => disposed
@@ -151,8 +153,10 @@ describe('the structured redrive edge', () => {
     await startWorker(onJournalActivity)
 
     host.emit('batch')
+
     const { releaseStructuredWorkerSession } =
       await import('./orchestration-structured-worker-session')
+
     releaseStructuredWorkerSession('d_redrive', runtime)
     vi.advanceTimersByTime(5_000)
 

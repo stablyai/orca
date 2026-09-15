@@ -33,6 +33,7 @@ export type RuntimeBrowserCommandsFactoryOptions = {
 }
 
 let currentFactory: RuntimeBrowserCommandsFactory | null = null
+
 let currentOptions: RuntimeBrowserCommandsFactoryOptions = {}
 
 export function setRuntimeBrowserCommandsFactory(
@@ -42,10 +43,12 @@ export function setRuntimeBrowserCommandsFactory(
   currentFactory = factory
   currentOptions = factory ? options : {}
 }
+
 export function runtimeBrowserCommandsFactoryIsAvailable(): boolean {
   if (!currentFactory) {
     return false
   }
+
   try {
     return currentOptions.isAvailable?.() !== false
   } catch {
@@ -85,6 +88,7 @@ export function runtimeBrowserUnavailableCause(): RuntimeBrowserUnavailableCause
       ? { reason: 'desktop_window_unavailable' }
       : { reason: 'provider_unhealthy' }
   }
+
   return unavailableCause ?? { reason: 'unknown' }
 }
 
@@ -99,12 +103,14 @@ export function createRuntimeBrowserCommands(
   if (currentFactory) {
     return currentFactory(host)
   }
+
   return new Proxy({} as RuntimeBrowserCommands, {
     get: (_target, property) => {
       if (property === 'then') {
         // Why: an awaited undefined must not look like a thenable.
         return undefined
       }
+
       return () => {
         throw new BrowserError(
           BROWSER_UNAVAILABLE_ERROR_CODE,

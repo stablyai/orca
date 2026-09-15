@@ -7,8 +7,11 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 // reach it through a lazy dynamic import (hoisted factories cannot close over imports).
 
 export const LIVE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 export const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 export const PANE_KEY = `tab-1:${LIVE_LEAF_ID}`
+
 export const STALE_PANE_KEY = `tab-1:${STALE_LEAF_ID}`
 
 export type NotificationDispatchMockState = {
@@ -101,6 +104,7 @@ export function resetNotificationDispatchMockState(): NotificationDispatchMockSt
   vi.stubGlobal('window', {
     api: { notifications: { dispatch: vi.fn().mockResolvedValue({ delivered: true }) } }
   })
+
   return mockState
 }
 
@@ -109,6 +113,7 @@ export function makeAgentStatus(
   overrides: Partial<AgentStatusEntry> = {}
 ): AgentStatusEntry {
   const now = Date.now()
+
   return {
     state: 'done',
     prompt: 'codex-hook-notify',
@@ -136,6 +141,7 @@ export function stubDocumentFocus({
 export function getLastNotificationDispatchArg(): Record<string, unknown> | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window stub above installs a vi.fn() at this exact path.
   const dispatch = window.api.notifications.dispatch as unknown as ReturnType<typeof vi.fn>
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch is only ever called with one NotificationDispatchRequest object.
   return dispatch.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined
 }

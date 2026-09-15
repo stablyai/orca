@@ -69,6 +69,7 @@ export function isQuickCommandEditorHostCurrent(
   runtimeStatuses: ReadonlyMap<string, { connectionGeneration?: number }>
 ): boolean {
   const host = parseExecutionHostId(hostId)
+
   return (
     hostOptions.some((option) => option.id === hostId) &&
     (host?.kind !== 'runtime' ||
@@ -98,19 +99,24 @@ export function QuickCommandsPane({
   const [selectedHostId, setSelectedHostId] = useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
   const selectedHost = parseExecutionHostId(selectedHostId)
   const selectedEnvironmentId = selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
+
   const selectedRuntimeConnectionGeneration = selectedEnvironmentId
     ? (runtimeStatuses.get(selectedEnvironmentId)?.connectionGeneration ?? 0)
     : 0
+
   const selectedRuntimeCommands = selectedEnvironmentId
     ? runtimeCommands.get(selectedEnvironmentId)
     : undefined
+
   const selectedRuntimeCommandsAreCurrent =
     selectedRuntimeCommands?.connectionGeneration === selectedRuntimeConnectionGeneration
+
   const commands = selectedEnvironmentId
     ? selectedRuntimeCommandsAreCurrent
       ? (selectedRuntimeCommands?.commands ?? [])
       : []
     : (settings.terminalQuickCommands ?? [])
+
   const canManageSelectedHost =
     !selectedEnvironmentId ||
     (selectedRuntimeCommandsAreCurrent && selectedRuntimeCommands?.supported === true)
@@ -133,6 +139,7 @@ export function QuickCommandsPane({
   const [query, setQuery] = useState('')
 
   const availableHostId = getAvailableQuickCommandHostId(selectedHostId, hostOptions)
+
   const editorHostIsCurrent =
     editor === null ||
     isQuickCommandEditorHostCurrent(
@@ -141,10 +148,12 @@ export function QuickCommandsPane({
       hostOptions,
       runtimeStatuses
     )
+
   if (availableHostId !== selectedHostId) {
     setSelectedHostId(availableHostId)
     setScopeSelection(null)
   }
+
   if (!editorHostIsCurrent) {
     setEditor(null)
   }
@@ -156,25 +165,31 @@ export function QuickCommandsPane({
         : repos,
     [repos, selectedEnvironmentId, selectedHostId]
   )
+
   const repoById = useMemo(() => new Map(hostRepos.map((repo) => [repo.id, repo])), [hostRepos])
 
   const allScopeKeys = useMemo(
     () => new Set<string>([GLOBAL_SCOPE_KEY, ...hostRepos.map((repo) => repo.id)]),
     [hostRepos]
   )
+
   const effectiveSelection: ReadonlySet<string> = scopeSelection ?? allScopeKeys
   const showAll = scopeSelection === null
 
   const scopedCommands = commands.filter((command) => {
     const scope = getTerminalQuickCommandScope(command)
+
     if (showAll) {
       return true
     }
+
     if (scope.type === 'global') {
       return effectiveSelection.has(GLOBAL_SCOPE_KEY)
     }
+
     return effectiveSelection.has(scope.repoId)
   })
+
   const visibleCommands = searchTerminalQuickCommands(scopedCommands, query)
 
   const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
@@ -184,20 +199,25 @@ export function QuickCommandsPane({
     // workspace repo; fall back to global when there's no active repo.
     if (!showAll) {
       const selectedRepoIds = [...effectiveSelection].filter((key) => key !== GLOBAL_SCOPE_KEY)
+
       if (selectedRepoIds.length === 1 && !effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
         return createTerminalQuickCommandDraft({ type: 'repo', repoId: selectedRepoIds[0] })
       }
+
       if (selectedRepoIds.length === 0 && effectiveSelection.has(GLOBAL_SCOPE_KEY)) {
         return createTerminalQuickCommandDraft({ type: 'global' })
       }
     }
+
     if (activeRepoId && repoById.has(activeRepoId)) {
       return createTerminalQuickCommandDraft({ type: 'repo', repoId: activeRepoId })
     }
+
     return createTerminalQuickCommandDraft({ type: 'global' })
   }, [activeRepoId, effectiveSelection, repoById, showAll])
 
   const intentSignal = addCommandIntentSignal
+
   if (
     typeof intentSignal === 'number' &&
     shouldOpenQuickCommandAddIntent(intentSignal, consumedAddIntentSignalRef.current)
@@ -215,16 +235,19 @@ export function QuickCommandsPane({
 
   const toggleScope = (key: string): void => {
     const current = new Set(effectiveSelection)
+
     if (current.has(key)) {
       // Why: forbid the empty selection — every command would disappear and
       // there'd be no signal that the filter caused it.
       if (current.size <= 1) {
         return
       }
+
       current.delete(key)
     } else {
       current.add(key)
     }
+
     setScopeSelection(current.size === allScopeKeys.size ? null : current)
   }
 
@@ -233,8 +256,10 @@ export function QuickCommandsPane({
       // Why: tasks-page parity — clicking "All" while everything is selected
       // collapses to a single scope rather than emitting an empty set.
       setScopeSelection(new Set([GLOBAL_SCOPE_KEY]))
+
       return
     }
+
     setScopeSelection(null)
   }
 
@@ -249,8 +274,10 @@ export function QuickCommandsPane({
       )
     ) {
       setEditor(null)
+
       return
     }
+
     useAppStore.getState().recordFeatureInteraction('quick-commands')
     void useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next)
   }
@@ -269,9 +296,11 @@ export function QuickCommandsPane({
       confirmLabel: translate('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
       confirmVariant: 'destructive'
     })
+
     if (!confirmed) {
       return
     }
+
     void useAppStore.getState().deleteTerminalQuickCommand(selectedHostId, command.id)
   }
 

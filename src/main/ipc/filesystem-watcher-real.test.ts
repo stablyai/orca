@@ -39,12 +39,15 @@ type FsChangedCall = { worktreePath: string; events: { kind: string; absolutePat
 // asynchronously after the file write; poll rather than assume a fixed delay.
 async function waitFor(predicate: () => boolean, timeoutMs = 8_000, stepMs = 50): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (predicate()) {
       return
     }
+
     await new Promise((resolve) => setTimeout(resolve, stepMs))
   }
+
   throw new Error('waitFor: condition not met within timeout')
 }
 
@@ -55,9 +58,11 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
 
   beforeEach(async () => {
     handleMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel: string, handler: HandlerMap[string]) => {
       handlers[channel] = handler
     })
@@ -67,10 +72,12 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
 
   afterEach(async () => {
     await closeAllWatchers()
+
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true })
       tempDir = null
     }
+
     await removeAliasedWatcherRoot(aliasedRoot)
     aliasedRoot = null
     vi.clearAllMocks()
@@ -95,6 +102,7 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
       // tmpdir() returns /var, so compare canonical paths instead of aliases.
       tempDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fswatch-real-')))
       const sendMock = vi.fn()
+
       const sender = {
         isDestroyed: () => false,
         send: sendMock,

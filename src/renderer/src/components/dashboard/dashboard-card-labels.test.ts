@@ -6,8 +6,11 @@ import { rowConversationName } from './dashboard-card-labels'
 import type { DashboardAgentRow } from './useDashboardData'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
 const TAB_ID = 'tab-1'
+
 const TAB: TerminalTab = {
   id: TAB_ID,
   ptyId: 'pty-1',
@@ -19,6 +22,7 @@ const TAB: TerminalTab = {
   sortOrder: 0,
   createdAt: 0
 }
+
 const LAYOUT: TerminalLayoutSnapshot = {
   root: {
     type: 'split',
@@ -32,6 +36,7 @@ const LAYOUT: TerminalLayoutSnapshot = {
 
 function row(leafId: string, sessionId: string): DashboardAgentRow {
   const paneKey = makePaneKey(TAB_ID, leafId)
+
   const entry: AgentStatusEntry = {
     state: 'working',
     prompt: '',
@@ -42,6 +47,7 @@ function row(leafId: string, sessionId: string): DashboardAgentRow {
     paneKey,
     providerSession: { key: 'session_id', id: sessionId }
   }
+
   return { paneKey, entry, tab: TAB, agentType: 'claude', state: 'working', startedAt: 0 }
 }
 

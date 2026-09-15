@@ -22,8 +22,11 @@ type ScanState =
   | 'stringEsc'
 
 const ESC = 0x1b
+
 const CAN = 0x18
+
 const SUB = 0x1a
+
 const BEL = 0x07
 
 // Why a cap: OSC/DCS payloads are unbounded and an unterminated one would
@@ -57,21 +60,26 @@ function stateAfterEscByte(code: number): ScanState {
 export function extractPartialEscapeTail(stream: string): string {
   let state: ScanState = 'ground'
   let start = 0
+
   for (let i = 0; i < stream.length; i++) {
     if (state === 'ground') {
       // Only ESC leaves ground; skip ordinary text without a per-code-unit walk.
       // Check the current unit first: on dense escape streams it is usually the
       // ESC itself, and indexOf's call + SIMD setup costs more than the compare.
       const escape = stream.charCodeAt(i) === ESC ? i : stream.indexOf('\x1b', i)
+
       if (escape === -1) {
         return ''
       }
+
       start = escape
       i = escape
       state = 'esc'
       continue
     }
+
     const code = stream.charCodeAt(i)
+
     if (
       code === ESC &&
       state !== 'osc' &&
@@ -84,6 +92,7 @@ export function extractPartialEscapeTail(stream: string): string {
       state = 'esc'
       continue
     }
+
     // CAN/SUB abort an in-progress escape sequence back to ground in every
     // non-string state (xterm's VT500 parser). The csi/osc/string cases handle
     // this inline below; esc/escIntermediate must too, or `ESC CAN` and
@@ -92,6 +101,7 @@ export function extractPartialEscapeTail(stream: string): string {
       state = 'ground'
       continue
     }
+
     switch (state) {
       case 'esc':
         state = stateAfterEscByte(code)
@@ -100,6 +110,7 @@ export function extractPartialEscapeTail(stream: string): string {
         if (code >= 0x30 && code <= 0x7e) {
           state = 'ground'
         }
+
         // 0x20–0x2f stays; other C0 executes and stays (CAN/SUB handled above).
         break
       case 'csi':
@@ -108,6 +119,7 @@ export function extractPartialEscapeTail(stream: string): string {
         } else if (code >= 0x40 && code <= 0x7e) {
           state = 'ground' // final byte completes the CSI
         }
+
         // params/intermediates (0x20–0x3f), C0, DEL stay in-sequence.
         break
       case 'osc':
@@ -116,6 +128,7 @@ export function extractPartialEscapeTail(stream: string): string {
         } else if (code === ESC) {
           state = 'oscEsc'
         }
+
         break
       case 'oscEsc':
         if (code === 0x5c) {
@@ -127,6 +140,7 @@ export function extractPartialEscapeTail(stream: string): string {
           state =
             code === ESC ? 'esc' : code === CAN || code === SUB ? 'ground' : stateAfterEscByte(code)
         }
+
         break
       case 'string':
         if (code === CAN || code === SUB) {
@@ -134,6 +148,7 @@ export function extractPartialEscapeTail(stream: string): string {
         } else if (code === ESC) {
           state = 'stringEsc'
         }
+
         break
       case 'stringEsc':
         if (code === 0x5c) {
@@ -143,9 +158,11 @@ export function extractPartialEscapeTail(stream: string): string {
           state =
             code === ESC ? 'esc' : code === CAN || code === SUB ? 'ground' : stateAfterEscByte(code)
         }
+
         break
     }
   }
+
   return state === 'ground' ? '' : stream.slice(start)
 }
 
@@ -160,6 +177,8 @@ export function advancePartialEscapeTail(pendingTail: string, chunk: string): st
   if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }
+
   const tail = extractPartialEscapeTail(pendingTail + chunk)
+
   return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
 }

@@ -35,9 +35,11 @@ export function extractGitHubIssueSourceError(
 ): GitHubIssueSourceError | null {
   const issueError = envelope.errors?.issues
   const issueSource = envelope.sources?.issues
+
   if (!issueError || !issueSource) {
     return null
   }
+
   return {
     repoId: repo.id,
     repoPath: repo.path,
@@ -53,7 +55,9 @@ export function extractGitHubIssueSourceFallback(
   if (envelope.issueSourceFellBack !== true) {
     return null
   }
+
   const prSource = envelope.sources?.prs
+
   return {
     repoId: repo.id,
     repoPath: repo.path,

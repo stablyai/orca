@@ -30,9 +30,11 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
     updateGitHubPullRequestMetadata,
     updateGitLabIssueMetadata
   } = model
+
   if (!actionItem || !detailPayload) {
     return null
   }
+
   return SHOW_MOBILE_DETAIL_METADATA_EDITORS &&
     ((actionItem.provider === 'github' &&
       detailPayload.provider === 'github' &&
@@ -58,14 +60,18 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
             void updateGitHubPullRequestMetadata(actionItem, {
               body: itemBodyDraft
             })
+
             return
           }
+
           if (actionItem.provider === 'github' && actionItem.source.type === 'issue') {
             void updateGitHubIssueMetadata(actionItem, {
               body: itemBodyDraft
             })
+
             return
           }
+
           if (
             actionItem.provider === 'gitlab' &&
             (actionItem.source.type === 'issue' || actionItem.source.type === 'mr')
@@ -101,9 +107,11 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
     requestGitHubReviewers,
     setItemReviewersDraft
   } = model
+
   if (!actionItem || !detailPayload) {
     return null
   }
+
   return SHOW_MOBILE_DETAIL_REVIEW_PANELS &&
     actionItem.provider === 'github' &&
     actionItem.source.type === 'pr' ? (
@@ -153,6 +161,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
         <View style={styles.chipRow}>
           {itemReviewerCandidates.map((user) => {
             const selected = itemSelectedReviewerLogins.has(user.login.trim().toLowerCase())
+
             return (
               <Pressable
                 key={user.login}
@@ -202,9 +211,11 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
     toggleGitHubFileExpansion,
     toggleGitHubFileViewed
   } = model
+
   if (!actionItem || !detailPayload) {
     return null
   }
+
   return SHOW_MOBILE_DETAIL_REVIEW_PANELS &&
     detailPayload.provider === 'github' &&
     detailPayload.files.length > 0 ? (

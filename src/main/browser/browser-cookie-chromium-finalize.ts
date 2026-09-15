@@ -17,6 +17,7 @@ export async function finalizeChromiumCookieImport(
     const zeroPathWarning = context.undecryptableWarning
     context.closeStagingDb()
     context.discardStagingFile()
+
     return {
       ok: true,
       profileId: '',
@@ -64,6 +65,7 @@ export async function finalizeChromiumCookieImport(
   // Why (STA-4300): one store spans the clear and the writes, so both halves of the import speak
   // the same CDP identities — cookies.set() cannot express the partition either one reads.
   const cookieClearStore = openCookieClearStore(context.targetSession)
+
   try {
     // Why (STA-4601): the outer lock spans the clear and the writes that repopulate the jar, so a
     // second import cannot clear between them and write on top of a newer import's jar.
@@ -84,20 +86,25 @@ export async function finalizeChromiumCookieImport(
     )
 
     const writable: SourceCookieToWrite[] = []
+
     for (const cookie of context.decryptedCookies) {
       const url = deriveUrl(cookie.domain, cookie.secure)
+
       if (!url) {
         context.memoryFailed++
         continue
       }
+
       writable.push({ ...cookie, url })
     }
+
     // Why: a rejected cookie here falls back to the staged cold-start replay rather than
     // unwinding the import, so one failure must not stop the rest from loading.
     const phase = await writeImportedCookies(cookieClearStore, writable, {
       stopOnFailure: false,
       log: diag
     })
+
     context.memoryLoaded = phase.importedCount
     context.memoryFailed += phase.writeRejected
   } finally {
@@ -109,6 +116,7 @@ export async function finalizeChromiumCookieImport(
   )
 
   let warning: BrowserCookieImportSummary['warning']
+
   if (context.memoryFailed > 0 && context.stagingAvailable) {
     // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
     browserSessionRegistry.setPendingCookieImport(
@@ -162,5 +170,6 @@ export async function finalizeChromiumCookieImport(
     domains: [...context.domainSet].sort(),
     ...(warning ? { warning } : {})
   }
+
   return { ok: true, profileId: '', summary }
 }

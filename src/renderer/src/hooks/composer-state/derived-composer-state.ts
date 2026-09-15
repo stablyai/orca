@@ -20,6 +20,7 @@ import type { SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useDerivedComposerState(input: DerivedComposerStateInput) {
@@ -64,10 +65,13 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (!sparseSelectedPresetId) {
       return null
     }
+
     const selected = sparsePresets.find((preset) => preset.id === sparseSelectedPresetId)
+
     if (!selected) {
       return null
     }
+
     return sparseDirectoriesMatch(selected.directories, normalizedSparseDirectories)
       ? selected.id
       : null
@@ -77,20 +81,25 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (!sparseEnabled) {
       return null
     }
+
     if (!selectedRepoIsGit) {
       return null
     }
+
     if (selectedRepo?.connectionId) {
       return 'Sparse checkout is only supported for local repos right now.'
     }
+
     if (normalizedSparseDirectories.length === 0) {
       return 'Enter at least one repo-relative directory.'
     }
+
     if (
       normalizedSparseDirectories.some((entry) => entry === '.' || entry.split('/').includes('..'))
     ) {
       return 'Use repo-relative directories, not root or parent paths.'
     }
+
     return null
   }, [normalizedSparseDirectories, selectedRepo?.connectionId, selectedRepoIsGit, sparseEnabled])
 
@@ -104,7 +113,9 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (linkedPR !== null) {
       return linkedPR
     }
+
     const fromName = parseGitHubIssueOrPRLink(name)
+
     if (fromName && fromName.type === 'pr') {
       // Why: adopt the number only when the URL slug matches the selected repo (and the slug has resolved), else a foreign PR URL mislinks to a same-numbered PR here.
       if (
@@ -114,6 +125,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
         return fromName.number
       }
     }
+
     return null
   }, [linkedPR, name, selectedRepoSlug])
 
@@ -199,7 +211,9 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
     }
+
     const template = issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE
+
     return renderIssueCommandTemplate(template, {
       issueNumber: linkedWorkItem.type === 'issue' ? linkedWorkItem.number : null,
       artifactUrl: linkedWorkItem.url
@@ -215,11 +229,13 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (normalizedLinkQuery.tooLarge) {
       return []
     }
+
     if (normalizedLinkQuery.directNumber !== null) {
       return linkDirectItem ? [linkDirectItem] : []
     }
 
     const query = normalizedLinkQuery.query.trim().toLowerCase()
+
     if (!query) {
       return linkItems
     }
@@ -236,6 +252,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
       ]
         .join(' ')
         .toLowerCase()
+
       return text.includes(query)
     })
   }, [

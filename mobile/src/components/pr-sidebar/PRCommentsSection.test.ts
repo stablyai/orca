@@ -30,11 +30,17 @@ vi.mock('../../session/mobile-pr-sidebar-state', () => ({
 }))
 
 vi.mock('./PRSection', () => ({ PRSection: 'PRSection' }))
+
 vi.mock('./CommentMarkdown', () => ({ CommentMarkdown: 'CommentMarkdown' }))
+
 vi.mock('./PRCommentCard', () => ({ PRCommentCard: 'PRCommentCard' }))
+
 vi.mock('./PRCommentComposer', () => ({ PRCommentComposer: 'PRCommentComposer' }))
+
 vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))
+
 vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: {} }))
+
 vi.mock('../../theme/mobile-theme', () => ({ colors: { textSecondary: '#999' } }))
 
 function comment(id: number): PRComment {
@@ -61,9 +67,11 @@ async function renderComments(details: GitHubWorkItemDetails): Promise<ReactTest
   await act(async () => {
     renderer = create(createElement(PRCommentsSection, { details, prState: 'open' }))
   })
+
   if (!renderer) {
     throw new Error('PRCommentsSection did not render')
   }
+
   return renderer
 }
 
@@ -77,9 +85,11 @@ function showMoreButton(renderer: ReactTestRenderer) {
   const button = renderer.root
     .findAllByType('Pressable')
     .find((node) => node.props.accessibilityState === undefined)
+
   if (!button) {
     throw new Error('Show more button not found')
   }
+
   return button
 }
 

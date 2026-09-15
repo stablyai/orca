@@ -13,6 +13,7 @@ const temporaryDirectories: string[] = []
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-skill-bundle-install-test-'))
   temporaryDirectories.push(directory)
+
   return directory
 }
 
@@ -23,6 +24,7 @@ async function createSkill(root: string, name: string): Promise<string> {
     join(directory, 'SKILL.md'),
     `---\nname: ${name}\ndescription: ${name}\n---\n\n# ${name}\n`
   )
+
   return directory
 }
 
@@ -36,6 +38,7 @@ describe('skill bundle installation', () => {
   it('cancels before extracting bundle bytes and removes staging', async () => {
     const root = await temporaryDirectory()
     const source = await createSkill(join(root, 'sources'), 'alpha-skill')
+
     const bundle = await createSkillBundleArchive({
       sources: [{ sourceDirectory: source }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -43,6 +46,7 @@ describe('skill bundle installation', () => {
       versionId: 'version_cancel',
       bundleName: 'team-skills'
     })
+
     const controller = new AbortController()
     controller.abort()
 
@@ -72,6 +76,7 @@ describe('skill bundle installation', () => {
     const source = await createSkill(join(root, 'sources'), 'alpha-skill')
     const payloadBytes = 256 * 1024
     await writeFile(join(source, 'payload.bin'), Buffer.alloc(payloadBytes, 0x61))
+
     const bundle = await createSkillBundleArchive({
       sources: [{ sourceDirectory: source }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -79,15 +84,18 @@ describe('skill bundle installation', () => {
       versionId: 'version_mid_extract_cancel',
       bundleName: 'team-skills'
     })
+
     const destinationRoot = join(root, 'home', '.agents', 'skills')
     const controller = new AbortController()
     let observedPartialBytes = false
+
     const signal = new Proxy(controller.signal, {
       get(target, property) {
         if (property === 'aborted' && !target.aborted) {
           const extraction = readdirSync(destinationRoot, { withFileTypes: true }).find(
             (entry) => entry.isDirectory() && entry.name.startsWith('.orca-skill-extract-')
           )
+
           if (extraction) {
             const size = (() => {
               try {
@@ -98,13 +106,16 @@ describe('skill bundle installation', () => {
                 return 0
               }
             })()
+
             if (size > 0 && size < payloadBytes) {
               observedPartialBytes = true
               controller.abort()
             }
           }
         }
+
         const value = Reflect.get(target, property, target) as unknown
+
         return typeof value === 'function' ? value.bind(target) : value
       }
     })
@@ -149,6 +160,7 @@ describe('skill bundle installation', () => {
       join(existingBeta, 'SKILL.md'),
       '---\nname: beta-skill\ndescription: Local\n---\n\n# Keep me\n'
     )
+
     const bundle = await createSkillBundleArchive({
       sources: [{ sourceDirectory: alpha }, { sourceDirectory: beta }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -163,6 +175,7 @@ describe('skill bundle installation', () => {
         throw new Error('renderer closed')
       }
     })
+
     const result = await installSkillBundle({
       operationId: 'operation_1',
       archivePath: bundle.archivePath,
@@ -222,6 +235,7 @@ describe('skill bundle installation', () => {
     const providerPath = join(homeDirectory, '.claude', 'skills', 'alpha-skill')
     await mkdir(providerPath, { recursive: true })
     await writeFile(join(providerPath, 'SKILL.md'), '# Unowned')
+
     const bundle = await createSkillBundleArchive({
       sources: [{ sourceDirectory: alpha }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -260,6 +274,7 @@ describe('skill bundle installation', () => {
     })
 
     await rm(providerPath, { recursive: true })
+
     const retried = await installSkillBundle({
       operationId: 'operation_provider_retry',
       archivePath: bundle.archivePath,

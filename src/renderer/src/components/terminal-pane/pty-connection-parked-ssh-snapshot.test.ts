@@ -42,8 +42,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -64,6 +67,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -73,6 +77,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -93,6 +98,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -103,9 +109,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -115,9 +123,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -126,6 +136,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -157,6 +168,7 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       const id = opts.sessionId ?? 'pty-new'
       transport.getPtyId.mockReturnValue(id)
+
       return { id, replay: 'restored-ssh-output' }
     })
     transportFactoryQueue.push(transport)
@@ -172,6 +184,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
@@ -183,10 +196,12 @@ describe('connectPanePty', () => {
     const settlePaneSerializer = vi.mocked(window.api.pty.settlePaneSerializer)
     expect(parseCallbacks.length).toBeGreaterThan(0)
     expect(settlePaneSerializer).not.toHaveBeenCalled()
+
     for (let step = 0; step < 20 && settlePaneSerializer.mock.calls.length === 0; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks()
     }
+
     expect(settlePaneSerializer).toHaveBeenCalledWith(expect.any(String), 1)
 
     const api = (
@@ -199,6 +214,7 @@ describe('connectPanePty', () => {
         }
       }
     ).window.api
+
     expect(api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'leaf-session' })
@@ -242,6 +258,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 }))
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const binding = connectPanePty(
       pane as never,
       createManager(1) as never,
@@ -251,6 +268,7 @@ describe('connectPanePty', () => {
         restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
     )
+
     await flushAsyncTicks(20)
 
     expect(window.api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
@@ -271,6 +289,7 @@ describe('connectPanePty', () => {
   it('drops an in-flight parked SSH prepaint after its retry lease is replaced', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const sshPtyId = toAppSshPtyId('conn-1', 'relay-pty-1')
+
     const snapshot = createDeferred<{
       data: string
       cols: number
@@ -278,7 +297,9 @@ describe('connectPanePty', () => {
       seq: number
       source: 'headless'
     }>()
+
     const sshConnect = createDeferred<SshConnectionState | null>()
+
     const pendingRetry = {
       attemptId: 'attempt-prepaint',
       authority: {
@@ -289,6 +310,7 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     transportFactoryQueue.push(createMockTransport())
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockReturnValue(snapshot.promise)
     vi.mocked(window.api.ssh.connect).mockReturnValue(sshConnect.promise)
@@ -314,6 +336,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const binding = connectPanePty(
       pane as never,
       createManager(1) as never,
@@ -323,6 +346,7 @@ describe('connectPanePty', () => {
         restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
     )
+
     await flushAsyncTicks(8)
     expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalledOnce()
 
@@ -383,6 +407,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const binding = connectPanePty(
       pane as never,
       createManager(1) as never,
@@ -392,6 +417,7 @@ describe('connectPanePty', () => {
         restoredPtyIdByLeafId: { [LEAF_1]: foreignPtyId }
       }) as never
     )
+
     await flushAsyncTicks(12)
 
     expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
@@ -405,6 +431,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const sshPtyId = toAppSshPtyId('conn-1', 'relay-pty-expired')
     const freshPtyId = toAppSshPtyId('conn-1', 'relay-pty-fresh')
+
     const snapshot = createDeferred<{
       data: string
       cols: number
@@ -412,13 +439,17 @@ describe('connectPanePty', () => {
       seq: number
       source: 'headless'
     }>()
+
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts) => {
       if (opts.sessionId) {
         opts.callbacks?.onError?.(`SSH_SESSION_EXPIRED: ${opts.sessionId}`)
+
         return undefined
       }
+
       transport.getPtyId.mockReturnValue(freshPtyId)
+
       return freshPtyId
     })
     transportFactoryQueue.push(transport)
@@ -435,6 +466,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const binding = connectPanePty(
       pane as never,
       createManager(1) as never,
@@ -444,6 +476,7 @@ describe('connectPanePty', () => {
         restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
       }) as never
     )
+
     await flushAsyncTicks(30)
     expect(transport.connect).toHaveBeenCalledTimes(2)
 
@@ -467,6 +500,7 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       transport.getPtyId.mockReturnValue(remotePtyId)
       callbacks.onReplayData?.('current screen from initial subscribe\r\n')
+
       return { id: remotePtyId, isReattach: true, replay: '' }
     })
     transport.serializeBuffer = vi.fn().mockResolvedValue({
@@ -495,6 +529,7 @@ describe('connectPanePty', () => {
     const deps = createDeps({ mountFollowsTerminalPark: true })
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
+
     for (let step = 0; step < 30; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(2)
@@ -513,6 +548,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport(localPtyId)
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       transport.getPtyId.mockReturnValue(localPtyId)
+
       return sessionId ? { id: localPtyId, isReattach: true } : null
     })
     transportFactoryQueue.push(transport)
@@ -546,13 +582,16 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     pane.container.getBoundingClientRect = vi.fn(() => createRect(0, 0))
     const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       mountFollowsTerminalPark: true,
       worktreeId: 'global-floating-terminal',
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: localPtyId }
     })
+
     connectPanePty(pane as never, createManager(1) as never, deps as never)
+
     for (let step = 0; step < 30; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(2)
@@ -576,6 +615,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport(sshPtyId)
     transport.connect.mockImplementation(async () => {
       transport.getPtyId.mockReturnValue(sshPtyId)
+
       return { id: sshPtyId, isReattach: true, replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -599,12 +639,15 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       mountFollowsTerminalPark: true,
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }
     })
+
     connectPanePty(pane as never, createManager(1) as never, deps as never)
+
     for (let step = 0; step < 30; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(2)
@@ -622,6 +665,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport(sshPtyId)
     transport.connect.mockImplementation(async () => {
       transport.getPtyId.mockReturnValue(sshPtyId)
+
       return { id: sshPtyId, isReattach: true, replay: 'relay-fallback-output' }
     })
     transportFactoryQueue.push(transport)
@@ -638,6 +682,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       mountFollowsTerminalPark: true,
       restoredLeafId: LEAF_1,
@@ -670,6 +715,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport(sshPtyId)
     transport.connect.mockImplementation(async () => {
       transport.getPtyId.mockReturnValue(sshPtyId)
+
       return { id: sshPtyId, isReattach: true, replay: 'relay-reconnect-output' }
     })
     transportFactoryQueue.push(transport)
@@ -685,6 +731,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: sshPtyId }

@@ -7,6 +7,7 @@ export function projectIpcPtyConnectResult(
   spawnResult: IpcPtySpawnResult
 ): string | PtyConnectResult {
   const launchAgent = isTuiAgent(spawnResult.launchAgent) ? spawnResult.launchAgent : undefined
+
   if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
     return {
       id: spawnResult.id,
@@ -40,6 +41,7 @@ export function projectIpcPtyConnectResult(
       ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
     }
   }
+
   if (
     launchAgent ||
     spawnResult.launchConfig ||
@@ -56,5 +58,6 @@ export function projectIpcPtyConnectResult(
       ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
     }
   }
+
   return spawnResult.id
 }

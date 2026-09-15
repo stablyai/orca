@@ -24,7 +24,9 @@ import {
 
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
+
 export { STEPS } from './use-onboarding-flow-types'
+
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export function useOnboardingFlow(
@@ -50,28 +52,35 @@ export function useOnboardingFlow(
 
   const skipIntegrations = shouldSkipIntegrationsStep(effectivePreflightStatus)
   const skipWindowsTerminal = shouldSkipWindowsTerminalStep(isWindowsUserAgent())
+
   const skipOptions = useMemo(
     () => ({ skipIntegrations, skipWindowsTerminal }),
     [skipIntegrations, skipWindowsTerminal]
   )
+
   const remappedLastCompletedStep = remapOpenOnboardingLastCompletedStep(onboarding)
+
   const initialStep = resolveStepIndex(
     Math.min(Math.max(remappedLastCompletedStep, 0), STEPS.length - 1),
     skipOptions,
     'forward'
   )
+
   const [stepIndex, setStepIndex] = useState(initialStep)
+
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
   )
+
   const [yoloPermissions, setYoloPermissions] = useState(
     resolveAgentPermissionModeSummary({
       agentDefaultArgs: settings?.agentDefaultArgs,
       agentDefaultEnv: settings?.agentDefaultEnv
     }) !== 'manual'
   )
+
   // Why: hydrate theme from saved settings so users who already chose one see it preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
@@ -82,6 +91,7 @@ export function useOnboardingFlow(
   const agentInteractedRef = useRef(false)
   const yoloPermissionsInteractedRef = useRef(false)
   const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
+
   const settingsHydration = resolveOnboardingSettingsHydration({
     settings,
     settingsHydrated,
@@ -90,21 +100,26 @@ export function useOnboardingFlow(
     currentTheme: theme,
     currentAgent: selectedAgent
   })
+
   if (settingsHydration) {
     setSettingsHydrated(settingsHydration.settingsHydrated)
+
     if (settingsHydration.theme !== undefined) {
       setTheme(settingsHydration.theme)
     }
+
     if (settingsHydration.selectedAgent !== undefined) {
       setSelectedAgent(settingsHydration.selectedAgent)
     }
   }
+
   if (settings && !yoloPermissionsInteractedRef.current) {
     const nextYoloPermissions =
       resolveAgentPermissionModeSummary({
         agentDefaultArgs: settings.agentDefaultArgs,
         agentDefaultEnv: settings.agentDefaultEnv
       }) !== 'manual'
+
     if (nextYoloPermissions !== yoloPermissions) {
       setYoloPermissions(nextYoloPermissions)
     }
@@ -115,6 +130,7 @@ export function useOnboardingFlow(
     themeInteractedRef.current = true
     setTheme(value)
   }, [])
+
   // `fromCollapsedSection`: whether the picked agent lived under AgentStep's `<details>` disclosure — only that call site knows.
   const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
   const isDetectingRef = useRef<boolean>(isDetectingAgents)
@@ -128,15 +144,18 @@ export function useOnboardingFlow(
   isDetectingRef.current = isDetectingAgents
   pathSourceRef.current = pathSource
   pathFailureReasonRef.current = pathFailureReason
+
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
       // Why: de-dup re-clicks on the current agent so telemetry counts mind-changes, not idle reselection.
       const prev = selectedAgentRef.current
       setSelectedAgent(value)
+
       if (value === null || value === prev) {
         return
       }
+
       // Why: emit at click time (not step completion) to capture mind-changes; payload builder extracted for coverage — see agent-picked-payload.test.ts.
       track(
         'onboarding_agent_picked',
@@ -152,6 +171,7 @@ export function useOnboardingFlow(
     },
     []
   )
+
   const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
     yoloPermissionsInteractedRef.current = true
     setYoloPermissions(enabled)
@@ -159,6 +179,7 @@ export function useOnboardingFlow(
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
+
   // Why: the stepper shows only steps the user will land on; skipped optional steps are dropped, not rendered as dead dots.
   const progressSteps = useMemo(
     () =>
@@ -167,12 +188,15 @@ export function useOnboardingFlow(
       ),
     [skipOptions]
   )
+
   // Why: while resuming, stepIndex can briefly point at a just-skipped step; resolve forward so the count reflects the landing step.
   const displayedStepIndex = resolveStepIndex(stepIndex, skipOptions, 'forward')
+
   const progressStepIndex = Math.max(
     0,
     progressSteps.findIndex(({ index }) => index === displayedStepIndex)
   )
+
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const [initialStartTime] = useState(() => Date.now())
   const startTimeRef = useRef<number>(initialStartTime)
@@ -185,11 +209,14 @@ export function useOnboardingFlow(
   useEffect(() => {
     if (currentStep.id !== 'theme') {
       themeStepEntryCapturedRef.current = false
+
       return
     }
+
     if (!settings || themeStepEntryCapturedRef.current) {
       return
     }
+
     // Why: capture entry theme so "Skip to project setup" keeps the preference the user arrived with.
     themeStepEntryCapturedRef.current = true
     themeStepEntryThemeRef.current = settings.theme
@@ -213,13 +240,16 @@ export function useOnboardingFlow(
     if (currentStep.id !== 'integrations' || !preflightStatusChecked || !skipIntegrations) {
       return
     }
+
     const nextIndex = getNextStepIndex(stepIndex)
     setStepIndex(nextIndex)
+
     // Why: persistence must resume at the next visible step, not bounce back through skipped optional pages.
     const skippedThroughStepNumber = Math.max(
       currentStep.stepNumber,
       STEPS[nextIndex].stepNumber - 1
     )
+
     void persistStep(skippedThroughStepNumber).then(onOnboardingChange, (err) => {
       toast.error(
         translate(
@@ -258,12 +288,14 @@ export function useOnboardingFlow(
     if (didAutoSelectRef.current) {
       return
     }
+
     didAutoSelectRef.current = true
     // Why: re-read PATH on mount; the session cache can be poisoned by callers that ran before shell PATH hydration, giving a false "no agents" state.
     void refreshDetectedAgents().then((ids) => {
       if (selectedAgentRef.current !== null) {
         return
       }
+
       const preferred = getAgentCatalog().find((agent) => ids.includes(agent.id))?.id ?? null
       setSelectedAgent(preferred)
     })

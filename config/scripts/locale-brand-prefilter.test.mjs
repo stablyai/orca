@@ -11,10 +11,12 @@ describe('locale brand matching', () => {
           if (typeof args[0] === 'string' && args[0].startsWith('(^|[^A-Za-z_])')) {
             boundaryExpressions += 1
           }
+
           return Reflect.construct(target, args)
         }
       })
     )
+
     try {
       for (const locale of ['zh', 'ja', 'ko', 'es']) {
         expect(
@@ -29,6 +31,7 @@ describe('locale brand matching', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+
     expect(boundaryExpressions).toBe(0)
   })
 

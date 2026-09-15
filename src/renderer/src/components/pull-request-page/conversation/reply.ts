@@ -32,11 +32,14 @@ export async function postConversationReply(args: {
         'Unable to reply without a repository path.'
       )
     )
+
     return false
   }
+
   // Why: nest under review threads (path/threadId/discussion_r); never post a
   // separate top-level conversation comment for those.
   const isReviewThreadReply = args.item.type === 'pr' && canPostPRReviewThreadReply(args.comment)
+
   const result = isReviewThreadReply
     ? await addPRReviewCommentReplyForRepo({
         repoPath: args.repoPath ?? '',
@@ -66,12 +69,15 @@ export async function postConversationReply(args: {
       result.error ||
         translate('auto.components.PullRequestPage.5821aab360', 'Failed to post reply.')
     )
+
     return false
   }
+
   args.onCommentAdded(
     isReviewThreadReply ? attachPRReviewReplyParent(result.comment, args.comment) : result.comment
   )
   args.onReplied()
   toast.success(translate('auto.components.PullRequestPage.11505c7a71', 'Reply posted.'))
+
   return true
 }

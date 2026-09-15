@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({ getRuntimeGitSubmoduleStatus: vi.fn() }))
 vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitSubmoduleStatus: mocks.getRuntimeGitSubmoduleStatus
 }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
 
 import {
@@ -26,10 +27,12 @@ function deferred<T>(): {
 } {
   let resolve!: (v: T) => void
   let reject!: (e: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -59,6 +62,7 @@ function Probe({
     activeRepoSettings: settings,
     entries
   })
+
   return null
 }
 

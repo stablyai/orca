@@ -3,7 +3,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import { resolveMobileBranchCompareBaseRef } from './mobile-branch-base-ref'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
+
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
+
 type RunGitWorkflow = (actionId: string, runner: () => Promise<void>) => Promise<boolean>
 
 type Params = {
@@ -71,10 +73,13 @@ export function useMobileSourceControlActionSheetRunners(params: Params) {
       if (!client) {
         throw new Error('Waiting for desktop...')
       }
+
       const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+
       if (!baseRef) {
         throw new Error('No base branch to rebase onto')
       }
+
       await sendGitRequest<unknown>('git.rebaseFromBase', { baseRef })
     })
     setShowActionSheet(false)

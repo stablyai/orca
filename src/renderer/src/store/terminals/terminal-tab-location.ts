@@ -12,9 +12,11 @@ export function locateTerminalTab(
 ): { worktreeId: string; index: number; tab: TerminalTab } | null {
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const index = tabs.findIndex((candidate) => candidate.id === tabId)
+
     if (index !== -1) {
       return { worktreeId, index, tab: tabs[index] }
     }
   }
+
   return null
 }

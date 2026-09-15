@@ -17,6 +17,7 @@ describe('generated WSL skill name filter', () => {
     'rejects only known scalar mismatches and passes uncertain names to TypeScript',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-wsl-name-filter-'))
+
       const scanRoot: SkillScanRoot = {
         id: 'home',
         owner: 'agents',
@@ -25,9 +26,11 @@ describe('generated WSL skill name filter', () => {
         sourceKind: 'home',
         providers: ['agent-skills']
       }
+
       for (const directory of [' orchestration', 'orchestration ', ' orchestration ']) {
         await writeSkill(root, directory, '---\nname: unrelated\n---\n')
       }
+
       await writeSkill(root, 'scalar-match', '---\nname: orchestration\n---\n')
       await writeSkill(root, 'scalar-mismatch', '---\nname: unrelated\n---\n')
       await writeSkill(root, 'empty-quoted', '---\nname: ""\n---\n# orchestration\n')
@@ -55,10 +58,12 @@ describe('generated WSL skill name filter', () => {
 
       try {
         const command = buildWslSkillDiscoveryCommand([scanRoot], ['orchestration'])
+
         const output = execFileSync('/bin/bash', ['-c', command], {
           encoding: 'utf8',
           maxBuffer: 4 * 1024 * 1024
         })
+
         expect(output).not.toContain('scalar-mismatch')
         expect(output).not.toContain('duplicate-mismatch')
         expect(output).toContain('beyond-limit')

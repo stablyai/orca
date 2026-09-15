@@ -14,14 +14,18 @@ const PLACEABLE_PATH = '/remote/work'
 
 function placementStore(): RemoteWorkspaceSnapshotPlacementStore {
   const state = appState()
+
   return { getState: () => state, subscribe: () => () => {} }
 }
 
 const rejections: unknown[] = []
+
 const onUnhandled = (reason: unknown): void => {
   rejections.push(reason)
 }
+
 process.on('unhandledRejection', onUnhandled)
+
 afterEach(() => {
   rejections.length = 0
 })
@@ -29,6 +33,7 @@ afterEach(() => {
 describe('createDeferredSnapshotPlacementRetries', () => {
   it('swallows a getSnapshot rejection instead of leaving it unhandled', async () => {
     const applySnapshot = vi.fn(async () => {})
+
     const retries = createDeferredSnapshotPlacementRetries({
       store: placementStore(),
       getCurrentAuthority: () => owner,
@@ -66,11 +71,13 @@ describe('createDeferredSnapshotPlacementRetries', () => {
     // Guards the test itself: without a bound the chain never yields and the run would hang.
     const CHAIN_GUARD = 50
     let pulls = 0
+
     const retries = createDeferredSnapshotPlacementRetries({
       store: placementStore(),
       getCurrentAuthority: () => owner,
       getSnapshot: async (): Promise<RemoteWorkspaceObservedSnapshot> => {
         pulls += 1
+
         return snapshot(4 + pulls)
       },
       applySnapshot: async () => {
@@ -82,6 +89,7 @@ describe('createDeferredSnapshotPlacementRetries', () => {
     })
 
     retries.watch(owner, [PLACEABLE_PATH])
+
     for (let tick = 0; tick < CHAIN_GUARD * 2; tick += 1) {
       await flush()
     }
@@ -103,14 +111,17 @@ describe('createDeferredSnapshotPlacementRetries', () => {
         }))
       }
     })
+
     const allPaths = [1, 2, 3, 4, 5].map((n) => `/remote/w${n}`)
     let pulls = 0
     let remaining = allPaths.length
+
     const retries = createDeferredSnapshotPlacementRetries({
       store: { getState: () => state, subscribe: () => () => {} },
       getCurrentAuthority: () => owner,
       getSnapshot: async (): Promise<RemoteWorkspaceObservedSnapshot> => {
         pulls += 1
+
         return snapshot(4 + pulls)
       },
       applySnapshot: async () => {
@@ -120,6 +131,7 @@ describe('createDeferredSnapshotPlacementRetries', () => {
     })
 
     retries.watch(owner, allPaths)
+
     for (let tick = 0; tick < 40; tick += 1) {
       await flush()
     }
@@ -131,11 +143,13 @@ describe('createDeferredSnapshotPlacementRetries', () => {
 
   it('does not spend the chain budget on watches armed outside a retry', async () => {
     let pulls = 0
+
     const retries = createDeferredSnapshotPlacementRetries({
       store: placementStore(),
       getCurrentAuthority: () => owner,
       getSnapshot: async (): Promise<RemoteWorkspaceObservedSnapshot> => {
         pulls += 1
+
         return snapshot(4 + pulls)
       },
       applySnapshot: async () => {}

@@ -16,6 +16,7 @@ type TailWatch = {
 }
 
 const tailWatches = new Map<string, TailWatch>()
+
 const senderCleanupRegistered = new Set<number>()
 
 function watchKey(senderId: number, subscriptionId: string): string {
@@ -24,15 +25,18 @@ function watchKey(senderId: number, subscriptionId: string): string {
 
 function closeWatch(key: string): void {
   const subscription = tailWatches.get(key)
+
   if (!subscription) {
     return
   }
+
   tailWatches.delete(key)
   subscription.watcher.close()
 }
 
 function closeSenderWatches(senderId: number): void {
   senderCleanupRegistered.delete(senderId)
+
   for (const [key, subscription] of tailWatches) {
     if (subscription.senderId === senderId) {
       closeWatch(key)
@@ -44,6 +48,7 @@ function validateSubscriptionId(value: unknown): string {
   if (typeof value !== 'string' || value.length === 0 || value.length > 200) {
     throw new Error('Invalid local log tail subscription id')
   }
+
   return value
 }
 
@@ -51,6 +56,7 @@ function registerSenderCleanup(sender: WebContents): void {
   if (senderCleanupRegistered.has(sender.id)) {
     return
   }
+
   senderCleanupRegistered.add(sender.id)
   sender.once('destroyed', () => closeSenderWatches(sender.id))
 }
@@ -60,6 +66,7 @@ export function registerLocalLogTailHandlers(store: Store): void {
     'fs:readLocalLogTail',
     async (_event, args: LocalLogTailReadArgs): Promise<LocalLogTailReadResult> => {
       const filePath = await resolveAuthorizedPath(args.filePath, store)
+
       return readLocalLogTailRange(filePath, args.fromByteOffset, args.expectedIdentity)
     }
   )
@@ -76,9 +83,11 @@ export function registerLocalLogTailHandlers(store: Store): void {
         if (!tailWatches.has(key) || event.sender.isDestroyed()) {
           return
         }
+
         const payload: LocalLogTailChangedPayload = { subscriptionId, eventType }
         event.sender.send('fs:localLogTailChanged', payload)
       }
+
       const watcher = watch(filePath, (eventType) => sendChange(eventType))
       watcher.on('error', () => {
         // Why: an error commonly accompanies rotation. Signal one final drain so
@@ -100,6 +109,7 @@ export function closeAllLocalLogTailWatchers(): void {
   for (const key of Array.from(tailWatches.keys())) {
     closeWatch(key)
   }
+
   senderCleanupRegistered.clear()
 }
 

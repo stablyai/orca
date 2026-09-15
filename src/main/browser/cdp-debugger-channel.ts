@@ -26,11 +26,13 @@ export class CdpDebuggerChannel {
     if (this.attached) {
       return
     }
+
     try {
       this.debuggerLease = acquireElectronDebugger(this.webContents)
     } catch {
       throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
     }
+
     this.attached = true
 
     try {
@@ -45,16 +47,20 @@ export class CdpDebuggerChannel {
         Record<string, unknown>,
         string | undefined
       ]
+
       const client = this.getClient()
+
       if (!client || client.readyState !== WebSocket.OPEN) {
         return
       }
+
       // Why: Electron passes empty string (not undefined) for root-session events, but
       // agent-browser filters events by the sessionId from Target.attachToTarget.
       const msg: Record<string, unknown> = { method, params }
       msg.sessionId = sessionId || this.sessions.primarySessionId
       client.send(JSON.stringify(msg))
     }
+
     this.debuggerDetachHandler = () => {
       this.attached = false
       const lease = this.debuggerLease
@@ -62,6 +68,7 @@ export class CdpDebuggerChannel {
       lease?.release()
       this.onDetached()
     }
+
     this.webContents.debugger.on('message', this.debuggerMessageHandler as never)
     this.webContents.debugger.on('detach', this.debuggerDetachHandler as never)
   }
@@ -71,10 +78,12 @@ export class CdpDebuggerChannel {
       this.webContents.debugger.removeListener('message', this.debuggerMessageHandler as never)
       this.debuggerMessageHandler = null
     }
+
     if (this.debuggerDetachHandler) {
       this.webContents.debugger.removeListener('detach', this.debuggerDetachHandler as never)
       this.debuggerDetachHandler = null
     }
+
     const lease = this.debuggerLease
     this.debuggerLease = null
     lease?.release()
@@ -89,6 +98,7 @@ export class CdpDebuggerChannel {
     const command = sessionId
       ? this.webContents.debugger.sendCommand(method, params, sessionId)
       : this.webContents.debugger.sendCommand(method, params)
+
     return Promise.resolve(command)
   }
 
@@ -101,9 +111,12 @@ export class CdpDebuggerChannel {
   ): void {
     if (this.webContents.isDestroyed()) {
       this.responder.sendError(clientId, 'Browser tab is no longer available', client)
+
       return
     }
+
     const sessionId = this.sessions.resolveDebuggerSessionId(msgSessionId)
+
     try {
       this.sendDebuggerCommand(method, params, sessionId)
         .then((result) => {

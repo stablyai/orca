@@ -24,6 +24,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
       const items = await mapWithConcurrency(params.dispatchIds, 16, async (dispatchId) => {
         requireHomeAttachment(runtime, dispatchId, authenticatedCallerFingerprint)
         const observation = await inspectRemoteAttachment(runtime, dispatchId)
+
         return {
           dispatchId,
           observation: {
@@ -36,6 +37,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           }
         }
       })
+
       return { runtimeEpoch: runtime.getRuntimeId(), items }
     }
   }),
@@ -48,7 +50,9 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
+
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+
       return releaseRemoteAttachment({ runtime, attachment, observation })
     }
   }),
@@ -61,7 +65,9 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
+
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -82,6 +88,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+
       // Why `=== 'exited'` rather than `!== 'live'`: the other non-live
       // statuses are already covered by the two guards, and an unverifiable
       // terminal is still readable — losing stop-contact is not an exit.
@@ -91,6 +98,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           `Remote Dispatch ${params.dispatchId} no longer resolves to its exact process.`
         )
       }
+
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -110,14 +118,17 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         params.dispatchId,
         authenticatedCallerFingerprint
       )
+
       const storedArchive = runtime
         .getOrchestrationDb()
         .getWorkerTerminalArchive(attachment.dispatch_id)
+
       if (storedArchive) {
         const archivedObservation =
           attachment.stage === 'released'
             ? null
             : await inspectRemoteAttachment(runtime, params.dispatchId)
+
         const output = await readRemoteAttachmentArchive({
           runtime,
           attachment,
@@ -133,6 +144,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
                   : 'unverifiable'
                 : 'unverifiable'
         })
+
         if (output) {
           return {
             dispatchId: params.dispatchId,
@@ -141,13 +153,16 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           }
         }
       }
+
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+
       if (!observation.exact || !observation.terminal) {
         throw new OrchestrationError(
           'worker_identity_changed',
           `Remote Dispatch ${params.dispatchId} no longer resolves to its exact process.`
         )
       }
+
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatchId,
@@ -170,13 +185,16 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         cursor: params.cursor,
         limit: params.limit
       })
+
       const afterRead = await inspectRemoteAttachment(runtime, params.dispatchId)
+
       if (!afterRead.exact) {
         throw new OrchestrationError(
           'worker_identity_changed',
           `Remote Dispatch ${params.dispatchId} changed process while output was read.`
         )
       }
+
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -191,6 +209,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
       const db = runtime.getOrchestrationDb()
       const begun = db.beginRemoteAttachmentStop(params.dispatchId)
+
       if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(begun.state)) {
         return {
           dispatchId: params.dispatchId,
@@ -199,12 +218,15 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           processAction: 'none'
         }
       }
+
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
+
       if (!observation.exact || !observation.terminal) {
         const attachment = db.markRemoteAttachmentStopUnknown(
           params.dispatchId,
           `The recorded worker process is ${observation.status}; no terminal was closed.`
         )
+
         return {
           dispatchId: params.dispatchId,
           state: attachment.state,
@@ -213,8 +235,10 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           lastError: attachment.last_error
         }
       }
+
       try {
         const close = await runtime.closeTerminal(observation.terminal.handle)
+
         if (!close.ptyKilled) {
           // The tab is retired but the process was never confirmed stopped, so
           // the coordinator must not be told this dispatch reached 'stopped'.
@@ -222,6 +246,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
             params.dispatchId,
             describeUnconfirmedAgentStop(close)
           )
+
           return {
             dispatchId: params.dispatchId,
             state: attachment.state,
@@ -231,7 +256,9 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
             close
           }
         }
+
         const attachment = db.settleRemoteAttachmentStop(params.dispatchId)
+
         return {
           dispatchId: params.dispatchId,
           state: attachment.state,
@@ -242,6 +269,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)
         const attachment = db.markRemoteAttachmentStopUnknown(params.dispatchId, reason)
+
         return {
           dispatchId: params.dispatchId,
           state: attachment.state,

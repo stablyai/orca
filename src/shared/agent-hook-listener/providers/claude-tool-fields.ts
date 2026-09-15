@@ -12,6 +12,7 @@ export function extractClaudeToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
+
   if (eventName === 'PostToolUseFailure') {
     Object.assign(update, clearActiveToolFieldsUpdate())
   } else if (
@@ -32,33 +33,41 @@ export function extractClaudeToolFields(
       )
     )
   }
+
   if (eventName === 'PostToolUse') {
     const responseText = extractToolResponseText(hookPayload.tool_response)
+
     if (responseText) {
       update.lastAssistantMessage = responseText
       update.lastAssistantMessageIsToolOutput = true
     }
   }
+
   if (eventName === 'PostToolUseFailure') {
     const errorText =
       extractToolResponseText(hookPayload.tool_response) ??
       readString(hookPayload, 'error') ??
       readString(hookPayload, 'message')
+
     if (errorText) {
       update.lastAssistantMessage = errorText
       update.lastAssistantMessageIsToolOutput = true
     }
   }
+
   if (eventName === 'Stop') {
     const direct = readString(hookPayload, 'last_assistant_message')
+
     if (direct) {
       update.lastAssistantMessage = direct
     } else {
       const lastFromTranscript = readLastAssistantFromTranscript(hookPayload.transcript_path)
+
       if (lastFromTranscript) {
         update.lastAssistantMessage = lastFromTranscript
       }
     }
   }
+
   return update
 }

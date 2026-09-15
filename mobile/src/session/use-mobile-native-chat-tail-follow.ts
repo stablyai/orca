@@ -6,6 +6,7 @@ const AT_TAIL_SLOP = 80
 
 function isAtTail(event: NativeScrollEvent): boolean {
   const { contentOffset, contentSize, layoutMeasurement } = event
+
   return contentSize.height - (contentOffset.y + layoutMeasurement.height) <= AT_TAIL_SLOP
 }
 
@@ -61,6 +62,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     if (followingRef.current === next) {
       return
     }
+
     followingRef.current = next
     setFollowingFlag(next)
   }, [])
@@ -69,6 +71,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     if (atTailRef.current === next) {
       return
     }
+
     atTailRef.current = next
     setAtTailFlag(next)
   }, [])
@@ -77,6 +80,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     if (!followingRef.current || !hasItems) {
       return
     }
+
     listRef.current?.scrollToEnd({ animated: false })
   }, [hasItems])
 
@@ -85,6 +89,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
       if (!followingRef.current || !hasItems) {
         return
       }
+
       listRef.current?.scrollToOffset({ animated: false, offset: height })
     },
     [hasItems]
@@ -121,10 +126,12 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
       if (!userScrollActiveRef.current) {
         return
       }
+
       clearUserScrollSettle()
       userScrollActiveRef.current = false
       setAtTail(finishedAtTail)
       setFollowing(finishedAtTail)
+
       if (finishedAtTail) {
         pinToTail()
       }
@@ -137,6 +144,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
       if (!userScrollActiveRef.current) {
         return
       }
+
       clearUserScrollSettle()
       const releasedAtTail = isAtTail(event.nativeEvent)
       userScrollSettleFrameRef.current = requestAnimationFrame(() => {

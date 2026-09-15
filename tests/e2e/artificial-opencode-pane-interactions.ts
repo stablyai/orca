@@ -20,18 +20,22 @@ export async function focusActiveTerminalInput(page: Page): Promise<void> {
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!pane || !textarea) {
       throw new Error('Active terminal input is unavailable')
     }
+
     pane.terminal.focus()
     textarea.focus()
   })
@@ -45,9 +49,11 @@ export async function focusPane(page: Page, paneKey: string): Promise<void> {
     ({ tabId, leafId }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getPanes?.().find((candidate) => candidate.leafId === leafId)
+
       if (!manager || !pane) {
         throw new Error(`Unable to focus pane ${tabId}:${leafId}`)
       }
+
       manager.setActivePane?.(pane.id, { focus: true })
     },
     { tabId, leafId }
@@ -67,10 +73,12 @@ export async function waitForTerminalPtyVisible(
             const pane = manager
               .getPanes?.()
               .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
+
             if (pane) {
               return pane.container.isConnected && pane.container.getClientRects().length > 0
             }
           }
+
           return false
         }, ptyId),
       {
@@ -88,14 +96,18 @@ export async function ensureActiveWorktreePaneLoad(
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
   const worktreeId = await getActiveWorktreeId(page)
+
   if (!worktreeId) {
     throw new Error('Active worktree is unavailable for terminal pane load')
   }
+
   let snapshot = await waitForActiveWorktreePaneLoad(page, worktreeId, 1)
+
   while (snapshot.panes.length < paneCount) {
     await splitActiveTerminalPane(page, snapshot.panes.length % 2 === 0 ? 'horizontal' : 'vertical')
     snapshot = await waitForActiveWorktreePaneLoad(page, worktreeId, snapshot.panes.length + 1)
   }
+
   return snapshot.panes.slice(0, paneCount).map((pane) => ({
     paneKey: `${snapshot.tabId}:${pane.leafId}`,
     ptyId: pane.ptyId ?? ''
@@ -117,7 +129,9 @@ async function waitForActiveWorktreePaneLoad(
           await ensureTerminalVisible(page)
           await waitForActiveTerminalManager(page, 30_000)
         }
+
         snapshot = await readPaneIdentitySnapshot(page)
+
         return Boolean(
           snapshot &&
           snapshot.panes.length === paneCount &&
@@ -137,9 +151,11 @@ async function waitForActiveWorktreePaneLoad(
       }
     )
     .toBe(true)
+
   if (!snapshot) {
     throw new Error('Artificial load pane snapshot is unavailable')
   }
+
   return snapshot
 }
 
@@ -149,12 +165,15 @@ export async function waitForMarkerLatency(
   timeoutMs: number
 ): Promise<number> {
   const start = performance.now()
+
   while (performance.now() - start < timeoutMs) {
     if ((await getTerminalContent(page, 12_000)).includes(marker)) {
       return performance.now() - start
     }
+
     await page.waitForTimeout(5)
   }
+
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 
@@ -172,6 +191,7 @@ export async function getTerminalContentForPtyId(
           }
         }
       }
+
       return ''
     },
     { ptyId, charLimit }

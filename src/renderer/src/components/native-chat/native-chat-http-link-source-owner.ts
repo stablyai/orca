@@ -15,13 +15,17 @@ export function resolveNativeChatHttpLinkSourceOwner(
   worktreeId: string
 ): HttpLinkSourceOwner {
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   if (runtimeEnvironmentId) {
     return { kind: 'runtime', runtimeEnvironmentId }
   }
+
   const connectionId = getConnectionIdFromState(state, worktreeId)
+
   if (connectionId === undefined) {
     return { kind: 'unknown' }
   }
+
   return connectionId === null ? { kind: 'local' } : { kind: 'ssh', connectionId }
 }
 
@@ -33,6 +37,7 @@ export function canNativeChatOpenOwnedBrowser(
   if (sourceOwner.kind === 'runtime') {
     return canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, sourceOwner.runtimeEnvironmentId)
   }
+
   return (
     sourceOwner.kind === 'ssh' &&
     canOpenWorkspaceBrowserTabOnSsh(state, worktreeId, sourceOwner.connectionId)

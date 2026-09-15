@@ -16,13 +16,16 @@ export function resolveTerminalStartupCwd(
   missingDirFallback?: TerminalStartupCwdMissingDirFallback
 ): string | undefined {
   const trimmedCwd = requestedCwd?.trim()
+
   if (!trimmedCwd) {
     return undefined
   }
+
   // Why: resolve relative requests against the worktree root and normalize
   // `..`; the cwd is intentionally not constrained to the worktree, so opening
   // or splitting a terminal outside it (e.g. after `cd ..`) is allowed. (#7685)
   const resolvedCwd = resolveRuntimePath(worktreePath, trimmedCwd)
+
   if (
     missingDirFallback &&
     resolvedCwd !== worktreePath &&
@@ -35,8 +38,10 @@ export function resolveTerminalStartupCwd(
     // (unmounted volume, stopped WSL distro), keep the requested cwd so the
     // provider surfaces its normal error instead of a misleading fallback.
     missingDirFallback.onFallbackToWorkspaceRoot?.(resolvedCwd)
+
     return worktreePath
   }
+
   return resolvedCwd
 }
 
@@ -49,20 +54,24 @@ export function resolveTerminalStartupCwdForWorkspace(args: {
   if (!args.requestedCwd || args.requestedCwd.trim().length === 0) {
     return undefined
   }
+
   if (args.workspaceId === FLOATING_TERMINAL_WORKTREE_ID) {
     // Why: floating terminals have no worktree root; their cwd was already
     // resolved against the trusted-directory grants in resolveFloatingTerminalCwd.
     return args.requestedCwd
   }
+
   const workspacePath = resolveTerminalWorkspacePath(
     args.workspaceId,
     args.resolveFolderWorkspacePath
   )
+
   if (!workspacePath) {
     // Why: without a worktree root we can't anchor a relative request, so fall
     // back to the provider default rather than guessing a base.
     return undefined
   }
+
   return resolveTerminalStartupCwd(workspacePath, args.requestedCwd, args.missingDirFallback)
 }
 
@@ -73,10 +82,14 @@ function resolveTerminalWorkspacePath(
   if (!workspaceId) {
     return null
   }
+
   const scope = parseWorkspaceKey(workspaceId)
+
   if (scope?.type === 'folder') {
     return resolveFolderWorkspacePath?.(scope.folderWorkspaceId) ?? null
   }
+
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+
   return splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? null
 }

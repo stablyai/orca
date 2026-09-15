@@ -59,19 +59,23 @@ function readSavedSourceControlActionRecipeAtTarget(input: {
   if (input.target.type === 'repo') {
     const repoRecipe = normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
       ?.actionOverrides?.[input.actionId]
+
     if (!repoRecipe) {
       return null
     }
+
     return resolveSourceControlActionRecipe({
       actionId: input.actionId,
       settings: input.settings,
       repo: input.repo
     })
   }
+
   const source = normalizeSourceControlAiSettings(
     input.settings?.sourceControlAi,
     input.settings?.commitMessageAi
   )
+
   return source.actions?.[input.actionId] ?? null
 }
 
@@ -87,6 +91,7 @@ function readSavedCustomAgentCommandAtTarget(input: {
       )?.customAgentCommand?.trim() ?? ''
     )
   }
+
   return normalizeSourceControlAiSettings(
     input.settings?.sourceControlAi,
     input.settings?.commitMessageAi
@@ -102,16 +107,21 @@ export function sourceControlActionRecipeMatchesTarget(input: {
   customAgentCommand?: string
 }): boolean {
   const savedRecipe = readSavedSourceControlActionRecipeAtTarget(input)
+
   if (!savedRecipe) {
     return false
   }
+
   const current = normalizeSourceControlActionRecipeForComparison(input.actionId, input.recipe)
   const saved = normalizeSourceControlActionRecipeForComparison(input.actionId, savedRecipe)
+
   if (!sourceControlActionRecipesMatch(current, saved)) {
     return false
   }
+
   if (!isCustomAgentId(current.agentId)) {
     return true
   }
+
   return (input.customAgentCommand ?? '').trim() === readSavedCustomAgentCommandAtTarget(input)
 }

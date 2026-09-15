@@ -34,9 +34,11 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     }>(client, flags, 'orchestration.workerStop', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
+
     if (result.result.state === 'stop_unknown') {
       process.exitCode = 1
     }
+
     printResult(
       result,
       json,
@@ -53,6 +55,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     }>(client, flags, 'orchestration.workerAbandon', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
+
     printResult(
       result,
       json,
@@ -67,10 +70,12 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       'orchestration.workerRelease',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
+
     // Why: only an unprovable close is a failure; retained/pending/already-released are settled answers.
     if (result.result.state === 'release_unknown') {
       process.exitCode = 1
     }
+
     printResult(result, json, formatWorkerRelease)
   },
 
@@ -81,14 +86,17 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       'orchestration.workerRetain',
       { dispatch: getRequiredStringFlag(flags, 'dispatch') }
     )
+
     if (result.result.state === 'release_unknown') {
       process.exitCode = 1
     }
+
     printResult(result, json, formatWorkerRelease)
   },
 
   'orchestration worker-list': async ({ flags, client, cwd, json }) => {
     const terminalState = getOptionalStringFlag(flags, 'terminal-state')
+
     if (
       terminalState &&
       !WORKER_TERMINAL_LIST_STATES.includes(
@@ -100,9 +108,12 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
         `invalid --terminal-state '${terminalState}', expected one of: ${WORKER_TERMINAL_LIST_STATES.join(', ')}`
       )
     }
+
     const scope = await resolveWorkerListRunScope(flags, cwd, client)
+
     const requiresCurrentListSemantics =
       flags.has('include-remote') || flags.has('cursor') || flags.has('limit')
+
     const result = await client.call<{
       workers: {
         dispatchId: string
@@ -140,12 +151,14 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       cursor: getOptionalStringFlag(flags, 'cursor'),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
+
     if (requiresCurrentListSemantics && !result.result.page) {
       throw new RuntimeClientError(
         'incompatible_runtime',
         'The connected Orca runtime did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca runtime and retry.'
       )
     }
+
     printResult({ ...result, result: { ...result.result, scope } }, json, (value) => {
       const rows =
         value.workers.length === 0
@@ -153,36 +166,46 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
           : value.workers
               .map((worker) => {
                 const projection = worker.projection
+
                 const provider = projection?.provider
                   ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
                   : 'unknown'
+
                 const workspace = projection?.workspace?.id ?? 'unknown'
                 const stage = projection?.stage.activity ?? worker.dispatchStatus
                 const liveness = projection?.liveness.verdict
                 const attention = projection?.attention?.categories.join(',') || 'none'
+
                 const details = projection
                   ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
                   : `]`
+
                 // Why: the enumerating command owes the literal argv the guides tell callers to run.
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`
                   : ''
+
                 return `${worker.dispatchId} task=${worker.taskId} [${worker.workerState}${details} terminal=${worker.terminalState ?? 'none'}${next}`
               })
               .join('\n')
+
       const counts = Object.entries(value.counts)
         .map(([state, count]) => `${state}=${count}`)
         .join(' ')
+
       const pagination =
         value.page?.hasMore && value.page.nextCursor
           ? `\nMore: --cursor ${value.page.nextCursor}`
           : ''
+
       const warnings = (value.partialHostErrors ?? []).map(
         (error) =>
           `Warning: worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
       )
+
       const warningBlock = warnings.length ? `\n${warnings.join('\n')}` : ''
       const scopeLine = `\n${formatWorkerListScope(value.scope ?? scope)}`
+
       return `${counts ? `${rows}\nTerminals: ${counts}` : rows}${scopeLine}${pagination}${warningBlock}`
     })
   }

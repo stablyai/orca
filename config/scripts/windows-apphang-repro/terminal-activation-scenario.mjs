@@ -39,21 +39,27 @@ async function setupAppFixture(page, fixture, gpuMode, sourceControl) {
       page.evaluate(
         async ({ repoPath, plainPath, importedWorktreePaths, mode, openSourceControl }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is unavailable.')
           }
+
           const state = store.getState()
           await state.fetchSettings?.()
           await store.getState().updateSettings({ terminalGpuAcceleration: mode })
 
           const addResult = await window.api.repos.add({ path: repoPath, kind: 'git' })
+
           if ('error' in addResult) {
             throw new Error(addResult.error)
           }
+
           await store.getState().fetchRepos()
           let nextState = store.getState()
+
           const repo =
             nextState.repos.find((candidate) => candidate.path === repoPath) ?? addResult.repo
+
           await nextState.updateRepo(repo.id, {
             externalWorktreeVisibility: 'show',
             externalWorktreeVisibilityPromptDismissedAt: Date.now(),
@@ -63,9 +69,11 @@ async function setupAppFixture(page, fixture, gpuMode, sourceControl) {
           await store.getState().fetchWorktrees(repo.id, { requireAuthoritative: true })
 
           const plainRepo = await store.getState().addNonGitFolder(plainPath)
+
           if (!plainRepo) {
             throw new Error('addNonGitFolder returned null.')
           }
+
           await store.getState().fetchWorktrees(plainRepo.id, { requireAuthoritative: true })
 
           nextState = store.getState()
@@ -74,6 +82,7 @@ async function setupAppFixture(page, fixture, gpuMode, sourceControl) {
           nextState.setSortBy('recent')
           nextState.setShowActiveOnly(false)
           nextState.setActiveView('terminal')
+
           if (openSourceControl) {
             nextState.setRightSidebarOpen(true)
             nextState.setRightSidebarTab('source-control')
@@ -81,6 +90,7 @@ async function setupAppFixture(page, fixture, gpuMode, sourceControl) {
 
           const gitWorktrees = nextState.worktreesByRepo[repo.id] ?? []
           const plainWorktrees = nextState.worktreesByRepo[plainRepo.id] ?? []
+
           return {
             repoId: repo.id,
             repoPath: repo.path,
@@ -120,15 +130,19 @@ async function clickWorktreeCard(page, worktreeId) {
       page.evaluate((id) => {
         const rows = Array.from(document.querySelectorAll('[data-worktree-id]'))
         const row = rows.find((candidate) => candidate.getAttribute('data-worktree-id') === id)
+
         if (!row) {
           return null
         }
+
         row.scrollIntoView({ block: 'center', inline: 'nearest' })
         const surface = row.querySelector('[data-worktree-card-surface="true"]') ?? row
         const bounds = surface.getBoundingClientRect()
+
         if (bounds.width <= 0 || bounds.height <= 0) {
           return null
         }
+
         return {
           x: bounds.left + bounds.width / 2,
           y: bounds.top + bounds.height / 2,
@@ -138,9 +152,11 @@ async function clickWorktreeCard(page, worktreeId) {
       }, worktreeId),
     rendererActionTimeoutMs
   )
+
   if (!rect) {
     throw new Error(`Could not find rendered worktree card for ${worktreeId}`)
   }
+
   await runWithTimeout(
     `click worktree card ${worktreeId}`,
     () => page.mouse.click(rect.x, rect.y),
@@ -154,6 +170,7 @@ async function waitForActiveWorktree(page, worktreeId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         return {
           activeWorktreeId: state?.activeWorktreeId ?? null,
           activeTabId: state?.activeTabId ?? null,
@@ -168,18 +185,22 @@ async function waitForActiveWorktree(page, worktreeId) {
 
 async function waitForActivePty(page, worktreeId) {
   const startedAt = Date.now()
+
   const value = await pollUntil(
     `active PTY for ${worktreeId}`,
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         const tabId =
           state?.activeWorktreeId === id && state.activeTabType === 'terminal'
             ? state.activeTabId
             : (state?.activeTabIdByWorktree?.[id] ?? null)
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
         const ptyId = pane?.container?.dataset?.ptyId ?? null
+
         return {
           tabId,
           ptyId,
@@ -191,11 +212,13 @@ async function waitForActivePty(page, worktreeId) {
     (value) => Boolean(value?.ptyId),
     ptyWaitTimeoutMs
   )
+
   return { ...value, waitMs: Date.now() - startedAt }
 }
 
 function makeOutputCommand(marker, outputLines) {
   const payload = 'x'.repeat(180)
+
   return `printf '${marker}_START\\n'; i=1; while [ "$i" -le ${outputLines} ]; do printf '${marker}_%05d ${payload}\\n' "$i"; i=$((i+1)); done; printf '${marker}_DONE\\n'\r`
 }
 
@@ -206,14 +229,17 @@ async function getTerminalContent(page, charLimit = 20_000) {
       page.evaluate((limit) => {
         const state = window.__store?.getState?.()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
         return (pane?.serializeAddon?.serialize?.() ?? '').slice(-limit)
       }, charLimit),
     rendererActionTimeoutMs
@@ -248,6 +274,7 @@ async function pingMainIpc(page) {
     () => page.evaluate(() => window.api.pty.listSessions()),
     rendererActionTimeoutMs
   )
+
   return Date.now() - startedAt
 }
 
@@ -268,10 +295,13 @@ async function killActivePty(page) {
         const tabId = state?.activeTabId ?? null
         const ptyIds = tabId ? (state?.ptyIdsByTabId?.[tabId] ?? []) : []
         const ptyId = ptyIds[0] ?? null
+
         if (!ptyId) {
           return null
         }
+
         await window.api.pty.kill(ptyId)
+
         return ptyId
       }),
     rendererActionTimeoutMs
@@ -287,9 +317,11 @@ async function resetRendererProbe(page) {
     () =>
       page.evaluate(() => {
         const probe = globalThis.__orcaApphangProbe?.probe
+
         if (!probe) {
           return
         }
+
         const now = performance.now()
         probe.last = now
         probe.lastTickAt = now
@@ -318,6 +350,7 @@ async function runActivationCycle(page, target, args) {
   const rendererProbe = await readRendererProbe(page)
   const diagnosticsAfterOutput = await collectRendererDiagnostics(page)
   const elapsedMs = Date.now() - cycleStartedAt
+
   const sample = {
     index: target.index,
     kind: target.kind,
@@ -339,26 +372,33 @@ async function runActivationCycle(page, target, args) {
   }
 
   const reproducedReasons = []
+
   if (activationMs > severeActivationMs) {
     reproducedReasons.push(`worktree activation took ${activationMs}ms`)
   }
+
   if (activePty.waitMs > severePtyWaitMs) {
     reproducedReasons.push(`PTY binding took ${activePty.waitMs}ms`)
   }
+
   if (mainIpcMs > severeMainIpcMs) {
     reproducedReasons.push(`main IPC ping took ${mainIpcMs}ms`)
   }
+
   if ((rendererProbe?.maxDriftMs ?? 0) > severeRendererDriftMs) {
     reproducedReasons.push(`renderer timer drift reached ${Math.round(rendererProbe.maxDriftMs)}ms`)
   }
+
   if (reproducedReasons.length > 0) {
     throw new ReproductionObservedError(reproducedReasons.join('; '), sample)
   }
+
   return sample
 }
 
 async function runDeadPtyReactivation(page, targets, args) {
   const samples = []
+
   for (const target of targets) {
     await clickWorktreeCard(page, target.id)
     await waitForActiveWorktree(page, target.id)
@@ -366,11 +406,13 @@ async function runDeadPtyReactivation(page, targets, args) {
     const killedPtyId = await killActivePty(page)
     samples.push({ worktreeId: target.id, killedPtyId })
   }
+
   for (const target of targets) {
     samples.push(
       await runActivationCycle(page, { ...target, kind: `${target.kind}:dead-pty` }, args)
     )
   }
+
   return samples
 }
 
@@ -380,14 +422,18 @@ function selectTargets(setupResult, cycles) {
     .sort((a, b) => Number(b.isMainWorktree) - Number(a.isMainWorktree))
     .slice(0, 5)
     .map((worktree) => ({ ...worktree, kind: 'git-wsl' }))
+
   const plainWorktrees = setupResult.plainWorktrees.map((worktree) => ({
     ...worktree,
     kind: 'plain-folder-wsl'
   }))
+
   const baseTargets = [...gitWorktrees, ...plainWorktrees]
+
   if (baseTargets.length === 0) {
     throw new Error('No worktrees were discovered for the repro fixture.')
   }
+
   return Array.from({ length: cycles }, (_, index) => ({
     ...baseTargets[index % baseTargets.length],
     index: index + 1
@@ -401,6 +447,7 @@ export async function runGpuMode(gpuMode, args, fixture) {
   let browser = null
   let page = null
   const startedAt = Date.now()
+
   const result = {
     gpuMode,
     reproduced: false,
@@ -426,11 +473,13 @@ export async function runGpuMode(gpuMode, args, fixture) {
     page = connected.page
     await waitForStoreReady(page)
     await installRendererProbe(page)
+
     const identity = await runWithTimeout(
       'app identity',
       () => page.evaluate(() => window.api.app.getIdentity?.()),
       rendererActionTimeoutMs
     ).catch(() => null)
+
     console.log(
       `[apphang-repro] connected gpu=${gpuMode} pid=${result.appPid} identity=${JSON.stringify(identity)}`
     )
@@ -441,19 +490,23 @@ export async function runGpuMode(gpuMode, args, fixture) {
         .map((target) => `${target.kind}:${target.displayName}`)
         .join(', ')}`
     )
+
     for (const target of targets) {
       console.log(`[apphang-repro] cycle=${target.index} gpu=${gpuMode} kind=${target.kind}`)
       result.samples.push(await runActivationCycle(page, target, args))
     }
+
     if (args.deadPtyReactivate) {
       const uniqueTargets = []
       const seen = new Set()
+
       for (const target of targets) {
         if (!seen.has(target.id)) {
           seen.add(target.id)
           uniqueTargets.push(target)
         }
       }
+
       console.log(`[apphang-repro] dead-pty-reactivation gpu=${gpuMode}`)
       result.samples.push(...(await runDeadPtyReactivation(page, uniqueTargets, args)))
     }
@@ -474,13 +527,17 @@ export async function runGpuMode(gpuMode, args, fixture) {
     result.trace = summarizeTrace(userDataDir)
     result.appLogSummary = summarizeAppLogs(launched.logs)
     result.appLogsTail = launched.logs.slice(-120)
+
     if (browser) {
       await browser.close().catch(() => undefined)
     }
+
     await stopDevApp(launched.child)
+
     if (!args.keep) {
       safeRemoveLocalDirectory(userDataDir, result.cleanupErrors)
     }
   }
+
   return result
 }

@@ -34,12 +34,14 @@ export function summarizeCodexRestartStatus({
   const stalePtyIds = Object.entries(codexRestartNoticeByPtyId)
     .filter(([, notice]) => awaitsCodexRestartAnswer(notice))
     .map(([ptyId]) => ptyId)
+
   if (stalePtyIds.length === 0) {
     return EMPTY_CODEX_RESTART_STATUS_SUMMARY
   }
 
   const stalePtyIdSet = new Set(stalePtyIds)
   const staleTabIds = new Set<string>()
+
   for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
     if (ptyIds.some((ptyId) => stalePtyIdSet.has(ptyId))) {
       staleTabIds.add(tabId)
@@ -47,6 +49,7 @@ export function summarizeCodexRestartStatus({
   }
 
   const staleWorktreeIds = new Set<string>()
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     if (tabs.some((tab) => staleTabIds.has(tab.id))) {
       staleWorktreeIds.add(worktreeId)

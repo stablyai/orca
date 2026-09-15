@@ -68,6 +68,7 @@ describe('pluginKillListSchema', () => {
     })
 
     expect(parsed.success).toBe(false)
+
     if (!parsed.success) {
       expect(parsed.error.issues).toEqual(
         expect.arrayContaining([
@@ -81,6 +82,7 @@ describe('pluginKillListSchema', () => {
     const plugins = Array.from({ length: PLUGIN_KILL_LIST_ENTRY_LIMIT + 1 }, (_, index) =>
       entry(`publisher.plugin-${index}`)
     )
+
     expect(
       pluginKillListSchema.safeParse({
         version: 1,
@@ -103,6 +105,7 @@ describe('isPluginKillListTooFarInFuture', () => {
     const generatedAt = new Date(
       Date.now() + PLUGIN_KILL_LIST_FUTURE_SKEW_MS - 60_000
     ).toISOString()
+
     expect(isPluginKillListTooFarInFuture(list(generatedAt))).toBe(false)
   })
 })

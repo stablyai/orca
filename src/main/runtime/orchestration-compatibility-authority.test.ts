@@ -4,7 +4,9 @@ import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const PANE_KEY = '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222'
+
 const TOKEN = 'launch-secret'
+
 const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex')
 
 type TerminalAuthorityResolver = {
@@ -27,6 +29,7 @@ function createRuntime(
         ? { paneKey, source: 'hydrated_commitment' }
         : null
   })
+
   const resolveTerminal = vi.fn(() => ({
     runtimeId: 'runtime-1',
     terminalHandle: 'term-1',
@@ -37,8 +40,10 @@ function createRuntime(
     launchTokenHash,
     hostScope
   }))
+
   ;(runtime as unknown as TerminalAuthorityResolver).getOrchestrationDispatchAuthority =
     resolveTerminal
+
   if (launchTokenHash === null) {
     ;(runtime as unknown as TerminalAuthorityResolver).restoredOrchestrationAuthorityByPtyId.set(
       'pty-1',
@@ -52,6 +57,7 @@ function createRuntime(
       }
     )
   }
+
   return runtime
 }
 
@@ -93,11 +99,13 @@ describe('orchestration compatibility runtime authority', () => {
     const firstLocal = createRuntime({ kind: 'local', hostId: 'local' })
     const secondLocal = createRuntime({ kind: 'local', hostId: 'local' })
     const wsl = createRuntime({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' })
+
     const localEvidence = {
       terminalHandle: 'term-1',
       paneKey: PANE_KEY,
       launchToken: TOKEN
     }
+
     const wslEvidence = {
       ...localEvidence,
       host: { kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }
@@ -122,6 +130,7 @@ describe('orchestration compatibility runtime authority', () => {
 
   it('requires a live exact terminal even when the hook proof is hydrated', () => {
     const runtime = createRuntime({ kind: 'local', hostId: 'local' })
+
     ;(runtime as unknown as TerminalAuthorityResolver).getOrchestrationDispatchAuthority = () =>
       null
 
@@ -136,7 +145,9 @@ describe('orchestration compatibility runtime authority', () => {
 
   it('uses the hydrated hook commitment for a restored exact PTY', () => {
     const restored = createRuntime({ kind: 'local', hostId: 'local' }, null)
+
     const uncommitted = new OrcaRuntimeService()
+
     ;(uncommitted as unknown as TerminalAuthorityResolver).getOrchestrationDispatchAuthority =
       () => ({
         runtimeId: 'runtime-1',
@@ -148,6 +159,7 @@ describe('orchestration compatibility runtime authority', () => {
         launchTokenHash: null,
         hostScope: { kind: 'local', hostId: 'local' }
       })
+
     const evidence = {
       terminalHandle: 'term-1',
       paneKey: PANE_KEY,
@@ -228,6 +240,7 @@ describe('orchestration compatibility runtime authority', () => {
 
   it('does not fall back to a restored receipt when a fresh launch token mismatches', () => {
     const runtime = createRuntime({ kind: 'local', hostId: 'local' })
+
     ;(runtime as unknown as TerminalAuthorityResolver).restoredOrchestrationAuthorityByPtyId.set(
       'pty-1',
       {
@@ -259,11 +272,13 @@ describe('orchestration compatibility runtime authority', () => {
       },
       'saved-target'
     )
+
     const createIntegratedRuntime = (launchTokenHash: string | null): OrcaRuntimeService => {
       const runtime = new OrcaRuntimeService(null, undefined, {
         attestAgentHookCompatibilityAuthority: (candidate) =>
           server.attestCompatibilityAuthority(candidate)
       })
+
       ;(runtime as unknown as TerminalAuthorityResolver).getOrchestrationDispatchAuthority = vi.fn(
         () => ({
           runtimeId: 'runtime-1',
@@ -276,6 +291,7 @@ describe('orchestration compatibility runtime authority', () => {
           hostScope: { kind: 'ssh', targetId: 'saved-target' }
         })
       )
+
       if (launchTokenHash === null) {
         ;(
           runtime as unknown as TerminalAuthorityResolver
@@ -288,8 +304,10 @@ describe('orchestration compatibility runtime authority', () => {
           hostScope: { kind: 'ssh', targetId: 'saved-target' }
         })
       }
+
       return runtime
     }
+
     const evidenceFor = (runtime: OrcaRuntimeService, launchToken = TOKEN) => ({
       terminalHandle: 'term-1',
       paneKey: PANE_KEY,
@@ -314,9 +332,11 @@ describe('orchestration compatibility runtime authority', () => {
     expect(current.verifyOrchestrationCompatibilityCaller(evidenceFor(current))).toBeNull()
 
     const mismatchedToken = 'different-launch-secret'
+
     const mismatched = createIntegratedRuntime(
       createHash('sha256').update(mismatchedToken).digest('hex')
     )
+
     expect(
       mismatched.verifyOrchestrationCompatibilityCaller(evidenceFor(mismatched, mismatchedToken))
     ).toBeNull()
@@ -324,10 +344,12 @@ describe('orchestration compatibility runtime authority', () => {
 
   it('accepts only a live runtime-issued SSH attachment', () => {
     const runtime = createRuntime({ kind: 'ssh', targetId: 'saved-target' })
+
     const host = runtime.registerOrchestrationCompatibilitySshAttachment(
       'saved-target',
       'connection-1'
     )
+
     const evidence = {
       terminalHandle: 'term-1',
       paneKey: PANE_KEY,

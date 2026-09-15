@@ -53,6 +53,7 @@ describe('remote URL probe', () => {
         stdout: 'git@github.com:acme/orca.git\n'
       })
     )
+
     getSshGitProviderMock.mockReturnValue({ exec })
 
     await expect(

@@ -12,11 +12,14 @@ import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
 function expectSpansCoverTokens(source: string, shell: 'powershell' | 'cmd'): string[] {
   const result = tokenizeStartupCommand(source, shell)
   expect(result.ok).toBe(true)
+
   if (!result.ok) {
     return []
   }
+
   expect(result.spans).toHaveLength(result.tokens.length)
   let previousEnd = 0
+
   for (const [index, { start, end }] of result.spans.entries()) {
     expect(start).toBeGreaterThanOrEqual(previousEnd)
     expect(end).toBeGreaterThan(start)
@@ -25,6 +28,7 @@ function expectSpansCoverTokens(source: string, shell: 'powershell' | 'cmd'): st
     expect(slice.ok && slice.tokens).toEqual([result.tokens[index]])
     previousEnd = end
   }
+
   return result.spans.map(({ start, end }) => source.slice(start, end))
 }
 

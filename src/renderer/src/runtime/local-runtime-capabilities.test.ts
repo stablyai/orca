@@ -44,9 +44,11 @@ describe('local runtime capabilities', () => {
 
   it('coalesces concurrent live status reads', async () => {
     let resolve!: (value: { capabilities: string[] }) => void
+
     const getStatus = vi.fn(
       () => new Promise<{ capabilities: string[] }>((next) => (resolve = next))
     )
+
     Object.assign(window, { api: { runtime: { getStatus } } })
 
     const first = refreshLocalRuntimeCapabilities()
@@ -103,10 +105,12 @@ describe('local runtime capabilities', () => {
 
   it('ensure stays unknown after a failed probe and re-probes on the next call', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
+
     const getStatus = vi
       .fn()
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({ capabilities: ['agent-session.structured.v1'] })
+
     Object.assign(window, { api: { runtime: { getStatus } } })
 
     // A failed probe is not evidence about the host, so it must not latch as a denial:

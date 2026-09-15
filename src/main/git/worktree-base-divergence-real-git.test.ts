@@ -35,6 +35,7 @@ async function createRepo(): Promise<string> {
   await writeFile(join(repoPath, 'version.txt'), 'one\n')
   git(repoPath, ['add', 'version.txt'])
   git(repoPath, ['commit', '--quiet', '-m', 'initial'])
+
   return repoPath
 }
 

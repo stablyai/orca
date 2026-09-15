@@ -32,7 +32,9 @@ import { useTabDragHoverPreview, type HoveredTabDropTarget } from './tab-drag-ho
 import { commitTabDragDrop } from './tab-drag-drop-commit'
 
 export type { HoveredTabInsertion }
+
 export type { HoveredTabDropTarget }
+
 export {
   canDropTabIntoPaneBody,
   isPaneDropData,
@@ -55,6 +57,7 @@ export function canDropTabForPaneColumnSplit(args: {
   if (!args.activeDrag || args.activeDrag.groupId !== args.targetGroupId) {
     return false
   }
+
   return canDropTabIntoPaneBody({
     activeDrag: args.activeDrag,
     groupsByWorktree: args.groupsByWorktree,
@@ -65,6 +68,7 @@ export function canDropTabForPaneColumnSplit(args: {
 
 const collisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args)
+
   return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args)
 }
 
@@ -107,6 +111,7 @@ export function useTabDragSplit({
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
   const clearDragStateRef = useRef<() => void>(() => {})
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
+
   const {
     acquireWebviewDragPassthrough,
     installMissedEndFallback,
@@ -114,6 +119,7 @@ export function useTabDragSplit({
     releaseWebviewDragPassthrough,
     setDragRootNode
   } = useTabDragGestureLifecycle({ clearDragStateRef, tabDragActiveRef })
+
   const {
     clear: clearHoveredDropTarget,
     handleDragUpdate,
@@ -134,6 +140,7 @@ export function useTabDragSplit({
   const pointerSensor = useSensor(TabDragPointerSensor, {
     activationConstraint: { distance: getTabDragActivationDistance(enabled) }
   })
+
   const sensors = useSensors(pointerSensor)
 
   const clearDragState = useCallback(() => {
@@ -151,22 +158,27 @@ export function useTabDragSplit({
     releaseWebviewDragPassthrough,
     tabInsertion
   ])
+
   clearDragStateRef.current = clearDragState
 
   const restorePreDragActivation = useCallback(() => {
     const snapshot = preDragActivationSnapshotRef.current
+
     if (!snapshot) {
       return
     }
+
     restoreTabDragActivationSnapshot(worktreeId, snapshot)
   }, [worktreeId])
 
   const restoreSourceGroupAfterCrossGroupDrop = useCallback(
     (activeData: TabDragItemData) => {
       const snapshot = preDragActivationSnapshotRef.current
+
       if (!snapshot) {
         return
       }
+
       restoreSourceGroupActiveTabAfterCrossGroupDrop({
         worktreeId,
         snapshot,
@@ -184,6 +196,7 @@ export function useTabDragSplit({
       } else if (activeData) {
         restoreSourceGroupAfterCrossGroupDrop(activeData)
       }
+
       clearDragState()
     },
     [clearDragState, restorePreDragActivation, restoreSourceGroupAfterCrossGroupDrop]
@@ -192,8 +205,10 @@ export function useTabDragSplit({
   const onDragStart = useCallback(
     (event: DragStartEvent) => {
       const dragData = event.active.data.current
+
       if (!isTabDragData(dragData) || dragData.worktreeId !== worktreeId) {
         clearDragState()
+
         return
       }
 
@@ -213,6 +228,7 @@ export function useTabDragSplit({
       if (!tabDragActiveRef.current) {
         return
       }
+
       handleDragUpdate(event)
     },
     [handleDragUpdate]
@@ -227,8 +243,10 @@ export function useTabDragSplit({
     (event: DragEndEvent) => {
       if (!tabDragActiveRef.current) {
         finishDrag(true)
+
         return
       }
+
       commitTabDragDrop({
         event,
         worktreeId,

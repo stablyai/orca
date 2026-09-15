@@ -8,6 +8,7 @@ const modifierKeyByPage = new WeakMap<Page, 'Meta' | 'Control'>()
 
 async function getModifierKey(page: Page): Promise<'Meta' | 'Control'> {
   const cached = modifierKeyByPage.get(page)
+
   if (cached) {
     return cached
   }
@@ -15,6 +16,7 @@ async function getModifierKey(page: Page): Promise<'Meta' | 'Control'> {
   const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
   const modifierKey = isMac ? 'Meta' : 'Control'
   modifierKeyByPage.set(page, modifierKey)
+
   return modifierKey
 }
 
@@ -31,9 +33,11 @@ export async function pressShortcut(
   options: ShortcutOptions = {}
 ): Promise<void> {
   const parts = [await getModifierKey(page)]
+
   if (options.shift) {
     parts.push('Shift')
   }
+
   parts.push(key)
   await page.keyboard.press(parts.join('+'))
 }

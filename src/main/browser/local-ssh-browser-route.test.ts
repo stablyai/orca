@@ -17,6 +17,7 @@ class FakeTunnelSocket extends EventEmitter implements BrowserNetworkTunnelSocke
   destroyed = false
   constructor(private readonly behavior: 'echo' | 'never-connect' = 'echo') {
     super()
+
     if (behavior === 'echo') {
       queueMicrotask(() => {
         if (!this.destroyed) {
@@ -38,7 +39,9 @@ class FakeTunnelSocket extends EventEmitter implements BrowserNetworkTunnelSocke
     if (this.behavior === 'echo' && !this.destroyed) {
       queueMicrotask(() => this.emit('data', bytes))
     }
+
     callback?.()
+
     return true
   }
   end(): this {
@@ -49,6 +52,7 @@ class FakeTunnelSocket extends EventEmitter implements BrowserNetworkTunnelSocke
       this.destroyed = true
       this.emit('close')
     }
+
     return this
   }
 }
@@ -61,15 +65,19 @@ type FakeRoute = BrowserNetworkExecutionRoute & {
 function fakeExecutionRoute(key: string): FakeRoute {
   let valid = true
   let invalidated: () => void = () => {}
+
   const whenInvalidated = new Promise<void>((resolve) => {
     invalidated = resolve
   })
+
   const dials: { host: string; port: number }[] = []
+
   return {
     key,
     dials,
     connect: (target) => {
       dials.push({ host: target.host, port: target.port })
+
       return new FakeTunnelSocket()
     },
     whenInvalidated,
@@ -107,31 +115,38 @@ async function socksConnect(port: number, host: string, targetPort: number): Pro
       targetPort & 0xff
     ])
   )
+
   return socket
 }
 
 async function readExact(socket: Socket, size: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let total = 0
+
   while (total < size) {
     const [chunk] = (await once(socket, 'data')) as [Buffer]
     chunks.push(chunk)
     total += chunk.byteLength
   }
+
   const combined = Buffer.concat(chunks)
+
   if (combined.byteLength > size) {
     socket.unshift(combined.subarray(size))
   }
+
   return combined.subarray(0, size)
 }
 
 describe('LocalSshBrowserRoute', () => {
   it('dials the exact hostname through the execution route and round-trips bytes', async () => {
     const executionRoute = fakeExecutionRoute('route-1')
+
     const route = new LocalSshBrowserRoute('target-a', {
       resolveExecutionRoute: async () => executionRoute,
       getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
     })
+
     routes.push(route)
     const address = await route.listen()
 
@@ -151,11 +166,13 @@ describe('LocalSshBrowserRoute', () => {
     const resolved: BrowserNetworkExecutionRouteContext[] = []
     const executionRoutes: FakeRoute[] = []
     let generation = 1
+
     const route = new LocalSshBrowserRoute('target-a', {
       resolveExecutionRoute: async (context) => {
         resolved.push(context)
         const fresh = fakeExecutionRoute(`route-${resolved.length}`)
         executionRoutes.push(fresh)
+
         return fresh
       },
       getAuthority: () => ({
@@ -163,6 +180,7 @@ describe('LocalSshBrowserRoute', () => {
         connectionGeneration: generation
       })
     })
+
     routes.push(route)
     const address = await route.listen()
 
@@ -183,24 +201,29 @@ describe('LocalSshBrowserRoute', () => {
     expect(resolved).toHaveLength(2)
     const secondHost = resolved[1].executionHost
     expect(secondHost.kind).toBe('ssh')
+
     if (secondHost.kind === 'ssh') {
       expect(secondHost.connectionGeneration).toBe(2)
       expect(secondHost.providerEpoch).toBe('epoch-2')
     }
+
     expect(executionRoutes[0].close).toHaveBeenCalled()
   })
 
   it('fails the SOCKS request while the target is unavailable and recovers on the next dial', async () => {
     let available = false
+
     const route = new LocalSshBrowserRoute('target-a', {
       resolveExecutionRoute: async () => {
         if (!available) {
           throw new Error('browser_tunnel_execution_host_unavailable')
         }
+
         return fakeExecutionRoute('route-live')
       },
       getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
     })
+
     routes.push(route)
     const address = await route.listen()
 
@@ -221,6 +244,7 @@ describe('LocalSshBrowserRoute', () => {
       resolveExecutionRoute: async () => fakeExecutionRoute('route-shared'),
       getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
     }
+
     const first = await retainLocalSshBrowserRoute('target-shared', dependencies)
     const second = await retainLocalSshBrowserRoute('target-shared', dependencies)
     expect(second.port).toBe(first.port)
@@ -231,6 +255,7 @@ describe('LocalSshBrowserRoute', () => {
       resolveExecutionRoute: async () => fakeExecutionRoute('route-shared'),
       getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
     }
+
     const first = await retainLocalSshBrowserRoute('target-cycled', dependencies)
     await closeLocalSshBrowserRouteForTarget('target-cycled')
     const second = await retainLocalSshBrowserRoute('target-cycled', dependencies)
@@ -243,6 +268,7 @@ describe('LocalSshBrowserRoute', () => {
 
   it('classifies forwarding probes by the wire reason code, never by scary wording', async () => {
     let failure: (Error & { reason?: number }) | null = null
+
     const route = new LocalSshBrowserRoute('target-probe', {
       resolveExecutionRoute: async () => {
         const executionRoute = fakeExecutionRoute('route-probe')
@@ -254,22 +280,28 @@ describe('LocalSshBrowserRoute', () => {
             queueMicrotask(() => {
               socket.emit('error', error)
             })
+
             return socket
           }
+
           return originalConnect(target)
         }
+
         return executionRoute
       },
       getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
     })
+
     routes.push(route)
     await route.listen()
 
     const withReason = (message: string, reason?: number): Error & { reason?: number } => {
       const error = new Error(message) as Error & { reason?: number }
+
       if (reason !== undefined) {
         error.reason = reason
       }
+
       return error
     }
 
@@ -296,6 +328,7 @@ describe('LocalSshBrowserRoute', () => {
       },
       getAuthority: () => ({ providerEpoch: 'epoch-1', connectionGeneration: 1 })
     })
+
     routes.push(route)
     expect(await route.probeForwarding(500)).toBe('ssh-unavailable')
   })

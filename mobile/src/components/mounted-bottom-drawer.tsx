@@ -30,12 +30,16 @@ import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
+
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
+
 // Why: negative translateY (pulling up) is damped with a rubber-band factor
 // so the drawer resists upward dragging — a subtle polish touch that signals
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
+
 const SHOW_DURATION = 180
+
 const TOP_SCROLL_EPSILON = 1
 
 export type MountedBottomDrawerProps = {
@@ -80,6 +84,7 @@ export function MountedBottomDrawer({
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useInsideBottomDrawerModalHost()
+
   const fillHeight = fillAvailable
     ? resolveBottomDrawerFillHeight({
         screenHeight,
@@ -103,9 +108,11 @@ export function MountedBottomDrawer({
   useEffect(() => {
     const tookWindowBack = visible && interactive && !wasInteractiveRef.current
     wasInteractiveRef.current = interactive
+
     if (!tookWindowBack) {
       return
     }
+
     translateY.value = 0
     progress.value = withTiming(1, { duration: SHOW_DURATION })
     setWindowEpoch((epoch) => epoch + 1)
@@ -137,6 +144,7 @@ export function MountedBottomDrawer({
     if (!visible || !interactive) {
       keyboardOffset.value = 0
       setKeyboardInset(0)
+
       return
     }
 
@@ -147,7 +155,9 @@ export function MountedBottomDrawer({
         fillAvailable,
         platform: Platform.OS
       })
+
       setKeyboardInset(inset)
+
       if (duration > 0) {
         keyboardOffset.value = withTiming(inset, { duration })
       } else {
@@ -160,6 +170,7 @@ export function MountedBottomDrawer({
     // outer sheets do not inherit a stale metrics height after an inner dismiss.
     if (fillAvailable) {
       const existing = Keyboard.metrics()
+
       if (existing != null && existing.height > 0) {
         applyKeyboardHeight(existing.height)
       }
@@ -171,6 +182,7 @@ export function MountedBottomDrawer({
     const onShow = Keyboard.addListener(showEvent, (e) => {
       applyKeyboardHeight(e.endCoordinates.height, e.duration || 250)
     })
+
     const onHide = Keyboard.addListener(hideEvent, (e) => {
       setKeyboardInset(0)
       keyboardOffset.value = withTiming(0, { duration: e.duration || 250 })
@@ -200,8 +212,10 @@ export function MountedBottomDrawer({
 
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       dismiss()
+
       return true
     })
+
     return () => sub.remove()
   }, [visible, interactive, dismiss])
 
@@ -210,6 +224,7 @@ export function MountedBottomDrawer({
   })
 
   const scrollGesture = Gesture.Native()
+
   const handlePanGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
@@ -233,6 +248,7 @@ export function MountedBottomDrawer({
         translateY.value = withSpring(0, SPRING_CONFIG)
       }
     })
+
   const contentPanGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
@@ -246,9 +262,11 @@ export function MountedBottomDrawer({
       if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
         contentDragCanDismiss.value = false
         contentDragStartY.value = 0
+
         if (translateY.value !== 0) {
           translateY.value = withSpring(0, SPRING_CONFIG)
         }
+
         return
       }
 
@@ -258,6 +276,7 @@ export function MountedBottomDrawer({
       }
 
       const translationY = e.translationY - contentDragStartY.value
+
       if (translationY > 0) {
         translateY.value = translationY
       } else {
@@ -270,6 +289,7 @@ export function MountedBottomDrawer({
       }
 
       const translationY = e.translationY - contentDragStartY.value
+
       if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
         const velocity = Math.max(e.velocityY, 800)
         const remaining = screenHeight - translationY
@@ -288,6 +308,7 @@ export function MountedBottomDrawer({
     // marginBottom (layout). Also subtracting keyboardOffset here would double-
     // count and park the dock under the keys (input hidden).
     const keyboardShift = fillAvailable ? 0 : keyboardOffset.value
+
     return {
       transform: [
         {
@@ -302,6 +323,7 @@ export function MountedBottomDrawer({
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
+
     return { opacity: progress.value * dragFade }
   })
 

@@ -17,6 +17,7 @@ function createTransport(
 
 function createManager() {
   const pane = { id: 1, leafId: 'leaf-1' }
+
   return {
     pane,
     manager: {
@@ -201,6 +202,7 @@ describe('terminal drop path writer', () => {
 
   it('times out dropped path writes that never receive PTY acknowledgement', async () => {
     vi.useFakeTimers()
+
     try {
       const sendInput = vi.fn(() => true)
       const sendInputAccepted = vi.fn(() => new Promise<boolean>(() => {}))
@@ -234,10 +236,13 @@ describe('terminal drop path writer', () => {
   it('reports partial writes when the captured target becomes stale between paths', async () => {
     const sendInput = vi.fn(() => true)
     let ptyId = 'pty-1'
+
     const sendInputAccepted = vi.fn(async () => {
       ptyId = 'pty-2'
+
       return true
     })
+
     const { manager, pane } = createManager()
     const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
     transport.getPtyId.mockImplementation(() => ptyId)

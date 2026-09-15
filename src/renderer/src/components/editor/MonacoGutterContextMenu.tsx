@@ -65,14 +65,19 @@ export function MonacoGutterContextMenu({
           onSelect={async () => {
             const state = useAppStore.getState()
             const activeFile = state.openFiles.find((f) => f.filePath === filePath)
+
             if (!activeFile) {
               return
             }
+
             const worktree = findWorktreeById(state.worktreesByRepo, activeFile.worktreeId)
+
             if (!worktree) {
               return
             }
+
             const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
+
             const url = await getRuntimeGitRemoteFileUrl(
               {
                 settings: state.settings,
@@ -82,6 +87,7 @@ export function MonacoGutterContextMenu({
               },
               { relativePath, line }
             )
+
             if (url) {
               window.api.ui.writeClipboardText(url)
             }

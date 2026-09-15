@@ -84,6 +84,7 @@ function textPosition(editor: Editor, text: string): number {
   editor.state.doc.descendants((node, pos) => {
     if (node.isText && node.text?.includes(text)) {
       position = pos + 1
+
       return false
     }
 
@@ -102,6 +103,7 @@ function codeBlockPosition(editor: Editor, text: string): number {
   editor.state.doc.descendants((node, pos) => {
     if (node.type.name === 'codeBlock' && node.textContent.includes(text)) {
       position = pos + 1 + node.textContent.indexOf(text)
+
       return false
     }
 
@@ -262,6 +264,7 @@ function taskListDocument(): object {
 describe('rich markdown Tab key handler', () => {
   it('flushes pending ProseMirror DOM selection before indenting lists', () => {
     const calls: string[] = []
+
     const editor = {
       view: {
         composing: false,
@@ -276,6 +279,7 @@ describe('rich markdown Tab key handler', () => {
       commands: {
         sinkListItem: vi.fn((type) => {
           calls.push(`sink:${String(type)}`)
+
           return true
         }),
         liftListItem: vi.fn(),
@@ -283,6 +287,7 @@ describe('rich markdown Tab key handler', () => {
       },
       isActive: vi.fn(() => false)
     } as unknown as Editor
+
     const event = keyEvent('Tab')
 
     expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
@@ -463,6 +468,7 @@ describe('rich markdown Tab key handler', () => {
 
   it('inserts spaces for Tab in code blocks', () => {
     const insertContent = vi.fn()
+
     const editor = {
       view: { composing: false },
       state: { selection: { $from: { depth: 0 } } },
@@ -473,6 +479,7 @@ describe('rich markdown Tab key handler', () => {
       },
       isActive: vi.fn((name) => name === 'codeBlock')
     } as unknown as Editor
+
     const event = keyEvent('Tab')
 
     expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)

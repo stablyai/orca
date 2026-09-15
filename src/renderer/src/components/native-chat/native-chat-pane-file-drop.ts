@@ -28,9 +28,11 @@ export function nativeChatPaneDragKind(
   if (!dataTransfer) {
     return null
   }
+
   if (hasWorkspaceFileDragType(dataTransfer)) {
     return 'workspace'
   }
+
   return hasNativeFileDragTypes(dataTransfer.types) ? 'os' : null
 }
 
@@ -38,6 +40,7 @@ export function nativeChatPaneDragKind(
  *  the leave that follows every child boundary must not end the drag state. */
 export function movedWithinDropSurface(event: NativeChatPaneDragEvent): boolean {
   const enteredNode = event.relatedTarget
+
   return enteredNode instanceof Node && event.currentTarget.contains(enteredNode)
 }
 
@@ -58,10 +61,13 @@ export function makeNativeChatPaneFileDropHandlers(host: {
 } {
   const showsDropTarget = (event: NativeChatPaneDragEvent): boolean => {
     const kind = nativeChatPaneDragKind(event.dataTransfer)
+
     if (kind === null) {
       return false
     }
+
     const claim = host.getClaim()
+
     // No composer (a question card owns the input region) means no attachment
     // target, so the drag stays the terminal's the way it is today.
     return claim !== null && !claim.disabled
@@ -77,6 +83,7 @@ export function makeNativeChatPaneFileDropHandlers(host: {
       if (showsDropTarget(event)) {
         host.setDragActive(true)
       }
+
       if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
         host.getClaim()?.onDragOverCapture(event)
       }
@@ -85,10 +92,12 @@ export function makeNativeChatPaneFileDropHandlers(host: {
       if (nativeChatPaneDragKind(event.dataTransfer) === null || movedWithinDropSurface(event)) {
         return
       }
+
       host.setDragActive(false)
     },
     onDropCapture(event) {
       host.setDragActive(false)
+
       if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
         host.getClaim()?.onDropCapture(event)
       }

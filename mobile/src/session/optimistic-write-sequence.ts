@@ -8,6 +8,7 @@ export type OptimisticSeqRef = { current: number }
 // hook tags each in-flight mutation with the returned value.
 export function nextSeq(ref: OptimisticSeqRef): number {
   ref.current += 1
+
   return ref.current
 }
 
@@ -54,6 +55,7 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
       optimisticSeq = seq
       optimisticValue = value
       onChange?.()
+
       return seq
     },
     settleSuccess(seq: number): boolean {
@@ -61,7 +63,9 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
       if (!isLatest(seqRef, seq) || optimisticSeq !== seq) {
         return false
       }
+
       clear()
+
       return true
     },
     settleFailure(seq: number): boolean {
@@ -70,7 +74,9 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
       if (!isLatest(seqRef, seq) || optimisticSeq !== seq) {
         return false
       }
+
       clear()
+
       return true
     },
     resolve(authoritative: T): T {
@@ -83,7 +89,9 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
       if (optimisticSeq === 0) {
         return false
       }
+
       clear()
+
       return true
     }
   }

@@ -35,6 +35,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   }): Promise<{ transcriptPath: string; leafUuid?: never }> {
     const assertDurableOwner = (): void => {
       const pty = this.getLivePtyForHandle(input.handle)?.pty
+
       if (
         !pty?.connected ||
         pty.paneKey !== input.paneKey ||
@@ -46,12 +47,15 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         throw new Error('The resumed terminal lost its durable owner identity.')
       }
     }
+
     assertDurableOwner()
     const transcriptPath = await resolvePinnedCodexRolloutProof(input.codexHome, input.threadId)
     assertDurableOwner()
+
     if (!transcriptPath) {
       throw new Error('The agent terminal did not prove the expected Codex rollout.')
     }
+
     return { transcriptPath }
   }
 
@@ -60,6 +64,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     agent: 'claude' | 'codex'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
@@ -86,6 +91,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     const rows =
       this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ??
       (this.getAgentProviderSessionSnapshotFn?.() ?? []).filter((row) => row.paneKey === paneKey)
+
     return rows
       .filter((row) => row.agentType === provider && row.providerSession?.id === providerSessionId)
       .reduce<AgentStatusIpcPayload | undefined>(
@@ -103,10 +109,12 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     // it. Both branches key on executionHostId: the target no longer carries a
     // connectionId, which used to spell remote, unresolved and local alike.
     const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
+
     const configuredWslDistro =
       repo && isLocalHost
         ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
         : null
+
     // Folder workspaces have no repo Git options, so a WSL UNC path is the only
     // durable signal that native Windows structured Codex cannot safely use it.
     const wslDistro =
@@ -114,6 +122,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       (folderWorkspace && isLocalHost
         ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
         : null)
+
     return {
       executionHostId: target.executionHostId,
       wslDistro,
@@ -144,10 +153,12 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         )
       })
     }
+
     return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
       // A create has no process yet, so the current selection is what it must follow.
       const preparedHome = await this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
       const configuredHome = launchEnv.CODEX_HOME
+
       return (
         preparedHome?.trim() ||
         (this.prepareCodexStructuredLaunchFn ? getSystemCodexHomePath() : configuredHome?.trim()) ||
@@ -176,32 +187,40 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     }) => string | Promise<string>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
+
     if (!support.supported) {
       throw new Error('structured_agent_session_unsupported')
     }
+
     const settings = this.requireStore().getSettings()
     const launchEnv = resolveTuiAgentLaunchEnv(input.agent, settings.agentDefaultEnv)
+
     const options = resolveStructuredLaunchSeedOptions(
       settings.nativeChatSessionOptions,
       input.agent
     )
+
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const workspacePath = (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
     const host = getStructuredAgentSessionHost()
+
     const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
       host,
       ...input,
       location,
       ...(options ? { options } : {})
     })
+
     if (committedReplay) {
       return committedReplay
     }
+
     const selectedAccountHomePath = await resolveAccountHomePath({
       workspacePath,
       launchEnv,
       location
     })
+
     // Adopting pins the account home to wherever the conversation actually lives, which is not
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
     // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
@@ -216,6 +235,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
           selectedAccountHomePath
         })
       : null
+
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -259,6 +279,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         this.structuredAgentSessionTabRestorePromise = null
         throw error
       })
+
     return this.structuredAgentSessionTabRestorePromise
   }
 
@@ -268,6 +289,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         this.structuredAgentSessionStartupRestorePromise = null
         throw error
       })
+
     return this.structuredAgentSessionStartupRestorePromise
   }
 
@@ -275,6 +297,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     if (!this.hasPersistedStructuredAgentSessionStore()) {
       return
     }
+
     // Durable agent records must exist before daemon inventory can be reconciled against them.
     await this.ensureStructuredAgentSessionHost()
     await this.refreshMobileSessionPtyRecords()

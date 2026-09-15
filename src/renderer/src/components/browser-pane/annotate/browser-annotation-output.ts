@@ -7,6 +7,7 @@ import type {
 function formatPageHeading(payload: BrowserGrabPayload): string {
   try {
     const url = new URL(payload.page.sanitizedUrl)
+
     return `${url.pathname}${url.search}`
   } catch {
     return payload.page.sanitizedUrl || 'current page'
@@ -16,11 +17,13 @@ function formatPageHeading(payload: BrowserGrabPayload): string {
 function annotationElementLabel(payload: BrowserGrabPayload): string {
   const react = payload.target.reactComponents
   const accessibleName = payload.target.accessibility.accessibleName
+
   const base = accessibleName
     ? `${payload.target.tagName} "${inlineText(accessibleName)}"`
     : payload.target.textSnippet
       ? `${payload.target.tagName} "${inlineText(payload.target.textSnippet).slice(0, 60)}"`
       : payload.target.tagName
+
   return react ? `${inlineText(react)} ${base}` : base
 }
 
@@ -35,33 +38,42 @@ function inlineText(
   // scanning only the bounded text we will actually retain.
   let normalized = ''
   let pendingSpace = false
+
   for (let index = 0; index < content.length && normalized.length < maxLength;) {
     const code = content.charCodeAt(index)
+
     if (isInlineWhitespaceCode(code)) {
       if (code === 13 && content.charCodeAt(index + 1) === 10) {
         index += 1
       }
+
       pendingSpace = normalized.length > 0
       index += 1
       continue
     }
 
     const codePoint = content.codePointAt(index)
+
     if (codePoint === undefined) {
       break
     }
+
     const char = String.fromCodePoint(codePoint)
     const extraSpaceLength = pendingSpace ? 1 : 0
+
     if (normalized.length + extraSpaceLength + char.length > maxLength) {
       break
     }
+
     if (pendingSpace) {
       normalized += ' '
       pendingSpace = false
     }
+
     normalized += char
     index += char.length
   }
+
   return normalized
 }
 
@@ -83,6 +95,7 @@ function isInlineWhitespaceCode(code: number): boolean {
 
 function formatStyles(styles: BrowserGrabComputedStyles): string[] {
   const lines: string[] = []
+
   const entries: [string, string][] = [
     ['display', styles.display],
     ['position', styles.position],
@@ -101,21 +114,27 @@ function formatStyles(styles: BrowserGrabComputedStyles): string[] {
     ['text-align', styles.textAlign],
     ['z-index', styles.zIndex]
   ]
+
   for (const [name, value] of entries) {
     if (!value || value === 'auto' || value === 'normal') {
       continue
     }
+
     if (name === 'position' && value === 'static') {
       continue
     }
+
     if (name === 'display' && value === 'inline') {
       continue
     }
+
     if (name === 'background' && value === 'rgba(0, 0, 0, 0)') {
       continue
     }
+
     lines.push(`- ${name}: ${value}`)
   }
+
   return lines
 }
 
@@ -132,16 +151,19 @@ function maxBacktickRunLength(content: string, floor: number): number {
     }
 
     currentRun += 1
+
     if (currentRun > maxRun) {
       maxRun = currentRun
     }
   }
+
   return maxRun
 }
 
 function fence(language: string, content: string): string[] {
   const maxRun = maxBacktickRunLength(content, 3)
   const marker = '`'.repeat(maxRun + 1)
+
   return [`${marker}${language}`, content, marker]
 }
 
@@ -149,6 +171,7 @@ function inlineCode(content: string): string {
   const maxRun = maxBacktickRunLength(content, 0)
   const marker = '`'.repeat(maxRun + 1)
   const padding = content.startsWith('`') || content.endsWith('`') ? ' ' : ''
+
   return `${marker}${padding}${content}${padding}${marker}`
 }
 
@@ -159,6 +182,7 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
 
   const firstAnnotation = annotations[0]
   const first = firstAnnotation.payload
+
   const lines: string[] = [
     `## Design Feedback: ${formatPageHeading(first)}`,
     '',
@@ -177,49 +201,63 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
     lines.push(`### ${index + 1}. ${annotationElementLabel(payload)}`)
     lines.push(`**Intent:** ${annotation.intent}`)
     lines.push(`**Selector:** ${inlineCode(target.selector)}`)
+
     if (target.elementPath) {
       lines.push(`**Location:** ${inlineCode(target.elementPath)}`)
     }
+
     if (target.sourceFile) {
       lines.push(`**Source:** ${inlineText(target.sourceFile)}`)
     }
+
     if (target.reactComponents) {
       lines.push(`**React:** ${inlineText(target.reactComponents)}`)
     }
+
     lines.push(
       `**Bounds:** x=${Math.round(rect.x)}, y=${Math.round(rect.y)}, ${Math.round(rect.width)}x${Math.round(rect.height)}`
     )
+
     if (target.cssClasses) {
       lines.push(`**Classes:** ${inlineCode(target.cssClasses)}`)
     }
+
     if (target.selectedText) {
       lines.push(`**Selected text:** "${inlineText(target.selectedText)}"`)
     } else if (target.textSnippet) {
       lines.push(`**Text:** "${inlineText(target.textSnippet)}"`)
     }
+
     if (payload.nearbyText.length > 0) {
       lines.push('**Nearby text:**')
+
       for (const text of payload.nearbyText) {
         lines.push(`- ${inlineText(text)}`)
       }
     }
+
     if (target.nearbyElements?.length) {
       lines.push('**Nearby elements:**')
+
       for (const element of target.nearbyElements) {
         lines.push(`- ${inlineText(element)}`)
       }
     }
+
     if (styleLines.length > 0) {
       lines.push('**Computed styles:**')
       lines.push(...styleLines)
     }
+
     if (target.fullPath) {
       lines.push(`**Full DOM path:** ${inlineCode(target.fullPath)}`)
     }
+
     if (target.htmlSnippet) {
       lines.push('**HTML:**')
       lines.push(...fence('html', target.htmlSnippet))
     }
+
     lines.push(`**Feedback:** ${inlineText(annotation.comment)}`)
     lines.push('')
   })

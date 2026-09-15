@@ -38,32 +38,41 @@ vi.mock('electron', () => ({
 const { Store } = await import('./store')
 
 const REPO_ID = 'repo-1'
+
 const LOCAL = 'local'
+
 const REMOTE = 'ssh:user@host'
+
 const TWIN_ROWS = 400
+
 /** Recent enough that the 30-day stale-metadata GC leaves the fixture alone. */
 const RECENTLY = Date.now()
 
 /** Seeded so the corpus is the same on every run and a failure is reproducible. */
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state * 1_664_525 + 1_013_904_223) >>> 0
+
     return state / 0x1_0000_0000
   }
 }
 
 const stores: InstanceType<typeof Store>[] = []
+
 afterEach(() => {
   for (const store of stores.splice(0)) {
     store.freezeWrites()
   }
+
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
   const store = new Store({ dataFile })
   stores.push(store)
+
   return store
 }
 
@@ -78,6 +87,7 @@ function worktreeId(index: number): string {
 /** Every optional slot exercised on a fraction of rows, so a row that must stay written does. */
 function meta(index: number, random: () => number, overrides: Partial<WorktreeMeta> = {}) {
   const rich = random() < 0.25
+
   return {
     instanceId: `instance-${index}`,
     hostId: LOCAL,
@@ -127,8 +137,10 @@ function buildFixture(): Fixture {
       executionHostId: host as never,
       instanceId: row.instanceId as string
     })
+
     worktreeMetaByIdentity[identityKey] = row
     worktreeIdentityAliases[composeWorktreeHostIdentity(host as never, id)] = [identityKey]
+
     return identityKey
   }
 
@@ -138,23 +150,28 @@ function buildFixture(): Fixture {
     worktreeMeta[worktreeId(index)] = { ...row }
     omittable.push(link(worktreeId(index), LOCAL, row))
   }
+
   // 2. Divergent twin: the locator row carries a value the identity row does not.
   const divergent = worktreeId(TWIN_ROWS)
   const divergentRow = meta(TWIN_ROWS, random)
   worktreeMeta[divergent] = { ...divergentRow, displayName: 'locator-only-name' }
   irreducible.push(link(divergent, LOCAL, divergentRow))
+
   // 3. No identity twin at all, and no hostId — the shape of Orca's synthetic pseudo-worktrees.
   for (const pseudo of ['global-floating-terminal', 'onboarding-setup-terminal']) {
     worktreeMeta[pseudo] = meta(0, random, { hostId: undefined, displayName: pseudo })
   }
+
   // 4. One locator claimed by two hosts: nothing on disk records which one owns the projection.
   const contested = worktreeId(TWIN_ROWS + 1)
   const localClaim = meta(TWIN_ROWS + 1, random)
+
   const remoteClaim = meta(TWIN_ROWS + 1, random, {
     hostId: REMOTE as never,
     instanceId: `instance-${TWIN_ROWS + 1}-remote`,
     lastActivityAt: RECENTLY + 99_999
   })
+
   worktreeMeta[contested] = { ...localClaim }
   // Only the host the locator row names can regenerate a key from it, so the other host's row stays.
   omittable.push(link(contested, LOCAL, localClaim))
@@ -171,19 +188,23 @@ function buildFixture(): Fixture {
   //    write one, so it is a repair state and its locator row must stay written in full.
   const ambiguous = worktreeId(TWIN_ROWS + 4)
   const claimA = meta(TWIN_ROWS + 4, random)
+
   const claimB = meta(TWIN_ROWS + 4, random, {
     instanceId: `instance-${TWIN_ROWS + 4}-b`,
     displayName: 'second-instance',
     lastActivityAt: RECENTLY + 99_999
   })
+
   worktreeMeta[ambiguous] = { ...claimA }
   const ambiguousKey = link(ambiguous, LOCAL, claimA)
   irreducible.push(ambiguousKey)
+
   const secondKey = canonicalWorktreeIdentity({
     worktreeId: ambiguous,
     executionHostId: LOCAL as never,
     instanceId: claimB.instanceId as string
   })
+
   worktreeMetaByIdentity[secondKey] = claimB
   worktreeIdentityAliases[composeWorktreeHostIdentity(LOCAL, ambiguous)] = [ambiguousKey, secondKey]
   irreducible.push(secondKey)
@@ -321,11 +342,13 @@ describe('worktree meta alias projection', () => {
     // JSON.parse splits the one object the write path shared into two; the rebuild puts it back,
     // worth ~0.46 MB of heap on the measured 3.64 MB profile.
     let shared = 0
+
     for (let index = 0; index < TWIN_ROWS; index++) {
       if (store.getWorktreeMetaForHost(worktreeId(index), LOCAL) === rebuilt[worktreeId(index)]) {
         shared++
       }
     }
+
     expect(shared).toBe(TWIN_ROWS)
   })
 

@@ -17,6 +17,7 @@ export class BrowserRouteRendererPrepareFenceRegistry {
     this.states.set(rendererWebContentsId, state)
     const epoch = state.epoch
     let released = false
+
     return {
       assertCurrent: () => {
         if (state.epoch !== epoch) {
@@ -27,8 +28,10 @@ export class BrowserRouteRendererPrepareFenceRegistry {
         if (released) {
           return
         }
+
         released = true
         state.pending -= 1
+
         if (state.pending === 0 && this.states.get(rendererWebContentsId) === state) {
           this.states.delete(rendererWebContentsId)
         }
@@ -38,6 +41,7 @@ export class BrowserRouteRendererPrepareFenceRegistry {
 
   retire(rendererWebContentsId: number): void {
     const state = this.states.get(rendererWebContentsId)
+
     if (state) {
       state.epoch += 1
     }

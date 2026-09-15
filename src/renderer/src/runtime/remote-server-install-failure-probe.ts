@@ -27,10 +27,13 @@ export async function readRemoteServerInstallFailure(
   if (runtime.runtimeId !== install.runtimeId) {
     return null
   }
+
   // Why: without an explicit deadline this inherits the RPC client's 15s default and can outlast the caller's own wait.
   const snapshot = await transport.getUpdaterStatus(environmentId, timeoutMs)
+
   if (snapshot.runtimeId !== install.runtimeId || snapshot.status.state !== 'error') {
     return null
   }
+
   return snapshot.status.message
 }

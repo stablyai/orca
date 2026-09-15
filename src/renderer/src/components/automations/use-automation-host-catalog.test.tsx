@@ -27,7 +27,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
     selector(mocks.state as Partial<AppState>)
+
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
+
   return { useAppStore }
 })
 
@@ -40,7 +42,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 
 const ENVIRONMENT_ID = 'env-1'
+
 const PROJECT_ID = 'shared-project'
+
 const RUNTIME_AUTHORITY_KEY = `authority:runtime:${ENVIRONMENT_ID}`
 
 function repo(overrides: Partial<Repo> & { id: string }): Repo {
@@ -82,6 +86,7 @@ function legacyAutomation(): Automation {
 
 function storeState(repos: readonly Repo[]): Record<string, unknown> {
   const noop = (): void => undefined
+
   return {
     repos,
     settings: null,
@@ -105,10 +110,12 @@ function storeState(repos: readonly Repo[]): Record<string, unknown> {
 }
 
 const roots: Root[] = []
+
 let view: AutomationHostCatalogView | null = null
 
 function Harness(): null {
   view = useAutomationHostCatalog()
+
   return null
 }
 
@@ -132,6 +139,7 @@ async function renderCatalog(repos: readonly Repo[]): Promise<void> {
 function runtimeSelfAutomationIds(): string[] {
   const group = view?.rows.groups.find((entry) => entry.authorityKey === RUNTIME_AUTHORITY_KEY)
   const host = group?.hosts.find((candidate) => candidate.entry.kind === 'self')
+
   return (host?.rows ?? []).map((row) => row.automation.id)
 }
 
@@ -148,6 +156,7 @@ beforeEach(() => {
     if ((target as { kind?: string } | null)?.kind === 'local') {
       return await desktopListScoped(params)
     }
+
     return { automations: [legacyAutomation()] }
   })
   mocks.getRuntimeEnvironmentStatus.mockResolvedValue({ capabilities: [] })

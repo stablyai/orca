@@ -42,18 +42,23 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
+
     const shortcutPlatform = getShortcutPlatform()
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       const direction = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
         ? 'back'
         : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
           ? 'forward'
           : null
+
       if (direction === null) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
+
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
@@ -61,7 +66,9 @@ export function useBrowserPageWebviewShortcuts({
         webviewRef.current?.goForward()
       }
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [isActive, keybindings, webviewRef])
 
@@ -71,6 +78,7 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
+
     return window.api.ui.onBrowserHistoryNavigate((direction) => {
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
@@ -87,7 +95,9 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
+
     const shortcutPlatform = getShortcutPlatform()
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       const isHardReload = keybindingMatchesAction(
         'browser.hardReload',
@@ -95,18 +105,24 @@ export function useBrowserPageWebviewShortcuts({
         shortcutPlatform,
         keybindings
       )
+
       const isReload = keybindingMatchesAction('browser.reload', e, shortcutPlatform, keybindings)
+
       if (!isHardReload && !isReload) {
         return
       }
+
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
       reloadWebviewOrRecoverGuest(isHardReload)
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
 
@@ -116,6 +132,7 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
+
     return window.api.ui.onReloadBrowserPage(() => {
       reloadWebviewOrRecoverGuest(false)
     })
@@ -125,6 +142,7 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
+
     return window.api.ui.onHardReloadBrowserPage(() => {
       reloadWebviewOrRecoverGuest(true)
     })
@@ -134,12 +152,15 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
+
     const applyActivePageZoom = (direction: BrowserPageZoomDirection): void => {
       if (!isActiveRef.current) {
         return
       }
+
       // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
       const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
+
       if (nextLevel !== null) {
         paneZoomLevelRef.current = nextLevel
         rememberExplicitBrowserPageZoomLevel(browserTabId, nextLevel)
@@ -147,13 +168,17 @@ export function useBrowserPageWebviewShortcuts({
         showBrowserZoomFeedback(nextLevel)
       }
     }
+
     const removeGuestListener = window.api.ui.onZoomBrowserPage(applyActivePageZoom)
+
     const removeLocalListener = addBrowserPageZoomEventListener((detail) => {
       if (detail.browserPageId !== browserTabId) {
         return
       }
+
       applyActivePageZoom(detail.direction)
     })
+
     return () => {
       removeGuestListener()
       removeLocalListener()

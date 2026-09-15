@@ -13,6 +13,7 @@ export function useRenderedSetupScriptPromptState(input: {
 }): SetupScriptPromptState | null {
   const { activeRepoHostIdentity, activeRepoId, promptState, promptTargetHidden } = input
   const lastVisiblePromptRef = useRef<LastVisibleSetupScriptPrompt | null>(null)
+
   const renderedPromptState =
     !promptTargetHidden && activeRepoId && activeRepoHostIdentity
       ? getRenderedSetupScriptPromptState({
@@ -30,8 +31,10 @@ export function useRenderedSetupScriptPromptState(input: {
       renderedPromptState.repoHostIdentity === activeRepoHostIdentity
     ) {
       lastVisiblePromptRef.current = { state: renderedPromptState }
+
       return
     }
+
     if (
       promptTargetHidden ||
       renderedPromptState?.status === 'forbidden' ||

@@ -6,17 +6,24 @@ export type RequestTabCloseListener = (data: {
   tabId: string | null
   worktreeId?: string
 }) => void
+
 export type CloseActiveTabListener = (payload?: { sourceId: string }) => void
+
 export type CloseFloatingItemListener = (payload: { sourceId: string }) => void
+
 export type SelectFloatingIndexListener = (payload: { index: number }) => void
+
 export type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
+
 export type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
+
 export type SessionTabCloseRequestListener = (data: {
   requestId: string
   tabId: string
   worktreeId: string
   expiresAt?: number
 }) => void
+
 export type TerminalTabCloseRequestListener = (data: {
   requestId: string
   tabId: string
@@ -56,8 +63,10 @@ export async function useIpcEventsForCloseRouting({
   if (typeof HTMLElement === 'undefined') {
     vi.stubGlobal('HTMLElement', class {})
   }
+
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
+
     return {
       ...actual,
       useEffect: (effect: () => void | (() => void)) => {
@@ -184,12 +193,14 @@ export async function useIpcEventsForCloseRouting({
           if (closeSessionTabListenerRef) {
             closeSessionTabListenerRef.current = listener
           }
+
           return () => {}
         },
         onSessionTabCloseRequest: (listener: SessionTabCloseRequestListener) => {
           if (sessionTabCloseRequestListenerRef) {
             sessionTabCloseRequestListenerRef.current = listener
           }
+
           return () => {}
         },
         respondSessionTabClose,
@@ -200,12 +211,14 @@ export async function useIpcEventsForCloseRouting({
           if (closeTerminalListenerRef) {
             closeTerminalListenerRef.current = listener
           }
+
           return () => {}
         },
         onTerminalTabCloseRequest: (listener: TerminalTabCloseRequestListener) => {
           if (terminalTabCloseRequestListenerRef) {
             terminalTabCloseRequestListenerRef.current = listener
           }
+
           return () => {}
         },
         respondTerminalTabClose,
@@ -219,6 +232,7 @@ export async function useIpcEventsForCloseRouting({
           if (requestTabCloseListenerRef) {
             requestTabCloseListenerRef.current = listener
           }
+
           return () => {}
         },
         replyTabClose,
@@ -229,18 +243,21 @@ export async function useIpcEventsForCloseRouting({
           if (closeActiveTabListenerRef) {
             closeActiveTabListenerRef.current = listener
           }
+
           return () => {}
         },
         onCloseFloatingItem: (listener: CloseFloatingItemListener) => {
           if (closeFloatingItemListenerRef) {
             closeFloatingItemListenerRef.current = listener
           }
+
           return () => {}
         },
         onSelectFloatingIndex: (listener: SelectFloatingIndexListener) => {
           if (selectFloatingIndexListenerRef) {
             selectFloatingIndexListenerRef.current = listener
           }
+
           return () => {}
         },
         onSwitchTab: () => () => {},

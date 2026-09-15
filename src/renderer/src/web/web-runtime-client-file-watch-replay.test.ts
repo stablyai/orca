@@ -49,9 +49,11 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.alloc(32).toString('base64')
     })
+
     const initialSocket = fakeSockets[0]!
     initialSocket.readyState = FakeWebSocket.OPEN
     const onResponse = vi.fn()
+
     const internals = client as unknown as {
       ws: FakeWebSocket | null
       sharedKey: Uint8Array | null
@@ -65,6 +67,7 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       >
       setState(next: string): void
     }
+
     internals.sharedKey = new Uint8Array(32)
     internals.state = 'connected'
 
@@ -117,10 +120,12 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.alloc(32).toString('base64')
     })
+
     const initialSocket = fakeSockets[0]!
     initialSocket.readyState = FakeWebSocket.OPEN
     const onResponse = vi.fn()
     const onClose = vi.fn()
+
     const internals = client as unknown as {
       ws: FakeWebSocket | null
       sharedKey: Uint8Array | null
@@ -135,6 +140,7 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       setState(next: string): void
       handleSocketClosed(socket: FakeWebSocket): void
     }
+
     internals.sharedKey = new Uint8Array(32)
     internals.state = 'connected'
 
@@ -143,6 +149,7 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       { worktree: 'wt-1' },
       { onResponse, onClose }
     )
+
     const firstId = Array.from(internals.subscriptions.keys())[0]
     expect(initialSocket.send).toHaveBeenCalledTimes(1)
 
@@ -189,8 +196,10 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.alloc(32).toString('base64')
     })
+
     const initialSocket = fakeSockets[0]!
     initialSocket.readyState = FakeWebSocket.OPEN
+
     const internals = client as unknown as {
       ws: FakeWebSocket | null
       sharedKey: Uint8Array | null
@@ -198,8 +207,10 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       subscriptions: Map<string, { needsReplay: boolean }>
       setState(next: string): void
     }
+
     internals.sharedKey = new Uint8Array(32)
     internals.state = 'connected'
+
     const handle = await client.subscribe(
       'files.watch',
       { worktree: 'wt-1' },
@@ -227,10 +238,12 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.alloc(32).toString('base64')
     })
+
     const initialSocket = fakeSockets[0]!
     initialSocket.readyState = FakeWebSocket.OPEN
     const sharedKey = new Uint8Array(32)
     const onResponse = vi.fn()
+
     const internals = client as unknown as {
       ws: FakeWebSocket | null
       sharedKey: Uint8Array | null
@@ -239,6 +252,7 @@ describe('WebRuntimeClient file-watch replay resync', () => {
       handleSocketMessage(rawData: unknown): Promise<void>
       setState(next: string): void
     }
+
     internals.sharedKey = sharedKey
     internals.state = 'connected'
     await client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse })

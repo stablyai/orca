@@ -45,6 +45,7 @@ export async function expectImePlatformPolicy(
     windows: navigator.userAgent.includes('Windows'),
     linux: navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)
   }))
+
   if (!observed[policy] || (policy !== 'mac' && observed.mac)) {
     throw new Error(`IME platform policy '${policy}' did not take: ${JSON.stringify(observed)}`)
   }

@@ -19,6 +19,7 @@ import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
+
 export {
   COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
@@ -30,10 +31,15 @@ export {
 } from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
+
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
+
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
+
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
+
 export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+
 export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
@@ -42,9 +48,11 @@ export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivity
 
 // Why: onboarding wizard's last step index, centralized so backfill, clamps, and UI agree on the bound.
 export const ONBOARDING_FINAL_STEP = 5
+
 export const ONBOARDING_FLOW_VERSION = 4
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
+
 // Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
@@ -67,12 +75,15 @@ export const BROWSER_FAMILY_LABELS: Record<string, string> = {
 // Why: only the initial value shown in Settings; buildFontFamily() adds the real cross-platform fallback chain.
 function defaultTerminalFontFamily(): string {
   const platform = typeof process !== 'undefined' ? process.platform : ''
+
   if (platform === 'win32') {
     return 'Cascadia Mono'
   }
+
   if (platform === 'linux') {
     return 'DejaVu Sans Mono'
   }
+
   return 'SF Mono' // macOS default
 }
 
@@ -93,7 +104,9 @@ export const getDefaultTerminalRightClickToPaste = (
 export const RICH_MARKDOWN_MAX_SIZE_BYTES = 600 * 1024
 
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
+
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
+
 export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
 
 // Why: first-time seed only — doubles on each dismissal without starring; later thresholds live in starNagNextThreshold.
@@ -158,6 +171,7 @@ export function getDefaultOnboardingState(): OnboardingState {
 export function getDefaultWorkspaceDir(homeDir: string): string {
   const separator = homeDir.includes('\\') ? '\\' : '/'
   const trimmedHomeDir = homeDir.replace(/[\\/]+$/, '')
+
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
 }
 

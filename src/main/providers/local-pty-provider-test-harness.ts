@@ -51,19 +51,23 @@ export function installLocalPtyProviderEnvSandbox(): void {
 
   afterEach(() => {
     _resetLocalPtyProviderStateForTest()
+
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
+
     if (origShell === undefined) {
       delete process.env.SHELL
     } else {
       process.env.SHELL = origShell
     }
+
     if (origPowerlevelWizardDisable === undefined) {
       delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     } else {
       process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD = origPowerlevelWizardDisable
     }
+
     if (origHistFile === undefined) {
       delete process.env.HISTFILE
     } else {
@@ -113,6 +117,7 @@ export function createLocalPtyMockProcess(exitCallback: {
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onExit: vi.fn((cb: LocalPtyExitCallback) => {
       exitCallback.set(cb)
+
       return {
         dispose: () => {
           if (exitCallback.get() === cb) {

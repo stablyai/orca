@@ -17,6 +17,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -31,9 +32,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -143,15 +146,18 @@ describe('Store', () => {
 
   it('keeps folder-workspace review notes across a previous-build rollback and re-upgrade', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const workspace = store.createFolderWorkspace({
       projectGroupId: group.id,
       name: 'Refund fix'
     })
+
     const note = makeFolderNote('note-1', 'Review this paragraph', workspace.id)
     store.updateFolderWorkspace(workspace.id, { diffComments: [note] })
     store.flush()
@@ -177,11 +183,13 @@ describe('Store', () => {
 
   it('survives repeated rollback / re-upgrade hops', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Refund fix' })
     const note = makeFolderNote('note-1', 'Review this paragraph', workspace.id)
     store.updateFolderWorkspace(workspace.id, { diffComments: [note] })
@@ -197,12 +205,14 @@ describe('Store', () => {
 
   it('keeps notes and remote provenance for an SSH folder workspace across a rollback', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       connectionId: 'ssh-1',
       createdFrom: 'folder-scan'
     })
+
     const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Remote fix' })
     expect(workspace.connectionId).toBe('ssh-1')
     const note = makeFolderNote('note-remote', 'Remote review', workspace.id)
@@ -354,11 +364,13 @@ describe('Store', () => {
 
   it('writes no folderWorkspaceDiffComments key for note-free profiles', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'No notes' })
     store.flush()
     expect('folderWorkspaceDiffComments' in (readDataFile() as object)).toBe(false)

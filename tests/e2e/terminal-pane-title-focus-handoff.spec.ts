@@ -16,10 +16,13 @@ async function installDelayedTerminalFocusSteals(
   await page.evaluate((delays) => {
     const focusTerminalAfterTitleFocus = (event: FocusEvent): void => {
       const target = event.target
+
       if (!(target instanceof HTMLInputElement) || !target.classList.contains('pane-title-input')) {
         return
       }
+
       document.removeEventListener('focusin', focusTerminalAfterTitleFocus, true)
+
       for (const delay of delays) {
         window.setTimeout(() => {
           const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
@@ -27,6 +30,7 @@ async function installDelayedTerminalFocusSteals(
         }, delay)
       }
     }
+
     document.addEventListener('focusin', focusTerminalAfterTitleFocus, true)
   }, delaysMs)
 }
@@ -34,6 +38,7 @@ async function installDelayedTerminalFocusSteals(
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
@@ -59,6 +64,7 @@ test.describe('Terminal Panes', () => {
         pointerId: 1,
         pointerType: 'mouse'
       }
+
       input.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
       input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
       input.dispatchEvent(new PointerEvent('pointerup', pointerInit))
@@ -81,15 +87,18 @@ test.describe('Terminal Panes', () => {
     await orcaPage.evaluate(() => {
       const blurOnFirstTitleFocus = (event: FocusEvent): void => {
         const target = event.target
+
         if (
           !(target instanceof HTMLInputElement) ||
           !target.classList.contains('pane-title-input')
         ) {
           return
         }
+
         document.removeEventListener('focusin', blurOnFirstTitleFocus, true)
         queueMicrotask(() => target.blur())
       }
+
       document.addEventListener('focusin', blurOnFirstTitleFocus, true)
     })
     await orcaPage.getByText('Set Title…', { exact: true }).click()

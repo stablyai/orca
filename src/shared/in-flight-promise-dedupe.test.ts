@@ -8,15 +8,18 @@ import {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((nextResolve) => {
     resolve = nextResolve
   })
+
   return { promise, resolve }
 }
 
 describe('InFlightPromiseDedupe', () => {
   it('coalesces only while in flight and retries after rejection', async () => {
     const dedupe = new InFlightPromiseDedupe<string>()
+
     const load = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new Error('transient failure'))
@@ -48,6 +51,7 @@ describe('InFlightPromiseDedupe', () => {
 
   it('clears entries after synchronous loader failures', async () => {
     const dedupe = new InFlightPromiseDedupe<string>()
+
     const load = vi
       .fn<() => Promise<string> | string>()
       .mockImplementationOnce(() => {
@@ -77,6 +81,7 @@ describe('InFlightPromiseDedupe', () => {
 
   it('expires hung entries so retries can start fresh work', async () => {
     vi.useFakeTimers()
+
     try {
       const dedupe = new InFlightPromiseDedupe<string>(5)
       const load = vi.fn<() => Promise<string>>()
@@ -96,9 +101,11 @@ describe('InFlightPromiseDedupe', () => {
 
   it('admits exactly the entry limit and bypasses new keys above it', async () => {
     const dedupe = new InFlightPromiseDedupe<string>()
+
     const pending = Array.from({ length: MAX_IN_FLIGHT_PROMISE_DEDUPE_ENTRIES }, () =>
       deferred<string>()
     )
+
     const admittedLoads = pending.map((item) => vi.fn(() => item.promise))
 
     for (let index = 0; index < pending.length; index += 1) {

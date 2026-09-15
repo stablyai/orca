@@ -24,12 +24,15 @@ describe('pre-v3 dispatch rows in worker-list', () => {
   function createLegacyDispatch(status: 'completed' | 'failed' | 'dispatched'): string {
     const task = h.db.createTask({ spec: `legacy ${status} task`, runId: h.activeRunId })
     const dispatch = createRootDispatch(h.db, task.id, `term_legacy_${status}`)
+
     if (status === 'completed') {
       h.db.completeDispatch(dispatch.id)
     }
+
     if (status === 'failed') {
       h.db.failDispatch(dispatch.id, 'legacy failure')
     }
+
     return dispatch.id
   }
 
@@ -38,6 +41,7 @@ describe('pre-v3 dispatch rows in worker-list', () => {
       paginate: true,
       run: h.activeRunId
     })) as { workers: ListedWorker[] }
+
     return new Map(listed.workers.map((worker) => [worker.dispatchId, worker]))
   }
 
@@ -69,12 +73,14 @@ describe('pre-v3 dispatch rows in worker-list', () => {
       h.setup()
       const task = h.db.createTask({ spec: `legacy ${status} with question`, runId: h.activeRunId })
       const dispatch = createRootDispatch(h.db, task.id, `term_legacy_q_${status}`)
+
       const asked = h.db.createQuestion({
         runId: h.activeRunId,
         dispatchId: dispatch.id,
         askerHandle: `term_legacy_q_${status}`,
         question: 'Which branch?'
       })
+
       // Both settlement paths a pre-v3 dispatch can take: the task-status path and failDispatch.
       if (status === 'completed') {
         h.db.updateTaskStatus(task.id, 'completed', 'done')

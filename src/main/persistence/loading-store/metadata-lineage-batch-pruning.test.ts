@@ -41,13 +41,16 @@ describe('MetadataLineageOperations batch metadata pruning', () => {
   it('schedules one save for thousands of removals and none for a no-op retry', () => {
     const state = getDefaultPersistedState('/home/test')
     state.repos = [REPO]
+
     const staleIds = Array.from(
       { length: 2_709 },
       (_, index) => `${REPO.id}::/workspace/stale-${index}`
     )
+
     for (const worktreeId of staleIds) {
       state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     }
+
     const operations = new MetadataLineageOperations({ state } as never, {} as never, {} as never)
     const scan = operations.captureNativeLocalWorktreeMetadataScanExpectation(REPO)
 

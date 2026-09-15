@@ -10,6 +10,7 @@ import { useStore } from 'zustand'
 import { installStoreListenerCensus, readStoreListenerCount } from './store-listener-census'
 
 type CensusState = { n: number }
+
 type CensusApi = {
   subscribe: (listener: (state: CensusState, previous: CensusState) => void) => () => void
   setState: (partial: Partial<CensusState>) => void
@@ -19,9 +20,12 @@ type CensusApi = {
 function createCensusStore(): { api: CensusApi; hook: { subscribe: unknown } } {
   const api = createStore<CensusState>(() => ({ n: 0 })) as unknown as CensusApi
   installStoreListenerCensus(api)
+
   const hook = ((selector: (state: CensusState) => unknown) =>
     useStore(api as never, selector)) as unknown as { subscribe: unknown }
+
   Object.assign(hook, api)
+
   return { api, hook }
 }
 
@@ -79,6 +83,7 @@ describe('store listener census', () => {
   it('still delivers state updates to a counted listener', () => {
     const { api } = createCensusStore()
     let seen = 0
+
     const unsubscribe = api.subscribe((state) => {
       seen = state.n
     })

@@ -10,11 +10,13 @@ describe('context-only self-dispatch and nesting depth', () => {
 
   async function selfDispatch(): Promise<string> {
     const task = harness.db.createTask({ spec: 'self bookkeeping', runId: harness.activeRunId })
+
     const result = (await harness.call('orchestration.dispatch', {
       task: task.id,
       from: 'term_coord',
       to: 'term_coord'
     })) as { dispatch: { id: string } }
+
     return result.dispatch.id
   }
 
@@ -35,6 +37,7 @@ describe('context-only self-dispatch and nesting depth', () => {
 
   it('still counts a real assignment to another pane as a nesting parent', async () => {
     const task = harness.db.createTask({ spec: 'real delegation', runId: harness.activeRunId })
+
     const delegated = (await harness.call('orchestration.dispatch', {
       task: task.id,
       from: 'term_coord',
@@ -65,6 +68,7 @@ describe('context-only self-dispatch and nesting depth', () => {
       handle: 'term_coord',
       paneKey: harness.coordinatorPaneKey
     } as const
+
     expect(harness.db.resolveCreatorDepth(creator)).toBe(0)
     expect(harness.db.resolveCreatorDispatchId(creator)).toBeNull()
   })

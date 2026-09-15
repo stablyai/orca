@@ -16,14 +16,17 @@ function providerWithAttachReplies(replies: unknown[]): {
   request: ReturnType<typeof vi.fn>
 } {
   const request = vi.fn()
+
   for (const reply of replies) {
     request.mockResolvedValueOnce(reply)
   }
+
   const mux = {
     request,
     notify: vi.fn(),
     onNotification: vi.fn().mockReturnValue(vi.fn())
   }
+
   return { provider: new SshPtyProvider('conn-1', mux as never), request }
 }
 
@@ -76,15 +79,20 @@ describe('a live PTY whose source delivery needs restoring', () => {
         recoveryEndSu: 0
       }
     })
+
     const rollback = vi.fn().mockResolvedValue(false)
+
     const mux = {
       request,
       notify: vi.fn(),
       onNotification: vi.fn().mockReturnValue(vi.fn())
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
+
     const outputState = (provider as unknown as { outputState: Record<string, unknown> })
       .outputState
+
     outputState.installReceivingActivation = () => ({
       commit: vi.fn(),
       rollback,

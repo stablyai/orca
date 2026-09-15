@@ -56,6 +56,7 @@ describe('install-electron-package-binary', () => {
         'replacement types'
       )
       expect(existsSync(join(projectDir, 'node_modules/electron/dist/electron.d.ts'))).toBe(false)
+
       if (process.platform !== 'win32') {
         expect(
           lstatSync(
@@ -63,6 +64,7 @@ describe('install-electron-package-binary', () => {
           ).isSymbolicLink()
         ).toBe(true)
       }
+
       expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
@@ -157,6 +159,7 @@ describe('install-electron-package-binary', () => {
           .filter(Boolean)
           .join(' ')
       })
+
       const electronDir = join(projectDir, 'node_modules/electron')
 
       expect(result.status).toBe(1)
@@ -546,6 +549,7 @@ describe('install-electron-package-binary', () => {
       writeFakeElectronGet(projectDir)
       writeFakeExtractor(projectDir, { createExecutable: true })
       const preloadPath = writeNonDarwinPlatformPreload(projectDir)
+
       const nonDarwinEnv = {
         CI: '',
         NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${preloadPath}`]

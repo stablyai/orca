@@ -14,7 +14,9 @@ export class TerminalSourceRangeRegistry {
     if (this.ledgers.size >= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION) {
       return null
     }
+
     let ledger: TerminalSourceRangeLedger
+
     const budget: TerminalSourceRangeBudget = {
       canReserve: (bytes) =>
         this.retainedBytes + bytes <= TERMINAL_SOURCE_RANGE_CONNECTION_MAX_BYTES,
@@ -22,7 +24,9 @@ export class TerminalSourceRangeRegistry {
         if (this.retainedBytes + bytes > TERMINAL_SOURCE_RANGE_CONNECTION_MAX_BYTES) {
           return false
         }
+
         this.retainedBytes += bytes
+
         return true
       },
       release: (bytes) => {
@@ -32,8 +36,10 @@ export class TerminalSourceRangeRegistry {
         this.ledgers.delete(ledger)
       }
     }
+
     ledger = new TerminalSourceRangeLedger(streamGeneration, budget)
     this.ledgers.add(ledger)
+
     return ledger
   }
 

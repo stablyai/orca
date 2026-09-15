@@ -18,8 +18,11 @@ import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
 const RELAY_PROBE_TIMEOUT_MS = 4_000
+
 const RELAY_MISSED_PROBE_LIMIT = 2
+
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
+
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
@@ -58,6 +61,7 @@ export function connectMobileRelayRpcSession(args: {
   const logSessionId = `${Date.now().toString(36)}-${(++relayRpcSessionSequence).toString(36)}`
   const livenessIdentity = {}
   const dialStage = new RelayDialStageTracker()
+
   const streams = new MobileRelayRpcStreams({
     nextId: () => pending.nextId(),
     sendFrame,
@@ -79,8 +83,10 @@ export function connectMobileRelayRpcSession(args: {
         hello.acceptedCredentialVersion !== args.resumeCredentialVersion
       ) {
         fail(new Error('relay resume credential version mismatch'))
+
         return
       }
+
       attachDeadlineAt = hello.leaseExpiresAt
       resumeExpiresAt = hello.resumeExpiresAt
       dialStage.advance('handshaking')
@@ -102,6 +108,7 @@ export function connectMobileRelayRpcSession(args: {
     async sendRequest(method, params, options) {
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
+
       return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
     },
 
@@ -109,6 +116,7 @@ export function connectMobileRelayRpcSession(args: {
       if (closed) {
         return () => {}
       }
+
       return streams.subscribe(method, params, listener, options)
     },
 
@@ -121,6 +129,7 @@ export function connectMobileRelayRpcSession(args: {
     getLastInboundAt: () => livenessWatchdog.getLastInboundAt() || null,
     onStateChange(listener) {
       stateListeners.add(listener)
+
       return () => stateListeners.delete(listener)
     },
     notifyForeground: (reason) => {
@@ -132,6 +141,7 @@ export function connectMobileRelayRpcSession(args: {
       if (closed) {
         return
       }
+
       closed = true
       livenessWatchdog.stop(livenessIdentity)
       link.close()
@@ -146,6 +156,7 @@ export function connectMobileRelayRpcSession(args: {
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
   }
+
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
     idleProbeMs: null,
@@ -168,10 +179,12 @@ export function connectMobileRelayRpcSession(args: {
     },
     terminate: () => fail(new Error('relay session liveness timeout'))
   })
+
   return client
 
   async function confirmResume(): Promise<void> {
     dialStage.advance('confirming')
+
     try {
       const response = await sendRpc(
         'pairing.getEndpoints',
@@ -179,13 +192,17 @@ export function connectMobileRelayRpcSession(args: {
         requestTimeoutMs,
         true
       )
+
       if (!response.ok) {
         throw new Error(response.error.code)
       }
+
       const result = PairingGetEndpointsResultSchema.parse(response.result)
+
       if (!result.resumeConfirmation || result.relay?.relayHostId !== args.relay.relayHostId) {
         throw new Error('relay resume confirmation missing')
       }
+
       resumeConfirmation = result.resumeConfirmation
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
@@ -209,20 +226,26 @@ export function connectMobileRelayRpcSession(args: {
     if (closed || (!beforeConnected && state !== 'connected')) {
       return Promise.reject(new Error('relay session not connected'))
     }
+
     const id = pending.nextId()
+
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.drop(id)
         // Why: the frame was written long ago — the desktop may have processed it.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
+
       pending.track(id, { resolve, reject, timer, written: false })
+
       if (!sendFrame({ id, method, params })) {
         clearTimeout(timer)
         pending.drop(id)
         reject(new Error('relay E2EE channel not ready'))
+
         return
       }
+
       pending.markWritten(id)
     })
   }
@@ -233,17 +256,21 @@ export function connectMobileRelayRpcSession(args: {
 
   function handleText(plaintext: string): void {
     let value: unknown
+
     try {
       value = JSON.parse(plaintext)
     } catch {
       return
     }
+
     if (!isRpcResponse(value)) {
       return
     }
+
     if (pending.settle(value)) {
       return
     }
+
     streams.handleResponse(value)
   }
 
@@ -255,8 +282,10 @@ export function connectMobileRelayRpcSession(args: {
     if (state === 'connected') {
       return Promise.resolve()
     }
+
     return new Promise((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | null = null
+
       const unsubscribe = client.onStateChange((next) => {
         if (next === 'connected') {
           finish()
@@ -266,14 +295,17 @@ export function connectMobileRelayRpcSession(args: {
           reject(new Error(`relay session ${next}`))
         }
       })
+
       timer = setTimeout(() => {
         finish()
         reject(new Error('relay session connection timed out'))
       }, timeoutMs)
+
       function finish(): void {
         if (timer) {
           clearTimeout(timer)
         }
+
         unsubscribe()
       }
     })
@@ -283,7 +315,9 @@ export function connectMobileRelayRpcSession(args: {
     if (state === next) {
       return
     }
+
     state = next
+
     for (const listener of stateListeners) {
       listener(next)
     }
@@ -293,6 +327,7 @@ export function connectMobileRelayRpcSession(args: {
     if (closed) {
       return
     }
+
     closed = true
     failure = error
     livenessWatchdog.stop(livenessIdentity)

@@ -43,6 +43,7 @@ describe('bounded Markdown document discovery', () => {
 
   it('stops consuming a wide directory at the visited-entry limit', async () => {
     let yielded = 0
+
     const readDirectory = async (): Promise<AsyncIterable<Dirent>> => ({
       async *[Symbol.asyncIterator]() {
         for (let index = 0; index < 10_000; index += 1) {

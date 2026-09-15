@@ -32,6 +32,7 @@ export function createTerminalEphemeralActions(
         if (s.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
           return s
         }
+
         return {
           defaultTerminalTabsAppliedByWorktreeId: {
             ...s.defaultTerminalTabsAppliedByWorktreeId,
@@ -69,9 +70,11 @@ export function createTerminalEphemeralActions(
     markNativeChatLaunchPromptFailed: (tabId) => {
       set((s) => {
         const current = s.nativeChatLaunchPromptByTabId[tabId]
+
         if (!current || current.failed) {
           return s
         }
+
         return {
           nativeChatLaunchPromptByTabId: {
             ...s.nativeChatLaunchPromptByTabId,
@@ -85,8 +88,10 @@ export function createTerminalEphemeralActions(
         if (!s.nativeChatLaunchPromptByTabId[tabId]) {
           return s
         }
+
         const next = { ...s.nativeChatLaunchPromptByTabId }
         delete next[tabId]
+
         return { nativeChatLaunchPromptByTabId: next }
       })
     },
@@ -101,9 +106,11 @@ export function createTerminalEphemeralActions(
     markNativeChatLaunchDraftAdopted: (tabId) => {
       set((s) => {
         const current = s.nativeChatLaunchDraftByTabId[tabId]
+
         if (!current || current.adopted) {
           return s
         }
+
         return {
           nativeChatLaunchDraftByTabId: {
             ...s.nativeChatLaunchDraftByTabId,
@@ -115,6 +122,7 @@ export function createTerminalEphemeralActions(
     resolveNativeChatLaunchDraft: (tabId, resolution) => {
       set((s) => {
         const current = s.nativeChatLaunchDraftByTabId[tabId]
+
         if (
           !current ||
           current.resolved ||
@@ -123,6 +131,7 @@ export function createTerminalEphemeralActions(
         ) {
           return s
         }
+
         return {
           nativeChatLaunchDraftByTabId: {
             ...s.nativeChatLaunchDraftByTabId,
@@ -136,8 +145,10 @@ export function createTerminalEphemeralActions(
         if (!s.nativeChatLaunchDraftByTabId[tabId]) {
           return s
         }
+
         const next = { ...s.nativeChatLaunchDraftByTabId }
         delete next[tabId]
+
         return { nativeChatLaunchDraftByTabId: next }
       })
     },
@@ -145,6 +156,7 @@ export function createTerminalEphemeralActions(
       if (!paneKey || !Number.isFinite(timestamp)) {
         return
       }
+
       recordTerminalInputActivity({
         paneKey,
         timestamp,
@@ -159,15 +171,19 @@ export function createTerminalEphemeralActions(
           refreshExisting: (entries) =>
             set((s) => {
               let next: Record<string, number> | null = null
+
               for (const [key, at] of entries) {
                 // Why: teardown (close pane/tab/worktree purge) deletes keys; a late flush must not resurrect them.
                 const current = s.lastTerminalInputAtByPaneKey[key]
+
                 if (current === undefined || current >= at) {
                   continue
                 }
+
                 next ??= { ...s.lastTerminalInputAtByPaneKey }
                 next[key] = at
               }
+
               return next ? { lastTerminalInputAtByPaneKey: next } : s
             })
         }
@@ -178,17 +194,23 @@ export function createTerminalEphemeralActions(
         // Why: a real pane write clears any ':seed' sentinel from seedCacheTimersForIdleTabs, avoiding phantom timers when the seed key doesn't match the real pane.
         const colonIdx = key.indexOf(':')
         const suffix = colonIdx === -1 ? null : key.slice(colonIdx + 1)
+
         const seedKey =
           colonIdx !== -1 && suffix !== 'seed' ? `${key.slice(0, colonIdx)}:seed` : null
+
         const hasStaleSeed = seedKey !== null && seedKey in s.cacheTimerByKey
+
         // Why: parked-pane watchers replay null-over-null on every working/exit transition; each redundant write runs every subscriber's selector.
         if (s.cacheTimerByKey[key] === ts && !hasStaleSeed) {
           return s
         }
+
         const next = { ...s.cacheTimerByKey, [key]: ts }
+
         if (seedKey !== null) {
           delete next[seedKey]
         }
+
         return { cacheTimerByKey: next }
       })
     },
@@ -197,22 +219,28 @@ export function createTerminalEphemeralActions(
       const s = get()
       const now = Date.now()
       const updates: Record<string, number> = {}
+
       for (const tabs of Object.values(s.tabsByWorktree)) {
         for (const tab of tabs) {
           if (!tab.title || !isClaudeAgent(tab.title)) {
             continue
           }
+
           const status = classifyTitleActivity(tab.title)
+
           if (status === null || status === 'working') {
             continue
           }
+
           // Why: the store doesn't know which pane holds the idle session, so use a ':seed' sentinel; setCacheTimerStartedAt clears it on any real pane write.
           const key = `${tab.id}:seed`
+
           if (s.cacheTimerByKey[key] == null) {
             updates[key] = now
           }
         }
       }
+
       if (Object.keys(updates).length > 0) {
         set((s) => ({
           cacheTimerByKey: { ...s.cacheTimerByKey, ...updates }
@@ -229,8 +257,10 @@ export function createTerminalEphemeralActions(
         if (!s.deferredSshSessionIdsByTabId[tabId]) {
           return s
         }
+
         const next = { ...s.deferredSshSessionIdsByTabId }
         delete next[tabId]
+
         return { deferredSshSessionIdsByTabId: next }
       })
   }

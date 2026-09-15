@@ -29,17 +29,21 @@ export function createLegacyStorageCutoverFixture(): {
   const tempDir = mkdtempSync(join(tmpdir(), 'orca-legacy-storage-'))
   const dbPath = join(tempDir, 'orchestration.db')
   const first = new OrchestrationDb(dbPath)
+
   const currentRun = first.createRun({
     objective: 'Current work',
     coordinatorHandle: 'term_current_coord',
     coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111'
   })
+
   const currentTask = first.createTask({ spec: 'current', runId: currentRun.id })
+
   const unrelatedRun = first.createRun({
     objective: 'Unrelated current work',
     coordinatorHandle: 'term_unrelated_coord',
     coordinatorPaneKey: 'tab_unrelated:55555555-5555-4555-8555-555555555555'
   })
+
   const currentDispatch = createRootDispatch(
     first,
     currentTask.id,
@@ -47,6 +51,7 @@ export function createLegacyStorageCutoverFixture(): {
     'tab_current:22222222-2222-4222-9222-222222222222',
     'current_launch_hash'
   )
+
   first.insertMessage({
     runId: currentRun.id,
     from: 'term_current_worker',
@@ -59,23 +64,28 @@ export function createLegacyStorageCutoverFixture(): {
     spec: 'legacy',
     createdByTerminalHandle: 'term_legacy_coord'
   })
+
   createRootDispatch(
     first,
     legacyTask.id,
     'term_legacy_worker',
     'tab_legacy:33333333-3333-4333-8333-333333333333'
   )
+
   const legacyGate = first.createGate({
     taskId: legacyTask.id,
     question: 'Retained gate?'
   })
+
   first.resolveGate(legacyGate.id, 'continue')
+
   const retryDispatch = createRootDispatch(
     first,
     legacyTask.id,
     'term_legacy_worker',
     'tab_legacy:33333333-3333-4333-8333-333333333333'
   )
+
   const legacyMessages = [
     first.insertMessage({
       runId: 'run_legacy_local',
@@ -96,13 +106,16 @@ export function createLegacyStorageCutoverFixture(): {
       subject: 'second worker page'
     })
   ]
+
   first.markAsRead(legacyMessages.map((message) => message.id))
+
   const question = first.createQuestion({
     runId: LEGACY_RUN_ID,
     dispatchId: retryDispatch.id,
     askerHandle: 'term_legacy_worker',
     question: 'Retained question?'
   })
+
   const rejection = first.insertMessage({
     runId: 'run_legacy_local',
     from: 'term_legacy_worker',
@@ -111,6 +124,7 @@ export function createLegacyStorageCutoverFixture(): {
     type: 'heartbeat',
     payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration', reason: 'cutover' } })
   })
+
   const lookalike = first.insertMessage({
     runId: 'run_legacy_local',
     from: 'term_legacy_worker',
@@ -120,6 +134,7 @@ export function createLegacyStorageCutoverFixture(): {
       userData: { _orcaLifecycleRejection: { code: 'not-a-top-level-audit-marker' } }
     })
   })
+
   const malformedRejections = [
     first.insertMessage({
       runId: 'run_legacy_local',
@@ -173,6 +188,7 @@ export function createLegacyStorageCutoverFixture(): {
       payload: JSON.stringify('_orcaLifecycleRejection')
     })
   ]
+
   first.close()
 
   const raw = new Database(dbPath)
@@ -193,12 +209,15 @@ export function createLegacyStorageCutoverFixture(): {
   raw
     .prepare("UPDATE messages SET delivery_contract = 'legacy_direct' WHERE id = ?")
     .run(rejection.id)
+
   const seedAuditOnly = raw.prepare(
     "UPDATE messages SET delivery_contract = 'audit_only' WHERE id = ?"
   )
+
   for (const message of [lookalike, ...malformedRejections]) {
     seedAuditOnly.run(message.id)
   }
+
   raw.exec(`
     DROP INDEX IF EXISTS idx_messages_delivery_contract;
     DROP TABLE legacy_mail_receipts;

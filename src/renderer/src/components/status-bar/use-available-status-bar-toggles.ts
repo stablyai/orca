@@ -8,5 +8,6 @@ export function useAvailableStatusBarToggles<T extends { id: StatusBarItem }>(
   toggles: readonly T[]
 ): T[] {
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+
   return toggles.filter((t) => isStatusBarItemAvailable(t.id, detectedAgentIds))
 }

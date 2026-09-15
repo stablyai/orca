@@ -20,9 +20,11 @@ export function useComposerFileDragOver(): {
     if (!event.dataTransfer.types.includes('Files')) {
       return
     }
+
     if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
       return
     }
+
     dragCounterRef.current += 1
     setIsFileDragOver(true)
   }, [])
@@ -32,10 +34,13 @@ export function useComposerFileDragOver(): {
       if (!event.dataTransfer.types.includes('Files')) {
         return
       }
+
       if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
+
       dragCounterRef.current -= 1
+
       if (dragCounterRef.current <= 0) {
         reset()
       }
@@ -47,8 +52,10 @@ export function useComposerFileDragOver(): {
     const handler = (): void => {
       reset()
     }
+
     document.addEventListener('drop', handler, true)
     document.addEventListener('dragend', handler, true)
+
     return () => {
       document.removeEventListener('drop', handler, true)
       document.removeEventListener('dragend', handler, true)

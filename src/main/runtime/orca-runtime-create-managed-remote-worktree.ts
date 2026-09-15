@@ -24,6 +24,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     return createRuntimeRemoteManagedWorktree(repo, args, {
       store: this.store,
       canSpawn: () => Boolean(this.ptyController?.spawn),
@@ -156,6 +157,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     return updateRuntimeManagedWorktreeMetadata({
       selector: worktreeSelector,
       updates,
@@ -175,6 +177,7 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     return persistRuntimeManagedWorktreeSortOrder({
       orderedIds,
       store: this.store,

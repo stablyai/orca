@@ -16,15 +16,19 @@ export function subscribeWindowParkVisibility(onChange: () => void): () => void 
   // registering it first lets its own visibilitychange handler clear the latch before `onChange`
   // reads it.
   const unregisterStaleRecovery = registerStaleDocumentVisibilityRecovery(onChange)
+
   const canListenToVisibility =
     typeof document !== 'undefined' && typeof document.addEventListener === 'function'
+
   if (canListenToVisibility) {
     document.addEventListener('visibilitychange', onChange)
   }
+
   return () => {
     if (canListenToVisibility) {
       document.removeEventListener('visibilitychange', onChange)
     }
+
     unregisterStaleRecovery()
   }
 }

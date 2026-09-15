@@ -109,6 +109,7 @@ describe('LinearScopeSelector helpers', () => {
 
   it('rejects oversized pasted filters before reading team text', () => {
     const oversizedQuery = 'secret-linear-scope'.repeat(LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES)
+
     const throwingTeams = [
       {
         id: 'secret',

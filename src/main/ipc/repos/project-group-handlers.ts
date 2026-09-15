@@ -24,6 +24,7 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_create_args'
     )
+
     const group = store.createProjectGroup({
       name: args.name,
       parentPath: args.parentPath ?? null,
@@ -31,7 +32,9 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       parentGroupId: args.parentGroupId ?? null,
       createdFrom: args.createdFrom ?? 'manual'
     })
+
     notifyReposChanged(mainWindow)
+
     return group
   })
 
@@ -41,10 +44,13 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_update_args'
     )
+
     const updated = store.updateProjectGroup(args.groupId, args.updates)
+
     if (updated) {
       notifyReposChanged(mainWindow)
     }
+
     return updated
   })
 
@@ -54,10 +60,13 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_delete_args'
     )
+
     const deleted = store.deleteProjectGroup(args.groupId)
+
     if (deleted) {
       notifyReposChanged(mainWindow)
     }
+
     return deleted
   })
 
@@ -67,10 +76,13 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_move_repo_args'
     )
+
     const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
+
     if (moved) {
       notifyReposChanged(mainWindow)
     }
+
     return moved
   })
 
@@ -82,6 +94,7 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
         rawArgs,
         'invalid_project_group_scan_nested_args'
       )
+
       return runNestedRepoScanForIpc(event, args)
     }
   )
@@ -92,11 +105,15 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_cancel_nested_scan_args'
     )
+
     const controller = activeNestedRepoScans.get(args.scanId)
+
     if (!controller) {
       return false
     }
+
     controller.abort()
+
     return true
   })
 }

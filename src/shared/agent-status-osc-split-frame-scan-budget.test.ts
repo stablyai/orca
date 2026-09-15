@@ -5,6 +5,7 @@ import { createAgentStatusOscProcessor } from './agent-status-osc'
 function feedWithScanBudget(chunks: string[]) {
   let searchedChars = 0
   const indexOf = String.prototype.indexOf
+
   const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
     this: string,
     search,
@@ -12,11 +13,14 @@ function feedWithScanBudget(chunks: string[]) {
   ) {
     const found = indexOf.call(this, search, from)
     searchedChars += (found === -1 ? this.length : found + String(search).length) - Number(from)
+
     return found
   })
+
   try {
     const process = createAgentStatusOscProcessor()
     const results = chunks.map((chunk) => process(chunk))
+
     return { results, searchedChars }
   } finally {
     spy.mockRestore()
@@ -67,9 +71,11 @@ describe('OSC 9999 split-frame scan budget', () => {
   it('still parses a payload that completes many chunks later', () => {
     const process = createAgentStatusOscProcessor()
     process('\x1b]9999;{"state":"wor')
+
     for (const chunk of ['k', 'i', 'n', 'g']) {
       expect(process(chunk).payloads).toEqual([])
     }
+
     expect(process('"}\x07done').payloads).toMatchObject([{ state: 'working' }])
   })
 })

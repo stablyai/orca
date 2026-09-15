@@ -37,8 +37,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -59,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -68,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -88,6 +93,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -98,9 +104,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -110,9 +118,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -121,6 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -158,6 +169,7 @@ describe('connectPanePty', () => {
     transport.connect.mockReturnValueOnce(pendingReattach.promise).mockResolvedValueOnce(null)
     transportFactoryQueue.push(transport)
     const restoredPtyId = toAppSshPtyId('target-a', 'pty-restored')
+
     const pendingRetry = {
       attemptId: 'attempt-reattach-timeout',
       authority: {
@@ -168,9 +180,11 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     const settleDirectSshPaneRetry = vi.fn(() => {
       mockStoreState.directSshPaneRetryByTabId = {}
     })
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -225,6 +239,7 @@ describe('connectPanePty', () => {
     const restoredPtyId = toAppSshPtyId('target-a', 'pty-restored')
     const transport = createMockTransport(restoredPtyId)
     transportFactoryQueue.push(transport)
+
     const pendingRetry = {
       attemptId: 'attempt-reattach-success',
       authority: {
@@ -235,6 +250,7 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -297,6 +313,7 @@ describe('connectPanePty', () => {
       replay
     })
     transportFactoryQueue.push(transport)
+
     const pendingRetry = {
       attemptId: 'attempt-relay-restore',
       authority: {
@@ -307,6 +324,7 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     vi.mocked(window.api.pty.getMainBufferSnapshot).mockResolvedValue({
       data: 'MODEL-ALT-FRAME',
       cols: 120,
@@ -352,6 +370,7 @@ describe('connectPanePty', () => {
       }) as never
     )
     await flushAsyncTicks(20)
+
     return { writes, transport }
   }
 
@@ -387,16 +406,19 @@ describe('connectPanePty', () => {
   it('rejects expired reattach state after its direct SSH retry lease is revoked', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const restoredPtyId = toAppSshPtyId('target-a', 'pty-stale-reattach')
+
     const pendingReattach = createDeferred<{
       id: string
       sessionExpired: true
       launchAgent: 'codex'
       launchConfig: { agentCommand: string; agentArgs: string; agentEnv: Record<string, string> }
     }>()
+
     const transport = createMockTransport(restoredPtyId)
     transport.connect.mockReturnValueOnce(pendingReattach.promise)
     transport.detach = vi.fn()
     transportFactoryQueue.push(transport)
+
     const pendingRetry = {
       attemptId: 'attempt-stale-reattach',
       authority: {
@@ -407,6 +429,7 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     const deps = createDeps()
     mockStoreState = {
       ...mockStoreState,
@@ -491,11 +514,13 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementationOnce(
       (options: { admitPtyId?: (ptyId: string) => boolean; callbacks?: ConnectCallbacks }) => {
         expect(options.admitPtyId?.(restoredPtyId)).toBe(true)
+
         return pendingReattach.promise
       }
     )
     transport.detach = vi.fn()
     transportFactoryQueue.push(transport)
+
     const pendingRetry = {
       attemptId: 'attempt-stale-empty-reattach',
       authority: {
@@ -506,6 +531,7 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     const deps = createDeps()
     mockStoreState = {
       ...mockStoreState,
@@ -546,6 +572,7 @@ describe('connectPanePty', () => {
     const connectOptions = transport.connect.mock.calls[0]?.[0] as {
       callbacks?: ConnectCallbacks
     }
+
     connectOptions.callbacks?.onError?.('stale reattach failure')
     connectOptions.callbacks?.onError?.('SSH_SESSION_EXPIRED: stale reattach')
     pendingReattach.resolve()
@@ -570,11 +597,13 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementationOnce(
       (options: { admitPtyId?: (ptyId: string) => boolean }) => {
         expect(options.admitPtyId?.(restoredPtyId)).toBe(true)
+
         return pendingReattach.promise
       }
     )
     transport.detach = vi.fn()
     transportFactoryQueue.push(transport)
+
     const pendingRetry = {
       attemptId: 'attempt-stale-rejected-reattach',
       authority: {
@@ -585,6 +614,7 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     const deps = createDeps()
     mockStoreState = {
       ...mockStoreState,
@@ -639,6 +669,7 @@ describe('connectPanePty', () => {
     const firstPtyId = toAppSshPtyId('target-a', 'pty-restored-first')
     const siblingPtyId = toAppSshPtyId('target-a', 'pty-restored-sibling')
     transportFactoryQueue.push(createMockTransport(firstPtyId), createMockTransport(siblingPtyId))
+
     const pendingRetry = {
       attemptId: 'attempt-split-reattach',
       authority: {
@@ -649,11 +680,14 @@ describe('connectPanePty', () => {
       tabGeneration: 7,
       startedAt: 1
     }
+
     const updateTabPtyId = createDirectSshSplitRetryCommit()
+
     const restoredPtyIdByLeafId = {
       [LEAF_1]: firstPtyId,
       [LEAF_2]: siblingPtyId
     }
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {

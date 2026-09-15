@@ -19,8 +19,11 @@ vi.mock('electron', () => ({
 }))
 
 const TARGET = 'ssh-1'
+
 const WORKTREE = 'repo1::/worktree'
+
 const TAB = 'tab-1'
+
 const OTHER_TAB = 'tab-moved-to'
 
 /**
@@ -184,6 +187,7 @@ describe('STA-3077: an SSH reattach binds panes without grafting them back', () 
 
     const { findTerminalTabIdForLeaf } =
       await import('./runtime/workspace-session-terminal-membership-authority')
+
     // The relay resolves the tab from the live layout before binding, exactly as the production
     // path does; forwarding the lease's frozen `TAB` here is what would strand the pane.
     const resolvedTabId = findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)
@@ -453,6 +457,7 @@ describe('STA-3077: `expired` separates a superseded sibling from an orphan', ()
     const store = await createStore()
     store.setWorkspaceSession(sessionWithPane({ tabId: TAB, leafId: TEST_LEAF_1, ptyId }))
     store.upsertSshRemotePtyLease({ ...paneLease, ptyId, state: 'attached' })
+
     return store
   }
 

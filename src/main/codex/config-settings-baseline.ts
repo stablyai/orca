@@ -46,15 +46,18 @@ export function observeCodexSettingsBaseline(
 ): CodexSettingsBaselineObservation {
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const baseline = readParsedCodexSettingsBaseline(baselinePath)
+
   if (baseline === 'unreadable') {
     return { kind: 'indeterminate' }
   }
+
   return baseline ? { kind: 'present', baseline } : { kind: 'absent' }
 }
 
 /** Absent and unreadable both collapse to `null`; use the observation to tell them apart. */
 export function readCodexSettingsBaseline(runtimeHomePath: string): CodexSettingsBaseline | null {
   const observation = observeCodexSettingsBaseline(runtimeHomePath)
+
   return observation.kind === 'present' ? observation.baseline : null
 }
 
@@ -63,15 +66,19 @@ function readParsedCodexSettingsBaseline(
 ): CodexSettingsBaseline | null | 'unreadable' {
   try {
     const parsed: unknown = readAgentStateJsonFileSync(baselinePath)
+
     if (!isStoredSettingsBaseline(parsed)) {
       return null
     }
+
     const settings = new Map(
       Object.entries(parsed.settings).filter((entry): entry is [string, string | null] => {
         return typeof entry[1] === 'string' || entry[1] === null
       })
     )
+
     const conflicts = new Map<string, CodexSettingsConflict>()
+
     for (const [key, conflict] of Object.entries(parsed.conflicts ?? {})) {
       if (
         conflict &&
@@ -81,6 +88,7 @@ function readParsedCodexSettingsBaseline(
         conflicts.set(key, conflict)
       }
     }
+
     return { settings, conflicts, registrations: readStoredRegistrations(parsed.registrations) }
   } catch (error) {
     // Why: invalid baseline state is still `null` — resetting it is the intent,
@@ -93,10 +101,12 @@ function readStoredRegistrations(
   stored: Record<string, Record<string, string>> | undefined
 ): Map<string, ReadonlyMap<string, string>> {
   const registrations = new Map<string, ReadonlyMap<string, string>>()
+
   for (const [key, fields] of Object.entries(stored ?? {})) {
     if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
       continue
     }
+
     registrations.set(
       key,
       new Map(
@@ -106,6 +116,7 @@ function readStoredRegistrations(
       )
     )
   }
+
   return registrations
 }
 
@@ -126,17 +137,21 @@ export function writeCodexSettingsBaseline(
     version: 3,
     settings: Object.fromEntries(baseline.settings)
   }
+
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)
   }
+
   if (baseline.registrations.size > 0) {
     file.registrations = Object.fromEntries(
       [...baseline.registrations].map(([key, fields]) => [key, Object.fromEntries(fields)])
     )
   }
+
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`
   let existing: string | null = null
+
   try {
     existing = readAgentStateFileSync(baselinePath)
   } catch (error) {
@@ -145,10 +160,12 @@ export function writeCodexSettingsBaseline(
       throw error
     }
   }
+
   // Why: launch prep runs repeatedly; byte-identical baselines should not churn disk metadata.
   if (existing === serialized) {
     return
   }
+
   writeFileSync(baselinePath, serialized, { encoding: 'utf-8', mode: 0o600 })
 }
 
@@ -160,7 +177,9 @@ function isStoredSettingsBaseline(value: unknown): value is StoredSettingsBaseli
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const candidate = value as Partial<StoredSettingsBaseline>
+
   return (
     (candidate.version === 1 || candidate.version === 2 || candidate.version === 3) &&
     !!candidate.settings &&

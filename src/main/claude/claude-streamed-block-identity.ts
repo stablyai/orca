@@ -37,10 +37,12 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
 
   const messageFor = (scope: string): StreamedMessage => {
     let streamed = messages.get(scope)
+
     if (!streamed) {
       streamed = { messageId: null, blocks: new Map(), awaitingFinal: [] }
       messages.set(scope, streamed)
     }
+
     return streamed
   }
 
@@ -53,6 +55,7 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
     const identity: AgentJournalItemIdentity = { provider: 'claude', sessionId, uuid }
     streamed.blocks.set(index, identity)
     streamed.awaitingFinal.push(identity)
+
     return identity
   }
 
@@ -61,48 +64,64 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
       const event = claudeRecord(frame.event)
       const sessionId = claudeText(frame.session_id)
       const uuid = claudeText(frame.uuid)
+
       if (frame.type !== 'stream_event' || !event || !sessionId || !uuid) {
         return null
       }
+
       const scope = scopeKey(sessionId, claudeText(frame.parent_tool_use_id))
+
       if (event.type === 'message_start') {
         messages.set(scope, {
           messageId: claudeText(claudeRecord(event.message)?.id),
           blocks: new Map(),
           awaitingFinal: []
         })
+
         return null
       }
+
       const index = typeof event.index === 'number' ? event.index : 0
+
       if (event.type === 'content_block_start') {
         const block = claudeRecord(event.content_block)
+
         if (block?.type !== 'text') {
           return null
         }
+
         const identity = mint(messageFor(scope), sessionId, index, uuid)
         const text = claudeText(block.text)
+
         return text ? { identity, text } : null
       }
+
       if (event.type !== 'content_block_delta') {
         return null
       }
+
       const delta = claudeRecord(event.delta)
       const text = delta?.type === 'text_delta' ? claudeText(delta.text) : null
+
       if (!text) {
         return null
       }
+
       const streamed = messageFor(scope)
       const identity = streamed.blocks.get(index) ?? mint(streamed, sessionId, index, uuid)
+
       return { identity, text }
     },
     reconcile: (frame) => {
       const streamed = messages.get(scopeKey(frame.sessionId, frame.parentToolUseId))
+
       if (
         !streamed ||
         (frame.messageId && streamed.messageId && frame.messageId !== streamed.messageId)
       ) {
         return null
       }
+
       return streamed.awaitingFinal.shift() ?? null
     },
     clear: () => messages.clear()

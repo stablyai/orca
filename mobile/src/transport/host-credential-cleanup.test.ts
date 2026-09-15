@@ -21,7 +21,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }))
 
 const PENDING_STORAGE_KEY = 'orca:pending-host-credential-cleanups'
+
 let storedPendingIds: string[]
+
 let readShouldFail = false
 
 async function flushMicrotasks(): Promise<void> {
@@ -41,9 +43,11 @@ describe('host credential cleanup', () => {
       if (key !== PENDING_STORAGE_KEY) {
         return null
       }
+
       if (readShouldFail) {
         throw new Error('async storage unavailable')
       }
+
       return JSON.stringify(storedPendingIds)
     })
     asyncStorageMock.setItem.mockImplementation(async (key: string, raw: string) => {
@@ -129,6 +133,7 @@ describe('host credential cleanup', () => {
   it('clears a timed-out pending entry when the native delete later succeeds', async () => {
     vi.useFakeTimers()
     let resolveDelete: (() => void) | null = null
+
     const deleteCredential = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -151,6 +156,7 @@ describe('host credential cleanup', () => {
 
   it('joins a concurrently observed delete instead of stacking native calls', async () => {
     let resolveDelete: (() => void) | null = null
+
     const deleteCredential = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -176,6 +182,7 @@ describe('host credential cleanup', () => {
 
   it('starts a fresh native attempt when the user retries after a timeout', async () => {
     vi.useFakeTimers()
+
     const deleteCredential = vi
       .fn()
       .mockImplementationOnce(() => new Promise<void>(() => undefined))
@@ -196,6 +203,7 @@ describe('host credential cleanup', () => {
 
   it('retries only on an explicit call and clears successful ids', async () => {
     storedPendingIds = ['host-1', 'host-2']
+
     const deleteCredential = vi
       .fn()
       .mockRejectedValueOnce(new Error('still unavailable'))
@@ -243,6 +251,7 @@ describe('host credential cleanup', () => {
 
   it('clears the fallback handle once the native delete finally succeeds', async () => {
     let resolveDelete: (() => void) | null = null
+
     const deleteCredential = vi.fn(
       () =>
         new Promise<void>((resolve) => {

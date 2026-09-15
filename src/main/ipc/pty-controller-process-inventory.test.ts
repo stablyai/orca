@@ -74,6 +74,7 @@ function createProvider(
   behavior: 'ok' | 'reject' = 'ok'
 ): { provider: IPtyProvider; calls: ListCall[] } {
   const calls: ListCall[] = []
+
   const provider = {
     onData: vi.fn().mockReturnValue(() => {}),
     onRejectedData: vi.fn().mockReturnValue(() => {}),
@@ -81,12 +82,15 @@ function createProvider(
     onExit: vi.fn().mockReturnValue(() => {}),
     listProcesses: vi.fn(async (opts?: { deadlineMs?: number }) => {
       calls.push({ opts })
+
       if (behavior === 'reject') {
         throw new Error('relay unreachable')
       }
+
       return sessions
     })
   } as unknown as IPtyProvider
+
   return { provider, calls }
 }
 
@@ -110,6 +114,7 @@ function captureController(): {
   handleMock.mockImplementation(() => {})
   onMock.mockImplementation(() => {})
   let controller: { listProcesses?: unknown } | undefined
+
   const runtime = {
     setPtyController: vi.fn((next: { listProcesses?: unknown }) => {
       controller = next
@@ -118,10 +123,13 @@ function captureController(): {
     registerPreAllocatedHandleForPty: vi.fn(),
     registerPty: vi.fn()
   }
+
   registerPtyHandlers(mainWindow as never, runtime as never)
+
   if (typeof controller?.listProcesses !== 'function') {
     throw new Error('PTY controller listProcesses was not registered')
   }
+
   return controller as never
 }
 

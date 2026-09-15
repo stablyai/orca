@@ -4,11 +4,14 @@ import { runtimeHostStatusFailure, type RuntimeHostStatusResponse } from './runt
 import type { RuntimeStatus } from './runtime-types'
 
 const owners: RuntimeHostStatusOwner[] = []
+
 beforeEach(() => vi.useFakeTimers())
+
 afterEach(() => {
   owners.splice(0).forEach((owner) => owner.dispose())
   vi.useRealTimers()
 })
+
 function success(runtimeId = 'host-1'): RuntimeHostStatusResponse & { ok: true } {
   return {
     id: 'status',
@@ -17,19 +20,25 @@ function success(runtimeId = 'host-1'): RuntimeHostStatusResponse & { ok: true }
     _meta: { runtimeId }
   }
 }
+
 function deferred() {
   let resolve!: (response: RuntimeHostStatusResponse) => void
+
   const promise = new Promise<RuntimeHostStatusResponse>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
+
 function createOwner(persistent = false) {
   const request = vi
     .fn<(signal: AbortSignal) => Promise<RuntimeHostStatusResponse>>()
     .mockResolvedValue(success())
+
   const publish = vi.fn()
   const verified = vi.fn((_response: RuntimeHostStatusResponse, _active: boolean) => persistent)
+
   const owner = new RuntimeHostStatusOwner({
     environmentId: 'env-a',
     pairingRevision: 1,
@@ -38,7 +47,9 @@ function createOwner(persistent = false) {
     publish,
     verified
   })
+
   owners.push(owner)
+
   return { owner, request, publish, verified }
 }
 

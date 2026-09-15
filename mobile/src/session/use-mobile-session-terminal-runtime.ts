@@ -36,6 +36,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     activeSessionTabId,
     keyboardHeight
   } = scope
+
   // Why: WebView pushes terminal modes on every change so paste reads a synchronous snapshot — no round-trip.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
   const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
@@ -58,14 +59,18 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
+
   const sessionTabActionSheetRequestSeqRef = useRef(0)
+
   const dictationRouteContextRef = useRef<{
     readonly handle: string | null
     readonly liveInputEnabled: boolean
   } | null>(null)
+
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   // Lease-only streams do not render, so reconciliation tracks them separately.
@@ -89,6 +94,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: route the terminal URL tap through a ref so it runs the current handleCreateBrowser closure (the memoized one may hold a null-client render).
   const handleCreateBrowserRef = useRef<((rawUrl?: string) => Promise<boolean>) | null>(null)
   const terminalInventoryRecoveryScope = JSON.stringify([hostId, worktreeId])
+
   const { registerTerminalInventoryRecoveryAction, signalTerminalInventoryRecovery } =
     useMobileTerminalInventoryRecoveryBridge(terminalInventoryRecoveryScope)
 
@@ -106,6 +112,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: sidebar resizes change the terminal frame width without a window-dim change; track it so the refit hook re-fits (see terminal-viewport-refit.ts).
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
+
   const {
     clearPendingLiveInputCommit,
     flushPendingLiveInputBeforeExternalSend,
@@ -126,14 +133,17 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
+
   const inputGate = resolveMobileTerminalInputGate({
     connState,
     activeHandle,
     activeSessionTabType: activeSessionTab?.type
   })
+
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+
   const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
@@ -145,12 +155,14 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     reopenFocusedInputWhenKeyboardHidden: Platform.OS === 'android',
     timerRef: liveInputFocusTimerRef
   })
+
   useFocusEffect(
     useCallback(() => {
       // Expo retains this route while pushed screens are visible.
       return resetLiveInputFocus
     }, [resetLiveInputFocus])
   )
+
   return {
     ptyModesRef,
     terminalGestureInputBucketsRef,

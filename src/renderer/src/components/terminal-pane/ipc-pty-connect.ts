@@ -45,22 +45,29 @@ export async function connectIpcPty(
   if (context.isDestroyed()) {
     return
   }
+
   if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
     if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
       return context.isDestroyed() ? undefined : { id: options.sessionId }
     }
+
     if (context.isDestroyed()) {
       return
     }
+
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
+
     if (context.isDestroyed()) {
       return
     }
+
     handlers.registerExit(options.sessionId)
+
     if (!context.isExpectedExitCurrent()) {
       return
     }
+
     return { id: options.sessionId, exitedBeforeAttach: true }
   }
 
@@ -68,26 +75,32 @@ export async function connectIpcPty(
     options.sessionId && !isPreHandlerPtyStateDiscarded(options.sessionId)
       ? options.sessionId
       : undefined
+
   if (admittedSessionId) {
     clearConsumedPreHandlerPtyExit(admittedSessionId)
   }
 
   try {
     const preSpawnBarrier = waitAtTerminalPtyPreSpawnE2EBarrier()
+
     if (preSpawnBarrier) {
       await preSpawnBarrier
+
       if (context.isDestroyed()) {
         return
       }
     }
+
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
+
     // Why read it before the request and not after: a redeployed SSH relay renumbers from pty-1, so
     // this spawn can be handed an id a dead PTY used to own. State dated at or below this fence was
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
+
     const retireFreshSpawn = async (): Promise<void> => {
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
       if (
@@ -101,20 +114,28 @@ export async function connectIpcPty(
 
     if (context.isDestroyed()) {
       await retireFreshSpawn()
+
       return
     }
+
     if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
       await retireFreshSpawn()
+
       return context.isDestroyed() ? undefined : spawnResult
     }
+
     if (context.isDestroyed()) {
       await retireFreshSpawn()
+
       return
     }
+
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
+
       if (context.isDestroyed()) {
         await retireFreshSpawn()
+
         return
       }
     }
@@ -123,49 +144,65 @@ export async function connectIpcPty(
     // reattach or cold restore — an exit naming a different incarnation of the id is not ours, so
     // it is safe to drop even for the reattach the fence below deliberately leaves alone.
     discardPreHandlerPtyExitFromForeignIncarnation(spawnResult.id, spawnResult.incarnationId)
+
     if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
       // Why only a fresh spawn: a reattach deliberately re-owns an id that already existed, so its
       // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
+
     context.bind(spawnResult.id)
+
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
+
       if (context.isDestroyed()) {
         return
       }
     }
+
     handlers.registerData(spawnResult.id)
+
     if (context.isDestroyed()) {
       return
     }
+
     const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
+
     if (exitedBeforeAttach) {
       if (!context.isExpectedExitCurrent()) {
         return
       }
+
       return { id: spawnResult.id, exitedBeforeAttach: true }
     }
+
     if (context.isDestroyed()) {
       return
     }
+
     if (!context.isCurrent(spawnResult.id)) {
       return
     }
 
     context.getCallbacks().onConnect?.()
+
     if (context.isDestroyed() || !context.isCurrent(spawnResult.id)) {
       return
     }
+
     context.getCallbacks().onStatus?.('shell')
+
     if (context.isDestroyed() || !context.isCurrent(spawnResult.id)) {
       return
     }
+
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
     if (context.isDestroyed()) {
       return
     }
+
     return handleConnectError(error, options, context)
   }
 }
@@ -176,16 +213,20 @@ function handleConnectError(
   context: IpcPtyConnectContext
 ): PtyConnectResult | undefined {
   const { connectionId } = context.transportOptions
+
   const message = extractIpcErrorMessage(
     error,
     error instanceof Error ? error.message : String(error)
   )
+
   if (connectionId && options.sessionId && isSshSessionGoneError(message)) {
     return { id: options.sessionId, sessionExpired: true }
   }
+
   if (message.includes('was explicitly killed')) {
     return undefined
   }
+
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {
     // Why not `sessionExpired`: this string is minted by `toRelaySshPtyId`/`toAppSshPtyId` from a
     // pure client-side id comparison, before any relay is contacted — it reports that the id is not
@@ -197,6 +238,7 @@ function handleConnectError(
     // to the remount-and-reattach recovery instead of a fresh shell.
     return undefined
   }
+
   if (connectionId && message.includes('No PTY provider for connection')) {
     if (!isRuntimeOwnedSshTargetId(connectionId)) {
       context
@@ -206,5 +248,6 @@ function handleConnectError(
   } else {
     context.getCallbacks().onError?.(message)
   }
+
   return undefined
 }

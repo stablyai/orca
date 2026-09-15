@@ -22,6 +22,7 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
     return async (record) => {
       const identity = record.lease.ownerProcess
       const head = record.providerHandleChain.at(-1)
+
       if (
         !identity ||
         !head ||
@@ -29,8 +30,10 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
       ) {
         throw new Error('agent_session_identity_required')
       }
+
       const provider = head.handle.provider
       const providerSessionId = provider === 'claude' ? head.handle.sessionId : head.handle.threadId
+
       let candidate = [...this.ptysById.values()].find(
         (pty) =>
           pty.connected &&
@@ -39,16 +42,21 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
           pty.tabId &&
           pty.paneKey
       )
+
       let handle = candidate ? this.issueStructuredTuiPtyHandle(candidate) : null
       let durableOwner: { binding: AgentSessionOwnerBinding; incarnationId: string } | undefined
+
       if (!candidate) {
         const workspace = await this.resolveTerminalWorkspaceLaunchScope(
           `id:${record.location.workspaceId}`
         )
+
         const baseNamespace = this.getAgentSessionExecutionNamespace(workspace, provider)
+
         if (!baseNamespace || !runtimeWorktreeIdsEqual(workspace.id, record.location.workspaceId)) {
           throw new Error('agent_session_identity_required')
         }
+
         const claim = this.agentSessionClaimSigner.createClaim({
           namespace: { ...baseNamespace, providerRoot: record.accountHome.path },
           identity: canonicalizeAgentSessionIdentity(provider, {
@@ -57,18 +65,23 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
           }),
           canonicalWorktreeId: workspace.id
         })
+
         const candidateEvaluations = [...this.ptysById.values()].flatMap((pty) =>
           pty.agentSessionOwners.map((owner) => {
             const session = this.getWorkspaceSessionForWorktree(owner.surface.worktreeId)
+
             const sessionWorktreeId = session
               ? resolveTerminalSessionWorktreeId(session, owner.surface.worktreeId)
               : null
+
             const persistedTab = sessionWorktreeId
               ? session?.tabsByWorktree[sessionWorktreeId]?.find(
                   (candidate) => candidate.id === owner.surface.tabId
                 )
               : null
+
             const paneKey = makePaneKey(owner.surface.tabId, owner.surface.leafId)
+
             const persisted = {
               sessionResolved: Boolean(session && sessionWorktreeId),
               tabPresent: Boolean(persistedTab),
@@ -78,6 +91,7 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
                 ] ?? null,
               incarnationId: session?.terminalPtyIncarnationsByPaneKey?.[paneKey] ?? null
             }
+
             const evaluation = evaluateStructuredTuiRecoveryClaim(
               {
                 expectedWorkspaceId: workspace.id,
@@ -93,13 +107,17 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
               },
               runtimeWorktreeIdsEqual
             )
+
             return { pty, owner, persisted, evaluation }
           })
         )
+
         const recoveredCandidates = candidateEvaluations
           .filter(({ evaluation }) => evaluation.matches)
           .map(({ pty, owner }) => ({ pty, owner }))
+
         const recovered = recoveredCandidates.length === 1 ? recoveredCandidates[0] : null
+
         if (!recovered) {
           console.warn('[structured-tui-recovery] claim mismatch', {
             sessionId: record.sessionId,
@@ -120,12 +138,14 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
             }))
           })
         }
+
         if (
           !recovered ||
           !(await this.proveRecoveredStructuredTuiPtyProcess(recovered.pty, identity, provider))
         ) {
           throw new Error('The owning agent terminal could not be recovered.')
         }
+
         candidate = recovered.pty
         candidate.tabId = recovered.owner.surface.tabId
         candidate.paneKey = makePaneKey(
@@ -134,6 +154,7 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
         )
         handle = this.issuePtyHandle(candidate)
         const recoveredIncarnationId = candidate.incarnationId
+
         if (handle && recoveredIncarnationId) {
           durableOwner = {
             binding: cloneAgentSessionOwnerBinding(recovered.owner),
@@ -141,10 +162,13 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
           }
         }
       }
+
       if (!candidate?.tabId || !candidate.paneKey || !handle) {
         throw new Error('The owning agent terminal could not be recovered.')
       }
+
       agentSessionPtyWriteGate.bindPty(candidate.ptyId, record.sessionId)
+
       const proof =
         provider === 'codex'
           ? durableOwner
@@ -170,6 +194,7 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
               previousLeafUuid: head.handle.leafUuid,
               projectsDir: join(record.accountHome.path, 'projects')
             })
+
       return {
         terminal: {
           handle,

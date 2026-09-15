@@ -31,6 +31,7 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
     repo,
     setConflictDetailsRefreshing
   } = model
+
   useEffect(() => {
     if (
       !repo ||
@@ -42,10 +43,12 @@ export function useChecksPanelConflictRefresh(model: ChecksPanelConflictRefreshI
     ) {
       conflictSummaryRefreshKeyRef.current = null
       setConflictDetailsRefreshing(false)
+
       return
     }
 
     const refreshKey = `${prCacheKey}::${branch}::${pr.number}`
+
     if (conflictSummaryRefreshKeyRef.current === refreshKey) {
       return
     }

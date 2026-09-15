@@ -71,10 +71,13 @@ export const ProjectHostSetupCreateIpcArgs = z.object({
     .min(1)
     .transform((value, ctx) => {
       const hostId = normalizeExecutionHostId(value)
+
       if (!hostId) {
         ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+
         return z.NEVER
       }
+
       return hostId
     }),
   setupId: z.string().min(1).optional(),
@@ -220,8 +223,10 @@ export function parseProjectGroupIpcArgs<T>(
   errorCode: string
 ): T {
   const result = schema.safeParse(value)
+
   if (result.success) {
     return result.data
   }
+
   throw new Error(errorCode)
 }

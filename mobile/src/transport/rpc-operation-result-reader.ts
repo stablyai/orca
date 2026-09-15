@@ -21,9 +21,11 @@ export function rpcResultVariant<Variant extends string, Schema extends z.ZodTyp
       // Why: zod-salvage holds module-level collector state and wraps a *synchronous*
       // parse only; safeParse throws on an async schema, which reads as incompatible.
       const parsed = collectSalvageDrops(() => schema.safeParse(raw))
+
       if (!parsed.value.success) {
         return { compatible: false, issues: decodeIssues(parsed.value.error) }
       }
+
       return {
         compatible: true,
         variant,
@@ -34,6 +36,7 @@ export function rpcResultVariant<Variant extends string, Schema extends z.ZodTyp
       return { compatible: false, issues: [{ path: '', message: describeThrow(error) }] }
     }
   }
+
   return Object.assign(read, { variant })
 }
 
@@ -46,15 +49,19 @@ export function rpcResultVariants<Variant extends string, Value>(
 ): RpcCompatibleReader<unknown, Variant, Value> {
   return (raw) => {
     const issues: RpcDecodeIssue[] = []
+
     for (const reader of readers) {
       const result = reader(raw)
+
       if (result.compatible) {
         return result
       }
+
       for (const issue of result.issues) {
         issues.push({ path: joinPath(reader.variant, issue.path), message: issue.message })
       }
     }
+
     return { compatible: false, issues: boundIssues(issues) }
   }
 }
@@ -74,6 +81,7 @@ function boundIssues(issues: readonly RpcDecodeIssue[]): RpcDecodeIssue[] {
   if (issues.length <= MAX_REPORTED_DECODE_ISSUES) {
     return [...issues]
   }
+
   return [
     ...issues.slice(0, MAX_REPORTED_DECODE_ISSUES),
     { path: '', message: `${issues.length - MAX_REPORTED_DECODE_ISSUES} further issues omitted` }

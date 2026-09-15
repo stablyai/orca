@@ -35,6 +35,7 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
+
     return getProjectSlug(repo.path, repoConnectionId(repo), ...hostedReviewOptionArgs(store, repo))
   })
 
@@ -49,6 +50,7 @@ export function registerGitLabHandlers(store: Store): void {
   // care about cwd because the endpoint is user-scoped.
   ipcMain.handle('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
+
     return listTodos(repo.path, repoConnectionId(repo), ...localGitOptionArgs(store, repo))
   })
 }

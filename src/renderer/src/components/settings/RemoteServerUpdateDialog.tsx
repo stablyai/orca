@@ -23,9 +23,11 @@ function versionDescription(entry: RemoteServerUpdateEntry): string {
   if (entry.currentVersion && entry.targetVersion && entry.currentVersion !== entry.targetVersion) {
     return `${entry.currentVersion} → ${entry.targetVersion}`
   }
+
   if (entry.currentVersion) {
     return `v${entry.currentVersion}`
   }
+
   return translate(
     'auto.components.settings.RemoteServerUpdateDialog.versionUnavailable',
     'Version unavailable'
@@ -36,15 +38,18 @@ function entryHelp(entry: RemoteServerUpdateEntry): string | null {
   if (entry.error) {
     return entry.error
   }
+
   if (entry.phase === 'manual') {
     return getRemoteServerManualUpdateHelp(entry)
   }
+
   if (entry.phase === 'restarting') {
     return translate(
       'auto.components.settings.RemoteServerUpdateDialog.restartingHelp',
       'Waiting for the replacement server to reconnect on the new version.'
     )
   }
+
   return null
 }
 
@@ -59,6 +64,7 @@ function ServerUpdateRow({
 }): React.JSX.Element {
   const canUpdate = entry.phase === 'available' || entry.phase === 'failed'
   const help = entryHelp(entry)
+
   return (
     <div className="space-y-2 px-3 py-3">
       <div className="flex items-start gap-3">
@@ -114,16 +120,20 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const start = useAppStore((state) => state.startRemoteServerUpdates)
+
   const eligible = entries.filter(
     (entry) => entry.phase === 'available' || entry.phase === 'failed'
   )
+
   const allCurrent =
     entries.length > 0 &&
     !checking &&
     !running &&
     entries.every((entry) => entry.phase === 'current' || entry.phase === 'updated')
+
   const liveTabCount = eligible.reduce((total, entry) => total + entry.liveTabCount, 0)
   const liveLeafCount = eligible.reduce((total, entry) => total + entry.liveLeafCount, 0)
+
   const liveTabLabel =
     liveTabCount === 1
       ? translate('auto.components.settings.RemoteServerUpdateDialog.liveTabOne', '1 live tab')
@@ -132,6 +142,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           '{{value0}} live tabs',
           { value0: liveTabCount }
         )
+
   const liveLeafLabel =
     liveLeafCount === 1
       ? translate('auto.components.settings.RemoteServerUpdateDialog.livePaneOne', '1 live pane')

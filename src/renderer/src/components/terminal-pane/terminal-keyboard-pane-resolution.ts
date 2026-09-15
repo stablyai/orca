@@ -9,10 +9,12 @@ export function resolveTerminalKeyboardPane(
     const focusedPane = manager
       .getPanes()
       .find((pane) => pane.terminal.element?.contains(target) === true)
+
     if (focusedPane) {
       return focusedPane
     }
   }
+
   return manager.getActivePane() ?? manager.getPanes()[0] ?? null
 }
 
@@ -21,8 +23,10 @@ export function synchronizeTerminalKeyboardPane(
   target: EventTarget | null
 ): ManagedPane | null {
   const pane = resolveTerminalKeyboardPane(manager, target)
+
   if (pane && manager.getActivePane()?.id !== pane.id) {
     manager.setActivePane(pane.id, { focus: false })
   }
+
   return pane
 }

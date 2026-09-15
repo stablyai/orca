@@ -36,6 +36,7 @@ export function getActiveSimulatorTabId({
   ) {
     return null
   }
+
   return activeGroupId
     ? (groups?.find((group) => group.id === activeGroupId)?.activeTabId ?? null)
     : null

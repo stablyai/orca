@@ -48,7 +48,9 @@ export function PullPolicyRemoteActionNotice({
     if (!copiedCommand) {
       return
     }
+
     const timeout = window.setTimeout(() => setCopiedCommand(null), 1400)
+
     return () => window.clearTimeout(timeout)
   }, [copiedCommand])
 
@@ -95,6 +97,7 @@ export function PullPolicyRemoteActionNotice({
             const copied = copiedCommand === option.command
             const label = translate(option.labelKey, option.labelFallback)
             const description = translate(option.descriptionKey, option.descriptionFallback)
+
             return (
               <div
                 key={option.command}

@@ -130,6 +130,7 @@ function makeDetected(
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -143,9 +144,11 @@ beforeEach(() => {
   mocks.state.updateRepo.mockImplementation(
     async (repoId: string, updates: Record<string, unknown>) => {
       const repo = (mocks.state.repos as Repo[]).find((candidate) => candidate.id === repoId)
+
       if (!repo) {
         return false
       }
+
       for (const [key, value] of Object.entries(updates)) {
         if (value === null) {
           delete (repo as unknown as Record<string, unknown>)[key]
@@ -153,6 +156,7 @@ beforeEach(() => {
           ;(repo as unknown as Record<string, unknown>)[key] = value
         }
       }
+
       return true
     }
   )
@@ -180,9 +184,11 @@ async function renderDialog(): Promise<void> {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -191,9 +197,11 @@ function buttonWithText(text: string): HTMLButtonElement {
   const button = [...document.querySelectorAll('button:not([data-visibility])')].find(
     (candidate) => (candidate.textContent ?? '').trim() === text
   )
+
   if (!button) {
     throw new Error(`No button with text "${text}"`)
   }
+
   return button as HTMLButtonElement
 }
 
@@ -201,9 +209,11 @@ function sourceSegment(label: string, visibility: 'show' | 'hide'): HTMLButtonEl
   const control = document.querySelector<HTMLButtonElement>(
     `[aria-label="Visibility for ${label}"] [data-visibility="${visibility}"]`
   )
+
   if (!control) {
     throw new Error(`No ${visibility} segment for ${label}`)
   }
+
   return control
 }
 
@@ -212,9 +222,11 @@ const sourceSwitch = (label = 'Claude Code'): HTMLButtonElement => sourceSegment
 
 function sourceRow(label: string): HTMLElement {
   const row = sourceSwitch(label).closest<HTMLElement>('[data-source-row]')
+
   if (!row) {
     throw new Error(`No ${label} source row`)
   }
+
   return row
 }
 
@@ -281,15 +293,18 @@ describe('WorktreeVisibilityDialog', () => {
         displayName: `scratch-${index}`
       })
     )
+
     mocks.state.detectedWorktreesByRepo = { 'repo-1': makeDetected(worktrees) }
 
     await renderDialog()
 
     expect(document.body.textContent).toContain('Hidden worktrees (500)')
     expect(document.querySelectorAll('ul > li').length).toBeLessThan(20)
+
     const search = document.querySelector<HTMLInputElement>(
       'input[aria-label="Search hidden worktrees"]'
     )
+
     expect(search).not.toBeNull()
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
@@ -373,6 +388,7 @@ describe('WorktreeVisibilityDialog', () => {
     // Why: a successful authoritative refetch also writes the trusted snapshot.
     mocks.state.fetchWorktrees.mockImplementation(async () => {
       mocks.state.detectedWorktreesByRepo = { 'repo-1': makeDetected() }
+
       return true
     })
     await click(buttonWithText('Try again'))
@@ -521,12 +537,14 @@ describe('WorktreeVisibilityDialog', () => {
     const update = deferred<boolean>()
     const localWorktree = makeWorktree({ hostId: 'local' })
     const remotePath = '/srv/repo/.claude/worktrees/remote-scratch'
+
     const remoteWorktree = makeWorktree({
       id: `repo-1::${remotePath}`,
       path: remotePath,
       displayName: 'remote-scratch',
       hostId: 'runtime:env-1'
     })
+
     mocks.state.modalData = { repoId: 'repo-1', hostId: 'local' }
     mocks.state.repos = [
       makeRepo(),
@@ -647,6 +665,7 @@ describe('WorktreeVisibilityDialog', () => {
       (candidate) =>
         candidate.textContent === 'These sources have a global setting you can override here:'
     )
+
     expect(intro).not.toBeUndefined()
     expect(
       [...(intro?.nextElementSibling?.querySelectorAll('li') ?? [])].map((item) => item.textContent)
@@ -752,10 +771,12 @@ describe('WorktreeVisibilityDialog', () => {
         })
       })
     )
+
     const update = mocks.state.updateRepo.mock.calls.at(-1)?.[1] as {
       customWorktreeVisibilitySources: { id: string }[]
       worktreeVisibilitySourcePreferences: { custom: Record<string, string> }
     }
+
     expect(
       update.worktreeVisibilitySourcePreferences.custom[
         update.customWorktreeVisibilitySources[0]!.id
@@ -786,6 +807,7 @@ describe('WorktreeVisibilityDialog', () => {
       id: `source-${index}`,
       rootPath: `/srv/source-${index}`
     }))
+
     mocks.state.repos = [makeRepo({ customWorktreeVisibilitySources: existing })]
     await renderDialog()
     const input = document.querySelector<HTMLInputElement>('#custom-worktree-root')!
@@ -849,9 +871,11 @@ describe('WorktreeVisibilityDialog', () => {
     await renderDialog()
 
     expect(sourceSwitch('/srv/team-worktrees').getAttribute('aria-checked')).toBe('false')
+
     const remove = document.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove /srv/team-worktrees"]'
     )
+
     expect(remove).not.toBeNull()
     await click(remove!)
 
@@ -872,9 +896,11 @@ describe('WorktreeVisibilityDialog', () => {
       customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
       worktreeVisibilitySourcePreferences: { custom: { team: 'show' } }
     })
+
     mocks.state.repos = [repo]
     mocks.state.updateRepo.mockImplementation(async () => {
       repo.customWorktreeVisibilitySources = []
+
       return true
     })
     await renderDialog()

@@ -47,7 +47,9 @@ export const fsApi = {
       _event: Electron.IpcRendererEvent,
       payload: LocalLogTailChangedPayload
     ): void => callback(payload)
+
     ipcRenderer.on('fs:localLogTailChanged', listener)
+
     return () => ipcRenderer.removeListener('fs:localLogTailChanged', listener)
   },
   downloadFile: (args: {
@@ -180,7 +182,9 @@ export const fsApi = {
   onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: FsChangedPayload) =>
       callback(payload)
+
     ipcRenderer.on('fs:changed', listener)
+
     return () => ipcRenderer.removeListener('fs:changed', listener)
   }
 } satisfies PreloadApi['fs']

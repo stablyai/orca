@@ -35,14 +35,18 @@ export function computeBrowserFrameGeometry(
   if (!layout || layout.width <= 0 || layout.height <= 0) {
     return null
   }
+
   const sourceWidth = getPositiveFiniteNumber(metadata?.deviceWidth) ?? layout.width
   const sourceHeight = getPositiveFiniteNumber(metadata?.deviceHeight) ?? layout.height
   const scale = Math.min(layout.width / sourceWidth, layout.height / sourceHeight)
+
   if (!Number.isFinite(scale) || scale <= 0) {
     return null
   }
+
   const renderedWidth = sourceWidth * scale
   const renderedHeight = sourceHeight * scale
+
   return {
     sourceWidth,
     sourceHeight,
@@ -64,13 +68,16 @@ export function mapScreenToBrowserPoint(
   zoom: BrowserZoomState
 ): BrowserPoint | null {
   const geometry = computeBrowserFrameGeometry(layout, metadata)
+
   if (!geometry || zoom.scale <= 0) {
     return null
   }
+
   const frameCenterX = geometry.offsetX + geometry.renderedWidth / 2 + zoom.offsetX
   const frameCenterY = geometry.offsetY + geometry.renderedHeight / 2 + zoom.offsetY
   const localX = (x - frameCenterX) / zoom.scale + geometry.renderedWidth / 2
   const localY = (y - frameCenterY) / zoom.scale + geometry.renderedHeight / 2
+
   if (
     localX < 0 ||
     localY < 0 ||
@@ -79,6 +86,7 @@ export function mapScreenToBrowserPoint(
   ) {
     return null
   }
+
   return {
     x: clamp(
       Math.round((localX / geometry.renderedWidth) * geometry.sourceWidth),
@@ -101,9 +109,11 @@ export function computeBrowserTouchClickRadiusCss(
 ): number {
   const geometry = computeBrowserFrameGeometry(layout, metadata)
   const scale = geometry ? geometry.scale * zoom.scale : 1
+
   if (!Number.isFinite(scale) || scale <= 0) {
     return 10
   }
+
   // Why: phone taps are finger-sized while CDP clicks are pixel exact. Convert a
   // small screen radius back into page CSS pixels so tiny links remain hittable.
   return clamp(Math.round(touchRadiusDip / scale), 6, 48)
@@ -116,11 +126,14 @@ export function clampBrowserZoomState(
   maxZoom: number
 ): BrowserZoomState {
   const scale = clamp(next.scale, minZoom, maxZoom)
+
   if (scale <= minZoom + 0.01) {
     return { scale: minZoom, offsetX: 0, offsetY: 0 }
   }
+
   const maxOffsetX = Math.max(0, (geometry.renderedWidth * scale - geometry.viewportWidth) / 2)
   const maxOffsetY = Math.max(0, (geometry.renderedHeight * scale - geometry.viewportHeight) / 2)
+
   return {
     scale,
     offsetX: clamp(next.offsetX, -maxOffsetX, maxOffsetX),
@@ -132,10 +145,12 @@ export function readLocalTouchPoint(touch: unknown): BrowserPoint | null {
   if (!touch || typeof touch !== 'object') {
     return null
   }
+
   const eventTouch = touch as {
     locationX?: unknown
     locationY?: unknown
   }
+
   if (
     typeof eventTouch.locationX !== 'number' ||
     !Number.isFinite(eventTouch.locationX) ||
@@ -144,6 +159,7 @@ export function readLocalTouchPoint(touch: unknown): BrowserPoint | null {
   ) {
     return null
   }
+
   return { x: eventTouch.locationX, y: eventTouch.locationY }
 }
 

@@ -22,7 +22,9 @@ function acquireReuseDispatchTab(tabId: string): (() => void) | null {
   if (activeReuseDispatchTabIds.has(tabId)) {
     return null
   }
+
   activeReuseDispatchTabIds.add(tabId)
+
   return () => activeReuseDispatchTabIds.delete(tabId)
 }
 
@@ -37,23 +39,29 @@ export async function handleAutomationDispatchRequest({
     // here would arrive second and invalidate every host in the catalog.
     await window.api.automations.markDispatchResult(result)
   }
+
   const state = useAppStore.getState()
+
   const focusBeforeDispatch = {
     activeView: state.activeView,
     activeWorktreeId: state.activeWorktreeId,
     activeTabId: state.activeTabId,
     activeTabType: state.activeTabType
   }
+
   const resolved = resolveAutomationDispatchWorkspace(state, automation, run)
   let terminalOwnership: AutomationTerminalOwnership | null = null
+
   const releaseTerminalOwnership = (): void => {
     const ownership = terminalOwnership
     terminalOwnership = null
     ownership?.release()
   }
+
   const finalizeTerminalOwnership = (): boolean => {
     const ownership = terminalOwnership
     terminalOwnership = null
+
     return ownership?.finalize() ?? false
   }
 
@@ -68,6 +76,7 @@ export async function handleAutomationDispatchRequest({
         'The target project is no longer available.'
       )
     })
+
     return
   }
 
@@ -80,9 +89,11 @@ export async function handleAutomationDispatchRequest({
       resolved: { ...resolved, repo: resolved.repo },
       markDispatchResult
     })
+
     if (!worktree) {
       return
     }
+
     const completion = createAutomationDispatchCompletion({
       run,
       worktree,
@@ -91,7 +102,9 @@ export async function handleAutomationDispatchRequest({
       releaseTerminalOwnership,
       finalizeTerminalOwnership
     })
+
     const dispatchStartedAt = Date.now()
+
     if (automation.reuseSession) {
       const reusableSession = findReusableAutomationSession({
         automationId: automation.id,
@@ -103,29 +116,37 @@ export async function handleAutomationDispatchRequest({
         runs: await listAutomationRunsForTarget({ kind: 'local' }, automation.id),
         state: useAppStore.getState()
       })
+
       if (reusableSession) {
         const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
+
         if (releaseTab) {
           completion.setReuseDispatchTabRelease(releaseTab)
+
           try {
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
               content: automation.prompt
             })
+
             if (!submitted) {
               completion.cleanupRunObservers()
             } else {
               let reuseSawWorking = false
+
               const handleReusableAgentStatus = (payload: { state: string }): void => {
                 if (payload.state === 'working') {
                   reuseSawWorking = true
+
                   return
                 }
+
                 if (payload.state === 'done' && reuseSawWorking) {
                   completion.handleAgentDone()
                 }
               }
+
               const reuseCompletionStartedAt = Date.now()
               completion.setSessionObserver(
                 await observeExistingAutomationSession({
@@ -155,6 +176,7 @@ export async function handleAutomationDispatchRequest({
                 error: null
               })
               await completion.settlePendingAfterDispatch()
+
               return
             }
           } catch (error) {
@@ -164,6 +186,7 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
+
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
@@ -173,27 +196,34 @@ export async function handleAutomationDispatchRequest({
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)
+
         // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
         if (payload.state !== 'done' || payload.sessionBoundary === true) {
           return
         }
+
         completion.handleAgentDone()
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)
       }
     })
+
     if (!result) {
       throw new Error('Unable to build an agent launch plan.')
     }
+
     terminalOwnership = result.terminalOwnership
+
     if (automation.reuseSession) {
       // Why: the first fresh launch is the seed for later reuse and must
       // survive completion under the same policy as an already-reused tab.
       releaseTerminalOwnership()
     }
+
     const launchedTabId = result.tabId
     completion.observeAgentStatus(result.paneKey, dispatchStartedAt)
+
     try {
       await markDispatchResult({
         runId: run.id,
@@ -211,7 +241,9 @@ export async function handleAutomationDispatchRequest({
       completion.cleanupRunObservers()
       throw error
     }
+
     const currentState = useAppStore.getState()
+
     // Why: Run Now and scheduled dispatches should create workspaces/tabs in
     // the background; only an explicit row click should navigate there.
     if (
@@ -220,9 +252,11 @@ export async function handleAutomationDispatchRequest({
     ) {
       currentState.setActiveView(focusBeforeDispatch.activeView)
       currentState.setActiveWorktree(focusBeforeDispatch.activeWorktreeId)
+
       if (focusBeforeDispatch.activeTabId) {
         currentState.setActiveTab(focusBeforeDispatch.activeTabId)
       }
+
       currentState.setActiveTabType(focusBeforeDispatch.activeTabType)
     }
   } catch (error) {

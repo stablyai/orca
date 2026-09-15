@@ -17,6 +17,7 @@ describe('ComputerProviderLifecycle', () => {
   it('rechecks macOS provider availability after an initial miss', () => {
     const macProvider = provider('mac')
     const shouldUseMacOSNativeProvider = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+
     const lifecycle = new ComputerProviderLifecycle({
       shouldUseMacOSNativeProvider,
       createMacOSNativeProvider: vi.fn(() => macProvider as never),
@@ -32,6 +33,7 @@ describe('ComputerProviderLifecycle', () => {
   it('caches an available provider and shuts it down', () => {
     const macProvider = provider('mac')
     const createMacOSNativeProvider = vi.fn(() => macProvider as never)
+
     const lifecycle = new ComputerProviderLifecycle({
       shouldUseMacOSNativeProvider: vi.fn(() => true),
       createMacOSNativeProvider,
@@ -50,6 +52,7 @@ describe('ComputerProviderLifecycle', () => {
 
   it('uses the desktop script provider on Linux when available', () => {
     const desktopProvider = provider('desktop')
+
     const lifecycle = new ComputerProviderLifecycle({
       shouldUseMacOSNativeProvider: vi.fn(() => false),
       createMacOSNativeProvider: vi.fn(),
@@ -62,6 +65,7 @@ describe('ComputerProviderLifecycle', () => {
 
   it('shuts down the desktop script provider', () => {
     const desktopProvider = provider('desktop')
+
     const lifecycle = new ComputerProviderLifecycle({
       shouldUseMacOSNativeProvider: vi.fn(() => false),
       createMacOSNativeProvider: vi.fn(),

@@ -168,9 +168,11 @@ test('restore all refits non-focused restored terminal panes', async ({
   const ptyIds = await waitForVisiblePanePtyIds(orcaPage, 2)
   const focusPtyId = await waitForActivePanePtyId(orcaPage)
   const inactivePtyId = ptyIds.find((ptyId) => ptyId !== focusPtyId)
+
   if (!inactivePtyId || !focusPtyId) {
     throw new Error('Expected two visible terminal panes with PTY bindings')
   }
+
   await installRestoreTerminalFitAutoRestoreRecorder(electronApp)
 
   await sendHeldPhoneFitIpc(electronApp, { ptyId: inactivePtyId, cols: 45, rows: 20 })
@@ -204,10 +206,13 @@ test('restore all recovers a hidden workspace held at narrow terminal geometry',
 }) => {
   await waitForSessionReady(orcaPage)
   const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
   const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
     (worktreeId) => worktreeId !== firstWorktreeId
   )
+
   test.skip(!secondWorktreeId, 'hidden-workspace restore repro needs the seeded secondary worktree')
+
   if (!secondWorktreeId) {
     return
   }
@@ -269,6 +274,7 @@ async function sendMobileSubscribeIpc(
 ): Promise<void> {
   await electronApp.evaluate(({ BrowserWindow }, payload) => {
     const wins = BrowserWindow.getAllWindows()
+
     for (const win of wins) {
       win.webContents.send('runtime:terminalFitOverrideChanged', {
         ptyId: payload.ptyId,
@@ -290,6 +296,7 @@ async function sendHeldPhoneFitIpc(
 ): Promise<void> {
   await electronApp.evaluate(({ BrowserWindow }, payload) => {
     const wins = BrowserWindow.getAllWindows()
+
     for (const win of wins) {
       win.webContents.send('runtime:terminalFitOverrideChanged', {
         ptyId: payload.ptyId,
@@ -311,6 +318,7 @@ async function sendDesktopRestoreIpc(
 ): Promise<void> {
   await electronApp.evaluate(({ BrowserWindow }, payload) => {
     const wins = BrowserWindow.getAllWindows()
+
     for (const win of wins) {
       win.webContents.send('runtime:terminalFitOverrideChanged', {
         ptyId: payload.ptyId,
@@ -331,6 +339,7 @@ async function installRestoreTerminalFitRecorder(electronApp: ElectronApplicatio
     const testGlobal = globalThis as typeof globalThis & {
       __mobileBannerRestoreCalls?: string[]
     }
+
     testGlobal.__mobileBannerRestoreCalls = []
     // Why: the renderer state is driven by production IPC events in this spec,
     // so the runtime has no real mobile subscriber to reclaim. Replace only the
@@ -339,6 +348,7 @@ async function installRestoreTerminalFitRecorder(electronApp: ElectronApplicatio
     ipcMain.removeHandler('runtime:restoreTerminalFit')
     ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
       testGlobal.__mobileBannerRestoreCalls?.push(args.ptyId)
+
       return { restored: true }
     })
   })
@@ -351,12 +361,14 @@ async function installRestoreTerminalFitAutoRestoreRecorder(
     const testGlobal = globalThis as typeof globalThis & {
       __mobileBannerRestoreCalls?: string[]
     }
+
     testGlobal.__mobileBannerRestoreCalls = []
     // Why: the production restore path sets desktop control after clearing the
     // fit override, so this harness mirrors both renderer-facing events.
     ipcMain.removeHandler('runtime:restoreTerminalFit')
     ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
       testGlobal.__mobileBannerRestoreCalls?.push(args.ptyId)
+
       for (const win of BrowserWindow.getAllWindows()) {
         win.webContents.send('runtime:terminalFitOverrideChanged', {
           ptyId: args.ptyId,
@@ -369,6 +381,7 @@ async function installRestoreTerminalFitAutoRestoreRecorder(
           driver: { kind: 'desktop' }
         })
       }
+
       return { restored: true }
     })
   })
@@ -423,10 +436,12 @@ async function waitForVisiblePanePtyIds(page: Page, expectedCount: number): Prom
           const state = window.__store?.getState()
           const tabId = state?.activeTabId
           const manager = tabId ? window.__paneManagers?.get(tabId) : null
+
           return (manager?.getPanes?.() ?? [])
             .map((pane) => pane.container?.dataset?.ptyId ?? null)
             .filter((ptyId): ptyId is string => Boolean(ptyId))
         })
+
         return ptyIds.length
       },
       {
@@ -435,6 +450,7 @@ async function waitForVisiblePanePtyIds(page: Page, expectedCount: number): Prom
       }
     )
     .toBe(expectedCount)
+
   return ptyIds
 }
 
@@ -444,12 +460,15 @@ async function forcePaneToOneColumn(page: Page, ptyId: string): Promise<void> {
       const pane = manager
         .getPanes?.()
         .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
+
       if (pane) {
         pane.terminal.resize(1, Math.max(8, pane.terminal.rows))
         pane.terminal.refresh(0, pane.terminal.rows - 1)
+
         return
       }
     }
+
     throw new Error(`No pane found for PTY ${targetPtyId}`)
   }, ptyId)
 }
@@ -465,15 +484,18 @@ async function forcePaneToOneColumnAndSwitchWorktree(
         const pane = manager
           .getPanes?.()
           .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
+
         if (pane) {
           // Why: the repro needs the desktop surface to inherit a phone-sized
           // xterm layout after the workspace is no longer visible.
           pane.terminal.resize(1, Math.max(8, pane.terminal.rows))
           pane.terminal.refresh(0, pane.terminal.rows - 1)
           window.__store?.getState().setActiveWorktree(targetWorktreeId)
+
           return
         }
       }
+
       throw new Error(`No pane found for PTY ${targetPtyId}`)
     },
     { targetPtyId: ptyId, targetWorktreeId: worktreeId }
@@ -486,10 +508,12 @@ async function getPaneTerminalCols(page: Page, ptyId: string): Promise<number> {
       const pane = manager
         .getPanes?.()
         .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
+
       if (pane) {
         return pane.terminal.cols
       }
     }
+
     return 0
   }, ptyId)
 }
@@ -502,23 +526,31 @@ async function expectExpandedOverlayLeavesPaneReadable(page: Page, ptyId: string
           const pane = Array.from(document.querySelectorAll<HTMLElement>('[data-pty-id]')).find(
             (node) => node.dataset.ptyId === targetPtyId
           )
+
           const overlay = document.querySelector<HTMLElement>('.mobile-driver-banner')
+
           if (!pane || !overlay) {
             return false
           }
+
           const style = getComputedStyle(overlay)
+
           const hasTransparentBackground =
             style.backgroundColor === 'rgba(0, 0, 0, 0)' || style.backgroundColor === 'transparent'
+
           const webkitBackdropFilter = (
             style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
           ).webkitBackdropFilter
+
           const hasNoBackdropFilter =
             (style.backdropFilter === 'none' || style.backdropFilter === '') &&
             (webkitBackdropFilter === undefined ||
               webkitBackdropFilter === '' ||
               webkitBackdropFilter === 'none')
+
           const paneBox = pane.getBoundingClientRect()
           const overlayBox = overlay.getBoundingClientRect()
+
           return (
             hasTransparentBackground &&
             hasNoBackdropFilter &&
@@ -541,14 +573,18 @@ async function expectChipIsCompactInPane(page: Page, ptyId: string): Promise<voi
           const pane = Array.from(document.querySelectorAll<HTMLElement>('[data-pty-id]')).find(
             (node) => node.dataset.ptyId === targetPtyId
           )
+
           const chip = document.querySelector<HTMLElement>('.mobile-driver-banner')
+
           if (!pane || !chip) {
             return false
           }
+
           const paneBox = pane.getBoundingClientRect()
           const chipBox = chip.getBoundingClientRect()
           const rightInset = paneBox.right - chipBox.right
           const topInset = chipBox.top - paneBox.top
+
           return (
             chipBox.width < paneBox.width * 0.6 &&
             chipBox.height <= 40 &&

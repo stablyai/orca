@@ -8,6 +8,7 @@ function pngBase64(width = 1, height = 1): string {
   bytes.write('IHDR', 12, 'ascii')
   bytes.writeUInt32BE(width, 16)
   bytes.writeUInt32BE(height, 20)
+
   return bytes.toString('base64')
 }
 

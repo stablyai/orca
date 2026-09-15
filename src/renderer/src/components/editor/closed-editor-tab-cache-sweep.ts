@@ -14,6 +14,7 @@ export function deletePaneScopedCacheEntries<T>(
   }
 
   const ownerSet = new Set(owners)
+
   for (const key of cache.keys()) {
     if (hasPaneScopeOwner(key, ownerSet)) {
       cache.delete(key)
@@ -49,5 +50,6 @@ export function sweepClosedPdfViewPositions(
   for (const filePath of filePaths) {
     cache.delete(`${filePath}:pdf`)
   }
+
   deletePaneScopedCacheEntries(cache, filePaths)
 }

@@ -15,6 +15,7 @@ export function opencodeDiscoveries(
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
   const storageDirs = opencodeStorageDirs(options, wslHomeDirs)
+
   return storageDirs.map(async (storageDir, index) =>
     discoverOpenCodeSessions({
       storageDir,
@@ -45,16 +46,20 @@ async function opencodeDbPathsForSource(
   if (options.opencodeDbPaths) {
     return sourceIndex === 0 ? options.opencodeDbPaths : []
   }
+
   // Why: custom OpenCode storage roots still keep SQLite DBs in the parent data dir.
   if (sourceIndex === 0 && options.opencodeStorageDir) {
     return listOpenCodeDatabasesInDirectory(dirname(storageDir), issues)
   }
+
   if (sourceIndex === 0) {
     return listOpenCodeDatabases((path, error) => {
       recordSessionScanIssue(issues, { agent: 'opencode', path, message: error.message })
     })
   }
+
   const wslHomeDir = wslHomeDirs[sourceIndex - 1]
+
   return wslHomeDir
     ? listOpenCodeDatabasesInDirectory(join(wslHomeDir, '.local', 'share', 'opencode'), issues)
     : []
@@ -66,6 +71,7 @@ async function listOpenCodeDatabasesInDirectory(
 ): Promise<string[]> {
   try {
     const entries = await wslGatedReaddir(dataDir, 'scan')
+
     return entries
       .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
       .map((entry) => join(dataDir, entry.name))
@@ -80,6 +86,7 @@ async function listOpenCodeDatabasesInDirectory(
         message: error.message
       })
     }
+
     return []
   }
 }

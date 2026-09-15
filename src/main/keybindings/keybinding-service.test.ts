@@ -19,6 +19,7 @@ import { KeybindingService } from './keybinding-service'
 // the swap, on every platform and every customization state.
 
 const PLATFORMS: NodeJS.Platform[] = ['darwin', 'linux', 'win32']
+
 const SWAPPED_ACTIONS = Object.keys(LEGACY_TAB_SWITCH_BINDINGS) as KeybindingActionId[]
 
 function makeCohort(pending: boolean): {
@@ -27,6 +28,7 @@ function makeCohort(pending: boolean): {
 } {
   let stillPending = pending
   let didSeed = false
+
   return {
     controller: {
       isPending: () => stillPending,
@@ -48,6 +50,7 @@ function bracketPress(opts: {
   platform: NodeJS.Platform
 }): KeybindingInput {
   const isMac = opts.platform === 'darwin'
+
   return {
     code: opts.code,
     key: opts.code === 'BracketRight' ? ']' : '[',
@@ -73,6 +76,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     'fresh install (%s) adopts the swapped defaults and writes no file',
     (platform) => {
       const cohort = makeCohort(false)
+
       const service = new KeybindingService({
         homePath: home,
         platform,
@@ -115,6 +119,7 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     'existing install (%s) keeps the pre-swap chords exactly, on a clean profile',
     (platform) => {
       const cohort = makeCohort(true)
+
       const service = new KeybindingService({
         homePath: home,
         platform,
@@ -157,11 +162,13 @@ describe('KeybindingService tab-switch cohort seeding', () => {
     writeKeybindingOverride(getUserKeybindingsPath(home), platform, 'tab.nextSameType', ['Mod+K'])
 
     const cohort = makeCohort(true)
+
     const service = new KeybindingService({
       homePath: home,
       platform,
       legacyTabSwitchSeed: cohort.controller
     })
+
     const overrides = service.getOverrides()
 
     // Their custom binding is untouched...
@@ -184,11 +191,13 @@ describe('KeybindingService tab-switch cohort seeding', () => {
   it('is idempotent: a second launch after the seed changes nothing', () => {
     const platform: NodeJS.Platform = 'linux'
     const cohort = makeCohort(true)
+
     const first = new KeybindingService({
       homePath: home,
       platform,
       legacyTabSwitchSeed: cohort.controller
     })
+
     const afterFirst = first.getOverrides()
 
     // Same cohort controller: markSeeded flipped it to not-pending, mirroring the
@@ -198,7 +207,9 @@ describe('KeybindingService tab-switch cohort seeding', () => {
       platform,
       legacyTabSwitchSeed: cohort.controller
     })
+
     expect(second.getOverrides()).toEqual(afterFirst)
+
     for (const actionId of SWAPPED_ACTIONS) {
       expect(getEffectiveKeybindingsForAction(actionId, platform, second.getOverrides())).toEqual(
         LEGACY_TAB_SWITCH_BINDINGS[actionId]

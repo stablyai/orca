@@ -10,6 +10,7 @@ import {
 import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
+
 const API_TIMEOUT_MS = 15_000
 
 // Server-function hash for the workspaces endpoint — stable identifier used by
@@ -25,19 +26,23 @@ const AUTH_COOKIE_NAMES = new Set(['auth', '__Host-auth'])
 // silent failure where the cookie looks non-empty but contains no auth name.
 export function normalizeCookieInput(raw: string): string {
   const trimmed = raw.trim()
+
   if (!trimmed) {
     return trimmed
   }
+
   // Already a valid cookie header: has multiple pairs or starts with known name.
   if (trimmed.includes(';') || /^(?:auth|__Host-auth)=/i.test(trimmed)) {
     return trimmed
   }
+
   // Only wrap if it looks like an Iron Session seal (starts with Fe26.2**)
   // or a reasonably structured bare token (alphanumeric with dots/dashes).
   // Otherwise, leave it alone to fail predictably instead of sending malformed auth.
   if (trimmed.startsWith('Fe26.2**') || /^[a-zA-Z0-9.\-_]+$/.test(trimmed)) {
     return `auth=${trimmed}`
   }
+
   return trimmed
 }
 
@@ -47,11 +52,14 @@ function parseAuthCookies(raw: string): { name: string; value: string }[] {
     .map((p) => p.trim())
     .map((pair) => {
       const eq = pair.indexOf('=')
+
       if (eq === -1) {
         return null
       }
+
       const name = pair.slice(0, eq).trim()
       const value = pair.slice(eq + 1).trim()
+
       return AUTH_COOKIE_NAMES.has(name) && value ? { name, value } : null
     })
     .filter((pair): pair is { name: string; value: string } => pair !== null)
@@ -64,12 +72,15 @@ function parseWorkspaceIds(text: string): string[] {
   // object properties that might match a generic ID pattern.
   const ids: string[] = []
   const workspaceIdRegex = /\bid\s*:\s*["']((?:wrk|wk)_[a-zA-Z0-9]+)["']/g
+
   for (const match of text.matchAll(workspaceIdRegex)) {
     const id = match[1]
+
     if (id && !ids.includes(id)) {
       ids.push(id)
     }
   }
+
   return ids
 }
 
@@ -108,6 +119,7 @@ export async function fetchOpenCodeGoRateLimits(
 
   // Filter to only auth cookies — avoids sending unrelated session data.
   const authCookies = parseAuthCookies(normalizedCookie)
+
   if (authCookies.length === 0) {
     return {
       provider: 'opencode-go',
@@ -123,6 +135,7 @@ export async function fetchOpenCodeGoRateLimits(
   // Why: Chromium can reject a manually supplied Cookie header on Windows.
   // An isolated session jar lets its network stack attach auth normally.
   let openCodeSession: Session
+
   try {
     openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
   } catch (error) {
@@ -170,6 +183,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
         status: 'error'
       }
     }
+
     ids = [override]
   } else {
     try {
@@ -177,6 +191,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       // and X-Server-Id / X-Server-Instance headers for routing.
       const instanceId = `server-fn:${randomUUID()}`
       const workspacesUrl = `${OPENCODE_SERVER_URL}?id=${WORKSPACES_SERVER_ID}`
+
       const workspacesRes = await openCodeSession.fetch(workspacesUrl, {
         method: 'GET',
         headers: {
@@ -205,6 +220,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
       ids = parseWorkspaceIds(workspacesText)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
+
       return {
         provider: 'opencode-go',
         session: null,
@@ -233,9 +249,11 @@ async function fetchOpenCodeGoRateLimitsWithSession(
   // and valid usage data. Each candidate gets its own timeout so a slow or
   // hung candidate cannot starve the rest.
   let lastError = ''
+
   for (const candidateId of ids) {
     try {
       const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${candidateId}/go`
+
       const pageRes = await openCodeSession.fetch(usagePageUrl, {
         method: 'GET',
         headers: {
@@ -253,6 +271,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
 
       const pageText = await pageRes.text()
       const parsed = parseSubscriptionFromPageText(pageText)
+
       if (parsed) {
         const monthly =
           parsed.monthlyUsagePercent !== null && parsed.monthlyResetInSec !== null
@@ -269,6 +288,7 @@ async function fetchOpenCodeGoRateLimitsWithSession(
           status: 'ok'
         }
       }
+
       lastError = 'Could not parse usage data from page'
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'

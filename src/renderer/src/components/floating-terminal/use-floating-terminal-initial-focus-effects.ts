@@ -20,6 +20,7 @@ export function useFloatingTerminalInitialFocusEffects({
     if (!open || !activeTerminalId) {
       return
     }
+
     focusTerminalTabSurface(activeTerminalId, null, {
       onImeRefocusSkipped: (active) => reportFloatingFocus(active),
       refreshImeContext: true
@@ -30,6 +31,7 @@ export function useFloatingTerminalInitialFocusEffects({
     if (!open || hasVisibleFloatingTabs) {
       return
     }
+
     panelRef.current?.focus({ preventScroll: true })
   }, [hasVisibleFloatingTabs, open, panelRef])
 }

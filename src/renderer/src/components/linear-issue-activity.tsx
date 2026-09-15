@@ -21,7 +21,9 @@ function LinearIssueAvatar({
   if (avatarUrl) {
     return <img src={avatarUrl} alt={name ?? ''} className={`${className} shrink-0 rounded-full`} />
   }
+
   const initial = name?.trim().charAt(0).toUpperCase() || '?'
+
   return (
     <span
       className={`${className} flex shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground`}

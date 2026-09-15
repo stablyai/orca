@@ -40,37 +40,45 @@ async function commitDeviceToken(hostId: string, token: string): Promise<void> {
 
 // Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
 const tokenCache = new Map<string, string>()
+
 // Why: serialize host metadata RMW so concurrent writers cannot drop updates.
 let hostListMutation: Promise<void> = Promise.resolve()
 
 export const loadHosts = async (): Promise<HostProfile[]> => (await loadHostListSnapshot()).profiles
+
 export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 
 async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
   // Why: writers hold the mutation chain across their full RMW; wait so a load doesn't race a half-written list.
   await hostListMutation
+
   // Why: deduplicate concurrent loadHosts() calls so simultaneously mounting screens share one Keychain read pass.
   return hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
 }
 
 async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
   const storedHosts = await loadStoredHostProfiles()
+
   if (!storedHosts) {
     return { catalog: [], profiles: [] }
   }
+
   const overlayState = await loadMobileRelayHostOverlayState(
     new Set(storedHosts.map(({ id }) => id))
   )
+
   const orphanWriteRevisions = new Map(
     overlayState.orphanHostIds.map((hostId) => [hostId, getHostCredentialWriteRevision(hostId)])
   )
+
   await scheduleOrphanedMobileRelayCleanup({
     hostIds: overlayState.orphanHostIds,
     deleteCredential: (hostId) =>
       deleteUnpairedHostCredentials(hostId, orphanWriteRevisions.get(hostId) ?? 0),
     removeOverlay: removeOrphanOverlayIfUnpaired
   })
+
   return joinHostCatalogCredentials({
     storedHosts,
     overlays: overlayState.overlays,
@@ -88,6 +96,7 @@ export async function resolvePairingHostIdentity(
   await hostListMutation
   const hosts = await readStoredHostProfilesForMutation()
   const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
+
   return match
     ? { id: match.id, name: match.name }
     : { id: newHostId, name: getNextHostNameFromHosts(hosts) }
@@ -105,6 +114,7 @@ const deleteUnpairedHostCredentials = createUnpairedHostCredentialDeletion({
 
 function scheduleUnpairedHostCredentialCleanup(hostId: string): Promise<void> {
   const writeRevision = getHostCredentialWriteRevision(hostId)
+
   return scheduleHostCredentialCleanup(hostId, (id) =>
     deleteUnpairedHostCredentials(id, writeRevision)
   )
@@ -113,16 +123,19 @@ function scheduleUnpairedHostCredentialCleanup(hostId: string): Promise<void> {
 function cancelCleanupForStoredHost(hostId: string): void {
   const cancellation = hostListMutation.then(async () => {
     const hosts = await readStoredHostProfilesForMutation()
+
     if (hosts.some(({ id }) => id === hostId)) {
       // Register before later removals enqueue their intent, without blocking host loads on cleanup storage.
       void cancelPendingHostCredentialCleanup(hostId).catch(() => undefined)
     }
   })
+
   hostListMutation = cancellation.catch(() => {})
 }
 
 async function cancelCleanupForDurablyStoredHosts(hostIds: Iterable<string>): Promise<void> {
   const targets = [...hostIds]
+
   return enqueueHostListMutation(async () => {
     const storedIds = new Set((await readStoredHostProfilesForMutation()).map(({ id }) => id))
     await Promise.all(
@@ -136,12 +149,14 @@ async function cancelCleanupForDurablyStoredHosts(hostIds: Iterable<string>): Pr
 function enqueueHostListMutation(operation: () => Promise<void>): Promise<void> {
   const mutation = hostListMutation.then(operation)
   hostListMutation = mutation.catch(() => {})
+
   return mutation
 }
 
 function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
   return enqueueHostListMutation(async () => {
     const hosts = await readStoredHostProfilesForMutation()
+
     if (!hosts.some(({ id }) => id === hostId)) {
       await removeMobileRelayHostOverlay(hostId)
     }
@@ -173,15 +188,19 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   let updatedExistingHost = false
   let cleanupIntentRecordedBeforeMetadata = false
   let tokenCommittedBeforeMetadata = false
+
   try {
     await mutateStoredHosts(async (hosts) => {
       const index = hosts.findIndex((h) => h.id === stored.id)
+
       for (const candidate of hosts) {
         if (candidate.id !== stored.id && candidate.publicKeyB64 === stored.publicKeyB64) {
           duplicateHostIds.add(candidate.id)
         }
       }
+
       let next: StoredHostProfile[]
+
       if (index !== -1) {
         updatedExistingHost = true
         // Why: an authoritative save is the safe point to collapse pre-existing duplicate rows to the preserved host id.
@@ -194,23 +213,28 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
       } else {
         next = [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
       }
+
       if (duplicateHostIds.size > 0) {
         if (index === -1) {
           // Why: process death between the early token write and metadata publication must leave cleanup discoverable.
           await recordHostCredentialCleanupIntent(stored.id)
           cleanupIntentRecordedBeforeMetadata = true
         }
+
         for (const duplicateHostId of duplicateHostIds) {
           await recordHostCredentialCleanupIntent(duplicateHostId)
         }
+
         // Why: never remove the only usable same-key row until its replacement credential is durable.
         await commitDeviceToken(stored.id, validated.deviceToken)
         tokenCommittedBeforeMetadata = true
       }
+
       return next
     })
   } catch (error) {
     await cancelCleanupForDurablyStoredHosts(duplicateHostIds)
+
     if (cleanupIntentRecordedBeforeMetadata) {
       try {
         await scheduleUnpairedHostCredentialCleanup(stored.id)
@@ -218,14 +242,18 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         // The write-ahead cleanup intent remains available for retry.
       }
     }
+
     throw error
   }
+
   if (!tokenCommittedBeforeMetadata) {
     // Why: the catalog can now surface a failed token write for recovery instead of losing the host.
     await commitDeviceToken(stored.id, validated.deviceToken)
   }
+
   // Why: a later removal owns its cleanup intent; cancel only while this publication remains authoritative.
   cancelCleanupForStoredHost(stored.id)
+
   if (validated.endpoints) {
     await saveMobileRelayHostOverlay({
       v: 2,
@@ -236,15 +264,19 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     })
     hostListLoads.dropSharedHostListLoad()
   }
+
   const overlayRemovalIds = [...duplicateHostIds]
+
   if (!validated.endpoints && updatedExistingHost) {
     overlayRemovalIds.push(stored.id)
   }
+
   if (overlayRemovalIds.length > 0) {
     // Why: reusing an id for direct-only re-pairing must not retain routing metadata from the previous transport state.
     await removeMobileRelayHostOverlays(overlayRemovalIds)
     hostListLoads.dropSharedHostListLoad()
   }
+
   for (const duplicateHostId of duplicateHostIds) {
     try {
       await scheduleUnpairedHostCredentialCleanup(duplicateHostId)
@@ -256,6 +288,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
 
 export async function removeHost(hostId: string): Promise<void> {
   let cleanupIntentRecorded = false
+
   try {
     await mutateStoredHosts(async (hosts) => {
       try {
@@ -264,21 +297,26 @@ export async function removeHost(hostId: string): Promise<void> {
       } catch {
         // Removal remains authoritative when cleanup intent storage is unavailable.
       }
+
       return hosts.filter((h) => h.id !== hostId)
     })
   } catch (error) {
     if (cleanupIntentRecorded) {
       await cancelCleanupForDurablyStoredHosts([hostId])
     }
+
     throw error
   }
+
   tokenCache.delete(hostId)
+
   try {
     await removeMobileRelayHostOverlay(hostId)
     hostListLoads.dropSharedHostListLoad()
   } catch {
     // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
   }
+
   // Why: keychain delete can stall/reject; await only the durable cleanup intent so removeHost can't freeze the UI.
   try {
     await scheduleUnpairedHostCredentialCleanup(hostId)
@@ -304,15 +342,18 @@ export async function updateHostNameAndEndpoint(
 ): Promise<void> {
   await mutateStoredHosts((hosts) => {
     const index = hosts.findIndex((host) => host.id === hostId)
+
     if (index === -1) {
       throw new Error('Host not found')
     }
+
     const next = hosts.slice()
     next[index] = {
       ...next[index]!,
       ...(updates.name !== undefined ? { name: updates.name } : {}),
       ...(updates.endpoint !== undefined ? { endpoint: updates.endpoint } : {})
     }
+
     return next
   })
 }
@@ -321,11 +362,14 @@ export async function updateLastConnected(hostId: string): Promise<void> {
   try {
     await mutateStoredHosts((hosts) => {
       const index = hosts.findIndex((h) => h.id === hostId)
+
       if (index === -1) {
         return hosts
       }
+
       const next = hosts.slice()
       next[index] = { ...next[index]!, lastConnected: Date.now() }
+
       return next
     })
   } catch {

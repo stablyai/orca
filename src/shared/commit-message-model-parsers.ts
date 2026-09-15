@@ -31,11 +31,14 @@ export const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = [
 
 function uniqueModels(models: CommitMessageModel[]): CommitMessageModel[] {
   const seen = new Set<string>()
+
   return models.filter((model) => {
     if (!model.id || seen.has(model.id)) {
       return false
     }
+
     seen.add(model.id)
+
     return true
   })
 }
@@ -45,14 +48,17 @@ function* iterateModelOutputLines(output: string): Generator<string> {
 
   for (let index = 0; index < output.length; index++) {
     const code = output.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       continue
     }
 
     yield output.slice(lineStart, index)
+
     if (code === 13 && output.charCodeAt(index + 1) === 10) {
       index++
     }
+
     lineStart = index + 1
   }
 
@@ -75,6 +81,7 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
       const thinkingLevels = CLAUDE_THINKING_LEVELS.filter((level) =>
         model.effortLevels.includes(level.id)
       )
+
       return {
         id: model.id,
         label: model.label,
@@ -96,6 +103,7 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
     assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
+
     const parsed = JSON.parse(stdout) as {
       models?: {
         slug?: string
@@ -104,6 +112,7 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
         default_reasoning_level?: string
       }[]
     }
+
     return uniqueModels(
       (parsed.models ?? [])
         .filter((model) => model.slug && model.display_name)
@@ -131,24 +140,30 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
 
 export function parseLineModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
+
   for (const rawLine of iterateModelOutputLines(stdout)) {
     const id = rawLine.trim()
+
     if (id.length === 0 || id.includes(' ')) {
       continue
     }
+
     models.push({
       id,
       label: labelFromModelId(id),
       ...withOpenAiThinking(id)
     })
   }
+
   return uniqueModels(models)
 }
 
 export function parsePiModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
+
   for (const rawLine of iterateModelOutputLines(stdout)) {
     const parts = getPiModelTableFields(rawLine, 6)
+
     if (parts.length < 6 || parts[0] === 'provider') {
       continue
     }
@@ -172,6 +187,7 @@ export function parsePiModels(stdout: string): CommitMessageModel[] {
         : {})
     })
   }
+
   return uniqueModels(models)
 }
 
@@ -182,15 +198,19 @@ function getPiModelTableFields(line: string, maxFields: number): string[] {
 
   for (let index = 0; index <= line.length; index += 1) {
     const isEnd = index === line.length
+
     if (!isEnd && !isPiModelTableWhitespace(line.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
+
     if (tokenStart !== -1) {
       fields.push(line.slice(tokenStart, index))
       tokenStart = -1
+
       if (fields.length >= maxFields) {
         break
       }
@@ -218,31 +238,39 @@ function isPiModelTableWhitespace(code: number): boolean {
 
 export function parseCursorModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
+
   for (const rawLine of iterateModelOutputLines(stdout)) {
     const match = /^([^\s]+)\s+-\s+(.+)$/.exec(rawLine.trim())
+
     if (!match) {
       continue
     }
+
     models.push({
       id: match[1],
       label: match[2].replace(/\s+\((?:default|current)\)$/i, ''),
       ...withOpenAiThinking(match[1])
     })
   }
+
   return uniqueModels(models)
 }
 
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
+
   for (const rawLine of iterateModelOutputLines(stdout)) {
     const id = rawLine.trim()
+
     if (id.length === 0) {
       continue
     }
+
     models.push({
       id,
       label: id
     })
   }
+
   return uniqueModels(models)
 }

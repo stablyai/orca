@@ -8,6 +8,7 @@ import { ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT } from './editor-autosave'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 
 const storeState = vi.hoisted(() => ({ editorDrafts: {} as Record<string, string> }))
+
 const EMPTY_FILE_CONTENTS: Parameters<typeof useEditorCmdSaveRequest>[0]['fileContents'] = {}
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
@@ -34,6 +35,7 @@ function SaveProbe({
     handleSave: onSave,
     enabled
   })
+
   return null
 }
 
@@ -105,12 +107,14 @@ describe('useEditorCmdSaveRequest', () => {
 
   it('uses the preview tab for ownership and the source file for content', () => {
     const sourceFile = makeFile('source')
+
     const previewFile: OpenFile = {
       ...sourceFile,
       id: 'markdown-preview::source',
       markdownPreviewSourceFileId: sourceFile.id,
       mode: 'markdown-preview'
     }
+
     const save = vi.fn(async () => true)
     storeState.editorDrafts = { [sourceFile.id]: 'source draft' }
 

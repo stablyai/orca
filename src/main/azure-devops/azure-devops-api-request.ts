@@ -3,6 +3,7 @@ import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
+
 const DEFAULT_API_VERSION = '7.1'
 
 // Why (STA-3494): on-prem Azure DevOps Server rejects versioned requests without
@@ -23,6 +24,7 @@ export function azureDevOpsApiVersionForOrigin(
   requested?: string | number
 ): string {
   const version = String(requested ?? DEFAULT_API_VERSION)
+
   return previewApiVersionOrigins.has(origin) && !version.endsWith('-preview')
     ? `${version}-preview`
     : version
@@ -32,8 +34,10 @@ export function isAzureDevOpsPreviewVersionRejection(status: number | null, body
   if (status !== 400) {
     return false
   }
+
   try {
     const parsed = JSON.parse(body) as { typeKey?: unknown } | null
+
     return parsed?.typeKey === 'VssInvalidPreviewVersionException'
   } catch {
     return false
@@ -54,6 +58,7 @@ export type AzureDevOpsRequestOptions = {
 
 function envValue(name: string): string | null {
   const value = process.env[name]?.trim() ?? ''
+
   return value.length > 0 ? value : null
 }
 
@@ -81,10 +86,13 @@ function authHeaders(config: AzureDevOpsAuthConfig): Record<string, string> {
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
+
   if (config.pat) {
     const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
+
     return { Authorization: `Basic ${encoded}` }
   }
+
   return {}
 }
 
@@ -94,6 +102,7 @@ function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
     const descendantUrl = new URL(descendant)
     const ancestorPath = ancestorUrl.pathname.replace(/\/+$/, '')
     const descendantPath = descendantUrl.pathname.replace(/\/+$/, '')
+
     return (
       ancestorUrl.origin === descendantUrl.origin &&
       (ancestorPath === descendantPath || descendantPath.startsWith(`${ancestorPath}/`))
@@ -105,10 +114,13 @@ function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
 
 export function resolveAzureDevOpsGitApiBaseUrl(repo: AzureDevOpsRepoRef): string {
   const configured = getAzureDevOpsAuthConfig().apiBaseUrl
+
   if (!configured) {
     return repo.apiBaseUrl
   }
+
   const normalized = normalizeAzureDevOpsApiBaseUrl(configured)
+
   // Why (STA-3494): a configured collection ancestor is the auth-probe URL;
   // Git endpoints need the project-level base derived from the remote.
   return isUrlPathAncestor(normalized, repo.apiBaseUrl) ? repo.apiBaseUrl : normalized
@@ -120,13 +132,16 @@ function apiUrl(
   searchParams?: AzureDevOpsRequestOptions['searchParams']
 ): URL {
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
+
   const params = {
     ...searchParams,
     'api-version': azureDevOpsApiVersionForOrigin(url.origin, searchParams?.['api-version'])
   }
+
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, String(value))
   }
+
   return url
 }
 
@@ -135,11 +150,14 @@ async function shouldRetryWithPreviewApiVersion(url: URL, response: Response): P
   if (response.ok || response.status !== 400) {
     return false
   }
+
   if (url.searchParams.get('api-version')?.endsWith('-preview')) {
     return false
   }
+
   try {
     const body = (await response.json()) as { typeKey?: string | null } | null
+
     return body?.typeKey === 'VssInvalidPreviewVersionException'
   } catch {
     return false
@@ -156,6 +174,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   throwOnFailure = false
 ): Promise<T | null> {
   const config = getAzureDevOpsAuthConfig()
+
   const doFetch = (url: URL): Promise<Response> =>
     fetch(url, {
       headers: {
@@ -164,25 +183,32 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
+
   try {
     const url = apiUrl(baseUrl, path, options.searchParams)
     let response = await doFetch(url)
+
     if (await shouldRetryWithPreviewApiVersion(url, response)) {
       markAzureDevOpsPreviewApiVersionOrigin(url.origin)
       response = await doFetch(apiUrl(baseUrl, path, options.searchParams))
     }
+
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
+
       if (throwOnFailure) {
         throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
       }
+
       return null
     }
+
     return (await response.json()) as T
   } catch (error) {
     if (throwOnFailure) {
       throw error
     }
+
     return null
   }
 }

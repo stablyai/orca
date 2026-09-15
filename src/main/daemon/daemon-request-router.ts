@@ -32,15 +32,18 @@ export class DaemonRequestRouter {
 
   async route(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.options.connections.get(clientId)
+
     switch (request.type) {
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')
         }
+
         return {
           transferId: this.options.historySeedTransfers.start(clientId, request.payload)
         }
       }
+
       case 'appendHistorySeedTransfer':
         this.options.historySeedTransfers.append(
           clientId,
@@ -48,12 +51,15 @@ export class DaemonRequestRouter {
           request.payload.index,
           request.payload.data
         )
+
         return {}
       case 'finishHistorySeedTransfer':
         this.options.historySeedTransfers.finish(clientId, request.payload.transferId)
+
         return {}
       case 'abortHistorySeedTransfer':
         this.options.historySeedTransfers.abort(clientId, request.payload.transferId)
+
         return {}
       case 'createOrAttach':
         return this.options.admission.createOrAttach(clientId, request)
@@ -81,9 +87,11 @@ export class DaemonRequestRouter {
         )
       case 'pausePty':
         this.options.host.pauseProducer(request.payload.sessionId)
+
         return {}
       case 'resumePty':
         this.options.host.resumeProducer(request.payload.sessionId)
+
         return {}
       case 'setSessionBackground':
         return this.options.sessionBackgroundRouting.setBackground(
@@ -94,10 +102,12 @@ export class DaemonRequestRouter {
         return this.kill(clientId, request.payload.sessionId, request.payload.immediate)
       case 'signal':
         this.options.host.signal(request.payload.sessionId, request.payload.signal)
+
         return {}
       case 'detach':
         this.options.attachments.detachSessionForClient(request.payload.sessionId, clientId)
         this.options.log.log('session-detached', { sessionId: request.payload.sessionId })
+
         return {}
       case 'getCwd':
         return { cwd: await this.options.host.getCwd(request.payload.sessionId) }
@@ -112,10 +122,12 @@ export class DaemonRequestRouter {
             : {}),
           ...(request.payload.steadyState === true ? { steadyState: true } : {})
         }
+
         return Object.keys(options).length > 0
           ? this.options.host.inspectProcess(request.payload.sessionId, options)
           : this.options.host.inspectProcess(request.payload.sessionId)
       }
+
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.options.host.confirmForegroundProcess(
@@ -128,6 +140,7 @@ export class DaemonRequestRouter {
         }
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
+
         return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }
@@ -149,10 +162,12 @@ export class DaemonRequestRouter {
         return { health: await readCurrentProcessMacSystemResolverHealth() }
       case 'ptySpawnHealth':
         await this.options.ptySpawnHealthCheck()
+
         return { healthy: true }
       case 'shutdown':
         return this.shutdown(clientId, request.id, request.payload.killSessions)
     }
+
     throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
   }
 
@@ -166,11 +181,14 @@ export class DaemonRequestRouter {
       this.options.host.write(sessionId, data)
     } catch (error) {
       this.options.attachments.clearInput(sessionId)
+
       if (error instanceof SessionNotFoundError) {
         this.sendExitEvent(client, sessionId, -1)
       }
+
       throw error
     }
+
     return {}
   }
 
@@ -186,8 +204,10 @@ export class DaemonRequestRouter {
       if (error instanceof SessionNotFoundError) {
         this.sendExitEvent(client, sessionId, -1)
       }
+
       throw error
     }
+
     return {}
   }
 
@@ -199,6 +219,7 @@ export class DaemonRequestRouter {
     const canceledPendingSpawn = this.options.preparations.cancel(sessionId)
     this.options.attachments.clearInput(sessionId)
     const attribution = { sessionId, immediate: immediate === true, clientId }
+
     try {
       await this.options.host.kill(sessionId, { immediate })
     } catch (error) {
@@ -211,12 +232,15 @@ export class DaemonRequestRouter {
         throw error
       }
     }
+
     this.options.log.log('session-killed', attribution)
+
     return {}
   }
 
   private shutdownIfIdle(clientId: string, requestId: string): { retiring: boolean } {
     const client = this.options.connections.get(clientId)
+
     const retiring =
       client !== undefined &&
       client.streamSocket !== null &&
@@ -224,26 +248,32 @@ export class DaemonRequestRouter {
       this.options.admission.inFlight === 0 &&
       this.options.host.listSessions().length === 0 &&
       this.options.connections.hasOnlyTransportsFor(client)
+
     if (retiring) {
       this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)
     }
+
     return { retiring }
   }
 
   private async getSnapshot(sessionId: string, requestedRows: unknown): Promise<unknown> {
     const startedAt = performance.now()
+
     const scrollbackRows =
       typeof requestedRows === 'number' && Number.isFinite(requestedRows)
         ? Math.max(0, Math.min(50_000, Math.floor(requestedRows)))
         : undefined
+
     const snapshot = await this.options.host.getSettledSnapshot(sessionId, { scrollbackRows })
     const snapshotMs = performance.now() - startedAt
+
     if (snapshotMs >= 25) {
       recordDaemonStreamBacklogEvent('slowGetSnapshot', {
         sessionIdSuffix: sessionId.slice(-10),
         snapshotMs: Math.round(snapshotMs)
       })
     }
+
     return { snapshot }
   }
 
@@ -257,6 +287,7 @@ export class DaemonRequestRouter {
       killSessions: killSessions === true
     })
     const serverClose = this.options.lifecycle.beginOrdinaryShutdownFence()
+
     if (killSessions) {
       try {
         await this.options.host.dispose()
@@ -266,7 +297,9 @@ export class DaemonRequestRouter {
         })
       }
     }
+
     const controlSocket = this.options.connections.get(clientId)?.controlSocket
+
     if (controlSocket) {
       this.options.lifecycle.deferRpcShutdownUntilReply(
         clientId,
@@ -277,6 +310,7 @@ export class DaemonRequestRouter {
     } else {
       this.options.lifecycle.finishRpcShutdownWithoutReply(serverClose)
     }
+
     return {}
   }
 
@@ -288,6 +322,7 @@ export class DaemonRequestRouter {
     if (!client?.streamSocket) {
       return
     }
+
     this.options.streamDataBatcher.enqueueControlEvent(client.clientId, sessionId, {
       type: 'event',
       event: 'exit',

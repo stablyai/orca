@@ -16,6 +16,7 @@ export {
   insertTabAtRecentlyClosedPosition,
   restoreRecentlyClosedTabPosition
 } from './recently-closed-tab-position'
+
 export type {
   RecentlyClosedTabPosition,
   RecentlyClosedTabPositionIndex
@@ -35,6 +36,7 @@ export type ClosedTerminalTabSnapshot = {
 export type RecentlyClosedTabKind = 'terminal' | 'browser' | 'editor'
 
 const MAX_RECENT_CLOSED_TERMINAL_TABS = 10
+
 // Why: wider than the per-type stacks (10) so cross-type ordering survives a
 // full per-type stack; kind entries whose snapshot aged out are skipped on pop.
 const MAX_RECENT_CLOSED_TAB_KINDS = 30
@@ -63,9 +65,11 @@ export function pushRecentlyClosedTabKind(
   if (count <= 0) {
     return map ?? {}
   }
+
   // Why: close-all may contain thousands of editor tabs, but entries beyond
   // the retained history cap can never affect reopen ordering.
   const retainedCount = Math.min(count, MAX_RECENT_CLOSED_TAB_KINDS)
+
   return {
     ...map,
     [worktreeId]: [
@@ -84,18 +88,24 @@ export function remapClosedTerminalTabSnapshotCwds(
     if (!snapshot.startupCwd) {
       return snapshot
     }
+
     const relative = relativePathInsideRoot(oldWorktreePath, snapshot.startupCwd)
+
     if (relative === null) {
       return snapshot
     }
+
     if (!relative) {
       return { ...snapshot, startupCwd: newWorktreePath }
     }
+
     const useBackslash =
       isWindowsAbsolutePathLike(newWorktreePath) && newWorktreePath.includes('\\')
+
     const separator = useBackslash ? '\\' : '/'
     const base = newWorktreePath.replace(/[\\/]+$/g, '')
     const suffix = useBackslash ? relative.replace(/\//g, '\\') : relative
+
     return { ...snapshot, startupCwd: `${base}${separator}${suffix}` }
   })
 }
@@ -130,6 +140,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
     if (getExplicitRuntimeEnvironmentIdForWorktree(get(), worktreeId)?.trim()) {
       return false
     }
+
     // Why: read and pop atomically inside set() to prevent a TOCTOU race where
     // two rapid Cmd+Shift+T presses both restore the same entry (mirrors
     // reopenClosedBrowserTab).
@@ -137,9 +148,11 @@ export const createRecentlyClosedTabsSlice: StateCreator<
     set((s) => {
       const stack = s.recentlyClosedTerminalTabsByWorktree[worktreeId] ?? []
       snapshot = stack[0]
+
       if (!snapshot) {
         return s
       }
+
       return {
         recentlyClosedTerminalTabsByWorktree: {
           ...s.recentlyClosedTerminalTabsByWorktree,
@@ -147,6 +160,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
         }
       }
     })
+
     if (!snapshot) {
       return false
     }
@@ -155,14 +169,18 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       ...(snapshot.startupCwd ? { startupCwd: snapshot.startupCwd } : {}),
       activate: true
     })
+
     if (snapshot.customTitle) {
       get().setTabCustomTitle(tab.id, snapshot.customTitle)
     }
+
     if (snapshot.color) {
       get().setTabColor(tab.id, snapshot.color)
     }
+
     get().setActiveTabType('terminal')
     restoreRecentlyClosedTabPosition(get, worktreeId, tab.id, snapshot.position)
+
     return true
   },
 
@@ -176,9 +194,11 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       set((s) => {
         const kinds = s.recentlyClosedTabKindsByWorktree[worktreeId] ?? []
         kind = kinds[0]
+
         if (!kind) {
           return s
         }
+
         return {
           recentlyClosedTabKindsByWorktree: {
             ...s.recentlyClosedTabKindsByWorktree,
@@ -186,15 +206,18 @@ export const createRecentlyClosedTabsSlice: StateCreator<
           }
         }
       })
+
       if (!kind) {
         return false
       }
+
       const reopened =
         kind === 'terminal'
           ? get().reopenClosedTerminalTab(worktreeId)
           : kind === 'browser'
             ? get().reopenClosedBrowserTab(worktreeId) !== null
             : get().reopenClosedEditorTab(worktreeId)
+
       if (reopened) {
         return true
       }

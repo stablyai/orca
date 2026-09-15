@@ -86,6 +86,7 @@ describe('extractPartialEscapeTail', () => {
       ['\x1b] \x1b\x1b', '^'],
       ['\x1bPq\x1b\x1b', '[3']
     ]
+
     for (const [a, b] of cases) {
       expect(extractPartialEscapeTail(extractPartialEscapeTail(a) + b)).toBe(
         extractPartialEscapeTail(a + b)

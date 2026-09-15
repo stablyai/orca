@@ -36,8 +36,10 @@ export function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.flatMap((entry): string[] => {
     const str = readString(entry)
+
     return str === undefined ? [] : [str]
   })
 }
@@ -73,6 +75,7 @@ export function readReviewDecision(value: unknown): PRReviewDecision | null | un
   if (value === null) {
     return null
   }
+
   return value === 'APPROVED' || value === 'CHANGES_REQUESTED' || value === 'REVIEW_REQUIRED'
     ? value
     : undefined
@@ -101,10 +104,13 @@ export function readAssignableUser(value: unknown): GitHubAssignableUser | null 
   if (!isRecord(value)) {
     return null
   }
+
   const login = readString(value.login)
+
   if (login === undefined) {
     return null
   }
+
   return {
     login,
     name: readString(value.name) ?? null,
@@ -116,8 +122,10 @@ export function readAssignableUserArray(value: unknown): GitHubAssignableUser[] 
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.flatMap((entry): GitHubAssignableUser[] => {
     const parsed = readAssignableUser(entry)
+
     return parsed ? [parsed] : []
   })
 }
@@ -126,19 +134,24 @@ export function readReviewSummary(value: unknown): GitHubPRReviewSummary | null 
   if (!isRecord(value)) {
     return null
   }
+
   // Desktop maps latestReviews to top-level `login`. Raw `gh pr view --json`
   // keeps nested `author.login` — accept both so mobile never drops reviewers.
   const nestedAuthor = isRecord(value.author) ? value.author : null
+
   const login =
     readString(value.login) ?? (nestedAuthor ? readString(nestedAuthor.login) : undefined)
+
   if (login === undefined) {
     return null
   }
+
   const avatarUrl =
     readString(value.avatarUrl) ??
     (nestedAuthor
       ? (readString(nestedAuthor.avatarUrl) ?? readString(nestedAuthor.avatar_url) ?? null)
       : null)
+
   return {
     login,
     state: readString(value.state) ?? null,
@@ -150,15 +163,19 @@ export function readRepoIdentity(value: unknown): GitHubRepositoryIdentity | und
   if (!isRecord(value)) {
     return undefined
   }
+
   const owner = readString(value.owner)
   const repo = readString(value.repo)
+
   // Empty owner/repo is malformed, not a valid identity — drop it before it reaches prRepo parsing.
   if (!owner || !repo) {
     return undefined
   }
+
   // Why: dropping `host` here would strip the GHES identity before every
   // subsequent PR RPC, forcing the host to re-derive it per call.
   const host = readString(value.host)
+
   return { owner, repo, ...(host ? { host } : {}) }
 }
 
@@ -170,11 +187,15 @@ export function readMergeMethodSettings(value: unknown): GitHubPRMergeMethodSett
   if (!isRecord(value)) {
     return undefined
   }
+
   const defaultMethod = readMergeMethod(value.defaultMethod)
+
   if (defaultMethod === undefined || !isRecord(value.allowedMethods)) {
     return undefined
   }
+
   const allowed = value.allowedMethods
+
   return {
     defaultMethod,
     allowedMethods: {
@@ -189,7 +210,9 @@ export function readCheckSummary(value: unknown): ProviderCheckSummary | undefin
   if (!isRecord(value)) {
     return undefined
   }
+
   const state = value.state
+
   if (
     state !== 'success' &&
     state !== 'failure' &&
@@ -199,6 +222,7 @@ export function readCheckSummary(value: unknown): ProviderCheckSummary | undefin
   ) {
     return undefined
   }
+
   return {
     state,
     total: readNumber(value.total) ?? 0,

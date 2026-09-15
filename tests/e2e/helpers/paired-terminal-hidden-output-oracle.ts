@@ -14,9 +14,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -50,14 +52,17 @@ export async function verifyHiddenPairedTerminalOutputSuppression(
         __terminalOutputSchedulerDebug?: { reset: () => void }
       }
     ).__terminalOutputSchedulerDebug
+
     if (!debug) {
       throw new Error('Terminal output scheduler debug API is unavailable')
     }
+
     debug.reset()
   })
 
   const lagProbe = await startRendererLagProbe(page)
   const tokens = terminals.map((_, index) => `HIDDEN_FLOOD_${index}_${Date.now()}`)
+
   try {
     await Promise.all(
       terminals.map((terminal, index) =>
@@ -79,6 +84,7 @@ export async function verifyHiddenPairedTerminalOutputSuppression(
                 'terminal.read',
                 { terminal: terminal.terminal, limit: 1_000 }
               )
+
               return result.terminal.tail.join('\n').includes(`FLOODED:${tokens[index]}`)
             })
           ),
@@ -86,6 +92,7 @@ export async function verifyHiddenPairedTerminalOutputSuppression(
       )
       .toEqual(Array(terminals.length).fill(true))
     const hiddenFloodLagMs = await lagProbe.evaluate((probe) => probe.stop())
+
     const scheduler = await page.evaluate(
       () =>
         (
@@ -100,6 +107,7 @@ export async function verifyHiddenPairedTerminalOutputSuppression(
           }
         ).__terminalOutputSchedulerDebug?.snapshot() ?? null
     )
+
     expect(scheduler).not.toBeNull()
     expect(scheduler?.backgroundEnqueueCount).toBe(0)
     expect(scheduler?.scheduledDrainCount).toBe(0)
@@ -109,5 +117,6 @@ export async function verifyHiddenPairedTerminalOutputSuppression(
     await lagProbe.evaluate((probe) => probe.stop()).catch(() => undefined)
     await lagProbe.dispose()
   }
+
   return tokens
 }

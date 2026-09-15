@@ -77,19 +77,23 @@ export async function runSourceControlAgentActionStart({
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
+
   const notifyLaunchAccepted = (): void => {
     if (launchAcceptedNotified) {
       return
     }
+
     launchAcceptedNotified = true
     onLaunchAccepted?.()
   }
+
   if (onStart) {
     launched = await onStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
       agentArgs
     })
+
     if (launched) {
       notifyLaunchAccepted()
     }
@@ -104,15 +108,19 @@ export async function runSourceControlAgentActionStart({
       launchPlatform,
       launchSource
     })
+
     launched = Boolean(result)
+
     if (result?.tabId) {
       focusTerminalTabSurface(result.tabId)
     }
+
     // Why: lets callers park launch-scoped state before submit-after-ready finishes
     // (can take tens of seconds); host mutations still wait for delivery below.
     if (launched) {
       notifyLaunchAccepted()
     }
+
     if (result?.promptDeliveryResult) {
       try {
         const deliveryResult = await result.promptDeliveryResult
@@ -124,10 +132,12 @@ export async function runSourceControlAgentActionStart({
       }
     }
   }
+
   if (!launched) {
     if (launchAcceptedNotified) {
       onLaunchAborted?.()
     }
+
     if (!launchFailureNotified) {
       toast.error(
         translate(
@@ -136,15 +146,18 @@ export async function runSourceControlAgentActionStart({
         )
       )
     }
+
     return false
   }
 
   const saveTarget = resolveSourceControlAgentSaveTarget(saveTargetValue, repoId)
+
   const launchRecipe = {
     agentId: selectedAgent,
     commandInputTemplate: commandTemplate,
     agentArgs
   }
+
   const launchRecipeAlreadySaved = Boolean(
     saveTarget &&
     sourceControlActionRecipeMatchesTarget({
@@ -155,6 +168,7 @@ export async function runSourceControlAgentActionStart({
       repo
     })
   )
+
   if (saveTarget && onSaveAgentDefault && !launchRecipeAlreadySaved) {
     try {
       await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
@@ -164,7 +178,9 @@ export async function runSourceControlAgentActionStart({
       console.error('onSaveAgentDefault failed', error)
     }
   }
+
   onLaunched?.()
   onClose()
+
   return true
 }

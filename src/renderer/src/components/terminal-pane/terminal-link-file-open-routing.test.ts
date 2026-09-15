@@ -11,7 +11,9 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
+
 const doubles = createTerminalLinkTestDoubles()
+
 const {
   storeState,
   deps,

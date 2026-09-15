@@ -25,6 +25,7 @@ export function renderMobileTasksLinearViewPicker(model: ConnectionPresentationM
     showLinearViewPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showLinearViewPicker}
@@ -45,6 +46,7 @@ export function renderMobileTasksLinearGroupPicker(model: ConnectionPresentation
     showLinearGroupPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showLinearGroupPicker}
@@ -65,6 +67,7 @@ export function renderMobileTasksLinearOrderPicker(model: ConnectionPresentation
     showLinearOrderPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showLinearOrderPicker}
@@ -86,6 +89,7 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
     showLinearDisplayPicker,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showLinearDisplayPicker}
@@ -97,6 +101,7 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
       <View style={styles.repoPickerGroup}>
         {LINEAR_DISPLAY_OPTIONS.map((property, index) => {
           const selected = effectiveLinearDisplayProperties.has(property.value)
+
           return (
             <View key={property.value}>
               {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -106,13 +111,16 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
                   if (property.value === 'team') {
                     setLinearTeamPropertyTouched(true)
                   }
+
                   setLinearDisplayProperties((current) => {
                     const next = new Set(current)
+
                     if (next.has(property.value)) {
                       next.delete(property.value)
                     } else {
                       next.add(property.value)
                     }
+
                     return next
                   })
                 }}
@@ -132,6 +140,7 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
 
 export function renderMobileTasksSortPicker(model: ConnectionPresentationModel) {
   const { setShowSortPicker, setTaskSort, showSortPicker, taskSort, taskUiReady } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showSortPicker}

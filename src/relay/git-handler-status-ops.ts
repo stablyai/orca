@@ -33,36 +33,43 @@ import { buildBranchLineTotalInput } from './git-status-branch-line-total'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
+
   try {
     const contents = await readFile(dotGitPath, 'utf-8')
     const match = contents.match(/^gitdir:\s*(.+)\s*$/m)
+
     if (match) {
       return path.resolve(worktreePath, match[1])
     }
   } catch {
     // .git is a directory, not a file
   }
+
   return dotGitPath
 }
 
 export async function detectConflictOperation(worktreePath: string): Promise<string> {
   const gitDir = await resolveGitDir(worktreePath)
+
   try {
     if (existsSync(path.join(gitDir, 'MERGE_HEAD'))) {
       return 'merge'
     }
+
     if (
       existsSync(path.join(gitDir, 'rebase-merge')) ||
       existsSync(path.join(gitDir, 'rebase-apply'))
     ) {
       return 'rebase'
     }
+
     if (existsSync(path.join(gitDir, 'CHERRY_PICK_HEAD'))) {
       return 'cherry-pick'
     }
   } catch {
     // fs error — treat as no conflict operation
   }
+
   return 'unknown'
 }
 
@@ -84,16 +91,21 @@ export async function getStatusOp(
 }> {
   const worktreePath = params.worktreePath as string
   const lineStatsCacheKey = `relay\0${worktreePath}`
+
   const lineStatsWriteToken =
     params.includeLineStats === false ? null : beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
+
   const includeIgnored = params.includeIgnored === true
+
   // Why: untrusted RPC input spliced into a git argv — only an OID shape may pass.
   const branchLineTotalMergeBase = readGitBranchLineTotalMergeBaseParam(
     params.branchLineTotalMergeBase
   )
+
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
   const limit = resolveGitStatusLimit(params.limit)
   const conflictPromise = detectConflictOperation(worktreePath)
+
   // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
   const statusArgs = [
     '-c',
@@ -103,25 +115,31 @@ export async function getStatusOp(
     '--branch',
     '--untracked-files=all'
   ]
+
   if (includeIgnored) {
     statusArgs.push('--ignored=matching')
   }
+
   // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
   const statusSettlementPromise = Promise.allSettled([
     (async () => {
       const parser = new StatusPorcelainParser()
+
       const result = await streamGit(statusArgs, worktreePath, {
         // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
         disableOptionalLocks: true,
         signal: options.signal,
         onStdout: (chunk) => parser.update(chunk, limit)
       })
+
       if (!result.stoppedEarly) {
         parser.finish()
       }
+
       return { parser, stoppedEarly: result.stoppedEarly }
     })()
   ])
+
   const conflictOperation = await conflictPromise
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
@@ -135,9 +153,11 @@ export async function getStatusOp(
 
   try {
     const [statusResult] = await statusSettlementPromise
+
     if (statusResult.status === 'rejected') {
       throw statusResult.reason
     }
+
     const { parser, stoppedEarly } = statusResult.value
     head = parser.branch.head
     branch = parser.branch.branch
@@ -158,6 +178,7 @@ export async function getStatusOp(
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
         const branchName = getShortBranchName(branch)
+
         if (branchName) {
           try {
             // Why: one request's abort must not reject this shared status probe.
@@ -181,10 +202,12 @@ export async function getStatusOp(
       if (didHitLimit && entries.length >= limit) {
         break
       }
+
       if (record.type === 'entry') {
         entries.push(record.entry as Record<string, unknown>)
       } else {
         const entry = await parseUnmergedEntry(worktreePath, record.line)
+
         if (entry) {
           entries.push(entry)
         }
@@ -209,6 +232,7 @@ export async function getStatusOp(
       statusSucceeded ? branchLineTotalMergeBase : undefined,
       options.signal
     )
+
     // Why: passed in so the ranged diff runs alongside the per-area numstats, not after them.
     ;({ branchLineTotal } = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
@@ -255,12 +279,14 @@ async function runNumstat(
       worktreePath,
       { disableOptionalLocks: true, signal }
     )
+
     return parseNumstat(stdout)
   } catch (error) {
     // Why: an aborted pass must reject so a cancelled scan is never treated as completed.
     if (signal?.aborted) {
       throw error
     }
+
     // Why: null (vs an empty map) tells the caller the pass is incomplete and must not be cached.
     return null
   }
@@ -276,13 +302,16 @@ async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
+
   const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
+
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(git, worktreePath, true, signal) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(git, worktreePath, false, signal) : Promise.resolve(emptyStats),
     collectUntrackedAdditions(worktreePath, untrackedPaths, signal)
   ])
+
   for (const entry of entries) {
     const filePath = entry.path as string
     const area = entry.area
@@ -295,11 +324,13 @@ async function attachLineStats(
           : untrackedStats.get(filePath)
     )
   }
+
   return stagedStats !== null && unstagedStats !== null
 }
 
 function getShortBranchName(branch: string | undefined): string | null {
   const prefix = 'refs/heads/'
+
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
 }
 
@@ -308,12 +339,16 @@ function shouldProbeEffectiveUpstreamStatus(
   upstreamName: string | undefined
 ): boolean {
   const branchName = getShortBranchName(branch)
+
   if (!branchName) {
     return false
   }
+
   if (!upstreamName) {
     return true
   }
+
   const parsed = splitRemoteBranchName(upstreamName)
+
   return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
 }

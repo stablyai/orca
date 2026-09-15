@@ -23,6 +23,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'remote-runtime' }
       })
     }
+
     return Promise.resolve({
       id: 'browse',
       ok: true,

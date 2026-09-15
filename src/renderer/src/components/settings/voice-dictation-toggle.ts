@@ -33,14 +33,17 @@ export async function handleVoiceDictationToggle({
 
   if (voiceEnabled) {
     updateVoiceSettings({ enabled: false })
+
     return
   }
 
   setPermissionPending?.(true)
+
   try {
     // Why: enabling dictation is the point where users expect the macOS
     // microphone prompt, not after their first attempted recording fails.
     const result = await requestMicrophonePermission()
+
     if (result.status === 'granted' || result.status === 'unsupported') {
       updateVoiceSettings({ enabled: true })
     }

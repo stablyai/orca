@@ -56,11 +56,13 @@ export class MobileRelayE2eeLink {
     this.socket = (options.createSocket ?? ((url) => new WebSocket(url)))(
       relaySocketUrl(options.endpoint)
     )
+
     const session = MobileE2EEV2ClientSession.create({
       desktopPublicKeyB64: options.desktopPublicKeyB64,
       transport: 'relay',
       relayHostId: options.endpoint.relayHostId
     })
+
     this.channel = new MobileE2EEV2PhysicalChannel({
       session,
       socket: this.socket,
@@ -86,11 +88,14 @@ export class MobileRelayE2eeLink {
     if (this.closed) {
       return
     }
+
     this.closed = true
+
     if (this.transportErrorTimer) {
       clearTimeout(this.transportErrorTimer)
       this.transportErrorTimer = null
     }
+
     this.channel.dispose()
     this.socket.close()
   }
@@ -108,16 +113,20 @@ export class MobileRelayE2eeLink {
         )
       } catch (error) {
         this.fail(asError(error))
+
         return
       }
+
       this.options.onOpen?.()
     }
+
     this.socket.onmessage = (event) => {
       this.inboundChain = this.inboundChain
         .then(async () => {
           if (this.closed) {
             return
           }
+
           if (!this.outerReady) {
             this.acceptHello(event.data)
           } else {
@@ -126,6 +135,7 @@ export class MobileRelayE2eeLink {
         })
         .catch((error: unknown) => this.fail(asError(error)))
     }
+
     // `error` is often delivered just before `close`; wait for close so a
     // typed relay code is not replaced by a generic transport error.
     this.socket.onerror = () => {
@@ -134,16 +144,20 @@ export class MobileRelayE2eeLink {
         this.fail(new RelayOuterError(1006))
       }, RELAY_ERROR_CLOSE_GRACE_MS)
     }
+
     this.socket.onclose = (event) => {
       if (this.transportErrorTimer) {
         clearTimeout(this.transportErrorTimer)
         this.transportErrorTimer = null
       }
+
       // Ahead of fail(), which no-ops once the hello already reported this close.
       const hostCloseReason = relayHostCloseReasonFrom(event.reason)
+
       if (hostCloseReason) {
         this.options.onHostCloseReason?.(hostCloseReason)
       }
+
       this.fail(new RelayOuterError(event.code || 1006))
     }
   }
@@ -152,22 +166,29 @@ export class MobileRelayE2eeLink {
     if (typeof raw !== 'string') {
       throw new Error('expected plaintext relay hello')
     }
+
     let value: unknown
+
     try {
       value = JSON.parse(raw)
     } catch {
       throw new Error('invalid relay hello JSON')
     }
+
     const parsed = RelayPhoneHelloSchema.safeParse(value)
+
     if (!parsed.success) {
       throw new Error('invalid relay hello')
     }
+
     if (!parsed.data.ok) {
       throw new RelayOuterError(parsed.data.code)
     }
+
     if (parsed.data.credentialKind !== this.options.expectedCredentialKind) {
       throw new Error('relay credential resolved as an unexpected credential kind')
     }
+
     this.outerReady = true
     this.options.onHello?.(parsed.data)
     this.channel.start()
@@ -177,11 +198,14 @@ export class MobileRelayE2eeLink {
     if (this.closed) {
       return
     }
+
     this.closed = true
+
     if (this.transportErrorTimer) {
       clearTimeout(this.transportErrorTimer)
       this.transportErrorTimer = null
     }
+
     this.channel.dispose()
     this.options.onError(error)
     this.socket.close()
@@ -192,6 +216,7 @@ function relaySocketUrl(endpoint: { cellUrl: string; relayHostId: string }): str
   const url = new URL(endpoint.cellUrl)
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(endpoint.relayHostId)}`
+
   return url.toString()
 }
 

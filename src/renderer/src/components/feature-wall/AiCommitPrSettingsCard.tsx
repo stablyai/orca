@@ -7,6 +7,7 @@ import { useAiCommitPrSettings } from './useAiCommitPrSettings'
 
 export function AiCommitPrSettingsCard(): JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
+
   const {
     config,
     selectPortalRoot,

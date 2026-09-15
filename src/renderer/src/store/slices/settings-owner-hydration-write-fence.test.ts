@@ -85,10 +85,12 @@ it('publishes startup settings before remote owner hydration and local catalog w
   })
   const store = createTestStore()
   let localCatalogStarted = false
+
   const startup = (async () => {
     await store.getState().fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
     localCatalogStarted = true
   })()
+
   await vi.waitFor(() => expect(window.api.runtimeEnvironments.call).toHaveBeenCalled())
 
   expect(store.getState().settings?.activeRuntimeEnvironmentId).toBe('env-1')
@@ -151,17 +153,23 @@ it('waits for a replacement owner hydration before publishing remote rows', asyn
   let resolveReplacementSettingsRead!: (value: GlobalSettings) => void
   const firstOwnerRead = new Promise((resolve) => (resolveFirstOwnerRead = resolve))
   const secondOwnerRead = new Promise((resolve) => (resolveSecondOwnerRead = resolve))
+
   const replacementSettingsRead = new Promise<GlobalSettings>(
     (resolve) => (resolveReplacementSettingsRead = resolve)
   )
+
   let settingsCallCount = 0
+
   const runtimeCall = vi.fn(({ method }: { method: string }) => {
     if (method !== 'settings.get') {
       return Promise.reject(new Error('status unavailable'))
     }
+
     settingsCallCount += 1
+
     return settingsCallCount === 1 ? firstOwnerRead : secondOwnerRead
   })
+
   vi.stubGlobal('window', {
     api: {
       settings: {

@@ -30,6 +30,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -68,15 +69,19 @@ describe('OrcaRuntimeService', () => {
       activeWorktreeId: TEST_WORKTREE_ID,
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const writes: [string, string][] = []
     const resize = vi.fn(() => true)
+
     const processes = [
       ['pty-agent', 'inc-agent', 'term_agent', 'Agent'],
       ['pty-setup', 'inc-setup', 'term_setup', 'Setup'],
       ['pty-shell', 'inc-shell', 'term_shell', 'Shell']
     ] as const
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+
     const listProcesses = vi.fn(async () =>
       processes.map(([id, incarnationId, terminalHandle, title]) => ({
         id,
@@ -88,9 +93,11 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }))
     )
+
     runtime.setPtyController({
       write: (ptyId, data) => {
         writes.push([ptyId, data])
+
         return true
       },
       resize,
@@ -102,10 +109,12 @@ describe('OrcaRuntimeService', () => {
     expect(before.terminals.map((terminal) => terminal.tabId)).toEqual(
       processes.map(([id]) => `pty:${id}`)
     )
+
     const targeted = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, 100, {
       handles: ['term_setup'],
       requireFreshPtyLiveness: true
     })
+
     expect(targeted).toMatchObject({
       terminals: [expect.objectContaining({ handle: 'term_setup', ptyId: 'pty-setup' })],
       totalCount: 1,
@@ -185,13 +194,16 @@ describe('OrcaRuntimeService', () => {
     })
 
     const inventoryCount = listProcesses.mock.calls.length
+
     const agentPty = (
       runtime as unknown as {
         ptysById: Map<string, { tabId: string | null; paneKey: string | null }>
       }
     ).ptysById.get('pty-agent')!
+
     agentPty.tabId = null
     agentPty.paneKey = null
+
     const secondClient = await runtime.adoptTerminalOrphans({
       worktree: `id:${TEST_WORKTREE_ID}`,
       expectedTopologyRevision: 0,
@@ -203,6 +215,7 @@ describe('OrcaRuntimeService', () => {
         leafId: [HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, HEADLESS_THIRD_LEAF_ID][index]!
       }))
     })
+
     expect(secondClient).toMatchObject({ adopted: false, topologyRevision: 1 })
     expect(agentPty).toMatchObject({
       tabId: 'tab-agent',
@@ -244,16 +257,20 @@ describe('OrcaRuntimeService', () => {
       activeWorktreeId: TEST_WORKTREE_ID,
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     }
+
     const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const durableWrite = deferred<void>()
     const durableWriteStarted = deferred<void>()
+
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       flushPendingOrThrowAsync: vi.fn(() => {
         durableWriteStarted.resolve()
+
         return durableWrite.promise
       })
     } as never)
+
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -285,6 +302,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     await durableWriteStarted.promise
     setSession({
       ...getSession(),
@@ -309,18 +327,24 @@ describe('OrcaRuntimeService', () => {
       activeWorktreeId: TEST_WORKTREE_ID,
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const firstWrite = deferred<void>()
     const firstWriteStarted = deferred<void>()
     let flushCount = 0
+
     const flushPendingOrThrowAsync = vi.fn(() => {
       flushCount += 1
+
       if (flushCount === 1) {
         firstWriteStarted.resolve()
+
         return firstWrite.promise
       }
+
       return Promise.resolve()
     })
+
     const listProcesses = vi.fn(async () => [
       {
         id: 'pty-serialized-adoption',
@@ -332,10 +356,12 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       flushPendingOrThrowAsync
     } as never)
+
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -343,6 +369,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses
     })
     const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+
     const request = {
       worktree: `id:${TEST_WORKTREE_ID}`,
       expectedTopologyRevision: before.topologyRevisions?.[TEST_WORKTREE_ID] ?? 0,
@@ -395,6 +422,7 @@ describe('OrcaRuntimeService', () => {
     const coordinatorLeafId = HEADLESS_SECOND_LEAF_ID
     const workerPaneKey = `legacy-worker:${workerLeafId}`
     const incarnationId = '22222222-2222-4222-8222-222222222222'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeWorktreeId: TEST_WORKTREE_ID,
@@ -445,8 +473,10 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const flushOrThrow = vi.fn()
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never, undefined, {
       canRecoverPersistentLocalPtys: () => true,
       attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash }) =>
@@ -454,6 +484,7 @@ describe('OrcaRuntimeService', () => {
           ? { paneKey, source: 'hydrated_commitment' }
           : null
     })
+
     runtime.setOrchestrationDb({
       getActiveDispatchForTerminal: () => undefined,
       listLegacyWorkerTerminalRecoveryRows: () => [
@@ -473,8 +504,10 @@ describe('OrcaRuntimeService', () => {
     } as unknown as OrchestrationDb)
     const write = vi.fn(() => true)
     const kill = vi.fn(() => true)
+
     const READY_SCREEN =
       ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n'
+
     // Why scrollbackRows-aware: a visible-only request gets the grid in `data`;
     // a scrollback request gets history. Collapsing the two would let a test
     // pass on evidence the caller never asked for.
@@ -489,6 +522,7 @@ describe('OrcaRuntimeService', () => {
         source: 'headless' as const,
         alternateScreen: false
       }))
+
     runtime.setPtyController({
       write,
       kill,
@@ -508,6 +542,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(
         runtime,
@@ -520,6 +555,7 @@ describe('OrcaRuntimeService', () => {
         'Legacy worker'
       )
     )
+
     const resolveLegacyWorkerTerminalRecovery = vi.fn()
     runtime.setNotifier({
       revealTerminalSession,
@@ -583,6 +619,7 @@ describe('OrcaRuntimeService', () => {
     await expect(
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
     ).rejects.toThrow('timeout')
+
     const lateReadySnapshot = deferred<{
       data: string
       scrollbackAnsi: string
@@ -592,12 +629,15 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }>()
+
     const snapshotSequence = runtime.getPtyOutputSequence('pty-legacy')
     serializeProviderBuffer.mockImplementationOnce(() => lateReadySnapshot.promise)
+
     const staleReadyWait = runtime.waitForTerminal(terminal.handle, {
       condition: 'tui-idle',
       timeoutMs: 50
     })
+
     await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledTimes(4))
     runtime.onPtyData('pty-legacy', '\x1b[H', Date.now())
     lateReadySnapshot.resolve({

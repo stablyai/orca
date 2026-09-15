@@ -17,6 +17,7 @@ export function getUsageWorktreeFingerprint(
       )
     )
     .sort()
+
   return JSON.stringify(rows)
 }
 
@@ -25,6 +26,7 @@ export function createWorktreeRefs(
   worktreesByRepo: Map<string, { path: string; worktreeId: string; displayName: string }[]>
 ): UsageScanWorktreeRef[] {
   const refs: UsageScanWorktreeRef[] = []
+
   for (const repo of repos) {
     for (const worktree of worktreesByRepo.get(repo.id) ?? []) {
       refs.push({
@@ -35,5 +37,6 @@ export function createWorktreeRefs(
       })
     }
   }
+
   return refs
 }

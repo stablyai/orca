@@ -15,6 +15,7 @@ export function githubRepoIdentityKey(repo: {
 }): string {
   const slug = `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
   const host = repo.host?.trim().toLowerCase()
+
   return host && !isDefaultGitHubHost(host) ? `${host}/${slug}` : slug
 }
 
@@ -24,5 +25,6 @@ export function githubRepoIdentityKey(repo: {
 // `undefined` means github.com, so never pass a key that may be unresolved.
 export function githubHostFromIdentityKey(key: string | null | undefined): string | undefined {
   const segments = key?.split('/') ?? []
+
   return segments.length === 3 ? segments[0] : undefined
 }

@@ -9,23 +9,29 @@ import {
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn() }))
+
 vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: mocks.releaseDocPreviewGrant,
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const DOC_LOCATION = {
   kind: 'workspace-doc' as const,
   worktreeId: WORKTREE_ID,
   filePath: '/home/alice/wt1/report/index.html'
 }
+
 // What a live document page shows: minted at mount, replaced on a hard reload, dead with the
 // process. Nothing in the store, on disk or on the wire may ever carry it.
 const LIVE_GRANT_URL = `orca-preview://${'a'.repeat(32)}/report/index.html`
@@ -39,6 +45,7 @@ function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WORKTREE_ID
   })
+
   return store
 }
 
@@ -46,6 +53,7 @@ function persistedSession(
   store: ReturnType<typeof createTestStore>
 ): ReturnType<typeof buildBrowserSessionData> {
   const state = store.getState()
+
   return buildBrowserSessionData(
     state.browserTabsByWorktree,
     state.browserPagesByWorkspace,
@@ -91,11 +99,13 @@ describe('a browser page that shows a workspace document', () => {
   // this the blank url that is correct for a document page named every preview "New Tab".
   it('takes its name from the document, and falls back to the file', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
+
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
     expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.title).toBe('index.html')
 
@@ -110,11 +120,13 @@ describe('a browser page that shows a workspace document', () => {
   // document declares none, and titles are stored, mirrored onto the tab and written to disk.
   it('refuses a grant url arriving as the document title', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
+
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     store.getState().updateBrowserPageState(pageId, { title: LIVE_GRANT_URL })
@@ -141,11 +153,13 @@ describe('a browser page that shows a workspace document', () => {
   // to the page every persisted, mirrored and published reader takes its url from.
   it('keeps its blank url when a navigation commits one onto it', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
+
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     store.getState().setBrowserPageUrl(pageId, LIVE_GRANT_URL)
@@ -183,6 +197,7 @@ describe('a browser page that shows a workspace document', () => {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const newTab = store.getState().createBrowserTab(WORKTREE_ID, ORCA_BROWSER_BLANK_URL)
 
     expect(store.getState().pendingAddressBarFocusByTabId[docTab.id]).toBeUndefined()
@@ -196,10 +211,12 @@ describe('a browser page that shows a workspace document', () => {
   // from — and the publish boundary reads the tab, not the page.
   it('follows the active page in and out of the document', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const docPageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     const urlPage = store.getState().createBrowserPage(tab.id, 'https://example.com/')
@@ -223,10 +240,12 @@ describe('a browser page that shows a workspace document', () => {
   // the document the reader moved away from, and the publish boundary reads the entry.
   it('repairs a workspace still naming the document its page has left', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
     const otherDocument = { ...DOC_LOCATION, filePath: '/home/alice/wt1/appendix/index.html' }
     store.setState({
@@ -248,10 +267,12 @@ describe('a browser page that shows a workspace document', () => {
   // until the process ends.
   it('revokes the grant of the document tab that was closed, and only that one', () => {
     const store = createStoreWithWorktree()
+
     const docTab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id
     const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
 
@@ -267,10 +288,12 @@ describe('a browser page that shows a workspace document', () => {
   it('revokes a document grant when only that page is closed', () => {
     mocks.releaseDocPreviewGrant.mockClear()
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const docPageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
     store.getState().createBrowserPage(tab.id, 'https://example.com/')
 
@@ -282,6 +305,7 @@ describe('a browser page that shows a workspace document', () => {
 
   it('reopens a closed document tab with its document identity', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
@@ -299,10 +323,12 @@ describe('a browser page that shows a workspace document', () => {
   it('reopens a closed document page with its document identity', () => {
     const store = createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+
     const documentPage = store.getState().createBrowserPage(tab.id, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     if (!documentPage) {
       throw new Error('Expected a document page')
     }
@@ -316,6 +342,7 @@ describe('a browser page that shows a workspace document', () => {
 
   it('writes the document and not the grant to the session', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
@@ -334,13 +361,16 @@ describe('a browser page that shows a workspace document', () => {
   // load, restoring the document as a blank New Tab under a strip entry that still names it.
   it('survives the session schema in both halves', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const session = persistedSession(store)
 
     const parsedPage = browserPageSchema.parse(session.browserPagesByWorkspace?.[tab.id]?.[0])
+
     const parsedTab = browserWorkspaceSchema.parse(
       session.browserTabsByWorktree?.[WORKTREE_ID]?.[0]
     )
@@ -351,10 +381,12 @@ describe('a browser page that shows a workspace document', () => {
 
   it('restores as the document it was, still blank', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const session = persistedSession(store)
 
     const restored = createStoreWithWorktree()
@@ -379,10 +411,12 @@ describe('a browser page that shows a workspace document', () => {
   // array empty, and hydration then rebuilds one page from the tab's own mirrored chrome.
   it('restores from the tab alone when its page row was salvaged away', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, LIVE_GRANT_URL, {
       docLocation: DOC_LOCATION,
       browserRuntimeEnvironmentId: null
     })
+
     const session = persistedSession(store)
 
     const restored = createStoreWithWorktree()
@@ -483,6 +517,7 @@ describe('conversion provenance at the session schema door', () => {
       ...PAGE_ROW,
       convertedFrom: { kind: 'url', url: LIVE_GRANT_URL }
     })
+
     expect(tainted.convertedFrom ?? null).toBeNull()
 
     const kept = browserPageSchema.parse({
@@ -493,6 +528,7 @@ describe('conversion provenance at the session schema door', () => {
         browserRuntimeEnvironmentId: 'env-1'
       }
     })
+
     expect(kept.convertedFrom).toEqual({
       kind: 'url',
       url: 'https://example.com/',
@@ -505,12 +541,14 @@ describe('conversion provenance at the session schema door', () => {
       ...PAGE_ROW,
       convertedTo: { kind: 'url', url: LIVE_GRANT_URL }
     })
+
     expect(tainted.convertedTo ?? null).toBeNull()
 
     const kept = browserPageSchema.parse({
       ...PAGE_ROW,
       convertedTo: { kind: 'url', url: 'https://example.com/' }
     })
+
     expect(kept.convertedTo).toEqual({ kind: 'url', url: 'https://example.com/' })
   })
 })

@@ -42,6 +42,7 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
+
 const DEAD_OWNER: AgentSessionProcessIdentity = {
   hostId: 'local',
   pid: 12_546,
@@ -50,8 +51,11 @@ const DEAD_OWNER: AgentSessionProcessIdentity = {
 }
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 
 type WedgeOverrides = {
@@ -66,6 +70,7 @@ type WedgeOverrides = {
 /** A record in the wedged shape, with real history behind it. */
 function wedgedRecord(overrides: WedgeOverrides): AgentSessionRecord {
   const fence = 13
+
   return {
     schemaVersion: 2,
     sessionId: SESSION,
@@ -194,6 +199,7 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
     },
     journalDir: journalDirectoryFor(root, { workspaceId: LOCATION.workspaceId, sessionId: SESSION })
   })
+
   await journal.appendItem(
     provider === 'codex'
       ? { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
@@ -208,6 +214,7 @@ function turnLifecycle(turnId: string) {
   const item = restoredJournal()
     .snapshot()
     .items.find((candidate) => readAgentJournalTurn(candidate.body)?.turnId === turnId)
+
   return item ? { ...readAgentJournalTurn(item.body), recovered: item.recovered } : null
 }
 
@@ -215,9 +222,11 @@ function restoredJournal(): AgentSessionJournal {
   const restored = (
     host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
   ).sessions.get(SESSION)
+
   if (!restored) {
     throw new Error('expected a restored session journal')
   }
+
   return restored.journal
 }
 
@@ -230,6 +239,7 @@ describe('already-wedged profiles become usable on load', () => {
         handoffStage: null,
         ownerProcess: DEAD_OWNER
       })
+
       const providerRecord: AgentSessionRecord =
         provider === 'codex'
           ? record
@@ -252,6 +262,7 @@ describe('already-wedged profiles become usable on load', () => {
                 }
               ]
             }
+
       await seedStore(providerRecord)
       await seedRunningTurn(provider)
       openHost()
@@ -471,6 +482,7 @@ describe('already-wedged profiles become usable on load', () => {
     openHost({
       probeOwner: async () => {
         probes += 1
+
         return probes === 1
           ? { outcome: 'indeterminate', reason: 'host could not enumerate spawn tokens' }
           : { outcome: 'reservation-unused' }
@@ -493,6 +505,7 @@ describe('already-wedged profiles become usable on load', () => {
       })
     )
     const order: string[] = []
+
     const scan = vi.fn(
       async () =>
         new Map([
@@ -500,8 +513,10 @@ describe('already-wedged profiles become usable on load', () => {
           [DEAD_OWNER.spawnToken, [12_546]]
         ])
     )
+
     acquire.mockImplementation(async ({ fence }) => {
       order.push('acquire')
+
       return {
         process: { hostId: 'local', pid: 4242, processStartTimeMs: 1, spawnToken: 'spawn-new' },
         link: {

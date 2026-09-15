@@ -5,6 +5,7 @@ import { createHookListenerState } from '../../../shared/agent-hook-listener/lis
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
+
 const dispatchAgentHookTerminalLifecycle = vi.fn()
 
 type MockStoreState = {
@@ -56,7 +57,9 @@ type MockStoreState = {
 }
 
 let mockStoreState: MockStoreState
+
 const HOOK_DONE_QUIET_MS = 1_500
+
 // Why: Codex attention notifications are debounced (issue #8387), so a genuine
 // permission pause only notifies once this quiet window elapses without resuming.
 const CODEX_ATTENTION_QUIET_MS = 1_500
@@ -115,6 +118,7 @@ describe('agent hook completion notifications', () => {
   async function observeCodexPermissionPause(state: 'waiting' | 'blocked'): Promise<void> {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
+
     observeAgentHookCompletionForNotification({
       paneKey,
       worktreeId: 'wt-1',
@@ -172,6 +176,7 @@ describe('agent hook completion notifications', () => {
 
   it('keeps completion tracking active across desktop notification changes', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
+
     const {
       observeAgentHookCompletionForNotification,
       syncAgentHookCompletionNotificationSettings
@@ -220,6 +225,7 @@ describe('agent hook completion notifications', () => {
   it('offers hook completion to mobile while desktop notifications and attention are disabled', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
     mockStoreState.settings.experimentalTerminalAttention = false
+
     const {
       observeAgentHookCompletionForNotification,
       syncAgentHookCompletionNotificationSettings
@@ -253,6 +259,7 @@ describe('agent hook completion notifications', () => {
   it('tracks hook completion for terminal attention when OS completion notifications are disabled', async () => {
     mockStoreState.settings.experimentalTerminalAttention = true
     mockStoreState.settings.notifications.agentTaskComplete = false
+
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
 
@@ -281,6 +288,7 @@ describe('agent hook completion notifications', () => {
         ptyIdsByLeafId: {}
       }
     }
+
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
 
@@ -320,6 +328,7 @@ describe('agent hook completion notifications', () => {
         ptyIdsByLeafId: {}
       }
     }
+
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
 
@@ -362,6 +371,7 @@ describe('agent hook completion notifications', () => {
         ptyIdsByLeafId: {}
       }
     }
+
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
 
@@ -517,6 +527,7 @@ describe('agent hook completion notifications', () => {
     mockStoreState.suppressedPtyExitIds = {
       'pty-1': true
     }
+
     const {
       _getAgentHookCompletionNotificationCoordinatorCountForTest,
       observeAgentHookCompletionForNotification
@@ -654,7 +665,9 @@ describe('agent hook completion notifications', () => {
   it('does not notify on Grok routine permission prompt notifications during tool use', async () => {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
+
     const listenerState = createHookListenerState()
+
     const observeGrokHook = (payload: Record<string, unknown>): void => {
       const event = normalizeHookPayload(
         listenerState,
@@ -667,9 +680,11 @@ describe('agent hook completion notifications', () => {
         },
         'production'
       )
+
       if (!event) {
         return
       }
+
       observeAgentHookCompletionForNotification({
         paneKey: event.paneKey,
         worktreeId: event.worktreeId ?? 'wt-1',
@@ -807,6 +822,7 @@ describe('agent hook completion notifications', () => {
 
   it('prunes only the coordinators whose panes lost liveness, keeping the rest', async () => {
     seedManyLivePanes()
+
     const {
       _getAgentHookCompletionNotificationCoordinatorCountForTest,
       observeAgentHookCompletionForNotification,
@@ -820,6 +836,7 @@ describe('agent hook completion notifications', () => {
         payload: hookStatus('working')
       })
     }
+
     expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(MANY_PANES.length)
 
     // Remove liveness for two panes (both the tab hint and the pty list).
@@ -867,6 +884,7 @@ describe('agent hook completion notifications', () => {
 
   it('skips tab scans until a pane-liveness slice changes', async () => {
     seedManyLivePanes()
+
     const {
       observeAgentHookCompletionForNotification,
       syncAgentHookCompletionNotificationSettings
@@ -886,6 +904,7 @@ describe('agent hook completion notifications', () => {
     mockStoreState.tabsByWorktree = new Proxy(realTabs, {
       ownKeys(target) {
         tabEnumerationCount += 1
+
         return Reflect.ownKeys(target)
       }
     })

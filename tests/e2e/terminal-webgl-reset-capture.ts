@@ -9,12 +9,14 @@ export async function resetWebglAndCaptureGraySlabAnalysis(page: Page): Promise<
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     manager?.resetWebglTextureAtlases?.()
@@ -26,5 +28,6 @@ export async function resetWebglAndCaptureGraySlabAnalysis(page: Page): Promise<
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       })
   )
+
   return captureGraySlabAnalysis(page)
 }

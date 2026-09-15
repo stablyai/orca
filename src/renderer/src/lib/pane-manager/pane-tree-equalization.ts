@@ -24,15 +24,20 @@ function getEqualizeWeight(
   // tree position fixes, so one element is never asked for two different weights.
   // The map lives for one sweep, so a split/close/resize can never read a stale weight.
   const cached = weights.get(el)
+
   if (cached !== undefined) {
     return cached
   }
+
   const children = findPaneChildren(el)
+
   const weight = Math.max(
     1,
     children.reduce((sum, child) => sum + getEqualizeWeight(child, direction, weights), 0)
   )
+
   weights.set(el, weight)
+
   return weight
 }
 
@@ -43,6 +48,7 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
 
   const weights = new Map<HTMLElement, number>()
   let changed = false
+
   const visit = (el: HTMLElement): void => {
     if (!el.classList.contains('pane-split')) {
       return
@@ -50,12 +56,14 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
 
     const direction = getSplitDirection(el)
     const children = findPaneChildren(el)
+
     if (children.length >= 2) {
       for (const child of children) {
         // Why: same-axis nested splits need pane-count weighting so three
         // side-by-side panes become thirds, not 50/25/25.
         const weight = getEqualizeWeight(child, direction, weights)
         const nextFlex = `${weight} 1 0%`
+
         if (child.style.flex !== nextFlex) {
           child.style.flex = nextFlex
           changed = true
@@ -69,5 +77,6 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
   }
 
   visit(root)
+
   return changed
 }

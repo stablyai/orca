@@ -68,9 +68,11 @@ function isOrcaCloudSession(value: unknown): value is OrcaCloudSession {
   if (!isObject(value) || !isObject(value.capabilities) || !isObject(value.capabilities.flags)) {
     return false
   }
+
   if (value.organizations !== undefined && !isOrcaCloudOrganizations(value.organizations)) {
     return false
   }
+
   return (
     typeof value.accessToken === 'string' &&
     value.accessToken.length > 0 &&
@@ -87,10 +89,12 @@ function isOrcaCloudOrganizations(value: unknown): value is OrcaCloudOrgSummary[
   if (!Array.isArray(value)) {
     return false
   }
+
   return value.every((organization) => {
     if (!isObject(organization)) {
       return false
     }
+
     return (
       typeof organization.orgId === 'string' &&
       organization.orgId.length > 0 &&
@@ -111,6 +115,7 @@ export function saveOrcaCloudSession(
   session: OrcaCloudSession
 ): OrcaCloudSessionPersistence {
   const cacheKey = sessionCacheKey(profileId, userDataPath)
+
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted: PersistedEncryptedSession = {
       version: 1,
@@ -118,8 +123,10 @@ export function saveOrcaCloudSession(
       savedAt: Date.now(),
       ciphertext: safeStorage.encryptString(JSON.stringify(session)).toString('base64')
     }
+
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), encrypted)
     memorySessions.set(cacheKey, { session, persistence: 'encrypted' })
+
     return 'encrypted'
   }
 
@@ -130,14 +137,17 @@ export function saveOrcaCloudSession(
       savedAt: Date.now(),
       session
     }
+
     writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), plaintext)
     memorySessions.set(cacheKey, { session, persistence: 'dev-plaintext' })
+
     return 'dev-plaintext'
   }
 
   // Why: Orca account refresh tokens must not silently fall back to plaintext
   // in production. Memory-only keeps cloud features usable until restart.
   memorySessions.set(cacheKey, { session, persistence: 'memory-only' })
+
   return 'memory-only'
 }
 
@@ -147,6 +157,7 @@ export function saveOrcaCloudSessionExchange(
   exchange: OrcaCloudSessionExchangeResponse
 ): OrcaCloudSessionPersistence {
   recordSuccessfulCloudSessionLogin(cloudSessionIdentity(profileId, exchange.cloud), userDataPath)
+
   return saveOrcaCloudSession(profileId, userDataPath, {
     accessToken: exchange.accessToken,
     refreshToken: exchange.refreshToken,
@@ -167,6 +178,7 @@ export function saveOrcaCloudSessionIfCurrent(
   if (!isCloudSessionMutationCurrent(profileId, userDataPath, snapshot)) {
     return null
   }
+
   return saveOrcaCloudSession(profileId, userDataPath, session)
 }
 
@@ -176,6 +188,7 @@ export function readOrcaCloudSession(
 ): OrcaCloudSessionReadResult {
   const cacheKey = sessionCacheKey(profileId, userDataPath)
   const memorySession = memorySessions.get(cacheKey)
+
   if (memorySession) {
     return {
       status: 'found',
@@ -185,6 +198,7 @@ export function readOrcaCloudSession(
   }
 
   const path = getOrcaCloudSessionPath(profileId, userDataPath)
+
   if (!existsSync(path)) {
     return { status: 'missing', persistence: 'none' }
   }
@@ -193,9 +207,11 @@ export function readOrcaCloudSession(
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as
       | PersistedEncryptedSession
       | PersistedPlaintextSession
+
     if (parsed.version !== 1) {
       return { status: 'decrypt-failed', persistence: 'none', error: 'Unsupported session format.' }
     }
+
     if (parsed.format === 'electron-safe-storage-v1') {
       if (!safeStorage.isEncryptionAvailable()) {
         return {
@@ -204,21 +220,29 @@ export function readOrcaCloudSession(
           error: 'OS-backed encryption is unavailable.'
         }
       }
+
       const decrypted = safeStorage.decryptString(Buffer.from(parsed.ciphertext, 'base64'))
       const session = JSON.parse(decrypted) as OrcaCloudSession
+
       if (!isOrcaCloudSession(session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
       }
+
       memorySessions.set(cacheKey, { session, persistence: 'encrypted' })
+
       return { status: 'found', session, persistence: 'encrypted' }
     }
+
     if (parsed.format === 'dev-plaintext-v1' && allowsPlaintextOrcaCloudSession()) {
       if (!isOrcaCloudSession(parsed.session)) {
         return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
       }
+
       memorySessions.set(cacheKey, { session: parsed.session, persistence: 'dev-plaintext' })
+
       return { status: 'found', session: parsed.session, persistence: 'dev-plaintext' }
     }
+
     return { status: 'decrypt-failed', persistence: 'none', error: 'Unsafe session format.' }
   } catch (error) {
     if (isUnreadableError(error)) {
@@ -228,6 +252,7 @@ export function readOrcaCloudSession(
         error: 'Cannot read the saved Orca account session: the read failed.'
       }
     }
+
     return {
       status: 'decrypt-failed',
       persistence: 'none',

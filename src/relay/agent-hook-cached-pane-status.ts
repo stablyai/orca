@@ -26,17 +26,21 @@ export function selectReplayableCachedPanes(input: {
   dropPane: (paneKey: string) => void
 }): CachedPaneReplaySelection[] {
   const selected: CachedPaneReplaySelection[] = []
+
   // Snapshot: dropping a retired pane mutates the map being read.
   for (const [paneKey, event] of Array.from(input.cachedByPaneKey.entries())) {
     if (input.isPaneSurfaceRetired(paneKey)) {
       input.dropPane(paneKey)
       continue
     }
+
     const meta = input.metaByPaneKey.get(paneKey)
+
     if (meta) {
       selected.push({ event, meta })
     }
   }
+
   return selected
 }
 
@@ -52,9 +56,11 @@ export function evictCachedPanesOverCap(
 ): void {
   while (cachedByPaneKey.size > maxPanes) {
     const oldest = cachedByPaneKey.keys().next().value
+
     if (oldest === undefined) {
       return
     }
+
     dropPane(oldest)
   }
 }

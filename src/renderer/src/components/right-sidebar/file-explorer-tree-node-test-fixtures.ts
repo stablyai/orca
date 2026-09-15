@@ -7,6 +7,7 @@ export const directoryNode: TreeNode = {
   isDirectory: true,
   depth: 0
 }
+
 export const fileNode: TreeNode = {
   name: 'index.ts',
   path: '/repo/src/index.ts',

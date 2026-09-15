@@ -43,6 +43,7 @@ async function createTerminalTab(page: Page): Promise<string> {
     .poll(
       async () => {
         tabId = await getActiveTabId(page)
+
         return Boolean(tabId && tabId !== activeBefore)
       },
       {
@@ -62,9 +63,11 @@ async function createTerminalTab(page: Page): Promise<string> {
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     state.setActiveTabType('terminal')
     state.setActiveTab(targetTabId)
@@ -99,9 +102,11 @@ async function emitBellAndWaitForTitleFlush(
 async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
+
     return Object.keys(store.getState().unreadTerminalTabs)
   })
 }
@@ -109,9 +114,11 @@ async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
 async function getUnreadTerminalPaneKeys(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
+
     return Object.keys(store.getState().unreadTerminalPanes)
   })
 }
@@ -121,9 +128,11 @@ async function getActivePaneKey(page: Page, tabId: string): Promise<string> {
     const manager = window.__paneManagers?.get(targetTabId)
     const pane = manager?.getActivePane?.()
     const leafId = pane?.leafId ?? null
+
     if (!leafId) {
       throw new Error(`No active pane leaf for terminal tab ${targetTabId}`)
     }
+
     return `${targetTabId}:${leafId}`
   }, tabId)
 }
@@ -133,9 +142,11 @@ async function focusActiveXterm(page: Page, tabId: string): Promise<void> {
     const manager = window.__paneManagers?.get(targetTabId)
     const pane = manager?.getActivePane?.()
     const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!pane || !textarea) {
       throw new Error(`No active xterm textarea for terminal tab ${targetTabId}`)
     }
+
     pane.terminal.focus()
     textarea.focus()
   }, tabId)
@@ -167,6 +178,7 @@ test.describe('Terminal attention', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const firstTabId = await getActiveTabId(orcaPage)
+
     if (!firstTabId) {
       throw new Error('Expected an initial terminal tab')
     }
@@ -179,17 +191,22 @@ test.describe('Terminal attention', () => {
     await activateTerminalTab(orcaPage, firstTabId)
     await orcaPage.evaluate((tabId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is unavailable')
       }
+
       const state = store.getState()
+
       const ownerWorktreeId =
         Object.entries(state.tabsByWorktree).find(([, tabs]) =>
           tabs.some((tab) => tab.id === tabId)
         )?.[0] ?? null
+
       if (!ownerWorktreeId) {
         throw new Error(`No owner worktree found for terminal tab ${tabId}`)
       }
+
       state.markWorktreeUnread(ownerWorktreeId)
       state.markTerminalTabUnread(tabId)
     }, secondTabId)
@@ -206,6 +223,7 @@ test.describe('Terminal attention', () => {
         `[data-testid="sortable-tab"][data-tab-id="${secondTabId}"] [data-testid="tab-activity-bell"]`
       )
       .first()
+
     await expect(secondTabBell).toBeVisible()
 
     // Activating the tab counts as "the user saw it" — the indicator clears.
@@ -231,9 +249,11 @@ test.describe('Terminal attention', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const activeTabId = await getActiveTabId(orcaPage)
+
     if (!activeTabId) {
       throw new Error('Expected an active terminal tab')
     }
+
     const activePtyId = await waitForActivePanePtyId(orcaPage)
     await installRendererTitleLog(orcaPage)
 
@@ -246,11 +266,13 @@ test.describe('Terminal attention', () => {
     // The focused tab is now unread — the bell persists until the user
     // actually interacts with the pane.
     expect((await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId)).toBe(true)
+
     const activeTabBell = orcaPage
       .locator(
         `[data-testid="sortable-tab"][data-tab-id="${activeTabId}"] [data-testid="tab-activity-bell"]`
       )
       .first()
+
     await expect(activeTabBell).toBeVisible()
 
     // A pointerdown inside the terminal container counts as interaction
@@ -262,9 +284,11 @@ test.describe('Terminal attention', () => {
       const manager = managers?.get(tabId)
       const pane = manager?.getActivePane()
       const container = pane?.container
+
       if (!container) {
         throw new Error('No active pane container to click')
       }
+
       container.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
     }, activeTabId)
 
@@ -287,9 +311,11 @@ test.describe('Terminal attention', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const activeTabId = await getActiveTabId(orcaPage)
+
     if (!activeTabId) {
       throw new Error('Expected an active terminal tab')
     }
+
     const activePaneKey = await getActivePaneKey(orcaPage, activeTabId)
     const activePtyId = await waitForActivePanePtyId(orcaPage)
     await installRendererTitleLog(orcaPage)
@@ -324,6 +350,7 @@ test.describe('Terminal attention', () => {
         `[data-testid="sortable-tab"][data-tab-id="${activeTabId}"] [data-testid="tab-activity-bell"]`
       )
       .first()
+
     await expect(activeTabBell).toBeVisible()
 
     await focusActiveXterm(orcaPage, activeTabId)
@@ -371,6 +398,7 @@ test.describe('Terminal attention', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const firstTabId = await getActiveTabId(orcaPage)
+
     if (!firstTabId) {
       throw new Error('Expected an initial terminal tab')
     }
@@ -403,10 +431,13 @@ test.describe('Terminal attention', () => {
           const managers = window.__paneManagers
           const manager = managers?.get(tabId)
           const pane = manager?.getActivePane()
+
           if (!pane) {
             reject(new Error('No active pane on restored tab'))
+
             return
           }
+
           pane.terminal.write('\x1b[?1004h')
           pane.terminal.write(modeReset, () => {
             // Parser has consumed both the DECSET and the reset. Any focus
@@ -414,11 +445,14 @@ test.describe('Terminal attention', () => {
             // (and dropped on the floor, since nothing was listening). Install
             // the spy now to observe only post-reset output.
             const recorded: string[] = []
+
             ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ =
               recorded
+
             const disposer = pane.terminal.onData((data) => {
               recorded.push(data)
             })
+
             ;(
               window as unknown as { __XTERM_ONDATA_DISPOSE__?: () => void }
             ).__XTERM_ONDATA_DISPOSE__ = () => disposer.dispose()
@@ -442,9 +476,11 @@ test.describe('Terminal attention', () => {
         const managers = window.__paneManagers
         const manager = managers?.get(tabId)
         const pane = manager?.getActivePane()
+
         if (!pane) {
           return
         }
+
         pane.terminal.blur()
       }, secondTabId)
 
@@ -463,6 +499,7 @@ test.describe('Terminal attention', () => {
           (window as unknown as { __XTERM_ONDATA_SPY__: string[] | undefined })
             .__XTERM_ONDATA_SPY__ ?? []
       )
+
       // Join before matching: individual chunks could split an escape
       // across onData calls (unlikely but possible — e.g. if xterm
       // flushes mid-escape).
@@ -477,6 +514,7 @@ test.describe('Terminal attention', () => {
           __XTERM_ONDATA_DISPOSE__?: () => void
           __XTERM_ONDATA_SPY__?: string[]
         }
+
         w.__XTERM_ONDATA_DISPOSE__?.()
         delete w.__XTERM_ONDATA_DISPOSE__
         delete w.__XTERM_ONDATA_SPY__

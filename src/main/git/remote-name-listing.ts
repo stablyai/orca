@@ -11,7 +11,9 @@ export type RemoteNameListingGitOptions = {
 }
 
 const SIGNED_REMOTE_NAME_LISTING_TTL_MS = 5 * 60_000
+
 const UNSIGNED_REMOTE_NAME_LISTING_TTL_MS = 30_000
+
 const REMOTE_NAME_LISTING_CACHE_MAX_ENTRIES = 512
 
 type CachedRemoteNames = {
@@ -21,6 +23,7 @@ type CachedRemoteNames = {
 }
 
 const remoteNameListingCache = new Map<string, CachedRemoteNames>()
+
 const remoteNameListingInFlight: CoalescedProbes<string[] | null> = new Map()
 
 /** @internal - exposed for tests only */
@@ -44,6 +47,7 @@ function remoteNameListingCacheKey(
   const runtimeKey = connectionId
     ? `ssh:${connectionId}:${getSshGitProviderGeneration(connectionId)}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
+
   return `${runtimeKey}\0${repoPath}`
 }
 
@@ -53,11 +57,14 @@ function pruneRemoteNameListingCache(now: number): void {
       remoteNameListingCache.delete(key)
     }
   }
+
   while (remoteNameListingCache.size > REMOTE_NAME_LISTING_CACHE_MAX_ENTRIES) {
     const oldestKey = remoteNameListingCache.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     remoteNameListingCache.delete(oldestKey)
   }
 }
@@ -88,14 +95,17 @@ export async function listCachedRemoteNames(
   const now = Date.now()
   pruneRemoteNameListingCache(now)
   const cached = remoteNameListingCache.get(cacheKey)
+
   if (cached && cached.expiresAt > now) {
     if (cached.configSignature !== undefined) {
       const currentSignature = await readLocalGitConfigSignature(
         listingGitConfigContext(repoPath, connectionId, localGitOptions)
       )
+
       if (currentSignature === cached.configSignature) {
         return cached.remotes
       }
+
       remoteNameListingCache.delete(cacheKey)
     } else {
       return cached.remotes
@@ -106,15 +116,19 @@ export async function listCachedRemoteNames(
     const configContext = listingGitConfigContext(repoPath, connectionId, localGitOptions)
     const configSignatureBefore = await readLocalGitConfigSignature(configContext)
     const remotes = await listUncachedRemoteNames(repoPath, connectionId, localGitOptions)
+
     if (remotes === null) {
       return null
     }
+
     if (ownsKey()) {
       const configSignatureAfter = await readLocalGitConfigSignature(configContext)
+
       const configSignature =
         configSignatureBefore !== undefined && configSignatureBefore === configSignatureAfter
           ? configSignatureAfter
           : undefined
+
       remoteNameListingCache.set(cacheKey, {
         remotes,
         expiresAt:
@@ -126,6 +140,7 @@ export async function listCachedRemoteNames(
       })
       pruneRemoteNameListingCache(Date.now())
     }
+
     return remotes
   })
 }
@@ -137,18 +152,22 @@ async function listUncachedRemoteNames(
 ): Promise<string[] | null> {
   if (connectionId) {
     const provider = getSshGitProvider(connectionId)
+
     if (!provider) {
       return null
     }
+
     try {
       const { stdout } = await provider.exec(['remote'], repoPath, {
         signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
       })
+
       return parseRemoteNames(stdout)
     } catch {
       return null
     }
   }
+
   try {
     const { stdout } = await gitExecFileAsync(['remote'], {
       cwd: repoPath,
@@ -156,6 +175,7 @@ async function listUncachedRemoteNames(
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
       ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
+
     return parseRemoteNames(stdout)
   } catch {
     return null
@@ -170,5 +190,6 @@ export async function shouldProbeGitRemote(
   localGitOptions: RemoteNameListingGitOptions = {}
 ): Promise<boolean> {
   const remotes = await listCachedRemoteNames(repoPath, connectionId, localGitOptions)
+
   return remotes === null || remotes.includes(remoteName)
 }

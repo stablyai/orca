@@ -13,17 +13,21 @@ export function getProvisionedRootResumeIntegrityError(
   if (getEphemeralVmRecipeResultCheckoutMode(previous) !== 'provisioned-root') {
     return null
   }
+
   if (
     normalizeRuntimePathForComparison(getEphemeralVmRecipeResultProjectRoot(previous)) !==
     normalizeRuntimePathForComparison(getEphemeralVmRecipeResultProjectRoot(resumed))
   ) {
     return 'The provisioned workspace root changed while the runtime was suspended.'
   }
+
   const previousConnection = getEphemeralVmRecipeResultConnection(previous)
   const resumedConnection = getEphemeralVmRecipeResultConnection(resumed)
+
   if (previousConnection.type !== resumedConnection.type) {
     return 'The provisioned workspace connection type changed while the runtime was suspended.'
   }
+
   if (
     previousConnection.type === 'ssh' &&
     resumedConnection.type === 'ssh' &&
@@ -31,6 +35,7 @@ export function getProvisionedRootResumeIntegrityError(
   ) {
     return 'The provisioned workspace SSH ownership changed while the runtime was suspended.'
   }
+
   return null
 }
 

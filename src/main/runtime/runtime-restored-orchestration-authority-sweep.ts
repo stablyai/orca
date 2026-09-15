@@ -24,6 +24,7 @@ export function retireOrchestrationAuthorityAbsentFromInventory(
       receipt.hostScope.kind === 'ssh'
         ? toSshExecutionHostId(receipt.hostScope.targetId)
         : LOCAL_EXECUTION_HOST_ID
+
     const inScope =
       queriedHostIds.has(receiptHostId) &&
       (connectionId === undefined ||
@@ -31,6 +32,7 @@ export function retireOrchestrationAuthorityAbsentFromInventory(
         (typeof connectionId === 'string' &&
           receipt.hostScope.kind === 'ssh' &&
           receipt.hostScope.targetId === connectionId))
+
     if (inScope && !allLivePtyIds.has(ptyId)) {
       receiptsByPtyId.delete(ptyId)
     }

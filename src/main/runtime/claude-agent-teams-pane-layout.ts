@@ -21,6 +21,7 @@ export function resolveSplitTarget(
       direction: 'horizontal'
     }
   }
+
   // Why: tmux `split-window -h` means left/right panes; Orca names that
   // layout by the vertical divider it creates.
   return { pane: targetPane, direction: horizontal ? 'vertical' : 'horizontal' }

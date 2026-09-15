@@ -9,17 +9,21 @@ export async function markOnboardingProjectAdded(
   if (typeof window === 'undefined' || !window.api?.onboarding) {
     return
   }
+
   const onboarding = await window.api.onboarding.get().catch(() => null)
+
   if (!onboarding || onboarding.checklist[item]) {
     return
   }
 
   const checklist: Partial<OnboardingState['checklist']> = {}
   checklist[item] = true
+
   try {
     await window.api.onboarding.update({ checklist })
   } catch (err) {
     console.warn('[onboarding] Failed to update project checklist item:', err)
+
     return
   }
 

@@ -9,15 +9,25 @@ import type { SftpNamespacePathMapping } from './sftp-namespace-resolution'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const SHELL_HOME = '/var/services/homes/alice'
+
 const SFTP_HOME = '/homes/alice'
+
 const RELAY_DIR = '.orca-remote/relay-0.1.0+wire'
+
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_DIR}`
+
 const SFTP_RELAY_DIR = `${SFTP_HOME}/${RELAY_DIR}`
+
 const MARKER_FILE = `.sftp-namespace-${'a'.repeat(32)}`
+
 const MARKER_PATH = `.install-lock/${MARKER_FILE}`
+
 const SFTP_OPEN_WRITE = 2
+
 const SFTP_STATUS_OK = 0
+
 const SFTP_STATUS_NO_SUCH_FILE = 2
+
 const SFTP_STATUS_FAILURE = 4
 
 type SftpWireServer = {
@@ -32,13 +42,17 @@ function backingPath(backingRoot: string, remotePath: string): string | null {
   if (remotePath === SFTP_HOME) {
     return backingRoot
   }
+
   if (!remotePath.startsWith(`${SFTP_HOME}/`)) {
     return null
   }
+
   const relativePath = posix.relative(SFTP_HOME, remotePath)
+
   if (!relativePath || relativePath.startsWith('../') || posix.isAbsolute(relativePath)) {
     return null
   }
+
   return join(backingRoot, ...relativePath.split('/'))
 }
 
@@ -47,6 +61,7 @@ function sendFsError(sftp: SFTPWrapper, requestId: number, error: unknown): void
     error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT'
       ? SFTP_STATUS_NO_SUCH_FILE
       : SFTP_STATUS_FAILURE
+
   sftp.status(requestId, code)
 }
 
@@ -54,7 +69,9 @@ function fileId(handle: Buffer, files: Map<number, OpenFile>): number | null {
   if (handle.length !== 4) {
     return null
   }
+
   const id = handle.readUInt32BE(0)
+
   return files.has(id) ? id : null
 }
 
@@ -64,10 +81,13 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
   sftp.on('error', () => {})
   sftp.on('REALPATH', (requestId, remotePath) => {
     operations.push(`REALPATH:${remotePath}`)
+
     if (remotePath !== '.') {
       sftp.status(requestId, SFTP_STATUS_NO_SUCH_FILE)
+
       return
     }
+
     sftp.name(requestId, [
       {
         filename: SFTP_HOME,
@@ -79,10 +99,13 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
   sftp.on('LSTAT', (requestId, remotePath) => {
     operations.push(`LSTAT:${remotePath}`)
     const localPath = backingPath(backingRoot, remotePath)
+
     if (!localPath) {
       sftp.status(requestId, SFTP_STATUS_NO_SUCH_FILE)
+
       return
     }
+
     void lstat(localPath).then(
       (stats) =>
         sftp.attrs(requestId, {
@@ -99,10 +122,13 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
   sftp.on('MKDIR', (requestId, remotePath) => {
     operations.push(`MKDIR:${remotePath}`)
     const localPath = backingPath(backingRoot, remotePath)
+
     if (!localPath) {
       sftp.status(requestId, SFTP_STATUS_NO_SUCH_FILE)
+
       return
     }
+
     void mkdir(localPath).then(
       () => sftp.status(requestId, SFTP_STATUS_OK),
       (error: unknown) => sendFsError(sftp, requestId, error)
@@ -111,10 +137,13 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
   sftp.on('OPEN', (requestId, remotePath, flags) => {
     operations.push(`OPEN:${remotePath}`)
     const localPath = backingPath(backingRoot, remotePath)
+
     if (!localPath || !(flags & SFTP_OPEN_WRITE)) {
       sftp.status(requestId, SFTP_STATUS_NO_SUCH_FILE)
+
       return
     }
+
     void open(localPath, 'w').then(
       (file) => {
         const id = nextFileId++
@@ -129,10 +158,13 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
   sftp.on('WRITE', (requestId, handle, offset, data) => {
     operations.push('WRITE')
     const id = fileId(handle, files)
+
     if (id === null) {
       sftp.status(requestId, SFTP_STATUS_FAILURE)
+
       return
     }
+
     void files
       .get(id)!
       .write(data, 0, data.length, offset)
@@ -144,10 +176,13 @@ function installSftpHandlers(sftp: SFTPWrapper, backingRoot: string, operations:
   sftp.on('CLOSE', (requestId, handle) => {
     operations.push('CLOSE')
     const id = fileId(handle, files)
+
     if (id === null) {
       sftp.status(requestId, SFTP_STATUS_FAILURE)
+
       return
     }
+
     const file = files.get(id)!
     files.delete(id)
     void file.close().then(
@@ -162,6 +197,7 @@ async function startSftpWireServer(backingRoot: string): Promise<SftpWireServer>
   const connections = new Set<Connection>()
   // Ed25519 keygen can produce an invalid 31-byte key; ECDSA points always start with 0x04.
   const hostKey = utils.generateKeyPairSync('ecdsa', { bits: 256 }).private
+
   const server = new Ssh2Server({ hostKeys: [hostKey] }, (connection) => {
     connections.add(connection)
     connection.on('error', () => {})
@@ -186,6 +222,7 @@ async function startSftpWireServer(backingRoot: string): Promise<SftpWireServer>
       })
     })
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -194,9 +231,11 @@ async function startSftpWireServer(backingRoot: string): Promise<SftpWireServer>
     })
   })
   const address = server.address()
+
   if (!address || typeof address === 'string') {
     throw new Error('SSH fixture did not bind a TCP port')
   }
+
   return {
     port: address.port,
     operations,
@@ -204,6 +243,7 @@ async function startSftpWireServer(backingRoot: string): Promise<SftpWireServer>
       for (const connection of connections) {
         connection.end()
       }
+
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
@@ -236,11 +276,13 @@ function connectionWithClient(client: Client): SshConnection {
     username: 'fixture',
     authMethod: 'password'
   } as SshTarget
+
   const connection = new SshConnection(target, { onStateChange: vi.fn() })
   Object.assign(connection as unknown as Record<string, unknown>, {
     client,
     useSystemSshTransport: false
   })
+
   return connection
 }
 
@@ -250,6 +292,7 @@ async function boundedTransfer(
   label: string
 ): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | undefined
+
   try {
     await Promise.race([
       operation,
@@ -288,6 +331,7 @@ async function withSplitNamespaceFixture(
 
   let fixture: SftpWireServer | undefined
   let client: Client | undefined
+
   try {
     fixture = await startSftpWireServer(backingRoot)
     client = await connectSshClient(fixture.port)

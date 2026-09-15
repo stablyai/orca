@@ -35,19 +35,23 @@ describe('workspace cleanup removal timeout recovery', () => {
 
   it('uses a success confirmed after the initial timeout and proceeds with its parent', async () => {
     vi.useFakeTimers()
+
     const parent = makeCandidate({
       worktreeId: 'repo-1::/repo/parent',
       displayName: 'parent',
       branch: 'parent',
       path: '/repo/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',
       displayName: 'child',
       branch: 'child',
       path: '/repo/parent/child'
     })
+
     let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -61,6 +65,7 @@ describe('workspace cleanup removal timeout recovery', () => {
         removedIdentities: [parent.worktreeId],
         failures: []
       })
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -93,25 +98,30 @@ describe('workspace cleanup removal timeout recovery', () => {
 
   it('reports a definitive late failure and skips its parent', async () => {
     vi.useFakeTimers()
+
     const parent = makeCandidate({
       worktreeId: 'repo-1::C:\\repo\\parent',
       displayName: 'parent',
       branch: 'parent',
       path: 'C:\\repo\\parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::C:\\repo\\parent\\child',
       displayName: 'child',
       branch: 'child',
       path: 'C:\\repo\\parent\\child'
     })
+
     let rejectChild: (error: Error) => void = () => {}
+
     const removeCandidates = vi.fn(
       () =>
         new Promise<WorkspaceCleanupRemoveResult>((_resolve, reject) => {
           rejectChild = reject
         })
     )
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -150,19 +160,23 @@ describe('workspace cleanup removal timeout recovery', () => {
 
   it('reports a timeout, skips its parent, then reports the authoritative result', async () => {
     vi.useFakeTimers()
+
     const parent = makeCandidate({
       worktreeId: 'repo-1::/repo/parent',
       displayName: 'parent',
       branch: 'parent',
       path: '/repo/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',
       displayName: 'child',
       branch: 'child',
       path: '/repo/parent/child'
     })
+
     let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -176,6 +190,7 @@ describe('workspace cleanup removal timeout recovery', () => {
         removedIdentities: [parent.worktreeId],
         failures: []
       })
+
     const onProgress = vi.fn()
     const onResult = vi.fn()
     const onLateResult = vi.fn()
@@ -258,19 +273,23 @@ describe('workspace cleanup removal timeout recovery', () => {
 
   it('hardens a provisional parent skip after the child late-fails post-batch', async () => {
     vi.useFakeTimers()
+
     const parent = makeCandidate({
       worktreeId: 'repo-1::/repo/parent',
       displayName: 'parent',
       branch: 'parent',
       path: '/repo/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',
       displayName: 'child',
       branch: 'child',
       path: '/repo/parent/child'
     })
+
     let rejectChild: (error: Error) => void = () => {}
+
     const onLateResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -317,26 +336,32 @@ describe('workspace cleanup removal timeout recovery', () => {
 
   it('retries a skipped parent after its blocking child succeeds mid-batch', async () => {
     vi.useFakeTimers()
+
     const parent = makeCandidate({
       worktreeId: 'repo-1::/rp/parent',
       displayName: 'parent',
       branch: 'parent',
       path: '/rp/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/rp/parent/c',
       displayName: 'child',
       branch: 'child',
       path: '/rp/parent/c'
     })
+
     const unrelated = makeCandidate({
       worktreeId: 'repo-1::/zz',
       displayName: 'other',
       branch: 'other',
       path: '/zz'
     })
+
     let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     let resolveUnrelated: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -356,6 +381,7 @@ describe('workspace cleanup removal timeout recovery', () => {
         removedIdentities: [parent.worktreeId],
         failures: []
       })
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -398,26 +424,32 @@ describe('workspace cleanup removal timeout recovery', () => {
 
   it('hardens a provisional skip into a definitive one after the child late-fails mid-batch', async () => {
     vi.useFakeTimers()
+
     const parent = makeCandidate({
       worktreeId: 'repo-1::/rp/parent',
       displayName: 'parent',
       branch: 'parent',
       path: '/rp/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/rp/parent/c',
       displayName: 'child',
       branch: 'child',
       path: '/rp/parent/c'
     })
+
     const unrelated = makeCandidate({
       worktreeId: 'repo-1::/zz',
       displayName: 'other',
       branch: 'other',
       path: '/zz'
     })
+
     let rejectChild: (error: Error) => void = () => {}
+
     let resolveUnrelated: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -432,6 +464,7 @@ describe('workspace cleanup removal timeout recovery', () => {
             resolveUnrelated = resolve
           })
       )
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -485,6 +518,7 @@ describe('workspace cleanup removal timeout recovery', () => {
     vi.useFakeTimers()
     const candidate = makeCandidate()
     let rejectRemoval: (error: Error) => void = () => {}
+
     const onLateResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({

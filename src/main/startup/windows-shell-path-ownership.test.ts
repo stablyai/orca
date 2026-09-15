@@ -18,6 +18,7 @@ describe('Windows shell PATH ownership', () => {
       const env: Record<string, string | undefined> = {
         [key]: 'C:\\B;c:\\b;C:\\;\\\\Server\\Share\\'
       }
+
       const ownership = new WindowsShellPathOwnership()
       ownership.apply(env, 'C:\\Profile;C:\\B;C:\\;\\\\Server\\Share\\')
 

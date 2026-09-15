@@ -37,6 +37,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         isActive: true
       }
     ])
+
     const staleEmpty = makeSnapshot([], {
       publicationEpoch: ready.publicationEpoch,
       snapshotVersion: ready.snapshotVersion - 1,

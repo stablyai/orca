@@ -14,12 +14,15 @@ export async function startRendererTimingProbe(page) {
     let longTaskSupported = false
 
     const round = (value) => Math.round(value * 100) / 100
+
     const summarize = (values, totalCount = values.length) => {
       const sorted = [...values].sort((left, right) => left - right)
+
       const percentile = (fraction) =>
         sorted.length === 0
           ? null
           : sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]
+
       return {
         count: totalCount,
         retainedCount: sorted.length,
@@ -32,6 +35,7 @@ export async function startRendererTimingProbe(page) {
         max: sorted.length === 0 ? null : round(sorted.at(-1))
       }
     }
+
     const recordLongTasks = (entries) => {
       for (const entry of entries) {
         longTaskEntries.push({
@@ -39,13 +43,16 @@ export async function startRendererTimingProbe(page) {
           duration: entry.duration,
           name: entry.name
         })
+
         if (longTaskEntries.length > maxSamples) {
           longTaskEntries.shift()
         }
       }
     }
+
     try {
       longTaskSupported = PerformanceObserver.supportedEntryTypes?.includes('longtask') === true
+
       if (longTaskSupported) {
         observer = new PerformanceObserver((list) => recordLongTasks(list.getEntries()))
         observer.observe({ type: 'longtask', buffered: true })
@@ -54,24 +61,30 @@ export async function startRendererTimingProbe(page) {
       observer = null
       longTaskSupported = false
     }
+
     const scheduleTimer = () => {
       const expectedAt = performance.now() + timerIntervalMs
       timerId = setTimeout(() => {
         driftCount += 1
         driftSamples.push(Math.max(0, performance.now() - expectedAt))
+
         if (driftSamples.length > maxSamples) {
           driftSamples.shift()
         }
+
         scheduleTimer()
       }, timerIntervalMs)
     }
+
     const snapshot = (reset) => {
       if (observer) {
         recordLongTasks(observer.takeRecords())
       }
+
       const capturedAt = performance.now()
       const phaseLongTasks = longTaskEntries.filter((entry) => entry.startTime >= phaseStartedAt)
       const durations = phaseLongTasks.map((entry) => entry.duration)
+
       const result = {
         startedAt: phaseStartedAtIso,
         capturedAt: new Date().toISOString(),
@@ -90,6 +103,7 @@ export async function startRendererTimingProbe(page) {
           entriesTruncated: Math.max(0, phaseLongTasks.length - maxEntries)
         }
       }
+
       if (reset) {
         phaseStartedAt = capturedAt
         phaseStartedAtIso = new Date().toISOString()
@@ -97,8 +111,10 @@ export async function startRendererTimingProbe(page) {
         driftSamples = []
         longTaskEntries = []
       }
+
       return result
     }
+
     scheduleTimer()
     window.__orcaIdleCpuTimingProbe = {
       snapshot: () => snapshot(true),
@@ -106,8 +122,10 @@ export async function startRendererTimingProbe(page) {
         if (timerId !== null) {
           clearTimeout(timerId)
         }
+
         const result = snapshot(false)
         observer?.disconnect()
+
         return result
       }
     }
@@ -127,21 +145,27 @@ export async function runZustandPublications(page, count, intervalMs) {
     ({ count, intervalMs }) =>
       new Promise((resolve, reject) => {
         const store = window.__store
+
         if (!store) {
           reject(new Error('window.__store is not available'))
+
           return
         }
+
         const maxSamples = 5_000
         const startedAt = performance.now()
         const startedAtIso = new Date().toISOString()
         const schedulingDriftMs = []
         let completed = 0
+
         const finish = () => {
           const sorted = [...schedulingDriftMs].sort((left, right) => left - right)
+
           const percentile = (fraction) =>
             sorted.length === 0
               ? null
               : sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]
+
           const round = (value) => Math.round(value * 100) / 100
           resolve({
             requested: count,
@@ -158,28 +182,37 @@ export async function runZustandPublications(page, count, intervalMs) {
             }
           })
         }
+
         const publish = () => {
           const publishedAt = performance.now()
           const scheduledAt = startedAt + completed * intervalMs
           schedulingDriftMs.push(Math.max(0, publishedAt - scheduledAt))
+
           if (schedulingDriftMs.length > maxSamples) {
             schedulingDriftMs.shift()
           }
+
           try {
             // Why: an empty partial notifies every subscriber without changing domain state.
             store.setState({})
           } catch (error) {
             reject(error)
+
             return
           }
+
           completed += 1
+
           if (completed >= count) {
             finish()
+
             return
           }
+
           const nextAt = startedAt + completed * intervalMs
           setTimeout(publish, Math.max(0, nextAt - performance.now()))
         }
+
         if (count === 0) {
           finish()
         } else {

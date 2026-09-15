@@ -16,6 +16,7 @@ type VirtualizerOptionsCapture = {
 
 const virtualizerMock = vi.hoisted(() => {
   const scrollElement: { current: HTMLElement | null } = { current: null }
+
   return {
     options: { current: null } as VirtualizerOptionsCapture,
     getTotalSize: vi.fn(() => 0),
@@ -34,6 +35,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   elementScroll: vi.fn(),
   useVirtualizer: (options: VirtualizerOptionsCapture['current']) => {
     virtualizerMock.options.current = options
+
     return { ...virtualizerMock, scrollElement: virtualizerMock.scrollElement.current }
   }
 }))
@@ -88,8 +90,10 @@ describe('native chat transcript virtualizer contract', () => {
     scrollElement.scrollTop = 320
     virtualizerMock.takeSnapshot.mockImplementation(() => {
       const key = virtualizerMock.options.current?.getItemKey(0) ?? 'message-0'
+
       return [{ index: 0, key, start: 0, size: 96, end: 96, lane: 0 }]
     })
+
     const { rerender } = renderHook(
       ({ id }) =>
         useNativeChatTranscriptWindow({
@@ -111,14 +115,17 @@ describe('native chat transcript virtualizer contract', () => {
 
   it('keeps item-key lookup stable across content-only row revisions', () => {
     const scrollRef = { current: null }
+
     const { rerender } = renderHook(
       ({ text }) => {
         const current = slot('message-0')
         current.message.blocks = [{ type: 'text', text }]
+
         return useNativeChatTranscriptWindow({ scrollRef, slots: [current], revealIndex: -1 })
       },
       { initialProps: { text: 'first' } }
     )
+
     const getItemKey = virtualizerMock.options.current?.getItemKey
 
     rerender({ text: 'streamed revision' })
@@ -141,6 +148,7 @@ describe('native chat transcript virtualizer contract', () => {
         }
       }
     })
+
     const { result } = renderHook(() =>
       useNativeChatTranscriptWindow({
         scrollRef: { current: scrollElement },
@@ -161,6 +169,7 @@ describe('native chat transcript virtualizer contract', () => {
     const target = document.createElement('div')
     scrollElement.append(target)
     virtualizerMock.scrollElement.current = scrollElement
+
     const { result } = renderHook(() =>
       useNativeChatTranscriptWindow({
         scrollRef: { current: scrollElement },

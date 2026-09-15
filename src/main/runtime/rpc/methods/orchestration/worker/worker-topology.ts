@@ -43,11 +43,14 @@ export type WorkerSetupReceipt = {
 export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHandle: string) {
   const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
   const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
+
   const processIncarnation =
     authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
+
   if (!paneKey || !processIncarnation) {
     throw new Error('stable_pane_required')
   }
+
   return {
     paneKey,
     processIncarnation,
@@ -75,6 +78,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     // to the worker's workspace while the user is reading somewhere else.
     surfaceOwner: false
   })
+
   args.effects.push({
     kind: 'terminal',
     role: 'agent',
@@ -83,6 +87,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     surface: terminal.surface,
     warning: terminal.warning
   })
+
   return { handle: terminal.handle, warning: terminal.warning }
 }
 
@@ -107,7 +112,9 @@ export async function createStructuredWorkerSessionForWorktree(args: {
       `Structured workers support claude and codex; ${args.agent} has no structured session.`
     )
   }
+
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,
@@ -117,6 +124,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     onJournalActivity: (sessionId) =>
       args.runtime.notifyStructuredSessionJournalActivity?.(sessionId)
   })
+
   args.effects.push({
     kind: 'terminal',
     role: 'agent',
@@ -124,6 +132,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     id: created.identity.handle,
     surface: 'background'
   })
+
   return created
 }
 
@@ -135,6 +144,7 @@ export function applyWaitForSetupOutcome(
   if (receipt.startupPolicy !== 'wait-for-setup' || receipt.state !== 'running') {
     return
   }
+
   if (wait.satisfied) {
     receipt.state = 'succeeded'
   } else if (wait.status === 'exited') {
@@ -142,7 +152,9 @@ export function applyWaitForSetupOutcome(
   } else {
     return
   }
+
   const setupEffect = effects.find((effect) => effect.kind === 'setup')
+
   if (setupEffect) {
     setupEffect.state = receipt.state
   }
@@ -159,6 +171,7 @@ export function monitorWorkerSetup(args: {
   const setupTerminal = args.effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'setup' && effect.id
   )
+
   if (
     !setupTerminal?.id ||
     args.setupReceipt.startupPolicy !== 'start-immediately' ||
@@ -166,11 +179,13 @@ export function monitorWorkerSetup(args: {
   ) {
     return
   }
+
   // Why: setup is intentionally non-gating, but command completion remains durable evidence.
   void args.runtime
     .waitForSetupTerminalCompletion(setupTerminal.id)
     .then((completion) => {
       const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
+
       const evidence = args.db.updateWorkerSetupEvidence({
         dispatchId: args.dispatchId,
         setupState,
@@ -178,9 +193,11 @@ export function monitorWorkerSetup(args: {
           effect.kind === 'setup' ? { ...effect, state: setupState } : effect
         )
       })
+
       if (!evidence.changed) {
         return
       }
+
       const message = args.db.insertMessage({
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
@@ -194,6 +211,7 @@ export function monitorWorkerSetup(args: {
           terminalHandle: setupTerminal.id
         })
       })
+
       args.runtime.notifyMessageArrived(message.to_handle, message.type)
     })
     .catch(() => undefined)
@@ -204,12 +222,16 @@ export function isUnknownWorkerStartOutcome(error: unknown, stage: string): bool
     error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
       ? (error as { code: string }).code
       : ''
+
   if (code === 'operation_unknown') {
     return true
   }
+
   if (stage !== 'worktree_create') {
     return false
   }
+
   const message = error instanceof Error ? error.message : String(error)
+
   return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
 }

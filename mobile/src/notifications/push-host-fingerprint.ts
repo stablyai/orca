@@ -16,9 +16,11 @@ function decodeBase64(value: string): Uint8Array | null {
   try {
     const binary = atob(value)
     const bytes = new Uint8Array(binary.length)
+
     for (let index = 0; index < binary.length; index++) {
       bytes[index] = binary.charCodeAt(index)
     }
+
     return bytes
   } catch {
     return null
@@ -27,18 +29,22 @@ function decodeBase64(value: string): Uint8Array | null {
 
 function encodeBase64Url(bytes: Uint8Array): string {
   let binary = ''
+
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 /** Null when the stored key is unreadable, so a corrupt host entry can't shadow a real match. */
 export function deriveHostFingerprint(publicKeyB64: string): string | null {
   const publicKey = decodeBase64(publicKeyB64)
+
   if (!publicKey || publicKey.length !== 32) {
     return null
   }
+
   return encodeBase64Url(sha256(publicKey)).slice(0, HOST_FINGERPRINT_LENGTH)
 }
 
@@ -49,10 +55,12 @@ export function resolveHostIdForFingerprint(
   if (fingerprint.length !== HOST_FINGERPRINT_LENGTH) {
     return null
   }
+
   for (const host of hosts) {
     if (deriveHostFingerprint(host.publicKeyB64) === fingerprint) {
       return host.id
     }
   }
+
   return null
 }

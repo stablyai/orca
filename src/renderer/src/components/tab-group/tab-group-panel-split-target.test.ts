@@ -101,6 +101,7 @@ function mockTabGroupGeometry(
       if (entry.counts) {
         entry.counts.bodyReads += 1
       }
+
       return entry.bodyRect
     },
     parentElement: {
@@ -108,23 +109,28 @@ function mockTabGroupGeometry(
         if (entry.counts) {
           entry.counts.panelReads += 1
         }
+
         return entry.panelRect
       }
     }
   }))
+
   const queryAll = vi.fn(() => bodies)
   vi.stubGlobal('document', {
     querySelector: vi.fn((selector: string) => {
       const match = selector.match(/data-tab-group-body-id="([^"]+)"/)
+
       return bodies.find((body) => body.dataset.tabGroupBodyId === match?.[1]) ?? null
     }),
     querySelectorAll: queryAll
   })
+
   return { queryAll }
 }
 
 function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]
 }
 
@@ -140,6 +146,7 @@ function fourGroupFixture(): {
     { panelReads: 0, bodyReads: 0 },
     { panelReads: 0, bodyReads: 0 }
   ]
+
   const { queryAll } = mockTabGroupGeometry([
     {
       groupId: 'group-1',
@@ -248,6 +255,7 @@ describe('resolvePanelEdgePaneColumnSplit', () => {
     right: 900,
     bottom: 600
   } as DOMRect
+
   const bodyRect = {
     left: 500,
     top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
@@ -351,6 +359,7 @@ describe('resolveActivePaneColumnSplitTarget', () => {
     right: 900,
     bottom: 600
   } as DOMRect
+
   const bodyRect = {
     left: 500,
     top: TAB_GROUP_TAB_STRIP_HEIGHT_PX,
@@ -558,6 +567,7 @@ describe('resolveActivePaneColumnSplitTarget', () => {
       layoutByWorktree: fourGroupLayoutByWorktree,
       queryAll
     } = fourGroupFixture()
+
     const geometry = captureTabGroupPanelGeometrySnapshot('wt-1')
 
     const points = [
@@ -569,6 +579,7 @@ describe('resolveActivePaneColumnSplitTarget', () => {
       { x: 968, y: 300 },
       { x: 1204, y: 300 }
     ]
+
     for (const pointer of points) {
       resolveActivePaneColumnSplitTarget({
         event: makeEvent({
@@ -595,7 +606,9 @@ describe('resolveActivePaneColumnSplitTarget', () => {
       layoutByWorktree: fourGroupLayoutByWorktree,
       queryAll
     } = fourGroupFixture()
+
     const geometry = captureTabGroupPanelGeometrySnapshot('wt-1')
+
     const points = [
       { x: 295, y: 300 },
       { x: 360, y: 300 },
@@ -606,7 +619,9 @@ describe('resolveActivePaneColumnSplitTarget', () => {
       { x: 1204, y: 300 },
       { x: 650, y: 300 }
     ]
+
     const durations: number[] = []
+
     for (let index = 0; index < 1_000; index += 1) {
       const pointer = points[index % points.length]!
       const startedAt = performance.now()

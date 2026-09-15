@@ -25,8 +25,11 @@ export type GitHistoryPanelState =
   | { status: 'error'; result?: GitHistoryResult; error: string }
 
 const DEFAULT_GIT_HISTORY_PANEL_HEIGHT = 256
+
 const MIN_GIT_HISTORY_PANEL_HEIGHT = 96
+
 const MAX_GIT_HISTORY_PANEL_HEIGHT = 520
+
 const MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT = '33vh'
 
 type GitHistoryResizeSession = {
@@ -64,10 +67,12 @@ export function GitHistoryPanel({
   onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element | null {
   const result = state.result
+
   const viewModels = useMemo(() => {
     if (!result) {
       return []
     }
+
     return buildGitHistoryViewModels(
       result.items,
       buildDefaultGitHistoryColorMap(result),
@@ -87,17 +92,20 @@ export function GitHistoryPanel({
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
+
   // Tracks commits whose files have been loaded (or are in flight) so re-expanding
   // never refetches; an entry is cleared on error to allow a retry.
   const loadedCommitsRef = useRef<{
     result: GitHistoryResult | undefined
     ids: Set<string>
   }>(undefined!)
+
   loadedCommitsRef.current ??= { result, ids: new Set() }
 
   // A new history result can reorder or replace commits, so drop any expansion
   // and cached file lists rather than risk showing stale files under a row.
   const [historyResult, setHistoryResult] = useState(result)
+
   if (historyResult !== result) {
     setHistoryResult(result)
     setExpanded(new Set())
@@ -110,21 +118,26 @@ export function GitHistoryPanel({
       const willExpand = !expanded.has(id)
       setExpanded((prev) => {
         const next = new Set(prev)
+
         if (willExpand) {
           next.add(id)
         } else {
           next.delete(id)
         }
+
         return next
       })
+
       // Why: clear the in-flight lock in the click handler, not during render —
       // a new history result can reuse commit ids with different file lists.
       if (loadedCommitsRef.current.result !== result) {
         loadedCommitsRef.current = { result, ids: new Set() }
       }
+
       if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.ids.has(id)) {
         return
       }
+
       loadedCommitsRef.current.ids.add(id)
       setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
       onLoadCommitFiles(item)
@@ -135,6 +148,7 @@ export function GitHistoryPanel({
           if (loadedCommitsRef.current.result === result) {
             loadedCommitsRef.current.ids.delete(id)
           }
+
           setFilesByCommit((prev) => ({
             ...prev,
             [id]: {
@@ -155,9 +169,11 @@ export function GitHistoryPanel({
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
+
     if (!session) {
       return
     }
+
     resizeSessionRef.current = null
     document.body.style.cursor = session.previousCursor
     document.body.style.userSelect = session.previousUserSelect
@@ -165,9 +181,11 @@ export function GitHistoryPanel({
 
   const handleResizePointerMove = useCallback((event: PointerEvent): void => {
     const session = resizeSessionRef.current
+
     if (!session) {
       return
     }
+
     setPanelHeight(clampGitHistoryPanelHeight(session.startHeight + session.startY - event.clientY))
   }, [])
 
@@ -176,6 +194,7 @@ export function GitHistoryPanel({
     window.addEventListener('pointerup', stopResize)
     window.addEventListener('pointercancel', stopResize)
     window.addEventListener('blur', stopResize)
+
     return () => {
       window.removeEventListener('pointermove', handleResizePointerMove)
       window.removeEventListener('pointerup', stopResize)
@@ -190,6 +209,7 @@ export function GitHistoryPanel({
       if (collapsed) {
         return
       }
+
       event.preventDefault()
       resizeSessionRef.current = {
         startY: event.clientY,
@@ -206,6 +226,7 @@ export function GitHistoryPanel({
 
   const handleResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>): void => {
     const step = event.shiftKey ? 32 : 16
+
     if (event.key === 'ArrowUp') {
       event.preventDefault()
       setPanelHeight((height) => clampGitHistoryPanelHeight(height + step))
@@ -222,6 +243,7 @@ export function GitHistoryPanel({
   }, [])
 
   const expandedBodyClassName = 'overflow-y-auto scrollbar-sleek'
+
   const expandedBodyStyle = {
     height: `min(${panelHeight}px, ${MAX_GIT_HISTORY_PANEL_VIEWPORT_HEIGHT})`
   }
@@ -295,10 +317,13 @@ export function GitHistoryPanel({
                 className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
                 onClick={(event) => {
                   event.stopPropagation()
+
                   if (collapsed) {
                     onToggle()
+
                     return
                   }
+
                   onRefresh()
                 }}
                 aria-label={translate(
@@ -355,11 +380,15 @@ export function GitHistoryPanel({
         <div className={expandedBodyClassName} style={expandedBodyStyle}>
           {viewModels.map((viewModel) => {
             const item = viewModel.historyItem
+
             const isBoundaryNode =
               viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+
             const canExpand =
               !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
+
             const isExpanded = canExpand && expanded.has(item.id)
+
             const row = (
               <GitHistoryRow
                 viewModel={viewModel}
@@ -369,6 +398,7 @@ export function GitHistoryPanel({
                 onToggleExpand={canExpand ? handleToggleExpand : undefined}
               />
             )
+
             return (
               <React.Fragment key={`${viewModel.kind}:${item.id}`}>
                 {onCommitAction && !isBoundaryNode ? (

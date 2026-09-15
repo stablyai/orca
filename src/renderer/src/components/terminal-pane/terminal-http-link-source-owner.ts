@@ -12,12 +12,14 @@ export function resolveTerminalHttpLinkSourceOwner(
   transport: OwnerTransport | null | undefined
 ): HttpLinkSourceOwner {
   const retainedRuntimeEnvironmentId = transport?.getRuntimeEnvironmentId?.()?.trim()
+
   if (retainedRuntimeEnvironmentId) {
     return { kind: 'runtime', runtimeEnvironmentId: retainedRuntimeEnvironmentId }
   }
 
   const ptyId = transport?.getPtyId() ?? null
   const retainedSshConnectionId = transport?.getConnectionId?.()?.trim()
+
   if (!ptyId) {
     return retainedSshConnectionId
       ? { kind: 'ssh', connectionId: retainedSshConnectionId }
@@ -25,11 +27,13 @@ export function resolveTerminalHttpLinkSourceOwner(
   }
 
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   if (runtimeEnvironmentId) {
     return { kind: 'runtime', runtimeEnvironmentId }
   }
 
   const sshPty = parseAppSshPtyId(ptyId)
+
   if (sshPty) {
     return { kind: 'ssh', connectionId: sshPty.connectionId }
   }
@@ -42,5 +46,6 @@ export function resolveTerminalHttpLinkSourceOwner(
   if (parseRemoteRuntimePtyId(ptyId)) {
     return { kind: 'unknown' }
   }
+
   return { kind: 'local' }
 }

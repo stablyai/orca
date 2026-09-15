@@ -13,9 +13,11 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
 
   const measureOverflow = useCallback((element: HTMLParagraphElement) => {
     const nextOverflows = element.scrollHeight > element.clientHeight + 1
+
     if (!nextOverflows && document.activeElement === toggleRef.current) {
       element.focus({ preventScroll: true })
     }
+
     setOverflows((current) => (current === nextOverflows ? current : nextOverflows))
   }, [])
 
@@ -29,14 +31,18 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
         measureOverflow(promptElement)
       }
     }
+
     updateOverflow()
+
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', updateOverflow)
+
       return () => window.removeEventListener('resize', updateOverflow)
     }
 
     const observer = new ResizeObserver(updateOverflow)
     observer.observe(promptElement)
+
     return () => observer.disconnect()
   }, [expanded, measureOverflow, promptElement])
 

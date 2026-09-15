@@ -5,6 +5,7 @@
 // would obscure ownership of the Project surface.
 
 export type GitHubProjectViewLayout = 'TABLE_LAYOUT' | 'BOARD_LAYOUT' | 'ROADMAP_LAYOUT'
+
 export type GitHubProjectOwnerType = 'organization' | 'user'
 
 // Why: anything outside this union must render as an empty cell — the

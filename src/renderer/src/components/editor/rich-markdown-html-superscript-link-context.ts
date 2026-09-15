@@ -20,10 +20,12 @@ export function createRichMarkdownHtmlSuperscriptLinkContext(
 ): RichMarkdownHtmlSuperscriptLinkContext {
   let snapshot = { ...initial, version: 0 }
   const listeners = new Set<() => void>()
+
   return {
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     },
     update: (next) => {
@@ -35,6 +37,7 @@ export function createRichMarkdownHtmlSuperscriptLinkContext(
       ) {
         return
       }
+
       snapshot = { ...next, version: snapshot.version + 1 }
       listeners.forEach((listener) => listener())
     }
@@ -48,10 +51,13 @@ export function classifyHtmlSuperscriptLinkAction(
   if (snapshot.sourceOwner.kind === 'unknown' || /^[\t\n\f\r ]*$/.test(href)) {
     return false
   }
+
   const target = resolveMarkdownLinkTarget(href, snapshot.sourceFilePath, snapshot.worktreeRoot)
+
   if (!target) {
     return false
   }
+
   return !(
     target.kind === 'file' &&
     target.relativePath === undefined &&
@@ -63,11 +69,14 @@ function sameOwner(left: HttpLinkSourceOwner, right: HttpLinkSourceOwner): boole
   if (left.kind !== right.kind) {
     return false
   }
+
   if (left.kind === 'runtime' && right.kind === 'runtime') {
     return left.runtimeEnvironmentId === right.runtimeEnvironmentId
   }
+
   if (left.kind === 'ssh' && right.kind === 'ssh') {
     return left.connectionId === right.connectionId
   }
+
   return true
 }

@@ -9,6 +9,7 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 // specs, so quoted prompt wording lands in scrollback while the terminal sits at its input box.
 const QUOTED_DETECTOR_SOURCE_LINE =
   "└   if (hooksindex !== -1 && normalized.includes('press enter to confirm', hooksindex)) {"
+
 const QUOTED_PERMISSION_FIXTURE_LINE =
   "  └ 236:      'Permission required\\nThis command requires permission\\nAllow once\\nAllow always\\nReject\\n',"
 
@@ -34,9 +35,11 @@ function codexScrollback(quotedLines: string[], trailingLineCount: number): stri
     '    src/main/runtime/orca-runtime-tests/terminal-creation-and-readiness-part-07.spec.ts',
     ...quotedLines
   ]
+
   for (let index = 0; index < trailingLineCount; index += 1) {
     lines.push(`    ${index}: unrelated codex narration about hook wiring and sandbox policy`)
   }
+
   return lines
 }
 
@@ -171,6 +174,7 @@ describe('detectTerminalWaitBlockedReason live prompts', () => {
     it(`blocks on a live ${prompt.name} prompt rendered with blank spacer rows`, () => {
       // Why: the visible-screen probe joins raw rows, so blank rows between dialog lines must not eat the window.
       const spaced = prompt.lines.flatMap((line) => [line, '', ''])
+
       const screen = [
         ' >_ OpenAI Codex (v0.153.3)',
         '',

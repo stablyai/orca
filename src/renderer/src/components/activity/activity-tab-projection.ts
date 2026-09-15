@@ -37,21 +37,29 @@ export function projectActivityTabs(
 ): ActivityTabProjection {
   const next: ActivityTabProjection = {}
   let changed = previous === null
+
   for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
     const relevant = tabs.filter(isActivityRelevantTab)
+
     if (relevant.length === 0) {
       continue
     }
+
     const prior = previous?.[worktreeId]
     let reusable = prior !== undefined && prior.length === relevant.length
+
     const projected = relevant.map((tab, index) => {
       const priorTab = prior?.[index]
+
       if (priorTab && activityTabFieldsEqual(priorTab, tab)) {
         return priorTab
       }
+
       reusable = false
+
       return tab
     })
+
     if (reusable && prior) {
       next[worktreeId] = prior
     } else {
@@ -59,8 +67,10 @@ export function projectActivityTabs(
       changed = true
     }
   }
+
   if (!changed && previous && Object.keys(previous).length === Object.keys(next).length) {
     return previous
   }
+
   return next
 }

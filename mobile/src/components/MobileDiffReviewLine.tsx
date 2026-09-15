@@ -19,6 +19,7 @@ type Props = {
 function accessibilityLabelForLine(line: MobileDiffLine): string {
   const number = mobileDiffLineNumber(line)
   const label = line.kind === 'add' ? 'Added' : line.kind === 'delete' ? 'Deleted' : 'Context'
+
   return number ? `${label} line ${number}` : `${label} line`
 }
 

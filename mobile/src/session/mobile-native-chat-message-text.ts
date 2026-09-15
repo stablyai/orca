@@ -1,5 +1,6 @@
 /** Pinch-to-zoom font bounds. Default 1 means no visible change until pinched. */
 export const FONT_SCALE_MIN = 0.8
+
 export const FONT_SCALE_MAX = 1.8
 
 /** Clamp a proposed font scale into the supported range. */
@@ -7,6 +8,7 @@ export function clampFontScale(scale: number): number {
   if (Number.isNaN(scale)) {
     return 1
   }
+
   return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, scale))
 }
 
@@ -30,7 +32,9 @@ export function quantizeFontScale(scale: number): number {
   if (Number.isNaN(scale)) {
     return 1
   }
+
   const stepped = Math.round(clampFontScale(scale) / FONT_SCALE_STEP) * FONT_SCALE_STEP
+
   // Re-clamp: rounding can push the outermost step past the bound.
   return clampFontScale(Number(stepped.toFixed(2)))
 }

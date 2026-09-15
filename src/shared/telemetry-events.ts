@@ -26,6 +26,7 @@ export {
   workspaceCreateErrorClassSchema,
   workspaceSourceSchema
 } from './telemetry-property-schemas'
+
 export type {
   AddRepoDefaultCheckoutHandoffSource,
   AddRepoExistingWorkspaceSource,
@@ -47,18 +48,24 @@ export {
   featureInteractionUsageBucketSchema,
   featureInteractionUsageBucketSourceSchema
 } from './telemetry-app-event-schemas'
+
 export {
   hookInstallAgentSchema,
   runtimeRpcStartErrorClassSchema
 } from './telemetry-daemon-event-schemas'
+
 export type { HookInstallAgent, RuntimeRpcStartErrorClass } from './telemetry-daemon-event-schemas'
+
 export type { NativeChatRuntime } from './telemetry-native-feature-event-schemas'
+
 export { eventSchemas } from './telemetry-event-registry'
+
 export {
   commonPropsSchema,
   isCohortExtendedEvent,
   isOnboardingEvent
 } from './telemetry-event-classification'
+
 export type {
   CommonProps,
   EventMap,

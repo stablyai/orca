@@ -4,14 +4,17 @@ import { join, posix } from 'node:path'
 import { RECORDING_DRIVERS } from './recording-drivers'
 
 export const RECORDER_DIRECTORY = 'mobile/src/test-support/rpc-recording'
+
 /** The per-domain mount adapters. Excluded below and pinned per golden by `adapterSha256` instead. */
 export const ADAPTER_DIRECTORY = `${RECORDER_DIRECTORY}/adapters`
+
 /**
  * Mutant evidence. Excluded below and pinned by nothing: no recording ever reads it. Deliberately
  * not exported — an importable handle is a way for the recording path to name the directory without
  * spelling it, and `mutants/mutant-seam.test.ts` rejects both spellings.
  */
 const MUTANT_DIRECTORY = `${RECORDER_DIRECTORY}/mutants`
+
 const digests = new Map<string, string>()
 
 function skippedTest(name: string): boolean {
@@ -24,6 +27,7 @@ function collect(root: string, relative: string, files: string[]): void {
     a.name < b.name ? -1 : 1
   )) {
     const child = `${relative}/${entry.name}`
+
     if (entry.isDirectory()) {
       if (child !== ADAPTER_DIRECTORY && child !== MUTANT_DIRECTORY) {
         collect(root, child, files)
@@ -54,11 +58,14 @@ function collect(root: string, relative: string, files: string[]): void {
  */
 export function recorderSha256(root: string): string {
   const cached = digests.get(root)
+
   if (cached !== undefined) {
     return cached
   }
+
   const files: string[] = []
   collect(root, RECORDER_DIRECTORY, files)
+
   const digest = createHash('sha256')
     .update(
       files
@@ -66,6 +73,8 @@ export function recorderSha256(root: string): string {
         .join('\n')
     )
     .digest('hex')
+
   digests.set(root, digest)
+
   return digest
 }

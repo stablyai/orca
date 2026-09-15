@@ -1,4 +1,5 @@
 export const WORKSPACE_SPACE_MAX_SCANNED_ENTRIES = 100_000
+
 export const WORKSPACE_SPACE_MAX_RETAINED_SCAN_BYTES = 64 * 1024 * 1024
 
 const WORKSPACE_SPACE_ENTRY_OVERHEAD_BYTES = 512
@@ -26,6 +27,7 @@ export type WorkspaceSpaceScanBudget = {
 
 function formatLiveStateLimit(bytes: number): string {
   const mebibytes = bytes / (1024 * 1024)
+
   return mebibytes >= 1
     ? `${Math.round(mebibytes * 10) / 10} MiB`
     : `${bytes.toLocaleString('en-US')} bytes`
@@ -73,12 +75,14 @@ export function retainWorkspaceSpaceScanEntry(
 ): void {
   const retainedBytes =
     budget.retainedBytes + estimateWorkspaceSpaceEntryRetainedBytes(entryName) + additionalBytes
+
   if (
     listingEntryCount >= budget.limits.maxEntries ||
     retainedBytes > budget.limits.maxRetainedBytes
   ) {
     throw new WorkspaceSpaceScanCapacityError(budget.limits)
   }
+
   budget.retainedBytes = retainedBytes
 }
 
@@ -106,14 +110,17 @@ export async function collectWorkspaceSpaceDirectoryEntries<TEntry>(
 ): Promise<WorkspaceSpaceDirectoryAdmission<TEntry>> {
   const entries: TEntry[] = []
   let retainedBytes = 0
+
   try {
     for await (const entry of directory) {
       checkCancelled()
       const name = entryName(entry)
+
       // The listing's shared parent path is charged once, with its first entry,
       // so an empty listing holds no charge for the caller to release.
       const listingBytes =
         entries.length === 0 ? estimateWorkspaceSpaceListingRetainedBytes(parentPath) : 0
+
       retainWorkspaceSpaceScanEntry(budget, name, entries.length, listingBytes)
       retainedBytes += estimateWorkspaceSpaceEntryRetainedBytes(name) + listingBytes
       entries.push(entry)
@@ -124,6 +131,7 @@ export async function collectWorkspaceSpaceDirectoryEntries<TEntry>(
     releaseWorkspaceSpaceScanEntries(budget, retainedBytes)
     throw error
   }
+
   return { entries, retainedBytes }
 }
 
@@ -131,5 +139,6 @@ function clampLimit(value: number | undefined, maximum: number): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     return maximum
   }
+
   return Math.min(value, maximum)
 }

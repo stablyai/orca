@@ -16,20 +16,27 @@ export function useMobilePageEscape(onClose: () => void): void {
       if (event.key !== 'Escape' || event.defaultPrevented) {
         return
       }
+
       const target = event.target
+
       if (!(target instanceof HTMLElement)) {
         return
       }
+
       if (isEditableElement(target)) {
         event.preventDefault()
         target.blur()
+
         return
       }
+
       event.preventDefault()
       onClose()
     }
+
     // Why: bubble phase lets Radix popovers/selects consume Escape first.
     window.addEventListener('keydown', onKeyDown)
+
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 }

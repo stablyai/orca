@@ -74,6 +74,7 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
     browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId),
   reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked)
 })
+
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 
 // Why: downloads must fail closed for client-hosted content, so the router needs to tell a route
@@ -82,7 +83,9 @@ setBrowserClientRouteWebContentsProbe((webContentsId) => {
   if (isBrowserRouteGuestPopup(webContentsId)) {
     return true
   }
+
   const contents = webContents.fromId(webContentsId)
+
   return Boolean(
     contents &&
     !contents.isDestroyed() &&

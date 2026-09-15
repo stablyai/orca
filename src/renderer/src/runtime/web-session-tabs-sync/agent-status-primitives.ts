@@ -17,6 +17,7 @@ export function toMirroredPaneKey(
   if (!isTerminalLeafId(leafId)) {
     return null
   }
+
   return makePaneKey(toWebTerminalSurfaceTabId(surface.parentTabId), leafId)
 }
 
@@ -28,14 +29,18 @@ export function remapHostAgentStatus(
   if (!surface.agentStatus) {
     return null
   }
+
   const paneKey = toMirroredPaneKey(surface, retainedSurface?.leafId)
+
   if (!paneKey) {
     return null
   }
+
   const ownerRecord = resolvePaneAgentOwnerRecord({
     launchAgent: retainedSurface?.launchAgent ?? surface.launchAgent,
     hookAgent: surface.agentStatus.agentType
   })
+
   return {
     ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerRecord?.agent, {
       ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
@@ -50,6 +55,7 @@ export function isMirroredAgentPaneKeyForTabs(
   tabIds: ReadonlySet<string>
 ): boolean {
   const parsed = parsePaneKey(paneKey)
+
   return parsed !== null && tabIds.has(parsed.tabId)
 }
 
@@ -88,18 +94,23 @@ export function batchAgentPaneKeysForTabs(
   if (!batchContext) {
     return Object.keys(state.agentStatusByPaneKey)
   }
+
   if (!batchContext.agentPaneKeysByTabId) {
     batchContext.agentPaneKeysByTabId = new Map()
+
     for (const paneKey of Object.keys(state.agentStatusByPaneKey)) {
       const tabId = parsePaneKey(paneKey)?.tabId
+
       if (!tabId) {
         continue
       }
+
       const paneKeys = batchContext.agentPaneKeysByTabId.get(tabId) ?? new Set<string>()
       paneKeys.add(paneKey)
       batchContext.agentPaneKeysByTabId.set(tabId, paneKeys)
     }
   }
+
   return [...tabIds].flatMap((tabId) => [...(batchContext.agentPaneKeysByTabId?.get(tabId) ?? [])])
 }
 
@@ -110,17 +121,22 @@ export function updateBatchAgentPaneKey(
 ): void {
   const tabId = parsePaneKey(paneKey)?.tabId
   const index = batchContext?.agentPaneKeysByTabId
+
   if (!tabId || !index) {
     return
   }
+
   if (present) {
     const paneKeys = index.get(tabId) ?? new Set<string>()
     paneKeys.add(paneKey)
     index.set(tabId, paneKeys)
+
     return
   }
+
   const paneKeys = index.get(tabId)
   paneKeys?.delete(paneKey)
+
   if (paneKeys?.size === 0) {
     index.delete(tabId)
   }
@@ -134,12 +150,14 @@ export function buildRemirroredClosedTabMarkerLiftPatch(
   mirroredTerminalIds: ReadonlySet<string>
 ): Partial<WebSessionTabsSyncState> | null {
   let next: WebSessionTabsSyncState['recentlyClosedAgentStatusTabIds'] | null = null
+
   for (const tabId of mirroredTerminalIds) {
     if (tabId in (recentlyClosedAgentStatusTabIds ?? {})) {
       next ??= { ...recentlyClosedAgentStatusTabIds }
       delete next[tabId]
     }
   }
+
   return next ? { recentlyClosedAgentStatusTabIds: next } : null
 }
 
@@ -162,9 +180,11 @@ export function buildRetractedMirroredTabSweepPatch(
   // Why: only a mirrored id the host stopped publishing is a retraction — a local or provisional
   // tab in this list is being renamed into its mirror, and a rename must keep its rows.
   const retractedTabIds = removedTerminalResourceIds.filter(isMirroredTerminalSurfaceId)
+
   if (retractedTabIds.length === 0) {
     return null
   }
+
   const sweepState: RetiredTerminalTabSweepState = {
     acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},
     activityClearedAtByPaneKey: state.activityClearedAtByPaneKey ?? {},
@@ -183,22 +203,27 @@ export function buildRetractedMirroredTabSweepPatch(
     // so it must see the post-removal tab list, not the one the snapshot replaced.
     tabsByWorktree: nextTabsByWorktree
   }
+
   // Why: a retraction can be a reconnect re-key, not pane death (ssh-execution-boundary); keeping
   // cutoffs means a republished pane cannot replay activity the user cleared on this client.
   const sweep = buildRetiredTerminalTabStateSweepPatch(sweepState, retractedTabIds, worktreeId, {
     preserveActivityClearedState: true
   })
+
   if (!sweep?.agentStatusByPaneKey || !batchContext) {
     return sweep ?? null
   }
+
   // Why: the batch republishes its own record copy at the end, which would undo the sweep.
   const mutableState = state as unknown as Record<string, unknown>
   mutableState.agentStatusByPaneKey = sweep.agentStatusByPaneKey
   batchContext.changedRecords.add('agentStatusByPaneKey')
+
   for (const paneKey of Object.keys(sweepState.agentStatusByPaneKey)) {
     if (!(paneKey in sweep.agentStatusByPaneKey)) {
       updateBatchAgentPaneKey(paneKey, false, batchContext)
     }
   }
+
   return sweep
 }

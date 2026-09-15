@@ -13,9 +13,11 @@ const snapshot = {
 
 function handler(methods: readonly RpcMethodDeclaration[], name: string) {
   const method = eraseRpcMethods(methods).find((candidate) => candidate.name === name)
+
   if (!method) {
     throw new Error(`Missing method ${name}`)
   }
+
   return method.handler
 }
 
@@ -23,12 +25,14 @@ describe('runtime updater RPC methods', () => {
   const getSnapshot = vi.fn(() => snapshot)
   const check = vi.fn(() => snapshot)
   const download = vi.fn(() => snapshot)
+
   const install = vi.fn(() => ({
     accepted: true as const,
     fromVersion: '1.5.0',
     targetVersion: '1.5.1',
     runtimeId: 'runtime-rpc'
   }))
+
   const runtime = {
     getRuntimeId: () => 'runtime-rpc',
     getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 2, liveLeafCount: 3 })

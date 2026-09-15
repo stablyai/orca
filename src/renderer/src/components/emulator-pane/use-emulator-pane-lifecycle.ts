@@ -22,6 +22,7 @@ export function useEmulatorPaneLifecycle({
     mountedRef.current = true
     cancelPendingSimulatorPaneShutdown(worktreeId)
     void refreshDevices()
+
     return () => {
       mountedRef.current = false
       scheduleSimulatorPaneManagedShutdown(worktreeId, tabId)

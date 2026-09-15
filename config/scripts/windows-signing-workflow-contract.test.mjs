@@ -13,9 +13,11 @@ describe('Windows signing workflow contract', () => {
     const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
+
     const installStepIndexes = stepNames.flatMap((name, index) =>
       name === 'Install SignPath PowerShell module' ? [index] : []
     )
+
     const buildIndex = stepNames.indexOf('Build Windows release artifacts')
     const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
     const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
@@ -46,6 +48,7 @@ describe('Windows signing workflow contract', () => {
     const installAction = readWorkflow('.github/actions/install-signpath-module/action.yml')
     const actionStep = installAction.runs.steps[0]
     const installRun = actionStep.run
+
     const sleepSeconds = [...installRun.matchAll(/Start-Sleep -Seconds (\d+)/g)].map(
       ([, seconds]) => seconds
     )
@@ -217,6 +220,7 @@ describe('Windows signing workflow contract', () => {
       'Replace cached elevate.exe with the signed copy',
       'Rebuild NSIS installer from signed unpacked app'
     ]
+
     for (const stepName of innerChainStepNames) {
       const step = steps[stepNames.indexOf(stepName)]
       expect(step, stepName).toBeDefined()
@@ -255,6 +259,7 @@ describe('Windows NSIS uninstaller signing', () => {
     ].flatMap((step) => [step.env?.[EXPORT_ENV], step.env?.[SIGNED_ENV]].filter(Boolean))
 
     expect(relayEnvValues.length).toBe(4)
+
     for (const value of relayEnvValues) {
       expect(value).toContain('runner.temp')
       expect(value).not.toContain('github.workspace')
@@ -268,6 +273,7 @@ describe('Windows NSIS uninstaller signing', () => {
       .filter((run) => run.includes('uninstaller-signing'))
 
     expect(relayScripts.length).toBeGreaterThan(0)
+
     for (const run of relayScripts) {
       // Why count occurrences rather than assert `toContain` once: a step
       // carrying two relay paths could root the first in RUNNER_TEMP and leave
@@ -286,11 +292,13 @@ describe('Windows NSIS uninstaller signing', () => {
 
     expect(stage.run).toContain('uninstaller-signing\\unsigned\\orca-uninstaller.exe')
     expect(stage.run).toContain('uninstaller\\orca-uninstaller.exe')
+
     // No third SignPath request: exactly two submissions, as budgeted for the
     // 1h + 4h approval waits inside the 360-minute job cap.
     const submissions = releaseSteps().filter(
       (step) => step.uses === 'signpath/github-action-submit-signing-request@v2'
     )
+
     expect(submissions).toHaveLength(2)
   })
 
@@ -298,6 +306,7 @@ describe('Windows NSIS uninstaller signing', () => {
   // SignPath artifact-configuration gap would cost the inner-binary signatures.
   it('keeps the uninstaller out of the inner-binary copy-back list', () => {
     const stage = stepNamed(releaseSteps(), 'Stage unsigned inner PE files for signing')
+
     const restoreInner = stepNamed(
       releaseSteps(),
       'Restore signed inner binaries into unpacked app'
@@ -364,6 +373,7 @@ describe('Windows NSIS uninstaller signing', () => {
   it('rehearses the uninstaller leg end to end', () => {
     const steps = readWorkflow('.github/workflows/windows-signing-rehearsal.yml').jobs.rehearse
       .steps
+
     const names = steps.map((step) => step.name)
     const pack = stepNamed(steps, 'Package Windows app and export the NSIS uninstaller')
     const rebuild = stepNamed(steps, 'Build NSIS installer from signed unpacked app')
@@ -391,6 +401,7 @@ describe('Windows NSIS uninstaller signing', () => {
   it('never lets an unreliable extract fail the rehearsal', () => {
     const steps = readWorkflow('.github/workflows/windows-signing-rehearsal.yml').jobs.rehearse
       .steps
+
     const verify = stepNamed(steps, 'Verify signatures end to end')
 
     // The 7-Zip route is only trusted when it reproduces the relayed bytes;
@@ -422,7 +433,9 @@ describe('Windows NSIS uninstaller signing', () => {
   it('confines the advisory escape hatch to elevate.exe', () => {
     const steps = readWorkflow('.github/workflows/windows-signing-rehearsal.yml').jobs.rehearse
       .steps
+
     const verify = stepNamed(steps, 'Verify signatures end to end')
+
     const advisoryCalls = verify.run
       .split('\n')
       .filter((line) => line.includes('-Advisory') && line.includes('Test-Signature'))
@@ -436,6 +449,7 @@ describe('Windows NSIS uninstaller signing', () => {
       const line = verify.run
         .split('\n')
         .find((it) => it.includes(`Test-Signature`) && it.includes(call))
+
       expect(line, call).toBeDefined()
       expect(line, call).not.toContain('-Advisory')
     }

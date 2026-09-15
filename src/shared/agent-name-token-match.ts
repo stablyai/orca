@@ -66,4 +66,5 @@ export const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 // Why: Hermes/agy are safe to token-match but unsafe as substrings because
 // cwd/path titles like `~/hermes/working` would otherwise count as activity.
 export const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
+
 export const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i

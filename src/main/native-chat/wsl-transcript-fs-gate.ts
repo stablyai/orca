@@ -13,11 +13,16 @@ import {
 } from './wsl-transcript-fs-route-quarantine'
 
 const MAX_CONCURRENT_WSL_TRANSCRIPT_FS_TASKS = 2
+
 export const WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS = 30_000
+
 export const WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS = 60_000
+
 // Burst bounds keep polling fan-out from growing retained tasks or callers indefinitely.
 export const WSL_TRANSCRIPT_FS_MAX_PENDING_TASKS = 64
+
 export const WSL_TRANSCRIPT_FS_MAX_WAITERS_PER_TASK = 64
+
 export {
   WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE,
   WSL_TRANSCRIPT_FS_SLOW_MESSAGE,
@@ -25,6 +30,7 @@ export {
   wslTranscriptFsRefusal,
   type WslTranscriptFsFailureCode
 } from './wsl-transcript-fs-error'
+
 export { WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS } from './wsl-transcript-fs-route-quarantine'
 
 export type WslTranscriptFsTaskPriority = 'exact' | 'scan'
@@ -56,10 +62,15 @@ type ScheduledTask<T> = {
 type UnknownScheduledTask = ScheduledTask<unknown>
 
 let activeScanCount = 0
+
 let undedupedTaskId = 0
+
 const activeLaneKeys = new Set<string>()
+
 const queuedTasks: UnknownScheduledTask[] = []
+
 const inFlightTasks = new Map<string, UnknownScheduledTask>()
+
 const activeTasks = new Set<UnknownScheduledTask>()
 
 function abortReason(signal: AbortSignal): unknown {
@@ -68,6 +79,7 @@ function abortReason(signal: AbortSignal): unknown {
 
 function removeQueuedTask(task: UnknownScheduledTask): void {
   const index = queuedTasks.indexOf(task)
+
   if (index !== -1) {
     queuedTasks.splice(index, 1)
   }
@@ -83,9 +95,11 @@ function abandonTaskIfUnused(task: UnknownScheduledTask, reason?: unknown): void
   if (task.waiters.size > 0 || task.state === 'settled') {
     return
   }
+
   // Running I/O keeps its permit and its process: an abort here would kill a
   // healthy child and pre-empt the deadline's quarantine. Only the deadline aborts.
   clearTask(task)
+
   if (task.state === 'queued') {
     task.controller.abort(reason)
     task.state = 'settled'
@@ -98,12 +112,15 @@ function removeWaiter<T>(task: ScheduledTask<T>, waiter: TaskWaiter<T>): boolean
   if (!task.waiters.delete(waiter)) {
     return false
   }
+
   if (waiter.signal && waiter.onAbort) {
     waiter.signal.removeEventListener('abort', waiter.onAbort)
   }
+
   if (waiter.timeout) {
     clearTimeout(waiter.timeout)
   }
+
   return true
 }
 
@@ -117,10 +134,12 @@ function timeoutMs(priority: WslTranscriptFsTaskPriority): number {
 // its own waiter deadline — one full deadline per file in a sequential scan.
 function failQueuedRouteTasks(route: string): void {
   const doomed = queuedTasks.filter((task) => task.route === route && task.state === 'queued')
+
   for (const task of doomed) {
     task.state = 'settled'
     removeQueuedTask(task)
     clearTask(task)
+
     for (const waiter of task.waiters) {
       removeWaiter(task, waiter)
       waiter.reject(unavailableError())
@@ -136,26 +155,34 @@ function attachWaiter<T>(task: ScheduledTask<T>, signal?: AbortSignal): Promise<
   if (task.waiters.size >= WSL_TRANSCRIPT_FS_MAX_WAITERS_PER_TASK) {
     return Promise.reject(capacityError())
   }
+
   return new Promise<T>((resolve, reject) => {
     const waiter: TaskWaiter<T> = { resolve, reject, signal }
     task.waiters.add(waiter)
+
     if (signal) {
       waiter.onAbort = () => {
         const reason = abortReason(signal)
+
         if (!removeWaiter(task, waiter)) {
           return
         }
+
         reject(reason)
         abandonTaskIfUnused(task as UnknownScheduledTask, reason)
       }
+
       signal.addEventListener('abort', waiter.onAbort, { once: true })
     }
+
     // The task deadline also replaces the isolated process; this bounds each caller's own wait.
     waiter.timeout = setTimeout(() => {
       const error = timeoutError()
+
       if (!removeWaiter(task, waiter)) {
         return
       }
+
       reject(error)
       abandonTaskIfUnused(task as UnknownScheduledTask, error)
     }, timeoutMs(task.priority))
@@ -175,8 +202,10 @@ function settleTask<T>(task: ScheduledTask<T>, result: { value: T } | { error: u
         // Best-effort teardown; nothing left to report it to.
       }
     }
+
     return
   }
+
   // Only a settle the deadline did not force proves the mount answered; a
   // transport fault (WslTranscriptFsError from a dead helper) proves nothing.
   if (
@@ -186,10 +215,13 @@ function settleTask<T>(task: ScheduledTask<T>, result: { value: T } | { error: u
   ) {
     liftRouteQuarantine(task.route)
   }
+
   task.state = 'settled'
+
   if (task.priority === 'scan') {
     activeScanCount -= 1
   }
+
   activeLaneKeys.delete(task.laneKey)
   activeTasks.delete(task as UnknownScheduledTask)
   clearTimeout(task.deadlineTimer)
@@ -198,15 +230,19 @@ function settleTask<T>(task: ScheduledTask<T>, result: { value: T } | { error: u
   // out or cancelled. A resource-valued result (open's FileHandle) then has no
   // owner left to close it, so ownership passes to the task's disposer.
   const abandoned = task.waiters.size === 0
+
   for (const waiter of task.waiters) {
     removeWaiter(task, waiter)
+
     if ('value' in result) {
       waiter.resolve(result.value)
     } else {
       waiter.reject(result.error)
     }
   }
+
   task.waiters.clear()
+
   if (abandoned && 'value' in result) {
     // Contained: a disposer that throws must not skip the pump below and wedge
     // every queued task behind this one.
@@ -216,6 +252,7 @@ function settleTask<T>(task: ScheduledTask<T>, result: { value: T } | { error: u
       // Best-effort teardown; nothing left to report it to.
     }
   }
+
   pumpTasks()
 }
 
@@ -225,34 +262,43 @@ function nextTaskIndex(): number {
     if (priority === 'scan' && activeScanCount > 0) {
       continue
     }
+
     const index = queuedTasks.findIndex(
       (task) =>
         task.priority === priority &&
         !activeLaneKeys.has(task.laneKey) &&
         !routeIsBlocked(task.route)
     )
+
     if (index !== -1) {
       return index
     }
   }
+
   return -1
 }
 
 function pumpTasks(): void {
   while (activeTasks.size < MAX_CONCURRENT_WSL_TRANSCRIPT_FS_TASKS) {
     const index = nextTaskIndex()
+
     if (index === -1) {
       return
     }
+
     const task = queuedTasks.splice(index, 1)[0]
+
     if (!task || task.state !== 'queued') {
       continue
     }
+
     task.state = 'running'
     task.startedAt = performance.now()
+
     if (task.priority === 'scan') {
       activeScanCount += 1
     }
+
     activeLaneKeys.add(task.laneKey)
     activeTasks.add(task)
     task.deadlineTimer = setTimeout(() => {
@@ -271,6 +317,7 @@ function pumpTasks(): void {
     void Promise.resolve()
       .then(() => {
         task.controller.signal.throwIfAborted()
+
         return task.operation(task.controller.signal)
       })
       .then(
@@ -285,10 +332,12 @@ export function resetWslTranscriptFsGateForTests(): void {
   for (const task of [...activeTasks, ...queuedTasks]) {
     task.state = 'settled'
     clearTimeout(task.deadlineTimer)
+
     for (const waiter of task.waiters) {
       removeWaiter(task, waiter)
     }
   }
+
   activeTasks.clear()
   queuedTasks.length = 0
   inFlightTasks.clear()
@@ -315,6 +364,7 @@ export function runWslTranscriptFsTask<T>(
   if (options.signal?.aborted) {
     return Promise.reject(abortReason(options.signal))
   }
+
   // Why: route spelling and Linux path case can change provider behavior, so
   // only byte-identical filesystem requests are safe to share. Priority is part
   // of the key because it selects the task's lane, scan slot and deadline: an
@@ -325,7 +375,9 @@ export function runWslTranscriptFsTask<T>(
     options.dedupe === false
       ? `undeduped:${++undedupedTaskId}`
       : JSON.stringify([options.operation, options.path, options.priority])
+
   const existing = inFlightTasks.get(key) as ScheduledTask<T> | undefined
+
   if (existing) {
     // Join even under a route quarantine: the in-flight task costs no new I/O,
     // is bounded by its own deadline, and its settle may itself lift the
@@ -333,10 +385,13 @@ export function runWslTranscriptFsTask<T>(
     // failQueuedRouteTasks cleared it when the quarantine was set.
     return attachWaiter(existing, options.signal)
   }
+
   const route = wslTranscriptFsRouteKey(options.path)
+
   if (routeIsBlocked(route)) {
     return Promise.reject(unavailableError())
   }
+
   if (queuedTasks.length >= WSL_TRANSCRIPT_FS_MAX_PENDING_TASKS) {
     return Promise.reject(capacityError())
   }
@@ -352,9 +407,11 @@ export function runWslTranscriptFsTask<T>(
     waiters: new Set(),
     state: 'queued'
   }
+
   inFlightTasks.set(key, scheduled as UnknownScheduledTask)
   const result = attachWaiter(scheduled, options.signal)
   queuedTasks.push(scheduled as UnknownScheduledTask)
   queueMicrotask(pumpTasks)
+
   return result
 }

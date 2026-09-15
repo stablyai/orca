@@ -34,10 +34,12 @@ function countBy(
   value: (card: DashboardCard) => string
 ): Map<string, number> {
   const counts = new Map<string, number>()
+
   for (const card of cards) {
     const key = value(card)
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
+
   return counts
 }
 
@@ -46,17 +48,21 @@ export function workspaceStatusOptions(
   configured: DashboardFilterOption[] | undefined
 ): FilterOption[] {
   const counts = countBy(cards, (card) => card.workspaceStatusId ?? '')
+
   if (configured) {
     return configured.map((option) => ({
       ...option,
       count: counts.get(option.id) ?? 0
     }))
   }
+
   const options = new Map<string, FilterOption>()
+
   for (const card of cards) {
     if (!card.workspaceStatusId || options.has(card.workspaceStatusId)) {
       continue
     }
+
     options.set(card.workspaceStatusId, {
       id: card.workspaceStatusId,
       label: card.workspaceStatusLabel ?? card.workspaceStatusId,
@@ -64,6 +70,7 @@ export function workspaceStatusOptions(
       count: counts.get(card.workspaceStatusId) ?? 0
     })
   }
+
   return [...options.values()]
 }
 
@@ -72,13 +79,16 @@ export function projectOptions(
   configured: DashboardFilterOption[] | undefined
 ): FilterOption[] {
   const counts = countBy(cards, (card) => card.repoId)
+
   if (configured) {
     return configured.map((option) => ({
       ...option,
       count: counts.get(option.id) ?? 0
     }))
   }
+
   const options = new Map<string, FilterOption>()
+
   for (const card of cards) {
     if (!options.has(card.repoId)) {
       options.set(card.repoId, {
@@ -88,6 +98,7 @@ export function projectOptions(
       })
     }
   }
+
   return [...options.values()]
 }
 

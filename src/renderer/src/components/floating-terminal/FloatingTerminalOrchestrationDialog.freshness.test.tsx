@@ -57,6 +57,7 @@ function inventory(eligibleUpdateNames: string[]): SkillFreshnessInventory {
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function recheckButton(): HTMLButtonElement | undefined {
@@ -92,6 +93,7 @@ describe('FloatingTerminalOrchestrationDialog freshness', () => {
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null
@@ -103,6 +105,7 @@ describe('FloatingTerminalOrchestrationDialog freshness', () => {
       .fn()
       .mockResolvedValueOnce(inventory(['orchestration']))
       .mockResolvedValueOnce(inventory([]))
+
     window.api = {
       skills: { freshnessInventory },
       cli: { getInstallStatus: vi.fn().mockResolvedValue({ onPath: true }) }

@@ -1,5 +1,7 @@
 let explicitForegroundTerminalTabIds = new Set<string>()
+
 const visibleTerminalTabClaimsByToken = new Map<symbol, string>()
+
 const foregroundTerminalTabLastSeenAtById = new Map<string, number>()
 
 function normalizeTerminalTabIds(tabIds: Iterable<string | null | undefined>): Set<string> {
@@ -14,15 +16,18 @@ export function setForegroundTerminalTabIds(tabIds: Iterable<string | null | und
   const previousForegroundTerminalTabIds = new Set(getForegroundTerminalTabIds())
   explicitForegroundTerminalTabIds = normalizeTerminalTabIds(tabIds)
   const now = Date.now()
+
   for (const tabId of explicitForegroundTerminalTabIds) {
     foregroundTerminalTabLastSeenAtById.set(tabId, now)
   }
+
   refreshExitedForegroundTerminalTabLastSeen(previousForegroundTerminalTabIds, now)
 }
 
 export function registerVisibleTerminalTab(tabId: string | null | undefined): () => void {
   const normalized = normalizeTerminalTabIds([tabId])
   const id = Array.from(normalized)[0]
+
   if (!id) {
     return () => {}
   }
@@ -32,10 +37,12 @@ export function registerVisibleTerminalTab(tabId: string | null | undefined): ()
   const token = Symbol(id)
   visibleTerminalTabClaimsByToken.set(token, id)
   foregroundTerminalTabLastSeenAtById.set(id, Date.now())
+
   return () => {
     if (!visibleTerminalTabClaimsByToken.delete(token)) {
       return
     }
+
     if (!getForegroundTerminalTabIds().includes(id)) {
       // Why: keep the sleep timer anchored to the end of the full foreground visit.
       foregroundTerminalTabLastSeenAtById.set(id, Date.now())
@@ -75,6 +82,7 @@ function refreshExitedForegroundTerminalTabLastSeen(
   now: number
 ): void {
   const currentForegroundTerminalTabIds = new Set(getForegroundTerminalTabIds())
+
   for (const tabId of previousForegroundTerminalTabIds) {
     if (!currentForegroundTerminalTabIds.has(tabId)) {
       // Why: visible panes can keep a terminal tab foreground after explicit ids change.

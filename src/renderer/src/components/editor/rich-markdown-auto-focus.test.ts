@@ -24,9 +24,11 @@ function setupScheduledFocus(
   let pendingFrame: FrameRequestCallback = () => {
     throw new Error('expected focus frame to be scheduled')
   }
+
   const focus = vi.fn()
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     pendingFrame = callback
+
     return 7
   })
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -107,10 +109,12 @@ describe('autoFocusRichEditor', () => {
 
   it('does not run deferred focus after an explicit handoff expires', () => {
     let runFrame: FrameRequestCallback = () => {}
+
     let requestActive = true
     const focus = vi.fn()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       runFrame = callback
+
       return 13
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())

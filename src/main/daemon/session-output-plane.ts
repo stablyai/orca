@@ -77,11 +77,13 @@ export class SessionOutputPlane {
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     const token = Symbol('attach')
     this.attachedClients.push({ token, ...client })
+
     return token
   }
 
   detachClient(token: symbol): void {
     const idx = this.attachedClients.findIndex((c) => c.token === token)
+
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
     }
@@ -100,6 +102,7 @@ export class SessionOutputPlane {
     // Why the fallback here: a handle that predates exit causes still reports a
     // code, and every client deserves the same shape.
     const resolved = cause ?? resolveProcessExitCause({ exitCode: code })
+
     for (const client of this.attachedClients) {
       client.onExit(code, incarnationId, resolved)
     }
@@ -115,6 +118,7 @@ export class SessionOutputPlane {
     if (this.disposed) {
       return
     }
+
     this.emulator.clearScrollback()
     this.record({ kind: 'clear' })
     subprocess.clear?.()
@@ -143,6 +147,7 @@ export class SessionOutputPlane {
     if (this.disposed) {
       return Promise.resolve()
     }
+
     return this.emulator.write('')
   }
 
@@ -150,7 +155,9 @@ export class SessionOutputPlane {
     if (this.disposed) {
       return null
     }
+
     const terminalOwner = this.readTerminalOwner?.()
+
     return {
       ...this.emulator.getSnapshot(opts),
       ...(terminalOwner ? { terminalOwner } : {}),
@@ -162,6 +169,7 @@ export class SessionOutputPlane {
     if (this.disposed) {
       return ''
     }
+
     return this.emulator.partialEscapeTailAnsi
   }
 
@@ -171,6 +179,7 @@ export class SessionOutputPlane {
     if (this.disposed) {
       return null
     }
+
     return this.emulator.getAppliedSize()
   }
 
@@ -183,10 +192,13 @@ export class SessionOutputPlane {
   releaseDeviceAttributesFilter(): void {
     const pending = this.deviceAttributesQueryFilter?.release() ?? ''
     this.deviceAttributesQueryFilter = null
+
     if (pending.length === 0) {
       return
     }
+
     this.record({ kind: 'output', data: pending })
+
     for (const client of this.attachedClients) {
       client.onData(pending, 0, true, this._outputSequence)
     }
@@ -197,10 +209,12 @@ export class SessionOutputPlane {
     const rawLength = emission.rawEndSeq - emission.rawStartSeq
     // Why: absolute raw count (daemon stream thinning can drop bytes) lets a snapshot cover the gaps while the renderer dedups the tail.
     this._outputSequence += rawLength
+
     if (data.length > 0) {
       this.emulator.write(data)
       data = this.deviceAttributesQueryFilter?.accept(data) ?? data
     }
+
     if (data.length > 0) {
       this.record({ kind: 'output', data })
     }
@@ -219,20 +233,26 @@ export class SessionOutputPlane {
     if (this.pendingOutputOverflowed) {
       return
     }
+
     const bytes = record.kind === 'output' ? record.data.length : 8
+
     if (this.pendingOutputBytes + bytes > PENDING_OUTPUT_MAX_BYTES) {
       this.pendingOutputRecords = []
       this.pendingOutputBytes = 0
       this.pendingOutputOverflowed = true
+
       return
     }
+
     // Why: coalesce the thousands of tiny TUI chunks per tick to keep take RPC/log frames compact; 64KB cap bounds append cost.
     const last = this.pendingOutputRecords.at(-1)
+
     if (record.kind === 'output' && last?.kind === 'output' && last.data.length < 64 * 1024) {
       last.data += record.data
     } else {
       this.pendingOutputRecords.push(record)
     }
+
     this.pendingOutputBytes += bytes
   }
 
@@ -248,10 +268,12 @@ export class SessionOutputPlane {
     this.pendingOutputRecords = []
     this.pendingOutputBytes = 0
     this.pendingOutputOverflowed = false
+
     // Empty incremental takes are not persisted; advancing them would create a false reattach gap.
     if (includeSnapshot || records.length > 0 || overflowed) {
       this.pendingOutputSeq += 1
     }
+
     return {
       records: includeSnapshot
         ? releasedHeldBytes

@@ -25,10 +25,13 @@ function normalizePathSegments(path: string): string[] {
 function labelForDepth(item: RepoDisplayLabelItem, depth: number): string {
   const segments = normalizePathSegments(item.path)
   const suffix = segments.slice(Math.max(0, segments.length - depth))
+
   if (suffix.length === 0) {
     return item.displayName
   }
+
   suffix[suffix.length - 1] = item.displayName
+
   return suffix.join('/')
 }
 
@@ -54,15 +57,19 @@ export function getRepoDisplayLabelsByPath(
     if (collidingItems.length < 2) {
       continue
     }
+
     const maxDepth = Math.max(
       ...collidingItems.map((item) => normalizePathSegments(item.path).length)
     )
+
     let depth = 1
     let nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
+
     while (depth < maxDepth && hasDuplicateLabels(nextLabels)) {
       depth += 1
       nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
     }
+
     collidingItems.forEach((item, index) => {
       labels.set(getRepoDisplayLabelKey(item), nextLabels[index] ?? item.displayName)
     })

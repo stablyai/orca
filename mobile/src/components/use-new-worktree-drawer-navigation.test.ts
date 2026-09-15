@@ -10,13 +10,17 @@ type Nav = ReturnType<typeof useNewWorktreeDrawerNavigation>
 
 function renderNavigation(modalVisible: boolean): { current: Nav } {
   const handle = { current: null as unknown as Nav }
+
   function Probe(props: { modalVisible: boolean }) {
     handle.current = useNewWorktreeDrawerNavigation(props.modalVisible)
+
     return null
   }
+
   act(() => {
     create(createElement(Probe, { modalVisible }))
   })
+
   return handle
 }
 

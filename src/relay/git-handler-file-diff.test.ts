@@ -42,6 +42,7 @@ describe('GitHandler', () => {
         filePath: 'file.txt',
         staged: false
       })) as { kind: string; originalContent: string; modifiedContent: string }
+
       expect(result.kind).toBe('text')
       expect(result.originalContent).toBe('original')
       expect(result.modifiedContent).toBe('modified')
@@ -59,6 +60,7 @@ describe('GitHandler', () => {
         filePath: 'file.txt',
         staged: true
       })) as { kind: string; originalContent: string; modifiedContent: string }
+
       expect(result.kind).toBe('text')
       expect(result.originalContent).toBe('original')
       expect(result.modifiedContent).toBe('staged-content')
@@ -144,6 +146,7 @@ describe('GitHandler', () => {
         stdio: 'pipe'
       })
       execFileSync('git', ['commit', '-m', 'add submodule'], { cwd: parent, stdio: 'pipe' })
+
       return path.join(parent, name)
     }
 
@@ -198,13 +201,16 @@ describe('GitHandler', () => {
       writeFileSync(path.join(tmpDir, 'root.txt'), 'root')
       gitCommit(tmpDir, 'initial')
       const sub = addSubmodule(tmpDir, 'flutter_mine')
+
       const oldOid = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: sub,
         encoding: 'utf-8'
       }).trim()
+
       writeFileSync(path.join(sub, 'lib.txt'), 'v2\n')
       execFileSync('git', ['add', 'lib.txt'], { cwd: sub, stdio: 'pipe' })
       gitCommit(sub, 'sub second')
+
       const newOid = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: sub,
         encoding: 'utf-8'
@@ -235,6 +241,7 @@ describe('GitHandler', () => {
         worktreePath: tmpDir,
         submodulePath: 'flutter_mine'
       })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+
       const ranged = status.entries.find((e) => e.path === 'lib.txt')
       expect(ranged).toBeDefined()
       expect(ranged!.status).toBe('modified')
@@ -245,6 +252,7 @@ describe('GitHandler', () => {
         filePath: 'flutter_mine/lib.txt',
         staged: false
       })) as { kind: string; originalContent: string; modifiedContent: string }
+
       expect(diff.kind).toBe('text')
       expect(normalizeGitFileText(diff.originalContent)).toBe('v1\n')
       expect(normalizeGitFileText(diff.modifiedContent)).toBe('v2\n')
@@ -265,6 +273,7 @@ describe('GitHandler', () => {
         submodulePath: 'flutter_mine',
         area: 'staged'
       })) as { entries: { path?: unknown; status?: unknown; area?: unknown }[] }
+
       const ranged = status.entries.find((e) => e.path === 'lib.txt')
       expect(ranged).toBeDefined()
       expect(ranged!.status).toBe('modified')
@@ -275,6 +284,7 @@ describe('GitHandler', () => {
         filePath: 'flutter_mine/lib.txt',
         staged: true
       })) as { kind: string; originalContent: string; modifiedContent: string }
+
       expect(diff.kind).toBe('text')
       expect(normalizeGitFileText(diff.originalContent)).toBe('v1\n')
       expect(normalizeGitFileText(diff.modifiedContent)).toBe('v2\n')
@@ -327,9 +337,11 @@ describe('GitHandler', () => {
       })) as { summary: Record<string, unknown>; entries: Record<string, unknown>[] }
 
       expect(result.summary.status).toBe('ready')
+
       const entry = result.entries.find((e) =>
         typeof e.path === 'string' ? e.path.endsWith('sample.md') : false
       )
+
       expect(entry).toBeDefined()
       expect(entry!.path).toBe('docs/日本語/sample.md')
     })
@@ -338,6 +350,7 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
+
       const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'

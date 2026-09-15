@@ -41,6 +41,7 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
     taskResumeRef,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showProviderPicker}
@@ -52,22 +53,28 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
         persistTaskSource(next)
         setProvider(next)
         setItems([])
+
         if (next === 'github') {
           const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
           setGithubMode(nextMode)
+
           if (nextMode === 'project') {
             setQuery('')
             setAppliedQuery('')
+
             return
           }
+
           const preset =
             resume.githubItemsPreset === null
               ? githubPreset
               : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
+
           const nextQuery =
             resume.githubItemsPreset === null
               ? (resume.githubItemsQuery ?? '')
               : getTaskPresetQuery(preset)
+
           const nextKind = githubKindFromQuery(nextQuery, preset)
           setGithubPreset(preset)
           setGithubKind(nextKind)
@@ -99,6 +106,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
     taskUiReady,
     toggleRepoSelection
   } = model
+
   return (
     <BottomDrawer visible={taskUiReady && showRepoPicker} onClose={() => setShowRepoPicker(false)}>
       <View style={styles.sheetHeader}>
@@ -124,6 +132,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
 
         {hostedRepos.map((repo) => {
           const selected = selectedRepoIds.has(repo.id)
+
           return (
             <View key={repo.id}>
               <View style={styles.actionSeparator} />
@@ -160,6 +169,7 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
     showGitHubIssueSourcePicker,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showGitHubIssueSourcePicker}
@@ -183,6 +193,7 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
               repo.issueSourcePreference === 'origin' || repo.issueSourcePreference === 'upstream'
                 ? repo.issueSourcePreference
                 : 'upstream'
+
             return (
               <View key={repo.id}>
                 {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -201,10 +212,12 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
                   <View style={styles.issueSourceSegment}>
                     {(['upstream', 'origin'] as const).map((preference) => {
                       const selected = selectedPreference === preference
+
                       const slug =
                         preference === 'upstream'
                           ? issueSourceSlug(sources.upstreamCandidate)
                           : issueSourceSlug(sources.prs)
+
                       return (
                         <Pressable
                           key={preference}
@@ -255,6 +268,7 @@ export function renderMobileTasksGitHubViewPicker(model: ConnectionPresentationM
     showGitHubKindPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showGitHubKindPicker}
@@ -266,8 +280,10 @@ export function renderMobileTasksGitHubViewPicker(model: ConnectionPresentationM
           setGithubMode('project')
           setItems([])
           persistTaskResumeState({ githubMode: 'project' })
+
           return
         }
+
         const preset = kind === 'prs' ? 'prs' : 'issues'
         const nextQuery = getTaskPresetQuery(preset)
         setGithubMode('items')
@@ -302,6 +318,7 @@ export function renderMobileTasksGitHubPresetPicker(model: ConnectionPresentatio
     showGitHubPresetPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showGitHubPresetPicker}
@@ -337,6 +354,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
     showGitHubPagePicker,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showGitHubPagePicker}
@@ -350,6 +368,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
         {githubPagePickerPages.map((index) => {
           const selected = index === githubCurrentPage
           const loaded = index < githubPages.length
+
           return (
             <Pressable
               key={`github-page:${index}`}

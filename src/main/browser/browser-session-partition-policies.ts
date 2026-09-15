@@ -25,6 +25,7 @@ const configuredPartitions = new Set<string>()
 export function forgetBrowserSessionPartitionConfiguration(partition: string): void {
   configuredPartitions.delete(partition)
 }
+
 const handleWillDownload = (
   _event: Electron.Event,
   item: Electron.DownloadItem,
@@ -55,9 +56,11 @@ function resolvePermissionNoticeUrl(
   details: Electron.PermissionRequest | undefined
 ): string {
   const requestingUrl = details?.requestingUrl
+
   if (!requestingUrl) {
     return webContents.getURL()
   }
+
   try {
     return new URL(requestingUrl).origin === 'null' ? '' : requestingUrl
   } catch {
@@ -67,6 +70,7 @@ function resolvePermissionNoticeUrl(
 
 /** `route` hands the item to the owning page's download flow; `deny` cancels it before it starts. */
 export type BrowserPartitionDownloadPolicy = 'route' | 'deny'
+
 export type BrowserPartitionPermissionPolicy = 'browser' | 'deny'
 
 export function installBrowserSessionPartitionPolicies(
@@ -80,6 +84,7 @@ export function installBrowserSessionPartitionPolicies(
   const { partition } = profile
   const sess = session.fromPartition(partition)
   setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
+
   // Why: route partitions own a SOCKS transport policy that the app proxy must not overwrite.
   const proxyReady = (
     options.applyAppWideProxy === false ? Promise.resolve() : applyProxyToBrowserSession(sess)
@@ -87,16 +92,19 @@ export function installBrowserSessionPartitionPolicies(
     clearProxySessionCredentials(sess)
     throw error
   })
+
   if (configuredPartitions.has(partition)) {
     return proxyReady
   }
 
   browserManager.installCertificateRequestGuard(sess)
+
   if (profile.userAgentMode !== 'native' && typeof sess.getUserAgent === 'function') {
     const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
     sess.setUserAgent(cleanUA)
     setupGoogleAuthUserAgentOverride(sess)
   }
+
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     sess.setPermissionCheckHandler(() => false)
@@ -118,6 +126,7 @@ export function installBrowserSessionPartitionPolicies(
                 rawUrl
               })
             }
+
             callback(granted)
           },
           (error: unknown) => {
@@ -130,9 +139,12 @@ export function installBrowserSessionPartitionPolicies(
             callback(false)
           }
         )
+
         return
       }
+
       const allowed = isAutoGrantedBrowserSessionPermission(permission)
+
       if (!allowed) {
         const rawUrl = resolvePermissionNoticeUrl(webContents, details)
         browserManager.notifyPermissionDenied({
@@ -141,19 +153,23 @@ export function installBrowserSessionPartitionPolicies(
           rawUrl
         })
       }
+
       callback(allowed)
     })
     sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
       if (permission === 'media') {
         return hasSystemMediaAccess(details?.mediaType)
       }
+
       if (allowsBrowserWebAuthnPermission(permission, details)) {
         return true
       }
+
       return isAutoGrantedBrowserSessionPermission(permission)
     })
     installBrowserWebAuthnAccessHandlers(sess)
   }
+
   sess.setDisplayMediaRequestHandler((_request, callback) => {
     callback({ video: undefined, audio: undefined })
   })
@@ -164,6 +180,7 @@ export function installBrowserSessionPartitionPolicies(
     options?.downloads === 'deny' ? handleDeniedWillDownload : handleWillDownload
   )
   configuredPartitions.add(partition)
+
   return proxyReady
 }
 
@@ -183,6 +200,7 @@ export function clearBrowserSessionPartitionPolicies(partition: string, sess: Se
 export function applyBrowserSessionUserAgentModes(profiles: BrowserSessionProfile[]): void {
   for (const profile of profiles) {
     const partition = profile.partition
+
     try {
       const sess = session.fromPartition(partition)
       const userAgentMode = profile.userAgentMode ?? 'clean'

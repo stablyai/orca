@@ -38,14 +38,17 @@ export const REACT_CASCADING_LANES = 42
 
 /** Headroom for the crumb to be built and sent before React throws above 50. */
 const REACT_COMMIT_CASCADE_NOTICE_HEADROOM = 10
+
 export const REACT_COMMIT_CASCADE_NOTICE_LIMIT =
   REACT_NESTED_UPDATE_LIMIT - REACT_COMMIT_CASCADE_NOTICE_HEADROOM
+
 /**
  * Nothing in the app legitimately reaches 20 consecutive same-root cascading
  * commits — the two deliberate oscillation loops are capped at 8 and 3 — and it
  * leaves 20 commits for the sampled writes to land inside the loop.
  */
 export const REACT_COMMIT_CASCADE_ARM_COMMITS = 20
+
 /** Matches RENDERER_BREADCRUMB_COALESCE_MS; main drops anything faster anyway. */
 export const REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS = 30_000
 
@@ -77,6 +80,7 @@ export function createReactCommitCascadeState(): ReactCommitCascadeState {
 }
 
 const sharedState = createReactCommitCascadeState()
+
 let rendererSurface: RendererSurface = 'main'
 
 export function setReactCommitCascadeRendererSurface(surface: RendererSurface): void {
@@ -135,22 +139,28 @@ function recordCommit(
     if (state.cascadeRoot !== null) {
       endCascade(state)
     }
+
     return
   }
+
   if (root !== state.cascadeRoot) {
     endCascade(state)
     state.cascadeRoot = root
   }
 
   state.commits += 1
+
   if (state.commits < armCommits) {
     return
   }
+
   if (state.commits === armCommits) {
     state.armedAtMs = readNowMs()
     armReactCommitCascadeWriteSampling()
+
     return
   }
+
   if (state.reported || state.commits < noticeLimit) {
     return
   }
@@ -160,10 +170,13 @@ function recordCommit(
   // Why the renderer throttles too: nothing rate-limits this pipe, and every
   // call is a structured clone plus an ipcRenderer.send.
   const sinceReportMs = state.lastReportedAtMs === null ? null : nowMs - state.lastReportedAtMs
+
   if (sinceReportMs !== null && sinceReportMs >= 0 && sinceReportMs < minReportIntervalMs) {
     state.suppressed += 1
+
     return
   }
+
   reportCascade(state, pendingLanes, nowMs)
 }
 

@@ -56,6 +56,7 @@ export type CookieImportOptions = {
 
 export function cookieImportTarget(targetPartition: string): CookieImportTarget {
   const targetSession = session.fromPartition(targetPartition)
+
   return {
     partition: targetPartition,
     mutationLockOwner: targetSession,
@@ -72,22 +73,28 @@ export async function importValidatedCookies(
 ): Promise<BrowserCookieImportResult> {
   const targetPartition = target.partition
   const importDomainCache = new Map<string, boolean>()
+
   const validDomainCookies = cookies.filter((cookie) => {
     let valid = importDomainCache.get(cookie.domain)
+
     if (valid === undefined) {
       valid = normalizeCookieImportDomain(cookie.domain) !== null
       importDomainCache.set(cookie.domain, valid)
     }
+
     return valid
   })
+
   const sourceBoundFiltered = validDomainCookies.filter(
     (cookie) => !isGoogleSourceBoundCookie(cookie.name, cookie.domain)
   )
+
   // Why: dropping these before the replace scope is computed is what keeps the existing
   // Google session intact — replaceCookiesForImportedDomains only clears domains we import.
   const importableCookies = sourceBoundFiltered.filter(
     (cookie) => !isNonTransplantableCookieDomain(cookie.domain)
   )
+
   const integritySkipped = validDomainCookies.length - sourceBoundFiltered.length
   const nonTransplantableSkipped = sourceBoundFiltered.length - importableCookies.length
   const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
@@ -118,6 +125,7 @@ export async function importValidatedCookies(
         'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
     }
   }
+
   // Why: a family-suppressed sibling is a partition skip too, so partitionSkippedCookies is a
   // BREAKDOWN of skippedCookies and is added into it exactly once — never a separate addend, or
   // totalCookies === importedCookies + skippedCookies silently stops holding.
@@ -136,6 +144,7 @@ export async function importValidatedCookies(
     // debugger, so holding it while queued cannot deadlock against the holder.
     const releaseMutationLock = await acquireCookieMutationLock(target.mutationLockOwner)
     let replaced: ReplacedImportedDomainCookies | null = null
+
     try {
       if (mode === 'replace-imported-domains') {
         try {
@@ -149,6 +158,7 @@ export async function importValidatedCookies(
           diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
         } catch (err) {
           diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+
           return {
             ok: false,
             reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
@@ -170,6 +180,7 @@ export async function importValidatedCookies(
 
       if (phase.failure && replaced) {
         const rollbackFailures: unknown[] = []
+
         for (const cookie of phase.attemptedKeys.toReversed()) {
           try {
             await cookieClearStore.remove(cookie.url, cookie.name)
@@ -177,6 +188,7 @@ export async function importValidatedCookies(
             rollbackFailures.push(err)
           }
         }
+
         // Why: restoreClearIdentities attaches the debugger before it iterates, so an empty
         // restore set would spin up a hidden BrowserWindow to put nothing back.
         if (replaced.identities.length > 0) {
@@ -186,9 +198,11 @@ export async function importValidatedCookies(
             rollbackFailures.push(err)
           }
         }
+
         if (rollbackFailures.length > 0) {
           diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
         }
+
         return {
           ok: false,
           reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
@@ -233,6 +247,7 @@ export async function pickCookieFile(parentWindow: BrowserWindow | null): Promis
     ],
     properties: ['openFile' as const]
   }
+
   const result = parentWindow
     ? await dialog.showOpenDialog(parentWindow, opts)
     : await dialog.showOpenDialog(opts)
@@ -240,6 +255,7 @@ export async function pickCookieFile(parentWindow: BrowserWindow | null): Promis
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
+
   return result.filePaths[0]
 }
 
@@ -248,6 +264,7 @@ export async function importCookiesFromFile(
   targetPartition: string
 ): Promise<BrowserCookieImportResult> {
   let rawContent: string
+
   try {
     rawContent = await readFile(filePath, 'utf-8')
   } catch {
@@ -255,6 +272,7 @@ export async function importCookiesFromFile(
   }
 
   let parsed: unknown
+
   try {
     parsed = JSON.parse(rawContent)
   } catch {
@@ -271,12 +289,15 @@ export async function importCookiesFromFile(
 
   const validated: ValidatedCookie[] = []
   let skipped = 0
+
   for (const entry of parsed) {
     if (typeof entry !== 'object' || entry === null) {
       skipped++
       continue
     }
+
     const cookie = validateCookieEntry(entry as RawCookieEntry)
+
     if (cookie) {
       validated.push(cookie)
     } else {

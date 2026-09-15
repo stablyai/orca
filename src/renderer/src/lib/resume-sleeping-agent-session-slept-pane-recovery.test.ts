@@ -5,7 +5,9 @@ import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
+
 const LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const OTHER_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 
 afterEach(() => {

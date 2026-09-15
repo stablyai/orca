@@ -18,9 +18,11 @@ export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean)
       'No live terminal — toggle back to reconnect.'
     )
   }
+
   if (!canSend) {
     return translate('components.native-chat.composer.locked', 'Input is held by another device.')
   }
+
   return translate('components.native-chat.composer.placeholder', 'Send a message…')
 }
 
@@ -30,5 +32,6 @@ export function nativeChatComposerTargetIsRemote(ptyId: string | null): boolean 
 
 export function formatNativeChatFileReference(filePath: string): string {
   const escaped = filePath.replace(/"/g, '\\"')
+
   return /\s/.test(filePath) ? `@"${escaped}"` : `@${filePath}`
 }

@@ -7,8 +7,11 @@ import type {
 } from '../../src/shared/runtime-types'
 
 const PTY_ID = 'pty-0'
+
 const WORKTREE_ID = 'workspace-0'
+
 const TAB_ID = 'host-tab-0'
+
 const LEAF_ID = '00000000-0000-4000-8000-000000000000'
 
 type TerminalTab = Extract<RuntimeMobileSessionTabsSnapshot['tabs'][number], { type: 'terminal' }>
@@ -32,6 +35,7 @@ function createHarness(): Harness {
   const runtime = new OrcaRuntimeService(null, undefined, statusWiring.deps)
   const uninstallStatusRepublish = statusWiring.attach(runtime)
   runtime.registerPty(PTY_ID, WORKTREE_ID)
+
   const tab: TerminalTab = {
     type: 'terminal',
     id: `${TAB_ID}::${LEAF_ID}`,
@@ -47,6 +51,7 @@ function createHarness(): Harness {
     },
     isActive: true
   }
+
   const internals = runtime as unknown as RuntimeInternals
   internals.mobileSessionTabsByWorktree.set(WORKTREE_ID, {
     worktree: WORKTREE_ID,
@@ -58,9 +63,11 @@ function createHarness(): Harness {
     tabs: [tab]
   })
   const publications: RuntimeMobileSessionTabsResult[] = []
+
   const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
     publications.push(structuredClone(snapshot))
   })
+
   return {
     internals,
     publications,
@@ -96,6 +103,7 @@ function emitTitle(harness: Harness, title: string, at = Date.now()): void {
 
 function latestStatus(harness: Harness) {
   const terminal = harness.publications.at(-1)?.tabs[0]
+
   return terminal?.type === 'terminal' ? terminal.agentStatus : undefined
 }
 

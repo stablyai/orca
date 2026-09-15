@@ -32,6 +32,7 @@ describe('mobile terminal records', () => {
       mode: 'dark' as const,
       theme: { foreground: '#eeeeee', background: '#111111' }
     }
+
     const stringify = vi.spyOn(JSON, 'stringify').mockImplementation(() => {
       throw new Error('unexpected theme serialization')
     })
@@ -60,6 +61,7 @@ describe('mobile terminal records', () => {
     const known: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Old title', terminalTheme: darkTheme, isActive: false }
     ]
+
     const snapshot: TerminalRecord[] = [{ handle: 'pty-1', title: 'Current title', isActive: true }]
 
     expect(mergeTerminalRecordsByCurrentOrder(snapshot, known)).toEqual([
@@ -72,9 +74,11 @@ describe('mobile terminal records', () => {
       { handle: 'pty-1', title: 'Terminal', isActive: true },
       { handle: 'pty-2', title: 'Logs', isActive: false }
     ]
+
     const currentTerminals: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Terminal', terminalTheme: darkTheme, isActive: true }
     ]
+
     const sessionTabs: MobileTerminalSessionTab[] = [
       {
         type: 'terminal',
@@ -94,6 +98,7 @@ describe('mobile terminal records', () => {
 
   it('falls back to the current terminal theme while waiting for session tabs', () => {
     const terminalList: TerminalRecord[] = [{ handle: 'pty-1', title: 'Terminal', isActive: true }]
+
     const currentTerminals: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Terminal', terminalTheme: darkTheme, isActive: true }
     ]
@@ -131,6 +136,7 @@ describe('mobile terminal records', () => {
       terminal: 'pty-1',
       isActive: true
     }
+
     const seeded: MobileTerminalSessionTab = {
       ...base,
       launchDraft: 'https://github.com/o/r/issues/12',
@@ -202,6 +208,7 @@ describe('mobile terminal records', () => {
     isActive: false,
     ...over
   })
+
   const terminalTab = (handle: string): MobileTerminalSessionTab => ({
     id: `tab-${handle}`,
     type: 'terminal',
@@ -253,6 +260,7 @@ describe('mobile terminal records', () => {
       record({ handle: 'pty-1', connected: true }),
       record({ handle: 'pty-2', connected: true })
     ]
+
     const tabs = [terminalTab('pty-1')]
 
     expect(

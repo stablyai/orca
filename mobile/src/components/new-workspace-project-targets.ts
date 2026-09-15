@@ -34,11 +34,13 @@ export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
 ): NewWorkspaceProjectOption<TRepo>[] {
   const options = new Map<string, NewWorkspaceProjectOption<TRepo>>()
   const hostIdsByProject = new Map<string, Set<string>>()
+
   for (const repo of repos) {
     const id = getProjectIdentityKey(repo)
     const hostIds = hostIdsByProject.get(id) ?? new Set<string>()
     hostIds.add(getRepoExecutionHostId(repo))
     hostIdsByProject.set(id, hostIds)
+
     if (!options.has(id)) {
       options.set(id, {
         id,
@@ -47,13 +49,17 @@ export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
       })
     }
   }
+
   return [...options.values()].map((option) => {
     const providerIdentity = getProjectProviderIdentity(option.repo)
+
     const providerDetail = providerIdentity
       ? `${providerIdentity.owner}/${providerIdentity.repo}`
       : ''
+
     const hostCount = hostIdsByProject.get(option.id)?.size ?? 0
     const detail = providerDetail || (hostCount > 1 ? `${hostCount} hosts configured` : '')
+
     return detail ? { ...option, detail } : option
   })
 }
@@ -68,12 +74,15 @@ export function getNewWorkspaceRunTarget(
   const hostId = getRepoExecutionHostId(repo)
   const host = parseExecutionHostId(hostId)
   const hostLabel = getExecutionHostLabel(hostId)
+
   if (host?.kind === 'ssh') {
     return { label: `SSH · ${hostLabel}`, detail: repo.path }
   }
+
   if (host?.kind === 'runtime') {
     return { label: `Remote · ${hostLabel}`, detail: repo.path }
   }
+
   return {
     label: localPlatform ? getLocalExecutionHostLabel(localPlatform) : 'This computer',
     detail: repo.path
@@ -88,12 +97,16 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
   if (!projectId) {
     return []
   }
+
   const options = new Map<string, NewWorkspaceRunTargetOption<TRepo>>()
+
   for (const repo of repos) {
     if (getProjectIdentityKey(repo) !== projectId) {
       continue
     }
+
     const hostId = getRepoExecutionHostId(repo)
+
     if (!options.has(hostId)) {
       options.set(hostId, {
         id: repo.id,
@@ -102,5 +115,6 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
       })
     }
   }
+
   return [...options.values()]
 }

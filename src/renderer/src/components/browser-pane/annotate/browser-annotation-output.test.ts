@@ -101,6 +101,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
 
   it('uses longer inline code fences when selector content contains backticks', () => {
     const annotation = makeAnnotation()
+
     const markdown = formatBrowserAnnotationsAsMarkdown([
       makeAnnotation({
         payload: {
@@ -142,6 +143,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
 
   it('collapses page-controlled newlines before putting text in headings and lists', () => {
     const annotation = makeAnnotation()
+
     const markdown = formatBrowserAnnotationsAsMarkdown([
       makeAnnotation({
         comment: 'Keep this change scoped.\n## injected',
@@ -217,6 +219,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     const selectedLabel = '**Selected text:**'
     const selectedLineStart = markdown.indexOf(selectedLabel)
     const selectedLineEnd = markdown.indexOf('\n', selectedLineStart)
+
     const selectedLine = markdown.slice(
       selectedLineStart,
       selectedLineEnd === -1 ? markdown.length : selectedLineEnd

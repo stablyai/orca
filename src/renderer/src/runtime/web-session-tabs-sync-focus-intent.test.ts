@@ -32,6 +32,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('does not let repeated remote terminal status snapshots steal local tab focus', () => {
     const agentTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const shellTabId = toWebTerminalSurfaceTabId('host-tab-2')
+
     const agentUnifiedTab: Tab = {
       id: agentTabId,
       entityId: agentTabId,
@@ -46,6 +47,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPreview: false,
       isPinned: false
     }
+
     const shellUnifiedTab: Tab = {
       id: shellTabId,
       entityId: shellTabId,
@@ -104,6 +106,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         ]
       }
     })
+
     const remoteActiveSnapshot = makeSnapshot(
       [
         {
@@ -139,6 +142,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         ]
       }
     )
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       remoteActiveSnapshot,
@@ -157,12 +161,14 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     expect(followed.activeTabIdByWorktree?.[WT]).toBe(agentTabId)
     expect(followed.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(agentTabId)
   })
 
   it('does not let stale browser intent override a newer terminal selection', () => {
     const terminalId = toWebTerminalSurfaceTabId('host-terminal')
+
     const terminalTab: Tab = {
       id: terminalId,
       entityId: terminalId,
@@ -177,6 +183,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPreview: false,
       isPinned: false
     }
+
     recordWebSessionFocusIntent(
       { environmentId: ENV },
       WT,
@@ -256,6 +263,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('does not let stale browser intent override a newer editor selection', () => {
     const fileId = '/repo/index.html'
+
     const editorTab: Tab = {
       id: 'local-editor',
       entityId: fileId,
@@ -270,6 +278,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPreview: false,
       isPinned: false
     }
+
     recordWebSessionFocusIntent(
       { environmentId: ENV },
       WT,
@@ -351,6 +360,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const newTabId = toWebTerminalSurfaceTabId('host-tab-2')
     // Simulate createWebRuntimeSessionTerminal recording focus intent for the new tab.
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'host-tab-2')
+
     const existingUnifiedTab: Tab = {
       id: existingTabId,
       entityId: existingTabId,
@@ -445,12 +455,14 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('replays a snapshot that beat the RPC response and focuses the exact adopted leaf', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
+
     const root = {
       type: 'split' as const,
       direction: 'horizontal' as const,
       first: { type: 'leaf' as const, leafId: LEAF_ID },
       second: { type: 'leaf' as const, leafId: SECOND_LEAF_ID }
     }
+
     const currentLayout = {
       root,
       activeLeafId: SECOND_LEAF_ID,
@@ -460,6 +472,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         [SECOND_LEAF_ID]: 'remote:web-env-1@@terminal-2'
       }
     }
+
     const state = makeState({
       activeTabId: mirroredTabId,
       activeTabIdByWorktree: { [WT]: mirroredTabId },
@@ -479,6 +492,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       },
       terminalLayoutsByTabId: { [mirroredTabId]: currentLayout }
     })
+
     const snapshot = makeSnapshot(
       [
         {
@@ -516,16 +530,19 @@ describe('applyWebSessionTabsSnapshot', () => {
     )
 
     const subscriptionPatch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
+
     const afterSubscription = {
       ...state,
       ...(subscriptionPatch as Partial<WebSessionTabsSyncState>)
     }
+
     expect(afterSubscription.terminalLayoutsByTabId[mirroredTabId]?.activeLeafId).toBe(
       SECOND_LEAF_ID
     )
 
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'host-tab-1', LEAF_ID)
     acceptReplayedWebSessionTabsSnapshot(ENV, WT)
+
     const replayPatch = applyFreshWebSessionTabsSnapshot(
       afterSubscription,
       snapshot,
@@ -543,6 +560,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('retains exact-leaf focus intent when a split sibling publishes first', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const siblingPtyId = 'remote:web-env-1@@terminal-2'
+
     const state = makeState({
       activeTabId: mirroredTabId,
       activeTabIdByWorktree: { [WT]: mirroredTabId },
@@ -561,6 +579,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         ]
       }
     })
+
     const sibling = {
       type: 'terminal' as const,
       id: `host-tab-1::${SECOND_LEAF_ID}`,
@@ -571,6 +590,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       status: 'ready' as const,
       terminal: 'terminal-2'
     }
+
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'host-tab-1', LEAF_ID)
 
     const partialPatch = applyWebSessionTabsSnapshot(
@@ -579,9 +599,11 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     expect(partialPatch.tabsByWorktree?.[WT]?.[0]?.ptyId).toBe(siblingPtyId)
 
     const afterPartial = { ...state, ...partialPatch }
+
     const completePatch = applyWebSessionTabsSnapshot(
       afterPartial,
       makeSnapshot([
@@ -607,6 +629,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('does not let repeated remote split status snapshots steal local pane focus', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
+
     const currentLayout = {
       root: {
         type: 'split' as const,
@@ -694,12 +717,14 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('activates a host-created split leaf only for the client that requested it', () => {
     const mirroredTabId = toWebTerminalSurfaceTabId('host-tab-1')
+
     const sourceOnlyLayout = {
       root: { type: 'leaf' as const, leafId: LEAF_ID },
       activeLeafId: LEAF_ID,
       expandedLeafId: null,
       ptyIdsByLeafId: { [LEAF_ID]: 'remote:web-env-1@@terminal-1' }
     }
+
     const splitLayout = {
       root: {
         type: 'split' as const,
@@ -714,6 +739,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         [SECOND_LEAF_ID]: 'remote:web-env-1@@terminal-2'
       }
     }
+
     const state = makeState({
       activeTabId: mirroredTabId,
       activeTabIdByWorktree: { [WT]: mirroredTabId },
@@ -733,6 +759,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       },
       terminalLayoutsByTabId: { [mirroredTabId]: sourceOnlyLayout }
     })
+
     const splitSnapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -764,24 +791,29 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     expect(unclaimed.terminalLayoutsByTabId?.[mirroredTabId]?.activeLeafId).toBe(LEAF_ID)
 
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, 'host-tab-1', SECOND_LEAF_ID)
+
     const claimed = applyWebSessionTabsSnapshot(
       state,
       splitSnapshot,
       ENV,
       NOW + 20
     ) as Partial<WebSessionTabsSyncState>
+
     expect(claimed.terminalLayoutsByTabId?.[mirroredTabId]?.activeLeafId).toBe(SECOND_LEAF_ID)
 
     recordWebSessionFocusIntent({ environmentId: 'web-env-2' }, WT, 'host-tab-1', SECOND_LEAF_ID)
+
     const otherClient = applyWebSessionTabsSnapshot(
       state,
       splitSnapshot,
       ENV,
       NOW + 30
     ) as Partial<WebSessionTabsSyncState>
+
     expect(otherClient.terminalLayoutsByTabId?.[mirroredTabId]?.activeLeafId).toBe(LEAF_ID)
   })
 })

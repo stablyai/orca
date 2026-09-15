@@ -37,10 +37,15 @@ const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
 
 const REMOTE_REPO_ROOT = '/home/user/project'
+
 const REMOTE_FILE_PATH = '/home/user/project/src/index.ts'
+
 const FLOATING_FILE_PATH = '/tmp/orca/floating-workspace/notes.md'
+
 const SSH_TARGET_ID = 'ssh-target-1'
+
 const SSH_REPO_ID = 'repo-ssh'
+
 const REMOTE_WORKTREE_ID = `${SSH_REPO_ID}::${REMOTE_REPO_ROOT}`
 
 const initialState = useAppStore.getInitialState()
@@ -58,9 +63,11 @@ function mainProcessReadFile(args: { filePath: string; connectionId?: string }) 
   if (args.connectionId) {
     return Promise.resolve({ content: 'export const remote = true\n', isBinary: false })
   }
+
   if (args.filePath === FLOATING_FILE_PATH) {
     return Promise.resolve({ content: '# floating workspace\n', isBinary: false })
   }
+
   // Local resolver: the remote POSIX path is not under any local allowed root.
   return Promise.reject(new Error(PATH_ACCESS_DENIED_MESSAGE))
 }
@@ -97,9 +104,11 @@ afterEach(() => {
 async function openRemoteFileInEditor() {
   const resolvedConnectionId = getConnectionIdForFile(REMOTE_WORKTREE_ID, REMOTE_FILE_PATH)
   const connectionId = resolvedConnectionId ?? undefined
+
   const readSettings: { activeRuntimeEnvironmentId: string | null } = {
     activeRuntimeEnvironmentId: null
   }
+
   if (
     resolvedConnectionId === undefined &&
     !readSettings.activeRuntimeEnvironmentId?.trim() &&
@@ -107,6 +116,7 @@ async function openRemoteFileInEditor() {
   ) {
     throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
   }
+
   return readRuntimeFileContent({
     settings: readSettings,
     filePath: REMOTE_FILE_PATH,
@@ -121,10 +131,13 @@ async function openFloatingWorkspaceFileInEditor() {
     FLOATING_TERMINAL_WORKTREE_ID,
     FLOATING_FILE_PATH
   )
+
   const connectionId = resolvedConnectionId ?? undefined
+
   const readSettings: { activeRuntimeEnvironmentId: string | null } = {
     activeRuntimeEnvironmentId: null
   }
+
   if (
     resolvedConnectionId === undefined &&
     !readSettings.activeRuntimeEnvironmentId?.trim() &&
@@ -132,6 +145,7 @@ async function openFloatingWorkspaceFileInEditor() {
   ) {
     throw new Error(WORKTREE_OWNER_NOT_READY_ERROR)
   }
+
   return readRuntimeFileContent({
     settings: readSettings,
     filePath: FLOATING_FILE_PATH,

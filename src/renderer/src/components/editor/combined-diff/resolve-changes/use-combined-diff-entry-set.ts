@@ -14,6 +14,7 @@ import { getRetainedResolvedSnapshotEntries } from './combined-diff-git-status-s
 
 // Why: stable identities so the store selectors don't resubscribe on every empty read.
 export const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
+
 export const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
 
 export type CombinedDiffEntrySet = {
@@ -47,10 +48,12 @@ export function useCombinedDiffEntrySet({
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
   const isAllMode = file.diffSource === 'combined-all'
+
   const branchCompare =
     file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
       ? file.branchCompare
       : null
+
   const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
 
   // Why: prefer the tab-open snapshot so a commit changing gitStatusByWorktree doesn't rebuild sections and lose loaded content.
@@ -58,10 +61,12 @@ export function useCombinedDiffEntrySet({
     () => file.uncommittedEntriesSnapshot?.filter((e) => e.conflictStatus !== 'unresolved'),
     [file.uncommittedEntriesSnapshot]
   )
+
   const uncommittedEntries = React.useMemo(() => {
     if (!snapshotEntries) {
       return getCombinedUncommittedEntries(gitStatusEntries, file.combinedAreaFilter)
     }
+
     // Why: row load-state changes must not rebuild the snapshot list; the ref is consulted only when live Git status changes.
     return resolveCombinedUncommittedSnapshotEntries(
       snapshotEntries,
@@ -69,21 +74,26 @@ export function useCombinedDiffEntrySet({
       getRetainedResolvedSnapshotEntries(sectionsRef.current)
     )
   }, [snapshotEntries, gitStatusEntries, file.combinedAreaFilter, sectionsRef])
+
   const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
     return getCombinedBranchEntries(file.branchEntriesSnapshot, liveBranchEntries)
   }, [file.branchEntriesSnapshot, liveBranchEntries])
+
   const renderableBranchEntries = React.useMemo(
     () => (branchCompare ? branchEntries : []),
     [branchCompare, branchEntries]
   )
+
   const commitEntries = React.useMemo<GitBranchChangeEntry[]>(
     () => file.commitEntriesSnapshot ?? [],
     [file.commitEntriesSnapshot]
   )
+
   const allEntries = React.useMemo(
     () => [...uncommittedEntries, ...renderableBranchEntries],
     [renderableBranchEntries, uncommittedEntries]
   )
+
   const entries = isAllMode
     ? allEntries
     : isBranchMode
@@ -91,6 +101,7 @@ export function useCombinedDiffEntrySet({
       : isCommitMode
         ? commitEntries
         : uncommittedEntries
+
   const treeMode = isAllMode
     ? 'all'
     : isBranchMode
@@ -98,11 +109,14 @@ export function useCombinedDiffEntrySet({
       : isCommitMode
         ? 'commit'
         : 'uncommitted'
+
   const hasUncommittedEntriesSnapshot = file.uncommittedEntriesSnapshot !== undefined
+
   const shouldAutoReloadFromGitStatus = shouldAutoReloadCombinedDiffFromGitStatus({
     mode: treeMode,
     hasUncommittedEntriesSnapshot
   })
+
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({

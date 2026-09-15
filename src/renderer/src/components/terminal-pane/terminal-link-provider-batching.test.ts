@@ -13,6 +13,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const { storeState } = doubles
 
 vi.mock('@/store', () => ({
@@ -41,12 +42,15 @@ it.each([false, true])('batches all cold hover candidates repeated=%s', async (r
     { length: 8 },
     (_, i) => `./${repeated ? 'same' : `file${i}`}.ts:${i + 1}`
   ).join('  ')
+
   const batch = vi.fn(async (paths: string[]) => paths.map(() => true))
   window.api.shell.pathsExist = batch
   const { provider } = createProviderSetup([makeBufferLine(text)], new Map())
+
   const links = await new Promise<ILink[]>((resolve) =>
     provider.provideLinks(1, (links) => resolve(links ?? []))
   )
+
   expect(batch).toHaveBeenCalledTimes(1)
   expect(batch.mock.calls[0][0]).toHaveLength(repeated ? 1 : 8)
   expect(window.api.shell.pathExists).not.toHaveBeenCalled()
@@ -62,8 +66,10 @@ it('preserves warm positive and negative cache answers across hover turns', asyn
   window.api.shell.pathsExist = batch
   const cache = new Map<string, boolean>()
   const { provider } = createProviderSetup([makeBufferLine('./present.ts ./missing.ts')], cache)
+
   const hover = () =>
     new Promise<ILink[]>((resolve) => provider.provideLinks(1, (links) => resolve(links ?? [])))
+
   expect((await hover()).map((link) => link.text)).toEqual(['./present.ts'])
   expect((await hover()).map((link) => link.text)).toEqual(['./present.ts'])
   expect(batch).toHaveBeenCalledTimes(1)
@@ -76,6 +82,7 @@ it('drops stale wrapped links while a batch is pending', async () => {
     makeBufferLine('open src/components/'),
     makeBufferLine('terminal-link-handlers.ts', { isWrapped: true })
   ]
+
   const exists = createDeferred<boolean[]>()
   const batch = vi.fn(() => exists.promise)
   window.api.shell.pathsExist = batch

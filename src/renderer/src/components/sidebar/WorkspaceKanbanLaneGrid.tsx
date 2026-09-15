@@ -20,8 +20,11 @@ import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 
 // Why: a fresh [] per render would defeat the memoized lane on empty lanes.
 const EMPTY_LANE_ITEMS: readonly Worktree[] = []
+
 const EMPTY_RENDERED_LANE_IDS: ReadonlySet<WorkspaceStatus> = new Set()
+
 const WORKSPACE_BOARD_LANE_GAP = 12
+
 const WORKSPACE_BOARD_LANE_OVERSCAN = 1
 
 type WorkspaceKanbanLaneGridProps = {
@@ -79,14 +82,17 @@ export default function WorkspaceKanbanLaneGrid({
   onColumnResizeKeyDown
 }: WorkspaceKanbanLaneGridProps): React.JSX.Element {
   const [focusedStatusId, setFocusedStatusId] = useState<WorkspaceStatus | null>(null)
+
   const [renderedLaneIds, setRenderedLaneIds] =
     useState<ReadonlySet<WorkspaceStatus>>(EMPTY_RENDERED_LANE_IDS)
+
   const renderedLaneIdsRef = useRef(renderedLaneIds)
   const renderCardsRef = useRef(renderCards)
   useLayoutEffect(() => {
     renderedLaneIdsRef.current = renderedLaneIds
     renderCardsRef.current = renderCards
   }, [renderCards, renderedLaneIds])
+
   const focusedIndex = useMemo(
     () =>
       focusedStatusId === null
@@ -94,12 +100,15 @@ export default function WorkspaceKanbanLaneGrid({
         : statuses.findIndex((status) => status.id === focusedStatusId),
     [focusedStatusId, statuses]
   )
+
   const estimateLaneSize = useCallback(() => columnWidth, [columnWidth])
   const getLaneKey = useCallback((index: number) => statuses[index]?.id ?? index, [statuses])
+
   const rangeExtractor = useCallback(
     (range: Range) => extractWorkspaceKanbanLaneRange(range, focusedIndex),
     [focusedIndex]
   )
+
   const laneVirtualizer = useVirtualizer({
     count: statuses.length,
     getScrollElement: () => laneScrollerRef.current,
@@ -111,18 +120,22 @@ export default function WorkspaceKanbanLaneGrid({
     rangeExtractor,
     useFlushSync: false
   })
+
   useLayoutEffect(() => {
     laneVirtualizer.measure()
   }, [columnWidth, laneVirtualizer])
   const virtualLanes = laneVirtualizer.getVirtualItems()
+
   const virtualStatusIds = useMemo(
     () =>
       virtualLanes.flatMap((virtualLane) => {
         const status = statuses[virtualLane.index]
+
         return status ? [status.id] : []
       }),
     [statuses, virtualLanes]
   )
+
   const mountedLaneIds = useMemo(() => new Set(virtualStatusIds), [virtualStatusIds])
   const mountedLaneIdsRef = useRef<ReadonlySet<WorkspaceStatus>>(mountedLaneIds)
   useLayoutEffect(() => {
@@ -131,36 +144,46 @@ export default function WorkspaceKanbanLaneGrid({
   useEffect(() => {
     if (!renderCards) {
       setRenderedLaneIds(EMPTY_RENDERED_LANE_IDS)
+
       return
     }
+
     const missingIds = virtualStatusIds.filter((id) => !renderedLaneIdsRef.current.has(id))
     setRenderedLaneIds((current) => {
       const retained = new Set(Array.from(current).filter((id) => mountedLaneIds.has(id)))
+
       return retained.size === current.size ? current : retained
     })
     let nextIndex = 0
     let frameId = 0
+
     const renderNextLane = (): void => {
       const statusId = missingIds[nextIndex]
       nextIndex += 1
+
       if (!statusId) {
         return
       }
+
       startTransition(() => {
         setRenderedLaneIds((current) => {
           if (!renderCardsRef.current || !mountedLaneIdsRef.current.has(statusId)) {
             return current
           }
+
           return new Set(current).add(statusId)
         })
       })
+
       if (nextIndex < missingIds.length) {
         frameId = window.requestAnimationFrame(renderNextLane)
       }
     }
+
     if (missingIds.length > 0) {
       frameId = window.requestAnimationFrame(renderNextLane)
     }
+
     return () => window.cancelAnimationFrame(frameId)
   }, [mountedLaneIds, renderCards, virtualStatusIds])
 
@@ -176,6 +199,7 @@ export default function WorkspaceKanbanLaneGrid({
       }}
       onBlurCapture={(event) => {
         const nextTarget = event.relatedTarget
+
         if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
           setFocusedStatusId(null)
         }
@@ -183,9 +207,11 @@ export default function WorkspaceKanbanLaneGrid({
     >
       {virtualLanes.map((virtualLane) => {
         const status = statuses[virtualLane.index]
+
         if (!status) {
           return null
         }
+
         return (
           <div
             key={virtualLane.key}

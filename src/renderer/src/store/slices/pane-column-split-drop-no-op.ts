@@ -12,6 +12,7 @@ function getDirectLayoutSiblingOnSplitSide(
     if (direction === 'horizontal' && splitDirection === 'right' && second.type === 'leaf') {
       return second.groupId
     }
+
     if (direction === 'vertical' && splitDirection === 'down' && second.type === 'leaf') {
       return second.groupId
     }
@@ -21,6 +22,7 @@ function getDirectLayoutSiblingOnSplitSide(
     if (direction === 'horizontal' && splitDirection === 'left' && first.type === 'leaf') {
       return first.groupId
     }
+
     if (direction === 'vertical' && splitDirection === 'up' && first.type === 'leaf') {
       return first.groupId
     }
@@ -39,6 +41,7 @@ export function findLayoutSiblingOnSplitSide(
   }
 
   const directSibling = getDirectLayoutSiblingOnSplitSide(root, targetGroupId, splitDirection)
+
   if (directSibling) {
     return directSibling
   }
@@ -60,6 +63,7 @@ export function isPaneColumnSplitDropNoOp(args: {
   if (args.sourceGroupId === args.targetGroupId && args.sourceTabCount <= 1) {
     return true
   }
+
   if (args.sourceTabCount !== 1 || !args.layout) {
     return false
   }

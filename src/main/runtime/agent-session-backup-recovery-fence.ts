@@ -29,9 +29,11 @@ import type { AgentSessionStoreState } from './agent-session-record-store-file'
 export function raiseAgentSessionFencesAfterBackupRecovery(state: AgentSessionStoreState): void {
   for (const [sessionId, record] of state.records) {
     const floor = nextAgentSessionFence(record.lease) + 1
+
     if (!Number.isSafeInteger(floor)) {
       throw new Error('agent_session_fence_exhausted')
     }
+
     state.records.set(sessionId, {
       ...record,
       lease: {

@@ -26,6 +26,7 @@ describe('useDiffCommentDecorator model lifecycle', () => {
     const disposeMouseMove = vi.fn()
     const disposeMouseLeave = vi.fn()
     const disposeScroll = vi.fn()
+
     const editor = {
       getDomNode: () => editorDomNode,
       getOption: () => 19,
@@ -34,6 +35,7 @@ describe('useDiffCommentDecorator model lifecycle', () => {
       onDidScrollChange: () => ({ dispose: disposeScroll }),
       changeViewZones: (callback: (accessor: object) => void) => callback({})
     } as unknown as MonacoEditor.ICodeEditor
+
     const hook = renderHook(
       ({ monacoModelIdentity }) =>
         useDiffCommentDecorator({
@@ -47,6 +49,7 @@ describe('useDiffCommentDecorator model lifecycle', () => {
         }),
       { initialProps: { monacoModelIdentity: 'modified-v1' } }
     )
+
     const firstButton = editorDomNode.querySelector('.orca-diff-comment-add-btn')
 
     hook.rerender({ monacoModelIdentity: 'modified-v2' })

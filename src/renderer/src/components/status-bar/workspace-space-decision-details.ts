@@ -94,16 +94,21 @@ function getBranchStatus(
   if (!status?.hasUpstream) {
     return null
   }
+
   if (status.ahead === 0 && status.behind === 0) {
     return 'Synced with upstream'
   }
+
   const parts: string[] = []
+
   if (status.ahead > 0) {
     parts.push(`${status.ahead} ahead`)
   }
+
   if (status.behind > 0) {
     parts.push(`${status.behind} behind`)
   }
+
   return parts.join(', ')
 }
 
@@ -114,22 +119,28 @@ export function getWorkspaceDecisionDetails(
   const workspaceRecord = inputs.worktreeMap.get(worktree.worktreeId)
   const tabs = inputs.tabsByWorktree[worktree.worktreeId] ?? []
   const openFiles = inputs.openFiles.filter((file) => file.worktreeId === worktree.worktreeId)
+
   const dirtyEditorBufferCount = openFiles.filter(
     (file) => file.isDirty || inputs.editorDrafts[file.id] !== undefined
   ).length
+
   const gitEntries = inputs.gitStatusByWorktreeIdentity
     ? inputs.gitStatusByWorktreeIdentity.get(getWorkspaceSpaceWorktreeIdentity(worktree))
     : inputs.gitStatusByWorktree[worktree.worktreeId]
+
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
     : getWorkspaceSpaceBranchLabel(worktree)
+
   const repo = inputs.repos
     ? findRepoForHost(inputs.repos, worktree.repoId, {
         hostId: worktree.executionHostId,
         settings: inputs.settings
       })
     : inputs.repoMap.get(worktree.repoId)
+
   const ownerExecutionHostId = repo?.executionHostId ?? worktree.executionHostId ?? null
+
   const reviewCacheKey = getHostedReviewCacheKey(
     worktree.repoPath,
     branch,
@@ -139,14 +150,18 @@ export function getWorkspaceDecisionDetails(
     ownerExecutionHostId,
     repo !== null && repo !== undefined
   )
+
   const cachedHostedReview = inputs.hostedReviewCache[reviewCacheKey]?.data
+
   const hostedReview =
     cachedHostedReview?.provider === 'github' &&
     workspaceRecord &&
     isGitHubPRSuppressed(workspaceRecord, cachedHostedReview.number)
       ? null
       : cachedHostedReview
+
   const linkedPR = workspaceRecord?.linkedPR ?? null
+
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
       ? `PR #${hostedReview.number} ${formatReviewState(hostedReview.state)}${
@@ -155,7 +170,9 @@ export function getWorkspaceDecisionDetails(
       : linkedPR
         ? `PR #${linkedPR}`
         : null
+
   const linkedIssue = workspaceRecord?.linkedIssue ?? null
+
   const issue =
     linkedIssue && repo
       ? inputs.issueCache[
@@ -170,16 +187,20 @@ export function getWorkspaceDecisionDetails(
           )
         ]?.data
       : null
+
   const issueLabel = linkedIssue
     ? issue
       ? `#${issue.number} ${issue.state}: ${issue.title}`
       : `#${linkedIssue}`
     : null
+
   const linkedLinearIssue = workspaceRecord?.linkedLinearIssue ?? null
+
   const linearIssue = linkedLinearIssue
     ? (inputs.linearIssueCache[`selected::${linkedLinearIssue}`]?.data ??
       inputs.linearIssueCache[linkedLinearIssue]?.data)
     : null
+
   const linearIssueLabel = linkedLinearIssue
     ? linearIssue
       ? `${linearIssue.identifier}${

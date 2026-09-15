@@ -101,12 +101,15 @@ export function useSourceControlRemoteActionRunner({
               pushTarget: activeWorktree?.pushTarget
             }
           : null)
+
       if (!target) {
         return { status: 'skipped' }
       }
+
       const sequence = (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] ?? 0) + 1
       remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] = sequence
       const targetIsActiveWorktree = target.worktreeId === activeWorktreeId
+
       const recoveryEntrySnapshot = captureSourceControlRecoveryEntrySnapshot(
         targetIsActiveWorktree
           ? ([
@@ -116,8 +119,10 @@ export function useSourceControlRemoteActionRunner({
             ] satisfies SourceControlRecoveryStatusEntry[])
           : []
       )
+
       const failureBranchName = targetIsActiveWorktree ? branchName || null : null
       setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+
       try {
         if (kind === 'publish') {
           await pushBranch(
@@ -128,8 +133,10 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
+
           return { status: 'ok' }
         }
+
         if (kind === 'push') {
           // Why: kind 'push' must stay a regular push; auto-upgrading made the always-enabled dropdown Push row silently force-push against its tooltip.
           await pushBranch(
@@ -140,8 +147,10 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
+
           return { status: 'ok' }
         }
+
         if (kind === 'force_push') {
           await pushBranch(
             target.worktreeId,
@@ -151,8 +160,10 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { forceWithLease: true, runtimeTargetSettings: target.settings }
           )
+
           return { status: 'ok' }
         }
+
         if (kind === 'pull') {
           await pullBranch(
             target.worktreeId,
@@ -163,8 +174,10 @@ export function useSourceControlRemoteActionRunner({
               runtimeTargetSettings: target.settings
             }
           )
+
           return { status: 'ok' }
         }
+
         if (kind === 'fast_forward') {
           await fastForwardBranch(
             target.worktreeId,
@@ -173,8 +186,10 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
+
           return { status: 'ok' }
         }
+
         if (kind === 'fetch') {
           await fetchBranch(
             target.worktreeId,
@@ -185,13 +200,17 @@ export function useSourceControlRemoteActionRunner({
               runtimeTargetSettings: target.settings
             }
           )
+
           return { status: 'ok' }
         }
+
         if (kind === 'rebase') {
           const baseRef = options?.baseRef ?? effectiveBaseRef
+
           if (!baseRef) {
             return { status: 'skipped' }
           }
+
           await rebaseFromBase(
             target.worktreeId,
             target.worktreePath,
@@ -200,8 +219,10 @@ export function useSourceControlRemoteActionRunner({
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
+
           return { status: 'ok' }
         }
+
         await syncBranch(
           target.worktreeId,
           target.worktreePath,
@@ -211,15 +232,18 @@ export function useSourceControlRemoteActionRunner({
             runtimeTargetSettings: target.settings
           }
         )
+
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
           setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
         }
+
         return { status: 'ok' }
       } catch (error) {
         // Why: editor-slice actions own the failure toast; keep the latest failure inline too since dropdown-only actions like Fetch look silent once the menu closes.
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
           return { status: 'superseded' }
         }
+
         const actionError: SourceControlActionError = {
           kind,
           message: resolveRemoteActionError(kind, error),
@@ -231,7 +255,9 @@ export function useSourceControlRemoteActionRunner({
           entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
           sequence
         }
+
         setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
+
         return { status: 'failed', error: actionError }
       } finally {
         if (!options?.target) {
@@ -271,17 +297,21 @@ export function useSourceControlRemoteActionRunner({
   const runCompoundCommitAction = useCallback(
     async (remoteKind: 'push' | 'sync'): Promise<void> => {
       const ok = await handleCommit()
+
       if (!ok) {
         return
       }
+
       // Why: "Commit & Force Push" maps to remoteKind 'push', so route to force_push when the upstream shape requires lease force (kind 'push' no longer auto-upgrades).
       if (
         remoteKind === 'push' &&
         shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)
       ) {
         await runRemoteAction('force_push')
+
         return
       }
+
       await runRemoteAction(remoteKind)
     },
     [handleCommit, remoteStatus, remoteStatusForActions, runRemoteAction]

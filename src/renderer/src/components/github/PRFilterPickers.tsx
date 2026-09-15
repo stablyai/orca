@@ -30,6 +30,7 @@ export function getPullRequestPickerQueryState(query: string): {
   trimmedQuery: string
 } {
   const queryTooLarge = isPullRequestPickerQueryTooLarge(query)
+
   return {
     queryTooLarge,
     trimmedQuery: queryTooLarge ? '' : query.trim()
@@ -41,13 +42,17 @@ export function filterPullRequestPickerOptions(
   query: string
 ): PickerOption[] {
   const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
+
   if (queryTooLarge) {
     return []
   }
+
   if (!trimmedQuery) {
     return options
   }
+
   const q = trimmedQuery.toLowerCase()
+
   return options.filter(
     (o) => o.primary.toLowerCase().includes(q) || (o.secondary ?? '').toLowerCase().includes(q)
   )
@@ -80,11 +85,13 @@ export function SingleSelectList({
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
+
   const showCustom =
     allowCustomValue &&
     trimmedQuery.length > 0 &&
     !queryTooLarge &&
     !filtered.some((o) => o.key.toLowerCase() === trimmedQuery.toLowerCase())
+
   const fallback = loading
     ? 'Loading…'
     : queryTooLarge
@@ -126,6 +133,7 @@ export function SingleSelectList({
         ) : null}
         {filtered.map((opt) => {
           const isActive = opt.key === activeValue
+
           return (
             <CommandItem
               key={opt.key}
@@ -169,6 +177,7 @@ export function MultiSelectList({
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const { queryTooLarge } = getPullRequestPickerQueryState(query)
+
   const fallback = loading
     ? 'Loading…'
     : queryTooLarge
@@ -177,11 +186,13 @@ export function MultiSelectList({
 
   const toggle = (key: string): void => {
     const next = new Set(selectedSet)
+
     if (next.has(key)) {
       next.delete(key)
     } else {
       next.add(key)
     }
+
     onChange([...next])
   }
 
@@ -207,6 +218,7 @@ export function MultiSelectList({
         ) : null}
         {filtered.map((opt) => {
           const isActive = selectedSet.has(opt.key)
+
           return (
             <CommandItem
               key={opt.key}

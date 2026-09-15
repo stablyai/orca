@@ -42,12 +42,15 @@ describe('setCacheTimerStartedAt identity bailout', () => {
     store.getState().setCacheTimerStartedAt(paneKey, null)
 
     let wakeups = 0
+
     const unsubscribe = store.subscribe(() => {
       wakeups += 1
     })
+
     for (let i = 0; i < REPEATS; i += 1) {
       store.getState().setCacheTimerStartedAt(paneKey, null)
     }
+
     unsubscribe()
 
     expect(wakeups).toBe(0)
@@ -60,12 +63,15 @@ describe('setCacheTimerStartedAt identity bailout', () => {
     store.getState().setCacheTimerStartedAt(paneKey, 1_700_000_000_000)
 
     let wakeups = 0
+
     const unsubscribe = store.subscribe(() => {
       wakeups += 1
     })
+
     for (let i = 0; i < REPEATS; i += 1) {
       store.getState().setCacheTimerStartedAt(paneKey, 1_700_000_000_000)
     }
+
     unsubscribe()
 
     expect(wakeups).toBe(0)
@@ -77,9 +83,11 @@ describe('setCacheTimerStartedAt identity bailout', () => {
     store.getState().setCacheTimerStartedAt(paneKey, null)
 
     let wakeups = 0
+
     const unsubscribe = store.subscribe(() => {
       wakeups += 1
     })
+
     store.getState().setCacheTimerStartedAt(paneKey, 123)
     store.getState().setCacheTimerStartedAt(paneKey, null)
     unsubscribe()
@@ -93,9 +101,11 @@ describe('setCacheTimerStartedAt identity bailout', () => {
     const paneKey = 'tab-1:leaf-a'
 
     let wakeups = 0
+
     const unsubscribe = store.subscribe(() => {
       wakeups += 1
     })
+
     store.getState().setCacheTimerStartedAt(paneKey, null)
     unsubscribe()
 
@@ -122,13 +132,16 @@ describe('setTabLayout identity bailout', () => {
     store.getState().setTabLayout('tab-1', makeLayout())
 
     let wakeups = 0
+
     const unsubscribe = store.subscribe(() => {
       wakeups += 1
     })
+
     for (let i = 0; i < REPEATS; i += 1) {
       // Fresh object each iteration: this is what persistLayoutSnapshot produces.
       store.getState().setTabLayout('tab-1', makeLayout())
     }
+
     unsubscribe()
 
     expect(wakeups).toBe(0)
@@ -178,9 +191,11 @@ describe('setTabLayout identity bailout', () => {
     for (const mutation of mutations) {
       store.getState().setTabLayout('tab-1', makeLayout())
       let wakeups = 0
+
       const unsubscribe = store.subscribe(() => {
         wakeups += 1
       })
+
       store.getState().setTabLayout('tab-1', makeLayout(mutation))
       unsubscribe()
       expect(wakeups, `expected a publish for ${JSON.stringify(mutation)}`).toBe(1)
@@ -191,9 +206,11 @@ describe('setTabLayout identity bailout', () => {
     // A duplicate-pty layout normalizes to a transfer; replaying the already-normalized
     // snapshot must be inert, since normalization then finds nothing to move.
     const store = createTestStore()
+
     const duplicate = makeLayout({
       ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-a' }
     })
+
     store.getState().setTabLayout('tab-1', duplicate)
     const normalized = store.getState().terminalLayoutsByTabId['tab-1']
     expect(normalized.ptyIdsByLeafId).not.toEqual(duplicate.ptyIdsByLeafId)
@@ -217,9 +234,11 @@ describe('setTabLayout identity bailout', () => {
     expect('tab-1' in store.getState().terminalLayoutsByTabId).toBe(false)
 
     let wakeups = 0
+
     const unsubscribe = store.subscribe(() => {
       wakeups += 1
     })
+
     store.getState().setTabLayout('tab-1', null)
     unsubscribe()
     expect(wakeups).toBe(0)

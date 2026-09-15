@@ -10,12 +10,15 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     leaf: RuntimeLeafRecord
   ): void {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+
     if (retained.leafKey !== leafKey) {
       if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
         this.handleByLeafKey.delete(retained.leafKey)
       }
+
       retained.leafKey = leafKey
     }
+
     this.handles.set(retained.handle, {
       handle: retained.handle,
       runtimeId: this.runtimeId,
@@ -31,13 +34,17 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
 
   protected invalidatePtyIncarnationHandle(ptyId: string): void {
     const retained = this.handleByPtyIncarnation.get(ptyId)
+
     if (!retained) {
       return
     }
+
     this.handleByPtyIncarnation.delete(ptyId)
+
     if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
       this.handleByLeafKey.delete(retained.leafKey)
     }
+
     this.handles.delete(retained.handle)
     this.syntheticTerminalHandles.delete(retained.handle)
     this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
@@ -47,6 +54,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     for (const retained of this.handleByPtyIncarnation.values()) {
       this.syntheticTerminalHandles.delete(retained.handle)
     }
+
     this.handleByPtyIncarnation.clear()
   }
 
@@ -54,6 +62,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       const pty = this.ptysById.get(ptyId)
       const leaves = this.getLeavesForPty(ptyId)
+
       if (
         !pty ||
         pty.incarnationId !== retained.incarnationId ||
@@ -63,6 +72,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
         this.invalidatePtyIncarnationHandle(ptyId)
         continue
       }
+
       this.bindPtyIncarnationHandle(retained, leaves[0])
     }
   }
@@ -71,10 +81,13 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     if (!leaf.ptyId) {
       return null
     }
+
     const preAllocated = this.handleByPtyId.get(leaf.ptyId)
+
     if (!preAllocated) {
       return null
     }
+
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     this.handles.set(preAllocated, {
       handle: preAllocated,
@@ -87,32 +100,40 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
       ptyGeneration: leaf.ptyGeneration
     })
     this.handleByLeafKey.set(leafKey, preAllocated)
+
     return preAllocated
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
     const retained = this.handleByPtyIncarnation.get(pty.ptyId)
+
     if (retained?.incarnationId === pty.incarnationId) {
       return retained.handle
     }
+
     const existingHandle =
       this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
+
     if (existingHandle) {
       const existingRecord = this.handles.get(existingHandle)
+
       if (
         existingRecord &&
         existingRecord.runtimeId === this.runtimeId &&
         existingRecord.ptyId === pty.ptyId
       ) {
         this.handleByPtyId.set(pty.ptyId, existingHandle)
+
         return existingHandle
       }
     }
 
     const handle = existingHandle ?? `term_${randomUUID()}`
+
     if (!existingHandle) {
       this.syntheticTerminalHandles.add(handle)
     }
+
     const syntheticId = `pty:${pty.ptyId}`
     this.handles.set(handle, {
       handle,
@@ -125,6 +146,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
       ptyGeneration: 0
     })
     this.handleByPtyId.set(pty.ptyId, handle)
+
     return handle
   }
 
@@ -138,6 +160,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
         return handle
       }
     }
+
     return null
   }
 
@@ -149,13 +172,17 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
 
   protected invalidateLeafHandle(leafKey: string): void {
     const handle = this.handleByLeafKey.get(leafKey)
+
     if (!handle) {
       return
     }
+
     const record = this.handles.get(handle)
+
     if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
       this.handleByPtyIncarnation.delete(record.ptyId)
     }
+
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
     this.syntheticTerminalHandles.delete(handle)
@@ -169,10 +196,13 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   ): boolean {
     const handle = this.handleByLeafKey.get(leafKey)
     const record = handle ? this.handles.get(handle) : null
+
     if (!handle || !record || record.ptyId !== null || ptyId === null) {
       return false
     }
+
     this.handles.set(handle, { ...record, ptyId, ptyGeneration })
+
     return true
   }
 

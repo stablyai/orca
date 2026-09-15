@@ -7,6 +7,7 @@ import {
   type RateLimitBucketKind
 } from '../../rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
+
 // Why: a branch lookup prefers REST but can fall back to `gh pr list` and
 // `gh pr view`, so both buckets are guarded and charged. Mirrors the PR refresh
 // coordinator's own estimate.
@@ -30,6 +31,7 @@ export async function getGitHubPRLookupRateLimitBlock(
   const executionOptions = ghRepoExecOptions(
     githubRepoContext(repoPath, connectionId, localGitOptions)
   )
+
   // Why: identity resolution runs local git, which can fail for reasons that
   // have nothing to do with the budget; let the lookup itself classify those.
   const repository = await getOriginGitHubApiRepository(
@@ -37,19 +39,23 @@ export async function getGitHubPRLookupRateLimitBlock(
     connectionId,
     executionOptions
   ).catch(() => null)
+
   if (repository === null) {
     return null
   }
+
   if (spendsSharedGitHubComQuota(repository, executionOptions)) {
     // Why: the probe only warms the snapshot and is exempt from limits, so a
     // failure must fail open rather than block the lookup (#7553).
     await getRateLimit().catch(() => undefined)
   }
+
   // Why: retrying at the earlier reset would fail again on the bucket that has
   // not reset yet, so the latest blocked reset is the only honest retry time.
   const resets = PR_BRANCH_LOOKUP_BUCKETS.map((bucket) =>
     repositoryRateLimitGuard(repository, bucket, executionOptions)
   ).flatMap((guard) => (guard.blocked ? [guard.resetAt] : []))
+
   return resets.length > 0 ? { resetAt: Math.max(...resets) } : null
 }
 
@@ -61,7 +67,9 @@ export async function assertRateLimitBudget(
   if (spendsSharedGitHubComQuota(repository, executionOptions)) {
     await getRateLimit()
   }
+
   const guard = repositoryRateLimitGuard(repository, bucket, executionOptions)
+
   if (guard.blocked) {
     throw new Error(
       `GitHub ${bucket} rate limit is low; retry after ${new Date(guard.resetAt * 1000).toLocaleTimeString()}`

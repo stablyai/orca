@@ -29,13 +29,16 @@ export function createTabsLabelActions(
       set((state) => {
         for (const [worktreeId, groups] of Object.entries(state.groupsByWorktree)) {
           const group = groups.find((candidate) => candidate.id === groupId)
+
           if (!group) {
             continue
           }
+
           // Why: dedupe at the store boundary so each tab keeps one canonical position and later group ops don't branch on duplicate ids.
           const nextTabOrder = dedupeTabOrder(tabIds)
           reordered = true
           const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
+
           return {
             groupsByWorktree: {
               ...state.groupsByWorktree,
@@ -45,13 +48,16 @@ export function createTabsLabelActions(
               ...state.unifiedTabsByWorktree,
               [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => {
                 const sortOrder = orderMap.get(tab.id)
+
                 return sortOrder === undefined ? tab : { ...tab, sortOrder }
               })
             }
           }
         }
+
         return state
       })
+
       if (reordered && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -65,9 +71,11 @@ export function createTabsLabelActions(
       set((state) => {
         const tabPatch = patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode })
         const rowPatch = patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
+
         if (!tabPatch && !rowPatch.tabsByWorktree) {
           return state
         }
+
         return {
           ...tabPatch,
           // Why the row too: viewMode is declared on both types and host-sync
@@ -85,31 +93,39 @@ export function createTabsLabelActions(
         to: 'terminal' | 'chat'
         agent: TuiAgent | null
       } | null = null
+
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+
         if (!found) {
           return state
         }
+
         // Why: viewMode defaults to 'terminal' for legacy/missing, so the first toggle flips to 'chat'.
         const fromMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
         const nextMode = fromMode === 'chat' ? 'terminal' : 'chat'
+
         // Why: launchAgent lives on the legacy terminal tab (keyed by entityId); resolve it here so toggle telemetry can attribute by agent.
         const agent =
           (state.tabsByWorktree[found.worktreeId] ?? []).find(
             (terminal) => terminal.id === found.tab.entityId
           )?.launchAgent ?? null
+
         toggled = { from: fromMode, to: nextMode, agent }
+
         return {
           ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }),
           ...patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: nextMode })
         }
       })
+
       // Why: emit after the state write so the event reflects the committed mode.
       const committed = toggled as {
         from: 'terminal' | 'chat'
         to: 'terminal' | 'chat'
         agent: TuiAgent | null
       } | null
+
       if (committed) {
         emitNativeChatToggled(committed)
         mirrorTabViewModeToHost(get(), tabId, committed.to)
@@ -119,6 +135,7 @@ export function createTabsLabelActions(
     setTabCustomLabel: (tabId, label, opts) => {
       const exists = get().getTab(tabId) !== null
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? state)
+
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -127,6 +144,7 @@ export function createTabsLabelActions(
     setUnifiedTabColor: (tabId, color) => {
       const exists = get().getTab(tabId) !== null
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? state)
+
       if (exists) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -136,21 +154,28 @@ export function createTabsLabelActions(
       const exists = get().getTab(tabId) !== null
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+
         if (!found) {
           return state
         }
+
         const { tab, worktreeId } = found
+
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
           candidate.id === tabId ? { ...candidate, isPinned: true, isPreview: false } : candidate
         )
+
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const group = groups.find((candidate) => candidate.id === tab.groupId)
+
         if (!group) {
           return {
             unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
           }
         }
+
         const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
+
         return {
           unifiedTabsByWorktree: {
             ...state.unifiedTabsByWorktree,
@@ -165,6 +190,7 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, true)
+
       if (exists) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -174,21 +200,28 @@ export function createTabsLabelActions(
       const exists = get().getTab(tabId) !== null
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+
         if (!found) {
           return state
         }
+
         const { tab, worktreeId } = found
+
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
           candidate.id === tabId ? { ...candidate, isPinned: false } : candidate
         )
+
         const groups = state.groupsByWorktree[worktreeId] ?? []
         const group = groups.find((candidate) => candidate.id === tab.groupId)
+
         if (!group) {
           return {
             unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
           }
         }
+
         const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
+
         return {
           unifiedTabsByWorktree: {
             ...state.unifiedTabsByWorktree,
@@ -202,6 +235,7 @@ export function createTabsLabelActions(
         }
       })
       mirrorTabPinnedToHost(get(), tabId, false)
+
       if (exists) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

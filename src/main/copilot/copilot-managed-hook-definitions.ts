@@ -30,6 +30,7 @@ export function getManagedCommand(scriptPath: string, eventName: string): string
   if (process.platform !== 'win32') {
     return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
   }
+
   return wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
 }
 
@@ -54,9 +55,11 @@ export function definitionHasStaleManagedCommand(
   isManagedCommand: (command: string | undefined) => boolean
 ): boolean {
   const commands = [definition.command, definition.bash, definition.powershell]
+
   if (commands.some((command) => isManagedCommand(command) && command !== currentCommand)) {
     return true
   }
+
   return (
     Array.isArray(definition.hooks) &&
     definition.hooks.some(

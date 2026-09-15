@@ -6,24 +6,35 @@ import { build } from 'esbuild'
 import { runProcess } from '../../../src/shared/child-process/run-process'
 
 const root = process.cwd()
+
 const evidence = resolve('notes/search-ipc')
+
 const overlay = join(evidence, 'overlay')
+
 const wiring = '9845bef63a6'
+
 const mode = process.argv[2]
+
 assert.equal(process.platform, 'win32', 'This harness requires native Windows and NTFS')
+
 assert.ok(mode === 'red' || mode === 'green', 'Pass red or green')
+
 assert.equal(process.env.ORCA_BACKGROUND_LAUNCH, '1')
+
 const output = join(evidence, mode, String(Date.now()))
+
 await mkdir(output, { recursive: true })
 
 async function command(program: string, args: string[]) {
   const result = await runProcess({ program, args, cwd: root, timeoutMs: 120_000 })
   assert.equal(result.code, 0, result.stderr)
+
   return result.stdout.trim()
 }
 
 // The overlay is exported, never checked out or staged on the fix branch.
 await mkdir(overlay, { recursive: true })
+
 await command('git', [
   'archive',
   '--format=tar',
@@ -31,20 +42,26 @@ await command('git', [
   wiring,
   'src'
 ])
+
 await command('tar', [
   '-xf',
   relative(root, join(evidence, 'overlay.tar')),
   '-C',
   relative(root, overlay)
 ])
+
 const edits: { path: string; sha256: string }[] = []
+
 function replaceOnce(source: string, before: string, after: string) {
   assert.equal(source.split(before).length, 2, `Expected exactly one injection: ${before}`)
+
   return source.replace(before, after)
 }
 
 const adapter = join(output, 'adapter.mjs')
+
 const source = (path: string) => JSON.stringify(join(overlay, 'src', path))
+
 await writeFile(
   adapter,
   `
@@ -89,10 +106,12 @@ await build({
         api.onLoad({ filter: /\.ts$/ }, async (args) => {
           let contents = await readFile(args.path, 'utf8')
           const path = args.path.replaceAll('\\', '/')
+
           if (path.endsWith('/runtime/rpc/methods/index.ts')) {
             // DispatcherOptions explicitly supplies AI_VAULT_METHODS; don't load unrelated default methods.
             contents = 'export const ALL_RPC_METHODS = []'
           }
+
           if (path.endsWith('/cached-session-list.ts')) {
             contents = replaceOnce(
               contents,
@@ -100,6 +119,7 @@ await build({
               '  return JSON.parse(process.env.ORCA_FILE_ID_ROOTS!);\n  const [additionalCodexHomes, wslHomeDirs] = await Promise.all(['
             )
           }
+
           if (path.endsWith('/session-scanner-service-env.ts')) {
             contents = replaceOnce(
               contents,
@@ -107,6 +127,7 @@ await build({
               "  env.ORCA_BACKGROUND_LAUNCH = '1'\n  env.ELECTRON_RUN_AS_NODE = '1'"
             )
           }
+
           if (path.endsWith('/session-scanner-service-spawn.ts')) {
             contents = replaceOnce(
               contents,
@@ -114,11 +135,13 @@ await build({
               '  globalThis.__fileIdObserveChild?.(child)\n  lowerAiVaultServicePriority(child.pid)'
             )
           }
+
           if (path.endsWith('/session-scanner-service-entry.ts')) {
             contents = `import { registerTranscriptConsumer } from './session-transcript-consumers';
 registerTranscriptConsumer({beginRead: start => { console.error('[file-id-read]', JSON.stringify({mode:start.mode,path:start.candidate.file.path})); return null }});
 console.error('[file-id-child]', JSON.stringify({pid:process.pid,execPath:process.execPath,versions:process.versions,background:process.env.ORCA_BACKGROUND_LAUNCH}));\n${contents}`
           }
+
           if (mode === 'green' && path.endsWith('/session-search-store.ts')) {
             contents = replaceOnce(
               contents,
@@ -126,6 +149,7 @@ console.error('[file-id-child]', JSON.stringify({pid:process.pid,execPath:proces
               'SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino, mtime_ms'
             )
           }
+
           if (mode === 'green' && path.endsWith('/session-search-index-writer.ts')) {
             contents = replaceOnce(
               contents,
@@ -133,24 +157,29 @@ console.error('[file-id-child]', JSON.stringify({pid:process.pid,execPath:proces
               'SELECT CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino, byte_offset'
             )
           }
+
           edits.push({
             path: path.replace(overlay.replaceAll('\\', '/'), ''),
             sha256: createHash('sha256').update(contents).digest('hex')
           })
+
           return { contents, loader: 'ts' }
         })
       }
     }
   ]
 })
+
 await copyFile(
   join(root, 'config/scripts/session-search-file-id-e2e/host.cjs'),
   join(output, 'host.cjs')
 )
+
 await copyFile(
   join(root, 'config/scripts/session-search-file-id-e2e/client.cjs'),
   join(output, 'client.cjs')
 )
+
 await writeFile(
   join(output, 'topology.json'),
   JSON.stringify(
@@ -170,9 +199,12 @@ await writeFile(
     2
   )
 )
+
 await writeFile(join(evidence, `${mode}-latest.json`), JSON.stringify({ output }))
+
 for (const phase of ['lifecycle', 'restart']) {
   console.log(JSON.stringify({ mode, phase, output }))
+
   const result = await runProcess({
     program: join(root, 'node_modules/electron/dist/electron.exe'),
     args: [join(output, 'host.cjs'), output, phase],
@@ -185,9 +217,11 @@ for (const phase of ['lifecycle', 'restart']) {
     },
     timeoutMs: 180_000
   })
+
   await writeFile(join(output, `process-${phase}.log`), result.stdout + result.stderr)
   console.log(JSON.stringify({ mode, phase, code: result.code, timedOut: result.timedOut, output }))
   process.exitCode = result.code ?? 1
+
   if (process.exitCode !== 0) {
     break
   }

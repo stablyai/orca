@@ -17,9 +17,13 @@ import { clearWebSessionTerminalOrphanRecoveryForTests } from './web-session-ter
 import { isTerminalRecoverySnapshot } from './web-session-terminal-recovery-snapshot-validation'
 
 const WORKTREE = 'folder:recovery-validation'
+
 const pending = pendingSurface('host-tab', 'leaf-1', 'pty-1')
+
 delete pending.ptyId
+
 const ready = { ...pending, status: 'ready' as const, terminal: 'term-1' }
+
 const file = {
   type: 'file' as const,
   id: 'file-1',
@@ -30,6 +34,7 @@ const file = {
   isDirty: false,
   isActive: false
 }
+
 const markdown = {
   ...file,
   type: 'markdown' as const,
@@ -40,6 +45,7 @@ const markdown = {
   sourceRelativePath: 'notes.md',
   documentVersion: 'v1'
 }
+
 const browser = {
   type: 'browser' as const,
   id: 'browser-1',
@@ -52,6 +58,7 @@ const browser = {
   canGoForward: false,
   isActive: false
 }
+
 const agent = {
   type: 'agent-session' as const,
   id: 'agent-1',
@@ -60,6 +67,7 @@ const agent = {
   agent: 'claude' as const,
   isActive: false
 }
+
 const rows = [
   { name: 'pending terminal', row: pending },
   { name: 'ready terminal', row: ready },
@@ -76,6 +84,7 @@ function snapshot(tabs: unknown[] = []) {
 async function expectBoundaryVerdict(value: unknown, valid: boolean): Promise<void> {
   expect(isTerminalRecoverySnapshot(value)).toBe(valid)
   expect(isAdoptionResult({ adopted: true, topologyRevision: 1, snapshot: value })).toBe(valid)
+
   const result = await readClientSessionSnapshotAfterAdoption({
     environmentId: ENVIRONMENT_ID,
     worktreeId: WORKTREE,
@@ -87,6 +96,7 @@ async function expectBoundaryVerdict(value: unknown, valid: boolean): Promise<vo
     })),
     isCurrent: () => true
   })
+
   expect(result).toBe(valid ? value : null)
 }
 
@@ -166,10 +176,13 @@ function withField(value: unknown, path: string, replacement: unknown): unknown 
   const copy = structuredClone(value)
   const keys = path.split('.')
   let parent = copy as Record<string, unknown>
+
   for (const key of keys.slice(0, -1)) {
     parent = parent[key] as Record<string, unknown>
   }
+
   parent[keys.at(-1)!] = replacement
+
   return copy
 }
 
@@ -332,6 +345,7 @@ describe('terminal recovery session-tabs snapshot validation', () => {
       { ...browser, browserPageId: null, placement: { kind: 'server' }, loadError: null },
       { ...file, mode: 'edit', diffSource: 'staged' }
     ])
+
     await expectBoundaryVerdict({ ...value, tabGroupLayout: null, tabGroups: undefined }, true)
     const legacy = snapshot([ready, file, browser])
     await expectBoundaryVerdict(legacy, true)
@@ -377,20 +391,25 @@ describe('terminal recovery session-tabs snapshot validation', () => {
 
   it('preserves unknown additive fields at every snapshot depth', async () => {
     const additive = { future: { nested: [null, false, {}] } }
+
     const extend = (value: unknown): unknown => {
       if (Array.isArray(value)) {
         return value.map(extend)
       }
+
       if (value === null || typeof value !== 'object') {
         return value
       }
+
       // Leaf maps are string records, not extensible metadata objects.
       const entries = Object.entries(value).map(([key, child]) => [
         key,
         key.endsWith('ByLeafId') ? child : extend(child)
       ])
+
       return { ...Object.fromEntries(entries), ...additive }
     }
+
     const value = extend(fullSnapshot)
     const original = structuredClone(value)
     await expectBoundaryVerdict(value, true)

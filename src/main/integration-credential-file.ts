@@ -33,8 +33,10 @@ export function writeEncryptedCredential(
 ): void {
   if (getSecretStore().isEncryptionAvailable()) {
     writeCredentialFileAtomic(path, getSecretStore().encryptString(value))
+
     return
   }
+
   console.warn(
     `[${service.toLowerCase()}] secret encryption unavailable — storing credential in plaintext`
   )
@@ -48,18 +50,23 @@ export function writeEncryptedCredential(
 export function writeCredentialFileAtomic(path: string, data: Buffer): void {
   const tempPath = `${path}.tmp`
   let handle: number | null = null
+
   try {
     handle = openSync(tempPath, 'w', 0o600)
     // Why: write(2) is allowed to return a short count, so a single writeSync
     // could publish a truncated credential — the very corruption this avoids.
     let written = 0
+
     while (written < data.length) {
       const bytes = writeSync(handle, data, written, data.length - written)
+
       if (bytes <= 0) {
         throw new Error(`Credential write stalled at ${written}/${data.length} bytes`)
       }
+
       written += bytes
     }
+
     fsyncSync(handle)
     closeSync(handle)
     handle = null
@@ -73,11 +80,13 @@ export function writeCredentialFileAtomic(path: string, data: Buffer): void {
         // Already closed or invalid; the unlink below is what matters.
       }
     }
+
     try {
       unlinkSync(tempPath)
     } catch {
       // Nothing to clean up.
     }
+
     throw error
   }
 }
@@ -127,11 +136,13 @@ function readPlaintextLegacyCredential(
   raw: Buffer
 ): string | null {
   const plaintext = decodeUtf8(raw)
+
   // Why: legacy plaintext tokens are printable UTF-8; sealed ciphertext
   // such as macOS v10 blobs must not be decoded into auth-header junk.
   if (plaintext === null || hasControlCharacter(plaintext)) {
     throw new CredentialDecryptionError(service)
   }
+
   return usableToken(plaintext)
 }
 
@@ -150,9 +161,11 @@ function decodeUtf8(raw: Buffer): string | null {
 function hasControlCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code < 0x20 || code === 0x7f) {
       return true
     }
   }
+
   return false
 }

@@ -18,8 +18,11 @@ import {
 } from './pty-transcript-secret-scan.mjs'
 
 const REPO_ROOT = resolve(import.meta.dirname, '..', '..')
+
 const FIXTURE_DIR = join(REPO_ROOT, 'src', 'main', 'runtime', '__fixtures__')
+
 const STOP_KEY = 0x1d // Ctrl-], consumed by the recorder and never forwarded to the agent.
+
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 const USAGE = `Capture a raw agent PTY transcript into src/main/runtime/__fixtures__/.
@@ -45,13 +48,16 @@ function parseArgs(argv) {
   const command = []
   let cursor = 0
   let afterSeparator = false
+
   while (cursor < argv.length) {
     const arg = argv[cursor]
+
     if (afterSeparator) {
       command.push(arg)
       cursor += 1
       continue
     }
+
     if (arg === '--') {
       afterSeparator = true
     } else if (arg === '--redact') {
@@ -71,52 +77,65 @@ function parseArgs(argv) {
       cursor += 1
       options[key] = argv[cursor]
     }
+
     cursor += 1
   }
+
   for (const key of ['cols', 'rows', 'duration']) {
     options[key] = options[key] == null ? null : Number(options[key])
   }
+
   return { options, command }
 }
 
 // String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
 // control byte in source, which is unreadable and survives badly in diffs.
 const ESC = String.fromCharCode(27)
+
 const SEND_ESCAPES = { r: '\r', n: '\n', t: '\t', e: ESC, '\\': '\\' }
 
 /** `"<ms>:<text>"` — a keystroke to deliver at a fixed offset, for an unattended dialog capture. */
 function parseSend(value) {
   const separator = String(value ?? '').indexOf(':')
+
   if (separator === -1) {
     throw new Error(`--send expects "<ms>:<text>", got ${String(value)}`)
   }
+
   const atMs = Number(value.slice(0, separator))
+
   if (!Number.isFinite(atMs)) {
     throw new Error(
       `--send delay must be a number of milliseconds, got ${value.slice(0, separator)}`
     )
   }
+
   const text = value
     .slice(separator + 1)
     .replace(/\\(.)/g, (whole, code) => SEND_ESCAPES[code] ?? whole)
+
   return { atMs, text }
 }
 
 function runScan(files, redact) {
   let failed = false
+
   for (const file of files) {
     const path = resolve(file)
     const text = readFileSync(path, 'utf8')
+
     if (redact) {
       const { text: redacted, redacted: count } = redactTranscript(text)
       writeFileSync(path, redacted)
       console.log(`${file}: redacted ${count} span(s) in place, same length each.`)
       continue
     }
+
     const findings = scanTranscriptForSecrets(text)
     console.log(formatFindings(file, findings))
     failed ||= findings.length > 0
   }
+
   return failed ? 1 : 0
 }
 
@@ -125,15 +144,19 @@ function resolveSpawn(command) {
   if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command[0])) {
     return { file: 'cmd.exe', args: ['/c', `"${command[0]}"`, ...command.slice(1)] }
   }
+
   return { file: command[0], args: command.slice(1) }
 }
 
 async function runCapture(options, command) {
   const name = options.name
+
   if (typeof name === 'string' && !NAME_RE.test(name)) {
     console.error(`--name must be lowercase kebab-case; got ${name}`)
+
     return 2
   }
+
   const outPath = options.out ? resolve(options.out) : join(FIXTURE_DIR, `${name}.txt`)
   mkdirSync(dirname(outPath), { recursive: true })
 
@@ -143,8 +166,10 @@ async function runCapture(options, command) {
   node config/scripts/ensure-native-runtime.mjs --runtime=node
 ${String(error)}`
     )
+
     return null
   })
+
   if (pty === null) {
     return 2
   }
@@ -152,6 +177,7 @@ ${String(error)}`
   const cols = options.cols ?? process.stdout.columns ?? 120
   const rows = options.rows ?? process.stdout.rows ?? 40
   const { file, args } = resolveSpawn(command)
+
   const term = pty.spawn(file, args, {
     name: 'xterm-256color',
     cols,
@@ -165,38 +191,48 @@ ${String(error)}`
   let recording = true
   term.onData((chunk) => {
     const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
+
     // Why recording stops before the kill: an agent repaints an idle frame on its way out, so
     // a transcript that keeps writing through shutdown ends on that frame instead of on the
     // state you stopped to capture. A mid-turn or dialog capture cannot survive that.
     if (recording) {
       sink.write(bytes)
     }
+
     process.stdout.write(bytes)
   })
 
   const wasRaw = process.stdin.isTTY === true && process.stdin.isRaw === true
+
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(true)
   }
+
   process.stdin.resume()
   let stopping = false
+
   const stop = () => {
     if (stopping) {
       return
     }
+
     stopping = true
     recording = false
+
     try {
       term.kill()
     } catch {
       // The agent may have exited on its own; the transcript is already on disk.
     }
   }
+
   process.stdin.on('data', (chunk) => {
     if (chunk.includes(STOP_KEY)) {
       stop()
+
       return
     }
+
     term.write(chunk.toString('binary'))
   })
   // Why scripted input: a dialog capture has to be driven, and CI (or an agent) has no TTY to
@@ -207,15 +243,19 @@ ${String(error)}`
   const exitCode = await new Promise((resolveExit) => {
     term.onExit(({ exitCode: code }) => resolveExit(code ?? 0))
   })
+
   for (const timer of sendTimers) {
     clearTimeout(timer)
   }
+
   if (durationTimer !== null) {
     clearTimeout(durationTimer)
   }
+
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(wasRaw)
   }
+
   process.stdin.pause()
   await new Promise((done) => sink.end(done))
 
@@ -223,12 +263,14 @@ ${String(error)}`
   const findings = scanTranscriptForSecrets(readFileSync(outPath, 'utf8'))
   console.log(`\nTranscript: ${outPath}`)
   console.log(formatFindings('scrub check', findings))
+
   if (findings.length > 0) {
     console.log(
       `Scrub with:
   node config/scripts/capture-agent-pty-transcript.mjs --scan ${outPath} --redact`
     )
   }
+
   return 0
 }
 
@@ -254,17 +296,23 @@ function writeMeta(outPath, details) {
 
 async function main() {
   const { options, command } = parseArgs(process.argv.slice(2))
+
   if (options.help === true) {
     console.log(USAGE)
+
     return 0
   }
+
   if (options.scan.length > 0) {
     return runScan(options.scan, options.redact)
   }
+
   if (command.length === 0 || (options.name === undefined && options.out === undefined)) {
     console.error(USAGE)
+
     return 2
   }
+
   return runCapture(options, command)
 }
 

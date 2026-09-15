@@ -8,11 +8,16 @@ import {
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
+
 it('closes in-flight candidates and clears their timeout when the owner stops', async () => {
   vi.useFakeTimers()
+
   try {
     const candidate = new FakeSession('connecting')
     const logical = new FakeLogicalClient('connected', 'relay')
@@ -38,6 +43,7 @@ it('closes in-flight candidates and clears their timeout when the owner stops', 
 
 it('closes an authenticated candidate when stop races its completion', async () => {
   vi.useFakeTimers()
+
   try {
     const candidate = new FakeSession('connecting')
     const logical = new FakeLogicalClient('connected', 'relay')
@@ -59,6 +65,7 @@ it('closes an authenticated candidate when stop races its completion', async () 
 
 it('preserves an in-flight probe across a transient background pause', async () => {
   vi.useFakeTimers()
+
   try {
     const candidate = new FakeSession('connecting')
     const logical = new FakeLogicalClient('connected', 'relay')
@@ -81,16 +88,20 @@ it('preserves an in-flight probe across a transient background pause', async () 
 
 it('releases every candidate when multiple endpoint probes are pending', async () => {
   vi.useFakeTimers()
+
   try {
     const candidates: FakeSession[] = []
     const logical = new FakeLogicalClient('connected', 'relay')
+
     const deps = dependencies({
       openDirect: vi.fn(() => {
         const candidate = new FakeSession('connecting')
         candidates.push(candidate)
+
         return candidate
       })
     })
+
     const supervisor = new MobileEndpointSupervisor(
       logical,
       {
@@ -99,16 +110,19 @@ it('releases every candidate when multiple endpoint probes are pending', async (
       },
       deps
     )
+
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(15_000)
     expect(candidates).toHaveLength(2)
     supervisor.stop()
     await vi.advanceTimersByTimeAsync(0)
     expect(vi.getTimerCount()).toBe(0)
+
     for (const candidate of candidates) {
       expect(candidate.close).toHaveBeenCalledOnce()
       candidate.publishState('connected')
     }
+
     await vi.advanceTimersByTimeAsync(60_000)
     expect(logical.migrateTo).not.toHaveBeenCalled()
     expect(deps.openDirect).toHaveBeenCalledTimes(2)
@@ -123,33 +137,42 @@ it.each([false, true])(
   'fences migration finishing after stop (already swapped: %s)',
   async (alreadySwapped) => {
     vi.useFakeTimers()
+
     try {
       const recordedMigration = vi.spyOn(MobileEndpointHysteresis.prototype, 'recordMigration')
       const relay = new FakeSession('connected')
       const logical = createStableLogicalRpcClient(relay, 'relay')
       const candidates: FakeSession[] = []
+
       const deps = dependencies({
         openDirect: vi.fn(() => {
           const candidate = new FakeSession('connected')
           candidates.push(candidate)
+
           return candidate
         })
       })
+
       const supervisor = new MobileEndpointSupervisor(logical, host, deps)
       const migrate = logical.migrateTo.bind(logical)
       let release!: () => void
+
       const pending = new Promise<void>((resolve) => {
         release = resolve
       })
+
       const migration = vi.spyOn(logical, 'migrateTo').mockImplementation(async (...args) => {
         if (alreadySwapped) {
           await migrate(...args)
         }
+
         await pending
+
         if (!alreadySwapped) {
           await migrate(...args)
         }
       })
+
       await supervisor.start()
       await vi.advanceTimersByTimeAsync(60_000)
       expect(migration).toHaveBeenCalledOnce()

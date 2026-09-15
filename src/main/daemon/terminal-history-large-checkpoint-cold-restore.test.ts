@@ -17,8 +17,11 @@ import { getHistorySessionDirName } from './history-paths'
 // through the real writer, which is what actually decides whether a user sees their scrollback.
 
 const MARKERS = 300
+
 const SESSION_ID = 'repo-1::/Users/dev/large-scrollback'
+
 const COLS = 800
+
 const ROWS = 40
 
 // Why per-cell color: the restore seed must clear 16MiB to cover the pre-#10479 cap, and
@@ -35,12 +38,15 @@ const FILLER_ROWS = Array.from(
 
 function writeLargeScrollback(emulator: HeadlessEmulator, fillerLines: number): void {
   let written = true
+
   for (let index = 0; index < fillerLines; index += 1) {
     written = emulator.writeSync(FILLER_ROWS[index % FILLER_ROWS.length]) && written
   }
+
   for (let index = 0; index < MARKERS; index += 1) {
     written = emulator.writeSync(`MARKER-${index}\r\n`) && written
   }
+
   // Why assert: writeSync returns false if xterm's private _core.writeSync ever goes away, which
   // would leave an empty snapshot. The size assertions below catch that, but the endedAt gate is
   // size-independent and would still pass — pinning the gate over no scrollback at all.
@@ -85,9 +91,11 @@ describe('checkpoint-only cold restore of a large checkpoint', () => {
     // The adapter seeds a non-alt-screen restore with rehydrateSequences + snapshotAnsi.
     const seed = info!.rehydrateSequences + info!.snapshotAnsi
     expect(info!.modes.alternateScreen).toBe(false)
+
     for (const index of [0, MARKERS - 1]) {
       expect(seed).toContain(`MARKER-${index}`)
     }
+
     expect(seed.length).toBeGreaterThan(16 * 1024 * 1024)
   }, 60_000)
 
@@ -106,11 +114,14 @@ describe('checkpoint-only cold restore of a large checkpoint', () => {
       const snapshot = emulator.getSnapshot()
       emulator.dispose()
       await manager.checkpoint(SESSION_ID, snapshot)
+
       if (endCleanly) {
         await manager.closeSession(SESSION_ID, 0)
       }
+
       const info = await new HistoryReader(dir).detectColdRestore(SESSION_ID)
       rmSync(join(dir, getHistorySessionDirName(SESSION_ID)), { recursive: true, force: true })
+
       return info !== null
     }
 

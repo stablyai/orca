@@ -13,11 +13,13 @@ export function shouldReuseCompiledWindowsCliLauncher(
   if (!existsSync(outputPath)) {
     return false
   }
+
   // Why reuseCached: Actions cache keys already hash the C# source, but restore
   // does not preserve mtimes, so a hit would look stale and recompile anyway.
   if (reuseCached) {
     return true
   }
+
   return statSync(outputPath).mtimeMs >= statSync(sourcePath).mtimeMs
 }
 
@@ -27,18 +29,22 @@ function defaultOutputPath(projectRoot) {
 
 function findFrameworkCompiler(env) {
   const windowsDirectory = env.WINDIR ?? env.SystemRoot
+
   if (!windowsDirectory) {
     return null
   }
+
   const candidates = [
     join(windowsDirectory, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),
     join(windowsDirectory, 'Microsoft.NET', 'Framework', 'v4.0.30319', 'csc.exe')
   ]
+
   return candidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
 function readArg(name) {
   const index = process.argv.indexOf(name)
+
   return index !== -1 ? process.argv[index + 1] : undefined
 }
 
@@ -61,6 +67,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
 
   mkdirSync(dirname(outputPath), { recursive: true })
+
   if (
     shouldReuseCompiledWindowsCliLauncher(outputPath, sourcePath, {
       reuseCached: process.env.ORCA_REUSE_WINDOWS_CLI_LAUNCHER === '1'
@@ -69,6 +76,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`[native-build] reusing Windows CLI launcher at ${outputPath}`)
     process.exit(0)
   }
+
   const result = spawnSync(
     compilerPath,
     ['/nologo', '/target:exe', '/optimize+', '/warnaserror+', `/out:${outputPath}`, sourcePath],
@@ -78,9 +86,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (result.signal) {
     process.kill(process.pid, result.signal)
   }
+
   if (result.error) {
     throw result.error
   }
+
   if (result.status !== 0) {
     process.exit(result.status ?? 1)
   }

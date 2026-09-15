@@ -39,6 +39,7 @@ export function createGitHandlerRelay(): { dispatcher: MockDispatcher; handler: 
   const dispatcher = createMockDispatcher()
   const ctx = new RelayContext()
   const handler = new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
+
   return { dispatcher, handler }
 }
 

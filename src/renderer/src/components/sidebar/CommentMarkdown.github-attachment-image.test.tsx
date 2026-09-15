@@ -9,6 +9,7 @@ const attachmentUrl =
   'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function renderCommentMarkdown(content: string): HTMLDivElement {
@@ -18,6 +19,7 @@ function renderCommentMarkdown(content: string): HTMLDivElement {
   act(() => {
     root?.render(<CommentMarkdown variant="document" content={content} />)
   })
+
   return container
 }
 
@@ -30,6 +32,7 @@ describe('CommentMarkdown GitHub attachment images', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     document.body.replaceChildren()
     root = null
     container = null

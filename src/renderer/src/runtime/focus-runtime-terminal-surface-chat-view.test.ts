@@ -3,10 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusRuntimeTerminalSurface, registerRuntimeTerminalTab } from './sync-runtime-graph'
 
 const TAB_ID = 'chat-view-tab'
+
 const WORKTREE_ID = 'chat-view-worktree'
+
 const LEAF_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+
 const SECOND_LEAF_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
 const PANE_ID = 1
+
 const SECOND_PANE_ID = 2
 
 const unregisterCallbacks: (() => void)[] = []
@@ -15,11 +20,13 @@ const unregisterCallbacks: (() => void)[] = []
 function makePaneContainer(covered: boolean, leafId = LEAF_ID): HTMLElement {
   const container = document.createElement('div')
   container.setAttribute('data-leaf-id', leafId)
+
   if (covered) {
     const shell = document.createElement('div')
     shell.className = 'native-chat-pane-shell absolute inset-0 z-10 flex'
     container.append(shell)
   }
+
   return container
 }
 
@@ -40,7 +47,9 @@ function registerSplitChatViewTab(options: { activeCovered: boolean; requestedCo
       terminal: { focus: vi.fn() }
     }
   ]
+
   const setActivePane = vi.fn()
+
   const manager = {
     getPanes: () => panes,
     getActivePane: () => panes[0],
@@ -49,6 +58,7 @@ function registerSplitChatViewTab(options: { activeCovered: boolean; requestedCo
       panes.find((pane) => pane.leafId === leafId)?.id ?? null,
     setActivePane
   }
+
   unregisterCallbacks.push(
     registerRuntimeTerminalTab({
       tabId: TAB_ID,
@@ -59,6 +69,7 @@ function registerSplitChatViewTab(options: { activeCovered: boolean; requestedCo
       getTabWideAgentHintLeafId: () => null
     })
   )
+
   return { setActivePane }
 }
 
@@ -68,12 +79,14 @@ function registerChatViewTab(covered: boolean): {
 } {
   const focus = vi.fn()
   const setActivePane = vi.fn()
+
   const pane = {
     id: PANE_ID,
     leafId: LEAF_ID,
     container: makePaneContainer(covered),
     terminal: { focus }
   }
+
   const manager = {
     getPanes: () => [pane],
     getActivePane: () => pane,
@@ -82,6 +95,7 @@ function registerChatViewTab(covered: boolean): {
       candidateLeafId === pane.leafId ? pane.id : null,
     setActivePane
   }
+
   unregisterCallbacks.push(
     registerRuntimeTerminalTab({
       tabId: TAB_ID,
@@ -92,6 +106,7 @@ function registerChatViewTab(covered: boolean): {
       getTabWideAgentHintLeafId: () => null
     })
   )
+
   return { focus, setActivePane }
 }
 

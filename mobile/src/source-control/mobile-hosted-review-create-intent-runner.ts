@@ -52,11 +52,13 @@ export async function runMobileHostedReviewCreateIntent(
   input: RunInput
 ): Promise<MobileHostedReviewCreateIntentRunOutcome> {
   const prepared = await prepareMobileHostedReviewCreateIntent(client, worktreeId, input)
+
   if (!prepared.ok) {
     return prepared
   }
 
   const blockedMessage = getMobilePrCreateBlockMessage(prepared.prefill)
+
   if (blockedMessage) {
     return {
       ok: false,
@@ -67,6 +69,7 @@ export async function runMobileHostedReviewCreateIntent(
   }
 
   input.onProgress?.('creating_review')
+
   const created = await createMobilePr(client, worktreeId, {
     provider: prepared.prefill.provider,
     base: prepared.prefill.base,
@@ -76,6 +79,7 @@ export async function runMobileHostedReviewCreateIntent(
     draft: false,
     pushBeforeCreate: shouldPushBeforeMobilePrCreate(prepared.prefill)
   })
+
   if (!created.ok) {
     return {
       ok: false,

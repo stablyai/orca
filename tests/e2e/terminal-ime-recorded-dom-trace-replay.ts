@@ -57,17 +57,21 @@ async function startRecordedTraceOnDataCapture(page: Page): Promise<void> {
     target.__recordedTraceOnData = []
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane for the recorded trace replay')
     }
+
     pane.terminal.onData((data) => target.__recordedTraceOnData.push(data))
   })
 }
@@ -78,9 +82,11 @@ async function dispatchRecordedEvents(
 ): Promise<void> {
   await page.evaluate((events: RecordedImeDomEvent[]) => {
     const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus')
+
     if (!textarea) {
       throw new Error('xterm helper textarea is not focused')
     }
+
     for (const event of events) {
       // The recorded value/selection is what the recorder observed *during* this event, so it has
       // to be in place before dispatch. xterm reads `textarea.value` inside its own handlers rather
@@ -89,9 +95,11 @@ async function dispatchRecordedEvents(
       if (event.value !== undefined) {
         textarea.value = event.value
       }
+
       if (event.selectionStart !== undefined && event.selectionEnd !== undefined) {
         textarea.setSelectionRange(event.selectionStart, event.selectionEnd)
       }
+
       // keypress is recorded on Windows, where the IME lets Enter through to the textarea's own
       // default action; replaying it as a CompositionEvent would invent an event no IME ever sent.
       if (event.type === 'keydown' || event.type === 'keyup' || event.type === 'keypress') {
@@ -102,6 +110,7 @@ async function dispatchRecordedEvents(
           bubbles: true,
           cancelable: true
         })
+
         Object.defineProperty(keyboard, 'keyCode', { value: event.keyCode })
         textarea.dispatchEvent(keyboard)
       } else if (event.type === 'input' || event.type === 'beforeinput') {
@@ -145,15 +154,19 @@ function nextRecordedEventGroup(
   start: number
 ): RecordedImeDomEvent[] {
   const group = [dom[start]]
+
   if (dom[start].type !== 'compositionend') {
     return group
   }
+
   for (let index = start + 1; index < dom.length; index += 1) {
     if (dom[index].type !== 'input' && dom[index].type !== 'beforeinput') {
       break
     }
+
     group.push(dom[index])
   }
+
   return group
 }
 
@@ -171,12 +184,15 @@ export async function replayRecordedImeDomTrace(
     const recorded = group[0]
     await dispatchRecordedEvents(page, group)
     index += group.length
+
     if (!COMPOSITION_EVENT_TYPES.has(recorded.type)) {
       continue
     }
+
     if (recorded.type === 'compositionstart') {
       compositionOpen = true
     }
+
     samples.push({
       index: index - group.length,
       type: recorded.type,
@@ -184,6 +200,7 @@ export async function replayRecordedImeDomTrace(
       compositionOpen,
       overlay: await samplePreeditOverlay(page)
     })
+
     if (recorded.type === 'compositionend') {
       compositionOpen = false
     }
@@ -194,5 +211,6 @@ export async function replayRecordedImeDomTrace(
       ''
     )
   )
+
   return { samples, onData }
 }

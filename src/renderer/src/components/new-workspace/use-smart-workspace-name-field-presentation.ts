@@ -66,18 +66,23 @@ export function useSmartWorkspaceNameFieldPresentation(
     linearUrlLoadingFeedbackQuery,
     settledLinearUrlQuery
   } = foundation
+
   const linearUrlIntent =
     options?.linearUrlIntent ?? parseBoundedSmartWorkspaceLinearIssueUrlIntent(value)
+
   const linearUrlIntentOwnsInput =
     options?.linearUrlIntentOwnsInput ??
     (linearUrlIntent !== null && (mode === 'smart' || mode === 'linear'))
+
   const linearQuery = options?.linearQuery ?? (linearUrlIntentOwnsInput ? value : debouncedQuery)
+
   const linearUrlLookupFailed =
     linearUrlIntentOwnsInput &&
     linearAvailable &&
     settledLinearUrlQuery === linearQuery.trim() &&
     !linearLoading &&
     linearIssues.length === 0
+
   const githubUrlIntent = useMemo(
     () =>
       isSmartWorkspaceSourceQueryWithinLimit(value) && (mode === 'smart' || mode === 'github')
@@ -85,6 +90,7 @@ export function useSmartWorkspaceNameFieldPresentation(
         : null,
     [mode, value]
   )
+
   const gitlabUrlIntent = useMemo(
     () =>
       isSmartWorkspaceSourceQueryWithinLimit(value) && (mode === 'smart' || mode === 'gitlab')
@@ -92,6 +98,7 @@ export function useSmartWorkspaceNameFieldPresentation(
         : null,
     [mode, value]
   )
+
   const rows = useMemo<RowEntry[]>(() => {
     if (jiraSource.intent && jiraSource.accountChoices.length > 0) {
       return jiraSource.accountChoices.map((site) => ({
@@ -100,6 +107,7 @@ export function useSmartWorkspaceNameFieldPresentation(
         site
       }))
     }
+
     return buildSmartWorkspaceSourceRows({
       branches: getVisibleBranchResults({
         branches,
@@ -164,8 +172,10 @@ export function useSmartWorkspaceNameFieldPresentation(
     selectedRepo?.id,
     value
   ])
+
   const { typedTextActionRow, searchResultRows } = useMemo(() => {
     const typedTextRow = rows.find(isTypedTextSourceRow) ?? null
+
     return {
       typedTextActionRow: typedTextRow,
       searchResultRows: typedTextRow ? rows.filter((row) => row !== typedTextRow) : rows
@@ -177,28 +187,37 @@ export function useSmartWorkspaceNameFieldPresentation(
   const debouncedQueryWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery)
   const trimmedValue = valueWithinSourceLimit ? value.trim() : ''
   const trimmedDebouncedQuery = debouncedQueryWithinSourceLimit ? debouncedQuery.trim() : ''
+
   const isQueryStale =
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
+
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
   const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
+
     const trimmed = value.trim()
+
     if (!trimmed) {
       return null
     }
+
     if (jiraSource.intent) {
       return 'jira'
     }
+
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
     }
+
     if (parseGitLabIssueOrMRLink(trimmed) !== null) {
       return 'gitlab'
     }
+
     if (linearAvailable) {
       const linearIntent = parseBoundedSmartWorkspaceLinearIssueInput(trimmed)
+
       if (
         linearIntent &&
         rows.some(
@@ -209,36 +228,44 @@ export function useSmartWorkspaceNameFieldPresentation(
         return 'linear'
       }
     }
+
     return null
   }, [jiraSource.intent, linearAvailable, rows, value])
+
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&
     linearAvailable &&
     sourceIntent !== 'linear' &&
     (linearLoading || settledLinearUrlQuery !== linearQuery.trim())
+
   const blockingTaskUrlResolution = isBlockingTaskUrlResolution({
     sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
     isQueryStale,
     githubLoading,
     gitlabLoading
   })
+
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
     rows,
     isQueryStale,
     sourceIntent
   })
+
   // Why: ignored stale cmdk changes must not reappear after the query settles.
   useEffect(() => {
     if (commandValue === resolvedCommandValue) {
       return
     }
+
     setCommandValue(resolvedCommandValue)
   }, [commandValue, resolvedCommandValue, setCommandValue])
+
   const activeEmojiShortcode = useMemo(
     () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
     [emojiCursor, value]
   )
+
   const emojiSuggestions = useMemo(
     () =>
       activeEmojiShortcode
@@ -246,11 +273,13 @@ export function useSmartWorkspaceNameFieldPresentation(
         : ([] as WorkspaceEmojiSuggestion[]),
     [activeEmojiShortcode]
   )
+
   const emojiMenuOpen =
     !disabled &&
     selectedSource === null &&
     activeEmojiShortcode !== null &&
     emojiSuggestions.length > 0
+
   const resolvedEmojiCommandValue = emojiSuggestions.some(
     (suggestion) => `emoji:${suggestion.shortcode}` === emojiCommandValue
   )
@@ -258,19 +287,25 @@ export function useSmartWorkspaceNameFieldPresentation(
     : emojiSuggestions[0]
       ? `emoji:${emojiSuggestions[0].shortcode}`
       : ''
+
   const selectedEmojiSuggestion =
     emojiSuggestions.find(
       (suggestion) => `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
     ) ?? null
+
   const showLinearUrlLoadingFeedback =
     linearLoading && linearUrlIntentOwnsInput && linearUrlLoadingFeedbackQuery === linearQuery
+
   const visibleLinearLoading =
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
+
   const loading = jiraSource.intent
     ? jiraSource.loading
     : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
+
   const ActiveInputIcon =
     mode === 'text' ? CaseSensitive : showSearchSpinner ? LoaderCircle : Search
 

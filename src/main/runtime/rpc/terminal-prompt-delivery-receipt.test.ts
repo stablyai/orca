@@ -55,6 +55,7 @@ async function createHarness(agent: TuiAgent, busy = false) {
     spawn: vi.fn().mockResolvedValue({ id: 'unused' }),
     write: (_ptyId, data) => {
       created.writes.push(data)
+
       return true
     },
     kill: () => true,
@@ -62,6 +63,7 @@ async function createHarness(agent: TuiAgent, busy = false) {
   })
   const db = new OrchestrationDb(':memory:')
   created.runtime.setOrchestrationDb(db)
+
   if (busy) {
     created.runtime.onPtyData(
       'pty-prompt',
@@ -69,6 +71,7 @@ async function createHarness(agent: TuiAgent, busy = false) {
       Date.now()
     )
   }
+
   return {
     ...created,
     db,
@@ -88,6 +91,7 @@ describe('durable terminal prompt delivery receipts', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'unused' }),
         write: (_ptyId, data) => {
           harness.writes.push(data)
+
           if (data === '\r') {
             harness.runtime.onPtyData(
               'pty-prompt',
@@ -95,6 +99,7 @@ describe('durable terminal prompt delivery receipts', () => {
               Date.now()
             )
           }
+
           return true
         },
         kill: () => true,
@@ -104,6 +109,7 @@ describe('durable terminal prompt delivery receipts', () => {
       const responsePromise = harness.dispatcher.dispatch(
         request(harness.handle, `${agent}-prompt`, 'review this', 1_000)
       )
+
       await vi.runAllTimersAsync()
 
       await expect(responsePromise).resolves.toMatchObject({
@@ -126,10 +132,12 @@ describe('durable terminal prompt delivery receipts', () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
     const responses: RpcResponse[] = []
+
     for (let index = 0; index < 16; index += 1) {
       const pending = harness.dispatcher.dispatch(
         request(harness.handle, `busy-${index}`, `queued ${index}`)
       )
+
       await vi.runAllTimersAsync()
       responses.push(await pending)
     }
@@ -142,6 +150,7 @@ describe('durable terminal prompt delivery receipts', () => {
         }
       })
     }
+
     expect(harness.writes.filter((data) => data === '\r')).toHaveLength(16)
     harness.db.close()
   })
@@ -149,13 +158,16 @@ describe('durable terminal prompt delivery receipts', () => {
   it('replays after a dispatcher replacement without duplicate text or Enter', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
+
     const firstPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'crash-retry', 'preserve once')
     )
+
     await vi.runAllTimersAsync()
     const first = await firstPromise
     const writesAfterFirst = [...harness.writes]
     const replacement = new RpcDispatcher({ runtime: harness.runtime, methods: TERMINAL_METHODS })
+
     const replay = await replacement.dispatch(
       request(harness.handle, 'crash-retry', 'preserve once')
     )
@@ -173,17 +185,21 @@ describe('durable terminal prompt delivery receipts', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'unused' }),
       write: (_ptyId, data) => {
         harness.writes.push(data)
+
         return data !== '\r'
       },
       kill: () => true,
       getForegroundProcess: async () => 'aider'
     })
+
     const firstPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'partial-retry', 'partial once')
     )
+
     await vi.runAllTimersAsync()
     const first = await firstPromise
     const writesAfterFailure = [...harness.writes]
+
     const retry = await harness.dispatcher.dispatch(
       request(harness.handle, 'partial-retry', 'partial once')
     )
@@ -197,20 +213,25 @@ describe('durable terminal prompt delivery receipts', () => {
   it('retries the same request after terminal_not_writable before any PTY write', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex')
+
     const pty = (
       harness.runtime as unknown as {
         ptysById: Map<string, { connected: boolean }>
       }
     ).ptysById.get('pty-prompt')!
+
     pty.connected = false
 
     const first = await harness.dispatcher.dispatch(
       request(harness.handle, 'pre-write-retry', 'retry safely')
     )
+
     pty.connected = true
+
     const retryPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'pre-write-retry', 'retry safely')
     )
+
     await vi.runAllTimersAsync()
     const retry = await retryPromise
 
@@ -223,9 +244,11 @@ describe('durable terminal prompt delivery receipts', () => {
   it('waits on a replay only for observation and never resends', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
+
     const firstPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'observe-retry', 'observe once')
     )
+
     await vi.runAllTimersAsync()
     await firstPromise
     const writesAfterFirst = [...harness.writes]
@@ -258,14 +281,18 @@ describe('durable terminal prompt delivery receipts', () => {
   it('claims one lifecycle transition for one queued request', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
+
     const firstPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'queued-first', 'first prompt')
     )
+
     await vi.runAllTimersAsync()
     const first = await firstPromise
+
     const secondPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'queued-second', 'second prompt')
     )
+
     await vi.runAllTimersAsync()
     const second = await secondPromise
     expect(first).toMatchObject({
@@ -287,10 +314,13 @@ describe('durable terminal prompt delivery receipts', () => {
     const firstObserved = harness.dispatcher.dispatch(
       request(harness.handle, 'queued-first', 'first prompt', 1_000)
     )
+
     await vi.runAllTimersAsync()
+
     const secondObserved = harness.dispatcher.dispatch(
       request(harness.handle, 'queued-second', 'second prompt', 1_000)
     )
+
     await vi.runAllTimersAsync()
 
     await expect(firstObserved).resolves.toMatchObject({
@@ -311,14 +341,18 @@ describe('durable terminal prompt delivery receipts', () => {
   it('does not let a later queued request claim an earlier lifecycle transition', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
+
     const firstPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'ordered-first', 'first prompt')
     )
+
     await vi.runAllTimersAsync()
     await firstPromise
+
     const secondPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'ordered-second', 'second prompt')
     )
+
     await vi.runAllTimersAsync()
     await secondPromise
 
@@ -332,10 +366,13 @@ describe('durable terminal prompt delivery receipts', () => {
     const secondObserved = harness.dispatcher.dispatch(
       request(harness.handle, 'ordered-second', 'second prompt', 1_000)
     )
+
     await vi.runAllTimersAsync()
+
     const firstObserved = harness.dispatcher.dispatch(
       request(harness.handle, 'ordered-first', 'first prompt', 1_000)
     )
+
     await vi.runAllTimersAsync()
 
     await expect(secondObserved).resolves.toMatchObject({
@@ -354,20 +391,24 @@ describe('durable terminal prompt delivery receipts', () => {
   it('rejects changed payload and replays queued truth after generation replacement', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
+
     const firstPromise = harness.dispatcher.dispatch(
       request(harness.handle, 'bound-request', 'original')
     )
+
     await vi.runAllTimersAsync()
     await firstPromise
 
     const changedPayload = await harness.dispatcher.dispatch(
       request(harness.handle, 'bound-request', 'changed')
     )
+
     harness.runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-prompt',
       { value: 0, generation: 'reset' },
       harness.runtime.getPtyOutputSequence('pty-prompt')
     )
+
     const changedGeneration = await harness.dispatcher.dispatch(
       request(harness.handle, 'bound-request', 'original', 1_000)
     )
@@ -392,9 +433,11 @@ describe('durable terminal prompt delivery receipts', () => {
   it('keeps unsupported providers on raw input with an idempotent accepted stage', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('aider')
+
     const responsePromise = harness.dispatcher.dispatch(
       request(harness.handle, 'unsupported-provider', 'raw fallback')
     )
+
     await vi.runAllTimersAsync()
 
     await expect(responsePromise).resolves.toMatchObject({
@@ -418,9 +461,11 @@ describe('durable terminal prompt delivery receipts', () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
     harness.runtime.onPtyData('pty-prompt', '› existing human draft', Date.now())
+
     const responsePromise = harness.dispatcher.dispatch(
       request(harness.handle, 'draft-safe', 'appended prompt')
     )
+
     await vi.runAllTimersAsync()
     await responsePromise
 

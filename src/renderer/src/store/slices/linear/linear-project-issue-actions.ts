@@ -44,16 +44,20 @@ export function createLinearProjectIssueActions(
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
       const effectiveLimit = clampLinearIssueListLimit(limit)
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(workspaceId, 'project-issues', projectId, effectiveLimit)
       )
+
       const cached = get().linearProjectIssueCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data ?? emptyLinearCollection<LinearIssue>()
       }
 
       const inflight = inflightProjectIssueRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -66,6 +70,7 @@ export function createLinearProjectIssueActions(
       let entry: InflightLinearCollectionRequest<LinearIssue>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearListProjectIssues(
         scope.settings,
         projectId,
@@ -93,10 +98,12 @@ export function createLinearProjectIssueActions(
               })
             }))
           }
+
           return result
         })
         .catch((error) => {
           console.warn('[linear] listLinearProjectIssues failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -109,6 +116,7 @@ export function createLinearProjectIssueActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           const fallback =
             get().linearProjectIssueCache[cacheKey]?.data ??
             largestCachedCollectionBelowLimit(
@@ -119,12 +127,14 @@ export function createLinearProjectIssueActions(
               effectiveLimit
             ) ??
             emptyLinearCollection<LinearIssue>()
+
           return collectionWithWorkspaceError(fallback, workspaceId, error)
         })
         .finally(() => {
           if (inflightProjectIssueRequests.get(cacheKey) === entry) {
             inflightProjectIssueRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -147,6 +157,7 @@ export function createLinearProjectIssueActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightProjectIssueRequests.set(cacheKey, entry)
+
       return promise
     }
   }

@@ -24,27 +24,33 @@ export async function revealMobileSourceControlSessionDiff(
 ): Promise<MobileSourceControlSessionDiffRevealResult> {
   if (options.onOpenedFileDiff) {
     options.onOpenedFileDiff(options.relativePath)
+
     return 'revealed'
   }
 
   for (const delayMs of TAB_POLL_DELAYS_MS) {
     await waitForDelay(delayMs)
+
     if (options.isCurrent?.() === false) {
       return 'cancelled'
     }
 
     const tab = await findOpenedSessionFileTab(options)
+
     if (options.isCurrent?.() === false) {
       return 'cancelled'
     }
+
     if (!tab) {
       continue
     }
 
     const activated = await activateSessionFileTab(options, tab.id)
+
     if (options.isCurrent?.() === false) {
       return 'cancelled'
     }
+
     if (activated) {
       return 'revealed'
     }
@@ -60,7 +66,9 @@ async function findOpenedSessionFileTab(
     const reply = await sessionFileTabListRead.request(options.client, {
       worktree: `id:${options.worktreeId}`
     })
+
     const listed = sessionFileTabListRead.interpret(reply)
+
     if (!listed.accepted || !listed.value) {
       return null
     }
@@ -72,10 +80,13 @@ async function findOpenedSessionFileTab(
         matchesTabMode(tab.mode, options.tabMode) &&
         tab.relativePath === options.relativePath
     )
+
     if (options.tabMode === 'edit') {
       return matches[0] ?? null
     }
+
     const source = options.staged ? 'staged' : 'unstaged'
+
     return (
       matches.find((tab) => tab.diffSource === source) ??
       matches.find((tab) => tab.diffSource == null) ??
@@ -99,6 +110,7 @@ async function activateSessionFileTab(options: Options, tabId: string): Promise<
       navigation: 'caller',
       intent: 'user'
     })
+
     return response.ok && readActiveTabId(response.result) === tabId
   } catch {
     return false
@@ -117,5 +129,6 @@ async function waitForDelay(delayMs: number): Promise<void> {
   if (delayMs === 0) {
     return
   }
+
   await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
 }

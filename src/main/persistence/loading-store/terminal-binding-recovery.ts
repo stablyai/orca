@@ -29,20 +29,26 @@ export class TerminalBindingRecoveryOperations {
 
   getTerminalLayoutLeafIds(root: TerminalPaneLayoutNode | null): Set<string> {
     const leafIds = new Set<string>()
+
     const visit = (node: TerminalPaneLayoutNode | null): void => {
       if (!node) {
         return
       }
+
       if (node.type === 'leaf') {
         if (isTerminalLeafId(node.leafId)) {
           leafIds.add(node.leafId)
         }
+
         return
       }
+
       visit(node.first)
       visit(node.second)
     }
+
     visit(root)
+
     return leafIds
   }
 
@@ -56,6 +62,7 @@ export class TerminalBindingRecoveryOperations {
     const leases = this.runtime.state.sshRemotePtyLeases?.filter((entry) =>
       this.sshRemotePtyLeaseMatchesBinding(entry, binding)
     )
+
     return !leases?.some(sshRemotePtyLeaseWithdrawsBinding)
   }
 
@@ -78,9 +85,11 @@ export class TerminalBindingRecoveryOperations {
     }
   ): boolean {
     const bindingPtyId = this.getRelayPtyIdForSshLeaseComparison(lease.targetId, binding.ptyId)
+
     if (lease.ptyId !== bindingPtyId) {
       return false
     }
+
     // Why: remote PTY ids are scoped to a relay target; require stored lease context to match so missing fields don't tombstone unrelated panes.
     return (
       (binding.targetId === undefined ||
@@ -110,6 +119,7 @@ export class TerminalBindingRecoveryOperations {
 
   getConnectionIdForWorktree(worktreeId: string): string | null {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
+
     return this.runtime.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 }

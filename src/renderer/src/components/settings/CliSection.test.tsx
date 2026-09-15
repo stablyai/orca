@@ -22,6 +22,7 @@ const capturedPanel = vi.hoisted(() => ({
   },
   useInstalledAgentSkill: vi.fn()
 }))
+
 const toastError = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
@@ -60,6 +61,7 @@ vi.mock('./AgentSkillSetupPanel', () => ({
     onBeforeOpenTerminal: () => Promise<void>
   }) {
     capturedPanel.props = props
+
     return <div data-testid="agent-skill-setup-panel" />
   }
 }))
@@ -105,6 +107,7 @@ describe('CliSection project runtime defaults', () => {
     const getWslInstallStatus = vi
       .fn()
       .mockResolvedValue({ supported: true, state: 'installed', pathConfigured: true })
+
     vi.stubGlobal('window', {
       api: {
         cli: {
@@ -166,6 +169,7 @@ describe('CliSection project runtime defaults', () => {
       unsupportedReason: null,
       detail: 'Orca could not read the Windows user PATH registry value.'
     })
+
     Object.assign(window, {
       api: {
         cli: {

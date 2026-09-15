@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -238,6 +243,7 @@ describe('LocalPtyProvider', () => {
 
     it('keeps a native UNC session native on a conflicting WSL reattach', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       const first = await provider.spawn({
         cols: 80,
         rows: 24,
@@ -245,6 +251,7 @@ describe('LocalPtyProvider', () => {
         cwd: '\\\\server\\share\\repo',
         shellOverride: 'powershell.exe'
       })
+
       spawnMock.mockClear()
 
       const second = await provider.spawn({
@@ -262,12 +269,14 @@ describe('LocalPtyProvider', () => {
 
     it('keeps the first WSL distro on a conflicting distro reattach', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       const first = await provider.spawn({
         cols: 80,
         rows: 24,
         sessionId: 'wsl-session',
         cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
       })
+
       spawnMock.mockClear()
 
       const second = await provider.spawn({
@@ -309,9 +318,11 @@ describe('LocalPtyProvider', () => {
         rows: 24,
         sessionId: 'pending-local-session'
       })
+
       const canceledSpawn = expect(spawn).rejects.toThrow(
         'PTY spawn canceled: pending-local-session'
       )
+
       await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledOnce())
 
       await provider.shutdown('pending-local-session', { immediate: true })
@@ -333,6 +344,7 @@ describe('LocalPtyProvider', () => {
         rows: 24,
         sessionId: 'immediate-shutdown-session'
       })
+
       await provider.shutdown('immediate-shutdown-session', { immediate: true })
 
       await expect(spawn).rejects.toThrow('PTY spawn canceled: immediate-shutdown-session')
@@ -345,12 +357,14 @@ describe('LocalPtyProvider', () => {
     it('does not spawn after shutdown cancels a pending spawn during the env build', async () => {
       spawnMock.mockClear()
       let finishEnvBuild!: (env: Record<string, string>) => void
+
       const buildSpawnEnv = vi.fn(
         (_id: string, baseEnv: Record<string, string>) =>
           new Promise<Record<string, string>>((resolve) => {
             finishEnvBuild = () => resolve(baseEnv)
           })
       )
+
       const envProvider = new LocalPtyProvider({ buildSpawnEnv })
 
       const spawn = envProvider.spawn({ cols: 80, rows: 24, sessionId: 'env-build-session' })
@@ -366,23 +380,28 @@ describe('LocalPtyProvider', () => {
     it('registers post-build preflight before a nested-microtask shutdown', async () => {
       spawnMock.mockClear()
       let finishEnvBuild!: () => void
+
       const envProvider = new LocalPtyProvider({
         buildSpawnEnv: (_id, baseEnv) =>
           new Promise<Record<string, string>>((resolve) => {
             finishEnvBuild = () => resolve(baseEnv)
           })
       })
+
       const spawn = envProvider.spawn({
         cols: 80,
         rows: 24,
         sessionId: 'resolved-env-build-session'
       })
+
       const canceledSpawn = expect(spawn).rejects.toThrow(
         'PTY spawn canceled: resolved-env-build-session'
       )
+
       await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
 
       finishEnvBuild()
+
       const shutdown = new Promise<void>((resolve, reject) => {
         queueMicrotask(() => {
           queueMicrotask(() => {

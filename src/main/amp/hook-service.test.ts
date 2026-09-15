@@ -9,6 +9,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock

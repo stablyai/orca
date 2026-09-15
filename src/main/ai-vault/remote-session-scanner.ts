@@ -39,7 +39,9 @@ import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-conc
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
 
 const REMOTE_SCAN_CONCURRENCY = 8
+
 const REMOTE_PARSE_CANDIDATE_MULTIPLIER = 2
+
 // Remote scope membership is only known after a transcript is read, so the scope
 // backfill carries its own ceiling on remote reads instead of borrowing the
 // recency cap — under the cap, newer out-of-scope files ate the scope budget and
@@ -62,6 +64,7 @@ export async function scanRemoteAiVaultSessions(args: {
   // One ceiling for the whole scan: discovery walks, stats and transcript reads
   // all queue behind it instead of multiplying into a nested fan-out.
   const provider = limitRemoteScanFilesystemConcurrency(args.provider)
+
   const context: RemoteScannerContext = {
     provider,
     executionHostId: args.executionHostId,
@@ -73,15 +76,18 @@ export async function scanRemoteAiVaultSessions(args: {
         throwIfAiVaultScanCancelled(args.signal)
         const read = await provider.readFile(historyPath)
         throwIfAiVaultScanCancelled(args.signal)
+
         return read.isBinary ? null : read.content
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
           throw error
         }
+
         return null
       }
     })
   }
+
   const candidates = dedupeCodexRolloutFileAliases(
     (
       await mapRemoteScanBatches(
@@ -107,14 +113,19 @@ export async function scanRemoteAiVaultSessions(args: {
     issues,
     limit
   })
+
   const parsedSessions = dedupeCodexSessionsBySessionId(parsed.sessions)
+
   const cappedSessions = parsedSessions
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
     .slice(0, limit)
+
   const scopePaths = normalizeRemoteScopePaths(args.scopePaths ?? [])
+
   const parsedScopeSessions = parsedSessions.filter((session) =>
     isRemoteSessionInScope(session, scopePaths)
   )
+
   const extraScopeSessions = await scanRemoteInScopeSessions({
     candidates,
     context,
@@ -123,6 +134,7 @@ export async function scanRemoteAiVaultSessions(args: {
     limit,
     alreadyParsedFilePaths: parsed.parsedFilePaths
   })
+
   const scopeSessions = dedupeCodexSessionsBySessionId([
     ...parsedScopeSessions,
     ...extraScopeSessions
@@ -156,18 +168,23 @@ async function parseRemoteSessionCandidates(args: {
     const needed = Math.max(args.limit - sessions.size, 1)
     const batchSize = Math.min(REMOTE_SCAN_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
+
     for (const candidate of batch) {
       parsedFilePaths.add(candidate.file.path)
     }
+
     throwIfAiVaultScanCancelled(args.context.signal)
+
     const results = await Promise.all(
       batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
     )
+
     for (const session of results) {
       if (session) {
         sessions.add(session)
       }
     }
+
     index += batchSize
     await yieldToEventLoop()
   }
@@ -175,6 +192,7 @@ async function parseRemoteSessionCandidates(args: {
   // The loop can terminate on the yield after its final batch, so re-check
   // rather than letting a cancelled scan return a partial parse as a success.
   throwIfAiVaultScanCancelled(args.context.signal)
+
   return { sessions: [...sessions.values()], parsedFilePaths }
 }
 
@@ -193,6 +211,7 @@ async function scanRemoteInScopeSessions(args: {
   const candidates = args.candidates.filter(
     (candidate) => !args.alreadyParsedFilePaths.has(candidate.file.path)
   )
+
   const bound = Math.min(candidates.length, REMOTE_SCOPE_PARSE_CANDIDATE_LIMIT)
   const sessions: AiVaultSession[] = []
   let index = 0
@@ -201,12 +220,14 @@ async function scanRemoteInScopeSessions(args: {
   // sessions; out-of-scope candidates no longer end the search.
   while (index < bound && sessions.length < args.limit) {
     const batchEnd = Math.min(index + REMOTE_SCAN_CONCURRENCY, bound)
+
     const results = await mapRemoteScanBatches(
       candidates.slice(index, batchEnd),
       REMOTE_SCAN_CONCURRENCY,
       (candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues),
       args.context.signal
     )
+
     sessions.push(
       ...results.filter(
         (session): session is AiVaultSession =>
@@ -236,6 +257,7 @@ async function parseRemoteSessionCandidate(
 ): Promise<AiVaultSession | null> {
   try {
     throwIfAiVaultScanCancelled(context.signal)
+
     // The read is inside the cached parse: an unchanged transcript must not be
     // pulled off the remote disk at all, which is the whole cost of #13753.
     const session = await parseRemoteSessionFileCached({
@@ -244,26 +266,32 @@ async function parseRemoteSessionCandidate(
       parse: () => parseRemoteSessionTranscript(candidate, context),
       refreshReusedSession: reusedCodexTitleRefresh(candidate, context)
     })
+
     throwIfAiVaultScanCancelled(context.signal)
     // Mirror the local rule: every session carries its sibling subagent
     // transcript count (row badge; recoverable signal at zero turns). The
     // walk listing supplies it — the parser can't readdir a remote disk.
     const subagentTranscriptCount = candidate.subagentTranscriptCount ?? 0
+
     if (session && subagentTranscriptCount > 0) {
       return { ...session, subagentTranscriptCount }
     }
+
     return session
   } catch (err) {
     throwIfAiVaultScanCancelled(context.signal)
+
     if (err instanceof BinarySessionTranscriptError) {
       return null
     }
+
     recordSessionScanIssue(issues, {
       executionHostId: context.executionHostId,
       agent: candidate.source.agent,
       path: candidate.file.path,
       message: errorMessage(err)
     })
+
     return null
   }
 }
@@ -277,10 +305,13 @@ function reusedCodexTitleRefresh(
   context: RemoteScannerContext
 ): ((session: AiVaultSession) => Promise<AiVaultSession>) | undefined {
   const codexHome = candidate.source.agent === 'codex' ? candidate.source.codexHome : undefined
+
   if (!codexHome) {
     return undefined
   }
+
   const readIndexedTitle = remoteCodexIndexedTitleReader(codexHome, context)
+
   return (session) => refreshCodexTitleFromIndex(session, readIndexedTitle)
 }
 
@@ -291,18 +322,23 @@ function mergeRemoteSessions(
   if (scopeSessions.length === 0) {
     return cappedSessions
   }
+
   const byId = new Map<string, AiVaultSession>()
+
   for (const session of cappedSessions) {
     byId.set(session.id, session)
   }
+
   for (const session of scopeSessions) {
     byId.set(session.id, session)
   }
+
   return [...byId.values()].sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
 }
 
 function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly string[]): boolean {
   const cwd = session.cwd
+
   return Boolean(cwd && scopePaths.some((scopePath) => isPathInsideOrEqual(scopePath, cwd)))
 }
 

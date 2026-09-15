@@ -26,11 +26,13 @@ export const updaterApi = {
   onStatus: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)
     ipcRenderer.on('updater:status', listener)
+
     return () => ipcRenderer.removeListener('updater:status', listener)
   },
   onClearDismissal: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('updater:clearDismissal', listener)
+
     return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
   }
 } satisfies PreloadApi['updater']

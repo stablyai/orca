@@ -12,17 +12,21 @@ export async function retireUnownedTerminal(args: {
 }): Promise<boolean> {
   const state = useAppStore.getState()
   const owner = args.owner
+
   const isOwned =
     'tabId' in owner
       ? isTerminalTabPresent(state, owner.tabId)
       : // Folder workspaces exist only in getKnownWorktreeById.
         state.getKnownWorktreeById(owner.worktreeId) !== undefined
+
   if (isOwned) {
     return false
   }
+
   // Close can win before the provider is bindable to store state.
   args.onRetire?.()
   await retireProvider(args)
+
   return true
 }
 

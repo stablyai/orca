@@ -19,6 +19,7 @@ import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 export type OwnerRepo = GitHubOwnerRepo
 
 export type { GitHubRemoteIdentity }
+
 export { parseGitHubOwnerRepo, parseGitHubRemoteIdentity }
 
 export type GitHubRepoContext = {
@@ -66,9 +67,12 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
 }
 
 const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
+
 const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+
 // Signed entries revalidate against Git config before reuse.
 const OWNER_REPO_SIGNED_CACHE_TTL_MS = 5 * 60_000
+
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
@@ -78,6 +82,7 @@ type OwnerRepoCacheEntry = {
 }
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
+
 const ownerRepoInFlight: CoalescedProbes<OwnerRepo | null> = new Map()
 
 /** @internal - exposed for tests only */
@@ -97,11 +102,14 @@ function pruneOwnerRepoCache(now: number): void {
       ownerRepoCache.delete(key)
     }
   }
+
   while (ownerRepoCache.size > OWNER_REPO_CACHE_MAX_ENTRIES) {
     const oldestKey = ownerRepoCache.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     ownerRepoCache.delete(oldestKey)
   }
 }
@@ -117,6 +125,7 @@ function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string)
   if (configSignature) {
     return value ? OWNER_REPO_SIGNED_CACHE_TTL_MS : OWNER_REPO_NEGATIVE_CACHE_TTL_MS
   }
+
   return OWNER_REPO_POSITIVE_CACHE_TTL_MS
 }
 
@@ -128,6 +137,7 @@ export async function getOwnerRepoForRemote(
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+
   if (
     probeOptions.requireVerifiedSshProbe &&
     context.connectionId &&
@@ -135,17 +145,21 @@ export async function getOwnerRepoForRemote(
   ) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   const runtimeKey = context.connectionId
     ? `ssh:${context.connectionId}:${getSshGitProviderGeneration(context.connectionId)}`
     : `local:${context.wslDistro ?? 'host'}`
+
   const cacheKey = `${runtimeKey}\0${context.repoPath}\0${remoteName}`
   const now = Date.now()
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
+
   if (cached && cached.expiresAt > now) {
     // Revalidate signed hits so remote changes are immediately visible.
     if (cached.configSignature !== undefined) {
       const currentSignature = await readLocalGitConfigSignature(context)
+
       if (currentSignature !== cached.configSignature) {
         ownerRepoCache.delete(cacheKey)
       } else {
@@ -155,6 +169,7 @@ export async function getOwnerRepoForRemote(
       return cached.value
     }
   }
+
   if (cached && cached.expiresAt <= now) {
     ownerRepoCache.delete(cacheKey)
   }
@@ -162,6 +177,7 @@ export async function getOwnerRepoForRemote(
   const nextConfigSignature = await readLocalGitConfigSignature(context)
   const refreshedNow = Date.now()
   const refreshedCached = ownerRepoCache.get(cacheKey)
+
   if (refreshedCached && refreshedCached.expiresAt > refreshedNow) {
     return refreshedCached.value
   }
@@ -171,6 +187,7 @@ export async function getOwnerRepoForRemote(
   // onto one young enough to still answer, so a wedged probe cannot pin the
   // repo's identity for the life of the process (P1-D).
   const inFlightKey = `${cacheKey}\0${probeOptions.requireVerifiedSshProbe ? 'verified' : 'tolerant'}`
+
   return runCoalescedProbe(ownerRepoInFlight, inFlightKey, () =>
     resolveOwnerRepoForRemote(
       context,
@@ -190,8 +207,10 @@ async function resolveOwnerRepoForRemote(
   requireVerifiedSshProbe: boolean
 ): Promise<OwnerRepo | null> {
   const now = Date.now()
+
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
+
     if (!remoteUrl) {
       if (
         requireVerifiedSshProbe &&
@@ -200,6 +219,7 @@ async function resolveOwnerRepoForRemote(
       ) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+
       // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {
         value: null,
@@ -207,10 +227,13 @@ async function resolveOwnerRepoForRemote(
         ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
+
       return null
     }
+
     // Why: PR mutations need the effective host behind an SSH alias.
     const classification = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, context)
+
     if (classification.kind === 'github') {
       // Signed identities stay valid until Git config changes.
       ownerRepoCache.set(cacheKey, {
@@ -219,24 +242,30 @@ async function resolveOwnerRepoForRemote(
         ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
+
       return classification.ownerRepo
     }
+
     if (classification.kind === 'indeterminate') {
       // Why: a failed ssh -G probe is not a stable "not GitHub" result.
       if (requireVerifiedSshProbe && context.connectionId) {
         throw new Error('Remote repository identity is unverifiable.')
       }
+
       return null
     }
+
     const stableConfigSignature = classification.cacheWithGitConfigSignature
       ? configSignature
       : undefined
+
     ownerRepoCache.set(cacheKey, {
       value: null,
       expiresAt: now + getOwnerRepoCacheTtl(null, stableConfigSignature),
       ...(stableConfigSignature ? { configSignature: stableConfigSignature } : {})
     })
     pruneOwnerRepoCache(now)
+
     return null
   } catch (error) {
     // Why: only stable "no such remote" misses are safe to hold for minutes.
@@ -245,9 +274,11 @@ async function resolveOwnerRepoForRemote(
       if (requireVerifiedSshProbe && context.connectionId) {
         throw error
       }
+
       return null
     }
   }
+
   // Why: a missing remote is stable until `.git/config` changes.
   // Holding that negative longer avoids Git process churn across PR polling.
   ownerRepoCache.set(cacheKey, {
@@ -256,5 +287,6 @@ async function resolveOwnerRepoForRemote(
     ...(configSignature ? { configSignature } : {})
   })
   pruneOwnerRepoCache(now)
+
   return null
 }

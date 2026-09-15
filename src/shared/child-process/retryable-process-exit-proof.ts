@@ -5,6 +5,7 @@ export class RetryableProcessExitProof {
     if (this.inFlight) {
       return this.inFlight
     }
+
     const attempt = proveExit()
     this.inFlight = attempt
     void attempt.then(
@@ -15,6 +16,7 @@ export class RetryableProcessExitProof {
       },
       () => this.clear(attempt)
     )
+
     return attempt
   }
 

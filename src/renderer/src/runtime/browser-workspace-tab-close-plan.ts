@@ -50,7 +50,9 @@ export function planBrowserWorkspaceTabClose({
     closesLocally: true,
     removesVisibleTab: true
   }
+
   const pages = state.browserPagesByWorkspace[workspaceId] ?? []
+
   // Why: a staged page names an environment before the host has ever heard of the tab, so the owner
   // branch below would fan session.tabs.close at a page id that does not exist yet — an inert X, and
   // the in-flight create's snapshot then puts the tab back. The create path owns retiring the host
@@ -58,12 +60,15 @@ export function planBrowserWorkspaceTabClose({
   if (pages.some((page) => state.remoteBrowserPageHandlesByPageId[page.id]?.staged === true)) {
     return { ...closeLocally, localCloseReason: 'cleanup' }
   }
+
   const hasPages = pages.length > 0
   const ownerEnvironmentIds = getBrowserWorkspaceRemoteOwnerEnvironmentIds(state, workspaceId)
+
   if (ownerEnvironmentIds.length > 0) {
     const activeEnvironmentIds = ownerEnvironmentIds.filter((environmentId) =>
       isEnvironmentActive(environmentId)
     )
+
     // Why: with every owning host disconnected there is nobody to close on, so this renderer
     // finishes the teardown rather than leaving the tab standing.
     return activeEnvironmentIds.length === 0
@@ -76,12 +81,14 @@ export function planBrowserWorkspaceTabClose({
           removesVisibleTab: false
         }
   }
+
   // Why: a workspace with pages of its own and no remote owner is a local fallback — the focused
   // runtime being connected does not make its tab the host's to close. A PAGELESS one is the
   // host's mirror and would otherwise be un-closable.
   if (hasPages || !isEnvironmentActive(focusedEnvironmentId)) {
     return closeLocally
   }
+
   return {
     hostEnvironmentIds: [focusedEnvironmentId ?? null],
     closesLocally: false,

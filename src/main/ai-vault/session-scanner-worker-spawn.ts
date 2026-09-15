@@ -15,9 +15,11 @@ const WORKER_ENTRY_FILENAME = 'session-scanner-worker-entry.js'
 
 function defaultWorkerFactory(): Worker {
   const workerPath = join(__dirname, WORKER_ENTRY_FILENAME)
+
   if (!existsSync(workerPath)) {
     throw new Error(`AI Vault scanner worker entry not found: ${workerPath}`)
   }
+
   return new Worker(workerPath, {
     workerData: {
       sessionParseCache: getSessionParseCachePersistenceOptions()
@@ -29,6 +31,7 @@ let sharedClient: AiVaultScannerWorkerClient | null = null
 
 function getSharedClient(): AiVaultScannerWorkerClient {
   sharedClient ??= new AiVaultScannerWorkerClient({ workerFactory: defaultWorkerFactory })
+
   return sharedClient
 }
 
@@ -40,6 +43,7 @@ export async function scanAiVaultSessionsInWorker(
     const { result, durationMs } = await getSharedClient().scan(options, signal)
     span.setAttribute('workerDurationMs', durationMs)
     span.setAttribute('sessions', result.sessions.length)
+
     return result
   })
 }

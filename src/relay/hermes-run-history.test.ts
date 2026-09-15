@@ -4,6 +4,7 @@ import type { HermesOutputRunRef } from './hermes-run-correlation'
 
 function outputRef(day: number, jobId = 'job-1'): HermesOutputRunRef {
   const dayText = String(day).padStart(2, '0')
+
   return {
     kind: 'output',
     id: `${jobId}:2026-05-${dayText}_09-00-00.md`,
@@ -27,6 +28,7 @@ function sources(overrides: Partial<HermesRunHistorySources> = {}): HermesRunHis
 describe('HermesRunHistory', () => {
   it('paginates refs before hydrating run content', async () => {
     const readOutputRun = vi.fn(async (ref: HermesOutputRunRef) => ref)
+
     const history = new HermesRunHistory(
       sources({
         readOutputRefs: async () => [outputRef(16), outputRef(15), outputRef(14)],
@@ -48,6 +50,7 @@ describe('HermesRunHistory', () => {
 
   it('uses a count-only path without hydrating content', async () => {
     const readOutputRun = vi.fn()
+
     const history = new HermesRunHistory(
       sources({ readOutputRefs: async () => [outputRef(16), outputRef(15)], readOutputRun })
     )
@@ -60,12 +63,14 @@ describe('HermesRunHistory', () => {
 
   it('deduplicates concurrent count reads', async () => {
     let resolveRefs: (refs: HermesOutputRunRef[]) => void = () => {}
+
     const readOutputRefs = vi.fn(
       () =>
         new Promise<HermesOutputRunRef[]>((resolve) => {
           resolveRefs = resolve
         })
     )
+
     const history = new HermesRunHistory(sources({ readOutputRefs }))
 
     const first = history.listRuns({ provider: 'hermes', jobId: 'job-1', pageSize: 0 })
@@ -81,10 +86,12 @@ describe('HermesRunHistory', () => {
 
   it('evicts a failed count read so the next call retries', async () => {
     const readError = new Error('output directory unavailable')
+
     const readOutputRefs = vi
       .fn<() => Promise<HermesOutputRunRef[]>>()
       .mockRejectedValueOnce(readError)
       .mockResolvedValueOnce([outputRef(16)])
+
     const history = new HermesRunHistory(sources({ readOutputRefs }))
 
     await expect(
@@ -101,6 +108,7 @@ describe('HermesRunHistory', () => {
       .fn<() => Promise<HermesOutputRunRef[]>>()
       .mockResolvedValueOnce([outputRef(15)])
       .mockResolvedValueOnce([outputRef(16), outputRef(15)])
+
     const history = new HermesRunHistory(sources({ readOutputRefs }))
 
     await history.listRuns({ provider: 'hermes', jobId: 'job-1', pageSize: 0 })
@@ -125,12 +133,15 @@ describe('HermesRunHistory', () => {
     const readOutputRefs = vi.fn(async (jobId: string) =>
       jobId === 'job-0' ? [outputRef(15, jobId)] : []
     )
+
     const history = new HermesRunHistory(sources({ readOutputRefs }))
 
     await history.listRuns({ provider: 'hermes', jobId: 'job-0', pageSize: 0 })
+
     for (let index = 1; index <= 200; index += 1) {
       await history.listRuns({ provider: 'hermes', jobId: `job-${index}`, pageSize: 0 })
     }
+
     await history.listRuns({ provider: 'hermes', jobId: 'job-0', pageSize: 0 })
 
     expect(readOutputRefs).toHaveBeenCalledTimes(202)

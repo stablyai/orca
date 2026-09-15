@@ -37,8 +37,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -59,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -68,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -88,6 +93,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -98,9 +104,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -110,9 +118,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -121,6 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -153,6 +164,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: 'live-snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -176,6 +188,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -196,6 +209,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: 'live-snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -218,6 +232,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -244,23 +259,28 @@ describe('connectPanePty', () => {
         async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
           callbacks?.onData?.('startup\r\n', { seq: 9, rawLength: 9 })
           callbacks?.onData?.('new output\r\n', { seq: 21, rawLength: 12 })
+
           return { id: sessionId, snapshot, snapshotSeq: seq }
         }
       )
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
       const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+
       const deps = createDeps({
         isVisibleRef: { current: true },
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
+
       connectPanePty(pane as never, createManager(1) as never, deps as never)
       await flushAsyncTicks(20)
+
       for (let step = 0; step < 40; step += 1) {
         parseCallbacks.shift()?.()
         await flushAsyncTicks(2)
       }
+
       expect(writes.join('').match(/startup/g)).toHaveLength(count)
       expect(writes.join('')).toContain('new output')
     }
@@ -268,8 +288,10 @@ describe('connectPanePty', () => {
 
   it('drains live bytes after transport confirms an explicit reattach', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { deliverTerminalDataWithDeferredCredit } =
       await import('@/lib/pane-manager/terminal-delivery-credit')
+
     const transport = createMockTransport('tab-pty')
     const acknowledgeLiveFrame = vi.fn()
     transport.connect.mockImplementation(
@@ -277,17 +299,20 @@ describe('connectPanePty', () => {
         if (!sessionId) {
           return null
         }
+
         // Why: the real dispatcher drains post-snapshot bytes as soon as spawn IPC resolves, before connect() returns.
         callbacks?.onReattachDetermined?.()
         deliverTerminalDataWithDeferredCredit(acknowledgeLiveFrame, () => {
           callbacks?.onData?.('post-snapshot-live')
         })
+
         return { id: sessionId, snapshot: 'authoritative-snapshot' }
       }
     )
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
     const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -299,10 +324,12 @@ describe('connectPanePty', () => {
     const snapshotIndex = writes.indexOf(`${RESET_GRAPHIC_RENDITION}authoritative-snapshot`)
     expect(snapshotIndex).toBeGreaterThanOrEqual(0)
     expect(writes).not.toContain('post-snapshot-live')
+
     for (let step = 0; step < 40; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(2)
     }
+
     const liveIndex = writes.indexOf('post-snapshot-live')
     expect(liveIndex).toBeGreaterThan(snapshotIndex)
     expect(acknowledgeLiveFrame).toHaveBeenCalledOnce()
@@ -318,7 +345,9 @@ describe('connectPanePty', () => {
         if (!sessionId) {
           return null
         }
+
         callbacks?.onData?.('post-snapshot-live')
+
         return { id: sessionId, snapshot: 'authoritative-snapshot' }
       }
     )
@@ -334,9 +363,11 @@ describe('connectPanePty', () => {
           pane.terminal.buffer.active.baseY = 200
           pane.terminal.buffer.active.viewportY = 100
         }
+
         callback?.()
       })
     })
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -344,9 +375,11 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
+
     for (let index = 0; index < 30; index += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(4)
+
       if (parseCallbacks.length === 0 && index > 5) {
         break
       }
@@ -357,15 +390,19 @@ describe('connectPanePty', () => {
 
   it('does not steal a newer user pin while deferred reattach output settles', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { markTerminalFollowOutput, markTerminalPinnedViewport } =
       await import('@/lib/pane-manager/terminal-scroll-intent')
+
     const transport = createMockTransport('tab-pty')
     transport.connect.mockImplementation(
       async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
         if (!sessionId) {
           return null
         }
+
         callbacks?.onData?.('post-snapshot-live')
+
         return { id: sessionId, snapshot: 'authoritative-snapshot' }
       }
     )
@@ -383,10 +420,12 @@ describe('connectPanePty', () => {
             pane.terminal.buffer.active.baseY = 200
             pane.terminal.buffer.active.viewportY = 100
           }
+
           callback?.()
         }
       })
     })
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -394,14 +433,17 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
+
     for (let index = 0; index < 40; index += 1) {
       const pending = parseCallbacks.shift()
       pending?.run()
       await flushAsyncTicks(4)
+
       if (pending?.data === 'post-snapshot-live') {
         pane.terminal.buffer.active.viewportY = 150
         markTerminalPinnedViewport(pane.terminal)
       }
+
       if (parseCallbacks.length === 0 && index > 8) {
         break
       }
@@ -419,7 +461,9 @@ describe('connectPanePty', () => {
         if (!sessionId) {
           return null
         }
+
         callbacks?.onData?.('post-snapshot-live')
+
         return { id: sessionId, snapshot: 'authoritative-snapshot' }
       }
     )
@@ -437,10 +481,12 @@ describe('connectPanePty', () => {
             pane.terminal.buffer.active.baseY = 200
             pane.terminal.buffer.active.viewportY = 100
           }
+
           callback?.()
         }
       })
     })
+
     const deps = createDeps({
       isVisibleRef: { current: true },
       restoredLeafId: LEAF_1,
@@ -449,13 +495,16 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
+
     for (let index = 0; index < 40; index += 1) {
       const pending = parseCallbacks.shift()
       pending?.run()
       await flushAsyncTicks(4)
+
       if (pending?.data === 'post-snapshot-live') {
         ;(deps.isVisibleRef as { current: boolean }).current = false
       }
+
       if (parseCallbacks.length === 0 && index > 8) {
         break
       }
@@ -472,13 +521,16 @@ describe('connectPanePty', () => {
         if (!sessionId) {
           return 'unexpected-fresh-pty'
         }
+
         callbacks?.onData?.('dead-session-final-frame')
+
         return { id: sessionId, exitedBeforeAttach: true }
       }
     )
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
     const { writes } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -499,12 +551,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false }
     })
@@ -514,6 +568,7 @@ describe('connectPanePty', () => {
 
     expect(capturedDataCallback.current).not.toBeNull()
     vi.useFakeTimers()
+
     try {
       const hiddenChunks = [
         'plain hidden text\r\n',
@@ -522,6 +577,7 @@ describe('connectPanePty', () => {
         '\x1b[?2026h| Sam Syntax | 😀 |\r\n\x1b[?2026l',
         '\x1b[?2026h\x1b[6n'
       ]
+
       for (const chunk of hiddenChunks) {
         capturedDataCallback.current?.(chunk)
       }
@@ -531,9 +587,11 @@ describe('connectPanePty', () => {
       vi.advanceTimersByTime(50)
       // The drain may coalesce queued chunks into one write — assert content.
       const written = pane.terminal.write.mock.calls.map((call) => String(call[0])).join('')
+
       for (const chunk of hiddenChunks) {
         expect(written).toContain(chunk)
       }
+
       // No model restore is latched for bounded hidden output.
       expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
     } finally {

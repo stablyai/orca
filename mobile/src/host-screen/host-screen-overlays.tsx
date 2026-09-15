@@ -29,6 +29,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     showNewWorktree,
     state
   } = controller
+
   const actionTarget = state.actionTarget
 
   return (
@@ -138,6 +139,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                   if (state.confirmDelete) {
                     void actions.handleDeleteWorktree(state.confirmDelete)
                   }
+
                   state.setConfirmDelete(null)
                   state.setActionTarget(null)
                 }}
@@ -175,6 +177,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                             })
                             .catch(() => null)
                         }
+
                         state.setActionTarget(null)
                       }
                     },

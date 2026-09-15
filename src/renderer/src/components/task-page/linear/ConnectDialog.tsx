@@ -1,5 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+
 export function TaskPageLinearConnectDialog({
   model
 }: {
@@ -11,6 +12,7 @@ export function TaskPageLinearConnectDialog({
     setLinearConnectOpen,
     handleLinearAccessConnected
   } = model
+
   return (
     <LinearApiKeyDialog
       open={linearConnectOpen}

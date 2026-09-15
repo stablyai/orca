@@ -26,10 +26,12 @@ function statusEntries(entries: AgentStatusEntry[]): Record<string, AgentStatusE
 
 function setup(entries: AgentStatusEntry[]) {
   const bumpEpochs = vi.fn()
+
   const scheduler = createFreshnessScheduler({
     getStatusEntries: () => statusEntries(entries),
     bumpEpochs
   })
+
   return { bumpEpochs, scheduler }
 }
 
@@ -47,6 +49,7 @@ describe('freshness scheduler completion deadlines', () => {
     vi.setSystemTime(NOW)
     // Completion is 25m old; same-state `done` writes have kept updatedAt at now.
     const completedAt = NOW - 25 * 60_000
+
     const { bumpEpochs, scheduler } = setup([
       doneEntry({ stateStartedAt: completedAt, updatedAt: NOW })
     ])
@@ -64,6 +67,7 @@ describe('freshness scheduler completion deadlines', () => {
   it('keeps the strict-expiry wake armed when rescheduled exactly at the boundary', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
+
     const { bumpEpochs, scheduler } = setup([
       doneEntry({
         stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS,
@@ -100,6 +104,7 @@ describe('freshness scheduler completion deadlines', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     const completedAt = NOW - 25 * 60_000
+
     const { bumpEpochs, scheduler } = setup([
       doneEntry({ stateStartedAt: completedAt, updatedAt: NOW })
     ])
@@ -119,6 +124,7 @@ describe('freshness scheduler completion deadlines', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     const completedAt = NOW - 25 * 60_000
+
     const { bumpEpochs, scheduler } = setup([
       doneEntry({ stateStartedAt: completedAt, updatedAt: NOW, interrupted: true })
     ])
@@ -137,6 +143,7 @@ describe('freshness scheduler completion deadlines', () => {
   it('still arms hook freshness for a working entry', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
+
     const { bumpEpochs, scheduler } = setup([
       doneEntry({ state: 'working', stateStartedAt: NOW, updatedAt: NOW })
     ])
@@ -173,13 +180,16 @@ describe('freshness scheduler completion deadlines', () => {
     vi.setSystemTime(NOW)
     let scheduler!: ReturnType<typeof createFreshnessScheduler>
     let firstRead = true
+
     const getStatusEntries = vi.fn((): Record<string, AgentStatusEntry> => {
       if (firstRead) {
         firstRead = false
         scheduler.scheduleDeferred()
       }
+
       return {}
     })
+
     scheduler = createFreshnessScheduler({ getStatusEntries, bumpEpochs: vi.fn() })
 
     scheduler.scheduleDeferred()

@@ -48,6 +48,7 @@ export function consumeBrowserAddressBarEditSession(
 ): BrowserAddressBarEditSession | null {
   const session = editSessionsByPageId.get(pageId) ?? null
   editSessionsByPageId.delete(pageId)
+
   return session
 }
 

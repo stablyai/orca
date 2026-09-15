@@ -11,12 +11,19 @@ import { eraseRpcMethods } from '../../../core'
 // a close it could not confirm must not be relayed home as a settled stop.
 
 const HOME_FINGERPRINT = 'home-peer-fingerprint'
+
 const DISPATCH_ID = 'ctx_federation_verdict'
+
 const HANDLE = 'term_remote_worker'
+
 const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 const INCARNATION = 'runtime:pty:7'
+
 const SSH_PROVIDER_GONE = 'its SSH provider is no longer registered'
+
 const REAL_PTY_ID = 'pty-federation-liveness'
+
 const REAL_WORKTREE_ID = 'repo-federation::/tmp/federation-liveness'
 
 function realRuntimeStore() {
@@ -91,9 +98,11 @@ describe('federation host liveness verdicts', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method.handler(method.params!.parse(params), {
       runtime,
       authenticatedCallerFingerprint: HOME_FINGERPRINT
@@ -112,9 +121,11 @@ describe('federation host liveness verdicts', () => {
       incarnationId: 'incarnation-real'
     })
     const terminal = (await hostRuntime.listTerminals(`id:${REAL_WORKTREE_ID}`)).terminals[0]
+
     if (!terminal) {
       throw new Error('Expected the real runtime PTY to be listed')
     }
+
     hostDb.createRemoteDispatchAttachment({
       runId: 'run-home',
       dispatchId: DISPATCH_ID,
@@ -140,18 +151,22 @@ describe('federation host liveness verdicts', () => {
       terminalOwnership: 'created'
     })
     hostDb.markRemoteAttachmentReady(DISPATCH_ID)
+
     const callHost = async (name: string, params: Record<string, unknown>) => {
       const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
         (candidate) => candidate.name === name
       )
+
       if (!method) {
         throw new Error(`Method not found: ${name}`)
       }
+
       return method.handler(method.params!.parse(params), {
         runtime: hostRuntime,
         authenticatedCallerFingerprint: HOME_FINGERPRINT
       } as never)
     }
+
     return { hostDb, hostRuntime, terminal, callHost }
   }
 
@@ -194,6 +209,7 @@ describe('federation host liveness verdicts', () => {
 
   it('publishes positive owning-host inventory as live without a test verdict stub', async () => {
     const host = await createRealHost()
+
     try {
       host.hostRuntime.setPtyController({
         write: () => true,
@@ -228,6 +244,7 @@ describe('federation host liveness verdicts', () => {
 
   it('publishes a real owning-host natural exit through show, fleet, and release', async () => {
     const host = await createRealHost()
+
     try {
       host.hostRuntime.onPtyExit(REAL_PTY_ID, 0, 'incarnation-real', {
         hostExitConfirmed: true
@@ -264,6 +281,7 @@ describe('federation host liveness verdicts', () => {
 
   it('keeps real SSH contact loss unverifiable through federation show', async () => {
     const host = await createRealHost('ssh-real-host')
+
     try {
       host.hostRuntime.onPtyExit(REAL_PTY_ID, -1, 'incarnation-real')
 
@@ -369,6 +387,7 @@ describe('federation host liveness verdicts', () => {
       status: 'unverifiable',
       reason: SSH_PROVIDER_GONE
     })
+
     const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: HANDLE,
       tabId: 'tab_remote',

@@ -97,6 +97,7 @@ describe('rankSlashCommandSuggestions', () => {
       { name: 'team-review', argumentHint: '<branch>' },
       { name: 'review', kindUnspecified: true as const }
     ]
+
     const result = rankSlashCommandSuggestions(catalog, 'review', 3)
     expect(result[0]).toBe(catalog[2])
     expect(result[1]).toBe(catalog[0])
@@ -131,20 +132,25 @@ describe.each([
     candidates.push('review-last', 'review-final')
     const includes = String.prototype.includes
     let substringChecks = 0
+
     const spy = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
       this: string,
       search: string,
       position?: number
     ) {
       substringChecks += 1
+
       return includes.call(this, search, position)
     })
+
     let result: string[]
+
     try {
       result = rank(candidates, 'review', 8)
     } finally {
       spy.mockRestore()
     }
+
     expect(result).toEqual(['review-last', 'review-final', ...candidates.slice(0, 6)])
     expect(substringChecks).toBeLessThanOrEqual(8)
   })

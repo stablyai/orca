@@ -20,13 +20,16 @@ export function getFilteredDaily(
   range: CodexUsageRange
 ) {
   const cutoff = getUsageRangeCutoff(range)
+
   return state.dailyAggregates.filter((entry) => {
     if (cutoff && entry.day < cutoff) {
       return false
     }
+
     if (scope === 'orca' && entry.worktreeId === null) {
       return false
     }
+
     return true
   })
 }
@@ -37,17 +40,22 @@ export function getFilteredSessions(
   range: CodexUsageRange
 ) {
   const cutoff = getUsageRangeCutoff(range)
+
   return state.sessions.filter((session) => {
     const day = getLocalUsageDay(session.lastTimestamp)
+
     if (!day) {
       return false
     }
+
     if (cutoff && day < cutoff) {
       return false
     }
+
     if (scope === 'orca') {
       return session.locationBreakdown.some((entry) => entry.worktreeId !== null)
     }
+
     return true
   })
 }
@@ -61,10 +69,12 @@ export function getScopedSessionModels(
   }
 
   const rows = new Map<string, ScopedCodexUsageModelRow>()
+
   for (const entry of session.locationModelBreakdown) {
     if (entry.worktreeId === null) {
       continue
     }
+
     const existing = rows.get(entry.modelKey) ?? {
       modelKey: entry.modelKey,
       modelLabel: entry.modelLabel,
@@ -76,6 +86,7 @@ export function getScopedSessionModels(
       reasoningOutputTokens: 0,
       totalTokens: 0
     }
+
     existing.hasInferredPricing ||= entry.hasInferredPricing
     existing.eventCount += entry.eventCount
     existing.inputTokens += entry.inputTokens
@@ -85,6 +96,7 @@ export function getScopedSessionModels(
     existing.totalTokens += entry.totalTokens
     rows.set(entry.modelKey, existing)
   }
+
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)
 }
 
@@ -93,11 +105,14 @@ export function getScopedSessionPrimaryModel(
   scope: CodexUsageScope
 ): string | null {
   const scopedModels = getScopedSessionModels(session, scope)
+
   if (scopedModels.length === 0) {
     return session.primaryModel
   }
+
   if (scopedModels.length === 1) {
     return scopedModels[0]?.modelLabel ?? null
   }
+
   return 'Mixed models'
 }

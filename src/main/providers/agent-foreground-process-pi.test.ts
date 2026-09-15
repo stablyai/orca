@@ -4,10 +4,12 @@ const getAllProcessesMock = vi.fn()
 
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
+
 // A real snapshot always contains the process doing the querying; the reader
 // rejects a table without it, because that is what a blocked
 // CreateToolhelp32Snapshot looks like (an empty list, not an error).
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
   ...rows
@@ -28,6 +30,7 @@ describe('Pi Windows foreground recognition', () => {
 
   afterEach(() => {
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -49,6 +52,7 @@ describe('Pi Windows foreground recognition', () => {
           'node.exe C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js'
       }
     ]
+
     getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
       cb(withSelf(rows))
     })
@@ -77,6 +81,7 @@ describe('Pi Windows foreground recognition', () => {
           'node.exe C:\\npm\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js'
       }
     ]
+
     getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
       cb(withSelf(rows))
     })

@@ -5,6 +5,7 @@ import { useTroubleshootDiagnostics } from '../src/diagnostics/use-troubleshoot-
 export default function NativeTroubleshootRoute() {
   const router = useRouter()
   const { rootRef, diagnosticStatus, checks, runDiagnostics } = useTroubleshootDiagnostics()
+
   return (
     <TroubleshootView
       rootRef={rootRef}

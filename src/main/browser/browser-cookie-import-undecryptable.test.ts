@@ -25,22 +25,28 @@ const {
 vi.mock('node:crypto', async (importOriginal) => {
   const original = await importOriginal<typeof NodeCrypto>()
   createDecipherivMock.mockImplementation(original.createDecipheriv)
+
   return { ...original, createDecipheriv: createDecipherivMock }
 })
+
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof NodeFs>()) }))
+
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: dialogShowOpenDialogMock },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -73,6 +79,7 @@ import { createCipheriv, pbkdf2Sync } from 'node:crypto'
 function encryptLinuxChromiumCookie(value: string, password: string, prefix: string): Buffer {
   const key = pbkdf2Sync(password, 'saltysalt', 1, 16, 'sha1')
   const cipher = createCipheriv('aes-128-cbc', key, Buffer.alloc(16, ' '))
+
   return Buffer.concat([
     Buffer.from(prefix),
     cipher.update(Buffer.from(value, 'latin1')),
@@ -106,6 +113,7 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     targetJar = []
     cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
       const index = targetJar.findIndex((cookie) => cookie.name === name)
+
       if (index !== -1) {
         targetJar.splice(index, 1)
       }
@@ -155,6 +163,7 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
       []
     ).close()
+
     return sourceCookiesPath
   }
 
@@ -167,9 +176,11 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
 
     expect(createDecipherivMock).not.toHaveBeenCalled()
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(result.summary.importedCookies).toBe(0)
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
@@ -181,6 +192,7 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
 
   it('preserves a populated family when its unreadable partition row cannot decrypt', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+
     const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
       {
         domain: '.preserved.example',
@@ -192,6 +204,7 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       { domain: 'sub.preserved.example', name: 'readable-sibling', value: 'do-not-write' },
       { domain: '.replace.test', name: 'plain', value: 'plain-value' }
     ])
+
     sourceDb.exec("UPDATE cookies SET has_cross_site_ancestor = 2 WHERE name = 'undecryptable'")
     sourceDb.close()
     createChromiumCookieTestDatabase(
@@ -211,9 +224,11 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(clearDataMock).not.toHaveBeenCalled()
     expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
     expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
@@ -252,9 +267,11 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
 
       expect(createDecipherivMock).not.toHaveBeenCalled()
       expect(result.ok).toBe(true)
+
       if (!result.ok) {
         return
       }
+
       expect(result.summary.importedCookies).toBe(0)
       expect(result.summary.warning).toEqual({
         code: 'cookies-undecryptable',
@@ -274,9 +291,11 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(result.summary.importedCookies).toBe(0)
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
@@ -291,9 +310,11 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     // Mutation guard: replacing the keyring-unavailable branch with `return null` must break v10.
     expect(result.summary.importedCookies).toBe(1)
     expect(result.summary.warning).toBeUndefined()
@@ -315,9 +336,11 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
       failedCookies: 2,
@@ -329,14 +352,17 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     const appBoundValues = Array.from({ length: 200 }, () =>
       Buffer.concat([Buffer.from('v20'), Buffer.from([1, 2, 3, 4])])
     )
+
     const sourceCookiesPath = seedProfile(...appBoundValues, Buffer.from('v99-corrupt'))
 
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(result.summary.warning).toEqual({
       code: 'cookies-undecryptable',
       failedCookies: 200,

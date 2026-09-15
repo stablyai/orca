@@ -11,6 +11,7 @@ import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
@@ -25,7 +26,9 @@ vi.mock('../telemetry/cohort-classifier', () => ({
  * worktree to `permission`. The store is the roster: the host drops the row on close.
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
+
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+
 const IDENTITY = {
   provider: 'codex',
   threadId: 'thread-1',
@@ -34,6 +37,7 @@ const IDENTITY = {
 } as const
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
@@ -58,6 +62,7 @@ async function awaitingApproval() {
     },
     journalDir: join(root, SESSION)
   })
+
   await journal.appendItem(
     { ...IDENTITY, ordinal: 1 },
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'rm the branch' }] },
@@ -74,6 +79,7 @@ async function awaitingApproval() {
     },
     { fence: 1 }
   )
+
   const sessions = new Map([
     [
       SESSION,
@@ -84,8 +90,10 @@ async function awaitingApproval() {
       }
     ]
   ])
+
   const store = new AgentHookServer()
   const published: AgentSessionStatusSummary[] = []
+
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
     getRecord: () => null,
@@ -98,7 +106,9 @@ async function awaitingApproval() {
       forget: (sessionId) => store.dropStructuredStatus(sessionId)
     })
   })
+
   feed.publish(SESSION, journal)
+
   return { feed, sessions, store, published }
 }
 
@@ -108,6 +118,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
     status: 'inactive',
     agents: []
   } as unknown as RuntimeWorktreePsSummary
+
   attachRuntimeWorktreeAgentRows({
     summaries: new Map([[WORKTREE_ID, row]]),
     pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
@@ -125,6 +136,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
     orchestrationByPaneKey: null,
     getSummary: (map, _paths, _missing, id) => map.get(id) ?? null
   })
+
   return row
 }
 
@@ -150,12 +162,14 @@ describe('worktree ps and a closed structured chat', () => {
 
   it('keeps an aged host-held working state authoritative', async () => {
     const { store, published } = await awaitingApproval()
+
     const aged = {
       ...published.at(-1)!,
       hostExecutionOwned: true as const,
       updatedAt: Date.now() - 30 * 60 * 1000 - 1,
       status: 'working' as const
     }
+
     store.ingestStructuredStatus(aged)
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
@@ -166,11 +180,13 @@ describe('worktree ps and a closed structured chat', () => {
 
   it('keeps an aged host-held approval state authoritative', async () => {
     const { store, published } = await awaitingApproval()
+
     const aged = {
       ...published.at(-1)!,
       hostExecutionOwned: true as const,
       updatedAt: Date.now() - 30 * 60 * 1000 - 1
     }
+
     store.ingestStructuredStatus(aged)
     const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)

@@ -11,6 +11,7 @@ export default function MobileSourceControlScreen() {
     origin?: string | string[]
     tab?: string | string[]
   }>()
+
   return (
     <MobileSourceControlPanel
       hostId={firstParam(params.hostId)}

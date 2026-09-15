@@ -13,9 +13,13 @@ import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
 
 export const ACTION_MODE_INHERIT = 'inherit'
+
 export const ACTION_MODE_OVERRIDE = 'override'
+
 export const DEFAULT_AGENT_VALUE = '__default_agent__'
+
 export const CUSTOM_COMMAND_MODE_INHERIT = 'inherit'
+
 export const CUSTOM_COMMAND_MODE_REPO = 'repo'
 
 export function readInheritedCommandTemplate(
@@ -45,9 +49,11 @@ export function resolveAgentArgsPlaceholderAgent(
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
 ): TuiAgent | null {
   const effectiveAgent = agentId === undefined ? source.actions?.[actionId]?.agentId : agentId
+
   if (effectiveAgent && !isCustomAgentId(effectiveAgent)) {
     return effectiveAgent
   }
+
   return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
@@ -61,7 +67,9 @@ export function completeRepoActionRecipe(
     typeof recipe.commandInputTemplate === 'string'
       ? recipe.commandInputTemplate
       : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
+
   const agentArgs = typeof recipe.agentArgs === 'string' ? recipe.agentArgs : ''
+
   return {
     agentId: recipe.agentId ?? null,
     commandInputTemplate,
@@ -81,6 +89,7 @@ export function commandTemplateStateLabel(args: {
   if (args.hasOverride) {
     return 'Repository custom prompt'
   }
+
   return args.inheritedTemplate === DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[args.actionId]
     ? 'Orca default prompt'
     : 'Global custom prompt'
@@ -94,5 +103,6 @@ export function agentArgsStateLabel(args: {
   if (args.hasOverride) {
     return args.repoAgentArgs.trim() ? 'Repository custom args' : 'No args'
   }
+
   return args.inheritedAgentArgs.trim() ? 'Global custom args' : 'No args'
 }

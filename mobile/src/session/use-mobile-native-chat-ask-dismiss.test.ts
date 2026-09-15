@@ -40,6 +40,7 @@ describe('useMobileNativeChatAskDismiss', () => {
       sessionKey,
       observing
     })
+
     return null
   }
 
@@ -59,6 +60,7 @@ describe('useMobileNativeChatAskDismiss', () => {
       { question: 'old second', multiSelect: false, options: [] }
     ]
   }
+
   const replacement: AskPrompt = {
     questions: [
       { question: 'same first', multiSelect: false, options: [] },

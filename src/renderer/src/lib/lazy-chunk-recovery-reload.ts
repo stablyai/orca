@@ -28,22 +28,27 @@ type RefusedNavigationWait = {
 function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
   let graceTimer: ReturnType<typeof setTimeout> | undefined
   let onUnloadPrevented: () => void = () => undefined
+
   const cancel = (): void => {
     if (graceTimer !== undefined) {
       clearTimeout(graceTimer)
       graceTimer = undefined
     }
+
     win.removeEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
   }
+
   const outcome = new Promise<'unload-vetoed' | 'never-landed'>((resolve) => {
     const settle = (result: 'unload-vetoed' | 'never-landed'): void => {
       cancel()
       resolve(result)
     }
+
     onUnloadPrevented = () => settle('unload-vetoed')
     win.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
     graceTimer = setTimeout(() => settle('never-landed'), RELOAD_SETTLE_GRACE_MS)
   })
+
   return { outcome, cancel }
 }
 
@@ -66,10 +71,12 @@ export async function requestLazyChunkRecoveryReload(
   }
 
   let cancelRefusalWait = (): void => undefined
+
   try {
     const refused = waitForRefusedNavigation(win)
     cancelRefusalWait = refused.cancel
     win.location.reload()
+
     return await refused.outcome
   } catch {
     return 'request-failed'

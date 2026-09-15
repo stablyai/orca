@@ -21,6 +21,7 @@ export async function readGuestProcessId(
 ): Promise<number | null> {
   return electronApp.evaluate(({ webContents }, targetId) => {
     const guest = webContents.fromId(targetId)
+
     return guest && !guest.isDestroyed() ? guest.getOSProcessId() : null
   }, webContentsId)
 }
@@ -33,6 +34,7 @@ export async function readBrowserGuestState(
     const chromePresent = Boolean(document.querySelector(`[data-tab-id="${targetBrowserTabId}"]`))
     const overlay = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
     const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       return {
         chromePresent,
@@ -42,13 +44,16 @@ export async function readBrowserGuestState(
         webContentsId: null
       }
     }
+
     try {
       const webContentsId = webview.getWebContentsId()
+
       const guest = (await webview.executeJavaScript(`({
         formValue: document.querySelector('#recovery-state')?.value ?? null,
         marker: document.querySelector('#recovery-marker')?.textContent ?? null,
         url: location.href
       })`)) as { formValue: string | null; marker: string | null; url: string }
+
       return { chromePresent, ...guest, webContentsId }
     } catch {
       return {
@@ -82,9 +87,11 @@ export async function crashGuestRenderer(
 ): Promise<Electron.RenderProcessGoneDetails> {
   return electronApp.evaluate(async ({ webContents }, targetId) => {
     const guest = webContents.fromId(targetId)
+
     if (!guest) {
       throw new Error(`Missing guest webContents ${targetId}`)
     }
+
     return new Promise<Electron.RenderProcessGoneDetails>((resolve) => {
       guest.once('render-process-gone', (_event, details) => resolve(details))
       guest.forcefullyCrashRenderer()
@@ -110,6 +117,7 @@ export async function verifyBrowserWorktreeRetentionAndRecovery({
       const overlay = document.querySelector(
         `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
       )
+
       const webview = overlay?.querySelector('webview') as Electron.WebviewTag
       await webview.executeJavaScript(
         `document.querySelector('#recovery-state').value = ${JSON.stringify(targetValue)}`

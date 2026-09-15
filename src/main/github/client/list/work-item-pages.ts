@@ -22,6 +22,7 @@ import {
   type PartialWorkItemsResult
 } from './work-item-list-request'
 import { listIssueWorkItemPage } from './work-item-issue-page'
+
 export async function listRecentWorkItems(
   repoPath: string,
   issueOwnerRepo: OwnerRepo | null,
@@ -35,6 +36,7 @@ export async function listRecentWorkItems(
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const recentQuery = parseTaskQuery('is:open')
+
   const prRequest = prOwnerRepo
     ? buildWorkItemListRequest({
         kind: 'pr',
@@ -44,6 +46,7 @@ export async function listRecentWorkItems(
         page
       })
     : null
+
   // Why: unresolved sources must stay empty — an unscoped Search API would return other public repos' issues (#9660).
   // Why: allSettled so a 403 on the issue side doesn't zero the PR half (partial results + banner).
   const [issuesSettled, prsSettled] = await Promise.allSettled([
@@ -70,6 +73,7 @@ export async function listRecentWorkItems(
 
   let issues: MainWorkItem[] = []
   let issuesError: ClassifiedError | undefined
+
   if (issuesSettled.status === 'fulfilled') {
     issues = issuesSettled.value
   } else {
@@ -77,10 +81,12 @@ export async function listRecentWorkItems(
       issuesSettled.reason instanceof Error
         ? issuesSettled.reason.message
         : String(issuesSettled.reason)
+
     issuesError = classifyListIssuesError(stderr)
   }
 
   let prs: MainWorkItem[] = []
+
   if (prsSettled.status === 'fulfilled') {
     prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[])
       .slice(prRequest?.offset ?? 0, (prRequest?.offset ?? 0) + limit)
@@ -101,6 +107,7 @@ export async function listRecentWorkItems(
         issuesError.message
       )
     }
+
     throw prsSettled.reason
   }
 
@@ -123,11 +130,13 @@ export async function listQueriedWorkItems(
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
+
   const hasPrOnlyFilter =
     query.state === 'merged' ||
     query.draft ||
     query.reviewRequested !== null ||
     query.reviewedBy !== null
+
   const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
   const prScope = query.scope !== 'issue'
   let successfulRequestCount = 0
@@ -140,9 +149,11 @@ export async function listQueriedWorkItems(
     if (!issueScope) {
       return { items: [] }
     }
+
     if (!issueOwnerRepo) {
       return { items: [] }
     }
+
     try {
       const items = await listIssueWorkItemPage({
         repoPath,
@@ -155,15 +166,19 @@ export async function listQueriedWorkItems(
         localGitOptions,
         noCache
       })
+
       successfulRequestCount += 1
+
       return { items }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+
       if (classifyGitHubUnavailable(stderr)) {
         availabilityError = err
       } else {
         nonAvailabilityFailureCount += 1
       }
+
       return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
   })()
@@ -172,9 +187,11 @@ export async function listQueriedWorkItems(
     if (!prScope) {
       return []
     }
+
     if (!prOwnerRepo) {
       return []
     }
+
     const request = buildWorkItemListRequest({
       kind: 'pr',
       ownerRepo: prOwnerRepo,
@@ -182,43 +199,53 @@ export async function listQueriedWorkItems(
       query,
       page: page ?? 1
     })
+
     try {
       const { stdout } = await ghExecFileAsync(request.args, {
         ...ghOptions,
         ...githubHostExecOptions(prOwnerRepo)
       })
+
       const mapped = (JSON.parse(stdout) as Record<string, unknown>[])
         .slice(request.offset, request.offset + limit)
         .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
+
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(
         mapped,
         prOwnerRepo,
         { ...ghOptions, ...githubHostExecOptions(prOwnerRepo) },
         githubPRStackExecutionScope(connectionId, localGitOptions)
       )
+
       successfulRequestCount += 1
+
       if (query.state === 'closed') {
         return hydrated.filter((item) => item.state !== 'merged')
       }
+
       return hydrated
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
       const stderr = err instanceof Error ? err.message : String(err)
       prsError = classifyListPrsError(stderr)
+
       if (classifyGitHubUnavailable(stderr)) {
         availabilityError ??= err
       } else {
         nonAvailabilityFailureCount += 1
       }
+
       return []
     }
   })()
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+
   if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
     // Why: when every half hit the same availability failure, propagate it so Tasks can distinguish an outage from no data.
     throw availabilityError
   }
+
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
     issuesError: issueResult.issuesError,

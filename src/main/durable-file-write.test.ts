@@ -21,6 +21,7 @@ describe('durable file write', () => {
       'sync',
       (t: string, f: string, p: string) => {
         writeFileDurableSync(t, f, p)
+
         return Promise.resolve()
       }
     ]
@@ -67,11 +68,13 @@ describe('durable file write', () => {
         // The sync variant throws synchronously and the async one rejects; both must fail loudly
         // and neither may publish a partial file.
         let failed = false
+
         try {
           await write(tmp, final, 'x')
         } catch {
           failed = true
         }
+
         expect(failed).toBe(true)
         expect(() => readFileSync(final, 'utf-8')).toThrow()
       })

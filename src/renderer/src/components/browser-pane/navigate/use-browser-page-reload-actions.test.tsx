@@ -36,6 +36,7 @@ describe('useBrowserPageReloadActions', () => {
     const webview = createWebview()
     const trackNextLoadingEventRef = { current: false }
     const onUpdatePageStateRef = { current: vi.fn() }
+
     const view = renderHook(() =>
       useBrowserPageReloadActions({
         browserTab: createBrowserTab(),
@@ -59,8 +60,10 @@ describe('useBrowserPageReloadActions', () => {
         throw new Error('The WebView must be attached to the DOM')
       })
     })
+
     const trackNextLoadingEventRef = { current: false }
     const onUpdatePageStateRef = { current: vi.fn() }
+
     const view = renderHook(() =>
       useBrowserPageReloadActions({
         browserTab: createBrowserTab(),

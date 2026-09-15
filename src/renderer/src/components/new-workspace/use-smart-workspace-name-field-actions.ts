@@ -17,6 +17,7 @@ import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace
 import type { useSmartWorkspaceNameFieldPresentation } from './use-smart-workspace-name-field-presentation'
 
 type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
+
 type Presentation = ReturnType<typeof useSmartWorkspaceNameFieldPresentation>
 
 function scheduleEmojiInputFocus(
@@ -62,14 +63,17 @@ export function useSmartWorkspaceNameFieldActions(
     addRepo,
     repoSlugCacheRef
   } = foundation
+
   const { selectJiraAccount, jiraBoundSourceContext, activeEmojiShortcode } = presentation
 
   const handleSelect = useCallback(
     (row: RowEntry) => {
       if (row.kind === 'jira-account') {
         selectJiraAccount(row.site.id)
+
         return
       }
+
       // Why: held rows remain selectable while the live query leads debounce.
       if (row.kind === 'use-name' || row.kind === 'create-branch') {
         onValueChange(row.name)
@@ -81,14 +85,17 @@ export function useSmartWorkspaceNameFieldActions(
         onBranchSelect(row.refName, row.localBranchName)
       } else if (row.kind === 'jira') {
         const sites = jiraConnectionStatus?.sites ?? []
+
         const site =
           sites.find((candidate) => candidate.id === row.issue.siteId) ??
           (sites.length === 1 ? sites[0] : null)
+
         const sourceContext =
           jiraBoundSourceContext ??
           (jiraSourceContext && site
             ? bindJiraIssueSourceContext(jiraSourceContext, site, row.issue)
             : null)
+
         if (!sourceContext) {
           toast.error(
             translate(
@@ -96,12 +103,15 @@ export function useSmartWorkspaceNameFieldActions(
               'Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.'
             )
           )
+
           return
         }
+
         onJiraIssueSelect?.(row.issue, sourceContext)
       } else {
         onLinearIssueSelect(row.issue)
       }
+
       setOpen(false)
     },
     [
@@ -118,11 +128,13 @@ export function useSmartWorkspaceNameFieldActions(
       selectJiraAccount
     ]
   )
+
   const openSelectedSource = useCallback((): void => {
     if (selectedSource?.url) {
       void window.api.shell.openUrl(selectedSource.url)
     }
   }, [selectedSource?.url])
+
   const applyEmojiReplacement = useCallback(
     (replacement: WorkspaceEmojiReplacement): void => {
       onValueChange(replacement.value)
@@ -138,28 +150,34 @@ export function useSmartWorkspaceNameFieldActions(
       setEmojiCursor
     ]
   )
+
   const handleEmojiSelect = useCallback(
     (suggestion: WorkspaceEmojiSuggestion): void => {
       if (!activeEmojiShortcode) {
         return
       }
+
       applyEmojiReplacement(applyWorkspaceEmojiSuggestion(value, activeEmojiShortcode, suggestion))
     },
     [activeEmojiShortcode, applyEmojiReplacement, value]
   )
+
   const acceptGitHubLink = useCallback(
     async (targetRepo: RepoOption): Promise<void> => {
       if (!crossRepoPrompt) {
         return
       }
+
       handledCrossRepoUrlRef.current = debouncedQuery.trim()
       setGithubLoading(true)
+
       try {
         const sourceContext = buildTaskSourceContextFromRepo({
           provider: 'github',
           projectId: targetRepo.id,
           repo: targetRepo
         })
+
         const item = await lookupGitHubWorkItemByOwnerRepoForSource({
           repoPath: targetRepo.path,
           repoId: targetRepo.id,
@@ -170,9 +188,11 @@ export function useSmartWorkspaceNameFieldActions(
           number: crossRepoPrompt.link.number,
           type: crossRepoPrompt.link.type
         })
+
         if (!item) {
           return
         }
+
         onRepoChange(targetRepo.id)
         onGitHubItemSelect({ ...item, repoId: targetRepo.id } as GitHubWorkItem)
         setOpen(false)
@@ -192,31 +212,40 @@ export function useSmartWorkspaceNameFieldActions(
       setOpen
     ]
   )
+
   const handleUseCurrentRepo = useCallback(async (): Promise<void> => {
     if (!selectedRepo) {
       return
     }
+
     setCrossRepoPrompt(null)
     await acceptGitHubLink(selectedRepo)
   }, [acceptGitHubLink, selectedRepo, setCrossRepoPrompt])
+
   const handleAddMatchingRepo = useCallback(async (): Promise<void> => {
     if (!crossRepoPrompt || !allowCrossRepoProjectAdd) {
       return
     }
+
     const added = await addRepo()
+
     if (!added) {
       return
     }
+
     const sourceContext = buildTaskSourceContextFromRepo({
       provider: 'github',
       projectId: added.id,
       repo: added
     })
+
     const slug = await getRepoSlugCached(added, sourceContext, repoSlugCacheRef.current)
+
     if (slug && sameSlug(slug, crossRepoPrompt.link.slug)) {
       await acceptGitHubLink(added)
     }
   }, [acceptGitHubLink, addRepo, allowCrossRepoProjectAdd, crossRepoPrompt, repoSlugCacheRef])
+
   const dismissCrossRepoPrompt = useCallback((): void => {
     handledCrossRepoUrlRef.current = debouncedQuery.trim()
     setCrossRepoPrompt(null)

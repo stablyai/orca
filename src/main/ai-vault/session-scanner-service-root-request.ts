@@ -11,27 +11,33 @@ export async function requestSessionSearchRoots(
   const id = nextId++
   const pending = Promise.withResolvers<SessionSearchScanRoots>()
   const onAbort = (): void => pending.reject(signal.reason)
+
   const onMessage = (message: AiVaultServiceParentMessage): void => {
     if (message?.type !== 'sessionSearchRoots' || message.id !== id) {
       return
     }
+
     if (message.roots) {
       pending.resolve(message.roots)
     } else {
       pending.reject(new Error('Session search root discovery failed.'))
     }
   }
+
   process.on('message', onMessage)
   signal.addEventListener('abort', onAbort, { once: true })
+
   try {
     if (!process.send) {
       throw new Error('Session search root discovery requires parent IPC.')
     }
+
     process.send({ type: 'sessionSearchRoots', id }, (error) => {
       if (error) {
         pending.reject(error)
       }
     })
+
     return await pending.promise
   } finally {
     process.removeListener('message', onMessage)

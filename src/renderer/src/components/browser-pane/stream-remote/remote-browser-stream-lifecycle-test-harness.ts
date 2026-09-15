@@ -19,12 +19,15 @@ export type Gate = {
 export function createGate(): Gate {
   let release!: () => void
   let fail!: (error: unknown) => void
+
   const wait = new Promise<void>((resolve, reject) => {
     release = () => resolve()
     fail = (error: unknown) => reject(error)
   })
+
   // Why: the gate is released by the test, not by this tick; an unhandled rejection would fail the run.
   wait.catch(() => {})
+
   return { wait, release, fail }
 }
 
@@ -54,6 +57,7 @@ export function createHarness() {
     environmentId: 'env-1' as string | null,
     pageExists: true
   }
+
   const statusLog: RemoteBrowserStreamStatus[] = []
   const appliedTitles: string[] = []
   const closedPages: (string | null)[] = []
@@ -74,35 +78,43 @@ export function createHarness() {
 
   const callRpc = (async (_target: unknown, method: string) => {
     rpcLog.push(method)
+
     if (method === 'status.get') {
       if (statusGate) {
         const gate = statusGate
         statusGate = null
         await gate.wait
       }
+
       return { capabilities }
     }
+
     if (method === 'browser.tabShow') {
       if (tabShowGate) {
         const gate = tabShowGate
         tabShowGate = null
         await gate.wait
       }
+
       return { tab: { url: 'https://example.test/', title: 'Example' } }
     }
+
     if (method === 'browser.tabCreate') {
       return { browserPageId: 'page-1' }
     }
+
     return {}
   }) as unknown as RemoteBrowserRpcCall
 
   const subscribeScreencast: RemoteBrowserScreencastSubscribe = async (args, callbacks) => {
     subscribeAttempts += 1
+
     if (subscribeGate) {
       const gate = subscribeGate
       subscribeGate = null
       await gate.wait
     }
+
     // Models the host closing the subscription and only then rejecting the request, which is what
     // src/main/ipc/runtime-environments.ts does on a stale pairing.
     if (closeBeforeNextSubscribeRejects) {
@@ -113,17 +125,22 @@ export function createHarness() {
         'Runtime environment pairing changed; refresh and try again'
       )
     }
+
     const error = subscribeErrorQueue.shift() ?? persistentSubscribeError
+
     if (error) {
       throw error
     }
+
     const params = args.params as {
       page: string
       viewportWidth?: number
     }
+
     const respond = (result: unknown): void => {
       callbacks.onResponse({ id: 'sub-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } })
     }
+
     const stream: FakeScreencastStream = {
       pageId: params.page,
       params: args.params,
@@ -150,7 +167,9 @@ export function createHarness() {
       emitTransportError: (code, message) => callbacks.onError?.({ code, message }),
       emitClose: () => callbacks.onClose?.()
     }
+
     streams.push(stream)
+
     return {
       unsubscribe: () => {
         stream.unsubscribeCount += 1
@@ -185,6 +204,7 @@ export function createHarness() {
         viewportGate = null
         await gate.wait
       }
+
       return viewportSize
     },
     readViewportSize: () => viewportSize,
@@ -216,6 +236,7 @@ export function createHarness() {
     },
     get reconnectOffered(): boolean {
       const status = statusLog.at(-1)
+
       return status ? canReconnectRemoteBrowserStream(status) : false
     },
     get currentStatusKind(): string | null {
@@ -223,6 +244,7 @@ export function createHarness() {
     },
     get currentError(): string | null {
       const status = statusLog.at(-1)
+
       return status ? remoteBrowserStreamNotice(status) : null
     },
     setCapabilities: (next: string[]) => {
@@ -243,21 +265,25 @@ export function createHarness() {
     holdNextViewportSize: (): Gate => {
       const gate = createGate()
       viewportGate = gate
+
       return gate
     },
     holdNextStatusGet: (): Gate => {
       const gate = createGate()
       statusGate = gate
+
       return gate
     },
     holdNextTabShow: (): Gate => {
       const gate = createGate()
       tabShowGate = gate
+
       return gate
     },
     holdNextSubscribe: (): Gate => {
       const gate = createGate()
       subscribeGate = gate
+
       return gate
     }
   }
@@ -274,5 +300,6 @@ export async function openStreamAndConfirmReady(harness: Harness): Promise<() =>
   await settle()
   harness.streams[0].emitReady()
   await settle()
+
   return close
 }

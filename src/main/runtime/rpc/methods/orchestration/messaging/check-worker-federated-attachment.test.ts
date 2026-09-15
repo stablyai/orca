@@ -12,8 +12,11 @@ import {
 } from '../../../../orchestration/federation-control-message'
 
 const DISPATCH_ID = 'ctx_federated_worker_1'
+
 const WORKER_HANDLE = 'term_federated_worker'
+
 const WORKER_PANE = 'tab_w:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+
 const INCARNATION = 'runtime_test:term_federated_worker:1'
 
 type CheckResult = {
@@ -32,6 +35,7 @@ describe('orchestration.check on a federated attachment across a restart', () =>
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (directory) {
       rmSync(directory, { recursive: true, force: true })
       directory = undefined
@@ -51,6 +55,7 @@ describe('orchestration.check on a federated attachment across a restart', () =>
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       handle === WORKER_HANDLE ? INCARNATION : null
     )
+
     return { runtime }
   }
 
@@ -58,12 +63,15 @@ describe('orchestration.check on a federated attachment across a restart', () =>
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (entry) => entry.name === 'orchestration.check'
     )
+
     if (!method) {
       throw new Error('orchestration.check is not registered')
     }
+
     const parsed = method.params
       ? method.params.parse({ terminal: WORKER_HANDLE, ...params })
       : undefined
+
     return method.handler(parsed, ctx) as Promise<CheckResult>
   }
 
@@ -138,21 +146,26 @@ describe('orchestration.check on a federated attachment across a restart', () =>
   it('files loopback mail once under the local Dispatch Run without replacing its owner', async () => {
     const ctx = launch(':memory:')
     const store = db as OrchestrationDb
+
     const run = store.createRun({
       objective: 'loopback coordinator',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:pane_coord'
     })
+
     const task = store.createTask({ runId: run.id, spec: 'loopback task' })
+
     const { dispatch } = store.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     attach(store, dispatch.id, run.id)
     expect(store.getRemoteDispatchAttachment(dispatch.id)?.home_run_id).toBe(dispatch.run_id)
     expect(store.getRun(run.id)).toEqual(run)
+
     const message = {
       dispatchId: dispatch.id,
       messageId: 'msg_loopback',
@@ -166,6 +179,7 @@ describe('orchestration.check on a federated attachment across a restart', () =>
         payload: null
       })
     }
+
     expect(importFederatedControlMessage(store, message).imported).toBe(true)
     expect(importFederatedControlMessage(store, message).imported).toBe(false)
     expect(store.getMessageById(message.messageId)?.run_id).toBe(run.id)

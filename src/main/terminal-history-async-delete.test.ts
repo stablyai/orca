@@ -32,6 +32,7 @@ describe('deleteWorktreeHistoryDir main-thread safety', () => {
     const hash = hashWorktreeId(worktreeId)
     const historyDir = join(userDataDir, 'terminal-history', hash)
     mkdirSync(historyDir, { recursive: true })
+
     // Enough files that a recursive sync walk would dominate the critical-path duration.
     for (let i = 0; i < 3_000; i++) {
       writeFileSync(join(historyDir, `file-${i}.txt`), `payload-${i}`)
@@ -66,6 +67,7 @@ describe('deleteWorktreeHistoryDir main-thread safety', () => {
     const lateWorktreeId = 'repo-1::/path/late-wt'
     const lateDir = join(userDataDir, 'terminal-history', hashWorktreeId(lateWorktreeId))
     mkdirSync(lateDir, { recursive: true })
+
     // Big enough that its rm is still in flight when the snapshotted seed removal settles.
     for (let i = 0; i < 3_000; i++) {
       writeFileSync(join(lateDir, `file-${i}.txt`), `payload-${i}`)

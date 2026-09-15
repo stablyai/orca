@@ -23,6 +23,7 @@ function resolveQuickCommandGroupId(
   fallbackGroupId: string | null | undefined
 ): string | null {
   const state = useAppStore.getState()
+
   return (
     state.unifiedTabsByWorktree[worktreeId]?.find(
       (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
@@ -59,10 +60,12 @@ export function runQuickCommandInNewTab({
   historyId = command.id
 }: RunQuickCommandInNewTabArgs): { tabId: string } | null {
   const targetGroupId = groupId ?? undefined
+
   if (isTerminalAgentQuickCommand(command)) {
     if (!command.prompt.trim() || !supportsTerminalAgentQuickCommand(command.agent)) {
       return null
     }
+
     const result = launchAgentInNewTab({
       agent: command.agent,
       prompt: command.prompt,
@@ -71,25 +74,32 @@ export function runQuickCommandInNewTab({
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
+
     if (result?.tabId) {
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
+
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
+
       return { tabId: result.tabId }
     }
+
     // Structured launches publish their tab asynchronously and therefore do not
     // return a local tab id; preserve quick-command recency immediately using
     // the caller's group (or its active group fallback).
     if (result?.focusAfterMenuClose === 'structured-session') {
       const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
+
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
     }
+
     if (result) {
       return null
     }
+
     return null
   }
 
@@ -98,7 +108,9 @@ export function runQuickCommandInNewTab({
   if (!command.command.trim()) {
     return null
   }
+
   const store = useAppStore.getState()
+
   const tab = store.createTab(worktreeId, targetGroupId, undefined, {
     quickCommandLabel: command.label
   })
@@ -119,17 +131,20 @@ export function runQuickCommandInNewTab({
   const termIds = (fresh.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds = fresh.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
   const browserIds = (fresh.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
+
   const base = reconcileTabOrder(
     fresh.tabBarOrderByWorktree[worktreeId],
     termIds,
     editorIds,
     browserIds
   )
+
   const order = base.filter((id) => id !== tab.id)
   order.push(tab.id)
   fresh.setTabBarOrder(worktreeId, order)
 
   const launchedGroupId = resolveQuickCommandGroupId(worktreeId, tab.id, groupId)
+
   if (launchedGroupId) {
     fresh.setRecentQuickCommandForGroup(launchedGroupId, historyId)
   }

@@ -90,40 +90,52 @@ const paneOccupancyByCapture = new WeakMap<readonly ProcessTableRow[], PaneOccup
  *  since the per-pane cadence poll and `pty.listProcesses` share one TTL-cached table. */
 function getPaneOccupancy(rows: readonly ProcessTableRow[]): PaneOccupancy {
   const cached = paneOccupancyByCapture.get(rows)
+
   if (cached) {
     return cached
   }
+
   const processGroupsByTty = new Map<number, Set<number>>()
   const stoppedTtys = new Set<number>()
   const rowsByProcessGroup = new Map<number, number>()
   let processGroupsIncomplete = false
+
   for (const row of rows) {
     if (row.pgid === undefined) {
       processGroupsIncomplete = true
       continue
     }
+
     rowsByProcessGroup.set(row.pgid, (rowsByProcessGroup.get(row.pgid) ?? 0) + 1)
+
     if (row.tpgid === undefined || row.tpgid <= 0) {
       continue
     }
+
     let groups = processGroupsByTty.get(row.tpgid)
+
     if (!groups) {
       groups = new Set<number>()
       processGroupsByTty.set(row.tpgid, groups)
     }
+
     groups.add(row.pgid)
+
     // `T` is a job-control stop (Ctrl-Z), `t` a tracing stop. Both are work the pane still holds.
     if (row.stat.startsWith('T') || row.stat.startsWith('t')) {
       stoppedTtys.add(row.tpgid)
     }
   }
+
   const occupancy: PaneOccupancy = {
     processGroupsByTty,
     stoppedTtys,
     rowsByProcessGroup,
     processGroupsIncomplete
   }
+
   paneOccupancyByCapture.set(rows, occupancy)
+
   return occupancy
 }
 
@@ -132,13 +144,17 @@ export async function resolveAgentForegroundProcessesBatch(
   options: BatchedForegroundProcessOptions = {}
 ): Promise<BatchedForegroundProcessResult[]> {
   let rows = options.rows
+
   if (!rows) {
     if (options.stats) {
       options.stats.captures = (options.stats.captures ?? 0) + 1
     }
+
     rows = await (options.readRows?.() ?? getStrictProcessTableSnapshot())
   }
+
   const index = buildProcessTableIndex(rows, options.stats)
+
   return resolveAgentForegroundProcessesFromIndex(index, requests)
 }
 
@@ -147,46 +163,59 @@ export function resolveAgentForegroundProcessesFromIndex(
   requests: readonly BatchedForegroundProcessRequest[]
 ): BatchedForegroundProcessResult[] {
   const uniqueRoots = new Set<number>()
+
   for (const request of requests) {
     uniqueRoots.add(request.rootPid)
   }
+
   const rootsByPid = new Set(uniqueRoots)
   const depthByPid = new Map<number, number>()
   const rowsByOwner = new Map<number, (ProcessTableRow & { depth: number })[]>()
   const queue: { row: ProcessTableRow; owner: number; depth: number }[] = []
+
   for (const rootPid of uniqueRoots) {
     const root = lookupProcessTableIndex(index, (value) => value.byPid.get(rootPid))
+
     if (root) {
       depthByPid.set(root.pid, 0)
       queue.push({ row: root, owner: root.pid, depth: 0 })
     }
   }
+
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const current = queue[cursor]
     const owned = rowsByOwner.get(current.owner) ?? []
+
     if (current.depth > 0) {
       owned.push({ ...current.row, depth: current.depth })
     }
+
     rowsByOwner.set(current.owner, owned)
+
     const children = lookupProcessTableIndex(
       index,
       (value) => value.childrenByPpid.get(current.row.pid) ?? []
     )
+
     for (const child of children) {
       const childOwner = rootsByPid.has(child.pid) ? child.pid : current.owner
       const childDepth = rootsByPid.has(child.pid) ? 0 : current.depth + 1
       const priorDepth = depthByPid.get(child.pid)
+
       if (priorDepth !== undefined && priorDepth <= childDepth) {
         continue
       }
+
       depthByPid.set(child.pid, childDepth)
       queue.push({ row: child, owner: childOwner, depth: childDepth })
     }
   }
 
   const occupancy = getPaneOccupancy(index.rows)
+
   return requests.map((request) => {
     const root = lookupProcessTableIndex(index, (value) => value.byPid.get(request.rootPid))
+
     if (!root) {
       return {
         available: false,
@@ -194,6 +223,7 @@ export function resolveAgentForegroundProcessesFromIndex(
         reason: 'root_missing'
       }
     }
+
     if (root.pgid === undefined || root.tpgid === undefined) {
       return {
         available: false,
@@ -201,6 +231,7 @@ export function resolveAgentForegroundProcessesFromIndex(
         reason: 'correlation_unavailable'
       }
     }
+
     if (root.tpgid === 0 || root.tpgid === -1) {
       return {
         available: false,
@@ -208,6 +239,7 @@ export function resolveAgentForegroundProcessesFromIndex(
         reason: 'no_controlling_tty'
       }
     }
+
     // The only host-observable "nothing is running here" signal, and it takes TWO measurements
     // because the stop it authorizes has two units. `forceKillPosixPtyProcessGroups` collects every
     // process group on the pane's tty and then `killpg`s each one, so the blast radius is
@@ -232,6 +264,7 @@ export function resolveAgentForegroundProcessesFromIndex(
     //
     // A reader may treat `false` as "busy" and must never treat absence as "idle".
     const ttyProcessGroups = occupancy.processGroupsByTty.get(root.tpgid)
+
     const shellOwnsEveryTtyProcessGroup =
       root.tpgid === root.pgid &&
       ttyProcessGroups !== undefined &&
@@ -242,20 +275,26 @@ export function resolveAgentForegroundProcessesFromIndex(
       // The root always counts itself, so exactly one row in its group means the group IS the
       // shell — no separate leader check, and no set of pids retained per capture.
       occupancy.rowsByProcessGroup.get(root.pgid) === 1
+
     const allCandidates = rowsByOwner.get(root.pid) ?? []
     const foregroundCandidates = allCandidates.filter((row) => row.pgid === root.tpgid)
     const fallbackProcess = request.fallbackProcess
+
     const wrapperFallback =
       typeof fallbackProcess === 'string' && isAgentForegroundWrapperProcess(fallbackProcess)
+
     const candidates = wrapperFallback
       ? foregroundCandidates.filter((candidate) =>
           isExpectedAgentProcess(getFirstCommandToken(candidate.command), fallbackProcess)
         )
       : foregroundCandidates
+
     if (wrapperFallback && candidates.length !== 1) {
       return { available: true, processName: null, shellOwnsEveryTtyProcessGroup }
     }
+
     const selected = selectForegroundProcessCandidate(candidates, allCandidates)
+
     if (selected) {
       return {
         available: true,
@@ -267,6 +306,7 @@ export function resolveAgentForegroundProcessesFromIndex(
         shellOwnsEveryTtyProcessGroup
       }
     }
+
     return { available: true, processName: null, shellOwnsEveryTtyProcessGroup }
   })
 }

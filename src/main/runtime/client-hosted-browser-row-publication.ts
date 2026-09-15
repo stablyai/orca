@@ -24,9 +24,11 @@ export class ClientHostedBrowserRowPublisher {
 
   publish(worktreeId: string): void {
     const emit = this.host.getEmitter()
+
     if (!emit) {
       return
     }
+
     this.publishPages(worktreeId, this.host.listClientPages(worktreeId), emit)
   }
 
@@ -36,31 +38,38 @@ export class ClientHostedBrowserRowPublisher {
     emit: (event: ClientHostedBrowserRowsEvent) => void
   ): void {
     const rows = this.buildRows(pages)
+
     // Why: the announcement this rides on also fires on terminal and editor churn, so most calls
     // concern a workspace that has never had a client page. Only speak up when something changed.
     if (rows.length === 0 && !this.publishedWorktreeIds.has(worktreeId)) {
       return
     }
+
     if (rows.length === 0) {
       this.publishedWorktreeIds.delete(worktreeId)
     } else {
       this.publishedWorktreeIds.add(worktreeId)
     }
+
     emit({ worktreeId, rows })
   }
 
   publishAll(): void {
     const pagesByWorktreeId = new Map<string, RuntimeBrowserClientPage[]>()
+
     for (const page of this.host.listClientPages()) {
       const pages = pagesByWorktreeId.get(page.workspaceId)
+
       if (pages) {
         pages.push(page)
       } else {
         pagesByWorktreeId.set(page.workspaceId, [page])
       }
     }
+
     for (const worktreeId of new Set([...this.publishedWorktreeIds, ...pagesByWorktreeId.keys()])) {
       const emit = this.host.getEmitter()
+
       if (emit) {
         this.publishPages(worktreeId, pagesByWorktreeId.get(worktreeId) ?? [], emit)
       }
@@ -75,21 +84,26 @@ export class ClientHostedBrowserRowPublisher {
    */
   deliverHydrationSnapshot(): ClientHostedBrowserRowsEvent[] {
     const pagesByWorktreeId = new Map<string, RuntimeBrowserClientPage[]>()
+
     for (const page of this.host.listClientPages()) {
       const pages = pagesByWorktreeId.get(page.workspaceId)
+
       if (pages) {
         pages.push(page)
       } else {
         pagesByWorktreeId.set(page.workspaceId, [page])
       }
     }
+
     // Replaced, not added to: the renderer clears before applying, so this set is its whole
     // contents afterwards. Re-deriving it every hydration is also what heals a stale entry left
     // by a window that went away between a publish and its retraction.
     this.publishedWorktreeIds.clear()
+
     for (const worktreeId of pagesByWorktreeId.keys()) {
       this.publishedWorktreeIds.add(worktreeId)
     }
+
     return [...pagesByWorktreeId].map(([worktreeId, pages]) => ({
       worktreeId,
       rows: this.buildRows(pages)

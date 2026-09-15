@@ -15,17 +15,22 @@ type FileHandleOptions = {
 
 function createFileHandle({ content, initialSize, readError, statError }: FileHandleOptions) {
   const close = vi.fn().mockResolvedValue(undefined)
+
   const read = vi.fn(async (target: Buffer, offset: number, length: number, position: number) => {
     if (readError) {
       throw readError
     }
+
     const bytesRead = Math.min(length, Math.max(0, content.byteLength - position))
     content.copy(target, offset, position, position + bytesRead)
+
     return { bytesRead, buffer: target }
   })
+
   const stat = statError
     ? vi.fn().mockRejectedValue(statError)
     : vi.fn().mockResolvedValue({ size: initialSize ?? content.byteLength })
+
   return { close, read, stat }
 }
 

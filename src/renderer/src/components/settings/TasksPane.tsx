@@ -108,17 +108,20 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   // sync re-render before passive effects flush and collapse the open card.
   // useState (not a ref write) keeps render pure for React Doctor.
   const [previousAutoExpanded, setPreviousAutoExpanded] = useState<TaskProvider | null>(null)
+
   const autoExpandedProvider = resolveStickyAutoExpandedTaskProvider({
     providers: TASK_PROVIDERS,
     readinessByProvider,
     previousAutoExpanded
   })
+
   if (autoExpandedProvider !== null && previousAutoExpanded === null) {
     setPreviousAutoExpanded(autoExpandedProvider)
   }
 
   const toggleProvider = (provider: TaskProvider): void => {
     const isVisible = visibleProviders.includes(provider)
+
     if (isVisible && visibleProviders.length === 1) {
       return
     }

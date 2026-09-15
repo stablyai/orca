@@ -43,7 +43,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const hydrateBrowserDrivers = vi.fn()
     const listeners: { fit?: MobileFitListener } = {}
     let resolveFitOverrides: (value: []) => void = () => {}
+
     let resolveDrivers: (value: []) => void = () => {}
+
     let resolveBrowserDrivers: (value: []) => void = () => {}
 
     vi.doMock('@/lib/pane-manager/mobile-fit-overrides', () => ({
@@ -85,6 +87,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
             }),
           onTerminalFitOverrideChanged: (listener: MobileFitListener) => {
             listeners.fit = listener
+
             return () => {}
           }
         }
@@ -95,9 +98,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     useIpcEvents()
 
     const emitFit = listeners.fit
+
     if (!emitFit) {
       throw new Error('Expected fit listener to be registered')
     }
+
     for (let index = 0; index < 350; index += 1) {
       emitFit({
         ptyId: `pty-${index}`,
@@ -106,6 +111,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         rows: 24
       })
     }
+
     expect(setFitOverride).not.toHaveBeenCalled()
 
     resolveFitOverrides([])
@@ -132,14 +138,18 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const unsubscribeFit = vi.fn()
     const unsubscribeDriver = vi.fn()
     const unsubscribeBrowserDriver = vi.fn()
+
     const refs: {
       cleanup?: () => void
       fit?: MobileFitListener
       driver?: MobileDriverListener
       browserDriver?: MobileBrowserDriverListener
     } = {}
+
     let resolveFitOverrides: (value: []) => void = () => {}
+
     let resolveDrivers: (value: []) => void = () => {}
+
     let resolveBrowserDrivers: (value: []) => void = () => {}
 
     vi.doMock('@/lib/pane-manager/mobile-fit-overrides', () => ({
@@ -156,10 +166,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }))
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
           const result = effect()
+
           if (typeof result === 'function') {
             refs.cleanup = result
           }
@@ -192,14 +204,17 @@ describe('useIpcEvents agent status snapshot integration', () => {
             }),
           onTerminalFitOverrideChanged: (listener: MobileFitListener) => {
             refs.fit = listener
+
             return unsubscribeFit
           },
           onTerminalDriverChanged: (listener: MobileDriverListener) => {
             refs.driver = listener
+
             return unsubscribeDriver
           },
           onBrowserDriverChanged: (listener: MobileBrowserDriverListener) => {
             refs.browserDriver = listener
+
             return unsubscribeBrowserDriver
           },
           onClientHostedBrowserRowsChanged: () => () => {},
@@ -250,6 +265,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('ignores early push events but applies the main-process snapshot after readiness', async () => {
     const setAgentStatus = vi.fn()
+
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
@@ -263,9 +279,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       ])
     )
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
 
     const storeState: StoreLike = buildStoreState({
@@ -273,6 +291,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree: {},
       workspaceSessionReady: false
     })
+
     const setAgentStatuses = vi.mocked(storeState.setAgentStatuses as AppState['setAgentStatuses'])
 
     stubReactSyncEffect()
@@ -280,6 +299,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -294,6 +314,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         getSnapshot,
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -332,9 +353,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expandedLeafId: null
       }
     }
+
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
+
     subscribeListenerRef.current(storeState, previousStoreState)
     await Promise.resolve()
 
@@ -362,6 +385,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const worktrees: AppState['worktreesByRepo'][string] = []
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
+
     for (let index = 0; index < paneCount; index += 1) {
       const worktreeId = `wt-snapshot-${index}`
       const tabId = `tab-snapshot-${index}`
@@ -386,13 +410,16 @@ describe('useIpcEvents agent status snapshot integration', () => {
         stateStartedAt: 1_700_000_000_000 + index
       })
     }
+
     let resolveSnapshot: ((entries: AgentStatusSetData[]) => void) | undefined
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<AgentStatusSetData[]>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const store = createTestStore()
     store.setState({
       workspaceSessionReady: true,
@@ -429,6 +456,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     useIpcEvents()
     await Promise.resolve()
     let relevantPublications = 0
+
     const unsubscribe = store.subscribe((state, previousState) => {
       if (
         state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey ||
@@ -437,6 +465,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         relevantPublications += 1
       }
     })
+
     resolveSnapshot?.(snapshot)
 
     await vi.waitFor(() => {
@@ -455,37 +484,46 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const paneCount = 100
     const tabId = 'tab-indexed-snapshot'
     const worktreeId = 'wt-indexed-snapshot'
+
     const leafIds = Array.from(
       { length: paneCount },
       (_, index) => `00000000-0000-4000-8001-${String(index).padStart(12, '0')}`
     )
+
     let leafIdLookupCount = 0
+
     const leaves = leafIds.map((leafId) => {
       const leaf = { type: 'leaf' } as TerminalPaneLayoutNode
       Object.defineProperty(leaf, 'leafId', {
         enumerable: true,
         get: () => {
           leafIdLookupCount += 1
+
           return leafId
         }
       })
+
       return leaf
     })
+
     const root = leaves
       .slice(1)
       .reduce<TerminalPaneLayoutNode>(
         (tree, leaf) => ({ type: 'split', direction: 'vertical', first: tree, second: leaf }),
         leaves[0]!
       )
+
     let tabIdLookupCount = 0
     const tab = makeTab({ id: tabId, worktreeId, title: 'Workspace', ptyId: 'pty-indexed' })
     Object.defineProperty(tab, 'id', {
       enumerable: true,
       get: () => {
         tabIdLookupCount += 1
+
         return tabId
       }
     })
+
     const snapshot = leafIds.map((leafId, index): AgentStatusSetData => ({
       paneKey: makePaneKey(tabId, leafId),
       worktreeId,
@@ -495,13 +533,16 @@ describe('useIpcEvents agent status snapshot integration', () => {
       receivedAt: 1_700_000_000_000 + index,
       stateStartedAt: 1_700_000_000_000 + index
     }))
+
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<AgentStatusSetData[]>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const store = createTestStore()
     store.setState({
       workspaceSessionReady: true,
@@ -553,19 +594,23 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const snapshot: AgentStatusSetData[] = []
     const unsupportedSnapshot: MigrationUnsupportedPtyEntry[] = []
     let tabIdLookupCount = 0
+
     for (let index = 0; index < paneCount; index += 1) {
       const tabId = `tab-indexed-${index}`
       const leafId = `00000000-0000-4000-8003-${String(index).padStart(12, '0')}`
+
       const tab = makeTab({
         id: tabId,
         worktreeId,
         title: 'Workspace',
         ptyId: `pty-indexed-${index}`
       })
+
       Object.defineProperty(tab, 'id', {
         enumerable: true,
         get: () => {
           tabIdLookupCount += 1
+
           return tabId
         }
       })
@@ -590,20 +635,25 @@ describe('useIpcEvents agent status snapshot integration', () => {
         updatedAt: 1_700_000_000_500 + index
       })
     }
+
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<AgentStatusSetData[]>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     let resolveUnsupportedSnapshot!: (entries: MigrationUnsupportedPtyEntry[]) => void
+
     const getMigrationUnsupportedSnapshot = vi.fn(
       () =>
         new Promise<MigrationUnsupportedPtyEntry[]>((resolve) => {
           resolveUnsupportedSnapshot = resolve
         })
     )
+
     const store = createTestStore()
     store.setState({
       workspaceSessionReady: true,

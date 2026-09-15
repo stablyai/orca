@@ -11,45 +11,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -69,7 +85,9 @@ describe('registerPtyHandlers', () => {
       resize(ptyId: string, cols: number, rows: number): boolean
       getSize(ptyId: string): { cols: number; rows: number } | null
     }
+
     let controller: RuntimeResizeController | null = null
+
     const proc = {
       onData: vi.fn(),
       onExit: vi.fn(),
@@ -81,6 +99,7 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -94,6 +113,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
@@ -115,10 +135,13 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     const store = {
       persistPtyBinding: vi.fn()
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -180,14 +203,18 @@ describe('registerPtyHandlers', () => {
         }
       }): Promise<{ id: string }>
     }
+
     let exitCallback: ((event: { exitCode: number }) => void) | undefined
+
     const killSpy = vi.fn(() => {
       exitCallback?.({ exitCode: 0 })
     })
+
     const proc = {
       onData: vi.fn(),
       onExit: vi.fn((cb) => {
         exitCallback = cb
+
         return { dispose: () => {} }
       }),
       write: vi.fn(),
@@ -196,9 +223,11 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     spawnMock.mockReturnValue(proc)
     const store = { persistPtyBinding: vi.fn(() => false) }
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -211,6 +240,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     registerPtyHandlers(
       mainWindow as never,
@@ -221,6 +251,7 @@ describe('registerPtyHandlers', () => {
       store as never
     )
     const leafId = '22222222-2222-4222-8222-222222222222'
+
     const expectedSourceBinding = {
       worktreeId: 'wt-1',
       tabId: 'tab-headless',
@@ -252,6 +283,7 @@ describe('registerPtyHandlers', () => {
   it('reports lower-owner commit before rejecting an early-exited runtime incarnation', async () => {
     const persistPtyBinding = vi.fn()
     const onPtySpawnCommitted = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       getRepo: () => undefined,
       getRepos: () => [],
@@ -272,10 +304,12 @@ describe('registerPtyHandlers', () => {
       }),
       persistPtyBinding
     } as never)
+
     const provider = createAgentClaimProvider({
       spawn: vi.fn(async () => {
         runtime.onPtySpawned('pty-early-exit', 'incarnation-early-exit')
         runtime.onPtyExit('pty-early-exit', 0, 'incarnation-early-exit')
+
         return {
           id: 'pty-early-exit',
           incarnationId: 'incarnation-early-exit',
@@ -285,10 +319,12 @@ describe('registerPtyHandlers', () => {
       }),
       authoritativeOwnerListings: false
     })
+
     setLocalPtyProvider(provider as never)
     registerPtyHandlers(mainWindow as never, runtime, undefined, undefined, undefined, {
       persistPtyBinding
     } as never)
+
     const controller = (
       runtime as unknown as {
         ptyController: {
@@ -296,6 +332,7 @@ describe('registerPtyHandlers', () => {
         }
       }
     ).ptyController
+
     const tabId = '11111111-1111-4111-8111-111111111111'
     const leafId = '22222222-2222-4222-8222-222222222222'
 
@@ -314,6 +351,7 @@ describe('registerPtyHandlers', () => {
 
     expect(onPtySpawnCommitted).toHaveBeenCalledOnce()
     expect(persistPtyBinding).not.toHaveBeenCalled()
+
     const internals = runtime as unknown as {
       handleByPtyId: Map<string, string>
       providerSequenceInitializedPtys: Set<string>
@@ -322,6 +360,7 @@ describe('registerPtyHandlers', () => {
       wslDistroByPtyId: Map<string, string>
       earlyExitedPtyIncarnations: Map<string, string | null>
     }
+
     expect(internals.handleByPtyId.has('pty-early-exit')).toBe(false)
     expect(internals.providerSequenceInitializedPtys.has('pty-early-exit')).toBe(false)
     expect(internals.ptyOutputSequenceById.has('pty-early-exit')).toBe(false)
@@ -350,16 +389,20 @@ describe('registerPtyHandlers', () => {
         terminalMainSideEffectAuthority: true
       })
     } as never)
+
     const sessions: {
       id: string
       incarnationId: string
       cwd: string
       title: string
     }[] = []
+
     let attempt = 0
+
     const physicalSpawn = vi.fn(async () => {
       attempt += 1
       const incarnationId = attempt === 1 ? 'incarnation-exited' : 'incarnation-live'
+
       if (attempt === 1) {
         runtime.onPtySpawned('pty-claimed-admission', incarnationId)
         runtime.onPtyExit('pty-claimed-admission', 0, incarnationId)
@@ -371,21 +414,26 @@ describe('registerPtyHandlers', () => {
           title: 'Codex'
         })
       }
+
       return { id: 'pty-claimed-admission', incarnationId }
     })
+
     const provider = createAgentClaimProvider({
       sessions,
       spawn: physicalSpawn,
       authoritativeOwnerListings: false
     })
+
     Object.assign(provider, { routesFreshSpawnsToLocalProvider: true })
     setLocalPtyProvider(provider as never)
     registerPtyHandlers(mainWindow as never, runtime)
+
     const controller = (
       runtime as unknown as {
         ptyController: { spawn(args: Record<string, unknown>): Promise<unknown> }
       }
     ).ptyController
+
     const request = {
       cols: 80,
       rows: 24,
@@ -423,13 +471,16 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     let resolveSpawn!: (result: { id: string }) => void
+
     const providerSpawn = vi.fn(
       () =>
         new Promise<{ id: string }>((resolve) => {
           resolveSpawn = resolve
         })
     )
+
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
@@ -453,10 +504,13 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const store = {
       persistPtyBinding: vi.fn()
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -481,6 +535,7 @@ describe('registerPtyHandlers', () => {
     const spawnController = controller as unknown as RuntimeSpawnController
     const leafId = '22222222-2222-4222-8222-222222222222'
     const paneKey = makePaneKey('tab-race', leafId)
+
     const runtimeSpawn = spawnController.spawn({
       cols: 80,
       rows: 24,
@@ -491,6 +546,7 @@ describe('registerPtyHandlers', () => {
       env: { ORCA_PANE_KEY: paneKey },
       persistHostSessionBinding: true
     })
+
     await Promise.resolve()
 
     // Why: SSH can strip ORCA_PANE_KEY before spawn; tab/leaf metadata must still dedupe against runtime materialization.
@@ -506,6 +562,7 @@ describe('registerPtyHandlers', () => {
         ORCA_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
+
     await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(1))
     resolveSpawn({ id: 'pty-shared' })
     await expect(Promise.all([runtimeSpawn, rendererSpawn])).resolves.toEqual([

@@ -35,17 +35,21 @@ export function createBrowserCloseActions(
         let owningWorktreeId: string | null = null
         let closedWorkspace: BrowserWorkspace | null = null
         const nextBrowserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
+
         for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
           const removedTab = tabs.find((tab) => tab.id === tabId) ?? null
           const filtered = tabs.filter((tab) => tab.id !== tabId)
+
           if (filtered.length !== tabs.length) {
             owningWorktreeId = worktreeId
             closedWorkspace = removedTab
           }
+
           if (filtered.length > 0) {
             nextBrowserTabsByWorktree[worktreeId] = filtered
           }
         }
+
         if (!owningWorktreeId || !closedWorkspace) {
           return s
         }
@@ -55,29 +59,36 @@ export function createBrowserCloseActions(
         const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
         delete nextBrowserPagesByWorkspace[tabId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+
         const nextBrowserCertificateFailuresByPageId = {
           ...s.browserCertificateFailuresByPageId
         }
+
         for (const page of closedPages) {
           delete nextBrowserAnnotationsByPageId[page.id]
           delete nextBrowserCertificateFailuresByPageId[page.id]
         }
+
         docPageIdsToRelease = closedPages.filter((page) => page.docLocation).map((page) => page.id)
         remotePagesToClose = isCleanup
           ? []
           : closedPages.flatMap((page) => {
               const handle = s.remoteBrowserPageHandlesByPageId[page.id]
+
               return handle ? [{ worktreeId: page.worktreeId, handle }] : []
             })
+
         const nextRemoteBrowserPageHandlesByPageId = {
           ...s.remoteBrowserPageHandlesByPageId
         }
+
         for (const page of closedPages) {
           delete nextRemoteBrowserPageHandlesByPageId[page.id]
         }
 
         const remainingBrowserTabs = nextBrowserTabsByWorktree[owningWorktreeId] ?? []
         const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
+
         if (nextActiveBrowserTabIdByWorktree[owningWorktreeId] === tabId) {
           const neighborId = pickNeighbor(s.tabBarOrderByWorktree[owningWorktreeId] ?? [], tabId)
           nextActiveBrowserTabIdByWorktree[owningWorktreeId] =
@@ -95,24 +106,30 @@ export function createBrowserCloseActions(
 
         const isActiveTabInOwningWorktree =
           s.activeWorktreeId === owningWorktreeId && s.activeBrowserTabId === tabId
+
         if (isActiveTabInOwningWorktree) {
           activeBrowserWorktreeIdToNotify = owningWorktreeId
         }
+
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         let nextActiveTabType = s.activeTabType
+
         if (remainingBrowserTabs.length === 0) {
           const fallbackTabType = getFallbackTabTypeForWorktree(
             owningWorktreeId,
             s.openFiles,
             s.tabsByWorktree
           )
+
           nextActiveTabTypeByWorktree[owningWorktreeId] = fallbackTabType
+
           if (isActiveTabInOwningWorktree && s.activeTabType === 'browser') {
             nextActiveTabType = fallbackTabType
           }
         }
 
         const nextRecentlyClosedBrowserTabsByWorktree = { ...s.recentlyClosedBrowserTabsByWorktree }
+
         if (!isCleanup) {
           const existingSnapshots = nextRecentlyClosedBrowserTabsByWorktree[owningWorktreeId] ?? []
           const position = getRecentlyClosedTabPosition(s, owningWorktreeId, tabId)
@@ -125,6 +142,7 @@ export function createBrowserCloseActions(
             ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
           ].slice(0, 10)
         }
+
         const nextRecentlyClosedTabKindsByWorktree = isCleanup
           ? s.recentlyClosedTabKindsByWorktree
           : pushRecentlyClosedTabKind(
@@ -136,15 +154,18 @@ export function createBrowserCloseActions(
         const nextRecentlyClosedBrowserPagesByWorkspace = {
           ...s.recentlyClosedBrowserPagesByWorkspace
         }
+
         delete nextRecentlyClosedBrowserPagesByWorkspace[tabId]
 
         // Why omit rather than rebuild: only the closed ids can match, so this touches the
         // closed pages instead of every pending entry and keeps the record identity when none did.
         const closedPageIds = closedPages.map((page) => page.id)
+
         const nextPendingAddressBarFocusByPageId = omitRecordKeys(
           s.pendingAddressBarFocusByPageId,
           closedPageIds
         )
+
         const nextPendingAddressBarFocusByTabId = omitRecordKeys(s.pendingAddressBarFocusByTabId, [
           ...closedPageIds,
           tabId
@@ -183,6 +204,7 @@ export function createBrowserCloseActions(
       for (const docPageId of docPageIdsToRelease) {
         releaseDocPreviewGrant(docPageId)
       }
+
       for (const pageId of closedPagesForMountRelease) {
         releaseBrowserPageMount(pageId)
       }
@@ -191,6 +213,7 @@ export function createBrowserCloseActions(
         const workspaceItem = tabs.find(
           (entry) => entry.contentType === 'browser' && entry.entityId === tabId
         )
+
         if (workspaceItem) {
           get().closeUnifiedTab(
             workspaceItem.id,
@@ -202,16 +225,20 @@ export function createBrowserCloseActions(
       // Why: announce the MRU page before guest teardown so bridge fallback cannot choose registration order.
       if (activeBrowserWorktreeIdToNotify) {
         const state = get()
+
         const activeWorkspaceId =
           state.activeBrowserTabIdByWorktree[activeBrowserWorktreeIdToNotify]
+
         const activeWorkspace = activeWorkspaceId
           ? findWorkspace(state.browserTabsByWorktree, activeWorkspaceId)
           : null
+
         const activePage = activeWorkspace?.activePageId
           ? (state.browserPagesByWorkspace[activeWorkspace.id] ?? []).find(
               (page) => page.id === activeWorkspace.activePageId
             )
           : undefined
+
         if (
           activeWorkspace?.activePageId &&
           isLocalBrowserPageOwner(
@@ -233,23 +260,29 @@ export function createBrowserCloseActions(
       const workspaces = get().browserTabsByWorktree[worktreeId] ?? []
       // Why: snapshot before the loop — closeBrowserTab empties the array, so set() below couldn't recompute hadBrowserTabs.
       const hadBrowserTabs = workspaces.length > 0
+
       for (const workspace of workspaces) {
         const browserPagesByWorkspace = get().browserPagesByWorkspace
         get().closeBrowserTab(workspace.id)
         destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
       }
+
       set((s) => {
         const removedWorktreeIds = [worktreeId]
+
         const nextBrowserTabsByWorktree = omitRecordKeys(
           s.browserTabsByWorktree,
           removedWorktreeIds
         )
+
         const nextActiveBrowserTabIdByWorktree = omitRecordKeys(
           s.activeBrowserTabIdByWorktree,
           removedWorktreeIds
         )
+
         // Why: reset the global browser surface only when the shut-down worktree is the active one AND had tabs.
         const shouldResetGlobalBrowser = s.activeWorktreeId === worktreeId && hadBrowserTabs
+
         return {
           browserTabsByWorktree: nextBrowserTabsByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,

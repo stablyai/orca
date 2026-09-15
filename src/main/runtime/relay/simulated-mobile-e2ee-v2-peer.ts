@@ -44,15 +44,18 @@ export class SimulatedMobileE2EEV2Peer {
 
   acceptReady(value: unknown): boolean {
     const handshake = validateMobileE2EEV2Handshake(this.hello, value)
+
     if (!handshake || !nacl.verify(handshake.desktopPublicKey, this.desktopPublicKey)) {
       return false
     }
+
     this.schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret: deriveSharedKey(this.clientKeys.secretKey, this.desktopPublicKey),
       transcript: encodeMobileE2EEV2Transcript(handshake),
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
+
     return true
   }
 
@@ -70,6 +73,7 @@ export class SimulatedMobileE2EEV2Peer {
 
   openText(frameB64: string): string | null {
     const plaintext = this.open(Buffer.from(frameB64, 'base64'), 'text')
+
     return plaintext ? new TextDecoder().decode(plaintext) : null
   }
 
@@ -79,6 +83,7 @@ export class SimulatedMobileE2EEV2Peer {
 
   private seal(payload: Uint8Array, payloadKind: MobileE2EEPayloadKind): Uint8Array {
     const schedule = this.requireSchedule()
+
     const frame = sealMobileE2EEV2Frame({
       payload,
       key: schedule.mobileToDesktopKey,
@@ -87,12 +92,15 @@ export class SimulatedMobileE2EEV2Peer {
       payloadKind,
       counter: this.outboundCounter
     })
+
     this.outboundCounter++
+
     return frame
   }
 
   private open(frame: Uint8Array, payloadKind: MobileE2EEPayloadKind): Uint8Array | null {
     const schedule = this.requireSchedule()
+
     const plaintext = openMobileE2EEV2Frame({
       frame,
       key: schedule.desktopToMobileKey,
@@ -101,9 +109,11 @@ export class SimulatedMobileE2EEV2Peer {
       payloadKind,
       expectedCounter: this.inboundCounter
     })
+
     if (plaintext) {
       this.inboundCounter++
     }
+
     return plaintext
   }
 
@@ -111,6 +121,7 @@ export class SimulatedMobileE2EEV2Peer {
     if (!this.schedule) {
       throw new Error('Simulated mobile peer has not accepted E2EE ready')
     }
+
     return this.schedule
   }
 }

@@ -22,6 +22,7 @@ const READER_SCRIPT = [
 ].join('\n')
 
 const REPLACEMENT_CHARACTER = '�'
+
 const KILL_AFTER_MS = 9_000
 
 type ReaderRun = {
@@ -44,10 +45,12 @@ function runReader(
 ): Promise<ReaderRun> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now()
+
     const child = spawn('/bin/sh', ['-c', READER_SCRIPT], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: env ?? process.env
     })
+
     let stdout = Buffer.alloc(0)
     let stderr = ''
     let timedOut = false
@@ -59,10 +62,12 @@ function runReader(
     })
     // A reader that never returns leaves the writer's pipe unread; ignore the tear-down error.
     child.stdin.on('error', () => {})
+
     const timer = setTimeout(() => {
       timedOut = true
       child.kill('SIGKILL')
     }, KILL_AFTER_MS)
+
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(error)
@@ -82,6 +87,7 @@ function runReader(
         child.stdin.write(chunk)
         await new Promise((resolveGap) => setTimeout(resolveGap, gapMs))
       }
+
       if (closeStdin) {
         child.stdin.end()
       }
@@ -95,6 +101,7 @@ async function resolveDefaultPathPython(): Promise<boolean> {
       '-c',
       'command -pv python3 || command -pv python'
     ])
+
     return stdout.trim().length > 0
   } catch {
     return false

@@ -5,9 +5,13 @@ import type { CustomPet, SpriteAnimation } from './pet-types'
  *  the renderer needs the same fingerprint to upgrade legacy persisted pets. */
 
 export const CODEX_PET_SPRITESHEET_PATH = 'spritesheet.webp'
+
 export const CODEX_PET_FRAME = { width: 192, height: 208 } as const
+
 export const CODEX_PET_DEFAULT_ANIMATION = 'idle'
+
 export const CODEX_PET_DEFAULT_FPS = 8
+
 // Codex sheets are 8 columns wide (its widest rows run 8 frames).
 export const CODEX_PET_DEFAULT_COLUMNS = 8
 
@@ -37,6 +41,7 @@ export const CODEX_PET_ANIMATIONS: Record<string, SpriteAnimation> = {
  *  legacy fingerprint below, so the render-time upgrade never retimes it. */
 export function codexAnimationsAtUniformFps(fps: number): Record<string, SpriteAnimation> {
   const frameMs = 1000 / fps
+
   return Object.fromEntries(
     Object.entries(CODEX_PET_ANIMATIONS).map(([name, { row, frames }]) => [
       name,
@@ -59,6 +64,7 @@ export type CustomPetSprite = NonNullable<CustomPet['sprite']>
  *  which still bake these nine animations, upgrade too. */
 function isLegacyCodexSprite(sprite: CustomPetSprite): boolean {
   const animations = sprite.animations
+
   if (
     !animations ||
     sprite.fps !== CODEX_PET_DEFAULT_FPS ||
@@ -69,13 +75,17 @@ function isLegacyCodexSprite(sprite: CustomPetSprite): boolean {
   ) {
     return false
   }
+
   const names = Object.keys(animations)
+
   if (names.length !== Object.keys(CODEX_PET_ANIMATIONS).length) {
     return false
   }
+
   return names.every((name) => {
     const anim = animations[name]
     const preset = CODEX_PET_ANIMATIONS[name]
+
     // Why: `anim` is untrusted persisted data — guard it so a corrupted entry
     // (e.g. a null value) is a non-match rather than a render-time throw.
     return (
@@ -96,5 +106,6 @@ export function applyCodexSpriteTimingDefaults(sprite: CustomPetSprite): CustomP
   if (!isLegacyCodexSprite(sprite)) {
     return sprite
   }
+
   return { ...sprite, animations: { ...CODEX_PET_ANIMATIONS } }
 }

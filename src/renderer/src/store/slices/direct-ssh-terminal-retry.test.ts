@@ -4,6 +4,7 @@ import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery
 import { createTestStore, makeLayout, makeTab, makeWorktree } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo-ssh::/work/demo'
+
 const TAB_ID = 'tab-ssh'
 
 function authority(epoch = 'epoch-1', generation = 1): DirectSshAuthority {
@@ -58,6 +59,7 @@ function seedStore(ptyId: string | null = null) {
       ]
     ])
   })
+
   return store
 }
 
@@ -76,6 +78,7 @@ describe('direct SSH terminal retry ledger', () => {
         },
         ptyIdsByTabId: { [TAB_ID]: [DEAD_PTY_ID] }
       })
+
       return store
     }
 
@@ -108,6 +111,7 @@ describe('direct SSH terminal retry ledger', () => {
     const ptyId = 'ssh:target@@pty-old'
     const store = seedStore(ptyId)
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -123,11 +127,13 @@ describe('direct SSH terminal retry ledger', () => {
 
   it('preserves a healthy current-authority sibling in the same workspace', () => {
     const store = seedStore('ssh:target@@pty-stale')
+
     const sibling = makeTab({
       id: 'tab-healthy',
       worktreeId: WORKTREE_ID,
       ptyId: 'ssh:target@@pty-healthy'
     })
+
     store.setState((state) => ({
       tabsByWorktree: {
         ...state.tabsByWorktree,
@@ -159,6 +165,7 @@ describe('direct SSH terminal retry ledger', () => {
   it('keeps one pending attempt and acknowledges success after the live commit', () => {
     const store = seedStore()
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -461,11 +468,13 @@ describe('direct SSH terminal retry ledger', () => {
     const store = seedStore()
     expect(store.getState().retryDirectSshTargetPanes(authority(), 1_000)).toBe(1)
     const firstAttempt = store.getState().directSshPaneRetryByTabId[TAB_ID]
+
     const sibling = makeTab({
       id: 'tab-unrelated',
       worktreeId: WORKTREE_ID,
       ptyId: null
     })
+
     store.setState((state) => ({
       tabsByWorktree: {
         ...state.tabsByWorktree,

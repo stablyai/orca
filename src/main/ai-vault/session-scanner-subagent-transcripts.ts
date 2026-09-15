@@ -26,6 +26,7 @@ export function isSubagentTranscriptFileName(name: string, isFile: boolean): boo
 // so they are the recoverable signal that keeps such a session from being hidden.
 export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
   const stem = basename(transcriptFilePath, extname(transcriptFilePath))
+
   return join(dirname(transcriptFilePath), stem, SUBAGENT_DIR_NAME)
 }
 
@@ -37,11 +38,13 @@ export function subagentTranscriptsDirFor(transcriptFilePath: string): string {
  */
 export async function countSubagentTranscripts(transcriptFilePath: string): Promise<number> {
   let entries
+
   try {
     entries = await wslGatedReaddir(subagentTranscriptsDirFor(transcriptFilePath), 'scan')
   } catch {
     return 0
   }
+
   return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length
 }
 
@@ -50,6 +53,7 @@ export async function countSubagentTranscripts(transcriptFilePath: string): Prom
 // can't over-count. Greedy prefix means nested subagent trees attribute to their
 // nearest parent, matching the local direct-children-only readdir semantics.
 const SUBAGENT_DIRECT_CHILD_PATTERN = /^(.*)[\\/]subagents[\\/]agent-[^\\/]+\.jsonl$/i
+
 const SUBAGENT_SUBTREE_PATTERN = /[\\/]subagents[\\/]/i
 
 // One walked-listing partition: transcripts that are real session candidates,
@@ -73,12 +77,15 @@ export function partitionSubagentTranscriptPaths(
 ): SubagentTranscriptPartition {
   const sessionFilePaths: string[] = []
   const subagentTranscriptCounts = new Map<string, number>()
+
   for (const path of paths) {
     if (!SUBAGENT_SUBTREE_PATTERN.test(path)) {
       sessionFilePaths.push(path)
       continue
     }
+
     const directChild = SUBAGENT_DIRECT_CHILD_PATTERN.exec(path)
+
     if (directChild) {
       const parentTranscriptPath = `${directChild[1]}.jsonl`
       subagentTranscriptCounts.set(
@@ -87,5 +94,6 @@ export function partitionSubagentTranscriptPaths(
       )
     }
   }
+
   return { sessionFilePaths, subagentTranscriptCounts }
 }

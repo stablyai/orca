@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const rawRequest = vi.fn()
+
 const getClients = vi.fn()
+
 const getStatus = vi.fn()
+
 const acquire = vi.fn()
+
 const release = vi.fn()
+
 const clearToken = vi.fn()
 
 const workspace = (id: string, organizationName: string) => ({
@@ -175,9 +180,11 @@ describe('MCP-compatible Linear issue listing', () => {
       if (workspaceId === 'workspace-1') {
         return [firstEntry]
       }
+
       if (workspaceId === 'workspace-2') {
         return [secondEntry]
       }
+
       return []
     })
     const { listMcpIssues } = await import('./mcp-issue-list')
@@ -221,6 +228,7 @@ describe('MCP-compatible Linear issue listing', () => {
         }
       }
     })
+
     const failedRequest = vi.fn().mockRejectedValue(new Error('429 rate limit exceeded'))
     const healthy = clientEntry('workspace-1', 'Acme', healthyRequest)
     const failed = clientEntry('workspace-2', 'Beta', failedRequest)
@@ -229,9 +237,11 @@ describe('MCP-compatible Linear issue listing', () => {
       if (workspaceId === 'workspace-1') {
         return [healthy]
       }
+
       if (workspaceId === 'workspace-2') {
         return [failed]
       }
+
       return []
     })
     const { listMcpIssues } = await import('./mcp-issue-list')

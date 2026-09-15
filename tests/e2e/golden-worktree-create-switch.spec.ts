@@ -72,6 +72,7 @@ test('creates a worktree, keeps its terminal isolated, and switches back @golden
           .click()
           .catch(() => undefined)
       }
+
       await removeCreatedWorktree(orcaPage, childWorktreeId).catch(() => undefined)
     }
   }

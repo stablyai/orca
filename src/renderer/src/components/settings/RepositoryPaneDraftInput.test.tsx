@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 
 let container: HTMLDivElement
+
 let root: Root
+
 let unmounted: boolean
 
 beforeEach(() => {
@@ -22,6 +24,7 @@ afterEach(() => {
       root.unmount()
     })
   }
+
   container.remove()
 })
 
@@ -53,9 +56,11 @@ function render(props: {
 
 function getInput(): HTMLInputElement {
   const input = container.querySelector('input')
+
   if (!input) {
     throw new Error('input not rendered')
   }
+
   return input
 }
 
@@ -91,6 +96,7 @@ function compositionEnd(text: string, options?: { trailingInput?: boolean }): vo
     const input = getInput()
     setNativeValue(input, text)
     input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }))
+
     // Why: some IMEs (e.g. Firefox) emit the final input event after
     // compositionend; model it so the single-persist guard is exercised.
     if (options?.trailingInput !== false) {

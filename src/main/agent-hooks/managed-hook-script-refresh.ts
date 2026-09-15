@@ -16,13 +16,16 @@ async function readExistingScript(scriptPath: string): Promise<ExistingScript> {
     if (isMissingPathError(error)) {
       return { exists: false }
     }
+
     try {
       await stat(scriptPath)
+
       return { exists: true, content: null }
     } catch (statError) {
       if (isMissingPathError(statError)) {
         return { exists: false }
       }
+
       throw error
     }
   }
@@ -31,11 +34,13 @@ async function readExistingScript(scriptPath: string): Promise<ExistingScript> {
 async function scriptStillExists(scriptPath: string): Promise<boolean> {
   try {
     await stat(scriptPath)
+
     return true
   } catch (error) {
     if (isMissingPathError(error)) {
       return false
     }
+
     throw error
   }
 }
@@ -48,11 +53,13 @@ async function writeScriptWithAclRetry(scriptPath: string, content: string): Pro
       try {
         await grantDirAclAsync(dirname(scriptPath))
         await writeFile(scriptPath, content, 'utf-8')
+
         return
       } catch {
         // Re-throw the original permission error.
       }
     }
+
     throw error
   }
 }
@@ -63,26 +70,34 @@ export async function refreshManagedScriptIfPresent(
   content: string
 ): Promise<boolean> {
   const existing = await readExistingScript(scriptPath)
+
   if (!existing.exists) {
     return false
   }
+
   if (existing.content === content) {
     if (process.platform !== 'win32') {
       await chmod(scriptPath, 0o755)
     }
+
     return true
   }
 
   const tmpPath = join(dirname(scriptPath), `.${Date.now()}-${randomUUID()}.tmp`)
+
   try {
     await writeScriptWithAclRetry(tmpPath, content)
+
     if (process.platform !== 'win32') {
       await chmod(tmpPath, 0o755)
     }
+
     if (!(await scriptStillExists(scriptPath))) {
       return false
     }
+
     await rename(tmpPath, scriptPath)
+
     return true
   } finally {
     await rm(tmpPath, { force: true }).catch(() => undefined)

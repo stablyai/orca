@@ -12,12 +12,16 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
@@ -30,9 +34,11 @@ function findInnerButton(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('inner Button not found')
   }
+
   return found
 }
 
@@ -45,13 +51,16 @@ function findTooltipContentText(node: unknown): string {
           (entry.type as { displayName?: string; name?: string }).name ??
           '')
         : ''
+
     if (typeName === 'TooltipContent') {
       const children = entry.props?.children
+
       if (typeof children === 'string') {
         texts.push(children)
       }
     }
   })
+
   return texts.join(' ')
 }
 
@@ -68,11 +77,13 @@ function makeClickEvent(): {
   preventDefault: ReturnType<typeof vi.fn>
 } {
   const preventDefault = vi.fn()
+
   const event: MinimalMouseEvent = {
     preventDefault,
     stopPropagation: vi.fn(),
     defaultPrevented: false
   }
+
   return { event, preventDefault }
 }
 
@@ -101,7 +112,9 @@ describe('ActionButton', () => {
     const onClick = vi.fn()
     const element = ActionButton({ ...baseProps, onClick })
     const button = findInnerButton(element)
+
     const { event } = makeClickEvent()
+
     ;(button.props.onClick as (e: MinimalMouseEvent) => void)(event)
     expect(onClick).toHaveBeenCalledWith(event)
   })
@@ -147,7 +160,9 @@ describe('ActionButton', () => {
     const onClick = vi.fn()
     const element = ActionButton({ ...baseProps, onClick, disabled: true })
     const button = findInnerButton(element)
+
     const { event, preventDefault } = makeClickEvent()
+
     ;(button.props.onClick as (e: MinimalMouseEvent) => void)(event)
     // Why: keyboard Enter/Space also fires onClick on a non-DOM-disabled
     // button. The guard must block both pointer and keyboard activation

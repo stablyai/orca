@@ -11,6 +11,7 @@ import {
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const target = document.createElement('div')
+
 const descriptor: ActivityTerminalPortalTarget = {
   slotId: 'primary',
   requestToken: 'primary:tab-a:leaf-a',
@@ -29,12 +30,14 @@ describe('Activity terminal portal publication loop', () => {
 
     function ActivityPublisher(): null {
       useLayoutEffect(() => setActivityTerminalPortals([{ ...descriptor }]))
+
       return null
     }
 
     function TerminalSubscriber({ invalidate }: { invalidate: () => void }): null {
       const portals = useActivityTerminalPortals(true)
       useLayoutEffect(invalidate, [invalidate, portals])
+
       return null
     }
 
@@ -42,6 +45,7 @@ describe('Activity terminal portal publication loop', () => {
       renders += 1
       const [, setRevision] = useState(0)
       const invalidate = useCallback(() => setRevision((revision) => revision + 1), [])
+
       return (
         <>
           <ActivityPublisher />

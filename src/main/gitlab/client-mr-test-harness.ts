@@ -24,9 +24,11 @@ export function primeGitDefaultBranch(
     if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
       return { stdout: `${defaultRef}\n`, stderr: '' }
     }
+
     if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
       return { stdout: 'default-oid\n', stderr: '' }
     }
+
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
 }

@@ -5,6 +5,7 @@ import { rm } from 'node:fs/promises'
 // running, and the rest of that removal would silently leak again. Removals are sequential today;
 // this keeps that a property of the module rather than of its callers.
 let activeRemovals = 0
+
 // Captured once when the outermost removal starts; `process.noAsar` is typed boolean, and an
 // unset flag is falsy, so restoring `false` is equivalent to restoring `undefined`.
 let asarBeforeOutermostRemoval = false
@@ -22,12 +23,15 @@ export async function removeExtractedAppImagePayload(targetPath: string): Promis
   if (activeRemovals === 0) {
     asarBeforeOutermostRemoval = process.noAsar === true
   }
+
   activeRemovals += 1
   process.noAsar = true
+
   try {
     await rm(targetPath, { recursive: true, force: true })
   } finally {
     activeRemovals -= 1
+
     if (activeRemovals === 0) {
       process.noAsar = asarBeforeOutermostRemoval
     }

@@ -12,6 +12,7 @@ export function isRemovedRuntimeHostId(
   removedEnvironmentIds: ReadonlySet<string>
 ): boolean {
   const parsed = parseExecutionHostId(hostId)
+
   return parsed?.kind === 'runtime' && removedEnvironmentIds.has(parsed.environmentId)
 }
 
@@ -37,9 +38,11 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
   if (removedEnvironmentIds.size === 0) {
     return { rowsByRepo, removedWorktreeIds: [] }
   }
+
   let changed = false
   const removedWorktreeIds: string[] = []
   const next: Record<string, T[]> = {}
+
   for (const [repoId, rows] of Object.entries(rowsByRepo)) {
     const survivors = rows.filter((row) => {
       if (
@@ -49,14 +52,19 @@ export function dropWorktreeRowsForRemovedRuntimeEnvironments<
         (row.hostId === undefined && repoIdsWithoutSurvivingOwners?.has(repoId) === true)
       ) {
         removedWorktreeIds.push(row.id)
+
         return false
       }
+
       return true
     })
+
     next[repoId] = survivors.length === rows.length ? rows : survivors
+
     if (survivors.length !== rows.length) {
       changed = true
     }
   }
+
   return changed ? { rowsByRepo: next, removedWorktreeIds } : { rowsByRepo, removedWorktreeIds: [] }
 }

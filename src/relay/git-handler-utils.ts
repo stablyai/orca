@@ -8,6 +8,7 @@
 import * as path from 'node:path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
+
 export { isUnsupportedWorktreeListZError } from '../shared/git-worktree-command-capabilities'
 
 export function parseBranchStatusChar(char: string): string {
@@ -37,10 +38,12 @@ export function parseBranchDiff(
   statsByPath = new Map<string, GitLineStats>()
 ): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
+
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
     }
+
     const parts = line.split('\t')
     const rawStatus = parts[0] ?? ''
     const status = parseBranchStatusChar(rawStatus[0] ?? 'M')
@@ -48,16 +51,19 @@ export function parseBranchDiff(
     if (rawStatus.startsWith('R') || rawStatus.startsWith('C')) {
       const oldPath = parts[1]
       const filePath = parts[2]
+
       if (filePath) {
         entries.push({ path: filePath, oldPath, status, ...statsByPath.get(filePath) })
       }
     } else {
       const filePath = parts[1]
+
       if (filePath) {
         entries.push({ path: filePath, status, ...statsByPath.get(filePath) })
       }
     }
   }
+
   return entries
 }
 
@@ -80,10 +86,13 @@ export function bufferToBlob(
   filePath?: string
 ): { content: string; isBinary: boolean } {
   const binary = isBinaryBuffer(buffer)
+
   if (binary) {
     const ext = filePath ? path.extname(filePath).toLowerCase() : ''
     const previewable = !!PREVIEWABLE_MIME[ext]
+
     return { content: previewable ? buffer.toString('base64') : '', isBinary: true }
   }
+
   return { content: buffer.toString('utf-8'), isBinary: false }
 }

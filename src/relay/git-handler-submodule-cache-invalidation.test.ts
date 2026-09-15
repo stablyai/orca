@@ -66,9 +66,11 @@ describe('GitHandler submodule cache invalidation', () => {
     await dispatcher.callRequest('git.diff', diffRequest)
 
     const gitSpy = vi.mocked(target.git)
+
     const submodulePathReads = gitSpy.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')
     )
+
     expect(submodulePathReads).toHaveLength(2)
   })
 })

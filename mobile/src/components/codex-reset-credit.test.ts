@@ -43,6 +43,7 @@ function makeSnapshot(
   } = {}
 ): AccountsSnapshot {
   const activeHostId = options.activeHostId === undefined ? 'account-host' : options.activeHostId
+
   return {
     claude: {
       accounts: [],
@@ -150,6 +151,7 @@ describe('Codex reset credit scope', () => {
       target: { runtime: 'wsl', wslDistro: null },
       activeWslIds: { __default__: 'account-host' }
     })
+
     expect(getActiveCodexAccountIdForRateLimitTarget(unknownDistro)).toBeNull()
     expect(getCodexResetCreditScope(unknownDistro)).toBeNull()
 
@@ -157,6 +159,7 @@ describe('Codex reset credit scope', () => {
       target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
       activeWslIds: { Ubuntu: 'account-host' }
     })
+
     expect(getCodexResetCreditScope(mismatch)).toBeNull()
   })
 })
@@ -192,6 +195,7 @@ describe('requestCodexResetCredit', () => {
   it('persists before RPC, sends the exact scope with a 90s timeout, then clears', async () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
+
     const sendRequest = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
@@ -240,12 +244,14 @@ describe('requestCodexResetCredit', () => {
     const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
     expect(refreshedScope.offerRevision).not.toBe(expectedScope.offerRevision)
     const createRetryKey = vi.fn(() => '22222222-2222-4222-8222-222222222222')
+
     const retry = vi.fn().mockResolvedValue({
       id: 'request-2',
       ok: true,
       result: { outcome: 'alreadyRedeemed', scope: expectedScope, snapshot: refreshedSnapshot },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const result = await requestCodexResetCredit(
       { sendRequest: retry },
       { hostId: 'host-a', expectedScope: refreshedScope, createIdempotencyKey: createRetryKey }
@@ -266,6 +272,7 @@ describe('requestCodexResetCredit', () => {
     const refreshedSnapshot = makeSnapshot()
     refreshedSnapshot.rateLimits.codex!.updatedAt = 101
     const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
+
     const staleResponse = vi.fn().mockResolvedValue({
       id: 'request-stale',
       ok: true,
@@ -296,12 +303,14 @@ describe('requestCodexResetCredit', () => {
 
     const nextKey = '22222222-2222-4222-8222-222222222222'
     const createNextKey = vi.fn(() => nextKey)
+
     const acceptedResponse = vi.fn().mockResolvedValue({
       id: 'request-next',
       ok: true,
       result: { outcome: 'reset', scope: refreshedScope, snapshot: refreshedSnapshot },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     await requestCodexResetCredit(
       { sendRequest: acceptedResponse },
       { hostId: 'host-a', expectedScope: refreshedScope, createIdempotencyKey: createNextKey }
@@ -322,11 +331,14 @@ describe('requestCodexResetCredit', () => {
     refreshedSnapshot.rateLimits.codex!.updatedAt = 101
     const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
     let releaseRequest!: () => void
+
     const requestGate = new Promise<void>((resolve) => {
       releaseRequest = resolve
     })
+
     const sendRequest = vi.fn().mockImplementation(async () => {
       await requestGate
+
       return {
         id: 'request-1',
         ok: true,
@@ -334,17 +346,21 @@ describe('requestCodexResetCredit', () => {
         _meta: { runtimeId: 'runtime-1' }
       }
     })
+
     const createSecondKey = vi.fn(() => '22222222-2222-4222-8222-222222222222')
 
     const first = requestCodexResetCredit(
       { sendRequest },
       { hostId: 'host-a', expectedScope, createIdempotencyKey: () => UUID }
     )
+
     await vi.waitFor(() => expect(sendRequest).toHaveBeenCalledTimes(1))
+
     const second = requestCodexResetCredit(
       { sendRequest },
       { hostId: 'host-a', expectedScope: refreshedScope, createIdempotencyKey: createSecondKey }
     )
+
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(createSecondKey).not.toHaveBeenCalled()
 
@@ -358,12 +374,14 @@ describe('requestCodexResetCredit', () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
     const mismatchedScope = { ...expectedScope, accountId: 'other-account' }
+
     const mismatch = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
       result: { outcome: 'reset', scope: mismatchedScope, snapshot },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     await expect(
       requestCodexResetCredit(
         { sendRequest: mismatch },
@@ -382,6 +400,7 @@ describe('requestCodexResetCredit', () => {
       },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     await expect(
       requestCodexResetCredit(
         { sendRequest: malformed },
@@ -394,6 +413,7 @@ describe('requestCodexResetCredit', () => {
   it('does not clear the journal for a mismatched definite-rejection response', async () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
+
     const mismatch = vi.fn().mockResolvedValue({
       id: 'request-mismatch',
       ok: true,
@@ -421,6 +441,7 @@ describe('requestCodexResetCredit', () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
     const wrongAccountSnapshot = makeSnapshot({ activeHostId: null })
+
     const sendRequest = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
@@ -440,12 +461,14 @@ describe('requestCodexResetCredit', () => {
   it('returns an authoritative result while reporting a failed journal cleanup', async () => {
     const snapshot = makeSnapshot()
     const expectedScope = getCodexResetCreditScope(snapshot)!
+
     const sendRequest = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
       result: { outcome: 'reset', scope: expectedScope, snapshot },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     asyncStorage.removeItem.mockRejectedValueOnce(new Error('storage unavailable'))
 
     await expect(
@@ -463,6 +486,7 @@ describe('requestCodexResetCredit', () => {
     const refreshedSnapshot = makeSnapshot()
     refreshedSnapshot.rateLimits.codex!.updatedAt = 101
     const refreshedScope = getCodexResetCreditScope(refreshedSnapshot)!
+
     const rejectionResult = {
       status: 'rejectedBeforeProvider',
       retryDisposition: 'discardAttempt',
@@ -470,12 +494,14 @@ describe('requestCodexResetCredit', () => {
       scope: originalScope,
       snapshot: refreshedSnapshot
     }
+
     const firstResponse = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
       result: rejectionResult,
       _meta: { runtimeId: 'runtime-1' }
     })
+
     asyncStorage.removeItem.mockRejectedValueOnce(new Error('storage unavailable'))
 
     await expect(
@@ -490,12 +516,14 @@ describe('requestCodexResetCredit', () => {
     expect(values.size).toBe(1)
 
     const createRetryKey = vi.fn(() => '22222222-2222-4222-8222-222222222222')
+
     const retryResponse = vi.fn().mockResolvedValue({
       id: 'request-2',
       ok: true,
       result: rejectionResult,
       _meta: { runtimeId: 'runtime-1' }
     })
+
     await expect(
       requestCodexResetCredit(
         { sendRequest: retryResponse },

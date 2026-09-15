@@ -3,7 +3,9 @@ import { useEffect } from 'react'
 import { TASK_SEARCH_DEBOUNCE_MS, LINEAR_ITEM_LIMIT } from './task-page-source-context'
 import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-limits'
 import { useTaskPageLinearCustomViewEffects } from './use-task-page-linear-custom-view-effects'
+
 export type TaskPageLinearCollectionEffectsPreludeModel = TaskPageLinearInOrcaEffectsModel
+
 export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearInOrcaEffectsModel) {
   const {
     setTaskResumeState,
@@ -36,30 +38,38 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectIssuesError,
     setLinearProjectParentView
   } = model
+
   useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
+
     const timeout = window.setTimeout(() => {
       setAppliedLinearProjectSearch(linearProjectSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
+
     return () => window.clearTimeout(timeout)
   }, [linearProjectSearchInput, taskResumeApplied, setAppliedLinearProjectSearch])
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
       return
     }
+
     if (!linearConnected || selectedLinearProject) {
       return
     }
+
     let cancelled = false
     const query = appliedLinearProjectSearch.trim()
+
     const cached = getCachedLinearProjects(query || undefined, LINEAR_ITEM_LIMIT, undefined, {
       sourceContext: linearTaskSourceContext
     })
+
     if (cached) {
       setLinearProjectsResult(cached)
     }
+
     const force = linearRefreshNonce > 0
     setLinearProjectsLoading(force || cached === null)
     setLinearProjectsError(null)
@@ -81,6 +91,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
           setLinearProjectsLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -100,8 +111,10 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
   useEffect(() => {
     if (!selectedLinearProject?.workspaceId) {
       setSelectedLinearProjectDetail(null)
+
       return
     }
+
     let cancelled = false
     setLinearProjectDetailLoading(true)
     setLinearProjectDetailError(null)
@@ -113,6 +126,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
         if (!cancelled) {
           setSelectedLinearProjectDetail(project)
           setLinearProjectDetailLoading(false)
+
           if (!project) {
             setSelectedLinearProject(null)
             setLinearProjectParentView(null)
@@ -132,6 +146,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
           setLinearProjectDetailLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -152,6 +167,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     if (!selectedLinearProject?.workspaceId || linearProjectTab !== 'issues') {
       return
     }
+
     let cancelled = false
     setLinearProjectIssuesLoading(true)
     setLinearProjectIssuesError(null)
@@ -179,6 +195,7 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
           setLinearProjectIssuesLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -193,12 +210,16 @@ export function useTaskPageLinearCollectionEffectsPrelude(model: TaskPageLinearI
     setLinearProjectIssuesResult,
     setLinearProjectIssuesLoading
   ])
+
   return model
 }
+
 export function useTaskPageLinearCollectionEffects(model: TaskPageLinearInOrcaEffectsModel) {
   const preludeModel = useTaskPageLinearCollectionEffectsPrelude(model)
+
   return useTaskPageLinearCustomViewEffects(preludeModel)
 }
+
 export type TaskPageLinearCollectionEffectsModel = ReturnType<
   typeof useTaskPageLinearCollectionEffects
 >

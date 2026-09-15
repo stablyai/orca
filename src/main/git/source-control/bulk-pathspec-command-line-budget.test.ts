@@ -11,7 +11,9 @@ vi.mock('../runner', () => ({
   gitExecFileAsync: (...args: unknown[]) =>
     (gitExecFileAsync as unknown as (...a: unknown[]) => Promise<{ stdout: string }>)(...args)
 }))
+
 vi.mock('./git-read-cache-invalidation', () => ({ invalidateGitReadCaches: vi.fn() }))
+
 vi.mock('../../../shared/git-discard-path-safety', () => ({
   removeSafeUntrackedDiscardTarget: vi.fn(),
   removeSafeUntrackedDiscardTargets: async (
@@ -21,6 +23,7 @@ vi.mock('../../../shared/git-discard-path-safety', () => ({
     restoreTracked: () => Promise<void>
   ) => {
     await restoreTracked()
+
     if (untrackedPaths.length > 0) {
       await cleanUntracked(untrackedPaths)
     }
@@ -28,6 +31,7 @@ vi.mock('../../../shared/git-discard-path-safety', () => ({
 }))
 
 const WSL_DISTRO = 'Ubuntu-24.04'
+
 const WSL_WORKTREE = `\\\\wsl$\\${WSL_DISTRO}\\home\\emilio\\projects\\orca`
 
 /** Windows-side length of the line `wsl.exe` is spawned with, wrapper included. */
@@ -36,6 +40,7 @@ function finishedCommandLineLength(args: readonly string[], wslDistro?: string):
     cwd: wslDistro ? WSL_WORKTREE : '/home/emilio/projects/orca',
     ...(wslDistro ? { wslDistro } : {})
   })
+
   return commandLineLength([resolved.binary, ...resolved.args])
 }
 
@@ -116,6 +121,7 @@ describe('bulk pathspec command-line budget', () => {
 
     const restores = capturedInvocations().filter((args) => args[0] === 'restore')
     expect(restores.length).toBeGreaterThan(1)
+
     for (const args of restores) {
       expect(finishedCommandLineLength(args, WSL_DISTRO)).toBeLessThanOrEqual(
         MAX_COMMAND_LINE_CHARS
@@ -134,6 +140,7 @@ describe('bulk pathspec command-line budget', () => {
     expect(cleans.length).toBeGreaterThan(1)
     const cleaned = cleans.flatMap((args) => args.slice(args.indexOf('--') + 1))
     expect(cleaned).toEqual(filePaths.map((filePath) => `:(literal)${filePath}`))
+
     for (const args of cleans) {
       expect(finishedCommandLineLength(args, WSL_DISTRO)).toBeLessThanOrEqual(
         MAX_COMMAND_LINE_CHARS
@@ -165,6 +172,7 @@ describe('bulk pathspec command-line budget', () => {
 
   it('gives a native Windows git.exe the CreateProcess cap and a POSIX host a larger one', async () => {
     const { bulkPathspecCommands } = await import('./git-pathspec')
+
     // Long enough that the raw argv alone passes the Windows cap with no wrapper in sight.
     const filePaths = Array.from(
       { length: 100 },
@@ -173,6 +181,7 @@ describe('bulk pathspec command-line budget', () => {
 
     const windowsNative = bulkPathspecCommands(['add', '--'], filePaths, 'C:\\repo', {})
     expect(windowsNative.length).toBeGreaterThan(1)
+
     for (const args of windowsNative) {
       expect(finishedCommandLineLength(args)).toBeLessThanOrEqual(MAX_COMMAND_LINE_CHARS)
     }

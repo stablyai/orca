@@ -4,28 +4,38 @@ import type * as RepoModule from '../git/repo'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
+
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
 )
+
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
+
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
+
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
+
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+
 vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
@@ -132,6 +142,7 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
     vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
 
@@ -153,6 +164,7 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e',
       externalWorktreeVisibility: 'show'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
 
     const result = await handlers.get('repos:add')!(null, {
@@ -174,6 +186,7 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
 
     await handlers.get('repos:add')!(null, {
@@ -193,8 +206,10 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
+
     const aligned = { ...existing, projectHostSetupMethod: 'imported-existing-folder' }
     const project = { id: 'project-1', displayName: 'Project' }
+
     const setup = {
       id: 'setup-1',
       projectId: project.id,
@@ -205,6 +220,7 @@ describe('repos:add + repos:clone', () => {
       setupState: 'ready',
       setupMethod: 'imported-existing-folder'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
     mockStore.getProjects.mockReturnValue([project])
     mockStore.getProjectHostSetups.mockReturnValue([setup])
@@ -230,7 +246,9 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
+
     const existingProject = { id: 'repo:repo-setup-enterprise', displayName: 'Existing' }
+
     const selectedProject = {
       id: 'github:github.acme-corp.com/acme/orca',
       displayName: 'Enterprise project',
@@ -241,6 +259,7 @@ describe('repos:add + repos:clone', () => {
         host: 'github.acme-corp.com'
       }
     }
+
     const setup = {
       id: existing.id,
       projectId: existingProject.id,
@@ -251,12 +270,14 @@ describe('repos:add + repos:clone', () => {
       setupState: 'ready',
       setupMethod: 'legacy-repo'
     }
+
     let updatedRepo = existing
     mockStore.getRepos.mockReturnValue([existing])
     mockStore.getProjects.mockReturnValue([existingProject, selectedProject])
     mockStore.getProjectHostSetups.mockReturnValue([setup])
     mockStore.updateRepo.mockImplementation((_repoId, updates) => {
       updatedRepo = { ...updatedRepo, ...updates }
+
       return updatedRepo
     })
 
@@ -283,14 +304,18 @@ describe('repos:add + repos:clone', () => {
     mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
     mockStore.updateRepo.mockImplementation((id, updates) => {
       const repo = added.find((entry) => entry.id === id)
+
       if (!repo) {
         return null
       }
+
       Object.assign(repo, updates)
+
       return { ...repo }
     })
     mockStore.getProjects.mockImplementation(() => {
       const repo = added.find((entry) => 'upstream' in entry)
+
       return repo
         ? [
             {
@@ -356,6 +381,7 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e',
       worktreeBasePath: '../worktrees'
     }
+
     mockStore.updateRepo.mockReturnValue(updated)
 
     const result = handlers.get('repos:update')!(null, {
@@ -380,6 +406,7 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e',
       agentWorktreeVisibility: 'show'
     }
+
     mockStore.updateRepo.mockReturnValue(updated)
 
     const result = handlers.get('repos:update')!(null, {
@@ -401,6 +428,7 @@ describe('repos:add + repos:clone', () => {
       kind: 'git',
       badgeColor: '#22c55e'
     }
+
     mockStore.updateRepo.mockReturnValue(updated)
 
     handlers.get('repos:update')!(null, {
@@ -435,11 +463,13 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e',
       worktreeBasePath: '../worktrees'
     }
+
     const result = {
       project: { id: 'project-1', displayName: 'Project' },
       setup: { id: 'setup-1', projectId: 'project-1', repoId: repo.id, hostId: 'local' },
       repo
     }
+
     mockStore.updateProjectHostSetup.mockReturnValue(result)
 
     expect(
@@ -461,6 +491,7 @@ describe('repos:add + repos:clone', () => {
       kind: 'folder',
       badgeColor: '#22c55e'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
 
     const result = await handlers.get('repos:add')!(null, {

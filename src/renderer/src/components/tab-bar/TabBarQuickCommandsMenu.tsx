@@ -33,6 +33,7 @@ import type {
   HostedTerminalQuickCommand,
   TerminalQuickCommandHost
 } from '@/hooks/use-terminal-quick-command-hosts'
+
 type TabBarQuickCommandsMenuProps = {
   repoCommands: readonly HostedTerminalQuickCommand[]
   globalCommands: readonly HostedTerminalQuickCommand[]
@@ -73,18 +74,22 @@ export function TabBarQuickCommandsMenu({
   // focus restoration should not immediately reopen its tooltip.
   const suppressMoreCommandsTooltipRef = useRef(false)
   const showSearch = repoCommands.length + globalCommands.length > 1
+
   const filteredRepoCommands = useMemo(
     () => searchHostedTerminalQuickCommands(repoCommands, query),
     [repoCommands, query]
   )
+
   const filteredGlobalCommands = useMemo(
     () => searchHostedTerminalQuickCommands(globalCommands, query),
     [globalCommands, query]
   )
+
   const filteredVisibleCommands = useMemo(
     () => [...filteredRepoCommands, ...filteredGlobalCommands],
     [filteredRepoCommands, filteredGlobalCommands]
   )
+
   const commandValue = useMemo(() => {
     const activeValue =
       !query.trim() &&
@@ -92,56 +97,70 @@ export function TabBarQuickCommandsMenu({
       filteredVisibleCommands.some((entry) => entry.key === mostRecent.key)
         ? mostRecent.key
         : (filteredVisibleCommands[0]?.key ?? '')
+
     if (
       commandValueOverride &&
       filteredVisibleCommands.some((entry) => entry.key === commandValueOverride)
     ) {
       return commandValueOverride
     }
+
     return activeValue
   }, [commandValueOverride, filteredVisibleCommands, mostRecent, query])
+
   const selectedCommand = useMemo(
     () => filteredVisibleCommands.find((entry) => entry.key === commandValue) ?? null,
     [commandValue, filteredVisibleCommands]
   )
+
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
       focusFrameRef.current = null
     }
   }, [])
+
   const focusSearchInput = useCallback((): void => {
     cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const searchInput = searchInputRef.current
+
       if (!searchInput) {
         return
       }
+
       searchInput.focus()
       const end = searchInput.value.length
       searchInput.setSelectionRange(end, end)
     })
   }, [cancelFocusFrame])
+
   const handleMoreCommandsTooltipOpenChange = useCallback((next: boolean): void => {
     if (next && suppressMoreCommandsTooltipRef.current) {
       return
     }
+
     setMoreCommandsTooltipOpen(next)
   }, [])
+
   const allowMoreCommandsTooltip = useCallback((): void => {
     suppressMoreCommandsTooltipRef.current = false
   }, [])
+
   const handleOpenChange = useCallback(
     (next: boolean): void => {
       setMenuOpen(next)
+
       if (next) {
         onMenuOpen()
         suppressMoreCommandsTooltipRef.current = false
         setMoreCommandsTooltipOpen(false)
         setCommandValueOverride(null)
+
         return
       }
+
       suppressMoreCommandsTooltipRef.current = true
       setMoreCommandsTooltipOpen(false)
       cancelFocusFrame()
@@ -150,19 +169,24 @@ export function TabBarQuickCommandsMenu({
     },
     [cancelFocusFrame, onMenuOpen]
   )
+
   const closeMenu = useCallback((): void => {
     handleOpenChange(false)
   }, [handleOpenChange])
+
   useTabBarQuickCommandsShortcut({ menuOpen, onOpenChange: handleOpenChange })
   useEffect(() => {
     if (!menuOpen || !showSearch) {
       return
     }
+
     // Why: Radix focuses the menu surface by default; search-first UX needs
     // the input ready so Enter can run the highlighted command.
     focusSearchInput()
+
     return cancelFocusFrame
   }, [cancelFocusFrame, focusSearchInput, menuOpen, showSearch])
+
   const runAndClose = useCallback(
     (entry: HostedTerminalQuickCommand): void => {
       closeMenu()
@@ -170,6 +194,7 @@ export function TabBarQuickCommandsMenu({
     },
     [closeMenu, onRunCommand]
   )
+
   const searchInput = useTabBarQuickCommandSearchInput({
     commandListRef,
     commandValue,
@@ -179,14 +204,18 @@ export function TabBarQuickCommandsMenu({
     onRun: runAndClose,
     selectedCommand
   })
+
   const moreCommandsLabel = translate(
     'auto.components.tab.bar.TabBarQuickCommandsButton.b82e237a4b',
     'More quick commands'
   )
+
   const splitButtonClass =
     'my-auto flex h-7 shrink-0 items-stretch overflow-hidden rounded-md border border-border/60 text-muted-foreground'
+
   const innerButtonBase =
     'flex items-center bg-transparent leading-none text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+
   return (
     <div className={splitButtonClass}>
       <Tooltip>
@@ -291,9 +320,11 @@ export function TabBarQuickCommandsMenu({
             if (!showSearch && menuImeEnter.ownsKeyDown(event)) {
               return
             }
+
             if (event.key !== 'Enter' || showSearch || filteredVisibleCommands.length !== 1) {
               return
             }
+
             event.preventDefault()
             runAndClose(filteredVisibleCommands[0])
           }}

@@ -41,6 +41,7 @@ const ROUTE_COLORS = {
 // can be in (first client's viewport / rejoined client's viewport / no subscriber at all) are
 // unmistakable in a single integer.
 const FIRST_CLIENT_WINDOW = { width: 900, height: 700 }
+
 const REJOINED_CLIENT_WINDOW = { width: 1600, height: 1040 }
 
 type GhostBrowserFixture = {
@@ -78,6 +79,7 @@ async function startGhostBrowserFixture(): Promise<GhostBrowserFixture> {
       </script>
     </body></html>`)
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -86,6 +88,7 @@ async function startGhostBrowserFixture(): Promise<GhostBrowserFixture> {
     })
   })
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -112,9 +115,11 @@ async function callEnvironment<TResult>(
         params,
         timeoutMs: 30_000
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -140,9 +145,11 @@ async function readGuestViewportWidth(
 ): Promise<number | null> {
   return app.evaluate(async ({ webContents }, prefix) => {
     const target = webContents.getAllWebContents().find((c) => c.getURL().startsWith(prefix))
+
     if (!target) {
       return null
     }
+
     try {
       return (await target.executeJavaScript('innerWidth')) as number
     } catch {
@@ -169,12 +176,15 @@ async function waitForWorktreeId(page: Page): Promise<string> {
       message: 'paired client never saw a host worktree'
     })
     .toBeGreaterThan(0)
+
   const worktreeId = await page.evaluate(
     () => window.__store?.getState().allWorktrees()[0]?.id ?? null
   )
+
   if (!worktreeId) {
     throw new Error('paired client did not receive the host worktree')
   }
+
   return worktreeId
 }
 
@@ -198,40 +208,51 @@ type FrameSample = {
 async function sampleRenderedFrame(page: Page): Promise<FrameSample> {
   return page.evaluate(async () => {
     const img = document.querySelector<HTMLImageElement>('[data-testid="remote-browser-frame"]')
+
     if (!img) {
       return { src: null, dominant: 'undecodable' as const }
     }
+
     const src = img.getAttribute('src')
+
     try {
       if (!img.complete || img.naturalWidth === 0) {
         await img.decode()
       }
+
       const canvas = document.createElement('canvas')
       canvas.width = Math.max(1, Math.min(img.naturalWidth, 160))
       canvas.height = Math.max(1, Math.min(img.naturalHeight, 160))
       const context = canvas.getContext('2d', { willReadFrequently: true })
+
       if (!context) {
         return { src, dominant: 'undecodable' as const }
       }
+
       context.drawImage(img, 0, 0, canvas.width, canvas.height)
       const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
       let red = 0
       let green = 0
       let blue = 0
+
       for (let i = 0; i < data.length; i += 4) {
         red += data[i]
         green += data[i + 1]
         blue += data[i + 2]
       }
+
       const pixels = data.length / 4
       const [r, g, b] = [red / pixels, green / pixels, blue / pixels]
+
       // Teal is green+blue with no red; crimson is red with neither.
       if (r > 90 && r > g + 50 && r > b + 50) {
         return { src, dominant: 'crimson' as const }
       }
+
       if (g > 40 && b > 40 && g + b > r * 2) {
         return { src, dominant: 'teal' as const }
       }
+
       return { src, dominant: 'other' as const }
     } catch {
       return { src, dominant: 'undecodable' as const }
@@ -285,6 +306,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
       'browser.tabCreate',
       { worktree: `id:${worktreeId}`, url: fixture.serverUrl, activate: true }
     )
+
     const remotePageId = created.browserPageId
 
     // The page really is on the runtime, not on the client.
@@ -338,6 +360,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
     // assertion that matters is what the runtime does when the same device comes back.
     const orphanTimeline: { atMs: number; guestWidth: number | null }[] = []
     const killedAt = Date.now()
+
     for (const waitMs of [500, 1_500, 3_000, 5_000]) {
       await new Promise((resolve) => setTimeout(resolve, waitMs))
       orphanTimeline.push({
@@ -345,6 +368,7 @@ test('replaces a force-quit client screencast subscriber when the same device re
         guestWidth: await readGuestViewportWidth(host.app, fixture.origin)
       })
     }
+
     const orphanSurvivedTheKill = orphanTimeline.some(
       (entry) => entry.guestWidth === firstClientWidth
     )
@@ -431,12 +455,15 @@ test('replaces a force-quit client screencast subscriber when the same device re
 
     const departure: { atMs: number; guestWidth: number | null }[] = []
     const departedAt = Date.now()
+
     for (;;) {
       const guestWidth = await readGuestViewportWidth(host.app, fixture.origin)
       departure.push({ atMs: Date.now() - departedAt, guestWidth })
+
       if (guestWidth !== rejoinedClientWidth || Date.now() - departedAt > 15_000) {
         break
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
 
@@ -461,9 +488,11 @@ test('replaces a force-quit client screencast subscriber when the same device re
     )
   } finally {
     await client?.dispose()
+
     if (abandonedProfile) {
       rmSync(abandonedProfile, { recursive: true, force: true })
     }
+
     await fixture.close()
     await host.dispose()
   }

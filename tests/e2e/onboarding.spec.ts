@@ -23,8 +23,11 @@ type OnboardingState = {
 }
 
 const SKIP_TO_PROJECT_SETUP_BUTTON = /^Skip to project setup$/i
+
 const TASK_SOURCES_HEADING = /Set up GitHub tasks/i
+
 const WINDOWS_TERMINAL_HEADING = /Set Windows terminal defaults/i
+
 const ADD_PROJECT_DIALOG_HEADING = /Add (?:a server project|a project|another project)/i
 
 async function getOnboardingState(page: Page): Promise<OnboardingState> {
@@ -112,6 +115,7 @@ async function continueFromPostNotificationsToRepo(page: Page): Promise<void> {
   if (await page.getByRole('heading', { name: ADD_PROJECT_DIALOG_HEADING }).isVisible()) {
     return
   }
+
   await continueThroughOptionalTaskSourcesAndWindowsTerminal(page)
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
   await expectOnboardingProgress(page, /^[345] of [345]$/)
@@ -126,19 +130,23 @@ async function continueThroughOptionalTaskSourcesAndWindowsTerminal(page: Page):
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (taskSourcesVisible) {
     await expectOnboardingProgress(page, /^3 of [45]$/)
     await continueOnboarding(page)
   }
+
   const windowsTerminalVisible = await page
     .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (windowsTerminalVisible) {
     await expectOnboardingProgress(page, /^[34] of [45]$/)
     await continueOnboarding(page)
   }
+
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 }
 
@@ -197,6 +205,7 @@ test.describe('Onboarding flow', () => {
     // expander — open it if codex isn't visible.
     const targetAgent: TuiAgent = 'codex'
     const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+
     // Why: isVisible() is a one-shot probe — on slow renderer paint it would
     // race the wizard mount and falsely take the "show more agents" branch.
     // waitFor with a small timeout actually retries until the button paints.
@@ -205,9 +214,11 @@ test.describe('Onboarding flow', () => {
       .waitFor({ state: 'visible', timeout: 1_000 })
       .then(() => true)
       .catch(() => false)
+
     if (!codexVisible) {
       await orcaPage.getByText(/Show \d+ more agents/).click()
     }
+
     await codexButton.click()
 
     await continueOnboarding(orcaPage)
@@ -282,6 +293,7 @@ test.describe('Onboarding flow', () => {
       .poll(
         async () => {
           const s = await getSettings(orcaPage)
+
           return {
             agentTaskComplete: s.notifications.agentTaskComplete,
             terminalBell: s.notifications.terminalBell,
@@ -302,6 +314,7 @@ test.describe('Onboarding flow', () => {
       .poll(
         async () => {
           const state = await getOnboardingState(orcaPage)
+
           return {
             closedAt: state.closedAt === null ? null : 'set',
             outcome: state.outcome,
@@ -349,14 +362,17 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
     const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })
       .then(() => true)
       .catch(() => false)
+
     if (!codexVisible) {
       await orcaPage.getByText(/Show \d+ more agents/).click()
     }
+
     await codexButton.click()
 
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
@@ -367,6 +383,7 @@ test.describe('Onboarding flow', () => {
       .poll(
         async () => {
           const state = await getOnboardingState(orcaPage)
+
           return {
             closedAt: state.closedAt === null ? null : 'set',
             outcome: state.outcome,
@@ -423,6 +440,7 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
+
     // Why: since #10011 `settings:set` strips activeRuntimeEnvironmentId — the
     // durable Active Server preference is only writable through its dedicated
     // handler, which resolves the id against the main-process environment
@@ -435,15 +453,19 @@ test.describe('Onboarding flow', () => {
       deviceToken: 'e2e-device-token',
       publicKeyB64: 'ZTJlLXB1YmxpYy1rZXk'
     })
+
     const environmentId = await orcaPage.evaluate(async (code) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
         name: 'E2E Server',
         pairingCode: code
       })
+
       // Why: after #5071 the server-path add step gates on the registered
       // runtime-environment list (store.runtimeEnvironments), not just the
       // activeRuntimeEnvironmentId setting.
@@ -465,6 +487,7 @@ test.describe('Onboarding flow', () => {
         },
         checkedAt: Date.now()
       })
+
       // Why: the store's switchRuntimeEnvironment probes reachability, which a
       // synthetic host can't satisfy — write the preference directly and push
       // the returned settings in rather than refetching (fetchSettings would
@@ -472,9 +495,12 @@ test.describe('Onboarding flow', () => {
       const settings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
         environmentId: environment.id
       })
+
       store.setState({ settings })
+
       return environment.id
     }, pairingCode)
+
     await expect
       .poll(async () => (await getSettings(orcaPage)).activeRuntimeEnvironmentId, {
         timeout: 5_000
@@ -506,6 +532,7 @@ test.describe('Onboarding flow', () => {
       localStorage.removeItem('orca.e2e.notificationPermissionRequested')
       window.api.notifications.requestPermission = async () => {
         localStorage.setItem('orca.e2e.notificationPermissionRequested', '1')
+
         return { supported: true, platform: 'darwin', requested: true }
       }
     })
@@ -530,14 +557,17 @@ test.describe('Onboarding flow', () => {
     })
 
     const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
+
     const codexVisible = await codexButton
       .first()
       .waitFor({ state: 'visible', timeout: 1_000 })
       .then(() => true)
       .catch(() => false)
+
     if (!codexVisible) {
       await orcaPage.getByText(/Show \d+ more agents/).click()
     }
+
     await codexButton.click()
     // Why: AgentButton now sets aria-pressed so screen readers and assistive
     // tech can announce the selection. Verify the attribute reflects state.
@@ -559,6 +589,7 @@ test.describe('Onboarding flow', () => {
       .poll(
         async () => {
           const s = await getSettings(orcaPage)
+
           return {
             agentTaskComplete: s.notifications.agentTaskComplete,
             terminalBell: s.notifications.terminalBell,
@@ -661,6 +692,7 @@ test.describe('Onboarding flow', () => {
       .poll(
         async () => {
           const state = await getOnboardingState(orcaPage)
+
           return {
             closedAt: state.closedAt === null ? null : 'set',
             outcome: state.outcome,

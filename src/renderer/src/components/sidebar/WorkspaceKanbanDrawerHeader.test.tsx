@@ -23,16 +23,20 @@ function findNode(
   if (!isValidElement<InspectableProps>(node)) {
     return null
   }
+
   if (predicate(node)) {
     return node
   }
+
   let match: React.ReactElement<InspectableProps> | null = null
   React.Children.forEach(node.props.children, (child) => {
     if (match) {
       return
     }
+
     match = findNode(child, predicate)
   })
+
   return match
 }
 
@@ -81,6 +85,7 @@ function renderHeader(
 describe('WorkspaceKanbanDrawerHeader', () => {
   it('routes the close button through the explicit drawer close callback', () => {
     const onClose = vi.fn()
+
     const closeButton = findElement(
       renderHeader(onClose),
       (props) => props['aria-label'] === 'Close'

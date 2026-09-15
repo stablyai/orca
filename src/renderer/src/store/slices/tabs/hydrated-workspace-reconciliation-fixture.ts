@@ -10,9 +10,11 @@ import type { OpenFile } from '../editor'
  * both the workspace-scoped maps and the store-global ones workspaces share.
  */
 export const HYDRATED_WORKSPACE_COUNT = 193
+
 export const HYDRATED_TAB_COUNT = 382
 
 const BUCKETS = ['stable', 'stale', 'legacy', 'orphan', 'editor'] as const
+
 type Bucket = (typeof BUCKETS)[number]
 
 export type HydratedWorkspaceFixture = {
@@ -82,6 +84,7 @@ function buildStableWorkspace(draft: FixtureDraft, worktreeId: string, groupId: 
   const live = `${worktreeId}#live`
   setGroup(draft, worktreeId, groupId, [unifiedTab(live, worktreeId, groupId, {})])
   draft.tabsByWorktree[worktreeId] = [runtimeTab(live, worktreeId, {})]
+
   return 1
 }
 
@@ -95,6 +98,7 @@ function buildStaleWorkspace(draft: FixtureDraft, worktreeId: string, groupId: s
   ])
   draft.tabsByWorktree[worktreeId] = [runtimeTab(live, worktreeId, {})]
   draft.unreadTerminalTabs[stale] = true
+
   return 2
 }
 
@@ -107,6 +111,7 @@ function buildLegacyWorkspace(draft: FixtureDraft, worktreeId: string): number {
   draft.unifiedTabsByWorktree[worktreeId] = []
   draft.groupsByWorktree[worktreeId] = []
   draft.activeTabIdByWorktree[worktreeId] = legacy
+
   return 1
 }
 
@@ -119,6 +124,7 @@ function buildOrphanWorkspace(draft: FixtureDraft, worktreeId: string): number {
   draft.cacheTimerByKey[`${orphan}:git`] = 1
   draft.unifiedTabsByWorktree[worktreeId] = []
   draft.groupsByWorktree[worktreeId] = []
+
   return 1
 }
 
@@ -140,6 +146,7 @@ function buildEditorWorkspace(draft: FixtureDraft, worktreeId: string, groupId: 
     isDirty: false,
     mode: 'edit'
   })
+
   return 2
 }
 
@@ -166,12 +173,15 @@ function buildWorkspace(
 /** Tops the fixture up to the measured tab count with extra live rows. */
 function padToTabCount(draft: FixtureDraft, workspaceIds: string[], missing: number): number {
   let added = 0
+
   for (let slot = 0; added < missing; slot += 1) {
     const worktreeId = workspaceIds[slot % workspaceIds.length]
     const group = draft.groupsByWorktree[worktreeId]?.[0]
+
     if (!group || draft.tabsByWorktree[worktreeId] == null) {
       continue
     }
+
     const id = `${worktreeId}#extra-${slot}`
     draft.unifiedTabsByWorktree[worktreeId].push(
       unifiedTab(id, worktreeId, group.id, { sortOrder: 10 + slot })
@@ -180,6 +190,7 @@ function padToTabCount(draft: FixtureDraft, workspaceIds: string[], missing: num
     group.tabOrder.push(id)
     added += 1
   }
+
   return added
 }
 
@@ -200,6 +211,7 @@ export function buildHydratedWorkspaceFixture(
     cacheTimerByKey: {},
     openFiles: []
   }
+
   const workspaceIds: string[] = []
   let tabCount = 0
 
@@ -210,6 +222,7 @@ export function buildHydratedWorkspaceFixture(
     draft.activeGroupIdByWorktree[worktreeId] = groupId
     tabCount += buildWorkspace(draft, BUCKETS[index % BUCKETS.length], worktreeId, groupId)
   }
+
   tabCount += padToTabCount(draft, workspaceIds, Math.max(0, tabCountTarget - tabCount))
 
   return { workspaceIds, tabCount, state: { ...draft } }

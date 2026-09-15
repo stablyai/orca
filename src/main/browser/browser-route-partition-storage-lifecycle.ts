@@ -36,11 +36,13 @@ export async function releaseBrowserRoutePartitionStorage(
   const clearedPartitions: string[] = []
   const livePartitions: string[] = []
   const failures: unknown[] = []
+
   for (const partition of partitions) {
     if (dependencies.isPartitionLive(partition)) {
       livePartitions.push(partition)
       continue
     }
+
     try {
       // Why: clear through Chromium first so a warm session cannot rewrite the directory.
       await dependencies.clearPartitionStorage(partition)
@@ -50,6 +52,7 @@ export async function releaseBrowserRoutePartitionStorage(
       failures.push(error)
     }
   }
+
   return {
     clearedPartitions,
     livePartitions,
@@ -72,14 +75,17 @@ export function findOrphanedBrowserRoutePartitions(
   liveStorageScopes: ReadonlySet<string>
 ): string[] {
   const orphans: string[] = []
+
   for (const [partition, binding] of dependencies.bindings.listBindings()) {
     if (dependencies.isPartitionLive(partition)) {
       continue
     }
+
     if (binding.storageScope === null || !liveStorageScopes.has(binding.storageScope)) {
       orphans.push(partition)
     }
   }
+
   return orphans
 }
 

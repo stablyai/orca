@@ -10,18 +10,29 @@ import type WorktreeCardComponent from './WorktreeCard'
 import type * as WorkspaceDeleteQuickAction from './workspace-delete-quick-action'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
+
 let tabsByWorktree: Record<string, { id: string }[]> = {}
+
 let ptyIdsByTabId: Record<string, string[]> = {}
+
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
+
 let settings: Partial<GlobalSettings> | null = null
+
 let projectGroups: unknown[] = []
+
 let workspaceDeleteModifierPressed = false
+
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
+
 let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
@@ -79,6 +90,7 @@ vi.mock('./WorktreeContextMenu', () => ({
 
 vi.mock('./workspace-delete-quick-action', async (importOriginal) => {
   const actual = await importOriginal<typeof WorkspaceDeleteQuickAction>()
+
   return {
     ...actual,
     useWorkspaceDeleteModifierPressed: () => workspaceDeleteModifierPressed
@@ -124,6 +136,7 @@ function getBranchMetadataLabelTag(markup: string): string {
     ?.find((tag) => tag.includes('text-[11px]'))
 
   expect(labelTag).toBeDefined()
+
   return labelTag ?? ''
 }
 

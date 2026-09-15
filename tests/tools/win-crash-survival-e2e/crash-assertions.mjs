@@ -29,8 +29,10 @@ export function buildCrashAssertions(ctx) {
     'main pid dead after taskkill',
     String(ctx.mainDied)
   )
+
   const profileAssertions =
     ctx.profile === 'orphaned' ? orphanedAssertions(ctx) : survivalAssertions(ctx)
+
   return [mainDied, ...profileAssertions]
 }
 
@@ -39,6 +41,7 @@ function survivalAssertions(ctx) {
     .slice(0, 3)
     .map((e) => `${e.provider}#${e.id}@${e.timeCreated}`)
     .join('; ')
+
   return [
     assertion(
       'daemon survives main crash (PID still alive)',

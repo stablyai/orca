@@ -15,8 +15,10 @@ export const WORKTREE_INCLUDE_FILE = '.worktreeinclude'
 // Glob (`*`/`?`) and negation (`!`) lines are skipped with a warning rather than
 // silently mishandled; they can be added later without changing this contract.
 const WORKTREE_INCLUDE_MAX_FILE_BYTES = 256 * 1024
+
 // Why: bound the work a single repo file can request; entries beyond this are ignored.
 const WORKTREE_INCLUDE_MAX_ENTRIES = 1000
+
 // Why: include files can name hundreds of independent paths; bound the local
 // stat fan-out while avoiding one serial filesystem round trip per entry.
 const WORKTREE_INCLUDE_PATH_STAT_CONCURRENCY = 8
@@ -28,18 +30,24 @@ const WORKTREE_INCLUDE_PATH_STAT_CONCURRENCY = 8
 export function parseWorktreeIncludeFile(content: string): string[] {
   const seen = new Set<string>()
   const entries: string[] = []
+
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim()
+
     if (!line || line.startsWith('#')) {
       continue
     }
+
     const normalized = line.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
+
     if (!normalized || seen.has(normalized)) {
       continue
     }
+
     seen.add(normalized)
     entries.push(normalized)
   }
+
   return entries
 }
 
@@ -51,17 +59,22 @@ function isSafeIncludePath(relativePath: string): boolean {
   if (!relativePath || isAbsolute(relativePath)) {
     return false
   }
+
   const segments = relativePath.split('/')
+
   return !segments.includes('..') && !segments.includes('') && segments[0] !== '.git'
 }
 
 async function readWorktreeIncludeFile(repoPath: string): Promise<string | null> {
   const includePath = join(repoPath, WORKTREE_INCLUDE_FILE)
+
   try {
     const stats = await lstat(includePath)
+
     if (!stats.isFile() || stats.size > WORKTREE_INCLUDE_MAX_FILE_BYTES) {
       return null
     }
+
     return await readFile(includePath, 'utf8')
   } catch {
     return null
@@ -83,11 +96,13 @@ export async function resolveWorktreeIncludePaths(
 ): Promise<string[]> {
   try {
     const content = await readWorktreeIncludeFile(repoPath)
+
     if (content === null) {
       return []
     }
 
     const candidates: string[] = []
+
     for (const entry of parseWorktreeIncludeFile(content)) {
       if (candidates.length >= WORKTREE_INCLUDE_MAX_ENTRIES) {
         console.warn(
@@ -95,6 +110,7 @@ export async function resolveWorktreeIncludePaths(
         )
         break
       }
+
       if (isUnsupportedPattern(entry)) {
         // Glob and negation are not supported yet; skip loudly so the entry isn't silently mis-copied.
         console.warn(
@@ -102,12 +118,15 @@ export async function resolveWorktreeIncludePaths(
         )
         continue
       }
+
       if (!isSafeIncludePath(entry)) {
         console.warn(`[worktree-include] Skipping unsafe ${WORKTREE_INCLUDE_FILE} path "${entry}"`)
         continue
       }
+
       candidates.push(entry)
     }
+
     if (candidates.length === 0) {
       return []
     }
@@ -121,6 +140,7 @@ export async function resolveWorktreeIncludePaths(
       async (relativePath) => {
         try {
           await lstat(join(repoPath, relativePath))
+
           return relativePath
         } catch {
           // Absent in the primary checkout — nothing to copy.
@@ -128,9 +148,11 @@ export async function resolveWorktreeIncludePaths(
         }
       }
     )
+
     const existing = existence.filter(
       (relativePath): relativePath is string => relativePath !== null
     )
+
     if (existing.length === 0) {
       return []
     }
@@ -138,9 +160,11 @@ export async function resolveWorktreeIncludePaths(
     // Why: enforce the gitignored-only contract (issue #7549) — never duplicate
     // tracked files or surface unignored ones as spurious worktree diffs.
     const ignored = new Set(await checkIgnoredPaths(repoPath, existing, options))
+
     return existing.filter((relativePath) => ignored.has(relativePath)).sort()
   } catch (error) {
     console.warn(`[worktree-include] Failed to resolve ${WORKTREE_INCLUDE_FILE} paths:`, error)
+
     return []
   }
 }

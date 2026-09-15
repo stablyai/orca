@@ -68,8 +68,10 @@ describe('getWorkItemDetails concurrency', () => {
     acquireMock.mockImplementation(() => {
       if (running < 4) {
         running += 1
+
         return Promise.resolve()
       }
+
       return new Promise((resolve) =>
         queue.push(() => {
           running += 1
@@ -99,12 +101,14 @@ describe('getWorkItemDetails concurrency', () => {
 
     const withNestedPermit = async <T>(value: T): Promise<T> => {
       await acquireMock()
+
       try {
         return value
       } finally {
         releaseMock()
       }
     }
+
     getPRCommentsMock.mockReset()
     getPRCommentsMock.mockImplementation(() => withNestedPermit([]))
     getPRChecksMock.mockReset()
@@ -113,6 +117,7 @@ describe('getWorkItemDetails concurrency', () => {
     ghExecFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('viewerViewedState')) {
         return {
           stdout: JSON.stringify({
@@ -127,6 +132,7 @@ describe('getWorkItemDetails concurrency', () => {
           })
         }
       }
+
       if (query.includes('participants')) {
         return {
           stdout: JSON.stringify({
@@ -134,15 +140,19 @@ describe('getWorkItemDetails concurrency', () => {
           })
         }
       }
+
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint.includes('/files?')) {
         return { stdout: '[]' }
       }
+
       if (/\/pulls\/\d+$/.test(endpoint)) {
         return {
           stdout: JSON.stringify({ body: 'body', head: { sha: 'head' }, base: { sha: 'base' } })
         }
       }
+
       return { stdout: JSON.stringify({ data: {} }) }
     })
   })

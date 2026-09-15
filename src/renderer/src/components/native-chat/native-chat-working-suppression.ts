@@ -21,6 +21,7 @@ export function shouldClearNativeChatWorkingSuppression(args: {
   if (!args.working) {
     return true
   }
+
   // Why: interrupt + next-turn can coalesce so `working` never goes false; a
   // newer epoch means the user started another generation and must see it.
   if (
@@ -31,5 +32,6 @@ export function shouldClearNativeChatWorkingSuppression(args: {
   ) {
     return true
   }
+
   return false
 }

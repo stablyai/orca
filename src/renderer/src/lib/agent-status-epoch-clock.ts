@@ -17,6 +17,7 @@ export function createAgentStatusEpochClock(
       sampledEpoch = agentStatusEpoch
       sampledNow = readNow()
     }
+
     return sampledNow
   }
 }

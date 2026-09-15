@@ -54,6 +54,7 @@ export function AgentDefaultSetting({
     defaultAgent !== null && defaultAgent !== 'blank'
       ? catalog.find((agent) => agent.id === defaultAgent)
       : undefined
+
   const defaultAgentPills =
     storedDefaultAgent && !enabledDetectedAgents.some((agent) => agent.id === storedDefaultAgent.id)
       ? [...enabledDetectedAgents, storedDefaultAgent]
@@ -78,6 +79,7 @@ export function AgentDefaultSetting({
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
           const isUndetected = detectedIds !== null && !detectedIds.has(agent.id)
+
           return (
             <DefaultAgentPill
               key={agent.id}

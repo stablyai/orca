@@ -54,7 +54,9 @@ function useHostMetric<T>(
     if (!hostId) {
       return
     }
+
     return context.subscribeHostState(hostId, () => force((count) => count + 1))
   }, [context, hostId])
+
   return hostId ? read(context, hostId) : fallback
 }

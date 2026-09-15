@@ -63,6 +63,7 @@ describe('browser host lease placement retirement', () => {
     const leases = registry()
     const host = attachHost(leases, 'host-a')
     const placement = leases.placeClientPage('page-a', 'host-a')
+
     if (placement.kind !== 'client') {
       throw new Error('expected client placement')
     }
@@ -96,6 +97,7 @@ describe('browser host lease placement retirement', () => {
     const placementA = leases.placeClientPage('page-a', 'host-a')
     const placementB = leases.placeClientPage('page-b', 'host-b')
     const server = leases.placeServerPage('page-server')
+
     if (placementA.kind !== 'client' || placementB.kind !== 'client') {
       throw new Error('expected client placements')
     }
@@ -163,6 +165,7 @@ describe('browser host lease placement retirement', () => {
   it('reclaims placement capacity on retirement completion and on lease fencing', () => {
     const leases = registry()
     const host = attachHost(leases, 'host-a')
+
     const placements = Array.from({ length: 256 }, (_, index) =>
       leases.placeClientPage(`page-${index}`, 'host-a')
     )

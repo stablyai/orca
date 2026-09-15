@@ -23,6 +23,7 @@ type BrowserDownloadDestinationOptions = {
 
 function normalizeReservationKey(filePath: string, platform: NodeJS.Platform): string {
   const normalizedPath = path.resolve(filePath)
+
   // Use a fixed locale for stable ASCII folding on case-insensitive filesystems.
   return platform === 'win32' || platform === 'darwin'
     ? normalizedPath.toLocaleLowerCase('en-US')
@@ -49,10 +50,13 @@ export class BrowserDownloadDestinationReservations {
       const candidateFilename = buildBrowserDownloadCollisionCandidate(safeFilename, attempt)
       const savePath = path.join(downloadsPath, candidateFilename)
       const reservationKey = normalizeReservationKey(savePath, this.platform)
+
       if (this.reservedPathKeys.has(reservationKey) || this.pathExists(savePath)) {
         continue
       }
+
       this.reservedPathKeys.add(reservationKey)
+
       return {
         filename: candidateFilename,
         savePath,
@@ -67,6 +71,7 @@ export class BrowserDownloadDestinationReservations {
     if (!reservationKey) {
       return
     }
+
     this.reservedPathKeys.delete(reservationKey)
   }
 

@@ -21,6 +21,7 @@ const {
 
 vi.mock('./gl-utils', async () => {
   const actual = await vi.importActual<typeof GlUtils>('./gl-utils')
+
   return {
     ...actual,
     glabExecFileAsync: glabExecFileAsyncMock,

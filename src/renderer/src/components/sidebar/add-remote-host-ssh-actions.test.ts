@@ -26,6 +26,7 @@ describe('individual SSH config host selection', () => {
 
   it('saves effective values while leaving all config identities authoritative', async () => {
     let savedTarget: SshTargetCreateInput | undefined
+
     const ssh = {
       resolveConfigHost: vi.fn().mockResolvedValue({
         alias: 'prod',
@@ -45,11 +46,13 @@ describe('individual SSH config host selection', () => {
         ),
       addTarget: vi.fn().mockImplementation(async ({ target }) => {
         savedTarget = target
+
         return { target: { ...target, id: 'ssh-prod', source: 'manual' }, repoReadoptions: [] }
       }),
       listConfigHosts: vi.fn(),
       importConfig: vi.fn()
     }
+
     const selection = await prefillFormFromSshConfigHost(
       {
         alias: 'prod',
@@ -63,6 +66,7 @@ describe('individual SSH config host selection', () => {
     )
 
     expect(selection).not.toBeNull()
+
     const outcome = await saveNewSshHostFromForm({
       form: selection!.form,
       ssh,
@@ -93,11 +97,13 @@ describe('manual SSH host label fallback', () => {
 
   it('labels a bare host with its hostname instead of an empty string', async () => {
     let savedTarget: SshTargetCreateInput | undefined
+
     const ssh = {
       resolveConfigHost: vi.fn(),
       listTargets: vi.fn().mockResolvedValue([]),
       addTarget: vi.fn().mockImplementation(async ({ target }) => {
         savedTarget = target
+
         return { target: { ...target, id: 'ssh-1', source: 'manual' }, repoReadoptions: [] }
       }),
       listConfigHosts: vi.fn(),
@@ -129,6 +135,7 @@ describe('bulk add of ~/.ssh/config hosts', () => {
       targets: [{ id: 'ssh-1', label: 'prod', host: 'prod', port: 22, username: '' }],
       repoReadoptions: []
     })
+
     const ssh = {
       importConfig,
       listTargets: vi.fn().mockResolvedValue([]),
@@ -151,6 +158,7 @@ describe('bulk add of ~/.ssh/config hosts', () => {
 
   it('reports already-synced without clearing tombstones', async () => {
     const importConfig = vi.fn().mockResolvedValue({ targets: [], repoReadoptions: [] })
+
     const result = await addAllSshConfigHostsToOrca({
       ssh: {
         importConfig,
@@ -178,11 +186,13 @@ describe('SSH config picker response admission', () => {
       username: '',
       alreadyInOrca: index === 0
     }))
+
     const result = await loadSshConfigHostsForPicker({
       listConfigHosts: vi.fn().mockResolvedValue(hosts)
     } as never)
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.result).toMatchObject({
         totalHostCount: 150,

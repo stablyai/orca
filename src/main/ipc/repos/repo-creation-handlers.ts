@@ -28,6 +28,7 @@ async function isGitAvailable(): Promise<boolean> {
       cwd: process.cwd(),
       timeout: GIT_AVAILABILITY_TIMEOUT_MS
     })
+
     return true
   } catch {
     return false
@@ -47,18 +48,22 @@ async function isGitAvailable(): Promise<boolean> {
 function getDefaultCreateProjectParent(store: Store): string {
   const home = homedir()
   const settings = store.getSettings()
+
   const configured = getEffectiveHostSetting(
     settings,
     LOCAL_EXECUTION_HOST_ID,
     'defaultWorktreeLocation',
     settings.workspaceDir ?? ''
   ).trim()
+
   const isUntouchedDefault =
     normalizeRuntimePathForComparison(configured) ===
     normalizeRuntimePathForComparison(getDefaultWorkspaceDir(home))
+
   if (configured && !isUntouchedDefault) {
     return configured
   }
+
   return join(home, 'orca', 'projects')
 }
 
@@ -73,15 +78,19 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       args: { path: string; kind?: 'git' | 'folder'; displayName?: string }
     ): Promise<{ repo: Repo } | { error: string }> => {
       const result = await addLocalRepoFromPath(store, args.path, args.kind, args.displayName)
+
       if ('error' in result) {
         return result
       }
+
       if (result.alreadyExisted) {
         await prepareLocalWorktreeRootForRepo(store, result.repo)
       }
+
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
+
       return { repo: result.repo }
     }
   )
@@ -98,11 +107,14 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
     ): Promise<{ repo: Repo } | { error: string }> => {
       const result = await addRemoteRepoFromPath(store, args)
+
       if ('error' in result) {
         return result
       }
+
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
+
       return { repo: result.repo }
     }
   )
@@ -119,10 +131,13 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
     ): Promise<{ repo: Repo } | { error: string }> => {
       const result = await createRemoteRepo(store, args)
+
       if ('error' in result) {
         return result
       }
+
       notifyReposChanged(mainWindow)
+
       return result
     }
   )
@@ -142,13 +157,16 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       if (!name) {
         return { error: 'Name cannot be empty' }
       }
+
       // Block slashes and ./.. so the name can't escape the chosen parent (guards direct IPC use).
       if (/[\\/]/.test(name) || name === '.' || name === '..') {
         return { error: 'Name cannot contain slashes or be "." / ".."' }
       }
+
       if (!parentPath) {
         return { error: 'Parent directory is required' }
       }
+
       // Why: block CWD-relative paths at the IPC boundary — keeps targetPath stable across process cwd changes.
       if (!isAbsolute(parentPath)) {
         return { error: 'Parent directory must be an absolute path' }
@@ -158,14 +176,17 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
 
       // Dedup by path so a double-click on Create doesn't make two entries for one folder (first of three dedup checks).
       const existing = store.getRepos().find((r) => r.path === targetPath)
+
       if (existing) {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
+
         return { repo: existing }
       }
 
       // Empty pre-existing dirs are allowed (e.g. made in Finder first); non-empty ones are rejected so we don't overwrite files.
       let createdDir = false
       let targetExists = false
+
       try {
         // Why: the default parent (~/orca/projects) may not exist on a fresh install; create only the parent before probing the target.
         await mkdir(parentPath, { recursive: true })
@@ -178,11 +199,14 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
           err && typeof err === 'object' && 'code' in err
             ? (err as NodeJS.ErrnoException).code
             : undefined
+
         const looksLikeEnoent =
           code === 'ENOENT' ||
           (code === undefined && err instanceof Error && /ENOENT/.test(err.message))
+
         if (!looksLikeEnoent) {
           const message = err instanceof Error ? err.message : String(err)
+
           return { error: `Cannot access target path: ${message}` }
         }
       }
@@ -190,6 +214,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       if (targetExists) {
         try {
           const entries = await readdir(targetPath)
+
           if (entries.length > 0) {
             return {
               error: `"${name}" already exists at this location and is not empty.`
@@ -198,6 +223,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         } catch (err) {
           // Why: access ok but readdir failed — path exists but isn't an inspectable dir (file or perms); return a distinct error.
           const message = err instanceof Error ? err.message : String(err)
+
           return { error: `Failed to read directory: ${message}` }
         }
       } else {
@@ -210,14 +236,19 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
             err && typeof err === 'object' && 'code' in err
               ? (err as NodeJS.ErrnoException).code
               : undefined
+
           const isEexist = code === 'EEXIST' || (err instanceof Error && /EEXIST/.test(err.message))
+
           if (isEexist) {
             const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+
             if (raceWinner) {
               return { repo: raceWinner }
             }
           }
+
           const message = err instanceof Error ? err.message : String(err)
+
           return { error: `Failed to create directory: ${message}` }
         }
       }
@@ -225,6 +256,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       if (repoKind === 'git') {
         // Why: track which git step ran so catch can attribute failure; the identity-hint regex only applies during commit.
         let step: 'init' | 'commit' = 'init'
+
         try {
           await gitExecFileAsync(['init'], { cwd: targetPath })
           step = 'commit'
@@ -238,7 +270,9 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
           } else if (step === 'commit') {
             await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
           }
+
           const message = err instanceof Error ? err.message : String(err)
+
           if (
             step === 'commit' &&
             /Please tell me who you are|user\.name|user\.email/i.test(message)
@@ -248,19 +282,23 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
                 'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
             }
           }
+
           const stepLabel =
             step === 'init'
               ? 'Failed to initialize git repository'
               : 'Failed to create initial commit'
+
           return { error: `${stepLabel}: ${message}` }
         }
       }
 
       // Why: ipcMain.handle doesn't serialize calls, so re-check dedup here to close the race between the first check and addRepo.
       const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+
       if (raceWinner) {
         // Why: don't rm even if we made the dir — the race winner owns it; leaking an empty folder beats deleting a dir in use.
         emitRepoAdded('folder_picker', true, repoKind === 'git')
+
         return { repo: raceWinner }
       }
 
@@ -269,6 +307,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         kind: repoKind,
         executionHostId: LOCAL_EXECUTION_HOST_ID
       })
+
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,
@@ -291,6 +330,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       notifyReposChanged(mainWindow)
       // Why: repos:create git-inits when kind is 'git', so repoKind is the true git-vs-folder signal.
       emitRepoAdded('folder_picker', false, repoKind === 'git')
+
       return { repo }
     }
   )

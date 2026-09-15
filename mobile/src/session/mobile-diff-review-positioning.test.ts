@@ -12,6 +12,7 @@ function item(
   oldPath?: string
 ): MobileDiffReviewQueueItem {
   const scope = area === 'staged' || area === 'branch' ? area : 'unstaged'
+
   return {
     key: createMobileDiffReviewFileKey(scope, area, filePath, oldPath),
     scope,
@@ -41,6 +42,7 @@ describe('mobile diff review positioning', () => {
       item('new file.ts', 'untracked'),
       item('b.ts', 'staged')
     ]
+
     const filtered = filterMobileDiffReviewQueue(queue, 'all')
 
     expect(

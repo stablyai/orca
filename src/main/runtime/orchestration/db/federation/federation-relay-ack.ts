@@ -56,14 +56,17 @@ export function acknowledgeFederationRelay(
   }
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const settledReports = params.settleRemoteReports ?? []
+
     for (const settledReport of settledReports) {
       const report = this.getFederationRelayItem(
         params.dispatchId,
         params.direction,
         settledReport.sequence
       )
+
       if (
         params.direction !== 'to_home' ||
         settledReport.sequence > params.throughSequence ||
@@ -77,7 +80,9 @@ export function acknowledgeFederationRelay(
         )
       }
     }
+
     const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+
     if (
       params.direction === 'to_home' &&
       attachment !== undefined &&
@@ -90,7 +95,9 @@ export function acknowledgeFederationRelay(
              AND acked_at IS NULL AND sequence <= ?`
         )
         .all(params.dispatchId, params.throughSequence) as { sequence: number }[]
+
       const settledSequences = new Set(settledReports.map((report) => report.sequence))
+
       if (acknowledgedReports.some((report) => !settledSequences.has(report.sequence))) {
         throw new OrchestrationError(
           'request_mismatch',
@@ -98,16 +105,20 @@ export function acknowledgeFederationRelay(
         )
       }
     }
+
     const terminalOutcomes = new Set(
       settledReports.flatMap((report) => (report.outcome ? [report.outcome] : []))
     )
+
     if (terminalOutcomes.size > 1) {
       throw new OrchestrationError(
         'request_mismatch',
         `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
       )
     }
+
     const terminalOutcome = settledReports.find((report) => report.outcome)?.outcome
+
     if (terminalOutcome) {
       this.settleRemoteAttachmentInRelayTransaction(
         params.dispatchId,
@@ -115,6 +126,7 @@ export function acknowledgeFederationRelay(
         'worker_report_settled'
       )
     }
+
     this.db
       .prepare(
         `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
@@ -151,6 +163,7 @@ export function recordFederatedHomeAcknowledgment(
   }
 ): void {
   const federated = this.getFederatedDispatch(params.dispatchId)
+
   if (
     !federated ||
     !Number.isInteger(params.sequence) ||
@@ -162,6 +175,7 @@ export function recordFederatedHomeAcknowledgment(
       `Federation acknowledgment for ${params.dispatchId} exceeds imported relay state.`
     )
   }
+
   this.db
     .prepare(
       `UPDATE federated_dispatches

@@ -21,6 +21,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const childGroup: ProjectGroup = {
       ...rootGroup,
       id: 'group-payments',
@@ -29,6 +30,7 @@ describe('project groups', () => {
       parentGroupId: rootGroup.id,
       tabOrder: 1
     }
+
     const groupedRepo: Repo = {
       ...repo,
       id: 'repo-payments-api',
@@ -36,6 +38,7 @@ describe('project groups', () => {
       projectGroupId: childGroup.id,
       projectGroupOrder: 0
     }
+
     const groupedWorktree: Worktree = {
       ...worktree,
       id: 'wt-payments-api',
@@ -85,6 +88,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const folderWorkspace: FolderWorkspace = {
       id: 'folder-workspace-1',
       projectGroupId: group.id,
@@ -151,6 +155,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const childGroup: ProjectGroup = {
       id: 'group-shared',
       name: 'packages/shared',
@@ -163,6 +168,7 @@ describe('project groups', () => {
       createdAt: 2,
       updatedAt: 2
     }
+
     const folderWorkspace: FolderWorkspace = {
       id: 'folder-workspace-nested',
       projectGroupId: childGroup.id,
@@ -233,6 +239,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const folderWorkspace: FolderWorkspace = {
       id: 'folder-workspace-1',
       projectGroupId: group.id,
@@ -294,6 +301,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const platformGroup: ProjectGroup = {
       ...rootGroup,
       id: 'group-platform',
@@ -301,6 +309,7 @@ describe('project groups', () => {
       parentGroupId: rootGroup.id,
       tabOrder: 1
     }
+
     const servicesGroup: ProjectGroup = {
       ...rootGroup,
       id: 'group-services',
@@ -308,6 +317,7 @@ describe('project groups', () => {
       parentGroupId: platformGroup.id,
       tabOrder: 2
     }
+
     const serviceA: Repo = {
       ...repo,
       id: 'repo-service-a',
@@ -315,6 +325,7 @@ describe('project groups', () => {
       projectGroupId: servicesGroup.id,
       projectGroupOrder: 0
     }
+
     const serviceB: Repo = {
       ...repo,
       id: 'repo-service-b',
@@ -360,6 +371,7 @@ describe('project groups', () => {
 
   it('returns both parent Project Group and repo keys for grouped repo reveals', () => {
     const groupedRepo: Repo = { ...repo, projectGroupId: 'group-1' }
+
     const group: ProjectGroup = {
       id: 'group-1',
       name: 'Platform',
@@ -388,6 +400,7 @@ describe('project groups', () => {
 
   it('returns only the repo key for missing Project Group metadata reveals', () => {
     const groupedRepo: Repo = { ...repo, projectGroupId: 'missing-group' }
+
     const loadedGroup: ProjectGroup = {
       id: 'loaded-group',
       name: 'Loaded',

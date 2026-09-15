@@ -46,15 +46,19 @@ export function TaskPageJiraSortControls({
   orderBy
 }: TaskPageJiraSortControlsProps): React.JSX.Element {
   const columns = getJiraSortColumns()
+
   const directionLabel =
     direction === 'asc'
       ? translate('auto.components.TaskPage.jiraSortAscending', 'ascending')
       : translate('auto.components.TaskPage.jiraSortDescending', 'descending')
+
   const nextDirectionLabel =
     direction === 'asc'
       ? translate('auto.components.TaskPage.jiraSortDescending', 'descending')
       : translate('auto.components.TaskPage.jiraSortAscending', 'ascending')
+
   const sortByLabel = translate('auto.components.TaskPage.jiraSortBy', 'Sort by')
+
   const toggleDirectionLabel = translate(
     'auto.components.TaskPage.jiraToggleSortDirection',
     'Sort {{value0}}',

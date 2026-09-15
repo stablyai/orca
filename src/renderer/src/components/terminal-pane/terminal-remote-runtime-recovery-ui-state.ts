@@ -20,10 +20,13 @@ export function updateTerminalRemoteRuntimeRecoveryUiState(
   if (isVisiblePtyRecoveryState(state)) {
     return previous[paneId] === state ? previous : { ...previous, [paneId]: state }
   }
+
   if (!(paneId in previous)) {
     return previous
   }
+
   const next = { ...previous }
   delete next[paneId]
+
   return next
 }

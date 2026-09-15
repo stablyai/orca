@@ -61,12 +61,15 @@ export function selectRuntimePairingIntent(
   customAddress: string
 ): string {
   runtimePairingLinkCache.intent = intent
+
   const selectedAddress =
     intent === 'local'
       ? RUNTIME_PAIRING_LOOPBACK_ADDRESS
       : intent === 'another'
         ? (networkInterfaces[0]?.address ?? '')
         : customAddress
+
   runtimePairingLinkCache.selectedAddress = selectedAddress
+
   return selectedAddress
 }

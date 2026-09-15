@@ -73,6 +73,7 @@ function ControlledTimeField({
   onTimeChange?: (time: string) => void
 }): React.JSX.Element {
   const [time, setTime] = React.useState(initialTime)
+
   return (
     <AutomationTimeField
       time={time}

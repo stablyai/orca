@@ -15,6 +15,7 @@ export function WorkspaceSpaceSizeBar({
   max: number
 }): React.JSX.Element {
   const pct = max > 0 ? Math.max(2, Math.min(100, (value / max) * 100)) : 0
+
   return (
     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
       <div className="h-full rounded-full bg-foreground/65" style={{ width: `${pct}%` }} />
@@ -52,7 +53,9 @@ export function WorkspaceSpaceBreakdownList({
     getLargestWorkspaceSpaceItemSize(worktree.topLevelItems),
     worktree.omittedTopLevelSizeBytes
   )
+
   const topLevelItemCount = worktree.topLevelItems.length + worktree.omittedTopLevelItemCount
+
   const omittedItem: WorkspaceSpaceItem | null =
     worktree.omittedTopLevelItemCount > 0
       ? {
@@ -66,6 +69,7 @@ export function WorkspaceSpaceBreakdownList({
           sizeBytes: worktree.omittedTopLevelSizeBytes
         }
       : null
+
   return (
     <div className="min-h-72 rounded-lg border border-border/70 bg-background/35">
       <div className="border-b border-border/60 px-4 py-3">

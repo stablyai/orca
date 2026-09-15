@@ -34,12 +34,14 @@ afterEach(() => {
 describe('BrowserLoadFailureOverlay', () => {
   it('offers the connection-check undo only when a routed page provides it', () => {
     const onRecheckSshRoute = vi.fn()
+
     const loadError = {
       code: -102,
       description: 'ERR_CONNECTION_REFUSED',
       url: 'https://example.com/',
       validatedUrl: 'https://example.com/'
     }
+
     const { rerender } = render(
       <BrowserLoadFailureOverlay
         loadError={loadError}
@@ -50,6 +52,7 @@ describe('BrowserLoadFailureOverlay', () => {
         {...callbacks}
       />
     )
+
     fireEvent.click(screen.getByTestId('browser-load-failure-recheck-ssh-route'))
     expect(onRecheckSshRoute).toHaveBeenCalledTimes(1)
 
@@ -292,6 +295,7 @@ describe('BrowserLoadFailureOverlay', () => {
         resolveProceed = resolve
       })
     )
+
     const { rerender } = render(
       <BrowserLoadFailureOverlay
         loadError={{
@@ -310,9 +314,11 @@ describe('BrowserLoadFailureOverlay', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Proceed Anyway (Unsafe)' }))
     expect(callbacks.onProceedCertificate).toHaveBeenCalledWith('challenge-1')
+
     for (const name of ['Proceed Anyway (Unsafe)', 'Open Externally', 'Retry', 'Copy Address']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
+
     expect(screen.queryByText('Connecting…')).toBeNull()
 
     act(() => vi.advanceTimersByTime(199))
@@ -342,6 +348,7 @@ describe('BrowserLoadFailureOverlay', () => {
 
   it('recovers from typed approval failures and resets for a new challenge', async () => {
     callbacks.onProceedCertificate.mockResolvedValue({ ok: false, reason: 'expired' })
+
     const props = {
       loadError: {
         code: -202,
@@ -354,6 +361,7 @@ describe('BrowserLoadFailureOverlay', () => {
       expectedBrowserPageId: 'page-1',
       ...callbacks
     }
+
     const { rerender } = render(
       <BrowserLoadFailureOverlay {...props} certificateFailure={certificateFailure} />
     )

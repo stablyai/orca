@@ -28,14 +28,18 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       session.deps.clearTerminalTabUnread(session.deps.tabId)
       session.deps.clearTerminalPaneUnread(session.cacheKey)
       session.deps.clearWorktreeUnread(session.deps.worktreeId)
+
       return
     }
+
     if (isCtrlCKeyEvent(event)) {
       if (!navigator.userAgent.includes('Mac') && session.pane.terminal.hasSelection()) {
         return
       }
+
       session.setPendingTerminalInputIntent('ctrl-c')
     }
+
     // Why: only treat keydowns that will produce real terminal input as the
     // "user is here" signal. Modifier-only presses, autorepeat, and Cmd/Ctrl+C
     // copy chords with an active selection must not dismiss attention on a
@@ -50,6 +54,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     ) {
       return
     }
+
     if (
       (event.metaKey || event.ctrlKey) &&
       event.key.toLowerCase() === 'c' &&
@@ -57,6 +62,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     ) {
       return
     }
+
     // Why: user shell frameworks (bash-preexec/iTerm2) can replace Orca's
     // OSC 133;C hook, so a manually launched agent produces no command-start
     // signal at all. Enter at a shell-foreground prompt is the user-side
@@ -65,10 +71,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       session.sampleVisiblePaneForegroundAgent()
     }
+
     session.deps.clearTerminalTabUnread(session.deps.tabId)
     session.deps.clearTerminalPaneUnread(session.cacheKey)
     session.deps.clearWorktreeUnread(session.deps.worktreeId)
   }
+
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
   // should not clear agent status.
@@ -76,6 +84,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.terminalKeyTargetSupportsEvents =
     typeof session.terminalKeyTarget?.addEventListener === 'function' &&
     typeof session.terminalKeyTarget?.removeEventListener === 'function'
+
   if (session.terminalKeyTargetSupportsEvents) {
     session.terminalKeyTarget.addEventListener('keydown', session.onTerminalKeyDown, {
       capture: true
@@ -87,6 +96,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.setPanePtyFitBinding = (ptyId: string): void => {
     bindPanePtyId(session.pane.id, ptyId, session.deps.tabId)
     session.pane.container.dataset.ptyId = ptyId
+
     if (
       session.deps.isVisibleRef.current &&
       isRemoteRuntimePtyId(ptyId) &&
@@ -96,13 +106,16 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       session.visibleRemoteViewportClaimPtyId = ptyId
       session.pendingVisibleRemoteViewportClaim = true
     }
+
     // Why: override hydration can arrive before this pane knows its PTY. Once
     // data-pty-id is bound, safeFit can park xterm at the authoritative grid.
     if (getFitOverrideForPty(ptyId)) {
       safeFit(session.pane)
     }
+
     session.claimPendingVisibleRemoteViewport()
   }
+
   session.activePanePtyBinding = null
   // Why: bind time lets async liveness reconcile ignore a request started
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
@@ -121,6 +134,7 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     if ((!session.mainSideEffectAuthority && !remoteOutputPaused) || session.disposed) {
       return
     }
+
     session.unregisterSideEffectFactConsumer?.()
     session.unregisterSideEffectFactConsumer = registerTerminalSideEffectFactConsumer({
       ptyId,
@@ -155,11 +169,13 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       restoreTitleOnRegister: true
     })
   }
+
   session.dropSideEffectFactConsumer = (): void => {
     session.unregisterSideEffectFactConsumer?.()
     session.unregisterSideEffectFactConsumer = null
     session.remoteOutputFactConsumerPtyId = null
   }
+
   session.clearPanePtyFitBinding = (): void => {
     // Why: fit bindings live in a module-level map, so pane teardown must
     // clear them explicitly instead of relying on DOM removal.
@@ -185,20 +201,24 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       dispatchAgentHookTerminalLifecycle(session.cacheKey, payload),
     shouldSuppressProcessReplacementCompletion: (_exited, replacement) => {
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
       const currentAgentForReplacement = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         replacement.agent
       )
+
       return (
         isFreshNonDoneAgentStatus(currentStatus) && currentAgentForReplacement === replacement.agent
       )
     },
     shouldSuppressConfirmedProcessExitCompletion: (exited) => {
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
       const currentAgentForExited = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         exited.agent
       )
+
       // Why: a replacement hook can lead process visibility by one cadence;
       // only a different known active owner can veto confirmed old-process exit.
       return Boolean(
@@ -212,15 +232,19 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       if (meta?.source === 'process-exit') {
         session.clearSuppressedTitleSideEffects()
       }
+
       if (meta?.terminalIdleConfirmed === true) {
         // Why: an agent can crash before its done hook; confirmed process death
         // must still restore cursor and native Windows Kitty keyboard modes.
         const currentAgentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
         if (!isFreshNonDoneAgentStatus(currentAgentStatus)) {
           session.setFocusReportSuppressionForAgentCompletion(title, meta.agentStatus?.agentType)
         }
+
         session.queueAgentIdleTerminalModeReset()
       }
+
       session.scheduleAgentTaskCompleteNotification(title, {
         allowDoneDetailAfterGrace: meta?.quietedHookDone,
         ...(meta?.source === 'process-exit' ? { agentCompletionSource: meta.source } : {}),
@@ -233,13 +257,16 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       }),
     shouldPollProcessCadence: () => {
       const ptyId = session.transport.getPtyId()
+
       if (ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId))) {
         return false
       }
+
       return isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current
     },
     shouldPollNoEvidenceProcessCadence: () => {
       const ptyId = session.transport.getPtyId()
+
       return !(ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)))
     },
     isProcessInspectionCostly: () =>
@@ -248,9 +275,11 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       if (session.disposed) {
         return false
       }
+
       if (session.transport.getPtyId()) {
         return true
       }
+
       return (useAppStore.getState().ptyIdsByTabId[session.deps.tabId] ?? []).length > 0
     },
     shouldSuppressHookCompletion: createCodexAutoApprovalHookCompletionSuppressor(

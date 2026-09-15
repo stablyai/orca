@@ -5,6 +5,7 @@ import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-t
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 
 const PANE_OLD = 'tab_old:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+
 const PANE_NEW = 'tab_new:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 type CheckResult = { messages: { subject: string }[]; count: number }
@@ -39,6 +40,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
       retryOf,
       startOptions: {}
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle,
@@ -48,6 +50,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
       setupState: 'not_applicable',
       effects: []
     })
+
     return started.dispatch.id
   }
 
@@ -57,6 +60,7 @@ describe('orchestration.check from a terminal whose Attempt was superseded', () 
     const abandoned = startWorker(task.id, 'term_old', PANE_OLD)
     db.abandonWorkerDispatch(abandoned)
     startWorker(task.id, 'term_new', PANE_NEW, abandoned)
+
     return abandoned
   }
 

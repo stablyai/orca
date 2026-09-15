@@ -48,9 +48,11 @@ function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | 
   if (sameSite === 'strict') {
     return 'Strict'
   }
+
   if (sameSite === 'no_restriction') {
     return 'None'
   }
+
   return sameSite === 'lax' ? 'Lax' : undefined
 }
 
@@ -58,22 +60,29 @@ function electronSameSite(sameSite: string | undefined): Cookie['sameSite'] {
   if (sameSite === 'Strict' || sameSite === 'None') {
     return sameSite === 'Strict' ? 'strict' : 'no_restriction'
   }
+
   return sameSite === 'Lax' ? 'lax' : 'unspecified'
 }
 
 function partitionKeyFromCdp(cookie: CdpCookie): CookieClearPartitionKey | undefined {
   const opaque = cookie.partitionKeyOpaque
+
   if (opaque === true || (opaque !== undefined && typeof opaque !== 'boolean')) {
     throw new Error('Could not snapshot cookie identity for an atomic clear')
   }
+
   const partitionKey = cookie.partitionKey
+
   if (partitionKey === undefined) {
     return undefined
   }
+
   const topLevelSite = normalizeCookiePartitionSite(partitionKey?.topLevelSite ?? '')
+
   if (!topLevelSite || typeof partitionKey?.hasCrossSiteAncestor !== 'boolean') {
     throw new Error('Could not snapshot cookie identity for an atomic clear')
   }
+
   return {
     topLevelSite,
     hasCrossSiteAncestor: partitionKey.hasCrossSiteAncestor
@@ -87,6 +96,7 @@ function cookieScopeKey(
   hostOnly: boolean
 ): string | null {
   const normalizedDomain = domain ? normalizeCookieDomain(domain) : null
+
   return normalizedDomain ? JSON.stringify([name, normalizedDomain, path || '/', hostOnly]) : null
 }
 
@@ -96,20 +106,25 @@ function cdpCookieScopeKey(cookie: CdpCookie): string | null {
 
 function indexCdpCookies(cookies: readonly CdpCookie[]): Map<string, CdpCookie[]> {
   const index = new Map<string, CdpCookie[]>()
+
   for (const cookie of cookies) {
     const key = cdpCookieScopeKey(cookie)
+
     if (!key) {
       continue
     }
+
     const matches = index.get(key) ?? []
     matches.push(cookie)
     index.set(key, matches)
   }
+
   return index
 }
 
 function identityFromCdpCookie(url: string, cdpCookie: CdpCookie): CookieClearIdentity {
   const partitionKey = partitionKeyFromCdp(cdpCookie)
+
   return {
     url,
     name: cdpCookie.name,
@@ -141,13 +156,17 @@ function openHiddenCookieWindow(targetSession: Session): BrowserWindow {
 
 async function leaseHiddenCookieDebugger(targetSession: Session): Promise<CookieClearSession> {
   const window = openHiddenCookieWindow(targetSession)
+
   try {
     await window.loadURL('data:text/html,<!doctype html><title>cookie-clear</title>')
     const contents = window.webContents
+
     if (contents.isDestroyed()) {
       throw new Error('Could not attach to the cookie session for an atomic clear')
     }
+
     const lease = acquireElectronDebugger(contents)
+
     return {
       debugger: contents.debugger,
       dispose: () => {
@@ -163,11 +182,14 @@ async function leaseHiddenCookieDebugger(targetSession: Session): Promise<Cookie
 
 async function attachCookieClearSession(targetSession: Session): Promise<CookieClearSession> {
   const existing = findPartitionWebContents(targetSession)
+
   if (!existing) {
     return leaseHiddenCookieDebugger(targetSession)
   }
+
   try {
     const lease = acquireElectronDebugger(existing)
+
     return { debugger: existing.debugger, dispose: () => lease.release() }
   } catch {
     // Why (STA-4300): every cookie write now needs this channel, and attaching to a live tab fails
@@ -183,6 +205,7 @@ export function cookieClearIdentitiesFromCdp(
   const identities: CookieClearIdentity[] = []
   const seen = new Set<string>()
   const cdpCookieIndex = indexCdpCookies(cdpCookies)
+
   for (const item of cookies) {
     const key = cookieScopeKey(
       item.cookie.name,
@@ -190,10 +213,13 @@ export function cookieClearIdentitiesFromCdp(
       item.cookie.path,
       item.cookie.hostOnly ?? !item.cookie.domain?.startsWith('.')
     )
+
     const matches = key ? (cdpCookieIndex.get(key) ?? []) : []
+
     if (matches.length === 0) {
       throw new Error('Could not snapshot cookie identity for an atomic clear')
     }
+
     for (const match of matches) {
       const key = JSON.stringify([
         item.url,
@@ -202,13 +228,16 @@ export function cookieClearIdentitiesFromCdp(
         match.path,
         partitionKeyFromCdp(match) ?? null
       ])
+
       if (seen.has(key)) {
         continue
       }
+
       seen.add(key)
       identities.push(identityFromCdpCookie(item.url, match))
     }
   }
+
   return identities
 }
 
@@ -216,6 +245,7 @@ export function cdpSetCookieParamsFromIdentity(
   identity: CookieClearIdentity
 ): Record<string, unknown> {
   const sameSite = cdpSameSite(identity.sameSite)
+
   return {
     url: identity.url,
     name: identity.name,
@@ -234,7 +264,9 @@ function cdpCookiesFromCommand(value: unknown): CdpCookie[] {
   if (typeof value !== 'object' || value === null || !('cookies' in value)) {
     return []
   }
+
   const cookies = value.cookies
+
   return Array.isArray(cookies) ? cookies : []
 }
 
@@ -242,6 +274,7 @@ function cdpSetCookieSucceeded(value: unknown): boolean {
   if (typeof value !== 'object' || value === null || !('success' in value)) {
     return true
   }
+
   return value.success !== false
 }
 
@@ -250,6 +283,7 @@ async function snapshotClearIdentitiesFromCdp(
   cookies: readonly { cookie: Cookie; url: string }[]
 ): Promise<CookieClearIdentity[]> {
   const result = await cookieDebugger.sendCommand('Network.getAllCookies')
+
   return cookieClearIdentitiesFromCdp(cookies, cdpCookiesFromCommand(result))
 }
 
@@ -262,6 +296,7 @@ async function writeIdentityWithCdp(
     'Network.setCookie',
     cdpSetCookieParamsFromIdentity(identity)
   )
+
   // Why: Network.setCookie reports rejection in the reply rather than throwing, so an unchecked
   // call reads as a successful write of a cookie that was never stored.
   if (!cdpSetCookieSucceeded(result)) {
@@ -275,25 +310,33 @@ export function openCookieClearStore(
   let attached: CookieClearSession | null = null
   let pendingAttach: Promise<CookieClearSession> | null = null
   let disposed = false
+
   const attach = async () => {
     if (disposed) {
       throw new Error('Cookie clear store was disposed')
     }
+
     if (attached) {
       return attached
     }
+
     if (pendingAttach) {
       return pendingAttach
     }
+
     const pending = attachCookieClearSession(targetSession).then((session) => {
       if (disposed) {
         session.dispose()
         throw new Error('Cookie clear store was disposed during debugger attachment')
       }
+
       attached = session
+
       return session
     })
+
     pendingAttach = pending
+
     try {
       return await pending
     } finally {
@@ -302,6 +345,7 @@ export function openCookieClearStore(
       }
     }
   }
+
   return {
     get: (filter) => targetSession.cookies.get(filter),
     remove: (url, name) => targetSession.cookies.remove(url, name),

@@ -44,9 +44,11 @@ export async function refreshRecoverableStructuredHandoffStatus(
   sessionId: string
 ) {
   const record = store.getRecord(sessionId)
+
   if (record && canRestoreLiveTuiOwner(record)) {
     await handoff.restore(sessionId)
   }
+
   return handoff.status(sessionId)
 }
 
@@ -68,6 +70,7 @@ export function createStructuredAgentSessionHostHandoff(
     },
     ...(deps.onEventSinkError ? { onError: deps.onEventSinkError } : {})
   })
+
   const coordinator = new StructuredAgentSessionHandoffCoordinator({
     store: deps.store,
     claimKeyId: deps.claimKeyId,
@@ -77,13 +80,17 @@ export function createStructuredAgentSessionHostHandoff(
       if (!deps.adapter.closeSession) {
         return { state: 'live' }
       }
+
       const exited = await deps.adapter.closeSession(sessionId)
+
       if (exited !== true) {
         // Report the unproven exit; the forward handoff refuses on it.
         return { state: 'live' }
       }
+
       host.session(sessionId).hasProviderChild = false
       host.publishStatus?.(sessionId)
+
       try {
         await host.flush(sessionId)
         const session = host.session(sessionId)
@@ -94,6 +101,7 @@ export function createStructuredAgentSessionHostHandoff(
         host.subscribers.publish(sessionId, session.journal)
         host.publishStatus?.(sessionId)
         host.eventSink(sessionId).unbind()
+
         return { state: 'stopped' }
       } catch (error) {
         return { state: 'stopped-cleanup-failed', error }
@@ -121,9 +129,11 @@ export function createStructuredAgentSessionHostHandoff(
       // last publish — usually the FAILED one — into an unhandled rejection nothing can catch.
       const fence =
         deps.store.getRecord(sessionId)?.lease.runtimeFence ?? host.findSession(sessionId)?.fence
+
       if (fence === undefined) {
         return
       }
+
       host.subscribers.handoff(sessionId, fence, status)
     },
     schedule: host.serialize,
@@ -132,6 +142,7 @@ export function createStructuredAgentSessionHostHandoff(
       ? { persistTuiProviderHandle: deps.persistTuiProviderHandle }
       : {})
   })
+
   return Object.assign(coordinator, {
     stopTuiHistoryCatchup: () => tuiHistoryCatchup.stopAll(),
     recoverDeadTuiOwner: async (
@@ -140,9 +151,11 @@ export function createStructuredAgentSessionHostHandoff(
       probe: AgentSessionOwnerProbe
     ) => {
       const record = deps.store.getRecord(sessionId)
+
       if (!record) {
         return
       }
+
       const status = await recoverDeadTuiHandoffStatus({
         store: deps.store,
         now: host.now,
@@ -150,6 +163,7 @@ export function createStructuredAgentSessionHostHandoff(
         expectedFence,
         probe
       })
+
       if (status) {
         coordinator.setStatus(sessionId, status)
       }
@@ -165,12 +179,16 @@ async function importTuiHistory(
   const session = host.session(input.sessionId)
   const record = deps.store.getRecord(input.sessionId)
   const head = record?.providerHandleChain.at(-1)
+
   if (!record || !head) {
     throw new Error('agent_session_identity_required')
   }
+
   const options = structuredTuiTranscriptImportOptions(record, input.transcriptPath)
+
   const providerSessionId =
     head.handle.provider === 'claude' ? head.handle.sessionId : head.handle.threadId
+
   const imported = await importLegacyTranscriptIntoJournal({
     journal: session.journal,
     agent: head.handle.provider,
@@ -178,9 +196,11 @@ async function importTuiHistory(
     fence: input.fence,
     options
   })
+
   if (!imported.ok) {
     throw new Error(imported.error)
   }
+
   host.subscribers.reset(input.sessionId, session.journal, 'epoch_changed', input.fence)
 }
 
@@ -191,6 +211,7 @@ export function structuredTuiTranscriptImportOptions(
   if (transcriptPath) {
     return { filePath: transcriptPath }
   }
+
   return record.provider === 'claude'
     ? { claudeProjectsDir: join(record.accountHome.path, 'projects') }
     : { codexSessionsDirs: [join(record.accountHome.path, 'sessions')] }
@@ -203,24 +224,31 @@ export async function acquireNativeHandoffOwner(
 ): Promise<AgentSessionRecord> {
   const session = host.session(input.sessionId)
   const record = deps.store.getRecord(input.sessionId)
+
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+
   // Native handoff bypasses attach admission; reject before unbinding TUI ownership.
   if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   const eventSink = host.eventSink(input.sessionId)
   const priorBarrier = await eventSink.drained()
+
   if (!priorBarrier.ok) {
     throw priorBarrier.error
   }
+
   eventSink.unbind()
+
   // Recheck immediately before acquisition; capability probes may drift while
   // the old TUI event sink is draining.
   if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   const acquired = await deps.adapter.acquire({
     identity: journalIdentityFor(record, session.params),
     fence: input.fence,
@@ -228,7 +256,9 @@ export async function acquireNativeHandoffOwner(
     ...(record.options ? { options: record.options } : {}),
     events: eventSink.sink
   })
+
   let proved: AgentSessionRecord
+
   try {
     const options = await readNativeSessionOptions({
       adapter: deps.adapter,
@@ -236,6 +266,7 @@ export async function acquireNativeHandoffOwner(
       fence: input.fence,
       ...(record.options ? { priorOptions: record.options } : {})
     })
+
     await deps.store.commitProcessIdentity({
       sessionId: input.sessionId,
       fence: input.fence,
@@ -252,6 +283,7 @@ export async function acquireNativeHandoffOwner(
   } catch (error) {
     return rethrowAfterAgentSessionAcquisitionCleanup(deps.adapter, input.sessionId, error)
   }
+
   session.hasProviderChild = true
   host.publishStatus?.(input.sessionId)
   session.fence = proved.lease.runtimeFence
@@ -262,9 +294,12 @@ export async function acquireNativeHandoffOwner(
     publish: (activity) => host.subscribers.publish(input.sessionId, session.journal, activity)
   })
   const acquiredBarrier = await eventSink.drained()
+
   if (!acquiredBarrier.ok) {
     throw acquiredBarrier.error
   }
+
   host.subscribers.snapshot(input.sessionId, session.journal, proved.lease.runtimeFence)
+
   return proved
 }

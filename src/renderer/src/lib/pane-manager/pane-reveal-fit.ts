@@ -14,13 +14,17 @@ import { resumePendingFitScrollRestoreAfterFit } from './pane-scroll'
 // No baseline / unmeasurable counts as changed so a first reveal still fits.
 export function paneFitClientSizeChanged(pane: ManagedPane): boolean {
   const last = (pane as ManagedPaneInternal).lastFitClientSize
+
   if (!last) {
     return true
   }
+
   const current = readFitClientSize(pane)
+
   if (!current || current.width <= 0 || current.height <= 0) {
     return true
   }
+
   return current.width !== last.width || current.height !== last.height
 }
 
@@ -29,9 +33,11 @@ export function paneFitClientSizeChanged(pane: ManagedPane): boolean {
 function proposedGridMatchesTerminal(pane: ManagedPane): boolean {
   try {
     const proposed = pane.fitAddon.proposeDimensions()
+
     if (!proposed) {
       return true
     }
+
     return proposed.cols === pane.terminal.cols && proposed.rows === pane.terminal.rows
   } catch {
     return true
@@ -45,6 +51,7 @@ function releaseMeasurableFitContinuations(pane: ManagedPane): void {
   if (!canMeasurePaneForFit(pane)) {
     return
   }
+
   resumePendingFitScrollRestoreAfterFit(pane.terminal)
   flushPendingSafeFitContinuations(pane)
   clearPaneFitContinuationRetry(pane)
@@ -65,16 +72,21 @@ export function fitRevealedPane(pane: ManagedPane): void {
   // Why first: the checks below can both say "nothing to do" and return without
   // fitting, stranding metric options parked while the pane was unmeasurable.
   const flushed = flushDeferredPaneMetricOptionsIfMeasurable(pane)
+
   if (paneFitClientSizeChanged(pane)) {
     safeFit(pane)
+
     return
   }
+
   // Why the stable path for a flush: it leaves pixels unchanged but the grid
   // diverged — the same shape as a snapshot resize, and a raw fit here would
   // reflow on the transient WebGL/DOM metric wobble this function exists to avoid.
   if (flushed || !proposedGridMatchesTerminal(pane)) {
     requestStablePaneFit(pane)
+
     return
   }
+
   releaseMeasurableFitContinuations(pane)
 }

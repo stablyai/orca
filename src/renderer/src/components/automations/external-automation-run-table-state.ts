@@ -61,6 +61,7 @@ export function resolveExternalAutomationFetchedRuns(
   result: ExternalAutomationRunPageResult
 ): ExternalAutomationRunTableState {
   const resolved = resolveExternalAutomationRunTableState(state, job)
+
   const selectedRunId =
     resolved.selectedRunId && result.runs.some((run) => run.id === resolved.selectedRunId)
       ? resolved.selectedRunId

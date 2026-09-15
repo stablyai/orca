@@ -24,9 +24,12 @@ export function runtimeWaitExitCode(wait: { exitCode?: number | null }): number 
  */
 export function settleTabPtyBinding(tabId: string, ptyId: string, code: number): void {
   const state = useAppStore.getState()
+
   if (isProvenProcessExit(code)) {
     state.clearTabPtyId(tabId, ptyId)
+
     return
   }
+
   state.markUnverifiedPtyLoss(tabId)
 }

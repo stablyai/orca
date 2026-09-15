@@ -42,16 +42,19 @@ const upgraded = {
 function logicalClient(initial: ConnectionState) {
   let state = initial
   const listeners = new Set<(state: ConnectionState) => void>()
+
   return {
     client: {
       getState: () => state,
       onStateChange: (listener: (next: ConnectionState) => void) => {
         listeners.add(listener)
+
         return () => listeners.delete(listener)
       }
     } as unknown as StableLogicalRpcClient,
     setState(next: ConnectionState) {
       state = next
+
       for (const listener of listeners) {
         listener(next)
       }
@@ -64,6 +67,7 @@ describe('direct pairing upgrade controller', () => {
     const logical = logicalClient('connected')
     const upgrade = vi.fn(async () => upgraded)
     const onUpgraded = vi.fn(async () => {})
+
     const controller = new MobileRelayDirectUpgradeController(logical.client, directHost, {
       upgrade,
       onUpgraded
@@ -79,6 +83,7 @@ describe('direct pairing upgrade controller', () => {
     const logical = logicalClient('connected')
     const upgrade = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(upgraded)
     const onUpgraded = vi.fn(async () => {})
+
     const controller = new MobileRelayDirectUpgradeController(logical.client, directHost, {
       upgrade,
       onUpgraded
@@ -95,17 +100,21 @@ describe('direct pairing upgrade controller', () => {
   it('fences a completed request after the host client closes', async () => {
     const logical = logicalClient('connecting')
     let resolveUpgrade!: (result: MobileRelayDirectUpgradeResult) => void
+
     const upgrade = vi.fn(
       () =>
         new Promise<MobileRelayDirectUpgradeResult>((resolve) => {
           resolveUpgrade = resolve
         })
     )
+
     const onUpgraded = vi.fn(async () => {})
+
     const controller = new MobileRelayDirectUpgradeController(logical.client, directHost, {
       upgrade,
       onUpgraded
     })
+
     await controller.start()
 
     logical.setState('connected')

@@ -34,17 +34,20 @@ describe('claude agent teams shim env', () => {
     const cliName = process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
     const cliPath = join(root, cliName)
     await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
+
     if (process.platform !== 'win32') {
       await chmod(cliPath, 0o755)
     }
 
     let capturedShimBin = ''
+
     const plan = await buildClaudeAgentTeamsLaunchPlan({
       command: "claude 'hello'",
       mode: 'native-panes-shim',
       baseEnv: { PATH: root },
       createTeamEnv: (shimDir, shimBin) => {
         capturedShimBin = shimBin
+
         return {
           PATH: `${shimDir}:/usr/bin`,
           TMUX: '/tmp/orca/fake,0,0',
@@ -85,6 +88,7 @@ describe('claude agent teams shim env', () => {
     const cliName = process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev'
     const cliPath = join(root, cliName)
     await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
+
     if (process.platform !== 'win32') {
       await chmod(cliPath, 0o755)
     }
@@ -95,9 +99,11 @@ describe('claude agent teams shim env', () => {
   it('refuses to resolve a CLI through relative PATH entries or a bare override', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
     roots.push(root)
+
     for (const name of ['orca', 'orca-ide', 'orca.cmd']) {
       const path = join(root, name)
       await writeFile(path, '#!/usr/bin/env sh\n', 'utf8')
+
       if (process.platform !== 'win32') {
         await chmod(path, 0o755)
       }
@@ -153,6 +159,7 @@ describe('claude agent teams shim env', () => {
       const cwd = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cwd-'))
       roots.push(cwd)
       const marker = join(cwd, 'hijacked')
+
       for (const name of ['orca', 'orca-ide']) {
         const decoy = join(cwd, name)
         await writeFile(decoy, `#!/usr/bin/env sh\ntouch ${JSON.stringify(marker)}\n`, 'utf8')
@@ -172,6 +179,7 @@ describe('claude agent teams shim env', () => {
       const cli = join(cwd, 'fake-orca')
       await writeFile(cli, '#!/usr/bin/env sh\necho "ran $*"\n', 'utf8')
       await chmod(cli, 0o755)
+
       const qualified = spawnSync(join(root, 'tmux'), ['list-panes'], {
         cwd,
         env: { PATH: `.:${process.env.PATH ?? ''}`, ORCA_AGENT_TEAMS_SHIM_BIN: cli },

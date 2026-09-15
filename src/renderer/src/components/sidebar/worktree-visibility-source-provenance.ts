@@ -23,9 +23,11 @@ export function globalWorktreeVisibilitySourceValue(
   if (source.kind === 'built-in') {
     return effectiveDefaultBuiltInWorktreeSourceVisibility(visibilityDefaults, source.id)
   }
+
   if (source.kind === 'custom') {
     return effectiveDefaultCustomWorktreeSourceVisibility(visibilityDefaults, source.source.id)
   }
+
   return effectiveExternalWorktreeVisibility({}, false, visibilityDefaults)
 }
 
@@ -38,13 +40,17 @@ export function getWorktreeVisibilitySourceProvenance(
   if (!repo) {
     return null
   }
+
   const globalVisibility = globalWorktreeVisibilitySourceValue(source, visibilityDefaults)
+
   if (source.kind === 'custom' && repoCustomSourceIds.has(source.source.id)) {
     return { kind: 'project-source', globalVisibility }
   }
+
   const preferences = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
   )
+
   const overridden =
     source.kind === 'built-in'
       ? preferences?.builtIn?.[source.id] !== undefined ||
@@ -52,6 +58,7 @@ export function getWorktreeVisibilitySourceProvenance(
       : source.kind === 'custom'
         ? preferences?.custom?.[source.source.id] !== undefined
         : repo.externalWorktreeVisibility !== undefined
+
   return { kind: overridden ? 'project-override' : 'global', globalVisibility }
 }
 
@@ -61,11 +68,13 @@ export function listInheritedWorktreeVisibilitySources(
   visibilityDefaults: WorktreeVisibilityDefaults | undefined
 ): { source: WorktreeVisibilitySourceRow; globalVisibility: ExternalWorktreeVisibility }[] {
   const defaults = visibilityDefaults ?? {}
+
   const repoCustomSourceIds = new Set(
     normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources)?.map(
       (source) => source.id
     ) ?? []
   )
+
   const sources: WorktreeVisibilitySourceRow[] = [
     { kind: 'built-in', id: 'claude' },
     { kind: 'built-in', id: 'gsd' },
@@ -83,6 +92,7 @@ export function listInheritedWorktreeVisibilitySources(
       defaults,
       repoCustomSourceIds
     )
+
     // Why: a source the project added itself has no global setting behind it to override.
     return !provenance || provenance.kind === 'project-source'
       ? []
@@ -107,6 +117,7 @@ export function getWorktreeVisibilityOverrideNotice(
   if (provenance?.kind !== 'project-override' || provenance.globalVisibility === visibility) {
     return null
   }
+
   return translate(
     'auto.components.sidebar.WorktreeVisibilitySourceList.overridingGlobal',
     'Overriding global setting: {{value0}}',

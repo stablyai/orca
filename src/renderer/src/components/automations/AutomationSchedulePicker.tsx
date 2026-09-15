@@ -18,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
+
 const AUTOMATION_WEEKDAY_VALUES = ['0', '1', '2', '3', '4', '5', '6'] as const
 
 export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
@@ -38,13 +39,17 @@ export function getAutomationSchedulePresetLabel([, fallbackLabel, labelKey]: re
 
 function buildCustomScheduleSeed(draft: AutomationDraft): string {
   const existing = draft.customSchedule.trim()
+
   if (existing) {
     return draft.customSchedule
   }
+
   if (draft.preset === 'custom') {
     return ''
   }
+
   const { hour, minute } = parseAutomationTime(draft.time)
+
   return buildAutomationCronSchedule({
     preset: draft.preset,
     hour,
@@ -75,6 +80,7 @@ export function AutomationSchedulePicker({
 }): React.JSX.Element {
   const customSchedule = draft.customSchedule.trim()
   const weekdayNames = getUiWeekdayNames()
+
   // Same gate the save path uses, so an untouched legacy cadence is not flagged red for a
   // rule it only has to satisfy as new input.
   const acceptsSchedule = (schedule: string): boolean =>
@@ -83,6 +89,7 @@ export function AutomationSchedulePicker({
       savedRrule: draft.savedSchedule,
       validate: validateAdvancedSchedule
     })
+
   const customScheduleInvalid =
     draft.preset === 'custom' && customSchedule.length > 0 && !acceptsSchedule(customSchedule)
 

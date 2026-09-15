@@ -113,6 +113,7 @@ export function getPRGroupKey(
 ): PRGroupKey {
   const repo = repoMap.get(worktree.repoId)
   const branch = branchName(worktree.branch)
+
   const repoScopedCacheKey =
     repo && branch
       ? getGitHubPRCacheKey(
@@ -125,11 +126,15 @@ export function getPRGroupKey(
           true
         )
       : ''
+
   const canUseLegacyPRCache = repo !== undefined && !repo.connectionId && !repo.executionHostId
+
   const legacyRepoScopedCacheKey =
     canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch) : ''
+
   const legacyPathScopedCacheKey =
     canUseLegacyPRCache && branch ? getLegacyGitHubPRCacheKey(repo.path, undefined, branch) : ''
+
   // Why: PR refreshes now write repo-id scoped entries; legacy path entries may
   // still exist from persisted cache, but must not override fresher repo data.
   const prEntry = prCache
@@ -149,20 +154,25 @@ export function getPRGroupKey(
             | undefined)
         : undefined))
     : undefined
+
   const pr = prEntry?.data
 
   if (!pr || (typeof pr.number === 'number' && isGitHubPRSuppressed(worktree, pr.number))) {
     return 'in-progress'
   }
+
   if (pr.state === 'merged') {
     return 'done'
   }
+
   if (pr.state === 'closed') {
     return 'closed'
   }
+
   if (pr.state === 'draft') {
     return 'in-progress'
   }
+
   return 'in-review'
 }
 

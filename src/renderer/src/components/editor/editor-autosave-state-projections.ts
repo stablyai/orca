@@ -31,9 +31,11 @@ export function autosaveSubscriberInputsEqual(
 
 export function getDuplicateDirtySavePaths(files: OpenFile[]): string[] {
   const counts = new Map<string, number>()
+
   for (const file of files) {
     counts.set(file.filePath, (counts.get(file.filePath) ?? 0) + 1)
   }
+
   return Array.from(counts.entries())
     .filter(([, count]) => count > 1)
     .map(([filePath]) => filePath)

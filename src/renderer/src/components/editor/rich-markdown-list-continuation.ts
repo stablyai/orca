@@ -13,6 +13,7 @@ function getEmptyListItemContext(editor: Editor): {
 
   const { $from } = selection
   const paragraph = $from.parent
+
   if (
     paragraph.type.name !== 'paragraph' ||
     paragraph.content.size > 0 ||
@@ -22,6 +23,7 @@ function getEmptyListItemContext(editor: Editor): {
   }
 
   let listItemDepth = -1
+
   for (let depth = $from.depth - 1; depth >= 0; depth -= 1) {
     if ($from.node(depth).type.name === 'listItem') {
       listItemDepth = depth
@@ -30,6 +32,7 @@ function getEmptyListItemContext(editor: Editor): {
   }
 
   const listDepth = listItemDepth - 1
+
   if (listItemDepth < 0 || listDepth < 0) {
     return null
   }
@@ -39,6 +42,7 @@ function getEmptyListItemContext(editor: Editor): {
 
 export function commitEmptyOrderedListMarkerAsText(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
+
   if (!context) {
     return false
   }
@@ -60,6 +64,7 @@ export function commitEmptyOrderedListMarkerAsText(editor: Editor): boolean {
   }
 
   const paragraphType = schema.nodes.paragraph
+
   if (!paragraphType) {
     return false
   }
@@ -75,11 +80,13 @@ export function commitEmptyOrderedListMarkerAsText(editor: Editor): boolean {
   // of treating it as an abandoned list and erasing the marker.
   tr.setSelection(TextSelection.create(tr.doc, from + markerParagraph.nodeSize + 1))
   view.dispatch(tr.scrollIntoView())
+
   return true
 }
 
 export function isSingleEmptyTopLevelOrderedList(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
+
   if (!context) {
     return false
   }
@@ -88,6 +95,7 @@ export function isSingleEmptyTopLevelOrderedList(editor: Editor): boolean {
   const list = $from.node(context.listDepth)
   const listItem = $from.node(context.listItemDepth)
   const parentDepth = context.listDepth - 1
+
   return (
     list.type.name === 'orderedList' &&
     list.childCount === 1 &&
@@ -98,6 +106,7 @@ export function isSingleEmptyTopLevelOrderedList(editor: Editor): boolean {
 
 export function exitTrailingEmptyOrderedListItem(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
+
   if (!context) {
     return false
   }
@@ -121,6 +130,7 @@ export function exitTrailingEmptyOrderedListItem(editor: Editor): boolean {
   }
 
   const paragraphType = schema.nodes.paragraph
+
   if (!paragraphType) {
     return false
   }
@@ -134,11 +144,13 @@ export function exitTrailingEmptyOrderedListItem(editor: Editor): boolean {
   // that caret target should continue as body text, not keep extending the list.
   tr.setSelection(TextSelection.create(tr.doc, from + remainingList.nodeSize + 1))
   view.dispatch(tr.scrollIntoView())
+
   return true
 }
 
 export function collapseEmptyListContinuationParagraph(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
+
   if (!context) {
     return false
   }
@@ -154,6 +166,7 @@ export function collapseEmptyListContinuationParagraph(editor: Editor): boolean 
   }
 
   const previousChild = listItem.child(childIndex - 1)
+
   if (previousChild.type.name !== 'paragraph' || previousChild.content.size === 0) {
     return false
   }
@@ -167,11 +180,13 @@ export function collapseEmptyListContinuationParagraph(editor: Editor): boolean 
   // numbered list item and remove its marker.
   tr.setSelection(TextSelection.create(tr.doc, previousParagraphEnd))
   view.dispatch(tr.scrollIntoView())
+
   return true
 }
 
 export function convertEmptyNestedOrderedItemToContinuation(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
+
   if (!context) {
     return false
   }
@@ -180,12 +195,14 @@ export function convertEmptyNestedOrderedItemToContinuation(editor: Editor): boo
   const { schema } = state
   const { $from } = state.selection
   const parentListItemDepth = context.listItemDepth - 2
+
   if (parentListItemDepth < 0) {
     return false
   }
 
   const list = $from.node(context.listDepth)
   const parentListItem = $from.node(parentListItemDepth)
+
   if (list.type.name !== 'orderedList' || parentListItem.type.name !== 'listItem') {
     return false
   }
@@ -195,6 +212,7 @@ export function convertEmptyNestedOrderedItemToContinuation(editor: Editor): boo
   }
 
   const replacementParagraph = schema.nodes.paragraph?.create()
+
   if (!replacementParagraph) {
     return false
   }
@@ -206,5 +224,6 @@ export function convertEmptyNestedOrderedItemToContinuation(editor: Editor): boo
   // continuation line under the parent item, not another numbered sublist.
   tr.setSelection(TextSelection.create(tr.doc, from + 1))
   view.dispatch(tr.scrollIntoView())
+
   return true
 }

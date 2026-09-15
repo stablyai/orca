@@ -18,6 +18,7 @@ type MockMultiplexer = {
 function createMockMux(): MockMultiplexer {
   const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
   const disposeHandlers = new Set<(reason: 'shutdown' | 'connection_lost') => void>()
+
   return {
     request: vi.fn().mockResolvedValue(undefined),
     notify: vi.fn(),
@@ -25,16 +26,20 @@ function createMockMux(): MockMultiplexer {
     onNotificationByMethod: vi.fn(
       (method: string, handler: (params: Record<string, unknown>) => void) => {
         let set = methodHandlers.get(method)
+
         if (!set) {
           set = new Set()
           methodHandlers.set(method, set)
         }
+
         set.add(handler)
+
         return () => set!.delete(handler)
       }
     ),
     onDispose: vi.fn((handler: (reason: 'shutdown' | 'connection_lost') => void) => {
       disposeHandlers.add(handler)
+
       return () => {
         disposeHandlers.delete(handler)
       }
@@ -43,6 +48,7 @@ function createMockMux(): MockMultiplexer {
     isDisposed: vi.fn().mockReturnValue(false),
     _emitMethod: (method, params) => {
       const set = methodHandlers.get(method)
+
       if (set) {
         for (const handler of Array.from(set)) {
           handler(params)
@@ -76,6 +82,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
       if (method !== 'fs.readFileStream') {
         throw new Error(`unexpected method ${method}`)
       }
+
       // Why: setImmediate fires after the metadata-resolution .then has set
       // streamIdRef, ensuring subscribed handlers see a matching streamId.
       setImmediate(() => {
@@ -86,6 +93,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
         })
         mux._emitMethod('fs.streamEnd', { streamId: 1 })
       })
+
       return {
         streamId: 1,
         totalSize,
@@ -111,9 +119,11 @@ describe('SshFilesystemProvider readFile streaming', () => {
         err.code = -32601
         throw err
       }
+
       if (method === 'fs.readFile') {
         return legacyResult
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -132,6 +142,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
           data: Buffer.alloc(256 * 1024).toString('base64')
         })
       })
+
       return {
         streamId: 1,
         totalSize,
@@ -180,6 +191,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
           message: 'gone'
         })
       })
+
       return {
         streamId: 7,
         totalSize,
@@ -319,6 +331,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
         })
         mux._emitMethod('fs.streamEnd', { streamId: 1 })
       })
+
       return {
         streamId: 1,
         totalSize,
@@ -349,6 +362,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
         })
         mux._emitMethod('fs.streamEnd', { streamId: 1 })
       })
+
       return {
         streamId: 1,
         totalSize,
@@ -376,6 +390,7 @@ describe('SshFilesystemProvider readFile streaming', () => {
         })
         mux._emitMethod('fs.streamEnd', { streamId: 1 })
       })
+
       return {
         streamId: 1,
         totalSize,

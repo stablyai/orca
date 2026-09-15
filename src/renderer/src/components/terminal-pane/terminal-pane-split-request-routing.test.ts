@@ -62,6 +62,7 @@ describe('parked terminal split request routing', () => {
         const sourcePaneId = resolveTerminalPaneSplitSourceId(detail, (leafId) =>
           leafId === SOURCE_LEAF_ID ? 7 : null
         )
+
         splitPane(sourcePaneId, detail.direction)
       }
     )
@@ -123,6 +124,7 @@ describe('parked terminal split request routing', () => {
       'repo::/one',
       first
     )
+
     expect(first).toHaveBeenCalledWith(expect.objectContaining({ worktreeId: 'repo::/one' }))
     expect(second).not.toHaveBeenCalled()
 
@@ -131,6 +133,7 @@ describe('parked terminal split request routing', () => {
       'repo::/two',
       second
     )
+
     expect(second).toHaveBeenCalledWith(expect.objectContaining({ worktreeId: 'repo::/two' }))
     unregisterFirst()
     unregisterSecond()

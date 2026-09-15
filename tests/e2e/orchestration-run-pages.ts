@@ -14,6 +14,7 @@ export async function listAllOrchestrationRuns(
 ): Promise<OrchestrationRunSummary[]> {
   const runs: OrchestrationRunSummary[] = []
   let cursor: string | undefined
+
   do {
     const page = await client.call<{
       runs: OrchestrationRunSummary[]
@@ -22,8 +23,10 @@ export async function listAllOrchestrationRuns(
       limit: ORCHESTRATION_RUN_PAGE_LIMIT,
       ...(cursor ? { cursor } : {})
     })
+
     runs.push(...page.result.runs)
     cursor = page.result.nextCursor ?? undefined
   } while (cursor)
+
   return runs
 }

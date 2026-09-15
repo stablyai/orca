@@ -12,7 +12,9 @@ import {
 } from './use-remote-push-capable-hosts'
 
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
+
 vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: vi.fn() }))
+
 vi.mock('../transport/runtime-capability-probe', () => ({
   startRuntimeCapabilityProbe: vi.fn()
 }))
@@ -33,12 +35,16 @@ function clientFor(hostId: string): RpcClient {
 }
 
 let renderer: ReactTestRenderer | null = null
+
 let latest: RemotePushHostSupport = { supported: false, resolved: false }
+
 const answerByHostId = new Map<string, (capabilities: readonly string[]) => void>()
+
 const stopProbe = vi.fn()
 
 function Harness(): null {
   latest = useRemotePushCapableHosts()
+
   return null
 }
 
@@ -71,6 +77,7 @@ beforeEach(() => {
   vi.mocked(useAllHostClients).mockReturnValue([] as never)
   vi.mocked(startRuntimeCapabilityProbe).mockImplementation((client, onCapabilities) => {
     answerByHostId.set((client as unknown as { hostId: string }).hostId, onCapabilities)
+
     return stopProbe
   })
   vi.mocked(loadHostCatalog).mockResolvedValue([

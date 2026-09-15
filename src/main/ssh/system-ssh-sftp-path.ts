@@ -18,12 +18,15 @@ export class UnsupportedSftpPathError extends Error {
  */
 export function toSftpRemotePath(remotePath: string): string {
   const normalized = normalizeWindowsRemotePath(remotePath)
+
   if (/^\/[a-zA-Z]:\//.test(normalized)) {
     return normalized
   }
+
   if (/^[a-zA-Z]:\//.test(normalized)) {
     return `/${normalized}`
   }
+
   // UNC (`//server/share`) and relative paths have no settled mapping in this namespace, and a
   // guess here writes real bytes to the wrong place. Decline instead.
   throw new UnsupportedSftpPathError(remotePath)
@@ -42,5 +45,6 @@ export function quoteSftpBatchArgument(value: string): string {
     // A line break would split one batch command into two; NUL truncates the argument.
     throw new UnsupportedSftpPathError(value)
   }
+
   return `"${value.replace(/([\\"])/g, '\\$1')}"`
 }

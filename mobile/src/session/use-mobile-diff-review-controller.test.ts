@@ -7,11 +7,14 @@ import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 
 const loadSnapshot = vi.hoisted(() => vi.fn())
+
 vi.mock('./mobile-diff-review-loaders', () => ({
   loadMobileDiffReviewSnapshot: loadSnapshot,
   loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
 }))
+
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(),
   notificationAsync: vi.fn(),
@@ -21,6 +24,7 @@ vi.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: {},
   NotificationFeedbackType: {}
 }))
+
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 
 const client = { sendRequest: vi.fn() } as unknown as RpcClient
@@ -51,7 +55,9 @@ describe('useMobileDiffReviewController', () => {
       onOpenSession: () => {},
       onReconnect: () => {}
     })
+
     screenState = controller.screenState
+
     return null
   }
 

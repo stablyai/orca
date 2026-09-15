@@ -80,6 +80,7 @@ export function createUsageEventAggregation<
     index: UsageSessionBreakdownIndex<TMetric>['locations']
   ): void {
     const existing = index.get(event.projectKey)
+
     if (existing) {
       existing.eventCount++
       existing.inputTokens += event.inputTokens
@@ -88,6 +89,7 @@ export function createUsageEventAggregation<
       existing.reasoningOutputTokens += event.reasoningOutputTokens
       existing.totalTokens += event.totalTokens
       metric.fold(existing, eventMetric)
+
       return
     }
 
@@ -104,6 +106,7 @@ export function createUsageEventAggregation<
       totalTokens: event.totalTokens,
       ...eventMetric
     }
+
     target.push(entry)
     index.set(event.projectKey, entry)
   }
@@ -116,6 +119,7 @@ export function createUsageEventAggregation<
   ): void {
     const key = event.model ?? 'unknown'
     const existing = index.get(key)
+
     if (existing) {
       existing.eventCount++
       existing.inputTokens += event.inputTokens
@@ -124,6 +128,7 @@ export function createUsageEventAggregation<
       existing.reasoningOutputTokens += event.reasoningOutputTokens
       existing.totalTokens += event.totalTokens
       metric.fold(existing, eventMetric)
+
       return
     }
 
@@ -138,6 +143,7 @@ export function createUsageEventAggregation<
       totalTokens: event.totalTokens,
       ...eventMetric
     }
+
     target.push(entry)
     index.set(key, entry)
   }
@@ -150,6 +156,7 @@ export function createUsageEventAggregation<
   ): void {
     const modelKey = event.model ?? 'unknown'
     const existing = index.get(usageLocationModelKey(event.projectKey, modelKey))
+
     if (existing) {
       existing.eventCount++
       existing.inputTokens += event.inputTokens
@@ -158,6 +165,7 @@ export function createUsageEventAggregation<
       existing.reasoningOutputTokens += event.reasoningOutputTokens
       existing.totalTokens += event.totalTokens
       metric.fold(existing, eventMetric)
+
       return
     }
 
@@ -175,6 +183,7 @@ export function createUsageEventAggregation<
       totalTokens: event.totalTokens,
       ...eventMetric
     }
+
     target.push(entry)
     index.set(usageLocationModelKey(event.projectKey, modelKey), entry)
   }
@@ -225,15 +234,19 @@ export function createUsageEventAggregation<
     for (const event of events) {
       const eventMetric = metric.fromEvent(event)
       const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
+
       if (!sessionsById.has(event.sessionId)) {
         sessionsById.set(event.sessionId, session)
       }
+
       if (event.timestamp < session.firstTimestamp) {
         session.firstTimestamp = event.timestamp
       }
+
       if (event.timestamp >= session.lastTimestamp) {
         session.lastTimestamp = event.timestamp
       }
+
       session.eventCount++
       session.totalInputTokens += event.inputTokens
       session.totalCachedInputTokens += event.cachedInputTokens
@@ -242,10 +255,12 @@ export function createUsageEventAggregation<
       session.totalTokens += event.totalTokens
       metric.fold(session, eventMetric)
       let breakdowns = breakdownsBySession.get(event.sessionId)
+
       if (!breakdowns) {
         breakdowns = indexUsageSessionBreakdowns(session)
         breakdownsBySession.set(event.sessionId, breakdowns)
       }
+
       foldLocation(session.locationBreakdown, event, eventMetric, breakdowns.locations)
       foldModel(session.modelBreakdown, event, eventMetric, breakdowns.models)
       foldLocationModel(
@@ -257,9 +272,11 @@ export function createUsageEventAggregation<
 
       const dailyKey = usageDailyAggregateKey(event)
       const daily = dailyByKey.get(dailyKey) ?? createEmptyDailyAggregate(event)
+
       if (!dailyByKey.has(dailyKey)) {
         dailyByKey.set(dailyKey, daily)
       }
+
       daily.eventCount++
       daily.inputTokens += event.inputTokens
       daily.cachedInputTokens += event.cachedInputTokens

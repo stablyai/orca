@@ -37,6 +37,7 @@ describe('web runtime environment identity', () => {
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
+
     const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Windows 2',
       pairingCode: encodePairingCode({ publicKeyB64: 'windows-2-key' })
@@ -78,6 +79,7 @@ describe('web runtime environment identity', () => {
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
+
     const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Windows 2',
       pairingCode: encodePairingCode({ publicKeyB64: 'windows-2-key' })
@@ -106,10 +108,12 @@ describe('web runtime environment identity', () => {
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
+
     const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Windows 2',
       pairingCode: encodePairingCode({ publicKeyB64: 'windows-2-key' })
     })
+
     await globals.window.api.settings.setActiveRuntimeEnvironmentPreference({
       environmentId: paired.environment.id
     })
@@ -143,9 +147,11 @@ describe('web runtime environment identity', () => {
   it('ignores malformed persisted compatibility ids when resolving selectors', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+
     const stored = JSON.parse(
       globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}'
     ) as Record<string, unknown>
+
     stored.compatibleEnvironmentIds = { old: 'web-server-old' }
     globals.storage.setItem('orca.web.runtimeEnvironment.v1', JSON.stringify(stored))
     const { installWebPreloadApi } = await import('./web-preload-api')
@@ -159,9 +165,11 @@ describe('web runtime environment identity', () => {
   it('ignores malformed persisted paired device identity', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
+
     const stored = JSON.parse(
       globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}'
     ) as Record<string, unknown>
+
     stored.pairedDeviceId = { invalid: true }
     globals.storage.setItem('orca.web.runtimeEnvironment.v1', JSON.stringify(stored))
     const { installWebPreloadApi } = await import('./web-preload-api')
@@ -183,6 +191,7 @@ describe('web runtime environment identity', () => {
 
         call(method: string): Promise<RuntimeRpcResponse<unknown>> {
           calls.push(method)
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -246,9 +255,11 @@ describe('web runtime environment identity', () => {
 
   it('fences a web runtime response that completes after manual disconnect', async () => {
     let resolveCall!: (response: RuntimeRpcResponse<unknown>) => void
+
     const pendingCall = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
       resolveCall = resolve
     })
+
     const call = vi.fn(() => pendingCall)
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -264,6 +275,7 @@ describe('web runtime environment identity', () => {
     const status = globals.window.api.runtimeEnvironments.getStatus({
       selector: 'web-server-a'
     })
+
     await vi.waitFor(() => expect(call).toHaveBeenCalledOnce())
     await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
     resolveCall({
@@ -283,12 +295,14 @@ describe('web runtime environment identity', () => {
     'returns a disconnect envelope when a queued %s call disconnects',
     async (route) => {
       const pending: ((response: RuntimeRpcResponse<unknown>) => void)[] = []
+
       const call = vi.fn(
         (method: string) =>
           new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
             pending.push((response) => resolve({ ...response, id: method }))
           })
       )
+
       vi.doMock('./web-runtime-client', () => ({
         WebRuntimeClient: class {
           call = call
@@ -299,6 +313,7 @@ describe('web runtime environment identity', () => {
       writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
       const { installWebPreloadApi } = await import('./web-preload-api')
       installWebPreloadApi()
+
       const invoke = (): Promise<RuntimeRpcResponse<unknown>> =>
         route === 'active runtime'
           ? globals.window.api.runtime.call({ method: 'repos.list' })
@@ -334,6 +349,7 @@ describe('web runtime environment identity', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       await expect(Promise.all(activeCalls)).resolves.toEqual(
         Array.from({ length: 8 }, () =>
           expect.objectContaining({
@@ -438,6 +454,7 @@ describe('web runtime environment identity', () => {
       },
       _meta: { runtimeId: 'runtime-new' }
     })
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call = call
@@ -528,6 +545,7 @@ describe('web runtime environment identity', () => {
 
   it('replaces API closures on reinstall while retaining the runtime client singleton', async () => {
     let clientCount = 0
+
     const call = vi.fn((method: string): Promise<RuntimeRpcResponse<unknown>> =>
       Promise.resolve({
         id: method,
@@ -536,6 +554,7 @@ describe('web runtime environment identity', () => {
         _meta: { runtimeId: 'runtime-a' }
       })
     )
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         constructor() {

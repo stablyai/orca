@@ -46,9 +46,11 @@ function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
 
 function getExecutionSurface(setup: ProjectHostSetup): string {
   const connectionId = setup.connectionId?.trim()
+
   if (connectionId) {
     return toSshExecutionHostId(connectionId)
   }
+
   return setup.executionHostId?.trim() || setup.hostId
 }
 
@@ -59,12 +61,15 @@ function getCheckoutIdentity(setup: ProjectHostSetup): string {
 
 function getPathSurface(setup: ProjectHostSetup): string {
   const wslPath = parseWslUncPath(setup.path)
+
   if (wslPath) {
     return `wsl:${wslPath.distro.toLowerCase()}`
   }
+
   if (isWindowsAbsolutePathLike(setup.path)) {
     return 'windows-host'
   }
+
   return 'default'
 }
 
@@ -74,41 +79,55 @@ export function buildProjectGroupingIndex(
   if (!model) {
     return null
   }
+
   const cached = projectGroupingIndexCache.get(model)
+
   if (cached !== undefined) {
     return cached
   }
+
   const projects = model.projects ?? []
   const projectHostSetups = model.projectHostSetups ?? []
+
   if (projects.length === 0 || projectHostSetups.length === 0) {
     projectGroupingIndexCache.set(model, null)
+
     return null
   }
+
   const checkoutsByProjectSurface = new Map<string, Set<string>>()
+
   for (const setup of projectHostSetups) {
     if (!isDistinctUserCheckout(setup)) {
       continue
     }
+
     const key = getProjectSetupSurfaceKey(setup)
     const existing = checkoutsByProjectSurface.get(key)
+
     if (existing) {
       existing.add(getCheckoutIdentity(setup))
     } else {
       checkoutsByProjectSurface.set(key, new Set([getCheckoutIdentity(setup)]))
     }
   }
+
   const surfaceKeysRequiringSetupGroups = new Set<string>()
+
   for (const [surfaceKey, checkouts] of checkoutsByProjectSurface) {
     if (checkouts.size > 1) {
       surfaceKeysRequiringSetupGroups.add(surfaceKey)
     }
   }
+
   const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
     setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
     surfaceKeysRequiringSetupGroups
   }
+
   projectGroupingIndexCache.set(model, index)
+
   return index
 }
 
@@ -127,6 +146,7 @@ export function getProjectGroupingForRepo(
   const repo = repoMap.get(repoId)
   const setup = projectIndex?.setupByRepoId.get(repoId)
   const project = setup ? projectIndex?.projectById.get(setup.projectId) : undefined
+
   if (!setup || !project) {
     return {
       key: `repo:${repoId}`,
@@ -134,6 +154,7 @@ export function getProjectGroupingForRepo(
       repo
     }
   }
+
   if (
     projectIndex?.surfaceKeysRequiringSetupGroups.has(getProjectSetupSurfaceKey(setup)) &&
     isDistinctUserCheckout(setup)
@@ -146,6 +167,7 @@ export function getProjectGroupingForRepo(
       projectId: project.id
     }
   }
+
   // Why: provisioned runtime copies and non-ambiguous checkouts follow project
   // identity rather than path-scoped setup identity, so they stay in one project.
   return {

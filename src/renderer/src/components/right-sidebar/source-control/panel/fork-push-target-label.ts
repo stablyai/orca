@@ -6,6 +6,7 @@ import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 export function describeForkPushTarget(pushTarget: GitPushTarget): string {
   const ownerMatch = pushTarget.remoteUrl?.match(/[:/]([^/:]+)\/[^/]+?(?:\.git)?$/)
   const owner = ownerMatch?.[1]
+
   return owner
     ? `${owner}:${pushTarget.branchName}`
     : `${pushTarget.remoteName}/${pushTarget.branchName}`

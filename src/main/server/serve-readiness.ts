@@ -50,7 +50,9 @@ export class ServeReadinessPublisher {
     if (this.state !== 'pending') {
       throw new Error(`Serve readiness publication already ${this.state}`)
     }
+
     this.state = 'publishing'
+
     try {
       await this.write(`${renderServeReadiness(readiness, output)}\n`)
       this.state = 'published'
@@ -71,12 +73,14 @@ export function renderServeReadiness(
         `Recipe JSON output requires runtime pairing: ${readiness.pairing.reason}. ${readiness.pairing.guidance}`
       )
     }
+
     return JSON.stringify({
       schemaVersion: 1,
       pairingCode: readiness.pairing.url,
       projectRoot: output.projectRoot
     })
   }
+
   if (output.mode === 'json') {
     return JSON.stringify({
       type: 'orca_server_ready',
@@ -90,6 +94,7 @@ export function renderServeReadiness(
       ...(readiness.health ? { health: readiness.health } : {})
     })
   }
+
   return renderHumanReadiness(readiness)
 }
 
@@ -99,6 +104,7 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
     `Bound endpoint: ${readiness.boundEndpoint ?? 'websocket unavailable'}`,
     `Advertised endpoint: ${readiness.advertisedEndpoint ?? 'unavailable'}`
   ]
+
   if (readiness.health) {
     const daemon = readiness.health.terminalDaemon
     lines.push(
@@ -111,18 +117,22 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
         `; terminals survive an orcad restart: ${daemon.ownsFreshSessions ? 'yes' : 'NO'}`
     )
   }
+
   if (readiness.pairing.available) {
     if (readiness.pairing.webClientUrl) {
       lines.push(`Web client URL: ${readiness.pairing.webClientUrl}`)
     }
+
     if (readiness.pairing.scope === 'mobile' && readiness.pairing.qr) {
       lines.push(`Mobile pairing QR:\n${readiness.pairing.qr}`)
     }
+
     lines.push(`Pairing URL: ${readiness.pairing.url}`)
   } else {
     lines.push(`Pairing unavailable: ${readiness.pairing.reason}`)
     lines.push(`Pairing guidance: ${readiness.pairing.guidance}`)
   }
+
   return lines.join('\n')
 }
 

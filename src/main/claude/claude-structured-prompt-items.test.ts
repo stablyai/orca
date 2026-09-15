@@ -13,6 +13,7 @@ import {
 describe('Claude structured question addressing', () => {
   it('bounds a valid grouped question before cancellation enters a lifecycle batch', () => {
     const oversized = 'large prompt text '.repeat(40_000)
+
     const questions = Array.from({ length: 4 }, (_, questionIndex) => ({
       question: `${questionIndex}:${oversized}`,
       header: oversized,
@@ -21,6 +22,7 @@ describe('Claude structured question addressing', () => {
         description: oversized
       }))
     }))
+
     const prompt: ClaudePendingPrompt = {
       requestId: 'oversized-question',
       promptKey: 'oversized-question',
@@ -35,10 +37,13 @@ describe('Claude structured question addressing', () => {
     }
 
     const body = claudeQuestionItems({ sessionId: 'session-1', prompt })[0]?.body
+
     if (!body) {
       throw new Error('expected grouped question body')
     }
+
     const cancelled = cancelledJournalPromptBody(body)
+
     if (!cancelled) {
       throw new Error('expected cancellable grouped question body')
     }
@@ -54,6 +59,7 @@ describe('Claude structured question addressing', () => {
   it('keeps wire IDs bounded while returning the original question and choice', () => {
     const questionId = 'Which option? '.repeat(100)
     const label = 'A detailed choice '.repeat(100)
+
     const prompt: ClaudePendingPrompt = {
       requestId: 'question-1',
       promptKey: 'question-1',
@@ -78,6 +84,7 @@ describe('Claude structured question addressing', () => {
 
   it('preserves colon-containing free-text answers', () => {
     const questionId = 'Where should this run?'
+
     const prompt: ClaudePendingPrompt = {
       requestId: 'question-1',
       promptKey: 'question-1',
@@ -90,6 +97,7 @@ describe('Claude structured question addressing', () => {
       answers: new Map(),
       settle: () => {}
     }
+
     const answer = 'https://example.test:8443/path'
 
     expect(
@@ -103,6 +111,7 @@ describe('Claude structured question addressing', () => {
     const multiQuestion = 'Which targets?'
     const singleQuestion = 'Which mode?'
     const otherQuestion = 'Where should it run?'
+
     const prompt: ClaudePendingPrompt = {
       requestId: 'question-1',
       promptKey: 'question-1',
@@ -128,8 +137,10 @@ describe('Claude structured question addressing', () => {
       answers: new Map(),
       settle: () => {}
     }
+
     const item = claudeQuestionItems({ sessionId: 'session-1', prompt })[0]!
     const questions = item.body.questions!
+
     const encoded = encodeAgentSessionQuestionAnswers([
       {
         questionId: 'q1',

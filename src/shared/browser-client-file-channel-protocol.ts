@@ -1,17 +1,24 @@
 import { z } from 'zod'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION = 1 as const
+
 export const BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY = 'file-channel-v1' as const
 
 // Why: base64 inflates 4/3, so a raw chunk this size stays well inside the runtime RPC envelope.
 export const BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES = 128 * 1024
+
 export const BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES = 64 * 1024 * 1024
+
 export const BROWSER_CLIENT_FILE_CHANNEL_MAX_FILES_PER_COMMAND = 16
+
 export const BROWSER_CLIENT_FILE_CHANNEL_MAX_ACTIVE_DOWNLOADS = 8
 
 const Identity = z.string().min(1).max(256)
+
 const Generation = z.number().int().min(1).max(0xffff_ffff)
+
 const FileChannelProtocolVersion = z.literal(BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION)
+
 const Base64Chunk = z
   .string()
   .max(Math.ceil(BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES / 3) * 4)
@@ -23,9 +30,11 @@ const Base64Chunk = z
 // Why: Buffer.from tolerates malformed base64 by dropping bytes, which would silently corrupt a staged file.
 export function decodeBrowserClientFileChannelChunk(contentBase64: string): Buffer {
   const decoded = Buffer.from(contentBase64, 'base64')
+
   if (decoded.toString('base64').replace(/=+$/, '') !== contentBase64.replace(/=+$/, '')) {
     throw new Error('browser_client_file_channel_chunk_invalid')
   }
+
   return decoded
 }
 

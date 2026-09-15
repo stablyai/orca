@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const repoRoot = resolve(__dirname, '../../..')
+
 const REAPER_MODULE = 'src/main/runtime/orca-runtime-on-pty-exit.ts'
 
 /** `fooByPtyId`, plus the older `ById` spellings that are still keyed by pty id. */
@@ -72,8 +73,10 @@ const INTENTIONALLY_RETAINED: Record<string, string> = {
 
 function ptyKeyedFieldNames(): string[] {
   const runtime = new OrcaRuntimeService() as unknown as Record<string, unknown>
+
   return Object.keys(runtime).filter((key) => {
     const value = runtime[key]
+
     return PTY_KEYED_FIELD.test(key) && (value instanceof Map || value instanceof Set)
   })
 }
@@ -112,6 +115,7 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
         !SELF_CLEARING_IN_FLIGHT.has(field) &&
         !(field in INTENTIONALLY_RETAINED)
     )
+
     expect(
       unaccounted,
       `${REAPER_MODULE} must delete these per-PTY entries, or they must be classified in this test`
@@ -120,11 +124,13 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
 
   it('keeps every classification about a field that still exists', () => {
     const known = new Set(fields)
+
     const stale = [
       ...Object.keys(CLEARED_BY_REAPER_HELPER),
       ...SELF_CLEARING_IN_FLIGHT,
       ...Object.keys(INTENTIONALLY_RETAINED)
     ].filter((field) => !known.has(field))
+
     expect(stale, 'classified fields that no longer exist').toEqual([])
   })
 
@@ -146,19 +152,23 @@ describe('per-PTY lifecycle generation retention (leak regression)', () => {
   it('retains no lifecycle generation after a spawn/exit cycle', () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as Internals
+
     for (let index = 0; index < 50; index += 1) {
       const ptyId = `pty-${index}`
       runtime.onPtySpawned(ptyId)
       runtime.onPtyExit(ptyId, 0)
     }
+
     expect(internals.ptyLifecycleGenerationById.size).toBe(0)
   })
 
   it('never hands a respawn a generation a pre-exit capture could still match', () => {
     const runtime = new OrcaRuntimeService()
+
     const internals = runtime as unknown as Internals & {
       getPtyLifecycleGeneration: (ptyId: string) => number
     }
+
     runtime.onPtySpawned('pty-1')
     const beforeExit = internals.getPtyLifecycleGeneration('pty-1')
     runtime.onPtyExit('pty-1', 0)

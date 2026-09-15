@@ -48,6 +48,7 @@ function middleRuleQualityClass(rule: number): PaletteResultQualityClass {
   if (rule <= 3) {
     return 'exact-intent'
   }
+
   return rule <= 5 ? 'visible-prefix' : 'partial-evidence'
 }
 
@@ -56,6 +57,7 @@ export function bestCmdJPaletteSectionQualityClass(
   results: readonly { qualityClass: PaletteResultQualityClass }[]
 ): PaletteResultQualityClass | null {
   let best: PaletteResultQualityClass | null = null
+
   for (const { qualityClass } of results) {
     if (
       best === null ||
@@ -64,6 +66,7 @@ export function bestCmdJPaletteSectionQualityClass(
       best = qualityClass
     }
   }
+
   return best
 }
 
@@ -108,9 +111,11 @@ function keywordParts(section: SettingsNavSection): string[] {
   // Why keep the English forms alongside the localized ones: section titles stay English in
   // some catalogs, and a user on a localized build still types `terminal settings` freely.
   const suffixed = [`${section.title} settings`, `${idWords} settings`]
+
   if (localized !== 'settings') {
     suffixed.push(`${section.title} ${localized}`, `${idWords} ${localized}`, localized)
   }
+
   return [
     section.id,
     baseId,
@@ -125,9 +130,11 @@ function keywordParts(section: SettingsNavSection): string[] {
 function targetEntryKeywordParts(entryTitle: string): string[] {
   const localized = settingsWord()
   const parts = [entryTitle, `${entryTitle} settings`]
+
   if (localized !== 'settings') {
     parts.push(`${entryTitle} ${localized}`)
   }
+
   return parts
 }
 
@@ -145,6 +152,7 @@ export function buildCmdJSettingsResults(
       order,
       configKeywords: uniqueNormalizedCmdJPaletteKeywords(keywordParts(section))
     }
+
     const targetedResults = section.searchEntries
       .filter((entry) => entry.targetSectionId)
       .map((entry, entryIndex) => ({
@@ -198,7 +206,9 @@ function rankingForCandidate(
     candidate.kind === 'settings'
       ? [candidate.title, ...candidate.configKeywords]
       : [candidate.title, ...candidate.verbKeywords]
+
   const score = cmdJPaletteTokenScore(queryTokens, values)
+
   if (score === 0) {
     return null
   }
@@ -244,15 +254,19 @@ function compareRanked(a: RankedResult, b: RankedResult): number {
   if (a.rule !== b.rule) {
     return a.rule - b.rule
   }
+
   if (a.rule === 6 && a.score !== b.score) {
     return b.score - a.score
   }
+
   if (a.result.kind !== b.result.kind) {
     return a.result.kind === 'settings' ? -1 : 1
   }
+
   if (a.result.order !== b.result.order) {
     return a.result.order - b.result.order
   }
+
   return a.result.id.localeCompare(b.result.id)
 }
 
@@ -268,10 +282,13 @@ export function rankCmdJMiddleResults({
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
   }
+
   const normalizedQuery = normalizeCmdJPaletteQuery(query)
+
   if (normalizedQuery.length < 2 || isCmdJPaletteQueryOverTokenLimit(normalizedQuery)) {
     return []
   }
+
   const queryTokens = uniqueCmdJPaletteQueryTokens(normalizedQuery)
   const settings = settingsResults
   const actions = actionResults

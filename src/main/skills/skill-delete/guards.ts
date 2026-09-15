@@ -39,6 +39,7 @@ export function isSkillDeleteFresh(
   if (displayedUpdatedAt === null || observedMtimeMs === null) {
     return false
   }
+
   return Math.abs(displayedUpdatedAt - observedMtimeMs) <= SKILL_DELETE_FRESHNESS_TOLERANCE_MS
 }
 
@@ -49,12 +50,15 @@ export function owningSkillRoot(
 ): SkillScanRoot | null {
   const api = pathApi(context.semantics)
   const skillFilePath = api.join(path, 'SKILL.md')
+
   for (const root of context.roots) {
     const depth = skillPathDepthBelow(root.path, skillFilePath, context.semantics)
+
     if (depth !== null && depth <= skillFileMaxDepth(root.sourceKind)) {
       return root
     }
   }
+
   return null
 }
 
@@ -76,14 +80,18 @@ export function blockedCanonicalReason(
 ): SkillDeleteBlockReason | null {
   const api = pathApi(context.semantics)
   const canonicalSkillFile = api.join(canonicalDirectoryPath, 'SKILL.md')
+
   for (const root of context.roots) {
     const depth = skillPathDepthBelow(root.path, canonicalSkillFile, context.semantics)
+
     if (depth === null || depth > skillFileMaxDepth(root.sourceKind)) {
       continue
     }
+
     if (root.sourceKind === 'plugin') {
       return 'plugin'
     }
+
     if (
       root.sourceKind === 'home' &&
       api.relative(root.path, canonicalSkillFile).split(context.semantics.sep)[0] === '.system'
@@ -91,6 +99,7 @@ export function blockedCanonicalReason(
       return 'bundled'
     }
   }
+
   return null
 }
 
@@ -109,9 +118,11 @@ export function classifySkillPlacement(
   const api = pathApi(context.semantics)
   const canonicalDirectoryPath = api.dirname(canonicalSkillFilePath)
   const owningRoot = owningSkillRoot(candidate.path, context)
+
   if (!owningRoot || skillPathsEqual(owningRoot.path, candidate.path, context.semantics)) {
     return null
   }
+
   const placement = (kind: SkillDeletePlacement['kind']): ClassifiedPlacement => ({
     path: candidate.path,
     kind,
@@ -127,11 +138,13 @@ export function classifySkillPlacement(
       ? placement('alias-dir')
       : null
   }
+
   if (
     !candidate.skillFileRealpath ||
     !skillPathsEqual(candidate.skillFileRealpath, canonicalSkillFilePath, context.semantics)
   ) {
     return null
   }
+
   return placement(candidate.skillFileKind === 'symlink' ? 'alias-file' : 'canonical')
 }

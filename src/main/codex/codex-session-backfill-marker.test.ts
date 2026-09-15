@@ -19,10 +19,13 @@ import type {
 } from './codex-session-backfill-types'
 
 const WINDOWS_ROOT = 'C:\\Users\\Me\\.codex\\sessions'
+
 const TODAY = getCodexSessionBackfillDate()
+
 const LAUNCH_DATE: CodexSessionBackfillDate = ['2026', '08', '05']
 
 let stateDir: string
+
 let markerPath: string
 
 function createSummary(scannedFiles = 3): CodexSessionBackfillSummary {
@@ -86,6 +89,7 @@ describe('codex session backfill marker', () => {
     for (const alias of ['C:/Users/Me/.codex/sessions', 'c:\\users\\me\\.codex\\sessions']) {
       expect(hasCompletedCodexSessionBackfillMarker(markerPath, alias)).toBe(true)
     }
+
     expect(
       hasCompletedCodexSessionBackfillMarker(markerPath, 'C:\\Users\\Me\\other-codex\\sessions')
     ).toBe(false)

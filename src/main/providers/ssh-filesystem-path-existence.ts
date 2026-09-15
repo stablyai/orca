@@ -15,6 +15,7 @@ export async function readSshPathExistenceBatch(
   stat: (path: string) => Promise<unknown>
 ): Promise<PathExistenceResult[]> {
   validatePathExistenceBatch(paths)
+
   if (await probeSshPathExistenceBatchCapability(mux)) {
     try {
       return requirePathExistenceResults(
@@ -27,16 +28,19 @@ export async function readSshPathExistenceBatch(
       }
     }
   }
+
   return Promise.all(
     paths.map((path) =>
       capturePathExistence(async () => {
         try {
           await stat(path)
+
           return true
         } catch (error) {
           if (isENOENT(error)) {
             return false
           }
+
           throw error
         }
       })

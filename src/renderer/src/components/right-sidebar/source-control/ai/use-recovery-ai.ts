@@ -55,6 +55,7 @@ export function useSourceControlRecoveryAi({
         : null,
     [commitError, commitMessage, stagedEntries, worktreePath]
   )
+
   const handleFixCommitFailureWithAI = useCallback(
     async (promptOverride?: string): Promise<boolean> => {
       if (isLaunchingCommitFailureAgent || !activeWorktreeId || !commitError) {
@@ -62,6 +63,7 @@ export function useSourceControlRecoveryAi({
       }
 
       setIsLaunchingCommitFailureAgent(true)
+
       try {
         return await launchSourceControlRecoveryAgentWithDefault({
           activeWorktreeId,
@@ -99,6 +101,7 @@ export function useSourceControlRecoveryAi({
       }
 
       setIsLaunchingPushFailureAgent(true)
+
       try {
         return await launchSourceControlRecoveryAgentWithDefault({
           activeWorktreeId,

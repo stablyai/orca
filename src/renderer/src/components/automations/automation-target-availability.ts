@@ -75,30 +75,36 @@ export function getAutomationTargetAvailability({
 
   if (automation.runContext) {
     const parsedHost = parseExecutionHostId(automation.runContext.hostId)
+
     if (parsedHost?.kind === 'runtime') {
       const runtimeAvailability = getRuntimeAutomationAvailability(
         parsedHost.environmentId,
         runtimeStatusByEnvironmentId
       )
+
       if (!runtimeAvailability.canRunNow) {
         return runtimeAvailability
       }
     }
+
     const setup = projectHostSetups.find(
       (candidate) => candidate.id === automation.runContext?.projectHostSetupId
     )
+
     if (!setup) {
       return unavailable(
         'missing-project-host-setup',
         'Project is not set up on the selected automation host anymore.'
       )
     }
+
     if (setup.setupState !== 'ready') {
       return unavailable(
         'project-host-setup-not-ready',
         `Project setup on the selected automation host is ${setup.setupState}.`
       )
     }
+
     // Why: projectId is a derived identity that upgrades over time (repo:→git:→github:);
     // matching on it strands automations created before their repo's identity resolved.
     // Anchor on repoId/path/host instead — the durable, stable target identity.
@@ -106,10 +112,12 @@ export function getAutomationTargetAvailability({
       setup.repoId === automation.runContext.repoId &&
       setup.path === automation.runContext.path &&
       setupHostMatchesRunContext(setup.hostId, automation.runContext.hostId, automationHostTarget)
+
     const repoMatchesContext =
       automation.runContext.repoId === repo.id &&
       automation.runContext.path === repo.path &&
       repoHostMatchesRunContext(repo, automation.runContext.hostId, automationHostTarget)
+
     if (!setupMatchesContext || !repoMatchesContext) {
       return unavailable(
         'host-mismatch',
@@ -117,6 +125,7 @@ export function getAutomationTargetAvailability({
       )
     }
   }
+
   if (automation.workspaceMode === 'existing' && !workspace) {
     return unavailable('missing-workspace', 'The target workspace is no longer available.')
   }
@@ -125,16 +134,19 @@ export function getAutomationTargetAvailability({
     automation.sourceContext,
     sourceHostAvailability
   )
+
   if (sourceAvailability) {
     return sourceAvailability
   }
 
   const sshTargetId = getAutomationSshTargetId(automation, repo)
+
   if (!sshTargetId) {
     return { canRunNow: true, reason: 'available', message: null }
   }
 
   const status = sshConnectionStates.get(sshTargetId)?.status ?? 'disconnected'
+
   switch (status) {
     case 'connected':
       return { canRunNow: true, reason: 'available', message: null }
@@ -165,7 +177,9 @@ function setupHostMatchesRunContext(
   if (setupHostId === runHostId) {
     return true
   }
+
   const targetHostId = getRuntimeTargetHostId(target)
+
   // Why: remote-runtime project lists project the server-local host as runtime:<env>,
   // while CLI-created automations can preserve the server's durable local run host.
   return targetHostId !== null && setupHostId === targetHostId && runHostId === 'local'
@@ -179,7 +193,9 @@ function repoHostMatchesRunContext(
   if (runHostId === getRepoExecutionHostId(repo)) {
     return true
   }
+
   const targetHostId = getRuntimeTargetHostId(target)
+
   // Why: repos fetched from a remote runtime are owned by runtime:<env> in the
   // renderer, but saved automations still target the host setup that runs there.
   return targetHostId !== null && getRepoExecutionHostId(repo) === targetHostId
@@ -192,13 +208,17 @@ function getAutomationSourceAvailability(
   if (!sourceContext) {
     return null
   }
+
   const availability = sourceHostAvailability?.find(
     (entry) => entry.hostId === sourceContext.hostId
   )
+
   if (!availability) {
     return null
   }
+
   const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
+
   switch (availability.reason) {
     case undefined:
       break
@@ -224,6 +244,7 @@ function getAutomationSourceAvailability(
         `Checking the saved ${providerLabel} source host before running manually.`
       )
   }
+
   if (
     availability.health === 'disconnected' ||
     availability.health === 'blocked' ||
@@ -238,6 +259,7 @@ function getAutomationSourceAvailability(
       `Reconnect the saved ${providerLabel} source host before running manually.`
     )
   }
+
   if (
     availability.health === 'connecting' ||
     availability.status === 'connecting' ||
@@ -249,6 +271,7 @@ function getAutomationSourceAvailability(
       `The saved ${providerLabel} source host is still connecting.`
     )
   }
+
   return null
 }
 
@@ -272,24 +295,28 @@ export function getRuntimeAutomationAvailability(
     | undefined
 ): AutomationTargetAvailability {
   const entry = runtimeStatusByEnvironmentId?.get(environmentId)
+
   if (!entry) {
     return unavailable(
       'runtime-checking',
       'Checking the selected remote server before running manually.'
     )
   }
+
   if (!entry.status) {
     return unavailable(
       'runtime-unavailable',
       'Reconnect this remote server before running manually.'
     )
   }
+
   if (entry.status.graphStatus !== 'ready') {
     return unavailable(
       'runtime-unavailable',
       'The selected remote server is not ready to run automations yet.'
     )
   }
+
   const compat = evaluateRuntimeCompat({
     clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
     minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
@@ -297,20 +324,25 @@ export function getRuntimeAutomationAvailability(
     serverMinCompatibleClientProtocolVersion:
       entry.status.minCompatibleRuntimeClientVersion ?? entry.status.minCompatibleMobileVersion
   })
+
   if (compat.kind === 'blocked') {
     return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat))
   }
+
   return { canRunNow: true, reason: 'available', message: null }
 }
 
 function getAutomationSshTargetId(automation: Automation, repo: Repo): string | null {
   const parsedHost = parseExecutionHostId(automation.runContext?.hostId)
+
   if (parsedHost?.kind === 'ssh') {
     return parsedHost.targetId
   }
+
   if (automation.executionTargetType === 'ssh' && automation.executionTargetId.trim()) {
     return automation.executionTargetId
   }
+
   return repo.connectionId?.trim() || null
 }
 

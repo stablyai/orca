@@ -13,6 +13,7 @@ import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   // Why: a repair-required runtime resolves to a WSL distro that is missing, so
   // drop back to the host runtime. This terminal auto-pastes with no install
   // gate, and repair-required only happens on Windows, so it still needs the
@@ -21,11 +22,14 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
     activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
   )
+
   const terminalRuntime = activeSkillRuntime.installDisabledReason
     ? undefined
     : activeSkillRuntime.agentRuntime
+
   const prepareCommandForShell = (command: string, effectiveShell: string | undefined): string =>
     buildSkillSetupTerminalCommand(command, effectiveShell, terminalRuntime)
+
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(skillCommand)

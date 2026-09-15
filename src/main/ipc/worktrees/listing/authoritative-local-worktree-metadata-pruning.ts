@@ -49,11 +49,13 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   signal
 }: AuthoritativeLocalMetadataPruneArgs): Promise<AuthoritativeLocalMetadataPruneResult> {
   const capturedCandidateIds = scan.metadata.map(({ worktreeId }) => worktreeId)
+
   const result = (
     removedWorktreeIds: readonly string[],
     scanGenerationCurrent: boolean
   ): AuthoritativeLocalMetadataPruneResult => {
     const removedIds = new Set(removedWorktreeIds)
+
     return {
       removedWorktreeIds,
       preservedMetadataCandidateIds: new Set(
@@ -62,8 +64,10 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
       scanGenerationCurrent
     }
   }
+
   const generationCurrent = () => isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
+
   if (
     !generationCurrent() ||
     !isCallerCurrent() ||
@@ -85,19 +89,23 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     worktreeRetentionPathComparisonKey(repo.path, platform),
     ...gitWorktrees.map((worktree) => worktreeRetentionPathComparisonKey(worktree.path, platform))
   ])
+
   // Why: only rows a delete could still accept are worth a filesystem probe. This is advisory —
   // `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks authoritatively — so it can only
   // ever shrink the `stat` fan-out, never widen what gets removed (#17775).
   const removableCandidates =
     store.selectProbeableLocalWorktreeMetadataCandidates?.(scan) ?? scan.metadata
+
   const probeCandidates = removableCandidates.flatMap((metadata) => {
     const { worktreeId } = metadata
     const parsed = splitWorktreeId(worktreeId)
+
     const nativeAbsolute = parsed
       ? platform === 'win32'
         ? isWindowsAbsolutePathLike(parsed.worktreePath)
         : parsed.worktreePath.startsWith('/')
       : false
+
     if (
       parsed?.repoId !== repo.id ||
       !nativeAbsolute ||
@@ -107,18 +115,23 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
     ) {
       return []
     }
+
     return [{ metadata, pathValue: parsed.worktreePath }]
   })
+
   const presenceByPath = await pathsExistOrAreUnverifiable(
     probeCandidates.map(({ pathValue }) => pathValue),
     { signal }
   )
+
   if (!generationCurrent() || !isCallerCurrent()) {
     return result([], generationCurrent())
   }
+
   const missingMetadata = probeCandidates.flatMap(({ metadata, pathValue }) =>
     presenceByPath.get(pathValue) === false ? [metadata] : []
   )
+
   if (missingMetadata.length === 0) {
     return result([], generationCurrent())
   }
@@ -126,12 +139,15 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
   if (!generationCurrent() || !isCallerCurrent()) {
     return result([], generationCurrent())
   }
+
   const removedIds = store.pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     scan,
     missingMetadata
   )
+
   if (removedIds.length > 0) {
     const snapshotDirectory = store.getProfileStorageDirectory()
+
     const targets: {
       worktreeId: string
       executionHostId: typeof LOCAL_EXECUTION_HOST_ID
@@ -139,8 +155,10 @@ export async function pruneMetadataMissingFromAuthoritativeLocalScan({
       worktreeId,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     }))
+
     void pruneWorkspaceCleanupScanSnapshots(snapshotDirectory, targets)
     void pruneWorkspaceSpaceAnalysisSnapshots(snapshotDirectory, targets)
   }
+
   return result(removedIds, generationCurrent())
 }

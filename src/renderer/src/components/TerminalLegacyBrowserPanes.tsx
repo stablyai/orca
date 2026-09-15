@@ -14,6 +14,7 @@ export function TerminalLegacyBrowserPanes({
     renderedActiveWorktreeId,
     workspaceSurfaces
   } = controller
+
   return (
     <div
       className={`relative flex-1 min-h-0 overflow-hidden ${
@@ -22,11 +23,14 @@ export function TerminalLegacyBrowserPanes({
     >
       {workspaceSurfaces.map((workspace) => {
         const browserTabs = browserTabsByWorktree[workspace.id] ?? []
+
         const isVisibleWorktree =
           activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+
         if (browserTabs.length === 0) {
           return null
         }
+
         return (
           <div
             key={`browser-${workspace.id}`}
@@ -38,6 +42,7 @@ export function TerminalLegacyBrowserPanes({
                 isVisibleWorktree &&
                 activeTabType === 'browser' &&
                 browserTab.id === activeBrowserTabId
+
               return (
                 <div
                   key={browserTab.id}

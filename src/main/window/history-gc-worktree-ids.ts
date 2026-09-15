@@ -17,23 +17,29 @@ export function getKnownWorktreeIdsForHistoryGc(
   readOtherProfiles = getOtherProfileWorktreeIdsForHistoryGc
 ): Set<string> {
   const live = new Set(Object.keys(store.getAllWorktreeMeta()))
+
   for (const workspace of store.getFolderWorkspaces()) {
     live.add(folderWorkspaceKey(workspace.id))
   }
+
   // Why the other profiles too: the history root is not profile-scoped but this
   // store is, so on its own the live set condemns every other profile's history
   // the moment the user switches. An unreadable profile means those ids are
   // unknown, and an incomplete live set is exactly what deletes real history —
   // so report the empty set, which runHistoryGc treats as "prune nothing".
   const others = readOtherProfiles()
+
   if (others.unreadableProfiles > 0) {
     console.warn(
       `[pty:history:gc] Skipping GC: ${others.unreadableProfiles} profile(s) could not be read`
     )
+
     return new Set()
   }
+
   for (const id of others.ids) {
     live.add(id)
   }
+
   return live
 }

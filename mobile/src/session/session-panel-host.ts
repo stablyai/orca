@@ -53,6 +53,7 @@ export function resolvePanelAction(args: {
   if (args.canDock) {
     return { kind: 'dock', next: nextActivePanel(args.current, args.tapped) }
   }
+
   return { kind: 'push', panel: args.tapped }
 }
 

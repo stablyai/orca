@@ -12,8 +12,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./git/repo', () => ({ getBaseRefDefault: mocks.getBaseRefDefault }))
+
 vi.mock('./git/runner', () => ({ gitExecFileAsync: mocks.gitExecFileAsync }))
+
 vi.mock('./providers/ssh-git-dispatch', () => ({ getSshGitProvider: mocks.getSshGitProvider }))
+
 vi.mock('./ipc/worktree-remote', () => ({
   prefetchRemoteWorktreeCreateBase: mocks.prefetchRemoteWorktreeCreateBase
 }))
@@ -43,6 +46,7 @@ function runtime() {
 function resolveOnly(present: string[]): void {
   mocks.gitExecFileAsync.mockImplementation(async (args: string[]) => {
     const rev = args.at(-1)?.replace('^{commit}', '') ?? ''
+
     return present.includes(rev)
       ? { stdout: `${'f'.repeat(40)}\n`, stderr: '' }
       : { stdout: '', stderr: '' }
@@ -57,6 +61,7 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) {
     mock.mockReset()
   }
+
   mocks.getBaseRefDefault.mockResolvedValue('origin/main')
   resolveOnly([])
   mocks.resolveRemoteTrackingBase.mockResolvedValue(null)
@@ -105,6 +110,7 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
+
     mocks.resolveRemoteTrackingBase.mockResolvedValue(remoteTrackingBase)
     mocks.hasRemoteTrackingRef.mockResolvedValue(true)
 
@@ -151,9 +157,11 @@ describe('prefetchWorktreeCreateBase local git routing', () => {
     expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(revParse('refs/remotes/feature/topic'), {
       cwd: repo.path
     })
+
     for (const call of mocks.gitExecFileAsync.mock.calls) {
       expect(call[1]).toEqual({ cwd: repo.path })
     }
+
     // Runtime calls keep their original arity so host repos stay on the runtime's own defaults.
     expect(mocks.resolveRemoteTrackingBase).toHaveBeenCalledWith(repo.path, 'feature/topic')
     expect(mocks.fetchRemoteWithCache).toHaveBeenCalledWith(repo.path, 'origin')
@@ -194,6 +202,7 @@ describe('checkout and refresh overlap', () => {
         ref: 'refs/remotes/origin/main',
         base: 'origin/main'
       }
+
       mocks.resolveRemoteTrackingBase.mockResolvedValue(base)
       mocks.hasRemoteTrackingRef.mockResolvedValue(true)
       let release!: () => void
@@ -205,6 +214,7 @@ describe('checkout and refresh overlap', () => {
       )
       const prepareCheckout = vi.fn().mockResolvedValue(undefined)
       let settled = false
+
       const result = prefetchWorktreeCreateBase({
         repo,
         baseBranch: 'origin/main',
@@ -214,6 +224,7 @@ describe('checkout and refresh overlap', () => {
       }).finally(() => {
         settled = true
       })
+
       await vi.waitFor(() => expect(prepareCheckout).toHaveBeenCalledWith('origin/main'))
       expect(settled).toBe(false)
       release()
@@ -237,6 +248,7 @@ describe('checkout and refresh overlap', () => {
         })
     )
     const prepareCheckout = vi.fn().mockResolvedValue(undefined)
+
     const result = prefetchWorktreeCreateBase({
       repo,
       baseBranch: 'origin/main',
@@ -244,6 +256,7 @@ describe('checkout and refresh overlap', () => {
       gitOptions: {},
       prepareCheckout
     })
+
     await vi.waitFor(() =>
       expect(mocks.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledTimes(1)
     )
@@ -285,13 +298,16 @@ describe('checkout and refresh overlap', () => {
     const error = new Error('refresh failed')
     mocks.getOrStartRemoteTrackingBaseRefresh.mockRejectedValue(error)
     let release!: () => void
+
     const prepareCheckout = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           release = resolve
         })
     )
+
     let settled = false
+
     const result = prefetchWorktreeCreateBase({
       repo,
       baseBranch: 'origin/main',
@@ -301,6 +317,7 @@ describe('checkout and refresh overlap', () => {
     }).finally(() => {
       settled = true
     })
+
     const assertion = expect(result).rejects.toBe(error)
     await vi.waitFor(() => expect(prepareCheckout).toHaveBeenCalledTimes(1))
     expect(settled).toBe(false)

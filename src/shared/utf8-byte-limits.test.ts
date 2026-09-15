@@ -17,15 +17,19 @@ import {
 const SLICE_BOUNDARY_PARENT_UNITS = [
   0x72, 0x2e6, 0x7b, 0x54, 0xda9b, 0x568, 0x52, 0x26, 0x46, 0xc15b, 0x7, 0x768, 0xd9f6, 0xdcde
 ]
+
 // V8 only creates a sliced string (rather than copying) at 13 code units or more.
 const SLICE_BOUNDARY_UNITS = 13
+
 const TIER_UP_ITERATIONS = 200_000
 
 function buildSliceEndingInLoneHighSurrogate(): string {
   let text = ''
+
   for (const unit of SLICE_BOUNDARY_PARENT_UNITS) {
     text += String.fromCharCode(unit)
   }
+
   return text.slice(0, SLICE_BOUNDARY_UNITS)
 }
 
@@ -40,36 +44,44 @@ describe('scanning a prefix slice whose parent continues past the slice', () => 
 
   it('reads the trailing lone surrogate without pairing past the end in every JIT tier', () => {
     const observed = new Set<number>()
+
     for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
       observed.add(readUtf8CodePointAt(sliced, SLICE_BOUNDARY_UNITS - 1))
     }
+
     expect([...observed]).toEqual([0xd9f6])
   })
 
   it('measures the same byte length as the encoder in every JIT tier', () => {
     const expected = Buffer.byteLength(sliced, 'utf8')
     const observed = new Set<number>()
+
     for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
       observed.add(measureUtf8ByteLength(sliced).byteLength)
     }
+
     expect([...observed]).toEqual([expected])
   })
 
   it('does not report an exceeded limit at the true byte length in every JIT tier', () => {
     const limit = Buffer.byteLength(sliced, 'utf8')
     const observed = new Set<boolean>()
+
     for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
       observed.add(measureUtf8ByteLength(sliced, { stopAfterBytes: limit }).exceededLimit)
     }
+
     expect([...observed]).toEqual([false])
   })
 
   it('keeps the whole slice when clamping to its true byte length in every JIT tier', () => {
     const limit = Buffer.byteLength(sliced, 'utf8')
     const observed = new Set<number>()
+
     for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
       observed.add(clampUtf8TextPrefix(sliced, limit).length)
     }
+
     expect([...observed]).toEqual([SLICE_BOUNDARY_UNITS])
   })
 })
@@ -150,6 +162,7 @@ describe('isUtf8ByteLengthWithinLimit native fast path', () => {
   it('matches the scanning implementation at every limit around the boundary', () => {
     for (const text of samples) {
       const exactBytes = getUtf8ByteLength(text)
+
       for (let maxBytes = 1; maxBytes <= exactBytes + 2; maxBytes += 1) {
         expect({ text, maxBytes, within: isUtf8ByteLengthWithinLimit(text, maxBytes) }).toEqual({
           text,

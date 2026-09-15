@@ -6,4 +6,5 @@
  * relative to it: a UI bound shorter than one creation attempt calls healthy recoveries dead.
  */
 export const DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS = 30_000
+
 export const MAX_CLIENT_PAGE_CREATION_TIMEOUT_MS = 60_000

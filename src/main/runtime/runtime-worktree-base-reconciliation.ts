@@ -30,6 +30,7 @@ export class RuntimeWorktreeBaseReconciliation {
   recordToken(worktreeId: string): string {
     const token = randomUUID()
     this.optimisticReconcileTokens.set(worktreeId, token)
+
     return token
   }
 
@@ -44,10 +45,12 @@ export class RuntimeWorktreeBaseReconciliation {
   async reconcile(args: WorktreeBaseReconciliationArgs): Promise<void> {
     const stillCurrent = (): boolean =>
       this.optimisticReconcileTokens.get(args.worktreeId) === args.token
+
     const emit = (event: Omit<WorktreeBaseStatusEvent, 'repoId' | 'worktreeId' | 'base'>): void => {
       if (!stillCurrent()) {
         return
       }
+
       this.getNotifier()?.worktreeBaseStatus?.({
         repoId: args.repoId,
         worktreeId: args.worktreeId,
@@ -56,6 +59,7 @@ export class RuntimeWorktreeBaseReconciliation {
         ...event
       })
     }
+
     const resolvePublishRemote = async (): Promise<string> => {
       // Why: publish remotes can differ from base remotes and may contain multiple segments.
       const tryConfig = async (key: string): Promise<string | null> => {
@@ -63,12 +67,15 @@ export class RuntimeWorktreeBaseReconciliation {
           const { stdout } = await gitExecFileAsync(['config', '--get', key], {
             cwd: args.repoPath
           })
+
           const value = stdout.trim()
+
           return value || null
         } catch {
           return null
         }
       }
+
       return (
         (await tryConfig(`branch.${args.branchName}.pushRemote`)) ??
         (await tryConfig('remote.pushDefault')) ??
@@ -77,19 +84,24 @@ export class RuntimeWorktreeBaseReconciliation {
         'origin'
       )
     }
+
     const checkPublishRemoteConflict = async (): Promise<void> => {
       const publishRemote = await resolvePublishRemote()
+
       try {
         if (publishRemote !== args.base.remote) {
           const result = await this.fetches.getOrStartRemoteFetch(args.repoPath, publishRemote)
+
           if (!result.ok) {
             return
           }
         }
+
         await gitExecFileAsync(
           ['rev-parse', '--verify', `refs/remotes/${publishRemote}/${args.branchName}^{commit}`],
           { cwd: args.repoPath }
         )
+
         if (stillCurrent()) {
           this.getNotifier()?.worktreeRemoteBranchConflict?.({
             repoId: args.repoId,
@@ -105,23 +117,31 @@ export class RuntimeWorktreeBaseReconciliation {
 
     try {
       const fetchResult = await args.fetchPromise
+
       if (!stillCurrent()) {
         return
       }
+
       if (!fetchResult.ok) {
         emit({ status: 'unknown' })
+
         return
       }
+
       const { stdout } = await gitExecFileAsync(
         ['rev-parse', '--verify', `${args.base.ref}^{commit}`],
         { cwd: args.repoPath }
       )
+
       const postFetchSha = stdout.trim()
+
       if (postFetchSha === args.createdBaseSha) {
         emit({ status: 'current' })
         await checkPublishRemoteConflict()
+
         return
       }
+
       try {
         await gitExecFileAsync(['merge-base', '--is-ancestor', args.createdBaseSha, postFetchSha], {
           cwd: args.repoPath
@@ -129,22 +149,29 @@ export class RuntimeWorktreeBaseReconciliation {
       } catch {
         emit({ status: 'base_changed' })
         await checkPublishRemoteConflict()
+
         return
       }
+
       const { stdout: countStdout } = await gitExecFileAsync(
         ['rev-list', '--count', `${args.createdBaseSha}..${postFetchSha}`],
         { cwd: args.repoPath }
       )
+
       const behind = Number(countStdout.trim())
+
       if (!Number.isFinite(behind) || behind <= 0) {
         emit({ status: 'current' })
         await checkPublishRemoteConflict()
+
         return
       }
+
       const { stdout: logStdout } = await gitExecFileAsync(
         ['log', '--format=%s', '-n', '5', `${args.createdBaseSha}..${postFetchSha}`],
         { cwd: args.repoPath }
       )
+
       emit({
         status: 'drift',
         behind,

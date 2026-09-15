@@ -28,6 +28,7 @@ import {
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await fn()
   } finally {
@@ -218,6 +219,7 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
         locked: true,
         lockReason: 'active agent'
       }
+
       const closeWatcher = vi.fn().mockResolvedValue(undefined)
 
       await expect(
@@ -316,6 +318,7 @@ describe('removeStaleLocalWorktreeRegistration', () => {
 
   it('prunes and strictly verifies on the selected WSL host without deleting files or branches', async () => {
     const options = { wslDistro: 'Ubuntu' }
+
     const result = await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath: '/home/dev/feature/.git',
       repoPath: '/home/dev/repo',
@@ -323,6 +326,7 @@ describe('removeStaleLocalWorktreeRegistration', () => {
       registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
       deleteBranch: true
     })
+
     expect(result).toEqual({ preservedBranch: { branchName: 'feature', head: 'abc123' } })
     expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(['worktree', 'prune'], {
       cwd: '/home/dev/repo',

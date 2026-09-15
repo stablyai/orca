@@ -20,9 +20,11 @@ describe('git worktree operation lock', () => {
     const events: string[] = []
     let releaseFirst!: () => void
     let markFirstStarted!: () => void
+
     const firstStarted = new Promise<void>((resolve) => {
       markFirstStarted = resolve
     })
+
     const firstRelease = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
@@ -33,11 +35,13 @@ describe('git worktree operation lock', () => {
       await firstRelease
       events.push('first:end')
     })
+
     await firstStarted
 
     const second = runWithGitWorktreeOperationLock(worktreePath, undefined, async () => {
       events.push('second:start')
     })
+
     await Promise.resolve()
     expect(events).toEqual(['first:start'])
 

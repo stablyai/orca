@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const { createMacBuildCompatibility } = require('./mac-build-compatibility.cjs')
 
 describe('mac build compatibility metadata', () => {

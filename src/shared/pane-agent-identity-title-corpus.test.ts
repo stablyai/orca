@@ -18,15 +18,18 @@ import type { TuiAgent } from './tui-agent'
  */
 
 const RECORDED_HISTORY_DIR = 'terminal-history'
+
 const QUARANTINE_DIR = '.recovery-quarantine'
 
 function orcaAppSupportCandidates(): string[] {
   if (process.platform === 'darwin') {
     return [join(homedir(), 'Library', 'Application Support', 'Orca')]
   }
+
   if (process.platform === 'win32') {
     return [join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'Orca')]
   }
+
   return [
     join(process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'Orca'),
     join(process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'Orca')
@@ -40,26 +43,34 @@ function loadRecordedTitleCorpus(): { checkpointCount: number; titles: string[] 
   const root = orcaAppSupportCandidates()
     .map((candidate) => join(candidate, RECORDED_HISTORY_DIR))
     .find((candidate) => existsSync(candidate))
+
   if (!root) {
     return null
   }
+
   let checkpointCount = 0
   const titles = new Set<string>()
+
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === QUARANTINE_DIR || entry.name.startsWith('.')) {
       continue
     }
+
     const checkpointPath = join(root, entry.name, 'checkpoint.json')
+
     if (!existsSync(checkpointPath)) {
       continue
     }
+
     const parsed: unknown = JSON.parse(readFileSync(checkpointPath, 'utf8'))
     checkpointCount += 1
     const lastTitle = (parsed as { lastTitle?: unknown }).lastTitle
+
     if (typeof lastTitle === 'string' && lastTitle.length > 0) {
       titles.add(lastTitle)
     }
   }
+
   return { checkpointCount, titles: [...titles] }
 }
 
@@ -123,11 +134,14 @@ describe('controlled title fixtures (always run)', () => {
 describe('recorded title corpus characterization (local gate)', () => {
   it('the canonical title-only lane matches the shipped parser on every recorded title', (ctx) => {
     const corpus = loadRecordedTitleCorpus()
+
     if (corpus === null) {
       console.info('corpus unavailable — skipped (no recorded terminal history on this machine)')
       ctx.skip()
+
       return
     }
+
     // A machine WITH history must never pass on an empty read — that would be a silently green
     // zero-title run, not a characterization.
     expect(corpus.checkpointCount).toBeGreaterThan(0)
@@ -138,9 +152,11 @@ describe('recorded title corpus characterization (local gate)', () => {
 
     const salt = randomBytes(16).toString('hex')
     const changed: { titleHash: string; oldAgent: string | null; newAgent: string | null }[] = []
+
     for (const title of corpus.titles) {
       const oldAgent = collectAgentTitleEvidence(title).agent
       const newAgent = canonicalTitleOnlyAgent(title)
+
       if (oldAgent !== newAgent) {
         changed.push({
           titleHash: createHash('sha256').update(`${salt}:${title}`).digest('hex').slice(0, 16),
@@ -149,6 +165,7 @@ describe('recorded title corpus characterization (local gate)', () => {
         })
       }
     }
+
     // Report hashes and agent summaries only; a reviewer who needs the raw value inspects the
     // protected corpus on the machine that owns it.
     expect(changed).toEqual([])

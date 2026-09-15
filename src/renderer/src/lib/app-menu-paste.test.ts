@@ -14,6 +14,7 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+
   return textarea
 }
 
@@ -22,6 +23,7 @@ function captureInputEvents(target: HTMLElement): InputEvent[] {
   target.addEventListener('input', (event) => {
     events.push(event as InputEvent)
   })
+
   return events
 }
 
@@ -34,9 +36,11 @@ describe('app menu paste', () => {
   it('lets an owned terminal paste event claim the menu action synchronously', async () => {
     const readClipboardText = vi.fn(async () => 'secret')
     const performNativePaste = vi.fn()
+
     const onPaste = (event: Event): void => {
       event.preventDefault()
     }
+
     window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
 
     const result = await handleAppMenuPasteRequest({
@@ -114,6 +118,7 @@ describe('app menu paste', () => {
     const result = await handleAppMenuPasteRequest({
       readClipboardText: vi.fn(async () => {
         other.focus()
+
         return text
       }),
       performNativePaste,
@@ -225,6 +230,7 @@ describe('app menu paste', () => {
     const onPaste = (event: Event): void => {
       event.preventDefault()
     }
+
     window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
 
     expect(dispatchAppMenuPasteEvent()).toBe(true)

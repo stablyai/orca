@@ -12,16 +12,21 @@ export class WatcherChildCapacityError extends Error {
 }
 
 let reservedChildren = 0
+
 const capacityListeners = new Set<() => Promise<void>>()
+
 let capacityNotificationsInProgress = 0
+
 let capacityNotificationGeneration = 0
 
 export function reserveWatcherChild(): (() => void) | null {
   if (reservedChildren >= MAX_PHYSICAL_WATCHER_CHILDREN) {
     return null
   }
+
   reservedChildren++
   let released = false
+
   return () => {
     if (!released) {
       released = true
@@ -33,20 +38,25 @@ export function reserveWatcherChild(): (() => void) | null {
 
 export function onWatcherChildCapacityAvailable(listener: () => void | Promise<void>): () => void {
   let active = true
+
   const notify = async (): Promise<void> => {
     if (!active) {
       return
     }
+
     active = false
     capacityListeners.delete(notify)
     await listener()
   }
+
   capacityListeners.add(notify)
+
   // Why: a child may exit between a failed reservation and listener setup.
   // Recheck asynchronously so that release cannot become a lost wake-up.
   if (reservedChildren < MAX_PHYSICAL_WATCHER_CHILDREN) {
     queueMicrotask(notifyCapacityListeners)
   }
+
   return () => {
     active = false
     capacityListeners.delete(notify)
@@ -58,9 +68,11 @@ function notifyCapacityListeners(): void {
   // the child or finishes, so one release cannot wake every waiting root.
   while (capacityNotificationsInProgress < MAX_PHYSICAL_WATCHER_CHILDREN - reservedChildren) {
     const listener = capacityListeners.values().next().value
+
     if (!listener) {
       return
     }
+
     const generation = capacityNotificationGeneration
     capacityNotificationsInProgress++
     void listener()
@@ -71,6 +83,7 @@ function notifyCapacityListeners(): void {
         if (generation !== capacityNotificationGeneration) {
           return
         }
+
         capacityNotificationsInProgress--
         notifyCapacityListeners()
       })

@@ -25,16 +25,20 @@ export function repairActiveTerminalTab({
     Object.hasOwn(activeTabIdByWorktree, renderedActiveWorktreeId)
       ? (activeTabIdByWorktree[renderedActiveWorktreeId] ?? null)
       : null
+
   const repairedTabId = resolveRepairedActiveTerminalTabId({
     activeTabType,
     activeTabId,
     rememberedTabId,
     tabs
   })
+
   if (!repairedTabId) {
     return false
   }
+
   setActiveTab(repairedTabId)
+
   return true
 }
 
@@ -47,6 +51,7 @@ export function useActiveTerminalRepair(input: ActiveTerminalRepairInput): void 
     setActiveTab,
     tabs
   } = input
+
   useEffect(() => {
     repairActiveTerminalTab(input)
     // Why: `tabs` is the dependency so repair reacts to order/content changes, not just scalar ids.

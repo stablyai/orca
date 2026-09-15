@@ -1,17 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import { parseDevinSessionContent, parseDevinSessionDocument } from './session-scanner-devin-parser'
 import { readStreamedSessionDocument } from './session-document-stream'
+
 const file = { path: '/devin/test.json', modifiedAt: new Date(0).toISOString(), mtimeMs: 0 }
+
 const options = {
   executionHostId: 'ssh:projection' as const,
   executionHostPlatform: 'darwin' as const
 }
+
 async function* bytes(content: string) {
   const b = Buffer.from(content)
+
   for (let i = 0; i < b.length; i += 7) {
     yield b.subarray(i, i + 7)
   }
 }
+
 describe('Devin consumed metadata projection', () => {
   for (const suffix of [
     '{}',
@@ -29,6 +34,7 @@ describe('Devin consumed metadata projection', () => {
       )
     })
   }
+
   it('retains only model fields from the agent object', async () => {
     const result = await readStreamedSessionDocument({
       bytes: bytes(
@@ -40,6 +46,7 @@ describe('Devin consumed metadata projection', () => {
       create: () => 0,
       consume: () => {}
     })
+
     expect(result).toEqual({
       record: { agent: { model_name: 'root', model: 'fallback' } },
       state: 0

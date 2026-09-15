@@ -79,9 +79,11 @@ export const nativeSkillInstallFilesystem: SkillInstallFilesystem = {
               if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') {
                 return []
               }
+
               throw error
             }
           )
+
           return [
             directory,
             entries.map((entry) => ({ name: entry.name, kind: direntKind(entry) }))
@@ -108,9 +110,11 @@ function direntKind(entry: Dirent): SkillFilesystemEntryKind {
   if (entry.isSymbolicLink()) {
     return 'symlink'
   }
+
   if (entry.isDirectory()) {
     return 'directory'
   }
+
   return entry.isFile() ? 'file' : 'other'
 }
 
@@ -118,11 +122,14 @@ function statKind(value: Stats | null): SkillFilesystemEntryKind {
   if (!value) {
     return 'missing'
   }
+
   if (value.isSymbolicLink()) {
     return 'symlink'
   }
+
   if (value.isDirectory()) {
     return 'directory'
   }
+
   return value.isFile() ? 'file' : 'other'
 }

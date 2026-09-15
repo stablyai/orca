@@ -31,6 +31,7 @@ export type WorkerTerminalOrderingKey = {
   dispatchId: string
   databaseId?: number
 }
+
 export type WorkerTerminalListingSnapshot =
   | { databaseId: number }
   | { createdAt: string; dispatchId: string }
@@ -59,20 +60,25 @@ function resolveAnchorRowId(
 ): number {
   const conditions = ['id = ?']
   const values: (string | number)[] = [after.dispatchId]
+
   if (runId) {
     conditions.push('run_id = ?')
     values.push(runId)
   }
+
   if (after.databaseId !== undefined) {
     conditions.push('rowid = ?')
     values.push(after.databaseId)
   }
+
   const anchor = this.db
     .prepare(`SELECT rowid AS rowid FROM dispatch_contexts WHERE ${conditions.join(' AND ')}`)
     .get(...values) as { rowid: number } | undefined
+
   if (!anchor) {
     throw new OrchestrationError('worker_list_cursor_expired', WORKER_LIST_CURSOR_EXPIRED_MESSAGE)
   }
+
   return anchor.rowid
 }
 
@@ -108,17 +114,21 @@ export function listWorkerTerminalResources(
   const orderExpression = 'COALESCE(w.created_at, d.created_at)'
   const where: string[] = []
   const values: (string | number)[] = []
+
   if (params.runId) {
     where.push('d.run_id = ?')
     values.push(params.runId)
   }
+
   if (params.dispatchIds) {
     if (params.dispatchIds.length === 0) {
       return []
     }
+
     where.push(`d.id IN (${params.dispatchIds.map(() => '?').join(',')})`)
     values.push(...params.dispatchIds)
   }
+
   if (params.snapshot) {
     if ('databaseId' in params.snapshot) {
       where.push('d.rowid <= ?')
@@ -128,6 +138,7 @@ export function listWorkerTerminalResources(
       values.push(params.snapshot.createdAt, params.snapshot.createdAt, params.snapshot.dispatchId)
     }
   }
+
   if (params.after) {
     // Order and fence must share one key, or a row created between pages moves across the cut.
     // A pre-v3 cursor is resolved from its anchor row; when a reset deleted that row
@@ -135,26 +146,34 @@ export function listWorkerTerminalResources(
     where.push('d.rowid > ?')
     values.push(resolveAnchorRowId.call(this, params.after, params.runId))
   }
+
   let detailWhere = where
   let detailValues = values
   let detailLimit = params.limit
+
   if (params.terminalState) {
     // Terminal state is derived by one TS function; page it before reading detail columns.
     const matching = scanWorkerTerminalStates
       .call(this, where, values)
       .filter((row) => row.terminalState === params.terminalState)
+
     const page = detailLimit === undefined ? matching : matching.slice(0, detailLimit)
+
     if (page.length === 0) {
       return []
     }
+
     detailWhere = [`d.rowid IN (${page.map(() => '?').join(',')})`]
     detailValues = page.map((row) => row.databaseId)
     detailLimit = undefined
   }
+
   const limitClause = detailLimit === undefined ? '' : ' LIMIT ?'
+
   if (detailLimit !== undefined) {
     detailValues.push(detailLimit)
   }
+
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id,
@@ -200,6 +219,7 @@ export function listWorkerTerminalResources(
     created_at: string
     database_id: number
   }[]
+
   const resources =
     rows.length === 0
       ? []
@@ -209,11 +229,14 @@ export function listWorkerTerminalResources(
                WHERE r.owner_dispatch_id IN (${rows.map(() => '?').join(',')})`
           )
           .all(...rows.map((row) => row.dispatch_id)) as WorkerTerminalResourceRow[])
+
   const resourceByOwner = new Map(
     resources.map((resource) => [resource.owner_dispatch_id, resource])
   )
+
   return rows.map((row) => {
     const resource = resourceByOwner.get(row.dispatch_id) ?? null
+
     return {
       dispatchId: row.dispatch_id,
       taskId: row.task_id,
@@ -239,6 +262,7 @@ export function listWorkerTerminalResources(
     }
   })
 }
+
 export function getWorkerTerminalListingSnapshot(
   this: OrchestrationDb,
   runId?: string
@@ -250,8 +274,10 @@ export function getWorkerTerminalListingSnapshot(
         ${runId ? 'WHERE d.run_id = ?' : ''}`
     )
     .get(...(runId ? [runId] : [])) as { database_id: number | null }
+
   return row.database_id === null ? null : { databaseId: row.database_id }
 }
+
 export function getWorkerTerminalOrderingKey(
   this: OrchestrationDb,
   dispatchId: string
@@ -265,6 +291,7 @@ export function getWorkerTerminalOrderingKey(
         WHERE d.id = ?`
     )
     .get(dispatchId) as { dispatch_id: string; created_at: string; database_id: number } | undefined
+
   return row
     ? { createdAt: row.created_at, dispatchId: row.dispatch_id, databaseId: row.database_id }
     : null

@@ -20,7 +20,9 @@ import { installClientHostedPaneApi, paneChannel } from './client-hosted-browser
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
 let requested = paneChannel<BrowserDownloadRequestedEvent>()
+
 let progress = paneChannel<BrowserDownloadProgressEvent>()
+
 let finished = paneChannel<BrowserDownloadFinishedEvent>()
 
 beforeEach(() => {
@@ -86,6 +88,7 @@ function emitRequested(overrides: Partial<BrowserDownloadRequestedEvent> = {}): 
     status: 'downloading',
     ...overrides
   } as BrowserDownloadRequestedEvent
+
   act(() => requested.emit(event))
 }
 
@@ -98,6 +101,7 @@ function emitFinished(overrides: Partial<BrowserDownloadFinishedEvent> = {}): vo
     error: null,
     ...overrides
   } as BrowserDownloadFinishedEvent
+
   act(() => finished.emit(event))
 }
 
@@ -109,6 +113,7 @@ function emitProgress(overrides: Partial<BrowserDownloadProgressEvent> = {}): vo
     state: 'progressing',
     ...overrides
   } as BrowserDownloadProgressEvent
+
   act(() => progress.emit(event))
 }
 

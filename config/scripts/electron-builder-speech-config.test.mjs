@@ -2,7 +2,9 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const electronBuilderConfig = require('../electron-builder.config.cjs')
+
 const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder speech resources', () => {
@@ -19,6 +21,7 @@ describe('electron-builder speech resources', () => {
         (resource) =>
           typeof resource.to === 'string' && resource.to.startsWith('node_modules/sherpa-onnx')
       )
+
       expect(speechResources).toEqual([{ from: packagePath, to: packagePath }])
     }
 
@@ -26,6 +29,7 @@ describe('electron-builder speech resources', () => {
     matcher.prependPattern('**/*')
     const isPacked = matcher.createFilter()
     const stat = { isDirectory: () => false }
+
     for (const packageName of [
       'sherpa-onnx',
       'sherpa-onnx-darwin-arm64',
@@ -36,6 +40,7 @@ describe('electron-builder speech resources', () => {
     ]) {
       expect(isPacked(`/app/node_modules/${packageName}/index.js`, stat)).toBe(false)
     }
+
     expect(isPacked('/app/node_modules/ws/index.js', stat)).toBe(true)
   })
 })

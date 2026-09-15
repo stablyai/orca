@@ -14,10 +14,12 @@ import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 // until Settings was remounted. This pins that the labels retranslate live.
 
 const roots: Root[] = []
+
 let latest: SettingsNavSection[] | null = null
 
 function Probe(): null {
   latest = useSettingsNavigationMetadata()
+
   return null
 }
 
@@ -41,6 +43,7 @@ afterEach(async () => {
       root.unmount()
     })
   }
+
   roots.length = 0
   latest = null
   await act(async () => {

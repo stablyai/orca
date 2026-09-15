@@ -50,9 +50,11 @@ export function useDiffCommentDecorator({
   onPendingScrollConsumed
 }: DecoratorArgs): void {
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+
   const activeGroupId = useAppStore((s) =>
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
+
   const hoverLineRef = useRef<number | null>(null)
   // One React root per view zone: body updates re-render into it so Monaco's zone DOM stays put and only the card contents change.
   const zonesRef = useRef<Map<string, ZoneEntry>>(new Map())
@@ -76,6 +78,7 @@ export function useDiffCommentDecorator({
     if (scrollToZoneFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(scrollToZoneFrameRef.current)
     scrollToZoneFrameRef.current = null
   }, [])
@@ -88,6 +91,7 @@ export function useDiffCommentDecorator({
     () => commentableLineNumbers?.join(','),
     [commentableLineNumbers]
   )
+
   const commentableLineSet = useMemo(
     () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,6 +106,7 @@ export function useDiffCommentDecorator({
     }
 
     const editorDomNode = editor.getDomNode()
+
     if (!editorDomNode) {
       return
     }
@@ -130,8 +135,10 @@ export function useDiffCommentDecorator({
       // Defer unmount via queueMicrotask: a sync unmount during React's commit triggers React 19's "unmount while rendering" warning; clear zones synchronously.
       const rootsToUnmount = Array.from(zones.values(), (z) => {
         z.disposeMouseDownStopper()
+
         return z.root
       })
+
       // Drop the zones from Monaco too: clearing our map alone would strand them as untracked blank gaps
       // in a still-live editor. No-op when the model already swapped (Monaco dropped them) or the editor is disposed.
       if (zones.size > 0) {
@@ -142,7 +149,9 @@ export function useDiffCommentDecorator({
           }
         })
       }
+
       zones.clear()
+
       if (rootsToUnmount.length > 0) {
         queueMicrotask(() => {
           for (const root of rootsToUnmount) {
@@ -150,6 +159,7 @@ export function useDiffCommentDecorator({
           }
         })
       }
+
       // Editor gone: drop the in-flight scroll request and resolver closure (captured the now-disposed editor).
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
@@ -171,9 +181,11 @@ export function useDiffCommentDecorator({
 
     const resizeZone = (commentId: string): void => {
       const entry = zones.get(commentId)
+
       if (!entry) {
         return
       }
+
       resizeDiffCommentZone(editor, entry)
     }
 
@@ -184,12 +196,15 @@ export function useDiffCommentDecorator({
       scrollToZoneFrameRef.current = requestAnimationFrame(() => {
         scrollToZoneFrameRef.current = null
         const entry = zones.get(commentId)
+
         if (!entry || !editor.getModel()) {
           return
         }
+
         if (pendingScrollRef.current !== commentId) {
           return
         }
+
         const top = editor.getTopForLineNumber(entry.delegate.afterLineNumber, true)
         const editorHeight = editor.getLayoutInfo().height
         editor.setScrollTop(Math.max(0, top - editorHeight / 2))
@@ -197,6 +212,7 @@ export function useDiffCommentDecorator({
         onPendingScrollConsumedRef.current?.()
       })
     }
+
     scrollToZoneRef.current = scrollToZone
 
     // Shared by the new-zone and patch branches so the card's prop wiring stays in lockstep.
@@ -221,6 +237,7 @@ export function useDiffCommentDecorator({
           entry.disposeMouseDownStopper()
           rootsToUnmount.push(entry.root)
           zones.delete(commentId)
+
           // Comment deleted: drop any pending scroll request so a future zone reusing the id can't pick up a stale request.
           if (pendingScrollRef.current === commentId) {
             pendingScrollRef.current = null
@@ -232,6 +249,7 @@ export function useDiffCommentDecorator({
         if (zones.has(c.id)) {
           continue
         }
+
         const dom = document.createElement('div')
         dom.className = 'orca-diff-comment-inline'
         // Swallow mousedown on the zone so the editor doesn't steal focus / start a selection drag; Delete still fires (click is on the button).
@@ -245,6 +263,7 @@ export function useDiffCommentDecorator({
 
         // suppressMouseDown: false so clicks (Delete button) reach our DOM listeners; true would route mousedown to the editor.
         const commentId = c.id
+
         const delegate: monacoEditor.IViewZone = {
           afterLineNumber: c.lineNumber,
           heightInPx,
@@ -253,16 +272,20 @@ export function useDiffCommentDecorator({
           // First onDomNodeTop = deterministic "zone placed" signal: resolve any waiting scroll and flip laidOut.
           onDomNodeTop: () => {
             const entry = zones.get(commentId)
+
             if (!entry) {
               return
             }
+
             const wasLaidOut = entry.laidOut
             entry.laidOut = true
+
             if (!wasLaidOut && pendingScrollRef.current === commentId) {
               scrollToZone(commentId)
             }
           }
         }
+
         const zoneId = accessor.addZone(delegate)
         zones.set(c.id, {
           zoneId,
@@ -279,13 +302,17 @@ export function useDiffCommentDecorator({
       // Patch existing zones in place — re-render the same root instead of removing/re-adding.
       for (const c of relevant) {
         const entry = zones.get(c.id)
+
         if (!entry) {
           continue
         }
+
         const renderSignature = getRenderSignature(c, formatCommentPrompt)
+
         if (entry.lastRenderSignature === renderSignature) {
           continue
         }
+
         entry.lastRenderSignature = renderSignature
         renderCard(entry.root, c)
       }
@@ -317,24 +344,31 @@ export function useDiffCommentDecorator({
     if (!editor) {
       return
     }
+
     // Null request: drop any in-flight pending id so a late onDomNodeTop doesn't snap-scroll the user.
     if (!pendingScrollCommentId) {
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
+
       return
     }
+
     const target = comments.find(
       (c) =>
         c.id === pendingScrollCommentId && c.filePath === filePath && c.worktreeId === worktreeId
     )
+
     if (!target) {
       // Not our comment; drop prior pending id so a late onDomNodeTop can't ack another surface's request.
       cancelScrollToZoneFrame()
       pendingScrollRef.current = null
+
       return
     }
+
     pendingScrollRef.current = pendingScrollCommentId
     const entry = zonesRef.current.get(pendingScrollCommentId)
+
     if (entry?.laidOut) {
       scrollToZoneRef.current?.(pendingScrollCommentId)
     }

@@ -24,8 +24,10 @@ import { createRemoteWorkspaceTargetSync } from '../hooks/remote-workspace-targe
 import { makeWorktree } from '../store/slices/store-test-helpers'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -33,13 +35,19 @@ import { useAppStore } from '@/store'
 import { useAppSessionPersistence } from './use-app-session-persistence'
 
 const TARGET_ID = 'target-a'
+
 const REPO_ROOT = '/srv/proj'
+
 const HOST_PATH = `${REPO_ROOT}/alpha`
+
 const WORKTREE_ID = `repo-a::${HOST_PATH}`
+
 /** Long enough that any deferred retry or debounce would have fired if one existed. */
 const SETTLE_MS = 12_000
+
 /** Longer than the post-apply session-write suppression in remote-workspace-snapshot-apply.ts. */
 const WRITE_SUPPRESSION_MS = 1_500
+
 const DEBOUNCE_MS = 300
 
 const owner: DirectSshAuthority = {
@@ -84,7 +92,9 @@ type UploadArgs = {
   expectedHostObservationTokensByTargetId?: Record<string, string>
   session?: unknown
 }
+
 type UploadResponse = { targetId: string; result: RemoteWorkspaceObservedPatchResult }[]
+
 const uploads = vi.fn(async (_args: UploadArgs): Promise<UploadResponse> => [])
 
 type Deferred<T> = {
@@ -94,9 +104,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -366,10 +378,13 @@ describe('uploads from a client that could not place the host tabs', () => {
     authorizeUploadsAtRevision(7)
     const secondLocalWrite = deferred<void>()
     let localWriteCount = 0
+
     const sessionPatch = vi.fn(() => {
       localWriteCount += 1
+
       return localWriteCount === 2 ? secondLocalWrite.promise : Promise.resolve()
     })
+
     const firstUpload = deferred<UploadResponse>()
     uploads.mockImplementationOnce(() => firstUpload.promise)
     uploads.mockResolvedValueOnce([

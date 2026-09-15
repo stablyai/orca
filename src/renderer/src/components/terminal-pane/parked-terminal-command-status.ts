@@ -32,9 +32,11 @@ export type ParkedTerminalCommandStatusPolicy = {
 // remount, which both recreate the detector long past the banner.
 export function readInFlightCommandCodeTurn(paneKey: string): { prompt: string } | null {
   const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
+
   if (entry?.agentType !== 'command-code' || entry.state !== 'working') {
     return null
   }
+
   return { prompt: entry.prompt }
 }
 
@@ -54,7 +56,9 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     if (disposed) {
       return undefined
     }
+
     const state = useAppStore.getState()
+
     return resolveLiveAgentStatusConnectionRouting({
       state,
       paneKey,
@@ -67,11 +71,13 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === tabId)
     const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+
     const paneOwnerAgent = resolvePaneAgentOwner({
       launchAgent: tab?.launchAgent,
       startupLaunchAgent: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType,
       hookAgent: state.agentStatusByPaneKey[paneKey]?.agentType
     })
+
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
@@ -84,44 +90,58 @@ export function createParkedTerminalCommandStatusPolicy(options: {
   // option: parked panes receive no key events, so inference never has evidence here.
   const dropCommandFinishedStatusIfSameTurn = (entry: AgentStatusEntry | undefined): void => {
     const state = useAppStore.getState()
+
     if (!entry) {
       // Why: an Orca-started agent can exit before its first hook status; clear the launch
       // registry on command exit like the mounted path does.
       state.clearAgentLaunchConfig(paneKey)
+
       return
     }
+
     const current = state.agentStatusByPaneKey[paneKey]
+
     if (!current) {
       state.clearAgentLaunchConfig(paneKey)
+
       return
     }
+
     const unchanged =
       current.state === entry.state &&
       current.prompt === entry.prompt &&
       current.updatedAt === entry.updatedAt &&
       current.stateStartedAt === entry.stateStartedAt &&
       current.agentType === entry.agentType
+
     if (!unchanged) {
       return
     }
+
     state.dropAgentStatus(paneKey)
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.
   const settleCommandCodeDone = (normalizedPrompt: string): void => {
     const routing = resolveRouting()
+
     if (!routing) {
       return
     }
+
     const currentState = useAppStore.getState()
     const currentEntry = currentState.agentStatusByPaneKey[paneKey]
+
     if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
       return
     }
+
     const currentPrompt = currentEntry.prompt.trim()
+
     if (currentPrompt && currentPrompt !== normalizedPrompt) {
       return
     }
+
     const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
     currentState.setAgentStatus(
       paneKey,
@@ -155,9 +175,11 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       if (disposed) {
         return
       }
+
       // Why: the finished command may have moved HEAD or the index (an agent running
       // `git checkout` in a parked worktree); nudge git UI now instead of waiting for a poll.
       dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
+
       // Why: drop the same-turn status row only for SSH PTYs — exact parity with the mounted
       // path, whose foreground tracker refuses SSH ids and drops un-probed. Local PTYs need
       // pty-connection's process-confirm ladder to tell a leaked nested-shell 133;D from a
@@ -165,6 +187,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       if (parseAppSshPtyId(ptyId) === null) {
         return
       }
+
       dropCommandFinishedStatusIfSameTurn(useAppStore.getState().agentStatusByPaneKey[paneKey])
     },
 
@@ -173,15 +196,19 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       if (!canApplyCommandCodeOutputStatus()) {
         return
       }
+
       clearCommandCodeOutputDoneTimer()
       const routing = resolveRouting()
+
       if (!routing) {
         return
       }
+
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[paneKey]
       const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
       const normalizedPrompt = prompt.trim()
+
       if (
         currentEntry?.agentType === 'command-code' &&
         currentEntry.state === 'done' &&
@@ -189,6 +216,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       ) {
         return
       }
+
       currentState.setAgentStatus(
         paneKey,
         {
@@ -214,11 +242,15 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       if (!canApplyCommandCodeOutputStatus()) {
         return
       }
+
       const normalizedPrompt = prompt.trim()
+
       if (!normalizedPrompt) {
         cancelCommandCodeDoneSettle(paneKey)
+
         return
       }
+
       openCommandCodeDoneSettle(paneKey, normalizedPrompt)
     },
 

@@ -4,9 +4,11 @@ import { consumeShutdownCheckpointFailureReason } from '../../../shared/renderer
 
 export function showShutdownCheckpointFailureToast(): void {
   const reason = consumeShutdownCheckpointFailureReason()
+
   if (!reason) {
     return
   }
+
   toast.error(
     translate(
       'auto.components.Terminal.quitSnapshotSaveFailed',

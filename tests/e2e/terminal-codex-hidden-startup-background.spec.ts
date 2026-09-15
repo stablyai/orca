@@ -56,6 +56,7 @@ function codexLikeStartupCommand(marker: string): string {
     'setTimeout(render, 100);',
     'setInterval(() => {}, 1000);'
   ].join('')
+
   // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
   return stageNodeScriptForTerminal(script, { prefix: 'orca-codex-startup-bg' }).command
 }
@@ -67,11 +68,14 @@ async function waitForHiddenTabPtyId(page: Page, tabId: string): Promise<string>
       async () => {
         ptyId = await page.evaluate((targetTabId) => {
           const state = window.__store?.getState()
+
           if (!state) {
             return null
           }
+
           return state.ptyIdsByTabId[targetTabId]?.[0] ?? null
         }, tabId)
+
         return ptyId
       },
       {
@@ -84,6 +88,7 @@ async function waitForHiddenTabPtyId(page: Page, tabId: string): Promise<string>
   if (!ptyId) {
     throw new Error(`waitForHiddenTabPtyId: tab ${tabId} has no PTY id`)
   }
+
   return ptyId
 }
 
@@ -93,6 +98,7 @@ async function mainSnapshotContains(page: Page, ptyId: string, text: string): Pr
       const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
         scrollbackRows: 200
       })
+
       return snapshot?.data.includes(expectedText) ?? false
     },
     { targetPtyId: ptyId, expectedText: text }
@@ -110,13 +116,16 @@ async function readCodexStartupBackgroundTarget(
           isBgRGB?: () => boolean
           getBgColor?: () => number
         }
+
         if (!record?.isBgRGB?.()) {
           return false
         }
+
         const color = record.getBgColor?.() ?? 0
         const red = (color >> 16) & 0xff
         const green = (color >> 8) & 0xff
         const blue = color & 0xff
+
         return (
           Math.abs(red - expected.red) <= 3 &&
           Math.abs(green - expected.green) <= 3 &&
@@ -126,39 +135,52 @@ async function readCodexStartupBackgroundTarget(
 
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         throw new Error('Active Codex terminal pane is unavailable')
       }
+
       const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
       const dimensions = pane.terminal._core?._renderService?.dimensions?.css?.cell
+
       if (!screen || !dimensions) {
         throw new Error('Active Codex terminal has no measurable xterm screen')
       }
+
       const rect = screen.getBoundingClientRect()
+
       if (rect.width <= 0 || rect.height <= 0) {
         throw new Error('Active Codex terminal screen is not visible')
       }
+
       const activeBuffer = pane.terminal.buffer.active
+
       for (let row = 0; row < pane.terminal.rows; row += 1) {
         const line = activeBuffer.getLine(activeBuffer.viewportY + row)
         const rowText = line?.translateToString(true) ?? ''
+
         if (!rowText.includes(marker)) {
           continue
         }
+
         let modelBackgroundCells = 0
+
         for (let col = 0; col < pane.terminal.cols; col += 1) {
           if (isExpectedBackground(line?.getCell(col))) {
             modelBackgroundCells += 1
           }
         }
+
         return {
           clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
           cellWidth: dimensions.width,
@@ -168,6 +190,7 @@ async function readCodexStartupBackgroundTarget(
           modelBackgroundCells
         }
       }
+
       throw new Error(`Could not find Codex startup background marker ${marker}`)
     },
     { marker, expected: COMPOSER_BG }
@@ -196,6 +219,7 @@ async function countVisibleBackgroundPixels(
     width: window.innerWidth,
     height: window.innerHeight
   }))
+
   const screenshot = Buffer.from(await page.screenshot())
   const image = PNG.sync.read(screenshot)
   const scaleX = image.width / viewport.width
@@ -207,9 +231,11 @@ async function countVisibleBackgroundPixels(
   const yEnd = rowTop + Math.round(target.cellHeight * scaleY * 0.75)
   const xEnd = Math.min(image.width, originX + Math.round(target.clip.width * scaleX))
   let count = 0
+
   for (let y = yStart; y < yEnd; y += 1) {
     for (let x = originX; x < xEnd; x += 1) {
       const offset = (y * image.width + x) * 4
+
       if (
         isExpectedBackgroundPixel(
           image.data[offset] ?? 0,
@@ -222,6 +248,7 @@ async function countVisibleBackgroundPixels(
       }
     }
   }
+
   return count
 }
 
@@ -237,30 +264,37 @@ test.describe('Codex hidden startup composer background', () => {
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'Codex hidden startup background repro needs a second worktree')
+
     if (!secondWorktreeId) {
       return
     }
 
     const marker = `CODEX_STARTUP_BG_${Date.now()}`
     const command = codexLikeStartupCommand(marker)
+
     const hiddenTabId = await orcaPage.evaluate(
       ({ worktreeId, command, eventName }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Store unavailable')
         }
+
         window.dispatchEvent(
           new CustomEvent(eventName, {
             detail: { worktreeId }
           })
         )
         const state = store.getState()
+
         const tab = state.createTab(worktreeId, undefined, undefined, {
           activate: false,
           launchAgent: 'codex',
           recordInteraction: false
         })
+
         state.queueTabStartupCommand(tab.id, {
           command,
           launchAgent: 'codex',
@@ -273,6 +307,7 @@ test.describe('Codex hidden startup composer background', () => {
         state.setTabCustomTitle(tab.id, 'Codex hidden startup background', {
           recordInteraction: false
         })
+
         return tab.id
       },
       {
@@ -303,9 +338,11 @@ test.describe('Codex hidden startup composer background', () => {
       .toBe(secondWorktreeId)
     await orcaPage.evaluate((tabId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const state = store.getState()
       state.setActiveTab(tabId)
       state.setActiveTabType('terminal')
@@ -326,9 +363,11 @@ test.describe('Codex hidden startup composer background', () => {
           try {
             const nextTarget = await readCodexStartupBackgroundTarget(orcaPage, marker)
             target = nextTarget
+
             return nextTarget.modelBackgroundCells >= Math.min(40, nextTarget.cols)
           } catch {
             target = null
+
             return false
           }
         },
@@ -338,13 +377,17 @@ test.describe('Codex hidden startup composer background', () => {
         }
       )
       .toBe(true)
+
     if (!target) {
       throw new Error('Codex startup background target was not captured')
     }
+
     const visibleBackgroundPixels = await countVisibleBackgroundPixels(orcaPage, target)
+
     const minimumVisiblePixels = Math.round(
       target.modelBackgroundCells * target.cellWidth * target.cellHeight * 0.2
     )
+
     expect(visibleBackgroundPixels).toBeGreaterThanOrEqual(minimumVisiblePixels)
   })
 })

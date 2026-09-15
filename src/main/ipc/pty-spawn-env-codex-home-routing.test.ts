@@ -11,45 +11,61 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -205,6 +221,7 @@ describe('registerPtyHandlers', () => {
         { CODEX_HOME: '/tmp/system-codex-home' },
         () => TEST_CODEX_HOME
       )
+
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
@@ -215,9 +232,11 @@ describe('registerPtyHandlers', () => {
         if (!filePath.endsWith('auth.json')) {
           return ''
         }
+
         if (!authReady) {
           throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
         }
+
         return TEST_CODEX_AUTH_JSON
       })
       handlers.clear()
@@ -236,6 +255,7 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         launchAgent: 'codex'
       })
+
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).not.toHaveBeenCalled()
 
@@ -279,6 +299,7 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         launchAgent: 'codex'
       })
+
       await vi.waitFor(() =>
         expect(ensureCodexBackfillRecoveryMock).toHaveBeenCalledWith(TEST_CODEX_HOME)
       )
@@ -300,6 +321,7 @@ describe('registerPtyHandlers', () => {
         if (filePath.endsWith('auth.json')) {
           throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
         }
+
         return ''
       })
       handlers.clear()
@@ -344,6 +366,7 @@ describe('registerPtyHandlers', () => {
         { CODEX_HOME: '/tmp/system-codex-home' },
         () => null
       )
+
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
     })
     it('strips a nested-Orca override for system default when the real-home flag is ON', async () => {
@@ -353,6 +376,7 @@ describe('registerPtyHandlers', () => {
         () => null,
         () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
       )
+
       expect(env.CODEX_HOME).toBeUndefined()
       expect(env.ORCA_CODEX_HOME).toBeUndefined()
     })
@@ -363,14 +387,17 @@ describe('registerPtyHandlers', () => {
         () => null,
         () => ({ codexSystemDefaultRealHomeEnabled: true }) as never
       )
+
       expect(env.CODEX_HOME).toBe('/home/me/.config/codex')
       expect(env.ORCA_CODEX_HOME).toBeUndefined()
     })
     it('lets the resolver keep a per-spawn custom CODEX_HOME on the managed lane', async () => {
       const customHome = '/home/me/.config/codex'
       let resolvedCodexHome: string | undefined
+
       const resolveHome = vi.fn((_target: unknown, launchEnv?: NodeJS.ProcessEnv) => {
         resolvedCodexHome = launchEnv?.CODEX_HOME
+
         return launchEnv?.CODEX_HOME === customHome ? TEST_CODEX_HOME : null
       })
 

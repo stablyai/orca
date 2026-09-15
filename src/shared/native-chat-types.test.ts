@@ -9,8 +9,11 @@ import {
 } from './native-chat-types'
 
 const textBlock: NativeChatBlock = { type: 'text', text: 'hello' }
+
 const toolCallBlock: NativeChatBlock = { type: 'tool-call', name: 'Edit', input: { path: 'a' } }
+
 const toolResultBlock: NativeChatBlock = { type: 'tool-result', output: 'done', isError: false }
+
 const imageRefBlock: NativeChatBlock = { type: 'image-ref', path: '/tmp/a.png', alt: 'a' }
 
 describe('native chat block guards', () => {

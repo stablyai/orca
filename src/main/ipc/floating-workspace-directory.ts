@@ -13,28 +13,35 @@ function expandHomePath(input: string, home: string): string {
   if (input === '~') {
     return home
   }
+
   if (input.startsWith(`~${path.sep}`)) {
     return path.join(home, input.slice(2))
   }
+
   if (process.platform === 'win32' && input.startsWith('~/')) {
     return path.join(home, input.slice(2))
   }
+
   return input
 }
 
 function resolveFloatingWorkspaceInput(input: string): string {
   const home = app.getPath('home')
   const expanded = expandHomePath(input, home)
+
   return path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(home, expanded)
 }
 
 async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string | null> {
   try {
     const dirStats = await stat(dirPath)
+
     if (!dirStats.isDirectory()) {
       return null
     }
+
     await access(dirPath, fsConstants.R_OK | fsConstants.X_OK)
+
     return path.resolve(await realpath(dirPath))
   } catch {
     return null
@@ -54,10 +61,12 @@ async function getPreservedTrustedFloatingWorkspaceDirectories(
   settings: GlobalSettings
 ): Promise<Set<string>> {
   const trustedDirectories = new Set<string>()
+
   for (const trustedDir of getTrustedFloatingWorkspaceDirectories(settings)) {
     const canonicalDir = await canonicalizeAccessibleDirectory(trustedDir)
     trustedDirectories.add(canonicalDir ?? trustedDir)
   }
+
   return trustedDirectories
 }
 
@@ -74,6 +83,7 @@ export async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
   // Why: the default floating workspace lives outside repo roots by design;
   // authorize only this app-owned directory instead of widening access to ~.
   authorizeExternalPath(cwd)
+
   return cwd
 }
 
@@ -82,6 +92,7 @@ export async function resolveFloatingTerminalCwd(
   args?: FloatingTerminalCwdRequest
 ): Promise<string> {
   const configuredPath = typeof args?.path === 'string' ? args.path.trim() : ''
+
   if (!configuredPath) {
     return args?.requireTrusted === true
       ? ensureDefaultFloatingWorkspacePath()
@@ -90,6 +101,7 @@ export async function resolveFloatingTerminalCwd(
 
   const cwd = resolveFloatingWorkspaceInput(configuredPath)
   const canonicalCwd = await canonicalizeAccessibleDirectory(cwd)
+
   if (!canonicalCwd) {
     return ensureDefaultFloatingWorkspacePath()
   }
@@ -98,6 +110,7 @@ export async function resolveFloatingTerminalCwd(
     // Why: picker-approved directories are persisted as explicit grants, so a
     // restart can restore file creation access without trusting arbitrary text.
     authorizeExternalPath(canonicalCwd)
+
     return canonicalCwd
   }
 
@@ -110,13 +123,17 @@ export async function grantFloatingWorkspaceDirectory(
 ): Promise<void> {
   const resolvedDir = resolveFloatingWorkspaceInput(dirPath)
   const canonicalDir = await canonicalizeAccessibleDirectory(resolvedDir)
+
   if (!canonicalDir) {
     return
   }
+
   authorizeExternalPath(canonicalDir)
+
   const trustedDirectories = await getPreservedTrustedFloatingWorkspaceDirectories(
     store.getSettings()
   )
+
   trustedDirectories.add(canonicalDir)
   store.updateSettings({
     floatingTerminalTrustedCwds: [...trustedDirectories]
@@ -128,16 +145,21 @@ export async function sanitizeFloatingWorkspaceDirectorySetting(
   dirPath: string
 ): Promise<string> {
   const trimmed = dirPath.trim()
+
   if (!trimmed) {
     return ''
   }
+
   if (trimmed === '~') {
     return '~'
   }
+
   const resolvedDir = resolveFloatingWorkspaceInput(trimmed)
   const canonicalDir = await canonicalizeAccessibleDirectory(resolvedDir)
+
   if (!canonicalDir || !isTrustedFloatingWorkspaceDirectory(canonicalDir, store.getSettings())) {
     return ''
   }
+
   return canonicalDir
 }

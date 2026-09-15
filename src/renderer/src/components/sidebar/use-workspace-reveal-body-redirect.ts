@@ -15,11 +15,14 @@ export function useWorkspaceRevealBodyRedirect(agentsBodyShowing: boolean): void
     if (!agentsBodyShowing) {
       return
     }
+
     const onRequest = (event: Event): void => {
       pendingDetailRef.current = { detail: event instanceof CustomEvent ? event.detail : undefined }
       setSidebarBody('workspaces')
     }
+
     window.addEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, onRequest)
+
     return () => {
       window.removeEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, onRequest)
     }
@@ -29,10 +32,13 @@ export function useWorkspaceRevealBodyRedirect(agentsBodyShowing: boolean): void
     if (agentsBodyShowing) {
       return
     }
+
     const pending = pendingDetailRef.current
+
     if (!pending) {
       return
     }
+
     pendingDetailRef.current = null
     // Why safe to replay synchronously: the worktree list is a child of the sidebar, so its
     // listener effect ran earlier in this same commit.

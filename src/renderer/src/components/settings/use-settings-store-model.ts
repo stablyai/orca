@@ -36,9 +36,11 @@ export function useSettingsStoreModel() {
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
+
   const setActiveRuntimeEnvironmentPreference = useAppStore(
     (s) => s.setActiveRuntimeEnvironmentPreference
   )
+
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
@@ -60,15 +62,18 @@ export function useSettingsStoreModel() {
 
   // Why: one entry per project (derived from repos to match nav metadata) — the source of truth for the pane list.
   const settingsProjectList = useMemo(() => buildSettingsProjectList(repos), [repos])
+
   const repoIdToRepresentative = useMemo(
     () => buildRepoIdToRepresentative(settingsProjectList),
     [settingsProjectList]
   )
+
   // Why: lets a deep-link's repoId select the owning project's host so host-specific subsection anchors exist.
   const repoIdToHostSelection = useMemo(
     () => buildRepoIdToHostSelection(settingsProjectList),
     [settingsProjectList]
   )
+
   // Why: pane-level "Remove Project" removes every host setup, not just the selected host (per-host remove lives in "Available Hosts").
   const removeProjectAllHosts = useCallback(
     (setups: readonly ProjectHostSetup[]): Promise<void> =>
@@ -79,6 +84,7 @@ export function useSettingsStoreModel() {
   const [repoHooksMap, setRepoHooksMap] = useState<
     Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
   >({})
+
   const systemPrefersDark = useSystemPrefersDark()
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
@@ -87,20 +93,24 @@ export function useSettingsStoreModel() {
   // Why: mirror the nav registry's gate so the Linear sidebar entry and section appear/disappear together.
   const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const linearSkill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linearConnected,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
     enabled: showDesktopOnlySettings,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
   const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
@@ -110,21 +120,28 @@ export function useSettingsStoreModel() {
   // Why: keep Ghostty import state at Settings level so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
+
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     mergeFontSuggestions([], getFallbackTerminalFonts())
   )
+
   const terminalFontSuggestions = useMemo(
     () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
     [fontSuggestions]
   )
+
   const [activeSectionId, setActiveSectionId] = useState('general')
+
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
+
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+
   const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
     null
   )
+
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)

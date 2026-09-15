@@ -17,7 +17,9 @@ export function automationHostAuthorityRef(
   if (entry.owner) {
     return entry.owner.authority
   }
+
   const authority = entry.stableRef.authority
+
   return authority.kind === 'desktop'
     ? { kind: 'desktop' }
     : {

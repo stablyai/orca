@@ -63,12 +63,14 @@ function getManagedCommand(scriptPath: string, event: AntigravityEvent): string 
   if (process.platform === 'win32') {
     return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
   }
+
   return getPosixManagedCommand(scriptPath, event)
 }
 
 export class AntigravityHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+
     if (process.platform === 'win32') {
       for (const event of ANTIGRAVITY_EVENTS) {
         await refreshManagedScriptIfPresent(
@@ -83,6 +85,7 @@ export class AntigravityHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'antigravity',
@@ -95,20 +98,25 @@ export class AntigravityHookService {
 
     const bundle = getBundle(config)
     const isManagedCommand = createAntigravityManagedCommandMatcher()
+
     const currentCommands = new Set(
       ANTIGRAVITY_EVENTS.map((event) => getManagedCommand(scriptPath, event))
     )
+
     const staleManagedPresent = bundleHasStaleManagedCommand(
       bundle,
       isManagedCommand,
       currentCommands
     )
+
     const missing: string[] = []
     let presentCount = 0
+
     for (const event of ANTIGRAVITY_EVENTS) {
       const definitions = Array.isArray(bundle[event.eventName])
         ? (bundle[event.eventName] as HookDefinition[])
         : []
+
       if (hasManagedCommand(definitions, getManagedCommand(scriptPath, event))) {
         presentCount += 1
       } else {
@@ -119,6 +127,7 @@ export class AntigravityHookService {
     const managedHooksPresent = presentCount > 0 || staleManagedPresent
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0 && !staleManagedPresent) {
       state = 'installed'
       detail = null
@@ -132,6 +141,7 @@ export class AntigravityHookService {
           ? `Managed hook missing for events: ${missing.join(', ')}`
           : 'Stale managed hook entries need cleanup'
     }
+
     return { agent: 'antigravity', state, configPath, managedHooksPresent, detail }
   }
 
@@ -139,6 +149,7 @@ export class AntigravityHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'antigravity',
@@ -155,6 +166,7 @@ export class AntigravityHookService {
       createAntigravityManagedCommandMatcher()
     )
     writeManagedScript(scriptPath, getManagedScript())
+
     if (process.platform === 'win32') {
       // Why: Antigravity wraps hook commands in cmd.exe. Keeping event env
       // setup inside event-specific .cmd files avoids nested hooks.json quotes.
@@ -165,7 +177,9 @@ export class AntigravityHookService {
         )
       }
     }
+
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 
@@ -173,8 +187,10 @@ export class AntigravityHookService {
     const home = remoteHome.replace(/\/$/, '')
     const remoteConfigPath = `${home}/.gemini/config/hooks.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/antigravity-hook.sh`
+
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
       if (!config) {
         return {
           agent: 'antigravity',
@@ -214,6 +230,7 @@ export class AntigravityHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'antigravity',
@@ -226,6 +243,7 @@ export class AntigravityHookService {
 
     removeInstalledConfig(config)
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 }

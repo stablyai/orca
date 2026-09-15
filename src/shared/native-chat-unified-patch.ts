@@ -23,6 +23,7 @@ export function editLinesFromUnifiedPatch(
   options?: { implicitFirstHunk?: boolean }
 ): UnifiedPatchLines | null {
   const lines: NativeChatEditLine[] = []
+
   const metadata = visitUnifiedPatch(
     text,
     (kind, raw, oldLineNumber, newLineNumber) => {
@@ -30,6 +31,7 @@ export function editLinesFromUnifiedPatch(
     },
     options
   )
+
   return metadata ? { lines, ...metadata } : null
 }
 
@@ -42,13 +44,16 @@ export function summarizeUnifiedPatch(text: string): {
   let added = 0
   let removed = 0
   let rowCount = 0
+
   const metadata = visitUnifiedPatch(text, (kind) => {
     rowCount += 1
+
     if (rowCount <= MAX_EDIT_LINES) {
       added += Number(kind === 'add')
       removed += Number(kind === 'del')
     }
   })
+
   return metadata
     ? { added, removed, truncated: metadata.truncated || rowCount > MAX_EDIT_LINES }
     : null
@@ -76,36 +81,45 @@ function visitUnifiedPatch(
 
   for (let index = 0; index < rows.length; index += 1) {
     const raw = rows[index] ?? ''
+
     if (raw.startsWith('@@')) {
       const match = HUNK_RANGES.exec(raw)
       oldNo = match ? Number(match[1]) : null
       newNo = match ? Number(match[3]) : null
+
       if (rowCount > 0 && !lastWasGap) {
         visit('gap', '', null, null)
         rowCount += 1
         lastWasGap = true
       }
+
       sawHunk = true
       inHunk = true
       continue
     }
+
     if (raw.startsWith('\\')) {
       continue
     }
+
     if (!inHunk && isFileHeaderPair(rows, index)) {
       index += 1
       continue
     }
+
     if (FILE_SECTION_START.test(raw)) {
       inHunk = false
       continue
     }
+
     if (!inHunk) {
       continue
     }
+
     ranged &&= oldNo !== null || newNo !== null
     rowCount += 1
     lastWasGap = false
+
     if (raw.startsWith('+')) {
       visit('add', raw.slice(1), null, newNo)
       newNo = newNo === null ? null : newNo + 1
@@ -118,6 +132,7 @@ function visitUnifiedPatch(
       newNo = newNo === null ? null : newNo + 1
     }
   }
+
   return sawHunk && rowCount > 0 ? { lineNumbersKnown: ranged, truncated: source.truncated } : null
 }
 
@@ -165,12 +180,15 @@ export function unifiedPatchSections(text: string): {
       hasHeaderPair: false,
       fromGitHeader: false
     }
+
     sections.push(section)
+
     return section
   }
 
   for (let index = 0; index < rows.length; index += 1) {
     const raw = rows[index] ?? ''
+
     if (raw.startsWith(GIT_DIFF_HEADER)) {
       const paths = gitHeaderPaths(raw)
       current = open()
@@ -181,6 +199,7 @@ export function unifiedPatchSections(text: string): {
       inHunk = false
       continue
     }
+
     // A header pair is structure outside a hunk. Inside one it is also a file
     // boundary, but only when a hunk header follows it immediately: a removed
     // `-- x` over an added `++ y` is never followed by a column-0 `@@`, and
@@ -192,6 +211,7 @@ export function unifiedPatchSections(text: string): {
       if (!current || current.hasHeaderPair) {
         current = open()
       }
+
       current.oldPath = sourceHeaderPath(rows[index] ?? '')
       current.newPath = sourceHeaderPath(rows[index + 1] ?? '')
       current.named = true
@@ -200,11 +220,13 @@ export function unifiedPatchSections(text: string): {
       index += 1
       continue
     }
+
     if (raw.startsWith('@@')) {
       inHunk = true
     } else if (FILE_SECTION_START.test(raw)) {
       inHunk = false
     }
+
     current ??= open()
     current.rows.push(raw)
   }
@@ -224,15 +246,19 @@ function sectionChangeKind(section: Section): UnifiedPatchSection['changeKind'] 
   if (!section.named) {
     return 'edited'
   }
+
   if (section.newPath === null) {
     return 'deleted'
   }
+
   if (section.oldPath === null) {
     return 'added'
   }
+
   if (section.oldPath === section.newPath) {
     return 'edited'
   }
+
   // Differing sides are a move only where the header says so. Bare pairs carry
   // whatever paths the producer compared, which may be two directories.
   return section.fromGitHeader ? 'renamed' : 'edited'
@@ -242,6 +268,7 @@ function sectionChangeKind(section: Section): UnifiedPatchSection['changeKind'] 
  *  trailing tab introduces the timestamp some producers append. */
 function sourceHeaderPath(line: string): string | null {
   const value = (line.slice(4).split('\t')[0] ?? '').trim()
+
   return value === '' || value === '/dev/null' ? null : value.replace(/^[ab]\//, '')
 }
 
@@ -250,9 +277,11 @@ function gitHeaderPaths(line: string): { oldPath: string | null; newPath: string
   // Both halves carry the same path unless the file moved, so the second one
   // starts at the last ` b/` rather than at the first space.
   const split = rest.lastIndexOf(' b/')
+
   if (split === -1) {
     return { oldPath: null, newPath: null }
   }
+
   return {
     oldPath: rest.slice(0, split).replace(/^a\//, ''),
     newPath: rest.slice(split + 1).replace(/^b\//, '')
@@ -265,6 +294,7 @@ export function editLinesFromWholeFile(
   kind: 'add' | 'del'
 ): { lines: NativeChatEditLine[]; truncated: boolean } {
   const body = splitEditContent(content)
+
   return {
     lines: body.lines.map((text, index) => ({
       kind,

@@ -25,15 +25,20 @@ export function maybePushMode2031Flip(
   if (!transport.isConnected()) {
     return false
   }
+
   if (!paneMode2031.get(paneId)) {
     return false
   }
+
   if (paneLastThemeMode.get(paneId) === mode) {
     return false
   }
+
   if (!sendMode2031Reply(transport, mode)) {
     return false
   }
+
   paneLastThemeMode.set(paneId, mode)
+
   return true
 }

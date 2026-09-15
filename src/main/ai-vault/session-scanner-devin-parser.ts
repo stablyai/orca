@@ -57,13 +57,16 @@ function parseDevinSessionRecord(
   messages?: TranscriptMessageSink
 ): AiVaultSession | null {
   const record = asRecord(JSON.parse(content) as unknown)
+
   if (!record) {
     return null
   }
+
   const sessionId =
     extractString(record.session_id) ??
     extractString(record.sessionId) ??
     sessionIdFromFileName(file.path)
+
   const accumulator = createAccumulator({ agent: 'devin', file, sessionId, messages })
   const agentRecord = asRecord(record.agent)
   accumulator.model =
@@ -71,17 +74,21 @@ function parseDevinSessionRecord(
     extractString(agentRecord?.model) ??
     extractString(record.generation_model)
   accumulator.cwd = extractString(record.working_directory)
+
   for (const step of arrayValue(record.steps)) {
     consumeDevinSessionStep(accumulator, step)
   }
+
   return finalizeSession(accumulator, platform, options)
 }
 
 function extractDevinStepText(step: Record<string, unknown>): string | null {
   const message = asRecord(step.message)
+
   if (message) {
     return extractContentText(message.content) ?? extractString(message.content)
   }
+
   return extractString(step.text)
 }
 
@@ -109,21 +116,26 @@ function numberFromDevinMetadata(
     if (!source) {
       continue
     }
+
     for (const key of keys) {
       const value = numberValue(source[key])
+
       if (value > 0) {
         return value
       }
     }
   }
+
   return 0
 }
 
 export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: unknown): void {
   const stepRecord = asRecord(step)
+
   if (!stepRecord) {
     return
   }
+
   const metadata = asRecord(stepRecord.metadata)
   updateTimeline(accumulator, extractString(metadata?.created_at))
   const metrics = asRecord(metadata?.metrics)
@@ -131,16 +143,21 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
     extractString(metadata?.generation_model) ?? extractString(metrics?.generation_model)
   accumulator.totalTokens += devinStepTokenTotal(metadata, metrics)
   const isUser = metadata?.is_user_input === true
+
   if (isUser) {
     accumulator.messageCount++
+
     const text =
       extractDevinStepText(stepRecord) ??
       extractContentText(stepRecord.content) ??
       extractString(stepRecord.text)
+
     const titleCandidate = normalizeTitleText(text ?? '')
+
     if (titleCandidate) {
       accumulator.title ??= titleCandidate
     }
+
     addPreviewContent(accumulator, 'user', text ?? stepRecord.content)
   } else if (extractString(stepRecord.role) === 'assistant' || stepRecord.tool_calls) {
     accumulator.messageCount++
@@ -169,9 +186,11 @@ export async function parseDevinSessionDocument(
     consume: consumeDevinSessionStep,
     signal
   })
+
   if (!parsed) {
     return null
   }
+
   const { record, state: accumulator } = parsed
   accumulator.sessionId =
     extractString(record.session_id) ??
@@ -184,5 +203,6 @@ export async function parseDevinSessionDocument(
     extractString(record.generation_model) ??
     accumulator.model
   accumulator.cwd = extractString(record.working_directory)
+
   return finalizeSession(accumulator, platform, options)
 }

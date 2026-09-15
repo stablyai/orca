@@ -21,7 +21,9 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       attachOnly,
       restoreSkippedForLiveSession
     } = context
+
     let { sessionId, wslDistro, restoreInfo, effectiveCwd, effectiveCols, effectiveRows } = context
+
     const createOrAttach = (historySeedSegments: readonly string[] | null) => {
       Object.assign(context, {
         sessionId,
@@ -29,14 +31,20 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         effectiveCols,
         effectiveRows
       })
+
       return this.createOrAttachSpawn(context, historySeedSegments)
     }
+
     let result = initialResult
+
     const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult =>
       this.resultForExitBeforeSpawnReply(sessionId, result, operation) ?? spawnResult
+
     let historySeedSegments = restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null
+
     const adoptSpawnResultSession = async (spawnResult: CreateOrAttachResult): Promise<void> => {
       const requestedSessionId = sessionId
+
       if (
         opts.agentSessionEnsure &&
         !isAgentSessionClaimedSpawnResult(spawnResult.agentSessionEnsure)
@@ -46,20 +54,25 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         await this.client.request('kill', { sessionId: requestedSessionId }).catch(() => {})
         throw new Error('agent_session_claim_unavailable')
       }
+
       sessionId = spawnResult.agentSessionEnsure?.owner.ptyId ?? requestedSessionId
       context.sessionId = sessionId
+
       if (requestedSessionId === sessionId) {
         return
       }
+
       if (historyRecovery.freeze) {
         this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
         historyRecovery.freeze = null
       }
+
       historyRecovery.unreadableSessionId = null
       historyRecovery.identityChanged = true
       restoreInfo = null
       historySeedSegments = null
     }
+
     if (attachOnly && result.isNew) {
       operation.ignoreNextExit = true
       await retireUnexpectedAttachOnlySpawn(requestedSessionId, () =>
@@ -67,30 +80,38 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       )
       throw new SessionNotFoundError(requestedSessionId)
     }
+
     await adoptSpawnResultSession(result)
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
     this.clearSessionAwaitingDaemonRecovery(requestedSessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
     const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
+
     if (exitedResult) {
       return exitedResult
     }
+
     if (result.incarnationId) {
       this.sessionIncarnations.set(sessionId, result.incarnationId)
     }
+
     const claimResult = (): Pick<PtySpawnResult, 'agentSessionEnsure'> | Record<string, never> =>
       result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}
+
     const incarnationResult = (): Pick<PtySpawnResult, 'incarnationId'> | Record<string, never> =>
       result.incarnationId ? { incarnationId: result.incarnationId } : {}
+
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Why: explicit null from a current daemon overrides the caller's WSL preference; undefined keeps compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
     context.wslDistro = wslDistro
+
     if (wslDistro) {
       this.wslDistrosBySessionId.set(sessionId, wslDistro)
     } else if (providerWslDistro === null || result.isNew) {
       this.wslDistrosBySessionId.delete(sessionId)
     }
+
     const launchIdentity = (): { launchAgent?: NonNullable<typeof result.launchAgent> } =>
       result.launchAgent ? { launchAgent: result.launchAgent } : {}
 
@@ -103,17 +124,21 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
 
     // Why: check sticky cache first — StrictMode double-mounts call spawn twice; the second call (isNew=false) must still return cached cold restore data.
     const cachedRestore = this.coldRestoreCache.get(sessionId)
+
     if (cachedRestore) {
       // Why: wake-after-sleep lands here too; sleep dropped active tracking + the history writer, so re-register both or the next sleep/wake restores a blank terminal.
       this.activeSessionIds.add(sessionId)
+
       if (this.historyManager && !historyRecovery.identityChanged) {
         const recoveryFreeze = takeHistoryRecoveryFreeze(historyRecovery, sessionId)
+
         if (historyRecovery.unreadableSessionId === sessionId) {
           this.historyManager.suspendSession(sessionId, recoveryFreeze)
         } else {
           this.historyManager.reopenSession(sessionId, recoveryFreeze)
         }
       }
+
       return finalizeSpawnResult({
         id: sessionId,
         ...incarnationResult(),
@@ -131,12 +156,14 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (!historyRecovery.identityChanged && result.isNew && restoreSkippedForLiveSession) {
       restoreInfo = await context.detectColdRestore({ ignoreCleanEnd: true })
       historySeedSegments = restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null
+
       if (restoreInfo && historySeedSegments && historySeedSegments.length > 0) {
         // Why: the aliveness probe raced with session death, so the first
         // create lacked recovery bytes. Replace it before exposing the PTY.
         if (result.incarnationId) {
           operation.ignoredExitIncarnationIds.add(result.incarnationId)
         }
+
         operation.ignoreNextExit = true
         await this.client.request('kill', { sessionId, immediate: true })
         effectiveCwd = restoreInfo.cwd
@@ -145,20 +172,25 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         result = await createOrAttach(historySeedSegments)
         await adoptSpawnResultSession(result)
         const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
+
         if (exitedRetryResult) {
           return exitedRetryResult
         }
+
         if (result.incarnationId) {
           this.sessionIncarnations.set(sessionId, result.incarnationId)
         }
+
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         context.wslDistro = wslDistro
+
         if (wslDistro) {
           this.wslDistrosBySessionId.set(sessionId, wslDistro)
         } else if (providerWslDistro === null || result.isNew) {
           this.wslDistrosBySessionId.delete(sessionId)
         }
+
         pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
         this.initialCwds.set(sessionId, effectiveCwd)
       }
@@ -178,11 +210,14 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     // Cold restore: daemon made a new session but disk history shows an unclean shutdown → return saved scrollback.
     if (restoreInfo && (result.isNew || result.historySeeded === false)) {
       const coldRestore = this.buildColdRestorePayload(restoreInfo)
+
       const canReanchorHistory =
         !historySeedSegments || historySeedSegments.length === 0 || result.historySeeded === true
+
       // Why: registerWriter (not openSession) avoids deleting checkpoint.json — the only recovery data if the revived daemon crashes before the next tick.
       if (this.historyManager && !historyRecovery.identityChanged) {
         const recoveryFreeze = takeHistoryRecoveryFreeze(historyRecovery, sessionId)
+
         if (historyRecovery.unreadableSessionId === sessionId) {
           await this.historyManager.openSession(sessionId, {
             cwd: effectiveCwd ?? '',
@@ -191,6 +226,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             ...(recoveryFreeze ? { recoveryFreeze } : {}),
             quarantineUnreadableRecovery: true
           })
+
           if (this.historyManager.hasWriter(sessionId)) {
             this.sessionsNeedingFullCheckpoint.add(sessionId)
             this.sessionsNeedingLiveCheckpoint.add(sessionId)
@@ -206,8 +242,10 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
           this.historyManager.suspendSession(sessionId, recoveryFreeze)
         }
       }
+
       if (coldRestore) {
         this.coldRestoreCache.set(sessionId, coldRestore)
+
         return finalizeSpawnResult({
           id: sessionId,
           ...incarnationResult(),
@@ -220,6 +258,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
           ...(!result.isNew ? { isReattach: true } : {})
         })
       }
+
       return finalizeSpawnResult({
         id: sessionId,
         ...incarnationResult(),
@@ -258,6 +297,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         sessionId,
         takeHistoryRecoveryFreeze(historyRecovery, sessionId)
       )
+
       if (!wasAlreadyManaged) {
         // Why: a previous adapter may have drained records it never persisted, so the first compact must prove disk-to-daemon continuity.
         this.sessionsNeedingFullCheckpoint.add(sessionId)
@@ -267,6 +307,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
 
     const isReattach = !result.isNew
+
     if (!isReattach || !result.snapshot) {
       return finalizeSpawnResult({
         id: sessionId,
@@ -281,20 +322,24 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     }
 
     const reattachSnapshot = await this.overlayDurableRestoreSnapshot(sessionId, result.snapshot)
+
     const reattachProviderSequence =
       typeof reattachSnapshot.outputSequence === 'number'
         ? { value: reattachSnapshot.outputSequence, generation: 'continued' as const }
         : providerSequence
+
     const isAltScreen = reattachSnapshot.modes.alternateScreen
     const snapshotPrefix = reattachSnapshot.scrollbackAnsi + reattachSnapshot.rehydrateSequences
     const snapshotFrame = reattachSnapshot.snapshotAnsi
     const snapshotPayload = snapshotPrefix + snapshotFrame
+
     // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
     // Why known `0` is no longer dropped: the pane tracker must be able to tell
     // "the app negotiated nothing" from "this reattach proved nothing".
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(
       reattachSnapshot.modes.kittyKeyboardFlags
     )
+
     return finalizeSpawnResult({
       id: sessionId,
       ...incarnationResult(),

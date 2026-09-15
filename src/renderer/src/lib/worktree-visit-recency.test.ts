@@ -31,11 +31,13 @@ describe('worktree visit recency identities', () => {
 
   it('removes one host key without deleting the other host twin or legacy fallback', () => {
     const id = 'repo::/srv/app'
+
     const timestamps = {
       [id]: 50,
       [getWorktreeVisitKey(id, 'local')]: 100,
       [getWorktreeVisitKey(id, 'ssh:builder')]: 200
     }
+
     expect(removeWorktreeVisitEntries(timestamps, new Set([id]), 'local')).toEqual({
       [id]: 50,
       [getWorktreeVisitKey(id, 'ssh:builder')]: 200

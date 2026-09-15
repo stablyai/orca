@@ -17,6 +17,7 @@ export function getPluginPath(): string {
 
 export function getRemotePluginPath(remoteHome: string): string {
   const home = remoteHome.replace(/\/$/, '')
+
   return `${home}/.config/amp/plugins/${AMP_PLUGIN_FILE}`
 }
 
@@ -40,11 +41,14 @@ export function readLocalPluginState(pluginPath: string): PluginFileState {
   if (!existsSync(pluginPath)) {
     return { kind: 'absent' }
   }
+
   try {
     const content = readFileSync(pluginPath, 'utf-8')
+
     if (!isManagedPlugin(content)) {
       return { kind: 'unmanaged' }
     }
+
     return { kind: 'managed', complete: isCompleteManagedPlugin(content) }
   } catch (error) {
     return { kind: 'error', detail: error instanceof Error ? error.message : String(error) }

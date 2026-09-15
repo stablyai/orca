@@ -190,10 +190,12 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.cursor/skills/orchestration'
       }
     ]
+
     for (const { agent, rootPath, directoryPath } of cases) {
       const skills = [
         skill({ providers: ['agent-skills'], sourceKind: 'home', rootPath, directoryPath })
       ]
+
       const sources = [source(rootPath, agent)]
       expect(agentHasOrchestrationSkill(agent, skills, sources)).toBe(true)
       // Why: a provider-home install must not leak coverage to unrelated agents.
@@ -212,6 +214,7 @@ describe('orchestration skill agent coverage', () => {
       source('/Users/test/.gemini/antigravity/skills', 'antigravity'),
       source('/Users/test/.cursor/skills', 'cursor')
     ]
+
     const skills = [
       skill({
         providers: ['codex', 'claude', 'agent-skills'],
@@ -243,6 +246,7 @@ describe('orchestration skill agent coverage', () => {
   it('does not treat a repository shared root as a global install after deduplication', () => {
     const codexRoot = source('/Users/test/.codex/skills', 'codex')
     const repoRoot = source('/workspace/.agents/skills', null, 'repo')
+
     const skills = [
       skill({
         providers: ['codex', 'agent-skills'],
@@ -332,6 +336,7 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.pi/agent/skills/orchestration'
       })
     ]
+
     const ompInstall = [
       skill({
         providers: ['agent-skills'],
@@ -358,6 +363,7 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.gemini/skills/orchestration'
       })
     ]
+
     const antigravityInstall = [
       skill({
         providers: ['agent-skills'],

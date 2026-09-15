@@ -9,14 +9,18 @@ export function resolveLatestAgentDoneStartedAt(
   if (!entry) {
     return undefined
   }
+
   if (entry.state === 'done') {
     return entry.stateStartedAt
   }
+
   const history = entry.stateHistory ?? []
+
   for (let index = history.length - 1; index >= 0; index -= 1) {
     if (history[index].state === 'done') {
       return history[index].startedAt
     }
   }
+
   return undefined
 }

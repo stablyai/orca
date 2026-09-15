@@ -34,14 +34,17 @@ export async function commandExecFileAsync(
 ): Promise<{ stdout: string; stderr: string }> {
   const { wslDistro, ...execOptions } = options
   const resolved = resolveCommand(command, args, options.cwd, wslDistro)
+
   const binary =
     resolved.wsl === null ? resolveWindowsCommand(resolved.binary, options.env) : resolved.binary
+
   if (isWindowsBatchScript(binary)) {
     return spawnCommandCapture(binary, resolved.args, {
       ...execOptions,
       cwd: resolved.cwd
     })
   }
+
   try {
     const { stdout, stderr } = await execFileCapture(binary, resolved.args, {
       cwd: resolved.cwd,
@@ -51,6 +54,7 @@ export async function commandExecFileAsync(
       env: execOptions.env,
       signal: execOptions.signal
     })
+
     return { stdout: stdout as string, stderr: stderr as string }
   } catch (error) {
     if (shouldRetryWindowsCommandShim(error, resolved)) {
@@ -63,6 +67,7 @@ export async function commandExecFileAsync(
         }
       )
     }
+
     throw error
   }
 }

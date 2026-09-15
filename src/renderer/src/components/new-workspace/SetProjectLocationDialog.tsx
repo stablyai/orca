@@ -17,6 +17,7 @@ import { pickLocalProjectLocationFolder } from './pick-local-project-folder'
 import { CloneForm, ExistingFolderForm, LocationActionButton } from './SetProjectLocationForms'
 
 type DialogView = 'choose' | 'existing' | 'clone' | 'browse'
+
 type BrowseField = 'existing' | 'clone'
 
 type SetProjectLocationDialogProps = {
@@ -40,9 +41,11 @@ export function SetProjectLocationDialog({
   // Why: keep the last option rendered through the close animation, so the body
   // doesn't blank out as the dialog slides away.
   const [renderOption, setRenderOption] = useState(option)
+
   if (option !== null && option !== renderOption) {
     setRenderOption(option)
   }
+
   const activeOption = option ?? renderOption
   // Why: Radix dismisses on Escape from a document-capture listener, so the host
   // browser can never intercept it itself. The body parks a back-out here so
@@ -117,15 +120,19 @@ function SetProjectLocationDialogBody({
     // Re-armed on mount: StrictMode runs mount/cleanup/mount, and latching this
     // on the first cleanup would disable the success path for the whole session.
     abandoned.current = false
+
     return () => {
       abandoned.current = true
     }
   }, [])
   const parsedHost = parseExecutionHostId(option.hostId)
+
   // Remote hosts browse in-dialog; the local host gets the native folder picker.
   const remoteHost =
     parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' ? parsedHost : null
+
   const canClone = projectKind === 'git'
+
   // Both views browse for a path; this is the field each one writes back to.
   const pathFields: Record<BrowseField, { value: string; set: (path: string) => void }> = {
     existing: { value: setupPath, set: setSetupPath },
@@ -137,9 +144,11 @@ function SetProjectLocationDialogBody({
     exitHostBrowser.current = browsing
       ? () => {
           setView(browseField)
+
           return true
         }
       : null
+
     return () => {
       exitHostBrowser.current = null
     }
@@ -148,8 +157,10 @@ function SetProjectLocationDialogBody({
   const openHostBrowser = (field: BrowseField): void => {
     if (!remoteHost) {
       void pickLocalProjectLocationFolder(pathFields[field].set)
+
       return
     }
+
     setBrowseField(field)
     setView('browse')
   }
@@ -158,7 +169,9 @@ function SetProjectLocationDialogBody({
     if (!setupPath.trim()) {
       return
     }
+
     setIsSubmitting(true)
+
     try {
       const result = await setupProjectExistingFolder({
         projectId: option.projectId,
@@ -167,6 +180,7 @@ function SetProjectLocationDialogBody({
         kind: setupKind,
         displayName: projectName
       })
+
       if (result && !abandoned.current) {
         onReady(result.setup.id)
       }
@@ -179,7 +193,9 @@ function SetProjectLocationDialogBody({
     if (!cloneUrl.trim() || !cloneDestination.trim()) {
       return
     }
+
     setIsSubmitting(true)
+
     try {
       const result = await setupProjectClone({
         projectId: option.projectId,
@@ -188,6 +204,7 @@ function SetProjectLocationDialogBody({
         destination: cloneDestination.trim(),
         displayName: projectName
       })
+
       if (result && !abandoned.current) {
         onReady(result.setup.id)
       }
@@ -239,6 +256,7 @@ function SetProjectLocationDialogBody({
             )}
             onClick={() => {
               setView('existing')
+
               // Local hosts get the native picker straight away — one click instead of two.
               if (!remoteHost && !setupPath) {
                 void pickLocalProjectLocationFolder(setSetupPath)

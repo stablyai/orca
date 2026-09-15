@@ -4,6 +4,7 @@ export type WslUncPathInfo = {
 }
 
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
+
 const BACKSLASH_CHAR_CODE = '\\'.charCodeAt(0)
 
 function isPathSeparatorCharCode(charCode: number): boolean {
@@ -19,8 +20,10 @@ export function parseWslUncPath(path: string): WslUncPathInfo | null {
   ) {
     return null
   }
+
   const normalized = path.includes('\\') ? path.replace(/\\/g, '/') : path
   const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
+
   if (!match) {
     return null
   }
@@ -48,17 +51,20 @@ export function toLinuxPath(windowsPath: string): string {
   // Why the platform guard: on a POSIX host a literal `//wsl$/x` path is an
   // ordinary directory, not a distro mount, so it must survive unchanged.
   const info = process.platform === 'win32' ? parseWslUncPath(windowsPath) : null
+
   if (info) {
     return info.linuxPath
   }
 
   const driveMatch = windowsPath.match(/^([A-Za-z]):[/\\](.*)$/)
+
   if (!driveMatch) {
     return windowsPath
   }
 
   const driveLetter = driveMatch[1].toLowerCase()
   const rest = driveMatch[2].replace(/\\/g, '/')
+
   return `/mnt/${driveLetter}/${rest}`
 }
 
@@ -96,25 +102,32 @@ export function toWindowsWslUncPath(linuxPath: string, distro: string): string {
  */
 export function resolveWslRepoWorktreeBasePath(repoPath: string, basePath: string): string {
   const repoWsl = parseWslUncPath(repoPath)
+
   if (!repoWsl || !/^\/(?!\/)/.test(basePath)) {
     return basePath
   }
+
   const collapsed = collapsePosixDotSegments(basePath)
+
   return toWindowsWslUncPath(collapsed, repoWsl.distro)
 }
 
 function collapsePosixDotSegments(absolutePosixPath: string): string {
   const segments: string[] = []
+
   for (const segment of absolutePosixPath.split('/')) {
     if (!segment || segment === '.') {
       continue
     }
+
     if (segment === '..') {
       segments.pop()
       continue
     }
+
     segments.push(segment)
   }
+
   return `/${segments.join('/')}`
 }
 
@@ -122,14 +135,17 @@ function collapsePosixDotSegments(absolutePosixPath: string): string {
 // drvfs /mnt/<drive> tails case-insensitively; the rest of the Linux path is not.
 export function foldWslUncPathCaseInsensitiveParts(path: string): string | null {
   const parsed = parseWslUncPath(path)
+
   if (!parsed) {
     return null
   }
+
   // Why: the drvfs automount is literally lowercase /mnt — a case-variant like
   // /MNT is an ordinary case-sensitive Linux dir and must not be folded.
   const linuxPath = /^\/mnt\/[a-zA-Z](?:\/|$)/.test(parsed.linuxPath)
     ? parsed.linuxPath.toLowerCase()
     : parsed.linuxPath
+
   return `//wsl.localhost/${parsed.distro.toLowerCase()}${linuxPath === '/' ? '' : linuxPath}`
 }
 
@@ -162,10 +178,13 @@ export function toWindowsWslDrivePath(linuxPath: string): string | null {
   // `.` excludes every line terminator, so a drvfs prefix on a stray output line (an rg hit that
   // still carries its CR) stays off the drive spelling.
   const match = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
+
   if (!match) {
     return null
   }
+
   const tail = (match[2] ?? '').replace(/\//g, '\\')
+
   return `${match[1].toUpperCase()}:${tail || '\\'}`
 }
 
@@ -185,11 +204,14 @@ export function getWslFilesystemBoundaryDistro(args: {
   wslRuntimeDistro?: string | null
 }): string | null {
   const wsl = parseWslUncPath(args.projectPath)
+
   if (wsl) {
     return isDrvfsLinuxPath(wsl.linuxPath) ? wsl.distro : null
   }
+
   if (!/^[A-Za-z]:[\\/]/.test(args.projectPath)) {
     return null
   }
+
   return args.wslRuntimeDistro || null
 }

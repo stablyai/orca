@@ -54,9 +54,11 @@ async function createProjectHeaderSortFixture(): Promise<string[]> {
   const root = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-project-sort-')))
   tempRoots.push(root)
   const repoPaths = PROJECT_NAMES.map((name) => path.join(root, name))
+
   for (const repoPath of repoPaths) {
     initializeGitRepo(repoPath)
   }
+
   return repoPaths
 }
 
@@ -66,6 +68,7 @@ async function seedProjectHeaderSortScenario(
 ): Promise<SeededProjectHeaderSortScenario> {
   return page.evaluate(async (paths) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -79,6 +82,7 @@ async function seedProjectHeaderSortScenario(
     state.setSidebarOpen(true)
     state.setGroupBy('repo')
     state.setProjectOrderBy('manual')
+
     // Why: repos.add broadcasts repos:changed, which schedules background
     // fetchRepos() calls; those bump reposFetchGeneration and can make our awaited
     // fetchRepos() drop its own complete result as superseded (#7020), leaving the
@@ -89,14 +93,18 @@ async function seedProjectHeaderSortScenario(
       paths.map((repoPath) =>
         store.getState().repos.find((candidate) => candidate.path === repoPath)
       )
+
     let repos = findSeededRepos()
     const deadline = Date.now() + 10_000
+
     while (repos.some((repo) => !repo) && Date.now() < deadline) {
       await state.fetchRepos()
       repos = findSeededRepos()
+
       if (repos.every((repo) => repo)) {
         break
       }
+
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
 
@@ -104,6 +112,7 @@ async function seedProjectHeaderSortScenario(
       if (!repo) {
         throw new Error(`Expected project repo to be loaded: ${paths[index]}`)
       }
+
       return repo
     })
 
@@ -124,6 +133,7 @@ async function seedDuplicateTabOrderProjectGroups(
 ): Promise<SeededProjectGroupSortScenario> {
   return page.evaluate(async (groupNames) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -135,11 +145,14 @@ async function seedDuplicateTabOrderProjectGroups(
     state.setProjectOrderBy('manual')
 
     const groups = []
+
     for (const name of groupNames) {
       const created = await state.createProjectGroup(name)
+
       if (!created) {
         throw new Error(`Failed to create Project Group: ${name}`)
       }
+
       // Why: existing profiles can have several groups with the same legacy rank;
       // the drag must still be able to insert one between its siblings.
       await state.updateProjectGroup(created.id, { tabOrder: 0 })
@@ -160,6 +173,7 @@ async function getProjectHeaderOrder(
   projectIds: SeededProjectHeaderSortScenario
 ): Promise<string[]> {
   const expectedIds = new Set(Object.values(projectIds))
+
   return page.locator('[data-worktree-sidebar] [data-repo-header-id]').evaluateAll(
     (elements, ids) =>
       elements
@@ -179,6 +193,7 @@ async function getProjectGroupHeaderOrder(
   groupIds: SeededProjectGroupSortScenario
 ): Promise<string[]> {
   const expectedIds = new Set(Object.values(groupIds))
+
   return page.locator('[data-worktree-sidebar] [data-project-group-header-id]').evaluateAll(
     (elements, ids) =>
       elements
@@ -204,6 +219,7 @@ async function dragProjectBefore(args: {
   await target.scrollIntoViewIfNeeded()
   const sourceBox = await source.boundingBox()
   const targetBox = await target.boundingBox()
+
   if (!sourceBox || !targetBox) {
     throw new Error('Project header bounding box was not available')
   }
@@ -225,6 +241,7 @@ async function dragProjectIntoProjectBody(args: {
   await targetHeader.scrollIntoViewIfNeeded()
   const sourceBox = await source.boundingBox()
   const targetHeaderBox = await targetHeader.boundingBox()
+
   if (!sourceBox || !targetHeaderBox) {
     throw new Error('Project body drag bounding box was not available')
   }
@@ -255,6 +272,7 @@ async function dragProjectGroupBefore(args: {
   await target.scrollIntoViewIfNeeded()
   const sourceBox = await source.boundingBox()
   const targetBox = await target.boundingBox()
+
   if (!sourceBox || !targetBox) {
     throw new Error('Project Group header bounding box was not available')
   }

@@ -11,6 +11,7 @@ function finiteNumber(value: unknown): number | undefined {
 
 export function readFrameMetadata(raw: unknown): BrowserScreencastFrameMetadata {
   const metadata = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+
   return {
     offsetTop: finiteNumber(metadata.offsetTop),
     pageScaleFactor: finiteNumber(metadata.pageScaleFactor),
@@ -35,6 +36,7 @@ function selectFrameDeviceSize(
     // compensate with crop/contain math and exposes blank compositor space.
     return requestedCssSize
   }
+
   return reportedSize ?? imageSize
 }
 
@@ -47,24 +49,31 @@ export function enrichFrameMetadata(
   const viewportHeight = positiveInteger(options.viewportHeight)
   const enriched: BrowserScreencastFrameMetadata = { ...metadata }
   const deviceWidth = selectFrameDeviceSize(enriched.deviceWidth, viewportWidth, imageSize?.width)
+
   const deviceHeight = selectFrameDeviceSize(
     enriched.deviceHeight,
     viewportHeight,
     imageSize?.height
   )
+
   const imageWidth = imageSize?.width ?? enriched.imageWidth
   const imageHeight = imageSize?.height ?? enriched.imageHeight
+
   if (deviceWidth !== undefined) {
     enriched.deviceWidth = deviceWidth
   }
+
   if (deviceHeight !== undefined) {
     enriched.deviceHeight = deviceHeight
   }
+
   if (imageWidth !== undefined) {
     enriched.imageWidth = imageWidth
   }
+
   if (imageHeight !== undefined) {
     enriched.imageHeight = imageHeight
   }
+
   return enriched
 }

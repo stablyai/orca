@@ -9,6 +9,7 @@ function fakeClient(byMethod: Record<string, unknown>, calls: Call[]): RpcClient
     sendRequest: async (method: string, params?: unknown) => {
       calls.push({ method, params: (params ?? {}) as Record<string, unknown> })
       const result = byMethod[method]
+
       if (result instanceof Error) {
         return {
           id: '1',
@@ -17,6 +18,7 @@ function fakeClient(byMethod: Record<string, unknown>, calls: Call[]): RpcClient
           _meta: { runtimeId: 'r' }
         }
       }
+
       return { id: '1', ok: true, result: result ?? { items: [] }, _meta: { runtimeId: 'r' } }
     }
   } as unknown as RpcClient
@@ -36,6 +38,7 @@ const smartArgs = {
 describe('fanOutSmartSearch', () => {
   it('fans out to every provider in smart mode and stamps repoId', async () => {
     const calls: Call[] = []
+
     const client = fakeClient(
       {
         'github.listWorkItems': { items: [{ id: 'g1', type: 'issue', number: 1, title: 'A' }] },
@@ -45,6 +48,7 @@ describe('fanOutSmartSearch', () => {
       },
       calls
     )
+
     const result = await fanOutSmartSearch({ client, ...smartArgs })
     expect(calls.map((c) => c.method).sort()).toEqual([
       'github.listWorkItems',
@@ -61,6 +65,7 @@ describe('fanOutSmartSearch', () => {
 
   it('swallows a single provider failure in smart mode (best-effort)', async () => {
     const calls: Call[] = []
+
     const client = fakeClient(
       {
         'github.listWorkItems': new Error('gh down'),
@@ -70,6 +75,7 @@ describe('fanOutSmartSearch', () => {
       },
       calls
     )
+
     const result = await fanOutSmartSearch({ client, ...smartArgs })
     expect(result.error).toBe('')
     expect(result.gitlabItems).toHaveLength(1)

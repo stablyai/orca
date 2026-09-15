@@ -48,11 +48,13 @@ describe('computeAgentSessionPayloadFingerprint', () => {
       sessionId: 'session-1',
       fields: { body: { kind: 'message', blocks: [{ type: 'text', text: 'hi' }] }, extra: 1 }
     })
+
     const b = computeAgentSessionPayloadFingerprint({
       method: 'agentSession.send',
       sessionId: 'session-1',
       fields: { extra: 1, body: { blocks: [{ text: 'hi', type: 'text' }], kind: 'message' } }
     })
+
     expect(a).toBe(b)
     expect(a).toMatch(/^[0-9a-f]{64}$/)
   })
@@ -63,6 +65,7 @@ describe('computeAgentSessionPayloadFingerprint', () => {
       sessionId: 'session-1',
       fields: { text: 'hi' }
     })
+
     expect(
       computeAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
@@ -106,6 +109,7 @@ describe('admitAgentSessionMutation', () => {
       envelope: envelope({ expectedRuntimeFence: 1 }),
       ledger: { decision: 'replay', row: row('f'.repeat(64)) }
     })
+
     expect(admission.decision).toBe('replay')
   })
 
@@ -115,6 +119,7 @@ describe('admitAgentSessionMutation', () => {
       envelope: envelope({ expectedRuntimeFence: 3 }),
       ledger: ADMIT('f'.repeat(64))
     })
+
     expect(admission).toMatchObject({
       decision: 'refused',
       refusal: { code: 'agent_session_checkpoint_stale', currentFence: 4 }
@@ -127,6 +132,7 @@ describe('admitAgentSessionMutation', () => {
       lease: { ...LEASE, unreconciled: true },
       ledger: ADMIT('f'.repeat(64))
     })
+
     expect(admission).toMatchObject({
       decision: 'refused',
       refusal: { code: 'execution_owner_reconciling' }
@@ -139,6 +145,7 @@ describe('admitAgentSessionMutation', () => {
       lease: { ...LEASE, handoffStage: 'new-owner-proving' },
       ledger: ADMIT('f'.repeat(64))
     })
+
     expect(admission).toMatchObject({
       decision: 'refused',
       refusal: { code: 'agent_session_conflict' }
@@ -150,6 +157,7 @@ describe('admitAgentSessionMutation', () => {
       ...base,
       ledger: { decision: 'refused', code: 'agent_session_operation_expired' }
     })
+
     expect(admission).toMatchObject({
       decision: 'refused',
       refusal: { code: 'agent_session_operation_expired' }

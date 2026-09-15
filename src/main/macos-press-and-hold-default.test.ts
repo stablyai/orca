@@ -26,6 +26,7 @@ function createHost(overrides: HostOverrides = {}): {
   const writes: { domain: string; value: boolean }[] = []
   const records: PressAndHoldRecord[] = []
   let stored = overrides.record ?? null
+
   const host: PressAndHoldHost = {
     platform: 'darwin',
     resolveBundleIdentifier: () => ORCA_DOMAIN,
@@ -37,11 +38,13 @@ function createHost(overrides: HostOverrides = {}): {
     readDomainPreference: () => 'unset',
     writeDomainPreference: (domain, value) => {
       writes.push({ domain, value })
+
       return true
     },
     now: () => '2026-08-20T00:00:00.000Z',
     ...overrides
   }
+
   return { host, writes, records }
 }
 
@@ -63,6 +66,7 @@ describe('ensureMacPressAndHoldDefault', () => {
       it(`does nothing at all on ${platform}`, () => {
         const probe = vi.fn(() => 'unset' as const)
         const readRecord = vi.fn(() => null)
+
         const { host, writes, records } = createHost({
           platform,
           readDomainPreference: probe,
@@ -95,6 +99,7 @@ describe('ensureMacPressAndHoldDefault', () => {
     it('never re-applies after a launch already decided', () => {
       for (const decision of ['applied', 'kept-user-preference'] as const) {
         const probe = vi.fn(() => 'unset' as const)
+
         const { host, writes } = createHost({
           record: terminalRecord(decision),
           readDomainPreference: probe
@@ -122,6 +127,7 @@ describe('ensureMacPressAndHoldDefault', () => {
   describe('domains we do not own', () => {
     it('skips a bare Electron bundle rather than writing into a shared domain', () => {
       const probe = vi.fn(() => 'unset' as const)
+
       const { host, writes, records } = createHost({
         resolveBundleIdentifier: () => 'com.github.Electron',
         readDomainPreference: probe
@@ -176,6 +182,7 @@ describe('ensureMacPressAndHoldDefault', () => {
       record: first.records.at(-1),
       resolveBundleIdentifier: () => 'com.github.Electron'
     })
+
     expect(ensureMacPressAndHoldDefault(second.host)).toBe('foreign-bundle')
     expect(second.records).toEqual([])
   })
@@ -217,6 +224,7 @@ describe('interpretDefaultsRead', () => {
         }
       ]
     ]
+
     for (const [name, failing] of failures) {
       it(name, () => {
         expect(interpretDefaultsRead(failing)).toBe('unknown')
@@ -239,6 +247,7 @@ describe('readBundleIdentifierFromExecutablePath', () => {
     roots.push(root)
     mkdirSync(join(root, 'Orca.app', 'Contents', 'MacOS'), { recursive: true })
     writeFileSync(join(root, 'Orca.app', 'Contents', 'Info.plist'), body)
+
     return join(root, 'Orca.app', 'Contents', 'MacOS', 'Orca')
   }
 
@@ -271,12 +280,14 @@ describe('startup wiring', () => {
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
     'utf8'
   )
+
   const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
   it('runs before app.whenReady(), which is the last point AppKit could still see it', () => {
     const callIndex = source.indexOf(
       'applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())'
     )
+
     const initDataPathIndex = source.indexOf('initDataPath()')
     const readyIndex = entrySource.indexOf('void app.whenReady().then(async () => {')
     const preflightCall = entrySource.indexOf('runMainProcessPreflight({')

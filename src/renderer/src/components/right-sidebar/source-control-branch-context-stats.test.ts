@@ -75,6 +75,7 @@ describe('source-control branch context stats', () => {
       { ...readySummary, commitsAhead: 36 },
       'origin/main'
     )
+
     expect(stats[0]?.label).toBe('\u219136')
     expect(stats[0]?.title).toBe('36 commits ahead of origin/main')
   })
@@ -84,6 +85,7 @@ describe('source-control branch context stats', () => {
       { ...readySummary, commitsAhead: 1, commitsBehind: 1 },
       'origin/main'
     )
+
     expect(stats.map((stat) => stat.title)).toEqual([
       '1 commit ahead of origin/main',
       '1 commit behind origin/main'
@@ -96,6 +98,7 @@ describe('source-control branch context stats', () => {
       { ...readySummary, commitsAhead: 33, commitsBehind: 12 },
       'refs/remotes/origin/main'
     )
+
     expect(stats.map((stat) => stat.label)).toEqual(['\u219133', '\u219312'])
     expect(stats[1]?.title).toBe('12 commits behind origin/main')
   })

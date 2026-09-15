@@ -35,9 +35,11 @@ type GitResponseStreamEntry = {
  * decoded bytes and parses once). */
 function encodeChunks(payload: Buffer, chunkBytes = GIT_RESPONSE_CHUNK_SIZE): string[] {
   const chunks: string[] = []
+
   for (let offset = 0; offset < payload.length; offset += chunkBytes) {
     chunks.push(payload.subarray(offset, offset + chunkBytes).toString('base64'))
   }
+
   return chunks
 }
 
@@ -53,11 +55,13 @@ export class GitResponseStreamRegistry {
       ackedThroughSeq: -1,
       ackWaiters: new Set()
     })
+
     return streamId
   }
 
   recordAck(streamId: number, seq: number, clientId: number): void {
     const entry = this.streams.get(streamId)
+
     if (
       !entry ||
       entry.ownerClientId !== clientId ||
@@ -66,14 +70,17 @@ export class GitResponseStreamRegistry {
     ) {
       return
     }
+
     if (seq > entry.ackedThroughSeq) {
       entry.ackedThroughSeq = seq
     }
+
     this.wake(entry)
   }
 
   abort(streamId: number, clientId: number): void {
     const entry = this.streams.get(streamId)
+
     if (entry?.ownerClientId === clientId) {
       entry.aborted = true
       this.wake(entry)
@@ -96,20 +103,25 @@ export class GitResponseStreamRegistry {
 
   private waitForAck(streamId: number): Promise<void> {
     const entry = this.streams.get(streamId)
+
     if (!entry || entry.aborted) {
       return Promise.resolve()
     }
+
     return new Promise<void>((resolve) => {
       let settled = false
+
       const finish = (): void => {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timer)
         entry.ackWaiters.delete(finish)
         resolve()
       }
+
       const timer = setTimeout(finish, STREAM_ACK_STALL_RECHECK_MS)
       timer.unref?.()
       entry.ackWaiters.add(finish)
@@ -127,23 +139,28 @@ export class GitResponseStreamRegistry {
     context: RequestContext
   ): GitResponseStreamMarker {
     const streamId = this.register(context.clientId)
+
     const base64Budget =
       dispatcher.producerDataBudget?.(
         'git.responseChunk',
         { streamId, seq: payload.length },
         context.clientId
       ) ?? Number.MAX_SAFE_INTEGER
+
     const sinkChunkBytes = Math.floor(Math.max(0, base64Budget) / 4) * 3
+
     if (sinkChunkBytes === 0) {
       this.streams.delete(streamId)
       throw new Error('Git response stream has no encoded producer capacity')
     }
+
     const chunks = encodeChunks(payload, Math.min(GIT_RESPONSE_CHUNK_SIZE, sinkChunkBytes))
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
     setImmediate(() => {
       void this.pump(streamId, chunks, dispatcher, context)
     })
+
     return {
       __orcaGitResponseStream: { streamId, totalBytes: payload.length, chunkCount: chunks.length }
     }
@@ -156,22 +173,27 @@ export class GitResponseStreamRegistry {
     context: RequestContext
   ): Promise<void> {
     const entry = this.streams.get(streamId)
+
     if (!entry) {
       return
     }
+
     const clientId = context.clientId
     let seq = 0
     let endReason: 'end' | 'aborted' | 'stale' = 'end'
+
     try {
       for (seq = 0; seq < chunks.length; seq += 1) {
         if (context.isStale()) {
           endReason = 'stale'
           break
         }
+
         if (entry.aborted) {
           endReason = 'aborted'
           break
         }
+
         // Why: credit window — the client acks each chunk, bounding how many
         // bulk bytes a keystroke echo can queue behind on the shared channel.
         while (
@@ -181,14 +203,17 @@ export class GitResponseStreamRegistry {
         ) {
           await this.waitForAck(streamId)
         }
+
         if (context.isStale()) {
           endReason = 'stale'
           break
         }
+
         if (entry.aborted) {
           endReason = 'aborted'
           break
         }
+
         // Why: notifyBulk waits out sink saturation so chunk frames never pile
         // up in the outbound pipe ahead of interactive pty.data frames.
         await dispatcher.notifyBulk(
@@ -199,6 +224,7 @@ export class GitResponseStreamRegistry {
           }
         )
       }
+
       if (endReason === 'end') {
         await dispatcher.notifyBulk('git.responseEnd', { streamId }, { clientId })
       }
@@ -228,6 +254,7 @@ export class GitResponseStreamRegistry {
       entry.aborted = true
       this.wake(entry)
     }
+
     this.streams.clear()
   }
 }
@@ -251,9 +278,12 @@ export function maybeStreamRpcResponse(
   if (params.__streamResponse !== true || !context) {
     return result
   }
+
   const payload = Buffer.from(JSON.stringify(result ?? null), 'utf-8')
+
   if (payload.length <= GIT_RESPONSE_STREAM_THRESHOLD) {
     return result
   }
+
   return registry.startStream(payload, dispatcher, context)
 }

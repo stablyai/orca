@@ -10,6 +10,7 @@ const authority: BrowserHostLeaseAuthority = {
   browserHostClientId: 'client-a',
   browserHostGeneration: 2
 }
+
 const authorityStorageKey = 'a'.repeat(64)
 
 afterEach(() => {
@@ -20,11 +21,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
   it('retains one exact route until its final page releases it', async () => {
     const route = createRoute()
     const routeFactory = vi.fn(() => route)
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'native',
       runtimeId: 'runtime-a',
@@ -64,19 +67,23 @@ describe('BrowserClientNetworkRouteRegistry', () => {
       if (closed) {
         throw new Error('Browser network route is closed')
       }
+
       return { host: '127.0.0.1', port: 43123 }
     })
     const routeFactory = vi.fn(() => route)
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'native',
       runtimeId: 'runtime-a',
       revision: 7
     })
+
     const retained = await registry.retain(key, signal())
 
     await expect(retained.release()).rejects.toThrow(cleanupError)
@@ -89,11 +96,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('rejects native and WSL routes for a different authority runtime', async () => {
     const routeFactory = vi.fn(() => createRoute())
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'native',
       runtimeId: 'runtime-b',
@@ -103,12 +112,14 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     await expect(registry.retain(key, signal())).rejects.toThrow(
       'browser_client_network_route_authority_mismatch'
     )
+
     const wslKey = browserNetworkExecutionHostKey({
       kind: 'wsl',
       runtimeId: 'runtime-b',
       revision: 1,
       distro: 'Ubuntu'
     })
+
     await expect(registry.retain(wslKey, signal())).rejects.toThrow(
       'browser_client_network_route_authority_mismatch'
     )
@@ -117,17 +128,21 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('releases an aborted startup without admitting a handle', async () => {
     let resolveStart = (_address: { host: string; port: number }): void => {}
+
     const route = createRoute(
       new Promise((resolve) => {
         resolveStart = resolve
       })
     )
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: () => route
     })
+
     const controller = new AbortController()
+
     const retaining = registry.retain(
       browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
       controller.signal
@@ -143,11 +158,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     const firstRoute = createRoute()
     const secondRoute = createRoute()
     const routeFactory = vi.fn().mockReturnValueOnce(firstRoute).mockReturnValueOnce(secondRoute)
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     await registry.retain(
       browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
       signal()
@@ -176,17 +193,20 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('retires old authority routes without destroying them before exact page cleanup', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: () => route
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'ssh',
       targetId: 'ssh-a',
       providerEpoch: 'provider-a',
       connectionGeneration: 1
     })
+
     const retained = await registry.retain(key, signal())
 
     const retirement = registry.retire(new Error('authority replaced'))
@@ -207,11 +227,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('force-closes retained retired routes during final shutdown', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: () => route
     })
+
     await registry.retain(
       browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
       signal()
@@ -225,16 +247,19 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('suspends every retained transport and restores the same listener address', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: () => route
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'native',
       runtimeId: 'runtime-a',
       revision: 1
     })
+
     await registry.retain(key, signal())
 
     registry.suspend()
@@ -258,6 +283,7 @@ describe('BrowserClientNetworkRouteRegistry', () => {
       .mockRejectedValueOnce(new Error('transient tunnel failure'))
       .mockResolvedValue({ host: '127.0.0.1', port: 43123 })
     const healthy = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
@@ -265,6 +291,7 @@ describe('BrowserClientNetworkRouteRegistry', () => {
       reconnectRetryDelayMs: 10,
       createRoute: vi.fn().mockReturnValueOnce(flaky).mockReturnValueOnce(healthy)
     })
+
     await registry.retain(
       browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
       signal()
@@ -294,17 +321,20 @@ describe('BrowserClientNetworkRouteRegistry', () => {
   it('aborts a stale route recovery without retaining its retry timer', async () => {
     vi.useFakeTimers()
     let rejectReconnect = (_error: Error): void => {}
+
     const route = createRoute()
     route.reconnect.mockReturnValueOnce(
       new Promise((_, reject) => {
         rejectReconnect = reject
       })
     )
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: () => route
     })
+
     await registry.retain(
       browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
       signal()
@@ -326,6 +356,7 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     const flaky = createRoute()
     flaky.reconnect.mockRejectedValue(new Error('persistent tunnel failure'))
     const healthy = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
@@ -333,6 +364,7 @@ describe('BrowserClientNetworkRouteRegistry', () => {
       reconnectRetryDelayMs: 10,
       createRoute: vi.fn().mockReturnValueOnce(flaky).mockReturnValueOnce(healthy)
     })
+
     await registry.retain(
       browserNetworkExecutionHostKey({ kind: 'native', runtimeId: 'runtime-a', revision: 1 }),
       signal()
@@ -348,6 +380,7 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     )
     registry.suspend()
     const reconnecting = registry.reconnect()
+
     const rejected = expect(reconnecting).rejects.toThrow(
       'Browser client network route reconnect failed'
     )
@@ -368,17 +401,20 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     closing.reconnect.mockRejectedValue(new Error('Browser network route is closed'))
     const replacement = createRoute(Promise.resolve({ host: '127.0.0.1', port: 43124 }))
     const routeFactory = vi.fn(() => (routeFactory.mock.calls.length > 1 ? replacement : closing))
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'ssh',
       targetId: 'target-a',
       providerEpoch: 'provider-a',
       connectionGeneration: 2
     })
+
     const retained = await registry.retain(key, signal())
 
     const releasing = retained.release()
@@ -396,16 +432,19 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     const teardown = deferredTeardown()
     const route = createRoute()
     route.close.mockImplementation(() => teardown.promise)
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     const key = browserNetworkExecutionHostKey({
       kind: 'native',
       runtimeId: 'runtime-a',
       revision: 7
     })
+
     const retained = await registry.retain(key, signal())
 
     const releasing = retained.release()
@@ -424,11 +463,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('refuses a retain whose signal aborted before admission', async () => {
     const routeFactory = vi.fn(() => createRoute())
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     const controller = new AbortController()
     controller.abort()
 
@@ -440,16 +481,19 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('rejects a retain the moment its signal aborts mid-startup', async () => {
     let resolveStart = (_address: { host: string; port: number }): void => {}
+
     const route = createRoute(
       new Promise((resolve) => {
         resolveStart = resolve
       })
     )
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: () => route
     })
+
     const controller = new AbortController()
     const retaining = registry.retain(nativeKey(1), controller.signal)
     await flushMicrotasks()
@@ -466,11 +510,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     const route = createRoute()
     route.close.mockImplementation(() => teardown.promise)
     const routeFactory = vi.fn(() => route)
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: routeFactory
     })
+
     const key = nativeKey(7)
     const retained = await registry.retain(key, signal())
     const releasing = retained.release()
@@ -488,11 +534,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('keeps a fully released key clean so final cleanup closes it only once', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     const retained = await registry.retain(nativeKey(1), signal())
 
     await retained.release()
@@ -504,11 +552,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('never re-closes a route the registry already force-closed', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     const key = nativeKey(1)
     const first = await registry.retain(key, signal())
     const second = await registry.retain(key, signal())
@@ -522,11 +572,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('ignores a repeated release from the same page handle', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     const key = nativeKey(1)
     const first = await registry.retain(key, signal())
     const second = await registry.retain(key, signal())
@@ -542,11 +594,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
   it('refuses a retain whose route came back on a different port', async () => {
     const route = createRoute()
     route.reconnect.mockResolvedValue({ host: '127.0.0.1', port: 43999 })
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     const key = nativeKey(1)
     await registry.retain(key, signal())
 
@@ -557,11 +611,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
 
   it('refuses a reconnect that moved a retained route to a different port', async () => {
     const route = createRoute()
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     await registry.retain(nativeKey(1), signal())
     registry.suspend()
     route.reconnect.mockResolvedValue({ host: '127.0.0.1', port: 43999 })
@@ -576,11 +632,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     route.suspend.mockImplementation(() => {
       throw new Error('suspend refused')
     })
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     await registry.retain(nativeKey(1), signal())
 
     expect(() => registry.retire()).toThrow('Browser client network route suspension failed')
@@ -595,11 +653,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
   it('reports a failed final cleanup to an awaiting retirement', async () => {
     const route = createRoute()
     route.close.mockRejectedValue(new Error('route cleanup outcome unknown'))
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     await registry.retain(nativeKey(1), signal())
     let retirementFailure: string | undefined
     void registry.retire().catch((error: Error) => {
@@ -615,11 +675,13 @@ describe('BrowserClientNetworkRouteRegistry', () => {
   it('refuses to report retirement for a registry whose close already failed', async () => {
     const route = createRoute()
     route.close.mockRejectedValue(new Error('route cleanup outcome unknown'))
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
       createRoute: vi.fn(() => route)
     })
+
     await registry.retain(nativeKey(1), signal())
 
     await expect(registry.close()).rejects.toThrow('Browser client network route cleanup failed')
@@ -631,6 +693,7 @@ describe('BrowserClientNetworkRouteRegistry', () => {
     const route = createRoute()
     route.start.mockRejectedValue(new Error('tunnel start failed'))
     route.close.mockRejectedValue(new Error('route cleanup outcome unknown'))
+
     const registry = new BrowserClientNetworkRouteRegistry({
       authority,
       authorityStorageKey,
@@ -659,9 +722,11 @@ async function flushMicrotasks(): Promise<void> {
 
 function deferredTeardown(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
+
   const promise = new Promise<void>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 

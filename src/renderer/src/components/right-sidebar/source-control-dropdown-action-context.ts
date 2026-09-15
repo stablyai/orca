@@ -63,15 +63,18 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
   const upstreamLoading = upstreamStatus === undefined
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const hasOpenHostedReview = prState === 'open' || prState === 'draft'
+
   const canPushUntrackedHostedReview =
     !hasUpstream &&
     hasOpenHostedReview &&
     hasCurrentBranch &&
     branchCommitsAhead !== 0 &&
     canPushLinkedReviewWithoutUpstream
+
   // Why: only a missing review head hard-blocks; branchCommitsAhead === 0 still means the target is known, so Push stays available.
   const pushBlockedByOpenHostedReviewTarget =
     !hasUpstream && hasOpenHostedReview && !canPushLinkedReviewWithoutUpstream
+
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
   const publishBlockedByOpenHostedReview = !hasUpstream && hasOpenHostedReview
@@ -79,6 +82,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
   const shouldForcePushWithLease = shouldForcePushWithLeaseForUpstream(upstreamStatus)
+
   // Why: prefer branch-compare for force-push counts — unpublished/loading branches report ahead=0 and patch-equivalent rewrites inflate upstream ahead.
   const pushLabelCount =
     branchCommitsAhead !== undefined &&
@@ -86,6 +90,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     (shouldForcePushWithLease || !hasUpstream)
       ? branchCommitsAhead
       : ahead
+
   const forcePushTitle = formatForcePushTitle(branchCommitsAhead, upstreamStatus?.upstreamName)
 
   // Why: lock the whole menu during any in-flight op so a second click can't queue on a stale status snapshot.
@@ -97,6 +102,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     hasMessage,
     hasUnresolvedConflicts
   })
+
   const canCommit =
     !globalBusy &&
     canSubmitCommit({

@@ -5,9 +5,11 @@ describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onReplay: ((payload: { id: string; data: string }) => void) | null = null
+
   let onExit:
     | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
     | null = null
+
   let onWriteUnavailable: ((payload: { id: string }) => void) | null = null
 
   beforeEach(() => {

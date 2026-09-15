@@ -79,11 +79,14 @@ describe('SshEgressIndicator', () => {
     mocks.executionHostId = 'ssh:target-a'
     const openSettingsTarget = vi.fn()
     const openSettingsPage = vi.fn()
+
     const prior = {
       openSettingsTarget: useAppStore.getState().openSettingsTarget,
       openSettingsPage: useAppStore.getState().openSettingsPage
     }
+
     useAppStore.setState({ openSettingsTarget, openSettingsPage } as unknown as SetState)
+
     try {
       renderIndicator('wt-1')
       fireEvent.click(screen.getByTestId('ssh-egress-indicator'))
@@ -145,11 +148,14 @@ describe('RemoteRuntimeEgressIndicator', () => {
   it('deep-links its settings button to the client-hosted browser setting', () => {
     const openSettingsTarget = vi.fn()
     const openSettingsPage = vi.fn()
+
     const prior = {
       openSettingsTarget: useAppStore.getState().openSettingsTarget,
       openSettingsPage: useAppStore.getState().openSettingsPage
     }
+
     useAppStore.setState({ openSettingsTarget, openSettingsPage } as unknown as SetState)
+
     try {
       renderRemote('client-hosted')
       fireEvent.click(screen.getByTestId('ssh-egress-indicator'))

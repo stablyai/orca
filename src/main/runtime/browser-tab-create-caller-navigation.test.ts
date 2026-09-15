@@ -25,6 +25,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn(), handle: vi.fn(), removeHandler: vi.fn() },
   webContents: { fromId: vi.fn() }
 }))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
@@ -91,6 +92,7 @@ function makeSession(): WorkspaceSessionState {
 /** A runtime whose headless snapshot already carries one browser page, plus two paired devices. */
 function createPairedRuntime() {
   let session = makeSession()
+
   const runtime = new OrcaRuntimeService({
     ...storeBase,
     getWorkspaceSession: () => session,
@@ -98,6 +100,7 @@ function createPairedRuntime() {
       session = next
     }
   })
+
   const internals = runtime as unknown as RuntimeInternals
   // Why stubbed: selector resolution scans real git worktrees, and none of this test's behavior
   // lives there — the browser command only needs the worktree id it hands the snapshot.
@@ -135,6 +138,7 @@ function createPairedRuntime() {
   const bystander: RuntimeMobileSessionTabsResult[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
   runtime.onMobileSessionTabsChanged((snapshot) => bystander.push(snapshot), 'device-bystander')
+
   // The shared snapshot is what the host desktop's derived rows read. A paired client projects its
   // own selection over it, so the bystander below needs its own — both surfaces can be stolen and
   // each one hides a different mutant.
@@ -144,6 +148,7 @@ function createPairedRuntime() {
         getMobileSessionTabsForWorktree: (id: string) => RuntimeMobileSessionTabsResult
       }
     ).getMobileSessionTabsForWorktree(WT).activeTabId
+
   return { runtime, caller, bystander, sharedActiveTabId }
 }
 
@@ -196,11 +201,13 @@ describe('browser.tabCreate caller navigation', () => {
     // installs this at the Electron entry and a Node host leaves the RPCs rejecting.
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+
     return () => setRuntimeBrowserCommandsFactory(null)
   })
 
   beforeEach(() => {
     vi.useFakeTimers()
+
     return () => vi.useRealTimers()
   })
 

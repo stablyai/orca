@@ -6,7 +6,9 @@ import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
+
 const PROCESS_EXIT_TIMEOUT_MS = 5_000
+
 const FORCE_KILL_WAIT_MS = 2_000
 
 function delay(ms: number): Promise<void> {
@@ -24,6 +26,7 @@ function releaseExitedProcessPipes(proc: ChildProcess): void {
   if (!hasExited(proc)) {
     return
   }
+
   // Detached SSH helpers can retain inherited pipes after Electron itself exits.
   for (const stream of proc.stdio) {
     stream?.destroy()
@@ -37,16 +40,19 @@ function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
 
   return new Promise((resolve) => {
     let settled = false
+
     const finish = (exited: boolean): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       proc.off('exit', onExit)
       proc.off('close', onExit)
       resolve(exited)
     }
+
     const onExit = (): void => finish(true)
     const timeout = setTimeout(() => finish(false), timeoutMs)
     timeout.unref?.()
@@ -57,6 +63,7 @@ function waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timeout: NodeJS.Timeout | null = null
+
   try {
     return await Promise.race([
       promise,
@@ -76,13 +83,16 @@ function readPosixDescendantPids(rootPid: number): number[] {
   try {
     const output = execFileSync('ps', ['-eo', 'pid=,ppid='], { encoding: 'utf8' })
     const childrenByParent = new Map<number, number[]>()
+
     for (const line of output.split('\n')) {
       const [pidText, ppidText] = line.trim().split(/\s+/)
       const pid = Number(pidText)
       const ppid = Number(ppidText)
+
       if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
         continue
       }
+
       const children = childrenByParent.get(ppid) ?? []
       children.push(pid)
       childrenByParent.set(ppid, children)
@@ -90,14 +100,18 @@ function readPosixDescendantPids(rootPid: number): number[] {
 
     const descendants: number[] = []
     const stack = [...(childrenByParent.get(rootPid) ?? [])]
+
     while (stack.length > 0) {
       const pid = stack.pop()
+
       if (!pid) {
         continue
       }
+
       descendants.push(pid)
       stack.push(...(childrenByParent.get(pid) ?? []))
     }
+
     return descendants
   } catch {
     return []
@@ -123,6 +137,7 @@ async function forceKillPidTree(pid: number): Promise<void> {
     } catch {
       /* already dead or taskkill unavailable */
     }
+
     return
   }
 
@@ -130,10 +145,13 @@ async function forceKillPidTree(pid: number): Promise<void> {
   // parent close path returned. Capture the tree before killing the root so
   // descendants do not get reparented out from under the cleanup.
   const pids = [...readPosixDescendantPids(pid), pid]
+
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGTERM')
   }
+
   await delay(FORCE_KILL_WAIT_MS)
+
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGKILL')
   }
@@ -141,6 +159,7 @@ async function forceKillPidTree(pid: number): Promise<void> {
 
 async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
   const pid = proc.pid
+
   if (!pid || hasExited(proc)) {
     return
   }
@@ -160,6 +179,7 @@ async function forceKillProcessTree(proc: ChildProcess): Promise<void> {
 export async function forceQuitElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   const pid = proc.pid
+
   if (pid) {
     if (process.platform === 'win32') {
       try {
@@ -176,6 +196,7 @@ export async function forceQuitElectronAppForE2E(app: ElectronApplication): Prom
       }
     }
   }
+
   await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
   releaseExitedProcessPipes(proc)
   // Hands the dead app back to Playwright so worker teardown has nothing left to wait on.
@@ -187,10 +208,13 @@ export async function closeElectronAppForE2E(app: ElectronApplication): Promise<
   const releasePipes = (): void => releaseExitedProcessPipes(proc)
   proc.once('exit', releasePipes)
   releasePipes()
+
   try {
     await withTimeout(app.close(), GRACEFUL_CLOSE_TIMEOUT_MS, 'Timed out closing Electron app')
+
     if (proc) {
       const exited = await waitForExit(proc, PROCESS_EXIT_TIMEOUT_MS)
+
       if (!exited) {
         await forceKillProcessTree(proc)
       }
@@ -207,28 +231,34 @@ export async function closeElectronAppForE2E(app: ElectronApplication): Promise<
 
 function readDaemonPidFiles(userDataDir: string): number[] {
   const daemonDir = path.join(userDataDir, 'daemon')
+
   if (!existsSync(daemonDir)) {
     return []
   }
 
   const pids: number[] = []
+
   for (const entry of readdirSync(daemonDir)) {
     if (!entry.endsWith('.pid')) {
       continue
     }
+
     try {
       const raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
       const parsed = JSON.parse(raw) as { pid?: unknown }
+
       if (typeof parsed.pid === 'number' && Number.isInteger(parsed.pid)) {
         pids.push(parsed.pid)
       }
     } catch {
       const pid = Number(readFileSync(path.join(daemonDir, entry), 'utf8').trim())
+
       if (Number.isInteger(pid)) {
         pids.push(pid)
       }
     }
   }
+
   return pids
 }
 
@@ -239,5 +269,6 @@ export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {
   for (const pid of readDaemonPidFiles(userDataDir)) {
     await forceKillPidTree(pid)
   }
+
   cleanupE2ECrashpad(userDataDir)
 }

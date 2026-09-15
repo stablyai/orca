@@ -14,12 +14,19 @@ import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 export const WORKER_HANDLE = 'term_legacy_worker'
+
 export const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
+
 export const COORDINATOR_HANDLE = 'term_legacy_coord'
+
 export const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
+
 export const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
+
 export const CURRENT_COORDINATOR_PANE = 'tab_current_coord:55555555-5555-4555-8555-555555555555'
+
 export const CURRENT_WORKER_HANDLE = 'term_current_worker'
+
 export const CURRENT_WORKER_PANE = 'tab_current_worker:66666666-6666-4666-8666-666666666666'
 
 type Transport = 'dispatch' | 'websocket'
@@ -36,12 +43,14 @@ export type LegacyCompatibilityDispatcherHarness = {
 }
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 export function cleanupLegacyCompatibilityDispatcherHarnesses(): void {
   for (const database of databases.splice(0)) {
     database.close()
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -52,11 +61,13 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   before.close()
 
@@ -81,39 +92,49 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
     if (handle === COORDINATOR_HANDLE) {
       return COORDINATOR_PANE
     }
+
     if (handle === WORKER_HANDLE) {
       return WORKER_PANE
     }
+
     if (handle === CURRENT_COORDINATOR_HANDLE) {
       return CURRENT_COORDINATOR_PANE
     }
+
     if (handle === CURRENT_WORKER_HANDLE) {
       return CURRENT_WORKER_PANE
     }
+
     return null
   })
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     [WORKER_HANDLE, CURRENT_WORKER_HANDLE].includes(handle) ? 'process-1' : null
   )
+
   const verify = vi
     .spyOn(runtime, 'verifyOrchestrationCompatibilityCaller')
     .mockImplementation((evidence) => {
       const validWorker =
         evidence?.terminalHandle === WORKER_HANDLE && evidence.paneKey === WORKER_PANE
+
       const validCoordinator =
         evidence?.terminalHandle === COORDINATOR_HANDLE && evidence.paneKey === COORDINATOR_PANE
+
       const validCurrentCoordinator =
         evidence?.terminalHandle === CURRENT_COORDINATOR_HANDLE &&
         evidence.paneKey === CURRENT_COORDINATOR_PANE
+
       const validCurrentWorker =
         evidence?.terminalHandle === CURRENT_WORKER_HANDLE &&
         evidence.paneKey === CURRENT_WORKER_PANE
+
       if (
         (!validWorker && !validCoordinator && !validCurrentCoordinator && !validCurrentWorker) ||
         !evidence?.launchToken
       ) {
         return null
       }
+
       return {
         hostScope: { kind: 'local', hostId: 'local' },
         terminalHandle: evidence.terminalHandle as string,
@@ -122,7 +143,9 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
         launchTokenHash: createHash('sha256').update(evidence.launchToken).digest('hex')
       }
     })
+
   const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
   return {
     db,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }),
@@ -140,6 +163,7 @@ export function evidence(
   valid = true
 ): OrchestrationCompatibilityEvidence {
   const worker = role === 'worker'
+
   return {
     terminalHandle: worker ? WORKER_HANDLE : COORDINATOR_HANDLE,
     paneKey: valid ? (worker ? WORKER_PANE : COORDINATOR_PANE) : 'tab_wrong:wrong-leaf',
@@ -151,6 +175,7 @@ export function currentEvidence(
   role: 'worker' | 'coordinator'
 ): OrchestrationCompatibilityEvidence {
   const worker = role === 'worker'
+
   return {
     terminalHandle: worker ? CURRENT_WORKER_HANDLE : CURRENT_COORDINATOR_HANDLE,
     paneKey: worker ? CURRENT_WORKER_PANE : CURRENT_COORDINATOR_PANE,
@@ -184,14 +209,17 @@ export async function invoke(
   if (transport === 'dispatch') {
     return await dispatcher.dispatch(rpcRequest)
   }
+
   const replies: string[] = []
   await dispatcher.dispatchStreaming(rpcRequest, (reply) => replies.push(reply))
   expect(replies).toHaveLength(1)
+
   return JSON.parse(replies[0]) as RpcResponse
 }
 
 export function counts(db: OrchestrationDb): Record<string, number> {
   const sqlite = (db as unknown as { db: Database.Database }).db
+
   return Object.fromEntries(
     [
       'messages',

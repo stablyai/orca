@@ -41,11 +41,14 @@ export function useWorktreeCardFoundation({
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -86,9 +89,11 @@ export function useWorktreeCardFoundation({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       const automationId = worktree.automationProvenance?.automationId
+
       if (!automationId) {
         return
       }
+
       const hostId = worktree.automationProvenance?.hostId ?? worktree.hostId
       setPendingAutomationRunNavigation({
         automationId,
@@ -110,9 +115,11 @@ export function useWorktreeCardFoundation({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       const provenance = worktree.automationProvenance
+
       if (!provenance) {
         return
       }
+
       const hostId = provenance.hostId ?? worktree.hostId
       setPendingAutomationRunNavigation({
         automationId: provenance.automationId,
@@ -132,8 +139,10 @@ export function useWorktreeCardFoundation({
   const deleteState = useAppStore((s) => {
     return getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   })
+
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
+
   const workspacePorts = useAppStore(
     (s) =>
       getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
@@ -143,19 +152,23 @@ export function useWorktreeCardFoundation({
   const sshOwnerEnvironmentId = useAppStore((s) =>
     repo?.connectionId ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id) : null
   )
+
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
+
     return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
   })
+
   useEffect(() => {
     if (sshOwnerEnvironmentId) {
       void hydrateRuntimeEnvironmentSshState(sshOwnerEnvironmentId).catch(() => {})
     }
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
+
   // Why: only reported on positive evidence, so a removed host never offers a Connect that can
   // only fail. Runtime-owned targets are excluded for the same reason sshStatus excludes them —
   // ssh:listTargets filters them out, so "absent from the target list" is not evidence of removal.
@@ -166,35 +179,43 @@ export function useWorktreeCardFoundation({
   )
 
   const parsedRepoHost = parseExecutionHostId(repo?.executionHostId)
+
   const runtimeOwnerEnvironmentId =
     worktree.runtimeOwnerEnvironmentId ??
     (parsedRepoHost?.kind === 'runtime' ? parsedRepoHost.environmentId : null)
+
   const runtimeHostId = runtimeOwnerEnvironmentId
     ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
     : null
+
   const runtimeEnvironmentName = useAppStore((s) =>
     runtimeOwnerEnvironmentId
       ? (s.runtimeEnvironments.find((environment) => environment.id === runtimeOwnerEnvironmentId)
           ?.name ?? null)
       : null
   )
+
   const runtimeHostLabel = runtimeHostId
     ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
     : null
+
   // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
   // which is not the same verdict as a probe that came back unreachable.
   const isRuntimeDisconnected = useAppStore((s) => {
     if (!runtimeOwnerEnvironmentId) {
       return false
     }
+
     return isDisconnectedRuntimeHostState(
       runtimeHostConnectionStateForEntry(
         s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
       )
     )
   })
+
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
+
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
   const sshTargetLabel = useAppStore((s) =>
     repo?.connectionId

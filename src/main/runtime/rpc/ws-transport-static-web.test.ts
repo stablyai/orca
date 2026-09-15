@@ -18,7 +18,9 @@ describe('WebSocketTransport static web client', () => {
       port: 0,
       staticRoot
     })
+
     transports.push(transport)
+
     return transport
   }
 
@@ -54,12 +56,14 @@ describe('WebSocketTransport static web client', () => {
     const indexResponse = await fetch(
       `http://127.0.0.1:${transport.resolvedPort}/orca/web-index.html`
     )
+
     expect(indexResponse.status).toBe(200)
     await expect(indexResponse.text()).resolves.toBe('<script src="./assets/app.js"></script>')
 
     const assetResponse = await fetch(
       `http://127.0.0.1:${transport.resolvedPort}/orca/assets/app.js`
     )
+
     expect(assetResponse.status).toBe(200)
     await expect(assetResponse.text()).resolves.toBe('console.log("prefixed")')
   })
@@ -86,6 +90,7 @@ describe('WebSocketTransport static web client', () => {
     const response = await fetch(
       `http://127.0.0.1:${transport.resolvedPort}/assets/..%5Cpackage.json`
     )
+
     expect(response.status).toBe(400)
   })
 })

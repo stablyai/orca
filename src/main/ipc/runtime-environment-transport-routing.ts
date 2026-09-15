@@ -42,6 +42,7 @@ export async function getRuntimeEnvironmentStatus(
   options?: { observeOnly?: true; signal?: AbortSignal; reconnect?: true }
 ): Promise<RuntimeRpcResponse<RuntimeStatus>> {
   const environment = resolveEnvironment(userDataPath, selector)
+
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     return {
       id: 'status.get',
@@ -52,10 +53,12 @@ export async function getRuntimeEnvironmentStatus(
       }
     }
   }
+
   const response = await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id).refresh({
     timeoutMs,
     ...options
   })
+
   return attachRemoteControlDiagnostics(
     withTailscaleHintForResponse(response, getPreferredPairingOffer(environment).endpoint),
     environment.id
@@ -74,13 +77,16 @@ export async function callRuntimeEnvironment(
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
     const environment = resolveEnvironment(userDataPath, selector)
+
     const failure = runtimeEnvironmentRevisionFailure(
       environment,
       expectedEnvironmentPairingRevision,
       method
     )
+
     return failure ?? getRuntimeEnvironmentStatus(userDataPath, selector, timeoutMs, options)
   }
+
   const environment = resolveEnvironment(userDataPath, selector)
   // Why: connection failures reject (they don't resolve as ok:false), so the
   // Tailscale hint is applied to the thrown error here — wrapping the resolved
@@ -88,25 +94,30 @@ export async function callRuntimeEnvironment(
   // Track the endpoint the queued closure actually used: it re-resolves the
   // environment, so a re-pair between enqueue and dispatch can change it.
   let endpoint = getPreferredPairingOffer(environment).endpoint
+
   try {
     return await enqueueRuntimeCall(
       environment.id,
       method,
       async () => {
         const currentEnvironment = resolveEnvironment(userDataPath, environment.id)
+
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
           expectedEnvironmentPairingRevision,
           method,
           options?.expectedEnvironmentRuntimeId
         )
+
         if (revisionFailure) {
           return revisionFailure
         }
+
         const pairing = getPreferredPairingOffer(currentEnvironment)
         endpoint = pairing.endpoint
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
+
         if (envelope && !sharedControlEnvelope) {
           const response = await sendRemoteRuntimeRequestAbortable(
             pairing,
@@ -117,9 +128,12 @@ export async function callRuntimeEnvironment(
             options?.signal,
             ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
           )
+
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+
           return response
         }
+
         if (shouldUseCachedRequestConnection(method)) {
           const response = await sendRemoteRuntimeConnectionRequestAbortable(
             currentEnvironment.id,
@@ -129,9 +143,12 @@ export async function callRuntimeEnvironment(
             effectiveTimeoutMs,
             options?.signal
           )
+
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+
           return response
         }
+
         if (shouldRouteCallBySupport(method)) {
           return executeSupportRoutedCall({
             userDataPath,
@@ -144,6 +161,7 @@ export async function callRuntimeEnvironment(
             signal: options?.signal
           })
         }
+
         // Why: startup/control-plane RPCs use the proven one-shot path so repo
         // hydration cannot be coupled to a stale terminal-control connection.
         const response = await sendRemoteRuntimeRequestAbortable(
@@ -155,7 +173,9 @@ export async function callRuntimeEnvironment(
           options?.signal,
           ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
         )
+
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
+
         return response
       },
       options?.signal
@@ -164,6 +184,7 @@ export async function callRuntimeEnvironment(
     if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRemoteRuntimeTailscaleHint(error.message, endpoint)
     }
+
     throw error
   }
 }
@@ -190,18 +211,22 @@ export async function subscribeRuntimeEnvironment(
   const pairing = getPreferredPairingOffer(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
+
   const markUsedOnce = (runtimeId: string): void => {
     if (markedUsed || !isCurrent()) {
       return
     }
+
     markedUsed = true
     markEnvironmentUsed(userDataPath, environment.id, { runtimeId })
   }
+
   const callbacksWithMarkUsed = {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
       if (response.ok === true) {
         markUsedOnce(response._meta.runtimeId)
       }
+
       callbacks.onEvent({ type: 'response' as const, response })
     },
     onBinary: (bytes: Uint8Array<ArrayBufferLike>) =>
@@ -217,6 +242,7 @@ export async function subscribeRuntimeEnvironment(
       callbacks.onClose()
     }
   }
+
   // Why: an initial-connect failure rejects (mid-stream drops go through
   // onError above), so the hint is applied to the thrown error here too.
   try {
@@ -231,6 +257,7 @@ export async function subscribeRuntimeEnvironment(
         isCurrent
       })
     }
+
     return await subscribeRemoteRuntimeRequest(
       pairing,
       method,
@@ -243,6 +270,7 @@ export async function subscribeRuntimeEnvironment(
     if (error instanceof Error) {
       error.message = withRemoteRuntimeTailscaleHint(error.message, pairing.endpoint)
     }
+
     throw error
   }
 }

@@ -3,13 +3,21 @@ import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const captureScrollState = vi.hoisted(() => vi.fn())
+
 const wrapInSplit = vi.hoisted(() => vi.fn())
+
 const openTerminal = vi.hoisted(() => vi.fn())
+
 const disposeWebgl = vi.hoisted(() => vi.fn())
+
 const clearPendingSplitScrollRestore = vi.hoisted(() => vi.fn())
+
 const scheduleSplitScrollRestore = vi.hoisted(() => vi.fn())
+
 const updateMultiPaneState = vi.hoisted(() => vi.fn())
+
 const applyPaneOpacity = vi.hoisted(() => vi.fn())
+
 const applyDividerStyles = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
@@ -83,6 +91,7 @@ function createPane(id: number, webglAddon: unknown): ManagedPaneInternal {
   const container = new MockElement(['pane'])
   container.dataset.paneId = String(id)
   container.dataset.leafId = TEST_LEAF_ID
+
   return {
     id,
     leafId: TEST_LEAF_ID,
@@ -125,10 +134,13 @@ describe('splitManagedPane', () => {
     const root = new MockElement(['root'])
     const existingContainer = existingPane.container as unknown as MockElement
     existingContainer.parentElement = root
+
     const cwdPromise = new Promise<string>(() => {
       // Keep CWD pending across every synchronous split assertion.
     })
+
     const setActivePaneId = vi.fn()
+
     const publishPaneCreated = vi.fn(() => {
       expect(newPane.terminal.focus).toHaveBeenCalledOnce()
     })
@@ -143,6 +155,7 @@ describe('splitManagedPane', () => {
       managerOptions: { linkOpenHint: () => '' },
       createPaneInternal: () => {
         panes.set(newPane.id, newPane)
+
         return newPane
       },
       createDivider: () => new MockElement(['pane-divider']) as unknown as HTMLElement,
@@ -162,10 +175,12 @@ describe('splitManagedPane', () => {
     const fallbackPane = createPane(1, { dispose: vi.fn() })
     const siblingPane = createPane(2, { dispose: vi.fn() })
     const newPane = createPane(3, null)
+
     const panes = new Map<number, ManagedPaneInternal>([
       [fallbackPane.id, fallbackPane],
       [siblingPane.id, siblingPane]
     ])
+
     const root = new MockElement(['root'])
     const sourceContainer = new MockElement(['pane-split'])
     sourceContainer.parentElement = root
@@ -189,6 +204,7 @@ describe('splitManagedPane', () => {
       managerOptions: { linkOpenHint: () => '' },
       createPaneInternal: () => {
         panes.set(newPane.id, newPane)
+
         return newPane
       },
       createDivider: () => new MockElement(['pane-divider']) as unknown as HTMLElement,

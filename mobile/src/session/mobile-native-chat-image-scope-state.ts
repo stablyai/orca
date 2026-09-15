@@ -12,7 +12,9 @@ export function withScopeAttachments(
   if (next.length > 0) {
     return { ...byScope, [scope]: next }
   }
+
   const remaining = { ...byScope }
   delete remaining[scope]
+
   return remaining
 }

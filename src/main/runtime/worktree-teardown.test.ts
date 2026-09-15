@@ -48,6 +48,7 @@ describe('killAllProcessesForWorktree', () => {
       { id: 'w1@@abcd1234', cwd: '/tmp/w1', title: 'shell' },
       { id: 'w2@@efef5678', cwd: '/tmp/w2', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'w1-registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 },
       { ptyId: 'w2-registry-2', worktreeId: 'w2', sessionId: null, paneKey: null, pid: 101 }
@@ -88,6 +89,7 @@ describe('killAllProcessesForWorktree', () => {
       { id: '1', cwd: '/tmp/w1', title: 'shell' },
       { id: '2', cwd: '/tmp/w2', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: '1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 200 }
     ])
@@ -112,6 +114,7 @@ describe('killAllProcessesForWorktree', () => {
       { id: 'outside-2', cwd: '/repo/application', title: 'shell' },
       { id: 'repo-1::/repo/app@@legacy-3', title: 'shell' } as PtyProcessInfo
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree('repo-1::/repo/app', {
@@ -143,6 +146,7 @@ describe('killAllProcessesForWorktree', () => {
         worktreeId: 'repo-1::/repo/sibling'
       }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree('repo-1::/repo/app', {
@@ -161,8 +165,10 @@ describe('killAllProcessesForWorktree', () => {
     // NOT be swept — it may belong to a sibling workspace or another repo.
     const deletedInstance =
       'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
+
     const siblingInstance =
       'repo-1::/Users/dev/project::workspace:22222222-2222-2222-2222-222222222222'
+
     const localProvider = createProviderStub(async () => [
       // Untagged session whose cwd is the shared checkout dir (sibling's live agent).
       { id: 'floating-sibling', cwd: '/Users/dev/project', title: 'shell' },
@@ -174,6 +180,7 @@ describe('killAllProcessesForWorktree', () => {
         worktreeId: siblingInstance
       }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree(deletedInstance, {
@@ -190,6 +197,7 @@ describe('killAllProcessesForWorktree', () => {
     // authoritative worktreeId matches for THIS instance must still fire.
     const deletedInstance =
       'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
+
     const localProvider = createProviderStub(async () => [
       { id: `${deletedInstance}@@own00001`, cwd: '/Users/dev/project', title: 'shell' },
       {
@@ -199,6 +207,7 @@ describe('killAllProcessesForWorktree', () => {
         worktreeId: deletedInstance
       }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree(deletedInstance, {
@@ -223,8 +232,10 @@ describe('killAllProcessesForWorktree', () => {
     // on the shared checkout path must survive.
     const deletedInstance =
       'repo-1::/Users/dev/project::workspace:11111111-1111-1111-1111-111111111111'
+
     const siblingInstance =
       'repo-1::/Users/dev/project::workspace:22222222-2222-2222-2222-222222222222'
+
     const localProvider = createProviderStub(async () => [
       { id: `${deletedInstance}@@own00001`, cwd: '/Users/dev/project', title: 'shell' },
       { id: 'own-tagged', cwd: '/Users/dev/project', title: 'shell', worktreeId: deletedInstance },
@@ -236,6 +247,7 @@ describe('killAllProcessesForWorktree', () => {
         worktreeId: siblingInstance
       }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
 
     const result = await killAllProcessesForWorktree(deletedInstance, {
@@ -246,6 +258,7 @@ describe('killAllProcessesForWorktree', () => {
     const killed = (localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as string)
       .sort()
+
     expect(killed).toEqual([`${deletedInstance}@@own00001`, 'own-tagged'].sort())
     expect(result.providerStopped).toBe(2)
   })
@@ -255,6 +268,7 @@ describe('killAllProcessesForWorktree', () => {
       { id: 'pty-remote', cwd: '/remote/w1', title: 'shell', worktreeId: 'w1' },
       { id: 'pty-sibling', cwd: '/remote/w2', title: 'shell', worktreeId: 'w2' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'local-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 200 }
     ])
@@ -302,7 +316,9 @@ describe('killAllProcessesForWorktree', () => {
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@aaaa', cwd: '/tmp/w1', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
+
     const onPtyStopped = vi.fn(() => {
       throw new Error('cleanup failed')
     })
@@ -319,9 +335,11 @@ describe('killAllProcessesForWorktree', () => {
     const providerA = createProviderStub(async () => [
       { id: 'w1@@aaaa', cwd: '/tmp', title: 'shell' }
     ])
+
     const providerB = createProviderStub(async () => [
       { id: 'w1@@bbbb', cwd: '/tmp', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
 
     const r1 = await killAllProcessesForWorktree('w1', { localProvider: providerA })
@@ -346,8 +364,11 @@ describe('killAllProcessesForWorktree', () => {
       { id: 'w1@@aaaa', cwd: '/tmp', title: 'shell' },
       { id: 'w1@@bbbb', cwd: '/tmp', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([])
+
     const releases: (() => void)[] = []
+
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       () =>
         new Promise<void>((resolve) => {
@@ -362,6 +383,7 @@ describe('killAllProcessesForWorktree', () => {
     for (const release of releases) {
       release()
     }
+
     await expect(teardown).resolves.toEqual({
       runtimeStopped: 0,
       providerStopped: 2,
@@ -375,11 +397,14 @@ describe('killAllProcessesForWorktree', () => {
       cwd: '/tmp',
       title: 'shell'
     }))
+
     const localProvider = createProviderStub(async () => sessions)
     listRegisteredPtysMock.mockReturnValue([])
     let active = 0
     let maxActive = 0
+
     const releases: (() => void)[] = []
+
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       () =>
         new Promise<void>((resolve) => {
@@ -408,6 +433,7 @@ describe('killAllProcessesForWorktree', () => {
 
   it('invokes runtime.stopTerminalsForWorktree when runtime is provided', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 3 })
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
@@ -426,6 +452,7 @@ describe('killAllProcessesForWorktree', () => {
 
   it('forwards resolvedWorktreeId so an orphan sweep skips selector resolution', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 2 })
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
@@ -450,9 +477,11 @@ describe('killAllProcessesForWorktree', () => {
 
   it('can restrict an orphan runtime sweep to its SSH connection', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 1 })
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
 
@@ -478,6 +507,7 @@ describe('killAllProcessesForWorktree', () => {
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
     ])
@@ -506,9 +536,11 @@ describe('killAllProcessesForWorktree', () => {
         stopped: (await options.stopPty('w1@@same', () => false)).owner ? 1 : 0
       })
     )
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
@@ -524,6 +556,7 @@ describe('killAllProcessesForWorktree', () => {
   it('accepts a failed stop when exact-owner inventory supersedes cached uncertainty', async () => {
     const worktreeId = 'repo-1::C:/Users/User/orca/workspaces/repo/feature'
     const ptyId = `${worktreeId}@@windows-pty`
+
     const stopTerminalsForWorktree = vi.fn(
       async (
         _worktreeId: string,
@@ -537,6 +570,7 @@ describe('killAllProcessesForWorktree', () => {
         stopped: (await options.stopPty(ptyId, () => false)).owner ? 1 : 0
       })
     )
+
     const runtime = {
       stopTerminalsForWorktree,
       getPtyLivenessVerdict: vi.fn(() => ({
@@ -544,13 +578,17 @@ describe('killAllProcessesForWorktree', () => {
         reason: 'the provider disconnected during stop'
       }))
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     let inventoryCount = 0
+
     const localProvider = createProviderStub(async () => {
       inventoryCount += 1
+
       return inventoryCount === 1
         ? [{ id: ptyId, cwd: 'C:/Users/User/orca/workspaces/repo/feature', title: 'shell' }]
         : []
     })
+
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error(`Session not found: ${ptyId}`)
     )
@@ -575,6 +613,7 @@ describe('killAllProcessesForWorktree', () => {
   it('keeps cached uncertainty when no provider can observe the owning host', async () => {
     const worktreeId = 'repo-1::/remote/worktree'
     const ptyId = `${worktreeId}@@remote-pty`
+
     const stopTerminalsForWorktree = vi.fn(
       async (
         _worktreeId: string,
@@ -588,6 +627,7 @@ describe('killAllProcessesForWorktree', () => {
         stopped: (await options.stopPty(ptyId, () => false)).owner ? 1 : 0
       })
     )
+
     const runtime = {
       stopTerminalsForWorktree,
       getPtyLivenessVerdict: vi.fn(() => ({
@@ -595,6 +635,7 @@ describe('killAllProcessesForWorktree', () => {
         reason: 'no registered provider can observe its host'
       }))
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     const fallbackProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
 
@@ -613,9 +654,11 @@ describe('killAllProcessesForWorktree', () => {
 
   it('keeps duplicate sweeps behind the runtime physical-stop promise', async () => {
     let releasePhysicalStop: () => void = () => undefined
+
     const physicalStop = new Promise<boolean>((resolve) => {
       releasePhysicalStop = () => resolve(true)
     })
+
     const stopTerminalsForWorktree = vi.fn(
       async (
         _worktreeId: string,
@@ -629,12 +672,15 @@ describe('killAllProcessesForWorktree', () => {
         stopped: (await options.stopPty('w1@@same', () => physicalStop)).owner ? 1 : 0
       })
     )
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
     ])
+
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
     ])
@@ -654,8 +700,10 @@ describe('killAllProcessesForWorktree', () => {
 
   it('fails destructive teardown closed when physical stop misses the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const physicalStop = new Promise<boolean>(() => {})
+
       const stopTerminalsForWorktree = vi.fn(
         async (
           _worktreeId: string,
@@ -669,12 +717,15 @@ describe('killAllProcessesForWorktree', () => {
           stopped: (await options.stopPty('w1@@same', () => physicalStop)).owner ? 1 : 0
         })
       )
+
       const runtime = {
         stopTerminalsForWorktree
       } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
       const localProvider = createProviderStub(async () => [
         { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
       ])
+
       listRegisteredPtysMock.mockReturnValue([
         { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
       ])
@@ -685,9 +736,11 @@ describe('killAllProcessesForWorktree', () => {
         timeoutMs: 25,
         requirePhysicalStop: true
       })
+
       const failure = expect(teardown).rejects.toThrow(
         'Timed out waiting for physical PTY teardown'
       )
+
       await vi.advanceTimersByTimeAsync(24)
       expect(localProvider.shutdown).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
@@ -705,6 +758,7 @@ describe('killAllProcessesForWorktree', () => {
   // the accurate stop failure. The bound must fire first (native-Windows regression).
   it('destructive teardown surfaces a bounded stop failure when the daemon kill RPC never replies (#9500 regression)', async () => {
     vi.useFakeTimers()
+
     try {
       const worktreeId = 'w1'
       const sessionId = 'w1@@dead0001'
@@ -718,6 +772,7 @@ describe('killAllProcessesForWorktree', () => {
       // no override, so the kill can only settle after 30s: long past the 10s
       // sweep deadline.
       const DAEMON_DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+
       const fakeClient = {
         onDisconnected: () => () => {},
         onEvent: () => () => {},
@@ -739,8 +794,10 @@ describe('killAllProcessesForWorktree', () => {
               sessions: [{ sessionId, isAlive: true, cwd: '/tmp/w1' }]
             })
           }
+
           if (type === 'kill') {
             killRequests += 1
+
             // The daemon never replies; the request only rejects when its own
             // timeout elapses, exactly like the real client.
             return new Promise((_resolve, reject) => {
@@ -750,11 +807,13 @@ describe('killAllProcessesForWorktree', () => {
               )
             })
           }
+
           return Promise.resolve({})
         }
       }
 
       const adapter = new DaemonPtyAdapter({ socketPath: '/tmp/sock', tokenPath: '/tmp/tok' })
+
       ;(adapter as unknown as { client: typeof fakeClient }).client = fakeClient
 
       listRegisteredPtysMock.mockReturnValue([])
@@ -792,6 +851,7 @@ describe('killAllProcessesForWorktree', () => {
 
   it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime_unavailable'))
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
@@ -808,9 +868,11 @@ describe('killAllProcessesForWorktree', () => {
     // Why: a just-created/removed worktree can be absent from the runtime
     // graph; that means zero runtime-owned PTYs, not a failed teardown.
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('selector_not_found'))
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
 
@@ -825,9 +887,11 @@ describe('killAllProcessesForWorktree', () => {
 
   it('fails destructive teardown closed when the runtime sweep rejects', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime sweep failed'))
+
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
 
@@ -842,17 +906,20 @@ describe('killAllProcessesForWorktree', () => {
 
   it('bounds the entire process sweep when a provider never settles', async () => {
     vi.useFakeTimers()
+
     try {
       const localProvider = createProviderStub(() => new Promise(() => {}))
       listRegisteredPtysMock.mockReturnValue([
         { ptyId: 'registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 12 }
       ])
       let completed = false
+
       const teardown = killAllProcessesForWorktree('w1', {
         localProvider,
         timeoutMs: WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
       }).then((result) => {
         completed = true
+
         return result
       })
 
@@ -877,14 +944,17 @@ describe('killAllProcessesForWorktree', () => {
 
   it('does not issue shutdown after a timed-out provider list settles late', async () => {
     vi.useFakeTimers()
+
     try {
       let resolveList: (sessions: { id: string; cwd: string; title: string }[]) => void = () => {}
+
       const localProvider = createProviderStub(
         () =>
           new Promise((resolve) => {
             resolveList = resolve
           })
       )
+
       listRegisteredPtysMock.mockReturnValue([])
       const teardown = killAllProcessesForWorktree('w1', { localProvider, timeoutMs: 25 })
 
@@ -901,9 +971,12 @@ describe('killAllProcessesForWorktree', () => {
 
   it('does not mutate PTY state after a shutdown settles beyond the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       let resolveShutdown: () => void = () => {}
+
       const localProvider = createProviderStub(async () => [])
+
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
         () =>
           new Promise<void>((resolve) => {
@@ -914,6 +987,7 @@ describe('killAllProcessesForWorktree', () => {
         { ptyId: 'registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 12 }
       ])
       const onPtyStopped = vi.fn()
+
       const teardown = killAllProcessesForWorktree('w1', {
         localProvider,
         onPtyStopped,

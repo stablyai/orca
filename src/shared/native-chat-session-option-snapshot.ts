@@ -16,6 +16,7 @@ import {
 } from './native-chat-session-option-state'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
+
 export type { NativeChatLiveOptionTransport }
 
 function choiceWithCurrent(
@@ -24,9 +25,11 @@ function choiceWithCurrent(
 ): SessionOptionSelectChoice[] {
   const result = [...choices]
   const current = typeof tracked?.value === 'string' ? tracked.value : null
+
   if (current && !result.some((choice) => choice.value === current)) {
     result.push({ value: current, label: current })
   }
+
   return result
 }
 
@@ -41,13 +44,17 @@ function settableState(args: {
       ? { settable: true }
       : { settable: false, disabledReason: 'available-after-session-start' }
   }
+
   if (args.liveTransport === 'agent-session') {
     return { settable: true }
   }
+
   if (args.apply.composedIntoModel && args.composedModelApply?.midSession?.kind === 'command') {
     return { settable: true }
   }
+
   const midSession = args.apply.midSession
+
   return midSession && midSession.kind !== 'unsupported'
     ? { settable: true }
     : { settable: false, disabledReason: 'set-when-session-starts' }
@@ -62,9 +69,11 @@ function actionForApply(
   if (mode !== 'live' || liveTransport === 'agent-session') {
     return undefined
   }
+
   if (apply.midSession?.kind === 'agent-picker') {
     return { type: 'agent-picker' }
   }
+
   // Why: only unknown flip-only options are actions; once we have a tracked
   // baseline the UI can show absolute On/Off without inventing a start state.
   return isFlipOnlyMidSession(apply.midSession) && !tracked ? { type: 'toggle-command' } : undefined
@@ -86,17 +95,21 @@ function optionDescriptor(args: {
   // own default no flag is sent at all, and the CLI's unstated choice is not ours to name.
   const showDefault = mode === 'draft' && !tracked && !modelIsCliDefault
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
+
   if (option.kind.type === 'select') {
     const choices = choiceWithCurrent(option.kind.choices, tracked)
+
     if (choices.length <= 1) {
       return null
     }
+
     const currentValue =
       typeof tracked?.value === 'string'
         ? tracked.value
         : showDefault
           ? option.kind.defaultValue
           : undefined
+
     return {
       id: option.id,
       label: option.label,
@@ -113,6 +126,7 @@ function optionDescriptor(args: {
       ...(action ? { action } : {})
     }
   }
+
   // Why display resolves here but `valueSource` above does not: a switch has no
   // third position, so a descriptor that leaves the value unset renders as `false`
   // and silently contradicts the catalog. Resolving to `defaultValue` is the same
@@ -122,6 +136,7 @@ function optionDescriptor(args: {
   // which is what every pill still reads before naming a value.
   const currentValue =
     typeof tracked?.value === 'boolean' ? tracked.value : option.kind.defaultValue
+
   return {
     id: option.id,
     label: option.label,
@@ -155,6 +170,7 @@ export function sortNativeChatSessionOptions(
     .sort((left, right) => {
       const leftOrder = CATEGORY_ORDER[left.category ?? ''] ?? 3
       const rightOrder = CATEGORY_ORDER[right.category ?? ''] ?? 3
+
       return leftOrder - rightOrder
     })
 }
@@ -171,10 +187,13 @@ export function withTrackedNativeChatModel(
   record: NativeChatSessionOptionRecord
 ): CatalogModel[] {
   const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
+
   if (!trackedId || models.some((model) => model.id === trackedId)) {
     return [...models]
   }
+
   const seeded = catalog.models.find((model) => model.id === trackedId)
+
   return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
 }
 
@@ -188,6 +207,7 @@ function cliDefaultModelId(
   if (trackedModelId || !catalog.defaultModelIsCliDefault) {
     return null
   }
+
   return models.find((model) => model.isDefault)?.id ?? null
 }
 
@@ -199,6 +219,7 @@ export function resolveEffectiveNativeChatModelId(
   record: NativeChatSessionOptionRecord
 ): string | null {
   const trackedModelId = typeof record.model?.value === 'string' ? record.model.value : null
+
   return trackedModelId ?? cliDefaultModelId(catalog, models, trackedModelId)
 }
 
@@ -213,10 +234,13 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   liveTransport: NativeChatLiveOptionTransport
 }): SessionOptionDescriptor[] {
   const { catalog, models, record, mode, modelLabel, liveTransport } = args
+
   if (models.length === 0) {
     return []
   }
+
   const modelTracked = record.model
+
   // Why: callers reconcile the tracked model into `models` (see
   // withTrackedNativeChatModel), so every listed row is a real choice and the
   // trigger never shows a value without one.
@@ -225,10 +249,12 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     label,
     ...(description ? { description } : {})
   }))
+
   const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
   const modelAction = actionForApply(catalog.modelApply, modelTracked, mode, liveTransport)
+
   const snapshot: SessionOptionDescriptor[] = [
     {
       id: 'model',
@@ -245,11 +271,14 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       ...(modelAction ? { action: modelAction } : {})
     }
   ]
+
   if (!effectiveModelId) {
     return snapshot
   }
+
   const model = models.find((candidate) => candidate.id === effectiveModelId)
   const trackedValues = record.valuesByModel[effectiveModelId] ?? {}
+
   for (const option of model?.options ?? []) {
     const descriptor = optionDescriptor({
       option,
@@ -259,9 +288,11 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       modelIsCliDefault: effectiveModelId === defaultModelId,
       composedModelApply: catalog.modelApply
     })
+
     if (descriptor) {
       snapshot.push(descriptor)
     }
   }
+
   return snapshot
 }

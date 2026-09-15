@@ -36,20 +36,26 @@ export function useMobileNativeChatPermissionSend(args: {
   return useCallback(
     async (text: string): Promise<boolean> => {
       const terminal = args.handleRef.current
+
       if (!args.client || !terminal || !args.enabled) {
         args.onSendError('Response not sent (disconnected)')
+
         return false
       }
+
       // A choice keystroke must not interleave into a mid-flight composed write
       // (image paste, paced answer) on the same PTY.
       if (!acquireMobileNativeChatTerminalWrite(terminal)) {
         args.onSendError('Response not sent')
+
         return false
       }
+
       // No stale-input heal here (unlike the text/ask sends): a choice is an
       // `enter: false` key for an active overlay that swallows the clear, so it
       // would consume the marker still protecting the next real message.
       let outcome: MobileNativeChatSendOutcome
+
       try {
         outcome = await sendMobileNativeChatPermissionResponse({
           client: args.client,
@@ -60,6 +66,7 @@ export function useMobileNativeChatPermissionSend(args: {
       } finally {
         releaseMobileNativeChatTerminalWrite(terminal)
       }
+
       if (outcome === 'unknown') {
         // Why: the response may have been delivered (ack lost / path cutover) —
         // a definite "not sent" would invite a double answer.
@@ -67,6 +74,7 @@ export function useMobileNativeChatPermissionSend(args: {
       } else if (outcome === 'rejected') {
         args.onSendError('Response not sent')
       }
+
       return outcome === 'accepted'
     },
     [args.client, args.deviceTokenRef, args.enabled, args.handleRef, args.onSendError]

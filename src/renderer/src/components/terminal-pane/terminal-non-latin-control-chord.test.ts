@@ -36,9 +36,11 @@ describe('resolveNonLatinControlChordInput', () => {
   it('covers the whole letter range, not just the reported keys', () => {
     for (let index = 0; index < 26; index++) {
       const letter = String.fromCharCode(0x41 + index)
+
       if (letter === 'C') {
         continue
       }
+
       expect(resolveNonLatinControlChordInput(event({ code: `Key${letter}` }))).toBe(
         String.fromCharCode(index + 1)
       )

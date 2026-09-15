@@ -11,6 +11,7 @@ type BrowseDirArgs = {
 }
 
 let browsePathFlavor: 'posix' | 'win32' = 'posix'
+
 let browseEntries = [
   { name: 'src', isDirectory: true },
   { name: 'README.md', isDirectory: false }
@@ -44,6 +45,7 @@ async function renderRemoteFileBrowser(): Promise<{
   })
 
   const input = container.querySelector('input')
+
   if (!input) {
     throw new Error('Remote file browser input was not rendered')
   }

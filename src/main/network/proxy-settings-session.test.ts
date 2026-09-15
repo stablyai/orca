@@ -184,6 +184,7 @@ describe('applyProxySettingsToSession', () => {
       { httpProxyUrl: 'http://old.example:8080', httpProxyBypassRules: '' },
       { env: {} }
     )
+
     const second = applyProxySettingsToSession(
       proxySession,
       { httpProxyUrl: 'http://new.example:8080', httpProxyBypassRules: '' },
@@ -214,14 +215,18 @@ describe('applyProxySettingsToSession', () => {
       { httpProxyUrl: 'http://old.example:8080' },
       { env: {} }
     )
+
     const second = applyProxySettingsToSession(
       proxySession,
       { httpProxyUrl: 'http://new.example:8080' },
       { env: {} }
     )
+
     let requestReleased = false
+
     const readiness = awaitProxySessionApplication(proxySession).then((ready) => {
       requestReleased = true
+
       return ready
     })
 
@@ -319,6 +324,7 @@ describe('applyProxySettingsToSession', () => {
       { httpProxyUrl: '', httpProxyBypassRules: '' },
       { env: { HTTP_PROXY: 'http://env.example:8080' } }
     )
+
     const explicit = applyProxySettingsToSession(
       proxySession,
       { httpProxyUrl: 'http://configured.example:8080', httpProxyBypassRules: '' },
@@ -514,6 +520,7 @@ describe('applyProxySettingsToSession', () => {
       { httpProxyUrl: 'http://alice:secret@proxy.example:8080' },
       { env: {} }
     )
+
     const releasing = releaseProxySessionApplication(proxySession)
     await vi.waitFor(() => expect(proxySession.setProxy).toHaveBeenCalledTimes(1))
     finishWrite?.()

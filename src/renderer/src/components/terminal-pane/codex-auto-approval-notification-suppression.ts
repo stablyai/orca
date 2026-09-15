@@ -29,12 +29,14 @@ export function shouldSuppressCodexAutoApprovalStatus(
   if (payload.agentType !== 'codex' || !isCodexAutoApprovedPermissionState(payload.state)) {
     return false
   }
+
   // Why: request_user_input waits are real questions the user must answer — yolo auto-approval never resolves them, so they must keep driving status.
   if (isAskUserQuestionTool(payload.toolName)) {
     return false
   }
 
   const state = useAppStore.getState()
+
   if (typeof state.getAgentLaunchConfigForStatusMetadata !== 'function') {
     return false
   }
@@ -48,6 +50,7 @@ export function shouldSuppressCodexAutoApprovalStatus(
     providerSession: context.providerSession,
     existingProviderSession: context.existingProviderSession
   })
+
   if (!launchConfig) {
     return false
   }

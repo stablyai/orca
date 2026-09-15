@@ -39,11 +39,14 @@ function apiErrorMessage(error: unknown): string {
 
 function classifyCreateError(error: unknown): CreateHostedReviewResult {
   const message = apiErrorMessage(error)
+
   if (message) {
     console.warn('createBitbucketPullRequest failed:', message)
   }
+
   const lower = message.toLowerCase()
   const status = error instanceof HostedReviewApiRequestError ? error.status : null
+
   if (status === 401 || status === 403 || lower.includes('unauthorized')) {
     return {
       ok: false,
@@ -52,6 +55,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
     }
   }
+
   // Bitbucket answers a duplicate source branch with 400 plus this phrasing
   // rather than a 409, so the text is the only reliable signal.
   if (lower.includes('already exists') || lower.includes('already a pull request')) {
@@ -61,6 +65,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       error: 'A pull request already exists for this branch.'
     }
   }
+
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
@@ -68,6 +73,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       error: 'PR creation may have completed. Refreshing branch review state...'
     }
   }
+
   if (status === 400 || status === 422) {
     return {
       ok: false,
@@ -76,6 +82,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Bitbucket rejected the pull request. Check the base branch and branch state, then try again.'
     }
   }
+
   if (status === 404) {
     return {
       ok: false,
@@ -84,6 +91,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Bitbucket could not find the repository. Check that the credential has write access to it.'
     }
   }
+
   return {
     ok: false,
     code: 'unknown',
@@ -104,6 +112,7 @@ async function findExistingPullRequest(
     connectionId,
     options
   )
+
   return existing ? { number: existing.number, url: existing.url } : null
 }
 
@@ -125,6 +134,7 @@ export async function createBitbucketPullRequest(
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const config = resolveBitbucketAuthConfig()
+
   if (!hasAuth(config)) {
     return {
       ok: false,
@@ -139,6 +149,7 @@ export async function createBitbucketPullRequest(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   if (!repo) {
     return {
       ok: false,
@@ -150,6 +161,7 @@ export async function createBitbucketPullRequest(
   const base = normalizeHostedReviewBaseRef(input.base)
   const head = input.head ? normalizeHostedReviewHeadRef(input.head) : ''
   const title = input.title.trim()
+
   if (!base || !head || !title) {
     return {
       ok: false,
@@ -157,6 +169,7 @@ export async function createBitbucketPullRequest(
       error: 'Create PR failed: base branch, head branch, and title are required.'
     }
   }
+
   if (head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
@@ -164,6 +177,7 @@ export async function createBitbucketPullRequest(
       error: 'Create PR failed: choose a different base branch before creating a pull request.'
     }
   }
+
   // Why: Bitbucket Cloud has no draft pull requests and the composer hides the
   // toggle, so `draft` here can only be an unreachable persisted default —
   // rejecting it would dead-end the user with no control to clear.
@@ -171,6 +185,7 @@ export async function createBitbucketPullRequest(
     input.useTemplate && !input.body?.trim()
       ? await readHostedPullRequestTemplate(repoPath, connectionId)
       : (input.body ?? '')
+
   const requestBody = {
     title,
     description,
@@ -194,13 +209,17 @@ export async function createBitbucketPullRequest(
       },
       CREATE_REQUEST_TIMEOUT_MS
     )
+
     const created = mapBitbucketPullRequest(raw, 'neutral')
+
     if (created) {
       return { ok: true, number: created.number, url: created.url }
     }
+
     const found = await findExistingPullRequest(repoPath, head, connectionId, options).catch(
       () => null
     )
+
     return found
       ? { ok: true, ...found }
       : {
@@ -210,6 +229,7 @@ export async function createBitbucketPullRequest(
         }
   } catch (error) {
     const classified = classifyCreateError(error)
+
     if (
       !classified.ok &&
       (classified.code === 'already_exists' || classified.code === 'unknown_completion')
@@ -217,6 +237,7 @@ export async function createBitbucketPullRequest(
       const existing = await findExistingPullRequest(repoPath, head, connectionId, options).catch(
         () => null
       )
+
       if (existing) {
         return {
           ok: false,
@@ -226,6 +247,7 @@ export async function createBitbucketPullRequest(
         }
       }
     }
+
     return classified
   }
 }

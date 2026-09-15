@@ -15,6 +15,7 @@ describe('agent completion coordinator', () => {
   it('does not dispatch completion when waiting states arrive mid-turn', () => {
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -72,6 +73,7 @@ describe('agent completion coordinator', () => {
     // the attention path, so auto-approved Codex pauses never notify.
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -111,6 +113,7 @@ describe('agent completion coordinator', () => {
   it('does not dispatch completion when a blocked state arrives mid-turn', () => {
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -153,6 +156,7 @@ describe('agent completion coordinator', () => {
   it('cancels a pending done timer when a waiting state arrives before the quiet window', () => {
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -202,6 +206,7 @@ describe('agent completion coordinator', () => {
     // 'done' so the quiet-window timer never fires a false completion notification.
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -239,6 +244,7 @@ describe('agent completion coordinator', () => {
   it('still dispatches completion on done after an intervening waiting state in the same turn', () => {
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -280,6 +286,7 @@ describe('agent completion coordinator', () => {
     // debounced and canceled — no false "approval required" banner (issue #8387).
     const dispatchAttention = vi.fn()
     const dispatchHookLifecycle = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -319,6 +326,7 @@ describe('agent completion coordinator', () => {
 
   it('dispatches the debounced Codex attention notification after the quiet window elapses', () => {
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -357,6 +365,7 @@ describe('agent completion coordinator', () => {
 
   it('dispatches a non-Codex attention notification immediately without debounce', () => {
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -383,6 +392,7 @@ describe('agent completion coordinator', () => {
 
   it('debounces a blocked Codex pause like waiting and fires after the quiet window', () => {
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -405,6 +415,7 @@ describe('agent completion coordinator', () => {
   it('cancels the debounced Codex attention when a completion lands in the window (no double notify)', () => {
     const dispatchAttention = vi.fn()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -430,6 +441,7 @@ describe('agent completion coordinator', () => {
 
   it('clears the pending Codex attention timer on dispose (no leak, no late fire)', () => {
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -454,6 +466,7 @@ describe('agent completion coordinator', () => {
 
   it('re-arms and fires a second distinct Codex pause after work resumed', () => {
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -499,6 +512,7 @@ describe('agent completion coordinator', () => {
     // 'working' hook lands; that title must also cancel the pending attention
     // so the self-resolving pause never fires a false banner (issue #8387).
     const dispatchAttention = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -530,6 +544,7 @@ describe('agent completion coordinator', () => {
     let foreground: string | null = 'codex'
     const dispatchAttention = vi.fn()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -567,9 +582,11 @@ describe('agent completion coordinator', () => {
 
   it('does not mutate completion state when hook completion is suppressed', () => {
     const dispatchCompletion = vi.fn()
+
     const shouldSuppressHookCompletion = vi.fn(
       (payload: { state: string }) => payload.state === 'waiting' || payload.state === 'blocked'
     )
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',

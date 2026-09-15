@@ -18,6 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 const T = 1_700_000_000_000
+
 const PANE = 'tab-1:pane-1'
 
 beforeEach(() => {
@@ -94,6 +95,7 @@ describe('AgentSessionTransitionRecorder', () => {
     for (let i = 0; i < 25; i++) {
       recorder.onStatus(hook('working', T))
     }
+
     recorder.onStatus(hook('done', T + 5_000))
 
     expect(stats.getSummary().totalAgentsSpawned).toBe(1)
@@ -200,6 +202,7 @@ describe('AgentSessionTransitionRecorder', () => {
     const recorder = new AgentSessionTransitionRecorder(stats)
 
     recorder.onStatus(hook('working', T, { paneKey: 'oldest' }))
+
     for (let i = 0; i < AGENT_SESSION_MIRROR_LIMIT; i++) {
       recorder.onStatus(hook('working', T, { paneKey: `pane-${i}` }))
     }

@@ -11,10 +11,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, reject, resolve }
 }
 
@@ -29,6 +31,7 @@ describe('CheckpointSessionQueue', () => {
       await first.promise
       order.push('a:end')
     })
+
     const b = queue.run('s', async () => {
       order.push('b:start')
     })
@@ -70,6 +73,7 @@ describe('CheckpointSessionQueue', () => {
       async () => {
         await stalled.promise
         completed = true
+
         return 'durable'
       },
       5,
@@ -139,6 +143,7 @@ describe('CheckpointSessionQueue', () => {
           order.push('stalled:start')
           await stalled.promise
           order.push('stalled:end')
+
           return 'ran'
         },
         5,
@@ -149,6 +154,7 @@ describe('CheckpointSessionQueue', () => {
     const later = queue.run('s', async () => {
       order.push('later')
     })
+
     await vi.waitFor(() => expect(order).toEqual(['stalled:start']))
     stalled.resolve()
     await later
@@ -179,6 +185,7 @@ describe('CheckpointSessionQueue', () => {
     let secondEntered = false
 
     void queue.run('s', async () => await stalled.promise).catch(() => {})
+
     const second = queue.run('s', async () => {
       secondEntered = true
     })

@@ -15,6 +15,7 @@ const roots: string[] = []
 async function tempRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), prefix))
   roots.push(root)
+
   return root
 }
 

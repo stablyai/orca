@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const platformMock = vi.hoisted(() => vi.fn())
+
 const homedirMock = vi.hoisted(() => vi.fn(() => '/Users/alice'))
+
 type MockDirectoryEntry = {
   name: string
   isDirectory: () => boolean
@@ -45,19 +47,26 @@ describe('getWarpThemeDirectories', () => {
 
   it('sorts dynamic directories with one collator and preserves locale ties', () => {
     platformMock.mockReturnValue('darwin')
+
     const names = ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul'].map(
       (name) => `.warp-${name}`
     )
+
     readdirSyncMock.mockReturnValue(names.map(directoryEntry))
+
     const expected = [...names].sort((a, b) =>
       // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
       a.localeCompare(b, undefined, { sensitivity: 'base' })
     )
+
     const NativeCollator = Intl.Collator
+
     const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
+
     const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
     try {
       expect(getWarpThemeDirectories().slice(6)).toEqual(
         expected.map((name) => `/Users/alice/${name}/themes`)
@@ -75,22 +84,27 @@ describe('getWarpThemeDirectories', () => {
     const noise = Array.from({ length: 500 }, (_, index) => directoryEntry(`project-${index}`))
     const warpNames = ['.warp-zebra', '.warp-Ångström', '.warp-éclair']
     readdirSyncMock.mockReturnValue([...noise, ...warpNames.map(directoryEntry)])
+
     const expected = [...warpNames].sort((a, b) =>
       // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
       a.localeCompare(b, undefined, { sensitivity: 'base' })
     )
+
     const NativeCollator = Intl.Collator
     const compares: string[][] = []
     vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       const collator = new NativeCollator(locales, options)
+
       return {
         ...collator,
         compare: (left: string, right: string) => {
           compares.push([left, right])
+
           return collator.compare(left, right)
         }
       }
     })
+
     try {
       expect(getWarpThemeDirectories().slice(6)).toEqual(
         expected.map((name) => `/Users/alice/${name}/themes`)
@@ -107,6 +121,7 @@ describe('getWarpThemeDirectories', () => {
     platformMock.mockReturnValue('darwin')
     readdirSyncMock.mockReturnValue([directoryEntry('Documents'), fileEntry('.warprc')])
     const construct = vi.spyOn(Intl, 'Collator')
+
     try {
       expect(getWarpThemeDirectories()).toHaveLength(6)
       expect(construct).not.toHaveBeenCalled()

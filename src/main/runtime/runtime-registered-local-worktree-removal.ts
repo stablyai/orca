@@ -60,6 +60,7 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   const canonicalPath = registeredWorktree.path
   const hooks = getEffectiveHooks(repo)
   let warning: string | undefined
+
   if (hooks?.scripts.archive && args.runHooks) {
     const result = await runHook(
       'archive',
@@ -68,6 +69,7 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
       undefined,
       args.hasLocalOptions ? localOptions : undefined
     )
+
     if (!result.success) {
       console.error(`[hooks] archive hook failed for ${canonicalPath}:`, result.output)
     }
@@ -79,12 +81,15 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   const refreshedWorktrees = args.hasLocalOptions
     ? await listWorktreesStrict(repo.path, localOptions)
     : await listWorktreesStrict(repo.path)
+
   const refreshed = findRegisteredDeletableWorktree(repo.path, canonicalPath, refreshedWorktrees)
+
   if (!refreshed) {
     throw new Error(
       `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
     )
   }
+
   try {
     assertWorktreeUnlockedForRemoval(refreshed)
   } catch (error) {
@@ -92,9 +97,11 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   }
 
   const linkedPaths = getWorktreeSharedLinkPaths(repo)
+
   const ignoredLinkedPaths = args.force
     ? []
     : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
+
   try {
     await (args.hasLocalOptions
       ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
@@ -115,11 +122,14 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   let removalResult: RemoveWorktreeResult | undefined
   const gate = await args.acquireWatcherRemoval(canonicalPath)
   let completed = false
+
   try {
     await args.stopPtys()
+
     if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
+
     try {
       removalResult = args.preserveBranchHead(
         await removeWorktree(repo.path, canonicalPath, args.force, {
@@ -140,6 +150,7 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         deleteBranch: args.deleteBranch,
         closeWatcher: args.closeWatchers
       })
+
       if (recovered) {
         removalResult = recovered
         completed = true
@@ -151,17 +162,21 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         await cleanupPushTarget(args)
         args.finishRemoval(undefined, false, refreshed.head)
         completed = true
+
         return warning ? { warning } : {}
       } else {
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
       }
     }
+
     completed = true
   } finally {
     await gate.finish(completed)
   }
+
   await cleanupPushTarget(args)
   args.finishRemoval(removalResult, true, refreshed.head)
+
   return { ...removalResult, ...(warning ? { warning } : {}) }
 }
 
@@ -172,6 +187,7 @@ async function cleanupOrphanedDirectory(
   closeWatchers: (path: string) => Promise<void>
 ): Promise<void> {
   const access = getLocalWorktreePathAccess(options)
+
   if (
     await canSafelyRemoveOrphanedWorktreeDirectory(
       toLocalWorktreeRuntimePath(path, options),

@@ -21,6 +21,7 @@ function editorWithTextNodes(nodes: FakeTextNode[], contentSize?: number): Edito
           callback: (node: FakeTextNode, pos: number) => void
         ) {
           let pos = 0
+
           for (const node of nodes) {
             callback(node, pos)
             pos += node.size ?? node.text.length
@@ -33,9 +34,11 @@ function editorWithTextNodes(nodes: FakeTextNode[], contentSize?: number): Edito
 
 function buildSelectedText(wordCount: number): string {
   let text = ''
+
   for (let index = 0; index < wordCount; index += 1) {
     text += index === 0 ? `word-${index}` : ` word-${index}`
   }
+
   return text
 }
 

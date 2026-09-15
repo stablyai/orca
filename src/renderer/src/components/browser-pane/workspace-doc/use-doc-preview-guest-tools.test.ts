@@ -18,6 +18,7 @@ const calls = vi.hoisted(() => ({
 vi.mock('@/components/browser-pane/annotate/use-browser-page-annotation-send', () => ({
   useBrowserPageAnnotationSend: (args: { browserTabId: string }) => {
     calls.annotationSend.push({ browserTabId: args.browserTabId })
+
     return { browserAnnotations: [], setBrowserAnnotationTrayOpen: () => undefined }
   }
 }))
@@ -28,6 +29,7 @@ vi.mock('@/components/browser-pane/annotate/use-browser-page-grab-annotations', 
       browserTabId: args.browserTabId,
       toolTargetId: args.toolTargetId
     })
+
     return { pendingAnnotationPayload: null, grabIntent: null, startGrabIntent: () => undefined }
   }
 }))
@@ -39,6 +41,7 @@ vi.mock('@/components/browser-pane/annotate/use-browser-page-markup-capture', ()
 vi.mock('@/components/browser-pane/annotate/useGrabMode', () => ({
   useGrabMode: (toolTargetId: string) => {
     calls.grabMode.push(toolTargetId)
+
     return { state: 'idle' }
   }
 }))
@@ -54,7 +57,9 @@ vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'G' }))
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
 
 const PREVIEW_ID = 'browser-page-9f2c'
+
 const FIRST_GRANT = 'a'.repeat(32)
+
 const SECOND_GRANT = 'b'.repeat(32)
 
 function Harness({ grantId }: { grantId: string | null }): null {
@@ -68,10 +73,12 @@ function Harness({ grantId }: { grantId: string | null }): null {
     containerRef: containerRef as never,
     toolsReady: true
   })
+
   return null
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 function render(grantId: string | null): void {

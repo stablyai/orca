@@ -11,9 +11,11 @@ function source(path) {
 function sourceBetween(contents, startMarker, endMarker) {
   const start = contents.indexOf(startMarker)
   const end = contents.indexOf(endMarker, start + startMarker.length)
+
   if (start === -1 || end === -1) {
     throw new Error(`Missing source boundary: ${startMarker} → ${endMarker}`)
   }
+
   return contents.slice(start, end)
 }
 
@@ -22,11 +24,13 @@ describe('Windows computer-use horizontal scroll', () => {
     const windows = source('native/computer-use-windows/runtime.ps1')
     const mouseEvents = sourceBetween(windows, '$MouseEvents = @{', 'function Write-OrcaJson')
     const scroll = sourceBetween(windows, '        "scroll" {', '        "drag" {')
+
     const left = sourceBetween(
       scroll,
       '} elseif ($Operation.direction -eq "left") {',
       '} elseif ($Operation.direction -eq "right") {'
     )
+
     const right = sourceBetween(
       scroll,
       '} elseif ($Operation.direction -eq "right") {',

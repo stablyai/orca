@@ -15,10 +15,12 @@ export function resolveFederatedWorkerStartBudgets(
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
+
   // Normalize non-positive/invalid values exactly as the client does so local
   // and federated transports share the ordinary default contract.
   const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(timeoutMs)
   const outerDeadlineMs = nowMs + resolveWorkerStartClientTimeoutMs(readinessTimeoutMs)
+
   return {
     readinessTimeoutMs,
     outerDeadlineMs,

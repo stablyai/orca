@@ -31,9 +31,11 @@ vi.mock('electron', () => ({
 }))
 
 const binary = process.env.ORCA_REPRO_CODEX_BINARY
+
 const trials = (['before', 'after'] as const).flatMap((arrival) =>
   [1, 2, 3].map((trial) => ({ arrival, trial }))
 )
+
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 it.skipIf(!binary || process.platform === 'win32').each(trials)(
@@ -44,29 +46,39 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
     mkdirSync(workspace)
     const trace: { ms: number; kind: string; value: unknown }[] = []
     const start = performance.now()
+
     const record = (kind: string, value: unknown) => {
       trace.push({ ms: Math.round(performance.now() - start), kind, value })
     }
+
     let raw = ''
     let submittedMail = false
     let requests = 0
+
     const model = createServer(async (req, res) => {
       if (req.method !== 'POST') {
         res.writeHead(404).end()
+
         return
       }
+
       let body = ''
+
       for await (const chunk of req) {
         body += chunk
       }
+
       const notification = body.includes('You have 1 orchestration message')
+
       if (notification) {
         submittedMail = true
       }
+
       const id = `response-${++requests}`
       record('model-request', { id, notification })
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
       await delay(400)
+
       const events = [
         { type: 'response.created', response: { id } },
         {
@@ -83,35 +95,46 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
           response: { id, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
         }
       ]
+
       for (const event of events) {
         res.write(`data: ${JSON.stringify(event)}\n\n`)
       }
+
       res.end()
     })
+
     await new Promise<void>((resolve) => model.listen(0, '127.0.0.1', resolve))
     const address = model.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('Missing fixture port')
     }
+
     const hooks = new AgentHookServer()
     await hooks.start()
     const db = createDatabase('orca-codex-mailbox-db-')
+
     const { runtime } = createRuntime(db, {
       getAgentStatusSnapshot: () => hooks.getStatusSnapshot()
     })
+
     const run = createBoundRun(db, 'Real Codex completion')
     let queuedMail = false
     let stops = 0
     hooks.setListener((event) => {
       record('hook', { event: event.hookEventName, state: event.payload.state })
+
       if (event.hookEventName === 'UserPromptSubmit' && !queuedMail && arrival === 'before') {
         queuedMail = true
         insertDirectRunMessage(db, run.id, 'Worker progress')
       }
+
       if (event.hookEventName === 'Stop') {
         stops++
       }
+
       const title = getSyntheticAgentTerminalTitle(event.payload.agentType, event.payload.state)
+
       if (title) {
         record('hook-title', title)
         runtime.ingestSyntheticTitleFrame(PTY_ID, `\x1b]0;${title}\x07`)
@@ -158,12 +181,14 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
         'trust_level="trusted"'
       ].join('\n')
     )
+
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
         ([key, value]) =>
           value !== undefined && !key.startsWith('ORCA_') && !key.startsWith('CODEX_')
       )
     ) as Record<string, string>
+
     const terminal = pty.spawn(
       binary!,
       ['--no-alt-screen', '--dangerously-bypass-hook-trust', 'Reply OK only'],
@@ -185,30 +210,38 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
         }
       }
     )
+
     let exited = false
+
     const exit = new Promise<void>((resolve) =>
       terminal.onExit(() => {
         exited = true
         resolve()
       })
     )
+
     const writes: string[] = []
+
     const write = (_id: string, data: string) => {
       record('input', data)
       writes.push(data)
       terminal.write(data)
+
       return true
     }
+
     runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
       kill: () => {
         terminal.kill()
+
         return true
       },
       getForegroundProcess: async () => {
         const name = terminal.process
         record('foreground', name)
+
         return name
       }
     })
@@ -216,17 +249,22 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
     let osc = ''
     terminal.onData((data) => {
       raw += data
+
       if (data.includes('\x1b[6n')) {
         terminal.write('\x1b[1;1R')
       }
+
       osc += data
       const titles = extractAllOscTitles(osc)
+
       for (const title of titles) {
         record('native-title', title)
       }
+
       const nativeIdle = titles.includes('work')
       osc = extractOscTitleScanTail(osc)
       runtime.onPtyData(PTY_ID, data, ++seq)
+
       if (arrival === 'after' && stops > 0 && !queuedMail && nativeIdle) {
         queuedMail = true
         insertDirectRunMessage(db, run.id, 'Later worker progress')
@@ -234,16 +272,21 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
         record('later-mail', 'arrived after the native idle title')
       }
     })
+
     try {
       await runtime.listTerminals()
       const deadline = Date.now() + 10_000
+
       while (!submittedMail && !exited && Date.now() < deadline) {
         await delay(50)
       }
+
       record('result', { arrival, submittedMail, stops, writes })
+
       const stopIndex = trace.findIndex(
         (event) => event.kind === 'hook' && (event.value as { event: string }).event === 'Stop'
       )
+
       expect(stopIndex).toBeGreaterThan(-1)
       const tail = trace.slice(stopIndex + 1).filter((event) => event.kind === 'native-title')
       expect(tail.some((event) => /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] work$/.test(String(event.value)))).toBe(true)
@@ -254,6 +297,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
       if (!exited) {
         terminal.kill('SIGKILL')
       }
+
       await Promise.race([exit, delay(2000)])
       hooks.stop()
       model.closeAllConnections()
@@ -263,6 +307,7 @@ it.skipIf(!binary || process.platform === 'win32').each(trials)(
       writeFileSync(join(directory, 'terminal.bin'), raw)
       console.log(`Real Codex evidence: ${directory}`)
       db.close()
+
       for (const path of temporaryDirectories.splice(0)) {
         rmSync(path, { recursive: true, force: true })
       }

@@ -81,6 +81,7 @@ export {
 } from './task-page-github-work-item-mutation-lifecycle'
 
 export { getRegistryMergedTaskPageGitHubWorkItem } from './task-page-github-work-item-mutation-composition'
+
 export { rebuildSoftHiddenKeysFromPendingAndSticky } from './task-page-github-work-item-mutation-composition'
 
 export { setTaskPageGitHubMutationQueryKey, taskPageGitHubItemKey }
@@ -89,6 +90,7 @@ function resolveSourceScope(sourceContext?: TaskSourceContext | null): string | 
   if (sourceContext?.provider === 'github') {
     return getTaskSourceCacheScope(sourceContext)
   }
+
   return null
 }
 
@@ -99,6 +101,7 @@ function resolveTaskPageGitHubMutation(args: {
 }) {
   const sourceScope = resolveSourceScope(args.sourceContext)
   const base = getRegistryMergedTaskPageGitHubWorkItem(args.item, sourceScope)
+
   return {
     sourceScope,
     built: buildTaskPageGitHubWorkItemMutationPatch(base, args.intent)
@@ -111,24 +114,30 @@ export function canStartTaskPageGitHubWorkItemMutation(args: {
   sourceContext?: TaskSourceContext | null
 }): boolean {
   const { sourceScope, built } = resolveTaskPageGitHubMutation(args)
+
   const key = {
     sourceScope,
     repoId: args.item.repoId,
     itemId: args.item.id,
     opKey: built.opKey
   }
+
   if (isTaskPageGitHubMutationPendingKey(key)) {
     return false
   }
+
   const pending = listPendingTaskPageGitHubOpsForItem(args.item.repoId, args.item.id, sourceScope)
+
   if (built.kind === 'list') {
     const affectedLogins = new Set(built.listOp.logins)
+
     return !pending.some(
       (op) =>
         op.listOp?.family === built.family &&
         op.listOp.logins.some((login) => affectedLogins.has(login))
     )
   }
+
   return !pending.some(
     (op) =>
       !op.listOp && familiesFromPendingOp(op).some((family) => built.families.includes(family))
@@ -141,12 +150,14 @@ export function beginTaskPageGitHubWorkItemMutation(
   setTaskPageGitHubMutationQueryKey(args.queryKey)
   const { sourceScope, built } = resolveTaskPageGitHubMutation(args)
   const skipMeQualifiers = args.skipMeQualifiers ?? false
+
   const key = {
     sourceScope,
     repoId: args.item.repoId,
     itemId: args.item.id,
     opKey: built.opKey
   }
+
   const generation = nextTaskPageGitHubMutationGeneration(key)
 
   if (built.kind === 'list') {
@@ -156,6 +167,7 @@ export function beginTaskPageGitHubWorkItemMutation(
       args.item.id,
       built.family
     )
+
     if (!existing) {
       const ops = listPendingTaskPageGitHubOpsForItem(args.item.repoId, args.item.id, sourceScope)
       const snapshot = stripFamilyPendingFromList(args.item, built.family, ops)
@@ -172,9 +184,11 @@ export function beginTaskPageGitHubWorkItemMutation(
     skipMeQualifiers,
     startedAt: Date.now()
   }
+
   setPendingTaskPageGitHubOp(op)
 
   const merged = getRegistryMergedTaskPageGitHubWorkItem(args.item, sourceScope)
+
   const composedFields: Partial<GitHubWorkItem> =
     built.kind === 'list'
       ? built.family === 'assignees'

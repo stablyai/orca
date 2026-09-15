@@ -14,6 +14,7 @@ import type { SearchResult } from '../../../../shared/code-search-types'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 const SEARCH_DEBOUNCE_MS = 300
+
 const SEARCH_MAX_RESULTS = 2000
 
 type UpdateSearchState = (updates: {
@@ -43,10 +44,12 @@ export function useFileSearchRunner({
 
   const cancelPendingSearch = useCallback(() => {
     latestSearchIdRef.current += 1
+
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current)
       searchTimerRef.current = null
     }
+
     updateActiveSearchState({ loading: false })
   }, [updateActiveSearchState])
 
@@ -62,10 +65,12 @@ export function useFileSearchRunner({
 
       if (!worktreePath || !activeWorktreeId) {
         updateActiveSearchState({ results: null, resultOwner: null, loading: false })
+
         return
       }
 
       const currentSearchState = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId]
+
       if (
         getRuntimeFileSearchRejectedField({
           query,
@@ -79,11 +84,13 @@ export function useFileSearchRunner({
           resultOwner: createFileSearchResultOwner(activeWorktreeId, runtimeSettings),
           loading: false
         })
+
         return
       }
 
       if (!query.trim()) {
         updateActiveSearchState({ results: null, resultOwner: null, loading: false })
+
         return
       }
 
@@ -93,10 +100,12 @@ export function useFileSearchRunner({
         // Why: results can outlive the selected worktree; clicks must reuse the route that produced them.
         const runtimeSettings = getRightSidebarWorktreeRuntimeSettings(activeWorktreeId)
         const resultOwner = createFileSearchResultOwner(activeWorktreeId, runtimeSettings)
+
         try {
           const state = useAppStore.getState()
           const connectionId = getConnectionId(activeWorktreeId) ?? undefined
           const activeSearchState = state.fileSearchStateByWorktree[activeWorktreeId]
+
           if (
             getRuntimeFileSearchRejectedField({
               query,
@@ -111,8 +120,10 @@ export function useFileSearchRunner({
                 loading: false
               })
             }
+
             return
           }
+
           const results = await searchRuntimeFiles(
             {
               settings: runtimeSettings,
@@ -131,11 +142,13 @@ export function useFileSearchRunner({
               maxResults: SEARCH_MAX_RESULTS
             }
           )
+
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({ results, resultOwner })
           }
         } catch (err) {
           console.error('Search failed:', err)
+
           if (latestSearchIdRef.current === searchId) {
             updateActiveSearchState({
               results: { files: [], totalMatches: 0, truncated: false },

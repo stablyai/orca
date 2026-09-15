@@ -42,6 +42,7 @@ function createScrollList(maxScrollTop: number): {
       value = Math.max(0, Math.min(next, max))
     }
   })
+
   return {
     element,
     rows,
@@ -190,6 +191,7 @@ describe('GitHub task list scroll restore', () => {
       restoreWriteRef,
       onScrollTopApplied: () => {}
     })
+
     stop()
 
     list.setMaxScrollTop(900)
@@ -210,6 +212,7 @@ describe('GitHub task list scroll restore', () => {
         throw new Error('nothing to apply without a list')
       }
     })
+
     stop()
 
     expect(pendingRestoreRef.current).toBe(360)

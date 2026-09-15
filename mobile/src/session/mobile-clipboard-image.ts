@@ -3,25 +3,34 @@ import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-cli
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
+
 export const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+
 export const MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+
 const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES = 1
+
 // Why: PNG bytes don't scale exactly with pixel area, so undershoot the target on
 // each pass and let the bounded retry below converge instead of distorting in one shot.
 const MOBILE_CLIPBOARD_IMAGE_DOWNSCALE_SAFETY = 0.85
+
 const MOBILE_CLIPBOARD_IMAGE_MAX_DOWNSCALE_ATTEMPTS = 3
 
 const DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
+
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 export function normalizeMobileClipboardImageBase64(data: string): string {
   const contentBase64 = data.replace(DATA_URL_PREFIX_RE, '')
+
   if (contentBase64.length > MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS) {
     throw new Error('Clipboard image is too large')
   }
+
   if (contentBase64.length % 4 === 1 || !BASE64_PATTERN.test(contentBase64)) {
     throw new Error('Clipboard image content must be base64')
   }
+
   return contentBase64
 }
 
@@ -48,16 +57,20 @@ export function computeMobileClipboardImageDownscale(
   if (base64Length <= maxBase64Length) {
     return null
   }
+
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return null
   }
+
   const scale = Math.sqrt(maxBase64Length / base64Length) * MOBILE_CLIPBOARD_IMAGE_DOWNSCALE_SAFETY
   const nextWidth = Math.max(1, Math.floor(width * scale))
   const nextHeight = Math.max(1, Math.floor(height * scale))
+
   // Guard against a no-op shrink (already 1px) so the retry loop can't spin forever.
   if (nextWidth >= width && nextHeight >= height) {
     return null
   }
+
   return { width: nextWidth, height: nextHeight }
 }
 
@@ -75,22 +88,27 @@ export async function prepareMobileClipboardImageBase64(
   let data = image.data
   let width = image.size.width
   let height = image.size.height
+
   for (let attempt = 0; attempt < MOBILE_CLIPBOARD_IMAGE_MAX_DOWNSCALE_ATTEMPTS; attempt += 1) {
     const contentLength = data.replace(DATA_URL_PREFIX_RE, '').length
+
     const target = computeMobileClipboardImageDownscale(
       contentLength,
       width,
       height,
       maxBase64Length
     )
+
     if (!target) {
       return data
     }
+
     const resized = await resize(data, target)
     data = resized.data
     width = resized.width
     height = resized.height
   }
+
   return data
 }
 
@@ -98,6 +116,7 @@ function assertSuccess<T>(response: RpcSuccess | RpcFailure): T {
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   return response.result as T
 }
 
@@ -108,6 +127,7 @@ export async function saveMobileClipboardImageAsTempFile(
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
+
   for (let retry = 0; ; retry += 1) {
     try {
       return await uploadMobileClipboardImageTransaction(client, contentBase64, connectionId)
@@ -142,10 +162,12 @@ async function uploadMobileClipboardImageTransaction(
         await client.sendRequest('clipboard.saveImageAsTempFile', { contentBase64, connectionId })
       )
     }
+
     throw new Error(startResponse.error.message)
   }
 
   const { uploadId } = startResponse.result as { uploadId: string }
+
   try {
     for (
       let offset = 0;
@@ -163,6 +185,7 @@ async function uploadMobileClipboardImageTransaction(
         })
       )
     }
+
     return assertSuccess<string>(
       await client.sendRequest('clipboard.commitImageUpload', { uploadId })
     )

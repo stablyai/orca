@@ -87,6 +87,7 @@ export function evaluateAgentSessionReserveOperation(
   request: AgentSessionReserveRequest
 ): AgentSessionOperationDecision {
   state.operations = pruneAgentSessionOperationRows(state.operations, request.now)
+
   return evaluateAgentSessionOperation({
     rows: state.operations,
     callerKey: request.operation.callerKey,
@@ -103,11 +104,13 @@ export function requireAgentSessionRecordForReplay(
 ): AgentSessionRecord {
   const replayedId = row.outcome.status === 'succeeded' ? row.outcome.sessionId : sessionId
   const record = state.records.get(replayedId)
+
   if (!record) {
     // Why: the recorded effect is no longer reconstructable, and re-running it would be a second
     // spawn rather than a replay.
     throw new Error('agent_session_ownership_unknown')
   }
+
   return record
 }
 
@@ -121,13 +124,16 @@ export function admitPendingAgentSessionReservationReplay(
     handoffOperationId: request.handoffOperationId,
     probe: request.probe
   })
+
   if (decision.decision === 'refused') {
     throw new Error(decision.code)
   }
+
   if (decision.decision !== 'retry-reservation') {
     // A replay may continue only its still-present reservation; recovery requires a fresh intent.
     throw new Error('agent_session_ownership_unknown')
   }
+
   return record
 }
 
@@ -142,12 +148,15 @@ export function applyAgentSessionReservation(
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
+
   if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
     throw new Error('agent_session_launch_args_invalid')
   }
+
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
+
   const reservation: AgentSessionReservation = {
     runtimeKind: request.runtimeKind,
     spawnToken:
@@ -157,21 +166,26 @@ export function applyAgentSessionReservation(
     leaseTtlMs: request.leaseTtlMs ?? leaseTtlMs,
     now: request.now
   }
+
   // Inside the transaction, not only in the RPC resolver: two concurrent adoptions of one
   // conversation mint different session ids, so the compare-and-swap never collides and a
   // pre-commit check passes for both. Codex would then hold one thread from two app-servers, which
   // it permits silently and which corrupts the conversation rather than erroring.
   assertAdoptedConversationUnowned(state, request)
   const existing = state.records.get(request.sessionId)
+
   if (!existing) {
     if (state.unreadableRecords.has(request.sessionId)) {
       throw new Error('execution_owner_reconciling')
     }
+
     if (request.expectedFence !== null) {
       throw new Error('agent_session_checkpoint_stale')
     }
+
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
+
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
@@ -181,14 +195,17 @@ export function applyAgentSessionReservation(
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw new Error('agent_session_conflict')
   }
+
   if (request.expectedFence === null) {
     throw new Error('agent_session_conflict')
   }
+
   const pinned = {
     ...existing,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
     ...(!existing.launchArgs && request.launchArgs ? { updatedAt: request.now } : {})
   }
+
   return reserveAgentSessionOwner({
     record: pinned,
     expectedFence: request.expectedFence,
@@ -215,17 +232,22 @@ function assertAdoptedConversationUnowned(
   request: AgentSessionReserveRequest
 ): void {
   const adopted = request.adoptedHandleLink
+
   if (!adopted) {
     return
   }
+
   const root = agentSessionProviderHandleRoot(adopted.handle)
+
   for (const record of state.records.values()) {
     if (record.sessionId === request.sessionId) {
       continue
     }
+
     const holdsSameConversation = record.providerHandleChain.some(
       (link) => agentSessionProviderHandleRoot(link.handle) === root
     )
+
     if (holdsSameConversation) {
       throw new Error('agent_session_conflict')
     }
@@ -280,21 +302,27 @@ export function commitAgentSessionReservation(
   leaseTtlMs: number
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
+
   if (decision.decision === 'refused') {
     throw new Error(decision.code)
   }
+
   if (decision.decision === 'replay') {
     let record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
+
     if (decision.row.outcome.status === 'pending' && request.handoffOperationId !== null) {
       record = admitPendingAgentSessionReservationReplay(record, request)
     }
+
     return { record, disposition: 'replayed' as const, operationRow: decision.row }
   }
+
   const result = applyAgentSessionReservation(state, request, leaseTtlMs)
   state.operations.set(
     agentSessionOperationKey(request.operation.callerKey, request.operation.operationId),
     decision.row
   )
   state.records.set(result.record.sessionId, result.record)
+
   return { ...result, operationRow: decision.row }
 }

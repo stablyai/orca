@@ -9,12 +9,16 @@ export function getOrCreateRendererRoot(
   hotData?: RendererRootHotData
 ): Root {
   const existingRoot = hotData?.orcaRendererRoot
+
   if (existingRoot) {
     return existingRoot
   }
+
   const root = createRoot(container)
+
   if (hotData) {
     hotData.orcaRendererRoot = root
   }
+
   return root
 }

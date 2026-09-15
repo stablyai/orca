@@ -10,6 +10,7 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+
   return textarea
 }
 
@@ -18,6 +19,7 @@ function captureInputEvents(target: HTMLElement): InputEvent[] {
   target.addEventListener('input', (event) => {
     events.push(event as InputEvent)
   })
+
   return events
 }
 
@@ -33,6 +35,7 @@ function appendContentEditable(text = ''): HTMLDivElement {
   const selection = document.getSelection()
   selection?.removeAllRanges()
   selection?.addRange(range)
+
   return element
 }
 
@@ -50,6 +53,7 @@ describe('primary selection paste', () => {
     textarea.setSelectionRange(6, 11)
 
     const target = findEditablePrimarySelectionPasteTarget(textarea)
+
     const result = await pastePrimarySelectionTextIntoTarget(target!, 'beta', {
       clientX: 0,
       clientY: 0
@@ -125,6 +129,7 @@ describe('primary selection paste', () => {
     textarea.focus()
     const events = captureInputEvents(textarea)
     const text = 'secret-token '.repeat(24)
+
     const yieldToEventLoop = vi.fn(async () => {
       other.focus()
     })
@@ -156,9 +161,11 @@ describe('primary selection paste', () => {
   it('pastes large contenteditable text in chunks without event data leakage', async () => {
     const target = appendContentEditable('prefix ')
     const events = captureInputEvents(target)
+
     const execCommand = vi.fn(() => {
       throw new Error('large contenteditable paste must not use execCommand')
     })
+
     Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand })
     Object.defineProperty(document, 'queryCommandSupported', {
       configurable: true,
@@ -247,6 +254,7 @@ describe('primary selection paste', () => {
     const other = appendTextarea('other')
     const events = captureInputEvents(target)
     const text = 'secret-token '.repeat(24)
+
     const yieldToEventLoop = vi.fn(async () => {
       other.focus()
     })

@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { searchKeywords } from './settings-search-keywords'
 
 const AGENT_STATUS_HOOKS_TITLE_KEY = 'auto.components.settings.agent-status-hooks-copy.7707c15abb'
+
 const AGENT_STATUS_HOOKS_DESCRIPTION_KEY =
   'auto.components.settings.agent-status-hooks-copy.a68a642835'
 

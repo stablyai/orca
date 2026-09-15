@@ -50,15 +50,21 @@ export type RemoteWatcherResyncState = {
 
 // Why: cache roots that failed watcher creation (e.g. WSL UNC paths) so we don't retry every worktree switch and spam the console with errors.
 export const UNWATCHABLE_ROOT_CACHE_MAX = 256
+
 // Why: recreating @parcel/watcher on Windows is expensive (ReadDirectoryChangesW + AV, 500ms+); a 30s grace lets rapid switches reuse the watcher.
 export const WATCHER_TEARDOWN_GRACE_MS = 30_000
+
 export const REMOTE_WATCH_RETRY_MS = 1_000
+
 export const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
+
 // Why: preserve the first and latest resync while bounding full-tree SSH refreshes during flaps.
 export const REMOTE_WATCH_RESYNC_COALESCE_MS = 5_000
+
 // Why: doubling from a minute to a half-hour ceiling costs a permanently broken remote ~7 fs.watch
 // calls in the first hour and 2/hour after, which a flapping link can absorb.
 export const REMOTE_WATCH_DORMANT_RETRY_MS = 60_000
+
 export const REMOTE_WATCH_DORMANT_RETRY_MAX_MS = 30 * 60_000
 
 export const watcherLifecycleState = {

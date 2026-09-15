@@ -33,6 +33,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     rendererMountRequestedBeforePty,
     serializerGenerationBeforeMobileFit
   } = args
+
   if (isMobile && clientId) {
     await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
   } else if (clientId && params.viewport) {
@@ -40,30 +41,36 @@ export async function publishLegacyBinaryInitialSnapshot(
     state.registeredRemoteDesktopDriver = true
     state.pendingRemoteDesktopViewport = params.viewport
   }
+
   if (state.closed) {
     return
   }
 
   let read = await runtime.readTerminal(params.terminal)
   let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+
   if (state.closed) {
     return
   }
+
   // Why: missing model state (not blank snapshot text) signals a never-attached PTY; a renderer-sourced snapshot already proves attachment, so skip the remount.
   const mountRequested =
     missingHeadlessStateBeforeMobileFit &&
     serialized?.source !== 'renderer' &&
     (rendererMountRequestedBeforePty || runtime.requestRendererTerminalTabMount(params.terminal))
+
   if (missingHeadlessStateBeforeMobileFit && mountRequested) {
     // Why: an idle legacy PTY emits no later byte, so wait for a settle proving this remount completed before replaying its screen.
     const mountWaitController = new AbortController()
     const abortMountWait = (): void => mountWaitController.abort()
     state.abortRendererMountWait = abortMountWait
+
     if (signal?.aborted) {
       abortMountWait()
     } else {
       signal?.addEventListener('abort', abortMountWait, { once: true })
     }
+
     const rendererReadyPromise = runtime
       .waitForRendererTerminalSerializer(
         ptyId,
@@ -72,40 +79,54 @@ export async function publishLegacyBinaryInitialSnapshot(
         mountWaitController.signal
       )
       .catch(() => false)
+
     const finishMountWait = (): void => {
       signal?.removeEventListener('abort', abortMountWait)
+
       if (state.abortRendererMountWait === abortMountWait) {
         state.abortRendererMountWait = () => {}
       }
     }
+
     void rendererReadyPromise.then(finishMountWait, finishMountWait)
     let deadlineTimer: ReturnType<typeof setTimeout> | null = null
+
     const initialDeadline = new Promise<boolean>((resolve) => {
       deadlineTimer = setTimeout(() => resolve(false), MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS)
+
       if (typeof deadlineTimer.unref === 'function') {
         deadlineTimer.unref()
       }
     })
+
     const rendererReady = await Promise.race([rendererReadyPromise, initialDeadline])
+
     if (deadlineTimer) {
       clearTimeout(deadlineTimer)
     }
+
     if (state.closed || signal?.aborted) {
       return
     }
+
     if (rendererReady) {
       read = await runtime.readTerminal(params.terminal)
       const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+
       if (state.closed) {
         return
       }
+
       if (stableRendererSnapshot?.data.length) {
         serialized = stableRendererSnapshot
+
         const trailingOutput = state.pendingOutput.flatMap((item) => {
           const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
           const seq = item.meta?.seq
+
           return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
         })
+
         runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
           ptyId,
           stableRendererSnapshot,
@@ -117,16 +138,20 @@ export async function publishLegacyBinaryInitialSnapshot(
       state.lateRendererReadyPromise = rendererReadyPromise
     }
   }
+
   let initialOutputOverflowed = false
+
   if (state.pendingOutputOverflowed) {
     state.pendingOutput.splice(0)
     state.pendingOutputBytes = 0
     state.pendingOutputOverflowed = false
     read = await runtime.readTerminal(params.terminal)
     serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+
     if (state.closed) {
       return
     }
+
     if (state.pendingOutputOverflowed) {
       initialOutputOverflowed = true
       state.pendingOutput.splice(0)
@@ -134,6 +159,7 @@ export async function publishLegacyBinaryInitialSnapshot(
       state.pendingOutputOverflowed = false
     }
   }
+
   const size = runtime.getTerminalSize(ptyId)
   state.displayMode = runtime.getMobileDisplayMode(ptyId)
   // Why: layout seq is the mobile stale-event filter's high-water mark (undefined pre-transition is fail-open). See docs/mobile-terminal-layout-state-machine.md.
@@ -150,6 +176,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     displayMode: state.displayMode,
     seq: layoutSeq
   })
+
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
     kind: 'scrollback',
     // Why: prefer the subscriber's viewport over the 80x24 stopgap when the PTY has
@@ -166,6 +193,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     terminalOwner: serialized?.terminalOwner,
     data: serialized?.data ?? ''
   })
+
   console.log('[mobile-terminal-stream] snapshot', {
     terminal: params.terminal,
     streamId: state.streamId,
@@ -178,21 +206,26 @@ export async function publishLegacyBinaryInitialSnapshot(
   // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
   state.lastResizeCols = serialized?.cols ?? size?.cols
   let recoveryAttempts = 0
+
   // Why: if the bounded pre-subscribe tail overflowed, only a fresh model snapshot covers the dropped middle without replay gaps.
   while (state.pendingOutputOverflowed && recoveryAttempts < 2) {
     state.pendingOutputOverflowed = false
     recoveryAttempts += 1
     const recovery = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
+
     if (state.closed) {
       return
     }
+
     if (!recovery) {
       break
     }
+
     // Why: without an output seq (renderer fallback) covered chunks can't be trimmed exactly, so keep the bounded replay over an unverifiable snapshot.
     if (typeof recovery.seq !== 'number') {
       break
     }
+
     // Why: clients drop a repeat scrollback snapshot but apply 'resized' inline; omit seq so output-byte seqs don't pollute the layout-seq filter.
     const recoveryStats = sendSnapshotFrames(state.sendFrame, {
       kind: 'resized',
@@ -205,6 +238,7 @@ export async function publishLegacyBinaryInitialSnapshot(
       truncatedByByteBudget: recovery.truncatedByByteBudget,
       data: recovery.data
     })
+
     console.log('[mobile-terminal-stream] recovery snapshot', {
       terminal: params.terminal,
       streamId: state.streamId,
@@ -219,8 +253,10 @@ export async function publishLegacyBinaryInitialSnapshot(
     state.pendingOutputBytes = trimmed.bytes
     snapshotOutputSeq = recovery.seq
   }
+
   state.buffering = false
   const bufferedOutput = state.pendingOutput.splice(0)
+
   const queryReplayData = state.pendingQueryOverflowed
     ? ''
     : state.pendingQuerySequences
@@ -231,15 +267,18 @@ export async function publishLegacyBinaryInitialSnapshot(
         )
         .map((query) => query.data)
         .join('')
+
   if (queryReplayData) {
     // Why: snapshots omit control queries but their seq trims the live chunk; replay the post-snapshot query so the mobile xterm answers once.
     state.outputBatcher.push(queryReplayData)
   }
+
   if (!initialOutputOverflowed) {
     for (const item of bufferedOutput) {
       const uncovered = getOutputAfterSnapshotSeq(item, snapshotOutputSeq)
       let uncoveredData = uncovered?.data ?? null
       let uncoveredMeta = uncovered?.meta
+
       if (
         uncoveredData &&
         uncoveredData !== item.data &&
@@ -250,6 +289,7 @@ export async function publishLegacyBinaryInitialSnapshot(
         if (item.meta.rawLength === item.data.length) {
           uncoveredMeta = { ...item.meta, rawLength: uncoveredData.length }
         }
+
         uncoveredData = stripSnapshotBoundaryQuerySuffixes(
           uncoveredData,
           snapshotOutputSeq,
@@ -257,11 +297,13 @@ export async function publishLegacyBinaryInitialSnapshot(
           state.pendingQuerySequences
         )
       }
+
       if (uncoveredData) {
         state.outputBatcher.push(uncoveredData, uncoveredMeta)
       }
     }
   }
+
   state.pendingOutputBytes = 0
   state.outputBatcher.flush()
 }

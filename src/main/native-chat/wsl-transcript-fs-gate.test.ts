@@ -12,6 +12,7 @@ import {
 
 const SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
+
 const CAPACITY_MESSAGE =
   'WSL transcript discovery is temporarily unavailable because too many filesystem requests are already waiting. Try again shortly or restart Orca if the issue continues.'
 
@@ -22,6 +23,7 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   return {
     promise: new Promise<T>((res, rej) => ((resolve = res), (reject = rej))),
     resolve,
@@ -86,22 +88,30 @@ describe('WSL transcript filesystem task scheduling', () => {
     const debian = deferred<string>()
     const occupied: string[] = []
     const started: string[] = []
+
     const first = run('\\\\wsl.localhost\\Ubuntu\\a', 'exact', () => {
       occupied.push('ubuntu')
+
       return ubuntu.promise
     })
+
     const second = run('\\\\wsl.localhost\\Debian\\a', 'exact', () => {
       occupied.push('debian')
+
       return debian.promise
     })
+
     await vi.waitFor(() => expect(occupied).toEqual(['ubuntu', 'debian']))
 
     const scan = run('\\\\wsl.localhost\\Fedora\\tree', 'scan', async () => {
       started.push('scan')
+
       return 'scan'
     })
+
     const exact = run('\\\\wsl.localhost\\Fedora\\file', 'exact', async () => {
       started.push('exact')
+
       return 'exact'
     })
 
@@ -144,8 +154,10 @@ describe('WSL transcript filesystem task scheduling', () => {
 
   it('never joins an exact probe onto the same file queued as scan work', async () => {
     const transcript = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\live.jsonl'
+
     const statTask = (priority: 'exact' | 'scan', task: () => Promise<string>): Promise<string> =>
       runWslTranscriptFsTask({ operation: 'stat', path: transcript, priority }, task)
+
     // Hold the single scan slot on another distro so the same-file scan stat
     // cannot run — a joiner would inherit exactly that queued position.
     const blocked = deferred<string>()
@@ -186,12 +198,14 @@ describe('WSL transcript filesystem task scheduling', () => {
     const stalled = deferred<string>()
     const firstTask = vi.fn(() => stalled.promise)
     const firstController = new AbortController()
+
     const first = run(
       '\\\\wsl.localhost\\Ubuntu\\abandoned',
       'exact',
       firstTask,
       firstController.signal
     )
+
     await vi.waitFor(() => expect(firstTask).toHaveBeenCalledOnce())
 
     firstController.abort(new Error('first closed'))
@@ -221,6 +235,7 @@ describe('WSL transcript filesystem task scheduling', () => {
       '\\\\wsl.localhost\\Ubuntu\\mnt\\C\\a',
       '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\a'
     ]
+
     const tasks = paths.map((path, index) => run(path, 'exact', async () => String(index)))
 
     await expect(Promise.all(tasks)).resolves.toEqual(['0', '1', '2', '3'])
@@ -232,14 +247,17 @@ describe('WSL transcript filesystem task scheduling', () => {
   ] as const)('rejects a stalled %s waiter at its deadline', async (priority, deadlineMs) => {
     vi.useFakeTimers()
     const stalled = deferred<string>()
+
     try {
       const task = vi.fn(() => stalled.promise)
       const pending = run(`\\\\wsl.localhost\\Deadline-${priority}\\a`, priority, task)
+
       const rejected = expect(pending).rejects.toMatchObject({
         name: 'WslTranscriptFsError',
         code: 'timeout',
         message: SLOW_MESSAGE
       })
+
       let settled = false
       void pending.then(
         () => (settled = true),
@@ -265,6 +283,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   ] as const)('completes healthy %s work below its deadline', async (priority, deadlineMs) => {
     vi.useFakeTimers()
     const work = deferred<string>()
+
     try {
       const pending = run(`\\\\wsl.localhost\\Healthy-${priority}\\a`, priority, () => work.promise)
 
@@ -285,6 +304,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     vi.useFakeTimers()
     const work = deferred<string>()
     const task = vi.fn(() => work.promise)
+
     try {
       const path = '\\\\wsl.localhost\\Ubuntu\\staggered'
       const first = run(path, 'exact', task)
@@ -310,6 +330,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     const ubuntu = deferred<string>()
     const debian = deferred<string>()
     const queuedController = new AbortController()
+
     try {
       const ubuntuTask = vi.fn(() => ubuntu.promise)
       const debianTask = vi.fn(() => debian.promise)
@@ -325,6 +346,7 @@ describe('WSL transcript filesystem task scheduling', () => {
           index === 0 ? queuedController.signal : undefined
         )
       )
+
       const overflowTask = vi.fn(async () => 'overflow')
       await expect(
         run('\\\\wsl.localhost\\Overflow\\a', 'exact', overflowTask)
@@ -355,11 +377,14 @@ describe('WSL transcript filesystem task scheduling', () => {
     const stalled = deferred<string>()
     const task = vi.fn(() => stalled.promise)
     const firstController = new AbortController()
+
     try {
       const path = '\\\\wsl.localhost\\Ubuntu\\shared-cap'
+
       const waiters = Array.from({ length: WSL_TRANSCRIPT_FS_MAX_WAITERS_PER_TASK }, (_, index) =>
         run(path, 'exact', task, index === 0 ? firstController.signal : undefined)
       )
+
       await vi.advanceTimersByTimeAsync(0)
 
       await expect(run(path, 'exact', task)).rejects.toMatchObject({
@@ -387,6 +412,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     vi.useFakeTimers()
     const ubuntu = deferred<string>()
     const debian = deferred<string>()
+
     try {
       const first = run('\\\\wsl.localhost\\Ubuntu\\stalled', 'exact', () => ubuntu.promise)
       const second = run('\\\\wsl.localhost\\Debian\\stalled', 'exact', () => debian.promise)
@@ -414,8 +440,10 @@ describe('WSL transcript filesystem task scheduling', () => {
   // that would settle the task first and skip the route quarantine entirely.
   it('quarantines the route when a sole-waiter abort-responsive task hits the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const path = '\\\\wsl.localhost\\Ubuntu\\solo-stall'
+
       const stalled = runWslTranscriptFsTask(
         { operation: 'open', path, priority: 'exact', dedupe: false },
         (signal) =>
@@ -423,6 +451,7 @@ describe('WSL transcript filesystem task scheduling', () => {
             signal.addEventListener('abort', () => reject(signal.reason), { once: true })
           )
       )
+
       const stalledRejected = expect(stalled).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
       await stalledRejected
@@ -439,6 +468,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     // performance.now drives the quarantine clock, so it must be faked too.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const path = '\\\\wsl.localhost\\Ubuntu\\cold-start'
+
     const stallOnce = (): Promise<string> =>
       runWslTranscriptFsTask(
         { operation: 'open', path, priority: 'exact', dedupe: false },
@@ -447,6 +477,7 @@ describe('WSL transcript filesystem task scheduling', () => {
             signal.addEventListener('abort', () => reject(signal.reason), { once: true })
           )
       )
+
     try {
       const first = stallOnce()
       const firstRejected = expect(first).rejects.toMatchObject({ code: 'timeout' })
@@ -490,10 +521,12 @@ describe('WSL transcript filesystem task scheduling', () => {
     vi.useFakeTimers()
     const stalledExact = deferred<string>()
     const scanWork = deferred<string>()
+
     try {
       const stalled = run('\\\\wsl.localhost\\Ubuntu\\quarantine-me', 'exact', () => {
         return stalledExact.promise
       })
+
       const stalledRejected = expect(stalled).rejects.toMatchObject({ code: 'timeout' })
       const scan = run('\\\\wsl.localhost\\Ubuntu\\scan-tree', 'scan', () => scanWork.promise)
       const scanRejected = expect(scan).rejects.toMatchObject({ code: 'unavailable' })
@@ -522,10 +555,13 @@ describe('WSL transcript filesystem task scheduling', () => {
     const work = deferred<string>()
     const controller = new AbortController()
     const sawAbort = vi.fn()
+
     const task = vi.fn((signal: AbortSignal) => {
       signal.addEventListener('abort', sawAbort, { once: true })
+
       return work.promise
     })
+
     const pending = runWslTranscriptFsTask(
       {
         operation: 'read',
@@ -536,6 +572,7 @@ describe('WSL transcript filesystem task scheduling', () => {
       },
       task
     )
+
     await vi.waitFor(() => expect(task).toHaveBeenCalledOnce())
     const reason = new Error('caller moved on')
     controller.abort(reason)
@@ -549,6 +586,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   it('quarantines an expired route while keeping healthy routes usable', async () => {
     vi.useFakeTimers()
     const stalled = deferred<string>()
+
     try {
       const stuck = run('\\\\wsl.localhost\\Ubuntu\\lane-stuck', 'exact', () => stalled.promise)
       const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
@@ -573,6 +611,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   it('restores the scan slot while quarantining the expired route', async () => {
     vi.useFakeTimers()
     const stalled = deferred<string>()
+
     try {
       const stuckScan = run('\\\\wsl.localhost\\Ubuntu\\stuck-tree', 'scan', () => stalled.promise)
       const stuckRejected = expect(stuckScan).rejects.toMatchObject({ code: 'timeout' })
@@ -600,6 +639,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   it('does not spend a replacement process on a quarantined route', async () => {
     vi.useFakeTimers()
     const stalled = deferred<string>()
+
     try {
       const stuck = run('\\\\wsl.localhost\\Ubuntu\\hung-file', 'exact', () => stalled.promise)
       const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
@@ -625,6 +665,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     // performance.now drives the quarantine clock, so it must be faked too.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const stalled = deferred<string>()
+
     try {
       const stuck = run('\\\\wsl.localhost\\Ubuntu\\recovering', 'exact', () => stalled.promise)
       const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
@@ -659,6 +700,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const work = deferred<string>()
     const task = vi.fn(() => work.promise)
+
     try {
       const path = '\\\\wsl.localhost\\Ubuntu\\join-stuck'
       const first = run(path, 'exact', task)
@@ -686,6 +728,7 @@ describe('WSL transcript filesystem task scheduling', () => {
     vi.useFakeTimers()
     const stalled = deferred<string>()
     const queuedTask = vi.fn(async () => 'queued')
+
     try {
       const stuck = run('\\\\wsl.localhost\\Ubuntu\\trap-hung', 'exact', () => stalled.promise)
       const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
@@ -713,17 +756,20 @@ describe('WSL transcript filesystem task scheduling', () => {
     const scanWork = deferred<string>()
     const debianWork = deferred<string>()
     const ubuntuTask = vi.fn(async () => 'ubuntu')
+
     try {
       const scanU = run(
         '\\\\wsl.localhost\\Ubuntu\\queued-route-tree',
         'scan',
         () => scanWork.promise
       )
+
       const exactD = run(
         '\\\\wsl.localhost\\Debian\\queued-route-d',
         'exact',
         () => debianWork.promise
       )
+
       const scanRejected = expect(scanU).rejects.toMatchObject({ code: 'timeout' })
       const exactDRejected = expect(exactD).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(35_000)
@@ -749,6 +795,7 @@ describe('WSL transcript filesystem task scheduling', () => {
   it('warns once per task that outlives its deadline while running', async () => {
     vi.useFakeTimers()
     const stalled = deferred<string>()
+
     try {
       const stuck = run('\\\\wsl.localhost\\Ubuntu\\logged', 'exact', () => stalled.promise)
       const stuckRejected = expect(stuck).rejects.toMatchObject({ code: 'timeout' })
@@ -768,12 +815,14 @@ describe('WSL transcript filesystem task scheduling', () => {
     vi.useFakeTimers()
     const exactWork = deferred<string>()
     const scanWork = deferred<string>()
+
     try {
       const exact = run(
         '\\\\wsl.localhost\\Ubuntu\\stalled-exact',
         'exact',
         () => exactWork.promise
       )
+
       const scanTask = vi.fn(() => scanWork.promise)
       const scanPath = '\\\\wsl.localhost\\Debian\\healthy-scan'
       const scan = run(scanPath, 'scan', scanTask)
@@ -815,10 +864,12 @@ describe('WSL transcript filesystem task coalescing opt-out', () => {
     const reads = Promise.all([
       gatedRead(async () => {
         bodies.shift()!.copy(first)
+
         return first
       }),
       gatedRead(async () => {
         bodies.shift()!.copy(second)
+
         return second
       })
     ])
@@ -835,7 +886,9 @@ describe('WSL transcript filesystem task coalescing opt-out', () => {
       { id: 1, closed: false },
       { id: 2, closed: false }
     ]
+
     let served = 0
+
     const opened = await Promise.all(
       handles.map(() =>
         runWslTranscriptFsTask(
@@ -856,6 +909,7 @@ describe('WSL transcript filesystem task coalescing opt-out', () => {
     const path = '\\\\wsl.localhost\\Alpine\\home\\ada'
     const first = run(path, 'scan', task)
     await vi.waitFor(() => expect(task).toHaveBeenCalledOnce())
+
     const joiner = run(
       path,
       'scan',

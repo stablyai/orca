@@ -52,6 +52,7 @@ export function resolveRelaySpawnCwd(args: {
 }): RelaySpawnCwdResolution {
   const directoryExists = args.directoryExists ?? relayHostDirectoryExists
   const requested = trimmedString(args.requestedCwd)
+
   if (requested) {
     return { kind: 'requested', cwd: requested }
   }
@@ -59,15 +60,18 @@ export function resolveRelaySpawnCwd(args: {
   const workspaceId = trimmedString(args.worktreeId) ?? trimmedString(args.env?.ORCA_WORKSPACE_ID)
   const scope = workspaceId ? parseWorkspaceKey(workspaceId) : null
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+
   const worktreePath =
     scope?.type === 'folder' || !worktreeId
       ? undefined
       : splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+
   if (worktreePath && directoryExists(worktreePath)) {
     return { kind: 'worktree', cwd: worktreePath }
   }
 
   const workspaceRoot = trimmedString(args.env?.ORCA_WORKSPACE_ROOT)
+
   if (workspaceRoot && directoryExists(workspaceRoot)) {
     return { kind: 'workspace-root', cwd: workspaceRoot }
   }

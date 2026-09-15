@@ -6,20 +6,24 @@ import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 vi.mock('./push-socket-dismissal', () => ({
   dismissHostPushNotification: vi.fn(async () => {})
 }))
+
 vi.mock('./push-dismissal-reconciliation', () => ({
   requestNotificationCatchup: vi.fn(async () => {})
 }))
+
 vi.mock('./notification-permissions', () => ({}))
 
 type Handler = (data: unknown) => void
 
 function client() {
   let handler: Handler | undefined
+
   return {
     getState: vi.fn(() => 'connected'),
     sendRequest: vi.fn(async () => ({ ok: true })),
     subscribe: vi.fn((_method: string, _params: unknown, callback: Handler) => {
       handler = callback
+
       return vi.fn()
     }),
     emit(data: unknown) {

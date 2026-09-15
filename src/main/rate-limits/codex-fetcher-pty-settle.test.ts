@@ -45,6 +45,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -56,6 +57,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }
@@ -88,6 +90,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -99,6 +102,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }
@@ -129,6 +133,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -140,6 +145,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }
@@ -174,6 +180,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -185,6 +192,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }
@@ -204,9 +212,11 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(500)
 
     const expectedReset = new Date(new Date().getFullYear(), 6, 28, 10, 21)
+
     if (expectedReset.getTime() <= Date.now()) {
       expectedReset.setFullYear(expectedReset.getFullYear() + 1)
     }
+
     await expect(resultPromise).resolves.toMatchObject({
       session: null,
       weekly: {
@@ -227,6 +237,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -238,6 +249,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }
@@ -266,6 +278,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),
@@ -277,6 +290,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     const onPtyData = ptyHandlers.onData
+
     if (!onPtyData) {
       throw new Error('PTY data handler was not registered')
     }

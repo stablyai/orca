@@ -157,12 +157,14 @@ describe('projectResolvedWorktreeLineage', () => {
 
   it('rejects every edge in a multi-node cycle without hiding valid descendants', () => {
     const grandchild = worktree('grandchild', 'grandchild-instance')
+
     const parentToChild = lineage({
       worktreeId: parent.id,
       worktreeInstanceId: parent.instanceId!,
       parentWorktreeId: child.id,
       parentWorktreeInstanceId: child.instanceId!
     })
+
     const grandchildToParent = lineage({
       worktreeId: grandchild.id,
       worktreeInstanceId: grandchild.instanceId!

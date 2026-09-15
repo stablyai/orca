@@ -26,6 +26,7 @@ export function BrowserPageDownloadList({
       <div className="scrollbar-sleek flex max-h-36 flex-col gap-1 overflow-y-auto">
         {visibleDownloads.map((download) => {
           const progressLabel = formatBrowserDownloadProgress(download)
+
           const statusLabel =
             download.status === 'downloading'
               ? download.progressState === 'interrupted'
@@ -44,6 +45,7 @@ export function BrowserPageDownloadList({
                       'auto.components.browser.pane.BrowserPane.6e776f9ef9',
                       'Download failed'
                     ))
+
           return (
             <div
               key={download.downloadId}

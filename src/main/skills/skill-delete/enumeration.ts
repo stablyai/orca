@@ -32,6 +32,7 @@ export function requireEnumerableFilesystem(filesystem: SkillInstallFilesystem):
   if (!filesystem.listEntries || !filesystem.inspectPaths) {
     throw new SkillDeleteEnumerationUnsupportedError()
   }
+
   // Bound, not detached: the WSL filesystem's `listEntries` reaches `this.runOutput`.
   return {
     listEntries: filesystem.listEntries.bind(filesystem),
@@ -64,9 +65,11 @@ export async function enumerateSkillPlacementCandidates(input: {
   while (frontier.length > 0) {
     const listings = await listEntries(frontier.map((entry) => input.toFilesystemPath(entry.path)))
     const next: typeof frontier = []
+
     for (const current of frontier) {
       const entries = listings.get(input.toFilesystemPath(current.path)) ?? []
       const skillFile = entries.find((entry) => entry.name === SKILL_FILE_NAME)
+
       // The root itself is never a placement, only the directories below it.
       if (current.depth > 0 && (skillFile?.kind === 'file' || skillFile?.kind === 'symlink')) {
         candidates.push({
@@ -80,16 +83,20 @@ export async function enumerateSkillPlacementCandidates(input: {
         inspectionTargets.add(current.path)
         inspectionTargets.add(api.join(current.path, SKILL_FILE_NAME))
       }
+
       for (const entry of entries) {
         if (entry.kind !== 'directory' && entry.kind !== 'symlink') {
           continue
         }
+
         // The SKILL.md of this directory is already accounted for above; as a
         // child entry it can only ever be a file, never a placement.
         if (entry.name === SKILL_FILE_NAME || isSkillStagingEntryName(entry.name)) {
           continue
         }
+
         const childPath = api.join(current.path, entry.name)
+
         if (entry.kind === 'symlink') {
           // A symlinked directory is an alias candidate on its own, and is not
           // descended into: its contents belong to whatever it points at.
@@ -105,11 +112,13 @@ export async function enumerateSkillPlacementCandidates(input: {
           inspectionTargets.add(api.join(childPath, SKILL_FILE_NAME))
           continue
         }
+
         if (current.depth + 1 <= skillDirectoryMaxDepth(current.root.sourceKind)) {
           next.push({ root: current.root, path: childPath, depth: current.depth + 1 })
         }
       }
     }
+
     // Two roots can share a path — `~/.claude/skills` is both a home root and a
     // repo root when the home directory is the workspace — so without this the
     // same directory is walked (and later staged) twice.
@@ -117,10 +126,12 @@ export async function enumerateSkillPlacementCandidates(input: {
   }
 
   const inspections = await resolveInspections(inspectPaths, inspectionTargets, input)
+
   return candidates
     .map((candidate) => {
       const directory = inspections.get(candidate.path)
       const skillFile = inspections.get(api.join(candidate.path, SKILL_FILE_NAME))
+
       return {
         ...candidate,
         entryKind: directory?.kind === 'symlink' ? ('symlink' as const) : candidate.entryKind,
@@ -137,11 +148,14 @@ export async function enumerateSkillPlacementCandidates(input: {
 
 function dedupeByPath<T extends { path: string }>(entries: readonly T[]): T[] {
   const seen = new Set<string>()
+
   return entries.filter((entry) => {
     if (seen.has(entry.path)) {
       return false
     }
+
     seen.add(entry.path)
+
     return true
   })
 }
@@ -153,9 +167,11 @@ async function resolveInspections(
 ): Promise<Map<string, SkillPathInspection>> {
   const ordered = [...targets]
   const raw = await inspectPaths(ordered.map((path) => input.toFilesystemPath(path)))
+
   return new Map(
     ordered.flatMap((path) => {
       const inspection = raw.get(input.toFilesystemPath(path))
+
       return inspection ? [[path, inspection] as const] : []
     })
   )

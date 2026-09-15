@@ -17,6 +17,7 @@ export function validateMarketplaceProvenance(
   ) {
     throw new Error('official marketplace metadata has an unexpected owner')
   }
+
   for (const entry of fetched.marketplace.plugins) {
     if (isReservedPluginIdentity(entry.id) && !isOfficialOrganizationGitSource(entry.source.url)) {
       throw new Error(

@@ -7,6 +7,7 @@ import {
 
 // Production-shaped ids: bare relay id on the wire side, prefixed app id in intake.
 const APP_ID = 'ssh:conn@@pty-1'
+
 const prodEvent = (overrides: Partial<SshPtyOutputDataEvent> = {}): SshPtyOutputDataEvent =>
   event({
     id: APP_ID,
@@ -28,6 +29,7 @@ describe('SshPtyOutputModelMigration', () => {
     const first = harness.intake.acceptData(prodEvent({ data: 'aaaa' }))
     harness.completions[0]!.resolve()
     await first
+
     const second = harness.intake.acceptData(
       prodEvent({
         data: 'bbbb',
@@ -66,6 +68,7 @@ describe('SshPtyOutputModelMigration', () => {
 
   it('targets the real pty on migration timeout with production-shaped ids', async () => {
     vi.useFakeTimers()
+
     try {
       const resetModelForMigration = vi.fn()
       const harness = createHarness({ resetModelForMigration })
@@ -90,6 +93,7 @@ describe('SshPtyOutputModelMigration', () => {
 
   it('fences a running source span before exporting its migration checkpoint', async () => {
     const harness = createHarness()
+
     const first = harness.intake.acceptData(
       event({
         data: 'aaaa',
@@ -103,8 +107,10 @@ describe('SshPtyOutputModelMigration', () => {
         }
       })
     )
+
     harness.completions[0]!.resolve()
     await first
+
     const second = harness.intake.acceptData(
       event({
         data: 'bbbb',
@@ -137,9 +143,11 @@ describe('SshPtyOutputModelMigration', () => {
 
   it('times out one migration, resets its model, and releases retained admission once', async () => {
     vi.useFakeTimers()
+
     try {
       const resetModelForMigration = vi.fn()
       const harness = createHarness({ resetModelForMigration })
+
       const receipt = harness.intake.acceptData(
         event({
           source: {
@@ -152,6 +160,7 @@ describe('SshPtyOutputModelMigration', () => {
           }
         })
       )
+
       const migration = harness.intake.beginGenerationMigration(1, 10_000)
       const result = migration.byPty.get('pty-1')
 
@@ -179,9 +188,11 @@ describe('SshPtyOutputModelMigration', () => {
 
   it('contains a running callback failure to its migrating PTY', async () => {
     vi.useFakeTimers()
+
     try {
       const resetModelForMigration = vi.fn()
       const harness = createHarness({ resetModelForMigration })
+
       const sibling = harness.intake.acceptData(
         event({
           id: 'pty-sibling',
@@ -196,8 +207,10 @@ describe('SshPtyOutputModelMigration', () => {
           }
         })
       )
+
       harness.completions[0]!.resolve()
       await sibling
+
       const failed = harness.intake.acceptData(
         event({
           id: 'pty-failed',
@@ -212,6 +225,7 @@ describe('SshPtyOutputModelMigration', () => {
           }
         })
       )
+
       const migration = harness.intake.beginGenerationMigration(1)
 
       harness.completions[1]!.reject(new Error('emulator failed'))
@@ -263,6 +277,7 @@ describe('SshPtyOutputModelMigration', () => {
           ptyIncarnation: 'incarnation-unrelated'
         })
       )
+
       harness.completions[2]!.resolve()
       await expect(unrelated).resolves.toMatchObject({ providerGeneration: 2 })
       expect(harness.dependencies.closeProvider).not.toHaveBeenCalled()

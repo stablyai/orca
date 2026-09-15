@@ -5,8 +5,11 @@ import { getKeyedSerializedQueueTail, runKeyedSerializedOperation } from './keye
 import { normalizeWslDistroKey } from './wsl-cli-registration-operation'
 
 const REGISTRY_FILE_NAME = 'wsl-cli-registrations.json'
+
 const REGISTRY_SCHEMA_VERSION = 2
+
 const DEFAULT_NEGATIVE_INSPECTION_TTL_MS = 7 * 24 * 60 * 60 * 1_000
+
 // Why: the registry is advisory; cap per-distro bookkeeping so hosts that
 // cycle many uniquely named distros cannot grow the file without bound.
 const MAX_INSPECTION_ENTRIES = 64
@@ -57,19 +60,24 @@ function uniqueDistros(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   const seen = new Set<string>()
   const distros: string[] = []
+
   for (const entry of value) {
     if (typeof entry !== 'string' || !entry.trim()) {
       continue
     }
+
     const distro = entry.trim()
     const key = normalizeWslDistroKey(distro)
+
     if (!seen.has(key)) {
       seen.add(key)
       distros.push(distro)
     }
   }
+
   return distros
 }
 
@@ -77,6 +85,7 @@ function parseReconciliations(value: unknown): Record<string, WslCliRegistration
   if (!value || typeof value !== 'object') {
     return {}
   }
+
   return Object.fromEntries(
     Object.entries(value).filter(
       (entry): entry is [string, WslCliRegistrationReconciliation] =>
@@ -91,9 +100,11 @@ function parseReconciliations(value: unknown): Record<string, WslCliRegistration
 function parseState(content: string): WslCliRegistrationRegistryState {
   try {
     const parsed = JSON.parse(content) as Record<string, unknown>
+
     if (parsed.schemaVersion !== 1 && parsed.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
       return emptyState()
     }
+
     const inspectionTimes =
       parsed.inspectionTimes && typeof parsed.inspectionTimes === 'object'
         ? Object.fromEntries(
@@ -103,6 +114,7 @@ function parseState(content: string): WslCliRegistrationRegistryState {
             )
           )
         : {}
+
     return {
       schemaVersion: REGISTRY_SCHEMA_VERSION,
       registeredDistros: uniqueDistros(parsed.registeredDistros),
@@ -131,6 +143,7 @@ async function readState(userDataPath: string): Promise<WslCliRegistrationRegist
     if (isMissingError(error)) {
       return emptyState()
     }
+
     throw error
   }
 }
@@ -138,14 +151,17 @@ async function readState(userDataPath: string): Promise<WslCliRegistrationRegist
 function upsertDistro(distros: string[], distro: string): string[] {
   const key = normalizeWslDistroKey(distro)
   const existingIndex = distros.findIndex((entry) => normalizeWslDistroKey(entry) === key)
+
   if (existingIndex === -1) {
     return [...distros, distro.trim()]
   }
+
   return distros.map((entry, index) => (index === existingIndex ? distro.trim() : entry))
 }
 
 function removeDistro(distros: string[], distro: string): string[] {
   const key = normalizeWslDistroKey(distro)
+
   return distros.filter((entry) => normalizeWslDistroKey(entry) !== key)
 }
 
@@ -164,6 +180,7 @@ function capInspectionEntries(
 ): WslCliRegistrationRegistryState {
   const registered = new Set(state.registeredDistros.map(normalizeWslDistroKey))
   const entries = Object.entries(state.inspectionTimes)
+
   const inspectionTimes =
     entries.length <= MAX_INSPECTION_ENTRIES
       ? state.inspectionTimes
@@ -172,9 +189,11 @@ function capInspectionEntries(
             .sort((a, b) => b[1] - a[1])
             .filter((entry, index) => index < MAX_INSPECTION_ENTRIES || registered.has(entry[0]))
         )
+
   const reconciliations = Object.fromEntries(
     Object.entries(state.reconciliations).filter(([key]) => registered.has(key))
   )
+
   return { ...state, inspectionTimes, reconciliations }
 }
 
@@ -198,12 +217,16 @@ export async function getWslCliRegistrationCandidates(
   const state = await readState(userDataPath)
   const registered = new Set(state.registeredDistros.map(normalizeWslDistroKey))
   const now = timing.now ?? Date.now()
+
   const negativeInspectionTtlMs =
     timing.negativeInspectionTtlMs ?? DEFAULT_NEGATIVE_INSPECTION_TTL_MS
+
   return uniqueDistros(availableDistros).filter((distro) => {
     const key = normalizeWslDistroKey(distro)
+
     if (registered.has(key)) {
       const reconciliation = state.reconciliations[key]
+
       return !(
         reconciliation &&
         timing.currentTarget &&
@@ -211,7 +234,9 @@ export async function getWslCliRegistrationCandidates(
         reconciliation.appVersion === (timing.appVersion ?? '')
       )
     }
+
     const inspectedAt = state.inspectionTimes[key]
+
     return (
       inspectedAt === undefined || inspectedAt > now || now - inspectedAt >= negativeInspectionTtlMs
     )
@@ -226,22 +251,27 @@ export function recordWslCliRegistrationObservations(
   const effective = observations.filter(
     (observation) => observation.inspected && observation.distro.trim()
   )
+
   if (effective.length === 0) {
     return Promise.resolve()
   }
+
   return updateState(userDataPath, (state) => {
     let registeredDistros = state.registeredDistros
     let inspectionTimes = state.inspectionTimes
     let reconciliations = state.reconciliations
     const now = timing.now ?? Date.now()
+
     for (const observation of effective) {
       const key = normalizeWslDistroKey(observation.distro)
       inspectionTimes = { ...inspectionTimes, [key]: now }
+
       if (observation.managed === true) {
         registeredDistros = upsertDistro(registeredDistros, observation.distro)
       } else if (observation.managed === false) {
         registeredDistros = removeDistro(registeredDistros, observation.distro)
       }
+
       if (observation.reconciled !== undefined) {
         if (observation.reconciled === null) {
           const { [key]: _removed, ...rest } = reconciliations
@@ -251,6 +281,7 @@ export function recordWslCliRegistrationObservations(
         }
       }
     }
+
     return {
       schemaVersion: REGISTRY_SCHEMA_VERSION,
       registeredDistros,

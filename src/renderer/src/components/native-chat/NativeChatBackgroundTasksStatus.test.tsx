@@ -22,6 +22,7 @@ function DisclosureHost(
   >
 ): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
+
   return (
     <NativeChatBackgroundTasksStatus
       {...props}
@@ -54,6 +55,7 @@ function renderStrip(props: { supportsTaskStop: boolean; supportsStopAll: boolea
     />
   )
   fireEvent.click(screen.getByRole('button', { expanded: false }))
+
   return { onStop }
 }
 
@@ -121,6 +123,7 @@ describe('background-tasks strip header', () => {
         onStop={() => {}}
       />
     )
+
     return screen.getByRole('button', { expanded: false })
   }
 
@@ -131,12 +134,14 @@ describe('background-tasks strip header', () => {
       { id: 'a3', kind: 'agent' },
       { id: 'm1', kind: 'monitor' }
     ])
+
     expect(header).toHaveAttribute('aria-label', '3 agents · 1 monitor')
     expect(header.querySelector('.lucide-bot')).toBeInTheDocument()
     // Heartbeat, the same glyph the agent sidebar shows for monitoring.
     expect(header.querySelector('.lucide-activity')).toBeInTheDocument()
     // Two kind icons and the chevron: the aggregate state dot is gone.
     expect(header.querySelectorAll('svg')).toHaveLength(3)
+
     for (const icon of header.querySelectorAll('svg')) {
       expect(icon).toHaveAttribute('aria-hidden', 'true')
     }
@@ -147,6 +152,7 @@ describe('background-tasks strip header', () => {
       { id: 'a1', kind: 'agent' },
       { id: 'm1', kind: 'monitor' }
     ])
+
     // Same glyph AND same colour as AgentStateDot/StatusIndicator, or a monitor
     // here does not read as the monitor there.
     expect(header.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500')
@@ -177,6 +183,7 @@ describe('background-tasks strip header', () => {
       { id: 'm1', kind: 'monitor', description: 'watcher' },
       { id: 'c1', kind: 'command', description: 'sleep 90' }
     ])
+
     fireEvent.click(header)
     // Each kind group is its own labelled list, so scope to the monitor one.
     const monitors = screen.getByRole('list', { name: 'Monitors' })
@@ -192,9 +199,11 @@ describe('background-tasks strip header', () => {
       { id: 'a1', kind: 'agent' },
       { id: 'c1', kind: 'command' }
     ])
+
     const separators = [...header.querySelectorAll('span')].filter(
       (element) => element.textContent === ' · '
     )
+
     expect(separators).toHaveLength(1)
     // `--border` is a divider line (7% white in dark), an order of magnitude
     // fainter than the counts it sits between.
@@ -211,6 +220,7 @@ describe('background-tasks strip header', () => {
       { id: 'm1', kind: 'monitor' },
       { id: 'w1', kind: 'workflow' }
     ])
+
     expect(header).toHaveAttribute('aria-label', '4 background tasks')
     expect(header.querySelectorAll('svg')).toHaveLength(1)
   })
@@ -278,6 +288,7 @@ describe('background-task row reasons', () => {
       />
     )
     fireEvent.click(screen.getByRole('button', { expanded: false }))
+
     return screen.getAllByRole('listitem')
   }
 
@@ -290,6 +301,7 @@ describe('background-task row reasons', () => {
       { id: 'a3', kind: 'agent', description: 'approval child', state: 'waiting' },
       { id: 'a4', kind: 'agent', description: 'busy child', state: 'working' }
     ])
+
     expect(rows).toHaveLength(4)
     expect(rows[0].textContent).toContain('ssh child · no contact')
     expect(rows[1].textContent).toContain('flaky child · failed')
@@ -303,6 +315,7 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
   vi.useFakeTimers()
   vi.setSystemTime(100_000)
   const committed = vi.fn()
+
   const view = (isVisible: boolean) => (
     <Profiler id="strip" onRender={committed}>
       <NativeChatBackgroundTasksStatus
@@ -320,6 +333,7 @@ it('stops elapsed renders in a hidden pane and catches up on reveal', () => {
       />
     </Profiler>
   )
+
   const { rerender, unmount } = render(view(true))
   committed.mockClear()
   act(() => vi.advanceTimersByTime(1_000))

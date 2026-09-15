@@ -11,6 +11,7 @@ export class PaneIdentityRegistry {
     if (leafIdHint && isTerminalLeafId(leafIdHint) && !this.numericIdByLeafId.has(leafIdHint)) {
       return leafIdHint
     }
+
     return this.mintUnclaimedLeafId()
   }
 
@@ -21,9 +22,11 @@ export class PaneIdentityRegistry {
 
   release(numericPaneId: number): void {
     const leafId = this.leafIdByNumericId.get(numericPaneId)
+
     if (leafId) {
       this.numericIdByLeafId.delete(leafId)
     }
+
     this.leafIdByNumericId.delete(numericPaneId)
     this.publishedPaneIds.delete(numericPaneId)
   }
@@ -40,6 +43,7 @@ export class PaneIdentityRegistry {
     if (!isTerminalLeafId(leafId)) {
       return null
     }
+
     return this.numericIdByLeafId.get(leafId) ?? null
   }
 
@@ -51,15 +55,19 @@ export class PaneIdentityRegistry {
     if (!isTerminalLeafId(leafId) || this.publishedPaneIds.has(numericPaneId)) {
       return false
     }
+
     const existingOwner = this.numericIdByLeafId.get(leafId)
+
     if (existingOwner !== undefined && existingOwner !== numericPaneId) {
       return false
     }
+
     this.numericIdByLeafId.delete(pane.leafId)
     this.register(numericPaneId, leafId)
     pane.leafId = leafId
     pane.stablePaneId = leafId
     pane.container.dataset.leafId = leafId
+
     return true
   }
 
@@ -71,9 +79,11 @@ export class PaneIdentityRegistry {
 
   private mintUnclaimedLeafId(): TerminalLeafId {
     let leafId: TerminalLeafId
+
     do {
       leafId = mintStablePaneId()
     } while (this.numericIdByLeafId.has(leafId))
+
     return leafId
   }
 }

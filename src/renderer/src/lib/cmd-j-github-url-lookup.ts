@@ -12,6 +12,7 @@ export async function lookupCmdJGitHubUrlWorkItem(args: {
   if (!args.repo) {
     return null
   }
+
   try {
     return await lookupGitHubWorkItemByOwnerRepoForSource({
       repoPath: args.repo.path,

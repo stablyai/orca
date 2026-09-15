@@ -35,12 +35,15 @@ export async function getTerminalAgentSendReadiness(
       { terminal: terminalHandle },
       { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
     )
+
     if (!agentStatus.isRunningAgent) {
       return { status: 'no-agent', supportsGuardedSend: true }
     }
+
     if (agentStatus.status === 'permission') {
       return { status: 'permission', supportsGuardedSend: true }
     }
+
     return { status: 'sendable', supportsGuardedSend: true }
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
@@ -49,10 +52,12 @@ export async function getTerminalAgentSendReadiness(
         // an older remote runtime cannot rule out permission/action prompts.
         return { status: 'status-unavailable', supportsGuardedSend: false }
       }
+
       // Why: active-focused sends still wait for tui-idle, preserving old
       // runtime compatibility without immediate selected-target risk.
       return await getLegacyTerminalAgentSendStatus(runtimeTarget, terminalHandle)
     }
+
     if (isRuntimeTerminalUnavailable(error)) {
       return {
         status: 'no-active-terminal',
@@ -60,6 +65,7 @@ export async function getTerminalAgentSendReadiness(
         code: runtimeTerminalUnavailableCode(error)
       }
     }
+
     throw error
   }
 }
@@ -75,6 +81,7 @@ async function getLegacyTerminalAgentSendStatus(
       { terminal: terminalHandle },
       { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
     )
+
     return {
       status: isRunningAgent ? 'sendable' : 'no-agent',
       supportsGuardedSend: false
@@ -87,6 +94,7 @@ async function getLegacyTerminalAgentSendStatus(
         code: runtimeTerminalUnavailableCode(error)
       }
     }
+
     throw error
   }
 }
@@ -99,7 +107,9 @@ export function isRuntimeTimeout(error: unknown): boolean {
   if (hasRuntimeRpcErrorCode(error, 'runtime_timeout')) {
     return true
   }
+
   const message = error instanceof Error ? error.message : String(error)
+
   return message.includes('timeout')
 }
 

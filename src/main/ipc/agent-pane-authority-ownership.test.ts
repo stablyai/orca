@@ -14,6 +14,7 @@ describe('agent pane authority ownership', () => {
 
   it('matches scoped and legacy runtime IDs to the authoritative terminal handle', () => {
     const getRuntimeTerminalHandleForPaneKey = vi.fn(() => 'terminal:one')
+
     const ownsPty = createAgentPaneAuthorityOwnership({
       getRuntimeTerminalHandleForPaneKey
     })

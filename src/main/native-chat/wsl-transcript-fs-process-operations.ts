@@ -28,6 +28,7 @@ export class WslTranscriptFsProcessOperations {
     switch (request.operation) {
       case 'access':
         await access(request.path)
+
         return true
       case 'stat':
         return stat(request.path)
@@ -41,21 +42,28 @@ export class WslTranscriptFsProcessOperations {
         const handle = await open(request.path, 'r')
         const handleId = this.nextHandleId++
         this.handles.set(handleId, handle)
+
         return handleId
       }
+
       case 'read': {
         const handle = this.handles.get(request.handleId)
+
         if (!handle) {
           throw invalidTranscriptHandleError()
         }
+
         const buffer = Buffer.allocUnsafe(request.length)
         const { bytesRead } = await handle.read(buffer, 0, request.length, request.position)
+
         return buffer.subarray(0, bytesRead)
       }
+
       case 'close': {
         const handle = this.handles.get(request.handleId)
         this.handles.delete(request.handleId)
         await handle?.close()
+
         return true
       }
     }

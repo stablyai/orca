@@ -64,15 +64,18 @@ export async function evictHeldStructuredAgentSession(
   sessionId: string
 ): Promise<void> {
   const session = context.sessions.get(sessionId)
+
   if (!session) {
     return
   }
+
   // The obligation OUTLIVES the child. `hasProviderChild` is retired the instant the adapter
   // proves the exit, so a step that aborts after that point would otherwise leave the retry
   // reading "no child here" and skipping the settlement and the lease release it still owes.
   const owesWindDown = owesProviderChildWindDown(session)
   session.owesProviderChildWindDown = owesWindDown
   let settlementError: unknown
+
   const eviction: StructuredAgentSessionEvictionContext = {
     sessionId,
     // The retry must not re-stop a child the adapter already proved gone, so this stays honest.
@@ -103,6 +106,7 @@ export async function evictHeldStructuredAgentSession(
           context.deps.onEventSinkError?.({ sessionId: id, error })
         }
       })
+
       if (!settled) {
         // Without the cause the quit log names the step and nothing else.
         throw new Error('dead generation work settlement failed', { cause: settlementError })
@@ -120,6 +124,7 @@ export async function evictHeldStructuredAgentSession(
       context.forgetStatus(sessionId)
     }
   }
+
   await evictStructuredAgentSession(
     eviction,
     withStructuredAgentSessionEvictionDeadline(STRUCTURED_AGENT_SESSION_EVICTION_STEPS)
@@ -136,12 +141,14 @@ export async function evictOwnedStructuredAgentSessions(
   const ownedSessionIds = [...context.sessions]
     .filter(([, session]) => owesProviderChildWindDown(session))
     .map(([sessionId]) => sessionId)
+
   // Retained up front and cleared only once an eviction settles: the quit phase is bounded, and a
   // timeout leaves these still running. Closing their journals underneath them is the one outcome
   // the retain set exists to prevent.
   for (const sessionId of ownedSessionIds) {
     retainOnFailure.add(sessionId)
   }
+
   const failures: unknown[] = []
   await Promise.all(
     ownedSessionIds.map(async (sessionId) => {
@@ -153,6 +160,7 @@ export async function evictOwnedStructuredAgentSessions(
       }
     })
   )
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'structured agent-session child eviction failed')
   }
@@ -167,9 +175,11 @@ export async function resumeStructuredAgentSessionForHold(
   attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
 ): Promise<void> {
   const unreconciled = await context.reconcileLeases(sessionId)
+
   if (unreconciled) {
     throw new Error(unreconciled.code)
   }
+
   await context.runtimeState.resolveRecovery(sessionId)
   await resumeHeldStructuredAgentSession({
     sessionId,
@@ -198,6 +208,7 @@ export function createStructuredAgentSessionHolds(
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
     isTurnActive: (sessionId) => {
       const session = context.sessions.get(sessionId)
+
       return session
         ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null
         : false

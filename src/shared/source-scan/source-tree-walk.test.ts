@@ -15,6 +15,7 @@ import { directoryEntryNeedsStat, scanSourceTree } from './source-tree-scan'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
+
   return {
     ...actual,
     readdirSync: vi.fn(actual.readdirSync),
@@ -68,6 +69,7 @@ describe('scanSourceTree filesystem traversal', () => {
       mkdirSync(join(root, directory))
       file(join(directory, 'hidden.ts'))
     }
+
     file('.hidden.ts')
     file('sample.test.ts')
     file('sample.spec.tsx')
@@ -107,7 +109,6 @@ describe('scanSourceTree filesystem traversal', () => {
     ])
     expect(statSync).toHaveBeenCalledExactlyOnceWith(join(root, 'alias'))
   })
-
 
   it('still reports a broken link instead of silently dropping it', () => {
     const target = join(root, '.target')

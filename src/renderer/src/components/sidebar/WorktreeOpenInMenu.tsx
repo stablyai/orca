@@ -57,6 +57,7 @@ export function getOpenInEntryAvailability(
 ): { disabled: boolean; metadata?: string } {
   if (entry.target === 'file-manager') {
     const disabled = isLocalPathOpenBlocked(settings, { connectionId })
+
     return disabled
       ? {
           disabled: true,
@@ -64,16 +65,19 @@ export function getOpenInEntryAvailability(
         }
       : { disabled: false }
   }
+
   const capability = getExternalEditorOpenCapability(settings, {
     connectionId,
     command: entry.command
   })
+
   if (!capability.allowed) {
     return {
       disabled: true,
       metadata: translate('auto.components.sidebar.WorktreeOpenInMenu.localOnly', 'Local only')
     }
   }
+
   return capability.remote
     ? {
         disabled: false,
@@ -99,8 +103,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   if (result.reason === 'ssh-target-not-found') {
     toast.error(
       translate(
@@ -114,8 +120,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   if (result.reason === 'ssh-target-invalid') {
     toast.error(
       translate(
@@ -129,8 +137,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   if (result.reason === 'ssh-alias-required') {
     toast.error(
       translate(
@@ -145,8 +155,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   if (result.reason === 'remote-editor-unsupported') {
     toast.error(
       translate(
@@ -160,8 +172,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   if (result.reason === 'not-absolute') {
     toast.error(
       remote
@@ -182,8 +196,10 @@ function showOpenFailureToast(
           }
         : undefined
     )
+
     return
   }
+
   if (result.reason === 'not-found') {
     toast.error(
       translate(
@@ -197,8 +213,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   if (remote) {
     toast.error(
       translate(
@@ -212,8 +230,10 @@ function showOpenFailureToast(
         )
       }
     )
+
     return
   }
+
   toast.error(
     translate(
       'auto.components.sidebar.WorktreeOpenInMenu.9a5381eb09',
@@ -249,9 +269,11 @@ export async function openWorktreePath(args: {
   command?: string
 }): Promise<void> {
   const settings = useAppStore.getState().settings
+
   if (args.target === 'file-manager') {
     if (isLocalPathOpenBlocked(settings, { connectionId: args.connectionId ?? null })) {
       showLocalPathOpenBlockedToast()
+
       return
     }
   } else {
@@ -259,12 +281,14 @@ export async function openWorktreePath(args: {
       connectionId: args.connectionId,
       command: args.command
     })
+
     if (!capability.allowed) {
       if (capability.reason === 'remote-runtime') {
         showOpenFailureToast({ ok: false, reason: 'remote-runtime-unsupported' }, false)
       } else {
         showOpenFailureToast({ ok: false, reason: 'remote-editor-unsupported' }, true)
       }
+
       return
     }
   }
@@ -277,6 +301,7 @@ export async function openWorktreePath(args: {
           command: args.command,
           connectionId: args.connectionId
         })
+
   if (!result.ok) {
     showOpenFailureToast(result, Boolean(args.connectionId?.trim()))
   }
@@ -304,9 +329,11 @@ export function WorktreeOpenInMenuItems({
   labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
+
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
+
   const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
   const entries = getWorktreeOpenInEntries(openInApplications, fileManagerLabel)
@@ -315,6 +342,7 @@ export function WorktreeOpenInMenuItems({
     <>
       {entries.map((entry) => {
         const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+
         return (
           <DropdownMenuItem
             key={entry.id}

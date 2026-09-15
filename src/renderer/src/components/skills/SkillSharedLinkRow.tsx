@@ -23,6 +23,7 @@ const createdFormatter = new Intl.DateTimeFormat(undefined, {
 
 function createdLabel(createdAt: string): string {
   const parsed = new Date(createdAt)
+
   return Number.isNaN(parsed.getTime())
     ? translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
     : createdFormatter.format(parsed)
@@ -42,13 +43,17 @@ function useShareContents(share: SkillCloudOwnedShare): {
     if (names || failed) {
       return
     }
+
     void (async () => {
       try {
         const operation = await window.api.skills.getPackage(share.packageId)
+
         if (operation.status !== 'ok') {
           setFailed(true)
+
           return
         }
+
         const version = operation.value.versions.at(0)
         setNames(
           version && isSkillBundleVersion(version)
@@ -81,8 +86,10 @@ export function SkillSharedLinkRow({
 
   const deletePackage = async (): Promise<void> => {
     setDeleting(true)
+
     try {
       const operation = await window.api.skills.deletePackage(share.packageId)
+
       if (operation.status !== 'ok') {
         toast.error(
           translate(
@@ -90,8 +97,10 @@ export function SkillSharedLinkRow({
             'Orca could not delete this from the Cloud.'
           )
         )
+
         return
       }
+
       toast.success(
         translate('auto.components.skills.SkillSharedLinkRow.deleted', 'Deleted from the Cloud')
       )

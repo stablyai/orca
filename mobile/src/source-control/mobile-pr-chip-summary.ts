@@ -49,12 +49,15 @@ export function countUnresolvedReviewThreads(
   if (!comments) {
     return null
   }
+
   const unresolved = new Set<string>()
+
   for (const comment of comments) {
     if (comment.threadId && comment.isResolved !== true) {
       unresolved.add(comment.threadId)
     }
   }
+
   return unresolved.size
 }
 
@@ -73,6 +76,7 @@ export function buildMobilePrChipSummary(
       return { kind: 'unavailable', message: state.message }
     case 'ready': {
       const badge = prStateBadge(state.data.pr.state)
+
       return {
         kind: 'ready',
         number: state.data.pr.number,
@@ -90,17 +94,22 @@ function buildChipRollup(state: Extract<PrSidebarState, { kind: 'ready' }>): Mob
   if (state.data.pr.mergeable === 'CONFLICTING') {
     return { kind: 'conflict', text: 'Conflicts', token: 'statusAmber' }
   }
+
   // Shared classifier so the chip, the Checks list and the tasks grid never disagree about the same PR.
   const checks = summarizeProviderChecks(state.data.checks)
+
   if (checks.failed > 0) {
     return { kind: 'failing', text: `${checks.failed} failing`, token: 'statusRed' }
   }
+
   if (checks.pending > 0) {
     return { kind: 'running', text: `${checks.pending} running`, token: 'statusAmber' }
   }
+
   if (checks.passed > 0) {
     return { kind: 'passed', text: `${checks.passed}/${checks.total}`, token: 'statusGreen' }
   }
+
   // Checks that exist but resolved to nothing actionable are not "no checks".
   return {
     kind: 'none',

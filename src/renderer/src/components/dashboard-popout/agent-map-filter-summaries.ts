@@ -18,9 +18,11 @@ export function summarizeSelection<T>(
   if (selected.size >= total) {
     return { text: all(), active: false }
   }
+
   if (selected.size === 1) {
     return { text: label([...selected][0]), active: true }
   }
+
   return {
     text: translate('dashboardPopout.map.filters.summaryCount', '{{shown}} of {{total}}', {
       shown: selected.size,
@@ -35,16 +37,20 @@ export function summarizeTimeRanges(
   label: (field: keyof AgentMapTimeRanges) => string
 ): AgentMapSectionSummary {
   const active = activeAgentMapTimeFields(ranges)
+
   if (active.length === 0) {
     return { text: translate('dashboardPopout.map.filters.timeAny', 'any'), active: false }
   }
+
   if (active.length === 1) {
     const range = ranges[active[0]]
+
     return {
       text: `${label(active[0])}: ${agentMapTimeStopLabel(range.min)}–${agentMapTimeStopLabel(range.max)}`,
       active: true
     }
   }
+
   return {
     text: translate('dashboardPopout.map.filters.timeRangeCount', '{{count}} ranges', {
       count: active.length

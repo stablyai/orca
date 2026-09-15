@@ -11,6 +11,7 @@ function createTimerRef(): MobileTaskCopyFeedbackTimerRef {
 
 function createCopiedKeyState(initial: string | null) {
   let value = initial
+
   return {
     get value() {
       return value

@@ -16,6 +16,7 @@ function presence(isLiveStructuredAgent: (handle: string) => boolean) {
     // used to swallow the question into `false`.
     throw new Error('terminal_handle_stale')
   })
+
   return {
     getLiveLeaf,
     presence: new RuntimeTerminalAgentPresence({

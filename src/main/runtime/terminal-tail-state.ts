@@ -8,8 +8,10 @@ import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
 export function buildPreview(lines: string[], partialLine: string): string {
   const previewLines: string[] = []
+
   const collectVisibleLine = (line: string): void => {
     const trimmed = line.trim()
+
     if (trimmed.length > 0) {
       previewLines.push(trimmed)
     }
@@ -18,6 +20,7 @@ export function buildPreview(lines: string[], partialLine: string): string {
   if (partialLine.length > 0) {
     collectVisibleLine(partialLine)
   }
+
   for (
     let index = lines.length - 1;
     index >= 0 && previewLines.length < MAX_PREVIEW_LINES;
@@ -25,9 +28,11 @@ export function buildPreview(lines: string[], partialLine: string): string {
   ) {
     collectVisibleLine(lines[index])
   }
+
   previewLines.reverse()
 
   const preview = previewLines.join('\n')
+
   return preview.length > MAX_PREVIEW_CHARS
     ? preview.slice(preview.length - MAX_PREVIEW_CHARS)
     : preview
@@ -46,15 +51,18 @@ export function appendCompletedTerminalTranscript(
   const omittedNewLineCount = Math.max(0, newCompleteLineCount - newlyCompletedLines.length)
   const lines = omittedNewLineCount > 0 ? [] : [...previousLines]
   let characters = omittedNewLineCount > 0 ? 0 : previousCharacters
+
   for (const line of newlyCompletedLines) {
     lines.push(line)
     characters += line.length
   }
 
   let dropCount = Math.max(0, lines.length - MAX_TAIL_LINES)
+
   for (let index = 0; index < dropCount; index += 1) {
     characters -= lines[index]!.length
   }
+
   while (dropCount < lines.length && characters > MAX_TAIL_CHARS) {
     characters -= lines[dropCount]!.length
     dropCount += 1
@@ -96,14 +104,17 @@ export function tailStateMatches(
   ) {
     return false
   }
+
   if (lines === snapshot.lines) {
     return true
   }
+
   for (let index = 0; index < lines.length; index++) {
     if (lines[index] !== snapshot.lines[index]) {
       return false
     }
   }
+
   if (transcriptLines !== snapshot.transcriptLines) {
     for (let index = 0; index < transcriptLines.length; index++) {
       if (transcriptLines[index] !== snapshot.transcriptLines[index]) {
@@ -111,6 +122,7 @@ export function tailStateMatches(
       }
     }
   }
+
   return true
 }
 
@@ -121,9 +133,11 @@ function tailRedrawCursorsMatch(
   if (left === right) {
     return true
   }
+
   if (!left || !right) {
     return false
   }
+
   return left.rowFromEnd === right.rowFromEnd && left.column === right.column
 }
 

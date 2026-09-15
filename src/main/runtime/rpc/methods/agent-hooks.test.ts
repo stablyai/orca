@@ -10,6 +10,7 @@ const { installForRuntimeHomeSerializedMock, realpathMock } = vi.hoisted(() => (
 vi.mock('../../../codex/hook-service', () => ({
   codexHookService: { installForRuntimeHomeSerialized: installForRuntimeHomeSerializedMock }
 }))
+
 vi.mock('node:fs/promises', () => ({ realpath: realpathMock }))
 
 import { AGENT_HOOK_METHODS } from './agent-hooks'
@@ -19,6 +20,7 @@ import {
 } from '../../../codex/managed-wsl-codex-home-registry'
 
 const LINUX_HOME = '/home/jin/.local/share/orca/codex-runtime-home/home'
+
 const RUNTIME_HOME =
   '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
 
@@ -26,9 +28,11 @@ function prepareMethod() {
   const method = eraseRpcMethods(AGENT_HOOK_METHODS).find(
     (candidate) => candidate.name === 'agentHooks.prepareCodexForWslPane'
   )
+
   if (!method || isStreamingMethod(method)) {
     throw new Error('Missing agentHooks.prepareCodexForWslPane request method')
   }
+
   return method
 }
 
@@ -54,6 +58,7 @@ describe('agent hook RPC methods', () => {
     const status = { agent: 'codex', state: 'installed' }
     installForRuntimeHomeSerializedMock.mockResolvedValue(status)
     const method = prepareMethod()
+
     const params = method.params!.parse({
       codexHome: LINUX_HOME,
       orcaCodexHome: LINUX_HOME,
@@ -72,6 +77,7 @@ describe('agent hook RPC methods', () => {
     [true, ['codex']]
   ])('does not install when hooks are disabled (%s, %j)', async (enabled, disabledTuiAgents) => {
     const method = prepareMethod()
+
     const params = method.params!.parse({
       codexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
       orcaCodexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
@@ -86,6 +92,7 @@ describe('agent hook RPC methods', () => {
 
   it.each(['runtime', 'mobile'] as const)('rejects non-local %s callers', async (clientKind) => {
     const method = prepareMethod()
+
     const params = method.params!.parse({
       codexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
       orcaCodexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
@@ -104,6 +111,7 @@ describe('agent hook RPC methods', () => {
   it('propagates an attempted installer failure', async () => {
     installForRuntimeHomeSerializedMock.mockRejectedValue(new Error('install failed'))
     const method = prepareMethod()
+
     const params = method.params!.parse({
       codexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
       orcaCodexHome: '/home/jin/.local/share/orca/codex-runtime-home/home',
@@ -121,6 +129,7 @@ describe('agent hook RPC methods', () => {
       '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\outside-managed-home'
     )
     const method = prepareMethod()
+
     const params = method.params!.parse({
       codexHome: LINUX_HOME,
       orcaCodexHome: LINUX_HOME,

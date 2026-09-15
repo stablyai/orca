@@ -9,12 +9,15 @@ import { join } from 'node:path'
 
 function initFixtureGitRepo(repoDir) {
   mkdirSync(repoDir, { recursive: true })
+
   if (!existsSync(join(repoDir, '.git'))) {
     const init = spawnSync('git', ['init', repoDir], { stdio: 'ignore' })
+
     if (init.status !== 0) {
       throw new Error(`Failed to create git repo fixture at ${repoDir}`)
     }
   }
+
   return realpathSync(repoDir)
 }
 
@@ -25,8 +28,10 @@ function initFixtureGitRepo(repoDir) {
  */
 function buildGithubRepoFixtures(fixtureDir, githubRepos) {
   const repos = []
+
   for (let i = 0; i < githubRepos; i++) {
     const repoPath = initFixtureGitRepo(join(fixtureDir, `bench-gh-repo-${i}`))
+
     const remote = spawnSync(
       'git',
       [
@@ -39,10 +44,12 @@ function buildGithubRepoFixtures(fixtureDir, githubRepos) {
       ],
       { stdio: 'ignore' }
     )
+
     // Exit 3 (remote exists) is fine on fixture reuse; anything else is not.
     if (remote.status !== 0 && remote.status !== 3) {
       throw new Error(`Failed to add GitHub remote to ${repoPath}`)
     }
+
     repos.push({
       id: `bench-gh-repo-${i}`,
       path: repoPath,
@@ -52,6 +59,7 @@ function buildGithubRepoFixtures(fixtureDir, githubRepos) {
       externalWorktreeVisibility: 'show'
     })
   }
+
   return repos
 }
 
@@ -62,6 +70,7 @@ function buildGithubRepoFixtures(fixtureDir, githubRepos) {
  */
 function buildUnreachableSshTargets(count) {
   const targets = []
+
   for (let i = 0; i < count; i++) {
     targets.push({
       id: `bench-ssh-unreachable-${i}`,
@@ -73,6 +82,7 @@ function buildUnreachableSshTargets(count) {
       lastRequiredPassphrase: false
     })
   }
+
   return targets
 }
 
@@ -81,20 +91,24 @@ export function writePersistedStateFixture(
   { stateProfile, sessionTabs, githubRepos, sshUnreachableTargets = 0 }
 ) {
   const dataPath = join(fixtureDir, 'orca-data.json')
+
   if (stateProfile === 'none' && githubRepos === 0 && sshUnreachableTargets === 0) {
     try {
       unlinkSync(dataPath)
     } catch {
       // no persisted state fixture
     }
+
     return 0
   }
+
   if (!['none', 'restored-local-tabs'].includes(stateProfile)) {
     throw new Error(`Unknown state profile: ${stateProfile}`)
   }
 
   const githubRepoEntries = buildGithubRepoFixtures(fixtureDir, githubRepos)
   const sshTargets = buildUnreachableSshTargets(sshUnreachableTargets)
+
   if (stateProfile === 'none') {
     const state = {
       schemaVersion: 1,
@@ -108,8 +122,10 @@ export function writePersistedStateFixture(
         }
       }
     }
+
     const json = JSON.stringify(state, null, 2)
     writeFileSync(dataPath, json, 'utf-8')
+
     return Buffer.byteLength(json)
   }
 
@@ -120,6 +136,7 @@ export function writePersistedStateFixture(
   const tabs = []
   const terminalLayoutsByTabId = {}
   const activeTabIdByWorktree = {}
+
   for (let i = 0; i < tabCount; i++) {
     const tabId = `bench-tab-${String(i).padStart(5, '0')}`
     const ptyId = `bench-pty-${String(i).padStart(5, '0')}`
@@ -139,7 +156,9 @@ export function writePersistedStateFixture(
       expandedLeafId: null
     }
   }
+
   activeTabIdByWorktree[worktreeId] = tabs[0]?.id ?? null
+
   const state = {
     schemaVersion: 1,
     repos: [
@@ -184,10 +203,13 @@ export function writePersistedStateFixture(
         : {})
     }
   }
+
   if (sshTargets.length > 0) {
     state.sshTargets = sshTargets
   }
+
   const json = JSON.stringify(state, null, 2)
   writeFileSync(dataPath, json, 'utf-8')
+
   return Buffer.byteLength(json)
 }

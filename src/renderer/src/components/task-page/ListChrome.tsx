@@ -4,12 +4,14 @@ import { TaskPageSourceBar } from './SourceBar'
 import { AlertCircle } from 'lucide-react'
 import { TaskPageGitHubModeControls } from './github/ModeControls'
 import { TaskPageProviderFilters } from './ProviderFilters'
+
 export function TaskPageListChrome({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const { taskSourceAvailabilityNotice, taskPageListChromeHidden } = model
+
   return (
     <div className={cn('flex-none flex flex-col gap-2', taskPageListChromeHidden && 'hidden')}>
       <section className="flex flex-col gap-2">

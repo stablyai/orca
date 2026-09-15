@@ -140,12 +140,14 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const repos = new RepoLifecycleOperations(runtime, scheduling)
   const bindingRecovery = new TerminalBindingRecoveryOperations(runtime)
   const sessions = new SessionHostPartitionOperations(runtime, scheduling, bindingRecovery)
+
   const sessionSnapshots = new SessionSnapshotOperations(
     runtime,
     sessions,
     bindingRecovery,
     scheduling
   )
+
   const metadata = new MetadataLineageOperations(runtime, scheduling, sessions)
   const projects = new ProjectCollectionOperations(runtime, repos, scheduling, metadata)
   const automations = new AutomationPersistence(runtime, flushBarriers, preferences)
@@ -154,12 +156,14 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
   const sshProfiles = new SshProfileOperations(runtime, scheduling, flushBarriers, repos)
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
+
   const sshLeases = new SshLeaseRecoveryOperations(
     runtime,
     flushBarriers,
     bindingRecovery,
     scheduling
   )
+
   return {
     adaptation,
     backups,

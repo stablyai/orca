@@ -5,6 +5,7 @@ export function sanitizeWebRuntimeWorkspaceSession(
   session: WorkspaceSessionState
 ): WorkspaceSessionState {
   const defaults = getDefaultWorkspaceSession()
+
   return {
     ...defaults,
     // Why: paired web clients get live tabs from the host runtime. Persisting

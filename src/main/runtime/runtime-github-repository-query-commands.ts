@@ -31,6 +31,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     noCache?: boolean
   ): Promise<ListWorkItemsResult<MainWorkItem>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return listWorkItems(
       repo.path,
       limit,
@@ -48,6 +49,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     limit?: number
   ): Promise<Awaited<ReturnType<typeof listIssues>>['items']> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     const result = await listIssues(
       repo.path,
       limit,
@@ -55,6 +57,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
       repo.connectionId ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
+
     return result.items
   }
 
@@ -64,6 +67,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getWorkItem(
       repo.path,
       number,
@@ -81,6 +85,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     type: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getWorkItemByOwnerRepo(
       repo.path,
       ownerRepo,
@@ -97,6 +102,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getWorkItemDetails(
       repo.path,
       number,
@@ -109,6 +115,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
 
   async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return countWorkItems(
       repo.path,
       query,
@@ -120,6 +127,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
 
   async listRepoLabels(repoSelector: string): Promise<Awaited<ReturnType<typeof listLabels>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
@@ -132,6 +140,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     repoSelector: string
   ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,

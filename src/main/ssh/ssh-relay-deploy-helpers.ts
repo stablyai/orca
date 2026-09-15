@@ -5,11 +5,13 @@ import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 import { buildRelayHandshakeRefusalError } from './ssh-relay-handshake-mismatch'
 
 export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
+
 export { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 
 // ── Sentinel detection ────────────────────────────────────────────────
 
 const MAX_RELAY_STARTUP_BUFFER_BYTES = 64 * 1024
+
 const RELAY_SENTINEL_BUFFER = Buffer.from(RELAY_SENTINEL, 'utf-8')
 
 export function waitForSentinel(
@@ -54,33 +56,41 @@ export function waitForSentinel(
 
     const cancelTimers = (): void => {
       clearTimeout(timeout)
+
       if (timeoutGraceTimer) {
         clearTimeout(timeoutGraceTimer)
         timeoutGraceTimer = null
       }
     }
+
     const cleanupStartup = (): void => {
       cancelTimers()
       signal?.removeEventListener('abort', onAbort)
     }
+
     const rejectStartup = (err: Error): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanupStartup()
       reject(err)
     }
+
     const onAbort = (): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanupStartup()
       channel.close()
       reject(createSshOperationAbortError())
     }
+
     signal?.addEventListener('abort', onAbort, { once: true })
+
     if (signal?.aborted) {
       onAbort()
     }
@@ -93,6 +103,7 @@ export function waitForSentinel(
 
     channel.stderr.on('data', (data: Buffer) => {
       stderrOutput += data.toString('utf-8')
+
       if (stderrOutput.length > MAX_RELAY_STARTUP_BUFFER_BYTES) {
         stderrOutput = stderrOutput.slice(-MAX_RELAY_STARTUP_BUFFER_BYTES)
       }
@@ -105,7 +116,9 @@ export function waitForSentinel(
       if (closedAfterSentinel) {
         return
       }
+
       closedAfterSentinel = true
+
       for (const cb of closeCallbacks) {
         cb()
       }
@@ -114,8 +127,10 @@ export function waitForSentinel(
     const failOrClose = (err: Error): void => {
       if (!sentinelReceived) {
         rejectStartup(err)
+
         return
       }
+
       notifyClosed()
     }
 
@@ -144,21 +159,27 @@ export function waitForSentinel(
           // timeout because the timeout handler defers settling for a small
           // grace window so the close handler can deliver the exit code.
           const refusal = buildRelayHandshakeRefusalError(lastExitCode, stderrOutput)
+
           if (refusal) {
             rejectStartup(refusal)
+
             return
           }
+
           const timeoutSuffix = timeoutFired
             ? ` (after ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s sentinel timeout)`
             : ''
+
           rejectStartup(
             new Error(
               `Relay process exited before ready${timeoutSuffix}.${stderrOutput ? ` stderr: ${stderrOutput.trim()}` : ''}`
             )
           )
         }
+
         return
       }
+
       notifyClosed()
     })
 
@@ -180,6 +201,7 @@ export function waitForSentinel(
             cb(data)
           }
         }
+
         return
       }
 
@@ -187,17 +209,21 @@ export function waitForSentinel(
         0,
         MAX_RELAY_STARTUP_BUFFER_BYTES - bufferedStdout.length + RELAY_SENTINEL_BUFFER.length
       )
+
       const searchableData = data.subarray(0, searchableDataLength)
+
       // Why: search only far enough to accept a sentinel at the cap boundary;
       // bytes after the sentinel are framed relay data and may be large.
       const startupStdout =
         bufferedStdout.length === 0
           ? searchableData
           : Buffer.concat([bufferedStdout, searchableData])
+
       const sentinelIdx = startupStdout.indexOf(RELAY_SENTINEL_BUFFER)
 
       if (sentinelIdx > MAX_RELAY_STARTUP_BUFFER_BYTES) {
         failStartupOutputCap()
+
         return
       }
 
@@ -208,12 +234,14 @@ export function waitForSentinel(
 
         const afterSentinelOffset =
           sentinelIdx + RELAY_SENTINEL_BUFFER.length - bufferedStdout.length
+
         const afterSentinel = data.subarray(Math.max(0, afterSentinelOffset))
         bufferedStdout = Buffer.alloc(0)
 
         if (afterSentinel.length > 0) {
           pendingAfterSentinel = afterSentinel
         }
+
         const transport: MultiplexerTransport = {
           write: (buf: Buffer, onSettled) => {
             return channel.stdin.write(buf, (error?: Error | null) => {
@@ -223,10 +251,12 @@ export function waitForSentinel(
           supportsWriteSettlement: true,
           onDrain: (cb) => {
             channel.stdin.on('drain', cb)
+
             return () => channel.stdin.off('drain', cb)
           },
           onData: (cb) => {
             dataCallbacks.push(cb)
+
             // Why: deliver buffered post-sentinel data to the first
             // subscriber. This is the multiplexer constructor, which
             // registers onData synchronously — the data is guaranteed
@@ -239,6 +269,7 @@ export function waitForSentinel(
           },
           onClose: (cb) => {
             closeCallbacks.push(cb)
+
             if (closedAfterSentinel) {
               cb()
             }
@@ -251,11 +282,13 @@ export function waitForSentinel(
         }
 
         resolve(transport)
+
         return
       }
 
       if (bufferedStdout.length + data.length > MAX_RELAY_STARTUP_BUFFER_BYTES) {
         failStartupOutputCap()
+
         return
       }
 

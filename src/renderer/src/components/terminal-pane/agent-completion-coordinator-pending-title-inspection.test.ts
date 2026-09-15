@@ -13,9 +13,11 @@ function createRejectableDeferred<T>(): {
   reject: (reason?: unknown) => void
 } {
   let rejectDeferred!: (reason?: unknown) => void
+
   const promise = new Promise<T>((_resolve, reject) => {
     rejectDeferred = reject
   })
+
   return { promise, reject: rejectDeferred }
 }
 
@@ -24,6 +26,7 @@ describe('agent completion coordinator', () => {
 
   it('does not dispatch a cwd title after an explicit agent working title if the shell owns the pane', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -43,11 +46,14 @@ describe('agent completion coordinator', () => {
   it('does not validate a pending cwd title with an already in-flight inspection', async () => {
     const staleInspection = createDeferred<RuntimeTerminalProcessInspection>()
     const freshInspection = createDeferred<RuntimeTerminalProcessInspection>()
+
     const inspectProcess = vi
       .fn()
       .mockReturnValueOnce(staleInspection.promise)
       .mockReturnValueOnce(freshInspection.promise)
+
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -78,11 +84,14 @@ describe('agent completion coordinator', () => {
   it('does not validate a replaced pending title with an older pending-title inspection', async () => {
     const titleAInspection = createDeferred<RuntimeTerminalProcessInspection>()
     const titleBInspection = createDeferred<RuntimeTerminalProcessInspection>()
+
     const inspectProcess = vi
       .fn()
       .mockReturnValueOnce(titleAInspection.promise)
       .mockReturnValueOnce(titleBInspection.promise)
+
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -113,11 +122,14 @@ describe('agent completion coordinator', () => {
   it('does not drop a replaced pending title from an older non-agent inspection', async () => {
     const titleAInspection = createDeferred<RuntimeTerminalProcessInspection>()
     const titleBInspection = createDeferred<RuntimeTerminalProcessInspection>()
+
     const inspectProcess = vi
       .fn()
       .mockReturnValueOnce(titleAInspection.promise)
       .mockReturnValueOnce(titleBInspection.promise)
+
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -148,6 +160,7 @@ describe('agent completion coordinator', () => {
   it('does not dispatch a pending cwd title when process inspection fails', async () => {
     const inspection = createRejectableDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -168,6 +181,7 @@ describe('agent completion coordinator', () => {
   it('prefers a later explicit completion title over a pending cwd title', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -189,6 +203,7 @@ describe('agent completion coordinator', () => {
 
   it('still dispatches a generic completion title after process inspection confirms an agent', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -208,6 +223,7 @@ describe('agent completion coordinator', () => {
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'remote:terminal-1',

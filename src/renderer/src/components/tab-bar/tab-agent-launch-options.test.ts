@@ -27,6 +27,7 @@ describe('tab agent launch options', () => {
       ['claude', 'codex', 'openclaude'],
       ['openclaude']
     )
+
     expect(ordered).not.toContain('openclaude')
     expect(ordered).toEqual(['claude', 'codex'])
   })
@@ -35,6 +36,7 @@ describe('tab agent launch options', () => {
     const options = buildTabAgentLaunchOptions(
       orderTabLaunchAgents('codex', ['claude', 'codex', 'openclaude'], ['openclaude'])
     )
+
     expect(findMatchingTabAgentLaunchOptions('open', options).map((o) => o.agent)).toEqual([])
   })
 

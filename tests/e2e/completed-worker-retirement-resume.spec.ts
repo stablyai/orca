@@ -66,17 +66,22 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     const isolatedHome = await electronApp.evaluate(({ app }) => app.getPath('home'))
     const client = new RuntimeClient(userDataDir, 30_000, null, null)
     const coordinatorPane = await waitForActivePaneHookDescriptor(orcaPage)
+
     const coordinatorResolved = await client.call<{ terminal: { handle: string } }>(
       'terminal.resolvePane',
       { paneKey: coordinatorPane.paneKey }
     )
+
     const coordinatorHandle = coordinatorResolved.result.terminal.handle
+
     const coordinator = (await listRuntimeTerminals(client)).find(
       (terminal) => terminal.handle === coordinatorHandle
     )
+
     if (!coordinator) {
       throw new Error('Coordinator terminal was not runtime-visible')
     }
+
     const coordinatorBefore = terminalIdentity(coordinator)
 
     let targetWorktreeId: string | null = null
@@ -84,25 +89,31 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       .poll(
         async () => {
           const listed = await client.call<{ worktrees: { id: string }[] }>('worktree.list', {})
+
           const rendererWorktreeIds = await orcaPage.evaluate(() =>
             Object.values(window.__store?.getState().worktreesByRepo ?? {})
               .flat()
               .map((worktree) => worktree.id)
           )
+
           targetWorktreeId =
             listed.result.worktrees.find(
               (worktree) =>
                 worktree.id !== coordinatorWorktreeId && rendererWorktreeIds.includes(worktree.id)
             )?.id ?? null
+
           return targetWorktreeId
         },
         { timeout: 60_000, message: 'runtime never registered the secondary worktree' }
       )
       .not.toBeNull()
+
     if (!targetWorktreeId) {
       throw new Error('The seeded repository did not expose its secondary worktree')
     }
+
     const targetWorktreePath = splitWorktreeIdForFilesystem(targetWorktreeId)?.worktreePath
+
     if (!targetWorktreePath) {
       throw new Error('The secondary worktree did not expose a filesystem path')
     }
@@ -118,11 +129,13 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       objective: 'Retire one completed background worker',
       from: coordinatorHandle
     })
+
     const task = await client.call<{ task: { id: string } }>('orchestration.taskCreate', {
       spec: 'Report completion, then exit normally',
       run: run.result.run.id,
       callerTerminalHandle: coordinatorHandle
     })
+
     const started = await client.call<{
       dispatchId: string
       state: string
@@ -134,10 +147,13 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       agent: 'codex',
       timeoutMs: 30_000
     })
+
     expect(started.result.state).toBe('ready')
+
     const workerHandle = started.result.effects.find(
       (effect) => effect.kind === 'terminal' && effect.role === 'agent'
     )?.id
+
     if (!workerHandle) {
       throw new Error('worker-start did not return its agent terminal')
     }
@@ -149,14 +165,17 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
           worker = (await listRuntimeTerminals(client)).find(
             (terminal) => terminal.handle === workerHandle
           )
+
           return worker?.ptyId ?? null
         },
         { timeout: 30_000, message: 'background worker never published its PTY identity' }
       )
       .not.toBeNull()
+
     if (!worker?.ptyId || !worker.incarnationId) {
       throw new Error('Background worker did not publish exact PTY identity')
     }
+
     const workerBefore = terminalIdentity(worker)
     const workerPaneKey = `${worker.tabId}:${worker.leafId}`
     expect(worker.worktreeId).toBe(targetWorktreeId)
@@ -188,6 +207,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await expect
       .poll(() => {
         dispatchCapability = readCompletedWorkerDispatchCapability()
+
         return dispatchCapability
       })
       .not.toBeNull()
@@ -198,6 +218,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
           .map((event) => event.mode)
       )
       .toEqual(['bracketed'])
+
     if (!dispatchCapability) {
       throw new Error('Background worker did not receive its dispatch capability')
     }
@@ -219,15 +240,19 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
         worktreeId
       }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Renderer store unavailable')
         }
+
         const providerSession = {
           key: 'session_id' as const,
           id: providerSessionId,
           transcriptPath
         }
+
         const metadata = { tabId, worktreeId, terminalHandle }
+
         const recovery = {
           providerSession,
           launchConfig: {
@@ -239,6 +264,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
             agentEnv: {}
           }
         }
+
         state.setAgentStatus(
           paneKey,
           { state: 'working', prompt: 'Report completion, then exit normally', agentType: 'codex' },
@@ -272,10 +298,12 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       state: 'done',
       providerSessionId: PROVIDER_SESSION_ID
     }
+
     await expect
       .poll(() =>
         orcaPage.evaluate((paneKey) => {
           const record = window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey]
+
           return record
             ? {
                 origin: record.origin,
@@ -290,6 +318,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       .poll(
         () => {
           const record = readPersistedWorkerRecoveryRecord(userDataDir, workerPaneKey)
+
           return record
             ? {
                 origin: record.origin,
@@ -317,6 +346,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       },
       { orchestrationCapability: dispatchCapability }
     )
+
     expect(completed.result.message.type).toBe('worker_done')
     await expect
       .poll(
@@ -325,10 +355,12 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
             'orchestration.dispatchShow',
             { task: task.result.task.id }
           )
+
           const tasks = await client.call<{ tasks: { id: string; status: string }[] }>(
             'orchestration.taskList',
             { run: run.result.run.id }
           )
+
           return {
             dispatch: dispatch.result.dispatch?.status ?? null,
             task:
@@ -352,6 +384,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       await orcaPage.evaluate(
         ({ paneKey, tabId, worktreeId }) => {
           const state = window.__store?.getState()
+
           return {
             tabPresent: Boolean(state?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)),
             recoveryPresent: Boolean(state?.sleepingAgentSessionsByPaneKey[paneKey])
@@ -364,14 +397,18 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await orcaPage.evaluate(
       ({ paneKey, tabId, worktreeId }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         type Transition = { tabPresent: boolean; recoveryPresent: boolean }
+
         const e2eWindow = window as typeof window & {
           __orcaRetiredWorkerTransitions?: Transition[]
           __orcaRetiredWorkerUnsubscribe?: () => void
         }
+
         const transitions: Transition[] = [
           {
             tabPresent: Boolean(
@@ -380,13 +417,16 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
             recoveryPresent: Boolean(store.getState().sleepingAgentSessionsByPaneKey[paneKey])
           }
         ]
+
         e2eWindow.__orcaRetiredWorkerTransitions = transitions
         e2eWindow.__orcaRetiredWorkerUnsubscribe = store.subscribe((state) => {
           const next = {
             tabPresent: Boolean(state.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)),
             recoveryPresent: Boolean(state.sleepingAgentSessionsByPaneKey[paneKey])
           }
+
           const previous = transitions.at(-1)
+
           if (
             !previous ||
             previous.tabPresent !== next.tabPresent ||
@@ -404,6 +444,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
         userDataDir,
         cwd: process.cwd()
       })
+
       expect(closed).toMatchObject({
         ok: true,
         result: {
@@ -420,16 +461,19 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
         state: string
         processAction: string
       }>('orchestration.workerRelease', { dispatch: started.result.dispatchId })
+
       expect(release.result).toMatchObject({
         dispatchId: started.result.dispatchId,
         state: 'released',
         processAction: 'closed_agent_terminal'
       })
     }
+
     await expect
       .poll(() =>
         orcaPage.evaluate(() => {
           type Transition = { tabPresent: boolean; recoveryPresent: boolean }
+
           return (window as typeof window & { __orcaRetiredWorkerTransitions?: Transition[] })
             .__orcaRetiredWorkerTransitions
         })
@@ -459,6 +503,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       .poll(() =>
         orcaPage.evaluate(async (paneKey) => {
           const session = await window.api.session.get()
+
           return session.sleepingAgentSessionsByPaneKey?.[paneKey] ?? null
         }, workerPaneKey)
       )
@@ -471,18 +516,21 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
 
     const beforeActivation = await orcaPage.evaluate((worktreeId) => {
       const state = window.__store?.getState()
+
       return {
         everActivated: state?.everActivatedWorktreeIds.has(worktreeId) ?? false,
         tabCount: state?.tabsByWorktree[worktreeId]?.length ?? 0,
         pendingStartupCount: Object.keys(state?.pendingStartupByTabId ?? {}).length
       }
     }, targetWorktreeId)
+
     expect(beforeActivation).toEqual({ everActivated: false, tabCount: 0, pendingStartupCount: 0 })
 
     const targetCard = orcaPage
       .locator(`[data-worktree-id="${String(targetWorktreeId)}"]`)
       .first()
       .locator('[data-worktree-card-surface]')
+
     await targetCard.evaluate((element: HTMLElement) => element.click())
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
@@ -491,10 +539,12 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await waitForActivePanePtyId(orcaPage)
     const activatedPane = await waitForActivePaneHookDescriptor(orcaPage)
     expect(activatedPane.worktreeId).toBe(targetWorktreeId)
+
     const activatedResolved = await client.call<{ terminal: { handle: string } }>(
       'terminal.resolvePane',
       { paneKey: activatedPane.paneKey }
     )
+
     await expect
       .poll(
         async () => {
@@ -502,6 +552,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
             terminal: activatedResolved.result.terminal.handle,
             limit: 50
           })
+
           return read.result.terminal.tail.join('\n')
         },
         { timeout: 30_000, message: 'activated fallback terminal never produced output' }
@@ -521,6 +572,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       ({ originalTabId, worktreeId }) => {
         const state = window.__store?.getState()
         const tabs = state?.tabsByWorktree[worktreeId] ?? []
+
         return {
           everActivated: state?.everActivatedWorktreeIds.has(worktreeId) ?? false,
           originalTabPresent: tabs.some((tab) => tab.id === originalTabId),
@@ -533,6 +585,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       },
       { originalTabId: workerBefore.tabId, worktreeId: targetWorktreeId }
     )
+
     expect(afterActivation).toEqual({
       everActivated: true,
       originalTabPresent: false,
@@ -544,6 +597,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     const coordinatorAfter = (await listRuntimeTerminals(client)).find(
       (terminal) => terminal.handle === coordinatorHandle
     )
+
     expect(coordinatorAfter ? terminalIdentity(coordinatorAfter) : null).toEqual(coordinatorBefore)
     expect(coordinatorAfter?.worktreeId).toBe(coordinatorWorktreeId)
   })

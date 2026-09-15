@@ -32,12 +32,15 @@ export function shouldIncludeOpenTabInRecentSection({
   if (worktree.isArchived) {
     return false
   }
+
   if (!isCurrentOpenTabItem(item)) {
     return true
   }
+
   if (!row.terminalTab) {
     return false
   }
+
   const badge = resolveTerminalTabAttentionBadge({
     status: resolveRecentWorkspaceTabStatus(row, paneSources, now),
     hasUnread: terminalTabHasUnreadActivity({
@@ -46,5 +49,6 @@ export function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
+
   return badge != null && badge !== 'done' && badge !== 'interrupted'
 }

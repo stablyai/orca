@@ -18,10 +18,12 @@ function mountResource() {
       connected
         ? () => {
             calls += 1
+
             return new Promise<Repo[]>((resolve, reject) => pending.push({ resolve, reject }))
           }
         : null
     )
+
     return null
   }
 
@@ -29,11 +31,13 @@ function mountResource() {
   act(() => {
     renderer = create(createElement(Probe, { clientKey: 'client-a' }))
   })
+
   return {
     get resource(): HostRepoListResource<Repo> {
       if (!latest) {
         throw new Error('probe never rendered')
       }
+
       return latest
     },
     get callCount(): number {

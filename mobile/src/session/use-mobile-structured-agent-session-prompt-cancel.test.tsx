@@ -6,6 +6,7 @@ import type { StructuredAgentSessionState } from '../../../src/shared/structured
 import type { RpcClient } from '../transport/rpc-client'
 
 const mocks = vi.hoisted(() => ({ sendRequest: vi.fn() }))
+
 vi.mock('./use-mobile-structured-agent-state', () => ({
   useMobileStructuredAgentState: () => ({
     state,
@@ -14,6 +15,7 @@ vi.mock('./use-mobile-structured-agent-state', () => ({
     loadEarlier: vi.fn()
   })
 }))
+
 vi.mock('./use-mobile-structured-agent-options', () => ({
   useMobileStructuredAgentOptions: () => ({
     conversationCommands: [],
@@ -24,6 +26,7 @@ vi.mock('./use-mobile-structured-agent-options', () => ({
     setStructuredOption: vi.fn()
   })
 }))
+
 vi.mock('./use-mobile-structured-prompt-responses', () => ({
   useMobileStructuredPromptResponses: () => ({
     groupedDraft: null,
@@ -31,6 +34,7 @@ vi.mock('./use-mobile-structured-prompt-responses', () => ({
     respondQuestion: vi.fn()
   })
 }))
+
 vi.mock('./use-mobile-structured-send-operation-reconciliation', () => ({
   useMobileStructuredSendOperationReconciliation: vi.fn()
 }))
@@ -87,11 +91,13 @@ const pendingQuestion = (): AgentJournalRenderItem => ({
 })
 
 let state: StructuredAgentSessionState
+
 const stateRef = {
   get current(): StructuredAgentSessionState {
     return state
   }
 }
+
 const client: RpcClient = {
   sendRequest: mocks.sendRequest,
   subscribe: () => () => {},
@@ -115,10 +121,12 @@ function Harness({ promptCancelSupported }: { promptCancelSupported: boolean }):
     promptCancelSupported,
     onSendError: vi.fn()
   })
+
   return null
 }
 
 let hook: ReturnType<typeof useMobileStructuredAgentSession>
+
 let renderer: ReactTestRenderer | null = null
 
 describe('mobile structured prompt cancellation', () => {

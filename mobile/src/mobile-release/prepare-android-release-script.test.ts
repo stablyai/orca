@@ -26,6 +26,7 @@ function createAppConfig() {
   const configPath = join(dir, 'app.json')
   const contents = `${JSON.stringify(appConfig, null, 2)}\n`
   writeFileSync(configPath, contents)
+
   return { configPath, contents }
 }
 
@@ -34,6 +35,7 @@ describe('prepare Android release script', () => {
     for (const dir of tempDirs) {
       rmSync(dir, { force: true, recursive: true })
     }
+
     tempDirs = []
   })
 

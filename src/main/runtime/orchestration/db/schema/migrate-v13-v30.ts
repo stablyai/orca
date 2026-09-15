@@ -10,6 +10,7 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
   if (current < 13 && !this.hasColumn('worker_dispatches', 'runtime_epoch')) {
     this.db.exec('ALTER TABLE worker_dispatches ADD COLUMN runtime_epoch TEXT')
   }
+
   if (current < 14) {
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS federated_dispatches (
@@ -53,17 +54,20 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
         );
       `)
   }
+
   if (current < 15) {
     if (!this.hasColumn('federated_dispatches', 'to_home_imported_sequence')) {
       this.db.exec(
         'ALTER TABLE federated_dispatches ADD COLUMN to_home_imported_sequence INTEGER NOT NULL DEFAULT 0'
       )
     }
+
     if (!this.hasColumn('remote_dispatch_attachments', 'to_worker_imported_sequence')) {
       this.db.exec(
         'ALTER TABLE remote_dispatch_attachments ADD COLUMN to_worker_imported_sequence INTEGER NOT NULL DEFAULT 0'
       )
     }
+
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS federation_relay_items (
           dispatch_id   TEXT NOT NULL,
@@ -82,6 +86,7 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
           ON federation_relay_items(dispatch_id, direction, acked_at, sequence);
       `)
   }
+
   if (current < 16) {
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS remote_questions (
@@ -98,40 +103,50 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
           ON remote_questions(dispatch_id, status);
       `)
   }
+
   if (current < 17 && !this.hasColumn('remote_dispatch_attachments', 'protocol_version')) {
     this.db.exec(
       'ALTER TABLE remote_dispatch_attachments ADD COLUMN protocol_version INTEGER NOT NULL DEFAULT 1'
     )
   }
+
   if (current < 19) {
     this.migrateLegacyContractStorage()
   }
+
   if (current < 20) {
     this.backfillLegacyQuestionThreads()
   }
+
   if (current < 21) {
     this.migrateLegacySchedulerLossProvenance()
   }
+
   if (current < 22) {
     this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_handle
           ON dispatch_contexts(assignee_handle);
       `)
   }
+
   if (current < 23) {
     this.backfillWorkerTerminalResources()
   }
+
   if (current < 24) {
     if (!this.hasColumn('tasks', 'created_by_pane_key')) {
       this.db.exec('ALTER TABLE tasks ADD COLUMN created_by_pane_key TEXT')
     }
+
     if (!this.hasColumn('tasks', 'created_by_process_incarnation')) {
       this.db.exec('ALTER TABLE tasks ADD COLUMN created_by_process_incarnation TEXT')
     }
+
     if (!this.hasColumn('tasks', 'created_by_run_generation')) {
       this.db.exec('ALTER TABLE tasks ADD COLUMN created_by_run_generation INTEGER')
     }
   }
+
   if (current < 25) {
     this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_active_assignee_handle
@@ -139,14 +154,17 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
           WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
       `)
   }
+
   if (current < 26) {
     migrateMutationReceiptCapacity(this.db)
   }
+
   if (current < 27 && !this.hasColumn('federated_dispatches', 'to_home_acknowledged_sequence')) {
     this.db.exec(
       'ALTER TABLE federated_dispatches ADD COLUMN to_home_acknowledged_sequence INTEGER NOT NULL DEFAULT 0'
     )
   }
+
   if (current < 28) {
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS mutation_caller_identities (
@@ -155,21 +173,25 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
         );
       `)
   }
+
   // Why a column and not a parsed `last_failure`: an operator close and a crash
   // used to write the same sentence, so post-mortem tooling had to reconcile
   // against external logs to tell them apart (STA-4603).
   if (current < 29 && !this.hasColumn('dispatch_contexts', 'termination_reason')) {
     this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN termination_reason TEXT')
   }
+
   if (current < 30) {
     if (!this.hasColumn('dispatch_contexts', 'depth')) {
       this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN depth INTEGER NOT NULL DEFAULT 1')
     }
+
     if (!this.hasColumn('remote_dispatch_attachments', 'depth')) {
       this.db.exec(
         'ALTER TABLE remote_dispatch_attachments ADD COLUMN depth INTEGER NOT NULL DEFAULT 1'
       )
     }
+
     // Why drop first: CREATE INDEX IF NOT EXISTS cannot widen an existing
     // partial index predicate, and these two covered only starting/ready.
     this.db.exec(`
@@ -184,34 +206,40 @@ export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: nu
             AND pane_key IS NOT NULL;
       `)
   }
+
   if (current < 31) {
     const dispatchColumns = [
       ['retry_of_dispatch_id', 'TEXT'],
       ['creator_dispatch_id', 'TEXT'],
       ['host_scope', 'TEXT']
     ] as const
+
     for (const [column, definition] of dispatchColumns) {
       if (!this.hasColumn('dispatch_contexts', column)) {
         this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN ${column} ${definition}`)
       }
     }
+
     for (const column of ['endpoint_id', 'endpoint_incarnation'] as const) {
       if (!this.hasColumn('worker_terminal_resources', column)) {
         this.db.exec(`ALTER TABLE worker_terminal_resources ADD COLUMN ${column} TEXT`)
       }
     }
   }
+
   if (current < 32) {
     const resourceColumns = [
       ['recovery_attempt_count', 'INTEGER NOT NULL DEFAULT 0'],
       ['last_recovery_at', 'TEXT']
     ] as const
+
     for (const [column, definition] of resourceColumns) {
       if (!this.hasColumn('worker_terminal_resources', column)) {
         this.db.exec(`ALTER TABLE worker_terminal_resources ADD COLUMN ${column} ${definition}`)
       }
     }
   }
+
   this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
         ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})

@@ -19,9 +19,13 @@ import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publ
 import { relayTestSocketPath } from './relay-test-socket-path'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
+
 const WATCHER_TS_ENTRY = path.resolve(__dirname, '../main/ipc/parcel-watcher-process-entry.ts')
+
 let bundleDir: string
+
 let relayEntry: string
+
 const spawnedSocketDirs: string[] = []
 
 beforeAll(async () => {
@@ -61,6 +65,7 @@ function spawnRelayEntry(
   env?: NodeJS.ProcessEnv
 ): RelayProcess {
   let relayArgs = args
+
   if (!args.includes('--sock-path')) {
     // Why: Windows relays require a named pipe; filesystem socket paths fail with EACCES.
     const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-sock-'))
@@ -73,6 +78,7 @@ function spawnRelayEntry(
       path.join(socketDir, 'agent-hooks')
     ]
   }
+
   return spawnRelay(entryPath, relayArgs, env ? { env } : undefined)
 }
 
@@ -97,9 +103,11 @@ function writeMockNodePty(root: string, source: string, withPackageEntry = false
   const nodePtyDir = path.join(root, 'node_modules', 'node-pty')
   const libDir = path.join(nodePtyDir, 'lib')
   mkdirSync(libDir, { recursive: true })
+
   if (withPackageEntry) {
     writeFileSync(path.join(nodePtyDir, 'package.json'), '{"main":"lib/index.js"}\n')
   }
+
   writeFileSync(path.join(libDir, 'index.js'), source)
 }
 
@@ -169,10 +177,13 @@ describe('Subprocess: Relay entry point', () => {
       relay.proc.kill('SIGKILL')
       await relay.waitForExit().catch(() => {})
     }
+
     relay = null
+
     if (tmpDir) {
       await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
     }
+
     while (spawnedSocketDirs.length > 0) {
       const socketDir = spawnedSocketDirs.pop()!
       await rm(socketDir, { recursive: true, force: true }).catch(() => {})
@@ -385,11 +396,13 @@ describe('Subprocess: Relay entry point', () => {
       const endpointBeforeDuplicate = readFileSync(endpointFile, 'utf8')
 
       let duplicateStderr = ''
+
       const duplicate = spawnChild(
         'node',
         [relayEntry, '--detached', '--grace-time', '10', '--sock-path', sockPath],
         { stdio: ['ignore', 'ignore', 'pipe'] }
       )
+
       duplicate.stderr!.on('data', (chunk: Buffer) => {
         duplicateStderr += chunk.toString('utf8')
       })
@@ -400,6 +413,7 @@ describe('Subprocess: Relay entry point', () => {
       expect(readFileSync(endpointFile, 'utf8')).toBe(endpointBeforeDuplicate)
 
       const bridge = spawn(['--connect', '--sock-path', sockPath])
+
       try {
         await bridge.sentinelReceived
         const id = bridge.send('relay.status')
@@ -425,6 +439,7 @@ describe('Subprocess: Relay entry point', () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-cred-race-'))
       const sockPath = path.join(tmpDir, 'relay.sock')
       const credentialFile = `${sockPath}.credential`
+
       const starters = [0, 1].map(() =>
         spawnRelay(relayEntry, [
           '--detached',
@@ -438,13 +453,16 @@ describe('Subprocess: Relay entry point', () => {
           credentialFile
         ])
       )
+
       const stderrByStarter = starters.map((starter) => {
         let text = ''
         starter.proc.stderr!.on('data', (chunk: Buffer) => {
           text += chunk.toString('utf8')
         })
+
         return () => text
       })
+
       try {
         const outcomes = await Promise.all(
           starters.map((starter) =>
@@ -454,6 +472,7 @@ describe('Subprocess: Relay entry point', () => {
             ])
           )
         )
+
         expect(outcomes.filter((outcome) => outcome === 'ready')).toHaveLength(1)
         expect(outcomes.filter((outcome) => outcome === 'exit:1')).toHaveLength(1)
         const winnerIndex = outcomes.indexOf('ready')
@@ -474,6 +493,7 @@ describe('Subprocess: Relay entry point', () => {
           '--credential-file',
           credentialFile
         ])
+
         try {
           await bridge.sentinelReceived
           const resp = await bridge.waitForResponse(bridge.send('relay.status'))
@@ -485,6 +505,7 @@ describe('Subprocess: Relay entry point', () => {
           bridge.kill('SIGTERM')
           await bridge.waitForExit().catch(() => {})
         }
+
         expect(stderrByStarter[winnerIndex]()).not.toContain('credential mismatch')
       } finally {
         for (const starter of starters) {
@@ -505,6 +526,7 @@ describe('Subprocess: Relay entry point', () => {
       const sockPath = path.join(tmpDir, 'relay.sock')
       const first = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
       let bridge: RelayProcess | null = null
+
       try {
         await first.sentinelReceived
 
@@ -532,6 +554,7 @@ describe('Subprocess: Relay entry point', () => {
       } finally {
         bridge?.kill('SIGTERM')
         await bridge?.waitForExit().catch(() => {})
+
         if (first.proc.exitCode === null && first.proc.signalCode === null) {
           first.kill('SIGKILL')
           await first.waitForExit().catch(() => {})
@@ -549,6 +572,7 @@ describe('Subprocess: Relay entry point', () => {
       const first = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
       let second: RelayProcess | null = null
       let bridge: RelayProcess | null = null
+
       try {
         await first.sentinelReceived
         unlinkSync(sockPath)
@@ -621,6 +645,7 @@ describe('Subprocess: Relay entry point', () => {
       await relay.sentinelReceived
 
       const bridge = spawn(['--connect', '--sock-path', sockPath])
+
       try {
         await bridge.sentinelReceived
       } finally {
@@ -648,11 +673,13 @@ describe('Subprocess: Relay entry point', () => {
     copyFileSync(relayEntry, daemonEntry)
     writeMockNodePty(tmpDir, nodePtyModule)
     const sockPath = path.join(tmpDir, 'relay.sock')
+
     const daemon = spawnRelayEntry(
       daemonEntry,
       ['--detached', '--grace-time', graceTimeSeconds, '--sock-path', sockPath],
       { ...process.env, ORCA_RELAY_IDLE_GRACE_MS: idleGraceMs }
     )
+
     return { daemon, sockPath }
   }
 
@@ -661,6 +688,7 @@ describe('Subprocess: Relay entry point', () => {
     whileConnected?: (bridge: RelayProcess) => Promise<void>
   ): Promise<void> {
     const bridge = spawn(['--connect', '--sock-path', sockPath])
+
     try {
       await bridge.sentinelReceived
       await whileConnected?.(bridge)
@@ -785,6 +813,7 @@ describe('Subprocess: Relay entry point', () => {
       expect(relay.proc.exitCode).toBeNull()
 
       const probe = spawn(['--connect', '--sock-path', sockPath])
+
       try {
         await probe.sentinelReceived
         const status = await probe.waitForResponse(probe.send('relay.status'))
@@ -821,11 +850,13 @@ describe('Subprocess: Relay entry point', () => {
     're-arms grace after a shutdown deferred by a rejected kill, so the relay still exits',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-shutdown-deferred-'))
+
       const { daemon, sockPath } = spawnIdleGraceDaemon(
         KILL_REJECTS_FIRST_DISPOSE_MODULE,
         '2',
         '200'
       )
+
       relay = daemon
       await relay.sentinelReceived
 
@@ -848,12 +879,14 @@ describe('Subprocess: Relay entry point', () => {
     const id = relay.send('relay.status')
     const resp = await relay.waitForResponse(id)
     expect(resp.error).toBeUndefined()
+
     const status = resp.result as {
       pid: number
       memory: { rss: number }
       ptys: { active: number }
       socket: { owned: boolean; listening: boolean; clients: number }
     }
+
     expect(status.pid).toBeGreaterThan(0)
     expect(status.memory.rss).toBeGreaterThan(0)
     expect(status.ptys.active).toBe(0)
@@ -910,6 +943,7 @@ describe('Subprocess: Relay entry point', () => {
     const id = relay.send('fs.readFile', {
       filePath: path.join(tmpDir, 'link', 'data.txt')
     })
+
     const resp = await relay.waitForResponse(id)
 
     expect(resp.error).toBeUndefined()

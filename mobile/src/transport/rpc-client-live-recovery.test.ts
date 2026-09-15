@@ -24,11 +24,13 @@ vi.mock('expo-crypto', () => ({
 
 const RUN_LIVE =
   process.env.ORCA_MOBILE_LIVE_REPRO === '1' || !!process.env.ORCA_MOBILE_LIVE_REPRO_FULL
+
 const RUN_FULL = process.env.ORCA_MOBILE_LIVE_REPRO_FULL === '1'
 
 const AUTH_TOKEN = 'repro-device-token'
 
 const serverKeyPair = nacl.box.keyPair()
+
 const serverPublicKeyB64 = Buffer.from(serverKeyPair.publicKey).toString('base64')
 
 // When true the server accepts traffic but never replies — simulates a
@@ -42,16 +44,20 @@ function e2eeEncrypt(plaintext: string, sharedKey: Uint8Array): string {
   const bundle = new Uint8Array(nonce.length + ciphertext.length)
   bundle.set(nonce)
   bundle.set(ciphertext, nonce.length)
+
   return Buffer.from(bundle).toString('base64')
 }
 
 function e2eeDecrypt(encrypted: string, sharedKey: Uint8Array): string | null {
   const bundle = Uint8Array.from(Buffer.from(encrypted, 'base64'))
+
   if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
     return null
   }
+
   const nonce = bundle.slice(0, nacl.box.nonceLength)
   const plaintext = nacl.box.open.after(bundle.slice(nacl.box.nonceLength), nonce, sharedKey)
+
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
@@ -68,31 +74,41 @@ function startServer(port = 0): Promise<WebSocketServer> {
       if (blackhole) {
         return
       }
+
       const msg = typeof data === 'string' ? data : data.toString('utf-8')
+
       if (!sharedKey) {
         const hello = JSON.parse(msg) as { publicKeyB64: string }
         const clientKey = Uint8Array.from(Buffer.from(hello.publicKeyB64, 'base64'))
         sharedKey = nacl.box.before(clientKey, serverKeyPair.secretKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
+
       const plaintext = e2eeDecrypt(msg, sharedKey)
+
       if (!plaintext) {
         return
       }
+
       const request = JSON.parse(plaintext) as { id?: string; type?: string; deviceToken?: string }
+
       if (!authenticated) {
         if (request.type === 'e2ee_auth' && request.deviceToken === AUTH_TOKEN) {
           authenticated = true
           ws.send(e2eeEncrypt(JSON.stringify({ type: 'e2ee_authenticated' }), sharedKey))
         }
+
         return
       }
+
       ws.send(
         e2eeEncrypt(JSON.stringify({ id: request.id, ok: true, result: { up: true } }), sharedKey)
       )
     })
   })
+
   return new Promise((resolve) => wss.once('listening', () => resolve(wss)))
 }
 
@@ -105,6 +121,7 @@ function stopServer(wss: WebSocketServer): Promise<void> {
     for (const ws of wss.clients) {
       ws.terminate()
     }
+
     wss.close(() => resolve())
   })
 }
@@ -115,12 +132,15 @@ function sleep(ms: number): Promise<void> {
 
 async function waitFor(label: string, timeoutMs: number, check: () => boolean): Promise<number> {
   const start = Date.now()
+
   while (Date.now() - start < timeoutMs) {
     if (check()) {
       return Date.now() - start
     }
+
     await sleep(200)
   }
+
   throw new Error(`timed out after ${timeoutMs / 1000}s waiting for: ${label}`)
 }
 
@@ -132,6 +152,7 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
     blackhole = false
     client?.close()
     client = null
+
     if (wss) {
       await stopServer(wss)
       wss = null
@@ -152,12 +173,14 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
       // comes back to the foreground.
       blackhole = true
       c.notifyForeground()
+
       // Three fair probe windows tolerate transient mobile/Tailscale stalls.
       const detectMs = await waitFor(
         'half-open detected',
         32_000,
         () => c.getState() !== 'connected'
       )
+
       expect(detectMs).toBeLessThan(30_000)
 
       blackhole = false

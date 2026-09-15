@@ -10,11 +10,13 @@ test('creates a focus-requested terminal against a headless serve host', async (
 }) => {
   test.setTimeout(180_000)
   const host = await launchHeadlessPairedRuntimeHost()
+
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
       path: testRepoPath,
       kind: 'git'
     })
+
     let worktreeId = ''
     await expect
       .poll(
@@ -22,7 +24,9 @@ test('creates a focus-requested terminal against a headless serve host', async (
           const listed = await host.client.call<{ worktrees: { id: string }[] }>('worktree.list', {
             repo: `id:${added.result.repo.id}`
           })
+
           worktreeId = listed.result.worktrees[0]?.id ?? ''
+
           return worktreeId
         },
         { timeout: 30_000 }
@@ -48,6 +52,7 @@ test('creates a focus-requested terminal against a headless serve host', async (
     const listedTerminals = await host.client.call<{
       terminals: { handle: string }[]
     }>('terminal.list', { worktree: `id:${worktreeId}` })
+
     expect(listedTerminals.result.terminals.map((terminal) => terminal.handle)).toContain(
       created.result.terminal.handle
     )

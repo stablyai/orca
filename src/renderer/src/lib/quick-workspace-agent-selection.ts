@@ -11,6 +11,7 @@ export function pickQuickWorkspaceAgent(
   disabledTuiAgents?: Iterable<unknown> | null
 ): TuiAgent | null {
   const candidates = detectedAgentIds ?? TUI_AGENT_AUTO_PICK_ORDER
+
   return pickTuiAgent(preferred, candidates, disabledTuiAgents)
 }
 
@@ -18,11 +19,13 @@ function hasDetectedAgent(detectedAgentIds: Iterable<TuiAgent>, agent: TuiAgent)
   if (detectedAgentIds instanceof Set) {
     return detectedAgentIds.has(agent)
   }
+
   for (const detectedAgentId of detectedAgentIds) {
     if (detectedAgentId === agent) {
       return true
     }
   }
+
   return false
 }
 
@@ -34,6 +37,7 @@ function isQuickWorkspaceAgentAvailable(
   if (!isTuiAgentEnabled(agent, disabledTuiAgents)) {
     return false
   }
+
   return detectedAgentIds === null || hasDetectedAgent(detectedAgentIds, agent)
 }
 
@@ -57,8 +61,10 @@ export function resolveQuickWorkspaceAgentSelection({
       quickAgentOverride
     }
   }
+
   if (isQuickWorkspaceAgentAvailable(quickAgentOverride, detectedAgentIds, disabledTuiAgents)) {
     return { quickAgent: quickAgentOverride, quickAgentOverride }
   }
+
   return { quickAgent: preferredQuickAgent, quickAgentOverride: preferredQuickAgent }
 }

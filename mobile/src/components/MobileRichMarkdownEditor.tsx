@@ -40,6 +40,7 @@ import {
 } from './mobile-rich-markdown-editor-html'
 
 const EDITOR_DOCUMENT_ORIGIN = 'https://orca-mobile-editor.invalid'
+
 const EDITOR_DOCUMENT_URL = `${EDITOR_DOCUMENT_ORIGIN}/rich-markdown-editor`
 
 type Props = Omit<MobileRichMarkdownEditorProps, 'onOpenLink'> & {
@@ -107,8 +108,10 @@ function MobileRichMarkdownEditorInner(
     (url: string) => {
       if (onOpenLink) {
         onOpenLink(url)
+
         return
       }
+
       void Linking.openURL(url).catch(() => {})
     },
     [onOpenLink]
@@ -126,14 +129,17 @@ function MobileRichMarkdownEditorInner(
   const handleWebViewMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let message: unknown
+
       try {
         message = JSON.parse(event.nativeEvent.data)
       } catch {
         return
       }
+
       if (!message || typeof message !== 'object') {
         return
       }
+
       handleMessage(message as Partial<MobileRichMarkdownEditorMessage>)
     },
     [handleMessage]
@@ -141,10 +147,12 @@ function MobileRichMarkdownEditorInner(
 
   const handleShouldStartLoadWithRequest = useCallback((request: { url?: string }) => {
     const url = request.url ?? ''
+
     const isEditorDocument =
       url === 'about:blank' ||
       url === EDITOR_DOCUMENT_URL ||
       url.startsWith(`${EDITOR_DOCUMENT_URL}#`)
+
     // Why: editor content is untrusted markdown; links must leave through openLink.
     return isEditorDocument
   }, [])
@@ -169,6 +177,7 @@ function MobileRichMarkdownEditorInner(
         >
           {TOOLBAR_ITEMS.map((item) => {
             const Icon = item.icon
+
             return (
               <Pressable
                 key={item.command}

@@ -15,9 +15,11 @@ export function getJiraProjectPickerDisplayLabel(
   includeSiteName: boolean
 ): string {
   const projectLabel = `${project.name} (${project.key})`
+
   if (includeSiteName && project.siteName) {
     return `${project.siteName} · ${projectLabel}`
   }
+
   return projectLabel
 }
 
@@ -44,11 +46,15 @@ export function filterJiraProjectPickerProjects({
   if (isJiraProjectPickerQueryTooLarge(query)) {
     return []
   }
+
   const trimmedQuery = query.trim()
+
   if (!trimmedQuery) {
     return [...projects]
   }
+
   const normalizedQuery = trimmedQuery.toLocaleLowerCase()
+
   return projects.filter((project) =>
     getJiraProjectPickerSearchText(project, includeSiteName).includes(normalizedQuery)
   )

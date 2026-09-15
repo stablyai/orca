@@ -35,9 +35,11 @@ function computeCorrection(
 ): { left: number; top: number; corrected: boolean } {
   const dx = targetX - measuredLeft
   const dy = targetY - measuredTop
+
   if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
     return { left: targetX + dx, top: targetY + dy, corrected: true }
   }
+
   return { left: targetX, top: targetY, corrected: false }
 }
 
@@ -123,14 +125,18 @@ function computeEdgeFlip(
 ): { x: number; y: number } {
   let x = cursorX
   let y = cursorY
+
   if (cursorX + menuWidth > viewportWidth) {
     x = cursorX - menuWidth
   }
+
   if (cursorY + menuHeight > viewportHeight) {
     y = cursorY - menuHeight
   }
+
   x = Math.max(0, x)
   y = Math.max(0, y)
+
   return { x, y }
 }
 
@@ -238,6 +244,7 @@ describe('full pipeline', () => {
       windowPos.y,
       1
     )
+
     const cssOffset = { x: 60, y: 40 }
     const measured = { left: menuPos.x + cssOffset.x, top: menuPos.y + cssOffset.y }
 
@@ -257,6 +264,7 @@ describe('full pipeline', () => {
       windowPos.y,
       1
     )
+
     const corrected = computeCorrection(menuPos.x, menuPos.y, menuPos.x, menuPos.y)
 
     expect(corrected.corrected).toBe(false)

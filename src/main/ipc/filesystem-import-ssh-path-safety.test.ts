@@ -15,13 +15,17 @@ vi.mock('node:fs/promises', () => ({
   readdir: readdirMock,
   realpath: realpathMock
 }))
+
 vi.mock('./filesystem-auth', () => ({
   authorizeExternalPath: vi.fn()
 }))
+
 vi.mock('./filesystem-path-containment', () => ({
   isENOENT: (error: NodeJS.ErrnoException) => error.code === 'ENOENT'
 }))
+
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: providerMock
 }))
@@ -30,6 +34,7 @@ import { importExternalPathsSsh } from './filesystem-import-ssh'
 
 function createProvider(uploadSession: FileUploadSession): IFilesystemProvider {
   const missing = Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+
   return {
     stat: vi.fn().mockRejectedValue(missing),
     createDirNoClobber: vi.fn().mockResolvedValue(undefined),
@@ -165,12 +170,14 @@ describe('SSH import remote path safety', () => {
   it('streams an N-file directory through guarded per-file uploads', async () => {
     const sourcePath = path.resolve('/tmp/assets')
     const names = ['one.txt', 'two.txt', 'three.txt']
+
     const entries = names.map((name) => ({
       name,
       isFile: () => true,
       isDirectory: () => false,
       isSymbolicLink: () => false
     }))
+
     lstatMock.mockImplementation(async (value: string) =>
       value === sourcePath
         ? { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
@@ -182,6 +189,7 @@ describe('SSH import remote path safety', () => {
 
     expect(results[0]).toMatchObject({ status: 'imported', kind: 'directory' })
     expect(uploadSession.uploadFile).toHaveBeenCalledTimes(3)
+
     for (const name of names) {
       expect(uploadSession.uploadFile).toHaveBeenCalledWith(
         path.join(sourcePath, name),
@@ -195,6 +203,7 @@ describe('SSH import remote path safety', () => {
     const sourcePath = path.resolve('/tmp/assets')
     const regularPath = path.join(sourcePath, 'report.txt')
     const socketPath = path.join(sourcePath, 'server.sock')
+
     const entries = [
       {
         name: 'report.txt',
@@ -209,14 +218,18 @@ describe('SSH import remote path safety', () => {
         isSymbolicLink: () => false
       }
     ]
+
     lstatMock.mockImplementation(async (value: string) => {
       if (value === sourcePath) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       if (value === regularPath) {
         return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
       }
+
       expect(value).toBe(socketPath)
+
       return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => false }
     })
     readdirMock.mockResolvedValue(entries)
@@ -253,6 +266,7 @@ describe('SSH import remote path safety', () => {
 
   it('rejects a selected root replaced while its realpath is captured', async () => {
     const sourcePath = path.resolve('/tmp/assets')
+
     const directoryStat = (ino: number) => ({
       dev: 1,
       ino,
@@ -260,6 +274,7 @@ describe('SSH import remote path safety', () => {
       isDirectory: () => true,
       isSymbolicLink: () => false
     })
+
     lstatMock.mockResolvedValueOnce(directoryStat(1)).mockResolvedValueOnce(directoryStat(2))
     realpathMock.mockResolvedValue('/private/replacement')
 

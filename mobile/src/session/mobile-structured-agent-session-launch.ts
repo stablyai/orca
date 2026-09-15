@@ -20,6 +20,7 @@ type StructuredCreateSupport = {
 }
 
 const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
+
 const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
 
 function delay(ms: number): Promise<void> {
@@ -49,6 +50,7 @@ function unknownCreateResult(
   error: unknown
 ): MobileStructuredAgentLaunchResult {
   const message = error instanceof Error ? error.message.trim() : ''
+
   return { kind: 'unknown', message: message || unconfirmedMessage(agent) }
 }
 
@@ -70,6 +72,7 @@ function classifyCreateRefusal(
   if (!isDefinitiveAgentSessionCreateRefusal(code)) {
     return unknownCreateResult(agent, new Error(message))
   }
+
   return { kind: 'failed', message: message || failedMessage(agent) }
 }
 
@@ -80,21 +83,26 @@ export async function createMobileStructuredAgentSession(
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
+
   for (let attempt = 0; ; attempt += 1) {
     try {
       supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+
       if (
         retryDelayMs === undefined ||
         !hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)
       ) {
         return { kind: 'unsupported' }
       }
+
       await delay(retryDelayMs)
       continue
     }
+
     const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+
     if (
       retryDelayMs !== undefined &&
       hasRuntimeRpcErrorCode(supportResponse, SELECTOR_NOT_RESOLVABLE_CODE)
@@ -102,8 +110,10 @@ export async function createMobileStructuredAgentSession(
       await delay(retryDelayMs)
       continue
     }
+
     break
   }
+
   if (
     !supportResponse ||
     typeof supportResponse !== 'object' ||
@@ -112,13 +122,16 @@ export async function createMobileStructuredAgentSession(
   ) {
     return { kind: 'unsupported' }
   }
+
   const support = supportResponse.result as StructuredCreateSupport | null
+
   if (!support || typeof support !== 'object' || support.supported !== true) {
     return { kind: 'unsupported', reason: support?.reason }
   }
 
   const params = createParamsFor(agent, worktree)
   let response
+
   try {
     response = await client.sendRequest('agentSession.create', params, {
       timeoutMs: 15_000,
@@ -142,8 +155,10 @@ export async function createMobileStructuredAgentSession(
   if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
+
   if (!response.ok) {
     const error = response.error as { code?: unknown; message?: unknown } | null | undefined
+
     if (
       !error ||
       typeof error !== 'object' ||
@@ -152,12 +167,16 @@ export async function createMobileStructuredAgentSession(
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
+
     return classifyCreateRefusal(agent, error.code, error.message)
   }
+
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
+
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
+
   if (!result.ok) {
     if (
       !result.refusal ||
@@ -167,8 +186,10 @@ export async function createMobileStructuredAgentSession(
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
+
     return classifyCreateRefusal(agent, result.refusal.code, result.refusal.message)
   }
+
   if (
     !result.value ||
     typeof result.value.sessionId !== 'string' ||
@@ -176,5 +197,6 @@ export async function createMobileStructuredAgentSession(
   ) {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
+
   return { kind: 'created', sessionId: result.value.sessionId }
 }

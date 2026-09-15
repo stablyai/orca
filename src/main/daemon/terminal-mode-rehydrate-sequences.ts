@@ -8,17 +8,21 @@ import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profil
 // protocol-conformant programs re-push.
 export function buildRehydrateSequences(modes: TerminalModes): string {
   const seqs: string[] = []
+
   if (modes.alternateScreen) {
     // Why: normal-buffer serialization can leave its pen active, while the
     // separately serialized alt body assumes it starts from default SGR.
     seqs.push(`${RESET_GRAPHIC_RENDITION}\x1b[?1049h`)
   }
+
   if (modes.bracketedPaste) {
     seqs.push('\x1b[?2004h')
   }
+
   if (modes.applicationCursor) {
     seqs.push('\x1b[?1h')
   }
+
   // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
   // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
   switch (modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none') {
@@ -37,6 +41,7 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
     case 'none':
       break
   }
+
   // Why: xterm tracks the mouse protocol and SGR encoding as independent
   // modes, so snapshots must preserve the encoding even when reporting is off.
   if (modes.sgrMousePixelsMode) {
@@ -44,5 +49,6 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
   } else if (modes.sgrMouseMode) {
     seqs.push('\x1b[?1006h')
   }
+
   return seqs.join('')
 }

@@ -22,15 +22,19 @@ export function createRuntimeRendererNotificationSender(args: {
   let warningEmitted = false
   let closed = false
   const warn = args.warn ?? ((message: string) => console.warn(message))
+
   const suspend = (reason: RuntimeRendererGraphFailureReason): void => {
     if (closed || (!available && warningEmitted)) {
       return
     }
+
     available = false
+
     if (!warningEmitted) {
       warningEmitted = true
       warn(`[runtime-graph] Renderer notifications suspended: ${reason}`)
     }
+
     args.onFailure(reason)
   }
 
@@ -39,13 +43,16 @@ export function createRuntimeRendererNotificationSender(args: {
       if (closed || args.isWindowDestroyed() || args.webContents.isDestroyed() || !available) {
         return false
       }
+
       try {
         args.webContents.send(channel, ...values)
+
         return true
       } catch {
         // Why: renderer notification is a side effect; a disposed frame must not
         // fail the persistence or runtime operation that produced the event.
         suspend('renderer-frame-unavailable')
+
         return false
       }
     },
@@ -53,6 +60,7 @@ export function createRuntimeRendererNotificationSender(args: {
       if (closed) {
         return
       }
+
       available = false
       warningEmitted = false
     },
@@ -60,6 +68,7 @@ export function createRuntimeRendererNotificationSender(args: {
       if (closed) {
         return
       }
+
       available = true
       warningEmitted = false
     },
@@ -67,6 +76,7 @@ export function createRuntimeRendererNotificationSender(args: {
       if (closed) {
         return
       }
+
       available = true
       warningEmitted = false
     },

@@ -33,11 +33,13 @@ export function pickNextActivationDeferredTabId(
   if (!deferredTabIds || deferredTabIds.size === 0) {
     return null
   }
+
   for (const tabId of allTabIds) {
     if (deferredTabIds.has(tabId)) {
       return tabId
     }
   }
+
   return null
 }
 
@@ -49,12 +51,16 @@ export function pickNextActivationDeferredTabId(
 export function scheduleActivationDeferredAdmission(callback: () => void): () => void {
   const requestIdle = globalThis.requestIdleCallback
   const cancelIdle = globalThis.cancelIdleCallback
+
   if (typeof requestIdle !== 'function' || typeof cancelIdle !== 'function') {
     const timer = globalThis.setTimeout(callback, 0)
+
     return () => globalThis.clearTimeout(timer)
   }
+
   const handle = requestIdle(() => callback(), {
     timeout: ACTIVATION_DEFERRED_ADMISSION_IDLE_TIMEOUT_MS
   })
+
   return () => cancelIdle(handle)
 }

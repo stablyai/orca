@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const rawRequest = vi.fn()
+
 const getClients = vi.fn()
+
 const getStatus = vi.fn()
+
 const acquire = vi.fn()
+
 const release = vi.fn()
+
 const clearToken = vi.fn()
 
 const workspace = (id: string, organizationName: string) => ({
@@ -198,6 +203,7 @@ describe('list-issues pagination contract', () => {
         hasNextPage,
         endCursor
       )
+
     rawRequest
       .mockResolvedValueOnce(page(1, 250, true, 'page-2'))
       .mockResolvedValueOnce(page(251, 50, true, 'page-3'))
@@ -240,11 +246,13 @@ describe('list-issues pagination contract', () => {
 
   it('stops on the read budget and hands back a cursor instead of outliving the RPC', async () => {
     vi.useFakeTimers()
+
     try {
       let issued = 0
       rawRequest.mockImplementation(() => {
         issued += 1
         vi.advanceTimersByTime(11_000)
+
         return Promise.resolve(
           pageResponse(
             [issueNode(`issue-${issued}`, `ENG-${issued}`, '2026-07-01T00:00:00.000Z')],
@@ -274,6 +282,7 @@ describe('list-issues pagination contract', () => {
         listMcpIssues({ cursor: encodeIssueListCursor(workspaceId, 'linear-end') })
       ).rejects.toMatchObject({ code: 'linear_invalid_workspace' })
     }
+
     await expect(
       listMcpIssues({ cursor: encodeIssueListCursor('workspace-1', '') })
     ).rejects.toMatchObject({ code: 'linear_invalid_workspace' })

@@ -1,4 +1,5 @@
 export const CODEX_SESSION_WINDOW_MINUTES = 300
+
 export const CODEX_WEEKLY_WINDOW_MINUTES = 10080
 
 // Why: tolerate the one-minute drift seen in older Codex bucket lengths without absorbing other durations.
@@ -16,6 +17,7 @@ export type CodexRateLimitWindowsSnapshot = {
 }
 
 type MappableCodexRateWindowSnapshot = CodexRateWindowSnapshot & { usedPercent: number }
+
 type CodexRateLimitWindowKind = 'session' | 'weekly' | null
 
 function isMappableCodexRateWindowSnapshot(
@@ -26,17 +28,21 @@ function isMappableCodexRateWindowSnapshot(
 
 function classifyWindowDuration(raw: MappableCodexRateWindowSnapshot): CodexRateLimitWindowKind {
   const duration = raw.windowDurationMins
+
   if (typeof duration !== 'number' || !Number.isFinite(duration)) {
     return null
   }
+
   if (
     Math.abs(duration - CODEX_SESSION_WINDOW_MINUTES) <= CODEX_WINDOW_DURATION_TOLERANCE_MINUTES
   ) {
     return 'session'
   }
+
   if (Math.abs(duration - CODEX_WEEKLY_WINDOW_MINUTES) <= CODEX_WINDOW_DURATION_TOLERANCE_MINUTES) {
     return 'weekly'
   }
+
   return null
 }
 
@@ -55,7 +61,9 @@ export function classifyCodexRateLimitWindows(
     if (!window) {
       continue
     }
+
     const kind = classifyWindowDuration(window)
+
     if (kind === 'session' && !session) {
       session = window
     } else if (kind === 'weekly' && !weekly) {
@@ -67,6 +75,7 @@ export function classifyCodexRateLimitWindows(
   if (!session && primary && classifyWindowDuration(primary) === null) {
     session = primary
   }
+
   if (!weekly && secondary && classifyWindowDuration(secondary) === null) {
     weekly = secondary
   }

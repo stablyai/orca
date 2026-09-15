@@ -17,6 +17,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'opus', effort: 'xhigh', fastMode: true },
       agentArgs: '--model haiku'
     })
+
     expect(plan?.launchCommand).toBe("claude '--model' 'opus' '--effort' 'xhigh' '--model' 'haiku'")
     expect(plan?.sessionOptions).toBeUndefined()
   })
@@ -31,6 +32,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'opus', effort: 'xhigh' },
       agentArgs: '--effort low'
     })
+
     expect(plan?.sessionOptions).toEqual({ model: 'opus' })
   })
 
@@ -45,6 +47,7 @@ describe('tui agent startup session options', () => {
       sessionOptionsOverrideAgentArgs: true,
       agentArgs: '-m gpt-5.5 -c model_reasoning_effort=low'
     })
+
     expect(plan?.launchCommand).toBe(
       "codex '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high'"
     )
@@ -65,6 +68,7 @@ describe('tui agent startup session options', () => {
       sessionOptionsOverrideAgentArgs: true,
       agentArgs: '--dangerously-bypass-approvals-and-sandbox -- literal'
     })
+
     expect(plan?.launchCommand).toBe(
       "codex '--dangerously-bypass-approvals-and-sandbox' '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high' '--' 'literal'"
     )
@@ -97,6 +101,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
       agentArgs: '--model gpt-5.5'
     })
+
     expect(plan?.sessionOptions).toBeUndefined()
   })
 
@@ -110,6 +115,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
       agentArgs: '--dangerously-bypass-approvals-and-sandbox'
     })
+
     expect(plan?.launchConfig.agentCommand).toBe(
       "codex '--dangerously-bypass-approvals-and-sandbox'"
     )
@@ -125,6 +131,7 @@ describe('tui agent startup session options', () => {
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: "team's-model", effort: 'high' }
     })
+
     expect(plan?.launchCommand).toContain(`'team'"'"'s-model'`)
   })
 
@@ -136,6 +143,7 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       sessionOptions: { model: 'opus', effort: 'high' }
     })
+
     expect(plan?.launchCommand).toContain("claude '--model' 'opus' '--effort' 'high'")
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   })
@@ -150,6 +158,7 @@ describe('tui agent startup session options', () => {
       sessionOptions: { model: 'gpt-5.5', effort: 'high' },
       sessionOptionsOverrideAgentArgs: true
     })
+
     expect(plan?.launchCommand).toBe(
       "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' 'resume' 'thread-1'"
     )

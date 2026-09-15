@@ -52,6 +52,7 @@ export function sessionDetailConversationTurns(
 /** Prompt text with enough provenance for the renderer to avoid overclaiming. */
 export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPromptPreview | null {
   const stored = session.firstUserPrompt?.trim()
+
   if (stored) {
     return { text: stored, source: 'first-user-prompt' }
   }
@@ -60,7 +61,9 @@ export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPro
     if (message.role !== 'user') {
       continue
     }
+
     const text = message.text.trim()
+
     if (text) {
       return { text, source: 'preview-window' }
     }
@@ -72,13 +75,17 @@ export function sessionPromptPreview(session: AiVaultSession): AiVaultSessionPro
 function turnTextMatchesSessionTitle(title: string, turnText: string): boolean {
   const sessionText = normalizeSessionDisplayText(title)
   const candidateText = normalizeSessionDisplayText(turnText)
+
   if (!sessionText || !candidateText) {
     return false
   }
+
   if (sessionText === candidateText) {
     return true
   }
+
   const longEnough = sessionText.length >= 24 && candidateText.length >= 24
+
   return (
     longEnough && (sessionText.startsWith(candidateText) || candidateText.startsWith(sessionText))
   )
@@ -88,8 +95,10 @@ function dedupeAdjacentConversationTurns(
   turns: AiVaultSessionDisplayTurn[]
 ): AiVaultSessionDisplayTurn[] {
   const deduped: AiVaultSessionDisplayTurn[] = []
+
   for (const turn of turns) {
     const previous = deduped.at(-1)
+
     if (
       previous &&
       previous.role === turn.role &&
@@ -97,8 +106,10 @@ function dedupeAdjacentConversationTurns(
     ) {
       continue
     }
+
     deduped.push(turn)
   }
+
   return deduped
 }
 

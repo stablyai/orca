@@ -25,12 +25,15 @@ function build(
   overrides: Partial<Parameters<typeof buildNativeChatTranscriptSlots>[0]> = {}
 ) {
   let turn: string | undefined
+
   const turnKeys = messages.map((message) => {
     if (message.role === 'user') {
       turn = message.id
     }
+
     return turn
   })
+
   return buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
@@ -56,19 +59,23 @@ describe('transcript slots', () => {
 
   it('keeps a message whose only content is a turn status under it', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
+
     const slots = build([text('u', '', 'user')], {
       latestUserIndex: 0,
       turnStatuses: { active: status, completedByTurn: {} }
     })
+
     expect(slots).toHaveLength(1)
     expect(slots[0]?.status).toBe(status)
   })
 
   it('keeps a message whose only content is its turn diff rollup', () => {
     const diff: NativeChatTurnDiff = { files: [], added: 1, removed: 0, truncated: false }
+
     const slots = build([text('u', 'ask', 'user'), text('blank', '')], {
       turnDiffs: new Map([['u', diff]])
     })
+
     expect(slots.map((slot) => slot.message.id)).toEqual(['u', 'blank'])
     expect(slots[1]?.turnDiff).toBe(diff)
   })
@@ -79,6 +86,7 @@ describe('transcript slots', () => {
       title: 'Run it?',
       resolution: { state: 'resolved', selectedOptionId: 'yes' }
     } as unknown as NativeChatResolvedPrompt
+
     const slots = build([text('blank', '')], { receipts: new Map([['blank', receipt]]) })
     expect(slots).toHaveLength(1)
     expect(slots[0]?.receipt).toBe(receipt)
@@ -86,11 +94,13 @@ describe('transcript slots', () => {
 
   it('leaves the running turn status to the single transcript-tail indicator', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: null }
+
     const slots = build([text('u', 'ask', 'user')], {
       latestUserIndex: 0,
       turnStatuses: { active: status, completedByTurn: {} },
       isWorking: true
     })
+
     expect(slots[0]?.status).toBeUndefined()
   })
 

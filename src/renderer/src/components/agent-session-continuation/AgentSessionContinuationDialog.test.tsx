@@ -14,18 +14,22 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector({ settings: mocks.settings })
 }))
+
 vi.mock('@/lib/launch-agent-session-continuation', () => ({
   detectAgentSessionContinuationAgents: mocks.detectAgents,
   launchAgentSessionContinuation: mocks.launchContinuation
 }))
+
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }],
   getAgentLabel: () => 'Codex'
 }))
+
 vi.mock('@/components/agent/AgentCombobox', () => ({
   default: ({ value }: { value: string | null }) =>
     React.createElement('div', { 'data-agent': value ?? '' })
 }))
+
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
     open ? React.createElement('div', null, children) : null,
@@ -39,6 +43,7 @@ vi.mock('@/components/ui/dialog', () => ({
     React.createElement('header', null, children),
   DialogTitle: ({ children }: { children?: ReactNode }) => React.createElement('h2', null, children)
 }))
+
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children }: { children?: ReactNode }) => React.createElement('div', null, children),
   SelectContent: ({ children }: { children?: ReactNode }) =>
@@ -82,6 +87,7 @@ describe('AgentSessionContinuationDialog', () => {
 
   it('clears a prior detection failure while detecting a new request', async () => {
     let resolveSecond: (agents: ['codex']) => void = () => {}
+
     mocks.detectAgents.mockRejectedValueOnce(new Error('offline')).mockReturnValueOnce(
       new Promise<['codex']>((resolve) => {
         resolveSecond = resolve

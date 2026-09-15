@@ -20,5 +20,6 @@ export default function MobileFilePreviewRoute() {
     name?: string | string[]
     worktreeName?: string | string[]
   }>()
+
   return <MobileFilePreviewScreen route={normalizeMobileFilePreviewRouteParams(params)} />
 }

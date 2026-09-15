@@ -27,11 +27,15 @@ import {
 import { getWorkspaceKanbanVirtualLaneItemIds } from './workspace-kanban-virtual-lane-layout'
 
 const BOARD_SELECTOR = '[data-workspace-board-selection-surface]'
+
 const BOARD_SHEET_SELECTOR = '[data-workspace-board-sheet]'
+
 const LANE_SCROLL_SELECTOR = '[data-workspace-board-lane-scroll]'
+
 const EXTERNAL_DRAG_TARGET_ATTR = 'data-workspace-board-external-drag-target'
 
 let externalDragTargetElement: HTMLElement | null = null
+
 let logicalDropGroupsRegistration: { groups: readonly WorktreeDragGroup[] } | null = null
 
 function getWorkspaceKanbanBoardElement(): HTMLElement | null {
@@ -44,11 +48,14 @@ export function hasWorkspaceKanbanSidebarDropBoard(): boolean {
 
 export function isWorkspaceKanbanSidebarDropPointInBoard(x: number, y: number): boolean {
   const board = getWorkspaceKanbanBoardElement()
+
   if (!board) {
     return false
   }
+
   const hitSurface = board.closest<HTMLElement>(BOARD_SHEET_SELECTOR) ?? board
   const rect = hitSurface.getBoundingClientRect()
+
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 }
 
@@ -75,11 +82,15 @@ function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: str
   const publishedFullLaneIds = parseWorkspaceLaneFullIds(lane.dataset.workspaceLaneFullIds)
   const laneScroll = lane.querySelector<HTMLElement>(LANE_SCROLL_SELECTOR)
   const virtualItemIds = laneScroll ? getWorkspaceKanbanVirtualLaneItemIds(laneScroll) : null
+
   if (virtualItemIds) {
     const viewIds = [...virtualItemIds]
+
     return { fullLaneIds: publishedFullLaneIds ?? viewIds, viewIds }
   }
+
   const cards = getLaneCardIds(lane)
+
   return {
     fullLaneIds: publishedFullLaneIds ?? cards.flatMap((card) => getCardWorktreeId(card) ?? []),
     viewIds: cards
@@ -103,6 +114,7 @@ function setExternalDragTargetElement(element: HTMLElement | null): void {
   if (externalDragTargetElement === element) {
     return
   }
+
   externalDragTargetElement?.removeAttribute(EXTERNAL_DRAG_TARGET_ATTR)
   externalDragTargetElement = element
   externalDragTargetElement?.setAttribute(EXTERNAL_DRAG_TARGET_ATTR, 'true')
@@ -118,6 +130,7 @@ export function registerWorkspaceKanbanSidebarDropGroups(
 ): () => void {
   const registration = { groups }
   logicalDropGroupsRegistration = registration
+
   return () => {
     if (logicalDropGroupsRegistration === registration) {
       logicalDropGroupsRegistration = null
@@ -134,15 +147,18 @@ export function getWorkspaceKanbanSidebarDropGroups(): WorktreeDragGroup[] {
   }
 
   const board = getWorkspaceKanbanBoardElement()
+
   if (!board) {
     return []
   }
 
   return Array.from(board.querySelectorAll<HTMLElement>(STATUS_DROP_TARGET)).flatMap((lane) => {
     const status = lane.dataset.workspaceStatus
+
     if (!status) {
       return []
     }
+
     return [{ key: status, worktreeIds: toLaneDropIds(lane).fullLaneIds }]
   })
 }
@@ -152,9 +168,11 @@ export function getWorkspaceKanbanSidebarDropTarget(
   y: number
 ): WorkspaceKanbanCardDropTarget {
   const board = getWorkspaceKanbanBoardElement()
+
   if (!board) {
     return { status: null, isPinDrop: false, dropIndex: 0 }
   }
+
   return getCardDropTarget(board, x, y)
 }
 
@@ -171,10 +189,13 @@ export function resolveWorkspaceKanbanSidebarFullLaneDropIndex(
 ): number {
   const board = getWorkspaceKanbanBoardElement()
   const lane = board ? getStatusDropTargetElement(board, status) : null
+
   if (!lane) {
     return viewDropIndex
   }
+
   const { fullLaneIds, viewIds } = toLaneDropIds(lane)
+
   return resolveFullLaneDropIndex({
     fullLaneIds,
     renderedIds: viewIds,
@@ -188,17 +209,21 @@ export function updateWorkspaceKanbanSidebarDropTargetVisual(args: {
   shouldShowDropIndicator: (target: WorkspaceKanbanCardDropTarget) => boolean
 }): WorkspaceKanbanCardDropTarget {
   const board = getWorkspaceKanbanBoardElement()
+
   if (!board) {
     clearWorkspaceKanbanSidebarDropTargetVisual()
+
     return { status: null, isPinDrop: false, dropIndex: 0 }
   }
 
   const target = getCardDropTarget(board, args.x, args.y)
+
   const targetElement = target.isPinDrop
     ? board.querySelector<HTMLElement>(PIN_DROP_TARGET)
     : target.status
       ? getStatusDropTargetElement(board, target.status)
       : null
+
   setExternalDragTargetElement(targetElement)
 
   if (target.status && args.shouldShowDropIndicator(target)) {
@@ -227,13 +252,16 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
 } {
   const sourceGroupKeys = args.worktreeIds.flatMap((worktreeId) => {
     const worktree = args.worktreeById.get(worktreeId)
+
     return worktree ? [getWorkspaceStatus(worktree, args.workspaceStatuses)] : []
   })
+
   const writeManualOrder = shouldWriteManualOrderForGroupDrop({
     sortBy: args.sortBy,
     sourceGroupKeys,
     targetGroupKey: args.status
   })
+
   const order = writeManualOrder
     ? buildManualOrderUpdatesForGroupDrop({
         groups: args.groups,
@@ -247,15 +275,20 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 
   const updates: WorktreeMetaBatchUpdate[] = []
+
   for (const worktreeId of args.worktreeIds) {
     const current = args.worktreeById.get(worktreeId)
+
     if (!current) {
       continue
     }
+
     const next: Partial<WorktreeMeta> = {}
+
     if (getWorkspaceStatus(current, args.workspaceStatuses) !== args.status) {
       next.workspaceStatus = args.status
     }
+
     updates.push({
       worktreeId,
       updates: next,
@@ -267,6 +300,7 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
     for (const [worktreeId, manualOrder] of order.updates) {
       const current = args.worktreeById.get(worktreeId)
       const entry = updates.find((candidate) => candidate.worktreeId === worktreeId)
+
       if (entry) {
         entry.updates = { ...entry.updates, ...manualOrder }
       } else if (current) {

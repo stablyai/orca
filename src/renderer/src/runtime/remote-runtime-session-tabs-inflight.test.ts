@@ -19,12 +19,14 @@ const SNAPSHOT = {
 describe('remote runtime session-tabs in-flight requests', () => {
   it('shares one request within an environment/worktree and evicts it after settlement', async () => {
     let resolveLoad: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+
     const load = vi.fn(
       () =>
         new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
           resolveLoad = resolve
         })
     )
+
     const args = { environmentId: 'env-1', worktreeId: 'wt-1', load }
 
     const first = listRemoteRuntimeSessionTabsDeduped(args)
@@ -71,26 +73,32 @@ describe('remote runtime session-tabs in-flight requests', () => {
 
   it('waits out an older request before sharing a post-operation inventory', async () => {
     let resolveCurrent: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+
     const currentLoad = vi.fn(
       () =>
         new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
           resolveCurrent = resolve
         })
     )
+
     let resolveFresh: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+
     const freshLoad = vi.fn(
       () =>
         new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
           resolveFresh = resolve
         })
     )
+
     const ownership = { environmentId: 'env-1', worktreeId: 'wt-1' }
 
     const current = listRemoteRuntimeSessionTabsDeduped({ ...ownership, load: currentLoad })
+
     const firstFresh = listRemoteRuntimeSessionTabsAfterCurrentInFlight({
       ...ownership,
       load: freshLoad
     })
+
     const secondFresh = listRemoteRuntimeSessionTabsAfterCurrentInFlight({
       ...ownership,
       load: freshLoad

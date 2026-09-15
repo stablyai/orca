@@ -41,9 +41,11 @@ function buildAutomationWorkspaceSearchText(
   if (automation.workspaceMode === 'new_per_run') {
     return automation.baseBranch ?? ''
   }
+
   if (!automation.workspaceId) {
     return ''
   }
+
   return worktreeMap?.get(automation.workspaceId)?.displayName ?? ''
 }
 
@@ -53,6 +55,7 @@ export function buildAutomationSearchFields(
 ): AutomationListSearchFields {
   const { automation } = row
   const repo = context.repoMap.get(getAutomationRunRepoId(automation))
+
   return {
     name: automation.name,
     project: buildAutomationProjectSearchText({
@@ -117,11 +120,13 @@ export function matchAutomationListSearchRowKeys(
   activeQuery: string
 ): string[] {
   const keys: string[] = []
+
   for (const row of rows) {
     if (automationListSearchIndexMatches(row.index, activeQuery)) {
       keys.push(row.key)
     }
   }
+
   return keys
 }
 

@@ -97,7 +97,9 @@ export function resolvePaneAgentActivity(
     isExplicitAgentStatusFresh(input.explicitEntry, input.now, AGENT_STATUS_STALE_AFTER_MS)
       ? input.explicitEntry
       : null
+
   const titleStatus = input.liveTitle !== null ? detectAgentStatusFromTitle(input.liveTitle) : null
+
   if (freshEntry) {
     return {
       hookState: freshEntry.state,
@@ -108,6 +110,7 @@ export function resolvePaneAgentActivity(
       livePtyRequired: false
     }
   }
+
   if (titleStatus !== null) {
     return {
       hookState: null,
@@ -118,6 +121,7 @@ export function resolvePaneAgentActivity(
       livePtyRequired: !input.hasLivePty
     }
   }
+
   return {
     hookState: null,
     hookAgentType: undefined,

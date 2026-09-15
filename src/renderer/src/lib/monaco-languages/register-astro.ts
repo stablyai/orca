@@ -248,6 +248,7 @@ export function registerAstroLanguage(monaco: MonacoModule): void {
   const astroAlreadyRegistered = monaco.languages
     .getLanguages()
     .some((language) => language.id === 'astro')
+
   if (astroAlreadyRegistered) {
     return
   }

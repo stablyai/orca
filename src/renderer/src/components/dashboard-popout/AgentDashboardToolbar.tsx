@@ -61,21 +61,26 @@ export function AgentDashboardToolbar({
   const statuses = workspaceStatusOptions(cards, filterOptions?.workspaceStatuses)
   const reviewCounts = reviewCountsByState(cards)
   const activeCount = activeDashboardFilterCount(filters)
+
   const toggleProject = (id: string): void =>
     onFiltersChange({ ...filters, projects: toggleDashboardFilter(filters.projects, id) })
+
   const toggleStatus = (id: string): void =>
     onFiltersChange({
       ...filters,
       workspaceStatuses: toggleDashboardFilter(filters.workspaceStatuses, id)
     })
+
   const toggleReview = (id: DashboardReviewFilter): void =>
     onFiltersChange({
       ...filters,
       reviewStates: toggleDashboardFilter(filters.reviewStates, id)
     })
+
   const clearFilters = (): void => {
     onFiltersChange({ projects: [], workspaceStatuses: [], reviewStates: [] })
   }
+
   const reviewLabel = (id: DashboardReviewFilter): string =>
     translate('dashboardPopout.filters.reviewChip', 'Review: {{state}}', {
       state: reviewStateLabel(id)
@@ -170,6 +175,7 @@ export function AgentDashboardToolbar({
                   label: option.label,
                   color: option.color
                 })
+
                 return (
                   <DropdownMenuCheckboxItem
                     key={option.id}

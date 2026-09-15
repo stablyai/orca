@@ -24,16 +24,19 @@ export async function cleanupDaemonForProtocol(
   const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
 
   const alive = await probeSocket(socketPath)
+
   if (!alive) {
     if (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
       // Endpoint absence doesn't prove the PID record belongs to the current protocol; leave artifact cleanup to the owning daemon.
       return { cleaned: false, killedCount: 0 }
     }
+
     try {
       unlinkSync(pidPath)
     } catch {
       // Best-effort
     }
+
     return { cleaned: false, killedCount: 0 }
   }
 
@@ -41,11 +44,14 @@ export async function cleanupDaemonForProtocol(
   let killedCount = 0
   let didRequestShutdown = false
   let didKillStaleDaemon = false
+
   try {
     await client.ensureConnected()
+
     const sessions = await client
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
+
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
 
     // Use the single-shot `shutdown` RPC (kills all sessions then exits) to avoid racing per-session `kill` calls against the daemon exiting.
@@ -57,6 +63,7 @@ export async function cleanupDaemonForProtocol(
     // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).
     const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
     didKillStaleDaemon = killOutcome.killed
+
     if (killOutcome.liveOwnerSurvived) {
       // Why: something still owns the endpoint. Returning as if it were cleaned lets restart
       // fork a replacement that cannot publish onto the held name, leaving the user with no
@@ -74,6 +81,7 @@ export async function cleanupDaemonForProtocol(
       // Never fork a replacement while the old incarnation may still own the endpoint or be disposing terminal children.
       throw new Error('Timed out waiting for daemon self-shutdown')
     }
+
     return { cleaned: true, killedCount }
   }
 
@@ -88,11 +96,14 @@ export async function cleanupDaemonForProtocol(
 
 async function waitForDaemonEndpointExit(socketPath: string): Promise<boolean> {
   const deadline = Date.now() + DAEMON_SELF_SHUTDOWN_WAIT_MS
+
   while (Date.now() < deadline) {
     if (!(await probeSocket(socketPath))) {
       return true
     }
+
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+
   return !(await probeSocket(socketPath))
 }

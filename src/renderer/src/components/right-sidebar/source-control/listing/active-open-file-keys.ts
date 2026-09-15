@@ -31,12 +31,14 @@ export function buildActiveOpenRowKeys(
   }
 
   const separatorIndex = signature.indexOf(SIGNATURE_SEPARATOR)
+
   if (separatorIndex === -1) {
     return EMPTY_OPEN_ROW_KEYS
   }
 
   const diffSource = signature.slice(0, separatorIndex)
   const path = signature.slice(separatorIndex + SIGNATURE_SEPARATOR.length)
+
   if (path.length === 0) {
     return EMPTY_OPEN_ROW_KEYS
   }
@@ -46,15 +48,18 @@ export function buildActiveOpenRowKeys(
   }
 
   const workingTreeKeys = [`unstaged::${path}`, `untracked::${path}`]
+
   if (diffSource === 'unstaged') {
     return filterAvailableRowKeys(workingTreeKeys, availableRowKeys)
   }
 
   if (diffSource === 'edit') {
     const availableWorkingTreeKeys = filterAvailableRowKeys(workingTreeKeys, availableRowKeys)
+
     if (availableWorkingTreeKeys.size > 0 || !availableRowKeys) {
       return availableWorkingTreeKeys
     }
+
     return filterAvailableRowKeys([`staged::${path}`], availableRowKeys)
   }
 
@@ -68,6 +73,8 @@ function filterAvailableRowKeys(
   if (!availableRowKeys) {
     return new Set(candidates)
   }
+
   const keys = candidates.filter((key) => availableRowKeys.has(key))
+
   return keys.length > 0 ? new Set(keys) : EMPTY_OPEN_ROW_KEYS
 }

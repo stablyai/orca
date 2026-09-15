@@ -9,7 +9,9 @@ import path from 'node:path'
 import { locateInstalledExe } from '../win-update-e2e/installer-steps.mjs'
 
 const VALID_PROFILES = new Set(['survival', 'orphaned'])
+
 const VALUE_FLAGS = new Set(['--expect', '--exe-path', '--soak-seconds'])
+
 const BOOLEAN_FLAGS = new Set(['--keep-profile'])
 
 const USAGE = `
@@ -49,6 +51,7 @@ export function parseArgs(argv) {
   }
 
   const exePathFlagPresent = argv.includes('--exe-path')
+
   const opts = {
     // Only auto-locate on win32: off-win32 this would needlessly spawn powershell,
     // and run.mjs asserts win32 first so the platform message wins over any
@@ -64,17 +67,20 @@ export function parseArgs(argv) {
   }
 
   const errors = validate(opts, exePathFlagPresent, argv)
+
   return { ...opts, errors }
 }
 
 function validate(opts, exePathFlagPresent, argv) {
   const errors = []
   errors.push(...validateArgShape(argv))
+
   if (!opts.expect) {
     errors.push('Missing --expect <survival|orphaned>')
   } else if (!VALID_PROFILES.has(opts.expect)) {
     errors.push(`Invalid --expect "${opts.expect}" (expected survival or orphaned)`)
   }
+
   // Distinguish "--exe-path omitted" (fall back to auto-locate) from
   // "--exe-path with no value" (a mistake that must fail, not silently default).
   if (exePathFlagPresent && takeValue(argv, '--exe-path') === undefined) {
@@ -88,43 +94,56 @@ function validate(opts, exePathFlagPresent, argv) {
   } else if (!path.isAbsolute(opts.exePath)) {
     errors.push(`--exe-path must be an absolute path (got "${opts.exePath}")`)
   }
+
   if (!Number.isFinite(opts.soakSeconds) || opts.soakSeconds < 0) {
     errors.push('--soak-seconds must be a non-negative number')
   }
+
   return errors
 }
 
 function validateArgShape(argv) {
   const errors = []
   const seen = new Set()
+
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index]
+
     if (!VALUE_FLAGS.has(arg) && !BOOLEAN_FLAGS.has(arg)) {
       errors.push(`Unknown argument: ${arg}`)
       continue
     }
+
     if (seen.has(arg)) {
       errors.push(`Duplicate argument: ${arg}`)
     }
+
     seen.add(arg)
+
     if (VALUE_FLAGS.has(arg)) {
       const value = argv[index + 1]
+
       if (value !== undefined && !value.startsWith('--')) {
         index++
       }
     }
   }
+
   return errors
 }
 
 function takeValue(argv, flag) {
   const idx = argv.indexOf(flag)
+
   if (idx === -1) {
     return undefined
   }
+
   const value = argv[idx + 1]
+
   if (value === undefined || value.startsWith('--')) {
     return undefined
   }
+
   return value
 }

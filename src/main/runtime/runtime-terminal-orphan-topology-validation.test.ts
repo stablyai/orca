@@ -4,6 +4,7 @@ import { validateRuntimeTerminalOrphanTopology } from './runtime-terminal-orphan
 
 function fixture(count: number): RuntimeTerminalOrphanAdoptionRequest {
   const ids = Array.from({ length: count }, (_, index) => `tab-${index}`)
+
   return {
     worktree: 'folder-workspace',
     expectedTopologyRevision: 1,
@@ -35,6 +36,7 @@ it('validates large restored MRU lists with linear tab-order reads', () => {
       if (typeof key === 'string' && /^\d+$/.test(key)) {
         reads += 1
       }
+
       return Reflect.get(target, key, receiver)
     }
   })
@@ -52,15 +54,19 @@ it.each(['duplicate', 'foreign-recent', 'foreign-active'])(
   (kind) => {
     const request = fixture(2)
     const group = request.topology!.groups[0]
+
     if (kind === 'duplicate') {
       group.tabOrder.push(group.tabOrder[0])
     }
+
     if (kind === 'foreign-recent') {
       group.recentTabIds = ['foreign']
     }
+
     if (kind === 'foreign-active') {
       group.activeTabId = 'foreign'
     }
+
     expect(() =>
       validateRuntimeTerminalOrphanTopology(
         request,
@@ -82,6 +88,7 @@ type Groups = NonNullable<RuntimeTerminalOrphanAdoptionRequest['topology']>['gro
 function withGroups(count: number, groups: Groups): RuntimeTerminalOrphanAdoptionRequest {
   const request = fixture(count)
   request.topology!.groups = groups
+
   return request
 }
 
@@ -136,6 +143,7 @@ it.each([
     // Reverse MRU: every entry must still resolve inside its own group.
     recentTabIds: tabOrder.toReversed()
   }))
+
   expect(validate(withGroups(2, groups)).topologyTabsById.size).toBe(2)
 })
 

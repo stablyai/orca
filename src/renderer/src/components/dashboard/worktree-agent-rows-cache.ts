@@ -97,10 +97,13 @@ function shallowRecordEqual(a: Record<string, unknown>, b: Record<string, unknow
   if (a === b) {
     return true
   }
+
   const aKeys = Object.keys(a)
+
   if (aKeys.length !== Object.keys(b).length) {
     return false
   }
+
   return aKeys.every((key) => Object.is(a[key], b[key]))
 }
 
@@ -124,6 +127,7 @@ export function selectWorktreeAgentRowsCached(args: {
   const ptyIdsByTabId = selectLivePtyIdsForWorktree(state, worktreeId)
 
   const cached = cache?.byWorktree.get(worktreeId)
+
   if (
     cached &&
     cached.generation === generation &&
@@ -145,10 +149,12 @@ export function selectWorktreeAgentRowsCached(args: {
           ...liveEntries,
           ...migrationUnsupported.flatMap((unsupported) => {
             const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+
             return entry ? [entry] : []
           })
         ]
       : liveEntries
+
   const rows = applyAgentRowLineage(
     buildWorktreeAgentRows({
       tabs: tabs ?? [],
@@ -161,6 +167,7 @@ export function selectWorktreeAgentRowsCached(args: {
       now
     })
   )
+
   if (cache) {
     cache.computeCount += 1
     cache.lastComputedWorktreeIds.push(worktreeId)
@@ -177,5 +184,6 @@ export function selectWorktreeAgentRowsCached(args: {
       rows
     })
   }
+
   return rows
 }

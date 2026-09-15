@@ -18,9 +18,11 @@ describe('terminal WebView external mouse drag', () => {
     const reports = mouse.terminalInputBytes().match(DEFAULT_MOUSE_REPORT_RE) ?? []
     expect(reports.length).toBeGreaterThanOrEqual(3)
     expect(reports[0]?.charCodeAt(3)).toBe(32)
+
     for (const motion of reports.slice(1, -1)) {
       expect(motion.charCodeAt(3)).toBe(64)
     }
+
     expect(reports.at(-1)?.charCodeAt(3)).toBe(35)
     // Motion reports are deduped per cell, so a horizontal drag advances columns.
     const motionCols = reports.slice(1, -1).map((report) => report.charCodeAt(4))

@@ -49,6 +49,7 @@ function assertCloneHostIsSupported(hostId: ExecutionHostId | null | undefined):
   if (parseExecutionHostId(hostId)?.kind !== 'ssh') {
     return
   }
+
   throw new Error(
     'Cloning onto an SSH host is not supported. Clone the repository on the host, then set the project up from that existing folder.'
   )
@@ -63,15 +64,20 @@ export class RuntimeProjectHostSetupController {
 
   updateProject(projectId: string, updates: ProjectUpdateArgs['updates']): Project {
     const store = this.deps.getStore()
+
     if (!store?.updateProject) {
       throw new Error('runtime_unavailable')
     }
+
     const project = store.updateProject(projectId, updates)
+
     if (!project) {
       throw new Error(`Project not found: ${projectId}`)
     }
+
     this.deps.invalidateResolvedWorktrees()
     this.deps.notifyReposChanged()
+
     return project
   }
 
@@ -81,13 +87,17 @@ export class RuntimeProjectHostSetupController {
 
   createSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult {
     const store = this.deps.getStore()
+
     if (!store?.createProjectHostSetup) {
       throw new Error('runtime_unavailable')
     }
+
     const result = store.createProjectHostSetup(args)
+
     if (!result) {
       throw new Error(`Project not found: ${args.projectId}`)
     }
+
     return result
   }
 
@@ -97,12 +107,14 @@ export class RuntimeProjectHostSetupController {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
     }
+
     const kind = args.kind === 'folder' ? 'folder' : 'git'
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     // Why route rather than refuse: this process owns the SSH connection, and its own IPC handler
     // already registers `ssh:*` hosts correctly. Refusing here only made the CLI and runtime RPC
     // disagree with the desktop app about what the same process can do.
     const sshTargetId = getSshTargetIdForExecutionHost(args.hostId)
+
     const repo = sshTargetId
       ? await this.deps.addRemoteRepo({
           connectionId: sshTargetId,
@@ -111,6 +123,7 @@ export class RuntimeProjectHostSetupController {
           kind
         })
       : await this.deps.addRepo(args.path, kind, args.hostId)
+
     return this.completeSetup(args, repo, !knownRepoIds.has(repo.id))
   }
 
@@ -118,6 +131,7 @@ export class RuntimeProjectHostSetupController {
     assertCloneHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
     const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
+
     return this.completeSetup(
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,
@@ -127,29 +141,38 @@ export class RuntimeProjectHostSetupController {
 
   updateSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult {
     const store = this.deps.getStore()
+
     if (!store?.updateProjectHostSetup) {
       throw new Error('runtime_unavailable')
     }
+
     const result = store.updateProjectHostSetup(args)
+
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
+
     if ('worktreeBasePath' in args.updates && result.repo) {
       void prepareLocalWorktreeRootForRepo(store, result.repo)
       invalidateAuthorizedRootsCache()
     }
+
     return result
   }
 
   deleteSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult {
     const store = this.deps.getStore()
+
     if (!store?.deleteProjectHostSetup) {
       throw new Error('runtime_unavailable')
     }
+
     const result = store.deleteProjectHostSetup(args)
+
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
+
     return result
   }
 
@@ -168,6 +191,7 @@ export class RuntimeProjectHostSetupController {
         invalidateAuthorizedRootsCache()
         this.deps.notifyReposChanged()
       }
+
       throw error
     }
   }
@@ -177,17 +201,22 @@ export class RuntimeProjectHostSetupController {
     initialRepo: Repo
   ): ProjectHostSetupResult {
     const store = this.deps.getStore()
+
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+
     let repo = initialRepo
     let setup = getProjectHostSetupForRepo(this.listSetups(), repo)
+
     if (setup.projectId !== args.projectId) {
       const existingProject = this.listProjects().find((project) => project.id === args.projectId)
       const identity = existingProject?.providerIdentity ?? args.projectProviderIdentity
+
       if (!identity || getProjectIdForProviderIdentity(identity) !== args.projectId) {
         throw new Error('Imported folder does not match the selected project identity.')
       }
+
       const updated = store.updateRepo(repo.id, {
         upstream: {
           owner: identity.owner,
@@ -195,25 +224,32 @@ export class RuntimeProjectHostSetupController {
           ...(identity.host ? { host: identity.host } : {})
         }
       })
+
       if (!updated) {
         throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
       }
+
       repo = updated
       setup = getProjectHostSetupForRepo(this.listSetups(), repo)
     }
+
     const setupMethod = args.setupMethod ?? 'imported-existing-folder'
     const updated = store.updateRepo(repo.id, { projectHostSetupMethod: setupMethod })
+
     if (!updated) {
       throw new Error(
         `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
       )
     }
+
     repo = updated
     setup = getProjectHostSetupForRepo(this.listSetups(), repo)
     const project = this.listProjects().find((entry) => entry.id === setup.projectId)
+
     if (!project) {
       throw new Error(`Project setup was created without a project record: ${setup.projectId}`)
     }
+
     return { project, setup, repo }
   }
 }

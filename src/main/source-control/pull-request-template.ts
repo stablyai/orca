@@ -28,6 +28,7 @@ function getTemplateCandidates(provider?: HostedReviewProvider | null): string[]
   if (provider === 'gitlab') {
     return [...MERGE_REQUEST_TEMPLATE_CANDIDATES, ...PULL_REQUEST_TEMPLATE_CANDIDATES]
   }
+
   return PULL_REQUEST_TEMPLATE_CANDIDATES
 }
 
@@ -44,25 +45,31 @@ export async function readHostedReviewTemplate(
   provider?: HostedReviewProvider | null
 ): Promise<string> {
   const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
+
   if (connectionId && !remoteProvider) {
     return ''
   }
+
   for (const relativeCandidate of getTemplateCandidates(provider)) {
     try {
       if (remoteProvider) {
         const result = await remoteProvider.readFile(
           joinWorktreeRelativePath(repoPath, relativeCandidate)
         )
+
         if (result.isBinary) {
           continue
         }
+
         return result.content
       }
+
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional hosted-review template path.
     }
   }
+
   return ''
 }
 
@@ -76,6 +83,7 @@ export async function resolveHostedReviewBodyForGeneration(args: {
   if (!args.useTemplate || args.body.trim()) {
     return args.body
   }
+
   // Why: generated non-empty bodies bypass provider-side template fallback, so
   // preload the template into the AI context when the user asked to use it.
   return readHostedReviewTemplate(args.repoPath, args.connectionId, args.provider)

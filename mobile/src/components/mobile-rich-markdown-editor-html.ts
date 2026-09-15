@@ -3,6 +3,7 @@ import { MOBILE_RICH_MARKDOWN_EDITOR_DOCUMENT_BODY } from './mobile-rich-markdow
 import { MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT } from './mobile-rich-markdown-editor-script'
 
 export { escapeInjectedJavaScriptString } from './mobile-rich-markdown-editor-script-string'
+
 export { MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT } from './mobile-rich-markdown-editor-script'
 
 export function buildMobileRichMarkdownEditorHtml(): string {

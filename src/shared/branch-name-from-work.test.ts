@@ -115,6 +115,7 @@ describe('buildBranchNamePrompt', () => {
       firstPrompt: 'Add a logout button',
       assistantMessage: "I'll wire it into the header."
     })
+
     expect(prompt).toContain("Agent's initial response")
     expect(prompt).toContain("I'll wire it into the header.")
   })
@@ -124,6 +125,7 @@ describe('buildBranchNamePrompt', () => {
       { firstPrompt: 'Add a logout button' },
       'Prefer product nouns.'
     )
+
     expect(prompt.startsWith('Prefer product nouns.')).toBe(true)
     expect(prompt).not.toContain('Additional user prompt:')
     expect(prompt).not.toContain('Rules:')

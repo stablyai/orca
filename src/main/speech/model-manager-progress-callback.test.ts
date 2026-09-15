@@ -22,6 +22,7 @@ type ModelManagerInternals = {
 describe('ModelManager progress callbacks', () => {
   it('unsubscribes progress callbacks without replacing other listeners', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manager = new ModelManager(dir)
       const internals = manager as unknown as ModelManagerInternals
@@ -48,6 +49,7 @@ describe('ModelManager progress callbacks', () => {
 
   it('coalesces per-chunk download progress to whole percent', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manager = new ModelManager(dir)
       const internals = manager as unknown as ModelManagerInternals

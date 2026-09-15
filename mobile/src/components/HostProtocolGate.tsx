@@ -14,9 +14,11 @@ const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
 
 export function useHostProtocolGates(): HostStatusGates {
   const gates = useContext(HostStatusGatesContext)
+
   if (!gates) {
     throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
   }
+
   return gates
 }
 
@@ -40,6 +42,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
     if (resolvedNow) {
       resolvedHostIdRef.current = hostKey
     }
+
     if (blocked) {
       // Why: the block screen unmounts the routes, so a later pending window
       // must not assume a live tree it can overlay.
@@ -61,9 +64,11 @@ export function HostProtocolGate({ hostId, children }: Props) {
       </View>
     )
   }
+
   if (blocked) {
     return <ProtocolBlockScreen verdict={compatVerdict} />
   }
+
   // Why: the host sidebar needs the same status fields; sharing the result avoids a second status.get per route.
   return (
     <HostStatusGatesContext.Provider value={gates}>

@@ -72,6 +72,7 @@ describe('mobile quick-command launch', () => {
 
   it('bounds native row text without truncating searchable or executable content', () => {
     const longPrompt = `Review ${'x'.repeat(5993)}`
+
     const agentCommand = command({
       action: 'agent-prompt',
       agent: 'codex',

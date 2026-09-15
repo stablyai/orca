@@ -68,9 +68,11 @@ export function GitHubMarkdownComposer({
   const onSubmitShortcutRef = useRef(onSubmitShortcut)
   const disabledRef = useRef(disabled)
   const isEditingLinkRef = useRef(false)
+
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
+
   const [activeTab, setActiveTab] = useState<ComposerTab>('write')
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
@@ -105,14 +107,19 @@ export function GitHubMarkdownComposer({
 
   const openLinkEditor = useCallback(() => {
     const editor = editorRef.current
+
     if (!editor || disabledRef.current) {
       return
     }
+
     const position = getLinkBubblePosition(editor, rootRef.current)
+
     if (!position) {
       editor.commands.focus()
+
       return
     }
+
     const href = editor.isActive('link') ? String(editor.getAttributes('link').href ?? '') : ''
     setLinkBubble(createEditableMarkdownLinkBubble(href, position))
     setIsEditingLink(true)
@@ -132,27 +139,35 @@ export function GitHubMarkdownComposer({
       handleKeyDown: (_view, event) => {
         if (isScreenSubmitShortcut(event)) {
           const submit = onSubmitShortcutRef.current
+
           if (submit) {
             event.preventDefault()
             event.stopPropagation()
             submit()
+
             return true
           }
         }
+
         const isMac = navigator.userAgent.includes('Mac')
         const mod = isMac ? event.metaKey : event.ctrlKey
+
         if (mod && event.key.toLowerCase() === 'k') {
           event.preventDefault()
           event.stopPropagation()
           openLinkEditor()
+
           return true
         }
+
         if (event.key === 'Escape' && imageInputOpen) {
           event.preventDefault()
           event.stopPropagation()
           setImageInputOpen(false)
+
           return true
         }
+
         return false
       }
     },
@@ -160,6 +175,7 @@ export function GitHubMarkdownComposer({
       editorRef.current = nextEditor
       normalizeSoftBreaks(nextEditor)
       lastSyncedMarkdownRef.current = value
+
       if (autoFocus) {
         requestAnimationFrame(() => nextEditor.commands.focus('end'))
       }
@@ -171,6 +187,7 @@ export function GitHubMarkdownComposer({
       if (applyingExternalValueRef.current) {
         return
       }
+
       const markdown = nextEditor.getMarkdown()
       lastSyncedMarkdownRef.current = markdown
       onChangeRef.current(markdown)
@@ -179,8 +196,10 @@ export function GitHubMarkdownComposer({
       if (isEditingLinkRef.current) {
         return
       }
+
       if (nextEditor.isActive('link')) {
         const position = getLinkBubblePosition(nextEditor, rootRef.current)
+
         if (position) {
           setLinkBubble(
             createEditableMarkdownLinkBubble(
@@ -188,18 +207,22 @@ export function GitHubMarkdownComposer({
               position
             )
           )
+
           return
         }
       }
+
       setLinkBubble(null)
     }
   })
+
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   useEffect(() => {
     if (!editor) {
       return
     }
+
     editorRef.current = editor
     editor.setEditable(!disabled)
   }, [disabled, editor])
@@ -208,11 +231,13 @@ export function GitHubMarkdownComposer({
     if (!editor) {
       return
     }
+
     // Why: parent clears to '' after submit; always reset the editor so stale
     // draft text never survives a successful comment post.
     if (!value.trim()) {
       if (editor.getMarkdown().trim()) {
         applyingExternalValueRef.current = true
+
         try {
           editor.commands.clearContent(true)
           normalizeSoftBreaks(editor)
@@ -223,13 +248,18 @@ export function GitHubMarkdownComposer({
       } else {
         lastSyncedMarkdownRef.current = ''
       }
+
       return
     }
+
     if (value === lastSyncedMarkdownRef.current || value === editor.getMarkdown()) {
       lastSyncedMarkdownRef.current = value
+
       return
     }
+
     applyingExternalValueRef.current = true
+
     try {
       editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(value, codec), {
         contentType: 'markdown',
@@ -244,9 +274,11 @@ export function GitHubMarkdownComposer({
 
   const handleLinkSave = useCallback((href: string) => {
     const editor = editorRef.current
+
     if (!editor) {
       return
     }
+
     if (href) {
       if (editor.isActive('link')) {
         editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
@@ -266,14 +298,17 @@ export function GitHubMarkdownComposer({
     } else if (editor.isActive('link')) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
     }
+
     setIsEditingLink(false)
   }, [])
 
   const handleLinkRemove = useCallback(() => {
     const editor = editorRef.current
+
     if (!editor) {
       return
     }
+
     editor.chain().focus().extendMarkRange('link').unsetLink().run()
     setLinkBubble(null)
     setIsEditingLink(false)
@@ -311,8 +346,10 @@ export function GitHubMarkdownComposer({
             event.preventDefault()
             event.stopPropagation()
             insertImageUrl()
+
             return
           }
+
           if (event.key === 'Escape') {
             event.preventDefault()
             event.stopPropagation()
@@ -338,7 +375,9 @@ export function GitHubMarkdownComposer({
       </Button>
     </form>
   ) : null
+
   const editorPane = <GitHubMarkdownComposerEditorPane disabled={disabled} editor={editor} />
+
   const previewPane = (
     <GitHubMarkdownComposerPreviewPane
       value={value}
@@ -346,6 +385,7 @@ export function GitHubMarkdownComposer({
       previewGithubRepo={previewGithubRepo}
     />
   )
+
   const attachmentFooter = isTabbed ? (
     <button
       type="button"
@@ -362,6 +402,7 @@ export function GitHubMarkdownComposer({
       </span>
     </button>
   ) : null
+
   return (
     <div
       ref={rootRef}
@@ -396,9 +437,11 @@ export function GitHubMarkdownComposer({
           onEditStart={() => setIsEditingLink(true)}
           onEditCancel={() => {
             setIsEditingLink(false)
+
             if (!linkBubble.href) {
               setLinkBubble(null)
             }
+
             editorRef.current?.commands.focus()
           }}
           onOpen={handleLinkOpen}

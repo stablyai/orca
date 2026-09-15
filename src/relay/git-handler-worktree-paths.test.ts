@@ -44,12 +44,15 @@ describe('relay worktree path parsing', () => {
   it('deletes the matching branch for SSH worktrees whose paths contain newlines', async () => {
     const worktreePath = '/repo-feature\nremote'
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -61,6 +64,7 @@ describe('relay worktree path parsing', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -72,18 +76,23 @@ describe('relay worktree path parsing', () => {
   it('falls back to line-block worktree listing when remote Git rejects -z', async () => {
     const calls: string[] = []
     let listCount = 0
+
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
+
       if (args[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       if (args[0] === 'worktree' && args[1] === 'list' && args.includes('-z')) {
         throw Object.assign(new Error("unknown switch `z'"), {
           stderr: "error: unknown switch `z'"
         })
       }
+
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
+
         return {
           stdout:
             listCount === 1
@@ -95,6 +104,7 @@ describe('relay worktree path parsing', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 

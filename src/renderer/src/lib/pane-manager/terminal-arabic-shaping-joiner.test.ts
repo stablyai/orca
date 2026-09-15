@@ -208,10 +208,12 @@ describe('registerArabicShapingJoiner', () => {
   } {
     let registered: ((text: string) => [number, number][]) | null = null
     let deregistered: number | null = null
+
     return {
       terminal: {
         registerCharacterJoiner(handler: (text: string) => [number, number][]): number {
           registered = handler
+
           return 7
         },
         deregisterCharacterJoiner(joinerId: number): void {
@@ -255,16 +257,19 @@ describe('configureLazyArabicShapingJoiner', () => {
   function createLazyHost() {
     const events: string[] = []
     let handler: ((text: string) => [number, number][]) | null = null
+
     const terminal = {
       registerCharacterJoiner(nextHandler: (text: string) => [number, number][]): number {
         events.push('register')
         handler = nextHandler
+
         return 11
       },
       deregisterCharacterJoiner(joinerId: number): void {
         events.push(`deregister:${joinerId}`)
       }
     }
+
     return { events, terminal, getHandler: () => handler }
   }
 
@@ -307,6 +312,7 @@ describe('configureLazyArabicShapingJoiner', () => {
 
   it('contains a registration failure and does not retry every write', () => {
     let attempts = 0
+
     const terminal = {
       registerCharacterJoiner(): number {
         attempts++
@@ -314,6 +320,7 @@ describe('configureLazyArabicShapingJoiner', () => {
       },
       deregisterCharacterJoiner(): void {}
     }
+
     configureLazyArabicShapingJoiner(terminal, () => true)
 
     expect(() => ensureArabicShapingJoinerForText(terminal, 'مرحبا')).not.toThrow()

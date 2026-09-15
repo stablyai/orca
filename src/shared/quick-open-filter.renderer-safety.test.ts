@@ -13,6 +13,7 @@ vi.mock('node:path', () => {
         if (typeof key === 'symbol' || key === '__esModule' || key === 'then') {
           return undefined
         }
+
         throw new Error(
           `Module "node:path" has been externalized for browser compatibility. Cannot access "node:path.${String(key)}" in client code.`
         )

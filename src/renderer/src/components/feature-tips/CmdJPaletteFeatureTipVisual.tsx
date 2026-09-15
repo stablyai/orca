@@ -5,6 +5,7 @@ import { formatShortcutKeyComboDetails, useShortcutKeyDetails } from '@/hooks/us
 import { translate } from '@/i18n/i18n'
 
 const TYPED_QUERY = 'auth'
+
 // Why: the real palette lists recent worktrees on open; typing only narrows the
 // list. Mix done + running states so the tip reads like a live worktree switcher.
 const DEMO_WORKTREES: readonly {
@@ -21,9 +22,11 @@ const DEMO_WORKTREES: readonly {
 
 function filterDemoWorktrees(query: string): typeof DEMO_WORKTREES {
   const normalized = query.trim().toLowerCase()
+
   if (!normalized) {
     return DEMO_WORKTREES
   }
+
   return DEMO_WORKTREES.filter(
     (worktree) =>
       worktree.name.toLowerCase().includes(normalized) ||
@@ -37,10 +40,13 @@ function filterDemoWorktrees(query: string): typeof DEMO_WORKTREES {
 type CyclePhase = 'idle' | 'pressed' | 'open' | 'typing'
 
 const KEYPRESS_AT_MS = 450
+
 const PALETTE_OPEN_AT_MS = 850
+
 // Why: linger on the empty-query worktree list so users notice the palette
 // already shows recent worktrees before filtering kicks in.
 const HOLD_BEFORE_TYPING_MS = 700
+
 // Per-character typing interval. Kept tight and constant so the cursor advances
 // at an even cadence instead of feeling staggered.
 const TYPE_INTERVAL_MS = 120
@@ -50,10 +56,12 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   // Why: render the live binding so the cue stays correct after a rebind and on
   // platforms where Cmd+J is not the default (Linux/Windows use Ctrl+Shift+J).
   const shortcut = useShortcutKeyDetails('worktree.palette')
+
   // Why: the press animation staggers per-key chips (⌘ then J); fall back to the
   // platform default when the user disables the binding.
   const displayShortcut =
     shortcut.keys.length > 0 ? shortcut : formatShortcutKeyComboDetails('worktree.palette')[0]
+
   const displayShortcutKeys = displayShortcut?.keys ?? []
   const displayShortcutDoubleTap = displayShortcut?.doubleTap === true
 
@@ -77,6 +85,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   // precedes the palette opening.
   const paletteMounted = reducedMotion || phase === 'open' || phase === 'typing'
   const paletteOpaque = reducedMotion || paletteMounted
+
   const resultEnterClass =
     showWorktreeList && !reducedMotion && phase === 'open' ? 'animate-cmd-j-tip-result-in' : ''
 
@@ -87,26 +96,33 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
 
     let cancelled = false
     const timeouts: number[] = []
+
     const later = (fn: () => void, ms: number): void => {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
     }
 
     const startTyping = (startIndex: number): void => {
       let i = startIndex
+
       const typeNext = (): void => {
         if (cancelled) {
           return
         }
+
         i += 1
         setTypedLength(i)
+
         if (i >= TYPED_QUERY.length) {
           return
         }
+
         timeouts.push(window.setTimeout(typeNext, TYPE_INTERVAL_MS))
       }
+
       if (i >= TYPED_QUERY.length) {
         return
       }
+
       later(typeNext, TYPE_INTERVAL_MS)
     }
 

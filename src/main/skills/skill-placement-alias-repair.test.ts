@@ -20,8 +20,10 @@ async function fixture(): Promise<{
   await mkdir(canonicalPath, { recursive: true })
   await writeFile(join(canonicalPath, 'SKILL.md'), 'private skill')
   const { nativeSkillInstallFilesystem } = await import('./skill-install-filesystem')
+
   const packageDigest = (await nativeSkillInstallFilesystem.observeSkill(canonicalPath))
     .observedDigest
+
   return { root, canonicalRoot, canonicalPath, packageDigest }
 }
 
@@ -108,10 +110,12 @@ describe('skill provider alias reconciliation', () => {
     const placementPath = join(providerRoot, 'private-skill')
     const target = join(value.root, `${label}-target`)
     await mkdir(providerRoot)
+
     if (createTarget) {
       await mkdir(target)
       await writeFile(join(target, 'SKILL.md'), 'external skill')
     }
+
     await createDirectoryLink(target, placementPath)
 
     const result = await reconcileSkillProviderPlacement({

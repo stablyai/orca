@@ -60,11 +60,13 @@ describe('diffPersistedUIWriteFields', () => {
       showDotfilesByWorktree: { w1: true },
       acknowledgedAgentsByPaneKey: { p1: 5 }
     })
+
     const b = makeBaseline({
       filterRepoIds: ['r1', 'r2'],
       showDotfilesByWorktree: { w1: true },
       acknowledgedAgentsByPaneKey: { p1: 5 }
     })
+
     expect(diffPersistedUIWriteFields(a, b)).toEqual({})
   })
 
@@ -141,6 +143,7 @@ describe('persistedUIWriteFieldsToWireUpdate', () => {
       hideDefaultBranchWorkspace: true,
       groupBy: 'none'
     })
+
     expect(update).toEqual({ hideDefaultBranchWorkspace: true, groupBy: 'none' })
   })
 })

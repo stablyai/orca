@@ -36,19 +36,26 @@ export function flushTerminalOutputImpl(
 ): void {
   exposeDebugApi()
   const entry = queuedByTerminal.get(terminal)
+
   if (!entry) {
     return
   }
+
   queuedByTerminal.delete(terminal)
+
   if (isTerminalWritePipelineCertifiedDead(terminal)) {
     discardDetachedQueueEntry(entry)
     discardTerminalOutput(terminal)
+
     return
   }
+
   if (!isEntryDrainable(entry)) {
     queuedByTerminal.set(terminal, entry)
+
     return
   }
+
   if (entry.backgroundBacklogDropped && requestRegisteredTerminalBacklogRecovery(terminal)) {
     fireQueuedAckCredits(entry)
     entry.chunks.length = 0
@@ -57,22 +64,28 @@ export function flushTerminalOutputImpl(
     entry.highPriority = false
     clearForegroundRelease(entry)
     recordQueueDebugPressure()
+
     return
   }
 
   let flushedChars = 0
   let queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+
   while (queuedWrite) {
     flushedChars += queuedWrite.data.length
+
     if (debugEnabled) {
       debugState.flushWriteCount++
     }
+
     const ackCreditsParsed = registerTerminalOutputAckCredits(terminal, queuedWrite.ackCredits)
     armTerminalWriteStallWatch(terminal, {
       onCertifiedDead: () => discardTerminalOutput(terminal)
     })
+
     try {
       queuedWrite.beforeWrite?.(queuedWrite.data)
+
       const writeAccepted = queuedWrite.foreground
         ? writeForegroundTerminalChunk(
             terminal,
@@ -98,10 +111,12 @@ export function flushTerminalOutputImpl(
             composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined),
             composeWriteFailureCallback(terminal, ackCreditsParsed)
           )
+
       if (!writeAccepted) {
         fireQueuedAckCredits(entry)
         clearForegroundRelease(entry)
         recordQueueDebugPressure()
+
         return
       }
     } catch {
@@ -111,13 +126,17 @@ export function flushTerminalOutputImpl(
       fireQueuedAckCredits(entry)
       clearForegroundRelease(entry)
       recordQueueDebugPressure()
+
       return
     }
+
     if (options?.maxChars !== undefined && flushedChars >= options.maxChars) {
       break
     }
+
     queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
   }
+
   if (hasQueuedChunks(entry)) {
     entry.highPriority = true
     queuedByTerminal.set(terminal, entry)
@@ -126,5 +145,6 @@ export function flushTerminalOutputImpl(
     entry.highPriority = false
     clearForegroundRelease(entry)
   }
+
   recordQueueDebugPressure()
 }

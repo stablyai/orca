@@ -39,6 +39,7 @@ describe('resolveAiVaultServiceEntryPath', () => {
 
   it('uses resourcesPath from packaged Electron-as-Node runtimes', () => {
     const resourcesPath = join('Applications', 'Orca.app', 'Contents', 'Resources')
+
     const entry = join(
       resourcesPath,
       'app.asar.unpacked',

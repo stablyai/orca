@@ -12,6 +12,7 @@ export function matchesPendingEditorFocusRequest(
   if (!request || pane.worktreeId === undefined || pane.viewStateId === undefined) {
     return false
   }
+
   return (
     request.fileId === pane.fileId &&
     request.worktreeId === pane.worktreeId &&

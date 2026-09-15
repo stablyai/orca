@@ -97,6 +97,7 @@ function pullRequestItem(number: number, title: string): Record<string, unknown>
 
 function auxiliaryPRResponse(args: string[]): { stdout: string } {
   const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
   if (query.includes('viewerViewedState')) {
     return {
       stdout: JSON.stringify({
@@ -111,6 +112,7 @@ function auxiliaryPRResponse(args: string[]): { stdout: string } {
       })
     }
   }
+
   if (query.includes('participants(first: 100)')) {
     return {
       stdout: JSON.stringify({
@@ -118,6 +120,7 @@ function auxiliaryPRResponse(args: string[]): { stdout: string } {
       })
     }
   }
+
   return { stdout: JSON.stringify({ data: {} }) }
 }
 
@@ -140,6 +143,7 @@ describe('getWorkItemDetails PR file listing', () => {
 
   it('loads files beyond the first 100-result REST page', async () => {
     getWorkItemMock.mockResolvedValueOnce(pullRequestItem(108, 'Large PR'))
+
     const restFile = (index: number) => ({
       filename: `src/file-${index}.ts`,
       status: 'modified',
@@ -148,19 +152,24 @@ describe('getWorkItemDetails PR file listing', () => {
       changes: 1,
       patch: '@@ -1 +1 @@'
     })
+
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/acme/widgets/pulls/108') {
         return { stdout: JSON.stringify({ head: { sha: 'head' }, base: { sha: 'base' } }) }
       }
+
       if (endpoint === 'repos/acme/widgets/pulls/108/files?per_page=100') {
         return {
           stdout: JSON.stringify(Array.from({ length: 100 }, (_, index) => restFile(index)))
         }
       }
+
       if (endpoint === 'repos/acme/widgets/pulls/108/files?per_page=100&page=2') {
         return { stdout: JSON.stringify([restFile(100)]) }
       }
+
       return auxiliaryPRResponse(args)
     })
 
@@ -168,9 +177,11 @@ describe('getWorkItemDetails PR file listing', () => {
 
     expect(details?.files).toHaveLength(101)
     expect(details?.files?.at(-1)?.path).toBe('src/file-100.ts')
+
     const fileEndpoints = ghExecFileAsyncMock.mock.calls
       .map(([args]) => (args as string[]).find((arg) => arg.includes('/files?')))
       .filter(Boolean)
+
     expect(fileEndpoints).toEqual([
       'repos/acme/widgets/pulls/108/files?per_page=100',
       'repos/acme/widgets/pulls/108/files?per_page=100&page=2'
@@ -189,14 +200,17 @@ describe('getWorkItemDetails PR file listing', () => {
     getWorkItemMock.mockResolvedValueOnce(pullRequestItem(8305, 'Files fetch fails'))
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
+
       if (target === 'repos/acme/widgets/pulls/8305') {
         return {
           stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
         }
       }
+
       if (target === 'repos/acme/widgets/pulls/8305/files?per_page=100') {
         throw new Error('gh: API rate limit exceeded (403)')
       }
+
       return auxiliaryPRResponse(args)
     })
 
@@ -210,14 +224,17 @@ describe('getWorkItemDetails PR file listing', () => {
     getWorkItemMock.mockResolvedValueOnce(pullRequestItem(8306, 'Empty PR'))
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const target = args.at(-1)
+
       if (target === 'repos/acme/widgets/pulls/8306') {
         return {
           stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
         }
       }
+
       if (target === 'repos/acme/widgets/pulls/8306/files?per_page=100') {
         return { stdout: '[]' }
       }
+
       return auxiliaryPRResponse(args)
     })
 
@@ -238,12 +255,15 @@ describe('getWorkItemDetails PR file listing', () => {
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterprise)
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/team/orca/pulls/8') {
         return { stdout: JSON.stringify({ body: 'Enterprise body' }) }
       }
+
       if (endpoint === 'repos/team/orca/pulls/8/files?per_page=100') {
         return { stdout: '[]' }
       }
+
       return auxiliaryPRResponse(args)
     })
 
@@ -290,14 +310,18 @@ describe('getWorkItemDetails PR file listing', () => {
       repo: 'orca',
       host: 'github.acme-corp.com'
     }
+
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/team/orca/contents/src/path%23with%3Fchars.ts?ref=base-sha') {
         return { stdout: 'base content' }
       }
+
       if (endpoint === 'repos/team/orca/contents/src/path%23with%3Fchars.ts?ref=head-sha') {
         return { stdout: 'head content' }
       }
+
       throw new Error(`unexpected gh call: ${args.join(' ')}`)
     })
 

@@ -19,6 +19,7 @@ export async function callAbortableRuntimeStatus<TResult>(
   webGitStatusAbortControllers.get(requestToken)?.abort()
   const controller = new AbortController()
   webGitStatusAbortControllers.set(requestToken, controller)
+
   try {
     const response = await callAbortableRuntimeEnvironment(
       environment.id,
@@ -27,10 +28,13 @@ export async function callAbortableRuntimeStatus<TResult>(
       undefined,
       controller.signal
     )
+
     updateEnvironmentFromResponse(environment, response)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     return response.result as TResult
   } finally {
     if (webGitStatusAbortControllers.get(requestToken) === controller) {
@@ -51,6 +55,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       requestToken
     }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       const params = {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         includeIgnored,
@@ -59,10 +64,12 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         reuseLineStats,
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
       }
+
       // Why: no token = nothing to cancel (pooled); a token routes via the subscription bridge so cancelStatus can abort.
       if (!requestToken) {
         return callRuntimeResult('git.status', params)
       }
+
       return callAbortableRuntimeStatus(requestToken, params)
     },
     cancelStatus: async ({ requestToken }) => {
@@ -71,6 +78,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     setStatusUpstreamRefWatch: async () => {},
     submoduleStatus: async ({ worktreePath, submodulePath, area }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.submoduleStatus', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         submodulePath,
@@ -79,6 +87,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     checkIgnored: async ({ worktreePath, paths }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.checkIgnored', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         paths
@@ -89,6 +98,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     appendGitignore: async () => false,
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.history', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         limit,
@@ -97,6 +107,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.conflictOperation', {
         worktree: toRuntimeWorktreeSelector(worktree.id)
       })
@@ -115,6 +126,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
+
       return callRuntimeResult('git.diff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
@@ -124,6 +136,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     branchCompare: async ({ worktreePath, baseRef, admissionTier }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.branchCompare', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         baseRef,
@@ -132,6 +145,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     commitCompare: async ({ worktreePath, commitId }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.commitCompare', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         commitId
@@ -139,6 +153,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     upstreamStatus: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.upstreamStatus', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
@@ -153,6 +168,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     syncFork: async ({ worktreePath, expectedUpstream }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult(
         'git.forkSync',
         {
@@ -193,6 +209,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
+
       return callRuntimeResult('git.branchDiff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
@@ -202,6 +219,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
+
       return callRuntimeResult('git.commitDiff', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
@@ -212,6 +230,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     commit: async ({ worktreePath, message }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.commit', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         message
@@ -256,6 +275,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.remoteFileUrl', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
@@ -264,6 +284,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     remoteCommitUrl: async ({ worktreePath, sha }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+
       return callRuntimeResult('git.remoteCommitUrl', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         sha

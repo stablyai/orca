@@ -62,9 +62,11 @@ export function createStructuredAgentSessionHandoffTestCoordinator(
     acquireNativeStop: (_sessionId, turnId) => input.acquireNativeStop(turnId),
     importTuiHistory: async ({ fence }) => {
       const importFailure = input.takeImportFailure()
+
       if (importFailure) {
         throw importFailure
       }
+
       await input.journal.appendItem(
         input.provider === 'claude'
           ? { provider: 'claude', sessionId: input.claudeSessionId, uuid: 'tui-turn' }

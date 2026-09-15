@@ -6,6 +6,7 @@ import { findTerminalTabIdForLeaf } from './workspace-session-terminal-membershi
 
 function layout(...leafIds: string[]): TerminalLayoutSnapshot {
   let root = { type: 'leaf' as const, leafId: leafIds[0] }
+
   for (const leafId of leafIds.slice(1)) {
     root = {
       type: 'split',
@@ -14,6 +15,7 @@ function layout(...leafIds: string[]): TerminalLayoutSnapshot {
       second: { type: 'leaf' as const, leafId }
     } as never
   }
+
   return { root, activeLeafId: leafIds[0], ptyIdsByLeafId: {} } as TerminalLayoutSnapshot
 }
 
@@ -27,6 +29,7 @@ describe('findTerminalTabIdForLeaf', () => {
       'tab-a': layout('leaf-1', 'leaf-2', 'leaf-3'),
       'tab-b': layout('leaf-4')
     })
+
     expect(findTerminalTabIdForLeaf(state, 'leaf-2')).toBe('tab-a')
     expect(findTerminalTabIdForLeaf(state, 'leaf-3')).toBe('tab-a')
     expect(findTerminalTabIdForLeaf(state, 'leaf-4')).toBe('tab-b')

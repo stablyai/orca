@@ -10,7 +10,9 @@ const {
   startSpanMock
 } = vi.hoisted(() => {
   class RemoteClipboardStagingRootUnsafeErrorMock extends Error {}
+
   const spanFailMock = vi.fn()
+
   return {
     cleanupLegacyRemoteClipboardStagingMock: vi.fn(async () => undefined),
     createRemoteClipboardTransferDirectoryMock: vi.fn(),
@@ -23,11 +25,15 @@ const {
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: requireSshFilesystemProviderMock
 }))
+
 vi.mock('../observability/tracer', () => ({ startSpan: startSpanMock }))
+
 vi.mock('./clipboard-file-copy', () => ({ writeFileToClipboard: vi.fn() }))
+
 vi.mock('./clipboard-remote-file-staging', () => ({
   cleanupExpiredRemoteClipboardStaging: vi.fn(async () => undefined),
   cleanupLegacyRemoteClipboardStaging: cleanupLegacyRemoteClipboardStagingMock,

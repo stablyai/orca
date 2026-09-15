@@ -16,23 +16,30 @@ function countCollectionReads<T>(items: readonly T[]): {
 } {
   const target = [...items]
   const counters: CollectionCounters = { map: 0, flatMap: 0, iterator: 0, length: 0 }
+
   const value = new Proxy(target, {
     get(array, property) {
       if (property === 'map' || property === 'flatMap') {
         counters[property] += 1
         const method = Reflect.get(array, property) as (...args: unknown[]) => unknown
+
         return method.bind(array)
       }
+
       if (property === Symbol.iterator) {
         counters.iterator += 1
+
         return array[Symbol.iterator].bind(array)
       }
+
       if (property === 'length') {
         counters.length += 1
       }
+
       return Reflect.get(array, property)
     }
   })
+
   return { value, counters }
 }
 
@@ -81,6 +88,7 @@ describe('project host setup selector', () => {
     const countedRepos = countCollectionReads(repos)
     const countedProjects = countCollectionReads(projects)
     const countedSetups = countCollectionReads(setups)
+
     const state = {
       repos: countedRepos.value,
       projects: countedProjects.value,
@@ -119,11 +127,13 @@ describe('project host setup selector', () => {
     const repos = [repo]
     const projects = [makeProject('repo:repo-1', repo.id)]
     const setups = [makeSetup(repo.id, 'repo:repo-1')]
+
     const first = getProjectHostSetupProjectionFromState({
       repos,
       projects,
       projectHostSetups: setups
     })
+
     const replacementSetups = [...setups]
 
     const next = getProjectHostSetupProjectionFromState({
@@ -145,6 +155,7 @@ describe('project host setup selector', () => {
     getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups: setups })
 
     const replacementRepos = [makeRepo('repo-2')]
+
     const next = getProjectHostSetupProjectionFromState({
       repos: replacementRepos,
       projects,

@@ -6,12 +6,15 @@ import type * as TranscriptReader from './transcript-reader'
 
 // Spy on the underlying reader so we can assert cache hits issue zero reads.
 const readSpy = vi.hoisted(() => vi.fn())
+
 vi.mock('./transcript-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof TranscriptReader>()
+
   return {
     ...actual,
     readNativeChatTranscript: (...args: Parameters<typeof actual.readNativeChatTranscript>) => {
       readSpy(...args)
+
       return actual.readNativeChatTranscript(...args)
     }
   }
@@ -35,15 +38,18 @@ async function seedSession(sessionId: string, turns: number): Promise<string> {
   tempRoots.push(root)
   const projectDir = join(root, '.claude', 'projects', '-repo')
   await mkdir(projectDir, { recursive: true })
+
   const records = Array.from({ length: turns }, (_unused, n) => ({
     type: 'user',
     uuid: `u-${n}`,
     timestamp: `2026-06-01T10:00:0${n}.000Z`,
     message: { role: 'user', content: `m${n}` }
   }))
+
   const filePath = join(projectDir, `${sessionId}.jsonl`)
   await writeFile(filePath, jsonLines(records))
   process.env.HOME = root
+
   return filePath
 }
 
@@ -54,13 +60,16 @@ async function seedBigFile(name: string, bytes: number): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-bytes-'))
   tempRoots.push(root)
   const filePath = join(root, `${name}.jsonl`)
+
   const record = {
     type: 'user',
     uuid: `u-${name}`,
     timestamp: '2026-06-01T10:00:00.000Z',
     message: { role: 'user', content: 'x'.repeat(Math.max(1, bytes)) }
   }
+
   await writeFile(filePath, jsonLines([record]))
+
   return filePath
 }
 
@@ -227,14 +236,18 @@ describe('readNativeChatTranscriptCached', () => {
       seedBigFile('s2', 512),
       seedBigFile('s3', 512)
     ])
+
     for (const [i, file] of files.entries()) {
       await readNativeChatTranscriptCached('claude', `sess-${i}`, file)
     }
+
     expect(readSpy).toHaveBeenCalledTimes(3)
+
     // Re-read all three: every one is still cached (byte budget never triggered).
     for (const [i, file] of files.entries()) {
       await readNativeChatTranscriptCached('claude', `sess-${i}`, file)
     }
+
     expect(readSpy).toHaveBeenCalledTimes(3)
   })
 })

@@ -23,6 +23,7 @@ function createTerminal(cols = 10, rows = 5, scrollback = 100): TerminalHarness 
   const terminal = new Terminal({ cols, rows, scrollback, allowProposedApi: true })
   const addon = new SerializeAddon()
   terminal.loadAddon(addon)
+
   return { terminal, addon }
 }
 
@@ -33,6 +34,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
 async function replay(data: string, cols = 10, rows = 5, scrollback = 100): Promise<Terminal> {
   const { terminal } = createTerminal(cols, rows, scrollback)
   await write(terminal, data)
+
   return terminal
 }
 
@@ -45,28 +47,35 @@ function cellAt(
 > {
   const buffer = terminal.buffer.active
   const line = buffer.getLine(buffer.baseY + viewportRow)
+
   if (!line) {
     throw new Error(`no line at viewport row ${viewportRow}`)
   }
+
   const cell = line.getCell(col)
+
   if (!cell) {
     throw new Error(`no cell at ${viewportRow},${col}`)
   }
+
   return cell
 }
 
 function visibleText(terminal: Terminal): string[] {
   const buffer = terminal.buffer.active
   const lines: string[] = []
+
   for (let row = 0; row < terminal.rows; row += 1) {
     lines.push(buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '')
   }
+
   return lines
 }
 
 async function roundTripStyles(source: string): Promise<Terminal> {
   const { terminal, addon } = createTerminal()
   await write(terminal, source)
+
   return replay(addon.serialize())
 }
 
@@ -190,6 +199,7 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
 
   it('never changes already-correct restores at various cursor positions', async () => {
     const positions = ['\x1b[1;1H', '\x1b[2;4H', '\x1b[5;10H', '\x1b[4;1H']
+
     for (const cup of positions) {
       const { terminal, addon } = createTerminal(10, 5)
       await write(terminal, `hello\r\nworld${cup}`)
@@ -252,9 +262,11 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
 
   it('restores scrolled-back buffers with the cursor at its base-relative spot', async () => {
     const { terminal, addon } = createTerminal(10, 3, 50)
+
     for (let i = 0; i < 8; i += 1) {
       await write(terminal, `line${i}\r\n`)
     }
+
     await write(terminal, '\x1b[2;3H')
     const source = { x: terminal.buffer.active.cursorX, y: terminal.buffer.active.cursorY }
     const restored = await replay(serializeWithAbsoluteCursor(addon, terminal), 10, 3, 50)

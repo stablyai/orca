@@ -52,24 +52,32 @@ export function RepoSettingsDraftInput({
         composingRef.current = false
         skipNextChangeRef.current = null
         lastPersistedRef.current = storeValue
+
         return { repoId, text: storeValue }
       }
+
       if (storeValue === current.text) {
         pendingStoreEchoesRef.current = []
         skipNextChangeRef.current = null
         lastPersistedRef.current = storeValue
+
         return current
       }
+
       const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
+
       if (pendingEchoIndex !== -1) {
         // Why: queued updateRepo calls can echo older input text after newer
         // keystrokes; accepting that echo re-cancels active IME composition.
         pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
+
         return current
       }
+
       pendingStoreEchoesRef.current = []
       skipNextChangeRef.current = null
       lastPersistedRef.current = storeValue
+
       return { repoId, text: storeValue }
     })
   }, [repoId, storeValue])
@@ -92,6 +100,7 @@ export function RepoSettingsDraftInput({
       if (draft.repoId !== repoId || draft.text === lastPersistedRef.current) {
         return
       }
+
       composingRef.current = false
       skipNextChangeRef.current = draft.text
       persist(draft.text)
@@ -106,15 +115,19 @@ export function RepoSettingsDraftInput({
       onChange={(e) => {
         const nextText = e.target.value
         setDraft({ repoId, text: nextText })
+
         // Why: during composition the input stays live via draft, but the
         // unconfirmed text is not persisted until compositionend.
         if (composingRef.current) {
           return
         }
+
         if (skipNextChangeRef.current === nextText) {
           skipNextChangeRef.current = null
+
           return
         }
+
         skipNextChangeRef.current = null
         persist(nextText)
       }}

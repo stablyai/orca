@@ -11,12 +11,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   // Why: screenshots target page ids but visible chrome is keyed by workspace id; activate by workspace or the webview stays hidden and capture times out.
   async ensureWebviewVisible(guestWebContentsId: number): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+
     if (!browserPageId) {
       return () => {}
     }
+
     const browserWorkspaceId = this.workspaceIdByPageId.get(browserPageId) ?? browserPageId
     const worktreeId = this.worktreeIdByTabId.get(browserPageId) ?? null
     const renderer = this.resolveRendererForBrowserTab(browserPageId)
+
     if (!renderer || renderer.isDestroyed()) {
       return () => {}
     }
@@ -163,6 +166,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
       if (!prev || !renderer || renderer.isDestroyed()) {
         return
       }
+
       renderer
         .executeJavaScript(
           `(function() {
@@ -221,10 +225,13 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
 
   async acquireAutomationVisibility(guestWebContentsId: number): Promise<() => void> {
     const browserPageId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+
     if (!browserPageId) {
       return () => {}
     }
+
     const renderer = this.resolveRendererForBrowserTab(browserPageId)
+
     if (!renderer || renderer.isDestroyed()) {
       return () => {}
     }
@@ -239,6 +246,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
           })()`
       )
       .catch(() => null)
+
     const { value: token, timedOut } = await resolveWithTimeout(
       acquirePromise,
       AUTOMATION_VISIBILITY_ACQUIRE_TIMEOUT_MS,

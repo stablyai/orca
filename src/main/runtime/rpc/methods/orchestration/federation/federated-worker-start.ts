@@ -47,36 +47,44 @@ export async function startFederatedWorker(args: {
   }
 }): Promise<unknown> {
   const { params, runtime, db, task, runId, orchestrationMutation } = args
+
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
+
   if (!orchestrationMutation) {
     throw new OrchestrationError(
       'invalid_argument',
       'Remote worker-start requires a durable retry request.'
     )
   }
+
   const worktree = params.worktree ?? 'current'
+
   if (worktree === 'current' || worktree === 'new-child') {
     throw new OrchestrationError(
       'invalid_argument',
       '--on requires an exact remote worktree selector or new-top-level.'
     )
   }
+
   const createsWorktree = worktree === 'new-top-level'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
+
   const requestedLaunch = createPendingWorkerLaunchReceipt({
     agent: isTuiAgent(params.agent) ? params.agent : null,
     model: params.model,
     effort: params.effort
   })
+
   const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
+
   const status = (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'status.get',
@@ -85,6 +93,7 @@ export async function startFederatedWorker(args: {
     undefined,
     pairingFence
   )) as RuntimeStatus
+
   if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'orchestration_migration_required',
@@ -92,21 +101,25 @@ export async function startFederatedWorker(args: {
       orchestrationMigrationData('runtime_capability_missing')
     )
   }
+
   if (!status.capabilities?.includes(ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
       'capability_unsupported',
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+
   assertWorkerLaunchPreferencesRuntimeSupported({
     model: params.model,
     effort: params.effort,
     capabilities: status.capabilities,
     serverName: server.name
   })
+
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
+
   const federationProtocolVersion =
     supportsControlMail &&
     status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
@@ -116,6 +129,7 @@ export async function startFederatedWorker(args: {
         : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
+
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
@@ -153,9 +167,11 @@ export async function startFederatedWorker(args: {
       protocolVersion: federationProtocolVersion
     }
   })
+
   const createdTask = started.task
   const taskForRemote = task ?? createdTask
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
+
   try {
     const remote = parseRemoteFederatedWorkerStartReceipt(
       await runtime.callOrchestrationWorkerServer(
@@ -195,17 +211,20 @@ export async function startFederatedWorker(args: {
         { contractVerified: true, ...pairingFence }
       )
     )
+
     if (remote.dispatchId !== started.dispatch.id) {
       throw new OrchestrationError(
         'resource_server_mismatch',
         'The worker server returned a different Dispatch attachment.'
       )
     }
+
     const launch = resolveFederatedWorkerLaunchReceipt(
       remote.launch,
       requestedLaunch,
       remote.state === 'ready'
     )
+
     if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
       db.updateFederatedDispatchResources({
         dispatchId: started.dispatch.id,
@@ -224,6 +243,7 @@ export async function startFederatedWorker(args: {
       })
       const readyWorker = db.markWorkerDispatchReady(started.dispatch.id)
       runtime.ensureOrchestrationFederationRelay(runId)
+
       return {
         runId,
         taskId: taskForRemote.id,
@@ -238,19 +258,23 @@ export async function startFederatedWorker(args: {
         residualResources: remote.residualResources ?? []
       }
     }
+
     if (remote.state === 'outcome_unknown') {
       const worker = db.markWorkerStartUnknown(
         started.dispatch.id,
         remote.failedStage ?? 'remote_attach',
         remote.lastError ?? 'The worker server reported an unknown start outcome.'
       )
+
       return federatedUnknownReceipt(worker, taskForRemote.id, server.name, launch)
     }
+
     const worker = db.failWorkerStart(
       started.dispatch.id,
       remote.failedStage ?? 'remote_attach',
       remote.lastError ?? `The worker server returned ${remote.state}.`
     )
+
     return {
       runId,
       taskId: taskForRemote.id,
@@ -267,8 +291,10 @@ export async function startFederatedWorker(args: {
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
+
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
+
       return {
         runId,
         taskId: taskForRemote.id,
@@ -283,7 +309,9 @@ export async function startFederatedWorker(args: {
         residualResources: []
       }
     }
+
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
+
     return federatedUnknownReceipt(worker, taskForRemote.id, server.name, requestedLaunch)
   }
 }

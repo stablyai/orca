@@ -48,6 +48,7 @@ export function CreateFromPicker({
   const repoRuntimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForRepo(state, repoId)
   )
+
   const repo = repoMap.get(repoId)
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
@@ -58,22 +59,29 @@ export function CreateFromPicker({
   const [isSearching, setIsSearching] = React.useState(false)
   const effectiveDefault = repo?.worktreeBaseRef ?? defaultBaseRef
   const selectedValue = value || DEFAULT_VALUE
+
   const selectedLabel =
     value || (effectiveDefault ? `${effectiveDefault} (default)` : 'Project default')
+
   const branchOptions = React.useMemo(() => {
     const options = new Set<string>()
+
     if (effectiveDefault) {
       options.add(effectiveDefault)
     }
+
     for (const worktree of worktrees) {
       const branch = displayBranchName(worktree.branch).trim()
+
       if (branch) {
         options.add(branch)
       }
     }
+
     for (const branch of searchResults) {
       options.add(branch)
     }
+
     return Array.from(options).sort((left, right) => left.localeCompare(right))
   }, [effectiveDefault, searchResults, worktrees])
 
@@ -89,6 +97,7 @@ export function CreateFromPicker({
       if (node === null) {
         cancelFocusFrame()
       }
+
       inputRef.current = node
     },
     [cancelFocusFrame]
@@ -105,6 +114,7 @@ export function CreateFromPicker({
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (!nextOpen) {
         cancelFocusFrame()
       }
@@ -116,6 +126,7 @@ export function CreateFromPicker({
     if (!repoId) {
       return
     }
+
     let stale = false
     setDefaultBaseRef(null)
     void getRuntimeRepoBaseRefDefault(
@@ -132,6 +143,7 @@ export function CreateFromPicker({
           setDefaultBaseRef(null)
         }
       })
+
     return () => {
       stale = true
     }
@@ -141,17 +153,22 @@ export function CreateFromPicker({
     if (!isRuntimeRepoRefSearchQueryWithinLimit(query)) {
       setSearchResults([])
       setIsSearching(false)
+
       return
     }
+
     const trimmedQuery = query.trim()
+
     if (!open || !repoId || trimmedQuery.length < 2) {
       setSearchResults([])
       setIsSearching(false)
+
       return
     }
 
     let stale = false
     setIsSearching(true)
+
     const timer = window.setTimeout(() => {
       void searchRuntimeRepoBaseRefs(
         { activeRuntimeEnvironmentId: repoRuntimeEnvironmentId },

@@ -9,6 +9,7 @@ import {
 } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -35,6 +36,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('resolves web mirrors through host session inventory, not client-side pane aliases', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -78,11 +80,13 @@ describe('createRemoteRuntimePtyTransport', () => {
           code: 'remote_runtime_unavailable'
         })
       }
+
       return healthyRuntimeCall?.(request)
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const recoveryPhases: string[] = []
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -111,6 +115,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('keeps web mirror inventory and subscription failures inside one recovery budget', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyRuntimeCall = runtimeCall.getMockImplementation()
       let activateAttempts = 0
@@ -120,12 +125,14 @@ describe('createRemoteRuntimePtyTransport', () => {
             code: 'remote_runtime_unavailable'
           })
         }
+
         if (request.method === 'session.tabs.list') {
           return healthyRuntimeCall?.({
             method: 'session.tabs.activate',
             params: { tabId: 'host-tab-1', leafId: 'pane:1' }
           })
         }
+
         return healthyRuntimeCall?.(request)
       })
       runtimeSubscribe.mockRejectedValue(
@@ -134,6 +141,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         })
       )
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -161,24 +169,29 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('ends web mirror recovery when a retry returns a fatal inventory error', async () => {
     vi.useFakeTimers()
+
     try {
       let activateAttempts = 0
       runtimeCall.mockImplementation(async (request: { method: string }) => {
         if (request.method !== 'session.tabs.activate') {
           throw new Error(`Unexpected method ${request.method}`)
         }
+
         activateAttempts += 1
+
         if (activateAttempts === 1) {
           throw Object.assign(new Error('Remote Orca runtime closed the connection.'), {
             code: 'remote_runtime_unavailable'
           })
         }
+
         throw Object.assign(new Error('Remote runtime pairing credentials expired.'), {
           code: 'unauthorized'
         })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -206,15 +219,19 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not restart web mirror recovery when an in-flight request rejects after cutoff', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyRuntimeCall = runtimeCall.getMockImplementation()
       let rejectInFlight: (error: Error) => void = () => {}
+
       let activateAttempts = 0
       runtimeCall.mockImplementation((request: { method: string }) => {
         if (request.method !== 'session.tabs.activate') {
           throw new Error(`Unexpected method ${request.method}`)
         }
+
         activateAttempts += 1
+
         if (activateAttempts === 1) {
           return Promise.reject(
             Object.assign(new Error('Remote Orca runtime closed the connection.'), {
@@ -222,11 +239,13 @@ describe('createRemoteRuntimePtyTransport', () => {
             })
           )
         }
+
         return new Promise((_, reject) => {
           rejectInFlight = reject
         })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -265,6 +284,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not restart web mirror recovery when subscription rejects after cutoff', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyRuntimeCall = runtimeCall.getMockImplementation()
       let activateAttempts = 0
@@ -274,9 +294,11 @@ describe('createRemoteRuntimePtyTransport', () => {
             code: 'remote_runtime_unavailable'
           })
         }
+
         return healthyRuntimeCall?.(request)
       })
       let rejectSubscription: (error: Error) => void = () => {}
+
       runtimeSubscribe.mockImplementation(
         () =>
           new Promise((_, reject) => {
@@ -284,6 +306,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           })
       )
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -319,10 +342,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not subscribe after mirror metadata resolution crosses the recovery cutoff', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyRuntimeCall = runtimeCall.getMockImplementation()
       let activateAttempts = 0
       let resolveMetadata: (value: unknown) => void = () => {}
+
       runtimeCall.mockImplementation((request: { method: string; params?: unknown }) => {
         if (request.method === 'session.tabs.activate' && activateAttempts++ === 0) {
           return Promise.reject(
@@ -331,14 +356,17 @@ describe('createRemoteRuntimePtyTransport', () => {
             })
           )
         }
+
         if (request.method === 'terminal.resolvePane') {
           return new Promise((resolve) => {
             resolveMetadata = resolve
           })
         }
+
         return healthyRuntimeCall?.(request)
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -381,6 +409,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('ignores stale web mirror inventory failure after a newer connect lifecycle', async () => {
     const healthyRuntimeCall = runtimeCall.getMockImplementation()
     let rejectStaleInventory: (error: Error) => void = () => {}
+
     let activateAttempts = 0
     runtimeCall.mockImplementation((request: { method: string; params?: unknown }) => {
       if (request.method === 'session.tabs.activate' && activateAttempts++ === 0) {
@@ -388,11 +417,13 @@ describe('createRemoteRuntimePtyTransport', () => {
           rejectStaleInventory = reject
         })
       }
+
       return healthyRuntimeCall?.(request)
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const staleOnError = vi.fn()
     const currentOnError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -412,6 +443,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         code: 'unauthorized'
       })
     )
+
     for (let index = 0; index < 20; index += 1) {
       await Promise.resolve()
     }

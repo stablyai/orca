@@ -12,9 +12,11 @@ export function resolveWorkspaceSelector(
   if (workspaces.length === 0) {
     return null
   }
+
   const byId = selectors.workspaceId
     ? workspaces.find((workspace) => workspace.id === selectors.workspaceId)
     : null
+
   const byOrg = selectors.organizationUrlKey
     ? workspaces.find((workspace) => workspace.organizationUrlKey === selectors.organizationUrlKey)
     : null
@@ -22,6 +24,7 @@ export function resolveWorkspaceSelector(
   if (selectors.workspaceId && !byId) {
     throw unknownWorkspace(selectors.workspaceId)
   }
+
   if (selectors.organizationUrlKey && !byOrg) {
     throw linearError(
       'linear_invalid_workspace',
@@ -31,6 +34,7 @@ export function resolveWorkspaceSelector(
       }
     )
   }
+
   if (byId && byOrg && byId.id !== byOrg.id) {
     throw linearError('linear_invalid_workspace', 'The issue URL and --workspace do not match.', {
       nextSteps: [
@@ -38,6 +42,7 @@ export function resolveWorkspaceSelector(
       ]
     })
   }
+
   return byId ?? byOrg ?? null
 }
 
@@ -55,6 +60,7 @@ export function ambiguousWorkspace(
     id: workspace.id,
     name: workspace.organizationName
   }))
+
   return linearError(
     'linear_workspace_ambiguous',
     `Linear issue ${identifier} exists in more than one workspace.`,

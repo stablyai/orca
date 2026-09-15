@@ -11,6 +11,7 @@ export function getBrowserHostLeaseRegistry(
   runtime: { getRuntimeId(): string } & RuntimeBrowserClientPageReleaseHost
 ): BrowserHostLeaseRegistry {
   let registry = registries.get(runtime)
+
   if (!registry) {
     registry = new BrowserHostLeaseRegistry({
       authorityRuntimeId: runtime.getRuntimeId(),
@@ -25,5 +26,6 @@ export function getBrowserHostLeaseRegistry(
     })
     registries.set(runtime, registry)
   }
+
   return registry
 }

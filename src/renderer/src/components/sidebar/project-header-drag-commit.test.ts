@@ -91,11 +91,13 @@ describe('commitProjectHeaderDragDrop', () => {
 
   it('commits projectGroupOrder when project groups are present', () => {
     const onCommitProjectGroupOrder = vi.fn()
+
     const repos = [
       makeRepo('a', { projectGroupId: 'group-1' }),
       makeRepo('b', { projectGroupId: 'group-1' }),
       makeRepo('c', { projectGroupId: 'group-1' })
     ]
+
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({

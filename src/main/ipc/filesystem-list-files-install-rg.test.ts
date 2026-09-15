@@ -43,6 +43,7 @@ import { listQuickOpenFiles } from './filesystem-list-files'
 
 function createStartedRipgrepProcess(): ChildProcess {
   const child = new EventEmitter() as ChildProcess
+
   ;(child as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (child as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -54,6 +55,7 @@ function createStartedRipgrepProcess(): ChildProcess {
   ;(child as unknown as Record<string, unknown>).exitCode = null
   ;(child as unknown as Record<string, unknown>).signalCode = null
   Object.defineProperty(child, 'pid', { value: 1 })
+
   return child
 }
 

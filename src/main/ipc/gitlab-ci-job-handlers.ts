@@ -18,6 +18,7 @@ export function registerGitLabCiJobHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       const result = await getJobTrace(
         repo.path,
         args.jobId,
@@ -26,6 +27,7 @@ export function registerGitLabCiJobHandlers(store: Store): void {
         args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
+
       return args.logExcerpt ? toGitLabJobLogExcerptResult(result) : result
     }
   )
@@ -37,6 +39,7 @@ export function registerGitLabCiJobHandlers(store: Store): void {
       args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: ProjectRef | null }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return retryJob(
         repo.path,
         args.jobId,

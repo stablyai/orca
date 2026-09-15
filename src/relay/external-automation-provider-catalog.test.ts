@@ -21,6 +21,7 @@ describe('ExternalAutomationProviderCatalog', () => {
     } else {
       process.env.HERMES_HOME = previousHermesHome
     }
+
     await rm(hermesHome, { recursive: true, force: true })
     vi.resetModules()
   })
@@ -31,8 +32,10 @@ describe('ExternalAutomationProviderCatalog', () => {
       JSON.stringify({ jobs: [{ id: 'job-1', name: 'Monitor' }] }),
       'utf-8'
     )
+
     const { ExternalAutomationProviderCatalog } =
       await import('./external-automation-provider-catalog')
+
     const catalog = new ExternalAutomationProviderCatalog(
       vi.fn().mockRejectedValue(new Error('not found')),
       vi.fn().mockResolvedValue({ total: 3, runs: [] })
@@ -48,8 +51,10 @@ describe('ExternalAutomationProviderCatalog', () => {
 
   it('projects jobs-file parse failures without hiding command availability', async () => {
     await writeFile(join(hermesHome, 'cron', 'jobs.json'), '{not-json', 'utf-8')
+
     const { ExternalAutomationProviderCatalog } =
       await import('./external-automation-provider-catalog')
+
     const catalog = new ExternalAutomationProviderCatalog(
       vi.fn().mockResolvedValue(undefined),
       vi.fn()
@@ -69,8 +74,10 @@ describe('ExternalAutomationProviderCatalog', () => {
       JSON.stringify([{ id: 'job-1' }, { id: '--invalid' }]),
       'utf-8'
     )
+
     const { ExternalAutomationProviderCatalog } =
       await import('./external-automation-provider-catalog')
+
     const catalog = new ExternalAutomationProviderCatalog(
       vi.fn().mockResolvedValue(undefined),
       vi

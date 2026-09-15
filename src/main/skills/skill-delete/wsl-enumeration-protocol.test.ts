@@ -19,6 +19,7 @@ describe('parseWslListEntriesOutput', () => {
       '\\\\wsl.localhost\\Ubuntu\\home\\u\\.agents\\skills',
       '\\\\wsl.localhost\\Ubuntu\\home\\u\\.claude\\skills'
     ]
+
     const output = records('D', '0', 'E', 'demo', 'directory', 'E', 'link', 'symlink', 'D', '1')
     const listings = parseWslListEntriesOutput(output, directories)
     expect(listings.get(directories[0])).toEqual([

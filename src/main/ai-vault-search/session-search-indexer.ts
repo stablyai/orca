@@ -125,11 +125,13 @@ export class SessionSearchIndexer {
       intervalMs: this.intervalMs,
       onFailure: onError
     })
+
     if (liveIndexerPaths.has(this.ownershipPath)) {
       throw new Error(
         `SessionSearchIndexer: ${options.databasePath} already has a live indexer; close it first`
       )
     }
+
     // Store, registration and indexer share one lifetime, which is what makes
     // the object immutable: there is no second open to get out of step with.
     // Claimed only once the store is open, because a construction that throws
@@ -148,8 +150,10 @@ export class SessionSearchIndexer {
     if (this.closed || this.started) {
       return this.loop.settled
     }
+
     this.started = true
     this.sweepNext = true
+
     return this.tick()
   }
 
@@ -166,10 +170,13 @@ export class SessionSearchIndexer {
     if (this.closed) {
       throw new Error('SessionSearchIndexer.reconcile: the indexer is closed')
     }
+
     if (!this.started) {
       throw new Error('SessionSearchIndexer.reconcile: start() first')
     }
+
     this.sweepNext ||= options.full === true
+
     return this.tick()
   }
 
@@ -189,6 +196,7 @@ export class SessionSearchIndexer {
       due: 0,
       failed: 0
     }
+
     return {
       phase: this.phase(settled),
       filesIndexed: settled.current,
@@ -205,6 +213,7 @@ export class SessionSearchIndexer {
     if (this.closed) {
       return
     }
+
     // Read before the handle goes, so a status call afterwards reports what the
     // index last held rather than opening a database its owner has finished with.
     this.lastCounts = this.readCounts() ?? this.lastCounts
@@ -226,9 +235,11 @@ export class SessionSearchIndexer {
     try {
       const counts = this.store.stateCounts()
       this.lastCounts = counts
+
       return counts
     } catch (error) {
       this.onError(error)
+
       return this.lastCounts
     }
   }
@@ -244,14 +255,17 @@ export class SessionSearchIndexer {
     if (this.closed) {
       return 'closed'
     }
+
     if (!this.started) {
       return 'idle'
     }
+
     // A root the pass could not read, or a file it could not read: both are gaps
     // the index knows about and cannot close on its own.
     if (this.degradedRoots.length > 0 || counts.failed > 0) {
       return 'degraded'
     }
+
     return counts.due === 0 && this.lastSweepCompletedAt !== null ? 'current' : 'indexing'
   }
 
@@ -275,14 +289,18 @@ export class SessionSearchIndexer {
     // raised while this pass is running sets it again, and clearing it at the
     // end would erase that request along with this pass's own.
     this.sweepNext = false
+
     try {
       if (full && this.options.resolveRoots) {
         const roots = await this.options.resolveRoots(signal)
+
         if (signal.aborted) {
           return
         }
+
         this.roots = roots
       }
+
       const result = await runSessionSearchPass({
         store: this.store,
         roots: this.roots,
@@ -294,12 +312,15 @@ export class SessionSearchIndexer {
         listings: new SessionSearchDirectoryListings(),
         signal
       })
+
       if (!result.completed) {
         // A pass cut short learned nothing about root health, and publishing its
         // empty findings would clear a live alarm. A sweep stays owed.
         this.sweepNext ||= full
+
         return
       }
+
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
@@ -307,15 +328,19 @@ export class SessionSearchIndexer {
       // pass that ran out of time asks for one. It is self-limiting: the first
       // pass that finishes its reads hands the interval back to cycles.
       this.sweepNext ||= result.outOfTime
+
       if (full) {
         this.lastSweepCompletedAt = this.lastReconcileAt
         this.cyclesSinceSweep = 0
+
         return
       }
+
       // A root that came back, a tree restored from a backup, an old transcript
       // deleted: only a sweep sees any of it, and the count of cycles is the
       // whole rule for when one is owed.
       this.cyclesSinceSweep += 1
+
       if (this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
         this.sweepNext = true
       }
@@ -332,4 +357,5 @@ export class SessionSearchIndexer {
     return sessionSearchHistoryCutoffMs(this.options.historyDays, this.clock.now())
   }
 }
+
 import { resolve } from 'node:path'

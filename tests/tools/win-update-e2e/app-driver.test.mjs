@@ -17,18 +17,23 @@ describe('dismissOverlays', () => {
       isVisible: vi.fn().mockResolvedValue(true),
       click: vi.fn().mockResolvedValue(undefined)
     }
+
     dialogClose.first.mockReturnValue(dialogClose)
+
     const windowClose = {
       first: vi.fn(),
       isVisible: vi.fn().mockResolvedValue(true),
       click: vi.fn().mockRejectedValue(new Error('window closed'))
     }
+
     windowClose.first.mockReturnValue(windowClose)
+
     const featureTipDialog = {
       first: vi.fn(),
       isVisible: vi.fn().mockResolvedValue(true),
       locator: vi.fn().mockReturnValue(dialogClose)
     }
+
     featureTipDialog.first.mockReturnValue(featureTipDialog)
 
     const page = {
@@ -36,6 +41,7 @@ describe('dismissOverlays', () => {
         if (role === 'dialog') {
           return featureTipDialog
         }
+
         return name === 'Close' ? windowClose : hiddenButton()
       }),
       keyboard: { press: vi.fn().mockResolvedValue(undefined) },
@@ -53,6 +59,7 @@ describe('dismissOverlays', () => {
 
   it('keeps overlay retries within the caller timeout budget', async () => {
     vi.useFakeTimers()
+
     try {
       const newWorkspace = {
         first: vi.fn(),
@@ -61,13 +68,16 @@ describe('dismissOverlays', () => {
           throw new Error('button remained blocked')
         })
       }
+
       newWorkspace.first.mockReturnValue(newWorkspace)
+
       const page = {
         locator: vi.fn().mockImplementation(() => hiddenButton()),
         getByRole: vi.fn((role, { name }) => {
           if (role === 'dialog') {
             return hiddenButton()
           }
+
           return name === 'New workspace' ? newWorkspace : hiddenButton()
         }),
         keyboard: { press: vi.fn().mockResolvedValue(undefined) },
@@ -88,12 +98,15 @@ describe('dismissOverlays', () => {
 
   it('bounds a blocked create submission by the remaining budget after a fast first click', async () => {
     vi.useFakeTimers()
+
     try {
       const newWorkspace = {
         first: vi.fn(),
         click: vi.fn().mockResolvedValue(undefined)
       }
+
       newWorkspace.first.mockReturnValue(newWorkspace)
+
       const createWorktree = {
         last: vi.fn(),
         click: vi.fn(async ({ timeout }) => {
@@ -101,31 +114,40 @@ describe('dismissOverlays', () => {
           throw new Error('submit remained blocked')
         })
       }
+
       createWorktree.last.mockReturnValue(createWorktree)
+
       const composer = {
         last: vi.fn(),
         waitFor: vi.fn().mockResolvedValue(undefined),
         getByRole: vi.fn().mockReturnValue(createWorktree)
       }
+
       composer.last.mockReturnValue(composer)
+
       const xterm = {
         first: vi.fn(),
         waitFor: vi.fn().mockResolvedValue(undefined)
       }
+
       xterm.first.mockReturnValue(xterm)
+
       const terminalSurface = {
         first: vi.fn(),
         isVisible: vi.fn().mockResolvedValue(false),
         waitFor: vi.fn().mockResolvedValue(undefined),
         locator: vi.fn().mockReturnValue(xterm)
       }
+
       terminalSurface.first.mockReturnValue(terminalSurface)
+
       const page = {
         locator: vi.fn().mockImplementation(() => terminalSurface),
         getByRole: vi.fn((role, { name }) => {
           if (role === 'dialog') {
             return name === 'Create worktree' ? composer : hiddenButton()
           }
+
           return name === 'New workspace' ? newWorkspace : hiddenButton()
         }),
         keyboard: { press: vi.fn().mockResolvedValue(undefined) },
@@ -151,25 +173,33 @@ describe('dismissOverlays', () => {
       isVisible: vi.fn().mockResolvedValue(true),
       click: vi.fn().mockResolvedValue(undefined)
     }
+
     dialogClose.first.mockReturnValue(dialogClose)
+
     const featureTipDialog = {
       first: vi.fn(),
       isVisible: vi.fn().mockResolvedValue(true),
       locator: vi.fn().mockReturnValue(dialogClose)
     }
+
     featureTipDialog.first.mockReturnValue(featureTipDialog)
+
     const xterm = {
       first: vi.fn(),
       waitFor: vi.fn().mockResolvedValue(undefined)
     }
+
     xterm.first.mockReturnValue(xterm)
+
     const terminalSurface = {
       first: vi.fn(),
       isVisible: vi.fn().mockResolvedValue(true),
       waitFor: vi.fn().mockResolvedValue(undefined),
       locator: vi.fn().mockReturnValue(xterm)
     }
+
     terminalSurface.first.mockReturnValue(terminalSurface)
+
     const page = {
       locator: vi.fn().mockReturnValue(terminalSurface),
       getByRole: vi.fn((role) => (role === 'dialog' ? featureTipDialog : hiddenButton())),
@@ -187,7 +217,9 @@ describe('dismissOverlays', () => {
       first: vi.fn(),
       click: vi.fn().mockResolvedValue(undefined)
     }
+
     newWorkspace.first.mockReturnValue(newWorkspace)
+
     const createWorktree = {
       last: vi.fn(),
       click: vi
@@ -195,31 +227,41 @@ describe('dismissOverlays', () => {
         .mockRejectedValueOnce(new Error('submit was briefly intercepted'))
         .mockResolvedValueOnce(undefined)
     }
+
     createWorktree.last.mockReturnValue(createWorktree)
+
     const composer = {
       last: vi.fn(),
       waitFor: vi.fn().mockResolvedValue(undefined),
       getByRole: vi.fn().mockReturnValue(createWorktree)
     }
+
     composer.last.mockReturnValue(composer)
+
     const xterm = {
       first: vi.fn(),
       waitFor: vi.fn().mockResolvedValue(undefined)
     }
+
     xterm.first.mockReturnValue(xterm)
+
     const terminalSurface = {
       first: vi.fn(),
       isVisible: vi.fn().mockResolvedValue(false),
       waitFor: vi.fn().mockResolvedValue(undefined),
       locator: vi.fn().mockReturnValue(xterm)
     }
+
     terminalSurface.first.mockReturnValue(terminalSurface)
+
     const unintendedDialogClose = {
       first: vi.fn(),
       isVisible: vi.fn().mockResolvedValue(true),
       click: vi.fn().mockResolvedValue(undefined)
     }
+
     unintendedDialogClose.first.mockReturnValue(unintendedDialogClose)
+
     const page = {
       locator: vi.fn((selector) =>
         selector.includes('dialog-close') ? unintendedDialogClose : terminalSurface
@@ -228,6 +270,7 @@ describe('dismissOverlays', () => {
         if (role === 'dialog') {
           return name === 'Create worktree' ? composer : hiddenButton()
         }
+
         return name === 'New workspace' ? newWorkspace : hiddenButton()
       }),
       keyboard: { press: vi.fn().mockResolvedValue(undefined) },

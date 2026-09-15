@@ -41,6 +41,7 @@ export const createRefreshEventActions = (
       requestHeadOid: string | null
       executionHostId: string
     }[] = []
+
     const branchMismatchedLinkedPRClears: {
       worktreeId: string
       linkedPRNumber: number
@@ -48,6 +49,7 @@ export const createRefreshEventActions = (
       requestHeadOid: string | null
       executionHostId: string
     }[] = []
+
     let didUpdatePRCache = false
     set((s) => {
       let linkedWorktreeLookupIndex: WorktreeLookupIndex | undefined
@@ -61,14 +63,17 @@ export const createRefreshEventActions = (
       for (const alias of event.aliases) {
         const aliasExecutionHostId = getRefreshAliasExecutionHostId(alias)
         const previousSequence = nextSequences[alias.cacheKey] ?? 0
+
         if (
           event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
         ) {
           if (event.outcome || event.status !== 'in-flight') {
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+
           continue
         }
+
         // Why: delete-then-set re-orders this key last so capPrRefreshSequences evicts idle, not active, keys.
         delete nextSequences[alias.cacheKey]
         nextSequences[alias.cacheKey] = event.sequence
@@ -78,10 +83,13 @@ export const createRefreshEventActions = (
           const startedEntryKey = prRefreshStartedEntryKey(event.sequence, alias.cacheKey)
           const requestStartedEntry = prRefreshStartedHostedReviewEntries.get(startedEntryKey)
           prRefreshStartedHostedReviewEntries.delete(startedEntryKey)
+
           if (previousSequence !== event.sequence) {
             deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
           }
+
           delete nextStates[alias.cacheKey]
+
           if (event.outcome.kind === 'upstream-error') {
             nextStates[alias.cacheKey] = {
               status: 'error',
@@ -94,6 +102,7 @@ export const createRefreshEventActions = (
             }
             continue
           }
+
           const data =
             event.outcome.kind === 'found'
               ? applyCachedChecksStatus(
@@ -104,20 +113,25 @@ export const createRefreshEventActions = (
                   aliasExecutionHostId
                 )
               : null
+
           const linkedPRNumber = alias.linkedPRNumber ?? null
+
           // Why: one outcome fans out to many aliases; build one lazy index instead of rescanning worktrees per alias.
           const worktreeLookupIndex =
             alias.worktreeId && linkedPRNumber != null
               ? (linkedWorktreeLookupIndex ??= buildWorktreeLookupIndex(s))
               : undefined
+
           // Why: a queued refresh finishing after the user unlinks an exact PR must not restore the manual-link UI.
           if (
             isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
           ) {
             continue
           }
+
           if (event.outcome.kind === 'found' && alias.worktreeId) {
             const requestHeadOid = alias.currentHeadOid ?? null
+
             const worktree =
               linkedPRNumber != null
                 ? findUniqueWorktreeById(
@@ -127,6 +141,7 @@ export const createRefreshEventActions = (
                     worktreeLookupIndex
                   )
                 : null
+
             // Why: only the sequence-gate winner owns metadata side effects; late outcomes must not unlink a newer PR.
             if (
               worktree &&
@@ -164,6 +179,7 @@ export const createRefreshEventActions = (
               })
             }
           }
+
           const nextCaches = applyGitHubPRResultToCaches({
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache,
@@ -185,6 +201,7 @@ export const createRefreshEventActions = (
             requestStartedAt: event.requestStartedAt,
             requestStartedEntry
           })
+
           didUpdatePRCache = didUpdatePRCache || nextCaches.prCache !== nextPRCache
           nextPRCache = nextCaches.prCache
           nextHostedReviewCache = nextCaches.hostedReviewCache
@@ -195,6 +212,7 @@ export const createRefreshEventActions = (
           if (previousSequence !== event.sequence) {
             deletePRRefreshStartedEntry(previousSequence, alias.cacheKey)
           }
+
           if (event.status === 'in-flight' && event.requestStartedAt !== undefined) {
             const hostedReviewCacheKey = getHostedReviewCacheKey(
               alias.repoPath,
@@ -205,6 +223,7 @@ export const createRefreshEventActions = (
               aliasExecutionHostId,
               true
             )
+
             setPRRefreshStartedHostedReviewEntry(
               prRefreshStartedEntryKey(event.sequence, alias.cacheKey),
               s.hostedReviewCache[hostedReviewCacheKey]
@@ -213,6 +232,7 @@ export const createRefreshEventActions = (
             // Why: pause/skip can follow an in-flight broadcast with no outcome; drop the stale request-start snapshot.
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+
           // Why: delete-then-set re-orders this key last so capRecordByInsertionOrder evicts idle, not active, keys.
           delete nextStates[alias.cacheKey]
           const isPaused = event.status === 'paused'
@@ -240,9 +260,11 @@ export const createRefreshEventActions = (
           }
         : s
     })
+
     if (didUpdatePRCache && event.outcome && event.outcome.kind !== 'upstream-error') {
       debouncedSaveCache(get())
     }
+
     for (const clear of divergedLinkedPRClears) {
       void get().updateWorktreeMeta(
         clear.worktreeId,
@@ -259,6 +281,7 @@ export const createRefreshEventActions = (
         }
       )
     }
+
     for (const clear of branchMismatchedLinkedPRClears) {
       void get().updateWorktreeMeta(
         clear.worktreeId,

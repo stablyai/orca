@@ -25,15 +25,18 @@ export function getMobileWorkspaceStatus(
   statuses: readonly WorkspaceStatusDefinition[]
 ): string {
   const availableStatuses = coerceMobileWorkspaceStatuses(statuses)
+
   if (
     worktree.workspaceStatus &&
     availableStatuses.some((status) => status.id === worktree.workspaceStatus)
   ) {
     return worktree.workspaceStatus
   }
+
   if (availableStatuses.some((status) => status.id === DEFAULT_MOBILE_WORKSPACE_STATUS_ID)) {
     return DEFAULT_MOBILE_WORKSPACE_STATUS_ID
   }
+
   return availableStatuses[0]?.id ?? DEFAULT_MOBILE_WORKSPACE_STATUS_ID
 }
 

@@ -20,6 +20,7 @@ function git(cwd, args) {
 
 function withGitRepo(run) {
   const dir = mkdtempSync(join(tmpdir(), 'orca-draft-release-'))
+
   try {
     git(dir, ['init', '--initial-branch=main'])
     git(dir, ['config', 'user.name', 'Test Bot'])
@@ -135,11 +136,13 @@ describe('publishCompleteDraftReleases', () => {
         ])
       )
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.2-rc.7', draft: false }))
+
     const verifyReleaseAssets = vi.fn(async ({ tag }) => {
       if (tag === 'v1.4.2-rc.8') {
         throw new Error('Release v1.4.2-rc.8 is missing required assets.')
       }
     })
+
     const log = vi.fn()
 
     const result = await publishCompleteDraftReleases({
@@ -181,6 +184,7 @@ describe('publishCompleteDraftReleases', () => {
         }
       ])
     )
+
     const verifyReleaseAssets = vi.fn()
     const log = vi.fn()
 
@@ -206,6 +210,7 @@ describe('writeGithubOutputs', () => {
   it('writes count outputs for workflow conditions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-release-outputs-'))
     const outputPath = join(dir, 'output')
+
     try {
       writeGithubOutputs(
         {

@@ -6,12 +6,16 @@ import {
   useNotificationPaneNavigation
 } from './use-notification-pane-navigation'
 import type { MobileSessionTab } from './mobile-session-route-types'
+
 const route = vi.hoisted(() => ({ paneKey: '', setParams: vi.fn() }))
+
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ paneKey: route.paneKey }),
   useRouter: () => ({ setParams: route.setParams })
 }))
+
 const leaf = '11111111-1111-4111-8111-111111111111'
+
 const tabs: MobileSessionTab[] = [
   {
     type: 'terminal',
@@ -32,22 +36,27 @@ const tabs: MobileSessionTab[] = [
     isActive: false
   }
 ]
+
 it('selects the originating split pane, not the first tab; closed and invalid panes fall back', () => {
   expect(notificationPaneTab(tabs, `tab-b:${leaf}`)).toBe(tabs[1])
   expect(notificationPaneTab(tabs, `closed:${leaf}`)).toBeUndefined()
   expect(notificationPaneTab(tabs, 'invalid')).toBeUndefined()
 })
+
 it('waits for tabs, switches through the existing action, and consumes the navigation request', async () => {
   route.paneKey = `tab-b:${leaf}`
   const switchSessionTab = vi.fn()
+
   function Probe({ loaded }: { loaded: boolean }) {
     useNotificationPaneNavigation({
       sessionTabs: loaded ? tabs : [],
       terminalsLoaded: loaded,
       switchSessionTab
     })
+
     return null
   }
+
   let renderer: ReturnType<typeof create>
   await act(async () => {
     renderer = create(createElement(Probe, { loaded: false }))

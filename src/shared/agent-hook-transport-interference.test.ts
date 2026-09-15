@@ -51,9 +51,11 @@ describe('createHookTransportInterferenceTracker', () => {
   it('reports exactly once at the threshold and keeps counting after', () => {
     const onThreshold = vi.fn()
     const tracker = createHookTransportInterferenceTracker(onThreshold, 3)
+
     for (let i = 0; i < 6; i++) {
       tracker.record(truncation)
     }
+
     expect(onThreshold).toHaveBeenCalledTimes(1)
     expect(onThreshold).toHaveBeenCalledWith({
       count: 3,
@@ -82,6 +84,7 @@ describe('describeHookTransportInterference', () => {
       bytesRead: 10,
       contentLength: 900
     })
+
     expect(message).toContain('/hook/codex')
     expect(message).toContain('10/900 bytes')
     expect(message).toContain('security software')
@@ -96,6 +99,7 @@ describe('describeHookTransportInterference', () => {
       bytesRead: 0,
       contentLength: 900
     })
+
     expect(message).not.toContain('/hook/')
   })
 })

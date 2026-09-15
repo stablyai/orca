@@ -28,26 +28,39 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-preserved-resurrection'
+
 const WORKTREE_PATH = '/tmp/preserved-resurrection'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 const TAB_A = 'tab-reviewer-a'
+
 const TAB_B = 'tab-main-b'
+
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
 const PTY_A = 'pty-reviewer-a'
+
 const PTY_B = 'pty-main-b'
+
 const INC_A = '33333333-3333-4333-8333-333333333333'
+
 const INC_B = '44444444-4444-4444-8444-444444444444'
 
 const TAB_P = 'tab-split-parent'
+
 // LEAF_C: the persisted session's alternative leafId for PTY_A's surface —
 // renderer and headless sources can derive different leafIds for one surface.
 const LEAF_C = '55555555-5555-4555-8555-555555555555'
+
 const PTY_BY_LEAF: Record<string, string> = { [LEAF_A]: PTY_A, [LEAF_B]: PTY_B, [LEAF_C]: PTY_A }
+
 const INC_BY_LEAF: Record<string, string> = { [LEAF_A]: INC_A, [LEAF_B]: INC_B, [LEAF_C]: INC_A }
 
 type TabSpec = { tabId: string; leafId: string; ptyId: string }
+
 const TAB_SPECS: Record<string, TabSpec> = {
   [TAB_A]: { tabId: TAB_A, leafId: LEAF_A, ptyId: PTY_A },
   [TAB_B]: { tabId: TAB_B, leafId: LEAF_B, ptyId: PTY_B }
@@ -88,14 +101,17 @@ function makeSession(tabIds: readonly string[]): WorkspaceSessionState {
 
 function makeDeferred() {
   let resolve!: () => void
+
   const promise = new Promise<void>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
 function createHarness() {
   let session = makeSession([TAB_A, TAB_B])
+
   const repo = {
     id: REPO_ID,
     path: WORKTREE_PATH,
@@ -103,6 +119,7 @@ function createHarness() {
     badgeColor: '#000000',
     addedAt: 1
   }
+
   const store = {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
@@ -116,6 +133,7 @@ function createHarness() {
     },
     flushOrThrow: () => {}
   }
+
   const relayAck = makeDeferred()
   const closeTerminal = vi.fn()
   const closeTerminalTab = vi.fn(() => relayAck.promise)
@@ -182,6 +200,7 @@ function createHarness() {
       leafId: spec.leafId,
       incarnationId: spec.tabId === TAB_A ? INC_A : INC_B
     })
+
     // Why: byte-identical to a paired create — ensurePtyBackedMobileSurfaceForRendererTab
     // marks every paired-created PTY runtimeSessionOwned + paired-session-owned,
     // and nothing clears either flag until close/exit.
@@ -190,11 +209,13 @@ function createHarness() {
         ptysById: Map<string, { runtimeSessionOwned: boolean }>
       }
     ).ptysById.get(spec.ptyId)!
+
     record.runtimeSessionOwned = true
     ;(
       runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
     ).pairedRendererSessionOwnedPtyIds.add(spec.ptyId)
   }
+
   publishRendererSnapshot([TAB_A, TAB_B], 1)
 
   return {
@@ -235,6 +256,7 @@ function makeSplitLayout(leafIds: readonly string[]) {
           ratio: 0.5
         }
       : { type: 'leaf' as const, leafId: leafIds[0]! }
+
   return {
     root,
     activeLeafId: leafIds[0]!,
@@ -270,6 +292,7 @@ function makeSplitSession(leafIds: readonly string[]): WorkspaceSessionState {
 
 function createSplitHarness() {
   let session = makeSplitSession([LEAF_A, LEAF_B])
+
   const repo = {
     id: REPO_ID,
     path: WORKTREE_PATH,
@@ -277,6 +300,7 @@ function createSplitHarness() {
     badgeColor: '#000000',
     addedAt: 1
   }
+
   const store = {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
@@ -290,6 +314,7 @@ function createSplitHarness() {
     },
     flushOrThrow: () => {}
   }
+
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab: vi.fn(async () => {}) } as never)
   runtime.setPtyController({
@@ -352,14 +377,17 @@ function createSplitHarness() {
       leafId,
       incarnationId: INC_BY_LEAF[leafId]!
     })
+
     const record = (
       runtime as unknown as { ptysById: Map<string, { runtimeSessionOwned: boolean }> }
     ).ptysById.get(PTY_BY_LEAF[leafId]!)!
+
     record.runtimeSessionOwned = true
     ;(
       runtime as unknown as { pairedRendererSessionOwnedPtyIds: Set<string> }
     ).pairedRendererSessionOwnedPtyIds.add(PTY_BY_LEAF[leafId]!)
   }
+
   publishSplitSnapshot([LEAF_A, LEAF_B], 1)
 
   return {
@@ -380,6 +408,7 @@ function createSplitHarness() {
 
 async function listTerminalSurfaceIds(runtime: OrcaRuntimeService): Promise<string[]> {
   const listed = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+
   return listed.tabs
     .filter((tab) => tab.type === 'terminal')
     .map((tab) => tab.id)
@@ -388,6 +417,7 @@ async function listTerminalSurfaceIds(runtime: OrcaRuntimeService): Promise<stri
 
 async function listParentTabIds(runtime: OrcaRuntimeService): Promise<string[]> {
   const listed = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+
   return [
     ...new Set(
       listed.tabs.map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id)).sort()
@@ -402,6 +432,7 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
     const closing = harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_A, {
       reason: 'user'
     })
+
     await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_A))
     harness.retirePersistedTab(TAB_A)
     harness.relayAck.resolve()
@@ -419,6 +450,7 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
     const closing = harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_A, {
       reason: 'user'
     })
+
     await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_A))
     // Production ordering: the renderer durably retires the tab and publishes
     // the pruned graph BEFORE replying to the relay. The kill it dispatched has

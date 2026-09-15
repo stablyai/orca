@@ -22,9 +22,11 @@ export async function trustDockerSshHost(
   const sshDir = join(target.tempDir, '.ssh')
   mkdirSync(sshDir, { recursive: true })
   const knownHostsPath = join(sshDir, 'known_hosts')
+
   const hostKeys = execFileSync('ssh-keyscan', ['-p', String(target.port), '127.0.0.1'], {
     encoding: 'utf8'
   })
+
   writeFileSync(knownHostsPath, hostKeys)
   const invocationLogPath = join(target.tempDir, 'system-ssh-invocations')
   const wrapperPath = join(target.tempDir, 'verified-system-ssh')
@@ -44,6 +46,7 @@ export async function trustDockerSshHost(
   await electronApp.evaluate((_electron, path) => {
     process.env.ORCA_SYSTEM_SSH_PATH = path
   }, wrapperPath)
+
   return invocationLogPath
 }
 
@@ -51,6 +54,7 @@ export function readSystemSshInvocationKinds(invocationLogPath: string): string[
   if (!existsSync(invocationLogPath)) {
     return []
   }
+
   return readFileSync(invocationLogPath, 'utf8').split(/\r?\n/).filter(Boolean)
 }
 
@@ -77,6 +81,7 @@ done
 printf '%s' "$count"
 `
   )
+
   return Number(output)
 }
 
@@ -86,6 +91,7 @@ export async function installSshStateCapture(page: Page, targetId: string): Prom
       __sshLifecycleStates?: CapturedSshState[]
       __sshLifecycleStateUnsubscribe?: () => void
     }
+
     scope.__sshLifecycleStateUnsubscribe?.()
     scope.__sshLifecycleStates = []
     scope.__sshLifecycleStateUnsubscribe = window.api.ssh.onStateChanged((event) => {
@@ -113,10 +119,12 @@ export async function forceDockerSshRelayChannelReconnect(
   targetId: string
 ): Promise<void> {
   await installSshStateCapture(page, targetId)
+
   const authority = await page.evaluate(
     (targetId) => window.__store?.getState().sshConnectionStates.get(targetId),
     targetId
   )
+
   expect(authority).toMatchObject({
     status: 'connected',
     providerEpoch: expect.any(String),
@@ -127,10 +135,12 @@ export async function forceDockerSshRelayChannelReconnect(
     .poll(
       async () => {
         const states = await readSshStateCapture(page)
+
         const current = await page.evaluate(
           (targetId) => window.__store?.getState().sshConnectionStates.get(targetId),
           targetId
         )
+
         return (
           states.some((state) => state.status === 'reconnecting') &&
           states.some((state) => state.status === 'connected') &&

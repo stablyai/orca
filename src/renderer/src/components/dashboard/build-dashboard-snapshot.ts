@@ -92,22 +92,27 @@ export function buildDashboardSnapshot(
   } = {}
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
+
   const workspaces: DashboardWorkspace[] | undefined =
     options.includeCardDetails === false ? undefined : []
+
   const clientHost = readDashboardClientHost()
   const repoIconsByRepoId: Record<string, RepoIcon | null> = {}
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
   const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
+
   const filterOptions =
     options.includeFilterOptions === false
       ? undefined
       : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
+
   const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
     state,
     activeWorktrees
   )
+
   if (options.rowsCache) {
     startWorktreeAgentRowsCachePass(options.rowsCache)
   }
@@ -130,12 +135,15 @@ export function buildDashboardSnapshot(
       generation: options.rowsGeneration,
       cache: options.rowsCache
     })
+
     const subagentsByParentPaneKey = includeCardDetails
       ? groupSubagentsByParentPaneKey(rows)
       : undefined
+
     const context = includeCardDetails
       ? resolveDashboardCardContext(state, repo, worktree)
       : undefined
+
     if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
       const hostMetadata = dashboardCardMapWorkspaceMetadata(
         workspace,
@@ -143,6 +151,7 @@ export function buildDashboardSnapshot(
         undefined,
         clientHost.platform
       )
+
       workspaces.push({
         repoId: workspace.projectId,
         worktreeId,
@@ -163,18 +172,22 @@ export function buildDashboardSnapshot(
       if (row.rowSource === 'subagent') {
         continue
       }
+
       // Title-derived rows (a live pane read only from its terminal title, no
       // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
       // agent LABEL and a status word like "Idle". They're marked by
       // startedAt === 0, and must NOT be shown as real conversation.
       const { isTitleDerived, dotState, workingMode, unseen, bucket } =
         dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey)
+
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
       const parsed = parsePaneKey(routingPaneKey)
       const tabId = parsed?.tabId ?? row.tab.id
       const leafId = parsed?.leafId ?? null
+
       const layoutPtyId =
         (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
+
       // Layout entries survive app restarts, but their PTYs may not (parked
       // tabs keep the pre-restart id). Only advertise a pty the terminal
       // preview can actually serialize — ptyIdsByTabId is the liveness truth.
@@ -182,6 +195,7 @@ export function buildDashboardSnapshot(
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
+
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.
@@ -199,7 +213,9 @@ export function buildDashboardSnapshot(
               osRelease: clientHost.osRelease
             })
           : null
+
       const finishedAt = lastEnteredDoneAt(row)
+
       const hostMetadata = includeCardDetails
         ? dashboardCardMapWorkspaceMetadata(
             workspace,
@@ -208,6 +224,7 @@ export function buildDashboardSnapshot(
             clientHost.platform
           )
         : undefined
+
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
 

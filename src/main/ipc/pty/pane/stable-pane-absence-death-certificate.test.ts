@@ -25,12 +25,18 @@ import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { resolvePersistedStablePaneOwner, spawnForStablePane } from './stable-owner'
 
 const CONNECTION = 'conn-1'
+
 const WORKTREE = 'repo-1::/tmp/pane-absence'
+
 const TAB = 'tab-1'
+
 const LEAF = '1b3f2c4d-5e6a-4b7c-8d9e-0f1a2b3c4d5e'
+
 const SIBLING_LEAF = '2c4d3e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'
+
 // Ids carry the relay's per-start mint epoch, so this one names a PTY the CURRENT relay never minted.
 const PTY_ID = 'ssh:conn-1@@pty2:epoch-a:1'
+
 const OWNER = { tabId: TAB, leafId: LEAF, ptyId: PTY_ID, hasPersistedBinding: true as const }
 
 function paneStore(): { store: Store; read: () => WorkspaceSessionState } {
@@ -52,6 +58,7 @@ function paneStore(): { store: Store; read: () => WorkspaceSessionState } {
       }
     }
   } as unknown as WorkspaceSessionState
+
   return {
     read: () => session,
     store: {
@@ -91,6 +98,7 @@ function runtimeOwning(store: Store): OrcaRuntimeService {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   runtime.registerPty(PTY_ID, WORKTREE, CONNECTION)
+
   return runtime
 }
 
@@ -102,10 +110,12 @@ async function adoptAfterAttachRefusal(error: unknown): Promise<{
 }> {
   const { store, read } = paneStore()
   const runtime = runtimeOwning(store)
+
   const spawn = vi
     .fn()
     .mockRejectedValueOnce(error)
     .mockResolvedValueOnce({ id: 'ssh:conn-1@@pty2:epoch-b:1', isReattach: false })
+
   await spawnForStablePane({
     runtime,
     store,
@@ -116,6 +126,7 @@ async function adoptAfterAttachRefusal(error: unknown): Promise<{
     connectionId: CONNECTION,
     resolveOwner: () => null
   })
+
   return { runtime, store, read, spawn }
 }
 

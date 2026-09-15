@@ -25,6 +25,7 @@ function exposeFaultApi(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
+
   const target = window as MetadataPublishFaultWindow
   target.__browserClientPageMetadataPublishFault ??= {
     suppress: () => {

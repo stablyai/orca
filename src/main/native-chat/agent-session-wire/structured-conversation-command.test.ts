@@ -17,11 +17,17 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const caller = { callerKey: 'desktop' }
+
 let directory: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let adapter: StructuredAgentSessionAdapter
+
 const compact = vi.fn<NonNullable<StructuredAgentSessionAdapter['compact']>>()
+
 let acquisitions = 0
 
 function commandParams(command: AgentSessionConversationCommand) {
@@ -54,6 +60,7 @@ beforeEach(async () => {
       location.executionHostId === 'local' && location.wslDistro === null,
     acquire: vi.fn(async (input) => {
       acquisitions++
+
       return {
         process: {
           hostId: 'local',
@@ -155,9 +162,11 @@ describe('host conversation commands', () => {
     })
     const result = await host.conversationCommand(caller, commandParams('clear'))
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(store.getRecord(result.value.replacementSessionId!)).toMatchObject({
       options: { model: 'test-model', effort: 'high', fastMode: 'false' }
     })
@@ -168,9 +177,11 @@ describe('host conversation commands', () => {
     const params = commandParams('clear')
     const result = await host.conversationCommand(caller, params)
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     const nextId = result.value.replacementSessionId!
     expect(nextId).not.toBe(HOST_TEST_SESSION)
     expect(store.getRecord(nextId)).toMatchObject({
@@ -245,6 +256,7 @@ describe('host conversation commands', () => {
       await host.conversationCommand({ callerKey: 'mobile' }, commandParams('clear'))
     ).toMatchObject({ ok: false })
     const turnId = `compact:${params.envelope.clientOperationId}`
+
     const cancel = await host.cancel(caller, {
       turnId,
       envelope: {
@@ -257,6 +269,7 @@ describe('host conversation commands', () => {
         })
       }
     })
+
     expect(cancel).toMatchObject({ ok: true, value: { cancelled: true } })
     expect(adapter.cancelTurn).toHaveBeenCalled()
     finish({})
@@ -269,6 +282,7 @@ describe('host conversation commands', () => {
       if (input.outcome.status === 'succeeded' && input.outcome.conversationCommand) {
         throw new Error('crash')
       }
+
       return persist(input)
     })
     const params = commandParams('clear')
@@ -296,9 +310,11 @@ describe('host conversation commands', () => {
 
   it('keeps explicitly revealed history and closed replacement tabs out of automatic restoration', async () => {
     const result = await host.conversationCommand(caller, commandParams('clear'))
+
     if (!result.ok) {
       throw new Error('clear failed')
     }
+
     expect(host.conversationReplacements()).toHaveLength(1)
     await host.setSessionTabVisibility(HOST_TEST_SESSION, true)
     expect(host.conversationReplacements()).toEqual([])

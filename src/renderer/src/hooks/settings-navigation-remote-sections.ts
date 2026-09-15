@@ -29,6 +29,7 @@ export function buildRemoteSettingsSections(
   reposById: ReadonlyMap<string, Repo>
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+
   return [
     ...(showDesktopOnlySettings
       ? [
@@ -157,6 +158,7 @@ export function buildRemoteSettingsSections(
     // a single entry. Derived from repos alone so this list matches the panes.
     ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
+
       const hostSummary =
         setups.length > 1
           ? translate(
@@ -165,6 +167,7 @@ export function buildRemoteSettingsSections(
               { value0: setups.length }
             )
           : (setups[0]?.path ?? representativeRepo.path)
+
       return {
         id: `repo-${representativeRepoId}`,
         title: project.displayName,

@@ -57,11 +57,13 @@ export const MessageRow = memo(function MessageRow({
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
+
   // One pass per block set, shared with the list that decides whether this row
   // occupies a slot — so "draws nothing" means the same thing to both.
   const { hasImages, markdown, prose, subagentGroups, tools } = deriveNativeChatRowContent(
     message.blocks
   )
+
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -86,6 +88,7 @@ export const MessageRow = memo(function MessageRow({
           block.type === 'text' && (block.presentation !== undefined || block.tone !== undefined)
       )
     : undefined
+
   if (notice?.type === 'text') {
     return (
       <div ref={rowRef}>

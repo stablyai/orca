@@ -20,6 +20,7 @@ async function startFixtureServer(): Promise<{ close(): Promise<void>; url: stri
       '<!doctype html><html><head><title>tooltip-preview</title></head><body style="font-family:sans-serif;padding:2rem"><h1>Client-hosted page</h1><p>The intro tooltip should point at the controls above.</p></body></html>'
     )
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -27,6 +28,7 @@ async function startFixtureServer(): Promise<{ close(): Promise<void>; url: stri
       resolve()
     })
   })
+
   return {
     close: () => closeServer(server),
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/preview`
@@ -50,13 +52,16 @@ async function findPairedWorktreeId(page: Page, repoPath: string): Promise<strin
           .find((worktree) => worktree.path === path)?.id ?? null,
       repoPath
     )
+
   await expect
     .poll(read, { timeout: 60_000, message: 'paired client never received the host worktree' })
     .not.toBeNull()
   const worktreeId = await read()
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -66,10 +71,12 @@ test('shows the client-hosted browser intro tooltip and holds for review', async
   test.setTimeout((HOLD_MINUTES + 10) * 60_000)
   const fixtureServer = await startFixtureServer()
   const host = await launchHeadlessPairedRuntimeHost()
+
   let dispose = async (): Promise<void> => {
     await host.dispose()
     await fixtureServer.close()
   }
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     await host.client.call('terminal.create', {
@@ -113,9 +120,11 @@ test('shows the client-hosted browser intro tooltip and holds for review', async
     await client.page.evaluate(
       async ({ url, worktreeId }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('store unavailable')
         }
+
         const groupId = state.groupsByWorktree[worktreeId]?.[0]?.id
         state.setBrowserDefaultUrl(url)
         await state.openNewBrowserTabInActiveWorkspace(groupId)

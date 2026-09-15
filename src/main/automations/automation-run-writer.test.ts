@@ -14,11 +14,13 @@ const SSH_SELECTOR = { kind: 'ssh', targetId: 'ssh-1' } as const
 function writerWith(selector: ReturnType<Store['automationChangeSelector']>) {
   const publish = vi.fn()
   const automationChangeSelector = vi.fn(() => selector)
+
   const store = {
     createAutomationRun: vi.fn(() => ({ id: 'run-1', automationId: 'auto-1' }) as AutomationRun),
     updateAutomationRun: vi.fn(() => ({ id: 'run-1', automationId: 'auto-1' }) as AutomationRun),
     automationChangeSelector
   } as unknown as Store
+
   return {
     publish,
     automationChangeSelector,
@@ -60,10 +62,12 @@ describe('automation run writer publications', () => {
 
   it('does not project a selector nobody will hear', () => {
     const automationChangeSelector = vi.fn(() => SSH_SELECTOR)
+
     const store = {
       createAutomationRun: vi.fn(() => ({ id: 'run-1', automationId: 'auto-1' }) as AutomationRun),
       automationChangeSelector
     } as unknown as Store
+
     createAutomationRunWriter(store, null).createRun({ id: 'auto-1' } as Automation, 0, 'scheduled')
     expect(automationChangeSelector).not.toHaveBeenCalled()
   })
@@ -72,12 +76,14 @@ describe('automation run writer publications', () => {
   // published during the write, so it is queued before the reply the caller awaits.
   it('publishes before markDispatchResult settles', async () => {
     const publish = vi.fn()
+
     const store = {
       updateAutomationRun: vi.fn(
         () => ({ id: 'run-1', automationId: 'auto-1', status: 'dispatched' }) as AutomationRun
       ),
       automationChangeSelector: vi.fn(() => SSH_SELECTOR)
     } as unknown as Store
+
     const service = new AutomationService(store, { onAutomationsChanged: publish })
 
     const settled = service.markDispatchResult({ runId: 'run-1', status: 'dispatched' })

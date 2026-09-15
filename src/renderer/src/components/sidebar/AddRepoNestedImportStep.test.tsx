@@ -54,9 +54,11 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((entry) =>
     entry.textContent?.includes(label)
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   return button
 }
 
@@ -69,6 +71,7 @@ describe('AddRepoNestedImportStep', () => {
       act(() => root?.unmount())
       root = null
     }
+
     container?.remove()
     container = null
   })
@@ -149,6 +152,7 @@ describe('AddRepoNestedImportStep', () => {
 
     function Harness(): React.JSX.Element {
       const [isAdding, setIsAdding] = useState(false)
+
       return (
         <TooltipProvider>
           <Dialog open>

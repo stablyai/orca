@@ -166,6 +166,7 @@ describe('OpenCode-family permission request status', () => {
 
   it.each(SOURCES)('leaves the AskUserQuestion route untouched for %s', (source) => {
     const properties = { questions: [{ question: 'Choose', options: ['x', 'y'] }] }
+
     const event = normalizeHookPayload(
       state,
       source,
@@ -204,6 +205,7 @@ describe('OpenCode-family permission request status', () => {
     'does not label a later question with the answered permission for %s',
     (source) => {
       permissionEvent(source, BASH_PERMISSION)
+
       const question = lifecycleEvent(source, 'AskUserQuestion', {
         questions: [{ question: 'Choose', options: ['x', 'y'] }]
       })
@@ -230,6 +232,7 @@ describe('OpenCode-family permission request status', () => {
     permissionEvent(source, BASH_PERMISSION)
     lifecycleEvent(source, 'SessionBusy')
     lifecycleEvent(source, 'SessionIdle')
+
     const laterQuestion = lifecycleEvent(source, 'AskUserQuestion', {
       questions: [{ question: 'Which branch?', options: ['main', 'dev'] }]
     })

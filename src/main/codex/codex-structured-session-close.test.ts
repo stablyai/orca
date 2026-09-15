@@ -34,8 +34,10 @@ function adapterFixture() {
     connection: CodexAppServerConnection
     handlers: CodexAppServerConnectionHandlers
   }[] = []
+
   const events: CodexStructuredSessionEvent[] = []
   let generation = 0
+
   const openConnection = (async (_launch, handlers = {}) => {
     const connection: CodexAppServerConnection = {
       pid: 4321,
@@ -46,9 +48,12 @@ function adapterFixture() {
       respondWithError: () => {},
       close: async () => true
     }
+
     connections.push({ connection, handlers })
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -62,6 +67,7 @@ function adapterFixture() {
     mintAcquisitionGeneration: () => `generation-${++generation}`,
     onEvent: (event) => events.push(event)
   })
+
   return { adapter, connections, events }
 }
 
@@ -86,12 +92,15 @@ describe('Codex structured session close lifecycle', () => {
       respondWithError: () => {},
       close: async () => true
     }
+
     const prompts = new CodexPromptRegistry()
     const clearPrompts = vi.spyOn(prompts, 'clear')
+
     const translator = {
       handle: vi.fn().mockReturnValueOnce({ accepted: false, reason: 'backpressure' as const }),
       dispose: vi.fn()
     } as unknown as NonNullable<CodexSession['translator']>
+
     const session: CodexSession = {
       connection,
       backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
@@ -108,6 +117,7 @@ describe('Codex structured session close lifecycle', () => {
       dispatchEchoes: createCodexDispatchEchoes(),
       translator
     }
+
     const sessions = new Map([['session-1', session]])
     const onEvent = vi.fn()
 
@@ -169,11 +179,14 @@ describe('Codex structured session close lifecycle', () => {
     const { adapter, connections, events } = adapterFixture()
     await adapter.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
     const current = connections[0]
+
     if (!current) {
       throw new Error('missing connection')
     }
+
     current.connection.close = async () => {
       current.handlers.onExit?.(new Error('sink failed'))
+
       return true
     }
 
@@ -185,17 +198,22 @@ describe('Codex structured session close lifecycle', () => {
 
   it('routes Codex sink-failure recovery through force-close and preserves unexpected-exit settlement', async () => {
     const { adapter, connections, events } = adapterFixture()
+
     const router = new StructuredAgentSessionAdapterRouter(
       { claude: claudeAdapterStub(), codex: adapter },
       async () => {}
     )
+
     await router.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
     const current = connections[0]
+
     if (!current) {
       throw new Error('missing connection')
     }
+
     current.connection.close = async () => {
       current.handlers.onExit?.(new Error('journal sink failed'))
+
       return true
     }
 

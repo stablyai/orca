@@ -13,6 +13,7 @@ export type ExternalAutomationScheduleDisplay = {
 function getDisplayableProviderSchedule(schedule: string): string | null {
   const trimmed = schedule.trim()
   const cronMatch = /^cron\s+(.+?)(?:\s+@\s+.+)?$/i.exec(trimmed)
+
   return cronMatch?.[1]?.trim() ?? trimmed
 }
 
@@ -21,6 +22,7 @@ export function getExternalAutomationScheduleDisplay(
   job: ExternalAutomationJob
 ): ExternalAutomationScheduleDisplay {
   const providerSchedule = job.schedule.trim()
+
   const candidateSchedules = [
     job.rawSchedule?.trim(),
     getDisplayableProviderSchedule(providerSchedule)

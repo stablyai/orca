@@ -2,6 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { browserManager } from './browser-manager'
 
 export const rendererWebContentsId = 5001
+
 // Base (non-Firefox) UA a guest reports off the Google auth hosts.
 export const guestBaseUserAgent = 'Mozilla/5.0 (Test) Chrome/140.0.0.0'
 
@@ -57,6 +58,7 @@ export function resetBrowserManagerState(): void {
 }
 
 type DownloadItemHandlerState = 'progressing' | 'interrupted' | 'completed' | 'cancelled'
+
 type DownloadItemHandler = (event: Electron.Event, state: DownloadItemHandlerState) => void
 
 export function createDownloadItem(
@@ -85,5 +87,6 @@ export function getDownloadItemEventHandler(
   const eventMock = item[method] as unknown as {
     mock: { calls: [string, DownloadItemHandler][] }
   }
+
   return eventMock.mock.calls.find(([event]) => event === eventName)?.[1]
 }

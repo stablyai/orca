@@ -3,6 +3,7 @@ import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 const EVENT_CHUNK_SIZE = 64
+
 const COMPACTION_MIN_HEAD_CHUNKS = 64
 
 export type PtyShutdownOutputEvent =
@@ -34,16 +35,20 @@ export class PtyShutdownOutputQueue {
   enqueue(event: PtyShutdownOutputEvent): void {
     const clamped = clampUtf8Tail(event.data, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)
     let tail = this.chunks.at(-1)
+
     if (!tail || tail.events.length >= EVENT_CHUNK_SIZE) {
       tail = { events: [] }
       this.chunks.push(tail)
     }
+
     const tailOffset = tail.events.length
     tail.events.push({ ...event, data: clamped.data })
+
     if (clamped.bytes !== clamped.data.length) {
       tail.eventBytes ??= new Uint32Array(EVENT_CHUNK_SIZE)
       tail.eventBytes[tailOffset] = clamped.bytes
     }
+
     this.retainedBytes += clamped.bytes
     this.retainedEvents += 1
 
@@ -55,6 +60,7 @@ export class PtyShutdownOutputQueue {
   takeAll(): PtyShutdownOutputEvent[] {
     const events: PtyShutdownOutputEvent[] = []
     this.drain((event) => events.push(event))
+
     return events
   }
 
@@ -63,14 +69,19 @@ export class PtyShutdownOutputQueue {
     const headChunk = this.headChunk
     const headOffset = this.headOffset
     this.reset()
+
     for (let chunkIndex = headChunk; chunkIndex < chunks.length; chunkIndex += 1) {
       const chunk = chunks[chunkIndex]
+
       if (!chunk) {
         continue
       }
+
       const start = chunkIndex === headChunk ? headOffset : 0
+
       for (let eventIndex = start; eventIndex < chunk.events.length; eventIndex += 1) {
         const event = chunk.events[eventIndex]
+
         if (event) {
           consumer(event)
         }
@@ -89,12 +100,14 @@ export class PtyShutdownOutputQueue {
   getStorageForTest(): PtyShutdownOutputQueueStorage {
     let backingLength = 0
     let byteBackingLength = 0
+
     for (const chunk of this.chunks) {
       if (chunk) {
         backingLength += chunk.events.length
         byteBackingLength += chunk.eventBytes?.length ?? 0
       }
     }
+
     return {
       backingLength,
       byteBackingLength,
@@ -108,23 +121,31 @@ export class PtyShutdownOutputQueue {
 
   private evictOldest(): void {
     const chunk = this.chunks[this.headChunk]
+
     if (!chunk) {
       throw new Error('Missing PTY shutdown output queue chunk')
     }
+
     const event = chunk.events[this.headOffset]
+
     if (!event) {
       throw new Error('Missing PTY shutdown output queue event')
     }
+
     this.retainedBytes -= chunk.eventBytes?.[this.headOffset] || event.data.length
     chunk.events[this.headOffset] = undefined
+
     if (chunk.eventBytes) {
       chunk.eventBytes[this.headOffset] = 0
     }
+
     this.headOffset += 1
     this.retainedEvents -= 1
+
     if (this.headOffset < chunk.events.length) {
       return
     }
+
     this.chunks[this.headChunk] = undefined
     this.headChunk += 1
     this.headOffset = 0
@@ -135,6 +156,7 @@ export class PtyShutdownOutputQueue {
     if (this.headChunk < COMPACTION_MIN_HEAD_CHUNKS || this.headChunk * 2 < this.chunks.length) {
       return
     }
+
     this.chunks = this.chunks.slice(this.headChunk)
     this.headChunk = 0
   }

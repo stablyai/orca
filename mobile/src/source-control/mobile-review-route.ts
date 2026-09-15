@@ -18,9 +18,11 @@ export function buildMobileReviewFileRoute(target: MobileReviewRouteTarget): str
   params.set('scope', 'all')
   params.set('file', target.filePath)
   params.set('area', target.area)
+
   if (target.worktreeName) {
     params.set('name', target.worktreeName)
   }
+
   return `/h/${encodeURIComponent(target.hostId)}/review/${encodeURIComponent(
     target.worktreeId
   )}?${params.toString()}`

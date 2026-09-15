@@ -15,6 +15,7 @@ import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import type { SshConnection } from './ssh-connection'
 
 const TARGET_PID = '11111'
+
 const UNRELATED_PID = '22222'
 
 type LsofMode = 'match' | 'empty'
@@ -38,12 +39,14 @@ async function closeServer(server: Server): Promise<void> {
   if (!server.listening) {
     return
   }
+
   await new Promise<void>((resolve) => server.close(() => resolve()))
 }
 
 async function capturedResetScript(): Promise<string> {
   const conn = {} as SshConnection
   await forceStopRelayForTarget(conn, 'ssh-1')
+
   return vi.mocked(execCommand).mock.lastCall?.[1] ?? ''
 }
 
@@ -71,6 +74,7 @@ async function runResetScript(lsofMode: LsofMode): Promise<{
   *" -a "*) printf '%s\\n' "$TARGET_PID" ;;
   *) printf '%s\\n' "$TARGET_PID" "$UNRELATED_PID" ;;
 esac`
+
   writeExecutable(join(binDir, 'lsof'), lsofBody)
   writeExecutable(
     join(binDir, 'pgrep'),
@@ -80,6 +84,7 @@ printf '%s\\n' "$TARGET_PID"`
   writeExecutable(join(binDir, 'sleep'), 'exit 0')
 
   const server = createServer()
+
   try {
     await listenOnSocket(server, socketPath)
     execFileSync(
@@ -104,6 +109,7 @@ eval "$RESET_SCRIPT"`
         }
       }
     )
+
     return {
       killCalls: readFileSync(killLog, 'utf8').split('\n').filter(Boolean),
       pgrepCalls: readFileSync(pgrepLog, 'utf8').split('\n').filter(Boolean),

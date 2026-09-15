@@ -42,6 +42,7 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
   // restore would never complete and would snap later marked writes back to
   // this stale target. Nothing to restore — don't arm.
   let restoring = targetOffset > 0 && el.scrollTop !== targetOffset
+
   if (restoring) {
     getMarks()?.mark(targetOffset)
     el.scrollTop = targetOffset
@@ -49,6 +50,7 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
 
   const completeRestore = (): void => {
     restoring = false
+
     if (getRecordAnchorOnScroll()) {
       recordCurrentAnchor()
     } else {
@@ -58,21 +60,27 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
 
   return (event: Event): void => {
     const marks = getMarks()
+
     if (marks) {
       const isProgrammatic = marks.consume(event, el.scrollTop, el.scrollHeight - el.clientHeight)
+
       if (restoring) {
         if (el.scrollTop === targetOffset) {
           completeRestore()
+
           return
         }
+
         if (!isProgrammatic) {
           const maxScrollOffset = el.scrollHeight - el.clientHeight
+
           // Why: an unmarked landing pinned at a max the target can't reach
           // is the browser clamping after content shrank, not user input;
           // keep waiting for the range to catch up instead of persisting the
           // clamped position. Direct input still takes over immediately.
           const clampExplainsLanding =
             targetOffset > maxScrollOffset && el.scrollTop >= maxScrollOffset - 2
+
           if (!clampExplainsLanding || getHasDirectScrollInput()?.() === true) {
             // Why: an unmarked scroll no clamp explains is the user taking
             // control of the viewport (marks classify our writes and their
@@ -80,29 +88,40 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
             restoring = false
             pendingRestoreRef.current = false
             recordCurrentAnchor()
+
             return
           }
         }
+
         if (el.scrollHeight - el.clientHeight >= targetOffset) {
           marks.mark(targetOffset)
           el.scrollTop = targetOffset
+
           if (el.scrollTop === targetOffset) {
             completeRestore()
           }
         }
+
         return
       }
+
       if (isProgrammatic) {
         onProgrammaticScroll(el.scrollTop)
+
         return
       }
+
       pendingRestoreRef.current = false
+
       if (!getRecordAnchorOnScroll()) {
         return
       }
+
       recordUserScroll(el.scrollTop)
+
       return
     }
+
     if (
       shouldCancelVirtualizedScrollOffsetRestore({
         hasDirectScrollInput: getHasDirectScrollInput(),
@@ -114,27 +133,35 @@ export function createVirtualizedScrollAnchorListener<TScrollElement extends Ele
       // back to a stale persisted offset while restoration is still pending.
       restoring = false
       recordCurrentAnchor()
+
       return
     }
+
     if (restoring) {
       // Why: during a fresh virtualizer mount, total height may still be
       // estimate-based. Avoid persisting a browser-clamped offset as the
       // user's real position until the intended offset is reachable.
       if (el.scrollTop === targetOffset) {
         completeRestore()
+
         return
       }
+
       if (el.scrollHeight - el.clientHeight >= targetOffset) {
         el.scrollTop = targetOffset
+
         if (el.scrollTop === targetOffset) {
           completeRestore()
         }
       }
+
       return
     }
+
     if (!getRecordAnchorOnScroll()) {
       return
     }
+
     recordUserScroll(el.scrollTop)
   }
 }

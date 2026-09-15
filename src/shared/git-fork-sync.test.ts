@@ -18,14 +18,18 @@ function createRunner(overrides: {
   aheadBehind?: string
 }): { runGit: GitForkSyncRunner; calls: string[][] } {
   const calls: string[][] = []
+
   const runGit = vi.fn(async (args: string[]) => {
     calls.push(args)
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       return { stdout: overrides.upstreamUrl ?? 'git@github.com:stablyai/orca.git\n' }
     }
+
     if (args[0] === 'remote') {
       return { stdout: overrides.remotes ?? 'origin\nupstream\n' }
     }
+
     if (args[0] === 'ls-remote') {
       return {
         stdout:
@@ -33,25 +37,32 @@ function createRunner(overrides: {
           'ref: refs/heads/main\tHEAD\n0123456789012345678901234567890123456789\tHEAD\n'
       }
     }
+
     if (args[0] === 'rev-parse') {
       const ref = args[2] ?? ''
+
       if (ref.includes('origin/main') && overrides.originExists === false) {
         throw new Error('missing origin branch')
       }
+
       if (ref.includes('upstream/main') && overrides.upstreamExists === false) {
         throw new Error('missing upstream branch')
       }
+
       return {
         stdout: ref.includes('upstream')
           ? '2222222222222222222222222222222222222222\n'
           : '1111111111111111111111111111111111111111\n'
       }
     }
+
     if (args[0] === 'rev-list') {
       return { stdout: overrides.aheadBehind ?? '0\t2\n' }
     }
+
     return { stdout: '' }
   })
+
   return { runGit, calls }
 }
 
@@ -107,6 +118,7 @@ describe('syncForkDefaultBranch', () => {
 
   it('scans newline-heavy remote and default-branch output without line-array splitting', async () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     const { runGit } = createRunner({
       remotes: `${'\r\n'.repeat(10_000)}origin\r\nupstream\r\n`,
       defaultBranchOutput: `${'metadata\r\n'.repeat(
@@ -125,6 +137,7 @@ describe('syncForkDefaultBranch', () => {
         (typeof separator === 'string' && separator === '\n') ||
         (separator instanceof RegExp && separator.source === '\\r?\\n')
     )
+
     expect(usedLineSplit).toBe(false)
   })
 

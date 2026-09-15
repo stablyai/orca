@@ -27,6 +27,7 @@ export class RelayPendingRequests {
 
   markWritten(id: string): void {
     const request = this.pending.get(id)
+
     if (request) {
       request.written = true
     }
@@ -35,12 +36,15 @@ export class RelayPendingRequests {
   /** Settle the waiter for this response; false when no request owns it. */
   settle(response: RpcResponse): boolean {
     const request = this.pending.get(response.id)
+
     if (!request) {
       return false
     }
+
     clearTimeout(request.timer)
     this.pending.delete(response.id)
     request.resolve(response)
+
     return true
   }
 
@@ -48,10 +52,12 @@ export class RelayPendingRequests {
     if (this.pending.size === 0) {
       return
     }
+
     for (const request of this.pending.values()) {
       clearTimeout(request.timer)
       request.reject(request.written ? markRpcDeliveryUnknown(new Error(error.message)) : error)
     }
+
     this.pending.clear()
   }
 }

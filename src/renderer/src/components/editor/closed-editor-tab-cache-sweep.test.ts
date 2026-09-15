@@ -14,6 +14,7 @@ describe('deletePaneScopedCacheEntries', () => {
       ['tab-10::pane-1', 2],
       ['tab-1x::pane-1', 3]
     ])
+
     deletePaneScopedCacheEntries(cache, ['tab-1'])
     expect([...cache.keys()]).toEqual(['tab-10::pane-1', 'tab-1x::pane-1'])
   })
@@ -26,6 +27,7 @@ describe('deletePaneScopedCacheEntries', () => {
       ['a::b', 2],
       ['ab:::c', 3]
     ])
+
     deletePaneScopedCacheEntries(cache, ['a:'])
     expect([...cache.keys()]).toEqual(['a::b', 'ab:::c'])
   })
@@ -36,6 +38,7 @@ describe('deletePaneScopedCacheEntries', () => {
       ['tab-2::pane-1', 2],
       ['tab-3::pane-1', 3]
     ])
+
     deletePaneScopedCacheEntries(cache, ['tab-1', 'tab-3'])
     expect([...cache.keys()]).toEqual(['tab-2::pane-1'])
   })
@@ -60,6 +63,7 @@ describe('sweepClosedPdfViewPositions', () => {
       ['/a.pdf::tab-2:pdf', position(9)],
       ['/a.pdf::tab-3:pdf', position(11)]
     ])
+
     sweepClosedPdfViewPositions(cache, ['/a.pdf'])
     expect(cache.size).toBe(0)
   })
@@ -70,6 +74,7 @@ describe('sweepClosedPdfViewPositions', () => {
       ['/b.pdf:pdf', position(7)],
       ['/b.pdf::tab-2:pdf', position(8)]
     ])
+
     sweepClosedPdfViewPositions(cache, ['/a.pdf'])
     expect([...cache.keys()]).toEqual(['/b.pdf:pdf', '/b.pdf::tab-2:pdf'])
   })
@@ -79,6 +84,7 @@ describe('sweepClosedPdfViewPositions', () => {
       ['/report.pdf:pdf', position(2)],
       ['/report.pdf.bak:pdf', position(3)]
     ])
+
     sweepClosedPdfViewPositions(cache, ['/report.pdf'])
     expect([...cache.keys()]).toEqual(['/report.pdf.bak:pdf'])
   })

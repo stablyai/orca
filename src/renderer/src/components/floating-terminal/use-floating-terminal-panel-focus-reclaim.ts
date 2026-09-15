@@ -26,6 +26,7 @@ export function useFloatingTerminalPanelFocusReclaim({
   const focusPanelForShortcuts = useCallback(
     (preserveExistingPanelFocus = true) => {
       const active = document.activeElement
+
       if (
         preserveExistingPanelFocus &&
         active instanceof HTMLElement &&
@@ -33,6 +34,7 @@ export function useFloatingTerminalPanelFocusReclaim({
       ) {
         return
       }
+
       panelRef.current?.focus({ preventScroll: true })
     },
     [panelRef]
@@ -43,6 +45,7 @@ export function useFloatingTerminalPanelFocusReclaim({
       cancelAnimationFrame(shortcutFocusFrameRef.current)
       shortcutFocusFrameRef.current = null
     }
+
     if (shortcutFocusTimeoutRef.current !== null) {
       window.clearTimeout(shortcutFocusTimeoutRef.current)
       shortcutFocusTimeoutRef.current = null
@@ -54,6 +57,7 @@ export function useFloatingTerminalPanelFocusReclaim({
       if (!node) {
         cancelShortcutFocusFrame()
       }
+
       panelRef.current = node
     },
     [cancelShortcutFocusFrame, panelRef]
@@ -63,16 +67,21 @@ export function useFloatingTerminalPanelFocusReclaim({
     if (typeof window === 'undefined') {
       return
     }
+
     cancelShortcutFocusFrame()
+
     const focusPanel = (): void => {
       shortcutFocusFrameRef.current = null
       shortcutFocusTimeoutRef.current = null
       focusPanelForShortcuts(false)
     }
+
     if (typeof window.requestAnimationFrame === 'function') {
       shortcutFocusFrameRef.current = window.requestAnimationFrame(focusPanel)
+
       return
     }
+
     shortcutFocusTimeoutRef.current = window.setTimeout(focusPanel, 0)
   }, [
     cancelShortcutFocusFrame,
@@ -87,9 +96,11 @@ export function useFloatingTerminalPanelFocusReclaim({
 
   useEffect(() => {
     const pending = pendingReclaimArmByFileIdRef.current
+
     if (pending.size === 0) {
       return
     }
+
     for (const [fileId, armIfEmptying] of pending) {
       if (!floatingFiles.some((file) => file.id === fileId)) {
         pending.delete(fileId)
@@ -101,8 +112,10 @@ export function useFloatingTerminalPanelFocusReclaim({
   useEffect(() => {
     if (visibleFloatingItemCount > 0) {
       clearFloatingPanelReclaimIntent()
+
       return
     }
+
     if (consumeFloatingPanelReclaimIntent()) {
       focusPanelForShortcutsAfterClose()
     }

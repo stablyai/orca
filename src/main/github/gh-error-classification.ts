@@ -4,6 +4,7 @@ import type { ClassifiedError } from '../../shared/classified-error'
 // patterns to typed errors so callers can show user-friendly messages.
 export function classifyGhError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
+
   // Why: primary rate-limit errors also carry "HTTP 403" — check rate limit
   // first so they don't misclassify as a token-scope problem.
   if (s.includes('rate limit')) {
@@ -12,21 +13,26 @@ export function classifyGhError(stderr: string): ClassifiedError {
       message: 'GitHub rate limit hit. Try again in a few minutes.'
     }
   }
+
   if (s.includes('http 403') || s.includes('resource not accessible')) {
     return {
       type: 'permission_denied',
       message: "You don't have permission to edit this issue. Check your GitHub token scopes."
     }
   }
+
   if (s.includes('http 404') || s.includes('could not resolve to a repository')) {
     return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
   }
+
   if (s.includes('has disabled issues')) {
     return { type: 'issues_disabled', message: 'Issues are disabled on this repository.' }
   }
+
   if (s.includes('http 422') || s.includes('validation failed')) {
     return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
   }
+
   if (
     s.includes('timeout') ||
     s.includes('no such host') ||
@@ -35,6 +41,7 @@ export function classifyGhError(stderr: string): ClassifiedError {
   ) {
     return { type: 'network_error', message: 'Network error — check your connection.' }
   }
+
   return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
 }
 
@@ -43,6 +50,7 @@ export function classifyGhError(stderr: string): ClassifiedError {
 export function classifyListIssuesError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
+
   const readMessages: Record<ClassifiedError['type'], string> = {
     permission_denied:
       "You don't have permission to read issues for this repository. Check your GitHub token scopes.",
@@ -53,6 +61,7 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     network_error: 'Network error — check your connection.',
     unknown: `Failed to load issues: ${trimmed}`
   }
+
   return { type: c.type, message: readMessages[c.type] }
 }
 
@@ -61,6 +70,7 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
 export function classifyPullRequestUpdateError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
+
   const pullRequestMessages: Record<ClassifiedError['type'], string> = {
     permission_denied:
       "You don't have permission to edit this pull request. Check your GitHub token scopes.",
@@ -71,6 +81,7 @@ export function classifyPullRequestUpdateError(stderr: string): ClassifiedError 
     network_error: c.message,
     unknown: `Failed to update pull request: ${trimmed}`
   }
+
   return { type: c.type, message: pullRequestMessages[c.type] }
 }
 
@@ -79,6 +90,7 @@ export function classifyPullRequestUpdateError(stderr: string): ClassifiedError 
 // end-of-data (#11485).
 export function classifyListPrsError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
+
   return { type: c.type, message: `Failed to load pull requests: ${stderr.trim()}` }
 }
 
@@ -87,6 +99,7 @@ export function classifyListPrsError(stderr: string): ClassifiedError {
 export function classifyRerunChecksError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
+
   const rerunMessages: Record<ClassifiedError['type'], string> = {
     permission_denied:
       "You don't have permission to rerun checks on this repository. Check your GitHub token scopes.",
@@ -97,5 +110,6 @@ export function classifyRerunChecksError(stderr: string): ClassifiedError {
     network_error: c.message,
     unknown: `Failed to rerun checks: ${trimmed}`
   }
+
   return { type: c.type, message: rerunMessages[c.type] }
 }

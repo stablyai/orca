@@ -9,6 +9,7 @@ type TerminalWithKittyKeyboard = Terminal & {
 
 export function readKittyKeyboardFlags(terminal: Terminal): number {
   const flags = (terminal as TerminalWithKittyKeyboard)._core?.coreService?.kittyKeyboard?.flags
+
   return typeof flags === 'number' ? flags : 0
 }
 
@@ -19,6 +20,7 @@ export function readTerminalModes(
 ): TerminalModes {
   const buffer = terminal.buffer.active
   const mouseTrackingMode = mouseModes.mouseTrackingMode
+
   return {
     bracketedPaste: terminal.modes.bracketedPasteMode,
     mouseTracking: mouseTrackingMode !== 'none',

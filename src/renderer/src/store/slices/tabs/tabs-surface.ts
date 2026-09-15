@@ -30,9 +30,12 @@ export function deriveActiveSurfaceForWorktree(
 } {
   const groups = state.groupsByWorktree[worktreeId] ?? []
   const activeGroupId = preferredGroupId ?? state.activeGroupIdByWorktree[worktreeId] ?? null
+
   const activeGroup =
     (activeGroupId ? groups.find((group) => group.id === activeGroupId) : null) ?? groups[0] ?? null
+
   const activeUnifiedTabId = options?.preferredTabId ?? activeGroup?.activeTabId
+
   const activeUnifiedTab =
     activeUnifiedTabId != null
       ? ((state.unifiedTabsByWorktree[worktreeId] ?? []).find(
@@ -40,26 +43,33 @@ export function deriveActiveSurfaceForWorktree(
             tab.id === activeUnifiedTabId && activeGroup != null && tab.groupId === activeGroup.id
         ) ?? null)
       : null
+
   const restoredFileId = state.activeFileIdByWorktree[worktreeId] ?? null
   const restoredBrowserTabId = state.activeBrowserTabIdByWorktree[worktreeId] ?? null
   const restoredTerminalTabId = state.activeTabIdByWorktree[worktreeId] ?? null
   const browserTabs = state.browserTabsByWorktree[worktreeId] ?? []
   const terminalTabs = state.tabsByWorktree[worktreeId] ?? []
+
   const fileStillOpen = restoredFileId
     ? state.openFiles.some((file) => file.id === restoredFileId && file.worktreeId === worktreeId)
     : false
+
   const browserTabStillOpen = restoredBrowserTabId
     ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
     : false
+
   const terminalTabStillExists = restoredTerminalTabId
     ? terminalTabs.some((tab) => tab.id === restoredTerminalTabId)
     : false
+
   const hasGroupOwnedSurface = groups.length > 0 || Boolean(state.layoutByWorktree[worktreeId])
 
   const restoreLegacyType = options?.legacySelection === 'remembered-type'
+
   const restoredTabType = restoreLegacyType
     ? (state.activeTabTypeByWorktree[worktreeId] ?? 'terminal')
     : null
+
   // Why: only a remembered browser type — or group focus, which remembers no type at all — may keep
   // the remembered file selected under the browser surface; a stale agent-session/simulator clears it.
   const keepRememberedFileUnderBrowser = restoredTabType === null || restoredTabType === 'browser'
@@ -143,6 +153,7 @@ export function buildActiveSurfacePatch(
   | 'activeTabTypeByWorktree'
 > {
   const derived = deriveActiveSurfaceForWorktree(state, worktreeId, preferredGroupId)
+
   return {
     activeBrowserTabId: derived.activeBrowserTabId,
     activeBrowserTabIdByWorktree: {

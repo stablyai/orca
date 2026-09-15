@@ -16,12 +16,17 @@ import {
  * the tunnel -- no proxy bookkeeping has to be trusted.
  */
 export const SSH_REMOTE_ONLY_HOST = 'remote-only.internal'
+
 export const SSH_REMOTE_ONLY_PORT = 18_080
+
 export const SSH_REMOTE_ONLY_ORIGIN = `http://${SSH_REMOTE_ONLY_HOST}:${SSH_REMOTE_ONLY_PORT}`
+
 export const SSH_REMOTE_ONLY_COOKIE_NAME = 'sta4150ssh'
+
 export const SSH_REMOTE_ONLY_COOKIE_VALUE = 'survivor'
 
 const SERVER_PATH = '/tmp/sta-4150-ssh-browser-fixture.js'
+
 const REQUEST_LOG_PATH = '/tmp/sta-4150-ssh-browser-requests.log'
 
 export type SshRemoteOnlyRequest = { path: string; cookie: string | null }
@@ -73,6 +78,7 @@ export function startSshRemoteOnlyBrowserFixture(target: DockerSshRelayTarget): 
       SERVER_PATH
     )} >/tmp/sta-4150-ssh-browser-fixture.log 2>&1 </dev/null &`
   )
+
   const waitForServer = [
     'const net = require("node:net")',
     'const deadline = Date.now() + 15000',
@@ -87,6 +93,7 @@ export function startSshRemoteOnlyBrowserFixture(target: DockerSshRelayTarget): 
     '}',
     'probe()'
   ].join('\n')
+
   writeDockerSshRelayTargetFile(target, '/tmp/sta-4150-ssh-browser-wait.js', waitForServer)
   execDockerSshRelayTargetCommand(target, 'node /tmp/sta-4150-ssh-browser-wait.js')
 }
@@ -97,6 +104,7 @@ export function readSshRemoteOnlyRequests(target: DockerSshRelayTarget): SshRemo
     target,
     `cat ${shellQuote(REQUEST_LOG_PATH)} 2>/dev/null || true`
   )
+
   return contents
     .split('\n')
     .filter((line) => line.trim().length > 0)
@@ -115,5 +123,6 @@ export function killSshRelayTargetTransport(target: DockerSshRelayTarget): numbe
     target,
     "pids=$(pgrep -f '^sshd: ' || true); for pid in $pids; do kill -9 $pid || true; done; printf '%s' \"$(printf '%s\\n' $pids | grep -c . || true)\""
   )
+
   return Number(killed.trim() || '0')
 }

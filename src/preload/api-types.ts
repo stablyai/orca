@@ -152,12 +152,19 @@ export type PreloadApi = {
 }
 
 export type { ClaudeUsageApi, CodexUsageApi, OpenCodeUsageApi } from './api/agent-usage-api'
+
 export type { AiVaultApi } from './api/ai-vault-api'
+
 export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
+
 export type { AppApi } from './api/app-api'
+
 export type { BrowserApi, DetectedBrowserInfo, DetectedBrowserProfileInfo } from './api/browser-api'
+
 export type { EmulatorApi } from './api/emulator-api'
+
 export type { ExportApi } from './api/filesystem-api'
+
 export type {
   NativeChatApi,
   NativeChatAppendedMessages,
@@ -166,6 +173,7 @@ export type {
   NativeChatSubscribeArgs,
   NativeChatSubscriptionFrame
 } from './api/native-chat-api'
+
 export type {
   PluginHostInstallResult,
   PluginHostInstallSource,
@@ -177,22 +185,26 @@ export type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
 } from './api/plugin-host-api'
+
 export type {
   PreflightApi,
   PreflightRuntimeContext,
   PreflightStatus,
   RefreshAgentsResult
 } from './api/preflight-api'
+
 export type {
   PtyManagementApi,
   PtyManagementMacTccAttributionHealth,
   PtyManagementSession
 } from './api/pty-management-api'
+
 export type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
 } from './api/shell-api'
+
 export type {
   DiagnosticsBundlePayload,
   DiagnosticsStatusPayload,

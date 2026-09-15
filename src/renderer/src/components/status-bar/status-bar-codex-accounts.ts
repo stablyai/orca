@@ -15,17 +15,21 @@ type CodexStatusAccount = CodexRateLimitAccountsState['accounts'][number]
 
 function getSingleConcreteCodexWslDistro(state: CodexRateLimitAccountsState): string | null {
   const keys = new Set<string>()
+
   for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
     if (accountId && key !== '__default__') {
       keys.add(key)
     }
   }
+
   for (const account of state.accounts) {
     const key = getCodexStatusWslKey(account.wslDistro)
+
     if (account.managedHomeRuntime === 'wsl' && key !== '__default__') {
       keys.add(key)
     }
   }
+
   return keys.size === 1 ? Array.from(keys)[0] : null
 }
 
@@ -36,7 +40,9 @@ export function normalizeCodexStatusRuntimeTarget(
   if (target.runtime !== 'wsl' || target.wslDistro) {
     return target
   }
+
   const concreteDistro = getSingleConcreteCodexWslDistro(state)
+
   return concreteDistro ? { runtime: 'wsl', wslDistro: concreteDistro } : target
 }
 
@@ -45,14 +51,19 @@ export function getCodexStatusActiveId(
   target: CodexStatusRuntimeTarget
 ): string | null {
   const selection = state.activeAccountIdsByRuntime
+
   if (target.runtime === 'host') {
     return selection?.host ?? state.activeAccountId ?? null
   }
+
   const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+
   if (target.wslDistro || distroSelection) {
     return distroSelection ?? null
   }
+
   const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
+
   return selectedIds.length === 1 ? selectedIds[0] : null
 }
 
@@ -63,6 +74,7 @@ function getCodexStatusAccountsForTarget(
   if (target.runtime === 'host') {
     return state.accounts.filter((account) => account.managedHomeRuntime !== 'wsl')
   }
+
   return state.accounts.filter(
     (account) =>
       account.managedHomeRuntime === 'wsl' &&
@@ -77,9 +89,11 @@ export function buildCodexStatusSwitchGroups(
 ): CodexStatusSwitchGroup[] {
   const groups: CodexStatusSwitchGroup[] = []
   const normalizedCurrentTarget = normalizeCodexStatusRuntimeTarget(state, currentTarget)
+
   const makeGroup = (target: CodexStatusRuntimeTarget): CodexStatusSwitchGroup => {
     const activeId = getCodexStatusActiveId(state, target)
     const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
+
     return {
       key: getCodexStatusRuntimeKey(target),
       label: getCodexStatusRuntimeLabel(target, options.hostLabel),
@@ -104,19 +118,24 @@ export function buildCodexStatusSwitchGroups(
   groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
 
   const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+
   if (normalizedCurrentTarget.runtime === 'wsl') {
     wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
   }
+
   for (const account of state.accounts) {
     if (account.managedHomeRuntime === 'wsl') {
       wslKeys.add(getCodexStatusWslKey(account.wslDistro))
     }
   }
+
   if (options.includeFallbackWsl) {
     wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
   }
+
   if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
     const concreteDistro = getSingleConcreteCodexWslDistro(state)
+
     if (concreteDistro) {
       wslKeys.delete('__default__')
     }
@@ -126,9 +145,11 @@ export function buildCodexStatusSwitchGroups(
     if (a === '__default__') {
       return -1
     }
+
     if (b === '__default__') {
       return 1
     }
+
     return a.localeCompare(b)
   })) {
     groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
@@ -143,6 +164,7 @@ function getCodexStatusAccountsFromSettings(
   if (!settings) {
     return null
   }
+
   return {
     accounts: settings.codexManagedAccounts
       .map((account) => ({
@@ -179,5 +201,6 @@ export function resolveCodexStatusAccountState(
   if (settings?.activeRuntimeEnvironmentId?.trim()) {
     return runtimeState
   }
+
   return getCodexStatusAccountsFromSettings(settings) ?? runtimeState
 }

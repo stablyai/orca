@@ -26,15 +26,19 @@ export function installHappyDomOffscreenCanvasCompatibility(): boolean {
   const offscreenCanvas = globals.OffscreenCanvas
   const htmlCanvas = globals.HTMLCanvasElement
   const document = globals.document
+
   if (!offscreenCanvas || !htmlCanvas || !document) {
     return false
   }
 
   const prototype = offscreenCanvas.prototype
+
   if (prototype[OFFSCREEN_CANVAS_COMPATIBILITY_INSTALLED] === true) {
     return true
   }
+
   const originalGetContext = prototype.getContext
+
   if (!originalGetContext || !htmlCanvas.prototype.getContext) {
     return false
   }
@@ -45,14 +49,18 @@ export function installHappyDomOffscreenCanvasCompatibility(): boolean {
     contextAttributes?: unknown
   ): unknown {
     const context = originalGetContext.call(this, contextType, contextAttributes)
+
     if (contextType !== '2d' || context) {
       return context
     }
 
     const canvas = document.createElement('canvas') as PatchableCanvas
+
     return htmlCanvas.prototype.getContext!.call(canvas, contextType, contextAttributes)
   }
+
   prototype[OFFSCREEN_CANVAS_COMPATIBILITY_INSTALLED] = true
+
   return true
 }
 

@@ -14,6 +14,7 @@ const initialState = useAppStore.getState()
 
 function baseState(): Partial<AppState> {
   const worktree = makeWorktree()
+
   return {
     repos: [
       {
@@ -110,6 +111,7 @@ function stubInventory(args?: {
   listSessions: ReturnType<typeof vi.fn>
 } {
   const worktree = makeWorktree()
+
   const runtimeCall = vi.fn(async ({ method }: { method: string }) => {
     if (method === 'session.tabs.list') {
       return {
@@ -119,9 +121,11 @@ function stubInventory(args?: {
           : { ...structuredSnapshot(worktree.id), tabs: [] }
       }
     }
+
     if (method === 'agentSession.handoffStatus') {
       return { ok: true, result: { owner: 'native' } }
     }
+
     if (method === 'terminal.list') {
       // The host knows this PTY but binds it to no surface, so adoption may mint one.
       return {
@@ -139,8 +143,10 @@ function stubInventory(args?: {
         }
       }
     }
+
     throw new Error(`Unexpected runtime method: ${method}`)
   })
+
   const listSessions = vi.fn(async () =>
     args?.livePtyId
       ? [
@@ -153,7 +159,9 @@ function stubInventory(args?: {
         ]
       : []
   )
+
   vi.stubGlobal('window', { api: { runtime: { call: runtimeCall }, pty: { listSessions } } })
+
   return { runtimeCall, listSessions }
 }
 
@@ -332,6 +340,7 @@ describe('worktree agent activation seam', () => {
       if (scope) {
         throw new Error('No PTY provider for connection "box": the SSH relay is not attached')
       }
+
       return []
     })
 

@@ -4,6 +4,7 @@ import { resolveRuntimeFilePath } from './web-runtime-worktree-catalog'
 async function pathExistsOnRuntime(path: string): Promise<boolean> {
   try {
     await resolveRuntimeFilePath(path)
+
     return true
   } catch {
     return false
@@ -12,6 +13,7 @@ async function pathExistsOnRuntime(path: string): Promise<boolean> {
 
 export function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
   const openResult = { ok: true } as const
+
   return {
     openPath: (path) =>
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),

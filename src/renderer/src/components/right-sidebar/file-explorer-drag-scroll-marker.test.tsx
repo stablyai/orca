@@ -31,6 +31,7 @@ async function renderToBody(element: React.JSX.Element): Promise<HTMLDivElement>
   await act(async () => {
     root.render(element)
   })
+
   return container
 }
 
@@ -41,6 +42,7 @@ const fileNode: TreeNode = {
   isDirectory: false,
   depth: 0
 }
+
 const directoryNode: TreeNode = {
   name: 'src',
   path: '/repo/src',
@@ -129,9 +131,11 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
         executionHostId: 'runtime:old-env'
       }
     }
+
     const container = await renderToBody(
       virtualRowsElement([cachedNode], { sourceWorkspaceId: 'old-workspace' })
     )
+
     const transfer = new DataTransfer()
     const event = new Event('dragstart', { bubbles: true, cancelable: true })
     Object.defineProperty(event, 'dataTransfer', { value: transfer })
@@ -146,16 +150,19 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
 
   it('omits ownership when selected cached rows came from different hosts', async () => {
     const localNode: TreeNode = { ...fileNode, operationOwner: { kind: 'local' } }
+
     const sshNode: TreeNode = {
       ...directoryNode,
       operationOwner: { kind: 'ssh', connectionId: 'remote-1' }
     }
+
     const container = await renderToBody(
       virtualRowsElement([localNode, sshNode], {
         selectedPaths: new Set([localNode.path, sshNode.path]),
         sourceWorkspaceId: 'workspace-1'
       })
     )
+
     const transfer = new DataTransfer()
     const event = new Event('dragstart', { bubbles: true, cancelable: true })
     Object.defineProperty(event, 'dataTransfer', { value: transfer })
@@ -171,6 +178,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
   // knows perfectly well.
   it('stamps a selection that reaches under a collapsed directory', async () => {
     const owner = { kind: 'local' } as const
+
     const collapsedChild: TreeNode = {
       name: 'a.ts',
       path: '/repo/src/a.ts',
@@ -179,6 +187,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
       depth: 1,
       operationOwner: owner
     }
+
     const readme: TreeNode = {
       name: 'README.md',
       path: '/repo/README.md',
@@ -187,6 +196,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
       depth: 0,
       operationOwner: owner
     }
+
     const dirCache = {
       '/repo': {
         children: [{ ...directoryNode, operationOwner: owner }, readme],
@@ -194,6 +204,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
       },
       '/repo/src': { children: [collapsedChild], operationOwner: owner }
     }
+
     // `expanded` is empty, so /repo/src is collapsed and a.ts is not a row.
     const projection = createVisibleFileExplorerRowProjection(
       { dirCache, expanded: new Set<string>(), worktreePath: '/repo' },
@@ -204,6 +215,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
         showGitIgnoredFiles: true
       }
     )
+
     expect(projection.getRowByPath(collapsedChild.path)).toBeNull()
 
     const container = await renderToBody(
@@ -214,6 +226,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
         sourceWorkspaceId: 'workspace-1'
       })
     )
+
     const transfer = new DataTransfer()
     const event = new Event('dragstart', { bubbles: true, cancelable: true })
     Object.defineProperty(event, 'dataTransfer', { value: transfer })
@@ -233,6 +246,7 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
     const otherNode: TreeNode = { ...directoryNode, operationOwner: { kind: 'local' } }
     const projection = createFileExplorerRowProjection([localNode, otherNode])
     const getRowByPath = vi.fn(projection.getRowByPath)
+
     const container = await renderToBody(
       virtualRowsElement([localNode, otherNode], {
         rowProjection: { ...projection, getRowByPath },
@@ -272,6 +286,7 @@ function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElemen
     setSelectedPath: vi.fn(),
     scrollRef
   })
+
   return null
 }
 
@@ -291,6 +306,7 @@ function makeViewport(
     }
   })
   document.body.appendChild(viewport)
+
   return { viewport, getScrollTop: () => scrollTop }
 }
 

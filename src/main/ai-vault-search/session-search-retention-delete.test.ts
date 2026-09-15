@@ -18,12 +18,15 @@ function seed(db: SyncDatabase, id: number, rows: number, mtime: number): void {
     id
   )
   db.exec('BEGIN')
+
   for (let i = 0; i < rows; i++) {
     const row = db
       .prepare("INSERT INTO messages(session_row_id,role) VALUES (?,'user')")
       .run(id).lastInsertRowid
+
     db.prepare('INSERT INTO messages_fts(rowid,user_text) VALUES (?,?)').run(row, 'retentionneedle')
   }
+
   db.exec('COMMIT')
 }
 
@@ -51,8 +54,10 @@ function count(db: SyncDatabase, table: string): number {
 
 it('seeks the expiring end of the file list instead of scanning it', async () => {
   const index = await openSessionSearchIndexFile('ss-retention-plan')
+
   try {
     seed(index.db, 1, 1, 1)
+
     const plan = (
       index.db
         .prepare('EXPLAIN QUERY PLAN SELECT path FROM files WHERE mtime_ms < ? ORDER BY mtime_ms')
@@ -60,6 +65,7 @@ it('seeks the expiring end of the file list instead of scanning it', async () =>
     )
       .map((row) => row.detail)
       .join(' ')
+
     // Without files_mtime this is "SCAN files" plus a "USE TEMP B-TREE FOR ORDER BY".
     expect(plan).toContain('files_mtime')
     expect(plan).not.toContain('TEMP B-TREE')
@@ -74,6 +80,7 @@ it('hides an expiring session at once, then reclaims its rows in bounded steps',
   seed(index.db, 2, 1, 200)
   let previous = 1025
   const steps: number[] = []
+
   try {
     await deleteExpiredSearchFiles(
       index.db,
@@ -102,6 +109,7 @@ it('finishes an interrupted deletion after reopening', async () => {
   let store = new SessionSearchStore(index.path)
   let closed = false
   let steps = 0
+
   try {
     seed(index.db, 1, 513, 1)
     await deleteExpiredSearchFiles(
@@ -132,6 +140,7 @@ it('finishes an interrupted deletion after reopening', async () => {
     if (!closed) {
       store.close()
     }
+
     await index.close()
   }
 })
@@ -139,6 +148,7 @@ it('finishes an interrupted deletion after reopening', async () => {
 it('cancels retention between batches and resumes without exposing a partial session', async () => {
   const index = await openSessionSearchIndexFile('ss-retention-cancel')
   const store = new SessionSearchStore(index.path)
+
   try {
     seed(index.db, 1, 1025, 1)
     const controller = new AbortController()
@@ -159,6 +169,7 @@ it('cancels retention between batches and resumes without exposing a partial ses
 
 it('keeps a file a read refreshed after the expiry list was taken', async () => {
   const index = await openSessionSearchIndexFile('ss-retention-refreshed')
+
   try {
     seed(index.db, 1, 2, 1)
     seed(index.db, 2, 2, 2)

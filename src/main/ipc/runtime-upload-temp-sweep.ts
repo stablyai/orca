@@ -3,6 +3,7 @@ import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 const RUNTIME_UPLOAD_SWEEP_ATTEMPTS = 2
+
 const RUNTIME_UPLOAD_SWEEP_SETTLE_MS = 250
 
 /**
@@ -24,6 +25,7 @@ export async function sweepAbandonedRuntimeUploadTempPath(
     if (attempt > 0) {
       await setTimeout(RUNTIME_UPLOAD_SWEEP_SETTLE_MS)
     }
+
     try {
       await callRuntimeEnvironment(
         userDataPath,

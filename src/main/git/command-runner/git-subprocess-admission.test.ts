@@ -43,6 +43,7 @@ describe('GitAdmissionScheduler', () => {
   it('keeps base and headroom counters separate and grants interactive all-headroom', async () => {
     const scheduler = schedulerWithOneSlot()
     const base = await scheduler.acquire(local('background'))
+
     const interactive = await scheduler.acquire({
       ...local('interactive'),
       cwd: 'C:\\repo',
@@ -62,12 +63,14 @@ describe('GitAdmissionScheduler', () => {
 
   it('partitions network and general budgets globally and per route', async () => {
     const scheduler = schedulerWithOneSlot()
+
     const fetch = await scheduler.acquire({
       args: ['fetch'],
       cwd: 'C:\\repo',
       wslDistro: 'Ubuntu',
       tier: 'background'
     })
+
     const status = await scheduler.acquire({
       args: ['status'],
       cwd: 'C:\\repo',
@@ -87,11 +90,13 @@ describe('GitAdmissionScheduler', () => {
 
   it('uses network and route headroom for an interactive push', async () => {
     const scheduler = schedulerWithOneSlot()
+
     const fetch = await scheduler.acquire({
       args: ['fetch'],
       cwd: '\\\\server\\repo',
       tier: 'background'
     })
+
     const push = await scheduler.acquire({
       args: ['push'],
       cwd: '\\\\server\\repo',
@@ -113,11 +118,14 @@ describe('GitAdmissionScheduler', () => {
       routeCap: 2,
       routeHeadroom: 1
     })
+
     const request = { cwd: 'C:\\repo', wslDistro: 'Ubuntu' }
+
     const background = await Promise.all([
       scheduler.acquire({ ...request, args: ['status'], tier: 'background' }),
       scheduler.acquire({ ...request, args: ['status'], tier: 'background' })
     ])
+
     const interactive = await scheduler.acquire({
       ...request,
       args: ['status'],
@@ -135,15 +143,18 @@ describe('GitAdmissionScheduler', () => {
   it('keeps status isolated from wedged route fetches and reserves push headroom', async () => {
     const scheduler = new GitAdmissionScheduler()
     const request = { cwd: 'C:\\repo', wslDistro: 'Ubuntu' }
+
     const fetches = await Promise.all([
       scheduler.acquire({ ...request, args: ['fetch'], tier: 'background' }),
       scheduler.acquire({ ...request, args: ['fetch'], tier: 'background' })
     ])
+
     const thirdFetch = await scheduler.acquire({
       args: ['fetch'],
       cwd: '/other-repo',
       tier: 'background'
     })
+
     const status = await scheduler.acquire({ ...request, args: ['status'], tier: 'status' })
     const push = await scheduler.acquire({ ...request, args: ['push'], tier: 'interactive' })
 
@@ -164,14 +175,19 @@ describe('GitAdmissionScheduler', () => {
     const scheduler = schedulerWithOneSlot(() => now)
     const running = await scheduler.acquire(local('status'))
     const order: string[] = []
+
     const backgroundPromise = scheduler.acquire(local('background')).then((grant) => {
       order.push('background')
+
       return grant
     })
+
     now = 30_000
     const headroom = await scheduler.acquire(local('interactive'))
+
     const freshPromise = scheduler.acquire(local('interactive')).then((grant) => {
       order.push('fresh')
+
       return grant
     })
 
@@ -191,12 +207,15 @@ describe('GitAdmissionScheduler', () => {
     let now = 0
     const scheduler = schedulerWithOneSlot(() => now)
     const running = await scheduler.acquire(local('status'))
+
     const agedPromise = scheduler.acquire({
       ...local('background'),
       cwd: 'C:\\repo',
       wslDistro: 'Ubuntu'
     })
+
     now = 30_000
+
     const interactive = await scheduler.acquire({
       ...local('interactive'),
       cwd: 'C:\\repo',
@@ -224,16 +243,19 @@ describe('GitAdmissionScheduler', () => {
       routeCap: 1,
       routeHeadroom: 1
     })
+
     const routed = await scheduler.acquire({
       ...local('background'),
       cwd: 'C:\\repo',
       wslDistro: 'Ubuntu'
     })
+
     const queuedRoute = scheduler.acquire({
       ...local('background'),
       cwd: 'C:\\other',
       wslDistro: 'Ubuntu'
     })
+
     const localDisk = await scheduler.acquire({ ...local('status'), cwd: 'C:\\local' })
 
     expect(scheduler.snapshot().queued).toBe(1)
@@ -245,6 +267,7 @@ describe('GitAdmissionScheduler', () => {
 
   it('admits local-disk work beside two saturated-route children below the cap', async () => {
     const scheduler = new GitAdmissionScheduler({ generalCap: 4, routeCap: 2 })
+
     const routed = await Promise.all([
       scheduler.acquire({
         ...local('background'),
@@ -257,6 +280,7 @@ describe('GitAdmissionScheduler', () => {
         wslDistro: 'Ubuntu'
       })
     ])
+
     const localDisk = await scheduler.acquire({ ...local('status'), cwd: 'C:\\local' })
 
     expect(scheduler.snapshot()).toMatchObject({
@@ -292,13 +316,16 @@ describe('GitAdmissionScheduler', () => {
 
     for (let index = 0; index < 4_000; index += 1) {
       const controller = new AbortController()
+
       const request = scheduler.acquire({ ...local(), signal: controller.signal }).then(
         () => undefined,
         (error) => expect(error).toMatchObject({ name: 'AbortError' })
       )
+
       controller.abort()
       canceled.push(request)
     }
+
     await Promise.all(canceled)
 
     expect(scheduler.snapshot().queued).toBe(0)
@@ -359,13 +386,16 @@ describe('GitAdmissionScheduler', () => {
   it('completes a background burst while interactive work uses reserved headroom', async () => {
     const scheduler = new GitAdmissionScheduler({ generalCap: 2, generalHeadroom: 1 })
     const order: number[] = []
+
     const background = Array.from({ length: 20 }, (_, index) =>
       scheduler.acquire(local('background')).then((grant) => {
         order.push(index)
         grant.release()
       })
     )
+
     let interactiveRan = false
+
     const interactive = scheduler.acquire(local('interactive')).then((grant) => {
       interactiveRan = true
       grant.release()
@@ -381,6 +411,7 @@ describe('GitAdmissionScheduler', () => {
     const running = await scheduler.acquire(local('status'))
     const count = 4_000
     const order: number[] = []
+
     const queued = Array.from({ length: count }, (_, index) =>
       scheduler.acquire(local('background')).then((grant) => {
         order.push(index)
@@ -403,29 +434,37 @@ describe('GitAdmissionScheduler', () => {
       routeCap: 1,
       routeHeadroom: 0
     })
+
     const routedRunning = await scheduler.acquire({
       ...local('background'),
       wslDistro: 'Ubuntu'
     })
+
     const localRunning = await scheduler.acquire(local('background'))
     let abortedReads = 0
+
     const signal = {
       get aborted() {
         abortedReads += 1
+
         return false
       },
       addEventListener: () => {},
       removeEventListener: () => {}
     } as unknown as AbortSignal
+
     const count = 4_000
+
     const routed = Array.from({ length: count }, () =>
       scheduler
         .acquire({ ...local('background'), wslDistro: 'Ubuntu', signal })
         .then((grant) => grant.release())
     )
+
     const localWork = Array.from({ length: count }, () =>
       scheduler.acquire({ ...local('background'), signal }).then((grant) => grant.release())
     )
+
     abortedReads = 0
 
     localRunning.release()
@@ -440,33 +479,40 @@ describe('GitAdmissionScheduler', () => {
 
   it('selects one eligible route without scanning thousands of saturated routes', async () => {
     const routeCount = 2_000
+
     const scheduler = new GitAdmissionScheduler({
       generalCap: routeCount,
       generalHeadroom: 0,
       routeCap: 1,
       routeHeadroom: 0
     })
+
     const running = await Promise.all(
       Array.from({ length: routeCount }, (_, index) =>
         scheduler.acquire({ ...local('background'), wslDistro: `distro-${index}` })
       )
     )
+
     let aborted = false
     let abortedReads = 0
     const abortListeners = new Set<() => void>()
+
     const signal = {
       get aborted() {
         abortedReads += 1
+
         return aborted
       },
       addEventListener: (_event: string, listener: () => void) => abortListeners.add(listener),
       removeEventListener: (_event: string, listener: () => void) => abortListeners.delete(listener)
     } as unknown as AbortSignal
+
     const queued = Array.from({ length: routeCount }, (_, index) =>
       scheduler
         .acquire({ ...local('background'), wslDistro: `distro-${index}`, signal })
         .then((grant) => grant.release())
     )
+
     abortedReads = 0
 
     running.at(-1)?.release()
@@ -476,9 +522,11 @@ describe('GitAdmissionScheduler', () => {
     expect(scheduler.snapshot().queued).toBe(routeCount - 1)
 
     aborted = true
+
     for (const listener of abortListeners) {
       listener()
     }
+
     await Promise.allSettled(queued.slice(0, -1))
     running.slice(0, -1).forEach((grant) => grant.release())
     expect(scheduler.snapshot()).toMatchObject({ queued: 0, queuedWaiters: [] })
@@ -504,6 +552,7 @@ describe('GitAdmissionScheduler', () => {
 
   it('publishes monotonic grant and release events with cap metadata', async () => {
     const events: GitAdmissionEvent[] = []
+
     const scheduler = new GitAdmissionScheduler({
       generalCap: 1,
       generalHeadroom: 1,
@@ -511,16 +560,19 @@ describe('GitAdmissionScheduler', () => {
       routeHeadroom: 1,
       onAdmissionEvent: (event) => events.push(event)
     })
+
     const background = await scheduler.acquire({
       ...local('background'),
       cwd: 'C:\\repo',
       wslDistro: 'Ubuntu'
     })
+
     const interactive = await scheduler.acquire({
       ...local('interactive'),
       cwd: 'C:\\repo',
       wslDistro: 'Ubuntu'
     })
+
     background.release()
     interactive.release()
 

@@ -37,6 +37,7 @@ function hostRecoveryAction(
   entry: AutomationHostCatalogEntry
 ): AutomationHostRecoveryAction | null {
   const recovery = automationHostRecoveryActions(entry)
+
   return recovery.authority ?? recovery.execution
 }
 
@@ -83,12 +84,14 @@ export function AutomationListHostGroups({
           </div>
           {group.hosts.map(({ entry, rows, hostRowCount }) => {
             const action = hostRecoveryAction(entry)
+
             const state = resolveAutomationHostGroupEmptyState({
               entry,
               hostRowCount,
               visibleRowCount: rows.length,
               searchActive
             })
+
             return (
               <div key={entry.stableKey} className="mb-1" data-host-group={entry.stableKey}>
                 <div className="flex flex-wrap items-center gap-1.5 px-2 py-1">

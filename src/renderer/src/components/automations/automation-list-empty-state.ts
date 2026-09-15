@@ -80,6 +80,7 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
       input
     )
   }
+
   if (input.resolution.status === 'unavailable' || entry?.authorityHealth === 'unavailable') {
     return state(
       'host-unavailable',
@@ -96,6 +97,7 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
       recovery?.authority ?? 'reconnect'
     )
   }
+
   if (entry?.authorityHealth === 'stale-error' || entry?.authorityHealth === 'incompatible') {
     return state(
       'host-error',
@@ -117,6 +119,7 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
       recovery?.authority ?? 'retry'
     )
   }
+
   if (entry && entry.executionHealth !== 'connected') {
     // Why: an unconnected target has told us nothing about storage, so "no automations" would overclaim.
     return state(
@@ -134,6 +137,7 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
       recovery?.execution ?? 'reconnect'
     )
   }
+
   return state(
     'host-empty',
     translate(
@@ -155,6 +159,7 @@ function groupHostStatus(entry: AutomationHostCatalogEntry): AutomationHostFilte
   if (entry.catalogState === 'unhydrated') {
     return 'loading'
   }
+
   return entry.authorityHealth === 'unavailable' ? 'unavailable' : 'ready'
 }
 
@@ -167,6 +172,7 @@ export function resolveAutomationHostGroupEmptyState(
   input: AutomationListHostGroupEmptyStateInput
 ): AutomationListEmptyState {
   const { entry, ...counts } = input
+
   return resolveAutomationListEmptyState({
     ...counts,
     resolution: {
@@ -184,6 +190,7 @@ export function resolveAutomationListEmptyState(
   if (input.visibleRowCount > 0) {
     return { kind: 'rows', title: '', detail: null, recovery: null }
   }
+
   if ((input.searchActive || input.filterActive) && input.hostRowCount > 0) {
     // The host has rows; only the query or the attribute filter emptied the view.
     return state(
@@ -201,6 +208,7 @@ export function resolveAutomationListEmptyState(
       input
     )
   }
+
   if (input.resolution.effective.kind === 'all') {
     return state(
       'all-hosts-empty',
@@ -212,5 +220,6 @@ export function resolveAutomationListEmptyState(
       input
     )
   }
+
   return resolveSelectedHostState(input)
 }

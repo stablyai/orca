@@ -8,11 +8,14 @@ export function SmartSourceModeIcon({ icon, color }: { icon: SmartModeIcon; colo
   if (icon.type === 'provider') {
     return <TaskProviderLogo provider={icon.provider} size={14} color={color} />
   }
+
   if (icon.name === 'sparkles') {
     return <Sparkles size={14} color={color} />
   }
+
   if (icon.name === 'git-branch') {
     return <GitBranch size={14} color={color} />
   }
+
   return <CaseSensitive size={14} color={color} />
 }

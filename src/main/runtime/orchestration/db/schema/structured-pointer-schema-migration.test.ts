@@ -48,11 +48,14 @@ describe('structured pointer schema migration', () => {
     const path = join(root, 'orchestration.db')
     seedLegacyDatabase(path)
     const db = new OrchestrationDb(path)
+
     try {
       expect(db.db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
+
       const kept = db.db
         .prepare('SELECT content FROM worker_terminal_archives WHERE dispatch_id = ?')
         .get('d_old') as { content: string }
+
       expect(kept.content).toContain('kept')
       db.storeWorkerTerminalArchive({
         dispatchId: 'd_new',
@@ -68,6 +71,7 @@ describe('structured pointer schema migration', () => {
 
   it('creates the structured pointer operation store', () => {
     const db = new OrchestrationDb(':memory:')
+
     try {
       expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
       db.putStructuredPointerOperation({

@@ -40,6 +40,7 @@ export function useFileExplorerTreeLoadEffects({
     if (!visibleFilesWorktreePath) {
       return
     }
+
     // Why: the sidebar remains mounted while closed to preserve caches, but
     // loading the hidden tree would probe every clicked workspace on macOS.
     if (
@@ -50,6 +51,7 @@ export function useFileExplorerTreeLoadEffects({
     ) {
       return
     }
+
     lastResetWorktreePathRef.current = visibleFilesWorktreePath
     resetSelection()
     setNameFilterQuery('')
@@ -66,6 +68,7 @@ export function useFileExplorerTreeLoadEffects({
   useEffect(() => {
     if (sshConnectedGeneration > sshGenRef.current) {
       sshGenRef.current = sshConnectedGeneration
+
       if (visibleFilesWorktreePath && rootError) {
         resetAndLoad()
       }
@@ -76,18 +79,22 @@ export function useFileExplorerTreeLoadEffects({
     if (!visibleFilesWorktreePath) {
       return
     }
+
     for (const dirPath of expanded) {
       // Why first: a refresh wave marks every dir it owns before its first read lands, and without
       // this the effect would fan out an unbounded loadDir per dir on the next `expanded` change.
       if (loadingDirPaths.has(dirPath)) {
         continue
       }
+
       // Why: a full refresh (watcher overflow) re-reads only root and the dirs expanded at the time,
       // so a listing cached while collapsed is unverified — re-read it here instead of trusting it.
       const decision = decideExpandedDirLoad(dirCache[dirPath], isDirStale(dirPath))
+
       if (decision === 'skip') {
         continue
       }
+
       const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
       void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
     }

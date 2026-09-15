@@ -33,9 +33,11 @@ function cancelledPromptBody(
   body: AgentJournalApprovalItem | AgentJournalQuestionItem
 ): AgentJournalApprovalItem | AgentJournalQuestionItem {
   const cancelled = cancelledJournalPromptBody(body)
+
   if (!cancelled) {
     throw new Error('Claude prompt body is not cancellable')
   }
+
   return cancelled
 }
 
@@ -64,6 +66,7 @@ export class ClaudeJournalPrompts {
 
   handle(event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void {
     const items: ClaudeJournalPrompt[] = []
+
     if (event.prompt.kind === 'question') {
       for (const question of (this.deps.questionItems ?? claudeQuestionItems)({
         sessionId: event.sessionId,
@@ -78,11 +81,13 @@ export class ClaudeJournalPrompts {
         sessionId: event.sessionId,
         promptKey: event.prompt.promptKey
       })
+
       const body = claudeApprovalItem(event.prompt)
       items.push({ identity, body })
       this.deps.sink.appendItem(identity, body)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
     }
+
     this.deletePrompt(event.prompt.promptKey)
     this.items.set(event.prompt.promptKey, { items, cancellationPending: false })
     this.deps.sink.publish()
@@ -90,15 +95,19 @@ export class ClaudeJournalPrompts {
 
   private admitCancellation(promptKey: string): StructuredAgentSessionSinkAdmission {
     const items = this.items.get(promptKey)?.items ?? []
+
     if (items.length === 0) {
       return ADMITTED
     }
+
     const mutations = items.map(({ identity, body }) => ({
       kind: 'item' as const,
       identity,
       body: cancelledPromptBody(body)
     }))
+
     let admission: StructuredAgentSessionSinkAdmission
+
     if (this.deps.sink.tryAppendLifecycleBatch) {
       admission = this.deps.sink.tryAppendLifecycleBatch(
         `prompt-cancelled:${encodeURIComponent(promptKey)}`,
@@ -114,9 +123,11 @@ export class ClaudeJournalPrompts {
         ) ?? ADMITTED
     } else if (items.length === 1) {
       const item = items[0]
+
       if (!item) {
         return ADMITTED
       }
+
       const body = cancelledPromptBody(item.body)
       admission = this.deps.sink.tryAppendItem
         ? this.deps.sink.tryAppendItem(item.identity, body, { lifecycle: true })
@@ -124,23 +135,29 @@ export class ClaudeJournalPrompts {
     } else {
       return { accepted: false, reason: 'failed' }
     }
+
     if (!admission.accepted) {
       return admission
     }
+
     const published = this.deps.sink.tryPublish
       ? this.deps.sink.tryPublish({ lifecycle: true })
       : (this.deps.sink.publish({ lifecycle: true }), ADMITTED)
+
     if (published.accepted) {
       this.deletePrompt(promptKey)
     }
+
     return published
   }
 
   private deletePrompt(promptKey: string): void {
     const entry = this.items.get(promptKey)
+
     if (entry?.cancellationPending) {
       this.pendingCancellationTotal -= 1
     }
+
     this.items.delete(promptKey)
   }
 
@@ -148,6 +165,7 @@ export class ClaudeJournalPrompts {
     if (entry.cancellationPending === pending) {
       return
     }
+
     entry.cancellationPending = pending
     this.pendingCancellationTotal += pending ? 1 : -1
   }
@@ -155,9 +173,11 @@ export class ClaudeJournalPrompts {
   cancel(promptKey: string): StructuredAgentSessionSinkAdmission {
     const admission = this.admitCancellation(promptKey)
     const entry = this.items.get(promptKey)
+
     if (entry) {
       this.setCancellationPending(entry, !admission.accepted && admission.reason === 'backpressure')
     }
+
     return admission
   }
 
@@ -165,15 +185,20 @@ export class ClaudeJournalPrompts {
     if (this.pendingCancellationTotal === 0) {
       return
     }
+
     for (const [promptKey, entry] of this.items) {
       if (!entry.cancellationPending) {
         continue
       }
+
       const admission = this.admitCancellation(promptKey)
+
       if (!admission.accepted && admission.reason === 'backpressure') {
         return
       }
+
       const retained = this.items.get(promptKey)
+
       if (retained) {
         this.setCancellationPending(retained, false)
       }

@@ -50,9 +50,11 @@ function orderAgents(
   const inCatalogOrder = getAgentCatalog()
     .filter((entry) => detected.includes(entry.id))
     .map((entry) => entry.id)
+
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
   }
+
   // Why: surface the user's configured default first — matches the prior
   // split-button behavior where the default agent was the primary action.
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
@@ -74,6 +76,7 @@ function getTerminalLaunchState(tabId: string): { stillOpen: boolean; hasPty: bo
 
   for (const tabs of Object.values(state.tabsByWorktree)) {
     const tab = tabs.find((t) => t.id === tabId)
+
     if (tab) {
       stillOpen = true
       tabPtyId = tab.ptyId
@@ -86,13 +89,17 @@ function getTerminalLaunchState(tabId: string): { stillOpen: boolean; hasPty: bo
 
 async function waitForTerminalPty(tabId: string, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     const launchState = getTerminalLaunchState(tabId)
+
     if (launchState.hasPty) {
       return true
     }
+
     await new Promise((resolve) => window.setTimeout(resolve, 100))
   }
+
   return getTerminalLaunchState(tabId).hasPty
 }
 
@@ -112,12 +119,15 @@ function QuickLaunchAgentMenuItemsInner({
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+
   const disabledAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
+
   // One hook per structured provider: the launch registry is keyed by agent, and hooks cannot run
   // inside the agent list's render loop.
   const structuredLaunchStatusByAgent = {
@@ -134,6 +144,7 @@ function QuickLaunchAgentMenuItemsInner({
     (agent: TuiAgent) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
+
       const result = launchAgentInNewTab({
         agent,
         worktreeId,
@@ -143,6 +154,7 @@ function QuickLaunchAgentMenuItemsInner({
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
       })
+
       if (!result) {
         toast.error(
           translate(
@@ -151,13 +163,16 @@ function QuickLaunchAgentMenuItemsInner({
             { value0: label }
           )
         )
+
         return
       }
+
       if (!result.tabId) {
         // Why: paired web clients create the tab on the host; focus follows the
         // next session-tabs snapshot instead of a local tab id.
         return
       }
+
       onFocusTerminal(result.tabId)
 
       // Why: launch success means the terminal session exists. Agent readiness
@@ -168,16 +183,21 @@ function QuickLaunchAgentMenuItemsInner({
         if (hasPty) {
           return
         }
+
         const launchState = getTerminalLaunchState(launchedTabId)
+
         if (!launchState.stillOpen) {
           return
         }
+
         if (useAppStore.getState().activeWorktreeId !== worktreeId) {
           return
         }
+
         if (!shouldShowLaunchWatchdogTimeout({ hasPty: launchState.hasPty })) {
           return
         }
+
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
@@ -205,16 +225,21 @@ function QuickLaunchAgentMenuItemsInner({
       {agents.map((agent) => {
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
+
         const isStructuredLaunchPending =
           isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
+
         const pendingLabel = translate(
           'components.native-chat.structuredSessionLaunchPending',
           'Starting {{value0}} chat…',
           { value0: label }
         )
+
         const menuLabel = isStructuredLaunchPending ? pendingLabel : label
+
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
+
         return (
           <DropdownMenuItem
             key={agent}

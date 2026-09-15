@@ -16,6 +16,7 @@ function sftpNoSuchFileError(): Error {
 }
 
 let tempDir = ''
+
 let localFile = ''
 
 beforeEach(async () => {
@@ -74,6 +75,7 @@ describe('late SFTP stream errors', () => {
       createWriteStream: () => {
         const stream = new PassThrough()
         stream.resume()
+
         return stream
       },
       end: () => {}
@@ -92,6 +94,7 @@ describe('late SFTP stream errors', () => {
       createWriteStream: () => {
         const stream = new PassThrough()
         queueMicrotask(() => sftp.emit('error', sftpNoSuchFileError()))
+
         return stream
       },
       end: () => {}
@@ -109,9 +112,11 @@ describe('late SFTP stream errors', () => {
   it('still rejects with the SFTP error when it arrives during the transfer', async () => {
     const stream = new PassThrough()
     stream.resume()
+
     const failing = Object.assign(new EventEmitter(), {
       createWriteStream: () => {
         queueMicrotask(() => stream.emit('error', sftpNoSuchFileError()))
+
         return stream
       }
     }) as unknown as SFTPWrapper

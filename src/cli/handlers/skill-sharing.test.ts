@@ -49,6 +49,7 @@ describe('skill sharing CLI handlers', () => {
       },
       _meta: successMeta
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await SKILL_SHARING_HANDLERS['skills installed']!(context(call, new Map(), { json: true }))
@@ -110,6 +111,7 @@ describe('skill sharing CLI handlers', () => {
         },
         _meta: successMeta
       })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await SKILL_SHARING_HANDLERS['skills share']!(
@@ -166,6 +168,7 @@ describe('skill sharing CLI handlers', () => {
         },
         _meta: successMeta
       })
+
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await SKILL_SHARING_HANDLERS['skills share']!(
@@ -217,6 +220,7 @@ describe('skill sharing CLI handlers', () => {
     if (forwardedCwd) {
       vi.stubEnv('ORCA_CLI_CWD', forwardedCwd)
     }
+
     const call = vi.fn()
 
     await expect(

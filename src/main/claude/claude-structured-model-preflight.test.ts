@@ -8,7 +8,9 @@ import type { ClaudeSession } from './claude-structured-session-state'
 
 /** Verbatim row shapes from Claude Code 2.1.260's list_models response. */
 const DEFAULT_ROW = { value: 'default', resolvedModel: 'claude-opus-5', displayName: 'Default' }
+
 const SONNET = { value: 'sonnet', resolvedModel: 'claude-sonnet-5', displayName: 'Sonnet' }
+
 const HAIKU = {
   value: 'haiku',
   resolvedModel: 'claude-haiku-4-5-20251001',
@@ -17,6 +19,7 @@ const HAIKU = {
 
 function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable') {
   const calls: string[] = []
+
   return {
     session: {
       options: new Map<string, string>(),
@@ -28,9 +31,11 @@ function sessionWith(catalog: readonly Record<string, unknown>[] | 'unavailable'
       connection: {
         supportedModels: async () => {
           calls.push('list_models')
+
           if (catalog === 'unavailable') {
             throw new Error('this CLI predates list_models')
           }
+
           return [...catalog]
         },
         setModel: async (model: string) => {

@@ -72,6 +72,7 @@ export function getWorktreeParentPickerFocusRestoreTarget(
   if (!anchorElement?.isConnected) {
     return null
   }
+
   return anchorElement.closest<HTMLElement>(FOCUSABLE_ANCHOR_SELECTOR)
 }
 
@@ -85,6 +86,7 @@ export function selectWorktreeParent({
   if (!childWorktreeId) {
     return
   }
+
   close()
   void assignWorktreeParent(childWorktreeId, { parentWorktreeId }).catch((error) => {
     console.error('Failed to set parent worktree:', error)
@@ -107,11 +109,13 @@ export function handleWorktreeParentPickerKeyDown({
   if (isImeCompositionKeyDown(event) || candidates.length === 0) {
     return
   }
+
   const navigate = (nextIndex: number): void => {
     event.preventDefault()
     event.stopPropagation()
     moveHighlight(clampWorktreeParentPickerIndex(nextIndex, candidates.length))
   }
+
   if (event.key === 'ArrowDown') {
     navigate(activeIndex + 1)
   } else if (event.key === 'ArrowUp') {
@@ -122,6 +126,7 @@ export function handleWorktreeParentPickerKeyDown({
     navigate(candidates.length - 1)
   } else if (event.key === 'Enter') {
     const candidate = candidates[activeIndex]
+
     if (candidate) {
       event.preventDefault()
       event.stopPropagation()
@@ -148,11 +153,14 @@ export function WorktreeParentPickerPopover({
   const optionIdPrefix = `${useId()}option`
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+
   const [anchorRect, setAnchorRect] = useState<AnchorRect | null>(() =>
     getAnchorRect(anchorElement)
   )
+
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight)
   const child = childWorktreeId ? worktreeMap.get(childWorktreeId) : undefined
+
   const candidates = useMemo(
     () =>
       child
@@ -171,13 +179,16 @@ export function WorktreeParentPickerPopover({
     if (!open) {
       return
     }
+
     const updateAnchorRect = (): void => {
       setAnchorRect(getAnchorRect(anchorElement))
       setViewportHeight(window.innerHeight)
     }
+
     updateAnchorRect()
     window.addEventListener('resize', updateAnchorRect)
     window.addEventListener('scroll', updateAnchorRect, true)
+
     return () => {
       window.removeEventListener('resize', updateAnchorRect)
       window.removeEventListener('scroll', updateAnchorRect, true)
@@ -187,14 +198,18 @@ export function WorktreeParentPickerPopover({
   useEffect(() => {
     if (!open) {
       suppressInitialOutsideCloseRef.current = false
+
       return
     }
+
     suppressInitialOutsideCloseRef.current = true
+
     // Why: the click that selected the dropdown item can reach Radix's newly
     // mounted popover as an outside interaction before the picker settles.
     const timerId = window.setTimeout(() => {
       suppressInitialOutsideCloseRef.current = false
     }, 150)
+
     return () => window.clearTimeout(timerId)
   }, [open])
 
@@ -219,6 +234,7 @@ export function WorktreeParentPickerPopover({
     if (!anchorRect) {
       return undefined
     }
+
     const top = clampWorktreeParentPickerAnchorTop(
       anchorRect.top,
       // Why: measured from the full candidate list, not the filtered one, so
@@ -226,7 +242,9 @@ export function WorktreeParentPickerPopover({
       estimateWorktreeParentPickerHeight(candidates.length),
       viewportHeight
     )
+
     const rect = new DOMRect(anchorRect.left, top, anchorRect.width, anchorRect.height)
+
     return { current: { getBoundingClientRect: () => rect } }
   }, [anchorRect, candidates.length, viewportHeight])
 
@@ -234,6 +252,7 @@ export function WorktreeParentPickerPopover({
     () => filterWorktreeParentCandidates(candidates, search),
     [candidates, search]
   )
+
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length)
 
   const virtualizer = useVirtualizer({
@@ -246,6 +265,7 @@ export function WorktreeParentPickerPopover({
     // seed the viewport with max-h-72 to avoid a blank first paint.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
+
   const handleSearchChange = useCallback(
     (nextSearch: string) => {
       // Why: re-ranking on each keystroke makes any prior highlight meaningless.
@@ -257,6 +277,7 @@ export function WorktreeParentPickerPopover({
   )
 
   const virtualRows = virtualizer.getVirtualItems()
+
   // Why: the hook memoizes its store selector on this array's identity, so a
   // fresh array each render would rebuild the status map on every render.
   const visibleWorktreeIds = useMemo(
@@ -266,6 +287,7 @@ export function WorktreeParentPickerPopover({
         .filter((id): id is string => id !== undefined),
     [filtered, virtualRows]
   )
+
   const statuses = useWorktreeActivityStatuses(visibleWorktreeIds)
 
   const moveHighlight = useCallback(
@@ -297,10 +319,13 @@ export function WorktreeParentPickerPopover({
   // commit so assistive tech still tracks the highlighted row.
   useEffect(() => {
     const input = inputRef.current
+
     if (!input) {
       return
     }
+
     const activeOptionId = filtered.length > 0 ? `${optionIdPrefix}-${activeIndex}` : null
+
     if (activeOptionId) {
       input.setAttribute('aria-activedescendant', activeOptionId)
     } else {
@@ -372,10 +397,13 @@ export function WorktreeParentPickerPopover({
               <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
                 {virtualRows.map((virtualRow) => {
                   const candidate = filtered[virtualRow.index]
+
                   if (!candidate) {
                     return null
                   }
+
                   const isHighlighted = virtualRow.index === activeIndex
+
                   return (
                     <div
                       key={candidate.id}

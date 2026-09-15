@@ -40,6 +40,7 @@ export function resolveGitHubChecksTabState(
   if (state.contextKey !== contextKey) {
     return createGitHubChecksTabState(sourceChecks, contextKey)
   }
+
   return state.sourceChecks === sourceChecks
     ? state
     : resetGitHubChecksTabForSource(state, sourceChecks)
@@ -104,6 +105,7 @@ export function beginGitHubChecksTabDetails(
   requestId: number
 ): GitHubChecksTabState {
   const current = state.detailsByCheckKey[key]
+
   return updateGitHubChecksTabDetails(state, key, {
     requestId,
     loading: true,
@@ -126,5 +128,6 @@ export function settleGitHubChecksTabDetails(
   if (state.detailsByCheckKey[key]?.requestId !== requestId) {
     return state
   }
+
   return updateGitHubChecksTabDetails(state, key, { ...details, requestId })
 }

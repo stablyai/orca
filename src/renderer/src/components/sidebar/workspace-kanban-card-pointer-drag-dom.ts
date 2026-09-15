@@ -5,11 +5,15 @@ import {
 } from './workspace-kanban-virtual-lane-layout'
 
 export const CARD_SELECTOR = '[data-workspace-board-card-id]'
+
 export const STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
+
 export const PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 
 const STATUS_DROP_GAP_TOLERANCE_PX = 24
+
 const POINTER_DROP_INDICATOR_ATTR = 'data-workspace-board-card-drop-indicator'
+
 const COMMIT_TARGET_FALLBACK_TOLERANCE_PX = 6
 
 export type WorkspaceKanbanStatusDropRect = {
@@ -61,13 +65,17 @@ export function resolveWorkspaceStatusDropTargetFromRects(
     if (y < rect.top || y > rect.bottom) {
       continue
     }
+
     if (x >= rect.left && x <= rect.right) {
       return rect.status
     }
+
     const distance = x < rect.left ? rect.left - x : x - rect.right
+
     if (distance > gapTolerance) {
       continue
     }
+
     if (!nearest || distance < nearest.distance) {
       nearest = { status: rect.status, distance }
     }
@@ -82,11 +90,14 @@ export function resolveWorkspaceCardDropIndexFromRects(
 ): number {
   for (let index = 0; index < rects.length; index++) {
     const rect = rects[index]!
+
     if (y < (rect.top + rect.bottom) / 2) {
       return rect.index ?? index
     }
   }
+
   const last = rects.at(-1)
+
   return last?.index !== undefined ? last.index + 1 : rects.length
 }
 
@@ -102,17 +113,21 @@ export function resolveWorkspaceCardDropIndicatorY(
   if (rects.length === 0) {
     return laneTop + 14
   }
+
   // Why: with a virtualized lane the drop index counts unrendered cards too,
   // so place the line relative to the rendered card that owns that slot.
   const slot = rects.findIndex(
     (rect, index) => getRenderedCardLanePosition(rect, index) >= dropIndex
   )
+
   if (slot === -1) {
     return rects.at(-1)!.bottom + 5
   }
+
   if (slot === 0) {
     return rects[0]!.top - 5
   }
+
   return (rects[slot - 1]!.bottom + rects[slot]!.top) / 2
 }
 
@@ -122,6 +137,7 @@ function getLaneCardDropRects(lane: HTMLElement): WorkspaceKanbanCardDropRect[] 
     .map((card) => {
       const rect = card.getBoundingClientRect()
       const index = Number.parseInt(card.dataset.workspaceBoardCardIndex ?? '', 10)
+
       return {
         top: rect.top,
         bottom: rect.bottom,
@@ -143,21 +159,28 @@ export function resolveWorkspaceKanbanCardDropCommitTarget(args: {
   if (hasWorkspaceKanbanCardDropTarget(args.currentTarget)) {
     return args.currentTarget
   }
+
   const latest = args.latestTrackedTarget
+
   if (!latest || !hasWorkspaceKanbanCardDropTarget(latest.target)) {
     return args.currentTarget
   }
+
   const distance = Math.hypot(args.x - latest.x, args.y - latest.y)
+
   return distance <= COMMIT_TARGET_FALLBACK_TOLERANCE_PX ? latest.target : args.currentTarget
 }
 
 function getStatusDropTargetRects(board: HTMLElement): WorkspaceKanbanStatusDropRect[] {
   return Array.from(board.querySelectorAll<HTMLElement>(STATUS_DROP_TARGET)).flatMap((element) => {
     const status = element.dataset.workspaceStatus
+
     if (!status) {
       return []
     }
+
     const rect = element.getBoundingClientRect()
+
     return [
       {
         status,
@@ -176,20 +199,24 @@ export function getDropTarget(
   y: number
 ): { status: WorkspaceStatus | null; isPinDrop: boolean } {
   const target = document.elementFromPoint(x, y)
+
   if (!(target instanceof Element) || !board.contains(target)) {
     return { status: null, isPinDrop: false }
   }
 
   const pinTarget = target.closest<HTMLElement>(PIN_DROP_TARGET)
+
   if (pinTarget && board.contains(pinTarget)) {
     return { status: null, isPinDrop: true }
   }
 
   const statusTarget = target.closest<HTMLElement>(STATUS_DROP_TARGET)
+
   const directStatus =
     statusTarget && board.contains(statusTarget)
       ? (statusTarget.dataset.workspaceStatus ?? null)
       : null
+
   return {
     // Why: dropping in the visual gap between lanes should still land in the
     // nearest lane. Without this fallback, otherwise-valid drags appeared flaky.
@@ -214,11 +241,13 @@ export function getCardDropTarget(
   y: number
 ): WorkspaceKanbanCardDropTarget {
   const target = getDropTarget(board, x, y)
+
   if (!target.status) {
     return { ...target, dropIndex: 0 }
   }
 
   const lane = getLaneForStatus(board, target.status)
+
   if (!lane) {
     return { ...target, dropIndex: 0 }
   }
@@ -226,13 +255,17 @@ export function getCardDropTarget(
   const laneContent = lane.querySelector<HTMLElement>('[data-workspace-board-lane-scroll]')
   const laneClientRect = (laneContent ?? lane).getBoundingClientRect()
   const cardRects = getLaneCardDropRects(lane)
+
   const virtualDropIndex = laneContent
     ? resolveWorkspaceKanbanVirtualLaneDropIndex(laneContent, y)
     : null
+
   const dropIndex = virtualDropIndex ?? resolveWorkspaceCardDropIndexFromRects(cardRects, y)
+
   const dropIndicatorY = laneContent
     ? resolveWorkspaceKanbanVirtualLaneDropIndicatorY(laneContent, dropIndex)
     : null
+
   return {
     ...target,
     dropIndex,
@@ -248,9 +281,11 @@ export function getCardDropTarget(
 
 function getOrCreateDropIndicator(): HTMLElement {
   const existing = document.querySelector<HTMLElement>(`[${POINTER_DROP_INDICATOR_ATTR}]`)
+
   if (existing) {
     return existing
   }
+
   const indicator = document.createElement('div')
   indicator.setAttribute(POINTER_DROP_INDICATOR_ATTR, 'true')
   indicator.setAttribute('aria-hidden', 'true')
@@ -259,6 +294,7 @@ function getOrCreateDropIndicator(): HTMLElement {
   indicator.style.setProperty('top', '0')
   indicator.style.setProperty('pointer-events', 'none')
   document.body.appendChild(indicator)
+
   return indicator
 }
 
@@ -272,21 +308,26 @@ export function updateCardDropIndicator(
 ): void {
   if (!target.status || target.isPinDrop) {
     removeCardDropIndicator()
+
     return
   }
 
   const lane = getLaneForStatus(board, target.status)
+
   if (!lane) {
     removeCardDropIndicator()
+
     return
   }
 
   const fallbackLaneContent = target.laneRect
     ? null
     : lane.querySelector<HTMLElement>('[data-workspace-board-lane-scroll]')
+
   const fallbackLaneRect = target.laneRect
     ? null
     : (fallbackLaneContent ?? lane).getBoundingClientRect()
+
   const laneRect =
     target.laneRect ??
     (fallbackLaneRect
@@ -296,10 +337,13 @@ export function updateCardDropIndicator(
           width: fallbackLaneRect.width
         }
       : { left: 0, top: 0, width: 0 })
+
   const cardRects = target.cardRects ?? getLaneCardDropRects(lane)
+
   const y =
     target.dropIndicatorY ??
     resolveWorkspaceCardDropIndicatorY(cardRects, Math.max(0, target.dropIndex), laneRect.top)
+
   const horizontalInset = 8
   const indicator = getOrCreateDropIndicator()
   indicator.dataset.workspaceStatus = target.status

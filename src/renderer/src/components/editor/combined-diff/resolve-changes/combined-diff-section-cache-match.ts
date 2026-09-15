@@ -19,12 +19,15 @@ export function combinedDiffSectionsMatchEntryMetadata({
     sections.length === entries.length &&
     sections.every((section, index) => {
       const entry = entries[index]
+
       if (!entry) {
         return false
       }
+
       const entryArea = 'area' in entry ? entry.area : undefined
       const entryAdded = 'added' in entry ? entry.added : undefined
       const entryRemoved = 'removed' in entry ? entry.removed : undefined
+
       return (
         section.key === getCombinedDiffFileTreeSectionKey(treeMode, entry) &&
         section.status === entry.status &&

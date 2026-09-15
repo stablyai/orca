@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { glob } from 'tinyglobby'
 
 const REPO_ROOT = join(import.meta.dirname, '../../../..')
+
 const CENSUS_FILE = 'src/renderer/src/lib/structured-agent-launch-settlement-caller-census.test.ts'
+
 const LOOP_FILE = 'src/renderer/src/lib/structured-agent-launch-settlement.ts'
 
 // Why: every structured entrypoint reaches the settle loop through the planner, which decided
@@ -18,11 +20,13 @@ describe('structured launch settle loop caller census', () => {
       cwd: REPO_ROOT,
       ignore: ['**/*.test.ts', '**/*.test.tsx', CENSUS_FILE, LOOP_FILE]
     })
+
     const callers = files
       .filter((file) =>
         readFileSync(join(REPO_ROOT, file), 'utf8').includes('settleStructuredAgentLaunch(')
       )
       .sort()
+
     expect(callers).toEqual([...SETTLE_LOOP_CALLERS].sort())
   })
 })

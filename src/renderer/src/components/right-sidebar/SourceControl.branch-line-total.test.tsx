@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     addedAt: 0,
     kind: 'git' as string
   }
+
   const activeWorktree = {
     id: 'wt-1',
     repoId: 'repo-1',
@@ -43,6 +44,7 @@ const mocks = vi.hoisted(() => {
     sortOrder: 0,
     lastActivityAt: 0
   }
+
   return {
     activeRepo,
     activeWorktree,
@@ -58,6 +60,7 @@ vi.mock('@/store', () => {
       getState: () => mocks.state
     }
   )
+
   return { useAppStore }
 })
 
@@ -176,6 +179,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -322,6 +326,7 @@ describe('SourceControl branch line total chip', () => {
   // after a hard failure, or during the ranged-diff cooldown.
   it('shows no placeholder while the total is still pending', () => {
     vi.useFakeTimers()
+
     try {
       renderSourceControl()
 

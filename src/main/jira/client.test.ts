@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const OLD_FETCH = globalThis.fetch
+
 const { closeAllConnectionsMock, netFetchMock, resolveProxyMock, setProxyMock } = vi.hoisted(
   () => ({
     closeAllConnectionsMock: vi.fn(),
@@ -20,6 +21,7 @@ type SafeStorageMockOptions = {
 }
 
 let tempHome = ''
+
 let fetchMock: ReturnType<typeof vi.fn>
 
 function mkdtempLike(prefix: string): string {
@@ -84,6 +86,7 @@ function writeMultiSiteFiles(
     ),
     { encoding: 'utf-8' }
   )
+
   for (const site of sites) {
     writeFileSync(tokenPathForSite(site.id), site.token)
   }
@@ -118,6 +121,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
   })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
+
     return { ...actual, homedir: () => tempHome }
   })
 
@@ -128,6 +132,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     import('./request-queue'),
     import('./authenticated-request')
   ])
+
   return { ...client, ...queue, ...api }
 }
 
@@ -163,6 +168,7 @@ describe('Jira client credential storage', () => {
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     )
+
     const jira = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -237,6 +243,7 @@ describe('Jira client credential storage', () => {
 
   it('downloads same-origin attachment URLs without forwarding auth cross-origin', async () => {
     const jira = await loadClientModule({ encryptionAvailable: true })
+
     const client = {
       site: {
         id: 'site-alpha',
@@ -247,6 +254,7 @@ describe('Jira client credential storage', () => {
       },
       authorization: 'Basic token-alpha'
     }
+
     netFetchMock.mockResolvedValueOnce(
       new Response(Uint8Array.from([1, 2, 3]), {
         status: 200,
@@ -294,6 +302,7 @@ describe('Jira client credential storage', () => {
     const siteId = 'site-alpha'
     const tokenPath = tokenPathForSite(siteId)
     writeJiraFiles(siteId, Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]))
+
     const jira = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -327,6 +336,7 @@ describe('Jira client credential storage', () => {
         headers: { 'Content-Type': 'application/json' }
       })
     )
+
     const jira = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -361,12 +371,14 @@ describe('Jira client credential storage', () => {
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     )
+
     const jira = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
         if (!keychainApproved) {
           throw new Error('userCanceledErr')
         }
+
         return 'token-alpha'
       }
     })
@@ -405,6 +417,7 @@ describe('Jira client credential storage', () => {
       ],
       'all'
     )
+
     const jira = await loadClientModule({
       encryptionAvailable: true,
       // Why: only the binary "bad" token throws on decrypt; the plaintext
@@ -428,6 +441,7 @@ describe('Jira client credential storage', () => {
       ],
       'bad'
     )
+
     const jira = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -642,6 +656,7 @@ describe('Jira client credential storage', () => {
     ) as {
       sites: { accountId: string }[]
     }
+
     expect(stored.sites).toHaveLength(2)
     expect(stored.sites.map((site) => site.accountId).sort()).toEqual(['alice', 'bot'])
   })

@@ -81,6 +81,7 @@ describe('normalizeGitErrorMessage', () => {
 
   it('uses the tail diagnostic from newline-heavy failures without line-array splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     const error = new Error(
       `Command failed: git fetch\r\n${'remote: progress update\r\n'.repeat(10_000)}remote side closed connection\r\n`
     )
@@ -92,6 +93,7 @@ describe('normalizeGitErrorMessage', () => {
         (typeof separator === 'string' && separator === '\n') ||
         (separator instanceof RegExp && separator.source === '\\r?\\n')
     )
+
     expect(usedLineSplit).toBe(false)
   })
 })
@@ -128,6 +130,7 @@ describe('formatSubmodulePushFailureDetail', () => {
     const usedCrlfReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
     )
+
     expect(usedCrlfReplace).toBe(false)
   })
 })
@@ -200,8 +203,10 @@ describe('runPullWithDivergenceFallback', () => {
 
   it('retries with merge reconciliation args on a policy error', async () => {
     const calls: string[][] = []
+
     const runPull = vi.fn(async (effectiveArgs: string[]) => {
       calls.push(effectiveArgs)
+
       if (effectiveArgs.length === 0) {
         throw divergentError
       }
@@ -225,6 +230,7 @@ describe('runPullWithDivergenceFallback', () => {
 
   it('rethrows non-divergence errors without retrying', async () => {
     const otherError = new Error('fatal: Not possible to fast-forward, aborting.')
+
     const runPull = vi.fn(async () => {
       throw otherError
     })

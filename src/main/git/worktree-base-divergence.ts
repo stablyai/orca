@@ -98,7 +98,9 @@ async function countCommitsAhead(
       ],
       probeOptions(repoPath, options, signal)
     )
+
     const count = Number.parseInt(stdout.trim(), 10)
+
     return Number.isNaN(count) ? null : count
   } catch {
     return null
@@ -118,6 +120,7 @@ async function hasCommonHistory(
       ['merge-base', '--end-of-options', leftRef, rightRef],
       probeOptions(repoPath, options, signal)
     )
+
     return stdout.trim().length > 0
   } catch (error) {
     // Exit 1 is `merge-base` reporting no common ancestor, which is an answer. A timeout or abort
@@ -141,25 +144,31 @@ export async function measureRetargetDivergence(
   const budget = AbortSignal.timeout(options.budgetMsForTest ?? RETARGET_DIVERGENCE_BUDGET_MS)
   // Combined so cancelling the create stops the probes immediately rather than at the deadline.
   const signal = options.signal ? AbortSignal.any([options.signal, budget]) : budget
+
   // Both directions: commits the target adds decide what the reset writes, commits only the
   // preparation has decide what it must delete.
   const [ahead, behind] = await Promise.all([
     countCommitsAhead(repoPath, preparedBase, targetBase, options, signal),
     countCommitsAhead(repoPath, targetBase, preparedBase, options, signal)
   ])
+
   if (ahead === null || behind === null) {
     return 'unknown'
   }
+
   if (ahead + behind > RETARGET_MAX_COMMIT_DIVERGENCE) {
     return 'exceeded'
   }
+
   // Only now: `merge-base` has no `--max-count`, so on unrelated histories it would walk both of
   // them in full. Reaching here already proved neither side is more than the cap ahead of the
   // other, which bounds that walk — and unrelated histories of any size fail the counts first.
   // Required because unrelated histories replace the whole tree however few commits they carry.
   const shareHistory = await hasCommonHistory(repoPath, preparedBase, targetBase, options, signal)
+
   if (shareHistory === null) {
     return 'unknown'
   }
+
   return shareHistory ? 'within' : 'exceeded'
 }

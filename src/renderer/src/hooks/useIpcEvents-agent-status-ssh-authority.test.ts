@@ -19,9 +19,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('retires the exact sleeping record after adopted or exited legacy worker recovery', async () => {
     const clearSleepingAgentSession = vi.fn()
+
     let listener:
       | ((data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void)
       | undefined
+
     const storeState = buildStoreState({
       clearSleepingAgentSession
     })
@@ -40,6 +42,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         onSet: () => () => {},
         onLegacyWorkerTerminalRecovery: (callback) => {
           listener = callback
+
           return () => {}
         }
       })
@@ -71,6 +74,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           connectionGeneration: 7
         }
       })
+
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
 
@@ -105,6 +109,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           connectionGeneration: 7
         }
       })
+
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
 
@@ -136,6 +141,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     async ({ enabled, expectedRoute }) => {
       const order: string[] = []
       let sshStateListener: ((data: { targetId: string; state: unknown }) => void) | undefined
+
       const oldState = {
         targetId: 'target-a',
         status: 'connected' as const,
@@ -144,11 +150,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
         providerEpoch: 'epoch-old',
         connectionGeneration: 1
       }
+
       const nextState = {
         ...oldState,
         providerEpoch: 'epoch-new',
         connectionGeneration: 2
       }
+
       const storeState = buildStoreState({
         sshTargetLabels: new Map([['target-a', 'Target A']]),
         sshConnectionStates: new Map([['target-a', oldState]]),
@@ -157,10 +165,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
         },
         invalidateStaleDirectSshTargetPtyBindings: () => {
           order.push('invalidate')
+
           return 1
         },
         retryDirectSshTargetPanes: () => {
           order.push('retry')
+
           return 1
         },
         setSshTargetsMetadata: vi.fn(),
@@ -170,9 +180,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         clearDirectSshTargetPtyBindings: vi.fn(),
         clearRemovedSshTargetState: vi.fn()
       })
+
       const coordinator = {
         requestReconnect: vi.fn(async () => {
           order.push('request')
+
           return { status: 'complete' }
         }),
         replaceAuthority: vi.fn(() => {
@@ -180,6 +192,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }),
         prepareOnly: vi.fn(async () => {
           order.push('prepare')
+
           return { token: null }
         }),
         correctUnboundTerminals: vi.fn(() => 0),
@@ -187,8 +200,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
         invalidate: vi.fn(),
         stop: vi.fn()
       }
+
       const capturePreparationInput = vi.fn(async (authority, reason) => {
         order.push('capture')
+
         return {
           ...authority,
           reason,
@@ -236,6 +251,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           ssh: {
             onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
               sshStateListener = listener
+
               return () => {}
             }
           }
@@ -249,6 +265,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       await Promise.resolve()
 
       expect(order).toEqual(expectedRoute)
+
       if (enabled) {
         expect(coordinator.requestReconnect).toHaveBeenCalledOnce()
         expect(coordinator.prepareOnly).not.toHaveBeenCalled()
@@ -265,6 +282,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const secondTargetId = 'target-ports-second'
     const rejectingTargetId = 'target-ports-rejecting'
     const partialTargetId = 'target-ports-partial'
+
     const connectedState = {
       targetId,
       status: 'connected' as const,
@@ -273,28 +291,33 @@ describe('useIpcEvents agent status snapshot integration', () => {
       providerEpoch: 'epoch-ports',
       connectionGeneration: 3
     }
+
     const secondConnectedState = {
       ...connectedState,
       targetId: secondTargetId,
       providerEpoch: 'epoch-ports-second'
     }
+
     const rejectingConnectedState = {
       ...connectedState,
       targetId: rejectingTargetId,
       providerEpoch: 'epoch-ports-rejecting'
     }
+
     const partialConnectedState = {
       ...connectedState,
       targetId: partialTargetId,
       providerEpoch: null,
       connectionGeneration: undefined
     }
+
     const reconciledPartialState = {
       ...connectedState,
       targetId: partialTargetId,
       providerEpoch: 'epoch-ports-partial',
       connectionGeneration: 4
     }
+
     const liveForward = {
       id: 'forward-live',
       targetId,
@@ -303,6 +326,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       remotePort: 7860,
       status: 'active' as const
     }
+
     const secondForward = {
       ...liveForward,
       id: 'forward-second',
@@ -310,6 +334,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       localPort: 17861,
       remotePort: 7861
     }
+
     const rejectingTargetForward = {
       ...liveForward,
       id: 'forward-rejecting-target',
@@ -317,6 +342,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       localPort: 17862,
       remotePort: 7862
     }
+
     const partialTargetForward = {
       ...liveForward,
       id: 'forward-partial-target',
@@ -324,60 +350,80 @@ describe('useIpcEvents agent status snapshot integration', () => {
       localPort: 17863,
       remotePort: 7863
     }
+
     const detectedPort = {
       port: 7860,
       pid: 42,
       processName: 'python',
       command: 'python -m http.server 7860'
     }
+
     const secondDetectedPort = {
       ...detectedPort,
       port: 7861,
       pid: 43,
       command: 'python -m http.server 7861'
     }
+
     let resolveForwards: (value: []) => void = () => {}
+
     let resolveDetected: (value: (typeof detectedPort)[]) => void = () => {}
+
     let resolveSecondForwards: (value: (typeof secondForward)[]) => void = () => {}
+
     let resolveSecondDetected: (value: []) => void = () => {}
+
     const forwardsSnapshot = new Promise<[]>((resolve) => {
       resolveForwards = resolve
     })
+
     const detectedSnapshot = new Promise<(typeof detectedPort)[]>((resolve) => {
       resolveDetected = resolve
     })
+
     const secondForwardsSnapshot = new Promise<(typeof secondForward)[]>((resolve) => {
       resolveSecondForwards = resolve
     })
+
     const secondDetectedSnapshot = new Promise<[]>((resolve) => {
       resolveSecondDetected = resolve
     })
+
     const listPortForwards = vi.fn(({ targetId: requestedTargetId }: { targetId: string }) => {
       if (requestedTargetId === rejectingTargetId) {
         return Promise.resolve([rejectingTargetForward])
       }
+
       if (requestedTargetId === partialTargetId) {
         return Promise.resolve([partialTargetForward])
       }
+
       return requestedTargetId === targetId ? forwardsSnapshot : secondForwardsSnapshot
     })
+
     const listDetectedPorts = vi.fn(({ targetId: requestedTargetId }: { targetId: string }) => {
       if (requestedTargetId === rejectingTargetId) {
         return Promise.reject(new Error('detected snapshot unavailable'))
       }
+
       if (requestedTargetId === partialTargetId) {
         return Promise.resolve([])
       }
+
       return requestedTargetId === targetId ? detectedSnapshot : secondDetectedSnapshot
     })
+
     let forwardListener:
       | ((data: { targetId: string; forwards: (typeof liveForward)[] }) => void)
       | undefined
+
     let detectedListener:
       | ((data: { targetId: string; ports: (typeof detectedPort)[] }) => void)
       | undefined
+
     const setPortForwards = vi.fn()
     const setDetectedPorts = vi.fn()
+
     const sshConnectionStates = new Map<
       string,
       | typeof connectedState
@@ -386,6 +432,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       | typeof partialConnectedState
       | typeof reconciledPartialState
     >()
+
     const storeState = buildStoreState({
       sshTargetLabels: new Map([
         [targetId, 'Ports Target'],
@@ -418,6 +465,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       invalidateStaleDirectSshTargetPtyBindings: vi.fn(() => 0),
       retryDirectSshTargetPanes: vi.fn(() => 0)
     })
+
     const coordinator = {
       requestReconnect: vi.fn(async () => ({ status: 'complete' })),
       replaceAuthority: vi.fn(),
@@ -427,6 +475,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       invalidate: vi.fn(),
       stop: vi.fn()
     }
+
     let partialTargetStateCalls = 0
 
     stubReactSyncEffect()
@@ -476,10 +525,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
           getState: ({ targetId: requestedTargetId }: { targetId: string }) => {
             if (requestedTargetId === partialTargetId) {
               partialTargetStateCalls += 1
+
               return Promise.resolve(
                 partialTargetStateCalls === 1 ? partialConnectedState : reconciledPartialState
               )
             }
+
             return Promise.resolve(
               requestedTargetId === rejectingTargetId
                 ? rejectingConnectedState
@@ -494,12 +545,14 @@ describe('useIpcEvents agent status snapshot integration', () => {
             listener: (data: { targetId: string; forwards: (typeof liveForward)[] }) => void
           ) => {
             forwardListener = listener
+
             return () => {}
           },
           onDetectedPortsChanged: (
             listener: (data: { targetId: string; ports: (typeof detectedPort)[] }) => void
           ) => {
             detectedListener = listener
+
             return () => {}
           }
         }

@@ -17,24 +17,28 @@ function relayStatusLabel(status: MobileRelayStatus): string {
   if (status === 'registered') {
     return translate('auto.components.settings.MobilePairingConnectionOptions.ready', 'Ready')
   }
+
   if (status === 'connecting') {
     return translate(
       'auto.components.settings.MobilePairingConnectionOptions.connecting',
       'Connecting'
     )
   }
+
   if (status === 'standby') {
     return translate(
       'auto.components.settings.MobilePairingConnectionOptions.available',
       'Available'
     )
   }
+
   if (status === 'draining') {
     return translate(
       'auto.components.settings.MobilePairingConnectionOptions.reconnecting',
       'Reconnecting'
     )
   }
+
   return translate(
     'auto.components.settings.MobilePairingConnectionOptions.unavailable',
     'Unavailable'
@@ -80,6 +84,7 @@ export function MobilePairingConnectionOptions({
   // Availability is a property of the build, not of the current selection.
   const relayUnavailable = !signedIn && !configured
   const relayDisabled = relayMintRetrying || relayUnavailable
+
   const optionRefs = useRef<Record<MobilePairingConnectionMode, HTMLDivElement | null>>({
     automatic: null,
     'local-only': null
@@ -93,16 +98,22 @@ export function MobilePairingConnectionOptions({
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
       return
     }
+
     const target = event.target
+
     if (!(target instanceof HTMLElement) || target.getAttribute('role') !== 'radio') {
       return
     }
+
     if (relayDisabled && value !== 'automatic') {
       return
     }
+
     event.preventDefault()
+
     const next: MobilePairingConnectionMode =
       relayDisabled || value === 'automatic' ? 'local-only' : 'automatic'
+
     onChange(next)
     optionRefs.current[next]?.focus()
   }
@@ -114,16 +125,20 @@ export function MobilePairingConnectionOptions({
   useEffect(() => {
     let receivedEvent = false
     let active = true
+
     const apply = (detail: MobileRelayStatusDetail): void => {
       setRelayStatus(detail.status)
       setRelayCellUrl(detail.cellUrl)
     }
+
     const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
       receivedEvent = true
+
       if (active) {
         apply(detail)
       }
     })
+
     void window.api.mobile
       .getRelayStatus()
       .then((detail) => {
@@ -132,6 +147,7 @@ export function MobilePairingConnectionOptions({
         }
       })
       .catch(() => {})
+
     return () => {
       active = false
       unsubscribe()

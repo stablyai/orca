@@ -10,13 +10,16 @@ import { subscribeStructuredAgentSession } from '@/runtime/structured-agent-sess
 
 function createReconnectScheduler(args: { shouldStop: () => boolean; reconnect: () => void }) {
   let timer: ReturnType<typeof setTimeout> | null = null
+
   return {
     schedule(delay = 750): void {
       if (args.shouldStop() || timer) {
         return
       }
+
       timer = setTimeout(() => {
         timer = null
+
         if (!args.shouldStop()) {
           args.reconnect()
         }
@@ -50,21 +53,27 @@ export function startStructuredAgentSessionReadTransport(args: {
   let openGeneration = 0
   let stateGeneration = 0
   let unsubscribe = (): void => {}
+
   let shouldStopCoalescedEvent = (): boolean => true
+
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
     if (!shouldStopCoalescedEvent()) {
       args.applyEvent(event)
     }
   })
+
   const reconnectScheduler = createReconnectScheduler({
     shouldStop: () => stopped || connected,
     reconnect: () => void open()
   })
+
   const isCurrentOpenGeneration = (candidate: number): boolean =>
     !stopped && candidate === openGeneration
+
   const clearUnattachedReadGrace = (): void => {
     unattachedSince = null
   }
+
   /**
    * A read failure, reported to the pane only once it is one.
    *
@@ -80,32 +89,43 @@ export function startStructuredAgentSessionReadTransport(args: {
     if (!isUnattachedAgentSessionReadRefusal(error)) {
       clearUnattachedReadGrace()
       args.applyError(String(error))
+
       return
     }
+
     const now = Date.now()
     unattachedSince ??= now
+
     if (now - unattachedSince >= AGENT_SESSION_UNATTACHED_READ_GRACE_MS) {
       args.applyError(String(error))
     }
   }
+
   const captureHistoryReadGuard = (): (() => boolean) => {
     const readOpenGeneration = openGeneration
     const readStateGeneration = stateGeneration
+
     return () =>
       !isCurrentOpenGeneration(readOpenGeneration) || readStateGeneration !== stateGeneration
   }
+
   const handleEvent = (event: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
     if (!isCurrentOpenGeneration(eventOpenGeneration)) {
       return
     }
+
     clearUnattachedReadGrace()
+
     if (event.type === 'snapshot' || event.type === 'reset') {
       coalescer.flush()
+
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
         return
       }
+
       stateGeneration += 1
       args.onHistoryReadInvalidated()
+
       if (!isCurrentOpenGeneration(eventOpenGeneration)) {
         return
       }
@@ -113,33 +133,44 @@ export function startStructuredAgentSessionReadTransport(args: {
       connected = false
       reconnectScheduler.schedule()
     }
+
     shouldStopCoalescedEvent = captureHistoryReadGuard()
     coalescer.push(event)
   }
+
   async function open(): Promise<void> {
     if (stopped || connected) {
       return
     }
+
     if (opening) {
       reconnectScheduler.schedule()
+
       return
     }
+
     opening = true
     coalescer.flush()
+
     if (stopped) {
       opening = false
+
       return
     }
+
     const currentOpenGeneration = ++openGeneration
     args.onHistoryReadInvalidated()
     unsubscribe()
     unsubscribe = (): void => {}
+
     try {
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
+
       let closedDuringOpen = false
       const cursor = args.getCursor()
+
       const handle = await subscribeStructuredAgentSession(
         args.target,
         { sessionId: args.sessionId, ...(cursor ? { cursor } : {}) },
@@ -148,6 +179,7 @@ export function startStructuredAgentSessionReadTransport(args: {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {
             return
           }
+
           closedDuringOpen = true
           connected = false
           reportReadFailure(error)
@@ -157,13 +189,16 @@ export function startStructuredAgentSessionReadTransport(args: {
           if (!isCurrentOpenGeneration(currentOpenGeneration)) {
             return
           }
+
           closedDuringOpen = true
           connected = false
           reconnectScheduler.schedule()
         }
       )
+
       if (!isCurrentOpenGeneration(currentOpenGeneration) || closedDuringOpen) {
         handle.unsubscribe()
+
         if (isCurrentOpenGeneration(currentOpenGeneration)) {
           reconnectScheduler.schedule()
         }
@@ -175,6 +210,7 @@ export function startStructuredAgentSessionReadTransport(args: {
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
+
       connected = false
       reportReadFailure(error)
       reconnectScheduler.schedule()
@@ -184,6 +220,7 @@ export function startStructuredAgentSessionReadTransport(args: {
       }
     }
   }
+
   if (args.hydrate) {
     const shouldStopInitialRead = captureHistoryReadGuard()
     void args
@@ -192,7 +229,9 @@ export function startStructuredAgentSessionReadTransport(args: {
         if (shouldStopInitialRead()) {
           return
         }
+
         clearUnattachedReadGrace()
+
         return open()
       })
       .catch((error) => {
@@ -204,6 +243,7 @@ export function startStructuredAgentSessionReadTransport(args: {
   } else {
     void open()
   }
+
   return {
     captureHistoryReadGuard,
     dispose: () => {

@@ -28,6 +28,7 @@ export function runtimeHostStatusError(error: unknown): RuntimeRpcFailure {
     error instanceof Error && 'code' in error && typeof error.code === 'string'
       ? error.code
       : 'runtime_unavailable'
+
   return runtimeHostStatusFailure(code, error instanceof Error ? error.message : String(error))
 }
 

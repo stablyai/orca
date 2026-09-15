@@ -9,6 +9,7 @@ import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+
 export type ComposerSourceModel = {
   addComposerAttachments: (paths: string[]) => void
   applyLinkedGitLabWorkItem: (item: GitLabWorkItem) => void

@@ -22,6 +22,7 @@ describe('linked work item builders', () => {
       url: 'https://github.com/o/r/pull/42',
       repoId: 'repo-1'
     })
+
     expect(linked).toMatchObject({ provider: 'github', type: 'pr', number: 42, repoId: 'repo-1' })
   })
 
@@ -33,6 +34,7 @@ describe('linked work item builders', () => {
       url: 'https://gitlab.com/g/p/-/merge_requests/7',
       repoId: 'repo-2'
     })
+
     expect(linked).toMatchObject({ provider: 'gitlab', type: 'mr', number: 7, repoId: 'repo-2' })
   })
 
@@ -43,6 +45,7 @@ describe('linked work item builders', () => {
       url: 'https://linear.app/acme/issue/ENG-9',
       workspaceId: 'ws-1'
     })
+
     expect(linked).toMatchObject({
       provider: 'linear',
       type: 'issue',
@@ -164,6 +167,7 @@ describe('resolveComposerCreateSelection', () => {
       },
       base: { baseBranch: 'main', compareBaseRef: 'origin/main', branchNameOverride: 'pr-5' }
     })
+
     expect(selection).toMatchObject({
       kind: 'work-item',
       baseBranch: 'main',
@@ -181,6 +185,7 @@ describe('resolveComposerCreateSelection', () => {
       reuseEligibleBranch: 'feature',
       reuseSelectedBranch: true
     })
+
     expect(selection).toEqual({
       kind: 'branch',
       baseBranch: 'feature',
@@ -219,6 +224,7 @@ describe('resolveComposerBranchPick', () => {
       lastAutoName: '',
       worktreeBranches: []
     })
+
     expect(pick.base).toEqual({ baseBranch: 'feature', branchNameOverride: 'feature' })
     expect(pick).toMatchObject({
       reuseEligibleBranch: 'feature',
@@ -235,6 +241,7 @@ describe('resolveComposerBranchPick', () => {
       lastAutoName: '',
       worktreeBranches: ['refs/heads/feature']
     })
+
     expect(pick.reuseEligibleBranch).toBeNull()
     expect(pick.reuseSelectedBranch).toBe(false)
     expect(pick.base.branchNameOverride).toBeUndefined()

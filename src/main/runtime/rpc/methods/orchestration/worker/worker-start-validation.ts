@@ -22,24 +22,28 @@ export function validateFederatedWorkerStartPlacement(
       'Remote new-top-level requires --name and an explicit --repo from remote discovery.'
     )
   }
+
   if (createsWorktree && params.terminal) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal cannot combine with remote new-worktree creation.'
     )
   }
+
   if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
     throw new OrchestrationError(
       'invalid_argument',
       'Creation and setup options apply only to remote new-top-level worktrees.'
     )
   }
+
   if (params.terminal && params.agent) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal reuses an existing agent and cannot combine with --agent.'
     )
   }
+
   if (!params.terminal && (!params.agent || !isTuiAgent(params.agent))) {
     throw new OrchestrationError(
       'agent_unconfigured',
@@ -55,27 +59,32 @@ export function prepareLocalWorkerStart(args: {
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
+
   if (params.terminal && params.agent) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal reuses an existing agent and cannot combine with --agent.'
     )
   }
+
   if (createsWorktree && params.terminal) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal cannot combine with new-worktree creation.'
     )
   }
+
   if (createsWorktree && !params.name) {
     throw new OrchestrationError('invalid_argument', 'New worktrees require --name.')
   }
+
   if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
     throw new OrchestrationError(
       'invalid_argument',
       'Creation and setup options apply only to new-child or new-top-level worktrees.'
     )
   }
+
   return resolveWorkerStartAgent({
     runtime,
     terminal: params.terminal,
@@ -93,18 +102,21 @@ export function prepareFederationAttachmentWorkerStart(args: {
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
+
   if (createsWorktree && (!params.name || !params.repo)) {
     throw new OrchestrationError(
       'invalid_argument',
       'A remote new-top-level worktree requires --name and an explicit --repo.'
     )
   }
+
   if (createsWorktree && params.terminal) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal cannot combine with remote new-worktree creation.'
     )
   }
+
   if (
     !createsWorktree &&
     (params.name || params.repo || params.baseBranch || params.setup || params.setupSource)
@@ -114,12 +126,14 @@ export function prepareFederationAttachmentWorkerStart(args: {
       'Creation and setup options apply only to remote new-top-level worktrees.'
     )
   }
+
   if (params.terminal && params.agent) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal reuses an existing agent and cannot combine with --agent.'
     )
   }
+
   return resolveWorkerStartAgent({
     runtime,
     terminal: params.terminal,
@@ -142,9 +156,12 @@ function resolveWorkerStartAgent(args: {
   if (!args.terminal && (!args.agent || !isTuiAgent(args.agent))) {
     throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
   }
+
   const agent = args.agent as TuiAgent | undefined
+
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
+
     return {
       agent,
       launch: resolveWorkerLaunchPreferences({
@@ -154,6 +171,7 @@ function resolveWorkerStartAgent(args: {
       })
     }
   }
+
   return {
     agent: undefined,
     launch: {

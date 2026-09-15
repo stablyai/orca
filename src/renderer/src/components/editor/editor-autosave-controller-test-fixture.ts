@@ -36,6 +36,7 @@ export function stubEditorWindow(): ReturnType<typeof vi.fn> {
       }
     }
   } satisfies EditorWindowStub)
+
   return writeFile
 }
 

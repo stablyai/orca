@@ -23,6 +23,7 @@ export async function fetchPluginMarketplace(
   source: PluginMarketplaceRegisteredSource
 ): Promise<PluginMarketplaceFetchResult> {
   const stagingDirectory = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-'))
+
   try {
     const marketplaceCommit = await checkoutPluginGitSource({
       url: source.source.url,
@@ -30,7 +31,9 @@ export async function fetchPluginMarketplace(
       destination: stagingDirectory,
       workingDirectory: tmpdir()
     })
+
     const marketplace = await readPluginMarketplaceIndex(stagingDirectory)
+
     return { marketplaceCommit, marketplace }
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true })
@@ -43,14 +46,18 @@ export async function readPluginMarketplaceIndex(
   const path = join(rootDirectory, PLUGIN_MARKETPLACE_FILENAME)
   const chunks: Buffer[] = []
   let totalBytes = 0
+
   for await (const chunk of createReadStream(path)) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     totalBytes += bytes.byteLength
+
     if (totalBytes > MARKETPLACE_INDEX_MAX_BYTES) {
       throw new Error(`${PLUGIN_MARKETPLACE_FILENAME} exceeds its size limit`)
     }
+
     chunks.push(bytes)
   }
+
   try {
     return pluginMarketplaceSchema.parse(
       JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf8'))

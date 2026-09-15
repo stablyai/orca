@@ -63,6 +63,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -99,6 +100,7 @@ function runtimeStatus(): Record<string, unknown> {
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -196,9 +198,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('retries one control connection without reversing manual disconnect intent', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+
     const add = handler<{ name: string; pairingCode: string }, { environment: { id: string } }>(
       'runtimeEnvironments:addFromPairingCode'
     )
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     const retry = handler<{ selector: string }, void>('runtimeEnvironments:retryControlConnection')
 
@@ -224,6 +228,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     expect(JSON.stringify(added)).not.toContain('device-token')
     expect(JSON.stringify(added)).not.toContain('publicKeyB64')
@@ -234,6 +239,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const resolve = handler<{ selector: string }, { id: string; name: string }>(
       'runtimeEnvironments:resolve'
     )
+
     expect(await resolve(null, { selector: 'desk' })).toMatchObject({
       id: added.environment.id,
       name: 'desk'
@@ -243,6 +249,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const remove = handler<{ selector: string }, { removed: { id: string; name: string } }>(
       'runtimeEnvironments:remove'
     )
+
     const removed = await remove(null, { selector: added.environment.id })
     expect(removed).toMatchObject({
       removed: { id: added.environment.id, name: 'desk' }
@@ -255,6 +262,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+
     const verifyAndAdd = handler<
       { name: string; pairingCode: string; allowLoopback?: boolean },
       { ok: boolean; kind?: string }
@@ -278,6 +286,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: runtimeStatus(),
       _meta: { runtimeId: 'runtime-a' }
     })
+
     const verifyAndAdd = handler<
       { name: string; pairingCode: string; allowLoopback?: boolean },
       { ok: boolean; environment?: { name: string; connectionDependency?: string } }
@@ -313,6 +322,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: runtimeStatus(),
       _meta: { runtimeId: 'runtime-a' }
     })
+
     const verifyAndAdd = handler<
       { name: string; pairingCode: string; allowLoopback?: boolean },
       { ok: boolean; environment?: { connectionDependency?: string } }
@@ -340,6 +350,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: status,
       _meta: { runtimeId: 'runtime-a' }
     })
+
     const verifyAndAdd = handler<
       { name: string; pairingCode: string },
       { ok: boolean; kind?: string }
@@ -378,6 +389,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   ] as const)('returns a structured pairing failure for %s', async (error, expectedKind) => {
     registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockRejectedValue(error)
+
     const verifyAndAdd = handler<
       { name: string; pairingCode: string },
       { ok: boolean; kind?: string; message?: string }
@@ -405,6 +417,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: runtimeStatus(),
       _meta: { runtimeId: 'runtime-a' }
     })
+
     const verifyAndAdd = handler<
       { name: string; pairingCode: string },
       { ok: boolean; kind?: string; message?: string }
@@ -425,12 +438,15 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('requires an explicit Advanced selection before removing the Active Server', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+
     const add = handler<
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     activeRuntimeEnvironmentId = added.environment.id
+
     const remove = handler<{ selector: string }, { removed: { id: string } }>(
       'runtimeEnvironments:remove'
     )
@@ -455,12 +471,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const disconnect = handler<
       { selector: string },
       { disconnected: { id: string; name: string } }
     >('runtimeEnvironments:disconnect')
+
     expect(await disconnect(null, { selector: 'desk' })).toMatchObject({
       disconnected: { id: added.environment.id, name: 'desk' }
     })
@@ -474,28 +492,35 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const getStatus = handler<{ selector: string }, { ok: boolean; error?: { code: string } }>(
       'runtimeEnvironments:getStatus'
     )
+
     await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
       ok: false,
       error: { code: 'runtime_manually_disconnected' }
     })
+
     const getSnapshots = handler<undefined, RuntimeHostStatusSnapshot[]>(
       'runtimeEnvironments:getStatusSnapshots'
     )
+
     // A new renderer only has the snapshot read, not the earlier disconnect event.
     expect(await getSnapshots(null, undefined)).toMatchObject([
       { environmentId: added.environment.id, retired: true, transport: 'disconnected' }
     ])
+
     const call = handler<
       { selector: string; method: string },
       { ok: boolean; error?: { code: string } }
     >('runtimeEnvironments:call')
+
     await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
       ok: false,
       error: { code: 'runtime_manually_disconnected' }
     })
+
     const subscribe = handler<{ selector: string; method: string }, { subscriptionId: string }>(
       'runtimeEnvironments:subscribe'
     )
+
     await expect(
       subscribe(null, { selector: 'desk', method: 'terminal.multiplex' })
     ).rejects.toThrow('runtime_manually_disconnected')
@@ -505,6 +530,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const connect = handler<{ selector: string }, { ok: boolean; result?: { runtimeId: string } }>(
       'runtimeEnvironments:connect'
     )
+
     await expect(connect(null, { selector: 'desk' })).resolves.toMatchObject({
       ok: true,
       result: { runtimeId: 'runtime-remote' }

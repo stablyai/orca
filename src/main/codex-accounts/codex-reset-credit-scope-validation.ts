@@ -50,6 +50,7 @@ export function validateCodexResetCreditScope(
   dependencies: CodexResetCreditScopeDependencies
 ): { managedHomePath: string; rateLimits: RateLimitState } {
   const rateLimitState = dependencies.rateLimits.getState()
+
   if (!sameTarget(rateLimitState.codexTarget, expectedScope.target)) {
     throw new CodexResetCreditScopeRejection(
       'targetChanged',
@@ -57,7 +58,9 @@ export function validateCodexResetCreditScope(
       'The active Codex rate-limit target changed before reset.'
     )
   }
+
   const settings = dependencies.store.getSettings()
+
   if (
     getSelectedCodexAccountIdForTarget(settings, expectedScope.target) !== expectedScope.accountId
   ) {
@@ -67,9 +70,11 @@ export function validateCodexResetCreditScope(
       'The selected Codex account changed before reset.'
     )
   }
+
   const account = settings.codexManagedAccounts.find(
     (candidate) => candidate.id === expectedScope.accountId
   )
+
   if (!account || account.updatedAt !== expectedScope.accountRevision) {
     throw new CodexResetCreditScopeRejection(
       'accountRevisionChanged',
@@ -77,9 +82,11 @@ export function validateCodexResetCreditScope(
       'The selected Codex account was updated before reset.'
     )
   }
+
   const accountTarget = normalizeCodexAccountSelectionTarget(
     getCodexSelectionTargetForAccount(account)
   )
+
   if (!sameTarget(accountTarget, expectedScope.target)) {
     throw new CodexResetCreditScopeRejection(
       'accountRuntimeChanged',
@@ -87,12 +94,14 @@ export function validateCodexResetCreditScope(
       'The selected Codex account belongs to a different runtime.'
     )
   }
+
   if (validation.kind === 'providerMutation' && validation.requireCurrentOffer) {
     const currentScope = buildCodexResetCreditExpectedScope({
       target: rateLimitState.codexTarget,
       account: dependencies.toSummary(account),
       limits: rateLimitState.codex
     })
+
     if (!currentScope) {
       throw new CodexResetCreditScopeRejection(
         'offerUnavailable',
@@ -100,6 +109,7 @@ export function validateCodexResetCreditScope(
         'The Codex reset-credit offer is no longer available.'
       )
     }
+
     if (resetScopeKey(expectedScope) !== resetScopeKey(currentScope)) {
       throw new CodexResetCreditScopeRejection(
         'offerChanged',
@@ -108,8 +118,10 @@ export function validateCodexResetCreditScope(
       )
     }
   }
+
   if (validation.kind === 'providerMutation' && expectedScope.target.runtime === 'host') {
     dependencies.managedHomePaths.assertHostOwnership(account.managedHomePath, account.id)
   }
+
   return { managedHomePath: account.managedHomePath, rateLimits: rateLimitState }
 }

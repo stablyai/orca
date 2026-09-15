@@ -7,6 +7,7 @@ import type { LinearIssueEditSectionProps } from '@/components/linear-item-drawe
 
 export function LinearIssueEditSection(props: LinearIssueEditSectionProps): React.JSX.Element {
   const controller = useLinearIssueEditController(props)
+
   return controller.layout === 'properties'
     ? renderLinearIssuePropertiesLayout(controller)
     : renderLinearIssueChipsLayout(controller)

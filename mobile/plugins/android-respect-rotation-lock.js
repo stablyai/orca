@@ -11,6 +11,7 @@ module.exports = function withAndroidRespectRotationLock(config) {
   return withAndroidManifest(config, (cfg) => {
     const activity = AndroidConfig.Manifest.getMainActivityOrThrow(cfg.modResults)
     activity.$['android:screenOrientation'] = ANDROID_SCREEN_ORIENTATION
+
     return cfg
   })
 }

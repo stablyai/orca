@@ -11,11 +11,17 @@ import { comparePaneKeysOrdinal } from './worktree-agent-row-order'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
+
 const LEAF_ID_1 = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_ID_1_SECOND = '77777777-7777-4777-8777-777777777777'
+
 const PANE_KEY_1 = makePaneKey('tab-1', LEAF_ID_1)
+
 const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
+
 const PANE_KEY_3 = makePaneKey('tab-3', '55555555-5555-4555-8555-555555555555')
+
 const PANE_KEY_4 = makePaneKey('tab-4', '66666666-6666-4666-8666-666666666666')
 
 function makeTab(id: string, overrides?: Partial<TerminalTab>): TerminalTab {
@@ -58,6 +64,7 @@ function makeRetained(
   overrides?: Partial<RetainedAgentEntry>
 ): RetainedAgentEntry {
   const tab = makeTab(paneKey.slice(0, paneKey.indexOf(':')))
+
   return {
     entry: makeEntry(paneKey, startedAt),
     worktreeId,
@@ -92,6 +99,7 @@ function makeSplitPaneLayout(firstLeafId: string, secondLeafId: string): Termina
 describe('buildWorktreeAgentRows', () => {
   it('includes retained rows even when their original tab is no longer current', () => {
     const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000)
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [],
@@ -116,6 +124,7 @@ describe('buildWorktreeAgentRows', () => {
       tab: { ...makeTab('tab-orphan'), title: '✳ Claude Code' },
       agentType: 'unknown'
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [],
       entries: [],
@@ -183,6 +192,7 @@ describe('buildWorktreeAgentRows', () => {
       tab: makeTab('tab-orphan', { launchAgent: 'codex', title: 'test-thing-2' }),
       agentType: 'unknown'
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [],
       entries: [],
@@ -195,6 +205,7 @@ describe('buildWorktreeAgentRows', () => {
 
   it('prefers a live row over a retained snapshot with the same paneKey', () => {
     const liveEntry = makeEntry(PANE_KEY_1, 2000)
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [liveEntry],
@@ -213,6 +224,7 @@ describe('buildWorktreeAgentRows', () => {
       agentType: 'copilot',
       prompt: 'current turn'
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [liveEntry],
@@ -232,6 +244,7 @@ describe('buildWorktreeAgentRows', () => {
       agentType: 'copilot',
       prompt: 'current turn'
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [liveEntry],
@@ -253,6 +266,7 @@ describe('buildWorktreeAgentRows', () => {
     const staleAt = 1000
     const freshDoneAt = 2000
     const now = staleAt + AGENT_STATUS_STALE_AFTER_MS + 1
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1'), makeTab('tab-2')],
       entries: [
@@ -274,6 +288,7 @@ describe('buildWorktreeAgentRows', () => {
     // receiver was up; it must never render as confirmed working, however new.
     const updatedAt = 2_000
     const now = updatedAt + 1
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1'), makeTab('tab-2')],
       entries: [
@@ -322,12 +337,14 @@ describe('buildWorktreeAgentRows', () => {
       tabId: 'tab-1',
       prompt: 'omp worker'
     })
+
     const second = makeEntry(PANE_KEY_2, 1000, {
       state: 'working',
       worktreeId: 'wt-1',
       tabId: 'tab-2',
       prompt: 'omp worker'
     })
+
     const third = makeEntry(PANE_KEY_3, 1000, {
       state: 'working',
       worktreeId: 'wt-1',
@@ -361,6 +378,7 @@ describe('buildWorktreeAgentRows', () => {
       tabId: 'tab-1',
       stateHistory: [{ state: 'working', prompt: 'omp worker', startedAt: 1000 }]
     })
+
     const second = makeEntry(PANE_KEY_2, 1500, {
       state: 'blocked',
       worktreeId: 'wt-1',
@@ -393,6 +411,7 @@ describe('buildWorktreeAgentRows', () => {
         { state: 'blocked', prompt: 'omp worker', startedAt: 1800 }
       ]
     })
+
     const second = makeEntry(PANE_KEY_2, 1600, {
       state: 'waiting',
       worktreeId: 'wt-1',
@@ -425,10 +444,12 @@ describe('buildWorktreeAgentRows', () => {
       prompt: 'parent',
       state: 'working'
     })
+
     const child = makeEntry(PANE_KEY_2, 1200, {
       prompt: 'child',
       state: 'working'
     })
+
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-1'), makeTab('tab-2')],
@@ -456,10 +477,12 @@ describe('buildWorktreeAgentRows', () => {
       prompt: 'current parent',
       state: 'done'
     })
+
     const staleParent = makeEntry(PANE_KEY_3, 1100, {
       prompt: 'stale parent',
       state: 'working'
     })
+
     const child = makeEntry(PANE_KEY_2, 1200, {
       prompt: 'child',
       state: 'working',
@@ -470,6 +493,7 @@ describe('buildWorktreeAgentRows', () => {
         parentTerminalHandle: 'term-current'
       }
     })
+
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-1'), makeTab('tab-2'), makeTab('tab-3')],
@@ -503,7 +527,9 @@ describe('buildWorktreeAgentRows', () => {
       prompt: 'parent',
       state: 'done'
     })
+
     const retainedChild = makeRetained(PANE_KEY_2, 'wt-1', 1200)
+
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-1')],
@@ -529,6 +555,7 @@ describe('buildWorktreeAgentRows', () => {
   it('does not synthesize a working parent row for a completed worktree-attributed worker', () => {
     const parentPaneKey = PANE_KEY_1
     const childPaneKey = PANE_KEY_2
+
     const child = makeEntry(childPaneKey, 1000, {
       state: 'done',
       worktreeId: 'wt-1',
@@ -538,6 +565,7 @@ describe('buildWorktreeAgentRows', () => {
         parentPaneKey
       }
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [child],
@@ -561,6 +589,7 @@ describe('buildWorktreeAgentRows', () => {
 
   it('does not synthesize a working parent row for a retained completed worker', () => {
     const parentPaneKey = PANE_KEY_1
+
     const retainedChild = makeRetained(PANE_KEY_2, 'wt-1', 1000, {
       entry: makeEntry(PANE_KEY_2, 1000, {
         state: 'done',
@@ -571,6 +600,7 @@ describe('buildWorktreeAgentRows', () => {
         }
       })
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [],
@@ -598,6 +628,7 @@ describe('buildWorktreeAgentRows', () => {
       state: 'done',
       terminalHandle: 'term-parent'
     })
+
     const child = makeEntry(PANE_KEY_2, 1200, {
       prompt: 'child',
       state: 'done',
@@ -607,6 +638,7 @@ describe('buildWorktreeAgentRows', () => {
         parentTerminalHandle: 'term-parent'
       }
     })
+
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-1'), makeTab('tab-2')],
@@ -627,6 +659,7 @@ describe('applyAgentRowLineage', () => {
     const parent = makeEntry(PANE_KEY_2, 2000, {
       prompt: 'parent'
     })
+
     const firstChild = makeEntry(PANE_KEY_1, 1000, {
       prompt: 'first child',
       orchestration: {
@@ -636,6 +669,7 @@ describe('applyAgentRowLineage', () => {
         parentPaneKey: PANE_KEY_2
       }
     })
+
     const secondChild = makeEntry(PANE_KEY_3, 3000, {
       prompt: 'second child',
       orchestration: {
@@ -652,6 +686,7 @@ describe('applyAgentRowLineage', () => {
       retained: [],
       now: 4000
     })
+
     const ordered = applyAgentRowLineage(rows)
 
     expect(ordered.map((row) => row.paneKey)).toEqual([PANE_KEY_2, PANE_KEY_1, PANE_KEY_3])
@@ -677,6 +712,7 @@ describe('applyAgentRowLineage', () => {
         parentPaneKey: PANE_KEY_2
       }
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [child],
@@ -689,6 +725,7 @@ describe('applyAgentRowLineage', () => {
 
   it('keeps nested dispatches under their nearest visible parent', () => {
     const parent = makeEntry(PANE_KEY_1, 1000, { prompt: 'parent' })
+
     const child = makeEntry(PANE_KEY_2, 2000, {
       prompt: 'child',
       orchestration: {
@@ -697,6 +734,7 @@ describe('applyAgentRowLineage', () => {
         parentPaneKey: PANE_KEY_1
       }
     })
+
     const grandchild = makeEntry(PANE_KEY_3, 3000, {
       prompt: 'grandchild',
       orchestration: {
@@ -705,7 +743,9 @@ describe('applyAgentRowLineage', () => {
         parentPaneKey: PANE_KEY_2
       }
     })
+
     const sibling = makeEntry(PANE_KEY_4, 4000, { prompt: 'sibling root' })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1'), makeTab('tab-2'), makeTab('tab-3'), makeTab('tab-4')],
       entries: [parent, child, grandchild, sibling],
@@ -741,6 +781,7 @@ describe('applyAgentRowLineage', () => {
         { id: 'r1', state: 'idle', startedAt: 1600, agentType: 'code-reviewer' }
       ]
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [entry],
@@ -773,6 +814,7 @@ describe('applyAgentRowLineage', () => {
       state: 'working',
       subagents: [{ id: 'a1', state: 'working', startedAt: 1000 }]
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [entry],
@@ -789,6 +831,7 @@ describe('applyAgentRowLineage', () => {
       state: 'waiting',
       subagents: [{ id: 'child-1', state: 'waiting', startedAt: 1000, agentType: 'reviewer' }]
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [entry],
@@ -805,6 +848,7 @@ describe('applyAgentRowLineage', () => {
         subagents: [{ id: 'a1', state: 'idle', startedAt: 1000 }]
       })
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [],

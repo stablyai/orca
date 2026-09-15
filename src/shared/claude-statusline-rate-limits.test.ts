@@ -21,6 +21,7 @@ describe('parseClaudeStatusLineBody', () => {
         '/home/dev/.config/managed-claude'
       )
     )
+
     expect(parsed).toEqual({
       configDir: '/home/dev/.config/managed-claude',
       fiveHour: { used_percentage: 23.5, resets_at: 1738425600 },
@@ -32,6 +33,7 @@ describe('parseClaudeStatusLineBody', () => {
     const parsed = parseClaudeStatusLineBody(
       formBody({ rate_limits: { five_hour: { used_percentage: 5 } } }, '')
     )
+
     expect(parsed?.configDir).toBeNull()
     expect(parsed?.fiveHour).toEqual({ used_percentage: 5, resets_at: undefined })
     expect(parsed?.sevenDay).toBeNull()
@@ -46,6 +48,7 @@ describe('parseClaudeStatusLineBody', () => {
         }
       })
     )
+
     expect(parsed?.fiveHour).toEqual({ used_percentage: 12, resets_at: '2026-07-20T10:00:00Z' })
     expect(parsed?.sevenDay).toEqual({ used_percentage: 3, resets_at: undefined })
   })
@@ -59,6 +62,7 @@ describe('parseClaudeStatusLineBody', () => {
         }
       })
     )
+
     expect(parsed?.fiveHour).toEqual({ utilization: 37, resets_at: 1_750_000_000 })
     // used_percentage wins when both are present — it is the documented statusline field.
     expect(parsed?.sevenDay).toEqual({ used_percentage: 8, resets_at: undefined })

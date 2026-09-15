@@ -21,6 +21,7 @@ export function resolveMarkdownPreviewHref(rawUrl: string, filePath: string): UR
       // normalize the drive path into the file URL form markdown previews use.
       return new URL(filesystemPathHrefToFileUri(rawUrl))
     }
+
     return new URL(rawUrl, toFileUrl(filePath))
   } catch {
     return null
@@ -36,6 +37,7 @@ export function getMarkdownPreviewLinkTarget(
   }
 
   const resolved = resolveMarkdownPreviewHref(rawHref, filePath)
+
   if (!resolved) {
     return null
   }
@@ -60,6 +62,7 @@ export function getMarkdownPreviewImageSrc(
   }
 
   const resolved = resolveMarkdownPreviewHref(rawSrc, filePath)
+
   if (!resolved) {
     return rawSrc
   }
@@ -84,6 +87,7 @@ export function getMarkdownPreviewImageOpenTarget(
   }
 
   const resolved = resolveMarkdownPreviewHref(rawSrc, filePath)
+
   if (!resolved) {
     return null
   }
@@ -126,6 +130,7 @@ export function resolveMarkdownPreviewHttpOpenOptions(
   if (isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
     return { worktreeId, modifierHeld: true, sourceOwner }
   }
+
   return { worktreeId, sourceOwner }
 }
 
@@ -143,6 +148,7 @@ export function resolveImageAbsolutePath(
   }
 
   const resolved = resolveMarkdownPreviewHref(rawSrc, filePath)
+
   if (!resolved || resolved.protocol !== 'file:') {
     return null
   }

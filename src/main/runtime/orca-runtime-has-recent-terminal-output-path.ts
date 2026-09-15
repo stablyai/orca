@@ -14,12 +14,16 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
     if (!this.recentPtyPathCandidateTrackingActive) {
       this.activateRecentPtyPathCandidateTracking()
     }
+
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
     const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId)?.read() : null
+
     if (recentOutput && recentTerminalOutputIncludesPath(recentOutput, pathText, absolutePath)) {
       return true
     }
+
     const candidates = ptyId ? this.recentPtyPathCandidatesById.get(ptyId) : null
+
     return candidates
       ? recentTerminalPathCandidatesIncludePath(candidates, pathText, absolutePath)
       : false
@@ -48,6 +52,7 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
       if (cols == null || rows == null || !Number.isFinite(cols) || !Number.isFinite(rows)) {
         throw new Error('invalid_dimensions')
       }
+
       const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(cols, rows)
 
       const currentSize = this.getTerminalSize(ptyId)
@@ -72,6 +77,7 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
 
       this.freshSubscribeGuard.add(ptyId)
       let result: ApplyLayoutResult
+
       try {
         result = await this.enqueueLayout(ptyId, {
           kind: 'phone',
@@ -82,6 +88,7 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
       } finally {
         this.freshSubscribeGuard.delete(ptyId)
       }
+
       if (!result.ok) {
         throw new Error('resize_failed')
       }
@@ -102,9 +109,11 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
 
     // restore mode
     const override = this.terminalFitOverrides.get(ptyId)
+
     if (!override) {
       throw new Error('no_active_override')
     }
+
     // Only the owning client can restore — prevents one phone from undoing
     // another phone's active fit.
     if (override.clientId !== clientId) {
@@ -112,11 +121,13 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
     }
 
     const restore = this.resolveDesktopRestoreTarget(ptyId)
+
     const result = await this.enqueueLayout(ptyId, {
       kind: 'desktop',
       cols: restore.cols,
       rows: restore.rows
     })
+
     if (!result.ok) {
       throw new Error('resize_failed')
     }
@@ -147,18 +158,23 @@ export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithG
       string,
       { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
     >()
+
     for (const [ptyId, override] of this.terminalFitOverrides) {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
     }
+
     for (const ptyId of this.remoteDesktopFloor.ownerPtyIds()) {
       if (result.has(ptyId)) {
         continue
       }
+
       const size = this.getTerminalSize(ptyId)
+
       if (size) {
         result.set(ptyId, { mode: 'remote-desktop-fit', ...size })
       }
     }
+
     return result
   }
 

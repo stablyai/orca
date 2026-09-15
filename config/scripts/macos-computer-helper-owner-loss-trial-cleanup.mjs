@@ -9,6 +9,7 @@ export function cleanupOwnerLossTrial(options) {
   const groupState = { stopped: false, anchorPid: null }
   let error
   let output = ''
+
   try {
     runBenchmarkCleanupStages([
       () => {
@@ -59,5 +60,6 @@ export function cleanupOwnerLossTrial(options) {
   } catch (caught) {
     error = caught
   }
+
   return { error, output }
 }

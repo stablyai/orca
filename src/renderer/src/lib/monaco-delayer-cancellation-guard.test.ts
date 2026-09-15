@@ -7,11 +7,13 @@ const UNHANDLED_REJECTION_SETTLE_MS = 20
 
 async function collectUnhandledRejections(run: () => void): Promise<unknown[]> {
   const reasons: unknown[] = []
+
   const onUnhandledRejection = (reason: unknown): void => {
     reasons.push(reason)
   }
 
   process.on('unhandledRejection', onUnhandledRejection)
+
   try {
     run()
     await new Promise((resolve) => setTimeout(resolve, UNHANDLED_REJECTION_SETTLE_MS))

@@ -22,6 +22,7 @@ export function acceptSessionSnapshot(
   marker: AppliedSnapshotMarker
 ): boolean {
   const incomingEpoch = incoming.publicationEpoch ?? null
+
   if (incomingEpoch === marker.epoch) {
     if (incoming.snapshotVersion < marker.version) {
       return false
@@ -29,7 +30,9 @@ export function acceptSessionSnapshot(
   } else {
     marker.epoch = incomingEpoch
   }
+
   marker.version = incoming.snapshotVersion
+
   return true
 }
 
@@ -54,23 +57,32 @@ export function applyClosedTabTombstones<T extends { id: string }>(
   if (tombstones.size === 0) {
     return tabs
   }
+
   const suppressed = new Set<string>()
+
   const next = tabs.filter((tab) => {
     const expiry = tombstones.get(tab.id)
+
     if (expiry === undefined) {
       return true
     }
+
     if (now >= expiry) {
       tombstones.delete(tab.id)
+
       return true
     }
+
     suppressed.add(tab.id)
+
     return false
   })
+
   for (const [id, expiry] of tombstones) {
     if (!suppressed.has(id) || now >= expiry) {
       tombstones.delete(id)
     }
   }
+
   return next
 }

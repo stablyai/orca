@@ -18,6 +18,7 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
     process.env.Path = originalPath
     __setWindowsPathRegistryLoaderForTests()
     __resetPersistedWindowsPathCacheForTests()
+
     for (const directory of fixtureDirs.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -33,9 +34,11 @@ describe.runIf(process.platform === 'win32')('Windows preflight Path refresh rep
     )
 
     let persistedUserPath = ''
+
     const getRegistryKey = vi.fn((root: number) => ({
       Path: { type: 1, value: root === 2 ? persistedUserPath : '' }
     }))
+
     __setWindowsPathRegistryLoaderForTests(() => ({
       HK: { LM: 1, CU: 2 },
       getRegistryKey

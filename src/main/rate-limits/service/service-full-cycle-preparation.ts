@@ -51,13 +51,16 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+
     if (signal.aborted) {
       return null
     }
+
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
@@ -67,11 +70,14 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexHome = this.resolveCodexHome(codexTarget)
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
+
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
+
     const codexProvenance = codexFetchGated
       ? null
       : this.getCodexProvenance(codexTarget, codexHomePath)
+
     const codexGeneration = this.codexFetchGeneration
     const openCodeGoConfig = this.openCodeGoConfigResolver?.()
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
@@ -90,18 +96,22 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
     const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
+
     if (opencodeConfigChanged) {
       this.lastOpencodeConfigHash = currentConfigHash
       this.opencodeFetchGeneration += 1
     }
+
     const opencodeGeneration = this.opencodeFetchGeneration
 
     const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxEndpoint}|${miniMaxApiKey}|${miniMaxConfigResult.error ?? ''}`
     const miniMaxConfigChanged = currentMiniMaxConfigHash !== this.lastMiniMaxConfigHash
+
     if (miniMaxConfigChanged) {
       this.lastMiniMaxConfigHash = currentMiniMaxConfigHash
       this.minimaxFetchGeneration += 1
     }
+
     const miniMaxGeneration = this.minimaxFetchGeneration
 
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
@@ -126,6 +136,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
+
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
@@ -178,6 +189,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+
     return {
       claudeTarget,
       claudeGeneration,

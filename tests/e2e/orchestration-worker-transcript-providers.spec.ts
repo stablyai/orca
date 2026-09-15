@@ -105,13 +105,17 @@ const PROVIDERS: readonly {
 ]
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-worker-transcript-providers-'))
+
 const capabilityLedgerPath = path.join(fakeCliDir, 'capabilities.jsonl')
+
 const fakeGrokHome = path.join(fakeCliDir, 'grok-home')
+
 const fakeOmpHome = path.join(fakeCliDir, 'omp-home')
 
 function writeFakeProvider(agent: TranscriptProvider, title: string): string {
   const configPath = path.join(fakeCliDir, `${agent}-config.json`)
   const hookPath = `/hook/${agent}`
+
   const source = `
 const { appendFileSync, readFileSync } = require('node:fs')
 const ledger = ${JSON.stringify(capabilityLedgerPath)}
@@ -151,7 +155,9 @@ process.stdin.on('data', (chunk) => {
 process.stdin.resume()
 setInterval(() => {}, 60_000)
 `
+
   const executable = path.join(fakeCliDir, process.platform === 'win32' ? `${agent}.cmd` : agent)
+
   if (process.platform === 'win32') {
     writeFileSync(path.join(fakeCliDir, `${agent}.js`), source)
     writeFileSync(executable, `@echo off\r\nnode "%~dp0\\${agent}.js" %*\r\n`)
@@ -159,6 +165,7 @@ setInterval(() => {}, 60_000)
     writeFileSync(executable, `#!/usr/bin/env node\n${source}`)
     chmodSync(executable, 0o755)
   }
+
   return buildFakeAgentCommandOverride(executable)
 }
 
@@ -166,9 +173,11 @@ function providerHookPayload(agent: TranscriptProvider): string {
   if (agent === 'claude') {
     return "({ hook_event_name: 'UserPromptSubmit', session_id: config.sessionId, transcript_path: config.transcriptPath, prompt: 'Read the provider transcript' })"
   }
+
   if (agent === 'grok') {
     return "({ hook_event_name: 'user_prompt_submit', sessionId: config.sessionId, cwd: config.cwd, grokHome: config.grokHome, prompt: 'Read the provider transcript' })"
   }
+
   return "({ hook_event_name: 'before_agent_start', session_id: config.sessionId, session_file: config.transcriptPath, prompt: 'Read the provider transcript' })"
 }
 
@@ -195,6 +204,7 @@ function readCapabilities(): { agent: TranscriptProvider; capability: string }[]
   if (!existsSync(capabilityLedgerPath)) {
     return []
   }
+
   return readFileSync(capabilityLedgerPath, 'utf8')
     .split(/\r?\n/)
     .filter(Boolean)
@@ -204,9 +214,11 @@ function readCapabilities(): { agent: TranscriptProvider; capability: string }[]
 async function listWorker(client: RuntimeClient, handle: string): Promise<RuntimeTerminalSummary> {
   const terminals = await client.call<RuntimeTerminalListResult>('terminal.list')
   const worker = terminals.result.terminals.find((terminal) => terminal.handle === handle)
+
   if (!worker) {
     throw new Error(`Worker terminal ${handle} was not runtime-visible`)
   }
+
   return worker
 }
 
@@ -234,15 +246,19 @@ test('worker-read uses provider transcripts across supported orchestration agent
   const coordinatorPane = await waitForActivePaneHookDescriptor(orcaPage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
+
   const coordinator = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
     paneKey: coordinatorPane.paneKey
   })
+
   const coordinatorHandle = coordinator.result.terminal.handle
   const coordinatorSummary = await listWorker(client, coordinatorHandle)
+
   const coordinatorTerminal = await client.call<{ terminal: { worktreeId: string } }>(
     'terminal.show',
     { terminal: coordinatorHandle }
   )
+
   let coordinatorWorktreePath = coordinatorSummary.worktreePath
   await expect
     .poll(async () => {
@@ -250,15 +266,19 @@ test('worker-read uses provider transcripts across supported orchestration agent
         'worktree.list',
         {}
       )
+
       const worktree = listed.result.worktrees.find(
         (candidate) => candidate.id === coordinatorTerminal.result.terminal.worktreeId
       )
+
       if (worktree?.path) {
         coordinatorWorktreePath = worktree.path
       }
+
       return Boolean(worktree)
     })
     .toBe(true)
+
   const run = await client.call<{ run: { id: string } }>('orchestration.runCreate', {
     objective: 'Provider transcript worker-read regression',
     from: coordinatorHandle
@@ -270,10 +290,13 @@ test('worker-read uses provider transcripts across supported orchestration agent
       run: run.result.run.id,
       callerTerminalHandle: coordinatorHandle
     })
+
     const transcriptDir = mkdtempSync(
       path.join(os.tmpdir(), `orca-e2e-${provider.agent}-transcript-`)
     )
+
     const sessionId = `e2e-${provider.agent}-session`
+
     const transcriptPath =
       provider.agent === 'grok'
         ? path.join(
@@ -286,10 +309,12 @@ test('worker-read uses provider transcripts across supported orchestration agent
         : provider.agent === 'omp'
           ? path.join(fakeOmpHome, 'workspace', `2026-08-30T00-00-00_${sessionId}.jsonl`)
           : path.join(transcriptDir, `${provider.agent}-session.jsonl`)
+
     const initialTranscript = provider
       .transcript(sessionId, provider.first, provider.second, provider.third)
       .split('\n')
       .filter(Boolean)
+
     // The initial file intentionally stops before the cursor continuation row.
     mkdirSync(path.dirname(transcriptPath), { recursive: true })
     writeFileSync(transcriptPath, `${initialTranscript.slice(0, 2).join('\n')}\n`)
@@ -305,6 +330,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
           : {})
       })
     )
+
     const started = await client.call<{
       dispatchId: string
       effects: { kind: string; role?: string; id?: string }[]
@@ -314,12 +340,15 @@ test('worker-read uses provider transcripts across supported orchestration agent
       agent: provider.agent,
       timeoutMs: 30_000
     })
+
     const workerHandle = started.result.effects.find(
       (effect) => effect.kind === 'terminal' && effect.role === 'agent'
     )?.id
+
     if (!workerHandle) {
       throw new Error(`${provider.agent} worker-start returned no agent terminal`)
     }
+
     const worker = await listWorker(client, workerHandle)
 
     type WorkerRead = {
@@ -329,6 +358,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
       cursor?: string
       transcript?: { messages: { blocks: { type: string; text?: string }[] }[] }
     }
+
     let firstRead: { result: WorkerRead } | undefined
     await expect
       .poll(
@@ -339,6 +369,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
               source: 'auto',
               limit: 10
             })
+
             return `${firstRead.result.source}:${firstRead.result.fallbackReason ?? 'none'}`
           } catch {
             return ''
@@ -351,6 +382,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
     expect(firstRead?.result.transcript?.messages).toHaveLength(2)
 
     appendFileSync(transcriptPath, `${initialTranscript[2]}\n`)
+
     const continuation = await client.call<{
       source: string
       transcript: { messages: { blocks: { text?: string }[] }[] }
@@ -359,6 +391,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
       cursor: firstRead?.result.cursor,
       limit: 10
     })
+
     expect(continuation.result.source).toBe('transcript')
     expect(
       continuation.result.transcript.messages.map((message) =>
@@ -369,12 +402,15 @@ test('worker-read uses provider transcripts across supported orchestration agent
     await expect
       .poll(() => readCapabilities().find((entry) => entry.agent === provider.agent))
       .toBeTruthy()
+
     const capability = readCapabilities().find(
       (entry) => entry.agent === provider.agent
     )?.capability
+
     if (!capability) {
       throw new Error(`${provider.agent} worker did not receive a dispatch capability`)
     }
+
     await client.call(
       'orchestration.send',
       {
@@ -396,6 +432,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
           'orchestration.dispatchShow',
           { task: task.result.task.id }
         )
+
         return dispatch.result.dispatch?.status
       })
       .toBe('completed')
@@ -403,7 +440,9 @@ test('worker-read uses provider transcripts across supported orchestration agent
     const release = await client.call<{ state: string }>('orchestration.workerRelease', {
       dispatch: started.result.dispatchId
     })
+
     expect(release.result.state).toBe('released')
+
     const archived = await client.call<{
       source: string
       provider?: string
@@ -411,6 +450,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
       status: { liveness?: string }
       transcript: { messages: { blocks: { text?: string }[] }[] }
     }>('orchestration.workerRead', { dispatch: started.result.dispatchId, source: 'auto' })
+
     expect(archived.result).toMatchObject({
       source: 'transcript',
       provider: provider.agent,

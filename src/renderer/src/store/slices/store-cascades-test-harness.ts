@@ -56,6 +56,7 @@ export function createStoreCascadesMockApi(): StoreCascadesMockApi {
 
   // @ts-expect-error -- mock
   globalThis.window = { api: mockApi }
+
   return mockApi
 }
 

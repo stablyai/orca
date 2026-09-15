@@ -18,14 +18,19 @@ export function requestGitHubCheckDetails(
   if (!ctx.canUseChecksRepoContext || (!check.checkRunId && !check.workflowRunId && !check.url)) {
     return
   }
+
   const requestId = ++ctx.nextCheckDetailsRequestIdRef.current
+
   const commit = (next: Omit<CheckDetailsLoadState, 'requestId'>): void => {
     if (!ctx.mountedRef.current) {
       return
     }
+
     ctx.setChecksState((current) => settleGitHubChecksTabDetails(current, key, requestId, next))
   }
+
   ctx.setChecksState((current) => beginGitHubChecksTabDetails(current, key, requestId))
+
   const detailsRequest = withGitHubCheckDetailsTimeout((signal) =>
     ctx.runtimeHost
       ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
@@ -52,6 +57,7 @@ export function requestGitHubCheckDetails(
           prRepo: ctx.prRepo
         })
   )
+
   void detailsRequest
     .then((details) => {
       commit({

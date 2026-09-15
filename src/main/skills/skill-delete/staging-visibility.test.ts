@@ -18,6 +18,7 @@ async function stagedRoot(stagedName: string): Promise<string> {
   const staged = join(root, stagedName)
   await mkdir(staged, { recursive: true })
   await writeFile(join(staged, 'SKILL.md'), '---\nname: demo\n---\n')
+
   return root
 }
 
@@ -68,6 +69,7 @@ describe('WSL guest scan', () => {
         owner: null
       }
     ])
+
     expect(command).toContain(`-name '${SKILL_STAGING_GLOB}' -prune`)
     // The prune must gate the print, not sit beside it.
     expect(command).toContain("-prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\)")

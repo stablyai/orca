@@ -9,7 +9,9 @@ import type { BrowserFindTarget } from '../../shared/browser-find-source'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
 export type ShouldForwardDictationShortcut = () => boolean
+
 export type IsMobileEmulatorEnabled = () => boolean
+
 export type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
 
 export type GuestShortcutForwardContext = {
@@ -39,27 +41,35 @@ export function forwardGuestShortcutInput(
     resolveWorkspaceId,
     forwardBrowserPageZoom
   } = ctx
+
   const keybindings = getKeybindings?.()
+
   if (action?.type === 'zoom') {
     // Why: focused guest key events never reach the renderer-owned webview ref that applies Orca's page zoom.
     forwardBrowserPageZoom(event, action.direction)
+
     return true
   }
+
   if (input.isAutoRepeat) {
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
       action?.type === 'deleteCurrentWorkspace'
     ) {
       event.preventDefault()
+
       return true
     }
+
     return false
   }
+
   if (action?.type === 'worktreeHistoryNavigate') {
     // Why: preventDefault unconditionally so the guest never handles Cmd+Alt+Arrow itself, even when the renderer can't be resolved.
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:worktreeHistoryNavigate', action.direction)
+
     return true
   }
 
@@ -67,6 +77,7 @@ export function forwardGuestShortcutInput(
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:toggleFloatingTerminal')
+
     return true
   }
 
@@ -81,10 +92,12 @@ export function forwardGuestShortcutInput(
     : keybindingMatchesAction('tab.previousAllTypes', input, process.platform, keybindings)
       ? -1
       : null
+
   if (switchAllTypesDirection !== null) {
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:switchTabAcrossAllTypes', switchAllTypesDirection)
+
     return true
   }
 
@@ -92,6 +105,7 @@ export function forwardGuestShortcutInput(
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:switchRecentTab')
+
     return true
   }
 
@@ -106,19 +120,24 @@ export function forwardGuestShortcutInput(
     : keybindingMatchesAction('tab.previousTerminal', input, process.platform, keybindings)
       ? -1
       : null
+
   if (terminalTabDirection !== null) {
     event.preventDefault()
     const renderer = resolveRenderer(browserTabId)
     renderer?.send('ui:switchTerminalTab', terminalTabDirection)
+
     return true
   }
 
   const renderer = resolveRenderer(browserTabId)
+
   if (!renderer) {
     return false
   }
+
   // Why: floating-panel guests route close/index chords to the panel (carrying their source id) so they hit the floating workspace, not the main tab strip.
   const isFloatingGuest = resolveWorktreeId?.(browserTabId) === FLOATING_TERMINAL_WORKTREE_ID
+
   if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
     renderer.send('ui:newBrowserTab')
   } else if (
@@ -206,11 +225,14 @@ export function forwardGuestShortcutInput(
     if (!shouldForwardDictationShortcut?.()) {
       return false
     }
+
     renderer.send('ui:dictationKeyDown')
   } else {
     return false
   }
+
   // Why: preventDefault stops the guest page from also processing the chord (e.g. Cmd+T opening a browser-internal new-tab page).
   event.preventDefault()
+
   return true
 }

@@ -17,6 +17,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -31,9 +32,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -99,6 +102,7 @@ describe('Store', () => {
   it('requires an expected split source incarnation in the owning host partition', async () => {
     for (const hostId of [undefined, 'ssh:ssh-1']) {
       const store = await createStore()
+
       const sourceSession: WorkspaceSessionState = {
         ...getDefaultWorkspaceSession(),
         tabsByWorktree: {
@@ -113,6 +117,7 @@ describe('Store', () => {
           }
         }
       }
+
       if (hostId) {
         store.setWorkspaceSession(
           {
@@ -124,6 +129,7 @@ describe('Store', () => {
           undefined
         )
       }
+
       store.setWorkspaceSession(sourceSession, hostId)
 
       expect(
@@ -226,6 +232,7 @@ describe('Store', () => {
         })
       ).toBe(false)
     }
+
     expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
       'inc-current'
     )
@@ -234,6 +241,7 @@ describe('Store', () => {
   it('reconciles only the requested execution-host partition', async () => {
     const store = await createStore()
     const paneKey = `tab1:${TEST_LEAF_1}`
+
     const session = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -249,6 +257,7 @@ describe('Store', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
     }
+
     store.setWorkspaceSession(structuredClone(session), 'local')
     store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
 

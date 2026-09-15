@@ -36,6 +36,7 @@ export function mobileNativeChatStreamPreview(
   if (!working || status?.lastAssistantMessageIsToolOutput === true) {
     return undefined
   }
+
   return status?.lastAssistantMessage
 }
 
@@ -49,6 +50,7 @@ function assistantTailText(tail: NativeChatMessage | undefined): string {
   if (!tail || tail.role !== 'assistant') {
     return ''
   }
+
   return tail.blocks
     .filter((block) => block.type === 'text')
     .map((block) => (block.type === 'text' ? block.text : ''))
@@ -83,11 +85,14 @@ export function deriveMobileNativeChatStreaming(
   } = {}
 ): { gate: MobileNativeChatStreamingGate; streaming: string | null } {
   const scopeKey = options.scopeKey === undefined ? gate.scopeKey : options.scopeKey
+
   const scopedGate =
     gate.scopeKey === scopeKey ? gate : createMobileNativeChatStreamingGate(scopeKey)
+
   const text = streamingText?.trim() ?? ''
   const tail = folded.at(-1)
   const tailId = tail?.id ?? null
+
   if (!text) {
     // Only a textless tick that carries a real tail and is outside a live turn
     // is trustworthy pre-stream history. Mid-turn gaps (a tool call, a throttle
@@ -97,8 +102,10 @@ export function deriveMobileNativeChatStreaming(
     // gate that has never anchored — mounted mid-turn, the first real tail it
     // sees is the best pre-stream history it will ever get.
     const canAnchor = tailId !== null && (!options.streamLive || scopedGate.baselineTailId === null)
+
     return { gate: canAnchor ? advanceGate(scopedGate, '', tailId) : scopedGate, streaming: null }
   }
+
   // A stream that is not an extension of the previous tick is a new segment
   // (next reply part); re-anchor to the tail that predates it.
   const segmentStart = scopedGate.prevText !== '' && !text.startsWith(scopedGate.prevText)
@@ -107,6 +114,7 @@ export function deriveMobileNativeChatStreaming(
   // A null baseline (text on the very first tick, no tail ever seen) is unequal
   // to every real tail id, so this degrades to the legacy suppress-on-prefix rule.
   const caughtUp = tailLeadsWithStream && tailId !== baselineTailId
+
   return {
     gate: advanceGate(scopedGate, text, baselineTailId),
     streaming: caughtUp ? null : text

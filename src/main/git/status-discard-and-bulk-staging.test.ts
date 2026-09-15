@@ -251,6 +251,7 @@ describe('bulk git helpers', () => {
     const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
       .join('\0')
       .concat('\0')
+
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: trackedStdout }).mockResolvedValueOnce({
       stdout: ''
     })

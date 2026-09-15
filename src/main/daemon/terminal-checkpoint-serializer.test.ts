@@ -43,6 +43,7 @@ describe('terminal checkpoint serializer', () => {
       )}`,
       oscLinks: [{ row: 0, startCol: 0, endCol: 1, uri: 'https://example.com/😀\n' }]
     })
+
     const expected = JSON.stringify({
       snapshotAnsi: input.snapshotAnsi,
       scrollbackAnsi: input.scrollbackAnsi,
@@ -56,6 +57,7 @@ describe('terminal checkpoint serializer', () => {
       generation: metadata.generation,
       checkpointedAt: metadata.checkpointedAt
     })
+
     const exactBytes = Buffer.byteLength(expected, 'utf8')
 
     await expect(serializeTerminalCheckpointWithinLimit(input, metadata, exactBytes)).resolves.toBe(
@@ -68,6 +70,7 @@ describe('terminal checkpoint serializer', () => {
       scrollbackAnsi: 'é\r\n'.repeat(100),
       scrollbackLines: 100
     })
+
     const expected = JSON.stringify({
       snapshotAnsi: input.snapshotAnsi,
       scrollbackAnsi: input.scrollbackAnsi,
@@ -81,6 +84,7 @@ describe('terminal checkpoint serializer', () => {
       generation: metadata.generation,
       checkpointedAt: metadata.checkpointedAt
     })
+
     const maxBytes = expected.length + 1
 
     expect(expected.length).toBeLessThan(maxBytes)
@@ -99,6 +103,7 @@ describe('terminal checkpoint serializer', () => {
       enumerable: true,
       get: () => {
         reads += 1
+
         return 'visible'
       }
     })
@@ -154,6 +159,7 @@ describe('terminal checkpoint serializer', () => {
       const materializedOversizedCandidate = stringify.mock.calls.some(([value]) => {
         return (value as { snapshotAnsi?: unknown })?.snapshotAnsi === oversized
       })
+
       expect(materializedOversizedCandidate).toBe(false)
     } finally {
       stringify.mockRestore()

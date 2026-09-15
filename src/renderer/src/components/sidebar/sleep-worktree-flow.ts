@@ -39,6 +39,7 @@ function isPinnedSidebarWorktreeOption(element: HTMLElement): boolean {
 
 function findPrimarySidebarWorktreeOption(worktreeId: string): HTMLElement | null {
   const options = getSidebarWorktreeOptions(worktreeId)
+
   return (
     options.find((element) =>
       element.querySelector<HTMLElement>('[data-worktree-card-active="primary"]')
@@ -51,9 +52,11 @@ function findPrimarySidebarWorktreeOption(worktreeId: string): HTMLElement | nul
 
 function findSidebarWorktreeRow(worktreeId: string, rowKey?: string): HTMLElement | null {
   const options = getSidebarWorktreeOptions(worktreeId)
+
   const option = rowKey
     ? (options.find((element) => element.dataset.worktreeRowKey === rowKey) ?? null)
     : (findPrimarySidebarWorktreeOption(worktreeId) ?? null)
+
   return option?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
 }
 
@@ -61,15 +64,19 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
   if (typeof document === 'undefined') {
     return () => {}
   }
+
   const getScroller = (): HTMLElement | null =>
     document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+
   const scroller = getScroller()
   const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
   const activeRowKey = activeOption?.dataset.worktreeRowKey
   const row = activeOption?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
+
   if (!scroller || !row) {
     return () => {}
   }
+
   scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
   const previousScrollTop = scroller.scrollTop
   const previousScrollHeight = scroller.scrollHeight
@@ -77,16 +84,22 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
 
   return () => {
     let attempts = 0
+
     const restore = (): void => {
       const currentScroller = getScroller()
+
       if (!currentScroller) {
         attempts += 1
+
         if (attempts < 12) {
           window.requestAnimationFrame(restore)
         }
+
         return
       }
+
       const nextRow = findSidebarWorktreeRow(worktreeId, activeRowKey)
+
       if (!nextRow) {
         // Why: a remount can first render the wrong virtual window. Put the
         // scroller near the same content after height changes so the row
@@ -97,27 +110,33 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
         )
       } else {
         const delta = nextRow.getBoundingClientRect().top - previousTop
+
         if (Math.abs(delta) > 1) {
           currentScroller.scrollTop += delta
         }
       }
+
       attempts += 1
+
       if (attempts < 12) {
         window.requestAnimationFrame(restore)
       }
     }
+
     window.requestAnimationFrame(restore)
   }
 }
 
 function describeSleepFailure(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
+
   if (detail.includes('legacy')) {
     return translate(
       'auto.components.sidebar.sleep.worktree.flow.legacy.unverified',
       'The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again.'
     )
   }
+
   if (
     detail.includes('terminal_') ||
     detail.includes('runtime') ||
@@ -129,6 +148,7 @@ function describeSleepFailure(error: unknown): string {
       'The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again.'
     )
   }
+
   return translate(
     'auto.components.sidebar.sleep.worktree.flow.retry',
     'The workspace was kept open. Try again; if the problem continues, check the host connection.'
@@ -139,14 +159,17 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
   if (worktreeIds.length === 0) {
     return
   }
+
   const {
     activeWorktreeId,
     setActiveWorktree,
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
+
   const sleptActiveWorktreeId =
     activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
+
   if (sleptActiveWorktreeId) {
     const restoreSidebarPosition = preserveSidebarWorktreePosition(sleptActiveWorktreeId)
     // Why: clearing the active workspace can unmount TerminalPanes before
@@ -157,14 +180,17 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     setActiveWorktree(null)
     restoreSidebarPosition()
   }
+
   const errors: string[] = []
   const failedWorktreeIds = new Set<string>()
+
   try {
     for (const worktreeId of worktreeIds) {
       // Why: the marker outlives teardown so the panes left mounted stay cold
       // until an explicit wake (#10205); mark per workspace so an earlier
       // slow teardown never leaves a later, still-awake one marked.
       markWorktreeSleepIntent(worktreeId)
+
       try {
         // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
         // so destroyPersistentWebview unregisters the Chromium guests before any
@@ -178,6 +204,7 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         errors.push(describeSleepFailure(err))
         continue
       }
+
       try {
         // Why: sleep is reversible — the tab record stays in tabsByWorktree, the
         // layout stays in terminalLayoutsByTabId, only the live PTY processes are
@@ -188,10 +215,12 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
         await withWorktreeSleepTeardown(worktreeId, async () => {
           await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+
           if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
             await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
           }
         })
+
         // Why: a workspace the user activated during the batch is awake by their choice.
         if (useAppStore.getState().activeWorktreeId === worktreeId) {
           clearWorktreeSleepIntent(worktreeId)
@@ -210,10 +239,12 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     for (const worktreeId of failedWorktreeIds) {
       clearWorktreeSleepIntent(worktreeId)
     }
+
     if (sleptActiveWorktreeId && failedWorktreeIds.has(sleptActiveWorktreeId)) {
       setActiveWorktree(sleptActiveWorktreeId)
     }
   }
+
   if (errors.length > 0) {
     // Why: callers are fire-and-forget; surface actionable teardown failures after restoring retryable UI state.
     toast.error(

@@ -13,6 +13,7 @@ function clientAnsweringShow(owner: unknown): { call: ReturnType<typeof vi.fn> }
       ? ok(owner === undefined ? { automation: { id: 'a1' } } : { automation: { id: 'a1' }, owner })
       : ok({ automation: { id: 'a1' }, removed: true, id: 'a1', run: { id: 'r1' } })
   )
+
   return { call }
 }
 

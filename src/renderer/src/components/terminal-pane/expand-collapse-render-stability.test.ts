@@ -7,6 +7,7 @@ import { useExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
 
 type ExpandCollapseHookState = Parameters<typeof useExpandCollapseActions>[0]
+
 type KeyboardHandlersDeps = Parameters<typeof useTerminalKeyboardShortcuts>[0]
 
 // Field identities are stable across renders (refs, setState, store actions,
@@ -40,6 +41,7 @@ describe('useExpandCollapseActions render stability', () => {
 
     const actionNames = Object.keys(first) as (keyof typeof first)[]
     expect(actionNames).toHaveLength(5)
+
     for (const name of actionNames) {
       expect(Object.is(hook.result.current[name], first[name])).toBe(true)
     }
@@ -47,9 +49,11 @@ describe('useExpandCollapseActions render stability', () => {
 
   it('remints actions when tabId changes', () => {
     const fields = createStableFields()
+
     const hook = renderHook(({ tabId }) => useExpandCollapseActions({ ...fields, tabId }), {
       initialProps: { tabId: 'tab-1' }
     })
+
     const first = hook.result.current
 
     hook.rerender({ tabId: 'tab-2' })
@@ -62,17 +66,21 @@ describe('terminal keyboard effect registration stability', () => {
   it('registers window listeners once across rerenders with TerminalPane-shaped wiring', () => {
     const scope = document.createElement('div')
     document.body.append(scope)
+
     const pane = {
       id: 1,
       leafId: '00000000-0000-4000-8000-000000000001',
       terminal: { element: scope, focus: vi.fn(), getSelection: vi.fn(() => '') }
     }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     } as unknown as PaneManager
+
     const transport = { getPtyId: () => 'pty-1', sendInput: vi.fn(() => true) }
     const fields = createStableFields()
+
     const stableDeps = {
       tabId: 'tab-1',
       worktreeId: 'worktree-1',
@@ -98,6 +106,7 @@ describe('terminal keyboard effect registration stability', () => {
     }
 
     const addSpy = vi.spyOn(window, 'addEventListener')
+
     const countBeforeinputAdds = (): number =>
       addSpy.mock.calls.filter(([type]) => type === 'beforeinput').length
 
@@ -113,6 +122,7 @@ describe('terminal keyboard effect registration stability', () => {
         toggleExpandPane: actions.toggleExpandPane
       } as KeyboardHandlersDeps)
     })
+
     expect(countBeforeinputAdds()).toBe(1)
 
     for (let render = 0; render < 10; render++) {

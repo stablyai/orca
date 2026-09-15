@@ -24,6 +24,7 @@ import {
 } from './agent-session-conversation-command'
 
 export const AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT = 512
+
 export const AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT = 4_096
 
 export type AgentSessionOperationOutcome =
@@ -78,6 +79,7 @@ export function settleAgentSessionOperation(
   const targetKey = args.callerKey
     ? agentSessionOperationKey(args.callerKey, args.operationId)
     : null
+
   return new Map(
     [...rows].map(([key, row]) => [
       key,
@@ -109,11 +111,13 @@ export function pruneAgentSessionOperationRows(
   now: number
 ): Map<string, AgentSessionOperationRow> {
   const kept = new Map<string, AgentSessionOperationRow>()
+
   for (const [key, row] of rows) {
     if (row.expiresAt > now) {
       kept.set(key, row)
     }
   }
+
   return kept
 }
 
@@ -132,6 +136,7 @@ export function evaluateAgentSessionOperation(args: {
 }): AgentSessionOperationDecision {
   const { rows, callerKey, operationId, fingerprint, now } = args
   const operationTimestamp = parseAgentSessionOperationTimestamp(operationId)
+
   if (
     operationTimestamp === null ||
     operationTimestamp > now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
@@ -139,31 +144,38 @@ export function evaluateAgentSessionOperation(args: {
     // Why: a future-dated id could look new again after its tombstone is collected.
     return { decision: 'refused', code: 'agent_session_operation_invalid' }
   }
+
   const key = agentSessionOperationKey(callerKey, operationId)
   const existing = rows.get(key)
+
   if (existing) {
     return existing.fingerprint === fingerprint
       ? { decision: 'replay', row: existing }
       : { decision: 'refused', code: 'agent_session_operation_conflict' }
   }
+
   if (now - operationTimestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
     // Why: once a tombstone could have expired, an unseen replay must never be reinterpreted as
     // permission to start another fresh agent.
     return { decision: 'refused', code: 'agent_session_operation_expired' }
   }
+
   const perClientLimit = args.perClientLimit ?? AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT
   const globalLimit = args.globalLimit ?? AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT
   let callerCount = 0
+
   for (const row of rows.values()) {
     if (row.callerKey === callerKey) {
       callerCount += 1
     }
   }
+
   if (callerCount >= perClientLimit || rows.size >= globalLimit) {
     // Why: tombstones cannot be evicted early without making an old replay capable of spawning
     // again; reject new ids until retained rows age out.
     return { decision: 'refused', code: 'agent_session_operation_capacity' }
   }
+
   return {
     decision: 'admit',
     row: {
@@ -184,8 +196,10 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const row = value as Partial<AgentSessionOperationRow>
   const outcome = row.outcome as AgentSessionOperationOutcome | undefined
+
   const outcomeValid =
     typeof outcome === 'object' &&
     outcome !== null &&
@@ -197,6 +211,7 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
           isAgentSessionConversationCommandResult(outcome.conversationCommand))) ||
       (outcome.status === 'failed' && typeof outcome.code === 'string') ||
       outcome.status === 'unknown')
+
   return (
     typeof row.callerKey === 'string' &&
     row.callerKey.length > 0 &&

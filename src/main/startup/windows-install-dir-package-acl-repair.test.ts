@@ -16,6 +16,7 @@ import {
 } from './windows-install-dir-package-acl-repair'
 
 const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\orca'
+
 const APP_VERSION = '1.4.184'
 
 /** icacls' real success summary; the /T pass prints one per tree. */
@@ -30,8 +31,10 @@ function fakeRunner(reply: (spec: ProcessSpec) => Partial<ProcessResult> = () =>
   specs: ProcessSpec[]
 } {
   const specs: ProcessSpec[] = []
+
   const run: Runner = async (spec) => {
     specs.push(spec)
+
     return {
       code: 0,
       signal: null,
@@ -41,6 +44,7 @@ function fakeRunner(reply: (spec: ProcessSpec) => Partial<ProcessResult> = () =>
       ...reply(spec)
     }
   }
+
   return { run, specs }
 }
 
@@ -62,6 +66,7 @@ function repair(
   data: CrashReportBreadcrumbData
 }> {
   const { run, ...rest } = overrides
+
   return new Promise((resolve, reject) => {
     let data: CrashReportBreadcrumbData = {}
     repairWindowsInstallDirPackageAcl({
@@ -74,6 +79,7 @@ function repair(
       recordBreadcrumb: (name, breadcrumb) => {
         expect(name).toBe(WINDOWS_INSTALL_DIR_ACL_REPAIR_BREADCRUMB)
         data = breadcrumb ?? {}
+
         return undefined
       },
       onDone: (result) => resolve({ result, data })
@@ -197,6 +203,7 @@ describe('repairWindowsInstallDirPackageAcl', () => {
           }
         : { code: 5, stdout: '', stderr: 'Access is denied.' }
     )
+
     const { result, data } = await repair({ run })
 
     expect(result.mode).toBe('failed')
@@ -210,6 +217,7 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     const { run, specs } = fakeRunner((spec) =>
       spec.args?.includes('/T') ? {} : { code: 5, stderr: 'Access is denied.' }
     )
+
     const { result } = await repair({ run })
     expect(specs).toHaveLength(2)
     expect(result.mode).toBe('failed')
@@ -230,6 +238,7 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     const marker = JSON.parse(
       readFileSync(join(userDataPath, WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE), 'utf-8')
     ) as { outcome: string }
+
     expect(marker.outcome).toBe('failed')
   })
 
@@ -239,10 +248,12 @@ describe('repairWindowsInstallDirPackageAcl', () => {
   it('retries a failed repair on later launches, then stops once the budget is spent', async () => {
     const userDataPath = userDataDir()
     const failing = fakeRunner(() => ({ code: 5, stderr: 'Access is denied.' }))
+
     for (let attempt = 0; attempt < 3; attempt++) {
       resetWindowsInstallDirAclRepairForTest()
       expect((await repair({ userDataPath, run: failing.run })).result.mode).toBe('failed')
     }
+
     expect(failing.specs).toHaveLength(6)
 
     resetWindowsInstallDirAclRepairForTest()

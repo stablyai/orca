@@ -9,7 +9,9 @@ import {
 } from './terminal-output-side-effects'
 
 const ESC = '\x1b'
+
 const BEL = '\x07'
+
 const ST = `${ESC}\\`
 
 type RecordedEvent =
@@ -25,6 +27,7 @@ function createRecordingTracker(overrides: TerminalTitleTrackerCallbacks = {}): 
   tracker: ReturnType<typeof createTerminalTitleTracker>
 } {
   const events: RecordedEvent[] = []
+
   const tracker = createTerminalTitleTracker({
     onTitle: (normalized) => events.push(['title', normalized]),
     onBell: () => events.push(['bell']),
@@ -34,6 +37,7 @@ function createRecordingTracker(overrides: TerminalTitleTrackerCallbacks = {}): 
     onMode2031Unsubscribe: () => events.push(['2031-unsubscribe']),
     ...overrides
   })
+
   return { events, tracker }
 }
 
@@ -108,6 +112,7 @@ describe('createTerminalTitleTracker pr-link facts', () => {
     // Mirrors headless serve: no pty:sideEffect consumer means no callbacks,
     // so the scanners must not be created (no carry state, no scan cost).
     const titles: string[] = []
+
     const tracker = createTerminalTitleTracker({
       onTitle: (normalized) => titles.push(normalized)
     })

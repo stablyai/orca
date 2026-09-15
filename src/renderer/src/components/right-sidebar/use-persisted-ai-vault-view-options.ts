@@ -38,9 +38,11 @@ export function usePersistedAiVaultViewOptions(): {
   const updateOptions = useCallback((update: AiVaultViewOptionsUpdate) => {
     const current = optionsRef.current
     const candidate = update(current)
+
     if (candidate === current) {
       return
     }
+
     // Why: setters map valid state to valid state, so persist the candidate directly.
     // Re-normalizing here would re-allocate disabledAgents on every sort/group change and
     // needlessly recompute the session filter; writeAiVaultViewOptions still normalizes what it stores.
@@ -54,11 +56,13 @@ export function usePersistedAiVaultViewOptions(): {
       updateOptions((current) => (current.sort === sort ? current : { ...current, sort })),
     [updateOptions]
   )
+
   const setGroup = useCallback(
     (group: AiVaultGroup) =>
       updateOptions((current) => (current.group === group ? current : { ...current, group })),
     [updateOptions]
   )
+
   const setHideEmptySessions = useCallback(
     (hideEmptySessions: boolean) =>
       updateOptions((current) =>
@@ -68,6 +72,7 @@ export function usePersistedAiVaultViewOptions(): {
       ),
     [updateOptions]
   )
+
   const setSessionLimit = useCallback(
     (sessionLimit: AiVaultSessionLimit) =>
       updateOptions((current) =>
@@ -75,37 +80,45 @@ export function usePersistedAiVaultViewOptions(): {
       ),
     [updateOptions]
   )
+
   const setAgentEnabled = useCallback(
     (agent: AiVaultAgent, enabled: boolean) => {
       updateOptions((current) => {
         const isDisabled = current.disabledAgents.includes(agent)
+
         if (enabled === !isDisabled) {
           return current
         }
+
         // Why: allow zero enabled agents so Clear + re-check one agent is a two-step filter.
         const disabledAgents = enabled
           ? current.disabledAgents.filter((entry) => entry !== agent)
           : [...current.disabledAgents, agent]
+
         return { ...current, disabledAgents }
       })
     },
     [updateOptions]
   )
+
   const setAllAgentsEnabled = useCallback(
     (enabled: boolean) => {
       updateOptions((current) => {
         const disabledAgents = enabled ? [] : [...AI_VAULT_AGENTS]
+
         if (
           disabledAgents.length === current.disabledAgents.length &&
           disabledAgents.every((agent) => current.disabledAgents.includes(agent))
         ) {
           return current
         }
+
         return { ...current, disabledAgents }
       })
     },
     [updateOptions]
   )
+
   const resetViewOptions = useCallback(
     () => updateOptions(() => createDefaultAiVaultViewOptions()),
     [updateOptions]
@@ -115,6 +128,7 @@ export function usePersistedAiVaultViewOptions(): {
     () => enabledAiVaultAgents(options.disabledAgents),
     [options.disabledAgents]
   )
+
   return {
     agents,
     sort: options.sort,

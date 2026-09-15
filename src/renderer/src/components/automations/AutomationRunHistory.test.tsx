@@ -18,6 +18,7 @@ import { makeRun } from './automations-page-fixtures'
 const roots: Root[] = []
 
 const FIRST = Date.UTC(2026, 7, 9, 14, 0)
+
 const LATEST = Date.UTC(2026, 7, 11, 9, 0)
 
 async function render(overrides: Partial<AutomationRun>): Promise<HTMLDivElement> {
@@ -35,6 +36,7 @@ async function render(overrides: Partial<AutomationRun>): Promise<HTMLDivElement
       />
     )
   })
+
   return container
 }
 
@@ -57,6 +59,7 @@ async function renderFailure(
       />
     )
   })
+
   return container
 }
 

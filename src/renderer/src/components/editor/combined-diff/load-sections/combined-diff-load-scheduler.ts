@@ -29,6 +29,7 @@ export function createCombinedDiffLoadScheduler({
 
     while (active < maxConcurrent) {
       const nextIndex = pending.shift()
+
       if (nextIndex === undefined) {
         return
       }
@@ -36,9 +37,11 @@ export function createCombinedDiffLoadScheduler({
       active += 1
       void loadSection(nextIndex).finally(() => {
         queued.delete(nextIndex)
+
         if (disposed || drainVersion !== version) {
           return
         }
+
         active = Math.max(0, active - 1)
         schedule(() => drain(drainVersion))
       })
@@ -49,6 +52,7 @@ export function createCombinedDiffLoadScheduler({
     if (disposed || queued.has(index)) {
       return
     }
+
     queued.add(index)
     pending.push(index)
     const requestVersion = version
@@ -63,11 +67,14 @@ export function createCombinedDiffLoadScheduler({
       if (disposed) {
         return
       }
+
       queued.delete(index)
       const pendingIndex = pending.indexOf(index)
+
       if (pendingIndex !== -1) {
         pending.splice(pendingIndex, 1)
       }
+
       enqueue(index)
     },
     reset() {

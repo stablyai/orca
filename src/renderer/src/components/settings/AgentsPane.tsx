@@ -73,6 +73,7 @@ export function AgentPermissionsSetting({
   onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
 }): React.JSX.Element {
   const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
+
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -147,6 +148,7 @@ export function AgentsPane({
   wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
   const activeServerEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
+
   const agentDetectionTarget = useMemo<AgentDetectionTarget>(
     () =>
       activeServerEnvironmentId
@@ -154,13 +156,16 @@ export function AgentsPane({
         : { kind: 'local' },
     [activeServerEnvironmentId]
   )
+
   const {
     detectedIds: detectedList,
     detectionFailed,
     isRefreshing,
     refresh: refreshTargetAgents
   } = useDetectedAgents(agentDetectionTarget)
+
   const refreshLocalAgents = useAppStore((state) => state.refreshDetectedAgents)
+
   const activeServerName = useAppStore((state) =>
     activeServerEnvironmentId
       ? (state.runtimeEnvironments.find(
@@ -168,21 +173,26 @@ export function AgentsPane({
         )?.name ?? null)
       : null
   )
+
   const detectedIds = useMemo<Set<string> | null>(
     () => (detectedList ? new Set(detectedList) : null),
     [detectedList]
   )
+
   const catalog = getAgentCatalog()
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+
   const detectedAgents =
     detectedIds === null ? [] : catalog.filter((agent) => detectedIds.has(agent.id))
+
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
     isTuiAgentEnabled(agent.id, disabledAgents)
   )
+
   const undetectedAgents = catalog.filter(
     (agent) => detectedIds !== null && !detectedIds.has(agent.id)
   )
@@ -196,6 +206,7 @@ export function AgentsPane({
       enabled
     })
   }
+
   const getRowProps = (
     agent: (typeof catalog)[number],
     isDetected: boolean
@@ -217,11 +228,13 @@ export function AgentsPane({
     onSaveOverride: isDetected
       ? (value) => {
           const next = { ...cmdOverrides }
+
           if (value) {
             next[agent.id] = value
           } else {
             delete next[agent.id]
           }
+
           updateSettings({ agentCmdOverrides: next })
         }
       : () => {},
@@ -283,6 +296,7 @@ export function AgentsPane({
 
 export function AgentStatusHooksSetting({ settings, updateSettings }: AgentsPaneProps) {
   const enabled = settings.agentStatusHooksEnabled !== false
+
   return (
     <section className="space-y-3">
       <SettingsSwitchRow
@@ -298,6 +312,7 @@ export function AgentStatusHooksSetting({ settings, updateSettings }: AgentsPane
 
 export function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentsPaneProps) {
   const enabled = settings.tabAutoGenerateTitle === true
+
   return (
     <section className="space-y-3">
       <SettingsSwitchRow

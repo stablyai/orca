@@ -13,7 +13,9 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const internals = runtime as unknown as {
       listResolvedWorktrees: () => Promise<unknown[]>
       resolveWorktreeRemovalTarget: (
@@ -21,6 +23,7 @@ describe('OrcaRuntimeService', () => {
         requiredHostId?: string
       ) => Promise<unknown>
     }
+
     internals.listResolvedWorktrees = vi.fn().mockResolvedValue([
       {
         id: TEST_WORKTREE_ID,

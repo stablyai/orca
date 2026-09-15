@@ -40,8 +40,10 @@ export function resolveTrustedExecutable(name: string): string | null {
   for (const directory of TRUSTED_EXECUTABLE_DIRECTORIES) {
     // posix.join: these are POSIX paths, and this module only ever runs on Linux.
     const candidate = path.posix.join(directory, name)
+
     try {
       const stats = statSync(candidate)
+
       if (stats.isFile() && (stats.mode & 0o111) !== 0) {
         return candidate
       }
@@ -49,6 +51,7 @@ export function resolveTrustedExecutable(name: string): string | null {
       // Absent here; keep looking in the remaining trusted directories.
     }
   }
+
   return null
 }
 
@@ -59,6 +62,7 @@ export function resolveTrustedExecutable(name: string): string | null {
  */
 export function hasTrustedPackageManagerFor(packageType: LinuxRootPackageType): boolean {
   const candidates = packageType === 'deb' ? DEB_PACKAGE_MANAGERS : RPM_PACKAGE_MANAGERS
+
   return candidates.some((candidate) => resolveTrustedExecutable(candidate.name) !== null)
 }
 
@@ -75,19 +79,27 @@ export function buildLinuxPackageInstallCommand(
   if (!path.isAbsolute(packagePath)) {
     return { ok: false, reason: 'invalid-package-path' }
   }
+
   const sudoPath = resolveTrustedExecutable('sudo')
+
   if (!sudoPath) {
     return { ok: false, reason: 'no-sudo' }
   }
+
   const candidates = packageType === 'deb' ? DEB_PACKAGE_MANAGERS : RPM_PACKAGE_MANAGERS
+
   for (const candidate of candidates) {
     const managerPath = resolveTrustedExecutable(candidate.name)
+
     if (!managerPath) {
       continue
     }
+
     // No -y/--noconfirm: the user must see and confirm the privileged transaction.
     const tokens = [sudoPath, managerPath, ...candidate.args, quoteForPosixShell(packagePath)]
+
     return { ok: true, command: tokens.join(' ') }
   }
+
   return { ok: false, reason: 'no-package-manager' }
 }

@@ -60,6 +60,7 @@ export class PluginCommandRegistry {
       (plugin): plugin is ValidDiscoveredPlugin =>
         !isInvalidDiscoveredPlugin(plugin) && plugin.manifest.contributes.commands.length > 0
     )
+
     const registrations = candidates.map((plugin) => ({
       pluginKey: plugin.pluginKey,
       approved: isApproved(plugin),
@@ -68,12 +69,14 @@ export class PluginCommandRegistry {
 
     this.previews.clear()
     this.errors.clear()
+
     for (const plugin of registrations) {
       this.previews.set(plugin.pluginKey, plugin.commands)
     }
 
     const approved = registrations.filter((plugin) => plugin.approved)
     const chordOwners = new Map<string, CommandOwner[]>()
+
     for (const plugin of approved) {
       for (const command of plugin.commands) {
         for (const keybinding of effectiveCommandKeybindings(command, overrides)) {
@@ -89,11 +92,13 @@ export class PluginCommandRegistry {
     }
 
     const conflicted = new Set<string>()
+
     for (const owners of chordOwners.values()) {
       // Global/worktree are the only contexts, so all owners of the same chord overlap.
       if (owners.length < 2) {
         continue
       }
+
       for (const owner of owners) {
         conflicted.add(owner.pluginKey)
         this.errors.set(
@@ -114,9 +119,11 @@ function effectiveCommandKeybindings(
   overrides: KeybindingOverrides
 ): PluginCommandKeybinding[] {
   const override = overrides[pluginCommandKeybindingActionId(command.pluginKey, command.id)]
+
   if (!Array.isArray(override)) {
     return command.keybindings
   }
+
   return override.map((key) => ({ key, when: command.context }))
 }
 
@@ -125,15 +132,18 @@ function registrationsForManifest(
   manifest: PluginManifest
 ): PluginCommandRegistration[] {
   const bindingsByCommand = new Map<string, PluginKeybindingContribution[]>()
+
   for (const binding of manifest.contributes.keybindings) {
     const commandId = binding.command
     const bindings = bindingsByCommand.get(commandId)
+
     if (bindings) {
       bindings.push(binding)
     } else {
       bindingsByCommand.set(commandId, [binding])
     }
   }
+
   return manifest.contributes.commands.map((command) => ({
     pluginKey,
     id: command.id,

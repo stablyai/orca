@@ -20,6 +20,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 
 export function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }
 
@@ -27,6 +28,7 @@ export function normalizeAutomationRunTerminalPaneKey(
   value: string | null | undefined
 ): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
+
   return trimmed && parsePaneKey(trimmed) ? trimmed : null
 }
 
@@ -34,6 +36,7 @@ export function normalizeAutomationRunTerminalPtyId(
   value: string | null | undefined
 ): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
+
   return trimmed || null
 }
 
@@ -43,10 +46,13 @@ export function normalizeAutomationRunOutputSnapshot(
   if (!value || value.format !== 'plain_text') {
     return null
   }
+
   const content = typeof value.content === 'string' ? value.content : ''
+
   if (!content.trim()) {
     return null
   }
+
   return {
     format: 'plain_text',
     content,
@@ -64,14 +70,17 @@ export function normalizeAutomationPrecheckResult(
   if (!value || typeof value.command !== 'string' || !value.command.trim()) {
     return null
   }
+
   const startedAt =
     typeof value.startedAt === 'number' && Number.isFinite(value.startedAt)
       ? value.startedAt
       : Date.now()
+
   const completedAt =
     typeof value.completedAt === 'number' && Number.isFinite(value.completedAt)
       ? value.completedAt
       : startedAt
+
   return {
     command: value.command.trim(),
     exitCode:
@@ -96,6 +105,7 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     automation.workspaceMode,
     automation.setupDecision
   )
+
   return {
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
@@ -123,18 +133,21 @@ export function getAutomationContextsForRepo(
       sourceContext: null
     }
   }
+
   const projection = projectHostSetupProjectionFromRepos([repo])
   const projectedProject = projection.projects[0]
   const projectedSetup = projection.setups[0]
   // Why the host filter first: a repo id can be shared across hosts, and the
   // contexts must describe the copy this record resolved to, not a sibling's.
   const repoHostId = getRepoExecutionHostId(repo)
+
   const setup =
     projectHostSetups.find(
       (candidate) => candidate.repoId === repo.id && candidate.hostId === repoHostId
     ) ??
     projectHostSetups.find((candidate) => candidate.repoId === repo.id) ??
     projectedSetup
+
   const runContext = setup
     ? buildWorkspaceRunContext({
         projectId: setup.projectId,
@@ -144,7 +157,9 @@ export function getAutomationContextsForRepo(
         path: setup.path
       })
     : null
+
   const providerIdentity = projectedProject?.providerIdentity
+
   const sourceContext = providerIdentity
     ? buildTaskSourceContextFromRepo({
         provider: providerIdentity.provider,
@@ -154,6 +169,7 @@ export function getAutomationContextsForRepo(
         providerIdentity
       })
     : null
+
   return {
     runContext,
     sourceContext
@@ -164,13 +180,17 @@ export function getAutomationSchedulerOwner(repo: Repo | undefined): AutomationS
   if (!repo) {
     return 'local_host_service'
   }
+
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   if (host?.kind === 'ssh') {
     return 'ssh_bridge'
   }
+
   if (host?.kind === 'runtime') {
     return 'remote_host_service'
   }
+
   return 'local_host_service'
 }
 
@@ -183,51 +203,65 @@ export function backfillLegacyAutomationContexts(
   let changed = false
   const contextsByAutomationId = new Map<string, Pick<Automation, 'runContext' | 'sourceContext'>>()
   const reposById = new Map((state.repos ?? []).map((repo) => [repo.id, repo]))
+
   const automations = (state.automations ?? []).map((automation) => {
     const contexts = getAutomationContextsForRepo(
       reposById.get(getAutomationLegacyRepoId(automation)),
       state.projectHostSetups ?? []
     )
+
     const next: Automation = { ...automation }
+
     if (!Object.hasOwn(next, 'runContext')) {
       // Why: pre-host-context automations only stored a repo id; backfill the run target once so dispatch/precheck stop inferring it.
       next.runContext = contexts.runContext
       changed = true
     }
+
     if (!Object.hasOwn(next, 'sourceContext')) {
       next.sourceContext = contexts.sourceContext
       changed = true
     }
+
     contextsByAutomationId.set(next.id, {
       runContext: next.runContext ?? null,
       sourceContext: next.sourceContext ?? null
     })
+
     return next
   })
+
   const automationRuns = (state.automationRuns ?? []).map((run) => {
     const automationContexts = contextsByAutomationId.get(run.automationId)
     const next: AutomationRun = { ...run }
+
     if (!Object.hasOwn(next, 'runContext')) {
       next.runContext = automationContexts?.runContext ?? null
       changed = true
     }
+
     if (!Object.hasOwn(next, 'sourceContext')) {
       next.sourceContext = automationContexts?.sourceContext ?? null
       changed = true
     }
+
     if (!Object.hasOwn(next, 'terminalPaneKey')) {
       next.terminalPaneKey = null
       changed = true
     }
+
     if (!Object.hasOwn(next, 'terminalPtyId')) {
       next.terminalPtyId = null
       changed = true
     }
+
     return next
   })
+
   if (!changed) {
     return { state, changed: false }
   }
+
   return {
     state: {
       ...state,

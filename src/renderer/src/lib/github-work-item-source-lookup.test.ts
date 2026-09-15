@@ -6,6 +6,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
   const actual = await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
+
   return {
     ...actual,
     callRuntimeRpc: vi.fn()
@@ -98,6 +99,7 @@ describe('GitHub source lookup routing', () => {
 
   it('keeps local GitHub details on Electron IPC with source context', async () => {
     vi.mocked(window.api.gh.workItemDetails).mockResolvedValue(null)
+
     const sourceContext: TaskSourceContext = {
       ...runtimeSourceContext,
       hostId: 'local',

@@ -22,15 +22,19 @@ export function measureRichMarkdownReviewNotePositions({
 }: MeasureRichMarkdownReviewNotePositionsOptions): RichMarkdownReviewNotePosition[] {
   const containerRect = container.getBoundingClientRect()
   const blocks = getRichMarkdownReviewRailBlocks(editor)
+
   const nextPositions = markdownComments
     .map((comment): RichMarkdownReviewNotePosition | null => {
       const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
+
       const block = blocks.find(
         (candidate) => candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
       )
+
       if (!block) {
         return null
       }
+
       const top = getRichMarkdownCommentAnchorTop(
         editor,
         comment,
@@ -40,9 +44,11 @@ export function measureRichMarkdownReviewNotePositions({
         markdownSourceLineOffset,
         blocks
       )
+
       return top === null ? null : { comment, top }
     })
     .filter((position): position is RichMarkdownReviewNotePosition => position !== null)
+
   return stackRichMarkdownReviewNotePositions(
     nextPositions,
     measureReviewNoteHeights(container, nextPositions)
@@ -54,11 +60,14 @@ function measureReviewNoteHeights(
   positions: RichMarkdownReviewNotePosition[]
 ): Map<string, number> {
   const measuredHeights = new Map<string, number>()
+
   for (const pos of positions) {
     const el = container.querySelector(`[data-rich-markdown-review-note-id="${pos.comment.id}"]`)
+
     if (el) {
       measuredHeights.set(pos.comment.id, el.getBoundingClientRect().height)
     }
   }
+
   return measuredHeights
 }

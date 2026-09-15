@@ -50,9 +50,11 @@ export async function getPRConflictSummary(
     baseRefOid,
     localGitOptions
   )
+
   // Why: the summary is a pure function of the two commit OIDs, so a key hit
   // can skip the whole merge-base/rev-list/merge-tree subprocess chain.
   const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
+
   const summaryKey = buildConflictSummaryCacheKey(
     runtimeKey,
     repoPath,
@@ -60,7 +62,9 @@ export async function getPRConflictSummary(
     headRefOid,
     latestBaseOid
   )
+
   const cached = readCachedSummary(summaryKey)
+
   if (cached) {
     return cached.value
   }
@@ -89,12 +93,14 @@ async function derivePRConflictSummary(
   localGitOptions: LocalGitExecOptions
 ): Promise<PRConflictSummary | undefined> {
   const cached = readCachedSummary(summaryKey)
+
   if (cached) {
     return cached.value
   }
 
   try {
     const mergeBase = await resolveMergeBase(repoPath, headRefOid, latestBaseOid, localGitOptions)
+
     const [commitsBehind, files] = await Promise.all([
       countCommits(repoPath, `${headRefOid}..${latestBaseOid}`, localGitOptions),
       loadConflictingFiles(repoPath, mergeBase, headRefOid, latestBaseOid, localGitOptions)
@@ -107,10 +113,13 @@ async function derivePRConflictSummary(
       files,
       ...(files.length === 0 ? { localMergeState: 'clean' as const } : {})
     }
+
     storeCachedSummary(summaryKey, summary)
+
     return summary
   } catch {
     storeCachedSummary(summaryKey, undefined)
+
     return undefined
   }
 }
@@ -124,25 +133,33 @@ async function resolveLatestBaseOidThrottled(
   const runtimeKey = getConflictSummaryGitRuntimeKey(localGitOptions.wslDistro)
   const baseKey = buildConflictSummaryCacheKey(runtimeKey, repoPath, baseRefName)
   const cachedResolution = readFreshBaseTipResolution(baseKey)
+
   if (cachedResolution) {
     return cachedResolution.kind === 'resolved' ? cachedResolution.oid : fallbackBaseOid
   }
+
   return dedupeBaseOidResolve(baseKey, async () => {
     // Why re-check inside the dedupe slot: a sibling caller may have finished
     // resolving between our cache read and this factory starting.
     const freshResolution = readFreshBaseTipResolution(baseKey)
+
     if (freshResolution) {
       return freshResolution
     }
+
     const oid = await resolveLatestBaseOid(repoPath, baseRefName, localGitOptions)
+
     if (oid) {
       storeResolvedBaseTip(baseKey, oid)
+
       return { kind: 'resolved', oid }
     }
+
     // Why cache the unresolved probe, not the caller fallback: the fetch
     // attempt is branch-wide expensive work, but GitHub's baseRefOid is
     // PR-specific and must not leak to sibling PRs on the same base branch.
     rememberUnresolvedBaseTip(baseKey)
+
     return { kind: 'fallback-unresolved' }
   }).then((resolution) => (resolution.kind === 'resolved' ? resolution.oid : fallbackBaseOid))
 }
@@ -172,7 +189,9 @@ async function resolveLatestBaseOid(
       const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', ref], {
         ...gitOptionsForWorktree(repoPath, localGitOptions)
       })
+
       const oid = stdout.trim()
+
       if (oid) {
         return oid
       }
@@ -193,6 +212,7 @@ async function resolveMergeBase(
   const { stdout } = await gitExecFileAsync(['merge-base', headOid, baseOid], {
     ...gitOptionsForWorktree(repoPath, localGitOptions)
   })
+
   return stdout.trim()
 }
 
@@ -204,6 +224,7 @@ async function countCommits(
   const { stdout } = await gitExecFileAsync(['rev-list', '--count', range], {
     ...gitOptionsForWorktree(repoPath, localGitOptions)
   })
+
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
@@ -225,6 +246,7 @@ async function loadConflictingFiles(
     headOid,
     baseOid
   ]
+
   const legacyArgs = [
     'merge-tree',
     '--write-tree',
@@ -248,17 +270,21 @@ async function loadConflictingFiles(
                 const result = await gitExecFileAsync(modernArgs, {
                   ...gitOptionsForWorktree(repoPath, localGitOptions)
                 })
+
                 return parseMergeTreeNameOnlyOutput(result.stdout)
               } catch (error) {
                 if (isUnsupportedMergeTreeWriteTreeError(error)) {
                   throw error
                 }
+
                 // Why: `git merge-tree --write-tree` exits 1 for conflicts but still
                 // writes the useful file list; only option rejection reaches fallback.
                 const stdoutFromError = getGitErrorOutput(error, 'stdout')
+
                 if (stdoutFromError) {
                   return parseMergeTreeNameOnlyOutput(stdoutFromError)
                 }
+
                 throw error
               }
             },
@@ -284,23 +310,28 @@ async function loadConflictingFilesWithLegacyMergeTree(
     const result = await gitExecFileAsync(legacyArgs, {
       ...gitOptionsForWorktree(repoPath, localGitOptions)
     })
+
     return parseMergeTreeNameOnlyOutput(result.stdout)
   } catch (fallbackError) {
     const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')
+
     if (fallbackStdout) {
       return parseMergeTreeNameOnlyOutput(fallbackStdout)
     }
+
     throw fallbackError
   }
 }
 
 function parseMergeTreeNameOnlyOutput(stdout: string): string[] {
   const entries = stdout.split('\0').filter(Boolean)
+
   if (entries.length === 0) {
     return []
   }
 
   const [, ...files] = entries
+
   return files
 }
 
@@ -308,6 +339,8 @@ function getGitErrorOutput(error: unknown, key: 'stdout' | 'stderr'): string {
   if (typeof error !== 'object' || error === null) {
     return ''
   }
+
   const output = (error as Partial<Record<'stdout' | 'stderr', unknown>>)[key]
+
   return typeof output === 'string' ? output : ''
 }

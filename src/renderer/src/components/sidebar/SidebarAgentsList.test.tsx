@@ -28,6 +28,7 @@ it('preserves workspace focus on mount and focuses search only when explicitly e
   document.body.append(workspaceInput, optionsTarget)
   workspaceInput.focus()
   const setQuery = vi.fn()
+
   const view = render(
     <TooltipProvider>
       <SidebarAgentsList

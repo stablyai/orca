@@ -49,6 +49,7 @@ describe('host-qualified row display state', () => {
   it('retains slept rows only while the same host still has live terminals', () => {
     const local = row('shared', 'host-a')
     const remote = row('shared', 'host-b')
+
     const retained = retainLiveSleptWorktreeIdentities(
       new Set([getWorktreeRowIdentity(local), getWorktreeRowIdentity(remote)]),
       [
@@ -62,6 +63,7 @@ describe('host-qualified row display state', () => {
 
   it('keeps first-match behavior when confirmed identities are duplicated', () => {
     const identity = getWorktreeRowIdentity(row('shared', 'host-a'))
+
     const retained = retainLiveSleptWorktreeIdentities(new Set([identity]), [
       row('shared', 'host-a', { liveTerminalCount: 0 }),
       row('shared', 'host-a', { liveTerminalCount: 1 })
@@ -73,23 +75,29 @@ describe('host-qualified row display state', () => {
   it('indexes confirmed identities once instead of rescanning for every slept row', () => {
     const rowCount = 64
     let worktreeIdReads = 0
+
     const confirmed = Array.from({ length: rowCount }, (_, index) => {
       const worktree = {
         hostId: `host-${index}`,
         liveTerminalCount: 1
       } as Worktree
+
       Object.defineProperty(worktree, 'worktreeId', {
         configurable: true,
         get: () => {
           worktreeIdReads += 1
+
           return `worktree-${index}`
         }
       })
+
       return worktree
     })
+
     const previous = new Set(
       Array.from({ length: rowCount }, (_, index) => {
         const reversed = rowCount - index - 1
+
         return `host-${reversed}|worktree-${reversed}`
       })
     )

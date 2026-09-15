@@ -13,14 +13,17 @@ const mocks = vi.hoisted(() => ({
   prune: vi.fn(),
   canCover: vi.fn(() => true)
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => 'unverifiable', {
     getState: () => ({ activeWorktreeId: null })
   })
 }))
+
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'unverifiable'
 }))
+
 vi.mock('./terminal-pane/terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: mocks.canCover,
   disposeAllParkedTerminalWatchers: vi.fn(),
@@ -28,14 +31,19 @@ vi.mock('./terminal-pane/terminal-parked-tab-watchers', () => ({
   syncParkedTerminalTabWatchersForWorkspaces: mocks.sync,
   terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids)
 }))
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const SURFACE_COUNT = 423
+
 const PARKED_WORKTREE_ID = 'repo-1::/worktree-0'
+
 const surfaceIds = Array.from({ length: SURFACE_COUNT }, (_, index) => `repo-1::/worktree-${index}`)
 
 let root: Root | undefined
+
 let rerenderWatcher: () => Promise<void>
+
 afterEach(async () => {
   await act(async () => root?.unmount())
   vi.clearAllMocks()
@@ -93,20 +101,26 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
     workspaceSurfaceIds: surfaceIds,
     ...overrides
   }
+
   function Watcher(): null {
     useTerminalWatcherEffects({ ...controller, ...overrides })
+
     return null
   }
+
   root = createRoot(document.createElement('div'))
   rerenderWatcher = () => act(async () => root?.render(<Watcher />))
+
   return rerenderWatcher()
 }
 
 function lastSyncEntries(): Map<string, ParkedTerminalTabWatcherSyncEntry> {
   const entries = mocks.sync.mock.calls.at(-1)?.[0]
+
   if (!entries) {
     throw new Error('Expected watcher synchronization')
   }
+
   return entries
 }
 
@@ -131,11 +145,13 @@ describe('parked terminal watcher sync entries', () => {
     await renderWatcherEffects()
 
     const entries = lastSyncEntries()
+
     const unmountedSets = new Set(
       [...entries]
         .filter(([workspaceId]) => workspaceId !== PARKED_WORKTREE_ID)
         .map(([, entry]) => entry.parkedTabIds)
     )
+
     // Pre-fix this was one empty Set per surface (422 of them) on every fire.
     expect(unmountedSets.size).toBe(1)
     expect([...unmountedSets][0]?.size).toBe(0)
@@ -175,6 +191,7 @@ describe('parked terminal watcher sync entries', () => {
         [surfaceIds[1]]: [terminalTab('background-agent', surfaceIds[1], 'live-pty')]
       }
     }
+
     mocks.canCover.mockReturnValue(false)
     await renderWatcherEffects(overrides)
     expect(lastSyncEntries().get(surfaceIds[1])!.parkedTabIds.size).toBe(0)
@@ -196,25 +213,30 @@ describe('parked terminal watcher sync entries', () => {
           [surfaceIds[1]]: [terminalTab('remote-agent', surfaceIds[1], 'remote-pty')]
         }
       }
+
       mocks.canCover.mockReturnValue(false)
       await renderWatcherEffects(overrides)
       expect(lastSyncEntries().get(surfaceIds[1])!.parkedTabIds.size).toBe(0)
 
       mocks.canCover.mockReturnValue(true)
+
       if (input === 'paired capability') {
         overrides.pairedRuntimeParkingEnvironmentIds = new Set(['paired-host'])
       } else {
         overrides.terminalSshParkingEnabled = true
       }
+
       await rerenderWatcher()
       expect([...lastSyncEntries().get(surfaceIds[1])!.parkedTabIds]).toEqual(['remote-agent'])
 
       mocks.canCover.mockReturnValue(false)
+
       if (input === 'paired capability') {
         overrides.pairedRuntimeParkingEnvironmentIds = new Set()
       } else {
         overrides.terminalSshParkingEnabled = false
       }
+
       await rerenderWatcher()
       expect(lastSyncEntries().get(surfaceIds[1])!.parkedTabIds.size).toBe(0)
     }

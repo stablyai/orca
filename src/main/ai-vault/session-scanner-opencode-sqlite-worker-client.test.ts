@@ -25,11 +25,13 @@ class FakeWorker {
     const set = this.listeners.get(event) ?? new Set()
     set.add(listener)
     this.listeners.set(event, set)
+
     return this
   }
 
   off(event: string, listener: (arg?: unknown) => void): this {
     this.listeners.get(event)?.delete(listener)
+
     return this
   }
 
@@ -43,6 +45,7 @@ class FakeWorker {
 
   async terminate(): Promise<number> {
     this.terminated = true
+
     return 1
   }
 
@@ -59,9 +62,11 @@ class FakeWorker {
 
   lastId(): number {
     const last = this.postedRequests.at(-1)
+
     if (!last) {
       throw new Error('no request posted to fake worker')
     }
+
     return last.id
   }
 }
@@ -70,6 +75,7 @@ function makeFactory(workers: FakeWorker[]): () => Worker {
   return () => {
     const worker = new FakeWorker()
     workers.push(worker)
+
     return worker as unknown as Worker
   }
 }
@@ -124,8 +130,10 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
   it('times out only the active call, then respawns and drains the queue', async () => {
     vi.useFakeTimers()
+
     try {
       const workers: FakeWorker[] = []
+
       const client = new OpenCodeSqliteWorkerClient({
         workerFactory: makeFactory(workers),
         log() {}
@@ -198,6 +206,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS + 2 }, (_, i) =>
       client.parse({ dbPath: `/db#${i}`, sessionId: `s${i}`, platform: 'darwin' })
     )
+
     const settled = pending.map((promise) => expect(promise).rejects.toThrow())
 
     // Crash every worker as it is spawned; the client respawns up to the cap.
@@ -214,18 +223,23 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
   it('surfaces a list-leg timeout as a scan issue and returns no candidates', async () => {
     vi.useFakeTimers()
+
     try {
       const workers: FakeWorker[] = []
+
       const client = new OpenCodeSqliteWorkerClient({
         workerFactory: makeFactory(workers),
         log() {}
       })
+
       const issues: AiVaultScanIssue[] = []
+
       const listPromise = client.list({
         dbPaths: ['/tmp/opencode.db'],
         limit: 10,
         issues
       })
+
       // The list request is dispatched but never answered → it must time out into
       // a scan issue (not an unbounded stall) and contribute no sessions.
       await vi.advanceTimersByTimeAsync(LIST_TIMEOUT_MS)
@@ -241,17 +255,21 @@ describe('OpenCodeSqliteWorkerClient', () => {
   it('self-heals after repeated spawn failures instead of latching unavailable', async () => {
     const workers: FakeWorker[] = []
     let failSpawns = true
+
     const client = new OpenCodeSqliteWorkerClient({
       workerFactory() {
         if (failSpawns) {
           throw new Error('spawn down')
         }
+
         const worker = new FakeWorker()
         workers.push(worker)
+
         return worker as unknown as Worker
       },
       log() {}
     })
+
     // Scan 1: both calls fail closed, keeping synchronous SQLite off the main
     // thread. The failure is not latched, so a later scan can still recover.
     const firstIssues: AiVaultScanIssue[] = []
@@ -297,8 +315,10 @@ describe('OpenCodeSqliteWorkerClient', () => {
 
   it('terminates an idle worker and respawns on later work', async () => {
     vi.useFakeTimers()
+
     try {
       const workers: FakeWorker[] = []
+
       const client = new OpenCodeSqliteWorkerClient({
         workerFactory: makeFactory(workers),
         log() {}
@@ -336,10 +356,13 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const pending = Array.from({ length: MAX_CONSECUTIVE_DEATHS }, (_, i) =>
       client.parse({ dbPath: `/db#b${i}`, sessionId: `b${i}`, platform: 'darwin' })
     )
+
     const settled = pending.map((promise) => expect(promise).rejects.toThrow())
+
     for (let i = 0; i < MAX_CONSECUTIVE_DEATHS; i++) {
       workers.at(-1)!.emit('error', new Error(`b-crash ${i}`))
     }
+
     await Promise.all(settled)
     // One worker from burst 1 plus a fresh worker per allowed death in burst 2.
     expect(workers).toHaveLength(1 + MAX_CONSECUTIVE_DEATHS)
@@ -355,6 +378,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
       worker.emit('message', { id: worker.lastId(), ok: true, value: `v${i}` })
       await expect(promise).resolves.toBe(`v${i}`)
     }
+
     expect(workers).toHaveLength(1)
   })
 })

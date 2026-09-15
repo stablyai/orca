@@ -35,6 +35,7 @@ describe('lookupCmdJGitHubUrlWorkItem', () => {
       type: 'issue' as const,
       number: 14198
     }
+
     expect(
       await lookupCmdJGitHubUrlWorkItem({
         link,

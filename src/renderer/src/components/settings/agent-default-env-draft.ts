@@ -20,17 +20,23 @@ export function parseAgentDefaultEnvDraft(value: string): AgentDefaultEnvDraftPa
   }
 
   const env: Record<string, string> = {}
+
   for (const pair of getAgentDefaultEnvDraftPairs(value)) {
     const separatorIndex = pair.indexOf('=')
+
     if (separatorIndex <= 0) {
       continue
     }
+
     const name = pair.slice(0, separatorIndex).trim()
+
     if (!name) {
       continue
     }
+
     env[name] = pair.slice(separatorIndex + 1)
   }
+
   return { env, tooLarge: false }
 }
 
@@ -40,12 +46,15 @@ function getAgentDefaultEnvDraftPairs(value: string): string[] {
 
   for (let index = 0; index <= value.length; index += 1) {
     const isEnd = index === value.length
+
     if (!isEnd && !isAgentDefaultEnvDraftWhitespace(value.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
+
     if (tokenStart !== -1) {
       pairs.push(value.slice(tokenStart, index))
       tokenStart = -1

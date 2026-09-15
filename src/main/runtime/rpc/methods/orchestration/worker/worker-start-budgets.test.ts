@@ -23,6 +23,7 @@ describe('worker-start transport budgets', () => {
   it('normalizes non-positive requests to the ordinary readiness default', () => {
     const expectedOuterDeadline =
       1_000 + ORCHESTRATION_READINESS_TIMEOUT_MS + ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
+
     expect(resolveFederatedWorkerStartBudgets(0, 1_000).readinessTimeoutMs).toBe(
       ORCHESTRATION_READINESS_TIMEOUT_MS
     )

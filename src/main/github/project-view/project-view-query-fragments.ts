@@ -26,6 +26,7 @@ fragment FieldConfig on ProjectV2FieldConfiguration {
 
 export function itemContentSelection(includeParent: boolean): string {
   const parentFrag = includeParent ? 'parent { number title url }' : ''
+
   return `
     __typename
     ... on Issue {

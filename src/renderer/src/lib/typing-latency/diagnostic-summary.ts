@@ -25,8 +25,10 @@ function percentile(sorted: number[], fraction: number): number | null {
   if (sorted.length === 0) {
     return null
   }
+
   const rank = Math.ceil(fraction * sorted.length)
   const index = Math.min(sorted.length - 1, Math.max(0, rank - 1))
+
   return sorted[index] ?? null
 }
 
@@ -37,6 +39,7 @@ function round(value: number | null): number | null {
 export function summarizeLatencySamples(values: readonly number[]): LatencyPercentiles {
   const finite = values.filter((value) => Number.isFinite(value))
   const sorted = [...finite].sort((a, b) => a - b)
+
   return {
     count: sorted.length,
     p50: round(percentile(sorted, 0.5)),
@@ -70,6 +73,7 @@ type WorktreeLike = { path?: string | null; hostId?: string | null }
  */
 function worktreeNestingKey(rawPath: string, foldPosixCase: boolean): string {
   const normalized = normalizeRuntimePathForComparison(rawPath)
+
   return foldPosixCase && !isWindowsAbsolutePathLike(rawPath.normalize('NFC'))
     ? normalized.toLowerCase()
     : normalized
@@ -80,10 +84,12 @@ export function summarizeWorktreeNesting(
   localPlatform: NodeJS.Platform = getRendererAppPlatform()
 ): WorktreeNestingCensus {
   const pathsByHost = new Map<string, Set<string>>()
+
   for (const worktree of worktrees) {
     if (typeof worktree.path !== 'string' || worktree.path.length === 0) {
       continue
     }
+
     // An absent hostId means the local host, so it must not partition away from 'local'.
     const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
     const paths = pathsByHost.get(hostId) ?? new Set<string>()
@@ -95,23 +101,30 @@ export function summarizeWorktreeNesting(
     )
     pathsByHost.set(hostId, paths)
   }
+
   let maxDepth = 0
   let nestedWorktrees = 0
+
   for (const paths of pathsByHost.values()) {
     for (const candidate of paths) {
       let depth = 0
+
       for (const ancestor of paths) {
         const ancestorPrefix = ancestor.endsWith('/') ? ancestor : `${ancestor}/`
+
         if (ancestor !== candidate && candidate.startsWith(ancestorPrefix)) {
           depth += 1
         }
       }
+
       maxDepth = Math.max(maxDepth, depth)
+
       if (depth > 0) {
         nestedWorktrees += 1
       }
     }
   }
+
   return { maxDepth, nestedWorktrees }
 }
 
@@ -179,10 +192,13 @@ function sumArrayLengths(byKey: Record<string, unknown[]> | null | undefined): n
   if (!byKey) {
     return 0
   }
+
   let total = 0
+
   for (const list of Object.values(byKey)) {
     total += Array.isArray(list) ? list.length : 0
   }
+
   return total
 }
 
@@ -191,6 +207,7 @@ function readBoolean(
   key: string
 ): boolean | null {
   const value = settings?.[key]
+
   return typeof value === 'boolean' ? value : null
 }
 
@@ -199,6 +216,7 @@ function readString(
   key: string
 ): string | null {
   const value = settings?.[key]
+
   return typeof value === 'string' ? value : null
 }
 
@@ -207,6 +225,7 @@ function readNumber(
   key: string
 ): number | null {
   const value = settings?.[key]
+
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
@@ -216,17 +235,21 @@ function collectWorktrees(
   if (!byRepo) {
     return []
   }
+
   const collected: WorktreeLike[] = []
+
   for (const worktrees of Object.values(byRepo)) {
     if (!Array.isArray(worktrees)) {
       continue
     }
+
     for (const worktree of worktrees) {
       if (typeof worktree?.path === 'string') {
         collected.push(worktree)
       }
     }
   }
+
   return collected
 }
 
@@ -245,6 +268,7 @@ export function summarizeTypingScaleCensus(input: {
   const worktrees = collectWorktrees(state?.worktreesByRepo)
   const storeLive = countRecord(state?.agentStatusByPaneKey)
   const storeRetained = countRecord(state?.retainedAgentsByPaneKey)
+
   return {
     appVersion: input.appVersion,
     repos: state?.worktreesByRepo ? Object.keys(state.worktreesByRepo).length : 0,

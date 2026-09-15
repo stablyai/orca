@@ -37,7 +37,9 @@ type LegacyWslRuntimeAuthDrainOptions = {
 }
 
 const drainQueueByDistro = new Map<string, Promise<void>>()
+
 const completedDistroKeys = new Set<string>()
+
 const pendingSessionBridgeRouteByDistro = new Map<string, string>()
 
 export function startLegacyWslRuntimeAuthDrain(
@@ -45,28 +47,36 @@ export function startLegacyWslRuntimeAuthDrain(
   startOptions: { throwOnFailure?: boolean } = {}
 ): Promise<void> {
   const key = options.distro.trim().toLowerCase()
+
   if (completedDistroKeys.has(key)) {
     return Promise.resolve()
   }
+
   // Coalesce launch/rate-limit callers while a drain is in flight. Queuing a
   // new pass for every poll can otherwise build an unbounded promise chain
   // while a legacy pane keeps the migration pending.
   const inFlight = drainQueueByDistro.get(key)
+
   if (inFlight) {
     return startOptions.throwOnFailure ? inFlight : logDrainFailure(inFlight)
   }
+
   const next = drainLegacyWslRuntimeAuth(options).then((status) => {
     if (status === 'complete') {
       completedDistroKeys.add(key)
     }
   })
+
   drainQueueByDistro.set(key, next)
+
   const clearQueue = (): void => {
     if (drainQueueByDistro.get(key) === next) {
       drainQueueByDistro.delete(key)
     }
   }
+
   void next.then(clearQueue, clearQueue)
+
   return startOptions.throwOnFailure ? next : logDrainFailure(next)
 }
 
@@ -81,6 +91,7 @@ export async function drainLegacyWslRuntimeAuth(
 ): Promise<'complete' | 'pending'> {
   const distroKey = options.distro.trim().toLowerCase()
   const paths = resolveLegacyRuntimePaths(options.guestHomeLinuxPath)
+
   const inspection = await runWslProcess({
     distro: options.distro,
     loginPath: 'none',
@@ -89,39 +100,53 @@ export async function drainLegacyWslRuntimeAuth(
     timeoutMs: 5_000,
     maxOutputBytes: 2 * 1024 * 1024
   })
+
   if (inspection.code === MARKER_PRESENT_EXIT) {
     return 'complete'
   }
+
   if (inspection.code === LEGACY_HOME_ABSENT_EXIT) {
     if (!options.legacyPanePresent) {
       return finalizeAbsentLegacyAuth(options.distro, paths)
     }
+
     return 'pending'
   }
+
   if (inspection.code === SOURCE_AUTH_ABSENT_EXIT) {
     return 'pending'
   }
+
   assertSuccessfulDrainStep('inspect', inspection)
 
   const inspected = parseLegacyRuntimeInspection(inspection.stdout)
+
   if (!inspected) {
     return 'pending'
   }
+
   const destination = await options.resolveDestination(inspected.authContents)
+
   if (!destination) {
     return 'pending'
   }
+
   const freshness = compareCodexAuthFreshness(inspected.authContents, destination.authContents)
+
   const promoteAuth =
     freshness !== null && codexAuthIsFresher(inspected.authContents, destination.authContents)
+
   const deleteSource = !options.legacyPanePresent && freshness !== null
+
   const sessionBridgeRoute = [
     paths.runtimeHome,
     destination.linuxHomePath,
     options.legacyPanePresent ? 'retained' : 'released'
   ].join('\0')
+
   const bridgeAllSessions =
     deleteSource || pendingSessionBridgeRouteByDistro.get(distroKey) !== sessionBridgeRoute
+
   const result = await runWslProcess({
     distro: options.distro,
     loginPath: 'none',
@@ -141,14 +166,17 @@ export async function drainLegacyWslRuntimeAuth(
     timeoutMs: bridgeAllSessions ? WSL_SESSION_BRIDGE_TIMEOUT_MS : 5_000,
     maxOutputBytes: 16 * 1024
   })
+
   try {
     assertSuccessfulDrainStep('apply', result)
   } catch {
     return recoverAfterFailedApply(options.distro, paths)
   }
+
   if (!deleteSource) {
     pendingSessionBridgeRouteByDistro.set(distroKey, sessionBridgeRoute)
   }
+
   return deleteSource ? 'complete' : 'pending'
 }
 
@@ -164,9 +192,11 @@ async function recoverAfterFailedApply(
     timeoutMs: 5_000,
     maxOutputBytes: 2 * 1024 * 1024
   })
+
   if (recovery.code === MARKER_PRESENT_EXIT) {
     return 'complete'
   }
+
   if (
     !recovery.timedOut &&
     (recovery.code === 0 ||
@@ -175,32 +205,41 @@ async function recoverAfterFailedApply(
   ) {
     return 'pending'
   }
+
   assertSuccessfulDrainStep('recover', recovery)
+
   return 'pending'
 }
 
 function parseLegacyRuntimeInspection(stdout: string): LegacyWslRuntimeInspection | null {
   const [authBase64, credentialsKind, credentialsBase64] = stdout.split('\n')
   const authContents = decodeWslBase64Payload(authBase64 ?? '')
+
   if (authContents === null) {
     return null
   }
+
   if (credentialsKind === 'missing') {
     return { authContents, credentials: { kind: 'missing' } }
   }
+
   if (credentialsKind !== 'present') {
     return null
   }
+
   const credentialsContents = decodeWslBase64Payload(credentialsBase64 ?? '')
+
   if (!credentialsContents || !isJsonObject(credentialsContents)) {
     return null
   }
+
   return { authContents, credentials: { kind: 'present', contents: credentialsContents } }
 }
 
 function isJsonObject(contents: string): boolean {
   try {
     const value = JSON.parse(contents) as unknown
+
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   } catch {
     return false
@@ -214,6 +253,7 @@ function resolveLegacyRuntimePaths(guestHomeLinuxPath: string): {
 } {
   const runtimeHome = wslCodexRuntimeHomeForGuestHome(guestHomeLinuxPath)
   const runtimeRoot = pathPosix.dirname(runtimeHome)
+
   return {
     activeHome: pathPosix.join(runtimeRoot, 'active', 'wsl', 'home'),
     marker: pathPosix.join(runtimeRoot, DRAIN_MARKER_NAME),
@@ -233,10 +273,13 @@ async function finalizeAbsentLegacyAuth(
     timeoutMs: 5_000,
     maxOutputBytes: 16 * 1024
   })
+
   if (result.code === LEGACY_HOME_STILL_PRESENT_EXIT) {
     return 'pending'
   }
+
   assertSuccessfulDrainStep('finalize', result)
+
   return 'complete'
 }
 
@@ -247,6 +290,7 @@ function assertSuccessfulDrainStep(
   if (result.code === 0 && !result.timedOut) {
     return
   }
+
   const detail = result.stderr.trim()
   throw new Error(
     `Legacy WSL auth drain ${step} failed (${result.timedOut ? 'timeout' : `exit ${result.code}`})${detail ? `: ${detail}` : ''}`

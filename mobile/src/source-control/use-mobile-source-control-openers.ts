@@ -67,10 +67,13 @@ export function useMobileSourceControlOpeners(params: Params) {
     busyActionRef,
     setActionError
   } = params
+
   const router = useRouter()
+
   const [branchDiffPreview, setBranchDiffPreview] = useState<MobileBranchDiffPreviewState | null>(
     null
   )
+
   const [openingPath, setOpeningPath] = useState<string | null>(null)
   const [openingBranchPath, setOpeningBranchPath] = useState<string | null>(null)
   const openingPathRef = useRef<string | null>(null)
@@ -83,20 +86,27 @@ export function useMobileSourceControlOpeners(params: Params) {
       if (!canOpenMobileGitStatusEntry(entry)) {
         return
       }
+
       if (openingPathRef.current || busyActionRef.current) {
         return
       }
+
       if (!client || connState !== 'connected') {
         if (!mountedRef.current) {
           return
         }
+
         setActionError('Waiting for desktop...')
+
         return
       }
+
       openingPathRef.current = entry.path
       setOpeningPath(entry.path)
+
       try {
         setActionError(null)
+
         if (origin !== 'session') {
           triggerSelection()
           router.push(
@@ -108,27 +118,33 @@ export function useMobileSourceControlOpeners(params: Params) {
               area: entry.area
             }) as Parameters<typeof router.push>[0]
           )
+
           return
         }
+
         // Snapshot the active tab now, at tap time, before the openDiff RPC —
         // the session uses it to avoid stealing focus if the user switches tabs
         // during the RPC window.
         onFileOpenStart?.()
+
         const diffReply = await sourceFileDiffOpenRun.request(client, {
           worktree: `id:${worktreeId}`,
           relativePath: entry.path,
           staged: entry.area === 'staged'
         })
+
         // Why the raw refusal: a host too old to open a diff tab is a capability gap this flow
         // falls back from, and no acceptance policy carries the code and message through.
         const fallbackToEdit = isMobileGitUnavailableReply(diffReply)
         const openedTabMode: 'diff' | 'edit' = fallbackToEdit ? 'edit' : 'diff'
+
         const editReply = fallbackToEdit
           ? await sourceFileOpenRun.request(client, {
               worktree: `id:${worktreeId}`,
               relativePath: entry.path
             })
           : undefined
+
         try {
           if (editReply) {
             sourceFileOpenRun.interpret(editReply)
@@ -138,9 +154,11 @@ export function useMobileSourceControlOpeners(params: Params) {
         } catch (error) {
           throw new Error(refusedRpcMessageOrFallback(error, 'Unable to open diff'))
         }
+
         if (!mountedRef.current) {
           return
         }
+
         const revealResult = await revealMobileSourceControlSessionDiff({
           client,
           worktreeId,
@@ -150,13 +168,17 @@ export function useMobileSourceControlOpeners(params: Params) {
           onOpenedFileDiff,
           isCurrent: () => mountedRef.current && openingPathRef.current === entry.path
         })
+
         if (revealResult === 'cancelled') {
           return
         }
+
         if (revealResult === 'timeout') {
           throw new Error("The file opened, but its tab isn't ready yet. Try again.")
         }
+
         triggerSelection()
+
         // Why: when launched from the session screen, opening a file dismisses
         // this surface back to the session. In embedded mode there is nothing
         // to pop (the panel docks beside the terminal), so close the dock
@@ -172,11 +194,13 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
+
         triggerError()
         setActionError(err instanceof Error ? err.message : 'Unable to open diff')
       } finally {
         if (openingPathRef.current === entry.path) {
           openingPathRef.current = null
+
           if (mountedRef.current) {
             setOpeningPath(null)
           }
@@ -206,23 +230,30 @@ export function useMobileSourceControlOpeners(params: Params) {
       if (openingBranchPathRef.current || openingPathRef.current || busyActionRef.current) {
         return
       }
+
       if (!client || connState !== 'connected') {
         if (!mountedRef.current) {
           return
         }
+
         setActionError('Waiting for desktop...')
+
         return
       }
+
       if (branchCompareState.kind !== 'ready') {
         return
       }
+
       const summary = branchCompareState.result.summary
+
       if (!canOpenMobileBranchCompareDiff(summary) || !summary.headOid || !summary.mergeBase) {
         return
       }
 
       openingBranchPathRef.current = entry.path
       setOpeningBranchPath(entry.path)
+
       if (origin !== 'session') {
         triggerSelection()
         router.push(
@@ -235,12 +266,16 @@ export function useMobileSourceControlOpeners(params: Params) {
           }) as Parameters<typeof router.push>[0]
         )
         openingBranchPathRef.current = null
+
         if (mountedRef.current) {
           setOpeningBranchPath(null)
         }
+
         return
       }
+
       setBranchDiffPreview({ kind: 'loading', entry })
+
       try {
         const reply = await gitBranchDiffRead.request(client, {
           worktree: `id:${worktreeId}`,
@@ -253,22 +288,29 @@ export function useMobileSourceControlOpeners(params: Params) {
             mergeBase: summary.mergeBase
           }
         })
+
         let interpreted: unknown
+
         try {
           interpreted = gitBranchDiffRead.interpret(reply)
         } catch (error) {
           throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed diff'))
         }
+
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const result = interpreted as GitDiffTextResult | { kind: 'binary' }
+
         if (result.kind !== 'text') {
           throw new Error('Binary branch diff preview unavailable on mobile')
         }
+
         const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
         const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
+
         if (!mountedRef.current) {
           return
         }
+
         setBranchDiffPreview({
           kind: 'ready',
           entry,
@@ -281,6 +323,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
+
         triggerError()
         setBranchDiffPreview({
           kind: 'error',
@@ -290,6 +333,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       } finally {
         if (openingBranchPathRef.current === entry.path) {
           openingBranchPathRef.current = null
+
           if (mountedRef.current) {
             setOpeningBranchPath(null)
           }

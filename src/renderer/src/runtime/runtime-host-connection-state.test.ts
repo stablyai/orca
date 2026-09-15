@@ -122,6 +122,7 @@ describe('runtime host connection state', () => {
         remoteControl: remoteControl({ state: 'reconnecting' })
       })
     ).toBe('reconnecting')
+
     for (const state of ['awaiting_ready', 'awaiting_authenticated'] as const) {
       expect(
         runtimeHostConnectionState({
@@ -206,6 +207,7 @@ describe('runtime host connection state for a recorded status entry', () => {
 
   it('names only the disconnected verdict as disconnected', () => {
     expect(isDisconnectedRuntimeHostState('disconnected')).toBe(true)
+
     for (const state of [
       'connected',
       'checking',

@@ -72,10 +72,12 @@ export function ConnectIntegrationsList(): React.JSX.Element {
     codeHostTaskProviderName: status.codeHostTaskProviderName,
     trackerChecking: status.trackerChecking
   })
+
   const reviewDone = status.reviewConnected
   const trackerDone = status.trackerProviderName !== null
   const reviewExpanded = !reviewDone || reviewReopened
   const reviewCanToggle = reviewDone
+
   // User's explicit expand/collapse of step 2, snapshotted against the
   // connection state so a provider connecting (or disconnecting) restores the
   // default for the new state instead of keeping a stale manual choice.
@@ -84,10 +86,12 @@ export function ConnectIntegrationsList(): React.JSX.Element {
     whenTrackerDone: boolean
     whenReviewDone: boolean
   } | null>(null)
+
   const taskToggleCurrent =
     taskToggle !== null &&
     taskToggle.whenTrackerDone === trackerDone &&
     taskToggle.whenReviewDone === reviewDone
+
   // Step 2 defaults collapsed while step 1 is still active (but opens on
   // click — review is not a prerequisite for connecting a tracker), stays open
   // even when the code host already resolved it so Linear/Jira remain

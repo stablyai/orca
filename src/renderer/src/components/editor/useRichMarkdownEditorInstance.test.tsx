@@ -8,6 +8,7 @@ import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 
 const { createExtensionsMock, createConfigMock, useEditorMock } = vi.hoisted(() => {
   const editorMock = { id: 'editor' }
+
   return {
     createExtensionsMock: vi.fn(() => ['extension']),
     createConfigMock: vi.fn(() => ({})),
@@ -16,9 +17,11 @@ const { createExtensionsMock, createConfigMock, useEditorMock } = vi.hoisted(() 
 })
 
 vi.mock('@tiptap/react', () => ({ useEditor: useEditorMock }))
+
 vi.mock('./rich-markdown-extensions', () => ({
   createRichMarkdownExtensions: createExtensionsMock
 }))
+
 vi.mock('./rich-markdown-editor-config', () => ({
   createRichMarkdownEditorConfig: createConfigMock
 }))
@@ -85,6 +88,7 @@ describe('useRichMarkdownEditorInstance', () => {
 
   it('does not rebuild Tiptap when ordinary editor options change', () => {
     const initialParams = createParams('initial')
+
     const { rerender, result } = renderHook(({ params }) => useRichMarkdownEditorInstance(params), {
       initialProps: { params: initialParams }
     })

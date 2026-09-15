@@ -31,6 +31,7 @@ export function asIdentifier(value: unknown): string {
   if (typeof value === 'string') {
     return value
   }
+
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
@@ -46,9 +47,11 @@ export function asFiniteNumber(value: unknown): number | null {
 
 export function getPageItems<T>(response: JiraPagedResponse<T>, key: JiraPageItemKey): T[] {
   const keyedItems = response[key]
+
   if (Array.isArray(keyedItems)) {
     return keyedItems
   }
+
   return response.values ?? []
 }
 
@@ -61,14 +64,18 @@ export function shouldFetchNextPage<T>(
   if (response.isLast === true || items.length === 0) {
     return false
   }
+
   const total = asFiniteNumber(response.total)
   const pageSize = asFiniteNumber(response.maxResults)
+
   if (total !== null) {
     return startAt + items.length < total && (pageSize ?? requestedMaxResults) > 0
   }
+
   if (response.isLast === false) {
     return (pageSize ?? requestedMaxResults) > 0
   }
+
   return pageSize !== null && items.length >= pageSize
 }
 
@@ -80,17 +87,22 @@ export async function fetchPagedRecords(
 ): Promise<JiraRecord[]> {
   const records: JiraRecord[] = []
   let startAt = 0
+
   for (let guard = 0; guard < 100; guard += 1) {
     const response = await jiraRequest<JiraPagedResponse<JiraRecord>>(
       entry,
       pathForPage(startAt, maxResults)
     )
+
     const items = getPageItems(response, key)
     records.push(...items)
+
     if (!shouldFetchNextPage(response, startAt, items, maxResults)) {
       break
     }
+
     startAt += asFiniteNumber(response.maxResults) ?? maxResults
   }
+
   return records
 }

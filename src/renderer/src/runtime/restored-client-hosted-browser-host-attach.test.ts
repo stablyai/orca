@@ -99,6 +99,7 @@ describe('ensureBrowserClientHostsForRestoredPages', () => {
 
   it('does not stack a second preparation on top of one still in flight', async () => {
     let settle = (): void => {}
+
     prepareBrowserClientHostPlacement.mockImplementation(
       () => new Promise((resolve) => (settle = () => resolve(CLIENT_PLACEMENT)))
     )

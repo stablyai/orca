@@ -28,6 +28,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
 
 function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
+
   return {
     worktreeId: 'wt-1',
     groupId: 'group-1',
@@ -66,12 +67,15 @@ function primaryButton(props: ReturnType<typeof baseProps>): string {
       <CommitArea {...props} />
     </TooltipProvider>
   )
+
   const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
     .map((match) => match[0])
     .find((entry) => entry.includes('data-slot="button"'))
+
   if (!button) {
     throw new Error('primary button not found')
   }
+
   return button
 }
 
@@ -96,6 +100,7 @@ describe('CommitArea primary action icons', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 1 }
       })
     )
+
     expect(button).not.toContain('lucide-arrow-up')
     expect(button).not.toContain('lucide-arrow-down-up')
     expect(button).not.toContain('lucide-cloud-upload')

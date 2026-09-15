@@ -6,6 +6,7 @@ import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function seedWorktree(store: ReturnType<typeof createTestStore>, enabled: boolean): string {
@@ -18,6 +19,7 @@ function seedWorktree(store: ReturnType<typeof createTestStore>, enabled: boolea
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
     }
   })
+
   return store.getState().createTab(WORKTREE_ID).id
 }
 
@@ -110,6 +112,7 @@ Implement the detailed worker instructions that should not be the short label`,
     const store = createTestStore()
     const tabId = seedWorktree(store, true)
     const paneKey = makePaneKey(tabId, LEAF_ID)
+
     const dispatchPrompt = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your task ID is: task-1
 
@@ -326,6 +329,7 @@ Implement task B worker instructions for the next dispatch`,
         repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
       }
     })
+
     const tabId = store
       .getState()
       .createTab(WORKTREE_ID, undefined, undefined, { quickCommandLabel: 'Run tests' }).id

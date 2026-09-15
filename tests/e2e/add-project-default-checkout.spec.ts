@@ -19,6 +19,7 @@ async function createCloneFixture(): Promise<{
   const rootPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-clone-'))
   )
+
   tempRoots.push(rootPath)
 
   const sourcePath = path.join(rootPath, 'default-checkout-source')
@@ -50,6 +51,7 @@ async function createLinkedWorktreeFixture(): Promise<{
   const rootPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
   )
+
   tempRoots.push(rootPath)
 
   const mainPath = path.join(rootPath, 'linked-source')
@@ -107,16 +109,21 @@ test.describe('Add project default checkout', () => {
         () =>
           orcaPage.evaluate((cloneName) => {
             const state = window.__store?.getState()
+
             if (!state) {
               return null
             }
+
             const repo = state.repos.find((candidate) => candidate.displayName === cloneName)
+
             if (!repo) {
               return null
             }
+
             const worktrees = state.worktreesByRepo[repo.id] ?? []
             const defaultCheckout = worktrees.find((worktree) => worktree.isMainWorktree)
             const normalizedDefaultCheckoutPath = defaultCheckout?.path.replace(/\\/g, '/') ?? null
+
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
               defaultCheckoutLooksCloned:
@@ -158,15 +165,20 @@ test.describe('Add project default checkout', () => {
         () =>
           orcaPage.evaluate((mainPath) => {
             const state = window.__store?.getState()
+
             if (!state) {
               return null
             }
+
             const repo = state.repos.find((candidate) => candidate.path === mainPath)
+
             if (!repo) {
               return null
             }
+
             const worktrees = state.worktreesByRepo[repo.id] ?? []
             const defaultCheckout = worktrees.find((worktree) => worktree.isMainWorktree)
+
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
               linkedRepoVisibility: repo.externalWorktreeVisibility,

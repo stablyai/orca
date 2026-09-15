@@ -23,10 +23,12 @@ export function mapMarkdownCommentsToBlocks(
       (candidate) =>
         candidate.startLine <= comment.lineNumber && comment.lineNumber <= candidate.endLine
     )
+
     if (!block) {
       unresolved.push(comment)
       continue
     }
+
     const list = byBlockKey.get(block.key) ?? []
     list.push(comment)
     byBlockKey.set(block.key, list)

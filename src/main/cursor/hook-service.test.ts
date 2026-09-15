@@ -12,6 +12,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock
@@ -23,6 +24,7 @@ import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
+
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
@@ -31,6 +33,7 @@ const WINDOWS_POWERSHELL_LAUNCHER =
 // node-pty suites, so a cold CLR start competes for the runner. Deliberately above the product's
 // own MANAGED_HOOK_TIMEOUT_SECONDS (10s): this gates launcher correctness, not user latency.
 const HOOK_RUN_TIMEOUT_MS = 30_000
+
 // Why: these cases run up to 16 of those chains back to back. Matches the same budget
 // windows-hook-payload-delivery.test.ts uses for the identical chain.
 const HOOK_CASE_TIMEOUT_MS = 60_000
@@ -59,9 +62,11 @@ function readInstalledCursorHooks(homeDir: string): InstalledCursorHooks {
 function requireRegisteredCommand(config: InstalledCursorHooks, eventName: string): string {
   const command = config.hooks[eventName]?.[0]?.command
   expect(command, eventName).toEqual(expect.any(String))
+
   if (typeof command !== 'string') {
     throw new Error(`missing Cursor hook command for ${eventName}`)
   }
+
   return command
 }
 
@@ -72,6 +77,7 @@ function runRegisteredCursorHook(
 ): { stdout: string; stderr: string; status: number | null } {
   const executable = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
   const args = process.platform === 'win32' ? ['/d', '/s', '/c', command] : ['-c', command]
+
   const result = spawnSync(executable, args, {
     encoding: 'utf8',
     input,
@@ -85,7 +91,9 @@ function runRegisteredCursorHook(
       ...extraEnv
     }
   })
+
   expect(result.error, result.stderr).toBeUndefined()
+
   return { stdout: result.stdout, stderr: result.stderr, status: result.status }
 }
 
@@ -113,16 +121,20 @@ describe('CursorHookService', () => {
       version?: number
       hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
     }
+
     expect(config.version).toBe(1)
     expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
+
     for (const eventName of CURSOR_EVENTS) {
       const definition = config.hooks[eventName]?.[0]
       expect(definition?.command).toMatch(
         process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
       )
+
       if (process.platform !== 'win32') {
         expect(definition?.command).toContain(join(homeDir, '.orca'))
       }
+
       expect(definition?.hooks).toBeUndefined()
     }
 
@@ -130,8 +142,10 @@ describe('CursorHookService', () => {
       join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME),
       'utf8'
     )
+
     expect(script).toContain('/hook/cursor')
     expect(script).toContain('GROK_HOOK_EVENT')
+
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
     } else {
@@ -154,6 +168,7 @@ describe('CursorHookService', () => {
       const spaceHome = join(tmpdir(), 'orca cursor home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         expect(new CursorHookService().install().state).toBe('installed')
 
@@ -200,6 +215,7 @@ describe('CursorHookService', () => {
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
       hooks: Record<string, { command?: string }[]>
     }
+
     const promptCommands = config.hooks.beforeSubmitPrompt.map((definition) => definition.command)
     expect(promptCommands).toContain('/usr/local/bin/user-hook')
     expect(
@@ -221,6 +237,7 @@ describe('CursorHookService', () => {
     () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
+
       const payloads = [
         (eventName: string) => JSON.stringify({ hook_event_name: eventName, tool_name: 'Write' }),
         () => ''
@@ -228,6 +245,7 @@ describe('CursorHookService', () => {
 
       for (const eventName of CURSOR_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
+
         for (const payloadFor of payloads) {
           const result = runRegisteredCursorHook(command, payloadFor(eventName))
           expect(result.status, `${eventName} exit`).toBe(0)
@@ -269,6 +287,7 @@ describe('CursorHookService', () => {
 
       for (const eventName of ['beforeSubmitPrompt', 'preToolUse', 'stop'] as const) {
         const command = requireRegisteredCommand(config, eventName)
+
         const result = runRegisteredCursorHook(
           command,
           JSON.stringify({ hook_event_name: eventName, tool_name: 'Write' }),
@@ -278,6 +297,7 @@ describe('CursorHookService', () => {
             ORCA_PANE_KEY: 'tab:leaf'
           }
         )
+
         expect(result.status, `${eventName} dead-listener exit`).toBe(0)
         expect(JSON.parse(result.stdout), `${eventName} dead-listener stdout`).toEqual(
           EXPECTED_CURSOR_HOOK_STDOUT[eventName]
@@ -293,12 +313,15 @@ describe('CursorHookService', () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
       const gitBash = findGitBash()
+
       const shells = [
         { name: 'cmd.exe', executable: 'cmd.exe', args: ['/d', '/c'] },
         { name: 'Git Bash', executable: gitBash, args: ['-c'] }
       ]
+
       for (const eventName of ['beforeSubmitPrompt', 'preToolUse'] as const) {
         const command = requireRegisteredCommand(config, eventName)
+
         for (const shell of shells) {
           const result = spawnSync(shell.executable, [...shell.args, command], {
             encoding: 'utf8',
@@ -313,6 +336,7 @@ describe('CursorHookService', () => {
               USERPROFILE: homeDir
             }
           })
+
           expect(result.error, `${eventName} ${shell.name}`).toBeUndefined()
           expect(result.status, `${eventName} ${shell.name} exit`).toBe(0)
           expect(result.stderr, `${eventName} ${shell.name} stderr`).toBe('')

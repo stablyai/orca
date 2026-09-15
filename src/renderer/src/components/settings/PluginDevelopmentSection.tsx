@@ -13,6 +13,7 @@ type PluginDevelopmentSectionProps = {
 
 function saveErrorMessage(cause: unknown): string {
   console.warn('[plugins] development path update failed:', cause)
+
   return translate(
     'auto.components.settings.PluginDevelopmentSection.saveFailed',
     'Could not save development plugin paths.'
@@ -29,6 +30,7 @@ export function PluginDevelopmentSection({
 
   const addPath = async (): Promise<void> => {
     const path = pathInput.trim()
+
     if (!path) {
       setError(
         translate(
@@ -36,9 +38,12 @@ export function PluginDevelopmentSection({
           'Enter a plugin folder path.'
         )
       )
+
       return
     }
+
     setError(null)
+
     try {
       await onChange([...paths, path])
       setPathInput('')
@@ -49,6 +54,7 @@ export function PluginDevelopmentSection({
 
   const removePath = async (index: number): Promise<void> => {
     setError(null)
+
     try {
       await onChange(paths.filter((_, pathIndex) => pathIndex !== index))
     } catch (cause) {

@@ -41,6 +41,7 @@ describe('readDevinHooksConfig', () => {
 
   it('rejects recovered partial parses from malformed JSONC', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       expect(parseDevinHooksConfigText('{"hooks": }', 'Devin config.json')).toBeNull()
       expect(warn).toHaveBeenCalledWith(

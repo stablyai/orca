@@ -14,8 +14,10 @@ export function matchNativeChatSplitShortcut(
   if (keybindingMatchesAction('terminal.splitRight', input, platform, keybindings)) {
     return 'right'
   }
+
   if (keybindingMatchesAction('terminal.splitDown', input, platform, keybindings)) {
     return 'down'
   }
+
   return null
 }

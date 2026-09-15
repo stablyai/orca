@@ -62,6 +62,7 @@ import {
 } from './helpers/host-created-terminal-retention-oracle'
 
 const scratch = createRetentionFixtureDirectory()
+
 const fixturePath = writeRetentionFixture(scratch)
 
 test.afterAll(() => {
@@ -77,9 +78,11 @@ function createPairedRuntimeCall(page: Page, environmentId: string): RuntimeRpcC
           method,
           params
         })
+
         if (!response.ok) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
+
         return response.result
       },
       { environmentId, method, params }
@@ -108,11 +111,13 @@ async function readClientStripWhenTabAppears(
     .poll(
       async () => {
         strip = await readClientTerminalStrip(page, worktreeId)
+
         return strip.includes(tabId)
       },
       { timeout: 60_000, message }
     )
     .toBe(true)
+
   return strip
 }
 
@@ -128,18 +133,24 @@ async function prepareRetentionFixture(
   client: PairedElectronClient
 ): Promise<RetentionFixture> {
   const call = createPairedRuntimeCall(client.page, client.environmentId)
+
   const { worktreeId, unrelatedWorktreeId } = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
     const active = state?.activeWorktreeId
+
     if (!state || !active) {
       throw new Error('Host has no active worktree')
     }
+
     const unrelated = state.allWorktrees().find((worktree) => worktree.id !== active)
+
     if (!unrelated) {
       throw new Error('Host fixture needs a second worktree for the unrelated-workspace control')
     }
+
     return { worktreeId: active, unrelatedWorktreeId: unrelated.id }
   })
+
   await expect
     .poll(
       () =>
@@ -158,12 +169,14 @@ async function prepareRetentionFixture(
   // PRECONDITION: the RENDERER owns this workspace's publication, so the CLI tab
   // created later inherits the renderer epoch instead of a headless one.
   const rendererTabId = await createHostRendererTerminalTab(orcaPage, worktreeId)
+
   const rendererOwned = await readHostInventoryWhenTabAppears(
     call,
     worktreeId,
     rendererTabId,
     'Host never published the renderer terminal tab'
   )
+
   expect(
     rendererOwned.publicationEpoch,
     'the attached-window topology requires a renderer-owned publication; a headless epoch takes a different, already-correct path'
@@ -174,6 +187,7 @@ async function prepareRetentionFixture(
     toWebTerminalSurfaceTabId(rendererTabId),
     'Paired client never mirrored the host renderer terminal tab'
   )
+
   return { call, unrelatedWorktreeId, worktreeId }
 }
 
@@ -197,12 +211,14 @@ async function runCliTerminalRetentionJourney(
     testInfo,
     clientName
   )
+
   const hostPageErrors: string[] = []
   const clientPageErrors: string[] = []
   orcaPage.on('pageerror', (error) => hostPageErrors.push(String(error)))
   client.page.on('pageerror', (error) => clientPageErrors.push(String(error)))
   const createdHandles: string[] = []
   let call: RuntimeRpcCall | null = null
+
   try {
     const fixture = await prepareRetentionFixture(orcaPage, client)
     call = fixture.call
@@ -216,17 +232,21 @@ async function runCliTerminalRetentionJourney(
         fixturePath,
         path.join(scratch, `${clientName}-unrelated.log`)
       )
+
       createdHandles.push(terminal.handle)
+
       return terminal
     }
 
     const preceding = precedingHostTerminal ? await createUnrelated() : null
+
     const cli = await createHostCliTerminal(
       fixture.call,
       worktreeId,
       fixturePath,
       path.join(scratch, `${clientName}-target.log`)
     )
+
     createdHandles.push(cli.handle)
     const unrelated = preceding ?? (await createUnrelated())
 
@@ -241,6 +261,7 @@ async function runCliTerminalRetentionJourney(
       secondRendererTabId,
       'Host never republished with the second renderer tab'
     )
+
     expect(
       afterSync.tabIds,
       'the renderer graph sync pruned the CLI-created terminal out of the host session inventory'
@@ -261,6 +282,7 @@ async function runCliTerminalRetentionJourney(
       toWebTerminalSurfaceTabId(secondRendererTabId),
       'Paired client never applied the renderer graph sync that followed the CLI create'
     )
+
     expect(strip, 'the paired client dropped the CLI-created terminal from its strip').toContain(
       toWebTerminalSurfaceTabId(cli.tabId)
     )
@@ -290,6 +312,7 @@ async function runCliTerminalRetentionJourney(
     for (const handle of createdHandles) {
       await call?.('terminal.closeTab', { terminal: handle }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 }

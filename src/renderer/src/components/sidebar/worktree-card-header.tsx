@@ -78,6 +78,7 @@ export function WorktreeCardHeader({
     isFolder,
     handleWorkspaceQuickAction
   } = card
+
   const {
     showPinnedRepoIcon,
     showInlineRepoBadge,

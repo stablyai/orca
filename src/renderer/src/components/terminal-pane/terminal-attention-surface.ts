@@ -33,14 +33,17 @@ function admitTerminalPane(
   liveness: AgentAttentionLiveness
 ): AgentAttentionSurfaceAdmission {
   const tabId = getPaneKeyTabId(subject.surfaceKey)
+
   if (tabId === null) {
     return { admitted: false, cause: 'unknown-surface' }
   }
+
   // Why: delayed completion hooks from a closed split pane can arrive while another pane in
   // the tab is still live; stale leaf completions must not create unread or OS notifications.
   const isCurrentPane = liveness.hasLiveSession
     ? isCurrentLivePaneKey(state, subject.workspaceId, subject.surfaceKey)
     : isCurrentKnownPaneKey(state, subject.workspaceId, subject.surfaceKey)
+
   return isCurrentPane
     ? { admitted: true, groupId: tabId }
     : { admitted: false, cause: 'superseded-surface' }
@@ -51,22 +54,29 @@ function collectTerminalAttentionRemainder(
   workspaceId: string
 ): AgentAttentionRemainder {
   const tabIds = new Set((state.tabsByWorktree[workspaceId] ?? []).map((tab) => tab.id))
+
   if (tabIds.size === 0) {
     return { hasSurfaces: false, unreadSubjectKeys: [], unreadGroupIds: [] }
   }
+
   const unreadSubjectKeys: string[] = []
+
   for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
     const parsed = parsePaneKey(paneKey)
+
     if (parsed && tabIds.has(parsed.tabId)) {
       unreadSubjectKeys.push(paneKey)
     }
   }
+
   const unreadGroupIds = Object.keys(state.unreadTerminalTabs).filter((tabId) => tabIds.has(tabId))
+
   return { hasSurfaces: true, unreadSubjectKeys, unreadGroupIds }
 }
 
 function resolveViewedPaneKey(state: StoreSnapshot, tabId: string): string | null {
   const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId ?? null
+
   return leafId !== null && isTerminalLeafId(leafId) ? makePaneKey(tabId, leafId) : null
 }
 

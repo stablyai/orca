@@ -54,8 +54,10 @@ export function runDocLinkCommand(
 export function commitRow(editor: Editor, menu: DocLinkMenuState, row: DocLinkMenuRow): void {
   if (row.kind === 'document') {
     runDocLinkCommand(editor, menu, row.document)
+
     return
   }
+
   // Why: action rows (v2 "Create <query>") delete the trigger text and hand
   // off to their own run(). v1 never emits action rows so this branch is dead
   // today, but the shape is in place so the hook point costs nothing later.
@@ -76,20 +78,25 @@ export function syncDocLinkMenu(
   // Guard 1: not editable, IME composing, or non-empty selection.
   if (!root || editor.view.composing || !editor.isEditable) {
     setDocLinkMenu(null)
+
     return
   }
 
   const { state, view } = editor
   const { selection } = state
+
   if (!selection.empty) {
     setDocLinkMenu(null)
+
     return
   }
 
   // Guard 2: must be inside a textblock.
   const { $from } = selection
+
   if (!$from.parent.isTextblock) {
     setDocLinkMenu(null)
+
     return
   }
 
@@ -97,19 +104,25 @@ export function syncDocLinkMenu(
   // `[[` is literal text and must not open the popover.
   if ($from.parent.type.spec.code) {
     setDocLinkMenu(null)
+
     return
   }
+
   const codeMarkType = state.schema.marks.code
+
   if (codeMarkType && state.doc.rangeHasMark($from.pos, $from.pos, codeMarkType)) {
     setDocLinkMenu(null)
+
     return
   }
 
   // Guard 4/5: extract block text and match the trigger regex.
   const blockTextBeforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
   const match = blockTextBeforeCursor.match(DOC_LINK_TRIGGER_REGEX)
+
   if (!match) {
     setDocLinkMenu(null)
+
     return
   }
 

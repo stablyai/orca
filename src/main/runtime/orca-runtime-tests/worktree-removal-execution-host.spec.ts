@@ -43,14 +43,17 @@ function makeRemoteRepoStore(
     executionHostId,
     ...extraRepoFields
   }
+
   const metaById: Record<string, WorktreeMeta> = {
     [TEST_WORKTREE_ID]: makeWorktreeMeta({ hostId: executionHostId, ...metaOverrides })
   }
+
   const removeWorktreeMeta = vi.fn((worktreeId: string, hostId?: string) => {
     if (!hostId || metaById[worktreeId]?.hostId === hostId) {
       delete metaById[worktreeId]
     }
   })
+
   return {
     repo,
     metaById,
@@ -63,6 +66,7 @@ function makeRemoteRepoStore(
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       removeWorktreeMeta
@@ -195,6 +199,7 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
     const { runtimeStore, metaById } = makeRemoteRepoStore('runtime:env-1', {
       connectionId: 'target-a'
     })
+
     const provider = makeGitProvider([REPO_ROOT_ENTRY, REGISTERED_ENTRY])
     registerSshGitProvider('target-a', provider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)

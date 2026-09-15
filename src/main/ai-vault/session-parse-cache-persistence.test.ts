@@ -61,17 +61,20 @@ afterEach(async () => {
 async function makeTempDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-parse-cache-persist-'))
   tempRoots.push(root)
+
   return root
 }
 
 async function claudeCandidate(path: string): Promise<SessionFileCandidate> {
   const fileStat = await stat(path)
+
   const file: FileWithMtime = {
     path,
     mtimeMs: fileStat.mtimeMs,
     modifiedAt: fileStat.mtime.toISOString(),
     sizeBytes: fileStat.size
   }
+
   return { agent: 'claude', file, codexHome: null }
 }
 
@@ -103,6 +106,7 @@ function assistantRecord(index: number, text: string): string {
 async function writeTranscript(root: string): Promise<string> {
   const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
   await writeFile(path, `${userRecord(0, 'first question')}\n${assistantRecord(1, 'answer')}\n`)
+
   return path
 }
 
@@ -112,6 +116,7 @@ async function parseAndPersist(path: string): Promise<SessionParseStats> {
   await parseAgentSessionFileCached(await claudeCandidate(path), process.platform, stats)
   scheduleSessionParseCachePersist(stats)
   await flushSessionParseCachePersistForTests()
+
   return stats
 }
 
@@ -127,6 +132,7 @@ async function coldParseStats(path: string): Promise<SessionParseStats> {
   const stats = createSessionParseStats()
   await ensureSessionParseCacheLoaded()
   await parseAgentSessionFileCached(await claudeCandidate(path), process.platform, stats)
+
   return stats
 }
 
@@ -327,11 +333,13 @@ describe('session parse cache persistence', () => {
     // full parse (not incremental) whose result matches a cold parse.
     await appendFile(transcript, `${userRecord(2, 'follow-up')}\n${assistantRecord(3, 'more')}\n`)
     const stats = createSessionParseStats()
+
     const reparsed = await parseAgentSessionFileCached(
       await claudeCandidate(transcript),
       process.platform,
       stats
     )
+
     expect(stats.fullParses).toBe(1)
     expect(stats.incremental).toBe(0)
     expect(stats.reused).toBe(0)
@@ -427,6 +435,7 @@ describe('session parse cache persistence', () => {
     const root = await makeTempDir()
     const transcript = await writeTranscript(root)
     const candidate = await claudeCandidate(transcript)
+
     // Snapshot order is oldest→newest, so a foreign over-cap file must keep
     // its newest (last) entries; the real transcript rides at the very end.
     const fakes: [string, PersistedSessionParseCacheEntry][] = Array.from(
@@ -436,6 +445,7 @@ describe('session parse cache persistence', () => {
         { mtimeMs: index, sizeBytes: 1, platform: process.platform, session: null }
       ]
     )
+
     seedSessionParseCache([
       ...fakes,
       [
@@ -547,12 +557,14 @@ describe('sidecar observations survive the round trip', () => {
 
     const stats = createSessionParseStats()
     await parseAgentSessionFileCached(await claudeCandidate(path), process.platform, stats)
+
     const seeded = snapshotSessionParseCacheForPersistence().map(
       ([entryPath, entry]): [string, PersistedSessionParseCacheEntry] => [
         entryPath,
         sidecar === undefined ? entry : { ...entry, sidecar }
       ]
     )
+
     resetSessionParseCacheForTests()
     seedSessionParseCache(seeded)
     scheduleSessionParseCachePersist(stats)

@@ -4,21 +4,26 @@ import { createAuthFilesystemOperation } from './auth-filesystem-operation'
 describe('createAuthFilesystemOperation', () => {
   it('serializes WSL aliases by distro and drops an abandoned queued read', async () => {
     let resolveFirst!: (value: string) => void
+
     const firstRaw = vi.fn(
       () =>
         new Promise<string>((resolve) => {
           resolveFirst = resolve
         })
     )
+
     const secondRaw = vi.fn(async () => 'second')
+
     const first = createAuthFilesystemOperation(
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex\\auth.json',
       firstRaw
     )
+
     const second = createAuthFilesystemOperation(
       '\\\\WSL$\\ubuntu\\home\\alice\\managed\\auth.json',
       secondRaw
     )
+
     const firstController = new AbortController()
     const secondController = new AbortController()
 
@@ -42,14 +47,17 @@ describe('createAuthFilesystemOperation', () => {
   it('allows different WSL distros to probe concurrently', async () => {
     const ubuntuRaw = vi.fn(async () => 'ubuntu')
     const debianRaw = vi.fn(async () => 'debian')
+
     const ubuntu = createAuthFilesystemOperation(
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex\\auth.json',
       ubuntuRaw
     )
+
     const debian = createAuthFilesystemOperation(
       '\\\\wsl.localhost\\Debian\\home\\alice\\.codex\\auth.json',
       debianRaw
     )
+
     const controller = new AbortController()
 
     await expect(
@@ -61,10 +69,12 @@ describe('createAuthFilesystemOperation', () => {
 
   it('does not start an operation for an already-aborted waiter', async () => {
     const raw = vi.fn(async () => 'unexpected')
+
     const operation = createAuthFilesystemOperation(
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex\\auth.json',
       raw
     )
+
     const controller = new AbortController()
     const abortError = new Error('already expired')
     controller.abort(abortError)
@@ -77,18 +87,21 @@ describe('createAuthFilesystemOperation', () => {
   it('caps cross-distro operations and never starts an expired queued probe', async () => {
     let resolveUbuntu!: (value: string) => void
     let resolveDebian!: (value: string) => void
+
     const ubuntuRaw = vi.fn(
       () =>
         new Promise<string>((resolve) => {
           resolveUbuntu = resolve
         })
     )
+
     const debianRaw = vi.fn(
       () =>
         new Promise<string>((resolve) => {
           resolveDebian = resolve
         })
     )
+
     const fedoraRaw = vi.fn(async () => 'fedora')
     const ubuntu = createAuthFilesystemOperation('\\\\wsl$\\Ubuntu\\a\\auth.json', ubuntuRaw)
     const debian = createAuthFilesystemOperation('\\\\wsl$\\Debian\\b\\auth.json', debianRaw)

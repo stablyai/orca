@@ -1,5 +1,7 @@
 export const STATUS_BAR_CONTEXT_MENU_EXEMPT_ATTR = 'data-status-bar-context-menu-exempt'
+
 export const STATUS_BAR_CONTEXT_MENU_EXEMPT_SELECTOR = `[${STATUS_BAR_CONTEXT_MENU_EXEMPT_ATTR}]`
+
 export const STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS = {
   [STATUS_BAR_CONTEXT_MENU_EXEMPT_ATTR]: ''
 } as const
@@ -22,16 +24,19 @@ function closestTargetFromEventTarget(target: EventTarget | null): ClosestCapabl
   // Why: contextmenu can target Text nodes inside exempt surfaces; their
   // Element parent still carries the opt-out selector.
   const parentElement = (target as { parentElement?: unknown } | null)?.parentElement
+
   if (hasClosest(parentElement)) {
     return parentElement
   }
 
   const parentNode = (target as { parentNode?: unknown } | null)?.parentNode
+
   return hasClosest(parentNode) ? parentNode : null
 }
 
 export function shouldOpenStatusBarContextMenu(target: EventTarget | null): boolean {
   const closestTarget = closestTargetFromEventTarget(target)
+
   if (!closestTarget) {
     return true
   }

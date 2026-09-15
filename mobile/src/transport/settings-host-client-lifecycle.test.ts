@@ -1,6 +1,7 @@
 vi.mock('../notifications/push-registration', () => ({
   attachPushRegistration: () => () => {}
 }))
+
 import { createElement, Fragment, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +19,9 @@ import type { RpcClient } from './rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
 const connectMock = vi.fn()
+
 const loadHostsMock = vi.fn()
+
 const routeFocus = vi.hoisted(() => ({
   effect: null as null | (() => void | (() => void))
 }))
@@ -32,9 +35,11 @@ vi.mock('expo-router', () => ({
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
+
 vi.mock('./host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
+
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
@@ -46,6 +51,7 @@ type FakeClient = RpcClient & {
 function makeFakeClient(initialState: ConnectionState): FakeClient {
   const listeners = new Set<(state: ConnectionState) => void>()
   const closeMock = vi.fn()
+
   return {
     sendRequest: vi.fn(),
     subscribe: vi.fn(() => () => {}),
@@ -55,6 +61,7 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
     getLastConnectedAt: () => null,
     onStateChange: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     },
     notifyForeground: vi.fn(),
@@ -82,13 +89,16 @@ const HOSTS = [
   host('folder-workspace-host', 20),
   host('offline-host', 10)
 ]
+
 const HOST_IDS = HOSTS.map((profile) => profile.id)
+
 const HOME_HOST_IDS = selectHomeAutoConnectHostIds(HOSTS)
 
 let context: RpcClientContextValue | null = null
 
 function ContextProbe(): null {
   context = useRpcClientContext()
+
   return null
 }
 
@@ -101,6 +111,7 @@ function HomeProbe(): null {
   useEffect(() => {
     primeHosts(HOSTS)
   }, [primeHosts])
+
   return null
 }
 
@@ -108,21 +119,25 @@ function SettingsProbe(): null {
   useAllHostClients(HOST_IDS, {
     closeUnusedOnRelease: true
   })
+
   return null
 }
 
 function FocusedSettingsProbe(): null {
   useFocusedSettingsHostClients(HOST_IDS)
+
   return null
 }
 
 function DynamicSettingsProbe({ hostIds }: { hostIds: string[] }): null {
   useAllHostClients(hostIds, { closeUnusedOnRelease: true })
+
   return null
 }
 
 function DetailProbe({ hostId }: { hostId: string }): null {
   useHostClient(hostId)
+
   return null
 }
 
@@ -141,6 +156,7 @@ function TestApp({
       : screen === 'settings'
         ? createElement(SettingsProbe)
         : null
+
   return createElement(
     RpcClientProvider,
     null,
@@ -161,9 +177,11 @@ async function renderScreen(screen: Screen, detailHostId?: string): Promise<Reac
     await Promise.resolve()
     await Promise.resolve()
   })
+
   if (!renderer) {
     throw new Error('settings lifecycle harness did not render')
   }
+
   return renderer
 }
 
@@ -183,6 +201,7 @@ function activeHostIds(): string[] {
   if (!context) {
     throw new Error('client context was not captured')
   }
+
   return context
     .getAllClients()
     .map(({ hostId }) => hostId)
@@ -202,6 +221,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation((profile: HostProfile) => {
       const client = makeFakeClient(profile.id === 'offline-host' ? 'reconnecting' : 'connected')
       clients.set(profile.id, [...(clients.get(profile.id) ?? []), client])
+
       return client
     })
     loadHostsMock.mockResolvedValue(HOSTS)
@@ -226,9 +246,11 @@ describe('settings host client lifecycle', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+
     if (!renderer) {
       throw new Error('navigation stack harness did not render')
     }
+
     expect(activeHostIds()).toEqual([...HOME_HOST_IDS].sort())
     expect(connectMock).toHaveBeenCalledTimes(3)
 
@@ -245,10 +267,12 @@ describe('settings host client lifecycle', () => {
       renderer?.update(createElement(NavigationStack, { settingsVisible: false }))
     })
     expect(activeHostIds()).toEqual([...HOME_HOST_IDS].sort())
+
     for (const hostId of HOME_HOST_IDS) {
       expect(clients.get(hostId)).toHaveLength(1)
       expect(clients.get(hostId)?.[0]?.closeMock).not.toHaveBeenCalled()
     }
+
     for (const hostId of ['folder-workspace-host', 'offline-host']) {
       expect(clients.get(hostId)?.[0]?.closeMock).toHaveBeenCalledOnce()
     }
@@ -263,9 +287,11 @@ describe('settings host client lifecycle', () => {
       renderer?.update(createElement(NavigationStack, { settingsVisible: false }))
     })
     expect(activeHostIds()).toEqual([...HOME_HOST_IDS].sort())
+
     for (const hostId of HOME_HOST_IDS) {
       expect(clients.get(hostId)).toHaveLength(1)
     }
+
     for (const hostId of ['folder-workspace-host', 'offline-host']) {
       expect(clients.get(hostId)).toHaveLength(2)
       expect(clients.get(hostId)?.every((client) => client.closeMock.mock.calls.length === 1)).toBe(
@@ -281,6 +307,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation((profile: HostProfile) => {
       const client = makeFakeClient('reconnecting')
       clients.set(profile.id, [...(clients.get(profile.id) ?? []), client])
+
       return client
     })
     loadHostsMock.mockResolvedValue(HOSTS)
@@ -290,6 +317,7 @@ describe('settings host client lifecycle', () => {
 
     await navigate(renderer, 'empty')
     expect(activeHostIds()).toEqual([])
+
     for (const hostClients of clients.values()) {
       expect(hostClients).toHaveLength(1)
       expect(hostClients[0]?.closeMock).toHaveBeenCalledOnce()
@@ -299,6 +327,7 @@ describe('settings host client lifecycle', () => {
     await navigate(renderer, 'empty')
     expect(activeHostIds()).toEqual([])
     expect(connectMock).toHaveBeenCalledTimes(HOSTS.length * 2)
+
     for (const hostClients of clients.values()) {
       expect(hostClients).toHaveLength(2)
       expect(hostClients.every((client) => client.closeMock.mock.calls.length === 1)).toBe(true)
@@ -312,6 +341,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation((profile: HostProfile) => {
       const client = makeFakeClient('reconnecting')
       clients.set(profile.id, client)
+
       return client
     })
     loadHostsMock.mockResolvedValue(HOSTS)
@@ -320,6 +350,7 @@ describe('settings host client lifecycle', () => {
     const sharedHostId = 'relay-recent'
     const removedHostId = 'folder-workspace-host'
     const addedHostId = 'offline-host'
+
     function HostListApp({ settingsHostIds }: { settingsHostIds: string[] }) {
       return createElement(
         RpcClientProvider,
@@ -344,6 +375,7 @@ describe('settings host client lifecycle', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+
     if (!renderer) {
       throw new Error('host-list lifecycle harness did not render')
     }
@@ -376,6 +408,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation((profile: HostProfile) => {
       const client = makeFakeClient('connected')
       clients.set(profile.id, client)
+
       return client
     })
     loadHostsMock.mockResolvedValue(HOSTS)
@@ -395,12 +428,15 @@ describe('settings host client lifecycle', () => {
     const retryHost = host('ssh-retry-host', 1)
     let resolveInitial: ((hosts: HostProfile[]) => void) | null = null
     let resolveRetry: ((hosts: HostProfile[]) => void) | null = null
+
     const initialLookup = new Promise<HostProfile[]>((resolve) => {
       resolveInitial = resolve
     })
+
     const retryLookup = new Promise<HostProfile[]>((resolve) => {
       resolveRetry = resolve
     })
+
     loadHostsMock.mockReturnValueOnce(initialLookup).mockReturnValueOnce(retryLookup)
     const initialClient = makeFakeClient('connected')
     const retryClient = makeFakeClient('reconnecting')
@@ -410,8 +446,10 @@ describe('settings host client lifecycle', () => {
       useAllHostClients([retryHost.id], {
         closeUnusedOnRelease: true
       })
+
       return null
     }
+
     function RetryApp({ settingsVisible }: { settingsVisible: boolean }): React.JSX.Element {
       return createElement(
         RpcClientProvider,
@@ -430,13 +468,16 @@ describe('settings host client lifecycle', () => {
     act(() => {
       renderer = create(createElement(RetryApp, { settingsVisible: true }))
     })
+
     if (!renderer || !resolveInitial || !resolveRetry) {
       throw new Error('retry lifecycle harness did not initialize')
     }
+
     await act(async () => {
       resolveInitial?.([retryHost])
       await initialLookup
     })
+
     if (!context) {
       throw new Error('client context was not captured')
     }
@@ -461,14 +502,18 @@ describe('settings host client lifecycle', () => {
       deviceToken: '',
       publicKeyB64: ''
     })
+
     let resolveFirst: ((hosts: HostProfile[]) => void) | null = null
     let resolveSecond: ((hosts: HostProfile[]) => void) | null = null
+
     const firstLookup = new Promise<HostProfile[]>((resolve) => {
       resolveFirst = resolve
     })
+
     const secondLookup = new Promise<HostProfile[]>((resolve) => {
       resolveSecond = resolve
     })
+
     loadHostsMock.mockReturnValueOnce(firstLookup).mockReturnValueOnce(secondLookup)
     const client = makeFakeClient('reconnecting')
     connectMock.mockReturnValue(client)
@@ -477,8 +522,10 @@ describe('settings host client lifecycle', () => {
       useAllHostClients([settingsOnlyHost.id], {
         closeUnusedOnRelease: true
       })
+
       return null
     }
+
     function PendingApp({ visible }: { visible: boolean }): React.JSX.Element {
       return createElement(
         RpcClientProvider,
@@ -491,6 +538,7 @@ describe('settings host client lifecycle', () => {
     act(() => {
       renderer = create(createElement(PendingApp, { visible: true }))
     })
+
     if (!renderer || !resolveFirst || !resolveSecond) {
       throw new Error('pending settings harness did not initialize')
     }
@@ -519,6 +567,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation((profile: HostProfile) => {
       const client = makeFakeClient('connected')
       clients.set(profile.id, [...(clients.get(profile.id) ?? []), client])
+
       return client
     })
     loadHostsMock.mockResolvedValue(HOSTS)
@@ -552,6 +601,7 @@ describe('settings host client lifecycle', () => {
       )
       await Promise.resolve()
     })
+
     if (!renderer || !context) {
       throw new Error('replacement lifecycle harness did not initialize')
     }
@@ -595,6 +645,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation(() => {
       const client = makeFakeClient('reconnecting')
       clients.push(client)
+
       return client
     })
     loadHostsMock.mockResolvedValue([manualHost])
@@ -604,8 +655,10 @@ describe('settings host client lifecycle', () => {
         autoConnectHostIds: selected ? [manualHost.id] : [],
         closeUnusedOnRelease: true
       })
+
       return null
     }
+
     function ManualApp({
       selected,
       homeVisible = true
@@ -629,9 +682,11 @@ describe('settings host client lifecycle', () => {
     act(() => {
       renderer = create(createElement(ManualApp, { selected: false }))
     })
+
     if (!renderer || !context) {
       throw new Error('manual connection harness did not initialize')
     }
+
     await act(async () => {
       await context?.forceReconnect(manualHost.id)
     })
@@ -670,6 +725,7 @@ describe('settings host client lifecycle', () => {
     connectMock.mockImplementation((profile: HostProfile) => {
       const client = makeFakeClient('reconnecting')
       clients.set(profile.id, client)
+
       return client
     })
     loadHostsMock.mockResolvedValue(HOSTS)
@@ -696,17 +752,21 @@ describe('settings host client lifecycle', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+
     if (!renderer || !routeFocus.effect) {
       throw new Error('settings focus harness did not initialize')
     }
+
     expect(activeHostIds()).toEqual([...HOME_HOST_IDS, detailHostId].sort())
 
     let blur: (() => void) | undefined
     await act(async () => {
       const cleanup = routeFocus.effect?.()
+
       if (typeof cleanup === 'function') {
         blur = cleanup
       }
+
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -717,9 +777,11 @@ describe('settings host client lifecycle', () => {
       await Promise.resolve()
     })
     expect(activeHostIds()).toEqual([...HOME_HOST_IDS, detailHostId].sort())
+
     for (const hostId of [...HOME_HOST_IDS, detailHostId]) {
       expect(clients.get(hostId)?.closeMock).not.toHaveBeenCalled()
     }
+
     expect(clients.get('offline-host')?.closeMock).toHaveBeenCalledOnce()
 
     act(() => renderer?.unmount())

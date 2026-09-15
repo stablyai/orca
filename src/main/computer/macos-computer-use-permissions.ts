@@ -39,13 +39,17 @@ async function openComputerUsePermissionsAsync(
   }
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
+
   if (!helperAppPath) {
     throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
   }
+
   const status = await getComputerUsePermissionStatus()
+
   if (status.helperUnavailableReason) {
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
   }
+
   const nextStep = nextPermissionStep(status.permissions)
 
   if (!permissionId && !nextStep) {
@@ -62,10 +66,12 @@ async function openComputerUsePermissionsAsync(
 
   closeExistingPermissionHelpers()
   const helperArgs = permissionId ? ['--permission', permissionId] : ['--permissions']
+
   const helper = spawn('/usr/bin/open', ['-n', helperAppPath, '--args', ...helperArgs], {
     detached: true,
     stdio: 'ignore'
   })
+
   helper.unref()
 
   return {
@@ -98,11 +104,13 @@ async function resetComputerUsePermissionsAsync(): Promise<ComputerUsePermission
   }
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
+
   if (!helperAppPath) {
     throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
   }
 
   const status = await getComputerUsePermissionStatus()
+
   if (status.helperUnavailableReason) {
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
   }
@@ -125,6 +133,7 @@ function closeExistingPermissionHelpers(): void {
     'orca-computer-use-macos[[:space:]]+--permission([[:space:]]|$)',
     'orca-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'
   ]
+
   for (const pattern of setupHelperPatterns) {
     spawnSync('/usr/bin/pkill', ['-f', pattern], {
       stdio: 'ignore'
@@ -134,6 +143,7 @@ function closeExistingPermissionHelpers(): void {
 
 function readComputerUseBundleId(helperAppPath: string): string {
   const infoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
+
   try {
     const bundleId = execFileSync(
       '/usr/libexec/PlistBuddy',
@@ -143,6 +153,7 @@ function readComputerUseBundleId(helperAppPath: string): string {
         stdio: ['ignore', 'pipe', 'ignore']
       }
     ).trim()
+
     return bundleId || DEFAULT_COMPUTER_USE_BUNDLE_ID
   } catch {
     return DEFAULT_COMPUTER_USE_BUNDLE_ID
@@ -156,11 +167,14 @@ function resetTccPermission(service: string, bundleId: string): void {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
   })
+
   if (result.status === 0) {
     return
   }
+
   const detail =
     result.stderr?.trim() || result.stdout?.trim() || `exit ${result.status ?? 'unknown'}`
+
   throw new RuntimeClientError('accessibility_error', `Could not reset ${service}: ${detail}`)
 }
 
@@ -168,8 +182,10 @@ function nextPermissionStep(
   permissions: ComputerUsePermissionStatusResult['permissions']
 ): string | null {
   const missing = permissions.find((permission) => permission.status !== 'granted')
+
   if (!missing) {
     return null
   }
+
   return `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to Orca Computer Use, then retry get-app-state.`
 }

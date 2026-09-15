@@ -4,14 +4,22 @@ import type { BrowserError } from './cdp-bridge'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 export const EXEC_TIMEOUT_MS = 90_000
+
 export const CONSECUTIVE_TIMEOUT_LIMIT = 3
+
 export const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
+
 export const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+
 // Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
 export const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
+
 export const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
+
 export const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
+
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
+
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
 export type SessionState = {

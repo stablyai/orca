@@ -39,22 +39,29 @@ function createTerminalLiveInputCommitHarness({
   const activeHandleRef: RefObject<string | null> = { current: activeHandle }
   const activeSessionTabTypeRef: RefObject<string | null> = { current: 'terminal' }
   const captures: string[] = []
+
   const setLiveInputCapture = (text: string): void => {
     captures.push(text)
   }
+
   const liveInputRef: RefObject<TextInput | null> = { current: null }
   const liveInputTerminalHandles = new Set([activeHandle])
+
   const liveInputTerminalHandlesRef: RefObject<Set<string>> = {
     current: new Set([activeHandle])
   }
+
   const sent: string[] = []
   let currentSendResult = sendResult
+
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (_handle, bytes) => {
       sent.push(bytes)
+
       return currentSendResult
     }
   }
+
   // Refs never re-render; only these variables re-run the hook's clear effects.
   let currentActiveSessionTabType: string | undefined = 'terminal'
   let currentConnected = true
@@ -74,12 +81,14 @@ function createTerminalLiveInputCommitHarness({
       sendLiveTerminalInputRef,
       setLiveInputCapture
     })
+
     return null
   }
 
   act(() => {
     renderer = create(createElement(Harness))
   })
+
   if (!handlers || !renderer) {
     throw new Error('terminal live input hook did not render')
   }
@@ -90,6 +99,7 @@ function createTerminalLiveInputCommitHarness({
       if (!handlers) {
         throw new Error('terminal live input hook is not mounted')
       }
+
       return handlers
     },
     handlers,
@@ -148,6 +158,7 @@ describe('terminal live input commit hook', () => {
       changeLiveInput(handlers, fieldText, true)
       await vi.advanceTimersByTimeAsync(50)
     }
+
     await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS * 4)
     changeLiveInput(handlers, '桜', false)
 
@@ -268,6 +279,7 @@ describe('terminal live input commit hook', () => {
   it('increments a stable interaction generation for typing, submit, and accessory Enter', async () => {
     const { getHandlers, handlers, setActiveSessionTabType } =
       createTerminalLiveInputCommitHarness()
+
     const getter = handlers.getLiveInputInteractionGeneration
     const initialGeneration = getter()
 
@@ -461,6 +473,7 @@ describe('terminal live input commit hook', () => {
     // Given: a stalled link — the mirror sends but the PTY never accepts (#6713 second defect)
     const { captures, handlers, sent, setConnected, setSendResult } =
       createTerminalLiveInputCommitHarness({ sendResult: false })
+
     changeLiveInput(handlers, 'XYZZY')
     await vi.waitFor(() => expect(sent).toEqual(['XYZZY']))
 
@@ -480,9 +493,11 @@ describe('terminal live input commit hook', () => {
   it('Given a held syllable during an outage When the disconnect is detected Then the settle timer cannot commit it later', async () => {
     // Given
     vi.useFakeTimers()
+
     const { handlers, sent, setConnected } = createTerminalLiveInputCommitHarness({
       sendResult: false
     })
+
     changeLiveInput(handlers, '한')
 
     // When

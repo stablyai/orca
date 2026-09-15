@@ -44,6 +44,7 @@ async function renderCard(state: SshConnectionState | undefined): Promise<HTMLEl
       </TooltipProvider>
     )
   })
+
   return container
 }
 
@@ -66,6 +67,7 @@ describe('the connection error on an SSH target card', () => {
   // with an ellipsis and there is no title attribute, so the remedy was unreachable even on hover.
   it('does not clamp it to a single line', async () => {
     const container = await renderCard(errorState(HOST_KEY_ERROR))
+
     const paragraph = [...container.querySelectorAll('p')].find((node) =>
       node.textContent?.includes('ssh-keygen')
     )

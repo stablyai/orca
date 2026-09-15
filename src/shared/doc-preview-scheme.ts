@@ -10,14 +10,19 @@ export const DOC_PREVIEW_SCHEME = 'orca-preview'
 export const DOC_PREVIEW_PARTITION = 'orca-doc-preview'
 
 export const DOC_PREVIEW_MINT_GRANT_CHANNEL = 'docPreview:mintGrant'
+
 export const DOC_PREVIEW_REVOKE_GRANT_CHANNEL = 'docPreview:revokeGrant'
+
 export const DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL = 'docPreview:authorizeDirectory'
+
 export const DOC_PREVIEW_EXTERNAL_LINK_CHANNEL = 'docPreview:externalLink'
+
 /**
  * The preview guest's preload reports a trusted anchor click here. Renderer↔main only — no paired
  * client ever sees it, and main gates every report on the sender being a live, grant-bound preview guest.
  */
 export const DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
+
 /** The one out-of-band route from the preview's main-side fences to the shell hosting it. */
 export const DOC_PREVIEW_LOAD_FAILURE_CHANNEL = 'docPreview:loadFailure'
 
@@ -61,6 +66,7 @@ export function buildDocPreviewUrl(grantId: string, relativePath: string): strin
     .split('/')
     .filter((segment) => segment.length > 0)
     .map((segment) => encodeURIComponent(segment))
+
   return `${DOC_PREVIEW_SCHEME}://${grantId}/${segments.join('/')}`
 }
 
@@ -81,30 +87,40 @@ export function isDocPreviewUrl(candidate: string): boolean {
 
 export function parseDocPreviewUrl(rawUrl: string): DocPreviewUrlTarget | null {
   let parsed: URL
+
   try {
     parsed = new URL(rawUrl)
   } catch {
     return null
   }
+
   if (parsed.protocol !== `${DOC_PREVIEW_SCHEME}:`) {
     return null
   }
+
   const grantId = parsed.hostname
+
   if (!isDocPreviewGrantId(grantId)) {
     return null
   }
+
   const segments: string[] = []
+
   for (const rawSegment of parsed.pathname.split('/')) {
     if (rawSegment.length === 0) {
       continue
     }
+
     let segment: string
+
     try {
       segment = decodeURIComponent(rawSegment)
     } catch {
       return null
     }
+
     segments.push(segment)
   }
+
   return { grantId, relativePath: segments.join('/') }
 }

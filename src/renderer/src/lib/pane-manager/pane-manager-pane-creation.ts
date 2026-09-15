@@ -28,6 +28,7 @@ export function createInitialManagedPane(
   }
 
   host.publishPaneCreated(pane)
+
   return toPublicPane(pane)
 }
 
@@ -37,6 +38,7 @@ export function createManagedPaneInternal(
 ): ManagedPaneInternal {
   const id = host.allocatePaneId()
   const leafId = host.identities.claimLeafId(leafIdHint)
+
   const pane = createPaneDOM(
     id,
     leafId,
@@ -54,13 +56,17 @@ export function createManagedPaneInternal(
       handleManagedPaneMouseEnter(host, paneId, event)
     }
   )
+
   pane.webglAttachmentDeferred = host.isRenderingSuspended()
+
   if (host.isRenderingSuspended()) {
     // A pane that mounts behind a hidden surface never sees suspendPaneRendering().
     suspendTerminalCursorBlink(pane.terminal)
   }
+
   host.panes.set(id, pane)
   host.identities.register(id, leafId)
+
   return pane
 }
 

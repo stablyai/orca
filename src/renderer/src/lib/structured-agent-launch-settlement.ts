@@ -58,21 +58,27 @@ export async function settleStructuredAgentLaunch(
   const signal = hooks.signal
   let cancelRequested = false
   const isCancelled = (): boolean => cancelRequested || signal?.aborted === true
+
   const cancelLaunch = (): void => {
     if (cancelRequested) {
       return
     }
+
     cancelRequested = true
     cancelStructuredAgentLaunch(worktreeId, launch.sessionId)
   }
+
   signal?.addEventListener('abort', cancelLaunch, { once: true })
+
   // Why: the caller may have been abandoned between its own check and this subscription.
   if (isCancelled()) {
     cancelLaunch()
   }
+
   // Why: a holder, not a `let`: TS narrows a closure-assigned local to its initial null.
   const fallback: { result: StructuredAgentLegacyFallbackResult | null } = { result: null }
   const legacyFallback = hooks.legacyFallback
+
   // Why: the claim resolves after the callback settles, so awaiting it below is what serialises
   // "refused" and "the legacy surface is up". The callback returns nothing so that wait ends at
   // activation, not at the end of a legacy paste that may be minutes away. Without a hook there is
@@ -82,20 +88,26 @@ export async function settleStructuredAgentLaunch(
         if (isCancelled()) {
           return
         }
+
         fallback.result = await legacyFallback()
       })
     : null
+
   const cancelled = (): StructuredAgentLaunchSettlement => ({
     kind: 'cancelled',
     sessionId: launch.sessionId,
     ...(fallback.result ? { fallback: fallback.result } : {})
   })
+
   try {
     const receipt = await launch.launchResult
+
     if (isCancelled()) {
       return cancelled()
     }
+
     hooks.onStructuredReady?.(receipt.sessionId)
+
     return {
       kind: 'structured',
       sessionId: receipt.sessionId,
@@ -105,31 +117,39 @@ export async function settleStructuredAgentLaunch(
     if (isCancelled()) {
       return cancelled()
     }
+
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       if (!refusalFallback) {
         return { kind: 'failed', error }
       }
+
       const ran = await refusalFallback.then(
         (value) => value,
         (fallbackError: unknown) => ({ fallbackError })
       )
+
       if (isCancelled()) {
         return cancelled()
       }
+
       if (typeof ran !== 'boolean') {
         return { kind: 'failed', error: ran.fallbackError }
       }
+
       return ran && fallback.result
         ? { kind: 'refused-then-legacy', ...fallback.result }
         : { kind: 'failed', error }
     }
+
     if (launch.isVisibilityUnknown()) {
       // Why: nobody awaits this caller once it returns, so a stale fallback closure must not fire
       // if a later retry on the same identity reconciles into a refusal. The launch state itself
       // stays pending so the badge shows "unknown" and the next click still reconciles.
       launch.releaseCallerAfterUnknownOutcome()
+
       return { kind: 'visibility-unknown', sessionId: launch.sessionId }
     }
+
     return { kind: 'failed', error }
   } finally {
     signal?.removeEventListener('abort', cancelLaunch)

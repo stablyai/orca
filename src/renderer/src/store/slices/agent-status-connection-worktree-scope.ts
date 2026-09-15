@@ -18,24 +18,31 @@ export function collectWorktreeIdsForConnection(
       .filter((repo) => repo.connectionId === connectionId)
       .map((repo) => getRepoExecutionHostId(repo))
   )
+
   if (hostIdsOnConnection.size === 0) {
     return new Set()
   }
+
   const repoById = new Map(state.repos.map((repo) => [repo.id, repo] as const))
   const onConnection = new Set<string>()
   const onOtherHost = new Set<string>()
+
   for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
     const repo = repoById.get(repoId)
+
     for (const worktree of worktrees) {
       const bucket = hostIdsOnConnection.has(getWorktreeExecutionHostId(worktree, repo))
         ? onConnection
         : onOtherHost
+
       bucket.add(worktree.id)
     }
   }
+
   // A worktree id that also lives on another host is ambiguous — leave it rather than hide a live row.
   for (const id of onOtherHost) {
     onConnection.delete(id)
   }
+
   return onConnection
 }

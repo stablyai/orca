@@ -110,9 +110,11 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.isRunningAgent') {
         return { isRunningAgent: true }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -240,6 +242,7 @@ function agentStatusEntry(
   overrides: Partial<AgentStatusEntry> = {}
 ): AgentStatusEntry {
   const updatedAt = overrides.updatedAt ?? NOW
+
   return {
     state: 'done',
     prompt: '',

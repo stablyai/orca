@@ -24,6 +24,7 @@ const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMo
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -32,6 +33,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -45,6 +47,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
+
   let lastSpawnOpts: {
     sessionId: string
     cols: number
@@ -58,8 +61,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     const harness = await startDaemonAdapterHarness((opts) => {
       lastSpawnOpts = opts
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -127,11 +132,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
       )
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const requestSpy = vi.spyOn(client, 'request')
 
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -164,6 +171,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         spawnSubprocess: (opts) => {
           lastSpawnOpts = opts
           lastSubprocess = createMockSubprocess()
+
           return lastSubprocess
         }
       })
@@ -209,11 +217,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         protocolVersion: 29,
         historyPath: historyDir
       })
+
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const requestSpy = vi.spyOn(client, 'request')
 
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -224,15 +234,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(createPayload).not.toHaveProperty('historySeed')
       expect(createPayload).not.toHaveProperty('historySeedTransferId')
       expect(existsSync(checkpointPath)).toBe(true)
+
       const managerInternals = historyAdapter.getHistoryManager()! as unknown as {
         writers: Map<string, unknown>
       }
+
       expect(managerInternals.writers.has(sessionId)).toBe(false)
     })
 
     it('repairs legacy hostname UNC cwd for WSL spawn and cold-restore metadata', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       try {
         const sessionId = 'wsl-legacy-cwd'
         const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))

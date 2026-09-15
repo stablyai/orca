@@ -6,9 +6,13 @@ import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 
 export const ENVIRONMENT_ID = 'web-env-1'
+
 export const SECOND_ENVIRONMENT_ID = 'web-env-2'
+
 export const RUNTIME_EXECUTION_HOST_ID = toRuntimeExecutionHostId(ENVIRONMENT_ID)
+
 export const WORKTREE_ID = 'repo::/worktree'
+
 export const FOCUS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 type SessionMock = ReturnType<typeof vi.fn>
@@ -63,6 +67,7 @@ export function stagedBrowserWorkspaces(
   mocks: WebRuntimeSessionMocks
 ): { workspaceId: string; pageId: string; staged: boolean }[] {
   const state = (mocks.getState as unknown as () => HarnessBrowserState)()
+
   return Object.values(state.browserTabsByWorktree)
     .flat()
     .map((workspace) => ({
@@ -86,6 +91,7 @@ function stubStagedBrowserTabStore(mocks: WebRuntimeSessionMocks): void {
         ...(state.browserTabsByWorktree[worktreeId] ?? []),
         workspace
       ]
+
       return workspace
     }
   )
@@ -98,11 +104,13 @@ function stubStagedBrowserTabStore(mocks: WebRuntimeSessionMocks): void {
     const state = readState()
     const handle = state.remoteBrowserPageHandlesByPageId[pageId] ?? null
     delete state.remoteBrowserPageHandlesByPageId[pageId]
+
     return handle
   })
   stagedBrowserTabMocks.closeBrowserTab.mockImplementation((workspaceId: string) => {
     const state = readState()
     delete state.browserPagesByWorkspace[workspaceId]
+
     for (const [worktreeId, workspaces] of Object.entries(state.browserTabsByWorktree)) {
       state.browserTabsByWorktree[worktreeId] = workspaces.filter(
         (workspace) => workspace.id !== workspaceId

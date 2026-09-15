@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -139,6 +146,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(1)
   })
 
@@ -146,6 +154,7 @@ describe('getPRForBranch', () => {
     const sshGitProvider = {
       exec: vi.fn().mockResolvedValue({ stdout: 'feature\0\n', stderr: '' })
     }
+
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
@@ -168,6 +177,7 @@ describe('getPRForBranch', () => {
 
   it('bounds unique tracked-upstream snapshots and sweeps expired identities', async () => {
     vi.useFakeTimers()
+
     try {
       getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
       ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
@@ -176,6 +186,7 @@ describe('getPRForBranch', () => {
       for (let index = 0; index < 513; index += 1) {
         await getPRForBranch(`/repo-root-${index}`, 'feature')
       }
+
       await getPRForBranch('/repo-root-512', 'feature')
 
       expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
@@ -272,6 +283,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
   })
 
@@ -328,6 +340,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
     expect(pr).toMatchObject({
       number: 78,
@@ -505,6 +518,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
     expect(pr).toMatchObject({
       number: 79,
@@ -552,6 +566,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
     expect(pr).toMatchObject({
       number: 82,
@@ -598,6 +613,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
     expect(pr).toMatchObject({
       number: 85,
@@ -613,6 +629,7 @@ describe('getPRForBranch', () => {
     ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
     gitExecFileAsyncMock.mockImplementation(async () => {
       await Promise.resolve()
+
       return { stdout: 'no-pr-branch\0\n', stderr: '' }
     })
 
@@ -625,6 +642,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(1)
   })
 
@@ -674,6 +692,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
     expect(waiterPr).toMatchObject({
       number: 84,
@@ -701,6 +720,7 @@ describe('getPRForBranch', () => {
     const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('refs/heads')
     )
+
     expect(trackedUpstreamCalls).toHaveLength(2)
     expect(trackedUpstreamCalls[0][1]).toEqual({ cwd: '/repo-root' })
     expect(trackedUpstreamCalls[1][1]).toEqual({
@@ -711,6 +731,7 @@ describe('getPRForBranch', () => {
 
   it('rechecks missing tracked-upstream probes after the null-cache TTL expires', async () => {
     vi.useFakeTimers()
+
     try {
       resolvePRRepositoryCandidatesMock.mockResolvedValue({
         candidates: [{ owner: 'acme', repo: 'widgets' }],
@@ -728,6 +749,7 @@ describe('getPRForBranch', () => {
       const trackedUpstreamCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
         (args as string[]).includes('refs/heads')
       )
+
       expect(trackedUpstreamCalls).toHaveLength(2)
     } finally {
       vi.useRealTimers()

@@ -8,6 +8,7 @@ import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 
 function host(id: SidebarHostOption['id'], label: string): SidebarHostOption {
   const kind = id === 'local' ? 'local' : id.startsWith('runtime:') ? 'runtime' : 'ssh'
+
   return {
     id,
     label,
@@ -24,6 +25,7 @@ describe('buildHostScopeChoices', () => {
       [host('local', 'Local Mac'), host('ssh:box', 'Box'), host('runtime:env', 'Server')],
       'Client default'
     )
+
     expect(choices).toEqual([
       { scope: CLIENT_DEFAULT_SCOPE, label: 'Client default' },
       { scope: 'ssh:box', label: 'Box' },

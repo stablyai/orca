@@ -80,6 +80,7 @@ describe('setupGuestContextMenu', () => {
 
   it('includes navigation state and page URL alongside coordinates', () => {
     screenGetCursorScreenPointMock.mockReturnValue({ x: 500, y: 375 })
+
     const guest = makeGuest({
       getURL: vi.fn(() => 'https://test.dev/page'),
       navigationHistory: {
@@ -87,6 +88,7 @@ describe('setupGuestContextMenu', () => {
         canGoForward: vi.fn(() => true)
       }
     })
+
     const renderer = makeRenderer()
 
     setupGuestContextMenu({
@@ -132,6 +134,7 @@ describe('setupGuestContextMenu', () => {
   it('reads navigation state from navigationHistory', () => {
     const deprecatedCanGoBack = vi.fn(() => false)
     const deprecatedCanGoForward = vi.fn(() => false)
+
     const guest = makeGuest({
       canGoBack: deprecatedCanGoBack,
       canGoForward: deprecatedCanGoForward,
@@ -140,6 +143,7 @@ describe('setupGuestContextMenu', () => {
         canGoForward: vi.fn(() => true)
       }
     })
+
     const renderer = makeRenderer()
 
     setupGuestContextMenu({
@@ -311,9 +315,11 @@ describe('guest mouse wheel browser zoom', () => {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-mouse-event')?.[1] as
       | ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void)
       | undefined
+
     expect(handler).toBeTypeOf('function')
     const preventDefault = vi.fn()
     handler!({ preventDefault } as unknown as Electron.Event, mouse)
+
     return preventDefault
   }
 
@@ -417,6 +423,7 @@ describe('setupGuestShortcutForwarding', () => {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-input-event')?.[1] as
       | ((event: Electron.Event, input: Electron.Input) => void)
       | undefined
+
     expect(handler).toBeTypeOf('function')
     const preventDefault = vi.fn()
     handler!(
@@ -430,6 +437,7 @@ describe('setupGuestShortcutForwarding', () => {
         ...input
       } as Electron.Input
     )
+
     return preventDefault
   }
 
@@ -437,9 +445,11 @@ describe('setupGuestShortcutForwarding', () => {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'zoom-changed')?.[1] as
       | ((event: Electron.Event, direction: 'in' | 'out' | 'reset') => void)
       | undefined
+
     expect(handler).toBeTypeOf('function')
     const preventDefault = vi.fn()
     handler!({ preventDefault } as unknown as Electron.Event, direction)
+
     return preventDefault
   }
 
@@ -447,9 +457,11 @@ describe('setupGuestShortcutForwarding', () => {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-mouse-event')?.[1] as
       | ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void)
       | undefined
+
     expect(handler).toBeTypeOf('function')
     const preventDefault = vi.fn()
     handler!({ preventDefault } as unknown as Electron.Event, mouse)
+
     return preventDefault
   }
 
@@ -457,6 +469,7 @@ describe('setupGuestShortcutForwarding', () => {
     const handler = guestOnMock.mock.calls.find((call) => call[0] === 'blur')?.[1] as
       | (() => void)
       | undefined
+
     expect(handler).toBeTypeOf('function')
     handler!()
   }
@@ -475,6 +488,7 @@ describe('setupGuestShortcutForwarding', () => {
     })
 
     const ctrlTabInput = { code: 'Tab', key: 'Tab', control: true, meta: false }
+
     const releaseInputs: Partial<Electron.Input>[] = [
       {
         type: 'keyUp',
@@ -517,14 +531,17 @@ describe('setupGuestShortcutForwarding', () => {
     })
 
     const zoomInPreventDefault = triggerBeforeInput({ code: 'Equal', key: '=' })
+
     const shiftedPlusPreventDefault = triggerBeforeInput({
       code: 'Equal',
       key: '+',
       shift: true
     })
+
     const zoomOutPreventDefault = triggerBeforeInput({ code: 'Minus', key: '-' })
     const numpadSubtractPreventDefault = triggerBeforeInput({ code: 'NumpadSubtract', key: '-' })
     const resetPreventDefault = triggerBeforeInput({ code: 'Digit0', key: '0' })
+
     const repeatPreventDefault = triggerBeforeInput({
       code: 'NumpadAdd',
       key: '+',
@@ -556,6 +573,7 @@ describe('setupGuestShortcutForwarding', () => {
       process.platform === 'darwin'
         ? { code: 'BracketLeft', key: '[', meta: true, control: false, alt: false }
         : { code: 'ArrowLeft', key: 'ArrowLeft', meta: false, control: false, alt: true }
+
     const forwardInput =
       process.platform === 'darwin'
         ? { code: 'BracketRight', key: ']', meta: true, control: false, alt: false }
@@ -616,6 +634,7 @@ describe('setupGuestShortcutForwarding', () => {
     })
 
     const isMac = process.platform === 'darwin'
+
     const preventDefault = triggerBeforeInput({
       code: 'KeyQ',
       key: 'q',
@@ -636,6 +655,7 @@ describe('setupGuestShortcutForwarding', () => {
     })
 
     const isMac = process.platform === 'darwin'
+
     const preventDefault = triggerBeforeInput({
       code: 'Backspace',
       key: 'Backspace',
@@ -656,6 +676,7 @@ describe('setupGuestShortcutForwarding', () => {
     })
 
     const isMac = process.platform === 'darwin'
+
     const preventDefault = triggerBeforeInput({
       code: 'Backspace',
       key: 'Backspace',
@@ -739,6 +760,7 @@ describe('setupGuestShortcutForwarding', () => {
       deltaY: -120,
       modifiers: ['ctrl']
     } as Electron.MouseWheelInputEvent)
+
     const zoomCommandPreventDefault = triggerZoomChanged('in')
 
     expect(wheelPreventDefault).toHaveBeenCalledTimes(1)
@@ -784,6 +806,7 @@ describe('setupGuestShortcutForwarding', () => {
       control: false,
       alt: false
     }
+
     const firstDownPreventDefault = triggerBeforeInput(modifierInput)
     const firstUpPreventDefault = triggerBeforeInput({ ...modifierInput, type: 'keyUp' })
     const secondDownPreventDefault = triggerBeforeInput(modifierInput)
@@ -812,6 +835,7 @@ describe('setupGuestShortcutForwarding', () => {
       control: false,
       alt: false
     }
+
     triggerBeforeInput(modifierInput)
     triggerBeforeInput({ ...modifierInput, type: 'keyUp' })
     const secondDownPreventDefault = triggerBeforeInput(modifierInput)
@@ -838,6 +862,7 @@ describe('setupGuestShortcutForwarding', () => {
       control: false,
       alt: false
     }
+
     triggerBeforeInput(modifierInput)
     triggerBeforeInput({ ...modifierInput, type: 'keyUp' })
     triggerGuestBlur()
@@ -853,6 +878,7 @@ describe('setupGuestShortcutForwarding', () => {
     const closeInput = { code: 'KeyW', key: 'w' }
     // workspace.selectByIndex default is Mod+1; tab.selectByIndex default is Ctrl+1 (darwin) / Alt+1 (other).
     const workspaceIndexInput = { code: 'Digit1', key: '1' }
+
     const tabIndexInput =
       process.platform === 'darwin'
         ? { code: 'Digit1', key: '1', control: true, meta: false }

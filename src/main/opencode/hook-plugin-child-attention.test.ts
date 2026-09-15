@@ -20,14 +20,20 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
+
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
+
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
+
 type PluginFactory = (ctx: unknown) => Promise<PluginHooks>
+
 type SessionList = (
   parameters?: { signal?: AbortSignal },
   options?: { signal?: AbortSignal }
 ) => Promise<{ data: SessionFixture[] }>
+
 type RecordedPost = {
   hook_event_name: string
   id?: string
@@ -52,9 +58,11 @@ describe('OpenCode plugin child attention', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-child-attention-'))
     posts = []
     savedEnv = {}
+
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     process.env.ORCA_AGENT_HOOK_PORT = '45678'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -64,6 +72,7 @@ describe('OpenCode plugin child attention', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { payload: RecordedPost }
       posts.push(body.payload)
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
   })
@@ -71,6 +80,7 @@ describe('OpenCode plugin child attention', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.fetch = savedFetch
+
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) {
         delete process.env[key]
@@ -78,6 +88,7 @@ describe('OpenCode plugin child attention', () => {
         process.env[key] = savedEnv[key]
       }
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -90,11 +101,14 @@ describe('OpenCode plugin child attention', () => {
     if (!pluginFactory) {
       const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
       writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+
       const module = (await import(pathToFileURL(pluginPath).href)) as {
         OrcaOpenCodeStatusPlugin: PluginFactory
       }
+
       pluginFactory = module.OrcaOpenCodeStatusPlugin
     }
+
     return pluginFactory({
       client: {
         session: {
@@ -227,6 +241,7 @@ describe('OpenCode plugin child attention', () => {
         { id: 'child-a', parentID: 'root' },
         { id: 'child-b', parentID: 'root' }
       ])
+
       const toolA = { messageID: 'message-a', callID: 'call-a' }
       const toolB = { messageID: 'message-b', callID: 'call-b' }
 
@@ -282,6 +297,7 @@ describe('OpenCode plugin child attention', () => {
         { id: 'child-b', parentID: 'child-a' }
       ]
     }))
+
     const hooks = await createHooks([], list)
 
     await hooks.event({
@@ -303,12 +319,15 @@ describe('OpenCode plugin child attention', () => {
 
   it('matches a child reply after its ancestry lookup fails', async () => {
     let lookupFails = false
+
     const list = vi.fn(async () => {
       if (lookupFails) {
         throw new Error('lookup unavailable')
       }
+
       return { data: [{ id: 'root' }] }
     })
+
     const hooks = await createHooks([], list)
 
     await hooks.event({ event: status('busy', 'root') })
@@ -327,11 +346,13 @@ describe('OpenCode plugin child attention', () => {
   it('clears timed-out child attention without repeating its ancestry lookup', async () => {
     vi.useFakeTimers()
     let lookupHangs = false
+
     const list = vi.fn(
       async (options?: { signal?: AbortSignal }): Promise<{ data: SessionFixture[] }> => {
         if (!lookupHangs) {
           return { data: [{ id: 'root' }] }
         }
+
         return new Promise((_resolve, reject) => {
           options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
             once: true
@@ -339,6 +360,7 @@ describe('OpenCode plugin child attention', () => {
         })
       }
     )
+
     const hooks = await createHooks([], list)
     await hooks.event({ event: status('busy', 'root') })
     lookupHangs = true
@@ -346,12 +368,15 @@ describe('OpenCode plugin child attention', () => {
     const asked = hooks.event({
       event: attention('question.asked', 'question-child', 'child')
     })
+
     await vi.advanceTimersByTimeAsync(2_000)
     await asked
     const lookupCountAfterAsk = list.mock.calls.length
+
     const replied = hooks.event({
       event: resolution('question.replied', 'question-child', 'child')
     })
+
     await replied
 
     expect(names()).toEqual(['SessionBusy', 'AskUserQuestion', 'SessionBusy'])
@@ -362,11 +387,13 @@ describe('OpenCode plugin child attention', () => {
   it('clears timed-out child attention on Idle without making unknown Idle authoritative', async () => {
     vi.useFakeTimers()
     let lookupHangs = false
+
     const list = vi.fn(
       async (options?: { signal?: AbortSignal }): Promise<{ data: SessionFixture[] }> => {
         if (!lookupHangs) {
           return { data: [{ id: 'root' }] }
         }
+
         return new Promise((_resolve, reject) => {
           options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
             once: true
@@ -374,6 +401,7 @@ describe('OpenCode plugin child attention', () => {
         })
       }
     )
+
     const hooks = await createHooks([], list)
     await hooks.event({ event: status('busy', 'root') })
     lookupHangs = true
@@ -381,6 +409,7 @@ describe('OpenCode plugin child attention', () => {
     const asked = hooks.event({
       event: attention('question.asked', 'question-child', 'child')
     })
+
     await vi.advanceTimersByTimeAsync(2_000)
     await asked
     const idle = hooks.event({ event: status('idle', 'child') })
@@ -460,6 +489,7 @@ describe('OpenCode plugin child attention', () => {
         event: attention('question.asked', `question-${String(index)}`, `session-${String(index)}`)
       })
     }
+
     for (let index = 2; index <= 129; index += 1) {
       await hooks.event({
         event: resolution(
@@ -543,25 +573,35 @@ describe('OpenCode plugin child attention', () => {
 
   it('does not let a delayed child Idle invalidate an in-flight parent preview', async () => {
     let releaseRootLookup: (() => void) | undefined
+
     const rootLookup = new Promise<void>((resolve) => {
       releaseRootLookup = resolve
     })
+
     let notifyRootLookup: (() => void) | undefined
+
     const rootLookupStarted = new Promise<void>((resolve) => {
       notifyRootLookup = resolve
     })
+
     let releaseChildLookup: (() => void) | undefined
+
     const childLookup = new Promise<void>((resolve) => {
       releaseChildLookup = resolve
     })
+
     let notifyChildLookup: (() => void) | undefined
+
     const childLookupStarted = new Promise<void>((resolve) => {
       notifyChildLookup = resolve
     })
+
     let calls = 0
     const sessions = [{ id: 'root' }, { id: 'child', parentID: 'root' }]
+
     const list = vi.fn(async () => {
       calls += 1
+
       if (calls === 1) {
         notifyRootLookup?.()
         await rootLookup
@@ -569,8 +609,10 @@ describe('OpenCode plugin child attention', () => {
         notifyChildLookup?.()
         await childLookup
       }
+
       return { data: sessions }
     })
+
     const hooks = await createHooks([], list)
 
     const seedRole = hooks.event({
@@ -582,7 +624,9 @@ describe('OpenCode plugin child attention', () => {
         }
       }
     })
+
     await rootLookupStarted
+
     const preview = hooks.event({
       event: {
         type: 'message.part.updated',
@@ -592,6 +636,7 @@ describe('OpenCode plugin child attention', () => {
         }
       }
     })
+
     const childIdle = hooks.event({ event: status('idle', 'child') })
 
     try {
@@ -601,6 +646,7 @@ describe('OpenCode plugin child attention', () => {
     } finally {
       releaseChildLookup?.()
     }
+
     await Promise.all([seedRole, preview, childIdle])
 
     // Why: child completion may clean its blockers, but it cannot cancel or

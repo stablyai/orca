@@ -30,11 +30,14 @@ export function getMobileTerminalActionSheetActions<
   bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
+
   if (!target) {
     return []
   }
+
   const phoneMode = args.isPhoneMode(target.handle)
   const sessionTab = args.tabs.find((tab) => tab.terminal === target.handle)
+
   return [
     ...getMobileNativeChatToggleActions({
       terminalHandle: target.handle,
@@ -72,10 +75,13 @@ export function getMobileTerminalActionSheetActions<
       destructive: true,
       onPress: () => {
         args.onDismiss()
+
         if (sessionTab) {
           args.onCloseSessionTab(sessionTab)
+
           return
         }
+
         args.onClose(target)
       }
     },

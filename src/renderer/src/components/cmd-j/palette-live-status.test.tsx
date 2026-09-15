@@ -24,6 +24,7 @@ vi.mock('@/components/AgentWorkingSpinner', () => ({
 }))
 
 const initialAppState = useAppStore.getInitialState()
+
 const LEAF = '11111111-2222-4333-8444-555555555555'
 
 function PaletteLiveStatusProvider(
@@ -37,6 +38,7 @@ function PaletteLiveStatusProvider(
 }
 
 let testRoot: Root
+
 let testContainer: HTMLDivElement
 
 function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
@@ -79,12 +81,14 @@ function setAgentState(state: AgentStatusState, overrides: Partial<AgentStatusEn
 
 /** Stands in for the palette body: counts how often the frozen subtree is re-rendered. */
 let bodyRenderCount = 0
+
 const FrozenBody = React.memo(function FrozenBody({
   children
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
   bodyRenderCount += 1
+
   return <>{children}</>
 })
 

@@ -20,6 +20,7 @@ afterEach(() => agentSessionPtyWriteGate.detachRecordLookup())
 describe('structured handoff PTY binding', () => {
   it('binds before runtime writes and unbinds on process exit', async () => {
     const runtime = new OrcaRuntimeService()
+
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<{
         id: string
@@ -29,6 +30,7 @@ describe('structured handoff PTY binding', () => {
         folderWorkspace: null
       }>
     }
+
     vi.spyOn(internal, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
       id: 'worktree-1',
       path: '/tmp/worktree-1',
@@ -43,6 +45,7 @@ describe('structured handoff PTY binding', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({
         sessionId: SESSION_ID,
@@ -50,6 +53,7 @@ describe('structured handoff PTY binding', () => {
         handoffStage: 'new-owner-proving'
       })
     )
+
     agentSessionPtyWriteGate.attachRecordLookup((sessionId) =>
       sessionId === SESSION_ID ? record : null
     )

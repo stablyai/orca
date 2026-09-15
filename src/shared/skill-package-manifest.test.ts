@@ -83,6 +83,7 @@ describe('skill package manifest', () => {
   it('enforces path depth at, below, and above the V1 limit', () => {
     const path = (depth: number): string =>
       [...Array.from({ length: depth - 1 }, (_, index) => `d${index}`), 'SKILL.md'].join('/')
+
     expect(() => validateSkillPackagePath(path(15))).not.toThrow()
     expect(() => validateSkillPackagePath(path(16))).not.toThrow()
     expect(() => validateSkillPackagePath(path(17))).toThrow('skill-package-path-invalid')
@@ -95,6 +96,7 @@ describe('skill package manifest', () => {
         packageFile(`file-${index.toString().padStart(3, '0')}.md`)
       )
     ]
+
     expect(() => parseSkillPackageManifest(manifest(files(511)))).not.toThrow()
     expect(() => parseSkillPackageManifest(manifest(files(512)))).not.toThrow()
     expect(() => parseSkillPackageManifest(manifest(files(513)))).toThrow(
@@ -111,11 +113,13 @@ describe('skill package manifest', () => {
     expect(() => parseSkillPackageManifest(manifest([{ ...file, size: fourMiB + 1 }]))).toThrow(
       'skill-package-manifest-invalid'
     )
+
     const total = (lastSize: number): SkillPackageFile[] => [
       { ...file, size: 0 },
       ...Array.from({ length: 7 }, (_, index) => packageFile(`payload-${index}.bin`, fourMiB)),
       packageFile('payload-7.bin', lastSize)
     ]
+
     expect(() => parseSkillPackageManifest(manifest(total(fourMiB - 1)))).not.toThrow()
     expect(() => parseSkillPackageManifest(manifest(total(fourMiB)))).not.toThrow()
     expect(() =>
@@ -136,11 +140,15 @@ describe('skill package manifest', () => {
 
   it('fuzzes path normalization without accepting traversal or platform syntax', () => {
     let state = 0x5eed
+
     const random = (): number => {
       state = (state * 1103515245 + 12345) & 0x7fffffff
+
       return state
     }
+
     const hazards = ['..', '.', '', 'C:', '\\server', 'nul', 'x.', 'x ', 'x\u0000y']
+
     for (let index = 0; index < 1_000; index += 1) {
       const hazard = hazards[random() % hazards.length]
       const path = `safe/${hazard}/file-${random()}.md`

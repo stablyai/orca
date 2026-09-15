@@ -17,11 +17,13 @@ import { DERIVED_DELIVERY_SCHEMA_SQL, migrateV41 } from './migrate-v41'
 export function migrate(this: OrchestrationDb): void {
   const storedVersion = this.db.pragma('user_version', { simple: true }) as number
   const current = resolveOrchestrationMigrationStartVersion(this.db, storedVersion, SCHEMA_VERSION)
+
   if (current >= SCHEMA_VERSION) {
     return
   }
 
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.db.exec(
       'DROP TRIGGER IF EXISTS trg_deliveries_one_outstanding; DROP VIEW IF EXISTS outstanding_deliveries;'

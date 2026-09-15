@@ -37,19 +37,25 @@ export function validateTaskPageGitHubDuplicateTarget(
   currentIssueNumber: number
 ): TaskPageGitHubDuplicateValidation {
   const trimmed = value.trim()
+
   if (!trimmed) {
     return { ok: false, reason: 'missing' }
   }
+
   if (!/^\d+$/.test(trimmed)) {
     return { ok: false, reason: 'not_integer' }
   }
+
   const duplicateOf = Number(trimmed)
+
   if (!Number.isSafeInteger(duplicateOf) || duplicateOf <= 0) {
     return { ok: false, reason: 'not_positive' }
   }
+
   if (duplicateOf === currentIssueNumber) {
     return { ok: false, reason: 'same_issue' }
   }
+
   return { ok: true, duplicateOf }
 }
 
@@ -87,13 +93,16 @@ export function getTaskPageGitHubDuplicateCandidates(
   query: string
 ): GitHubWorkItem[] {
   const normalizedQuery = query.trim().toLowerCase()
+
   return items.filter((candidate) => {
     if (candidate.type !== 'issue' || candidate.number === currentIssueNumber) {
       return false
     }
+
     if (!normalizedQuery) {
       return true
     }
+
     return (
       candidate.title.toLowerCase().includes(normalizedQuery) ||
       String(candidate.number).includes(normalizedQuery)

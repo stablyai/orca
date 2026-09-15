@@ -14,19 +14,24 @@ describe('useMobileNativeChatTerminalStream', () => {
   /** Mirrors the route's subscribe-time coverage guess, which is what decides whether
    *  the host opens a lease-only stream or a streaming one. */
   let subscribeOpensLeaseOnly = false
+
   const registerSubscription = (handle: string): void => {
     subscriptionsRef.current.set(handle, () => {})
+
     if (subscribeOpensLeaseOnly) {
       leaseOnlyRef.current.add(handle)
     } else {
       leaseOnlyRef.current.delete(handle)
     }
   }
+
   const subscribe = vi.fn(registerSubscription)
+
   const unsubscribe = vi.fn((handle: string) => {
     subscriptionsRef.current.delete(handle)
     leaseOnlyRef.current.delete(handle)
   })
+
   const notifyWebReadyRef = { current: (_handle: string, _wasAlreadyReady: boolean): void => {} }
   const notifyListedHandlesRef = { current: (_liveHandles: ReadonlySet<string>): void => {} }
   const hasTabsRecoveryNeedRef = { current: (): boolean => false }
@@ -60,6 +65,7 @@ describe('useMobileNativeChatTerminalStream', () => {
     streamRevision?: number
   }): null {
     harnessRenderCount += 1
+
     const stream = useMobileNativeChatTerminalStream({
       showNativeChat,
       activeHandle,
@@ -74,9 +80,11 @@ describe('useMobileNativeChatTerminalStream', () => {
       subscribe,
       unsubscribe
     })
+
     notifyWebReadyRef.current = stream.notifyWebReady
     notifyListedHandlesRef.current = stream.notifyListedHandles
     hasTabsRecoveryNeedRef.current = stream.hasTabsRecoveryNeed
+
     return null
   }
 
@@ -255,6 +263,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
     subscribe.mockClear()
+
     // A dead PTY answers every subscribe with `subscribed`+`end`, so the stream is
     // gone again on each pass. Unbounded, that is a ~10s resubscribe loop.
     for (let revision = 1; revision <= 6; revision += 1) {
@@ -282,6 +291,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       // No client / no webview yet: the call returns without registering anything, so
       // it never reached the host and must not spend one of the three real tries.
       subscribe.mockImplementation(() => {})
+
       for (let revision = 1; revision <= 5; revision += 1) {
         subscriptionsRef.current.delete('terminal-1')
         await act(async () => {
@@ -305,6 +315,7 @@ describe('useMobileNativeChatTerminalStream', () => {
     await act(async () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
+
     for (let revision = 1; revision <= 5; revision += 1) {
       subscriptionsRef.current.delete('terminal-1')
       await act(async () => {
@@ -317,6 +328,7 @@ describe('useMobileNativeChatTerminalStream', () => {
         )
       })
     }
+
     subscribe.mockClear()
     // Budget is spent, so a further teardown signal alone changes nothing.
     await act(async () => {
@@ -365,6 +377,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
     subscribe.mockClear()
+
     // The `subscribed` half re-runs the effect with the stream momentarily up, which
     // used to clear the attempt count — the loop refilled its own budget forever.
     for (let revision = 1; revision <= 6; revision += 1) {
@@ -376,14 +389,17 @@ describe('useMobileNativeChatTerminalStream', () => {
 
   it('refills the budget for a rearmed stream that outlives the teardown window', async () => {
     vi.useFakeTimers()
+
     try {
       await act(async () => {
         renderer = create(createElement(Harness, { showNativeChat: true }))
       })
       subscribe.mockClear()
+
       for (let revision = 1; revision <= 3; revision += 1) {
         await playDeadPtyRoundTrip(revision)
       }
+
       expect(subscribe).toHaveBeenCalledTimes(3)
 
       // This rearm actually took: no `end` follows, so the stream is still up well
@@ -410,9 +426,11 @@ describe('useMobileNativeChatTerminalStream', () => {
     await act(async () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
+
     for (let revision = 1; revision <= 2; revision += 1) {
       await playDeadPtyRoundTrip(revision)
     }
+
     // The handle went away and came back with budget still left. Spending the marker
     // on that check left nothing to trade once the budget did run out — and a handle
     // the host keeps listing never goes absent again, so the composer locked for good.
@@ -436,9 +454,11 @@ describe('useMobileNativeChatTerminalStream', () => {
     await act(async () => {
       renderer = create(createElement(Harness, { showNativeChat: true }))
     })
+
     for (let revision = 1; revision <= 3; revision += 1) {
       await playDeadPtyRoundTrip(revision)
     }
+
     // Exhausted but still listed: the host may yet answer, so nothing to recover from.
     await act(async () => {
       notifyListedHandlesRef.current(new Set(['terminal-1']))

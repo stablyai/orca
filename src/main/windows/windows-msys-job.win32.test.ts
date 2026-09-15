@@ -12,6 +12,7 @@ const describeOnWindows = process.platform === 'win32' ? describe : describe.ski
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'EPERM'
@@ -29,21 +30,25 @@ describeOnWindows('MSYS terminal job ownership', () => {
       "console.log('MSYS_OWNED_CHILD=' + process.pid); setInterval(() => {}, 1000)\n"
     )
     const pty = await import('node-pty')
+
     const proc = pty.spawn(shell!, ['-c', 'exec "$BASH" --noprofile --norc -i'], {
       cwd: tmpdir(),
       cols: 120,
       rows: 30,
       useConptyDll: true
     })
+
     let output = ''
     let childPid: number | undefined
     proc.onData((chunk) => {
       output += chunk
       const match = /MSYS_OWNED_CHILD=(\d+)/.exec(output)
+
       if (match) {
         childPid = Number(match[1])
       }
     })
+
     try {
       proc.write(
         `${quotePosixShell(process.execPath.replace(/\\/g, '/'))} ${quotePosixShell(script.replace(/\\/g, '/'))}\r`
@@ -58,6 +63,7 @@ describeOnWindows('MSYS terminal job ownership', () => {
       if (childPid && isAlive(childPid)) {
         process.kill(childPid)
       }
+
       proc.kill()
       removeTreeSync(directory)
     }

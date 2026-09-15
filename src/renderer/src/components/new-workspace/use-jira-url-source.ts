@@ -19,6 +19,7 @@ import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import { canReuseLoadedJiraStatus, type JiraSourceConnection } from './use-jira-source-connection'
 
 const LOOKUP_DEBOUNCE_MS = 200
+
 const UPDATE_RUNTIME_ERROR = 'update-runtime'
 
 export type JiraUrlSourceError =
@@ -58,16 +59,19 @@ function getPreferredSite(
   activeSiteId: string | null | undefined
 ): JiraSite | null {
   const explicitId = selectedAccount?.requestKey === requestKey ? selectedAccount.siteId : null
+
   for (const siteId of [
     explicitId,
     selectedSiteId === 'all' ? null : selectedSiteId,
     activeSiteId
   ]) {
     const site = matches.find((candidate) => candidate.id === siteId)
+
     if (site) {
       return site
     }
   }
+
   return matches.length === 1 ? matches[0] : null
 }
 
@@ -104,18 +108,23 @@ export function useJiraUrlSource(args: {
 }): JiraUrlSourceState {
   const readJiraStatus = useAppStore((state) => state.readJiraStatus)
   const lookupJiraIssueSummary = useAppStore((state) => state.lookupJiraIssueSummary)
+
   const parsed = useMemo(
     () => (args.enabled ? parseJiraIssueUrl(args.value) : null),
     [args.enabled, args.value]
   )
+
   const requestKey = parsed && args.sourceContext ? getRequestKey(parsed, args.sourceContext) : null
   const [selectedAccount, setSelectedAccount] = useState<AccountSelection | null>(null)
   const [retryGeneration, setRetryGeneration] = useState(0)
+
   const attemptKey = requestKey
     ? `${requestKey}::${selectedAccount?.requestKey === requestKey ? selectedAccount.siteId : ''}::${retryGeneration}`
     : null
+
   const requestGenerationRef = useRef(0)
   const consumedRetryGenerationRef = useRef(0)
+
   const [state, setState] = useState<JiraUrlLookupState>({
     attemptKey: null,
     loading: false,
@@ -128,23 +137,29 @@ export function useJiraUrlSource(args: {
   useEffect(() => {
     const generation = (requestGenerationRef.current += 1)
     const sourceContext = args.sourceContext
+
     if (!parsed || !sourceContext || !requestKey || !attemptKey) {
       return
     }
+
     const settle = (result: Omit<JiraUrlLookupState, 'attemptKey' | 'loading'>): void => {
       if (requestGenerationRef.current === generation) {
         setState({ ...result, attemptKey, loading: false })
       }
     }
+
     const fail = (errorKind: JiraUrlSourceError): void =>
       settle({ issue: null, boundSourceContext: null, accountChoices: [], errorKind })
 
     const controller = new AbortController()
+
     let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       timer = null
+
       const run = async (): Promise<void> => {
         try {
           const parsedHost = parseExecutionHostId(sourceContext.hostId)
+
           if (parsedHost?.kind === 'runtime') {
             await assertRuntimeEnvironmentCapability(
               parsedHost.environmentId,
@@ -152,23 +167,32 @@ export function useJiraUrlSource(args: {
               UPDATE_RUNTIME_ERROR
             )
           }
+
           const force = retryGeneration > consumedRetryGenerationRef.current
           const connection = args.connection
+
           const status = canReuseLoadedJiraStatus(connection, force)
             ? connection.status
             : await readJiraStatus(sourceContext)
+
           if (requestGenerationRef.current !== generation) {
             return
           }
+
           if (!status.connected) {
             fail('disconnected')
+
             return
           }
+
           const matches = getMatchingJiraSites(parsed, status.sites ?? [])
+
           if (matches.length === 0) {
             fail('site-not-connected')
+
             return
           }
+
           const site = getPreferredSite(
             matches,
             selectedAccount,
@@ -176,6 +200,7 @@ export function useJiraUrlSource(args: {
             status.selectedSiteId,
             status.activeSiteId
           )
+
           if (!site) {
             settle({
               issue: null,
@@ -183,17 +208,23 @@ export function useJiraUrlSource(args: {
               accountChoices: matches,
               errorKind: null
             })
+
             return
           }
+
           consumedRetryGenerationRef.current = retryGeneration
+
           const issue = await lookupJiraIssueSummary(sourceContext, parsed.issueKey, site.id, {
             force,
             signal: controller.signal
           })
+
           if (!issue || !isResolvedJiraIssueMatch(parsed, site, issue)) {
             fail('read-failed')
+
             return
           }
+
           const boundSourceContext = bindJiraIssueSourceContext(sourceContext, site, issue)
           settle({
             issue,
@@ -203,8 +234,10 @@ export function useJiraUrlSource(args: {
           })
         } catch (error) {
           const summaryCode = getJiraSummaryLookupErrorCode(error)
+
           const updateRequired =
             error instanceof Error && error.message.includes(UPDATE_RUNTIME_ERROR)
+
           fail(
             updateRequired
               ? UPDATE_RUNTIME_ERROR
@@ -214,12 +247,14 @@ export function useJiraUrlSource(args: {
           )
         }
       }
+
       void run()
     }, LOOKUP_DEBOUNCE_MS)
 
     return () => {
       requestGenerationRef.current += 1
       controller.abort()
+
       if (timer !== null) {
         clearTimeout(timer)
       }
@@ -244,6 +279,7 @@ export function useJiraUrlSource(args: {
     },
     [requestKey]
   )
+
   const retry = useCallback((): void => {
     setRetryGeneration((current) => current + 1)
   }, [])
@@ -258,6 +294,7 @@ export function useJiraUrlSource(args: {
           accountChoices: [],
           errorKind: null
         }
+
   return {
     intent: parsed !== null,
     loading: visibleState.loading,

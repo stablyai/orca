@@ -65,6 +65,7 @@ describe('CLI remote WebSocket transport', () => {
       deviceToken: runtime.deviceToken,
       publicKeyB64: runtime.publicKeyB64
     })
+
     const client = new RuntimeClient('/tmp/unused', 5_000, pairingUrl)
     const response = await client.call<{ runtimeId: string }>('status.get')
 
@@ -112,14 +113,18 @@ describe('CLI remote WebSocket transport', () => {
         }
       ]
     })
+
     servers.push(runtime)
+
     const offer: PairingOffer = {
       v: 2,
       endpoint: runtime.endpoint,
       deviceToken: runtime.deviceToken,
       publicKeyB64: runtime.publicKeyB64
     }
+
     const pairingUrl = encodePairingOffer(offer)
+
     const barePayload = new URLSearchParams(pairingUrl.slice(pairingUrl.indexOf('?') + 1)).get(
       'code'
     )!
@@ -142,7 +147,9 @@ describe('CLI remote WebSocket transport', () => {
     const runtime = await startTestRuntime('runtime-remote-headless', {
       desktopWindowStatus: 'initializing'
     })
+
     servers.push(runtime)
+
     const client = new RuntimeClient(
       '/tmp/unused',
       5_000,
@@ -209,6 +216,7 @@ describe('CLI remote WebSocket transport', () => {
   it('preflights and dispatches through one authenticated connection', async () => {
     const runtime = await startTestRuntime('runtime-single-auth')
     servers.push(runtime)
+
     const client = new RuntimeClient(
       '/tmp/unused',
       5_000,
@@ -230,6 +238,7 @@ describe('CLI remote WebSocket transport', () => {
   it('blocks orchestration mutations when a remote runtime lacks the contract capability', async () => {
     const runtime = await startTestRuntime('runtime-old-orchestration', { capabilities: [] })
     servers.push(runtime)
+
     const client = new RuntimeClient(
       '/tmp/unused',
       5_000,
@@ -282,40 +291,52 @@ async function startTestRuntime(
 
     ws.on('message', (data) => {
       const frame = data.toString()
+
       if (!sharedKey) {
         const hello = JSON.parse(frame) as Record<string, unknown> & {
           type?: string
           publicKeyB64?: string
         }
+
         const clientPublicKey = Buffer.from(hello.publicKeyB64 ?? '', 'base64')
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
 
       const plaintext = decrypt(frame, sharedKey)
+
       if (!plaintext) {
         ws.close(4003, 'decrypt failed')
+
         return
       }
+
       if (!authenticated) {
         const auth = JSON.parse(plaintext) as Record<string, unknown> & {
           type?: string
           deviceToken?: string
         }
+
         authFrames.push(auth)
+
         if (auth.type !== 'e2ee_auth' || auth.deviceToken !== deviceToken) {
           ws.send(encrypt(JSON.stringify({ type: 'e2ee_error' }), sharedKey))
           ws.close(4001, 'auth failed')
+
           return
         }
+
         authenticated = true
         ws.send(encrypt(JSON.stringify({ type: 'e2ee_authenticated' }), sharedKey))
+
         return
       }
 
       const request = JSON.parse(plaintext) as { id: string; method: string }
       requestMethods.push(request.method)
+
       const response =
         request.method === 'status.get'
           ? {
@@ -347,12 +368,14 @@ async function startTestRuntime(
               error: { code: 'method_not_found', message: 'Unknown method' },
               _meta: { runtimeId }
             }
+
       ws.send(encrypt(JSON.stringify(response), sharedKey))
     })
   })
 
   await listen(httpServer)
   const address = httpServer.address()
+
   if (!address || typeof address === 'string') {
     throw new Error('Expected TCP test server')
   }
@@ -367,6 +390,7 @@ async function startTestRuntime(
     close: async () => {
       await new Promise<void>((resolve) => {
         wss.close(() => resolve())
+
         for (const client of wss.clients) {
           client.close()
         }
@@ -391,8 +415,10 @@ async function closeHttpServer(server: Server): Promise<void> {
     server.close((error) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve()
     })
   })

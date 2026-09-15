@@ -12,6 +12,7 @@ import {
 
 const countCtrlU = (bytes: string): number =>
   bytes.split('').filter((char) => char === AGENT_TUI_CLEAR_INPUT_LINE).length
+
 const countCtrlK = (bytes: string): number =>
   bytes.split('').filter((char) => char === AGENT_TUI_CLEAR_INPUT_FORWARD).length
 

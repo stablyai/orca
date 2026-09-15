@@ -32,16 +32,20 @@ export function buildNativeChatRailItems(
   previous: readonly NativeChatRailItem[] = []
 ): readonly NativeChatRailItem[] {
   const items: NativeChatRailItem[] = []
+
   for (const [slotIndex, slot] of slots.entries()) {
     if (slot.message.role !== 'user') {
       continue
     }
+
     let preview = previews.get(slot.message.blocks)
+
     if (!preview) {
       const content = deriveNativeChatRowContent(slot.message.blocks)
       preview = { text: content.markdown.replace(/\s+/g, ' ').trim(), hasImages: content.hasImages }
       previews.set(slot.message.blocks, preview)
     }
+
     const prior = previous[items.length]
     items.push(
       prior?.id === slot.message.id &&
@@ -56,6 +60,7 @@ export function buildNativeChatRailItems(
           }
     )
   }
+
   return items.length === previous.length && items.every((item, index) => item === previous[index])
     ? previous
     : items
@@ -77,38 +82,47 @@ export function selectNativeChatRailTicks({
 
   const maxIndex = items.length - 1
   const sampled = new Set<number>()
+
   for (let slot = 0; slot < NATIVE_CHAT_RAIL_MAX_TICKS; slot += 1) {
     sampled.add(Math.round((slot * maxIndex) / (NATIVE_CHAT_RAIL_MAX_TICKS - 1)))
   }
 
   const activeIndex = activeId === null ? -1 : items.findIndex((item) => item.id === activeId)
+
   if (activeIndex >= 0 && !sampled.has(activeIndex)) {
     sampled.add(activeIndex)
     // Drop the neighbour nearest the active tick, never an end: losing an end
     // would make the rail claim the thread starts or stops somewhere it doesn't.
     let evict: number | null = null
     let evictDistance = Number.POSITIVE_INFINITY
+
     for (const index of sampled) {
       if (index === activeIndex || index === 0 || index === maxIndex) {
         continue
       }
+
       const distance = Math.abs(index - activeIndex)
+
       if (distance < evictDistance) {
         evict = index
         evictDistance = distance
       }
     }
+
     if (evict !== null) {
       sampled.delete(evict)
     }
   }
 
   const ordered: NativeChatRailItem[] = []
+
   for (const index of Array.from(sampled).sort((left, right) => left - right)) {
     const item = items[index]
+
     if (item) {
       ordered.push(item)
     }
   }
+
   return ordered
 }

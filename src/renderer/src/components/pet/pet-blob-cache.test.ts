@@ -12,9 +12,11 @@ const TEST_PET_IDS = ['pet', 'late-pet', 'bundle-pet']
 
 afterEach(() => {
   const ids = new Set([...TEST_PET_IDS, ...blobUrlCache.keys(), ...detectedSpriteCache.keys()])
+
   for (const id of ids) {
     revokeCustomPetBlobUrl(id)
   }
+
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -45,12 +47,14 @@ describe('loadCustomBlobUrl', () => {
 
   it('revokes a blob URL created after the custom pet was removed', async () => {
     let resolveRead: (buffer: ArrayBuffer) => void = () => {}
+
     const read = vi.fn(
       () =>
         new Promise<ArrayBuffer>((resolve) => {
           resolveRead = resolve
         })
     )
+
     stubPetRead(read)
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:late-pet')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
@@ -85,10 +89,13 @@ describe('loadCustomBlobUrl', () => {
     )
 
     const pixels = new Uint8ClampedArray(8 * 8 * 4)
+
     for (let i = 0; i < pixels.length; i += 4) {
       pixels[i + 3] = 255
     }
+
     const imageData = { data: pixels, width: 8, height: 8 } as ImageData
+
     const canvas = {
       width: 0,
       height: 0,
@@ -99,6 +106,7 @@ describe('loadCustomBlobUrl', () => {
       })),
       toBlob: vi.fn((callback: BlobCallback) => callback(null))
     } as unknown as HTMLCanvasElement
+
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas) })
 
     await expect(loadCustomBlobUrl('bundle-pet', 'pet.png', 'image/png', 'bundle')).resolves.toBe(
@@ -121,6 +129,7 @@ describe('loadCustomBlobUrl', () => {
         `blob:pet-${index}`
       )
     }
+
     detectedSpriteCache.set('pet-1', {
       bitmaps: [evictedBitmap],
       fps: 8,
@@ -141,17 +150,20 @@ describe('loadCustomBlobUrl', () => {
 
   it('does not let stale load completions evict retained active media', async () => {
     const resolvers = new Map<string, (buffer: ArrayBuffer) => void>()
+
     const read = vi.fn(
       (id: string) =>
         new Promise<ArrayBuffer>((resolve) => {
           resolvers.set(id, resolve)
         })
     )
+
     stubPetRead(read)
     let blobIndex = 0
     vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:pet-${blobIndex++}`)
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const releaseActive = retainCustomPetBlobCacheEntry('pet-16')
+
     const loads = Array.from({ length: 17 }, (_, index) =>
       loadCustomBlobUrl(`pet-${index}`, 'pet.png', 'image/png')
     )
@@ -191,6 +203,7 @@ describe('loadCustomBlobUrl', () => {
     let blobIndex = 0
     vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:retained-${blobIndex++}`)
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+
     const releases = Array.from({ length: 17 }, (_, index) =>
       retainCustomPetBlobCacheEntry(`retained-${index}`)
     )
@@ -199,6 +212,7 @@ describe('loadCustomBlobUrl', () => {
       for (let index = 0; index < 17; index += 1) {
         await loadCustomBlobUrl(`retained-${index}`, 'pet.png', 'image/png')
       }
+
       expect(blobUrlCache.size).toBe(17)
 
       releases[0]()

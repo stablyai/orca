@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -43,11 +44,13 @@ describe('CodexRuntimeHomeService', () => {
     const account1Refreshed = createCodexAuthJson('one@example.com', 'acct-1', 'one-refreshed', 2)
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
+
     const wslManagedHomePath = createManagedAuth(
       testState.userDataDir,
       'wsl-account',
       createCodexAuthJson('wsl@example.com', 'acct-wsl', 'wsl')
     )
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [
@@ -80,6 +83,7 @@ describe('CodexRuntimeHomeService', () => {
         wsl: { Ubuntu: 'wsl-account' }
       }
     })
+
     const store = createStore(settings)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -129,6 +133,7 @@ describe('CodexRuntimeHomeService', () => {
 
     // Once the absence outlives the grace window it is durable and deselects.
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => absenceObservedAt + 6_000)
+
     try {
       expect(
         service.prepareForCodexLaunch(undefined, undefined, {
@@ -138,6 +143,7 @@ describe('CodexRuntimeHomeService', () => {
     } finally {
       nowSpy.mockRestore()
     }
+
     expect(store.getSettings().activeCodexManagedAccountId).toBeNull()
     expect(store.getSettings().activeCodexManagedAccountIdsByRuntime).toEqual({
       host: null,
@@ -157,6 +163,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const accountAuth = createCodexAuthJson('user@example.com', 'acct-user', 'managed')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', accountAuth)
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -177,6 +184,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -196,6 +204,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(managedHomePath, 'auth.json'), accountAuth, 'utf-8')
     const healedAt = Date.now()
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => healedAt + 60_000)
+
     try {
       expect(
         service.prepareForCodexLaunch(undefined, undefined, {
@@ -205,6 +214,7 @@ describe('CodexRuntimeHomeService', () => {
     } finally {
       nowSpy.mockRestore()
     }
+
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
     expect(store.updateSettings).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalledWith(
@@ -219,6 +229,7 @@ describe('CodexRuntimeHomeService', () => {
     const mismatchedAuth = createCodexAuthJson('other@example.com', 'acct-other', 'other', 2)
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [
@@ -237,6 +248,7 @@ describe('CodexRuntimeHomeService', () => {
       activeCodexManagedAccountId: 'account-1',
       activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     })
+
     const store = createStore(settings)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -257,14 +269,17 @@ describe('CodexRuntimeHomeService', () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const managedAuth = createCodexAuthJson('user@example.com', 'acct-user', 'managed', 1)
+
     const refreshedManagedAuth = createCodexAuthJson(
       'user@example.com',
       'acct-user',
       'refreshed',
       2
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [
@@ -283,6 +298,7 @@ describe('CodexRuntimeHomeService', () => {
       activeCodexManagedAccountId: 'account-1',
       activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)

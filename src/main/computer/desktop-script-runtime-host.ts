@@ -21,6 +21,7 @@ import {
 } from './windows-powershell-execution-policy'
 
 const REQUEST_TIMEOUT_MS = 30_000
+
 const IDLE_SHUTDOWN_MS = 120_000
 
 /** Code the client keys on to serve this one operation from the one-shot bridge. */
@@ -114,32 +115,41 @@ export class DesktopScriptRuntimeHost {
 
   private async send(request: BridgeRequest): Promise<BridgeResponse> {
     this.clearIdleTimer()
+
     // Why checked here and not only on entry: requests queue, and dispose can
     // land while one waits its turn. Without this a teardown respawns a helper.
     if (this.disposed) {
       throw this.unavailableError('runtime host was disposed')
     }
+
     const cooldown = this.availability.remainingCooldown()
+
     if (cooldown > 0) {
       throw this.unavailableError(`retrying the runtime host in ${cooldown}ms`)
     }
+
     let lastError: unknown
+
     for (let attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
       try {
         const response = await this.sendOnce(request)
         this.availability.recordSuccess()
+
         return response
       } catch (error) {
         lastError = error
+
         if (this.availability.policyRetryPending) {
           this.availability.escalateExecutionPolicy()
           continue
         }
+
         // Only this error proves no helper started, which is what disproves the
         // escalation; a helper that started and then died proves the opposite.
         if (isRuntimeHostUnavailable(error)) {
           this.availability.abandonUnprovenFallback()
         }
+
         // A helper that answered and then died is a crash, not a bad start: the
         // caller sees it and the next operation gets a fresh process — unless it
         // keeps happening, which is thrash the one-shot bridge should absorb.
@@ -147,26 +157,33 @@ export class DesktopScriptRuntimeHost {
           if (this.availability.exhausted) {
             this.availability.enterCooldown()
           }
+
           throw error
         }
+
         this.availability.warn(
           `runtime host failed to start (attempt ${attempt}/${MAX_START_ATTEMPTS}): ${errorText(error)}`
         )
       }
     }
+
     this.availability.enterCooldown()
     throw lastError
   }
 
   private sendOnce(request: BridgeRequest): Promise<BridgeResponse> {
     let channel: DesktopScriptServeChannel
+
     try {
       channel = this.ensureChannel()
     } catch (error) {
       this.availability.recordFailure()
+
       return Promise.reject(this.unavailableError(errorText(error)))
     }
+
     const id = this.nextRequestId++
+
     return new Promise((resolve, reject) => {
       // Why kill rather than wait: a hung UI Automation call cannot be
       // cancelled, so the process itself is the only thing left to reclaim.
@@ -178,6 +195,7 @@ export class DesktopScriptRuntimeHost {
           )
         )
       }, this.requestTimeoutMs)
+
       timer.unref?.()
       this.pending = { id, resolve, reject, timer }
       channel.write(`${JSON.stringify({ ...request, requestId: id })}\n`, (error) => {
@@ -193,6 +211,7 @@ export class DesktopScriptRuntimeHost {
         if (this.channel !== channel || this.pending?.id !== id) {
           return
         }
+
         this.abortChannel(new RuntimeClientError('accessibility_error', error.message))
       })
     })
@@ -202,8 +221,10 @@ export class DesktopScriptRuntimeHost {
     if (this.channel) {
       return this.channel
     }
+
     this.childReady = false
     this.childAnswered = false
+
     const channel: DesktopScriptServeChannel = startServeChannel(
       {
         program: (this.options.powerShellPath ?? windowsPowerShellPath)(),
@@ -230,7 +251,9 @@ export class DesktopScriptRuntimeHost {
           )
       }
     )
+
     this.channel = channel
+
     return channel
   }
 
@@ -247,11 +270,13 @@ export class DesktopScriptRuntimeHost {
     if (this.childReady || this.childAnswered) {
       return false
     }
+
     return this.readyProtocolConfirmed || isReplayableTool(request.tool)
   }
 
   private deliver(line: string): void {
     let parsed: Record<string, unknown>
+
     try {
       parsed = JSON.parse(line) as Record<string, unknown>
     } catch {
@@ -260,14 +285,18 @@ export class DesktopScriptRuntimeHost {
       // and it keeps a chatty console from making the helper unusable.
       return
     }
+
     // The readiness announcement carries no request id and answers nothing.
     if (parsed.ready === true && parsed.requestId === undefined) {
       this.childReady = true
       this.readyProtocolConfirmed = true
       this.availability.confirmExecutionPolicy()
+
       return
     }
+
     const pending = this.pending
+
     if (!pending || parsed.requestId !== pending.id) {
       // One unmatched reply would otherwise shift every later response by one.
       // Carry the helper's own message when it sent one: a line it could not tag
@@ -280,8 +309,10 @@ export class DesktopScriptRuntimeHost {
           `desktop provider response did not match the pending request${reported}`
         )
       )
+
       return
     }
+
     // Only a reply this host can prove is its own counts as the helper working.
     this.childAnswered = true
     this.pending = null
@@ -294,6 +325,7 @@ export class DesktopScriptRuntimeHost {
     const started = this.childReady || this.childAnswered
     this.channel = null
     this.availability.recordFailure()
+
     if (!started && this.availability.atPreferredPolicy && isExecutionPolicyBlocked(detail)) {
       this.availability.requestPolicyRetry()
       // Unavailable rather than a generic error, because this can now be the
@@ -302,12 +334,16 @@ export class DesktopScriptRuntimeHost {
       // code routes the operation to the one-shot bridge, which carries its own
       // policy fallback; anything else fails the operation outright.
       this.rejectPending(this.unavailableError(detail))
+
       return
     }
+
     if (!started) {
       this.rejectPending(this.unavailableError(detail))
+
       return
     }
+
     this.rejectPending(
       new RuntimeClientError(
         'accessibility_error',
@@ -342,9 +378,11 @@ export class DesktopScriptRuntimeHost {
   private takePending(): PendingRequest | null {
     const pending = this.pending
     this.pending = null
+
     if (pending) {
       clearTimeout(pending.timer)
     }
+
     return pending
   }
 
@@ -354,9 +392,11 @@ export class DesktopScriptRuntimeHost {
 
   private armIdleTimer(): void {
     this.clearIdleTimer()
+
     if (!this.channel) {
       return
     }
+
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null
       this.stopChannel()

@@ -39,10 +39,12 @@ export function scanShellStartupOutput(
   const identityInput = readiness.output.slice(0, postMarkerOutputIndex)
   let shellPid: number | null = null
   let output = identityInput
+
   if (state.identity) {
     const identity = scanForShellStartupIdentity(state.identity, identityInput)
     output = identity.output
     shellPid = identity.shellPid
+
     if (shellPid) {
       state.identity = null
     }
@@ -52,7 +54,9 @@ export function scanShellStartupOutput(
     output += drainShellStartupIdentityHeldBytes(state.identity)
     state.identity = null
   }
+
   output += readiness.output.slice(postMarkerOutputIndex)
+
   return {
     output,
     shellPid,
@@ -64,5 +68,6 @@ export function scanShellStartupOutput(
 export function drainShellStartupOutputScanState(state: ShellStartupOutputScanState): string {
   const output = state.identity ? drainShellStartupIdentityHeldBytes(state.identity) : ''
   state.identity = null
+
   return output + drainShellReadyHeldBytes(state.ready)
 }

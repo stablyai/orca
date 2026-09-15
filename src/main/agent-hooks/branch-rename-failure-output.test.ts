@@ -35,6 +35,7 @@ describe('branch rename failure output store', () => {
     for (let index = 0; index < 33; index += 1) {
       rememberBranchRenameFailureOutput(`wt-${index}`, output(`Agent${index}`))
     }
+
     expect(readBranchRenameFailureOutputForDisplay('wt-0')).toBeNull()
     expect(readBranchRenameFailureOutputForDisplay('wt-32')).not.toBeNull()
   })
@@ -43,6 +44,7 @@ describe('branch rename failure output store', () => {
     for (let index = 0; index < 32; index += 1) {
       rememberBranchRenameFailureOutput(`wt-${index}`, output(`Agent${index}`))
     }
+
     rememberBranchRenameFailureOutput('wt-0', output('Agent0-again'))
     rememberBranchRenameFailureOutput('wt-new', output('AgentNew'))
     expect(readBranchRenameFailureOutputForDisplay('wt-0')).not.toBeNull()

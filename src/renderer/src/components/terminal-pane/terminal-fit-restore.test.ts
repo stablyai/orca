@@ -47,6 +47,7 @@ describe('terminal-fit-restore', () => {
   it('restores remote terminals through the environment runtime RPC', async () => {
     // Why: freeze Date.now so remaining deadline is exact (wall clock can drop 1ms).
     vi.useFakeTimers()
+
     try {
       vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-one')
       vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-one')
@@ -69,6 +70,7 @@ describe('terminal-fit-restore', () => {
   it('uses the active runtime environment when the remote PTY has no encoded environment', async () => {
     // Why: freeze Date.now so remaining deadline is exact (wall clock can drop 1ms).
     vi.useFakeTimers()
+
     try {
       vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-two')
       vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue(null)
@@ -113,6 +115,7 @@ describe('terminal-fit-restore', () => {
 
   it('fails a local restore whose invoke never resolves instead of hanging', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
       // Why: models a wedged runtime/daemon after system sleep (#9447) — the
@@ -120,9 +123,11 @@ describe('terminal-fit-restore', () => {
       restoreTerminalFit.mockReturnValue(new Promise(() => {}))
 
       let settled: boolean | null = null
+
       const pending = restoreTerminalFitToDesktop('pty-local', undefined).then((restored) => {
         settled = restored
       })
+
       await vi.advanceTimersByTimeAsync(14_999)
       expect(settled).toBeNull()
       await vi.advanceTimersByTimeAsync(1)
@@ -135,6 +140,7 @@ describe('terminal-fit-restore', () => {
 
   it('gives restores started later only the remainder of the shared bulk deadline', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue(null)
       restoreTerminalFit.mockImplementation(
@@ -177,6 +183,7 @@ describe('terminal-fit-restore', () => {
 
   it('bounds a remote restore even when the RPC client does not enforce its timeout', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(getRemoteRuntimeTerminalHandle).mockReturnValue('terminal-stuck')
       vi.mocked(getRemoteRuntimePtyEnvironmentId).mockReturnValue('env-stuck')

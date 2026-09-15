@@ -26,10 +26,12 @@ export function MobileSelectableText({ children, style, ...props }: TextProps): 
 
   // The native span adapter otherwise maps numeric bold to semibold.
   const textStyle = StyleSheet.flatten(style)
+
   const nativeStyle =
     textStyle?.fontWeight === '700' || textStyle?.fontWeight === 700
       ? { ...textStyle, fontWeight: 'bold' as const }
       : style
+
   return (
     <UITextView {...props} uiTextView style={nativeStyle}>
       {flattenFragments(children)}

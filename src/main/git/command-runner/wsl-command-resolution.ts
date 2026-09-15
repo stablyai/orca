@@ -19,6 +19,7 @@ import { resolveWslInteropSpawnCwd } from '../../wsl-interop-spawn-directory'
 const GIT_OUTPUT_LOCALE_SHELL_PREFIX = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV)
   .map(([key, value]) => `${key}=${value}`)
   .join(' ')
+
 const GIT_OUTPUT_LOCALE_ENV_ARGS = Object.entries(UNTRANSLATED_GIT_OUTPUT_ENV).map(
   ([key, value]) => `${key}=${value}`
 )
@@ -47,6 +48,7 @@ export function resolveDefaultWslCli(
   args: string[]
 ): ResolvedCommand | null {
   const distro = defaultWslDistroOverride ?? getDefaultWslDistro()
+
   return distro ? resolveCommand(command, args, undefined, distro) : null
 }
 
@@ -76,8 +78,10 @@ export function resolveCommand(
   // Why: global gh callers (rate_limit, listAccessibleProjects) have no cwd to derive a distro from; a distro hint still routes through wsl.exe.
   // TODO(wsl-default-distro): no default-distro setting yet, so override-less global gh callers fall back to host gh.exe (ENOENT on WSL-only installs).
   const cwdWsl = cwd ? parseWslPath(cwd) : null
+
   const wsl: WslPathInfo | null =
     cwdWsl ?? (wslDistroOverride ? { distro: wslDistroOverride, linuxPath: '' } : null)
+
   if (!wsl) {
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
@@ -90,12 +94,14 @@ export function resolveCommand(
   const escapedArgs = translatedArgs.map(quotePosixShell)
   // Why: prepend `cd <linuxPath> &&` for a UNC cwd; skip it when only a distro override was given (global gh needs no cwd).
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
+
   const shellCmd = linuxCwd
     ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
     : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
 
   if (command === 'git' && options.wslGitReadEnvironment) {
     const optionalLocks = options.env?.GIT_OPTIONAL_LOCKS
+
     return withWslProcessGroupTermination(
       {
         binary: 'wsl.exe',
@@ -127,6 +133,7 @@ export function resolveCommand(
     // marker would be glued onto their first record.
     if (options.captureLoginShellOutput) {
       const captured = buildWslCapturedLoginShellCommand(shellCmd)
+
       return withWslProcessGroupTermination(
         {
           binary: 'wsl.exe',
@@ -139,6 +146,7 @@ export function resolveCommand(
         options.terminationBarrier
       )
     }
+
     return withWslProcessGroupTermination(
       {
         binary: 'wsl.exe',
@@ -174,11 +182,15 @@ function withWslProcessGroupTermination(
   if (!enabled || !command.wsl) {
     return command
   }
+
   const execIndex = command.args.indexOf('--exec')
+
   if (execIndex === -1) {
     return command
   }
+
   const termination = createWslProcessGroupTermination(command.wsl.distro)
+
   return {
     ...command,
     args: [

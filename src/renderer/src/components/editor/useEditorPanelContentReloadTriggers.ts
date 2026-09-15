@@ -37,16 +37,20 @@ export function useEditorPanelContentReloadTriggers({
   loadFileContent
 }: UseEditorPanelContentReloadTriggersParams): void {
   const changesStatusEntries = activeFile?.worktreeId ? gitStatusEntries : undefined
+
   const activeFileGitStatusEntries = useMemo(() => {
     if (!activeFile?.relativePath || !changesStatusEntries) {
       return undefined
     }
+
     return changesStatusEntries.filter((entry) => entry.path === activeFile.relativePath)
   }, [activeFile?.relativePath, changesStatusEntries])
+
   const activeFileGitStatusSignature = useMemo(() => {
     if (!activeFileGitStatusEntries) {
       return ''
     }
+
     return JSON.stringify(
       activeFileGitStatusEntries.map((entry) => ({
         area: entry.area,
@@ -55,6 +59,7 @@ export function useEditorPanelContentReloadTriggers({
       }))
     )
   }, [activeFileGitStatusEntries])
+
   const activeFileShouldReloadOnGitStatusChange = useMemo(
     () =>
       activeFile
@@ -62,27 +67,36 @@ export function useEditorPanelContentReloadTriggers({
         : false,
     [activeFile, activeFileGitStatusEntries]
   )
+
   useEffect(() => {
     if (!activeFile?.id) {
       return
     }
+
     const current = openFilesRef.current.find((f) => f.id === activeFile.id)
+
     if (!current) {
       return
     }
+
     if (!(isChangesMode || activeFileShouldReloadOnGitStatusChange)) {
       return
     }
+
     if (!isVisibleRef.current) {
       invalidateDiffContent([current.id])
+
       return
     }
+
     // Why: the lazy-load effect already fetches on first open and on a retained
     // stale entry; forcing here races a duplicate git-diff RPC for the same tab.
     const cachedDiff = diffContentsRef.current[current.id]
+
     if (!cachedDiff || cachedDiff.isStale === true) {
       return
     }
+
     void loadDiffContent(current, { force: true })
   }, [
     activeFileShouldReloadOnGitStatusChange,
@@ -98,17 +112,23 @@ export function useEditorPanelContentReloadTriggers({
 
   useEffect(() => {
     const nonce = activeFile?.diffContentReloadNonce
+
     if (!activeFile?.id || nonce === undefined || nonce === 0) {
       return
     }
+
     const current = openFilesRef.current.find((f) => f.id === activeFile.id)
+
     if (!current || !isReloadableSingleFileDiffTab(current)) {
       return
     }
+
     invalidateDiffContent([current.id])
+
     if (!isVisibleRef.current) {
       return
     }
+
     void loadDiffContent(current, { force: true })
   }, [
     activeFile?.diffContentReloadNonce,
@@ -121,10 +141,13 @@ export function useEditorPanelContentReloadTriggers({
 
   useEffect(() => {
     const nonce = activeFile?.fileContentReloadNonce
+
     if (!activeFile?.id || nonce === undefined || nonce === 0) {
       return
     }
+
     const current = openFilesRef.current.find((f) => f.id === activeFile.id)
+
     if (
       !current ||
       current.isDirty ||
@@ -132,10 +155,13 @@ export function useEditorPanelContentReloadTriggers({
     ) {
       return
     }
+
     invalidateFileContent([current.id])
+
     if (!isVisibleRef.current) {
       return
     }
+
     void loadFileContent(current.filePath, current.id, current.worktreeId, current.relativePath, {
       force: true
     })

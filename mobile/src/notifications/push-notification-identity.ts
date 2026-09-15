@@ -8,7 +8,9 @@ export function readPushNotificationIdentity(value: unknown): PushNotificationId
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const item = value as PushNotificationIdentity
+
   return typeof item.notificationId === 'string' &&
     item.notificationId.length > 0 &&
     item.notificationId.length <= 2048 &&

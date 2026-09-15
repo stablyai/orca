@@ -27,10 +27,15 @@ import {
 } from './worktree-base-directory-watch-targets'
 
 const absolutePath = (...parts: string[]): string => join(sep, ...parts)
+
 const WORKTREE_ROOT = absolutePath('workspace', 'worktrees')
+
 const PROJECT_ROOT = absolutePath('workspace', 'projects')
+
 const localDirectoryStat = { isDirectory: () => true }
+
 const remoteDirectoryStat = { type: 'directory', size: 0, mtime: 0 }
+
 const settings = {
   workspaceDir: WORKTREE_ROOT,
   nestWorkspaces: true
@@ -83,6 +88,7 @@ describe('worktree base directory watch target resolution', () => {
       { length: WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY + 4 },
       (_, index) => makeRepo(index)
     )
+
     const gates = repos.map(() => Promise.withResolvers<void>())
     let startedRootStats = 0
     let activeRootStats = 0
@@ -95,6 +101,7 @@ describe('worktree base directory watch target resolution', () => {
         await gate.promise
         activeRootStats--
       }
+
       return localDirectoryStat
     })
 
@@ -113,6 +120,7 @@ describe('worktree base directory watch target resolution', () => {
     for (const gate of gates) {
       gate.resolve()
     }
+
     await resultPromise
     expect(startedRootStats).toBe(repos.length)
     expect(peakRootStats).toBe(WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY)
@@ -125,20 +133,24 @@ describe('worktree base directory watch target resolution', () => {
     const completionOrder: number[] = []
     statMock.mockImplementation(async (path: string) => {
       const index = repos.findIndex((repo) => path === join(repo.path, '.git'))
+
       if (index !== -1) {
         gitStatStarted.add(index)
         await gates[index].promise
         completionOrder.push(index)
       }
+
       return localDirectoryStat
     })
 
     const resultPromise = buildWorktreeBaseDirectoryWatchTargets(makeStore(repos) as never)
     await vi.waitFor(() => expect(gitStatStarted.size).toBe(repos.length))
+
     for (let index = repos.length - 1; index >= 0; index--) {
       gates[index].resolve()
       await vi.waitFor(() => expect(completionOrder).toContain(index))
     }
+
     const targets = await resultPromise
 
     expect(completionOrder).toEqual([3, 2, 1, 0])
@@ -160,12 +172,14 @@ describe('worktree base directory watch target resolution', () => {
       if (path === unavailable.worktreeBasePath || path === join(unavailable.path, '.git')) {
         throw missing
       }
+
       return localDirectoryStat
     })
 
     const targets = await buildWorktreeBaseDirectoryWatchTargets(
       makeStore([goodBefore, unavailable, goodAfter]) as never
     )
+
     const repoIds = [...targets.values()].flatMap((target) => [...target.repos.keys()])
 
     expect(repoIds).toContain(goodBefore.id)
@@ -180,6 +194,7 @@ describe('worktree base directory watch target resolution', () => {
       connectionId === 'ssh-a' ? providerA : connectionId === 'ssh-b' ? providerB : undefined
     )
     const sharedPath = '/srv/project'
+
     const repos = [
       makeRepo(0, { path: sharedPath, connectionId: 'ssh-a' }),
       makeRepo(1, { path: sharedPath, connectionId: 'ssh-b' })

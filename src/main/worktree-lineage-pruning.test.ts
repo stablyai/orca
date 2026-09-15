@@ -51,6 +51,7 @@ function createStore(
     removeWorkspaceLineage: vi.fn((key: string) => delete workspaceLineageByChildKey[key]),
     setWorktreeMeta: vi.fn((id: string, updates: Partial<WorktreeMeta>) => {
       metaById[id] = { ...metaById[id], ...updates }
+
       return metaById[id]
     })
   }
@@ -62,12 +63,15 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     const childId = 'repo-1::/repo/./child'
     const edge = lineage(childId, parentId)
     const worktreeLineageById = { [childId]: edge }
+
     const workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(childId)]: workspaceLineage(childId, parentId)
     }
+
     const metaById = {
       [parentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
     }
+
     const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
 
     pruneLineageForMissingRepoWorktrees(
@@ -91,13 +95,16 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     const childId = 'repo-1::/alias/child'
     const edge = lineage(childId, parentId)
     const worktreeLineageById = { [childId]: edge }
+
     const workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(childId)]: workspaceLineage(childId, parentId)
     }
+
     const metaById = {
       [childId]: { instanceId: edge.worktreeInstanceId } as WorktreeMeta,
       [parentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
     }
+
     const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
 
     pruneLineageForMissingRepoWorktrees(
@@ -140,9 +147,11 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     const workspaceEdge = workspaceLineage(childId, parentId)
     const worktreeLineageById = { [childId]: edge }
     const workspaceLineageByChildKey = { [worktreeWorkspaceKey(childId)]: workspaceEdge }
+
     const metaById = {
       [parentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
     }
+
     const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
 
     pruneLineageForMissingRepoWorktrees(store as never, repo, [])
@@ -161,18 +170,22 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     const missingParentId = 'repo-1::/repo/missing-parent'
     const missingChildEdge = lineage(missingChildId, liveParentId)
     const missingParentEdge = lineage(liveChildId, missingParentId)
+
     const worktreeLineageById = {
       [missingChildId]: missingChildEdge,
       [liveChildId]: missingParentEdge
     }
+
     const workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(missingChildId)]: workspaceLineage(missingChildId, liveParentId),
       [worktreeWorkspaceKey(liveChildId)]: workspaceLineage(liveChildId, missingParentId)
     }
+
     const metaById = {
       [liveParentId]: { instanceId: missingChildEdge.parentWorktreeInstanceId } as WorktreeMeta,
       [missingParentId]: { instanceId: missingParentEdge.parentWorktreeInstanceId } as WorktreeMeta
     }
+
     const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
 
     pruneLineageForMissingRepoWorktrees(

@@ -9,6 +9,7 @@ function ownedEditorFileId(
   runtimeEnvironmentId: string | null | undefined
 ): string {
   const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
@@ -53,9 +54,11 @@ describe('remapOpenEditorTabsForPathChange', () => {
       language: 'markdown',
       mode: 'edit'
     })
+
     const remoteEdit = useAppStore
       .getState()
       .openFiles.find((file) => file.mode === 'edit' && file.runtimeEnvironmentId === 'env-remote')
+
     expect(remoteEdit).toBeTruthy()
     state.setEditorDraft(remoteEdit!.id, 'remote draft')
     state.markFileDirty(remoteEdit!.id, true)
@@ -85,12 +88,14 @@ describe('remapOpenEditorTabsForPathChange', () => {
       (file) =>
         file.filePath === newPath && file.mode === 'edit' && file.runtimeEnvironmentId === null
     )
+
     const remoteRemapped = nextState.openFiles.find(
       (file) =>
         file.filePath === newPath &&
         file.mode === 'edit' &&
         file.runtimeEnvironmentId === 'env-remote'
     )
+
     expect(localRemapped).toMatchObject({
       relativePath: 'notes/readme.md',
       isDirty: true,
@@ -109,6 +114,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
     const remotePreview = nextState.openFiles.find(
       (file) => file.mode === 'markdown-preview' && file.runtimeEnvironmentId === 'env-remote'
     )
+
     expect(remotePreview).toMatchObject({
       filePath: newPath,
       relativePath: 'notes/readme.md',
@@ -194,8 +200,10 @@ describe('remapOpenEditorTabsForPathChange', () => {
       const id = useAppStore.getState().openFiles.find((f) => f.worktreeId === worktreeId)!.id
       state.setEditorDraft(id, draft)
       state.markFileDirty(id, true)
+
       return id
     }
+
     openDirtyAt('wt-a', 'draft A')
     const idB = openDirtyAt('wt-b', 'draft B')
 
@@ -205,6 +213,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
       worktreePath: '/repo',
       worktreeId: 'wt-a'
     })
+
     expect(result.ok).toBe(true)
 
     const files = useAppStore.getState().openFiles
@@ -344,6 +353,7 @@ describe('remapOpenEditorTabsForPathChange', () => {
     const floating = useAppStore
       .getState()
       .openFiles.find((f) => f.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)!
+
     expect(floating.filePath).toBe('/repo/dst/a\\b.txt')
     // The backslash stays filename data in the recomputed relativePath — it must
     // NOT have been folded into a `a/b.txt` separator.

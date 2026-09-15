@@ -4,11 +4,13 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
 
 const MAX_CLICK_TASK_DURATION_MS = 32
+
 const MAX_CLICK_BACK_TIMER_DRIFT_MS = 50
 
 async function prepareSidebarForSwitchTest(page: Page): Promise<[string, string]> {
   return page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -25,17 +27,21 @@ async function prepareSidebarForSwitchTest(page: Page): Promise<[string, string]
 
     const repo = state.repos[0]
     const worktrees = repo ? (state.worktreesByRepo[repo.id] ?? []) : []
+
     if (worktrees.length < 2) {
       throw new Error('Worktree switch responsiveness test needs at least two worktrees')
     }
 
     const [first, second] = worktrees
+
     if ((state.tabsByWorktree[second.id] ?? []).length === 0) {
       state.createTab(second.id, undefined, undefined, { pendingActivationSpawn: true })
     }
+
     state.revealWorktreeInSidebar(first.id, { behavior: 'auto' })
     state.revealWorktreeInSidebar(second.id, { behavior: 'auto' })
     state.setActiveWorktree(first.id)
+
     return [first.id, second.id]
   })
 }
@@ -67,18 +73,24 @@ test.describe('Worktree switch responsiveness', () => {
           const element = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
             (candidate) => candidate.dataset.worktreeId === id
           )
+
           if (!element) {
             throw new Error(`Missing worktree option for ${id}`)
           }
+
           return element
         }
+
         const surface = (id: string): HTMLElement => {
           const element = option(id).querySelector<HTMLElement>('[data-worktree-card-surface]')
+
           if (!element) {
             throw new Error(`Missing worktree card surface for ${id}`)
           }
+
           return element
         }
+
         const visibleState = () => ({
           firstCurrent: option(firstId).getAttribute('aria-current'),
           secondCurrent: option(secondId).getAttribute('aria-current'),
@@ -91,12 +103,14 @@ test.describe('Worktree switch responsiveness', () => {
         const before = visibleState()
         const firstClickStart = performance.now()
         surface(secondId).click()
+
         const afterFirstClick = {
           clickDurationMs: performance.now() - firstClickStart,
           ...visibleState()
         }
 
         const timerStart = performance.now()
+
         const afterSecondClick = await new Promise<
           ReturnType<typeof visibleState> & {
             clickDurationMs: number

@@ -46,6 +46,7 @@ type ResultActions = {
 }
 
 const resolved = Promise.resolve()
+
 const RECONCILIATION_INTERVAL_MS = 2000
 
 export function useMobileSessionTabsReconciliation<Result, Tab>({
@@ -73,30 +74,39 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
   useEffect(() => {
     onPendingTerminalRecoveryParkedRef.current = onPendingTerminalRecoveryParked
   })
+
   const combinedHasRecoveryNeed = useCallback(() => {
     const contextKey = getPendingTerminalRecoveryContextKey?.() ?? null
     pendingTerminalRecoveryBudget.observeContext(contextKey)
+
     return hasRecoveryNeed() || contextKey !== null
   }, [getPendingTerminalRecoveryContextKey, hasRecoveryNeed, pendingTerminalRecoveryBudget])
+
   const allowRecoveryPoll = useCallback(() => {
     if (hasRecoveryNeed()) {
       return true
     }
+
     const contextKey = getPendingTerminalRecoveryContextKey?.() ?? null
     const attempt = pendingTerminalRecoveryBudget.take(contextKey)
+
     if (attempt.parked) {
       onPendingTerminalRecoveryParkedRef.current?.(contextKey)
     }
+
     return attempt.allowed
   }, [getPendingTerminalRecoveryContextKey, hasRecoveryNeed, pendingTerminalRecoveryBudget])
+
   const resetPendingTerminalRecovery = useCallback(() => {
     pendingTerminalRecoveryBudget.reset()
     onPendingTerminalRecoveryParkedRef.current?.(null)
   }, [pendingTerminalRecoveryBudget])
+
   useEffect(() => {
     pendingTerminalRecoveryBudget.observeContext(pendingTerminalRecoveryContextKey ?? null)
     onPendingTerminalRecoveryParkedRef.current?.(null)
   }, [pendingTerminalRecoveryBudget, pendingTerminalRecoveryContextKey])
+
   const controller = useMemo(
     () =>
       client
@@ -157,13 +167,16 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     if (!client || !controller || connState !== 'connected') {
       return
     }
+
     resetPendingTerminalRecovery()
     const subscription = controller.beginSubscription()
+
     const unsubscribe = client.subscribe(
       'session.tabs.subscribe',
       { worktree: `id:${worktreeId}` },
       subscription.listener
     )
+
     return () => {
       subscription.cancel()
       unsubscribe()
@@ -174,26 +187,34 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     useCallback(() => {
       if (!controller || connState !== 'connected') {
         suspendTerminalInventoryRecovery(true)
+
         return
       }
+
       activateTerminalInventoryRecovery()
       resetCertifiedTerminalSweep()
+
       const refresh = (forceTabs: boolean): void => {
         if (AppState.currentState !== 'active') {
           suspendTerminalInventoryRecovery(true)
           controller.setReconciliationActive(false)
+
           return
         }
+
         activateTerminalInventoryRecovery()
         controller.setReconciliationActive(true)
         const tabsRequest = forceTabs ? controller.requestReconciliation() : controller.poll()
         const now = Date.now()
+
         // Why: healthy tab streams own liveness; retain only a slow inventory sweep for stale handles and metadata.
         if (forceTabs || tabsRequest !== null || isCertifiedTerminalSweepDue(now)) {
           void refreshTerminalInventory()
         }
+
         resumePendingTerminalInventoryRecovery()
       }
+
       const appStateSubscription = AppState.addEventListener('change', (state) => {
         if (state === 'active') {
           activateTerminalInventoryRecovery()
@@ -204,9 +225,11 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
           controller.setReconciliationActive(false)
         }
       })
+
       const interval = setInterval(() => refresh(false), RECONCILIATION_INTERVAL_MS)
       resetPendingTerminalRecovery()
       refresh(true)
+
       return () => {
         suspendTerminalInventoryRecovery(true)
         controller.setReconciliationActive(false)
@@ -241,6 +264,7 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     ),
     retryPendingTerminalRecovery: useCallback(() => {
       resetPendingTerminalRecovery()
+
       return controller?.retryReconciliation() ?? resolved
     }, [controller, resetPendingTerminalRecovery]),
     requestTerminalInventoryRecovery

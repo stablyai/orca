@@ -35,6 +35,7 @@ export function createRecoveringPairingRelayCandidate(args: {
         ) {
           throw error
         }
+
         return recoverThroughDirector(method, params, error)
       }
     },
@@ -47,28 +48,36 @@ export function createRecoveringPairingRelayCandidate(args: {
   async function recoverThroughDirector(method: string, params: unknown, initialError: unknown) {
     const maxAttempts = args.maxRecoveryAttempts ?? 3
     const random = args.random ?? Math.random
+
     const sleep =
       args.sleep ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)))
+
     const backOff = async (attempt: number, floorMs = 0): Promise<void> => {
       const capMs = Math.min(2_000, 100 * 2 ** attempt)
       const delayMs = Math.max(floorMs, Math.floor(random() * (capMs + 1)))
+
       if (delayMs > 0) {
         log('info', `Relay: backing off ${delayMs}ms`)
       }
+
       await sleep(delayMs)
     }
+
     let lastError = initialError
     log('warn', 'Relay: cell dial failed', pairingRelayErrorDetail(initialError))
+
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (closed || relay.inviteExpiresAt <= args.now()) {
         log('error', 'Relay: recovery gave up', closed ? 'pairing cancelled' : 'invite expired')
         throw lastError
       }
+
       log(
         'info',
         `Relay: resolving director (attempt ${attempt + 1}/${maxAttempts})`,
         redactSocketEndpoint(relay.directorUrl)
       )
+
       try {
         const moved = await args.resolveDirector(relay)
         // Why: the authenticated newer assignment must be durable before a
@@ -82,13 +91,17 @@ export function createRecoveringPairingRelayCandidate(args: {
         client.close()
         relay = moved
         await backOff(attempt)
+
         if (closed) {
           throw new Error('relay pairing client closed')
         }
+
         client = args.connect(relay, args.onLog)
+
         return await client.sendRequest(method, params)
       } catch (error) {
         lastError = error
+
         if (error instanceof RelayDirectorMoveNotNewerError) {
           // Why: the director has no "assignment unchanged" verb — a non-newer
           // move IS that answer. The stored assignment stays authoritative (the
@@ -103,11 +116,14 @@ export function createRecoveringPairingRelayCandidate(args: {
           )
           client.close()
           await backOff(attempt, NOT_NEWER_RETRY_FLOOR_MS)
+
           if (closed) {
             throw new Error('relay pairing client closed')
           }
+
           try {
             client = args.connect(relay, args.onLog)
+
             return await client.sendRequest(method, params)
           } catch (retryError) {
             lastError = retryError
@@ -116,22 +132,28 @@ export function createRecoveringPairingRelayCandidate(args: {
               `Relay: recovery attempt ${attempt + 1} failed`,
               pairingRelayErrorDetail(retryError)
             )
+
             if (!isDirectorRecoverable(retryError) || attempt + 1 >= maxAttempts) {
               log('error', 'Relay: recovery gave up', `after ${attempt + 1} attempt(s)`)
               throw retryError
             }
+
             await backOff(attempt)
             continue
           }
         }
+
         log('warn', `Relay: recovery attempt ${attempt + 1} failed`, pairingRelayErrorDetail(error))
+
         if (!isDirectorRecoverable(error) || attempt + 1 >= maxAttempts) {
           log('error', 'Relay: recovery gave up', `after ${attempt + 1} attempt(s)`)
           throw error
         }
+
         await backOff(attempt)
       }
     }
+
     throw lastError
   }
 }
@@ -161,6 +183,7 @@ function isDirectorRecoverable(error: unknown): boolean {
   if (!(error instanceof RelayOuterError)) {
     return true
   }
+
   // 4429 stays out: the cell rejects it after reserving the invite credential,
   // so each retry burns an attempt toward cooldown/invalidation — and a
   // director hop cannot relieve cell load anyway. The retained codes are

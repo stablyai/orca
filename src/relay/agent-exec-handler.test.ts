@@ -6,6 +6,7 @@ import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+
   return {
     ...actual,
     execFile: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 const spawnMock = vi.mocked(spawn)
+
 const execFileMock = vi.mocked(execFile)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
@@ -29,6 +31,7 @@ describe('AgentExecHandler', () => {
     // Why: the guard rewrites these, so an already-guarded runner (Orca guards
     // its own agent terminals) would not see its ambient values passed through.
     ambientGuardEnv = {}
+
     for (const key of Object.keys(process.env).filter((name) => GUARD_OWNED_ENV_RE.test(name))) {
       ambientGuardEnv[key] = process.env[key]
       delete process.env[key]
@@ -156,6 +159,7 @@ describe('AgentExecHandler', () => {
       'GIT_CONFIG_KEY_1',
       'GIT_CONFIG_VALUE_1'
     ] as const
+
     const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
     process.env.GIT_CONFIG_COUNT = '2'
     process.env.GIT_CONFIG_KEY_0 = 'base.one'
@@ -167,6 +171,7 @@ describe('AgentExecHandler', () => {
       const child = createFakeChild()
       spawnMock.mockReturnValue(child as never)
       const handlers = createHandlers()
+
       const pending = handlers.get('agent.execNonInteractive')!(
         {
           binary: 'npx',
@@ -260,6 +265,7 @@ describe('AgentExecHandler', () => {
       },
       requestContext()
     )
+
     const pullRequest = handlers.get('agent.execNonInteractive')!(
       {
         binary: 'agent',
@@ -373,6 +379,7 @@ describe('AgentExecHandler', () => {
       },
       requestContext()
     )
+
     const second = handlers.get('agent.execNonInteractive')!(
       {
         binary: 'agent',
@@ -434,6 +441,7 @@ describe('AgentExecHandler', () => {
 
   it('settles timed-out commands even when the killed child does not close', async () => {
     vi.useFakeTimers()
+
     try {
       const child = createFakeChild()
       spawnMock.mockReturnValue(child as never)
@@ -449,6 +457,7 @@ describe('AgentExecHandler', () => {
         },
         requestContext()
       ) as Promise<AgentExecResult>
+
       const outcomePromise = pending.then((result) =>
         result.timedOut ? `timed-out:${result.exitCode}` : 'not-timed-out'
       )
@@ -457,6 +466,7 @@ describe('AgentExecHandler', () => {
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
       expect(outcome).toBe('timed-out:null')
+
       if (process.platform === 'win32') {
         expect(execFileMock).toHaveBeenCalledWith(
           'taskkill',
@@ -466,6 +476,7 @@ describe('AgentExecHandler', () => {
       } else {
         expect(child.kill).toHaveBeenCalledWith('SIGKILL')
       }
+
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)

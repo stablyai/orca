@@ -10,6 +10,7 @@ export function isBrowserHostReconciliationResult(
 ): boolean {
   const page = pages.get(params.browserPageId)
   const record = page?.records.get(params.commandSequence)
+
   return (
     page?.generation === params.pageHostGeneration &&
     record?.event.commandId === params.commandId &&
@@ -23,6 +24,7 @@ export function isBrowserHostUnplacedPageResult(
 ): boolean {
   const page = pages.get(params.browserPageId)
   const record = page?.records.get(params.commandSequence)
+
   return (
     page?.generation === params.pageHostGeneration &&
     record?.event.commandId === params.commandId &&
@@ -40,6 +42,7 @@ export function hasOutstandingBrowserHostReconciliation(
       }
     }
   }
+
   return false
 }
 
@@ -48,9 +51,11 @@ export function replaySettledBrowserHostCommand(
   params: BrowserHostCommandResultParams
 ): false {
   const record = page.records.get(params.commandSequence)
+
   if (!record) {
     throw new Error('browser_host_command_result_expired')
   }
+
   if (
     record.event.commandId !== params.commandId ||
     !record.settled ||
@@ -58,5 +63,6 @@ export function replaySettledBrowserHostCommand(
   ) {
     throw new Error('browser_host_command_result_conflict')
   }
+
   return false
 }

@@ -4,6 +4,7 @@ import { Readable, Writable } from 'node:stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
+
 const {
   handleMock,
   lstatMock,
@@ -49,6 +50,7 @@ vi.mock('fs/promises', () => ({
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 
 const REPO_PATH = path.resolve('/workspace/repo')
+
 const WORKSPACE_DIR = path.resolve('/workspace')
 
 const store = {
@@ -79,6 +81,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
   }
@@ -89,7 +92,9 @@ describe('fs:importExternalPaths', () => {
       if (p === resolvedDir) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       const entry = entries.find((e) => path.join(resolvedDir, e.name) === p)
+
       if (entry) {
         return {
           size: entry.isDir ? 0 : 12,
@@ -101,6 +106,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockImplementation(async () => {
@@ -119,6 +125,7 @@ describe('fs:importExternalPaths', () => {
       if (p === resolvedPath) {
         return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true }
       }
+
       throw enoent()
     })
   }
@@ -127,6 +134,7 @@ describe('fs:importExternalPaths', () => {
     openMock.mockImplementation(async (_p: string, flags: unknown) => {
       if (flags === 'wx') {
         const written: Buffer[] = []
+
         return {
           createWriteStream: () =>
             new Writable({
@@ -139,6 +147,7 @@ describe('fs:importExternalPaths', () => {
           written
         }
       }
+
       return {
         stat: vi.fn().mockResolvedValue({
           size: content.byteLength,
@@ -214,6 +223,7 @@ describe('fs:importExternalPaths', () => {
       if (flags === 'wx') {
         throw Object.assign(new Error('EEXIST'), { code: 'EEXIST' })
       }
+
       return {
         stat: vi.fn().mockResolvedValue({
           size: 12,
@@ -244,9 +254,11 @@ describe('fs:importExternalPaths', () => {
     const sources = ['/tmp/dropped/a.txt', '/tmp/dropped/b.txt']
     lstatMock.mockImplementation(async (p: string) => {
       const resolved = [path.resolve(sources[0]), path.resolve(sources[1])]
+
       if (resolved.includes(p)) {
         return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
       }
+
       throw enoent()
     })
 
@@ -299,9 +311,11 @@ describe('fs:importExternalPaths', () => {
       if (p === path.resolve(sourcePath)) {
         return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
       }
+
       if (p === existingDest) {
         return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
       }
+
       throw enoent()
     })
 
@@ -324,9 +338,11 @@ describe('fs:importExternalPaths', () => {
       if (p === path.resolve(sourcePath)) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       if (p === existingDest) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       throw enoent()
     })
     readdirMock.mockResolvedValue([])
@@ -362,6 +378,7 @@ describe('fs:importExternalPaths', () => {
       if (p === path.resolve(sourcePath)) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       throw enoent()
     })
     readdirMock.mockResolvedValue([
@@ -396,9 +413,11 @@ describe('fs:importExternalPaths', () => {
       if (p === resolvedSource) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       if (p === childPath) {
         return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true }
       }
+
       throw enoent()
     })
     readdirMock.mockResolvedValue([
@@ -434,6 +453,7 @@ describe('fs:importExternalPaths', () => {
       if (p === path.resolve('/outside/evil')) {
         return path.resolve('/outside/evil')
       }
+
       return p
     })
 
@@ -451,6 +471,7 @@ describe('fs:importExternalPaths', () => {
       if (p === path.resolve(sources[0])) {
         return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
       }
+
       throw enoent()
     })
 
@@ -494,6 +515,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     const closeMock = vi.fn().mockResolvedValue(undefined)
@@ -555,6 +577,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       if (p === childFile) {
         return {
           size: 4,
@@ -566,6 +589,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockImplementation(async (p: string) => {
@@ -579,6 +603,7 @@ describe('fs:importExternalPaths', () => {
           }
         ]
       }
+
       if (p === childDir) {
         return [
           {
@@ -589,6 +614,7 @@ describe('fs:importExternalPaths', () => {
           }
         ]
       }
+
       return []
     })
     openMock.mockResolvedValue({
@@ -644,6 +670,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockResolvedValue([
@@ -667,9 +694,11 @@ describe('fs:importExternalPaths', () => {
   it('checks runtime upload directory byte budget before opening a file that exceeds the total cap', async () => {
     const sourcePath = '/tmp/dropped/project'
     const resolvedPath = path.resolve(sourcePath)
+
     const filePaths = ['one.bin', 'two.bin', 'three.bin', 'four.bin', 'overflow.bin'].map((name) =>
       path.join(resolvedPath, name)
     )
+
     const mib = 1024 * 1024
     // Four files exactly fill the 8 GB total ceiling; the fifth pushes past it.
     const regularSize = 2 * 1024 * mib
@@ -688,9 +717,12 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       const fileIndex = filePaths.indexOf(p)
+
       if (fileIndex !== -1) {
         const size = fileIndex === filePaths.length - 1 ? overflowSize : regularSize
+
         return {
           size,
           ino: fileIndex + 2,
@@ -701,6 +733,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockResolvedValue(
@@ -713,6 +746,7 @@ describe('fs:importExternalPaths', () => {
     )
     openMock.mockImplementation(async (p: string) => {
       const fileIndex = filePaths.indexOf(p)
+
       if (fileIndex !== -1 && fileIndex < filePaths.length - 1) {
         return {
           stat: vi.fn().mockResolvedValue({
@@ -726,6 +760,7 @@ describe('fs:importExternalPaths', () => {
           close: vi.fn().mockResolvedValue(undefined)
         }
       }
+
       throw new Error(`unexpected open: ${p}`)
     })
 
@@ -754,6 +789,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     const readFileHandleMock = vi.fn().mockResolvedValue(Buffer.from('png'))
@@ -791,6 +827,7 @@ describe('fs:importExternalPaths', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockResolvedValue([])

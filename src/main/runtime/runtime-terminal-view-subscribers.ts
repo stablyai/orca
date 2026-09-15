@@ -34,6 +34,7 @@ export class RuntimeTerminalViewSubscribers {
     this.remoteCounts.set(ptyId, (this.remoteCounts.get(ptyId) ?? 0) + 1)
     this.ensureProviderAttach(ptyId)
     this.deps.notifyPresenceChanged(ptyId)
+
     return this.releaseOnce(() => {
       this.decrement(this.remoteCounts, ptyId)
       this.deps.notifyPresenceChanged(ptyId)
@@ -43,6 +44,7 @@ export class RuntimeTerminalViewSubscribers {
   registerRaw(ptyId: string): () => void {
     this.rawCounts.set(ptyId, (this.rawCounts.get(ptyId) ?? 0) + 1)
     this.deps.notifyPresenceChanged(ptyId)
+
     return this.releaseOnce(() => {
       this.decrement(this.rawCounts, ptyId)
       this.deps.notifyPresenceChanged(ptyId)
@@ -73,23 +75,31 @@ export class RuntimeTerminalViewSubscribers {
     if (!this.hasRemote(ptyId)) {
       return
     }
+
     const pending = this.providerAttaches.get(ptyId)
+
     if (!pending) {
       this.ensureProviderAttach(ptyId)
+
       return
     }
+
     if (this.attachInventoryWaiters.has(ptyId)) {
       return
     }
+
     this.attachInventoryWaiters.add(ptyId)
     void pending.then((attached) => {
       this.attachInventoryWaiters.delete(ptyId)
+
       if (attached || !this.hasRemote(ptyId)) {
         return
       }
+
       if (this.providerAttaches.get(ptyId) === pending) {
         this.providerAttaches.delete(ptyId)
       }
+
       this.ensureProviderAttach(ptyId)
     })
   }
@@ -98,15 +108,19 @@ export class RuntimeTerminalViewSubscribers {
     if (this.providerAttaches.has(ptyId) || !this.isKnownUnattachedLocal(ptyId)) {
       return
     }
+
     let attempt: Promise<boolean> | null
+
     try {
       attempt = this.deps.attachProvider(ptyId)
     } catch {
       attempt = Promise.resolve(false)
     }
+
     if (!attempt) {
       return
     }
+
     const guardedAttempt = Promise.resolve(attempt).catch(() => false)
     this.providerAttaches.set(ptyId, guardedAttempt)
     void guardedAttempt.then((attached) => {
@@ -118,6 +132,7 @@ export class RuntimeTerminalViewSubscribers {
 
   private decrement(counts: Map<string, number>, ptyId: string): void {
     const next = (counts.get(ptyId) ?? 1) - 1
+
     if (next <= 0) {
       counts.delete(ptyId)
     } else {
@@ -127,10 +142,12 @@ export class RuntimeTerminalViewSubscribers {
 
   private releaseOnce(release: () => void): () => void {
     let released = false
+
     return () => {
       if (released) {
         return
       }
+
       released = true
       release()
     }

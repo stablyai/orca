@@ -102,11 +102,14 @@ function createMockGuest(
         }
       case 'Page.navigate': {
         const targetUrl = (params as { url: string }).url
+
         if (targetUrl.includes('nonexistent.invalid')) {
           return { errorText: 'net::ERR_NAME_NOT_RESOLVED' }
         }
+
         navHistoryId++
         currentUrl = targetUrl
+
         if (targetUrl.includes('search.example.com')) {
           currentTitle = 'Search'
           currentTree = SEARCH_PAGE_TREE
@@ -114,10 +117,13 @@ function createMockGuest(
           currentTitle = 'Example Domain'
           currentTree = EXAMPLE_COM_TREE
         }
+
         return {}
       }
+
       case 'Runtime.evaluate': {
         const expr = (params as { expression: string }).expression
+
         if (expr === 'document.readyState') {
           return {
             result: {
@@ -128,21 +134,27 @@ function createMockGuest(
             }
           }
         }
+
         if (expr === 'location.origin') {
           return { result: { value: new URL(currentUrl).origin } }
         }
+
         if (expr.includes('innerWidth')) {
           return { result: { value: JSON.stringify({ w: 1280, h: 720 }) } }
         }
+
         if (expr.includes('scrollBy')) {
           return { result: { value: undefined } }
         }
+
         if (expr.includes('dispatchEvent')) {
           return { result: { value: undefined } }
         }
+
         // eslint-disable-next-line no-eval
         return { result: { value: String(eval(expr)), type: 'string' } }
       }
+
       case 'DOM.scrollIntoViewIfNeeded':
         return {}
       case 'DOM.getBoxModel':
@@ -202,6 +214,7 @@ function createMockGuest(
         if (debuggerAttached) {
           throw new Error('Another debugger is already attached')
         }
+
         debuggerAttached = true
       }),
       detach: vi.fn(),
@@ -214,6 +227,7 @@ function createMockGuest(
       removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         const handlers = debuggerListeners.get(event) ?? []
         const idx = handlers.indexOf(handler)
+
         if (idx !== -1) {
           handlers.splice(idx, 1)
         }
@@ -255,9 +269,11 @@ async function sendRequest(
     socket.on('data', (chunk: string) => {
       buffer += chunk
       const newlineIndex = buffer.indexOf('\n')
+
       if (newlineIndex === -1) {
         return
       }
+
       const message = buffer.slice(0, newlineIndex)
       socket.end()
       resolve(JSON.parse(message) as Record<string, unknown>)
@@ -293,6 +309,7 @@ describe('Browser automation pipeline (integration)', () => {
       if (id === GUEST_WC_ID) {
         return guest
       }
+
       return null
     })
 
@@ -332,6 +349,7 @@ describe('Browser automation pipeline (integration)', () => {
       method,
       ...(params ? { params } : {})
     })
+
     return response
   }
 
@@ -347,6 +365,7 @@ describe('Browser automation pipeline (integration)', () => {
       url: string
       title: string
     }
+
     expect(result.url).toBe('https://example.com')
     expect(result.title).toBe('Example Domain')
     expect(result.snapshot).toContain('heading "Example Domain"')
@@ -434,14 +453,17 @@ describe('Browser automation pipeline (integration)', () => {
 
   it('clears readyState polling timers when navigation times out', async () => {
     vi.useFakeTimers()
+
     try {
       const slowGuestHarness = createMockGuest(6001, 'https://slow.example.com', 'Slow Page', {
         readyState: 'loading'
       })
+
       webContentsFromIdMock.mockImplementation((id: number) => {
         if (id === 6001) {
           return slowGuestHarness.guest
         }
+
         return null
       })
 
@@ -491,6 +513,7 @@ describe('Browser automation pipeline (integration)', () => {
     const insertCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
       ([method]) => method === 'Input.insertText'
     )
+
     expect(res.ok).toBe(true)
     expect(insertCalls).toHaveLength(2)
     expect((insertCalls[0]![1] as { text: string }).text).toHaveLength(
@@ -514,6 +537,7 @@ describe('Browser automation pipeline (integration)', () => {
     const insertCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
       ([method]) => method === 'Input.insertText'
     )
+
     expect(res.ok).toBe(true)
     expect(insertCalls).toHaveLength(2)
     expect((insertCalls[0]![1] as { text: string }).text).toHaveLength(
@@ -642,6 +666,7 @@ describe('Browser automation pipeline (integration)', () => {
     // 2. Snapshot the page
     const snap1 = await rpc('browser.snapshot')
     expect(snap1.ok).toBe(true)
+
     const snap1Result = snap1.result as {
       snapshot: string
       refs: { ref: string; role: string; name: string }[]
@@ -655,10 +680,12 @@ describe('Browser automation pipeline (integration)', () => {
     // 3. Fill the search input
     const searchInput = snap1Result.refs.find((r) => r.name === 'Search query')
     expect(searchInput).toBeDefined()
+
     const fillRes = await rpc('browser.fill', {
       element: searchInput!.ref,
       value: 'integration testing'
     })
+
     expect(fillRes.ok).toBe(true)
 
     // 4. Click the search button
@@ -694,6 +721,7 @@ describe('Browser automation pipeline (integration)', () => {
     await server2.start()
 
     const metadata2 = readRuntimeMetadata(userDataPath2)!
+
     const res = await sendRequest(metadata2.transports[0]!.endpoint, {
       id: 'req_no_tab',
       authToken: metadata2.authToken,

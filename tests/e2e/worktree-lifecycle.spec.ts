@@ -38,14 +38,17 @@ async function createIsolatedWorktree(
   page: Parameters<typeof getActiveWorktreeId>[0]
 ): Promise<string> {
   const name = `e2e-lifecycle-${Date.now()}`
+
   return page.evaluate(async (worktreeName) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
     const activeWorktreeId = state.activeWorktreeId
+
     if (!activeWorktreeId) {
       throw new Error('No active worktree to derive repo from')
     }
@@ -53,12 +56,14 @@ async function createIsolatedWorktree(
     const activeWorktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === activeWorktreeId)
+
     if (!activeWorktree) {
       throw new Error(`Active worktree ${activeWorktreeId} not found`)
     }
 
     const result = await state.createWorktree(activeWorktree.repoId, worktreeName)
     await state.fetchWorktrees(activeWorktree.repoId)
+
     return result.worktree.id
   }, name)
 }
@@ -69,15 +74,18 @@ async function removeWorktreeViaStore(
 ): Promise<{ ok: boolean; error?: string }> {
   return page.evaluate(async (id) => {
     const store = window.__store
+
     if (!store) {
       return { ok: false as const, error: 'store unavailable' }
     }
 
     const state = store.getState()
+
     const result = await state.removeWorktree(
       { id, executionHostId: state.getKnownWorktreeById(id)?.hostId ?? null },
       true
     )
+
     return result
   }, worktreeId)
 }
@@ -100,6 +108,7 @@ test.describe('Worktree Lifecycle', () => {
     if (!createdWorktreeId) {
       return
     }
+
     const idToClean = createdWorktreeId
     createdWorktreeId = null
     await orcaPage
@@ -138,6 +147,7 @@ test.describe('Worktree Lifecycle', () => {
     // clean up all three in a single atomic set().
     await orcaPage.evaluate((worktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
@@ -230,17 +240,21 @@ test.describe('Worktree Lifecycle', () => {
     // assertion tautological, so guard that expectation up-front.
     const originalState = await orcaPage.evaluate((wId) => {
       const store = window.__store
+
       if (!store) {
         // Surface a store-unavailable failure via a clear empty baseline
         // rather than a null-deref inside page.evaluate.
         return { openFileIds: [] as string[], hasLayout: false }
       }
+
       const state = store.getState()
+
       return {
         openFileIds: state.openFiles.filter((f) => f.worktreeId === wId).map((f) => f.id),
         hasLayout: Boolean(state.layoutByWorktree?.[wId])
       }
     }, originalWorktreeId)
+
     expect(
       originalState.openFileIds.length,
       'expected seeded openFiles on original worktree'
@@ -259,6 +273,7 @@ test.describe('Worktree Lifecycle', () => {
         async () =>
           orcaPage.evaluate(() => {
             const state = window.__store?.getState()
+
             return Boolean(state?.rightSidebarOpen && state?.rightSidebarTab === 'explorer')
           }),
         { timeout: 5_000, message: 'Right sidebar state was lost during worktree switch' }
@@ -276,17 +291,21 @@ test.describe('Worktree Lifecycle', () => {
     // would fail here even though `activeWorktreeId` round-tripped cleanly.
     const afterRoundTrip = await orcaPage.evaluate((wId) => {
       const store = window.__store
+
       if (!store) {
         // Match the originalState guard so assertion failures point at
         // "store gone" instead of a null-deref stack.
         return { openFileIds: [] as string[], hasLayout: false }
       }
+
       const state = store.getState()
+
       return {
         openFileIds: state.openFiles.filter((f) => f.worktreeId === wId).map((f) => f.id),
         hasLayout: Boolean(state.layoutByWorktree?.[wId])
       }
     }, originalWorktreeId)
+
     expect(new Set(afterRoundTrip.openFileIds)).toEqual(new Set(originalState.openFileIds))
     expect(afterRoundTrip.hasLayout).toBe(originalState.hasLayout)
   })
@@ -310,6 +329,7 @@ test.describe('Worktree Lifecycle', () => {
     // Create an extra tab on A so it has a distinctive tab ID set.
     await orcaPage.evaluate((worktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
@@ -328,6 +348,7 @@ test.describe('Worktree Lifecycle', () => {
     await ensureTerminalVisible(orcaPage)
     await orcaPage.evaluate((worktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }

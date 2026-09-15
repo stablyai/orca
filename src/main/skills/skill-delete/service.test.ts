@@ -31,6 +31,7 @@ async function fixture(): Promise<{
   await mkdir(canonicalDirectory, { recursive: true })
   const file = join(canonicalDirectory, 'SKILL.md')
   await writeFile(file, '---\nname: demo\ndescription: Demo\n---\n\n# Demo\n')
+
   return { home, stateDirectory: join(home, 'state'), canonicalDirectory, file }
 }
 
@@ -111,11 +112,13 @@ describe('deleteSkills', () => {
 
   it('takes the lock an install of the same destination directory would take', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
+
     // Keyed on the placement's literal directory path, which is what install
     // hashes — not the realpath'd file identity's dirname.
     const release = await acquireSkillInstallLock({
       path: skillInstallLockPath(stateDirectory, canonicalDirectory)
     })
+
     try {
       const result = await run(home, stateDirectory, await request(file))
       expect(result.skills[0].status).toBe('busy')
@@ -135,12 +138,15 @@ describe('deleteSkills', () => {
     const release = await acquireSkillInstallLock({
       path: skillInstallLockPath(stateDirectory, canonicalDirectory)
     })
+
     try {
       const [first, second] = await Promise.all([request(file), request(otherFile)])
+
       const result = await run(home, stateDirectory, {
         operationId: 'batch',
         skills: [first.skills[0], { ...second.skills[0], id: 'other-id', name: 'other' }]
       })
+
       expect(result.skills.map((skill) => skill.status)).toEqual(['busy', 'deleted'])
       expect(await exists(otherDirectory)).toBe(false)
     } finally {
@@ -155,14 +161,17 @@ describe('deleteSkills', () => {
     await symlink(canonicalDirectory, aliasDirectory, 'dir')
 
     let renames = 0
+
     const filesystem: SkillInstallFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source, target) => {
         renames += 1
+
         // Fail the canonical stage, which runs last.
         if (renames === 2) {
           throw new Error('EBUSY')
         }
+
         return nativeSkillInstallFilesystem.rename(source, target)
       }
     }
@@ -179,13 +188,16 @@ describe('deleteSkills', () => {
     await symlink(canonicalDirectory, join(home, '.claude', 'skills', 'demo'), 'dir')
 
     let renames = 0
+
     const filesystem: SkillInstallFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source, target) => {
         renames += 1
+
         if (renames === 1) {
           return nativeSkillInstallFilesystem.rename(source, target)
         }
+
         throw new Error('EACCES')
       }
     }
@@ -199,12 +211,14 @@ describe('deleteSkills', () => {
 
   it('reports partial rather than deleted when a staged removal fails', async () => {
     const { home, stateDirectory, file } = await fixture()
+
     const filesystem: SkillInstallFilesystem = {
       ...nativeSkillInstallFilesystem,
       remove: async () => {
         throw new Error('EACCES')
       }
     }
+
     const result = await run(home, stateDirectory, await request(file), filesystem)
     expect(result.skills[0].status).toBe('partial')
     expect(result.skills[0].stagedPaths?.length).toBe(1)
@@ -251,10 +265,12 @@ describe('deleteSkills', () => {
   it('skips a blocked skill without touching disk', async () => {
     const { home, stateDirectory, file } = await fixture()
     const deleteRequest = await request(file)
+
     const result = await run(home, stateDirectory, {
       ...deleteRequest,
       skills: [{ ...deleteRequest.skills[0], updatedAt: 1 }]
     })
+
     expect(result.skills[0]).toMatchObject({ status: 'skipped', blocked: 'stale' })
     expect(await exists(file)).toBe(true)
   })

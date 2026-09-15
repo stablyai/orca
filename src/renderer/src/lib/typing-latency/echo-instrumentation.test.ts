@@ -56,8 +56,10 @@ function fakeTerminal(): {
   const renderListeners = new Set<() => void>()
   const writtenPayloads: (string | Uint8Array)[] = []
   let disposed = 0
+
   const listen = <T>(listeners: Set<T>, listener: T): { dispose: () => void } => {
     listeners.add(listener)
+
     return {
       dispose: () => {
         if (listeners.delete(listener)) {
@@ -66,6 +68,7 @@ function fakeTerminal(): {
       }
     }
   }
+
   return {
     terminal: {
       write: (data) => writtenPayloads.push(data),
@@ -150,11 +153,13 @@ describe('recordKeystroke', () => {
     const entry = emptyEntry()
     let dropped = 0
     const records: ReturnType<typeof recordKeystroke>[] = []
+
     for (let index = 0; index < 200; index += 1) {
       const recorded = recordKeystroke(entry, index, 'direct')
       dropped += recorded.unmatched
       records.push(recorded)
     }
+
     expect(entry.pendingCount).toBe(64)
     expect(entry.undispatched).toHaveLength(64)
     expect(entry.ignoredDispatches).toHaveLength(64)
@@ -190,6 +195,7 @@ describe('recordKeystroke', () => {
   it('uses a cap-rejection sentinel instead of consuming a retained input', () => {
     const fake = fakeTerminal()
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, () => undefined)
+
     for (let index = 0; index < 64; index += 1) {
       recordKeystroke(entry, index, 'direct')
     }
@@ -206,15 +212,18 @@ describe('recordKeystroke', () => {
   it('fences overflow dispatches without consuming retained inputs', () => {
     const fake = fakeTerminal()
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, () => undefined)
+
     for (let index = 0; index < 64; index += 1) {
       recordKeystroke(entry, index, 'direct')
     }
+
     for (let index = 64; index < 129; index += 1) {
       recordKeystroke(entry, index, 'direct')
     }
 
     expect(entry.ignoredDispatches).toHaveLength(64)
     expect(entry.ignoredDispatchOverflowedAt).toBe(128)
+
     for (let index = 0; index < 65; index += 1) {
       fake.emitData('rejected')
     }
@@ -239,6 +248,7 @@ describe('recordKeystroke', () => {
 
   it('settles a prevented cap-rejected commit without touching retained inputs', () => {
     const entry = emptyEntry()
+
     for (let index = 0; index < 64; index += 1) {
       recordKeystroke(entry, index, 'direct')
     }
@@ -253,6 +263,7 @@ describe('recordKeystroke', () => {
 
   it('settles overlapping cap-rejected commits by identity', () => {
     const entry = emptyEntry()
+
     for (let index = 0; index < 64; index += 1) {
       recordKeystroke(entry, index, 'direct')
     }
@@ -270,6 +281,7 @@ describe('recordKeystroke', () => {
 
   it('settles same-timestamp cap rejections independently', () => {
     const entry = emptyEntry()
+
     for (let index = 0; index < 64; index += 1) {
       recordKeystroke(entry, index, 'direct')
     }
@@ -305,9 +317,11 @@ describe('instrumentPaneEcho', () => {
   it('measures input, dispatch, parse, and paint stages separately', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
+
     const now = vi.spyOn(performance, 'now')
 
     recordKeystroke(entry, 10, 'direct', 'a')
@@ -337,6 +351,7 @@ describe('instrumentPaneEcho', () => {
   it('counts UTF-8 bytes consistently for string and binary writes', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -359,6 +374,7 @@ describe('instrumentPaneEcho', () => {
   it('does not credit output that arrived before the input dispatched', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -379,6 +395,7 @@ describe('instrumentPaneEcho', () => {
   it('emits one ambiguous burst when overlapping inputs receive separate outputs', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -406,6 +423,7 @@ describe('instrumentPaneEcho', () => {
   it('emits one aggregate observation for genuinely coalesced mixed-source output', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -429,6 +447,7 @@ describe('instrumentPaneEcho', () => {
   it('keeps a batch ambiguous when another input arrives before parsing finishes', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -452,11 +471,13 @@ describe('instrumentPaneEcho', () => {
   it('aggregates thousands of writes in constant-size batch accounting', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
 
     recordAndDispatch(entry, fake)
+
     for (let index = 0; index < 1_000; index += 1) {
       fake.terminal.write('x')
     }
@@ -471,6 +492,7 @@ describe('instrumentPaneEcho', () => {
   it('keeps parsed batches separate when two parses precede one render', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -489,9 +511,11 @@ describe('instrumentPaneEcho', () => {
   it('marks the first late output after a timeout as ambiguous, then restores confidence', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
+
     const now = vi.spyOn(performance, 'now')
 
     recordKeystroke(entry, 0, 'direct', 'A')
@@ -530,9 +554,11 @@ describe('instrumentPaneEcho', () => {
   it('clears a gap-only output boundary without retaining an empty parsed batch', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
+
     const now = vi.spyOn(performance, 'now')
 
     recordKeystroke(entry, 0, 'direct', 'A')
@@ -559,6 +585,7 @@ describe('instrumentPaneEcho', () => {
   it('holds an unparsed input across a render instead of discarding it', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -576,6 +603,7 @@ describe('instrumentPaneEcho', () => {
   it('drains parsed output that never paints exactly once', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -601,6 +629,7 @@ describe('instrumentPaneEcho', () => {
   it('keeps a shared unparsed batch ambiguous after draining its stale input', () => {
     const fake = fakeTerminal()
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
@@ -627,9 +656,11 @@ describe('instrumentPaneEcho', () => {
     const fake = fakeTerminal()
     const originalWrite = fake.terminal.write
     const observations: EchoObservation[] = []
+
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (value) =>
       observations.push(value)
     )
+
     recordAndDispatch(entry, fake)
     fake.terminal.write('parsed but not painted')
     fake.emitParsed()

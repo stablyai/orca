@@ -23,6 +23,7 @@ it('retains settled folded runs while exposing changed tools, metadata, and attr
   const tail = message('tail', 5, [{ type: 'text', text: 'Answer' }])
   const initial = project([prose, call, result, prompt, tail])
   expect(project([prose, call, result, prompt, tail])).toBe(initial)
+
   const streamed = project([
     prose,
     call,
@@ -30,17 +31,21 @@ it('retains settled folded runs while exposing changed tools, metadata, and attr
     prompt,
     { ...tail, blocks: [{ type: 'text', text: 'Answer grows' }] }
   ])
+
   expect(streamed[0]).toBe(initial[0])
   expect(streamed.at(-1)).not.toBe(initial.at(-1))
 
   const lateResult = { ...result, blocks: [{ type: 'tool-result' as const, output: '/different' }] }
+
   const interruption = message(
     'interrupt',
     2.5,
     [{ type: 'text', text: '[Request interrupted by user]' }],
     'user'
   )
+
   const earlier = message('earlier', 0, [{ type: 'text', text: 'Earlier task' }], 'user')
+
   const scenarios = [
     [prose, call, lateResult, prompt, tail],
     [prose, call, interruption, result, prompt, tail],
@@ -52,11 +57,13 @@ it('retains settled folded runs while exposing changed tools, metadata, and attr
     structuredClone([prose, call, result, prompt, tail]),
     []
   ]
+
   for (const messages of scenarios) {
     expect(project(messages)).toEqual(
       stripNoiseMessages(foldToolMessages(orderNativeChatMessages(messages)))
     )
   }
+
   expect(project([prose, call, result])[0]).not.toBe(initial[0])
 })
 
@@ -67,12 +74,14 @@ it('leaves producer-owned messages and blocks untouched', () => {
   const prose = message('prose', 1, [{ type: 'text', text: 'Working' }])
   const call = message('call', 2, [{ type: 'tool-call', name: 'shell', input: { command: 'pwd' } }])
   const result = message('result', 3, [{ type: 'tool-result', output: '/workspace' }], 'tool')
+
   const later = message(
     'later',
     4,
     [{ type: 'tool-call', name: 'read', input: { path: 'a.ts' } }],
     'tool'
   )
+
   const input = [prose, call, result, later]
   const snapshot = structuredClone(input)
   const folded = project(input)

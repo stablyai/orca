@@ -24,6 +24,7 @@ import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const CELL_WIDTH_PX = 8
+
 const CELL_HEIGHT_PX = 16
 
 type RecordedEvent = {
@@ -88,22 +89,29 @@ function buildEvent(recorded: RecordedEvent): Event {
       isComposing: recorded.isComposing,
       key: recorded.key ?? ''
     })
+
     Object.defineProperty(keyboard, 'keyCode', { value: recorded.keyCode })
+
     return keyboard
   }
+
   if (recorded.type === 'input' || recorded.type === 'beforeinput') {
     const input = new InputEvent(recorded.type, {
       bubbles: true,
       isComposing: recorded.isComposing
     })
+
     // happy-dom drops these from InputEventInit; Chromium supplies them.
     Object.defineProperty(input, 'inputType', { value: 'insertCompositionText' })
     Object.defineProperty(input, 'data', { value: recorded.data ?? null })
     Object.defineProperty(input, 'composed', { value: true })
+
     return input
   }
+
   const composition = new CompositionEvent(recorded.type, { bubbles: true })
   Object.defineProperty(composition, 'data', { value: recorded.data ?? '' })
+
   return composition
 }
 
@@ -121,9 +129,11 @@ function openTerminal(): Rig {
   terminal.open(container)
   const textarea = terminal.textarea
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!textarea || !compositionView) {
     throw new Error('xterm did not create the helper textarea and composition view')
   }
+
   openTerminals.push(terminal)
 
   const cell = (
@@ -133,6 +143,7 @@ function openTerminal(): Rig {
       }
     }
   )._core._renderService.dimensions.css.cell
+
   cell.width = CELL_WIDTH_PX
   cell.height = CELL_HEIGHT_PX
   const emitted: string[] = []
@@ -147,10 +158,12 @@ function openTerminal(): Rig {
       if (recorded.type === 'keydown' || recorded.type === 'keyup') {
         await nextEventLoop()
       }
+
       if (recorded.data !== undefined && recorded.type !== 'compositionupdate') {
         textarea.value = recorded.data
         textarea.setSelectionRange(recorded.data.length, recorded.data.length)
       }
+
       textarea.dispatchEvent(buildEvent(recorded))
     }
   }
@@ -178,9 +191,11 @@ describe('preedit visibility across a composition the IME resumes', () => {
     // updateCompositionElements re-arms on a timer; let the pending one run before dispose.
     await nextEventLoop()
     await nextEventLoop()
+
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })

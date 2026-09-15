@@ -48,7 +48,9 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     setAppliedGithubProjectSearch,
     setSelectedRepoIds
   } = model
+
   const githubPresetOptions = githubKind === 'prs' ? PR_PRESETS : ISSUE_PRESETS
+
   const githubPresetPickerOptions = useMemo(
     () =>
       githubPresetOptions.map((option) =>
@@ -58,18 +60,25 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       ),
     [defaultGitHubPreset, githubPresetOptions]
   )
+
   const githubPresetLabel =
     githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ?? 'Open'
+
   const gitlabFilterLabel =
     GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ?? 'Open'
+
   const linearFilterLabel =
     LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ?? 'All'
+
   const linearViewLabel =
     LINEAR_VIEW_OPTIONS.find((option) => option.value === linearViewMode)?.label ?? 'List'
+
   const linearGroupLabel =
     LINEAR_GROUP_OPTIONS.find((option) => option.value === linearGroupBy)?.label ?? 'No grouping'
+
   const linearOrderLabel =
     LINEAR_ORDER_OPTIONS.find((option) => option.value === linearOrderBy)?.label ?? 'Priority'
+
   const linearWorkspaceLabel =
     selectedLinearWorkspaceId === 'all'
       ? 'All workspaces'
@@ -78,6 +87,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
         linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId)
           ?.displayName ??
         'Workspace')
+
   const linearWorkspaceOptions = useMemo<PickerOption<string>[]>(
     () => [
       { value: 'all', label: 'All workspaces' },
@@ -88,31 +98,39 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     ],
     [linearWorkspaces]
   )
+
   const linearTeamLabel =
     selectedLinearTeamIds.size === 0 || selectedLinearTeamIds.size === linearTeams.length
       ? 'All teams'
       : selectedLinearTeamIds.size === 1
         ? (linearTeams.find((team) => selectedLinearTeamIds.has(team.id))?.name ?? '1 team')
         : `${selectedLinearTeamIds.size} teams`
+
   const effectiveLinearDisplayProperties = useMemo(() => {
     const next = new Set(linearDisplayProperties)
+
     if (linearGroupBy === 'status') {
       next.delete('state')
     }
+
     if (linearGroupBy === 'assignee') {
       next.delete('assignee')
     }
+
     if (linearGroupBy === 'priority') {
       next.delete('priority')
     }
+
     if (linearGroupBy === 'team') {
       next.delete('team')
     }
+
     if (selectedLinearTeamIds.size <= 1 && !linearTeamPropertyTouched) {
       next.delete('team')
     } else if (selectedLinearTeamIds.size > 1 && !linearTeamPropertyTouched) {
       next.add('team')
     }
+
     return next
   }, [
     linearDisplayProperties,
@@ -120,6 +138,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     linearTeamPropertyTouched,
     selectedLinearTeamIds.size
   ])
+
   const linearIssuesForView = useMemo(
     () =>
       sortLinearIssues(
@@ -132,10 +151,12 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       ),
     [items, linearOrderBy]
   )
+
   const linearIssueSections = useMemo(
     () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
     [linearGroupBy, linearIssuesForView]
   )
+
   // Why: FlatList treats data identity as meaningful; unrelated renders should
   // not rebuild the section/item wrapper array.
   const linearListEntries = useMemo<LinearListEntry[]>(
@@ -150,6 +171,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       ),
     [linearGroupBy, linearIssueSections]
   )
+
   // Why: every grouping but `none` produces the same sections as the list, so the
   // board reuses them; `none` still needs its own status split for columns.
   const linearBoardSections = useMemo(
@@ -159,20 +181,25 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
         : linearIssueSections,
     [linearGroupBy, linearIssueSections, linearIssuesForView]
   )
+
   const githubModeLabel =
     githubMode === 'project' ? 'Projects' : githubKind === 'prs' ? 'PRs' : 'Issues'
+
   const activeProjectLabel = githubProjectTable
     ? githubProjectTable.project.title
     : activeGitHubProject
       ? `${activeGitHubProject.owner} #${activeGitHubProject.number}`
       : 'Choose project'
+
   const selectedGitHubProjectViewUrl = githubProjectTable
     ? `${githubProjectTable.project.url}/views/${githubProjectTable.selectedView.number}`
     : null
+
   const githubProjectsByKey = useMemo(
     () => new Map(githubProjects.map((project) => [githubProjectKey(project), project])),
     [githubProjects]
   )
+
   const pinnedGitHubProjects = useMemo(
     () =>
       githubProjectSettings.pinned.map((project) => ({
@@ -181,6 +208,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       })),
     [githubProjectSettings.pinned, githubProjectsByKey]
   )
+
   const recentGitHubProjects = useMemo(
     () =>
       githubProjectSettings.recent
@@ -196,19 +224,24 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
         })),
     [githubProjectSettings.pinned, githubProjectSettings.recent, githubProjectsByKey]
   )
+
   const browseGitHubProjects = useMemo(() => {
     const queryText = githubProjectPickerSearch.trim().toLowerCase()
+
     const pinnedOrRecentKeys = new Set([
       ...githubProjectSettings.pinned.map(githubProjectKey),
       ...githubProjectSettings.recent.map(githubProjectKey)
     ])
+
     return githubProjects.filter((project) => {
       if (pinnedOrRecentKeys.has(githubProjectKey(project))) {
         return false
       }
+
       if (!queryText) {
         return true
       }
+
       return (
         project.title.toLowerCase().includes(queryText) ||
         project.owner.toLowerCase().includes(queryText) ||
@@ -226,14 +259,18 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     (repoId: string) => {
       setSelectedRepoIds((current) => {
         const next = new Set(current)
+
         if (next.has(repoId)) {
           next.delete(repoId)
         } else {
           next.add(repoId)
         }
+
         const normalized =
           next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
+
         persistRepoSelection(normalized, hostedRepos)
+
         return normalized
       })
     },
@@ -245,6 +282,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     const next = githubProjectSearch
     setAppliedGithubProjectSearch(next === viewFilter ? undefined : next)
   }, [githubProjectSearch, githubProjectTable?.selectedView.filter])
+
   return Object.assign(model, {
     githubPresetOptions,
     githubPresetPickerOptions,

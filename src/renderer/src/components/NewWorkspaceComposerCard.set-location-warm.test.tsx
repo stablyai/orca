@@ -13,6 +13,7 @@ const chunk = vi.hoisted(() => ({ loads: 0 }))
 // actually fail; a `() => null` stub would make that check vacuous.
 vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => {
   chunk.loads += 1
+
   return {
     SetProjectLocationDialog: () => <div data-testid="set-project-location-dialog" />
   }
@@ -70,6 +71,7 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
 }))
 
 const readyOnlyHostOptions = hostOptions.filter((option) => option.kind === 'ready')
+
 // A disconnected host is a needs-setup row with no "Set location" action, so it must not warm.
 const unavailableHostOptions: ProjectHostSetupOption[] = [
   ...readyOnlyHostOptions,

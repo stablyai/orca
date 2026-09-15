@@ -18,7 +18,9 @@ export type {
   UISliceCore,
   UiViewHistory
 } from './ui-slice-contract-core'
+
 export type { UISliceContextual } from './ui-slice-contract-contextual'
+
 export type {
   UISlicePersistence,
   UISlicePreferences,
@@ -32,5 +34,7 @@ export type UISlice = UISliceCore &
   UISlicePersistence
 
 type UISliceStateCreator = StateCreator<AppState, [], [], UISlice>
+
 export type UISliceSet = Parameters<UISliceStateCreator>[0]
+
 export type UISliceGet = Parameters<UISliceStateCreator>[1]

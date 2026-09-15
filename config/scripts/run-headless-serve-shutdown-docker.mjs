@@ -5,13 +5,21 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const args = process.argv.slice(2)
+
 const appImageArg = valueAfter('--appimage')
+
 const platform = valueAfter('--platform') ?? 'linux/amd64'
+
 const signalTarget = valueAfter('--signal-target') ?? 'app'
+
 const entrypoint = valueAfter('--entrypoint') ?? 'app'
+
 const intDelivery = valueAfter('--int-delivery') ?? 'foreground-process-group'
+
 const launcherExecOverlay = args.includes('--launcher-exec-overlay')
+
 const allEntrypoints = args.includes('--all-entrypoints')
+
 if (
   allEntrypoints &&
   ['--entrypoint', '--signal-target', '--int-delivery', '--launcher-exec-overlay'].some((flag) =>
@@ -20,6 +28,7 @@ if (
 ) {
   fail('--all-entrypoints cannot be combined with individual case options')
 }
+
 const cases = allEntrypoints
   ? [
       { entrypoint: 'app', signalTarget: 'app', intDelivery: 'foreground-process-group' },
@@ -27,35 +36,47 @@ const cases = allEntrypoints
       { entrypoint: 'appimage', signalTarget: 'serving-electron', intDelivery: 'pid' }
     ]
   : [{ entrypoint, signalTarget, intDelivery }]
+
 if (!appImageArg) {
   fail('Usage: run-headless-serve-shutdown-docker.mjs --appimage /path/to/orca.AppImage')
 }
+
 if (!['app', 'serving-electron'].includes(signalTarget)) {
   fail(`Unsupported --signal-target: ${signalTarget}`)
 }
+
 if (!['app', 'appimage', 'launcher'].includes(entrypoint)) {
   fail(`Unsupported --entrypoint: ${entrypoint}`)
 }
+
 if (!['pid', 'foreground-process-group'].includes(intDelivery)) {
   fail(`Unsupported --int-delivery: ${intDelivery}`)
 }
+
 if (intDelivery === 'foreground-process-group' && signalTarget !== 'app') {
   fail('--int-delivery foreground-process-group requires --signal-target app')
 }
+
 if (launcherExecOverlay && entrypoint !== 'launcher') {
   fail('--launcher-exec-overlay requires --entrypoint launcher')
 }
 
 const appImage = resolve(appImageArg)
+
 const shutdownDockerDirectory = resolve('config', 'docker', 'headless-serve-shutdown')
+
 const shutdownDockerfile = resolve(shutdownDockerDirectory, 'Dockerfile')
+
 if (!existsSync(appImage)) {
   fail(`AppImage not found: ${appImage}`)
 }
 
 const suffix = `${process.pid}-${Date.now()}`
+
 const image = `orca-headless-serve-shutdown:${suffix}`
+
 const artifactVolume = `orca-headless-serve-shutdown-${suffix}`
+
 const sha256 = createHash('sha256').update(readFileSync(appImage)).digest('hex')
 
 try {
@@ -69,14 +90,17 @@ try {
     image,
     shutdownDockerDirectory
   ]
+
   // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
   const firstBuild = docker(buildArgs, { allowFailure: true })
+
   if (firstBuild.status !== 0) {
     process.stderr.write(
       `${firstBuild.stdout}${firstBuild.stderr}\ndocker build failed with status ${firstBuild.status}; retrying once...\n`
     )
     docker(buildArgs)
   }
+
   docker(['volume', 'create', artifactVolume])
   runDesktopStartupOracle({ image, appImage, platform })
   docker([
@@ -115,6 +139,7 @@ try {
   ])
 
   const failedSignals = []
+
   for (const { entrypoint, signalTarget, intDelivery } of cases) {
     console.log(
       JSON.stringify({
@@ -128,6 +153,7 @@ try {
         launcherExecOverlay
       })
     )
+
     for (const signal of ['INT', 'TERM']) {
       const result = docker(
         [
@@ -155,16 +181,20 @@ try {
         ],
         { allowFailure: true }
       )
+
       process.stdout.write(result.stdout)
       process.stderr.write(result.stderr)
+
       if (result.status !== 0) {
         failedSignals.push(`${entrypoint}:${signal}:${result.status}`)
       }
     }
   }
+
   if (failedSignals.length > 0) {
     fail(`Shutdown oracle failed: ${failedSignals.join(', ')}`)
   }
+
   console.log('Headless serve packaged shutdown Docker validation passed.')
 } finally {
   docker(['volume', 'rm', artifactVolume], { allowFailure: true })
@@ -205,6 +235,7 @@ function runDesktopStartupOracle({ image, appImage, platform }) {
 
 function valueAfter(flag) {
   const index = args.indexOf(flag)
+
   return index === -1 ? null : (args[index + 1] ?? null)
 }
 
@@ -214,14 +245,17 @@ function docker(dockerArgs, options = {}) {
     encoding: 'utf8',
     maxBuffer: 20 * 1024 * 1024
   })
+
   if (result.error) {
     throw result.error
   }
+
   if (result.status !== 0 && !options.allowFailure) {
     process.stdout.write(result.stdout)
     process.stderr.write(result.stderr)
     fail(`docker ${dockerArgs[0]} failed with status ${result.status}`)
   }
+
   return result
 }
 

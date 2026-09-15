@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchWriteFailureReason } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
 const hostRef: { current: unknown } = { current: null }
+
 const createSpy = vi.fn()
 
 vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
+
 vi.mock('./structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: (...args: unknown[]) => createSpy(...args)
 }))
@@ -17,8 +19,11 @@ const {
   sendStructuredWorkerPreamble,
   structuredWorkerHoldId
 } = await import('./orchestration-structured-worker-session')
+
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
+
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
+
 const { structuredWorkerChildIdentityEnv } =
   await import('../../structured-worker-child-identity-env')
 
@@ -41,6 +46,7 @@ function installHost() {
     release,
     subscribe: () => dispose
   }
+
   return { hold, release, dispose }
 }
 
@@ -56,6 +62,7 @@ describe('structured worker session hold', () => {
 
   it('takes a resume-capable hold at start and releases it only on settlement', async () => {
     const { hold, release, dispose } = installHost()
+
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -63,6 +70,7 @@ describe('structured worker session hold', () => {
       dispatchId: 'd1',
       onJournalActivity: () => {}
     })
+
     // Without the hold, the release clock evicts the provider child 15s after a user closes the
     // worker's chat tab, killing an idle worker mid-dispatch.
     expect(hold).toHaveBeenCalledWith(created.identity.sessionId, structuredWorkerHoldId('d1'))
@@ -84,8 +92,10 @@ describe('structured worker session hold', () => {
       // `attach` is what spawns the provider child, and the child's env is read from the registry
       // at spawn time. Registering afterwards ships a worker with no ORCA_TERMINAL_HANDLE.
       envAtSpawn = structuredWorkerChildIdentityEnv(args.envelope.sessionId, {})
+
       return { ok: true, value: { sessionId: args.envelope.sessionId } }
     })
+
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -93,6 +103,7 @@ describe('structured worker session hold', () => {
       dispatchId: 'd_spawn',
       onJournalActivity: () => {}
     })
+
     expect(envAtSpawn?.ORCA_TERMINAL_HANDLE).toBe(created.identity.handle)
     expect(envAtSpawn?.ORCA_CLI_COMMAND).toBe('orca')
     expect(envAtSpawn?.ORCA_PANE_KEY).toBeUndefined()
@@ -102,10 +113,13 @@ describe('structured worker session hold', () => {
   it('forgets the identity and discards the session when the start fails', async () => {
     const { hold } = installHost()
     hold.mockRejectedValueOnce(new Error('hold refused'))
+
     const closed: string[] = []
+
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
     }
+
     await expect(
       createStructuredWorkerSession({
         runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
@@ -122,10 +136,13 @@ describe('structured worker session hold', () => {
 
   it('discards the session when the create settled UNKNOWN after attach', async () => {
     installHost()
+
     const closed: string[] = []
+
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
     }
+
     // `commit` answers this after `attach` SUCCEEDED and only the tab publish failed, so the
     // provider child is live. Reading it as "refused, nothing created" strands that child with no
     // hold and no binding, and nothing else in the runtime ever retires it.
@@ -151,10 +168,13 @@ describe('structured worker session hold', () => {
 
   it('does not close anything when the create refusal proves nothing was created', async () => {
     installHost()
+
     const closed: string[] = []
+
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
     }
+
     createSpy.mockImplementation(async () => ({
       ok: false,
       refusal: {
@@ -176,6 +196,7 @@ describe('structured worker session hold', () => {
 
   it('registers a random handle bound to the created session', async () => {
     installHost()
+
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -183,6 +204,7 @@ describe('structured worker session hold', () => {
       dispatchId: 'd2',
       onJournalActivity: () => {}
     })
+
     expect(created.identity.handle.startsWith('structworker_')).toBe(true)
     expect(created.identity.processIncarnation).toBe(`structured:${created.identity.sessionId}`)
     expect(structuredWorkerIdentities.getBySessionId(created.identity.sessionId)?.agent).toBe(
@@ -249,6 +271,7 @@ describe('structured worker dispatch preamble', () => {
       const error = await send(
         hostWithSubmission({ dispatchState, reason: 'provider child exited' })
       ).catch((thrown: unknown) => thrown)
+
       expect((error as { code?: string }).code).toBe('operation_unknown')
       // The wiring, not just the throw: this is the code that makes the start receipt
       // `outcome_unknown` with the worker-show / worker-abandon recovery commands.
@@ -260,6 +283,7 @@ describe('structured worker dispatch preamble', () => {
     const error = await send(
       hostWithSubmission({ dispatchState: 'rejected', reason: 'fence moved' })
     ).catch((thrown: unknown) => thrown)
+
     // A verdict, not prose. A coordinator must be able to tell "we could not send it"
     // from `operation_unknown`'s "it may be running, go look" without parsing a message,
     // which a bare `Error` forced it to do.
@@ -277,6 +301,7 @@ describe('structured worker dispatch preamble', () => {
         reason: dispatchWriteFailureReason(new Error('broken pipe'))
       })
     ).catch((thrown: unknown) => thrown)
+
     expect((error as { code?: string }).code).toBe('dispatch_preamble_undelivered')
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
   })

@@ -9,6 +9,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -16,9 +17,11 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -27,12 +30,14 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
 }))
 
 const readRepoWorktreeAdminFingerprintMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./repo-worktree-admin-fingerprint', () => ({
   readRepoWorktreeAdminFingerprint: readRepoWorktreeAdminFingerprintMock
 }))
@@ -46,11 +51,17 @@ import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolutio
 import { canonicalWorktreeIdentity } from '../../shared/worktree/identity'
 
 const REPO_ID = 'repo-local'
+
 const REPO_PATH = '/Users/me/dev/app'
+
 const WORKTREE_PATH = '/Users/me/dev/app-feature'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
+
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
+
 const SCAN_TTL_MS = 30_000
+
 // A busy host (100+ linked worktrees, Defender, cold dentry cache, cloud placeholders) can spend
 // seconds in pure stat time. Reuse has to survive that, or trimming the probe's deadline to fit the
 // caller budget just trades a repeating stall for a repeating `git worktree list`.
@@ -86,7 +97,9 @@ function makeStore(options: { connectionId?: string; repoCount?: number; repoPat
       instanceId: '22222222-2222-4222-8222-222222222222'
     })
   }
+
   const basePath = options.repoPath ?? REPO_PATH
+
   const repos = Array.from({ length: options.repoCount ?? 1 }, (_unused, index) => ({
     id: index === 0 ? REPO_ID : `${REPO_ID}-${index}`,
     path: index === 0 ? basePath : `${basePath}-${index}`,
@@ -95,6 +108,7 @@ function makeStore(options: { connectionId?: string; repoCount?: number; repoPat
     addedAt: 1,
     ...(options.connectionId === undefined ? {} : { connectionId: options.connectionId })
   }))
+
   const store = {
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => repos,
@@ -102,6 +116,7 @@ function makeStore(options: { connectionId?: string; repoCount?: number; repoPat
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
+
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -119,6 +134,7 @@ function makeStore(options: { connectionId?: string; repoCount?: number; repoPat
     }),
     getProjects: () => []
   }
+
   return store
 }
 
@@ -133,6 +149,7 @@ function makeRuntime(
 } {
   const store = makeStore(options)
   const runtime = new OrcaRuntimeService(store as never)
+
   return {
     runtime,
     list: () => (runtime as unknown as RuntimeInternals).listResolvedWorktrees(),
@@ -166,16 +183,19 @@ function trackSettled(promise: Promise<unknown>): () => boolean {
       settled = true
     }
   )
+
   return () => settled
 }
 
 function stallProbeOnce(): (fingerprint: string | null) => void {
   let release: (fingerprint: string | null) => void = () => {}
+
   readRepoWorktreeAdminFingerprintMock.mockReturnValueOnce(
     new Promise<string | null>((resolve) => {
       release = resolve
     })
   )
+
   return (fingerprint) => release(fingerprint)
 }
 
@@ -193,6 +213,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('skips the Git scan past the TTL while the admin fingerprint is unchanged', async () => {
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime()
 
@@ -215,6 +236,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('rescans at the TTL once the admin fingerprint changes', async () => {
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime()
 
@@ -232,6 +254,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('reconciles with a real scan once the bounded interval elapses', async () => {
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime()
 
@@ -247,6 +270,7 @@ describe('worktree scan admin-fingerprint gate', () => {
         vi.advanceTimersByTime(31_000)
         await list()
       }
+
       expect(scanCount()).toBe(1)
 
       vi.advanceTimersByTime(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS)
@@ -259,6 +283,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('still rescans immediately when an event invalidates the repo', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, list } = makeRuntime()
 
@@ -291,6 +316,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('scans when the probe cannot describe the repo', async () => {
     vi.useFakeTimers()
+
     try {
       readRepoWorktreeAdminFingerprintMock.mockResolvedValue(null)
       const { list } = makeRuntime()
@@ -309,6 +335,7 @@ describe('worktree scan admin-fingerprint gate', () => {
     // Agent-scratch roots carry a 5-minute TTL, so a fingerprint could never be reused. Reading one
     // would be pure work on a polling path.
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime({ repoPath: '/tmp/.codex-tmp/capsule-a' })
 
@@ -325,10 +352,12 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('never consults the probe for SSH repos', async () => {
     vi.useFakeTimers()
+
     try {
       const listWorktrees = vi.fn(async () => [
         { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
       ])
+
       getSshGitProviderMock.mockReturnValue({ listWorktrees })
       const { list } = makeRuntime({ connectionId: 'ssh-remote-1' })
 
@@ -345,6 +374,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('does not extend a failed scan on an unchanged fingerprint', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
       const { list } = makeRuntime()
@@ -364,6 +394,7 @@ describe('worktree scan admin-fingerprint gate', () => {
     // Reproduces the reported steady state: 10 idle repos, a caller polling faster than the
     // resolved-snapshot TTL. Before the gate this cost one `git worktree list` per repo per 30 s.
     vi.useFakeTimers()
+
     try {
       const REPOS = 10
       const POLL_SECONDS = 30 * 60
@@ -377,8 +408,10 @@ describe('worktree scan admin-fingerprint gate', () => {
       // One scan per repo per cache refresh: the TTL alone would refresh 60x per repo, the
       // reconcile deadline refreshes 6x. 600 -> 60 `git worktree list` spawns per half hour.
       const ttlOnlyScans = (REPOS * POLL_SECONDS * 1_000) / SCAN_TTL_MS
+
       const reconcileScans =
         (REPOS * POLL_SECONDS * 1_000) / WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
+
       expect(ttlOnlyScans).toBe(600)
       expect(reconcileScans).toBe(60)
       expect(scanCount()).toBe(reconcileScans)
@@ -389,6 +422,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('keeps refreshing when a probe on a wedged filesystem never settles', async () => {
     vi.useFakeTimers()
+
     try {
       stallProbeOnce()
       const { list } = makeRuntime()
@@ -420,6 +454,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('issues no further probes while one is still outstanding', async () => {
     vi.useFakeTimers()
+
     try {
       readRepoWorktreeAdminFingerprintMock.mockReturnValue(new Promise<string | null>(() => {}))
       const { list } = makeRuntime()
@@ -442,6 +477,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('resumes gating once the filesystem recovers', async () => {
     vi.useFakeTimers()
+
     try {
       const releaseStalledProbe = stallProbeOnce()
       const { list } = makeRuntime()
@@ -468,6 +504,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('scans when the awaited probe outlives its deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime()
 
@@ -501,6 +538,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('still reuses the scan when a slow probe answers inside its deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime()
       await list()
@@ -523,6 +561,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('still returns scanned rows within the per-repo budget when the probe stalls', async () => {
     vi.useFakeTimers()
+
     try {
       const { list } = makeRuntime()
       await list()
@@ -546,6 +585,7 @@ describe('worktree scan admin-fingerprint gate', () => {
 
   it('does not publish an already-expired snapshot after a slow compute', async () => {
     vi.useFakeTimers()
+
     try {
       const { list, store } = makeRuntime()
       await list()
@@ -600,6 +640,7 @@ describe('scoped explicit worktree-id resolution', () => {
 
   it('scans only the owning repo for an id: selector on a cold cache', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+
     const resolve = (selector: string): Promise<{ id: string }> =>
       (
         runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
@@ -612,10 +653,12 @@ describe('scoped explicit worktree-id resolution', () => {
   })
   it('resolves an exact canonical identity without relying on the mutable locator', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+
     const resolve = (selector: string): Promise<{ id: string }> =>
       (
         runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
       ).resolveWorktreeSelector(selector)
+
     const identityKey = canonicalWorktreeIdentity({
       worktreeId: MAIN_WORKTREE_ID,
       executionHostId: 'local',
@@ -629,6 +672,7 @@ describe('scoped explicit worktree-id resolution', () => {
 
   it('still finds worktrees in other repos through the fleet path', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+
     const resolve = (selector: string): Promise<{ id: string }> =>
       (
         runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
@@ -643,6 +687,7 @@ describe('scoped explicit worktree-id resolution', () => {
 
   it('keeps cross-repo selectors on the fleet path so ambiguity still throws', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+
     const resolve = (selector: string): Promise<unknown> =>
       (
         runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }
@@ -655,6 +700,7 @@ describe('scoped explicit worktree-id resolution', () => {
 
   it('falls back to the fleet path when the id names no registered repo', async () => {
     const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+
     const resolve = (selector: string): Promise<unknown> =>
       (
         runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<unknown> }

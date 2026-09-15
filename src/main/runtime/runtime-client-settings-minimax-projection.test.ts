@@ -8,6 +8,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 // tests mock the controller, so only a real get() covers it.
 function getProjected(overrides: Partial<GlobalSettings>) {
   const settings = createGlobalSettingsFixture({ workspaceDir: '/w', ...overrides })
+
   return new RuntimeClientSettingsController({ getSettings: () => settings } as never).get()
 }
 
@@ -23,9 +24,11 @@ describe('RuntimeClientSettingsController MiniMax projection', () => {
   it('falls back to overseas when the host has no persisted endpoint', () => {
     const settings = createGlobalSettingsFixture({ workspaceDir: '/w' })
     delete (settings as Partial<GlobalSettings>).minimaxEndpoint
+
     const projected = new RuntimeClientSettingsController({
       getSettings: () => settings
     } as never).get()
+
     expect(projected.minimaxEndpoint).toBe('overseas')
   })
 })

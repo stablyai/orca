@@ -21,6 +21,7 @@ describe('shell process readiness', () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-shell-path-'))
       const link = join(root, 'shell-name')
       await symlink(process.execPath, link)
+
       try {
         await expect(resolveShellExecutablePath('shell-name', dirname(root), root)).resolves.toBe(
           await resolveShellExecutablePath(process.execPath, dirname(root), root)
@@ -46,6 +47,7 @@ describe('shell process readiness', () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-relative-shell-'))
       const bin = join(root, 'bin')
       await symlink(dirname(process.execPath), bin)
+
       try {
         await expect(
           resolveShellExecutablePath(`./bin/${basename(process.execPath)}`, root, '')
@@ -65,6 +67,7 @@ describe('shell process readiness', () => {
       await mkdir(join(first, 'shell-name'), { recursive: true })
       await mkdir(second)
       await symlink(process.execPath, join(second, 'shell-name'))
+
       try {
         await expect(
           resolveShellExecutablePath('shell-name', root, `${first}:${second}`)
@@ -86,6 +89,7 @@ describe('shell process readiness', () => {
       await mkdir(second)
       await symlink(process.execPath, join(first, 'shell-name'))
       await symlink(process.execPath, join(second, 'shell-name'))
+
       try {
         const canonical = await resolveShellExecutablePath(process.execPath, root, '')
         await expect(
@@ -107,6 +111,7 @@ describe('shell process readiness', () => {
       await mkdir(offPath)
       await symlink(process.execPath, join(onPath, 'shell-name'))
       await symlink(process.execPath, join(offPath, 'shell-name'))
+
       try {
         await expect(
           resolveInstalledShellExecutablePaths('shell-name', root, onPath)

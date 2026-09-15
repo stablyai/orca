@@ -51,6 +51,7 @@ test('blocked navigation preserves the renderer document and graph authority', a
   await expect
     .poll(async () => {
       const status = (await client.call<RuntimeStatus>('status.get')).result
+
       return {
         graphStatus: status.graphStatus,
         rendererGraphEpoch: status.rendererGraphEpoch,
@@ -87,6 +88,7 @@ test('cancelled renderer reload restores the surviving graph authority', async (
   await expect
     .poll(async () => {
       const status = (await client.call<RuntimeStatus>('status.get')).result
+
       return {
         graphStatus: status.graphStatus,
         rendererGraphEpoch: status.rendererGraphEpoch,
@@ -139,6 +141,7 @@ test('beforeunload cancellation never retires the surviving graph authority', as
     const url = new URL(contents.getURL())
     url.searchParams.set('prevented-unload', '1')
     await contents.loadURL(url.href).catch(() => undefined)
+
     return events
   })
 

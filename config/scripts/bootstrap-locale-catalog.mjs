@@ -12,6 +12,7 @@ import {
 } from './locale-translation-policy.mjs'
 
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
+
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
 
 const LOCALE_CONFIG = {
@@ -44,22 +45,28 @@ const LOCALE_CONFIG = {
 
 function protectPlaceholders(text) {
   const tokens = []
+
   const protectedText = text.replace(PLACEHOLDER_RE, (match) => {
     const token = `__PH${tokens.length}__`
     tokens.push(match)
+
     return token
   })
+
   return { protectedText, tokens }
 }
 
 function restorePlaceholders(text, tokens) {
   let result = text
+
   for (let index = 0; index < tokens.length; index += 1) {
     const patterns = [`__PH${index}__`, `__ PH ${index} __`, `__PH ${index}__`, `__ PH${index}__`]
+
     for (const pattern of patterns) {
       result = result.replaceAll(pattern, tokens[index])
     }
   }
+
   return result
 }
 
@@ -76,19 +83,24 @@ async function translateText(text, targetLanguage) {
   url.searchParams.set('q', text)
 
   let lastError
+
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const response = await fetch(url)
+
       if (!response.ok) {
         throw new Error(`Translation request failed with status ${response.status}`)
       }
+
       const payload = await response.json()
+
       return payload[0].map((part) => part[0]).join('')
     } catch (error) {
       lastError = error
       await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
     }
   }
+
   throw lastError
 }
 
@@ -105,12 +117,14 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()))
+
   return results
 }
 
 async function loadCache(cachePath) {
   try {
     const raw = JSON.parse(await fs.readFile(cachePath, 'utf8'))
+
     return new Map(Object.entries(raw))
   } catch {
     return new Map()
@@ -124,18 +138,22 @@ async function saveCache(cachePath, cache) {
 
 function parseLocaleArg(argv) {
   const localeFlagIndex = argv.indexOf('--locale')
+
   if (localeFlagIndex !== -1 && argv[localeFlagIndex + 1]) {
     return argv[localeFlagIndex + 1]
   }
+
   return argv[2]
 }
 
 export async function main(root = process.cwd(), locale = parseLocaleArg(process.argv)) {
   const config = LOCALE_CONFIG[locale]
+
   if (!config) {
     console.error(
       `Unsupported locale "${locale}". Supported: ${Object.keys(LOCALE_CONFIG).join(', ')}`
     )
+
     return 1
   }
 
@@ -147,6 +165,7 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
   const leaves = collectStringLeaves(enCatalog)
   const uniqueValues = [...new Set(leaves.map((leaf) => leaf.value))]
   const cache = await loadCache(cachePath)
+
   const toTranslate = uniqueValues.filter(
     (value) => !shouldSkipTranslation(value) && !cache.has(value)
   )
@@ -158,10 +177,12 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
   let completed = 0
   await mapWithConcurrency(toTranslate, 2, async (value) => {
     completed += 1
+
     if (completed % 25 === 0) {
       console.log(`  ${completed}/${toTranslate.length}`)
       await saveCache(cachePath, cache)
     }
+
     const { protectedText, tokens } = protectPlaceholders(value)
     const translated = await translateText(protectedText, config.targetLanguage)
     const restored = restorePlaceholders(translated, tokens)
@@ -198,6 +219,7 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
 
   await fs.writeFile(localePath, `${JSON.stringify(localeCatalog, null, 2)}\n`, 'utf8')
   console.log(`Wrote ${localePath}`)
+
   return 0
 }
 

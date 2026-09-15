@@ -47,23 +47,30 @@ export function TerminalAdvancedSection({
   const scrollbackRows = normalizeDesktopTerminalScrollbackRows(settings.terminalScrollbackRows)
   const [scrollbackRowsDraft, setScrollbackRowsDraft] = useState(String(scrollbackRows))
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(scrollbackRows)
+
   if (scrollbackRows !== prevScrollbackRows) {
     // Why: settings can update outside this pane, so the draft follows the
     // persisted source once it changes instead of clobbering active edits.
     setPrevScrollbackRows(scrollbackRows)
     setScrollbackRowsDraft(String(scrollbackRows))
   }
+
   const isPreset = SCROLLBACK_PRESETS_ROWS.includes(
     scrollbackRows as (typeof SCROLLBACK_PRESETS_ROWS)[number]
   )
+
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackRows}` : 'custom'
+
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
+
   const commitScrollbackRowsDraft = (): void => {
     const trimmed = scrollbackRowsDraft.trim()
     const value = Number(trimmed)
+
     if (trimmed === '' || !Number.isFinite(value)) {
       setScrollbackRowsDraft(String(scrollbackRows))
+
       return
     }
 
@@ -107,8 +114,10 @@ export function TerminalAdvancedSection({
                     if (!value) {
                       return
                     }
+
                     if (value === 'custom') {
                       setScrollbackMode('custom')
+
                       return
                     }
 

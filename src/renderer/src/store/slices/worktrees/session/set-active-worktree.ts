@@ -36,13 +36,17 @@ export function createSetActiveWorktree(
 ): WorktreeSlice['setActiveWorktree'] {
   return (worktreeId, executionHostId, options) => {
     const stateTransition = options?.stateTransition?.(get())
+
     if (stateTransition && !stateTransition.activate) {
       if (Object.keys(stateTransition.patch).length > 0) {
         set(stateTransition.patch)
       }
+
       return false
     }
+
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
+
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -50,6 +54,7 @@ export function createSetActiveWorktree(
     if (get().activeWorktreeId !== worktreeId) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
+
     let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
@@ -57,17 +62,22 @@ export function createSetActiveWorktree(
       const transitioned = stateTransition
         ? ({ ...current, ...stateTransition.patch } as AppState)
         : current
+
       const reconciliation = worktreeId
         ? projectWorktreeTabModelReconciliation(transitioned, worktreeId)
         : null
+
       const reconciliationChanged = Boolean(
         reconciliation && Object.keys(reconciliation.patch).length > 0
       )
+
       const s =
         reconciliation && reconciliationChanged
           ? ({ ...transitioned, ...reconciliation.patch } as AppState)
           : transitioned
+
       const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
+
       if (!worktreeId) {
         return {
           ...stateTransition?.patch,
@@ -81,6 +91,7 @@ export function createSetActiveWorktree(
 
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
       shouldClearUnread = Boolean(worktree?.isUnread)
+
       const {
         restoredRightSidebarExplorerView,
         activeFileId,
@@ -102,10 +113,12 @@ export function createSetActiveWorktree(
       // Tag every tab on FIRST activation so reattach/fresh-spawn updateTabPtyId suppresses activity + sortEpoch bumps.
       // Generation is only bumped when no tab has a live PTY — a live remount would kill the user's shell.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
+
       const allDead =
         worktreeId != null &&
         tabs.length > 0 &&
         tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
+
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
       // Why: bump generation in the same set() as activation so a dead-transport pane can't go visible-but-dead before remount.
@@ -113,15 +126,19 @@ export function createSetActiveWorktree(
         worktreeId && tabs.length > 0 && shouldTagTabs && !allDead
       )
       shouldTagTerminalTabs = shouldTagTabs
+
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
         : s.everActivatedWorktreeIds
+
       const nextWorktrees = shouldClearUnread
         ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
         : s.worktreesByRepo
+
       const nextDetectedWorktrees = shouldClearUnread
         ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
         : s.detectedWorktreesByRepo
+
       const nextFolderWorkspaces =
         shouldClearUnread && workspaceScope?.type === 'folder'
           ? s.folderWorkspaces.map((workspace) =>
@@ -130,12 +147,14 @@ export function createSetActiveWorktree(
                 : workspace
             )
           : s.folderWorkspaces
+
       const nextActiveRepoId =
         workspaceScope?.type === 'folder'
           ? null
           : stateTransition
             ? (worktree?.repoId ?? s.activeRepoId)
             : s.activeRepoId
+
       const tabsByWorktreeUpdate =
         allDead && worktreeId != null
           ? {
@@ -156,6 +175,7 @@ export function createSetActiveWorktree(
         s.activeTabTypeByWorktree[worktreeId] === activeTabType
           ? s.activeTabTypeByWorktree
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
+
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
         s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
@@ -174,6 +194,7 @@ export function createSetActiveWorktree(
         nextActiveRepoId !== s.activeRepoId ||
         reconciliationChanged ||
         stateTransition !== undefined
+
       if (!hasStateChange) {
         // Why: preserve the root Zustand reference on a no-op re-activation so session persistence/runtime sync don't fan out.
         return s
@@ -219,14 +240,19 @@ export function createSetActiveWorktree(
           if (s.activeWorktreeId !== worktreeId) {
             return s
           }
+
           const tabs = s.tabsByWorktree[worktreeId] ?? []
+
           if (tabs.length === 0) {
             return s
           }
+
           const allDead = tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
+
           if (!allDead && !shouldTagTerminalTabs) {
             return s
           }
+
           return {
             tabsByWorktree: {
               ...s.tabsByWorktree,
@@ -244,9 +270,11 @@ export function createSetActiveWorktree(
       }
 
       const cancelExistingPrep = pendingActivationTerminalPrepCancels.get(worktreeId)
+
       if (cancelExistingPrep) {
         cancelExistingPrep()
       }
+
       if (shouldDeferActivationTerminalPrep()) {
         pendingActivationTerminalPrepCancels.set(
           worktreeId,
@@ -273,8 +301,10 @@ export function createSetActiveWorktree(
     if (shouldClearUnread) {
       if (workspaceScope?.type === 'folder') {
         void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
+
         return true
       }
+
       persistPassiveWorktreeMetaForOwner(
         get,
         worktreeId,
@@ -282,6 +312,7 @@ export function createSetActiveWorktree(
         'persist worktree activation state'
       )
     }
+
     return true
   }
 }

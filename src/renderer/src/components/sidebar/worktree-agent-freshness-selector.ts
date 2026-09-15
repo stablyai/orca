@@ -20,14 +20,17 @@ function buildWorktreeAgentFreshnessSignature(
   now: number
 ): string {
   let signature = ''
+
   for (const entry of selectLiveAgentStatusEntriesForWorktree(state, worktreeId)) {
     if (entry.state !== 'working' && entry.state !== 'blocked' && entry.state !== 'waiting') {
       continue
     }
+
     signature += `${entry.paneKey}\0${
       isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? '1' : '0'
     }\0`
   }
+
   return signature
 }
 
@@ -44,10 +47,12 @@ export function createWorktreeAgentFreshnessSelector(
     if (cachedGlobalEpoch === state.agentStatusEpoch) {
       return cachedSignature
     }
+
     cachedGlobalEpoch = state.agentStatusEpoch
     // Why: the global epoch wakes every card, but only cards whose effective
     // fresh/stale row state changed should render and rebuild their row trees.
     cachedSignature = buildWorktreeAgentFreshnessSignature(state, worktreeId, readNow())
+
     return cachedSignature
   }
 }

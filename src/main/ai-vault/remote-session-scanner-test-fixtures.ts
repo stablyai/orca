@@ -25,49 +25,64 @@ export class MemoryRemoteProvider implements IFilesystemProvider {
     const dir = normalize(dirPath)
     this.readDirPaths.push(dir)
     const readDirError = this.readDirErrors.get(dir)
+
     if (readDirError) {
       throw readDirError
     }
+
     const prefix = dir.endsWith('/') ? dir : `${dir}/`
     const entries = new Map<string, DirEntry>()
+
     for (const path of this.files.keys()) {
       if (!path.startsWith(prefix)) {
         continue
       }
+
       const relative = path.slice(prefix.length)
+
       if (!relative) {
         continue
       }
+
       const [name, ...rest] = relative.split('/')
+
       if (!name) {
         continue
       }
+
       entries.set(name, {
         name,
         isDirectory: rest.length > 0,
         isSymlink: false
       })
     }
+
     return [...entries.values()].sort((left, right) => left.name.localeCompare(right.name))
   }
 
   async readFile(filePath: string): Promise<FileReadResult> {
     const file = this.files.get(normalize(filePath))
+
     if (!file) {
       throw new Error(`ENOENT: ${filePath}`)
     }
+
     return { content: file.content, isBinary: false }
   }
 
   async stat(filePath: string): Promise<FileStat> {
     const statError = this.statErrors.get(normalize(filePath))
+
     if (statError) {
       throw statError
     }
+
     const file = this.files.get(normalize(filePath))
+
     if (!file) {
       throw new Error(`ENOENT: ${filePath}`)
     }
+
     return { size: file.content.length, type: 'file', mtime: file.mtimeMs, mtimeMs: file.mtimeMs }
   }
 

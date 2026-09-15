@@ -31,11 +31,13 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[qi] ?? []
+
       if (multi) {
         next[qi] = cur.includes(optIndex) ? cur.filter((i) => i !== optIndex) : [...cur, optIndex]
       } else {
         next[qi] = cur.includes(optIndex) ? [] : [optIndex]
       }
+
       return next
     })
   }
@@ -44,6 +46,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
     setOtherText((prev) => {
       const next = [...prev]
       next[qi] = value
+
       return next
     })
   }
@@ -51,34 +54,41 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
   const selectionFor = (qi: number): AskAnswerSelection => {
     const picked = (selections[qi] ?? []).filter((i) => i !== OTHER)
     const other = (selections[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
+
     return other ? { indices: picked, other } : { indices: picked }
   }
 
   const isAnswered = (qi: number): boolean => {
     const sel = selectionFor(qi)
+
     return sel.indices.length > 0 || (sel.other ?? '').length > 0
   }
 
   const total = prompt.questions.length
   const isLast = index === total - 1
+
   const currentAnswered = useMemo(
     () => isAnswered(index),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selections, otherText, index]
   )
+
   const allAnswered = useMemo(
     () => prompt.questions.every((_, i) => isAnswered(i)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [otherText, prompt.questions, selections]
   )
+
   const canAdvance = !submitting && (isLast ? allAnswered : currentAnswered)
 
   const submit = async (): Promise<void> => {
     if (!allAnswered || submittingRef.current) {
       return
     }
+
     submittingRef.current = true
     setSubmitting(true)
+
     try {
       await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
     } finally {
@@ -163,6 +173,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
             if (!submittingRef.current && onCancel) {
               submittingRef.current = true
               setSubmitting(true)
+
               try {
                 await onCancel()
               } finally {

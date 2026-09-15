@@ -14,6 +14,7 @@ export {
   settingsForRuntimeOwner,
   type RuntimeClientTarget
 } from './runtime-client-target'
+
 export {
   hasRuntimeRpcErrorCode,
   RuntimeRpcCallError,
@@ -21,7 +22,9 @@ export {
 } from './runtime-rpc-result'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
+
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
+
 // Why: capability verdicts must eventually follow a saved environment's version changes.
 const RUNTIME_CAPABILITY_STATUS_TTL_MS = 60_000
 
@@ -64,6 +67,7 @@ export async function callRuntimeRpc<TResult>(
           options.expectedEnvironmentPairingRevision
         )
       : undefined
+
   if (
     target.kind === 'environment' &&
     method !== 'status.get' &&
@@ -74,12 +78,15 @@ export async function callRuntimeRpc<TResult>(
       expectedEnvironmentPairingRevision
     })
   }
+
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }
+
   const nextParams = options.suppressFeatureInteraction
     ? withBrowserPaneUiRuntimeRpcSource(params)
     : params
+
   const response =
     target.kind === 'local'
       ? await window.api.runtime.call({ method, params: nextParams })
@@ -92,6 +99,7 @@ export async function callRuntimeRpc<TResult>(
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId: options.expectedEnvironmentRuntimeId
         })
+
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }
 
@@ -104,10 +112,13 @@ async function ensureRuntimeEnvironmentCompatible(
   } = {}
 ): Promise<void> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
+
   if (cached) {
     await cached.check
+
     return
   }
+
   const entry: RuntimeCompatibilityCacheEntry = {
     check: Promise.resolve(),
     failedAt: null,
@@ -115,6 +126,7 @@ async function ensureRuntimeEnvironmentCompatible(
     status: null,
     statusCheckedAt: null
   }
+
   const check = (async () => {
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
@@ -122,17 +134,22 @@ async function ensureRuntimeEnvironmentCompatible(
       timeoutMs: options.timeoutMs,
       expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision
     })
+
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
       response as RuntimeRpcResponse<RuntimeStatus>
     )
+
     assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
   })()
+
   entry.check = check
   rememberRuntimeEnvironmentCompatibility(environmentId, entry)
+
   try {
     await check
+
     if (runtimeCompatibilityChecks.get(environmentId) === entry) {
       entry.provenCompatible = true
     }
@@ -142,6 +159,7 @@ async function ensureRuntimeEnvironmentCompatible(
       // offline runtime should pay one timeout during that burst, not three.
       entry.failedAt = Date.now()
     }
+
     throw error
   }
 }
@@ -151,21 +169,27 @@ function getCachedRuntimeCompatibilityCheck(
   options: { reuseRecentCompatibilityFailure?: boolean }
 ): RuntimeCompatibilityCacheEntry | null {
   const cached = runtimeCompatibilityChecks.get(environmentId)
+
   if (!cached) {
     return null
   }
+
   if (
     cached.failedAt !== null &&
     Date.now() - cached.failedAt >= RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS
   ) {
     runtimeCompatibilityChecks.delete(environmentId)
+
     return null
   }
+
   if (cached.failedAt !== null && options.reuseRecentCompatibilityFailure !== true) {
     return null
   }
+
   runtimeCompatibilityChecks.delete(environmentId)
   runtimeCompatibilityChecks.set(environmentId, cached)
+
   return cached
 }
 
@@ -177,11 +201,14 @@ function rememberRuntimeEnvironmentCompatibility(
   // renderer sessions; compatibility cache entries should not grow forever.
   runtimeCompatibilityChecks.delete(environmentId)
   runtimeCompatibilityChecks.set(environmentId, entry)
+
   while (runtimeCompatibilityChecks.size > RUNTIME_COMPATIBILITY_CACHE_MAX) {
     const oldest = runtimeCompatibilityChecks.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     runtimeCompatibilityChecks.delete(oldest)
   }
 }
@@ -193,10 +220,13 @@ export function clearRecentRuntimeCompatibilityFailure(
   observedStatus?: RuntimeStatus
 ): void {
   const trimmed = environmentId.trim()
+
   if (!trimmed) {
     return
   }
+
   const cached = runtimeCompatibilityChecks.get(trimmed)
+
   if (
     cached &&
     (!cached.provenCompatible ||
@@ -212,18 +242,23 @@ export function clearRecentRuntimeCompatibilityFailure(
 
 export function clearRuntimeCompatibilityCache(environmentId?: string | null): void {
   const trimmed = environmentId?.trim()
+
   if (trimmed) {
     runtimeCompatibilityChecks.delete(trimmed)
+
     return
   }
+
   runtimeCompatibilityChecks.clear()
 }
 
 export function markRuntimeEnvironmentCompatible(environmentId: string): void {
   const trimmed = environmentId.trim()
+
   if (!trimmed) {
     return
   }
+
   rememberRuntimeEnvironmentCompatibility(trimmed, {
     check: Promise.resolve(),
     failedAt: null,
@@ -238,6 +273,7 @@ export async function getRuntimeEnvironmentStatus(
   timeoutMs?: number
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
+
   const entry: RuntimeCompatibilityCacheEntry = {
     check: Promise.resolve(),
     failedAt: null,
@@ -245,6 +281,7 @@ export async function getRuntimeEnvironmentStatus(
     status: null,
     statusCheckedAt: null
   }
+
   // Why: publish the in-flight probe before awaiting so concurrent cold-cache
   // capability lookups coalesce onto this one status.get (via the cache-hit path
   // in runtimeEnvironmentSupportsCapability) instead of each firing their own.
@@ -254,16 +291,20 @@ export async function getRuntimeEnvironmentStatus(
       method: 'status.get',
       timeoutMs
     })
+
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
       response as RuntimeRpcResponse<RuntimeStatus>
     )
+
     assertRuntimeStatusCompatible(status)
     entry.status = status
     entry.statusCheckedAt = Date.now()
     entry.provenCompatible = true
   })()
+
   entry.check = check
   rememberRuntimeEnvironmentCompatibility(trimmed, entry)
+
   try {
     await check
   } catch (error) {
@@ -272,12 +313,15 @@ export async function getRuntimeEnvironmentStatus(
     if (runtimeCompatibilityChecks.get(trimmed) === entry) {
       runtimeCompatibilityChecks.delete(trimmed)
     }
+
     throw error
   }
+
   if (!entry.status) {
     // Unreachable: a resolved probe always assigns status; narrows the type.
     throw new Error('Runtime status probe resolved without a status.')
   }
+
   return entry.status
 }
 
@@ -288,12 +332,14 @@ export async function runtimeEnvironmentSupportsCapability(
 ): Promise<boolean> {
   const trimmed = environmentId.trim()
   const cached = runtimeCompatibilityChecks.get(trimmed)
+
   // Why: callRuntimeRpc re-probes after failed status checks by default. Capability
   // lookups must not pin to a rejected cache promise or they block recovery for
   // the full failure TTL even though the next RPC would re-probe successfully.
   if (cached && cached.failedAt === null) {
     try {
       await cached.check
+
       if (
         runtimeCompatibilityChecks.get(trimmed) === cached &&
         cached.status &&
@@ -301,23 +347,28 @@ export async function runtimeEnvironmentSupportsCapability(
         Date.now() - cached.statusCheckedAt < RUNTIME_CAPABILITY_STATUS_TTL_MS
       ) {
         const supported = cached.status.capabilities?.includes(capability) === true
+
         if (!supported) {
           // Why: retain protocol proof for this legacy dispatch, but force the
           // next capability decision to observe an in-place host upgrade.
           cached.statusCheckedAt = null
         }
+
         return supported
       }
     } catch {
       // Fall through to a fresh status.get that refreshes the cache.
     }
   }
+
   const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
   const supported = status.capabilities?.includes(capability) === true
   const resolved = runtimeCompatibilityChecks.get(trimmed)
+
   if (!supported && resolved?.status === status) {
     resolved.statusCheckedAt = null
   }
+
   return supported
 }
 

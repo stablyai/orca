@@ -6,6 +6,7 @@ import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory
 import { RuntimeJiraCommands } from './runtime-jira-commands'
 
 type PublicMethods<T> = Pick<T, keyof T>
+
 type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreencast'> & {
   browserScreencast(
     params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
@@ -25,6 +26,7 @@ export type RuntimeEdgeCommandSurface = BrowserSurface &
   PublicMethods<RuntimeEmulatorCommands>
 
 type ScreencastDependencies = ConstructorParameters<typeof RuntimeBrowserScreencastController>[0]
+
 type EmulatorHost = ConstructorParameters<typeof RuntimeEmulatorCommands>[0]
 
 const BROWSER_COMMAND_NAMES = [
@@ -117,11 +119,13 @@ function bindPrefixedMethods<T extends object>(
   prefix: string
 ): Partial<PublicMethods<T>> {
   const bound: Record<string, unknown> = {}
+
   for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(instance))) {
     if (name.startsWith(prefix)) {
       bound[name] = (instance[name as keyof T] as (...args: unknown[]) => unknown).bind(instance)
     }
   }
+
   return bound as Partial<PublicMethods<T>>
 }
 

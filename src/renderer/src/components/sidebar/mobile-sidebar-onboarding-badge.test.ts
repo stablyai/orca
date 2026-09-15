@@ -18,10 +18,12 @@ let latestHookState: HookState | null = null
 
 function HookProbe({ enabled = true }: { enabled?: boolean }): null {
   latestHookState = useMobileSidebarOnboardingBadge(enabled)
+
   return null
 }
 
 const mountedRoots: Root[] = []
+
 const listDevices = vi.fn()
 
 async function renderHookProbe(props: ComponentProps<typeof HookProbe> = {}): Promise<void> {

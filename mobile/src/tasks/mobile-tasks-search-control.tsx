@@ -24,6 +24,7 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     setQuery,
     taskUiReady
   } = model
+
   return provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&
     !linearConnected ? null : (
     <View style={styles.searchBar}>
@@ -50,14 +51,19 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
           if (!taskUiReady) {
             return
           }
+
           if (isGithubProjectSearch) {
             applyGitHubProjectSearch()
+
             return
           }
+
           const nextQuery =
             provider === 'github' ? scopeGitHubTaskSearch(query, githubKind) : query.trim()
+
           setQuery(nextQuery)
           setAppliedQuery(nextQuery)
+
           if (provider === 'github') {
             persistTaskResumeState({
               githubItemsPreset:
@@ -82,8 +88,10 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
             setGithubProjectSearch('')
             // Why: undefined = use view default; '' = explicit unfiltered override.
             setAppliedGithubProjectSearch(viewFilter ? '' : undefined)
+
             return
           }
+
           if (provider === 'github') {
             const nextQuery = getTaskPresetQuery(githubPreset)
             setQuery(nextQuery)
@@ -92,10 +100,13 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
               githubItemsPreset: githubPreset,
               githubItemsQuery: nextQuery
             })
+
             return
           }
+
           setQuery('')
           setAppliedQuery('')
+
           if (provider === 'linear') {
             persistTaskResumeState({ linearQuery: '' })
           }

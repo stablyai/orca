@@ -69,5 +69,6 @@ export function terminalUnavailableMessage(
   detail?: string
 ): string {
   const base = TERMINAL_UNAVAILABLE_MESSAGES[reason]
+
   return detail ? `${base} (${detail})` : base
 }

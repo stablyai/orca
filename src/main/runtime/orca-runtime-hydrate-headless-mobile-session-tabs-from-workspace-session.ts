@@ -41,17 +41,21 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
     // Why: report which worktrees were reconciled in place so callers don't
     // reconcile them a second time (see notifyMobileSessionTabsChanged).
     const reconciledWorktreeIds = new Set<string>()
+
     if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
       return reconciledWorktreeIds
     }
+
     const session =
       options.workspaceSession ??
       (worktreeId
         ? this.getWorkspaceSessionForWorktree(worktreeId)
         : this.store?.getWorkspaceSession?.())
+
     if (!session) {
       return reconciledWorktreeIds
     }
+
     // Why: with no runtime-owned candidate in the session and no offscreen
     // browser backend, this hydrate provably builds zero tabs for
     // every worktree — skip the per-worktree rebuild entirely (hot on every
@@ -72,10 +76,12 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
     ) {
       return reconciledWorktreeIds
     }
+
     const entries =
       worktreeId !== undefined
         ? ([[worktreeId, session.tabsByWorktree[worktreeId] ?? []]] as const)
         : Object.entries(session.tabsByWorktree ?? {})
+
     // Why: workspaceSession keys are `${repoId}::${path}` and are not pruned when
     // a repo disappears from this client's view (e.g. removed on another client,
     // or a stale browser-persisted session). Hydrating such a key would surface a
@@ -85,18 +91,23 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
     // repo inventory on the hot poll path, and `null` when the store cannot
     // report repos — an unavailable list must not read as "every repo is gone".
     let liveRepoIds: Set<string> | null | undefined
+
     for (const [entryWorktreeId, persistedTabs] of entries) {
       const ownerRepoId = splitWorktreeIdForFilesystem(entryWorktreeId)?.repoId
+
       if (ownerRepoId) {
         if (liveRepoIds === undefined) {
           const knownRepos = this.store?.getRepos?.()
           liveRepoIds = knownRepos ? new Set(knownRepos.map((repo) => repo.id)) : null
         }
+
         if (liveRepoIds && !liveRepoIds.has(ownerRepoId)) {
           continue
         }
       }
+
       const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
+
       if (
         existing &&
         existing.tabs.length > 0 &&
@@ -111,6 +122,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
         reconciledWorktreeIds.add(entryWorktreeId)
         continue
       }
+
       const terminalTabs = buildHeadlessMobileSessionTerminalTabs(
         entryWorktreeId,
         persistedTabs,
@@ -121,49 +133,62 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
           this.hasServeOrSshOwnedBinding(tab) ||
           this.hasRecentExpiredSshLeasePane(entryWorktreeId, tab)
       )
+
       // Why: offscreen browser panes are live-only (no persisted session entry),
       // so include them on every hydrate regardless of the onlyRuntimeOwnedTerminals
       // filter, which is about terminal PTY ownership and never applies to browsers.
       const browserTabs = this.buildHeadlessMobileSessionBrowserTabs(entryWorktreeId)
       const tabs: RuntimeMobileSessionSnapshotTab[] = [...terminalTabs, ...browserTabs]
+
       if (tabs.length === 0) {
         continue
       }
+
       const activeTab = pickHeadlessActiveTerminalTab(terminalTabs)
+
       const tabOrder = [
         ...collectHeadlessParentTabOrder(terminalTabs),
         ...browserTabs.map((tab) => tab.id)
       ]
+
       const groupId = getHeadlessMobileSessionGroupId(entryWorktreeId)
+
       const mergedTabs =
         options.onlyRuntimeOwnedTerminals === true && existing
           ? mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
           : tabs
+
       const mergedActiveTab =
         existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
         activeTab ??
         mergedTabs[0] ??
         null
+
       const mergedTerminalTabs = mergedTabs.filter(
         (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
       )
+
       const mergedBrowserOrder = mergedTabs
         .filter((tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser')
         .map((tab) => tab.id)
+
       // Why: a persisted multi-group split must be restored on cold rebuild, or
       // the headless serve coalesces the user's group layout back into one group
       // (the persisted tabGroups/tabGroupLayouts would otherwise be write-only).
       const persistedGroups = session.tabGroups?.[entryWorktreeId]
       const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
+
       const hasPersistedSplit =
         options.onlyRuntimeOwnedTerminals !== true &&
         persistedGroups !== undefined &&
         persistedGroups.length > 1
+
       const activeTopLevelId = mergedActiveTab
         ? mergedActiveTab.type === 'terminal'
           ? mergedActiveTab.parentTabId
           : mergedActiveTab.id
         : null
+
       const nextTabGroups: RuntimeMobileSessionTabGroup[] = hasPersistedSplit
         ? appendBrowserTabOrder(
             distributeHeadlessTabsAcrossGroups(
@@ -201,6 +226,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
                 tabOrder
               }
             ]
+
       // Why: merging runtime tabs INTO a renderer publication must not reclass
       // the snapshot as headless-built — the preservation predicate would then
       // treat the renderer's own tabs as runtime-owned and resurrect tabs the
@@ -210,6 +236,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
         options.onlyRuntimeOwnedTerminals === true &&
         existing !== undefined &&
         !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
+
       const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: mergedIntoRendererPublication
@@ -229,6 +256,7 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
             : {}),
         tabs: mergedTabs
       }
+
       // Why: the runtime-owned hydrate runs on EVERY graph sync; when the rebuilt
       // projection matches the existing snapshot, keep the existing object and
       // (epoch, version) untouched so identity-based change detection stays a
@@ -236,8 +264,10 @@ export class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession
       if (existing && headlessMobileSnapshotContentUnchanged(existing, nextSnapshot)) {
         continue
       }
+
       this.storeMobileSessionSnapshot(entryWorktreeId, nextSnapshot)
     }
+
     return reconciledWorktreeIds
   }
 }

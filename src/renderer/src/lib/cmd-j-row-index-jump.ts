@@ -10,6 +10,7 @@ const listeners = new Set<CmdJRowIndexJumpListener>()
  */
 export function subscribeCmdJRowIndexJump(listener: CmdJRowIndexJumpListener): () => void {
   listeners.add(listener)
+
   return () => {
     listeners.delete(listener)
   }

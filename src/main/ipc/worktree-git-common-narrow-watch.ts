@@ -41,6 +41,7 @@ export async function startGitCommonNarrowWatch(
   let parkedWhileHidden = false
   let usingPollingFallback = false
   let nativeSubscriptionGeneration = 0
+
   const reconciliation = createGitCommonWatchReconciliation({
     commonDirPath: target.path,
     pollIntervalMs,
@@ -51,9 +52,11 @@ export async function startGitCommonNarrowWatch(
       nativeSubscriptionGeneration++
       const current = subscription
       subscription = null
+
       if (current) {
         void current.unsubscribe().catch(() => {})
       }
+
       armExistencePoll()
     },
     onEvents
@@ -74,6 +77,7 @@ export async function startGitCommonNarrowWatch(
     pollingFallback.run(() => {
       stopExistencePoll()
       usingPollingFallback = true
+
       return reconciliation
         .unsubscribe()
         .catch(() => {})
@@ -95,8 +99,10 @@ export async function startGitCommonNarrowWatch(
         .then(async (fallback) => {
           if (disposed || subscription) {
             await fallback.unsubscribe()
+
             return
           }
+
           subscription = fallback
         })
     })
@@ -105,9 +111,12 @@ export async function startGitCommonNarrowWatch(
     if (disposed || subscribing || subscription) {
       return
     }
+
     subscribing = true
+
     try {
       const installed = await trySubscribe()
+
       if (installed && !disposed) {
         stopExistencePoll()
         await reconciliation.ensureStarted()
@@ -124,19 +133,25 @@ export async function startGitCommonNarrowWatch(
     if (disposed || existenceTimer || subscription) {
       return
     }
+
     if (!visibility.isWindowVisible()) {
       parkedWhileHidden = true
+
       return
     }
+
     existenceTimer = setInterval(() => {
       if (disposed) {
         return
       }
+
       if (!visibility.isWindowVisible()) {
         parkedWhileHidden = true
         stopExistencePoll()
+
         return
       }
+
       void tryUpgradeToNarrowWatch()
     }, pollIntervalMs)
     existenceTimer.unref?.()
@@ -149,21 +164,25 @@ export async function startGitCommonNarrowWatch(
         armExistencePoll()
       })
     }
+
     reconciliation.notifyWindowBecameVisible()
   })
 
   const trySubscribe = async (): Promise<boolean> => {
     try {
       const s = await stat(worktreesDir)
+
       if (!s.isDirectory()) {
         return false
       }
     } catch {
       return false
     }
+
     const generation = ++nativeSubscriptionGeneration
     let errored = false
     let active = true
+
     // Why: parcel tears its native stream down when the watched root is
     // deleted (e.g. `git worktree prune` removing an empty worktrees dir) —
     // sometimes surfaced as an error, sometimes as a delete event for the
@@ -172,19 +191,24 @@ export async function startGitCommonNarrowWatch(
     const teardown = (): void => {
       active = false
       errored = true
+
       if (generation === nativeSubscriptionGeneration) {
         nativeSubscriptionGeneration++
       }
+
       const current = subscription
       subscription = null
+
       if (current) {
         void current.unsubscribe().catch(() => {})
       }
     }
+
     const teardownAndRearm = (): void => {
       teardown()
       armExistencePoll()
     }
+
     try {
       const sub = await subscribeViaWatcherProcess(
         worktreesDir,
@@ -192,12 +216,14 @@ export async function startGitCommonNarrowWatch(
           if (disposed || !active || generation !== nativeSubscriptionGeneration) {
             return
           }
+
           if (error) {
             if (onWatchError) {
               onWatchError(error)
             } else {
               onEvents([{ type: 'update', path: worktreesDir }])
             }
+
             if (shouldUsePollingFallback(error)) {
               teardown()
               void ensurePollingFallback().catch(() => {
@@ -208,13 +234,17 @@ export async function startGitCommonNarrowWatch(
             } else {
               teardownAndRearm()
             }
+
             return
           }
+
           if (events.length > 0) {
             const rootGone = events.some(
               (event) => event.type === 'delete' && event.path === worktreesDir
             )
+
             onEvents(events.map((event) => ({ type: event.type, path: event.path })))
+
             if (rootGone) {
               teardownAndRearm()
             }
@@ -242,6 +272,7 @@ export async function startGitCommonNarrowWatch(
             if (disposed || !active || generation !== nativeSubscriptionGeneration) {
               return
             }
+
             if (onOverflow) {
               onOverflow()
             } else if (onWatchError) {
@@ -252,25 +283,34 @@ export async function startGitCommonNarrowWatch(
           }
         }
       )
+
       if (generation !== nativeSubscriptionGeneration) {
         void sub.unsubscribe().catch(() => {})
+
         return false
       }
+
       if (disposed || errored) {
         void sub.unsubscribe().catch(() => {})
         await pollingFallback.pending()?.catch(() => {})
+
         return !errored || subscription !== null
       }
+
       subscription = { unsubscribe: () => sub.unsubscribe() }
+
       return true
     } catch (error) {
       if (disposed || generation !== nativeSubscriptionGeneration) {
         return false
       }
+
       if (shouldUsePollingFallback(error)) {
         await ensurePollingFallback()
+
         return subscription !== null
       }
+
       return false
     }
   }
@@ -280,6 +320,7 @@ export async function startGitCommonNarrowWatch(
     // subscription lets macOS upgrade to native events when the directory appears.
     armExistencePoll()
   }
+
   await reconciliation.ensureStarted()
 
   return {

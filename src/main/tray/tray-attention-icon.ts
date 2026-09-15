@@ -4,6 +4,7 @@ import { nativeImage, type NativeImage } from 'electron'
 // the renderer launcher dot and the tab-unread bell. Kept in sync with the
 // bg-amber-500 used in FloatingTerminalToggleButton.
 const DOT_RGB = { r: 0xf5, g: 0x9e, b: 0x0b }
+
 // A near-white halo separates the dot from the icon glyph on any tray theme.
 const RING_RGB = { r: 0xff, g: 0xff, b: 0xff }
 
@@ -17,11 +18,13 @@ export function tintTrayTemplateForAttention(
   scaleFactor = 1
 ): NativeImage {
   const { width, height } = base.getSize()
+
   if (width <= 0 || height <= 0) {
     return base
   }
 
   const bitmap = Buffer.from(base.toBitmap({ scaleFactor }))
+
   for (let offset = 0; offset < bitmap.length; offset += 4) {
     // Why: the bitmap is premultiplied, so a light glyph must write the pixel's
     // alpha (not 0xff) or antialiased edges become invalid over-bright pixels.
@@ -45,6 +48,7 @@ export function tintTrayTemplateForAttention(
  */
 export function composeTrayAttentionIcon(base: NativeImage): NativeImage {
   const { width, height } = base.getSize()
+
   if (width <= 0 || height <= 0) {
     return base
   }
@@ -66,9 +70,11 @@ export function composeTrayAttentionIcon(base: NativeImage): NativeImage {
       const dx = x - centerX
       const dy = y - centerY
       const distSq = dx * dx + dy * dy
+
       if (distSq > ringRadiusSq) {
         continue
       }
+
       const offset = (y * width + x) * 4
       const color = distSq <= dotRadiusSq ? DOT_RGB : RING_RGB
       bitmap[offset] = color.b

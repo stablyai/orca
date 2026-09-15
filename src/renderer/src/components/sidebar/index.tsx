@@ -24,18 +24,26 @@ import { lazyWithRetry } from '@/lib/lazy-with-retry'
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
+
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+
 const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
+
 const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
+
 const ForgetSshWorkspaceDialog = lazyWithRetry(() => import('./ForgetSshWorkspaceDialog'))
+
 const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
 
 const MIN_WIDTH = 220
+
 const MAX_WIDTH = 500
+
 // Why: straddle the sidebar/terminal seam so the divider sits on the border-l
 // instead of leaving a blank strip between the hover target and the edge.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
   'group absolute -right-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-center'
+
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
   'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
 
@@ -65,36 +73,44 @@ function Sidebar({
   const [agentQuery, setAgentQuery] = React.useState('')
   const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
+
   // Held here so collapsed groups (and the layout the saved scrollTop assumes)
   // survive the Agents list unmounting on sidebar body switches.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
     ReadonlySet<string>
   >(() => new Set())
+
   const agentsCollapseState = useMemo(
     () => ({
       collapsedGroupKeys: agentsCollapsedGroupKeys,
       onToggleGroupCollapse: (groupKey: string) =>
         setAgentsCollapsedGroupKeys((prev) => {
           const next = new Set(prev)
+
           if (next.has(groupKey)) {
             next.delete(groupKey)
           } else {
             next.add(groupKey)
           }
+
           return next
         })
     }),
     [agentsCollapsedGroupKeys]
   )
+
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
+
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
+
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
+
   const {
     workspaceBoardOpen,
     workspaceBoardRenderedOpen,
@@ -118,6 +134,7 @@ function Sidebar({
   useEffect(() => {
     const repoCountChanged = previousRepoCountRef.current !== repoCount
     previousRepoCountRef.current = repoCount
+
     // Why: App owns the initial all-host scan; partial startup catalogs must not trigger broad scans or stale-state purges.
     if (startupWorktreeRefreshCompleted && repoCountChanged && repoCount > 0) {
       void fetchAllWorktrees()

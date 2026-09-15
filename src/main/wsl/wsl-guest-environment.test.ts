@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+
 vi.mock('./wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
 
 import {
@@ -16,6 +18,7 @@ function respondWithPayload(payload: string, code = 0): void {
     const script = spec.args.at(-1) ?? ''
     const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
     const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
+
     return {
       code,
       signal: null,
@@ -32,6 +35,7 @@ beforeEach(() => {
   runProcessMock.mockReset()
   invalidateWslGuestEnvironment(undefined, true)
 })
+
 afterEach(() => invalidateWslGuestEnvironment(undefined, true))
 
 describe('probing', () => {
@@ -61,6 +65,7 @@ describe('probing', () => {
 
   it('does not retain deadline timers after a concurrent probe settles', async () => {
     vi.useFakeTimers()
+
     try {
       respondWithPayload(GOOD)
       await Promise.all(Array.from({ length: 32 }, () => getWslGuestEnvironment('Ubuntu')))
@@ -75,10 +80,12 @@ describe('probing', () => {
     respondWithPayload(GOOD)
     const environment = await getWslGuestEnvironment('Ubuntu')
     const timeout = vi.spyOn(globalThis, 'setTimeout')
+
     try {
       for (let index = 0; index < 100; index++) {
         expect(await getWslGuestEnvironment('Ubuntu')).toBe(environment)
       }
+
       expect(timeout).not.toHaveBeenCalled()
       expect(runProcessMock).toHaveBeenCalledTimes(1)
     } finally {
@@ -129,6 +136,7 @@ describe('transient versus permanent failure', () => {
 
   it('retries after the window when the probe timed out', async () => {
     vi.useFakeTimers()
+
     try {
       runProcessMock.mockResolvedValue({
         code: null,
@@ -158,6 +166,7 @@ describe('a failed verdict does not outlive its usefulness', () => {
     // Before: any unparseable payload was permanent, so one fence lost to a
     // truncated rc disabled every WSL feature on the distro until restart.
     vi.useFakeTimers()
+
     try {
       respondWithPayload('garbage')
       expect(await getWslGuestEnvironment('Ubuntu')).toBeNull()
@@ -187,6 +196,7 @@ describe('a failed verdict does not outlive its usefulness', () => {
     // Joining used to mean waiting out the starter's probe, so a joiner could
     // reach its own command with 1ms left.
     let release: (v: unknown) => void = () => {}
+
     runProcessMock.mockImplementation(() => new Promise((r) => (release = r)))
     const slow = getWslGuestEnvironment('Ubuntu', 60_000)
     const joiner = getWslGuestEnvironment('Ubuntu', 30)

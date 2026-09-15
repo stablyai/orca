@@ -31,6 +31,7 @@ export function isPathEqualOrDescendant(candidatePath: string, targetPath: strin
 
 export function getRevealAncestorDirs(worktreePath: string, filePath: string): string[] | null {
   const relativePath = relativePathInsideRoot(worktreePath, filePath)
+
   if (relativePath === null) {
     return null
   }

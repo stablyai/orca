@@ -34,6 +34,7 @@ export function createClaudeSessionPublication(input: {
   const model = input.init.model
   const effort = input.effort
   const fastMode = input.fastMode
+
   return {
     acquisition: {
       process: input.process,

@@ -2,6 +2,7 @@ import type { DiffComment } from '../../../shared/diff-comment-types'
 import { getDiffCommentLineLabel } from './diff-comment-compat'
 
 const MAX_EXCERPT_LINES = 8
+
 const MAX_CARD_QUOTE_LENGTH = 60
 
 export type MarkdownReviewNote = DiffComment & { source: 'markdown' }
@@ -11,17 +12,22 @@ export function sortMarkdownReviewNotes(
 ): MarkdownReviewNote[] {
   return [...notes].sort((a, b) => {
     const pathCompare = a.filePath.localeCompare(b.filePath)
+
     if (pathCompare !== 0) {
       return pathCompare
     }
+
     const startA = a.startLine ?? a.lineNumber
     const startB = b.startLine ?? b.lineNumber
+
     if (startA !== startB) {
       return startA - startB
     }
+
     if (a.lineNumber !== b.lineNumber) {
       return a.lineNumber - b.lineNumber
     }
+
     return a.createdAt - b.createdAt
   })
 }
@@ -33,6 +39,7 @@ export function getMarkdownReviewExcerpt(
   const startLine = Math.max(1, note.startLine ?? note.lineNumber)
   const endLine = Math.max(startLine, note.lineNumber)
   const selected = getMarkdownReviewSelectedLines(content, startLine, endLine)
+
   if (selected.count === 0) {
     return ''
   }
@@ -65,22 +72,31 @@ function getMarkdownReviewSelectedLines(
     if (lineNumber < startLine) {
       return
     }
+
     if (lineNumber > endLine) {
       return false
     }
+
     count += 1
+
     if (count <= MAX_EXCERPT_LINES) {
       lines.push(line)
+
       return lineNumber >= endLine ? false : undefined
     }
+
     if (count === MAX_EXCERPT_LINES + 1) {
       tailLines.push(...lines.slice(-(tailLimit - 1)), line)
+
       return lineNumber >= endLine ? false : undefined
     }
+
     tailLines.push(line)
+
     if (tailLines.length > tailLimit) {
       tailLines.shift()
     }
+
     return lineNumber >= endLine ? false : undefined
   })
 
@@ -93,13 +109,16 @@ function forEachMarkdownReviewLine(
 ): void {
   let lineStart = 0
   let lineNumber = 1
+
   while (lineStart <= content.length) {
     const newline = content.indexOf('\n', lineStart)
     const index = newline === -1 ? content.length : newline
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
+
     if (visit(content.slice(lineStart, lineEnd), lineNumber) === false) {
       return
     }
+
     lineStart = index + 1
     lineNumber += 1
   }
@@ -110,10 +129,13 @@ export function getMarkdownReviewHighlightedText(
   note: Pick<DiffComment, 'lineNumber' | 'selectedText' | 'startLine'>
 ): string {
   const selectedText = note.selectedText?.trim()
+
   if (selectedText) {
     return selectedText
   }
+
   const excerpt = getMarkdownReviewExcerpt(content, note)
+
   return excerpt.replace(/^> ?/gm, '').trim()
 }
 
@@ -121,6 +143,7 @@ export function formatMarkdownReviewCardQuote(text: string | null | undefined): 
   if (text === null || text === undefined) {
     return undefined
   }
+
   return formatBoundedMarkdownReviewCardQuote(text)
 }
 
@@ -129,21 +152,27 @@ export function formatMarkdownReviewCardQuote(text: string | null | undefined): 
 function formatBoundedMarkdownReviewCardQuote(text: string): string | undefined {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index)
+
     if (isMarkdownReviewCardQuoteWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += text.charAt(index)
+
     if (normalized.length > MAX_CARD_QUOTE_LENGTH) {
       return `${normalized.slice(0, MAX_CARD_QUOTE_LENGTH - 3).trimEnd()}...`
     }
   }
+
   return normalized.length > 0 ? normalized : undefined
 }
 
@@ -182,11 +211,13 @@ function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: stri
   const excerpt = note.selectedText
     ? quoteMarkdownReviewText(getMarkdownReviewHighlightedText(content, note))
     : getMarkdownReviewExcerpt(content, note)
+
   const parts = [
     getDiffCommentLineLabel(note),
     excerpt ? `Excerpt:\n${excerpt}` : null,
     `User comment: "${escapeMarkdownReviewNoteBody(note.body)}"`
   ]
+
   return parts.filter((part): part is string => part !== null).join('\n')
 }
 
@@ -199,8 +230,10 @@ export function formatMarkdownReviewNotes(
   content: string
 ): string {
   const groups = new Map<string, MarkdownReviewNote[]>()
+
   for (const note of sortMarkdownReviewNotes(notes)) {
     const group = groups.get(note.filePath)
+
     if (group) {
       group.push(note)
     } else {

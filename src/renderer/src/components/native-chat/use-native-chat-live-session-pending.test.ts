@@ -9,15 +9,18 @@ import { useAppStore } from '@/store'
 const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
   const subscriptions: { onFrame: (frame: unknown) => void }[] = []
   const transport = { readSession: vi.fn(), subscribe: vi.fn() }
+
   const resetTransport = (): void => {
     subscriptions.splice(0)
     // Default to an in-flight read so only the frames a test emits move the view.
     transport.readSession.mockReset().mockImplementation(() => new Promise(() => {}))
     transport.subscribe.mockReset().mockImplementation((_args, onFrame) => {
       subscriptions.push({ onFrame })
+
       return vi.fn()
     })
   }
+
   return { resetTransport, subscriptions, transport }
 })
 
@@ -61,6 +64,7 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
 
   function Probe(props: UseNativeChatLiveSessionArgs): null {
     latest = useNativeChatLiveSession(props)
+
     return null
   }
 
@@ -115,6 +119,7 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
     // between the stream's initial drain and its next event — a pending frame
     // must not consume it the way a real snapshot does.
     let settleRead = (_result: { messages: NativeChatMessage[] }): void => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (settleRead = resolve))
     )
@@ -159,6 +164,7 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
     // every read is notFound forever. The host has told us that is expected.
     vi.useFakeTimers()
     let settleRead = (_result: { error: string; notFound: true }): void => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (settleRead = resolve))
     )
@@ -195,6 +201,7 @@ describe('useNativeChatRetainedSession — unflushed transcript', () => {
 
   function Probe(props: UseNativeChatLiveSessionArgs): null {
     latest = useNativeChatRetainedSession(props)
+
     return null
   }
 

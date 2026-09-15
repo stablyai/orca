@@ -29,6 +29,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -43,9 +44,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -86,6 +89,7 @@ describe('Store', () => {
       terminalFontWeight: 600,
       terminalFontWeightBold: 800
     })
+
     expect(updated.theme).toBe('dark')
     expect(updated.editorAutoSave).toBe(true)
     expect(updated.editorAutoSaveDelayMs).toBe(1500)
@@ -125,6 +129,7 @@ describe('Store', () => {
       { length: 600 },
       (_, index) => ` bot-${String(index).padStart(4, '0')} `
     )
+
     const updated = store.updateSettings({ prBotAuthorOverrides: oversized })
 
     expect(updated.prBotAuthorOverrides).toHaveLength(500)
@@ -151,6 +156,7 @@ describe('Store', () => {
     const updated = store.updateSettings({
       mobilePairingCustomAddress: ' 100.126.117.25:6768 '
     })
+
     expect(updated.mobilePairingCustomAddress).toBe('100.126.117.25:6768')
     expect(updated.mobilePairingCustomAddresses).toEqual([
       'first.example:6768',
@@ -351,6 +357,7 @@ describe('Store', () => {
     writeDataFile(settled)
 
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
 
@@ -361,6 +368,7 @@ describe('Store', () => {
     } finally {
       vi.useRealTimers()
     }
+
     const persisted = readDataFile() as { settings?: Record<string, unknown> }
     expect(persisted.settings).not.toHaveProperty('enableGitHubAttribution')
     expect(persisted.settings).toHaveProperty('futureSetting', { enabled: true })
@@ -411,6 +419,7 @@ describe('Store', () => {
       { terminalCursorStyle: 'underline' },
       { notifyListeners: true }
     )
+
     expect(valid.terminalCursorStyle).toBe('underline')
     expect(listener).toHaveBeenLastCalledWith(
       { terminalCursorStyle: 'underline' },
@@ -438,6 +447,7 @@ describe('Store', () => {
     const updated = store.updateSettings({
       disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
     })
+
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
@@ -599,6 +609,7 @@ describe('Store', () => {
 
   it('updateSettings normalizes open-in applications', async () => {
     const store = await createStore()
+
     const updated = store.updateSettings({
       openInApplications: [
         { id: 'cursor', label: ' Cursor ', command: ' cursor ' },
@@ -606,6 +617,7 @@ describe('Store', () => {
         { id: 'bad', label: '', command: 'bad' }
       ]
     })
+
     expect(updated.openInApplications).toEqual([
       { id: 'cursor', label: 'Cursor', command: 'cursor' }
     ])
@@ -613,6 +625,7 @@ describe('Store', () => {
 
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
     const store = await createStore()
+
     const updated = store.updateSettings({
       notifications: {
         ...store.getSettings().notifications,
@@ -706,6 +719,7 @@ describe('Store', () => {
       browserUrlHistory: [],
       defaultTerminalTabsAppliedByWorktreeId: {}
     }
+
     writeDataFile({
       schemaVersion: 1,
       repos: [makeRepo({ id: 'repo1', path: '/repo1' })],
@@ -731,6 +745,7 @@ describe('Store', () => {
       workspaceSession?: typeof workspaceSession
       worktreeMeta?: Record<string, unknown>
     }
+
     expect(persisted.settings?.sourceControlViewMode).toBe('tree')
     expect(persisted.settings?.sourceControlGroupOrder).toBe('staged-first')
     expect(persisted.workspaceSession).toEqual({

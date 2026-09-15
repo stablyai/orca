@@ -7,6 +7,7 @@ export function getEditorSaveTargetFile(
   if (activeFile.mode !== 'markdown-preview') {
     return activeFile
   }
+
   return (
     openFiles.find(
       (openFile) =>

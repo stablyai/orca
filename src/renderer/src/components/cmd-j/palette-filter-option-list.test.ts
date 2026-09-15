@@ -38,6 +38,7 @@ describe('rankPaletteFilterOptions', () => {
       selectedIds: new Set(),
       rankMode: 'registry'
     })
+
     expect(before.ordered.map((entry) => entry.id)).toEqual(['a', 'b', 'c', 'd'])
 
     // Toggling the option the user had arrowed onto pins it to the front; an index of 1
@@ -48,6 +49,7 @@ describe('rankPaletteFilterOptions', () => {
       selectedIds: new Set(['c']),
       rankMode: 'registry'
     })
+
     expect(after.ordered[0]?.id).toBe('c')
     expect(before.ordered[1]?.id).not.toBe(after.ordered[1]?.id)
   })
@@ -105,7 +107,9 @@ describe('rankPaletteFilterOptions', () => {
     const many = Array.from({ length: FILTER_OPTION_MAX_PINNED_SELECTED + 3 }, (_, i) =>
       option(`s${i}`, `Selected ${i}`, 1)
     )
+
     const rest = [option('u1', 'Unselected', 9)]
+
     const ranked = rankPaletteFilterOptions({
       options: [...many, ...rest],
       selectedIds: new Set(many.map((row) => row.id)),

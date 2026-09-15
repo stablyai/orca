@@ -25,6 +25,7 @@ let trustPromptChain: Promise<unknown> = Promise.resolve()
 function enqueueTrustPrompt<T>(task: () => Promise<T>): Promise<T> {
   const next = trustPromptChain.then(task, task)
   trustPromptChain = next.catch(() => undefined)
+
   return next
 }
 
@@ -36,13 +37,17 @@ function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
   const defaultTabCommands = (yamlHooks?.defaultTabs ?? [])
     .map((tab, index) => {
       const command = tab.command?.trim()
+
       if (!command) {
         return null
       }
+
       const label = tab.title ? ` ${tab.title}` : ''
+
       return `# defaultTabs[${index + 1}]${label}\n${command}`
     })
     .filter((entry): entry is string => entry !== null)
+
   return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
@@ -81,6 +86,7 @@ function settingsForHookRepoOwner(
   runtimeOwnerEnvironmentId?: string | null
 ): AppState['settings'] {
   const parsedHost = hostId ? parseExecutionHostId(hostId) : null
+
   const runtimeEnvironmentId =
     runtimeOwnerEnvironmentId?.trim() ||
     (hostId
@@ -88,6 +94,7 @@ function settingsForHookRepoOwner(
         ? parsedHost.environmentId
         : null
       : getRuntimeEnvironmentIdForRepo(state, repoId))
+
   // Why: hook inspection must follow the repo owner. SSH/local repos execute
   // through desktop IPC, while runtime repos may differ from the focused host.
   return state.settings
@@ -97,6 +104,7 @@ function settingsForHookRepoOwner(
 
 function canUseRepoWideTrust(state: AppState, repoId: string): boolean {
   const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
+
   return Boolean(state.trustedOrcaHooks[repoId]?.all) && !hasDuplicateRepoId
 }
 
@@ -111,15 +119,19 @@ async function confirmScriptContent(
   if (isCancelled()) {
     return 'skip'
   }
+
   if (canUseRepoWideTrust(state, repoId) || !scriptContent) {
     return 'run'
   }
 
   const contentHash = await hashOrcaHookScript(scriptContent)
+
   if (isCancelled()) {
     return 'skip'
   }
+
   const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
+
   if (existingHash === contentHash) {
     return 'run'
   }
@@ -130,13 +142,16 @@ async function confirmScriptContent(
 
   return new Promise<'run' | 'skip'>((resolve) => {
     let settled = false
+
     const settle = (decision: 'run' | 'skip'): void => {
       if (settled) {
         return
       }
+
       settled = true
       resolve(decision)
     }
+
     state.openModal('confirm-orca-yaml-hooks', {
       repoId,
       repoName,
@@ -155,9 +170,11 @@ function getIssueCommandTrustContent(result: IssueCommandReadResult): string {
   if (result.source === 'local') {
     return (result.localContent ?? '').trim()
   }
+
   if (result.source === 'shared') {
     return (result.sharedContent ?? '').trim()
   }
+
   return ''
 }
 
@@ -171,12 +188,15 @@ async function confirmIssueCommandReadResult(
   if (isCancelled()) {
     return 'skip'
   }
+
   if (result.source === 'local') {
     return 'run'
   }
+
   if (result.status === 'error') {
     return 'skip'
   }
+
   return confirmScriptContent(
     state,
     repoId,
@@ -214,6 +234,7 @@ export async function readAndConfirmRuntimeIssueCommand(
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
 ): Promise<ConfirmedRuntimeIssueCommand> {
   let result: IssueCommandReadResult
+
   try {
     result = await readRuntimeIssueCommand(
       settingsForHookRepoOwner(state, repoId, hostId),
@@ -230,6 +251,7 @@ export async function readAndConfirmRuntimeIssueCommand(
       source: 'none'
     }
   }
+
   return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
 }
 
@@ -245,11 +267,13 @@ export async function ensureHooksConfirmed(
     if (isCancelled()) {
       return 'skip'
     }
+
     if (canUseRepoWideTrust(state, repoId)) {
       return 'run'
     }
 
     let scriptContent = ''
+
     try {
       if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
@@ -260,36 +284,45 @@ export async function ensureHooksConfirmed(
           repoId,
           hostId
         )
+
         if (result.source === 'local') {
           return 'run'
         }
+
         if (result.status === 'error') {
           return 'skip'
         }
+
         if (result.source !== 'shared') {
           return 'run'
         }
+
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
         const repo = findHookRepo(state, repoId, hostId)
         const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+
         const sourcePolicy = resolveHookCommandSourcePolicy(
           repo?.hookSettings?.commandSourcePolicy,
           {
             hasLocalScript: Boolean(localScript)
           }
         )
+
         if (sourcePolicy === 'local-only') {
           return 'run'
         }
+
         const result = await checkRuntimeHooks(
           settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           hostId
         )
+
         if (result.status === 'error') {
           return 'skip'
         }
+
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
         scriptContent =
           scriptKind === 'setup'

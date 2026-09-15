@@ -28,31 +28,39 @@ function isForgetModalData(data: unknown): data is ForgetSshWorkspaceModalData {
   if (!data || typeof data !== 'object') {
     return false
   }
+
   const candidate = data as Partial<ForgetSshWorkspaceModalData>
+
   return typeof candidate.worktreeId === 'string' && candidate.resolution != null
 }
 
 export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
+
   const hostLabel = useAppStore((s) => {
     const resolution = isForgetModalData(s.modalData) ? s.modalData.resolution : null
     const targetId = resolution && resolution.kind !== 'not-ssh' ? resolution.targetId : undefined
+
     if (!targetId) {
       return ''
     }
+
     // Prefer the live label, then the removed target's last known label (ghost
     // host), then the raw id as a last resort.
     return s.sshTargetLabels.get(targetId) ?? s.removedSshTargetLabels.get(targetId) ?? targetId
   })
+
   const [busy, setBusy] = useState<null | 'reconnect' | 'forget'>(null)
   const mountedRef = useMountedRef()
 
   if (!isForgetModalData(modalData)) {
     return null
   }
+
   const { worktreeId, displayName, resolution } = modalData
   const canReconnect = resolution.kind === 'disconnected'
+
   // This dialog only opens for a workspace pinned to a named SSH target, so that
   // target IS the host the removal was confirmed against (STA-4343).
   const removalTarget: WorktreeRemovalTarget = {
@@ -73,13 +81,16 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     if (resolution.kind !== 'disconnected') {
       return
     }
+
     setBusy('reconnect')
+
     try {
       await window.api.ssh.connect({ targetId: resolution.targetId })
     } catch (err) {
       if (mountedRef.current) {
         setBusy(null)
       }
+
       toast.error(
         err instanceof Error
           ? err.message
@@ -88,11 +99,14 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
               'Reconnection failed'
             )
       )
+
       return
     }
+
     // Close before the delete toast fires so the two don't overlap.
     closeModal()
     void runWorktreeDeleteWithToast(removalTarget, displayName)
+
     if (mountedRef.current) {
       setBusy(null)
     }
@@ -101,20 +115,26 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   // Remove Orca's records only — never touches remote files, worktrees, or branches.
   const handleForget = async (): Promise<void> => {
     setBusy('forget')
+
     try {
       const result = await useAppStore
         .getState()
         .removeWorktree(removalTarget, false, { mode: 'forget-local' })
+
       if (!result.ok) {
         toast.error(result.error)
+
         if (mountedRef.current) {
           setBusy(null)
         }
+
         return
       }
+
       done()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err))
+
       if (mountedRef.current) {
         setBusy(null)
       }

@@ -27,14 +27,23 @@ if (!process.send) {
 }
 
 const controllers = new Map<number, AbortController>()
+
 const cancelled = new Set<number>()
+
 const pending = new Set<number>()
+
 const titleIndex = new Map<string, AiVaultSessionTitle>()
+
 const invalidatedPaths = new Set<string>()
+
 const sessionSearch = new SessionScannerServiceSearch(requestSessionSearchRoots)
+
 let initialized = false
+
 let shuttingDown = false
+
 let cacheLane = Promise.resolve()
+
 let interactiveLane = Promise.resolve()
 
 function send(message: AiVaultServiceChildMessage): void {
@@ -55,17 +64,21 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       cancelled.delete(request.id)
     }
   }
+
   const controller = new AbortController()
   controllers.set(request.id, controller)
+
   try {
     if (cancelled.delete(request.id)) {
       controller.abort()
     }
+
     if (request.operation === 'titles') {
       const requests = await resolveHostReadableAiVaultTitleRequests(
         request.requests,
         controller.signal
       )
+
       return {
         operation: 'titles',
         value: await readAiVaultSessionTitlesFromFiles(requests, {
@@ -77,20 +90,24 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         })
       }
     }
+
     if (request.operation === 'subagents') {
       return {
         operation: 'subagents',
         value: await listLocalAiVaultSubagentSessions(request.request)
       }
     }
+
     if (request.operation === 'firstPrompt') {
       return {
         operation: 'firstPrompt',
         value: await readAiVaultFirstUserPrompt(request.request)
       }
     }
+
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
+
     for (const session of result.sessions) {
       if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
         cacheServiceTitle(titleIndex, {
@@ -100,6 +117,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
         })
       }
     }
+
     return {
       operation: 'scan',
       value: { result, durationMs: performance.now() - startedAt }
@@ -107,9 +125,11 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
   } finally {
     controllers.delete(request.id)
     cancelled.delete(request.id)
+
     for (const path of invalidatedPaths) {
       invalidateSessionParseCacheEntry(path)
     }
+
     // Why: the re-apply only protects reads that overlapped the invalidation.
     // Once nothing else is executing it has done its job, and holding the paths
     // would re-evict them on every later request for the life of the process.
@@ -143,13 +163,18 @@ function queueRequest(request: AiVaultServiceRequest): void {
       message: 'AI Vault service queue is full.',
       retryable: true
     })
+
     return
   }
+
   pending.add(request.id)
+
   if (aiVaultServiceLane(request.operation) === 'interactive') {
     interactiveLane = interactiveLane.then(() => handleRequest(request))
+
     return
   }
+
   cacheLane = cacheLane.then(() => handleRequest(request))
 }
 
@@ -157,10 +182,13 @@ async function shutdown(): Promise<void> {
   if (shuttingDown) {
     return
   }
+
   shuttingDown = true
+
   for (const controller of controllers.values()) {
     controller.abort()
   }
+
   sessionSearch.close()
   await Promise.allSettled([cacheLane, interactiveLane])
   await flushSessionParseCachePersist()
@@ -171,51 +199,71 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
   if (raw?.type === 'init') {
     if (initialized || raw.protocol !== AI_VAULT_SERVICE_PROTOCOL_VERSION) {
       void shutdown()
+
       return
     }
+
     initialized = true
+
     if (raw.sessionParseCache) {
       initSessionParseCachePersistence(raw.sessionParseCache)
     }
+
     if (raw.sessionSearch) {
       sessionSearch.apply(raw.sessionSearch)
     }
+
     send({ type: 'ready', protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION, pid: process.pid })
+
     return
   }
+
   if (!initialized || shuttingDown) {
     return
   }
+
   if (raw?.type === 'cancel') {
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
+
     return
   }
+
   if (raw?.type === 'invalidate') {
     for (const path of raw.paths) {
       invalidatedPaths.delete(path)
       invalidatedPaths.add(path)
       invalidateSessionParseCacheEntry(path)
     }
+
     while (invalidatedPaths.size > 4_096) {
       const oldest = invalidatedPaths.values().next().value
+
       if (oldest === undefined) {
         break
       }
+
       invalidatedPaths.delete(oldest)
     }
+
     titleIndex.clear()
     send({ type: 'invalidated', generation: raw.generation })
+
     return
   }
+
   if (raw?.type === 'sessionSearch') {
     sessionSearch.apply(raw.init)
+
     return
   }
+
   if (raw?.type === 'shutdown') {
     void shutdown()
+
     return
   }
+
   if (isAiVaultServiceRequest(raw)) {
     queueRequest(raw)
   }

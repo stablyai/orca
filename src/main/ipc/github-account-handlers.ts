@@ -12,12 +12,14 @@ export function registerGitHubAccountHandlers(): void {
   ipcMain.handle('gh:starOrca', async (_event, source: unknown) => {
     const sourceParse = appStarSourceSchema.safeParse(source)
     const starred = await starOrca()
+
     if (starred && sourceParse.success) {
       track('app_starred_orca', {
         source: sourceParse.data,
         ...getCohortAtEmit()
       })
     }
+
     return starred
   })
 

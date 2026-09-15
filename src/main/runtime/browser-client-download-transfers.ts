@@ -86,6 +86,7 @@ export class BrowserClientDownloadTransferStore {
     const chunk = decodeBrowserClientFileChannelChunk(input.contentBase64)
     const session = this.requireSession(input)
     this.clearIdleTimer(session)
+
     try {
       return await this.serialize(session, () => this.write(session, input, chunk.byteLength))
     } finally {
@@ -95,10 +96,13 @@ export class BrowserClientDownloadTransferStore {
 
   abort(input: { transferId: string; browserPageId: string }): Promise<boolean> {
     const session = this.sessions.get(sessionKey(input.browserPageId, input.transferId))
+
     if (!session) {
       return Promise.resolve(false)
     }
+
     session.canceled = true
+
     return this.serialize(session, () => this.release(session)).then(() => true)
   }
 
@@ -107,9 +111,11 @@ export class BrowserClientDownloadTransferStore {
     const owned = [...this.sessions.values()].filter(
       (session) => session.browserPageId === browserPageId
     )
+
     for (const session of owned) {
       session.canceled = true
     }
+
     await Promise.all(owned.map((session) => this.serialize(session, () => this.release(session))))
   }
 
@@ -121,9 +127,11 @@ export class BrowserClientDownloadTransferStore {
     if (session.idleTimer || this.sessions.get(session.key) !== session) {
       return
     }
+
     const timer = setTimeout(() => {
       void this.expire(session)
     }, this.idleTimeoutMs)
+
     timer.unref?.()
     session.idleTimer = timer
   }
@@ -137,9 +145,11 @@ export class BrowserClientDownloadTransferStore {
 
   private async expire(session: TransferSession): Promise<void> {
     session.idleTimer = null
+
     if (this.sessions.get(session.key) !== session) {
       return
     }
+
     session.canceled = true
     await this.serialize(session, () => this.release(session)).catch(() => undefined)
   }
@@ -151,6 +161,7 @@ export class BrowserClientDownloadTransferStore {
       () => undefined,
       () => undefined
     )
+
     return running
   }
 
@@ -160,14 +171,17 @@ export class BrowserClientDownloadTransferStore {
     byteLength: number
   ): Promise<BrowserClientDownloadCommit | null> {
     this.assertLive(session)
+
     if (input.offset !== session.bytesWritten) {
       await this.release(session)
       throw new Error('browser_client_download_transfer_out_of_order')
     }
+
     if (session.bytesWritten + byteLength > BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES) {
       await this.release(session)
       throw new Error('browser_client_download_transfer_too_large')
     }
+
     try {
       if (session.bytesWritten === 0) {
         await this.dependencies.ensureDirectory({
@@ -176,6 +190,7 @@ export class BrowserClientDownloadTransferStore {
         })
         this.assertLive(session)
       }
+
       await this.dependencies.writeChunk({
         workspaceId: session.workspaceId,
         relativePath: session.tempRelativePath,
@@ -186,13 +201,16 @@ export class BrowserClientDownloadTransferStore {
       await this.release(session)
       throw error
     }
+
     // Why: cancellation during the write leaves the temp file for the queued release to remove; the
     // transfer must not keep accounting bytes or continue to a commit after that.
     this.assertLive(session)
     session.bytesWritten += byteLength
+
     if (!input.final) {
       return null
     }
+
     try {
       return await this.commit(session, input.filename, input.platform)
     } catch (error) {
@@ -217,6 +235,7 @@ export class BrowserClientDownloadTransferStore {
   }): TransferSession {
     const key = sessionKey(input.browserPageId, input.transferId)
     const existing = this.sessions.get(key)
+
     if (existing) {
       if (
         existing.pageHostGeneration !== input.pageHostGeneration ||
@@ -224,14 +243,18 @@ export class BrowserClientDownloadTransferStore {
       ) {
         throw new Error('browser_client_download_transfer_stale')
       }
+
       return existing
     }
+
     if (this.settled.has(key)) {
       throw new Error('browser_client_download_transfer_settled')
     }
+
     if (this.sessions.size >= this.maxActiveTransfers) {
       throw new Error('browser_client_download_transfer_capacity')
     }
+
     const session: TransferSession = {
       key,
       browserPageId: input.browserPageId,
@@ -243,7 +266,9 @@ export class BrowserClientDownloadTransferStore {
       operations: Promise.resolve(),
       idleTimer: null
     }
+
     this.sessions.set(key, session)
+
     return session
   }
 
@@ -253,9 +278,11 @@ export class BrowserClientDownloadTransferStore {
     platform: NodeJS.Platform
   ): Promise<BrowserClientDownloadCommit> {
     const safeFilename = normalizeBrowserDownloadFilename(filename, platform)
+
     for (let attempt = 0; attempt < MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS; attempt += 1) {
       const candidate = buildBrowserDownloadCollisionCandidate(safeFilename, attempt)
       const finalRelativePath = `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/${candidate}`
+
       if (
         await this.dependencies.exists({
           workspaceId: session.workspaceId,
@@ -264,7 +291,9 @@ export class BrowserClientDownloadTransferStore {
       ) {
         continue
       }
+
       this.assertLive(session)
+
       try {
         await this.dependencies.commit({
           workspaceId: session.workspaceId,
@@ -277,20 +306,26 @@ export class BrowserClientDownloadTransferStore {
         if (!isDestinationExistsError(error)) {
           throw error
         }
+
         continue
       }
+
       this.settle(session)
+
       return { workspaceRelativePath: finalRelativePath }
     }
+
     throw new Error('browser_client_download_transfer_name_unavailable')
   }
 
   private async release(session: TransferSession): Promise<void> {
     const owned = this.sessions.get(session.key) === session
     this.settle(session)
+
     if (!owned) {
       return
     }
+
     try {
       await this.dependencies.remove({
         workspaceId: session.workspaceId,
@@ -303,15 +338,20 @@ export class BrowserClientDownloadTransferStore {
 
   private settle(session: TransferSession): void {
     this.clearIdleTimer(session)
+
     if (this.sessions.get(session.key) === session) {
       this.sessions.delete(session.key)
     }
+
     this.settled.add(session.key)
+
     while (this.settled.size > this.maxSettledTrail) {
       const oldest = this.settled.values().next()
+
       if (oldest.done) {
         return
       }
+
       this.settled.delete(oldest.value)
     }
   }
@@ -323,6 +363,7 @@ function isDestinationExistsError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   return (
     (error as NodeJS.ErrnoException).code === 'EEXIST' ||
     /\bEEXIST\b|already exists/i.test(error.message)

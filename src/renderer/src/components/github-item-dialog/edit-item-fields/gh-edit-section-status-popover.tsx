@@ -60,6 +60,7 @@ export function GHEditSectionStatusPopover({
   onOpenDuplicatePicker: () => void
 }): React.JSX.Element {
   const isSidebar = variant === 'sidebar'
+
   return (
     <Popover open={statusPopoverOpen} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>

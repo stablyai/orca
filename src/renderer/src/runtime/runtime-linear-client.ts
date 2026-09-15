@@ -47,15 +47,21 @@ export function isLinearIssueAttributeFilterUnsupportedError(
 }
 
 export type LinearIssueFilter = 'assigned' | 'created' | 'all' | 'completed'
+
 export type LinearConnectResult = { ok: true; viewer: LinearViewer } | { ok: false; error: string }
+
 export type LinearCreateIssueResult =
   | { ok: true; id: string; identifier: string; title: string; url: string }
   | { ok: false; error: string }
+
 export type LinearCreateProjectResult =
   | { ok: true; project: LinearProjectDetail }
   | { ok: false; error: string }
+
 export type LinearMutationResult = { ok: true } | { ok: false; error: string }
+
 export type LinearCommentResult = { ok: true; id: string } | { ok: false; error: string }
+
 export type LinearReadOptions = { force?: boolean }
 
 export function linearReadForce(options?: LinearReadOptions): { force: true } | {} {
@@ -84,13 +90,17 @@ function normalizeLinearIssueCollectionResult(
   if (Array.isArray(result)) {
     return { items: result as LinearIssue[] }
   }
+
   if (!result || typeof result !== 'object') {
     return { items: [] }
   }
+
   const collection = result as Partial<LinearCollectionResult<LinearIssue>>
+
   if (!Array.isArray(collection.items)) {
     return { items: [] }
   }
+
   return {
     items: collection.items,
     ...(Array.isArray(collection.errors) ? { errors: collection.errors } : {}),
@@ -102,6 +112,7 @@ export async function linearStatus(
   settings: RuntimeLinearSettings
 ): Promise<LinearConnectionStatus> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(target, 'linear.status', undefined, {
         timeoutMs: 15_000
@@ -114,6 +125,7 @@ export async function linearTestConnection(
   workspaceId?: string | null
 ): Promise<LinearConnectResult> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectResult>(
         target,
@@ -131,6 +143,7 @@ export async function linearConnect(
   apiKey: string
 ): Promise<LinearConnectResult> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectResult>(
         target,
@@ -150,6 +163,7 @@ export async function linearDisconnectWorkspace(
   workspaceId?: string | null
 ): Promise<void> {
   const target = getLinearRuntimeTarget(settings)
+
   if (target.kind === 'environment') {
     await callRuntimeRpc<{ ok: true }>(
       target,
@@ -159,8 +173,10 @@ export async function linearDisconnectWorkspace(
         timeoutMs: 15_000
       }
     )
+
     return
   }
+
   await window.api.linear.disconnect(workspaceId ? { workspaceId } : undefined)
 }
 
@@ -169,6 +185,7 @@ export async function linearSelectWorkspace(
   workspaceId: LinearWorkspaceSelection
 ): Promise<LinearConnectionStatus> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(
         target,
@@ -188,7 +205,9 @@ export async function linearSearchIssues(
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
+
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue[]>(
         target,
@@ -207,16 +226,19 @@ export async function linearListIssues(
   attributeFilter?: LinearIssueAttributeFilter | null
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getLinearRuntimeTarget(settings)
+
   const canonicalAttributeFilter =
     attributeFilter && !isEmptyLinearIssueAttributeFilter(attributeFilter)
       ? canonicalizeLinearIssueAttributeFilter(attributeFilter)
       : undefined
+
   const payload = {
     filter,
     limit,
     workspaceId: workspaceId ?? undefined,
     ...(canonicalAttributeFilter ? { attributeFilter: canonicalAttributeFilter } : {})
   }
+
   if (
     target.kind === 'environment' &&
     canonicalAttributeFilter &&
@@ -230,11 +252,13 @@ export async function linearListIssues(
     // prevents their unfiltered rows from being presented or cached as filtered.
     throw new LinearIssueAttributeFilterUnsupportedError()
   }
+
   const result =
     target.kind === 'environment'
       ? await callRuntimeRpc<unknown>(target, 'linear.listIssues', payload, {
           timeoutMs: 30_000
         })
       : await window.api.linear.listIssues(payload)
+
   return normalizeLinearIssueCollectionResult(result)
 }

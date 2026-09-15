@@ -8,8 +8,11 @@ const BASE_OPTIONS: SecureStore.SecureStoreOptions = {
 }
 
 const GENERATION_STORAGE_KEY = 'orca:pairing-keychain-generation'
+
 const PRESENCE_STORAGE_PREFIX = 'orca:pairing-keychain-presence:'
+
 const SERVICE_PREFIX = 'orca.pairing.v'
+
 // Why: every generation adds one read probe per miss; bound pathological recovery cost.
 const MAX_GENERATION = 8
 
@@ -26,6 +29,7 @@ function serviceForGeneration(generation: number): string | undefined {
 
 function optionsForGeneration(generation: number): SecureStore.SecureStoreOptions {
   const keychainService = serviceForGeneration(generation)
+
   return keychainService ? { ...BASE_OPTIONS, keychainService } : BASE_OPTIONS
 }
 
@@ -34,18 +38,22 @@ type LoadedGeneration =
   | { generation: 0; pending: false; reliable: false; error: unknown }
 
 type GenerationState = { generation: number; pending: boolean }
+
 type PresenceChange = { storageKey: string; previousRaw: string | null }
 
 let cachedGeneration: GenerationState | null = null
+
 let keychainMutation: Promise<void> = Promise.resolve()
 
 function parseGeneration(raw: string | null): LoadedGeneration {
   if (raw === null) {
     return { generation: 0, pending: false, reliable: true }
   }
+
   const pending = raw.endsWith(':pending')
   const generationRaw = pending ? raw.slice(0, -':pending'.length) : raw
   const parsed = Number(generationRaw)
+
   if (
     !Number.isInteger(parsed) ||
     parsed < 0 ||
@@ -60,6 +68,7 @@ function parseGeneration(raw: string | null): LoadedGeneration {
       error: new Error('pairing keychain generation record is invalid')
     }
   }
+
   return { generation: parsed, pending, reliable: true }
 }
 
@@ -67,7 +76,9 @@ function parsePresenceGeneration(raw: string | null): number | null {
   if (raw === null) {
     return null
   }
+
   const parsed = Number(raw)
+
   if (
     !Number.isInteger(parsed) ||
     parsed < 0 ||
@@ -76,6 +87,7 @@ function parsePresenceGeneration(raw: string | null): number | null {
   ) {
     throw new Error('pairing keychain presence record is invalid')
   }
+
   return parsed
 }
 
@@ -87,6 +99,7 @@ async function loadPresenceGeneration(key: string): Promise<number | null> {
   if (Platform.OS !== 'android') {
     return null
   }
+
   return parsePresenceGeneration(await AsyncStorage.getItem(presenceStorageKey(key)))
 }
 
@@ -94,11 +107,14 @@ async function loadGeneration(): Promise<LoadedGeneration> {
   if (cachedGeneration !== null) {
     return { ...cachedGeneration, reliable: true }
   }
+
   try {
     const loaded = parseGeneration(await AsyncStorage.getItem(GENERATION_STORAGE_KEY))
+
     if (loaded.reliable) {
       cachedGeneration = { generation: loaded.generation, pending: loaded.pending }
     }
+
     return loaded
   } catch (error) {
     // Why: don't cache or rotate from a guess; a later read may recover the durable pointer.
@@ -116,6 +132,7 @@ async function commitGeneration(generation: number, pending: boolean): Promise<v
 function enqueueKeychainMutation(operation: () => Promise<void>): Promise<void> {
   const mutation = keychainMutation.then(operation)
   keychainMutation = mutation.catch(() => {})
+
   return mutation
 }
 
@@ -126,11 +143,13 @@ async function preparePresenceWrite(
   if (Platform.OS !== 'android') {
     return null
   }
+
   // Why: Expo Android returns null for both absent and undecryptable entries.
   const storageKey = presenceStorageKey(key)
   const previousRaw = await AsyncStorage.getItem(storageKey)
   parsePresenceGeneration(previousRaw)
   await AsyncStorage.setItem(storageKey, String(generation))
+
   return { storageKey, previousRaw }
 }
 
@@ -138,15 +157,19 @@ async function restorePresence(change: PresenceChange | null): Promise<void> {
   if (!change) {
     return
   }
+
   if (change.previousRaw === null) {
     await AsyncStorage.removeItem(change.storageKey)
+
     return
   }
+
   await AsyncStorage.setItem(change.storageKey, change.previousRaw)
 }
 
 async function setItemAtGeneration(key: string, value: string, generation: number): Promise<void> {
   const presenceChange = await preparePresenceWrite(key, generation)
+
   try {
     await SecureStore.setItemAsync(key, value, optionsForGeneration(generation))
   } catch (error) {
@@ -159,8 +182,10 @@ async function setItemAtGeneration(key: string, value: string, generation: numbe
 export async function readPairingKeychainItem(key: string): Promise<string | null> {
   await keychainMutation
   const presenceGeneration = await loadPresenceGeneration(key)
+
   if (presenceGeneration !== null) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))
+
     if (value === null) {
       // Why: Android reports an undecryptable entry as null, so failing closed here latched
       // callers out of their own orphan cleanup forever; report absent instead. The presence
@@ -169,31 +194,41 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
       // re-pair write, so a legitimately-current older value is traded for re-pairing.
       return null
     }
+
     return value
   }
+
   const loaded = await loadGeneration()
   const firstCandidate = loaded.reliable ? loaded.generation : MAX_GENERATION
+
   for (let candidate = firstCandidate; candidate >= 0; candidate -= 1) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(candidate))
+
     if (value !== null) {
       return value
     }
   }
+
   return null
 }
 
 async function writePairingKeychainItemImpl(key: string, value: string): Promise<void> {
   const loaded = await loadGeneration()
+
   if (!loaded.reliable) {
     throw loaded.error
   }
+
   const generation = loaded.generation
   let firstError: unknown
+
   try {
     await setItemAtGeneration(key, value, generation)
+
     if (loaded.pending) {
       await commitGeneration(generation, false)
     }
+
     return
   } catch (error) {
     firstError = error
@@ -203,15 +238,19 @@ async function writePairingKeychainItemImpl(key: string, value: string): Promise
   if (loaded.pending || !isAndroidEncryptionFailure(firstError)) {
     throw firstError
   }
+
   const rotated = generation + 1
+
   if (rotated > MAX_GENERATION) {
     throw firstError
   }
+
   try {
     await commitGeneration(rotated, true)
   } catch {
     throw firstError
   }
+
   try {
     await setItemAtGeneration(key, value, rotated)
     await commitGeneration(rotated, false)
@@ -224,7 +263,9 @@ function isAndroidEncryptionFailure(error: unknown): boolean {
   if (Platform.OS !== 'android' || !error || typeof error !== 'object') {
     return false
   }
+
   const message = 'message' in error ? error.message : null
+
   return typeof message === 'string' && message.includes('Could not encrypt the value for key')
 }
 
@@ -236,6 +277,7 @@ async function deletePairingKeychainItemImpl(key: string): Promise<void> {
   const loaded = await loadGeneration()
   const firstCandidate = loaded.reliable ? loaded.generation : MAX_GENERATION
   let firstError: unknown
+
   for (let candidate = firstCandidate; candidate >= 0; candidate -= 1) {
     try {
       await SecureStore.deleteItemAsync(key, optionsForGeneration(candidate))
@@ -243,9 +285,11 @@ async function deletePairingKeychainItemImpl(key: string): Promise<void> {
       firstError ??= error
     }
   }
+
   if (firstError !== undefined) {
     throw firstError
   }
+
   if (Platform.OS === 'android') {
     await AsyncStorage.removeItem(presenceStorageKey(key))
   }

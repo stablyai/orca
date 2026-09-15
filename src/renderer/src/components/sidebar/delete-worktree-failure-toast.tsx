@@ -42,6 +42,7 @@ function DeleteWorktreeFailureToastBody({
     toast.dismiss(toastId)
     onViewChanges()
   }
+
   const forceDelete = (): void => {
     toast.dismiss(toastId)
     onForceDelete()
@@ -85,6 +86,7 @@ export function showDeleteWorktreeFailureToast({
     error,
     lockReason ?? null
   )
+
   const showToast = toastCopy.isDestructive ? toast.error : toast.info
   const id = deleteWorktreeFailureToastId(worktreeId)
 

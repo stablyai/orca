@@ -7,6 +7,7 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const { runtimeCall, resetRemoteRuntimeTransport } = createRemoteRuntimeTransportMocks({
@@ -34,19 +35,24 @@ describe('createRemoteRuntimePtyTransport', () => {
           result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
         }
       }
+
       if (args.method === 'terminal.create') {
         createCalls += 1
+
         if (createCalls === 1) {
           throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
             code: 'runtime_timeout'
           })
         }
+
         return { ok: true, result: { terminal: { handle: 'terminal-once' } } }
       }
+
       return { ok: true, result: {} }
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtySpawn = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -65,6 +71,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
       )
       .filter((args) => args.method === 'terminal.create')
+
     expect(creates).toHaveLength(2)
     expect(creates[0].params?.clientMutationId).toMatch(/\S+/)
     expect(creates[1].params?.clientMutationId).toBe(creates[0].params?.clientMutationId)
@@ -77,26 +84,32 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('clips a reconciled create timeout to the budget left after a slow capability probe', async () => {
     vi.useFakeTimers()
+
     try {
       const startedAt = Date.now()
       let createCalls = 0
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'status.get') {
           vi.setSystemTime(startedAt + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS - 1_000)
+
           return {
             ok: true,
             result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
           }
         }
+
         if (args.method === 'terminal.create') {
           createCalls += 1
+
           if (createCalls === 1) {
             throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
               code: 'runtime_timeout'
             })
           }
+
           return { ok: true, result: { terminal: { handle: 'terminal-reconciled' } } }
         }
+
         return { ok: true, result: {} }
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -109,6 +122,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       const createRequests = runtimeCall.mock.calls
         .map(([args]) => args as { method: string; timeoutMs: number })
         .filter((args) => args.method === 'terminal.create')
+
       expect(createRequests).toHaveLength(2)
       expect(createRequests[1].timeoutMs).toBe(1_000)
       transport.destroy?.()
@@ -122,6 +136,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'status.get') {
         return { ok: true, result: { capabilities: [] } }
       }
+
       throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
         code: 'runtime_timeout'
       })
@@ -147,6 +162,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           code: 'unauthorized'
         })
       }
+
       throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
         code: 'runtime_timeout'
       })
@@ -166,6 +182,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('stops unknown terminal-create recovery at the cutoff and remains manually retryable', async () => {
     vi.useFakeTimers()
+
     try {
       let reachable = false
       let statusTimesOut = false
@@ -182,14 +199,17 @@ describe('createRemoteRuntimePtyTransport', () => {
               }, args.timeoutMs)
             })
           }
+
           return {
             ok: true,
             result: { capabilities: [TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
           }
         }
+
         if (args.method === 'terminal.create' && reachable) {
           return { ok: true, result: { terminal: { handle: 'terminal-recovered' } } }
         }
+
         throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
           code: 'runtime_timeout'
         })
@@ -206,6 +226,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           onRecoveryStateChange: (state) => recoveryStates.push(state.phase)
         }
       })
+
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       await connect
       const callsAtCutoff = runtimeCall.mock.calls.length
@@ -229,9 +250,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       reachable = true
       expect(transport.retryRecovery?.()).toBe(true)
       await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-recovered'))
+
       const createRequests = runtimeCall.mock.calls
         .map(([args]) => args as { method: string; params?: { reconcileExisting?: boolean } })
         .filter((args) => args.method === 'terminal.create')
+
       expect(createRequests[0].params?.reconcileExisting).toBeUndefined()
       expect(createRequests.slice(1).every((args) => args.params?.reconcileExisting === true)).toBe(
         true
@@ -244,6 +267,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('replays an ambiguous structured agent create without downgrading after cutoff', async () => {
     vi.useFakeTimers()
+
     try {
       let reachable = false
       runtimeCall.mockImplementation(async (args: { method: string }) => {
@@ -257,6 +281,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             }
           }
         }
+
         if (args.method === 'terminal.createAgentSession' && reachable) {
           return {
             ok: true,
@@ -266,11 +291,13 @@ describe('createRemoteRuntimePtyTransport', () => {
             }
           }
         }
+
         throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
           code: 'runtime_timeout'
         })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -283,9 +310,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       await connect
 
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+
       const initialCreates = runtimeCall.mock.calls
         .map(([args]) => args as { method: string; params?: { clientOperationId?: string } })
         .filter((args) => args.method === 'terminal.createAgentSession')
+
       expect(initialCreates.length).toBeGreaterThan(0)
       const operationId = initialCreates[0].params?.clientOperationId
       expect(operationId).toMatch(/\S+/)
@@ -299,6 +328,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       const allCreates = runtimeCall.mock.calls
         .map(([args]) => args as { method: string; params?: { clientOperationId?: string } })
         .filter((args) => args.method === 'terminal.createAgentSession')
+
       expect(allCreates.every((args) => args.params?.clientOperationId === operationId)).toBe(true)
       expect(runtimeCall.mock.calls.some(([args]) => args.method === 'terminal.create')).toBe(false)
       expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'status.get')).toHaveLength(

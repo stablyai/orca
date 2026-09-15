@@ -22,6 +22,7 @@ export function createPtyIpcSpawnDrivers(ctx: {
   createMockProc: () => { emitData: (data: string) => void }
 }) {
   const { handlers, mainWindow, createMockProc } = ctx
+
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
@@ -44,9 +45,11 @@ export function createPtyIpcSpawnDrivers(ctx: {
     worktreeId?: string
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
+
     if (processEnvOverrides) {
       for (const [k, v] of Object.entries(processEnvOverrides)) {
         savedEnv[k] = process.env[k]
+
         if (v === undefined) {
           delete process.env[k]
         } else {
@@ -74,6 +77,7 @@ export function createPtyIpcSpawnDrivers(ctx: {
         ...(worktreeId ? { worktreeId } : {})
       })
       const spawnCall = spawnMock.mock.calls.at(-1)!
+
       return spawnCall[2].env as Record<string, string>
     } finally {
       for (const [k, v] of Object.entries(savedEnv)) {
@@ -98,6 +102,7 @@ export function createPtyIpcSpawnDrivers(ctx: {
       rows: 24,
       ...args
     })
+
     return spawnMock.mock.calls.at(-1) as [
       string,
       string[],
@@ -125,6 +130,7 @@ export function createPtyIpcSpawnDrivers(ctx: {
       mode: 0o755,
       size: 1
     }))
+
     if (!launcherExecutable) {
       accessSyncMock.mockImplementation((target: string) => {
         if (target === BUNDLED_CLI_PATH) {
@@ -132,6 +138,7 @@ export function createPtyIpcSpawnDrivers(ctx: {
         }
       })
     }
+
     try {
       return await run()
     } finally {
@@ -141,22 +148,27 @@ export function createPtyIpcSpawnDrivers(ctx: {
       })
     }
   }
+
   /** Saturates one PTY to its 512 KiB in-flight cap; leaves 88 KiB pending and no timers scheduled. */
   async function spawnAndSaturateRendererDeliveryGate(
     mockProc: ReturnType<typeof createMockProc>
   ): Promise<{ id: string }> {
     registerPtyHandlers(mainWindow as never)
+
     const spawnResult = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
       cwd: '/tmp'
     })) as { id: string }
+
     mainWindow.webContents.send.mockClear()
     mockProc.emitData('x'.repeat(600 * 1024))
     vi.advanceTimersByTime(8)
+
     for (let index = 0; index < 32; index++) {
       vi.advanceTimersByTime(1)
     }
+
     return spawnResult
   }
 

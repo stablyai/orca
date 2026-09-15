@@ -32,6 +32,7 @@ import {
   isTabEntryAbsolutePathAllowed
 } from './tab-create-entry-local-path'
 import type { TabEntryLocalPlatform } from './tab-create-entry-path-validation'
+
 export {
   classifyTabEntryQuery,
   getTabEntryOptions,
@@ -44,6 +45,7 @@ export {
   type TabEntryOption,
   type TabEntryOptionsContext
 } from './tab-create-entry-classifier'
+
 export {
   createTabEntryAllowAbsolutePathsSelector,
   getTabEntryAllowAbsolutePaths,
@@ -87,6 +89,7 @@ type OpenTabEntryWithOperationsArgs = {
 
 function isExistsError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
+
   return /\bEEXIST\b|already exists|file exists/i.test(message)
 }
 
@@ -101,6 +104,7 @@ async function createParentDirectoriesForNewFile(args: {
 
   for (const segment of directorySegments) {
     currentPath = joinPath(currentPath, segment)
+
     try {
       // Why: file creation authorizes the immediate parent before its own mkdir,
       // so nested new-file paths must materialize parents one level at a time.
@@ -109,7 +113,9 @@ async function createParentDirectoriesForNewFile(args: {
       if (!isExistsError(error)) {
         throw error
       }
+
       const stat = await args.operations.statRuntimePath(args.context, currentPath)
+
       if (!stat.isDirectory) {
         throw new Error(`Cannot create file because ${currentPath} is not a directory.`)
       }
@@ -127,14 +133,17 @@ async function openExistingFile(args: {
 }): Promise<void> {
   const filePath = joinPath(args.worktreePath, args.relativePath)
   let stat: Awaited<ReturnType<typeof statRuntimePath>>
+
   try {
     stat = await args.operations.statRuntimePath(args.context, filePath)
   } catch {
     throw new Error(`File no longer exists: ${args.relativePath}`)
   }
+
   if (stat.isDirectory) {
     throw new Error(`Cannot open a directory: ${args.relativePath}`)
   }
+
   args.operations.openFile(
     {
       filePath,
@@ -168,6 +177,7 @@ function getNetworkTabRequest(
   searchUrlOptions?: SearchUrlOptions
 ): OpenWorkspaceBrowserTabRequest {
   const target = { workspaceId: worktreeId, targetGroupId: groupId }
+
   if (classification.kind === 'search') {
     return {
       ...target,
@@ -175,6 +185,7 @@ function getNetworkTabRequest(
       intent: { kind: 'search', engine: classification.engine }
     }
   }
+
   return { ...target, url: classification.url, intent: { kind: 'url' } }
 }
 
@@ -193,8 +204,10 @@ export async function openTabEntryWithOperations({
   worktreePath
 }: OpenTabEntryWithOperationsArgs): Promise<void> {
   const entryContext: TabEntryOptionsContext = { allowAbsolutePaths, localPlatform, searchEngine }
+
   const classification =
     selectedClassification ?? classifyTabEntryQuery(query, fileList, entryContext)
+
   if (classification.kind === 'empty' || classification.kind === 'blocked') {
     throw new Error(classification.message)
   }
@@ -203,6 +216,7 @@ export async function openTabEntryWithOperations({
     await operations.openWorkspaceBrowserTab(
       getNetworkTabRequest(classification, { worktreeId, groupId }, searchUrlOptions)
     )
+
     return
   }
 
@@ -210,6 +224,7 @@ export async function openTabEntryWithOperations({
     if (!allowAbsolutePaths) {
       throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
     }
+
     await openAbsoluteTabEntryFile({
       context: runtimeContext,
       groupId,
@@ -219,6 +234,7 @@ export async function openTabEntryWithOperations({
       worktreeId,
       worktreePath
     })
+
     return
   }
 
@@ -231,10 +247,12 @@ export async function openTabEntryWithOperations({
       worktreeId,
       worktreePath
     })
+
     return
   }
 
   const filePath = joinPath(worktreePath, classification.relativePath)
+
   try {
     await createParentDirectoriesForNewFile({
       context: runtimeContext,
@@ -248,6 +266,7 @@ export async function openTabEntryWithOperations({
       throw error
     }
   }
+
   await openExistingFile({
     context: runtimeContext,
     groupId,
@@ -261,15 +280,20 @@ export async function openTabEntryWithOperations({
 export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
   const state = useAppStore.getState()
   const searchUrlOptions = { kagiSessionLink: state.browserKagiSessionLink }
+
   if (args.classification && isNetworkTabEntry(args.classification)) {
     await openWorkspaceBrowserTab(getNetworkTabRequest(args.classification, args, searchUrlOptions))
+
     return
   }
+
   const searchEngine = state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
   const worktree = state.getKnownWorktreeById(args.worktreeId)
+
   if (!worktree) {
     throw new Error('No active worktree.')
   }
+
   const runtimeContext = getTabEntryFileOperationContext(state, args.worktreeId, worktree.path)
   const allowAbsolutePaths = isTabEntryAbsolutePathAllowed(runtimeContext)
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'

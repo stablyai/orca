@@ -20,6 +20,7 @@ const tempRoots: string[] = []
 async function createTempDir(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-relay-prunable-'))
   tempRoots.push(root)
+
   return root
 }
 

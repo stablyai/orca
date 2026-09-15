@@ -38,8 +38,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
       rootless?: boolean
       expected: boolean
     }
+
     const folderId = 'folder-routing'
     const folderKey = folderWorkspaceKey(folderId)
+
     const cases: RoutingCase[] = [
       {
         tabId: 'tab-routing-inactive',
@@ -90,8 +92,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expected: true
       }
     ]
+
     const tabsByWorktree: AppState['tabsByWorktree'] = {}
     const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
+
     for (const entry of cases) {
       ;(tabsByWorktree[entry.ownerId] ??= []).push(
         makeTab({
@@ -107,6 +111,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expandedLeafId: null
       }
     }
+
     const snapshot = cases.map((entry, index): AgentStatusSetData => ({
       paneKey: makePaneKey(entry.tabId, entry.leafId),
       worktreeId: entry.payloadWorktreeId,
@@ -117,6 +122,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       receivedAt: 1_700_000_001_000 + index,
       stateStartedAt: 1_700_000_001_000 + index
     }))
+
     const localRepo = { ...TEST_REPO, id: 'repo-routing-local', connectionId: null }
     const sshRepo = { ...TEST_REPO, id: 'repo-routing-ssh', connectionId: 'ssh-live' }
     const store = createTestStore()
@@ -177,6 +183,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           )
       ).toBe(true)
     })
+
     for (const entry of cases) {
       expect(
         store.getState().agentStatusByPaneKey[makePaneKey(entry.tabId, entry.leafId)] !== undefined
@@ -189,6 +196,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const worktreeId = 'wt-inactive-split'
     const waitingPaneKey = makePaneKey(tabId, '00000000-0000-4000-8000-000000000001')
     const donePaneKey = makePaneKey(tabId, '00000000-0000-4000-8000-000000000002')
+
     const getSnapshot = vi.fn().mockResolvedValue([
       {
         paneKey: waitingPaneKey,
@@ -209,6 +217,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         stateStartedAt: 1_700_000_000_001
       }
     ] satisfies AgentStatusSetData[])
+
     const store = createTestStore()
     store.setState({
       workspaceSessionReady: true,
@@ -266,16 +275,19 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.useFakeTimers()
     let storeState: StoreLike
     let publicationCount = 0
+
     const applyStatus = (paneKey: string, payload: unknown): void => {
       storeState.agentStatusByPaneKey = {
         ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
         [paneKey]: payload
       }
     }
+
     const setAgentStatus = vi.fn((paneKey: string, payload: unknown) => {
       applyStatus(paneKey, payload)
       publicationCount += 1
     })
+
     const setAgentStatuses = vi.fn((updates: readonly AgentStatusBatchUpdate[]) => {
       for (const update of updates) {
         if (update.kind === 'providerSession') {
@@ -286,13 +298,18 @@ describe('useIpcEvents agent status snapshot integration', () => {
           applyStatus(update.paneKey, update.payload)
         }
       }
+
       publicationCount += 1
+
       return updates.map(() => true)
     })
+
     const recordAgentProviderSession = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     storeState = buildStoreState({
       setAgentStatus,
       setAgentStatuses,
@@ -322,6 +339,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -330,9 +348,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     try {
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
+
       if (typeof onSetListenerRef.current !== 'function') {
         throw new Error('Expected agentStatus.onSet listener to be registered')
       }
+
       const emit = (receivedAt: number, prompt: string): void => {
         onSetListenerRef.current!({
           paneKey: FUTURE_PANE_KEY,
@@ -392,10 +412,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('keeps a live event enqueued by a synchronous batch subscriber for the next flush', async () => {
     vi.useFakeTimers()
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     let reentered = false
+
     const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
       if (!reentered) {
         reentered = true
@@ -408,8 +431,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
           stateStartedAt: 1_700_000_000_002
         })
       }
+
       return updates.map(() => true)
     })
+
     const storeState = buildStoreState({
       setAgentStatus,
       setAgentStatuses,
@@ -439,6 +464,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (callback) => {
           onSetListenerRef.current = callback
+
           return () => {}
         }
       })
@@ -447,6 +473,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     try {
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
+
       if (!onSetListenerRef.current) {
         throw new Error('Expected agentStatus.onSet listener to be registered')
       }
@@ -483,6 +510,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('projects synthetic pane titles across ordered same-pane batch updates', async () => {
     vi.useFakeTimers()
     let storeState: StoreLike
+
     const applyStatusUpdate = (update: AgentStatusUpdate): void => {
       storeState.agentStatusByPaneKey = {
         ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
@@ -493,6 +521,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     }
+
     const setAgentStatus = vi.fn(
       (
         paneKey: string,
@@ -503,11 +532,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
         metadata?: AgentStatusUpdate['metadata']
       ) => applyStatusUpdate({ paneKey, payload, terminalTitle, timing, routing, metadata })
     )
+
     const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
       return updates.map((update) => {
         const existing = (
           storeState.agentStatusByPaneKey as Record<string, { updatedAt?: number } | undefined>
         )[update.paneKey]
+
         if (
           existing?.updatedAt !== undefined &&
           update.timing?.updatedAt !== undefined &&
@@ -515,15 +546,20 @@ describe('useIpcEvents agent status snapshot integration', () => {
         ) {
           return false
         }
+
         applyStatusUpdate(update)
+
         return true
       })
     })
+
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     storeState = buildStoreState({
       setAgentStatus,
       setAgentStatuses,
@@ -560,6 +596,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (callback) => {
           onSetListenerRef.current = callback
+
           return () => {}
         }
       })
@@ -569,9 +606,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
       const onSet = onSetListenerRef.current
+
       if (!onSet) {
         throw new Error('Expected agentStatus.onSet listener to be registered')
       }
+
       const emit = (
         receivedAt: number,
         state: AgentStatusSetData['state'],

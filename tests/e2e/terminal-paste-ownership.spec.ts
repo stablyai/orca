@@ -73,10 +73,12 @@ process.stdin.on('data', (chunk) => {
 function countOccurrences(value: string, needle: string): number {
   let count = 0
   let index = value.indexOf(needle)
+
   while (index !== -1) {
     count += 1
     index = value.indexOf(needle, index + needle.length)
   }
+
   return count
 }
 
@@ -84,49 +86,62 @@ async function rightClickActiveTerminalSurface(page: Page): Promise<void> {
   const point = await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     const surface =
       pane?.container.querySelector<HTMLElement>('.xterm-screen') ??
       pane?.container.querySelector<HTMLElement>('.xterm') ??
       pane?.container
+
     if (!pane || !surface) {
       throw new Error('No active terminal surface to right-click')
     }
+
     pane.terminal.clearSelection()
     const rect = surface.getBoundingClientRect()
+
     if (rect.width <= 0 || rect.height <= 0) {
       throw new Error('Active terminal surface is not measurable')
     }
+
     return {
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2
     }
   })
+
   await page.mouse.click(point.x, point.y, { button: 'right' })
 }
 
 async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ BrowserWindow, ipcMain }) => {
     type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => unknown
+
     const global = globalThis as unknown as {
       __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
     }
+
     const invokeHandlers = (
       ipcMain as unknown as {
         _invokeHandlers?: Map<string, ClipboardReadHandler>
       }
     )._invokeHandlers
+
     const handler = invokeHandlers?.get('clipboard:readText')
+
     if (!invokeHandlers || !handler || global.__orcaOriginalClipboardReadTextHandler) {
       return
     }
+
     global.__orcaOriginalClipboardReadTextHandler = handler
     invokeHandlers.set('clipboard:readText', async (event, ...args) => {
       const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
@@ -145,6 +160,7 @@ async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): 
       )
       // Why: reproduce the focus churn window before the async clipboard read resolves.
       await new Promise((resolve) => setTimeout(resolve, 0))
+
       return global.__orcaOriginalClipboardReadTextHandler!(event, ...args)
     })
   })
@@ -153,14 +169,17 @@ async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): 
 async function restoreClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ ipcMain }) => {
     type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => unknown
+
     const global = globalThis as unknown as {
       __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
     }
+
     const invokeHandlers = (
       ipcMain as unknown as {
         _invokeHandlers?: Map<string, ClipboardReadHandler>
       }
     )._invokeHandlers
+
     if (invokeHandlers && global.__orcaOriginalClipboardReadTextHandler) {
       invokeHandlers.set('clipboard:readText', global.__orcaOriginalClipboardReadTextHandler)
       delete global.__orcaOriginalClipboardReadTextHandler
@@ -223,6 +242,7 @@ test.describe('terminal paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -263,9 +283,11 @@ test.describe('terminal paste ownership', () => {
       expect(countOccurrences(writes, payload), 'transient blur PTY write count').toBe(1)
     } finally {
       await restoreClipboardReadTerminalBlurRepro(electronApp).catch(() => undefined)
+
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -308,6 +330,7 @@ test.describe('terminal paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -328,6 +351,7 @@ test.describe('terminal paste ownership', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
     const sentinel = `ORCA_E2E_MULTILINE_DONE_${runId}`
+
     const payload = [
       `ORCA_E2E_MULTILINE_${runId}`,
       'line with spaces and tabs\tend',
@@ -336,6 +360,7 @@ test.describe('terminal paste ownership', () => {
       'Unicode: caf\u00e9 \u4f60\u597d \u0645\u0631\u062d\u0628\u0627 \ud83d\ude00',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+
     // Why: xterm translates clipboard line endings to terminal Enter bytes;
     // Orca's direct Windows bracketed-paste path must produce the same bytes.
     const terminalText = payload.replace(/\r?\n/g, '\r')
@@ -361,6 +386,7 @@ test.describe('terminal paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -405,6 +431,7 @@ test.describe('terminal paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })

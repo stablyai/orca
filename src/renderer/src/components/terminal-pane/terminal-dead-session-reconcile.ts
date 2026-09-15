@@ -39,17 +39,21 @@ export function shouldReconcileDeadSession(args: {
   snapshotRequestedAt?: number | null
 }): boolean {
   const { ptyId, connectionId, liveSessionIds, ptyBoundAt, snapshotRequestedAt } = args
+
   if (ptyId === null || ptyId === undefined) {
     return false
   }
+
   if (ptyId.startsWith(REMOTE_PTY_ID_PREFIX)) {
     return false
   }
+
   // Why: only local/daemon-backed ids (connectionId null/undefined) are
   // reconcilable; a non-null connectionId means SSH, which is deferred.
   if (connectionId !== null && connectionId !== undefined) {
     return false
   }
+
   // Why: a snapshot requested before this binding existed can't prove it dead
   // (newborn-PTY reconcile race). Omitting either timestamp keeps prior
   // pure-membership behavior (back-compat).
@@ -60,6 +64,7 @@ export function shouldReconcileDeadSession(args: {
   ) {
     return false
   }
+
   return !liveSessionIds.has(ptyId)
 }
 
@@ -73,6 +78,7 @@ export function shouldReconcileMissingSession(args: {
   if (args.isLive !== false) {
     return false
   }
+
   return shouldReconcileDeadSession({
     ptyId: args.ptyId,
     connectionId: args.connectionId,
@@ -89,6 +95,7 @@ export function reconcileMissingSessions(args: {
   // Why: the liveness request time must predate every async response so a
   // stale response cannot close a PTY that bound after the request started.
   const requestedAt = performance.now()
+
   for (const binding of args.bindings) {
     binding.reconcileIfSessionMissing?.(args.hasPty, requestedAt)
   }
@@ -112,13 +119,16 @@ export async function reconcileDeadSessions(args: {
   // Why: capture the request time BEFORE the round-trip so the decision can tell
   // a snapshot that predates a fresh binding from one that postdates it.
   const requestedAt = performance.now()
+
   try {
     sessions = await args.listSessions()
   } catch {
     // Why: a rejected listing is "unknown" — never close a pane on it.
     return
   }
+
   const liveSessionIds = new Set(sessions.map((session) => session.id))
+
   for (const binding of args.bindings) {
     binding.reconcileIfSessionDead?.(liveSessionIds, requestedAt)
   }

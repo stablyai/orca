@@ -40,11 +40,14 @@ async function scanRemoteEntry(
       if (sourceEntry?.isSymlink) {
         return { kind: 'symlink', sizeBytes: 0 }
       }
+
       const stats = await provider.stat(path)
       throwIfWorkspaceSpaceScanAborted(signal)
+
       if (stats.type === 'symlink') {
         return { kind: 'symlink', sizeBytes: stats.size }
       }
+
       return stats.type === 'directory'
         ? { kind: 'directory', sizeBytes: stats.size }
         : { kind: 'file', sizeBytes: stats.size }
@@ -68,16 +71,19 @@ export async function scanRemoteWorkspaceSpaceWorktree(
     if (provider.scanWorkspaceSpace) {
       try {
         const scan = await provider.scanWorkspaceSpace(worktree.path, { signal })
+
         return createScannedWorkspaceSpaceRow(repo, worktree, scannedAt, scan)
       } catch (error) {
         if (isWorkspaceSpaceAbortError(error)) {
           throw new WorkspaceSpaceScanCancelledError()
         }
+
         if (!isWorkspaceSpaceRelayMethodMissing(error)) {
           throw error
         }
       }
     }
+
     const root = await fallbackTraversalLimit(() =>
       scanRemoteEntry(
         worktree.path,
@@ -86,6 +92,7 @@ export async function scanRemoteWorkspaceSpaceWorktree(
         signal
       )
     )
+
     return createScannedWorkspaceSpaceRow(repo, worktree, scannedAt, {
       sizeBytes: root.sizeBytes,
       skippedEntryCount: root.skippedEntryCount,
@@ -95,7 +102,9 @@ export async function scanRemoteWorkspaceSpaceWorktree(
     if (error instanceof WorkspaceSpaceScanCancelledError) {
       throw error
     }
+
     const classified = classifyWorkspaceSpaceError(error)
+
     return createUnavailableWorkspaceSpaceRow(
       repo,
       worktree,

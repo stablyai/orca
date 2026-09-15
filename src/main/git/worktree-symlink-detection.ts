@@ -21,6 +21,7 @@ export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
   // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
   // is, and the traversal check below sees the already-relative form.
   const rel = rawPath.trim().replace(/^[\\/]+/, '')
+
   // Why: split on both separators so a Windows-authored `..\escape` is
   // rejected the same way POSIX `../escape` is; the split catches relative
   // backslash traversal that `.split('/')` would otherwise miss.
@@ -30,6 +31,7 @@ export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
   if (!rel || WINDOWS_DRIVE_DESIGNATOR.test(rel) || rel.split(/[\\/]/).includes('..')) {
     return { safe: false }
   }
+
   return { safe: true, rel }
 }
 
@@ -47,11 +49,14 @@ export async function findExistingWorktreeSymlinkPaths(
   // the Windows main process, where that spelling names nothing.
   const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options) ?? worktreePath
   const symlinkPaths: string[] = []
+
   for (const rawPath of paths) {
     const safePath = getSafeRelativePath(rawPath)
+
     if (!safePath.safe) {
       continue
     }
+
     try {
       if ((await lstat(resolve(hostWorktreePath, safePath.rel))).isSymbolicLink()) {
         symlinkPaths.push(safePath.rel)
@@ -60,5 +65,6 @@ export async function findExistingWorktreeSymlinkPaths(
       // Why: only a positively identified symlink may bypass dirty preflight.
     }
   }
+
   return symlinkPaths
 }

@@ -61,9 +61,11 @@ export function isProviderConfigured(
   if (provider == null || provider.status === 'unavailable') {
     return false
   }
+
   if (provider.status === 'fetching' && !hasUsageData(provider)) {
     return false
   }
+
   return true
 }
 
@@ -90,30 +92,38 @@ export function hasUsageProviderSettingsForProvider(
   if (!settings) {
     return false
   }
+
   if (providerId === 'claude') {
     return (settings.claudeManagedAccounts?.length ?? 0) > 0
   }
+
   if (providerId === 'codex') {
     return (settings.codexManagedAccounts?.length ?? 0) > 0
   }
+
   if (providerId === 'gemini') {
     return settings.geminiCliOAuthEnabled === true
   }
+
   if (providerId === 'opencode-go') {
     return Boolean(settings.opencodeSessionCookie?.trim())
   }
+
   if (providerId === 'antigravity') {
     // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
     // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
     // gate the default-on checked item would pin a permanently dead bar.
     return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
   }
+
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
   }
+
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
   }
+
   return false
 }
 
@@ -138,9 +148,11 @@ export function getVisibleUsageProvider(
   if (isProviderConfigured(provider)) {
     return provider
   }
+
   if (!hasUsageProviderSettingsForProvider(providerId, settings)) {
     return null
   }
+
   return provider ?? createPendingProviderSnapshot(providerId)
 }
 
@@ -153,12 +165,14 @@ export function isUsageEmptyState(
   if (!settings) {
     return false
   }
+
   // Why: system-default Claude/Codex accounts have no persisted account row;
   // their first durable signal is the usage snapshot, so wait for snapshots to
   // settle before teaching the user to connect an account.
   const antigravitySnapshotPending =
     hasUsageProviderSettingsForProvider('antigravity', settings) &&
     isProviderSnapshotPending(providers.antigravity)
+
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
@@ -171,6 +185,7 @@ export function isUsageEmptyState(
   ) {
     return false
   }
+
   return (
     !hasUsageProviderSettings(settings) &&
     !isProviderConfigured(providers.claude) &&

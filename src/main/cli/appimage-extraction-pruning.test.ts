@@ -9,6 +9,7 @@ const publicationRace = vi.hoisted(() => ({ endpointPath: '', replacementTarget:
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     rename: async (source: string, destination: string) => {
@@ -17,6 +18,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         await actual.symlink(publicationRace.replacementTarget, source)
         publicationRace.replacementTarget = ''
       }
+
       return actual.rename(source, destination)
     }
   }
@@ -48,6 +50,7 @@ async function writePayload(rootPath: string, content = '#!/usr/bin/env bash\n')
   const launcherPath = join(rootPath, 'resources', 'bin', 'orca-ide')
   await mkdir(dirname(launcherPath), { recursive: true })
   await writeFile(launcherPath, content, { mode: 0o755 })
+
   return launcherPath
 }
 
@@ -56,6 +59,7 @@ async function makeExtractionFixture() {
   created.push(root)
   const appImagePath = join(root, 'Orca.AppImage')
   await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+
   return { root, appImagePath, cacheRootPath: join(root, 'cache') }
 }
 
@@ -72,11 +76,13 @@ describe('AppImage extraction pruning', () => {
     const keepRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
     const keepKey = basename(keepRoot.rootPath)
     const staleRoot = join(dirname(keepRoot.rootPath), cacheKeyApartFrom(keepKey))
+
     const siblingRoot = join(
       cacheRootPath,
       cacheKeyApartFrom(basename(dirname(keepRoot.rootPath))),
       'd'.repeat(24)
     )
+
     await Promise.all([
       mkdir(keepRoot.rootPath, { recursive: true }),
       mkdir(staleRoot, { recursive: true }),
@@ -93,14 +99,17 @@ describe('AppImage extraction pruning', () => {
   it('a sibling installed endpoint does not displace the owner generation', async () => {
     const { appImagePath, cacheRootPath } = await makeExtractionFixture()
     const ownerRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
+
     const siblingRoot = join(
       dirname(ownerRoot.rootPath),
       cacheKeyApartFrom(basename(ownerRoot.rootPath))
     )
+
     const [ownerLauncher, siblingLauncher] = await Promise.all([
       writePayload(ownerRoot.rootPath, 'owner'),
       writePayload(siblingRoot, 'installed')
     ])
+
     publishAppImageLauncherEndpoint(cacheRootPath, 'installed', siblingLauncher)
 
     await pruneAppImageExtractedRoots(ownerRoot.rootPath)
@@ -117,12 +126,15 @@ describe('AppImage extraction pruning', () => {
     const root = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
     let reportStarted!: (stagingPath: string) => void
     let releaseExtraction!: () => void
+
     const started = new Promise<string>((resolve) => {
       reportStarted = resolve
     })
+
     const release = new Promise<void>((resolve) => {
       releaseExtraction = resolve
     })
+
     const extraction = ensureAppImageExtractedRoot({
       appImagePath,
       cacheRootPath,
@@ -132,6 +144,7 @@ describe('AppImage extraction pruning', () => {
         await writePayload(join(cwd, 'squashfs-root'), '')
       }
     })
+
     const stagingPath = await started
 
     try {
@@ -140,6 +153,7 @@ describe('AppImage extraction pruning', () => {
     } finally {
       releaseExtraction()
     }
+
     await expect(extraction).resolves.toEqual(root)
   })
 
@@ -167,10 +181,12 @@ describe('AppImage extraction pruning', () => {
     const keepRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
     const keepKey = basename(keepRoot.rootPath)
     const recentRoot = join(dirname(keepRoot.rootPath), cacheKeyApartFrom(keepKey))
+
     const staleRoot = join(
       dirname(keepRoot.rootPath),
       cacheKeyApartFrom(keepKey, basename(recentRoot))
     )
+
     const recentMarker = getAppImageActiveExtractionPath(recentRoot)
     const staleMarker = getAppImageActiveExtractionPath(staleRoot)
     await Promise.all([

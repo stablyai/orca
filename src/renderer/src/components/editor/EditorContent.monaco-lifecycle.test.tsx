@@ -31,6 +31,7 @@ const lifecycle = vi.hoisted(() => ({
 vi.mock('@/lib/lazy-with-retry', async () => {
   const React = await import('react')
   const { syncContentOnMount } = await import('./monaco-content-sync')
+
   return {
     lazyWithRetry: (factory: () => Promise<unknown>) => {
       if (factory.toString().includes('/DiffViewer.tsx')) {
@@ -39,31 +40,39 @@ vi.mock('@/lib/lazy-with-retry', async () => {
           /* oxlint-disable react-hooks/exhaustive-deps -- Mount-only by design: a prop-effect would hide a missing outer React remount. */
           React.useEffect(() => {
             lifecycle.events.push(`mount-diff:${props.filePath}`)
+
             return () => {
               lifecycle.events.push(`unmount-diff:${props.filePath}`)
             }
           }, [])
+
           /* oxlint-enable react-hooks/exhaustive-deps */
           return null
         }
       }
+
       if (factory.toString().includes('/IpynbViewer.tsx')) {
         return function MockIpynbViewer(props: (typeof lifecycle.notebookProps)[number]) {
           lifecycle.notebookProps.push(props)
+
           return null
         }
       }
+
       if (factory.toString().includes('/RichMarkdownEditor.tsx')) {
         return function MockRichMarkdownEditor(
           props: (typeof lifecycle.richMarkdownProps)[number]
         ) {
           lifecycle.richMarkdownProps.push(props)
+
           return null
         }
       }
+
       if (!factory.toString().includes('/MonacoEditor.tsx')) {
         return () => null
       }
+
       return function MockRetainedMonaco(props: {
         filePath: string
         content: string
@@ -81,6 +90,7 @@ vi.mock('@/lib/lazy-with-retry', async () => {
             viewStateId: props.viewStateId
           })
           const retained = lifecycle.models.get(props.filePath) ?? { content: '', undo: [] }
+
           const model = {
             getValue: () => retained.content,
             getEOL: () => '\n',
@@ -94,6 +104,7 @@ vi.mock('@/lib/lazy-with-retry', async () => {
               retained.content = operations[0]?.text ?? retained.content
             }
           }
+
           // Why: exercising the real mount reconciler makes outer key ordering
           // observable without replacing Monaco's retained-model semantics.
           syncContentOnMount(
@@ -101,22 +112,26 @@ vi.mock('@/lib/lazy-with-retry', async () => {
               getModel: () => model,
               pushUndoStop: () => {
                 retained.undo.push('unexpected undo stop')
+
                 return true
               }
             } as never,
             props.content
           )
           lifecycle.models.set(props.filePath, retained)
+
           return () => {
             lifecycle.events.push(`unmount:${props.filePath}`)
           }
         }, [])
+
         /* oxlint-enable react-hooks/exhaustive-deps */
         return null
       }
     }
   }
 })
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) =>

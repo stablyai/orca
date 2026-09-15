@@ -21,9 +21,11 @@ describe('mobile new-tab agent loading', () => {
           result: { settings: { defaultTuiAgent: 'codex', disabledTuiAgents: [] } }
         }
       }
+
       if (method === 'preflight.detectAgents') {
         return { ok: true, result: ['claude', 'codex'] }
       }
+
       throw new Error(`unexpected request: ${method}`)
     })
 
@@ -47,13 +49,17 @@ describe('mobile new-tab agent loading', () => {
       if (method === 'settings.get') {
         return { ok: true, result: { settings: {} } }
       }
+
       if (method === 'repo.list') {
         return { ok: true, result: { repos: [{ id: 'repo-1', connectionId: 'ssh-1' }] } }
       }
+
       if (method === 'preflight.detectRemoteAgents') {
         expect(params).toEqual({ connectionId: 'ssh-1' })
+
         return { ok: true, result: ['claude'] }
       }
+
       throw new Error(`unexpected request: ${method}`)
     })
 

@@ -17,10 +17,12 @@ export function createStarNagPromptContext(
 ): StarNagPromptContext {
   const ui = store.getUI()
   const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+
   const agentsSinceBaseline = Math.max(
     0,
     stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
   )
+
   return {
     source,
     mode,

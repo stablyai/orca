@@ -17,17 +17,22 @@ export function createBrowserFindSubscriptions(): {
     subscribedPageCount: () => callbacksByPage.size,
     dispatch: (target) => {
       const findTarget = asBrowserFindTarget(target)
+
       if (!findTarget) {
         return
       }
+
       const callbacksByWorkspace = callbacksByPage.get(findTarget.browserPageId)
+
       if (!callbacksByWorkspace) {
         return
       }
+
       const scoped =
         findTarget.browserWorkspaceId === undefined
           ? [...callbacksByWorkspace.values()]
           : [callbacksByWorkspace.get(findTarget.browserWorkspaceId)]
+
       for (const callbacks of scoped) {
         for (const callback of callbacks ?? []) {
           callback()
@@ -36,23 +41,30 @@ export function createBrowserFindSubscriptions(): {
     },
     subscribe: (source, callback) => {
       let callbacksByWorkspace = callbacksByPage.get(source.browserPageId)
+
       if (!callbacksByWorkspace) {
         callbacksByWorkspace = new Map()
         callbacksByPage.set(source.browserPageId, callbacksByWorkspace)
       }
+
       let callbacks = callbacksByWorkspace.get(source.browserWorkspaceId)
+
       if (!callbacks) {
         callbacks = new Set()
         callbacksByWorkspace.set(source.browserWorkspaceId, callbacks)
       }
+
       callbacks.add(callback)
 
       return () => {
         callbacks.delete(callback)
+
         if (callbacks.size > 0) {
           return
         }
+
         callbacksByWorkspace.delete(source.browserWorkspaceId)
+
         if (callbacksByWorkspace.size === 0) {
           callbacksByPage.delete(source.browserPageId)
         }

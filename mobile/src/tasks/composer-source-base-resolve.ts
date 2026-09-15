@@ -23,6 +23,7 @@ export async function resolveComposerPrBase(args: {
   isCrossRepository?: boolean
 }): Promise<GitHubPrStartPoint> {
   const { client, repoId, prNumber, headRefName, baseRefName, isCrossRepository } = args
+
   const reply = await worktreePrBaseResolve.request(
     client,
     {
@@ -34,11 +35,14 @@ export async function resolveComposerPrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const result = worktreePrBaseResolve.interpret(reply) as GitHubPrStartPoint | { error: string }
+
   if ('error' in result) {
     throw new Error(result.error)
   }
+
   return result
 }
 
@@ -52,6 +56,7 @@ export async function resolveComposerMrBase(args: {
   isCrossRepository?: boolean
 }): Promise<ComposerHostedBase> {
   const { client, repoId, mrIid, sourceBranch, targetBranch, isCrossRepository } = args
+
   const reply = await worktreeMrBaseResolve.request(
     client,
     {
@@ -63,10 +68,13 @@ export async function resolveComposerMrBase(args: {
     },
     { timeoutMs: 30_000 }
   )
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const result = worktreeMrBaseResolve.interpret(reply) as HostedBaseResult
+
   if ('error' in result) {
     throw new Error(result.error)
   }
+
   return result
 }

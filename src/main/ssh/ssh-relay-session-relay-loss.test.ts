@@ -17,9 +17,11 @@ const { muxRequestMock, openConsumerSessionMock, registeredPtyProvider } = vi.ho
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -35,6 +37,7 @@ vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   installSshPtySourceAckPublisher: vi.fn(() => () => {}),
   installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
 }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('')
 }))
@@ -61,11 +64,15 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     onDispose = vi.fn((handler: (reason: string) => void) => {
       if (this.disposed) {
         handler(this.disposeReason ?? 'shutdown')
+
         return () => {}
       }
+
       this.disposeHandlers.push(handler)
+
       return () => {
         const idx = this.disposeHandlers.indexOf(handler)
+
         if (idx !== -1) {
           this.disposeHandlers.splice(idx, 1)
         }
@@ -75,8 +82,10 @@ vi.mock('./ssh-channel-multiplexer', () => ({
       if (this.disposed) {
         return
       }
+
       this.disposed = true
       this.disposeReason = reason
+
       for (const handler of this.disposeHandlers.splice(0)) {
         handler(reason)
       }
@@ -98,14 +107,17 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -118,11 +130,13 @@ vi.mock('../ipc/pty', () => ({
   restorePtyIncarnation: vi.fn(),
   isCurrentPtyExit: vi.fn(() => true)
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -130,6 +144,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 const { registerSshFilesystemProvider, unregisterSshFilesystemProvider } =
   await import('../providers/ssh-filesystem-dispatch')
+
 const { getPtyIdsForConnection } = await import('../ipc/pty')
 
 describe('SshRelaySession relay loss during setup', () => {
@@ -170,15 +185,19 @@ describe('SshRelaySession relay loss during setup', () => {
         failNotifyMethod: string | null
         dispose: (reason: string) => void
       } | null
+
       if (mux && armGraceTimeFailure) {
         mux.failNotifyMethod = SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
       }
+
       if (mux && armProviderRegistrationFailure && method === 'git.listWorktrees') {
         mux.dispose('connection_lost')
         throw new Error('SSH connection lost, reconnecting...')
       }
+
       return []
     })
+
     return { session, onRelayLost, onReady, mockStore }
   }
 
@@ -249,11 +268,14 @@ describe('SshRelaySession relay loss during setup', () => {
           if (method !== 'ports.detect') {
             return []
           }
+
           const mux = session.getMux() as unknown as {
             failNotifyMethod: string | null
             notify: (method: string, params?: unknown) => void
           }
+
           mux.failNotifyMethod = 'rpc.cancel'
+
           return new Promise((_resolve, reject) => {
             options?.signal?.addEventListener(
               'abort',

@@ -19,6 +19,7 @@ class ParentRemovalPool {
   ): Promise<WatcherProcessSubscription> {
     const unsubscribe = vi.fn(async () => undefined)
     this.subscriptions.push({ rootPath, unsubscribe })
+
     return { unsubscribe }
   }
 }
@@ -46,12 +47,15 @@ describe('RelayFilesystemWatchRegistry parent removal', () => {
     async (parent, descendant, sibling) => {
       const pool = new ParentRemovalPool()
       const dispatcher = watchDispatcher()
+
       const registry = new RelayFilesystemWatchRegistry(
         dispatcher as unknown as RelayDispatcher,
         pool
       )
+
       await registry.watch(descendant, context(1), 101)
       await registry.watch(sibling, context(2), 202)
+
       const remove = vi.fn(async () => {
         expect(pool.subscriptions[0].unsubscribe).toHaveBeenCalledOnce()
         expect(pool.subscriptions[1].unsubscribe).not.toHaveBeenCalled()
@@ -71,24 +75,31 @@ describe('RelayFilesystemWatchRegistry parent removal', () => {
   it('waits for a descendant setup and closes its published subscription before removal', async () => {
     const pool = new ParentRemovalPool()
     const dispatcher = watchDispatcher()
+
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool
     )
+
     let releaseSetup: () => void = () => undefined
+
     const setupGate = new Promise<void>((resolve) => {
       releaseSetup = resolve
     })
+
     const subscribe = pool.subscribe.bind(pool)
     vi.spyOn(pool, 'subscribe').mockImplementation(async (...args) => {
       await setupGate
+
       return subscribe(...args)
     })
 
     const watch = registry.watch('/repo/nested', context(1), 101)
+
     const remove = vi.fn(async () => {
       expect(pool.subscriptions[0].unsubscribe).toHaveBeenCalledOnce()
     })
+
     const removal = registry.runWithRemovalFence('/repo', remove)
     await Promise.resolve()
     expect(remove).not.toHaveBeenCalled()
@@ -101,10 +112,12 @@ describe('RelayFilesystemWatchRegistry parent removal', () => {
   it('waits for an already-retiring descendant before removal', async () => {
     const pool = new ParentRemovalPool()
     const dispatcher = watchDispatcher()
+
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool
     )
+
     await registry.watch('/repo/nested', context(1), 101)
     let releaseTeardown: () => void = () => undefined
     pool.subscriptions[0].unsubscribe.mockImplementation(

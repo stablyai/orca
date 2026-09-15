@@ -29,11 +29,14 @@ export function workspaceSessionPartitionHostId(
   sshOwnership: WorkspaceSessionSshOwnership
 ): ExecutionHostId {
   const parsed = parseExecutionHostId(executionHostId)
+
   if (parsed?.kind === 'runtime') {
     return parsed.id
   }
+
   if (parsed?.kind === 'ssh') {
     return sshOwnership === 'host-partition' ? parsed.id : LOCAL_EXECUTION_HOST_ID
   }
+
   return LOCAL_EXECUTION_HOST_ID
 }

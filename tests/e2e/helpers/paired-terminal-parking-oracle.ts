@@ -16,9 +16,13 @@ import { verifyPairedTerminalTitleFanout } from './paired-terminal-title-fanout-
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 
 const TARGET_WORKTREE_COUNT = 6
+
 const MIN_STAGED_BUFFER_CELLS = 1_000_000
+
 const MAX_RETAINED_CELL_FRACTION = 0.45
+
 const MAX_EVICTION_LAG_MS = 500
+
 const MAX_HEAP_GROWTH_BYTES = 16 * 1024 * 1024
 
 type RemoteTab = {
@@ -33,9 +37,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -50,12 +56,14 @@ export async function runPairedTerminalParkingOracle(
   const fixture = createPairedTerminalParkingFixture()
   const createdWorktreeIds: string[] = []
   const remoteTabs: RemoteTab[] = []
+
   try {
     await expect
       .poll(
         () =>
           page.evaluate((capability) => {
             const statuses = window.__store?.getState().runtimeStatusByEnvironmentId.values() ?? []
+
             return Array.from(statuses).some((entry) =>
               entry.status?.capabilities?.includes(capability)
             )
@@ -70,10 +78,12 @@ export async function runPairedTerminalParkingOracle(
       })
     })
     const createdTerminals: Omit<RemoteTab, 'originalPtyId'>[] = []
+
     while (createdTerminals.length < TARGET_WORKTREE_COUNT) {
       const index = createdTerminals.length
       const marker = `PAIR_RETENTION_${index}`
       const suffix = `${Date.now()}-${index}`
+
       const created = await callRuntime<{
         startupTerminal?: { handle?: string; tabId?: string }
         worktree: { id: string }
@@ -85,9 +95,11 @@ export async function runPairedTerminalParkingOracle(
         noParent: true,
         startupCommand: fixture.command(marker)
       })
+
       if (!created.startupTerminal?.handle || !created.startupTerminal.tabId) {
         throw new Error(`Paired retention startup terminal ${index} was not created`)
       }
+
       createdWorktreeIds.push(created.worktree.id)
       createdTerminals.push({
         marker,
@@ -96,6 +108,7 @@ export async function runPairedTerminalParkingOracle(
         worktreeId: created.worktree.id
       })
     }
+
     await expect
       .poll(
         () =>
@@ -133,19 +146,23 @@ export async function runPairedTerminalParkingOracle(
         .toContain(`FILLED:${created.marker}`)
       remoteTabs.push({ ...created, originalPtyId })
     }
+
     await expectHostTerminalsUnmounted(options.hostPage, seed.fallbackWorktreeId, remoteTabs)
 
     const hiddenFloodTokens = await verifyHiddenPairedTerminalOutputSuppression(page, remoteTabs)
     await verifyPairedTerminalTitleFanout(page, remoteTabs)
+
     const baseline = await readPairedRetentionSample(
       page,
       remoteTabs.map((tab) => tab.tabId)
     )
+
     expect(baseline.bufferCells).toBeGreaterThan(MIN_STAGED_BUFFER_CELLS)
 
     const lagProbe = await startRendererLagProbe(page)
     let maxLagMs = Number.POSITIVE_INFINITY
     let lagProbeStopped = false
+
     try {
       await page.evaluate(async () => {
         await window.__store?.getState().updateSettings({ terminalHiddenViewParking: true })
@@ -156,6 +173,7 @@ export async function runPairedTerminalParkingOracle(
             page.evaluate(
               ({ tabIds, worktreeIds }) => {
                 const verdicts = window.__terminalParkingDebug?.worktreeVerdicts() ?? []
+
                 return {
                   forceParked: worktreeIds.map(
                     (id) => verdicts.find((verdict) => verdict.worktreeId === id)?.forceParked
@@ -190,15 +208,19 @@ export async function runPairedTerminalParkingOracle(
       if (!lagProbeStopped) {
         await lagProbe.evaluate((probe) => probe.stop()).catch(() => undefined)
       }
+
       await lagProbe.dispose()
     }
+
     const after = await readPairedRetentionSample(
       page,
       remoteTabs.map((tab) => tab.tabId)
     )
+
     expect(after.bufferCells).toBeLessThanOrEqual(baseline.bufferCells * MAX_RETAINED_CELL_FRACTION)
     expect(after.mountedTargetManagers).toBe(1)
     expect(maxLagMs).toBeLessThan(MAX_EVICTION_LAG_MS)
+
     if (baseline.heapBytes !== null && after.heapBytes !== null) {
       expect(after.heapBytes).toBeLessThanOrEqual(baseline.heapBytes + MAX_HEAP_GROWTH_BYTES)
     }
@@ -207,11 +229,14 @@ export async function runPairedTerminalParkingOracle(
       (tabs) => tabs.find((tab) => !window.__paneManagers?.has(tab.tabId)) ?? null,
       remoteTabs
     )
+
     if (!evicted) {
       throw new Error('Ordinary parking did not unmount a paired terminal')
     }
+
     const hiddenFloodToken =
       hiddenFloodTokens[remoteTabs.findIndex((tab) => tab.tabId === evicted.tabId)]
+
     const parkedMarker = `WHILE_PARKED_${Date.now()}`
     await callRuntime(page, 'terminal.send', {
       terminal: evicted.terminal,
@@ -227,6 +252,7 @@ export async function runPairedTerminalParkingOracle(
             'terminal.read',
             { terminal: evicted.terminal, limit: 1_000 }
           )
+
           return result.terminal.tail.join('\n')
         },
         { timeout: 30_000 }
@@ -246,6 +272,7 @@ export async function runPairedTerminalParkingOracle(
       .poll(
         async () => {
           const content = await getTerminalContent(page, 1_000_000)
+
           return [
             `flood-${hiddenFloodToken}-3999-`,
             `FLOODED:${hiddenFloodToken}`,
@@ -272,9 +299,11 @@ export async function runPairedTerminalParkingOracle(
         () => undefined
       )
     }
+
     await page
       .evaluate((id) => window.__store?.getState().setActiveWorktree(id), seed.fallbackWorktreeId)
       .catch(() => undefined)
+
     for (const worktreeId of createdWorktreeIds.toReversed()) {
       await callRuntime(page, 'worktree.rm', {
         worktree: `id:${worktreeId}`,
@@ -282,6 +311,7 @@ export async function runPairedTerminalParkingOracle(
         runHooks: false
       }).catch(() => undefined)
     }
+
     fixture.dispose()
   }
 }
@@ -294,6 +324,7 @@ async function expectHostTerminalsUnmounted(
   if (!hostPage) {
     return
   }
+
   await expect
     .poll(
       () =>

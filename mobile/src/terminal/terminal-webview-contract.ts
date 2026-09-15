@@ -26,10 +26,12 @@ export function parseTerminalKeyboardAvoidanceMetrics(
   const rows = toNonNegativeInteger(msg.rows)
   const maxRow = Math.max(0, rows - 1)
   const cursorY = Math.min(toNonNegativeInteger(msg.cursorY), maxRow)
+
   const contentBottomRow =
     msg.contentBottomRow === undefined
       ? cursorY
       : Math.min(toNonNegativeInteger(msg.contentBottomRow), maxRow)
+
   return {
     cursorY,
     contentBottomRow,

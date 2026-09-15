@@ -17,6 +17,7 @@ import {
 } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -32,6 +33,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -296,14 +298,17 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     let sawRawSuppressedDuringStop = false
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.stopExact') {
         sawWrappedSuppressedDuringStop = store
           .getState()
           .consumeSuppressedPtyExit('remote:env-1@@terminal-1')
         sawRawSuppressedDuringStop = store.getState().consumeSuppressedPtyExit('terminal-1')
+
         return Promise.resolve({
           id: 'rpc-default',
           ok: true,
@@ -315,6 +320,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-default',
         ok: true,
@@ -476,6 +482,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.stopExact') {
         store.getState().removeAgentStatus('tab-1:live')
+
         return Promise.resolve({
           id: 'rpc-default',
           ok: true,
@@ -483,6 +490,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve(
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
           id: 'rpc-default',
@@ -534,6 +542,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.stopExact') {
         store.getState().removeAgentStatus('tab-1:live')
+
         return Promise.resolve({
           id: 'rpc-default',
           ok: true,
@@ -541,6 +550,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve(
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
           id: 'rpc-default',
@@ -610,6 +620,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           { tabId: 'tab-1', worktreeId: wt },
           { providerSession: { key: 'session_id', id: 'live-session' } }
         )
+
         return Promise.resolve({
           id: 'rpc-default',
           ok: true,
@@ -617,6 +628,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve(
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
           id: 'rpc-default',
@@ -667,12 +679,15 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const wt = 'repo1::/path/wt1'
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.stopExact') {
         return Promise.reject(new Error('stop failed'))
       }
+
       return Promise.resolve({
         id: 'rpc-default',
         ok: true,

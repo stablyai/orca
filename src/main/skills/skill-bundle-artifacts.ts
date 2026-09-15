@@ -18,6 +18,7 @@ export type SkillBundleArtifacts = {
 }
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/)
+
 const snapshotShape = {
   releaseRevision: z.number().int().positive(),
   packageDigest: sha256Schema,
@@ -38,7 +39,9 @@ const snapshotShape = {
     )
     .min(1)
 }
+
 const knownSnapshotSchema = z.object(snapshotShape).strict()
+
 const manifestSchema = z
   .object({
     schemaVersion: z.literal(2),
@@ -53,12 +56,14 @@ const manifestSchema = z
     )
   })
   .strict()
+
 const registrySchema = z
   .object({
     schemaVersion: z.literal(1),
     skills: z.record(z.string().min(1), z.array(knownSnapshotSchema).min(1))
   })
   .strict()
+
 const releaseMappingSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -75,9 +80,11 @@ const releaseMappingSchema = z
 
 function parseArtifact<T>(schema: ZodType<T>, value: unknown, label: string): T {
   const result = schema.safeParse(value)
+
   if (!result.success) {
     throw new Error(`Invalid ${label}: ${result.error.issues[0]?.message ?? 'schema mismatch'}`)
   }
+
   return result.data
 }
 
@@ -89,39 +96,47 @@ export function loadSkillBundleArtifacts(
   resourceRoot = app.isPackaged ? process.resourcesPath : resolve(process.cwd(), 'resources')
 ): Promise<SkillBundleArtifacts> {
   const cached = artifactsByResourceRoot.get(resourceRoot)
+
   if (cached) {
     return cached
   }
+
   const loading = readSkillBundleArtifacts(resourceRoot)
   artifactsByResourceRoot.set(resourceRoot, loading)
   loading.catch(() => {
     artifactsByResourceRoot.delete(resourceRoot)
   })
+
   return loading
 }
 
 async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBundleArtifacts> {
   const bundleRoot = join(resourceRoot, 'skills')
+
   const [manifestValue, registryValue, releaseMappingValue] = await Promise.all([
     readFile(join(bundleRoot, 'current-manifest.json'), 'utf8').then(JSON.parse),
     readFile(join(bundleRoot, 'snapshot-registry.json'), 'utf8').then(JSON.parse),
     readFile(join(bundleRoot, 'release-mapping.json'), 'utf8').then(JSON.parse)
   ])
+
   const manifest: SkillBundleManifest = parseArtifact(
     manifestSchema,
     manifestValue,
     'skill bundle manifest'
   )
+
   const registry: SkillSnapshotRegistry = parseArtifact(
     registrySchema,
     registryValue,
     'skill snapshot registry'
   )
+
   const releaseMapping: SkillReleaseMapping = parseArtifact(
     releaseMappingSchema,
     releaseMappingValue,
     'skill release mapping'
   )
+
   for (const current of manifest.skills) {
     if (
       !registry.skills[current.name]?.some(
@@ -137,11 +152,13 @@ async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBund
   // Why: historical provenance only — the current revision's label is the
   // running build's version, supplied at the inventory boundary, not stored here.
   const releasedAppVersions: Record<string, Record<number, string>> = {}
+
   for (const release of releaseMapping.releases) {
     for (const [name, revision] of Object.entries(release.skills)) {
       if (!registry.skills[name]?.some((snapshot) => snapshot.releaseRevision === revision)) {
         throw new Error(`Unknown released skill revision: ${name}@${revision}`)
       }
+
       releasedAppVersions[name] ??= {}
       releasedAppVersions[name][revision] ??= release.appVersion
     }

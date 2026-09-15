@@ -58,6 +58,7 @@ describe('pr comment audience filtering', () => {
 
   it('applies overrides to counts and filters', () => {
     const overrides = createBotAuthorOverrideSet(['gretelflux'])
+
     const comments = [
       comment({ id: 1, author: 'yasinkavakli' }),
       comment({ id: 2, author: 'gretelflux' }),

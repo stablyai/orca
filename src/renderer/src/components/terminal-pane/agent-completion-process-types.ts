@@ -8,11 +8,13 @@ import type { PendingTitleController } from './agent-completion-pending-title'
 import type { PollCadenceTier } from './agent-completion-poll-cadence'
 
 export type CompletionSource = 'hook' | 'title' | 'process-exit'
+
 export type CompletionDispatch = (
   source: CompletionSource,
   title: string,
   options?: { terminalIdleConfirmed?: boolean; completionIdentity?: LastCompletionIdentity | null }
 ) => boolean
+
 export type ProcessMonitorState = {
   disposed: boolean
   inspectionInFlight: boolean
@@ -27,6 +29,7 @@ export type ProcessMonitorState = {
   lastForegroundAgent: RecognizedAgentProcess | null
   processSession: number
 }
+
 export type ProcessMonitorOptions = {
   options: AgentCompletionCoordinatorOptions
   state: ProcessMonitorState

@@ -70,11 +70,13 @@ export class SshPtyOutputSourceObligations {
     const span = this.toSourceSpan(event, projection)
     const identity = this.sourceIdentity(span)
     const tokenKey = ptySourceDeliveryKey(identity)
+
     if (!this.openedTokens.has(tokenKey)) {
       this.coordinator.open(identity, span.sourceStartSu)
       this.openedTokens.add(tokenKey)
       this.identityByPty.set(this.ptyKey(event), Object.freeze({ appPtyId: event.id, identity }))
     }
+
     return Object.freeze({
       span,
       admission: this.coordinator.reserve(identity, span, [
@@ -131,6 +133,7 @@ export class SshPtyOutputSourceObligations {
       consumer: 'desktop' as const,
       reason
     }
+
     if (this.coordinator.beginTransfer(transition, 'model')) {
       this.coordinator.commitTransfer(transition)
     }
@@ -138,6 +141,7 @@ export class SshPtyOutputSourceObligations {
 
   sealPty(event: SshPtyOutputExitEvent): void {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
+
     if (identity) {
       this.coordinator.seal(identity)
     }
@@ -145,6 +149,7 @@ export class SshPtyOutputSourceObligations {
 
   markExitPublished(event: SshPtyOutputExitEvent): void {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
+
     if (identity) {
       this.coordinator.markExitPublished(identity)
     }
@@ -152,6 +157,7 @@ export class SshPtyOutputSourceObligations {
 
   whenPtyTerminal(event: SshPtyOutputExitEvent): Promise<void> {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
+
     return identity ? this.coordinator.whenTerminal(identity) : Promise.resolve()
   }
 
@@ -160,11 +166,14 @@ export class SshPtyOutputSourceObligations {
     cancel: (request: SshPtySourceCancellationRequest) => Promise<SshPtySourceCancellationProof>
   ): Promise<SshPtySourceCancellationProofCommit | null> {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
+
     if (!identity) {
       return null
     }
+
     const request = this.coordinator.beginExitTimeout(identity)
     const proof = await cancel(request)
+
     return Object.freeze({ identity, proof })
   }
 
@@ -177,10 +186,13 @@ export class SshPtyOutputSourceObligations {
     proof: SshPtySourceCancellationProof
   ): boolean {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
+
     if (!identity) {
       return false
     }
+
     this.coordinator.applyCancellationProof(identity, proof)
+
     return true
   }
 
@@ -189,6 +201,7 @@ export class SshPtyOutputSourceObligations {
     proof: SshPtySourceCancellationProof
   ): void {
     const identity = this.identityByPty.get(this.ptyKey(event))?.identity
+
     if (identity) {
       this.coordinator.applyRecoveryCancellationProof(identity, proof)
     }
@@ -198,11 +211,13 @@ export class SshPtyOutputSourceObligations {
     this.remoteConsumers.closeGeneration(providerGeneration, reason)
     this.coordinator.closeGeneration(providerGeneration, reason)
     const prefix = `${providerGeneration}\0`
+
     for (const key of this.openedTokens) {
       if (key.startsWith(prefix)) {
         this.openedTokens.delete(key)
       }
     }
+
     for (const [key, record] of this.identityByPty) {
       if (record.identity.providerGeneration === providerGeneration) {
         this.identityByPty.delete(key)
@@ -212,10 +227,12 @@ export class SshPtyOutputSourceObligations {
 
   acceptedCheckpoints(providerGeneration: number): readonly SshPtyAcceptedSourceCheckpoint[] {
     const checkpoints: SshPtyAcceptedSourceCheckpoint[] = []
+
     for (const record of this.identityByPty.values()) {
       if (record.identity.providerGeneration !== providerGeneration) {
         continue
       }
+
       checkpoints.push(
         Object.freeze({
           // Why: fence/recovery keys are app pty ids; the bare relay id stays on identity.id.
@@ -229,6 +246,7 @@ export class SshPtyOutputSourceObligations {
         })
       )
     }
+
     return Object.freeze(checkpoints)
   }
 
@@ -290,6 +308,7 @@ export class SshPtyOutputSourceObligations {
 
   private removeIdentity(identity: PtySourceDeliveryIdentity): void {
     this.openedTokens.delete(ptySourceDeliveryKey(identity))
+
     for (const [key, record] of this.identityByPty) {
       if (samePtySourceDelivery(record.identity, identity)) {
         this.identityByPty.delete(key)

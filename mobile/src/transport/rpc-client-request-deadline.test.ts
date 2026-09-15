@@ -36,6 +36,7 @@ class MockWebSocket {
     if (this.readyState === MockWebSocket.CLOSED) {
       return
     }
+
     this.readyState = MockWebSocket.CLOSED
     this.onclose?.()
   })
@@ -61,6 +62,7 @@ class MockWebSocket {
 }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 /** Latest settled state of a request, so a timeout can be observed without
@@ -75,6 +77,7 @@ function track(request: Promise<unknown>): { read: () => string } {
       outcome = error.message
     }
   )
+
   return { read: () => outcome }
 }
 
@@ -101,6 +104,7 @@ describe('mobile rpc-client request deadline', () => {
       { terminal: 't1', text: 'hi' },
       { timeoutMs: 5_000, budgetSpansConnect: true }
     )
+
     const outcome = track(request)
 
     try {
@@ -134,6 +138,7 @@ describe('mobile rpc-client request deadline', () => {
       { dictationId: 'd1' },
       { timeoutMs: 5_000 }
     )
+
     const outcome = track(request)
 
     try {
@@ -163,6 +168,7 @@ describe('mobile rpc-client request deadline', () => {
       { terminal: 't1', text: 'hi' },
       { timeoutMs: 400, budgetSpansConnect: true }
     )
+
     const outcome = track(request)
 
     try {

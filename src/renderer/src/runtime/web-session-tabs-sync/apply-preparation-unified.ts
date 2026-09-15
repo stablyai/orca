@@ -35,6 +35,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     hostGroupIdByTabId,
     targetGroupId
   } = base
+
   const mirroredTerminalUnifiedTabs = mirroredTerminalTabs.map((entry) =>
     buildTerminalUnifiedTab(
       entry.tab,
@@ -43,63 +44,80 @@ export function prepareWebSessionTabsSnapshotUnified(
       entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
     )
   )
+
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
   const mirroredEditorUnifiedTabs = mirroredEditorTabs.map((entry) => entry.unifiedTab)
   const mirroredAgentUnifiedTabs = mirroredAgentTabs.map((entry) => entry.unifiedTab)
+
   const mirroredUnifiedTabs = [
     ...mirroredTerminalUnifiedTabs,
     ...mirroredBrowserUnifiedTabs,
     ...mirroredEditorUnifiedTabs,
     ...mirroredAgentUnifiedTabs
   ]
+
   const nextUnifiedTabs =
     retainedUnifiedTabs.length + mirroredUnifiedTabs.length > 0
       ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
       : null
+
   const validUnifiedTabIds = new Set(nextUnifiedTabs?.map((tab) => tab.id) ?? [])
+
   const activeHostTerminalId =
     terminalSurfaceTabs.find((tab) => tab.id === snapshot.activeTabId)?.id ??
     terminalSurfaceTabs.find((tab) => tab.isActive)?.id ??
     null
+
   const activeHostTerminalParentId =
     terminalSurfaceTabs.find((tab) => tab.id === activeHostTerminalId)?.parentTabId ??
     terminalSurfaceTabs.find((tab) => tab.isActive)?.parentTabId ??
     null
+
   const activeMirroredTerminalId = activeHostTerminalId
     ? toWebTerminalSurfaceTabId(activeHostTerminalParentId ?? activeHostTerminalId)
     : null
+
   const activeHostBrowser =
     readyBrowserTabs.find((tab) => tab.id === snapshot.activeTabId) ??
     readyBrowserTabs.find((tab) => tab.isActive) ??
     null
+
   const activeMirroredBrowser = activeHostBrowser
     ? (mirroredBrowserTabs.find(
         (entry) => entry.remotePageId === activeHostBrowser.browserPageId
       ) ?? null)
     : null
+
   const activeMirroredBrowserTabId = activeMirroredBrowser?.unifiedTab.id ?? null
   const activeMirroredBrowserWorkspaceId = activeMirroredBrowser?.workspace.id ?? null
+
   const activeHostEditor =
     readyEditorTabs.find((tab) => tab.id === snapshot.activeTabId) ??
     readyEditorTabs.find((tab) => tab.isActive) ??
     null
+
   const activeMirroredEditor = activeHostEditor
     ? (mirroredEditorTabs.find((entry) => entry.hostTabId === activeHostEditor.id) ?? null)
     : null
+
   const activeMirroredEditorFileId = activeMirroredEditor?.file.id ?? null
   const activeMirroredEditorTabId = activeMirroredEditor?.unifiedTab.id ?? null
+
   const activeHostAgent =
     snapshot.tabs
       .filter(isAgentSessionTab)
       .find((tab) => tab.id === snapshot.activeTabId || tab.isActive) ?? null
+
   const activeMirroredAgentTabId = activeHostAgent
     ? (mirroredAgentTabs.find((entry) => entry.hostTabId === activeHostAgent.id)?.unifiedTab.id ??
       null)
     : null
+
   const intentMirroredTerminalId =
     navigationIntentTab?.type === 'terminal'
       ? toWebTerminalSurfaceTabId(navigationIntentTab.parentTabId)
       : null
+
   const intentMirroredBrowser =
     navigationIntentTab?.type === 'browser'
       ? (mirroredBrowserTabs.find(
@@ -108,24 +126,29 @@ export function prepareWebSessionTabsSnapshotUnified(
             entry.remotePageId === navigationIntentTab.browserPageId
         ) ?? null)
       : null
+
   const intentMirroredEditor =
     navigationIntentTab?.type === 'markdown' || navigationIntentTab?.type === 'file'
       ? (mirroredEditorTabs.find((entry) => entry.hostTabId === navigationIntentTab.id) ?? null)
       : null
+
   const intentMirroredAgent =
     navigationIntentTab?.type === 'agent-session'
       ? (mirroredAgentTabs.find((entry) => entry.hostTabId === navigationIntentTab.id) ?? null)
       : null
+
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
       ? state.activeTabIdByWorktree[worktreeId]
       : null
+
   // Why: caller intent targets the requested tab even when an older host leaves its own active tab unchanged.
   const intentTerminalId =
     honorSnapshotActiveFocus && navigationIntentTab?.type === 'terminal'
       ? intentMirroredTerminalId
       : null
+
   const nextActiveTerminalId =
     intentTerminalId ??
     currentActiveTerminalStillExists ??
@@ -133,15 +156,18 @@ export function prepareWebSessionTabsSnapshotUnified(
       ? (activeMirroredTerminalId ?? mirroredTerminalTabEntries[0]?.id)
       : mirroredTerminalTabEntries[0]?.id) ??
     null
+
   const currentActiveBrowserStillExists =
     state.activeBrowserTabIdByWorktree[worktreeId] &&
     (nextBrowserTabs ?? []).some((tab) => tab.id === state.activeBrowserTabIdByWorktree[worktreeId])
       ? state.activeBrowserTabIdByWorktree[worktreeId]
       : null
+
   const intentBrowserWorkspaceId =
     honorSnapshotActiveFocus && navigationIntentTab?.type === 'browser'
       ? (intentMirroredBrowser?.workspace.id ?? null)
       : null
+
   const nextActiveBrowserWorkspaceId =
     intentBrowserWorkspaceId ??
     currentActiveBrowserStillExists ??
@@ -149,14 +175,18 @@ export function prepareWebSessionTabsSnapshotUnified(
       ? (activeMirroredBrowserWorkspaceId ?? mirroredBrowserTabs[0]?.workspace.id)
       : mirroredBrowserTabs[0]?.workspace.id) ??
     null
+
   const activeEditorFileIdForWorktree = state.activeFileIdByWorktree[worktreeId]
+
   const currentActiveEditorStillExists =
     activeEditorFileIdForWorktree && nextWorktreeOpenFileIds.has(activeEditorFileIdForWorktree)
       ? activeEditorFileIdForWorktree
       : null
+
   const intentEditorFileId = honorSnapshotActiveFocus
     ? (intentMirroredEditor?.file.id ?? null)
     : null
+
   const nextActiveEditorFileId =
     intentEditorFileId ??
     currentActiveEditorStillExists ??
@@ -164,11 +194,13 @@ export function prepareWebSessionTabsSnapshotUnified(
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
       : mirroredEditorTabs[0]?.file.id) ??
     null
+
   const currentVisibleUnifiedTabId = resolveWebSessionVisibleTabId(
     state,
     worktreeId,
     nextUnifiedTabs ?? []
   )
+
   const currentVisibleStructuredTabId =
     currentVisibleUnifiedTabId &&
     nextUnifiedTabs?.find(
@@ -176,7 +208,9 @@ export function prepareWebSessionTabsSnapshotUnified(
     )
       ? currentVisibleUnifiedTabId
       : null
+
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
   // Why: Open Preview to the Side can activate an empty reserved group before the host
   // browser lands. A snapshot that still has the host terminal active must not treat
   // that emptiness as a terminal focus change.
@@ -186,6 +220,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId: activeGroupId })
       ? resolveWebSessionSiblingVisibleTabId(state, worktreeId, nextUnifiedTabs ?? [])
       : null
+
   // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
     ? navigationIntentTab?.type === 'browser'
@@ -198,6 +233,7 @@ export function prepareWebSessionTabsSnapshotUnified(
             ? (intentMirroredEditor?.unifiedTab.id ?? null)
             : null
     : null
+
   const nextActiveUnifiedTabId =
     intentUnifiedTabId ??
     currentVisibleUnifiedTabId ??
@@ -215,7 +251,9 @@ export function prepareWebSessionTabsSnapshotUnified(
             state.activeTabIdByWorktree[worktreeId] ??
             nextActiveTerminalId)
           : nextActiveTerminalId)
+
   const mirroredUnifiedIds = new Set(mirroredUnifiedTabs.map((tab) => tab.id))
+
   const hostToLocalTabId = buildHostToLocalTabIdMap({
     terminalSurfaces: terminalSurfaceTabs,
     terminalTabs: mirroredTerminalTabEntries,
@@ -223,6 +261,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     editorTabs: mirroredEditorTabs,
     agentTabs: mirroredAgentTabs
   })
+
   updateHostSessionTabIdMappings({
     environmentId,
     worktreeId,

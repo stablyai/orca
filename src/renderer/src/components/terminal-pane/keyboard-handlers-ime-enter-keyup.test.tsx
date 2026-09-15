@@ -20,11 +20,13 @@ function keyboardEvent(
     cancelable: true,
     ...overrides
   })
+
   Object.defineProperties(event, {
     isComposing: { value: overrides.isComposing ?? false },
     keyCode: { value: overrides.keyCode },
     timeStamp: { value: overrides.timeStamp }
   })
+
   return event
 }
 
@@ -46,10 +48,12 @@ function createHarness(options: { staleActivePane?: boolean } = {}): {
   document.body.append(scope)
 
   const sendInput = vi.fn(() => true)
+
   const transport = {
     getPtyId: () => 'pty-1',
     sendInput
   } as unknown as PtyTransport
+
   const pane = {
     id: options.staleActivePane ? 2 : 1,
     leafId: '00000000-0000-4000-8000-000000000001',
@@ -59,6 +63,7 @@ function createHarness(options: { staleActivePane?: boolean } = {}): {
       getSelection: vi.fn(() => '')
     }
   }
+
   const stalePane = {
     id: 1,
     leafId: '00000000-0000-4000-8000-000000000002',
@@ -68,22 +73,27 @@ function createHarness(options: { staleActivePane?: boolean } = {}): {
       getSelection: vi.fn(() => '')
     }
   }
+
   let activePane = options.staleActivePane ? stalePane : pane
   const panes = options.staleActivePane ? [stalePane, pane] : [pane]
+
   const setActivePane = vi.fn((paneId: number) => {
     activePane = panes.find((candidate) => candidate.id === paneId) ?? activePane
   })
+
   const manager = {
     getActivePane: () => activePane,
     getPanes: () => panes,
     setActivePane
   } as unknown as PaneManager
+
   const route = installTerminalImeCompositionRoute({
     terminalElement,
     terminal: { input: vi.fn() },
     capturedTransport: transport,
     getCurrentTransport: () => transport
   })
+
   const deps: KeyboardHandlersDeps = {
     tabId: 'tab-1',
     worktreeId: 'worktree-1',
@@ -110,6 +120,7 @@ function createHarness(options: { staleActivePane?: boolean } = {}): {
     searchStateRef: { current: { query: '', caseSensitive: false, regex: false } },
     macOptionAsAltRef: { current: 'false' }
   }
+
   return {
     deps,
     sendInput,
@@ -261,6 +272,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
         shiftKey: true
       })
     )
+
     for (const timeStamp of [30, 40]) {
       harness.terminalInput.dispatchEvent(
         keyboardEvent('keyup', {
@@ -272,6 +284,7 @@ describe('Windows IME Enter-keyup press-time evidence', () => {
         })
       )
     }
+
     vi.runAllTimers()
 
     expect(harness.sendInput).not.toHaveBeenCalled()

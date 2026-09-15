@@ -57,6 +57,7 @@ export function DiffSectionItem({
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+
   // Why: subscribe to the raw comments array on the worktree (reference-
   // stable across unrelated store updates) and filter by filePath inside a
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
@@ -64,17 +65,21 @@ export function DiffSectionItem({
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
+
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
   )
+
   const language = detectLanguage(section.path)
   const isEditable = section.area === 'unstaged'
+
   const modelPathBase = useMemo(
     () =>
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
     [section.contentGeneration, section.key, worktreeId]
   )
+
   const diffEditorFontSize = computeDiffEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
@@ -84,6 +89,7 @@ export function DiffSectionItem({
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const sectionBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
@@ -91,6 +97,7 @@ export function DiffSectionItem({
     left?: number
     lineHeight: number
   } | null>(null)
+
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
   const { disposeDiffModels, setSectionRootNode } = useDiffSectionModelLifecycle({
@@ -105,6 +112,7 @@ export function DiffSectionItem({
     if (!scrollToDiffCommentId) {
       return null
     }
+
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments])
 
@@ -139,21 +147,27 @@ export function DiffSectionItem({
     if (!modifiedEditor || !popover) {
       return
     }
+
     const update = (): void => {
       const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
       const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
+
       if (top == null) {
         setPopover(null)
+
         return
       }
+
       const left = getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current)
       setPopover((prev) =>
         prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
       )
     }
+
     const scrollSub = modifiedEditor.onDidScrollChange(update)
     const contentSub = modifiedEditor.onDidContentSizeChange(update)
     const layoutSub = modifiedEditor.onDidLayoutChange(update)
+
     return () => {
       scrollSub.dispose()
       contentSub.dispose()
@@ -167,11 +181,14 @@ export function DiffSectionItem({
 
   useEffect(() => {
     const diffEditor = diffEditorRef.current
+
     if (!diffEditor) {
       return
     }
+
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+
     return () => {
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
@@ -182,6 +199,7 @@ export function DiffSectionItem({
     if (!popover) {
       return
     }
+
     const submitted = await submitDiffSectionComment({
       addDiffComment,
       body,
@@ -190,6 +208,7 @@ export function DiffSectionItem({
       section,
       worktreeId
     })
+
     if (submitted) {
       setPopover(null)
     }
@@ -218,34 +237,42 @@ export function DiffSectionItem({
     // full-file height, making virtualized combined diffs jump as rows remount.
     let diffLayoutReady = false
     let pendingHeightFrame: number | null = null
+
     const updateHeight = (): void => {
       const contentHeight = editor.getModifiedEditor().getContentHeight()
       setSectionHeights((prev) => {
         if (prev[index] === contentHeight) {
           return prev
         }
+
         return { ...prev, [index]: contentHeight }
       })
     }
+
     const requestHeightUpdate = (): void => {
       if (pendingHeightFrame !== null) {
         return
       }
+
       pendingHeightFrame = window.requestAnimationFrame(() => {
         pendingHeightFrame = null
         updateHeight()
       })
     }
+
     const markDiffLayoutReady = (): void => {
       diffLayoutReady = true
       requestHeightUpdate()
     }
+
     const contentSizeSub = modified.onDidContentSizeChange(() => {
       if (diffLayoutReady) {
         requestHeightUpdate()
       }
     })
+
     const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
+
     if (editor.getLineChanges() !== null) {
       markDiffLayoutReady()
     }
@@ -259,16 +286,20 @@ export function DiffSectionItem({
     modified.onDidDispose(() => {
       contentSizeSub.dispose()
       diffUpdateSub.dispose()
+
       if (pendingHeightFrame !== null) {
         window.cancelAnimationFrame(pendingHeightFrame)
         pendingHeightFrame = null
       }
+
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null
+
       if (modifiedEditorsRef.current.get(index) === modified) {
         modifiedEditorsRef.current.delete(index)
       }
+
       setModifiedEditor(null)
       setPopover(null)
     })
@@ -279,15 +310,19 @@ export function DiffSectionItem({
 
     modifiedEditorsRef.current.set(index, modified)
     const original = editor.getOriginalEditor()
+
     const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
       handleSectionSaveRef.current(index)
     )
+
     const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
     const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
+
     const modelContentSub = modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
       setSections((prev) => {
         let changed = false
+
         const next = prev.map((s, i) => {
           if (i !== index) {
             return s
@@ -295,12 +330,15 @@ export function DiffSectionItem({
 
           const savedModifiedContent =
             s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
+
           const dirty = current !== savedModifiedContent
+
           if (s.modifiedContent === current && s.dirty === dirty) {
             return s
           }
 
           changed = true
+
           // Why: virtualized rows unmount when scrolled away, so the draft must
           // live in section state instead of only in Monaco's mounted model.
           return {
@@ -314,9 +352,11 @@ export function DiffSectionItem({
             })
           }
         })
+
         return changed ? next : prev
       })
     })
+
     modified.onDidDispose(() => {
       // Why: editable diff sections own both panes' shortcut bridges and the
       // model subscription for the lifetime of this Monaco diff instance.

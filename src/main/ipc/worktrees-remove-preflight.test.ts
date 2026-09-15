@@ -20,83 +20,107 @@ import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -108,6 +132,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('fails dirty non-force deletes before PTY teardown', async () => {
     mockKnownFeatureWorktree()
+
     const repoWithConfiguredRegularFile = {
       id: 'repo-1',
       path: '/workspace/repo',
@@ -116,6 +141,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       symlinkPaths: ['scratch.txt']
     }
+
     store.getRepo.mockReturnValue(repoWithConfiguredRegularFile)
     store.getRepos.mockReturnValue([repoWithConfiguredRegularFile])
     getEffectiveHooksMock.mockReturnValue(null)
@@ -204,11 +230,13 @@ describe('registerWorktreeHandlers', () => {
 
   it('rechecks a local Git lock after the archive hook before teardown', async () => {
     const unlockedWorktrees = mockKnownFeatureWorktree()
+
     const lockedWorktrees = unlockedWorktrees.map((worktree) =>
       worktree.path === '/workspace/feature-wt'
         ? { ...worktree, locked: true, lockReason: 'locked during archive' }
         : worktree
     )
+
     listWorktreesMock
       .mockResolvedValueOnce(unlockedWorktrees)
       .mockResolvedValueOnce(lockedWorktrees)
@@ -297,6 +325,7 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: null
     }
+
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     const removeWorktree = vi.fn()

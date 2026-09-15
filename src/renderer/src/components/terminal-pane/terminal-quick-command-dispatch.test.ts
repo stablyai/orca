@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
+
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 
 function createPane() {

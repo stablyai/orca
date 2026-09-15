@@ -38,18 +38,24 @@ const PROBE_BUDGET_MS = 5_000
 
 /** Raw S-1-15-2-* means icacls could not resolve it — locale-independent. */
 const RAW_PACKAGE_SID = /\bS-1-15-2-[0-9-]+\b/i
+
 /** ALL RESTRICTED APPLICATION PACKAGES: the grant the reproduced remedy added. */
 const RESTRICTED_PACKAGES_SID = 's-1-15-2-2'
+
 const WELL_KNOWN_PACKAGE_SIDS = new Set(['s-1-15-2-1', RESTRICTED_PACKAGES_SID])
+
 // icacls localizes these; the raw SID form is never printed for them. Orphan
 // detection stays SID-form and locale-independent, but this check is not — so we
 // report whether the output looked English at all, making a locale-induced
 // false positive recognizable instead of silent.
 const WELL_KNOWN_PACKAGE_NAMES = /ALL (RESTRICTED )?APPLICATION PACKAGES/i
+
 const RESTRICTED_PACKAGE_NAME = /ALL RESTRICTED APPLICATION PACKAGES/i
+
 // Not BUILTIN: fr-FR and es-ES print it verbatim while localizing the package
 // names, so it is evidence of nothing. SYSTEM's ACE is on every install tree.
 const ENGLISH_PRINCIPAL = /\b(NT AUTHORITY|APPLICATION PACKAGE AUTHORITY)\b/i
+
 // Why: an ACE that denies, or only propagates to children, grants nothing on this
 // object — so it cannot satisfy an orphan the way the reproduced fix did.
 const NON_GRANTING_FLAGS = /\((?:DENY|IO)\)/i
@@ -80,20 +86,25 @@ function readDacl(spawnFn: typeof spawn, target: string, deadlineMs: number): Pr
       stdio: ['ignore', 'pipe', 'ignore'],
       windowsHide: true
     })
+
     let out = ''
     let settled = false
+
     const settle = (value: string): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       resolve(value)
     }
+
     const timer = setTimeout(() => {
       child.kill()
       settle('')
     }, deadlineMs)
+
     timer.unref?.()
     child.stdout?.on('data', (chunk: Buffer) => {
       out += chunk.toString('utf-8')
@@ -110,33 +121,43 @@ function collectAclFacts(daclOutput: string): AclFacts {
   let hasWellKnownPackageGrant = false
   let hasRestrictedPackageGrant = false
   let sawEnglishPrincipal = false
+
   for (const line of daclOutput.split(/\r?\n/)) {
     if (ENGLISH_PRINCIPAL.test(line)) {
       sawEnglishPrincipal = true
     }
+
     // icacls glues the echoed path onto the first principal with no separator, so
     // match the principal:(flags) tail rather than trying to split the line.
     const ace = /([^\s:][^:]*):(\([^\s]*\))\s*$/.exec(line.trim())
+
     if (!ace) {
       continue
     }
+
     const [, principal, flags] = ace
     const rawSid = RAW_PACKAGE_SID.exec(principal)?.[0]
     const sid = rawSid?.toLowerCase()
+
     if (rawSid && !WELL_KNOWN_PACKAGE_SIDS.has(rawSid.toLowerCase())) {
       orphanPackageSids.push(rawSid)
       continue
     }
+
     const isWellKnown = sid !== undefined || WELL_KNOWN_PACKAGE_NAMES.test(principal)
+
     if (!isWellKnown || NON_GRANTING_FLAGS.test(flags)) {
       continue
     }
+
     hasWellKnownPackageGrant = true
+
     // Reported, never the verdict: narrows which grant is present for triage.
     if (sid === RESTRICTED_PACKAGES_SID || (!sid && RESTRICTED_PACKAGE_NAME.test(principal))) {
       hasRestrictedPackageGrant = true
     }
   }
+
   return {
     orphanPackageSids,
     hasWellKnownPackageGrant,
@@ -147,33 +168,39 @@ function collectAclFacts(daclOutput: string): AclFacts {
 
 function resolveTargets(installDir: string, fileExists: (path: string) => boolean): string[] {
   const moduleFile = MODULE_SHORTLIST.map((name) => join(installDir, name)).find(fileExists)
+
   return moduleFile ? [installDir, moduleFile] : [installDir]
 }
 
 async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void> {
   const record = options.recordBreadcrumb ?? recordDurableCrashBreadcrumb
   let data: CrashReportBreadcrumbData
+
   try {
     const installDir = options.installDir ?? dirname(process.execPath)
     const targets = resolveTargets(installDir, options.fileExists ?? existsSync)
     const spawnFn = options.spawnFn ?? spawn
     const startedAt = Date.now()
     const outputs: string[] = []
+
     for (const target of targets) {
       const remaining = PROBE_BUDGET_MS - (Date.now() - startedAt)
       // Why one shared budget: two targets must never cost two full timeouts.
       outputs.push(remaining > 0 ? await readDacl(spawnFn, target, remaining) : '')
     }
+
     const facts = outputs.map(collectAclFacts)
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
     const hasRestrictedPackageGrant = facts.some((f) => f.hasRestrictedPackageGrant)
+
     // Why per target: a grant on the directory does not grant on the module file,
     // and the reproduced failure is a per-file content read. Merging would let a
     // grant on one target mask its absence on the other.
     const poisoned = facts.some(
       (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
     )
+
     data = outputs.every((out) => out === '')
       ? { status: 'failed', reason: 'all-targets-unreadable' }
       : {
@@ -195,6 +222,7 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
   } catch (error) {
     data = { status: 'failed', reason: sanitizeCrashReportString(`probe: ${String(error)}`, 200) }
   }
+
   record(WINDOWS_INSTALL_DIR_ACL_BREADCRUMB, data)
   options.onDone?.(data)
 }
@@ -219,10 +247,13 @@ export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOpti
   if ((options.platform ?? process.platform) !== 'win32' || options.isServeMode === true) {
     return false
   }
+
   if (probeStarted) {
     return false
   }
+
   probeStarted = true
+
   // Why the try: this runs inline in openMainWindow, so anything thrown here
   // propagates into window creation. A diagnostic must never be able to do that.
   try {
@@ -232,5 +263,6 @@ export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOpti
   } catch {
     // Nothing left to report to that would not throw again.
   }
+
   return true
 }

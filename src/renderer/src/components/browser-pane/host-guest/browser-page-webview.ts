@@ -43,15 +43,20 @@ export function ensureBrowserPageWebview({
     } else {
       void destroyPersistentWebview(browserTabId)
     }
+
     webview = undefined
     const refreshedContainer = resolveContainer()
+
     if (!refreshedContainer) {
       return null
     }
+
     activeContainer = refreshedContainer
   }
+
   if (webview) {
     setBrowserPageWebviewInputLock(webview, inputLocked)
+
     return { container: activeContainer, created, webview }
   }
 

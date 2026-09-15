@@ -41,12 +41,15 @@ function remoteActionErrorMatchesSettledConflictOperation(
   if (kind === 'rebase' || kind === 'abort_rebase') {
     return operation === 'rebase'
   }
+
   if (kind === 'abort_merge') {
     return operation === 'merge'
   }
+
   if (kind === 'pull' || kind === 'sync') {
     return operation === 'merge' || operation === 'rebase'
   }
+
   return false
 }
 
@@ -60,12 +63,15 @@ export function clearRemoteActionErrorsForCompletedConflictOperations({
   currentConflictOperations: Record<string, GitConflictOperation>
 }): Record<string, SourceControlActionError | null> {
   let next: Record<string, SourceControlActionError | null> | null = null
+
   for (const [worktreeId, error] of Object.entries(remoteActionErrors)) {
     if (!error) {
       continue
     }
+
     const previousOperation = previousConflictOperations[worktreeId] ?? 'unknown'
     const currentOperation = currentConflictOperations[worktreeId] ?? 'unknown'
+
     if (
       previousOperation === 'unknown' ||
       currentOperation !== 'unknown' ||
@@ -73,8 +79,10 @@ export function clearRemoteActionErrorsForCompletedConflictOperations({
     ) {
       continue
     }
+
     next ??= { ...remoteActionErrors }
     next[worktreeId] = null
   }
+
   return next ?? remoteActionErrors
 }

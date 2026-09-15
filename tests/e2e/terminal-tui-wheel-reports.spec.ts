@@ -19,6 +19,7 @@ type TimedWheelReportSample = WheelReportSample & {
 }
 
 const PHYSICAL_MOUSE_WHEEL_DELTA = -120
+
 const VISIBLE_TUI_FIXTURE_PATH = path.join(
   process.cwd(),
   'tests/e2e/fixtures/visible-tui-scroll-fixture.cjs'
@@ -32,36 +33,44 @@ async function probeSmallMouseWheelReports(
     async ({ tickCount, physicalMouseWheelDelta }) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane?.terminal.element) {
         throw new Error('Active terminal pane unavailable')
       }
 
       const reports: string[] = []
       const disposable = pane.terminal.onData((data) => reports.push(data))
+
       try {
         await new Promise<void>((resolve) => pane.terminal.write('\x1b[?1003h\x1b[?1006h', resolve))
         await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+
         if (!pane.terminal.element.classList.contains('enable-mouse-events')) {
           throw new Error('Mouse reporting mode did not activate')
         }
 
         const screen = pane.terminal.element.querySelector<HTMLElement>('.xterm-screen')
+
         if (!screen) {
           throw new Error('Active terminal screen unavailable')
         }
 
         const rect = screen.getBoundingClientRect()
+
         const cellHeight =
           pane.terminal._core?._renderService?.dimensions?.css?.cell?.height ??
           rect.height / pane.terminal.rows
+
         const scrollSensitivity = Number(pane.terminal.options.scrollSensitivity ?? 1)
         // Why: this is a notched mouse wheel event that Chromium can surface as a
         // small pixel delta; xterm's <50px damping accumulates it for four ticks.
@@ -70,6 +79,7 @@ async function probeSmallMouseWheelReports(
 
         for (let i = 0; i < tickCount; i += 1) {
           const before = reports.length
+
           const event = new WheelEvent('wheel', {
             bubbles: true,
             cancelable: true,
@@ -78,6 +88,7 @@ async function probeSmallMouseWheelReports(
             deltaMode: WheelEvent.DOM_DELTA_PIXEL,
             deltaY
           })
+
           Object.defineProperty(event, 'wheelDeltaY', {
             configurable: true,
             value: physicalMouseWheelDelta
@@ -124,36 +135,44 @@ async function probeTimedSmallMouseWheelReports(
     async ({ drainWaitMs, intervalMs, physicalMouseWheelDelta, tickCount }) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane?.terminal.element) {
         throw new Error('Active terminal pane unavailable')
       }
 
       const reports: string[] = []
       const disposable = pane.terminal.onData((data) => reports.push(data))
+
       try {
         await new Promise<void>((resolve) => pane.terminal.write('\x1b[?1003h\x1b[?1006h', resolve))
         await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+
         if (!pane.terminal.element.classList.contains('enable-mouse-events')) {
           throw new Error('Mouse reporting mode did not activate')
         }
 
         const screen = pane.terminal.element.querySelector<HTMLElement>('.xterm-screen')
+
         if (!screen) {
           throw new Error('Active terminal screen unavailable')
         }
 
         const rect = screen.getBoundingClientRect()
+
         const cellHeight =
           pane.terminal._core?._renderService?.dimensions?.css?.cell?.height ??
           rect.height / pane.terminal.rows
+
         const scrollSensitivity = Number(pane.terminal.options.scrollSensitivity ?? 1)
         // Why: this is a notched mouse wheel event that Chromium can surface as a
         // small pixel delta; xterm's <50px damping accumulates it for four ticks.
@@ -163,6 +182,7 @@ async function probeTimedSmallMouseWheelReports(
 
         for (let i = 0; i < tickCount; i += 1) {
           const before = reports.length
+
           const event = new WheelEvent('wheel', {
             bubbles: true,
             cancelable: true,
@@ -171,6 +191,7 @@ async function probeTimedSmallMouseWheelReports(
             deltaMode: WheelEvent.DOM_DELTA_PIXEL,
             deltaY
           })
+
           Object.defineProperty(event, 'wheelDeltaY', {
             configurable: true,
             value: physicalMouseWheelDelta
@@ -212,14 +233,17 @@ async function readVisibleTuiOffset(page: Page): Promise<number | null> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane?.terminal) {
       return null
     }
@@ -227,10 +251,12 @@ async function readVisibleTuiOffset(page: Page): Promise<number | null> {
     for (let row = 0; row < pane.terminal.rows; row += 1) {
       const text = pane.terminal.buffer.active.getLine(row)?.translateToString(true) ?? ''
       const match = /TUI_SCROLL_ROW_(\d+)/.exec(text)
+
       if (match) {
         return Number(match[1])
       }
     }
+
     return null
   })
 }
@@ -245,23 +271,29 @@ async function dispatchTuiWheel(
   await page.evaluate(({ deltaY, wheelDeltaY }) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane?.terminal.element) {
       throw new Error('Active terminal pane unavailable')
     }
 
     const screen = pane.terminal.element.querySelector<HTMLElement>('.xterm-screen')
+
     if (!screen) {
       throw new Error('Active terminal screen unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
+
     const event = new WheelEvent('wheel', {
       bubbles: true,
       cancelable: true,
@@ -270,6 +302,7 @@ async function dispatchTuiWheel(
       deltaMode: WheelEvent.DOM_DELTA_PIXEL,
       deltaY
     })
+
     if (wheelDeltaY !== undefined) {
       Object.defineProperty(event, 'wheelDeltaY', {
         configurable: true,
@@ -280,6 +313,7 @@ async function dispatchTuiWheel(
         value: wheelDeltaY
       })
     }
+
     pane.terminal.element.dispatchEvent(event)
   }, options)
 }
@@ -311,12 +345,15 @@ test.describe('terminal TUI wheel reports', () => {
   }) => {
     await electronApp.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0]
+
       if (!win) {
         throw new Error('No BrowserWindow available')
       }
+
       if (win.isMinimized()) {
         win.restore()
       }
+
       win.show()
       win.focus()
       win.setFullScreen(true)
@@ -362,18 +399,22 @@ test.describe('terminal TUI wheel reports', () => {
     const cellHeight = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
       const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
       if (!pane?.terminal || !screen) {
         throw new Error('Active terminal screen unavailable')
       }
+
       return screen.getBoundingClientRect().height / pane.terminal.rows
     })
 
@@ -404,7 +445,9 @@ test.describe('terminal TUI wheel reports', () => {
       intervalMs: 220,
       ticks: 5
     })
+
     await orcaPage.waitForTimeout(220)
+
     const paced = await probeTimedSmallMouseWheelReports(orcaPage, {
       drainWaitMs: 220,
       intervalMs: 80,

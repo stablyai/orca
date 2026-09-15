@@ -17,6 +17,7 @@ vi.mock('./source-control-preflight-card-status', () => ({
     refresh: mocks.refresh
   })
 }))
+
 vi.mock('./bitbucket-credentials-dialog', () => ({
   BitbucketCredentialsDialog: ({ open, initialEmail }: { open: boolean; initialEmail?: string }) =>
     open ? <div>Credential dialog open {initialEmail}</div> : null
@@ -27,6 +28,7 @@ import { BitbucketIntegrationCard } from './bitbucket-integration-card'
 const LOAD_FAILED_TEXT = 'Could not check for a saved Bitbucket credential.'
 
 let container: HTMLDivElement
+
 let root: Root
 
 async function renderCard(): Promise<void> {
@@ -42,9 +44,11 @@ function recheckButton(): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find(
     (candidate) => candidate.textContent === 'Re-check'
   )
+
   if (!button) {
     throw new Error('Re-check button not rendered')
   }
+
   return button
 }
 

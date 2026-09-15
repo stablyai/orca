@@ -98,6 +98,7 @@ describe('nested repo import target resolution', () => {
   it('uses the SSH provider worktree list for remote import targets', async () => {
     const mainPath = join('/srv', 'source', 'demo')
     const selectedPath = join('/srv', 'paseo', 'demo', 'brash-binder')
+
     const gitProvider = {
       listWorktrees: vi
         .fn()

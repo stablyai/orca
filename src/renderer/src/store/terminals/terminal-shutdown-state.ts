@@ -46,41 +46,50 @@ export function commitTerminalShutdownState({
             clearTransientTerminalState(tab, index)
           )
         }
+
     // Why copy-on-write everywhere below: a worktree whose panes already exited hits
     // this with nothing to clear, and unconditional spreads then hand every map a new
     // identity for no data change. ptyIdsByTabId is the costly one — six components
     // select it whole, and selectLivePtyIdsForWorktree memoizes per sidebar card on
     // its identity, so churning it rebuilds that record once per card.
     const ptyIdsByTabId = copyOnWriteRecord(state.ptyIdsByTabId)
+
     for (const tab of tabs) {
       // Why `!== undefined`: an absent key is not an empty array, and the spread this
       // replaces created the key. Only an already-empty entry can be skipped.
       const current = state.ptyIdsByTabId[tab.id]
+
       if (current === undefined || current.length > 0) {
         ptyIdsByTabId.set(tab.id, [])
       }
     }
+
     const suppressedPtyExitIds = copyOnWriteRecord(state.suppressedPtyExitIds)
     const pendingPtyShutdownIds = copyOnWriteRecord(state.pendingPtyShutdownIds)
     const pendingCodexPaneRestartIds = copyOnWriteRecord(state.pendingCodexPaneRestartIds)
     const codexRestartNoticeByPtyId = copyOnWriteRecord(state.codexRestartNoticeByPtyId)
+
     for (const ptyId of exitGuardPtyIds) {
       if (state.suppressedPtyExitIds[ptyId] !== true) {
         suppressedPtyExitIds.set(ptyId, true)
       }
+
       // An absent owner count meant `delete` of a missing key, which changed nothing.
       if (ptyId in state.pendingPtyShutdownIds) {
         const remainingOwners = (state.pendingPtyShutdownIds[ptyId] ?? 0) - 1
+
         if (remainingOwners > 0) {
           pendingPtyShutdownIds.set(ptyId, remainingOwners)
         } else {
           pendingPtyShutdownIds.delete(ptyId)
         }
       }
+
       // Sleeping terminals retain restart intent, but a wake can receive a different live PTY id.
       if (!keepIdentifiers) {
         pendingCodexPaneRestartIds.delete(ptyId)
       }
+
       codexRestartNoticeByPtyId.delete(ptyId)
     }
 
@@ -99,25 +108,30 @@ export function commitTerminalShutdownState({
       pendingIssueCommandSplitByTabId.delete(tab.id)
       unreadTerminalTabs.delete(tab.id)
       const panePrefix = `${tab.id}:`
+
       for (const paneKey of Object.keys(state.unreadTerminalPanes)) {
         if (paneKey.startsWith(panePrefix)) {
           unreadTerminalPanes.delete(paneKey)
         }
       }
+
       for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
         if (paneKey.startsWith(panePrefix)) {
           unreadAgentCompletionPanes.delete(paneKey)
         }
       }
+
       for (const paneKey of Object.keys(state.lastTerminalInputAtByPaneKey)) {
         if (paneKey.startsWith(panePrefix)) {
           lastTerminalInputAtByPaneKey.delete(paneKey)
         }
       }
+
       if (!keepIdentifiers) {
         runtimePaneTitlesByTabId.delete(tab.id)
         lastKnownRelayPtyIdByTabId.delete(tab.id)
         const layout = state.terminalLayoutsByTabId[tab.id]
+
         // Why the emptiness check: replacing an already-empty map with a fresh {} is
         // the same value with a new identity.
         if (layout?.ptyIdsByLeafId && Object.keys(layout.ptyIdsByLeafId).length > 0) {
@@ -156,6 +170,7 @@ export function commitTerminalShutdownState({
               sleepingAgentSessionRecords
             ).records
           : state.sleepingAgentSessionsByPaneKey
+
       return {
         sleepingAgentSessionsByPaneKey: {
           ...base,

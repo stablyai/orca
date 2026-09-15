@@ -7,6 +7,7 @@ import {
 } from '@/components/task-page-jira-status-order'
 import { createTaskPageJiraLoadFailureState } from '@/components/task-page-jira-load-state'
 import { JIRA_ITEM_LIMIT, TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-context'
+
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {
   const {
     settings,
@@ -36,23 +37,29 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     setJiraProjectStatusOrder,
     displayedJiraIssues
   } = model
+
   useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
+
     const timeout = window.setTimeout(() => {
       setAppliedJiraSearch(jiraSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
+
     return () => window.clearTimeout(timeout)
   }, [jiraSearchInput, taskResumeApplied, setAppliedJiraSearch])
   useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
+
     if (!jiraSearchPersistReadyRef.current) {
       jiraSearchPersistReadyRef.current = true
+
       return
     }
+
     setTaskResumeState({
       jiraQuery: appliedJiraSearch.trim()
     })
@@ -61,17 +68,21 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     if (!taskResumeApplied) {
       return
     }
+
     if (taskSource !== 'jira') {
       return
     }
+
     if (!jiraConnected) {
       return
     }
+
     let cancelled = false
     setJiraLoading(true)
     setJiraError(null)
     setJiraErrorDetailsOpen(false)
     const trimmed = appliedJiraSearch.trim()
+
     const request =
       trimmed.length > 0
         ? searchJiraIssues(trimmed, JIRA_ITEM_LIMIT, {
@@ -80,21 +91,26 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
         : listJiraIssues(activeJiraPreset, JIRA_ITEM_LIMIT, {
             sourceContext: jiraTaskSourceContext
           })
+
     void request
       .then((issues) => {
         if (cancelled) {
           return
         }
+
         setJiraIssues(issues)
         setJiraLoading(false)
         const projectScope = getSingleJiraProjectScope(issues)
+
         if (!projectScope) {
           return
         }
+
         const statusOrderScopeKey = getTaskPageJiraStatusOrderScopeKey(
           jiraTaskSourceScopeKey,
           projectScope
         )
+
         void loadTaskPageJiraProjectStatusOrder(
           jiraTaskSourceContext ?? settings,
           jiraTaskSourceScopeKey,
@@ -112,11 +128,13 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
         if (cancelled) {
           return
         }
+
         const failureState = createTaskPageJiraLoadFailureState(err)
         setJiraIssues(failureState.issues)
         setJiraError(failureState.error)
         setJiraLoading(false)
       })
+
     return () => {
       cancelled = true
     }
@@ -136,15 +154,19 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
     if (!taskResumeApplied || taskSource !== 'jira') {
       return
     }
+
     if (!jiraConnected || displayedJiraIssues.length === 0) {
       if (selectedJiraIssueKey !== null) {
         setSelectedJiraIssueKey(null)
       }
+
       if (selectedJiraIssueFallback !== null) {
         setSelectedJiraIssueFallback(null)
       }
+
       return
     }
+
     if (
       selectedJiraIssueKey &&
       !displayedJiraIssues.some((issue) => issue.key === selectedJiraIssueKey)
@@ -166,4 +188,5 @@ export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffect
   // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
   return model
 }
+
 export type TaskPageJiraListEffectsModel = ReturnType<typeof useTaskPageJiraListEffects>

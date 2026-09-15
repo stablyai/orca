@@ -14,11 +14,13 @@ export function buildAgentStatusBatchPatch(
   nextState: AppState
 ): Partial<AppState> {
   const patch: Record<string, unknown> = {}
+
   for (const key of Object.keys(nextState) as (keyof AppState)[]) {
     if (!Object.is(nextState[key], initialState[key])) {
       patch[key as string] = nextState[key]
     }
   }
+
   return patch as Partial<AppState>
 }
 
@@ -53,45 +55,58 @@ export function buildAgentStatusTabPrefixDropPatch(
 ): { patch: Partial<AgentStatusTabPrefixDropState>; hadLive: boolean } {
   const prefix = `${tabIdPrefix}:`
   let hadLive = false
+
   const buildPatch = (): Partial<AgentStatusTabPrefixDropState> => {
     const completedOrphanKeys = findCompletedOrphanPaneKeysForTabClose(s, opts?.worktreeId, prefix)
     const completedOrphanKeySet = new Set(completedOrphanKeys)
+
     const liveKeys = [
       ...Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix)),
       ...completedOrphanKeys
     ]
+
     const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
       (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
     )
+
     const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter(
       (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
     )
+
     const migrationUnsupported = pruneMigrationUnsupportedEntries(
       s.migrationUnsupportedByPtyId,
       (entry) => entry.paneKey?.startsWith(prefix) ?? false
     )
+
     // See removeAgentStatus for ack-cleanup rationale; ack entries are owned by the pane lifecycle regardless of live/retained state.
     let nextAck = s.acknowledgedAgentsByPaneKey
+
     const ackKeys = Object.keys(nextAck).filter(
       (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
     )
+
     if (ackKeys.length > 0) {
       nextAck = { ...nextAck }
+
       for (const k of ackKeys) {
         delete nextAck[k]
       }
     }
+
     const nextClosedTabs = boundRecentlyClosedAgentStatusTabIds(
       s.recentlyClosedAgentStatusTabIds,
       tabIdPrefix
     )
+
     const nextRetiredPaneKeys = boundRecentlyRetiredAgentStatusPaneKeys(
       s.recentlyRetiredAgentStatusPaneKeys,
       retiredAliasPaneKeys
     )
+
     const nextClearedAt = opts?.preserveActivityClearedState
       ? s.activityClearedAtByPaneKey
       : removePaneKeysByTabPrefix(s.activityClearedAtByPaneKey, tabIdPrefix, completedOrphanKeySet)
+
     const nextManualUnread = opts?.preserveActivityClearedState
       ? s.manuallyUnreadTurnsByPaneKey
       : removePaneKeysByTabPrefix(
@@ -119,6 +134,7 @@ export function buildAgentStatusTabPrefixDropPatch(
           recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
         }
       }
+
       return {
         recentlyClosedAgentStatusTabIds: nextClosedTabs,
         recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys,
@@ -130,22 +146,27 @@ export function buildAgentStatusTabPrefixDropPatch(
           : {})
       }
     }
+
     hadLive = liveKeys.length > 0
 
     const nextLive = liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+
     for (const key of liveKeys) {
       delete nextLive[key]
     }
+
     const nextLaunchConfigs =
       launchConfigKeys.length > 0
         ? { ...s.agentLaunchConfigByPaneKey }
         : s.agentLaunchConfigByPaneKey
+
     for (const key of launchConfigKeys) {
       delete nextLaunchConfigs[key]
     }
 
     const nextRetained =
       retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
+
     for (const key of retainedKeys) {
       delete nextRetained[key]
     }
@@ -154,9 +175,12 @@ export function buildAgentStatusTabPrefixDropPatch(
     const suppressorAdds = liveKeys.filter(
       (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
     )
+
     let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+
     if (suppressorAdds.length > 0) {
       nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
+
       for (const key of suppressorAdds) {
         nextRetentionSuppressedPaneKeys[key] = true
       }
@@ -185,6 +209,8 @@ export function buildAgentStatusTabPrefixDropPatch(
       sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
     }
   }
+
   const patch = buildPatch()
+
   return { patch, hadLive }
 }

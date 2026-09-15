@@ -69,13 +69,16 @@ describe('mobile markdown bridge save guards', () => {
     state.setEditorDraft('/repo/README.md', 'desktop draft')
     state.markFileDirty('/repo/README.md', true)
     let diskContent = 'desktop draft'
+
     const readFile = vi.fn().mockImplementation(async () => ({
       content: 'verified mismatch',
       isBinary: false
     }))
+
     const writeFile = vi.fn().mockImplementation(async ({ content }) => {
       diskContent = content
     })
+
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
     const detachAutosave = attachEditorAutosaveController(useAppStore as never)
@@ -104,16 +107,20 @@ describe('mobile markdown bridge save guards', () => {
     openMarkdownFile()
     let diskContent = 'original'
     const firstWrite = createDeferred()
+
     const readFile = vi.fn().mockImplementation(async () => ({
       content: diskContent,
       isBinary: false
     }))
+
     const writeFile = vi.fn().mockImplementation(async ({ content }) => {
       if (content === 'first edit') {
         await firstWrite.promise
       }
+
       diskContent = content
     })
+
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
     const detachAutosave = attachEditorAutosaveController(useAppStore as never)
@@ -127,7 +134,9 @@ describe('mobile markdown bridge save guards', () => {
         baseVersion: hashMarkdownContent('original'),
         content: 'first edit'
       })
+
       await new Promise((resolve) => setTimeout(resolve, 0))
+
       const second = sendRequest({
         id: 'save-b',
         operation: 'save',
@@ -136,6 +145,7 @@ describe('mobile markdown bridge save guards', () => {
         baseVersion: hashMarkdownContent('original'),
         content: 'second edit'
       })
+
       firstWrite.resolve()
 
       await expect(first).resolves.toMatchObject({ id: 'save-a', ok: true })
@@ -151,16 +161,20 @@ describe('mobile markdown bridge save guards', () => {
     openMarkdownFile()
     let diskContent = 'original'
     const firstWrite = createDeferred()
+
     const readFile = vi.fn().mockImplementation(async () => ({
       content: diskContent,
       isBinary: false
     }))
+
     const writeFile = vi.fn().mockImplementation(async ({ content }) => {
       if (content === 'mobile edit' && diskContent === 'original') {
         await firstWrite.promise
       }
+
       diskContent = content
     })
+
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
     const detachAutosave = attachEditorAutosaveController(useAppStore as never)
@@ -174,7 +188,9 @@ describe('mobile markdown bridge save guards', () => {
         baseVersion: hashMarkdownContent('original'),
         content: 'mobile edit'
       })
+
       await new Promise((resolve) => setTimeout(resolve, 0))
+
       const second = sendRequest({
         id: 'save-b',
         operation: 'save',
@@ -183,6 +199,7 @@ describe('mobile markdown bridge save guards', () => {
         baseVersion: hashMarkdownContent('original'),
         content: 'mobile edit'
       })
+
       firstWrite.resolve()
 
       await expect(first).resolves.toMatchObject({ id: 'save-a', ok: true })

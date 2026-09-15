@@ -25,8 +25,10 @@ export const ConfirmationDialogContext = createContext<ConfirmationDialogContext
 
 export function useConfirmationDialog(): ConfirmationDialogContextValue {
   const confirm = useContext(ConfirmationDialogContext)
+
   if (!confirm) {
     throw new Error('useConfirmationDialog must be used inside ConfirmationDialogProvider')
   }
+
   return confirm
 }

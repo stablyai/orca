@@ -27,9 +27,11 @@ function leadingGlyphs(container: HTMLElement): (string | null)[] {
  *  members render as separate pills, so it has no single joined summary node. */
 function runHeader(container: HTMLElement): HTMLElement {
   const header = container.querySelector('button')
+
   if (!header) {
     throw new Error('run header did not render')
   }
+
   return header
 }
 
@@ -97,9 +99,11 @@ describe('NativeChatToolRun', () => {
         state: 'completed'
       }
     }
+
     const projected = projectStructuredItemToNativeChat(item)
 
     expect(projected).not.toBeNull()
+
     const { container } = render(
       <NativeChatToolRun blocks={projected?.blocks ?? []} expandSignal />
     )
@@ -228,6 +232,7 @@ describe('NativeChatToolRun', () => {
   it('copies the diff as signed rows, with the region breaks left out', () => {
     const writeClipboardText = vi.fn()
     Object.assign(window, { api: { ui: { writeClipboardText } } })
+
     const blocks: NativeChatBlock[] = [
       {
         type: 'tool-call',
@@ -404,6 +409,7 @@ describe('NativeChatToolRun', () => {
     const runningBlocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'running' }
     ]
+
     const { rerender, container } = render(
       <NativeChatToolRun blocks={runningBlocks} expandSignal={false} />
     )
@@ -532,6 +538,7 @@ describe('NativeChatToolRun', () => {
     const searchCall = (state: 'running' | 'completed' | 'failed'): NativeChatBlock[] => [
       { type: 'tool-call', name: 'search', input: { query: 'beta' }, state }
     ]
+
     const { container, rerender } = render(
       <NativeChatToolRun blocks={searchCall('running')} expandSignal activeTurnIsWorking />
     )
@@ -766,6 +773,7 @@ describe('NativeChatToolRun task lists', () => {
         }
       }
     ]
+
     const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
     expect(screen.getByText('Completed Read')).toBeInTheDocument()
     expect(screen.getByText('Started Test')).toBeInTheDocument()

@@ -37,6 +37,7 @@ export function createHttpProxyUrlDraftState(
   httpProxyUrl: string | undefined
 ): HttpProxyUrlDraftState {
   const sourceValue = httpProxyUrl ?? ''
+
   return {
     sourceValue,
     draft: sourceValue,
@@ -49,6 +50,7 @@ function resolveHttpProxyUrlDraftState(
   httpProxyUrl: string | undefined
 ): HttpProxyUrlDraftState {
   const sourceValue = httpProxyUrl ?? ''
+
   return state.sourceValue === sourceValue ? state : createHttpProxyUrlDraftState(httpProxyUrl)
 }
 
@@ -86,6 +88,7 @@ export function createHttpProxyBypassRulesDraftState(
   httpProxyBypassRules: string | undefined
 ): HttpProxyBypassRulesDraftState {
   const sourceValue = httpProxyBypassRules ?? ''
+
   return {
     sourceValue,
     draft: sourceValue
@@ -97,6 +100,7 @@ function resolveHttpProxyBypassRulesDraftState(
   httpProxyBypassRules: string | undefined
 ): HttpProxyBypassRulesDraftState {
   const sourceValue = httpProxyBypassRules ?? ''
+
   return state.sourceValue === sourceValue
     ? state
     : createHttpProxyBypassRulesDraftState(httpProxyBypassRules)
@@ -124,15 +128,18 @@ export function AdvancedNetworkSettingsSection({
 }: AdvancedNetworkSettingsSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
+
   // Reveal the fields when searching for proxy terms or when a proxy is set,
   // so the value is never hidden behind a collapsed trigger.
   const proxyConfigForcedOpen =
     shouldOpenNetworkProxyConfig(searchQuery) || hasConfiguredNetworkProxy(settings)
+
   const proxyConfigExpanded = proxyConfigOpen || proxyConfigForcedOpen
 
   const [httpProxyUrlDraftState, setHttpProxyUrlDraftState] = useState(() =>
     createHttpProxyUrlDraftState(settings.httpProxyUrl)
   )
+
   const [httpProxyBypassRulesDraftState, setHttpProxyBypassRulesDraftState] = useState(() =>
     createHttpProxyBypassRulesDraftState(settings.httpProxyBypassRules)
   )
@@ -141,11 +148,13 @@ export function AdvancedNetworkSettingsSection({
     httpProxyUrlDraftState,
     settings.httpProxyUrl
   )
+
   if (resolvedHttpProxyUrlDraftState !== httpProxyUrlDraftState) {
     // Why: Settings can change outside this pane; reconcile the proxy draft
     // before paint so stale network values do not briefly appear.
     setHttpProxyUrlDraftState(resolvedHttpProxyUrlDraftState)
   }
+
   const httpProxyUrlDraft = resolvedHttpProxyUrlDraftState.draft
   const httpProxyUrlError = resolvedHttpProxyUrlDraftState.error
 
@@ -153,11 +162,13 @@ export function AdvancedNetworkSettingsSection({
     httpProxyBypassRulesDraftState,
     settings.httpProxyBypassRules
   )
+
   if (resolvedHttpProxyBypassRulesDraftState !== httpProxyBypassRulesDraftState) {
     // Why: Proxy bypass rules are local input state, but settings reloads can
     // replace their source while this pane is mounted.
     setHttpProxyBypassRulesDraftState(resolvedHttpProxyBypassRulesDraftState)
   }
+
   const httpProxyBypassRulesDraft = resolvedHttpProxyBypassRulesDraftState.draft
 
   const updateHttpProxyUrlDraft = (draft: string): void => {
@@ -174,15 +185,19 @@ export function AdvancedNetworkSettingsSection({
 
   const commitHttpProxyUrl = (): void => {
     const normalized = normalizeProxyUrl(httpProxyUrlDraft)
+
     if (!normalized.ok) {
       setHttpProxyUrlDraftState((current) =>
         setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.message)
       )
+
       return
     }
+
     setHttpProxyUrlDraftState((current) =>
       updateHttpProxyUrlDraftState(current, settings.httpProxyUrl, normalized.value)
     )
+
     if (normalized.value !== (settings.httpProxyUrl ?? '')) {
       updateSettings({ httpProxyUrl: normalized.value })
     }
@@ -193,6 +208,7 @@ export function AdvancedNetworkSettingsSection({
     setHttpProxyBypassRulesDraftState((current) =>
       updateHttpProxyBypassRulesDraftState(current, settings.httpProxyBypassRules, normalized)
     )
+
     if (normalized !== (settings.httpProxyBypassRules ?? '')) {
       updateSettings({ httpProxyBypassRules: normalized })
     }

@@ -47,23 +47,28 @@ export function createBrowserNetworkTunnelMethods(
         ) {
           throw new Error('authenticated_binary_browser_tunnel_required')
         }
+
         if (!clientCapabilities?.includes(BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY)) {
           throw new Error('browser_tunnel_capability_required')
         }
+
         if (!clientCapabilities.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
           throw new Error('browser_client_host_capability_required')
         }
+
         if (
           params.executionHost.kind !== 'native' &&
           !clientCapabilities.includes(BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY)
         ) {
           throw new Error('browser_tunnel_execution_hosts_capability_required')
         }
+
         if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
           throw new Error('browser_tunnel_identity_mismatch')
         }
 
         const leaseRegistry = getBrowserHostLeaseRegistry(runtime)
+
         const tunnelIdentity = {
           authorityEpoch: params.authorityEpoch,
           browserHostClientId: params.browserHostClientId,
@@ -71,15 +76,20 @@ export function createBrowserNetworkTunnelMethods(
           pairedDeviceId,
           executionHostKey: browserNetworkExecutionHostKey(params.executionHost)
         }
+
         leaseRegistry.requireLease(tunnelIdentity)
+
         if (params.executionHost.kind !== 'native') {
           leaseRegistry.requireExecutionHost(tunnelIdentity, tunnelIdentity.executionHostKey)
         }
+
         if (signal?.aborted) {
           return
         }
+
         const executionRouteAbort = new AbortController()
         const abortExecutionRoute = (): void => executionRouteAbort.abort()
+
         const unlinkExecutionGrant =
           params.executionHost.kind === 'native'
             ? () => {}
@@ -88,16 +98,21 @@ export function createBrowserNetworkTunnelMethods(
                 tunnelIdentity.executionHostKey,
                 abortExecutionRoute
               )
+
         signal?.addEventListener('abort', abortExecutionRoute, { once: true })
+
         const outboundMemory = memoryBudgets.acquire(
           `${pairedDeviceId}:${params.browserHostClientId}`
         )
+
         if (!outboundMemory) {
           unlinkExecutionGrant()
           signal?.removeEventListener('abort', abortExecutionRoute)
           throw new Error('browser_tunnel_memory_admission_failed')
         }
+
         let executionRoute
+
         try {
           executionRoute = await resolveExecutionRoute({
             executionHost: params.executionHost,
@@ -105,13 +120,16 @@ export function createBrowserNetworkTunnelMethods(
             runtimeRevision: runtime.getStartedAt(),
             signal: executionRouteAbort.signal
           })
+
           if (executionRoute.key !== tunnelIdentity.executionHostKey || !executionRoute.isValid()) {
             await executionRoute.close()
             throw new Error('browser_tunnel_execution_host_stale')
           }
+
           if (signal?.aborted) {
             outboundMemory.release()
             await executionRoute.close()
+
             return
           }
         } catch (error) {
@@ -121,7 +139,9 @@ export function createBrowserNetworkTunnelMethods(
           unlinkExecutionGrant()
           signal?.removeEventListener('abort', abortExecutionRoute)
         }
+
         let route: ReturnType<ReturnType<typeof getBrowserHostLeaseRegistry>['openTunnel']>
+
         try {
           route = leaseRegistry.openTunnel(tunnelIdentity, {
             requireExecutionHostGrant: params.executionHost.kind !== 'native'
@@ -132,16 +152,21 @@ export function createBrowserNetworkTunnelMethods(
           } finally {
             await executionRoute.close()
           }
+
           throw error
         }
 
         let resolveClosed = (): void => {}
+
         const closed = new Promise<void>((resolve) => {
           resolveClosed = resolve
         })
+
         let session: BrowserNetworkTunnelSession | null = null
         let unregisterBinary = (): void => {}
+
         let executionRouteClose: Promise<void> | null = null
+
         const closeExecutionRoute = (): Promise<void> => {
           if (!executionRouteClose) {
             try {
@@ -149,16 +174,22 @@ export function createBrowserNetworkTunnelMethods(
             } catch (error) {
               executionRouteClose = Promise.reject(error)
             }
+
             void executionRouteClose.catch(() => {})
           }
+
           return executionRouteClose
         }
+
         let cleaned = false
+
         const cleanup = (): void => {
           if (cleaned) {
             return
           }
+
           cleaned = true
+
           try {
             unregisterBinary()
           } finally {
@@ -179,12 +210,14 @@ export function createBrowserNetworkTunnelMethods(
             }
           }
         }
+
         const subscriptionId = JSON.stringify([
           'browser-network-tunnel',
           connectionId,
           params.browserHostClientId,
           tunnelIdentity.executionHostKey
         ])
+
         try {
           session = new BrowserNetworkTunnelSession({
             tunnelGeneration: route.tunnelGeneration,
@@ -204,14 +237,18 @@ export function createBrowserNetworkTunnelMethods(
           unregisterBinary = registerBinaryMessageHandler((bytes) => session?.handleBinary(bytes))
           runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
           signal?.addEventListener('abort', cleanup, { once: true })
+
           if (signal?.aborted || !executionRoute.isValid()) {
             cleanup()
+
             return
           }
+
           emit({ type: 'ready', tunnelGeneration: route.tunnelGeneration })
           await closed
         } finally {
           signal?.removeEventListener('abort', cleanup)
+
           try {
             cleanup()
           } finally {
@@ -233,6 +270,7 @@ function publicExecutionRouteError(error: unknown): Error {
   if (error instanceof Error && PUBLIC_EXECUTION_ROUTE_ERRORS.has(error.message)) {
     return error
   }
+
   return new Error('browser_tunnel_execution_host_unavailable', { cause: error })
 }
 

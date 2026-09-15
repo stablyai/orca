@@ -5,6 +5,7 @@ import {
 import type { WorktreeNavHistoryViewEntry } from '@/store/slices/worktree-nav-history'
 
 type ActivateFn = (worktreeId: string) => unknown
+
 type ViewActivateFn = (entry: WorktreeNavHistoryViewEntry) => void
 
 export function registerWorktreeActivation(

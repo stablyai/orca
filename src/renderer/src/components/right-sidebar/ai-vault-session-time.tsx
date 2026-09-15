@@ -10,6 +10,7 @@ export function SessionTime({
   className?: string
 }): React.JSX.Element {
   const timestamp = Date.parse(value)
+
   if (!Number.isFinite(timestamp)) {
     return (
       <span className={cn('shrink-0 text-[11px] text-muted-foreground', className)}>
@@ -22,6 +23,7 @@ export function SessionTime({
   }
 
   const date = new Date(timestamp)
+
   return (
     <span className={cn('shrink-0 text-[11px] text-muted-foreground', className)}>
       <time dateTime={date.toISOString()}>{formatTimeAgo(timestamp)}</time>
@@ -31,10 +33,13 @@ export function SessionTime({
 
 function formatTimeAgo(timestamp: number): string {
   const diffMs = Date.now() - timestamp
+
   if (diffMs < 60_000) {
     return translate('auto.components.right.sidebar.AiVaultSessionDetails.justNow', 'Just now')
   }
+
   const minutes = Math.floor(diffMs / 60_000)
+
   if (minutes < 60) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionDetails.minutesAgo',
@@ -42,7 +47,9 @@ function formatTimeAgo(timestamp: number): string {
       { value0: minutes }
     )
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionDetails.hoursAgo',
@@ -50,7 +57,9 @@ function formatTimeAgo(timestamp: number): string {
       { value0: hours }
     )
   }
+
   const days = Math.floor(hours / 24)
+
   if (days < 30) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionDetails.daysAgo',
@@ -58,7 +67,9 @@ function formatTimeAgo(timestamp: number): string {
       { value0: days }
     )
   }
+
   const months = Math.floor(days / 30)
+
   if (months < 12) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionDetails.monthsAgo',
@@ -66,6 +77,7 @@ function formatTimeAgo(timestamp: number): string {
       { value0: months }
     )
   }
+
   return translate(
     'auto.components.right.sidebar.AiVaultSessionDetails.yearsAgo',
     '{{value0}}y ago',

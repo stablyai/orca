@@ -29,16 +29,19 @@ import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home
 export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHome {
   getHostCodexHomePathsForSessionDiscovery(): string[] {
     const homes = [this.getRuntimeHomePath()]
+
     if (this.isHostSystemDefaultRealHome() || this.getSelfContainedManagedHostAccount()) {
       // Why: nested Orca processes can retain an ambient managed CODEX_HOME.
       // Per-account lanes no longer bridge real-home history into the shared
       // mirror, so include the real root for both directly-routed host lanes.
       homes.push(getSystemCodexHomePath())
     }
+
     // Why: account-scoped rollouts live in each account's own home, including WSL.
     for (const perAccountHome of this.getManagedAccountHomesForSessionDiscovery()) {
       homes.push(perAccountHome)
     }
+
     return homes.filter((home, index) => homes.indexOf(home) === index)
   }
 
@@ -52,6 +55,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
    */
   getSelectedHostAccountCodexHomePath(): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+
     return selfContainedAccount
       ? this.getTrustedSelfContainedManagedHomePath(selfContainedAccount)
       : null
@@ -66,17 +70,23 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
    */
   resolveSelectedHostAccountCodexHomePathForResume(): string | null {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+
     if (!selfContainedAccount) {
       return null
     }
+
     const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
+
     if (resolved.kind === 'indeterminate') {
       throw new ManagedCodexHomeTemporarilyUnavailableError()
     }
+
     if (resolved.kind === 'untrusted') {
       this.clearSelfContainedManagedSelection(selfContainedAccount)
+
       return null
     }
+
     return resolved.homePath
   }
 
@@ -87,7 +97,9 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (account.managedHomeRuntime === 'wsl' || this.getWslManagedHomePath(account)) {
       return { kind: 'ready', homePath: account.managedHomePath }
     }
+
     const resolved = this.resolveSelfContainedManagedHome(account)
+
     return resolved.kind === 'owned'
       ? { kind: 'ready', homePath: resolved.homePath }
       : { kind: 'skip' }
@@ -97,17 +109,21 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (this.getSelfContainedManagedHostAccount()) {
       return 'account-home'
     }
+
     return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
   }
 
   getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
     const settings = this.store.getSettings()
     const homes = new Map<string, string>()
+
     for (const ptyId of ptyIds) {
       const record = getCodexPaneAccount(ptyId)
+
       if (!record || record.selectionKey !== 'host') {
         continue
       }
+
       if (
         record.homeRoute === undefined ||
         record.homeRoute === 'shared-home' ||
@@ -117,20 +133,26 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
         homes.set(normalizeRuntimePathForComparison(homePath), homePath)
         continue
       }
+
       if (record.homeRoute !== 'account-home' || !record.accountId) {
         continue
       }
+
       const account = settings.codexManagedAccounts.find(
         (candidate) => candidate.id === record.accountId
       )
+
       if (!account || this.getWslManagedHomePath(account)) {
         continue
       }
+
       const homePath = this.getTrustedSelfContainedManagedHomePath(account)
+
       if (homePath) {
         homes.set(normalizeRuntimePathForComparison(homePath), homePath)
       }
     }
+
     return [...homes.values()]
   }
 
@@ -149,12 +171,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   // across old homes.
   isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
     const settings = this.store.getSettings()
+
     if (
       normalizeCodexRuntimeSelection(settings).host !== null ||
       !isShellStartupEnvProbeSupported()
     ) {
       return false
     }
+
     return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
   }
 
@@ -166,6 +190,7 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (!this.isHostSystemDefaultRealHome() || !hasRecordedLegacySharedCodexPane()) {
       return
     }
+
     this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
     syncLegacySharedCodexConfigForRetainedPanes()
   }
@@ -175,26 +200,33 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (process.platform !== 'win32') {
       return
     }
+
     const settings = this.store.getSettings()
     const drains: Promise<void>[] = []
+
     for (const [selectedDistroKey, accountId] of Object.entries(
       normalizeCodexRuntimeSelection(settings).wsl
     )) {
       if (!accountId) {
         continue
       }
+
       const account = this.getActiveAccount(settings.codexManagedAccounts, accountId)
+
       if (!account || account.managedHomeRuntime !== 'wsl') {
         continue
       }
+
       const distro =
         selectedDistroKey === getWslSelectionKey(null)
           ? account.wslDistro?.trim() || null
           : selectedDistroKey.trim() || null
+
       if (distro) {
         drains.push(this.startLegacyWslAuthDrain({ runtime: 'wsl', wslDistro: distro }))
       }
     }
+
     await Promise.all(drains)
   }
 
@@ -202,17 +234,23 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (process.platform !== 'win32') {
       return null
     }
+
     const distro = target.wslDistro?.trim() || getDefaultWslDistro()
+
     if (!distro) {
       return null
     }
+
     const home = getWslHome(distro)
+
     if (home && /^[A-Za-z]:[\\/]/.test(home)) {
       const linuxHome = toLinuxPath(home).trim()
+
       return linuxHome.startsWith('/')
         ? toWindowsWslUncPath(pathPosix.join(linuxHome, '.codex'), distro)
         : null
     }
+
     return home ? this.joinWslPath(home, '.codex') : null
   }
 
@@ -231,15 +269,20 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     if (!runtimeHomePath) {
       return
     }
+
     const distro =
       parseWslUncPath(runtimeHomePath)?.distro || target.wslDistro?.trim() || getDefaultWslDistro()
+
     if (!distro) {
       return
     }
+
     const systemHomePath = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+
     if (!systemHomePath || systemHomePath === runtimeHomePath) {
       return
     }
+
     // Why: WSL uses a distro-local CODEX_HOME, so host resource mirroring can't provide the distro user's global instructions.
     syncCodexGlobalInstructionsIntoManagedHome({
       systemHomePath,
@@ -258,27 +301,34 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
+
       return {
         kind: 'ready',
         codexHomePath: this.getPreparedWslRateLimitHomePath(wslTarget)
       }
     }
+
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
+
       if (resolved.kind === 'owned') {
         // Why: the quota fetch reads the account's own auth.json in place; no
         // shared-home hot-swap or per-poll resource relink (that is launch prep).
         return { kind: 'ready', codexHomePath: resolved.homePath }
       }
+
       if (resolved.kind === 'indeterminate') {
         // Why: returning null here would NOT skip — the fetcher maps null to
         // ~/.codex and would probe the user's real home with a token-refreshing
         // app-server. Skip the poll outright and keep the selection.
         return { kind: 'skip' }
       }
+
       this.clearSelfContainedManagedSelection(selfContainedAccount)
     }
+
     if (this.isHostSystemDefaultRealHome()) {
       // Why: null lets the fetcher fall back to the main process's inherited
       // CODEX_HOME before ~/.codex. Nested Orca launches can inherit the
@@ -287,11 +337,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       if (hasRecordedLegacySharedCodexPane()) {
         this.syncLegacySharedSystemDefaultAuthForRetainedPanes()
       }
+
       return { kind: 'ready', codexHomePath: getSystemCodexHomePath() }
     }
+
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
+
     return { kind: 'ready', codexHomePath: this.getRuntimeHomePath() }
   }
 }

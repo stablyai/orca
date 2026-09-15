@@ -11,8 +11,11 @@ import {
 } from './browser-route-session-registry'
 
 const orcaProfileId = 'orca/profile:alpha'
+
 const browserProfileId = 'default'
+
 const storageScope = 'e'.repeat(64)
+
 const identity = {
   orcaProfileId,
   browserProfileId,
@@ -43,7 +46,9 @@ function createSessionRegistry(filePath: string): BrowserRouteSessionRegistry {
     closeAllConnections: vi.fn(async () => {}),
     resolveProxy: vi.fn(async () => 'SOCKS5 127.0.0.1:43123')
   }
+
   const store = new BrowserRoutePartitionBindingStore({ filePath })
+
   return new BrowserRouteSessionRegistry({
     validateProfile: vi.fn(),
     getSession: () => routeSession,
@@ -75,8 +80,10 @@ async function preparePartition(
     rendererWebContentsId: 11,
     proxyEndpoint: { host: '127.0.0.1', port: 43123 }
   })
+
   const partition = handle.partition
   handle.release()
+
   return partition
 }
 
@@ -88,6 +95,7 @@ function seedLegacyBinding(filePath: string, runtimeId: string): string {
     derived.bindingFingerprint,
     storageScope
   )
+
   return derived.partition
 }
 

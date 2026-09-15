@@ -4,7 +4,9 @@ import { TERMINAL_HISTORY_SEED_CHUNK_CODE_UNITS } from './terminal-history-seed-
 import type { TerminalHistorySeedTransferManifest } from './terminal-history-seed-transfer-protocol'
 
 const MAX_TRANSFERS = 8
+
 const MAX_CHUNKS = 4096
+
 const TRANSFER_TTL_MS = 30_000
 
 type Transfer = {
@@ -29,9 +31,11 @@ export class TerminalHistorySeedTransferRegistry {
 
   start(ownerId: string, manifest: TerminalHistorySeedTransferManifest): string {
     this.validateManifest(manifest)
+
     if (this.transfers.size >= MAX_TRANSFERS) {
       throw new Error('Too many pending terminal history seed transfers')
     }
+
     const transferId = randomUUID()
     const timer = setTimeout(() => this.delete(transferId), this.transferTtlMs)
     timer.unref()
@@ -45,27 +49,34 @@ export class TerminalHistorySeedTransferRegistry {
       finished: false,
       timer
     })
+
     return transferId
   }
 
   append(ownerId: string, transferId: string, index: number, data: string): void {
     const transfer = this.getOwned(ownerId, transferId)
+
     if (transfer.finished) {
       throw new Error('Terminal history seed transfer is already finished')
     }
+
     if (index !== transfer.chunks.length || index >= transfer.manifest.chunkCount) {
       throw new Error('Terminal history seed chunk sequence mismatch')
     }
+
     if (data.length === 0 || data.length > TERMINAL_HISTORY_SEED_CHUNK_CODE_UNITS) {
       throw new Error('Terminal history seed chunk size is invalid')
     }
+
     const utf8Bytes = Buffer.byteLength(data, 'utf8')
+
     if (
       transfer.codeUnits + data.length > transfer.manifest.codeUnits ||
       this.retainedBytes + utf8Bytes > this.maxRetainedBytes
     ) {
       throw new Error('Terminal history seed transfer exceeds retained byte limit')
     }
+
     transfer.chunks.push(data)
     transfer.codeUnits += data.length
     transfer.utf8Bytes += utf8Bytes
@@ -76,31 +87,39 @@ export class TerminalHistorySeedTransferRegistry {
 
   finish(ownerId: string, transferId: string): void {
     const transfer = this.getOwned(ownerId, transferId)
+
     if (transfer.finished) {
       throw new Error('Terminal history seed transfer is already finished')
     }
+
     if (
       transfer.chunks.length !== transfer.manifest.chunkCount ||
       transfer.codeUnits !== transfer.manifest.codeUnits
     ) {
       throw new Error('Terminal history seed transfer is incomplete')
     }
+
     const digest = transfer.hash.digest('hex')
+
     if (digest !== transfer.manifest.sha256) {
       this.delete(transferId)
       throw new Error('Terminal history seed transfer digest mismatch')
     }
+
     transfer.finished = true
     this.refreshExpiry(transferId, transfer)
   }
 
   take(ownerId: string, transferId: string): readonly string[] {
     const transfer = this.getOwned(ownerId, transferId)
+
     if (!transfer.finished) {
       throw new Error('Terminal history seed transfer is not finished')
     }
+
     const chunks = transfer.chunks
     this.delete(transferId)
+
     return chunks
   }
 
@@ -142,9 +161,11 @@ export class TerminalHistorySeedTransferRegistry {
 
   private getOwned(ownerId: string, transferId: string): Transfer {
     const transfer = this.transfers.get(transferId)
+
     if (!transfer || transfer.ownerId !== ownerId) {
       throw new Error('Terminal history seed transfer not found')
     }
+
     return transfer
   }
 
@@ -156,9 +177,11 @@ export class TerminalHistorySeedTransferRegistry {
 
   private delete(transferId: string): void {
     const transfer = this.transfers.get(transferId)
+
     if (!transfer) {
       return
     }
+
     clearTimeout(transfer.timer)
     this.retainedBytes -= transfer.utf8Bytes
     this.transfers.delete(transferId)

@@ -41,6 +41,7 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
   // Why: manual targets store configHost as their host. Clear that implicit
   // value on edit so changing Host recomputes the alias instead of keeping stale resolution.
   const configHost = target.configHost && target.configHost !== target.host ? target.configHost : ''
+
   return {
     label: target.label,
     configHost,
@@ -65,6 +66,7 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
 /** Prefill the add-host form from a ~/.ssh/config Host entry (does not save). */
 export function getEditingTargetFromSshConfigHost(host: SshConfigHostResolution): EditingTarget {
   const configHost = host.alias !== host.hostname ? host.alias : ''
+
   return {
     ...EMPTY_FORM,
     label: host.alias,
@@ -92,6 +94,7 @@ export type ParsedSshHostInput = {
 
 export function parseSshHostInput(rawInput: string): ParsedSshHostInput | null {
   const input = rawInput.trim()
+
   if (!input) {
     return null
   }
@@ -104,6 +107,7 @@ export function parseSshHostInput(rawInput: string): ParsedSshHostInput | null {
   const username = atIndex > 0 ? input.slice(0, atIndex).trim() : undefined
   const hostPort = atIndex > 0 ? input.slice(atIndex + 1).trim() : input
   const parsed = parseHostAndOptionalPort(hostPort)
+
   if (!parsed.host) {
     return null
   }
@@ -119,6 +123,7 @@ export function parseSshHostInput(rawInput: string): ParsedSshHostInput | null {
 
 export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
   const parsed = parseSshHostInput(draft.host)
+
   // Why: keep bad host:port text visible so the user can correct it after
   // the save validator reports the invalid port.
   if (!parsed || parsed.invalidPort) {
@@ -146,6 +151,7 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
   const configHost = draft.configHost.trim() || parsed?.configHost || host
   const username = draft.username.trim() || parsed?.username || ''
   const parsedPort = Number.parseInt(draft.port, 10)
+
   const port =
     parsed?.invalidPort === true
       ? Number.NaN
@@ -202,13 +208,16 @@ export function isRelayGracePeriodValid(draft: EditingTarget, graceSeconds: numb
 function parseSshUrl(input: string): ParsedSshHostInput | null {
   try {
     const url = new URL(input)
+
     if (url.protocol !== 'ssh:' || !url.hostname) {
       return null
     }
+
     // Why: URL.hostname keeps IPv6 literals bracketed, but ssh2 and DNS
     // resolution expect the bare address. The non-URL parser already strips.
     const host = url.hostname.replace(/^\[|\]$/g, '')
     const port = url.port ? parsePort(url.port) : undefined
+
     if (url.port && port === undefined) {
       return {
         host,
@@ -217,6 +226,7 @@ function parseSshUrl(input: string): ParsedSshHostInput | null {
         invalidPort: true
       }
     }
+
     return {
       host,
       username: decodeSshUrlUsername(url.username),
@@ -230,6 +240,7 @@ function parseSshUrl(input: string): ParsedSshHostInput | null {
 
 function parseSshUrlWithInvalidPort(input: string): ParsedSshHostInput | null {
   const match = input.match(/^ssh:\/\/(?:([^@/?#]*)@)?(\[[^\]]+\]|[^:/?#]+):([^/?#]*)(?:[/?#]|$)/i)
+
   if (!match) {
     return null
   }
@@ -237,6 +248,7 @@ function parseSshUrlWithInvalidPort(input: string): ParsedSshHostInput | null {
   const rawHost = match[2]
   const host = rawHost.startsWith('[') && rawHost.endsWith(']') ? rawHost.slice(1, -1) : rawHost
   const port = parsePort(match[3])
+
   if (port !== undefined) {
     return null
   }
@@ -253,6 +265,7 @@ function decodeSshUrlUsername(value: string): string | undefined {
   if (!value) {
     return undefined
   }
+
   try {
     return decodeURIComponent(value)
   } catch {
@@ -269,21 +282,27 @@ function parseHostAndOptionalPort(input: string): {
 } {
   if (input.startsWith('[')) {
     const closeIndex = input.indexOf(']')
+
     if (closeIndex > 1) {
       const host = input.slice(1, closeIndex)
       const suffix = input.slice(closeIndex + 1)
+
       if (suffix.startsWith(':')) {
         const port = parsePort(suffix.slice(1))
+
         return port === undefined ? { host, invalidPort: true } : { host, port }
       }
+
       return { host }
     }
   }
 
   const firstColon = input.indexOf(':')
+
   if (firstColon !== -1 && firstColon === input.lastIndexOf(':')) {
     const host = input.slice(0, firstColon)
     const port = parsePort(input.slice(firstColon + 1))
+
     if (host) {
       return port === undefined ? { host, invalidPort: true } : { host, port }
     }
@@ -296,7 +315,9 @@ function parsePort(value: string): number | undefined {
   if (!/^\d+$/.test(value)) {
     return undefined
   }
+
   const port = Number(value)
+
   return isValidPort(port) ? port : undefined
 }
 
@@ -306,5 +327,6 @@ function isValidPort(port: number): boolean {
 
 function isDefaultPortDraft(value: string): boolean {
   const trimmed = value.trim()
+
   return trimmed === '' || trimmed === '22'
 }

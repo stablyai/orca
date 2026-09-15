@@ -25,6 +25,7 @@ function lookupIn(catalog: unknown, key: string): string | undefined {
         node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined,
       catalog
     )
+
   return typeof value === 'string' ? value : undefined
 }
 
@@ -107,6 +108,7 @@ describe('settings and stats status labels', () => {
     (key, placeholders) => {
       const value = lookup(key)
       expect(value).toBeDefined()
+
       for (const placeholder of placeholders) {
         expect(value).toContain(placeholder)
       }
@@ -136,9 +138,11 @@ describe('shipped locale catalogs', () => {
     (_locale, catalog) => {
       for (const key of Object.keys(INTERPOLATED_KEYS)) {
         const localized = lookupIn(catalog, key)
+
         if (localized === undefined) {
           continue
         }
+
         const english = lookup(key)
         expect(english, `${key} missing from en.json`).toBeDefined()
         expect(placeholdersOf(localized), `${key} placeholders drifted`).toEqual(
@@ -153,9 +157,11 @@ describe('shipped locale catalogs', () => {
     (locale, catalog) => {
       for (const base of PLURAL_KEYS) {
         const suffixes = [...new Set([...pluralCategories(locale), ...pluralCategories('en')])]
+
         if (!suffixes.some((suffix) => lookupIn(catalog, `${base}_${suffix}`))) {
           continue
         }
+
         for (const suffix of requiredPluralSuffixes(locale, base)) {
           expect(lookupIn(catalog, `${base}_${suffix}`), `${base}_${suffix} missing`).toBeTruthy()
         }

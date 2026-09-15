@@ -42,16 +42,19 @@ async function sampleOpenComposition(page: Page): Promise<MidlinePreeditOcclusio
     .poll(
       async () => {
         const overlay = await samplePreeditOverlay(page)
+
         return overlay.active && overlay.rect.width > 0 && overlay.text.startsWith('가')
       },
       { message: 'the preedit never reached the overlay at a non-zero size' }
     )
     .toBe(true)
+
   return sampleMidlinePreeditOcclusion(page)
 }
 
 function describeSpan(sample: MidlinePreeditOcclusionSample): string {
   const cells = sample.cellWidth > 0 ? sample.overlayRect.width / sample.cellWidth : 0
+
   return `overlay ${sample.overlayRect.width}px over a ${sample.cellWidth}px cell = ${cells.toFixed(2)} cells, covering columns ${JSON.stringify(sample.coveredColumns)}`
 }
 
@@ -59,6 +62,7 @@ test.describe('Terminal end-of-row Korean preedit cell span', () => {
   test('keeps the preedit caret inside the final terminal cell', async ({ orcaPage }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       // CHA clamps to the last column; xterm's wrap-pending cursor is the final-cell shape the
       // composition helper itself clamps onto.
@@ -128,6 +132,7 @@ test.describe('Terminal end-of-row Korean preedit cell span', () => {
   }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       // 안녕하세요 is ten cells, so the cursor lands at the end of the row with nothing after it —
       // the shape #12729 hits, and the one where the overlay carries the preedit alone.

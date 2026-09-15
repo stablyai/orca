@@ -52,6 +52,7 @@ export function WorktreeVisibilityGlobalSettingsLink({
   visibilityDefaults?: WorktreeVisibilityDefaults
 }): React.JSX.Element {
   const inherited = listInheritedWorktreeVisibilitySources(repo, visibilityDefaults)
+
   if (inherited.length === 0) {
     return <GlobalSettingsButton />
   }

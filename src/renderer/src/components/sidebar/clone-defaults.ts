@@ -4,6 +4,7 @@ export function getDefaultCloneParent(workspaceDir: string): string {
   }
 
   const trimmed = workspaceDir.replace(/[\\/]+$/, '')
+
   if (!trimmed) {
     return workspaceDir
   }
@@ -17,12 +18,15 @@ export function getDefaultCloneParent(workspaceDir: string): string {
 
   // Why: default Orca worktrees live under "workspaces"; clones should sit beside that tree.
   const parent = separatorIndex === -1 ? '' : trimmed.slice(0, separatorIndex)
+
   if (parent === '' && trimmed.startsWith('/')) {
     return '/'
   }
+
   if (/^[A-Za-z]:$/.test(parent)) {
     return `${parent}${trimmed[separatorIndex]}`
   }
+
   return parent
 }
 
@@ -44,8 +48,10 @@ export function getCloneDestinationAutoFill({
   if (step !== 'clone' || cloneStepAutoFilled || cloneDestination) {
     return null
   }
+
   if (activeRuntimeEnvironmentId?.trim() || sshTargetId?.trim() || !workspaceDir) {
     return null
   }
+
   return { destination: getDefaultCloneParent(workspaceDir) }
 }

@@ -100,16 +100,25 @@ import type { SftpNamespacePathMapping } from './sftp-namespace-resolution'
 type TransferOptions = { sftpNamespace?: SftpNamespacePathMapping }
 
 const SHELL_HOME = '/home/u'
+
 const SFTP_HOME = '/homes/u'
+
 const RELAY_SUFFIX = '.orca-remote/relay-0.1.0+testhash'
+
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_SUFFIX}`
+
 const SFTP_RELAY_DIR = `${SFTP_HOME}/${RELAY_SUFFIX}`
+
 const MARKER_PATTERN = /\.sftp-namespace-[0-9a-f]{32}/
+
 // Stdout of the relay-side pty-master cloexec patch, which runs on Linux hosts once a
 // freshly installed node-pty loads (#17915).
 const NPTY_CLOEXEC_PATCHED = 'ORCA-NPTY-CLOEXEC:patched\n'
+
 const STAGE_OWNER = '.sftp-namespace-00000000000000000000000000000000'
+
 const STAGE_RESERVED = `__ORCA_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`
+
 const STAGE_PROMOTED = `__ORCA_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
 
 type ConnectionOptions = {
@@ -149,12 +158,15 @@ function newCapture(): Capture {
 // The marker this run created, read back from the shell command that made it.
 function issuedMarkerNames(): string[] {
   const markers: string[] = []
+
   for (const [, command] of vi.mocked(execCommand).mock.calls) {
     const match = decodeCommand(command).match(MARKER_PATTERN)
+
     if (match) {
       markers.push(match[0])
     }
   }
+
   return markers
 }
 
@@ -168,6 +180,7 @@ function execCommands(): string[] {
 
 function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshConnection {
   const startPath = options.sftpStartPath ?? SFTP_HOME
+
   // Default: the marker is visible only through the SFTP namespace, and only under this install's token.
   const lstatPresent =
     options.lstatPresent ??
@@ -177,13 +190,16 @@ function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshC
 
   const makeSftp = (): unknown => {
     const sftp = new EventEmitter()
+
     return Object.assign(sftp, {
       mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
       realpath: vi.fn((path: string, cb: (err: Error | null, resolved?: string) => void) => {
         capture.realpathCalls.push(path)
+
         if (options.hangRealpath) {
           return
         }
+
         cb(null, startPath)
       }),
       lstat: vi.fn((path: string, cb: (err: Error | null) => void) => {
@@ -193,12 +209,14 @@ function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshC
       createWriteStream: vi.fn().mockImplementation((path: string) => {
         capture.writePaths.push(path)
         const ws = new EventEmitter()
+
         return Object.assign(ws, {
           end: vi.fn(() => setTimeout(() => ws.emit('close'), 0))
         })
       }),
       end: vi.fn(() => {
         capture.sftpEndCalls += 1
+
         if (!options.neverCloses) {
           setTimeout(() => sftp.emit('close'), 0)
         }
@@ -217,15 +235,18 @@ function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshC
     }),
     sftp: vi.fn().mockImplementation(() => Promise.resolve(makeSftp()))
   }
+
   if (options.systemSsh) {
     conn.usesSystemSshTransport = vi.fn().mockReturnValue(true)
   }
+
   if (options.transferMethods) {
     conn.uploadDirectory = vi
       .fn()
       .mockImplementation((_local: string, remote: string, opts?: TransferOptions) => {
         capture.uploadTargets.push(remote)
         capture.uploadOptions.push(opts)
+
         return Promise.resolve()
       })
     conn.writeFile = vi
@@ -233,9 +254,11 @@ function makeConnection(capture: Capture, options: ConnectionOptions = {}): SshC
       .mockImplementation((remote: string, _contents: string, opts?: TransferOptions) => {
         capture.writePaths.push(remote)
         capture.writeOptions.push(opts)
+
         return Promise.resolve()
       })
   }
+
   return conn as unknown as SshConnection
 }
 
@@ -319,6 +342,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockImplementation((_sftp, _local, remote: string) => {
       capture.uploadTargets.push(remote)
+
       return Promise.resolve()
     })
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
@@ -346,10 +370,12 @@ describe('relay install writes on a split SFTP namespace', () => {
       `${capture.uploadTargets[0]}/.version`,
       `${SFTP_RELAY_DIR}/package.json`
     ])
+
     // Every shell command — mkdir, chmod, npm, launch — still names the shell path.
     for (const command of execCommands()) {
       expect(command).not.toContain(SFTP_RELAY_DIR)
     }
+
     expect(execCommands().some((command) => command.includes(SHELL_RELAY_DIR))).toBe(true)
   })
 
@@ -360,9 +386,11 @@ describe('relay install writes on a split SFTP namespace', () => {
     await deployAndLaunchRelay(conn)
 
     const markerCommands = execCommands().filter((command) => MARKER_PATTERN.test(command))
+
     const reservation = markerCommands.find((command) =>
       command.includes('__ORCA_UPLOAD_STAGE_SLOT__')
     )
+
     const installMarker = markerCommands.find((command) => command.includes('.install-lock'))
     expect(reservation).toContain('mkdir')
     expect(reservation).toContain('/.orca-remote/.upload-stages')
@@ -380,10 +408,12 @@ describe('relay install writes on a split SFTP namespace', () => {
     expect(stageMarker).toMatch(MARKER_PATTERN)
     expect(installMarker).toMatch(MARKER_PATTERN)
     expect(capture.lstatCalls).toHaveLength(6)
+
     for (const path of capture.lstatCalls.slice(0, 4)) {
       expect(path).toContain('.upload-stages')
       expect(path).toContain(stageMarker)
     }
+
     expect(capture.lstatCalls.slice(4)).toEqual([
       `${SHELL_RELAY_DIR}/.install-lock/${installMarker}`,
       `${SFTP_RELAY_DIR}/.install-lock/${installMarker}`
@@ -392,9 +422,11 @@ describe('relay install writes on a split SFTP namespace', () => {
 
   it('refuses a same-version candidate dir that carries another install marker', async () => {
     const foreign = `.sftp-namespace-${'f'.repeat(32)}`
+
     const conn = makeConnection(capture, {
       lstatPresent: (path) => path.startsWith(`${SFTP_HOME}/`) && path.includes(foreign)
     })
+
     feed(POSIX_FIRST_INSTALL)
 
     await deployAndLaunchRelay(conn)
@@ -423,6 +455,7 @@ describe('relay install writes on a split SFTP namespace', () => {
       sftpStartPath: '/volume1/shared',
       lstatPresent: (path) => path.startsWith('/volume1/shared/')
     })
+
     feed(POSIX_FIRST_INSTALL)
 
     await deployAndLaunchRelay(conn)
@@ -447,9 +480,11 @@ describe('relay install writes on a split SFTP namespace', () => {
       `${SHELL_RELAY_DIR}/package.json`
     ])
     const [stageMarker, installMarker] = issuedMarkerNames()
+
     const mappings = [...capture.uploadOptions, ...capture.writeOptions].map(
       (options) => options?.sftpNamespace
     )
+
     expect(mappings).toHaveLength(3)
     expect(mappings[0]?.shellProbePath).toContain('/.orca-remote/.upload-stages/slot-0/')
     expect(mappings[0]?.shellProbePath).toContain(stageMarker)
@@ -481,6 +516,7 @@ describe('relay install writes on a split SFTP namespace', () => {
     ])
     const transferOptions = [...capture.uploadOptions, ...capture.writeOptions]
     expect(transferOptions).toHaveLength(3)
+
     for (const options of transferOptions) {
       expect(options?.sftpNamespace).toBeUndefined()
     }
@@ -491,21 +527,27 @@ describe('relay install writes on a split SFTP namespace', () => {
     const conn = makeConnection(capture)
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
       const decoded = decodeCommand(command)
+
       if (decoded.includes('__ORCA_REMOTE_PLATFORM__')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Windows AMD64')
       }
+
       if (decoded.includes('[Environment]::GetFolderPath')) {
         return Promise.resolve('C:\\Users\\u')
       }
+
       if (decoded.includes('__ORCA_UPLOAD_STAGE_SLOT__')) {
         return Promise.resolve(STAGE_RESERVED)
       }
+
       if (decoded.includes('__ORCA_UPLOAD_STAGE_PROMOTION__')) {
         return Promise.resolve(STAGE_PROMOTED)
       }
+
       if (decoded.includes('npm install')) {
         return Promise.reject(new Error('npm install failed'))
       }
+
       return Promise.resolve('')
     })
 
@@ -532,6 +574,7 @@ describe('relay install writes on a split SFTP namespace', () => {
 
   it('ends the SFTP session once when a deploy abort strands namespace discovery', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeConnection(capture, { hangRealpath: true })
       feed(POSIX_FIRST_INSTALL)
@@ -554,6 +597,7 @@ describe('relay install writes on a split SFTP namespace', () => {
 
   it('retains the first-install lock when the aborted SFTP session never closes', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeConnection(capture, { hangRealpath: true, neverCloses: true })
       feed(POSIX_FIRST_INSTALL)
@@ -668,6 +712,7 @@ describe('relay repair writes on a split SFTP namespace', () => {
     let execCountAtLock = -1
     vi.mocked(tryAcquireRelayRepairLock).mockImplementation(() => {
       execCountAtLock = vi.mocked(execCommand).mock.calls.length
+
       return Promise.resolve('acquired')
     })
     feed(POSIX_REPAIR)

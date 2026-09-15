@@ -23,7 +23,9 @@ export type NativeChatCommandMarkerScope = {
 }
 
 const COMMAND_MARKER_LIMIT = 8
+
 const commandMarkerCache = new Map<string, NativeChatCommandMarker[]>()
+
 let commandMarkerCounter = 0
 
 function commandMarkerScopeKey(scope: NativeChatCommandMarkerScope): string {
@@ -43,17 +45,20 @@ export function appendCommandMarkerCache(
 ): NativeChatCommandMarker[] {
   commandMarkerCounter += 1
   const key = commandMarkerScopeKey(scope)
+
   // Why: native/TUI view switches remount the chat surface, but slash commands
   // are not transcript turns, so their local feedback needs a pane-scoped cache.
   const next = [
     ...(commandMarkerCache.get(key) ?? []),
     { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
   ].slice(-COMMAND_MARKER_LIMIT)
+
   // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
   // sessionId changes on every /clear) is ephemeral and was never evicted, so it
   // grew one entry per (pane, session) for the renderer's whole life. LRU-bound
   // the key count (mirrors the #7566 draft/attachment caches in this folder).
   setBoundedScopeCacheEntry(commandMarkerCache, key, next)
+
   return [...next]
 }
 
@@ -68,11 +73,13 @@ function isClearCommand(command: string): boolean {
 
 function latestClearSentAt(markers: readonly NativeChatCommandMarker[]): number | null {
   let latest: number | null = null
+
   for (const marker of markers) {
     if (isClearCommand(marker.command) && (latest === null || marker.sentAt > latest)) {
       latest = marker.sentAt
     }
   }
+
   return latest
 }
 
@@ -81,9 +88,11 @@ export function applyCommandMarkerBoundaries(
   markers: readonly NativeChatCommandMarker[]
 ): NativeChatMessage[] {
   const clearSentAt = latestClearSentAt(markers)
+
   if (clearSentAt === null) {
     return messages as NativeChatMessage[]
   }
+
   // Why: `/clear` mutates the TUI/transcript asynchronously. Hide the current
   // transcript immediately so native chat reflects the command before the agent
   // writes a replacement session or truncates the file.

@@ -25,6 +25,7 @@ function collectLinks(provider: ILinkProvider, bufferLineNumber = 1): ILink[] | 
     result = links
   })
   expect(called).toBe(true)
+
   return result
 }
 
@@ -37,6 +38,7 @@ describe('guardLinkProvider', () => {
         throw new RangeError('Invalid array length')
       }
     }
+
     const guarded = guardLinkProvider(provider, 'web-links')
 
     expect(() => collectLinks(guarded)).not.toThrow()
@@ -54,9 +56,11 @@ describe('guardLinkProvider', () => {
 
   it('passes provided links through unchanged when the provider succeeds', () => {
     const links = [{ text: 'term_abc' }] as unknown as ILink[]
+
     const provider: ILinkProvider = {
       provideLinks: (_lineNumber, callback) => callback(links)
     }
+
     const guarded = guardLinkProvider(provider, 'orca-handle')
 
     expect(collectLinks(guarded)).toBe(links)
@@ -65,12 +69,14 @@ describe('guardLinkProvider', () => {
 
   it('does not double-invoke the callback when the provider throws after resolving', () => {
     const links = [{ text: 'file.ts' }] as unknown as ILink[]
+
     const provider: ILinkProvider = {
       provideLinks: (_lineNumber, callback) => {
         callback(links)
         throw new RangeError('Invalid array length')
       }
     }
+
     const guarded = guardLinkProvider(provider, 'orca-file')
 
     const callback = vi.fn()
@@ -84,9 +90,11 @@ describe('guardLinkProvider', () => {
 describe('installGuardedLinkProviderRegistration', () => {
   it('guards every provider registered after install (addon-internal included)', () => {
     const registered: ILinkProvider[] = []
+
     const terminal = {
       registerLinkProvider: (provider: ILinkProvider) => {
         registered.push(provider)
+
         return { dispose: vi.fn() }
       }
     } as unknown as Terminal

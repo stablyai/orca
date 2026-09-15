@@ -23,9 +23,11 @@ describe('terminal multiplex rejected input signalling', () => {
   it('reports when locally accepted input never reaches the process', async () => {
     const processWrites: string[] = []
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
+
     const harness = startDesktopMultiplexSubscribe({
       sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal']
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopMultiplexSubscribe(harness.handlers, {
       ackOutput: 1,
@@ -63,9 +65,11 @@ describe('terminal multiplex rejected input signalling', () => {
 
   it('does not send an unknown opcode to a legacy client', async () => {
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
+
     const harness = startDesktopMultiplexSubscribe({
       sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal']
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopMultiplexSubscribe(harness.handlers)
     await vi.waitFor(() =>
@@ -96,15 +100,19 @@ describe('terminal multiplex rejected input signalling', () => {
       accepted: boolean
       bytesWritten: number
     }) => void = () => {}
+
     const hostWrite = new Promise<{ handle: string; accepted: boolean; bytesWritten: number }>(
       (resolve) => {
         settleWrite = resolve
       }
     )
+
     const sendTerminal = vi.fn(() => hostWrite)
+
     const harness = startDesktopMultiplexSubscribe({
       sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal']
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     const capabilities = { ackOutput: 1 as const, writeUnavailable: 1 as const }
     sendDesktopMultiplexSubscribe(harness.handlers, capabilities)
@@ -151,11 +159,14 @@ describe('terminal multiplex rejected input signalling', () => {
 describe('terminal multiplex RPC', () => {
   it('drops desktop multiplex input while a mobile client owns the terminal floor', async () => {
     const messages: string[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -179,6 +190,7 @@ describe('terminal multiplex RPC', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -192,6 +204,7 @@ describe('terminal multiplex RPC', () => {
         sendBinary: vi.fn(),
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -253,11 +266,14 @@ describe('terminal multiplex RPC', () => {
 
   it('preserves LF input frames before writing to the multiplexed PTY', async () => {
     const messages: string[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -278,6 +294,7 @@ describe('terminal multiplex RPC', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -291,6 +308,7 @@ describe('terminal multiplex RPC', () => {
         sendBinary: vi.fn(),
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -340,11 +358,14 @@ describe('terminal multiplex RPC', () => {
 
   it('preserves LF input frames before writing to the subscribed PTY', async () => {
     const messages: string[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -363,6 +384,7 @@ describe('terminal multiplex RPC', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -380,6 +402,7 @@ describe('terminal multiplex RPC', () => {
         sendBinary: vi.fn(),
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -388,9 +411,11 @@ describe('terminal multiplex RPC', () => {
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
     )
+
     const streamId = JSON.parse(
       messages.find((msg) => JSON.parse(msg).result?.type === 'subscribed')!
     ).result.streamId as number
+
     handlers.get(streamId)?.(
       decodeTerminalStreamFrame(
         encodeTerminalStreamFrame({
@@ -417,12 +442,15 @@ describe('terminal multiplex RPC', () => {
   it('reports rejected input on a capable legacy binary stream', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const registry = createSubscriptionRegistryDouble()
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -441,7 +469,9 @@ describe('terminal multiplex RPC', () => {
       sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal'],
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
         terminal: 'terminal-1',
@@ -456,6 +486,7 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -466,9 +497,11 @@ describe('terminal multiplex RPC', () => {
         true
       )
     )
+
     const streamId = JSON.parse(
       messages.find((message) => JSON.parse(message).result?.type === 'subscribed')!
     ).result.streamId as number
+
     binaryFrames.splice(0)
     handlers.get(streamId)?.(
       decodeTerminalStreamFrame(
@@ -497,6 +530,7 @@ describe('terminal multiplex RPC', () => {
     // its frame proves the rejection had already been processed for both.
     const registry = createSubscriptionRegistryDouble()
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -518,6 +552,7 @@ describe('terminal multiplex RPC', () => {
       handleMobileUnsubscribe: vi.fn(),
       updateMobileViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     async function subscribeLegacyBinary(
@@ -526,10 +561,12 @@ describe('terminal multiplex RPC', () => {
     ) {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
       const handlers = new Map<
         number,
         (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       >()
+
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.subscribe', { terminal: 'terminal-1', client, capabilities }),
         (message) => messages.push(message),
@@ -540,19 +577,24 @@ describe('terminal multiplex RPC', () => {
           },
           registerBinaryStreamHandler: (streamId, handler) => {
             handlers.set(streamId, handler)
+
             return () => handlers.delete(streamId)
           }
         }
       )
+
       await vi.waitFor(() =>
         expect(messages.some((message) => JSON.parse(message).result?.type === 'subscribed')).toBe(
           true
         )
       )
+
       const streamId = JSON.parse(
         messages.find((message) => JSON.parse(message).result?.type === 'subscribed')!
       ).result.streamId as number
+
       binaryFrames.splice(0)
+
       return {
         binaryFrames,
         dispatchPromise,
@@ -574,6 +616,7 @@ describe('terminal multiplex RPC', () => {
       { id: 'mobile-1', type: 'mobile' },
       { terminalBinaryStream: 1 }
     )
+
     const capable = await subscribeLegacyBinary(
       { id: 'desktop-1', type: 'desktop' },
       { terminalBinaryStream: 1, writeUnavailable: 1 }

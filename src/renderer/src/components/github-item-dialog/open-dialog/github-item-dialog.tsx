@@ -35,6 +35,7 @@ export default function GitHubItemDialog({
   const workItemLabels = workItem?.labels
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
   const allWorktrees = useAllWorktrees()
+
   const issueAttachedWorkspace = useMemo(
     () =>
       workItem?.type === 'issue'
@@ -42,6 +43,7 @@ export default function GitHubItemDialog({
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
+
   const issueAttachedWorkspaceLabel = issueAttachedWorkspace
     ? getWorktreeAttachmentLabel(issueAttachedWorkspace)
     : null
@@ -53,12 +55,15 @@ export default function GitHubItemDialog({
         effectiveRepoId,
         item.number
       )
+
       if (!currentAttached) {
         onUse(item)
+
         return
       }
 
       const result = activateAndRevealWorktree(currentAttached.id)
+
       if (result === false) {
         toast.error(
           translate(
@@ -95,6 +100,7 @@ export default function GitHubItemDialog({
     projectOrigin,
     onReviewRequestsChange
   })
+
   const { linkCopied, setLinkCopyButtonRef, handleCopyWorkItemLink } =
     useGitHubItemDialogLinkCopy(workItem)
 
@@ -104,6 +110,7 @@ export default function GitHubItemDialog({
     if (resolvedWorkItemState) {
       setLocalState(resolvedWorkItemState)
     }
+
     if (workItemLabels) {
       setLocalLabels(workItemLabels)
     }
@@ -114,24 +121,32 @@ export default function GitHubItemDialog({
     if (!workItem) {
       return
     }
+
     let cancelled = false
     let count = 0
     let frameId: number | null = null
+
     const tick = (): void => {
       frameId = null
+
       if (cancelled) {
         return
       }
+
       if (document.body.style.pointerEvents === 'none') {
         document.body.style.pointerEvents = ''
       }
+
       if (count++ < 5) {
         frameId = requestAnimationFrame(tick)
       }
     }
+
     tick()
+
     return () => {
       cancelled = true
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }

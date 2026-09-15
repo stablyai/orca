@@ -7,8 +7,11 @@ import { setStoredAgentSessionHandoffStage } from '../../runtime/agent-session-h
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-live-tui-restart'
+
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+
 const roots: string[] = []
 
 afterEach(async () => {
@@ -20,6 +23,7 @@ describe('structured session live TUI restart survival', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-live-tui-restart-'))
     roots.push(root)
     const store = await AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+
     const reserved = await store.reserveOwner({
       sessionId: SESSION,
       location: {
@@ -43,18 +47,21 @@ describe('structured session live TUI restart survival', () => {
       },
       now: NOW
     })
+
     const process = {
       hostId: 'local',
       pid: 4200,
       processStartTimeMs: NOW - 1_000,
       spawnToken: 'toggle-tui-spawn'
     }
+
     await store.commitProcessIdentity({
       sessionId: SESSION,
       fence: reserved.record.lease.runtimeFence,
       process,
       now: NOW
     })
+
     const record = await store.proveOwner({
       sessionId: SESSION,
       fence: reserved.record.lease.runtimeFence,
@@ -67,6 +74,7 @@ describe('structured session live TUI restart survival', () => {
       },
       now: NOW
     })
+
     await setStoredAgentSessionHandoffStage(store, {
       sessionId: SESSION,
       fence: record.lease.runtimeFence,
@@ -75,6 +83,7 @@ describe('structured session live TUI restart survival', () => {
       now: NOW
     })
     const stopRecoveredOwner = vi.fn(async () => undefined)
+
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
       store,
       claimKeyId: 'key-1',
@@ -126,6 +135,7 @@ describe('structured session live TUI restart survival', () => {
     roots.push(root)
     const sessionId = 'session-claude-live-tui-restart'
     const store = await AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+
     const reserved = await store.reserveOwner({
       sessionId,
       location: {
@@ -149,18 +159,21 @@ describe('structured session live TUI restart survival', () => {
       },
       now: NOW
     })
+
     const process = {
       hostId: 'local',
       pid: 4201,
       processStartTimeMs: NOW - 1_000,
       spawnToken: 'claude-tui-spawn'
     }
+
     await store.commitProcessIdentity({
       sessionId,
       fence: reserved.record.lease.runtimeFence,
       process,
       now: NOW
     })
+
     const record = await store.proveOwner({
       sessionId,
       fence: reserved.record.lease.runtimeFence,
@@ -173,6 +186,7 @@ describe('structured session live TUI restart survival', () => {
       },
       now: NOW
     })
+
     await setStoredAgentSessionHandoffStage(store, {
       sessionId,
       fence: record.lease.runtimeFence,
@@ -202,7 +216,9 @@ describe('structured session live TUI restart survival', () => {
       },
       transcriptPath: join(root, 'claude-home', 'projects', 'session.jsonl')
     }
+
     const persistTuiProviderHandle = vi.fn(async () => undefined)
+
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
       store,
       claimKeyId: 'key-1',

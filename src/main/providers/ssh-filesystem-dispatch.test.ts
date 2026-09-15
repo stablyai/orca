@@ -28,6 +28,7 @@ describe('onSshFilesystemProviderRegistered', () => {
 
   it('exposes the new provider to subscribers while they are being notified', () => {
     let seen: IFilesystemProvider | undefined
+
     const unsubscribe = onSshFilesystemProviderRegistered((connectionId) => {
       seen = getSshFilesystemProvider(connectionId)
     })
@@ -52,9 +53,11 @@ describe('onSshFilesystemProviderRegistered', () => {
   it('keeps registration working when a subscriber throws', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const healthy = vi.fn()
+
     const unsubscribeThrower = onSshFilesystemProviderRegistered(() => {
       throw new Error('subscriber blew up')
     })
+
     const unsubscribeHealthy = onSshFilesystemProviderRegistered(healthy)
 
     expect(() => registerSshFilesystemProvider('conn-4', provider)).not.toThrow()

@@ -11,6 +11,7 @@ export function launchConfigsEqual(
   if (a === undefined || b === undefined) {
     return a === b
   }
+
   if (
     a.agentCommand !== b.agentCommand ||
     a.agentArgs !== b.agentArgs ||
@@ -18,8 +19,10 @@ export function launchConfigsEqual(
   ) {
     return false
   }
+
   const aKeys = Object.keys(a.agentEnv)
   const bKeys = Object.keys(b.agentEnv)
+
   return aKeys.length === bKeys.length && aKeys.every((key) => a.agentEnv[key] === b.agentEnv[key])
 }
 
@@ -30,6 +33,7 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
   if (!existing) {
     return false
   }
+
   return (
     existing.paneKey === next.paneKey &&
     existing.tabId === next.tabId &&
@@ -54,6 +58,7 @@ export function recoveryRecordMatches(
   if (!existing) {
     return false
   }
+
   // Why: completion or interruption must replace a pre-status working checkpoint.
   return (
     existing.origin === next.origin &&
@@ -74,6 +79,7 @@ export function recoveryRecordTargetsSameSession(
   if (!existing) {
     return false
   }
+
   return (
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&

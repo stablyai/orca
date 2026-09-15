@@ -33,12 +33,15 @@ describe('federation relay parsing', () => {
     'binds an old remote %s payload to the imported Dispatch',
     async (type) => {
       const db = new OrchestrationDb(':memory:')
+
       const run = db.createRun({
         objective: 'Federated mutation binding',
         coordinatorHandle: 'term_coordinator',
         coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
       })
+
       const task = db.createTask({ spec: 'Remote work', runId: run.id })
+
       const { dispatch } = db.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
@@ -51,6 +54,7 @@ describe('federation relay parsing', () => {
           protocolVersion: 3
         }
       })
+
       db.recordWorkerStage({ dispatchId: dispatch.id, stage: 'ready', state: 'ready' })
       const runtime = new OrcaRuntimeService()
       runtime.setOrchestrationDb(db)
@@ -65,6 +69,7 @@ describe('federation relay parsing', () => {
               capabilities: [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
             }
           }
+
           if (method === 'orchestration.federationPull') {
             return {
               runtimeEpoch: 'remote_epoch_1',
@@ -88,9 +93,11 @@ describe('federation relay parsing', () => {
               ]
             }
           }
+
           if (method === 'orchestration.federationAck') {
             return { acknowledgedThrough: 1 }
           }
+
           throw new Error(`Unexpected method ${method}`)
         }
       )
@@ -124,6 +131,7 @@ describe('federation relay acknowledgments', () => {
     let remoteRuntimeEpoch = 'remote_epoch_1'
     let remoteCapabilities = [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
     let failNextAck = true
+
     const pending = [
       {
         dispatch_id: 'dispatch_remote',
@@ -151,6 +159,7 @@ describe('federation relay acknowledgments', () => {
         payload: JSON.stringify({ subject: 'Status', body: 'Still around', type: 'status' })
       }
     ]
+
     const federated = {
       environment_id: 'environment_windows',
       environment_name: 'windows',
@@ -160,6 +169,7 @@ describe('federation relay acknowledgments', () => {
       to_home_imported_sequence: 0,
       to_home_acknowledged_sequence: 0
     }
+
     const db = {
       getFederatedDispatch: () => federated,
       getDispatchContextById: () => ({ run_id: 'run_home', task_id: 'task_home' }),
@@ -183,6 +193,7 @@ describe('federation relay acknowledgments', () => {
           federated.to_home_imported_sequence,
           sequence
         )
+
         return {
           message: { to_handle: message.to, type: message.type, read: 1 },
           duplicate,
@@ -205,19 +216,23 @@ describe('federation relay acknowledgments', () => {
         federated.remote_runtime_epoch = epoch
       }
     } as never
+
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       peerFingerprint: federated.peer_fingerprint
     } as never)
+
     const remoteCall = vi
       .spyOn(runtime, 'callOrchestrationWorkerServer')
       .mockImplementation(async (_environmentId, method, params) => {
         if (method === 'status.get') {
           return { runtimeId: remoteRuntimeEpoch, capabilities: remoteCapabilities }
         }
+
         if (method === 'orchestration.federationPull') {
           const replay = (params as { replayUnacknowledged?: boolean }).replayUnacknowledged
+
           return {
             runtimeEpoch: remoteRuntimeEpoch,
             items: pending.filter((item) =>
@@ -227,20 +242,25 @@ describe('federation relay acknowledgments', () => {
             )
           }
         }
+
         if (method === 'orchestration.federationAck') {
           const throughSequence = (params as { throughSequence: number }).throughSequence
+
           if (failNextAck) {
             failNextAck = false
             throw new Error('ack response lost before remote mutation')
           }
+
           pending.splice(
             0,
             pending.findIndex((item) => item.sequence > throughSequence) === -1
               ? pending.length
               : pending.findIndex((item) => item.sequence > throughSequence)
           )
+
           return { acknowledgedThrough: throughSequence }
         }
+
         throw new Error(`Unexpected method ${method}`)
       })
 
@@ -277,6 +297,7 @@ describe('federation relay acknowledgments', () => {
   it('invalidates stale capabilities when an empty pull observes a restarted runtime', async () => {
     const { runtime, restartRemote, setRemoteCapabilities, getPersistedRemoteRuntimeEpoch } =
       createIdleSyncHarness(0)
+
     const cache = getOrchestrationPeerCapabilityCache(runtime)
     await cache.resolve({
       peerFingerprint: 'windows_peer_fingerprint',
@@ -293,12 +314,14 @@ describe('federation relay acknowledgments', () => {
     await runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
 
     expect(getPersistedRemoteRuntimeEpoch()).toBe('remote_epoch_2')
+
     // The restart dropped the old epoch's answers, so the next resolve re-probes once and
     // then serves the new epoch from cache.
     const probe = vi.fn().mockResolvedValue({
       runtimeId: 'remote_epoch_2',
       capabilities: [ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY]
     })
+
     const resolveRelease = () =>
       cache.resolve({
         peerFingerprint: 'windows_peer_fingerprint',
@@ -306,6 +329,7 @@ describe('federation relay acknowledgments', () => {
         capability: ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
         probe
       })
+
     await expect(resolveRelease()).resolves.toMatchObject({
       runtimeEpoch: 'remote_epoch_2',
       supported: true,
@@ -331,12 +355,15 @@ describe('federation relay acknowledgments', () => {
 
   it('does not wake a waiter for an acknowledged duplicate replay', async () => {
     const db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'Federation replay wake',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
     })
+
     const task = db.createTask({ spec: 'Remote work', runId: run.id })
+
     const { dispatch } = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -349,7 +376,9 @@ describe('federation relay acknowledgments', () => {
         protocolVersion: 3
       }
     })
+
     db.recordWorkerStage({ dispatchId: dispatch.id, stage: 'ready', state: 'ready' })
+
     const relayItem = (sequence: number) => ({
       dispatch_id: dispatch.id,
       direction: 'to_home' as const,
@@ -362,6 +391,7 @@ describe('federation relay acknowledgments', () => {
         type: 'status'
       })
     })
+
     let pulled = [relayItem(1)]
     let rejectAck = true
     const runtime = new OrcaRuntimeService()
@@ -377,16 +407,20 @@ describe('federation relay acknowledgments', () => {
             capabilities: [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
           }
         }
+
         if (method === 'orchestration.federationPull') {
           return { runtimeEpoch: 'remote_epoch_1', items: pulled }
         }
+
         if (method === 'orchestration.federationAck') {
           if (rejectAck) {
             rejectAck = false
             throw new Error('ack response lost before remote mutation')
           }
+
           return { acknowledgedThrough: pulled.at(-1)?.sequence ?? 0 }
         }
+
         throw new Error(`Unexpected method ${method}`)
       }
     )
@@ -394,20 +428,24 @@ describe('federation relay acknowledgments', () => {
     await expect(syncFederatedDispatch(runtime, dispatch.id)).rejects.toThrow(
       'ack response lost before remote mutation'
     )
+
     const first = db.getOrCreateRunDelivery({
       runId: run.id,
       consumerGeneration: run.consumer_generation
     })
+
     expect(first?.messages.map((message) => message.id)).toEqual(['msg_federated_1'])
     db.acknowledgeRunDelivery({
       runId: run.id,
       consumerGeneration: run.consumer_generation,
       deliveryId: first!.delivery.id
     })
+
     const waiting = runtime.waitForMessage(`run:${run.id}`, {
       typeFilter: ['status'],
       timeoutMs: 5_000
     })
+
     let settled = false
     void waiting.then(() => {
       settled = true
@@ -431,6 +469,7 @@ describe('federation relay acknowledgments', () => {
     const pending = Array.from({ length: 51 }, (_, index) => {
       const sequence = index + 1
       const terminal = sequence >= 50
+
       return {
         dispatch_id: 'dispatch_remote',
         direction: 'to_home' as const,
@@ -453,6 +492,7 @@ describe('federation relay acknowledgments', () => {
         })
       }
     })
+
     const federated = {
       environment_id: 'environment_windows',
       environment_name: 'windows',
@@ -462,6 +502,7 @@ describe('federation relay acknowledgments', () => {
       to_home_imported_sequence: 0,
       to_home_acknowledged_sequence: 0
     }
+
     let pendingToWorker = [{ sequence: 1 }]
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb({
@@ -479,6 +520,7 @@ describe('federation relay acknowledgments', () => {
           | { kind: 'none' | 'heartbeat' | 'rejected' }
       }) => {
         federated.to_home_imported_sequence = sequence
+
         return {
           message: { to_handle: message.to, type: message.type },
           duplicate: false,
@@ -503,6 +545,7 @@ describe('federation relay acknowledgments', () => {
       peerFingerprint: federated.peer_fingerprint
     } as never)
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
     const remoteCall = vi
       .spyOn(runtime, 'callOrchestrationWorkerServer')
       .mockImplementation(async (_environmentId, method, params) => {
@@ -512,9 +555,11 @@ describe('federation relay acknowledgments', () => {
             capabilities: [ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY]
           }
         }
+
         if (method === 'orchestration.federationPull') {
           return { runtimeEpoch: 'remote_epoch_1', items: pending.slice(0, 50) }
         }
+
         if (method === 'orchestration.federationAck') {
           const throughSequence = (params as { throughSequence: number }).throughSequence
           pending.splice(
@@ -523,11 +568,14 @@ describe('federation relay acknowledgments', () => {
               ? pending.length
               : pending.findIndex((item) => item.sequence > throughSequence)
           )
+
           return { acknowledgedThrough: throughSequence }
         }
+
         if (method === 'orchestration.federationImport') {
           return { acknowledgedThrough: 1 }
         }
+
         throw new Error(`Unexpected method ${method}`)
       })
 
@@ -558,6 +606,7 @@ describe('federation relay acknowledgments', () => {
 
   it('acknowledges only new progress until remote runtime identity changes', async () => {
     const { runtime, remoteCall, advanceCursor, restartRemote } = createIdleSyncHarness()
+
     const ackCalls = () =>
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
 
@@ -663,11 +712,13 @@ describe('federation relay acknowledgments', () => {
 
   it('releases the checkpoint once a dispatch is no longer relay eligible', async () => {
     const { runtime, settleDispatch } = createIdleSyncHarness()
+
     const identity: FederationAckIdentity = {
       environmentId: 'environment_windows',
       peerFingerprint: 'windows_peer_fingerprint',
       remoteRuntimeEpoch: 'remote_epoch_1'
     }
+
     const ackedThrough = () =>
       getFederationAckedThrough(acquireFederationAckLease(runtime, 'dispatch_remote'), identity)
 
@@ -681,6 +732,7 @@ describe('federation relay acknowledgments', () => {
 
   it('leaves the durable watermark suppressing acks after the checkpoint is released', async () => {
     const { runtime, remoteCall, settleDispatch } = createIdleSyncHarness()
+
     const ackCalls = () =>
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
 

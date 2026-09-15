@@ -13,9 +13,13 @@ import {
 import type { BrowserRoutePageGuestIdentity } from './browser-route-page-authority'
 
 const SSH_HOST_STORAGE = 'storage-ssh-target-a'
+
 const OTHER_HOST_STORAGE = 'storage-ssh-target-b'
+
 const GENERATION_1 = 'execution-host-ssh-a-gen-1'
+
 const GENERATION_2 = 'execution-host-ssh-a-gen-2'
+
 const OTHER_HOST = 'execution-host-ssh-b-gen-1'
 
 const proxyPortByKey: Record<string, number> = {
@@ -38,9 +42,11 @@ function createHarness() {
 
   const getSession = (partition: string): BrowserRouteElectronSession => {
     const existing = sessionsByPartition.get(partition)
+
     if (existing) {
       return existing
     }
+
     const created: BrowserRouteElectronSession = {
       setProxy: vi.fn(async ({ proxyRules }) => {
         proxyRulesByPartition.set(partition, proxyRules)
@@ -50,7 +56,9 @@ function createHarness() {
         (proxyRulesByPartition.get(partition) ?? '').replace('socks5://', 'SOCKS5 ')
       )
     }
+
     sessionsByPartition.set(partition, created)
+
     return created
   }
 
@@ -87,6 +95,7 @@ function createHarness() {
       isCurrent: () => true,
       mountPage: vi.fn(async () => {
         nextWebContentsId += 1
+
         return { webContentsId: nextWebContentsId }
       }),
       retirePage: vi.fn(async () => {})

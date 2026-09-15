@@ -56,11 +56,15 @@ export class RelayWatchRootCapacityGate {
     ) {
       return undefined
     }
+
     const released = this.teardowns().settlePending()
+
     if (!released) {
       return undefined
     }
+
     this.waiting.add(rootKey)
+
     // Once, and never past the caller: a genuinely full cap must still reach the refusal that sends
     // the client dormant, and an unsubscribe that never settles must not park the request with it.
     return (signal ? Promise.race([released, abortSignalSettled(signal)]) : released).finally(

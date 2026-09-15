@@ -33,6 +33,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 const status = { id: 'todo', label: 'Todo' }
+
 const repoMap = new Map<string, Repo>()
 
 function worktree(id: string): Worktree {
@@ -40,6 +41,7 @@ function worktree(id: string): Worktree {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 function renderLane(props: {
@@ -81,9 +83,11 @@ function renderLane(props: {
 
 function lane(): HTMLElement {
   const element = container.querySelector<HTMLElement>('[data-workspace-status-drop-target]')
+
   if (!element) {
     throw new Error('lane not rendered')
   }
+
   return element
 }
 

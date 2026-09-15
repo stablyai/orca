@@ -21,6 +21,7 @@ export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null 
   if (!createdTerminal) {
     return
   }
+
   useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
 }
 
@@ -39,12 +40,15 @@ export function useTabGroupCreationCommands({
   const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
+
   const openNewBrowserTabInActiveWorkspace = useAppStore(
     (state) => state.openNewBrowserTabInActiveWorkspace
   )
+
   const openNewMarkdownInActiveWorkspace = useAppStore(
     (state) => state.openNewMarkdownInActiveWorkspace
   )
+
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
@@ -53,9 +57,11 @@ export function useTabGroupCreationCommands({
     (direction: 'left' | 'right' | 'up' | 'down') => {
       focusGroup(worktreeId, groupId)
       const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
+
       if (!newGroupId) {
         return
       }
+
       // Why: this Split entry point always seeds a fresh terminal (tab-drag can open other directions).
       const terminal = createTab(worktreeId, newGroupId)
       recordTerminalTabGroupSplit(terminal)
@@ -85,8 +91,10 @@ export function useTabGroupCreationCommands({
       ? () => {
           if (getSimulatorTabForWorktree(worktreeId)) {
             void ensureSimulatorTab(worktreeId, { surfacePane: true })
+
             return
           }
+
           // Why: mobile simulators are most useful beside the current tab group.
           void openMobileEmulatorTab(worktreeId, {
             placement: 'rightSplit',
@@ -104,16 +112,21 @@ export function useTabGroupCreationCommands({
         const state = useAppStore.getState()
         const tabs = state.browserTabsByWorktree[worktreeId] ?? []
         const source = tabs.find((t) => t.id === browserTabId)
+
         if (!source) {
           return
         }
+
         const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
         const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
           'managed-browser'
         ]
+
         if (browserAvailability.state !== 'enabled') {
           throw new Error(browserAvailability.reason)
         }
+
         if (
           browserAvailability.provider === 'paired-runtime' &&
           browserWorkspaceHasRemoteOwner(state, source.id, runtimeEnvironmentId)
@@ -125,11 +138,14 @@ export function useTabGroupCreationCommands({
             profileId: source.sessionProfileId,
             targetGroupId: groupId
           })
+
           if (created) {
             return
           }
+
           throw new Error('The paired runtime could not duplicate the managed browser tab.')
         }
+
         createBrowserTab(worktreeId, source.url, {
           ...buildDuplicatedBrowserTabOptions(source),
           ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {}),
@@ -149,6 +165,7 @@ export function useTabGroupCreationCommands({
     newTerminalWithShell: (shellOverride: string) => {
       void (async () => {
         const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+
         const outcome = await createWebRuntimeSessionTerminal({
           worktreeId,
           environmentId,
@@ -156,9 +173,11 @@ export function useTabGroupCreationCommands({
           command: shellOverride,
           activate: true
         })
+
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
           return
         }
+
         const terminal = createTab(worktreeId, groupId, shellOverride)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')

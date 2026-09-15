@@ -3,8 +3,11 @@ import { parse } from 'yaml'
 import { compareVersions, isPrereleaseVersion, isValidVersion } from './updater-fallback'
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
+
 const RELEASES_DOWNLOAD_BASE = 'https://github.com/stablyai/orca/releases/download'
+
 const FETCH_TIMEOUT_MS = 5000
+
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
 
 // Why: GitHub's atom feed lists every release (prerelease or stable) in a
@@ -20,9 +23,11 @@ function getPlatformManifestName(): string {
   if (process.platform === 'darwin') {
     return 'latest-mac.yml'
   }
+
   if (process.platform === 'linux') {
     return 'latest-linux.yml'
   }
+
   return 'latest.yml'
 }
 
@@ -47,6 +52,7 @@ export function isPerfPrereleaseTag(tag: string): boolean {
   const version = normalizeTagToVersion(tag)
   const match = version.match(/^\d+\.\d+\.\d+-([0-9A-Za-z-.]+)(?:\+[0-9A-Za-z-.]+)?$/)
   const identifiers = match?.[1]?.split('.') ?? []
+
   return (
     identifiers.length === 3 &&
     identifiers[0] === 'rc' &&
@@ -58,21 +64,25 @@ export function isPerfPrereleaseTag(tag: string): boolean {
 async function fetchReleaseFeedTags(): Promise<ReleaseFeedTag[] | null> {
   try {
     const res = await net.fetch(ATOM_FEED_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+
     if (!res.ok) {
       return null
     }
+
     const body = await res.text()
     const tags: ReleaseFeedTag[] = []
 
     for (const match of body.matchAll(TAG_HREF_RE)) {
       const tag = match[1]
       const version = normalizeTagToVersion(tag)
+
       if (isValidVersion(version)) {
         tags.push({ tag, version })
       }
     }
 
     tags.sort((left, right) => compareVersions(right.version, left.version))
+
     return tags
   } catch {
     return null
@@ -91,15 +101,19 @@ function getManifestAssetNames(manifestText: string): string[] {
   } | null
 
   const names = new Set<string>()
+
   for (const file of Array.isArray(parsed?.files) ? parsed.files : []) {
     const value = typeof file.url === 'string' ? file.url : file.path
+
     if (typeof value === 'string' && value.trim()) {
       names.add(value.trim())
     }
   }
+
   if (typeof parsed?.path === 'string' && parsed.path.trim()) {
     names.add(parsed.path.trim())
   }
+
   return [...names]
 }
 
@@ -109,20 +123,24 @@ function getGitHubReleaseAssetReadiness(assetUrl: string): Promise<ReleaseReadin
   return new Promise((resolve) => {
     const request = net.request({ method: 'HEAD', url: assetUrl, redirect: 'manual' })
     let settled = false
+
     const settle = (readiness: ReleaseReadiness): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       resolve(readiness)
     }
+
     const timeout = setTimeout(() => {
       try {
         request.abort()
       } catch {
         // The request may already have been cancelled by Electron.
       }
+
       settle('unavailable')
     }, FETCH_TIMEOUT_MS)
 
@@ -140,6 +158,7 @@ function getGitHubReleaseAssetReadiness(assetUrl: string): Promise<ReleaseReadin
       )
     })
     request.on('error', () => settle('unavailable'))
+
     try {
       request.end()
     } catch {
@@ -150,13 +169,16 @@ function getGitHubReleaseAssetReadiness(assetUrl: string): Promise<ReleaseReadin
 
 async function getReleaseAssetReadiness(tag: string, assetName: string): Promise<ReleaseReadiness> {
   const isRelativeAsset = !/^https?:\/\//i.test(assetName)
+
   const isGitHubReleaseAsset =
     process.platform === 'win32' &&
     (isRelativeAsset ||
       /^https:\/\/github\.com\/stablyai\/orca\/releases\/download\//i.test(assetName))
+
   const assetUrl = isRelativeAsset
     ? getReleaseAssetUrl(tag, assetName.split('/').findLast(Boolean) ?? assetName)
     : assetName
+
   if (isGitHubReleaseAsset) {
     return getGitHubReleaseAssetReadiness(assetUrl)
   }
@@ -166,9 +188,11 @@ async function getReleaseAssetReadiness(tag: string, assetName: string): Promise
       method: 'HEAD',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     })
+
     if (res.status === 404) {
       return 'not-ready'
     }
+
     return res.ok ? 'ready' : 'unavailable'
   } catch {
     return 'unavailable'
@@ -182,25 +206,32 @@ async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadine
     // those manifests. Pinning to those tags makes download clicks 404.
     const manifestUrl = getReleaseManifestUrl(tag)
     const res = await net.fetch(manifestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+
     if (res.status === 404) {
       return 'not-ready'
     }
+
     if (!res.ok) {
       return 'unavailable'
     }
+
     const manifestText = await res.text()
     let assetNames: string[]
+
     try {
       assetNames = getManifestAssetNames(manifestText)
     } catch {
       return 'not-ready'
     }
+
     if (assetNames.length === 0) {
       return 'not-ready'
     }
+
     const assetResults = await Promise.all(
       assetNames.map((assetName) => getReleaseAssetReadiness(tag, assetName))
     )
+
     return assetResults.includes('not-ready')
       ? 'not-ready'
       : assetResults.includes('unavailable')
@@ -256,10 +287,13 @@ export async function fetchNewerReleaseTagsWithReadiness(
   options: FetchNewerReleaseTagOptions = {}
 ): Promise<FetchNewerReleaseTagsResult> {
   const includePrerelease = options.includePrerelease ?? true
+
   if (maxTags <= 0) {
     return { tags: [], state: 'no-newer' }
   }
+
   const tags = await fetchReleaseFeedTags()
+
   if (!tags) {
     return { tags: [], state: 'unavailable', unavailableReason: 'feed' }
   }
@@ -272,9 +306,11 @@ export async function fetchNewerReleaseTagsWithReadiness(
       : includePrerelease
         ? tags.filter(({ tag }) => !isPerfPrereleaseTag(tag))
         : tags.filter(({ version }) => !isPrereleaseVersion(version))
+
   const newestNewerIndex = candidates.findIndex(
     ({ version }) => compareVersions(version, currentVersion) > 0
   )
+
   if (newestNewerIndex === -1) {
     return { tags: [], state: 'no-newer' }
   }
@@ -285,6 +321,7 @@ export async function fetchNewerReleaseTagsWithReadiness(
     newestNewerIndex,
     newestNewerIndex + MAX_MANIFEST_PROBE_CANDIDATES
   )
+
   const manifestResults = await Promise.all(
     probeCandidates.map(async ({ tag, version }) => ({
       tag,
@@ -297,11 +334,14 @@ export async function fetchNewerReleaseTagsWithReadiness(
     ({ readiness, version }) =>
       readiness === 'ready' && compareVersions(version, currentVersion) > 0
   )
+
   if (primaryIndex === -1) {
     if (manifestResults[0]?.readiness === 'unavailable') {
       return { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
     }
+
     const lastGoodTag = manifestResults.find(({ readiness }) => readiness === 'ready')?.tag
+
     return lastGoodTag
       ? { tags: [], state: 'not-ready', lastGoodTag }
       : { tags: [], state: 'not-ready' }
@@ -311,6 +351,7 @@ export async function fetchNewerReleaseTagsWithReadiness(
     if (manifestResults[0]?.readiness === 'unavailable') {
       return { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
     }
+
     return { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
   }
 

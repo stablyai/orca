@@ -7,10 +7,15 @@ import { ORCA_PI_EXTENSION_FILE } from './titlebar-extension-source'
 import { isSafeDescendCandidate } from '../pty/overlay-mirror'
 
 const LEGACY_PI_OVERLAY_MANIFEST_FILE = '.orca-pi-overlay-manifest.json'
+
 const LEGACY_OMP_OVERLAY_MIGRATION_MARKER_FILE = '.orca-omp-overlay-migration-complete'
+
 const PI_AGENT_SETTINGS_FILE = 'settings.json'
+
 const SQLITE_DATABASE_EXTENSION = '.db'
+
 const SQLITE_SIDECAR_SUFFIXES = ['-wal', '-shm', '-journal'] as const
+
 const MANAGED_EXTENSION_FILES = new Set([
   ORCA_PI_EXTENSION_FILE,
   ORCA_PI_PREFILL_EXTENSION_FILE,
@@ -36,17 +41,22 @@ function getSqliteSidecarBaseName(name: string): string | undefined {
     if (!name.endsWith(suffix)) {
       continue
     }
+
     const baseName = name.slice(0, -suffix.length)
+
     return baseName.endsWith(SQLITE_DATABASE_EXTENSION) ? baseName : undefined
   }
+
   return undefined
 }
 
 function shouldSkipLegacyOverlayEntry(pathSegments: string[]): boolean {
   const name = pathSegments.at(-1)
+
   if (!name) {
     return true
   }
+
   if (pathSegments.length === 1) {
     return (
       name === LEGACY_PI_OVERLAY_MANIFEST_FILE ||
@@ -54,6 +64,7 @@ function shouldSkipLegacyOverlayEntry(pathSegments: string[]): boolean {
       name === PI_AGENT_SETTINGS_FILE
     )
   }
+
   return (
     pathSegments.length === 2 &&
     pathSegments[0] === 'extensions' &&
@@ -69,6 +80,7 @@ function copyLegacyFile(
   if (getPathStats(targetPath)) {
     return true
   }
+
   try {
     mkdirSync(dirname(targetPath), { recursive: true })
     cpSync(overlayPath, targetPath, {
@@ -77,6 +89,7 @@ function copyLegacyFile(
       preserveTimestamps: true
     })
     copiedFilePaths.add(targetPath)
+
     return true
   } catch {
     return false
@@ -88,6 +101,7 @@ function removeCopiedFiles(paths: string[], copiedFilePaths: Set<string>): void 
     if (!copiedFilePaths.delete(path)) {
       continue
     }
+
     try {
       unlinkSync(path)
     } catch {
@@ -104,6 +118,7 @@ function copyDeferredSidecars(
 ): boolean {
   let completed = true
   const copiedSidecarsByBase = new Map<string, string[]>()
+
   for (const { baseTargetPath, entry, nextSegments } of deferredSidecars) {
     if (!copiedFilePaths.has(baseTargetPath)) {
       continue
@@ -112,6 +127,7 @@ function copyDeferredSidecars(
     const overlayPath = join(overlayDir, entry.name)
     const targetPath = join(sourceAgentDir, ...nextSegments)
     const stats = getPathStats(overlayPath)
+
     if (!stats) {
       removeCopiedFiles(
         [baseTargetPath, ...(copiedSidecarsByBase.get(baseTargetPath) ?? [])],
@@ -120,10 +136,13 @@ function copyDeferredSidecars(
       completed = false
       continue
     }
+
     if (stats.isSymbolicLink() || !stats.isFile()) {
       continue
     }
+
     const wasCopied = copiedFilePaths.has(targetPath)
+
     if (!copyLegacyFile(overlayPath, targetPath, copiedFilePaths)) {
       removeCopiedFiles(
         [baseTargetPath, ...(copiedSidecarsByBase.get(baseTargetPath) ?? [])],
@@ -132,6 +151,7 @@ function copyDeferredSidecars(
       completed = false
       continue
     }
+
     if (!wasCopied && copiedFilePaths.has(targetPath)) {
       copiedSidecarsByBase.set(baseTargetPath, [
         ...(copiedSidecarsByBase.get(baseTargetPath) ?? []),
@@ -139,6 +159,7 @@ function copyDeferredSidecars(
       ])
     }
   }
+
   return completed
 }
 
@@ -150,6 +171,7 @@ function copyMissingLegacyOmpOverlayEntries(
 ): boolean {
   let completed = true
   let entries: Dirent[]
+
   try {
     entries = readdirSync(overlayDir, { withFileTypes: true })
   } catch {
@@ -157,13 +179,16 @@ function copyMissingLegacyOmpOverlayEntries(
   }
 
   const deferredSidecars: DeferredSidecar[] = []
+
   for (const entry of entries) {
     const nextSegments = [...pathSegments, entry.name]
+
     if (shouldSkipLegacyOverlayEntry(nextSegments)) {
       continue
     }
 
     const sidecarBaseName = getSqliteSidecarBaseName(entry.name)
+
     if (sidecarBaseName) {
       deferredSidecars.push({
         baseTargetPath: join(sourceAgentDir, ...pathSegments, sidecarBaseName),
@@ -176,18 +201,23 @@ function copyMissingLegacyOmpOverlayEntries(
     const overlayPath = join(overlayDir, entry.name)
     const targetPath = join(sourceAgentDir, ...nextSegments)
     const stats = getPathStats(overlayPath)
+
     if (!stats) {
       completed = false
       continue
     }
+
     if (stats.isSymbolicLink()) {
       continue
     }
+
     if (stats.isDirectory()) {
       const targetStats = getPathStats(targetPath)
+
       if (targetStats && !isSafeDescendCandidate(targetStats)) {
         continue
       }
+
       if (!targetStats) {
         try {
           mkdirSync(targetPath, { recursive: true })
@@ -196,6 +226,7 @@ function copyMissingLegacyOmpOverlayEntries(
           continue
         }
       }
+
       completed =
         copyMissingLegacyOmpOverlayEntries(
           overlayPath,
@@ -205,9 +236,11 @@ function copyMissingLegacyOmpOverlayEntries(
         ) && completed
       continue
     }
+
     if (!stats.isFile()) {
       continue
     }
+
     completed = copyLegacyFile(overlayPath, targetPath, copiedFilePaths) && completed
   }
 
@@ -220,15 +253,20 @@ export function migrateLegacyOmpOverlayState(sourceAgentDir: string, overlayDir:
   // Why: temporary rescue shim for OMP builds from the legacy overlay window.
   // Remove after 2026-08-07 once affected users have had a full upgrade window.
   const overlayStats = getPathStats(overlayDir)
+
   if (!overlayStats || overlayStats.isSymbolicLink() || !overlayStats.isDirectory()) {
     return
   }
+
   const markerPath = join(overlayDir, LEGACY_OMP_OVERLAY_MIGRATION_MARKER_FILE)
+
   if (getPathStats(markerPath)) {
     return
   }
+
   try {
     mkdirSync(sourceAgentDir, { recursive: true })
+
     // Why: some pre-managed-extension builds pointed OMP at this overlay, so
     // first-login auth/session files can exist only there after an update.
     if (copyMissingLegacyOmpOverlayEntries(overlayDir, sourceAgentDir)) {

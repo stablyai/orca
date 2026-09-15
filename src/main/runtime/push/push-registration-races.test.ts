@@ -9,16 +9,19 @@ import { createPushHostKeypair } from './push-host-challenge-fixtures'
 import { PushDispatcher } from './push-dispatcher'
 
 const paths: string[] = []
+
 afterEach(() => {
   for (const path of paths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
 })
+
 const input = {
   platform: 'android' as const,
   token: 'synthetic',
   filter: {}
 }
+
 const tick = () => new Promise((resolve) => setImmediate(resolve))
 
 function harness() {
@@ -30,20 +33,25 @@ function harness() {
   const retries: { run: () => void; delayMs: number }[] = []
   let live = false
   let reachable = true
+
   const client = {
     registerDevice: vi.fn(async () => {
       live = true
+
       return { ok: true, registrationId: 'stable-id' }
     }),
     deleteDevice: vi.fn(async (_registrationId: string) => {
       if (!reachable) {
         return false
       }
+
       live = false
+
       return true
     }),
     send: vi.fn()
   }
+
   const service = DesktopPushService.create({
     gatewayUrl: 'https://push.example.test',
     client: client as never,
@@ -59,7 +67,9 @@ function harness() {
       setOnPushUnregisterQueued: () => {}
     } as never
   })!
+
   service.start()
+
   return {
     path,
     retries,
@@ -103,6 +113,7 @@ it('waits for an already-running delete before re-registering', async () => {
     await new Promise<void>((resolve) => {
       release = resolve
     })
+
     return normalDelete('stable-id')
   })
   await h.service.unregister(h.deviceId)
@@ -124,6 +135,7 @@ it('orders unregister after a register already in flight', async () => {
     await new Promise<void>((resolve) => {
       release = resolve
     })
+
     return normalRegister()
   })
   const registered = h.service.register({ ...input, deviceId: h.deviceId })
@@ -176,9 +188,11 @@ it('preserves the live route when clearing local registration fails, then cleans
   const h = harness()
   await h.service.register({ ...input, deviceId: h.deviceId })
   await h.service.flushUnregisterOutbox()
+
   const persist = vi.spyOn(h.registry, 'setPushRegistration').mockImplementation(() => {
     throw new Error('disk full')
   })
+
   await expect(h.service.unregister(h.deviceId)).rejects.toThrow('disk full')
   await tick()
   expect(h.client.deleteDevice).not.toHaveBeenCalled()
@@ -201,10 +215,12 @@ it('retries an old failure before mid-drain work, then waits for the armed backo
   const deletes: string[] = []
   h.client.deleteDevice.mockImplementation(async (registrationId) => {
     deletes.push(registrationId)
+
     if (deletes.length === 1) {
       h.outbox.enqueue({ registrationId: 'new', deviceId: 'new-phone' })
       void h.service.flushUnregisterOutbox()
     }
+
     return registrationId === 'new'
   })
   h.outbox.enqueue({ registrationId: 'old', deviceId: h.deviceId })

@@ -72,6 +72,7 @@ describe('WebSocketServer loopback bind boundary', () => {
     const unlisted = scan.wildcardBound.filter(
       (site) => !WILDCARD_BIND_ALLOWLIST.includes(site.path)
     )
+
     expect(
       formatSites(unlisted),
       "New WebSocketServer that binds a port without a host. Pass host: '127.0.0.1' so a foreign " +

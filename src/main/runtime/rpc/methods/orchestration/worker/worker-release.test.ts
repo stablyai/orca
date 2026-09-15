@@ -63,9 +63,11 @@ describe('orchestration worker release', () => {
   it('releases a failed worker the same way', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker('failed')
+
     const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
     }
+
     expect(receipt.state).toBe('released')
     expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('failed')
   })
@@ -74,10 +76,12 @@ describe('orchestration worker release', () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
     await h.call('orchestration.workerRelease', { dispatch: dispatchId })
+
     const second = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       processAction: string
     }
+
     expect(second).toMatchObject({ state: 'already_released', processAction: 'none' })
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
@@ -95,10 +99,12 @@ describe('orchestration worker release', () => {
   it('retains an explicitly reused external terminal without closing it', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker('succeeded', { terminal: 'term_worker' })
+
     const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       reason?: string
     }
+
     expect(receipt).toMatchObject({ state: 'retained', reason: 'external_terminal' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
   })
@@ -130,9 +136,11 @@ describe('orchestration worker release', () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker('succeeded', { terminal: 'term_worker' })
     const resource = h.db.getWorkerTerminalResourceByOwner(dispatchId)
+
     const raw = (
       h.db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
     ).db
+
     raw
       .prepare('UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE id = ?')
       .run('{invalid', resource?.id)
@@ -148,14 +156,18 @@ describe('orchestration worker release', () => {
   it('retains a user-taken-over terminal durably', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
+
     const changed = (await h.call('orchestration.workerTerminalUserInput', {
       paneKey: h.workerPaneKey
     })) as { changed: number }
+
     expect(changed.changed).toBe(1)
+
     const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       reason?: string
     }
+
     expect(receipt).toMatchObject({ state: 'retained', reason: 'user_takeover' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
     expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.ownership_state).toBe('user_owned')
@@ -188,12 +200,14 @@ describe('orchestration worker release', () => {
     async (state) => {
       h.setup()
       const { dispatchId } = await h.startWorker()
+
       if (state === 'stopped') {
         h.db.beginWorkerStop(dispatchId, h.runtime.getRuntimeId())
         h.db.settleWorkerStop(dispatchId)
       } else {
         h.db.abandonWorkerDispatch(dispatchId)
       }
+
       h.inspectProcessLiveness.mockResolvedValue('exited')
 
       await expect(
@@ -217,12 +231,14 @@ describe('orchestration worker release', () => {
     async (state) => {
       h.setup()
       const { dispatchId } = await h.startWorker()
+
       if (state === 'stopped') {
         h.db.beginWorkerStop(dispatchId, h.runtime.getRuntimeId())
         h.db.settleWorkerStop(dispatchId)
       } else {
         h.db.abandonWorkerDispatch(dispatchId)
       }
+
       h.inspectProcessLiveness.mockResolvedValue('unverifiable')
 
       await expect(
@@ -244,9 +260,11 @@ describe('orchestration worker release', () => {
 
     const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
     await vi.waitFor(() => expect(h.runtime.readTerminal).toHaveBeenCalledTimes(1))
+
     const changed = (await h.call('orchestration.workerTerminalUserInput', {
       paneKey: h.workerPaneKey
     })) as { changed: number }
+
     expect(changed.changed).toBe(1)
     pendingRead.resolve({
       handle: 'term_worker',
@@ -305,15 +323,18 @@ describe('orchestration worker release', () => {
 
   it('never marks takeover for panes without an owned resource', async () => {
     h.setup()
+
     const changed = (await h.call('orchestration.workerTerminalUserInput', {
       paneKey: 'tab_other:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     })) as { changed: number }
+
     expect(changed.changed).toBe(0)
   })
 
   it('preserves takeover across a reminted tab key for the same pane leaf', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
+
     const changed = (await h.call('orchestration.workerTerminalUserInput', {
       paneKey: 'tab_reminted:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     })) as { changed: number }
@@ -340,9 +361,11 @@ describe('orchestration worker release', () => {
       reason: 'identity_unproven',
       processAction: 'none'
     })
+
     const listed = (await h.call('orchestration.workerList', { run: h.activeRunId })) as {
       workers: { dispatchId: string; terminalState: string; workerState: string }[]
     }
+
     expect(listed.workers).toEqual([
       expect.objectContaining({ dispatchId, terminalState: 'retained', workerState: 'succeeded' })
     ])
@@ -400,10 +423,12 @@ describe('orchestration worker release', () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
     vi.mocked(h.runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+
     const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       recovery?: string
     }
+
     expect(receipt.state).toBe('release_unknown')
     expect(receipt.recovery).toContain('worker-show')
     expect(receipt.recovery).toContain('fresh request ID')
@@ -413,9 +438,11 @@ describe('orchestration worker release', () => {
     vi.mocked(h.runtime.showTerminal).mockImplementation(
       async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
     )
+
     const retry = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
     }
+
     expect(retry.state).toBe('released')
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
@@ -436,11 +463,13 @@ describe('orchestration worker release', () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
     vi.mocked(h.runtime.closeTerminal).mockRejectedValue(new Error('close exploded'))
+
     const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       lastError?: string
       recovery?: string
     }
+
     expect(receipt.state).toBe('release_unknown')
     expect(receipt.recovery).toContain('fresh request ID')
     expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('unknown')

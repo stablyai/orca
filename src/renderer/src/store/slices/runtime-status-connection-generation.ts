@@ -14,11 +14,13 @@ export function setRuntimeEnvironmentConnectionGenerationForTests(
 export function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
   connectionGenerationByEnvironment.set(environmentId, next)
+
   return next
 }
 
 export function clearRuntimeEnvironmentConnectionGenerations(): Iterable<string> {
   const environmentIds = [...connectionGenerationByEnvironment.keys()]
   connectionGenerationByEnvironment.clear()
+
   return environmentIds
 }

@@ -17,39 +17,55 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
   protected handleBinary(bytes: Uint8Array<ArrayBufferLike>): void {
     if (!this.matchesCurrentEnvironmentRevision()) {
       this.closeForEnvironmentReplacement()
+
       return
     }
+
     const frame = decodeTerminalStreamFrame(bytes)
+
     if (!frame) {
       // Why: malformed framing cannot be credited safely; closing makes the server release every stream window.
       this.failConnection(new Error('Remote terminal stream received a malformed frame.'))
+
       return
     }
+
     const isOutput =
       frame.opcode === TerminalStreamOpcode.Output ||
       frame.opcode === TerminalStreamOpcode.OutputSpan
+
     const stream = this.streams.get(frame.streamId)
+
     if (!stream) {
       if (isOutput) {
         // Why: the renderer already disposed this stream; unsubscribe releases server credit that cannot reach a parser.
         this.sendFrame(frame.streamId, TerminalStreamOpcode.Unsubscribe)
       }
+
       return
     }
+
     if (isOutput && shouldDropE2eRemoteTerminalOutput(stream, frame.payload.byteLength)) {
       this.queueOutputAcknowledgement(stream, frame.payload.byteLength)
+
       return
     }
+
     // Control frames prove transport activity, not delivery of command output.
     stream.watchdog.recordInbound(isOutput)
+
     if (frame.opcode === TerminalStreamOpcode.WriteUnavailable) {
       stream.callbacks.onWriteUnavailable?.()
+
       return
     }
+
     if (isOutput) {
       this.handleOutputFrame(frame, stream)
+
       return
     }
+
     this.handleSnapshotOrErrorFrame(frame, stream)
   }
 
@@ -65,6 +81,7 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
             transformed?: unknown
           }>(frame.payload)
         : null
+
     const validSpan =
       frame.opcode !== TerminalStreamOpcode.OutputSpan ||
       (typeof span?.data === 'string' &&
@@ -72,29 +89,36 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
         Number.isSafeInteger(span.rawLength) &&
         span.rawLength >= 0 &&
         span.transformed === true)
+
     const data =
       frame.opcode === TerminalStreamOpcode.OutputSpan
         ? validSpan
           ? (span!.data as string)
           : ''
         : decodeTerminalStreamText(frame.payload)
+
     const deliverOutput = (): void => {
       if (!validSpan) {
         // Why: rendering malformed span JSON would expose protocol framing
         // as terminal text and lose its raw sequence accounting.
         this.requestResyncSnapshot(stream)
+
         return
       }
+
       const rawLength =
         frame.opcode === TerminalStreamOpcode.OutputSpan && typeof span?.rawLength === 'number'
           ? span.rawLength
           : data.length
+
       // Why: a resync snapshot is authoritative; discard live output while
       // it is in flight, but still return transport credit in finally.
       if (stream.resyncInFlight) {
         return
       }
+
       const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
+
       // Why: older servers replay snapshot-covered buffered chunks after a
       // requested recovery; rendering them would duplicate the recovered tail.
       if (
@@ -104,28 +128,36 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       ) {
         return
       }
+
       if (this.detectOutputGap(stream, seq, rawLength)) {
         this.requestResyncSnapshot(stream)
+
         return
       }
+
       if (typeof seq === 'number') {
         stream.expectedSeq = seq
         stream.commandProbeBaselineSeq = undefined
       }
+
       stream.callbacks.onData(data, {
         seq,
         rawLength,
         ...(frame.opcode === TerminalStreamOpcode.OutputSpan ? { transformed: true } : {})
       })
     }
+
     if (!stream.acknowledgeOutput) {
       deliverOutput()
+
       return
     }
+
     try {
       const settleWatchdog = stream.watchdog.beginOutputDelivery(frame.payload.byteLength)
       deliverTerminalDataWithDeferredCredit(() => {
         settleWatchdog()
+
         if (shouldHoldE2eRemoteTerminalAck(stream.terminal)) {
           stream.heldAckBytes += frame.payload.byteLength
         } else {

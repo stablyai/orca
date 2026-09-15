@@ -59,10 +59,12 @@ export function TabBarStaticCreateMenu({
     onNewFileTab,
     onOpenFileTab
   } = props
+
   const defaultTerminalMenuItems =
     windowsShellEntries && onNewTerminalWithShell ? (
       windowsShellEntries.map((entry, index) => {
         const isDefault = index === 0
+
         return (
           <DropdownMenuItem
             key={entry.shell}
@@ -101,6 +103,7 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
+
   const newBrowserMenuItem =
     !terminalOnly && managedBrowserCreationEnabled ? (
       <DropdownMenuItem
@@ -112,6 +115,7 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
+
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -144,6 +148,7 @@ export function TabBarStaticCreateMenu({
         </DropdownMenuItem>
       )
     ) : null
+
   const newMarkdownMenuItem =
     !terminalOnly && onNewFileTab ? (
       <DropdownMenuItem
@@ -155,6 +160,7 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
+
   const openMarkdownMenuItem =
     !terminalOnly && onOpenFileTab ? (
       <DropdownMenuItem
@@ -168,6 +174,7 @@ export function TabBarStaticCreateMenu({
         ) : null}
       </DropdownMenuItem>
     ) : null
+
   const mobileEmulatorIntroMenuBlock =
     showMobileEmulatorIntroCallout &&
     !terminalOnly &&

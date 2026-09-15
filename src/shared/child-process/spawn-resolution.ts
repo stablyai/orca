@@ -23,6 +23,7 @@ export type ResolvedSpawn = {
  */
 export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): ResolvedSpawn {
   const args = spec.args ?? []
+
   const base: NodeSpawnOptions = {
     cwd: spec.cwd,
     env: spec.env,
@@ -51,6 +52,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
   // arguments containing a line break. Unrecognised shims resolve to null and
   // keep the cmd.exe path below.
   const shim = resolveWindowsCmdShim(spec.program, spec.env ?? process.env)
+
   if (shim) {
     return {
       file: shim.program,
@@ -72,6 +74,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
   // line ourselves — rather than handing Node `shell: true` — is what keeps the
   // arguments intact and the console hidden.
   const comSpec = spec.env?.ComSpec ?? process.env.ComSpec ?? 'cmd.exe'
+
   return {
     file: comSpec,
     args: [buildWindowsCmdShimCommandLine(spec.program, args)],

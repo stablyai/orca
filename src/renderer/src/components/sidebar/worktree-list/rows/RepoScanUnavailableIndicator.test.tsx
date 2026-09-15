@@ -18,6 +18,7 @@ const repo = {
 } as Repo
 
 const initialState = useAppStore.getInitialState()
+
 const roots: Root[] = []
 
 async function render(): Promise<HTMLDivElement> {
@@ -32,6 +33,7 @@ async function render(): Promise<HTMLDivElement> {
       </TooltipProvider>
     )
   })
+
   return container
 }
 
@@ -45,6 +47,7 @@ describe('RepoScanUnavailableIndicator', () => {
     for (const root of roots.splice(0)) {
       await act(async () => root.unmount())
     }
+
     document.body.innerHTML = ''
     useAppStore.setState(initialState, true)
   })

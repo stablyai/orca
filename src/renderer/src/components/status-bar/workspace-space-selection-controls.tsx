@@ -18,6 +18,7 @@ export function CheckButton({
 }): React.JSX.Element {
   const isChecked = checked === true
   const isMixed = checked === 'mixed'
+
   return (
     <button
       type="button"
@@ -63,5 +64,6 @@ export function SortIndicator({
   if (sortKey !== activeKey) {
     return <Circle className="size-3 opacity-0" />
   }
+
   return direction === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
 }

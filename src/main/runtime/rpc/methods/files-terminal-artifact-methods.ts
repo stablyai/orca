@@ -22,6 +22,7 @@ export const FILE_TERMINAL_ARTIFACT_METHODS = [
     params: TerminalArtifactFile,
     handler: async (params, { runtime, clientId, clientKind, requestId }) => {
       const budget = remoteFileContentBudget(clientKind, requestId)
+
       return budget === undefined
         ? runtime.readTerminalArtifactPreview(
             params.worktree,

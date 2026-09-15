@@ -11,6 +11,7 @@ import {
 export type { NativeChatTurnStatus }
 
 export const MOBILE_UNANCHORED_TURN_KEY = '__unanchored__'
+
 const EMPTY_TURN_TIMING_BY_TURN: NativeChatTurnTimingByTurn = Object.freeze({})
 
 type ScopedTurnTiming = {
@@ -47,18 +48,22 @@ export function useMobileNativeChatTurnStatus({
   const latestUserIndex = enabled
     ? messages.findLastIndex((message) => message.role === 'user')
     : -1
+
   const latestUserId = latestUserIndex !== -1 ? (messages[latestUserIndex]?.id ?? null) : null
   const activeTurnKey = latestUserId ?? MOBILE_UNANCHORED_TURN_KEY
+
   const [scopedTiming, setScopedTiming] = useState<ScopedTurnTiming>(() => ({
     scopeKey,
     timingByTurn: {}
   }))
+
   // Do not expose the previous surface's state during the render before the
   // timing effect adopts the new scope, or scan it while this UI is disabled.
   const timingByTurn =
     enabled && scopedTiming.scopeKey === scopeKey
       ? scopedTiming.timingByTurn
       : EMPTY_TURN_TIMING_BY_TURN
+
   // An accepted send renders as `pending-N` until the transcript echo lands under
   // its real id. That is one turn under two keys, so the clock must survive the swap.
   const previousActiveTurn = useRef<{ scopeKey: string; turnKey: string } | null>(null)
@@ -67,17 +72,21 @@ export function useMobileNativeChatTurnStatus({
     if (!enabled) {
       return
     }
+
     const validTurnKeys = new Set(
       messages.filter((message) => message.role === 'user').map((message) => message.id)
     )
+
     const previousActiveTurnKey =
       previousActiveTurn.current?.scopeKey === scopeKey
         ? previousActiveTurn.current.turnKey
         : undefined
+
     previousActiveTurn.current = { scopeKey, turnKey: activeTurnKey }
     setScopedTiming((current) => {
       const currentTiming =
         current.scopeKey === scopeKey ? current.timingByTurn : EMPTY_TURN_TIMING_BY_TURN
+
       const nextTiming = reduceNativeChatTurnTiming(currentTiming, {
         activeTurnKey,
         previousActiveTurnKey,
@@ -86,6 +95,7 @@ export function useMobileNativeChatTurnStatus({
         workingStartedAt,
         now: Date.now()
       })
+
       return current.scopeKey === scopeKey && nextTiming === currentTiming
         ? current
         : { scopeKey, timingByTurn: nextTiming }
@@ -98,6 +108,7 @@ export function useMobileNativeChatTurnStatus({
   const turnIsWorking = enabled && isWorking
   const turnIsThinking = enabled && thinking
   const settledByTurn = enabled ? (settledTurns ?? undefined) : undefined
+
   const statuses = useMemo(
     () =>
       selectNativeChatTurnStatuses(timingByTurn, {
@@ -109,5 +120,6 @@ export function useMobileNativeChatTurnStatus({
       }),
     [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking, settledByTurn]
   )
+
   return { ...statuses, activeTurnKey }
 }

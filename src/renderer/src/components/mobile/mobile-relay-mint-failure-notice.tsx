@@ -24,20 +24,26 @@ export function MobileRelayMintFailureNotice({
   busy?: boolean
 }): React.JSX.Element {
   const providerMissing = failure.stage === 'provider_missing'
+
   // Why: a revoked cloud session fails every mint; "retry or use LAN" hides the one action that works.
   const reconnectRequired = useAppStore(
     (state) => state.orcaProfileAuthStatus?.state === 'reconnect-required'
   )
+
   const [showBusyFeedback, setShowBusyFeedback] = useState(false)
   useEffect(() => {
     if (!busy) {
       setShowBusyFeedback(false)
+
       return
     }
+
     const timer = window.setTimeout(() => setShowBusyFeedback(true), 200)
+
     return () => window.clearTimeout(timer)
   }, [busy])
   const visibleBusy = busy && showBusyFeedback
+
   const title = visibleBusy
     ? translate(
         'auto.components.mobile.MobileRelayMintFailureNotice.retryingTitle',
@@ -57,6 +63,7 @@ export function MobileRelayMintFailureNotice({
             'auto.components.mobile.MobileRelayMintFailureNotice.title',
             'Couldn’t create a Relay pairing code.'
           )
+
   const body = visibleBusy
     ? translate(
         'auto.components.mobile.MobileRelayMintFailureNotice.retryingBody',

@@ -31,6 +31,7 @@ describe('parseServeSimDetachedSession', () => {
       },
       'device-1'
     )
+
     const explicit = parseServeSimDetachedSession(
       {
         streamUrl: 'http://127.0.0.1:3200/stream.mjpeg',

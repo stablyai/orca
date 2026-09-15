@@ -37,19 +37,24 @@ export function runDialogForceDelete(args: {
   // removal must land on; a bare id would let force delete another host's
   // checkout at the same path.
   const forceTarget = currentWorktrees.find((entry) => entry.id === worktreeId)
+
   if (!forceTarget) {
     // Same recovery as a stale confirmed batch: say so and close, rather
     // than leaving a destructive button that silently does nothing.
     showWorkspaceListChangedToast()
     closeModal()
+
     return
   }
+
   const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+
   // Why (#11960): this IS the explicit Force Delete, so it may also waive
   // the PTY-stop proof — unlike the confirmed delete in the branch below.
   const deletePromise = removeWorktree(toWorktreeRemovalTarget(forceTarget), true, {
     allowUnverifiedPtyStop: true
   })
+
   closeModal()
   deletePromise
     .then((result) => {
@@ -63,8 +68,10 @@ export function runDialogForceDelete(args: {
             description: result.error
           }
         )
+
         return
       }
+
       commitFocus()
       onDeleted?.([toWorktreeRemovalTarget(forceTarget)])
     })

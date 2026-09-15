@@ -21,12 +21,16 @@ import {
 const execFileAsync = promisify(execFile)
 
 let scratchDir = ''
+
 let repoPath = ''
+
 let workspaceRoot = ''
+
 let worktreePath = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
+
   return stdout
 }
 
@@ -124,9 +128,11 @@ describe('deferred worktree removal against the real Git binary', () => {
     await writeFile(join(worktreePath, 'untracked.txt'), 'keep this work\n')
     const row = (await listWorktreesStrict(repoPath)).find((entry) => entry.path === markerPath)
     expect(row).toBeDefined()
+
     if (!row) {
       throw new Error('Missing malformed registration')
     }
+
     expect(await isPrunableGitFileWorktree(row)).toBe(true)
 
     const result = await removeStaleLocalWorktreeRegistration({
@@ -154,6 +160,7 @@ describe('deferred worktree removal against the real Git binary', () => {
       WORKTREE_TRASH_DIR_NAME,
       'wt-1700000000000-deadbeef'
     )
+
     await mkdir(join(stalePath, 'node_modules'), { recursive: true })
 
     await sweepStaleWorktreeTrash([workspaceRoot])

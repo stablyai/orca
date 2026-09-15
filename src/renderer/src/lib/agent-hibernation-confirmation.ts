@@ -13,11 +13,14 @@ export function confirmAgentHibernationCandidates(
 ): AgentHibernationPlan {
   const confirmationState: AgentHibernationConfirmationState = {}
   const confirmed: AgentHibernationCandidate[] = []
+
   for (const candidate of candidates) {
     confirmationState[candidate.id] = candidate.signature
+
     if (previous[candidate.id] === candidate.signature) {
       confirmed.push(candidate)
     }
   }
+
   return { candidates: confirmed, confirmationState }
 }

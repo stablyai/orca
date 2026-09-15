@@ -13,6 +13,7 @@ const runtimeMocks = vi.hoisted(() => ({
   linearListProjects: vi.fn(),
   linearUpdateIssue: vi.fn()
 }))
+
 const storeMocks = vi.hoisted(() => ({
   state: {
     settings: { activeRuntimeEnvironmentId: null },
@@ -23,13 +24,17 @@ const storeMocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-linear-project-client', () => ({
   linearListProjects: runtimeMocks.linearListProjects
 }))
+
 vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
   linearUpdateIssue: runtimeMocks.linearUpdateIssue
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof storeMocks.state) => unknown) => selector(storeMocks.state)
 }))
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 type Deferred<T> = {
@@ -39,9 +44,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve = (_value: T): void => undefined
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -64,11 +71,13 @@ const selectedIssue: LinearIssue = {
   priority: 2,
   updatedAt: '2026-08-01T00:00:00.000Z'
 }
+
 const sourceContext = normalizeTaskSourceContext({
   provider: 'linear',
   hostId: 'runtime:environment-1',
   projectId: 'project-group-1'
 })!
+
 const roots: Root[] = []
 
 beforeEach(() => {
@@ -140,6 +149,7 @@ describe('LinearIssueProjectSelector', () => {
     const projectButton = [...document.body.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Second project')
     )
+
     await act(async () => {
       projectButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await Promise.resolve()

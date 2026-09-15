@@ -18,16 +18,20 @@ export function applyDesktopFitFallbackAfterReplay(
     if (dimensions.shouldApply?.() === false) {
       return
     }
+
     safeFit(pane)
+
     const stuckAtPriorGrid =
       dimensions.priorCols != null &&
       dimensions.priorRows != null &&
       pane.terminal.cols === dimensions.priorCols &&
       pane.terminal.rows === dimensions.priorRows
+
     if (stuckAtPriorGrid && dimensions.cols > 0 && dimensions.rows > 0) {
       pane.terminal.resize(dimensions.cols, dimensions.rows)
     }
   }
+
   // Why: the server dimensions are only a fallback; source-dimension replay
   // must parse and restore its viewport before this can reflow xterm.
   if (

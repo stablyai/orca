@@ -25,6 +25,7 @@ export async function createAliasedWatcherRoot(prefix: string): Promise<AliasedW
   const aliasRoot = join(base, 'alias')
   await mkdir(realRoot, { recursive: true })
   await symlink(realRoot, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir')
+
   return { base, realRoot, aliasRoot }
 }
 

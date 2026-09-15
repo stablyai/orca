@@ -42,22 +42,27 @@ describe('detectInstalledBrowsers — Comet', () => {
   it('detects Comet when its data directory and Cookies DB exist', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           const normalizedPath = slashPath(p)
+
           if (normalizedPath.includes('Comet/Default/Network/Cookies')) {
             return true
           }
+
           if (normalizedPath.includes('Comet/Local State')) {
             return true
           }
+
           return false
         },
         readFileSync: (p: string, enc?: string) => {
           if (typeof p === 'string' && slashPath(p).includes('Comet/Local State')) {
             return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
           }
+
           return actual.readFileSync(p as never, enc as never)
         }
       }
@@ -75,6 +80,7 @@ describe('detectInstalledBrowsers — Comet', () => {
   it('does not list Comet when its data directory is absent', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: () => false
@@ -89,16 +95,20 @@ describe('detectInstalledBrowsers — Comet', () => {
   it('enumerates all Comet profiles from Local State info_cache', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           const normalizedPath = slashPath(p)
+
           if (normalizedPath.includes('Comet/Default/Network/Cookies')) {
             return true
           }
+
           if (normalizedPath.includes('Comet/Local State')) {
             return true
           }
+
           return false
         },
         readFileSync: (p: string, enc?: string) => {
@@ -113,6 +123,7 @@ describe('detectInstalledBrowsers — Comet', () => {
               }
             })
           }
+
           return actual.readFileSync(p as never, enc as never)
         }
       }
@@ -131,15 +142,18 @@ describe('detectInstalledBrowsers — Comet', () => {
   it('ignores Comet profile directories that escape the browser root', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           if (p.includes('Comet/Local State')) {
             return true
           }
+
           if (p.includes('Application Support/Outside/Network/Cookies')) {
             return true
           }
+
           return false
         },
         readFileSync: (p: string, enc?: string) => {
@@ -152,6 +166,7 @@ describe('detectInstalledBrowsers — Comet', () => {
               }
             })
           }
+
           return actual.readFileSync(p as never, enc as never)
         }
       }
@@ -165,18 +180,21 @@ describe('detectInstalledBrowsers — Comet', () => {
   it('rejects explicit Comet profile selections that escape the browser root', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           if (p.includes('Application Support/Outside/Network/Cookies')) {
             return true
           }
+
           return false
         }
       }
     })
 
     const { selectBrowserProfile } = await import('./browser-cookie-import')
+
     const selected = selectBrowserProfile(
       {
         family: 'comet',
@@ -196,21 +214,25 @@ describe('detectInstalledBrowsers — Comet', () => {
   it('skips Comet when the data directory exists but no Cookies DB is present', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           if (p.includes('Comet/Local State')) {
             return true
           }
+
           if (p.includes('Network/Cookies') || p.endsWith('/Cookies')) {
             return false
           }
+
           return false
         },
         readFileSync: (p: string, enc?: string) => {
           if (typeof p === 'string' && p.includes('Comet/Local State')) {
             return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
           }
+
           return actual.readFileSync(p as never, enc as never)
         }
       }

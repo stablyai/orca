@@ -23,10 +23,13 @@ export function createOpenConflictFile(
       set((s) => {
         const id = absolutePath
         const conflict = toOpenConflictMetadata(entry)
+
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+
         editorItemTargetGroupId = targetGroupId
         const existing = s.openFiles.find((f) => f.id === id)
+
         const nextTracked =
           entry.conflictStatus === 'unresolved' && entry.conflictKind
             ? {
@@ -37,11 +40,13 @@ export function createOpenConflictFile(
 
         if (!conflict) {
           openedConflictFile = false
+
           return s
         }
 
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
+
           return {
             openFiles: s.openFiles.map((f) =>
               f.id === id
@@ -84,9 +89,11 @@ export function createOpenConflictFile(
 
         if (isPreview) {
           const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
+
           if (replaceablePreviewIndex !== -1) {
             return {
               openFiles: s.openFiles.map((file, index) =>
@@ -117,10 +124,12 @@ export function createOpenConflictFile(
               : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
         }
       })
+
       // Why: no conflict metadata means no OpenFile was added, so a workspace tab would point at nothing.
       if (!openedConflictFile) {
         return
       }
+
       void openWorkspaceEditorItem(
         get(),
         absolutePath,

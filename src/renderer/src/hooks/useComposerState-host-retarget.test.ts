@@ -15,6 +15,7 @@ describe('useComposerState host retarget', () => {
       author: 'octocat',
       repoId: 'repo-local'
     }
+
     const selection = {
       repoId: 'repo-local',
       item,

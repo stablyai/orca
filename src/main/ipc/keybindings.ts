@@ -10,6 +10,7 @@ function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
       window.webContents.send('keybindings:changed', snapshot)
     }
   }
+
   rebuildAppMenu()
 }
 
@@ -26,6 +27,7 @@ export function registerKeybindingHandlers(
     authorizeExternalPath(snapshot.path)
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
+
     return snapshot
   })
 
@@ -35,6 +37,7 @@ export function registerKeybindingHandlers(
       const snapshot = service.setActionBindings(args.actionId, args.bindings)
       broadcastKeybindingsChanged(snapshot)
       onChanged?.()
+
       return snapshot
     }
   )
@@ -43,6 +46,7 @@ export function registerKeybindingHandlers(
     const snapshot = service.reload()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
+
     return snapshot
   })
 
@@ -50,9 +54,11 @@ export function registerKeybindingHandlers(
     const snapshot = service.ensureFile()
     authorizeExternalPath(snapshot.path)
     const error = await shell.openPath(snapshot.path)
+
     if (error) {
       throw new Error(error)
     }
+
     return snapshot
   })
 
@@ -60,6 +66,7 @@ export function registerKeybindingHandlers(
     const snapshot = service.ensureFile()
     authorizeExternalPath(snapshot.path)
     shell.showItemInFolder(snapshot.path)
+
     return snapshot
   })
 }

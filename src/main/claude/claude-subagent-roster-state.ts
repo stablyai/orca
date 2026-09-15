@@ -38,26 +38,34 @@ export function applyClaudeSubagentInvocation(
   if (tracked.invocationIds === null) {
     return false
   }
+
   const newInvocation =
     frame.announcement && frame.toolUseId !== null && !tracked.invocationIds.has(frame.toolUseId)
+
   if (newInvocation && frame.toolUseId) {
     if (tracked.invocationIds.size >= MAX_INVOCATIONS_PER_SUBAGENT) {
       tracked.invocationIds = null
       tracked.entry = { ...tracked.entry, state: 'unverifiable', settledAt: now() }
+
       return true
     }
+
     tracked.invocationIds.add(frame.toolUseId)
+
     if (tracked.toolUseId !== null && tracked.toolUseId !== frame.toolUseId) {
       tracked.backgrounded = frame.backgrounded ?? false
       tracked.entry = { ...tracked.entry, state: frame.state ?? 'working', settledAt: undefined }
     }
+
     tracked.toolUseId = frame.toolUseId
   } else if (tracked.toolUseId && frame.toolUseId && tracked.toolUseId !== frame.toolUseId) {
     return false
   }
+
   if (tracked.toolUseId === null) {
     tracked.toolUseId = frame.toolUseId
   }
+
   return true
 }
 
@@ -67,9 +75,12 @@ export function applyClaudeSubagentInvocation(
  *  must not collide with a provider that names its own child `Audit 2`. */
 export function claimClaudeSubagentLabel(group: RosterGroup, base: string): string {
   let candidate = base
+
   for (let ordinal = 2; group.claimedLabels.has(candidate); ordinal++) {
     candidate = `${base} ${ordinal}`
   }
+
   group.claimedLabels.add(candidate)
+
   return candidate
 }

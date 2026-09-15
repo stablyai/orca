@@ -42,18 +42,22 @@ export function LinearAgentSkillInstallCta({
   // Why: mirror the sidebar setup prompt's runtime resolution so both surfaces
   // agree on which machine (host vs. WSL distro) is scanned and installed to.
   const remote = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+
   const agentRuntime = useMemo(
     () => getLinearPromptAgentRuntime(settings, getCurrentPlatform(), remote),
     [remote, settings]
   )
+
   const skillDiscoveryTarget = useMemo(
     () => getLinearPromptSkillDiscoveryTarget(agentRuntime),
     [agentRuntime]
   )
+
   const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     discoveryTarget: skillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const command = useMemo(
     () =>
       buildSkillCommandForRuntime(
@@ -64,6 +68,7 @@ export function LinearAgentSkillInstallCta({
       ),
     [agentRuntime, skill.installed, skill.skills]
   )
+
   const subordinateRowClass = useIntegrationSubordinateRowClass('space-y-1.5')
   const commandRowClass = useIntegrationCommandRowClass()
 

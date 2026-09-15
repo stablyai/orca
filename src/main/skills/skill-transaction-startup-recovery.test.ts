@@ -26,6 +26,7 @@ async function packageVersion(root: string, name: string, versionId: string, bod
     join(source, 'SKILL.md'),
     `---\nname: ${name}\ndescription: Recovery\n---\n\n${body}\n`
   )
+
   return createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, `${name}-${versionId}.tar.gz`),
@@ -52,6 +53,7 @@ async function install(
     hostIdentity: 'test',
     expectedPackageDigest: archive.manifest.packageDigest
   })
+
   return { archive, canonicalPath: join(destinationRoot, name) }
 }
 
@@ -116,9 +118,11 @@ describe('skill transaction startup recovery', () => {
     const first = await install(root, 'alpha', 'version_1', '# First')
     const second = await packageVersion(root, 'alpha', 'version_2', '# Second')
     const previous = await readSkillInstallReceipt(stateDirectory, first.canonicalPath)
+
     if (!previous) {
       throw new Error('missing receipt')
     }
+
     const extractionPath = join(root, 'skills', '.orca-skill-extract-restart')
     const stagingPath = join(root, 'skills', '.alpha.orca-staging-restart')
     const backupPath = join(root, 'skills', '.alpha.orca-backup-restart')
@@ -130,6 +134,7 @@ describe('skill transaction startup recovery', () => {
     await rename(join(extractionPath, 'skill'), stagingPath)
     await rename(first.canonicalPath, backupPath)
     await rename(stagingPath, first.canonicalPath)
+
     const receipt: SkillInstallReceiptV1 = {
       ...previous,
       versionId: second.manifest.versionId,
@@ -137,6 +142,7 @@ describe('skill transaction startup recovery', () => {
       archiveSha256: second.archiveSha256,
       fileModes: second.manifest.files
     }
+
     const journal: SkillInstallJournalV1 = {
       schemaVersion: 1,
       operation: 'install',
@@ -150,6 +156,7 @@ describe('skill transaction startup recovery', () => {
       backupFileModes: first.archive.manifest.files,
       receipt
     }
+
     await writeSkillStateFile(skillInstallJournalPath(stateDirectory, first.canonicalPath), journal)
     const lockPath = skillInstallLockPath(stateDirectory, first.canonicalPath)
     await mkdir(dirname(lockPath), { recursive: true })
@@ -174,11 +181,14 @@ describe('skill transaction startup recovery', () => {
     const stateDirectory = join(root, 'state')
     const installed = await install(root, 'beta', 'version_1', '# Keep')
     const receipt = await readSkillInstallReceipt(stateDirectory, installed.canonicalPath)
+
     if (!receipt) {
       throw new Error('missing receipt')
     }
+
     const backupPath = join(root, 'skills', '.beta.orca-remove-backup-restart')
     await rename(installed.canonicalPath, backupPath)
+
     const journal: SkillRemovalJournalV1 = {
       schemaVersion: 1,
       operation: 'remove',
@@ -201,6 +211,7 @@ describe('skill transaction startup recovery', () => {
       receipt,
       allowedProviderRoots: []
     }
+
     await writeSkillStateFile(
       skillRemovalJournalPath(stateDirectory, installed.canonicalPath),
       journal

@@ -19,6 +19,7 @@ vi.mock('./structured-agent-session-create', () => ({
     value: { sessionId: args.envelope.sessionId }
   })
 }))
+
 vi.mock('./orchestration-structured-worker-session', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   // The realistic post-create failure: the session is live, the preamble turn is not acknowledged.
@@ -26,26 +27,31 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
     throw new Error('The dispatch preamble was rejected: no capacity')
   }
 }))
+
 vi.mock('./orchestration/worker/worker-start-validation', () => ({
   prepareLocalWorkerStart: () => ({
     agent: 'claude',
     launch: { receipt: { requested: null, effective: null }, preferences: undefined }
   })
 }))
+
 vi.mock('./orchestration/worker/worker-setup-gate', () => ({
   persistGatedSetupSpawnFailure: () => false,
   persistWorkerReadinessStage: () => {},
   persistWorkerSetupWaitOutcome: () => {}
 }))
+
 vi.mock('./orchestration/worker/worker-start-receipt', () => ({
   failWorkerStartWithReceipt: (args: { failedStage: string }) => ({
     state: 'failed',
     stage: args.failedStage
   })
 }))
+
 vi.mock('./orchestration/runs/dispatch-creator', () => ({
   resolveDispatchCreator: () => ({ kind: 'terminal', handle: 'term_c' })
 }))
+
 vi.mock('../../orchestration/preamble', () => ({ buildDispatchPreamble: () => 'preamble' }))
 
 const { startLocalWorker } = await import('./orchestration/worker/local-worker-start')
@@ -80,11 +86,13 @@ function installHost() {
       }
     }
   } as never)
+
   return { closed, visibility }
 }
 
 function fakes() {
   const retireStructuredAgentSessionTabFromSnapshot = vi.fn(() => true)
+
   const runtime = {
     showTerminal: async () => ({ worktreeId: WORKTREE }),
     showManagedTerminalWorkspace: async () => ({ id: WORKTREE }),
@@ -104,6 +112,7 @@ function fakes() {
     getTerminalPaneKey: vi.fn(() => 'pane_1'),
     retireStructuredAgentSessionTabFromSnapshot
   } as unknown as OrcaRuntimeService
+
   const db = {
     createStartingWorkerDispatch: () => ({
       dispatch: { id: 'd_fail', depth: 0 },
@@ -112,6 +121,7 @@ function fakes() {
     recordWorkerStage: () => {},
     prepareStartingWorkerAuthority: () => 'capability'
   } as unknown as OrchestrationDb
+
   return { runtime, db, retireStructuredAgentSessionTabFromSnapshot }
 }
 

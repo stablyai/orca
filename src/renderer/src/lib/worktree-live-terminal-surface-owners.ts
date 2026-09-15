@@ -40,7 +40,9 @@ function isScopedTerminalListResult(
   ) {
     return false
   }
+
   const hostScope = (value as { hostScope?: unknown }).hostScope
+
   return (
     Boolean(hostScope) &&
     typeof hostScope === 'object' &&
@@ -53,6 +55,7 @@ function toSurfaceOwner(terminal: RuntimeTerminalSummary): LiveTerminalSurfaceOw
   if (!terminal.ptyId || !terminal.tabId || terminal.tabId.includes(':')) {
     return null
   }
+
   return isTerminalLeafId(terminal.leafId)
     ? {
         paneKey: makePaneKey(terminal.tabId, terminal.leafId),
@@ -67,6 +70,7 @@ export function indexLiveTerminalSurfaceOwners(
   worktreeId: string
 ): Map<string, LiveTerminalSurfaceOwner | null> {
   const owners = new Map<string, LiveTerminalSurfaceOwner | null>()
+
   for (const terminal of terminals) {
     // `orphaned` is the host's own word for "live PTY, no surface owns it".
     // Path spelling can differ between the host's row and the renderer's id; dropping a row
@@ -78,6 +82,7 @@ export function indexLiveTerminalSurfaceOwners(
     ) {
       continue
     }
+
     const owner = toSurfaceOwner(terminal)
     const recorded = owners.get(terminal.ptyId)
     // Two surfaces claiming one PTY is the duplicate this index must not endorse.
@@ -86,6 +91,7 @@ export function indexLiveTerminalSurfaceOwners(
       owners.has(terminal.ptyId) && recorded?.paneKey !== owner?.paneKey ? null : owner
     )
   }
+
   return owners
 }
 
@@ -99,6 +105,7 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
   if (typeof window === 'undefined') {
     return null
   }
+
   const response = await window.api.runtime.call({
     method: 'terminal.list',
     params: {
@@ -107,10 +114,13 @@ export async function readWorktreeLiveTerminalSurfaceOwners(
       includeVisualLayouts: false
     }
   })
+
   if (!response.ok || !isScopedTerminalListResult(response.result)) {
     return null
   }
+
   const { hostScope, terminals, truncated } = response.result
+
   // A worktree-scoped listing names every host but the target's as omitted by
   // design, so completeness here is "the workspace's own host answered" —
   // `hostIds` holds exactly that host when it did. A truncated list never proves

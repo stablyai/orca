@@ -2,19 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionsByPartition, fromPartition, fromPartitionMock } = vi.hoisted(() => {
   const sessionsByPartition = new Map<string, Record<string, ReturnType<typeof vi.fn>>>()
+
   const fromPartition = (partition: string): Record<string, ReturnType<typeof vi.fn>> => {
     const existing = sessionsByPartition.get(partition)
+
     if (existing) {
       return existing
     }
+
     const created = {
       resolveProxy: vi.fn(async () => 'DIRECT'),
       setProxy: vi.fn(async () => {}),
       closeAllConnections: vi.fn(async () => {})
     }
+
     sessionsByPartition.set(partition, created)
+
     return created
   }
+
   return { sessionsByPartition, fromPartition, fromPartitionMock: vi.fn(fromPartition) }
 })
 
@@ -71,6 +77,7 @@ describe('browser session proxy', () => {
 
     expect(fromPartitionMock).toHaveBeenCalledWith('persist:orca-browser')
     expect(fromPartitionMock).toHaveBeenCalledWith('persist:orca-browser-session-iso')
+
     for (const partition of PROFILES.map((p) => p.partition)) {
       expect(sessionsByPartition.get(partition)?.setProxy).toHaveBeenCalledWith({
         mode: 'fixed_servers',

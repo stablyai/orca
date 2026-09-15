@@ -46,12 +46,15 @@ describe('fetchWorktrees', () => {
 
   it('coalesces concurrent duplicate refreshes for the same repo and host', async () => {
     const store = createTestStore()
+
     const refreshed = makeWorktree({
       id: 'repo1::/path/refreshed',
       repoId: 'repo1',
       path: '/path/refreshed'
     })
+
     let releaseScan!: () => void
+
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async ({ repoId }: { repoId: string }) => {
@@ -59,6 +62,7 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseScan = release
           })
+
           return makeDetectedResult(repoId, [refreshed])
         }
       )
@@ -92,12 +96,14 @@ describe('fetchWorktrees', () => {
     } as unknown as Partial<AppState>)
 
     let releaseScan!: () => void
+
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(async ({ repoId }) => {
         resolve()
         await new Promise<void>((release) => {
           releaseScan = release
         })
+
         return makeDetectedResult(repoId, [surviving])
       })
     })
@@ -197,12 +203,15 @@ describe('fetchWorktrees', () => {
 
   it('coalesces fetchDetectedWorktrees with a matching fetchWorktrees refresh', async () => {
     const store = createTestStore()
+
     const refreshed = makeWorktree({
       id: 'repo1::/path/refreshed',
       repoId: 'repo1',
       path: '/path/refreshed'
     })
+
     let releaseScan!: () => void
+
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async ({ repoId }: { repoId: string }) => {
@@ -210,6 +219,7 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseScan = release
           })
+
           return makeDetectedResult(repoId, [refreshed])
         }
       )
@@ -232,18 +242,22 @@ describe('fetchWorktrees', () => {
 
   it('keeps authoritative refreshes separate from non-authoritative in-flight results', async () => {
     const store = createTestStore()
+
     const fallback = makeWorktree({
       id: 'repo1::/path/fallback',
       repoId: 'repo1',
       path: '/path/fallback'
     })
+
     const authoritative = makeWorktree({
       id: 'repo1::/path/authoritative',
       repoId: 'repo1',
       path: '/path/authoritative'
     })
+
     let releaseFallback!: () => void
     let releaseAuthoritative!: () => void
+
     const fallbackStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async ({ repoId }: { repoId: string }) => {
@@ -251,6 +265,7 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseFallback = release
           })
+
           return makeDetectedResult(repoId, [fallback], {
             authoritative: false,
             source: 'metadata-fallback'
@@ -258,6 +273,7 @@ describe('fetchWorktrees', () => {
         }
       )
     })
+
     const authoritativeStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async ({ repoId }: { repoId: string }) => {
@@ -265,6 +281,7 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseAuthoritative = release
           })
+
           return makeDetectedResult(repoId, [authoritative])
         }
       )
@@ -272,9 +289,11 @@ describe('fetchWorktrees', () => {
 
     const bestEffortRequest = store.getState().fetchWorktrees('repo1')
     await fallbackStarted
+
     const authoritativeRequest = store
       .getState()
       .fetchWorktrees('repo1', { requireAuthoritative: true })
+
     await authoritativeStarted
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(2)
@@ -290,18 +309,22 @@ describe('fetchWorktrees', () => {
 
   it('keeps same-repo refreshes separate for different execution hosts', async () => {
     const store = createTestStore()
+
     const localWorktree = makeWorktree({
       id: 'repo1::/local/wt1',
       repoId: 'repo1',
       path: '/local/wt1'
     })
+
     const sshWorktree = makeWorktree({
       id: 'repo1::/ssh/wt1',
       repoId: 'repo1',
       path: '/home/orca/wt1'
     })
+
     let releaseLocal!: () => void
     let releaseSsh!: () => void
+
     const localStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async (args: ListDetectedWorktreesArgs) => {
@@ -309,10 +332,12 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseLocal = release
           })
+
           return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [localWorktree]))
         }
       )
     })
+
     const sshStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async (args: ListDetectedWorktreesArgs) => {
@@ -320,10 +345,12 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseSsh = release
           })
+
           return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
         }
       )
     })
+
     store.setState({
       hasHydratedWorktreePurge: true,
       repos: [
@@ -364,12 +391,15 @@ describe('fetchWorktrees', () => {
 
   it('preserves SSH host identity when detected and visible refreshes overlap', async () => {
     const store = createTestStore()
+
     const sshWorktree = makeWorktree({
       id: 'repo-ssh::/home/orca/wt1',
       repoId: 'repo-ssh',
       path: '/home/orca/wt1'
     })
+
     let releaseScan!: () => void
+
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async (args: ListDetectedWorktreesArgs) => {
@@ -377,10 +407,12 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseScan = release
           })
+
           return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
         }
       )
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -416,12 +448,15 @@ describe('fetchWorktrees', () => {
 
   it('preserves SSH host identity when visible refresh starts before detected refresh', async () => {
     const store = createTestStore()
+
     const sshWorktree = makeWorktree({
       id: 'repo-ssh::/home/orca/wt1',
       repoId: 'repo-ssh',
       path: '/home/orca/wt1'
     })
+
     let releaseScan!: () => void
+
     const scanStarted = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async (args: ListDetectedWorktreesArgs) => {
@@ -429,10 +464,12 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((release) => {
             releaseScan = release
           })
+
           return qualifyDetectedResult(args, makeDetectedResult(args.repoId, [sshWorktree]))
         }
       )
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -470,12 +507,15 @@ describe('fetchWorktrees', () => {
     const store = createTestStore()
     let request!: ListDetectedWorktreesArgs
     let resolveProvider!: (result: HostQualifiedDetectedWorktreeResult) => void
+
     const provider = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
       resolveProvider = resolve
     })
+
     mockApi.worktrees.listDetected.mockImplementationOnce(
       async (args: ListDetectedWorktreesArgs) => {
         request = args
+
         return provider
       }
     )
@@ -485,6 +525,7 @@ describe('fetchWorktrees', () => {
       executionHostId: 'ssh:ssh-1' as const,
       authority: TEST_SSH_AUTHORITY
     }
+
     const first = acquireDirectSshDetectedWorktreeRefresh(store, input)
     const second = acquireDirectSshDetectedWorktreeRefresh(store, input)
 
@@ -506,11 +547,13 @@ describe('fetchWorktrees', () => {
 
   it('merges one exact direct provider result once without a second scan', async () => {
     const store = createTestStore()
+
     const worktree = makeWorktree({
       id: 'repo-ssh::/home/orca/feature',
       repoId: 'repo-ssh',
       path: '/home/orca/feature'
     })
+
     store.setState({
       repos: [
         {
@@ -534,6 +577,7 @@ describe('fetchWorktrees', () => {
       executionHostId: 'ssh:ssh-1',
       authority: TEST_SSH_AUTHORITY
     })
+
     const providerResult = await lease.result
     const firstMerge = lease.merge(providerResult)
     const secondMerge = lease.merge(providerResult)
@@ -550,6 +594,7 @@ describe('fetchWorktrees', () => {
 
   it('rejects a late duplicate exact-host owner with zero mutation publications', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo-ssh::/home/orca/existing',
       repoId: 'repo-ssh',
@@ -557,6 +602,7 @@ describe('fetchWorktrees', () => {
       branch: 'refs/heads/old',
       hostId: 'ssh:ssh-1'
     })
+
     store.setState({
       repos: [
         {
@@ -582,6 +628,7 @@ describe('fetchWorktrees', () => {
           resolveProvider = resolve
         })
     )
+
     const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
       repoId: 'repo-ssh',
       executionHostId: 'ssh:ssh-1',

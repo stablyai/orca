@@ -33,10 +33,12 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 let clock = 1_000
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -73,11 +75,13 @@ afterEach(async () => {
 describe('sequences', () => {
   it('assigns a contiguous sequence with no gaps or reuse under concurrent appends', async () => {
     const journal = await open()
+
     const results = await Promise.all(
       Array.from({ length: 25 }, (_unused, index) =>
         journal.appendItem(item(index), body(`m${index}`), { fence: 1 })
       )
     )
+
     const sequences = results.map((result) => result.cursor.sequence)
     expect(new Set(sequences).size).toBe(25)
     expect(sequences.slice().sort((a, b) => a - b)).toEqual(
@@ -87,11 +91,13 @@ describe('sequences', () => {
 
   it('serializes revisions of one item so the last write wins deterministically', async () => {
     const journal = await open()
+
     const results = await Promise.all([
       journal.appendItem(item(0), body('a'), { fence: 1 }),
       journal.appendItem(item(0), body('b'), { fence: 1 }),
       journal.appendItem(item(0), body('c'), { fence: 1 })
     ])
+
     expect(results.map((result) => result.revision)).toEqual([1, 2, 3])
     expect(journal.snapshot().items).toHaveLength(1)
     expect(journal.snapshot().items[0]?.revision).toBe(3)
@@ -115,12 +121,14 @@ describe('sequences', () => {
   it('preserves an oversized identity and its raw digest-form mimic across reopen', async () => {
     const oversizedTurnId = 'a'.repeat(MAX_JOURNAL_KEY_COMPONENT_CHARS + 1)
     const digestFormMimic = boundJournalKeyComponent(oversizedTurnId)
+
     const identityFor = (turnId: string): AgentJournalItemIdentity => ({
       provider: 'codex',
       threadId: 'thread-1',
       turnId,
       ordinal: 0
     })
+
     const oversizedIdentity = identityFor(oversizedTurnId)
     const mimicIdentity = identityFor(digestFormMimic)
     const journal = await open()
@@ -212,9 +220,11 @@ describe('replay', () => {
 
   it('keeps the intact prefix and drops the rejected suffix', async () => {
     const journal = await open()
+
     for (let index = 0; index < 4; index += 1) {
       await journal.appendItem(item(index), body(`m${index}`), { fence: 1 })
     }
+
     const before = journal.epoch
     await journal.close()
     await withJournalDatabase(root, (db) => {
@@ -263,6 +273,7 @@ describe('bounds', () => {
 describe('lifecycle batches', () => {
   it('deduplicates concurrent submissions before appending a second row', async () => {
     const journal = await open()
+
     const input = {
       settlementId: 'concurrent-settlement',
       fence: 1,
@@ -279,12 +290,14 @@ describe('lifecycle batches', () => {
 
   it('applies every mutation at one sequence and deduplicates a replay across reopen', async () => {
     const journal = await open()
+
     const turn: AgentJournalItemIdentity = {
       provider: 'legacy',
       agent: 'codex',
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
+
     await journal.appendItem(turn, { kind: 'status', text: 'working' }, { fence: 1 })
 
     const settled = await journal.appendLifecycleBatch({
@@ -300,9 +313,11 @@ describe('lifecycle batches', () => {
         { kind: 'tombstone', identity: turn }
       ]
     })
+
     const atSettlement = journal
       .snapshot()
       .items.filter((entry) => entry.sequence === settled.sequence)
+
     expect(atSettlement).toHaveLength(2)
     expect(
       journal
@@ -313,11 +328,13 @@ describe('lifecycle batches', () => {
 
     const reopened = await open()
     const beforeReplay = reopened.cursor()
+
     const replay = await reopened.appendLifecycleBatch({
       settlementId: 'exit:turn-1',
       fence: 1,
       mutations: [{ kind: 'item', identity: item(9), body: body('must not appear') }]
     })
+
     expect(replay).toEqual(beforeReplay)
     expect(
       reopened
@@ -378,6 +395,7 @@ async function withJournalDatabase(
 ): Promise<void> {
   const { openJournalDatabase } = await import('./journal-database')
   const opened = openJournalDatabase(journalDatabaseFile(journalDir))
+
   try {
     run(opened.db)
   } finally {

@@ -35,11 +35,13 @@ async function createBrowserTab(
   return page.evaluate(
     ({ targetWorktreeId, targetUrl, targetTitle }) => {
       const store = window.__store
+
       if (!store) {
         return null
       }
 
       const state = store.getState()
+
       const tab = state.createBrowserTab(
         targetWorktreeId,
         targetUrl ?? state.browserDefaultUrl ?? 'about:blank',
@@ -48,6 +50,7 @@ async function createBrowserTab(
           activate: true
         }
       )
+
       return { id: tab.id, pageId: tab.activePageId ?? null }
     },
     { targetWorktreeId: worktreeId, targetUrl: url, targetTitle: title }
@@ -60,15 +63,18 @@ async function switchToTerminalTab(
 ): Promise<void> {
   await page.evaluate((targetWorktreeId) => {
     const store = window.__store
+
     if (!store) {
       return
     }
 
     const state = store.getState()
     const terminalTab = (state.tabsByWorktree[targetWorktreeId] ?? [])[0]
+
     if (terminalTab) {
       state.setActiveTab(terminalTab.id)
     }
+
     state.setActiveTabType('terminal')
   }, worktreeId)
 }
@@ -81,11 +87,13 @@ async function switchToBrowserTab(
   await page.evaluate(
     ({ targetWorktreeId, targetBrowserTabId }) => {
       const store = window.__store
+
       if (!store) {
         return
       }
 
       const state = store.getState()
+
       if (
         (state.browserTabsByWorktree[targetWorktreeId] ?? []).some(
           (tab) => tab.id === targetBrowserTabId
@@ -114,8 +122,10 @@ async function startBrowserFormServer(host = '127.0.0.1'): Promise<{
       </html>
     `)
   })
+
   await new Promise<void>((resolve) => server.listen(0, host, resolve))
   const port = (server.address() as AddressInfo).port
+
   return {
     url: (label: string) => `http://${host}:${port}/${encodeURIComponent(label)}`,
     close: () => closeServer(server)
@@ -131,6 +141,7 @@ async function startBrowserWindowCloseServer(): Promise<{
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
     const pathname = new URL(request.url ?? '/', origin).pathname
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+
     if (pathname === '/source') {
       response.end(`
         <!doctype html>
@@ -139,8 +150,10 @@ async function startBrowserWindowCloseServer(): Promise<{
           <body><a id="window-close-link" href="${origin}/window-close" target="_blank">Open close page</a></body>
         </html>
       `)
+
       return
     }
+
     response.end(`
       <!doctype html>
       <html>
@@ -158,8 +171,10 @@ async function startBrowserWindowCloseServer(): Promise<{
       </html>
     `)
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const port = (server.address() as AddressInfo).port
+
   return {
     url: `http://127.0.0.1:${port}/window-close`,
     sourceUrl: `http://127.0.0.1:${port}/source`,
@@ -174,9 +189,11 @@ async function readBrowserWindowCloseStatus(
   return page.evaluate(async (targetBrowserTabId) => {
     const slot = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
     const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       return 'webview missing'
     }
+
     try {
       return (await webview.executeJavaScript(
         'document.querySelector("#s")?.textContent ?? "status missing"'
@@ -192,8 +209,10 @@ async function closeServer(server: Server): Promise<void> {
     server.close((error) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve()
     })
   )
@@ -214,10 +233,13 @@ async function clickBrowserLink(
       const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
         (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
       )
+
       const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
       if (!webview) {
         throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
       }
+
       const point = (await webview.executeJavaScript(`(async () => {
         const deadline = Date.now() + 5000
         while (Date.now() < deadline) {
@@ -237,13 +259,17 @@ async function clickBrowserLink(
         }
         return null
       })()`)) as { x: number; y: number } | null
+
       if (!point) {
         throw new Error(`Missing browser link ${targetSelector}`)
       }
+
       const holdShift = inputModifiers.includes('shift')
+
       if (holdShift) {
         await webview.sendInputEvent({ type: 'keyDown', keyCode: 'Shift', modifiers: ['shift'] })
       }
+
       try {
         await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
         await webview.sendInputEvent({
@@ -283,9 +309,12 @@ async function waitForTabIdByExactTitle(
   const resolveTabId = (): Promise<string | null> =>
     page.locator('[data-tab-id]').evaluateAll((tabs, exactTitle) => {
       const tab = tabs.find((candidate) => candidate.textContent?.trim() === exactTitle)
+
       return tab?.getAttribute('data-tab-id') ?? null
     }, title)
+
   await expect.poll(resolveTabId, { timeout: 10_000 }).not.toBeNull()
+
   return (await resolveTabId()) as string
 }
 
@@ -321,10 +350,13 @@ async function readBrowserInputValue(
     const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
       (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
     )
+
     const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       return null
     }
+
     try {
       return await webview.executeJavaScript('document.querySelector("#q")?.value ?? null')
     } catch {
@@ -347,10 +379,13 @@ async function writeBrowserInputValue(
       const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
         (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
       )
+
       const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
       if (!webview) {
         throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
       }
+
       await webview.executeJavaScript(
         `document.querySelector("#q").value = ${JSON.stringify(nextValue)}`
       )
@@ -406,8 +441,10 @@ test.describe('Browser Tab', () => {
     // The active browser tab should have a URL (even if it's about:blank or the default)
     const activeBrowserTabId = await orcaPage.evaluate(() => {
       const store = window.__store
+
       return store?.getState().activeBrowserTabId ?? null
     })
+
     expect(activeBrowserTabId).not.toBeNull()
   })
 
@@ -445,14 +482,17 @@ test.describe('Browser Tab', () => {
     orcaPage
   }) => {
     const formServer = await startBrowserFormServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
       const firstTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         formServer.url('First search'),
         'First Form'
       )
+
       expect(firstTab?.id).toBeTruthy()
       await writeBrowserInputValue(orcaPage, firstTab!.id, 'first typed value')
 
@@ -462,6 +502,7 @@ test.describe('Browser Tab', () => {
         formServer.url('Second search'),
         'Second Form'
       )
+
       expect(secondTab?.id).toBeTruthy()
       await writeBrowserInputValue(orcaPage, secondTab!.id, 'second typed value')
 
@@ -483,14 +524,17 @@ test.describe('Browser Tab', () => {
 
   test('browser page reload restores the configured 100% zoom', async ({ orcaPage }) => {
     const formServer = await startBrowserFormServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
       const browserTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         formServer.url('Zoom reload'),
         'Zoom Reload'
       )
+
       expect(browserTab?.id).toBeTruthy()
       await expect
         .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
@@ -499,15 +543,18 @@ test.describe('Browser Tab', () => {
       const zoomLevels = await orcaPage.evaluate(async (browserTabId) => {
         const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
         const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
         if (!webview) {
           throw new Error(`Missing webview for browser tab ${browserTabId}`)
         }
 
         const levels = [webview.getZoomLevel()]
         webview.setZoomLevel(0.5)
+
         for (let reload = 0; reload < 3; reload += 1) {
           await new Promise<void>((resolve) => {
             webview.addEventListener('dom-ready', () => resolve(), { once: true })
+
             if (reload === 1) {
               webview.reloadIgnoringCache()
             } else {
@@ -516,6 +563,7 @@ test.describe('Browser Tab', () => {
           })
           levels.push(webview.getZoomLevel())
         }
+
         return levels
       }, browserTab!.id)
 
@@ -527,14 +575,17 @@ test.describe('Browser Tab', () => {
 
   test('Cmd/Ctrl+0 resets a zoomed browser page to 100%', async ({ orcaPage }) => {
     const formServer = await startBrowserFormServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
       const browserTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         formServer.url('Zoom reset'),
         'Zoom Reset'
       )
+
       expect(browserTab?.id).toBeTruthy()
       await expect
         .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
@@ -544,9 +595,11 @@ test.describe('Browser Tab', () => {
         async ({ browserTabId, browserPageId, modifier }) => {
           const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
           const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
           if (!webview) {
             throw new Error(`Missing webview for browser tab ${browserTabId}`)
           }
+
           window.dispatchEvent(
             new CustomEvent('orca:browser-page-zoom', {
               detail: { browserPageId, direction: 'in' }
@@ -565,6 +618,7 @@ test.describe('Browser Tab', () => {
         .poll(() =>
           orcaPage.evaluate((browserTabId) => {
             const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
+
             return (slot?.querySelector('webview') as Electron.WebviewTag | null)?.getZoomLevel()
           }, browserTab!.id)
         )
@@ -579,12 +633,14 @@ test.describe('Browser Tab', () => {
       startBrowserFormServer(),
       startBrowserFormServer('localhost')
     ])
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
       const tabA = await createBrowserTab(orcaPage, worktreeId, formServerA.url('Zoom A'), 'Zoom A')
       const tabB = await createBrowserTab(orcaPage, worktreeId, formServerB.url('Zoom B'), 'Zoom B')
       expect(tabA?.id).toBeTruthy()
       expect(tabB?.id).toBeTruthy()
+
       for (const tab of [tabA, tabB]) {
         await expect
           .poll(async () => readBrowserInputValue(orcaPage, tab!.id), { timeout: 5_000 })
@@ -596,11 +652,14 @@ test.describe('Browser Tab', () => {
           const webviewFor = (id: string): Electron.WebviewTag => {
             const slot = document.querySelector(`[data-browser-overlay-tab-id="${id}"]`)
             const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
             if (!webview) {
               throw new Error(`Missing webview for browser tab ${id}`)
             }
+
             return webview
           }
+
           const webviewA = webviewFor(tabAId)
           const webviewB = webviewFor(tabBId)
 
@@ -613,6 +672,7 @@ test.describe('Browser Tab', () => {
             )
             await new Promise((resolve) => setTimeout(resolve, 100))
           }
+
           const zoomedB = webviewB.getZoomLevel()
           const untouchedA = webviewA.getZoomLevel()
 
@@ -640,19 +700,23 @@ test.describe('Browser Tab', () => {
     orcaPage
   }) => {
     const linkServer = await startBrowserLinkServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
       const sourceTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         linkServer.sourceUrl,
         'Source page'
       )
+
       expect(sourceTab?.id).toBeTruthy()
 
       const baseWindowCount = await electronApp.evaluate(
         ({ BaseWindow }) => BaseWindow.getAllWindows().length
       )
+
       // A plain main-frame target=_blank click must not navigate the source tab away.
       const sourceTabLocator = orcaPage.locator(`[data-tab-id="${sourceTab!.id}"]`)
       await clickBrowserLink(orcaPage, sourceTab!.id, '#blank-link')
@@ -723,20 +787,24 @@ test.describe('Browser Tab', () => {
     orcaPage
   }) => {
     const closeServer = await startBrowserWindowCloseServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
       const neighboringTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         'about:blank',
         'Neighboring tab'
       )
+
       const sourceTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         closeServer.sourceUrl,
         'Close link source'
       )
+
       expect(neighboringTab?.id).toBeTruthy()
       expect(sourceTab?.id).toBeTruthy()
 
@@ -746,6 +814,7 @@ test.describe('Browser Tab', () => {
         .poll(async () => {
           const tabs = await getBrowserTabs(orcaPage, worktreeId)
           closeTabId = tabs.find((tab) => tab.url === closeServer.url)?.id ?? null
+
           return closeTabId
         })
         .not.toBeNull()
@@ -764,14 +833,17 @@ test.describe('Browser Tab', () => {
     orcaPage
   }) => {
     const closeServer = await startBrowserWindowCloseServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
       const directTab = await createBrowserTab(
         orcaPage,
         worktreeId,
         closeServer.url,
         'Direct close tab'
       )
+
       expect(directTab?.id).toBeTruthy()
 
       await expect
@@ -785,10 +857,13 @@ test.describe('Browser Tab', () => {
               const slot = document.querySelector(
                 `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
               )
+
               const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
               if (!webview) {
                 return 'webview missing'
               }
+
               try {
                 return (await webview.executeJavaScript(`(() => {
                   window.close = () => 'replacement-called'
@@ -812,6 +887,7 @@ test.describe('Browser Tab', () => {
    */
   test('browser tab retains state when switching worktrees and back', async ({ orcaPage }) => {
     const allWorktreeIds = await getAllWorktreeIds(orcaPage)
+
     if (allWorktreeIds.length < 2) {
       test.skip(true, 'Need at least 2 worktrees to test worktree switching')
     }

@@ -7,10 +7,15 @@ import {
 } from './automation-terminal-ownership'
 
 const WORKTREE_ID = 'worktree-1'
+
 const TAB_ID = 'tab-1'
+
 const LEAF_ID = '7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 const PTY_ID = 'pty-1'
+
 const CREATED_AT = 100
 
 type OwnershipState = Pick<
@@ -27,6 +32,7 @@ type OwnershipState = Pick<
 
 function createStore() {
   const closeTab = vi.fn()
+
   let state: OwnershipState = {
     activeWorktreeId: 'other-worktree',
     activeTabId: 'other-tab',
@@ -52,21 +58,27 @@ function createStore() {
     lastTerminalInputAtByPaneKey: {},
     closeTab
   }
+
   const listeners = new Set<(state: AppState, previousState: AppState) => void>()
+
   const store: AutomationTerminalOwnershipStore = {
     getState: () => state as unknown as AppState,
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     }
   }
+
   const update = (patch: Partial<OwnershipState>): void => {
     const previousState = state
     state = { ...state, ...patch }
+
     for (const listener of listeners) {
       listener(state as unknown as AppState, previousState as unknown as AppState)
     }
   }
+
   return { closeTab, getState: () => state, store, update }
 }
 

@@ -10,17 +10,22 @@ export const createLineageToggleHandlerCache = (
   toggleGroup: (groupKey: string) => void
 ): ((groupKey: string) => LineageToggleHandler) => {
   const handlersByGroupKey = new Map<string, LineageToggleHandler>()
+
   return (groupKey: string) => {
     const cached = handlersByGroupKey.get(groupKey)
+
     if (cached) {
       return cached
     }
+
     const handler: LineageToggleHandler = (event) => {
       event.preventDefault()
       event.stopPropagation()
       toggleGroup(groupKey)
     }
+
     handlersByGroupKey.set(groupKey, handler)
+
     return handler
   }
 }

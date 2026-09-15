@@ -37,6 +37,7 @@ function relayRejection(data: unknown): Error {
   const error = new Error(UNAVAILABLE_MESSAGE)
   Object.defineProperty(error, 'code', { value: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE })
   Object.defineProperty(error, 'data', { value: data })
+
   return error
 }
 
@@ -49,6 +50,7 @@ function rejectSpawnOnce(mux: MockMultiplexer, error: Error): void {
     if (method === 'pty.spawn') {
       throw error
     }
+
     return undefined
   })
 }
@@ -56,6 +58,7 @@ function rejectSpawnOnce(mux: MockMultiplexer, error: Error): void {
 const SPAWN_OPTS = { cwd: '/repo', cols: 80, rows: 24 }
 
 let mux: MockMultiplexer
+
 let provider: SshPtyProvider
 
 beforeEach(() => {

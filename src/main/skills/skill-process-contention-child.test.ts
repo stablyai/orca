@@ -7,12 +7,15 @@ const CHILD = process.env.ORCA_SKILL_CONTENTION_CHILD === '1'
 
 async function waitForRelease(path: string): Promise<void> {
   const deadline = Date.now() + 15_000
+
   while (Date.now() < deadline) {
     if (await stat(path).catch(() => null)) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 20))
   }
+
   throw new Error('skill-contention-release-timeout')
 }
 
@@ -22,9 +25,11 @@ describe.runIf(CHILD)('skill process contention child', () => {
     const archivePath = process.env.ORCA_SKILL_CONTENTION_ARCHIVE
     const resultPath = process.env.ORCA_SKILL_CONTENTION_RESULT
     const role = process.env.ORCA_SKILL_CONTENTION_ROLE
+
     if (!root || !archivePath || !resultPath || !role) {
       throw new Error('missing-skill-contention-input')
     }
+
     const result = await installLocalSkillPackage(
       {
         operationId: `contention-${role}`,
@@ -41,16 +46,20 @@ describe.runIf(CHILD)('skill process contention child', () => {
           if (role !== 'holder' || phase !== 'prepared' || boundary !== 'before') {
             return
           }
+
           const readyPath = process.env.ORCA_SKILL_CONTENTION_READY
           const releasePath = process.env.ORCA_SKILL_CONTENTION_RELEASE
+
           if (!readyPath || !releasePath) {
             throw new Error('missing-skill-contention-coordination')
           }
+
           await writeFile(readyPath, `${process.pid}\n`)
           await waitForRelease(releasePath)
         }
       }
     )
+
     await writeFile(resultPath, JSON.stringify(result))
   })
 })

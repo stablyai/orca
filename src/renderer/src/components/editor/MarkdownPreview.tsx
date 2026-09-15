@@ -12,6 +12,7 @@ export {
   decodeMarkdownPreviewAnchor,
   getMarkdownPreviewAnchorScrollTop
 } from './markdown-preview-anchor-navigation'
+
 export {
   deriveMarkdownPreviewSourceRoot,
   findMarkdownPreviewOpenedEditFileId,
@@ -46,6 +47,7 @@ export default function MarkdownPreview({
     markdownDocuments,
     markdownAnnotationsEnabled
   })
+
   const viewport = useMarkdownPreviewViewport({
     foundation,
     scrollCacheKey,
@@ -53,7 +55,9 @@ export default function MarkdownPreview({
     content,
     markdownAnnotationsEnabled
   })
+
   const reviewActions = useMarkdownPreviewReviewActions({ foundation, viewport })
+
   const annotationRenderers = useMarkdownPreviewAnnotationRenderers({
     foundation,
     reviewActions,
@@ -61,6 +65,7 @@ export default function MarkdownPreview({
     content,
     markdownAnnotationsEnabled
   })
+
   const components = useMarkdownPreviewComponents({
     foundation,
     viewport,

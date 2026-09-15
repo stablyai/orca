@@ -16,10 +16,12 @@ export function guardLinkProvider(provider: ILinkProvider, label: string): ILink
   return {
     provideLinks(bufferLineNumber, callback) {
       let callbackInvoked = false
+
       const trackedCallback: typeof callback = (links) => {
         callbackInvoked = true
         callback(links)
       }
+
       try {
         provider.provideLinks(bufferLineNumber, trackedCallback)
       } catch (error: unknown) {
@@ -29,6 +31,7 @@ export function guardLinkProvider(provider: ILinkProvider, label: string): ILink
           errorName: error instanceof Error ? error.name : typeof error,
           errorMessage: error instanceof Error ? error.message : String(error)
         })
+
         // Why: only resolve the link request if the provider threw before it
         // already delivered links, so we never double-invoke the callback.
         if (!callbackInvoked) {
@@ -51,10 +54,12 @@ export function installGuardedLinkProviderRegistration(terminal: Terminal): void
   if (typeof terminal.registerLinkProvider !== 'function') {
     return
   }
+
   const register = terminal.registerLinkProvider.bind(terminal)
   let providerCount = 0
   terminal.registerLinkProvider = (provider: ILinkProvider) => {
     providerCount += 1
+
     return register(guardLinkProvider(provider, `provider-${providerCount}`))
   }
 }

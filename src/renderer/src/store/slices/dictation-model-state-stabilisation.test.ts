@@ -6,6 +6,7 @@ import type { AppState } from '../types'
 import { createDictationSlice } from './dictation'
 
 type DictationTestStore = Pick<AppState, 'modelStates' | 'refreshModelStates' | 'setModelStates'>
+
 const dictationSlice = createDictationSlice as unknown as StateCreator<DictationTestStore>
 
 let reply: SpeechModelState[]

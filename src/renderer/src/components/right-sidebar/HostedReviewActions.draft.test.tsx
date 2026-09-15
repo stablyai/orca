@@ -12,6 +12,7 @@ const actionMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: () => false }))
+
 vi.mock('./use-hosted-review-actions', () => ({
   useHostedReviewActions: () => ({
     merging: false,
@@ -25,6 +26,7 @@ vi.mock('./use-hosted-review-actions', () => ({
     handleReopenReview: vi.fn()
   })
 }))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -34,6 +36,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 const repo = { id: 'repo-1', path: '/repo' } as Repo
+
 const worktree = { id: 'worktree-1' } as Worktree
 
 function renderDraft(provider: HostedReviewActionInfo['provider']): string {

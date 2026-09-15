@@ -30,6 +30,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null
     }
+
     const closeFile = vi.fn()
     const closeUnifiedTab = vi.fn()
 
@@ -58,6 +59,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null
     }
+
     const closeFile = vi.fn()
     const closeUnifiedTab = vi.fn()
 
@@ -103,12 +105,14 @@ describe('useIpcEvents browser tab close routing', () => {
   it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {
     const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
     let finishPersist!: () => void
+
     const persistWorkspaceSession = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishPersist = resolve
         })
     )
+
     const respondTerminalTabClose = vi.fn()
     closeTerminalTabMock.mockImplementation((_tabId: string, options: { onClosed?: () => void }) =>
       options.onClosed?.()
@@ -210,6 +214,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
       current: null
     }
+
     const closeBrowserTab = vi.fn()
     const replyTabClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
@@ -239,6 +244,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     expect(closeBrowserTab).not.toHaveBeenCalled()
     expect(replyTabClose).not.toHaveBeenCalledWith({ requestId: 'req-pinned' })
+
     const request = requestPinnedTabCloseConfirm.mock.calls[0][0] as {
       onConfirm: () => void
       onCancel: () => void
@@ -254,6 +260,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
       current: null
     }
+
     const closeBrowserTab = vi.fn()
     const replyTabClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
@@ -280,6 +287,7 @@ describe('useIpcEvents browser tab close routing', () => {
     })
 
     requestTabCloseListenerRef.current?.({ requestId: 'req-cancel', tabId: 'workspace-1' })
+
     const request = requestPinnedTabCloseConfirm.mock.calls[0][0] as {
       onCancel: () => void
     }
@@ -297,6 +305,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
       current: null
     }
+
     const closeBrowserTab = vi.fn()
     const replyTabClose = vi.fn()
     const requestPinnedTabCloseConfirm = vi.fn()
@@ -338,6 +347,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
       current: null
     }
+
     const closeBrowserTab = vi.fn()
     const closeBrowserPage = vi.fn()
     const replyTabClose = vi.fn()
@@ -381,6 +391,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
       current: null
     }
+
     const closeBrowserTab = vi.fn()
     const closeBrowserPage = vi.fn()
     const replyTabClose = vi.fn()

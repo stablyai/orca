@@ -34,7 +34,9 @@ import { getOwnerRepo, getIssueOwnerRepo } from './github-owner-repo-selection'
 import { getRepoUpstream } from './client'
 
 const FORK_PATH = '/tmp/fork-checkout'
+
 const NON_FORK_PATH = '/tmp/plain-checkout'
+
 const SSH_FORK_PATH = '/tmp/ssh-fork-checkout'
 
 // origin -> personal fork, upstream -> parent (the classic fork checkout).
@@ -60,16 +62,20 @@ beforeEach(() => {
   gitExecFileAsyncMock.mockImplementation(
     async (args: string[], options: { cwd?: string } = {}) => {
       const configured = REMOTE_URLS_BY_REPO[options.cwd ?? ''] ?? {}
+
       if (args[0] === 'remote' && args[1] !== 'get-url') {
         return { stdout: `${Object.keys(configured).join('\n')}\n` }
       }
+
       const remoteName = args[2]
       const url = configured[remoteName]
+
       if (!url) {
         const err = new Error(`fatal: No such remote '${remoteName}'`) as Error & { code?: number }
         err.code = 128
         throw err
       }
+
       return { stdout: url }
     }
   )
@@ -99,14 +105,17 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
 
   it('skips git remote get-url upstream on origin-only clones and caches the listing', async () => {
     await getOwnerRepo(NON_FORK_PATH)
+
     const upstreamGetUrl = (): number =>
       gitExecFileAsyncMock.mock.calls.filter(
         ([args]) => args[1] === 'get-url' && args[2] === 'upstream'
       ).length
+
     const listCalls = (): number =>
       gitExecFileAsyncMock.mock.calls.filter(
         ([args]) => args[0] === 'remote' && args[1] !== 'get-url'
       ).length
+
     expect(upstreamGetUrl()).toBe(0)
     expect(listCalls()).toBe(1)
 

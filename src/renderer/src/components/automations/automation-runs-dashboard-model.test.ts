@@ -41,10 +41,12 @@ describe('automation runs dashboard model', () => {
     authority: { kind: 'desktop' },
     selector: { kind: 'self' }
   })
+
   const ssh = row('ssh-row', 'Build host', {
     authority: { kind: 'desktop' },
     selector: { kind: 'ssh', targetId: 'build' }
   })
+
   const runtime = row('runtime-row', 'Cloud runtime', {
     authority: { kind: 'runtime', environmentId: 'cloud' },
     selector: { kind: 'self' }

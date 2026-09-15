@@ -5,23 +5,38 @@ import { LinearIssueAttributeFilterUnsupportedError } from '@/runtime/runtime-li
 import { createTestStore, deferred, issue } from './linear-slice-test-harness'
 
 const linearStatus = vi.fn()
+
 const linearConnect = vi.fn()
+
 const linearDisconnect = vi.fn()
+
 const linearListIssues = vi.fn()
+
 const linearSearchIssues = vi.fn()
+
 const linearListTeams = vi.fn()
+
 const linearGetIssue = vi.fn()
+
 const linearListProjects = vi.fn()
+
 const linearGetCustomView = vi.fn()
+
 const linearGetProject = vi.fn()
+
 const linearListProjectIssues = vi.fn()
+
 const linearListCustomViews = vi.fn()
+
 const linearListCustomViewIssues = vi.fn()
+
 const linearListCustomViewProjects = vi.fn()
+
 const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearConnect: (...args: unknown[]) => linearConnect(...args),
@@ -84,12 +99,14 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
     })
+
     const filtered = {
       stateIds: ['state-1'],
       priorities: [1],
       assignee: null as null,
       labelIds: [] as string[]
     }
+
     linearListIssues
       .mockResolvedValueOnce({ items: [issue('LIN-ALL')] })
       .mockResolvedValueOnce({ items: [issue('LIN-FILTERED')] })
@@ -143,6 +160,7 @@ describe('createLinearSlice caching', () => {
     const stalePromise = store
       .getState()
       .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+
     const forcedPromise = store
       .getState()
       .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
@@ -211,12 +229,14 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
     })
+
     const attributeFilter = {
       stateIds: ['state-1'],
       priorities: [] as number[],
       assignee: null as null,
       labelIds: [] as string[]
     }
+
     // Seed via a successful read so the cache key matches production signing.
     linearListIssues.mockResolvedValueOnce({ items: [issue('LIN-CACHED')] })
     await store.getState().listLinearIssues({

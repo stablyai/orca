@@ -76,6 +76,7 @@ export function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
 
 export function makeFile(overrides: Partial<OpenFile> = {}): OpenFile {
   const id = overrides.id ?? 'file-1'
+
   return {
     id,
     filePath: overrides.filePath ?? `/tmp/orca/${id}.md`,
@@ -94,6 +95,7 @@ export function removeFloatingTerminalTabFromStore(entityId: string): void {
   const state = storeBox.state as FloatingPanelStoreState
   const current = state.tabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID] ?? []
   const remaining = current.filter((tab) => tab.id !== entityId)
+
   if (remaining.length !== current.length) {
     setFloatingTabs(remaining)
   }
@@ -102,6 +104,7 @@ export function removeFloatingTerminalTabFromStore(entityId: string): void {
 export function setFloatingTabs(tabs: TerminalTab[]): void {
   const state = storeBox.state as FloatingPanelStoreState
   const groupId = 'floating-group'
+
   const unifiedTabs = tabs.map<Tab>((tab, index) => ({
     id: tab.id,
     entityId: tab.id,
@@ -114,6 +117,7 @@ export function setFloatingTabs(tabs: TerminalTab[]): void {
     sortOrder: index,
     createdAt: tab.createdAt
   }))
+
   state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: tabs }
   state.unifiedTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: unifiedTabs }
   state.groupsByWorktree = {
@@ -135,6 +139,7 @@ export function setFloatingTabs(tabs: TerminalTab[]): void {
 export function setFloatingEditorTabs(files: OpenFile[]): void {
   const state = storeBox.state as FloatingPanelStoreState
   const groupId = 'floating-group'
+
   const unifiedTabs = files.map<Tab>((file, index) => ({
     id: `tab-${file.id}`,
     entityId: file.id,
@@ -147,6 +152,7 @@ export function setFloatingEditorTabs(files: OpenFile[]): void {
     sortOrder: index,
     createdAt: index
   }))
+
   state.openFiles = files
   state.unifiedTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: unifiedTabs }
   state.groupsByWorktree = {
@@ -166,6 +172,7 @@ export function setFloatingEditorTabs(files: OpenFile[]): void {
 export function setFloatingSimulatorTab(): Tab {
   const state = storeBox.state as FloatingPanelStoreState
   const groupId = 'floating-group'
+
   const tab: Tab = {
     id: 'simulator-tab',
     entityId: 'simulator-tab',
@@ -178,6 +185,7 @@ export function setFloatingSimulatorTab(): Tab {
     sortOrder: 0,
     createdAt: 0
   }
+
   state.unifiedTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] }
   state.groupsByWorktree = {
     [FLOATING_TERMINAL_WORKTREE_ID]: [
@@ -192,5 +200,6 @@ export function setFloatingSimulatorTab(): Tab {
   }
   state.activeGroupIdByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
   state.tabBarOrderByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [tab.id] }
+
   return tab
 }

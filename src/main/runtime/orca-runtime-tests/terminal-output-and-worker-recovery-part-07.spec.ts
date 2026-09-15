@@ -21,15 +21,18 @@ describe('OrcaRuntimeService', () => {
       },
       terminalTopologyRevisionByRepoId: { [TEST_REPO_ID]: 4 }
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     let connected = true
     const writes: [string, string][] = []
     const resize = vi.fn(() => true)
+
     const makeRuntime = (): OrcaRuntimeService => {
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
         write: (ptyId, data) => {
           writes.push([ptyId, data])
+
           return true
         },
         resize,
@@ -51,6 +54,7 @@ describe('OrcaRuntimeService', () => {
             : []
       })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
       return runtime
     }
 
@@ -107,6 +111,7 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
       terminalTopologyRevisionByRepoId: { [TEST_REPO_ID]: 7 }
     }
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     runtime.setPtyController({
@@ -148,11 +153,13 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     const writes: [string, string][] = []
     runtime.setPtyController({
       write: (ptyId: string, data: string) => {
         writes.push([ptyId, data])
+
         return true
       },
       kill: () => true,
@@ -190,8 +197,10 @@ describe('OrcaRuntimeService', () => {
         ...getDefaultWorkspaceSession(),
         tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
       })
+
       return new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     }
+
     const ownerMismatch = makeRuntime()
     ownerMismatch.registerPty('pty-wrong-owner', TEST_WORKTREE_ID, 'ssh-other-host')
     ownerMismatch.onPtySpawned('pty-wrong-owner', 'inc-owner', { awaitsRegistration: false })
@@ -228,6 +237,7 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('terminal_orphan_owner_mismatch')
 
     const reusedHandle = makeRuntime()
+
     for (const [ptyId, incarnationId] of [
       ['pty-first', 'inc-first'],
       ['pty-second', 'inc-second']
@@ -235,6 +245,7 @@ describe('OrcaRuntimeService', () => {
       reusedHandle.registerPty(ptyId, TEST_WORKTREE_ID)
       reusedHandle.onPtySpawned(ptyId, incarnationId, { awaitsRegistration: false })
     }
+
     reusedHandle.setPtyController({
       write: () => true,
       kill: () => true,
@@ -282,6 +293,7 @@ describe('OrcaRuntimeService', () => {
           ...getDefaultWorkspaceSession(),
           tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
         })
+
         const wsl = new OrcaRuntimeService({
           ...runtimeStore,
           flushOrThrow: vi.fn(),
@@ -301,6 +313,7 @@ describe('OrcaRuntimeService', () => {
             localWindowsRuntimeDefault: { kind: 'windows-host' }
           })
         } as never)
+
         wsl.registerPty('pty-wsl', TEST_WORKTREE_ID, null, undefined, true)
         wsl.onPtySpawned('pty-wsl', 'inc-wsl', { awaitsRegistration: false })
         wsl.setPtyController({
@@ -319,8 +332,10 @@ describe('OrcaRuntimeService', () => {
             }
           ]
         })
+
         return wsl
       }
+
       const request = {
         worktree: `id:${TEST_WORKTREE_ID}`,
         expectedTopologyRevision: 0,
@@ -355,13 +370,16 @@ describe('OrcaRuntimeService', () => {
       activeTabId: 'other-tab',
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+
     const processes = [
       ['pty-left', 'inc-left', 'term_left'],
       ['pty-right', 'inc-right', 'term_right'],
       ['pty-shell', 'inc-shell', 'term_shell']
     ] as const
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

@@ -89,6 +89,7 @@ describe('SshRoutedBrowserPageGate', () => {
     useAppStore.setState({
       settings: { ...priorSettings, browserSshWorkspaceRoutingEnabled: false }
     } as Parameters<typeof useAppStore.setState>[0])
+
     try {
       render(
         <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
@@ -134,6 +135,7 @@ describe('SshRoutedBrowserPageGate', () => {
     useAppStore.setState({ updateSettings } as unknown as Parameters<
       typeof useAppStore.setState
     >[0])
+
     try {
       render(
         <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
@@ -158,6 +160,7 @@ describe('SshRoutedBrowserPageGate', () => {
     useAppStore.setState({
       settings: { ...priorSettings, browserSshWorkspaceRoutingDisabledTargetIds: ['target-a'] }
     } as Parameters<typeof useAppStore.setState>[0])
+
     try {
       render(
         <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
@@ -180,11 +183,13 @@ describe('SshRoutedBrowserPageGate', () => {
     // local-egress webview behind the preparing card, and unmount only parks it.
     mocks.executionHostId = 'local'
     mocks.prepare.mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
+
     const view = render(
       <SshRoutedBrowserPageGate worktreeId="wt-1" sessionProfileId={null} pageIds={PAGE_IDS}>
         {(partition) => <div data-testid="page">{String(partition)}</div>}
       </SshRoutedBrowserPageGate>
     )
+
     await settle()
     expect(screen.getByTestId('page').textContent).toBe('null')
 

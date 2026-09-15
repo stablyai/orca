@@ -18,6 +18,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -39,6 +40,7 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/land-pull-request/pr-reviewers-panel.tsx',
       'github-item-dialog/land-pull-request/pr-reviewers-request-actions.ts'
     )
+
     const section = source
 
     expect(section).toContain('getTaskSourceRuntimeSettings(sourceContext)')
@@ -63,6 +65,7 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/edit-item-fields/gh-edit-section.tsx',
       'github-item-dialog/edit-item-fields/gh-edit-section-mutations.ts'
     )
+
     const section = source
     const helperSection = componentSource('github/github-work-item-edit-mutations.ts')
 
@@ -94,11 +97,13 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/load-item-details/work-item-details-cache.ts',
       'github-item-dialog/load-item-details/use-github-item-dialog-details.ts'
     )
+
     const cacheKeySection = sourceBetween(
       source,
       'function getWorkItemDetailsCacheKey',
       'function touchWorkItemDetailsCache'
     )
+
     const matchInvalidationSection = sourceBetween(
       source,
       'function invalidateWorkItemDetailsCacheByMatch',
@@ -119,11 +124,13 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/load-item-details/use-github-item-dialog-details.ts',
       'github-item-dialog/load-item-details/work-item-details-fetch-settle.ts'
     )
+
     const loadedSection = sourceBetween(
       source,
       'const loading = !!cachedEntry?.pending && !cachedEntry?.details',
       '// Why: if a cross-window mutation invalidates'
     )
+
     const resultSection = sourceBetween(source, 'inflight', '.catch((err) => {')
 
     expect(loadedSection).toContain('const detailsLoaded = Boolean(cachedEntry?.details)')
@@ -138,6 +145,7 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/load-item-details/use-github-item-dialog-details.ts',
       'github-item-dialog/load-item-details/pr-file-viewed-change.ts'
     )
+
     const helperSection = componentSource('github/github-work-item-comment-mutations.ts')
 
     expect(helperSection).toContain('getGitHubSourceRuntimeHost(args.sourceContext)')
@@ -152,6 +160,7 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('routes comment mutations through runtime source context when needed', () => {
     const helperSource = componentSource('github/github-work-item-comment-mutations.ts')
+
     const helperSection = sourceBetween(
       helperSource,
       'function addIssueCommentForRepo',
@@ -173,17 +182,21 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/load-item-details/work-item-details-cache.ts',
       'github-item-dialog/load-item-details/pr-file-content-cache.ts'
     )
+
     const commentMutations = componentSource('github/github-work-item-comment-mutations.ts')
+
     const fileContentsSection = sourceBetween(
       source,
       'function loadPRFileContents',
       'touchPRFileContentCache(cacheKey, request)'
     )
+
     const fileContentsCacheKeySection = sourceBetween(
       source,
       'function getPRFileContentCacheKey',
       'function loadPRFileContents'
     )
+
     const listenerSection = sourceBetween(source, 'let workItemMutatedUnsub', '// Why: bounded LRU')
 
     expect(fileContentsCacheKeySection).toContain(
@@ -283,6 +296,7 @@ describe('GitHubItemDialog source host boundaries', () => {
 
   it('uses hydrated work item details for the page checks tab', () => {
     const source = componentSource('github-item-dialog/open-dialog/github-item-dialog-pr-tabs.tsx')
+
     const checksTab = sourceBetween(
       source,
       '<TabsContent value="checks"',
@@ -297,12 +311,14 @@ describe('GitHubItemDialog source host boundaries', () => {
       'github-item-dialog/edit-item-fields/gh-edit-section.tsx',
       'github-item-dialog/edit-item-fields/gh-edit-section-mutations.ts'
     )
+
     expect(editSection).toContain('assertTaskPageGitHubDialogStateAuthority({')
     expect(editSection).toContain('if (authority?.revert())')
 
     const actionsSection = componentSource(
       'github-item-dialog/land-pull-request/pr-actions-panel.tsx'
     )
+
     expect(actionsSection.match(/assertTaskPageGitHubDialogStateAuthority\(\{/g)).toHaveLength(2)
     expect(actionsSection).toContain('if (authority.revert())')
     expect(actionsSection).toContain("state: 'merged'")

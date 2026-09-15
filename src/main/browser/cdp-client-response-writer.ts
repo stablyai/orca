@@ -11,6 +11,7 @@ export class CdpClientResponseWriter {
 
   send(payload: unknown, client = this.getClient()): void {
     const responsePayload = client ? this.addResponseSessionId(payload, client) : payload
+
     if (client?.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(responsePayload))
     }
@@ -20,13 +21,17 @@ export class CdpClientResponseWriter {
     if (typeof payload !== 'object' || payload === null) {
       return payload
     }
+
     const clientId = (payload as { id?: unknown }).id
+
     if (typeof clientId !== 'number') {
       return payload
     }
+
     const responseSessionIds = this.responseSessionIdsByClient.get(client)
     const sessionId = responseSessionIds?.get(clientId)
     responseSessionIds?.delete(clientId)
+
     return sessionId ? { ...payload, sessionId } : payload
   }
 
@@ -44,11 +49,13 @@ export class CdpClientResponseWriter {
 
   recordRequestSessionId(client: WebSocket, clientId: number, msg: { sessionId?: string }): void {
     const responseSessionIds = this.responseSessionIdsByClient.get(client) ?? new Map()
+
     if (msg.sessionId) {
       responseSessionIds.set(clientId, msg.sessionId)
     } else {
       responseSessionIds.delete(clientId)
     }
+
     this.responseSessionIdsByClient.set(client, responseSessionIds)
   }
 

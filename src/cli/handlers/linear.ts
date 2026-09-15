@@ -69,6 +69,7 @@ import { linearRelationWriteHandler } from './linear-relation-write'
 import { runLinearSaveIssue } from './linear-save-issue'
 
 const ISSUE_CONTEXT_TIMEOUT_MS = 120_000
+
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
 
 export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
@@ -78,33 +79,41 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   'linear relation remove': linearRelationWriteHandler('remove'),
   'linear issue': async ({ flags, client, cwd, json }) => {
     const request = buildIssueRequest(flags, cwd, client.isRemote)
+
     const response = await client.call<LinearIssueContextResult>('linear.issueContext', request, {
       timeoutMs: flags.get('full') === true ? ISSUE_CONTEXT_TIMEOUT_MS : undefined
     })
+
     if (!json) {
       printLinearIssueWarnings(response.result)
     }
+
     printResult(response, json, formatLinearIssue)
   },
   'linear search': async ({ flags, client, json }) => {
     const limit = clampLinearSearchLimit(getOptionalPositiveIntegerFlag(flags, 'limit'))
+
     const response = await client.call<LinearSearchResult>('linear.agentSearchIssues', {
       query: getRequiredStringFlag(flags, 'query'),
       limit,
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     })
+
     if (!json) {
       printLinearSearchWarnings(response.result)
     }
+
     printResult(response, json, formatLinearSearch)
   },
   'linear team list': async ({ flags, client, json }) => {
     const response = await client.call<LinearTeamListResult>('linear.agentTeamList', {
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     })
+
     if (!json) {
       printLinearListWarnings(response.result)
     }
+
     printResult(response, json, formatLinearTeamList)
   },
   'linear team members': async ({ flags, client, json }) => {
@@ -112,6 +121,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       teamInput: getRequiredStringFlag(flags, 'team'),
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     })
+
     printResult(response, json, formatLinearTeamMembers)
   },
   'linear team states': async ({ flags, client, json }) => {
@@ -119,6 +129,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       teamInput: getRequiredStringFlag(flags, 'team'),
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     })
+
     printResult(response, json, formatLinearTeamStates)
   },
   'linear team labels': async ({ flags, client, json }) => {
@@ -126,34 +137,43 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       teamInput: getRequiredStringFlag(flags, 'team'),
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     })
+
     printResult(response, json, formatLinearTeamLabels)
   },
   'linear project list': async ({ flags, client, json }) => {
     const limit = clampLinearSearchLimit(getOptionalPositiveIntegerFlag(flags, 'limit'))
+
     const request: LinearProjectListRequest = {
       query: getOptionalStringFlag(flags, 'query'),
       limit,
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     }
+
     const response = await client.call<LinearProjectListResult>('linear.agentProjectList', request)
+
     if (!json) {
       printLinearProjectListWarnings(response.result)
     }
+
     printResult(response, json, formatLinearProjectList)
   },
   'linear list': async ({ flags, client, json }) => {
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
     const filter = getLinearListFilter(flags)
+
     const request: LinearIssueListRequest = {
       filter,
       teamInput: getOptionalStringFlag(flags, 'team'),
       limit,
       workspaceId: getOptionalStringFlag(flags, 'workspace')
     }
+
     const response = await client.call<LinearIssueListResult>('linear.agentIssueList', request)
+
     if (!json) {
       printLinearListWarnings(response.result)
     }
+
     printResult(response, json, formatLinearIssueList)
   },
   'linear status set': async ({ flags, client, cwd, json }) => {
@@ -161,9 +181,11 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       ...buildWriteTargetRequest(flags, cwd, client.isRemote),
       to: getRequiredStringFlag(flags, 'to')
     }
+
     const response = await client.call<LinearStatusSetResult>('linear.issueSetState', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     })
+
     printResult(response, json, formatLinearStatusSet)
   },
   'linear assignee set': async (ctx) =>
@@ -215,15 +237,18 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
   'linear label set': async (ctx) => runLabelUpdate(ctx, 'set'),
   'linear comment add': async ({ flags, client, cwd, json }) => {
     const body = await readLinearBody(flags, cwd, { required: true })
+
     const request: LinearCommentAddRequest = {
       ...buildWriteTargetRequest(flags, cwd, client.isRemote),
       body,
       replyTo: getOptionalStringFlag(flags, 'reply-to'),
       writeId: getOptionalWriteId(flags)
     }
+
     const response = await client.call<LinearCommentAddResult>('linear.issueAddComment', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     })
+
     printResult(response, json, formatLinearCommentAdd)
   },
   'linear attach': async ({ flags, client, cwd, json }) => {
@@ -233,22 +258,27 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       title: getOptionalStringFlag(flags, 'title'),
       writeId: getOptionalWriteId(flags)
     }
+
     const response = await client.call<LinearAttachResult>('linear.issueAttachLink', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     })
+
     printResult(response, json, formatLinearAttach)
   },
   'linear create': async ({ flags, client, cwd, json }) => {
     rejectAllWorkspaceForWrite(flags)
     const parentInput = getOptionalStringFlag(flags, 'parent')
     const parentCurrent = flags.get('parent-current') === true
+
     if (parentInput && parentCurrent) {
       throw new RuntimeClientError(
         'invalid_argument',
         'Use either --parent or --parent-current, not both'
       )
     }
+
     const body = await readLinearBody(flags, cwd, { required: false })
+
     const request: LinearCreateRequest = {
       title: getRequiredStringFlag(flags, 'title'),
       ...(body !== undefined ? { body } : {}),
@@ -268,9 +298,11 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       writeId: getOptionalWriteId(flags),
       context: buildLinearCurrentContext(cwd, client.isRemote)
     }
+
     const response = await client.call<LinearCreateResult>('linear.issueCreate', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     })
+
     printResult(response, json, formatLinearCreate)
   }
 }
@@ -286,6 +318,7 @@ async function runTaskUpdate(
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     }
   )
+
   printResult(response, json, formatLinearTaskUpdate)
 }
 

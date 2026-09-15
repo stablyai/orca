@@ -15,9 +15,11 @@ export function hostNewWorktreeSessionRoute(
   warning?: string
 ): `/h/${string}/session/${string}?${string}` {
   const params = new URLSearchParams({ name: worktreeName, created: '1' })
+
   if (warning?.trim()) {
     params.set('warning', warning)
   }
+
   return `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}?${params}`
 }
 
@@ -37,6 +39,7 @@ export function resolveHostRouteActionState(
   if (current.routeAction === routeAction) {
     return current
   }
+
   return {
     routeAction,
     showNewWorktree: current.showNewWorktree || routeAction === 'newWorktree'
@@ -50,5 +53,6 @@ export function setHostRouteNewWorktreeVisible(
   if (current.showNewWorktree === showNewWorktree) {
     return current
   }
+
   return { ...current, showNewWorktree }
 }

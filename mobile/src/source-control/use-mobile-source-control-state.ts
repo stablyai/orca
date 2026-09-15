@@ -60,6 +60,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onOpenedFileDiff,
     onOpenHistory
   } = params
+
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
@@ -77,8 +78,10 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const busyActionRef = useRef<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   const statusIdentityKey = `${hostId}\0${worktreeId}`
+
   const { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure } =
     useMobileSourceControlCommitFailure({ client, connState, worktreeId })
+
   const clearCommitFailureRecovery = useCallback(() => {
     recordCommitFailure(null)
   }, [recordCommitFailure])
@@ -123,16 +126,20 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const derivedEntries = useMemo(() => buildMobileGitStatusEntryViews(entries), [entries])
   const sections = useMemo(() => buildMobileSourceControlSections(derivedEntries), [derivedEntries])
   const branchCompareResult = branchCompareState.kind === 'ready' ? branchCompareState.result : null
+
   const branchCompareSection = useMemo(
     () => buildMobileBranchCompareSection(branchCompareResult?.entries ?? []),
     [branchCompareResult]
   )
+
   const branchCompareSummaryText = branchCompareResult
     ? formatMobileBranchCompareSummary(branchCompareResult.summary)
     : null
+
   const branchCompareCanOpen = branchCompareResult
     ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
     : false
+
   const branchEntries = useMemo<MobileBranchEntryView[]>(
     () =>
       (branchCompareSection?.data ?? []).map((entry) => ({
@@ -141,28 +148,35 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
       })),
     [branchCompareCanOpen, branchCompareSection]
   )
+
   // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =
     branchEntries.length > 0 ||
     branchCompareState.kind === 'loading' ||
     branchCompareState.kind === 'error' ||
     (branchCompareResult !== null && branchCompareResult.summary.status !== 'ready')
+
   const hasVisibleChanges = sections.length > 0 || shouldShowBranchCompareSection
   const stageablePaths = useMemo(() => getStageablePaths(entries), [entries])
   const unstageablePaths = useMemo(() => getUnstageablePaths(entries), [entries])
   const stagedCount = useMemo(() => countStagedEntries(entries), [entries])
+
   const stagedEntriesForRecovery = useMemo(
     () => getMobileCommitFailureStagedEntries(entries),
     [entries]
   )
+
   const unstagedCount = useMemo(() => countUnstagedEntries(entries), [entries])
+
   const hasUnresolvedConflicts = useMemo(
     () => entries.some((entry) => entry.conflictStatus === 'unresolved'),
     [entries]
   )
+
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
   const upstreamKnown = upstream !== undefined
+
   const syncLabel =
     upstream && upstream.hasUpstream
       ? `${upstream.ahead} ahead, ${upstream.behind} behind`
@@ -206,6 +220,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     recordCommitFailure,
     onOpenHistory
   })
+
   const createPrAction = useMobileSourceControlCreatePrAction({
     client,
     connState,
@@ -216,6 +231,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     busyAction,
     createPr: runners.createPr
   })
+
   const primaryAction = useMemo(
     () =>
       buildMobileSourceControlPrimaryAction({

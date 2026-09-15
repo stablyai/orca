@@ -61,10 +61,13 @@ function formatBuildLabel(build: ReleaseBuild): string {
   if (build.name) {
     return build.name
   }
+
   const stamp = parseDevBuildStamp(build.version)
+
   if (!stamp) {
     return build.version
   }
+
   // Fallback for builds cut before that naming, and for any release someone
   // titled by hand. A dev build's semver tail is an opaque timestamp, so show it
   // as a date rather than as digits.
@@ -90,12 +93,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
   const platform = getShortcutPlatform()
   const runningChannel = appVersion ? getVersionChannel(appVersion) : null
   const requestedChannel = releaseChannelOverride ?? runningChannel ?? 'stable'
+
   // Why: a persisted 'hourly' can arrive on Linux/Windows — settings sync, or a
   // profile carried over from a Mac. Fall back rather than rendering a selected
   // segment the user cannot act on and a build list that can never install.
   const activeChannel = isChannelSupportedOnPlatform(requestedChannel, platform)
     ? requestedChannel
     : 'stable'
+
   const busy = updateStatus.state === 'checking' || updateStatus.state === 'downloading'
 
   useEffect(() => {
@@ -105,6 +110,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
         setAppVersion(version)
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -122,11 +128,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
     const isStale = (): boolean => latestRequestRef.current !== requestId
     setLoading(true)
     setLoadError(null)
+
     try {
       const result = await window.api.updater.listBuilds(channel)
+
       if (isStale()) {
         return
       }
+
       if (result.ok) {
         setBuilds(result.builds)
         setSelectedTag(result.builds[0]?.tag ?? null)
@@ -138,6 +147,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
       if (isStale()) {
         return
       }
+
       setBuilds(null)
       setLoadError(String((error as Error)?.message ?? error))
     } finally {
@@ -177,6 +187,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
   }
 
   const isRunningBuild = selectedBuild?.version === appVersion
+
   // Why a download instead of an update: Windows dev builds are unsigned, and a
   // signed build verifies every installer it downloads against its own baked-in
   // publisher name. It is the one jump the in-app updater cannot make — and only
@@ -230,6 +241,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
           // unavailable, instead of silently not finding it.
           options={RELEASE_CHANNELS.map((channel) => {
             const supported = isChannelSupportedOnPlatform(channel, platform)
+
             return {
               value: channel,
               label: RELEASE_CHANNEL_LABELS[channel],
@@ -324,10 +336,13 @@ export function ReleaseChannelSection(): React.JSX.Element {
               if (!selectedBuild) {
                 return
               }
+
               if (needsManualInstall) {
                 handleDownloadInstaller(selectedBuild)
+
                 return
               }
+
               handleSwitchTo(selectedBuild)
             }}
           >

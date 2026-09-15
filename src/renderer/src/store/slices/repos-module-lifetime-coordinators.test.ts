@@ -11,6 +11,7 @@ const { syncFork } = vi.hoisted(() => ({ syncFork: vi.fn() }))
 
 vi.mock('../../runtime/runtime-git-client', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
+
   return {
     ...original,
     syncRuntimeGitForkDefaultBranch: syncFork
@@ -46,7 +47,9 @@ describe('repo module-lifetime coordinators', () => {
           _meta: { runtimeId: 'runtime' }
         }
       }
+
       repoListCalls++
+
       return repoListCalls === 1
         ? olderList
         : {
@@ -85,6 +88,7 @@ describe('repo module-lifetime coordinators', () => {
   it('shares safe-auto fork sync cooldown attempts across store instances', async () => {
     const { promise: sync, resolve: resolveSync } = Promise.withResolvers<void>()
     syncFork.mockReturnValueOnce(sync)
+
     const safeAutoRepo: Repo = {
       id: 'safe-auto-shared',
       path: '/safe-auto-shared',
@@ -94,6 +98,7 @@ describe('repo module-lifetime coordinators', () => {
       forkSyncMode: 'safe-auto',
       upstream: { owner: 'upstream', repo: 'safe-auto-shared' }
     }
+
     window.api.repos.list = vi.fn().mockResolvedValue([safeAutoRepo])
     const firstStore = createTestStore()
     const secondStore = createTestStore()

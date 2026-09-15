@@ -30,10 +30,13 @@ export function normalizeSshPendingPtyKill(value: unknown): SshPendingPtyKill | 
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const raw = value as Partial<SshPendingPtyKill>
+
   if (typeof raw.requestedAt !== 'number' || !Number.isFinite(raw.requestedAt)) {
     return null
   }
+
   // No incarnation, no fence, and an unfenced kill order is worse than none.
   if (
     typeof raw.incarnationId !== 'string' ||
@@ -42,6 +45,7 @@ export function normalizeSshPendingPtyKill(value: unknown): SshPendingPtyKill | 
   ) {
     return null
   }
+
   return {
     requestedAt: raw.requestedAt,
     incarnationId: raw.incarnationId,
@@ -104,18 +108,22 @@ export function decideSshPendingPtyKill(
     // id today if a future caller reaches this without pruning first.
     return { action: 'defer', reason: 'order is past its TTL and awaiting prune' }
   }
+
   if (!observation.hostListsPty) {
     return { action: 'retire', reason: 'host-reports-absent' }
   }
+
   if (observation.hostIncarnationId === undefined) {
     // Why not replay: an unfenced kill against a renumbered relay id destroys a shell nobody asked
     // to close, which is strictly worse than the leak. Hosts predating the published incarnation
     // therefore degrade to no replay rather than to a guess.
     return { action: 'defer', reason: 'host published no PTY incarnation for this id' }
   }
+
   if (observation.hostIncarnationId !== intent.incarnationId) {
     return { action: 'retire', reason: 'relay-id-recycled' }
   }
+
   return { action: 'replay' }
 }
 
@@ -138,10 +146,12 @@ export function pendingSshPtyKillEntries(
   leases: readonly SshRemotePtyLease[]
 ): SshPendingPtyKillEntry[] {
   const entries: SshPendingPtyKillEntry[] = []
+
   for (const lease of leases) {
     if (lease.pendingKill) {
       entries.push({ ptyId: lease.ptyId, intent: lease.pendingKill })
     }
   }
+
   return entries
 }

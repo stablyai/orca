@@ -11,6 +11,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
@@ -39,15 +40,18 @@ function renderRows(descriptor: SessionOptionDescriptor): ReactTestRenderer {
       })
     )
   })
+
   if (!renderer) {
     throw new Error('renderer did not mount')
   }
+
   return renderer
 }
 
 const textOf = (renderer: ReactTestRenderer): string[] =>
   renderer.root.findAllByType('Text').flatMap((node) => {
     const children = node.props.children
+
     return typeof children === 'string' ? [children] : []
   })
 
@@ -95,6 +99,7 @@ describe('DescriptorRows boolean', () => {
       kind: { type: 'boolean', currentValue: true },
       valueSource: 'unknown'
     })
+
     expect(renderer.root.findByType('Switch').props.value).toBe(true)
   })
 })

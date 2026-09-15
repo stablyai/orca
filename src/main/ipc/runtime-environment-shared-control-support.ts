@@ -29,15 +29,19 @@ export async function supportsSharedControl(
     pairing,
     environment.runtimeId
   )
+
   if (accepted) {
     return accepted
   }
+
   const response = await getRuntimeEnvironmentStatusOwner(userDataPath, environment.id).refresh({
     timeoutMs
   })
+
   if (!response.ok) {
     throw new RemoteRuntimeClientError(response.error.code, response.error.message)
   }
+
   return (
     getAcceptedRuntimeEnvironmentCapabilityOutcome(
       environment.id,

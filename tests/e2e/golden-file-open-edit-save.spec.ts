@@ -30,10 +30,12 @@ test('@golden opens, edits, saves, and reopens a tracked file', async ({
   await orcaPage.getByRole('button', { name: 'Explorer' }).click()
 
   const explorer = orcaPage.locator('[data-orca-explorer-shell]')
+
   // Why: after save the row's full text is "README.md M" from the git badge.
   const readmeRow = explorer.locator('[data-file-explorer-row]').filter({
     has: orcaPage.locator('[data-file-explorer-row-name]').getByText(README_PATH, { exact: true })
   })
+
   await expect(readmeRow).toBeVisible({ timeout: 10_000 })
   await readmeRow.click()
 

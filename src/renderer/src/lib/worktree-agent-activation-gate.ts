@@ -47,29 +47,36 @@ export type WorktreeAgentActivationOutcome =
   | 'blocked'
 
 const inFlightByWorktreeId = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
+
 const WORKSPACE_SESSION_READY_TIMEOUT_MS = 30_000
 
 function waitForWorkspaceSessionReady(): Promise<boolean> {
   const isReady = () => {
     const state = useAppStore.getState()
+
     return state.workspaceSessionReady && state.terminalStartupRestorationReady
   }
+
   if (isReady()) {
     return Promise.resolve(true)
   }
+
   return new Promise((resolve) => {
     let unsubscribe: (() => void) | null = null
+
     const settle = (ready: boolean) => {
       clearTimeout(timeout)
       unsubscribe?.()
       resolve(ready)
     }
+
     const timeout = setTimeout(() => settle(isReady()), WORKSPACE_SESSION_READY_TIMEOUT_MS)
     unsubscribe = useAppStore.subscribe((state) => {
       if (state.workspaceSessionReady && state.terminalStartupRestorationReady) {
         settle(true)
       }
     })
+
     if (isReady()) {
       settle(true)
     }
@@ -95,7 +102,9 @@ function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boole
   if (parsePtySessionId(sessionId).worktreeId === worktreeId) {
     return true
   }
+
   const scope = parseWorkspaceKey(worktreeId)
+
   return (
     scope?.type === 'folder' &&
     sessionId.startsWith(`${worktreeId}${PTY_SESSION_ID_SEPARATOR}`) &&
@@ -110,33 +119,43 @@ function liveSleepingAgentClaimKeys(
   structuredInventory: StructuredActivationInventory | null
 ): Set<string> {
   const keys = new Set<string>()
+
   for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
     if (record.worktreeId !== worktreeId) {
       continue
     }
+
     const stable = parsePaneKey(record.paneKey)
     const tabId = record.tabId ?? stable?.tabId
+
     const layoutPtyId = stable
       ? store.terminalLayoutsByTabId[stable.tabId]?.ptyIdsByLeafId?.[stable.leafId]
       : undefined
+
     const tabPtyIds = tabId ? store.ptyIdsByTabId[tabId] : undefined
+
     const structuredOwner =
       stable && isStructuredAgentSyntheticSleepingRecord(record)
         ? structuredInventory?.ownerBySessionId.get(record.providerSession.id)
         : undefined
+
     if (structuredOwner?.owner === 'native') {
       keys.add(getProviderSessionClaimKey(record))
       continue
     }
+
     // Packaged hydration can omit renderer bindings while main retains this session's exact TUI.
     const structuredOwnerPtyId =
       structuredOwner?.owner === 'tui' ? structuredOwner.terminal?.ptyId : undefined
+
     const persistedPtyId =
       layoutPtyId ?? (tabPtyIds?.length === 1 ? tabPtyIds[0] : undefined) ?? structuredOwnerPtyId
+
     if (persistedPtyId && livePtyIds.has(persistedPtyId)) {
       keys.add(getProviderSessionClaimKey(record))
     }
   }
+
   return keys
 }
 
@@ -151,8 +170,10 @@ export async function runWorktreeAgentActivationGate(
   } catch {
     return 'blocked'
   }
+
   let structured = false
   let structuredInventory: StructuredActivationInventory | null = null
+
   try {
     const reportedStructuredSession = await deps.hasStructuredSession?.(worktreeId)
     structuredInventory =
@@ -167,9 +188,11 @@ export async function runWorktreeAgentActivationGate(
   const structuredTabs = structuredInventory?.snapshot.tabs.filter(
     (tab) => tab.type === 'agent-session'
   )
+
   if (
     structuredTabs?.some((tab) => {
       const owner = structuredInventory?.ownerBySessionId.get(tab.sessionId)
+
       return (
         !owner ||
         (owner.owner === 'tui' &&
@@ -179,6 +202,7 @@ export async function runWorktreeAgentActivationGate(
   ) {
     return 'blocked'
   }
+
   if (
     structured &&
     !structuredInventory &&
@@ -188,6 +212,7 @@ export async function runWorktreeAgentActivationGate(
   }
 
   let sessions: PtyListedSession[]
+
   try {
     sessions = await deps.listSessions()
   } catch {
@@ -203,11 +228,14 @@ export async function runWorktreeAgentActivationGate(
       (session.worktreeId !== undefined && worktreeIdsEqual(session.worktreeId, worktreeId)) ||
       sessionBelongsToWorkspace(session.id, worktreeId)
   )
+
   const liveWorkspacePtyIds = new Set(liveWorkspaceSessions.map((session) => session.id))
+
   for (const owner of structuredInventory?.ownerBySessionId.values() ?? []) {
     if (owner.owner !== 'tui') {
       continue
     }
+
     if (
       !owner.terminal ||
       !liveWorkspacePtyIds.has(owner.terminal.ptyId) ||
@@ -216,7 +244,9 @@ export async function runWorktreeAgentActivationGate(
       return 'blocked'
     }
   }
+
   let liveSurfaceAdopted = false
+
   if (liveWorkspaceSessions.length > 0) {
     // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
     // would suppress the caller's seed and leave the workspace with no surface at all —
@@ -227,7 +257,9 @@ export async function runWorktreeAgentActivationGate(
       [...liveWorkspacePtyIds],
       deps.listSurfaceOwners
     )
+
     liveSurfaceAdopted = adoption.surfaced
+
     // A live agent the user can no longer see has to be diagnosable from the console.
     if (adoption.declinedPtyIds.length > 0) {
       console.warn('[worktree-activation] live PTYs left without a surface', {
@@ -235,6 +267,7 @@ export async function runWorktreeAgentActivationGate(
         declinedPtyIds: adoption.declinedPtyIds
       })
     }
+
     if (liveSurfaceAdopted && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
     }
@@ -243,6 +276,7 @@ export async function runWorktreeAgentActivationGate(
   if (structured && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
     return 'structured'
   }
+
   const launched = deps.resume(worktreeId, {
     skipClaimKeys: liveSleepingAgentClaimKeys(
       deps.getState(),
@@ -251,6 +285,7 @@ export async function runWorktreeAgentActivationGate(
       structuredInventory
     )
   })
+
   // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
   // claim the host had nothing; the callers re-check their own seeding guards first.
   return launched > 0
@@ -266,9 +301,11 @@ export function gateWorktreeAgentActivation(
   worktreeId: string
 ): Promise<WorktreeAgentActivationOutcome> {
   const existing = inFlightByWorktreeId.get(worktreeId)
+
   if (existing) {
     return existing
   }
+
   const gate = runWorktreeAgentActivationGate(worktreeId, {
     getState: () => useAppStore.getState(),
     awaitReady: waitForWorkspaceSessionReady,
@@ -284,7 +321,9 @@ export function gateWorktreeAgentActivation(
       inFlightByWorktreeId.delete(worktreeId)
     }
   })
+
   inFlightByWorktreeId.set(worktreeId, gate)
+
   return gate
 }
 

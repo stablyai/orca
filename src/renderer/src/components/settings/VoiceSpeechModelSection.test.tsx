@@ -8,6 +8,7 @@ import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/s
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
+
 const menuDismissMock = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
@@ -44,6 +45,7 @@ vi.mock('../ui/dropdown-menu', () => ({
         if (!disabled) {
           const selectEvent = new Event('select', { cancelable: true })
           onSelect?.(selectEvent)
+
           if (!selectEvent.defaultPrevented) {
             menuDismissMock()
           }
@@ -127,7 +129,9 @@ describe('VoiceSpeechModelSection', () => {
 
   it('shows delete for the selected ready local row and refreshes after success', async () => {
     let resolveDelete: () => void = () => {}
+
     const refreshModelStates = vi.fn()
+
     const { container, root } = renderSection({
       refreshModelStates,
       deleteModel: () =>
@@ -135,6 +139,7 @@ describe('VoiceSpeechModelSection', () => {
           resolveDelete = resolve
         })
     })
+
     const deleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete Local Model"]'
     )
@@ -160,6 +165,7 @@ describe('VoiceSpeechModelSection', () => {
   it('keeps another row delete disabled until its own request finishes', async () => {
     const deleteResolvers = new Map<string, () => void>()
     const refreshModelStates = vi.fn()
+
     const { container, root } = renderSection({
       refreshModelStates,
       catalog: [localModel, secondLocalModel],
@@ -172,9 +178,11 @@ describe('VoiceSpeechModelSection', () => {
           deleteResolvers.set(modelId, resolve)
         })
     })
+
     const firstDeleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete Local Model"]'
     )
+
     const secondDeleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete Second Local Model"]'
     )
@@ -208,10 +216,12 @@ describe('VoiceSpeechModelSection', () => {
 
   it('shows the existing error toast when selected-row deletion fails', async () => {
     const refreshModelStates = vi.fn()
+
     const { container, root } = renderSection({
       refreshModelStates,
       deleteModel: () => Promise.reject(new Error('in use'))
     })
+
     const deleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete Local Model"]'
     )
@@ -231,6 +241,7 @@ describe('VoiceSpeechModelSection', () => {
       deleteModel: () => Promise.resolve(),
       modelStates: [{ id: localModel.id, status: 'not-downloaded' }]
     })
+
     const modelOption = container.querySelector<HTMLElement>('[role="option"]')
 
     await act(async () => {

@@ -15,6 +15,7 @@ export function hostRouteNoticeMessage(notice: string | undefined): string | nul
   if (!notice || !Object.hasOwn(HOST_ROUTE_NOTICES, notice)) {
     return null
   }
+
   return HOST_ROUTE_NOTICES[notice as HostRouteNotice]
 }
 
@@ -34,5 +35,6 @@ export function visibleHostRouteNotice(
   if (embedded || (notice && notice === dismissed)) {
     return null
   }
+
   return hostRouteNoticeMessage(notice)
 }

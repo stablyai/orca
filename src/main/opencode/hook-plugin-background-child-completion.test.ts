@@ -20,14 +20,20 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
+
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
+
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
+
 type PluginFactory = (ctx: unknown) => Promise<PluginHooks>
+
 type SessionList = (
   parameters?: { signal?: AbortSignal },
   options?: { signal?: AbortSignal }
 ) => Promise<{ data: SessionFixture[] }>
+
 type RecordedPost = {
   hook_event_name: string
   sessionID?: string
@@ -53,9 +59,11 @@ describe('OpenCode plugin background child completion', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-background-child-'))
     posts = []
     savedEnv = {}
+
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     process.env.ORCA_AGENT_HOOK_PORT = '45678'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -65,6 +73,7 @@ describe('OpenCode plugin background child completion', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { payload: RecordedPost }
       posts.push(body.payload)
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
   })
@@ -72,6 +81,7 @@ describe('OpenCode plugin background child completion', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.fetch = savedFetch
+
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) {
         delete process.env[key]
@@ -79,6 +89,7 @@ describe('OpenCode plugin background child completion', () => {
         process.env[key] = savedEnv[key]
       }
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -89,11 +100,14 @@ describe('OpenCode plugin background child completion', () => {
     if (!pluginFactory) {
       const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
       writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+
       const module = (await import(pathToFileURL(pluginPath).href)) as {
         OrcaOpenCodeStatusPlugin: PluginFactory
       }
+
       pluginFactory = module.OrcaOpenCodeStatusPlugin
     }
+
     return pluginFactory({ client: { session: { list } } })
   }
 
@@ -184,6 +198,7 @@ describe('OpenCode plugin background child completion', () => {
 
   it('retires a background child through an Idle whose ancestry cannot be resolved', async () => {
     let resolvable = true
+
     const hooks = await createHooks([], async () =>
       resolvable ? { data: TASK_TREE } : Promise.reject(new Error('sdk outage'))
     )

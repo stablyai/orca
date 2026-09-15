@@ -12,6 +12,7 @@ export async function activateWorktreeFromSidebar(
   executionHostId?: ExecutionHostId
 ): Promise<void> {
   const workspaceScope = parseWorkspaceKey(worktreeId)
+
   if (workspaceScope?.type === 'folder') {
     if (executionHostId) {
       activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
@@ -20,8 +21,10 @@ export async function activateWorktreeFromSidebar(
     } else {
       activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
     }
+
     return
   }
+
   // Keep navigation independent from an optional runtime wake IPC.
   activateAndRevealWorktree(worktreeId, {
     revealInSidebar: false,
@@ -31,6 +34,7 @@ export async function activateWorktreeFromSidebar(
   if (typeof window !== 'undefined' && window.api?.ephemeralVm?.resumeWorkspace) {
     try {
       const runtime = await window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
+
       if (runtime?.runtimeEnvironmentId) {
         const store = (await import('@/store')).useAppStore
         store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())

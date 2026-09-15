@@ -34,7 +34,9 @@ export function dispatchAppMenuPasteEvent(target: Window = window): boolean {
     bubbles: false,
     cancelable: true
   })
+
   target.dispatchEvent(event)
+
   return event.defaultPrevented
 }
 
@@ -71,17 +73,21 @@ export async function handleAppMenuPasteRequest({
   nativePasteMode = 'paste'
 }: AppMenuPasteRequestDeps): Promise<AppMenuPasteRequestResult> {
   const startedAtMs = getNowMs()
+
   if (dispatchOwnedPasteEvent()) {
     return { status: 'handled', target: 'terminal' }
   }
 
   const target = findFocusedAppMenuTextControlPasteTarget(getActiveElement())
+
   if (!target) {
     performNativePaste({ mode: nativePasteMode })
+
     return { status: 'native-fallback', reason: 'no-owned-target' }
   }
 
   let text: string
+
   try {
     text = await readClipboardText({ maxBytes: TEXT_CONTROL_PASTE_MAX_BYTES })
   } catch (error) {
@@ -92,11 +98,13 @@ export async function handleAppMenuPasteRequest({
         'app-menu',
         getNowMs() - startedAtMs
       )
+
       return createAppMenuTextControlRejectedResult({
         reason: 'too-large',
         redactedDiagnostic: rejectedResult.redactedDiagnostic
       })
     }
+
     // Why: a native fallback after async failure would paste into whichever
     // control gained focus, not the text control Orca already resolved.
     if (target.ownerDocument.activeElement !== target) {
@@ -106,12 +114,15 @@ export async function handleAppMenuPasteRequest({
         'app-menu',
         getNowMs() - startedAtMs
       )
+
       return createAppMenuTextControlRejectedResult({
         reason: 'target-unavailable',
         redactedDiagnostic: rejectedResult.redactedDiagnostic
       })
     }
+
     performNativePaste({ mode: nativePasteMode })
+
     return { status: 'native-fallback', reason: 'clipboard-read-failed' }
   }
 

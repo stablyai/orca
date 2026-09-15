@@ -20,6 +20,7 @@ export async function setupTerminalCreateSurfacing(
       id: options?.id ?? 'tab-new'
     })
   )
+
   const setActiveView = vi.fn()
   const setActiveWorktree = vi.fn()
   const markWorktreeVisited = vi.fn()
@@ -37,12 +38,15 @@ export async function setupTerminalCreateSurfacing(
   const replyTerminalCreate = vi.fn()
   const dispatchEvent = vi.fn()
   const createFloatingWorkspaceTerminalTab = vi.fn()
+
   const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue({
     status: 'failed',
     message: 'The workspace is not connected to a remote Orca host.'
   })
+
   const focusRuntimeTerminalSurface = vi.fn(() => false)
   const focusTerminalTabSurface = vi.fn()
+
   const storeState: TerminalCreateSurfacingStore = {
     setUpdateStatus: vi.fn(),
     createTab,
@@ -105,12 +109,15 @@ export async function setupTerminalCreateSurfacing(
       activeRuntimeEnvironmentId: undefined as string | undefined
     }
   }
+
   updateTabPtyId.mockImplementation((tabId: string, ptyId: string) => {
     storeState.ptyIdsByTabId[tabId] = [
       ...new Set([...(storeState.ptyIdsByTabId[tabId] ?? []), ptyId])
     ]
+
     for (const tabs of Object.values(storeState.tabsByWorktree)) {
       const tab = tabs.find((candidate) => candidate.id === tabId)
+
       if (tab) {
         tab.ptyId = ptyId
       }
@@ -119,15 +126,19 @@ export async function setupTerminalCreateSurfacing(
   setTabLayout.mockImplementation((tabId: string, layout: unknown) => {
     storeState.terminalLayoutsByTabId[tabId] = layout
   })
+
   const createTerminalListenerRef: ListenerRef<(data: TerminalCreateListenerPayload) => void> = {
     current: null
   }
+
   const requestTerminalCreateListenerRef: ListenerRef<
     (data: RequestTerminalCreateListenerPayload) => void
   > = { current: null }
+
   const focusTerminalListenerRef: ListenerRef<(data: FocusTerminalListenerPayload) => void> = {
     current: null
   }
+
   const newTerminalTabListenerRef: ListenerRef<() => void> = { current: null }
 
   vi.resetModules()
@@ -135,6 +146,7 @@ export async function setupTerminalCreateSurfacing(
 
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
+
     return {
       ...actual,
       useEffect: (effect: () => void | (() => void)) => {
@@ -212,9 +224,11 @@ export async function setupTerminalCreateSurfacing(
   if (typeof createTerminalListenerRef.current !== 'function') {
     throw new Error('Expected create-terminal listener to be registered')
   }
+
   if (typeof newTerminalTabListenerRef.current !== 'function') {
     throw new Error('Expected new-terminal-tab listener to be registered')
   }
+
   return {
     createTab,
     setActiveView,

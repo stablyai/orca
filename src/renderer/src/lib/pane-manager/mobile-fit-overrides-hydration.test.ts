@@ -9,6 +9,7 @@ describe('hydrateOverrides notifications', () => {
   it('notifies listeners for hydrated and cleared overrides', () => {
     setFitOverride('pty-old', 'mobile-fit', 49, 20)
     const events: { ptyId: string; mode: string; priorCols: number | null }[] = []
+
     const unsub = onOverrideChange((event) => {
       events.push({ ptyId: event.ptyId, mode: event.mode, priorCols: event.priorCols })
     })

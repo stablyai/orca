@@ -47,9 +47,11 @@ export {
 
 function makeDeferred() {
   let resolve!: () => void
+
   const promise = new Promise<void>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -94,6 +96,7 @@ function createHarness(
   let includeSiblingPty = false
   let victimPtyListed = true
   let flushError: Error | null = null
+
   const repo = {
     id: REPO_ID,
     path: WORKTREE_PATH,
@@ -101,6 +104,7 @@ function createHarness(
     badgeColor: '#000000',
     addedAt: 1
   }
+
   const store = {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
@@ -118,26 +122,34 @@ function createHarness(
       }
     })
   }
+
   const acknowledged = makeDeferred()
   let closeTerminalTabError: Error | null = null
   let closeTerminalTabAction: (() => void | Promise<void>) | null = null
   const closeTerminal = vi.fn()
+
   const closeTerminalTab = vi.fn(() => {
     if (closeTerminalTabError) {
       return Promise.reject(closeTerminalTabError)
     }
+
     return closeTerminalTabAction ? Promise.resolve(closeTerminalTabAction()) : acknowledged.promise
   })
+
   const kill = vi.fn(() => true)
   let verifiedStopResult: boolean | Error = false
   let stopAndWaitAction: ((stoppingPtyId: string) => void | Promise<void>) | null = null
+
   const stopAndWait = vi.fn(async (stoppingPtyId: string) => {
     await stopAndWaitAction?.(stoppingPtyId)
+
     if (verifiedStopResult instanceof Error) {
       throw verifiedStopResult
     }
+
     return verifiedStopResult
   })
+
   const listProcesses = vi.fn(async () => [
     ...(victimPtyListed
       ? [
@@ -161,6 +173,7 @@ function createHarness(
       : []),
     ...(options.includeCanary ? [canaryProcess] : [])
   ])
+
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
   runtime.setPtyController({
@@ -192,6 +205,7 @@ function createHarness(
       leafId: LEAF_ID,
       incarnationId: INCARNATION_ID
     })
+
     if (options.includeCanary) {
       runtime.registerPty(CANARY_PTY_ID, WORKTREE_ID, null, {
         tabId: CANARY_TAB_ID,
@@ -200,7 +214,9 @@ function createHarness(
       })
     }
   }
+
   graph.syncFixtureGraph()
+
   return {
     runtime,
     acknowledged,
@@ -273,7 +289,9 @@ function createPtyBackedPublishedSurfaceHarness(): CloseContinuityHarness {
     publishMobileSurface: true,
     registerPtyBacked: true
   })
+
   harness.syncFixtureTabWithoutLeaf()
+
   return harness
 }
 
@@ -281,18 +299,22 @@ async function createStaleTabCloseHarness(
   options: { headless?: boolean } = {}
 ): Promise<CloseContinuityHarness & { terminal: RuntimeTerminalListResult['terminals'][number] }> {
   const harness = createPtyBackedPublishedSurfaceHarness()
+
   const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
     (candidate) => candidate.ptyId === RUNTIME_OWNED_PTY_ID
   )!
+
   harness.runtime.registerPty(RUNTIME_OWNED_PTY_ID, WORKTREE_ID, null, {
     tabId: STALE_TAB_ID,
     leafId: LEAF_ID,
     incarnationId: INCARNATION_ID
   })
   harness.setCloseTerminalTabAction(() => {})
+
   if (options.headless) {
     harness.syncEmptyGraph()
   }
+
   return { ...harness, terminal }
 }
 

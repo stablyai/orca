@@ -68,6 +68,7 @@ export function resolveDetectedTuiAgentIds(
         (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
     )
     .map(({ id }) => id)
+
   return [...new Set(detected)]
 }
 

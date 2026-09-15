@@ -23,10 +23,12 @@ function deferred(): {
 } {
   let resolvePromise: (() => void) | undefined
   let rejectPromise: ((error: Error) => void) | undefined
+
   const promise = new Promise<void>((resolve, reject) => {
     resolvePromise = resolve
     rejectPromise = reject
   })
+
   return {
     promise,
     resolve: () => resolvePromise?.(),
@@ -131,6 +133,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('times out a never-settling native call instead of wedging the queue', async () => {
     vi.useFakeTimers()
+
     try {
       keepAwake.activate.mockImplementationOnce(() => new Promise<void>(() => undefined))
       const hungOwner = new MobileDictationKeepAwakeOwner()
@@ -161,6 +164,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('adopts a timed-out activation that lands late while the dictation is live', async () => {
     vi.useFakeTimers()
+
     try {
       const lateActivation = deferred()
       keepAwake.activate.mockImplementationOnce(() => lateActivation.promise)
@@ -187,6 +191,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('does not let another owner drain a still-wanted timed-out activation', async () => {
     vi.useFakeTimers()
+
     try {
       const lateActivation = deferred()
       keepAwake.activate.mockImplementationOnce(() => lateActivation.promise)
@@ -215,6 +220,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('deactivates a late-landing activation once its dictation has ended', async () => {
     vi.useFakeTimers()
+
     try {
       const lateActivation = deferred()
       keepAwake.activate.mockImplementationOnce(() => lateActivation.promise)
@@ -235,6 +241,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('retries a timed-out final deactivation via the foreground drain', async () => {
     vi.useFakeTimers()
+
     try {
       const owner = new MobileDictationKeepAwakeOwner()
       await owner.acquire('final')
@@ -259,6 +266,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('drains orphaned tags on release, not only on the next acquire', async () => {
     vi.useFakeTimers()
+
     try {
       keepAwake.activate.mockImplementationOnce(() => new Promise<void>(() => undefined))
       const owner = new MobileDictationKeepAwakeOwner()
@@ -340,6 +348,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('keeps tracking a newer timed-out activation when an older one settles late', async () => {
     vi.useFakeTimers()
+
     try {
       const first = deferred()
       keepAwake.activate.mockImplementationOnce(() => first.promise)
@@ -374,6 +383,7 @@ describe('MobileDictationKeepAwakeOwner', () => {
 
   it('reacquires a maybe-active timed-out activation by deactivating first', async () => {
     vi.useFakeTimers()
+
     try {
       keepAwake.activate.mockImplementationOnce(() => new Promise<void>(() => undefined))
       const owner = new MobileDictationKeepAwakeOwner()

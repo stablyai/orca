@@ -24,11 +24,13 @@ export type BranchUpstreamProbe =
 export async function probeBranchUpstream(exec: GitExec): Promise<BranchUpstreamProbe> {
   try {
     const upstream = await resolveEffectiveGitUpstream(exec)
+
     return { outcome: upstream !== null ? 'has-upstream' : 'no-upstream' }
   } catch (error) {
     if (isNoUpstreamError(error)) {
       return { outcome: 'no-upstream' }
     }
+
     // Why: an unexpected failure is not proof either way — report it as its own
     // outcome so callers skip the rename but stay retryable (issue #7808).
     // The message surfaces in the UI, so scrub credential-bearing remote URLs.
@@ -42,6 +44,7 @@ export async function probeBranchUpstream(exec: GitExec): Promise<BranchUpstream
 async function localBranchExists(exec: GitExec, branch: string): Promise<boolean> {
   try {
     await exec(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`])
+
     return true
   } catch {
     return false
@@ -65,15 +68,19 @@ export async function resolveUniqueBranchName(
     candidate === currentBranch || !(await localBranchExists(exec, candidate))
 
   const first = compute(leaf)
+
   if (await isAvailable(first)) {
     return first
   }
+
   for (let suffix = 2; suffix <= maxAttempts; suffix += 1) {
     const candidate = compute(`${leaf}-${suffix}`)
+
     if (await isAvailable(candidate)) {
       return candidate
     }
   }
+
   return null
 }
 

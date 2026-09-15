@@ -12,7 +12,9 @@ import {
 } from './browser-route-partition-storage-lifecycle'
 
 const fingerprint = 'a'.repeat(64)
+
 const scopeAlpha = '1'.repeat(64)
+
 const scopeBeta = '2'.repeat(64)
 
 function partitionName(marker: string): string {
@@ -28,6 +30,7 @@ function createStore(): {
   const filePath = join(root, 'bindings.json')
   const partitionDataRoot = join(root, 'Partitions')
   mkdirSync(partitionDataRoot, { recursive: true })
+
   return {
     filePath,
     partitionDataRoot,
@@ -39,6 +42,7 @@ function seedPartitionDirectory(partitionDataRoot: string, partition: string): s
   const directory = join(partitionDataRoot, partition.slice('persist:'.length))
   mkdirSync(directory, { recursive: true })
   writeFileSync(join(directory, 'Cookies'), 'cookie-bytes')
+
   return directory
 }
 
@@ -48,6 +52,7 @@ function createDependencies(
   live: ReadonlySet<string> = new Set()
 ): BrowserRoutePartitionStorageDependencies & { cleared: string[] } {
   const cleared: string[] = []
+
   return {
     cleared,
     bindings: store,

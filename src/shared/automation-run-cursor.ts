@@ -13,13 +13,18 @@ function decodeAutomationRunCursor(cursor: string | undefined): AutomationRunCur
   if (!cursor) {
     return null
   }
+
   const separator = cursor.indexOf(':')
+
   if (separator === -1) {
     const offset = Number.parseInt(cursor, 10)
+
     return Number.isFinite(offset) && offset > 0 ? { kind: 'offset', offset } : null
   }
+
   const createdAt = Number.parseInt(cursor.slice(0, separator), 10)
   const id = cursor.slice(separator + 1)
+
   return Number.isFinite(createdAt) && id ? { kind: 'key', createdAt, id } : null
 }
 
@@ -39,18 +44,23 @@ function pageStartIndex(
   if (!cursor) {
     return 0
   }
+
   if (cursor.kind === 'offset') {
     return Math.min(cursor.offset, runs.length)
   }
+
   const boundary = runs.findIndex(
     (run) => run.id === cursor.id && run.createdAt === cursor.createdAt
   )
+
   if (boundary !== -1) {
     return boundary + 1
   }
+
   // Boundary run pruned between pages: resume at the first run the total order
   // places after it, so runs tied on `createdAt` are not dropped with it.
   const older = runs.findIndex((run) => compareAutomationRunsNewestFirst(cursor, run) < 0)
+
   return older === -1 ? runs.length : older
 }
 
@@ -68,6 +78,7 @@ export function paginateAutomationRuns(
   const boundedLimit = Math.min(Math.max(1, limit ?? 100), MAX_PAGE_SIZE)
   const page = runs.slice(start, start + boundedLimit)
   const last = page.at(-1)
+
   return {
     runs: page,
     nextCursor: last && start + page.length < runs.length ? `${last.createdAt}:${last.id}` : null

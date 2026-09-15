@@ -18,6 +18,7 @@ export function reconcileActivityPortalThreads<TThread extends ActivityPortalThr
   displayedHasLiveTab: boolean
 }): ActivityPortalReconciliation<TThread> {
   const { selectedThread, displayedThread, selectedHasLiveTab, displayedHasLiveTab } = args
+
   // Why: same-tab panes share one TerminalPane and swap through isolatedPaneKey, not staging.
   const displayedIsSelectedTerminal = Boolean(
     selectedThread &&
@@ -25,6 +26,7 @@ export function reconcileActivityPortalThreads<TThread extends ActivityPortalThr
     displayedThread.worktree.id === selectedThread.worktree.id &&
     displayedThread.tab.id === selectedThread.tab.id
   )
+
   const visibleThread =
     selectedThread && selectedHasLiveTab
       ? displayedThread && displayedHasLiveTab && displayedThread.paneKey !== selectedThread.paneKey
@@ -33,6 +35,7 @@ export function reconcileActivityPortalThreads<TThread extends ActivityPortalThr
           : displayedThread
         : selectedThread
       : null
+
   const stagedThread =
     selectedThread &&
     selectedHasLiveTab &&
@@ -41,6 +44,7 @@ export function reconcileActivityPortalThreads<TThread extends ActivityPortalThr
     !displayedIsSelectedTerminal
       ? selectedThread
       : null
+
   return { displayedIsSelectedTerminal, visibleThread, stagedThread }
 }
 
@@ -69,14 +73,18 @@ export function resolveActivityPortalSwap<TThread extends ActivityPortalThreadRe
     stagedPortalReady,
     stagedPortalUnavailable
   } = args
+
   if (!selectedThread || !selectedHasLiveTab) {
     return { kind: 'clear' }
   }
+
   if (stagedThread && (stagedPortalReady || stagedPortalUnavailable)) {
     return { kind: 'swap-staged', paneKey: stagedThread.paneKey }
   }
+
   if (!stagedThread && visibleThread?.paneKey === selectedThread.paneKey && visiblePortalReady) {
     return { kind: 'settle-visible', paneKey: selectedThread.paneKey }
   }
+
   return null
 }

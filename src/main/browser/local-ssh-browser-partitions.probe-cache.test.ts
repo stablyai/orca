@@ -6,47 +6,59 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => {
   const sessions = new Map<string, object>()
+
   return {
     app: { on: vi.fn() },
     session: {
       fromPartition: (partition: string) => {
         let existing = sessions.get(partition)
+
         if (!existing) {
           existing = { partition }
           sessions.set(partition, existing)
         }
+
         return existing
       }
     },
     webContents: { getAllWebContents: () => [] }
   }
 })
+
 vi.mock('./browser-route-guest-guard', () => ({ closeRouteGuest: vi.fn() }))
+
 vi.mock('./browser-route-partition-binding-runtime', () => {
   const fingerprints = new Map<string, string>()
+
   return {
     activeBrowserRoutePartitionOrcaProfileId: () => 'orca-profile-1',
     currentBrowserRoutePartitionBindingStore: () => ({
       get: (partition: string) => fingerprints.get(partition) ?? null,
       set: (partition: string, fingerprint: string) => {
         fingerprints.set(partition, fingerprint)
+
         return []
       },
       touch: vi.fn()
     })
   }
 })
+
 vi.mock('./browser-route-partition-retention', () => ({
   isBrowserRoutePartitionRetainedByAnyOwner: () => false,
   registerBrowserRoutePartitionRetentionProbe: vi.fn()
 }))
+
 vi.mock('./browser-route-partition-storage-dependencies', () => ({
   releaseEvictedBrowserRoutePartitionStorage: vi.fn(async () => {})
 }))
+
 vi.mock('./browser-route-session-policy', () => ({
   prepareBrowserRouteSessionPolicy: vi.fn(async () => {})
 }))
+
 vi.mock('./browser-route-webrtc-policy', () => ({ enforceBrowserRouteWebRtcPolicy: vi.fn() }))
+
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     requireRouteBrowserProfile: vi.fn(),
@@ -54,6 +66,7 @@ vi.mock('./browser-session-registry', () => ({
     clearRoutePartitionPolicies: vi.fn()
   }
 }))
+
 vi.mock('./local-ssh-browser-route', () => ({
   retainLocalSshBrowserRoute: vi.fn(async () => ({ host: '127.0.0.1', port: 1080 })),
   probeLocalSshBrowserRouteForwarding: mocks.probe,
@@ -75,6 +88,7 @@ describe('prepareLocalSshBrowserPartition probe caching', () => {
       browserProfileId: 'default',
       skipProbe: true
     })
+
     expect(skipped.partition).toMatch(/^persist:orca-browser-v1-/)
     expect(mocks.probe).not.toHaveBeenCalled()
 
@@ -93,10 +107,12 @@ describe('prepareLocalSshBrowserPartition probe caching', () => {
       targetId: 'target-cached',
       browserProfileId: 'default'
     })
+
     const second = await prepareLocalSshBrowserPartition({
       targetId: 'target-cached',
       browserProfileId: 'default'
     })
+
     expect(second.partition).toBe(first.partition)
     expect(mocks.probe).toHaveBeenCalledTimes(1)
   })
@@ -109,10 +125,12 @@ describe('prepareLocalSshBrowserPartition probe caching', () => {
       browserProfileId: 'default',
       skipProbe: true
     })
+
     const probed = await prepareLocalSshBrowserPartition({
       targetId: 'target-same',
       browserProfileId: 'default'
     })
+
     expect(probed.partition).toBe(skipped.partition)
   })
 })

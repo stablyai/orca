@@ -40,34 +40,52 @@ import {
 } from './live-remote-bulk-open-freeze-metrics.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
+
 const reportDir = path.join(root, 'test-results', 'freeze-repro')
+
 const envName = process.env.ORCA_FREEZE_ENV || 'paired-remote'
+
 const scenario = process.env.ORCA_FREEZE_SCENARIO || 'idle-backlog-open'
+
 const createCount = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_CREATE', 0))
+
 const openCount = Math.max(2, readFreezeNumberEnv('ORCA_FREEZE_OPEN_COUNT', 20))
+
 const idleMs = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_IDLE_MS', 45_000))
+
 const paceMs = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_PACE_MS', 250))
+
 const paceJitterMs = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_PACE_JITTER_MS', 150))
+
 const createWorktreeSpan = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_CREATE_WT_SPAN', 12))
+
 const softMs = readFreezeNumberEnv('ORCA_FREEZE_SOFT_MS', DEFAULT_SOFT_MS)
+
 const hardMs = readFreezeNumberEnv('ORCA_FREEZE_HARD_MS', DEFAULT_HARD_MS)
+
 /** Concurrent opens during lockup-storm (wake refresh overlaps fan-out). */
 const stormParallel = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_STORM_PARALLEL', 16))
+
 /** Kill a switch if it exceeds this — counts toward permanent lockup. */
 const opTimeoutMs = Math.max(10_000, readFreezeNumberEnv('ORCA_FREEZE_OP_TIMEOUT_MS', 60_000))
+
 const permanentTimeoutMs = Math.max(15_000, readFreezeNumberEnv('ORCA_FREEZE_PERMANENT_MS', 60_000))
+
 const foreverWindowMs = Math.max(
   10_000,
   readFreezeNumberEnv('ORCA_FREEZE_FOREVER_WINDOW_MS', DEFAULT_FOREVER_WINDOW_MS)
 )
+
 const statusSlowMs = Math.max(
   5_000,
   readFreezeNumberEnv('ORCA_FREEZE_STATUS_SLOW_MS', DEFAULT_STATUS_SLOW_MS)
 )
+
 const watchdogIntervalMs = Math.max(
   500,
   readFreezeNumberEnv('ORCA_FREEZE_WATCHDOG_INTERVAL_MS', 1500)
 )
+
 const scratchDir = process.env.ORCA_FREEZE_SCRATCH || ''
 
 function sleep(ms) {
@@ -75,11 +93,13 @@ function sleep(ms) {
 }
 
 const rpc = createOrcaRpc({ envName })
+
 const { orcaJsonSync, orcaJsonAsync, runReconnectRefreshStorm, runRestartProxy } = rpc
 
 async function mapPool(items, concurrency, worker) {
   const results = Array.from({ length: items.length })
   let next = 0
+
   async function run() {
     while (next < items.length) {
       const index = next
@@ -87,15 +107,18 @@ async function mapPool(items, concurrency, worker) {
       results[index] = await worker(items[index], index)
     }
   }
+
   await Promise.all(
     Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, () => run())
   )
+
   return results
 }
 
 function floodCommand(marker) {
   const script =
     "const m=process.argv[1];process.stdout.write('READY:'+m+'\n');let f=0;const c='A'.repeat(2048);setInterval(()=>{f++;process.stdout.write('BG:'+m+':'+f+':'+c+'\n')},8);process.stdin.resume()"
+
   return `node -e ${JSON.stringify(script)} ${JSON.stringify(marker)}`
 }
 
@@ -103,17 +126,22 @@ function sampleOrcaIfPossible() {
   if (process.platform !== 'darwin') {
     return null
   }
+
   try {
     const status = orcaJsonSync(['status'], { local: true }).result
     const pid = status?.app?.pid
+
     if (!pid) {
       return null
     }
+
     const out = path.join(reportDir, `orca-sample-realistic-${Date.now()}.txt`)
+
     const sampled = spawnSync('sample', [String(pid), '5', '-file', out], {
       timeout: 20_000,
       stdio: 'ignore'
     })
+
     return sampled.status === 0 ? out : null
   } catch {
     return null
@@ -123,6 +151,7 @@ function sampleOrcaIfPossible() {
 function listLiveTerminalHandles() {
   const listed = orcaJsonSync(['terminal', 'list'])
   const terms = listed.result?.terminals || []
+
   return terms
     .filter((t) => typeof t.handle === 'string' && t.handle.startsWith('term_'))
     .map((t) => ({
@@ -158,14 +187,17 @@ async function main() {
 
   const worktrees = orcaJsonSync(['worktree', 'list']).result
   const wtList = worktrees?.worktrees || worktrees?.items || worktrees || []
+
   if (!Array.isArray(wtList) || wtList.length === 0) {
     throw new Error(`No worktrees on environment ${envName}`)
   }
+
   notes.push(`remote worktrees=${wtList.length}`)
   phases.push({ phase: 'baseline', worktrees: wtList.length })
 
   // --- Phase: seed flood terminals (agent-like backlog sources) ---
   const created = []
+
   if (createCount > 0) {
     const targets = wtList.slice(0, Math.min(createWorktreeSpan, wtList.length))
     await mapPool(
@@ -174,10 +206,13 @@ async function main() {
       async (i) => {
         const wt = targets[i % targets.length]
         const selector = worktreeSelector(wt)
+
         if (!selector) {
           return
         }
+
         const marker = `REALISTIC_${Date.now()}_${i}`
+
         try {
           const createdTerm = await orcaJsonAsync(
             [
@@ -192,7 +227,9 @@ async function main() {
             ],
             { timeoutMs: 180_000 }
           )
+
           const handle = extractTerminalHandle(createdTerm.result)
+
           if (handle) {
             created.push({ handle, marker, worktree: selector })
             console.log(
@@ -214,6 +251,7 @@ async function main() {
 
   // Prefer created floods for open pass; fill with existing live terminals.
   let live = []
+
   try {
     live = listLiveTerminalHandles()
     notes.push(`live terminals listed=${live.length}`)
@@ -234,9 +272,11 @@ async function main() {
   // --- Phase: park — leave one session focused, rest accumulate flood while "away" ---
   try {
     const parkHandle = openList[0]
+
     const parked = await orcaJsonAsync(['terminal', 'switch', '--terminal', parkHandle], {
       timeoutMs: 60_000
     })
+
     notes.push(`park switch ms=${parked.elapsedMs.toFixed(0)} handle=${parkHandle}`)
   } catch (error) {
     notes.push(`park switch failed: ${String(error).slice(0, 200)}`)
@@ -286,6 +326,7 @@ async function main() {
   const openStarted = performance.now()
 
   let statusWatch = null
+
   if (scenario === 'lockup-storm') {
     console.log(
       `[realistic-freeze] LOCKUP STORM: concurrent open parallel=${stormParallel} + overlapping reconnect refresh (timeout=${opTimeoutMs}ms); mid-storm status watchdog every ${watchdogIntervalMs}ms`
@@ -297,34 +338,43 @@ async function main() {
     })
     // Fire reconnect storm again concurrently with first open wave.
     const overlapStormPromise = runReconnectRefreshStorm(notes)
+
     for (let offset = 0; offset < openList.length; offset += stormParallel) {
       const batch = openList.slice(offset, offset + stormParallel)
       const batchStarted = performance.now()
+
       const batchResults = await Promise.all(
         batch.map(async (handle, batchIndex) => {
           const index = offset + batchIndex
+
           try {
             const sw = await orcaJsonAsync(['terminal', 'switch', '--terminal', handle], {
               timeoutMs: opTimeoutMs
             })
+
             return { handle, index, ms: sw.elapsedMs, ok: true, timedOut: false }
           } catch (error) {
             const msg = String(error)
             const timedOut = /timed out/i.test(msg)
+
             return { handle, index, error: msg, ok: false, timedOut }
           }
         })
       )
+
       const batchWall = performance.now() - batchStarted
       maxBatchWallMs = Math.max(maxBatchWallMs, batchWall)
+
       for (const item of batchResults) {
         if (item.ok) {
           openOk += 1
           sumOpenMs += item.ms
           maxOpenMs = Math.max(maxOpenMs, item.ms)
+
           if (item.index === 0 || firstOpenMs === 0) {
             firstOpenMs = item.ms
           }
+
           consecutiveSwitchFailures = 0
           openTimings.add({
             handle: item.handle,
@@ -332,6 +382,7 @@ async function main() {
             index: item.index,
             batchWall
           })
+
           if (item.ms >= hardMs) {
             console.warn(
               `[realistic-freeze] HARD open #${item.index} ${item.handle}: ${item.ms.toFixed(0)}ms`
@@ -341,6 +392,7 @@ async function main() {
           if (item.timedOut) {
             timedOutOps += 1
           }
+
           consecutiveSwitchFailures += 1
           maxConsecutiveSwitchFailures = Math.max(
             maxConsecutiveSwitchFailures,
@@ -360,12 +412,14 @@ async function main() {
           )
         }
       }
+
       if (batchWall >= hardMs) {
         console.warn(
           `[realistic-freeze] HARD batch wall=${batchWall.toFixed(0)}ms size=${batch.length}`
         )
       }
     }
+
     try {
       const overlap = await overlapStormPromise
       reconnectRefreshMs = Math.max(reconnectRefreshMs, overlap.wallMs, overlap.maxJobMs)
@@ -377,6 +431,7 @@ async function main() {
     } catch (error) {
       notes.push(`overlap reconnect failed: ${String(error).slice(0, 200)}`)
     }
+
     phases.push({
       phase: 'lockup-storm-open',
       count: openList.length,
@@ -391,32 +446,41 @@ async function main() {
     console.log(
       `[realistic-freeze] human-paced open of ${openList.length} sessions (pace≈${paceMs}ms + jitter)`
     )
+
     for (let i = 0; i < openList.length; i += 1) {
       const handle = openList[i]
+
       try {
         const sw = await orcaJsonAsync(['terminal', 'switch', '--terminal', handle], {
           timeoutMs: opTimeoutMs
         })
+
         openOk += 1
         sumOpenMs += sw.elapsedMs
         maxOpenMs = Math.max(maxOpenMs, sw.elapsedMs)
+
         if (i === 0) {
           firstOpenMs = sw.elapsedMs
         }
+
         consecutiveSwitchFailures = 0
         openTimings.add({ handle, ms: sw.elapsedMs, index: i })
+
         if (sw.elapsedMs >= softMs) {
           console.warn(`[realistic-freeze] SOFT open #${i} ${handle}: ${sw.elapsedMs.toFixed(0)}ms`)
         }
+
         if (sw.elapsedMs >= hardMs) {
           console.warn(`[realistic-freeze] HARD open #${i} ${handle}: ${sw.elapsedMs.toFixed(0)}ms`)
         }
       } catch (error) {
         const msg = String(error)
         const timedOut = /timed out/i.test(msg)
+
         if (timedOut) {
           timedOutOps += 1
         }
+
         consecutiveSwitchFailures += 1
         maxConsecutiveSwitchFailures = Math.max(
           maxConsecutiveSwitchFailures,
@@ -425,10 +489,12 @@ async function main() {
         openTimings.add({ handle, error: msg, index: i, timedOut })
         notes.push(`open ${handle} failed${timedOut ? ' (TIMEOUT)' : ''}: ${msg.slice(0, 200)}`)
       }
+
       if (i < openList.length - 1) {
         await sleep(humanPaceDelayMs(paceMs, paceJitterMs))
       }
     }
+
     phases.push({
       phase: 'human-paced-open',
       count: openList.length,
@@ -450,6 +516,7 @@ async function main() {
     infrastructureErrorCount: 0,
     longestUnhealthyWindowMs: 0
   }
+
   if (statusWatch) {
     midStormWatch = await statusWatch.stop()
     notes.push(
@@ -467,11 +534,13 @@ async function main() {
   let statusProbeMs = null
   let statusHangMs = 0
   const statusStarted = performance.now()
+
   try {
     const statusProbe = await orcaJsonAsync(['status'], {
       local: true,
       timeoutMs: permanentTimeoutMs
     })
+
     statusProbeMs = statusProbe.elapsedMs
   } catch (error) {
     statusHangMs = performance.now() - statusStarted
@@ -482,11 +551,13 @@ async function main() {
   }
 
   let memoryProbeMs = null
+
   try {
     const mem = await orcaJsonAsync(['diagnostics', 'memory'], {
       local: true,
       timeoutMs: permanentTimeoutMs
     })
+
     memoryProbeMs = mem.elapsedMs
     notes.push(`memory diagnostic ms=${mem.elapsedMs.toFixed(0)}`)
   } catch (error) {
@@ -494,6 +565,7 @@ async function main() {
   }
 
   const peakForSignals = Math.max(maxOpenMs, firstOpenMs, maxBatchWallMs)
+
   const signals = evaluateRealisticFreezeSignals({
     maxOpenMs: peakForSignals,
     firstOpenMs,
@@ -519,7 +591,9 @@ async function main() {
     foreverWindowMs,
     statusSlowMs
   })
+
   const watchdogInfrastructureErrorCount = midStormWatch.infrastructureErrorCount
+
   if (statusHangMs >= foreverWindowMs) {
     fullApp.foreverUiLockupObserved = true
     fullApp.longestUnhealthyWindowMs = Math.max(fullApp.longestUnhealthyWindowMs, statusHangMs)
@@ -529,8 +603,10 @@ async function main() {
   const recoveredHardStall = signals.hardFreeze && !fullApp.foreverUiLockupObserved && openOk > 0
 
   let samplePath = null
+
   if (signals.softFreeze || signals.hardFreeze || fullApp.foreverUiLockupObserved) {
     samplePath = sampleOrcaIfPossible()
+
     if (samplePath) {
       notes.push(`sample=${samplePath}`)
     } else {
@@ -597,10 +673,12 @@ async function main() {
   }
 
   const outPath = path.join(reportDir, `live-realistic-freeze-${envName}-${scenario}.json`)
+
   const stamped = path.join(
     reportDir,
     `live-realistic-freeze-${envName}-${scenario}-peak-${Date.now()}.json`
   )
+
   writeFileSync(outPath, `${JSON.stringify(report, null, 2)}\n`)
   writeFileSync(stamped, `${JSON.stringify(report, null, 2)}\n`)
   console.log(`[realistic-freeze] report ${outPath}`)

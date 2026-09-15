@@ -15,7 +15,9 @@ import {
 import type { GitLineStats } from './git-uncommitted-line-stats'
 
 const MERGE_BASE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4'
+
 const NO_LINES = { added: 0, removed: 0 }
+
 const OTHER_MERGE_BASE = '0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c'
 
 function statsMap(entries: Record<string, GitLineStats>): ReadonlyMap<string, GitLineStats> {
@@ -25,6 +27,7 @@ function statsMap(entries: Record<string, GitLineStats>): ReadonlyMap<string, Gi
 function createAbortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
+
   return error
 }
 
@@ -33,9 +36,11 @@ const tempRoots: string[] = []
 async function createWorktreeDir(files: Record<string, string> = {}): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-line-total-'))
   tempRoots.push(root)
+
   for (const [relativePath, contents] of Object.entries(files)) {
     await writeFile(path.join(root, relativePath), contents)
   }
+
   return root
 }
 
@@ -151,6 +156,7 @@ describe('sumGitBranchLineTotal', () => {
       added: total.added - total.test!.added - total.generated!.added,
       removed: total.removed - total.test!.removed - total.generated!.removed
     }
+
     expect(source).toEqual({ added: 12, removed: 2 })
     expect(total.test).toEqual({ added: 34, removed: 6 })
     expect(total.generated).toEqual({ added: 7, removed: 3 })
@@ -181,6 +187,7 @@ describe('merge base param validation', () => {
       42,
       { toString: () => MERGE_BASE }
     ]
+
     for (const value of rejected) {
       expect(isGitBranchLineTotalMergeBase(value)).toBe(false)
       expect(readGitBranchLineTotalMergeBaseParam(value)).toBeUndefined()
@@ -218,6 +225,7 @@ describe('buildGitBranchLineTotalDiffArgs', () => {
 describe('computeGitBranchLineTotal', () => {
   it('never invokes git for a merge base that is not an object name', async () => {
     const runDiffNumstat = vi.fn()
+
     for (const mergeBase of ['--upload-pack=x', 'HEAD', '', 'origin/main']) {
       await expect(
         computeGitBranchLineTotal({
@@ -229,6 +237,7 @@ describe('computeGitBranchLineTotal', () => {
         })
       ).resolves.toBeUndefined()
     }
+
     expect(runDiffNumstat).not.toHaveBeenCalled()
   })
 
@@ -270,13 +279,17 @@ describe('computeGitBranchLineTotal', () => {
 
   it('coalesces concurrent callers sharing a host, worktree and merge base into one exec', async () => {
     let release = (): void => {}
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const runDiffNumstat = vi.fn(async () => {
       await gate
+
       return '4\t1\tsrc/a.ts\0'
     })
+
     const input = {
       worktreePath: '/repo',
       hostKey: 'native',
@@ -297,6 +310,7 @@ describe('computeGitBranchLineTotal', () => {
 
   it('keeps separate execs for a different merge base, worktree or host', async () => {
     const runDiffNumstat = vi.fn(async () => '1\t0\tsrc/a.ts\0')
+
     const base = {
       worktreePath: '/repo',
       hostKey: 'native',
@@ -317,6 +331,7 @@ describe('computeGitBranchLineTotal', () => {
 
   it('re-execs once the shared lease has settled', async () => {
     const runDiffNumstat = vi.fn(async () => '1\t0\tsrc/a.ts\0')
+
     const input = {
       worktreePath: '/repo',
       hostKey: 'native',
@@ -333,6 +348,7 @@ describe('computeGitBranchLineTotal', () => {
 
   it('rejects when the shared diff is aborted instead of resolving a partial total', async () => {
     const controller = new AbortController()
+
     const runDiffNumstat = vi.fn(
       (_args: string[], signal: AbortSignal) =>
         new Promise<string>((_resolve, reject) => {
@@ -348,6 +364,7 @@ describe('computeGitBranchLineTotal', () => {
       runDiffNumstat,
       signal: controller.signal
     })
+
     const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     controller.abort()
     await assertion
@@ -388,13 +405,17 @@ describe('computeGitBranchLineTotal', () => {
 
   it('invalidateGitBranchLineTotalInFlight stops a later pass joining a pre-mutation diff', async () => {
     let release = (): void => {}
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const runDiffNumstat = vi.fn(async () => {
       await gate
+
       return '1\t0\tsrc/a.ts\0'
     })
+
     const input = {
       worktreePath: '/repo',
       hostKey: 'native',
@@ -419,6 +440,7 @@ describe('computeGitBranchLineTotal ranged-diff cooldown', () => {
   function diffTaking(durationMs: number): () => Promise<string> {
     return vi.fn(async () => {
       nowMs += durationMs
+
       return '10\t2\tsrc/a.ts\0'
     })
   }
@@ -480,6 +502,7 @@ describe('computeGitBranchLineTotal ranged-diff cooldown', () => {
       nowMs += GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS
       throw new Error('timed out')
     })
+
     const input = inputFor(runDiffNumstat)
 
     await expect(computeGitBranchLineTotal(input)).resolves.toBeUndefined()

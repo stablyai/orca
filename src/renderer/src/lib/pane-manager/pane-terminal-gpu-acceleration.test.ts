@@ -4,6 +4,7 @@ import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 
 function createPane(): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
+
   return {
     id: 1,
     leafId,
@@ -44,6 +45,7 @@ describe('applyTerminalGpuAcceleration', () => {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
   })
@@ -54,6 +56,7 @@ describe('applyTerminalGpuAcceleration', () => {
 
   it('refits after disabling WebGL so DOM renderer dimensions settle', () => {
     const pane = createPane()
+
     const options: PaneManagerOptions = {
       linkOpenHint: () => '',
       terminalGpuAcceleration: 'auto'
@@ -72,6 +75,7 @@ describe('applyTerminalGpuAcceleration', () => {
     })
     const pane = createPane()
     pane.hasComplexScriptOutput = true
+
     const options: PaneManagerOptions = {
       linkOpenHint: () => '',
       terminalGpuAcceleration: 'on'
@@ -90,6 +94,7 @@ describe('applyTerminalGpuAcceleration', () => {
     })
     const pane = createPane()
     pane.webglDisabledAfterContextLoss = true
+
     const options: PaneManagerOptions = {
       linkOpenHint: () => '',
       terminalGpuAcceleration: 'auto'
@@ -103,6 +108,7 @@ describe('applyTerminalGpuAcceleration', () => {
   it('keeps context-loss latches when the acceleration mode is unchanged', () => {
     const pane = createPane()
     pane.webglDisabledAfterContextLoss = true
+
     const options: PaneManagerOptions = {
       linkOpenHint: () => '',
       terminalGpuAcceleration: 'on'
@@ -119,6 +125,7 @@ describe('applyTerminalGpuAcceleration', () => {
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
     })
     const pane = createPane()
+
     const options: PaneManagerOptions = {
       linkOpenHint: () => '',
       terminalGpuAcceleration: 'on'

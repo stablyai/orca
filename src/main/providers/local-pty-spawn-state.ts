@@ -17,14 +17,18 @@ export async function awaitCancelableLocalPtySpawn<T>(
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
+
   try {
     const result = await operation
+
     if (pendingSpawn.canceled) {
       throw new Error(`PTY spawn canceled: ${id}`)
     }
+
     return result
   } finally {
     pending.delete(pendingSpawn)
+
     if (pending.size === 0) {
       pendingLocalPtySpawns.delete(id)
     }
@@ -33,9 +37,11 @@ export async function awaitCancelableLocalPtySpawn<T>(
 
 export function cancelPendingLocalPtySpawns(id: string): void {
   const pending = pendingLocalPtySpawns.get(id)
+
   if (!pending) {
     return
   }
+
   for (const pendingSpawn of pending) {
     pendingSpawn.canceled = true
   }
@@ -49,16 +55,20 @@ export function cancelAllPendingLocalPtySpawns(): void {
 
 export function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResult | null {
   const existing = ptyProcesses.get(id)
+
   if (!existing) {
     return null
   }
+
   let resized = false
+
   try {
     existing.resize(cols, rows)
     resized = true
   } catch {
     /* Existing PTY may reject resize during teardown; still return the live handle. */
   }
+
   return {
     id,
     ...(ptyIncarnations.has(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),

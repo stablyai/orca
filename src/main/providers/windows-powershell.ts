@@ -1,4 +1,5 @@
 export type WindowsPowerShellImplementation = 'auto' | 'powershell.exe' | 'pwsh.exe'
+
 export type WindowsPowerShellShellFamily =
   | 'powershell.exe'
   | 'pwsh.exe'

@@ -31,6 +31,7 @@ export function captureWorktreeOperationGenerationSnapshot(
 ): WorktreeOperationGenerationSnapshot {
   const environmentId = expectedRoute.runtimeEnvironmentId
   const executionHost = parseExecutionHostId(expectedRoute.executionHostId)
+
   return {
     route: expectedRoute,
     runtimeConnectionGeneration: environmentId
@@ -60,9 +61,11 @@ export function assertWorktreeOperationGenerationSnapshotCurrent(
 ): WorktreeOperationRoute {
   const environmentId = snapshot.route.runtimeEnvironmentId
   const executionHost = parseExecutionHostId(snapshot.route.executionHostId)
+
   const currentRoute = resolveCurrentRoute
     ? resolveCurrentRoute()
     : resolveWorktreeOperationRoute(getState(), worktreeId)
+
   if (
     JSON.stringify(currentRoute) !== JSON.stringify(snapshot.route) ||
     (environmentId &&
@@ -83,6 +86,7 @@ export function assertWorktreeOperationGenerationSnapshotCurrent(
   ) {
     throw createError()
   }
+
   return snapshot.route
 }
 

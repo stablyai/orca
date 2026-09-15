@@ -51,20 +51,26 @@ export function activateLocalPtySession(args: {
   ptyReportsChildExitStatus.set(id, args.reportsChildExitStatus)
   ptyProcesses.set(id, proc)
   ptyInitialCwd.set(id, plan.cwd)
+
   if (spawnedWslDistro !== undefined) {
     ptyWslDistroById.set(id, spawnedWslDistro)
   }
+
   // Why both: launchAgent is explicit intent that survives command rewrites; recognition catches bare agent command lines.
   if (spawn.launchAgent || plan.startupAgentRecognition) {
     ptyAgentSessionIds.add(id)
   }
+
   ptyShellName.set(id, getSpawnedShellName(plan.shellPath))
+
   if (env.ORCA_TERMINAL_HANDLE) {
     ptyTerminalHandle.set(id, env.ORCA_TERMINAL_HANDLE)
   }
+
   if (spawn.worktreeId) {
     ptyWorktreeId.set(id, spawn.worktreeId)
   }
+
   ptyAgentForegroundContextPaths.set(
     id,
     getAgentForegroundContextPaths({ cwd: spawn.cwd, worktreeId: spawn.worktreeId })
@@ -75,11 +81,13 @@ export function activateLocalPtySession(args: {
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
     const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
+
     if (emission.transformed || sequenceChars !== emission.data.length) {
       getOptions().onData?.(id, emission.data, Date.now(), sequenceChars, true)
     } else {
       getOptions().onData?.(id, emission.data, Date.now())
     }
+
     for (const cb of dataListeners) {
       cb(
         emission.transformed || sequenceChars !== emission.data.length
@@ -94,6 +102,7 @@ export function activateLocalPtySession(args: {
       )
     }
   }
+
   const startupIngress = new PtyStartupIngress({
     ...(spawn.startupIngress ? { intent: spawn.startupIngress } : {}),
     ownerBackend: resolvePtyOwnerBackend({
@@ -104,6 +113,7 @@ export function activateLocalPtySession(args: {
     write: (data) => proc.write(data),
     onEmission: emitIngressData
   })
+
   startupIngressByPty.set(id, startupIngress)
 
   // Shell-ready startup command support
@@ -115,10 +125,13 @@ export function activateLocalPtySession(args: {
     proc,
     startupIngress
   })
+
   const disposables: { dispose: () => void }[] = []
+
   const onDataDisposable = proc.onData((rawData) => {
     readiness.acceptData(rawData)
   })
+
   if (onDataDisposable) {
     disposables.push(onDataDisposable)
   }
@@ -132,12 +145,15 @@ export function activateLocalPtySession(args: {
       signal,
       hostReportsChildExitStatus: ptyReportsChildExitStatus.get(id)
     })
+
     const wasTerminationRequested = ptyTerminationMode.has(id)
     ptyPhysicalExits.get(id)?.markExited()
+
     // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
     if (process.platform !== 'win32') {
       ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
     }
+
     readiness.prepareForExit()
     clearPtyState(id)
     startupIngress.drainAndClose()
@@ -146,18 +162,22 @@ export function activateLocalPtySession(args: {
     destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
     ptyReportsChildExitStatus.delete(id)
     getOptions().onExit?.(id, exitCode, incarnationId, cause)
+
     for (const cb of exitListeners) {
       cb({ id, code: exitCode, incarnationId, cause })
     }
   })
+
   if (onExitDisposable) {
     ptyExitDisposables.set(id, onExitDisposable)
   }
+
   ptyDisposables.set(id, disposables)
 
   const startupCommandDeliveredByWrapper =
     spawn.command !== undefined &&
     plan.shellReadyLaunch?.env[POSIX_SHELL_STARTUP_COMMAND_ENV] === spawn.command
+
   if (
     spawn.command &&
     !plan.startupCommandDeliveredInShellArgs &&
@@ -165,12 +185,14 @@ export function activateLocalPtySession(args: {
   ) {
     // Why: shells with bracketed paste armed take a multiline startup prompt literally; others use raw submit.
     const spawnedShellName = getSpawnedShellName(plan.shellPath).toLowerCase()
+
     const bracketedPasteSafe =
       process.platform !== 'win32' &&
       isBracketedPasteSafeShell({
         shellName: spawnedShellName,
         waitsForShellReady: plan.shellReadyLaunch?.supportsReadyMarker === true
       })
+
     writeStartupCommandWhenShellReady(
       readiness.shellReadyPromise,
       proc,
@@ -187,6 +209,7 @@ export function activateLocalPtySession(args: {
   // Why: publish the OS pid for the memory collector; proc.pid can be briefly 0/undefined before node-pty sees the child.
   const rawPid = proc.pid
   const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
+
   return {
     id,
     incarnationId,

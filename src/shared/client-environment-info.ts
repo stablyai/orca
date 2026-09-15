@@ -9,6 +9,7 @@ export type ClientEnvironmentInfo = {
 }
 
 const FOOTER_MARKER = '---'
+
 const ORCA_LINE_PREFIX = 'Orca:'
 
 // Why: match the whole prefilled block (optional Shell line included) so strip
@@ -29,9 +30,11 @@ export function formatClientEnvironmentInfo(info: ClientEnvironmentInfo): string
   const osParts = [platform, osRelease, arch ? `(${arch})` : ''].filter(Boolean)
   const lines = [`${ORCA_LINE_PREFIX} ${version}`, `OS: ${osParts.join(' ')}`]
   const shell = info.shell ? normalizeEnvironmentValue(info.shell) : ''
+
   if (shell) {
     lines.push(`Shell: ${shell}`)
   }
+
   return lines.join('\n')
 }
 
@@ -56,7 +59,9 @@ export function appendClientEnvironmentFooter(params: {
   if (hasClientEnvironmentFooter(params.message)) {
     return params.message
   }
+
   const footer = formatClientEnvironmentFooter(params.info)
   const base = params.message.trimEnd()
+
   return base.length > 0 ? `${base}\n\n${footer}` : footer
 }

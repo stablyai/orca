@@ -20,12 +20,14 @@ export async function prepareMobileAiVaultSessionResume(
   const needsAccountRepin =
     isPerAccountManagedCodexHome(session.codexHome) &&
     (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
+
   if (
     session.agent !== 'codex' ||
     (!isLegacySharedCodexHome(session.codexHome) && !needsAccountRepin)
   ) {
     return session
   }
+
   const response = await client.sendRequest(
     'aiVault.prepareSessionResume',
     {
@@ -36,25 +38,31 @@ export async function prepareMobileAiVaultSessionResume(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
+
   if (!response.ok) {
     if (isAiVaultPrepareSessionResumeUnavailableError(response.error)) {
       // Why: older hosts cannot prepare, but their shared home still supports the legacy resume path.
       return session
     }
+
     throw new Error(
       response.error?.message || 'Could not prepare this legacy Codex session. Retry resume.'
     )
   }
+
   const result = response.result as {
     useRealCodexHome?: unknown
     substituteCodexHome?: unknown
   } | null
+
   if (result?.useRealCodexHome === true) {
     return { ...session, codexHome: null }
   }
+
   // Why: older hosts never send a repin home, so absence keeps the session's own home.
   if (typeof result?.substituteCodexHome === 'string' && result.substituteCodexHome) {
     return { ...session, codexHome: result.substituteCodexHome }
   }
+
   return session
 }

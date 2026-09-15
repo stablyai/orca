@@ -34,6 +34,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
   it('reattaches once with the refreshed unavailable-page inventory', async () => {
     const attempts = mockAttempts()
     let state: 'active' | 'outcomeUnknown' = 'active'
+
     const host = new PairedRuntimeBrowserClientHost({
       pairing,
       authorityRuntimeId: 'runtime-a',
@@ -44,6 +45,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
       pageReconciliationProtocolVersion: 1,
       reconnectRetryDelayMs: 1
     })
+
     const starting = host.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
     expect(subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2]).toMatchObject({
@@ -70,6 +72,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
     const attempts = mockAttempts()
     const handler = vi.fn(() => ({ status: 'completed' as const }))
     const onError = vi.fn()
+
     const host = new PairedRuntimeBrowserClientHost({
       pairing,
       authorityRuntimeId: 'runtime-a',
@@ -79,6 +82,7 @@ describe('PairedRuntimeBrowserClientHost reconnect', () => {
       getPageInventory: () => [],
       onError
     })
+
     const starting = host.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
     attempts[0]!.callbacks.onResponse(readyResponse())
@@ -110,20 +114,24 @@ function mockAttempts(): {
     close: ReturnType<typeof vi.fn>
     sendRequest: ReturnType<typeof vi.fn>
   }[] = []
+
   subscribeRemoteRuntimeRequestMock.mockImplementation(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       const close = vi.fn()
+
       const sendRequest = vi.fn().mockResolvedValue({
         id: 'command-result',
         ok: true,
         result: { accepted: true },
         _meta: { runtimeId: 'runtime-a' }
       })
+
       attempts.push({
         callbacks: args[4] as RemoteRuntimeSubscriptionCallbacks,
         close,
         sendRequest
       })
+
       return {
         requestId: `browser-host-${attempts.length}`,
         close,
@@ -132,6 +140,7 @@ function mockAttempts(): {
       }
     }
   )
+
   return attempts
 }
 

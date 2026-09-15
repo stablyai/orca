@@ -28,8 +28,10 @@ export const ORCHESTRATION_ASK_METHODS = [
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+
       if (remoteAttachment) {
         rejectFederatedExplicitTarget(params)
+
         return askRemoteRunHome({
           params: { ...params, timeoutMs },
           runtime,
@@ -42,13 +44,16 @@ export const ORCHESTRATION_ASK_METHODS = [
           taskId: remoteAttachment.task_id
         })
       }
+
       const activeDispatch = db.getActiveDispatchForIdentity(from, paneKey)
+
       if (!activeDispatch) {
         throw new OrchestrationError(
           'dispatch_inactive',
           'ask requires an active supervised Dispatch.'
         )
       }
+
       if (activeDispatch.capability_hash) {
         const authority = db.verifyDispatchCapability({
           dispatchId: activeDispatch.id,
@@ -56,16 +61,20 @@ export const ORCHESTRATION_ASK_METHODS = [
           paneKey,
           processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
         })
+
         if (!authority.valid) {
           throw new OrchestrationError('dispatch_capability_invalid', authority.reason)
         }
       }
+
       const options =
         params.options
           ?.split(',')
           .map((s) => s.trim())
           .filter(Boolean) ?? []
+
       let question = params.resume ? db.getQuestion(params.resume) : undefined
+
       if (params.resume) {
         if (!question || question.dispatch_id !== activeDispatch.id) {
           throw new OrchestrationError(
@@ -75,24 +84,28 @@ export const ORCHESTRATION_ASK_METHODS = [
         }
       } else {
         const run = db.getRun(activeDispatch.run_id)
+
         if (!run || run.legacy === 1) {
           throw new OrchestrationError(
             'run_not_found',
             `Run ${activeDispatch.run_id} was not found.`
           )
         }
+
         if (params.run && params.run !== run.id) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
             `Dispatch ${activeDispatch.id} belongs to Run ${run.id}, not ${params.run}.`
           )
         }
+
         if (params.to && params.to !== `run:${run.id}` && params.to !== run.coordinator_handle) {
           throw new OrchestrationError(
             'dispatch_run_mismatch',
             `ask from Dispatch ${activeDispatch.id} must target its owning Run ${run.id}.`
           )
         }
+
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: activeDispatch.id,
@@ -100,6 +113,7 @@ export const ORCHESTRATION_ASK_METHODS = [
           question: params.question as string,
           options
         })
+
         question = created.question
         runtime.notifyMessageArrived(`run:${run.id}`, created.message.type)
       }
@@ -116,14 +130,17 @@ export const ORCHESTRATION_ASK_METHODS = [
         timeoutMs
       })
       const deadline = Date.now() + timeoutMs
+
       while (true) {
         const current = db.getQuestion(questionId)
+
         if (!current || current.status === 'closed') {
           throw new OrchestrationError(
             'dispatch_inactive',
             `Question ${questionId} closed because its Dispatch is inactive.`
           )
         }
+
         if (current.status === 'answered') {
           return {
             answer: current.answer_body,
@@ -136,6 +153,7 @@ export const ORCHESTRATION_ASK_METHODS = [
             timeoutMs
           }
         }
+
         if (signal?.aborted) {
           return {
             answer: null,
@@ -147,7 +165,9 @@ export const ORCHESTRATION_ASK_METHODS = [
             timeoutMs
           }
         }
+
         const remainingMs = deadline - Date.now()
+
         if (remainingMs <= 0) {
           return {
             answer: null,
@@ -159,6 +179,7 @@ export const ORCHESTRATION_ASK_METHODS = [
             timeoutMs
           }
         }
+
         await runtime.waitForMessage(`dispatch:${activeDispatch.id}`, {
           timeoutMs: remainingMs,
           signal

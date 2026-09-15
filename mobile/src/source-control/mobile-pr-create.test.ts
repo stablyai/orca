@@ -15,17 +15,21 @@ import {
 function ok(result: unknown): RpcSuccess {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
 }
+
 function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
+
 function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
   calls: Array<{ method: string; params: unknown }>
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
+
       return responses.shift() ?? fail('unexpected')
     })
   }
@@ -86,6 +90,7 @@ describe('buildMobilePrCreateParams', () => {
       body: 'Body text',
       draft: true
     })
+
     expect(params).toMatchObject({ head: 'feature/x', body: 'Body text', draft: true })
   })
 })
@@ -105,12 +110,14 @@ describe('mobile create form gating parity', () => {
     { reason: 'fork_head_unsupported', canCreate: false }
   ] as const)('matches desktop composer gating for $reason', ({ reason, canCreate }) => {
     const desktopEligibility = eligibility({ canCreate, blockedReason: reason })
+
     const desktopAllowsComposer = shouldOpenChecksPanelCreateComposer({
       activeReview: null,
       isFolder: false,
       branch: 'feature/x',
       hostedReviewCreation: desktopEligibility
     })
+
     const mobileAllowsComposer =
       getMobilePrCreateBlockMessage({
         provider: desktopEligibility.provider,
@@ -214,6 +221,7 @@ describe('mobile create form gating parity', () => {
         blockedReason: 'needs_push',
         reviewLookupOutcome: 'unavailable'
       }) !== null
+
     const desktopAllowsComposer = shouldOpenChecksPanelCreateComposer({
       activeReview: null,
       isFolder: false,
@@ -224,6 +232,7 @@ describe('mobile create form gating parity', () => {
         reviewLookupOutcome: 'unavailable'
       })
     })
+
     expect(mobileBlocked).toBe(true)
     expect(desktopAllowsComposer).toBe(false)
   })
@@ -266,6 +275,7 @@ describe('resolveMobilePrPrefill', () => {
         reviewLookupOutcome: 'not_found'
       })
     ])
+
     await expect(resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)).resolves.toEqual({
       provider: 'gitlab',
       base: 'develop',
@@ -292,6 +302,7 @@ describe('resolveMobilePrPrefill', () => {
         reviewLookupOutcome: 'not_found'
       })
     ])
+
     const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
     expect(shouldPushBeforeMobilePrCreate(prefill)).toBe(true)
     expect(getMobilePrCreateBlockMessage(prefill)).toBeNull()
@@ -309,6 +320,7 @@ describe('resolveMobilePrPrefill', () => {
         reviewLookupOutcome: 'not_found'
       })
     ])
+
     const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
     expect(getMobilePrCreateBlockMessage(prefill)).toBe(
       'Commit changes before creating a pull request.'
@@ -347,6 +359,7 @@ describe('resolveMobilePrPrefill', () => {
         reviewLookupOutcome: 'unavailable'
       })
     ])
+
     const prefill = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', baseArgs)
     expect(prefill.reviewLookupOutcome).toBe('unavailable')
     expect(getMobilePrCreateBlockMessage(prefill)).not.toBeNull()
@@ -354,10 +367,12 @@ describe('resolveMobilePrPrefill', () => {
 
   it('blocks without calling the RPC when there is no branch', async () => {
     const client = clientWith([])
+
     const result = await resolveMobilePrPrefill(client, 'repo-1::/tmp/wt', {
       ...baseArgs,
       branch: undefined
     })
+
     expect(result.provider).toBe('github')
     expect(result.canCreate).toBe(false)
     expect(result.blockedReason).toBe('detached_head')

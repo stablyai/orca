@@ -25,8 +25,10 @@ function notification(buffer: Buffer): Notification | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
   const message = JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
+
   return typeof message.method === 'string' && message.id === undefined ? message : null
 }
 
@@ -34,8 +36,10 @@ function responseResult(buffer: Buffer): Record<string, unknown> | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
   const message = JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
+
   return message.id === undefined ? null : (message.result ?? null)
 }
 
@@ -65,17 +69,21 @@ describe('RelayPtySourcePublication', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         const frame = notification(data)
+
         if (frame?.method === 'pty.data' || frame?.method === 'pty.exit') {
           sourceSettlements.push(onSettled)
+
           if (frame.method === 'pty.exit') {
             exitSettlements.push(onSettled)
           }
+
           if (settleSourceImmediately && !(holdExitSettlement && frame.method === 'pty.exit')) {
             onSettled({ ok: true })
           }
         } else {
           onSettled({ ok: true })
         }
+
         return true
       },
       {
@@ -90,9 +98,11 @@ describe('RelayPtySourcePublication', () => {
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, (id) => capacityIds.push(id))
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -113,6 +123,7 @@ describe('RelayPtySourcePublication', () => {
       })
     ).toBe('opened')
     activationSettlements[0]({ ok: true })
+
     return { adapter, publication, sourceSettlements, exitSettlements, capacityIds, writes }
   }
 
@@ -205,6 +216,7 @@ describe('RelayPtySourcePublication', () => {
     const payload = '\u0000'.repeat(4000)
 
     expect(harness.publication.publish('pty-1', { data: payload }, false)).toBe(true)
+
     for (let turn = 0; turn < 4; turn++) {
       await flushRequests()
     }
@@ -223,15 +235,18 @@ describe('RelayPtySourcePublication', () => {
   it('keeps mixed legacy and V1 clients on distinct frame authority', async () => {
     const harness = await createHarness(8)
     const legacyWrites: Buffer[] = []
+
     const legacyClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         legacyWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       legacyClientId,
       requestFrame(2, 'pty.openClient', {
@@ -247,10 +262,13 @@ describe('RelayPtySourcePublication', () => {
     const sourceFrame = harness.writes
       .map(notification)
       .find((frame) => frame?.method === 'pty.data')!
+
     const oldGrant = harness.writes.map(responseResult).find((result) => result?.ownerLease)!
+
     const legacyFrame = legacyWrites
       .map(notification)
       .find((frame) => frame?.method === 'pty.data')!
+
     expect(sourceFrame.params).toMatchObject({
       data: 'data',
       sourceEndSu: 4,
@@ -260,15 +278,18 @@ describe('RelayPtySourcePublication', () => {
 
     dispatcher!.invalidateClient()
     const replacementWrites: Buffer[] = []
+
     const replacementClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         replacementWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       replacementClientId,
       requestFrame(2, 'pty.openClient', {
@@ -301,14 +322,19 @@ describe('RelayPtySourcePublication', () => {
     const heldSettlements: ((result: SinkWriteSettlement) => void)[] = []
     let saturateSubscriber = false
     dispatcher!.onClientDetached((clientId) => detached.push(clientId))
+
     const saturatedId = dispatcher!.attachClient(
       (data, onSettled) => {
         saturatedWrites.push(Buffer.from(data))
+
         if (!saturateSubscriber) {
           onSettled({ ok: true })
+
           return true
         }
+
         heldSettlements.push(onSettled)
+
         return false
       },
       {
@@ -318,15 +344,18 @@ describe('RelayPtySourcePublication', () => {
       },
       endpointIdentity
     )
+
     const healthyId = dispatcher!.attachClient(
       (data, onSettled) => {
         healthyWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       saturatedId,
       requestFrame(2, 'pty.openClient', {
@@ -347,6 +376,7 @@ describe('RelayPtySourcePublication', () => {
     saturateSubscriber = true
     const saturatedPayload = 's'.repeat(128 * 1024)
     let admitted = 0
+
     while (
       dispatcher!.tryNotifyPtyDataToClient(
         saturatedId,
@@ -417,9 +447,11 @@ describe('RelayPtySourcePublication', () => {
   it('fences idle publication and pumping before the wait continuation', async () => {
     const harness = await createHarness(4)
     harness.publication.publish('pty-1', { data: 'abcdefgh' }, false)
+
     const firstData = harness.writes
       .map(notification)
       .find((frame) => frame?.method === 'pty.data')!
+
     const fence = harness.publication.waitForPendingSend('pty-1')
 
     expect(harness.publication.publish('pty-1', { data: 'ijkl' }, false)).toBe(false)
@@ -478,15 +510,18 @@ describe('RelayPtySourcePublication', () => {
     dispatcher!.invalidateClient()
 
     const recoveredWrites: Buffer[] = []
+
     const recoveredClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         recoveredWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -527,6 +562,7 @@ describe('RelayPtySourcePublication', () => {
     const replacementData = recoveredWrites
       .map(notification)
       .find((frame) => frame?.method === 'pty.data')!
+
     expect(replacementData.params).toMatchObject({ data: 'efgh', sourceEndSu: 8 })
     expect(replacementData.params.deliveryToken).not.toBe(oldData.params.deliveryToken)
     expect(
@@ -540,10 +576,13 @@ describe('RelayPtySourcePublication', () => {
     const oldData = harness.writes.map(notification).find((frame) => frame?.method === 'pty.data')!
     const oldGrant = harness.writes.map(responseResult).find((result) => result?.ownerLease)!
     let fenceSettled = false
+
     const fence = harness.publication.waitForPendingSend('pty-1').then((result) => {
       fenceSettled = true
+
       return result
     })
+
     await Promise.resolve()
     expect(fenceSettled).toBe(false)
 
@@ -555,15 +594,18 @@ describe('RelayPtySourcePublication', () => {
     })
 
     const recoveredWrites: Buffer[] = []
+
     const recoveredClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         recoveredWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -579,6 +621,7 @@ describe('RelayPtySourcePublication', () => {
     )
     await flushRequests()
     const activationSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const activation = harness.publication.activate(
       'pty-1',
       'incarnation-1',
@@ -597,6 +640,7 @@ describe('RelayPtySourcePublication', () => {
         acceptedSourceEndSu: 4
       }
     )
+
     expect(activation).toMatchObject({
       status: 'pending',
       checkpointSourceEndSu: 4,
@@ -647,19 +691,23 @@ describe('RelayPtySourcePublication', () => {
   it('settles the recovery fence before sending buffered live output', async () => {
     const harness = await createHarness(4)
     harness.publication.publish('pty-1', { data: 'abcdefgh' }, false)
+
     const firstData = harness.writes
       .map(notification)
       .find((frame) => frame?.method === 'pty.data')!
+
     const firstGrant = harness.writes.map(responseResult).find((result) => result?.ownerLease)!
     dispatcher!.invalidateClient()
 
     const recoveredWrites: Buffer[] = []
     const recoverySettlements: ((result: SinkWriteSettlement) => void)[] = []
     const completionSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const recoveredClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         recoveredWrites.push(Buffer.from(data))
         const method = notification(data)?.method
+
         if (method === 'pty.data') {
           recoverySettlements.push(onSettled)
         } else if (method === 'pty.recoveryComplete') {
@@ -667,11 +715,13 @@ describe('RelayPtySourcePublication', () => {
         } else {
           onSettled({ ok: true })
         }
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -687,6 +737,7 @@ describe('RelayPtySourcePublication', () => {
     )
     await flushRequests()
     const activationSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const activation = harness.publication.activate(
       'pty-1',
       'incarnation-1',
@@ -705,6 +756,7 @@ describe('RelayPtySourcePublication', () => {
         acceptedSourceEndSu: 4
       }
     )
+
     expect(activation).toMatchObject({
       status: 'pending',
       checkpointSourceEndSu: 4,
@@ -716,9 +768,11 @@ describe('RelayPtySourcePublication', () => {
     expect(
       recoveredWrites.map(notification).filter((frame) => frame?.method === 'pty.recoveryComplete')
     ).toHaveLength(0)
+
     const recoveredData = recoveredWrites
       .map(notification)
       .find((frame) => frame?.method === 'pty.data')!
+
     harness.adapter.appendSource(
       {
         id: 'pty-1',

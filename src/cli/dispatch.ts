@@ -16,17 +16,21 @@ export type CommandHandler = (ctx: HandlerContext) => Promise<void>
 // transitive module graph of the 24 groups it does not dispatch into.
 function buildRoutes(groups: readonly HandlerGroup[]): Map<string, HandlerGroup> {
   const table = new Map<string, HandlerGroup>()
+
   for (const group of groups) {
     for (const key of group.keys) {
       const owner = table.get(key)
+
       if (owner) {
         throw new Error(
           `Duplicate CLI handler registration for "${key}" (${owner.name} and ${group.name})`
         )
       }
+
       table.set(key, group)
     }
   }
+
   return table
 }
 
@@ -39,10 +43,13 @@ export const HANDLER_COMMAND_KEYS: ReadonlySet<string> = new Set(ROUTES.keys())
 export async function dispatch(commandPath: string[], ctx: HandlerContext): Promise<void> {
   const key = commandPath.join(' ')
   const group = ROUTES.get(key)
+
   if (!group) {
     throw new RuntimeClientError('invalid_argument', `Unknown command: ${key}`)
   }
+
   const handler = (await group.load())[key]
+
   // Why: the manifest key list is verified against the real exports in CI, so a
   // miss here means the group changed without the manifest — fail loudly.
   if (!handler) {
@@ -51,6 +58,7 @@ export async function dispatch(commandPath: string[], ctx: HandlerContext): Prom
       `CLI handler group "${group.name}" does not export "${key}"`
     )
   }
+
   await handler(ctx)
 }
 

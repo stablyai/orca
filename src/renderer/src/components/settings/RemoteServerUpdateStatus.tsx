@@ -80,6 +80,7 @@ export function RemoteServerUpdateStatus({
     entry.phase === 'downloading' && entry.progress !== null
       ? ` ${Math.round(entry.progress)}%`
       : ''
+
   return (
     <Badge
       variant={entry.phase === 'failed' ? 'destructive' : 'outline'}
@@ -99,12 +100,14 @@ export function getRemoteServerManualUpdateHelp(entry: RemoteServerUpdateEntry):
       'Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.'
     )
   }
+
   if (entry.support?.reason === 'unpackaged-build') {
     return translate(
       'auto.components.settings.RemoteServerUpdateStatus.unpackedHelp',
       'Development builds must be updated from their source checkout.'
     )
   }
+
   return translate(
     'auto.components.settings.RemoteServerUpdateStatus.legacyHelp',
     'Update this server manually once to enable remote updates.'

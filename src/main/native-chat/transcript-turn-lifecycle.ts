@@ -24,12 +24,15 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   agent: AgentType
 ): NativeChatTurnLifecycleDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+
   if (transcriptAgent === 'codex') {
     return decodeCodexTurnLifecycle
   }
+
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
   }
+
   return null
 }
 
@@ -39,9 +42,11 @@ export function decodeCodexTurnLifecycle(
 ): NativeChatTurnLifecycle | null {
   const record = parseJsonObject(line)
   const payload = asRecord(record?.payload)
+
   if (record?.type !== 'event_msg' || !payload) {
     return null
   }
+
   if (
     payload.type !== CODEX_EVENT_TURN_STARTED &&
     payload.type !== CODEX_EVENT_TURN_COMPLETE &&
@@ -49,12 +54,14 @@ export function decodeCodexTurnLifecycle(
   ) {
     return null
   }
+
   const state =
     payload.type === CODEX_EVENT_TURN_STARTED
       ? 'working'
       : payload.type === CODEX_EVENT_TURN_ABORTED
         ? 'interrupted'
         : 'completed'
+
   return {
     state,
     turnId: extractString(payload.turn_id) ?? fallbackId,
@@ -74,19 +81,24 @@ export function decodeClaudeTurnLifecycle(
   fallbackId: string
 ): NativeChatTurnLifecycle | null {
   const record = parseJsonObject(line)
+
   if (!record) {
     return null
   }
+
   const message = asRecord(record.message)
   const timestamp = lifecycleTimestamp(record.timestamp)
   const interruptedMessageId = claudeInterruptedMessageId(record)
+
   if (interruptedMessageId) {
     // Why: Claude stores its interrupt notice as an injected user row; it ends
     // the active generation and must not be mistaken for the next user prompt.
     return { state: 'interrupted', turnId: interruptedMessageId, timestamp }
   }
+
   if (record.type === 'assistant') {
     const stopReason = message?.stop_reason
+
     // Why: capable hosts rely on explicit terminals (prose is only a backup when
     // the latest lifecycle is not mid-generation). Emit completed for every real
     // end marker — including historical/OpenClaude rows that omit stop_reason —
@@ -99,6 +111,7 @@ export function decodeClaudeTurnLifecycle(
       (stopReason == null &&
         assistantHasRenderableContent(message) &&
         !assistantHasToolUse(message))
+
     if (isTerminal) {
       return {
         state: 'completed',
@@ -106,44 +119,56 @@ export function decodeClaudeTurnLifecycle(
         timestamp
       }
     }
+
     return null
   }
+
   if (record.type !== 'user') {
     return null
   }
+
   const decoded = decodeClaudeTranscriptLine(line, fallbackId)
+
   if (decoded?.role !== 'user' || decoded.blocks.some((block) => block.type === 'tool-result')) {
     // Why: Claude can attach text sidecars to tool-result user rows; those are
     // continuations of the active turn, not a new user-authored generation.
     return null
   }
+
   // Why: harness noise (task-notification, system-reminder, …) is user-role in
   // the JSONL but not a new generation. Treating it as working would overwrite
   // a real terminal marker and re-stick the chat spinner after done/interrupt.
   if (isNoiseMessage(decoded)) {
     return null
   }
+
   return { state: 'working', turnId: decoded.id, timestamp }
 }
 
 function lifecycleTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
+
   return Number.isFinite(parsed) ? parsed : null
 }
 
 function assistantHasRenderableContent(message: Record<string, unknown> | null): boolean {
   const content = message?.content
+
   if (typeof content === 'string') {
     return content.trim().length > 0
   }
+
   if (!Array.isArray(content)) {
     return false
   }
+
   return content.some((block) => {
     const record = asRecord(block)
+
     if (!record) {
       return false
     }
+
     if (
       record.type === 'text' &&
       typeof record.text === 'string' &&
@@ -151,9 +176,11 @@ function assistantHasRenderableContent(message: Record<string, unknown> | null):
     ) {
       return true
     }
+
     if (record.type === 'thinking' || record.type === 'redacted_thinking') {
       return true
     }
+
     return false
   })
 }
@@ -162,8 +189,10 @@ function assistantHasRenderableContent(message: Record<string, unknown> | null):
  *  a tool call, so a missing stop_reason must not be read as completion. */
 function assistantHasToolUse(message: Record<string, unknown> | null): boolean {
   const content = message?.content
+
   if (!Array.isArray(content)) {
     return false
   }
+
   return content.some((block) => asRecord(block)?.type === 'tool_use')
 }

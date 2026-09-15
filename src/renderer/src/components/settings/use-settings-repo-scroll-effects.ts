@@ -33,6 +33,7 @@ export function useSettingsRepoScrollEffects(
     setSettingsSearchQuery,
     settingsSearchQuery
   } = model
+
   const {
     contentScrollRef,
     pendingNavSectionRef,
@@ -41,6 +42,7 @@ export function useSettingsRepoScrollEffects(
     pendingSubsectionScrollFrameRef,
     repoHooksRequestSeqRef
   } = interactions
+
   const { visibleNavSections, visibleSectionIds } = navigation
   const { neededRepos } = terminal
 
@@ -50,6 +52,7 @@ export function useSettingsRepoScrollEffects(
       const next = Object.fromEntries(
         Object.entries(previous).filter(([identity]) => repoHostIdentitySet.has(identity))
       ) as Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+
       return Object.keys(next).length === Object.keys(previous).length ? previous : next
     })
   }, [repos, setRepoHooksMap])
@@ -66,21 +69,26 @@ export function useSettingsRepoScrollEffects(
     void Promise.all(
       neededRepos.map(async (repo) => {
         const repoHostIdentity = getRepoHostIdentity(repo)
+
         if (isFolderRepo(repo)) {
           setRepoHooksMap((previous) => {
             if (previous[repoHostIdentity]) {
               return previous
             }
+
             return {
               ...previous,
               [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
             }
           })
+
           return
         }
+
         try {
           const hostId = getRepoExecutionHostId(repo)
           const parsedHost = parseExecutionHostId(hostId)
+
           const result = await checkRuntimeHooks(
             {
               activeRuntimeEnvironmentId:
@@ -89,13 +97,16 @@ export function useSettingsRepoScrollEffects(
             repo.id,
             hostId
           )
+
           if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
             return
           }
+
           setRepoHooksMap((previous) => {
             if (!liveRepoHostIdentities.has(repoHostIdentity)) {
               return previous
             }
+
             return { ...previous, [repoHostIdentity]: result }
           })
         } catch {
@@ -103,13 +114,16 @@ export function useSettingsRepoScrollEffects(
           if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
             return
           }
+
           setRepoHooksMap((previous) => {
             if (!liveRepoHostIdentities.has(repoHostIdentity)) {
               return previous
             }
+
             if (previous[repoHostIdentity]) {
               return previous
             }
+
             return {
               ...previous,
               [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
@@ -138,6 +152,7 @@ export function useSettingsRepoScrollEffects(
       settingsSearchQuery.trim() !== ''
     ) {
       setSettingsSearchQuery('')
+
       return
     }
 
@@ -145,12 +160,16 @@ export function useSettingsRepoScrollEffects(
       // Why: inactive panes don't render; activate the pane first, then find the subsection next render.
       if (activeSectionId !== pendingNavSectionId) {
         setActiveSectionId(pendingNavSectionId)
+
         return
       }
+
       const container = contentScrollRef.current
+
       if (container) {
         container.scrollTo({ top: 0 })
       }
+
       // Why: deep links can target a row inside the already-visible pane.
       if (scrollTargetId !== pendingNavSectionId) {
         // Why: target can arrive before the lazy section mounts; keep pending refs until it does.
@@ -162,29 +181,37 @@ export function useSettingsRepoScrollEffects(
               getSettingsScrollTarget(scrollTargetId, contentScrollRef.current) !== null,
             onTargetPresent: () => setPendingNavRequestTick((tick) => tick + 1)
           })
+
           return
         }
+
         const scrollToSubsection = (): void => {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
         }
+
         scrollToSubsection()
         cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
         let completed = false
         let frameId: number | undefined
         frameId = requestAnimationFrame(() => {
           completed = true
+
           if (pendingSubsectionScrollFrameRef.current === frameId) {
             pendingSubsectionScrollFrameRef.current = null
           }
+
           scrollToSubsection()
         })
+
         if (!completed) {
           pendingSubsectionScrollFrameRef.current = frameId
         }
       }
+
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
       pendingScrollTargetRef.current = null
+
       return
     }
 

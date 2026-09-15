@@ -25,9 +25,11 @@ vi.mock('@/store', () => {
     searchLinearIssues: vi.fn(),
     settings: null
   }
+
   const useAppStore = (selector: (s: typeof state) => unknown): unknown => selector(state)
   useAppStore.getState = () => state
   useAppStore.setState = (patch: Partial<typeof state>) => Object.assign(state, patch)
+
   return { useAppStore }
 })
 
@@ -79,6 +81,7 @@ vi.mock('@/components/ui/dialog', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -122,9 +125,11 @@ function renderField(onPlainEnter: () => void): HTMLInputElement {
     )
   })
   const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+
   if (!input) {
     throw new Error('workspace name input not rendered')
   }
+
   return input
 }
 
@@ -151,9 +156,11 @@ function renderSmartField(spies: {
     )
   })
   const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+
   if (!input) {
     throw new Error('workspace name input not rendered')
   }
+
   return input
 }
 
@@ -176,9 +183,11 @@ function renderEmojiField(value: string, onValueChange: (value: string) => void)
     )
   })
   const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+
   if (!input) {
     throw new Error('workspace name input not rendered')
   }
+
   return input
 }
 
@@ -202,9 +211,11 @@ function pressEnter(
     cancelable: true,
     ...init
   })
+
   if (init?.keyCode !== undefined) {
     Object.defineProperty(event, 'keyCode', { value: init.keyCode })
   }
+
   act(() => {
     input.dispatchEvent(event)
   })
@@ -333,6 +344,7 @@ describe('SmartWorkspaceNameField Linear URL loading', () => {
     if (!input) {
       throw new Error('workspace name input not rendered')
     }
+
     pressEnter(input)
     expect(onPlainEnter).not.toHaveBeenCalled()
     expect(onValueChange).not.toHaveBeenCalled()

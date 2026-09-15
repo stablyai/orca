@@ -22,8 +22,10 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
   protected transitionGraphReloadToTerminalState(windowId: number): void {
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.restoreHeadlessGraphAuthority()
+
       return
     }
+
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
@@ -66,6 +68,7 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
 
   protected captureReadyGraphEpoch(): number {
     this.assertGraphReady()
+
     return this.rendererGraphEpoch
   }
 
@@ -78,6 +81,7 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
   protected resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
     const repos = this.store?.getRepos() ?? []
     const projectGroups = this.store?.getProjectGroups?.() ?? []
+
     const connection = inferFolderWorkspacePathConnection({
       folderPath: workspace.folderPath,
       projectGroupId: workspace.projectGroupId,
@@ -85,10 +89,12 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
       projectGroups,
       repos
     })
+
     if (connection.kind === 'ambiguous') {
       // Why: a PTY spawns on one runtime target; mixed child-repo connections need an explicit V2 routing decision.
       throw new Error('folder_workspace_connection_ambiguous')
     }
+
     return connection.kind === 'ssh' ? connection.connectionId : null
   }
 
@@ -96,18 +102,23 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
     selector: string
   ): Promise<(TerminalWorkspaceLaunchScope & { folderWorkspace: FolderWorkspace }) | null> {
     const workspace = this.resolveFolderWorkspaceSelector(selector)
+
     if (!workspace) {
       return null
     }
+
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     const status = await getFolderWorkspacePathStatus(
       this.store,
       { scope: 'folder-workspace', folderWorkspaceId: workspace.id },
       { getSshFilesystemProvider }
     )
+
     assertFolderWorkspacePathUsable(status)
+
     return {
       id: folderWorkspaceKey(workspace.id),
       path: workspace.folderPath,
@@ -120,20 +131,25 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
   protected resolveFolderWorkspaceSelector(selector: string): FolderWorkspace | null {
     const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(workspaceSelector)
+
     if (parsed?.type !== 'folder') {
       return null
     }
+
     const workspace = this.store
       ?.getFolderWorkspaces?.()
       .find((entry) => entry.id === parsed.folderWorkspaceId)
+
     if (!workspace) {
       throw new Error('selector_not_found')
     }
+
     return workspace
   }
 
   protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
     const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
+
     return folderWorkspace
       ? folderWorkspaceKey(folderWorkspace.id)
       : (await this.resolveWorktreeSelector(selector)).id
@@ -141,6 +157,7 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
 
   protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
+
     return folderScope?.folderWorkspace
       ? this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
       : this.resolveWorktreeSelector(selector)
@@ -170,11 +187,13 @@ export class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRun
     workspaceId: string
   ): Promise<BrowserExecutionHostKeyResolution> {
     let worktree: ResolvedWorktree
+
     try {
       worktree = await this.resolveBrowserWorkspace(`id:${workspaceId}`)
     } catch {
       return { status: 'workspace-gone' }
     }
+
     try {
       return {
         status: 'resolved',

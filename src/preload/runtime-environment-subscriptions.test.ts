@@ -8,10 +8,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -29,6 +31,7 @@ type SubscriptionEventListener = (_event: unknown, payload: SubscriptionEvent) =
 
 function createIpc() {
   const listeners = new Set<SubscriptionEventListener>()
+
   return {
     invoke: vi.fn((_channel: string, _args?: unknown) => Promise.resolve({}) as Promise<unknown>),
     send: vi.fn(),
@@ -40,6 +43,7 @@ function createIpc() {
     }),
     emitSubscriptionEvent: (event: SubscriptionEvent): void => {
       const currentListeners = Array.from(listeners)
+
       for (const listener of currentListeners) {
         listener(null, event)
       }
@@ -149,6 +153,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
 
     let counter = 0
     const onResponses = Array.from({ length: 25 }, () => vi.fn())
+
     const handles = await Promise.all(
       onResponses.map((onResponse) =>
         subscribeRuntimeEnvironmentFromPreload(
@@ -184,6 +189,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     for (const handle of handles.slice(1)) {
       handle.unsubscribe()
     }
+
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
   })
@@ -216,6 +222,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
         message: 'Timed out waiting for the remote Orca runtime to respond.'
       })
     }
+
     expect(onError).toHaveBeenCalledTimes(50)
     expect(ipc.removeListener).not.toHaveBeenCalled()
     expect(ipc.listenerCount()).toBe(1)
@@ -340,6 +347,7 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
         ? Promise.resolve({ subscriptionId: 'sub-throw', requestId: 'rpc-throw' })
         : (Promise.resolve({}) as Promise<unknown>)
     )
+
     const onClose = vi.fn(() => {
       throw new Error('close failed')
     })

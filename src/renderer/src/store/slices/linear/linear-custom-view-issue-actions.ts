@@ -44,16 +44,20 @@ export function createLinearCustomViewIssueActions(
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
       const effectiveLimit = clampLinearIssueListLimit(limit)
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(workspaceId, 'custom-view-issues', viewId, effectiveLimit)
       )
+
       const cached = get().linearCustomViewIssueCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data ?? emptyLinearCollection<LinearIssue>()
       }
 
       const inflight = inflightCustomViewIssueRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -66,6 +70,7 @@ export function createLinearCustomViewIssueActions(
       let entry: InflightLinearCollectionRequest<LinearIssue>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearListCustomViewIssues(
         scope.settings,
         viewId,
@@ -93,10 +98,12 @@ export function createLinearCustomViewIssueActions(
               })
             }))
           }
+
           return result
         })
         .catch((error) => {
           console.warn('[linear] listLinearCustomViewIssues failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -109,6 +116,7 @@ export function createLinearCustomViewIssueActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           const fallback =
             get().linearCustomViewIssueCache[cacheKey]?.data ??
             largestCachedCollectionBelowLimit(
@@ -119,12 +127,14 @@ export function createLinearCustomViewIssueActions(
               effectiveLimit
             ) ??
             emptyLinearCollection<LinearIssue>()
+
           return collectionWithWorkspaceError(fallback, workspaceId, error)
         })
         .finally(() => {
           if (inflightCustomViewIssueRequests.get(cacheKey) === entry) {
             inflightCustomViewIssueRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -147,6 +157,7 @@ export function createLinearCustomViewIssueActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightCustomViewIssueRequests.set(cacheKey, entry)
+
       return promise
     }
   }

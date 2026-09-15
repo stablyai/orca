@@ -73,6 +73,7 @@ describe('resolveDocPreviewTargetPath', () => {
       entryRelativePath: 'docs/report.html',
       browserPageId: 'page-1'
     })
+
     expect(resolveDocPreviewTargetPath(nested, 'docs/styles.css')).toBe('/srv/repo/docs/styles.css')
 
     const atWorkspaceRoot = mintDocPreviewGrant({
@@ -82,6 +83,7 @@ describe('resolveDocPreviewTargetPath', () => {
       entryRelativePath: 'report.html',
       browserPageId: 'page-2'
     })
+
     expect(resolveDocPreviewTargetPath(atWorkspaceRoot, 'report.html')).toBe(
       '/srv/repo/report.html'
     )
@@ -247,6 +249,7 @@ describe('resolveCanonicalDocPreviewPath', () => {
       entryRelativePath: 'docs/report.html',
       browserPageId: 'page-1'
     })
+
     authorizeDocPreviewDirectory(grant.id, 'assets/chart.js')
 
     await expect(
@@ -254,9 +257,11 @@ describe('resolveCanonicalDocPreviewPath', () => {
         if (path === '/srv/repo/assets') {
           return '/srv/repo/assets'
         }
+
         if (path === '/srv/repo/assets/chart.js') {
           return '/etc/shadow'
         }
+
         return path
       })
     ).resolves.toBeNull()

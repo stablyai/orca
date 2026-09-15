@@ -50,6 +50,7 @@ describe('agent sleep coordinator', () => {
 
   it('hibernates completed Pi after the periodic recovery capture', async () => {
     vi.useFakeTimers()
+
     const piEntry = {
       ...entry(),
       agentType: 'pi' as const,
@@ -59,6 +60,7 @@ describe('agent sleep coordinator', () => {
         transcriptPath: PI_TRANSCRIPT_PATH
       }
     }
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       agentStatusByPaneKey: { [piEntry.paneKey]: piEntry },
       sleepingAgentSessionsByPaneKey: {
@@ -96,9 +98,11 @@ describe('agent sleep coordinator', () => {
 
   it('hibernates an eligible pane when a sibling shell PTY is live', async () => {
     vi.useFakeTimers()
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -184,6 +188,7 @@ describe('agent sleep coordinator', () => {
       intervalMs: 1000,
       now: () => {
         nowCalls += 1
+
         if (nowCalls === 3) {
           const e = entry()
           useAppStore.setState({
@@ -195,6 +200,7 @@ describe('agent sleep coordinator', () => {
             }
           })
         }
+
         return NOW
       }
     })
@@ -207,6 +213,7 @@ describe('agent sleep coordinator', () => {
 
   it('rechecks dispatch settlement before shutdown', async () => {
     vi.useFakeTimers()
+
     const completed = {
       ...entry(),
       orchestration: {
@@ -215,9 +222,11 @@ describe('agent sleep coordinator', () => {
         dispatchStatus: 'completed' as const
       }
     }
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       agentStatusByPaneKey: { [completed.paneKey]: completed }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -322,6 +331,7 @@ describe('agent sleep coordinator', () => {
       const result = runtimeListResult(['pty-1'])
       result.terminals[0].worktreeId = worktreeId
       installRuntimeListResponses(result, result, result)
+
       const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
         settings: {
           experimentalAgentHibernation: true,
@@ -339,6 +349,7 @@ describe('agent sleep coordinator', () => {
         agentStatusByPaneKey: { [entry().paneKey]: { ...entry(), worktreeId } },
         ptyIdsByTabId: { 'tab-1': [] }
       })
+
       startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
       await vi.advanceTimersByTimeAsync(1000)
@@ -367,6 +378,7 @@ describe('agent sleep coordinator', () => {
       runtimeListResult(['pty-1']),
       runtimeListResult(['pty-shell'])
     )
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       settings: {
         experimentalAgentHibernation: true,
@@ -375,6 +387,7 @@ describe('agent sleep coordinator', () => {
       } as never,
       ptyIdsByTabId: { 'tab-1': [] }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -388,6 +401,7 @@ describe('agent sleep coordinator', () => {
 
   it('revalidates a confirmed pane without listing unrelated runtime worktrees', async () => {
     installRuntimeListResponses(...Array.from({ length: 3 }, () => runtimeListResult(['pty-1'])))
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       settings: {
         experimentalAgentHibernation: true,
@@ -421,9 +435,11 @@ describe('agent sleep coordinator', () => {
     await runAgentHibernationTick()
 
     expect(shutdown).toHaveBeenCalledTimes(1)
+
     const listCalls = mockRuntimeEnvironmentCall.mock.calls.filter(
       ([args]) => args.method === 'terminal.list'
     )
+
     // Both confirmation samples and the destructive recheck query only the completed agent's owner.
     expect(listCalls).toHaveLength(3)
     expect(listCalls.at(-1)?.[0]).toMatchObject({
@@ -434,11 +450,13 @@ describe('agent sleep coordinator', () => {
 
   it('does not request runtime inventories for 100 workspaces without completed agents', async () => {
     installRuntimeListResponses()
+
     const tabs = Array.from({ length: 100 }, (_, index) => ({
       ...tab(),
       id: `tab-${index}`,
       worktreeId: `wt-${index}`
     }))
+
     const shutdown = installEligibleState(vi.fn(), {
       worktreesByRepo: {
         'fixture-repo': tabs.map((t) => ({
@@ -480,6 +498,7 @@ describe('agent sleep coordinator', () => {
     )
     const first = entry()
     const second = { ...entry(), tabId: 'tab-2', paneKey: `tab-2:${LEAF}`, worktreeId: 'wt-other' }
+
     const shutdown = installEligibleState(vi.fn(), {
       worktreesByRepo: {
         'fixture-repo': ['wt-bg', 'wt-other'].map((id) => ({
@@ -525,15 +544,19 @@ describe('agent sleep coordinator', () => {
   it('uses fresh store state after awaiting runtime liveness before shutdown', async () => {
     vi.useFakeTimers()
     const delayed = deferred<ReturnType<typeof runtimeListResult>>()
+
     const responses: (
       | ReturnType<typeof runtimeListResult>
       | Promise<ReturnType<typeof runtimeListResult>>
     )[] = [runtimeListResult(['pty-1']), runtimeListResult(['pty-1']), delayed.promise]
+
     mockRuntimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.list') {
         return Promise.resolve(responses.shift() ?? runtimeListResult(['pty-1'])).then(
           (result) => ({
@@ -544,6 +567,7 @@ describe('agent sleep coordinator', () => {
           })
         )
       }
+
       return Promise.resolve({
         id: 'default',
         ok: true,
@@ -551,6 +575,7 @@ describe('agent sleep coordinator', () => {
         _meta: { runtimeId: 'runtime-1' }
       })
     })
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       settings: {
         experimentalAgentHibernation: true,
@@ -559,6 +584,7 @@ describe('agent sleep coordinator', () => {
       } as never,
       ptyIdsByTabId: { 'tab-1': [] }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -580,11 +606,13 @@ describe('agent sleep coordinator', () => {
       runtimeListResult(['pty-1', 'pty-2'])
     )
     const secondLeaf = '22222222-2222-4222-8222-222222222222'
+
     const e = {
       ...entry(),
       paneKey: `tab-1:${secondLeaf}`,
       providerSession: { key: 'session_id' as const, id: 'session-2' }
     }
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       settings: {
         experimentalAgentHibernation: true,
@@ -603,6 +631,7 @@ describe('agent sleep coordinator', () => {
         [e.paneKey]: e
       }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -628,6 +657,7 @@ describe('agent sleep coordinator', () => {
   it('fails closed on truncated runtime liveness samples', async () => {
     vi.useFakeTimers()
     installRuntimeListResponses(runtimeListResult(['pty-1'], true), runtimeListResult(['pty-1']))
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       settings: {
         experimentalAgentHibernation: true,
@@ -636,6 +666,7 @@ describe('agent sleep coordinator', () => {
       } as never,
       ptyIdsByTabId: { 'tab-1': [] }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -647,6 +678,7 @@ describe('agent sleep coordinator', () => {
   it('fails closed when fresh runtime liveness rejects after an earlier good sample', async () => {
     vi.useFakeTimers()
     installRuntimeListResponses(runtimeListResult(['pty-1']), new Error('runtime unavailable'))
+
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       settings: {
         experimentalAgentHibernation: true,
@@ -655,6 +687,7 @@ describe('agent sleep coordinator', () => {
       } as never,
       ptyIdsByTabId: { 'tab-1': [] }
     })
+
     startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
 
     await vi.advanceTimersByTimeAsync(1000)
@@ -675,12 +708,14 @@ describe('teardown drains sequentially', () => {
   it('never runs two pane teardowns at the same time', async () => {
     let inFlight = 0
     let maxInFlight = 0
+
     const shutdown = vi.fn().mockImplementation(async () => {
       inFlight += 1
       maxInFlight = Math.max(maxInFlight, inFlight)
       await new Promise((resolve) => setTimeout(resolve, 5))
       inFlight -= 1
     })
+
     const second = '22222222-2222-4222-8222-222222222222'
     const third = '33333333-3333-4333-8333-333333333333'
     const leafIds = [LEAF, second, third]

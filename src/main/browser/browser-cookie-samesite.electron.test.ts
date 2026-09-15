@@ -40,6 +40,7 @@ type SourceShape = {
 }
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 const VALID_COMBINATIONS: readonly ExpectedCookie[] = [
@@ -149,6 +150,7 @@ run().catch((error) => {
 
 function readSourceShape(sourceDbPath: string): SourceShape[] {
   const db = new DatabaseSync(sourceDbPath, { readOnly: true })
+
   try {
     return db
       .prepare('SELECT name, samesite, is_secure FROM cookies ORDER BY rowid')
@@ -166,6 +168,7 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceShape: Sour
   const resultPath = join(root, 'result.json')
   const fixturePath = join(root, 'main.cjs')
   const sourceDbPath = join(root, 'source-cookies.db')
+
   const rows = [REJECTION_CONTROL, ...VALID_COMBINATIONS, NULL_CASE].map(
     ({ name, rawSameSite, secure }) => ({
       domain: '.samesite.example',
@@ -175,6 +178,7 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceShape: Sour
       sameSite: rawSameSite
     })
   )
+
   createChromiumCookieTestDatabase(sourceDbPath, rows).close()
   const sourceShape = readSourceShape(sourceDbPath)
   writeFileSync(
@@ -200,18 +204,22 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceShape: Sour
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
+
   const args =
     process.platform === 'linux'
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
+
   const run = spawnSync(executable, args, {
     encoding: 'utf8',
     env: { ...env, ORCA_BACKGROUND_LAUNCH: '1' },
     timeout: 90_000
   })
+
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
   return { fixture: JSON.parse(fixtureResult) as FixtureResult, sourceShape }
 }
 

@@ -5,9 +5,13 @@ import { getOrphanTerminalIds } from '../slices/terminal-orphan-helpers'
 import { createTestStore, makeTab, makeWorktree } from '../slices/store-test-helpers'
 
 const TARGET_ID = 'target'
+
 const REPO_ID = 'repo-ssh'
+
 const WORKTREE_ID = `${REPO_ID}::/work/demo`
+
 const TAB_ID = 'tab-ssh'
+
 const RELAY_PTY_ID = 'ssh:target@@pty-42'
 
 function connectedSshState(status: 'connected' | 'disconnected') {
@@ -45,6 +49,7 @@ function seedStore(status: 'connected' | 'disconnected' = 'connected') {
     sshTargetLabels: new Map([[TARGET_ID, 'demo host']]),
     hydrationSucceeded: true
   })
+
   return store
 }
 

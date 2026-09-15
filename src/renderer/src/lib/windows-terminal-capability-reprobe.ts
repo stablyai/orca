@@ -3,7 +3,9 @@ import type { WindowsTerminalCapabilities } from './windows-terminal-capabilitie
 // Why: an absent WSL must stay re-checkable (a distro can finish provisioning while Orca runs),
 // but every re-check spawns wsl.exe/pwsh.exe, so stable answers fall back to a low-frequency poll.
 const REPROBE_BASE_DELAY_MS = 30_000
+
 const REPROBE_MAX_DELAY_MS = 5 * 60_000
+
 /** Consecutive identical answers before switching to the five-minute ceiling. */
 const REPROBE_SETTLE_STREAK = 3
 
@@ -23,6 +25,7 @@ type CapabilityReprobeRunner = {
 }
 
 const runnersByOwnerKey = new Map<string, CapabilityReprobeRunner>()
+
 let focusListenerAttached = false
 
 function capabilitySignature(capabilities: WindowsTerminalCapabilities): string {
@@ -41,9 +44,11 @@ function isSettled(capabilities: WindowsTerminalCapabilities): boolean {
   if (!capabilities.wslAvailable || capabilities.wslDistros.length === 0) {
     return false
   }
+
   if (capabilities.hostPlatform === 'win32') {
     return capabilities.windowsProcessStartTimeAvailable === true
   }
+
   // A missing platform means the status probe may have failed; keep checking until it recovers.
   return capabilities.hostPlatform !== null
 }
@@ -53,6 +58,7 @@ function clearRunnerTimer(runner: CapabilityReprobeRunner): void {
     globalThis.clearTimeout(runner.timer)
     runner.timer = null
   }
+
   runner.timerDeadline = 0
   runner.timerKind = null
 }
@@ -79,8 +85,10 @@ function scheduleProbe(
 function scheduleNextProbe(runner: CapabilityReprobeRunner): void {
   if (runner.unchangedStreak >= REPROBE_SETTLE_STREAK) {
     scheduleProbe(runner, 'ceiling', Date.now() + REPROBE_MAX_DELAY_MS)
+
     return
   }
+
   const delay = REPROBE_BASE_DELAY_MS * 2 ** runner.unchangedStreak
   scheduleProbe(runner, 'backoff', Date.now() + delay)
 }
@@ -89,17 +97,21 @@ async function runProbe(runner: CapabilityReprobeRunner): Promise<void> {
   if (runner.consumers <= 0 || runner.probeInFlight || isSettled(runner.readCached())) {
     return
   }
+
   runner.probeInFlight = true
   runner.lastProbeAt = Date.now()
   let capabilities: WindowsTerminalCapabilities
+
   try {
     capabilities = await runner.probe().catch(() => runner.readCached())
   } finally {
     runner.probeInFlight = false
   }
+
   if (runner.consumers <= 0) {
     return
   }
+
   if (capabilitySignature(capabilities) === runner.signature) {
     runner.unchangedStreak += 1
   } else {
@@ -107,27 +119,34 @@ async function runProbe(runner: CapabilityReprobeRunner): Promise<void> {
     runner.signature = capabilitySignature(capabilities)
     runner.unchangedStreak = 0
   }
+
   if (isSettled(capabilities)) {
     return
   }
+
   scheduleNextProbe(runner)
 }
 
 function armNewRunner(runner: CapabilityReprobeRunner): void {
   if (isSettled(runner.readCached())) {
     clearRunnerTimer(runner)
+
     return
   }
+
   scheduleNextProbe(runner)
 }
 
 function handleWindowFocus(): void {
   const now = Date.now()
+
   for (const runner of runnersByOwnerKey.values()) {
     if (runner.probeInFlight || runner.timerKind !== 'ceiling') {
       continue
     }
+
     const demandDeadline = Math.max(now, runner.lastProbeAt + REPROBE_BASE_DELAY_MS)
+
     if (demandDeadline < runner.timerDeadline) {
       scheduleProbe(runner, 'ceiling', demandDeadline)
     }
@@ -138,6 +157,7 @@ function attachFocusListener(): void {
   if (focusListenerAttached || typeof globalThis.addEventListener !== 'function') {
     return
   }
+
   focusListenerAttached = true
   globalThis.addEventListener('focus', handleWindowFocus)
 }
@@ -146,6 +166,7 @@ function detachFocusListenerWhenIdle(): void {
   if (!focusListenerAttached || runnersByOwnerKey.size > 0) {
     return
   }
+
   focusListenerAttached = false
   globalThis.removeEventListener('focus', handleWindowFocus)
 }
@@ -171,29 +192,38 @@ export function startWindowsTerminalCapabilityReprobe(options: {
     probe: options.probe,
     readCached: options.readCached
   }
+
   runner.probe = options.probe
   runner.readCached = options.readCached
   runner.consumers += 1
   runnersByOwnerKey.set(options.ownerKey, runner)
+
   if (runner.consumers === 1) {
     armNewRunner(runner)
   }
+
   attachFocusListener()
 
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     runner.consumers -= 1
+
     if (runner.consumers > 0) {
       return
     }
+
     clearRunnerTimer(runner)
+
     if (runnersByOwnerKey.get(options.ownerKey) === runner) {
       runnersByOwnerKey.delete(options.ownerKey)
     }
+
     detachFocusListenerWhenIdle()
   }
 }
@@ -203,6 +233,7 @@ export function resetWindowsTerminalCapabilityReprobeForTests(): void {
     clearRunnerTimer(runner)
     runner.consumers = 0
   }
+
   runnersByOwnerKey.clear()
   detachFocusListenerWhenIdle()
 }

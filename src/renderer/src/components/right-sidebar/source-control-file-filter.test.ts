@@ -37,11 +37,13 @@ describe('source-control-file-filter', () => {
     const oversizedQuery = 'secret-source-control'.repeat(
       SOURCE_CONTROL_FILE_FILTER_QUERY_MAX_BYTES
     )
+
     const throwingEntry = {
       get path(): string {
         throw new Error('oversized filters must not scan source-control paths')
       }
     } as SourceControlPathEntry
+
     const filter = getSourceControlFileFilterState(oversizedQuery)
 
     expect(isSourceControlFileFilterQueryTooLarge(oversizedQuery)).toBe(true)

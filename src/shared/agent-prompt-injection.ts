@@ -1,7 +1,9 @@
 import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './terminal-input'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
+
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
+
 export const AGENT_PROMPT_SUBMIT = '\r'
 
 // Why: Windows ConPTY ingests pasted input linearly (first byte written -> child observes
@@ -17,10 +19,12 @@ export const AGENT_PROMPT_SUBMIT = '\r'
 // directions. 64 B/ms is 1.5x the slower of the two slopes, so neither host -- nor a
 // meaningfully slower one -- can still be ingesting when the wait ends.
 const WINDOWS_CONPTY_INGEST_BYTES_PER_MS = 64
+
 // Why: the same walk on macOS drains 320 KB in 26 ms (~12.3 KB/ms), but at those magnitudes
 // the samples are noise-dominated (80 KB measured faster than 40 KB), so hold a 3x margin.
 // It costs 0 ms at real prompt sizes and 4.1 s at the 16 MB terminal-input ceiling.
 const DEFAULT_PASTE_INGEST_BYTES_PER_MS = 4_096
+
 // Why: ingest only buys the child the *bytes*; it still has to attach the completed paste
 // before Enter counts. Unchanged from the previous cross-platform constant -- nothing
 // measured here justifies moving it, and it also absorbs the 15-25 ms fixed intercept
@@ -33,6 +37,7 @@ export function getTerminalPasteIngestMs(platform: NodeJS.Platform, byteLength: 
   if (!Number.isFinite(byteLength) || byteLength <= 0) {
     return 0
   }
+
   return Math.ceil(
     byteLength /
       (platform === 'win32'
@@ -49,8 +54,10 @@ export function getMaxTerminalPasteBytesForIngestMs(
   if (!Number.isFinite(budgetMs) || budgetMs <= 0) {
     return 0
   }
+
   const bytesPerMs =
     platform === 'win32' ? WINDOWS_CONPTY_INGEST_BYTES_PER_MS : DEFAULT_PASTE_INGEST_BYTES_PER_MS
+
   return Math.floor(budgetMs * bytesPerMs)
 }
 
@@ -62,21 +69,25 @@ export function getAgentPromptSubmitDelayMs(platform: NodeJS.Platform, byteLengt
 }
 
 const ESCAPE = '\x1b'
+
 const INERT_ESCAPE = '<ESC>'
 
 export function sanitizeAgentPromptText(text: string): string {
   let escapeIndex = text.indexOf(ESCAPE)
+
   if (escapeIndex === -1) {
     return text
   }
 
   let sanitized = ''
   let start = 0
+
   while (escapeIndex !== -1) {
     sanitized += `${text.slice(start, escapeIndex)}${INERT_ESCAPE}`
     start = escapeIndex + ESCAPE.length
     escapeIndex = text.indexOf(ESCAPE, start)
   }
+
   return sanitized + text.slice(start)
 }
 

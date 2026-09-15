@@ -125,6 +125,7 @@ it('detaches the delivered batch from a reentrant shutdown queue', () => {
   let reentrantSnapshot: ReturnType<typeof unregisterPtyDataHandlers>[number] | undefined
   ptyDataHandlers.set(ptyId, (data) => {
     delivered.push(data)
+
     if (data === 'old-first') {
       reentrantSnapshot = unregisterPtyDataHandlers([ptyId])[0]
       bufferPtyShutdownData(ptyId, 'new-pending')

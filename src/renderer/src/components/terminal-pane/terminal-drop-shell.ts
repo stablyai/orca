@@ -8,6 +8,7 @@ export function getTerminalTargetShellForWorktreePath(worktreePath: string): Ter
   if (isWslUncPath(worktreePath)) {
     return 'posix'
   }
+
   return isTerminalDropWindowsPathLike(worktreePath) ? 'windows' : 'posix'
 }
 
@@ -27,12 +28,15 @@ export function resolveTerminalDropTargetShell({
   if (activeRuntimeEnvironmentId?.trim() && worktreePath) {
     return getTerminalTargetShellForWorktreePath(worktreePath)
   }
+
   if (typeof connectionId === 'string') {
     return remotePlatform === 'win32' ? 'windows' : 'posix'
   }
+
   if (worktreePath && isWslUncPath(worktreePath)) {
     return 'posix'
   }
+
   return isWindowsUserAgent(userAgent) ? 'windows' : 'posix'
 }
 
@@ -40,5 +44,6 @@ export function isTerminalDropWindowsPathLike(path: string): boolean {
   if (isWslUncPath(path)) {
     return false
   }
+
   return isWindowsAbsolutePathLike(path) || path.includes('\\')
 }

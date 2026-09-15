@@ -42,6 +42,7 @@ describe('getChecksPanelReviewState — no-review honesty', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'unknown', refresh: { status: 'paused' } })
     )
+
     expect(state.title).toBe('GitHub refresh paused')
   })
 
@@ -49,6 +50,7 @@ describe('getChecksPanelReviewState — no-review honesty', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'unknown', refresh: { status: 'skipped', skippedReason: 'bare' } })
     )
+
     expect(state.title).toBe('Bare repository')
   })
 
@@ -62,6 +64,7 @@ describe('getChecksPanelReviewState — no-review honesty', () => {
         reviewLookup: 'not_found'
       })
     )
+
     expect(state.title).toBe('No merge request found')
   })
 })
@@ -82,6 +85,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'positive_unresolved', openReviewUrl: 'https://x/pull/1' })
     )
+
     expect(state.title).toBe('Pull request details unavailable')
     expect(state.composerMode).toBe('hidden')
     expect(state.workflowAction).toBeNull()
@@ -100,6 +104,7 @@ describe('getChecksPanelReviewState — precedence', () => {
         hasUpstream: false
       })
     )
+
     expect(state.title).toBe('No upstream configured')
     expect(state.workflowAction).toBe('publish_branch')
     expect(state.composerMode).toBe('hidden')
@@ -121,6 +126,7 @@ describe('getChecksPanelReviewState — precedence', () => {
         refresh: { status: 'error', errorType: 'auth' }
       })
     )
+
     expect(state.title).toBe('No upstream configured')
     expect(state.workflowAction).toBe('publish_branch')
     // Hard error concurrent with the blocker: detail appended, create suppressed.
@@ -135,6 +141,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ eligibilityBlockedReason: 'existing_review', refresh: { status: 'in-flight' } })
     )
+
     expect(state.title).toBe('Checking pull request status')
     expect(state.renderReview).toBe(false)
     expect(state.recovery).toEqual([])
@@ -144,6 +151,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'positive_unresolved', refresh: { status: 'queued' } })
     )
+
     expect(state.title).toBe('Checking pull request status')
   })
 
@@ -151,6 +159,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ eligibilityBlockedReason: 'existing_review', openReviewUrl: 'https://x/pull/1' })
     )
+
     expect(state.title).toBe('Pull request already exists')
     expect(state.recovery).toContain('open_review')
   })
@@ -164,6 +173,7 @@ describe('getChecksPanelReviewState — precedence', () => {
         refresh: { status: 'in-flight' }
       })
     )
+
     expect(state.title).toBe('No upstream configured')
   })
 
@@ -175,6 +185,7 @@ describe('getChecksPanelReviewState — precedence', () => {
         refresh: { status: 'in-flight' }
       })
     )
+
     expect(state.title).toBe('Commit changes first')
   })
 
@@ -182,6 +193,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ refresh: { status: 'error', errorType: 'auth' } })
     )
+
     expect(state.title).toBe('GitHub authentication failed')
     expect(state.composerMode).toBe('hidden')
     expect(state.workflowAction).toBeNull()
@@ -191,6 +203,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'not_found', refresh: { status: 'error', errorType: 'permission' } })
     )
+
     expect(state.title).toBe('GitHub access denied')
   })
 })
@@ -200,6 +213,7 @@ describe('getChecksPanelReviewState — composer preserve', () => {
     const state = getChecksPanelReviewState(
       input({ reviewLookup: 'not_found', confirmedReadiness: true })
     )
+
     expect(state.composerMode).toBe('confirmed_open')
     expect(state.workflowAction).toBe('create')
   })
@@ -208,6 +222,7 @@ describe('getChecksPanelReviewState — composer preserve', () => {
     const state = getChecksPanelReviewState(
       input({ confirmedReadiness: true, refresh: { status: 'error', errorType: 'network' } })
     )
+
     expect(state.composerMode).toBe('confirmed_open')
     expect(state.title).toBe('Could not reach GitHub')
   })
@@ -216,6 +231,7 @@ describe('getChecksPanelReviewState — composer preserve', () => {
     const state = getChecksPanelReviewState(
       input({ confirmedReadiness: true, refresh: { status: 'error', errorType: 'server_error' } })
     )
+
     expect(state).toMatchObject({
       title: 'GitHub is unavailable',
       description:
@@ -229,6 +245,7 @@ describe('getChecksPanelReviewState — composer preserve', () => {
     const state = getChecksPanelReviewState(
       input({ confirmedReadiness: false, refresh: { status: 'error', errorType: 'network' } })
     )
+
     expect(state.composerMode).toBe('hidden')
   })
 
@@ -241,6 +258,7 @@ describe('getChecksPanelReviewState — composer preserve', () => {
         confirmedNeedsPush: true
       })
     )
+
     expect(state.composerMode).toBe('hidden')
     expect(state.workflowAction).toBeNull()
   })
@@ -254,6 +272,7 @@ describe('getChecksPanelReviewState — composer preserve', () => {
         confirmedNeedsPush: true
       })
     )
+
     expect(state.composerMode).toBe('needs_push_open')
     expect(state.workflowAction).toBe('push_and_create')
   })
@@ -264,6 +283,7 @@ describe('getChecksPanelReviewState — schedule', () => {
     const state = getChecksPanelReviewState(
       input({ refresh: { status: 'paused', nextAutoRetryAt: 123, retryDisabledUntil: 123 } })
     )
+
     expect(state.autoRetryAt).toBe(123)
     expect(state.retryDisabledUntil).toBe(123)
   })
@@ -272,6 +292,7 @@ describe('getChecksPanelReviewState — schedule', () => {
     const state = getChecksPanelReviewState(
       input({ refresh: { status: 'error', errorType: 'network', nextAutoRetryAt: 456 } })
     )
+
     expect(state.autoRetryAt).toBe(456)
     expect(state.retryDisabledUntil).toBeUndefined()
   })
@@ -288,6 +309,7 @@ describe('getChecksPanelReviewState — git status', () => {
     const state = getChecksPanelReviewState(
       input({ gitStatusPhase: 'error', hasUpstream: undefined })
     )
+
     expect(state.title).toBe('Could not check branch status')
     expect(state.recovery).toContain('retry')
     expect(state.composerMode).toBe('hidden')

@@ -11,6 +11,7 @@ export function createLocalizedCatalog<T>(builder: () => T): () => T {
       cachedLocale = i18n.language
       cachedValue = builder()
     }
+
     return cachedValue
   }
 }

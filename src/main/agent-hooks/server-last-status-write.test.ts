@@ -51,6 +51,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       await postHookEvent(
         server,
@@ -125,6 +126,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
       expect(server.getHydratedAuthorityCommitments()).toEqual([
@@ -141,6 +143,7 @@ describe('Last-status persistence', () => {
 
     const restartedServer = new AgentHookServer()
     await restartedServer.start({ env: 'production', userDataPath })
+
     try {
       expect(restartedServer.getHydratedAuthorityCommitments()).toEqual([
         expect.objectContaining({
@@ -213,6 +216,7 @@ describe('Last-status persistence', () => {
 
     const retired = new AgentHookServer()
     await retired.start({ env: 'production', userDataPath })
+
     try {
       expect(
         retired.attestCompatibilityAuthority({
@@ -234,6 +238,7 @@ describe('Last-status persistence', () => {
     firstServer.setListener(firstRendererListener)
     firstServer.subscribeStatusChanges(statusChangeListener)
     await firstServer.start({ env: 'production', userDataPath })
+
     try {
       const response = await postHookEvent(
         firstServer,
@@ -244,6 +249,7 @@ describe('Last-status persistence', () => {
         }),
         '/hook/pi'
       )
+
       expect(response.status).toBe(204)
       expect(firstRendererListener).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -275,6 +281,7 @@ describe('Last-status persistence', () => {
 
     const hydratedServer = new AgentHookServer()
     await hydratedServer.start({ env: 'production', userDataPath })
+
     try {
       const hydratedListener = vi.fn()
       hydratedServer.setListener(hydratedListener)
@@ -298,6 +305,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       await postHookEvent(
         server,

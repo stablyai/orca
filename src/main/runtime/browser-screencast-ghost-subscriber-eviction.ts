@@ -28,6 +28,7 @@ export function recordScreencastSubscriberSend(
   if (delivered) {
     return { refusalStreak: 0, hasDeliveredFrame: true }
   }
+
   return { refusalStreak: state.refusalStreak + 1, hasDeliveredFrame: state.hasDeliveredFrame }
 }
 

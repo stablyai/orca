@@ -86,6 +86,7 @@ export function readCodexRateLimitsViaRpc(
         clearTimeout(timeout)
         timeout = null
       }
+
       fetchOptions?.signal?.removeEventListener('abort', onAbort)
       child.stdout.off('data', onStdoutData)
       child.stderr.off('data', onStderrData)
@@ -97,15 +98,19 @@ export function readCodexRateLimitsViaRpc(
       if (resolved) {
         return
       }
+
       resolved = true
       cleanupListeners()
+
       if (settleOptions?.kill) {
         void options.terminate().then(
           () => resolve(result),
           () => resolve(result)
         )
+
         return
       }
+
       resolve(result)
     }
 
@@ -116,8 +121,10 @@ export function readCodexRateLimitsViaRpc(
     if (fetchOptions?.signal) {
       if (fetchOptions.signal.aborted) {
         onAbort()
+
         return
       }
+
       fetchOptions.signal.addEventListener('abort', onAbort, { once: true })
     }
 
@@ -125,6 +132,7 @@ export function readCodexRateLimitsViaRpc(
       if (timeout) {
         clearTimeout(timeout)
       }
+
       timeout = setTimeout(() => {
         settle(
           {
@@ -139,11 +147,13 @@ export function readCodexRateLimitsViaRpc(
         )
       }, deadlineMs)
     }
+
     armRpcDeadline(options.initTimeoutMs)
 
     function sendRpc(method: string, params?: unknown): number {
       const id = ++rpcId
       child.stdin.write(buildRpcMessage(id, method, params))
+
       return id
     }
 
@@ -153,6 +163,7 @@ export function readCodexRateLimitsViaRpc(
 
     function onStderrData(chunk: Buffer): void {
       stderr += chunk.toString()
+
       if (stderr.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
         stderr = stderr.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
       }
@@ -203,30 +214,39 @@ export function readCodexRateLimitsViaRpc(
     function onStdoutData(chunk: Buffer): void {
       buffer += chunk.toString()
       let newlineIdx: number
+
       while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
         const line = buffer.slice(0, newlineIdx).trim()
         buffer = buffer.slice(newlineIdx + 1)
+
         if (!line) {
           continue
         }
+
         try {
           const message = JSON.parse(line) as RpcResponse
+
           if (message.id == null) {
             continue
           }
+
           if (message.id === initId) {
             armRpcDeadline(options.rpcTimeoutMs)
+
             try {
               sendNotification('initialized')
               rateLimitsId = sendRpc('account/rateLimits/read')
             } catch (error) {
               onError(error instanceof Error ? error : new Error(String(error)))
             }
+
             continue
           }
+
           if (rateLimitsId === null || message.id !== rateLimitsId || resolved) {
             continue
           }
+
           if (message.error) {
             settle(
               {
@@ -239,8 +259,10 @@ export function readCodexRateLimitsViaRpc(
               },
               { kill: true }
             )
+
             return
           }
+
           const wrapper = message.result as RpcRateLimitsResponse | undefined
           const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
           const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
@@ -287,11 +309,14 @@ function describeCodexRpcExit(
     // Fixed copy cannot leak paths/tokens and is exactly what the renderer classifies.
     return 'Your ChatGPT session could not be refreshed. Please sign in again.'
   }
+
   const reason =
     code !== null ? `exit code ${code}` : signal ? `signal ${signal}` : 'no exit status'
+
   const detail = sanitizeAgentFailureDetail(
     redactString(excerptAgentFailureOutput('', stderr) ?? '')
   )
+
   return withMacTailscaleDnsHint(
     detail
       ? `Codex RPC process exited (${reason}): ${detail}`

@@ -7,19 +7,25 @@ import { scanWarpThemeDirectory } from './theme-file-scanner'
 it('reuses one collator per directory while preserving capped scan order', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'orca-theme-order-'))
   const names = ['éclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul']
+
   try {
     await Promise.all(names.map((name) => writeFile(path.join(directory, `${name}.yaml`), '')))
     await mkdir(path.join(directory, 'nested'))
     await writeFile(path.join(directory, 'nested', 'theme.yaml'), '')
+
     const expected = (await readdir(directory))
       // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
       .map((name) => (name === 'nested' ? path.join(name, 'theme.yaml') : name))
+
     const NativeCollator = Intl.Collator
+
     const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
+
     const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
     try {
       const result = await scanWarpThemeDirectory(directory, undefined, { themeFileLimit: 6 })
       expect(result.files.map((file) => file.label)).toEqual(expected.slice(0, 6))

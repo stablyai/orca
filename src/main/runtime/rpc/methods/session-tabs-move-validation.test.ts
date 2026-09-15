@@ -63,6 +63,7 @@ function browserTab({
 describe('session tab move validation', () => {
   it('preserves a structured tab across renderer-authored snapshot sync', () => {
     const runtime = new OrcaRuntimeService()
+
     const structured = {
       type: 'agent-session' as const,
       id: 'agent-session:session-a',
@@ -71,6 +72,7 @@ describe('session tab move validation', () => {
       agent: 'codex' as const,
       isActive: false
     }
+
     setMobileSessionSnapshot(runtime, {
       worktree: 'wt-1',
       publicationEpoch: 'structured-epoch',
@@ -87,6 +89,7 @@ describe('session tab move validation', () => {
       ],
       tabs: [terminalTab(), structured]
     })
+
     const incoming: RuntimeMobileSessionTabsSnapshot = {
       worktree: 'wt-1',
       publicationEpoch: 'renderer-epoch',

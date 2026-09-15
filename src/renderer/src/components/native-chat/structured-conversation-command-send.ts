@@ -21,9 +21,12 @@ export async function sendStructuredConversationCommand(input: {
       )
     }
   }
+
   input.pending.current = true
+
   try {
     const result = await input.send(input.command)
+
     return {
       accepted: result?.state === 'completed' && !result.error,
       error:

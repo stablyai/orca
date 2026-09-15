@@ -25,6 +25,7 @@ import { tightenTerminalHistorySessionDirMode } from './terminal-history-session
 import type { TerminalModes, TerminalSnapshot } from './types'
 
 const onPosix = it.skipIf(process.platform === 'win32')
+
 const REPAIR_MARKER_NAME = '.permissions-repaired-v1'
 
 const defaultModes: TerminalModes = {
@@ -60,6 +61,7 @@ function sessionPath(baseDir: string, sessionId: string, file: string): string {
 function stubPlatform(platform: NodeJS.Platform): () => void {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+
   return () => {
     if (original) {
       Object.defineProperty(process, 'platform', original)
@@ -74,11 +76,13 @@ describe('terminal history file permissions', () => {
   function isolatedDir(): string {
     const created = mkdtempSync(join(tmpdir(), 'history-perms-test-'))
     createdDirs.push(created)
+
     return created
   }
 
   afterEach(async () => {
     await flushPendingSessionTreeRemovals()
+
     for (const created of createdDirs.splice(0)) {
       rmSync(created, { recursive: true, force: true })
     }
@@ -153,6 +157,7 @@ describe('terminal history file permissions', () => {
       const checkpointPath = join(sessionDir, 'checkpoint.json')
       writeFileSync(checkpointPath, '{"scrollbackAnsi":"secret"}')
       chmodSync(checkpointPath, 0o644)
+
       return { base, sessionDir, checkpointPath }
     }
 
@@ -182,9 +187,11 @@ describe('terminal history file permissions', () => {
     onPosix('leaves a session under an open recovery freeze alone', async () => {
       const { base, sessionDir: legacyDir, checkpointPath } = seedLegacyTree()
       const writeErrors: Error[] = []
+
       const mgr = new HistoryManager(base, {
         onWriteError: (_sessionId, error) => writeErrors.push(error)
       })
+
       try {
         await mgr.openSession('frozen', { cwd: '/tmp', cols: 80, rows: 24 })
         await mgr.checkpoint('frozen', makeSnapshot())
@@ -213,6 +220,7 @@ describe('terminal history file permissions', () => {
     onPosix('sweeps a session tree once its recovery freeze is released', async () => {
       const base = isolatedDir()
       const mgr = new HistoryManager(base)
+
       try {
         await mgr.openSession('thawed', { cwd: '/tmp', cols: 80, rows: 24 })
         const freeze = await mgr.freezeForRecovery('thawed')
@@ -220,6 +228,7 @@ describe('terminal history file permissions', () => {
       } finally {
         await mgr.dispose()
       }
+
       const sessionDir = join(base, getHistorySessionDirName('thawed'))
       chmodSync(sessionDir, 0o755)
 
@@ -231,6 +240,7 @@ describe('terminal history file permissions', () => {
     onPosix('defers the sweep off the daemon-init critical path and runs it once', async () => {
       const { base, checkpointPath } = seedLegacyTree()
       vi.useFakeTimers()
+
       try {
         const first = scheduleTerminalHistoryPermissionRepair(base)
         // Both startup accessors ask for the same tree; only the first arms a sweep.
@@ -249,6 +259,7 @@ describe('terminal history file permissions', () => {
       } finally {
         vi.useRealTimers()
       }
+
       expect(modeOf(checkpointPath)).toBe(0o600)
     })
 
@@ -257,15 +268,18 @@ describe('terminal history file permissions', () => {
       vi.resetModules()
       vi.doMock('node:fs/promises', async () => {
         const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+
         return {
           ...actual,
           default: actual,
           chmod: () => Promise.reject(Object.assign(new Error('EPERM'), { code: 'EPERM' }))
         }
       })
+
       try {
         const { repairTerminalHistoryPermissions: patchedRepair } =
           await import('./terminal-history-permission-repair')
+
         await expect(patchedRepair(base)).resolves.toBe(true)
       } finally {
         vi.doUnmock('node:fs/promises')
@@ -280,11 +294,13 @@ describe('terminal history file permissions', () => {
     it('skips the repair sweep on win32 rather than touching the tree', async () => {
       const base = isolatedDir()
       const restore = stubPlatform('win32')
+
       try {
         await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(false)
       } finally {
         restore()
       }
+
       expect(existsSync(join(base, REPAIR_MARKER_NAME))).toBe(false)
     })
 
@@ -292,6 +308,7 @@ describe('terminal history file permissions', () => {
       const base = isolatedDir()
       const restore = stubPlatform('win32')
       const mgr = new HistoryManager(base)
+
       try {
         await mgr.openSession('win-sess', { cwd: 'C:\\tmp', cols: 80, rows: 24 })
         await mgr.checkpoint('win-sess', makeSnapshot())
@@ -310,11 +327,14 @@ describe('terminal history file permissions', () => {
       vi.resetModules()
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         const chmodSyncThrows = (): never => {
           throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
         }
+
         return { ...actual, default: actual, chmodSync: chmodSyncThrows }
       })
+
       try {
         const { HistoryManager: PatchedHistoryManager } = await import('./history-manager')
         const mgr = new PatchedHistoryManager(base)

@@ -19,25 +19,30 @@ import {
 } from './helpers/terminal-pty-write-spy'
 
 test.use({ launchEnv: getGoldenStubAgentLaunchEnv() })
+
 test.skip(process.platform !== 'win32', 'A real Windows ConPTY is required')
 
 async function getKittyKeyboardFlags(page: Page): Promise<number | null> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const pane = tabId ? window.__paneManagers?.get(tabId)?.getActivePane?.() : null
+
     const terminal = pane?.terminal as
       | {
           core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
           _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
         }
       | undefined
+
     return (
       terminal?.core?.coreService?.kittyKeyboard?.flags ??
       terminal?._core?.coreService?.kittyKeyboard?.flags ??
@@ -70,10 +75,12 @@ test('resets standard keyboard bytes after a protocol-mode agent exits on ConPTY
   await orcaPage.keyboard.type('exit')
   await orcaPage.keyboard.press('Enter')
   await waitForTerminalOutput(orcaPage, GOLDEN_STUB_EXIT_MARKER, 15_000)
+
   const protocolWrites = (await readTerminalPtyWriteEntries(electronApp))
     .filter((entry) => entry.id === ptyId)
     .map((entry) => entry.data)
     .join('')
+
   expect(protocolWrites).toContain('\x1b[13;2u')
   expect(protocolWrites).toContain('\r')
   await expect.poll(() => getKittyKeyboardFlags(orcaPage), { timeout: 10_000 }).toBe(0)
@@ -99,6 +106,7 @@ test('resets standard keyboard bytes after a protocol-mode agent exits on ConPTY
   const shellWrites = (await readTerminalPtyWriteEntries(electronApp))
     .filter((entry) => entry.id === ptyId)
     .map((entry) => entry.data)
+
   const joinedShellWrites = shellWrites.join('')
   expect(joinedShellWrites).toContain('REET_')
   expect(shellWrites.filter((data) => data === '\x1b[D')).toHaveLength(3)

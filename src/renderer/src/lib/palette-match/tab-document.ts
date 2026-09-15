@@ -2,11 +2,17 @@ import { buildPaletteDocument, type PaletteDocument } from './palette-document'
 import type { PaletteVisibleFieldSource } from './indexed-field'
 
 export const PALETTE_TAB_TITLE_FIELD_ID = 'title'
+
 export const PALETTE_TAB_WORKTREE_FIELD_ID = 'worktree'
+
 export const PALETTE_TAB_BRANCH_FIELD_ID = 'branch'
+
 export const PALETTE_TAB_REPO_FIELD_ID = 'repo'
+
 export const PALETTE_TAB_WORKSPACE_FIELD_ID = 'workspace'
+
 export const PALETTE_TAB_SECONDARY_FIELD_PREFIX = 'secondary:'
+
 export const PALETTE_TAB_ALIAS_FIELD_PREFIX = 'alias:'
 
 export type PaletteTabDocumentInput = {
@@ -34,7 +40,9 @@ export function parsePaletteTabIndexedFieldId(fieldId: string, prefix: string): 
   if (!fieldId.startsWith(prefix)) {
     return null
   }
+
   const index = Number.parseInt(fieldId.slice(prefix.length), 10)
+
   return Number.isInteger(index) ? index : null
 }
 

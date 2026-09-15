@@ -20,23 +20,29 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
+
 vi.mock('./git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
+
 vi.mock('./git/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
   unlockPreparedWorktree: mocks.unlock
 }))
+
 vi.mock('./git/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
+
 vi.mock('./git/worktree-base-divergence', () => ({
   measureRetargetDivergence: mocks.measureDivergence
 }))
+
 vi.mock('./project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: () => undefined
 }))
+
 vi.mock('./ipc/worktree-logic', async (importOriginal) => ({
   isOrphanedWorktreeError: (await importOriginal<typeof WorktreeLogic>()).isOrphanedWorktreeError,
   computeWorkspaceRoot: mocks.computeWorkspaceRoot,
@@ -63,7 +69,9 @@ const EXISTING_REFS = new Set([
   'refs/remotes/origin/main',
   'refs/remotes/origin/release'
 ])
+
 const repo = { id: 'repo-1', path: '/repo' } as Repo
+
 const store = { getSettings: () => ({}) } as unknown as Store
 
 beforeEach(() => {
@@ -104,6 +112,7 @@ describe('worktree create preparation cancellation', () => {
     let signal: AbortSignal | undefined
     mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
       signal = options.signal
+
       return new Promise<void>((_resolve, reject) => {
         signal!.addEventListener('abort', () => reject(signal!.reason), { once: true })
       })
@@ -112,9 +121,11 @@ describe('worktree create preparation cancellation', () => {
     const settled = Promise.allSettled([obsolete])
     await flushBackgroundWork()
     const obsoletePath = mocks.prepareCheckout.mock.calls[0][1]
+
     for (const base of ['origin/one', 'origin/two', 'origin/three']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     expect(signal?.aborted).toBe(true)
     expect((await settled)[0].status).toBe('rejected')
     await flushBackgroundWork()
@@ -125,10 +136,12 @@ describe('worktree create preparation cancellation', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
       const signal = options.signal!
+
       return new Promise<void>((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true })
       })
     })
+
     try {
       const obsolete = prepareWorktreeCreateForRepo(store, repo, 'origin/main').catch(() => {})
       await flushBackgroundWork()
@@ -140,19 +153,24 @@ describe('worktree create preparation cancellation', () => {
           })
         }
       })
+
       for (const base of ['origin/one', 'origin/two', 'origin/three']) {
         await prepareWorktreeCreateForRepo(store, repo, base)
       }
+
       await obsolete
       await flushBackgroundWork()
+
       const obsoleteDiscards = (): number =>
         mocks.discard.mock.calls.filter((call) => call[1] === obsoletePath).length
+
       expect(obsoleteDiscards()).toBe(1)
 
       for (const base of ['origin/four', 'origin/five']) {
         await prepareWorktreeCreateForRepo(store, repo, base)
         await flushBackgroundWork()
       }
+
       expect(obsoleteDiscards()).toBe(1)
       expect(warn).not.toHaveBeenCalled()
     } finally {
@@ -168,9 +186,11 @@ describe('worktree create preparation cancellation', () => {
           releaseCleanup = () => resolve([])
         })
     )
+
     const requests = ['main', 'one', 'two', 'three'].map((base) =>
       prepareWorktreeCreateForRepo(store, repo, `origin/${base}`)
     )
+
     const settled = Promise.allSettled(requests)
     await flushBackgroundWork()
     expect(mocks.prepareCheckout).not.toHaveBeenCalled()
@@ -192,12 +212,14 @@ describe('worktree create preparation cancellation', () => {
     let finishCheckout!: () => void
     mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
       signal = options.signal
+
       return new Promise<void>((resolve) => {
         finishCheckout = resolve
       })
     })
     const preparation = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     await flushBackgroundWork()
+
     const create = consumePreparedWorktreeCreate({
       repoPath: repo.path,
       workspaceRoot: '/workspace',
@@ -205,10 +227,13 @@ describe('worktree create preparation cancellation', () => {
       branch: 'claimed',
       baseBranch: 'origin/main'
     })
+
     await flushBackgroundWork()
+
     for (const base of ['origin/one', 'origin/two', 'origin/three', 'origin/four']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     expect(signal?.aborted).toBe(false)
     finishCheckout()
     await preparation
@@ -220,10 +245,12 @@ describe('worktree create preparation cancellation', () => {
     let signal: AbortSignal | undefined
     mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
       signal = options.signal
+
       return new Promise<void>((_resolve, reject) => {
         signal!.addEventListener('abort', () => reject(signal!.reason), { once: true })
       })
     })
+
     try {
       const settled = Promise.allSettled([prepareWorktreeCreateForRepo(store, repo, 'origin/main')])
       await vi.advanceTimersByTimeAsync(0)
@@ -243,6 +270,7 @@ describe('worktree create preparation cancellation', () => {
     let signal: AbortSignal | undefined
     mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, executionOptions) => {
       signal = executionOptions.signal
+
       return new Promise<void>((_resolve, reject) => {
         signal!.addEventListener('abort', () => reject(signal!.reason), { once: true })
       })

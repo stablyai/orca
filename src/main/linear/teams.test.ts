@@ -3,9 +3,13 @@ import type { LinearClientForWorkspace } from './client'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const getClients = vi.fn()
+
 const clearToken = vi.fn()
+
 const isAuthError = vi.fn()
+
 const acquire = vi.fn().mockResolvedValue(undefined)
+
 const release = vi.fn()
 
 vi.mock('./linear-request-concurrency', () => ({
@@ -69,6 +73,7 @@ function makeState(id: string, name = id, position = 0): StateNode {
 function makeConnection<TNode>(pages: TNode[][]) {
   const nodes = [...(pages[0] ?? [])]
   let pageIndex = 0
+
   return {
     nodes,
     pageInfo: { hasNextPage: pages.length > 1 },
@@ -79,6 +84,7 @@ function makeConnection<TNode>(pages: TNode[][]) {
           pageIndex += 1
           this.nodes.push(...(pages[pageIndex] ?? []))
           this.pageInfo.hasNextPage = pageIndex < pages.length - 1
+
           return this
         }
       )
@@ -156,6 +162,7 @@ describe('Linear teams', () => {
       [team('team-2', 'Frontend', 'FE')],
       [team('team-3', 'Support', 'SUP')]
     ])
+
     getClients.mockReturnValue([entry])
     const { listTeams } = await import('./teams')
 
@@ -211,6 +218,7 @@ describe('Linear teams', () => {
           [makeLabel('label-3', 'Docs')]
         ])
       )
+
     const entry = makeTeamLookupEntry('workspace-1', 'Workspace', { labels })
     getClients.mockReturnValue([entry])
     const { getTeamLabelsOrThrow } = await import('./teams')
@@ -235,6 +243,7 @@ describe('Linear teams', () => {
           [makeState('state-3', 'Review', 3)]
         ])
       )
+
     const entry = makeTeamLookupEntry('workspace-1', 'Workspace', { states })
     getClients.mockReturnValue([entry])
     const { getTeamStatesOrThrow } = await import('./teams')
@@ -259,6 +268,7 @@ describe('Linear teams', () => {
           [makeMember('user-3', 'Linus')]
         ])
       )
+
     const entry = makeTeamLookupEntry('workspace-1', 'Workspace', { members })
     getClients.mockReturnValue([entry])
     const { getTeamMembersOrThrow } = await import('./teams')

@@ -48,17 +48,22 @@ export function pendingListOpsForFamily(
       if (!pending.listOp) {
         return acc
       }
+
       if (pending.listOp.logins.length > 1) {
         acc.push(pending.listOp)
+
         return acc
       }
+
       const login = pending.listOp.logins[0]
       const lastIndex = acc.findIndex((op) => op.logins.length === 1 && op.logins[0] === login)
+
       if (lastIndex !== -1) {
         acc[lastIndex] = pending.listOp
       } else {
         acc.push(pending.listOp)
       }
+
       return acc
     }, [])
 }
@@ -71,13 +76,17 @@ export function stripFamilyPendingFromList(
   const current = freezeTaskPageGitHubUsers(
     family === 'assignees' ? (item.assignees ?? []) : (item.reviewRequests ?? [])
   )
+
   let list = current
   const familyOps = pendingListOpsForFamily(ops, family)
+
   // Why: strip by reversing adds/removes so lazy snapshot ignores in-flight intent.
   for (let i = familyOps.length - 1; i >= 0; i--) {
     const op = familyOps[i]
+
     for (let j = 0; j < op.logins.length; j++) {
       const login = op.logins[j]
+
       if (op.kind === 'add') {
         list = list.filter((user) => user.login.toLowerCase() !== login)
       } else if (!list.some((user) => user.login.toLowerCase() === login)) {
@@ -86,6 +95,7 @@ export function stripFamilyPendingFromList(
       }
     }
   }
+
   return list
 }
 
@@ -99,21 +109,27 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
   // Why: after confirm, pending is cleared but search may still lag — hold the
   // last confirmed whole-field values until a matching adopt or newer pending.
   const lastState = getLastConfirmedClientValue(sourceScope, item.repoId, item.id, 'state')
+
   if (typeof lastState === 'string') {
     merged = { ...merged, state: lastState as GitHubWorkItem['state'] }
   }
+
   const lastAutoMerge = getLastConfirmedClientValue(sourceScope, item.repoId, item.id, 'autoMerge')
+
   if (typeof lastAutoMerge === 'boolean') {
     merged = { ...merged, autoMergeEnabled: lastAutoMerge }
   }
 
   const wholeByOpKey = new Map<string, PendingOp>()
+
   for (const op of ops) {
     if (op.listOp) {
       continue
     }
+
     wholeByOpKey.set(op.key.opKey, op)
   }
+
   for (const op of wholeByOpKey.values()) {
     merged = { ...merged, ...op.next }
   }
@@ -121,12 +137,15 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
   for (const family of ['assignees', 'reviewRequests'] as const) {
     const familyOps = pendingListOpsForFamily(ops, family)
     let snapshot = getConfirmedListSnapshot(sourceScope, item.repoId, item.id, family)
+
     if (!snapshot && familyOps.length === 0) {
       continue
     }
+
     if (!snapshot) {
       snapshot = stripFamilyPendingFromList(item, family, ops)
     }
+
     const composed = applyTaskPageGitHubListOps(snapshot, familyOps)
     merged =
       family === 'assignees'
@@ -149,6 +168,7 @@ export function recomputeSoftHideForItem(args: {
 }): boolean {
   const merged = getRegistryMergedTaskPageGitHubWorkItem(args.item, args.sourceScope)
   const itemKey = taskPageGitHubItemKey(args.item.repoId, args.item.id)
+
   const membershipHide = shouldSoftHideTaskPageGitHubWorkItem({
     item: merged,
     query: args.query,
@@ -178,7 +198,9 @@ export function recomputeSoftHideForItem(args: {
     sticky: getAllStickyHideEntries(),
     itemKey
   })
+
   updateSoftHiddenItemKey(itemKey, result.hide)
+
   return result.hide
 }
 
@@ -190,14 +212,17 @@ export function rebuildSoftHiddenKeysFromPendingAndSticky(args: {
   skipMeByItemKey?: ReadonlyMap<string, boolean>
 }): void {
   const next = new Set<string>()
+
   for (const [itemKey, entry] of getAllStickyHideEntries()) {
     if (entry.queryKey === args.queryKey) {
       next.add(itemKey)
     }
   }
+
   for (const item of args.items) {
     const ops = listPendingTaskPageGitHubOpsForItem(item.repoId, item.id)
     const itemKey = taskPageGitHubItemKey(item.repoId, item.id)
+
     if (
       ops.length === 0 &&
       !next.has(itemKey) &&
@@ -205,9 +230,11 @@ export function rebuildSoftHiddenKeysFromPendingAndSticky(args: {
     ) {
       continue
     }
+
     const sourceScope = ops[0]?.key.sourceScope ?? resolveItemSourceScope(item.repoId, item.id)
     const skipMe = args.skipMeByItemKey?.get(itemKey) ?? ops[0]?.skipMeQualifiers ?? false
     const merged = getRegistryMergedTaskPageGitHubWorkItem(item, sourceScope)
+
     if (
       shouldSoftHideTaskPageGitHubWorkItem({
         item: merged,
@@ -219,10 +246,13 @@ export function rebuildSoftHiddenKeysFromPendingAndSticky(args: {
       next.add(itemKey)
     }
   }
+
   const current = getTaskPageGitHubSoftHiddenItemKeys()
+
   if (next.size === current.size && [...next].every((itemKey) => current.has(itemKey))) {
     return
   }
+
   setSoftHiddenItemKeys(next)
   notifyTaskPageGitHubMutationRegistry()
 }
@@ -231,14 +261,18 @@ export function familiesFromPendingOp(op: PendingOp): string[] {
   if (op.listOp) {
     return [op.listOp.family]
   }
+
   if (op.key.opKey === 'merge') {
     return ['state', 'merge', 'autoMerge']
   }
+
   if (op.key.opKey === 'autoMerge') {
     return ['autoMerge']
   }
+
   if (op.key.opKey === 'state') {
     return ['state']
   }
+
   return [op.key.opKey]
 }

@@ -32,10 +32,12 @@ export default function AboutScreen({
   versionLabel: string
 }) {
   const [error, setError] = useState<string | null>(null)
+
   const openLink = (url: string) => {
     setError(null)
     void openExternal(url).catch(() => setError('Could not open the link. Try again.'))
   }
+
   const insets = useSafeAreaInsets()
 
   return (

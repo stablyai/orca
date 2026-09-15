@@ -43,6 +43,7 @@ export async function mapWorkspaceCleanupWithConcurrency<T, R>(
       }
     })
   )
+
   return results
 }
 
@@ -55,6 +56,7 @@ export async function withWorkspaceCleanupTimeout<T>(
   const controller = new AbortController()
   let timeoutId: NodeJS.Timeout | undefined
   let onParentAbort: (() => void) | undefined
+
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => {
       controller.abort()
@@ -64,17 +66,21 @@ export async function withWorkspaceCleanupTimeout<T>(
       controller.abort()
       reject(new WorkspaceCleanupScanCancelledError())
     }
+
     parentSignal?.addEventListener('abort', onParentAbort, { once: true })
+
     if (parentSignal?.aborted) {
       onParentAbort()
     }
   })
+
   try {
     return await Promise.race([run(controller.signal), timeoutPromise])
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId)
     }
+
     if (onParentAbort) {
       parentSignal?.removeEventListener('abort', onParentAbort)
     }
@@ -101,20 +107,25 @@ export function createWorkspaceCleanupScanError(
 // cause useful without leaking raw local/remote filesystem details to the UI.
 export function toSafeWorkspaceCleanupRepoScanError(error: unknown): string {
   const message = toWorkspaceCleanupErrorMessage(error)
+
   if (message === 'Timed out listing SSH worktrees.') {
     return 'Timed out listing remote worktrees.'
   }
+
   if (message === 'Timed out listing worktrees.') {
     return 'Timed out listing worktrees.'
   }
+
   if (message.startsWith('Timed out ')) {
     return message.replace(/\.$/, '')
   }
 
   const lower = message.toLowerCase()
+
   if (lower.includes('not a git repository') || lower.includes('not a git worktree')) {
     return 'Repository is not a git checkout.'
   }
+
   if (
     lower.includes('enoent') ||
     lower.includes('no such file') ||
@@ -123,8 +134,10 @@ export function toSafeWorkspaceCleanupRepoScanError(error: unknown): string {
   ) {
     return 'Repository folder was not found.'
   }
+
   if (lower.includes('eacces') || lower.includes('eperm') || lower.includes('permission denied')) {
     return 'Repository folder is not accessible.'
   }
+
   return 'Git could not list worktrees.'
 }

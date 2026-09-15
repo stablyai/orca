@@ -79,6 +79,7 @@ describe('agent picker search', () => {
 
   it('rejects oversized pasted queries before scoring agent candidates', () => {
     const oversizedQuery = 'secret-agent-picker'.repeat(AGENT_PICKER_QUERY_MAX_BYTES)
+
     const throwingAgents = [
       {
         get id(): AgentCatalogEntry['id'] {

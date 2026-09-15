@@ -76,6 +76,7 @@ export function reconcileSubmissions(input: {
   const unsettled = input.submissions.filter(
     (submission) => submission.dispatchState === 'pending' || submission.dispatchState === 'unknown'
   )
+
   const claimed = new Set<string>()
   const matched = new Map<string, ProviderHistoryItem>()
   const ambiguous = new Set<string>()
@@ -104,18 +105,22 @@ export function reconcileSubmissions(input: {
   // the first identical submission would make the later one look absent even
   // though either submission could be the delivered one.
   const submissionsByFingerprint = new Map<string, AgentJournalSubmission[]>()
+
   for (const submission of unsettled) {
     if (matched.has(submission.clientMessageId) || !submission.payloadFingerprint) {
       continue
     }
+
     const sameFingerprint = submissionsByFingerprint.get(submission.payloadFingerprint) ?? []
     sameFingerprint.push(submission)
     submissionsByFingerprint.set(submission.payloadFingerprint, sameFingerprint)
   }
+
   for (const [fingerprint, fingerprintSubmissions] of submissionsByFingerprint) {
     const candidates = input.history.items.filter(
       (item) => !claimed.has(item.providerItemId) && item.payloadFingerprint === fingerprint
     )
+
     if (fingerprintSubmissions.length === 1 && candidates.length === 1) {
       const [submission] = fingerprintSubmissions
       const [only] = candidates
@@ -123,6 +128,7 @@ export function reconcileSubmissions(input: {
       matched.set(submission!.clientMessageId, only!)
       continue
     }
+
     if (candidates.length > 0) {
       // Equal payloads without an id cannot be assigned safely, including when
       // fewer provider items exist than unsettled submissions.
@@ -146,9 +152,11 @@ function claimBy(
     if (matched.has(submission.clientMessageId)) {
       continue
     }
+
     const item = items.find((candidate) => {
       return !claimed.has(candidate.providerItemId) && matches(submission, candidate)
     })
+
     if (item) {
       claimed.add(item.providerItemId)
       matched.set(submission.clientMessageId, item)
@@ -163,6 +171,7 @@ function resolveOne(
   history: ProviderHistoryWindow
 ): SubmissionReconciliation {
   const item = matched.get(submission.clientMessageId)
+
   if (item) {
     return {
       clientMessageId: submission.clientMessageId,
@@ -171,6 +180,7 @@ function resolveOne(
       identity: item.identity
     }
   }
+
   if (ambiguous.has(submission.clientMessageId)) {
     return {
       clientMessageId: submission.clientMessageId,
@@ -178,6 +188,7 @@ function resolveOne(
       reason: 'ambiguous_match'
     }
   }
+
   if (!history.boundaryConsistent) {
     return {
       clientMessageId: submission.clientMessageId,
@@ -185,6 +196,7 @@ function resolveOne(
       reason: 'history_boundary_inconsistent'
     }
   }
+
   if (history.turnInFlight) {
     return {
       clientMessageId: submission.clientMessageId,
@@ -192,6 +204,7 @@ function resolveOne(
       reason: 'turn_in_flight'
     }
   }
+
   // Absent from a history we can trust the boundary of, with nothing running:
   // the provider never took it.
   return {

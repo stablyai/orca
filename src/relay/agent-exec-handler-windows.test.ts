@@ -13,6 +13,7 @@ import {
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+
   return {
     ...actual,
     exec: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 const spawnMock = vi.mocked(spawn)
+
 const execMock = vi.mocked(exec)
 
 describe('AgentExecHandler Windows command spawning', () => {
@@ -33,6 +35,7 @@ describe('AgentExecHandler Windows command spawning', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-agent-exec-'))
     const originalComSpec = process.env.ComSpec
     process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
+
     try {
       await withPlatform('win32', async () => {
         const codexShim = join(tempDir, 'codex.cmd')
@@ -72,6 +75,7 @@ describe('AgentExecHandler Windows command spawning', () => {
       })
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
+
       if (originalComSpec === undefined) {
         delete process.env.ComSpec
       } else {

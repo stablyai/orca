@@ -44,6 +44,7 @@ export function setupWindow({
       ui: {
         onMobileMarkdownRequest: (callback) => {
           mobileMarkdownHandler = callback
+
           return () => {
             mobileMarkdownHandler = null
           }
@@ -53,6 +54,7 @@ export function setupWindow({
       fs: { readFile, writeFile }
     }
   } satisfies WindowStub)
+
   return { responses }
 }
 
@@ -88,25 +90,31 @@ export function openMarkdownFile(): void {
 export async function sendRequest(request: RuntimeMobileMarkdownRequest): Promise<unknown> {
   expect(mobileMarkdownHandler).not.toBeNull()
   mobileMarkdownHandler?.(request)
+
   for (let i = 0; i < 20; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0))
+
     const response = (
       window.api.ui.respondMobileMarkdownRequest as ReturnType<typeof vi.fn>
     ).mock.calls
       .map((call) => call[0])
       .find((candidate) => candidate?.id === request.id)
+
     if (response) {
       return response
     }
   }
+
   throw new Error(`No response for ${request.id}`)
 }
 
 export function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve: () => void = () => {}
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 

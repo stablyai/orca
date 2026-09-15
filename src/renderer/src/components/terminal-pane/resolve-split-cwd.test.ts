@@ -28,12 +28,14 @@ describe('resolveSplitCwd', () => {
     const getCwd = vi.fn()
     installGetCwd(getCwd as unknown as (id: string) => Promise<string>)
     const paneCwdMap: PaneCwdMap = new Map([[1, { cwd: '/live/here', confirmed: true }]])
+
     const result = await resolveSplitCwd({
       paneCwdMap,
       sourcePaneId: 1,
       sourcePtyId: 'pty-1',
       fallbackCwd: '/worktree'
     })
+
     expect(result).toBe('/live/here')
     expect(getCwd).not.toHaveBeenCalled()
   })
@@ -41,35 +43,41 @@ describe('resolveSplitCwd', () => {
   it('queries IPC when no confirmed entry exists', async () => {
     installGetCwd(async () => '/tmp/ipc')
     const paneCwdMap: PaneCwdMap = new Map()
+
     const result = await resolveSplitCwd({
       paneCwdMap,
       sourcePaneId: 1,
       sourcePtyId: 'pty-1',
       fallbackCwd: '/worktree'
     })
+
     expect(result).toBe('/tmp/ipc')
   })
 
   it('falls through to the unconfirmed cached entry when IPC returns empty', async () => {
     installGetCwd(async () => '')
     const paneCwdMap: PaneCwdMap = new Map([[1, { cwd: '/replayed', confirmed: false }]])
+
     const result = await resolveSplitCwd({
       paneCwdMap,
       sourcePaneId: 1,
       sourcePtyId: 'pty-1',
       fallbackCwd: '/worktree'
     })
+
     expect(result).toBe('/replayed')
   })
 
   it('falls back to worktree root when OSC 7 and IPC both miss', async () => {
     installGetCwd(async () => '')
+
     const result = await resolveSplitCwd({
       paneCwdMap: new Map(),
       sourcePaneId: 1,
       sourcePtyId: 'pty-1',
       fallbackCwd: '/worktree'
     })
+
     expect(result).toBe('/worktree')
   })
 
@@ -80,24 +88,28 @@ describe('resolveSplitCwd', () => {
           setTimeout(() => resolve('/slow/ipc'), 900)
         })
     )
+
     const promise = resolveSplitCwd({
       paneCwdMap: new Map(),
       sourcePaneId: 1,
       sourcePtyId: 'pty-1',
       fallbackCwd: '/worktree'
     })
+
     await vi.advanceTimersByTimeAsync(900)
     expect(await promise).toBe('/slow/ipc')
   })
 
   it('times out and falls back when IPC hangs', async () => {
     installGetCwd(() => new Promise<string>(() => {}))
+
     const promise = resolveSplitCwd({
       paneCwdMap: new Map(),
       sourcePaneId: 1,
       sourcePtyId: 'pty-1',
       fallbackCwd: '/worktree'
     })
+
     await vi.advanceTimersByTimeAsync(1500)
     expect(await promise).toBe('/worktree')
   })
@@ -105,12 +117,14 @@ describe('resolveSplitCwd', () => {
   it('skips IPC entirely when there is no source PTY id', async () => {
     const getCwd = vi.fn()
     installGetCwd(getCwd as unknown as (id: string) => Promise<string>)
+
     const result = await resolveSplitCwd({
       paneCwdMap: new Map(),
       sourcePaneId: 1,
       sourcePtyId: null,
       fallbackCwd: '/worktree'
     })
+
     expect(result).toBe('/worktree')
     expect(getCwd).not.toHaveBeenCalled()
   })
@@ -118,12 +132,14 @@ describe('resolveSplitCwd', () => {
   it('skips local PTY IPC for remote runtime PTY ids', async () => {
     const getCwd = vi.fn()
     installGetCwd(getCwd as unknown as (id: string) => Promise<string>)
+
     const result = await resolveSplitCwd({
       paneCwdMap: new Map(),
       sourcePaneId: 1,
       sourcePtyId: 'remote:term-1',
       fallbackCwd: '/remote/worktree'
     })
+
     expect(result).toBe('/remote/worktree')
     expect(getCwd).not.toHaveBeenCalled()
   })
@@ -150,6 +166,7 @@ describe('mergePaneCwdFromOsc7', () => {
 describe('clearPaneCwdDeferredSpawn', () => {
   it('clears a settled deferred entry after its promise settles', () => {
     const originalPromise = Promise.resolve('/resolved')
+
     const settledEntry = {
       cwd: '/resolved',
       confirmed: false,
@@ -166,6 +183,7 @@ describe('clearPaneCwdDeferredSpawn', () => {
   it('keeps a newer pending deferred lookup when an older callback arrives', () => {
     const olderPromise = Promise.resolve('/older')
     const newerPromise = new Promise<string>(() => {})
+
     const newerEntry = {
       cwd: '/newer',
       confirmed: false,

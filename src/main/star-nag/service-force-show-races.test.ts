@@ -46,6 +46,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 const { browserWindowMock, checkOrcaStarredMock } = mocks
+
 const getIpcHandler = createIpcHandlerLookup(mocks.ipcMainHandleMock)
 
 describe('StarNagService', () => {
@@ -63,6 +64,7 @@ describe('StarNagService', () => {
   it('allows force_show to bypass the persisted cooldown', () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
+
     const { service } = createHarness({
       starNagDeferredUntil: Date.now() + 3 * 24 * 60 * 60 * 1000
     })
@@ -275,6 +277,7 @@ describe('StarNagService', () => {
     const dismissedLogs = consoleInfoMock.mock.calls.filter(
       ([payload]) => (payload as { event?: string }).event === 'star_nag_dismissed'
     )
+
     expect(dismissedLogs).toHaveLength(1)
     expect(ui.starNagNextThreshold).toBe(STAR_NAG_INITIAL_THRESHOLD * 2)
   })

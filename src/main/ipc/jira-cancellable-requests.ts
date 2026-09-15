@@ -18,14 +18,18 @@ export class JiraCancellableRequests {
   async run<T>(requestId: unknown, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const id = normalizeRequestId(requestId)
     const controller = new AbortController()
+
     if (id) {
       // Reusing an id means the renderer abandoned its previous attempt.
       this.controllers.get(id)?.abort()
+
       if (this.consumeCancelTombstone(id)) {
         controller.abort()
       }
+
       this.controllers.set(id, controller)
     }
+
     try {
       return await task(controller.signal)
     } finally {
@@ -37,15 +41,20 @@ export class JiraCancellableRequests {
 
   cancel(requestId: unknown): void {
     const id = normalizeRequestId(requestId)
+
     if (!id) {
       return
     }
+
     this.pruneExpiredTombstones()
     const live = this.controllers.get(id)
+
     if (live) {
       live.abort()
+
       return
     }
+
     // Re-delete first: Map.set keeps an existing key's original position, which would
     // strand a stale expiry ahead of newer ones and stall the front-to-back sweep.
     this.cancelTombstones.delete(id)
@@ -56,20 +65,25 @@ export class JiraCancellableRequests {
   // Expiries only increase and Map keeps insertion order, so stop at the first live entry.
   private pruneExpiredTombstones(): void {
     const now = Date.now()
+
     for (const [id, expiresAt] of this.cancelTombstones) {
       if (expiresAt > now) {
         break
       }
+
       this.cancelTombstones.delete(id)
     }
   }
 
   private consumeCancelTombstone(id: string): boolean {
     const until = this.cancelTombstones.get(id)
+
     if (until === undefined) {
       return false
     }
+
     this.cancelTombstones.delete(id)
+
     return until > Date.now()
   }
 }

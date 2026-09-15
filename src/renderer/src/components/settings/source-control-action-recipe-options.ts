@@ -15,6 +15,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 
 export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
+
 const TEXT_GENERATION_AGENT_ID_SET = new Set(
   listCommitMessageAgentCapabilities().map((capability) => capability.id)
 )
@@ -81,11 +82,13 @@ export function getSourceControlAgentArgsPlaceholder(
   }
 
   const override = AGENT_ARGS_PLACEHOLDER_OVERRIDES[agentId]
+
   if (override) {
     return override
   }
 
   const capability = getCommitMessageAgentCapability(agentId)
+
   if (!capability) {
     return '--model <model>'
   }
@@ -103,6 +106,7 @@ export function getAgentCatalogForAction(
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
     return getAgentCatalog()
   }
+
   return getAgentCatalog().filter(
     (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
   )
@@ -124,6 +128,7 @@ export function getSourceControlActionAgentSupportText(
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
     return null
   }
+
   return translate(
     'auto.components.settings.source.control.action.recipe.options.supportedAgents',
     'Supported agents for this recipe: {{value0}}.',
@@ -143,7 +148,9 @@ export function getSourceControlActionAgentWarningText(
     if (TEXT_GENERATION_AGENT_ID_SET.has(selectedAgent)) {
       return null
     }
+
     const agentLabel = getAgentCatalog().find((agent) => agent.id === selectedAgent)?.label
+
     return translate(
       'auto.components.settings.source.control.action.recipe.options.unsupportedSavedAgent',
       '{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.',

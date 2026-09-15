@@ -100,6 +100,7 @@ function launchAgentInNewTabInternal(
     launchPlatform,
     onPromptDelivered
   } = args
+
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
@@ -108,6 +109,7 @@ function launchAgentInNewTabInternal(
   // The shared resolver answers from the worktree's own host; `undefined` (rival rows disagree) is
   // not evidence of a remote, and main rejects that launch anyway.
   const worktreeSshConnectionId = getConnectionIdFromState(store, worktreeId)
+
   const resolvedLaunchPlatform =
     launchPlatform ??
     (repo
@@ -118,25 +120,32 @@ function launchAgentInNewTabInternal(
             : getLocalProjectExecutionRuntimeContext(store, worktreeId)
         )
       : CLIENT_PLATFORM)
+
   // Why: SSH remotes deploy the shim as plain `orca`, so skip the Linux-only `orca-ide` rename for remote launches.
   const isRemote = Boolean(worktreeSshConnectionId)
+
   const queuedShell = resolveLocalWindowsAgentStartupShell({
     platform: resolvedLaunchPlatform,
     isRemote,
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
+
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+
   const effectiveAgentArgs =
     agentArgs !== undefined
       ? agentArgs
       : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+
   // Why: the remote host can't infer this client's draft/default view choice, so decide it here for paired tabs too.
   const viewModePromptDelivery =
     hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
+
   const initialViewModeOptions = {
     agent,
     promptDelivery: viewModePromptDelivery,
@@ -144,7 +153,9 @@ function launchAgentInNewTabInternal(
     nativeChatTranscriptIsLocalReadable:
       isNativeChatTranscriptLocalReadable(worktreeSshConnectionId)
   }
+
   const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
+
   const startupPlanBase = {
     agent,
     cmdOverrides,
@@ -155,12 +166,14 @@ function launchAgentInNewTabInternal(
     agentEnv,
     sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
   }
+
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
     base: startupPlanBase,
     prompt: trimmedPrompt,
     promptDelivery,
     isFollowupPath
   })
+
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
   if (!startupPlan) {
@@ -168,6 +181,7 @@ function launchAgentInNewTabInternal(
   }
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const webHostDelivery = launchAgentInWebHostTab({
       agent,
@@ -186,6 +200,7 @@ function launchAgentInNewTabInternal(
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
       onPromptDelivered
     })
+
     return {
       tabId: null,
       startupPlan,
@@ -208,11 +223,13 @@ function launchAgentInNewTabInternal(
         initialSessionOptions: startupPlan.sessionOptions,
         onPromptDelivered
       })
+
   if (plan?.route === 'structured-native-chat') {
     const structured = launchAgentInStructuredNewTab({
       plan,
       legacyLaunch: () => launchAgentInNewTabInternal(args, true)
     })
+
     return {
       tabId: null,
       startupPlan,
@@ -232,11 +249,14 @@ function launchAgentInNewTabInternal(
     quickCommandLabel,
     ...initialViewModeProps
   })
+
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
+
   if (initialCwd?.trim()) {
     // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
     store.queueTabInitialCwd(tab.id, initialCwd)
   }
+
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -256,6 +276,7 @@ function launchAgentInNewTabInternal(
       request_kind: 'new'
     }
   })
+
   // Why: fire-and-forget the paste-after-ready delivery so callers keep the synchronous { tabId, startupPlan } signature.
   // Why: safe to call unconditionally — the helper short-circuits (no paste) for native-prefill agents already holding the draft.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
@@ -263,6 +284,7 @@ function launchAgentInNewTabInternal(
     // and deliverLaunchPromptToAgentTab never seeds. Mirror it into chat here.
     seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
   }
+
   if (pasteDraftAfterLaunch !== null) {
     const timeoutNotice = createPasteReadinessTimeoutNotice({
       worktreeId,
@@ -270,6 +292,7 @@ function launchAgentInNewTabInternal(
       agent,
       submitted: submitPastedPrompt
     })
+
     const deliveryPromise = deliverLaunchPromptToAgentTab({
       tabId: tab.id,
       content: pasteDraftAfterLaunch,
@@ -284,10 +307,13 @@ function launchAgentInNewTabInternal(
           // generated prompt after readiness, seed working at delivery time.
           seedCommandCodeSubmittedPromptStatus(worktreeId, tab.id, trimmedPrompt)
         }
+
         onPromptDelivered?.()
       }
+
       return { delivered, failureNotified: !delivered && timeoutNotice.wasNotified() }
     })
+
     if (promptDelivery === 'submit-after-ready') {
       promptDeliveryResult = deliveryPromise
     } else {

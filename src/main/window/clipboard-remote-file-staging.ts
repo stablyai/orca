@@ -3,20 +3,31 @@ import { access, lstat, mkdir, opendir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 
 const REMOTE_CLIPBOARD_STAGING_ROOT_NAME = 'orca-clipboard-files'
+
 const REMOTE_CLIPBOARD_LEGACY_PREFIX = 'orca-clipboard-file-'
+
 const REMOTE_CLIPBOARD_MIGRATION_MARKER = '.legacy-cleanup-complete'
+
 const REMOTE_CLIPBOARD_FILE_TTL_MS = 60 * 60 * 1000
+
 const REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY = 8
+
 const REMOTE_CLIPBOARD_CLEANUP_RETRY_MS = 60 * 1000
+
 const REMOTE_CLIPBOARD_CLEANUP_RETRY_LIMIT = 3
+
 // Why: compatibility cleanup must never restore O(shared temp root) work.
 const REMOTE_CLIPBOARD_LEGACY_ENTRY_LIMIT = 4_096
+
 const UUID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
 const TRANSFER_DIRECTORY_PATTERN = new RegExp(`^\\d{1,16}-${UUID_PATTERN}$`, 'i')
+
 const LEGACY_DIRECTORY_PATTERN = new RegExp(
   `^${REMOTE_CLIPBOARD_LEGACY_PREFIX}\\d{1,16}-${UUID_PATTERN}$`,
   'i'
 )
+
 const REMOVE_OPTIONS = {
   recursive: true,
   force: true,
@@ -35,6 +46,7 @@ export class RemoteClipboardStagingRootUnsafeError extends Error {
 
 export function getRemoteClipboardStagingRoot(tempRoot: string): string {
   const uidSuffix = typeof process.getuid === 'function' ? `-${process.getuid()}` : ''
+
   return join(tempRoot, `${REMOTE_CLIPBOARD_STAGING_ROOT_NAME}${uidSuffix}`)
 }
 
@@ -45,17 +57,21 @@ export async function createRemoteClipboardTransferDirectory(
 ): Promise<string> {
   const stagingRoot = await ensureRemoteClipboardStagingRoot(tempRoot)
   const transferDirectory = join(stagingRoot, `${createdAtMs}-${transferId}`)
+
   if (
     !isTransferDirectoryName(basename(transferDirectory)) ||
     !isDirectChild(stagingRoot, transferDirectory)
   ) {
     throw new Error('Remote clipboard transfer path escapes its staging root')
   }
+
   await mkdir(transferDirectory, { mode: 0o700 })
   const transferStats = await lstat(transferDirectory)
+
   if (!isSafeOwnedDirectory(transferStats)) {
     throw new Error('Remote clipboard transfer directory is unsafe')
   }
+
   return transferDirectory
 }
 
@@ -64,11 +80,13 @@ export async function cleanupExpiredRemoteClipboardStaging(
   nowMs = Date.now()
 ): Promise<void> {
   let stagingRoot: string
+
   try {
     stagingRoot = await ensureRemoteClipboardStagingRoot(tempRoot)
   } catch {
     return
   }
+
   await sweepDirectories(stagingRoot, nowMs, isTransferDirectoryName)
 }
 
@@ -77,6 +95,7 @@ export async function cleanupLegacyRemoteClipboardStaging(
   nowMs = Date.now()
 ): Promise<void> {
   let stagingRoot: string
+
   try {
     stagingRoot = await ensureRemoteClipboardStagingRoot(tempRoot)
   } catch {
@@ -84,8 +103,10 @@ export async function cleanupLegacyRemoteClipboardStaging(
   }
 
   const markerPath = join(stagingRoot, REMOTE_CLIPBOARD_MIGRATION_MARKER)
+
   try {
     await access(markerPath)
+
     return
   } catch (error) {
     if (!isMissingPathError(error)) {
@@ -99,6 +120,7 @@ export async function cleanupLegacyRemoteClipboardStaging(
     isLegacyTransferDirectoryName,
     REMOTE_CLIPBOARD_LEGACY_ENTRY_LIMIT
   )
+
   if (result.complete && !result.hasFreshDirectories && !result.hasFailures) {
     await writeFile(markerPath, '', { flag: 'wx', mode: 0o600 }).catch(() => undefined)
   }
@@ -109,19 +131,24 @@ export async function removeRemoteClipboardTransferDirectory(
   transferDirectory: string
 ): Promise<boolean> {
   const stagingRoot = getRemoteClipboardStagingRoot(tempRoot)
+
   if (
     !isDirectChild(stagingRoot, transferDirectory) ||
     !isTransferDirectoryName(basename(resolve(transferDirectory)))
   ) {
     return false
   }
+
   try {
     await ensureRemoteClipboardStagingRoot(tempRoot)
     const transferStats = await lstat(transferDirectory)
+
     if (!isSafeOwnedDirectory(transferStats)) {
       return false
     }
+
     await rm(transferDirectory, REMOVE_OPTIONS)
+
     return true
   } catch (error) {
     return isMissingPathError(error)
@@ -158,6 +185,7 @@ function scheduleCleanupAttempt(
       }
     })
   }, delayMs)
+
   if (typeof timer === 'object' && 'unref' in timer) {
     timer.unref()
   }
@@ -167,9 +195,11 @@ async function ensureRemoteClipboardStagingRoot(tempRoot: string): Promise<strin
   const stagingRoot = getRemoteClipboardStagingRoot(tempRoot)
   await mkdir(stagingRoot, { recursive: true, mode: 0o700 })
   const rootStats = await lstat(stagingRoot)
+
   if (!isSafeOwnedDirectory(rootStats)) {
     throw new RemoteClipboardStagingRootUnsafeError()
   }
+
   return stagingRoot
 }
 
@@ -180,6 +210,7 @@ async function sweepDirectories(
   entryLimit = Number.POSITIVE_INFINITY
 ): Promise<{ complete: boolean; hasFailures: boolean; hasFreshDirectories: boolean }> {
   let rootDir: Dir
+
   try {
     rootDir = await opendir(root)
   } catch {
@@ -191,23 +222,29 @@ async function sweepDirectories(
   let hasFailures = false
   let hasFreshDirectories = false
   const pending = new Set<Promise<void>>()
+
   try {
     for await (const entry of rootDir) {
       entriesVisited += 1
+
       if (entry.isDirectory() && ownsEntry(entry.name)) {
         const candidate = join(root, entry.name)
+
         if (isDirectChild(root, candidate)) {
           const cleanup = cleanupDirectory(candidate, nowMs).then((result) => {
             hasFailures ||= result === 'failed'
             hasFreshDirectories ||= result === 'fresh'
           })
+
           pending.add(cleanup)
           void cleanup.finally(() => pending.delete(cleanup))
+
           if (pending.size >= REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY) {
             await Promise.race(pending)
           }
         }
       }
+
       if (entriesVisited >= entryLimit) {
         break
       }
@@ -217,20 +254,26 @@ async function sweepDirectories(
   } finally {
     await rootDir.close().catch(() => undefined)
   }
+
   await Promise.all(pending)
+
   return { complete, hasFailures, hasFreshDirectories }
 }
 
 async function cleanupDirectory(directory: string, nowMs: number): Promise<CleanupResult> {
   try {
     const directoryStats = await lstat(directory)
+
     if (!isSafeOwnedDirectory(directoryStats)) {
       return 'ignored'
     }
+
     if (nowMs - directoryStats.mtimeMs < REMOTE_CLIPBOARD_FILE_TTL_MS) {
       return 'fresh'
     }
+
     await rm(directory, REMOVE_OPTIONS)
+
     return 'removed'
   } catch (error) {
     return isMissingPathError(error) ? 'ignored' : 'failed'
@@ -241,9 +284,11 @@ function isSafeOwnedDirectory(stats: Stats): boolean {
   if (!stats.isDirectory() || stats.isSymbolicLink()) {
     return false
   }
+
   if (typeof process.getuid !== 'function') {
     return true
   }
+
   return stats.uid === process.getuid() && (stats.mode & 0o777) === 0o700
 }
 

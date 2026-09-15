@@ -5,9 +5,11 @@ export function focusedValueSetExpression(
   const nextValue = options?.append
     ? ["String(target.value ?? '') + ", valueExpression].join('')
     : valueExpression
+
   const dispatchEvents = options?.dispatchEvents
     ? " target.dispatchEvent(new Event('input', { bubbles: true })); target.dispatchEvent(new Event('change', { bubbles: true }));"
     : ''
+
   return [
     '(() => { const el = document.activeElement; if (el) {',
     // Why: ARIA spinbutton wrappers can hold focus while a contained or controlled input owns the value.
@@ -35,6 +37,7 @@ export function focusedRichTextEditExpression(
   options?: { selectAll?: boolean }
 ): string {
   const selectAll = options?.selectAll ? 'true' : 'false'
+
   return [
     '(() => {',
     ' const target = document.activeElement;',
@@ -63,5 +66,6 @@ export function focusedRichTextEditExpression(
 export function isExplicitContentEditableResult(result: unknown): boolean {
   const value =
     result && typeof result === 'object' ? (result as { value?: unknown }).value : undefined
+
   return typeof value === 'string' && /^(|true|plaintext-only)$/i.test(value)
 }

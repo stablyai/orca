@@ -25,9 +25,11 @@ export function useTabGroupCloseScopeCommands({
     const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
       (item) => item.groupId === groupId
     )
+
     for (const item of items) {
       closeItem(item.id, { skipEmptyCheck: true })
     }
+
     // Why: closing tabs doesn't remove the group shell; empty split groups are layout state, collapse the placeholder pane here.
     closeEmptyGroup(worktreeId, groupId)
     leaveWorktreeIfEmpty()
@@ -49,13 +51,16 @@ export function useTabGroupCloseScopeCommands({
   const closeOthers = useCallback(
     (itemId: string) => {
       const item = groupTabs.find((candidate) => candidate.id === itemId)
+
       if (!item) {
         return
       }
+
       // Why: store closeOtherTabs strands dirty files if the save dialog is cancelled; route via closeMany to stay dirty-aware.
       const siblingIds = groupTabs
         .filter((candidate) => candidate.id !== itemId && !candidate.isPinned)
         .map((candidate) => candidate.id)
+
       closeMany(siblingIds)
     },
     [closeMany, groupTabs]
@@ -66,14 +71,19 @@ export function useTabGroupCloseScopeCommands({
       // Why: store closeTabsToRight pre-closes dirty tabs; walk tabOrder (canonical L-to-R) via closeMany to stay dirty-aware.
       const order = group?.tabOrder ?? []
       const index = order.indexOf(itemId)
+
       if (index === -1) {
         return
       }
+
       const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
+
       const rightIds = order.slice(index + 1).filter((id) => {
         const candidate = tabById.get(id)
+
         return candidate ? !candidate.isPinned : false
       })
+
       closeMany(rightIds)
     },
     [closeMany, group, groupTabs]
@@ -85,14 +95,19 @@ export function useTabGroupCloseScopeCommands({
       // dirty-aware closeMany path instead of the store helper.
       const order = group?.tabOrder ?? []
       const index = order.indexOf(itemId)
+
       if (index === -1) {
         return
       }
+
       const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
+
       const leftIds = order.slice(0, index).filter((id) => {
         const candidate = tabById.get(id)
+
         return candidate ? !candidate.isPinned : false
       })
+
       closeMany(leftIds)
     },
     [closeMany, group, groupTabs]

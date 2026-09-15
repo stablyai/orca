@@ -59,7 +59,9 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     setInternalRepoId,
     selectedWorkspaceTarget
   } = input
+
   const { getMatchingLinkedTaskSourceContext } = decisions
+
   const setRepoId = useCallback(
     (value: string) => {
       if (onRepoIdOverrideChange) {
@@ -142,12 +144,15 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     ) {
       return null
     }
+
     const selectedProject = projects.find(
       (project) => project.id === selectedWorkspaceTarget.target.projectId
     )
+
     if (selectedProject?.providerIdentity?.provider !== 'github') {
       return null
     }
+
     return buildTaskSourceContextFromRepo({
       provider: 'github',
       projectId: selectedWorkspaceTarget.target.projectId,
@@ -163,13 +168,16 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     if (!selectedRepo || !selectedRepoIsGit) {
       return null
     }
+
     if (taskSourceContext?.provider === 'github') {
       return taskSourceContext
     }
+
     if (selectedWorkspaceTarget.status === 'ready') {
       const selectedProject = projects.find(
         (project) => project.id === selectedWorkspaceTarget.target.projectId
       )
+
       return buildTaskSourceContextFromRepo({
         provider: 'github',
         projectId: selectedWorkspaceTarget.target.projectId,
@@ -181,6 +189,7 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
             : null
       })
     }
+
     return buildTaskSourceContextFromRepo({
       provider: 'github',
       projectId: selectedRepo.id,
@@ -192,9 +201,11 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     if (!selectedProjectId) {
       return null
     }
+
     const sourceRepo = isProjectGroupTarget
       ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
       : selectedRepo
+
     return normalizeTaskSourceContext({
       provider: 'jira',
       projectId: selectedProjectGroup?.id ?? selectedProjectId,

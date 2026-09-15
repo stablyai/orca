@@ -5,9 +5,13 @@ import type {
 } from '../../shared/browser-client-host-protocol'
 
 export const DEFAULT_MAX_OUTSTANDING_COMMANDS = 256
+
 export const DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE = 32
+
 export const DEFAULT_MAX_CACHED_RESULTS = 1_024
+
 export const DEFAULT_MAX_CACHED_RESULTS_PER_PAGE = 64
+
 export const DEFAULT_MAX_PAGES = 256
 
 export type BrowserHostCommandResultAdmission = 'placed-page' | 'reserved-page' | 'reconciliation'
@@ -53,6 +57,7 @@ export function assertBrowserHostCommandOrder(
 ): void {
   const closesImportedInventory =
     command.type === 'closePage' && resultAdmission === 'reconciliation'
+
   if (
     page.nextIssueSequence === 1 &&
     command.type !== 'createPage' &&
@@ -62,10 +67,12 @@ export function assertBrowserHostCommandOrder(
   ) {
     throw new Error('browser_host_command_create_required')
   }
+
   if (page.nextIssueSequence > 1) {
     if (page.terminalCommandIssued) {
       throw new Error('browser_host_command_page_terminal')
     }
+
     if (
       command.type === 'createPage' ||
       command.type === 'reclaimPage' ||
@@ -98,12 +105,14 @@ export function snapshotBrowserHostPageCommand(
       previousAuthority: Object.freeze({ ...command.previousAuthority })
     })
   }
+
   if (command.type === 'closePage') {
     return Object.freeze({
       ...command,
       targetAuthority: Object.freeze({ ...command.targetAuthority })
     })
   }
+
   return Object.freeze({ ...command })
 }
 
@@ -122,12 +131,16 @@ export function createBrowserHostCommandRecord(
   resultAdmission: BrowserHostCommandRecord['resultAdmission']
 ): BrowserHostCommandRecord {
   let resolve = (_result: BrowserClientHostCommandResult): void => {}
+
   let reject = (_error: Error): void => {}
+
   const result = new Promise<BrowserClientHostCommandResult>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   void result.catch(() => undefined)
+
   return { event, resultAdmission, result, resolve, reject }
 }
 
@@ -163,8 +176,10 @@ export function positiveBrowserHostCommandLimit(
   fallback: number
 ): number {
   const resolved = value ?? fallback
+
   if (!Number.isInteger(resolved) || resolved < 1) {
     throw new Error('browser_host_command_limit_invalid')
   }
+
   return resolved
 }

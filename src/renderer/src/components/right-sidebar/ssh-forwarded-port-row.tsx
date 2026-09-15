@@ -25,11 +25,13 @@ export function SshForwardedPortRow({
 
   const handleRemove = useCallback(async () => {
     setRemoving(true)
+
     try {
       await window.api.ssh.removePortForward({ id: entry.id })
     } catch {
       // broadcast will update state
     }
+
     if (mountedRef.current) {
       setRemoving(false)
     }
@@ -49,6 +51,7 @@ export function SshForwardedPortRow({
   const handleCopyButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       handleCopy()
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -61,6 +64,7 @@ export function SshForwardedPortRow({
       // Why: keyboard activations have detail=0; only pointer clicks carry
       // the modifier intent for the system-browser escape hatch.
       handleOpenBrowser(event.detail > 0 ? event : undefined)
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -71,6 +75,7 @@ export function SshForwardedPortRow({
   const handleEditButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       onEdit()
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -81,6 +86,7 @@ export function SshForwardedPortRow({
   const handleRemoveButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       void handleRemove()
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -89,10 +95,12 @@ export function SshForwardedPortRow({
   )
 
   const advertisedBrowserUrl = advertisedBrowserUrlForForwardedRow(entry)
+
   const openBrowserLabel = translate(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
   )
+
   const openBrowserTitle = getPortOpenBrowserTooltipLabel(
     advertisedBrowserUrl
       ? translate(

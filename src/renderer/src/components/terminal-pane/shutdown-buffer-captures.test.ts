@@ -13,6 +13,7 @@ describe('captureTerminalShutdownBuffersBestEffort', () => {
     const failed = vi.fn(() => {
       throw new Error('layout capture failed')
     })
+
     const succeeded = vi.fn()
     shutdownBufferCaptures.set('tab-failed', failed)
     shutdownBufferCaptures.set('tab-succeeded', succeeded)

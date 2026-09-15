@@ -20,9 +20,11 @@ export function restoreTerminalPaneLayout(args: {
 }): Map<string, number> {
   const { manager, deps, refs, ptyDeps, initialLayoutHadBuffers } = args
   const { initialLayoutRef, tabId, worktreeId, isActive, managerRef } = deps
+
   const restoredPaneByLeafId = replayLayoutWithOneShotParkIntent(ptyDeps, () =>
     replayTerminalLayout(manager, initialLayoutRef.current, isActive)
   )
+
   const restoredBuffers = initialLayoutRef.current.buffersByLeafId
   restoreScrollbackBuffers(
     manager,
@@ -32,6 +34,7 @@ export function restoreTerminalPaneLayout(args: {
     refs.restoredViewportBlankingPanesRef
   )
   const hasScrollbackRefs = Boolean(initialLayoutRef.current.scrollbackRefsByLeafId)
+
   if (
     restoredBuffers &&
     canReleaseReplayedScrollbackFromStore({
@@ -42,21 +45,26 @@ export function restoreTerminalPaneLayout(args: {
   ) {
     const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
     delete layoutWithoutRestoredBuffers.buffersByLeafId
+
     if (hasScrollbackRefs) {
       initialLayoutRef.current = layoutWithoutRestoredBuffers
     }
+
     if (initialLayoutHadBuffers) {
       useAppStore.getState().setTabLayout(tabId, layoutWithoutRestoredBuffers)
     }
   }
+
   const restoredTitles = mapRestoredPaneTitlesByPaneId(
     initialLayoutRef.current.titlesByLeafId,
     restoredPaneByLeafId
   )
+
   if (Object.keys(restoredTitles).length > 0) {
     deps.setPaneTitles((prev) => ({ ...prev, ...restoredTitles }))
     deps.paneTitlesRef.current = { ...deps.paneTitlesRef.current, ...restoredTitles }
   }
+
   const restoredActivePaneId =
     (initialLayoutRef.current.activeLeafId
       ? restoredPaneByLeafId.get(initialLayoutRef.current.activeLeafId)
@@ -64,12 +72,15 @@ export function restoreTerminalPaneLayout(args: {
     manager.getActivePane()?.id ??
     manager.getPanes()[0]?.id ??
     null
+
   if (restoredActivePaneId !== null) {
     manager.setActivePane(restoredActivePaneId, { focus: isActive })
   }
+
   const restoredExpandedPaneId = initialLayoutRef.current.expandedLeafId
     ? (restoredPaneByLeafId.get(initialLayoutRef.current.expandedLeafId) ?? null)
     : null
+
   if (restoredExpandedPaneId !== null && manager.getPanes().length > 1) {
     deps.setExpandedPane(restoredExpandedPaneId)
     applyExpandedLayoutTo(restoredExpandedPaneId, {
@@ -80,5 +91,6 @@ export function restoreTerminalPaneLayout(args: {
   } else {
     deps.setExpandedPane(null)
   }
+
   return restoredPaneByLeafId
 }

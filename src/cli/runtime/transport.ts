@@ -19,8 +19,10 @@ export async function sendRequest<TResult>(
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
     )
   }
+
   return await new Promise((resolve, reject) => {
     const transport = findTransport(metadata, 'unix', 'named-pipe')
+
     if (!transport) {
       reject(
         new RuntimeClientError(
@@ -28,8 +30,10 @@ export async function sendRequest<TResult>(
           'No compatible transport found in Orca runtime metadata.'
         )
       )
+
       return
     }
+
     const socket = createConnection(transport.endpoint)
     let lineSegments: string[] = []
     let settled = false
@@ -39,6 +43,7 @@ export async function sendRequest<TResult>(
       if (settled) {
         return
       }
+
       settled = true
       lineSegments = []
       socket.destroy()
@@ -56,10 +61,12 @@ export async function sendRequest<TResult>(
       if (settled) {
         return
       }
+
       settled = true
       lineSegments = []
       clearTimeout(timeout)
       socket.end()
+
       if (result.ok === false) {
         reject(result.error)
       } else {
@@ -97,25 +104,33 @@ export async function sendRequest<TResult>(
       // terminal frame. Each keepalive refreshes the client-side timer so a
       // 10 min wait doesn't trip the 60 s default ceiling.
       let cursor = 0
+
       while (cursor < chunk.length && !settled) {
         const newlineIndex = chunk.indexOf('\n', cursor)
+
         if (newlineIndex === -1) {
           lineSegments.push(chunk.slice(cursor))
+
           return
         }
+
         const segment = chunk.slice(cursor, newlineIndex)
         let line = segment
+
         if (lineSegments.length > 0) {
           lineSegments.push(segment)
           line = lineSegments.join('')
           lineSegments = []
         }
+
         cursor = newlineIndex + 1
+
         if (line.trim().length === 0) {
           continue
         }
 
         let raw: unknown
+
         try {
           raw = JSON.parse(line)
         } catch {
@@ -126,6 +141,7 @@ export async function sendRequest<TResult>(
               'The Orca runtime returned an invalid response frame.'
             )
           })
+
           return
         }
 
@@ -144,6 +160,7 @@ export async function sendRequest<TResult>(
         // of a downstream mis-typed field access. `result` is left as
         // unknown — the TResult generic is the caller's responsibility.
         const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)
+
         if (!parsed.success) {
           finish({
             ok: false,
@@ -152,18 +169,21 @@ export async function sendRequest<TResult>(
               'The Orca runtime returned an invalid response frame.'
             )
           })
+
           return
         }
 
         // Narrow out keepalive (already filtered above) so TS can see a
         // Success|Failure shape here.
         const frame = parsed.data
+
         if ('_keepalive' in frame) {
           timeout.refresh()
           continue
         }
 
         const response = frame as RuntimeRpcResponse<TResult>
+
         if (response.id !== requestId) {
           finish({
             ok: false,
@@ -172,8 +192,10 @@ export async function sendRequest<TResult>(
               'The Orca runtime returned a mismatched response id.'
             )
           })
+
           return
         }
+
         if (response._meta?.runtimeId && response._meta.runtimeId !== metadata.runtimeId) {
           finish({
             ok: false,
@@ -182,9 +204,12 @@ export async function sendRequest<TResult>(
               'The Orca runtime changed while the request was in flight. Retry the command.'
             )
           })
+
           return
         }
+
         finish({ ok: true, response })
+
         return
       }
     })

@@ -5,7 +5,9 @@ export async function joinBrowserClientHostCommands(
   if (handlers.length === 0) {
     return true
   }
+
   let timeout: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       Promise.allSettled(handlers).then(() => true),

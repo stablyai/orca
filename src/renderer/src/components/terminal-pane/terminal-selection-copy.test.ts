@@ -31,6 +31,7 @@ describe('copyTerminalSelection', () => {
 
   it('clears xterm selection only after the clipboard write succeeds', async () => {
     const terminal = makeTerminal('copilot answer')
+
     const writeClipboardText = vi
       .fn<(text: string) => Promise<void>>()
       .mockRejectedValue(new Error('clipboard unchanged'))

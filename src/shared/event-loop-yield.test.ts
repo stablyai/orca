@@ -45,6 +45,7 @@ describe('yieldToEventLoop', () => {
         )
       }
     }
+
     await Promise.all([runProducer(), runProducer()])
 
     expect(postMessage).toHaveBeenCalledTimes(40)

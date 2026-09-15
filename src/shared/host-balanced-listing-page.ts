@@ -16,11 +16,13 @@ export function selectHostBalancedPage<TRow>(
   if (rows.length <= limit) {
     return [...rows]
   }
+
   // Insertion order is first-appearance order per host, so the round robin is deterministic.
   const indicesByHost = new Map<string, number[]>()
   rows.forEach((row, index) => {
     const hostId = getHostId(row) ?? ''
     const bucket = indicesByHost.get(hostId)
+
     if (bucket) {
       bucket.push(index)
     } else {
@@ -35,8 +37,10 @@ export function selectHostBalancedPage<TRow>(
   // re-scanning every exhausted one. Writes land at or before the slot just read, never ahead.
   let activeCount = buckets.length
   let round = 0
+
   while (chosen.length < limit && activeCount > 0) {
     let nextActiveCount = 0
+
     for (
       let bucketIndex = 0;
       bucketIndex < activeCount && chosen.length < limit;
@@ -44,13 +48,16 @@ export function selectHostBalancedPage<TRow>(
     ) {
       const bucket = buckets[bucketIndex]
       chosen.push(bucket[round])
+
       if (bucket.length > round + 1) {
         buckets[nextActiveCount] = bucket
         nextActiveCount += 1
       }
     }
+
     activeCount = nextActiveCount
     round += 1
   }
+
   return chosen.sort((left, right) => left - right).map((index) => rows[index] as TRow)
 }

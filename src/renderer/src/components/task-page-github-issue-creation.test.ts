@@ -3,10 +3,12 @@ import { readTaskPageSource } from './task-page-source-family.test-support'
 import { readFileSync } from 'node:fs'
 
 const taskPageSource = readTaskPageSource('use-task-page-github-issue-creation.ts')
+
 const newIssueDraftSource = readFileSync(
   new URL('./use-task-page-github-issue-draft.ts', import.meta.url),
   'utf8'
 )
+
 const newIssueRepoResetSource = readFileSync(
   new URL('./task-page-new-issue-draft.ts', import.meta.url),
   'utf8'
@@ -17,6 +19,7 @@ function issueCreationSection(): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = taskPageSource.indexOf('const nextModel', start)
   expect(end).toBeGreaterThan(start)
+
   return taskPageSource.slice(start, end)
 }
 
@@ -39,6 +42,7 @@ describe('TaskPage GitHub issue creation', () => {
 
   it('treats a body-save warning as created while preserving the recovery draft', () => {
     const section = issueCreationSection()
+
     const warningBranch = section.slice(
       section.indexOf('if (result.bodySaveWarning)'),
       section.indexOf('// Why: bump the nonce')

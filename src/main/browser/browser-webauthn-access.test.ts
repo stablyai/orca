@@ -26,6 +26,7 @@ describe('browser WebAuthn access', () => {
           callback: (credentialId?: string | null) => void
         ) => Promise<void>)
       | undefined
+
     const browserSession = {
       setDevicePermissionHandler: vi.fn(),
       removeListener: vi.fn(),
@@ -35,11 +36,13 @@ describe('browser WebAuthn access', () => {
         }
       })
     } as unknown as Electron.Session
+
     const details = {
       relyingPartyId: 'example.com',
       frame: {} as Electron.WebFrameMain,
       accounts: [{ credentialId: 'first' }, { credentialId: 'second' }]
     }
+
     const callback = vi.fn()
     requestAccountMock.mockResolvedValue('second')
 

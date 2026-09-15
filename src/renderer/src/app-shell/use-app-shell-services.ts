@@ -26,6 +26,7 @@ import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-
 export function useAppShellServices(options: { floatingPanelVisible: boolean }): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+
   const primarySelectionMiddleClickPaste = useAppStore((s) =>
     resolvePrimarySelectionMiddleClickPaste(s.settings?.primarySelectionMiddleClickPaste)
   )

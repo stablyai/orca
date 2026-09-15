@@ -16,9 +16,12 @@ export class WindowsPathRegistryFallback {
       if (!read.failed) {
         const segments = [...read.segments]
         this.lastGoodBySource[index] = segments
+
         return segments
       }
+
       const lastGood = this.lastGoodBySource[index]
+
       return lastGood ? [...lastGood] : undefined
     })
 

@@ -31,12 +31,14 @@ export function installMonacoPeekReferencesPreviewOptions(
   referenceWidget: ReferenceWidgetConstructor = MonacoReferenceWidget as unknown as ReferenceWidgetConstructor
 ): void {
   const prototype = referenceWidget.prototype
+
   if (prototype.__orcaPeekPreviewOptionsInstalled) {
     return
   }
 
   const originalFillBody = prototype._fillBody
   const originalRevealReference = prototype._revealReference
+
   // Why: these are private Monaco members with no stability guarantee; if an
   // upgrade removes either, skip patching so Peek keeps Monaco's defaults.
   if (typeof originalFillBody !== 'function' || typeof originalRevealReference !== 'function') {
@@ -56,6 +58,7 @@ export function installMonacoPeekReferencesPreviewOptions(
     ...args: unknown[]
   ): Promise<unknown> {
     applyPeekReferencesPreviewOptions(this._preview)
+
     try {
       return await originalRevealReference.apply(this, args)
     } finally {

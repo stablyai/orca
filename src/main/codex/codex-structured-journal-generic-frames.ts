@@ -14,24 +14,30 @@ import {
 import { readCodexTurnId } from './codex-structured-thread-facts'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
+
 type SuppressedSummary = { count: number; publishedCount: number }
 
 function boundedTurnBucket(threadId: string, turnId: string): string {
   const encoded = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
+
   if (Buffer.byteLength(encoded, 'utf8') <= 512) {
     return encoded
   }
+
   let hash = 2166136261
+
   for (const byte of Buffer.from(encoded, 'utf8')) {
     hash ^= byte
     hash = Math.imul(hash, 16777619)
   }
+
   return `${encoded.slice(0, 160)}:${(hash >>> 0).toString(16)}`
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
   const timer = setTimeout(run, ms)
   timer.unref?.()
+
   return () => clearTimeout(timer)
 }
 
@@ -64,30 +70,38 @@ export class CodexJournalGenericFrames {
     threadId = 'session'
   ): CodexJournalTranslationAdmission {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
     if (!translated) {
       return CODEX_JOURNAL_ADMITTED
     }
+
     const turnId = readCodexTurnId(payload) ?? this.activeTurn(threadId) ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
     const rowCount = this.genericRowsByTurn.get(bucket) ?? 0
     // The cap bounds noise, never evidence: an error frame is always journaled, and
     // capped frames stay countable through one summary row per turn.
     const isError = translated.classification === 'error-surface'
+
     if (!isError && rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
       this.addSuppressed(bucket, 1)
       this.recordBucket(bucket)
       this.scheduleSuppressedRows()
+
       return CODEX_JOURNAL_ADMITTED
     }
+
     if (isError) {
       const suppressionAdmission = this.flush()
+
       if (!suppressionAdmission.accepted) {
         return suppressionAdmission
       }
     }
+
     this.fallbackSequence += 1
+
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(
           { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
@@ -98,12 +112,16 @@ export class CodexJournalGenericFrames {
           translated.body
         ),
         CODEX_JOURNAL_ADMITTED)
+
     if (!admission.accepted) {
       this.fallbackSequence -= 1
+
       return admission
     }
+
     this.genericRowsByTurn.set(bucket, rowCount + 1)
     this.recordBucket(bucket)
+
     return publish(this.deps.sink)
   }
 
@@ -119,14 +137,17 @@ export class CodexJournalGenericFrames {
     let wrote = false
     const ready: SuppressedSummary[] = []
     let blocked: CodexJournalTranslationAdmission | null = null
+
     for (const [bucket, summary] of this.suppressedRowsByTurn) {
       if (summary.count === summary.publishedCount) {
         continue
       }
+
       const text =
         bucket === OVERFLOW_BUCKET
           ? `${summary.count} more provider notification${summary.count === 1 ? '' : 's'} not shown across evicted turns`
           : `${summary.count} more provider notification${summary.count === 1 ? '' : 's'} not shown for this turn`
+
       const admission = this.deps.sink.tryAppendItem
         ? this.deps.sink.tryAppendItem(
             { provider: 'orca', clientMessageId: `provider-frame-suppressed:codex:${bucket}` },
@@ -142,15 +163,19 @@ export class CodexJournalGenericFrames {
             { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
           ),
           CODEX_JOURNAL_ADMITTED)
+
       if (!admission.accepted) {
         blocked ??= admission
         continue
       }
+
       ready.push(summary)
       wrote = true
     }
+
     if (wrote) {
       const admission = publish(this.deps.sink)
+
       if (!admission.accepted) {
         blocked ??= admission
       } else {
@@ -159,10 +184,13 @@ export class CodexJournalGenericFrames {
         }
       }
     }
+
     if (blocked) {
       this.scheduleSuppressedRows()
+
       return blocked
     }
+
     return CODEX_JOURNAL_ADMITTED
   }
 
@@ -183,6 +211,7 @@ export class CodexJournalGenericFrames {
 
   private bucketFor(threadId: string, turnId: string): string {
     const requested = boundedTurnBucket(threadId, turnId)
+
     return Buffer.byteLength(requested, 'utf8') > MAX_CODEX_GENERIC_BOOKKEEPING_BYTES
       ? OVERFLOW_BUCKET
       : requested
@@ -199,6 +228,7 @@ export class CodexJournalGenericFrames {
       this.bucketOrder.set(bucket, this.nextBucketOrder++)
       this.bookkeepingBytes += Buffer.byteLength(bucket, 'utf8')
     }
+
     while (
       (this.bucketOrder.size > MAX_CODEX_GENERIC_TURN_BUCKETS ||
         this.genericRowsByTurn.size + this.suppressedRowsByTurn.size >
@@ -209,11 +239,14 @@ export class CodexJournalGenericFrames {
       const oldest = [...this.bucketOrder.entries()]
         .filter(([id]) => id !== OVERFLOW_BUCKET && id !== bucket)
         .sort((a, b) => a[1] - b[1])[0]?.[0]
+
       if (!oldest) {
         break
       }
+
       const suppressed = this.suppressedRowsByTurn.get(oldest)
       this.removeBucket(oldest)
+
       if (suppressed && suppressed.count > suppressed.publishedCount) {
         this.recordBucket(OVERFLOW_BUCKET)
         this.addSuppressed(OVERFLOW_BUCKET, suppressed.count - suppressed.publishedCount)

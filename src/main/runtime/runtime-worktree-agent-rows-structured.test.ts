@@ -10,6 +10,7 @@ import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
@@ -20,6 +21,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
  * reported a worktree running one as idle while the sidebar showed it working.
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
+
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
@@ -37,15 +39,18 @@ function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionSta
 
 function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummary {
   const store = new AgentHookServer()
+
   for (const entry of summaries) {
     store.ingestStructuredStatus(entry)
   }
+
   const row = {
     worktreeId: WORKTREE_ID,
     status: 'inactive',
     hasHostSidebarActivity: false,
     agents: []
   } as unknown as RuntimeWorktreePsSummary
+
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
@@ -64,6 +69,7 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
     orchestrationByPaneKey: null,
     getSummary: (map, _p, _m, id) => map.get(id) ?? null
   })
+
   return row
 }
 
@@ -123,11 +129,13 @@ describe('worktree ps reports structured sessions', () => {
 describe('terminal listing is deliberately left alone', () => {
   it('never reads the agent-status store that now carries structured rows', async () => {
     const { readFile } = await import('node:fs/promises')
+
     // orca-runtime-subscribe-to-terminal-resize.ts owns listTerminals.
     const listing = await readFile(
       new URL('./orca-runtime-subscribe-to-terminal-resize.ts', import.meta.url),
       'utf8'
     )
+
     // Guard the guard: an empty read would make every assertion below vacuously true.
     expect(listing).toContain('async listTerminals(')
     expect(listing).not.toContain('getAgentStatusSnapshotFn')

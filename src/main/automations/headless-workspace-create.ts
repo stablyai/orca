@@ -4,6 +4,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
+
 type RuntimeCreateManagedWorktreeArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
 
 export function buildHeadlessAutomationWorkspaceName(
@@ -17,7 +18,9 @@ export function buildHeadlessAutomationWorkspaceName(
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40)
+
   const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
+
   return `auto-${slug || 'run'}-${stamp}`
 }
 

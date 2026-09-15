@@ -38,6 +38,7 @@ describe('Grok first-user prompt text', () => {
       'Note: Prefer using relative paths over absolute paths',
       '</user_info>'
     ].join('\n')
+
     expect(isGrokBootstrapContextText(bootstrap)).toBe(true)
     expect(extractGrokFirstUserPromptText(bootstrap)).toBeNull()
   })

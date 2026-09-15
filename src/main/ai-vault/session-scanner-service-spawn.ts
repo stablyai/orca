@@ -30,17 +30,21 @@ import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol
 
 export function spawnAiVaultServiceProcess(): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()
+
   if (!existsSync(entryPath)) {
     throw new Error(`AI Vault service entry not found: ${entryPath}`)
   }
+
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     execArgv: ['--max-old-space-size=384'],
     env: buildAiVaultServiceEnv(),
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })
+
   lowerAiVaultServicePriority(child.pid)
   child.unref()
+
   return child
 }
 
@@ -56,6 +60,7 @@ function getSharedClient(): AiVaultScannerServiceClient {
     }),
     onStderr: (text) => console.error('[ai-vault-service]', text.trimEnd())
   })
+
   return sharedClient
 }
 
@@ -68,8 +73,10 @@ export function scanAiVaultSessionsInService(
       result: AiVaultListResult
       durationMs: number
     }>({ type: 'request', operation: 'scan', options }, signal)
+
     span.setAttribute('serviceDurationMs', value.durationMs)
     span.setAttribute('sessions', value.result.sessions.length)
+
     return value.result
   })
 }

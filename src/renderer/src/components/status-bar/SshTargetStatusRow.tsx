@@ -75,8 +75,10 @@ export function SshTargetStatusRow({
     if (isSshConnectInFlight(targetId)) {
       return
     }
+
     beginSshConnect(targetId)
     setBusy(true)
+
     try {
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
@@ -88,6 +90,7 @@ export function SshTargetStatusRow({
       )
     } finally {
       endSshConnect(targetId)
+
       if (mountedRef.current) {
         setBusy(false)
       }
@@ -96,6 +99,7 @@ export function SshTargetStatusRow({
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)
+
     try {
       await window.api.ssh.disconnect({ targetId })
       recordFeatureInteraction('ssh')

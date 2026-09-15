@@ -49,6 +49,7 @@ export function withResolvedCmdJGitHubPreview(
   if (preview.provider !== 'github') {
     return preview
   }
+
   if (resolvedTitle) {
     return {
       ...preview,
@@ -57,6 +58,7 @@ export function withResolvedCmdJGitHubPreview(
       loading: false
     }
   }
+
   return loading ? { ...preview, loading: true } : preview
 }
 
@@ -78,9 +80,11 @@ function githubLinksEqual(left: GitHubIssueOrPRLink, right: GitHubIssueOrPRLink)
 
 function parseOwnerRepoDisplayName(value: string | null | undefined): RepoSlug | null {
   const match = /^([^/]+)\/([^/]+)$/.exec(value?.trim() ?? '')
+
   if (!match) {
     return null
   }
+
   return { owner: match[1], repo: match[2] }
 }
 
@@ -95,13 +99,17 @@ function githubRemoteKeyParts(slug: RepoSlug): GitRemoteKeyParts {
 function remoteIdentityMatchesGitHubSlug(repo: Repo, slug: RepoSlug): boolean | 'unknown' {
   const identity = repo.gitRemoteIdentity
   const identityParts = splitGitRemoteKey(identity?.canonicalKey, foldComparableGitHubHost)
+
   if (!identityParts) {
     return 'unknown'
   }
+
   const verdict = matchGitRemoteKeyParts(identityParts, githubRemoteKeyParts(slug))
+
   if (verdict !== false) {
     return verdict
   }
+
   // Why not false: identity keeps only one remote, so an `upstream` pick means a fork's `origin`
   // existed and is invisible here, and rejecting would drop URLs from the fork itself. GitLab makes
   // the opposite trade (STA-4450); aligning the two is left to a twin ticket.
@@ -113,15 +121,19 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
   if (!repo) {
     return 'unknown'
   }
+
   // Why displayName first: it is compared host-agnostically, so mirrors and host aliases of the
   // same owner/repo keep matching; the probed remote only fills in where no name evidence exists.
   const fromName = parseOwnerRepoDisplayName(repo.displayName)
+
   if (fromName) {
     return githubIdentityKey({ ...fromName, host: slug.host }) === githubIdentityKey(slug)
   }
+
   if (repo.upstream?.owner && repo.upstream.repo) {
     return githubIdentityKey(repo.upstream) === githubIdentityKey(slug)
   }
+
   // Why: a basename-only displayName is the common non-fork case, and issue/PR numbers are
   // per-repo, so a bare number must still clear the remote the repo actually points at.
   return remoteIdentityMatchesGitHubSlug(repo, slug)
@@ -129,26 +141,31 @@ function repoMatchesGitHubSlug(repo: Repo | undefined, slug: RepoSlug): boolean 
 
 export function parseCmdJTaskSourceUrl(query: string): CmdJTaskSourceUrl | null {
   const trimmed = query.trim()
+
   if (!trimmed || isWorktreePaletteQueryTooLarge(trimmed)) {
     return null
   }
 
   const linear = parseLinearIssueUrlIntent(trimmed)
+
   if (linear) {
     return { provider: 'linear', intent: linear }
   }
 
   const github = parseGitHubIssueOrPRLink(trimmed)
+
   if (github) {
     return { provider: 'github', link: github }
   }
 
   const gitlab = parseGitLabIssueOrMRLink(trimmed)
+
   if (gitlab) {
     return { provider: 'gitlab', link: gitlab }
   }
 
   const jira = parseJiraIssueUrl(trimmed)
+
   if (jira) {
     return { provider: 'jira', parsed: jira }
   }
@@ -162,10 +179,12 @@ export function getCmdJTaskUrlCreatePreview(
   if (intent.provider === 'linear') {
     return null
   }
+
   if (intent.provider === 'github') {
     const { slug, number, type } = intent.link
     const repo = `${slug.owner}/${slug.repo}`
     const kindLabel = type === 'pr' ? 'GitHub pull request' : 'GitHub issue'
+
     return {
       provider: 'github',
       identifier: `#${number}`,
@@ -174,11 +193,13 @@ export function getCmdJTaskUrlCreatePreview(
       createLabel: `Create worktree from ${kindLabel} ${repo}#${number}`
     }
   }
+
   if (intent.provider === 'gitlab') {
     const { slug, number, type } = intent.link
     const project = `${slug.host}/${slug.path}`
     const kindLabel = type === 'mr' ? 'GitLab merge request' : 'GitLab issue'
     const identifier = type === 'mr' ? `!${number}` : `#${number}`
+
     return {
       provider: 'gitlab',
       identifier,
@@ -187,6 +208,7 @@ export function getCmdJTaskUrlCreatePreview(
       createLabel: `Create worktree from ${kindLabel} ${project}${identifier}`
     }
   }
+
   return {
     provider: 'jira',
     identifier: intent.parsed.issueKey,
@@ -205,23 +227,28 @@ function worktreeMatchesGitHubUrl(
   const linkedUrl = worktree.linkedWorkItem?.url
     ? parseGitHubIssueOrPRLink(worktree.linkedWorkItem.url)
     : null
+
   if (linkedUrl && githubLinksEqual(linkedUrl, link)) {
     return true
   }
 
   const reviewUrl = review?.url ? parseGitHubIssueOrPRLink(review.url) : null
+
   if (reviewUrl && githubLinksEqual(reviewUrl, link)) {
     return true
   }
 
   const linkedItem = worktree.linkedWorkItem
+
   const linkedItemMatches =
     linkedItem?.provider === 'github' &&
     linkedItem.type === link.type &&
     linkedItem.number === link.number
+
   const numberMatches =
     linkedItemMatches ||
     (link.type === 'pr' ? worktree.linkedPR === link.number : worktree.linkedIssue === link.number)
+
   if (!numberMatches) {
     return false
   }
@@ -231,13 +258,16 @@ function worktreeMatchesGitHubUrl(
 
 function worktreeMatchesLinearUrl(worktree: Worktree, intent: LinearIssueUrlIntent): boolean {
   const identifier = normalizeLinearIdentifier(intent.identifier)
+
   const linkedIdentifier =
     normalizeLinearIdentifier(worktree.linkedLinearIssue) ??
     normalizeLinearIdentifier(worktree.linkedWorkItem?.linearIdentifier)
+
   if (!identifier || linkedIdentifier !== identifier) {
     const linkedUrl = worktree.linkedWorkItem?.url
       ? parseLinearIssueUrlIntent(worktree.linkedWorkItem.url)
       : null
+
     if (
       !linkedUrl ||
       linkedUrl.identifier !== intent.identifier ||
@@ -248,9 +278,11 @@ function worktreeMatchesLinearUrl(worktree: Worktree, intent: LinearIssueUrlInte
   }
 
   const worktreeOrg = worktree.linkedLinearIssueOrganizationUrlKey?.trim().toLowerCase()
+
   if (worktreeOrg && worktreeOrg !== intent.organizationUrlKey.toLowerCase()) {
     return false
   }
+
   return true
 }
 
@@ -258,6 +290,7 @@ function worktreeMatchesJiraUrl(worktree: Worktree, parsed: ParsedJiraIssueUrl):
   const linkedUrl = worktree.linkedWorkItem?.url
     ? parseJiraIssueUrl(worktree.linkedWorkItem.url)
     : null
+
   // Why url first: issue keys are per-project, not per-tenant, so two Jira sites
   // routinely both have a PROJ-123. The stored URL is the only tenant evidence
   // here, so where it exists it decides — matching on the bare identifier would
@@ -269,6 +302,7 @@ function worktreeMatchesJiraUrl(worktree: Worktree, parsed: ParsedJiraIssueUrl):
       linkedUrl.sitePath === parsed.sitePath
     )
   }
+
   return worktree.linkedWorkItem?.jiraIdentifier?.toUpperCase() === parsed.issueKey
 }
 
@@ -280,10 +314,12 @@ export function matchWorktreePaletteTaskUrl(args: {
 }): PaletteSearchResult | null {
   const { worktree, intent, repo, review } = args
   const worktreeHostId = getPaletteWorktreeExecutionHostId(worktree)
+
   if (intent.provider === 'github') {
     if (!worktreeMatchesGitHubUrl(worktree, intent.link, repo, review)) {
       return null
     }
+
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
       ...(worktreeHostId ? { worktreeHostId } : {}),
@@ -291,10 +327,12 @@ export function matchWorktreePaletteTaskUrl(args: {
       text: `${intent.link.type === 'pr' ? 'PR' : 'Issue'} #${intent.link.number}`
     })
   }
+
   if (intent.provider === 'linear') {
     if (!worktreeMatchesLinearUrl(worktree, intent.intent)) {
       return null
     }
+
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
       ...(worktreeHostId ? { worktreeHostId } : {}),
@@ -302,10 +340,12 @@ export function matchWorktreePaletteTaskUrl(args: {
       text: intent.intent.identifier
     })
   }
+
   if (intent.provider === 'gitlab') {
     if (!worktreeMatchesGitLabUrl(worktree, intent.link, repo, review)) {
       return null
     }
+
     return buildWorktreePaletteTaskUrlResult({
       worktreeId: worktree.id,
       ...(worktreeHostId ? { worktreeHostId } : {}),
@@ -313,9 +353,11 @@ export function matchWorktreePaletteTaskUrl(args: {
       text: `${intent.link.type === 'mr' ? 'MR' : 'Issue'} #${intent.link.number}`
     })
   }
+
   if (!worktreeMatchesJiraUrl(worktree, intent.parsed)) {
     return null
   }
+
   return buildWorktreePaletteTaskUrlResult({
     worktreeId: worktree.id,
     ...(worktreeHostId ? { worktreeHostId } : {}),

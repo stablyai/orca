@@ -24,13 +24,18 @@ const knobByFlag = {
 }
 
 const env = { ...process.env, ORCA_TYPING_BENCH: '1' }
+
 const passthroughArgs = []
+
 const argv = process.argv.slice(2)
+
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--') {
     continue
   }
+
   const knob = knobByFlag[argv[i]]
+
   if (knob) {
     env[knob] = argv[++i]
   } else {
@@ -57,7 +62,9 @@ const child = spawn(
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
+
     return
   }
+
   process.exit(code ?? 1)
 })

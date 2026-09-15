@@ -17,9 +17,11 @@ import type { SessionSearchScope } from './session-search-engine-types'
 // `[[` — a bash `[[ -f x ]]`, numpy's `[[1, 2]]` — and a mark the content can
 // forge makes both of those decisions wrong on real text.
 const MARK_OPEN = '\uE000'
+
 const MARK_CLOSE = '\uE001'
 
 const SNIPPET_TOKENS = 12
+
 // Why a ceiling on top of the token count: a transcript chunk can be 8000
 // characters with no separator in it, which FTS5 reports as one token, so
 // "twelve tokens" is not by itself a bound on what a hit carries.
@@ -57,6 +59,7 @@ export function sessionSearchSnippet(
   // second list here would be a guard with nothing left to guard, and the two
   // would mask each other's mistakes.
   const columns = [0, 1, 2, -1]
+
   // Each column twice: once marked, once with empty marks. Whether a column
   // matched is then the difference between two renderings of the same text,
   // which content cannot forge — searching the marked one for a mark reads a
@@ -68,6 +71,7 @@ export function sessionSearchSnippet(
       `snippet(messages_fts, ${column}, '', '', '…', ${SNIPPET_TOKENS}) AS p${index}`
     ])
     .join(', ')
+
   try {
     // Why the subselect: a bound `rowid = ?` or `rowid IN (?)` next to MATCH is
     // silently ignored by the FTS5 planner, which then returns the first match
@@ -86,17 +90,22 @@ export function sessionSearchSnippet(
       .get(scopedExpression(scope, orExpression(plan.terms)), rowid) as
       | Record<string, string>
       | undefined
+
     if (!row) {
       return EMPTY_SNIPPET
     }
+
     // A snippet with nothing highlighted tells the user nothing; omit it.
     const index = columns.findIndex(
       (_column, at) => row[`c${at}`] !== undefined && row[`c${at}`] !== row[`p${at}`]
     )
+
     if (index === -1) {
       return EMPTY_SNIPPET
     }
+
     const pieces = splitMarks(row[`c${index}`]!, row[`p${index}`]!)
+
     return pieces === null ? EMPTY_SNIPPET : renderSnippet(pieces)
   } catch {
     return EMPTY_SNIPPET
@@ -120,22 +129,28 @@ function splitMarks(marked: string, plain: string): SnippetPiece[] | null {
   const rest = [...plain]
   let at = 0
   let run = ''
+
   for (const point of marked) {
     if (point === rest[at]) {
       run += point
       at++
       continue
     }
+
     if (point !== MARK_OPEN && point !== MARK_CLOSE) {
       return null
     }
+
     pieces.push({ kind: 'text', value: run }, { kind: 'mark', value: point })
     run = ''
   }
+
   if (at !== rest.length) {
     return null
   }
+
   pieces.push({ kind: 'text', value: run })
+
   return pieces
 }
 
@@ -151,6 +166,7 @@ function renderSnippet(pieces: SnippetPiece[]): SessionSearchSnippet {
   let text = ''
   let shown = 0
   let openedAt: number | null = null
+
   for (const piece of pieces) {
     if (piece.kind === 'mark') {
       const open = piece.value === MARK_OPEN
@@ -158,14 +174,19 @@ function renderSnippet(pieces: SnippetPiece[]): SessionSearchSnippet {
       text += open ? SESSION_SEARCH_SNIPPET_MARK_OPEN : SESSION_SEARCH_SNIPPET_MARK_CLOSE
       continue
     }
+
     const points = [...piece.value]
+
     if (shown + points.length <= SNIPPET_MAX_CHARS) {
       shown += points.length
       text += piece.value
       continue
     }
+
     text += points.slice(0, SNIPPET_MAX_CHARS - shown).join('')
+
     return { text: openedAt === null ? text : text.slice(0, openedAt), truncated: true }
   }
+
   return { text, truncated: false }
 }

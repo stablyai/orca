@@ -43,6 +43,7 @@ export function buildSummary(
       row.projectLabel,
       (byProject.get(row.projectLabel) ?? 0) + row.inputTokens + row.outputTokens
     )
+
     const cost = estimateCostUsd(
       row.model,
       row.inputTokens,
@@ -51,6 +52,7 @@ export function buildSummary(
       row.cacheWriteTokens,
       row.cacheWrite1hTokens
     )
+
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
@@ -88,6 +90,7 @@ export function buildDaily(
   range: ClaudeUsageRange
 ): ClaudeUsageDailyPoint[] {
   const byDay = new Map<string, ClaudeUsageDailyPoint>()
+
   for (const row of getFilteredDaily(state, scope, range)) {
     const existing = byDay.get(row.day) ?? {
       day: row.day,
@@ -96,12 +99,14 @@ export function buildDaily(
       cacheReadTokens: 0,
       cacheWriteTokens: 0
     }
+
     existing.inputTokens += row.inputTokens
     existing.outputTokens += row.outputTokens
     existing.cacheReadTokens += row.cacheReadTokens
     existing.cacheWriteTokens += row.cacheWriteTokens
     byDay.set(row.day, existing)
   }
+
   return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
 }
 
@@ -120,6 +125,7 @@ export function buildBreakdown(
   for (const daily of filteredDaily) {
     const key = kind === 'model' ? (daily.model ?? 'unknown') : daily.projectKey
     const label = kind === 'model' ? (daily.model ?? 'Unknown model') : daily.projectLabel
+
     const existing = rows.get(key) ?? {
       key,
       label,
@@ -131,6 +137,7 @@ export function buildBreakdown(
       cacheWriteTokens: 0,
       estimatedCostUsd: null
     }
+
     existing.turns += daily.turnCount
     existing.inputTokens += daily.inputTokens
     existing.outputTokens += daily.outputTokens
@@ -147,21 +154,28 @@ export function buildBreakdown(
     if (kind === 'model') {
       const key = session.model ?? 'unknown'
       const row = rows.get(key)
+
       if (row) {
         row.sessions++
       }
+
       continue
     }
+
     const matchingLocations = session.locationBreakdown.filter((entry) =>
       scope === 'all' ? true : entry.worktreeId !== null
     )
+
     const seen = new Set<string>()
+
     for (const location of matchingLocations) {
       if (seen.has(location.locationKey)) {
         continue
       }
+
       seen.add(location.locationKey)
       const row = rows.get(location.locationKey)
+
       if (row) {
         row.sessions++
       }
@@ -184,6 +198,7 @@ export function buildBreakdown(
   return [...rows.values()].sort((left, right) => {
     const leftTotal = left.inputTokens + left.outputTokens
     const rightTotal = right.inputTokens + right.outputTokens
+
     return rightTotal - leftTotal
   })
 }

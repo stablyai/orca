@@ -8,9 +8,13 @@ import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
+
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
+
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
+
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
+
 let devParentShutdownRequested = false
 
 type NetworkCompatibilityOptions = {
@@ -22,18 +26,23 @@ function parseBooleanEnvFlag(value: string | undefined): boolean | null {
   if (value === undefined) {
     return null
   }
+
   const normalized = value.trim().toLowerCase()
+
   if (TRUE_ENV_VALUES.has(normalized)) {
     return true
   }
+
   if (FALSE_ENV_VALUES.has(normalized)) {
     return false
   }
+
   return null
 }
 
 function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
   const dataFile = join(userDataPath, 'orca-data.json')
+
   if (!existsSync(dataFile)) {
     return false
   }
@@ -42,6 +51,7 @@ function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
     const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
       settings?: { electronHttp1CompatibilityMode?: unknown }
     }
+
     return parsed.settings?.electronHttp1CompatibilityMode === true
   } catch {
     return false
@@ -52,10 +62,13 @@ export function shouldDisableHttp2ForElectronNetworking(
   options: NetworkCompatibilityOptions = {}
 ): boolean {
   const envValue = parseBooleanEnvFlag(options.env?.[HTTP1_COMPATIBILITY_ENV_VAR])
+
   if (envValue !== null) {
     return envValue
   }
+
   const userDataPath = options.userDataPath ?? app.getPath('userData')
+
   // Why the marker first: this runs before app.whenReady(), and the settings file is the multi-MB
   // orca-data.json the Store parses again moments later. The marker is refreshed whenever settings
   // change, so the full read only happens on a profile that has never written one.
@@ -70,6 +83,7 @@ export function configureElectronNetworkCompatibility(
   if (!shouldDisableHttp2ForElectronNetworking(options)) {
     return
   }
+
   // Why: Chromium's HTTP/2 switch is process-wide and only applies before the first session exists, so set it during early startup.
   app.commandLine.appendSwitch('disable-http2')
 }
@@ -90,6 +104,7 @@ function appendDisabledChromiumFeatures(features: string[]): void {
     .split(',')
     .map((feature) => feature.trim())
     .filter(Boolean)
+
   const disabledFeatures = Array.from(new Set([...features, ...existingFeatures])).join(',')
   app.commandLine.appendSwitch('disable-features', disabledFeatures)
 }
@@ -124,6 +139,7 @@ export function patchPackagedProcessPath(): void {
   }
 
   const home = process.env.HOME ?? ''
+
   // Why two lists: a seed exists so a GUI-launched Electron can *find* a tool
   // its minimal PATH omits. Putting one ahead of the inherited PATH does more
   // than that — it re-ranks binaries the user already has, and `~/bin` and
@@ -137,6 +153,7 @@ export function patchPackagedProcessPath(): void {
     process.platform !== 'win32' &&
     home !== '' &&
     (path === join(home, 'bin') || path === join(home, '.local/bin'))
+
   const appendPaths: string[] = []
   // Why these still lead: version-manager shims must beat a system install or
   // an nvm/mise/asdf user gets the wrong runtime, which is the whole reason
@@ -189,34 +206,42 @@ export function patchPackagedProcessPath(): void {
 
 export function configureDevUserDataPath(isDev: boolean): void {
   const e2eConfig = getMainE2EConfig()
+
   if (e2eConfig.userDataDir) {
     // Why: the E2E suite launches a fresh Electron app for each spec. A
     // dedicated userData path per launch prevents persisted repos, worktrees,
     // and session state from leaking between tests through the shared dev
     // profile while still leaving the user's real packaged profile untouched.
     const e2eHomeDir = process.env.ORCA_E2E_HOME_DIR ?? join(e2eConfig.userDataDir, 'home')
+
     // Why: E2E imports can resolve os.homedir() before Electron is ready. Abort
     // startup if a direct launch skipped the disposable Node-home contract.
     if (!areSameE2EHomePath(homedir(), e2eHomeDir)) {
       throw new Error('Refusing to start E2E outside its disposable home boundary')
     }
+
     // Why: on macOS Electron resolves app.getPath('home') from the native user
     // database, not HOME. Set it explicitly before any Codex paths are built.
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
+
     return
   }
 
   if (!isDev) {
     return
   }
+
   const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
+
   if (overrideUserDataPath) {
     // Why: automated repros need an isolated profile so the dev's persisted tabs/worktrees don't skew startup and hide window bugs.
     app.setPath('userData', overrideUserDataPath)
+
     return
   }
+
   // Why: without a dev-only path, pnpm dev overwrites the packaged app's runtime pointer under userData and breaks the orca CLI.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
@@ -224,6 +249,7 @@ export function configureDevUserDataPath(isDev: boolean): void {
 function areSameE2EHomePath(left: string, right: string): boolean {
   const normalizedLeft = resolve(left)
   const normalizedRight = resolve(right)
+
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight
@@ -236,6 +262,7 @@ export function configureOrcaUserDataPathEnv(): void {
 
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
+
   // Why: managed hooks now target Orca-owned Codex homes, not ~/.codex, so keep install on for all agents until each gets its own seam.
   return true
 }
@@ -257,6 +284,7 @@ export function installDevParentWatchdog(isDev: boolean): void {
   }
 
   const initialParentPid = process.ppid
+
   if (!Number.isInteger(initialParentPid) || initialParentPid <= 1) {
     return
   }
@@ -309,6 +337,7 @@ export function enableMainProcessGpuFeatures(): void {
     // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu')
+
     return
   }
 
@@ -325,8 +354,10 @@ export function enableMainProcessGpuFeatures(): void {
 
   const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
   const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+
   const isLinuxX11Override =
     ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
+
   const isLinuxWaylandSession =
     process.platform === 'linux' &&
     !isLinuxX11Override &&
@@ -334,12 +365,14 @@ export function enableMainProcessGpuFeatures(): void {
       process.env.XDG_SESSION_TYPE === 'wayland' ||
       ozonePlatformHint === 'wayland' ||
       ozonePlatform === 'wayland')
+
   if (isLinuxWaylandSession) {
     // Why: #5319 — Wayland loses the eager GPU channel; drop the GPU sandbox so Chromium opens it lazily.
     app.commandLine.appendSwitch('disable-gpu-sandbox')
   }
 
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
+
   const features = [
     // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
     ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
@@ -347,6 +380,7 @@ export function enableMainProcessGpuFeatures(): void {
   ]
     .filter(Boolean)
     .join(',')
+
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
   }

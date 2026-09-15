@@ -29,8 +29,10 @@ export async function importCookiesFromFirefox(
 
   try {
     copyFileSync(browser.cookiesPath, tmpCookiesPath)
+
     for (const suffix of ['-wal', '-shm'] as const) {
       const sidecar = browser.cookiesPath + suffix
+
       if (existsSync(sidecar)) {
         try {
           copyFileSync(sidecar, tmpCookiesPath + suffix)
@@ -41,6 +43,7 @@ export async function importCookiesFromFirefox(
     }
   } catch {
     rmSync(tmpDir, { recursive: true, force: true })
+
     return {
       ok: false,
       reason: 'Could not copy Firefox cookies database. Try closing Firefox first.'
@@ -49,6 +52,7 @@ export async function importCookiesFromFirefox(
 
   try {
     const db = new DatabaseSync(tmpCookiesPath, { readOnly: true })
+
     type FirefoxRow = Record<string, unknown> & {
       name: string
       value: string
@@ -60,6 +64,7 @@ export async function importCookiesFromFirefox(
       sameSite: number
       isPartitionedAttributeSet?: number
     }
+
     // Why: selecting a column an older moz_cookies schema lacks fails the whole import. A schema
     // without the server-declared partition flag predates that cookie identity.
     const firefoxColumns = new Set(
@@ -67,28 +72,35 @@ export async function importCookiesFromFirefox(
         (column) => column.name
       )
     )
+
     const partitionColumn = firefoxColumns.has('isPartitionedAttributeSet')
       ? ', isPartitionedAttributeSet'
       : ''
+
     const rows = db
       .prepare(
         `SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite${partitionColumn} FROM moz_cookies`
       )
       .all() as FirefoxRow[]
+
     db.close()
 
     diag(`  Firefox source has ${rows.length} cookies`)
+
     if (rows.length === 0) {
       rmSync(tmpDir, { recursive: true, force: true })
+
       return { ok: false, reason: 'No cookies found in Firefox.' }
     }
 
     const now = Math.floor(Date.now() / 1000)
     const validated: ValidatedCookie[] = []
+
     for (const row of rows) {
       if (!row.name || !row.host) {
         continue
       }
+
       if (row.expiry > 0 && row.expiry < now) {
         continue
       }
@@ -96,6 +108,7 @@ export async function importCookiesFromFirefox(
       const domain = row.host
       const secure = row.isSecure === 1
       const url = deriveUrl(domain, secure)
+
       if (!url) {
         continue
       }
@@ -130,6 +143,7 @@ export async function importCookiesFromFirefox(
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
     diag(`  Firefox import failed: ${String(err)}`)
+
     return {
       ok: false,
       reason: 'Could not import cookies from Firefox. Try closing Firefox first.'

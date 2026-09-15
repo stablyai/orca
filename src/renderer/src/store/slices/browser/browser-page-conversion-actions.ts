@@ -24,12 +24,14 @@ export function createBrowserPageConversionActions(
       // Ownership is resolved ONCE, on the plan's own terms — property-present-undefined means
       // worktree-inferred — so the assert and the plan cannot disagree about what is being built.
       const oldPageForOwnership = findPage(get().browserPagesByWorkspace, pageId)
+
       const declaredOwnership =
         target.kind === 'workspace-doc'
           ? null
           : 'browserRuntimeEnvironmentId' in target
             ? target.browserRuntimeEnvironmentId
             : (oldPageForOwnership?.browserRuntimeEnvironmentId ?? null)
+
       assertManagedBrowserMaterializationAllowed(
         get(),
         declaredOwnership !== undefined
@@ -43,25 +45,32 @@ export function createBrowserPageConversionActions(
       let remotePageToClose: { worktreeId: string; handle: RemoteBrowserPageHandle } | null = null
       set((s) => {
         const plan = planBrowserPageConversion(s, pageId, target, options)
+
         if (!plan) {
           return s
         }
+
         converted = plan.newPage
+
         // Why collected rather than released inside the reducer: revoking is main-process work, and
         // it must happen exactly once even if a later set() retries the reducer.
         if (plan.oldPage.docLocation) {
           docPageIdToRelease = plan.oldPage.id
         }
+
         const remoteHandle = s.remoteBrowserPageHandlesByPageId[plan.oldPage.id]
+
         if (remoteHandle) {
           remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
         }
+
         const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
         delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
         delete nextBrowserAnnotationsByPageId[plan.oldPage.id]
         const nextBrowserCertificateFailuresByPageId = { ...s.browserCertificateFailuresByPageId }
         delete nextBrowserCertificateFailuresByPageId[plan.oldPage.id]
+
         return {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
@@ -91,13 +100,16 @@ export function createBrowserPageConversionActions(
       // Why the casts: the assignments happen inside set()'s callback, which TS's flow analysis does
       // not track, so the initializers' null narrowing would otherwise read these as never.
       const newPage = converted as BrowserPage | null
+
       const remoteClose = remotePageToClose as {
         worktreeId: string
         handle: RemoteBrowserPageHandle
       } | null
+
       if (!newPage) {
         return null
       }
+
       if (remoteClose) {
         closeRemoteBrowserPageInOwningEnvironment(
           remoteClose.worktreeId,
@@ -105,22 +117,27 @@ export function createBrowserPageConversionActions(
           get().recordClientHostedBrowserCloseIntents
         )
       }
+
       // Why after the reducer: a closed document must stop being readable, and the grant is the only
       // authority the preview scheme honors — but the store row has to stop naming it first.
       if (docPageIdToRelease) {
         releaseDocPreviewGrant(docPageIdToRelease)
       }
+
       const workspaceAfter = findWorkspace(get().browserTabsByWorktree, newPage.workspaceId)
+
       if (workspaceAfter?.activePageId === newPage.id) {
         const item = Object.values(get().unifiedTabsByWorktree)
           .flat()
           .find(
             (entry) => entry.contentType === 'browser' && entry.entityId === newPage.workspaceId
           )
+
         if (item) {
           get().setTabLabel(item.id, newPage.title)
         }
       }
+
       return newPage
     },
 
@@ -131,9 +148,11 @@ export function createBrowserPageConversionActions(
       set((s) => {
         const recentlyClosed = s.recentlyClosedBrowserPagesByWorkspace[workspaceId] ?? []
         pageToRestore = recentlyClosed[0]
+
         if (!pageToRestore) {
           return s
         }
+
         return {
           recentlyClosedBrowserPagesByWorkspace: {
             ...s.recentlyClosedBrowserPagesByWorkspace,
@@ -157,13 +176,17 @@ export function createBrowserPageConversionActions(
     setActiveBrowserPage: (workspaceId, pageId) => {
       set((s) => {
         const workspace = findWorkspace(s.browserTabsByWorktree, workspaceId)
+
         if (!workspace) {
           return s
         }
+
         const pages = s.browserPagesByWorkspace[workspaceId] ?? []
+
         if (!pages.some((page) => page.id === pageId)) {
           return s
         }
+
         const nextWorkspace = mirrorWorkspaceFromActivePage(
           {
             ...workspace,
@@ -171,6 +194,7 @@ export function createBrowserPageConversionActions(
           },
           pages
         )
+
         return {
           browserTabsByWorktree: {
             ...s.browserTabsByWorktree,
@@ -185,7 +209,9 @@ export function createBrowserPageConversionActions(
       const activePage = (get().browserPagesByWorkspace[workspaceId] ?? []).find(
         (page) => page.id === pageId
       )
+
       const workspace = findWorkspace(get().browserTabsByWorktree, workspaceId)
+
       if (
         workspace &&
         isLocalBrowserPageOwner(
@@ -198,12 +224,15 @@ export function createBrowserPageConversionActions(
       ) {
         window.api.browser.notifyActiveTabChanged({ browserPageId: pageId }).catch(() => {})
       }
+
       if (!workspace) {
         return
       }
+
       const item = Object.values(get().unifiedTabsByWorktree)
         .flat()
         .find((entry) => entry.contentType === 'browser' && entry.entityId === workspaceId)
+
       if (item) {
         get().setTabLabel(item.id, workspace.title)
       }

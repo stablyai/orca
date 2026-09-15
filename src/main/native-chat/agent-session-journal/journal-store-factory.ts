@@ -6,5 +6,6 @@ export async function openAgentSessionJournal(
 ): Promise<AgentSessionJournal> {
   const journal = new AgentSessionJournal(options)
   await journal.open()
+
   return journal
 }

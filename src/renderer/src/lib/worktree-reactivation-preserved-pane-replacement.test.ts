@@ -20,8 +20,11 @@ import {
 const initialAppStoreState = useAppStore.getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const HUSK_TAB_ID = 'husk-tab-1'
+
 const RUNTIME_ENV_ID = 'env-4f0a8c21'
+
 const RUNTIME_HOST_ID = `runtime:${encodeURIComponent(RUNTIME_ENV_ID)}` as ExecutionHostId
 
 function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
@@ -341,9 +344,11 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
 
     const replayed = useAppStore.getState()
+
     const replacementIds = (replayed.tabsByWorktree[worktree.id] ?? [])
       .map((tab) => tab.id)
       .filter((id) => id !== webTabId)
+
     expect(replacementIds).toHaveLength(1)
     expect(replayed.automaticAgentResumeClaimsByTabId[replacementIds[0]!]).toMatchObject({
       launchAgent: 'codex',

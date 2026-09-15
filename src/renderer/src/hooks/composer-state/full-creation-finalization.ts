@@ -14,10 +14,13 @@ export function finalizeFullCreation(args: {
   ) => void
 }): void {
   args.setSidebarOpen(true)
+
   if (args.persistDraft) {
     args.clearNewWorkspaceDraft()
   }
+
   args.onCreated?.()
+
   if (!args.structuredLaunchAccepted) {
     args.queueWorkspaceActivationTerminalFocus(args.worktreeId, args.activation)
   }

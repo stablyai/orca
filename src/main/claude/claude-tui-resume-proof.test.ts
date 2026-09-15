@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { proveClaudeTuiResume, readClaudeTuiSessionStartEvidence } from './claude-tui-resume-proof'
 
 const SESSION = '91deba8d-a398-4b69-a05d-35041536fe8e'
+
 const TRANSCRIPT = '/accounts/claude/projects/workspace/transcript.jsonl'
 
 function envelope(overrides: Record<string, unknown> = {}): Record<string, unknown> {

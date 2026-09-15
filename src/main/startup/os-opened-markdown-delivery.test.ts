@@ -14,6 +14,7 @@ describe('os-opened markdown delivery ownership', () => {
     // Mirrors the ipcMain.handle('ui:consumePendingMarkdownFileOpens') body.
     const pull = async (): Promise<unknown> => {
       const filePaths = state.consume()
+
       try {
         return await resolve(filePaths)
       } catch (error) {
@@ -37,7 +38,9 @@ describe('os-opened markdown delivery ownership', () => {
       if (!listenerReady) {
         return
       }
+
       const filePaths = state.consume()
+
       if (filePaths.length > 0) {
         send(filePaths)
       }

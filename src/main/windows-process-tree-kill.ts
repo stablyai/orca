@@ -23,11 +23,15 @@ export function terminateWindowsProcessTree(
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve()
   }
+
   const site = deps.site ?? 'windows-process-tree-kill'
+
   if (!admitSelfInitiatedTreeKill({ pid: rootPid, site, scope: 'win-taskkill-tree' })) {
     return Promise.resolve()
   }
+
   const run = deps.execFileImpl ?? execFile
+
   return new Promise((resolve) => {
     run(
       'taskkill',

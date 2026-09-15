@@ -63,9 +63,11 @@ function deferredBuffer(content: string): {
   resolve: () => void
 } {
   let resolve!: (value: { stdout: Buffer }) => void
+
   const promise = new Promise<{ stdout: Buffer }>((innerResolve) => {
     resolve = innerResolve
   })
+
   return {
     promise,
     resolve: () => resolve({ stdout: Buffer.from(content) })
@@ -77,9 +79,11 @@ async function waitForMockCalls(mock: ReturnType<typeof vi.fn>, calls: number): 
     if (mock.mock.calls.length >= calls) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
   }
 }
+
 describe('getDiff', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -191,15 +195,19 @@ describe('getDiff', () => {
     const result = await getDiff('/repo', 'dist/large.log', false)
 
     expect(result.kind).toBe('text')
+
     if (result.kind !== 'text') {
       throw new Error('expected text diff result')
     }
+
     expect(result.originalContent).toBe('')
     expect(result.modifiedContent).toBe('')
     expect(result.largeDiffRenderLimit?.limited).toBe(true)
+
     if (result.largeDiffRenderLimit?.limited !== true) {
       throw new Error('expected large diff render limit')
     }
+
     expect(result.largeDiffRenderLimit.reason).toBe('character-count')
     expect(result.largeDiffRenderLimit.characterCount).toBe(
       oversizedText.length + 'index-content\n'.length
@@ -218,15 +226,19 @@ describe('getDiff', () => {
     const result = await getDiff('/repo', 'dist/large-lines.log', false)
 
     expect(result.kind).toBe('text')
+
     if (result.kind !== 'text') {
       throw new Error('expected text diff result')
     }
+
     expect(result.originalContent).toBe('')
     expect(result.modifiedContent).toBe('')
     expect(result.largeDiffRenderLimit?.limited).toBe(true)
+
     if (result.largeDiffRenderLimit?.limited !== true) {
       throw new Error('expected large diff render limit')
     }
+
     expect(result.largeDiffRenderLimit.reason).toBe('line-count')
     expect(result.largeDiffRenderLimit.lineCounts?.modified).toBeGreaterThan(
       MAX_RENDERED_DIFF_LINES_PER_SIDE
@@ -272,15 +284,18 @@ describe('getDiff', () => {
       if (target === workingTreePath) {
         throw Object.assign(new Error('missing'), { code: 'ENOENT' })
       }
+
       return { isFile: () => true, size: 12 }
     })
 
     const result = await getDiff('/repo', 'assets/deleted.png', false)
 
     expect(result.kind).toBe('binary')
+
     if (result.kind !== 'binary') {
       throw new Error('expected binary diff result')
     }
+
     expect(result.modifiedDeleted).toBe(true)
     expect(result.originalContent).toBe(pngBuffer.toString('base64'))
     expect(result.modifiedContent).toBe('')
@@ -295,15 +310,18 @@ describe('getDiff', () => {
       if (target === workingTreePath) {
         throw new Error('EIO')
       }
+
       return Buffer.from('')
     })
 
     const result = await getDiff('/repo', 'assets/unreadable.png', false)
 
     expect(result.kind).toBe('binary')
+
     if (result.kind !== 'binary') {
       throw new Error('expected binary diff result')
     }
+
     expect(result.modifiedDeleted).toBeUndefined()
   })
 

@@ -13,6 +13,7 @@ export function collectMarkdownTocParentIds(items: MarkdownTocItem[]): Set<strin
   }
 
   visit(items)
+
   return parentIds
 }
 
@@ -27,11 +28,13 @@ export function collapseMarkdownTocToLevel(
       if (item.children.length > 0 && item.level >= maxExpandedLevel) {
         collapsed.add(item.id)
       }
+
       visit(item.children)
     }
   }
 
   visit(items)
+
   return collapsed
 }
 
@@ -41,11 +44,13 @@ export function pruneMarkdownTocCollapsedIds(
 ): Set<string> {
   const parentIds = collectMarkdownTocParentIds(items)
   const next = new Set<string>()
+
   for (const id of collapsedIds) {
     if (parentIds.has(id)) {
       next.add(id)
     }
   }
+
   return next
 }
 
@@ -54,11 +59,13 @@ export function toggleMarkdownTocCollapsedId(
   id: string
 ): Set<string> {
   const next = new Set(collapsedIds)
+
   if (next.has(id)) {
     next.delete(id)
   } else {
     next.add(id)
   }
+
   return next
 }
 

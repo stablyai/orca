@@ -21,6 +21,7 @@ import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-pr
 // through a real bash and uses filesystem markers — not scraped output — as the oracle.
 
 const roots: string[] = []
+
 const bashAvailable = process.platform !== 'win32' && existsSync('/bin/bash')
 
 type Fixture = {
@@ -56,10 +57,12 @@ function buildFixture(options: { aliasCodex?: boolean } = {}): Fixture {
 
   // The CLI Orca ships, at the absolute path Orca controls.
   writeStub(getBundledLauncherPath(process.platform, resourcesPath) as string, intendedMarker)
+
   // The impostor a user's own bin directory could hold under every CLI name Orca uses.
   for (const name of ['orca', 'orca-ide', 'orca-dev']) {
     writeStub(join(hijackDir, name), hijackMarker)
   }
+
   writeStub(join(codexDir, 'codex'), codexMarker)
 
   // Why: /etc/profile runs first and macOS path_helper rebuilds PATH from /etc/paths,
@@ -67,10 +70,12 @@ function buildFixture(options: { aliasCodex?: boolean } = {}): Fixture {
   const aliasLine = options.aliasCodex
     ? `alias codex='GIT_AUTHOR_NAME=Codex codex --alias-flag'\n`
     : ''
+
   writeFileSync(
     join(homePath, '.bash_profile'),
     `export PATH=${JSON.stringify(codexDir)}:"$PATH"\nexport PATH=${JSON.stringify(hijackDir)}:"$PATH"\n${aliasLine}`
   )
+
   return {
     root,
     resourcesPath,
@@ -123,6 +128,7 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
 
   it('runs the bundled CLI the resolver picked, not the impostor the profile put first', () => {
     const fixture = buildFixture()
+
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
       hooksEnabled: true,
       isPackaged: true,
@@ -130,6 +136,7 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
       userDataPath: join(fixture.root, 'user-data'),
       resourcesPath: fixture.resourcesPath
     })
+
     expect(preflightCommand).toBe(getBundledLauncherPath(process.platform, fixture.resourcesPath))
 
     launchCodexThroughRcfile(fixture, preflightCommand as string)
@@ -145,6 +152,7 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
   // the OSC 133 hooks and the shell-ready marker defined below it with it.
   it('finishes the rcfile and preserves the alias when the user aliased the name codex', () => {
     const fixture = buildFixture({ aliasCodex: true })
+
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
       hooksEnabled: true,
       isPackaged: true,

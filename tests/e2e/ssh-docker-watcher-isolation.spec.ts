@@ -52,14 +52,17 @@ async function waitForRelayWatcherProcessGroup(
     .poll(
       () => {
         snapshot = readDockerSshRelayProcessSnapshot(target)
+
         return snapshot !== null
       },
       { timeout: 30_000, message: 'remote relay/watcher process group did not appear' }
     )
     .toBe(true)
+
   if (!snapshot) {
     throw new Error('remote relay/watcher process group disappeared after polling')
   }
+
   return snapshot
 }
 
@@ -84,12 +87,15 @@ async function closeRemoteFileExplorer(page: Page): Promise<void> {
 async function enableTerminalAccessibilityDom(page: Page, ptyId: string): Promise<void> {
   await page.evaluate((ptyId) => {
     const managers = Array.from(window.__paneManagers?.values() ?? [])
+
     const pane = managers
       .flatMap((manager) => manager.getPanes?.() ?? [])
       .find((candidate) => candidate.container.dataset.ptyId === ptyId)
+
     if (!pane) {
       throw new Error(`Terminal pane ${ptyId} is unavailable`)
     }
+
     // Why: xterm normally paints to canvas. Screen-reader mode mirrors the
     // user-visible buffer into DOM rows so the survival assertion stays DOM-based.
     pane.terminal.options.screenReaderMode = true
@@ -109,6 +115,7 @@ test.describe('Docker SSH relay watcher isolation', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -134,6 +141,7 @@ test.describe('Docker SSH relay watcher isolation', () => {
         .poll(
           () => {
             afterCrash = readDockerSshRelayProcessSnapshot(target!)
+
             return Boolean(
               afterCrash &&
               afterCrash.relayPid === beforeCrash.relayPid &&
@@ -160,9 +168,11 @@ test.describe('Docker SSH relay watcher isolation', () => {
         `printf '%s' ${shellQuote(terminalMarkerBase64)} | base64 -d && printf '\\n' && ` +
           `printf '%s\\n' 'after watcher crash' > ${shellQuote(remoteRepoFile(afterFile))}`
       )
+
       const terminalDom = orcaPage.locator(
         `[data-pty-id=${JSON.stringify(ptyId)}] .xterm-accessibility-tree`
       )
+
       await expect(terminalDom).toContainText(terminalMarker, { timeout: 30_000 })
 
       const finalProcesses = await waitForRelayWatcherProcessGroup(target)
@@ -190,6 +200,7 @@ test.describe('Docker SSH relay watcher isolation', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)

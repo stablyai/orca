@@ -3,8 +3,10 @@ import type * as CodexAppServerSession from './codex-app-server-session'
 import type { CodexAppServerRpc } from './codex-app-server-session'
 
 const requestRpcMock = vi.hoisted(() => vi.fn<CodexAppServerRpc['request']>())
+
 vi.mock('./codex-app-server-session', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexAppServerSession>()
+
   return {
     ...actual,
     runCodexAppServerSession: vi.fn((_invocation, run) =>
@@ -16,9 +18,13 @@ vi.mock('./codex-app-server-session', async (importOriginal) => {
 import { runCodexUserHookTrustRebaseSession } from './codex-user-hook-trust-rebase-client'
 
 const invocation = { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 1000 }
+
 const oldTrusted = '/home/a/.codex/hooks.json:stop:1:0'
+
 const oldUntrusted = '/home/a/.codex/hooks.json:stop:2:0'
+
 const newTrusted = '/home/a/.codex/hooks.json:stop:0:0'
+
 const newUntrusted = '/home/a/.codex/hooks.json:stop:1:0'
 
 function listing(key: string, command: string, trustStatus: string, enabled = true) {
@@ -39,6 +45,7 @@ describe('Codex user hook trust rebase RPCs', () => {
         listing(oldUntrusted, 'untrusted-user', 'untrusted', false)
       ])
     )
+
     const result = await runCodexUserHookTrustRebaseSession({
       operation: 'inspect-user-hook-trust',
       invocation,
@@ -64,10 +71,12 @@ describe('Codex user hook trust rebase RPCs', () => {
       listing(newTrusted, 'trusted-user', 'untrusted'),
       listing(newUntrusted, 'untrusted-user', 'trusted')
     ])
+
     const verified = listResult([
       listing(newTrusted, 'trusted-user', 'trusted'),
       listing(newUntrusted, 'untrusted-user', 'untrusted', false)
     ])
+
     requestRpcMock
       .mockResolvedValueOnce(postMutation)
       .mockResolvedValueOnce({ status: 'ok' })

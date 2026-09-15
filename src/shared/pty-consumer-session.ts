@@ -68,9 +68,11 @@ export class PtyConsumerSession {
     validateHello(hello)
     assertNonEmptyString(authentication.connectionId, 'connectionId')
     assertNonEmptyString(authentication.principal, 'principal')
+
     if (!authentication.authenticated) {
       throw new Error('PTY consumer authentication required')
     }
+
     this.expireOwner()
 
     // Why even an identical repeat is rejected: the two responses settle their publications
@@ -81,6 +83,7 @@ export class PtyConsumerSession {
     }
 
     const owner = this.selectOwner(hello, authentication)
+
     const grant = Object.freeze({
       protocolVersion: PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
       serverBuildId: this.options.serverBuildId,
@@ -91,6 +94,7 @@ export class PtyConsumerSession {
         : {}),
       ...intersectPtyConsumerCapabilities(hello, this.options.outputFlowControl)
     })
+
     const client: ClientRecord = {
       principal: authentication.principal,
       clientInstanceId: hello.clientInstanceId,
@@ -98,10 +102,13 @@ export class PtyConsumerSession {
       state: 'pending',
       publicationState: 'pending'
     }
+
     this.clients.set(authentication.connectionId, client)
+
     if (owner) {
       this.owner = owner
     }
+
     return this.admissionFor(client, this.displacedOwnerFor(owner))
   }
 
@@ -109,10 +116,13 @@ export class PtyConsumerSession {
   // that cannot prove the peer's transport ended gets the answer that costs a live owner nothing.
   close(connectionId: string, cause: PtyConsumerCloseCause = 'local'): void {
     const client = this.clients.get(connectionId)
+
     if (!client) {
       return
     }
+
     this.clients.delete(connectionId)
+
     if (this.owner?.connectionId !== connectionId) {
       // Why: a pending replacement can still roll back onto the owner it is displacing; restoring an
       // 'active' record whose connection has since closed would wedge an owner that can never expire.
@@ -130,12 +140,16 @@ export class PtyConsumerSession {
           }
         }
       }
+
       return
     }
+
     if (this.owner.state === 'pending') {
       this.owner = this.owner.replaces ?? null
+
       return
     }
+
     this.owner = {
       ...this.owner,
       state: 'disconnected',
@@ -150,6 +164,7 @@ export class PtyConsumerSession {
 
   activeGrant(connectionId: string): Readonly<PtyConsumerSessionGrant> | null {
     const client = this.clients.get(connectionId)
+
     return client?.state === 'active' ? client.grant : null
   }
 
@@ -159,6 +174,7 @@ export class PtyConsumerSession {
    *  "this PTY belongs to you" attestation evidence rather than an echo of what a caller claimed. */
   activeClientInstanceId(connectionId: string): string | null {
     const client = this.clients.get(connectionId)
+
     return client?.state === 'active' ? client.clientInstanceId : null
   }
 
@@ -173,12 +189,16 @@ export class PtyConsumerSession {
         if (client.publicationState !== 'pending') {
           return
         }
+
         client.publicationState = 'committed'
+
         if (client.state !== 'pending') {
           return
         }
+
         client.state = 'active'
         const owner = this.owner
+
         if (owner?.connectionId === this.connectionIdFor(client) && owner.state === 'pending') {
           this.retireDisplacedOwner(owner.replaces)
           this.owner = { ...owner, state: 'active', replaces: undefined }
@@ -188,12 +208,16 @@ export class PtyConsumerSession {
         if (client.publicationState !== 'pending') {
           return
         }
+
         client.publicationState = 'rolled-back'
+
         if (client.state !== 'pending') {
           return
         }
+
         const connectionId = this.connectionIdFor(client)
         this.clients.delete(connectionId)
+
         if (this.owner?.connectionId === connectionId && this.owner.state === 'pending') {
           this.owner = this.owner.replaces ?? null
         }
@@ -207,6 +231,7 @@ export class PtyConsumerSession {
         return connectionId
       }
     }
+
     return ''
   }
 
@@ -217,13 +242,16 @@ export class PtyConsumerSession {
     if (hello.requestedRole !== 'session-owner' || !authentication.allowSessionOwner) {
       return null
     }
+
     const current = this.owner
+
     // Why resume proof for a vacant record is not an error: the relay simply no longer has the record
     // the client is naming. Minting a fresh claim here resolves it in one round trip, and `resumed:
     // false` tells the client its checkpoints are void without making it delete its identity first.
     if (!current) {
       return this.newOwner(hello, authentication, null)
     }
+
     if (!matchesPtyConsumerOwnerClaim(hello, authentication, current)) {
       refuseHeldPtyConsumerOwner(current, {
         ownerGraceMs: this.ownerGraceMs,
@@ -234,7 +262,9 @@ export class PtyConsumerSession {
         }
       })
     }
+
     assertPtyConsumerOwnerRecovery(hello, authentication, current)
+
     // Why an active owner is displaced rather than refused: the resume proof matched this owner's
     // generation, lease, client instance, and principal on a *different* transport, so the requester is
     // the same logical owner reconnecting. Waiting for the incumbent's socket to close is unbounded —
@@ -246,13 +276,17 @@ export class PtyConsumerSession {
     owner: OwnerRecord | null
   ): Readonly<PtyConsumerDisplacedOwner> | undefined {
     const replaced = owner?.replaces
+
     if (replaced?.state !== 'active') {
       return undefined
     }
+
     const client = this.clients.get(replaced.connectionId)
+
     if (client?.state !== 'active') {
       return undefined
     }
+
     return Object.freeze({ connectionId: replaced.connectionId, grant: client.grant })
   }
 
@@ -262,7 +296,9 @@ export class PtyConsumerSession {
     if (replaced?.state !== 'active') {
       return
     }
+
     const client = this.clients.get(replaced.connectionId)
+
     if (client?.state === 'active') {
       client.state = 'displaced'
     }
@@ -275,6 +311,7 @@ export class PtyConsumerSession {
   ): OwnerRecord {
     const lease = replaces?.lease ?? this.createLease()
     assertNonEmptyString(lease, 'ownerLease')
+
     return {
       connectionId: authentication.connectionId,
       principal: authentication.principal,

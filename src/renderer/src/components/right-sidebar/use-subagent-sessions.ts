@@ -26,6 +26,7 @@ export function useSubagentSessions(
       })
       .then((result) => {
         clearTimeout(loadingTimer)
+
         if (!cancelled) {
           setState({
             status: result.issues.some((issue) => issue.kind !== 'notice') ? 'error' : 'loaded',
@@ -35,10 +36,12 @@ export function useSubagentSessions(
       })
       .catch(() => {
         clearTimeout(loadingTimer)
+
         if (!cancelled) {
           setState((previous) => ({ ...previous, status: 'error' }))
         }
       })
+
     return () => {
       cancelled = true
       clearTimeout(loadingTimer)
@@ -51,6 +54,7 @@ export function useSubagentSessions(
     session.modifiedAt,
     attempt
   ])
+
   return {
     ...state,
     showLoading: showLoading && state.status === 'loading',

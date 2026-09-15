@@ -9,6 +9,7 @@ const tempRoots: string[] = []
 async function createWorktree(): Promise<string> {
   const worktreePath = await mkdtemp(path.join(tmpdir(), 'orca-discard-safety-'))
   tempRoots.push(worktreePath)
+
   return worktreePath
 }
 

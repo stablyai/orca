@@ -25,6 +25,7 @@ function listedEfforts(row: Record<string, unknown>): AgentSessionOptionChoice[]
   return row.supportsEffort === true && Array.isArray(row.supportedEffortLevels)
     ? row.supportedEffortLevels.flatMap((value) => {
         const effort = text(value)
+
         return effort ? [{ value: effort, label: effortLabel(effort) }] : []
       })
     : []
@@ -32,22 +33,29 @@ function listedEfforts(row: Record<string, unknown>): AgentSessionOptionChoice[]
 
 export function listedModels(value: unknown): ListedModel[] {
   const response = record(value)
+
   const rows = Array.isArray(response?.models)
     ? response.models.map(record).filter((row): row is Record<string, unknown> => row !== null)
     : []
+
   const defaultRow = rows.find((row) => text(row.value) === 'default')
   const defaultResolvedModel = text(defaultRow?.resolvedModel)
   const seen = new Set<string>()
+
   return rows.flatMap((row) => {
     const id = text(row.value)
+
     if (!id || id === 'default' || seen.has(id)) {
       return []
     }
+
     seen.add(id)
     const resolvedModel = text(row.resolvedModel)
     const description = text(row.description)
+
     const supportsFastMode =
       typeof row.supportsFastMode === 'boolean' ? row.supportsFastMode : undefined
+
     return [
       {
         id,
@@ -80,6 +88,7 @@ export function matchListedModel(
 
 function seedEfforts(model: CatalogModel): AgentSessionOptionChoice[] {
   const effort = model.options.find((option) => option.id === 'effort')
+
   return effort?.kind.type === 'select' ? effort.kind.choices : []
 }
 
@@ -103,6 +112,7 @@ export function currentModelId(models: ListedModel[], reportedModel: string | un
           (reportedModel === 'default' && model.isDefault)
       )
     : undefined
+
   return (
     matched?.id ?? reportedModel ?? models.find((model) => model.isDefault)?.id ?? models[0]!.id
   )

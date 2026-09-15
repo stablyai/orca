@@ -54,45 +54,55 @@ async function openLegacyWorktreeSurface(
   isCancelled: () => boolean
 ): Promise<StructuredAgentLegacyFallbackResult> {
   const unchanged = { activation: args.activation, primaryTabId: args.primaryTabId }
+
   // Why cancel first: an abandoned creation is being torn down, so its worktree must not be marked
   // for a rename that will never happen.
   if (isCancelled()) {
     return unchanged
   }
+
   if (args.request.pendingFirstAgentMessageRename) {
     await useAppStore
       .getState()
       .updateWorktreeMeta(args.worktreeId, { pendingFirstAgentMessageRename: true })
       .catch(() => undefined)
   }
+
   if (isCancelled()) {
     return unchanged
   }
+
   const worktree = useAppStore
     .getState()
     .allWorktrees?.()
     .find((candidate) => candidate.id === args.worktreeId)
+
   if (args.request.agent && worktree?.path) {
     const repoConnectionId = useAppStore
       .getState()
       .repos.find((repo) => repo.id === args.request.repoId)?.connectionId
+
     await preflightAgentTrust({
       agent: args.request.agent,
       workspacePath: worktree.path,
       connectionId: repoConnectionId
     })
   }
+
   if (isCancelled()) {
     return unchanged
   }
+
   if (args.shouldActivateOnCompletion) {
     const activation = activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
       createNewTerminalForStartup: true,
       ...(args.fallbackStartupOpt ? { startup: args.fallbackStartupOpt } : {})
     })
+
     return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
   }
+
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     args.worktreeId,
@@ -102,11 +112,13 @@ async function openLegacyWorktreeSurface(
     undefined,
     { activateCreatedTabs: false, createNewTerminalForStartup: true }
   )
+
   ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
     startup: args.fallbackStartupOpt,
     agent: args.request.agent,
     activate: false
   })
+
   return { primaryTabId }
 }
 
@@ -116,15 +128,20 @@ export async function launchStructuredWorktreeSession(
   let { activation, primaryTabId } = args
   const settled = { accepted: true, cancelled: false, visibilityUnknown: false }
   const { agent } = args.request
+
   if (!isAgentSessionHandleProvider(agent)) {
     return { ...settled, activation, primaryTabId }
   }
+
   const isCancelled = (): boolean =>
     !useAppStore.getState().pendingWorktreeCreations[args.creationId]
+
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
+
   let refused = false
+
   // Why: the composer decided route and delivery mode before the worktree existed, and the request
   // carries that verdict in renderer memory for the life of the create; re-entering with it is what
   // keeps a retry from re-resolving against a host that has changed since.
@@ -138,25 +155,31 @@ export async function launchStructuredWorktreeSession(
           ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
         })
   })
+
   const abandoned = new AbortController()
+
   const unsubscribe = useAppStore.subscribe((state) => {
     if (!state.pendingWorktreeCreations[args.creationId]) {
       abandoned.abort()
     }
   })
+
   let settlement: Awaited<ReturnType<typeof plan.launch>>
+
   try {
     settlement = await plan.launch(
       {
         signal: abandoned.signal,
         legacyFallback: () => {
           refused = true
+
           return openLegacyWorktreeSurface(args, isCancelled)
         },
         onStructuredReady: (sessionId) => {
           if (!args.shouldActivateOnCompletion) {
             return
           }
+
           // Why: chat selection requires its workspace to be active.
           if (!activation) {
             activation = activateAndRevealWorktree(args.worktreeId, {
@@ -164,6 +187,7 @@ export async function launchStructuredWorktreeSession(
             })
             primaryTabId = activation === false ? null : activation.primaryTabId
           }
+
           activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
         }
       },
@@ -176,18 +200,22 @@ export async function launchStructuredWorktreeSession(
   } finally {
     unsubscribe()
   }
+
   if (!settlement) {
     return { ...settled, activation, primaryTabId }
   }
+
   switch (settlement.kind) {
     case 'cancelled': {
       // Why: a refusal means no session exists on the host, so there is nothing to retire.
       if (!refused) {
         await retireCancelledStructuredSession(args.worktreeId, settlement.sessionId)
       }
+
       // Why: a fallback that already opened a terminal owns the surface, cancel or not; reporting
       // the pre-launch tab would hand the caller a workspace the user cannot see the agent in.
       const surface = settlement.fallback
+
       return {
         ...settled,
         accepted: !refused,
@@ -196,6 +224,7 @@ export async function launchStructuredWorktreeSession(
         primaryTabId: surface ? surface.primaryTabId : primaryTabId
       }
     }
+
     case 'refused-then-legacy':
       return {
         ...settled,

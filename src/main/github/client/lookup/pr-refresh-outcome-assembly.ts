@@ -30,6 +30,7 @@ export function assemblePRRefreshFoundOutcome(args: {
     headDivergedFromMergedPRAtOid,
     conflictSummary
   } = args
+
   return {
     kind: 'found',
     fetchedAt: Date.now(),

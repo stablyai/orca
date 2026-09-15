@@ -175,6 +175,7 @@ function createWindowsLauncherCompileCommand(
   ]
     .map(powerShellNativeArg)
     .join(' ')
+
   return powerShellCommand(
     [
       `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(binDir)}`,
@@ -201,6 +202,7 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
     const sourcePath = joinRemotePath(env.hostPlatform, env.binDir, sourceFileName)
     const legacyShimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.cmd')
     const binDir = joinRemotePath(env.hostPlatform, env.binDir)
+
     return {
       launcherPath,
       files: [{ path: sourcePath, contents: WINDOWS_REMOTE_CLI_LAUNCHER_SOURCE }],
@@ -220,6 +222,7 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
   }
 
   const launcherPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca')
+
   return {
     launcherPath,
     files: [

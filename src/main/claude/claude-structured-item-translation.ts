@@ -21,6 +21,7 @@ export type ClaudeMessageEnvelope = {
 }
 
 export type ClaudeToolUse = { id: string; name: string; input: unknown }
+
 export type ClaudeToolResult = { toolUseId: string; output: string; failed: boolean }
 
 export function claudeRecord(value: unknown): Record<string, unknown> | null {
@@ -39,13 +40,16 @@ export function readClaudeMessageEnvelope(
   if (frame.type !== 'assistant' && frame.type !== 'user') {
     return null
   }
+
   const message = claudeRecord(frame.message)
   const sessionId = claudeText(frame.session_id)
   const uuid = claudeText(frame.uuid)
   const role = message?.role
+
   const isInjectedUserTurn =
     frame.type === 'user' &&
     (frame.isMeta === true || frame.isSynthetic === true || frame.isCompactSummary === true)
+
   return sessionId && uuid && (role === 'assistant' || role === 'user')
     ? {
         sessionId,
@@ -64,7 +68,9 @@ function messageContent(content: unknown): unknown[] {
   if (Array.isArray(content)) {
     return content
   }
+
   const text = claudeText(content)
+
   return text ? [{ type: 'text', text }] : []
 }
 
@@ -80,6 +86,7 @@ export function claudeOutputEnvelope(envelope: ClaudeMessageEnvelope): ClaudeMes
   if (envelope.role !== 'user') {
     return envelope
   }
+
   return {
     ...envelope,
     content: envelope.content.filter((part) => claudeRecord(part)?.type === 'tool_result')
@@ -88,24 +95,30 @@ export function claudeOutputEnvelope(envelope: ClaudeMessageEnvelope): ClaudeMes
 
 function messageBlocks(envelope: ClaudeMessageEnvelope): NativeChatBlock[] {
   const blocks: NativeChatBlock[] = []
+
   for (const value of envelope.content) {
     const part = claudeRecord(value)
     const text = claudeText(part?.text)
+
     if (part?.type === 'text' && text) {
       blocks.push({ type: 'text', text })
       continue
     }
+
     const source = claudeRecord(part?.source)
     const url = claudeText(source?.url)
+
     if (part?.type === 'image' && source?.type === 'url' && url) {
       blocks.push({ type: 'image-ref', url })
     }
   }
+
   return blocks
 }
 
 export function claudeMessageBody(envelope: ClaudeMessageEnvelope): AgentJournalMessageItem | null {
   const blocks = messageBlocks(envelope)
+
   return blocks.length > 0 ? { kind: 'message', role: envelope.role, blocks } : null
 }
 
@@ -113,8 +126,10 @@ export function claudeHasReplayContent(envelope: ClaudeMessageEnvelope): boolean
   if (envelope.isInjectedUserTurn) {
     return false
   }
+
   return envelope.content.some((value) => {
     const part = claudeRecord(value)
+
     return part !== null && part.type !== 'tool_result'
   })
 }
@@ -124,6 +139,7 @@ export function claudeToolUses(envelope: ClaudeMessageEnvelope): ClaudeToolUse[]
     const part = claudeRecord(value)
     const id = claudeText(part?.id)
     const name = claudeText(part?.name)
+
     return part?.type === 'tool_use' && id && name ? [{ id, name, input: part.input ?? null }] : []
   })
 }
@@ -132,15 +148,19 @@ function resultText(value: unknown): string {
   if (typeof value === 'string') {
     return value
   }
+
   if (!Array.isArray(value)) {
     return value === undefined ? '' : JSON.stringify(value)
   }
+
   return value
     .flatMap((entry) => {
       if (typeof entry === 'string') {
         return [entry]
       }
+
       const part = claudeRecord(entry)
+
       return part?.type === 'text' && typeof part.text === 'string' ? [part.text] : []
     })
     .join('\n')
@@ -150,6 +170,7 @@ export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolRe
   return envelope.content.flatMap((value) => {
     const part = claudeRecord(value)
     const toolUseId = claudeText(part?.tool_use_id)
+
     return part?.type === 'tool_result' && toolUseId
       ? [
           {
@@ -166,8 +187,10 @@ export function claudeThinkingText(envelope: ClaudeMessageEnvelope): string | nu
   const parts = envelope.content.flatMap((value) => {
     const part = claudeRecord(value)
     const thinking = claudeText(part?.thinking)
+
     return part?.type === 'thinking' && thinking ? [thinking] : []
   })
+
   return parts.length > 0 ? parts.join('\n') : null
 }
 

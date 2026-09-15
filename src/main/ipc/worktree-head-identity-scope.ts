@@ -68,15 +68,19 @@ export function mergeHeadIdentityScopes(
   if (first.all) {
     return first
   }
+
   if (second.all) {
     return second
   }
+
   if (second.entryNames.size === 0 && !second.listing && !second.primary) {
     return first
   }
+
   if (first.entryNames.size === 0 && !first.listing && !first.primary) {
     return second
   }
+
   return {
     listing: first.listing || second.listing,
     primary: first.primary || second.primary,

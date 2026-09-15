@@ -9,24 +9,29 @@ type MenuItemProps = {
 }
 
 const menuItems = vi.hoisted(() => ({ values: [] as MenuItemProps[] }))
+
 const requestManualPark = vi.hoisted(() => vi.fn())
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
+
   const passthrough = ({ children }: { children?: ReactNode }) =>
     React_.createElement(React_.Fragment, null, children)
+
   return {
     DropdownMenuSub: passthrough,
     DropdownMenuSubContent: passthrough,
     DropdownMenuSubTrigger: passthrough,
     DropdownMenuItem: (props: MenuItemProps) => {
       menuItems.values.push(props)
+
       return React_.createElement(React_.Fragment, null, props.children)
     }
   }
 })
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('@/lib/manual-terminal-worktree-parking', () => ({
   requestManualTerminalWorktreePark: requestManualPark
 }))

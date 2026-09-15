@@ -6,12 +6,16 @@ import type {
 } from './parent-pr-checks-row-types'
 
 type ReviewCacheState = Pick<AppState, 'checksCache' | 'hostedReviewCache' | 'prCache'>
+
 type ReviewCacheName = keyof ReviewCacheState
+
 type ProjectionInputs = Omit<
   BuildParentPrChecksRowsArgs,
   'checksCache' | 'hostedReviewCache' | 'prCache'
 >
+
 type ProjectionBuilder = (args: BuildParentPrChecksRowsArgs) => ParentPrChecksProjection
+
 type CacheDependency = {
   cacheName: ReviewCacheName
   key: string
@@ -26,9 +30,11 @@ function trackCacheReads<K extends ReviewCacheName>(
   return new Proxy(state[cacheName], {
     get: (target, property, receiver) => {
       const value = Reflect.get(target, property, receiver)
+
       if (typeof property === 'string') {
         dependencies.push({ cacheName, key: property, value })
       }
+
       return value
     }
   })
@@ -71,14 +77,17 @@ export function createParentPrChecksProjectionSelector(
       if (cacheReferencesAreCurrent(state, cached.cacheReferences)) {
         return cached.projection
       }
+
       if (dependenciesAreCurrent(state, cached.cacheReferences, cached.dependencies)) {
         // Why: adopting unrelated replacement maps keeps later store notifications O(1).
         cached.cacheReferences = state
+
         return cached.projection
       }
     }
 
     const dependencies: CacheDependency[] = []
+
     // Why: global provider refreshes replace these maps frequently; track only
     // cache keys the attached-worktree projection actually reads.
     const projection = buildProjection({
@@ -87,7 +96,9 @@ export function createParentPrChecksProjectionSelector(
       prCache: trackCacheReads(state, 'prCache', dependencies),
       checksCache: trackCacheReads(state, 'checksCache', dependencies)
     })
+
     cached = { cacheReferences: state, dependencies, projection }
+
     return projection
   }
 }

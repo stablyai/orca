@@ -74,6 +74,7 @@ export function hostScopeDescriptor(
   if (entry.querySupport === 'scoped') {
     return null
   }
+
   if (entry.querySupport === 'incompatible') {
     return {
       id: 'query-incompatible',
@@ -89,6 +90,7 @@ export function hostScopeDescriptor(
       isDefault: false
     }
   }
+
   // An unscoped contract with no recorded cause can only be the authority's own.
   return scopeGapDescriptor(entry.scopeGap ?? 'authority-unscoped')
 }

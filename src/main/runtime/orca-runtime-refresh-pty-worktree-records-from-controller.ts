@@ -14,6 +14,7 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController extends Orca
       targetWorktreeId,
       deadline
     )
+
     return inventory ? new Set(inventory.livePtyIds) : null
   }
 }

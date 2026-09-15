@@ -27,9 +27,11 @@ export function extractHiddenStartupRendererQueryData(
 
   while (offset < input.length) {
     const candidateIndex = input.indexOf('\x1b', offset)
+
     if (candidateIndex === -1) {
       break
     }
+
     if (candidateIndex + 1 >= input.length) {
       return {
         statelessQueryData,
@@ -38,8 +40,10 @@ export function extractHiddenStartupRendererQueryData(
         pending: input.slice(candidateIndex)
       }
     }
+
     if (input.startsWith('\x1b[', candidateIndex)) {
       const finalByteIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
+
       if (finalByteIndex === -1) {
         return {
           statelessQueryData,
@@ -51,18 +55,22 @@ export function extractHiddenStartupRendererQueryData(
           )
         }
       }
+
       const sequence = input.slice(candidateIndex, finalByteIndex + 1)
+
       if (isStatelessRendererReplyCsiQuery(sequence)) {
         statelessQueryData += sequence
       } else if (isStatefulRendererReplyCsiQuery(sequence)) {
         statefulQueryData += sequence
       }
+
       offset = finalByteIndex + 1
       continue
     }
 
     if (input.startsWith('\x1b]', candidateIndex)) {
       const query = parseTerminalOscColorQuery(input, candidateIndex)
+
       if (query.kind === 'partial') {
         return {
           statelessQueryData,
@@ -74,10 +82,12 @@ export function extractHiddenStartupRendererQueryData(
           )
         }
       }
+
       if (query.kind === 'none') {
         offset = candidateIndex + 2
         continue
       }
+
       oscColorQueryData += input.slice(candidateIndex, query.endIndex)
       offset = query.endIndex
       continue
@@ -103,43 +113,57 @@ export function extractHiddenStartupRendererQueryData(
 
 export function containsCsiRendererQuery(data: string): boolean {
   let offset = data.indexOf('\x1b[')
+
   while (offset !== -1) {
     const finalByteIndex = findCsiFinalByteIndex(data, offset + 2)
+
     if (finalByteIndex === -1) {
       return false
     }
+
     const sequence = data.slice(offset, finalByteIndex + 1)
+
     if (isStatelessRendererReplyCsiQuery(sequence) || isStatefulRendererReplyCsiQuery(sequence)) {
       return true
     }
+
     offset = data.indexOf('\x1b[', finalByteIndex + 1)
   }
+
   return false
 }
 
 export function containsStatefulRendererQuery(data: string): boolean {
   let offset = data.indexOf('\x1b[')
+
   while (offset !== -1) {
     const finalByteIndex = findCsiFinalByteIndex(data, offset + 2)
+
     if (finalByteIndex === -1) {
       return false
     }
+
     const sequence = data.slice(offset, finalByteIndex + 1)
+
     if (isStatefulRendererReplyCsiQuery(sequence)) {
       return true
     }
+
     offset = data.indexOf('\x1b[', finalByteIndex + 1)
   }
+
   return false
 }
 
 export function findCsiFinalByteIndex(data: string, offset: number): number {
   for (let index = offset; index < data.length; index++) {
     const code = data.charCodeAt(index)
+
     if (code >= 0x40 && code <= 0x7e) {
       return index
     }
   }
+
   return -1
 }
 
@@ -147,6 +171,7 @@ export function isStatelessRendererReplyCsiQuery(sequence: string): boolean {
   if (sequence.endsWith('c')) {
     return true
   }
+
   return (
     sequence === '\x1b[5n' ||
     sequence === '\x1b[>q' ||

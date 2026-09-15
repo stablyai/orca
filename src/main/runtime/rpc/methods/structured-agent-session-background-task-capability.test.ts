@@ -16,6 +16,7 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 
 beforeEach(installStructuredHostStub)
+
 afterEach(clearStructuredHostStub)
 
 const TASKS: AgentSessionBackgroundTaskState = {
@@ -23,10 +24,12 @@ const TASKS: AgentSessionBackgroundTaskState = {
   supportsStopAll: false,
   tasks: [{ id: 'child', kind: 'agent' }]
 }
+
 const CURRENT_CLIENT = {
   ...STRUCTURED_CLIENT,
   clientCapabilities: remoteRuntimeClientCapabilities(STRUCTURED_CLIENT.clientCapabilities)
 }
+
 /** Understands a stopless roster, but predates per-row stoppability. */
 const STOP_ONLY_CLIENT = {
   ...STRUCTURED_CLIENT,
@@ -34,8 +37,11 @@ const STOP_ONLY_CLIENT = {
     (capability) => capability !== AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY
   )
 }
+
 const FOREGROUND_ROW = { id: 'fore', kind: 'agent', stoppable: false } as const
+
 const BACKGROUNDED_ROW = { id: 'back', kind: 'agent' } as const
+
 const MIXED_ROWS: AgentSessionBackgroundTaskState = {
   state: 'monitoring',
   supportsTaskStop: true,
@@ -66,6 +72,7 @@ describe('background-task stop capability at the RPC boundary', () => {
       hostCalls.hold = vi.fn(async () => undefined)
       hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
         const base = { sessionId: SESSION, fence: 1, backgroundTasks: TASKS }
+
         if (type === 'batch') {
           input.emit({
             ...base,
@@ -89,14 +96,17 @@ describe('background-task stop capability at the RPC boundary', () => {
             hasOlder: false,
             hasNewer: false
           }
+
           input.emit(
             type === 'snapshot'
               ? { ...base, type, page }
               : { ...base, type, page, reset: 'epoch_changed' }
           )
         }
+
         return () => {}
       })
+
       for (const [client, expected] of [
         [STRUCTURED_CLIENT, null],
         [CURRENT_CLIENT, TASKS]
@@ -106,6 +116,7 @@ describe('background-task stop capability at the RPC boundary', () => {
           result: { type, backgroundTasks: expected }
         })
       }
+
       expect(TASKS.supportsStopAll).toBe(false)
     }
   )
@@ -146,6 +157,7 @@ describe('background-task stop capability at the RPC boundary', () => {
       supportsTaskStop: true,
       tasks: [{ id: 'fore', kind: 'agent' as const, stoppable: false }]
     }
+
     hostCalls.history.mockReturnValue({
       ok: true,
       page: { items: [], backgroundTasks: foregroundOnly }
@@ -165,6 +177,7 @@ describe('background-task stop capability at the RPC boundary', () => {
   it('preserves legacy stoppable state for both readers', async () => {
     const stoppable = { state: 'monitoring', tasks: TASKS.tasks }
     hostCalls.history.mockReturnValue({ ok: true, page: { items: [], backgroundTasks: stoppable } })
+
     for (const client of [STRUCTURED_CLIENT, CURRENT_CLIENT]) {
       expect(
         await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, client)

@@ -16,6 +16,7 @@ const contentProbe = vi.hoisted(() => ({
 
 vi.mock('@/components/quick-open-file-list', async () => {
   const React = await import('react')
+
   return {
     useRuntimeFileListForWorktree: ({ enabled }: { enabled: boolean }) => {
       contentProbe.enabled(enabled)
@@ -23,11 +24,13 @@ vi.mock('@/components/quick-open-file-list', async () => {
       React.useEffect(() => {
         contentProbe.subscriptions()
         const unsubscribe = useAppStore.subscribe(() => contentProbe.storeNotifications())
+
         return () => {
           contentProbe.unsubscriptions()
           unsubscribe()
         }
       }, [])
+
       return { files: [], loading: false, loadError: null, truncated: false }
     }
   }
@@ -53,7 +56,9 @@ vi.mock('@/components/ui/command', () => {
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 let testContainer: HTMLDivElement
+
 let testRoot: Root
 
 async function flushEffects(): Promise<void> {

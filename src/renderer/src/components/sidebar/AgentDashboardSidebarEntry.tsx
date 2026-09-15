@@ -35,9 +35,11 @@ function DashboardBucketCounts({
   const active = DASHBOARD_BUCKET_ORDER.filter(
     (bucket) => counts[bucket] > 0 && (bucket !== 'idle' || showIdle)
   )
+
   if (active.length === 0) {
     return null
   }
+
   return (
     <span className="flex items-center gap-1.5">
       {active.map((bucket) => (

@@ -45,15 +45,18 @@ describe('runner script builders', () => {
       ).toBe(true)
       expect(result).toContain('call pnpm install\r\nif errorlevel 1 exit /b %errorlevel%')
       expect(result).toContain('call npm run build\r\nif errorlevel 1 exit /b %errorlevel%')
+
       const usedLineSplit = splitSpy.mock.calls.some(
         ([separator]) =>
           (typeof separator === 'string' && separator === '\n') ||
           (separator instanceof RegExp && separator.source === '\\r?\\n')
       )
+
       const usedNewlineReplace = replaceSpy.mock.calls.some(
         ([pattern]) =>
           pattern instanceof RegExp && (pattern.source === '\\r?\\n' || pattern.source === '\\r\\n')
       )
+
       expect(usedLineSplit).toBe(false)
       expect(usedNewlineReplace).toBe(false)
     } finally {
@@ -72,9 +75,11 @@ describe('runner script builders', () => {
 
       expect(result.startsWith('#!/usr/bin/env bash\nset -e\necho setup\n')).toBe(true)
       expect(result.endsWith('echo done\n')).toBe(true)
+
       const usedCrlfReplace = replaceSpy.mock.calls.some(
         ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
       )
+
       expect(usedCrlfReplace).toBe(false)
     } finally {
       replaceSpy.mockRestore()
@@ -103,6 +108,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -143,6 +149,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -182,6 +189,7 @@ describe('createSetupRunnerScript', () => {
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const { buildSetupRunnerCommand } = await import('../shared/setup-runner-command')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -243,6 +251,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',

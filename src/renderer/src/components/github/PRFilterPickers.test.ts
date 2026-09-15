@@ -26,6 +26,7 @@ describe('filterPullRequestPickerOptions', () => {
 
   it('rejects oversized pasted queries before reading picker option text', () => {
     const oversizedQuery = 'secret-pr-picker-filter'.repeat(PULL_REQUEST_PICKER_QUERY_MAX_BYTES)
+
     const throwingOptions = [
       {
         key: 'secret',

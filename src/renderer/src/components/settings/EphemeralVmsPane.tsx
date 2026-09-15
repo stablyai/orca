@@ -54,6 +54,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         EPHEMERAL_VMS_SKILL_INSTALL_COMMAND,
         activeSkillRuntime.agentRuntime
       )
+
   const updateCommand = activeSkillRuntime.installDisabledReason
     ? EPHEMERAL_VMS_SKILL_UPDATE_COMMAND
     : buildSkillCommandForRuntime(
@@ -73,11 +74,14 @@ export function EphemeralVmsPane(): React.JSX.Element {
 
   const refresh = useCallback(async (): Promise<void> => {
     const generation = ++refreshGenerationRef.current
+
     if (mountedRef.current) {
       setIsLoading(true)
     }
+
     try {
       const nextCatalog = await window.api.ephemeralVm.listRecipeCatalog()
+
       if (mountedRef.current && generation === refreshGenerationRef.current) {
         setCatalog(nextCatalog)
       }
@@ -107,6 +111,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
     if (!window.api.plugins?.onChanged) {
       return
     }
+
     return window.api.plugins.onChanged((event) => {
       if (event?.contentPacksChanged ?? true) {
         void refresh()

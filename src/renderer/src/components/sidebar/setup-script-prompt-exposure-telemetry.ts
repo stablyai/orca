@@ -9,6 +9,7 @@ export function trackSetupScriptPromptExposure(input: {
   trackedPromptKeys: Set<string>
 }): void {
   const { promptState, repoHostIdentity, repoId, trackedPromptKeys } = input
+
   if (
     promptState?.repoId !== repoId ||
     promptState.repoHostIdentity !== repoHostIdentity ||
@@ -22,6 +23,7 @@ export function trackSetupScriptPromptExposure(input: {
     candidate: promptState.candidate,
     hasSharedHooks: promptState.hasSharedHooks
   })
+
   // Why: React may re-render the sidebar often; this event should represent
   // a distinct prompt exposure for this repo/source, not render churn.
   const promptKey = [
@@ -32,6 +34,7 @@ export function trackSetupScriptPromptExposure(input: {
     telemetry.unsupported_field_count_bucket,
     String(telemetry.has_shared_hooks)
   ].join(':')
+
   if (trackedPromptKeys.has(promptKey)) {
     return
   }

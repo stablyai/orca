@@ -22,8 +22,10 @@ describe('useMobileNativeChatFileSearch', () => {
   async function mount(client: RpcClient): Promise<void> {
     function Harness(): null {
       state = useMobileNativeChatFileSearch({ client, worktreeId: 'wt-1' })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -71,8 +73,10 @@ describe('useMobileNativeChatFileSearch', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       return rpcSuccess(['src/apple.ts', 'docs/readme.md'])
     })
+
     await mount({ sendRequest } as unknown as RpcClient)
 
     act(() => state?.loadNativeChatFiles('apple'))
@@ -92,6 +96,7 @@ describe('useMobileNativeChatFileSearch', () => {
     const sendRequest = vi.fn(async (_method: string, params: { query: string }) =>
       rpcSuccess(params.query === 'app' ? ['src/app.ts'] : ['src/beta.ts'])
     )
+
     await mount({ sendRequest } as unknown as RpcClient)
 
     // Populate the cache for 'app'.
@@ -116,9 +121,11 @@ describe('useMobileNativeChatFileSearch', () => {
 
   it('coalesces overlapping legacy inventory requests on a slow host', async () => {
     let resolveList: (value: Awaited<ReturnType<RpcClient['sendRequest']>>) => void = () => {}
+
     const listResponse = new Promise<Awaited<ReturnType<RpcClient['sendRequest']>>>((resolve) => {
       resolveList = resolve
     })
+
     const sendRequest = vi.fn((method: string) => {
       if (method === 'files.searchPaths') {
         return Promise.resolve({
@@ -128,8 +135,10 @@ describe('useMobileNativeChatFileSearch', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       return listResponse
     })
+
     await mount({ sendRequest } as unknown as RpcClient)
 
     act(() => state?.loadNativeChatFiles('apple'))

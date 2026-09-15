@@ -34,6 +34,7 @@ describe('browser client automation protocol', () => {
         BrowserClientAutomationCommand.parse({ type: 'automation', method, params: {} })
       ).toThrow()
     }
+
     expect(() =>
       BrowserClientAutomationCommand.parse({
         type: 'automation',

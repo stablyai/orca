@@ -5,7 +5,9 @@ import { transform } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const path = 'src/renderer/src/components/skills/skill-source-inventory.ts'
+
 const arms = {}
+
 for (const [name, source] of [
   ['baseline', readFileSync(0, 'utf8')],
   ['indexed', readFileSync(path, 'utf8')]
@@ -21,14 +23,18 @@ function verify(result) {
   const actual = arms.indexed(result)
   assert.deepEqual(actual, expected)
   actual.forEach((entry, index) => assert.equal(entry.source, result.sources[index]))
+
   return expected
 }
 
 let seed = 20260911
+
 function random(max) {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
   return Math.floor((seed / 0x100000000) * max)
 }
+
 const paths = [
   '/home/ada/.agents/skills',
   '/repo/.agents/skills',
@@ -39,7 +45,9 @@ const paths = [
   '',
   '/not-listed'
 ]
+
 verify(null)
+
 for (let trial = 0; trial < 5000; trial++) {
   const sources = Array.from({ length: random(25) }, (_, index) =>
     Object.freeze({
@@ -49,8 +57,10 @@ for (let trial = 0; trial < 5000; trial++) {
       skippedReason: [undefined, 'missing', 'remote-repo', 'unavailable'][random(4)]
     })
   )
+
   const skills = []
   const count = random(100)
+
   for (let index = 0; index < count; index++) {
     skills.push(
       skills.length && random(4) === 0
@@ -63,8 +73,10 @@ for (let trial = 0; trial < 5000; trial++) {
           })
     )
   }
+
   verify(Object.freeze({ sources: Object.freeze(sources), skills: Object.freeze(skills) }))
 }
+
 console.log(
   JSON.stringify({
     differentialCases: 5001,
@@ -79,6 +91,7 @@ function workload(sourceCount, skillCount, rootsPerSkill) {
     { length: sourceCount || 1 },
     (_, index) => `/repo-${index}/.agents/skills`
   )
+
   return {
     sources: paths.slice(0, sourceCount).map((path, index) => ({
       id: `${index}`,
@@ -98,6 +111,7 @@ function workload(sourceCount, skillCount, rootsPerSkill) {
 
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
+
   return (sorted[3] + sorted[4]) / 2
 }
 
@@ -116,26 +130,32 @@ for (const [sourceCount, skillCount, rootsPerSkill] of [
   const input = workload(sourceCount, skillCount, rootsPerSkill)
   const expected = verify(input)
   const samples = { baseline: [], indexed: [] }
+
   const repeats = Math.max(
     5,
     Math.floor(200000 / (Math.max(1, sourceCount) * Math.max(1, skillCount)))
   )
+
   for (const run of Object.values(arms)) {
     for (let warmup = 0; warmup < Math.min(100, repeats); warmup++) {
       run(input)
     }
   }
+
   for (const pair of buildCounterbalancedSchedule(8, 'baseline', 'indexed')) {
     for (const arm of pair) {
       const start = performance.now()
       let result
+
       for (let repeat = 0; repeat < repeats; repeat++) {
         result = arms[arm](input)
       }
+
       samples[arm].push((performance.now() - start) / repeats)
       assert.deepEqual(result, expected)
     }
   }
+
   console.log(
     JSON.stringify({
       sourceCount,

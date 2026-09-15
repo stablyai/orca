@@ -47,13 +47,17 @@ export function createClaudeStreamedTextCheckpoints(
     latestText.set(key, text)
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
+
     if (!force && checkpointLength > 0 && text.length < nextLength) {
       return
     }
+
     const identity = identities.get(key)
+
     if (!identity) {
       return
     }
+
     checkpointLengths.set(key, text.length)
     deps.persist(identity, text)
   }
@@ -79,6 +83,7 @@ export function createClaudeStreamedTextCheckpoints(
     },
     flush: () => {
       coalescer.flushAll()
+
       for (const [key, text] of latestText) {
         if (checkpointLengths.get(key) !== text.length) {
           persist(key, text, true)

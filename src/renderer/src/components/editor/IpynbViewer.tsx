@@ -50,6 +50,7 @@ export default function IpynbViewer({
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
+
   const parsed = useMemo(() => {
     try {
       return { notebook: parseIpynb(content), error: null as string | null }
@@ -60,7 +61,9 @@ export default function IpynbViewer({
       }
     }
   }, [content])
+
   const deactivateEditor = useCallback((): void => setEditingCellKey(null), [])
+
   const {
     rootRef,
     setRootRef,
@@ -80,6 +83,7 @@ export default function IpynbViewer({
     onDirtyStateHint,
     onDeactivateEditor: deactivateEditor
   })
+
   const execution = useIpynbCellExecution({
     filePath,
     worktreeId,
@@ -87,6 +91,7 @@ export default function IpynbViewer({
     applyContent,
     onSave
   })
+
   useIpynbScrollRestoration(rootRef, scrollCacheKey, content)
   const saveShortcut = useShortcutKeyDetails('editor.save')
   const fontSize = computeEditorFontSize(13, editorFontZoomLevel)
@@ -101,6 +106,7 @@ export default function IpynbViewer({
       if (event.repeat || !editorShortcutMatches('editor.save', event)) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       void saveNotebook()
@@ -113,7 +119,9 @@ export default function IpynbViewer({
       if (editingCellKey === null) {
         return
       }
+
       const target = event.target instanceof Element ? event.target : null
+
       if (!target?.closest('.monaco-editor')) {
         setEditingCellKey(null)
       }
@@ -141,6 +149,7 @@ export default function IpynbViewer({
   }
 
   const { notebook } = parsed
+
   return (
     <div
       ref={setRootRef}
@@ -183,9 +192,11 @@ export default function IpynbViewer({
         ) : (
           notebook.cells.map((cell, index) => {
             const cellKey = getIpynbCellKey(cell, index)
+
             const source = hasIpynbSourceDraft(sourceDrafts, cellKey)
               ? (sourceDrafts[cellKey] ?? '')
               : cell.source
+
             return (
               <section
                 key={cellKey}

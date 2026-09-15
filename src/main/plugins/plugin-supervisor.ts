@@ -41,11 +41,13 @@ export class PluginSupervisor {
 
   constructor(config: Partial<PluginSupervisionConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+
     // Guard misconfiguration: an empty backoff schedule would index [-1] →
     // undefined delay (immediate restart loop); a negative cap is meaningless.
     if (this.config.maxRestarts < 0) {
       throw new Error('PluginSupervisionConfig.maxRestarts must be >= 0')
     }
+
     if (this.config.backoffMs.length === 0) {
       throw new Error('PluginSupervisionConfig.backoffMs must be non-empty')
     }
@@ -74,20 +76,27 @@ export class PluginSupervisor {
     if (!info.crashed) {
       // Host-initiated stop (or idle reap): go inactive, clear history.
       this.entries.set(id, { state: 'inactive', restarts: 0 })
+
       return { restart: false, state: 'inactive' }
     }
+
     const entry = this.entries.get(id)
+
     // An exit for an untracked plugin is not a running crash to restart.
     if (!entry) {
       return { restart: false, state: 'inactive' }
     }
+
     if (entry.restarts >= this.config.maxRestarts) {
       this.entries.set(id, { state: 'errored', restarts: entry.restarts })
+
       return { restart: false, state: 'errored' }
     }
+
     const attempt = entry.restarts + 1
     const idx = Math.max(0, Math.min(entry.restarts, this.config.backoffMs.length - 1))
     this.entries.set(id, { state: 'restarting', restarts: attempt })
+
     return { restart: true, delayMs: this.config.backoffMs[idx]!, attempt }
   }
 

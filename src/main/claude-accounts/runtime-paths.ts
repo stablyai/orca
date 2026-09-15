@@ -26,9 +26,11 @@ export class ClaudeRuntimePathResolver {
 
   private resolveConfigPath(configDir: string, inheritedConfigDir: string | null): string {
     const colocatedConfigPath = join(configDir, '.claude.json')
+
     if (inheritedConfigDir || existsSync(colocatedConfigPath)) {
       return colocatedConfigPath
     }
+
     return join(homedir(), '.claude.json')
   }
 }

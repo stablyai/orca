@@ -61,12 +61,15 @@ function getAgentDecisionLabel(details: WorkspaceDecisionDetails): string {
       'completed agent'
     )}`
   }
+
   if (details.activeAgentCount > 0) {
     return pluralize(details.activeAgentCount, 'active agent')
   }
+
   if (details.completedAgentCount > 0) {
     return `${pluralize(details.completedAgentCount, 'completed agent')} retained`
   }
+
   return 'No tracked agents running'
 }
 
@@ -74,6 +77,7 @@ function getTerminalDecisionLabel(details: WorkspaceDecisionDetails): string {
   if (details.terminalTabCount === 0) {
     return 'No terminal tabs'
   }
+
   return `${details.liveTerminalCount} live of ${pluralize(details.terminalTabCount, 'terminal tab')}`
 }
 
@@ -85,11 +89,14 @@ function getGitDecisionLabel(
     if (gitRefreshState?.error) {
       return `Git status unavailable: ${gitRefreshState.error}`
     }
+
     return 'Git status has not loaded yet'
   }
+
   if (details.changedFileCount === 0) {
     return 'No uncommitted files'
   }
+
   return pluralize(details.changedFileCount, 'changed file')
 }
 
@@ -97,9 +104,11 @@ function getEditorDecisionLabel(details: WorkspaceDecisionDetails): string {
   if (details.openEditorFileCount === 0) {
     return 'No editor files open'
   }
+
   if (details.dirtyEditorBufferCount === 0) {
     return `${pluralize(details.openEditorFileCount, 'editor file')} open`
   }
+
   return `${pluralize(details.dirtyEditorBufferCount, 'dirty editor buffer')} of ${pluralize(
     details.openEditorFileCount,
     'open file'
@@ -113,15 +122,19 @@ function getDeleteDecisionLabel(
   if (details.isActive) {
     return 'This is the active workspace'
   }
+
   if (worktree.status !== 'ok') {
     return worktree.error ?? getWorkspaceSpaceStatusLabel(worktree.status)
   }
+
   if (worktree.isMainWorktree) {
     return 'Main worktree is protected'
   }
+
   if (!worktree.canDelete) {
     return 'Workspace is protected'
   }
+
   return 'Can be deleted after review'
 }
 
@@ -137,8 +150,10 @@ export function WorkspaceDecisionHoverCard({
   onOpenWorkspace: () => void
 }): React.JSX.Element {
   const deleteDecision = getDeleteDecisionLabel(worktree, details)
+
   const issueLabel =
     [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') || 'No linked issue'
+
   return (
     <HoverCardContent
       align="end"

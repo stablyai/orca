@@ -8,6 +8,7 @@ test.use({ seedTestRepo: false })
 async function readElectronHomeState(electronApp: ElectronApplication) {
   return electronApp.evaluate(({ app }) => {
     const nodeOs = process.getBuiltinModule('node:os')
+
     return {
       appHome: app.getPath('home'),
       nodeHome: nodeOs.homedir(),

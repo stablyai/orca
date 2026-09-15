@@ -17,6 +17,7 @@ describe('buildInjectRejectionMessage', () => {
 
   it('names every agent Orca recognizes, including agy', () => {
     expect(message).toMatch(/\bagy\b/)
+
     for (const config of Object.values(TUI_AGENT_CONFIG)) {
       expect(message).toContain(config.expectedProcess)
     }
@@ -28,6 +29,7 @@ describe('buildInjectRejectionMessage', () => {
     expect(listed.length).toBeGreaterThan(0)
     expect(new Set(listed).size).toBe(listed.length)
     expect([...listed].sort()).toEqual(listed)
+
     for (const name of listed) {
       expect(recognizeAgentProcess(name)).not.toBeNull()
     }

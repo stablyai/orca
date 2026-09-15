@@ -29,9 +29,11 @@ export function KagiSessionLinkForm(): React.JSX.Element {
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const setBrowserKagiSessionLink = useAppStore((s) => s.setBrowserKagiSessionLink)
   const persistedDraft = browserKagiSessionLink ?? ''
+
   const [draftState, setDraftState] = useState(() =>
     createKagiSessionLinkDraftState(persistedDraft)
   )
+
   const resolvedDraftState = resolveKagiSessionLinkDraftState(draftState, persistedDraft)
 
   // Why: the Kagi token is edited as a masked draft so accidental typing or
@@ -40,13 +42,16 @@ export function KagiSessionLinkForm(): React.JSX.Element {
   if (resolvedDraftState !== draftState) {
     setDraftState(resolvedDraftState)
   }
+
   const draft = resolvedDraftState.value
+
   const setDraft = (value: string): void => {
     setDraftState((current) => ({ ...current, value }))
   }
 
   const save = (): void => {
     const trimmed = draft.trim()
+
     if (!trimmed) {
       setBrowserKagiSessionLink(null)
       setDraftState(createKagiSessionLinkDraftState(''))
@@ -56,9 +61,12 @@ export function KagiSessionLinkForm(): React.JSX.Element {
           'Kagi session link cleared.'
         )
       )
+
       return
     }
+
     const normalized = normalizeKagiSessionLink(trimmed)
+
     if (!normalized) {
       toast.error(
         translate(
@@ -66,8 +74,10 @@ export function KagiSessionLinkForm(): React.JSX.Element {
           'Enter a Kagi private session link from https://kagi.com/search?token=...'
         )
       )
+
       return
     }
+
     setBrowserKagiSessionLink(normalized)
     setDraftState(createKagiSessionLinkDraftState(normalized))
     toast.success(

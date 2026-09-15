@@ -36,11 +36,13 @@ export function buildSpriteAnimationCss({
 }: SpriteAnimationCssInput): SpriteAnimationCss {
   const name = `pet-${keyframesId}`
   const durations = validFrameDurations(frameDurationsMs, frames)
+
   if (durations) {
     const totalMs = durations.reduce((sum, ms) => sum + ms, 0)
     // Why: Codex pets hold frames unevenly (idle rests ~1.9s on its last frame).
     // steps() can't express that, so emit one step-end stop per frame.
     const stops = stepEndStops(durations, totalMs, frameWidth, scale, rowOffsetY)
+
     if (stops) {
       return {
         keyframesCss: `@keyframes ${name} { ${stops.join(' ')} }`,
@@ -48,9 +50,11 @@ export function buildSpriteAnimationCss({
       }
     }
   }
+
   // Uniform sheet fps: one steps() run across the row.
   const duration = Math.max(0.1, frames / Math.max(0.1, fps))
   const endX = -(frames * frameWidth * scale)
+
   return {
     keyframesCss: `@keyframes ${name} { from { background-position: 0px ${rowOffsetY}px; } to { background-position: ${endX}px ${rowOffsetY}px; } }`,
     animationCss: `${name} ${duration}s steps(${frames}) infinite`
@@ -71,6 +75,7 @@ function validFrameDurations(
   ) {
     return frameDurationsMs
   }
+
   return null
 }
 
@@ -87,15 +92,19 @@ function stepEndStops(
   const stops: string[] = []
   let elapsedMs = 0
   let previousPct = -1
+
   for (let index = 0; index < durations.length; index++) {
     const pct = +((elapsedMs / totalMs) * 100).toFixed(4)
+
     if (pct <= previousPct || pct >= 100) {
       return null
     }
+
     previousPct = pct
     const x = -(index * frameWidth * scale)
     stops.push(`${pct}% { background-position: ${x}px ${rowOffsetY}px; }`)
     elapsedMs += durations[index]
   }
+
   return stops
 }

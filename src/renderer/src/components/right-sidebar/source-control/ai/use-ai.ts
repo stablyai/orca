@@ -64,10 +64,12 @@ export function useSourceControlAi({
     () => getSourceControlAiControllerDiscoveryHostKey(settings, activeConnectionId),
     [activeConnectionId, settings]
   )
+
   const sourceControlAiActionsVisible = useMemo(
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo: activeRepo }) : false),
     [activeRepo, settings]
   )
+
   const resolvedCommitMessageAi = useMemo(
     () =>
       settings
@@ -80,10 +82,12 @@ export function useSourceControlAi({
         : null,
     [activeRepo, settings, sourceControlAiDiscoveryHostKey]
   )
+
   const resolvedPrCreationDefaults = useMemo(() => {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     }
+
     const resolved = resolveSourceControlAiForOperation({
       settings,
       repo: activeRepo,
@@ -91,6 +95,7 @@ export function useSourceControlAi({
       discoveryHostKey: sourceControlAiDiscoveryHostKey,
       prCreationProductDefaults: DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     })
+
     return resolved.ok
       ? resolved.value.prCreationDefaults
       : resolveSourceControlAiPrCreationDefaults({
@@ -109,6 +114,7 @@ export function useSourceControlAi({
       }),
     [activeRepo, settings]
   )
+
   const saveActionRecipeForTarget = useCallback(
     async (
       target: SourceControlAiWriteTarget,
@@ -128,6 +134,7 @@ export function useSourceControlAi({
     },
     [getStoreState, updateRepo, updateSettings]
   )
+
   const saveLaunchActionDefault = useCallback(
     async (
       target: SourceControlAiWriteTarget,
@@ -156,10 +163,12 @@ export function useSourceControlAi({
       }),
     [conflictOperation, unresolvedConflicts, worktreePath]
   )
+
   const handleResolveConflictsWithAI = useCallback((): void => {
     if (!activeWorktreeId) {
       return
     }
+
     if (unresolvedConflicts.length === 0) {
       toast.message(
         translate(
@@ -167,8 +176,10 @@ export function useSourceControlAi({
           'No unresolved conflicts to send.'
         )
       )
+
       return
     }
+
     setResolveConflictsComposerOpen(true)
   }, [activeWorktreeId, unresolvedConflicts.length])
 
@@ -226,6 +237,7 @@ export function useSourceControlAi({
   const openCommitGenerationDialog = useCallback((): void => {
     setCommitGenerationDialogOpen(true)
   }, [])
+
   const openPullRequestGenerationDialog = useCallback((): void => {
     setPullRequestGenerationDialogOpen(true)
   }, [])

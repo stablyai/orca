@@ -38,39 +38,49 @@ export function createLocalPtyShellReadinessSession(args: {
   let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
   let shellStartupPid: number | null = null
   let shellPromptReadinessProbe: ShellPromptReadinessProbe | null = null
+
   let shellStartupOutputScanState = plan.shellReadyLaunch?.supportsReadyMarker
     ? createShellStartupOutputScanState()
     : null
+
   const shellReadyPromise = spawn.command
     ? new Promise<ShellReadySignal>((resolve) => {
         resolveShellReady = resolve
       })
     : Promise.resolve({ postMarkerBytesObserved: false })
+
   const finishShellReady = (signal: ShellReadySignal): void => {
     if (!resolveShellReady) {
       return
     }
+
     if (shellReadyTimeout) {
       clearTimeout(shellReadyTimeout)
       shellReadyTimeout = null
     }
+
     shellPromptReadinessProbe?.dispose()
     shellPromptReadinessProbe = null
     const resolve = resolveShellReady
     resolveShellReady = null
     resolve(signal)
   }
+
   const releaseHeldShellReadyBytes = (): void => {
     if (!shellStartupOutputScanState) {
       return
     }
+
     const heldBytes = drainShellStartupOutputScanState(shellStartupOutputScanState)
     shellStartupOutputScanState = null
+
     if (heldBytes.length === 0) {
       return
     }
+
     startupIngress.accept(heldBytes)
   }
+
   if (shellStartupOutputScanState) {
     shellPromptReadinessProbe = createShellPromptReadinessProbe({
       slavePath: readPtySlavePath(proc),
@@ -87,6 +97,7 @@ export function createLocalPtyShellReadinessSession(args: {
       }
     })
   }
+
   if (spawn.command) {
     if (plan.shellReadyLaunch?.supportsReadyMarker) {
       shellReadyTimeout = setTimeout(() => {
@@ -97,13 +108,16 @@ export function createLocalPtyShellReadinessSession(args: {
       finishShellReady({ postMarkerBytesObserved: false })
     }
   }
+
   let startupCommandCleanup: (() => void) | null = null
+
   if (spawn.command) {
     ptyCleanupCallbacks.set(id, () => {
       if (shellReadyTimeout) {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
+
       releaseHeldShellReadyBytes()
       startupCommandCleanup?.()
       startupCommandCleanup = null
@@ -117,17 +131,22 @@ export function createLocalPtyShellReadinessSession(args: {
     shellReadyPromise,
     acceptData: (rawData) => {
       let data = rawData
+
       if (shellStartupOutputScanState && resolveShellReady) {
         const scanned = scanShellStartupOutput(shellStartupOutputScanState, data)
         data = scanned.output
+
         if (scanned.shellPid) {
           shellStartupPid = scanned.shellPid
         }
+
         if (scanned.ready) {
           finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
         }
       }
+
       startupIngress.accept(data)
+
       if (resolveShellReady && data.length > 0) {
         shellPromptReadinessProbe?.notifyOutput(data)
       }
@@ -140,6 +159,7 @@ export function createLocalPtyShellReadinessSession(args: {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
+
       startupCommandCleanup?.()
       shellPromptReadinessProbe?.dispose()
       shellPromptReadinessProbe = null

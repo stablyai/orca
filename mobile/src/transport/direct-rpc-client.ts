@@ -175,16 +175,21 @@ export class DirectRpcClient implements RpcClient {
     if (this.intentionallyClosed) {
       return
     }
+
     if (this.getState() === 'connected') {
       console.log('[net] foreground — probing live connection')
+
       if (this.livenessSession) {
         this.liveness.probeNow(this.livenessSession)
       }
+
       return
     }
+
     const dialing = this.socketSession
     const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
     let abandoned = false
+
     if (dialing && isStaleForegroundDial(this.getState(), dialAgeMs)) {
       console.log('[net] foreground — abandoning stale dial', {
         state: this.getState(),
@@ -193,6 +198,7 @@ export class DirectRpcClient implements RpcClient {
       this.socketClose.forceClose(dialing)
       abandoned = true
     }
+
     if (this.getState() === 'reconnecting') {
       console.log('[net] foreground — restarting reconnect loop', {
         attempt: this.getReconnectAttempt(),
@@ -207,10 +213,12 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect.cancel()
     const session = this.socketSession
     session?.clearTimers()
+
     if (this.livenessSession) {
       this.liveness.stop(this.livenessSession)
       this.livenessSession = null
     }
+
     session?.close()
     this.socketSession = null
     session?.clearKey()
@@ -222,6 +230,7 @@ export class DirectRpcClient implements RpcClient {
     if (this.intentionallyClosed) {
       return
     }
+
     this.connectionState.publish('connecting')
     this.socketSession = this.socketFactory.open()
   }
@@ -249,11 +258,14 @@ export class DirectRpcClient implements RpcClient {
     if (response.id.startsWith(LIVENESS_REQUEST_ID_PREFIX)) {
       return
     }
+
     if (!response.ok && response.error.code === 'unauthorized') {
       // Settle this correlated refusal before marking other written requests unknown.
       this.requests.resolve(response)
+
       return this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
     }
+
     if (!this.streams.handleResponse(response)) {
       this.requests.resolve(response)
     }
@@ -289,11 +301,13 @@ export class DirectRpcClient implements RpcClient {
     if (this.socketSession) {
       return this.socketSession.sendEncrypted(request)
     }
+
     console.log('[net] sendEncrypted FAILED — channel not ready', {
       hasWs: false,
       hasKey: false,
       state: this.getState()
     })
+
     return false
   }
 
@@ -301,6 +315,7 @@ export class DirectRpcClient implements RpcClient {
     if (identity !== this.livenessSession || this.getState() !== 'connected') {
       return false
     }
+
     return this.sendEncrypted({
       id: `${LIVENESS_REQUEST_ID_PREFIX}${this.nextId()}`,
       deviceToken: this.deviceToken,
@@ -315,6 +330,7 @@ export class DirectRpcClient implements RpcClient {
     ) {
       return Promise.reject(new Error('Connection retry limit reached'))
     }
+
     return this.connectionState.waitForConnected(timeoutMs)
   }
 

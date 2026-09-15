@@ -73,6 +73,7 @@ describe('mobile AI Vault resume target guards', () => {
       workspaceKind: 'folder-workspace' as const
     }
   ]
+
   const repos = [
     { id: 'local-repo', path: '/Users/ada/repo', connectionId: null },
     { id: 'ssh-repo', path: '/home/ada/ssh-repo', connectionId: 'builder' },
@@ -83,6 +84,7 @@ describe('mobile AI Vault resume target guards', () => {
       executionHostId: 'runtime:devbox' as const
     }
   ]
+
   const folderWorkspaces = [
     { id: 'folder-local', projectGroupId: 'group-local', folderPath: '/Users/ada/folder' },
     {
@@ -93,6 +95,7 @@ describe('mobile AI Vault resume target guards', () => {
     },
     { id: 'folder-runtime', projectGroupId: 'group-runtime', folderPath: '/workspace/folder' }
   ]
+
   const projectGroups = [
     { id: 'group-local', connectionId: null },
     { id: 'group-runtime', executionHostId: 'runtime:devbox' as const }
@@ -170,6 +173,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       repos
     })
+
     expect(target).toEqual({
       status: 'ready',
       worktreeId: 'session-wt',
@@ -193,6 +197,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       repos
     })
+
     expect(target).toEqual({
       status: 'ready',
       worktreeId: 'route-wt',
@@ -211,6 +216,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       repos
     })
+
     expect(target.status).toBe('blocked')
     expect(target.status === 'blocked' ? target.message : '').toContain('runtime-hosted')
   })
@@ -231,6 +237,7 @@ describe('mobile AI Vault resume target guards', () => {
       folderWorkspaces,
       projectGroups
     })
+
     expect(target.status).toBe('blocked')
     expect(target.status === 'blocked' ? target.message : '').toContain('SSH workspace')
   })
@@ -249,6 +256,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       repos
     })
+
     expect(target).toEqual({
       status: 'ready',
       worktreeId: 'route-wt',
@@ -271,6 +279,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       repos
     })
+
     expect(target.status).toBe('blocked')
     expect(target.status === 'blocked' ? target.message : '').toContain('SSH workspace')
   })
@@ -305,6 +314,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       projectGroups
     })
+
     expect(target.status).toBe('blocked')
     expect(target.status === 'blocked' ? target.message : '').toContain('runtime-hosted')
   })
@@ -325,6 +335,7 @@ describe('mobile AI Vault resume target guards', () => {
       folderWorkspaces: [],
       projectGroups
     })
+
     expect(target).toEqual({
       status: 'blocked',
       message: 'Open a local workspace before resuming a session.'
@@ -364,6 +375,7 @@ describe('mobile AI Vault resume target guards', () => {
       ],
       projectGroups
     })
+
     expect(target).toEqual({
       status: 'blocked',
       message: 'Open a local workspace before resuming a session.'

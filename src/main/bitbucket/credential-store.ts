@@ -44,8 +44,11 @@ export type BitbucketCredentialSaveInput = {
 }
 
 let cachedMetadata: BitbucketStoredMetadata | null = null
+
 let metadataLoadedFromDisk = false
+
 let cachedSecret: BitbucketStoredSecret | null = null
+
 let credentialError: string | null = null
 
 function getOrcaDir(): string {
@@ -62,6 +65,7 @@ function getSecretPath(): string {
 
 function ensureOrcaDir(): void {
   const dir = getOrcaDir()
+
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -75,14 +79,18 @@ function asOptionalString(value: unknown): string | null {
 
 function readMetadataFromDisk(): BitbucketStoredMetadata | null {
   const path = getMetadataPath()
+
   if (!existsSync(path)) {
     return null
   }
+
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<BitbucketStoredMetadata>
+
     if (parsed.authMode !== 'token' && parsed.authMode !== 'basic') {
       return null
     }
+
     return {
       version: 1,
       authMode: parsed.authMode,
@@ -101,6 +109,7 @@ export function getStoredBitbucketMetadata(): BitbucketStoredMetadata | null {
     cachedMetadata = readMetadataFromDisk()
     metadataLoadedFromDisk = true
   }
+
   return cachedMetadata
 }
 
@@ -123,18 +132,24 @@ export function loadStoredBitbucketSecret(
   if (cachedSecret !== null) {
     return cachedSecret
   }
+
   if (!options.force) {
     return null
   }
+
   const path = getSecretPath()
+
   if (!existsSync(path)) {
     return null
   }
+
   try {
     const token = readStoredCredentialToken('Bitbucket', readFileSync(path))
+
     if (!token) {
       return null
     }
+
     const parsed = JSON.parse(token) as Partial<BitbucketStoredSecret>
     cachedSecret = {
       accessToken: asOptionalString(parsed.accessToken),
@@ -146,18 +161,21 @@ export function loadStoredBitbucketSecret(
       baseUrl: asOptionalString(parsed.baseUrl)
     }
     credentialError = null
+
     return cachedSecret
   } catch (error) {
     if (error instanceof CredentialDecryptionError) {
       credentialError = error.message
       throw error
     }
+
     return null
   }
 }
 
 export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): void {
   ensureOrcaDir()
+
   const secret: BitbucketStoredSecret = {
     accessToken: input.accessToken,
     apiToken: input.apiToken,
@@ -165,7 +183,9 @@ export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): vo
     email: input.email,
     baseUrl: input.baseUrl
   }
+
   writeEncryptedCredential('Bitbucket', getSecretPath(), JSON.stringify(secret))
+
   const metadata: BitbucketStoredMetadata = {
     version: 1,
     authMode: input.authMode,
@@ -174,6 +194,7 @@ export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): vo
     account: input.account,
     updatedAt: new Date().toISOString()
   }
+
   writeCredentialFileAtomic(
     getMetadataPath(),
     Buffer.from(JSON.stringify(metadata, null, 2), 'utf-8')

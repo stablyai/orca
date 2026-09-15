@@ -17,10 +17,12 @@ import { listFilesWithGit } from './filesystem-list-files-git-fallback'
 import { isFileListingCancellation } from '../../shared/file-listing-cancellation'
 
 const tempDirs: string[] = []
+
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
 
 function createMockProcess(): ChildProcess {
   const process = new EventEmitter() as unknown as ChildProcess
+
   ;(process as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (process as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -31,6 +33,7 @@ function createMockProcess(): ChildProcess {
   ;(process as unknown as Record<string, unknown>).kill = vi.fn()
   ;(process as unknown as Record<string, unknown>).exitCode = null
   ;(process as unknown as Record<string, unknown>).signalCode = null
+
   return process
 }
 

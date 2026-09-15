@@ -23,6 +23,7 @@ describe('Orca runtime module size', () => {
   it('keeps every split implementation module at or below 400 physical lines', () => {
     const oversized = runtimeImplementationModuleNames().flatMap((name) => {
       const lines = readFileSync(join(import.meta.dirname, name), 'utf8').split(/\r?\n/).length
+
       return lines > MAX_RUNTIME_MODULE_LINES ? [`${name}: ${lines}`] : []
     })
 

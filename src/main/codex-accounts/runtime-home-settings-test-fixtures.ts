@@ -16,5 +16,6 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
   // Mirror-path tests assert the shared runtime home, which production still uses
   // on Windows; opt these cases onto that lane unless a test overrides it.
   setShellStartupEnvProbeSupportedForTest(overrides.shellStartupEnvProbeSupported ?? false)
+
   return createCodexAccountSettings(testState.fakeHomeDir, overrides)
 }

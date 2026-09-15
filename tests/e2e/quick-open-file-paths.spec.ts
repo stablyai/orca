@@ -45,6 +45,7 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
   const tooltip = orcaPage
     .locator('[data-slot="tooltip-content"]')
     .filter({ hasText: relativeFilePath })
+
   // Streaming results can remount the row under a stationary pointer.
   await expect(async () => {
     await row.hover({ position: { x: 20, y: 12 }, timeout: 1_000 })
@@ -58,6 +59,7 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
   await expect(tooltip).toBeVisible()
 
   const proofPath = process.env.ORCA_QUICK_OPEN_PROOF_PATH
+
   if (proofPath) {
     await orcaPage.screenshot({ path: proofPath })
   }

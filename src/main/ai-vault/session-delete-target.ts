@@ -47,17 +47,21 @@ export function validateAiVaultSessionDeleteTarget(
 ): AiVaultSessionDeleteValidationResult {
   const { agent } = args
   const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : ''
+
   if (!filePath) {
     return rejected(agent, 'invalid-path')
   }
+
   if (!isAiVaultDeletableAgent(agent)) {
     return rejected(agent, 'unsupported-agent')
   }
+
   // Electron shell/fs APIs only act on this computer; an ssh/runtime session's
   // path exists on the remote host. Same limit as Open/Reveal Log.
   if (normalizeExecutionHostId(args.executionHostId) !== LOCAL_EXECUTION_HOST_ID) {
     return rejected(agent, 'non-local-host')
   }
+
   if (isAiVaultSyntheticSessionPath(filePath)) {
     return rejected(agent, 'synthetic-path')
   }
@@ -66,18 +70,22 @@ export function validateAiVaultSessionDeleteTarget(
   // would otherwise pass `<root>/../../etc/x.jsonl`.
   const resolvedPath = resolve(filePath)
   const source = AI_VAULT_AGENT_SOURCES[agent]
+
   const roots = source
     .rootDirs(args.rootOptions ?? {}, args.wslHomeDirs ?? [])
     // Why: OMP_CODING_AGENT_DIR='/' normalizes to '', which resolve()s to the
     // process cwd — an empty root would silently allowlist it.
     .filter((rootDir) => rootDir.trim().length > 0)
     .map((rootDir) => resolve(rootDir))
+
   // Keep the root that actually contains this path: companion roots are derived
   // from it, so a WSL-home session can't pair with the local host's companions.
   const matchedRoot = roots.find((root) => isPathInsideOrEqual(root, resolvedPath))
+
   if (!matchedRoot) {
     return rejected(agent, 'path-outside-known-roots')
   }
+
   // The scanner's own accept rule, so a path it would never have surfaced as a
   // session row can't be accepted as a delete target either.
   if (!isDiscoverableSessionFile(source, matchedRoot, resolvedPath)) {
@@ -85,6 +93,7 @@ export function validateAiVaultSessionDeleteTarget(
   }
 
   const removals = sessionDeleteRemovals({ agent, resolvedPath, matchedRoot, roots })
+
   if (!removals) {
     return rejected(agent, 'no-session-directory')
   }
@@ -111,19 +120,23 @@ function sessionDeleteRemovals(args: {
 
   if (AI_VAULT_DIRECTORY_SHAPED_DELETE_AGENTS.has(agent)) {
     const sessionDir = dirname(resolvedPath)
+
     if (sessionDir === matchedRoot || !isPathInsideOrEqual(matchedRoot, sessionDir)) {
       return null
     }
+
     return [{ path: sessionDir, kind: 'directory', roots }]
   }
 
   if (agent === 'claude') {
     const sessionId = basename(resolvedPath, extname(resolvedPath))
+
     // A degenerate stem ('.' from `..jsonl`, or empty) would resolve the session
     // dir to the project dir and trash every session in it.
     if (!sessionId || sessionId === '.' || sessionId === '..') {
       return null
     }
+
     // <enc>/<uuid>/, named after the transcript. Taking it rather than just the
     // `subagents/` it holds is what stops an empty <uuid>/ being left behind.
     // Derived from the scanner's subagents path so the two can't drift.
@@ -131,6 +144,7 @@ function sessionDeleteRemovals(args: {
     // Derived from the matched root, so a WSL-home session cleans up that
     // distro's session-env rather than the local host's.
     const sessionEnvRoot = join(dirname(matchedRoot), 'session-env')
+
     return [
       { path: sessionDir, kind: 'directory', roots },
       { path: join(sessionEnvRoot, sessionId), kind: 'directory', roots: [sessionEnvRoot] },

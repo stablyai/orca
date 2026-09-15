@@ -53,6 +53,7 @@ type TerminalWithSynchronousWrite = Terminal & {
 }
 
 const DEFAULT_SCROLLBACK = 5000
+
 // Keep in sync with the renderer twin terminal-capability-replies.ts (main must not import renderer modules).
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
@@ -100,6 +101,7 @@ export class HeadlessEmulator {
 
     // Why gated: an emulator query reply would beat the renderer's to the shell's stdin (OSC 11 default-black was the casualty).
     this.onQueryReply = opts.onQueryReply ?? null
+
     if (this.onQueryReply) {
       this.terminal.onData((reply) => this.emitQueryReply(reply))
     }
@@ -111,6 +113,7 @@ export class HeadlessEmulator {
     if (this.conptyDa1OverrideInstalled) {
       return
     }
+
     this.conptyDa1OverrideInstalled = true
     installDeviceAttributesResponder({
       parser: this.terminal.parser,
@@ -130,6 +133,7 @@ export class HeadlessEmulator {
     if (this.viewAttributeResponder) {
       return
     }
+
     this.viewAttributeResponder = installTerminalViewAttributeResponder({
       parser: this.terminal.parser,
       getBaseAttributes,
@@ -143,6 +147,7 @@ export class HeadlessEmulator {
     if (this.disposed) {
       return
     }
+
     this.terminal.options.cursorStyle = attributes.cursorStyle
     this.terminal.options.cursorBlink = attributes.cursorBlink
     this.viewAttributeResponder?.clearColorOverrides()
@@ -153,6 +158,7 @@ export class HeadlessEmulator {
     if (!Number.isInteger(flags) || flags <= 0) {
       return Promise.resolve()
     }
+
     return this.write(`\x1b[=${flags};1u`)
   }
 
@@ -173,21 +179,26 @@ export class HeadlessEmulator {
     }
 
     const forwardQueryReplies = opts.forwardQueryReplies === true
+
     if (this.tryWriteSync(data, { forwardQueryReplies })) {
       return Promise.resolve()
     }
+
     this.oscText.scan(data)
+
     // Why the sentinel: xterm parses writes async, so its zero-byte callback fires in FIFO order to open the window at exactly this chunk.
     if (forwardQueryReplies) {
       this.terminal.write('', () => {
         this.queryReplyForwardingDepth += 1
       })
     }
+
     return new Promise<void>((resolve) => {
       this.terminal.write(data, () => {
         if (forwardQueryReplies) {
           this.queryReplyForwardingDepth -= 1
         }
+
         // Why: commit the mouse-mode mirror only after xterm has parsed the same bytes (snapshots combine both).
         this.mouseModes.scan(data)
         this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
@@ -201,19 +212,24 @@ export class HeadlessEmulator {
     if (this.disposed) {
       return false
     }
+
     return this.tryWriteSync(data)
   }
 
   private tryWriteSync(data: string, opts: HeadlessEmulatorWriteOptions = {}): boolean {
     const writeSync = (this.terminal as TerminalWithSynchronousWrite)._core?.writeSync
+
     if (typeof writeSync !== 'function') {
       return false
     }
+
     this.oscText.scan(data)
     const forwardQueryReplies = opts.forwardQueryReplies === true
+
     if (forwardQueryReplies) {
       this.queryReplyForwardingDepth += 1
     }
+
     // Why: restore snapshots are requested right after PTY bursts; queued writes could snapshot half-cleared TUI rows.
     try {
       writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
@@ -222,8 +238,10 @@ export class HeadlessEmulator {
         this.queryReplyForwardingDepth -= 1
       }
     }
+
     this.mouseModes.scan(data)
     this.partialEscapeTail = advancePartialEscapeTail(this.partialEscapeTail, data)
+
     return true
   }
 
@@ -231,6 +249,7 @@ export class HeadlessEmulator {
     if (this.disposed) {
       return
     }
+
     // Why gated: restored OSC-8 ranges are row-indexed, so a reflow
     // invalidates them — but a resize to the size already applied is not a
     // reflow. Cold restore seeds the ranges and then replays records that
@@ -240,6 +259,7 @@ export class HeadlessEmulator {
     if (this.terminal.cols === cols && this.terminal.rows === rows) {
       return
     }
+
     this.restoredOscLinks = []
     this.terminal.resize(cols, rows)
   }
@@ -251,6 +271,7 @@ export class HeadlessEmulator {
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot {
     const modes = this.getModes()
+
     // Why absolute: relative cursor restore is off by a column after a wrap-pending final row; saved-cursor rides along for DECRC.
     const serializedAnsi = serializeWithAbsoluteCursor(
       this.serializer,
@@ -258,7 +279,9 @@ export class HeadlessEmulator {
       { scrollback: opts.scrollbackRows },
       readSavedCursorRegister(this.terminal)
     )
+
     const { snapshotAnsi, scrollbackAnsi } = splitTerminalSnapshotAnsi(serializedAnsi, modes)
+
     const snapshot: TerminalSnapshot = {
       snapshotAnsi,
       scrollbackAnsi,
@@ -280,6 +303,7 @@ export class HeadlessEmulator {
         ? { pendingEscapeTailAnsi: this.partialEscapeTail }
         : {})
     }
+
     return snapshot
   }
 
@@ -296,26 +320,32 @@ export class HeadlessEmulator {
   isCursorOnEmptyPromptLine(): boolean {
     const buffer = this.terminal.buffer.active
     const line = buffer.getLine(buffer.baseY + buffer.cursorY)
+
     if (!line) {
       return false
     }
+
     const upToCursor = line.translateToString(true, 0, buffer.cursorX).trimEnd()
     const fullLine = line.translateToString(true).trimEnd()
+
     return fullLine === upToCursor && upToCursor.endsWith('>') && !upToCursor.endsWith('>>')
   }
 
   getVisibleLines(): string[] {
     const buffer = this.terminal.buffer.active
     const lines: string[] = []
+
     for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
       lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
     }
+
     return lines
   }
 
   getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {
     const buffer = this.terminal.buffer.active
     const start = buffer.viewportY
+
     return {
       start,
       endExclusive: Math.min(buffer.length, start + this.terminal.rows),
@@ -331,9 +361,11 @@ export class HeadlessEmulator {
     const buffer = this.terminal.buffer.active
     const start = Math.max(0, buffer.length - Math.max(0, Math.floor(limit)))
     const lines: string[] = []
+
     for (let row = start; row < buffer.length; row += 1) {
       lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
     }
+
     return lines
   }
 

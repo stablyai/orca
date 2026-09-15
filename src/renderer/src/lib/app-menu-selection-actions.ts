@@ -10,6 +10,8 @@ export function dispatchAppMenuSelectionAction(
     detail: action,
     cancelable: true
   })
+
   target.dispatchEvent(event)
+
   return event.defaultPrevented
 }

@@ -57,10 +57,12 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
+
     // This field reports current Windows process-identity proof. Structured RPC
     // support itself stays advertised; agentSession.createSupport owns current eligibility.
     const windowsProcessStartTimeAvailable =
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
+
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
         (capability !== 'browser.screencast.v1' || canBrowse) &&
@@ -72,19 +74,23 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
         (process.env.ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY !== '1' ||
           capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY)
     )
+
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
+
     // Why: certificate proceed is owned by the browser-hosting process for both
     // desktop webviews and offscreen pages. Advertise whenever either backend
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
     }
+
     // Why the cause and not one fixed sentence: the operator can only act on the reason
     // that actually applies, and a host that says "set ORCA_BROWSER_EXECUTABLE" to someone
     // who already set it sends them to fix a thing that is not broken.
     const cause = canBrowse || hasHeadlessCommands ? null : runtimeBrowserUnavailableCause()
+
     const degradations: RuntimeDegradation[] = cause
       ? [
           {
@@ -96,10 +102,13 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
           }
         ]
       : []
+
     const terminalDegradation = runtimeTerminalDegradation()
+
     if (terminalDegradation) {
       degradations.push(terminalDegradation)
     }
+
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -133,6 +142,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
 
   setNotifier(notifier: RuntimeNotifier | null): void {
     this.notifier = notifier
+
     if (notifier) {
       this.repositoryForkBackfill.start()
     }
@@ -145,15 +155,19 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   getTerminalSleepClientEventSnapshot(): RuntimeClientEvent[] {
     const statusHost = this.asRuntimeStatusHost()
     const events: RuntimeClientEvent[] = []
+
     const sleepStates = [...this.terminalSleepStateByWorktreeId.values()].sort((a, b) =>
       a.worktreeId.localeCompare(b.worktreeId)
     )
+
     for (const state of sleepStates) {
       const committedPtyIds = new Set(state.ptyIds)
+
       if (state.phase === 'stopping') {
         const pendingPtyIds = Object.keys(state.terminalHandlesByPtyId)
           .filter((ptyId) => !committedPtyIds.has(ptyId))
           .sort()
+
         if (pendingPtyIds.length > 0) {
           events.push({
             type: 'worktreeTerminalSleepState',
@@ -168,6 +182,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
           })
         }
       }
+
       if (state.ptyIds.length > 0) {
         events.push({
           type: 'worktreeTerminalSleepState',
@@ -182,6 +197,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
         })
       }
     }
+
     return events
   }
 
@@ -189,20 +205,26 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     handle: string
   ): { tabId: string; worktreeId: string } | null {
     const record = this.handles.get(handle)
+
     if (!record) {
       return null
     }
+
     if (!record.tabId.startsWith('pty:')) {
       return { tabId: record.tabId, worktreeId: record.worktreeId }
     }
+
     const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
+
     const tabId =
       pty?.tabId && !pty.tabId.startsWith('pty:')
         ? pty.tabId
         : parsePaneKey(pty?.paneKey ?? '')?.tabId
+
     if (!pty || !tabId || tabId.startsWith('pty:')) {
       return null
     }
+
     return { tabId, worktreeId: pty.worktreeId }
   }
 

@@ -21,11 +21,13 @@ export function backoffUntil(key: string): number | null {
   // Why: a lapsed window keeps its failure count, otherwise the very act of
   // retrying resets the escalation and the backoff never grows past the base.
   const entry = failureBackoff.get(key)
+
   return entry !== undefined && entry.until > Date.now() ? entry.until : null
 }
 
 export function noteFailure(key: string): void {
   const now = Date.now()
+
   for (const [candidate, entry] of failureBackoff) {
     // Why: only counts that lapsed a full max window ago are stale enough to
     // forget; anything more eager would undo the escalation above.
@@ -33,14 +35,18 @@ export function noteFailure(key: string): void {
       failureBackoff.delete(candidate)
     }
   }
+
   const failures = (failureBackoff.get(key)?.failures ?? 0) + 1
   failureBackoff.delete(key)
   failureBackoff.set(key, { until: now + lookupBackoffDelayMs(failures), failures })
+
   while (failureBackoff.size > MAX_BACKOFF_ENTRIES) {
     const oldest = failureBackoff.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     failureBackoff.delete(oldest)
   }
 }

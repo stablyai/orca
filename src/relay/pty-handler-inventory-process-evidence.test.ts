@@ -44,6 +44,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 
 vi.mock('../shared/process-table-snapshot-reader', async (importOriginal) => {
   const actual = await importOriginal<ProcessTableSnapshotModule>()
+
   return {
     ...actual,
     getStrictProcessTableSnapshot: mockGetStrictProcessTableSnapshot,
@@ -55,6 +56,7 @@ import type * as processTableSnapshotModule from '../shared/process-table-snapsh
 import type { ProcessTableRow } from '../shared/process-table-snapshot'
 
 type ProcessTableSnapshotModule = typeof processTableSnapshotModule
+
 import * as ptyShellUtils from './pty-shell-utils'
 import type { PtyHandler } from './pty-handler'
 import {
@@ -69,6 +71,7 @@ type ProcessSummary = { id: string; title: string }
 /** A shell root plus its foreground children, as `ps` reports them. */
 function paneRows(rootPid: number, commands: string[]): ProcessTableRow[] {
   const foregroundPgid = rootPid + 1
+
   return [
     {
       pid: rootPid,
@@ -95,14 +98,17 @@ function countingRows(rows: ProcessTableRow[]): {
   reads: () => number
 } {
   let reads = 0
+
   const proxy = new Proxy(rows, {
     get(target, key, receiver) {
       if (typeof key === 'string' && /^\d+$/.test(key)) {
         reads += 1
       }
+
       return Reflect.get(target, key, receiver)
     }
   })
+
   return { rows: proxy, reads: () => reads }
 }
 
@@ -122,6 +128,7 @@ describe('PtyHandler inventory foreground evidence', () => {
       onExit: vi.fn(),
       kill: vi.fn()
     })
+
     return (await spawnPty()).id
   }
 
@@ -180,8 +187,10 @@ describe('PtyHandler inventory foreground evidence', () => {
       const table = Array.from({ length: paneCount }, (_, index) =>
         paneRows(10_000 + index * 10, ['node /opt/codex'])
       ).flat()
+
       const { rows, reads } = countingRows(table)
       mockGetStrictProcessTableSnapshot.mockResolvedValue(rows)
+
       for (let index = 0; index < paneCount; index += 1) {
         await spawnPane(10_000 + index * 10, 'zsh')
       }
@@ -229,6 +238,7 @@ describe('PtyHandler inventory foreground evidence', () => {
         command: 'node /opt/codex'
       }
     ])
+
     const inspection = await dispatcher.callRequest('pty.inspectProcess', {
       id: spawned.id,
       expectedIncarnationId: spawned.incarnationId

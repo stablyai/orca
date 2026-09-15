@@ -35,6 +35,7 @@ describe('findSetupScriptPromptRepo', () => {
       badgeColor: '#000',
       addedAt: 1
     }
+
     const ssh: Repo = {
       ...local,
       path: '/ssh',
@@ -62,6 +63,7 @@ describe('findSetupScriptPromptRepo', () => {
       addedAt: 1,
       connectionId: 'private'
     }
+
     const runtime: Repo = {
       ...directSsh,
       path: '/runtime',

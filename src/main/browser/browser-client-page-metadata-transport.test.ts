@@ -98,9 +98,11 @@ describe('browser client page metadata transport', () => {
   it('leaves a replacement bound when the host it replaced unbinds', async () => {
     const transport = new BrowserClientPageMetadataTransport()
     const outgoing = { sendPageMetadataRequest: vi.fn() }
+
     const replacement = {
       sendPageMetadataRequest: vi.fn().mockResolvedValue(answered({ accepted: true }))
     }
+
     transport.bind(outgoing)
     transport.bind(replacement)
     transport.unbind(outgoing)

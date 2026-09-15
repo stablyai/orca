@@ -22,6 +22,7 @@ export function buildMergeabilityRecalculationCommands(): string {
 
 export function ConflictingFilesSection({ pr }: { pr: ConflictReview }): React.JSX.Element | null {
   const files = pr.conflictSummary?.files ?? []
+
   if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
   }
@@ -76,11 +77,14 @@ export function MergeConflictNotice({
   if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
     return null
   }
+
   const locallyClean = pr.conflictSummary?.localMergeState === 'clean'
+
   let noticeBody = translate(
     'auto.components.right.sidebar.checks.panel.content.ae8a04ef17',
     'Conflict file details are unavailable'
   )
+
   if (isRefreshingConflictDetails) {
     noticeBody = translate(
       'auto.components.right.sidebar.checks.panel.content.73d0675356',
@@ -92,6 +96,7 @@ export function MergeConflictNotice({
       'The hosting provider reports conflicts, but local Git did not reproduce them. Refresh the review or push the branch to recalculate mergeability.'
     )
   }
+
   const refreshCommands = locallyClean ? buildMergeabilityRecalculationCommands() : null
 
   return (
@@ -127,6 +132,7 @@ function MergeabilityRecalculationCommandBox({
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -141,6 +147,7 @@ function MergeabilityRecalculationCommandBox({
         if (!isMountedRef.current) {
           return
         }
+
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {

@@ -32,15 +32,19 @@ export function shouldSkipLocalViewerQualifiers(sourceContext?: TaskSourceContex
   if (!sourceContext) {
     return false
   }
+
   // Why: local gh viewer must not evaluate @me soft-hide for SSH/environment rows.
   const hostKind = parseExecutionHostId(sourceContext.hostId)?.kind
+
   if (hostKind === 'ssh' || hostKind === 'runtime') {
     return true
   }
+
   const providerHost =
     sourceContext.providerIdentity?.provider === 'github'
       ? sourceContext.providerIdentity.host?.toLowerCase()
       : undefined
+
   return Boolean(providerHost && providerHost !== 'github.com')
 }
 
@@ -63,16 +67,19 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
 } {
   const patchWorkItem = args.patchWorkItem
   const mountedRef = useMountedRef()
+
   const activeQueryRef = useRef({
     query: args.query,
     queryKey: args.queryKey,
     viewerLogin: args.viewerLogin
   })
+
   activeQueryRef.current = {
     query: args.query,
     queryKey: args.queryKey,
     viewerLogin: args.viewerLogin
   }
+
   const [softHiddenItemKeys, setSoftHiddenItemKeys] = useState<ReadonlySet<string>>(
     () => new Set(getTaskPageGitHubSoftHiddenItemKeys())
   )
@@ -83,6 +90,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
 
   useEffect(() => {
     setSoftHiddenItemKeys(new Set(getTaskPageGitHubSoftHiddenItemKeys()))
+
     return subscribeTaskPageGitHubMutationRegistry(() => {
       setSoftHiddenItemKeys(new Set(getTaskPageGitHubSoftHiddenItemKeys()))
     })
@@ -112,7 +120,9 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       if (!canStartTaskPageGitHubWorkItemMutation(input)) {
         return 'stale'
       }
+
       const skipMeQualifiers = shouldSkipLocalViewerQualifiers(input.sourceContext)
+
       const began = beginTaskPageGitHubWorkItemMutation({
         item: input.item,
         intent: input.intent,
@@ -128,6 +138,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
         const result = await input.mutate()
         const activeQuery = activeQueryRef.current
         const typed = result as { ok?: boolean; error?: string | { message?: string } } | void
+
         if (typed && typeof typed === 'object' && typed.ok === false) {
           const rolled = rollbackTaskPageGitHubWorkItemMutation({
             key: began.key,
@@ -139,17 +150,21 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
             viewerLogin: activeQuery.viewerLogin,
             item: input.item
           })
+
           if (rolled === 'rolled_back' && mountedRef.current) {
             const message =
               typeof typed.error === 'string'
                 ? typed.error
                 : (typed.error?.message ?? input.errorToast)
+
             toast.error(message)
           }
+
           return rolled
         }
 
         const serverEntity = input.serverEntityFromResult?.(result)
+
         const confirmed = confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
           query: activeQuery.query,
           queryKey: activeQuery.queryKey,
@@ -161,15 +176,19 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           // Quiet revalidate: mark dirty; TaskPage runner is registered separately.
           scheduleQuiet: false
         })
+
         if (confirmed === 'confirmed') {
           if (input.successToast && mountedRef.current) {
             toast.success(input.successToast)
           }
+
           useAppStore.getState().recordFeatureInteraction('github-tasks')
         }
+
         return confirmed
       } catch (err) {
         const activeQuery = activeQueryRef.current
+
         const rolled = rollbackTaskPageGitHubWorkItemMutation({
           key: began.key,
           generation: began.generation,
@@ -180,9 +199,11 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           viewerLogin: activeQuery.viewerLogin,
           item: input.item
         })
+
         if (rolled === 'rolled_back' && mountedRef.current) {
           toast.error(err instanceof Error ? err.message : input.errorToast)
         }
+
         return rolled
       }
     },

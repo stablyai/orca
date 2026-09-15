@@ -15,6 +15,7 @@ import { HostScreen } from './[hostId]/index'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
+
 const RESIZE_EDGE_WIDTH = 24
 
 // Clamp a sidebar width to the bounds and to the current window, so a width
@@ -24,6 +25,7 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
     HOST_SIDEBAR_MIN_WIDTH,
     Math.min(HOST_SIDEBAR_MAX_WIDTH, windowWidth - MIN_DETAIL_WIDTH)
   )
+
   return Math.min(hardMax, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
 
@@ -82,6 +84,7 @@ export default function HostGroupLayout() {
         setSidebarWidth(clampSidebarToWindow(saved, windowWidthRef.current))
       }
     })
+
     return () => {
       stale = true
     }

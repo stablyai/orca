@@ -32,10 +32,13 @@ export function resolveActivationPtyListScope(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return { connectionId: null }
   }
+
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
+
   if (resolution.kind === 'missing' && !getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
     const repo = resolveIndexedRepoOwner(state.repos, getRepoIdFromWorktreeId(worktreeId))
     const worktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+
     // A known native repo remains usable while the unrelated runtime catalog hydrates.
     if (
       repo.kind === 'resolved' &&
@@ -50,14 +53,18 @@ export function resolveActivationPtyListScope(
       return { connectionId: null }
     }
   }
+
   if (resolution.kind !== 'resolved' || resolution.route.runtimeEnvironmentId) {
     return undefined
   }
+
   const host = parseExecutionHostId(resolution.route.executionHostId)
+
   if (!host || host.kind === 'runtime') {
     // Paired hosts own their activation; a client inventory cannot authorize a writer there.
     return undefined
   }
+
   return { connectionId: host.kind === 'ssh' ? host.targetId : null }
 }
 
@@ -73,15 +80,18 @@ export async function listActivationPtySessions(
   worktreeId: string
 ): Promise<PtyListedSession[]> {
   const scope = resolveActivationPtyListScope(state, worktreeId)
+
   if (!scope) {
     return window.api.pty.listSessions()
   }
+
   try {
     return await window.api.pty.listSessions(scope)
   } catch (error) {
     if (!String((error as Error)?.message ?? error).includes(DETACHED_PROVIDER_REJECTION)) {
       throw error
     }
+
     return window.api.pty.listSessions()
   }
 }

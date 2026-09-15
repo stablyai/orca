@@ -13,6 +13,7 @@ export async function settlePostAcquisitionAttachFailure(
 ): Promise<never> {
   let cleanupError: unknown = cause
   let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
+
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
@@ -24,8 +25,10 @@ export async function settlePostAcquisitionAttachFailure(
           ? 'root-exit-observed'
           : 'exit-proven'
   }
+
   // A failed close must not prevent durable failure settlement.
   await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
+
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,
@@ -47,5 +50,6 @@ export async function settlePostAcquisitionAttachFailure(
       'agent session post-acquisition attachment failure settlement failed'
     )
   }
+
   throw cleanupError
 }

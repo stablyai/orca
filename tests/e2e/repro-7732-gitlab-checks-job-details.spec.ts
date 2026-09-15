@@ -78,6 +78,7 @@ async function installGitLabChecksBackend(electronApp: ElectronApplication): Pro
     ipcMain.handle('gitlab:jobTrace', async () => {
       const g = globalThis as { __repro7732JobTraceCalls?: number }
       g.__repro7732JobTraceCalls = (g.__repro7732JobTraceCalls ?? 0) + 1
+
       return { ok: true, trace: fx.trace }
     })
   }, FIXTURE)
@@ -93,9 +94,11 @@ async function linkGitLabMRToWorktree(page: Page, worktreeId: string): Promise<v
   await page.evaluate(
     ({ worktreeId, mrNumber }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.setState((current) => ({
         worktreesByRepo: Object.fromEntries(
           Object.entries(current.worktreesByRepo).map(([repoId, worktrees]) => [
@@ -124,30 +127,37 @@ test.describe('#7732 GitLab Checks panel job details', () => {
     const worktreeId = await orcaPage.evaluate(
       () => window.__store?.getState().activeWorktreeId ?? null
     )
+
     if (!worktreeId) {
       throw new Error('E2E fixture did not expose an active worktree')
     }
+
     // Late startup UI hydration resets the active workspace + sidebar route; let it settle first.
     await orcaPage.waitForTimeout(8_000)
 
     const jobRow = orcaPage.getByText(`${FIXTURE.stage}: ${FIXTURE.jobName}`, { exact: true })
+
     for (let attempt = 0; attempt < 40 && (await jobRow.count()) === 0; attempt++) {
       await linkGitLabMRToWorktree(orcaPage, worktreeId)
       await openChecks(orcaPage, worktreeId)
       await orcaPage.waitForTimeout(500)
     }
+
     await expect(jobRow).toBeVisible({ timeout: 15_000 })
 
     mkdirSync(SCREENSHOT_DIR, { recursive: true })
     await jobRow.click()
     const noDetails = orcaPage.getByText('No inline details are available for this check.')
     const viewFullLogs = orcaPage.getByRole('button', { name: 'View full logs' })
+
     for (let attempt = 0; attempt < 20; attempt++) {
       if ((await noDetails.count()) > 0 || (await viewFullLogs.count()) > 0) {
         break
       }
+
       await orcaPage.waitForTimeout(500)
     }
+
     await orcaPage.screenshot({
       path: path.join(SCREENSHOT_DIR, 'gitlab-checks-job-expanded.png')
     })

@@ -18,15 +18,20 @@ export function asBrowserFindTarget(value: unknown): BrowserFindTarget | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
+
   const target = value as Partial<BrowserFindSource>
+
   if (typeof target.browserPageId !== 'string' || target.browserPageId.length === 0) {
     return null
   }
+
   if (target.browserWorkspaceId === undefined) {
     return { browserPageId: target.browserPageId }
   }
+
   if (typeof target.browserWorkspaceId !== 'string' || target.browserWorkspaceId.length === 0) {
     return null
   }
+
   return { browserPageId: target.browserPageId, browserWorkspaceId: target.browserWorkspaceId }
 }

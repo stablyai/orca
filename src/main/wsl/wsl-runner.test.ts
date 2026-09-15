@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+
 vi.mock('./wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
@@ -32,6 +34,7 @@ function fencedEcho(payload = ''): void {
     const script = spec.args.at(-1) ?? ''
     const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
     const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
+
     return {
       environmentResolved: true,
       code: 0,

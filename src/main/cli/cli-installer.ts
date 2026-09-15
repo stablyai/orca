@@ -22,7 +22,9 @@ export class CliInstaller extends CliPathRegistration {
     ) {
       return false
     }
+
     const extractionOptions = this.appImageExtractionOptions()
+
     return Boolean(
       extractionOptions && isAppImageInstalledLauncherOwnedBySibling(extractionOptions)
     )
@@ -30,6 +32,7 @@ export class CliInstaller extends CliPathRegistration {
 
   async getStatus(): Promise<CliInstallStatus> {
     const defaultSpec = this.resolveInstallSpec()
+
     if (!defaultSpec) {
       return {
         platform: this.platform,
@@ -48,6 +51,7 @@ export class CliInstaller extends CliPathRegistration {
     }
 
     const launcherPath = await this.resolveLauncherPath()
+
     if (!launcherPath) {
       const detail = this.hasUnverifiedAppImageRuntime
         ? 'Orca could not verify the inherited AppImage runtime identity, so CLI registration is unavailable.'
@@ -56,6 +60,7 @@ export class CliInstaller extends CliPathRegistration {
           : this.isPackaged
             ? 'The bundled CLI launcher is missing from this Orca build.'
             : 'Development mode uses a generated launcher for validation only.'
+
       return {
         platform: this.platform,
         commandName: this.commandName,
@@ -77,15 +82,20 @@ export class CliInstaller extends CliPathRegistration {
 
   private async getStatusForLauncher(launcherPath: string): Promise<CliInstallStatus> {
     const defaultSpec = this.resolveInstallSpec()
+
     if (!defaultSpec) {
       throw new Error('CLI registration is not implemented on this platform.')
     }
+
     const spec = await this.resolveActiveInstallSpec(defaultSpec, launcherPath)
+
     const inspectedStatus =
       spec.installMethod === 'symlink'
         ? await this.inspectSymlink(spec.commandPath, launcherPath)
         : await this.inspectWindowsWrapper(spec.commandPath, launcherPath)
+
     const extractionOptions = this.appImageExtractionOptions()
+
     const baseStatus =
       inspectedStatus.state === 'installed' &&
       extractionOptions &&
@@ -96,8 +106,10 @@ export class CliInstaller extends CliPathRegistration {
             detail: `${spec.commandPath} does not point to the current Orca AppImage payload.`
           }
         : inspectedStatus
+
     const pathDirectory = dirname(spec.commandPath)
     const pathProbe = await this.probePathConfiguration(pathDirectory)
+
     return this.withPathInfo(baseStatus, pathDirectory, pathProbe)
   }
 
@@ -107,6 +119,7 @@ export class CliInstaller extends CliPathRegistration {
 
   private async installUnlocked(): Promise<CliInstallStatus> {
     const initialStatus = await this.getStatus()
+
     if (
       !initialStatus.supported ||
       !initialStatus.commandPath ||
@@ -115,18 +128,23 @@ export class CliInstaller extends CliPathRegistration {
     ) {
       throw new Error(initialStatus.detail ?? 'CLI registration is unavailable on this build.')
     }
+
     if (initialStatus.state === 'conflict') {
       throw new Error(
         `Refusing to replace non-Orca command at ${initialStatus.commandPath}. Remove it and register again if it is no longer needed.`
       )
     }
+
     const extractedRoot = await this.ensureLinuxAppImagePayload()
+
     const status = extractedRoot
       ? await this.getStatusForLauncher(extractedRoot.stableLauncherPath)
       : initialStatus
+
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       throw new Error(status.detail ?? 'CLI registration is unavailable on this build.')
     }
+
     if (status.state === 'conflict') {
       throw new Error(
         `Refusing to replace non-Orca command at ${status.commandPath}. Remove it and register again if it is no longer needed.`
@@ -149,6 +167,7 @@ export class CliInstaller extends CliPathRegistration {
       // Why: Windows shells find commands via user PATH, so the installer owns that entry, not the desktop installer.
       await this.ensureWindowsPathEntry(dirname(status.commandPath))
     }
+
     if (extractedRoot) {
       await pruneAppImageExtractedRoots(extractedRoot.rootPath)
     }
@@ -164,28 +183,38 @@ export class CliInstaller extends CliPathRegistration {
 
   private async removeUnlocked(): Promise<CliInstallStatus> {
     const status = await this.getStatus()
+
     if (!status.supported || !status.commandPath || !status.launcherPath || !status.installMethod) {
       await this.removeLinuxAppImagePayloads()
+
       return status
     }
+
     if (status.state === 'not_installed') {
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
+
       if (this.platform === 'win32') {
         await this.removeWindowsPathEntry(dirname(status.commandPath))
+
         return this.getStatus()
       }
+
       await this.removeLinuxAppImagePayloads()
+
       return status
     }
+
     if (status.state === 'conflict') {
       throw new Error(`Refusing to remove non-Orca command at ${status.commandPath}.`)
     }
+
     if (status.state === 'stale' && status.installMethod !== 'symlink') {
       throw new Error(`Refusing to remove a command not owned by Orca at ${status.commandPath}.`)
     }
 
     if (status.state === 'stale' && this.isAppImageRegistrationOwnedBySibling(status)) {
       await this.removeLinuxAppImagePayloads()
+
       return this.getStatus()
     }
 
@@ -200,11 +229,13 @@ export class CliInstaller extends CliPathRegistration {
     }
 
     await this.removeLinuxAppImagePayloads()
+
     return this.getStatus()
   }
 
   private async removeLinuxAppImagePayloads(): Promise<void> {
     const extractionOptions = this.appImageExtractionOptions()
+
     if (this.isLinuxAppImage() && extractionOptions) {
       await removeAppImageInstalledPayloads(resolveAppImageNamespacePath(extractionOptions))
     }

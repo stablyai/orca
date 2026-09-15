@@ -32,6 +32,7 @@ describe('federation acknowledgment integrity', () => {
       stage: 'input_accepted',
       state: 'ready'
     })
+
     return { db, dispatchId }
   }
 
@@ -114,6 +115,7 @@ describe('federation acknowledgment integrity', () => {
   it('accepts an identical remote answer replay and rejects a conflicting replay', () => {
     const current = createReadyAttachment(3)
     enqueueQuestion(current.db, current.dispatchId, 'question_replay')
+
     const answer = {
       messageId: 'question_replay',
       dispatchId: current.dispatchId,
@@ -135,12 +137,15 @@ describe('federation acknowledgment integrity', () => {
     const sqlite = (current.db as unknown as { db: Database.Database }).db
     const originalPrepare = sqlite.prepare.bind(sqlite)
     let injected = false
+
     const prepare = vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
       const statement = originalPrepare(sql)
+
       if (!injected && sql.includes('UPDATE remote_questions')) {
         injected = true
         statement.run('answer_race', 'Yes', 'question_race')
       }
+
       return statement
     })
 

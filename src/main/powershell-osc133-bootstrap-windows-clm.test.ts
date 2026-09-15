@@ -7,7 +7,9 @@ import { encodePowerShellCommand } from './powershell-osc133-bootstrap'
 import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 
 const WINDOWS_POWERSHELLS = ['powershell.exe', 'pwsh.exe'] as const
+
 const PROFILE_CODEX_HOME = 'C:\\Profile Custom\\codex'
+
 const MANAGED_CODEX_HOME = 'C:\\Orca Managed\\codex-runtime-home'
 
 for (const shell of WINDOWS_POWERSHELLS) {
@@ -16,6 +18,7 @@ for (const shell of WINDOWS_POWERSHELLS) {
       'restores CODEX_HOME and continues startup in %s mode',
       (languageMode) => {
         const cwd = mkdtempSync(join(tmpdir(), 'orca-powershell-clm-'))
+
         try {
           expect(runBootstrap(shell, languageMode, cwd)).toContain(
             `mode=${languageMode};codexHome=${MANAGED_CODEX_HOME};orcaHome=${MANAGED_CODEX_HOME};startupCount=2;cwd=${cwd}`
@@ -40,6 +43,7 @@ function runBootstrap(
     undefined,
     '$env:ORCA_TEST_STARTUP_COUNT = 1 + [int]$env:ORCA_TEST_STARTUP_COUNT'
   )
+
   expect(launch.startupCommandDeliveredInShellArgs).toBe(true)
   const encodedCommandIndex = launch.shellArgs.indexOf('-EncodedCommand')
   expect(encodedCommandIndex).toBeGreaterThanOrEqual(0)
@@ -67,11 +71,13 @@ function isAvailable(shell: (typeof WINDOWS_POWERSHELLS)[number]): boolean {
   if (process.platform !== 'win32') {
     return false
   }
+
   try {
     execFileSync(shell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$null'], {
       stdio: 'ignore',
       windowsHide: true
     })
+
     return true
   } catch {
     return false

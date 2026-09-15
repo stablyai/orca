@@ -29,6 +29,7 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./gl-utils', async () => {
   const actual = await vi.importActual<typeof GlUtils>('./gl-utils')
+
   return {
     ...actual,
     glabExecFileAsync: glabExecFileAsyncMock,
@@ -87,6 +88,7 @@ describe('gitlab client — MR operations', () => {
       })
       const originalMap = Array.prototype.map
       let knownHostCacheScans = 0
+
       const mapSpy = vi.spyOn(Array.prototype, 'map').mockImplementation(function (
         this: unknown[],
         callback: (value: unknown, index: number, array: unknown[]) => unknown,
@@ -95,6 +97,7 @@ describe('gitlab client — MR operations', () => {
         if (this[0] === 'gitlab.com' && this.every((value) => typeof value === 'string')) {
           knownHostCacheScans += 1
         }
+
         return Reflect.apply(originalMap, this, [callback, thisArg])
       })
 
@@ -106,6 +109,7 @@ describe('gitlab client — MR operations', () => {
       } finally {
         mapSpy.mockRestore()
       }
+
       expect(knownHostCacheScans).toBe(1)
     })
   })

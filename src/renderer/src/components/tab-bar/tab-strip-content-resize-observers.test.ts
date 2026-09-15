@@ -12,6 +12,7 @@ describe('bindTabStripContentResizeObservers', () => {
 
     const observe = vi.fn()
     const disconnect = vi.fn()
+
     const resizeObserver = vi.fn(function ResizeObserver(
       this: ResizeObserver,
       callback: ResizeObserverCallback

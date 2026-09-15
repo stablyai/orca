@@ -57,16 +57,20 @@ export default function DiffViewer({
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+
   // Why: subscribe to the raw array so selector identity only changes when this worktree's comments change; filtering happens below.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
+
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
+
   const terminalFontSize = settings?.terminalFontSize ?? 13
   const diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -76,6 +80,7 @@ export default function DiffViewer({
   const diffBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
@@ -88,6 +93,7 @@ export default function DiffViewer({
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
     [largeDiffRenderLimit, originalContent, modifiedContent]
   )
+
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
   // Why: only forward the pending scroll id when this viewer owns the comment, else unrelated viewers race to ack it.
@@ -95,6 +101,7 @@ export default function DiffViewer({
     if (!worktreeId || !scrollToDiffCommentId) {
       return null
     }
+
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments, worktreeId])
 
@@ -131,21 +138,27 @@ export default function DiffViewer({
     if (!modifiedEditor || !popover) {
       return
     }
+
     const update = (): void => {
       const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
       const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
+
       if (top == null) {
         setPopover(null)
+
         return
       }
+
       const left = getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current)
       setPopover((prev) =>
         prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
       )
     }
+
     const scrollSub = modifiedEditor.onDidScrollChange(update)
     const contentSub = modifiedEditor.onDidContentSizeChange(update)
     const layoutSub = modifiedEditor.onDidLayoutChange(update)
+
     return () => {
       scrollSub.dispose()
       contentSub.dispose()
@@ -164,40 +177,55 @@ export default function DiffViewer({
       // Why: reset the per-modelKey one-shot here before the first-diff guard runs for the new file.
       didAutoScrollFirstDiffRef.current = false
     }
+
     const diffEditor = diffEditorRef.current
+
     if (!diffEditor || !modifiedEditor) {
       return
     }
+
     if (didAutoScrollFirstDiffRef.current) {
       return
     }
+
     if (diffViewStateCache.get(modelKey)) {
       return
     }
+
     if (pendingScrollForThisViewer) {
       // Why: decorator owns this scroll, so set the one-shot flag; else we'd re-run and overwrite it when pendingScroll flips back to null.
       didAutoScrollFirstDiffRef.current = true
+
       return
     }
+
     let rafId: number | null = null
+
     const run = (): void => {
       if (didAutoScrollFirstDiffRef.current) {
         return
       }
+
       const changes = diffEditor.getLineChanges()
+
       if (!changes || changes.length === 0) {
         return
       }
+
       const line = Math.max(1, changes[0].modifiedStartLineNumber)
+
       // Defer one frame so view zones are laid out before measuring; cancel any earlier rAF to avoid a redundant scroll.
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
       }
+
       rafId = requestAnimationFrame(() => {
         rafId = null
+
         if (didAutoScrollFirstDiffRef.current || !modifiedEditor.getModel()) {
           return
         }
+
         const top = modifiedEditor.getTopForLineNumber(line, true)
         const editorHeight = modifiedEditor.getLayoutInfo().height
         modifiedEditor.setPosition({ lineNumber: line, column: 1 })
@@ -205,13 +233,17 @@ export default function DiffViewer({
         didAutoScrollFirstDiffRef.current = true
       })
     }
+
     // Run now if the diff is ready; otherwise onDidUpdateDiff fires once the computation lands.
     if (diffEditor.getLineChanges()) {
       run()
     }
+
     const sub = diffEditor.onDidUpdateDiff(() => run())
+
     return () => {
       sub.dispose()
+
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
       }
@@ -225,9 +257,11 @@ export default function DiffViewer({
     // Why: capture before nulling so we unregister the exact instance (identity guard no-ops a stale dispose).
     const fallenBackEditor = diffEditorRef.current
     diffEditorRef.current = null
+
     if (fallenBackEditor) {
       unregisterDiffEditor(fallenBackEditor)
     }
+
     setModifiedEditor(null)
     setPopover(null)
   }, [unregisterDiffEditor])
@@ -236,20 +270,25 @@ export default function DiffViewer({
     if (!popover) {
       return
     }
+
     if (onAddLineComment) {
       const ok = await onAddLineComment({
         lineNumber: popover.lineNumber,
         startLine: popover.startLine,
         body
       })
+
       if (ok) {
         setPopover(null)
       }
+
       return
     }
+
     if (!worktreeId) {
       return
     }
+
     // Why: await persistence — a null result (failed save) keeps the popover open for retry instead of losing the draft.
     const result = await addDiffComment({
       worktreeId,
@@ -260,6 +299,7 @@ export default function DiffViewer({
       body,
       side: 'modified'
     })
+
     if (result) {
       setPopover(null)
     } else {
@@ -277,6 +317,7 @@ export default function DiffViewer({
 
   const propsRef = useRef({ relativePath, language, onSave })
   propsRef.current = { relativePath, language, onSave }
+
   const currentDiffModelPaths = useDiffViewerLargeDiffLifecycle({
     limited: renderLimit.limited,
     modelKey,
@@ -303,6 +344,7 @@ export default function DiffViewer({
 
       // Why: restore full diff view state (not just scrollTop) so cursor/selection stay consistent across both panes.
       const savedViewState = diffViewStateCache.get(modelKey)
+
       if (savedViewState) {
         requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
       }
@@ -315,6 +357,7 @@ export default function DiffViewer({
             onSaveRef.current?.(modifiedEditor.getValue())
           }
         )
+
         const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
         const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
 
@@ -322,6 +365,7 @@ export default function DiffViewer({
         const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
           onContentChangeRef.current?.(modifiedEditor.getValue())
         })
+
         modifiedEditor.onDidDispose(() => {
           // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
           cleanupSaveShortcut()
@@ -352,8 +396,10 @@ export default function DiffViewer({
   useLayoutEffect(() => {
     return () => {
       const de = diffEditorRef.current
+
       if (de) {
         const currentViewState = de.saveViewState()
+
         if (currentViewState) {
           setWithLRU(diffViewStateCache, modelKey, currentViewState)
         }
@@ -363,11 +409,14 @@ export default function DiffViewer({
 
   useEffect(() => {
     const diffEditor = diffEditorRef.current
+
     if (!diffEditor) {
       return
     }
+
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+
     return () => {
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null

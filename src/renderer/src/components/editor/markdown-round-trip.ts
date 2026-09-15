@@ -5,10 +5,12 @@ import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 
 const roundTripCache = new Map<string, string | null>()
+
 const MAX_CACHE_ENTRIES = 20
 
 export function getRichMarkdownRoundTripOutput(content: string): string | null {
   const cached = roundTripCache.get(content)
+
   if (cached !== undefined) {
     return cached
   }
@@ -17,12 +19,14 @@ export function getRichMarkdownRoundTripOutput(content: string): string | null {
 
   try {
     const codec = createRichMarkdownEditorCodec()
+
     const context = createRichMarkdownHtmlSuperscriptLinkContext({
       sourceFilePath: '',
       worktreeId: '',
       worktreeRoot: null,
       sourceOwner: { kind: 'unknown' }
     })
+
     const editor = new Editor({
       element: null,
       extensions: createRichMarkdownExtensions({
@@ -35,6 +39,7 @@ export function getRichMarkdownRoundTripOutput(content: string): string | null {
       }),
       contentType: 'markdown'
     })
+
     try {
       output = editor.getMarkdown()
     } finally {
@@ -45,8 +50,10 @@ export function getRichMarkdownRoundTripOutput(content: string): string | null {
   }
 
   roundTripCache.set(content, output)
+
   if (roundTripCache.size > MAX_CACHE_ENTRIES) {
     const oldestKey = roundTripCache.keys().next().value
+
     if (oldestKey) {
       roundTripCache.delete(oldestKey)
     }

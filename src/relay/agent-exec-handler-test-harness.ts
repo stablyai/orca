@@ -6,6 +6,7 @@ import { AgentExecHandler } from './agent-exec-handler'
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return fn()
   } finally {
@@ -38,6 +39,7 @@ export function createHandlers(): Map<string, MethodHandler> {
       handlers.set(method, handler)
     }
   } as never)
+
   return handlers
 }
 

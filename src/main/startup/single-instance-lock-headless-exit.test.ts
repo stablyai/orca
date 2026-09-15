@@ -9,12 +9,14 @@ import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-loc
 
 function readSystemdUnitBlocks(doc: string): Map<string, string[]> {
   const blocks = new Map<string, string[]>()
+
   // Why: key on the unit's path comment — splitting on directives mixes `[Unit]` and `[Service]` across blocks.
   for (const match of doc.matchAll(/^# \/etc\/systemd\/system\/(\S+\.service)$/gm)) {
     const start = match.index + match[0].length
     const name = match[1]
     blocks.set(name, [...(blocks.get(name) ?? []), doc.slice(start, doc.indexOf('```', start))])
   }
+
   return blocks
 }
 
@@ -23,6 +25,7 @@ describe('headless lock-loss exit contract', () => {
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
     'utf8'
   )
+
   const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
   const doc = readFileSync(join(process.cwd(), 'docs/reference/headless-linux-server.md'), 'utf8')
 
@@ -53,6 +56,7 @@ describe('headless lock-loss exit contract', () => {
     const serveUnits = readSystemdUnitBlocks(doc).get('orca-serve.service') ?? []
 
     expect(serveUnits.length).toBeGreaterThan(0)
+
     for (const unit of serveUnits) {
       expect(unit).toContain(
         `RestartPreventExitStatus=${SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE}`
@@ -64,11 +68,13 @@ describe('headless lock-loss exit contract', () => {
 
   it('clears the start limit before every scripted start, which a tripped burst would refuse', () => {
     const lines = doc.split('\n')
+
     const startLines = lines.flatMap((line, index) =>
       /^\s*sudo systemctl start orca-serve/.test(line) ? [index] : []
     )
 
     expect(startLines.length).toBeGreaterThan(0)
+
     for (const index of startLines) {
       expect(lines.slice(Math.max(0, index - 3), index).join('\n')).toContain(
         'systemctl reset-failed orca-serve'
@@ -80,6 +86,7 @@ describe('headless lock-loss exit contract', () => {
     const xvfbUnits = readSystemdUnitBlocks(doc).get('orca-xvfb.service') ?? []
 
     expect(xvfbUnits.length).toBeGreaterThan(0)
+
     // Why: a start limit here would down the display unit permanently and take orca-serve with it.
     for (const unit of xvfbUnits) {
       expect(unit).not.toContain('StartLimitBurst=')

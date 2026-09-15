@@ -24,9 +24,13 @@ import type { CodexStructuredSessionEvent } from './codex-structured-session-ada
 import type { CodexSession } from './codex-structured-session-state'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-abc'
+
 const TURN_ID = 'turn-1'
+
 const LIFECYCLE_KEY = 'legacy:codex:session-1:turn-lifecycle%3Aturn-1'
+
 const USER_ITEM_ID = 'codex:thread-abc:turn-1:0'
 
 type Row = { key: string; body: AgentJournalItemBody }
@@ -34,21 +38,25 @@ type Row = { key: string; body: AgentJournalItemBody }
 function recorder() {
   const rows: Row[] = []
   const tombstones: string[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity: AgentJournalItemIdentity, body) =>
       rows.push({ key: agentJournalItemKey(identity), body }),
     appendTombstone: (identity) => tombstones.push(agentJournalItemKey(identity)),
     publish: () => {}
   }
+
   return { sink, rows, tombstones }
 }
 
 /** Latest body per identity, in first-seen order: what the journal reducer keeps. */
 function reduced(rows: readonly Row[]): Row[] {
   const latest = new Map<string, Row>()
+
   for (const row of rows) {
     latest.set(row.key, row)
   }
+
   return [...latest.values()]
 }
 
@@ -77,6 +85,7 @@ function translatorFor(tap: ReturnType<typeof recorder>, now?: () => number) {
 }
 
 const journals = createTrackedJournalOpener()
+
 let root: string
 
 beforeEach(async () => {
@@ -102,6 +111,7 @@ describe('codex turn lifecycle rows', () => {
         threadId: THREAD_ID
       }
     })
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID,
@@ -129,6 +139,7 @@ describe('codex turn lifecycle rows', () => {
   it('settles prompts when a turn completes while awaiting approval', () => {
     const tap = recorder()
     const clearPromptTurn = vi.fn()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID,
@@ -167,6 +178,7 @@ describe('codex turn lifecycle rows', () => {
   it('settles questions when a turn completes while awaiting input', () => {
     const tap = recorder()
     const clearPromptTurn = vi.fn()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID,
@@ -219,12 +231,15 @@ describe('codex turn lifecycle rows', () => {
       now: () => 9_000,
       journalDir: join(root, SESSION_ID)
     })
+
     const deferred = createDeferredStructuredAgentSessionEventSink()
+
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       sessionId: SESSION_ID,
       primaryThreadId: () => THREAD_ID
     })
+
     deferred.bind({ journal, fence: 1, publish: () => {} })
     const before = journal.cursor()
 
@@ -350,14 +365,17 @@ describe('codex turn lifecycle rows', () => {
 
   it('replays a backpressured turn boundary with its original receipt time', async () => {
     vi.useFakeTimers()
+
     const connection = {
       pauseReading: vi.fn(),
       resumeReading: vi.fn()
     } as unknown as CodexAppServerConnection
+
     const translate = vi
       .fn<Parameters<typeof createCodexStructuredNotificationRetry>[0]['translate']>()
       .mockReturnValueOnce({ accepted: false, reason: 'backpressure' })
       .mockReturnValue({ accepted: true })
+
     const retries = createCodexStructuredNotificationRetry({
       sessionFor: () => ({ connection, ended: false }) as CodexSession,
       translate
@@ -432,6 +450,7 @@ describe('codex turn lifecycle rows', () => {
 
   it('restores no lifecycle rows without a session identity to key them by', () => {
     const tap = recorder()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID

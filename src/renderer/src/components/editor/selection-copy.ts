@@ -15,6 +15,7 @@ export function formatCopiedSelectionWithContext({
 }: FormatCopiedSelectionArgs): string | null {
   const { startLine, endLine } = getContextualCopyLineRange(selection)
   const isSingleLineSelection = selection.startLineNumber === selection.endLineNumber
+
   if (isSingleLineSelection) {
     return null
   }

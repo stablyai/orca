@@ -25,27 +25,33 @@ export class DesktopRuntimeSenderLifecycle {
 
   existingSubscriptionsFor(sender: WebContents): Map<string, AbortController> | null {
     const state = this.senders.get(sender.id)
+
     return state?.sender === sender ? state.subscriptions : null
   }
 
   private stateFor(sender: WebContents): SenderState {
     const existing = this.senders.get(sender.id)
+
     if (existing?.sender === sender) {
       return existing
     }
+
     if (existing) {
       this.retire(existing, true)
     }
+
     const state: SenderState = {
       connectionId: this.mintConnectionId(sender.id),
       sender,
       subscriptions: new Map()
     }
+
     this.senders.set(sender.id, state)
     const retireDocument = (): void => this.retire(state, false)
     sender.on('did-navigate', retireDocument)
     sender.on('render-process-gone', retireDocument)
     sender.once('destroyed', () => this.retire(state, true))
+
     return state
   }
 
@@ -53,15 +59,19 @@ export class DesktopRuntimeSenderLifecycle {
     if (this.senders.get(state.sender.id) !== state) {
       return
     }
+
     const retiredConnectionId = state.connectionId
+
     if (destroyed) {
       this.senders.delete(state.sender.id)
     } else {
       state.connectionId = this.mintConnectionId(state.sender.id)
     }
+
     for (const controller of state.subscriptions.values()) {
       controller.abort()
     }
+
     state.subscriptions.clear()
     this.runtime.cleanupSubscriptionsForConnection(retiredConnectionId)
   }

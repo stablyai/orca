@@ -26,6 +26,7 @@ export async function statRemoteSessionFile(
     const stat = await provider.stat(path)
     throwIfAiVaultScanCancelled(options?.signal)
     const mtimeMs = remoteSessionMtimeMs(stat)
+
     return {
       path,
       mtimeMs,
@@ -38,6 +39,7 @@ export async function statRemoteSessionFile(
   } catch (error) {
     throwIfAiVaultScanCancelled(options?.signal)
     const missing = isMissingRemoteSessionPathError(error)
+
     if (!options?.missingIsExpected || !missing) {
       recordSessionScanIssue(issues, {
         executionHostId,
@@ -46,9 +48,11 @@ export async function statRemoteSessionFile(
         message: errorMessage(error)
       })
     }
+
     if (options?.rethrowFailures && !missing) {
       throw error
     }
+
     return null
   }
 }
@@ -58,9 +62,11 @@ export function isMissingRemoteSessionPathError(error: unknown): boolean {
     error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
       ? error.code
       : null
+
   if (code === 'ENOENT' || code === 'ENOTDIR') {
     return true
   }
+
   // Relay/provider boundaries can preserve only the underlying Node error text.
   return /(?:^|[\s:])(ENOENT|ENOTDIR)(?=[\s:]|$)/.test(errorMessage(error))
 }
@@ -69,5 +75,6 @@ function remoteSessionMtimeMs(stat: FileStat): number {
   if (typeof stat.mtimeMs === 'number' && Number.isFinite(stat.mtimeMs)) {
     return stat.mtimeMs
   }
+
   return stat.mtime > 10_000_000_000 ? stat.mtime : stat.mtime * 1000
 }

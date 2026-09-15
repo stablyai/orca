@@ -42,10 +42,13 @@ export function registerSshBrowseHandler(
     'ssh:browseDir',
     async (_event, args: { targetId: string; dirPath: string }): Promise<RemoteBrowseResult> => {
       const mgr = getConnectionManager()
+
       if (!mgr) {
         throw new Error('SSH connection manager not initialized')
       }
+
       const conn = mgr.getConnection(args.targetId)
+
       if (!conn) {
         throw new Error(`SSH connection "${args.targetId}" not found`)
       }
@@ -57,6 +60,7 @@ export function registerSshBrowseHandler(
         if (!(posixError instanceof RemoteBrowseError)) {
           throw posixError
         }
+
         try {
           return await browseWithWindowsPowerShell(conn, args.dirPath)
         } catch (fallbackError) {
@@ -89,6 +93,7 @@ function browseWithWindowsPowerShell(
       "Write-Output '/'",
       "Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Name -match '^[A-Za-z]$' } | Sort-Object Name | ForEach-Object { Write-Output (($_.Name.ToUpperInvariant() + ':\\') + '/') }"
     ].join('; ')
+
     return runBrowseCommand(conn, powerShellCommand(script), 'win32', { wrapCommand: false })
   }
 
@@ -129,6 +134,7 @@ async function runBrowseCommand(
         clearTimeout(timeout)
         timeout = null
       }
+
       channel.off('data', onStdoutData)
       channel.stderr.off('data', onStderrData)
       channel.off('exit', onExit)
@@ -136,16 +142,20 @@ async function runBrowseCommand(
       channel.off('error', onError)
       channel.stderr.off('error', onError)
     }
+
     const rejectOnce = (error: Error): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       reject(error)
     }
+
     const closeChannel = (): void => {
       const closable = channel as { close?: () => void; destroy?: () => void }
+
       try {
         if (typeof closable.close === 'function') {
           closable.close()
@@ -156,15 +166,18 @@ async function runBrowseCommand(
         /* best effort */
       }
     }
+
     const onTimeout = (): void => {
       // Why: no relay deadline exists during add-project browsing, so bound this raw exec channel or Add Remote Project hangs forever.
       rejectOnce(new Error('Remote directory listing timed out'))
       closeChannel()
     }
+
     const resolveOnce = (result: RemoteBrowseResult): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       resolve(result)
@@ -173,16 +186,20 @@ async function runBrowseCommand(
     const onStdoutData = (data: Buffer): void => {
       stdout += data.toString()
     }
+
     const onStderrData = (data: Buffer): void => {
       stderr += data.toString()
     }
+
     // `exit` fires before `close`; capture the code to tell a failed `ls` (that still printed `pwd`) from an empty listing.
     const onExit = (code: number | null): void => {
       exitCode = code
     }
+
     const onError = (error: Error): void => {
       rejectOnce(error)
     }
+
     const onClose = (): void => {
       // Why: a null exitCode (channel closed without exit status) isn't success; don't treat empty stdout as an empty dir.
       if (exitCode !== 0) {
@@ -191,18 +208,24 @@ async function runBrowseCommand(
           (exitCode === null
             ? 'Remote listing failed (channel closed without exit status)'
             : `Remote listing failed (exit ${exitCode})`)
+
         rejectOnce(new RemoteBrowseError(msg, exitCode))
+
         return
       }
+
       if (stderr.trim() && !stdout.trim()) {
         rejectOnce(new Error(stderr.trim()))
+
         return
       }
 
       // Why: Windows OpenSSH exec emits CRLF; split on \r?\n so a trailing \r doesn't defeat the endsWith('/') dir check or leave a stray CR in names.
       const lines = stdout.trim().split(/\r?\n/)
+
       if (lines.length === 0) {
         rejectOnce(new Error('Empty response from remote'))
+
         return
       }
 
@@ -211,9 +234,11 @@ async function runBrowseCommand(
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i]
+
         if (!line || line === './' || line === '../') {
           continue
         }
+
         if (line.endsWith('/')) {
           entries.push({ name: line.slice(0, -1), isDirectory: true })
         } else {
@@ -235,6 +260,7 @@ async function runBrowseCommand(
     channel.on('error', onError)
     channel.stderr.on('error', onError)
     timeout = setTimeout(onTimeout, SSH_BROWSE_TIMEOUT_MS)
+
     if (typeof timeout.unref === 'function') {
       timeout.unref()
     }
@@ -251,9 +277,11 @@ function shellEscape(s: string): string {
   if (s === '~') {
     return '"$HOME"'
   }
+
   if (s.startsWith('~/')) {
     return `"$HOME"/${shellEscapeRaw(s.slice(2))}`
   }
+
   return shellEscapeRaw(s)
 }
 
@@ -265,14 +293,17 @@ function powerShellPathExpression(s: string): string {
   if (s === '~') {
     return '$HOME'
   }
+
   if (s.startsWith('~/') || s.startsWith('~\\')) {
     return `Join-Path $HOME ${powerShellLiteral(s.slice(2))}`
   }
+
   return powerShellLiteral(normalizeWindowsDrivePath(s))
 }
 
 // Why: renderer's POSIX path rebuild yields '/C:/…' or bare 'C:' (drive-relative), both mis-resolved by Set-Location; re-root to a proper drive path.
 function normalizeWindowsDrivePath(s: string): string {
   const stripped = s.replace(/^\/(?=[A-Za-z]:(?:[/\\]|$))/, '')
+
   return /^[A-Za-z]:$/.test(stripped) ? `${stripped}/` : stripped
 }

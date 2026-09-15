@@ -16,33 +16,43 @@ export function isCommandCodeIdlePromptCandidate(value: string): boolean {
 function foldCommandCodePromptWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isCommandCodePromptWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index)
   }
+
   return normalized
 }
 
 function equalsCommandCodePromptIgnoringWhitespace(value: string, expected: string): boolean {
   let expectedIndex = 0
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isCommandCodePromptWhitespace(code)) {
       continue
     }
+
     if (value.charAt(index) !== expected.charAt(expectedIndex)) {
       return false
     }
+
     expectedIndex += 1
   }
+
   return expectedIndex === expected.length
 }
 

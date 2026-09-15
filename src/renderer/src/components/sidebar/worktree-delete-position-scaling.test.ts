@@ -13,18 +13,24 @@ function mountSidebar(rowCount: number): {
   const sidebar = document.createElement('div')
   sidebar.setAttribute('data-worktree-sidebar', '')
   const measurementsByRow = new Map<HTMLElement, number>()
+
   const rows = Array.from({ length: rowCount }, (_, index) => {
     const row = document.createElement('div')
     row.setAttribute('data-worktree-virtual-row', '')
     row.setAttribute('data-worktree-virtual-row-key', String(index))
     row.getBoundingClientRect = () => {
       measurementsByRow.set(row, (measurementsByRow.get(row) ?? 0) + 1)
+
       return { top: topFor(index) } as DOMRect
     }
+
     sidebar.append(row)
+
     return row
   })
+
   document.body.append(sidebar)
+
   return { sidebar, rows, measurementsByRow }
 }
 
@@ -53,6 +59,7 @@ it('anchors on the same row the pre-hoist comparator sort would have chosen', ()
   const expectedOrder = [...rows].sort(
     (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
   )
+
   const targetIndex = expectedOrder.indexOf(target)
   const expectedAnchor = expectedOrder[targetIndex + 1] ?? expectedOrder[targetIndex - 1]!
 

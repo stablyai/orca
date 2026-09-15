@@ -46,13 +46,17 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
 
 export function buildJiraIssueSearchJql(query: string): string | null {
   const trimmed = query.trim()
+
   if (!trimmed || !isSmartWorkspaceSourceQueryWithinLimit(trimmed)) {
     return null
   }
+
   if (JIRA_ISSUE_KEY_PATTERN.test(trimmed)) {
     return `key = "${trimmed.toUpperCase()}"`
   }
+
   const escaped = trimmed.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+
   return `text ~ "${escaped}*"`
 }
 
@@ -74,6 +78,7 @@ export function isBlockingTaskUrlResolution({
   if (sourceIntent === null) {
     return false
   }
+
   return isQueryStale || (sourceIntent === 'github' ? githubLoading : gitlabLoading)
 }
 
@@ -111,11 +116,14 @@ export function getBranchSearchRequest({
   ) {
     return null
   }
+
   const trimmedQuery = query.trim()
   const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
+
   if (!shouldSearchBranches) {
     return null
   }
+
   return { repoId: selectedRepoId, query: trimmedQuery, limit }
 }
 
@@ -136,9 +144,11 @@ export function getVisibleHeldProviderResults<T>({
   if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
     return []
   }
+
   if (value.trim() === '' && debouncedQuery.trim() !== '') {
     return []
   }
+
   return items.slice()
 }
 
@@ -160,22 +170,28 @@ export function getVisibleBranchResults({
   if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
     return []
   }
+
   if (mode !== 'branches' && mode !== 'smart') {
     return []
   }
+
   if (!selectedRepoId || resultRepoId !== selectedRepoId || resultQuery === null) {
     return []
   }
+
   const currentQuery = value.trim()
+
   // Why: hold the last settled list while the user extends/trims the query so the
   // dropdown does not blank between debounced keystrokes. Drop the hold when the
   // query diverges (e.g. "feat" → "bug") so unrelated rows do not linger.
   if (currentQuery === '') {
     return resultQuery === '' ? branches : []
   }
+
   if (!shouldHoldSourceResultsForQuery({ resultQuery, value: currentQuery })) {
     return []
   }
+
   return branches
 }
 
@@ -196,12 +212,15 @@ export function shouldHoldSourceResultsForQuery({
 }): boolean {
   const currentQueryKey = value.trim().toLowerCase()
   const resultQueryKey = resultQuery.trim().toLowerCase()
+
   if (resultQueryKey === currentQueryKey) {
     return true
   }
+
   if (!currentQueryKey.startsWith(resultQueryKey) && !resultQueryKey.startsWith(currentQueryKey)) {
     return false
   }
+
   return Math.abs(currentQueryKey.length - resultQueryKey.length) <= SOURCE_RESULT_HOLD_MAX_DELTA
 }
 
@@ -242,14 +261,17 @@ export function buildSmartWorkspaceSourceRows({
   if (jiraIntent) {
     return jiraIssue ? [toJiraSourceRow(jiraIssue)] : []
   }
+
   if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
     return []
   }
+
   const resolvedLinearIssues = Array.isArray(linearIssues)
     ? linearIssues
     : Array.isArray(linearIssues?.items)
       ? linearIssues.items
       : []
+
   // Why: a full task URL is unambiguous, so unrelated held rows must never remain selectable.
   const urlSourceRows = buildSmartWorkspaceUrlSourceRows({
     githubItems,
@@ -264,21 +286,27 @@ export function buildSmartWorkspaceSourceRows({
     resultLimit,
     value
   })
+
   if (urlSourceRows !== null) {
     return urlSourceRows
   }
+
   const trimmed = value.trim()
   const nextRows: SmartWorkspaceSourceRow[] = []
+
   if (trimmed && mode === 'smart') {
     // Why: stable cmdk value — embedding the query remounted the row every keystroke.
     nextRows.push({ kind: 'use-name', value: 'use-name', name: trimmed })
   }
+
   if (mode === 'text') {
     return nextRows
   }
+
   if (mode === 'smart' || mode === 'github') {
     nextRows.push(...githubItems.map(toGitHubSourceRow))
   }
+
   if (gitlabAvailable && (mode === 'smart' || mode === 'gitlab')) {
     nextRows.push(
       ...gitlabItems.map((item) => ({
@@ -288,14 +316,18 @@ export function buildSmartWorkspaceSourceRows({
       }))
     )
   }
+
   const shouldShowBranches = mode === 'branches' || (mode === 'smart' && trimmed.length > 0)
+
   if (shouldShowBranches) {
     const branchExactMatch = branches.some(
       (branch) => branch.refName === trimmed || branch.localBranchName === trimmed
     )
+
     if (trimmed && mode === 'branches' && !branchExactMatch) {
       nextRows.push({ kind: 'create-branch', value: 'create-branch', name: trimmed })
     }
+
     nextRows.push(
       ...branches.map((branch) => ({
         kind: 'branch' as const,
@@ -305,6 +337,7 @@ export function buildSmartWorkspaceSourceRows({
       }))
     )
   }
+
   if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
     // Why: mixed-version runtime responses may briefly carry the paginated
     // collection shape into this render path; rendering must stay recoverable.
@@ -316,8 +349,10 @@ export function buildSmartWorkspaceSourceRows({
       }))
     )
   }
+
   if (mode === 'jira') {
     nextRows.push(...jiraIssues.map(toJiraSourceRow))
   }
+
   return nextRows.slice(0, resultLimit + 1)
 }

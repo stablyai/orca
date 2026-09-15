@@ -36,6 +36,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
       // Why nothing on failure: an unread catalog marked loaded resolves the answer as
       // "no paired host supports push", which tells the user to update a current desktop.
       .catch(() => {})
+
     return () => {
       cancelled = true
     }
@@ -48,6 +49,7 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
   useEffect(() => {
     setSupportedByHostId((previous) => {
       const kept = Object.entries(previous).filter(([hostId]) => hostIds.includes(hostId))
+
       return kept.length === Object.keys(previous).length ? previous : Object.fromEntries(kept)
     })
   }, [hostIds])
@@ -61,25 +63,31 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
         .filter((entry) => entry.state === 'connected')
         .map((entry) => [entry.hostId, entry.client])
     )
+
     const probes = probesRef.current
+
     for (const [hostId, probe] of probes) {
       if (connected.get(hostId) !== probe.client) {
         probe.stop()
         probes.delete(hostId)
       }
     }
+
     for (const [hostId, client] of connected) {
       if (!probes.has(hostId)) {
         setSupportedByHostId((previous) => {
           const { [hostId]: _removed, ...remaining } = previous
+
           return remaining
         })
+
         const stop = startRuntimeCapabilityProbe(client, (capabilities) => {
           setSupportedByHostId((previous) => ({
             ...previous,
             [hostId]: capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
           }))
         })
+
         probes.set(hostId, { client, stop })
       }
     }
@@ -87,15 +95,18 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
 
   useEffect(() => {
     const probes = probesRef.current
+
     return () => {
       for (const probe of probes.values()) {
         probe.stop()
       }
+
       probes.clear()
     }
   }, [])
 
   const answeredHostIds = hostIds.filter((hostId) => hostId in supportedByHostId)
+
   return {
     supported: answeredHostIds.some((hostId) => supportedByHostId[hostId]),
     // A connected host that has not answered yet is exactly the case the silence is

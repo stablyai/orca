@@ -13,8 +13,10 @@ const checkboxItems = vi.hoisted(() => ({
 
 vi.mock('@/components/ui/dropdown-menu', async () => {
   const React_ = await import('react')
+
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
     React_.createElement(React_.Fragment, null, children)
+
   return {
     DropdownMenu: passthrough,
     DropdownMenuContent: passthrough,
@@ -33,7 +35,9 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
       const label = React_.Children.toArray(children)
         .filter((child): child is string => typeof child === 'string')
         .join('')
+
       checkboxItems.list.push({ checked, label, onCheckedChange })
+
       return React_.createElement(React_.Fragment, null, children)
     }
   }

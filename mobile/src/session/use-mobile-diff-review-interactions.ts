@@ -142,16 +142,21 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       if (diffState.kind !== 'ready') {
         return
       }
+
       const currentLineIndex =
         activeHunkIndex === null ? -1 : (diffState.hunks[activeHunkIndex]?.startIndex ?? -1)
+
       const nextIndex =
         direction === 'next'
           ? findNextMobileDiffHunkIndex(diffState.hunks, currentLineIndex)
           : findPreviousMobileDiffHunkIndex(diffState.hunks, currentLineIndex)
+
       const target = nextIndex === null ? null : diffState.hunks[nextIndex]
+
       if (!target || nextIndex === null) {
         return
       }
+
       setActiveHunkIndex(nextIndex)
       listRef.current?.scrollToIndex({
         index: target.startIndex,
@@ -166,6 +171,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       if (filteredQueue.length === 0) {
         return
       }
+
       setCurrentIndex((index) =>
         direction === 'next'
           ? index + 1 >= filteredQueue.length
@@ -182,23 +188,29 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       if (!client || !currentItem || currentItem.scope === 'branch') {
         return
       }
+
       const response = await client.sendRequest('files.openDiff', {
         worktree: `id:${worktreeId}`,
         relativePath: currentItem.filePath,
         staged: currentItem.scope === 'staged'
       })
+
       if (!response.ok) {
         setActionError(response.error?.message || 'Unable to open in session')
+
         return
       }
+
       onOpenSession()
     },
     openSendSheet,
     retryAction: () => {
       if (connState !== 'connected' && hostId) {
         void onReconnect(hostId)
+
         return
       }
+
       void loadReviewData()
     },
     runGitMutation,

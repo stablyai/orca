@@ -36,13 +36,16 @@ export class PluginAuditLog {
     const write = this.writeChain.then(async () => {
       await mkdir(dirname(this.filePath), { recursive: true })
       const line = `${JSON.stringify(entry)}\n`
+
       if (this.fileBytes === null) {
         this.fileBytes = await stat(this.filePath).then(
           (file) => file.size,
           () => 0
         )
       }
+
       const lineBytes = Buffer.byteLength(line, 'utf8')
+
       if (this.fileBytes > 0 && this.fileBytes + lineBytes > this.maxBytes) {
         await rm(this.rotatedFilePath, { force: true })
         await rename(this.filePath, this.rotatedFilePath).catch((error) => {
@@ -52,12 +55,15 @@ export class PluginAuditLog {
         })
         this.fileBytes = 0
       }
+
       await appendFile(this.filePath, line, 'utf8')
       this.fileBytes += lineBytes
     })
+
     // Keep the serialization chain usable after a failed append while still
     // exposing this write's failure to the mutation chokepoint.
     this.writeChain = write.catch(() => undefined)
+
     return write
   }
 
@@ -70,8 +76,10 @@ export class PluginAuditLog {
       const [rotated, current] = await Promise.all(
         [this.rotatedFilePath, this.filePath].map((path) => readFile(path, 'utf8').catch(() => ''))
       )
+
       const text = rotated + current
       const lines = recentAuditLines(text, limit)
+
       return lines.flatMap((line) => {
         try {
           return [JSON.parse(line) as PluginAuditEntry]
@@ -92,18 +100,24 @@ function recentAuditLines(text: string, limit: number): string[] {
       .filter((line) => line.length > 0)
       .slice(-limit)
   }
+
   const lines: string[] = []
   let end = text.length
   const count = Math.trunc(limit)
+
   while (end > 0 && lines.length < count) {
     const start = text.lastIndexOf('\n', end - 1) + 1
+
     if (start < end) {
       lines.push(text.slice(start, end))
     }
+
     if (start === 0) {
       break
     }
+
     end = start - 1
   }
+
   return lines.toReversed()
 }

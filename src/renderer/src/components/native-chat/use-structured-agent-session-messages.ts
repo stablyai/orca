@@ -16,20 +16,26 @@ export function useStructuredAgentSessionMessages(
   const projectItems = useMemo(() => {
     // Journal revisions replace item objects; weak keys release removed history.
     const byItem = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
+
     return (rows: readonly AgentJournalRenderItem[]): NativeChatMessage[] => {
       const messages: NativeChatMessage[] = []
+
       for (const row of rows) {
         if (!byItem.has(row)) {
           byItem.set(row, projectStructuredItemToNativeChat(row))
         }
+
         const message = byItem.get(row)
+
         if (message) {
           messages.push(message)
         }
       }
+
       return messages
     }
   }, [])
+
   return useMemo(
     () => projectStructuredAgentSessionMessages(items, outbox, submissions, projectItems),
     [items, outbox, submissions, projectItems]

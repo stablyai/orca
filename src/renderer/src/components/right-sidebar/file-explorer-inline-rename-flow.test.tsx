@@ -32,10 +32,12 @@ const node: TreeNode = {
   isDirectory: true,
   depth: 1
 }
+
 const rowProjection = createFileExplorerRowProjection([node])
 
 function RenameHarness(): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
+
   const { inlineInput, startRename, dismissInlineInput, handleInlineSubmit } =
     useFileExplorerInlineInput({
       activeWorktreeId: 'wt-1',
@@ -79,6 +81,7 @@ async function startSettledRename(): Promise<{
   fireEvent.click(view.getByRole('button', { name: 'Rename' }))
   await advance(0)
   await advance(250)
+
   return {
     input: view.getByRole('textbox') as HTMLInputElement,
     outsideRow: view.getByRole('button', { name: 'Another row' }) as HTMLButtonElement

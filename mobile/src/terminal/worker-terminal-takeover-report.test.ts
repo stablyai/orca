@@ -5,19 +5,23 @@ import {
 } from './worker-terminal-takeover-report'
 
 const success = { id: 'report', ok: true as const, result: { changed: 1 } }
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(1_000)
   resetWorkerTerminalTakeoverReportsForTest()
 })
+
 afterEach(() => vi.useRealTimers())
 
 it('gates per handle and owning client for 30 seconds', () => {
   const relay = { sendRequest: vi.fn().mockResolvedValue(success) }
   const direct = { sendRequest: vi.fn().mockResolvedValue(success) }
+
   for (let i = 0; i < 100; i++) {
     reportWorkerTerminalUserInput(relay, 'term-1')
   }
+
   expect(relay.sendRequest).toHaveBeenCalledTimes(1)
   reportWorkerTerminalUserInput(relay, 'term-2')
   reportWorkerTerminalUserInput(direct, 'term-1')
@@ -52,6 +56,7 @@ it.each(['throw', 'rpc refusal'])(
           ? vi.fn().mockRejectedValue(new Error('offline'))
           : vi.fn().mockResolvedValue({ id: 'report', ok: false, error: { message: 'refused' } })
     }
+
     reportWorkerTerminalUserInput(client, 'term-1')
     await vi.advanceTimersByTimeAsync(249)
     expect(client.sendRequest).toHaveBeenCalledTimes(1)
@@ -71,10 +76,12 @@ it('a report that changed nothing still arms the gate, so plain terminals pay on
   const client = {
     sendRequest: vi.fn().mockResolvedValue({ id: 'report', ok: true, result: { changed: 0 } })
   }
+
   for (let i = 0; i < 100; i++) {
     reportWorkerTerminalUserInput(client, 'term-plain')
     await vi.advanceTimersByTimeAsync(100)
   }
+
   expect(client.sendRequest).toHaveBeenCalledTimes(1)
   await vi.advanceTimersByTimeAsync(30_000)
   reportWorkerTerminalUserInput(client, 'term-plain')

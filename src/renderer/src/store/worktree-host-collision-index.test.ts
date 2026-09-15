@@ -41,6 +41,7 @@ const baseWorktree: Worktree = {
 } as Worktree
 
 const localRow: Worktree = { ...baseWorktree, hostId: 'local', displayName: 'local orca' }
+
 const sshRow: Worktree = { ...baseWorktree, hostId: 'ssh:build-box', displayName: 'ssh orca' }
 
 function byRepo(...worktrees: Worktree[]): AppState['worktreesByRepo'] {

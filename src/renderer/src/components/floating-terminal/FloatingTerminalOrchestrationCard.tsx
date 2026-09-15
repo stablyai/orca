@@ -15,6 +15,7 @@ export function renderFloatingTerminalOrchestrationCard({
   if (!visible) {
     return null
   }
+
   return (
     <div
       className="absolute right-4 bottom-4 z-10 w-[280px] rounded-md border border-border/60 bg-card/95 p-3 text-card-foreground shadow-xs"

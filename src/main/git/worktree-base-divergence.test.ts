@@ -61,6 +61,7 @@ describe('measureRetargetDivergence deadlines', () => {
     for (const options of callOptions()) {
       expect(options.timeout).toBe(RETARGET_DIVERGENCE_BUDGET_MS)
     }
+
     expect(RETARGET_DIVERGENCE_BUDGET_MS).toBeLessThan(GIT_READ_TIMEOUT_MS)
   })
 
@@ -111,6 +112,7 @@ describe('measureRetargetDivergence deadlines', () => {
         })
     )
     const controller = new AbortController()
+
     const pending = measureRetargetDivergence(
       '/repo',
       'refs/heads/main',
@@ -118,6 +120,7 @@ describe('measureRetargetDivergence deadlines', () => {
       // A budget long enough that only the caller's cancellation can end this in time.
       { signal: controller.signal, budgetMsForTest: 60_000 }
     )
+
     controller.abort()
 
     await expect(pending).resolves.toBe('unknown')
@@ -139,6 +142,7 @@ describe('measureRetargetDivergence deadlines', () => {
         // Exit 1 is Git's answer for unrelated histories.
         throw exitCodeError(1)
       }
+
       return { stdout: '2\n' }
     })
     await expect(
@@ -151,6 +155,7 @@ describe('measureRetargetDivergence deadlines', () => {
         // A timeout carries no exit code and must not be read as "no common ancestor".
         throw new Error('git timed out.')
       }
+
       return { stdout: '2\n' }
     })
     await expect(

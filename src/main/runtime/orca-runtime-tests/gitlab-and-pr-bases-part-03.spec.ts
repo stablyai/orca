@@ -21,16 +21,19 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-1',
       issueSourcePreference: 'origin' as const
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'remote' && args[1] === 'get-url') {
           return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
         }
+
         if (
           args[0] === 'rev-parse' &&
           args[1] === '--verify' &&
@@ -38,6 +41,7 @@ describe('OrcaRuntimeService', () => {
         ) {
           return { stdout: 'remote-fork-mr-sha\n', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       fetchGitLabMergeRequestHead: vi
@@ -45,6 +49,7 @@ describe('OrcaRuntimeService', () => {
         .mockResolvedValue(`refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/77`),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -90,21 +95,25 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-1',
       issueSourcePreference: 'origin' as const
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'origin/feature/fix') {
           return { stdout: 'same-repo-mr-sha\n', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       fetchGitLabMergeRequestHead: vi.fn().mockResolvedValue(undefined),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
     getGitLabProjectRefForRemoteMock.mockResolvedValue({
@@ -154,16 +163,19 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       issueSourcePreference: 'origin' as const
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [localRepo],
       getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
     }
+
     getGitLabProjectRefForRemoteMock.mockResolvedValue({
       host: 'gitlab.example',
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (
         args[0] === 'fetch' &&
@@ -171,17 +183,22 @@ describe('OrcaRuntimeService', () => {
       ) {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'fetch' && args[2] === '+refs/heads/main:refs/remotes/origin/main') {
         // Target branch was deleted on the remote (merged MR).
         throw new Error("couldn't find remote ref refs/heads/main")
       }
+
       if (args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'origin/feature/fix') {
         return { stdout: 'same-repo-mr-sha\n', stderr: '' }
       }
+
       throw new Error(`unexpected git call: ${args.join(' ')}`)
     })
+
     gitSpy.mockClear()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const result = await runtime.resolveManagedMrBase({
         repoSelector: 'id:repo-1',
@@ -212,16 +229,19 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       issueSourcePreference: 'origin' as const
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [localRepo],
       getRepo: (id: string) => (id === localRepo.id ? localRepo : undefined)
     }
+
     getGitLabProjectRefForRemoteMock.mockResolvedValue({
       host: 'gitlab.example',
       path: 'group/repo'
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (
         args[0] === 'fetch' &&
@@ -229,19 +249,25 @@ describe('OrcaRuntimeService', () => {
       ) {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'fetch' && args[2] === '+refs/heads/main:refs/remotes/origin/main') {
         throw new Error('fatal: unable to access repo: Could not resolve host: gitlab.example')
       }
+
       if (args[0] === 'rev-parse' && args[2] === 'origin/feature/fix') {
         return { stdout: 'same-repo-mr-sha\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
         return { stdout: 'base-commit-sha\n', stderr: '' }
       }
+
       throw new Error(`unexpected git call: ${args.join(' ')}`)
     })
+
     gitSpy.mockClear()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const result = await runtime.resolveManagedMrBase({
         repoSelector: 'id:repo-1',
@@ -273,20 +299,25 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-1',
       issueSourcePreference: 'origin' as const
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
+
     const durableLocalRef = `refs/orca/merge-requests/${ORIGIN_HEAD_COMPONENT}/77`
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'rev-parse' && args[2] === `${durableLocalRef}^{commit}`) {
           return { stdout: 'remote-fork-mr-sha\n', stderr: '' }
         }
+
         if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
           return { stdout: 'base-commit-sha\n', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       fetchGitLabMergeRequestHead: vi.fn().mockResolvedValue(durableLocalRef),
@@ -294,6 +325,7 @@ describe('OrcaRuntimeService', () => {
         throw new Error('fatal: unable to access repo: Could not resolve host: gitlab.example')
       })
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com', 'git.internal'])
     getGitLabProjectRefForRemoteMock.mockResolvedValue({

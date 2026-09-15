@@ -1,8 +1,11 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 const MAX_CONCURRENT_WSL_AUTH_OPERATIONS = 2
+
 const activeWslOperationDistros = new Set<string>()
+
 const queuedWslOperations: QueuedWslOperation<unknown>[] = []
+
 let activeWslOperationCount = 0
 
 type QueuedWslOperation<T> = {
@@ -23,6 +26,7 @@ function finishWslOperation<T>(task: QueuedWslOperation<T>, settle: () => void):
   if (task.state !== 'running') {
     return
   }
+
   task.state = 'settled'
   activeWslOperationCount -= 1
   activeWslOperationDistros.delete(task.distroKey)
@@ -35,19 +39,25 @@ function pumpWslOperations(): void {
     const nextIndex = queuedWslOperations.findIndex(
       (task) => !activeWslOperationDistros.has(task.distroKey)
     )
+
     if (nextIndex === -1) {
       return
     }
+
     const task = queuedWslOperations.splice(nextIndex, 1)[0]
+
     if (!task || task.state !== 'queued') {
       continue
     }
+
     task.neededSignal.removeEventListener('abort', task.onAbort)
+
     if (task.neededSignal.aborted) {
       task.state = 'settled'
       task.reject(getAbortReason(task.neededSignal))
       continue
     }
+
     task.state = 'running'
     activeWslOperationCount += 1
     activeWslOperationDistros.add(task.distroKey)
@@ -56,6 +66,7 @@ function pumpWslOperations(): void {
         if (task.neededSignal.aborted) {
           throw getAbortReason(task.neededSignal)
         }
+
         return task.operation()
       })
       .then(
@@ -82,15 +93,19 @@ function scheduleWslAuthFilesystemOperation<T>(
         if (task.state !== 'queued') {
           return
         }
+
         task.state = 'settled'
         const index = queuedWslOperations.indexOf(task as QueuedWslOperation<unknown>)
+
         if (index !== -1) {
           queuedWslOperations.splice(index, 1)
         }
+
         reject(getAbortReason(neededSignal))
         pumpWslOperations()
       }
     }
+
     neededSignal.addEventListener('abort', task.onAbort, { once: true })
     queuedWslOperations.push(task as QueuedWslOperation<unknown>)
     queueMicrotask(pumpWslOperations)
@@ -103,14 +118,17 @@ function scheduleAuthFilesystemOperation<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   const wslInfo = parseWslUncPath(authPath)
+
   if (!wslInfo) {
     return Promise.resolve().then(() => {
       if (neededSignal.aborted) {
         throw getAbortReason(neededSignal)
       }
+
       return operation()
     })
   }
+
   // Why: a few disconnected distros must not occupy libuv's entire default
   // filesystem pool. Distro serialization also folds wsl$/wsl.localhost and
   // case aliases without forcing healthy local auth reads through the queue.
@@ -139,9 +157,11 @@ export function createAuthFilesystemOperation<T>(
   const waiters = new Set<symbol>()
   let settled = false
   const result = scheduleAuthFilesystemOperation(authPath, neededController.signal, operation)
+
   const markSettled = (): void => {
     settled = true
   }
+
   void result.then(markSettled, markSettled)
 
   return {
@@ -151,21 +171,26 @@ export function createAuthFilesystemOperation<T>(
         if (!settled && waiters.size === 0) {
           neededController.abort(getAbortReason(signal))
         }
+
         return Promise.reject(getAbortReason(signal))
       }
 
       const waiter = Symbol('auth-filesystem-waiter')
       waiters.add(waiter)
       let onAbort: (() => void) | null = null
+
       const aborted = new Promise<never>((_resolve, reject) => {
         onAbort = () => reject(getAbortReason(signal))
         signal.addEventListener('abort', onAbort, { once: true })
       })
+
       return Promise.race([result, aborted]).finally(() => {
         if (onAbort) {
           signal.removeEventListener('abort', onAbort)
         }
+
         waiters.delete(waiter)
+
         if (!settled && waiters.size === 0) {
           neededController.abort(getAbortReason(signal))
         }

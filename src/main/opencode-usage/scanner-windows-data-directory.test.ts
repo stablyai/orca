@@ -9,11 +9,13 @@ import { scanOpenCodeUsageDatabases } from './scanner'
 vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
   const { listOpenCodeSqliteSessions } =
     await import('../ai-vault/session-scanner-opencode-sqlite-list')
+
   return { listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions }
 })
 
 describe('OpenCode usage discovery on Windows', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+
   const environmentKeys = [
     'HOME',
     'USERPROFILE',
@@ -22,6 +24,7 @@ describe('OpenCode usage discovery on Windows', () => {
     'XDG_DATA_HOME',
     'OPENCODE_DB'
   ] as const
+
   let originalEnvironment: Partial<Record<(typeof environmentKeys)[number], string>>
   let homeDirectory: string
 
@@ -39,14 +42,17 @@ describe('OpenCode usage discovery on Windows', () => {
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', originalPlatform)
+
     for (const key of environmentKeys) {
       const value = originalEnvironment[key]
+
       if (value === undefined) {
         delete process.env[key]
       } else {
         process.env[key] = value
       }
     }
+
     rmSync(homeDirectory, { recursive: true, force: true })
   })
 

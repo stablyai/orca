@@ -55,6 +55,7 @@ describe('planNativeChatLaunchDraftSend', () => {
       agent: 'codex',
       readScreen: () => samePrefixEdit
     })
+
     expect(result.plan.kind).toBe('replace-draft')
   })
 
@@ -82,6 +83,7 @@ describe('agentInputLineCleared', () => {
       '❯ issue: ABC-123 residue after a cursor-middle clear',
       '────────────────────────────────────────'
     ].join('\n')
+
     expect(agentInputLineCleared(edited)).toBe(false)
   })
 
@@ -92,6 +94,7 @@ describe('agentInputLineCleared', () => {
       '  suffix after a cursor-middle clear',
       '────────────────────────────────────────'
     ].join('\n')
+
     expect(agentInputLineCleared(residue)).toBe(false)
   })
 

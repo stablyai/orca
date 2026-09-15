@@ -24,6 +24,7 @@ afterEach(async () => {
 })
 
 const BASH = 'run this: if [[ -f /home/me/.aws/credentials ]]; then cat it; fi'
+
 const TOOL = 'zebrafish appears only in the tool output here'
 
 it('shows the column that matched, not the one that happens to contain brackets', async () => {
@@ -35,6 +36,7 @@ it('shows the column that matched, not the one that happens to contain brackets'
 
   const hits = harness.engine.search({ query: 'zebrafish' }).hits
   expect(hits).toHaveLength(2)
+
   for (const hit of hits) {
     expect(hit.evidence?.snippet).toContain(
       `${SESSION_SEARCH_SNIPPET_MARK_OPEN}zebrafish${SESSION_SEARCH_SNIPPET_MARK_CLOSE}`
@@ -97,8 +99,10 @@ it('truncates on the last real mark, not on a bracket the transcript wrote', asy
   // stops at the transcript's own bracket instead and throws away everything
   // after it.
   harness = await openSessionSearchHarness('ss-snippet-marks-truncation')
+
   const long = (letter: string): string =>
     Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')
+
   addSyntheticSession(harness.db, {
     id: 1,
     text: `zebrafish ${long('p')} [[ ${long('q')}`
@@ -132,8 +136,10 @@ it('does not cut a snippet at a private-use code point the transcript wrote', as
   // The balance check looks for the last open mark, and a content glyph is not
   // one; treating it as one throws away every character after it.
   harness = await openSessionSearchHarness('ss-snippet-marks-literal-truncation')
+
   const long = (letter: string): string =>
     Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')
+
   addSyntheticSession(harness.db, { id: 1, text: `zebrafish ${long('p')} \uE000 ${long('q')}` })
 
   const snippet = harness.engine.search({ query: 'zebrafish' }).hits[0]?.evidence?.snippet ?? ''

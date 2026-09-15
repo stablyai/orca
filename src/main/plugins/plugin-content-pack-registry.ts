@@ -38,6 +38,7 @@ export class PluginContentPackRegistry {
         .filter((plugin) => isApproved(plugin) && !this.isKilled(plugin.pluginKey))
         .map((plugin) => plugin.pluginKey)
     )
+
     const excluded = new Set<string>()
     this.activationErrors.clear()
 
@@ -50,6 +51,7 @@ export class PluginContentPackRegistry {
         ) {
           return
         }
+
         try {
           await verifyInstructionalPluginContent(plugin)
         } catch (error) {
@@ -70,20 +72,24 @@ export class PluginContentPackRegistry {
         approvedKeys.has(plugin.pluginKey) &&
         !excluded.has(plugin.pluginKey) &&
         !this.isKilled(plugin.pluginKey)
+
       const languagePacks = this.languagePacks.reconcile(discovered, approveAtomically)
       const vmRecipes = this.vmRecipes.reconcile(discovered, approveAtomically)
       this.commands.reconcile(discovered, approveAtomically, keybindings)
       await Promise.all([languagePacks, vmRecipes])
 
       let foundNewError = false
+
       for (const pluginKey of approvedKeys) {
         const error = this.registryError(pluginKey)
+
         if (error && !excluded.has(pluginKey)) {
           excluded.add(pluginKey)
           this.activationErrors.set(pluginKey, error)
           foundNewError = true
         }
       }
+
       if (!foundNewError) {
         break
       }

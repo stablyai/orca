@@ -23,16 +23,20 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
 
     // Tentative writes — the resize is the point of no return.
     this.layouts.set(ptyId, next)
+
     if (target.kind === 'phone') {
       // Why: pull baseline cols+rows atomically from the same subscriber so
       // they can't desync.
       const baseline = (() => {
         const inner = this.mobileSubscribers.get(ptyId)
+
         if (!inner) {
           return null
         }
+
         return this.pickEarliestRestoreTarget(inner)
       })()
+
       this.terminalFitOverrides.set(ptyId, {
         mode: 'mobile-fit',
         cols: target.cols,
@@ -48,6 +52,7 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
 
     if (dimsChanged) {
       let ok = false
+
       try {
         const r = this.ptyController?.resize?.(ptyId, target.cols, target.rows)
         ok = r ?? true
@@ -55,6 +60,7 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
         console.error('[layout] ptyController.resize threw', { ptyId, err })
         ok = false
       }
+
       if (!ok) {
         // Roll back to pre-call snapshot. seq is NOT bumped on the wire
         // because we never emit below.
@@ -63,13 +69,16 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
         } else {
           this.layouts.delete(ptyId)
         }
+
         if (prevFitOverride) {
           this.terminalFitOverrides.set(ptyId, prevFitOverride)
         } else {
           this.terminalFitOverrides.delete(ptyId)
         }
+
         return { ok: false, reason: 'resize-failed' }
       }
+
       this.resizeHeadlessTerminal(ptyId, target.cols, target.rows)
     }
 
@@ -83,6 +92,7 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
     // only if that invariant is ever violated, repairing the renderer instead
     // of stranding the held modal.
     const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
+
     if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
       // Why: phone→desktop arms the renderer-cascade suppress window
       // before the collateral safeFit IPCs arrive. See "Renderer cascade
@@ -91,6 +101,7 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
         this.lastRendererSizes.delete(ptyId)
         this.suppressResizesForMs(500)
       }
+
       this.notifier?.terminalFitOverrideChanged(
         ptyId,
         target.kind === 'phone'
@@ -142,6 +153,7 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
 
   isMobileSubscriberActive(ptyId: string): boolean {
     const inner = this.mobileSubscribers.get(ptyId)
+
     return inner !== undefined && inner.size > 0
   }
 
@@ -158,9 +170,11 @@ export class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentAct
   ): void {
     const inner = this.mobileSubscribers.get(ptyId)
     const record = inner?.get(clientId)
+
     if (!record) {
       return
     }
+
     record.viewport = viewport
   }
 }

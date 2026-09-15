@@ -4,11 +4,13 @@ export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
 
 function normalizeToModelEol(content: string, model: editor.ITextModel): string {
   const eol = model.getEOL()
+
   // Why: Monaco normalizes model line endings, while filesystem content keeps
   // its raw EOLs. Compare the representation Monaco can actually retain.
   if (eol === '\n' && !content.includes('\r')) {
     return content
   }
+
   return content.replace(/\r\n|\r|\n/g, eol)
 }
 
@@ -23,12 +25,16 @@ function applyModelEdit(
     // Why: live-tail updates are machine-owned and cannot be undone by users;
     // recording them would retain the growing log again in Monaco's undo service.
     model.applyEdits([edit])
+
     return
   }
+
   if (withUndoStops) {
     editorInstance.pushUndoStop()
   }
+
   model.pushEditOperations([], [edit], () => null)
+
   if (withUndoStops) {
     editorInstance.pushUndoStop()
   }
@@ -45,6 +51,7 @@ function replaceModelContent(
   if (currentContent === content) {
     return
   }
+
   const fullRange = model.getFullModelRange()
   applyModelEdit(editorInstance, model, { range: fullRange, text: content }, mode, withUndoStops)
 }
@@ -65,18 +72,23 @@ export function syncContentOnMount(
   mode: MonacoContentSyncMode = 'undoable'
 ): boolean {
   const model = editorInstance.getModel()
+
   if (!model) {
     return false
   }
+
   const currentContent = model.getValue()
   const normalizedContent = normalizeToModelEol(content, model)
+
   if (currentContent === normalizedContent) {
     return false
   }
+
   // Why: no undo stop on mount — the retained model's text was already the
   // user's last-known state, and adding an undo entry here would make Cmd+Z
   // revert to the pre-remount text, which is confusing.
   replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, false)
+
   return true
 }
 
@@ -94,15 +106,20 @@ export function syncContentUpdate(
   mode: MonacoContentSyncMode = 'undoable'
 ): void {
   const model = editorInstance.getModel()
+
   if (!model) {
     return
   }
+
   const currentContent = model.getValue()
   const normalizedContent = normalizeToModelEol(content, model)
+
   if (currentContent.length === normalizedContent.length) {
     replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, true)
+
     return
   }
+
   if (
     normalizedContent.length > currentContent.length &&
     normalizedContent.startsWith(currentContent)
@@ -125,7 +142,9 @@ export function syncContentUpdate(
       mode,
       true
     )
+
     return
   }
+
   replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, true)
 }

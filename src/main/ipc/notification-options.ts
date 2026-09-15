@@ -2,7 +2,9 @@ import { translateMain } from '../i18n/main-i18n'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
 const NOTIFICATION_AGENT_LABEL_MAX_LENGTH = 40
+
 const NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH = 80
+
 const NOTIFICATION_BODY_PREVIEW_MAX_LENGTH = 180
 
 const AGENT_TYPE_LABELS: Readonly<Record<string, string>> = {
@@ -42,6 +44,7 @@ export function buildNotificationOptions(args: NotificationDispatchRequest): {
   }
 
   const richOptions = buildAgentTaskCompleteNotificationOptions(args)
+
   if (richOptions) {
     return richOptions
   }
@@ -73,9 +76,11 @@ function formatAgentNotificationStatusText(args: NotificationDispatchRequest): s
   if (args.agentState === 'blocked' || args.agentState === 'waiting') {
     return translateMain('notifications.agentStatus.needsInput', 'needs input')
   }
+
   if (args.agentState === 'working') {
     return translateMain('notifications.agentStatus.working', 'working')
   }
+
   return args.agentState === 'done' && args.agentInterrupted
     ? translateMain('notifications.agentStatus.stopped', 'stopped')
     : translateMain('notifications.agentStatus.finished', 'finished')
@@ -86,13 +91,16 @@ function formatNotificationWorktreeContext(args: NotificationDispatchRequest): s
     args.worktreeLabel,
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
   )
+
   const repoLabel = normalizeNotificationText(args.repoLabel, NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH)
+
   if (args.hasMultipleActiveRepos && repoLabel && worktreeLabel) {
     return normalizeNotificationText(
       `${repoLabel} / ${worktreeLabel}`,
       NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
     )
   }
+
   return worktreeLabel || repoLabel || 'workspace'
 }
 
@@ -113,21 +121,26 @@ function buildAgentTaskCompleteRichBody(args: NotificationDispatchRequest): stri
     args.agentLastAssistantMessage,
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
+
   if (assistantMessage) {
     return assistantMessage
   }
 
   const toolName = normalizeNotificationText(args.agentToolName, 60)
+
   const toolInput = normalizeNotificationText(
     args.agentToolInput,
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
+
   if (toolName && toolInput) {
     return `Using ${toolName}: ${toolInput}`
   }
+
   if (toolName) {
     return `Using ${toolName}`
   }
+
   if (toolInput) {
     return `Tool input: ${toolInput}`
   }
@@ -153,20 +166,26 @@ function buildAgentTaskCompleteFallbackBody(args: NotificationDispatchRequest): 
 
 function formatNotificationAgentLabel(agentType: string | null | undefined): string {
   const normalized = normalizeNotificationText(agentType, NOTIFICATION_AGENT_LABEL_MAX_LENGTH)
+
   if (!normalized || normalized === 'unknown') {
     return 'Agent'
   }
+
   return AGENT_TYPE_LABELS[normalized] ?? normalized
 }
 
 function normalizeNotificationText(value: string | null | undefined, maxLength: number): string {
   const normalized = value?.replace(/\s+/g, ' ').trim() ?? ''
+
   if (normalized.length <= maxLength) {
     return normalized
   }
+
   const truncated = normalized.slice(0, maxLength - 1)
   const lastCode = truncated.charCodeAt(truncated.length - 1)
+
   const safeTruncated =
     lastCode >= 0xd800 && lastCode <= 0xdbff ? truncated.slice(0, -1) : truncated
+
   return `${safeTruncated}…`
 }

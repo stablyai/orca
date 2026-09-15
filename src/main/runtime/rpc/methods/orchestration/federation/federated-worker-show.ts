@@ -24,9 +24,11 @@ export function projectFederatedFleetWorker(args: {
   observation: { status?: string; exactWorker: boolean; reason?: string }
 }): OrchestrationFleetWorker | null {
   const fleet = projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
+
   if (!fleet) {
     return null
   }
+
   const observed = args.observation
   applyFederatedFleetObservations(
     fleet,
@@ -50,6 +52,7 @@ export function projectFederatedFleetWorker(args: {
     },
     fleet.durable
   )
+
   return fleet.workers[0] ?? null
 }
 
@@ -61,40 +64,51 @@ export async function showFederatedWorker(args: {
   federated: FederatedDispatchRow
 }) {
   const { runtime, db, dispatchId } = args
+
   if (!db.getWorkerDispatch(dispatchId)) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Federated Worker Dispatch ${dispatchId} has no worker record.`
     )
   }
+
   const observationFence = db.captureFederatedDispatchObservationFence(dispatchId)
+
   if (!observationFence) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Federated Worker Dispatch ${dispatchId} has no observation projection.`
     )
   }
+
   const server = resolvePinnedFederatedServer(runtime, args.federated)
   runtime.ensureOrchestrationFederationRelay(args.dispatch.run_id)
   const remote = await callFederatedWorkerShow(runtime, args.federated)
   const attachment = remote.attachment
+
   const settlementQueued =
     attachment.state === 'succeeded' ||
     (attachment.state === 'failed' && attachment.stage === 'worker_report_queued')
+
   const observationProjected = db.projectFederatedDispatchObservation(observationFence, () => {
     reconcileFederatedAttachment({ db, dispatchId, remote, settlementQueued })
   })
+
   if (settlementQueued) {
     await runtime.syncOrchestrationFederatedDispatchAfterCurrent(dispatchId).catch(() => undefined)
   }
+
   const worker = db.getWorkerDispatch(dispatchId)
+
   if (!worker) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Worker Dispatch ${dispatchId} was not found after remote reconciliation.`
     )
   }
+
   const observation = exposeFederatedWorkerObservation(remote.observation, observationProjected)
+
   return {
     dispatch: exposeDispatchContext(db.getDispatchContextById(dispatchId) ?? args.dispatch),
     worker: exposeWorker(worker),
@@ -122,11 +136,13 @@ function reconcileFederatedAttachment(args: {
 }): void {
   const { db, dispatchId, remote } = args
   const attachment = remote.attachment
+
   const projected = db.updateWorkerSetupEvidence({
     dispatchId,
     setupState: attachment.setup_state,
     effects: attachment.effects
   }).worker
+
   if (attachment.state === 'stopped' && ['stopping', 'stop_unknown'].includes(projected.state)) {
     db.reconcileFederatedWorkerStop(dispatchId)
   } else if (
@@ -145,6 +161,7 @@ function reconcileFederatedAttachment(args: {
       residualResources: attachment.residualResources
     })
   }
+
   if (attachment.state === 'ready' && attachment.worktree_id && attachment.terminal_handle) {
     db.updateFederatedDispatchResources({
       dispatchId,

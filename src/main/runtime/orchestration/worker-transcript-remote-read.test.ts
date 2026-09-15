@@ -36,10 +36,13 @@ function rangedProvider(
   const readFile = vi.fn(async () => {
     throw new Error('Whole-file reads must not serve a ranged transcript')
   })
+
   const readFileRange = vi.fn(async (_path: string, position: number, length: number) => {
     const bytes = readContents().subarray(position, position + length)
+
     return { bytes, bytesRead: bytes.length }
   })
+
   return {
     provider: {
       readFile,
@@ -103,11 +106,13 @@ describe('remote worker transcript reads', () => {
         limited: false,
         warnings: []
       })
+
       if (!initial.ok) {
         throw new Error('Expected an initial split transcript page')
       }
 
       contents = Buffer.concat([contents, splitRecord.subarray(splitAt)])
+
       const completed = await readWorkerTranscript({
         agent: 'codex',
         sessionId: 'split-session',
@@ -118,12 +123,14 @@ describe('remote worker transcript reads', () => {
         expectedBoundaryCheckpoint: initial.boundaryCheckpoint,
         limit: 10
       })
+
       expect(completed).toMatchObject({
         ok: true,
         messages: [{ id: 'split', blocks: [{ type: 'text', text: 'completed by second append' }] }],
         nextOffset: contents.length,
         limited: false
       })
+
       if (!completed.ok) {
         throw new Error('Expected the completed split transcript page')
       }
@@ -145,11 +152,13 @@ describe('remote worker transcript reads', () => {
 
   it('returns and redacts the newest bounded page from an append-only transcript over 8 MiB', async () => {
     const capability = `dcap_${'A'.repeat(43)}`
+
     let contents = Buffer.concat([
       Buffer.alloc(MAX_REMOTE_TRANSCRIPT_SCAN_BYTES + 128, 0x78),
       Buffer.from('\n'),
       codexMessage('latest', `newest output ${capability}`)
     ])
+
     const { provider, readFile, readFileRange } = rangedProvider(() => contents)
     const transcriptPath = '/remote/home/ada/.codex/sessions/rollout.jsonl'
 
@@ -184,9 +193,11 @@ describe('remote worker transcript reads', () => {
       MAX_REMOTE_TRANSCRIPT_SCAN_BYTES + 128
     )
     expect(JSON.stringify(initial)).not.toContain(capability)
+
     if (!initial.ok) {
       throw new Error('Expected an initial transcript page')
     }
+
     expect(initial.warnings.join(' ')).not.toContain('continue with the cursor')
 
     contents = Buffer.concat([contents, codexMessage('appended', 'arrived after the first read')])
@@ -215,6 +226,7 @@ describe('remote worker transcript reads', () => {
     const contents = codexMessage('legacy', 'small legacy transcript')
     const readFile = vi.fn(async () => ({ content: contents.toString('utf8'), isBinary: false }))
     const readFileRange = vi.fn()
+
     const provider = {
       readFile,
       readFileRange,
@@ -245,18 +257,22 @@ describe('remote worker transcript reads', () => {
       Buffer.from('\n'),
       codexMessage('legacy-tail', 'newest legacy output')
     ])
+
     const readFile = vi.fn(async (_path: string, limits?: { maxTextBytes?: number }) => {
       if (contents.length > (limits?.maxTextBytes ?? 0)) {
         throw new Error('Reported totalSize exceeds client cap')
       }
+
       return { content: contents.toString('utf8'), isBinary: false }
     })
+
     const provider = {
       readFile,
       readFileRange: vi.fn(),
       supportsFileRangeRead: vi.fn(async () => false),
       stat: vi.fn(async () => fileStat(() => contents))
     } as unknown as IFilesystemProvider
+
     const transcriptPath = '/remote/legacy-large.jsonl'
 
     const initial = await readWorkerTranscript({
@@ -276,6 +292,7 @@ describe('remote worker transcript reads', () => {
         'Older transcript records were clipped by the remote scan limit and are not pageable through this EOF cursor; the cursor only follows records appended after this read.'
       ])
     })
+
     if (!initial.ok) {
       throw new Error('Expected an initial legacy transcript page')
     }
@@ -313,8 +330,10 @@ describe('remote worker transcript reads', () => {
       'first',
       'original transcript with enough padding for equal-size rewrite'
     )
+
     const { provider } = rangedProvider(() => contents)
     const transcriptPath = '/remote/replaced.jsonl'
+
     const initial = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'replacement-session',
@@ -322,6 +341,7 @@ describe('remote worker transcript reads', () => {
       filesystemProvider: provider,
       limit: 10
     })
+
     if (!initial.ok) {
       throw new Error('Expected the original remote transcript')
     }
@@ -331,6 +351,7 @@ describe('remote worker transcript reads', () => {
       replacement,
       Buffer.alloc(Math.max(0, initial.nextOffset + extraBytes - replacement.length), 0x20)
     ])
+
     const replaced = await readWorkerTranscript({
       agent: 'codex',
       sessionId: 'replacement-session',
@@ -347,6 +368,7 @@ describe('remote worker transcript reads', () => {
 
   it('degrades when a remote host cannot prove stable file identity', async () => {
     const contents = codexMessage('legacy', 'identity unavailable')
+
     const provider = {
       readFile: vi.fn(async () => ({ content: contents.toString('utf8'), isBinary: false })),
       readFileRange: vi.fn(),

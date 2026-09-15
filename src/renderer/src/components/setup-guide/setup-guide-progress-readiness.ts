@@ -36,7 +36,9 @@ export function getSetupScriptProbeSignature(
   if (!settings) {
     return null
   }
+
   const target = getActiveRuntimeTarget(settings)
+
   return JSON.stringify({
     runtime: target.kind === 'environment' ? target.environmentId : 'local',
     repos: orderedGitRepos.map((repo) => ({
@@ -54,6 +56,7 @@ export function markSetupScriptProbePending(
   if (current.signature === signature) {
     return current
   }
+
   return { signature, ready: false, hasSetupScript: false }
 }
 
@@ -65,6 +68,7 @@ export function settleSetupScriptProbe(
   if (current.signature !== signature) {
     return current
   }
+
   return { signature, ready: true, hasSetupScript }
 }
 
@@ -75,6 +79,7 @@ export function getCurrentSetupScriptProbeState(
   if (current.signature === signature) {
     return current
   }
+
   return { signature, ready: false, hasSetupScript: false }
 }
 

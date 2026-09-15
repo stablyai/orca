@@ -58,6 +58,7 @@ export async function createRuntimeFolderWorktree(args: {
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()
   const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
+
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     request.displayName,
     request.displayNameKind,
@@ -65,7 +66,9 @@ export async function createRuntimeFolderWorktree(args: {
     request.cliProvenance?.kind === 'created-by-cli',
     request.nameWasGenerated === true
   )
+
   const resolvedFolderDisplayName = displayNameRequest.value
+
   const meta = deps.store.setWorktreeMeta(worktreeId, {
     instanceId,
     ...getProjectHostSetupWorktreeMeta(deps.store.getProjectHostSetups?.() ?? [], repo),
@@ -115,6 +118,7 @@ export async function createRuntimeFolderWorktree(args: {
     ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
   })
+
   const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
   deps.invalidateResolvedWorktrees()
   deps.notifyWorktreesChanged(repo.id)
@@ -128,12 +132,15 @@ export async function createRuntimeFolderWorktree(args: {
   let warning: string | undefined
   let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
+
   if (args.startup && deps.ptySpawnAvailable) {
     try {
       const trustAgent = args.draftPaste?.agent ?? args.createdWithAgent
+
       if (trustAgent) {
         await deps.markTrusted(trustAgent, worktree.path)
       }
+
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
         command: args.startup.command,
         env: args.startup.env,
@@ -144,12 +151,15 @@ export async function createRuntimeFolderWorktree(args: {
         telemetry: args.startup.telemetry,
         ...(shouldActivate ? {} : { surfaceOwner: false })
       })
+
       if (args.draftPaste) {
         deps.pasteDraft(terminal.handle, args.draftPaste)
       }
+
       if (args.startupFollowup) {
         deps.sendFollowup(terminal.handle, args.startupFollowup)
       }
+
       didSpawnStartup = true
       startupTerminal = {
         spawned: true,
@@ -165,6 +175,7 @@ export async function createRuntimeFolderWorktree(args: {
       console.warn(`[worktree-create] ${warning}`)
     }
   }
+
   if (shouldActivate) {
     deps.activate(
       repo.id,
@@ -184,6 +195,7 @@ export async function createRuntimeFolderWorktree(args: {
       console.warn(`[worktree-create] ${warning}`)
     }
   }
+
   return {
     worktree: {
       ...worktree,

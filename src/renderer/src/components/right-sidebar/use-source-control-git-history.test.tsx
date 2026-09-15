@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({ getRuntimeGitHistory: vi.fn() }))
 vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitHistory: mocks.getRuntimeGitHistory
 }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
 
 import { useSourceControlGitHistory } from './source-control/sync/use-git-history'
@@ -56,6 +57,7 @@ function Probe(props: {
     isGitHistoryVisible: props.isGitHistoryVisible ?? true,
     worktreeMap: props.worktreeMap ?? ALL_WORKTREES
   })
+
   return null
 }
 
@@ -240,6 +242,7 @@ describe('useSourceControlGitHistory stale completion', () => {
     const root = await mount({
       activeRepoSettings: { activeRuntimeEnvironmentId: null }
     })
+
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(

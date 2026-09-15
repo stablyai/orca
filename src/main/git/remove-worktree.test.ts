@@ -42,6 +42,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return { ...actual, stat: statMock, readFile: readFileMock }
 })
 
@@ -60,6 +61,7 @@ import {
 } from './worktree-sparse-checkout-cache'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
+
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
 beforeEach(() => {
@@ -421,6 +423,7 @@ branch refs/heads/main
     const originalPlatform = process.platform
     const worktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\dev\\feature'
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       mockGitCommands({})
 

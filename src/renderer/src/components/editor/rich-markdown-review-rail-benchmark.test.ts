@@ -33,15 +33,19 @@ function measureBaseline({
 }: MeasureRichMarkdownReviewNotePositionsOptions): RichMarkdownReviewNotePosition[] {
   const containerRect = container.getBoundingClientRect()
   const blocks = buildRichMarkdownCommentBlocks(editor)
+
   const nextPositions = markdownComments
     .map((comment): RichMarkdownReviewNotePosition | null => {
       const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
+
       const block = blocks.find(
         (candidate) => candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
       )
+
       if (!block) {
         return null
       }
+
       const top = getRichMarkdownCommentAnchorTop(
         editor,
         comment,
@@ -50,9 +54,11 @@ function measureBaseline({
         container.scrollTop,
         markdownSourceLineOffset
       )
+
       return top === null ? null : { comment, top }
     })
     .filter((position): position is RichMarkdownReviewNotePosition => position !== null)
+
   return stackRichMarkdownReviewNotePositions(
     nextPositions,
     measureReviewNoteHeights(container, nextPositions)
@@ -64,12 +70,15 @@ function measureReviewNoteHeights(
   positions: RichMarkdownReviewNotePosition[]
 ): Map<string, number> {
   const measuredHeights = new Map<string, number>()
+
   for (const pos of positions) {
     const el = container.querySelector(`[data-rich-markdown-review-note-id="${pos.comment.id}"]`)
+
     if (el) {
       measuredHeights.set(pos.comment.id, el.getBoundingClientRect().height)
     }
   }
+
   return measuredHeights
 }
 
@@ -88,6 +97,7 @@ it.skipIf(process.env.ORCA_REVIEW_RAIL_BENCH !== '1')(
           }))
         }
       })
+
       try {
         vi.spyOn(editor.view, 'coordsAtPos').mockReturnValue({
           top: 100,
@@ -96,6 +106,7 @@ it.skipIf(process.env.ORCA_REVIEW_RAIL_BENCH !== '1')(
           right: 10
         })
         const container = document.createElement('div')
+
         const markdownComments: DiffComment[] = Array.from({ length: 5 }, (_, index) => ({
           id: `note-${index}`,
           worktreeId: 'workspace',
@@ -106,6 +117,7 @@ it.skipIf(process.env.ORCA_REVIEW_RAIL_BENCH !== '1')(
           createdAt: index,
           side: 'modified'
         }))
+
         const args = { editor, container, markdownComments, markdownSourceLineOffset: 0 }
         const serialize = vi.spyOn(editor.markdown!, 'serialize')
         const baseline = measureBaseline(args)
@@ -117,20 +129,27 @@ it.skipIf(process.env.ORCA_REVIEW_RAIL_BENCH !== '1')(
         expect(measureRichMarkdownReviewNotePositions(args)).toEqual(baseline)
         const warmCalls = serialize.mock.calls.length
         serialize.mockRestore()
+
         const time = (run: () => unknown) => {
           const start = performance.now()
+
           for (let index = 0; index < 20; index++) {
             run()
           }
+
           return (performance.now() - start) / 20
         }
+
         const before: number[] = []
         const after: number[] = []
+
         for (let round = 0; round < 5; round++) {
           before.push(time(() => measureBaseline(args)))
           after.push(time(() => measureRichMarkdownReviewNotePositions(args)))
         }
+
         const median = (values: number[]) => values.sort((a, b) => a - b)[2]!
+
         const result = {
           blockCount,
           comments: markdownComments.length,
@@ -140,6 +159,7 @@ it.skipIf(process.env.ORCA_REVIEW_RAIL_BENCH !== '1')(
           coldCalls,
           warmCalls
         }
+
         process.stdout.write(`${JSON.stringify(result)}\n`)
         expect(baselineCalls).toBe((2 * blockCount - 1) * 6)
         expect(coldCalls).toBe(2 * blockCount - 1)

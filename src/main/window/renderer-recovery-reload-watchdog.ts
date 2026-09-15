@@ -6,10 +6,13 @@ import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 
 // Field recoveries took up to 30.4s; allow 45s before retrying a load with no document.
 export const RENDERER_RECOVERY_LOAD_TIMEOUT_MS = 45_000
+
 // Vite cold starts need a longer budget than packaged files.
 export const RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS = 180_000
+
 // Retry once before handing recovery back to the user.
 const RENDERER_RECOVERY_LOAD_ATTEMPTS = 2
+
 // Milestones may extend the budget, but cannot postpone the prompt indefinitely.
 const RENDERER_RECOVERY_LOAD_CAP_FACTOR = 2
 
@@ -18,6 +21,7 @@ export type RecoveryReloadTrigger = 'automatic' | 'manual-retry'
 
 /** How far a load got. Ranked, so an attempt's milestone only ever moves forward. */
 export type RecoveryReloadMilestone = 'none' | 'committed' | 'dom-ready'
+
 const MILESTONE_RANK: Record<RecoveryReloadMilestone, number> = {
   none: 0,
   committed: 1,
@@ -60,6 +64,7 @@ type RecoveryReload = {
 }
 
 type RecoveryReloadSeed = Pick<RecoveryReload, 'attempt' | 'details' | 'recentRecoveryCount'>
+
 /** What a raised prompt is about; the crash-loop breaker has no attempt to hand over, only the crash. */
 export type RecoveryPromptSubject = Pick<RecoveryReload, 'details' | 'recentRecoveryCount'>
 
@@ -81,6 +86,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
     reloadMainWindow,
     rendererWebContentsId
   } = args
+
   // Cache before teardown: accessing a destroyed window's webContents throws.
   const rendererWebContents = mainWindow.webContents
   let inFlight: RecoveryReload | null = null
@@ -97,6 +103,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       timer = null
     }
   }
+
   // Match loadMainWindow's dev/prod branch.
   const timeoutMs = (): number =>
     is.dev && process.env.ELECTRON_RENDERER_URL
@@ -117,16 +124,20 @@ export function createRendererRecoveryReloadWatchdog(args: {
     if (inFlight !== reload) {
       return
     }
+
     // Give a progressing load the remaining budget instead of restarting it cold.
     if (reload.progressedSinceArm && Date.now() < reload.capAt) {
       armTimer(reload)
+
       return
     }
+
     fail(reload)
   }
 
   const start = (seed: RecoveryReloadSeed, trigger: RecoveryReloadTrigger): void => {
     const issuedAt = Date.now()
+
     const reload: RecoveryReload = {
       ...seed,
       issuedAt,
@@ -135,6 +146,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       progressedSinceArm: false,
       superseded: false
     }
+
     inFlight = reload
     latest = reload
     documentLanded = false
@@ -153,12 +165,15 @@ export function createRendererRecoveryReloadWatchdog(args: {
     if (reload !== latest) {
       return
     }
+
     latest = null
     documentLanded = true
+
     if (reload === inFlight) {
       inFlight = null
       clearTimer()
     }
+
     opts?.onRecoveryReloadOutcome?.({
       status: 'loaded',
       attempt: reload.attempt,
@@ -174,12 +189,16 @@ export function createRendererRecoveryReloadWatchdog(args: {
   const onLoadRejected = (reload: RecoveryReload, errorCode: string): void => {
     if (errorCode !== 'ERR_ABORTED') {
       fail(reload, errorCode)
+
       return
     }
+
     if (latest !== reload) {
       return
     }
+
     reload.superseded = true
+
     if (inFlight === reload) {
       armTimer(reload)
     }
@@ -187,10 +206,12 @@ export function createRendererRecoveryReloadWatchdog(args: {
 
   const retryFrom = (subject: RecoveryPromptSubject): void => {
     prompt = null
+
     // A late recovery makes the prompt's Reload unnecessary.
     if (documentLanded) {
       return
     }
+
     start(
       { attempt: 1, details: subject.details, recentRecoveryCount: subject.recentRecoveryCount },
       'manual-retry'
@@ -200,9 +221,11 @@ export function createRendererRecoveryReloadWatchdog(args: {
   const escalate = (subject: RecoveryPromptSubject, cause: RecoveryExhaustionCause): void => {
     // A new crash invalidates any document that landed while the prompt was open.
     documentLanded = false
+
     if (prompt) {
       return
     }
+
     prompt = subject
     opts?.onRendererRecoveryExhausted?.({
       details: subject.details,
@@ -219,6 +242,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
     if (inFlight !== reload) {
       return
     }
+
     // Suppress shutdown verdicts; resume may re-arm the retained attempt.
     if (
       isWindowClosing() ||
@@ -228,6 +252,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
     ) {
       return
     }
+
     inFlight = null
     clearTimer()
     opts?.onRecoveryReloadOutcome?.({
@@ -238,15 +263,19 @@ export function createRendererRecoveryReloadWatchdog(args: {
       progress: reload.milestone,
       ...(errorCode === undefined ? {} : { errorCode })
     })
+
     // A pending prompt or crash recovery owns the next reload.
     if (prompt || isRecoveryPending()) {
       return
     }
+
     // Restart only loads with no document; preserve progress until the user chooses Reload.
     if (reload.attempt < RENDERER_RECOVERY_LOAD_ATTEMPTS && reload.milestone === 'none') {
       start({ ...reload, attempt: reload.attempt + 1 }, 'automatic')
+
       return
     }
+
     escalate(reload, 'reload-stalled')
   }
 
@@ -255,11 +284,14 @@ export function createRendererRecoveryReloadWatchdog(args: {
     if (!inFlight || MILESTONE_RANK[milestone] <= MILESTONE_RANK[inFlight.milestone]) {
       return
     }
+
     inFlight.milestone = milestone
     inFlight.progressedSinceArm = true
   }
+
   const onDidNavigate = observeMilestone('committed')
   const onDomReady = observeMilestone('dom-ready')
+
   const onDidFailLoad = (
     _event: Electron.Event,
     errorCode: number,
@@ -270,11 +302,13 @@ export function createRendererRecoveryReloadWatchdog(args: {
     if (!isMainFrame || errorCode === -3 || !latest?.superseded) {
       return
     }
+
     // Error documents also finish loading; only a successful replacement may settle an aborted attempt.
     latest.superseded = false
     documentLanded = false
     fail(latest, mainWindowLoadErrorCode(new Error(errorDescription)))
   }
+
   rendererWebContents.on('did-navigate', onDidNavigate)
   rendererWebContents.on('dom-ready', onDomReady)
   rendererWebContents.on('did-fail-load', onDidFailLoad)
@@ -294,6 +328,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
       if (!inFlight) {
         return
       }
+
       inFlight.capAt = Date.now() + timeoutMs() * RENDERER_RECOVERY_LOAD_CAP_FACTOR
       armTimer(inFlight)
     },

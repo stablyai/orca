@@ -24,6 +24,7 @@ describe('filterGitHubWorkItemLabels', () => {
     const oversizedQuery = 'secret-label-filter'.repeat(
       GITHUB_WORK_ITEM_OPTION_FILTER_QUERY_MAX_BYTES
     )
+
     const throwingLabels = [
       {
         toLowerCase(): string {

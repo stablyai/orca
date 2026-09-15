@@ -17,6 +17,7 @@ function globalSkillLockPath(args: SkillUpdateRegistrationArgs): string {
         ? (process.env.XDG_STATE_HOME ?? null)
         : null
       : args.stateHome
+
   return stateHome
     ? join(stateHome, 'skills', '.skill-lock.json')
     : join(args.homeDir ?? homedir(), '.agents', '.skill-lock.json')
@@ -70,6 +71,7 @@ export async function readGloballyUpdatableSkillLocks(
       version?: unknown
       skills?: unknown
     }
+
     if (
       typeof parsed.version !== 'number' ||
       parsed.version < GLOBAL_SKILL_LOCK_SCHEMA_VERSION ||
@@ -86,11 +88,13 @@ export async function readGloballyUpdatableSkillLocks(
           if (!value || typeof value !== 'object' || Array.isArray(value)) {
             return false
           }
+
           const entry = value as {
             skillFolderHash?: unknown
             skillPath?: unknown
             source?: unknown
           }
+
           return (
             typeof entry.skillFolderHash === 'string' &&
             entry.skillFolderHash.length > 0 &&

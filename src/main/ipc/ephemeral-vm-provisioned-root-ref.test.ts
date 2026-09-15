@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
+
 const { connectRuntimeOwnedSshTargetMock, getPathMock, handleMock, removeHandlerMock } = vi.hoisted(
   () => ({
     connectRuntimeOwnedSshTargetMock: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('../ephemeral-vm-runtime-ssh', () => ({
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 
 let userDataPath: string
+
 let repoPath: string
 
 beforeEach(() => {
@@ -133,6 +135,7 @@ function provision(args: { ref?: string }): Promise<unknown> {
 
 function makeStore(path: string) {
   const repo = { id: 'repo-1', path, displayName: 'Repo', badgeColor: '#000', addedAt: 0 }
+
   return {
     getRepo: vi.fn((id: string) => (id === repo.id ? repo : null)),
     getRepos: vi.fn(() => [repo]),
@@ -148,6 +151,7 @@ function createGitFixtureCommit(path: string): string {
   writeFileSync(join(path, 'fixture.txt'), 'fixture')
   execFileSync('git', ['add', 'fixture.txt'], { cwd: path })
   execFileSync('git', ['commit', '-m', 'fixture'], { cwd: path })
+
   return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path, encoding: 'utf8' }).trim()
 }
 
@@ -156,11 +160,14 @@ function createBranchCommit(path: string, branch: string): string {
   writeFileSync(join(path, 'fixture.txt'), branch)
   execFileSync('git', ['add', 'fixture.txt'], { cwd: path })
   execFileSync('git', ['commit', '-m', branch], { cwd: path })
+
   const head = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: path,
     encoding: 'utf8'
   }).trim()
+
   execFileSync('git', ['checkout', 'main'], { cwd: path })
+
   return head
 }
 

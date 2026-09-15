@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+
 const readRepoCommonDirFromGitMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./runner', async (importOriginal) => ({
@@ -60,6 +61,7 @@ describe('local repo ref maintenance target', () => {
     const packCall = gitExecFileAsyncMock.mock.calls.find(
       ([argv]) => (argv as string[])[0] === 'pack-refs'
     )
+
     expect(packCall?.[1]).not.toHaveProperty('signal')
   })
 

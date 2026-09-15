@@ -39,15 +39,19 @@ function readCleanupMarker(
   userDataPath: string
 ): ArtifactCloudCleanupMarker | null {
   const path = cleanupMarkerPath(profileId, userDataPath)
+
   if (!existsSync(path)) {
     return null
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
     throw new Error('Artifact cloud cleanup marker could not be read safely.', { cause: error })
   }
+
   if (
     !parsed ||
     typeof parsed !== 'object' ||
@@ -59,6 +63,7 @@ function readCleanupMarker(
   ) {
     throw new Error('Artifact cloud cleanup marker has an unsupported format.')
   }
+
   return parsed as ArtifactCloudCleanupMarker
 }
 
@@ -68,6 +73,7 @@ export function artifactCloudCleanupNeedsCommit(
   targetCloud: OrcaProfileCloudSummary | undefined
 ): boolean {
   const marker = readCleanupMarker(profileId, userDataPath)
+
   return (
     marker?.phase === 'prepared' && marker.targetIdentity === artifactCloudIdentity(targetCloud)
   )
@@ -80,9 +86,11 @@ export function commitArtifactCloudCleanup(
 ): void {
   const targetIdentity = artifactCloudIdentity(targetCloud)
   const marker = readCleanupMarker(profileId, userDataPath)
+
   if (marker?.phase !== 'prepared' || marker.targetIdentity !== targetIdentity) {
     throw new Error('Artifact cloud cleanup marker does not match the profile transition.')
   }
+
   writeDurableSecureJsonFile(cleanupMarkerPath(profileId, userDataPath), {
     version: 1,
     phase: 'committed',
@@ -96,12 +104,14 @@ export function completeArtifactCloudCleanupIfCommitted(
   currentCloud: OrcaProfileCloudSummary | undefined
 ): void {
   const marker = readCleanupMarker(profileId, userDataPath)
+
   if (
     marker?.phase !== 'committed' ||
     marker.targetIdentity !== artifactCloudIdentity(currentCloud)
   ) {
     return
   }
+
   clearArtifactCreateIntents(profileId, userDataPath)
   clearArtifactShareRecords(profileId, userDataPath)
   rmSync(cleanupMarkerPath(profileId, userDataPath), { force: true })
@@ -114,6 +124,7 @@ function assertArtifactCloudCleanupReady(
   currentCloud: OrcaProfileCloudSummary | undefined
 ): void {
   const marker = readCleanupMarker(profileId, userDataPath)
+
   if (
     marker?.phase === 'prepared' &&
     marker.targetIdentity === artifactCloudIdentity(currentCloud)

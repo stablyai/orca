@@ -47,9 +47,11 @@ export class CodexHookService {
     if (!runtimeHomePath) {
       return 0
     }
+
     const key = getWslReconciliationKey(runtimeHomePath)
     const generation = (this.wslReconciliationGeneration.get(key) ?? 0) + 1
     this.wslReconciliationGeneration.set(key, generation)
+
     return generation
   }
 
@@ -65,16 +67,20 @@ export class CodexHookService {
     // reading the finished install's flags, as it did when the install was
     // synchronous and no callback could interleave with it.
     let markPrimaryInstallSettled!: () => void
+
     let reconciliationChain = new Promise<void>((resolve) => {
       markPrimaryInstallSettled = resolve
     })
+
     const reconcileSettledWslCanonicalPath = async (
       settlement: WslCanonicalPathSettlement
     ): Promise<void> => {
       if (!runtimeHomePath) {
         return
       }
+
       const key = getWslReconciliationKey(runtimeHomePath)
+
       const resolvedPlan =
         settlement.status === 'resolved'
           ? createCodexWslRuntimeHookInstallPlan(
@@ -83,6 +89,7 @@ export class CodexHookService {
               () => settlement.canonicalPath
             )
           : null
+
       const action = getWslHookReconciliationAction({
         settlement,
         isCurrentGeneration: this.wslReconciliationGeneration.get(key) === generation,
@@ -90,9 +97,11 @@ export class CodexHookService {
         resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null,
         installSucceeded
       })
+
       if (action === 'none') {
         return
       }
+
       if (action === 'remove') {
         try {
           removeStaleWslRuntimeManagedHookTrustEntries(
@@ -102,19 +111,26 @@ export class CodexHookService {
         } catch (error) {
           console.warn('[codex-hook-service] failed to revoke stale WSL hook trust', error)
         }
+
         return
       }
+
       if (!resolvedPlan) {
         return
       }
+
       const status = await installManagedHooksIntoWslRuntime(resolvedPlan)
+
       if (status.state === 'error') {
         console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
+
         return
       }
+
       installedTrustConfigPath = resolvedPlan.trustConfigPath
       installSucceeded = status.state === 'installed'
     }
+
     const onCanonicalPathSettled = (settlement: WslCanonicalPathSettlement): void => {
       const run = (): Promise<void> => reconcileSettledWslCanonicalPath(settlement)
       reconciliationChain = reconciliationChain.then(run, run)
@@ -122,16 +138,20 @@ export class CodexHookService {
         console.warn('[codex-hook-service] failed to reconcile WSL hook path', error)
       })
     }
+
     const wslPlan = createCodexWslRuntimeHookInstallPlan(
       runtimeHomePath,
       target,
       undefined,
       onCanonicalPathSettled
     )
+
     installedTrustConfigPath = wslPlan?.trustConfigPath ?? null
+
     try {
       const status = wslPlan ? await installManagedHooksIntoWslRuntime(wslPlan) : null
       installSucceeded = status?.state === 'installed'
+
       return status
     } finally {
       markPrimaryInstallSettled()
@@ -145,7 +165,9 @@ export class CodexHookService {
     if (!runtimeHomePath) {
       return Promise.resolve(null)
     }
+
     const targetKey = target?.runtime === 'wsl' ? target.wslDistro?.trim().toLowerCase() : ''
+
     return dedupeInFlightRun(
       this.wslInstallsInFlight,
       `${getWslReconciliationKey(runtimeHomePath)}\0${targetKey ?? ''}`,
@@ -166,6 +188,7 @@ export class CodexHookService {
         (await this.installForLaunchPrep(runtimeHomePath ?? undefined))
       )
     }
+
     return (
       this.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, target) ??
       (await this.refreshRuntimeUserHooksForLaunchPrep(runtimeHomePath ?? undefined))
@@ -178,6 +201,7 @@ export class CodexHookService {
   ): AgentHookInstallStatus | null {
     this.supersedeWslReconciliation(runtimeHomePath)
     const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
+
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
@@ -219,6 +243,7 @@ export class CodexHookService {
    */
   installForLaunchPrep(runtimeHomePath?: string): Promise<AgentHookInstallStatus> {
     const homePath = runtimeHomePath ?? getOrcaManagedCodexHomePath()
+
     return dedupeInFlightRun(this.launchPrepInFlight, launchPrepKey('install', homePath), () =>
       this.install(homePath)
     )
@@ -226,6 +251,7 @@ export class CodexHookService {
 
   refreshRuntimeUserHooksForLaunchPrep(runtimeHomePath?: string): Promise<AgentHookInstallStatus> {
     const homePath = runtimeHomePath ?? getOrcaManagedCodexHomePath()
+
     return dedupeInFlightRun(this.launchPrepInFlight, launchPrepKey('refresh', homePath), () =>
       this.refreshRuntimeUserHooks(homePath)
     )

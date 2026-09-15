@@ -214,6 +214,7 @@ describe('resolveCodexPaneLaunchAccount', () => {
       wslDistro: 'Ubuntu',
       wslLinuxHomePath: '/mnt/c/Users/u/orca/codex-accounts/drive-account/home'
     })
+
     const args = {
       launchCodexHomePath:
         '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\u\\orca\\codex-accounts\\drive-account\\home',

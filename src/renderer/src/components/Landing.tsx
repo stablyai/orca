@@ -46,35 +46,46 @@ function GitHubStarButton({
     if (!menuOpen) {
       return
     }
+
     const onDocClick = (e: MouseEvent): void => {
       if (!wrapperRef.current?.contains(e.target as Node)) {
         setMenuOpen(false)
       }
     }
+
     document.addEventListener('mousedown', onDocClick)
+
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [menuOpen])
 
   const handleClick = async (): Promise<void> => {
     if (state === 'starred') {
       setMenuOpen((v) => !v)
+
       return
     }
+
     if (state === 'web-fallback') {
       await window.api.shell.openUrl(ORCA_GITHUB_URL)
+
       return
     }
+
     if (state !== 'not-starred') {
       return
     }
+
     setState('starred') // optimistic
     const ok = await window.api.gh.starOrca('landing')
+
     if (!ok) {
       if (mountedRef.current) {
         setState('web-fallback')
       }
+
       return
     }
+
     // Why: starring from any entry point mutes the threshold-based nag.
     // Without this the background notification could still fire on the next
     // threshold crossing, which would feel like a bug to the user.
@@ -152,6 +163,7 @@ function PreflightBanner({
   // GitHub project (which changes the key) re-evaluates dismissals, so a lapsed
   // dismissal re-surfaces the nudge without a manual reset.
   const githubKey = githubProjectKeys(repos).join('|')
+
   const [dismissed, setDismissed] = useState<Set<string>>(
     () =>
       new Set(
@@ -175,6 +187,7 @@ function PreflightBanner({
   }, [githubKey])
 
   const visibleIssues = issues.filter((issue) => !dismissed.has(issue.id))
+
   if (visibleIssues.length === 0) {
     return null
   }
@@ -228,6 +241,7 @@ export default function Landing(): React.JSX.Element {
 
   const createTargetLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
+
   const hasProjects = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
@@ -239,6 +253,7 @@ export default function Landing(): React.JSX.Element {
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
   const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
+
   const shortcuts = useMemo<ShortcutItem[]>(() => {
     return [
       {

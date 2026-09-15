@@ -14,15 +14,19 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: mocks.activateWorkspaceTab
 }))
+
 vi.mock('@/lib/browser-page-palette-activation', () => ({
   activateBrowserPagePaletteResult: mocks.activateBrowserPage
 }))
+
 vi.mock('@/lib/simulator-tab-palette-activation', () => ({
   activateSimulatorTabPaletteResult: mocks.activateSimulatorTab
 }))
+
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
+
 vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
   requestBrowserFocus: mocks.requestBrowserFocus
 }))
@@ -107,6 +111,7 @@ describe('activateOpenTabSearchResult', () => {
     if (outcome.status !== 'activated') {
       throw new Error('expected activation')
     }
+
     outcome.focus?.()
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('term-1')
   })
@@ -127,6 +132,7 @@ describe('activateOpenTabSearchResult', () => {
     if (outcome.status !== 'activated') {
       throw new Error('expected activation')
     }
+
     outcome.focus?.()
 
     expect(mocks.requestBrowserFocus).toHaveBeenCalledWith({

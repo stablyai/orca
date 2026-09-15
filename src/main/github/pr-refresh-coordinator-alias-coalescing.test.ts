@@ -3,15 +3,20 @@ import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
@@ -30,6 +35,7 @@ describe('pr-refresh-coordinator', () => {
   it('cancels queued work when a later enqueue marks the candidate invalid', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock.mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({ checksStatus: 'success' }),
@@ -59,6 +65,7 @@ describe('pr-refresh-coordinator', () => {
   it('does not cancel other aliases when one coalesced PR alias becomes invalid', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock
       .mockResolvedValueOnce({
         kind: 'found',
@@ -77,12 +84,14 @@ describe('pr-refresh-coordinator', () => {
       linkedPRNumber: 12,
       worktreeId: 'wt-a'
     })
+
     const second = makeCandidate({
       cacheKey: '/repo::feature/b',
       branch: 'feature/b',
       linkedPRNumber: 12,
       worktreeId: 'wt-b'
     })
+
     reportVisiblePRRefreshCandidates([first, second], 1, 1)
     await vi.advanceTimersByTimeAsync(0)
 
@@ -115,6 +124,7 @@ describe('pr-refresh-coordinator', () => {
       worktreeId: 'wt-b',
       currentHeadOid: 'head-b'
     })
+
     const representative = makeCandidate({
       cacheKey: '/repo::feature/a',
       branch: 'feature/a',
@@ -139,6 +149,7 @@ describe('pr-refresh-coordinator', () => {
   it('probes with the survivor head after the representative worktree is pruned', async () => {
     const { enqueuePRRefresh, pruneWorktreePRRefreshAliases } =
       await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock.mockResolvedValue({
       kind: 'found',
       pr: makePR({ state: 'merged' }),
@@ -152,6 +163,7 @@ describe('pr-refresh-coordinator', () => {
       worktreeId: 'wt-b',
       currentHeadOid: 'head-b'
     })
+
     const representative = makeCandidate({
       cacheKey: '/repo::feature/a',
       branch: 'feature/a',

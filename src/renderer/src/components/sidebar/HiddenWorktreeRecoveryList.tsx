@@ -34,6 +34,7 @@ export default function HiddenWorktreeRecoveryList({
   const listRef = useRef<HTMLDivElement>(null)
   const hidden = getHiddenImportableExternalWorktrees(detected)
   const normalizedQuery = query.trim().toLocaleLowerCase()
+
   const filtered = normalizedQuery
     ? hidden.filter(
         (worktree) =>
@@ -41,7 +42,9 @@ export default function HiddenWorktreeRecoveryList({
           worktree.path.toLocaleLowerCase().includes(normalizedQuery)
       )
     : hidden
+
   const discoveredCount = hidden.length + getVisibleNonOrcaWorktrees(detected).length
+
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => listRef.current,
@@ -106,10 +109,13 @@ export default function HiddenWorktreeRecoveryList({
           <ul className="relative min-w-0" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const worktree = filtered[virtualRow.index]
+
               if (!worktree) {
                 return null
               }
+
               const displayPath = relativePathInsideRoot(repo.path, worktree.path) || worktree.path
+
               return (
                 <li
                   key={worktree.id}

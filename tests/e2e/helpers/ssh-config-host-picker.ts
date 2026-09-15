@@ -48,15 +48,18 @@ export async function seedIsolatedSshConfig(
   const sshDir = path.join(home, '.ssh')
   mkdirSync(sshDir, { recursive: true, mode: 0o700 })
   writeFileSync(path.join(sshDir, 'config'), configBody, { mode: 0o600 })
+
   return home
 }
 
 export async function dismissTransientAnnouncement(page: Page): Promise<void> {
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+
   const visible = await expect(maybeLaterButton)
     .toBeVisible({ timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (visible) {
     await maybeLaterButton.click()
   }
@@ -78,15 +81,20 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
       timeout: 3_000
     })
     const dialogCount = await page.getByRole('dialog').count()
+
     if (dialogCount === 0) {
       return
     }
+
     const dialogId = await page.getByRole('dialog').last().getAttribute('id')
+
     if (!dialogId) {
       throw new Error('Open dialog is missing its Radix identity')
     }
+
     const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
     const back = dialog.getByRole('button', { name: 'Back', exact: true })
+
     if (await back.isVisible()) {
       await back.click()
       // The picker and host form reuse the same Radix dialog.
@@ -96,12 +104,14 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
       })
       continue
     }
+
     const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
     await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
     // Hidden Electron windows can park CSS exits before their first compositor frame.
     await page.screenshot({ animations: 'disabled' })
     await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
+
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }
 
@@ -132,12 +142,14 @@ export async function openAddSshHostDialog(page: Page): Promise<Locator> {
   const addSshHostAction = page.getByRole('button', {
     name: /Add SSH host.*existing machine over SSH/i
   })
+
   await expect(addSshHostAction).toBeVisible({ timeout: 5_000 })
   await addSshHostAction.click()
 
   const sshDialog = page.getByRole('dialog', { name: 'Add SSH host' })
   await expect(sshDialog).toBeVisible({ timeout: 10_000 })
   await expect(sshDialog.getByRole('heading', { name: 'Add SSH host' })).toBeVisible()
+
   return sshDialog
 }
 
@@ -151,6 +163,7 @@ export async function openSshConfigHostPicker(page: Page): Promise<Locator> {
   ).toBeVisible()
   // Wait past the loading empty-state before asserting host rows.
   await expect(pickerDialog.getByText('Reading ~/.ssh/config…')).toBeHidden({ timeout: 10_000 })
+
   return pickerDialog
 }
 
@@ -159,9 +172,11 @@ export async function openSshHostSettings(page: Page): Promise<Locator> {
   await closeOpenDialogs(page)
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     state.openSettingsTarget({ pane: 'ssh', repoId: null })
     state.openSettingsPage()
   })
@@ -171,9 +186,11 @@ export async function openSshHostSettings(page: Page): Promise<Locator> {
   const sshSection = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'SSH Hosts' }) })
+
   await expect(sshSection).toBeVisible({ timeout: 10_000 })
   await expect(sshSection.getByRole('button', { name: 'Import' })).toBeVisible()
   await expect(sshSection.getByRole('button', { name: 'Add Target' })).toBeVisible()
+
   return sshSection
 }
 
@@ -204,6 +221,7 @@ export function configHostRow(
 ): Locator {
   const alias = escapeRegExp(host.alias)
   const endpoint = escapeRegExp(hostEndpointSummary(host))
+
   return pickerDialog
     .getByRole('list', { name: 'SSH config hosts' })
     .getByRole('button', { name: new RegExp(`${alias}[\\s\\S]*${endpoint}`) })
@@ -232,6 +250,7 @@ export async function expectSshHostAbsentFromSettings(
     sshSection.getByText(new RegExp(escapeRegExp(hostEndpointSummary(host))))
   ).toHaveCount(0)
 }
+
 export async function seedOrcaSshTargetMatchingAlias(
   page: Page,
   args: { alias: string; hostname: string; username?: string; port?: number }
@@ -247,7 +266,9 @@ export async function seedOrcaSshTargetMatchingAlias(
         relayGracePeriodSeconds: 60
       }
     })
+
     window.__store?.getState().recordSshRepoReadoptions(result.repoReadoptions)
+
     return result.target.id
   }, args)
 }
@@ -259,13 +280,16 @@ export async function removeSshTargetsByPrefix(page: Page, prefix: string): Prom
       label: string
       configHost?: string
     }[]
+
     for (const target of targets) {
       const matches =
         target.label.startsWith(labelPrefix) ||
         (target.configHost != null && target.configHost.startsWith(labelPrefix))
+
       if (!matches) {
         continue
       }
+
       try {
         await window.api.ssh.removeTarget({ id: target.id })
       } catch {
@@ -282,12 +306,15 @@ export async function removeSshTargetByAlias(page: Page, alias: string): Promise
       label: string
       configHost?: string
     }[]
+
     const match = targets.find(
       (target) => target.configHost === hostAlias || target.label === hostAlias
     )
+
     if (!match) {
       throw new Error(`No SSH target for alias ${hostAlias}`)
     }
+
     await window.api.ssh.removeTarget({ id: match.id })
   }, alias)
 }

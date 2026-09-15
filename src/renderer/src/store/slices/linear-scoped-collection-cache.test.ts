@@ -4,23 +4,38 @@ import { credentialDecryptionMessage } from '../../../../shared/integration-cred
 import { createTestStore, deferred, issue, project } from './linear-slice-test-harness'
 
 const linearStatus = vi.fn()
+
 const linearConnect = vi.fn()
+
 const linearDisconnect = vi.fn()
+
 const linearListIssues = vi.fn()
+
 const linearSearchIssues = vi.fn()
+
 const linearListTeams = vi.fn()
+
 const linearGetIssue = vi.fn()
+
 const linearListProjects = vi.fn()
+
 const linearGetCustomView = vi.fn()
+
 const linearGetProject = vi.fn()
+
 const linearListProjectIssues = vi.fn()
+
 const linearListCustomViews = vi.fn()
+
 const linearListCustomViewIssues = vi.fn()
+
 const linearListCustomViewProjects = vi.fn()
+
 const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearConnect: (...args: unknown[]) => linearConnect(...args),
@@ -36,6 +51,7 @@ vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
 
 vi.mock('@/runtime/runtime-linear-issue-mutations', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
@@ -44,6 +60,7 @@ vi.mock('@/runtime/runtime-linear-issue-mutations', async (importOriginal) => {
 
 vi.mock('@/runtime/runtime-linear-project-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
@@ -349,18 +366,21 @@ describe('createLinearSlice caching', () => {
     const store = createTestStore()
     const staleProject = deferred<LinearProjectDetail | null>()
     const freshProject = deferred<LinearProjectDetail | null>()
+
     const staleView = deferred<{
       id: string
       name: string
       model: 'project'
       workspaceId: string
     }>()
+
     const freshView = deferred<{
       id: string
       name: string
       model: 'project'
       workspaceId: string
     }>()
+
     linearGetProject
       .mockReturnValueOnce(staleProject.promise)
       .mockReturnValueOnce(freshProject.promise)
@@ -369,12 +389,15 @@ describe('createLinearSlice caching', () => {
       .mockReturnValueOnce(freshView.promise)
 
     const staleProjectPromise = store.getState().fetchLinearProject('project-1', 'workspace-1')
+
     const freshProjectPromise = store
       .getState()
       .fetchLinearProject('project-1', 'workspace-1', { force: true })
+
     const staleViewPromise = store
       .getState()
       .fetchLinearCustomView('view-1', 'workspace-1', 'project')
+
     const freshViewPromise = store
       .getState()
       .fetchLinearCustomView('view-1', 'workspace-1', 'project', { force: true })

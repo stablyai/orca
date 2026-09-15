@@ -34,30 +34,39 @@ export async function executePluginHostCall(
   if (!isQualifiedPluginKey(input.pluginId)) {
     return { ok: false, code: 'invalid_request', error: 'invalid qualified plugin key' }
   }
+
   const gate = decidePluginHostCall(
     { grantedCapabilities: input.grantedCapabilities, viaPanel: input.viaPanel },
     input.method
   )
+
   if (!gate.granted) {
     return { ok: false, code: gate.code, error: gate.error }
   }
+
   const bound = getBoundPluginHostMethod(input.method)
+
   if (!bound) {
     return { ok: false, code: 'unknown_method', error: `unknown host method: ${input.method}` }
   }
+
   const parsedParams = bound.spec.params.safeParse(input.params)
+
   if (!parsedParams.success) {
     const issue = parsedParams.error.issues[0]
     const path = issue?.path.join('.') || '(root)'
+
     return {
       ok: false,
       code: 'invalid_params',
       error: `${path}: ${issue?.message ?? 'invalid params'}`
     }
   }
+
   if (!input.services) {
     return { ok: false, code: 'unavailable', error: 'runtime is not available' }
   }
+
   const auditMutation = async (outcome: 'attempt' | 'ok' | 'error'): Promise<void> => {
     if (bound.spec.mutation && input.audit) {
       await input.audit.record({
@@ -69,6 +78,7 @@ export async function executePluginHostCall(
       })
     }
   }
+
   if (bound.spec.mutation) {
     if (!input.audit) {
       return {
@@ -77,6 +87,7 @@ export async function executePluginHostCall(
         error: 'mutation audit log is not available'
       }
     }
+
     try {
       // The intent is appended before the handler. If this write fails, the
       // mutation is never attempted.
@@ -89,14 +100,18 @@ export async function executePluginHostCall(
       }
     }
   }
+
   try {
     const value = await bound.handler(parsedParams.data, {
       pluginId: input.pluginId,
       services: input.services
     })
+
     const validated = bound.spec.result.safeParse(value)
+
     if (!validated.success) {
       await auditMutation('error').catch(() => undefined)
+
       // A result-schema mismatch is a host bug; fail the call rather than
       // leaking an unvalidated shape into plugin-facing transports.
       return {
@@ -105,10 +120,13 @@ export async function executePluginHostCall(
         error: `internal: malformed ${input.method} result`
       }
     }
+
     await auditMutation('ok').catch(() => undefined)
+
     return { ok: true, value: validated.data }
   } catch (error) {
     await auditMutation('error').catch(() => undefined)
+
     return {
       ok: false,
       code: 'action_failed',
@@ -123,15 +141,20 @@ function summarizeParams(method: string, params: unknown): string {
     string,
     unknown
   >
+
   switch (method) {
     case 'terminal.sendText': {
       const text = typeof record.text === 'string' ? record.text : ''
+
       return `terminal=${String(record.terminalId)} bytes=${Buffer.byteLength(text, 'utf8')} enter=${record.enter === true}`
     }
+
     case 'notifications.show': {
       const title = typeof record.title === 'string' ? record.title : ''
+
       return `titleChars=${title.length}`
     }
+
     case 'storage.set':
     case 'storage.delete':
     case 'secrets.set':

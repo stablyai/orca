@@ -19,11 +19,13 @@ function buildAtomFeed(tags: string[]): string {
         `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
     )
     .join('')
+
   return `<?xml version="1.0" encoding="UTF-8"?><feed>${entries}</feed>`
 }
 
 function buildManifest(tag: string): string {
   const version = tag.replace(/^v/i, '')
+
   return [
     `version: ${version}`,
     'files:',
@@ -51,8 +53,10 @@ function respondWithAtom(
     }
 
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+
       if (unavailableManifests.has(tag)) {
         return Promise.resolve({
           ok: false,
@@ -60,6 +64,7 @@ function respondWithAtom(
           text: () => Promise.resolve('')
         })
       }
+
       return Promise.resolve({
         ok: !missingManifests.has(tag),
         status: missingManifests.has(tag) ? 404 : 200,
@@ -68,6 +73,7 @@ function respondWithAtom(
     }
 
     const assetMatch = url.match(/\/releases\/download\/([^/]+)\/(.+)$/)
+
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
@@ -138,6 +144,7 @@ describe('fetchNewerReleaseTag', () => {
 
         if (url.endsWith(manifestName)) {
           manifestUrls.push(url)
+
           return Promise.resolve({
             ok: true,
             text: () => Promise.resolve(buildManifest('v1.4.1'))
@@ -147,6 +154,7 @@ describe('fetchNewerReleaseTag', () => {
         if (init?.method === 'HEAD') {
           assetUrls.push(url)
         }
+
         return Promise.resolve({
           ok: true,
           text: () => Promise.resolve('')
@@ -361,6 +369,7 @@ describe('fetchNewerReleaseTag', () => {
       'v1.4.2-rc.0',
       'v1.4.1-rc.0'
     ]
+
     const manifestUrls: string[] = []
     const manifestResolvers: (() => void)[] = []
 
@@ -373,6 +382,7 @@ describe('fetchNewerReleaseTag', () => {
       }
 
       manifestUrls.push(url)
+
       return new Promise((resolve) => {
         manifestResolvers.push(() => {
           resolve({ ok: false, text: () => Promise.resolve('') })

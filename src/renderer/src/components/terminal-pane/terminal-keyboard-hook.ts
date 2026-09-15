@@ -77,6 +77,7 @@ export function useTerminalKeyboardShortcuts({
       keybindings,
       terminalShortcutPolicy
     })
+
     const {
       optionKittyReleases,
       deferredNewlineSender,
@@ -123,6 +124,7 @@ export function useTerminalKeyboardShortcuts({
           ? 'contextual_tour'
           : 'keyboard'
     })
+
     const {
       onKeyDown,
       onKeyUp,
@@ -138,6 +140,7 @@ export function useTerminalKeyboardShortcuts({
     window.addEventListener('keyup', onNativeOnlyShortcutCompanion, { capture: true })
     window.addEventListener('beforeinput', onNativeOnlyBeforeInput, { capture: true })
     window.addEventListener('blur', onNativeOnlyBlur)
+
     return () => {
       optionKittyReleases.clear()
       modifiedEnterChordOwner.clear()

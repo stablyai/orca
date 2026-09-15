@@ -20,19 +20,25 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       if (typeof args.message !== 'string' || args.message.trim().length === 0) {
         throw new Error('Commit message is required')
       }
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.commit(args.worktreePath, args.message)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return commitChanges(worktreePath, args.message, {
         ...gitOptions,
         admissionTier: 'interactive'

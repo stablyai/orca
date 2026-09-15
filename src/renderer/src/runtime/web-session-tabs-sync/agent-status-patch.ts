@@ -52,6 +52,7 @@ function withMirroredEvidenceReceipt(
     agentStatusAuthorityObservedAt(existing) === agentStatusAuthorityObservedAt(entry)
       ? existing.mirroredEvidenceReceivedAt
       : now
+
   return { ...entry, mirroredEvidenceReceivedAt: receivedAt }
 }
 
@@ -64,11 +65,13 @@ export function buildMirroredAgentStatusPatch(
   batchContext?: WebSessionTabsBatchContext
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
   const mirroredTabIds = new Set<string>()
+
   for (const tab of currentTerminalTabs) {
     if (isWebTerminalSurfaceTabId(tab.id)) {
       mirroredTabIds.add(tab.id)
     }
   }
+
   for (const surface of terminalSurfaceTabs) {
     mirroredTabIds.add(toWebTerminalSurfaceTabId(surface.parentTabId))
   }
@@ -80,6 +83,7 @@ export function buildMirroredAgentStatusPatch(
   let retainedSurfaceByHostTabAndPrunedLeafId:
     | Map<string, ReadonlyMap<string, TerminalSurface>>
     | undefined
+
   for (const entry of mirroredTerminalTabs) {
     if (entry.retainedSurfaceByPrunedLeafId) {
       retainedSurfaceByHostTabAndPrunedLeafId ??= new Map()
@@ -89,24 +93,32 @@ export function buildMirroredAgentStatusPatch(
       )
     }
   }
+
   const nextByPaneKey = new Map<string, AgentStatusEntry>()
+
   for (const surface of terminalSurfaceTabs) {
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
+
     const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+
     if (!hostEntry) {
       continue
     }
+
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
+
     const entry = withMirroredEvidenceReceipt(hostEntry, existing, now)
+
     // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&
       entry.state === 'done' &&
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
+
     // Why: cross-machine wall clocks are not comparable, so the host frame could
     // outrank live client status forever; a proven client writer keeps its own
     // state (still adopting the host's identity fields below) unless the host
@@ -114,6 +126,7 @@ export function buildMirroredAgentStatusPatch(
     const clientOwnsEntry =
       isFencedClientAgentStatus(entry.paneKey, existing, now) &&
       !hostAgentStatusPiercesClientAuthority(entry)
+
     const nextEntry =
       existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
         ? {
@@ -139,6 +152,7 @@ export function buildMirroredAgentStatusPatch(
                 : entry.lastAssistantMessageIsToolOutput
           }
         : entry
+
     nextByPaneKey.set(entry.paneKey, nextEntry)
   }
 
@@ -151,9 +165,11 @@ export function buildMirroredAgentStatusPatch(
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
       continue
     }
+
     if (nextByPaneKey.has(paneKey)) {
       continue
     }
+
     // Why: the host surface carrying no status is not proof the agent stopped —
     // hook-only hosts publish nothing for OSC-driven panes. Keep a live entry
     // this renderer owns; it decays through the normal freshness boundary.
@@ -164,6 +180,7 @@ export function buildMirroredAgentStatusPatch(
     if (isClientOwnedAgentStatus(paneKey, state.agentStatusByPaneKey[paneKey])) {
       continue
     }
+
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
       nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
         state,
@@ -171,6 +188,7 @@ export function buildMirroredAgentStatusPatch(
         batchContext
       )
     }
+
     delete nextAgentStatusByPaneKey[paneKey]
     updateBatchAgentPaneKey(paneKey, false, batchContext)
     changed = true
@@ -180,9 +198,11 @@ export function buildMirroredAgentStatusPatch(
 
   for (const [paneKey, entry] of nextByPaneKey) {
     const existing = nextAgentStatusByPaneKey[paneKey]
+
     if (agentStatusEntryEqual(existing, entry)) {
       continue
     }
+
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
       nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
         state,
@@ -190,18 +210,24 @@ export function buildMirroredAgentStatusPatch(
         batchContext
       )
     }
+
     nextAgentStatusByPaneKey[paneKey] = entry
     updateBatchAgentPaneKey(paneKey, true, batchContext)
     changed = true
+
     const entryAttributionChanged =
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
+
     const entryFreshnessChanged =
       !!existing && isAgentStatusFresh(existing, now) !== isAgentStatusFresh(entry, now)
+
     const doneAttentionChanged =
       existing?.state === 'done' &&
       entry.state === 'done' &&
       agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
+
     const workingModeChanged = existing?.workingMode !== entry.workingMode
+
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
@@ -210,6 +236,7 @@ export function buildMirroredAgentStatusPatch(
       entryAttributionChanged ||
       doneAttentionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
+
     aggregateRelevantChange =
       aggregateRelevantChange || entrySortRelevantChange || workingModeChanged
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange

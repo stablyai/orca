@@ -195,6 +195,7 @@ describe('getTerminalTabColdParkRecheckDelayMs', () => {
       coldParkDelayMs: 100,
       hotRetainMs: 1_000
     }
+
     expect(
       getTerminalTabColdParkRecheckDelayMs({
         ...base,

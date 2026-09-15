@@ -10,6 +10,7 @@ export type RuntimeProcessSpawn = (spec: ProcessSpec) => RuntimeChildProcess
 
 /** UTF-16 units, not bytes — this bounds the buffer, it is not a payload contract. */
 const MAX_RESPONSE_CHARS = 20 * 1024 * 1024
+
 const MAX_STDERR_CHARS = 4096
 
 export type ServeChannelHandlers = {
@@ -42,13 +43,16 @@ export class DesktopScriptServeChannel {
     private readonly handlers: ServeChannelHandlers
   ) {
     const onStdout = (chunk: Buffer | string): void => this.readStdout(chunk)
+
     const onStderr = (chunk: Buffer | string): void => {
       this.stderrTail = `${this.stderrTail}${chunk.toString()}`.slice(-MAX_STDERR_CHARS)
     }
+
     // Why close and not exit: the caller classifies the failure from stderr, and
     // only close guarantees the stdio streams were drained first.
     const onClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       this.reportGone(signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`)
+
     const onError = (error: Error): void => this.reportGone(error.message)
     child.stdout.on('data', onStdout)
     child.stderr.on('data', onStderr)
@@ -69,6 +73,7 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
+
     this.child.stdin.write(payload, (error) => {
       // A destroyed stdin calls back after stop(); reporting then charges the
       // caller a second failure for one operation. Deliberately redundant with
@@ -85,16 +90,19 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
+
     this.closed = true
     this.detach?.()
     this.detach = null
     this.buffer = ''
+
     // Closing stdin ends the serve loop; the kill covers a wedged helper.
     try {
       this.child.stdin.end()
     } catch {
       /* already closed */
     }
+
     this.child.kill()
   }
 
@@ -102,6 +110,7 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
+
     const text = [detail, this.stderrTail.trim()].filter(Boolean).join(': ')
     this.closed = true
     this.detach?.()
@@ -113,34 +122,45 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
+
     const decoded = typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
     const retainedLength = this.buffer.length
     this.buffer += decoded
+
     if (this.buffer.length > MAX_RESPONSE_CHARS) {
       this.buffer = ''
       this.handlers.onOverflow()
+
       return
     }
+
     // The retained tail has no newline, so only the new chunk needs scanning for the first one.
     const firstNewline = decoded.indexOf('\n')
+
     if (firstNewline === -1) {
       return
     }
+
     for (let newline = retainedLength + firstNewline; newline >= 0;) {
       // Slice a trailing CR off by index; trimming copies the whole payload.
       const end = newline > 0 && this.buffer.charCodeAt(newline - 1) === 13 ? newline - 1 : newline
       const line = this.buffer.slice(0, end)
       this.buffer = this.buffer.slice(newline + 1)
+
       if (line.length > 0) {
         this.handlers.onLine(line)
+
         // A handler may have stopped this channel; stop reading its backlog.
         if (this.closed) {
           this.buffer = ''
+
           return
         }
       }
+
       newline = this.buffer.indexOf('\n')
     }
+
     // Why own: the tail is a slice that would pin the whole drained buffer until the next newline.
     this.buffer = ownRetainedString(this.buffer)
   }

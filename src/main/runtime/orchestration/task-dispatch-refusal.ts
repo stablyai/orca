@@ -47,14 +47,17 @@ function toError(receipt: DispatchRefusalReceipt): OrchestrationError {
 
 function unmetTaskDependencies(db: OrchestrationDb, task: TaskRow): string[] {
   let deps: unknown
+
   try {
     deps = JSON.parse(task.deps)
   } catch {
     return []
   }
+
   if (!Array.isArray(deps)) {
     return []
   }
+
   return deps.filter(
     (dep): dep is string => typeof dep === 'string' && db.getTask(dep)?.status !== 'completed'
   )

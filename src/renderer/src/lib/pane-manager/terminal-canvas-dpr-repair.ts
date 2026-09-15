@@ -31,28 +31,37 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
       _core?: { _renderService?: { _renderer?: { value?: XtermRendererInternals } } }
     }
   )._core?._renderService?._renderer?.value
+
   const canvas = renderer?._canvas ?? renderer?._gl?.canvas
+
   if (!renderer || !canvas) {
     return 'current'
   }
+
   if (!canvas.isConnected) {
     return 'deferred'
   }
+
   const view = canvas.ownerDocument?.defaultView
   const expected = renderer.dimensions?.device?.canvas
   const expectedWidth = expected?.width ?? 0
   const expectedHeight = expected?.height ?? 0
+
   if (!view || expectedWidth <= 0 || expectedHeight <= 0) {
     return 'deferred'
   }
+
   const staleBackingWidth = canvas.width
   const staleBackingHeight = canvas.height
   const cachedDevicePixelRatio = renderer._devicePixelRatio
+
   const devicePixelRatioChanged =
     typeof cachedDevicePixelRatio === 'number' && cachedDevicePixelRatio !== view.devicePixelRatio
+
   // xterm rounds its CSS canvas size before ResizeObserver converts it back to
   // device pixels; allow that round trip without forcing layout on every fit.
   const roundingTolerance = Math.max(1, Math.ceil(view.devicePixelRatio / 2))
+
   if (
     !devicePixelRatioChanged &&
     Math.abs(staleBackingWidth - expectedWidth) <= roundingTolerance &&
@@ -60,6 +69,7 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
   ) {
     return 'current'
   }
+
   try {
     // Order matters: refresh the renderer's cached dpr/dimensions first, then
     // the resize path recreates the backing store and layer sizes from them.
@@ -70,6 +80,7 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
     // Pane may be mid-teardown; the next reveal/fit retries the check.
     return 'deferred'
   }
+
   recordTerminalWebglDiagnostic('webgl-canvas-dpr-repair', {
     paneId: pane.id,
     staleBackingWidth,
@@ -77,6 +88,7 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
     ...(cachedDevicePixelRatio === undefined ? {} : { cachedDevicePixelRatio }),
     devicePixelRatio: view.devicePixelRatio
   })
+
   return 'repaired'
 }
 

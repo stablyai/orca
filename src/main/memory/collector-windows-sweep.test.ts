@@ -49,6 +49,7 @@ async function loadCollector() {
   vi.resetModules()
   const { setAppEnvironment: setResetAppEnvironment } = await import('../../shared/app-environment')
   setResetAppEnvironment(appEnvironment())
+
   return await import('./collector')
 }
 
@@ -95,6 +96,7 @@ describe('collectMemorySnapshot on Windows', () => {
       .map((line) => {
         const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
         const memory = Number.parseInt(rssKb ?? '', 10)
+
         return [
           pid ?? '',
           ppid ?? '',
@@ -115,6 +117,7 @@ describe('collectMemorySnapshot on Windows', () => {
       .map((line, index) => {
         const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
         const memoryKb = Number.parseInt(rssKb ?? '', 10)
+
         return {
           instance: `fixture${index}`,
           pid: pid ?? '',
@@ -122,8 +125,10 @@ describe('collectMemorySnapshot on Windows', () => {
           memory: Number.isFinite(memoryKb) && memoryKb > 0 ? memoryKb * 1024 : 0
         }
       })
+
     const counterColumns = (counter: string): string[] =>
       rows.map((row) => `"\\\\HOST\\Process(${row.instance})\\${counter}"`)
+
     const valueColumns = (field: 'pid' | 'ppid' | 'memory'): string[] =>
       rows.map((row) => `"${row[field]}"`)
 
@@ -161,10 +166,12 @@ describe('collectMemorySnapshot on Windows', () => {
   it('attributes Windows process CPU from cumulative time deltas between sweeps', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
     vi.spyOn(performance, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(3_000)
+
     const cpuOutputs = [
       '10\t1\t1048576\t10000000\t0\t638830000000000000',
       '10\t1\t1048576\t30000000\t0\t638830000000000000'
     ]
+
     runProcessMock.mockImplementation(() =>
       Promise.resolve({
         code: 0,
@@ -199,10 +206,12 @@ describe('collectMemorySnapshot on Windows', () => {
   it('does not attribute prior CPU time after Windows reuses a process id', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
     vi.spyOn(performance, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(3_000)
+
     const cpuOutputs = [
       '10\t1\t1048576\t10000000\t0\t638830000000000000',
       '10\t1\t1048576\t30000000\t0\t638830000000000001'
     ]
+
     runProcessMock.mockImplementation(() =>
       Promise.resolve({
         code: 0,
@@ -232,10 +241,12 @@ describe('collectMemorySnapshot on Windows', () => {
   it('supports cumulative CPU counters above JavaScript safe integers', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
     vi.spyOn(performance, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(3_000)
+
     const cpuOutputs = [
       '10\t1\t1048576\t90071992547409920\t0\t638830000000000000',
       '10\t1\t1048576\t90071992567409920\t0\t638830000000000000'
     ]
+
     runProcessMock.mockImplementation(() =>
       Promise.resolve({
         code: 0,
@@ -268,11 +279,13 @@ describe('collectMemorySnapshot on Windows', () => {
       .mockReturnValueOnce(1_000)
       .mockReturnValueOnce(1_100)
       .mockReturnValueOnce(3_000)
+
     const cpuOutputs = [
       '10\t1\t1048576\t0\t0\t638830000000000000',
       '10\t1\t1048576\t1000000\t0\t638830000000000000',
       '10\t1\t1048576\t20000000\t0\t638830000000000000'
     ]
+
     runProcessMock.mockImplementation(() =>
       Promise.resolve({
         code: 0,
@@ -305,10 +318,12 @@ describe('collectMemorySnapshot on Windows', () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
     vi.spyOn(os, 'cpus').mockReturnValue([{}, {}] as ReturnType<typeof os.cpus>)
     vi.spyOn(performance, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(3_000)
+
     const cpuOutputs = [
       '10\t1\t1048576\t0\t0\t638830000000000000',
       '10\t1\t1048576\t1000000000\t0\t638830000000000000'
     ]
+
     runProcessMock.mockImplementation(() =>
       Promise.resolve({
         code: 0,
@@ -338,10 +353,12 @@ describe('collectMemorySnapshot on Windows', () => {
   it('warms CPU sampling again after Resource Manager was closed', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
     vi.spyOn(performance, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(12_000)
+
     const cpuOutputs = [
       '10\t1\t1048576\t0\t0\t638830000000000000',
       '10\t1\t1048576\t100000000\t0\t638830000000000000'
     ]
+
     runProcessMock.mockImplementation(() =>
       Promise.resolve({
         code: 0,
@@ -443,10 +460,12 @@ describe('collectMemorySnapshot on Windows', () => {
       .mockReturnValueOnce(31_001)
       .mockReturnValueOnce(32_000)
       .mockReturnValueOnce(34_000)
+
     const cimOutputs = [
       '10\t1\t1048576\t10000000\t0\t638830000000000000',
       '10\t1\t1048576\t30000000\t0\t638830000000000000'
     ]
+
     let cimCalls = 0
     runProcessMock.mockImplementation((spec: { program: string }) => {
       if (spec.program === 'typeperf.exe') {
@@ -458,7 +477,9 @@ describe('collectMemorySnapshot on Windows', () => {
           timedOut: false
         })
       }
+
       cimCalls += 1
+
       return Promise.resolve(
         cimCalls === 1
           ? { code: 1, signal: null, stdout: '', stderr: 'transient CIM failure', timedOut: false }
@@ -500,6 +521,7 @@ describe('collectMemorySnapshot on Windows', () => {
 
   it('sums committed private bytes across the whole PTY subtree on Windows', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
+
     // Working set stays small while commit is 10-40x larger — the reported shape.
     const rows = [
       '10\t1\t52428800\t0\t0\t638830000000000000\t1048576',
@@ -507,6 +529,7 @@ describe('collectMemorySnapshot on Windows', () => {
       '12\t11\t52428800\t0\t0\t638830000000000000\t524288',
       '900\t1\t20971520\t0\t0\t638830000000000000\t262144'
     ].join('\r\n')
+
     runProcessMock.mockResolvedValue({
       code: 0,
       signal: null,

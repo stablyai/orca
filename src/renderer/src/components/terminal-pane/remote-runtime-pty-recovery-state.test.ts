@@ -262,6 +262,7 @@ describe('RemoteRuntimePtyRecoveryState', () => {
         }
       }, REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS)
     }
+
     state.schedule(epoch, failSlowly)
 
     await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)

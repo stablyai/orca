@@ -2,12 +2,15 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
+
 vi.mock('./linux-terminal-orca-cli-shim', () => shim)
 
 import { prependOrcaCliDirToChildPath } from './orca-cli-child-path'
 
 const USER_DATA = '/data/orca'
+
 const RESOURCES = '/app/Resources'
+
 const SHIM_DIR = join(USER_DATA, 'linux-orca-cli-shim')
 
 beforeEach(() => {
@@ -108,6 +111,7 @@ describe('prependOrcaCliDirToChildPath', () => {
     const env: Record<string, string> = { PATH: '' }
     const inheritedPath = process.env.PATH
     delete process.env.PATH
+
     try {
       prependOrcaCliDirToChildPath(env, {
         isPackaged: false,
@@ -119,6 +123,7 @@ describe('prependOrcaCliDirToChildPath', () => {
         process.env.PATH = inheritedPath
       }
     }
+
     // Why: an empty trailing segment resolves as `.` in some shells.
     expect(env.PATH).toBe(join(USER_DATA, 'cli', 'bin'))
   })

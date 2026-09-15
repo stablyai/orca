@@ -66,6 +66,7 @@ describe('home resume card', () => {
 
   it('prefers the worktree last opened on this device, enabled with its host', () => {
     const visited = worktree('repo::/tmp/visited')
+
     const fromLastVisited = (state: 'connecting' | 'connected') =>
       selectHomeResumeCard(
         input({
@@ -104,6 +105,7 @@ describe('home resume card', () => {
 
   it('gives a connected host precedence over an offline last-visited worktree', () => {
     const visited = worktree('repo::/tmp/visited')
+
     const card = selectHomeResumeCard(
       input({
         hosts: [{ id: 'host-1' }, { id: 'host-2' }],

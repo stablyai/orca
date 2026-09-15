@@ -29,6 +29,7 @@ export function resolveAttestedLegacyPrincipal(args: {
   authority?: OrchestrationCompatibilityCallerAuthority
 }): LegacyCompatibilityPrincipalRow {
   const authority = args.authority ?? verifyAttestedLegacyCandidate(args)
+
   return args.runtime.getOrchestrationDb().commitLegacyCompatibilityPrincipal({
     runId: args.candidate.runId,
     dispatchId: args.candidate.dispatchId,
@@ -47,6 +48,7 @@ export function verifyAttestedLegacyCandidate(args: {
   candidate: LegacyPrincipalCandidate
 }) {
   const authority = args.runtime.verifyOrchestrationCompatibilityCaller(args.evidence)
+
   if (
     !authority ||
     !equivalentLegacyPaneKey(args.candidate.paneKey, authority.paneKey) ||
@@ -54,6 +56,7 @@ export function verifyAttestedLegacyCandidate(args: {
   ) {
     throw legacyReadOnlyError()
   }
+
   if (
     args.candidate.role === 'worker' &&
     args.candidate.dispatchId &&
@@ -65,6 +68,7 @@ export function verifyAttestedLegacyCandidate(args: {
   ) {
     throw legacyReadOnlyError()
   }
+
   return authority
 }
 
@@ -78,6 +82,7 @@ export class LegacyCompatibilityAuthority {
     const db = this.runtime.getOrchestrationDb()
     const evidence = request.orchestrationCompatibilityEvidence
     const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id
+
     const existing = adoptedRunId
       ? db.resolveLegacyCompatibilityPrincipalByIdentity({
           runId: adoptedRunId,
@@ -86,6 +91,7 @@ export class LegacyCompatibilityAuthority {
           paneKey: evidence?.paneKey
         })
       : undefined
+
     if (existing?.dispatch_id) {
       verifyAttestedLegacyCandidate({
         runtime: this.runtime,
@@ -93,6 +99,7 @@ export class LegacyCompatibilityAuthority {
         candidate: candidateFromPrincipal(existing)
       })
       const settledDispatch = db.getDispatchContextById(existing.dispatch_id)
+
       if (
         settledDispatch &&
         (!target.dispatchId || target.dispatchId === settledDispatch.id) &&
@@ -101,6 +108,7 @@ export class LegacyCompatibilityAuthority {
         return settledDispatch
       }
     }
+
     const dispatch = db.resolveLegacyWorkerCandidate({
       runId: adoptedRunId,
       terminalHandle: evidence?.terminalHandle ?? target.terminalHandle,
@@ -108,6 +116,7 @@ export class LegacyCompatibilityAuthority {
       dispatchId: target.dispatchId,
       taskId: target.taskId
     })?.dispatch
+
     if (!dispatch && evidence) {
       const retained = db.resolveLegacyWorkerCandidate({
         runId: adoptedRunId,
@@ -115,10 +124,12 @@ export class LegacyCompatibilityAuthority {
         dispatchId: target.dispatchId,
         taskId: target.taskId
       })
+
       if (retained) {
         throw legacyReadOnlyError()
       }
     }
+
     return dispatch
   }
 
@@ -127,10 +138,13 @@ export class LegacyCompatibilityAuthority {
     params: { from?: string; resume?: string }
   ): DispatchContextRow | undefined {
     const db = this.runtime.getOrchestrationDb()
+
     if (params.resume) {
       const question = db.getQuestion(params.resume)
+
       return question ? db.getDispatchContextById(question.dispatch_id) : undefined
     }
+
     return this.resolveWorkerDispatch(request, { terminalHandle: params.from })
   }
 
@@ -140,46 +154,57 @@ export class LegacyCompatibilityAuthority {
   ): LegacyCompatibilityPrincipalRow | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
+
     if (!adoption) {
       return undefined
     }
+
     const evidence = request.orchestrationCompatibilityEvidence
+
     const existingWorker = db.resolveLegacyCompatibilityPrincipalByIdentity({
       runId: adoption.adopted_run_id,
       role: 'worker',
       terminalHandle: evidence?.terminalHandle,
       paneKey: evidence?.paneKey
     })
+
     if (existingWorker) {
       verifyAttestedLegacyCandidate({
         runtime: this.runtime,
         evidence,
         candidate: candidateFromPrincipal(existingWorker)
       })
+
       return existingWorker
     }
+
     const worker = db.resolveLegacyWorkerCandidate({
       runId: adoption.adopted_run_id,
       terminalHandle: evidence?.terminalHandle ?? terminalHandle,
       paneKey: evidence?.paneKey
     })
+
     if (worker) {
       return this.attestWorker(request, worker.dispatch)
     }
+
     if (evidence) {
       const retained = db.resolveLegacyWorkerCandidate({
         runId: adoption.adopted_run_id,
         terminalHandle
       })
+
       const settled = db.resolveLegacyCompatibilityPrincipalByIdentity({
         runId: adoption.adopted_run_id,
         role: 'worker',
         terminalHandle
       })
+
       if (retained || settled) {
         throw legacyReadOnlyError()
       }
     }
+
     return this.attestCoordinator(request, adoption.adopted_run_id, false)
   }
 
@@ -190,6 +215,7 @@ export class LegacyCompatibilityAuthority {
         `Dispatch ${dispatch.id} does not use the legacy contract.`
       )
     }
+
     return resolveAttestedLegacyPrincipal({
       runtime: this.runtime,
       evidence: request.orchestrationCompatibilityEvidence,
@@ -203,17 +229,21 @@ export class LegacyCompatibilityAuthority {
     required = true
   ): LegacyCompatibilityPrincipalRow | undefined {
     const db = this.runtime.getOrchestrationDb()
+
     const candidate = db.resolveLegacyCoordinatorCandidate({
       runId,
       terminalHandle: request.orchestrationCompatibilityEvidence?.terminalHandle,
       paneKey: request.orchestrationCompatibilityEvidence?.paneKey
     })
+
     if (!candidate) {
       if (required) {
         throw legacyCoordinatorReadOnly()
       }
+
       return undefined
     }
+
     const principal = resolveAttestedLegacyPrincipal({
       runtime: this.runtime,
       evidence: request.orchestrationCompatibilityEvidence,
@@ -224,6 +254,7 @@ export class LegacyCompatibilityAuthority {
         paneKey: candidate.paneKey
       }
     })
+
     return principal
   }
 }
@@ -235,6 +266,7 @@ function candidateFromDispatch(dispatch: DispatchContextRow): LegacyPrincipalCan
       `Dispatch ${dispatch.id} lacks durable process identity. No effects were applied.`
     )
   }
+
   return {
     runId: dispatch.run_id,
     role: 'worker',

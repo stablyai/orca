@@ -54,6 +54,7 @@ function probedOwners(): AutomationOwnerRef[] {
 
 function lastRetainedOwners(): readonly AutomationOwnerRef[] {
   const calls = api.automations.retainExternalScopes.mock.calls
+
   return (calls.at(-1)?.[0] as { owners: readonly AutomationOwnerRef[] } | undefined)?.owners ?? []
 }
 

@@ -22,6 +22,7 @@ export function installMonacoContextMenuPaste(monaco: typeof Monaco): void {
   if (installed || !PasteAction) {
     return
   }
+
   installed = true
 
   // Why: a higher priority than Monaco's built-in 'code-editor' implementation

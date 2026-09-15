@@ -11,15 +11,19 @@ export function filterWorkspaceCleanupRemovalCandidates(
 ): WorkspaceCleanupCandidate[] {
   return candidates.filter((candidate) => {
     const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+
     const qualifiedState = hostId
       ? deleteStateByWorktreeId[composeWorktreeHostIdentity(hostId, candidate.worktreeId)]
       : undefined
+
     const legacyState = deleteStateByWorktreeId[candidate.worktreeId]
+
     const legacyStateMatchesHost =
       legacyState?.executionHostId === undefined ||
       legacyState.executionHostId === null ||
       hostId === null ||
       legacyState.executionHostId === hostId
+
     return (
       qualifiedState?.isDeleting !== true &&
       !(legacyState?.isDeleting === true && legacyStateMatchesHost)

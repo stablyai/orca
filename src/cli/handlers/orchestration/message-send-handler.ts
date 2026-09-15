@@ -62,16 +62,20 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
   'orchestration send': async ({ flags, client, cwd, json }) => {
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
+
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
+
     const outcome = getOptionalStringFlag(flags, 'outcome')
+
     if (type !== 'worker_done' && outcome !== undefined) {
       throw new RuntimeClientError(
         'invalid_argument',
         '--outcome is only valid with --type worker_done.'
       )
     }
+
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
       !getOptionalStringFlag(flags, 'from') &&
@@ -83,6 +87,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
 
     // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+
     const sendParams = {
       from,
       to,
@@ -98,7 +103,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }
+
     const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
+
     const result = await callOrchestrationMutation<OrchestrationSendResult>(
       client,
       flags,
@@ -106,29 +113,37 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined
     )
+
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
+
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
+
     printResult(result, json, (value) => {
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []
+
       const withWarnings = (line: string): string =>
         warnings.length > 0
           ? [line, ...warnings.map((warning) => `Warning: ${warning.message}`)].join('\n')
           : line
+
       if ('message' in value) {
         return withWarnings(`Sent ${value.message.id}`)
       }
+
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {
           return withWarnings(
             `Queued ${value.relay.messageId} for worker Dispatch ${value.relay.dispatchId}`
           )
         }
+
         return withWarnings(
           `Queued ${value.relay.messageId} for Run home (Dispatch ${value.relay.dispatchId})`
         )
       }
+
       return withWarnings(
         `Sent ${value.messages.length} messages to ${value.recipients} recipients`
       )

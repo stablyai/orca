@@ -35,12 +35,15 @@ export function resolveCommitMessageSelectedModel(
   capability: CommitMessageAgentCapability
 ): CommitMessageModelCapability {
   const persisted = config.selectedModelByAgent[capability.id]
+
   if (persisted) {
     const found = capability.models.find((m) => m.id === persisted)
+
     if (found) {
       return found
     }
   }
+
   return capability.models.find((m) => m.id === capability.defaultModelId) ?? capability.models[0]
 }
 
@@ -51,10 +54,13 @@ export function resolveCommitMessageSelectedThinking(
   if (!model.thinkingLevels) {
     return undefined
   }
+
   const persisted = config.selectedThinkingByModel[model.id]
+
   if (persisted && model.thinkingLevels.some((l) => l.id === persisted)) {
     return persisted
   }
+
   return model.defaultThinkingLevel
 }
 
@@ -65,20 +71,27 @@ export function seedCommitMessageAiEnablePatch(
   const seedCapability = isCustomAgentId(seedAgentId)
     ? undefined
     : getCommitMessageAgentCapability(seedAgentId)
+
   const seedModel = seedCapability
     ? resolveCommitMessageSelectedModel(config, seedCapability)
     : null
+
   const seedThinking = seedModel
     ? resolveCommitMessageSelectedThinking(config, seedModel)
     : undefined
+
   const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
+
   if (seedCapability && !nextSelectedModelByAgent[seedCapability.id]) {
     nextSelectedModelByAgent[seedCapability.id] = seedCapability.defaultModelId
   }
+
   const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
+
   if (seedModel && seedThinking && !nextSelectedThinkingByModel[seedModel.id]) {
     nextSelectedThinkingByModel[seedModel.id] = seedThinking
   }
+
   return {
     enabled: true,
     agentId: seedAgentId,

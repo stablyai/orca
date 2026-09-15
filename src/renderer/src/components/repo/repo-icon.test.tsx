@@ -28,6 +28,7 @@ describe('RepoIconGlyph', () => {
     const { container, rerender } = render(
       <RepoIconGlyph repoIcon={{ type: 'image', src: GHE_AVATAR, source: 'github' }} />
     )
+
     fireEvent.error(container.querySelector('img') as HTMLImageElement)
     expect(container.querySelector('img')).toBeNull()
 
@@ -58,6 +59,7 @@ describe('RepoIconGlyph', () => {
     const { container: lucide } = render(
       <RepoIconGlyph repoIcon={{ type: 'lucide', name: 'Database' }} />
     )
+
     expect(lucide.querySelector('svg')?.getAttribute('class')).toContain('lucide-database')
   })
 

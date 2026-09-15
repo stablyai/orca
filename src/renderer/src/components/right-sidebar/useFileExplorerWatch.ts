@@ -60,10 +60,13 @@ export function getFileExplorerWatchRuntimeEnvironmentId(
     restoredRuntimeHostIdByWorkspaceSessionKey:
       state.restoredRuntimeHostIdByWorkspaceSessionKey ?? {}
   }
+
   const owner = getFileExplorerOperationOwnerFromState(ownerState, activeWorktreeId)
+
   if (expectedOwner && JSON.stringify(owner) !== JSON.stringify(expectedOwner)) {
     return undefined
   }
+
   return owner.kind === 'runtime'
     ? owner.environmentId
     : owner.kind === 'unresolved'
@@ -138,6 +141,7 @@ export function useFileExplorerWatch({
     const currentWorktreeId = activeWorktreeId
     const resyncWatchKeys = resyncWatchKeysRef.current
     const activeResyncByWatchKey = activeResyncByWatchKeyRef.current
+
     const currentWatchKey = JSON.stringify([
       currentWorktreeId,
       normalizeRuntimePathForComparison(currentWorktreePath)
@@ -148,6 +152,7 @@ export function useFileExplorerWatch({
     // lifetime is tied to the watched worktree so a switch can't refresh the
     // previous root.
     const owner = getFileExplorerOperationOwner(currentWorktreeId)
+
     const scheduler = createFileExplorerWatchRefreshScheduler({
       refreshTree: () => refreshTreeRef.current(),
       refreshDir: (dirPath) => refreshDirRef.current(dirPath),
@@ -167,6 +172,7 @@ export function useFileExplorerWatch({
       trailingMs: 0,
       maxWaitMs: 0
     })
+
     activeResyncByWatchKey.set(currentWatchKey, scheduler.requestFullRefresh)
 
     if (resyncWatchKeys.delete(currentWatchKey)) {
@@ -200,14 +206,17 @@ export function useFileExplorerWatch({
           normalizeRuntimePathForComparison(currentWorktreePath)
         ) {
           const requestActiveResync = activeResyncByWatchKey.get(currentWatchKey)
+
           if (requestActiveResync) {
             requestActiveResync()
           } else {
             resyncWatchKeys.add(currentWatchKey)
           }
         }
+
         return
       }
+
       // Why: defer refreshes during inline input/drag so rows don't shift; native drags only set isNativeDragOver (design §6.2).
       if (
         inlineInputRef.current !== null ||
@@ -215,6 +224,7 @@ export function useFileExplorerWatch({
         isNativeDragOverRef.current
       ) {
         deferredRef.current.push(payload)
+
         return
       }
 
@@ -222,6 +232,7 @@ export function useFileExplorerWatch({
     }
 
     let unsubscribeListener: (() => void) | null = null
+
     if (activeRuntimeEnvironmentId?.trim() && activeWorktreeId) {
       // Why: remote runtime watch events don't enter the local Electron fs:changed bus, so subscribe directly.
       void subscribeRuntimeFileChanges(
@@ -243,8 +254,10 @@ export function useFileExplorerWatch({
         .then((unsubscribe) => {
           if (disposed) {
             unsubscribe()
+
             return
           }
+
           unsubscribeListener = unsubscribe
         })
         .catch((err) => {
@@ -261,14 +274,18 @@ export function useFileExplorerWatch({
     return () => {
       disposed = true
       unsubscribeListener?.()
+
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)
       }
+
       const hadDeferredEvents = deferredRef.current.length > 0
+
       if (scheduler.cancel() || hadDeferredEvents) {
         // The tree cache survives Files being hidden, so remember work canceled after receipt.
         resyncWatchKeys.add(currentWatchKey)
       }
+
       deferredRef.current = []
       processPayloadRef.current = null
     }
@@ -283,6 +300,7 @@ export function useFileExplorerWatch({
       deferredRef.current.length > 0
     ) {
       const deferred = deferredRef.current.splice(0)
+
       // Why: replay deferred payloads so the tree cache reconciles to disk after inline input or drag ends (design §6.2).
       if (processPayloadRef.current) {
         for (const payload of deferred) {

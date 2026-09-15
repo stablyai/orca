@@ -51,6 +51,7 @@ describe('collectAutomationReferencedSshTargetIds', () => {
 describe('folder-workspace removal evidence', () => {
   it('retains a tombstone referenced by an automation workspace pin past the cap', () => {
     const all = tombstones(51)
+
     const workspaceState = {
       folderWorkspaces: [
         {
@@ -63,6 +64,7 @@ describe('folder-workspace removal evidence', () => {
       projectGroups: [],
       repos: []
     } as unknown as FolderWorkspaceHostState
+
     const referenced = collectSshTargetRemovalEvidenceDependencies({
       automations: [
         { executionTargetType: 'local', executionTargetId: 'local', workspaceId: 'folder:folder-1' }

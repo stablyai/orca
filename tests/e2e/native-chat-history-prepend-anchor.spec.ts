@@ -41,28 +41,36 @@ async function toggleTerminalTabToChatView(
 ): Promise<void> {
   await page.evaluate(({ tabId, worktreeId }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
+
     const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
       (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
     )
+
     if (!unifiedTab) {
       throw new Error('Unified terminal tab not found for chat toggle')
     }
+
     state.toggleTabViewMode(unifiedTab.id)
   }, args)
 }
 
 function claudeTranscript(rowCount: number, sessionId: string): string {
   const startedAt = Date.now() - rowCount * 1_000
+
   return `${Array.from({ length: rowCount }, (_, index) => {
     const marker = `E2E transcript row ${String(index).padStart(4, '0')}`
+
     const body = Array.from(
       { length: 5 },
       (_unused, line) => `Measured paragraph ${line + 1} for row ${String(index).padStart(4, '0')}.`
     ).join('\n\n')
+
     return JSON.stringify({
       sessionId,
       uuid: `${sessionId}-${index}`,
@@ -117,33 +125,42 @@ test.describe('Native chat history prepend anchoring', () => {
         .toBeGreaterThan(3)
 
       const initialTotalSize = await transcriptWindow.evaluate((element) => element.offsetHeight)
+
       const anchor = await scroll.evaluate(async (element) => {
         element.scrollTop = element.scrollHeight * 0.55
         element.dispatchEvent(new Event('scroll', { bubbles: true }))
         let previousGeometry = ''
         let stableFrames = 0
+
         for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           const geometry = `${element.scrollHeight}:${element.scrollTop}`
           stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
           previousGeometry = geometry
         }
+
         const scrollRect = element.getBoundingClientRect()
+
         const candidates = Array.from(
           element.querySelectorAll<HTMLElement>('[data-native-chat-window] > [data-index]')
         ).filter((row) => {
           const rect = row.getBoundingClientRect()
+
           return rect.top >= scrollRect.top + 40 && rect.bottom <= scrollRect.bottom - 40
         })
+
         const row = candidates[Math.floor(candidates.length / 2)]
+
         const marker = row
           ? Array.from(row.querySelectorAll('p')).find((paragraph) =>
               /^E2E transcript row \d{4}$/.test(paragraph.textContent?.trim() ?? '')
             )
           : undefined
+
         if (!row || !marker) {
           return null
         }
+
         return {
           index: Number(row.dataset.index),
           marker: marker.textContent?.trim() ?? '',
@@ -152,7 +169,9 @@ test.describe('Native chat history prepend anchoring', () => {
           viewportOffset: row.getBoundingClientRect().top - scrollRect.top
         }
       })
+
       expect(anchor, 'expected a fully visible measured row to anchor').not.toBeNull()
+
       if (!anchor) {
         throw new Error('Expected a fully visible measured row to anchor')
       }
@@ -167,20 +186,25 @@ test.describe('Native chat history prepend anchoring', () => {
 
       const anchoredMarker = orcaPage.getByText(anchor.marker, { exact: true })
       await expect(anchoredMarker).toBeAttached({ timeout: 15_000 })
+
       const after = await anchoredMarker.evaluate(async (marker) => {
         const row = marker.closest<HTMLElement>('[data-index]')
         const scrollRoot = marker.closest<HTMLElement>('[data-native-chat-scroll]')
+
         if (!row || !scrollRoot) {
           return null
         }
+
         let previousGeometry = ''
         let stableFrames = 0
+
         for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           const geometry = `${scrollRoot.scrollHeight}:${scrollRoot.scrollTop}`
           stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
           previousGeometry = geometry
         }
+
         return {
           index: Number(row.dataset.index),
           scrollHeight: scrollRoot.scrollHeight,
@@ -188,6 +212,7 @@ test.describe('Native chat history prepend anchoring', () => {
           viewportOffset: row.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top
         }
       })
+
       expect(after, 'anchored row must remain mounted after history prepends').not.toBeNull()
       expect(after?.index).toBe(anchor.index + 200)
       const contentGrowth = (after?.scrollHeight ?? 0) - anchor.scrollHeight

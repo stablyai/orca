@@ -13,10 +13,13 @@ import type { PushGatewayClient, PushSendNotification } from './push-gateway-cli
 import { PushOutcomeCounters } from './push-outcome-counters'
 
 const PUSH_RETRY_DELAY_MS = 2_000
+
 // The gateway rejects a whole request above this, so a host with more paired
 // phones fans out across several sends rather than starving the extras.
 const MAX_REGISTRATIONS_PER_SEND = 20
+
 const PUSH_TITLE_MAX_LENGTH = 80
+
 const PUSH_BODY_MAX_LENGTH = 180
 
 export type PushDispatcherRegistry = {
@@ -35,6 +38,7 @@ type PushTarget = { deviceId: string; registration: MobilePushRegistration }
 
 function clip(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
+
   return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`
 }
 
@@ -45,9 +49,11 @@ export function mapPushAgentState(
   if (source !== 'agent-task-complete') {
     return null
   }
+
   if (state === 'blocked' || state === 'waiting' || state === 'needs-input') {
     return 'needs-input'
   }
+
   return state === undefined || state === 'done' || state === 'finished' ? 'finished' : undefined
 }
 
@@ -94,15 +100,19 @@ export class PushDispatcher {
     if (this.stopped) {
       return
     }
+
     try {
       const plan = this.planSend(event)
+
       if (!plan) {
         return
       }
+
       for (const sound of [true, false]) {
         const targets = plan.targets.filter(
           (target) => (target.registration.filter.sound !== false) === sound
         )
+
         for (let start = 0; start < targets.length; start += MAX_REGISTRATIONS_PER_SEND) {
           void this.deliver(
             targets.slice(start, start + MAX_REGISTRATIONS_PER_SEND),
@@ -123,11 +133,13 @@ export class PushDispatcher {
       if (event.notificationSeq === undefined || !event.notificationEpoch) {
         return null
       }
+
       const targets = this.registry
         .listDevices()
         .flatMap(({ deviceId, pushRegistration: registration }) =>
           registration && registration.expiresAt > Date.now() ? [{ deviceId, registration }] : []
         )
+
       return {
         targets,
         notification: {
@@ -144,16 +156,22 @@ export class PushDispatcher {
         }
       }
     }
+
     const source = MOBILE_PUSH_SOURCES.find((candidate) => candidate === event.source)
+
     if (!source || event.notificationSeq === undefined || event.notificationEpoch === undefined) {
       return null
     }
+
     const agentState = mapPushAgentState(source, event.agentState)
+
     if (agentState === undefined) {
       return null
     }
+
     const targets = this.registry.listDevices().flatMap((device) => {
       const registration = device.pushRegistration
+
       if (
         !registration ||
         registration.expiresAt <= Date.now() ||
@@ -161,6 +179,7 @@ export class PushDispatcher {
       ) {
         return []
       }
+
       if (
         event.emittedAt !== undefined &&
         !reserveNotificationCooldown(
@@ -171,11 +190,14 @@ export class PushDispatcher {
       ) {
         return []
       }
+
       return [{ deviceId: device.deviceId, registration }]
     })
+
     if (targets.length === 0) {
       return null
     }
+
     return {
       targets,
       notification: {
@@ -200,6 +222,7 @@ export class PushDispatcher {
     if (this.stopped) {
       return
     }
+
     const currentTargets = targets.filter((target) =>
       this.registry
         .listDevices()
@@ -210,27 +233,35 @@ export class PushDispatcher {
             target.registration.expiresAt > Date.now()
         )
     )
+
     if (!currentTargets.length) {
       return
     }
+
     try {
       const result = await this.client.send({
         registrationIds: currentTargets.map((target) => target.registration.registrationId),
         notification
       })
+
       if (this.stopped) {
         return
       }
+
       if (result.ok) {
         for (const entry of result.results) {
           if (entry.status === 'error' || entry.status === 'rate_limited') {
             this.outcomes.record(entry.status)
           }
         }
+
         this.dropDeadRegistrations(targets, result.results)
+
         return
       }
+
       this.outcomes.record(result.reason)
+
       // Only a transport-level miss is worth repeating; a gateway that refused
       // this payload will refuse the identical retry.
       if (attempt === 0 && result.reason === 'unreachable') {
@@ -251,9 +282,11 @@ export class PushDispatcher {
       if (result.status !== 'dead') {
         continue
       }
+
       const target = targets.find(
         (entry) => entry.registration.registrationId === result.registrationId
       )
+
       if (
         !target ||
         this.registry.listDevices().find((device) => device.deviceId === target.deviceId)
@@ -261,6 +294,7 @@ export class PushDispatcher {
       ) {
         continue
       }
+
       try {
         this.registry.setPushRegistration(target.deviceId, null)
       } catch (error) {

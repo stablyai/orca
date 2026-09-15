@@ -18,9 +18,11 @@ export function createPreviewBoxFit(args: {
     const terminal = args.getTerminal()
     const screen = args.container.querySelector<HTMLElement>('.xterm-screen')
     const box = args.container.parentElement
+
     if (!screen || !box || !terminal) {
       return
     }
+
     const scale = Math.min(1, box.clientWidth / Math.max(1, screen.offsetWidth))
     args.container.style.transform = scale < 1 ? `scale(${scale})` : ''
     const cellHeight = screen.offsetHeight / Math.max(1, terminal.rows)
@@ -32,10 +34,12 @@ export function createPreviewBoxFit(args: {
 
   // Re-fit after every parsed write (cursor may move ends); rAF coalesces.
   let scheduled = false
+
   const schedule = (): void => {
     if (scheduled) {
       return
     }
+
     scheduled = true
     requestAnimationFrame(() => {
       scheduled = false

@@ -9,6 +9,7 @@ import { skillPlacementParticipatesInGlobalFreshness } from '../../../../shared/
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
+
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
 
 type ActiveFreshnessNudge = {
@@ -29,9 +30,11 @@ export function SkillFreshnessNudge(): null {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const state = useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)
   const settingsLoaded = useAppStore((store) => store.settings !== null)
+
   const dismissed = useAppStore(
     (store) => store.settings?.dismissedSkillFreshnessNudges ?? NO_DISMISSED_FRESHNESS_NUDGES
   )
+
   const updateSettings = useAppStore((store) => store.updateSettings)
   const shownFingerprints = useRef(new Set<string>())
   const persistedFingerprints = useRef(new Set<string>())
@@ -40,19 +43,25 @@ export function SkillFreshnessNudge(): null {
   useEffect(() => {
     if (!activeSkillRuntime.canUseLocalSkillFreshness) {
       const active = activeNudgeRef.current
+
       if (active) {
         active.persistDismissal = false
         activeNudgeRef.current = null
         toast.dismiss(active.id)
       }
+
       return
     }
+
     const inventory = state.inventory
+
     if (!settingsLoaded) {
       return
     }
+
     if (!inventory) {
       const active = activeNudgeRef.current
+
       if (state.error && active) {
         // Why: a failed re-check cannot keep advertising authority derived from
         // old bytes; retract without turning the scan failure into a dismissal.
@@ -60,9 +69,12 @@ export function SkillFreshnessNudge(): null {
         activeNudgeRef.current = null
         toast.dismiss(active.id)
       }
+
       return
     }
+
     const eligibleNames = new Set(inventory.eligibleUpdateNames)
+
     const candidates = inventory.installations.flatMap((installation) =>
       // Why: a project copy the global update never touches must not enter the dismissal
       // fingerprint, or re-checking out that repo re-raises a nudge the user already
@@ -83,10 +95,13 @@ export function SkillFreshnessNudge(): null {
           ]
         : []
     )
+
     const dismissedKeys = new Set(dismissed)
     const unseen = candidates.filter((candidate) => !dismissedKeys.has(candidate.key))
+
     if (unseen.length === 0) {
       const active = activeNudgeRef.current
+
       if (active) {
         // Why: a resolved/replaced nudge is stale presentation, not an explicit
         // user dismissal, so retract it without persisting its tuple keys.
@@ -94,50 +109,64 @@ export function SkillFreshnessNudge(): null {
         activeNudgeRef.current = null
         toast.dismiss(active.id)
       }
+
       return
     }
+
     const fingerprint = unseen
       .map((candidate) => candidate.key)
       .sort((left, right) => left.localeCompare(right, 'en'))
       .join('\n')
+
     const active = activeNudgeRef.current
+
     if (active?.fingerprint === fingerprint) {
       return
     }
+
     if (active) {
       active.persistDismissal = false
       activeNudgeRef.current = null
       toast.dismiss(active.id)
     }
+
     if (shownFingerprints.current.has(fingerprint)) {
       return
     }
+
     shownFingerprints.current.add(fingerprint)
 
     const persistDismissal = (): void => {
       if (persistedFingerprints.current.has(fingerprint)) {
         return
       }
+
       persistedFingerprints.current.add(fingerprint)
       const current = useAppStore.getState().settings?.dismissedSkillFreshnessNudges ?? []
+
       const next = [...new Set([...current, ...unseen.map((candidate) => candidate.key)])].slice(
         -MAX_DISMISSED_FRESHNESS_NUDGES
       )
+
       void updateSettings({ dismissedSkillFreshnessNudges: next }).catch(() => {
         persistedFingerprints.current.delete(fingerprint)
       })
     }
+
     const names = new Set(unseen.map((candidate) => candidate.name))
+
     // Why: name the outdated skills so the nudge is actionable without opening
     // the modal; the sentence is translatable but the identifiers interpolate as-is.
     const outdatedNames = [...names]
       .sort((left, right) => left.localeCompare(right, 'en'))
       .join(', ')
+
     const nextActive: ActiveFreshnessNudge = {
       id: '',
       fingerprint,
       persistDismissal: true
     }
+
     nextActive.id = toast.info(
       names.size === 1
         ? translate(
@@ -164,6 +193,7 @@ export function SkillFreshnessNudge(): null {
           if (nextActive.persistDismissal) {
             persistDismissal()
           }
+
           if (activeNudgeRef.current === nextActive) {
             activeNudgeRef.current = null
           }
@@ -184,9 +214,11 @@ export function SkillFreshnessNudge(): null {
             // Sonner closes action toasts without onDismiss; clear ownership so
             // a later inventory cannot treat the already-closed toast as active.
             nextActive.persistDismissal = false
+
             if (activeNudgeRef.current === nextActive) {
               activeNudgeRef.current = null
             }
+
             requestSkillFreshnessUpdateDialog()
           }
         }

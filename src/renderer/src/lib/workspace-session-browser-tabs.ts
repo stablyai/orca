@@ -58,7 +58,9 @@ function persistedRemoteBrowserPageIdentity(
   if (!handle) {
     return {}
   }
+
   const clientHosted = handle.placement?.kind === 'client' || handle.restoredClientHosted === true
+
   return {
     remoteBrowserPageId: handle.remotePageId,
     ...(clientHosted ? { remoteBrowserPageClientHosted: true } : {})

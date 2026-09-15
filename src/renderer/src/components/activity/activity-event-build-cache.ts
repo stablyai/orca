@@ -58,6 +58,7 @@ export function resolvePaneBuild(
 ): { events: ActivityEvent[]; live: ActivityLiveAgentSnapshot | null } {
   seenCacheKeys?.add(request.cacheKey)
   const cached = cache?.panes.get(request.cacheKey)
+
   const inputsUnchanged =
     cached !== undefined &&
     cached.source === request.source &&
@@ -67,6 +68,7 @@ export function resolvePaneBuild(
     cached.worktree === request.worktree &&
     cached.repo === request.repo &&
     cached.tab === request.tab
+
   const rowEntry = inputsUnchanged
     ? cached.rowEntry
     : entryWithRuntimeOrchestration(
@@ -75,6 +77,7 @@ export function resolvePaneBuild(
       )
 
   const liveTimestamp = rowEntry.stateStartedAt
+
   const liveMatchesCache =
     inputsUnchanged &&
     (request.liveState === null
@@ -100,6 +103,7 @@ export function resolvePaneBuild(
     liveState: request.liveState,
     migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
   })
+
   const live: ActivityLiveAgentSnapshot | null =
     request.liveState === null
       ? null
@@ -125,5 +129,6 @@ export function resolvePaneBuild(
     live,
     rowEntry
   })
+
   return { events, live }
 }

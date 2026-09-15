@@ -38,6 +38,7 @@ describe('orchestration federated message targeting', () => {
         payloadHash: 'attach_payload'
       }
     })
+
     const capability = db.prepareRemoteAttachmentAuthority({
       dispatchId,
       paneKey,
@@ -47,8 +48,10 @@ describe('orchestration federated message targeting', () => {
       setupState: 'not_applicable',
       effects: []
     })
+
     db.markRemoteAttachmentReady(dispatchId)
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+
     const requests: RpcRequest[] = [
       request('send_to', capability, 'orchestration.send', {
         from: 'term_remote_worker',
@@ -81,6 +84,7 @@ describe('orchestration federated message targeting', () => {
         }
       })
     }
+
     expect(
       db.listFederationRelay({ dispatchId, direction: 'to_home', afterSequence: 0 })
     ).toHaveLength(0)

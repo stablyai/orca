@@ -70,12 +70,15 @@ export type SourceControlFileProjection = {
 const EMPTY_TREE_ROOTS_BY_SECTION: Readonly<
   Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>>
 > = Object.freeze({})
+
 const EMPTY_TREE_ROWS_BY_SECTION: Readonly<
   Partial<Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>>
 > = Object.freeze({})
+
 const EMPTY_LIST_ROWS_BY_SECTION: Readonly<
   Partial<Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>>
 > = Object.freeze({})
+
 const EMPTY_BRANCH_TREE_NODES: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[] =
   Object.freeze([])
 
@@ -112,17 +115,21 @@ export function useSourceControlFileProjection({
       unstaged: [],
       untracked: []
     }
+
     for (const entry of entries) {
       groups[entry.area].push(entry)
     }
+
     for (const area of SOURCE_CONTROL_AREAS) {
       groups[area].sort(compareGitStatusEntries)
     }
+
     return groups
   }, [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
   const normalizedFilter = fileFilterState.normalizedFilter
+
   const isGitHistoryVisible =
     !normalizedFilter &&
     !fileFilterState.tooLarge &&
@@ -137,10 +144,12 @@ export function useSourceControlFileProjection({
     () => buildSourceControlDisplaySections(filteredGrouped, sourceControlGroupOrder),
     [filteredGrouped, sourceControlGroupOrder]
   )
+
   const unfilteredDisplaySections = useMemo(
     () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
     [grouped, sourceControlGroupOrder]
   )
+
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
     [unfilteredDisplaySections]
@@ -155,6 +164,7 @@ export function useSourceControlFileProjection({
     () => [...branchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
     [branchEntries]
   )
+
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(sortedBranchEntries, fileFilterState),
     [fileFilterState, sortedBranchEntries]
@@ -164,12 +174,15 @@ export function useSourceControlFileProjection({
     if (sourceControlViewMode !== 'tree') {
       return EMPTY_TREE_ROOTS_BY_SECTION
     }
+
     const roots: Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>> =
       {}
+
     for (const section of displaySections) {
       const sectionRoots = compactSourceControlTree(
         buildGitStatusSourceControlTree(section.area, section.items)
       )
+
       roots[section.id] =
         section.id === 'conflicts'
           ? applyGitStatusEntryAreasToSourceControlTree(
@@ -178,6 +191,7 @@ export function useSourceControlFileProjection({
             )
           : sectionRoots
     }
+
     return roots
   }, [displaySections, sourceControlViewMode])
 
@@ -185,7 +199,9 @@ export function useSourceControlFileProjection({
     if (sourceControlViewMode !== 'tree') {
       return EMPTY_TREE_ROWS_BY_SECTION
     }
+
     const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>> = {}
+
     for (const section of displaySections) {
       rows[section.id] = injectExpandedSubmoduleRows(
         flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
@@ -195,6 +211,7 @@ export function useSourceControlFileProjection({
         SUBMODULE_EMPTY_LABEL
       )
     }
+
     return rows
   }, [
     collapsedTreeDirs,
@@ -210,7 +227,9 @@ export function useSourceControlFileProjection({
     if (sourceControlViewMode !== 'list') {
       return EMPTY_LIST_ROWS_BY_SECTION
     }
+
     const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>> = {}
+
     for (const section of displaySections) {
       rows[section.id] = injectExpandedSubmoduleEntries(
         section.items,
@@ -220,6 +239,7 @@ export function useSourceControlFileProjection({
         SUBMODULE_EMPTY_LABEL
       )
     }
+
     return rows
   }, [displaySections, expandedSubmoduleKeys, sourceControlViewMode, submoduleStatusByKey])
 
@@ -230,6 +250,7 @@ export function useSourceControlFileProjection({
         : EMPTY_BRANCH_TREE_NODES,
     [filteredBranchEntries, sourceControlViewMode]
   )
+
   const visibleBranchTreeRows = useMemo(
     () =>
       sourceControlViewMode === 'tree'
@@ -240,14 +261,17 @@ export function useSourceControlFileProjection({
 
   const visibleSelectionEntries = useMemo(() => {
     const arr: FlatEntry[] = []
+
     // Why: list view splices in lazy submodule rows, so selection/range bookkeeping must read the injected rows, not the pre-injection entries.
     if (sourceControlViewMode === 'list') {
       for (const section of displaySections) {
         if (collapsedSections.has(section.id)) {
           continue
         }
+
         arr.push(...collectListSelectionEntries(visibleListRowsBySection[section.id] ?? []))
       }
+
       return arr
     }
 
@@ -255,12 +279,14 @@ export function useSourceControlFileProjection({
       if (collapsedSections.has(section.id)) {
         continue
       }
+
       for (const node of visibleTreeRowsBySection[section.id] ?? []) {
         if (node.type === 'file') {
           arr.push({ key: node.key, entry: node.entry, area: node.area })
         }
       }
     }
+
     return arr
   }, [
     collapsedSections,
@@ -269,6 +295,7 @@ export function useSourceControlFileProjection({
     visibleListRowsBySection,
     visibleTreeRowsBySection
   ])
+
   return {
     grouped,
     fileFilterState,

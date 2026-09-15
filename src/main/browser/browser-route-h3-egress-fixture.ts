@@ -30,12 +30,14 @@ export async function runBrowserRouteH3EgressProbe(
   const socks = createSocksStandIn()
   let result: BrowserRouteH3EgressProbeResult | null = null
   let primaryFailure: unknown = null
+
   try {
     const [webTransportPort, forcedQuicPort, socksPort] = await Promise.all([
       bindUdp(webTransportObserver),
       bindUdp(forcedQuicObserver),
       listen(socks, sockets)
     ])
+
     const resultPath = join(root, 'result.json')
     const mainPath = join(root, 'main.cjs')
     writeFileSync(mainPath, browserRouteH3EgressElectronMain())
@@ -50,11 +52,13 @@ export async function runBrowserRouteH3EgressProbe(
         webTransportPort
       })
     )
+
     const parsed = await runBrowserRouteEgressElectron(
       root,
       mainPath,
       electronArgs(protectedSession, forcedQuicPort)
     )
+
     result = {
       ...readProbeFields(parsed),
       webTransportPackets: countOf(webTransportObserver),
@@ -63,21 +67,25 @@ export async function runBrowserRouteH3EgressProbe(
   } catch (error) {
     primaryFailure = error
   }
+
   const cleanupFailures = await cleanup(
     root,
     [webTransportObserver, forcedQuicObserver],
     socks,
     sockets
   )
+
   if (primaryFailure || cleanupFailures.length > 0) {
     throw new AggregateError(
       [...(primaryFailure ? [primaryFailure] : []), ...cleanupFailures],
       primaryFailure instanceof Error ? primaryFailure.message : 'browser_route_h3_probe_failed'
     )
   }
+
   if (!result) {
     throw new Error('browser_route_h3_probe_result_missing')
   }
+
   return result
 }
 
@@ -94,10 +102,12 @@ function electronArgs(protectedSession: boolean, forcedQuicPort: number): string
     // beat an explicit enable, which is the future-Chromium-default-flip this switch exists to survive.
     `--enable-features=${DIRECT_SOCKETS_FEATURES.join(',')}`
   ]
+
   if (protectedSession) {
     // Why: the guest arm launches with the exact list Orca ships, so this proves the shipped switch, not a bare flag.
     args.push(`--disable-features=${DISABLED_CHROMIUM_FEATURES.join(',')}`)
   }
+
   return args
 }
 
@@ -106,6 +116,7 @@ function readProbeFields(
 ): Omit<BrowserRouteH3EgressProbeResult, 'webTransportPackets' | 'forcedQuicPackets'> {
   const { resolvedProxy, webTransport, directSockets, forcedQuic } = parsed
   const { directSocketsConstruct, rendererGone } = parsed
+
   if (
     typeof resolvedProxy !== 'string' ||
     typeof webTransport !== 'string' ||
@@ -116,6 +127,7 @@ function readProbeFields(
   ) {
     throw new Error(`browser_route_h3_probe_result_invalid:${JSON.stringify(parsed)}`)
   }
+
   return {
     resolvedProxy,
     webTransport,
@@ -134,6 +146,7 @@ function countOf(socket: UdpSocket): number {
 
 function bindUdp(socket: UdpSocket): Promise<number> {
   socket.on('message', () => packetCounts.set(socket, countOf(socket) + 1))
+
   return new Promise((resolve, reject) => {
     socket.once('error', reject)
     socket.bind(0, PROBE_HOST, () => {
@@ -154,15 +167,19 @@ function listen(server: Server, sockets: Set<Socket>): Promise<number> {
     socket.on('error', () => socket.destroy())
     socket.once('close', () => sockets.delete(socket))
   })
+
   return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, PROBE_HOST, () => {
       server.off('error', reject)
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         reject(new Error('browser_route_h3_probe_listener_unavailable'))
+
         return
       }
+
       resolve(address.port)
     })
   })
@@ -175,10 +192,13 @@ async function cleanup(
   sockets: Set<Socket>
 ): Promise<unknown[]> {
   const failures: unknown[] = []
+
   for (const socket of sockets) {
     socket.destroy()
   }
+
   sockets.clear()
+
   for (const observer of observers) {
     try {
       await closeUdp(observer)
@@ -186,6 +206,7 @@ async function cleanup(
       failures.push(error)
     }
   }
+
   try {
     await new Promise<void>((resolve, reject) =>
       socks.close((error) => (error ? reject(error) : resolve()))
@@ -193,11 +214,13 @@ async function cleanup(
   } catch (error) {
     failures.push(error)
   }
+
   try {
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   } catch (error) {
     failures.push(error)
   }
+
   return failures
 }
 

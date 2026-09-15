@@ -51,6 +51,7 @@ describe('remote browser stream status', () => {
   // "retrying, but the control is up" offered a manual retry ~500ms before the automatic one.
   it('offers reconnect only once automatic recovery is over', () => {
     expect(canReconnectRemoteBrowserStream(remoteBrowserStreamStopped('gone'))).toBe(true)
+
     for (const status of ALL.filter((candidate) => candidate.kind !== 'stopped')) {
       expect(canReconnectRemoteBrowserStream(status)).toBe(false)
     }

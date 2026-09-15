@@ -10,10 +10,12 @@ import {
 describe('agent session claim identity', () => {
   it('creates stable opaque identity and worktree digests', () => {
     const signer = createEphemeralAgentSessionClaimSigner('profile-1')
+
     const identity = canonicalizeAgentSessionIdentity('codex', {
       key: 'session_id',
       id: 'session-1'
     })
+
     const namespace = {
       machine: 'machine',
       principal: 'user',
@@ -23,6 +25,7 @@ describe('agent session claim identity', () => {
 
     const first = signer.createClaim({ namespace, identity, canonicalWorktreeId: 'worktree-1' })
     const second = signer.createClaim({ namespace, identity, canonicalWorktreeId: 'worktree-1' })
+
     const otherWorktree = signer.createClaim({
       namespace,
       identity,
@@ -47,6 +50,7 @@ describe('agent session claim identity', () => {
   it('canonicalizes Prime identity by its transcript path', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-prime-claim-'))
     const transcriptPath = join(dir, 'session.jsonl')
+
     try {
       writeFileSync(transcriptPath, '{}\n')
       const canonicalTranscriptPath = realpathSync(transcriptPath)

@@ -45,6 +45,7 @@ export function findRichMarkdownSearchMatches(
   if (!query) {
     return []
   }
+
   if (isMarkdownPreviewSearchQueryTooLarge(query)) {
     return []
   }
@@ -53,6 +54,7 @@ export function findRichMarkdownSearchMatches(
   const visibleMap = createRichMarkdownVisibleTextMap(doc)
   const ranges = findTextMatchRanges(visibleMap.text, query, options)
   let segmentIndex = 0
+
   for (const range of ranges) {
     while (
       segmentIndex < visibleMap.segments.length &&
@@ -61,34 +63,43 @@ export function findRichMarkdownSearchMatches(
       if (stats) {
         stats.segmentVisits += 1
       }
+
       segmentIndex += 1
     }
+
     const firstSegmentIndex = segmentIndex
     let lastSegmentIndex = firstSegmentIndex - 1
     let touchesReadOnlyAtom = false
     let segmentsAreContiguous = true
     let touchesSeparator = false
+
     while (
       lastSegmentIndex + 1 < visibleMap.segments.length &&
       visibleMap.segments[lastSegmentIndex + 1]!.visibleFrom < range.end
     ) {
       lastSegmentIndex += 1
+
       if (stats) {
         stats.segmentVisits += 1
       }
+
       touchesReadOnlyAtom ||= visibleMap.segments[lastSegmentIndex]!.kind === 'read-only-atom'
       touchesSeparator ||= visibleMap.segments[lastSegmentIndex]!.kind === 'separator'
       const previous = visibleMap.segments[lastSegmentIndex - 1]
       const current = visibleMap.segments[lastSegmentIndex]!
+
       if (lastSegmentIndex > firstSegmentIndex && previous?.to !== current.from) {
         segmentsAreContiguous = false
       }
     }
+
     const first = visibleMap.segments[firstSegmentIndex]
     const last = visibleMap.segments[lastSegmentIndex]
+
     if (!first || !last || !segmentsAreContiguous || touchesSeparator) {
       continue
     }
+
     const from = mapSegmentStart(first, range.start)
     const to = mapSegmentEnd(last, range.end)
     matches.push(
@@ -194,6 +205,7 @@ function buildSearchDecorationsFromMatches(
           class: 'rich-markdown-search-match',
           'data-active': index === activeIndex ? 'true' : undefined
         }
+
         return range.kind === 'node'
           ? Decoration.node(range.from, range.to, attrs)
           : Decoration.inline(range.from, range.to, attrs)

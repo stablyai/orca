@@ -86,6 +86,7 @@ export const PermissionsParams = z
           message: 'package is not allowed for reset'
         })
       }
+
       if (value.permission) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -93,8 +94,10 @@ export const PermissionsParams = z
           message: 'permission is not allowed for reset'
         })
       }
+
       return
     }
+
     if (!value.package) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -102,6 +105,7 @@ export const PermissionsParams = z
         message: 'package is required for grant/revoke'
       })
     }
+
     if (!value.permission) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

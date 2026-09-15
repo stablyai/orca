@@ -23,6 +23,7 @@ function createPatchMock(): PatchMock {
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 const COUNTS: WorkspaceCleanupFacetCounts = {
@@ -61,6 +62,7 @@ function typeInto(input: HTMLInputElement | null, value: string): void {
   if (!input) {
     return
   }
+
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
   setter?.call(input, value)
   input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -87,6 +89,7 @@ describe('workspace cleanup facet controls', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -98,6 +101,7 @@ describe('workspace cleanup facet controls', () => {
     const counts = [...(container?.querySelectorAll('[data-facet-count]') ?? [])].map(
       (node) => node.textContent
     )
+
     expect(counts).toHaveLength(10)
     expect(counts).toContain('2/8')
     expect(counts).toContain('3/8')
@@ -126,10 +130,13 @@ describe('workspace cleanup facet controls', () => {
       'Commits ahead ≥',
       'Commits behind ≥'
     ]
+
     const found = numericFacets
       .map((label) => control(label) as HTMLInputElement | null)
       .filter((input): input is HTMLInputElement => input !== null)
+
     expect(found).toHaveLength(numericFacets.length)
+
     for (const input of found) {
       expect(input.type).toBe('text')
       expect(input.inputMode).toBe('numeric')

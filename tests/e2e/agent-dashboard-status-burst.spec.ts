@@ -2,6 +2,7 @@ import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const PANE_COUNT = 100
+
 const BASE_TIME = 1_700_000_000_000
 
 type BurstPane = {
@@ -24,19 +25,24 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
 }) => {
   await waitForSessionReady(orcaPage)
   const worktreeId = await waitForActiveWorktree(orcaPage)
+
   const panes = await orcaPage.evaluate(
     ({ baseTime, paneCount, worktreeId }): BurstPane[] => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is unavailable')
       }
+
       const state = store.getState()
+
       const tab =
         state.tabsByWorktree[worktreeId]?.[0] ??
         state.createTab(worktreeId, undefined, undefined, {
           activate: false,
           id: 'agent-dashboard-burst-tab'
         })
+
       store.setState({
         agentDashboardDrawerOpen: false,
         settings: {
@@ -48,6 +54,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
         }
       })
       const seeded: BurstPane[] = []
+
       for (let index = 0; index < paneCount; index += 1) {
         const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
         const paneKey = `${tab.id}:${leafId}`
@@ -63,7 +70,9 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
           )
         seeded.push({ paneKey, tabId: tab.id, terminalHandle, worktreeId })
       }
+
       const probe = { statusPublications: 0 }
+
       ;(window as typeof window & { __agentDashboardBurstProbe?: typeof probe })[
         '__agentDashboardBurstProbe'
       ] = probe
@@ -72,6 +81,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
           probe.statusPublications += 1
         }
       })
+
       return seeded
     },
     { baseTime: BASE_TIME, paneCount: PANE_COUNT, worktreeId }
@@ -83,9 +93,11 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
   await electronApp.evaluate(
     ({ BrowserWindow }, { baseTime, panes }) => {
       const window = BrowserWindow.getAllWindows().find((candidate) => !candidate.isDestroyed())
+
       if (!window) {
         throw new Error('Orca BrowserWindow is unavailable')
       }
+
       for (const [index, pane] of panes.entries()) {
         const receivedAt = baseTime + index
         window.webContents.send('agentStatus:set', {
@@ -106,13 +118,16 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
   await dashboardButton.click()
   await orcaPage.locator('[data-agent-dashboard-sheet]').waitFor({ state: 'visible' })
   const interactionElapsedMs = performance.now() - interactionStartedAt
+
   const statusPublicationsAtVisible = await orcaPage.evaluate(() => {
     const probe = (
       window as typeof window & { __agentDashboardBurstProbe?: { statusPublications: number } }
     ).__agentDashboardBurstProbe
+
     if (!probe) {
       throw new Error('Agent Dashboard burst evidence is unavailable')
     }
+
     return probe.statusPublications
   })
 
@@ -122,6 +137,7 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
         orcaPage.evaluate(
           (paneKeys) => {
             const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
+
             return paneKeys.every((paneKey) => statuses[paneKey]?.state === 'done')
           },
           panes.map(({ paneKey }) => paneKey)
@@ -133,13 +149,17 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
   const evidence = await orcaPage.evaluate(
     ({ paneKeys, statusPublicationsAtVisible }): BurstEvidence => {
       const state = window.__store?.getState()
+
       const probe = (
         window as typeof window & { __agentDashboardBurstProbe?: { statusPublications: number } }
       ).__agentDashboardBurstProbe
+
       if (!state || !probe) {
         throw new Error('Agent Dashboard burst evidence is unavailable')
       }
+
       const first = state.agentStatusByPaneKey[paneKeys[0]]
+
       return {
         statusPublications: probe.statusPublications,
         statusPublicationsAtVisible,

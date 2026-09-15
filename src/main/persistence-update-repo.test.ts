@@ -26,6 +26,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -40,9 +41,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -151,6 +154,7 @@ describe('Store', () => {
       id: 'cloud-project',
       displayName: 'Cloud Project'
     })
+
     const independentSetup = makeProjectHostSetup({
       id: 'cloud-project::gpu-vm',
       projectId: independentProject.id,
@@ -159,6 +163,7 @@ describe('Store', () => {
       path: '/srv/cloud-project',
       displayName: 'GPU VM'
     })
+
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       repos: [makeRepo({ id: 'r1' })],
@@ -182,6 +187,7 @@ describe('Store', () => {
       id: 'cloud-project',
       displayName: 'Cloud Project'
     })
+
     const independentSetup = makeProjectHostSetup({
       id: 'cloud-project::gpu-vm',
       projectId: independentProject.id,
@@ -190,6 +196,7 @@ describe('Store', () => {
       path: '/srv/cloud-project',
       displayName: 'GPU VM'
     })
+
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       projects: [independentProject],
@@ -270,11 +277,13 @@ describe('Store', () => {
       ...makeRepo({ id: 'r1', displayName: 'Cloud Project' }),
       upstream: { owner: 'stablyai', repo: 'cloud-project' }
     })
+
     const independentSetup = makeProjectHostSetup({
       id: 'cloud-project::gpu-vm',
       projectId: 'github:stablyai/cloud-project',
       hostId: 'runtime:gpu-vm'
     })
+
     store.createProjectHostSetup({
       projectId: independentSetup.projectId,
       hostId: independentSetup.hostId,
@@ -338,6 +347,7 @@ describe('Store', () => {
       id: 'cloud-project',
       displayName: 'Cloud Project'
     })
+
     const independentSetup = makeProjectHostSetup({
       id: 'cloud-project::gpu-vm',
       projectId: independentProject.id,
@@ -346,6 +356,7 @@ describe('Store', () => {
       path: '/srv/cloud-project',
       displayName: 'GPU VM'
     })
+
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       projects: [independentProject],
@@ -451,6 +462,7 @@ describe('Store', () => {
     const updated = store.updateRepo('r1', {
       upstream: { owner: ' stablyai ', repo: ' orca ' }
     })
+
     expect(updated!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
 
     store.updateRepo('r1', { upstream: null })
@@ -470,6 +482,7 @@ describe('Store', () => {
         remoteUrl: 'git@gitlab.example.com:team/orca.git'
       }
     })
+
     expect(updated!.gitRemoteIdentity).toEqual({
       canonicalKey: 'gitlab.example.com/team/orca',
       remoteName: 'origin',
@@ -497,6 +510,7 @@ describe('Store', () => {
     const updated = store.updateRepo('r1', {
       upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
     })
+
     expect(updated!.upstream).toEqual({
       owner: 'acme',
       repo: 'widgets',

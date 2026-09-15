@@ -5,6 +5,7 @@ export function extractWorkspaceKanbanLaneRange(
   focusedIndex: number | null
 ): number[] {
   const indexes = defaultRangeExtractor(range)
+
   if (
     focusedIndex === null ||
     focusedIndex < 0 ||
@@ -13,5 +14,6 @@ export function extractWorkspaceKanbanLaneRange(
   ) {
     return indexes
   }
+
   return [...indexes, focusedIndex].sort((left, right) => left - right)
 }

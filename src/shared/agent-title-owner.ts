@@ -33,12 +33,15 @@ function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch |
   if (!label) {
     return null
   }
+
   const normalizedLabel = label.trim().toLowerCase()
+
   for (const profile of Object.values(SYNTHETIC_AGENT_TITLE_PROFILES)) {
     if (profile.workingLabel.toLowerCase() === normalizedLabel) {
       return { profile }
     }
   }
+
   return null
 }
 
@@ -49,21 +52,29 @@ function getProfileForTitle(title: string): TitleProfileMatch | null {
   // Why each segment: a wrapper prefix must not hide the inner compatible agent identity.
   const candidates = getWrapperTitleSegments(title)
   let fallback: TitleProfileMatch | null = null
+
   for (const candidate of candidates) {
     const labelProfile = getProfileForTitleLabel(getAgentLabel(candidate))
+
     const legacyProfile = isLegacyPiCompatibleTitle(candidate)
       ? getProfileForTitleLabel('Pi')
       : null
+
     const candidateProfile = labelProfile ?? legacyProfile
+
     if (!candidateProfile) {
       continue
     }
+
     const match = { ...candidateProfile, sourceTitle: candidate }
+
     if (candidateProfile.profile.titleIdentityGroup) {
       return match
     }
+
     fallback ??= match
   }
+
   return fallback
 }
 
@@ -81,12 +92,15 @@ export function hasCompatibleAgentTitleIdentity(title: string): boolean {
  */
 function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' | null {
   const detectedStatus = detectAgentStatusFromTitle(title)
+
   if (detectedStatus) {
     return detectedStatus
   }
+
   if (isLegacyPiCompatibleTitle(title)) {
     return 'idle'
   }
+
   return null
 }
 
@@ -95,6 +109,7 @@ function getSourceTitleStatus(title: string): 'working' | 'permission' | 'idle' 
  */
 function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
+
   return (
     normalizedTitle === sourceProfile.permissionLabel.toLowerCase() ||
     normalizedTitle.includes('action required') ||
@@ -108,6 +123,7 @@ function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitlePr
  */
 function hasIdleSuffix(title: string, sourceProfile: SyntheticAgentTitleProfile): boolean {
   const normalizedTitle = title.trim().toLowerCase()
+
   return (
     normalizedTitle === sourceProfile.idleLabel.toLowerCase() ||
     COMPATIBLE_IDLE_TITLE_RE.test(title)
@@ -126,8 +142,10 @@ export function resolveCompatibleAgentTypeForOwner(
   if (!incomingAgentType) {
     return undefined
   }
+
   const incomingProfile = getSyntheticAgentTitleProfile(incomingAgentType)
   const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
+
   if (
     !incomingProfile?.titleIdentityGroup ||
     !ownerProfile?.titleIdentityGroup ||
@@ -135,6 +153,7 @@ export function resolveCompatibleAgentTypeForOwner(
   ) {
     return incomingAgentType
   }
+
   return ownerAgentType as AgentType
 }
 
@@ -148,20 +167,26 @@ export function normalizeCompatibleAgentTitleForOwner(
   _options?: CompatibleAgentOwnerOptions
 ): string {
   const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
+
   if (!ownerProfile?.titleIdentityGroup) {
     return title
   }
+
   const source = getProfileForTitle(title)
+
   if (
     !source?.profile.titleIdentityGroup ||
     source.profile.titleIdentityGroup !== ownerProfile.titleIdentityGroup
   ) {
     return title
   }
+
   const stateTitle = rebrandPiStateTitle(title, ownerProfile.workingLabel)
+
   if (stateTitle !== null) {
     return stateTitle
   }
+
   // Why: a π-branded title is the agent's own semantic session title (`π > <session> - <cwd>`;
   // Orca's injected extension writes the same shape). Swap only the BRAND for the owner's label
   // so the pane still reads as its launch owner (#6689, #7633, #9077) without discarding the
@@ -173,24 +198,32 @@ export function normalizeCompatibleAgentTitleForOwner(
     // makes the whole string the match, and then the prefix's brand is what gets swapped.
     const ownedSegment = source.sourceTitle.replace(LEGACY_PI_BRAND, ownerProfile.workingLabel)
     const segmentAt = title.lastIndexOf(source.sourceTitle)
+
     return segmentAt === -1 ? ownedSegment : title.slice(0, segmentAt) + ownedSegment
   }
+
   const sourceStatus = getSourceTitleStatus(source.sourceTitle)
+
   if (sourceStatus === 'working') {
     return `\u280b ${ownerProfile.workingLabel}`
   }
+
   if (sourceStatus === 'permission') {
     return ownerProfile.permissionLabel
   }
+
   if (sourceStatus === 'idle') {
     return ownerProfile.idleLabel
   }
+
   if (hasPermissionSuffix(source.sourceTitle, source.profile)) {
     return ownerProfile.permissionLabel
   }
+
   if (hasIdleSuffix(source.sourceTitle, source.profile)) {
     return ownerProfile.idleLabel
   }
+
   return ownerProfile.workingLabel
 }
 
@@ -204,6 +237,7 @@ export function normalizeCompatibleAgentStatusEntryForOwner(
   options?: CompatibleAgentOwnerOptions
 ): AgentStatusEntry {
   const agentType = resolveCompatibleAgentTypeForOwner(entry.agentType, ownerAgentType, options)
+
   const terminalTitle = entry.terminalTitle
     ? normalizeCompatibleAgentTitleForOwner(
         entry.terminalTitle,
@@ -211,9 +245,11 @@ export function normalizeCompatibleAgentStatusEntryForOwner(
         options
       )
     : entry.terminalTitle
+
   if (agentType === entry.agentType && terminalTitle === entry.terminalTitle) {
     return entry
   }
+
   return {
     ...entry,
     ...(agentType ? { agentType } : {}),
@@ -229,10 +265,13 @@ export function shareCompatibleTitleIdentityGroup(
   if (!left || !right) {
     return false
   }
+
   if (left === right) {
     return true
   }
+
   const leftGroup = getSyntheticAgentTitleProfile(left)?.titleIdentityGroup
   const rightGroup = getSyntheticAgentTitleProfile(right)?.titleIdentityGroup
+
   return Boolean(leftGroup && leftGroup === rightGroup)
 }

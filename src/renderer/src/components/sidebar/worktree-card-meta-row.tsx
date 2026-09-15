@@ -31,6 +31,7 @@ export function WorktreeCardMetaRow({
     cacheStartedAt,
     cacheTtlMs
   } = card
+
   const {
     showRepoBadgeInMetaRow,
     showHostContextBadge,

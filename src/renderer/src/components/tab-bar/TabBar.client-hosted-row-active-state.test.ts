@@ -22,20 +22,35 @@ import {
 import type { ClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
 
 vi.mock('react', async () => await stubHeadlessReact())
+
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
+
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
+
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
+
 vi.mock('./tab-strip-drag-scroll', () => stubTabStripDragScroll())
+
 vi.mock('../../store', () => ({ useAppStore: useAppStoreExport }))
+
 vi.mock('../right-sidebar/status-display', () => stubStatusDisplay())
+
 vi.mock('../tab-group/tab-insertion', () => stubTabInsertion())
+
 vi.mock('@/components/editor/editor-labels', () => stubEditorLabels())
+
 vi.mock('./SortableTab', () => stubSortableTab())
+
 vi.mock('./EditorFileTab', () => stubEditorFileTab())
+
 vi.mock('./BrowserTab', () => stubBrowserTab())
+
 vi.mock('./QuickLaunchButton', () => stubQuickLaunchButton())
+
 vi.mock('./shell-icons', () => stubShellIcons())
+
 vi.mock('@/lib/focus-terminal-tab-surface', () => stubFocusTerminalTabSurface())
+
 vi.mock('@/components/ui/dropdown-menu', () => stubDropdownMenu())
 
 const TERMINAL_TAB = {
@@ -54,20 +69,26 @@ function findByComponentName(node: unknown, name: string): Record<string, unknow
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return null
   }
+
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findByComponentName(child, name)
+
       if (found) {
         return found
       }
     }
+
     return null
   }
+
   const el = node as { type?: unknown; props?: Record<string, unknown> }
   const type = el.type as { name?: string } | string | undefined
+
   if ((typeof type === 'string' ? type : type?.name) === name) {
     return el.props ?? {}
   }
+
   return findByComponentName(el.props?.children, name)
 }
 
@@ -80,10 +101,13 @@ async function selectRow(selection: ClientHostedBrowserRowSelection): Promise<vo
 
 async function renderTerminalStrip(): Promise<Record<string, unknown> | null> {
   const tabBarModule = await import('./TabBar')
+
   const candidate = tabBarModule.default as unknown as
     | ((props: Record<string, unknown>) => unknown)
     | { type: (props: Record<string, unknown>) => unknown }
+
   const TabBar = typeof candidate === 'function' ? candidate : candidate.type
+
   return findByComponentName(
     TabBar({
       tabs: [TERMINAL_TAB],
@@ -123,6 +147,7 @@ describe('TabBar client-hosted row active state', () => {
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())

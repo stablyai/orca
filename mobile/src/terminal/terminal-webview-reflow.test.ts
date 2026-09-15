@@ -10,13 +10,16 @@ const reflowSource = readFileSync(
   new URL('./terminal-webview-reflow-injected.ts', import.meta.url),
   'utf8'
 )
+
 // Use the assembled document so the test covers the fragments that run in the WebView.
 const htmlSource = readTerminalWebViewHtmlSource()
+
 const handleSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
 
 function reflowFnBody(): string {
   const start = reflowSource.indexOf('function reflow(cols, rows) {')
   expect(start).toBeGreaterThanOrEqual(0)
+
   return reflowSource.slice(start)
 }
 

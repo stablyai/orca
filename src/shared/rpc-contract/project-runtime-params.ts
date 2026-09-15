@@ -23,10 +23,13 @@ export const ProjectProviderIdentity = z.object({
 // `local` back to `runtime:<their-id>`, so the client-visible model is unchanged.
 export const RequestedHostId = requiredString('Missing host ID').transform((value, ctx) => {
   const hostId = normalizeExecutionHostId(value)
+
   if (!hostId) {
     ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+
     return z.NEVER
   }
+
   return parseExecutionHostId(hostId)?.kind === 'runtime' ? LOCAL_EXECUTION_HOST_ID : hostId
 })
 

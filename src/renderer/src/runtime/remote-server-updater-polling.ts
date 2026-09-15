@@ -20,16 +20,22 @@ export async function pollRemoteServerUpdater(
 ): Promise<RemoteServerUpdaterSnapshot> {
   const now = transport.now ?? Date.now
   const deadline = now() + timing.operationTimeoutMs
+
   while (now() < deadline) {
     const snapshot = await transport.getUpdaterStatus(environmentId)
+
     if (snapshot.status.state === 'error') {
       throw new Error(snapshot.status.message)
     }
+
     onSnapshot(snapshot)
+
     if (accept(snapshot)) {
       return snapshot
     }
+
     await transport.wait(timing.pollIntervalMs)
   }
+
   throw new Error('remote_update_updater_timeout')
 }

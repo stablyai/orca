@@ -58,6 +58,7 @@ export function useReviewPrViewAnimation(
 ): void {
   useEffect(() => {
     const root = rootRef.current
+
     if (!root) {
       return
     }
@@ -78,6 +79,7 @@ export function useReviewPrViewAnimation(
     const verifyRow = root.querySelector<HTMLDivElement>('[data-check-row="verify"]')
     const verifyState = root.querySelector<HTMLSpanElement>('[data-check-verify-state]')
     const mergeBtn = root.querySelector<HTMLButtonElement>('[data-merge-btn]')
+
     if (
       !sidebarPeek ||
       !prCard ||
@@ -117,6 +119,7 @@ export function useReviewPrViewAnimation(
 
     let cancelled = false
     const timers: number[] = []
+
     const wait = (ms: number): Promise<void> =>
       new Promise((resolve) => {
         const id = window.setTimeout(() => resolve(), ms)
@@ -168,6 +171,7 @@ export function useReviewPrViewAnimation(
 
     if (reducedMotion) {
       showFinalState()
+
       return
     }
 
@@ -175,6 +179,7 @@ export function useReviewPrViewAnimation(
       while (!cancelled) {
         resetState()
         await wait(420)
+
         if (cancelled) {
           return
         }
@@ -183,26 +188,32 @@ export function useReviewPrViewAnimation(
         moveCursor(rootEl, cursorEl, checksTabEl, 5, 6)
         checksTabEl.classList.add('is-hovered')
         await wait(260)
+
         if (cancelled) {
           return
         }
+
         checksTooltipEl.classList.add('is-visible')
         await wait(1300)
+
         if (cancelled) {
           return
         }
 
         cursorEl.classList.add('is-clicking')
         await wait(220)
+
         if (cancelled) {
           return
         }
+
         cursorEl.classList.remove('is-clicking')
         checksTooltipEl.classList.remove('is-visible')
         checksTabEl.classList.remove('is-hovered')
         explorerTabEl.classList.remove('is-active')
         checksTabEl.classList.add('is-active')
         await wait(420)
+
         if (cancelled) {
           return
         }
@@ -211,12 +222,14 @@ export function useReviewPrViewAnimation(
         prCardEl.classList.add('is-visible')
         cursorEl.classList.remove('is-visible')
         await wait(560)
+
         if (cancelled) {
           return
         }
 
         checksBlockEl.classList.add('is-visible')
         await wait(1050)
+
         if (cancelled) {
           return
         }
@@ -230,11 +243,14 @@ export function useReviewPrViewAnimation(
         mergeBtnEl.classList.add('is-ready')
 
         await wait(560)
+
         if (cancelled) {
           return
         }
+
         commentsBlockEl.classList.add('is-visible')
         await wait(260)
+
         if (cancelled) {
           return
         }
@@ -243,6 +259,7 @@ export function useReviewPrViewAnimation(
           comments[i]?.classList.add('is-visible')
           commentsCountEl.textContent = String(i + 1)
           await wait(520)
+
           if (cancelled) {
             return
           }
@@ -253,6 +270,7 @@ export function useReviewPrViewAnimation(
     }
 
     void loop()
+
     return () => {
       cancelled = true
       timers.forEach((timer) => window.clearTimeout(timer))

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { OrchestrationError } from './orchestration-error'
 
 const WORKER_OUTPUT_CURSOR_PREFIX = 'owr1_'
+
 const WORKER_OUTPUT_CURSOR_MAX_LENGTH = 2_048
 
 type WorkerOutputCursorPayload = {
@@ -47,6 +48,7 @@ export function encodeWorkerOutputCursor(
     p: position,
     ...(source === 'transcript' && boundaryCheckpoint ? { c: boundaryCheckpoint } : {})
   }
+
   return `${WORKER_OUTPUT_CURSOR_PREFIX}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
 }
 
@@ -57,19 +59,24 @@ export function decodeWorkerOutputCursor(
   if (cursor === undefined) {
     return null
   }
+
   if (typeof cursor === 'number') {
     return decodeLegacyTerminalCursor(cursor)
   }
+
   if (/^\d+$/.test(cursor)) {
     return decodeLegacyTerminalCursor(Number.parseInt(cursor, 10))
   }
+
   if (
     cursor.length > WORKER_OUTPUT_CURSOR_MAX_LENGTH ||
     !cursor.startsWith(WORKER_OUTPUT_CURSOR_PREFIX)
   ) {
     throw invalidCursor()
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(
       Buffer.from(cursor.slice(WORKER_OUTPUT_CURSOR_PREFIX.length), 'base64url').toString('utf8')
@@ -77,15 +84,18 @@ export function decodeWorkerOutputCursor(
   } catch {
     throw invalidCursor()
   }
+
   if (!isWorkerOutputCursorPayload(parsed)) {
     throw invalidCursor()
   }
+
   if (parsed.d !== dispatchId) {
     throw new OrchestrationError(
       'cursor_dispatch_mismatch',
       'The worker-read cursor belongs to a different Dispatch.'
     )
   }
+
   return parsed.s === 'transcript'
     ? {
         source: 'transcript',
@@ -106,6 +116,7 @@ function decodeLegacyTerminalCursor(position: number): DecodedWorkerOutputCursor
   if (!Number.isSafeInteger(position) || position < 0) {
     throw invalidCursor()
   }
+
   return { source: 'terminal', sourceIdentity: null, position, legacy: true }
 }
 
@@ -113,7 +124,9 @@ function isWorkerOutputCursorPayload(value: unknown): value is WorkerOutputCurso
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const payload = value as Record<string, unknown>
+
   return (
     payload.v === 1 &&
     typeof payload.d === 'string' &&

@@ -31,7 +31,9 @@ import { validatePluginManifestContributions } from './plugin-manifest-contribut
 
 const SEMVER_RE =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+
 export const PLUGIN_PANEL_LIMIT = 64
+
 export const PLUGIN_COMMAND_LIMIT = 256
 
 // Why: v0 supports only the ">=x.y.z" form. A closed grammar keeps the gate
@@ -65,6 +67,7 @@ export const PLUGIN_EVENT_NAMES = [
   'worktree.removed',
   'agent.status.changed'
 ] as const
+
 export const PLUGIN_EVENT_SUBSCRIPTION_LIMIT = PLUGIN_EVENT_NAMES.length
 
 export type PluginEventName = (typeof PLUGIN_EVENT_NAMES)[number]
@@ -131,8 +134,11 @@ export const pluginManifestSchema = z
   .superRefine(validatePluginManifestContributions)
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
+
 export type PluginPanelContribution = z.infer<typeof panelContributionSchema>
+
 export type PluginCommandContribution = z.infer<typeof commandContributionSchema>
+
 export type PluginEventContribution = z.infer<typeof eventContributionSchema>
 
 export {
@@ -154,11 +160,14 @@ export type PluginManifestParseResult =
 
 export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
   const parsed = pluginManifestSchema.safeParse(raw)
+
   if (parsed.success) {
     return { ok: true, manifest: parsed.data }
   }
+
   const issue = parsed.error.issues[0]
   const path = issue?.path.join('.') || '(root)'
+
   return { ok: false, error: `${path}: ${issue?.message ?? 'invalid manifest'}` }
 }
 
@@ -166,20 +175,25 @@ export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
  *  Prerelease/build suffixes on the host version are ignored for ordering. */
 export function satisfiesOrcaEngineRange(hostVersion: string, range: string): boolean {
   const minimum = range.slice(2)
+
   const parse = (value: string): number[] =>
     value
       .split(/[-+]/)[0]!
       .split('.')
       .map((part) => Number.parseInt(part, 10) || 0)
+
   const host = parse(hostVersion)
   const min = parse(minimum)
+
   for (let i = 0; i < 3; i++) {
     const a = host[i] ?? 0
     const b = min[i] ?? 0
+
     if (a !== b) {
       return a > b
     }
   }
+
   return true
 }
 

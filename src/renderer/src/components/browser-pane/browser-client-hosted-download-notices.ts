@@ -24,11 +24,13 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
 
   useEffect(() => {
     const filenames = filenamesRef.current
+
     const releaseRequested = window.api.browser.onDownloadRequested(
       (event: BrowserDownloadRequestedEvent) => {
         if (event.browserPageId !== browserPageId) {
           return
         }
+
         filenames.set(event.downloadId, event.filename)
         toast.loading(
           translate('browser.clientHosted.download.started', 'Downloading {{filename}}…', {
@@ -38,29 +40,35 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
         )
       }
     )
+
     // Why: progress carries no page id once the guest is gone, so a filename this pane recorded is
     // what proves the download is ours — an unknown id belongs to another page and is ignored.
     const releaseProgress = window.api.browser.onDownloadProgress(
       (event: BrowserDownloadProgressEvent) => {
         const filename = filenames.get(event.downloadId)
+
         if (filename === undefined) {
           return
         }
+
         toast.loading(formatBrowserClientHostedDownloadProgress(event, filename), {
           id: downloadToastId(event.downloadId)
         })
       }
     )
+
     const releaseFinished = window.api.browser.onDownloadFinished(
       (event: BrowserDownloadFinishedEvent) => {
         if (event.browserPageId !== browserPageId) {
           return
         }
+
         const filename = filenames.get(event.downloadId) ?? ''
         filenames.delete(event.downloadId)
         emitBrowserClientHostedDownloadNotice(event, filename)
       }
     )
+
     return () => {
       releaseRequested()
       releaseProgress()
@@ -78,11 +86,14 @@ export function formatBrowserClientHostedDownloadProgress(
   const started = translate('browser.clientHosted.download.started', 'Downloading {{filename}}…', {
     filename
   })
+
   const received = formatByteCount(event.receivedBytes)
   const total = formatByteCount(event.totalBytes)
+
   if (received && total) {
     return `${started} ${received} / ${total}`
   }
+
   return received ? `${started} ${received}` : started
 }
 
@@ -91,6 +102,7 @@ export function emitBrowserClientHostedDownloadNotice(
   filename: string
 ): void {
   const id = downloadToastId(event.downloadId)
+
   if (event.status === 'completed') {
     toast.success(
       event.remoteDestination
@@ -100,8 +112,10 @@ export function emitBrowserClientHostedDownloadNotice(
           }),
       { id }
     )
+
     return
   }
+
   toast.error(
     event.error ||
       (event.status === 'canceled'

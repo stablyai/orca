@@ -19,6 +19,7 @@ async function renderDialog(
   await act(async () => {
     root.render(<PluginInstallDialog open onOpenChange={vi.fn()} onInstall={onInstall} />)
   })
+
   return root
 }
 
@@ -33,9 +34,11 @@ function button(label: string): HTMLButtonElement {
   const match = Array.from(document.querySelectorAll('button')).find(
     (candidate) => candidate.textContent?.trim() === label
   )
+
   if (!match) {
     throw new Error(`missing ${label} button`)
   }
+
   return match
 }
 
@@ -44,11 +47,14 @@ describe('PluginInstallDialog', () => {
     const onInstall = vi
       .fn<(source: PluginHostInstallSource) => Promise<void>>()
       .mockRejectedValue(new Error('Integrity check failed'))
+
     const root = await renderDialog(onInstall)
     const input = document.querySelector<HTMLInputElement>('#plugin-local-path')
+
     if (!input) {
       throw new Error('missing local path input')
     }
+
     await enter(input, 'C:\\plugins\\demo')
 
     await act(async () => {
@@ -66,11 +72,14 @@ describe('PluginInstallDialog', () => {
     const onInstall = vi
       .fn<(source: PluginHostInstallSource) => Promise<void>>()
       .mockRejectedValue(new Error('invalid manifest: contributes.panels.0.entry is required'))
+
     const root = await renderDialog(onInstall)
     const input = document.querySelector<HTMLInputElement>('#plugin-local-path')
+
     if (!input) {
       throw new Error('missing local path input')
     }
+
     await enter(input, '/plugins/demo')
 
     await act(async () => {

@@ -26,6 +26,7 @@ import { sessionCandidate } from '../../src/main/ai-vault-search/session-search-
 // never point this at a real transcript tree.
 
 const WARMUP = 5
+
 const SAMPLES = 25
 
 // One query per rung the ladder can take, plus the two shapes that skip it.
@@ -44,17 +45,20 @@ type Timing = { p50: number; p95: number }
 
 function percentile(sorted: readonly number[], fraction: number): number {
   const at = Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))
+
   return Math.round((sorted[at] ?? 0) * 100) / 100
 }
 
 function timing(samples: number[]): Timing {
   const sorted = [...samples].sort((left, right) => left - right)
+
   return { p50: percentile(sorted, 0.5), p95: percentile(sorted, 0.95) }
 }
 
 function time(engine: SessionSearchEngine, request: SessionSearchRequest): number {
   const started = performance.now()
   engine.search(request)
+
   return performance.now() - started
 }
 
@@ -63,11 +67,14 @@ async function indexCorpus(
 ): Promise<{ corpus: SyntheticCorpus; db: SyncDatabase; release: () => void }> {
   resetSessionParseCacheForTests()
   const corpus = await writeSyntheticTranscriptCorpus(options)
+
   const store = new SessionSearchStore(join(corpus.root, 'index.sqlite'), (error) => {
     throw error
   })
+
   const unregister = registerSessionSearchIndexConsumer(store)
   const stats = createSessionParseStats()
+
   for (const path of corpus.files) {
     await parseAgentSessionFileCached(
       await sessionCandidate('claude', path),
@@ -75,6 +82,7 @@ async function indexCorpus(
       stats
     )
   }
+
   return {
     corpus,
     // The handle a composed reader gets. Every read here is one synchronous
@@ -94,16 +102,20 @@ function scopeReport(db: SyncDatabase, scope: SessionSearchScope): Record<string
   const engine = new SessionSearchEngine(db)
   const everything: number[] = []
   const perQuery: Record<string, Timing & { hits: number; route: string }> = {}
+
   for (const { name, request } of QUERIES) {
     const scoped = { ...request, scope }
+
     for (let run = 0; run < WARMUP; run++) {
       engine.search(scoped)
     }
+
     const samples = Array.from({ length: SAMPLES }, () => time(engine, scoped))
     everything.push(...samples)
     const result = engine.search(scoped)
     perQuery[name] = { ...timing(samples), hits: result.hits.length, route: result.planner.route }
   }
+
   return { ...timing(everything), perQuery }
 }
 
@@ -116,21 +128,27 @@ function scopeReport(db: SyncDatabase, scope: SessionSearchScope): Record<string
  */
 function candidateSweep(db: SyncDatabase, limits: readonly number[]): Record<string, unknown> {
   const request: SessionSearchRequest = { query: 'index', limit: 20 }
+
   const engines = new Map(
     limits.map((limit) => [limit, new SessionSearchEngine(db, { sessionCandidateLimit: limit })])
   )
+
   const samples = new Map(limits.map((limit) => [limit, [] as number[]]))
+
   for (let run = 0; run < WARMUP; run++) {
     for (const engine of engines.values()) {
       engine.search(request)
     }
   }
+
   for (let run = 0; run < SAMPLES; run++) {
     for (const limit of limits) {
       samples.get(limit)!.push(time(engines.get(limit)!, request))
     }
   }
+
   const report: Record<string, unknown> = {}
+
   for (const limit of limits) {
     const result = engines.get(limit)!.search(request)
     report[String(limit)] = {
@@ -140,22 +158,27 @@ function candidateSweep(db: SyncDatabase, limits: readonly number[]): Record<str
       reachablePages: Math.ceil(limit / (request.limit ?? 20))
     }
   }
+
   return report
 }
 
 const wide = await indexCorpus({ sessions: Number(process.env.SESSIONS ?? 40) })
+
 let report: string
+
 try {
   const scope = {
     all: scopeReport(wide.db, 'all'),
     conversation: scopeReport(wide.db, 'conversation')
   }
+
   wide.release()
   await rm(wide.corpus.root, { recursive: true, force: true })
 
   // Many short sessions: what makes the candidate limit binding is the session
   // count, not the byte count.
   const many = await indexCorpus({ sessions: 2500, turnsPerSession: 1, seed: 7 })
+
   try {
     report = JSON.stringify(
       {
@@ -186,7 +209,9 @@ try {
 // Why a file as well as stdout: a runner that intercepts console output
 // (vitest does) would otherwise swallow the whole report.
 const out = process.env.BENCH_OUT
+
 if (out) {
   await writeFile(out, `${report}\n`)
 }
+
 console.log(report)

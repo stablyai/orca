@@ -40,6 +40,7 @@ describe('summarizeJobSteps', () => {
       startedAt: null,
       completedAt: null
     })
+
     const breakdown = summarizeJobSteps({
       steps: [
         step('Typecheck', 'completed', 'failure'),
@@ -49,6 +50,7 @@ describe('summarizeJobSteps', () => {
         step('Deploy', 'queued', null)
       ]
     })
+
     expect(breakdown.failed.map((step) => step.name)).toEqual(['Typecheck'])
     expect(breakdown.succeeded.map((step) => step.name)).toEqual(['Lint', 'Build'])
     expect(breakdown.skipped.map((step) => step.name)).toEqual(['Smoke test'])

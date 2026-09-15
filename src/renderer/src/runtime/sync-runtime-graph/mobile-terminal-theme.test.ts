@@ -26,6 +26,7 @@ describe('resolveMobileTerminalTheme contrast floor', () => {
       stateWith({ ...BASE, terminalMinimumContrastRatio: 1 }),
       true
     )
+
     expect(theme?.minimumContrastRatio).toBe(1)
   })
 

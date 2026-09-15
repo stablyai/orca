@@ -65,9 +65,11 @@ async function installRendererHeartbeat(page: Page): Promise<void> {
       __largePasteHeartbeat?: number
       __largePasteHeartbeatTimer?: number
     }
+
     if (global.__largePasteHeartbeatTimer !== undefined) {
       window.clearInterval(global.__largePasteHeartbeatTimer)
     }
+
     global.__largePasteHeartbeat = 0
     global.__largePasteHeartbeatTimer = window.setInterval(() => {
       global.__largePasteHeartbeat = (global.__largePasteHeartbeat ?? 0) + 1
@@ -78,6 +80,7 @@ async function installRendererHeartbeat(page: Page): Promise<void> {
 async function readRendererHeartbeat(page: Page): Promise<number> {
   return page.evaluate(() => {
     const global = window as unknown as { __largePasteHeartbeat?: number }
+
     return global.__largePasteHeartbeat ?? 0
   })
 }
@@ -87,6 +90,7 @@ async function stopRendererHeartbeat(page: Page): Promise<void> {
     const global = window as unknown as {
       __largePasteHeartbeatTimer?: number
     }
+
     if (global.__largePasteHeartbeatTimer !== undefined) {
       window.clearInterval(global.__largePasteHeartbeatTimer)
       delete global.__largePasteHeartbeatTimer
@@ -151,13 +155,16 @@ test.describe('large terminal paste responsiveness', () => {
       const writes = (await readTerminalPtyWriteEntries(electronApp)).filter(
         (entry) => entry.id === ptyId
       )
+
       expect(writes.length).toBeGreaterThan(1)
     } finally {
       await setTerminalPtyWriteDelay(electronApp, 0).catch(() => undefined)
       await stopRendererHeartbeat(orcaPage).catch(() => undefined)
+
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })

@@ -34,8 +34,11 @@ vi.mock('../pwsh', () => ({
 // tests run on non-Windows CI. The real resolver (which skips the Store App
 // Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -48,6 +51,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -59,6 +63,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -392,6 +397,7 @@ describe('createPtySubprocess', () => {
       } else {
         process.env.CODEX_HOME = previousCodexHome
       }
+
       if (previousOrcaCodexHome === undefined) {
         delete process.env.ORCA_CODEX_HOME
       } else {
@@ -429,6 +435,7 @@ describe('createPtySubprocess', () => {
       } else {
         process.env.CODEX_HOME = previousCodexHome
       }
+
       if (previousOrcaCodexHome === undefined) {
         delete process.env.ORCA_CODEX_HOME
       } else {
@@ -463,11 +470,13 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       if (previousCodexHome === undefined) {
         delete process.env.CODEX_HOME
       } else {
         process.env.CODEX_HOME = previousCodexHome
       }
+
       if (previousOrcaCodexHome === undefined) {
         delete process.env.ORCA_CODEX_HOME
       } else {

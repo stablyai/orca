@@ -11,15 +11,19 @@ import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -61,6 +65,7 @@ describe('SshConnection', () => {
     ssh2Mock.execBehavior = 'pending'
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn.exec('printf ready').catch((error: Error) => error)
 
@@ -83,6 +88,7 @@ describe('SshConnection', () => {
     const lateChannel = { close: vi.fn() }
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn
         .exec('printf ready')
@@ -103,6 +109,7 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     const channel = { close: vi.fn() }
+
     const execMock = vi
       .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
       .mockImplementationOnce((_cmd, cb) => {
@@ -112,6 +119,7 @@ describe('SshConnection', () => {
         )
       })
       .mockImplementation((_cmd, cb) => cb(undefined, channel))
+
     clientInstances[0].exec = execMock as never
 
     await expect(conn.exec('printf ready')).resolves.toBe(channel)
@@ -121,12 +129,15 @@ describe('SshConnection', () => {
   it('surfaces the session-limit error once open retries are exhausted', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
+
     const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 2
     })
+
     const execMock = vi
       .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
       .mockImplementation((_cmd, cb) => cb(refusal, undefined))
+
     clientInstances[0].exec = execMock as never
 
     await expect(conn.exec('printf ready')).rejects.toBe(refusal)
@@ -137,9 +148,11 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     const failure = new Error('Not connected')
+
     const execMock = vi
       .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
       .mockImplementation((_cmd, cb) => cb(failure, undefined))
+
     clientInstances[0].exec = execMock as never
 
     await expect(conn.exec('printf ready')).rejects.toBe(failure)
@@ -153,6 +166,7 @@ describe('SshConnection', () => {
     const controller = new AbortController()
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn
         .exec('printf ready', { signal: controller.signal })
@@ -177,6 +191,7 @@ describe('SshConnection', () => {
     await conn.connect()
     ssh2Mock.execBehavior = 'pending'
     const controller = new AbortController()
+
     const lateChannel = Object.assign(new EventEmitter(), {
       close: vi.fn(),
       resume: vi.fn(),
@@ -184,6 +199,7 @@ describe('SshConnection', () => {
     })
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn
         .exec('printf ready', { signal: controller.signal })
@@ -213,15 +229,19 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     const controller = new AbortController()
+
     const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 2
     })
+
     const execMock = vi
       .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
       .mockImplementation((_cmd, cb) => cb(refusal, undefined))
+
     clientInstances[0].exec = execMock as never
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn
         .exec('printf ready', { signal: controller.signal })
@@ -245,6 +265,7 @@ describe('SshConnection', () => {
     await conn.connect()
     ssh2Mock.execBehavior = 'pending'
     const controller = new AbortController()
+
     const lateChannel = Object.assign(new EventEmitter(), {
       close: vi.fn(),
       resume: vi.fn(),
@@ -277,6 +298,7 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     vi.useFakeTimers()
+
     try {
       ssh2Mock.sftpBehavior = 'pending'
       const controller = new AbortController()
@@ -286,6 +308,7 @@ describe('SshConnection', () => {
         .sftp(controller.signal)
         .then(() => 'opened')
         .catch((error: Error) => error.name)
+
       await vi.advanceTimersByTimeAsync(0)
       controller.abort()
       pendingSftpCallback?.(undefined, lateSftp)
@@ -307,6 +330,7 @@ describe('SshConnection', () => {
     ssh2Mock.sftpBehavior = 'pending'
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn.sftp().catch((error: Error) => error)
 
@@ -327,6 +351,7 @@ describe('SshConnection', () => {
     const lateSftp = { end: vi.fn() }
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn
         .sftp()
@@ -371,6 +396,7 @@ describe('SshConnection', () => {
     const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
 
     vi.useFakeTimers()
+
     try {
       const outcomePromise = conn
         .sftp({ signal: controller.signal })

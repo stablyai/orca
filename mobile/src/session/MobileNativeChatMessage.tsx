@@ -33,6 +33,7 @@ function Prose({
         </Text>
       )
     }
+
     return (
       <MobileMarkdown
         content={block.text}
@@ -42,10 +43,12 @@ function Prose({
       />
     )
   }
+
   if (isImageRefBlock(block)) {
     // A local preview (composer echo) or real URL renders as a thumbnail; a bare
     // host path (not loadable on the device) falls back to a text placeholder.
     const uri = block.url ?? block.path
+
     if (isRenderableImageUri(uri)) {
       return (
         <Image
@@ -56,12 +59,14 @@ function Prose({
         />
       )
     }
+
     return (
       <NativeText style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
         🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
       </NativeText>
     )
   }
+
   return null
 }
 
@@ -101,9 +106,11 @@ function MobileNativeChatMessageImpl({
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
+
   const activeCall = structuredActivityUi
     ? selectActiveToolCall(tools, { activeTurnIsWorking })
     : null
+
   // A completed turn's activity belongs behind the turn-status caret. Leaving the
   // grouped row visible made a failed child command read as a failed response.
   // The composer's global Tools toggle still overrides this, or it would silently
@@ -114,6 +121,7 @@ function MobileNativeChatMessageImpl({
     activeTurnIsWorking === false &&
     !turnExpanded &&
     !toolsExpanded
+
   const showToolRun = tools.length > 0 && !settledToolsHidden
 
   return (

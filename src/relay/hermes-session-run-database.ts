@@ -24,19 +24,24 @@ type NodeSqliteDatabaseSync = new (
 ) => SqliteDatabase
 
 const requireOptional = createRequire(__filename)
+
 let databaseConstructor: DatabaseConstructor | null | undefined
 
 function getDatabaseConstructor(): DatabaseConstructor | null {
   if (databaseConstructor !== undefined) {
     return databaseConstructor
   }
+
   try {
     const loaded = requireOptional('node:sqlite') as { DatabaseSync?: NodeSqliteDatabaseSync }
     const DatabaseSync = loaded.DatabaseSync
+
     if (typeof DatabaseSync !== 'function') {
       databaseConstructor = null
+
       return databaseConstructor
     }
+
     const SqliteDatabaseSync = DatabaseSync
     databaseConstructor = class RelaySqliteDatabase {
       private readonly db: SqliteDatabase
@@ -48,6 +53,7 @@ function getDatabaseConstructor(): DatabaseConstructor | null {
         if (options.fileMustExist && !existsSync(path)) {
           throw new Error(`SQLite database does not exist: ${path}`)
         }
+
         this.db = new SqliteDatabaseSync(path, {
           readOnly: options.readonly,
           timeout: options.timeout
@@ -65,6 +71,7 @@ function getDatabaseConstructor(): DatabaseConstructor | null {
   } catch {
     databaseConstructor = null
   }
+
   return databaseConstructor
 }
 
@@ -76,7 +83,9 @@ function runAtFromUnixSeconds(value: unknown): string | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null
   }
+
   const date = new Date(value * 1000)
+
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
@@ -84,22 +93,26 @@ function formatSessionMessages(messages: Record<string, unknown>[]): string | nu
   if (messages.length === 0) {
     return null
   }
+
   return messages
     .map((message) => {
       const role = typeof message.role === 'string' ? message.role : 'message'
       const content = typeof message.content === 'string' ? message.content.trim() : ''
       const toolName = typeof message.tool_name === 'string' ? message.tool_name.trim() : ''
+
       const reasoning =
         typeof message.reasoning_content === 'string'
           ? message.reasoning_content.trim()
           : typeof message.reasoning === 'string'
             ? message.reasoning.trim()
             : ''
+
       const parts = [
         `## ${role}${toolName ? ` / ${toolName}` : ''}`,
         reasoning ? `### Reasoning\n\n${reasoning}` : null,
         content || '(empty)'
       ].filter(Boolean)
+
       return parts.join('\n\n')
     })
     .join('\n\n---\n\n')
@@ -109,14 +122,19 @@ export function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[]
   if (!existsSync(HERMES_STATE_DB)) {
     return []
   }
+
   const Database = getDatabaseConstructor()
+
   if (!Database) {
     return []
   }
+
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
+
     try {
       const pattern = `cron\\_${escapeSqlLike(jobId)}\\_%`
+
       const rows = db
         .prepare(
           `SELECT id, started_at
@@ -125,8 +143,10 @@ export function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[]
             ORDER BY started_at DESC`
         )
         .all(pattern) as Record<string, unknown>[]
+
       return rows.map((row) => {
         const runId = typeof row.id === 'string' ? row.id : `${jobId}:${String(row.started_at)}`
+
         return {
           kind: 'session',
           id: runId,
@@ -147,12 +167,16 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
   if (!existsSync(HERMES_STATE_DB)) {
     return null
   }
+
   const Database = getDatabaseConstructor()
+
   if (!Database) {
     return null
   }
+
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
+
     try {
       const row = db
         .prepare(
@@ -162,9 +186,11 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
             WHERE id = ?`
         )
         .get(runId) as Record<string, unknown> | undefined
+
       if (!row) {
         return null
       }
+
       const messages = db
         .prepare(
           `SELECT role, content, tool_name, reasoning, reasoning_content
@@ -173,18 +199,22 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
             ORDER BY timestamp, id`
         )
         .all(runId) as Record<string, unknown>[]
+
       const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null
       const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
       const messageCount = typeof row.message_count === 'number' ? row.message_count : null
+
       const tokenCount =
         (typeof row.input_tokens === 'number' ? row.input_tokens : 0) +
         (typeof row.output_tokens === 'number' ? row.output_tokens : 0)
+
       const summaryParts = [
         title,
         model ? `Model: ${model}` : null,
         messageCount !== null ? `${messageCount} messages` : null,
         tokenCount > 0 ? `${tokenCount} tokens` : null
       ].filter(Boolean)
+
       return {
         id: runId,
         job_id: jobId,

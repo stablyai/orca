@@ -34,6 +34,7 @@ export function resolveProvisionalHostedReviewProvider(input: {
   if (input.hostedReview?.provider && supportsHostedReviewCreation(input.hostedReview.provider)) {
     return input.hostedReview.provider
   }
+
   if (
     input.hostedReviewCreationState &&
     input.activeRepoId === input.hostedReviewCreationState.repoId &&
@@ -41,21 +42,27 @@ export function resolveProvisionalHostedReviewProvider(input: {
   ) {
     return input.hostedReviewCreationState.data.provider
   }
+
   if (input.linkedGitLabMR != null) {
     return 'gitlab'
   }
+
   if (input.linkedAzureDevOpsPR != null) {
     return 'azure-devops'
   }
+
   if (input.linkedGiteaPR != null) {
     return 'gitea'
   }
+
   if (input.linkedGitHubPR != null || input.fallbackGitHubPR != null) {
     return 'github'
   }
+
   if (input.remoteInferredProvider && supportsHostedReviewCreation(input.remoteInferredProvider)) {
     return input.remoteInferredProvider
   }
+
   return 'github'
 }
 
@@ -65,7 +72,9 @@ function shouldOfferCreatePrHeaderChrome(
   if (!supportsHostedReviewCreation(hostedReviewCreation?.provider)) {
     return false
   }
+
   const blockedReason = hostedReviewCreation?.blockedReason
+
   return blockedReason !== 'existing_review' && blockedReason !== 'unsupported_provider'
 }
 
@@ -77,6 +86,7 @@ function buildCreatePrHeaderAction(
   const copy = localizedHostedReviewCopy(
     resolveSupportedHostedReviewCopyProvider(hostedReviewCreation.provider)
   )
+
   return {
     kind: 'create_pr',
     label: translate(
@@ -96,6 +106,7 @@ export function resolveDisabledCreatePrHeaderAction(
   >
 ): PrimaryAction | null {
   const { hostedReviewCreation } = inputs
+
   if (!shouldOfferCreatePrHeaderChrome(hostedReviewCreation)) {
     return null
   }
@@ -105,6 +116,7 @@ export function resolveDisabledCreatePrHeaderAction(
   )
 
   let title: string
+
   if (inputs.isCommitting) {
     title = translate(
       'auto.components.right.sidebar.source.control.primary.action.16aee3a5c1',
@@ -187,8 +199,10 @@ export function resolveDisabledCreatePrHeaderAction(
 
   const blockedByBusyState =
     inputs.isCommitting || inputs.isRemoteOperationActive || inputs.hasUnresolvedConflicts
+
   const disabled =
     blockedByBusyState || !canClickBlockedCreateReviewReason(hostedReviewCreation.blockedReason)
+
   return buildCreatePrHeaderAction(hostedReviewCreation, title, disabled)
 }
 
@@ -227,12 +241,15 @@ export function resolveCreatePrIntentPrimaryAction(
     branchCommitsAhead: inputs.branchCommitsAhead,
     hasCurrentBranch: inputs.hasCurrentBranch
   })
+
   if (!createPrIntent.eligible) {
     return null
   }
+
   const copy = localizedHostedReviewCopy(
     resolveSupportedHostedReviewCopyProvider(inputs.hostedReviewCreation?.provider)
   )
+
   return {
     kind: 'create_pr_intent',
     label: translate(
@@ -255,9 +272,11 @@ function resolveLoadingCreatePrHeaderAction(
   if (!shouldOfferCreatePrHeaderChrome(hostedReviewCreation)) {
     return null
   }
+
   const copy = localizedHostedReviewCopy(
     resolveSupportedHostedReviewCopyProvider(hostedReviewCreation.provider)
   )
+
   return buildCreatePrHeaderAction(
     hostedReviewCreation,
     translate(
@@ -286,6 +305,7 @@ export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): Primar
     const copy = localizedHostedReviewCopy(
       resolveSupportedHostedReviewCopyProvider(inputs.hostedReviewCreation.provider)
     )
+
     return {
       kind: 'create_pr',
       label: translate(
@@ -303,6 +323,7 @@ export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): Primar
   }
 
   const createPrIntent = resolveCreatePrIntentPrimaryAction(inputs)
+
   if (createPrIntent) {
     return createPrIntent
   }

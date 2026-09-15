@@ -28,6 +28,7 @@ type DetectedBrowserEntry = {
   profiles: { name: string; directory: string }[]
   selectedProfile: string
 }
+
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
 import { translate } from '@/i18n/i18n'
 
@@ -80,6 +81,7 @@ export function BrowserToolbarMenuDropdown({
       <DropdownMenuContent align="end" className="w-56">
         {allProfiles.map((profile) => {
           const isSelectedProfile = profile.id === effectiveProfileId
+
           return (
             <DropdownMenuItem
               key={profile.id}

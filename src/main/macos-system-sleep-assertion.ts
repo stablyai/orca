@@ -5,6 +5,7 @@ export const MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS = 30_000
 type Logger = Pick<Console, 'debug' | 'warn'>
 
 type CaffeinateErrorListener = (error: Error) => void
+
 type CaffeinateExitListener = (code: number | null, signal: NodeJS.Signals | null) => void
 
 type CaffeinateProcess = {
@@ -57,15 +58,19 @@ export class MacosSystemSleepAssertion {
     if (this.platform !== 'darwin') {
       return false
     }
+
     if (this.child) {
       return true
     }
+
     if (this.retryNotBefore !== null && this.now() < this.retryNotBefore) {
       this.scheduleRetry()
+
       return false
     }
 
     let child: CaffeinateProcess
+
     try {
       child = this.spawn('/usr/bin/caffeinate', ['-i', '-s'], {
         stdio: 'ignore',
@@ -73,19 +78,23 @@ export class MacosSystemSleepAssertion {
       })
     } catch (error) {
       this.handleFailure('spawn-error', reason, error)
+
       return false
     }
 
     this.child = child
+
     const onError: CaffeinateErrorListener = (error) => {
       this.handleChildFailure(child, `error:${String(error.message)}`, 'error', reason, error)
     }
+
     const onExit: CaffeinateExitListener = (code, signal) => {
       this.handleChildFailure(child, `exit:${String(code)}:${String(signal)}`, 'exit', reason, {
         code,
         signal
       })
     }
+
     this.childCleanups.set(child, () => {
       child.off('error', onError)
       child.off('exit', onExit)
@@ -94,19 +103,23 @@ export class MacosSystemSleepAssertion {
     child.on('exit', onExit)
     this.resetRetrySuppression()
     this.resetFailureStreak()
+
     return true
   }
 
   stop(_reason: string): void {
     this.resetRetrySuppression()
     this.resetFailureStreak()
+
     if (!this.child) {
       return
     }
+
     const child = this.child
     this.child = null
     this.intentionalStops.add(child)
     this.detachChildListeners(child)
+
     try {
       child.kill()
     } catch (error) {
@@ -130,25 +143,33 @@ export class MacosSystemSleepAssertion {
     details: unknown
   ): void {
     this.detachChildListeners(child)
+
     if (this.intentionalStops.has(child)) {
       this.intentionalStops.delete(child)
+
       return
     }
+
     if (this.reportedFailures.has(child)) {
       return
     }
+
     this.reportedFailures.add(child)
+
     if (this.child === child) {
       this.child = null
     }
+
     this.handleFailure(failureKey, startReason, details, failureType)
   }
 
   private detachChildListeners(child: CaffeinateProcess): void {
     const cleanup = this.childCleanups.get(child)
+
     if (!cleanup) {
       return
     }
+
     cleanup()
     this.childCleanups.delete(child)
   }
@@ -176,10 +197,13 @@ export class MacosSystemSleepAssertion {
       failureType,
       details
     }
+
     if (this.lastFailureKey === failureKey && this.warnedForLastFailure) {
       this.logger.debug('[agent-awake] macOS system sleep assertion failed repeatedly', payload)
+
       return
     }
+
     this.lastFailureKey = failureKey
     this.warnedForLastFailure = true
     this.logger.warn('[agent-awake] macOS system sleep assertion failed', payload)
@@ -189,11 +213,13 @@ export class MacosSystemSleepAssertion {
     if (this.retryNotBefore === null || this.retryTimer) {
       return
     }
+
     const retryDelay = Math.max(0, this.retryNotBefore - this.now())
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       this.onUnexpectedFailure('macos-assertion-retry')
     }, retryDelay)
+
     if (typeof this.retryTimer.unref === 'function') {
       this.retryTimer.unref()
     }
@@ -201,9 +227,11 @@ export class MacosSystemSleepAssertion {
 
   private resetRetrySuppression(): void {
     this.retryNotBefore = null
+
     if (!this.retryTimer) {
       return
     }
+
     clearTimeout(this.retryTimer)
     this.retryTimer = null
   }

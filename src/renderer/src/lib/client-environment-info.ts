@@ -8,6 +8,7 @@ import { getRendererAppPlatform } from './renderer-app-platform'
 export async function resolveClientEnvironmentInfo(): Promise<ClientEnvironmentInfo> {
   const platformInfo = resolvePlatformInfo()
   const appVersion = await resolveAppVersion()
+
   return {
     appVersion,
     platform: platformInfo?.platform ?? resolveFallbackPlatform(),
@@ -40,11 +41,13 @@ export async function resolveClientEnvironmentFooter(): Promise<string> {
 async function resolveAppVersion(): Promise<string> {
   try {
     const version = await window.api?.updater?.getVersion?.()
+
     if (typeof version === 'string' && version.trim()) {
       return version.trim()
     }
   } catch {
     // Best-effort: feedback/error copy should still show OS details.
   }
+
   return 'unknown'
 }

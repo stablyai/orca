@@ -61,21 +61,27 @@ export function resolveNativeChatSkillDiscoveryCwd(
   terminalTabId: string
 ): string | null {
   const found = findNativeChatTab(state, terminalTabId)
+
   if (!found) {
     return null
   }
+
   // Why: the agent runs where its pane started. A pane launched in a
   // subdirectory must not scan (or share a cache key with) the worktree root.
   const startupCwd = found.tab.startupCwd?.trim()
+
   if (startupCwd) {
     return startupCwd
   }
+
   for (const worktrees of Object.values(state.worktreesByRepo)) {
     const worktree = worktrees.find((entry) => entry.id === found.worktreeId)
+
     if (worktree) {
       return worktree.path
     }
   }
+
   return null
 }
 
@@ -84,10 +90,13 @@ export function resolveNativeChatSkillDiscoveryContext(
   terminalTabId: string
 ): NativeChatSkillDiscoveryContext | null {
   const worktreeId = findNativeChatTab(state, terminalTabId)?.worktreeId ?? null
+
   if (!worktreeId) {
     return null
   }
+
   const workspaceScope = parseWorkspaceKey(worktreeId)
+
   const cwd =
     resolveNativeChatSkillDiscoveryCwd(state, terminalTabId) ??
     (workspaceScope?.type === 'folder'
@@ -95,12 +104,14 @@ export function resolveNativeChatSkillDiscoveryContext(
           (workspace) => workspace.id === workspaceScope.folderWorkspaceId
         )?.folderPath
       : null)
+
   if (!cwd) {
     return null
   }
 
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   const parsedHost = parseExecutionHostId(hostId)
+
   if (parsedHost?.kind === 'ssh') {
     return {
       key: JSON.stringify(['ssh', hostId, cwd]),
@@ -112,21 +123,26 @@ export function resolveNativeChatSkillDiscoveryContext(
   }
 
   const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   // Why: a selected global runtime is not proof that it owns this pane. Modern
   // panes carry an owner stamp; ambiguous legacy panes stay not-ready.
   if (parsedHost?.kind === 'runtime' && !runtimeEnvironmentId) {
     return null
   }
+
   const runtimeTarget: RuntimeClientTarget = runtimeEnvironmentId
     ? { kind: 'environment', environmentId: runtimeEnvironmentId }
     : { kind: 'local' }
+
   const projectRuntime = runtimeEnvironmentId
     ? undefined
     : getLocalProjectExecutionRuntimeContext(state, worktreeId)
+
   const projectRuntimeKey =
     projectRuntime?.status === 'resolved'
       ? projectRuntime.runtime.cacheKey
       : projectRuntime?.repair.cacheKey
+
   return {
     key: JSON.stringify([
       runtimeTarget.kind,
@@ -161,9 +177,11 @@ function findTerminalTab(
 ): { worktreeId: string; tab: NativeChatSkillTab } | null {
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const tab = tabs.find((entry) => entry.id === terminalTabId)
+
     if (tab) {
       return { worktreeId, tab }
     }
   }
+
   return null
 }

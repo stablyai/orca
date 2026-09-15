@@ -6,10 +6,12 @@ import { isInTable, selectionCell } from '@tiptap/pm/tables'
 function isEmptyCell(cell: PmNode): boolean {
   for (let index = 0; index < cell.childCount; index += 1) {
     const child = cell.child(index)
+
     if (!child.isTextblock || child.content.size > 0) {
       return false
     }
   }
+
   return true
 }
 
@@ -23,6 +25,7 @@ function isEmptyRow(row: PmNode): boolean {
       return false
     }
   }
+
   return row.childCount > 0
 }
 
@@ -34,6 +37,7 @@ function isEmptyRow(row: PmNode): boolean {
  */
 export function handleRichMarkdownTableBackspace(editor: Editor): boolean {
   const { state } = editor
+
   if (!state.selection.empty || !isInTable(state)) {
     return false
   }
@@ -42,6 +46,7 @@ export function handleRichMarkdownTableBackspace(editor: Editor): boolean {
   // row, node(-1) the table.
   const $cell = selectionCell(state)
   const cell = $cell.nodeAfter
+
   if (!cell || !isEmptyCell(cell)) {
     return false
   }
@@ -57,6 +62,7 @@ export function handleRichMarkdownTableBackspace(editor: Editor): boolean {
     // previous cell's text. Consume either way so ProseMirror never merges the
     // table into whatever precedes it.
     editor.commands.goToPreviousCell()
+
     return true
   }
 

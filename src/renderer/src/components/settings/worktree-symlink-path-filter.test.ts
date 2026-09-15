@@ -61,6 +61,7 @@ describe('worktree-symlink-path-filter', () => {
 
   it('rejects oversized pasted path queries before reading suggestion names', () => {
     const oversizedQuery = 'secret-symlink-path'.repeat(WORKTREE_SYMLINK_PATH_QUERY_MAX_BYTES)
+
     const suggestions = [
       {
         get name(): string {

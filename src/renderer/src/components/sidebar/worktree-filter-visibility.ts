@@ -26,6 +26,7 @@ export function worktreePassesSidebarFilters(
   const repoMap = getRepoMapFromState(state)
   const requestedHostId = executionHostId ? normalizeExecutionHostId(executionHostId) : null
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+
   return computeVisibleWorktrees(
     state.worktreesByRepo,
     [],
@@ -34,10 +35,13 @@ export function worktreePassesSidebarFilters(
     if (worktree.id !== worktreeId) {
       return false
     }
+
     if (!requestedHostId) {
       return true
     }
+
     const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+
     return normalizeExecutionHostId(hostId) === requestedHostId
   })
 }

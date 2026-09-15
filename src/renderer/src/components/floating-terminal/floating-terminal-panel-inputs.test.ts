@@ -6,10 +6,15 @@ import { createFloatingTerminalPanelInputsSelector } from './floating-terminal-p
 const OTHER_WORKTREE_ID = 'worktree-other'
 
 type State = Parameters<ReturnType<typeof createFloatingTerminalPanelInputsSelector>>[0]
+
 type TerminalTab = NonNullable<AppState['tabsByWorktree'][string]>[number]
+
 type BrowserTab = NonNullable<AppState['browserTabsByWorktree'][string]>[number]
+
 type TabGroup = NonNullable<AppState['groupsByWorktree'][string]>[number]
+
 type UnifiedTab = NonNullable<AppState['unifiedTabsByWorktree'][string]>[number]
+
 type OpenFile = AppState['openFiles'][number]
 
 function terminalTab(id: string, worktreeId: string = FLOATING_TERMINAL_WORKTREE_ID): TerminalTab {
@@ -48,15 +53,18 @@ describe('createFloatingTerminalPanelInputsSelector', () => {
   it('ignores unrelated workspace collection churn while the panel is retained', () => {
     const onExpandedTabVisited = vi.fn()
     const onOpenFileVisited = vi.fn()
+
     const select = createFloatingTerminalPanelInputsSelector({
       onExpandedTabVisited,
       onOpenFileVisited
     })
+
     const floatingTab = terminalTab('floating-terminal')
     const floatingBrowser = browserTab('floating-browser')
     const floatingGroup = group('floating-group')
     const floatingUnifiedTab = unifiedTab('floating-unified')
     const floatingFile = openFile('floating-file', FLOATING_TERMINAL_WORKTREE_ID)
+
     const initial = state({
       browserTabsByWorktree: {
         [FLOATING_TERMINAL_WORKTREE_ID]: [floatingBrowser],
@@ -77,7 +85,9 @@ describe('createFloatingTerminalPanelInputsSelector', () => {
         [OTHER_WORKTREE_ID]: [unifiedTab('other-unified', OTHER_WORKTREE_ID)]
       }
     })
+
     const first = select(initial)
+
     const afterUnrelatedWrites = state({
       browserTabsByWorktree: {
         ...initial.browserTabsByWorktree,
@@ -173,6 +183,7 @@ describe('createFloatingTerminalPanelInputsSelector', () => {
 
   it('excludes non-floating files and pane expansion state', () => {
     const select = createFloatingTerminalPanelInputsSelector()
+
     const selected = select(
       state({
         expandedPaneByTabId: { floating: false, other: true },

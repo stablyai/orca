@@ -6,11 +6,13 @@ function dedupeWithComparator<T extends { path: string }>(
   platform: NodeJS.Platform
 ): T[] {
   const unique: T[] = []
+
   for (const worktree of worktrees) {
     if (!unique.some((existing) => areWorktreePathsEqual(existing.path, worktree.path, platform))) {
       unique.push(worktree)
     }
   }
+
   return unique
 }
 
@@ -46,9 +48,11 @@ describe('dedupeWorktreesByPath', () => {
 
   it('reads each path once for a large unique list', () => {
     let pathReads = 0
+
     const worktrees = Array.from({ length: 1_000 }, (_, index) => ({
       get path(): string {
         pathReads += 1
+
         return `/workspaces/feature-${index}`
       }
     }))

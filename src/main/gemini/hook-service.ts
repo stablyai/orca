@@ -109,6 +109,7 @@ export class GeminiHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'gemini',
@@ -122,20 +123,25 @@ export class GeminiHookService {
     const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
+
     for (const eventName of GEMINI_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
+
       const hasCommand = definitions.some((definition) =>
         (definition.hooks ?? []).some((hook) => hook.command === command)
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
         missing.push(eventName)
       }
     }
+
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0) {
       state = 'installed'
       detail = null
@@ -146,6 +152,7 @@ export class GeminiHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: 'gemini', state, configPath, managedHooksPresent, detail }
   }
 
@@ -153,6 +160,7 @@ export class GeminiHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'gemini',
@@ -176,10 +184,13 @@ export class GeminiHookService {
       if (managedEvents.has(eventName)) {
         continue
       }
+
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -190,16 +201,19 @@ export class GeminiHookService {
     for (const eventName of GEMINI_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
+
       const definition: HookDefinition = {
         // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
         hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
       }
+
       nextHooks[eventName] = [...cleaned, definition]
     }
 
     config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 
@@ -207,8 +221,10 @@ export class GeminiHookService {
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.gemini/settings.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/gemini-hook.sh`
+
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
       if (!config) {
         return {
           agent: 'gemini',
@@ -229,10 +245,13 @@ export class GeminiHookService {
         if (managedEvents.has(eventName)) {
           continue
         }
+
         if (!Array.isArray(definitions)) {
           continue
         }
+
         const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
         if (cleaned.length === 0) {
           delete nextHooks[eventName]
         } else {
@@ -243,12 +262,15 @@ export class GeminiHookService {
       for (const eventName of GEMINI_EVENTS) {
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         const cleaned = removeManagedCommands(current, isManagedCommand)
+
         const definition: HookDefinition = {
           // Why: Gemini's hook `timeout` unit is milliseconds, unlike Claude/Codex.
           hooks: [buildManagedCommandHook(command, MANAGED_HOOK_TIMEOUT_MILLISECONDS)]
         }
+
         nextHooks[eventName] = [...cleaned, definition]
       }
+
       config.hooks = nextHooks
 
       // Why: write the script before settings.json so an interrupted install never points at a missing script.
@@ -277,6 +299,7 @@ export class GeminiHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'gemini',
@@ -290,20 +313,25 @@ export class GeminiHookService {
     const nextHooks = { ...config.hooks }
     // Why: match by filename so remove() sweeps stale entries even after the script path moved.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       // Why: fail open on malformed (non-array) entries so a broken user config never blocks uninstall.
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
         nextHooks[eventName] = cleaned
       }
     }
+
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 }

@@ -15,7 +15,9 @@ type IncludeExpansionContext = {
 }
 
 const MAX_INCLUDE_GLOB_MATCHES = 256
+
 const MAX_INCLUDE_FILE_BYTES = 1024 * 1024
+
 const TARGET_DEPENDENT_INCLUDE_TOKENS = new Set(['h', 'n', 'p', 'r', 'j', 'k', 'C'])
 
 export function expandSshConfigIncludes(configPath: string): string {
@@ -43,11 +45,13 @@ function expandSshConfigFile(
   activeStack: string[]
 ): string[] {
   const canonicalPath = getCanonicalPath(filePath)
+
   if (!canonicalPath || activeStack.includes(canonicalPath)) {
     return []
   }
 
   const rawContent = readCachedFile(canonicalPath, context)
+
   if (rawContent === null) {
     return []
   }
@@ -57,6 +61,7 @@ function expandSshConfigFile(
 
   for (const line of rawContent.split(/\r?\n/)) {
     const includeArgs = parseIncludeDirective(line)
+
     if (!includeArgs) {
       expandedLines.push(line)
       continue
@@ -82,6 +87,7 @@ function appendExpandedLines(target: string[], lines: readonly string[]): void {
 
 function readCachedFile(filePath: string, context: IncludeExpansionContext): string | null {
   const cached = context.cache.get(filePath)
+
   if (cached !== undefined) {
     return cached
   }
@@ -93,6 +99,7 @@ function readCachedFile(filePath: string, context: IncludeExpansionContext): str
   try {
     const content = readFileSync(filePath, 'utf-8')
     context.cache.set(filePath, content)
+
     return content
   } catch {
     return null
@@ -101,16 +108,19 @@ function readCachedFile(filePath: string, context: IncludeExpansionContext): str
 
 function parseIncludeDirective(line: string): string[] | null {
   const trimmed = line.trimStart()
+
   if (!trimmed || trimmed.startsWith('#')) {
     return null
   }
 
   const match = trimmed.match(/^([^=\s]+)(?:\s*=\s*|\s+)(.*)$/)
+
   if (!match || match[1].toLowerCase() !== 'include') {
     return null
   }
 
   const args = splitQuotedArguments(match[2])
+
   return args.length > 0 ? args : null
 }
 
@@ -142,6 +152,7 @@ function splitQuotedArguments(input: string): string[] {
         args.push(current)
         current = ''
       }
+
       continue
     }
 
@@ -157,25 +168,31 @@ function splitQuotedArguments(input: string): string[] {
 
 function resolveIncludePaths(pattern: string, context: IncludeExpansionContext): string[] {
   const withEnv = expandEnvironmentVariables(pattern)
+
   if (withEnv === null) {
     return []
   }
 
   const withTokens = expandIncludeTokens(withEnv, context)
+
   if (withTokens === null) {
     return []
   }
 
   const absolutePattern = resolveIncludePatternPath(withTokens, context)
+
   if (hasGlobPattern(absolutePattern)) {
     try {
       const matches = globSync(absolutePattern).sort((left, right) => left.localeCompare(right))
+
       if (matches.length > MAX_INCLUDE_GLOB_MATCHES) {
         console.warn(
           `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files; processing first ${MAX_INCLUDE_GLOB_MATCHES}`
         )
+
         return matches.slice(0, MAX_INCLUDE_GLOB_MATCHES)
       }
+
       return matches
     } catch {
       return []
@@ -187,12 +204,16 @@ function resolveIncludePaths(pattern: string, context: IncludeExpansionContext):
 
 function expandEnvironmentVariables(input: string): string | null {
   let missing = false
+
   const expanded = input.replaceAll(/\$\{([^}]+)\}/g, (_, name: string) => {
     const value = process.env[name]
+
     if (value === undefined) {
       missing = true
+
       return ''
     }
+
     return value
   })
 
@@ -204,12 +225,14 @@ function expandIncludeTokens(input: string, context: IncludeExpansionContext): s
 
   for (let i = 0; i < input.length; i += 1) {
     const char = input[i]
+
     if (char !== '%') {
       output += char
       continue
     }
 
     const token = input[i + 1]
+
     if (!token) {
       output += char
       continue
@@ -241,6 +264,7 @@ function expandIncludeTokens(input: string, context: IncludeExpansionContext): s
       if (!context.uid) {
         return null
       }
+
       output += context.uid
       i += 1
       continue
@@ -267,9 +291,11 @@ function expandIncludeTokens(input: string, context: IncludeExpansionContext): s
 
 function resolveIncludePatternPath(input: string, context: IncludeExpansionContext): string {
   const pathApi = context.pathApi
+
   if (input === '~') {
     return context.home
   }
+
   if (input.startsWith('~/') || input.startsWith('~\\')) {
     return pathApi.join(context.home, input.slice(2))
   }
@@ -296,16 +322,21 @@ function getCanonicalPath(filePath: string): string | null {
 function isReadableRegularFile(filePath: string): boolean {
   try {
     const stats = statSync(filePath)
+
     if (!stats.isFile()) {
       console.warn(`[ssh] Skipping SSH config include "${filePath}": not a regular file`)
+
       return false
     }
+
     if (stats.size > MAX_INCLUDE_FILE_BYTES) {
       console.warn(
         `[ssh] Skipping SSH config include "${filePath}": size ${stats.size} exceeds ${MAX_INCLUDE_FILE_BYTES} bytes`
       )
+
       return false
     }
+
     return true
   } catch {
     return false
@@ -315,6 +346,7 @@ function isReadableRegularFile(filePath: string): boolean {
 function getCurrentUid(): string | undefined {
   try {
     const info = userInfo()
+
     if (typeof info.uid === 'number' && info.uid >= 0) {
       return String(info.uid)
     }
@@ -336,6 +368,7 @@ function getCurrentUid(): string | undefined {
 function getCurrentUser(): string {
   try {
     const info = userInfo()
+
     if (info.username) {
       return info.username
     }

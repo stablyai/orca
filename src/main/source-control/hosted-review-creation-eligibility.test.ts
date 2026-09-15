@@ -260,11 +260,13 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\nfork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/fork/main'
           ? { stdout: '', stderr: '' }
           : Promise.reject(Object.assign(new Error('missing ref'), { code: 1 }))
       }
+
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
@@ -289,9 +291,11 @@ describe('getHostedReviewCreationEligibility', () => {
         if (args[0] === 'remote') {
           return { stdout: `${remote}\nfork\n`, stderr: '' }
         }
+
         if (args[0] === 'show-ref' && args[1] === '--verify') {
           throw Object.assign(new Error('missing ref'), { code: 1 })
         }
+
         expect(args).toEqual(['show-ref', '--', 'main'])
         throw Object.assign(new Error('missing ref'), { code: 1 })
       })
@@ -310,11 +314,13 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/orphan/main'
           ? { stdout: '', stderr: '' }
           : Promise.reject(Object.assign(new Error('missing ref'), { code: 1 }))
       }
+
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
 
@@ -333,9 +339,11 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'orphan\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args[1] === '--verify') {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       expect(args).toEqual(['show-ref', '--', 'orphan/main'])
       throw Object.assign(new Error('missing ref'), { code: 1 })
     })
@@ -353,13 +361,17 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         expect(args).toEqual(['show-ref', '--', 'feature/fix'])
+
         return { stdout: 'abc123 refs/remotes/orphan/feature/fix\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -371,13 +383,17 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         expect(args).toEqual(['show-ref', '--', 'main'])
+
         return { stdout: 'abc123 refs/remotes/orphan/main\n', stderr: '' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -393,13 +409,17 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         expect(args).toEqual(['show-ref', '--', 'HEAD'])
+
         return { stdout: 'abc123 refs/remotes/fork/feature/HEAD\n', stderr: '' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -411,14 +431,17 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         return {
           stdout: 'abc123 refs/remotes/orphan-a/main\nabc123 refs/remotes/orphan-b/main\n'
         }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -434,9 +457,11 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'remote') {
         throw new Error('remote listing unavailable')
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -454,12 +479,15 @@ describe('getHostedReviewCreationEligibility', () => {
         if (args[0] === 'remote') {
           return { stdout: 'fork\n', stderr: '' }
         }
+
         if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
           throw Object.assign(new Error('missing ref'), { code: 1 })
         }
+
         if (args[0] === 'show-ref') {
           throw new Error(failure)
         }
+
         throw new Error(`unexpected git command: ${args.join(' ')}`)
       })
 
@@ -543,9 +571,11 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'feature/x\n', stderr: '' }
       }
+
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
+
       // symbolic-ref / for-each-ref resolve the base on the remote.
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
@@ -591,29 +621,37 @@ describe('getHostedReviewCreationEligibility', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: opts.symbolicRef ?? '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         if (opts.forEachThrows) {
           throw new Error('ssh: connect: connection refused')
         }
+
         const availableRefs = (opts.forEachRef ?? '')
           .split(/\r?\n/)
           .map((ref) => ref.trim())
           .filter(Boolean)
+
         const matches = availableRefs.filter((ref) => args.includes(ref))
+
         if (matches.length > 0) {
           return {
             stdout: `${matches.map((ref) => `abc ${ref}`).join('\n')}\n`,
             stderr: ''
           }
         }
+
         throw Object.assign(new Error('missing ref'), { code: 1 })
       }
+
       if (args[0] === 'rev-parse' && opts.revParseThrows) {
         throw new Error('unknown revision')
       }
+
       return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
     })
   }
@@ -768,6 +806,7 @@ describe('getHostedReviewCreationEligibility', () => {
         stderr: ''
       }))
     }
+
     getSshGitProviderMock.mockReturnValue(remoteGit)
 
     await expect(

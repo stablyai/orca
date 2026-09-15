@@ -9,6 +9,7 @@ import {
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 
 const LOCAL_PTY = 'pty-local-123'
+
 const REMOTE_PTY = 'remote:env-1@@term_abc'
 
 describe('isHostAuthoritativeLayout', () => {
@@ -331,6 +332,7 @@ describe('trackRetiredLeafIds', () => {
       previousLayoutLeafIds: new Set(['leaf-a']),
       layoutLeafIds: new Set(['leaf-a'])
     }
+
     expect(trackRetiredLeafIds({ ...args, mountedLeafIds: ['leaf-a', 'leaf-b'] })).toEqual(
       new Set(['leaf-b'])
     )
@@ -368,6 +370,7 @@ describe('host retirement that lands before the transport teardown', () => {
     // the layout bindings, the effect runs again and must close it then.
     const layout: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-a' }
     const mounted = ['leaf-a', 'leaf-b']
+
     const paneIdForLeaf = (leafId: string) =>
       leafId === 'leaf-a' ? 1 : leafId === 'leaf-b' ? 2 : null
 
@@ -377,6 +380,7 @@ describe('host retirement that lands before the transport teardown', () => {
       layoutLeafIds: new Set(['leaf-a']),
       mountedLeafIds: mounted
     })
+
     let removals = planTerminalLiveLayoutRemovals(layout, mounted, retired)
     expect(removals).toEqual(['leaf-b'])
     expect(

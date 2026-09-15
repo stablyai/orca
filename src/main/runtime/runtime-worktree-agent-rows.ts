@@ -4,6 +4,7 @@ import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+
 export type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
 
 type OrchestrationDisplay = {
@@ -32,21 +33,27 @@ export function attachRuntimeWorktreeAgentRows(args: {
   const { rowSources } = args
   const now = Date.now()
   const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
+
   for (const source of rowSources.values()) {
     const { worktreeId } = source
+
     if (!worktreeId) {
       continue
     }
+
     const summary = args.getSummary(
       args.summaries,
       args.pathIndex,
       args.missingWorktreeIds,
       worktreeId
     )
+
     if (!summary) {
       continue
     }
+
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
+
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
       parentPaneKey: orchestration?.parentPaneKey ?? null,
@@ -64,30 +71,39 @@ export function attachRuntimeWorktreeAgentRows(args: {
       updatedAt: source.updatedAt,
       ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {})
     }
+
     const rows = rowsByWorktree.get(summary.worktreeId)
+
     if (rows) {
       rows.push(row)
     } else {
       rowsByWorktree.set(summary.worktreeId, [row])
     }
   }
+
   for (const [worktreeId, rows] of rowsByWorktree) {
     rows.sort((a, b) => a.stateStartedAt - b.stateStartedAt)
     const summary = args.summaries.get(worktreeId)
+
     if (!summary) {
       continue
     }
+
     summary.agents = rows
     let hasForegroundWorkingAgent = false
     const monitoringSources: RuntimeWorktreeAgentSource[] = []
+
     for (const row of rows) {
       if (!isFreshNonDoneAgentStatus(row, now)) {
         continue
       }
+
       summary.hasHostSidebarActivity = true
+
       if (row.state === 'working') {
         if (row.workingMode === 'monitoring') {
           const source = rowSources.get(row.paneKey)
+
           if (source) {
             monitoringSources.push(source)
           }
@@ -98,12 +114,14 @@ export function attachRuntimeWorktreeAgentRows(args: {
         mergeWorktreeSummaryStatus(summary, 'permission')
       }
     }
+
     if (hasForegroundWorkingAgent || monitoringSources.length > 0) {
       const hasIndependentWorkingTerminal = (
         args.workingTerminalEvidenceByWorktreeId.get(worktreeId) ?? []
       ).some((evidence) =>
         monitoringSources.every((source) => !workingTerminalEvidenceMatchesSource(evidence, source))
       )
+
       mergeWorktreeSummaryStatus(
         summary,
         'working',
@@ -123,8 +141,10 @@ function workingTerminalEvidenceMatchesSource(
       Boolean(evidence.ptyId && source.ptyId && evidence.ptyId === source.ptyId)
     )
   }
+
   if (evidence.ptyId && source.ptyId) {
     return evidence.ptyId === source.ptyId
   }
+
   return Boolean(evidence.tabId && evidence.tabId === source.tabId)
 }

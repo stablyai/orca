@@ -14,7 +14,9 @@ import { PluginService, type PluginServiceOptions } from './plugin-service'
 import type { PluginWorkerFactory } from './plugin-worker-manager'
 
 const PLUGIN_COUNT = 20
+
 const SAMPLE_COUNT = 20
+
 // Real disk I/O, so the number moves with machine load: ~16-34ms idle, higher
 // when the suite saturates the box. Sized to catch an order-of-magnitude
 // regression rather than scheduling noise — the behavioral assertions below
@@ -22,11 +24,14 @@ const SAMPLE_COUNT = 20
 const STARTUP_P95_BUDGET_MS = 400
 
 let userDataPath = ''
+
 let markerPaths: string[] = []
+
 let consents: Record<string, string> = {}
 
 function dummyManifest(index: number): PluginManifest {
   const key = String.fromCharCode('A'.charCodeAt(0) + index)
+
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: `dummy-${index}`,
@@ -69,20 +74,24 @@ async function installDummy(index: number): Promise<{ pluginKey: string; markerP
     )
   ])
   consents[pluginKey] = fingerprintPluginConsent(manifest)
+
   return { pluginKey, markerPath }
 }
 
 function nearestRankP95(samples: readonly number[]): number {
   const sorted = [...samples].sort((left, right) => left - right)
+
   return sorted[Math.ceil(sorted.length * 0.95) - 1]!
 }
 
 describe('plugin startup budget', () => {
   beforeAll(async () => {
     userDataPath = await mkdtemp(join(tmpdir(), 'orca-plugin-startup-budget-'))
+
     const installed = await Promise.all(
       Array.from({ length: PLUGIN_COUNT }, (_, index) => installDummy(index))
     )
+
     markerPaths = installed.map(({ markerPath }) => markerPath)
   })
 
@@ -94,6 +103,7 @@ describe('plugin startup budget', () => {
     const workerFactory = vi.fn<PluginWorkerFactory>(async () => {
       throw new Error('startup must not create a plugin worker')
     })
+
     const options: PluginServiceOptions = {
       userDataPath,
       hostVersion: '1.4.0',
@@ -103,6 +113,7 @@ describe('plugin startup budget', () => {
       getDevPluginPaths: () => [],
       workerFactory
     }
+
     const measure = async (): Promise<number> => {
       const startedAt = performance.now()
       const service = new PluginService(options)
@@ -110,19 +121,23 @@ describe('plugin startup budget', () => {
       const elapsedMs = performance.now() - startedAt
       expect(service.getDiscovered()).toHaveLength(PLUGIN_COUNT)
       await service.dispose()
+
       return elapsedMs
     }
 
     await measure()
     const samples: number[] = []
+
     for (let index = 0; index < SAMPLE_COUNT; index += 1) {
       samples.push(await measure())
     }
 
     const p95 = nearestRankP95(samples)
+
     if (process.env.ORCA_PLUGIN_STARTUP_BUDGET_REPORT === '1') {
       process.stdout.write(`plugin startup P95 ${p95.toFixed(2)}ms (${SAMPLE_COUNT} samples)\n`)
     }
+
     expect(workerFactory).not.toHaveBeenCalled()
     await Promise.all(
       markerPaths.map((markerPath) =>

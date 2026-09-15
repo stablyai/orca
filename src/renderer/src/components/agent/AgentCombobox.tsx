@@ -56,6 +56,7 @@ type AgentComboboxProps = {
 }
 
 const BLANK_VALUE = '__none__'
+
 const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 type ItemRenderArgs = {
@@ -100,6 +101,7 @@ function AgentDefaultContextMenu({
   if (!onSetDefault) {
     return children
   }
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
@@ -138,6 +140,7 @@ function renderItem({
       <AgentIconLabel icon={icon} label={label} />
     </CommandItem>
   )
+
   return (
     // Why: z-[70] sits above PopoverContent's z-[60] so the right-click menu
     // renders in front of the still-open combobox popover instead of behind it.
@@ -175,12 +178,15 @@ export default function AgentCombobox({
     () => (value ? (agents.find((agent) => agent.id === value) ?? null) : null),
     [agents, value]
   )
+
   const selectedDefaultPreference = value ?? (allowBlankTerminal ? 'blank' : null)
   const filteredAgents = useMemo(() => searchAgentPickerEntries(agents, query), [agents, query])
+
   const blankMatchesQuery = useMemo(
     () => allowBlankTerminal && agentPickerBlankTerminalMatches(query),
     [allowBlankTerminal, query]
   )
+
   const activeCommandValue = getAgentPickerCommandValue({
     blankValue: BLANK_VALUE,
     blankMatchesQuery,
@@ -188,16 +194,19 @@ export default function AgentCombobox({
     filteredAgents,
     rawQuery: query
   })
+
   const resolvedCommandState = resolveAgentComboboxCommandState(
     commandState,
     open,
     activeCommandValue
   )
+
   if (resolvedCommandState !== commandState) {
     // Why: cmdk highlights should follow query/result changes before paint,
     // while manual hover selection remains intact until the active candidate changes.
     setCommandState(resolvedCommandState)
   }
+
   const commandValue = resolvedCommandState.commandValue
 
   const cancelFocusFrame = useCallback((): void => {
@@ -212,6 +221,7 @@ export default function AgentCombobox({
       if (node === null) {
         cancelFocusFrame()
       }
+
       inputRef.current = node
     },
     [cancelFocusFrame]
@@ -226,9 +236,11 @@ export default function AgentCombobox({
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const searchInput = inputRef.current
+
       if (!searchInput) {
         return
       }
+
       searchInput.focus()
       // Why: when a printable keydown on the trigger seeded the query, the user
       // expects the next keystroke to append to what they typed — not replace
@@ -241,10 +253,13 @@ export default function AgentCombobox({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (nextOpen) {
         setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
+
         return
       }
+
       cancelFocusFrame()
       setQuery('')
     },
@@ -271,6 +286,7 @@ export default function AgentCombobox({
       if (open) {
         return
       }
+
       if (
         event.key === 'Enter' &&
         onTriggerEnter &&
@@ -281,17 +297,22 @@ export default function AgentCombobox({
       ) {
         event.preventDefault()
         onTriggerEnter()
+
         return
       }
+
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setOpen(true)
+
         return
       }
+
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
+
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
         setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))

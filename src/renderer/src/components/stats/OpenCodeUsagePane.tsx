@@ -13,6 +13,7 @@ import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: OpenCodeUsageRange[] = ['7d', '30d', '90d', 'all']
+
 const SCOPE_OPTIONS: { value: OpenCodeUsageScope; label: string }[] = [
   {
     value: 'orca',
@@ -30,6 +31,7 @@ const SCOPE_OPTIONS: { value: OpenCodeUsageScope; label: string }[] = [
     }
   }
 ]
+
 const RANGE_LABELS: Record<OpenCodeUsageRange, string> = {
   get '7d'() {
     return translate('auto.components.stats.OpenCodeUsagePane.rangeLast7Days', 'Last 7 days')
@@ -74,6 +76,7 @@ export function OpenCodeUsagePane(): React.JSX.Element {
     'auto.components.stats.OpenCodeUsagePane.bea80ceae0',
     'OpenCode Usage Tracking'
   )
+
   const enableLabel = translate(
     'auto.components.stats.OpenCodeUsagePane.f04131b3be',
     'Enable OpenCode usage analytics'

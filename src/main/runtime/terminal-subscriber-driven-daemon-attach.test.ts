@@ -27,6 +27,7 @@ import {
 } from '../../shared/terminal-stream-protocol'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
+
 const PTY_ID = `${WORKTREE_ID}@@1a2b3c4d`
 
 type RuntimeInternals = {
@@ -66,6 +67,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
   const resizeCalls: [string, number, number][] = []
   let nextAttachBarrier: { promise: Promise<void>; result: boolean } | null = null
   let runtime: OrcaRuntimeService | null = null
+
   const controller = {
     write: () => true,
     kill: () => true,
@@ -82,36 +84,46 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
     hasRendererSerializer: () => false,
     getSize: (ptyId: string) => {
       const session = sessions.get(ptyId)
+
       return session ? { cols: session.cols, rows: session.rows } : null
     },
     resize: (ptyId: string, cols: number, rows: number) => {
       resizeCalls.push([ptyId, cols, rows])
+
       return true
     },
     attach: async (ptyId: string) => {
       attachCalls.push(ptyId)
       const barrier = nextAttachBarrier
       nextAttachBarrier = null
+
       if (barrier) {
         await barrier.promise
+
         if (!barrier.result) {
           return false
         }
       }
+
       const session = sessions.get(ptyId)
+
       // Attach-only: an absent session is refused, never created.
       if (!session) {
         return false
       }
+
       session.attached = true
+
       return true
     },
     serializeProviderBuffer: async (ptyId: string) => {
       const session = sessions.get(ptyId)
+
       if (!session || !opts.snapshotCapable) {
         // v19-style daemon: no authoritative snapshot (missing outputSequence).
         return null
       }
+
       return {
         data: session.screen,
         cols: session.cols,
@@ -121,6 +133,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
       }
     }
   }
+
   return {
     controller,
     sessions,
@@ -128,10 +141,13 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
     resizeCalls,
     deferNextAttach(result: boolean): () => void {
       let release!: () => void
+
       const promise = new Promise<void>((resolve) => {
         release = resolve
       })
+
       nextAttachBarrier = { promise, result }
+
       return release
     },
     bind(target: OrcaRuntimeService) {
@@ -141,10 +157,13 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
      *  but the daemon only emits for sessions this app has attached. */
     emitData(ptyId: string, data: string): boolean {
       const session = sessions.get(ptyId)
+
       if (!session?.attached) {
         return false
       }
+
       runtime?.onPtyData(ptyId, data, Date.now())
+
       return true
     }
   }
@@ -171,23 +190,28 @@ function setupNeverAttachedDaemonSession(opts: { snapshotCapable: boolean; scree
   const record = internals(runtime).recordPtyWorktree(PTY_ID, WORKTREE_ID, { connected: true })
   const handle = internals(runtime).issuePtyHandle(record)
   const mountSpy = vi.spyOn(runtime, 'requestRendererTerminalTabMount')
+
   return { runtime, model, handle, mountSpy }
 }
 
 function startMultiplex(runtime: OrcaRuntimeService, connectionId = 'conn-desktop') {
   const messages: { result?: { type?: string; streamId?: number | null } }[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
   const handlers = new Map<
     number,
     (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
   >()
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
   const request: RpcRequest = {
     id: 'req-1',
     authToken: 'tok',
     method: 'terminal.multiplex',
     params: {}
   }
+
   const dispatchPromise = dispatcher.dispatchStreaming(
     request,
     (msg) => {
@@ -197,6 +221,7 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId = 'conn-deskto
       connectionId,
       sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => {
         binaryFrames.push(bytes)
+
         return true
       },
       registerBinaryStreamHandler: (
@@ -204,6 +229,7 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId = 'conn-deskto
         handler: (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       ) => {
         handlers.set(streamId, handler)
+
         return () => {
           if (handlers.get(streamId) === handler) {
             handlers.delete(streamId)
@@ -212,6 +238,7 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId = 'conn-deskto
       }
     }
   )
+
   return { messages, binaryFrames, handlers, dispatchPromise }
 }
 
@@ -284,6 +311,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     const { runtime, model, handle, mountSpy } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
     })
+
     const harness = startMultiplex(runtime)
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
 
@@ -315,6 +343,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
       snapshotCapable: true,
       screen: 'agent frozen screen\r\n'
     })
+
     const harness = startMultiplex(runtime)
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
 
@@ -332,6 +361,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
     })
+
     const harness = startMultiplex(runtime)
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
 
@@ -357,14 +387,18 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
   it('never attaches SSH-scoped sessions or sessions absent from the daemon inventory', async () => {
     const { runtime, model } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
     const sshPtyId = 'ssh:conn-9@@relay-pty-4'
+
     const sshRecord = internals(runtime).recordPtyWorktree(sshPtyId, WORKTREE_ID, {
       connected: true
     })
+
     const sshHandle = internals(runtime).issuePtyHandle(sshRecord)
     const absentPtyId = `${WORKTREE_ID}@@99999999`
+
     const absentRecord = internals(runtime).recordPtyWorktree(absentPtyId, WORKTREE_ID, {
       connected: true
     })
+
     const absentHandle = internals(runtime).issuePtyHandle(absentRecord)
 
     const harness = startMultiplex(runtime)
@@ -414,6 +448,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
     })
+
     model.sessions.delete(PTY_ID)
     const refuseFirstAttach = model.deferNextAttach(false)
     const harness = startMultiplex(runtime)
@@ -448,6 +483,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
       snapshotCapable: true,
       screen: 'predecessor frame\r\n'
     })
+
     // A spawn through this app attaches its stream at spawn time; a
     // replacement under a reused id must not adopt the discovered-session path.
     runtime.onPtySpawned(PTY_ID, undefined, { awaitsRegistration: false })
@@ -486,6 +522,7 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
       snapshotCapable: true,
       screen: 'stale provider frame\r\n'
     })
+
     model.sessions.get(PTY_ID)!.attached = true
     model.emitData(PTY_ID, 'live model line\r\n')
 

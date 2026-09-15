@@ -22,6 +22,7 @@ import {
   getPendingApprovalCheckSuiteUrl
 } from './pr-checks-response-mapping'
 import { parseActionsRunId } from './check-detail-field-mapping'
+
 export async function getPRChecksViaRestFallback(
   ownerRepo: GitHubApiRepository,
   headSha: string | undefined,
@@ -31,17 +32,21 @@ export async function getPRChecksViaRestFallback(
   if (!headSha) {
     return null
   }
+
   try {
     await assertRateLimitBudget('core', ownerRepo, ghOptions)
   } catch (err) {
     console.warn('getPRChecks skipped REST fallback, falling back to gh pr checks:', err)
+
     return null
   }
 
   await acquire()
+
   try {
     const cacheArgs = noCache ? [] : ['--cache', '60s']
     const encodedHeadSha = encodeURIComponent(headSha)
+
     const { stdout } = await ghExecFileAsync(
       [
         'api',
@@ -50,14 +55,18 @@ export async function getPRChecksViaRestFallback(
       ],
       ghOptions
     )
+
     noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
+
     const checkRunData = JSON.parse(stdout) as {
       check_runs?: RestCheckRun[]
     }
+
     const checkRuns = (checkRunData.check_runs ?? []).map(mapRestCheckRun)
     const checkRunNames = new Set(checkRuns.map((check) => check.name))
 
     let legacyStatuses: PRCheckDetail[] = []
+
     try {
       const statusResult = await ghExecFileAsync(
         [
@@ -67,10 +76,13 @@ export async function getPRChecksViaRestFallback(
         ],
         ghOptions
       )
+
       noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
+
       const statusData = JSON.parse(statusResult.stdout) as {
         statuses?: RestCommitStatus[]
       }
+
       legacyStatuses = (statusData.statuses ?? [])
         .map(mapRestCommitStatus)
         .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
@@ -80,6 +92,7 @@ export async function getPRChecksViaRestFallback(
     }
 
     let pendingApprovalChecks: PRCheckDetail[] = []
+
     try {
       const suitesResult = await ghExecFileAsync(
         [
@@ -89,10 +102,13 @@ export async function getPRChecksViaRestFallback(
         ],
         ghOptions
       )
+
       noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
+
       const suitesData = JSON.parse(suitesResult.stdout) as {
         check_suites?: RestCheckSuite[]
       }
+
       pendingApprovalChecks = (suitesData.check_suites ?? [])
         .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
         .map((suite, index) => ({
@@ -106,9 +122,11 @@ export async function getPRChecksViaRestFallback(
     }
 
     const checks = [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+
     return checks.length > 0 ? checks : null
   } catch (err) {
     console.warn('getPRChecks via REST fallback failed, falling back to gh pr checks:', err)
+
     return null
   } finally {
     release()
@@ -130,33 +148,43 @@ export async function getPRChecks(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
   void headSha
+
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     prRepo,
     connectionId,
     localGitOptions
   )
+
   if (connectionId && !ownerRepo) {
     throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
   }
+
   const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
     await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
     await acquire()
+
     try {
       const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
+
       if (ownerRepo) {
         fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
       }
+
       const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
         const { stderr } = extractExecError(err)
+
         // Why: `gh pr checks` exits non-zero when a PR has no check runs yet; treat that as empty, not a load failure.
         if (stderr.toLowerCase().includes('no checks reported')) {
           return { stdout: '[]', stderr }
         }
+
         throw err
       })
+
       noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
       const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
+
       return data.map((d) => ({
         name: d.name,
         status: mapCheckStatus(d.state),
@@ -171,17 +199,21 @@ export async function getPRChecks(
 
   if (ownerRepo) {
     let canUseGraphQLRollup = true
+
     try {
       await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
     } catch (err) {
       canUseGraphQLRollup = false
       console.warn('getPRChecks skipped GraphQL rollup, falling back to gh pr checks:', err)
     }
+
     if (canUseGraphQLRollup) {
       await acquire()
+
       try {
         // Why: --cache 60s saves rate-limit budget during polling; explicit refresh skips it for fresh data.
         const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
+
         const { stdout } = await ghExecFileAsync(
           [
             'api',
@@ -198,11 +230,14 @@ export async function getPRChecks(
           ],
           ghOptions
         )
+
         noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
+
         const checks = mapGraphQLPRChecksResponse(
           ownerRepo,
           JSON.parse(stdout) as GraphQLPRChecksResponse
         )
+
         if (checks !== null) {
           return checks
         }
@@ -213,12 +248,14 @@ export async function getPRChecks(
         release()
       }
     }
+
     const restChecks = await getPRChecksViaRestFallback(
       ownerRepo,
       headSha,
       ghOptions,
       options?.noCache
     )
+
     if (restChecks !== null) {
       return restChecks
     }

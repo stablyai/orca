@@ -21,6 +21,7 @@ const posixIt = process.platform === 'win32' ? it.skip : it
 // A byte budget small enough to trip on a fixture that stays trivial on disk —
 // the bound must be injectable or testing it would mean writing gigabytes.
 const TINY_BYTE_BUDGET = { maxBytes: 64, maxEntries: 10_000 }
+
 const TINY_ENTRY_BUDGET = { maxBytes: 1024 * 1024 * 1024, maxEntries: 3 }
 
 describe('worktree copy budget tracker', () => {
@@ -59,9 +60,11 @@ describe('worktree copy budget tracker', () => {
 
   it('refuses a directory with too many entries even when it weighs nothing', async () => {
     mkdirSync(join(root, 'cache'))
+
     for (const name of ['a', 'b', 'c', 'd', 'e']) {
       writeFileSync(join(root, 'cache', name), '')
     }
+
     const tracker = createWorktreeCopyBudgetTracker(TINY_ENTRY_BUDGET)
 
     await expect(tracker.admit(join(root, 'cache'))).resolves.toEqual({
@@ -116,6 +119,7 @@ describe('worktree copy budget tracker', () => {
       mkdirSync(join(root, `dir-${index}`))
       writeFileSync(join(root, `dir-${index}`, 'one'), 'x'.repeat(200))
     }
+
     writeFileSync(join(root, 'tiny'), '')
     const tracker = createWorktreeCopyBudgetTracker({ maxBytes: 64, maxEntries: 4 })
 
@@ -142,10 +146,13 @@ describe('worktree copy budget tracker', () => {
       mkdirSync(join(root, `dir-${index}`))
       writeFileSync(join(root, `dir-${index}`, 'one'), 'x'.repeat(200))
     }
+
     mkdirSync(join(root, 'fits'))
+
     for (const name of ['a', 'b', 'c']) {
       writeFileSync(join(root, 'fits', name), '')
     }
+
     const tracker = createWorktreeCopyBudgetTracker({ maxBytes: 64, maxEntries: 4 })
 
     for (let index = 0; index < 9; index += 1) {
@@ -164,9 +171,11 @@ describe('worktree copy budget tracker', () => {
     // The regression this guards: sizing `node_modules` burns maxEntries + 1
     // walk, which without headroom would starve every entry listed after it.
     mkdirSync(join(root, 'node_modules'))
+
     for (let index = 0; index < 12; index += 1) {
       writeFileSync(join(root, 'node_modules', `pkg-${index}`), '')
     }
+
     writeFileSync(join(root, '.env'), 'A=1\n')
     const tracker = createWorktreeCopyBudgetTracker({ maxBytes: 1024, maxEntries: 4 })
 
@@ -299,6 +308,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
   it('refuses an entry that busts the file-count limit', async () => {
     mkdirSync(join(primary, '.cache'))
+
     for (const name of ['a', 'b', 'c', 'd', 'e']) {
       writeFileSync(join(primary, '.cache', name), '')
     }
@@ -359,9 +369,11 @@ describe('createWorktreeCopiedPaths copy budget', () => {
 
   it('does not run the macOS APFS clone for an entry over the file-count limit', async () => {
     mkdirSync(join(primary, '.cache'))
+
     for (const name of ['a', 'b', 'c', 'd', 'e']) {
       writeFileSync(join(primary, '.cache', name), '')
     }
+
     const cloneWorktreePath = vi.fn(async () => undefined)
 
     const skipped = await createWorktreeCopiedPaths(primary, worktree, ['.cache'], {
@@ -378,6 +390,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
   it('does not fall back to a real copy when a failed clone would escape the byte budget', async () => {
     mkdirSync(join(primary, 'models'))
     writeFileSync(join(primary, 'models', 'checkpoint'), 'x'.repeat(500))
+
     // The clone was predicted (so bytes went uncharged) but fails mid-copy.
     const cloneWorktreePath = vi.fn(async () => {
       throw Object.assign(new Error('EPERM'), { code: 'EPERM' })
@@ -399,6 +412,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     // Sized so that billing it a second time would bust the 64-byte budget —
     // that is what makes this test notice a missing short-circuit.
     writeFileSync(join(primary, '.env'), 'x'.repeat(40))
+
     // A wedged df/diskutil makes the volume probe answer "no clone", so bytes
     // are charged up front and the real-copy fallback must simply proceed.
     const apfsCloneDeps = {
@@ -421,6 +435,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
   it('bills a recovered clone fallback so a later entry sees the spent budget', async () => {
     writeFileSync(join(primary, 'one'), 'x'.repeat(50))
     writeFileSync(join(primary, 'two'), 'x'.repeat(50))
+
     // Clone is predicted for both, then fails, so each falls back to a real
     // copy. The first bills 50 of the 64-byte budget; the second cannot.
     const cloneWorktreePath = vi.fn(async () => {

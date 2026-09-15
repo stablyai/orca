@@ -10,6 +10,7 @@ function mostRecentCompletedTurnInHistory(
   history: readonly AgentStateHistoryEntry[] | undefined
 ): number | null {
   let max = 0
+
   for (const row of history ?? []) {
     if (
       row.state === 'done' &&
@@ -20,6 +21,7 @@ function mostRecentCompletedTurnInHistory(
       max = row.startedAt
     }
   }
+
   return max > 0 ? max : null
 }
 
@@ -36,8 +38,10 @@ export function agentEntryCompletionAt(entry: AgentCompletionSource): number | n
   if (entry.state !== 'done' || entry.interrupted === true) {
     return null
   }
+
   if (entry.sessionBoundary === true) {
     return mostRecentCompletedTurnInHistory(entry.stateHistory)
   }
+
   return Number.isFinite(entry.stateStartedAt) ? entry.stateStartedAt : null
 }

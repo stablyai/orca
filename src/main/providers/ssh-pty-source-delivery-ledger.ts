@@ -29,13 +29,17 @@ export class SshPtySourceDeliveryLedger {
     if (!relayPtyId || activation.ptyIncarnation.length === 0) {
       throw new Error('ssh_source_receiving_activation_invalid')
     }
+
     const previous = this.deliveryByPty.get(relayPtyId)
+
     if (previous && sameReceivingActivation(previous.activation, activation)) {
       if (previous.lease.phase !== 'committed') {
         throw new Error('ssh_source_receiving_activation_stale')
       }
+
       return settledReceivingActivationLease()
     }
+
     if (
       previous &&
       (activation.clientGeneration <= previous.activation.clientGeneration ||
@@ -44,19 +48,24 @@ export class SshPtySourceDeliveryLedger {
     ) {
       throw new Error('ssh_source_receiving_activation_stale')
     }
+
     return this.installProvisional(relayPtyId, activation, previous)
   }
 
   admit(pending: PendingSshPtySourceData & { source: SshPtySourceFrame }): boolean {
     const current = this.deliveryByPty.get(pending.relayPtyId)
+
     if (!acceptsSourceFrame(current, pending.params, pending.source)) {
       return false
     }
+
     const accepted = Object.freeze({
       ...current,
       sourceEndSu: pending.source.sourceEndSu
     }) as SourceDeliveryState
+
     this.deliveryByPty.set(pending.relayPtyId, accepted)
+
     if (accepted.lease.phase === 'recovery') {
       accepted.lease.recoverySink?.(pending)
     } else if (accepted.lease.phase !== 'committed') {
@@ -64,11 +73,13 @@ export class SshPtySourceDeliveryLedger {
     } else {
       this.publishData(pending)
     }
+
     return true
   }
 
   recordExit(relayPtyId: string): void {
     const current = this.deliveryByPty.get(relayPtyId)
+
     if (current?.lease.phase === 'committed') {
       this.deliveryByPty.delete(relayPtyId)
     } else if (current) {
@@ -83,22 +94,31 @@ export class SshPtySourceDeliveryLedger {
     if (!identity) {
       return 'reconnect-channel'
     }
+
     const offeredCurrent = this.deliveryByPty.get(relayPtyId)
+
     const matched = Boolean(
       offeredCurrent && sameRejectedSourceIdentity(offeredCurrent.activation, identity)
     )
+
     const canceled = await settleExactSourceDeliveryCancellation(this.mux, relayPtyId, identity)
+
     if (matched && canceled) {
       const current = this.deliveryByPty.get(relayPtyId)
+
       if (current && sameRejectedSourceIdentity(current.activation, identity)) {
         this.retire(relayPtyId, current.previous, current.lease)
+
         return 'fresh-activation'
       }
+
       return current ? 'reconnect-channel' : 'fresh-activation'
     }
+
     if (!matched && !canceled) {
       return 'confirm-existing'
     }
+
     return 'reconnect-channel'
   }
 
@@ -112,6 +132,7 @@ export class SshPtySourceDeliveryLedger {
       pendingData: [],
       exited: false
     }
+
     this.deliveryByPty.set(
       relayPtyId,
       Object.freeze({
@@ -124,11 +145,13 @@ export class SshPtySourceDeliveryLedger {
     let settled = false
     let transferInProgress = false
     let rollbackSettlement: Promise<boolean> | undefined
+
     return Object.freeze({
       commit: () => {
         if (settled || transferInProgress) {
           return
         }
+
         settled = true
         this.commit(relayPtyId, leaseState)
       },
@@ -136,22 +159,28 @@ export class SshPtySourceDeliveryLedger {
         if (rollbackSettlement) {
           return rollbackSettlement
         }
+
         if (settled || transferInProgress) {
           return Promise.resolve(false)
         }
+
         settled = true
         this.retire(relayPtyId, previous, leaseState)
         rollbackSettlement = settleExactSourceDeliveryCancellation(this.mux, relayPtyId, activation)
+
         return rollbackSettlement
       },
       transferToRecovery: (sink) => {
         if (settled || transferInProgress || leaseState.phase !== 'provisional') {
           throw new Error('ssh_source_receiving_activation_stale')
         }
+
         transferInProgress = true
+
         try {
           const recoveryLease = this.transferToRecovery(relayPtyId, leaseState, previous, sink)
           settled = true
+
           return recoveryLease
         } finally {
           transferInProgress = false
@@ -170,8 +199,10 @@ export class SshPtySourceDeliveryLedger {
       this.retire(relayPtyId, previous, lease)
       throw new Error('ssh_source_receiving_activation_stale')
     }
+
     lease.phase = 'recovery'
     lease.recoverySink = sink
+
     try {
       while (lease.pendingData.length > 0) {
         sink(lease.pendingData.shift()!)
@@ -180,12 +211,15 @@ export class SshPtySourceDeliveryLedger {
       this.retire(relayPtyId, previous, lease)
       throw error
     }
+
     let settled = false
+
     return Object.freeze({
       commit: () => {
         if (settled) {
           return
         }
+
         settled = true
         lease.recoverySink = undefined
         this.commit(relayPtyId, lease)
@@ -194,6 +228,7 @@ export class SshPtySourceDeliveryLedger {
         if (settled) {
           return
         }
+
         settled = true
         lease.recoverySink = undefined
         this.retire(relayPtyId, previous, lease)
@@ -205,18 +240,25 @@ export class SshPtySourceDeliveryLedger {
     if (this.deliveryByPty.get(relayPtyId)?.lease !== lease) {
       lease.phase = 'retired'
       lease.pendingData.splice(0)
+
       return
     }
+
     lease.phase = 'committing'
+
     while (lease.pendingData.length > 0) {
       this.publishData(lease.pendingData.shift()!)
     }
+
     lease.phase = 'committed'
     const current = this.deliveryByPty.get(relayPtyId)
+
     if (lease.exited && current?.lease === lease) {
       this.deliveryByPty.delete(relayPtyId)
+
       return
     }
+
     if (current?.lease === lease && current.previous) {
       this.deliveryByPty.set(
         relayPtyId,
@@ -237,14 +279,19 @@ export class SshPtySourceDeliveryLedger {
     lease.phase = 'retired'
     lease.recoverySink = undefined
     lease.pendingData.splice(0)
+
     if (this.deliveryByPty.get(relayPtyId)?.lease !== lease) {
       return
     }
+
     if (lease.exited) {
       this.deliveryByPty.delete(relayPtyId)
+
       return
     }
+
     const predecessor = activePredecessor(previous)
+
     if (predecessor) {
       this.deliveryByPty.set(relayPtyId, predecessor)
     } else {

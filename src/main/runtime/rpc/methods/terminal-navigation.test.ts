@@ -23,6 +23,7 @@ describe('terminal focus navigation authority', () => {
         worktreeId: 'wt-1'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(request({ terminal: 'term-1' }), () => {}, {
@@ -59,6 +60,7 @@ describe('terminal focus navigation authority', () => {
       getRuntimeId: () => 'runtime-1',
       focusTerminal: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(

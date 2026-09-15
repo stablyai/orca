@@ -15,6 +15,7 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
   private acknowledgeOutput(stream: RemoteRuntimeMultiplexedTerminalState, bytes: number): boolean {
     if (stream.acknowledgeOutputSourceRanges && stream.streamGeneration) {
       const ackedEndByte = stream.sourceAckedEndByte + bytes
+
       const sent = this.sendFrame(
         stream.streamId,
         TerminalStreamOpcode.Ack,
@@ -23,11 +24,14 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
           ackedEndByte
         })
       )
+
       if (sent) {
         stream.sourceAckedEndByte = ackedEndByte
       }
+
       return sent
     }
+
     return this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.Ack,
@@ -46,9 +50,11 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
       TerminalStreamOpcode.Input,
       encodeTerminalStreamText(text)
     )
+
     if (sent && !stream.outputPaused) {
       stream.watchdog.recordCommandInput(text)
     }
+
     return sent
   }
 
@@ -59,17 +65,21 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     if (!stream.supportsOutputPause || this.streams.get(stream.streamId) !== stream) {
       return false
     }
+
     if (stream.outputPaused === paused) {
       return true
     }
+
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.SetOutputPaused,
       encodeTerminalStreamJson({ paused })
     )
+
     if (sent) {
       stream.outputPaused = paused
     }
+
     return sent
   }
 
@@ -80,11 +90,15 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     if (!this.isRegisteredStream(stream)) {
       return true
     }
+
     stream.pendingAckBytes += bytes
+
     if (stream.pendingAckBytes >= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES) {
       return this.flushOutputAcknowledgement(stream)
     }
+
     this.scheduleOutputAcknowledgementFlush(stream)
+
     return true
   }
 
@@ -92,6 +106,7 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
     if (stream.ackFlushTimer !== null) {
       return
     }
+
     stream.ackFlushTimer = setTimeout(() => {
       stream.ackFlushTimer = null
       this.flushOutputAcknowledgement(stream)
@@ -101,21 +116,27 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
   private flushOutputAcknowledgement(stream: RemoteRuntimeMultiplexedTerminalState): boolean {
     clearAckFlushTimer(stream)
     const bytes = stream.pendingAckBytes
+
     if (bytes <= 0) {
       return true
     }
+
     stream.pendingAckBytes = 0
+
     if (this.acknowledgeOutput(stream, bytes)) {
       // Why: only a frame the transport took reopens the host's send window.
       stream.watchdog.recordOutputAcknowledged(bytes)
+
       return true
     }
+
     // Why guarded: a failed send may have torn the stream down, and re-charging a dropped stream reschedules itself forever.
     if (this.isRegisteredStream(stream)) {
       // Why re-charged: dropping an unsent ack shrinks the host window for the stream's life, and the only retry trigger is the output that shrunken window blocks.
       stream.pendingAckBytes += bytes
       this.scheduleOutputAcknowledgementFlush(stream)
     }
+
     return false
   }
 
@@ -125,37 +146,45 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
 
   forceErrorForE2e(terminals: ReadonlySet<string>, message: string): number {
     let dispatched = 0
+
     for (const stream of this.streams.values()) {
       if (terminals.has(stream.terminal)) {
         stream.callbacks.onError?.(message)
         dispatched += 1
       }
     }
+
     return dispatched
   }
 
   releaseHeldAcksForE2e(): number {
     let released = 0
+
     for (const stream of this.streams.values()) {
       if (stream.heldAckBytes <= 0) {
         continue
       }
+
       const bytes = stream.heldAckBytes
       stream.heldAckBytes = 0
+
       if (this.queueOutputAcknowledgement(stream, bytes)) {
         released += bytes
       }
     }
+
     return released
   }
 
   sendInputForE2e(terminal: string, text: string): number {
     let sent = 0
+
     for (const stream of this.streams.values()) {
       if (stream.terminal === terminal && this.sendInput(stream, text)) {
         sent += 1
       }
     }
+
     return sent
   }
 }

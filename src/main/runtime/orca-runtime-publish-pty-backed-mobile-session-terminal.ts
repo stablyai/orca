@@ -41,19 +41,23 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
     ) {
       return
     }
+
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const ownerAgent = pty.launchAgent ?? pty.foregroundAgent
+
     const title = normalizeCompatibleAgentTitleForOwner(
       args.title ?? getLatestPtyTitle(pty) ?? 'Terminal',
       ownerAgent,
       { ownerIsLaunch: Boolean(pty.launchAgent) }
     )
+
     const existingTab = existing?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionTerminalTab =>
         candidate.type === 'terminal' &&
         candidate.parentTabId === args.tabId &&
         candidate.leafId === args.leafId
     )
+
     // Why: a split inserts into the parent tab's layout, which lives on the
     // sibling surface, not this new leaf's (empty) existing surface.
     const baseLayout = args.split
@@ -64,12 +68,14 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
             candidate.leafId === args.split!.splitFromLeafId
         )?.parentLayout ?? existingTab?.parentLayout)
       : existingTab?.parentLayout
+
     const parentLayout = buildMaterializedHeadlessParentLayout(
       args.leafId,
       pty.ptyId,
       baseLayout,
       args.split
     )
+
     // Why: a main-side PTY rescue or split publication must not erase the
     // host's explicit tab mode before the renderer graph catches up.
     const viewMode =
@@ -81,6 +87,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
+
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -96,6 +103,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       isActive:
         args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
     }
+
     const existingTabs = (existing?.tabs ?? []).filter(
       (candidate) =>
         !(
@@ -104,6 +112,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           candidate.leafId === args.leafId
         )
     )
+
     const tabs = mergeMobileSessionSnapshotTabs(
       existingTabs.map((candidate) => ({
         ...candidate,
@@ -118,14 +127,17 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       })),
       [tab]
     )
+
     const activeTab =
       (tab.isActive ? tab : tabs.find((candidate) => candidate.id === existing?.activeTabId)) ??
       tabs.find((candidate) => candidate.isActive) ??
       (args.selectIfNoActiveTab !== false ? tabs[0] : null) ??
       null
+
     const terminalTabs = tabs.filter(
       (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
     )
+
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
       publicationEpoch:
@@ -143,7 +155,9 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
+
     this.storeMobileSessionSnapshot(worktreeId, next)
+
     if (args.notify !== false) {
       this.notifyMobileSessionTabsChanged(worktreeId)
     }
@@ -159,25 +173,30 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           tab.type === 'terminal' &&
           (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
       )
+
       if (!hasPtyBackedTab) {
         continue
       }
+
       this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
   }
 
   protected getMobileSessionWorktreeIdsForPty(ptyId: string): string[] {
     const worktreeIds: string[] = []
+
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const hasPtyBackedTab = snapshot.tabs.some(
         (tab) =>
           tab.type === 'terminal' &&
           (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
       )
+
       if (hasPtyBackedTab) {
         worktreeIds.push(worktreeId)
       }
     }
+
     return worktreeIds
   }
 }

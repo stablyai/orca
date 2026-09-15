@@ -20,13 +20,17 @@ class FakeRuntimeChild extends EventEmitter {
   readonly stdin = {
     write: (chunk: string, callback?: (error?: Error | null) => void): boolean => {
       this.writes.push(chunk)
+
       if (this.deferWrites) {
         if (callback) {
           this.pendingWrites.push(callback)
         }
+
         return true
       }
+
       callback?.(null)
+
       return true
     },
     end: (): void => {
@@ -37,6 +41,7 @@ class FakeRuntimeChild extends EventEmitter {
 
   kill(): boolean {
     this.killed = true
+
     return true
   }
 
@@ -79,6 +84,7 @@ class FakeRuntimeChild extends EventEmitter {
     if (stderr) {
       this.stderr.emit('data', Buffer.from(stderr, 'utf8'))
     }
+
     this.emit('close', code, null)
   }
 }
@@ -95,6 +101,7 @@ function createHost(
   const children: FakeRuntimeChild[] = []
   const specs: ProcessSpec[] = []
   const warnings: string[] = []
+
   const host = new DesktopScriptRuntimeHost('C:\\orca\\runtime.ps1', {
     ...options,
     powerShellPath: () => 'C:\\Windows\\System32\\powershell.exe',
@@ -104,9 +111,11 @@ function createHost(
       const child = new FakeRuntimeChild()
       child.deferWrites = options.deferWrites === true
       children.push(child)
+
       return child as unknown as RuntimeChildProcess
     }
   })
+
   return { host, children, specs, warnings }
 }
 
@@ -120,6 +129,7 @@ async function settle(): Promise<void> {
 /** The wait the host reported, read back out of its refusal message. */
 function remainingCooldownMs(error: Error | null): number {
   const match = /retrying the runtime host in (\d+)ms/.exec(error?.message ?? '')
+
   return match ? Number(match[1]) : Number.NaN
 }
 
@@ -129,6 +139,7 @@ async function failEveryStart(children: FakeRuntimeChild[], stderr: string): Pro
     if (index >= children.length) {
       return
     }
+
     children[index].exit(1, stderr)
     await settle()
   }
@@ -208,6 +219,7 @@ describe('DesktopScriptRuntimeHost', () => {
       `${JSON.stringify({ ok: true, snapshot: { app: 'né' }, requestId: 1 })}\r\n`,
       'utf8'
     )
+
     const split = payload.indexOf(Buffer.from('é', 'utf8')) + 1
     children[0].stdout.emit('data', payload.subarray(0, split))
     children[0].stdout.emit('data', payload.subarray(split))
@@ -358,6 +370,7 @@ describe('DesktopScriptRuntimeHost', () => {
   it('stops respawning a helper that times out on every operation', async () => {
     vi.useFakeTimers()
     let clock = 1_000
+
     const { host, children } = createHost({
       requestTimeoutMs: 1_000,
       cooldownMs: 60_000,
@@ -760,11 +773,13 @@ describe('DesktopScriptRuntimeHost', () => {
     // Asserted before the clock moves: both reject while the test is still
     // inside advanceTimersByTimeAsync.
     const firstFailed = expect(first).rejects.toMatchObject({ code: 'action_timeout' })
+
     // Its own deadline, not the one it would inherit by reaching the head.
     const queuedFailed = expect(queued).rejects.toMatchObject({
       code: 'action_timeout',
       message: /waiting for earlier operations/
     })
+
     await settle()
     expect(children[0].requests()).toHaveLength(1)
 
@@ -828,6 +843,7 @@ describe('DesktopScriptRuntimeHost', () => {
       () => null,
       (error: Error) => error
     )
+
     expect(refused?.message).toMatch(/retrying the runtime host in/)
     expect(remainingCooldownMs(refused)).toBeLessThanOrEqual(60_000)
     host.dispose()

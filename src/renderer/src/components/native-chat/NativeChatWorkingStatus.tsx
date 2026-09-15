@@ -30,6 +30,7 @@ export function NativeChatWorkingStatus({
     workedSeconds,
     elapsedSeconds
   })
+
   const label =
     key === 'workedFor'
       ? translate(
@@ -46,7 +47,9 @@ export function NativeChatWorkingStatus({
             NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
             { value0: duration }
           )
+
   const className = `flex min-h-8 items-center gap-1 text-sm text-muted-foreground${thinking ? '' : ' border-b border-border'}`
+
   const caret =
     workedSeconds != null ? (
       <ChevronRight
@@ -54,6 +57,7 @@ export function NativeChatWorkingStatus({
         aria-hidden="true"
       />
     ) : null
+
   if (workedSeconds != null && onToggleExpanded) {
     return (
       <button

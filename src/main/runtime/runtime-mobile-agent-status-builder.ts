@@ -38,6 +38,7 @@ export function buildRuntimeMobileAgentStatus(
   // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
   // transcript to address and sits on the empty state forever.
   const hookRow = selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
+
   // Why: the hook row is evidence in its own right. Returning early on a missing
   // PTY status/projected row put this check ahead of the only headless carrier, so
   // an agent that reported its session but never emitted a recognized title got no
@@ -45,13 +46,16 @@ export function buildRuntimeMobileAgentStatus(
   if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
     return {}
   }
+
   const providerSession = hookRow.providerSession
     ? { providerSession: hookRow.providerSession }
     : retained?.providerSession
       ? { providerSession: retained.providerSession }
       : {}
+
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
+
   const ptyTitle = pty
     ? getLatestAgentCandidateTitle(
         { title: pty.title, updatedAt: pty.titleUpdatedAt },
@@ -63,8 +67,10 @@ export function buildRuntimeMobileAgentStatus(
           { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
         )
       : null
+
   const ptyTitleClassification = classifyAgentTitle(ptyTitle)
   const nonAgentTitle = ptyTitle !== null && ptyTitleClassification !== 'agent'
+
   if (nonAgentTitle) {
     // Why: non-agent title = shell reclaimed the pane; suppress to clear stuck spinners (#1437), though a live hook signal survives.
     const hasLiveHookSignal =
@@ -79,24 +85,30 @@ export function buildRuntimeMobileAgentStatus(
       // Scoped to panes with no PTY status at all, so it cannot revive a spinner:
       // this branch publishes `done`. It only keeps the transcript addressable.
       (!pty?.lastAgentStatus && (hookRow.agentType != null || hookRow.providerSession != null))
+
     if (!hasLiveHookSignal) {
       return {}
     }
   }
+
   // Why: a retained OMP hook stays stable while wrapper foreground reads can report Pi.
   const ownerRecord = resolvePaneAgentOwnerRecord({
     launchAgent: tab.launchAgent ?? pty?.launchAgent ?? null,
     hookAgent: retained?.payload.agentType ?? hookRow.agentType
   })
+
   const ownerAgent = ownerRecord?.agent ?? pty?.foregroundAgent ?? null
   const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+
   const terminalTitle = normalizeCompatibleAgentTitleForOwner(
     trackerOnlyTitle ?? (pty ? getLatestPtyTitle(pty) : null) ?? tab.title,
     ownerAgent,
     ownerOptions
   )
+
   // Why: OSC 9999 hook payload carries real state/prompt/agent; without preferring it, hook-only transitions never surfaced (#7970).
   const liveRow = retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
+
   if (liveRow) {
     const liveStatus = normalizeCompatibleAgentStatusEntryForOwner(
       {
@@ -119,14 +131,17 @@ export function buildRuntimeMobileAgentStatus(
       ownerAgent,
       ownerOptions
     )
+
     // A live question outranks only the shell title that currently obscures it.
     const renewedStatus = renewRuntimeMobileAgentStatusFromPtyTitle(liveStatus, pty, {
       preserveQuestionUnderShellTitle: true
     })
+
     if (renewedStatus) {
       return { agentStatus: renewedStatus }
     }
   }
+
   // Last resort: the pane's hook evidence is identity only (resume rows, stale
   // rows, or a row the freshness gate rejected). `done` is the honest
   // projection — and it is what retires the card once the agent exits.
@@ -135,6 +150,7 @@ export function buildRuntimeMobileAgentStatus(
   // every output byte, so a paired client's live status could never outrank it.
   const evidenceAt = pty?.lastOscTitleEpochMs ?? hookRow.providerSessionReceivedAt ?? Date.now()
   const agentType = ownerAgent ?? undefined
+
   return {
     agentStatus: {
       state:

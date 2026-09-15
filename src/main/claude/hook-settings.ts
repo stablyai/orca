@@ -157,6 +157,7 @@ export function getManagedCommand(
 ): string {
   const scriptFileName = basename(scriptPath)
   const extension = extname(scriptFileName)
+
   return wrapRuntimeHomeHookCommand(
     extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
     options
@@ -171,6 +172,7 @@ export function getManagedLifecycleHook(
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
+
   return getWindowsManagedLifecycleHook(scriptPath, options)
 }
 
@@ -187,17 +189,21 @@ export function getWindowsManagedLifecycleHook(
     (options.gitBashAvailable ?? isGitBashAvailable())
       ? wrapWindowsDirectCmdHookCommand(scriptPath)
       : null
+
   if (directCommand) {
     return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
   }
+
   const scriptFileName = win32.basename(scriptPath)
   // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
   const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
+
   // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
   const innerCommand =
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
     'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
     "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
+
   return {
     type: 'command',
     command: wrapWindowsPowerShellEncodedCommand(innerCommand),
@@ -233,16 +239,19 @@ export function applyManagedHooks(
   for (const event of events) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       ...event.definition,
       hooks: [hook]
     }
+
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
   if (!sessionEndCapable) {
     const current = Array.isArray(nextHooks.SessionEnd) ? nextHooks.SessionEnd : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks.SessionEnd
     } else {
@@ -263,11 +272,14 @@ export function getStatusLineSlotState(
 ): StatusLineSlotState {
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const current = config.statusLine
+
   const currentCommand =
     isPlainObject(current) && typeof current.command === 'string' ? current.command : null
+
   if (!currentCommand) {
     return 'empty'
   }
+
   return isManagedCommand(currentCommand) ? 'managed' : 'user'
 }
 
@@ -286,6 +298,7 @@ export function applyManagedStatusLine(
   if (getStatusLineSlotState(config, scriptFileName) === 'user') {
     return config
   }
+
   return { ...config, statusLine: { type: 'command', command } }
 }
 
@@ -295,13 +308,17 @@ export function removeManagedStatusLine(
 ): { config: HooksConfig; changed: boolean } {
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const current = config.statusLine
+
   const currentCommand =
     isPlainObject(current) && typeof current.command === 'string' ? current.command : null
+
   if (!currentCommand || !isManagedCommand(currentCommand)) {
     return { config, changed: false }
   }
+
   const next = { ...config }
   delete next.statusLine
+
   return { config: next, changed: true }
 }
 
@@ -320,10 +337,13 @@ export function removeManagedHooks(
     if (!Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (JSON.stringify(cleaned) !== JSON.stringify(definitions)) {
       changed = true
     }
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {

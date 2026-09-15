@@ -38,6 +38,7 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
 
 function activityItemAriaLabel(item: ActivityBarItem, status?: CheckStatus | null): string {
   const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
+
   return status === 'failure'
     ? `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
     : base
@@ -58,9 +59,11 @@ export function TopActivityOverflowMenu({
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
       ? checksStatus
       : null
+
   const hiddenItemStatus = items.some((item) => item.statusIndicator === 'failure')
     ? 'failure'
     : hiddenChecksStatus
+
   const moreTabsLabel = translate(
     'auto.components.right.sidebar.activity.bar.buttons.1fd284e931',
     'More sidebar tabs'
@@ -96,6 +99,7 @@ export function TopActivityOverflowMenu({
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
+
           return (
             <DropdownMenuItem
               key={item.id}

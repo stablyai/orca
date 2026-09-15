@@ -1,7 +1,9 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RuntimeStatusSlice } from './runtime-status-types'
+
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
+
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,
@@ -60,27 +62,33 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         environment.pairingRevision ?? environment.createdAt
       ])
     )
+
     const replacedEnvironmentIds = environments
       .filter((environment) => {
         const previousRevision = previousRevisionById.get(environment.id)
+
         return (
           previousRevision !== undefined &&
           previousRevision !== (environment.pairingRevision ?? environment.createdAt)
         )
       })
       .map((environment) => environment.id)
+
     replaceRuntimeEnvironmentRevisions(environments)
     // Why: diff against the accumulated in-memory saved list (not a second disk
     // read) so a main-initiated removal that never calls setRuntimeEnvironments
     // still enters the diff on the next list read. #8881.
     const nextIds = new Set(environments.map((environment) => environment.id))
+
     const removedIds = get()
       .runtimeEnvironments.map((environment) => environment.id)
       .filter((id) => !nextIds.has(id))
+
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
       const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
       let statusesChanged = false
+
       for (const id of nextStatuses.keys()) {
         if (!keep.has(id)) {
           nextStatuses.delete(id)
@@ -88,28 +96,34 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           statusesChanged = true
         }
       }
+
       for (const id of replacedEnvironmentIds) {
         if (nextStatuses.delete(id)) {
           statusesChanged = true
         }
+
         runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
       }
+
       // Add just-removed ids as tombstones and clear any that were re-added, so an
       // in-flight catalog merge for a removed env can be dropped without mistaking a
       // not-yet-hydrated env for a removed one (#8881).
       const nextRemoved = new Set(s.removedRuntimeEnvironmentIds)
       let removedChanged = false
+
       for (const id of removedIds) {
         if (!nextRemoved.has(id)) {
           nextRemoved.add(id)
           removedChanged = true
         }
       }
+
       for (const id of nextIds) {
         if (nextRemoved.delete(id)) {
           removedChanged = true
         }
       }
+
       // Why: list()/hydrate always allocate (IPC structuredClone + redact remaps
       // endpoints[]). Reuse equal rows so Object.is subscribers don't miss 100%.
       const reconciled = reconcileCatalogRows(
@@ -117,7 +131,9 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         environments,
         (environment) => environment.id
       )
+
       const catalogUnchanged = reconciled === s.runtimeEnvironments
+
       if (
         catalogUnchanged &&
         s.runtimeEnvironmentCatalogHydrated &&
@@ -127,6 +143,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       ) {
         return s
       }
+
       return {
         runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
@@ -143,12 +160,15 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
     // A detached environment's mirrored SSH state must not outlive it.
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
+
     for (const id of replacedEnvironmentIds) {
       clearRuntimeCompatibilityCache(id)
       get().markEnvironmentSshStateStale?.(id)
     }
+
     // Why: same-id re-pair publications belong to the retired peer just as surely as removed ids.
     const retiredEnvironmentIds = [...new Set([...removedIds, ...replacedEnvironmentIds])]
+
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
@@ -168,11 +188,14 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
 
   setRuntimeEnvironmentStatus: (environmentId, status, options) => {
     const previous = get().runtimeStatusByEnvironmentId.get(environmentId)
+
     if (previous?.snapshot && !status.snapshot) {
       return
     }
+
     const previousVerifiedStatus = previous?.snapshot?.status ?? previous?.status
     const pairedDeviceId = status.status?.pairedDeviceId?.trim()
+
     // A new runtime id under a known previous one is a restart, not a first connect: the guests are
     // still ours to host, but only a fresh attach hands them back to the replacement runtime.
     const runtimeRestarted = Boolean(
@@ -180,20 +203,24 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       previousVerifiedStatus != null &&
       previousVerifiedStatus.runtimeId !== status.status.runtimeId
     )
+
     // Why: a non-null status proves the runtime just answered, so drop any stale
     // "offline" compat failure before this online transition fires the
     // reuse-flagged background refetches — a recovered host must re-probe.
     if (status.status !== null) {
       clearRecentRuntimeCompatibilityFailure(environmentId, status.status)
     }
+
     set((s) => {
       const sessionEnded = status.status === null && previous?.status != null
+
       // A reachable answer where we held none (never asked, or recorded unreachable) or
       // where the runtime id moved starts a runtime session.
       const runtimeSessionStarted =
         status.status !== null &&
         (previousVerifiedStatus == null ||
           previousVerifiedStatus.runtimeId !== status.status.runtimeId)
+
       // Why narrower than the session start: a first publication has no prior connection to
       // differ from, so it is not a reconnect. Advancing the generation there retires reads
       // already issued against this very connection — a startup worktree scan that had
@@ -201,6 +228,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       // refresh (#19241).
       const connectionChanged = runtimeSessionStarted && previous !== undefined
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
+
       const connectionGeneration = connectionChanged
         ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
             environmentId
@@ -210,21 +238,26 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(
             environmentId
           ))
+
       // Why the session flag and not `connectionChanged`: integration-readiness caches key
       // off the runtime session, for which a first publication is a real transition.
       if (activeEnvironmentId === environmentId && (sessionEnded || runtimeSessionStarted)) {
         bumpProviderRuntimeSessionGeneration()
       }
+
       const nextEntry = { ...status, connectionGeneration }
       const currentEntry = s.runtimeStatusByEnvironmentId.get(environmentId)
+
       // Why: an unchanged re-probe must not invalidate every Map subscriber. Real
       // transitions change `status` or advance `connectionGeneration`, so they still write.
       const statusUnchanged = Boolean(
         currentEntry && runtimeEnvironmentStatusesEqual(currentEntry, nextEntry)
       )
+
       const environmentIndex = pairedDeviceId
         ? s.runtimeEnvironments.findIndex((environment) => environment.id === environmentId)
         : -1
+
       const runtimeEnvironments =
         environmentIndex >= 0 &&
         s.runtimeEnvironments[environmentIndex].pairedDeviceId !== pairedDeviceId
@@ -232,10 +265,13 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
               index === environmentIndex ? { ...environment, pairedDeviceId } : environment
             )
           : s.runtimeEnvironments
+
       const environmentsChanged = runtimeEnvironments !== s.runtimeEnvironments
+
       if (statusUnchanged && !environmentsChanged) {
         return s
       }
+
       return {
         runtimeStatusByEnvironmentId: statusUnchanged
           ? s.runtimeStatusByEnvironmentId
@@ -243,9 +279,11 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })
+
     if (runtimeRestarted) {
       void ensureBrowserClientHostForRestartedRuntime(get(), environmentId)
     }
+
     if (options?.suppressDisconnectToast) {
       dismissRuntimeDisconnectedToast(environmentId)
     } else if (previous?.status === null && status.status !== null) {
@@ -259,31 +297,38 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     dismissRuntimeDisconnectedToast(environmentId)
     set((s) => {
       runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+
       if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
         return s
       }
+
       const next = new Map(s.runtimeStatusByEnvironmentId)
       next.delete(environmentId)
+
       return { runtimeStatusByEnvironmentId: next }
     })
   },
 
   retainRuntimeEnvironmentStatuses: (environmentIds) => {
     const keep = new Set(environmentIds)
+
     for (const id of get().runtimeStatusByEnvironmentId.keys()) {
       if (!keep.has(id)) {
         dismissRuntimeDisconnectedToast(id)
       }
     }
+
     set((s) => {
       let changed = false
       const next = new Map(s.runtimeStatusByEnvironmentId)
+
       for (const id of next.keys()) {
         if (!keep.has(id)) {
           next.delete(id)
           changed = true
         }
       }
+
       return changed ? { runtimeStatusByEnvironmentId: next } : s
     })
   },
@@ -292,11 +337,14 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
       if (entry.snapshot) {
         get().applyRuntimeHostStatusSnapshot(entry.snapshot)
+
         return
       }
+
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
       get().setRuntimeEnvironmentStatus(environmentId, entry)
+
       if (entry.status) {
         // Why here: hydration can ask before the environment is reachable, and a restored
         // client-hosted page only comes back once this desktop attaches as its host.

@@ -26,11 +26,15 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     if (params.body.length > LINEAR_WRITE_BODY_CAP) {
       throw linearError('linear_body_too_large', 'Linear comment body is too large.')
     }
+
     const target = await this.resolveLinearAgentWriteTarget(params)
+
     const parentId = params.replyTo
       ? await this.resolveLinearCommentParentId(target.issue.id, params.replyTo, target.workspaceId)
       : null
+
     const writeId = params.writeId ?? randomUUID()
+
     const existing =
       params.writeId !== undefined
         ? await this.getMatchingLinearCommentWrite(
@@ -41,8 +45,10 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
             true
           )
         : null
+
     if (existing) {
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
       return this.linearCommentResult(existing, target, params.body.length, writeId, true)
     }
 
@@ -61,7 +67,9 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
             cause
           })
       )
+
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
       return this.linearCommentResult(comment, target, params.body.length, writeId, false)
     } catch (error) {
       if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
@@ -76,9 +84,12 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
               bodyRequired: true
             })
         )
+
         await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
         return this.linearCommentResult(comment, target, params.body.length, writeId, true)
       }
+
       throw error
     }
   }
@@ -96,6 +107,7 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     const target = await this.resolveLinearAgentWriteTarget(params)
     const writeId = params.writeId ?? randomUUID()
     const title = params.title?.trim() || this.defaultLinearAttachmentTitle(url)
+
     const existing =
       params.writeId !== undefined
         ? await this.getMatchingLinearAttachmentWrite(
@@ -105,10 +117,13 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
             true
           )
         : null
+
     if (existing) {
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
       return this.linearAttachResult(existing, target, writeId, true)
     }
+
     try {
       const attachment = await this.runLinearAgentWrite(
         (signal) =>
@@ -125,7 +140,9 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
             cause
           })
       )
+
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
       return this.linearAttachResult(attachment, target, writeId, false)
     } catch (error) {
       if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
@@ -139,9 +156,12 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
               url: url.toString()
             })
         )
+
         await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
         return this.linearAttachResult(attachment, target, writeId, true)
       }
+
       throw error
     }
   }

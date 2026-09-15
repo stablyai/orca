@@ -5,6 +5,7 @@ import {
   isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
 } from '../../../../shared/worktree/removal'
+
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string
@@ -53,6 +54,7 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+
     if (forceDeleteReason === 'unstopped-pty') {
       return {
         title: translate(
@@ -75,6 +77,7 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+
     if (forceDeleteReason === 'running-agent-session') {
       return {
         title: translate(
@@ -98,6 +101,7 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+
     if (forceDeleteReason === 'missing-registration') {
       return {
         title: translate(
@@ -112,6 +116,7 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+
     return {
       title: translate(
         'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',

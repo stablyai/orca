@@ -10,6 +10,7 @@ function profileDirectory(): string {
 
 async function freshModule(): Promise<typeof BrowserClientHostIdModule> {
   vi.resetModules()
+
   return await import('./browser-client-host-id')
 }
 

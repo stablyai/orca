@@ -40,18 +40,22 @@ export function normalizeMobileDiffComments(value: unknown, worktreeId: string):
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.flatMap((candidate): DiffComment[] => {
     if (!isRecord(candidate)) {
       return []
     }
+
     const id = typeof candidate.id === 'string' ? candidate.id : ''
     const filePath = typeof candidate.filePath === 'string' ? candidate.filePath : ''
     const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : Number.NaN
     const body = typeof candidate.body === 'string' ? candidate.body.trim() : ''
     const createdAt = typeof candidate.createdAt === 'number' ? candidate.createdAt : Date.now()
+
     if (!id || !filePath || !Number.isFinite(lineNumber) || lineNumber < 0 || !body) {
       return []
     }
+
     return [
       {
         id,
@@ -78,9 +82,11 @@ export function normalizeMobileDiffComments(value: unknown, worktreeId: string):
 
 export function createMobileDiffComment(input: CreateMobileDiffCommentInput): DiffComment | null {
   const body = input.body.trim()
+
   if (!body || !Number.isFinite(input.lineNumber) || input.lineNumber < 0) {
     return null
   }
+
   return {
     id: input.id,
     worktreeId: input.worktreeId,
@@ -101,9 +107,11 @@ export function addMobileDiffComment(
   input: CreateMobileDiffCommentInput
 ): { comments: DiffComment[]; comment: DiffComment | null } {
   const comment = createMobileDiffComment(input)
+
   if (!comment) {
     return { comments: [...comments], comment: null }
   }
+
   return { comments: [...comments, comment], comment }
 }
 
@@ -114,6 +122,7 @@ export function removeMobileDiffComments(
   if (ids.size === 0) {
     return [...comments]
   }
+
   return comments.filter((comment) => !ids.has(comment.id))
 }
 
@@ -136,9 +145,12 @@ export function removeDeliveredMobileDiffComments(
   if (delivered.length === 0) {
     return [...comments]
   }
+
   const deliveredById = new Map(delivered.map((comment) => [comment.id, comment]))
+
   return comments.filter((comment) => {
     const snapshot = deliveredById.get(comment.id)
+
     return !snapshot || !deliveredCommentMatches(comment, snapshot)
   })
 }

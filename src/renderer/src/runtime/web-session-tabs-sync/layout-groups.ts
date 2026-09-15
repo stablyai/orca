@@ -29,23 +29,29 @@ export function buildHostToLocalTabIdMap({
 }): Map<string, string> {
   const hostToLocal = new Map<string, string>()
   const terminalIds = new Set(terminalTabs.map((tab) => tab.id))
+
   for (const surface of terminalSurfaces) {
     const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
+
     if (terminalIds.has(localId)) {
       hostToLocal.set(surface.parentTabId, localId)
       hostToLocal.set(surface.id, localId)
     }
   }
+
   for (const entry of browserTabs) {
     hostToLocal.set(entry.hostTabId, entry.unifiedTab.id)
     hostToLocal.set(entry.unifiedTab.id, entry.unifiedTab.id)
   }
+
   for (const entry of editorTabs) {
     hostToLocal.set(entry.hostTabId, entry.unifiedTab.id)
   }
+
   for (const entry of agentTabs) {
     hostToLocal.set(entry.hostTabId, entry.unifiedTab.id)
   }
+
   return hostToLocal
 }
 
@@ -61,18 +67,23 @@ export function updateHostSessionTabIdMappings(args: {
   clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
+
   for (const surface of args.terminalSurfaces) {
     const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
+
     if (mirroredTerminalIds.has(localId)) {
       setHostSessionTabIdMapping({ ...args, tabId: localId }, surface.parentTabId)
     }
   }
+
   for (const entry of args.browserTabs) {
     setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
+
   for (const entry of args.editorTabs) {
     setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
+
   for (const entry of args.agentTabs) {
     setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
@@ -92,6 +103,7 @@ export function retainClientPlacedMirroredTabs(args: {
         (!args.mirroredUnifiedIds.has(tabId) ||
           args.clientGroupIdByLocalTabId.get(tabId) === group.id)
     )
+
     const placedTabIds = [...args.clientGroupIdByLocalTabId]
       .filter(
         ([tabId, groupId]) =>
@@ -100,13 +112,16 @@ export function retainClientPlacedMirroredTabs(args: {
           !retainedTabOrder.includes(tabId)
       )
       .map(([tabId]) => tabId)
+
     const tabOrder = [...retainedTabOrder, ...placedTabIds]
+
     const activeTabId =
       args.nextActiveUnifiedTabId && tabOrder.includes(args.nextActiveUnifiedTabId)
         ? args.nextActiveUnifiedTabId
         : group.activeTabId && tabOrder.includes(group.activeTabId)
           ? group.activeTabId
           : (tabOrder[0] ?? null)
+
     return {
       ...group,
       tabOrder,
@@ -148,12 +163,14 @@ export function buildMirroredHostGroups({
     clientGroupIdByLocalTabId,
     nextActiveUnifiedTabId
   })
+
   const groupsById = new Map(strippedGroups.map((group) => [group.id, group]))
   const orderedGroups: TabGroup[] = []
   const seen = new Set<string>()
 
   for (const hostGroup of hostGroups) {
     const existing = groupsById.get(hostGroup.id)
+
     const localHostOrder = hostGroup.tabOrder
       .map((tabId) => hostToLocalTabId.get(tabId))
       .filter(
@@ -162,11 +179,14 @@ export function buildMirroredHostGroups({
           validUnifiedTabIds.has(tabId) &&
           !clientGroupIdByLocalTabId.has(tabId)
       )
+
     const localHostOrderIds = new Set(localHostOrder)
+
     const hostTabOrder = [
       ...(existing?.tabOrder.filter((tabId) => !localHostOrderIds.has(tabId)) ?? []),
       ...localHostOrder
     ]
+
     // Why: a pending client reorder wins over a stale pre-move host order until the host echoes the move (or membership changes).
     const tabOrder = resolveWebSessionReorderedOrder(
       { environmentId },
@@ -175,11 +195,14 @@ export function buildMirroredHostGroups({
       hostTabOrder,
       now
     )
+
     if (tabOrder.length === 0) {
       continue
     }
+
     const activeFromHost =
       hostGroup.activeTabId !== null ? (hostToLocalTabId.get(hostGroup.activeTabId) ?? null) : null
+
     const activeTabId =
       nextActiveUnifiedTabId && tabOrder.includes(nextActiveUnifiedTabId)
         ? nextActiveUnifiedTabId
@@ -188,6 +211,7 @@ export function buildMirroredHostGroups({
           : existing?.activeTabId && tabOrder.includes(existing.activeTabId)
             ? existing.activeTabId
             : (tabOrder[0] ?? null)
+
     orderedGroups.push({
       id: hostGroup.id,
       worktreeId,

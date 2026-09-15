@@ -99,6 +99,7 @@ export function SourceControlAiActionRecipeDefaults({
   // Recomputes on every keystroke in the sibling recipe textareas otherwise, so
   // memoize the filter and the O(actions × repos) override scan on `repos`.
   const repos = useMemo(() => allRepos.filter((repo) => !isFolderRepo(repo)), [allRepos])
+
   const overrideSummaries = useMemo(
     () =>
       Object.fromEntries(
@@ -109,8 +110,10 @@ export function SourceControlAiActionRecipeDefaults({
       ) as Record<SourceControlActionId, SourceControlActionRecipeOverrideSummary>,
     [repos]
   )
+
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+
   const {
     actionRecipeDraftState,
     savingActionTemplateIds,
@@ -136,21 +139,26 @@ export function SourceControlAiActionRecipeDefaults({
         : value === CUSTOM_AGENT_ID
           ? CUSTOM_AGENT_ID
           : (value as TuiAgent)
+
     let previousActions = config.actions
+
     try {
       await writeConfig((current) => {
         previousActions = current.actions
+
         return {
           actions: setSourceControlActionDefault(current.actions, actionId, { agentId })
         }
       })
     } catch (error) {
       console.error('Failed to save Source Control AI action agent default', error)
+
       try {
         await writeConfig({ actions: previousActions })
       } catch (rollbackError) {
         console.error('Failed to roll back Source Control AI action agent default', rollbackError)
       }
+
       toast.error(
         translate(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.b5f46664d3',
@@ -198,6 +206,7 @@ export function SourceControlAiActionRecipeDefaults({
           const recipe = config.actions?.[actionId]
           const selectedAgent = recipe?.agentId ?? null
           const overrideSummary = overrideSummaries[actionId]
+
           return (
             <SourceControlActionRecipeRow
               key={actionId}

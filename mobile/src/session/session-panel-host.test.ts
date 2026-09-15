@@ -53,6 +53,7 @@ describe('resolvePanelAction', () => {
 
   it('pushes the tapped panel when docking is unavailable regardless of current', () => {
     const currents: ActivePanel[] = [null, 'sourceControl', 'files', 'pr']
+
     for (const panel of PANELS) {
       for (const current of currents) {
         expect(resolvePanelAction({ canDock: false, tapped: panel, current })).toEqual({

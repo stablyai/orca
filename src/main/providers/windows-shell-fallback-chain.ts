@@ -30,6 +30,7 @@ function toAttempt(
     wslContext,
     startupCommand
   )
+
   return {
     shellPath,
     shellArgs: resolved.shellArgs,
@@ -61,10 +62,13 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   resolveOptions?: WindowsPowerShellResolveOptions
 }): WindowsShellSpawnAttempt[] {
   const basename = pathWin32.basename(args.shellPath).toLowerCase()
+
   if (basename !== 'pwsh.exe' && basename !== 'powershell.exe') {
     return []
   }
+
   const chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
+
   return chain.map((candidate) =>
     toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
   )

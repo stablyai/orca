@@ -27,7 +27,9 @@ export function rekeyWorktreeId(oldRepoId: string, newRepoId: string, worktreeId
   if (worktreeId === oldRepoId) {
     return newRepoId
   }
+
   const prefix = `${oldRepoId}${WORKTREE_ID_SEPARATOR}`
+
   return worktreeId.startsWith(prefix)
     ? `${newRepoId}${WORKTREE_ID_SEPARATOR}${worktreeId.slice(prefix.length)}`
     : worktreeId
@@ -39,9 +41,11 @@ export function rekeyWorkspaceKey(
   workspaceKey: WorkspaceKey
 ): WorkspaceKey {
   const parsed = parseWorkspaceKey(workspaceKey)
+
   if (parsed?.type !== 'worktree' || !isRepoWorktreeId(oldRepoId, parsed.worktreeId)) {
     return workspaceKey
   }
+
   return worktreeWorkspaceKey(rekeyWorktreeId(oldRepoId, newRepoId, parsed.worktreeId))
 }
 
@@ -53,16 +57,21 @@ export function rekeyOwnerKey(
   const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
     ? getWorktreeIdFromHostIdentity(ownerKey)
     : ownerKey
+
   if (isRepoWorktreeId(oldRepoId, rawOwnerKey)) {
     const rekeyed = rekeyWorktreeId(oldRepoId, newRepoId, rawOwnerKey)
+
     return isWorktreeHostIdentity(ownerKey)
       ? `${ownerKey.slice(0, ownerKey.length - rawOwnerKey.length)}${rekeyed}`
       : rekeyed
   }
+
   const parsed = parseWorkspaceKey(ownerKey)
+
   if (parsed?.type === 'worktree' && isRepoWorktreeId(oldRepoId, parsed.worktreeId)) {
     return worktreeWorkspaceKey(rekeyWorktreeId(oldRepoId, newRepoId, parsed.worktreeId))
   }
+
   return null
 }
 
@@ -78,7 +87,9 @@ export function ownerKeyWorktreeIds(ownerKey: string): string[] {
   const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
     ? getWorktreeIdFromHostIdentity(ownerKey)
     : ownerKey
+
   const scope = parseWorkspaceKey(ownerKey)
+
   return scope?.type === 'worktree' && scope.worktreeId !== rawOwnerKey
     ? [rawOwnerKey, scope.worktreeId]
     : [rawOwnerKey]
@@ -88,10 +99,13 @@ export function ownerKeyBelongsToRepo(ownerKey: string, repoId: string): boolean
   const rawOwnerKey = isWorktreeHostIdentity(ownerKey)
     ? getWorktreeIdFromHostIdentity(ownerKey)
     : ownerKey
+
   if (isRepoWorktreeId(repoId, rawOwnerKey)) {
     return true
   }
+
   const parsed = parseWorkspaceKey(ownerKey)
+
   return parsed?.type === 'worktree' && isRepoWorktreeId(repoId, parsed.worktreeId)
 }
 
@@ -100,10 +114,12 @@ export function removeRepoWorktreeRecord<T>(
   repoId: string
 ): Record<string, T> {
   const next = { ...record }
+
   for (const key of Object.keys(next)) {
     if (ownerKeyBelongsToRepo(key, repoId)) {
       delete next[key]
     }
   }
+
   return next
 }

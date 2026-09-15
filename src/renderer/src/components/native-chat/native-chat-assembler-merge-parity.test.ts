@@ -39,6 +39,7 @@ describe('assembler ↔ id-merge parity on single-source data', () => {
       sessionId: 's1',
       agent: 'claude'
     }).messages
+
     const merged = mergeNativeChatMessagesWith([], transcript, NATIVE_CHAT_SOURCE_PRIORITY)
 
     // The assembler sorts by (timestamp, id); the merge preserves arrival order.

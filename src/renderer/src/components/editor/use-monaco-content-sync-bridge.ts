@@ -41,8 +41,10 @@ export function useMonacoContentSyncBridge(params: {
         // Why: split panes share one retained model, so a sibling must ignore the echoed programmatic-sync onChange or it marks the file dirty.
         if (isApplyingLargePasteRef.current) {
           lastSyncedContentRef.current = value
+
           return
         }
+
         if (
           shouldIgnoreMonacoContentChange({
             filePath,
@@ -51,6 +53,7 @@ export function useMonacoContentSyncBridge(params: {
         ) {
           return
         }
+
         lastSyncedContentRef.current = value
         onContentChange(value)
       }
@@ -61,11 +64,14 @@ export function useMonacoContentSyncBridge(params: {
   // Why: sync the model on external `content` drift; useLayoutEffect lands the overwrite before paint so no stale text flashes. On-mount handled in handleMount.
   useLayoutEffect(() => {
     const ed = editorRef.current
+
     if (!ed || lastSyncedContentRef.current === content) {
       return
     }
+
     beginProgrammaticContentSync(filePath)
     isApplyingProgrammaticContentRef.current = true
+
     try {
       syncContentUpdate(ed, content, contentSyncModeRef.current)
       lastSyncedContentRef.current = content

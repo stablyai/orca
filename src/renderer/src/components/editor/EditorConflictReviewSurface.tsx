@@ -40,6 +40,7 @@ export function EditorConflictReviewSurface({
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+
   const selectedConflictReviewFile = activeFile.conflictReview?.selectedFileId
     ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
     : null
@@ -59,6 +60,7 @@ export function EditorConflictReviewSurface({
 
   const createContentFile = (entry: GitStatusEntry): OpenFile => {
     const absolutePath = joinPath(activeFile.filePath, entry.path)
+
     const conflict =
       entry.conflictKind && entry.conflictStatus && entry.conflictStatusSource
         ? entry.status === 'deleted'
@@ -117,6 +119,7 @@ export function EditorConflictReviewSurface({
     }
 
     const fileContent = fileContents[contentFile.id]
+
     if (!fileContent) {
       return (
         <div className={className}>
@@ -126,6 +129,7 @@ export function EditorConflictReviewSurface({
         </div>
       )
     }
+
     if (fileContent.loadError) {
       return (
         <div className={className}>
@@ -136,6 +140,7 @@ export function EditorConflictReviewSurface({
         </div>
       )
     }
+
     if (fileContent.isBinary) {
       if (fileContent.isImage) {
         return (
@@ -148,6 +153,7 @@ export function EditorConflictReviewSurface({
           </div>
         )
       }
+
       return (
         <div className={className}>
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -216,6 +222,7 @@ export function EditorConflictReviewSurface({
   const renderSelectedContent = (selectedFile: OpenFile): React.JSX.Element => {
     const selectedConflictEntry =
       worktreeEntries.find((entry) => entry.path === selectedFile.relativePath) ?? null
+
     return renderEditorContent({
       contentFile: selectedFile,
       entry: selectedConflictEntry,
@@ -237,10 +244,13 @@ export function EditorConflictReviewSurface({
   const renderAllContent = (): React.JSX.Element => {
     const snapshotEntries = activeFile.conflictReview?.entries ?? []
     const liveEntriesByPath = new Map(worktreeEntries.map((entry) => [entry.path, entry]))
+
     const unresolvedEntries = snapshotEntries.flatMap((entry) => {
       const liveEntry = liveEntriesByPath.get(entry.path)
+
       return liveEntry?.conflictStatus === 'unresolved' && liveEntry.conflictKind ? [liveEntry] : []
     })
+
     return (
       <div className="min-h-0 flex-1 overflow-y-auto bg-editor-surface scrollbar-sleek">
         {unresolvedEntries.map(renderInlineFile)}
@@ -282,5 +292,6 @@ function matchesPendingEditorReveal(
   if (!reveal) {
     return false
   }
+
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath
 }

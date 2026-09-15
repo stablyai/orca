@@ -30,6 +30,7 @@ function cancelStructuralFrames(frameIds: MutableRefObject<number[]>): void {
   for (const frameId of frameIds.current) {
     cancelAnimationFrame(frameId)
   }
+
   frameIds.current = []
 }
 
@@ -41,11 +42,14 @@ function requestStructuralFrame(
   let frameId: number | undefined
   frameId = requestAnimationFrame((timestamp) => {
     completed = true
+
     if (frameId !== undefined) {
       frameIds.current = frameIds.current.filter((pendingFrameId) => pendingFrameId !== frameId)
     }
+
     callback(timestamp)
   })
+
   if (!completed) {
     frameIds.current.push(frameId)
   }
@@ -87,15 +91,19 @@ export function useIpynbDocumentEditing({
   const materializeSourceDrafts = useCallback((): string => {
     const latestNotebook = notebookRef.current
     const drafts = sourceDraftsRef.current
+
     if (!latestNotebook || Object.keys(drafts).length === 0) {
       return contentRef.current
     }
+
     const updates = latestNotebook.cells
       .map((cell, index) => {
         const key = getIpynbCellKey(cell, index)
+
         return hasIpynbSourceDraft(drafts, key) ? { index, source: drafts[key] ?? '' } : null
       })
       .filter((update): update is { index: number; source: string } => update !== null)
+
     return updateIpynbCellSources(contentRef.current, updates)
   }, [])
 
@@ -104,11 +112,14 @@ export function useIpynbDocumentEditing({
       clearTimeout(sourceCommitTimerRef.current)
       sourceCommitTimerRef.current = null
     }
+
     const nextContent = materializeSourceDrafts()
+
     if (nextContent !== contentRef.current) {
       contentRef.current = nextContent
       onContentChangeRef.current(nextContent)
     }
+
     return nextContent
   }, [materializeSourceDrafts])
 
@@ -116,6 +127,7 @@ export function useIpynbDocumentEditing({
     if (sourceCommitTimerRef.current !== null) {
       clearTimeout(sourceCommitTimerRef.current)
     }
+
     sourceCommitTimerRef.current = setTimeout(() => {
       void flushSourceDrafts()
     }, NOTEBOOK_SOURCE_COMMIT_DELAY_MS)
@@ -130,15 +142,19 @@ export function useIpynbDocumentEditing({
     if (!notebook || Object.keys(sourceDraftsRef.current).length === 0) {
       return
     }
+
     const nextDrafts = { ...sourceDraftsRef.current }
     let changed = false
+
     for (const [index, cell] of notebook.cells.entries()) {
       const key = getIpynbCellKey(cell, index)
+
       if (hasIpynbSourceDraft(nextDrafts, key) && nextDrafts[key] === cell.source) {
         delete nextDrafts[key]
         changed = true
       }
     }
+
     if (changed) {
       sourceDraftsRef.current = nextDrafts
       setSourceDrafts(nextDrafts)
@@ -148,9 +164,11 @@ export function useIpynbDocumentEditing({
   const setRootRef = useCallback(
     (node: HTMLDivElement | null): void => {
       rootRef.current = node
+
       if (node !== null) {
         return
       }
+
       void flushSourceDrafts()
       cancelStructuralFrames(structuralFrameIdsRef)
     },
@@ -165,9 +183,11 @@ export function useIpynbDocumentEditing({
   const updateCellSource = useCallback(
     (index: number, source: string): void => {
       const cell = notebookRef.current?.cells[index]
+
       if (!cell) {
         return
       }
+
       const key = getIpynbCellKey(cell, index)
       const nextDrafts = { ...sourceDraftsRef.current, [key]: source }
       sourceDraftsRef.current = nextDrafts
@@ -195,13 +215,16 @@ export function useIpynbDocumentEditing({
       updateIpynbCellKind(latestContent, index, kind, language)
     )
   }
+
   const insertCell = (index: number, kind: IpynbCellKind): void => {
     const language = notebookRef.current?.language ?? 'python'
     applyStructuralChange((latestContent) => insertIpynbCell(latestContent, index, kind, language))
   }
+
   const moveCell = (index: number, direction: -1 | 1): void => {
     applyStructuralChange((latestContent) => moveIpynbCell(latestContent, index, direction))
   }
+
   const deleteCell = (index: number): void => {
     applyStructuralChange((latestContent) => deleteIpynbCell(latestContent, index))
   }

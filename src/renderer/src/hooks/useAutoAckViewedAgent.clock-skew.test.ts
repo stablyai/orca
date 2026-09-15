@@ -24,10 +24,15 @@ vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
 }))
 
 const TAB_ID = 'tab-main'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const NOW = new Date('2026-06-02T12:00:00Z').getTime()
+
 const SKEW_MS = 90_000
+
 const ACK_CALL_CEILING = 20
 
 function seedFutureStampedTurn(stateStartedAt: number): void {
@@ -40,6 +45,7 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
     paneKey: PANE_KEY,
     stateHistory: []
   }
+
   useAppStore.setState({
     activeView: 'terminal',
     activeTabId: TAB_ID,
@@ -64,12 +70,15 @@ function instrumentAcknowledgeAgents(): string[][] {
   useAppStore.setState({
     acknowledgeAgents: (paneKeys: string[]) => {
       calls.push(paneKeys)
+
       if (calls.length > ACK_CALL_CEILING) {
         return
       }
+
       real(paneKeys)
     }
   })
+
   return calls
 }
 

@@ -11,14 +11,18 @@ export function getEffectiveLayoutForWorktree(
   activeGroupIdByWorktree: Record<string, string | undefined>
 ): TabGroupLayoutNode | undefined {
   const layout = layoutByWorktree[worktreeId]
+
   if (layout) {
     return layout
   }
+
   const groups = groupsByWorktree[worktreeId] ?? []
   const fallbackGroupId = activeGroupIdByWorktree[worktreeId] ?? groups[0]?.id ?? null
+
   if (!fallbackGroupId) {
     return undefined
   }
+
   return { type: 'leaf', groupId: fallbackGroupId } as const
 }
 

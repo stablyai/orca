@@ -7,11 +7,13 @@ import {
 function createFrameScheduler() {
   const queue = new Map<number, () => void>()
   let nextHandle = 1
+
   return {
     requestFrame: (callback: () => void): number => {
       const handle = nextHandle
       nextHandle += 1
       queue.set(handle, callback)
+
       return handle
     },
     cancelFrame: (handle: number): void => {
@@ -19,12 +21,14 @@ function createFrameScheduler() {
     },
     run(maxFrames = 100): number {
       let ran = 0
+
       while (queue.size > 0 && ran < maxFrames) {
         const [handle, callback] = queue.entries().next().value as [number, () => void]
         queue.delete(handle)
         callback()
         ran += 1
       }
+
       return ran
     },
     pending: (): number => queue.size
@@ -33,9 +37,11 @@ function createFrameScheduler() {
 
 function createTimelineMeasure(timeline: (frame: number) => TerminalStartupGridDimensions | null) {
   let frame = 0
+
   return vi.fn((): TerminalStartupGridDimensions | null => {
     const dimensions = timeline(frame)
     frame += 1
+
     return dimensions
   })
 }
@@ -68,6 +74,7 @@ describe('waitForStableStartupGrid', () => {
   it('settles on the later split grid instead of the early wide grid', () => {
     const scheduler = createFrameScheduler()
     const onSettled = vi.fn()
+
     const measure = createTimelineMeasure((frame) =>
       frame < 5 ? { cols: 180, rows: 50 } : { cols: 88, rows: 50 }
     )
@@ -204,6 +211,7 @@ describe('waitForStableStartupGrid', () => {
   it('cancels the pending frame without calling the settle callback', () => {
     const scheduler = createFrameScheduler()
     const onSettled = vi.fn()
+
     const handle = waitForStableStartupGrid({
       isAlive: () => true,
       measure: vi.fn(() => ({ cols: 120, rows: 40 })),

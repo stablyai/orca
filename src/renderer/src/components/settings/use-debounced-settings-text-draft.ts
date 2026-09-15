@@ -42,6 +42,7 @@ export function useDebouncedSettingsTextDraft(args: {
     if (timerRef.current !== null) {
       return
     }
+
     draftRef.current = value
     setDraft(value)
   }, [value])
@@ -50,6 +51,7 @@ export function useDebouncedSettingsTextDraft(args: {
     if (timerRef.current === null) {
       return
     }
+
     clearTimeout(timerRef.current)
     timerRef.current = null
     commitRef.current(draftRef.current)
@@ -59,9 +61,11 @@ export function useDebouncedSettingsTextDraft(args: {
     (next: string) => {
       draftRef.current = next
       setDraft(next)
+
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current)
       }
+
       timerRef.current = setTimeout(flush, SETTINGS_TEXT_COMMIT_DEBOUNCE_MS)
     },
     [flush]
@@ -76,6 +80,7 @@ export function useDebouncedSettingsTextDraft(args: {
   // close confirmation, so main persists the value before it flushes the store on quit.
   useEffect(() => {
     window.addEventListener('beforeunload', flush)
+
     return () => {
       window.removeEventListener('beforeunload', flush)
       flush()

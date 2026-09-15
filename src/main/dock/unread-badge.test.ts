@@ -19,6 +19,7 @@ describe('unread Dock badge', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     setBadgeMock.mockReset()
     vi.resetModules()
   })

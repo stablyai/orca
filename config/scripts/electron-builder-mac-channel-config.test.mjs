@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 
 const MUTABLE_BUILD_ENV = [
@@ -19,10 +20,12 @@ const MUTABLE_BUILD_ENV = [
 function withEnv(env, assert) {
   const configPath = require.resolve('../electron-builder.config.cjs')
   const original = Object.fromEntries(MUTABLE_BUILD_ENV.map((key) => [key, process.env[key]]))
+
   try {
     for (const key of MUTABLE_BUILD_ENV) {
       delete process.env[key]
     }
+
     Object.assign(process.env, env)
     delete require.cache[configPath]
     assert(require('../electron-builder.config.cjs'))
@@ -34,13 +37,16 @@ function withEnv(env, assert) {
         process.env[key] = value
       }
     }
+
     delete require.cache[configPath]
     require('../electron-builder.config.cjs')
   }
 }
 
 const withHourlyEnv = (assert) => withEnv({ ORCA_MAC_HOURLY: '1' }, assert)
+
 const withDailyEnv = (assert) => withEnv({ ORCA_MAC_DAILY: '1' }, assert)
+
 const withAdhocEnv = (assert) => withEnv({ ORCA_MAC_ADHOC: '1' }, assert)
 
 describe('electron-builder mac channel config', () => {

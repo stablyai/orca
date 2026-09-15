@@ -6,14 +6,21 @@ import tailwindcss from '@tailwindcss/vite'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
   throw new Error('Requires ORCA_BACKGROUND_LAUNCH=1')
 }
+
 const root = fileURLToPath(new URL('../../../', import.meta.url))
+
 const parent = path.join(root, '.bench-fixtures')
+
 mkdirSync(parent, { recursive: true })
+
 const output = mkdtempSync(path.join(parent, 'omp-picker-search-'))
+
 const main = path.join(output, 'main.cjs')
+
 await buildMain({
   entryPoints: [path.join(root, 'tests/tools/benchmarks/spinner-rendering/main.ts')],
   outfile: main,
@@ -22,6 +29,7 @@ await buildMain({
   format: 'cjs',
   external: ['electron']
 })
+
 await buildRenderer({
   configFile: false,
   root: import.meta.dirname,
@@ -31,12 +39,16 @@ await buildRenderer({
   resolve: { alias: { '@': path.join(root, 'src/renderer/src') } },
   build: { outDir: path.join(output, 'renderer'), emptyOutDir: true }
 })
+
 const { ELECTRON_RUN_AS_NODE: _runAsNode, ...env } = process.env
+
 const app = await electron.launch({ args: [main], env: { ...env, ORCA_BACKGROUND_LAUNCH: '1' } })
+
 const report = {
   scope:
     'Production AgentCombobox and agent catalog in hidden Electron; supplied available agents, no PATH detection or terminal launch.'
 }
+
 try {
   const page = await app.firstWindow()
   const errors = []
@@ -46,9 +58,11 @@ try {
   })
   const baseline = process.env.ORCA_OMP_PICKER_BASELINE === '1'
   const fixtureUrl = pathToFileURL(path.join(output, 'renderer/index.html'))
+
   if (baseline) {
     fixtureUrl.searchParams.set('baseline', '1')
   }
+
   await page.goto(fixtureUrl.href)
   await page.locator('button[role=combobox]').click()
   const search = page.getByPlaceholder('Search agents...')
@@ -69,6 +83,7 @@ try {
     path.join(output, baseline ? 'before.png' : 'after.png'),
     Buffer.from(data, 'base64')
   )
+
   if (!baseline) {
     await page.getByRole('option', { name: 'OMP', exact: true }).click()
     await expect(page.getByText('Selected agent: omp', { exact: true })).toBeVisible()
@@ -77,6 +92,7 @@ try {
     await search.fill('oh my pi')
     await expect(page.getByRole('option', { name: 'OMP', exact: true })).toBeVisible()
   }
+
   report.baseline = baseline
   expect(errors).toEqual([])
   report.windows = await app.evaluate(({ BrowserWindow }) =>

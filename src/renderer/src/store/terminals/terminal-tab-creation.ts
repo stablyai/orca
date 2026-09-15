@@ -23,19 +23,26 @@ import {
   resolveCreatedTabShellOverride,
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
+
 export function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
+
   for (const tab of tabs) {
     const match = /^Terminal (\d+)$/.exec(tab.defaultTitle ?? tab.title)
+
     if (!match) {
       continue
     }
+
     usedOrdinals.add(Number(match[1]))
   }
+
   let nextOrdinal = 1
+
   while (usedOrdinals.has(nextOrdinal)) {
     nextOrdinal += 1
   }
+
   return nextOrdinal
 }
 
@@ -46,6 +53,7 @@ function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupComma
   const launchToken = startup.launchConfig
     ? (startup.launchToken ?? createBrowserUuid())
     : undefined
+
   return {
     ...startup,
     ...(launchToken ? { launchToken } : {})
@@ -62,34 +70,43 @@ export function createTerminalTabCreationActions(
       set((s) => {
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
         const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(s, worktreeId, orphanTerminalIds)
+
         const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
           (entry) => !orphanTerminalIds.has(entry.id)
         )
+
         // Why: honor a caller-supplied tab id but mint on collision — aliasing two PTYs to one id corrupts agent-status routing. See docs/cli-terminal-hook-pane-key.md.
         // Why: only honor a non-empty trimmed hint; useIpcEvents spreads `id` whenever tabId !== undefined, so a stray '' would break paneKey routing.
         const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
+
         const hintedId =
           trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
+
         const idCollides =
           hintedId !== undefined &&
           Object.values(s.tabsByWorktree).some((tabs) =>
             tabs.some((entry) => entry.id === hintedId)
           )
+
         if (idCollides) {
           console.warn(
             `[createTab] tabId hint ${hintedId} already exists; minting a fresh id (hook attribution will degrade for this terminal)`
           )
         }
+
         const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
+
         const requestedInitialLeafId =
           options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
             ? options.initialLeafId
             : undefined
+
         // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
         const initialLeafId =
           options?.initialPtyId || options?.pendingStartup
             ? (requestedInitialLeafId ?? createBrowserUuid())
             : undefined
+
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -98,6 +115,7 @@ export function createTerminalTabCreationActions(
         const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
         const isRemoteWorktree = Boolean(remoteConnectionId)
         const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
+
         const createdShellOverride = resolveCreatedTabShellOverride(
           shellOverride,
           s.settings?.terminalWindowsShell,
@@ -113,6 +131,7 @@ export function createTerminalTabCreationActions(
             ? undefined
             : getLocalProjectExecutionRuntimeContext(s, worktreeId)
         )
+
         tab = {
           id,
           // Why: CLI-created background sessions already own a PTY, so reveal attaches instead of spawning a duplicate.
@@ -133,22 +152,27 @@ export function createTerminalTabCreationActions(
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
         }
+
         const validTargetGroupId =
           targetGroupId &&
           s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
             ? targetGroupId
             : undefined
+
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           s.groupsByWorktree,
           s.activeGroupIdByWorktree,
           worktreeId,
           validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
         )
+
         const nextActiveGroupIdByWorktree =
           shouldActivate && validTargetGroupId
             ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
             : activeGroupIdByWorktree
+
         const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
+
         const existingTerminalTab = findTabByEntityInGroup(
           s.unifiedTabsByWorktree,
           worktreeId,
@@ -156,7 +180,9 @@ export function createTerminalTabCreationActions(
           id,
           'terminal'
         )
+
         const groupsForWorktree = groupsByWorktree[worktreeId] ?? []
+
         const cleanedGroups =
           orphanTerminalIds.size === 0
             ? groupsForWorktree
@@ -165,12 +191,16 @@ export function createTerminalTabCreationActions(
                 const tabOrder = dedupeTabOrder(entry.tabOrder).filter(
                   (tabId) => !orphanTerminalIds.has(tabId)
                 )
+
                 const recentTabIds = sanitizeRecentTabIds(entry.recentTabIds, tabOrder)
+
                 const replacedActiveTabId = Boolean(
                   entry.activeTabId && orphanTerminalIds.has(entry.activeTabId)
                 )
+
                 const fallbackActiveTabId = recentTabIds.at(-1) ?? tabOrder[0] ?? null
                 const activeTabId = replacedActiveTabId ? fallbackActiveTabId : entry.activeTabId
+
                 return {
                   ...entry,
                   activeTabId,
@@ -181,10 +211,13 @@ export function createTerminalTabCreationActions(
                       : recentTabIds
                 }
               })
+
         const cleanedTargetGroup = cleanedGroups.find((entry) => entry.id === group.id) ?? group
+
         const cleanedGroupOrder = dedupeTabOrder(cleanedTargetGroup.tabOrder).filter(
           (tabId) => !orphanTerminalIds.has(tabId)
         )
+
         const unifiedTab = existingTerminalTab ?? {
           id,
           entityId: id,
@@ -202,18 +235,24 @@ export function createTerminalTabCreationActions(
           // Why: omit for non-agent tabs so they keep the implicit 'terminal' view mode.
           ...(options?.viewMode ? { viewMode: options.viewMode } : {})
         }
+
         const nextGroupOrder = dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
+
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizeRecentTabIds(group.recentTabIds, nextGroupOrder), unifiedTab.id)
           : sanitizeRecentTabIds(cleanedTargetGroup.recentTabIds, nextGroupOrder)
+
         const cleanedActiveTabIdForWorktree = orphanCleanupPatch.activeTabIdByWorktree[worktreeId]
+
         const cleanedGroupActiveTabId =
           cleanedTargetGroup.activeTabId && !orphanTerminalIds.has(cleanedTargetGroup.activeTabId)
             ? cleanedTargetGroup.activeTabId
             : null
+
         const nextActiveTabIdForWorktree = shouldActivate
           ? tab.id
           : (cleanedActiveTabIdForWorktree ?? cleanedGroupActiveTabId ?? tab.id)
+
         return {
           ...orphanCleanupPatch,
           tabsByWorktree: {
@@ -272,15 +311,19 @@ export function createTerminalTabCreationActions(
           }
         }
       })
+
       if (options?.initialPtyId) {
         // Why: a tab born with a live PTY (CLI/runtime create) wakes the workspace like any other bind.
         clearWorktreeSleepIntent(worktreeId)
       }
+
       const shouldRecordInteraction =
         options?.recordInteraction ?? (!options?.pendingActivationSpawn && !options?.initialPtyId)
+
       if (shouldRecordInteraction) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
+
       return tab
     }
   }

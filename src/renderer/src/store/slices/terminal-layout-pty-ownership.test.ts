@@ -8,6 +8,7 @@ import {
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 
 describe('setTabLayout PTY ownership', () => {
@@ -43,6 +44,7 @@ describe('setTabLayout PTY ownership', () => {
 
   it('preserves valid live layouts and legacy leaf ids by identity', () => {
     const store = createTestStore()
+
     const layout = {
       root: {
         type: 'split' as const,
@@ -213,12 +215,14 @@ describe('setTabLayout PTY ownership', () => {
 
   it('scopes ownership to a tab so detach handoffs can share a PTY across tabs', () => {
     const store = createTestStore()
+
     const sourceLayout = {
       root: { type: 'leaf' as const, leafId: LEAF_1 },
       activeLeafId: LEAF_1,
       expandedLeafId: null,
       ptyIdsByLeafId: { [LEAF_1]: 'pty-detached' }
     }
+
     const targetLayout = {
       root: { type: 'leaf' as const, leafId: LEAF_2 },
       activeLeafId: LEAF_2,

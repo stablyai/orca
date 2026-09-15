@@ -10,6 +10,7 @@ describe('SSH Linear MCP-compatible issue listing', () => {
       result: {},
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const dispatcher = { dispatch } as unknown as RpcDispatcher
 
     await dispatchRemoteLinearListIssues(dispatcher, {

@@ -38,10 +38,13 @@ type ClipboardEventLike = {
 
 function clipboardEventImageFile(event: ClipboardEventLike): File | null {
   const data = event.clipboardData
+
   if (!data) {
     return null
   }
+
   const item = Array.from(data.items).find((candidate) => candidate.type.startsWith('image/'))
+
   return item?.getAsFile() ?? null
 }
 
@@ -65,9 +68,11 @@ function attachmentOwnerStillMatches(
   if (original.kind !== current.kind) {
     return false
   }
+
   if (original.kind !== 'ssh') {
     return true
   }
+
   return current.kind === 'ssh' && original.connectionId === current.connectionId
 }
 
@@ -115,14 +120,17 @@ export function useNativeChatComposerPaste({
     ): Promise<{ status: 'saved'; tempPath: string } | { status: 'empty' | 'failed' }> => {
       if (owner.kind === 'runtime') {
         setNotice(nativeChatLocalAttachmentUnsupportedNotice())
+
         return { status: 'failed' }
       }
+
       try {
         // SSH panes save the image on the remote host (SFTP) so the attached
         // path is readable by the remote agent, matching terminal image paste.
         const tempPath = await window.api.ui.saveClipboardImageAsTempFile(
           owner.kind === 'ssh' ? { connectionId: owner.connectionId } : undefined
         )
+
         return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
       } catch (error) {
         // A failed save must be visible: over SSH it fails whenever the
@@ -135,6 +143,7 @@ export function useNativeChatComposerPaste({
             )
           )
         }
+
         return { status: 'failed' }
       }
     },
@@ -163,14 +172,18 @@ export function useNativeChatComposerPaste({
         if (pendingId) {
           dropPendingImageAttachment(pendingId)
         }
+
         setNotice(nativeChatWorktreeNotReadyNotice())
+
         return
       }
+
       if (pendingId) {
         resolvePendingImageAttachment(pendingId, path, connectionId)
       } else {
         attachResolvedPaths([path], connectionId)
       }
+
       setNotice(null)
     },
     [
@@ -189,44 +202,59 @@ export function useNativeChatComposerPaste({
       if (event.defaultPrevented) {
         return
       }
+
       // Only an image needs interception; plain text falls through so the
       // textarea's native paste keeps its caret/undo behavior when it is the
       // event target. (When the OS retargets the paste off the textarea the
       // pane listener still routes text via pasteFromClipboard.)
       const imageFile = clipboardEventImageFile(event)
+
       if (!imageFile) {
         return
       }
+
       event.preventDefault()
       const owner = resolveAttachmentOwner()
+
       if (owner.kind === 'not-ready') {
         setNotice(nativeChatWorktreeNotReadyNotice())
+
         return
       }
+
       if (!acceptsImages) {
         noteImagesUnsupported()
+
         return
       }
+
       // Why: snapshot the caret before the async temp-file round-trip — `caret`
       // state can move (further typing/selection) while the await is in flight.
       const caretAtPaste = caret
+
       // The clipboard blob is already in this process, so the chip can show the
       // real image on the same tick the paste happens — no round-trip at all.
       const previewUrl = ownerAcceptsClipboardImage(owner)
         ? URL.createObjectURL(imageFile)
         : undefined
+
       const pendingId = previewUrl ? beginPendingImageAttachment(previewUrl) : null
+
       if (previewUrl && !pendingId) {
         URL.revokeObjectURL(previewUrl)
       }
+
       void (async () => {
         const saved = await saveClipboardImageForOwner(owner)
+
         if (saved.status !== 'saved' || disabledRef.current) {
           if (pendingId) {
             dropPendingImageAttachment(pendingId)
           }
+
           return
         }
+
         settleImagePaste(pendingId, saved.tempPath, ownerConnectionId(owner), owner)
         setCaret(caretAtPaste)
       })()
@@ -257,42 +285,58 @@ export function useNativeChatComposerPaste({
       // it: it answers first (it never touches disk or the network), so the chip
       // appears while the save is still in flight and text paste stays as fast.
       const wantsPlaceholder = acceptsImages && ownerAcceptsClipboardImage(owner)
+
       const thumbnailPromise = wantsPlaceholder
         ? window.api.ui.readClipboardImageThumbnail().catch(() => null)
         : Promise.resolve(null)
+
       const savePromise = saveClipboardImageForOwner(owner)
       const thumbnail = await thumbnailPromise
+
       const pendingId =
         thumbnail && !disabledRef.current ? beginPendingImageAttachment(thumbnail.dataUrl) : null
+
       const saved = await savePromise
+
       if (disabledRef.current || saved.status === 'failed') {
         if (pendingId) {
           dropPendingImageAttachment(pendingId)
         }
+
         return
       }
+
       if (saved.status === 'saved') {
         if (owner.kind === 'not-ready') {
           setNotice(nativeChatWorktreeNotReadyNotice())
+
           return
         }
+
         if (!acceptsImages) {
           noteImagesUnsupported()
+
           return
         }
+
         settleImagePaste(pendingId, saved.tempPath, ownerConnectionId(owner), owner)
+
         return
       }
+
       // Clipboard changed between the probe and the save: no image to attach.
       if (pendingId) {
         dropPendingImageAttachment(pendingId)
       }
+
       const text = await window.api.ui
         .readClipboardText({ maxBytes: NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES })
         .catch(() => '')
+
       if (disabledRef.current) {
         return
       }
+
       if (text.length > 0) {
         insertTypedText(text)
       }

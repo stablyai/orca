@@ -4,6 +4,7 @@ import type { BrowserHostCommandLedger } from './browser-host-command-ledger'
 import type { BrowserHostFence, BrowserHostFenceReason } from './browser-host-lease-fence'
 
 const MAX_BROWSER_HOSTS_PER_CONNECTION = 1
+
 // Why: tolerate brief desktop restart overlap while keeping one paired identity bounded.
 const MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE = 4
 
@@ -74,20 +75,25 @@ export function assertBrowserHostLeaseAdmission(
 ): void {
   let connectionLeases = 0
   let deviceLeases = 0
+
   for (const state of states) {
     if (state === replacement) {
       continue
     }
+
     if (state.lease.connectionId === input.connectionId) {
       connectionLeases += 1
     }
+
     if (state.lease.pairedDeviceId === input.pairedDeviceId) {
       deviceLeases += 1
     }
   }
+
   if (connectionLeases >= MAX_BROWSER_HOSTS_PER_CONNECTION) {
     throw new Error('browser_host_connection_capacity')
   }
+
   if (deviceLeases >= MAX_BROWSER_HOSTS_PER_PAIRED_DEVICE) {
     throw new Error('browser_host_device_capacity')
   }
@@ -100,8 +106,10 @@ export function requireBrowserHostCommandResultLedger(
   if (state.lease.connectionId !== identity.connectionId) {
     throw new Error('browser_host_lease_stale')
   }
+
   if (!state.commandLedger) {
     throw new Error('browser_host_command_protocol_required')
   }
+
   return state.commandLedger
 }

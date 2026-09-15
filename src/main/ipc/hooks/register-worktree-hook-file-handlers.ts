@@ -16,6 +16,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
     'hooks:readIssueCommand',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
+
       if (!repo || isFolderRepo(repo)) {
         return {
           status: 'ok',
@@ -26,9 +27,11 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           source: 'none' as const
         }
       }
+
       if (repo.connectionId) {
         const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
         if (!fsProvider) {
           return {
             status: 'error',
@@ -43,6 +46,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         let status: 'ok' | 'error' = 'ok'
         let localContent: string | null = null
         let sharedContent: string | null = null
+
         try {
           const result = await fsProvider.readFile(issueCommandPath)
           localContent = result.isBinary ? null : result.content.trim() || null
@@ -51,6 +55,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
             status = 'error'
           }
         }
+
         try {
           const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
           sharedContent = result.isBinary
@@ -61,7 +66,9 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
             status = 'error'
           }
         }
+
         const effectiveContent = localContent ?? sharedContent
+
         return {
           status: localContent ? 'ok' : status,
           localContent,
@@ -75,6 +82,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
               : ('none' as const)
         }
       }
+
       return readIssueCommand(repo.path)
     }
   )
@@ -83,30 +91,39 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
     'hooks:writeIssueCommand',
     async (_event, args: { repoId: string; content: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
+
       if (!repo || isFolderRepo(repo)) {
         return
       }
+
       if (repo.connectionId) {
         const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
         if (!fsProvider) {
           throw new Error(
             'Remote filesystem unavailable. Reconnect the SSH target before retrying.'
           )
         }
+
         const trimmed = args.content.trim()
+
         if (!trimmed) {
           await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
             if (!isENOENT(error)) {
               throw error
             }
           })
+
           return
         }
+
         await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
         const gitignorePath = joinWorktreeRelativePath(repo.path, '.gitignore')
+
         try {
           const result = await fsProvider.readFile(gitignorePath)
+
           if (!result.isBinary && !/^\.orca\/?$/m.test(result.content)) {
             const separator = result.content.endsWith('\n') ? '' : '\n'
             await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
@@ -115,11 +132,15 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           if (!isENOENT(error)) {
             throw error
           }
+
           await fsProvider.writeFile(gitignorePath, '.orca\n')
         }
+
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
+
         return
       }
+
       writeIssueCommand(repo.path, args.content)
     }
   )

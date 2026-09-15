@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+
 export { parseSshGOutput, resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
 export type SshConfigHost = {
@@ -31,11 +32,13 @@ export function parseSshConfig(content: string): SshConfigHost[] {
 
   for (const rawLine of content.split('\n')) {
     const line = rawLine.trim()
+
     if (!line || line.startsWith('#')) {
       continue
     }
 
     const directive = parseConfigDirective(line)
+
     if (!directive) {
       continue
     }
@@ -48,9 +51,11 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       }
 
       const patterns = splitHostPatterns(rawValue)
+
       const concretePatterns = patterns.filter(
         (pattern) => !pattern.startsWith('!') && !pattern.includes('*') && !pattern.includes('?')
       )
+
       if (concretePatterns.length === 0) {
         current = []
         continue
@@ -64,6 +69,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       if (current.length > 0) {
         appendHosts(hosts, current)
       }
+
       current = []
       continue
     }
@@ -80,36 +86,43 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         for (const host of current) {
           host.hostname ??= value
         }
+
         break
       case 'port':
         for (const host of current) {
           host.port ??= Number.parseInt(value, 10) || 22
         }
+
         break
       case 'user':
         for (const host of current) {
           host.user ??= value
         }
+
         break
       case 'identityfile':
         for (const host of current) {
           host.identityFile = resolveSshConfigHomePath(value)
         }
+
         break
       case 'identityagent':
         for (const host of current) {
           host.identityAgent ??= resolveSshConfigHomePath(value)
         }
+
         break
       case 'identitiesonly':
         for (const host of current) {
           host.identitiesOnly ??= value.toLowerCase() === 'yes'
         }
+
         break
       case 'gssapiauthentication':
         for (const host of current) {
           host.gssapiAuthentication ??= value.toLowerCase() === 'yes'
         }
+
         break
       case 'proxycommand':
         for (const host of current) {
@@ -117,16 +130,19 @@ export function parseSshConfig(content: string): SshConfigHost[] {
           // the rest of the line, including quotes and `#` characters.
           host.proxyCommand ??= rawValue.trim()
         }
+
         break
       case 'proxyusefdpass':
         for (const host of current) {
           host.proxyUseFdpass ??= value.toLowerCase() === 'yes'
         }
+
         break
       case 'proxyjump':
         for (const host of current) {
           host.proxyJump ??= value
         }
+
         break
     }
   }
@@ -134,6 +150,7 @@ export function parseSshConfig(content: string): SshConfigHost[] {
   if (current.length > 0) {
     appendHosts(hosts, current)
   }
+
   return hosts
 }
 
@@ -163,20 +180,27 @@ export function parseSshConfigAliasClaims(content: string): SshConfigAliasClaims
 
   for (const rawLine of content.split('\n')) {
     const line = rawLine.trim()
+
     if (!line || line.startsWith('#')) {
       continue
     }
+
     const directive = parseConfigDirective(line)
+
     if (!directive) {
       continue
     }
+
     if (directive.key === 'host') {
       const patterns = splitHostPatterns(directive.rawValue)
+
       if (patterns.length > 0) {
         hostPatternGroups.push(patterns)
       }
+
       continue
     }
+
     if (directive.key === 'match') {
       hasMatchBlock = true
     }
@@ -187,6 +211,7 @@ export function parseSshConfigAliasClaims(content: string): SshConfigAliasClaims
 
 function parseConfigDirective(line: string): { key: string; rawValue: string } | null {
   const match = line.match(/^([^=\s]+)(?:\s*=\s*|\s+)(.*)$/)
+
   if (!match) {
     return null
   }
@@ -240,6 +265,7 @@ function splitOpenSshArguments(input: string): string[] {
         args.push(current)
         current = ''
       }
+
       continue
     }
 
@@ -256,15 +282,18 @@ function splitOpenSshArguments(input: string): string[] {
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
 export function loadUserSshConfig(): SshConfigHost[] {
   const configPath = join(homedir(), '.ssh', 'config')
+
   if (!existsSync(configPath)) {
     return []
   }
 
   try {
     const content = expandSshConfigIncludes(configPath)
+
     return parseSshConfig(content)
   } catch {
     console.warn(`[ssh] Failed to read SSH config at ${configPath}`)
+
     return []
   }
 }
@@ -284,6 +313,7 @@ export function sshConfigHostsToTargets(
     if (seenLabels.has(label)) {
       continue
     }
+
     seenLabels.add(label)
 
     targets.push({

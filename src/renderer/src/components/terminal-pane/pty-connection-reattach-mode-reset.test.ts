@@ -53,8 +53,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -75,6 +78,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -84,6 +88,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -104,6 +109,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -114,9 +120,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -126,9 +134,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -137,6 +147,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -173,8 +184,10 @@ describe('connectPanePty', () => {
 
   it('retries a fresh-spawn native follow reset when renderer dimensions return', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { getTerminalScrollIntentKind } =
       await import('@/lib/pane-manager/terminal-scroll-intent')
+
     const transport = createMockTransport('fresh-pty')
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -188,6 +201,7 @@ describe('connectPanePty', () => {
     const renderDisposable = { dispose: vi.fn() }
     pane.terminal.onRender = vi.fn((listener: () => void) => {
       renderListener.current = listener
+
       return renderDisposable
     })
     vi.mocked(pane.terminal.scrollToBottom)
@@ -224,6 +238,7 @@ describe('connectPanePty', () => {
           pendingEscapeTailAnsi: '\x1b[3'
         }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -234,6 +249,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -245,9 +261,11 @@ describe('connectPanePty', () => {
     const tailWriteCall = pane.terminal.write.mock.invocationCallOrder.find(
       (_order, index) => pane.terminal.write.mock.calls[index][0] === '\x1b[3'
     )
+
     const resetWriteCall = pane.terminal.write.mock.invocationCallOrder.find((_order, index) =>
       String(pane.terminal.write.mock.calls[index][0]).includes(POST_REPLAY_REATTACH_RESET)
     )
+
     expect(tailWriteCall).toBeDefined()
     expect(resetWriteCall).toBeDefined()
     // The dangling tail is written AFTER the reset.
@@ -289,10 +307,12 @@ describe('connectPanePty', () => {
     transport.sendInput.mockClear()
     transport.sendInputImmediate.mockClear()
     const printableInputs = [']10;hello', '>|xterm.js(6.1.0-beta.287)', ']|literal-text']
+
     for (const data of printableInputs) {
       sendTerminalInputThroughPane(pane, data)
       expect(transport.sendInput).toHaveBeenCalledWith(data)
     }
+
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
   })
 
@@ -307,6 +327,7 @@ describe('connectPanePty', () => {
       callback?.()
     }) as typeof pane.terminal.write
     const transport = createMockTransport('remote:web-env-1@@pty-7329-tail')
+
     const replayCallback: {
       current:
         | ((
@@ -315,8 +336,10 @@ describe('connectPanePty', () => {
           ) => void)
         | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       replayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:web-env-1@@pty-7329-tail', replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -349,6 +372,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -360,6 +384,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -374,9 +399,11 @@ describe('connectPanePty', () => {
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
       )
+
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
         ([data]) => data as string
       )
+
       expect(writes.some((data) => data.includes('\x1b[?25h'))).toBe(false)
     })
   })
@@ -393,6 +420,7 @@ describe('connectPanePty', () => {
           snapshotTerminalOwner: 'shell' as const
         }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -435,6 +463,7 @@ describe('connectPanePty', () => {
           coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
         }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -445,6 +474,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -456,6 +486,7 @@ describe('connectPanePty', () => {
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
         ([data]) => data as string
       )
+
       expect(writes).toContain(
         `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ `
       )
@@ -476,8 +507,10 @@ describe('connectPanePty', () => {
       if (sessionId) {
         throw new Error('restored session is gone')
       }
+
       // Main answered the spawn by adopting a durable session instead.
       activePtyId = 'adopted-pty'
+
       return {
         id: 'adopted-pty',
         isReattach: true,
@@ -496,6 +529,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -507,9 +541,11 @@ describe('connectPanePty', () => {
       expect(transport.connect).toHaveBeenCalledTimes(2)
       expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
       expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
+
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
         ([data]) => data as string
       )
+
       const output = writes.join('')
       const snapshotIndex = output.indexOf('\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ')
       const resetIndex = output.indexOf(POST_REPLAY_MODE_RESET)
@@ -528,6 +564,7 @@ describe('connectPanePty', () => {
         // A mid-frame snapshot cut after the TUI re-showed its cursor.
         return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25l\x1b[?25hrestored cursor snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -538,6 +575,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -560,6 +598,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lrestored cursor snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -571,6 +610,7 @@ describe('connectPanePty', () => {
     // Why: a different element owns focus, so the reattach must not send a stray focus-in to a background pane.
     await withMockedDocumentActiveElement({}, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -594,6 +634,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -604,6 +645,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -638,14 +680,18 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const textarea = {} as HTMLTextAreaElement
     configureTerminalFocusMode(pane, textarea)
+
     return withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
+
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
+
       return (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls
         .map((call) => String(call[0]))
         .find(
@@ -674,6 +720,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -693,6 +740,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -720,6 +768,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: '\x1b[?1004h\x1b[?25lstale shell snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -731,6 +780,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -762,6 +812,7 @@ describe('connectPanePty', () => {
             '\x1b[?1004h\x1b[?25l$ grep -R "Cursor Agent" docs\r\nCursor Agent IME notes\r\n'
         }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -772,6 +823,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     await withMockedDocumentActiveElement(textarea, async () => {
       const manager = createManager(1)
+
       const deps = createDeps({
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
@@ -799,6 +851,7 @@ describe('connectPanePty', () => {
       if (sessionId) {
         return { id: sessionId, snapshot: 'restored idle codex snapshot' }
       }
+
       return null
     })
     transportFactoryQueue.push(transport)
@@ -817,6 +870,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }

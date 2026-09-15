@@ -21,6 +21,7 @@ export async function collectAgentSessionRestartProbes(
 ): Promise<Map<string, RestartProbe>> {
   const probes = new Map<string, RestartProbe>()
   const batched = args.probeMany ? await args.probeMany(records) : null
+
   for (const record of records) {
     probes.set(record.sessionId, {
       record,
@@ -31,6 +32,7 @@ export async function collectAgentSessionRestartProbes(
           : await args.probe(record))
     })
   }
+
   return probes
 }
 
@@ -40,18 +42,23 @@ export function applyAgentSessionRestartProbes(
   now: number
 ): Map<string, AgentSessionRecord> {
   const reconciled = new Map<string, AgentSessionRecord>()
+
   for (const [sessionId, probed] of probes) {
     const record = state.records.get(sessionId)
+
     if (
       !record?.lease.unreconciled ||
       !agentSessionReconciliationTargetMatches(record, probed.record)
     ) {
       continue
     }
+
     const next = applyAgentSessionRestartAdjudication({ record, probe: probed.probe, now })
     state.records.set(sessionId, next)
     reconciled.set(sessionId, next)
   }
+
   state.operations = pruneAgentSessionOperationRows(state.operations, now)
+
   return reconciled
 }

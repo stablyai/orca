@@ -29,8 +29,10 @@ export function createTiptapMarkedFacade(): typeof marked {
   }
 
   const parser = (tokens: Token[], options?: MarkedOptions) => registry.parser(tokens, options)
+
   const lexer = (src: string, options?: MarkedOptions): TokensList =>
     new RegistryLexer(options).lex(src)
+
   const facade = new Proxy(marked, {
     apply: (_target, _thisArg, args) => Reflect.apply(registry.parse, registry, args),
     get: (target, property, receiver) => {
@@ -64,14 +66,18 @@ export function createTiptapMarkedFacade(): typeof marked {
         case 'use':
           return (...extensions: Parameters<typeof registry.use>) => {
             registry.use(...extensions)
+
             return facade
           }
+
         case 'setOptions':
         case 'options':
           return (options: MarkedOptions) => {
             registry.setOptions(options)
+
             return facade
           }
+
         default:
           return Reflect.get(target, property, receiver)
       }

@@ -71,6 +71,7 @@ describe('moveWorktreeDirectoryToTrash', () => {
 
     expect(first).not.toEqual(second)
     expect(await readdir(join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME))).toHaveLength(2)
+
     for (const entry of await readdir(join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME))) {
       expect(isWorktreeTrashEntryName(entry)).toBe(true)
     }
@@ -98,6 +99,7 @@ describe('moveWorktreeDirectoryToTrash', () => {
   async function seededWorktree(name: string): Promise<string> {
     const worktreePath = join(scratchDir, 'repo', name)
     await createWorktreeDirectory(worktreePath)
+
     return worktreePath
   }
 })
@@ -219,6 +221,7 @@ describe('collectWorktreeTrashSweepRoots', () => {
   it('skips WSL repos that cannot create host trash', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       expect(
         collectWorktreeTrashSweepRoots(

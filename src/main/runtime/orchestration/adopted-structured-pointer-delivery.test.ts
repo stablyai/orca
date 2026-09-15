@@ -6,6 +6,7 @@ import { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../orca-runtime-get-pty-r
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+
 const PTY_ID = 'pty_adopted'
 
 // Both methods are protected, and a subclass is the sanctioned way to reach them. The probes
@@ -63,10 +64,12 @@ describe('an orchestration pointer aimed at an adopted pane', () => {
     bindNativeOwnedPane()
     const write = vi.fn(() => true)
     const writeWithSettlement = vi.fn(async () => true)
+
     const stub = {
       orchestrationPointerAdmissionByPtyId: new Map(),
       ptyController: { write, writeWithSettlement }
     }
+
     // Zero bytes: the controller path would re-admit, refuse again, and fire
     // `pty:writeUnavailable`, whose renderer handler runs transport RECOVERY on a healthy pane.
     // A proven refusal, not a bare false: the settlement vocabulary keeps "declined before any
@@ -86,10 +89,12 @@ describe('an orchestration pointer aimed at an adopted pane', () => {
     // The gate admits an unbound pane, so the bytes reach the provider and its own settlement is
     // what the caller gets back.
     const writeWithSettlement = vi.fn(() => ({ outcome: 'accepted' }) as const)
+
     const stub = {
       orchestrationPointerAdmissionByPtyId: new Map(),
       ptyController: { write, writeWithSettlement }
     }
+
     expect(
       probe(PointerWriteProbe.prototype, stub).probeWritePointer('pty_unbound', 'pointer')
     ).toEqual({ outcome: 'accepted' })
@@ -109,11 +114,13 @@ describe('the mailbox target for an adopted pane', () => {
 
   it('routes the mailbox to the owning session so the nudge travels as a turn', () => {
     bindNativeOwnedPane()
+
     const target = targetStub().probeResolveTarget('dispatch:d1') as {
       sessionId: string
       dispatchId: string
       refusal?: { ownerRuntimeKind: string }
     } | null
+
     expect(target).toMatchObject({ sessionId: SESSION_ID, dispatchId: 'd1' })
     expect(target?.refusal?.ownerRuntimeKind).toBe('native')
   })

@@ -26,7 +26,9 @@ import type {
 const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
 
 const CODE_CONTEXT_EXPAND_STEP = 5
+
 const CODE_CONTEXT_FALLBACK_LINES = 20
+
 const CODE_CONTEXT_MAX_BLOCK_LINES = CODE_CONTEXT_FALLBACK_LINES * 2 + 1
 
 /** Why: each host owns a private PR file-contents cache, so the loader is injected instead of shared. */
@@ -66,22 +68,27 @@ export function CommentCodeContext({
 }): React.JSX.Element | null {
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [error, setError] = useState(false)
+
   const [contextExpansionState, setContextExpansionState] = useState(() =>
     createCommentCodeContextExpansionState(comment.id)
   )
+
   const file = useMemo(
     () => files.find((candidate) => candidate.path === comment.path),
     [comment.path, files]
   )
+
   const line = comment.line
   const startLine = comment.startLine ?? line
 
   useEffect(() => {
     setContents(null)
     setError(false)
+
     if (!repoPath || !file || !headSha || !baseSha || !line || file.isBinary) {
       return
     }
+
     let cancelled = false
     loadPRFileContents({
       repoPath,
@@ -103,6 +110,7 @@ export function CommentCodeContext({
           setError(true)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -123,12 +131,15 @@ export function CommentCodeContext({
     contextExpansionState,
     comment.id
   )
+
   if (resolvedContextExpansionState !== contextExpansionState) {
     // Why: comment rows can be reused on PR refresh; reset before paint so the previous comment's expanded context isn't shown on the next.
     setContextExpansionState(resolvedContextExpansionState)
   }
+
   const contextBefore = resolvedContextExpansionState.contextBefore
   const contextAfter = resolvedContextExpansionState.contextAfter
+
   const setContextBefore = useCallback(
     (contextBeforeUpdate: CommentCodeContextLineUpdate) => {
       setContextExpansionState((current) =>
@@ -139,6 +150,7 @@ export function CommentCodeContext({
     },
     [comment.id]
   )
+
   const setContextAfter = useCallback(
     (contextAfterUpdate: CommentCodeContextLineUpdate) => {
       setContextExpansionState((current) =>
@@ -168,6 +180,7 @@ export function CommentCodeContext({
   }
 
   const source = contents.modified || contents.original
+
   const codeContext = getPrCommentCodeContext({
     source,
     line,
@@ -177,9 +190,11 @@ export function CommentCodeContext({
     fallbackLines: CODE_CONTEXT_FALLBACK_LINES,
     maxBlockLines: CODE_CONTEXT_MAX_BLOCK_LINES
   })
+
   if (!codeContext) {
     return null
   }
+
   const {
     selectedLines,
     totalLines,
@@ -193,7 +208,9 @@ export function CommentCodeContext({
     canExpandBelow,
     canExpandBlock
   } = codeContext
+
   const language = detectLanguage(comment.path)
+
   const blockTooltip = shouldUseBlockRange
     ? 'Show surrounding code block'
     : 'Show nearby code context'
@@ -338,6 +355,7 @@ export function CommentCodeContext({
             {selectedLines.map((codeLine, index) => {
               const lineNumber = from + index
               const isCommentedLine = lineNumber >= commentFrom && lineNumber <= commentTo
+
               return (
                 <div
                   key={lineNumber}

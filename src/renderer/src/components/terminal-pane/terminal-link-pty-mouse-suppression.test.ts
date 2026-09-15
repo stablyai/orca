@@ -14,17 +14,21 @@ function createSuppression(
 } {
   const element = document.createElement('div')
   document.body.append(element)
+
   const terminal = {
     element,
     options: { mouseEventsRequireAlt: false }
   } as unknown as Terminal
+
   const suppression = installTerminalLinkPtyMouseSuppression(
     terminal,
     () => true,
     () => deferPlain,
     shouldContinueDeferring
   )
+
   activeSuppressions.add(suppression)
+
   return { element, suppression }
 }
 
@@ -45,6 +49,7 @@ afterEach(() => {
   for (const suppression of activeSuppressions) {
     suppression.dispose()
   }
+
   activeSuppressions.clear()
   document.body.replaceChildren()
   vi.restoreAllMocks()
@@ -54,9 +59,11 @@ describe('terminal link PTY mouse suppression', () => {
   it('drops deferred mouse input when the completed action claims it', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
+
     const forward = (data: string): void => {
       forwarded.push(data)
     }
+
     element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<0;1;1M', forward))
     element.addEventListener('mouseup', () => {
       suppression.handlePtyInput('\x1b[<0;1;1m', forward)
@@ -72,9 +79,11 @@ describe('terminal link PTY mouse suppression', () => {
   it('flushes deferred mouse input when the completed gesture stays child-owned', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
+
     const forward = (data: string): void => {
       forwarded.push(data)
     }
+
     element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<0;1;1M', forward))
     element.addEventListener('mouseup', () => suppression.handlePtyInput('\x1b[<0;1;1m', forward))
 
@@ -99,9 +108,11 @@ describe('terminal link PTY mouse suppression', () => {
   it('flushes a dragged mouse sequence in order', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
+
     const forward = (data: string): void => {
       forwarded.push(data)
     }
+
     element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<0;1;1M', forward))
     document.addEventListener(
       'mousemove',
@@ -124,9 +135,11 @@ describe('terminal link PTY mouse suppression', () => {
   it('releases a drag as soon as pointer eligibility is lost', () => {
     const { element, suppression } = createSuppression(true, (event) => event.clientX < 5)
     const forwarded: string[] = []
+
     const forward = (data: string): void => {
       forwarded.push(data)
     }
+
     element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<0;1;1M', forward))
     document.addEventListener(
       'mousemove',
@@ -143,9 +156,11 @@ describe('terminal link PTY mouse suppression', () => {
   it('forwards keyboard input outside mouse dispatch while a click is pending', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
+
     const forward = (data: string): void => {
       forwarded.push(data)
     }
+
     element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<0;1;1M', forward))
     document.addEventListener(
       'mouseup',
@@ -240,9 +255,11 @@ describe('terminal link PTY mouse suppression', () => {
   it('forwards non-mouse focus reports during a claimed mouse gesture', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []
+
     const forward = (data: string): void => {
       forwarded.push(data)
     }
+
     element.addEventListener('mousedown', () => {
       suppression.handlePtyInput('\x1b[<0;1;1M', forward)
       suppression.handlePtyInput('\x1b[I', forward)

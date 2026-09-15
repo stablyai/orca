@@ -34,12 +34,15 @@ function open(initialFlags: number): Session {
   const textarea = terminal.textarea!
   let flags = initialFlags
   let flagReads = 0
+
   const bridge = installPreviewImeBridge(terminal, {
     getKittyKeyboardFlags: () => {
       flagReads += 1
+
       return flags
     }
   })!
+
   terminal.attachCustomKeyEventHandler((event) => !bridge.claimKeyEvent(event))
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
@@ -56,6 +59,7 @@ function open(initialFlags: number): Session {
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(event, 'keyCode', { value: COMMA.keyCode })
     textarea.dispatchEvent(event)
   }
@@ -124,6 +128,7 @@ describe('preview IME bridge outbound bytes', () => {
   ])('in %s order', (_name, keyupFirst) => {
     const type = (session: Session): void => {
       session.keydown()
+
       if (keyupFirst) {
         session.keyup()
         session.commit('，')
@@ -161,6 +166,7 @@ describe('preview IME bridge outbound bytes', () => {
       session.keydown()
       expect(session.flagReads).toBe(0)
       session.setFlags(8)
+
       if (keyupFirst) {
         session.keyup()
         expect(session.flagReads).toBe(0)
@@ -169,6 +175,7 @@ describe('preview IME bridge outbound bytes', () => {
         session.commit('，')
         session.keyup()
       }
+
       expect(session.flagReads).toBe(1)
       // The commit-time read is what both the press AND its release encode from.
       expect(session.emitted.join('')).toBe('\x1b[44u')
@@ -178,6 +185,7 @@ describe('preview IME bridge outbound bytes', () => {
     it('emits nothing when the input source swallowed the press', () => {
       const session = open(10)
       session.keydown()
+
       if (keyupFirst) {
         session.keyup()
         session.swallow()
@@ -185,6 +193,7 @@ describe('preview IME bridge outbound bytes', () => {
         session.swallow()
         session.keyup()
       }
+
       // A release describes a press the app received; none did.
       expect(session.emitted.join('')).toBe('')
       session.dispose()

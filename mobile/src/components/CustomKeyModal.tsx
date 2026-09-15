@@ -68,6 +68,7 @@ type Props = {
 export async function loadCustomKeys(): Promise<CustomKey[]> {
   try {
     const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
+
     return raw ? (JSON.parse(raw) as CustomKey[]) : []
   } catch {
     return []
@@ -91,6 +92,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
   // custom-key draft; keep close state unchanged for the slide-out animation.
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
+
     if (visible) {
       setStep('choose-type')
       setShortcutKey('c')
@@ -120,9 +122,11 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const previewKeyLabel = useMemo(() => {
     const special = SPECIAL_KEY_BY_ID[shortcutKey]
+
     if (special) {
       return special.label
     }
+
     return shortcutKey.length === 1 ? shortcutKey.toUpperCase() : shortcutKey
   }, [shortcutKey])
 
@@ -144,9 +148,12 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
       // Why: allow the field to go empty so backspace works; the Save button
       // stays disabled until a valid key is entered.
       setShortcutKey('')
+
       return
     }
+
     const next = normalizeShortcutKeyInput(value)
+
     if (next) {
       setShortcutKey(next)
     }
@@ -159,23 +166,28 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const handleShortcutSave = useCallback(() => {
     const built = buildTerminalShortcutKey({ key: shortcutKey, modifiers: shortcutModifiers })
+
     if (!built) {
       return
     }
+
     void addKey({ label: built.label, bytes: built.bytes, enter: false })
   }, [addKey, shortcutKey, shortcutModifiers])
 
   const handleMacroSave = useCallback(() => {
     const label = macroLabel.trim() || macroText.trim().slice(0, 12)
     const text = macroText
+
     if (!label || !text) {
       return
     }
+
     const bytes = macroEnter ? `${text}\r` : text
     void addKey({ label, bytes, enter: false })
   }, [addKey, macroLabel, macroText, macroEnter])
 
   const showBack = step !== 'choose-type'
+
   const onBack = useCallback(() => {
     if (step === 'special-keys') {
       setStep('shortcut-combo')
@@ -263,6 +275,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
             <View style={styles.mods}>
               {SHORTCUT_MODIFIERS.map((modifier) => {
                 const selected = shortcutModifiers.includes(modifier.id)
+
                 return (
                   <Pressable
                     key={modifier.id}
@@ -331,11 +344,14 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               <View style={styles.keyGrid}>
                 {group.ids.map((id) => {
                   const key = SPECIAL_KEY_BY_ID[id]
+
                   if (!key) {
                     return null
                   }
+
                   const selected = shortcutKey === id
                   const flexBasis = `${100 / group.columns}%` as const
+
                   return (
                     <View key={id} style={[styles.keyCellWrap, { flexBasis }]}>
                       <Pressable

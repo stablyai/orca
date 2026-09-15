@@ -7,7 +7,9 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow, worktreeRowSurface } from './worktree-row-locators'
 
 const INSPECTION_ERROR_TEXT = "Couldn't verify this repo's setup script right now."
+
 const SETUP_SCRIPT_COMMAND = 'echo orca-e2e-setup'
+
 const RECORDING_DWELL_MS = 1200
 
 type WorktreeIds = {
@@ -44,19 +46,25 @@ function createRepoWithSharedSetupScript(repoPath: string, featureWorktreePath: 
 async function installUnreadableOrcaYamlFault(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(({ ipcMain }) => {
     type InvokeHandler = (event: unknown, ...args: unknown[]) => unknown
+
     const faultState = globalThis as typeof globalThis & { __orcaE2eOrcaYamlUnreadable?: boolean }
+
     const registry = (ipcMain as unknown as { _invokeHandlers?: Map<string, InvokeHandler> })
       ._invokeHandlers
+
     const productionHandler = registry?.get('hooks:check')
+
     if (!productionHandler) {
       throw new Error('hooks:check handler was not registered in the main process')
     }
+
     faultState.__orcaE2eOrcaYamlUnreadable = true
     ipcMain.removeHandler('hooks:check')
     ipcMain.handle('hooks:check', async (event, ...args) => {
       if (faultState.__orcaE2eOrcaYamlUnreadable) {
         return { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
+
       return productionHandler(event, ...args)
     })
   })
@@ -80,14 +88,19 @@ async function addRepoAndActivateMainWorktree(
   // worktree only reaches the sidebar once the repo opts into showing them.
   const repoId = await page.evaluate(async (targetRepoPath) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const addedRepo = await store.getState().addRepoPath(targetRepoPath)
+
     if (!addedRepo) {
       throw new Error(`Failed to add repo at ${targetRepoPath}`)
     }
+
     await store.getState().updateRepo(addedRepo.id, { externalWorktreeVisibility: 'show' })
+
     return addedRepo.id
   }, repoPath)
 
@@ -96,10 +109,13 @@ async function addRepoAndActivateMainWorktree(
       () =>
         page.evaluate(async (targetRepoId) => {
           const store = window.__store
+
           if (!store) {
             return 0
           }
+
           await store.getState().fetchWorktrees(targetRepoId)
+
           return store.getState().worktreesByRepo[targetRepoId]?.length ?? 0
         }, repoId),
       { timeout: 20_000, message: 'proof repo worktrees did not load' }
@@ -109,13 +125,16 @@ async function addRepoAndActivateMainWorktree(
   return page.evaluate(
     ({ targetRepoId, targetRepoPath, targetFeaturePath }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const worktrees = state.worktreesByRepo[targetRepoId] ?? []
       const mainWorktree = worktrees.find((entry) => entry.path === targetRepoPath)
       const featureWorktree = worktrees.find((entry) => entry.path === targetFeaturePath)
+
       if (!mainWorktree || !featureWorktree) {
         throw new Error(
           `Missing worktrees for ${targetRepoPath}: ${worktrees.map((entry) => entry.path).join(', ')}`
@@ -132,6 +151,7 @@ async function addRepoAndActivateMainWorktree(
       state.setActiveRepo(targetRepoId)
       state.setActiveWorktree(mainWorktree.id)
       state.revealWorktreeInSidebar(featureWorktree.id, { behavior: 'auto' })
+
       return {
         repoId: targetRepoId,
         mainWorktreeId: mainWorktree.id,
@@ -161,6 +181,7 @@ test.describe('Setup script prompt', () => {
     createRepoWithSharedSetupScript(repoPath, featureWorktreePath)
 
     await installUnreadableOrcaYamlFault(electronApp)
+
     const { repoId, featureWorktreeId } = await addRepoAndActivateMainWorktree(
       orcaPage,
       repoPath,
@@ -173,10 +194,12 @@ test.describe('Setup script prompt', () => {
 
     // orca.yaml is readable again; the card is still pinned to the failed verdict.
     await healOrcaYamlRead(electronApp)
+
     const healthyCheck = await orcaPage.evaluate(
       (targetRepoId) => window.api.hooks.check({ repoId: targetRepoId }),
       repoId
     )
+
     expect(healthyCheck.status).toBe('ok')
     expect((healthyCheck.hooks as { scripts?: { setup?: string } } | null)?.scripts?.setup).toBe(
       SETUP_SCRIPT_COMMAND

@@ -28,17 +28,21 @@ export function registerFilesystemGitModelDiscoveryHandlers(
     ): Promise<DiscoverCommitMessageModelsResult> => {
       const agentId = args.agentId
       const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
+
       if (args.connectionId) {
         if (!args.worktreePath) {
           return { success: false, error: 'Missing worktree path for remote model discovery.' }
         }
+
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           return {
             success: false,
             error: `No git provider for connection "${args.connectionId}"`
           }
         }
+
         return discoverCommitMessageModelsRemote(
           agentId as TuiAgent,
           args.worktreePath,
@@ -46,29 +50,36 @@ export function registerFilesystemGitModelDiscoveryHandlers(
           agentCommandOverride
         )
       }
+
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
+
       if (args.worktreePath) {
         const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
+
         const gitOptions = getLocalGitOptionsForRegisteredWorktree(
           store,
           args.worktreePath,
           worktreePath
         )
+
         const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
         localRuntimeTarget = wslDistro
           ? { runtime: 'wsl', wslDistro }
           : getLocalAgentRuntimeTarget(gitOptions)
         localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
       }
+
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,
         commitMessageAgentEnv,
         localRuntimeTarget
       )
+
       if (!localEnv.ok) {
         return { success: false, error: localEnv.error }
       }
+
       return localDiscoveryOptions
         ? discoverCommitMessageModelsLocal(
             agentId as TuiAgent,

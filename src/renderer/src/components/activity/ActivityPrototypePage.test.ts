@@ -39,10 +39,12 @@ describe('buildActivityEvents', () => {
 
     for (let paneIndex = 0; paneIndex < 18; paneIndex += 1) {
       const tabId = `tab-${paneIndex}`
+
       const paneKey = makePaneKey(
         tabId,
         `00000000-0000-4000-8000-${String(paneIndex + 1).padStart(12, '0')}`
       )
+
       tabs.push(makeTabWithIds(tabId, worktree.id, `Agent ${paneIndex}`))
       // Why: later pane indexes are older, so the pre-fix global 80-event cap
       // would drop the final panes entirely when every pane had five events.
@@ -72,6 +74,7 @@ describe('buildActivityEvents', () => {
       acknowledgedAgentsByPaneKey: {},
       now: 100_000
     })
+
     const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
 
     expect(events).toHaveLength(80)
@@ -166,6 +169,7 @@ describe('buildActivityEvents', () => {
         }
       }
     })
+
     const threads = makeThreads(result)
     const groups = buildActivityThreadGroups(threads, 'status')
 
@@ -216,6 +220,7 @@ describe('buildActivityEvents', () => {
 
   it('creates a thread for a repo-less floating terminal agent', () => {
     const tab = makeTabWithIds('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'Claude')
+
     const result = buildActivityEvents({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeWorkingEntryWithoutHistory()
@@ -248,6 +253,7 @@ describe('buildActivityEvents', () => {
 
   it('matches a custom-titled live thread by its current prompt', () => {
     const tab = { ...makeTab(), customTitle: 'Pinned agent title' }
+
     const entry = {
       ...makeWorkingEntryWithoutHistory(),
       prompt: 'Investigate activity live prompt search'
@@ -296,6 +302,7 @@ describe('buildActivityEvents', () => {
 
   it('caps rendered assistant response preview without changing searchable thread text', () => {
     const longResponse = `${'Preview details '.repeat(80)}activity row searchable tail`
+
     const entry = {
       ...makeWorkingEntryWithoutHistory(),
       lastAssistantMessage: longResponse
@@ -308,6 +315,7 @@ describe('buildActivityEvents', () => {
     })
 
     const threads = makeThreads(result)
+
     const renderedPreview = activityThreadResponseRenderPreview({
       responsePreview: threads[0].responsePreview
     })
@@ -324,6 +332,7 @@ describe('buildActivityEvents', () => {
 
   it('rejects oversized pasted searches before building thread search text', () => {
     const oversizedQuery = 'secret-activity-search'.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES)
+
     const thread = {
       get paneTitle(): string {
         throw new Error('oversized activity searches must not scan thread text')
@@ -352,6 +361,7 @@ describe('buildActivityEvents', () => {
     const renderedPreview = activityThreadResponseRenderPreview({
       responsePreview: `${'a'.repeat(319)}😀tail`
     })
+
     const beforeEllipsis = renderedPreview.slice(0, -3)
     const lastCode = beforeEllipsis.charCodeAt(beforeEllipsis.length - 1)
 
@@ -409,6 +419,7 @@ describe('buildActivityEvents', () => {
     const workingTab = makeTab()
     const blockedTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
     const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
+
     const result = buildActivityEvents({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeWorkingEntryWithoutHistory(),
@@ -460,6 +471,7 @@ describe('buildActivityEvents', () => {
     const worktree = makeWorktree()
     const tab1 = makeTabWithIds('tab-1', worktree.id)
     const tab2 = makeTabWithIds('tab-2', worktree.id)
+
     const result = buildActivityEvents({
       agentStatusByPaneKey: {
         [PANE_KEY]: makeWorkingEntryWithoutHistory(),

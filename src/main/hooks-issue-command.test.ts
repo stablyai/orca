@@ -47,9 +47,11 @@ describe('readIssueCommand', () => {
       if (path === TEST_ISSUE_COMMAND_PATH) {
         return 'local command\n'
       }
+
       if (path === TEST_REPO_ORCA_YAML_PATH) {
         return 'issueCommand: |\n  shared command\n'
       }
+
       return ''
     })
 
@@ -70,6 +72,7 @@ describe('readIssueCommand', () => {
       if (path === TEST_REPO_ORCA_YAML_PATH) {
         return 'issueCommand: |\n  shared command\n'
       }
+
       return ''
     })
 
@@ -94,6 +97,7 @@ describe('writeIssueCommand', () => {
       if (path === TEST_GITIGNORE_PATH) {
         return 'node_modules/\n'
       }
+
       return ''
     })
 
@@ -137,6 +141,7 @@ describe('createIssueCommandRunnerScript', () => {
 
     try {
       const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
+
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -168,6 +173,7 @@ describe('createIssueCommandRunnerScript', () => {
 
     try {
       const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
+
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',
@@ -195,6 +201,7 @@ describe('createIssueCommandRunnerScript', () => {
 
     try {
       const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
+
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo-worktree',

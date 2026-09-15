@@ -107,6 +107,7 @@ describe('markup geometry', () => {
         { x: 4, y: 5 }
       ]
     }
+
     const scaled = scaleShape(shape, 2) as PenShape
     expect(scaled.width).toBe(8)
     expect(scaled.points).toEqual([
@@ -124,6 +125,7 @@ describe('markup geometry', () => {
       from: { x: 1, y: 1 },
       to: { x: 3, y: 5 }
     }
+
     const scaledArrow = scaleShape(arrow, 3) as ArrowShape
     expect(scaledArrow.from).toEqual({ x: 3, y: 3 })
     expect(scaledArrow.to).toEqual({ x: 9, y: 15 })
@@ -137,6 +139,7 @@ describe('markup geometry', () => {
       text: 'fix',
       fontSize: 18
     }
+
     const scaledText = scaleShape(text, 2) as TextShape
     expect(scaledText.at).toEqual({ x: 20, y: 40 })
     expect(scaledText.fontSize).toBe(36)
@@ -149,9 +152,11 @@ describe('markup geometry', () => {
   it('produces a symmetric arrowhead pointing at the tip', () => {
     const head = arrowHeadGeometry({ x: 0, y: 0 }, { x: 10, y: 0 }, 4)
     expect(head).not.toBeNull()
+
     if (!head) {
       return
     }
+
     expect(head.tip).toEqual({ x: 10, y: 0 })
     // Wings sit behind the tip (smaller x) and mirror across the horizontal axis.
     expect(head.left.x).toBeLessThan(10)
@@ -163,4 +168,5 @@ describe('markup geometry', () => {
 // Why: exhaustiveness guard — if a new MarkupShape kind is added without a
 // scaleShape branch, this fails to type-check at the cast site below.
 const _exhaustive: MarkupShape['kind'][] = ['pen', 'highlight', 'arrow', 'rect', 'ellipse', 'text']
+
 void _exhaustive

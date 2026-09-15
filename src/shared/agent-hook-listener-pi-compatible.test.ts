@@ -28,6 +28,7 @@ describe('shared agent-hook-listener', () => {
         }
       ]
     }
+
     const blocked = normalizeHookPayload(
       state,
       'pi',
@@ -45,6 +46,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(blocked?.payload).toMatchObject({
       state: 'blocked',
       agentType: 'pi',
@@ -62,6 +64,7 @@ describe('shared agent-hook-listener', () => {
         }
       ]
     }
+
     const blocked = normalizeHookPayload(
       state,
       'pi',
@@ -79,6 +82,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(blocked?.payload).toMatchObject({
       state: 'blocked',
       agentType: 'pi',
@@ -105,6 +109,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(working?.payload).toMatchObject({
       state: 'working',
       agentType: 'pi',
@@ -131,6 +136,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(blocked?.payload).toMatchObject({
       state: 'blocked',
       agentType: 'pi',
@@ -143,6 +149,7 @@ describe('shared agent-hook-listener', () => {
     const questions = {
       questions: [{ question: 'Ship it?', options: ['yes', 'no'] }]
     }
+
     const base = {
       paneKey: PANE_KEY,
       tabId: 'tab-1',
@@ -150,6 +157,7 @@ describe('shared agent-hook-listener', () => {
       env: 'production' as const,
       version: '1'
     }
+
     const blocked = normalizeHookPayload(
       state,
       'pi',
@@ -163,6 +171,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(blocked?.payload.state).toBe('blocked')
     expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
 
@@ -180,6 +189,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(cleared?.payload.state).toBe('working')
     expect(cleared?.payload.interactivePrompt).toBeUndefined()
   })
@@ -192,6 +202,7 @@ describe('shared agent-hook-listener', () => {
       env: 'production' as const,
       version: '1'
     }
+
     normalizeHookPayload(
       state,
       'pi',
@@ -205,12 +216,14 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const done = normalizeHookPayload(
       state,
       'pi',
       { ...base, payload: { hook_event_name: 'agent_end' } },
       'production'
     )
+
     expect(done?.payload.state).toBe('done')
     expect(done?.payload.interactivePrompt).toBeUndefined()
   })
@@ -223,6 +236,7 @@ describe('shared agent-hook-listener', () => {
       env: 'production' as const,
       version: '1'
     }
+
     normalizeHookPayload(
       state,
       'pi',
@@ -236,6 +250,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     // Why: a follow-up regular tool must not inherit the prior question's blocked
     // state or its live interactivePrompt card.
     const working = normalizeHookPayload(
@@ -251,6 +266,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(working?.payload).toMatchObject({
       state: 'working',
       agentType: 'pi',
@@ -277,6 +293,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload).toMatchObject({
       state: 'working',
       prompt: 'wire omp status',
@@ -300,6 +317,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool?.payload).toMatchObject({
       state: 'working',
       prompt: 'wire omp status',
@@ -322,6 +340,7 @@ describe('shared agent-hook-listener', () => {
         }
       ]
     }
+
     const tool = normalizeHookPayload(
       state,
       'omp',
@@ -339,6 +358,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool?.payload).toMatchObject({
       state: 'blocked',
       agentType: 'omp',
@@ -436,6 +456,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(start?.payload.prompt).toBe('stale turn')
 
     const sessionStart = normalizeHookPayload(
@@ -451,6 +472,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(sessionStart).toMatchObject({
       providerSessionOnly: true,
       providerSession: {
@@ -467,6 +489,7 @@ describe('shared agent-hook-listener', () => {
       { paneKey: PANE_KEY, payload: { hook_event_name: 'tool_call', tool_name: 'bash' } },
       'production'
     )
+
     expect(next?.payload.prompt).toBe('')
   })
 
@@ -487,6 +510,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool).toMatchObject({
       source: 'prime-agent',
       providerSession: {
@@ -511,6 +535,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(sessionStart).toMatchObject({
       providerSessionOnly: true,
       payload: { state: 'done', prompt: '', agentType: 'prime-agent' }

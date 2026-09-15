@@ -17,14 +17,17 @@ export type TrackedJournalOpener = {
 
 export function createTrackedJournalOpener(): TrackedJournalOpener {
   const opened: AgentSessionJournal[] = []
+
   return {
     open: async (options) => {
       const journal = await openAgentSessionJournal(options)
       opened.push(journal)
+
       return journal
     },
     track: (journal) => {
       opened.push(journal)
+
       return journal
     },
     closeAll: async () => {

@@ -17,23 +17,31 @@ import {
 } from './terminal-ime-engagement-receipt.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+
 const e2eWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
+
 const reliabilityManifest = parseJsonc(
   readFileSync(join(projectDir, 'config/reliability-gates.jsonc'), 'utf8')
 )
+
 const playwrightConfig = readFileSync(join(projectDir, 'tests/playwright.config.ts'), 'utf8')
+
 const sshDockerRunner = readFileSync(
   join(projectDir, 'config/scripts/run-ssh-docker-terminal-parking-e2e.mjs'),
   'utf8'
 )
+
 const nativeImeWorkflow = parseYaml(
   readFileSync(join(projectDir, '.github/workflows/terminal-ime-e2e.yml'), 'utf8')
 )
+
 const nativeImeRunner = readFileSync(
   join(projectDir, 'config/scripts/run-terminal-ibus-hangul-e2e.mjs'),
   'utf8'
 )
+
 const nativeImeSpec = readFileSync(
   join(projectDir, 'tests/e2e/terminal-ibus-hangul-native.spec.ts'),
   'utf8'
@@ -42,9 +50,11 @@ const nativeImeSpec = readFileSync(
 const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
+
 const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
   (step) => step.name === 'Check VM runtime rollback compatibility'
 )
+
 const verifyStep = prWorkflow.jobs.verify.steps.find(
   (step) => step.name === 'Require successful checks'
 )
@@ -128,12 +138,15 @@ describe('PR E2E gate contract', () => {
     expect(successLoop.length).toBeGreaterThan(0)
     expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
     expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
+
       if (job === 'code_paths' || job === 'root_directory_guard') {
         continue
       }
+
       expect(successLoop).toContain(`"$${envVar}"`)
       expect(verifyStep.env[`${envVar}_SHOULD_RUN`]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
     }
@@ -162,9 +175,11 @@ describe('PR E2E gate contract', () => {
         shard_name: `${index + 1}-of-14`
       }))
     )
+
     const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
       (step) => step.name === 'Run changed E2E specs'
     )
+
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
@@ -179,9 +194,11 @@ describe('PR E2E gate contract', () => {
       'pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"'
     )
     expect(playwrightConfig).toContain('retries: 0')
+
     const steps = e2eWorkflow.jobs.e2e.steps.filter((step) =>
       step.run?.includes('tests/e2e/worktree-switch-first-paint.spec.ts')
     )
+
     expect(steps).toHaveLength(1)
     expect(steps[0].if).toBe("matrix.shard == '1/14'")
     expect(steps[0].run).toContain('xvfb-run --auto-servernum')
@@ -206,6 +223,7 @@ describe('PR E2E gate contract', () => {
       )
 
     expect(installFor('build').with['native-runtime']).toBe('node')
+
     for (const jobName of ['e2e', 'changed-e2e', 'ssh-docker-watcher-isolation']) {
       expect(installFor(jobName).with['native-runtime'], jobName).toBe('electron')
     }
@@ -216,6 +234,7 @@ describe('PR E2E gate contract', () => {
       const installStep = e2eWorkflow.jobs[jobName].steps.find((step) =>
         step.name.startsWith('Install native build')
       )
+
       expect(installStep.run, jobName).toMatch(/\bzsh\b/)
     }
   })
@@ -256,6 +275,7 @@ describe('PR E2E gate contract', () => {
       'src/renderer/src/store/slices/direct-ssh-',
       'src/renderer/src/components/terminal-pane/remote-runtime-'
     ]
+
     for (const authority of sshSourceAuthorities) {
       expect(selectPrE2eSpecs([`${authority}routing.ts`])).toContain(
         'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts'
@@ -284,9 +304,11 @@ describe('PR E2E gate contract', () => {
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
       'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts'
     ]
+
     for (const spec of mappedSpecs) {
       expect(selectPrE2eSpecs(['src/main/ssh/connection.ts'])).toContain(spec)
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
+
       // Why: a spec that stops reading the flag would silently run without Docker.
       if (spec !== 'tests/e2e/ssh-startup-exec-readiness.spec.ts') {
         expect(readFileSync(join(projectDir, spec), 'utf8'), spec).toContain('ORCA_E2E_SSH_DOCKER')
@@ -303,9 +325,11 @@ describe('PR E2E gate contract', () => {
 
     // Why: this lane can now pay a Docker image build plus serial SSH specs.
     expect(e2eWorkflow.jobs['changed-e2e']['timeout-minutes']).toBeGreaterThanOrEqual(45)
+
     const changedInstall = e2eWorkflow.jobs['changed-e2e'].steps.find((step) =>
       step.name.startsWith('Install native build')
     )
+
     expect(changedInstall.run).toContain('openssh-client')
   })
 
@@ -347,6 +371,7 @@ describe('PR E2E gate contract', () => {
     ]) {
       expect(hasSshSourceChange([file]), file).toBe(true)
     }
+
     for (const file of [
       'src/main/git/git-status.ts',
       'src/renderer/src/components/tab-bar/BrowserTab.tsx',
@@ -389,12 +414,14 @@ describe('PR E2E gate contract', () => {
     // The remaining exemption needs performance validation before routine CI, recorded in
     // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
     const unreachableSpecs = new Set(['tests/e2e/ssh-docker-relay-perf.spec.ts'])
+
     // Why comments are stripped: the runner documents the exempt spec by name in a
     // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
     // runner as claimed by it -- the silent skip this assertion exists to catch, re-entering
     // through the documentation.
     const stripComments = (text) =>
       text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
     const laneRunners = [
       'run-ssh-docker-e2e.mjs',
       'run-ssh-docker-watcher-isolation-e2e.mjs',
@@ -406,15 +433,18 @@ describe('PR E2E gate contract', () => {
     // equally-valid spelling (double quotes, or a `!==` guard) would escape a fixed-string scan
     // and the spec would silently leave the contract.
     const dockerGateExpression = /ORCA_E2E_SSH_DOCKER\s*[!=]==\s*['"]1['"]/
+
     const dockerGatedSpecs = readdirSync(join(projectDir, 'tests/e2e'))
       .filter((file) => file.endsWith('.spec.ts'))
       .map((file) => `tests/e2e/${file}`)
       .filter((spec) => dockerGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
+
     expect(dockerGatedSpecs.length).toBeGreaterThan(0)
 
     const unclaimed = dockerGatedSpecs.filter(
       (spec) => !unreachableSpecs.has(spec) && !laneRunners.some((runner) => runner.includes(spec))
     )
+
     expect(
       unclaimed,
       `Docker-gated specs claimed by no lane runner: ${unclaimed.join(', ')}`
@@ -423,6 +453,7 @@ describe('PR E2E gate contract', () => {
     // Why: an exemption that outlives its spec would quietly excuse a real gap.
     for (const spec of unreachableSpecs) {
       expect(dockerGatedSpecs, spec).toContain(spec)
+
       // Why also assert absence from every runner: `unreachableSpecs` short-circuits the
       // unclaimed check above, so a spec could be documented as exempt while a runner still
       // invokes it -- an exemption that reads as coverage removal but changes nothing, and a
@@ -437,6 +468,7 @@ describe('PR E2E gate contract', () => {
     const laneStep = e2eWorkflow.jobs['ssh-docker-watcher-isolation'].steps.find(
       (step) => step.name === 'Run remaining Docker SSH E2E'
     )
+
     expect(laneStep.run).toContain('test:e2e:ssh-docker')
     // Why: the added serial tests, several budgeting 4-10 minutes each, do not fit the old 35.
     expect(
@@ -473,12 +505,15 @@ describe('PR E2E gate contract', () => {
         'tests/e2e/paired-remote-pane-layout-retry.spec.ts'
       ]
     ]
+
     for (const [source, spec] of cases) {
       expect(selectPrE2eSpecs([source]), source).toEqual([spec])
       expect(selectPrE2eSpecs([source.replace(/\.tsx?$/, '.test.ts')]), source).toEqual([])
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
     }
+
     const parkedSplitSpec = 'tests/e2e/terminal-parked-cli-split.spec.ts'
+
     for (const source of [
       'src/main/window/attach-main-window-services.ts',
       'src/preload/api/ui-command-event-api.ts',
@@ -493,9 +528,11 @@ describe('PR E2E gate contract', () => {
         parkedSplitSpec
       )
     }
+
     expect(existsSync(join(projectDir, parkedSplitSpec)), parkedSplitSpec).toBe(true)
 
     const restartContinuitySpec = 'tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts'
+
     for (const source of [
       'src/main/daemon/daemon-attach-only-retirement.ts',
       'src/main/daemon/daemon-pty-applied-size.ts',
@@ -521,8 +558,10 @@ describe('PR E2E gate contract', () => {
         restartContinuitySpec
       )
     }
+
     expect(existsSync(join(projectDir, restartContinuitySpec)), restartContinuitySpec).toBe(true)
     const quickCommandSpec = 'tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'
+
     for (const source of [
       'src/renderer/src/components/terminal-pane/pty-connection.ts',
       'src/renderer/src/components/terminal-pane/pty-connection/connect-pane-pty.ts',
@@ -535,6 +574,7 @@ describe('PR E2E gate contract', () => {
         quickCommandSpec
       )
     }
+
     for (const source of [
       'src/main/ipc/rg-availability.ts',
       'src/shared/ripgrep-process-availability.ts'
@@ -543,6 +583,7 @@ describe('PR E2E gate contract', () => {
         'tests/e2e/paired-quick-open-large-tree.spec.ts'
       ])
     }
+
     expect(
       selectPrE2eSpecs([
         'src/main/runtime/orca-runtime-files.ts',
@@ -637,17 +678,21 @@ describe('PR E2E gate contract', () => {
     // reports as a pass. This repo already carries such specs; the point is that they are named
     // as gaps rather than counted as coverage.
     const nativeGateExpression = /ORCA_E2E_NATIVE_(?:IBUS_HANGUL|MACOS_KOREAN)\s*[!=]==\s*['"]1['"]/
+
     const nativeGatedSpecs = readdirSync(join(projectDir, 'tests/e2e'))
       .filter((file) => file.endsWith('.spec.ts'))
       .map((file) => `tests/e2e/${file}`)
       .filter((spec) => nativeGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
+
     expect(nativeGatedSpecs.length).toBeGreaterThan(0)
 
     // The macOS spec needs a native input source; PR and scheduled IME lanes use Linux.
     const unreachableSpecs = new Set(['tests/e2e/terminal-macos-2set-korean-native.spec.ts'])
+
     const unclaimed = nativeGatedSpecs.filter(
       (spec) => !unreachableSpecs.has(spec) && !nativeImeRunner.includes(spec)
     )
+
     expect(
       unclaimed,
       `Native-IME-gated specs claimed by no lane runner: ${unclaimed.join(', ')}`
@@ -672,6 +717,7 @@ describe('PR E2E gate contract', () => {
     const nativeStep = nativeImeWorkflow.jobs['linux-x11'].steps.find(
       (step) => step.name === 'Run native IBus Hangul exact-byte tests'
     )
+
     expect(nativeStep.if).toBe('!cancelled()')
 
     // Why a literal comparison: the spec cannot import the .mjs module, so the env var name is
@@ -680,6 +726,7 @@ describe('PR E2E gate contract', () => {
       join(projectDir, 'tests/e2e/terminal-ime-engagement-receipt.ts'),
       'utf8'
     )
+
     expect(specSideReceipt).toContain(`'${IME_ENGAGEMENT_RECEIPT_ENV}'`)
 
     // Why pin the titles: the runner requires one receipt per name, so a rename that nobody
@@ -688,7 +735,9 @@ describe('PR E2E gate contract', () => {
       join(projectDir, 'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'),
       'utf8'
     )
+
     expect(nativeDigitSpec).toContain('appendImeEngagementReceipt(testInfo.title, trace)')
+
     for (const title of EXPECTED_NATIVE_IME_TESTS) {
       expect(nativeImeSpec + nativeDigitSpec, title).toContain(title)
     }
@@ -698,6 +747,7 @@ describe('PR E2E gate contract', () => {
     const changedRun = e2eWorkflow.jobs['changed-e2e'].steps.find(
       (step) => step.name === 'Run changed E2E specs'
     )
+
     expect(changedRun.run).toContain('. != "tests/e2e/terminal-ibus-hangul-native.spec.ts"')
     // Why it still has to be routed: the dedicated lane is selected by the same route, so the
     // spec appearing in test_files is how a spec-only edit reaches the real-IME lane at all.
@@ -714,11 +764,13 @@ describe('PR E2E gate contract', () => {
       'terminal-provider.ssh-remote-reattach-contract',
       'terminal-session.remote-pane-layout-retry'
     ]
+
     for (const gateId of routedGateIds) {
       const route = PR_E2E_SOURCE_ROUTES.find((candidate) => candidate.id === gateId)
       const gate = reliabilityManifest.gates.find((candidate) => candidate.id === gateId)
       expect(route, gateId).toBeDefined()
       expect(gate, gateId).toMatchObject({ maturity: 'experimental', protection: 'partial' })
+
       for (const spec of route.specs) {
         expect(gate.testFiles, gateId).toContain(spec)
         expect(

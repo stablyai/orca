@@ -15,28 +15,37 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
+
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
+
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
+
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon' }))
+
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
+
 vi.mock('../dictation/use-dictation-setup-poller', () => ({
   useDictationSetupPoller: ({ refresh }: { refresh: () => Promise<unknown> }) => {
     useEffect(() => {
       void refresh()
     }, [refresh])
+
     return refresh
   }
 }))
+
 let renderer: ReactTestRenderer
 
 afterEach(() => {
   act(() => renderer?.unmount())
 })
+
 describe('shared settings screen state', () => {
   it('flips the Voice switch before the desktop replies and surfaces a rejected save', async () => {
     const loaded = {
@@ -45,7 +54,9 @@ describe('shared settings screen state', () => {
       selectedModelId: '',
       models: []
     }
+
     let rejectConfigure: (error: Error) => void = () => {}
+
     const operations = {
       // Why: the reconcile read stays pending so the optimistic value and the
       // rejection message are both observable, as they are on a slow desktop.
@@ -62,6 +73,7 @@ describe('shared settings screen state', () => {
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
+
     await act(async () => {
       renderer = create(
         createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
@@ -93,6 +105,7 @@ describe('shared settings screen state', () => {
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
+
     await act(async () => {
       renderer = create(
         createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
@@ -108,7 +121,9 @@ describe('shared settings screen state', () => {
       selectedModelId: '',
       models: []
     }
+
     let resolveStalePoll: (value: typeof loaded) => void = () => {}
+
     const shared = {
       load: vi
         .fn()
@@ -123,6 +138,7 @@ describe('shared settings screen state', () => {
       download: vi.fn(),
       delete: vi.fn()
     }
+
     const first = { ...shared } as VoiceSettingsOperations
     await act(async () => {
       renderer = create(
@@ -160,11 +176,13 @@ describe('shared settings screen state', () => {
       canAskAgain: true,
       authorizationReflectsUserChoice: false
     }
+
     const operations = {
       permission: vi.fn().mockResolvedValue(denied),
       preference: vi.fn().mockResolvedValue({ enabled: false }),
       openSettings: vi.fn()
     }
+
     await act(async () => {
       renderer = create(createElement(NotificationsScreen, { operations, onBack: vi.fn() }))
     })
@@ -178,6 +196,7 @@ describe('shared settings screen state', () => {
   })
   it('keeps the notification switch live while the read is pending and after it fails', async () => {
     let rejectPreference: (error: Error) => void = () => {}
+
     const operations = {
       permission: vi.fn().mockResolvedValue({
         granted: true,
@@ -193,6 +212,7 @@ describe('shared settings screen state', () => {
       ),
       openSettings: vi.fn()
     }
+
     await act(async () => {
       renderer = create(createElement(NotificationsScreen, { operations, onBack: vi.fn() }))
     })

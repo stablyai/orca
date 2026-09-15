@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -33,11 +34,13 @@ describe('CodexAccountService config sync', () => {
   it('removes command listeners when Codex login times out', async () => {
     vi.resetModules()
     vi.useFakeTimers()
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
       kill: () => void
     }
+
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
@@ -56,16 +59,19 @@ describe('CodexAccountService config sync', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
         runtimeHome as never
       )
+
       const loginPromise = (
         service as unknown as {
           runCodexLogin(managedHomePath: string): Promise<void>
         }
       ).runCodexLogin(testState.fakeHomeDir)
+
       const rejection = expect(loginPromise).rejects.toThrow(
         'Codex sign-in took too long to finish.'
       )
@@ -90,6 +96,7 @@ describe('CodexAccountService config sync', () => {
     vi.useFakeTimers()
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
@@ -98,6 +105,7 @@ describe('CodexAccountService config sync', () => {
       exitCode: number | null
       signalCode: string | null
     }
+
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
@@ -119,11 +127,13 @@ describe('CodexAccountService config sync', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
         runtimeHome as never
       )
+
       const loginPromise = (
         service as unknown as {
           runCodexLogin(managedHomePath: string): Promise<void>
@@ -163,6 +173,7 @@ describe('CodexAccountService config sync', () => {
     vi.useFakeTimers()
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
@@ -171,6 +182,7 @@ describe('CodexAccountService config sync', () => {
       exitCode: number | null
       signalCode: string | null
     }
+
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
@@ -192,11 +204,13 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,
         createRuntimeHome() as never
       )
+
       const loginPromise = (
         service as unknown as { runCodexLogin(managedHomePath: string): Promise<void> }
       ).runCodexLogin(testState.fakeHomeDir)

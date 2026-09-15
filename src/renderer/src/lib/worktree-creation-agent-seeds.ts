@@ -33,13 +33,16 @@ function resolveLaunchAgentTabId(
   }
 ): string | null {
   const worktreeTabs = state.tabsByWorktree[args.worktreeId] ?? []
+
   // Main spawned the agent itself, so its startup tab is authoritative.
   if (args.backendSpawned && args.startupTerminalTabId) {
     return getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
       ? toWebTerminalSurfaceTabId(args.startupTerminalTabId)
       : args.startupTerminalTabId
   }
+
   const stamped = worktreeTabs.find((tab) => tab.launchAgent === args.agent)?.id
+
   // Why: when the renderer owns startup, `ensureAgentStartupInTerminal` queues it
   // on primaryTabId, so that tab is the agent's tab by construction.
   return stamped ?? args.primaryTabId ?? args.startupTerminalTabId ?? null
@@ -54,9 +57,11 @@ function applyBackendSpawnedDraftViewMode(args: {
   backendSpawned: boolean
 }): void {
   const { state, request, agent, tabId, worktreeId, backendSpawned } = args
+
   if (!backendSpawned || !request.launchDraftPrompt) {
     return
   }
+
   const desiredViewMode =
     decideInitialAgentTabViewMode({
       experimentalNativeChat: state.settings?.experimentalNativeChat,
@@ -72,14 +77,19 @@ function applyBackendSpawnedDraftViewMode(args: {
           }
         : {})
     }) ?? 'terminal'
+
   const tab = state.unifiedTabsByWorktree?.[worktreeId]?.find((tab) => tab.id === tabId)
+
   if (!tab && getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
     void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
       setWebRuntimeTabProps({ worktreeId, tabId, viewMode: desiredViewMode })
     )
+
     return
   }
+
   const currentViewMode = tab?.viewMode ?? 'terminal'
+
   if (currentViewMode !== desiredViewMode) {
     state.setTabViewMode(tabId, desiredViewMode)
   }
@@ -96,6 +106,7 @@ function applyAgentTabSeeds(args: {
   const { request, agent, tabId } = args
   applyBackendSpawnedDraftViewMode(args)
   seedNativeChatAppliedSessionOptions(tabId, agent, request.startupPlan?.sessionOptions)
+
   // Why: draft launch context reaches only the TUI input; seed the
   // chat-composer copy so it isn't invisible in the chat view.
   if (request.launchDraftPrompt) {
@@ -116,20 +127,26 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
 }): void {
   const { request, worktreeId, backendSpawned } = args
   const agent = request.agent
+
   if (!request.startupPlan || !agent) {
     return
   }
+
   const state = useAppStore.getState()
   const tabId = resolveLaunchAgentTabId(state, { ...args, agent })
+
   if (tabId) {
     applyAgentTabSeeds({ state, request, agent, tabId, worktreeId, backendSpawned })
+
     return
   }
+
   if ((state.tabsByWorktree[worktreeId] ?? []).length > 0) {
     // Tabs exist but none is the agent's; seeding one anyway would publish the
     // draft on a tab that runs no agent.
     return
   }
+
   // Why: runtime-owned (web session) worktrees mirror their session tabs async,
   // so there is no tab to seed yet — hold the seed for the first mirrored tab
   // instead of dropping it and leaving the draft invisible on that host class.
@@ -137,6 +154,7 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
     worktreeId,
     deliver: (state, firstTerminalTabId) => {
       const mirroredTabId = resolveLaunchAgentTabId(state, { ...args, agent })
+
       if (mirroredTabId) {
         applyAgentTabSeeds({
           state,
@@ -146,8 +164,10 @@ export function seedAgentTabStateAfterWorktreeCreate(args: {
           worktreeId,
           backendSpawned
         })
+
         return
       }
+
       // Why: same invariant as the synchronous branch — never seed a tab that
       // runs no agent. The queue entry is consumed before delivery (no retry),
       // so accept the first mirrored tab only when it is the worktree's only

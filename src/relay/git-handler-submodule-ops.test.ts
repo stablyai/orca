@@ -13,16 +13,20 @@ import {
 
 function gitmodulesExec(paths: string[]): { git: GitExec; calls: () => number } {
   let calls = 0
+
   const git: GitExec = async (args) => {
     if (args[0] === 'config' && args.includes('.gitmodules')) {
       calls += 1
+
       return {
         stdout: paths.map((p, i) => `submodule.sub${i}.path ${p}`).join('\n'),
         stderr: ''
       }
     }
+
     return { stdout: '', stderr: '' }
   }
+
   return { git, calls: () => calls }
 }
 
@@ -73,10 +77,12 @@ describe('listSubmodulePathsCached', () => {
 
   it('caches an empty result so a submodule-free repo is not re-read', async () => {
     let calls = 0
+
     const git: GitExec = async () => {
       calls += 1
       throw new Error('fatal: No such file or directory')
     }
+
     const cache = createSubmodulePathsCache()
 
     const first = await listSubmodulePathsCached(git, '/repo', cache, 1_000)
@@ -96,14 +102,17 @@ describe('listSubmodulePathsCached', () => {
       for (let i = 0; i < MAX_SUBMODULE_PATHS_CACHE_ENTRIES; i += 1) {
         await listSubmodulePathsCached(git, `/wave-${wave}-repo-${i}`, cache, now)
       }
+
       expect(getSubmodulePathsCacheCount(cache)).toBe(MAX_SUBMODULE_PATHS_CACHE_ENTRIES)
       now += SUBMODULE_PATHS_CACHE_TTL_MS + 1
     }
 
     await listSubmodulePathsCached(git, '/retained-repo', cache, now)
+
     for (let i = 0; i < MAX_SUBMODULE_PATHS_CACHE_ENTRIES - 1; i += 1) {
       await listSubmodulePathsCached(git, `/final-repo-${i}`, cache, now)
     }
+
     await listSubmodulePathsCached(git, '/retained-repo', cache, now)
     await listSubmodulePathsCached(
       git,
@@ -124,15 +133,19 @@ describe('listSubmodulePathsCached', () => {
   it('does not let a pre-mutation SSH read repopulate the cache', async () => {
     let resolveOldRead: ((value: { stdout: string; stderr: string }) => void) | undefined
     let calls = 0
+
     const git: GitExec = () => {
       calls += 1
+
       if (calls > 1) {
         return Promise.resolve({ stdout: 'submodule.lib.path fresh-lib\n', stderr: '' })
       }
+
       return new Promise((resolve) => {
         resolveOldRead = resolve
       })
     }
+
     const cache = createSubmodulePathsCache()
 
     const oldRead = listSubmodulePathsCached(git, '/repo', cache, 1_000)

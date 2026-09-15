@@ -19,6 +19,7 @@ function distinctFacetNames(ids: readonly string[], namesById: Map<string, strin
 
 export function countLinearIssueAttributeFilters(value: LinearIssueAttributeFilter): number {
   const canonical = canonicalizeLinearIssueAttributeFilter(value)
+
   return (
     (canonical.stateIds.length > 0 ? 1 : 0) +
     (canonical.priorities.length > 0 ? 1 : 0) +
@@ -64,6 +65,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
 }): LinearIssueFilterPill[] {
   const canonical = canonicalizeLinearIssueAttributeFilter(options.value)
   const pills: LinearIssueFilterPill[] = []
+
   if (canonical.stateIds.length > 0) {
     pills.push({
       key: 'status',
@@ -76,6 +78,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
       )
     })
   }
+
   if (canonical.priorities.length > 0) {
     pills.push({
       key: 'priority',
@@ -87,6 +90,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
       partial: false
     })
   }
+
   if (canonical.assignee?.kind === 'unassigned') {
     pills.push({
       key: 'assignee',
@@ -111,6 +115,7 @@ export function linearIssueAttributeFilterPillLabels(options: {
       partial: false
     })
   }
+
   if (canonical.labelIds.length > 0) {
     pills.push({
       key: 'labels',
@@ -123,5 +128,6 @@ export function linearIssueAttributeFilterPillLabels(options: {
       )
     })
   }
+
   return pills
 }

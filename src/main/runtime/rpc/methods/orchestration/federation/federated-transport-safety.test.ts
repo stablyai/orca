@@ -37,6 +37,7 @@ describe('federated transport safety', () => {
             },
       _meta: { runtimeId: 'epoch-worker' }
     }))
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: {
         resolve: () => server,
@@ -57,6 +58,7 @@ describe('federated transport safety', () => {
       'status.get',
       'orchestration.federationRelease'
     ])
+
     for (const entry of call.mock.calls) {
       expect((entry as unknown[])[5]).toBe(73)
     }
@@ -64,6 +66,7 @@ describe('federated transport safety', () => {
 
   it('fences structured reads and worker-show to the resolved pairing revision', async () => {
     const updateFederatedDispatchRuntimeEpoch = vi.fn()
+
     const db = {
       updateFederatedDispatchRuntimeEpoch,
       captureFederatedDispatchObservationFence: (dispatchId: string) => ({
@@ -71,13 +74,16 @@ describe('federated transport safety', () => {
       }),
       projectFederatedDispatchObservation: (_fence: unknown, projection: () => void) => {
         projection()
+
         return true
       }
     } as unknown as OrchestrationDb
+
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) => {
       if (method === 'status.get') {
         return runtimeStatus([ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY])
       }
+
       if (method === 'orchestration.federationShow') {
         return {
           runtimeEpoch: 'epoch-worker',
@@ -86,15 +92,18 @@ describe('federated transport safety', () => {
           observation: { status: 'live', exactWorker: true }
         }
       }
+
       return {
         runtimeEpoch: 'epoch-worker',
         output: { dispatchId: 'dispatch-worker', source: 'terminal' }
       }
     })
+
     const runtime = {
       callOrchestrationWorkerServer,
       resolveOrchestrationWorkerServer: () => server
     } as unknown as OrcaRuntimeService
+
     const federated = federatedDispatch()
 
     await readFederatedWorkerOutput({
@@ -117,6 +126,7 @@ describe('federated transport safety', () => {
   it('drops a structured-read epoch projection after its home fence is superseded', async () => {
     const updateFederatedDispatchRuntimeEpoch = vi.fn()
     const projectFederatedDispatchObservation = vi.fn().mockReturnValue(false)
+
     const db = {
       updateFederatedDispatchRuntimeEpoch,
       captureFederatedDispatchObservationFence: (dispatchId: string) => ({
@@ -124,6 +134,7 @@ describe('federated transport safety', () => {
       }),
       projectFederatedDispatchObservation
     } as unknown as OrchestrationDb
+
     const runtime = {
       callOrchestrationWorkerServer: vi.fn(async (_selector, method: string) =>
         method === 'status.get'
@@ -152,10 +163,12 @@ describe('federated transport safety', () => {
 
   it('rejects a mismatched release receipt before applying home effects', async () => {
     const transitionLifecycle = vi.fn()
+
     const db = {
       updateFederatedDispatchRuntimeEpoch: vi.fn(),
       transitionLifecycle
     }
+
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) =>
       method === 'status.get'
         ? runtimeStatus([ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY])
@@ -166,6 +179,7 @@ describe('federated transport safety', () => {
             archive: null
           }
     )
+
     const runtime = {
       callOrchestrationWorkerServer,
       getOrchestrationDb: () => db
@@ -186,6 +200,7 @@ describe('federated transport safety', () => {
       lastError: expect.stringContaining('invalid release receipt')
     })
     expect(transitionLifecycle).not.toHaveBeenCalled()
+
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
     }
@@ -202,6 +217,7 @@ describe('federated transport safety', () => {
 
   it('fences lifecycle pull, acknowledgment, and import to one resolved pairing revision', async () => {
     const federated = federatedDispatch()
+
     const db = {
       getFederatedDispatch: () => federated,
       getDispatchContextById: () => ({ run_id: 'run-home', task_id: 'task-worker' }),
@@ -225,10 +241,12 @@ describe('federated transport safety', () => {
       ],
       acknowledgeFederationRelay: vi.fn()
     }
+
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) => {
       if (method === 'status.get') {
         return runtimeStatus([])
       }
+
       if (method === 'orchestration.federationPull') {
         return {
           runtimeEpoch: 'epoch-worker',
@@ -244,8 +262,10 @@ describe('federated transport safety', () => {
           ]
         }
       }
+
       return { acknowledgedThrough: 1 }
     })
+
     const runtime = {
       getOrchestrationDb: () => db,
       resolveOrchestrationWorkerServer: () => server,
@@ -261,6 +281,7 @@ describe('federated transport safety', () => {
       'orchestration.federationAck',
       'orchestration.federationImport'
     ])
+
     for (const call of callOrchestrationWorkerServer.mock.calls) {
       expect((call as unknown[])[5]).toEqual({ expectedEnvironmentPairingRevision: 73 })
     }
@@ -272,17 +293,20 @@ describe('federated transport safety', () => {
       beginWorkerStop: () => ({ disposition: 'stopping', worker: { state: 'stopping' } }),
       reconcileFederatedWorkerStop: () => ({ state: 'stopped' })
     }
+
     const callOrchestrationWorkerServer = vi.fn(async (_selector, method: string) =>
       method === 'status.get'
         ? runtimeStatus([ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY])
         : { state: 'stopped', alreadySettled: false, processAction: 'closed_agent_terminal' }
     )
+
     const runtime = {
       getOrchestrationDb: () => db,
       getRuntimeId: () => 'runtime-home',
       resolveOrchestrationWorkerServer: () => server,
       callOrchestrationWorkerServer
     } as unknown as OrcaRuntimeService
+
     const method = ORCHESTRATION_WORKER_STOP_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStop'
     )!

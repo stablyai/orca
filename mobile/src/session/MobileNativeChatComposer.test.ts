@@ -18,6 +18,7 @@ function MobileNativeChatComposer({
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   return {
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
@@ -49,6 +50,7 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
+
   return {
     BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
       visible ? React.createElement('BottomDrawer', { visible }, children) : null
@@ -94,6 +96,7 @@ describe('MobileNativeChatComposer', () => {
     if (!renderer) {
       throw new Error('Composer was not rendered')
     }
+
     return renderer.root.find(
       (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     ) as { props: { onPress: () => Promise<void> } }
@@ -154,12 +157,14 @@ describe('MobileNativeChatComposer', () => {
     // ~500ms apart, so an apply tapped inside that window would be submitted as
     // part of the user's prompt instead of running as its own command.
     let releaseSend: ((accepted: boolean) => void) | undefined
+
     const onSend = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           releaseSend = resolve
         })
     )
+
     const controller = {
       snapshot: [
         {
@@ -182,6 +187,7 @@ describe('MobileNativeChatComposer', () => {
       invokeAction: vi.fn(),
       recordCommand: vi.fn()
     }
+
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {
@@ -194,10 +200,12 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
+
     const modelPill = (): { props: { accessibilityState: { disabled: boolean } } } =>
       renderer!.root.find(
         (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Model, Model'
       ) as { props: { accessibilityState: { disabled: boolean } } }
+
     expect(modelPill().props.accessibilityState).toMatchObject({ disabled: false })
     // Start the send but don't await it — it stays in flight on purpose.
     let pressed!: Promise<void>
@@ -275,11 +283,13 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
+
     // Revoking `editable` on a focused field resigns first responder on iOS and
     // yanks the keyboard mid-typing (#10681) — the lock may only gate sending.
     const input = renderer!.root.find((node) => node.type === 'TextInput') as {
       props: { editable?: boolean }
     }
+
     expect(input.props.editable).not.toBe(false)
     expect(sendButton().props).toMatchObject({ disabled: true })
   })
@@ -302,14 +312,17 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
+
     const thumbs = renderer!.root.findAll((node) => node.type === 'Image') as Array<{
       props: { source: { uri: string } }
     }>
+
     expect(thumbs.map((t) => t.props.source.uri)).toEqual(['file:///a.png', 'file:///b.png'])
 
     const remove = renderer!.root.findAll(
       (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Remove image'
     ) as Array<{ props: { onPress: () => void } }>
+
     remove[1].props.onPress()
     expect(onRemoveAttachment).toHaveBeenCalledWith('img-2')
   })
@@ -347,6 +360,7 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
+
     const input = () =>
       renderer!.root.find((node) => node.type === 'TextInput') as {
         props: {
@@ -354,15 +368,18 @@ describe('MobileNativeChatComposer', () => {
           onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void
         }
       }
+
     // Uncontrolled selection until a suggestion is applied.
     expect(input().props.selection).toBeUndefined()
     // Place the caret at the end so the slash trigger is active and suggestions render.
     await act(async () =>
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 2 } } })
     )
+
     const firstSuggestion = renderer!.root.findAll(
       (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
     )[0] as { props: { onPress: () => void } }
+
     await act(async () => firstSuggestion.props.onPress())
     expect(onChangeText).toHaveBeenCalledWith('/clear ')
     // `/clear ` is 7 chars — the caret jumps just past the inserted command + space.
@@ -387,13 +404,17 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
+
     const input = renderer!.root.find((node) => node.type === 'TextInput') as {
       props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
     }
+
     await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+
     const texts = renderer!.root
       .findAll((node) => node.type === 'Text')
       .map((node) => (node.props as { children?: unknown }).children)
+
     // Codex-only commands from the shared catalog, with their description rows —
     // and none of the old hardcoded provider-agnostic list's phantom entries.
     expect(texts).toContain('/permissions')
@@ -405,6 +426,7 @@ describe('MobileNativeChatComposer', () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()
     const onMicPressOut = vi.fn()
+
     const mic = () =>
       renderer!.root.find(
         (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Dictate'
@@ -498,12 +520,14 @@ describe('MobileNativeChatComposer', () => {
   it('does not dismiss a newly focused composer when an old accepted send settles', async () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     let resolveSend: ((accepted: boolean) => void) | null = null
+
     const onSend = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveSend = resolve
         })
     )
+
     await render(onSend, vi.fn())
 
     let pendingSend!: Promise<void>
@@ -533,12 +557,14 @@ describe('MobileNativeChatComposer', () => {
   it('does not dismiss after a newer edit on the same surface', async () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     let resolveSend: ((accepted: boolean) => void) | null = null
+
     const onSend = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveSend = resolve
         })
     )
+
     await render(onSend, vi.fn())
 
     let pendingSend!: Promise<void>
@@ -546,9 +572,11 @@ describe('MobileNativeChatComposer', () => {
       pendingSend = sendButton().props.onPress()
       await Promise.resolve()
     })
+
     const input = renderer!.root.find((node) => node.type === 'TextInput') as {
       props: { onChangeText: (text: string) => void }
     }
+
     await act(async () => input.props.onChangeText('newer draft'))
     await act(async () => {
       resolveSend?.(true)
@@ -562,12 +590,14 @@ describe('MobileNativeChatComposer', () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     let editGeneration = 0
     let resolveSend: ((accepted: boolean) => void) | null = null
+
     const onSend = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveSend = resolve
         })
     )
+
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {
@@ -583,9 +613,11 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
+
     const input = renderer!.root.find((node) => node.type === 'TextInput') as {
       props: { onSelectionChange: (event: { nativeEvent: { selection: { end: number } } }) => void }
     }
+
     await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 2 } } }))
 
     let pendingSend!: Promise<void>
@@ -593,9 +625,11 @@ describe('MobileNativeChatComposer', () => {
       pendingSend = sendButton().props.onPress()
       await Promise.resolve()
     })
+
     const suggestion = renderer!.root.findAll(
       (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
     )[0] as { props: { onPress: () => void } }
+
     await act(async () => suggestion.props.onPress())
     await act(async () => {
       resolveSend?.(true)
@@ -609,12 +643,14 @@ describe('MobileNativeChatComposer', () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     let editGeneration = 0
     let resolveSend: ((accepted: boolean) => void) | null = null
+
     const onSend = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveSend = resolve
         })
     )
+
     const props = {
       value: 'hello',
       onChangeText: vi.fn(),
@@ -623,6 +659,7 @@ describe('MobileNativeChatComposer', () => {
       getSendCompletionGeneration: getCurrentSendCompletionGeneration,
       getComposerEditGeneration: () => editGeneration
     }
+
     await act(async () => {
       renderer = create(createElement(MobileNativeChatComposer, props))
     })
@@ -650,12 +687,14 @@ describe('MobileNativeChatComposer', () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     let generation = 0
     let resolveSend: ((accepted: boolean) => void) | null = null
+
     const onSend = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveSend = resolve
         })
     )
+
     await render(onSend, vi.fn(), false, 'tab-a', () => generation)
 
     let pendingSend!: Promise<void>

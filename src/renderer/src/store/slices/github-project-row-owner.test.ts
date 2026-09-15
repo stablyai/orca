@@ -20,10 +20,12 @@ describe('settingsForProjectRowOwner', () => {
 
   it('routes to the matched repo owner host when the slug matches', () => {
     mockedLookup.mockReturnValue([repo('repo-1', 'runtime:owner-env')])
+
     const state = {
       repos: [repo('repo-1', 'runtime:owner-env')],
       settings: { activeRuntimeEnvironmentId: 'focused-env' }
     }
+
     expect(settingsForProjectRowOwner(state, 'acme', 'widgets')).toEqual({
       activeRuntimeEnvironmentId: 'owner-env'
     })
@@ -31,10 +33,12 @@ describe('settingsForProjectRowOwner', () => {
 
   it('falls back to focused settings when no repo matches the slug', () => {
     mockedLookup.mockReturnValue([])
+
     const state = {
       repos: [repo('repo-1', 'runtime:owner-env')],
       settings: { activeRuntimeEnvironmentId: 'focused-env' }
     }
+
     expect(settingsForProjectRowOwner(state, 'acme', 'widgets')).toEqual({
       activeRuntimeEnvironmentId: 'focused-env'
     })

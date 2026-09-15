@@ -47,6 +47,7 @@ export function buildUpdateCardErrorModel({
         }
       : null
   }
+
   if (isLocalBuild) {
     return {
       title: cachedVersion
@@ -68,6 +69,7 @@ export function buildUpdateCardErrorModel({
       }
     }
   }
+
   if (isHttp2ProtocolError(status.message)) {
     return {
       variant: 'http1Compatibility',
@@ -87,6 +89,7 @@ export function buildUpdateCardErrorModel({
       }
     }
   }
+
   if (isWindowsSignatureMismatchFailure(status.message)) {
     return {
       variant: 'security',
@@ -100,6 +103,7 @@ export function buildUpdateCardErrorModel({
       manualLabel: translate('auto.components.UpdateCard.c9ff9b9ec2', 'Check official releases')
     }
   }
+
   if (isWindowsSignatureCheckUnavailableFailure(status.message)) {
     return {
       title: translate('auto.components.UpdateCard.e944c2de43', 'Update Verification Blocked'),
@@ -115,6 +119,7 @@ export function buildUpdateCardErrorModel({
       }
     }
   }
+
   return {
     title: cachedVersion ? 'Update Error' : 'Update Check Failed',
     summary:

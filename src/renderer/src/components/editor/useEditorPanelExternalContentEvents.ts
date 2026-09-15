@@ -38,15 +38,19 @@ type UseEditorPanelExternalContentEventsParams = {
 }
 
 const externalEventGenerations = new WeakMap<Event, number>()
+
 let externalEventGenerationCounter = 0
 
 function getExternalEventGeneration(event: Event): number {
   const existing = externalEventGenerations.get(event)
+
   if (existing !== undefined) {
     return existing
   }
+
   const generation = ++externalEventGenerationCounter
   externalEventGenerations.set(event, generation)
+
   return generation
 }
 
@@ -65,12 +69,15 @@ export function useEditorPanelExternalContentEvents({
   useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+
       if (!detail) {
         return
       }
+
       const eventGeneration = getExternalEventGeneration(event)
       const invalidatedDiffFileIds: string[] = []
       const invalidatedFileIds: string[] = []
+
       for (const file of getOpenFilesForExternalFileChange(openFilesRef.current, detail)) {
         // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
         // marked changed-on-disk upstream and resolves via the editor banner,
@@ -78,10 +85,12 @@ export function useEditorPanelExternalContentEvents({
         if (file.isDirty) {
           continue
         }
+
         if (!isVisibleRef.current || file.id !== activeContentFileIdRef.current) {
           invalidatedFileIds.push(file.id)
           continue
         }
+
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           // Why: external writes must replace any in-flight pre-change read so
           // the tab shows the new on-disk content, not a stale dedupe result.
@@ -89,6 +98,7 @@ export function useEditorPanelExternalContentEvents({
             force: true,
             externalEventGeneration: eventGeneration
           })
+
           if (editorViewModeRef.current[file.id] === 'changes') {
             void loadDiffContent(file, {
               force: true,
@@ -104,14 +114,18 @@ export function useEditorPanelExternalContentEvents({
           })
         }
       }
+
       if (invalidatedFileIds.length > 0) {
         invalidateContent(invalidatedFileIds)
       }
+
       if (invalidatedDiffFileIds.length > 0) {
         invalidateDiffContent(invalidatedDiffFileIds)
       }
     }
+
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
   }, [
@@ -128,32 +142,43 @@ export function useEditorPanelExternalContentEvents({
   useEffect(() => {
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorFileSavedDetail>).detail
+
       if (!detail) {
         return
       }
+
       const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
+
       if (!file) {
         return
       }
+
       if (file.mode === 'edit' || file.mode === 'markdown-preview') {
         setFileContents((prev) => ({
           ...prev,
           [file.id]: { content: detail.content, isBinary: false }
         }))
       }
+
       updateSavedPreviewTabs(openFilesRef.current, detail, setFileContents)
+
       if (file.mode === 'edit' || file.mode === 'markdown-preview') {
         return
       }
+
       setDiffContents((prev) => {
         const existing = prev[file.id]
+
         if (!existing || existing.kind !== 'text') {
           return prev
         }
+
         return { ...prev, [file.id]: { ...existing, modifiedContent: detail.content } }
       })
     }
+
     window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
+
     return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
   }, [openFilesRef, setDiffContents, setFileContents])
 }
@@ -167,14 +192,18 @@ function updateSavedPreviewTabs(
     (openFile) =>
       openFile.mode === 'markdown-preview' && openFile.markdownPreviewSourceFileId === detail.fileId
   )
+
   if (previewTabs.length === 0) {
     return
   }
+
   setFileContents((prev) => {
     const next = { ...prev }
+
     for (const previewTab of previewTabs) {
       next[previewTab.id] = { content: detail.content, isBinary: false }
     }
+
     return next
   })
 }
@@ -191,14 +220,17 @@ export function usePruneClosedEditorContent(
 
   useEffect(() => {
     const openIds = new Set(openFiles.map((f) => f.id))
+
     for (const fileId of openIds) {
       knownOpenFileIdsRef.current.add(fileId)
     }
+
     for (const fileId of Object.keys(fileLoadRetryAttemptsRef.current)) {
       if (!openIds.has(fileId)) {
         delete fileLoadRetryAttemptsRef.current[fileId]
       }
     }
+
     // Why: conflict-review entry loads use absolute paths as content ids; only
     // ids that have belonged to tabs are safe to prune as closed tabs.
     for (const fileId of Object.keys(fileReadGenerationRef.current)) {
@@ -206,11 +238,13 @@ export function usePruneClosedEditorContent(
         delete fileReadGenerationRef.current[fileId]
       }
     }
+
     for (const fileId of Object.keys(diffReadGenerationRef.current)) {
       if (knownOpenFileIdsRef.current.has(fileId) && !openIds.has(fileId)) {
         delete diffReadGenerationRef.current[fileId]
       }
     }
+
     setFileContents((prev) =>
       Object.fromEntries(Object.entries(prev).filter(([key]) => openIds.has(key)))
     )

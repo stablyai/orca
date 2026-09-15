@@ -27,27 +27,36 @@ export async function listLabelsBySlug(
   args: ListLabelsBySlugArgs
 ): Promise<ListLabelsBySlugResult> {
   const validation = validateSlugArgs(args.owner, args.repo)
+
   if (!validation.ok) {
     return validation
   }
+
   const authError = await projectHostAuthenticationError(args.host)
+
   if (authError) {
     return { ok: false, error: authError }
   }
+
   const guard = repositoryRateLimitGuard(args, 'core')
+
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
   }
+
   await acquire()
   noteRepositoryRateLimitSpend(args, 'core')
+
   try {
     const { stdout } = await ghExecFileAsync(
       ['api', '--paginate', `repos/${args.owner}/${args.repo}/labels`, '--jq', '.[].name'],
       { encoding: 'utf-8', ...projectGhExecOptions(args.host) }
     )
+
     return { ok: true, labels: stdout.trim().split('\n').filter(Boolean) }
   } catch (error) {
     const { stderr, stdout } = extractExecError(error)
+
     return { ok: false, error: classifyProjectError(stderr, stdout, args.host) }
   } finally {
     release()
@@ -58,20 +67,27 @@ export async function listAssignableUsersBySlug(
   args: ListAssignableUsersBySlugArgs
 ): Promise<ListAssignableUsersBySlugResult> {
   const validation = validateSlugArgs(args.owner, args.repo)
+
   if (!validation.ok) {
     return validation
   }
+
   const authError = await projectHostAuthenticationError(args.host)
+
   if (authError) {
     return { ok: false, error: authError }
   }
+
   const guard = repositoryRateLimitGuard(args, 'core')
+
   if (guard.blocked) {
     return { ok: false, error: rateLimitedError(guard) }
   }
+
   const users: GitHubAssignableUser[] = []
   await acquire()
   noteRepositoryRateLimitSpend(args, 'core')
+
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -83,6 +99,7 @@ export async function listAssignableUsersBySlug(
       ],
       { encoding: 'utf-8', ...projectGhExecOptions(args.host) }
     )
+
     for (const line of stdout.trim().split('\n').filter(Boolean)) {
       try {
         const user = JSON.parse(line) as {
@@ -90,6 +107,7 @@ export async function listAssignableUsersBySlug(
           avatarUrl?: string
           name?: string | null
         }
+
         if (typeof user.login === 'string') {
           users.push({
             login: user.login,
@@ -103,17 +121,21 @@ export async function listAssignableUsersBySlug(
     }
   } catch (error) {
     const { stderr } = extractExecError(error)
+
     return { ok: false, error: classifyProjectError(stderr, '', args.host) }
   } finally {
     release()
   }
+
   const seen = new Set(users.map((user) => user.login))
+
   for (const login of args.seedLogins ?? []) {
     if (typeof login === 'string' && !seen.has(login)) {
       users.push({ login, name: null, avatarUrl: '' })
       seen.add(login)
     }
   }
+
   return { ok: true, users }
 }
 
@@ -121,9 +143,11 @@ export async function listIssueTypesBySlug(
   args: ListIssueTypesBySlugArgs
 ): Promise<ListIssueTypesBySlugResult> {
   const validation = validateSlugArgs(args.owner, args.repo)
+
   if (!validation.ok) {
     return validation
   }
+
   const result = await runGraphql<{
     repository?: {
       issueTypes?: {
@@ -144,12 +168,15 @@ export async function listIssueTypesBySlug(
     { owner: args.owner, repo: args.repo },
     projectGhExecOptions(args.host)
   )
+
   if (!result.ok) {
     if (result.error.type === 'schema_drift' || result.error.type === 'validation_error') {
       return { ok: true, types: [] }
     }
+
     return { ok: false, error: result.error }
   }
+
   const types = (result.data.repository?.issueTypes?.nodes ?? [])
     .filter(
       (node): node is NonNullable<typeof node> =>
@@ -161,5 +188,6 @@ export async function listIssueTypesBySlug(
       color: typeof node.color === 'string' ? node.color : null,
       description: typeof node.description === 'string' ? node.description : null
     }))
+
   return { ok: true, types }
 }

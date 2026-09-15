@@ -56,11 +56,13 @@ export function useCombinedDiffScrollAnchors({
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): CombinedDiffScrollAnchors {
   const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
+
   const getCombinedDiffSectionElementKey = useCallback(
     (element: Element): string | null =>
       element instanceof HTMLElement ? (element.dataset.combinedDiffSectionKey ?? null) : null,
     []
   )
+
   const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number): void => {
       scrollAnchorRef.current = getVirtualizedScrollAnchorForOffset({
@@ -73,22 +75,28 @@ export function useCombinedDiffScrollAnchors({
     },
     [getCombinedDiffSectionKey, latestDomScrollAnchorRef, scrollAnchorRef, sectionsRef, virtualizer]
   )
+
   const recordDomScrollAnchor = useCallback((): boolean => {
     const container = scrollContainerRef.current
+
     if (!container) {
       return false
     }
 
     const containerRect = container.getBoundingClientRect()
+
     const visibleRows = Array.from(
       container.querySelectorAll<HTMLElement>('[data-combined-diff-section-row]')
     )
       .map((row) => {
         const key = row.dataset.combinedDiffSectionKey
+
         if (!key || !row.isConnected) {
           return null
         }
+
         const rect = row.getBoundingClientRect()
+
         if (
           rect.height <= 0 ||
           rect.bottom <= containerRect.top ||
@@ -96,12 +104,14 @@ export function useCombinedDiffScrollAnchors({
         ) {
           return null
         }
+
         return { key, rect }
       })
       .filter((row): row is { key: string; rect: DOMRect } => row !== null)
       .sort((a, b) => a.rect.top - b.rect.top)
 
     const firstVisible = visibleRows[0]
+
     if (!firstVisible) {
       return false
     }
@@ -115,23 +125,29 @@ export function useCombinedDiffScrollAnchors({
       ),
       scrollTop: container.scrollTop
     }
+
     scrollAnchorRef.current = anchor
     latestDomScrollAnchorRef.current = anchor
+
     return true
   }, [latestDomScrollAnchorRef, scrollAnchorRef, scrollContainerRef])
+
   const writeScrollAnchor = useCallback((): void => {
     const anchor = scrollAnchorRef.current
+
     if (anchor) {
       setWithLRU(combinedDiffScrollAnchorCache, viewStateKey, anchor)
     } else {
       combinedDiffScrollAnchorCache.delete(viewStateKey)
     }
   }, [scrollAnchorRef, viewStateKey])
+
   const persistScrollAnchor = useCallback(
     (refreshDomAnchor = true): void => {
       if (refreshDomAnchor) {
         recordDomScrollAnchor()
       }
+
       writeScrollAnchor()
     },
     [recordDomScrollAnchor, writeScrollAnchor]

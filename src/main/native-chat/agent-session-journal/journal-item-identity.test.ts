@@ -13,7 +13,9 @@ import type { AgentJournalItemIdentity } from '../../../shared/agent-session-jou
 // history with the ORIGINAL item uuids.
 
 const THREAD = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
+
 const TURN_A = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'
+
 const TURN_B = '019fd8cb-1c40-7a02-9f31-0f1a54b7c211'
 
 describe('codex identity survives positional renumbering', () => {
@@ -25,6 +27,7 @@ describe('codex identity survives positional renumbering', () => {
       turnId: TURN_B,
       ordinal: 0
     }
+
     // After `thread/resume` the same item comes back as item-1 of the replayed
     // history. Ordinal-within-turn is unchanged, so the key is unchanged.
     const resumed: AgentJournalItemIdentity = {
@@ -33,6 +36,7 @@ describe('codex identity survives positional renumbering', () => {
       turnId: TURN_B,
       ordinal: 0
     }
+
     expect(agentJournalItemKey(resumed)).toBe(agentJournalItemKey(live))
   })
 
@@ -43,12 +47,14 @@ describe('codex identity survives positional renumbering', () => {
       turnId: TURN_A,
       ordinal: 0
     })
+
     const second = agentJournalItemKey({
       provider: 'codex',
       threadId: THREAD,
       turnId: TURN_A,
       ordinal: 1
     })
+
     expect(first).not.toBe(second)
   })
 
@@ -59,12 +65,14 @@ describe('codex identity survives positional renumbering', () => {
       turnId: TURN_A,
       ordinal: 0
     })
+
     const forked = agentJournalItemKey({
       provider: 'codex',
       threadId: '019fd900-77aa-7c19-8bd0-2b3c4d5e6f70',
       turnId: TURN_A,
       ordinal: 0
     })
+
     expect(forked).not.toBe(original)
   })
 })
@@ -76,6 +84,7 @@ describe('claude identity', () => {
       sessionId: '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88',
       uuid: 'c1a5f0de-2b44-4a11-9f0e-7c2d31b6aa04'
     })
+
     expect(key).toBe(
       'claude:29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88:c1a5f0de-2b44-4a11-9f0e-7c2d31b6aa04'
     )
@@ -89,11 +98,13 @@ describe('claude identity', () => {
       sessionId: '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88',
       uuid: 'c1a5f0de-2b44-4a11-9f0e-7c2d31b6aa04'
     })
+
     const copiedIntoFork = agentJournalItemKey({
       provider: 'claude',
       sessionId: '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88',
       uuid: 'c1a5f0de-2b44-4a11-9f0e-7c2d31b6aa04'
     })
+
     expect(copiedIntoFork).toBe(parent)
   })
 
@@ -103,11 +114,13 @@ describe('claude identity', () => {
       sessionId: '29eb22a4-6a5f-4f21-9b0c-1d7f3a2e5c88',
       uuid: 'c1a5f0de-2b44-4a11-9f0e-7c2d31b6aa04'
     })
+
     const minted = agentJournalItemKey({
       provider: 'claude',
       sessionId: '7b1e5d33-0f28-42ac-8d59-9a4c6e2b1f70',
       uuid: 'f8b2c9a1-3e77-4c60-b1a2-5d0e7f4a9c33'
     })
+
     expect(minted).not.toBe(parent)
   })
 })
@@ -120,23 +133,27 @@ describe('key encoding', () => {
       sessionId: 'a:b',
       recordId: 'c'
     })
+
     const b = agentJournalItemKey({
       provider: 'legacy',
       agent: 'codex',
       sessionId: 'a',
       recordId: 'b:c'
     })
+
     expect(a).not.toBe(b)
   })
 
   it('separates the provider namespaces', () => {
     const orca = agentJournalItemKey({ provider: 'orca', clientMessageId: 'x' })
+
     const legacy = agentJournalItemKey({
       provider: 'legacy',
       agent: 'claude',
       sessionId: 'x',
       recordId: 'x'
     })
+
     expect(orca).not.toBe(legacy)
   })
 
@@ -150,6 +167,7 @@ describe('key encoding', () => {
 describe('bounded component domain separation', () => {
   const oversizedTurnId = 'a'.repeat(MAX_JOURNAL_KEY_COMPONENT_CHARS + 1)
   const digestFormMimic = boundJournalKeyComponent(oversizedTurnId)
+
   const keyFor = (turnId: string) =>
     agentJournalItemKey({ provider: 'codex', threadId: THREAD, turnId, ordinal: 0 })
 
@@ -166,6 +184,7 @@ describe('bounded component domain separation', () => {
       expect(parsed).not.toBeNull()
       expect(agentJournalItemKey(parsed as AgentJournalItemIdentity)).toBe(key)
     }
+
     expect(parseAgentJournalItemKey(keyFor(digestFormMimic))).toEqual({
       provider: 'codex',
       threadId: THREAD,
@@ -180,6 +199,7 @@ describe('oversized identity bounding on Unicode boundaries', () => {
   // the 40-unit diagnostic-head cut. Pre-fix the head ended in a lone high
   // surrogate and `encodeURIComponent` threw `URIError: URI malformed`.
   const STRADDLING = `${'a'.repeat(39)}😀${'x'.repeat(1100)}`
+
   const straddlingIdentity: AgentJournalItemIdentity = {
     provider: 'codex',
     threadId: THREAD,
@@ -235,6 +255,7 @@ describe('ill-formed UTF-16 identity totality', () => {
       sessionId: LONE_HIGH,
       uuid: 'u-1'
     }
+
     expect(() => agentJournalItemKey(identity)).not.toThrow()
     expect(agentJournalItemKey(identity)).toBe(agentJournalItemKey(identity))
   })
@@ -246,6 +267,7 @@ describe('ill-formed UTF-16 identity totality', () => {
       turnId: `${LONE_LOW}${'x'.repeat(1100)}`,
       ordinal: 0
     }
+
     expect(() => agentJournalItemKey(identity)).not.toThrow()
   })
 
@@ -256,12 +278,14 @@ describe('ill-formed UTF-16 identity totality', () => {
       turnId: `${'a'.repeat(10)}${LONE_HIGH}${'b'.repeat(1100)}`,
       ordinal: 0
     }
+
     expect(() => agentJournalItemKey(identity)).not.toThrow()
   })
 
   it('cannot collide an ill-formed id with its replacement-character spelling', () => {
     const keyFor = (sessionId: string) =>
       agentJournalItemKey({ provider: 'claude', sessionId, uuid: 'u-1' })
+
     expect(keyFor(LONE_HIGH)).not.toBe(keyFor('�'))
     expect(keyFor(LONE_HIGH)).not.toBe(keyFor(LONE_LOW))
     const oversized = (head: string) => `${head}${'x'.repeat(1100)}`
@@ -294,6 +318,7 @@ describe('malformed persisted keys decode to null instead of throwing', () => {
       sessionId: 's:1',
       uuid: 'u 1'
     }
+
     expect(parseAgentJournalItemKey(agentJournalItemKey(identity))).toEqual(identity)
   })
 })

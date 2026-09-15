@@ -12,6 +12,7 @@ import { scheduleSave } from './write-scheduling'
 type RetiredWorktreeNameRuntime = Pick<StoreRuntimeState, 'state'>
 
 const retiredWorktreeNamePersistenceContext = Symbol('RetiredWorktreeNamePersistence')
+
 type RetiredWorktreeNamePersistenceContext = {
   runtime: RetiredWorktreeNameRuntime
   scheduling: WriteSchedulingOperations
@@ -27,6 +28,7 @@ export class RetiredWorktreeNamePersistence {
   getRetiredWorktreeNameRegistry(repoId: string): RetiredNameRegistry {
     const stored =
       this[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByRepo?.[repoId]
+
     return stored
       ? { exhaustedTiers: stored.exhaustedTiers, names: [...stored.names] }
       : EMPTY_RETIRED_NAME_REGISTRY
@@ -37,6 +39,7 @@ export class RetiredWorktreeNamePersistence {
       this[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByNamespace?.[
         namespaceKey
       ]
+
     return stored
       ? { exhaustedTiers: stored.exhaustedTiers, names: [...stored.names] }
       : EMPTY_RETIRED_NAME_REGISTRY
@@ -44,9 +47,11 @@ export class RetiredWorktreeNamePersistence {
 
   addRetiredWorktreeName(repoId: string, name: string): void {
     const normalized = normalizeRetirableGeneratedName(name)
+
     if (!repoId || !normalized) {
       return
     }
+
     applyRetiredWorktreeNames(this, repoId, [normalized])
   }
 
@@ -54,13 +59,17 @@ export class RetiredWorktreeNamePersistence {
     if (!repoId) {
       return false
     }
+
     const incoming = new Set<string>()
+
     for (const name of names) {
       const normalized = normalizeRetirableGeneratedName(name)
+
       if (normalized) {
         incoming.add(normalized)
       }
     }
+
     return incoming.size > 0 && applyRetiredWorktreeNames(this, repoId, incoming)
   }
 
@@ -68,20 +77,26 @@ export class RetiredWorktreeNamePersistence {
     if (!namespaceKey) {
       return false
     }
+
     const normalized = new Set<string>()
+
     for (const name of names) {
       const candidate = normalizeRetirableGeneratedName(name)
+
       if (candidate) {
         normalized.add(candidate)
       }
     }
+
     const next = addRetiredNames(
       this.getRetiredWorktreeNameRegistryForNamespace(namespaceKey),
       normalized
     )
+
     if (!next) {
       return false
     }
+
     this[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByNamespace ??= {}
     recordRetirementNamespaceRegistry(
       this[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByNamespace,
@@ -89,6 +104,7 @@ export class RetiredWorktreeNamePersistence {
       next
     )
     scheduleSave(this[retiredWorktreeNamePersistenceContext].scheduling)
+
     return true
   }
 }
@@ -99,13 +115,16 @@ export function applyRetiredWorktreeNames(
   names: Iterable<string>
 ): boolean {
   const next = addRetiredNames(owner.getRetiredWorktreeNameRegistry(repoId), names)
+
   if (!next) {
     return false
   }
+
   owner[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByRepo ??= {}
   owner[retiredWorktreeNamePersistenceContext].runtime.state.retiredWorktreeNamesByRepo[repoId] =
     next
   scheduleSave(owner[retiredWorktreeNamePersistenceContext].scheduling)
+
   return true
 }
 

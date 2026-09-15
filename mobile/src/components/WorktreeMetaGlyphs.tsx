@@ -33,9 +33,11 @@ export function WorktreeMetaGlyphs({
   const hasLinear = Boolean(linkedLinearIssue)
   const hasGitLabMR = linkedGitLabMR != null
   const hasIssue = linkedIssue != null || linkedGitLabIssue != null
+
   if (!hasNotes && !hasLinear && !hasGitLabMR && !hasIssue) {
     return null
   }
+
   return (
     <View style={styles.metaGlyphs}>
       {hasNotes && <StickyNote size={11} color={colors.textMuted} />}

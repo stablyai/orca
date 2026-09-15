@@ -54,6 +54,7 @@ describe('listAutomationRunsPage', () => {
       { id: 'r2', createdAt: 2 },
       { id: 'r3', createdAt: 3 }
     ])
+
     const first = listAutomationRunsPage(state, 'a1', 2)
 
     state.automationRuns = state.automationRuns.filter((run) => run.id !== 'r2')
@@ -71,6 +72,7 @@ describe('listAutomationRunsPage', () => {
       { id: 'r1', createdAt: 10 },
       { id: 'r0', createdAt: 5 }
     ])
+
     const first = listAutomationRunsPage(state, 'a1', 1)
     expect(first.runs.map((run) => run.id)).toEqual(['r1'])
 

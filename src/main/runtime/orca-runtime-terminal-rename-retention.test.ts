@@ -40,6 +40,7 @@ describe('terminal rename before renderer graph hydration', () => {
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
+
       const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
         tabId: 'host-tab',
         leafId: HEADLESS_LEAF_ID
@@ -77,10 +78,12 @@ describe('terminal rename before renderer graph hydration', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     setSession({ ...getSession(), tabsByWorktree: { [TEST_WORKTREE_ID]: [] } })
     runtimeStore.setWorkspaceSession.mockClear()
 

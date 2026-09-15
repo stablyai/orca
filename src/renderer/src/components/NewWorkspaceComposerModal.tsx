@@ -74,10 +74,12 @@ function ComposerModalBody({
   onClose: () => void
 }): React.JSX.Element {
   const submitCancelledRef = useRef(false)
+
   const handleDismiss = useCallback(() => {
     submitCancelledRef.current = true
     onClose()
   }, [onClose])
+
   const isSubmissionCancelled = useCallback(() => submitCancelledRef.current, [])
 
   return (
@@ -117,6 +119,7 @@ function QuickTabBody({
   active: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+
   const {
     cardProps,
     composerRef,
@@ -145,12 +148,14 @@ function QuickTabBody({
     enableIssueAutomation: modalData.enableIssueAutomation === true,
     createGateMode: 'quick'
   })
+
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want
   // a less disruptive affordance — a nested dialog layered over the composer
   // so the user can tweak agents without losing their in-progress workspace
   // name/repo selection.
   const [agentSettingsOpen, setAgentSettingsOpen] = useState(false)
+
   // Why: once the user picks an agent, their choice wins and must not be
   // overwritten when the derived "preferred" value changes (e.g. detection
   // finishes and adds more installed agents to the set). Track that with an
@@ -160,23 +165,28 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     undefined
   )
+
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
+
     // Why: detection can still be pending when quick-create submits; keep the
     // prior catalog fallback while filtering disabled agents out of that choice.
     return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
+
   const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
     quickAgentOverride,
     preferredQuickAgent,
     detectedAgentIds: cardProps.detectedAgentIds,
     disabledTuiAgents: settings?.disabledTuiAgents
   })
+
   if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
     // Why: detection/settings changes can invalidate a user-picked agent; repair
     // before the child selector renders an unavailable option for one commit.
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
+
   const quickAgent = resolvedQuickAgentSelection.quickAgent
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
@@ -186,6 +196,7 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
+
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -195,16 +206,19 @@ function QuickTabBody({
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
   const [setLocationOpen, setSetLocationOpen] = useState(false)
+
   const handleOpenAddProject = useCallback((): void => {
     setAddProjectMounted(true)
     setAddProjectOpen(true)
   }, [])
+
   const handleProjectAdded = useCallback(
     (repoId: string): void => {
       selectAddedProjectRepo(repoId)
     },
     [selectAddedProjectRepo]
   )
+
   const handleAddProjectCloseAutoFocus = useCallback(
     (event: Event): void => {
       // Why: after adding a project the next step is naming the worktree.
@@ -216,6 +230,7 @@ function QuickTabBody({
     },
     [nameInputRef]
   )
+
   const addProjectController = useMemo<AddRepoDialogHostedController>(
     () => ({
       open: addProjectOpen,
@@ -225,10 +240,13 @@ function QuickTabBody({
     }),
     [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded]
   )
+
   const selectedProjectOption = cardProps.projectOptions.find(
     (option) => option.id === cardProps.selectedProjectId
   )
+
   const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
+
   const primaryActionLabel = isFolderWorkspaceTarget
     ? getFolderWorkspacePrimaryActionLabel()
     : cardProps.selectedRepoIsGit
@@ -248,26 +266,34 @@ function QuickTabBody({
       // on top, this capture-phase handler must not fire composer submit underneath it.
       return
     }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       // Why: workspace creation is screen-local submit behavior, not a
       // user-configurable app command.
       if (!isScreenSubmitShortcut(event)) {
         return
       }
+
       const target = event.target
+
       if (!(target instanceof HTMLElement)) {
         return
       }
+
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
+
       if (createDisabled) {
         return
       }
+
       event.preventDefault()
       void handleCreate()
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
 

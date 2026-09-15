@@ -9,6 +9,7 @@ export function buildFullCreationIssueCommand(args: {
   if (!args.shouldRun) {
     return undefined
   }
+
   return {
     command: renderIssueCommandTemplate(args.template, {
       issueNumber: args.issueNumber ?? null,

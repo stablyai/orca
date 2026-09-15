@@ -34,55 +34,69 @@ export function startGitHubListScrollRestore({
   onScrollTopApplied
 }: GitHubListScrollRestoreOptions): () => void {
   const scrollElement = scrollElementRef.current
+
   if (!scrollElement) {
     return () => {}
   }
+
   restoreWriteRef.current = null
   let frame: number | null = null
   let observer: ResizeObserver | null = null
   let mutationObserver: MutationObserver | null = null
+
   const stop = (): void => {
     if (frame !== null) {
       window.cancelAnimationFrame(frame)
       frame = null
     }
+
     observer?.disconnect()
     observer = null
     mutationObserver?.disconnect()
     mutationObserver = null
   }
+
   const restore = (): void => {
     const element = scrollElementRef.current
+
     if (!element || pendingRestoreRef.current !== target) {
       stop()
+
       return
     }
+
     element.scrollTop = target
     const committed = element.scrollTop
     restoreWriteRef.current = { target, committed }
     // Re-assert the target, not the clamped position: a half-painted list must not
     // downgrade what gets remembered on unmount.
     onScrollTopApplied(target)
+
     if (Math.abs(committed - target) < SCROLL_MATCH_EPSILON_PX) {
       pendingRestoreRef.current = null
       stop()
     }
   }
+
   // The container is observed alongside its rows: a pagination bar appearing or a window
   // resize changes only the container, and that alone can make the target reachable.
   observer = new ResizeObserver(restore)
   observer.observe(scrollElement)
+
   for (const child of scrollElement.children) {
     observer.observe(child)
   }
+
   // Rows can mount after this layout effect (for example when a cached page settles),
   // so observe child-list changes to cover elements that were not present initially.
   mutationObserver = new MutationObserver(restore)
   mutationObserver.observe(scrollElement, { childList: true, subtree: true })
   restore()
+
   if (pendingRestoreRef.current === target) {
     frame = window.requestAnimationFrame(restore)
   }
+
   return stop
 }
 
@@ -104,6 +118,7 @@ export function supersedeGitHubListScrollRestore({
   restoreWriteRef: RefObject<GitHubListRestoreWrite | null>
 }): boolean {
   const write = restoreWriteRef.current
+
   // Matching targets is what keeps a write left over from an earlier restore — pending is
   // re-armed from passive effects, after this restore's layout effect — out of the echo.
   if (
@@ -113,7 +128,9 @@ export function supersedeGitHubListScrollRestore({
   ) {
     return false
   }
+
   pendingRestoreRef.current = null
   restoreWriteRef.current = null
+
   return true
 }

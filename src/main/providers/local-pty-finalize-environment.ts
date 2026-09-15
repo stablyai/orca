@@ -36,10 +36,13 @@ export function finalizeLocalPtySpawnEnvironment(args: {
   env: Record<string, string>
 }): HistoryInjectionResult | null {
   const { spawn, getOptions, plan, env } = args
+
   if (process.platform === 'win32') {
     finalizeWindowsLocalPtySpawnEnvironment({ spawn, plan, env })
   }
+
   seedPowerlevel10kWizardEnv(env, { envToDelete: spawn.envToDelete })
+
   if (
     env[POWERLEVEL10K_WIZARD_DISABLE_ENV] !== undefined &&
     process.platform === 'win32' &&
@@ -47,6 +50,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
+
   const requestedEnv = spawn.env
   expandWindowsPathEnvironmentVariables(env)
   promoteAgentTeamsShimPath(
@@ -61,20 +65,25 @@ export function finalizeLocalPtySpawnEnvironment(args: {
   // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
   const worktreeId = spawn.worktreeId
   const historyEnabled = worktreeId && (getOptions().isHistoryEnabled?.() ?? true)
+
   // Effective shell for history injection: WSL's outer exe is wsl.exe but the inner login shell is bash.
   const isWslTerminal =
     Boolean(plan.wslInfo || plan.worktreeWslContext || plan.preferredWslContext) ||
     pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
+
   const effectiveShellPath = isWslTerminal ? 'bash' : plan.shellPath
   let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
+
   if (historyEnabled) {
     historyResult = injectHistoryEnv(env, worktreeId, effectiveShellPath, plan.cwd, {
       wslDistro: plan.launchWslDistro
     })
+
     if (isWslTerminal && plan.launchWslDistro) {
       injectWslFishHistoryEnv(env, worktreeId, plan.launchWslDistro)
       addWslEnvKeys(env, ['HISTFILE', 'fish_history'])
     }
+
     logHistoryInjection(worktreeId, historyResult)
   } else {
     // Why: injectHistoryEnv is what normally clears it, so when history is off
@@ -94,12 +103,14 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // see whether this spawn actually injected one.
     const isCodexStartupCommand = plan.startupAgentRecognition?.agent === 'codex'
     const codexStartupCommand = isCodexStartupCommand ? spawn.command : undefined
+
     const codexRequiresShellReady =
       codexStartupCommand !== undefined &&
       shouldUseShellReadyStartupDelivery({
         command: codexStartupCommand,
         startupCommandDelivery: spawn.startupCommandDelivery
       })
+
     // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch
     // config below may name features for this shell.
     delete env.ORCA_SHELL_FEATURES
@@ -109,11 +120,13 @@ export function finalizeLocalPtySpawnEnvironment(args: {
         codexStartupCommand !== undefined && supportsPosixShellStartupCommand(shell)
           ? codexStartupCommand
           : undefined
+
       // Why no line-editor widening here (unlike the daemon and relay): a Codex
       // startup command this provider wraps is run by the wrapper's own prompt
       // hook, never written into the PTY, so there is no early write to double-echo.
       const waitsForShellReady =
         Boolean(spawn.command) && (!isCodexStartupCommand || codexRequiresShellReady)
+
       return getShellLaunchConfig(
         shell,
         selectShellStartupFeatures({
@@ -128,11 +141,13 @@ export function finalizeLocalPtySpawnEnvironment(args: {
         wrapperStartupCommand
       )
     }
+
     const shellLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
     Object.assign(env, shellLaunch.env)
     plan.shellArgs = shellLaunch.args ?? plan.shellArgs
     plan.shellReadyLaunch = spawn.command ? shellLaunch : null
     plan.primaryLaunchEnvKeys = Object.keys(shellLaunch.env)
   }
+
   return historyResult
 }

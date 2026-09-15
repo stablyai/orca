@@ -4,10 +4,13 @@ import type { HandlerMap } from './worktrees-test-ipc-surface'
 
 /** Loose signature: one mock stands in for many unrelated module exports. */
 export type ModuleMock = Mock<(...args: unknown[]) => unknown>
+
 /** Mocks tests re-implement with a leading path/name/script argument. */
 export type StringArgMock = Mock<(value: string, ...rest: unknown[]) => unknown>
+
 /** Lookups tests re-implement per branch, e.g. conflict kind and PR resolution. */
 export type RepoBranchMock = Mock<(repoPath: string, branch: string, ...rest: unknown[]) => unknown>
+
 /** Git invocations tests re-implement by inspecting the argv array. */
 export type GitArgvMock = Mock<(args: string[], ...rest: unknown[]) => unknown>
 
@@ -29,11 +32,17 @@ export function setPlatform(platform: NodeJS.Platform): void {
 }
 
 export const removeWorktreeLinkedPathsMock: ModuleMock = vi.fn()
+
 export const findExistingWorktreeSymlinkPathsMock: ModuleMock = vi.fn()
+
 export const handleMock: Mock<(channel: string, handler: HandlerMap[string]) => void> = vi.fn()
+
 export const removeHandlerMock: ModuleMock = vi.fn()
+
 export const listWorktreesMock: StringArgMock = vi.fn()
+
 export const describeCreatedWorktreeMock: ModuleMock = vi.fn()
+
 export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]> = vi.fn(
   (output: string) =>
     output
@@ -44,57 +53,104 @@ export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]
         const lines = block.split(/\r?\n/)
         const path = lines.find((line) => line.startsWith('worktree '))?.slice(9) ?? ''
         const branch = lines.find((line) => line.startsWith('branch '))?.slice(7) ?? ''
+
         return { path, branch, head: String(index), isBare: false, isMainWorktree: index === 0 }
       })
 )
+
 export const assertWorktreeCleanForRemovalMock: ModuleMock = vi.fn()
+
 export const addWorktreeMock: ModuleMock = vi.fn()
+
 export const addSparseWorktreeMock: ModuleMock = vi.fn()
+
 export const removeWorktreeMock: ModuleMock = vi.fn()
+
 export const forceDeleteLocalBranchMock: ModuleMock = vi.fn()
+
 export const resolveLocalGitUsernameMock: ModuleMock = vi.fn()
+
 export const getBaseRefDefaultMock: ModuleMock = vi.fn()
+
 export const resolveDefaultBaseRefWithLocalGitMock: ModuleMock = vi.fn()
+
 export const resolveDefaultBaseRefViaExecMock: ModuleMock = vi.fn()
+
 export const getDefaultRemoteMock: ModuleMock = vi.fn()
+
 export const getBranchConflictKindMock: RepoBranchMock = vi.fn()
+
 export const getPRForBranchMock: RepoBranchMock = vi.fn()
+
 export const getHostedReviewForBranchMock: ModuleMock = vi.fn()
+
 export const getWorkItemMock: ModuleMock = vi.fn()
+
 export const getPullRequestPushTargetMock: ModuleMock = vi.fn()
+
 export const getEffectiveHooksMock: Mock<(repo?: unknown, worktreePath?: string) => unknown> =
   vi.fn()
+
 export const createIssueCommandRunnerScriptMock: ModuleMock = vi.fn()
+
 export const createSetupRunnerScriptMock: ModuleMock = vi.fn()
+
 export const getEffectiveHooksFromConfigMock: ModuleMock = vi.fn()
+
 export const getDefaultTabsLaunchMock: ModuleMock = vi.fn()
+
 export const parseOrcaYamlMock: ModuleMock = vi.fn()
+
 export const shouldRunSetupForCreateMock: ModuleMock = vi.fn()
+
 export const buildPosixRunnerScriptMock: StringArgMock = vi.fn()
+
 export const buildWindowsRunnerScriptMock: StringArgMock = vi.fn()
+
 export const getSetupRunnerEnvVarsMock: Mock<
   (repo: { path: string }, worktreePath: string) => Record<string, string>
 > = vi.fn()
+
 export const resolveSetupRunnerShellMock: ModuleMock = vi.fn()
+
 export const runHookMock: ModuleMock = vi.fn()
+
 export const hasHooksFileMock: ModuleMock = vi.fn()
+
 export const loadHooksMock: ModuleMock = vi.fn()
+
 export const computeWorktreePathMock: Mock<typeof computeWorktreePath> = vi.fn()
+
 export const ensurePathWithinWorkspaceMock: StringArgMock = vi.fn()
+
 export const gitExecFileAsyncMock: GitArgvMock = vi.fn()
+
 export const getSshGitProviderMock: StringArgMock = vi.fn()
+
 export const getSshFilesystemProviderMock: ModuleMock = vi.fn()
+
 export const getActiveMultiplexerMock: ModuleMock = vi.fn()
+
 export const deleteWorktreeHistoryDirMock: ModuleMock = vi.fn()
+
 export const advertisedUrlWatcherForgetWorktreeMock: ModuleMock = vi.fn()
+
 export const pruneCleanupScanSnapshotMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
+
 export const pruneCleanupScanSnapshotsMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
+
 export const pruneSpaceAnalysisSnapshotMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
+
 export const pruneSpaceAnalysisSnapshotsMock: ModuleMock = vi.fn().mockResolvedValue(undefined)
+
 export const recordRemovalSnapshotPruneMock: ModuleMock = vi.fn()
+
 export const killAllProcessesForWorktreeMock: ModuleMock = vi.fn()
+
 export const clearProviderPtyStateMock: ModuleMock = vi.fn()
+
 export const getLocalPtyProviderMock: ModuleMock = vi.fn()
+
 export const getSshPtyProviderMock: ModuleMock = vi.fn()
 
 // Why: vi.mock factories are hoisted per test file, so each file calls these builders instead of
@@ -144,6 +200,7 @@ export const gitRepoModuleMock = () => ({
     if (allowLocalBranch && (await allowLocalBranch())) {
       return null
     }
+
     return getBranchConflictKindMock(repoPath, branch, base, options)
   }
 })
@@ -165,11 +222,13 @@ export const sshGitDispatchModuleMock = () => ({
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
   requireSshGitProvider: (connectionId: string) => {
     const provider = getSshGitProviderMock(connectionId)
+
     if (!provider) {
       throw new Error(
         'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
       )
     }
+
     return provider
   }
 })

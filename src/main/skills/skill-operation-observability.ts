@@ -14,10 +14,13 @@ import { summarizeSkillBundleObservation } from './skill-bundle-observability-su
 import { skillInstallFailureFromError } from './skill-install-operation-error'
 
 const SAFE_LABEL = /^[a-z0-9][a-z0-9._-]{0,63}$/i
+
 const MAX_OBSERVED_COUNT = 1_000_000
+
 // Roots grow with the repo count, so an uncapped id list makes one log line
 // grow with the install.
 const MAX_LOGGED_DELETE_ROOT_IDS = 12
+
 const MAX_OBSERVED_BYTES = 64 * 1024 * 1024
 
 type SkillOperationPhase =
@@ -85,6 +88,7 @@ function platformLabel(destination?: SkillInstallDestination): string {
   if (destination?.scope === 'global' && destination.executionTarget?.kind === 'wsl') {
     return 'linux'
   }
+
   return ['darwin', 'linux', 'win32'].includes(process.platform) ? process.platform : 'other'
 }
 
@@ -92,6 +96,7 @@ export function skillInstallDestinationLabel(destination: SkillInstallDestinatio
   if (destination.scope === 'workspace') {
     return 'workspace'
   }
+
   return `global-${destination.executionTarget?.kind ?? 'host'}`
 }
 
@@ -101,6 +106,7 @@ function failureLabel(
 ): { category: 'cancelled' | 'failed'; code: string } {
   const failure = skillInstallFailureFromError(error)
   const message = error instanceof Error ? error.message : undefined
+
   return {
     category: failure?.category === 'cancelled' ? 'cancelled' : 'failed',
     code: safeLabel(failure?.code ?? message, fallback)
@@ -135,6 +141,7 @@ export function startSkillPhaseOperation(input: SkillPhaseStart): SkillPhaseOper
       ...(input.provider ? { provider: safeLabel(input.provider, 'unknown') } : {})
     }
   })
+
   return {
     complete(outcome = {}) {
       setOutcome(span, outcome)
@@ -144,6 +151,7 @@ export function startSkillPhaseOperation(input: SkillPhaseStart): SkillPhaseOper
       const failure = failureLabel(error)
       span.setAttribute('status', failure.category)
       span.setAttribute('errorCategory', failure.code)
+
       if (failure.category === 'cancelled') {
         span.interrupt(failure.code)
       } else {
@@ -170,6 +178,7 @@ export function recordSkillCapabilityAbsence(input: {
       status: 'absent'
     }
   })
+
   span.end()
 }
 
@@ -196,6 +205,7 @@ export function startSkillInstallOperation(
       compressedBytes: request.package.compressedBytes
     }
   })
+
   return {
     complete(result) {
       span.setAttribute('status', result.status)
@@ -209,9 +219,11 @@ export function startSkillInstallOperation(
         'copyPlacementCount',
         result.placements.filter((placement) => placement.topology === 'independent-copy').length
       )
+
       for (const placement of result.placements) {
         recordPlacement(span, placement)
       }
+
       if (result.status === 'cancelled') {
         span.interrupt(safeLabel(result.errorCategory, 'skill-install-cancelled'))
       } else if (result.status === 'failed') {
@@ -224,6 +236,7 @@ export function startSkillInstallOperation(
       const failure = failureLabel(error, 'skill-install-unknown')
       span.setAttribute('status', failure.category)
       span.setAttribute('errorCategory', failure.code)
+
       if (failure.category === 'cancelled') {
         span.interrupt(failure.code)
       } else {
@@ -249,19 +262,23 @@ export function startSkillBundleInstallOperation(
       selectedSkillCount: boundedNumber(request.selectedSkillIds.length)
     }
   })
+
   return {
     complete(result) {
       span.setAttribute('status', result.status)
       const summary = summarizeSkillBundleObservation(result)
+
       for (const [key, value] of Object.entries(summary.attributes)) {
         span.setAttribute(key, boundedNumber(value))
       }
+
       for (const [category, count] of summary.errorCategories) {
         span.addEvent('skill.error-category', {
           category: safeLabel(category, 'skill-bundle-install-unknown'),
           count: boundedNumber(count)
         })
       }
+
       if (result.status === 'cancelled') {
         span.interrupt('skill-bundle-install-cancelled')
       } else if (result.status === 'failed') {
@@ -274,6 +291,7 @@ export function startSkillBundleInstallOperation(
       const failure = failureLabel(error, 'skill-bundle-install-unknown')
       span.setAttribute('status', failure.category)
       span.setAttribute('errorCategory', failure.code)
+
       if (failure.category === 'cancelled') {
         span.interrupt(failure.code)
       } else {
@@ -295,9 +313,11 @@ export function recordSkillDeleteOperation(input: {
   rootIds: readonly string[]
 }): void {
   const counts = new Map<string, number>()
+
   for (const skill of input.skills) {
     counts.set(skill.status, (counts.get(skill.status) ?? 0) + 1)
   }
+
   const span = startSpan('skill.delete', {
     attributes: {
       phase: 'delete',
@@ -313,5 +333,6 @@ export function recordSkillDeleteOperation(input: {
       rootIds: input.rootIds.slice(0, MAX_LOGGED_DELETE_ROOT_IDS).join(',')
     }
   })
+
   span.end()
 }

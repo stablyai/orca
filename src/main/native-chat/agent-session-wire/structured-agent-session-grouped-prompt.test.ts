@@ -40,20 +40,27 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 const attachParams = (): AgentSessionAttachParams => hostTestAttachParams(null)
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let answerPrompt: Mock<StructuredAgentSessionAdapter['answerPrompt']>
+
 let ordinal = 0
 
 function adapter(): StructuredAgentSessionAdapter {
   const dispatch = vi.fn(async (): Promise<AgentSessionDispatchOutcome> => {
     ordinal += 1
+
     return {
       state: 'accepted',
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal }
     }
   })
+
   return {
     acquire,
     releaseAcquisition: vi.fn(async () => true),
@@ -67,9 +74,11 @@ function adapter(): StructuredAgentSessionAdapter {
 async function seedGroupedQuestion(): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 100 }
   const events = acquire.mock.calls.at(-1)?.[0].events
+
   if (!events) {
     throw new Error('seedGroupedQuestion requires an acquired session')
   }
+
   events.appendItem(identity, {
     kind: 'question',
     question: '2 grouped questions from Claude',
@@ -98,9 +107,11 @@ async function seedGroupedQuestion(): Promise<{ itemId: string; revision: number
   const itemId = agentJournalItemKey(identity)
   const page = host.history({ sessionId: SESSION, direction: 'tail' })
   const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
+
   if (!appended) {
     throw new Error('provider question was not written to the journal')
   }
+
   return { itemId, revision: appended.revision }
 }
 
@@ -145,16 +156,20 @@ describe('grouped question admission', () => {
     const attached = await host.attach(CALLER, attachParams())
     expect(attached.ok).toBe(true)
     const prompt = await seedGroupedQuestion()
+
     const optionId = encodeAgentSessionQuestionAnswers([
       { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
       { questionId: 'q2', optionIds: [], other: 'SSH host' }
     ])
+
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId }
+
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:question', fields),
       kind: 'question',
       ...fields
     })
+
     expect(result).toMatchObject({ ok: true, value: { resolution: { state: 'resolved' } } })
     expect(answerPrompt).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: prompt.itemId, optionId })

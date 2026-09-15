@@ -68,8 +68,11 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
+
 let handlerOptions: AiVaultHandlerOptions = {}
+
 const listCancellations = createSenderScopedRequestCancellations()
+
 // Shared by the IPC registration and the test internals: a delete must drop
 // the multi-host leg cache, which this module owns the only caller of.
 const aiVaultDeleteDeps = {
@@ -90,6 +93,7 @@ async function listAiVaultSessions(
   // A scanner consumes at most 64 paths, so smaller equivalent workspace sets
   // can share a snapshot regardless of which worktree was selected first.
   const scopePaths = args?.scopePaths ?? []
+
   const key = JSON.stringify({
     scopePaths:
       scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
@@ -97,8 +101,10 @@ async function listAiVaultSessions(
         : scopePaths,
     executionHostScope
   })
+
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
+
   // Why: every renderer request carries its own cancellation signal, so
   // coalescing has to survive them — the coordinator hands all same-key callers
   // one scan and only aborts it once every one of them has cancelled.
@@ -108,9 +114,11 @@ async function listAiVaultSessions(
     signal: options.signal,
     start: (scanSignal) => {
       const scan = () => scanAiVaultSessionsByHostScope(args, executionHostScope, scanSignal, key)
+
       if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
         return scan()
       }
+
       return scanHostLegWithCache({
         cacheKey: key,
         depth,
@@ -130,16 +138,20 @@ async function scanAiVaultSessionsByHostScope(
 ): Promise<AiVaultListResult> {
   const depth = requestedAiVaultSessionDepth(args)
   const scopePaths = args?.scopePaths ?? []
+
   if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
     return scanLocalAiVaultSessionsAsIssue(args, signal)
   }
+
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
     const sshHosts = getActiveSshAiVaultHostInfosResult()
+
     const runtimeResults = [
       ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
       ...(sshHosts.issue ? [sshHosts.issue] : [])
     ]
+
     const scannedResults = await Promise.all([
       scanLocalAiVaultSessionsAsIssue(args, signal),
       ...sshHosts.hostInfos.map((hostInfo) =>
@@ -172,6 +184,7 @@ async function scanAiVaultSessionsByHostScope(
         })
       )
     ])
+
     return mergeAiVaultListResults(
       [...scannedResults, ...runtimeResults],
       args?.limit,
@@ -180,9 +193,11 @@ async function scanAiVaultSessionsByHostScope(
   }
 
   const parsed = parseExecutionHostId(executionHostScope)
+
   if (parsed?.kind === 'ssh') {
     return scanSshAiVaultSessions(parsed.targetId, args, { signal })
   }
+
   if (parsed?.kind === 'runtime') {
     return scanRuntimeAiVaultSessions({
       hostInfo: {
@@ -231,10 +246,12 @@ async function scanLocalAiVaultSessionsAsIssue(
     if (isAiVaultScanCancelledError(error)) {
       throw error
     }
+
     // Raw supervision text ("restart circuit is open") means nothing to a user,
     // so the row carries actionable copy and the log keeps the original.
     const raw = error instanceof Error ? error.message : 'Local session scan failed.'
     console.error('[ai-vault] local session scan failed:', raw)
+
     return aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
@@ -273,10 +290,13 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       typeof args?.requestToken === 'string' && args.requestToken.length <= 128
         ? args.requestToken
         : undefined
+
     const controller = listCancellations.begin(event, requestToken)
+
     try {
       await handlerOptions.ensureStructuredSessionOwnership?.()
       const result = await listAiVaultSessions(args, { signal: controller?.signal })
+
       return projectStructuredAiVaultSessions(result, true)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
@@ -284,6 +304,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       if (!isAiVaultScanCancelledError(error)) {
         throw error
       }
+
       return cancelledAiVaultListResult()
     } finally {
       listCancellations.finish(event, requestToken, controller)

@@ -57,6 +57,7 @@ vi.mock('./ssh-connection-utils', () => ({
 vi.mock('./ssh-relay-superseded-endpoints', () => ({
   sweepSupersededRelayEndpoints: vi.fn().mockResolvedValue([])
 }))
+
 import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
 import { gcOldRelayVersions } from './ssh-relay-versioned-install'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'

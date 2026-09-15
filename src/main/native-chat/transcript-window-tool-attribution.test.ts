@@ -21,6 +21,7 @@ async function writeTranscript(records: unknown[]): Promise<string> {
   tempRoots.push(root)
   const filePath = join(root, 'transcript.jsonl')
   await writeFile(filePath, records.map((record) => JSON.stringify(record)).join('\n'))
+
   return filePath
 }
 
@@ -53,19 +54,23 @@ function toolTurn(n: number): unknown[] {
  *  Mirrors what both chat views build from a folded message's tool blocks. */
 function unattributedResults(messages: readonly NativeChatMessage[]): string[] {
   const stray: string[] = []
+
   for (const message of messages) {
     const tools = message.blocks.filter(
       (block) => isToolCallBlock(block) || isToolResultBlock(block)
     )
+
     if (tools.length === 0) {
       continue
     }
+
     for (const pair of pairToolBlocks(tools)) {
       if (pair.call === undefined && pair.result) {
         stray.push(pair.result.output)
       }
     }
   }
+
   return stray
 }
 
@@ -76,6 +81,7 @@ async function renderedMessages(filePath: string, limit: number): Promise<Native
     decodeClaudeTranscriptLine,
     true
   )
+
   return stripNoiseMessages(foldToolMessages(page.messages))
 }
 
@@ -113,6 +119,7 @@ describe('windowed transcript tool attribution', () => {
     // Claude appends byte-identical copies of already-answered tool_result
     // records after a compaction, with no `tool_use` in between.
     const [, answeredResult] = toolTurn(1)
+
     const filePath = await writeTranscript([
       ...toolTurn(1),
       {
@@ -137,6 +144,7 @@ describe('windowed transcript tool attribution', () => {
   it('keeps a hidden interruption from authorizing a later result', async () => {
     const [abandonedCall] = toolTurn(1)
     const [, laterResult] = toolTurn(2)
+
     const filePath = await writeTranscript([
       abandonedCall,
       {

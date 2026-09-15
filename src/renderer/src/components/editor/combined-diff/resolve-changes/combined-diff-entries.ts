@@ -16,6 +16,7 @@ export function getCombinedUncommittedEntries(
     if (entry.conflictStatus === 'unresolved') {
       return false
     }
+
     return areaFilter === undefined || entry.area === areaFilter
   })
 }
@@ -30,23 +31,28 @@ export function resolveCombinedUncommittedSnapshotEntries(
   const snapshotAreaKeys = new Set(snapshotEntries.map(getUncommittedAreaPathKey))
   const resolvedEntries: GitStatusEntry[] = []
   const resolvedAreaKeys = new Set<string>()
+
   const pushResolvedEntry = (entry: GitStatusEntry): void => {
     const areaKey = getUncommittedAreaPathKey(entry)
+
     if (resolvedAreaKeys.has(areaKey)) {
       return
     }
+
     resolvedAreaKeys.add(areaKey)
     resolvedEntries.push(entry)
   }
 
   for (const snapshotEntry of snapshotEntries) {
     const livePathEntries = liveEntriesByPath.get(snapshotEntry.path) ?? []
+
     if (livePathEntries.some((liveEntry) => liveEntry.area === snapshotEntry.area)) {
       pushResolvedEntry(snapshotEntry)
       continue
     }
 
     const retainedPathEntries = retainedEntriesByPath.get(snapshotEntry.path) ?? []
+
     if (
       livePathEntries.length === 0 &&
       retainedPathEntries.some((retainedEntry) => retainedEntry.area === snapshotEntry.area)
@@ -57,6 +63,7 @@ export function resolveCombinedUncommittedSnapshotEntries(
 
     const movedEntry =
       livePathEntries[0] ?? (retainedPathEntries.length === 1 ? retainedPathEntries[0] : undefined)
+
     if (!movedEntry || movedEntry.area === snapshotEntry.area) {
       pushResolvedEntry(snapshotEntry)
       continue
@@ -66,9 +73,11 @@ export function resolveCombinedUncommittedSnapshotEntries(
       path: snapshotEntry.path,
       area: movedEntry.area
     })
+
     if (snapshotAreaKeys.has(movedAreaKey)) {
       continue
     }
+
     if (resolvedAreaKeys.has(movedAreaKey)) {
       continue
     }
@@ -93,14 +102,17 @@ function getGitStatusEntriesByPath(
   entries: readonly GitStatusEntry[]
 ): Map<string, GitStatusEntry[]> {
   const entriesByPath = new Map<string, GitStatusEntry[]>()
+
   for (const entry of entries) {
     const pathEntries = entriesByPath.get(entry.path)
+
     if (pathEntries) {
       pathEntries.push(entry)
     } else {
       entriesByPath.set(entry.path, [entry])
     }
   }
+
   return entriesByPath
 }
 

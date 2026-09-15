@@ -33,13 +33,17 @@ export function redirectPortedHostnameToEnv(
   options: GlabExecOptions
 ): { args: string[]; options: GlabExecOptions } {
   const i = args.indexOf('--hostname')
+
   if (i === -1 || i + 1 >= args.length) {
     return { args, options }
   }
+
   const host = args[i + 1]
+
   if (!/^[^/\s]+:\d+$/.test(host)) {
     return { args, options }
   }
+
   // Why WSLENV: a glab routed into a distro only sees Windows-side variables
   // named in WSLENV, so without this the ported host silently never crosses and
   // glab talks to gitlab.com instead (#12557). Credit: #12558.
@@ -48,6 +52,7 @@ export function redirectPortedHostnameToEnv(
   // the extra key is inert there, and gating it would need the test to know the
   // platform for no behavioural gain.
   addWslEnvKeys(env, ['GITLAB_HOST'])
+
   return {
     args: [...args.slice(0, i), ...args.slice(i + 2)],
     options: { ...options, env }
@@ -63,6 +68,7 @@ export async function glabExecFileAsync(
   const timeoutMs = options.timeout ?? DEFAULT_GLAB_EXEC_TIMEOUT_MS
   let lastError: unknown
   let attemptedDefaultWslFallback = false
+
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
       // Why to-termination: same shim chain as gh — the deadline has to reap the
@@ -81,10 +87,12 @@ export async function glabExecFileAsync(
         },
         resolved.termination
       )
+
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
+
       if (
         process.platform === 'win32' &&
         !attemptedDefaultWslFallback &&
@@ -95,6 +103,7 @@ export async function glabExecFileAsync(
         isHostCommandMissing(err, 'glab')
       ) {
         const wslResolved = resolveDefaultWslCli('glab', args)
+
         if (wslResolved) {
           // Why: mirror gh's WSL-only fallback for global GitLab project/auth calls.
           resolved = wslResolved
@@ -103,20 +112,26 @@ export async function glabExecFileAsync(
           continue
         }
       }
+
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
       // Why: mirror gh's write-safety gate — don't auto-retry a non-idempotent write that GitLab may already have applied.
       const idempotent = options.idempotent ?? argsLookIdempotent(args)
+
       if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
         const retryAfterMs = parseRetryAfterMs(stderr)
+
         const delayMs =
           retryAfterMs !== null
             ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
             : GH_RETRY_DELAYS_MS[attempt]
+
         await sleep(delayMs, options.signal)
         continue
       }
+
       throw err
     }
   }
+
   throw lastError
 }

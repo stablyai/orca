@@ -22,5 +22,6 @@ export function resolveMountedLazyModalIds(
   if (!isLazyModalId(activeModal) || mountedIds.has(activeModal)) {
     return mountedIds
   }
+
   return new Set([...mountedIds, activeModal])
 }

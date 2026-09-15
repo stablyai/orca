@@ -15,6 +15,7 @@ afterEach(async () => {
   cleanup()
   await i18n.changeLanguage('en')
 })
+
 const approval: NativeChatResolvedPrompt = {
   kind: 'approval',
   title: 'Run command?',
@@ -98,6 +99,7 @@ describe('resolution receipts', () => {
         body={{ ...approval, resolution: { ...approval.resolution, state: 'pending' } }}
       />
     )
+
     expect(container).toBeEmptyDOMElement()
   })
 
@@ -126,6 +128,7 @@ describe('resolution receipts', () => {
         ])
       }
     }
+
     render(<NativeChatResolutionReceipt body={body} />)
     expect(screen.getByText('Features?')).toBeInTheDocument()
     expect(screen.getByText('First · Second')).toBeInTheDocument()
@@ -150,7 +153,9 @@ describe('resolution receipts', () => {
       freeTextQuestionId: 'name/id',
       resolution: { ...approval.resolution, selectedOptionId: 'name%2Fid:hello%20world' }
     }
+
     expect(nativeChatReceiptAnswers(body)).toEqual([{ question: null, answer: 'hello world' }])
+
     for (const selectedOptionId of ['other:hello', 'name%2Fid:%invalid']) {
       expect(
         nativeChatReceiptAnswers({ ...body, resolution: { ...body.resolution, selectedOptionId } })

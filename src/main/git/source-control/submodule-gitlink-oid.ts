@@ -13,6 +13,7 @@ export async function readGitlinkOidFromTree(
       ...gitOptionsForWorktree(worktreePath, options),
       env: gitOptionalLocksDisabledEnv()
     })
+
     return stdout.match(/^160000 commit ([0-9a-f]+)\t/m)?.[1] ?? ''
   } catch {
     return ''
@@ -29,6 +30,7 @@ export async function readGitlinkOidFromIndex(
       ...gitOptionsForWorktree(worktreePath, options),
       env: gitOptionalLocksDisabledEnv()
     })
+
     return stdout.match(/^160000 ([0-9a-f]+) /m)?.[1] ?? ''
   } catch {
     return ''
@@ -44,6 +46,7 @@ export async function readWorkingSubmoduleHead(
       ...gitOptionsForWorktree(submoduleWorktreePath, options),
       env: gitOptionalLocksDisabledEnv()
     })
+
     return stdout.trim()
   } catch {
     return ''

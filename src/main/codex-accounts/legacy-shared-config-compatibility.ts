@@ -14,6 +14,7 @@ export function syncLegacySharedCodexConfigForRetainedPanes(
       sharedRuntimeHome: getOrcaManagedCodexHomePath(),
       systemCodexHome: getSystemCodexHomePath()
     }
+
     syncSystemConfigIntoLegacySharedCodexHome({
       runtimeHomePath: resolvedPaths.sharedRuntimeHome,
       systemHomePath: resolvedPaths.systemCodexHome

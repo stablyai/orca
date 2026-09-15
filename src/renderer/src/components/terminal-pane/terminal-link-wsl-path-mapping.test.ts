@@ -11,6 +11,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const {
   storeState,
   authorizeExternalPathMock,
@@ -49,6 +50,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     vi.mocked(window.api.shell.pathExists).mockImplementation(
       async (pathValue) => pathValue === mappedPath
     )
+
     const { provider, linkTooltip } = createProviderSetup(
       [makeBufferLine('/root/workspace/myrepo/README.md:5:3')],
       new Map(),
@@ -88,6 +90,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     vi.mocked(window.api.shell.pathExists).mockImplementation(
       async (pathValue) => pathValue === mappedPath
     )
+
     const { provider } = createProviderSetup([makeBufferLine('README.md:5')], new Map(), {
       worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
       wslDistro: 'Ubuntu',
@@ -162,6 +165,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     vi.mocked(window.api.shell.pathExists).mockImplementation(
       async (pathValue) => pathValue === mappedPath
     )
+
     const { provider } = createProviderSetup([makeBufferLine('src/main.ts:5')], new Map(), {
       worktreePath: 'C:\\repo',
       wslDistro: 'Ubuntu',

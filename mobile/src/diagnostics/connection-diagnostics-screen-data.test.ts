@@ -53,6 +53,7 @@ describe('connection diagnostics screen data', () => {
 
   it('waits for hydration and then reads the refreshed log', async () => {
     const entries: ConnectionLogEntry[] = []
+
     const store = {
       hydrate: vi.fn(async () => {
         entries.push({ id: 'stored', ts: 1, level: 'info', message: 'stored event' })
@@ -66,6 +67,7 @@ describe('connection diagnostics screen data', () => {
 
   it('retries one transient hydration failure before reading', async () => {
     const entries = [{ id: 'stored', ts: 1, level: 'info' as const, message: 'stored event' }]
+
     const store = {
       hydrate: vi
         .fn()
@@ -80,12 +82,14 @@ describe('connection diagnostics screen data', () => {
 
   it('reads connection metadata after hydration completes', async () => {
     let state: 'connecting' | 'reconnecting' = 'connecting'
+
     const store = {
       hydrate: vi.fn(async () => {
         state = 'reconnecting'
       }),
       get: vi.fn(() => [{ id: 'new', ts: 2, level: 'warn' as const, message: 'new event' }])
     }
+
     const context = {
       getState: vi.fn(() => state),
       getReconnectAttempt: vi.fn(() => 2),

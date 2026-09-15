@@ -53,24 +53,33 @@ export class StatusPorcelainParser {
   update(chunk: string, limit: number): boolean {
     const text = this.carry + chunk
     let start = 0
+
     while (true) {
       const nl = text.indexOf('\n', start)
+
       if (nl === -1) {
         break
       }
+
       // Strip a trailing \r so Windows CRLF output parses cleanly.
       let end = nl
+
       if (end > start && text.charCodeAt(end - 1) === 13) {
         end -= 1
       }
+
       this.parseLine(text.slice(start, end))
       start = nl + 1
+
       if (limit !== 0 && this.count > limit) {
         this.carry = ''
+
         return true
       }
     }
+
     this.carry = text.slice(start)
+
     return false
   }
 
@@ -86,48 +95,64 @@ export class StatusPorcelainParser {
     if (!line) {
       return
     }
+
     if (line.startsWith('# branch.oid ')) {
       this.branch.head = line.slice('# branch.oid '.length).trim()
+
       return
     }
+
     if (line.startsWith('# branch.head ')) {
       const branchHead = line.slice('# branch.head '.length).trim()
       // Why: undefined (not '') keeps this transport-compatible — the renderer
       // turns "head without branch" into an explicit detached-HEAD clear.
       this.branch.branch =
         branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
+
       return
     }
+
     if (line.startsWith('# branch.upstream ')) {
       this.branch.upstreamName = line.slice('# branch.upstream '.length).trim() || undefined
+
       return
     }
+
     if (line.startsWith('# branch.ab ')) {
       const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/)
+
       if (match) {
         this.branch.upstreamAheadBehind = {
           ahead: Number.parseInt(match[1], 10),
           behind: Number.parseInt(match[2], 10)
         }
       }
+
       return
     }
+
     if (line.startsWith('1 ') || line.startsWith('2 ')) {
       this.parseChangedEntry(line)
+
       return
     }
+
     if (line.startsWith('? ')) {
       this.push({
         path: decodeGitCQuotedPath(line.slice(2)),
         status: 'untracked',
         area: 'untracked'
       })
+
       return
     }
+
     if (line.startsWith('! ')) {
       this.ignoredPaths.push(decodeGitCQuotedPath(line.slice(2)))
+
       return
     }
+
     if (line.startsWith('u ')) {
       this.count += 1
       this.unmergedLines.push(line)
@@ -150,6 +175,7 @@ export class StatusPorcelainParser {
       const tabParts = line.split('\t')
       const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
       const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))
+
       if (indexStatus !== '.') {
         this.push({
           path,
@@ -159,6 +185,7 @@ export class StatusPorcelainParser {
           ...submoduleStatusField(parts[2], indexStatus)
         })
       }
+
       if (worktreeStatus !== '.') {
         this.push({
           path,
@@ -168,10 +195,12 @@ export class StatusPorcelainParser {
           ...submoduleStatusField(parts[2], worktreeStatus)
         })
       }
+
       return
     }
 
     const path = decodeGitCQuotedPath(parts.slice(8).join(' '))
+
     if (indexStatus !== '.') {
       this.push({
         path,
@@ -180,6 +209,7 @@ export class StatusPorcelainParser {
         ...submoduleStatusField(parts[2], indexStatus)
       })
     }
+
     if (worktreeStatus !== '.') {
       this.push({
         path,
@@ -221,6 +251,7 @@ export function parseSubmoduleStatus(
   if (!submoduleField?.startsWith('S')) {
     return undefined
   }
+
   return {
     commitChanged: submoduleField[1] === 'C' || (submoduleField === 'S...' && statusChar === 'M'),
     trackedChanges: submoduleField[2] === 'M',
@@ -233,5 +264,6 @@ function submoduleStatusField(
   statusChar: string
 ): { submodule: GitStatusEntry['submodule'] } | {} {
   const submodule = parseSubmoduleStatus(submoduleField, statusChar)
+
   return submodule ? { submodule } : {}
 }

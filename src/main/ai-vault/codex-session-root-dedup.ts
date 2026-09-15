@@ -25,6 +25,7 @@ function lastPathSegment(filePath: string): string {
 // those execution boundaries.
 function codexPathExecutionNamespace(filePath: string): string {
   const wslPath = parseWslUncPath(filePath)
+
   return wslPath ? `wsl:${wslPath.distro.toLowerCase()}` : 'native'
 }
 
@@ -35,6 +36,7 @@ export function codexRolloutHardlinkIdentity(file: {
   nlink?: number
 }): string | null {
   const { dev, ino, nlink } = file
+
   if (
     typeof dev !== 'number' ||
     typeof ino !== 'number' ||
@@ -47,6 +49,7 @@ export function codexRolloutHardlinkIdentity(file: {
   ) {
     return null
   }
+
   return `${dev}:${ino}`
 }
 
@@ -65,9 +68,11 @@ function codexSessionRootRank(codexHome: string | null): number {
   if (codexHome === null) {
     return 0
   }
+
   const segments = codexHome.split(/[\\/]/).filter(Boolean)
   const isSharedRuntimeHome = segments.at(-2) === 'codex-runtime-home' && segments.at(-1) === 'home'
   const isPerAccountManagedHome = segments.at(-3) === 'codex-accounts' && segments.at(-1) === 'home'
+
   return isSharedRuntimeHome || isPerAccountManagedHome ? 1 : 2
 }
 
@@ -86,38 +91,50 @@ export function dedupeCodexRolloutFileAliases<T>(
   }
 ): T[] {
   const bestByAlias = new Map<string, { candidate: T; rank: number; filePath: string }>()
+
   for (const candidate of candidates) {
     if (!accessors.isCodex(candidate)) {
       continue
     }
+
     const filePath = accessors.getFilePath(candidate)
     const fileName = lastPathSegment(filePath)
+
     if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
       continue
     }
+
     const hardlinkIdentity = accessors.getHardlinkIdentity(candidate)
+
     if (!hardlinkIdentity) {
       continue
     }
+
     const aliasKey = `${codexPathExecutionNamespace(filePath)}\0${fileName}\0${hardlinkIdentity}`
     const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
     const best = bestByAlias.get(aliasKey)
+
     if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
       bestByAlias.set(aliasKey, { candidate, rank, filePath })
     }
   }
+
   return candidates.filter((candidate) => {
     if (!accessors.isCodex(candidate)) {
       return true
     }
+
     const fileName = lastPathSegment(accessors.getFilePath(candidate))
     const hardlinkIdentity = accessors.getHardlinkIdentity(candidate)
+
     if (!hardlinkIdentity) {
       return true
     }
+
     const best = bestByAlias.get(
       `${codexPathExecutionNamespace(accessors.getFilePath(candidate))}\0${fileName}\0${hardlinkIdentity}`
     )
+
     return !best || best.candidate === candidate
   })
 }
@@ -135,6 +152,7 @@ export async function dedupeCodexRolloutAliases<T>(
   signal?: AbortSignal
 ): Promise<T[]> {
   const hardlinkDeduped = dedupeCodexRolloutFileAliases(candidates, accessors)
+
   return dedupeCodexRolloutCopyAliases(hardlinkDeduped, accessors, readSessionMetaId, signal)
 }
 
@@ -158,17 +176,22 @@ export async function dedupeCodexRolloutCopyAliases<T>(
   signal?: AbortSignal
 ): Promise<T[]> {
   const groups = new Map<string, T[]>()
+
   for (const candidate of candidates) {
     if (!accessors.isCodex(candidate)) {
       continue
     }
+
     const filePath = accessors.getFilePath(candidate)
     const fileName = lastPathSegment(filePath)
+
     if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
       continue
     }
+
     const key = `${codexPathExecutionNamespace(filePath)}\0${fileName}`
     const group = groups.get(key)
+
     if (group) {
       group.push(candidate)
     } else {
@@ -180,46 +203,59 @@ export async function dedupeCodexRolloutCopyAliases<T>(
   // contested candidate at once rather than one group at a time — a corpus
   // with a full second history copy has thousands of two-file groups.
   const contested = [...groups.values()].filter((group) => group.length > 1).flat()
+
   if (contested.length === 0) {
     return [...candidates]
   }
+
   const identifiedIds = await mapWithConcurrency(
     contested,
     COPY_PROOF_READ_CONCURRENCY,
     async (candidate) => {
       throwIfAiVaultScanCancelled(signal)
+
       return readSessionMetaId(accessors.getFilePath(candidate))
     }
   )
+
   const idByCandidate = new Map<T, string | null>(
     contested.map((candidate, index) => [candidate, identifiedIds[index]])
   )
 
   const aliasesToDrop = new Set<T>()
+
   for (const group of groups.values()) {
     if (group.length < 2) {
       continue
     }
+
     const bestById = new Map<string, { candidate: T; rank: number; filePath: string }>()
+
     for (const candidate of group) {
       const id = idByCandidate.get(candidate)
+
       if (!id) {
         continue
       }
+
       const filePath = accessors.getFilePath(candidate)
       const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
       const best = bestById.get(id)
+
       if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
         bestById.set(id, { candidate, rank, filePath })
       }
     }
+
     for (const candidate of group) {
       const id = idByCandidate.get(candidate)
+
       if (id && bestById.get(id)?.candidate !== candidate) {
         aliasesToDrop.add(candidate)
       }
     }
   }
+
   return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
 }
 
@@ -233,21 +269,28 @@ export function dedupeCodexSessionsBySessionId(
   sessions: readonly AiVaultSession[]
 ): AiVaultSession[] {
   const bestByKey = new Map<string, AiVaultSession>()
+
   for (const session of sessions) {
     const key = codexSessionAliasKey(session)
+
     if (!key) {
       continue
     }
+
     const best = bestByKey.get(key)
+
     if (!best || codexSessionAliasBeats(session, best)) {
       bestByKey.set(key, session)
     }
   }
+
   return sessions.filter((session) => {
     const key = codexSessionAliasKey(session)
+
     if (!key) {
       return true
     }
+
     return bestByKey.get(key) === session
   })
 }
@@ -277,23 +320,30 @@ export class CodexSessionCollection {
   add(session: AiVaultSession): void {
     const key = codexSessionAliasKey(session)
     const index = this.nextIndex++
+
     if (key && !this.admit(session, key, index)) {
       return
     }
+
     this.sessions.set(index, session)
   }
 
   /** Whether the row is retained; a losing alias is dropped. */
   private admit(session: AiVaultSession, key: string, index: number): boolean {
     const bucket = this.winnersBySessionId.get(session.sessionId)
+
     if (bucket instanceof Map) {
       const winner = this.contest(bucket.get(key), session, index)
+
       if (winner) {
         bucket.set(key, winner)
       }
+
       return winner !== null
     }
+
     const bucketKey = bucket && codexSessionAliasKey(bucket.session)
+
     if (bucket && bucketKey && bucketKey !== key) {
       this.winnersBySessionId.set(
         session.sessionId,
@@ -302,12 +352,16 @@ export class CodexSessionCollection {
           [key, { session, indices: index }]
         ])
       )
+
       return true
     }
+
     const winner = this.contest(bucket, session, index)
+
     if (winner) {
       this.winnersBySessionId.set(session.sessionId, winner)
     }
+
     return winner !== null
   }
 
@@ -320,6 +374,7 @@ export class CodexSessionCollection {
     if (!best) {
       return { session, indices: index }
     }
+
     if (best.session === session) {
       // The batch filter retains every occurrence of the winning object.
       if (typeof best.indices === 'number') {
@@ -327,11 +382,14 @@ export class CodexSessionCollection {
       } else {
         best.indices.push(index)
       }
+
       return best
     }
+
     if (!codexSessionAliasBeats(session, best.session)) {
       return null
     }
+
     if (typeof best.indices === 'number') {
       this.sessions.delete(best.indices)
     } else {
@@ -339,6 +397,7 @@ export class CodexSessionCollection {
         this.sessions.delete(previousIndex)
       }
     }
+
     return { session, indices: index }
   }
 }
@@ -347,23 +406,30 @@ function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent !== 'codex') {
     return null
   }
+
   const fileName = lastPathSegment(session.filePath)
+
   if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
     return null
   }
+
   return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
 
 function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
   const candidateRank = codexSessionRootRank(candidate.codexHome)
   const bestRank = codexSessionRootRank(best.codexHome)
+
   if (candidateRank !== bestRank) {
     return candidateRank < bestRank
   }
+
   const candidateTime = sessionSortTime(candidate)
   const bestTime = sessionSortTime(best)
+
   if (candidateTime !== bestTime) {
     return candidateTime > bestTime
   }
+
   return candidate.filePath < best.filePath
 }

@@ -155,6 +155,7 @@ describe('RuntimeHostStatusRow', () => {
 
   it('renders a long raw error in full inside the submenu', () => {
     const longError = `Invalid remote endpoint: ${'wss://relay.example.test/path/'.repeat(8)}`
+
     const { container } = render(
       <RuntimeHostStatusRow
         label="Dev Box"

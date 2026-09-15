@@ -18,10 +18,12 @@ vi.mock('@/store', () => ({
     })
   }
 }))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 import { openLinearIssueWorkspaceOrStart } from './linear-issue-workspace-open'

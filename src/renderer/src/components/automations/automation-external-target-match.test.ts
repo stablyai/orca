@@ -11,6 +11,7 @@ function repo(
 }
 
 const sshTarget: ExternalAutomationTarget = { type: 'ssh', connectionId: 'conn-1' }
+
 const localTarget: ExternalAutomationTarget = { type: 'local' }
 
 describe('repoMatchesExternalAutomationTarget', () => {

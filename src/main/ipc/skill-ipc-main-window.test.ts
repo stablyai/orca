@@ -6,6 +6,7 @@ const { getTrustedUIRendererWebContentsMock, handleMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('./ui', () => ({
   getTrustedUIRendererWebContents: getTrustedUIRendererWebContentsMock
 }))

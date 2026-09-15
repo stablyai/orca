@@ -43,6 +43,7 @@ export type GitStatusRefBindingRequest = {
 const FAILED_RESOLUTION_RETRY_MS = 5 * 60_000
 
 let activeBinding: ActiveGitStatusRefBinding | null = null
+
 let activeResolution: GitStatusRefResolution | null = null
 
 function watchMatchesBinding(
@@ -69,6 +70,7 @@ function watchMatchesResolution(
 
 export function applyActiveGitStatusRefBinding(watch: GitStatusRefWatchTarget): void {
   watch.gitStatusRefPaths.clear()
+
   if (activeBinding && watchMatchesBinding(watch, activeBinding)) {
     watch.gitStatusRefPaths.add(resolveRuntimePath(watch.path, activeBinding.upstreamRef))
   }
@@ -82,6 +84,7 @@ const bindingChangeListeners = new Set<() => void>()
 
 export function onActiveGitStatusRefBindingChanged(listener: () => void): () => void {
   bindingChangeListeners.add(listener)
+
   return () => {
     bindingChangeListeners.delete(listener)
   }
@@ -91,8 +94,10 @@ function applyBindingToWatches(watches: Iterable<GitStatusRefWatchTarget>): void
   for (const watch of watches) {
     applyActiveGitStatusRefBinding(watch)
   }
+
   // Snapshot first: a listener may unsubscribe while being notified.
   const listeners = Array.from(bindingChangeListeners)
+
   for (const listener of listeners) {
     listener()
   }
@@ -105,6 +110,7 @@ function clearResolutionForWorktree(
   if (activeResolution?.worktreeId !== worktreeId) {
     return
   }
+
   activeResolution.controller.abort()
   activeResolution = null
   activeBinding = null
@@ -130,12 +136,15 @@ export function updateActiveGitStatusRefBinding(
 ): Promise<void> {
   if (!args.branch || !args.upstreamName) {
     clearResolutionForWorktree(args.worktreeId, getWatches)
+
     return Promise.resolve()
   }
 
   const key = resolutionKey(args)
+
   if (activeResolution?.key === key && activeResolution.retryAt > Date.now()) {
     applyBindingToWatches(getWatches())
+
     return activeResolution.promise
   }
 
@@ -144,6 +153,7 @@ export function updateActiveGitStatusRefBinding(
   applyBindingToWatches(getWatches())
 
   const controller = new AbortController()
+
   const resolution = {
     key,
     worktreeId: args.worktreeId,
@@ -153,12 +163,14 @@ export function updateActiveGitStatusRefBinding(
     promise: Promise.resolve(),
     retryAt: Number.POSITIVE_INFINITY
   }
+
   resolution.promise = Promise.resolve()
     .then(() => resolveUpstreamRef(controller.signal))
     .then((upstreamRef) => {
       if (activeResolution !== resolution) {
         return
       }
+
       activeBinding =
         upstreamRef && isSafeGitStatusUpstreamRef(upstreamRef)
           ? {
@@ -176,6 +188,7 @@ export function updateActiveGitStatusRefBinding(
       }
     })
   activeResolution = resolution
+
   return resolution.promise
 }
 
@@ -186,6 +199,7 @@ export function invalidateActiveGitStatusRefResolution(
   if (!activeResolution || !watchMatchesResolution(changedWatch, activeResolution)) {
     return
   }
+
   activeResolution.controller.abort()
   activeResolution = null
   activeBinding = null
@@ -201,9 +215,12 @@ export function invalidateGitStatusRefResolutionForPaths(
     if (!path || changedWatch.kind !== 'git-common') {
       return false
     }
+
     const parts = pathRelativeToWorktreeWatchRoot(changedWatch.path, path)
+
     return parts?.length === 1 && parts[0] === 'config'
   })
+
   if (configChanged) {
     invalidateActiveGitStatusRefResolution(changedWatch, getWatches)
   }

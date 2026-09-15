@@ -81,29 +81,36 @@ async function measureCopySize(
   let bytes = 0
   let entries = 0
   const pending: string[] = [source]
+
   while (pending.length > 0) {
     const current = pending.pop() as string
     let stats: Awaited<ReturnType<typeof lstat>>
+
     try {
       stats = await lstat(current)
     } catch {
       // Raced away between the walk and now — the copy will skip it too.
       continue
     }
+
     entries += 1
+
     if (entries > Math.min(remainingEntries, remainingWalk)) {
       // Why: attribute to whichever ceiling actually bound. Blaming the file
       // limit for a walk that earlier entries used up would quote the user a
       // limit this entry never approached.
       const reason = remainingWalk < remainingEntries ? 'sizing' : 'entries'
+
       return { verdict: { withinBudget: false, reason }, walked: entries }
     }
+
     // Why: both copy backends reproduce a nested symlink as a symlink rather
     // than following it, so walking through one would double-count a shared
     // target and could loop forever on a cycle.
     if (stats.isSymbolicLink()) {
       continue
     }
+
     if (stats.isDirectory()) {
       try {
         for (const name of await readdir(current)) {
@@ -112,13 +119,17 @@ async function measureCopySize(
       } catch {
         // Unreadable directory — nothing measurable, and the copy will report it.
       }
+
       continue
     }
+
     bytes += stats.size
+
     if (bytes > remainingBytes) {
       return { verdict: { withinBudget: false, reason: 'bytes' }, walked: entries }
     }
   }
+
   return { verdict: { withinBudget: true, bytes, entries }, walked: entries }
 }
 
@@ -136,31 +147,39 @@ export function createWorktreeCopyBudgetTracker(
   // on walking itself a `.worktreeinclude` listing 1000 over-budget directories
   // would pay a fresh full-limit walk for each one — the very stall this bounds.
   let remainingWalk = budget.maxEntries * WORKTREE_COPY_SIZING_HEADROOM
+
   return {
     admit: async (source, { bytesAreCopied = true } = {}) => {
       if (remainingWalk <= 0) {
         return { withinBudget: false, reason: 'sizing' }
       }
+
       const { verdict, walked } = await measureCopySize(
         source,
         bytesAreCopied ? remainingBytes : Number.POSITIVE_INFINITY,
         remainingEntries,
         remainingWalk
       )
+
       remainingWalk -= walked
+
       if (verdict.withinBudget) {
         if (bytesAreCopied) {
           remainingBytes -= verdict.bytes
         }
+
         remainingEntries -= verdict.entries
       }
+
       return verdict
     },
     chargeBytes: (bytes) => {
       if (bytes > remainingBytes) {
         return false
       }
+
       remainingBytes -= bytes
+
       return true
     }
   }
@@ -168,9 +187,11 @@ export function createWorktreeCopyBudgetTracker(
 
 function formatByteLimit(maxBytes: number): string {
   const gigabytes = maxBytes / (1024 * 1024 * 1024)
+
   if (gigabytes >= 1) {
     return `${Number(gigabytes.toFixed(1))} GB`
   }
+
   return `${Math.max(1, Math.round(maxBytes / (1024 * 1024)))} MB`
 }
 
@@ -185,25 +206,31 @@ export function formatWorktreeIncludeCopyWarning(
   if (skipped.length === 0) {
     return undefined
   }
+
   // Why: `.worktreeinclude` allows 1000 entries and every one can be skipped,
   // so enumerating them all would put a multi-kilobyte sentence in a warning.
   const nameList = (entries: readonly SkippedWorktreeCopyPath[]): string => {
     const shown = entries.slice(0, MAX_NAMED_SKIPPED_ENTRIES)
     const names = shown.map((entry) => `"${entry.path}"`).join(', ')
     const rest = entries.length - shown.length
+
     return rest > 0 ? `${names} and ${rest.toLocaleString('en-US')} more` : names
   }
+
   const describe = (entries: readonly SkippedWorktreeCopyPath[]): string => {
     const subject = entries.length === 1 ? 'entry' : 'entries'
     const verb = entries.length === 1 ? 'was' : 'were'
+
     return `.worktreeinclude ${subject} ${nameList(entries)} ${verb} not copied into the new workspace`
   }
+
   const pronoun = (count: number): string => (count === 1 ? 'it' : 'them')
   // Why: an entry refused because earlier ones exhausted the sizing walk never
   // approached the limits itself, so quoting them at the user would be a lie.
   const overBudget = skipped.filter((entry) => entry.reason !== 'sizing')
   const unsized = skipped.filter((entry) => entry.reason === 'sizing')
   const sentences: string[] = []
+
   if (overBudget.length > 0) {
     sentences.push(
       `${describe(overBudget)}: copying ${pronoun(overBudget.length)} would exceed the ` +
@@ -211,12 +238,15 @@ export function formatWorktreeIncludeCopyWarning(
         `file limit that keeps workspace creation responsive.`
     )
   }
+
   const partial = skipped.filter((entry) => entry.mayBePartial)
+
   if (unsized.length > 0) {
     sentences.push(
       `${describe(unsized)}: earlier entries used up the budget for measuring what to copy.`
     )
   }
+
   if (partial.length > 0) {
     // Why: the copy was abandoned after it started, so "copy it in manually"
     // would merge into whatever the interrupted run already left behind.
@@ -225,8 +255,10 @@ export function formatWorktreeIncludeCopyWarning(
         `${pronoun(partial.length)} before reusing this workspace.`
     )
   }
+
   sentences.push(
     `Copy ${pronoun(skipped.length)} in manually if this workspace needs ${pronoun(skipped.length)}.`
   )
+
   return sentences.join(' ')
 }

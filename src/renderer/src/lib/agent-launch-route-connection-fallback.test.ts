@@ -7,7 +7,9 @@ import { planAgentSessionLaunch } from './agent-session-launch-plan'
 // that stages `getConnectionIdFromState` cannot catch it. Grok is the agent the answer routes on —
 // only agents whose hook discloses no transcript path read the local-readability input at all.
 const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+
 const WORKTREE_ID = 'repo-1::/repo/wt-1'
+
 const WORKSPACE = { kind: 'git-worktree', worktreeId: WORKTREE_ID, repoId: 'repo-1' } as const
 
 /** Rival repos publishing the same worktree id on different hosts: the documented case where owner

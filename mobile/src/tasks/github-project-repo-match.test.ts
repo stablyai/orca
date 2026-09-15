@@ -136,6 +136,7 @@ describe('GitHub project repo matching', () => {
 
   it('prefers the clone that owns the slug over a fork of it', () => {
     const upstreamClone = { id: 'repo-1', path: '/Users/me/r2r', displayName: 'r2r' }
+
     const fork = {
       id: 'repo-2',
       path: '/Users/me/r2r-mirror',
@@ -228,6 +229,7 @@ describe('GitHub project repo matching', () => {
       displayName: 'widgets-mirror',
       upstream: { owner: 'acme', repo: 'widgets' }
     }
+
     const slugs = {
       'repo-1': {
         path: '/Users/me/widgets-mirror',

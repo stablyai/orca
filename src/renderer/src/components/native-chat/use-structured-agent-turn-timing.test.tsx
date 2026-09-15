@@ -13,6 +13,7 @@ import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing
 // Host clock sits an hour ahead of the client's so any leak of a host timestamp
 // into the local anchor shows up as a huge offset.
 const HOST_START = 3_600_000_000
+
 const CLIENT_NOW = 12_345_000
 
 function user(itemId: string, sequence: number): AgentJournalRenderItem {
@@ -75,6 +76,7 @@ describe('useStructuredAgentTurnTiming', () => {
   it('hands settled host durations through and anchors the live counter locally, once per turn', () => {
     vi.useFakeTimers()
     vi.setSystemTime(CLIENT_NOW)
+
     const running = [
       user('u1', 1),
       lifecycle(
@@ -97,16 +99,19 @@ describe('useStructuredAgentTurnTiming', () => {
         HOST_START + 102_500
       )
     ]
+
     type Props = {
       items: AgentJournalRenderItem[]
       turnId: string | null
       hostClock?: { hostNow: number; receivedAt: number }
     }
+
     const { result, rerender } = renderHook(
       ({ items, turnId, hostClock }: Props) =>
         useStructuredAgentTurnTiming({ items, submissions: SUBMISSIONS, hostClock }, turnId),
       { initialProps: { items: running, turnId: 't2' } as Props }
     )
+
     // Without a host clock the counter starts at first sight, less the append lag.
     expect(result.current.workingStartedAt).toBe(CLIENT_NOW - 2_500)
     // The row's provider key resolves through the submission alias, not journal order.
@@ -123,6 +128,7 @@ describe('useStructuredAgentTurnTiming', () => {
     expect(result.current.workingStartedAt).toBeNull()
 
     vi.setSystemTime(CLIENT_NOW + 60_000)
+
     // An older host's status carrier still anchors the counter. With a host clock
     // that said the turn was 35s old 5s ago, the anchor sits 40s before first
     // sight, wherever the client's absolute clock is.
@@ -136,6 +142,7 @@ describe('useStructuredAgentTurnTiming', () => {
         HOST_START + 150_100
       )
     ]
+
     rerender({
       items: next,
       turnId: 't3',
@@ -148,9 +155,11 @@ describe('useStructuredAgentTurnTiming', () => {
     vi.useFakeTimers()
     vi.setSystemTime(CLIENT_NOW)
     const items = [user('u1', 1), lifecycle('t1', 2, { state: 'running' }, HOST_START)]
+
     const { result } = renderHook(() =>
       useStructuredAgentTurnTiming({ items, submissions: [] }, 't1')
     )
+
     expect(result.current.workingStartedAt).toBeNull()
     expect(result.current.settledTurns.size).toBe(0)
   })

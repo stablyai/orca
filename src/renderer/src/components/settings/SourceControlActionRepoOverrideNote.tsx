@@ -33,8 +33,10 @@ function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideFie
         'Command template'
       )
   }
+
   // Fail at compile time if the override-field union grows a new variant.
   const _exhaustive: never = field
+
   return _exhaustive
 }
 
@@ -45,6 +47,7 @@ function getRecipeOverrideFieldSummary(fields: SourceControlActionRecipeOverride
       'Recipe'
     )
   }
+
   return fields.map(getRecipeOverrideFieldLabel).join(', ')
 }
 
@@ -55,12 +58,16 @@ export function SourceControlActionRepoOverrideNote({
   if (summary.count === 0) {
     return null
   }
+
   const firstOverride = summary.overrides[0]
+
   if (!firstOverride) {
     return null
   }
+
   const visibleOverrides = summary.overrides.slice(0, MAX_VISIBLE_REPOS)
   const hiddenOverrideCount = Math.max(0, summary.overrides.length - visibleOverrides.length)
+
   const noteText =
     summary.count === 1
       ? translate(
@@ -72,6 +79,7 @@ export function SourceControlActionRepoOverrideNote({
           "Global saves won't change {{count}} repositories with their own recipes.",
           { count: summary.count }
         )
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md bg-muted/40 px-2 py-1.5 text-[11px] leading-4 text-muted-foreground">
       <Tooltip>

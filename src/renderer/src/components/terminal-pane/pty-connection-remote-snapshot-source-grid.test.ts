@@ -31,8 +31,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -53,6 +56,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -62,6 +66,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -79,6 +84,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -89,9 +95,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -101,9 +109,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -111,6 +121,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -118,8 +129,11 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 })
 
 const HOST_COLS = 143
+
 const HOST_ROWS = 12
+
 const PANE_COLS = 120
+
 const PANE_ROWS = 40
 
 // A serialized TUI frame the way @xterm/addon-serialize emits one: newline-fed
@@ -146,6 +160,7 @@ async function connectRemotePane(): Promise<{
   const captured: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
     captured.current = callbacks.onReplayData ?? null
+
     return { id: 'remote:env-1@@terminal-1', replay: '' }
   })
   transportFactoryQueue.push(transport)
@@ -206,9 +221,11 @@ describe('pushed remote snapshot replay grid', () => {
     const frameWriteIndex = session.operations.findIndex(
       (operation) => operation.kind === 'write' && operation.value === HOST_FRAME
     )
+
     const sourceResizeIndex = session.operations.findIndex(
       (operation) => operation.kind === 'resize' && operation.value === `${HOST_COLS}x${HOST_ROWS}`
     )
+
     expect(sourceResizeIndex).toBeGreaterThanOrEqual(0)
     expect(frameWriteIndex).toBeGreaterThan(sourceResizeIndex)
     // Why the PTY push matters: the pane must not be left driving the host at

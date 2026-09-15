@@ -15,7 +15,9 @@ export function orchestrationMigrationFence(
   if (!isOrchestrationMutation(request.method, request.params)) {
     return undefined
   }
+
   let reason: OrchestrationMigrationReason | undefined
+
   if (isRetiredOrchestrationMethod(request.method)) {
     reason = 'command_retired'
   } else if (request.orchestrationContractVersion === undefined) {
@@ -23,9 +25,11 @@ export function orchestrationMigrationFence(
   } else if (request.orchestrationContractVersion !== ORCHESTRATION_CONTRACT_VERSION) {
     reason = 'client_contract_unsupported'
   }
+
   if (!reason) {
     return undefined
   }
+
   return errorResponse(
     request.id,
     meta,

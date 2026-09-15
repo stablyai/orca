@@ -34,7 +34,9 @@ export const BROWSER_SCREENCAST_METHODS = [
           'Browser automation is unavailable on this host.'
         )
       }
+
       runtime.cleanupSubscription(params.subscriptionId)
+
       return { unsubscribed: true }
     }
   })

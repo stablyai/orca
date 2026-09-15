@@ -16,12 +16,16 @@ import type { AutomationHostRow } from './automation-host-cache-types'
 import { createAutomationHostInvalidation } from './automation-host-invalidation'
 
 const DESKTOP: StableAutomationAuthorityRef = { kind: 'desktop' }
+
 const RUNTIME: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-1' }
+
 const DESKTOP_SELF: StableAutomationCatalogRef = { authority: DESKTOP, selector: { kind: 'self' } }
+
 const DESKTOP_SSH: StableAutomationCatalogRef = {
   authority: DESKTOP,
   selector: { kind: 'ssh', targetId: 'target-1' }
 }
+
 const RUNTIME_SELF: StableAutomationCatalogRef = { authority: RUNTIME, selector: { kind: 'self' } }
 
 function row(id: string): AutomationHostRow {
@@ -39,9 +43,11 @@ function seeded(): AutomationHostCache {
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
   })
+
   for (const ref of [DESKTOP_SELF, DESKTOP_SSH, RUNTIME_SELF]) {
     cache.commit(cache.beginRequest(ref), { rows: [row('a')] })
   }
+
   return cache
 }
 
@@ -53,11 +59,13 @@ describe('automation host invalidation', () => {
   it('invalidates only the entry a scoped event names', () => {
     const cache = seeded()
     const onInvalidated = vi.fn()
+
     const invalidation = createAutomationHostInvalidation({
       cache,
       onInvalidated,
       schedule: (f) => f()
     })
+
     const before = generationOf(cache, DESKTOP_SELF)
 
     invalidation.handle({ authority: DESKTOP, selector: { kind: 'ssh', targetId: 'target-1' } })
@@ -69,11 +77,13 @@ describe('automation host invalidation', () => {
   it('invalidates every entry of one authority for an unscoped event, and no other authority', () => {
     const cache = seeded()
     const onInvalidated = vi.fn()
+
     const invalidation = createAutomationHostInvalidation({
       cache,
       onInvalidated,
       schedule: (f) => f()
     })
+
     const untouched = generationOf(cache, RUNTIME_SELF)
 
     invalidation.handle({ authority: DESKTOP, reason: 'definition' })
@@ -118,10 +128,12 @@ describe('automation host invalidation', () => {
 
   it('reports a scoped event for a host nothing is caching yet', async () => {
     const cache = seeded()
+
     const uncached: StableAutomationCatalogRef = {
       authority: RUNTIME,
       selector: { kind: 'ssh', targetId: 'never-seen' }
     }
+
     const onInvalidated = vi.fn()
     const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
 

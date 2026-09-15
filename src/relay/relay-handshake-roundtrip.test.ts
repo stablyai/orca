@@ -52,27 +52,35 @@ describe('handshake round-trip over a real Socket pair', () => {
       if (err instanceof ExitCalled) {
         return
       }
+
       throw err
     }
+
     process.on('uncaughtException', uncaughtHandler)
   })
 
   afterEach(async () => {
     process.off('uncaughtException', uncaughtHandler)
     exitSpy.mockRestore()
+
     for (const s of liveServerSockets) {
       s.destroy()
     }
+
     liveServerSockets.length = 0
+
     if (server) {
       await new Promise<void>((r) => server.close(() => r()))
     }
+
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
   const liveServerSockets: Socket[] = []
+
   function trackServerSocket(s: Socket): Socket {
     liveServerSockets.push(s)
+
     return s
   }
 
@@ -88,9 +96,11 @@ describe('handshake round-trip over a real Socket pair', () => {
         resolve: (v: { sock: Socket; leftover: Buffer }) => void
       } = (() => {
         let _resolve: (v: { sock: Socket; leftover: Buffer }) => void = () => {}
+
         const promise = new Promise<{ sock: Socket; leftover: Buffer }>((r) => {
           _resolve = r
         })
+
         return { promise, resolve: _resolve }
       })()
 
@@ -154,6 +164,7 @@ describe('handshake round-trip over a real Socket pair', () => {
       type: 'orca-relay-handshake',
       version: '0.1.0+match'
     })
+
     const trailingPayload = encodeJsonRpcFrame({ jsonrpc: '2.0', method: 'noop', params: {} }, 1, 0)
     bridgeSock.write(Buffer.concat([handshakeFrame, trailingPayload]))
 
@@ -172,22 +183,28 @@ describe('handshake round-trip over a real Socket pair', () => {
     let serverHandshakeSeen = false
     server = createServer((sock) => {
       trackServerSocket(sock)
+
       const decoder = new FrameDecoder((frame) => {
         if (frame.type !== MessageType.Handshake || serverHandshakeSeen) {
           return
         }
+
         serverHandshakeSeen = true
+
         const ok = encodeHandshakeFrame({
           type: 'orca-relay-handshake-ok',
           version: '0.1.0+match'
         })
+
         const trailing = encodeJsonRpcFrame(
           { jsonrpc: '2.0', method: 'pty.event', params: { evt: 'data' } },
           7,
           1
         )
+
         sock.write(Buffer.concat([ok, trailing]))
       })
+
       sock.on('data', (chunk: Buffer) => decoder.feed(chunk))
     })
     await new Promise<void>((r) => server.listen(sockPath, () => r()))

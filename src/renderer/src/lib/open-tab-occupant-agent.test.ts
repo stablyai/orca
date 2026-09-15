@@ -8,7 +8,9 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { resolveOpenTabOccupantAgent } from './open-tab-occupant-agent'
 
 const TAB_ID = 'tab-1'
+
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 function layout(activeLeafId: string | null): TerminalLayoutSnapshot {
@@ -30,6 +32,7 @@ function status(
   state: AgentStatusEntry['state'] = 'working'
 ): AgentStatusEntry {
   const paneKey = makePaneKey(TAB_ID, leafId)
+
   return {
     state,
     prompt: '',
@@ -59,6 +62,7 @@ function sleeping(leafId: string, agent: TuiAgent): SleepingAgentSessionRecord {
 
 function retained(leafId: string, agentType: TuiAgent): RetainedAgentEntry {
   const entry = status(leafId, agentType, 'done')
+
   return {
     entry,
     worktreeId: 'wt-1',

@@ -19,11 +19,13 @@ export const AgentMapWorktreeLabel = memo(function AgentMapWorktreeLabel({
 }: AgentMapWorktreeLabelProps): React.JSX.Element {
   // Hover is an explicit ask for this workspace's detail, so it outranks declutter.
   const showCount = active || (visible && worktree.radius * mapScale >= 80)
+
   const agentCountText = translate(
     'dashboardPopout.map.agentCount',
     worktree.agents.length === 1 ? '{{count}} agent' : '{{count}} agents',
     { count: worktree.agents.length }
   )
+
   return (
     <g
       className={`agent-map-worktree-label-group${visible ? ' is-visible' : ''}${active ? ' is-active' : ''}${showCount ? ' is-count-visible' : ''}${worktree.motionState ? ` is-${worktree.motionState}` : ''}`}

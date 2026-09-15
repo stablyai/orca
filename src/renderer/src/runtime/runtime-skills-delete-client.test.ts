@@ -3,7 +3,9 @@ import { SKILL_DELETE_UPDATE_REQUIRED_MESSAGE } from '../../../shared/skill-inst
 import type { SkillDeleteRequest } from '../../../shared/skill-delete-contract'
 
 const callRuntimeRpc = vi.fn()
+
 const runtimeEnvironmentSupportsCapability = vi.fn()
+
 const assertRuntimeEnvironmentCapability = vi.fn()
 
 vi.mock('./runtime-rpc-client', () => ({
@@ -28,7 +30,9 @@ const REQUEST: SkillDeleteRequest = {
 }
 
 const localDelete = vi.fn()
+
 const localPreview = vi.fn()
+
 const localDeleteSupported = vi.fn()
 
 beforeEach(() => {

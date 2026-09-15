@@ -19,6 +19,7 @@ const mountedRoots: Root[] = []
 function renderToastBody(): HTMLElement {
   const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]
     ?.description as React.ReactElement
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -26,6 +27,7 @@ function renderToastBody(): HTMLElement {
   act(() => {
     root.render(description)
   })
+
   return container
 }
 
@@ -33,9 +35,11 @@ function clickButton(container: HTMLElement, label: string): void {
   const button = [...container.querySelectorAll('button')].find(
     (el) => el.textContent?.trim() === label
   )
+
   if (!button) {
     throw new Error(`button "${label}" not found`)
   }
+
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -50,6 +54,7 @@ afterEach(() => {
 describe('showPreservedBranchToast', () => {
   it('renders the branch recovery action below the long description', () => {
     const onForceDelete = vi.fn()
+
     const result: RemoveWorktreeResult = {
       preservedBranch: {
         branchName: 'feat/notes-send-any-running-agent',

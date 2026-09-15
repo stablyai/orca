@@ -27,13 +27,17 @@ export function resolveWorktreeRemovalRepoOwner(
   const matches = store
     .getRepos()
     .filter((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
+
   if (matches.length === 1 && matches[0]) {
     return { kind: 'resolved', repo: matches[0] }
   }
+
   if (matches.length > 1) {
     return { kind: 'ambiguous' }
   }
+
   const legacyMatch = store.getRepo(repoId)
+
   return legacyMatch && (!hostId || getRepoExecutionHostId(legacyMatch) === hostId)
     ? { kind: 'resolved', repo: legacyMatch }
     : { kind: 'missing' }
@@ -76,12 +80,16 @@ export function resolveWorktreeRemovalMetadata(
   hostId: ExecutionHostId
 ): WorktreeMeta | undefined {
   const meta = store.getWorktreeMeta(worktreeId)
+
   if (!meta) {
     return undefined
   }
+
   const repoOwnerCount = store.getRepos().filter((repo) => repo.id === repoId).length
+
   if (repoOwnerCount <= 1) {
     return meta
   }
+
   return meta.hostId === hostId ? meta : undefined
 }

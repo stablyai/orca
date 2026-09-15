@@ -73,14 +73,17 @@ export class SshPtyLegacyProjectionLedger {
     const cursor = getOrCreateProjectionCursor(this.cursorByPty, args, (generation) =>
       this.transferGeneration(generation, 'provider-generation-replaced')
     )
+
     if (
       cursor.providerGeneration !== args.providerGeneration ||
       cursor.ptyIncarnation !== args.ptyIncarnation
     ) {
       throw projectionError('ssh_projection_stale_generation')
     }
+
     const scan = scanMode2031ReplyDecision(cursor.scanner, args.data)
     const projectionSemanticsId = `ssh-projection:${args.providerGeneration}:${this.nextId++}`
+
     const identity = Object.freeze({
       projectionSemanticsId,
       ptyId: args.ptyId,
@@ -92,6 +95,7 @@ export class SshPtyLegacyProjectionLedger {
       rawLength: args.rawLength,
       transformed: args.transformed
     })
+
     const semantics = Object.freeze({
       identity,
       ...(args.source
@@ -117,6 +121,7 @@ export class SshPtyLegacyProjectionLedger {
       afterScanner: scannerSnapshot(scan.state),
       decision: scan.decision
     })
+
     this.records.set(projectionSemanticsId, {
       semantics,
       state: 'reserved',
@@ -124,6 +129,7 @@ export class SshPtyLegacyProjectionLedger {
       publishedAccounting: 0,
       settledAccounting: 0
     })
+
     return Object.freeze({ semantics })
   }
 
@@ -132,11 +138,14 @@ export class SshPtyLegacyProjectionLedger {
       this.records,
       reservation.semantics.identity.projectionSemanticsId
     )
+
     if (record.state !== 'reserved') {
       throw projectionError('ssh_projection_commit_invalid')
     }
+
     const { identity, afterScanner } = record.semantics
     const cursor = this.cursorByPty.get(identity.ptyId)
+
     if (
       !cursor ||
       cursor.providerGeneration !== identity.providerGeneration ||
@@ -146,23 +155,28 @@ export class SshPtyLegacyProjectionLedger {
       this.records.delete(identity.projectionSemanticsId)
       throw projectionError('ssh_projection_commit_stale')
     }
+
     cursor.displayEnd = identity.displayEnd
     cursor.scanner = { ...afterScanner }
     record.state = 'committed'
     const ids = this.idsByPty.get(identity.ptyId) ?? []
     ids.push(identity.projectionSemanticsId)
     this.idsByPty.set(identity.ptyId, ids)
+
     return record.semantics
   }
 
   rollback(reservation: LegacySshProjectionReservation): boolean {
     const id = reservation.semantics.identity.projectionSemanticsId
     const record = this.records.get(id)
+
     if (!record || record.state !== 'reserved') {
       return false
     }
+
     this.records.delete(id)
     this.rolledBackCount++
+
     return true
   }
 
@@ -173,11 +187,14 @@ export class SshPtyLegacyProjectionLedger {
       this.cursorByPty,
       reservation
     )
+
     if (!ptyId) {
       return false
     }
+
     this.rolledBackCount++
     resolveProjectionTerminality(this.terminality, this.records, this.idsByPty, ptyId)
+
     return true
   }
 
@@ -193,31 +210,40 @@ export class SshPtyLegacyProjectionLedger {
       accountingChars,
       this.options.onSettled
     )
+
     this.settledCount += result.completed
     resolveProjectionTerminality(this.terminality, this.records, this.idsByPty, ptyId)
+
     return result.settled
   }
 
   transfer(ids: readonly string[], reason: string): number {
     let transferred = 0
     const touchedPtys = new Set<string>()
+
     for (const id of ids.slice()) {
       const record = this.records.get(id)
+
       if (!record || record.state === 'reserved') {
         continue
       }
+
       const ptyId = record.semantics.identity.ptyId
+
       if (record.semantics.desktopSpan) {
         this.options.onTransferred?.(record.semantics.desktopSpan, reason)
       }
+
       this.transferredCount++
       reclaimProjectionRecord(this.records, this.idsByPty, id, ptyId)
       touchedPtys.add(ptyId)
       transferred++
     }
+
     for (const ptyId of touchedPtys) {
       resolveProjectionTerminality(this.terminality, this.records, this.idsByPty, ptyId)
     }
+
     return transferred
   }
 
@@ -236,11 +262,13 @@ export class SshPtyLegacyProjectionLedger {
 
   transferGeneration(providerGeneration: number, reason: string): number {
     const ids: string[] = []
+
     for (const [id, record] of this.records) {
       if (record.semantics.identity.providerGeneration === providerGeneration) {
         ids.push(id)
       }
     }
+
     return this.transfer(ids, reason)
   }
 
@@ -260,6 +288,7 @@ export class SshPtyLegacyProjectionLedger {
       providerGeneration,
       ptyIncarnation
     )
+
     return this.transfer(ids, reason)
   }
 
@@ -280,6 +309,7 @@ export class SshPtyLegacyProjectionLedger {
       if (record.semantics.identity.providerGeneration !== providerGeneration) {
         continue
       }
+
       if (record.state === 'reserved') {
         this.records.delete(id)
         this.rolledBackCount++
@@ -287,12 +317,14 @@ export class SshPtyLegacyProjectionLedger {
         this.transfer([id], reason)
       }
     }
+
     for (const [ptyId, cursor] of this.cursorByPty) {
       if (cursor.providerGeneration === providerGeneration) {
         this.cursorByPty.delete(ptyId)
         this.idsByPty.delete(ptyId)
       }
     }
+
     this.terminality.closeGeneration(providerGeneration)
   }
 

@@ -24,6 +24,7 @@ function sameDeviceList(
     a.length === b.length &&
     a.every((device, index) => {
       const other = b[index]
+
       return device.deviceId === other?.deviceId && device.label === other.label
     })
   )
@@ -43,6 +44,7 @@ export function VoiceMicrophoneSetting({
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }
@@ -51,18 +53,23 @@ export function VoiceMicrophoneSetting({
   const refreshDevices = useCallback(async (): Promise<void> => {
     const generation = refreshGenerationRef.current + 1
     refreshGenerationRef.current = generation
+
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
       return
     }
+
     let next: VoiceMicrophoneDevice[] = []
+
     try {
       next = listVoiceMicrophoneDevices(await navigator.mediaDevices.enumerateDevices())
     } catch {
       next = []
     }
+
     if (!mountedRef.current || refreshGenerationRef.current !== generation) {
       return
     }
+
     setDevicesKnown(next.length > 0)
     setDevices((current) => (sameDeviceList(current, next) ? current : next))
   }, [])
@@ -71,13 +78,17 @@ export function VoiceMicrophoneSetting({
   // that toggle is often when mic permission lands and real labels appear.
   useEffect(() => {
     void refreshDevices()
+
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.addEventListener) {
       return
     }
+
     const handleDeviceChange = (): void => {
       void refreshDevices()
     }
+
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
+
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
     }
@@ -89,7 +100,9 @@ export function VoiceMicrophoneSetting({
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       return
     }
+
     setAccessPending(true)
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       stream.getTracks().forEach((track) => track.stop())
@@ -169,13 +182,16 @@ export function VoiceMicrophoneSetting({
         }}
         onValueChange={(value) => {
           const deviceId = microphoneDeviceIdFromSelectValue(value)
+
           if (!deviceId) {
             onUpdateVoiceSettings({
               microphoneDeviceId: null,
               microphoneDeviceLabel: null
             })
+
             return
           }
+
           const match = devices.find((device) => device.deviceId === deviceId)
           onUpdateVoiceSettings({
             microphoneDeviceId: deviceId,

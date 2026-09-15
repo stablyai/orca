@@ -65,23 +65,30 @@ export type EchoObservation = ExactEchoSample | AmbiguousEchoBurst
 
 function countSources(candidates: readonly EchoCandidate[]): EchoSourceCounts {
   const counts: EchoSourceCounts = { direct: 0, ime: 0 }
+
   for (const candidate of candidates) {
     counts[candidate.source] += 1
   }
+
   return counts
 }
 
 export function createEchoObservation(batch: EchoBatch, paintedAt: number): EchoObservation | null {
   const parsedAt = batch.parsedAt
+
   if (parsedAt === null || batch.candidates.length === 0) {
     return null
   }
+
   if (batch.candidates.length === 1 && !batch.hasAttributionGap) {
     const candidate = batch.candidates[0]
+
     if (!candidate) {
       return null
     }
+
     const dispatchedAt = candidate.dispatchedAt ?? candidate.t0
+
     return {
       attribution: 'single-input',
       source: candidate.source,
@@ -94,9 +101,11 @@ export function createEchoObservation(batch: EchoBatch, paintedAt: number): Echo
       outputWrites: batch.outputWrites
     }
   }
+
   const dispatchTimes = batch.candidates.map((candidate) => candidate.dispatchedAt ?? candidate.t0)
   const firstDispatch = Math.min(...dispatchTimes)
   const lastDispatch = Math.max(...dispatchTimes)
+
   return {
     attribution: 'ambiguous-burst',
     reason: batch.hasAttributionGap ? 'attribution-gap' : 'overlapping-inputs',

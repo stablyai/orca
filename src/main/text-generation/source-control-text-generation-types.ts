@@ -80,6 +80,7 @@ export type LocalProcessExecution<T> = {
 export type SpawnedSourceControlAgentProcess = ReturnType<typeof spawnProcess>
 
 export type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
+
 export type RemoteGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'remote' }>
 
 export type SpawnSourceControlAgent = (input: {

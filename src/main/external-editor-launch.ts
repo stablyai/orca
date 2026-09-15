@@ -16,6 +16,7 @@ import {
 import { getCmdExePath, getSpawnArgsForWindows } from './win32-utils'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
+
 const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
 
 export type ExternalEditorExecutableLaunchSpec = {
@@ -46,6 +47,7 @@ function escapePosixPathForShell(pathValue: string): string {
   if (/^[a-zA-Z0-9_./@:-]+$/.test(pathValue)) {
     return pathValue
   }
+
   return `'${pathValue.replace(/'/g, "'\\''")}'`
 }
 
@@ -69,17 +71,22 @@ function isDirectExecutablePath(
   fileExists: (path: string) => boolean
 ): boolean {
   const unquoted = stripMatchingQuotes(command)
+
   if (!/[\\/]/.test(unquoted)) {
     return false
   }
+
   const isAbsolutePath =
     platform === 'win32' ? win32.isAbsolute(unquoted) : posix.isAbsolute(unquoted)
+
   if (!isAbsolutePath) {
     return false
   }
+
   if (!/\s/.test(unquoted) || hasMatchingOuterQuotes(command)) {
     return true
   }
+
   // Why: unquoted POSIX paths can contain spaces, but so can shell commands
   // with arguments. Only an existing path is safe to treat as one executable.
   return platform === 'win32' ? isWindowsExecutablePath(unquoted) : fileExists(unquoted)
@@ -99,18 +106,22 @@ function buildExecutableArgs(
   platform: NodeJS.Platform
 ): string[] {
   const launcherBaseName = getLauncherBaseName(editorCommand)
+
   if (launcherBaseName === 'cursor') {
     // Why: Cursor can route bare folder launches through the last active
     // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
     return ['--new-window', pathValue]
   }
+
   if (platform === 'win32' && isVsCodeLauncherExecutable(editorCommand)) {
     const wslPath = parseWslUncPath(pathValue)
+
     if (wslPath) {
       // Why: VS Code otherwise treats a WSL UNC path as a local Windows folder.
       return ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath]
     }
   }
+
   return [pathValue]
 }
 
@@ -126,6 +137,7 @@ function preferJetBrainsGuiExecutable(
   if (platform !== 'win32') {
     return editorCommand
   }
+
   return resolveColocatedJetBrainsGuiExecutable(editorCommand, fileExists) ?? editorCommand
 }
 
@@ -152,9 +164,11 @@ function buildExecutableLaunchSpec(
     spawnCmd: editorCommand,
     spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
   }
+
   if (spec.hideWindowsConsole && isJetBrainsConsoleShim(editorCommand, platform)) {
     spec.detachedGui = true
   }
+
   return spec
 }
 
@@ -164,6 +178,7 @@ function buildShellLaunchSpec(
   platform: NodeJS.Platform
 ): ExternalEditorLaunchSpec {
   const shellCommand = `${command} ${escapePathForShell(pathValue, platform)}`
+
   if (platform === 'win32') {
     // Why: no `start` wrap here. `start` re-parses the line — it swallows the
     // first quoted operand as a window title and mangles remote paths with
@@ -177,6 +192,7 @@ function buildShellLaunchSpec(
       spawnArgs: ['/d', '/s', '/c', shellCommand]
     }
   }
+
   return {
     kind: 'shell',
     hideWindowsConsole: true,
@@ -226,18 +242,21 @@ export function resolveVsCodeRemoteSshLaunchSpec(
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
   let editorCommand: string
+
   if (isDirectExecutablePath(trimmed, platform, fileExists)) {
     editorCommand = stripMatchingQuotes(trimmed)
   } else {
     if (isCompoundShellCommand(trimmed)) {
       return null
     }
+
     editorCommand = resolveCliCommand(trimmed, { platform })
   }
 
   if (!isVsCodeLauncherExecutable(editorCommand)) {
     return null
   }
+
   return {
     kind: 'executable',
     hideWindowsConsole: true,
@@ -257,8 +276,10 @@ function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
     const spawned = getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs, {
       detachedGui: launchSpec.detachedGui === true
     })
+
     return { ...spawned, windowsHide: launchSpec.hideWindowsConsole }
   }
+
   return {
     spawnCmd: launchSpec.spawnCmd,
     spawnArgs: launchSpec.spawnArgs,
@@ -271,25 +292,31 @@ export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec)
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide })
     let settled = false
+
     function cleanup(): void {
       child.off('error', onError)
       child.off('spawn', onSpawn)
     }
+
     function settle(callback: () => void): void {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       callback()
     }
+
     function onError(error: Error): void {
       settle(() => rejectPromise(error))
     }
+
     function onSpawn(): void {
       child.unref()
       settle(resolvePromise)
     }
+
     child.once('error', onError)
     child.once('spawn', onSpawn)
   })

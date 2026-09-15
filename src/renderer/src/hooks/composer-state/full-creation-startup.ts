@@ -13,6 +13,7 @@ export function buildFullCreationStartup(args: {
   if (!args.startupPlan || args.backendSpawnedStartup) {
     return undefined
   }
+
   return {
     command: args.startupPlan.launchCommand,
     ...(args.startupPlan.env ? { env: args.startupPlan.env } : {}),

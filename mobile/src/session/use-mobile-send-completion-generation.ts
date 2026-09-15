@@ -24,5 +24,6 @@ export function useMobileSendCompletionGeneration({ onBlur, surfaceKey }: Option
       }
     }, [onBlur])
   )
+
   return useCallback(() => generationRef.current, [])
 }

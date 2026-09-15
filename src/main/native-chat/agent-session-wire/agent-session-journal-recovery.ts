@@ -47,6 +47,7 @@ export function providerHistoryId(handle: AgentSessionProviderHandle): string {
   if (handle.kind === 'codex') {
     return handle.threadId
   }
+
   return handle.kind === 'claude' ? handle.sessionId : handle.value
 }
 
@@ -58,20 +59,25 @@ export async function openAgentSessionJournalWithRecovery(input: {
   historyFilePath?: string | null
 }): Promise<AgentSessionJournalOpened> {
   const probe = loadJournal(input.journalDir, input.identity.sessionId)
+
   if (probe?.readOnly) {
     const journal = await openAgentSessionJournal({
       identity: input.identity,
       journalDir: recoveryJournalDir(input.journalDir)
     })
+
     return { journal, recovery: await rehydrateOrClose(input, journal, 'schema_unreadable') }
   }
+
   const journal = await openAgentSessionJournal({
     identity: input.identity,
     journalDir: input.journalDir
   })
+
   if (!probe?.corrupt) {
     return { journal, recovery: null }
   }
+
   // `open()` drops the unusable suffix; a successful import rolls once more so
   // the rebuilt timeline is the only content of its epoch.
   return { journal, recovery: await rehydrateOrClose(input, journal, 'journal_corrupt') }
@@ -107,6 +113,7 @@ async function rehydrate(input: {
 }): Promise<AgentSessionJournalRecovery> {
   const reset: AgentJournalResetReason =
     input.trigger === 'schema_unreadable' ? 'schema_unreadable' : 'epoch_changed'
+
   const result = await importLegacyTranscriptIntoJournal({
     journal: input.journal,
     agent: input.identity.agent satisfies AgentType,
@@ -114,6 +121,7 @@ async function rehydrate(input: {
     fence: input.fence,
     ...(input.historyFilePath ? { options: { filePath: input.historyFilePath } } : {})
   })
+
   // A transcript that held nothing is the same outcome as one that could not be
   // read: nothing was restored, so the repair's marker has to stand and be
   // retried on a later attach rather than being retired as a completed recovery.
@@ -126,6 +134,7 @@ async function rehydrate(input: {
       error: result.ok ? 'Provider history held no messages to restore' : result.error
     }
   }
+
   return {
     trigger: input.trigger,
     reset,

@@ -120,6 +120,7 @@ describe('breaker state', () => {
 
   it('bounds retained blocks across user-supplied Enterprise host scopes', () => {
     const now = Date.now()
+
     for (let i = 0; i < 1_200; i += 1) {
       recordGhPrimaryRateLimit('core', now + 60_000, `native:ghe-${i}.example.test`)
     }
@@ -135,6 +136,7 @@ describe('breaker state', () => {
     const now = Date.now()
     const hotScope = 'native:active.example.test'
     recordGhPrimaryRateLimit('core', now + 60_000, hotScope)
+
     for (let i = 0; i < 1_023; i += 1) {
       recordGhPrimaryRateLimit('core', now + 60_000, `native:cold-${i}.example.test`)
     }

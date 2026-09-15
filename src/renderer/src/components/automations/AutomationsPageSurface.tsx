@@ -12,6 +12,7 @@ import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
 import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
 import { AutomationsPageListPanel } from './AutomationsPageListPanel'
+
 export function AutomationsPageSurface({
   controller
 }: {
@@ -36,6 +37,7 @@ export function AutomationsPageSurface({
     externalActions,
     openRunWorkspace
   } = controller
+
   const {
     projectHostSetups,
     repoMap,
@@ -45,6 +47,7 @@ export function AutomationsPageSurface({
     worktreeForRow,
     setPendingAutomationRunNavigation
   } = store
+
   const {
     createOpen,
     editingAutomationId,
@@ -85,58 +88,71 @@ export function AutomationsPageSurface({
     runPageOrigin,
     setRunPageOrigin
   } = local
+
   const { hostCatalog, hasListItems, selected, selectedRow, selectedExternal } = list
   const selectedAutomationRunPage = setup.selectedAutomationRunPage
+
   const selectedRunWorktreeMap = useMemo(() => {
     if (!selectedRow) {
       return worktreeMap
     }
+
     const repo = repoForRow(selectedRow)
+
     return new Map(
       setup.selectedRuns.flatMap((run) => {
         const worktree = worktreeForRow(selectedRow, repo, run.workspaceId)
+
         return worktree ? [[worktree.id, worktree] as const] : []
       })
     )
   }, [repoForRow, selectedRow, setup.selectedRuns, worktreeForRow, worktreeMap])
+
   const runSelectedRowAction = (action: (row: AutomationListRow) => void): void => {
     if (selectedRow) {
       action(selectedRow)
     }
   }
+
   const recoverOwnerAction = (
     action: AutomationHostRecoveryAction,
     host = ownerAction?.host ?? null
   ): void => {
     setOwnerAction(null)
     hostCatalog.recover(action, host)
+
     if (action === 'retry') {
       void pageRefresh.refresh()
     }
   }
+
   const openAutomationRunPage = (run: (typeof setup.selectedRuns)[number]): void => {
     externalActions.openAutomationRunPage(run)
     setRunPageOrigin('automation')
     setPageView('run')
   }
+
   const showAutomationsList = (): void => {
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
+
   const showRunsDashboard = (): void => {
     setPageView('runs')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
+
   const showAutomationDetails = (): void => {
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(true)
     setActivePaneTab('runs')
   }
+
   return (
     <main className="relative flex h-full min-h-0 flex-col bg-background pt-5 text-foreground md:pt-6">
       <AutomationsPageTopBar
@@ -168,6 +184,7 @@ export function AutomationsPageSurface({
           setEditorNotice(null)
           setEditorNoticeHost(null)
           hostCatalog.recover(action, host)
+
           if (action === 'retry') {
             void pageRefresh.refresh()
           }
@@ -198,6 +215,7 @@ export function AutomationsPageSurface({
         onCreateTargetChange={draftEffects.handleCreateTargetChange}
         onOpenChange={(open) => {
           setCreateOpen(open)
+
           if (!open) {
             setEditorNotice(null)
             setEditorNoticeHost(null)

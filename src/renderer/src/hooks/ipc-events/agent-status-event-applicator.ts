@@ -42,26 +42,33 @@ export function createAgentStatusEventApplicator(args: {
     transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   } = args
+
   const applyAgentStatus = (
     data: AgentStatusIpcPayload,
     options?: AgentStatusApplyOptions
   ): AgentStatusApplyResult => {
     const store = options?.batch?.transaction.getState() ?? useAppStore.getState()
+
     if (!store.workspaceSessionReady) {
       return 'dropped'
     }
+
     if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
       return 'dropped'
     }
+
     const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
     const ownerTabId = parsePaneKey(paneKey)?.tabId ?? data.tabId
     const payload = normalizeAgentStatusEvent(data)
+
     if (!payload) {
       return 'dropped'
     }
+
     // Why: the memoized index answers the leading edge with the same first-match ownership the
     // standalone resolver produced, without its worktree x tab rescan per event.
     const routingIndex = options?.batch?.routingIndex ?? createAgentStatusPaneRoutingIndex(store)
+
     let {
       exists,
       title,
@@ -72,20 +79,25 @@ export function createAgentStatusEventApplicator(args: {
       titleUsesTabTitle,
       tabTitle
     } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
+
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
         ? options?.batch?.projectedTitlesByTabId.get(ownerTabId)
         : undefined
+
     if (projectedTitles) {
       title = projectedTitles.title
       identityTitle = projectedTitles.identityTitle
     }
+
     tabTitle = options?.batch?.tabTitlesByTabId.get(ownerTabId ?? '') ?? tabTitle
+
     if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
       const fallbackOwnership = resolveWorktreeConnectionFromRoutingIndex(
         routingIndex,
         data.worktreeId
       )
+
       if (fallbackOwnership.worktreeExists) {
         owningWorktreeId = data.worktreeId
         repoConnectionId = fallbackOwnership.repoConnectionId
@@ -93,22 +105,28 @@ export function createAgentStatusEventApplicator(args: {
         exists = true
       }
     }
+
     if (!exists) {
       if (options?.replay === true) {
         if (data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
           if (options?.retry !== true) {
             enqueuePendingAgentStatus(data, { replay: true })
           }
+
           return 'pending'
         }
+
         return 'dropped'
       }
+
       if (options?.retry !== true) {
         track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
         enqueuePendingAgentStatus(data)
       }
+
       return 'pending'
     }
+
     if (options?.replay !== true && options?.retry !== true) {
       for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
         if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
@@ -116,22 +134,27 @@ export function createAgentStatusEventApplicator(args: {
         }
       }
     }
+
     const ownershipConnectionId = isWslHookRelayConnectionId(data.connectionId)
       ? null
       : data.connectionId
+
     const transientClearWatermark =
       typeof data.connectionId === 'string'
         ? transientClearWatermarkByConnectionId.get(data.connectionId)
         : undefined
+
     if (transientClearWatermark !== undefined && data.receivedAt <= transientClearWatermark) {
       return 'dropped'
     }
+
     const canAcceptPendingRemoteOwnership =
       ownershipConnectionId !== undefined &&
       ownershipConnectionId !== null &&
       !repoConnectionResolved &&
       data.worktreeId !== undefined &&
       data.worktreeId === owningWorktreeId
+
     if (
       ownershipConnectionId !== undefined &&
       ownershipConnectionId !== repoConnectionId &&
@@ -139,14 +162,18 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
+
     const existingStatus = store.agentStatusByPaneKey[paneKey]
+
     if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
       return 'dropped'
     }
+
     if (data.providerSessionOnly) {
       if (!data.providerSession || data.agentType !== 'pi') {
         return 'dropped'
       }
+
       const providerSessionUpdate: AgentStatusBatchUpdate = {
         kind: 'providerSession',
         paneKey,
@@ -160,9 +187,11 @@ export function createAgentStatusEventApplicator(args: {
         },
         metadata: data.launchToken ? { launchToken: data.launchToken } : undefined
       }
+
       if (options?.batch) {
         return options.batch.transaction.apply(providerSessionUpdate) ? 'applied' : 'dropped'
       }
+
       store.recordAgentProviderSession(
         providerSessionUpdate.paneKey,
         providerSessionUpdate.agent,
@@ -171,22 +200,29 @@ export function createAgentStatusEventApplicator(args: {
         providerSessionUpdate.routing,
         providerSessionUpdate.metadata
       )
+
       return 'applied'
     }
+
     const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
+
     const statusPayload = data.orchestration
       ? { ...resolvedPayload, orchestration: data.orchestration }
       : resolvedPayload
+
     const statusPayloadWithTurnBoundary = data.promptInteractionKey
       ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
       : statusPayload
+
     const statusPayloadWithProvenance =
       data.restoredUnconfirmed === true
         ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
         : statusPayloadWithTurnBoundary
+
     const statusPayloadWithObservation = data.observation
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
+
     const identity = resolveAgentStatusIdentity({
       existing: existingStatus
         ? {
@@ -199,6 +235,7 @@ export function createAgentStatusEventApplicator(args: {
       incoming: statusPayload.agentType,
       now: data.receivedAt
     })
+
     if (
       existingStatus &&
       shouldSuppressInheritedTerminalStatus({
@@ -208,6 +245,7 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
+
     if (
       shouldSuppressCodexAutoApprovalStatus(statusPayload, {
         paneKey,
@@ -220,8 +258,10 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
+
     const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
+
     const update: AgentStatusUpdate = {
       paneKey,
       payload: statusPayloadWithObservation,
@@ -247,12 +287,14 @@ export function createAgentStatusEventApplicator(args: {
             }
           : undefined
     }
+
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
         const notificationPayload =
           typeof data.stateStartedAt === 'number'
             ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
             : resolvedPayload
+
         observeAgentHookCompletionForNotification({
           paneKey,
           worktreeId: statusWorktreeId,
@@ -261,17 +303,21 @@ export function createAgentStatusEventApplicator(args: {
         })
       }
     }
+
     if (options?.batch) {
       if (!options.batch.transaction.apply(update)) {
         return 'dropped'
       }
+
       options.batch.notificationEffects.push(applyPostCommitNotification)
+
       if (
         terminalTitle &&
         shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, tabTitle, terminalTitle)
       ) {
         if (ownerTabId) {
           options.batch.tabTitlesByTabId.set(ownerTabId, terminalTitle)
+
           if (titleUsesTabTitle) {
             const titleChanges = !title || !isDecorativeAgentTitleFrameChange(title, terminalTitle)
             options.batch.projectedTitlesByTabId.set(ownerTabId, {
@@ -293,6 +339,7 @@ export function createAgentStatusEventApplicator(args: {
       applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, tabTitle, terminalTitle)
       applyPostCommitNotification()
     }
+
     return 'applied'
   }
 

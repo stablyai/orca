@@ -92,14 +92,17 @@ function parseState(
   hostId: string
 ): { state: AgentSessionStoreState; needsRewrite: boolean } | null {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(raw)
   } catch {
     return null
   }
+
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
+
   const file = parsed as {
     schemaVersion?: unknown
     hostId?: unknown
@@ -109,6 +112,7 @@ function parseState(
     unusableRecords?: unknown
     visibleSessionIds?: unknown
   }
+
   if (
     !Number.isSafeInteger(file.schemaVersion) ||
     (file.schemaVersion as number) < 0 ||
@@ -116,16 +120,20 @@ function parseState(
   ) {
     return null
   }
+
   const schemaVersion = file.schemaVersion as number
+
   if (schemaVersion < AGENT_SESSION_STORE_SCHEMA_VERSION) {
     return null
   }
+
   if (
     schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION &&
     (typeof file.records !== 'object' || file.records === null || Array.isArray(file.records))
   ) {
     return null
   }
+
   if (
     schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION &&
     (typeof file.operations !== 'object' ||
@@ -138,13 +146,16 @@ function parseState(
   ) {
     return null
   }
+
   const state = emptyState(hostId)
   state.schemaVersion = schemaVersion
   state.hostId = file.hostId
   let needsRewrite = false
+
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
       const record = isAgentSessionRecord(value) ? value : null
+
       if (record?.sessionId === sessionId) {
         state.records.set(sessionId, record)
       } else {
@@ -152,54 +163,69 @@ function parseState(
           typeof value === 'object' &&
           value !== null &&
           (value as { schemaVersion?: unknown }).schemaVersion
+
         const reason = record
           ? 'record_key_session_id_mismatch'
           : valueSchemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION
             ? 'current_shape_invalid'
             : 'unsupported_schema'
+
         state.unreadableRecords.set(sessionId, { reason, raw: value })
         needsRewrite ||= schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION
       }
     }
   }
+
   if (typeof file.unusableRecords === 'object' && file.unusableRecords !== null) {
     for (const [sessionId, value] of Object.entries(file.unusableRecords)) {
       if (typeof value !== 'object' || value === null) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
+
         continue
       }
+
       const unusable = value as { reason?: unknown; raw?: unknown }
+
       if (typeof unusable.reason !== 'string' || unusable.reason.length === 0) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
+
         continue
       }
+
       state.unreadableRecords.set(sessionId, { reason: unusable.reason, raw: unusable.raw })
     }
   }
+
   if (typeof file.operations === 'object' && file.operations !== null) {
     for (const [key, value] of Object.entries(file.operations)) {
       if (!isAgentSessionOperationRow(value)) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
+
         continue
       }
+
       if (key !== agentSessionOperationKey(value.callerKey, value.operationId)) {
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
+
         continue
       }
+
       state.operations.set(key, value)
     }
   }
+
   if (Array.isArray(file.retiredClaimKeys)) {
     for (const entry of file.retiredClaimKeys) {
       const key = entry as Partial<RetiredAgentSessionClaimKey>
+
       if (
         typeof key?.keyId !== 'string' ||
         key.keyId.length === 0 ||
@@ -210,21 +236,27 @@ function parseState(
         if (schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION) {
           return null
         }
+
         continue
       }
+
       state.retiredClaimKeys.push({ keyId: key.keyId, retiredAt: key.retiredAt as number })
     }
   }
+
   const visibleSessionIds = parseVisibleSessionIds(
     file.visibleSessionIds,
     schemaVersion,
     AGENT_SESSION_STORE_SCHEMA_VERSION
   )
+
   if (!visibleSessionIds.valid) {
     return null
   }
+
   state.visibleSessionIdsIndexPresent = visibleSessionIds.present
   visibleSessionIds.ids.forEach((sessionId) => state.visibleSessionIds.add(sessionId))
+
   return { state, needsRewrite }
 }
 
@@ -239,21 +271,28 @@ async function salvageUnreadableRecordsFromBackup(
   const missing = [...state.unreadableRecords.keys()].filter(
     (sessionId) => !state.records.has(sessionId)
   )
+
   if (missing.length === 0) {
     return
   }
+
   let raw: string
+
   try {
     raw = await readFile(backupFilePath, 'utf-8')
   } catch {
     return
   }
+
   const backup = parseState(raw, hostId)
+
   if (!backup) {
     return
   }
+
   for (const sessionId of missing) {
     const record = backup.state.records.get(sessionId)
+
     if (record) {
       state.records.set(sessionId, record)
     }
@@ -265,11 +304,13 @@ export async function loadAgentSessionStore(
   hostId: string
 ): Promise<LoadedAgentSessionStore> {
   let unusableStoreFound = false
+
   for (const [candidate, recoveredFromBackup] of [
     [filePath, false],
     [backupPath(filePath), true]
   ] as const) {
     let raw: string
+
     try {
       raw = await readFile(candidate, 'utf-8')
     } catch (error) {
@@ -280,18 +321,24 @@ export async function loadAgentSessionStore(
         if (!recoveredFromBackup) {
           throw new Error('agent_session_store_corrupt')
         }
+
         unusableStoreFound = true
       }
+
       continue
     }
+
     const parsed = parseState(raw, hostId)
+
     if (!parsed) {
       unusableStoreFound = true
       continue
     }
+
     if (!recoveredFromBackup) {
       await salvageUnreadableRecordsFromBackup(parsed.state, backupPath(filePath), hostId)
     }
+
     return {
       state: parsed.state,
       storeFound: true,
@@ -300,9 +347,11 @@ export async function loadAgentSessionStore(
       needsRewrite: parsed.needsRewrite
     }
   }
+
   if (unusableStoreFound) {
     throw new Error('agent_session_store_corrupt')
   }
+
   return {
     state: emptyState(hostId),
     storeFound: false,
@@ -330,13 +379,16 @@ export async function saveAgentSessionStore(
   await mkdir(directory, { recursive: true, mode: 0o700 })
   await chmod(directory, 0o700)
   const tmpPath = durableWriteTempPath(filePath)
+
   try {
     await writeTempFileDurable(tmpPath, serializeAgentSessionStoreState(state), 0o600)
+
     // Only a primary parsed under the transaction lock may replace the backup. During recovery the
     // primary is corrupt or absent, so the known-good backup must survive until publication.
     if (options.primaryStatus === 'validated') {
       await copyFileDurable(filePath, backupPath(filePath))
     }
+
     await renameDurable(tmpPath, filePath)
   } catch (error) {
     await rm(tmpPath, { force: true }).catch(() => {})

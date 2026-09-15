@@ -39,6 +39,7 @@ vi.mock('electron', () => ({
   BrowserWindow: electron.BrowserWindow,
   webContents: { getAllWebContents: electron.getAllWebContents }
 }))
+
 vi.mock('./electron-debugger-lease', () => ({
   acquireElectronDebugger: vi.fn(() => lease)
 }))
@@ -86,10 +87,12 @@ describe('cookie clear debugger lifecycle', () => {
 
   it('attempts the whole frozen restore snapshot after one cookie is rejected', async () => {
     const store = openCookieClearStore(targetSession())
+
     const restore = store.restoreClearIdentities([
       { url: 'https://first.example/', name: 'first', value: 'one', sameSite: 'unspecified' },
       { url: 'https://second.example/', name: 'second', value: 'two', sameSite: 'unspecified' }
     ])
+
     const sendCommand = electron.windows[0].webContents.debugger.sendCommand
     sendCommand.mockResolvedValueOnce({ success: false }).mockResolvedValueOnce({ success: true })
 

@@ -30,9 +30,11 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
     const provider = requireRuntimeFileProvider(target)
     const rootPath = target.worktree.path
     const searchOptions = { ...options, rootPath }
+
     if (provider) {
       return provider.search(searchOptions)
     }
+
     return this.searchLocalRuntimeFiles(rootPath, searchOptions)
   }
 
@@ -47,24 +49,30 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
   ): Promise<string[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const route = runtimeFileRouteForTarget(target)
+
     if (route.kind === 'ssh') {
       // Why: quick-open listings degrade to empty for an unreachable host rather than throwing.
       const provider = route.provider
+
       if (!provider) {
         return []
       }
+
       const maxResults =
         options.maxResults ??
         (options.maxContentBytes === undefined ? undefined : QUICK_OPEN_LISTING_MAX_RESULTS)
+
       const files = await provider.listFiles(target.worktree.path, {
         excludePaths: options.excludePaths,
         maxResults,
         signal: options.signal
       })
+
       return options.maxContentBytes === undefined
         ? files
         : limitQuickOpenFilesBySerializedBytes(files, options.maxContentBytes)
     }
+
     return listQuickOpenFiles(
       target.worktree.path,
       this.host.requireStore(),
@@ -78,10 +86,13 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const provider = requireRuntimeFileProvider(target)
+
     if (provider) {
       const relativePaths = await provider.listFiles(target.worktree.path)
+
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
     }
+
     return listMarkdownDocuments(target.worktree.path)
   }
 
@@ -91,6 +102,7 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
   ): Promise<PathExistenceResult[]> {
     validatePathExistenceBatch(relativePaths)
     const targets = await this.resolveFileExplorerPaths(worktreeSelector, relativePaths)
+
     return readRuntimeFilePathExistence(targets, () => this.host.requireStore())
   }
 
@@ -100,16 +112,20 @@ export class RuntimeFileCommandsWithSearchRuntimeFiles extends RuntimeFileComman
   ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     const provider = requireRuntimeFileProvider(target)
+
     if (provider) {
       const fileStat = await provider.stat(target.path)
+
       return {
         size: fileStat.size,
         isDirectory: fileStat.type === 'directory',
         mtime: fileStat.mtime
       }
     }
+
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const stats = await stat(filePath)
+
     return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
   }
 }

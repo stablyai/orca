@@ -5,6 +5,7 @@ import { ensurePrivateDir, PRIVATE_FILE_MODE } from './daemon-private-file-modes
 import { getHistorySessionDirName } from './history-paths'
 
 const QUARANTINE_DIR_NAME = '.recovery-quarantine'
+
 const RECOVERY_PROTECTION_MARKER = '.unreadable-recovery'
 
 export type TerminalHistoryDirectoryFingerprint = string | null
@@ -25,6 +26,7 @@ export function isTerminalHistoryQuarantineEntry(name: string): boolean {
 
 export function getTerminalHistoryQuarantineOwnerDir(basePath: string, sessionId: string): string {
   const sessionHash = createHash('sha256').update(sessionId).digest('hex')
+
   return join(basePath, QUARANTINE_DIR_NAME, sessionHash)
 }
 
@@ -42,9 +44,11 @@ export function markTerminalHistorySessionRecoveryFrozen(sessionDir: string): vo
 export function unmarkTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
   const key = resolve(sessionDir)
   const held = recoveryFrozenSessionDirs.get(key)
+
   if (held === undefined) {
     return
   }
+
   if (held > 1) {
     recoveryFrozenSessionDirs.set(key, held - 1)
   } else {
@@ -78,12 +82,14 @@ export function fingerprintTerminalHistorySession(
   sessionId: string
 ): TerminalHistoryDirectoryFingerprint {
   const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
+
   if (!existsSync(sessionDir)) {
     return null
   }
 
   const fingerprint = createHash('sha256')
   const entries = readdirSync(sessionDir).sort()
+
   for (const name of ['.', ...entries]) {
     const stats = lstatSync(name === '.' ? sessionDir : join(sessionDir, name))
     fingerprint.update(name)
@@ -93,6 +99,7 @@ export function fingerprintTerminalHistorySession(
     )
     fingerprint.update('\0')
   }
+
   return fingerprint.digest('hex')
 }
 
@@ -102,6 +109,7 @@ export function quarantineTerminalHistorySession(
   expectedFingerprint: TerminalHistoryDirectoryFingerprint
 ): string {
   const actualFingerprint = fingerprintTerminalHistorySession(basePath, sessionId)
+
   if (actualFingerprint !== expectedFingerprint) {
     throw new Error('terminal_history_recovery_generation_changed')
   }
@@ -113,5 +121,6 @@ export function quarantineTerminalHistorySession(
   ensurePrivateDir(ownerDir)
   const quarantineDir = join(ownerDir, randomUUID())
   renameSync(sessionDir, quarantineDir)
+
   return quarantineDir
 }

@@ -8,6 +8,7 @@ export async function shutdownProviderAndDetectExit(
 ): Promise<boolean> {
   let providerExitObserved = false
   const expectedIncarnationId = ptyIncarnationById.get(id)
+
   const unsubscribe = provider.onExit((payload) => {
     if (
       payload.id === id &&
@@ -16,10 +17,12 @@ export async function shutdownProviderAndDetectExit(
       providerExitObserved = true
     }
   })
+
   try {
     await provider.shutdown(id, opts)
   } finally {
     unsubscribe()
   }
+
   return providerExitObserved
 }

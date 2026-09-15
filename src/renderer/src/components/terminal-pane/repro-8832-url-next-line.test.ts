@@ -21,8 +21,11 @@ import {
 import { buildHardWrappedPathLogicalLineCandidates } from './wrapped-terminal-link-ranges'
 
 const LINE_1 = 'Repo: https://github.com/stablyai/orca/'
+
 const LINE_2 = 'Description: 123'
+
 const EXPECTED_URL = 'https://github.com/stablyai/orca/'
+
 const BUGGY_URL = 'https://github.com/stablyai/orca/Description'
 
 const openUrlMock = vi.fn()
@@ -33,6 +36,7 @@ function makeBufferLine(
 ): IBufferLine {
   const cols = options.cols ?? Math.max(text.length, 80)
   const padded = text.padEnd(cols)
+
   return {
     isWrapped: options.isWrapped ?? false,
     length: cols,
@@ -45,10 +49,12 @@ function makeBufferLine(
     ) => {
       if (outColumns) {
         outColumns.length = 0
+
         for (let index = startColumn; index <= endColumn; index++) {
           outColumns.push(index)
         }
       }
+
       return padded.slice(startColumn, endColumn)
     }
   } as IBufferLine
@@ -60,10 +66,12 @@ function twoRowBuffer(
   options: { cols?: number; softWrapped?: boolean } = {}
 ): { getLine(y: number): IBufferLine | undefined } {
   const cols = options.cols ?? 120
+
   const rows = [
     makeBufferLine(row0, { cols, isWrapped: false }),
     makeBufferLine(row1, { cols, isWrapped: options.softWrapped === true })
   ]
+
   return { getLine: (y: number) => rows[y] }
 }
 
@@ -78,10 +86,12 @@ function openUrlAt(
   cols = 120
 ) {
   openUrlMock.mockReset()
+
   const opened = openHttpLinkAtBufferPosition(buffer, { x, y }, cols, {
     worktreeId: 'wt-repro-8832',
     modifierHeld: true
   })
+
   return { opened, url: openUrlMock.mock.calls[0]?.[0] as string | undefined }
 }
 

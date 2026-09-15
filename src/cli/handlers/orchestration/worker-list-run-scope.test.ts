@@ -15,14 +15,17 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
   const client = {
     call: async (name: string, params: Record<string, unknown>) => {
       calls.push({ name, params })
+
       if (name === 'orchestration.runCurrent') {
         return { result: { run: boundRun ? { id: boundRun } : null } }
       }
+
       if (name === 'orchestration.workerList') {
         return {
           result: { workers: [], counts: {}, page: { hasMore: false, nextCursor: null, total: 0 } }
         }
       }
+
       throw new Error(`unexpected call ${name}`)
     }
   }
@@ -38,6 +41,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+
     if (originalTerminalHandle === undefined) {
       delete process.env.ORCA_TERMINAL_HANDLE
     } else {
@@ -53,6 +57,7 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
       json
     } as never)
     const listCall = calls.find((call) => call.name === 'orchestration.workerList')
+
     return { listCall, receipt: json ? JSON.parse(logged.at(-1)!).result : null }
   }
 

@@ -8,6 +8,7 @@ import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-port
 type FailureMode = 'availability-throws' | 'encryption-throws' | 'unavailable'
 
 const testState = { dir: '' }
+
 const cipherState = {
   availability: 'available' as 'available' | 'throws' | 'unavailable',
   encryptionThrows: false,
@@ -24,6 +25,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn().mockReturnValue({ nth_repo_added: 2 })
 }))
@@ -36,22 +38,27 @@ async function createStore() {
       if (cipherState.availability === 'throws') {
         throw new Error('keychain access denied')
       }
+
       return cipherState.availability === 'available'
     },
     encryptString: (plaintext) => {
       if (cipherState.encryptionThrows) {
         throw new Error('keychain encryption failed')
       }
+
       return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
     },
     decryptString: (ciphertext) => {
       if (cipherState.decryptionThrows) {
         throw new Error('keychain decryption failed')
       }
+
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('enc:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('enc:'.length + 36 + 1)
     },
     describeProtectionGap: () => null
@@ -61,6 +68,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
@@ -88,6 +96,7 @@ const ORIGINAL = {
   kagi: 'https://kagi.test/session/old-token',
   ownerLease: `old-ssh-owner-lease-${'x'.repeat(480)}`
 } as const
+
 const PENDING = {
   proxy: 'http://new-user:new-pass@proxy.test:8080',
   cookie: 'new-opencode-cookie',

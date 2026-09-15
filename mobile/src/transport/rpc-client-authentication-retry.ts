@@ -22,6 +22,7 @@ export class RpcClientAuthenticationRetry {
   reject(reason: string, preserveRecovery = false): void {
     this.options.stopLiveness()
     this.rejectionCount++
+
     if (this.rejectionCount < AUTH_RETRY_BUDGET) {
       console.log('[net] auth rejected — retrying handshake', {
         attempt: this.rejectionCount,
@@ -32,11 +33,14 @@ export class RpcClientAuthenticationRetry {
         'Authentication rejected',
         `Retrying (${this.rejectionCount}/${AUTH_RETRY_BUDGET})`
       )
+
       if (!preserveRecovery) {
         this.options.retry(reason)
       }
+
       return
     }
+
     console.log('[net] auth rejected — budget exhausted, latching auth-failed', {
       attempt: this.rejectionCount,
       endpoint: redactSocketEndpoint(this.options.endpoint)

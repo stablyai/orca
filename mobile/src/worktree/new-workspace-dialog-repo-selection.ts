@@ -19,6 +19,7 @@ function getMobileRepoExecutionHostId(
   if (repo.executionHostId) {
     return repo.executionHostId
   }
+
   return repo.connectionId ? `ssh:${encodeURIComponent(repo.connectionId)}` : 'local'
 }
 
@@ -59,5 +60,6 @@ export function refreshMobileNewWorkspaceDialogSelectedRepo<T extends { id: stri
   if (!current) {
     return null
   }
+
   return repos.find((repo) => repo.id === current.id) ?? null
 }

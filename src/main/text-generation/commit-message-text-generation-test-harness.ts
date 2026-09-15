@@ -16,12 +16,14 @@ export function createMockDiscoveryChild(): MockDiscoveryChild {
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
   child.stdin = { end: vi.fn() }
+
   return child
 }
 
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return fn()
   } finally {
@@ -40,6 +42,7 @@ export function createChildTerminationExpectation(
         site: 'source-control-text-generation'
       })
     }
+
     // Every platform kills the root by its own handle. On win32 that is not a
     // duplicate of the tree walk: it is what keeps a refused walk from resolving
     // having killed nothing while the caller releases the managed-home lock. It

@@ -51,6 +51,7 @@ export function validateComputerTarget(
       message: 'Computer-use targeting accepts either session or worktree, not both'
     })
   }
+
   validateWindowTarget(value, ctx)
 }
 
@@ -76,26 +77,31 @@ export const Click = ComputerObserveTargetBase.extend({
   const hasElement = value.elementIndex !== undefined
   const hasX = value.x !== undefined
   const hasY = value.y !== undefined
+
   if (!hasElement && !(hasX && hasY)) {
     ctx.addIssue({
       code: 'custom',
       message: 'Click requires --element-index or both --x and --y'
     })
   }
+
   if (hasX !== hasY) {
     ctx.addIssue({
       code: 'custom',
       message: 'Click coordinates require both --x and --y'
     })
   }
+
   if (hasElement && (hasX || hasY)) {
     ctx.addIssue({
       code: 'custom',
       message: 'Click accepts either --element-index or coordinate flags, not both'
     })
   }
+
   if (value.modifiers !== undefined) {
     const message = computerUseClickModifiersValidationMessage(value.modifiers)
+
     if (message) {
       ctx.addIssue({ code: 'custom', message })
     }
@@ -107,6 +113,7 @@ export const PerformSecondaryAction = ComputerObserveTargetBase.extend({
   action: requiredString('Missing action')
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
+
   if (value.elementIndex === undefined) {
     ctx.addIssue({ code: 'custom', message: 'Missing element index' })
   }
@@ -123,18 +130,21 @@ export const Scroll = ComputerObserveTargetBase.extend({
   const hasElement = value.elementIndex !== undefined
   const hasX = value.x !== undefined
   const hasY = value.y !== undefined
+
   if (!hasElement && !(hasX && hasY)) {
     ctx.addIssue({
       code: 'custom',
       message: 'Scroll requires --element-index or both --x and --y'
     })
   }
+
   if (hasX !== hasY) {
     ctx.addIssue({
       code: 'custom',
       message: 'Scroll coordinates require both --x and --y'
     })
   }
+
   if (hasElement && (hasX || hasY)) {
     ctx.addIssue({
       code: 'custom',
@@ -153,29 +163,35 @@ export const Drag = ComputerObserveTargetBase.extend({
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const hasElementPair = value.fromElementIndex !== undefined && value.toElementIndex !== undefined
+
   const hasPartialElementPair =
     value.fromElementIndex !== undefined || value.toElementIndex !== undefined
+
   const coordinateKeys = [value.fromX, value.fromY, value.toX, value.toY]
   const hasCoordinatePair = coordinateKeys.every((coordinate) => coordinate !== undefined)
   const hasPartialCoordinatePair = coordinateKeys.some((coordinate) => coordinate !== undefined)
+
   if (hasElementPair && hasCoordinatePair) {
     ctx.addIssue({
       code: 'custom',
       message: 'Drag accepts either element indexes or coordinate flags, not both'
     })
   }
+
   if (!hasElementPair && !hasCoordinatePair) {
     ctx.addIssue({
       code: 'custom',
       message: 'Drag requires --from-element-index and --to-element-index, or all coordinate flags'
     })
   }
+
   if (hasPartialElementPair && !hasElementPair) {
     ctx.addIssue({
       code: 'custom',
       message: 'Drag element targeting requires both --from-element-index and --to-element-index'
     })
   }
+
   if (hasPartialCoordinatePair && !hasCoordinatePair) {
     ctx.addIssue({
       code: 'custom',
@@ -193,6 +209,7 @@ export const PressKey = ComputerObserveTargetBase.extend({
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const message = computerUsePressKeyValidationMessage(value.key)
+
   if (message) {
     ctx.addIssue({ code: 'custom', message })
   }
@@ -203,6 +220,7 @@ export const Hotkey = ComputerObserveTargetBase.extend({
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const message = computerUseHotkeyValidationMessage(value.key)
+
   if (message) {
     ctx.addIssue({ code: 'custom', message })
   }
@@ -221,6 +239,7 @@ export const SetValue = ComputerObserveTargetBase.extend({
   value: requiredStringAllowingEmpty('Missing value')
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
+
   if (value.elementIndex === undefined) {
     ctx.addIssue({ code: 'custom', message: 'Missing element index' })
   }

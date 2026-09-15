@@ -53,8 +53,10 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     ref
   ): React.JSX.Element {
     const item = viewModel.historyItem
+
     const isBoundaryNode =
       viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+
     // Expanding to an inline file list is the primary click; opening the combined
     // diff stays reachable from the expanded list. Fall back to open-all when no
     // expand handler is wired so the row still does something useful.
@@ -67,6 +69,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)
     const rowTooltip = item.message || item.subject
+
     const rowClassName = cn(
       'grid min-h-[26px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
       isInteractive && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
@@ -74,6 +77,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
       isBoundaryNode && 'text-muted-foreground',
       className
     )
+
     const rowContent = (
       <>
         <GitHistoryGraphSvg viewModel={viewModel} />
@@ -139,8 +143,10 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const handleClick = (): void => {
       if (canExpand) {
         onToggleExpand?.(item)
+
         return
       }
+
       onOpenCommit?.(item)
     }
 

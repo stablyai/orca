@@ -16,9 +16,11 @@ export function spawnTokenFromEnvironBlock(
   for (const entry of block.split('\0')) {
     if (entry.startsWith(`${variable}=`)) {
       const value = entry.slice(variable.length + 1)
+
       return value.length > 0 ? value : null
     }
   }
+
   return null
 }
 
@@ -29,6 +31,7 @@ export async function readEchoedAgentSessionSpawnToken(
   if (platform !== 'linux') {
     return null
   }
+
   try {
     return spawnTokenFromEnvironBlock(await readFile(`/proc/${identity.pid}/environ`, 'utf-8'))
   } catch {

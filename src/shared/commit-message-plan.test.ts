@@ -7,10 +7,13 @@ describe('planCommitMessageGeneration', () => {
       { agentId: 'pi', model: 'local-extension/model' },
       'Write a commit message'
     )
+
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     expect(result.plan.args).not.toContain('--no-extensions')
     expect(result.plan.args).toEqual(
       expect.arrayContaining([
@@ -232,6 +235,7 @@ describe('planCommitMessageGeneration', () => {
   // parity assertion below) — pinned here as a known property, not a regression.
   it('puts a large Antigravity prompt on argv with no size guard, same as other argv-delivery agents', () => {
     const bigPrompt = 'y'.repeat(70_000)
+
     const result = planCommitMessageGeneration(
       { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
       bigPrompt
@@ -245,6 +249,7 @@ describe('planCommitMessageGeneration', () => {
       { agentId: 'cursor', model: 'auto' },
       bigPrompt
     )
+
     expect(cursorResult.ok).toBe(true)
     expect(cursorResult.ok && cursorResult.plan.args.at(-1)).toBe(bigPrompt)
     expect(cursorResult.ok && cursorResult.plan.stdinPayload).toBeNull()

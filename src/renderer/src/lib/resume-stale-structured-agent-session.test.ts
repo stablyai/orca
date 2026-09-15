@@ -6,8 +6,11 @@ import { structuredAgentSessionTabId } from '../../../shared/structured-agent-se
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
+
 const WORKTREE_ID = 'stale-structured-worktree'
+
 const SESSION_ID = 'structured-session-stale'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 afterEach(() => {
@@ -18,6 +21,7 @@ describe('stale structured sleeping session', () => {
   it('clears the synthetic terminal projection without spawning', () => {
     const tabId = structuredAgentSessionTabId(SESSION_ID)
     const paneKey = makePaneKey(tabId, LEAF_ID)
+
     const record: SleepingAgentSessionRecord = {
       paneKey,
       tabId,
@@ -29,6 +33,7 @@ describe('stale structured sleeping session', () => {
       capturedAt: 1,
       updatedAt: 1
     }
+
     useAppStore.setState({
       tabsByWorktree: { [WORKTREE_ID]: [] },
       sleepingAgentSessionsByPaneKey: { [paneKey]: record }

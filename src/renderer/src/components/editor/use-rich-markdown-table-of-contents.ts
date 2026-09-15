@@ -23,6 +23,7 @@ export function useRichMarkdownTableOfContents(
     () => selectMarkdownTableOfContents(showTableOfContents, content),
     [content, showTableOfContents]
   )
+
   const flatTableOfContentsItems = useMemo(
     () => flattenMarkdownTocItems(tableOfContentsItems),
     [tableOfContentsItems]
@@ -31,9 +32,11 @@ export function useRichMarkdownTableOfContents(
   const navigateToTableOfContentsItem = useCallback(
     (id: string): void => {
       const container = scrollContainerRef.current
+
       if (!container) {
         return
       }
+
       const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
       heading?.scrollIntoView({ block: 'center' })
     },

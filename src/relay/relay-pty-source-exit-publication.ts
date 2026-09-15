@@ -47,6 +47,7 @@ export class RelayPtySourceLegacyExitIndex {
     if (this.stateByPty.get(params.id)?.incarnationId !== params.incarnationId) {
       return
     }
+
     this.stateByPty.set(params.id, { incarnationId: params.incarnationId, state: 'complete' })
   }
 
@@ -64,20 +65,26 @@ export class RelayPtySourceLegacyExitIndex {
     session: SshPtyConsumerSessionAdapter
   ): boolean | null {
     const remembered = this.stateByPty.get(params.id)
+
     if (remembered?.incarnationId !== params.incarnationId) {
       return null
     }
+
     if (remembered.state === 'complete') {
       this.forget(params.id)
+
       return true
     }
+
     const published = dispatcher.tryNotifyPtyExitToMatchingClients(
       (clientId) => session.deliveryMode(clientId) === 'source-owner',
       params
     )
+
     if (published) {
       this.forget(params.id)
     }
+
     return published
   }
 }
@@ -99,6 +106,7 @@ function retireFaultedPtySourceExit(
   } catch (err) {
     logExitSettlementFault(options.params.id, err)
   }
+
   try {
     options.sender.wakeSendWaiters(record)
   } catch (err) {
@@ -106,6 +114,7 @@ function retireFaultedPtySourceExit(
   } finally {
     record.sendWaiters.clear()
   }
+
   if (options.deliveries.get(options.params.id) === record) {
     options.deliveries.delete(options.params.id)
   }
@@ -116,9 +125,11 @@ export function sealAndPublishTrackedPtySourceExit(
   options: Omit<PtySourceExitOptions, 'record'> & { legacyExits: RelayPtySourceLegacyExitIndex }
 ): boolean {
   const record = options.deliveries.get(options.params.id)
+
   if (!record) {
     return false
   }
+
   try {
     return sealAndPublishPtySourceExit({ ...options, record })
   } catch (err) {
@@ -129,19 +140,25 @@ export function sealAndPublishTrackedPtySourceExit(
 
 export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): boolean {
   const { params, record, deliveries, dispatcher, session, sender, counters, onCapacity } = options
+
   if (record.restoreRequired) {
     const published = dispatcher.tryNotifyPtyExit(params)
+
     if (published && deliveries.get(params.id) === record) {
       deliveries.delete(params.id)
       options.legacyExits?.forget(params.id)
     }
+
     return published
   }
+
   if (record.sourceExitState === 'pending') {
     // Why: an exit frame is in flight; its settlement drives the next step.
     return false
   }
+
   const probe = session.sourceDeliverySnapshotIfKnown(record.identity)
+
   // Why: 'closing' is defensive — the ledger closes a canceled record in the same call, so it
   // only ever hands back 'closed' (or null once the tombstone is evicted).
   if (!probe || probe.state === 'closed' || probe.state === 'closing') {
@@ -150,9 +167,12 @@ export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): bool
       if (deliveries.get(params.id) === record) {
         deliveries.delete(params.id)
       }
+
       options.legacyExits?.forget(params.id)
+
       return true
     }
+
     // Why: the delivery was canceled out from under the record; never touch the sealed
     // ledger — the exit flows as a legacy broadcast instead.
     const published = record.legacyExitAccepted
@@ -161,35 +181,45 @@ export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): bool
           params
         )
       : dispatcher.tryNotifyPtyExit(params)
+
     if (published && deliveries.get(params.id) === record) {
       deliveries.delete(params.id)
       options.legacyExits?.forget(params.id)
     }
+
     return published
   }
+
   if (!record.sealed) {
     session.sealDelivery(record.identity)
     record.sealed = true
   }
+
   sender.pump(record)
   const snapshot = session.sourceDeliverySnapshot(record.identity)
+
   if (snapshot.sentEndSu !== snapshot.receivedEndSu) {
     return false
   }
+
   if (!record.legacyExitAccepted) {
     record.legacyExitAccepted = dispatcher.projectPtyExitToMatchingClients(
       (clientId) => session.deliveryMode(clientId) !== 'source-owner',
       params
     )
     options.legacyExits?.remember(params, record.legacyExitAccepted)
+
     if (!record.legacyExitAccepted) {
       return false
     }
   }
+
   if (record.sourceExitState !== 'idle') {
     return true
   }
+
   record.sourceExitState = 'pending'
+
   const settle = onceSinkSettlement((result) => {
     if (result.ok) {
       record.sourceExitState = 'published'
@@ -198,23 +228,28 @@ export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): bool
       record.sourceExitState = 'idle'
       counters.exitRolledBack++
     }
+
     let deliveryGone = false
     let settlementFailed = false
+
     try {
       // Why: a client cancel or rotation can close the delivery while this frame is in
       // flight; settling a closed ledger entry throws out of a bare socket write/drain
       // callback (dispatcher-client-writer releaseEntry) straight into uncaughtException.
       deliveryGone =
         session.sourceDeliverySnapshotIfKnown(record.identity)?.state !== 'sealed-unsettled'
+
       if (!deliveryGone) {
         session.settleExitPublication(record.identity, result)
       }
     } catch (err) {
       settlementFailed = true
       logExitSettlementFault(params.id, err)
+
       if (result.ok) {
         options.legacyExits?.complete(params)
       }
+
       retireFaultedPtySourceExit(options, record)
     } finally {
       if (result.ok || deliveryGone || settlementFailed) {
@@ -227,9 +262,12 @@ export function sealAndPublishPtySourceExit(options: PtySourceExitOptions): bool
       }
     }
   })
+
   const accepted = dispatcher.tryNotifyPtyExitToClient(record.clientId, params, settle)
+
   if (!accepted && record.sourceExitState === 'pending') {
     record.sourceExitState = 'idle'
   }
+
   return accepted
 }

@@ -21,6 +21,7 @@ export function listWslDistros() {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 10_000
   })
+
   return output
     .replaceAll(String.fromCharCode(0), '')
     .split(/\r?\n/)
@@ -32,6 +33,7 @@ function linuxPathToWslUnc(distro, linuxPath) {
   if (!linuxPath.startsWith('/')) {
     throw new Error(`Expected absolute Linux path, got ${linuxPath}`)
   }
+
   return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
 }
 
@@ -63,13 +65,17 @@ mkdir -p "$plain/subdir"
 printf 'plain folder for Orca AppHang repro\n' > "$plain/README.txt"
 printf '%s\n' "$base" "$repo" "$base/wt-1" "$base/wt-2" "$base/wt-3" "$base/wt-4" "$plain"
 `
+
   const lines = runWsl(distro, script, { timeoutMs: 120_000 }).trim().split(/\r?\n/).filter(Boolean)
+
   if (lines.length < 7) {
     throw new Error(`WSL fixture creation returned unexpected output: ${JSON.stringify(lines)}`)
   }
+
   const [base, repo, ...rest] = lines
   const plain = rest.at(-1)
   const worktrees = rest.slice(0, -1)
+
   return {
     distro,
     baseLinuxPath: base,
@@ -86,12 +92,14 @@ export function removeWslFixture(fixture) {
   if (!fixture?.baseLinuxPath) {
     return
   }
+
   const quoted = fixture.baseLinuxPath.replaceAll("'", "'\\''")
   runWsl(fixture.distro, `rm -rf '${quoted}'`, { timeoutMs: 30_000 })
 }
 
 export function createCompletedOnboardingProfile(userDataDir) {
   mkdirSync(userDataDir, { recursive: true })
+
   const profile = {
     settings: {
       telemetry: {
@@ -123,6 +131,7 @@ export function createCompletedOnboardingProfile(userDataDir) {
       projectOrderManualDefaultNoticeDismissed: true
     }
   }
+
   writeFileSync(path.join(userDataDir, 'orca-data.json'), `${JSON.stringify(profile, null, 2)}\n`)
 }
 

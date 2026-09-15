@@ -26,17 +26,28 @@ import {
 import { createOrcaRpc } from './live-remote-freeze-rpc.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
+
 const reportDir = path.join(root, 'test-results', 'freeze-repro')
+
 const envName = process.env.ORCA_FREEZE_ENV || 'paired-remote'
+
 const createCount = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_CREATE', 0))
+
 const switchPasses = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_SWITCH_PASSES', 3))
+
 const parallel = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_PARALLEL', 1))
+
 // 0 = no cap (use all live terminals). Only positive env values limit targets.
 const maxSwitchTargets = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_MAX_SWITCH_TARGETS', 0))
+
 const softMs = readFreezeNumberEnv('ORCA_FREEZE_SOFT_MS', DEFAULT_SOFT_MS)
+
 const hardMs = readFreezeNumberEnv('ORCA_FREEZE_HARD_MS', DEFAULT_HARD_MS)
+
 const createWorktreeSpan = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_CREATE_WT_SPAN', 16))
+
 const preFloodMs = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_PRE_FLOOD_MS', 3000))
+
 const scratchDir = process.env.ORCA_FREEZE_SCRATCH || ''
 
 const { orcaJsonSync, orcaJsonAsync } = createOrcaRpc({ envName })
@@ -44,6 +55,7 @@ const { orcaJsonSync, orcaJsonAsync } = createOrcaRpc({ envName })
 async function mapPool(items, concurrency, worker) {
   const results = Array.from({ length: items.length })
   let next = 0
+
   async function run() {
     while (next < items.length) {
       const index = next
@@ -51,8 +63,10 @@ async function mapPool(items, concurrency, worker) {
       results[index] = await worker(items[index], index)
     }
   }
+
   const runners = Array.from({ length: Math.min(concurrency, items.length) }, () => run())
   await Promise.all(runners)
+
   return results
 }
 
@@ -60,17 +74,22 @@ function sampleOrcaIfPossible() {
   if (process.platform !== 'darwin') {
     return null
   }
+
   try {
     const status = orcaJsonSync(['status'], { local: true }).result
     const pid = status?.app?.pid
+
     if (!pid) {
       return null
     }
+
     const out = path.join(reportDir, `orca-sample-${Date.now()}.txt`)
+
     const sampled = spawnSync('sample', [String(pid), '5', '-file', out], {
       timeout: 20_000,
       stdio: 'ignore'
     })
+
     return sampled.status === 0 ? out : null
   } catch {
     return null
@@ -81,6 +100,7 @@ function floodCommand(marker) {
   // Continuous 2KB frames @ ~8ms — agent-like remote output.
   const script =
     "const m=process.argv[1];process.stdout.write('READY:'+m+'\\n');let f=0;const c='A'.repeat(2048);setInterval(()=>{f++;process.stdout.write('BG:'+m+':'+f+':'+c+'\\n')},8);process.stdin.resume()"
+
   return `node -e ${JSON.stringify(script)} ${JSON.stringify(marker)}`
 }
 
@@ -103,9 +123,11 @@ async function main() {
 
   const worktrees = orcaJsonSync(['worktree', 'list']).result
   const wtList = worktrees?.worktrees || worktrees?.items || worktrees || []
+
   if (!Array.isArray(wtList) || wtList.length === 0) {
     throw new Error(`No worktrees on environment ${envName}`)
   }
+
   notes.push(`remote worktrees=${wtList.length}`)
   amplificationSteps.push(`baseline worktrees=${wtList.length}`)
 
@@ -119,11 +141,15 @@ async function main() {
     await mapPool(createJobs, Math.min(parallel, createCount), async (i) => {
       const wt = targets[i % targets.length]
       const selector = worktreeSelector(wt)
+
       if (!selector) {
         notes.push(`create ${i} skipped: no selector`)
+
         return
       }
+
       const marker = `LIVE_BULK_${Date.now()}_${i}`
+
       try {
         const createdTerm = await orcaJsonAsync(
           [
@@ -138,8 +164,10 @@ async function main() {
           ],
           { timeoutMs: 180_000 }
         )
+
         timings.add({ op: 'terminal.create', ms: createdTerm.elapsedMs, ok: true, index: i })
         const handle = extractTerminalHandle(createdTerm.result)
+
         if (handle) {
           created.push({ handle, marker, worktree: selector })
           console.log(
@@ -164,6 +192,7 @@ async function main() {
   }
 
   let live = []
+
   try {
     const listed = orcaJsonSync(['terminal', 'list'])
     const terms = listed.result?.terminals || []
@@ -210,29 +239,35 @@ async function main() {
     for (let offset = 0; offset < switchTargets.length; offset += parallel) {
       const batch = switchTargets.slice(offset, offset + parallel)
       const batchStarted = performance.now()
+
       const batchResults = await Promise.all(
         batch.map(async (handle) => {
           try {
             const sw = await orcaJsonAsync(['terminal', 'switch', '--terminal', handle], {
               timeoutMs: 90_000
             })
+
             return { handle, ms: sw.elapsedMs, ok: true }
           } catch (error) {
             return { handle, error: String(error), ok: false }
           }
         })
       )
+
       const batchWall = performance.now() - batchStarted
       maxBatchWallMs = Math.max(maxBatchWallMs, batchWall)
+
       for (const item of batchResults) {
         if (item.ok) {
           maxSwitchMs = Math.max(maxSwitchMs, item.ms)
           sumSwitchMs += item.ms
           switchCount += 1
           timings.add({ op: 'terminal.switch', handle: item.handle, ms: item.ms, batchWall })
+
           if (item.ms >= softMs) {
             console.warn(`[live-freeze] SOFT lag on switch ${item.handle}: ${item.ms.toFixed(0)}ms`)
           }
+
           if (item.ms >= hardMs) {
             console.warn(`[live-freeze] HARD lag on switch ${item.handle}: ${item.ms.toFixed(0)}ms`)
           }
@@ -241,9 +276,11 @@ async function main() {
           notes.push(`switch ${item.handle} failed: ${String(item.error).slice(0, 200)}`)
         }
       }
+
       if (batchWall >= softMs) {
         console.warn(`[live-freeze] SOFT batch wall=${batchWall.toFixed(0)}ms size=${batch.length}`)
       }
+
       if (batchWall >= hardMs) {
         console.warn(`[live-freeze] HARD batch wall=${batchWall.toFixed(0)}ms size=${batch.length}`)
       }
@@ -255,6 +292,7 @@ async function main() {
 
   const statusProbe = orcaJsonSync(['status'], { local: true })
   let memoryProbeMs = null
+
   try {
     const mem = orcaJsonSync(['diagnostics', 'memory'], { local: true, timeoutMs: 120_000 })
     memoryProbeMs = mem.elapsedMs
@@ -273,8 +311,10 @@ async function main() {
   })
 
   let samplePath = null
+
   if (softFreeze || hardFreeze) {
     samplePath = sampleOrcaIfPossible()
+
     if (samplePath) {
       notes.push(`sample=${samplePath}`)
     } else {

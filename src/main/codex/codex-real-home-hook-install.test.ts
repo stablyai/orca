@@ -29,6 +29,7 @@ const { homedirMock, grantMock } = vi.hoisted(() => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: homedirMock }
 })
 
@@ -46,7 +47,9 @@ import { getCodexManagedHookInstallMaterial } from './hook-service'
 import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 function getRealHooksJsonPath(): string {
@@ -91,11 +94,13 @@ afterEach(() => {
   rebaseInternals.resetRetryState()
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -128,11 +133,13 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     expect(lane).toBe('installed')
     const material = getCodexManagedHookInstallMaterial()
     const config = readRealHooksJson()
+
     for (const eventName of material.events) {
       const definitions = config.hooks?.[eventName]
       expect(definitions).toHaveLength(1)
       expect(definitions?.[0]?.hooks?.[0]?.command).toBe(material.command)
     }
+
     // The grant plan targeted the real home with append-position trust keys.
     const plan = grantMock.mock.calls[0]![0] as CodexManagedTrustGrantPlan
     expect(plan.runtimeHomePath).toBe(join(fakeHomeDir, '.codex'))
@@ -161,6 +168,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
 
   it('keeps the managed lane for unknown top-level fields Codex cannot load', async () => {
     grantSucceeds()
+
     const userConfig = {
       hooks: {
         Stop: [{ matcher: 'deploy-*', hooks: [{ type: 'command', command: 'my-stop-hook.sh' }] }],
@@ -168,6 +176,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
       },
       _pluginManagerMetadata: { owner: 'someone-else' }
     }
+
     const original = `${JSON.stringify(userConfig, null, 2)}\n`
     writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
 
@@ -186,12 +195,14 @@ describe('ensureRealHomeCodexHookState (install)', () => {
 
   it('appends LAST and preserves user entries and trust positions', async () => {
     grantSucceeds()
+
     const userConfig = {
       hooks: {
         Stop: [{ matcher: 'deploy-*', hooks: [{ type: 'command', command: 'my-stop-hook.sh' }] }],
         PreCompact: [{ hooks: [{ type: 'command', command: 'my-compact-hook.sh' }] }]
       }
     }
+
     const original = `${JSON.stringify(userConfig, null, 2)}\n`
     writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
 
@@ -310,6 +321,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     grantMock.mockImplementation(() => {
       rmSync(getRealHooksJsonPath())
       mkdirSync(getRealHooksJsonPath())
+
       return { lane: 'fallback', reason: 'unsupported' }
     })
 
@@ -442,8 +454,10 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     const operations: string[] = []
     rebaseInternals.setSessionRunner(async (request) => {
       operations.push(request.operation)
+
       if (request.operation === 'inspect-user-hook-trust') {
         expect(readRealHooksJson().hooks?.Stop?.[2]?.hooks?.[0]?.command).toBe('after.sh')
+
         return {
           outcome: 'inspected',
           moves: request.moves.map((move) => ({
@@ -454,7 +468,9 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
           }))
         }
       }
+
       expect(readRealHooksJson().hooks?.Stop?.[1]?.hooks?.[0]?.command).toBe('after.sh')
+
       return { outcome: 'repaired', repaired: 1 }
     })
 
@@ -485,6 +501,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
       operations.push(request.operation)
       // A user save (or a second Orca instance) lands while the RPC runs.
       writeFileSync(getRealHooksJsonPath(), concurrentSave, 'utf-8')
+
       return {
         outcome: 'inspected',
         moves: request.moves.map((move) => ({
@@ -507,10 +524,12 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
 
   it('removes only Orca entries and reports the removed lane', async () => {
     grantSucceeds()
+
     const userStop = {
       matcher: 'deploy-*',
       hooks: [{ type: 'command', command: 'my-stop-hook.sh' }]
     }
+
     writeFileSync(
       getRealHooksJsonPath(),
       `${JSON.stringify({ hooks: { Stop: [userStop] } }, null, 2)}\n`,
@@ -528,10 +547,12 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     const config = readRealHooksJson()
     expect(config.hooks?.Stop).toEqual([userStop])
     const material = getCodexManagedHookInstallMaterial()
+
     for (const eventName of material.events) {
       if (eventName === 'Stop') {
         continue
       }
+
       expect(config.hooks?.[eventName]).toBeUndefined()
     }
   })
@@ -569,6 +590,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
       )}\n`,
       'utf-8'
     )
+
     const entries: CodexTrustEntry[] = [
       {
         sourcePath: getRealHooksJsonPath(),
@@ -586,6 +608,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
         timeoutSec: 10
       }
     ]
+
     writeFileSync(getRealConfigTomlPath(), upsertHookTrustEntriesInContent('', entries), 'utf-8')
 
     expect(

@@ -18,12 +18,16 @@ import os from 'node:os'
 import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
 
 export const E2E_TEST_REPO_PATH_FILE_ENV = 'ORCA_E2E_TEST_REPO_PATH_FILE'
+
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE =
   process.env[E2E_TEST_REPO_PATH_FILE_ENV] ??
   path.join(os.tmpdir(), `orca-e2e-test-repo-path-${randomUUID()}.txt`)
+
 const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
+
 const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
+
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
@@ -52,6 +56,7 @@ export default function globalSetup(): void {
     })
     console.error('[e2e] Build complete.')
   }
+
   if (process.env.SKIP_BUILD && existsSync(outCli)) {
     console.error('[e2e] SKIP_BUILD set and out/cli/index.js exists — skipping CLI build')
   } else {
@@ -63,6 +68,7 @@ export default function globalSetup(): void {
     })
     console.error('[e2e] CLI build complete.')
   }
+
   if (process.env.ORCA_E2E_WEB_CLIENT === '1') {
     if (process.env.SKIP_BUILD && existsSync(outWeb)) {
       console.error('[e2e] SKIP_BUILD set and web client exists — skipping web build')
@@ -78,6 +84,7 @@ export default function globalSetup(): void {
       console.error('[e2e] Web client build complete.')
     }
   }
+
   if (
     process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
     process.env.ORCA_E2E_SSH_DOCKER === '1' ||
@@ -96,6 +103,7 @@ export default function globalSetup(): void {
       })
     }
   }
+
   if (process.env.ORCA_E2E_SSH_DOCKER === '1' || process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1') {
     console.error('[e2e] Preparing Docker OpenSSH fixture image...')
     prepareDockerSshRelayImage(root)

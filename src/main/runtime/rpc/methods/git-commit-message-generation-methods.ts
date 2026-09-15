@@ -34,6 +34,7 @@ function buildCommitMessageGenerationOverride(params: {
   ) {
     return undefined
   }
+
   return {
     ...(params.commitMessageAi !== undefined
       ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
@@ -64,9 +65,11 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
     params: GitGenerateCommitMessage,
     handler: async (params, { runtime }) => {
       const override = buildCommitMessageGenerationOverride(params)
+
       if (override === undefined) {
         return runtime.generateRuntimeCommitMessage(params.worktree)
       }
+
       return runtime.generateRuntimeCommitMessage(params.worktree, override)
     }
   }),
@@ -102,10 +105,13 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
         provider: params.provider,
         useTemplate: params.useTemplate
       }
+
       const override = buildCommitMessageGenerationOverride(params)
+
       if (override === undefined) {
         return runtime.generateRuntimePullRequestFields(params.worktree, input)
       }
+
       return runtime.generateRuntimePullRequestFields(params.worktree, input, override)
     }
   }),

@@ -16,9 +16,12 @@ export function ensureClientCreationActionAllowed(
   action: ClientCreationAction
 ): boolean {
   const availability = getClientCreationActionPolicy(useAppStore.getState(), worktreeId)[action]
+
   if (availability.state !== 'enabled') {
     toast.error(availability.reason)
+
     return false
   }
+
   return true
 }

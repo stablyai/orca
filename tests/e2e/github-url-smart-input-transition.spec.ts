@@ -6,12 +6,19 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const TARGET_URL = 'https://github.com/stablyai/orca/issues/4242'
+
 const WRONG_TITLE = 'Wrong cached issue'
+
 const TARGET_TITLE = 'Exact pasted issue'
+
 const GITLAB_TARGET_URL = 'https://gitlab.example.test/stablyai/orca/-/merge_requests/4242'
+
 const GITLAB_WRONG_TITLE = 'Wrong cached merge request'
+
 const GITLAB_TARGET_TITLE = 'Exact pasted merge request'
+
 const MIN_PASTED_FRAMES = 2
+
 const TRANSITION_FRAME_LIMIT = 600
 
 const WRONG_ITEM: GitHubWorkItem = {
@@ -79,6 +86,7 @@ async function startTransitionCapture(
   await page.evaluate(
     ({ frameKey, frameLimit, wrongTitle, targetTitle }) => {
       const frames: TransitionFrame[] = []
+
       const capture = (): void => {
         const input = document.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
         const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
@@ -91,10 +99,12 @@ async function startTransitionCapture(
           targetVisible: Boolean(target && target.getClientRects().length > 0),
           targetSelected: target?.dataset.selected === 'true'
         })
+
         if (frames.length < frameLimit) {
           requestAnimationFrame(capture)
         }
       }
+
       Reflect.set(window, frameKey, frames)
       capture()
     },
@@ -116,6 +126,7 @@ async function expectLookupHeldWithoutStaleRow(
   await expect
     .poll(async () => {
       const frames = await readTransitionFrames(page, frameKey)
+
       return frames.filter((frame) => frame.value === targetUrl).length
     })
     .toBeGreaterThanOrEqual(MIN_PASTED_FRAMES)
@@ -134,6 +145,7 @@ async function expectExactTargetAfterLookup(
   await expect
     .poll(async () => {
       const frames = await readTransitionFrames(page, frameKey)
+
       return frames.some((frame) => frame.targetVisible && frame.targetSelected)
     })
     .toBe(true)
@@ -155,12 +167,14 @@ async function installHeldGitHubLookup(
       __githubUrlLookupStarted?: boolean
       __releaseGitHubUrlLookup?: () => void
     }
+
     fixture.__githubUrlLookupStarted = false
     ipcMain.removeHandler('gh:repoSlug')
     ipcMain.handle('gh:repoSlug', () => ({ owner: 'stablyai', repo: 'orca' }))
     ipcMain.removeHandler('gh:workItemByOwnerRepo')
     ipcMain.handle('gh:workItemByOwnerRepo', () => {
       fixture.__githubUrlLookupStarted = true
+
       return new Promise((resolve) => {
         fixture.__releaseGitHubUrlLookup = () => resolve(targetItem)
       })
@@ -168,9 +182,11 @@ async function installHeldGitHubLookup(
   }, TARGET_ITEM)
   await page.evaluate((wrongItem) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     store.setState({
       getCachedWorkItems: () => [wrongItem],
       fetchWorkItems: async () => [wrongItem],
@@ -186,9 +202,11 @@ async function installHeldGitHubLookup(
 async function releaseGitHubLookup(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(() => {
     const fixture = globalThis as unknown as { __releaseGitHubUrlLookup?: () => void }
+
     if (!fixture.__releaseGitHubUrlLookup) {
       throw new Error('GitHub lookup is not held')
     }
+
     fixture.__releaseGitHubUrlLookup()
   })
 }
@@ -203,6 +221,7 @@ async function installHeldGitLabLookup(
         __gitlabUrlLookupStarted?: boolean
         __releaseGitLabUrlLookup?: () => void
       }
+
       fixture.__gitlabUrlLookupStarted = false
       ipcMain.removeHandler('preflight:check')
       ipcMain.handle('preflight:check', () => ({
@@ -221,6 +240,7 @@ async function installHeldGitLabLookup(
       ipcMain.removeHandler('gitlab:workItemByPath')
       ipcMain.handle('gitlab:workItemByPath', () => {
         fixture.__gitlabUrlLookupStarted = true
+
         return new Promise((resolve) => {
           fixture.__releaseGitLabUrlLookup = () => resolve(targetItem)
         })
@@ -230,9 +250,11 @@ async function installHeldGitLabLookup(
   )
   await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     await store.getState().refreshPreflightStatus({ force: true })
   })
 }
@@ -240,9 +262,11 @@ async function installHeldGitLabLookup(
 async function releaseGitLabLookup(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(() => {
     const fixture = globalThis as unknown as { __releaseGitLabUrlLookup?: () => void }
+
     if (!fixture.__releaseGitLabUrlLookup) {
       throw new Error('GitLab lookup is not held')
     }
+
     fixture.__releaseGitLabUrlLookup()
   })
 }
@@ -262,10 +286,12 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
   await input.click()
 
   const wrongOption = orcaPage.getByRole('option', { name: `#17 ${WRONG_TITLE}`, exact: true })
+
   const targetOption = orcaPage.getByRole('option', {
     name: `#4242 ${TARGET_TITLE}`,
     exact: true
   })
+
   await expect(wrongOption).toBeVisible()
 
   const frameKey = '__githubUrlTransitionFrames'
@@ -278,6 +304,7 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
     .poll(() =>
       electronApp.evaluate(() => {
         const fixture = globalThis as unknown as { __githubUrlLookupStarted?: boolean }
+
         return fixture.__githubUrlLookupStarted === true
       })
     )
@@ -311,10 +338,12 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
     name: `!17 ${GITLAB_WRONG_TITLE}`,
     exact: true
   })
+
   const targetOption = orcaPage.getByRole('option', {
     name: `!4242 ${GITLAB_TARGET_TITLE}`,
     exact: true
   })
+
   await expect(wrongOption).toBeVisible()
 
   const frameKey = '__gitlabUrlTransitionFrames'
@@ -327,6 +356,7 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
     .poll(() =>
       electronApp.evaluate(() => {
         const fixture = globalThis as unknown as { __gitlabUrlLookupStarted?: boolean }
+
         return fixture.__gitlabUrlLookupStarted === true
       })
     )

@@ -12,6 +12,7 @@ import {
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const DEFAULT_SAMPLES = 20
+
 const DEFAULT_WARMUPS = 3
 
 function parseArgs(argv) {
@@ -23,12 +24,15 @@ function parseArgs(argv) {
     warmups: DEFAULT_WARMUPS,
     loginDelayMs: 0
   }
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const value = argv[++index]
+
     if (!value) {
       throw new Error(`${arg} requires a value`)
     }
+
     if (arg === '--distro') {
       options.distro = value
     } else if (arg === '--native-repo') {
@@ -45,6 +49,7 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${arg}`)
     }
   }
+
   for (const [name, value, minimum] of [
     ['samples', options.samples, 5],
     ['warmups', options.warmups, 0],
@@ -54,12 +59,15 @@ function parseArgs(argv) {
       throw new Error(`--${name} must be an integer between ${minimum} and 1000`)
     }
   }
+
   if (options.samples % 2 !== 0) {
     throw new Error('--samples must be even so ABBA blocks are counterbalanced')
   }
+
   if (!options.nativeRepo || !options.mountedRepo) {
     throw new Error('--native-repo and --mounted-repo are required')
   }
+
   return options
 }
 
@@ -70,6 +78,7 @@ function run(command, args, options = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
+
     const stdout = []
     const stderr = []
     child.stdout.on('data', (chunk) => stdout.push(chunk))
@@ -81,6 +90,7 @@ function run(command, args, options = {}) {
         stdout: Buffer.concat(stdout),
         stderr: Buffer.concat(stderr)
       }
+
       if (status === 0 || options.allowFailure) {
         resolve(result)
       } else {
@@ -98,18 +108,22 @@ async function resolveDistro(requested) {
   if (requested) {
     return requested
   }
+
   const result = await run('wsl.exe', ['--list', '--quiet'], {
     env: { ...process.env, WSL_UTF8: '1' }
   })
+
   const distro = result.stdout
     .toString('utf8')
     .replaceAll('\0', '')
     .split(/\r?\n/)
     .map((value) => value.trim())
     .find(Boolean)
+
   if (!distro) {
     throw new Error('No WSL distro is installed')
   }
+
   return distro
 }
 
@@ -123,11 +137,13 @@ async function main() {
   if (process.platform !== 'win32') {
     throw new Error('This benchmark requires a Windows host with WSL')
   }
+
   const options = parseArgs(process.argv.slice(2))
   assertRepoPath(options.nativeRepo, '/')
   assertRepoPath(options.mountedRepo, '/mnt/')
   const distro = await resolveDistro(options.distro)
   const jiti = createJiti(import.meta.url)
+
   const { buildWslLoginShellCommand, quotePosixShell } = await jiti.import(
     '../../src/shared/wsl-login-shell-command.ts'
   )
@@ -135,19 +151,23 @@ async function main() {
   const loginProbe = buildWslLoginShellCommand(
     `printf '\\n__ORCA_PATH__%s\\n__ORCA_GIT__%s\\n__ORCA_HOME__%s\\n' "$PATH" "$(command -v git)" "$HOME"`
   )
+
   const probe = await run('wsl.exe', wslArgs(distro, ['/bin/sh', '-lc', loginProbe]))
   const probeText = probe.stdout.toString('utf8')
   const loginPath = /__ORCA_PATH__(.*)/.exec(probeText)?.[1]?.trim()
   const gitPath = /__ORCA_GIT__(.*)/.exec(probeText)?.[1]?.trim()
   const loginHome = /__ORCA_HOME__(.*)/.exec(probeText)?.[1]?.trim()
+
   if (!loginPath || !gitPath?.startsWith('/') || !loginHome?.startsWith('/')) {
     throw new Error(`Could not resolve login-shell Git environment: ${probeText.trim()}`)
   }
+
   const outputMarker = `__ORCA_GIT_OUTPUT_${process.pid}__\n`
 
   const runGit = async (mode, repo, args) => {
     const startedAt = performance.now()
     let result
+
     if (mode === 'login') {
       const command = [
         `cd ${quotePosixShell(repo)} &&`,
@@ -155,13 +175,16 @@ async function main() {
         `LC_ALL=C LANG=C ${quotePosixShell('git')}`,
         ...args.map(quotePosixShell)
       ].join(' ')
+
       const delay = options.loginDelayMs > 0 ? `sleep ${options.loginDelayMs / 1_000}; ` : ''
       const script = `${delay}${buildWslLoginShellCommand(command)}`
       result = await run('wsl.exe', wslArgs(distro, ['/bin/sh', '-lc', script]))
       const markerOffset = result.stdout.indexOf(outputMarker)
+
       if (markerOffset === -1) {
         throw new Error('Login shell did not emit the Git output marker')
       }
+
       result.stdout = result.stdout.subarray(markerOffset + Buffer.byteLength(outputMarker))
     } else {
       result = await run(
@@ -179,6 +202,7 @@ async function main() {
         ])
       )
     }
+
     return { ...result, elapsedMs: performance.now() - startedAt }
   }
 
@@ -187,15 +211,19 @@ async function main() {
       await runArm('login')
       await runArm('fast')
     }
+
     const samples = { login: [], fast: [] }
     const schedule = buildCounterbalancedSchedule(options.samples, 'login', 'fast')
+
     for (const order of schedule) {
       const results = []
+
       for (const mode of order) {
         const result = await runArm(mode)
         samples[mode].push(result.elapsedMs)
         results.push(result)
       }
+
       if (
         results[0].status !== results[1].status ||
         !results[0].stdout.equals(results[1].stdout) ||
@@ -208,8 +236,10 @@ async function main() {
         )
       }
     }
+
     const login = summarizeBenchmarkSamples(samples.login)
     const fast = summarizeBenchmarkSamples(samples.fast)
+
     return {
       login,
       fast,
@@ -224,8 +254,10 @@ async function main() {
     ).stdout
       .toString('utf8')
       .trim()
+
     const fixtureName = `.orca-wsl-git-shell-benchmark-${process.pid}-${randomUUID()}.txt`
     const fixturePath = posix.join(repo, fixtureName)
+
     const prepareStage = async () => {
       await runGit('fast', repo, ['reset', '--quiet', '--', fixtureName])
       await run(
@@ -239,6 +271,7 @@ async function main() {
         ])
       )
     }
+
     const cleanupStage = async () => {
       await runGit('fast', repo, ['reset', '--quiet', '--', fixtureName])
       await run('wsl.exe', wslArgs(distro, ['/bin/rm', '-f', '--', fixturePath]))
@@ -261,10 +294,13 @@ async function main() {
         `refs/heads/${branch}`
       ]
     }
+
     const result = {}
+
     for (const [name, args] of Object.entries(operations)) {
       result[name] = await measure(`${repo}:${name}`, (mode) => runGit(mode, repo, args))
     }
+
     const created = await run(
       'wsl.exe',
       wslArgs(distro, [
@@ -276,15 +312,18 @@ async function main() {
       ]),
       { allowFailure: true }
     )
+
     if (created.status !== 0) {
       throw new Error(`Could not exclusively create benchmark fixture: ${fixturePath}`)
     }
+
     try {
       result.stageRefresh = await measure(`${repo}:stage-refresh`, async (mode) => {
         await prepareStage()
         const startedAt = performance.now()
         await runGit('login', repo, ['add', '--', fixtureName])
         const status = await runGit(mode, repo, operations.status)
+
         const numstat = await runGit(mode, repo, [
           '-c',
           'core.quotePath=false',
@@ -294,6 +333,7 @@ async function main() {
           '--numstat',
           '-M'
         ])
+
         return {
           status: 0,
           stdout: Buffer.concat([status.stdout, numstat.stdout]),
@@ -304,6 +344,7 @@ async function main() {
     } finally {
       await cleanupStage()
     }
+
     return result
   }
 
@@ -313,6 +354,7 @@ async function main() {
     ).stdout
       .toString('utf8')
       .trim()
+
     const args = [
       '-c',
       'core.quotePath=false',
@@ -321,24 +363,29 @@ async function main() {
       '--branch',
       '--untracked-files=all'
     ]
+
     const [{ gitExecFileAsync }, { getWslGitReadEnvironment }, expected] = await Promise.all([
       jiti.import('../../src/main/git/runner.ts'),
       jiti.import('../../src/main/git/wsl-git-read-environment.ts'),
       runGit('fast', repo, args)
     ])
+
     await getWslGitReadEnvironment(distro)
     const startedAt = performance.now()
+
     const actual = await gitExecFileAsync(args, {
       cwd: windowsRepo,
       preferWslDirectGit: true,
       wslDistro: distro
     })
+
     if (
       !Buffer.from(actual.stdout).equals(expected.stdout) ||
       !Buffer.from(actual.stderr).equals(expected.stderr)
     ) {
       throw new Error(`Production runner output mismatch for ${windowsRepo}`)
     }
+
     return {
       windowsRepo,
       environmentPrimed: true,
@@ -369,6 +416,7 @@ async function main() {
       mounted: await verifyProductionRunner(options.mountedRepo)
     }
   }
+
   console.log(JSON.stringify(result, null, 2))
 }
 

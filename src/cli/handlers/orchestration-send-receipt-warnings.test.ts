@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
@@ -21,6 +23,7 @@ async function formatSend(result: unknown): Promise<string> {
   } as never)
   const printCall = vi.mocked(printResult).mock.calls.at(-1)
   const formatter = printCall?.[2] as (value: unknown) => string
+
   return formatter(result)
 }
 

@@ -44,6 +44,7 @@ function fakeChild(exit: { code?: number | null; signal?: NodeJS.Signals | null 
       fn(exit.code ?? null, exit.signal ?? null)
     }
   })
+
   return {
     pid: 4242,
     stdout: stream,
@@ -53,6 +54,7 @@ function fakeChild(exit: { code?: number | null; signal?: NodeJS.Signals | null 
     kill: () => true,
     on(event: string, fn: (...args: unknown[]) => void) {
       ;(listeners[event] ??= []).push(fn)
+
       return this
     }
   }
@@ -104,6 +106,7 @@ describe('runHook', () => {
         configurable: true,
         value: originalPlatform
       })
+
       if (originalComSpec === undefined) {
         delete process.env.ComSpec
       } else {
@@ -118,6 +121,7 @@ describe('runHook', () => {
     let capturedEnv: Record<string, string> | undefined
     spawnMock.mockImplementation((_script, options) => {
       capturedEnv = (options as { env: Record<string, string> }).env
+
       return fakeChild()
     })
 
@@ -131,6 +135,7 @@ describe('runHook', () => {
       CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
       CONDA_EXE: process.env.CONDA_EXE
     }
+
     delete process.env.CONDA_PREFIX
     process.env.CONDA_SHLVL = '1'
     process.env.CONDA_DEFAULT_ENV = 'base'
@@ -193,6 +198,7 @@ describe('runHook', () => {
         configurable: true,
         value: originalPlatform
       })
+
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -225,6 +231,7 @@ describe('runHook', () => {
 
     try {
       const { runHook } = await import('./hooks')
+
       const result = await runHook('setup', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature', {
         ...makeRepo(),
         path: 'C:\\Users\\jinwo\\git\\orca'
@@ -282,6 +289,7 @@ describe('runHook', () => {
 
     try {
       const { runHook } = await import('./hooks')
+
       const result = await runHook(
         'setup',
         'C:\\Users\\jinwo\\git\\orca-feature',
@@ -334,6 +342,7 @@ describe('runHook', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         {
           ...makeRepo(),
@@ -394,6 +403,7 @@ describe('runHook', () => {
 
     try {
       const { runHook } = await import('./hooks')
+
       const result = await runHook('setup', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature', {
         ...makeRepo(),
         path: 'C:\\Users\\jinwo\\git\\orca'

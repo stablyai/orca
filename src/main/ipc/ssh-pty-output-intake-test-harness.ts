@@ -26,6 +26,7 @@ export function createSshPtyOutputIntakeHarness(
   let sequence = 0
   const completions: ReturnType<typeof deferred>[] = []
   const order: string[] = []
+
   const dependencies: SshPtyOutputIntakeDependencies = {
     getModelSequence: () => sequence,
     acceptModel: (input) => {
@@ -33,6 +34,7 @@ export function createSshPtyOutputIntakeHarness(
       sequence += input.rawLength
       const completion = deferred()
       completions.push(completion)
+
       return { sequence, completion: completion.promise }
     },
     project: (input) => order.push(`project:${input.data}`),
@@ -43,6 +45,7 @@ export function createSshPtyOutputIntakeHarness(
     closeProvider: vi.fn(),
     ...overrides
   }
+
   return {
     intake: new SshPtyOutputIntake(dependencies, options),
     dependencies,
@@ -54,9 +57,11 @@ export function createSshPtyOutputIntakeHarness(
 function deferred() {
   let resolve!: () => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<void>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }

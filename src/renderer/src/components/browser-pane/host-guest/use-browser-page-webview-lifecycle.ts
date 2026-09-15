@@ -136,9 +136,11 @@ export function useBrowserPageWebviewLifecycle({
   annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')
   const isActiveRef = useRef(isActive)
   const pendingAnnotationPayloadRef = useRef(pendingAnnotationPayload)
+
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTabId] ?? EMPTY_BROWSER_ANNOTATIONS
   )
+
   const browserAnnotationsRef = useRef(browserAnnotations)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
   const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
@@ -165,6 +167,7 @@ export function useBrowserPageWebviewLifecycle({
 
   useLayoutEffect(() => {
     const webview = webviewRef.current
+
     if (webview) {
       setBrowserPageWebviewInputLock(webview, inputLocked)
     }
@@ -287,6 +290,7 @@ export function useBrowserPageWebviewLifecycle({
   useEffect(() => {
     const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current
     wasPaintableForGuestValidationRef.current = isPaintable
+
     if (becamePaintable) {
       validateVisibleGuestRegistrationRef.current()
     }

@@ -92,12 +92,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('reads scoped Keychain credentials when the Claude config dir is explicit', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -136,12 +138,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('falls back to the legacy keychain token when the scoped token is rejected as stale', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
       dir
         ? JSON.stringify({
@@ -151,6 +155,7 @@ describe('fetchClaudeRateLimits', () => {
     )
     netFetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
       const auth = (init?.headers as Record<string, string> | undefined)?.Authorization
+
       return auth === 'Bearer fresh-legacy-token'
         ? new Response(
             JSON.stringify({ five_hour: { utilization: 12 }, seven_day: { utilization: 34 } }),
@@ -177,12 +182,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('prefers a legacy access token over scoped refresh-only credentials', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
       dir
         ? JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh-only' } })
@@ -206,12 +213,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('does not retry with the legacy keychain for managed account credentials', async () => {
     const configDir = '/Users/test/managed-account'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: true,
       provenance: 'managed:account-1'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
       dir ? JSON.stringify({ claudeAiOauth: { accessToken: 'stale-managed-token' } }) : null
     )
@@ -236,6 +245,7 @@ describe('fetchClaudeRateLimits', () => {
     // Why: a WSL target's stale credentials must never be answered with the
     // host user's legacy macOS Keychain account.
     const configDir = '\\\\wsl$\\Ubuntu\\home\\test\\.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       runtime: 'wsl',
@@ -245,6 +255,7 @@ describe('fetchClaudeRateLimits', () => {
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
       dir
         ? JSON.stringify({ claudeAiOauth: { accessToken: 'stale-wsl-token' } })
@@ -271,12 +282,14 @@ describe('fetchClaudeRateLimits', () => {
     // Why: Claude's usage endpoint has a tight request budget; retrying the
     // identical token would double the request for a guaranteed second 401.
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
       JSON.stringify({ claudeAiOauth: { accessToken: 'mirrored-token' } })
     )
@@ -299,6 +312,7 @@ describe('fetchClaudeRateLimits', () => {
 
   it('falls back to legacy Keychain credentials for host system default without an explicit config dir', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       runtime: 'host',
@@ -306,6 +320,7 @@ describe('fetchClaudeRateLimits', () => {
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(
@@ -339,6 +354,7 @@ describe('fetchClaudeRateLimits', () => {
 
   it('reads scoped Keychain credentials for host system default without an explicit config dir', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       runtime: 'host',
@@ -346,6 +362,7 @@ describe('fetchClaudeRateLimits', () => {
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -379,12 +396,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('falls back to the credentials file when Keychain access fails', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockRejectedValue(
       new Error('Keychain locked')
     )
@@ -418,12 +437,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('falls back to legacy Keychain when scoped credentials are unusable', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict)
       .mockResolvedValueOnce('{not-json')
       .mockResolvedValueOnce(
@@ -454,12 +475,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('tries OAuth usage even when local credential metadata is expired', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {

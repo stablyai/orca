@@ -84,10 +84,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       requestTimeoutMs: deps.requestTimeoutMs,
       emit: (session, event) => {
         const admission = this.emit(session, event)
+
         if (!admission.accepted && event.type === 'notification') {
           const { sessionId, method, params, observedAt } = event
           this.notificationRetries.handle(sessionId, method, params, observedAt)
         }
+
         return admission
       }
     })
@@ -123,6 +125,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (acquisition.buffer(event, retainedBytes)) {
       return
     }
+
     if (this.sessions.get(sessionId)?.connection === acquisition.connection) {
       event()
     } else if (acquisition.isOverflowed) {
@@ -140,22 +143,29 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (event.type === 'notification' && !session.backgroundTasks.canObserve(event)) {
       return { accepted: false, reason: 'failed' }
     }
+
     const admission = session.translator?.handle(event) ?? { accepted: true }
+
     if (!admission.accepted) {
       return admission
     }
+
     if (event.type === 'notification') {
       this.compactions.codex(event.sessionId, event.method, event.params)
+
       // After the admission check, so a refused frame is observed by the strip
       // only on the retry that also reaches the journal.
       if (session.backgroundTasks.observe(event)) {
         this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
       }
     }
+
     if (event.type === 'ended') {
       this.compactions.ended(event.sessionId)
     }
+
     this.deps.onEvent?.(event)
+
     return admission
   }
 
@@ -206,8 +216,10 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
+
     try {
       await this.turnCancellation.captureBaseline(session)
+
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
@@ -235,11 +247,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
     const session = this.session(input.sessionId)
+
     return this.compactions.run(
       input.sessionId,
       session.threadId,
       async () => {
         await this.turnCancellation.captureBaseline(session)
+
         return session.connection
           .request(
             'thread/compact/start',
@@ -250,6 +264,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
             if (isCodexAppServerRequestError(error)) {
               return { error: error.message }
             }
+
             throw error
           })
       },
@@ -267,6 +282,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (!isCodexTurnOptionKey(input.key)) {
       throw new Error(`codex app-server has no thread option named ${input.key}`)
     }
+
     return applyCodexStructuredSessionOption(
       this.session(input.sessionId),
       input.key,

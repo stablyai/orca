@@ -14,10 +14,15 @@ vi.mock('../lib/focus-terminal-tab-surface', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let latestCaptureReturnFocus: (() => void) | null = null
+
 let latestSkipReturnFocus: (() => void) | null = null
+
 let nextAnimationFrameId = 1
+
 let animationFrames = new Map<number, FrameRequestCallback>()
 
 function installAnimationFrameStubs(): void {
@@ -27,6 +32,7 @@ function installAnimationFrameStubs(): void {
     const id = nextAnimationFrameId
     nextAnimationFrameId += 1
     animationFrames.set(id, callback)
+
     return id
   })
   vi.stubGlobal('cancelAnimationFrame', (id: number): void => {
@@ -38,6 +44,7 @@ function flushAnimationFrames(): void {
   for (let i = 0; i < 10 && animationFrames.size > 0; i += 1) {
     const pending = Array.from(animationFrames.values())
     animationFrames.clear()
+
     for (const callback of pending) {
       callback(0)
     }
@@ -50,6 +57,7 @@ function Probe({ visible }: { visible: boolean }): null {
     latestCaptureReturnFocus = captureReturnFocus
     latestSkipReturnFocus = skipReturnFocus
   }, [captureReturnFocus, skipReturnFocus])
+
   return null
 }
 
@@ -59,6 +67,7 @@ async function renderProbe(visible: boolean): Promise<void> {
     document.body.append(container)
     root = createRoot(container)
   }
+
   await act(async () => {
     root?.render(<Probe visible={visible} />)
   })
@@ -70,6 +79,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null

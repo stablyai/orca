@@ -27,6 +27,7 @@ import {
 } from './native-chat-pty-send-queue'
 
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
+
 export { resetNativeChatPtySendQueuesForTests }
 
 // Why: agent TUI composers treat Ctrl+U as kill-to-start-of-line. Chat sends
@@ -92,20 +93,26 @@ export function clearThenWrite(
 ): void {
   clearUnsubmittedAgentInput(settings, ptyId, options)
   const confirmCleared = options?.confirmCleared
+
   if (!confirmCleared) {
     writeBody()
+
     return
   }
+
   delay(NATIVE_CHAT_CLEAR_CONFIRM_MS, () => {
     let cleared = false
+
     try {
       cleared = confirmCleared()
     } catch {
       // An unreadable terminal is unconfirmed; the maximal clear remains safe.
     }
+
     if (!cleared) {
       sendRuntimePtyInput(settings, ptyId, AGENT_TUI_CLEAR_INPUT_MAX)
     }
+
     writeBody()
   })
 }
@@ -136,10 +143,12 @@ export function sendNativeChatMessage(
       if (isCancelled()) {
         return
       }
+
       clearThenWrite(settings, ptyId, options, delay, () => {
         if (isCancelled()) {
           return
         }
+
         sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
@@ -159,17 +168,21 @@ function waitForNativeChatSubmit(signal?: AbortSignal): Promise<boolean> {
   if (signal?.aborted) {
     return Promise.resolve(false)
   }
+
   return new Promise((resolve) => {
     let timer: ReturnType<typeof setTimeout> | null = null
+
     const finish = (completed: boolean): void => {
       if (timer === null) {
         return
       }
+
       clearTimeout(timer)
       timer = null
       signal?.removeEventListener('abort', onAbort)
       resolve(completed)
     }
+
     const onAbort = (): void => finish(false)
     timer = setTimeout(() => finish(true), NATIVE_CHAT_SUBMIT_DELAY_MS)
     signal?.addEventListener('abort', onAbort, { once: true })
@@ -194,6 +207,7 @@ export async function sendNativeChatMessageVerified(
   // verification timed out with "Could not verify the model change".
   cancelNativeChatPtySends(ptyId)
   await waitForNativeChatPtyIdle(ptyId)
+
   if (signal?.aborted) {
     return false
   }
@@ -205,9 +219,11 @@ export async function sendNativeChatMessageVerified(
     ptyId,
     buildNativeChatPasteBytes(text)
   )
+
   if (!bodyAccepted || signal?.aborted || !(await waitForNativeChatSubmit(signal))) {
     return false
   }
+
   return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT)
 }
 
@@ -220,12 +236,14 @@ export async function typeNativeChatCommand(
 ): Promise<boolean> {
   cancelNativeChatPtySends(ptyId)
   await waitForNativeChatPtyIdle(ptyId)
+
   const outcome = await typeAgentTuiCommand({
     command,
     signal,
     write: async (key) =>
       (await sendRuntimePtyInputVerified(settings, ptyId, key)) ? 'accepted' : 'rejected'
   })
+
   return outcome === 'accepted'
 }
 
@@ -236,6 +254,7 @@ export function sendNativeChatTypedCommand(
   command: string
 ): NativeChatSendHandle {
   const controller = new AbortController()
+
   return enqueueNativeChatPtySend(
     ptyId,
     (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
@@ -244,8 +263,10 @@ export function sendNativeChatTypedCommand(
         if (!isCancelled() && outcome !== 'accepted') {
           clearUnsubmittedAgentInput(settings, ptyId)
         }
+
         markSubmitted()
       }
+
       void typeAgentTuiCommand({
         command,
         signal: controller.signal,
@@ -253,6 +274,7 @@ export function sendNativeChatTypedCommand(
           if (isCancelled()) {
             return 'rejected'
           }
+
           return (await sendRuntimePtyInputVerified(settings, ptyId, key)) ? 'accepted' : 'rejected'
         }
       }).then(finish, () => finish('rejected'))
@@ -286,6 +308,7 @@ export function sendNativeChatAskAnswer(
   if (groups.length === 0) {
     return { cancel: () => {}, settleAfterMs: 0 }
   }
+
   const timers: ReturnType<typeof setTimeout>[] = []
   const verifiedWrites: Promise<boolean>[] = []
   let cancelled = false
@@ -293,6 +316,7 @@ export function sendNativeChatAskAnswer(
     timers.push(
       setTimeout(() => {
         const bytes = 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text)
+
         if (onSettled) {
           // Why: inference must use the remote host's acceptance result, not
           // the fire-and-forget renderer dispatch result.
@@ -305,8 +329,10 @@ export function sendNativeChatAskAnswer(
       }, index * NATIVE_CHAT_QUESTION_STEP_MS)
     )
   })
+
   const settleAfterMs =
     (groups.length - 1) * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+
   if (onSettled) {
     // Why: status inference must wait for every paced write and must not run
     // after cancellation or a rejected runtime write.
@@ -320,9 +346,11 @@ export function sendNativeChatAskAnswer(
       }, settleAfterMs)
     )
   }
+
   return {
     cancel: () => {
       cancelled = true
+
       for (const timer of timers) {
         clearTimeout(timer)
       }

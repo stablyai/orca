@@ -37,6 +37,7 @@ export function useRemoteBrowserPageInputQueue(): {
   const enqueueRemoteInput = useCallback((operation: () => Promise<void>): Promise<void> => {
     const next = remoteInputQueueRef.current.catch(() => {}).then(operation)
     remoteInputQueueRef.current = next.catch(() => {})
+
     return next
   }, [])
 
@@ -47,6 +48,7 @@ export function useRemoteBrowserPageInputQueue(): {
   const clearPendingRemoteWheel = useCallback((): void => {
     pendingRemoteWheelRef.current = null
     remoteWheelInFlightRef.current = false
+
     if (remoteWheelFrameRef.current !== null) {
       window.cancelAnimationFrame(remoteWheelFrameRef.current)
       remoteWheelFrameRef.current = null
@@ -108,19 +110,24 @@ export function useRemoteBrowserPageInput({
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
       const image = imageRef.current
       const viewport = remoteViewportRef.current
+
       if (!image || !viewport) {
         return null
       }
+
       const rect = viewport.getBoundingClientRect()
+
       const { width: viewportWidth, height: viewportHeight } = resolveRemoteBrowserCssViewport({
         cssViewportSize: remoteCssViewportSizeRef.current,
         requestedViewportSize: remoteViewportSizeRef.current,
         frameMetadata,
         naturalSize: { width: image.naturalWidth, height: image.naturalHeight }
       })
+
       if (rect.width <= 0 || rect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
         return null
       }
+
       return {
         x: Math.round(((event.clientX - rect.left) / rect.width) * viewportWidth),
         y: Math.round(((event.clientY - rect.top) / rect.height) * viewportHeight)
@@ -133,18 +140,22 @@ export function useRemoteBrowserPageInput({
     if (busy) {
       return
     }
+
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
     const image = imageRef.current
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
     const button = getRemoteBrowserMouseButton(event.button)
+
     if (button === 'right') {
       return
     }
+
     if (!target || !pageId || !image || !operationToken || !point || !button) {
       return
     }
+
     event.preventDefault()
     image.focus()
     setPaneNotice(null)
@@ -152,6 +163,7 @@ export function useRemoteBrowserPageInput({
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+
       try {
         const params = { worktree: runtimeWorktree, page: pageId }
         await callRuntimeRpc(
@@ -170,8 +182,10 @@ export function useRemoteBrowserPageInput({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+
             return
           }
+
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote mouse input failed.'
@@ -185,23 +199,28 @@ export function useRemoteBrowserPageInput({
     if (busy) {
       return
     }
+
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
     const point = getRemoteImagePoint(event)
     const button = getRemoteBrowserMouseButton(event.button)
+
     if (button === 'right') {
       return
     }
+
     if (!target || !pageId || !operationToken || !point || !button) {
       return
     }
+
     event.preventDefault()
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+
       try {
         const params = { worktree: runtimeWorktree, page: pageId }
         await callRuntimeRpc(
@@ -221,8 +240,10 @@ export function useRemoteBrowserPageInput({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+
             return
           }
+
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote mouse input failed.'
@@ -236,23 +257,29 @@ export function useRemoteBrowserPageInput({
     if (isEditableKeyboardTarget(event.target)) {
       return
     }
+
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
+
     if (!target || !pageId || !operationToken) {
       return
     }
+
     const params = { worktree: runtimeWorktree, page: pageId }
     const key = getRemoteBrowserKeyboardShortcut(event) ?? getRemoteBrowserKeypressKey(event)
+
     if (!key) {
       return
     }
+
     event.preventDefault()
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+
       try {
         await callRuntimeRpc(
           target,
@@ -260,6 +287,7 @@ export function useRemoteBrowserPageInput({
           { ...params, key },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+
         if (
           key === 'Enter' ||
           key === 'Meta+r' ||
@@ -273,8 +301,10 @@ export function useRemoteBrowserPageInput({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+
             return
           }
+
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote keyboard input failed.'

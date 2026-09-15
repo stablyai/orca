@@ -50,8 +50,11 @@ function worktree(id: string, repoId: string, extra: Partial<Worktree> = {}): Wo
 
 // Two repos behind one project: one local checkout, one on the SSH host.
 const repos = [repo('r1', 'Orca'), repo('r2', 'Orca (builder)', 'ssh-1'), repo('r3', 'Solo')]
+
 const projects = [project('p1', 'Orca')]
+
 const projectHostSetups = [setup('s1', 'p1', 'local', 'r1'), setup('s2', 'p1', 'ssh-1', 'r2')]
+
 const hostOptions = buildSidebarHostOptions({
   repos,
   sshTargetLabels: new Map([['ssh-1', 'Builder']]),
@@ -126,6 +129,7 @@ describe('buildPaletteFilterModel', () => {
 
   it('deduplicates a repository ID shared by multiple hosts', () => {
     const duplicateRepos = [repo('shared', 'Shared'), repo('shared', 'Shared remote', 'ssh-1')]
+
     const model = buildPaletteFilterModel({
       repos: duplicateRepos,
       worktrees: [
@@ -151,6 +155,7 @@ describe('buildPaletteFilterModel', () => {
       { ...repo('payments', 'api'), path: path.join('/repos', 'payments', 'api') },
       { ...repo('billing', 'api'), path: path.join('/repos', 'billing', 'api') }
     ]
+
     const model = buildPaletteFilterModel({
       repos: duplicateNames,
       worktrees: [],
@@ -225,6 +230,7 @@ describe('resolveWorktreeFilterHostId', () => {
   // host the sidebar does, including the host-less "inherit the focused runtime" case.
   it('agrees with getWorktreeExecutionHostId for every default host', () => {
     const repoMap = new Map(repos.map((entry) => [entry.id, entry]))
+
     const cases = [
       worktree('w1', 'r1'),
       worktree('w2', 'r2'),
@@ -242,6 +248,7 @@ describe('resolveWorktreeFilterHostId', () => {
         projectHostSetups,
         defaultHostId
       })
+
       for (const entry of cases) {
         expect(resolveWorktreeFilterHostId(entry, model.repoById, model.defaultHostId)).toBe(
           getWorktreeExecutionHostId(entry, repoMap.get(entry.repoId), defaultHostId)

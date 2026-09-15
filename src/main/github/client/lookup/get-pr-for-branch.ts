@@ -1,6 +1,7 @@
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { GitHubPRBranchLookupOptions } from './pull-request-lookup-data'
 import { getPRForBranchOutcome } from './pr-for-branch-outcome'
+
 /**
  * Get PR info for a given branch using gh CLI.
  * Returns null if gh is not installed, or no PR exists for the branch.
@@ -28,5 +29,6 @@ export async function getPRForBranch(
     fallbackPRNumber,
     options
   )
+
   return outcome.kind === 'found' ? outcome.pr : null
 }

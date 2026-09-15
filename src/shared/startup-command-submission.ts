@@ -15,6 +15,7 @@
 
 // DEC 2004 bracketed-paste bracket sequences.
 const BRACKETED_PASTE_START = '\x1b[200~'
+
 const BRACKETED_PASTE_END = '\x1b[201~'
 
 export type StartupCommandSubmissionOptions = {
@@ -44,9 +45,11 @@ export function isBracketedPasteSafeShell(args: {
   waitsForShellReady: boolean
 }): boolean {
   const name = args.shellName.toLowerCase()
+
   if (name === 'bash' || name === 'zsh') {
     return true
   }
+
   return name === 'fish' && args.waitsForShellReady
 }
 
@@ -59,8 +62,10 @@ export function buildStartupCommandSubmission(
   const trailingTerminator = /\r\n$|\r$|\n$/.exec(command)?.[0] ?? ''
   const endsWithSubmit = trailingTerminator.length > 0
   const body = endsWithSubmit ? command.slice(0, -trailingTerminator.length) : command
+
   if (bracketedPasteSafe && (body.includes('\n') || body.includes('\r'))) {
     return `${BRACKETED_PASTE_START}${body}${BRACKETED_PASTE_END}${submit}`
   }
+
   return endsWithSubmit ? command : `${command}${submit}`
 }

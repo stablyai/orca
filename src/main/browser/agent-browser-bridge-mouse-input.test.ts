@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,15 +18,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -34,12 +39,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -81,6 +88,7 @@ describe('AgentBrowserBridge', () => {
       if (method === 'Runtime.evaluate') {
         return { result: { value: { x: 12, y: 34, adjusted: true, handled: true } } }
       }
+
       return {}
     })
     webContentsFromIdMock.mockReturnValue(wc)
@@ -105,6 +113,7 @@ describe('AgentBrowserBridge', () => {
       if (method === 'Runtime.evaluate') {
         return { result: { value: { x: 10, y: 20, adjusted: false, handled: false } } }
       }
+
       return {}
     })
     webContentsFromIdMock.mockReturnValue(wc)
@@ -116,6 +125,7 @@ describe('AgentBrowserBridge', () => {
     const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
       (call) => call[0] === 'Input.dispatchMouseEvent'
     )
+
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 10, y: 20 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 10, y: 20 })
@@ -127,6 +137,7 @@ describe('AgentBrowserBridge', () => {
       if (method === 'Runtime.evaluate') {
         return { result: { value: { x: 10, y: 20, adjusted: false, handled: false } } }
       }
+
       return {}
     })
     webContentsFromIdMock.mockReturnValue(wc)
@@ -136,6 +147,7 @@ describe('AgentBrowserBridge', () => {
     const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
       (call) => call[0] === 'Input.dispatchMouseEvent'
     )
+
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', modifiers: 12 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', modifiers: 12 })
   })
@@ -146,6 +158,7 @@ describe('AgentBrowserBridge', () => {
       if (method === 'Runtime.evaluate') {
         return { result: { value: { x: 12, y: 34, adjusted: true, handled: false } } }
       }
+
       return {}
     })
     webContentsFromIdMock.mockReturnValue(wc)
@@ -159,12 +172,15 @@ describe('AgentBrowserBridge', () => {
     const evaluateCall = wc.debugger.sendCommand.mock.calls.find(
       (call) => call[0] === 'Runtime.evaluate'
     )
+
     expect((evaluateCall?.[1] as { expression?: string } | undefined)?.expression).toContain(
       'const allowDomActivation = false'
     )
+
     const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
       (call) => call[0] === 'Input.dispatchMouseEvent'
     )
+
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })

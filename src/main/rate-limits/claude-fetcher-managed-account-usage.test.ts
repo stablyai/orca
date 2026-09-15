@@ -74,6 +74,7 @@ describe('fetchClaudeRateLimits', () => {
 
   afterEach(() => {
     restorePlatform()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -169,12 +170,14 @@ describe('fetchClaudeRateLimits', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
     appGetPathMock.mockReturnValue(tempDir)
     const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+
     const credentialsJson = JSON.stringify({
       claudeAiOauth: {
         accessToken: 'managed-keychain-token',
         expiresAt: Date.now() + 60_000
       }
     })
+
     mkdirSync(ownedAuthPath, { recursive: true })
     writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     const canonicalAuthPath = realpathSync(ownedAuthPath)
@@ -251,6 +254,7 @@ describe('fetchClaudeRateLimits', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-claude-fetcher-'))
     appGetPathMock.mockReturnValue(tempDir)
     const ownedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+
     const staleCredentialsJson = JSON.stringify({
       claudeAiOauth: {
         accessToken: 'stale-access',
@@ -258,6 +262,7 @@ describe('fetchClaudeRateLimits', () => {
         expiresAt: Date.now() - 60_000
       }
     })
+
     mkdirSync(ownedAuthPath, { recursive: true })
     writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValueOnce(staleCredentialsJson)
@@ -416,10 +421,12 @@ describe('fetchClaudeRateLimits', () => {
     const persisted = JSON.parse(readFileSync(credentialsPath, 'utf-8'))
     expect(persisted.claudeAiOauth.accessToken).toBe('fresh-access')
     expect(persisted.claudeAiOauth.refreshToken).toBe('fresh-refresh')
+
     // Usage fetch used the fresh access token.
     const usageCall = netFetchMock.mock.calls.find(([url]) =>
       String(url).includes('/api/oauth/usage')
     )
+
     expect(usageCall?.[1]?.headers?.Authorization).toBe('Bearer fresh-access')
   })
 })

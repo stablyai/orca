@@ -20,6 +20,7 @@ function resolveUnavailableHostedReviewBranch(
 ): string | null {
   const branch = status.branch?.trim() ?? ''
   const baseBranch = normalizeHostedReviewBaseRef(status.baseRef ?? '').trim()
+
   if (
     branch === '' ||
     branch === 'HEAD' ||
@@ -29,6 +30,7 @@ function resolveUnavailableHostedReviewBranch(
   ) {
     return null
   }
+
   return branch
 }
 
@@ -82,12 +84,14 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
   status: UnavailableHostedReviewStatus
 ): HostedReviewCreationEligibility | null {
   const branch = resolveUnavailableHostedReviewBranch(provider, status)
+
   if (
     !branch ||
     (!status.hasUncommittedChanges && status.hasUpstream === true && (status.behind ?? 0) === 0)
   ) {
     return null
   }
+
   const base = {
     provider,
     review: null,
@@ -97,17 +101,21 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
     // Why: local Git blockers cannot prove that a hosted review does not exist.
     reviewLookupOutcome: 'unavailable' as const
   }
+
   if (status.hasUncommittedChanges) {
     return { ...base, blockedReason: 'dirty', nextAction: 'commit' }
   }
+
   if (status.hasUpstream === false) {
     return { ...base, blockedReason: 'no_upstream', nextAction: 'publish' }
   }
+
   // Unknown upstream (hasUpstream !== true) is retryable, not an actionable
   // blocker — mirror main, which returns a null blocker there.
   if (status.hasUpstream === true && (status.behind ?? 0) > 0) {
     return { ...base, blockedReason: 'needs_sync', nextAction: 'sync' }
   }
+
   return null
 }
 
@@ -116,13 +124,17 @@ export function buildCreatePrIntentUnavailableEligibility(
   status: UnavailableHostedReviewStatus
 ): HostedReviewCreationEligibility | null {
   const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(provider, status)
+
   if (localBlocker) {
     return localBlocker
   }
+
   const branch = resolveUnavailableHostedReviewBranch(provider, status)
+
   if (!branch || status.hasUpstream !== true) {
     return null
   }
+
   const base = {
     provider,
     review: null,
@@ -131,8 +143,10 @@ export function buildCreatePrIntentUnavailableEligibility(
     head: branch,
     reviewLookupOutcome: 'unavailable' as const
   }
+
   if ((status.ahead ?? 0) > 0) {
     return { ...base, blockedReason: 'needs_push', nextAction: 'push' }
   }
+
   return { ...base, blockedReason: null, nextAction: null }
 }

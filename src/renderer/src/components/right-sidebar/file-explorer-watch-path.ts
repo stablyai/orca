@@ -18,6 +18,7 @@ export function getExternalFileChangeRelativePath(
   }
 
   const relativePath = relativePathInsideRoot(worktreePath, absolutePath)
+
   if (relativePath === null || relativePath === '') {
     return null
   }
@@ -31,11 +32,13 @@ export function canonicalizeFileExplorerWatchPath(
   absolutePath: string
 ): string | null {
   const relativePath = relativePathInsideRoot(worktreePath, absolutePath)
+
   if (relativePath === null) {
     return null
   }
 
   const rootPath = normalizeExplorerAbsolutePath(worktreePath)
+
   return relativePath === '' ? rootPath : joinPath(rootPath, relativePath)
 }
 
@@ -43,12 +46,15 @@ export function createCachedDirPathIndex(
   cache: Record<string, { children: unknown }>
 ): ReadonlyMap<string, string> {
   const index = new Map<string, string>()
+
   for (const key of Object.keys(cache)) {
     const normalizedKey = normalizeRuntimePathForComparison(key)
+
     if (!index.has(normalizedKey)) {
       index.set(normalizedKey, key)
     }
   }
+
   return index
 }
 
@@ -68,11 +74,14 @@ export function resolveCachedDirPath(
   if (dirPath in cache) {
     return dirPath
   }
+
   const target = normalizeRuntimePathForComparison(dirPath)
   const indexedPath = cachePathIndex?.().get(target)
+
   if (indexedPath) {
     return indexedPath
   }
+
   if (!cachePathIndex) {
     for (const key of Object.keys(cache)) {
       if (normalizeRuntimePathForComparison(key) === target) {
@@ -80,16 +89,20 @@ export function resolveCachedDirPath(
       }
     }
   }
+
   if (worktreePath && normalizeRuntimePathForComparison(worktreePath) === target) {
     return normalizeExplorerAbsolutePath(worktreePath)
   }
+
   return null
 }
 
 export function parentDirForWatchPath(normalizedPath: string): string {
   const parentPath = dirname(normalizedPath)
+
   if (/^[A-Za-z]:$/.test(parentPath)) {
     return `${parentPath}${normalizedPath.includes('\\') ? '\\' : '/'}`
   }
+
   return normalizeExplorerAbsolutePath(parentPath)
 }

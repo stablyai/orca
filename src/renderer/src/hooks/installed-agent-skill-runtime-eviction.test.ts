@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 
 const discover = vi.hoisted(() => vi.fn<() => Promise<SkillDiscoveryResult>>())
+
 vi.mock('@/runtime/runtime-skills-client', () => ({ discoverSkillsForRuntimeTarget: discover }))
 
 import {
@@ -13,6 +14,7 @@ import {
 } from './installed-agent-skill-discovery'
 
 const result = (scannedAt: number): SkillDiscoveryResult => ({ skills: [], sources: [], scannedAt })
+
 const runtime = (environmentId: string) => ({ kind: 'environment' as const, environmentId })
 
 afterEach(() => {
@@ -26,14 +28,17 @@ it.each(['env', 'env"[,]'])(
     const owner = runtime(id)
     const other = runtime(`${id}-other`)
     discover.mockResolvedValue(result(1))
+
     for (const names of [['alpha'], ['beta'], undefined]) {
       await discoverInstalledAgentSkills(false, undefined, owner, names, ['home'])
     }
+
     await discoverInstalledAgentSkills(false, undefined, other, ['alpha'], ['home'])
     await discoverInstalledAgentSkills(false, undefined, { kind: 'local' }, ['alpha'], ['home'])
 
     evictInstalledAgentSkillDiscoveryForRuntimeEnvironments([id])
     discover.mockResolvedValue(result(2))
+
     for (const names of [['alpha'], ['beta'], undefined]) {
       const key = getRuntimeScopedSkillDiscoveryKey(owner, undefined, names, ['home'])
       expect(getCachedSkillDiscovery(key)).toBeNull()
@@ -41,6 +46,7 @@ it.each(['env', 'env"[,]'])(
         discoverInstalledAgentSkills(false, undefined, owner, names, ['home'])
       ).resolves.toEqual(result(2))
     }
+
     await expect(
       discoverInstalledAgentSkills(false, undefined, other, ['alpha'], ['home'])
     ).resolves.toEqual(result(1))

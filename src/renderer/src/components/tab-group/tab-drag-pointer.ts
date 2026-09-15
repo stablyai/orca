@@ -10,6 +10,7 @@ type DragPointerEvent = Pick<
  *  never tracks the pointer and panel-edge split targets would stay wrong. */
 export function getDragPointer(event: DragPointerEvent): { x: number; y: number } | null {
   const activator = event.activatorEvent
+
   if (
     activator &&
     typeof activator === 'object' &&
@@ -25,6 +26,7 @@ export function getDragPointer(event: DragPointerEvent): { x: number; y: number 
   }
 
   const initial = event.active.rect.current.initial
+
   if (!initial) {
     return null
   }

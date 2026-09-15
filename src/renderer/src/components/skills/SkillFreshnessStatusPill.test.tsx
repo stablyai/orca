@@ -63,6 +63,7 @@ function inventory(
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderPill(skillName: string): Promise<HTMLDivElement> {
@@ -72,6 +73,7 @@ async function renderPill(skillName: string): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(<SkillFreshnessStatusPill skillName={skillName} />)
   })
+
   return container
 }
 
@@ -88,6 +90,7 @@ describe('SkillFreshnessStatusPill', () => {
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null

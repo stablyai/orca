@@ -6,9 +6,11 @@ const YIELD_CHAR_COUNT = 256 * 1024
 
 async function collect(content: string, signal: AbortSignal): Promise<string[]> {
   const lines: string[] = []
+
   for await (const line of remoteSessionContentLines(content, signal)) {
     lines.push(line)
   }
+
   return lines
 }
 
@@ -45,6 +47,7 @@ describe('remote session content lines', () => {
     const controller = new AbortController()
     const seen: string[] = []
     setImmediate(() => controller.abort())
+
     const scan = (async () => {
       for await (const line of remoteSessionContentLines(
         'x'.repeat(YIELD_CHAR_COUNT * 3),
@@ -53,6 +56,7 @@ describe('remote session content lines', () => {
         seen.push(line)
       }
     })()
+
     await expect(scan).rejects.toThrow()
     expect(seen).toEqual([])
   })

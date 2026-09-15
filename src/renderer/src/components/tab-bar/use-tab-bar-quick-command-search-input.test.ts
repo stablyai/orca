@@ -23,6 +23,7 @@ function setup(onRun = vi.fn()): {
       selectedCommand: command
     })
   )
+
   return { onRun, result }
 }
 
@@ -55,6 +56,7 @@ describe('useTabBarQuickCommandSearchInput IME Enter ownership', () => {
   it('navigates hosted commands by the caller-provided composite key', () => {
     const entries = [{ key: 'local\0shared' }, { key: 'runtime:build\0shared' }]
     const onCommandValueChange = vi.fn()
+
     const { result } = renderHook(() =>
       useTabBarQuickCommandSearchInput({
         commandListRef: createRef<HTMLDivElement>(),

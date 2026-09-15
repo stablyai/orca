@@ -11,11 +11,14 @@ export function formatRemoteOrchestrationAsk(
       ? { stdout: `${JSON.stringify(response, null, 2)}\n`, stderr: '' }
       : formatRemoteCli(response)
   }
+
   if (json) {
     return { stdout: `${JSON.stringify(response.result)}\n`, stderr: '' }
   }
+
   if (isRecord(response.result.legacyCompatibility)) {
     const compatibility = response.result.legacyCompatibility
+
     if (compatibility.resumeRequired === true && typeof compatibility.resumeCommand === 'string') {
       return {
         stdout:
@@ -25,10 +28,13 @@ export function formatRemoteOrchestrationAsk(
       }
     }
   }
+
   const answer = typeof response.result.answer === 'string' ? response.result.answer : ''
   const thread = typeof response.result.threadId === 'string' ? response.result.threadId : 'unknown'
+
   const timeoutMs =
     typeof response.result.timeoutMs === 'number' ? response.result.timeoutMs : undefined
+
   const stderr = response.result.timedOut
     ? `ask timeout after ${timeoutMs ?? 0}ms (thread ${thread})\n`
     : response.result.cancelled
@@ -36,6 +42,7 @@ export function formatRemoteOrchestrationAsk(
         ? `ask connection closed (question ${String(response.result.messageId ?? 'unknown')})\n`
         : `ask cancelled (question ${String(response.result.messageId ?? 'unknown')})\n`
       : ''
+
   return { stdout: answer ? `${answer}\n` : '', stderr }
 }
 
@@ -43,6 +50,7 @@ export function getRemoteCliExitCode(command: string, response: RpcResponse): nu
   if (!response.ok || hasRemoteLifecycleRejection(response.result)) {
     return 1
   }
+
   if (
     command === 'orchestration ask' &&
     isRecord(response.result) &&
@@ -51,6 +59,7 @@ export function getRemoteCliExitCode(command: string, response: RpcResponse): nu
   ) {
     return 75
   }
+
   if (
     command === 'orchestration ask' &&
     isRecord(response.result) &&
@@ -58,6 +67,7 @@ export function getRemoteCliExitCode(command: string, response: RpcResponse): nu
   ) {
     return 1
   }
+
   return 0
 }
 

@@ -5,6 +5,7 @@ import { PendingCredentialCleanupCard } from '../src/settings/pending-credential
 
 export default function NativeSettingsRoute() {
   const router = useRouter()
+
   return (
     <SettingsMenuScreen
       push={(route) => router.push(route)}

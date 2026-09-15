@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStateValues: unknown[] = []
+
 let mockStateIndex = 0
+
 let mockSettingsSearchQuery = ''
 
 function resetMockState() {
@@ -10,16 +12,20 @@ function resetMockState() {
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useState: (initial: unknown) => {
       const i = mockStateIndex++
+
       if (mockStateValues[i] === undefined) {
         mockStateValues[i] = initial
       }
+
       const setter = (v: unknown) => {
         mockStateValues[i] = v
       }
+
       return [mockStateValues[i], setter]
     },
     useCallback: (fn: () => void) => fn,
@@ -192,19 +198,25 @@ function extractText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string') {
     return node
   }
+
   if (typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(extractText).join('')
   }
+
   const el = node as ReactElementLike
+
   if (el.props?.children) {
     return extractText(el.props.children)
   }
+
   return ''
 }
 
@@ -215,23 +227,31 @@ function findButtons(node: unknown): { text: string; onClick: (() => void) | und
     if (n == null) {
       return
     }
+
     if (typeof n === 'string' || typeof n === 'number') {
       return
     }
+
     if (Array.isArray(n)) {
       n.forEach(traverse)
+
       return
     }
+
     const el = n as ReactElementLike
     const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
     if (typeName === 'GhosttyImportButton' || typeName === 'WarpThemeImportButton') {
       traverse((el.type as (props: Record<string, unknown>) => unknown)(el.props))
+
       return
     }
+
     if (typeName === 'Button') {
       const text = extractText(el.props.children)
       buttons.push({ text, onClick: el.props.onClick as (() => void) | undefined })
     }
+
     // Why: appearance controls were split into subcomponents; expand them so
     // this wiring test can still find nested buttons without a full render tree.
     if (typeof el.type === 'function' && typeName !== 'Button') {
@@ -241,12 +261,14 @@ function findButtons(node: unknown): { text: string; onClick: (() => void) | und
         // Ignore components that need runtime context the test does not provide.
       }
     }
+
     if (el.props?.children) {
       traverse(el.props.children)
     }
   }
 
   traverse(node)
+
   return buttons
 }
 
@@ -254,23 +276,30 @@ function findTerminalThemeCatalogSection(node: unknown): ReactElementLike | null
   if (node == null) {
     return null
   }
+
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findTerminalThemeCatalogSection(child)
+
       if (found) {
         return found
       }
     }
+
     return null
   }
+
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
   if (typeName === 'TerminalThemeCatalogSection') {
     return el
   }
+
   if (el.props?.children) {
     return findTerminalThemeCatalogSection(el.props.children)
   }
+
   return null
 }
 
@@ -278,23 +307,30 @@ function findGhosttyImportModal(node: unknown): ReactElementLike | null {
   if (node == null) {
     return null
   }
+
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findGhosttyImportModal(child)
+
       if (found) {
         return found
       }
     }
+
     return null
   }
+
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
   if (typeName === 'GhosttyImportModal') {
     return el
   }
+
   if (el.props?.children) {
     return findGhosttyImportModal(el.props.children)
   }
+
   return null
 }
 
@@ -302,23 +338,30 @@ function findWarpThemeImportModal(node: unknown): ReactElementLike | null {
   if (node == null) {
     return null
   }
+
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findWarpThemeImportModal(child)
+
       if (found) {
         return found
       }
     }
+
     return null
   }
+
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
   if (typeName === 'WarpThemeImportModal') {
     return el
   }
+
   if (el.props?.children) {
     return findWarpThemeImportModal(el.props.children)
   }
+
   return null
 }
 
@@ -326,23 +369,30 @@ function findComponentByTypeName(node: unknown, targetTypeName: string): ReactEl
   if (node == null) {
     return null
   }
+
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findComponentByTypeName(child, targetTypeName)
+
       if (found) {
         return found
       }
     }
+
     return null
   }
+
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
   if (typeName === targetTypeName) {
     return el
   }
+
   if (el.props?.children) {
     return findComponentByTypeName(el.props.children, targetTypeName)
   }
+
   return null
 }
 
@@ -394,6 +444,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
   it('routes dark and light theme searches to the matching catalog target', () => {
     mockSettingsSearchQuery = 'Light Divider Color'
+
     const lightElement = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
@@ -407,6 +458,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     mockSettingsSearchQuery = 'Dark Theme'
     resetMockState()
+
     const darkElement = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
@@ -420,6 +472,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     mockSettingsSearchQuery = 'dark'
     resetMockState()
+
     const darkAliasElement = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
@@ -433,6 +486,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     mockSettingsSearchQuery = 'dark terminal theme'
     resetMockState()
+
     const darkPhraseElement = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
@@ -548,6 +602,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
         false
       )
       expect(findGhosttyImportModal(element)).toBeNull()
+
       if (!forceVisiblePrimary) {
         expect(findComponentByTypeName(element, 'SettingsSubsectionHeader')).toBeNull()
       }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { evaluatePackagedNodePtyCapability } from './packaged-node-pty-capability-oracle.mjs'
 
 const fixtureToken = 'a'.repeat(64)
+
 const channel = `\\\\.\\pipe\\orca-pty-native-capability-${fixtureToken}`
 
 function observation(pid, role) {
@@ -17,6 +18,7 @@ function passingEvidence() {
   const launcherExited = observation(4101, 'target-launcher-exited')
   const grandchild = observation(4102, 'target-grandchild')
   const canary = observation(5100, 'canary-shell')
+
   return {
     patchedExports: ['assignCurrentProcessToJob', 'listJobProcessIds', 'terminateJob'],
     fixtureToken,

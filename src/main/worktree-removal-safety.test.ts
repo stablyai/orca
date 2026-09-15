@@ -24,23 +24,28 @@ function missingPath(path: string): Error & { code: string } {
 function makeStatPath(filePaths: readonly string[], directoryPaths: readonly string[] = []) {
   const files = new Set(filePaths)
   const directories = new Set(directoryPaths)
+
   return async (path: string) => {
     if (files.has(path)) {
       return { type: 'file' }
     }
+
     if (directories.has(path)) {
       return { type: 'directory' }
     }
+
     throw missingPath(path)
   }
 }
 
 function makeReadPath(entries: readonly (readonly [string, unknown])[]) {
   const files = new Map(entries)
+
   return async (path: string) => {
     if (!files.has(path)) {
       throw missingPath(path)
     }
+
     return files.get(path)
   }
 }
@@ -51,6 +56,7 @@ async function withProcessPlatform<T>(
 ): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { value: platform })
+
   try {
     return await callback()
   } finally {
@@ -319,6 +325,7 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
 describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
   const repo = { path: '/repos/main' }
   const ownedMeta = { orcaCreatedAt: 1, orcaCreationSource: 'runtime' as const }
+
   const baseArgs = {
     meta: ownedMeta,
     worktreePath: '/workspaces/orca-owned',
@@ -345,6 +352,7 @@ describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
           if (path === '/workspaces/orca-owned') {
             return { type: 'symlink' }
           }
+
           throw missingPath(path)
         },
         isGitRepository
@@ -385,9 +393,11 @@ describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
 
   it('checks dangerous paths in the original path space before runtime translation', async () => {
     const homePath = homedir()
+
     const runtimeHomePath = homePath
       .replace(/^([A-Za-z]):/, (_match, drive: string) => `/mnt/${drive.toLowerCase()}`)
       .replace(/\\/g, '/')
+
     const isGitRepository = vi.fn().mockResolvedValue(false)
 
     await expect(
@@ -460,8 +470,10 @@ describe('canCleanupUnregisteredOrcaLeftoverDirectory', () => {
       if (path === '/mnt/c/workspaces/orca-owned') {
         return { type: 'directory' }
       }
+
       throw missingPath(path)
     })
+
     const isGitRepository = vi.fn().mockResolvedValue(false)
 
     await expect(

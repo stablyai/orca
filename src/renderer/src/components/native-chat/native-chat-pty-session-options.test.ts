@@ -24,6 +24,7 @@ describe('native chat PTY session options', () => {
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
+
     expect(surface.getSnapshot()).toEqual([])
   })
 
@@ -79,6 +80,7 @@ describe('native chat PTY session options', () => {
       model: 'opus',
       effort: 'xhigh'
     })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -86,6 +88,7 @@ describe('native chat PTY session options', () => {
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
+
     expect(surface.getSnapshot()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'model', valueSource: 'applied' }),
@@ -103,6 +106,7 @@ describe('native chat PTY session options', () => {
     const dispatch = vi.fn()
     const persist = vi.fn()
     const listener = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -110,6 +114,7 @@ describe('native chat PTY session options', () => {
       dispatchCommand: dispatch,
       persistSelection: persist
     })!
+
     surface.subscribe(listener)
 
     const effortResult = await surface.setOption('effort', 'high')
@@ -138,6 +143,7 @@ describe('native chat PTY session options', () => {
     })
     const dispatch = vi.fn().mockResolvedValue({ outcome: 'applied' })
     const onAgentPicker = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -145,6 +151,7 @@ describe('native chat PTY session options', () => {
       dispatchCommand: dispatch,
       onAgentPicker
     })!
+
     expect(surface.getSnapshot()[0]?.action).toBeUndefined()
 
     const result = await surface.setOption('model', 'fable')
@@ -167,6 +174,7 @@ describe('native chat PTY session options', () => {
     })
     const persist = vi.fn()
     const onAgentPicker = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -195,6 +203,7 @@ describe('native chat PTY session options', () => {
     })
     const persist = vi.fn()
     const onAgentPicker = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -221,6 +230,7 @@ describe('native chat PTY session options', () => {
     })
     const dispatch = vi.fn()
     const persist = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -228,6 +238,7 @@ describe('native chat PTY session options', () => {
       dispatchCommand: dispatch,
       persistSelection: persist
     })!
+
     const fastBefore = surface.getSnapshot().find(({ id }) => id === 'fastMode')
     expect(fastBefore?.action?.type).toBe('toggle-command')
     expect(fastBefore?.kind).toMatchObject({ type: 'boolean' })
@@ -254,6 +265,7 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -276,6 +288,7 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -302,6 +315,7 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -327,6 +341,7 @@ describe('native chat PTY session options', () => {
     })
     const dispatch = vi.fn()
     const persist = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -353,14 +368,17 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     let releaseFirst: (() => void) | undefined
+
     const dispatch = vi.fn((command: string) => {
       if (command === '/fast') {
         return new Promise<void>((resolve) => {
           releaseFirst = resolve
         })
       }
+
       return Promise.resolve()
     })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -392,6 +410,7 @@ describe('native chat PTY session options', () => {
       effort: 'high'
     })
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -421,12 +440,14 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     let resolveDispatch: (() => void) | undefined
+
     const dispatch = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveDispatch = resolve
         })
     )
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -453,12 +474,14 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     let resolveDispatch: (() => void) | undefined
+
     const dispatch = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveDispatch = resolve
         })
     )
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -490,13 +513,16 @@ describe('native chat PTY session options', () => {
       effort: 'high'
     })
     let resolveDispatch: (() => void) | undefined
+
     const dispatch = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveDispatch = resolve
         })
     )
+
     const persist = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -532,6 +558,7 @@ describe('native chat PTY session options', () => {
     })
     const dispatch = vi.fn()
     const onAgentPicker = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'codex',
       scopeKey: 'pty-1',
@@ -539,6 +566,7 @@ describe('native chat PTY session options', () => {
       dispatchCommand: dispatch,
       onAgentPicker
     })!
+
     expect(surface.getSnapshot().find(({ id }) => id === 'effort')?.action?.type).toBe(
       'agent-picker'
     )
@@ -555,12 +583,14 @@ describe('native chat PTY session options', () => {
       model: 'opus',
       effort: 'xhigh'
     })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
+
     surface.recordOutgoingCommand('/effort high')
     expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
@@ -578,6 +608,7 @@ describe('native chat PTY session options', () => {
       effort: 'xhigh'
     })
     const onAgentPicker = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -597,12 +628,14 @@ describe('native chat PTY session options', () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'future-model'
     })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
+
     const model = surface.getSnapshot()[0]
     expect(model.kind).toMatchObject({
       currentValue: 'future-model',
@@ -616,6 +649,7 @@ describe('native chat PTY session options', () => {
       effort: 'xhigh'
     })
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -646,6 +680,7 @@ describe('native chat PTY session options', () => {
 
   it('drops the reconciled row once the tracked model moves onto the host catalog', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus' })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -669,12 +704,14 @@ describe('native chat PTY session options', () => {
       fastMode: true
     })
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'cursor',
       scopeKey: 'pty-1',
       mode: 'live',
       dispatchCommand: dispatch
     })!
+
     expect(surface.getSnapshot().find(({ id }) => id === 'effort')?.settable).toBe(true)
 
     await surface.setOption('effort', 'high')
@@ -688,12 +725,14 @@ describe('native chat PTY session options', () => {
 
   it('names grok’s CLI default on load and still applies the rows it draws', async () => {
     const dispatch = vi.fn()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
       scopeKey: 'pty-1',
       mode: 'live',
       dispatchCommand: dispatch
     })!
+
     // Nothing tracked means no `-m` was emitted, so grok is on its own default.
     expect(surface.getSnapshot()[0]).toMatchObject({
       id: 'model',
@@ -718,6 +757,7 @@ describe('native chat PTY session options', () => {
     // that model, a fatal launch the user never opted into. No discovery has run here,
     // so `grok-4.6` is still only the seed's guess.
     let persisted: PersistedNativeChatSessionOptions = {}
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
       scopeKey: 'pty-1',
@@ -752,10 +792,13 @@ describe('native chat PTY session options', () => {
     // settling mid-dispatch moved which row is `isDefault` and looked like a model
     // switch — discarding a value the agent had already applied.
     let release = (): void => {}
+
     let markDispatched = (): void => {}
+
     const dispatched = new Promise<void>((resolve) => {
       markDispatched = resolve
     })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
       scopeKey: 'pty-1',
@@ -793,10 +836,13 @@ describe('native chat PTY session options', () => {
     // never running and blank the pill the user just set.
     const persistSelection = vi.fn()
     let release = (): void => {}
+
     let markDispatched = (): void => {}
+
     const dispatched = new Promise<void>((resolve) => {
       markDispatched = resolve
     })
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
       scopeKey: 'pty-1',
@@ -838,6 +884,7 @@ describe('native chat PTY session options', () => {
     // resolveNativeChatSessionOptionDefaults bailed and every new grok tab reverted to
     // the catalog default — the setting silently never survived a relaunch.
     let persisted: PersistedNativeChatSessionOptions = {}
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
       scopeKey: 'pty-1',

@@ -21,17 +21,21 @@ export function usePRBotAuthorOverrides(
     if (!client || connState !== 'connected') {
       sourceClientRef.current = null
       setLogins([])
+
       return
     }
+
     if (sourceClientRef.current !== client) {
       // Why: overrides belong to the connected runtime; never render a prior
       // host's classification while the replacement host is still loading.
       sourceClientRef.current = client
       setLogins([])
     }
+
     if (refreshKey == null) {
       return
     }
+
     let stale = false
     void botOverridesRead
       .request(client)
@@ -39,7 +43,9 @@ export function usePRBotAuthorOverrides(
         if (stale) {
           return
         }
+
         const overrides = botOverridesRead.interpret(response)
+
         if (overrides.accepted) {
           setLogins(overrides.value)
         }
@@ -47,6 +53,7 @@ export function usePRBotAuthorOverrides(
       .catch(() => {
         // Best-effort: without the setting the heuristics still classify most bots.
       })
+
     return () => {
       stale = true
     }

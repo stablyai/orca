@@ -49,6 +49,7 @@ function renderBubble(): { onDismiss: ReturnType<typeof vi.fn> } {
     </TooltipProvider>
   )
   onDismiss.mockClear()
+
   return { onDismiss }
 }
 

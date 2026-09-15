@@ -10,6 +10,7 @@ export function handleAiVaultGetFirstUserPrompt(
   if (!args || typeof args.filePath !== 'string' || typeof args.agent !== 'string') {
     return Promise.resolve({ prompt: null })
   }
+
   return readAiVaultFirstUserPromptInBackground({
     agent: args.agent,
     filePath: args.filePath,

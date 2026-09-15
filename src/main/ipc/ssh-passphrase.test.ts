@@ -20,6 +20,7 @@ describe('SSH credential requests', () => {
   it('resolves and removes the renderer prompt when its connection aborts', async () => {
     const window = credentialWindow()
     const controller = new AbortController()
+
     const pending = requestCredential(
       () => window,
       'target-1',
@@ -27,6 +28,7 @@ describe('SSH credential requests', () => {
       'Duo response',
       controller.signal
     )
+
     const request = vi.mocked(window.webContents.send).mock.calls[0][1] as { requestId: string }
 
     controller.abort()

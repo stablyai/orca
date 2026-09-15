@@ -10,6 +10,7 @@ describe('what a client does when it finds both models installed', () => {
       registration: 'orcad-peer',
       installedDirNames: BOTH_INSTALLED
     })
+
     expect(selection).toMatchObject({ outcome: 'use', model: 'orcad' })
     expect(selection.outcome === 'use' && selection.coexisting).toEqual(['relay-0.1.0+aa01'])
     expect(selection.outcome === 'use' && selection.note).toContain(
@@ -22,6 +23,7 @@ describe('what a client does when it finds both models installed', () => {
       registration: 'ssh-target',
       installedDirNames: BOTH_INSTALLED
     })
+
     expect(selection).toMatchObject({ outcome: 'use', model: 'relay' })
     expect(selection.outcome === 'use' && selection.coexisting).toEqual([
       'orcad-0.2.0+bb01',
@@ -36,6 +38,7 @@ describe('what a client does when it finds both models installed', () => {
       registration: 'orcad-peer',
       installedDirNames: ['relay-0.1.0+aa01']
     })
+
     expect(selection).toMatchObject({ outcome: 'use', model: 'orcad' })
   })
 
@@ -44,6 +47,7 @@ describe('what a client does when it finds both models installed', () => {
       registration: 'both',
       installedDirNames: BOTH_INSTALLED
     })
+
     expect(selection).toMatchObject({
       outcome: 'refuse',
       code: 'remote_host_registered_under_both_models'
@@ -60,6 +64,7 @@ describe('what a client does when it finds both models installed', () => {
       registration: 'none',
       installedDirNames: BOTH_INSTALLED
     })
+
     expect(selection).toMatchObject({
       outcome: 'refuse',
       code: 'remote_host_not_registered'
@@ -71,6 +76,7 @@ describe('what a client does when it finds both models installed', () => {
       registration: 'orcad-peer',
       installedDirNames: ['orcad-0.2.0+bb01']
     })
+
     expect(selection).toMatchObject({ outcome: 'use', model: 'orcad', note: null })
   })
 })

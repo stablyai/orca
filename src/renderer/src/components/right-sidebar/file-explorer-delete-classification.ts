@@ -7,6 +7,7 @@ import type { TreeNode } from './file-explorer-types'
 
 export function needsRemoteDeleteConfirmation(node: TreeNode): boolean {
   const owner = node.operationOwner ?? { kind: 'unresolved' as const }
+
   return owner.kind !== 'local' && getFileExplorerOperationRoute(owner) !== null
 }
 
@@ -18,6 +19,7 @@ export function getFileDeleteErrorMessage(error: unknown): string | null {
   if (!(error instanceof Error)) {
     return null
   }
+
   return error.message === getFileExplorerOwnerUnresolvedMessage()
     ? translate(
         'auto.components.right.sidebar.useFileDeletion.8b8ee9d22f',

@@ -1,7 +1,9 @@
 import { runProcess, runProcessSync } from '../shared/child-process/run-process'
 
 const PWSH_SYNC_PROBE_TIMEOUT_MS = 5000
+
 const PWSH_WARMUP_PROBE_TIMEOUT_MS = 30_000
+
 const PWSH_NEGATIVE_CACHE_TTL_MS = 30_000
 
 type PwshAvailabilityCache =
@@ -9,8 +11,11 @@ type PwshAvailabilityCache =
   | { available: false; cachedAt: number; retryable: boolean }
 
 let pwshAvailableCache: PwshAvailabilityCache | null = null
+
 let pwshWarmupInFlight: Promise<boolean> | null = null
+
 let pwshProbeInFlight: Promise<boolean> | null = null
+
 let pwshAvailabilityCacheGeneration = 0
 
 function isCacheFresh(cache: PwshAvailabilityCache): boolean {
@@ -28,13 +33,17 @@ function cachePwshProbeFailure(timedOut: boolean, startedAtGeneration: number): 
   if (startedAtGeneration !== pwshAvailabilityCacheGeneration) {
     return pwshAvailableCache?.available ?? false
   }
+
   // Why: pwsh.exe cold starts can exceed the sync timeout; do not let one slow
   // .NET startup disable the user's PowerShell 7 preference for the daemon.
   if (timedOut) {
     writePwshAvailabilityCache(null)
+
     return false
   }
+
   writePwshAvailabilityCache({ available: false, cachedAt: Date.now(), retryable: true })
+
   return false
 }
 
@@ -56,11 +65,13 @@ export function isPwshAvailable(): boolean {
 
   if (process.platform !== 'win32') {
     writePwshAvailabilityCache({ available: false, cachedAt: Date.now(), retryable: false })
+
     return false
   }
 
   const startedAtGeneration = pwshAvailabilityCacheGeneration
   let probe
+
   try {
     probe = runProcessSync({
       program: 'pwsh.exe',
@@ -71,9 +82,11 @@ export function isPwshAvailable(): boolean {
     // pwsh.exe is not on PATH at all.
     return cachePwshProbeFailure(false, startedAtGeneration)
   }
+
   if (probe.timedOut || probe.code !== 0) {
     return cachePwshProbeFailure(probe.timedOut, startedAtGeneration)
   }
+
   writePwshAvailabilityCache({ available: true })
 
   return pwshAvailableCache?.available ?? false
@@ -92,6 +105,7 @@ export function isPwshAvailableAsync(): Promise<boolean> {
 
   if (process.platform !== 'win32') {
     writePwshAvailabilityCache({ available: false, cachedAt: Date.now(), retryable: false })
+
     return Promise.resolve(false)
   }
 
@@ -107,16 +121,21 @@ export function isPwshAvailableAsync(): Promise<boolean> {
   })
     .then((probe) => {
       pwshProbeInFlight = null
+
       if (probe.timedOut || probe.code !== 0) {
         return cachePwshProbeFailure(probe.timedOut, startedAtGeneration)
       }
+
       writePwshAvailabilityCache({ available: true })
+
       return true
     })
     .catch(() => {
       pwshProbeInFlight = null
+
       return cachePwshProbeFailure(false, startedAtGeneration)
     })
+
   return pwshProbeInFlight
 }
 
@@ -124,10 +143,13 @@ export function warmPwshAvailabilityCache(): Promise<boolean> {
   if (pwshAvailableCache?.available) {
     return Promise.resolve(true)
   }
+
   if (process.platform !== 'win32') {
     writePwshAvailabilityCache({ available: false, cachedAt: Date.now(), retryable: false })
+
     return Promise.resolve(false)
   }
+
   if (pwshWarmupInFlight) {
     return pwshWarmupInFlight
   }
@@ -140,15 +162,20 @@ export function warmPwshAvailabilityCache(): Promise<boolean> {
   })
     .then((probe) => {
       pwshWarmupInFlight = null
+
       if (probe.timedOut || probe.code !== 0) {
         return cachePwshProbeFailure(probe.timedOut, startedAtGeneration)
       }
+
       writePwshAvailabilityCache({ available: true })
+
       return true
     })
     .catch(() => {
       pwshWarmupInFlight = null
+
       return cachePwshProbeFailure(false, startedAtGeneration)
     })
+
   return pwshWarmupInFlight
 }

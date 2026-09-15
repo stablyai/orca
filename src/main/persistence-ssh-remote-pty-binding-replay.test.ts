@@ -16,6 +16,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -30,9 +31,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -60,6 +63,7 @@ describe('Store', () => {
   it('retains an SSH host binding when a stale renderer clears its pty map', async () => {
     const store = await createStore()
     const hostId = 'ssh:ssh-1'
+
     const session = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -87,6 +91,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.upsertSshRemotePtyLease({
       targetId: 'ssh-1',
@@ -119,6 +124,7 @@ describe('Store', () => {
   it('does not replay a scoped SSH binding from a different host partition', async () => {
     const store = await createStore()
     const hostId = 'ssh:ssh-1'
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -146,6 +152,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.setWorkspaceSession(
       {
@@ -168,6 +175,7 @@ describe('Store', () => {
   it('retains a runtime host binding when no death evidence exists', async () => {
     const store = await createStore()
     const hostId = 'runtime:env-1'
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -195,6 +203,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.setWorkspaceSession(
       {
@@ -218,6 +227,7 @@ describe('Store', () => {
   it('restores a host binding after its SSH lease expires', async () => {
     const store = await createStore()
     const hostId = 'ssh:ssh-1'
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -245,6 +255,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.upsertSshRemotePtyLease({
       targetId: 'ssh-1',
@@ -276,6 +287,7 @@ describe('Store', () => {
   it('does not resurrect a host binding after its SSH lease was terminated', async () => {
     const store = await createStore()
     const hostId = 'ssh:ssh-1'
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -303,6 +315,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.upsertSshRemotePtyLease({
       targetId: 'ssh-1',
@@ -332,6 +345,7 @@ describe('Store', () => {
   it('retains surviving leaves while ignoring bindings for removed leaves', async () => {
     const store = await createStore()
     const hostId = 'runtime:env-1'
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -367,6 +381,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.setWorkspaceSession(
       {
@@ -395,6 +410,7 @@ describe('Store', () => {
   it('does not restore a binding with an explicit SSH termination tombstone', async () => {
     const store = await createStore()
     const hostId = 'ssh:ssh-1'
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -422,6 +438,7 @@ describe('Store', () => {
         }
       }
     }
+
     store.setWorkspaceSession(session, hostId)
     store.upsertSshRemotePtyLease({
       targetId: 'ssh-1',

@@ -66,6 +66,7 @@ export function createGitStatusRefreshScheduler(
       activityTimerFiresAt = Infinity
     }
   }
+
   const clearSafetyTimer = (): void => {
     if (safetyTimer !== null) {
       clearTimeout(safetyTimer)
@@ -93,6 +94,7 @@ export function createGitStatusRefreshScheduler(
         options.slowTaskBackoff.maxIntervalMs
       )
     )
+
     safetyTimer = setTimeout(() => {
       safetyTimer = null
       startRun('safety')
@@ -103,27 +105,36 @@ export function createGitStatusRefreshScheduler(
     if (disposed) {
       return
     }
+
     if (inFlight) {
       // Why: the trigger may describe a mutation after the running Git
       // snapshot, so one trailing refresh is required for freshness.
       pendingActivity = true
+
       return
     }
+
     const now = Date.now()
     const delay = Math.max(minDelayMs, pacing.lastRunEndedAt + requiredActivityIdleMs() - now)
+
     if (delay <= 0) {
       startRun('activity')
+
       return
     }
+
     const firesAt = now + delay
+
     if (activityTimer !== null) {
       // Why: an earlier-eligible trigger may pull a pending run forward, but a
       // later debounce window must never push an already-scheduled run back.
       if (firesAt >= activityTimerFiresAt) {
         return
       }
+
       clearActivityTimer()
     }
+
     activityTimerFiresAt = firesAt
     activityTimer = setTimeout(() => {
       activityTimer = null
@@ -136,6 +147,7 @@ export function createGitStatusRefreshScheduler(
     if (disposed || inFlight) {
       return
     }
+
     clearActivityTimer()
     clearSafetyTimer()
     inFlight = true
@@ -144,11 +156,13 @@ export function createGitStatusRefreshScheduler(
     const controller = new AbortController()
     activeController = controller
     let result: Promise<void>
+
     try {
       result = task({ reason, signal: controller.signal })
     } catch (error) {
       result = Promise.reject(error)
     }
+
     void result
       .catch(() => {
         // Status refresh errors are transient; the next signal or safety run retries.
@@ -165,18 +179,24 @@ export function createGitStatusRefreshScheduler(
             ? 0
             : Math.max(0, pacing.lastRunEndedAt - startedAt)
         }
+
         if (activeController === controller) {
           activeController = null
         }
+
         inFlight = false
+
         if (disposed) {
           return
         }
+
         if (pendingActivity) {
           pendingActivity = false
           scheduleActivityRun(0)
+
           return
         }
+
         if (safetyEnabled) {
           scheduleSafetyRun()
         }
@@ -188,18 +208,24 @@ export function createGitStatusRefreshScheduler(
       if (disposed) {
         return
       }
+
       const wasEnabled = safetyEnabled
       safetyEnabled = true
+
       if (wasEnabled) {
         return
       }
+
       clearSafetyTimer()
+
       if (inFlight) {
         // Why: a request aborted while hidden cannot serve as reveal catch-up;
         // retain one fresh run and wait for the old transport to settle.
         pendingActivity ||= activeController?.signal.aborted === true
+
         return
       }
+
       scheduleActivityRun(0)
     },
     pause: () => {
@@ -217,6 +243,7 @@ export function createGitStatusRefreshScheduler(
       if (disposed) {
         return
       }
+
       clearSafetyTimer()
       scheduleActivityRun(options.activityDebounceMs)
     },
@@ -224,6 +251,7 @@ export function createGitStatusRefreshScheduler(
       if (disposed) {
         return
       }
+
       clearSafetyTimer()
       scheduleActivityRun(0)
     },

@@ -12,6 +12,7 @@ const PI_COMPATIBLE_CASES = [
 
 function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
   const session = { key: 'session_id' as const, id: `${agent}-session-1` }
+
   return agent === 'omp' ? session : { ...session, transcriptPath: `/tmp/${agent}-session-1.jsonl` }
 }
 
@@ -107,6 +108,7 @@ describe('recordAgentProviderSession', () => {
         undefined,
         { providerSession }
       )
+
     for (const prompt of ['summarize the diff', 'summarize the diff again']) {
       store
         .getState()
@@ -154,6 +156,7 @@ describe('recordAgentProviderSession', () => {
       updatedAt: 10,
       origin: 'live' as const
     }
+
     const makeRecord = (
       agent: 'pi' | 'prime-agent' | 'claude',
       transcriptPath: string
@@ -181,11 +184,13 @@ describe('recordAgentProviderSession', () => {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
       }
     } as Partial<AppState>)
+
     const launchConfig = {
       agentCommand: "pi '--model' 'anthropic/claude-sonnet-4'",
       agentArgs: '--model anthropic/claude-sonnet-4',
       agentEnv: { PI_CODING_AGENT_DIR: '/tmp/pi-agent' }
     }
+
     const providerSession = {
       key: 'session_id' as const,
       id: 'pi-session-1',
@@ -248,11 +253,13 @@ describe('recordAgentProviderSession', () => {
     store.setState({
       tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
     } as Partial<AppState>)
+
     const providerSession = {
       key: 'session_id' as const,
       id: 'pi-session-1',
       transcriptPath: '/tmp/pi-session-1.jsonl'
     }
+
     store
       .getState()
       .setAgentStatus(

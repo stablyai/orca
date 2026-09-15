@@ -23,6 +23,7 @@ const execFile = promisify(execFileCb)
 // whole subsystem answered "unverifiable" about a table it could read. This keeps a wedged
 // `ps` bounded while staying out of reach of a host that is merely busy.
 export const PS_TIMEOUT_MS = 15_000
+
 const DEFAULT_SNAPSHOT_TTL_MS = PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
 
 type Snapshot<T> = { value: T; capturedAtMs: number; completedAtMs: number }
@@ -56,9 +57,11 @@ export function createProcessTableSnapshotReader<T = string>(
     const capturedAtMs = deps.now()
     const promise = deps.runPs()
     inFlight = promise
+
     try {
       const value = await promise
       cached = { value, capturedAtMs, completedAtMs: deps.now() }
+
       return value
     } finally {
       if (inFlight === promise) {
@@ -71,56 +74,71 @@ export function createProcessTableSnapshotReader<T = string>(
     if (cached && deps.now() - cached.completedAtMs < ttlMs) {
       return cached.value
     }
+
     if (inFlight) {
       return inFlight
     }
+
     if (freshQueued) {
       return freshQueued.promise
     }
+
     return runSnapshot()
   }
 
   async function getSnapshotWithAge(): Promise<{ value: T; capturedAgeMs: number }> {
     const value = await getSnapshot()
     const capturedAtMs = cached?.value === value ? cached.capturedAtMs : deps.now()
+
     return { value, capturedAgeMs: Math.max(0, deps.now() - capturedAtMs) }
   }
 
   function getFreshSnapshot(): Promise<T> {
     const requestSequence = ++sequence
+
     if (freshQueued?.startSequence === null) {
       return freshQueued.promise
     }
+
     const priorFresh = freshQueued?.promise ?? null
     const priorScan = inFlight
+
     const entry: { promise: Promise<T>; startSequence: number | null } = {
       promise: Promise.resolve(undefined as never),
       startSequence: null
     }
+
     entry.promise = Promise.resolve().then(async () => {
       for (const prior of [priorFresh, priorScan]) {
         if (!prior) {
           continue
         }
+
         try {
           await prior
         } catch {
           // The post-boundary scan below owns the confirmation result.
         }
       }
+
       entry.startSequence = ++sequence
+
       if (entry.startSequence <= requestSequence) {
         throw new Error('fresh process snapshot did not start after request')
       }
+
       return runSnapshot()
     })
     freshQueued = entry
+
     const clearQueued = (): void => {
       if (freshQueued === entry) {
         freshQueued = null
       }
     }
+
     void entry.promise.then(clearQueued, clearQueued)
+
     return entry.promise
   }
 
@@ -150,15 +168,20 @@ function applyProcessStartTimes(
   if ((!startTimesByPid || startTimesByPid.size === 0) && !dropUnstableStartTimes) {
     return rows
   }
+
   return rows.map((row) => {
     const startTime = startTimesByPid?.get(row.pid)
+
     if (startTime) {
       return { ...row, startTime }
     }
+
     if (dropUnstableStartTimes && row.startTime !== undefined) {
       const { startTime: _unstable, ...withoutStartTime } = row
+
       return withoutStartTime
     }
+
     return row
   })
 }
@@ -170,6 +193,7 @@ function createProcessTableCapture(
 ): ProcessTableCapture {
   let lenientRows: ProcessTableRow[] | null = null
   let strictResult: { rows: ProcessTableRow[] } | { error: unknown } | null = null
+
   return {
     lenient: () =>
       (lenientRows ??= applyProcessStartTimes(
@@ -191,9 +215,11 @@ function createProcessTableCapture(
           strictResult = { error }
         }
       }
+
       if ('error' in strictResult) {
         throw strictResult.error
       }
+
       return strictResult.rows
     }
   }
@@ -204,22 +230,27 @@ function assertWholeCapture(stdout: string): string {
   if (Buffer.byteLength(stdout, 'utf-8') >= PS_MAX_BUFFER_BYTES) {
     throw new ProcessTableCaptureError('capture_truncated')
   }
+
   if (!/\S/.test(stdout)) {
     throw new ProcessTableCaptureError('empty_capture')
   }
+
   return stdout
 }
 
 /** Field 22 (`starttime`) of `/proc/<pid>/stat`, read past the parenthesised comm. */
 export function parseLinuxProcStatStartTime(stat: string): string | null {
   const closingParen = stat.lastIndexOf(')')
+
   if (closingParen === -1) {
     return null
   }
+
   const tail = stat
     .slice(closingParen + 1)
     .trim()
     .split(/\s+/)
+
   return tail[19] || null
 }
 
@@ -230,30 +261,37 @@ async function readLinuxProcessStartTimes(
   if (process.platform !== 'linux') {
     return undefined
   }
+
   const candidates = rows.filter((row) => row.tty !== undefined && row.tty !== '?')
+
   const starts = await Promise.all(
     candidates.map(async (row) => {
       try {
         const startTime = parseLinuxProcStatStartTime(
           await readFile(`/proc/${row.pid}/stat`, 'utf8')
         )
+
         return startTime ? ([row.pid, startTime] as const) : null
       } catch {
         return null
       }
     })
   )
+
   const result = new Map<number, string>()
+
   for (const entry of starts) {
     if (entry) {
       result.set(entry[0], entry[1])
     }
   }
+
   return result
 }
 
 async function captureProcessTable(args: readonly string[]): Promise<string> {
   let stdout: string
+
   try {
     ;({ stdout } = await execFile('ps', [...args], {
       encoding: 'utf-8',
@@ -265,8 +303,10 @@ async function captureProcessTable(args: readonly string[]): Promise<string> {
     if ((error as { code?: unknown } | null)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
       throw new ProcessTableCaptureError('capture_truncated')
     }
+
     throw error
   }
+
   return assertWholeCapture(stdout)
 }
 
@@ -275,6 +315,7 @@ const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>
     const stdout = await captureProcessTable(PS_ARGS)
     const baseCapture = createProcessTableCapture(stdout)
     const startTimesByPid = await readLinuxProcessStartTimes(baseCapture.lenient())
+
     return createProcessTableCapture(stdout, startTimesByPid, process.platform === 'linux')
   },
   now: () => Date.now()
@@ -329,6 +370,7 @@ export const PROCESS_TABLE_EVIDENCE_BUDGET_MS = 1_200
  *  that can least afford one. */
 export async function withEvidenceBudget<T>(pending: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       pending,
@@ -349,6 +391,7 @@ export async function getStrictProcessTableSnapshotWithAge(): Promise<{
   capturedAgeMs: number
 }> {
   const snapshot = await withEvidenceBudget(processTableReader.getSnapshotWithAge())
+
   return { rows: snapshot.value.strict(), capturedAgeMs: snapshot.capturedAgeMs }
 }
 

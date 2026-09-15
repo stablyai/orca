@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const callMock = vi.fn()
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -41,6 +42,7 @@ describe('orchestration request-show', () => {
       method: 'orchestration.workerStart',
       interpretation: 'Request request_1 already took effect.'
     }
+
     callMock.mockResolvedValue(result)
 
     await runRequestShow()
@@ -50,6 +52,7 @@ describe('orchestration request-show', () => {
       boolean,
       (value: unknown) => string
     ]
+
     expect(render(value)).toBe(
       'request_1 [completed] orchestration.workerStart\nRequest request_1 already took effect.'
     )

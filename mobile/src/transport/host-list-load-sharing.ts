@@ -8,6 +8,7 @@ export type HostListSnapshot = {
 // Why: concurrent callers share a slow Keychain pass; durable writes invalidate
 // it so later loads cannot receive stale snapshots (#8791).
 let inflight: Promise<HostListSnapshot> | null = null
+
 let revision = 0
 
 export function getHostListLoadRevision(): number {
@@ -20,6 +21,7 @@ export function shareHostListLoad(
   if (inflight) {
     return inflight
   }
+
   const started = load().finally(() => {
     // Why: a dropped pass can settle after its replacement started; only retire
     // the entry still on offer, or the replacement is silently discarded.
@@ -27,7 +29,9 @@ export function shareHostListLoad(
       inflight = null
     }
   })
+
   inflight = started
+
   return started
 }
 

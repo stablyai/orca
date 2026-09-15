@@ -58,6 +58,7 @@ describe('Jira search abort', () => {
 
     expect(acquireMock).toHaveBeenCalledTimes(2)
     expect(acquireMock.mock.calls[0]?.[0]).toBeInstanceOf(AbortSignal)
+
     for (const call of jiraRequestMock.mock.calls) {
       expect(call[2]?.signal).toBeInstanceOf(AbortSignal)
       expect(JSON.parse(call[2].body).fields).not.toContain('description')

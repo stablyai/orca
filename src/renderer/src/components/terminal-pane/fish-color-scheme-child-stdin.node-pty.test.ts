@@ -31,18 +31,29 @@ import {
 // tty_handoff introduced by the fish 4.0 rewrite. An older fish cannot produce the
 // subscribe at all, so the test would pass vacuously instead of guarding anything.
 const FISH = resolveFishBinary(4)
+
 const FISH_BIN = FISH.path
+
 const itWithFish = FISH.available ? it : it.skip
 
 const PROMPT_MARK = 'ORCA997> '
+
 const COLOR_SCHEME_REPORT_PREFIX = '\x1b[?997'
+
 const ARM_2031 = '\x1b[?2031h'
+
 const WITHDRAW_2031 = '\x1b[?2031l'
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const DA1_REPLY = '\x1b[?62;4;6;22c'
+
 const DSR_REPLY = '\x1b[1;1R'
+
 const OSC_10_REPLY = '\x1b]10;rgb:eeee/eeee/eeee\x1b\\'
+
 const OSC_11_REPLY = '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\'
+
 const TERMINAL_QUERY_REPLIES: readonly (readonly [string, string])[] = [
   ['\x1b[0c', DA1_REPLY],
   ['\x1b[c', DA1_REPLY],
@@ -52,42 +63,56 @@ const TERMINAL_QUERY_REPLIES: readonly (readonly [string, string])[] = [
   ['\x1b]11;?\x07', OSC_11_REPLY],
   ['\x1b]11;?\x1b\\', OSC_11_REPLY]
 ]
+
 const QUERY_CARRY_LENGTH = Math.max(...TERMINAL_QUERY_REPLIES.map(([query]) => query.length)) - 1
 
 type MutableState = Record<string, unknown>
+
 let mockStoreState: MutableState = {}
+
 let storeSubscribers: ((state: MutableState) => void)[] = []
+
 let transportFactoryQueue: unknown[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: vi.fn()
 }))
+
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
+
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false) }))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => mockStoreState,
     subscribe: (listener: (state: MutableState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
     }
   }
 }))
+
 // Why: connectPanePty calls useNotificationDispatch's useCallback outside React.
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: <T>(fn: T): T => fn
 }))
+
 vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const next = transportFactoryQueue.shift()
+
     if (!next) {
       throw new Error('No mock transport queued')
     }
+
     return next
   })
 }))
@@ -102,15 +127,19 @@ function createPtyBackedTransport(write: (data: string) => void): {
 } {
   const sent: string[] = []
   const captured: { current: ((data: string) => void) | null } = { current: null }
+
   const send = (data: string): boolean => {
     sent.push(data)
     write(data)
+
     return true
   }
+
   const transport = {
     attach: vi.fn(),
     connect: vi.fn(async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
       captured.current = callbacks?.onData ?? null
+
       return 'fish-pty'
     }),
     disconnect: vi.fn(),
@@ -123,6 +152,7 @@ function createPtyBackedTransport(write: (data: string) => void): {
     getPtyId: vi.fn(() => 'fish-pty'),
     getConnectionId: vi.fn(() => null)
   }
+
   return { transport, sent, emit: (data: string) => captured.current?.(data) }
 }
 
@@ -130,6 +160,7 @@ function createPane(paneId: number): Record<string, unknown> {
   const activeBuffer = { type: 'normal' as const, viewportY: 0, baseY: 0, cursorY: 0, cursorX: 0 }
   const container = new EventTarget()
   Object.defineProperty(container, 'dataset', { configurable: true, value: {} })
+
   return {
     id: paneId,
     leafId: LEAF_1,
@@ -221,12 +252,15 @@ const countOf = (haystack: string, needle: string): number => haystack.split(nee
 
 async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (predicate()) {
       return true
     }
+
     await sleep(10)
   }
+
   return false
 }
 
@@ -235,19 +269,23 @@ function createTerminalQueryResponder(write: (reply: string) => void): {
   getCarryLength: () => number
 } {
   let carry = ''
+
   return {
     accept: (chunk) => {
       const carriedLength = carry.length
       const scan = carry + chunk
       carry = scan.slice(-QUERY_CARRY_LENGTH)
+
       for (let at = 0; at < scan.length; at += 1) {
         for (const [query, reply] of TERMINAL_QUERY_REPLIES) {
           if (!scan.startsWith(query, at)) {
             continue
           }
+
           if (at + query.length > carriedLength) {
             write(reply)
           }
+
           at += query.length - 1
           break
         }
@@ -261,12 +299,15 @@ function allChunkPartitions(input: string): string[][] {
   if (input.length === 0) {
     return [[]]
   }
+
   const partitions: string[][] = []
+
   for (let end = 1; end <= input.length; end += 1) {
     for (const suffix of allChunkPartitions(input.slice(end))) {
       partitions.push([input.slice(0, end), ...suffix])
     }
   }
+
   return partitions
 }
 
@@ -274,6 +315,7 @@ function collectTerminalQueryReplies(chunks: readonly string[]): string[] {
   const replies: string[] = []
   const responder = createTerminalQueryResponder((reply) => replies.push(reply))
   chunks.forEach(responder.accept)
+
   return replies
 }
 
@@ -315,6 +357,7 @@ describe('terminal query responder', () => {
 
   it('answers concatenated queries once each in source order across every partition', () => {
     const input = '\x1b]10;?\x07\x1b]11;?\x07'
+
     for (const chunks of allChunkPartitions(input)) {
       expect(collectTerminalQueryReplies(chunks)).toEqual([OSC_10_REPLY, OSC_11_REPLY])
     }
@@ -324,10 +367,12 @@ describe('terminal query responder', () => {
     const replies: string[] = []
     const responder = createTerminalQueryResponder((reply) => replies.push(reply))
     let maxCarryLength = 0
+
     for (const fragment of `\x1b]10;?${'x'.repeat(10_000)}`) {
       responder.accept(fragment)
       maxCarryLength = Math.max(maxCarryLength, responder.getCarryLength())
     }
+
     for (const fragment of '\x1b]10;?\x07') {
       responder.accept(fragment)
     }
@@ -451,6 +496,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
     }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     globalThis.cancelAnimationFrame = vi.fn()
@@ -460,6 +506,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
     delete (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame
     delete (globalThis as { cancelAnimationFrame?: unknown }).cancelAnimationFrame
     delete (globalThis as { window?: unknown }).window
+
     if (configHome) {
       rmSync(configHome, { recursive: true, force: true })
       configHome = null
@@ -528,10 +575,12 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       // on DA1 and re-probes every prompt. These are harness bytes, never renderer output.
       term.onData((chunk) => {
         rendered += chunk
+
         // Maximal fragmentation keeps query handling independent of node-pty chunk boundaries.
         for (const fragment of chunk) {
           answerTerminalQueries.accept(fragment)
         }
+
         emit(chunk)
       })
 
@@ -548,11 +597,13 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
         expect(await waitUntil(() => rendered.includes(PROMPT_MARK), 15_000)).toBe(true)
         // The arm is the settle signal.
         expect(await waitUntil(() => rendered.includes(ARM_2031), 5_000)).toBe(true)
+
         // Vacuity guard: the renderer observer must actually have seen the subscribe,
         // otherwise "sent nothing" is trivially true. Checked here and not at the end,
         // because the last decision races between fish's subscribe and its withdrawal.
         const paneMode2031 = (deps as { paneMode2031Ref: { current: Map<number, boolean> } })
           .paneMode2031Ref.current
+
         expect(await waitUntil(() => paneMode2031.get(1) === true, 5_000)).toBe(true)
 
         // Type-ahead is the deterministic leak shape: queue the child command while an
@@ -581,6 +632,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
 
         const childRead =
           rendered.slice(renderedBeforeChildInput).match(/CHILD-READ:[^\r\n]*/)?.[0] ?? ''
+
         // The merge-blocking assertion: the child's STDIN, not the screen. A rendered-output
         // check passes while npx/brew confirm prompts still eat the bytes.
         // Scope note: the harness' own DA1/CPR/OSC-11 answers can still land here — that is
@@ -596,6 +648,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       } finally {
         term.write('exit\r')
         await waitUntil(() => exited, 3_000)
+
         try {
           term.kill()
         } catch {

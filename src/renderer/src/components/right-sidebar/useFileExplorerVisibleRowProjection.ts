@@ -36,27 +36,35 @@ export function getFileExplorerIgnoredQueryRelativePaths(
   showDotfiles: boolean
 ): string[] {
   const { dirCache, expanded, worktreePath } = input
+
   if (!worktreePath) {
     return []
   }
 
   const relativePaths: string[] = []
+
   const visitChildren = (parentPath: string): void => {
     const cached = dirCache[parentPath]
+
     if (!cached?.children) {
       return
     }
+
     for (const row of cached.children) {
       if (!showDotfiles && isDotfileRelativePath(row.relativePath)) {
         continue
       }
+
       relativePaths.push(row.relativePath)
+
       if (row.isDirectory && expanded.has(row.path)) {
         visitChildren(row.path)
       }
     }
   }
+
   visitChildren(worktreePath)
+
   return relativePaths
 }
 
@@ -67,9 +75,11 @@ export function createVisibleFileExplorerRowProjection(
   const { dirCache, expanded, worktreePath } = input
   const visibleFlatRows: TreeNode[] = []
   const rowsByPath = new Map<string, TreeNode>()
+
   if (!worktreePath) {
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
+
   if (options.nameFilter) {
     return createNameFilteredFileExplorerProjection({
       collapsedPaths: options.nameFilterCollapsedPaths ?? undefined,
@@ -85,25 +95,31 @@ export function createVisibleFileExplorerRowProjection(
     if (!options.showDotfiles && isDotfileRelativePath(row.relativePath)) {
       return true
     }
+
     return !options.showGitIgnoredFiles && isPathIgnored(options.ignoredSet, row.relativePath)
   }
 
   const visitChildren = (parentPath: string): void => {
     const cached = dirCache[parentPath]
+
     if (!cached?.children) {
       return
     }
+
     for (const row of cached.children) {
       if (shouldHideRow(row)) {
         continue
       }
+
       visibleFlatRows.push(row)
       rowsByPath.set(row.path, row)
+
       if (row.isDirectory && expanded.has(row.path)) {
         visitChildren(row.path)
       }
     }
   }
+
   visitChildren(worktreePath)
 
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
@@ -113,11 +129,13 @@ function relativePathListsEqual(a: readonly string[], b: readonly string[]): boo
   if (a.length !== b.length) {
     return false
   }
+
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) {
       return false
     }
   }
+
   return true
 }
 
@@ -133,16 +151,19 @@ function useContentStableRelativePaths(relativePaths: string[], enabled: boolean
   // Why: filters need fresh identities per keystroke and must not evict the tree signature.
   const prevRef = useRef<string[] | null>(null)
   const prev = prevRef.current
+
   // Why publish `stable`, not `relativePaths`: the ref must hold what this hook actually
   // returned. Publishing the input instead leaves the ref one commit behind, so a wave of
   // content-equal arrays flips identity on every render — the churn this hook exists to stop.
   const stable =
     enabled && prev && relativePathListsEqual(prev, relativePaths) ? prev : relativePaths
+
   // Why write-in-effect: render must stay pure (react-doctor); the first commit of a new
   // list loses stability, never staleness.
   useEffect(() => {
     prevRef.current = stable
   }, [stable])
+
   return stable
 }
 
@@ -165,6 +186,7 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
+
   const rebuiltRelativePaths = useMemo(
     () =>
       activeRepoSupportsGit
@@ -177,15 +199,19 @@ export function useFileExplorerVisibleRowProjection(
         : EMPTY_RELATIVE_PATHS,
     [activeRepoSupportsGit, dirCache, expanded, nameFilter, showDotfiles, worktreePath]
   )
+
   // Why: the name-filter list is debounced per keystroke, so it must keep a fresh
   // identity; only the dirCache-derived list needs stability across wave commits.
   const relativePaths = useContentStableRelativePaths(rebuiltRelativePaths, !nameFilter)
+
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&
     Boolean(activeWorktreeId) &&
     Boolean(worktreePath) &&
     relativePaths.length > 0
+
   const shouldDebounceIgnoredQuery = nameFilter !== null
+
   const effectiveIgnoredPaths = useFileExplorerIgnoredPaths({
     activeWorktreeId,
     canLoadIgnoredPaths,
@@ -193,7 +219,9 @@ export function useFileExplorerVisibleRowProjection(
     shouldDebounceIgnoredQuery,
     worktreePath
   })
+
   const ignoredSet = useMemo(() => buildIgnoredSet(effectiveIgnoredPaths), [effectiveIgnoredPaths])
+
   const rowProjection = useMemo(
     () =>
       createVisibleFileExplorerRowProjection(
@@ -217,14 +245,17 @@ export function useFileExplorerVisibleRowProjection(
       worktreePath
     ]
   )
+
   const nameFilterExpandedPaths = useMemo(
     () => getFileExplorerNameFilterExpandedPaths(rowProjection, nameFilter?.query ?? ''),
     [nameFilter?.query, rowProjection]
   )
+
   const ignoredByRelativePath = useMemo(
     () => (showGitIgnoredFiles ? ignoredSet : new Set<string>()),
     [ignoredSet, showGitIgnoredFiles]
   )
+
   const toggleGitIgnoredFiles = useCallback(() => {
     void updateSettings({ showGitIgnoredFiles: !showGitIgnoredFiles })
   }, [showGitIgnoredFiles, updateSettings])

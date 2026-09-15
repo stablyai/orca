@@ -59,15 +59,19 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     setIsRefreshing,
     updateWorktreeGitIdentity
   } = model
+
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
       return
     }
+
     if (refreshInFlightRef.current) {
       return
     }
+
     // Why: button isn't disabled until next render; guard a rapid double-click from starting duplicate git subprocesses.
     refreshInFlightRef.current = true
+
     const initialRequestKey = checksPanelAsyncResultKey(
       prCacheKey,
       branch,
@@ -75,6 +79,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       pr?.prRepo,
       pr?.headSha
     )
+
     const refreshRequestKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}::${Date.now()}::${Math.random()}`
     refreshRequestKeyRef.current = refreshRequestKey
     const isCurrentRequest = (): boolean => refreshRequestKeyRef.current === refreshRequestKey
@@ -94,6 +99,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       prChecksStatus: pr?.checksStatus,
       refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null
     })
+
     try {
       if (activeWorktreeId && activeWorktreePath && !isFolder) {
         const snapshotIdentity = readChecksPanelRefreshGitIdentitySnapshot({
@@ -101,6 +107,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           contextKey: panelContextKey,
           currentBranch: branch
         })
+
         if (snapshotIdentity.kind === 'changed') {
           updateWorktreeGitIdentity(activeWorktreeId, {
             head: snapshotIdentity.head,
@@ -108,8 +115,10 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           })
           // Why: this click discovered a terminal branch switch; let branch-keyed render/effects restart instead of refreshing old PR data.
           refreshOutcome = 'branch-changed'
+
           return
         }
+
         try {
           const statusContext = {
             settings: ownerSettings,
@@ -117,14 +126,17 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             worktreePath: activeWorktreePath,
             connectionId: activeConnectionId ?? undefined
           }
+
           const status = await getRuntimeGitStatus(statusContext, {
             admissionTier: 'interactive'
           })
+
           const observedBranch = status.branch ?? (status.head ? null : undefined)
           updateWorktreeGitIdentity(activeWorktreeId, {
             head: status.head,
             branch: observedBranch
           })
+
           if (
             observedBranch !== undefined &&
             hasChecksPanelGitStatusBranchChanged({
@@ -134,9 +146,12 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           ) {
             // Why: this click discovered a terminal branch switch; let branch-keyed render/effects restart instead of refreshing old PR data.
             refreshOutcome = 'branch-changed'
+
             return
           }
+
           let freshRemoteStatus = status.upstreamStatus
+
           if (activeWorktreePushTarget) {
             freshRemoteStatus = await getRuntimeGitUpstreamStatus(
               statusContext,
@@ -150,6 +165,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           ) {
             freshRemoteStatus = await getRuntimeGitUpstreamStatus(statusContext)
           }
+
           if (
             isCurrentRequest() &&
             shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, panelContextKey)
@@ -169,6 +185,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           console.warn('[ChecksPanel] pre-refresh git identity refresh failed', error)
         }
       }
+
       if (isGitLabReviewContext) {
         const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
           repoPath: repo.path,
@@ -182,11 +199,14 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           linkedAzureDevOpsPR,
           linkedGiteaPR
         })
+
         if (!isCurrentRequest()) {
           return
         }
+
         const refreshedGitLabReview =
           refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+
         if (refreshedGitLabReview) {
           await fetchGitLabDetails({
             mrNumberOverride: refreshedGitLabReview.number,
@@ -199,16 +219,21 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           setComments([])
           refreshOutcome = 'no-review'
         }
+
         return
       }
+
       const refreshStoreState = useAppStore.getState()
       const rawPRRefreshState = refreshStoreState.prRefreshStates[prCacheKey]
+
       const startedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
         rawPRRefreshState,
         refreshStoreState.prRefreshSequences,
         prCacheKey
       )
+
       let refreshedPR: PRInfo | null = null
+
       try {
         refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
@@ -223,9 +248,11 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           expireGitHubPRRefreshState(prCacheKey, startedPRRefreshToken)
         }
       }
+
       if (!isCurrentRequest()) {
         return
       }
+
       await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
@@ -238,11 +265,14 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         linkedAzureDevOpsPR,
         linkedGiteaPR
       })
+
       if (!isCurrentRequest()) {
         return
       }
+
       if (refreshedPR) {
         refreshOutcome = 'pr'
+
         const prRequestKey = checksPanelAsyncResultKey(
           prCacheKey,
           branch,
@@ -250,11 +280,14 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           refreshedPR.prRepo,
           refreshedPR.headSha
         )
+
         if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentRequest()) {
           return
         }
+
         // Why: a forced refresh can find the PR number before React repaints from prCache; mark this refresh's checks current.
         asyncResultKeyRef.current = prRequestKey
+
         // Why: pass the refreshed headSha directly; fetchChecks's closure captured a stale one (force-pushes, PR-number changes).
         const refreshedChecks = fetchPRChecks(
           repo.path,
@@ -268,10 +301,13 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
               return
             }
+
             setChecks(result)
+
             const signature = JSON.stringify(
               result.map((c) => `${c.name}:${c.status}:${c.conclusion}`)
             )
+
             pollIntervalRef.current =
               signature === prevChecksRef.current
                 ? Math.min(pollIntervalRef.current * 2, 120_000)
@@ -282,12 +318,15 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
               return
             }
+
             console.warn('Failed to fetch PR checks:', err)
             setChecks([])
           }
         )
+
         setChecksLoading(true)
         setCommentsLoading(true)
+
         const refreshedComments = fetchPRComments(repo.path, refreshedPR.number, {
           force: true,
           repoId: repo.id,
@@ -302,10 +341,12 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
               return
             }
+
             console.warn('Failed to fetch PR comments:', err)
             setComments([])
           }
         )
+
         await Promise.all([
           refreshedChecks.finally(() => {
             if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
@@ -342,6 +383,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         durationMs: Date.now() - refreshStartedAt,
         currentRequest: isCurrentRequest()
       })
+
       if (isCurrentRequest()) {
         refreshInFlightRef.current = false
         setIsRefreshing(false)
@@ -396,6 +438,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     pollIntervalRef,
     refreshInFlightRef
   ])
+
   return { handleRefresh }
 }
 

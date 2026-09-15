@@ -42,13 +42,17 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     const leafKey = this.getLeafKey(stagedLeaf.tabId, stagedLeaf.leafId)
     const currentLeaf = this.leaves.get(leafKey)
     const parked = currentLeaf === undefined
+
     const terminalHandle = parked
       ? this.handleByPtyId.get(ptyId)
       : this.handleByLeafKey.get(leafKey)
+
     if (!terminalHandle) {
       return null
     }
+
     const pty = this.ptysById.get(ptyId)
+
     const leaf = parked
       ? pty?.connected &&
         pty.tabId === stagedLeaf.tabId &&
@@ -65,10 +69,13 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       : currentLeaf.ptyId === ptyId
         ? currentLeaf
         : null
+
     if (!leaf) {
       return null
     }
+
     const processIncarnation = this.getTerminalProcessIncarnation(terminalHandle)
+
     return processIncarnation ? { leaf, terminalHandle, processIncarnation } : null
   }
 
@@ -81,10 +88,13 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     worktreeId: string
   ): { executionHostId?: ExecutionHostId } {
     const fromPtyId = getPtyExecutionHost(ptyId)
+
     if (fromPtyId === 'foreign') {
       return {}
     }
+
     const hostId = fromPtyId ?? this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+
     return hostId ? { executionHostId: hostId } : {}
   }
 
@@ -97,7 +107,9 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     const hookRow = paneKey
       ? selectRuntimeHookAgentRowForPane(this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [])
       : null
+
     const hookAgent = isTuiAgent(hookRow?.agentType) ? hookRow.agentType : null
+
     const agentIdentity = resolvePublishedPaneAgentIdentity({
       hookAgent,
       hookIsLive: hookRow?.agentIsLive,
@@ -105,6 +117,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       foregroundAgent,
       title
     })
+
     return agentIdentity ? { agentIdentity } : {}
   }
 
@@ -115,28 +128,37 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     runtimeWorktreeId: string
   ): RuntimeWorktreePsSummary | null {
     const exact = summaries.get(runtimeWorktreeId)
+
     if (exact) {
       return exact
     }
+
     if (missingRuntimeWorktreeIds.has(runtimeWorktreeId)) {
       return null
     }
+
     const parsed = parseRuntimeWorktreeId(runtimeWorktreeId)
+
     if (!parsed) {
       return null
     }
+
     const comparisonPlatform =
       runtimeWorktreeSummaryPathIndex.platformByRepoId.get(parsed.repoId) ?? process.platform
+
     const indexed = findRuntimeWorktreeSummaryByPath(
       runtimeWorktreeSummaryPathIndex,
       parsed.repoId,
       parsed.worktreePath,
       comparisonPlatform
     )
+
     if (indexed) {
       return indexed
     }
+
     missingRuntimeWorktreeIds.add(runtimeWorktreeId)
+
     return null
   }
 
@@ -150,6 +172,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
     const title = getLatestLeafTitle(leaf, tab?.title ?? null)
+
     // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
     // restored surface whose PTY died with a prior run still reads connected.
     // Demote only on a controller-proven absence, and only for locally-scoped
@@ -165,6 +188,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       !leaf.ptyId.startsWith('remote:') &&
       parseAppSshPtyId(leaf.ptyId) === null &&
       this.ptyController?.hasPty?.(leaf.ptyId) !== true
+
     return {
       handle: this.issueHandle(leaf),
       ptyId: leaf.ptyId,

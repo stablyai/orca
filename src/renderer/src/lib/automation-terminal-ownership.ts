@@ -30,13 +30,17 @@ function isOwnedTabIdentityCurrent(
   args: Omit<CreateAutomationTerminalOwnershipArgs, 'store' | 'runtimeKind'>
 ): boolean {
   const parsedPane = parsePaneKey(args.paneKey)
+
   if (!parsedPane || parsedPane.tabId !== args.tabId) {
     return false
   }
+
   const matchingTabs = Object.entries(state.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
     tabs.filter((tab) => tab.id === args.tabId).map((tab) => ({ tab, worktreeId }))
   )
+
   const match = matchingTabs[0]
+
   if (
     matchingTabs.length !== 1 ||
     !match ||
@@ -46,15 +50,19 @@ function isOwnedTabIdentityCurrent(
   ) {
     return false
   }
+
   if (match.tab.ptyId !== null && match.tab.ptyId !== args.ptyId) {
     return false
   }
+
   if ((state.ptyIdsByTabId[args.tabId] ?? []).some((ptyId) => ptyId !== args.ptyId)) {
     return false
   }
+
   const layout = state.terminalLayoutsByTabId[args.tabId]
   const root = layout?.root
   const ptyIdsByLeafId = layout?.ptyIdsByLeafId
+
   if (
     !layout ||
     !root ||
@@ -65,7 +73,9 @@ function isOwnedTabIdentityCurrent(
   ) {
     return false
   }
+
   const layoutPtyId = ptyIdsByLeafId?.[parsedPane.leafId]
+
   return layoutPtyId === undefined || layoutPtyId === args.ptyId
 }
 
@@ -74,14 +84,17 @@ export function createAutomationTerminalOwnership(
 ): AutomationTerminalOwnership {
   let consumed = false
   let userTookOver = false
+
   // Why: input stamps are coalesced, so compare the freshest value (including a
   // pending keystroke) or a take-over inside the coalescing window is missed.
   const inputAtLaunch = readLastTerminalInputAt(
     args.store.getState().lastTerminalInputAtByPaneKey,
     args.paneKey
   )
+
   const observeTakeover = (): void => {
     const state = args.store.getState()
+
     if (
       (state.activeWorktreeId === args.worktreeId &&
         state.activeTabId === args.tabId &&
@@ -91,6 +104,7 @@ export function createAutomationTerminalOwnership(
       userTookOver = true
     }
   }
+
   const unsubscribe = args.store.subscribe(observeTakeover)
   observeTakeover()
 
@@ -98,6 +112,7 @@ export function createAutomationTerminalOwnership(
     if (consumed) {
       return
     }
+
     consumed = true
     unsubscribe()
   }
@@ -108,18 +123,23 @@ export function createAutomationTerminalOwnership(
       if (consumed) {
         return false
       }
+
       // Why: completion and exit can race; consume before any identity check so
       // only the first successful-result path can retire this exact session.
       consumed = true
       unsubscribe()
       observeTakeover()
+
       if (args.runtimeKind !== 'desktop' || args.ptyId.startsWith('remote:') || userTookOver) {
         return false
       }
+
       const state = args.store.getState()
+
       if (!isOwnedTabIdentityCurrent(state, args)) {
         return false
       }
+
       try {
         // Why: closeTab centrally owns provider shutdown and pane removal; a
         // direct kill here would create a second teardown authority.
@@ -128,8 +148,10 @@ export function createAutomationTerminalOwnership(
         // Why: a throwing close leaves the terminal alive; report not-closed so
         // the run keeps its (still-valid) terminal identity and no stale clear runs.
         console.error('[automations] Failed to close owned automation terminal:', error)
+
         return false
       }
+
       return true
     }
   }
@@ -143,15 +165,20 @@ export function bindAutomationTerminal(
   title?: string
 ): AutomationTerminalOwnership | null {
   const parsedPane = parsePaneKey(paneKey)
+
   if (!parsedPane || parsedPane.tabId !== tab.id) {
     throw new Error('Automation terminal pane identity is invalid.')
   }
+
   const store = useAppStore.getState()
+
   if (title) {
     store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
+
   store.updateTabPtyId(tab.id, ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(parsedPane.leafId, ptyId))
+
   const ownership =
     runtimeKind === 'local'
       ? createAutomationTerminalOwnership({
@@ -164,5 +191,6 @@ export function bindAutomationTerminal(
           runtimeKind: 'desktop'
         })
       : null
+
   return ownership
 }

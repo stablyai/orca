@@ -13,6 +13,7 @@ type KimiSessionIndexCacheEntry = {
 }
 
 export const KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS = 64
+
 // Active Vault scans refresh this window; closing the surface releases parsed
 // index maps soon without making a live Kimi session reread on every scan.
 export const KIMI_WORK_DIR_CACHE_TTL_MS = 5 * 60_000
@@ -24,6 +25,7 @@ export class KimiSessionIndexCache {
 
   beginRead(): number {
     this.nextGeneration += 1
+
     return this.nextGeneration
   }
 
@@ -33,6 +35,7 @@ export class KimiSessionIndexCache {
         clearTimeout(entry.timer)
       }
     }
+
     this.entries.clear()
     // Why: a read already awaiting stat/load when its owner clears the cache
     // may finish later, but must not silently recreate the released entry.
@@ -41,6 +44,7 @@ export class KimiSessionIndexCache {
 
   delete(indexPath: string, generation = Number.POSITIVE_INFINITY): void {
     const entry = this.entries.get(indexPath)
+
     if (entry && entry.generation <= generation) {
       this.forget(indexPath, entry)
     }
@@ -55,12 +59,16 @@ export class KimiSessionIndexCache {
     if (generation < this.minimumCacheGeneration) {
       return load()
     }
+
     const cached = this.entries.get(indexPath)
     const now = Date.now()
+
     if (cached && cached.expiresAt > now && identitiesMatch(cached.identity, identity)) {
       this.remember(indexPath, cached, now)
+
       return cached.value
     }
+
     if (cached && cached.generation > generation) {
       // Why: a slower, older stat must not replace a newer file generation
       // that another concurrent scan already cached for the same path.
@@ -74,7 +82,9 @@ export class KimiSessionIndexCache {
       timer: null,
       value: load()
     }
+
     this.remember(indexPath, entry, now)
+
     return entry.value
   }
 
@@ -90,20 +100,25 @@ export class KimiSessionIndexCache {
     if (this.entries.get(indexPath) !== entry) {
       return
     }
+
     if (entry.timer) {
       clearTimeout(entry.timer)
     }
+
     this.entries.delete(indexPath)
   }
 
   private remember(indexPath: string, entry: KimiSessionIndexCacheEntry, now: number): void {
     const replaced = this.entries.get(indexPath)
+
     if (replaced?.timer && replaced !== entry) {
       clearTimeout(replaced.timer)
     }
+
     if (entry.timer) {
       clearTimeout(entry.timer)
     }
+
     entry.expiresAt = now + KIMI_WORK_DIR_CACHE_TTL_MS
     entry.timer = setTimeout(() => this.forget(indexPath, entry), KIMI_WORK_DIR_CACHE_TTL_MS)
     entry.timer.unref()
@@ -112,9 +127,11 @@ export class KimiSessionIndexCache {
 
     while (this.entries.size > KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS) {
       const oldest = this.entries.entries().next().value
+
       if (!oldest) {
         return
       }
+
       this.forget(oldest[0], oldest[1])
     }
   }

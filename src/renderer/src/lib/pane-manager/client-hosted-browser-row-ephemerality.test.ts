@@ -19,6 +19,7 @@ import {
 } from './client-hosted-browser-row-state'
 
 const WT = 'wt-1'
+
 const CLIENT_HOSTED_PAGE_ID = 'client-hosted-page-1'
 
 let initialState: AppState
@@ -28,6 +29,7 @@ function seedLocalBrowserTab(): string {
     title: 'Local page',
     activate: true
   })
+
   return workspace.id
 }
 
@@ -95,6 +97,7 @@ describe('client-hosted rows and the persisted workspace session', () => {
 
   it('leaves the store tab model untouched when a row arrives', () => {
     seedLocalBrowserTab()
+
     const before = {
       browserTabs: useAppStore.getState().browserTabsByWorktree[WT],
       unifiedTabs: useAppStore.getState().unifiedTabsByWorktree[WT],

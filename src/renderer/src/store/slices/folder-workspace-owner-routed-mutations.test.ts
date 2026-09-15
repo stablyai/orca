@@ -10,9 +10,13 @@ import { createTestStore } from './store-test-helpers'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const folderWorkspacesUpdate = vi.fn()
+
 const folderWorkspacesDelete = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 const projectGroup: ProjectGroup = {
@@ -173,9 +177,11 @@ describe('folder workspace owner-routed mutations', () => {
     const olderUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
+
     const newerUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: false })
+
     resolveNewer({ ...folderWorkspace, isUnread: false, updatedAt: 3 })
     await newerUpdate
     resolveOlder({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
@@ -192,6 +198,7 @@ describe('folder workspace owner-routed mutations', () => {
       .mockResolvedValueOnce({ ...folderWorkspace, comment: 'Second store' })
     const firstStore = createTestStore()
     const secondStore = createTestStore()
+
     for (const store of [firstStore, secondStore]) {
       store.setState({
         projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
@@ -227,6 +234,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
+
     await store.getState().fetchFolderWorkspaces()
     resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
     await pendingUpdate
@@ -254,6 +262,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { isUnread: true })
+
     await store.getState().fetchFolderWorkspaces()
     resolveUpdate({ ...folderWorkspace, isUnread: true, updatedAt: 2 })
     await pendingUpdate
@@ -264,16 +273,19 @@ describe('folder workspace owner-routed mutations', () => {
 
   it('does not fence a runtime update when the local same-ID catalog refreshes', async () => {
     const localWorkspace = makeFolderWorkspace({ updatedAt: 3 })
+
     const runtimeWorkspace = {
       ...makeFolderWorkspace(),
       executionHostId: 'runtime:env-owner' as const
     }
+
     let resolveRuntimeUpdate!: (response: {
       id: string
       ok: true
       result: { folderWorkspace: FolderWorkspace }
       _meta: { runtimeId: string }
     }) => void
+
     runtimeEnvironmentCall.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -294,6 +306,7 @@ describe('folder workspace owner-routed mutations', () => {
         { isUnread: true },
         { executionHostId: 'runtime:env-owner' }
       )
+
     await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
     await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
     resolveRuntimeUpdate({
@@ -330,6 +343,7 @@ describe('folder workspace owner-routed mutations', () => {
     const pendingUpdate = store
       .getState()
       .updateFolderWorkspace(folderWorkspace.id, { lastActivityAt: 10 })
+
     store.setState({
       folderWorkspaces: [{ ...folderWorkspace, lastActivityAt: 20 }]
     })
@@ -432,11 +446,13 @@ describe('folder workspace owner-routed mutations', () => {
 
   it('deletes only the selected owner row when workspace IDs collide', async () => {
     const localFolder = makeFolderWorkspace({ executionHostId: 'local' })
+
     const runtimeFolder = makeFolderWorkspace({
       name: 'Runtime collision',
       folderPath: '/runtime/platform',
       executionHostId: 'runtime:env-owner'
     })
+
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
     const shutdownWorktreeBrowsers = vi.fn().mockResolvedValue(undefined)

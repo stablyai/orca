@@ -58,8 +58,10 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
         workspaceBoardDragPreviewOpenRef.current = false
         setWorkspaceBoardDragPreviewOpen(false)
       }
+
       return
     }
+
     workspaceBoardOpenRef.current = true
     workspaceBoardDragPreviewOpenRef.current = false
     // Why: opening the board is the user action; recording here avoids a
@@ -81,8 +83,10 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     (open: boolean) => {
       if (open) {
         openWorkspaceBoard()
+
         return
       }
+
       closeWorkspaceBoard()
     },
     [closeWorkspaceBoard, openWorkspaceBoard]
@@ -91,8 +95,10 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
   const toggleWorkspaceBoard = useCallback(() => {
     if (workspaceBoardOpenRef.current) {
       closeWorkspaceBoard()
+
       return
     }
+
     openWorkspaceBoard()
   }, [closeWorkspaceBoard, openWorkspaceBoard])
 
@@ -100,6 +106,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     if (workspaceBoardOpenRef.current || workspaceBoardDragPreviewOpenRef.current) {
       return
     }
+
     workspaceBoardDragPreviewOpenRef.current = true
     setWorkspaceBoardDragPreviewOpen(true)
   }, [])
@@ -110,8 +117,10 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
         workspaceBoardDragPreviewOpenRef.current = false
         setWorkspaceBoardDragPreviewOpen(false)
       }
+
       return
     }
+
     workspaceBoardOpenRef.current = true
     workspaceBoardDragPreviewOpenRef.current = false
     useAppStore.getState().recordFeatureInteraction('workspace-board')
@@ -123,6 +132,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     if (!workspaceBoardDragPreviewOpenRef.current) {
       return
     }
+
     workspaceBoardDragPreviewOpenRef.current = false
     setWorkspaceBoardDragPreviewOpen(false)
   }, [])
@@ -136,17 +146,21 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
       if (event.key !== 'Escape') {
         return
       }
+
       if (workspaceBoardMenuOpen) {
         return
       }
+
       if (isWorkspaceBoardEditableTarget(event.target)) {
         return
       }
+
       // Why: Escape should dismiss interactive nested overlays before this
       // companion panel, but non-interactive tooltips should not trap it.
       if (document.querySelector(WORKSPACE_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR)) {
         return
       }
+
       event.preventDefault()
       closeWorkspaceBoard()
     }
@@ -154,11 +168,13 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     // Why: the workspace board is a non-modal companion panel, so focus may
     // be outside the sheet when Escape should still dismiss it.
     document.addEventListener('keydown', handleKeyDown, true)
+
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [closeWorkspaceBoard, workspaceBoardMenuOpen, workspaceBoardOpen])
 
   useEffect(() => {
     window.addEventListener(TOGGLE_WORKSPACE_BOARD_EVENT, toggleWorkspaceBoard)
+
     return () => window.removeEventListener(TOGGLE_WORKSPACE_BOARD_EVENT, toggleWorkspaceBoard)
   }, [toggleWorkspaceBoard])
 

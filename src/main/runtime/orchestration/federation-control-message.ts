@@ -20,15 +20,19 @@ export function encodeFederatedControlMessage(message: FederatedControlMessage):
 
 export function parseFederatedControlMessage(payload: string): FederatedControlMessage {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(payload)
   } catch {
     throw new OrchestrationError('invalid_argument', 'Federated control message is invalid JSON.')
   }
+
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new OrchestrationError('invalid_argument', 'Federated control message is invalid.')
   }
+
   const message = parsed as Partial<FederatedControlMessage>
+
   if (
     typeof message.from !== 'string' ||
     typeof message.subject !== 'string' ||
@@ -38,6 +42,7 @@ export function parseFederatedControlMessage(payload: string): FederatedControlM
   ) {
     throw new OrchestrationError('invalid_argument', 'Federated control message is incomplete.')
   }
+
   return {
     from: message.from,
     subject: message.subject,
@@ -59,16 +64,19 @@ export function importFederatedControlMessage(
   }
 ): { imported: boolean; type: MessageType } {
   const attachment = db.getRemoteDispatchAttachment(params.dispatchId)
+
   if (!attachment) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Remote Dispatch ${params.dispatchId} was not found.`
     )
   }
+
   db.requireRun(attachment.home_run_id)
   const message = parseFederatedControlMessage(params.payload)
   const recipient = `dispatch:${params.dispatchId}`
   const existing = db.getMessageById(params.messageId)
+
   if (existing) {
     if (
       existing.run_id !== attachment.home_run_id ||
@@ -86,8 +94,10 @@ export function importFederatedControlMessage(
         `Federated control message ${params.messageId} conflicts with an existing message.`
       )
     }
+
     return { imported: false, type: message.type }
   }
+
   db.insertMessage({
     id: params.messageId,
     runId: attachment.home_run_id,
@@ -100,5 +110,6 @@ export function importFederatedControlMessage(
     threadId: message.threadId ?? undefined,
     payload: message.payload ?? undefined
   })
+
   return { imported: true, type: message.type }
 }

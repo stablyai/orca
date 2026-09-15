@@ -8,14 +8,17 @@ export function areWorktreeListsEqual(
   if (left === right) {
     return true
   }
+
   if (left.length !== right.length) {
     return false
   }
+
   for (let index = 0; index < left.length; index += 1) {
     if (!areWorktreesEqual(left[index]!, right[index]!)) {
       return false
     }
   }
+
   return true
 }
 
@@ -65,14 +68,17 @@ function areStringArraysEqual(left: readonly string[], right: readonly string[])
   if (left === right) {
     return true
   }
+
   if (left.length !== right.length) {
     return false
   }
+
   for (let index = 0; index < left.length; index += 1) {
     if (left[index] !== right[index]) {
       return false
     }
   }
+
   return true
 }
 
@@ -80,9 +86,11 @@ function arePullRequestsEqual(left: Worktree['linkedPR'], right: Worktree['linke
   if (left === right) {
     return true
   }
+
   if (!left || !right) {
     return false
   }
+
   return left.number === right.number && left.state === right.state
 }
 
@@ -93,12 +101,15 @@ function areAgentRowsEqual(
   if (left === right) {
     return true
   }
+
   if (left.length !== right.length) {
     return false
   }
+
   for (let index = 0; index < left.length; index += 1) {
     const a = left[index]!
     const b = right[index]!
+
     if (
       a.paneKey !== b.paneKey ||
       a.parentPaneKey !== b.parentPaneKey ||
@@ -116,5 +127,6 @@ function areAgentRowsEqual(
       return false
     }
   }
+
   return true
 }

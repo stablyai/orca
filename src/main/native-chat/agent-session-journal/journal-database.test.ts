@@ -23,6 +23,7 @@ import type { JournalRow } from './journal-row-schema'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 
 let root: string
+
 let dbPath: string
 
 function epochRow(seq: number, epoch = 'epoch-1'): JournalRow {
@@ -51,11 +52,13 @@ afterEach(async () => {
 describe('journal database open', () => {
   it('creates both tables and reads back every load-bearing pragma', () => {
     const opened = openJournalDatabase(dbPath)
+
     try {
       const tables = opened.db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
         .all()
         .map((entry) => (entry as { name: string }).name)
+
       expect(tables).toContain('journal_rows')
       expect(tables).toContain('journal_sessions')
       expect(opened.db.pragma('journal_mode', { simple: true })).toBe('wal')
@@ -78,6 +81,7 @@ describe('journal database open', () => {
     const before = await stat(dbPath)
 
     const latched = openJournalDatabase(dbPath)
+
     try {
       expect(latched.readOnly).toBe(true)
       expect(journalPragmaNumber(latched.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION + 5)
@@ -86,6 +90,7 @@ describe('journal database open', () => {
     } finally {
       latched.db.close()
     }
+
     expect((await stat(dbPath)).size).toBe(before.size)
     expect(journalPragmaNumber(openJournalDatabase(dbPath).db, 'user_version')).toBe(
       JOURNAL_DB_SCHEMA_VERSION + 5
@@ -105,12 +110,15 @@ describe('journal database open', () => {
 describe('journal row statements', () => {
   it('serves replay, resume, discard and suffix truncation from the primary key', () => {
     const opened = openJournalDatabase(dbPath)
+
     try {
       const { db } = opened
       db.exec('BEGIN IMMEDIATE')
+
       for (let seq = 1; seq <= 5; seq += 1) {
         insertJournalRow(db, 'session-1', epochRow(seq))
       }
+
       insertJournalRow(db, 'session-1', epochRow(1, 'epoch-old'))
       upsertJournalSessionRow(db, 'session-1', 'epoch-1', 42)
       db.exec('COMMIT')
@@ -142,6 +150,7 @@ describe('journal row statements', () => {
 
   it('refuses a duplicate sequence inside one epoch', () => {
     const opened = openJournalDatabase(dbPath)
+
     try {
       insertJournalRow(opened.db, 'session-1', epochRow(1))
       expect(() => insertJournalRow(opened.db, 'session-1', epochRow(1))).toThrow()
@@ -153,6 +162,7 @@ describe('journal row statements', () => {
 
   it('upserts the session projection in place', () => {
     const opened = openJournalDatabase(dbPath)
+
     try {
       upsertJournalSessionRow(opened.db, 'session-1', 'epoch-1', 1)
       upsertJournalSessionRow(opened.db, 'session-1', 'epoch-2', 2)
@@ -172,6 +182,7 @@ describe('schema creation', () => {
   // read-only: it stamps its own version on and writes through v1 SQL.
   it('publishes no table until the version bump commits with it', () => {
     const original = Database.prototype.pragma
+
     const pragma = vi.spyOn(Database.prototype, 'pragma').mockImplementation(function (
       this: Database.Database,
       sql: string,
@@ -180,6 +191,7 @@ describe('schema creation', () => {
       if (sql.startsWith('user_version =')) {
         throw new Error('crash before the version is published')
       }
+
       return original.call(this, sql, options)
     })
 
@@ -187,6 +199,7 @@ describe('schema creation', () => {
     pragma.mockRestore()
 
     const inspected = new Database(dbPath)
+
     try {
       expect(inspected.pragma('user_version', { simple: true })).toBe(0)
       expect(

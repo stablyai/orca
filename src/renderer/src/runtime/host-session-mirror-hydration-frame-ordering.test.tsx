@@ -9,6 +9,7 @@ import type * as WebSessionTerminalHandleEventsModule from './web-session-termin
 vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
   const actual = await importOriginal<typeof WebSessionTerminalHandleEventsModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return {
     ...actual,
     queueAcceptedWebSessionTerminalSnapshot: frameOrderingMocks.queueAcceptedSnapshot
@@ -17,6 +18,7 @@ vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
 
 vi.mock('./use-runtime-session-mirror-environment-key', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return {
     useRuntimeSessionMirrorEnvironmentKey: frameOrderingMocks.runtimeSessionMirrorEnvironmentKey
   }
@@ -24,12 +26,14 @@ vi.mock('./use-runtime-session-mirror-environment-key', async () => {
 
 vi.mock('./web-session-terminal-orphan-recovery', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return { recoverWebSessionTerminalOrphansBeforeApply: frameOrderingMocks.recoverSnapshot }
 })
 
 vi.mock('./web-runtime-session', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeSessionModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+
   return { ...actual, createWebRuntimeSessionTerminal: frameOrderingMocks.createTerminal }
 })
 
@@ -89,6 +93,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
   it('does not let late bootstrap inventory restore a pre-restart terminal handle', async () => {
     let resolveListAll: (response: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((request: { method: string }) =>
       request.method === 'session.tabs.listAll'
         ? new Promise((resolve) => {
@@ -101,15 +106,19 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
     const beforeRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
     beforeRestart.publicationEpoch = 'before-restart'
+
     if (beforeRestart.tabs[0]?.type !== 'terminal') {
       throw new Error('fixture must contain a terminal surface')
     }
+
     beforeRestart.tabs[0].terminal = 'terminal-before-restart'
     const afterRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
     afterRestart.publicationEpoch = 'after-restart'
+
     if (afterRestart.tabs[0]?.type !== 'terminal') {
       throw new Error('fixture must contain a terminal surface')
     }
+
     afterRestart.tabs[0].terminal = 'terminal-after-restart'
     const afterRestartPtyId = `remote:${ENV}@@terminal-after-restart`
 
@@ -141,6 +150,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
   it('does not let late bootstrap inventory repopulate after a newer empty inventory', async () => {
     let resolveListAll: (response: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((request: { method: string }) =>
       request.method === 'session.tabs.listAll'
         ? new Promise((resolve) => {
@@ -153,9 +163,11 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
     const beforeRestart = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
     beforeRestart.publicationEpoch = 'before-empty-inventory'
+
     if (beforeRestart.tabs[0]?.type !== 'terminal') {
       throw new Error('fixture must contain a terminal surface')
     }
+
     beforeRestart.tabs[0].terminal = 'terminal-before-empty-inventory'
 
     await publish(findSubscription('session.tabs.subscribeAll'), {
@@ -182,6 +194,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
   it('does not let a late bootstrap runtime id retire a newer stream runtime', async () => {
     let resolveListAll: (response: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((request: { method: string }) =>
       request.method === 'session.tabs.listAll'
         ? new Promise((resolve) => {
@@ -196,9 +209,11 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     const backgroundSurfaceId = `${backgroundParentTabId}::${LEAF_ID}`
     const firstRuntimeB = makeHostSnapshot(BG_WT, backgroundSurfaceId, backgroundParentTabId)
     firstRuntimeB.publicationEpoch = 'runtime-b-epoch'
+
     if (firstRuntimeB.tabs[0]?.type !== 'terminal') {
       throw new Error('fixture must contain a terminal surface')
     }
+
     firstRuntimeB.tabs[0].terminal = 'runtime-b-terminal-1'
     await publish(
       findSubscription('session.tabs.subscribeAll'),
@@ -208,9 +223,11 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
     const lateRuntimeA = makeHostSnapshot(WT, HOST_SURFACE_ID, HOST_PARENT_TAB_ID)
     lateRuntimeA.publicationEpoch = 'runtime-a-epoch'
+
     if (lateRuntimeA.tabs[0]?.type !== 'terminal') {
       throw new Error('fixture must contain a terminal surface')
     }
+
     lateRuntimeA.tabs[0].terminal = 'runtime-a-terminal'
     await act(async () => {
       resolveListAll({
@@ -225,9 +242,11 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     const secondRuntimeB = makeHostSnapshot(BG_WT, backgroundSurfaceId, backgroundParentTabId)
     secondRuntimeB.publicationEpoch = 'runtime-b-epoch'
     secondRuntimeB.snapshotVersion = 2
+
     if (secondRuntimeB.tabs[0]?.type !== 'terminal') {
       throw new Error('fixture must contain a terminal surface')
     }
+
     secondRuntimeB.tabs[0].terminal = 'runtime-b-terminal-2'
     await publish(
       findSubscription('session.tabs.subscribeAll'),
@@ -308,6 +327,7 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
   // there cannot be covered for by another handler.
   it('the initial listAll releases the pane it parked', async () => {
     let resolveListAll: (response: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((request: { method: string }) =>
       request.method === 'session.tabs.listAll'
         ? new Promise((resolve) => {
@@ -390,6 +410,7 @@ describe('mirror latch verdicts against real stream failures', () => {
 
   it('a rejected inventory keeps a parked pane parked', async () => {
     let rejectListAll: (error: Error) => void = () => {}
+
     runtimeCall.mockImplementation((request: { method: string }) =>
       request.method === 'session.tabs.listAll'
         ? new Promise((_resolve, reject) => {

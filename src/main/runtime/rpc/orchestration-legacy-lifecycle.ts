@@ -20,15 +20,19 @@ export async function handleLegacyLifecycleSend(args: {
   params: LegacySendParams
 }): Promise<unknown> {
   const { runtime, authority, request, params } = args
+
   if (!['heartbeat', 'worker_done', 'escalation'].includes(params.type ?? '')) {
     return undefined
   }
+
   const payload = parseLegacyPayload(params.payload)
+
   const dispatch = authority.resolveWorkerDispatch(request, {
     terminalHandle: params.from,
     dispatchId: stringValue(payload.dispatchId),
     taskId: stringValue(payload.taskId)
   })
+
   if (!dispatch) {
     if (params.type === 'worker_done' && !isWorkerOutcome(payload.outcome)) {
       throw new OrchestrationError(
@@ -36,12 +40,16 @@ export async function handleLegacyLifecycleSend(args: {
         'worker_done requires outcome=succeeded|failed for a current Dispatch.'
       )
     }
+
     return undefined
   }
+
   if (!params.to) {
     throw new OrchestrationError('invalid_argument', 'Legacy lifecycle mail requires --to.')
   }
+
   const db = runtime.getOrchestrationDb()
+
   if (!db.isLegacyCoordinatorDeliveryTarget(dispatch.run_id, params.to)) {
     throw new OrchestrationError(
       'request_mismatch',
@@ -59,14 +67,17 @@ export async function handleLegacyLifecycleSend(args: {
       'Legacy worker_done outcome must be succeeded or failed when provided.'
     )
   }
+
   const principal = authority.attestWorker(request, dispatch)
   const operation = operationIdentity(request, params.type as string, { ...params, payload })
+
   const inferredOutcome =
     params.type === 'worker_done'
       ? isWorkerOutcome(payload.outcome)
         ? payload.outcome
         : inferLegacyWorkerOutcome(params.subject)
       : undefined
+
   const existingId =
     params.type === 'worker_done'
       ? db.findLegacyWorkerCompletion({
@@ -78,6 +89,7 @@ export async function handleLegacyLifecycleSend(args: {
           payload: params.payload ?? null
         })?.id
       : undefined
+
   const committed = db.commitLegacyLifecycleOperation({
     principalId: principal.id,
     operationKey: operation.key,
@@ -108,9 +120,11 @@ export async function handleLegacyLifecycleSend(args: {
             }
           : { kind: 'message_only' }
   })
+
   if (!committed.duplicate) {
     runtime.notifyMessageArrived(committed.message.to_handle, committed.message.type)
   }
+
   return {
     message: committed.message,
     ...(committed.settlement ? { lifecycle: committed.settlement } : {}),

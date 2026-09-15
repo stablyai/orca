@@ -1,8 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 const originalExitCode = process.exitCode
+
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
@@ -25,6 +28,7 @@ it('raises a lifecycle rejection for the CLI error boundary', async () => {
       }
     }
   }
+
   callMock.mockResolvedValueOnce(response)
 
   await expect(

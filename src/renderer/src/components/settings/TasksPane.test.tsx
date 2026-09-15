@@ -39,6 +39,7 @@ vi.mock('./TaskSourceLinearSetup', () => ({
     onOpenIntegrations: () => void
   }) => {
     mocks.linearSetupProps.push(props)
+
     return <div data-testid="linear-setup">Linear setup steps</div>
   }
 }))
@@ -64,6 +65,7 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   ),
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
+
     return <div data-testid="jira-setup">Jira setup</div>
   }
 }))
@@ -95,6 +97,7 @@ const baseSettings = {
 } as GlobalSettings
 
 const INCOMPLETE_BANNER = 'Some visible providers still need setup'
+
 const LINEAR_SETUP_MARKER = 'data-testid="linear-setup"'
 
 function renderPane(): string {
@@ -102,6 +105,7 @@ function renderPane(): string {
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderInteractivePane(): Promise<HTMLDivElement> {
@@ -111,6 +115,7 @@ async function renderInteractivePane(): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(<TasksPane settings={baseSettings} updateSettings={vi.fn()} />)
   })
+
   return container
 }
 
@@ -147,6 +152,7 @@ describe('TasksPane', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null
@@ -236,6 +242,7 @@ describe('TasksPane', () => {
   it('deep-links connected Jira credential management to its integration card', async () => {
     mocks.readiness.jira = { connected: true, checking: false, visible: true }
     await renderInteractivePane()
+
     const expandJira = Array.from(container?.querySelectorAll('button') ?? []).find(
       (button) => button.getAttribute('aria-label') === 'Show Jira setup steps'
     )
@@ -382,9 +389,11 @@ describe('TasksPane', () => {
 
     expect(container?.textContent).toContain('Status unavailable')
     expect(container?.textContent).toContain("Orca couldn't check this connection")
+
     const retry = Array.from(container?.querySelectorAll('button') ?? []).find(
       (button) => button.textContent === 'Try again'
     )
+
     expect(retry).toBeDefined()
 
     await act(async () => {

@@ -14,6 +14,7 @@ describe('deleteRemoteWorktreeHistory', () => {
 
   it('degrades safely when an old relay does not expose cleanup', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const provider = {
       deleteWorktreeHistory: vi.fn().mockRejectedValue(new Error('unknown request method'))
     } as never

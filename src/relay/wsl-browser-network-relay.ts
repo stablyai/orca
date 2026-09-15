@@ -9,26 +9,31 @@ import { WSL_BROWSER_NETWORK_RELAY_SENTINEL } from '../shared/wsl-browser-networ
 
 function main(): void {
   let shuttingDown = false
+
   const shutdown = (): void => {
     if (shuttingDown) {
       return
     }
+
     shuttingDown = true
     decoder.close()
     writer.close()
     session.close()
     process.exitCode = 0
   }
+
   const writer = new BrowserNetworkTunnelStreamFrameWriter(
     (bytes, callback) => process.stdout.write(bytes, callback),
     shutdown
   )
+
   const session = new BrowserNetworkTunnelSession({
     tunnelGeneration: 1,
     connect: (target) => connect({ ...target, allowHalfOpen: true }),
     sendBinary: (frame) => writer.send(frame),
     onClose: shutdown
   })
+
   const decoder = new BrowserNetworkTunnelStreamFrameDecoder(
     (frame) => session.handleBinary(frame),
     shutdown

@@ -21,6 +21,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -56,12 +57,14 @@ async function settledProfile(): Promise<PersistedState> {
   })
   const store = await createStore()
   store.flush()
+
   return readDataFile() as PersistedState
 }
 
 /** Reload without mutating, letting only the load-path debounce write. */
 async function reloadAndSettleWrites(): Promise<PersistedState> {
   vi.useFakeTimers()
+
   try {
     const store = await createStore()
     // Why over-advance: an exact-fit advance turns a future debounce raise into a confusing no-write.
@@ -70,6 +73,7 @@ async function reloadAndSettleWrites(): Promise<PersistedState> {
   } finally {
     vi.useRealTimers()
   }
+
   return readDataFile() as PersistedState
 }
 

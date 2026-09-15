@@ -40,6 +40,7 @@ export function DocPreviewAddressEdit({
       window.clearTimeout(exitTimerRef.current)
       exitTimerRef.current = null
     }
+
     setEditing(false)
   }, [])
 
@@ -47,9 +48,11 @@ export function DocPreviewAddressEdit({
     if (!editing) {
       return
     }
+
     const input = inputRef.current
     input?.focus()
     input?.select()
+
     return () => {
       if (exitTimerRef.current !== null) {
         window.clearTimeout(exitTimerRef.current)
@@ -70,9 +73,12 @@ export function DocPreviewAddressEdit({
             'This browser tab cannot open local files. Use "Open Preview to the Side" on the file instead.'
           )
         )
+
         return
       }
+
       const converted = useAppStore.getState().convertBrowserPage(previewId, { kind: 'web', url })
+
       if (!converted) {
         exitEdit()
       }
@@ -85,22 +91,30 @@ export function DocPreviewAddressEdit({
     // A workspace path retargets the preview (fresh grant, same tab) — or activates the tab the
     // document is already open in, which is what opening a document has always meant.
     const docTarget = resolveWorkspaceDocAddressTarget(useAppStore.getState(), worktreeId, typed)
+
     if (docTarget.status === 'workspace-doc') {
       convertBrowserPageToWorkspaceDoc(previewId, docTarget.docLocation)
       exitEdit()
+
       return
     }
+
     if (docTarget.status === 'unsupported') {
       toast.error(docTarget.message)
+
       return
     }
+
     const submission = resolveBrowserAddressBarSubmission(typed, {
       allowFileUrls: false
     })
+
     if (submission.status === 'navigate') {
       navigateToUrl(submission.url)
+
       return
     }
+
     toast.error(submission.loadError.description)
   }, [exitEdit, navigateToUrl, previewId, worktreeId])
 
@@ -122,6 +136,7 @@ export function DocPreviewAddressEdit({
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
           return
         }
+
         exitTimerRef.current = window.setTimeout(() => setEditing(false), 200)
       }}
       onFocus={() => {

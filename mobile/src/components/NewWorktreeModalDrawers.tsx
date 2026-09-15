@@ -57,6 +57,7 @@ export function NewWorktreeModalDrawers(props: {
         sshReady={props.sshReady}
         onRepoChange={(repoId) => {
           const nextRepo = props.repos.find((repo) => repo.id === repoId)
+
           if (nextRepo) {
             props.onSourceRepoChange(nextRepo)
           }

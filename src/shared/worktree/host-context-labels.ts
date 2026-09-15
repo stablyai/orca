@@ -23,19 +23,23 @@ export function getHostContextLabel(
   sources: HostContextLabelSources = {}
 ): string {
   const override = sources.hostLabelById?.get(hostId)?.trim()
+
   if (override) {
     return override
   }
+
   if (parseExecutionHostId(hostId)?.kind === 'local') {
     // An explicit null means the paired host platform is unknown (mobile); an
     // omitted platform means use the current process (desktop).
     if (sources.hostPlatform === null) {
       return 'This computer'
     }
+
     return sources.hostPlatform !== undefined
       ? getLocalExecutionHostLabel(sources.hostPlatform)
       : getExecutionHostLabel(hostId)
   }
+
   return getExecutionHostLabel(hostId)
 }
 
@@ -49,28 +53,36 @@ export function buildHostLabelById(args: {
   hostSettingOverrides: unknown
 }): Map<ExecutionHostId, string> {
   const labels = new Map<ExecutionHostId, string>()
+
   for (const target of args.sshTargets) {
     const label = target.label.trim()
+
     if (!target.id.trim() || !label) {
       continue
     }
+
     const hostId = normalizeExecutionHostId(target.id) ?? toSshExecutionHostId(target.id)
+
     if (hostId) {
       labels.set(hostId, label)
     }
   }
+
   const overrides =
     args.hostSettingOverrides && typeof args.hostSettingOverrides === 'object'
       ? getHostDisplayLabelOverrides({
           hostSettingOverrides: args.hostSettingOverrides as GlobalSettings['hostSettingOverrides']
         })
       : new Map<ExecutionHostId, string>()
+
   for (const [hostId, label] of overrides) {
     const normalized = normalizeExecutionHostId(hostId) ?? toSshExecutionHostId(hostId)
+
     if (normalized) {
       labels.set(normalized, label)
     }
   }
+
   return labels
 }
 
@@ -87,26 +99,33 @@ export function getMixedHostContextLabels<T>(
   // Deciding first costs one getHostId per item and skips the label work entirely.
   let firstHostId: ExecutionHostId | undefined
   let isMixed = false
+
   for (const item of items) {
     const hostId = args.getHostId(item)
+
     if (firstHostId === undefined) {
       firstHostId = hostId
       continue
     }
+
     if (hostId !== firstHostId) {
       isMixed = true
       break
     }
   }
+
   if (!isMixed) {
     return undefined
   }
+
   const labelsByIdentity = new Map<string, string>()
+
   for (const item of items) {
     labelsByIdentity.set(
       args.getIdentity(item),
       getHostContextLabel(args.getHostId(item), args.sources)
     )
   }
+
   return labelsByIdentity
 }

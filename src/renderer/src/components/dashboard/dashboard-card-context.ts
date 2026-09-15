@@ -44,7 +44,9 @@ function resolveReview(
   if (!repo || !state.hostedReviewCache || !state.prCache || repo.kind === 'folder') {
     return undefined
   }
+
   const branch = branchName(worktree.branch)
+
   const hostedReviewEntry =
     state.hostedReviewCache[
       getHostedReviewCacheKey(
@@ -57,22 +59,27 @@ function resolveReview(
         true
       )
     ]
+
   const hostedReview = hostedReviewEntry?.data
+
   if (
     hostedReview &&
     canUseParentPrChecksHostedReviewCacheEntry(worktree, hostedReview, hostedReviewEntry)
   ) {
     return { number: hostedReview.number, state: hostedReview.state }
   }
+
   const prEntry = getParentPrChecksGitHubPRCacheEntry({
     prCache: state.prCache,
     repo,
     branch,
     settings: state.settings ?? null
   })
+
   const review = canUseParentPrChecksGitHubPRCacheEntry(worktree, prEntry, hostedReviewEntry)
     ? hostedReviewInfoFromGitHubPRInfo(prEntry.data)
     : undefined
+
   return review ? { number: review.number, state: review.state } : undefined
 }
 
@@ -85,8 +92,10 @@ export function resolveDashboardCardContext(
     state.workspaceStatuses && state.workspaceStatuses.length > 0
       ? state.workspaceStatuses
       : DEFAULT_WORKSPACE_STATUSES
+
   const workspaceStatusId = getWorkspaceStatus(worktree, statuses)
   const review = resolveReview(state, repo, worktree)
+
   return {
     workspaceStatus:
       statuses.find((status) => status.id === workspaceStatusId) ?? DEFAULT_WORKSPACE_STATUSES[0],

@@ -13,21 +13,27 @@ export async function stopSttDictation(
   if (options.cancelStarting !== false && state.startingOwner === owner) {
     state.canceledOwners.add(owner)
   }
+
   if (!state.worker && !state.cloudSession) {
     return
   }
+
   const currentOwner = state.activeOwner ?? state.startingOwner
+
   if (currentOwner && currentOwner !== owner) {
     throw new Error('dictation_owner_mismatch')
   }
 
   if (state.cloudSession) {
     state.stopping = true
+
     try {
       const session = state.cloudSession
       state.cloudSession = null
+
       try {
         const text = await session.finish()
+
         if (text) {
           state.eventSink?.({ type: 'final', text })
         }
@@ -46,17 +52,21 @@ export async function stopSttDictation(
     } finally {
       state.stopping = false
     }
+
     return
   }
 
   const worker = state.worker
+
   if (!worker) {
     return
   }
+
   if (state.stopInFlight?.worker === worker) {
     if (state.stopInFlight.owner !== owner) {
       throw new Error('dictation_owner_mismatch')
     }
+
     return state.stopInFlight.promise
   }
 
@@ -74,6 +84,7 @@ export async function stopSttDictation(
   })
   state.stopInFlight = { worker, owner, promise: stopPromise }
   state.stopping = true
+
   try {
     worker.postMessage({ type: 'stop' })
     await stopPromise
@@ -93,13 +104,17 @@ function finishSttWorkerStop(
       state.eventSink = null
       scheduleSttIdleTeardown(state)
     }
+
     return
   }
+
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
+
   if (outcome !== 'exit') {
     void worker.terminate().catch(() => undefined)
   }
+
   if (state.worker === worker) {
     clearSttWorkerState(state)
   }
@@ -112,8 +127,10 @@ export async function prepareSttModelForDeletion(
   if (state.startingModelId === modelId || (state.activeOwner && state.activeModelId === modelId)) {
     throw new Error('voice_model_in_use')
   }
+
   if (state.worker && state.activeModelId === modelId) {
     await teardownIdleSttWorker(state, { ignoreTerminateErrors: false })
+
     if (state.worker && state.activeModelId === modelId) {
       throw new Error('voice_model_in_use')
     }
@@ -140,9 +157,11 @@ async function teardownIdleSttWorker(
   options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
 ): Promise<void> {
   clearSttIdleTeardownTimer(state)
+
   if (!state.worker || state.activeOwner || state.startingOwner) {
     return
   }
+
   await teardownSttWorker(state, state.worker, options)
 }
 
@@ -152,16 +171,20 @@ export async function teardownSttWorker(
   options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
 ): Promise<void> {
   clearSttIdleTeardownTimer(state)
+
   if (state.stopInFlight?.worker === worker) {
     await state.stopInFlight.promise
   }
+
   try {
     worker.postMessage({ type: 'teardown' })
   } catch {
     // The worker may already have exited on a forced stop path.
   }
+
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
+
   try {
     await worker.terminate()
   } catch (error) {
@@ -169,6 +192,7 @@ export async function teardownSttWorker(
       throw error
     }
   }
+
   if (state.worker === worker) {
     clearSttWorkerState(state)
   }
@@ -178,6 +202,7 @@ export function handleSttWorkerFailure(state: SttSessionState, error?: Error): v
   if (error) {
     state.eventSink?.({ type: 'error', error: String(error) })
   }
+
   cleanupActiveSttWorkerLifecycleListeners(state)
   clearSttWorkerState(state)
 }

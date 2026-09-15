@@ -15,6 +15,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   agent: 'codex',
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
+
 const PROMPT_IDENTITY = {
   provider: 'codex' as const,
   threadId: 'thread-1',
@@ -23,10 +24,12 @@ const PROMPT_IDENTITY = {
 }
 
 const journals = createTrackedJournalOpener()
+
 let root: string | null = null
 
 afterEach(async () => {
   await journals.closeAll()
+
   if (root) {
     await rm(root, { recursive: true, force: true })
     root = null
@@ -36,6 +39,7 @@ afterEach(async () => {
 async function pendingPrompt(): Promise<{ journal: AgentSessionJournal; itemId: string }> {
   root = await mkdtemp(join(tmpdir(), 'orca-prompt-cancel-'))
   const journal = await journals.open({ identity: IDENTITY, journalDir: root })
+
   const item = await journal.appendItem(
     PROMPT_IDENTITY,
     {
@@ -52,6 +56,7 @@ async function pendingPrompt(): Promise<{ journal: AgentSessionJournal; itemId: 
     },
     { fence: 1 }
   )
+
   return { journal, itemId: item.itemId }
 }
 
@@ -96,16 +101,21 @@ describe('performCancel for a pending prompt', () => {
   it('drains terminal lifecycle before recording a confirmed cancellation', async () => {
     const { journal, itemId } = await pendingPrompt()
     const order: string[] = []
+
     const cancelTurn = vi.fn(async () => {
       order.push('interrupt')
+
       return { cancelled: true }
     })
+
     const flush = vi.fn(async () => {
       order.push('lifecycle')
       const current = journal.snapshot().items.find((item) => item.itemId === itemId)!
+
       if (current.body.kind !== 'approval') {
         throw new Error('expected approval prompt')
       }
+
       await journal.appendItem(
         PROMPT_IDENTITY,
         {
@@ -193,6 +203,7 @@ describe('performCancel for a pending prompt', () => {
 
   it('surfaces a lifecycle drain failure after the provider confirms interruption', async () => {
     const { journal, itemId } = await pendingPrompt()
+
     const flush = vi.fn(async () => {
       throw new Error('journal drain failed')
     })

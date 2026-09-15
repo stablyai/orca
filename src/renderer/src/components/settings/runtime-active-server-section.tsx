@@ -156,6 +156,7 @@ export function RuntimeActiveServerSection({
                 <div className="space-y-1 rounded-lg border border-border/50 bg-card/30 p-2">
                   {environments.map((environment) => {
                     const details = detailsByEnvironmentId[environment.id]
+
                     return (
                       <div
                         key={environment.id}

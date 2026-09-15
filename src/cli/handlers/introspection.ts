@@ -7,10 +7,13 @@ export const INTROSPECTION_HANDLERS: Record<string, CommandHandler> = {
   // no runtime RPC, so it works when the Orca app is not running (SSH/headless).
   'agent-context': async ({ json }) => {
     const schema = buildAgentContext(COMMAND_SPECS)
+
     if (json) {
       console.log(JSON.stringify(schema, null, 2))
+
       return
     }
+
     console.log(formatAgentContextSummary(schema))
   }
 }

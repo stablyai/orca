@@ -41,6 +41,7 @@ const OMP_SUBCOMMANDS = [
 
 export function getPosixOmpShellWrapper(): string {
   const subcommands = OMP_SUBCOMMANDS.map((value) => `'${value}'`).join('|')
+
   return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.
@@ -107,6 +108,7 @@ fi
 
 export function getPowerShellOmpShellWrapper(): string {
   const subcommands = OMP_SUBCOMMANDS.map((value) => `'${value}'`).join(', ')
+
   return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
 # interactive launch invocations so subcommands such as \`omp config\` keep
 # their normal argv shape.

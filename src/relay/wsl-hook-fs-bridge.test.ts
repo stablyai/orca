@@ -21,15 +21,18 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
     params: Record<string, unknown> = {}
   ): Promise<WslFsResult<T>> => {
     const handler = handlers.get(method)
+
     if (!handler) {
       throw new Error(`no handler registered for ${method}`)
     }
+
     return (await handler(params, context)) as WslFsResult<T>
   }
 
   beforeEach(() => {
     home = mkdtempSync(posix.join(tmpdir(), 'wsl-fs-home-'))
     handlers = new Map<string, MethodHandler>()
+
     // Capture handlers from a minimal fake dispatcher — registration only ever
     // calls onRequest, so a real RelayDispatcher is unnecessary.
     const dispatcher = {
@@ -37,6 +40,7 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
         handlers.set(method, handler)
       }
     } as unknown as RelayDispatcher
+
     registerWslHookFsHandlers(dispatcher, home, () => ({ fallbackPort: 4321 }))
   })
 
@@ -62,6 +66,7 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       path: '/etc/orca-evil.txt',
       content: 'x'
     })
+
     expect(result).toMatchObject({ ok: false, errno: 'EACCES' })
   })
 
@@ -70,6 +75,7 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       path: `${home}/../escape.txt`,
       content: 'x'
     })
+
     expect(result).toMatchObject({ ok: false, errno: 'EACCES' })
   })
 
@@ -79,6 +85,7 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
       path: `${home}-evil/x.txt`,
       content: 'x'
     })
+
     expect(result).toMatchObject({ ok: false, errno: 'EACCES' })
   })
 
@@ -86,6 +93,7 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
     const result = await call(WSL_HOOK_FS_METHODS.readFile, {
       path: posix.join(home, 'does-not-exist.txt')
     })
+
     expect(result).toMatchObject({ ok: false, errno: 'ENOENT' })
   })
 
@@ -93,10 +101,13 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
     const ancestor = await call<{ entries: { filename: string }[] }>(WSL_HOOK_FS_METHODS.readdir, {
       path: posix.dirname(home)
     })
+
     expect(ancestor.ok).toBe(true)
+
     const root = await call<{ entries: { filename: string }[] }>(WSL_HOOK_FS_METHODS.readdir, {
       path: '/'
     })
+
     expect(root.ok).toBe(true)
   })
 
@@ -108,15 +119,19 @@ describe.skipIf(process.platform === 'win32')('registerWslHookFsHandlers (WSL fs
   it('refuses rename crossing the home boundary in either direction', async () => {
     const inside = posix.join(home, 'src.txt')
     await call(WSL_HOOK_FS_METHODS.writeFile, { path: inside, content: 'x' })
+
     const outbound = await call(WSL_HOOK_FS_METHODS.rename, {
       src: inside,
       dst: '/etc/orca-evil.txt'
     })
+
     expect(outbound).toMatchObject({ ok: false, errno: 'EACCES' })
+
     const inbound = await call(WSL_HOOK_FS_METHODS.rename, {
       src: '/etc/passwd',
       dst: posix.join(home, 'stolen.txt')
     })
+
     expect(inbound).toMatchObject({ ok: false, errno: 'EACCES' })
   })
 

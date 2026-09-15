@@ -25,6 +25,7 @@ beforeEach(() => {
 describe('WslSkillInstallFilesystem', () => {
   it('allows every global provider destination inside the selected distro', async () => {
     const home = '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin'
+
     const filesystem = createWslSkillInstallFilesystem({
       distro: 'Ubuntu-24.04',
       homeDirectory: home
@@ -51,12 +52,14 @@ describe('WslSkillInstallFilesystem', () => {
 
   it('applies and verifies manifest modes through bounded guest argv batches', async () => {
     const filesystem = new WslSkillInstallFilesystem('Ubuntu-24.04', [WSL_ROOT])
+
     const manifest = {
       files: [
         { path: 'SKILL.md', executable: false },
         { path: 'scripts/run.sh', executable: true }
       ]
     } as SkillPackageManifestV1
+
     await filesystem.prepareExtractedSkill(`${WSL_ROOT}\\.orca-skill-extract-1\\skill`, manifest)
 
     expect(runWslProcessMock).toHaveBeenCalledTimes(2)
@@ -83,6 +86,7 @@ describe('WslSkillInstallFilesystem', () => {
     const filesystem = new WslSkillInstallFilesystem('Ubuntu-24.04', [
       'C:\\Users\\jin\\repo\\.agents\\skills'
     ])
+
     await filesystem.rename(
       'C:\\Users\\jin\\repo\\.agents\\skills\\.skill.orca-staging-1',
       'C:\\Users\\jin\\repo\\.agents\\skills\\skill'
@@ -103,6 +107,7 @@ describe('WslSkillInstallFilesystem', () => {
     const filesystem = new WslSkillInstallFilesystem('Ubuntu-24.04', [
       'C:\\Users\\jin\\repo\\.agents\\skills'
     ])
+
     const manifest = {
       files: [
         { path: 'SKILL.md', executable: false },
@@ -128,8 +133,10 @@ describe('WslSkillInstallFilesystem', () => {
 
   it('authorizes a historical provider root before update or removal', async () => {
     const filesystem = new WslSkillInstallFilesystem('Ubuntu-24.04', [WSL_ROOT])
+
     const historicalRoot =
       '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.local\\share\\orca\\claude-accounts\\old\\auth\\skills'
+
     filesystem.authorizeRoots([historicalRoot])
 
     await filesystem.remove(`${historicalRoot}\\private-skill`)

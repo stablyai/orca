@@ -27,9 +27,11 @@ export async function fetchGitLabMergeRequestHeadRef(
   if (!isValidReviewHeadNumber(mrIid)) {
     throw new Error(`Invalid merge request iid: ${String(mrIid)}`)
   }
+
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Merge request fetch remote must not start with "-".')
   }
+
   if (!repo.connectionId) {
     const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
     const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)
@@ -42,10 +44,13 @@ export async function fetchGitLabMergeRequestHeadRef(
         timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
       }
     )
+
     return localRef
   }
+
   if (!sshGitProvider) {
     throw new Error('SSH Git provider is not available. Reconnect to this target and try again.')
   }
+
   return sshGitProvider.fetchGitLabMergeRequestHead(repo.path, remote, mrIid)
 }

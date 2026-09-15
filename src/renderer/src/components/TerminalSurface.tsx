@@ -13,6 +13,7 @@ export function TerminalSurface({
 }): React.JSX.Element {
   const { renderedActiveWorktreeId } = controller
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!renderedActiveWorktreeId)
+
   return (
     <div
       // Why: already out of flow via the workbench container when hidden, so retention only

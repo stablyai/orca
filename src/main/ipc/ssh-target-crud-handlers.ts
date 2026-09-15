@@ -17,25 +17,32 @@ import { removeRegisteredSshTarget } from './ssh-session-teardown'
 // Why: add/import can re-adopt workspaces orphaned on a removed target id (see ssh-target-readoption); the renderer must refresh its repo list to surface them.
 function takeRepoReadoptions(): SshRepoReadoption[] {
   const store = getSshTargetRegistryStore()
+
   if (!store || store.lastRepoReadoptions.length === 0) {
     return []
   }
+
   const repoReadoptions = store.lastRepoReadoptions
   store.lastRepoReadoptions = []
+
   for (const targetId of new Set(
     repoReadoptions.flatMap(({ oldTargetId, newTargetId }) => [oldTargetId, newTargetId])
   )) {
     rotateSshProviderAuthority(targetId)
   }
+
   const win = getCurrentMainWindow()
+
   if (win && !win.isDestroyed()) {
     win.webContents.send('repos:changed')
   }
+
   return repoReadoptions
 }
 
 function omitRendererSshTargetGeneration<T extends object>(value: T): Omit<T, 'generation'> {
   const { generation: _generation, ...rest } = value as T & { generation?: unknown }
+
   return rest
 }
 
@@ -52,8 +59,10 @@ export function registerSshTargetCrudHandlers(): void {
     const target = getSshTargetRegistryStore()!.addTarget(
       omitRendererSshTargetGeneration(args.target)
     )
+
     // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
     const repoReadoptions = takeRepoReadoptions()
+
     return { target, repoReadoptions }
   })
 
@@ -74,6 +83,7 @@ export function registerSshTargetCrudHandlers(): void {
   ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
     const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)
     const repoReadoptions = takeRepoReadoptions()
+
     return { targets, repoReadoptions }
   })
 

@@ -28,17 +28,21 @@ function projectItems(items: AgentJournalRenderItem[]): AgentJournalRenderItem[]
   if (!items.some((item) => item.body.kind === 'turn')) {
     return items
   }
+
   return items.map((item) => {
     if (item.body.kind !== 'turn') {
       return item
     }
+
     const { kind: _kind, ...turn } = item.body
+
     return { ...item, body: legacyAgentJournalTurnStatusBody(turn, item.itemId) }
   })
 }
 
 function projectPage(page: AgentSessionHistoryPage): AgentSessionHistoryPage {
   const items = projectItems(page.items)
+
   return items === page.items ? page : { ...page, items }
 }
 
@@ -49,7 +53,9 @@ export function projectTurnItemHistory(
   if (readsTurnItems(ctx)) {
     return result
   }
+
   const page = projectPage(result.page)
+
   return page === result.page ? result : { ...result, page }
 }
 
@@ -60,13 +66,18 @@ export function projectTurnItemEvent(
   if (readsTurnItems(ctx)) {
     return event
   }
+
   if (event.type === 'batch') {
     const items = projectItems(event.batch.items)
+
     return items === event.batch.items ? event : { ...event, batch: { ...event.batch, items } }
   }
+
   if (event.type === 'snapshot' || event.type === 'reset') {
     const page = projectPage(event.page)
+
     return page === event.page ? event : { ...event, page }
   }
+
   return event
 }

@@ -45,12 +45,15 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     getTerminalRef,
     hostQueryReplyInputSupportedRef
   } = scope
+
   const toggleLiveInput = useCallback(() => {
     if (!activeHandle) {
       return
     }
+
     const nextEnabled = toggleTerminalLiveInput(activeHandle)
     clearPendingLiveInputCommit()
+
     if (nextEnabled) {
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
@@ -62,11 +65,14 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
   const allowTerminalGestureInput = useCallback(
     (handle: string, sequenceCount: number): boolean => {
       const now = Date.now()
+
       const current = terminalGestureInputBucketsRef.current.get(handle) ?? {
         tokens: TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
         lastRefillMs: now
       }
+
       const elapsedSeconds = Math.max(0, now - current.lastRefillMs) / 1000
+
       const tokens = Math.min(
         TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
         current.tokens + elapsedSeconds * TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
@@ -75,6 +81,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       // Why: tokens count terminal control sequences, not WebView messages; one gesture may batch up to 32 wheel/key reports.
       if (tokens < sequenceCount) {
         terminalGestureInputBucketsRef.current.set(handle, { tokens, lastRefillMs: now })
+
         return false
       }
 
@@ -82,6 +89,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         tokens: tokens - sequenceCount,
         lastRefillMs: now
       })
+
       return true
     },
     []
@@ -89,27 +97,34 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
 
   const flushTerminalGestureInput = useCallback(async (handle: string) => {
     const queued = terminalGestureInputQueuesRef.current.get(handle)
+
     if (!queued) {
       return
     }
+
     if (queued.timer) {
       clearTimeout(queued.timer)
       queued.timer = null
     }
+
     if (terminalGestureInputInFlightRef.current.has(handle)) {
       return
     }
 
     terminalGestureInputQueuesRef.current.delete(handle)
+
     const isActive =
       handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
+
     const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
     const rpc = clientRef.current
+
     if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
       return
     }
 
     terminalGestureInputInFlightRef.current.add(handle)
+
     try {
       // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
       const response = await rpc.sendRequest(
@@ -122,6 +137,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
+
       if (isTerminalSendRpcAccepted(response)) {
         reportWorkerTerminalUserInput(rpc, handle)
       }
@@ -130,11 +146,13 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     } finally {
       terminalGestureInputInFlightRef.current.delete(handle)
       const next = terminalGestureInputQueuesRef.current.get(handle)
+
       if (next) {
         if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
           if (next.timer) {
             clearTimeout(next.timer)
           }
+
           terminalGestureInputQueuesRef.current.delete(handle)
         } else {
           void flushTerminalGestureInput(handle)
@@ -147,6 +165,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     (handle: string, bytes: string, sequenceCount: number) => {
       const now = Date.now()
       const current = terminalGestureInputQueuesRef.current.get(handle)
+
       if (
         current &&
         current.sequenceCount + sequenceCount <= TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
@@ -154,6 +173,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         current.bytes += bytes
         current.sequenceCount += sequenceCount
         current.lastUpdatedMs = now
+
         return
       }
 
@@ -161,6 +181,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         if (current.timer) {
           clearTimeout(current.timer)
         }
+
         if (!terminalGestureInputInFlightRef.current.has(handle)) {
           void flushTerminalGestureInput(handle)
         } else {
@@ -172,6 +193,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
             current.timer = null
             void flushTerminalGestureInput(handle)
           }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
+
           return
         }
       }
@@ -182,6 +204,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         timer: null,
         lastUpdatedMs: now
       }
+
       queued.timer = setTimeout(() => {
         queued.timer = null
         void flushTerminalGestureInput(handle)
@@ -196,21 +219,28 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       if (!client || connState !== 'connected' || bytes.length === 0) {
         return
       }
+
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
         return
       }
+
       const modes = ptyModesRef.current.get(handle)
+
       // Why: WebView gesture bytes can become PTY input, so gate mouse reports behind validation and SSH-safe rate limiting.
       if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) {
         return
       }
+
       const sequenceCount = countTerminalGestureInputSequences(bytes)
+
       if (sequenceCount == null) {
         return
       }
+
       if (!allowTerminalGestureInput(handle, sequenceCount)) {
         return
       }
+
       enqueueTerminalGestureInput(handle, bytes, sequenceCount)
     },
     [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
@@ -232,7 +262,9 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     if (!client) {
       return
     }
+
     getTerminalRef(target.handle)?.clear()
+
     try {
       await client.sendRequest('terminal.clearBuffer', {
         terminal: target.handle
@@ -242,6 +274,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       showToast("Couldn't clear terminal", 1500)
     }
   }
+
   return {
     toggleLiveInput,
     allowTerminalGestureInput,

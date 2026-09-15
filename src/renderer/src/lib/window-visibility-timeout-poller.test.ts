@@ -84,12 +84,14 @@ describe('installWindowVisibilityTimeoutPoller', () => {
   it('does not overlap focus refreshes while a poll is in flight', async () => {
     const windowListeners = new Map<string, () => void>()
     let resolveRun!: () => void
+
     const run = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveRun = resolve
         })
     )
+
     const setTimeoutMock = vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>)
 
     vi.stubGlobal('window', {

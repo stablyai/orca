@@ -117,6 +117,7 @@ describe('parseWindowsCmdShim', () => {
       '"NODE_PATH=C:\\p;%NODE_PATH%"',
       '"NODE_PATH=C:\\evil;%NODE_PATH%"'
     )
+
     expect(parseWindowsCmdShim(tampered)).toBeNull()
   })
 })
@@ -147,6 +148,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
   function write(name: string, contents: string): string {
     const path = join(dir, name)
     writeFileSync(path, contents)
+
     return path
   }
 
@@ -159,6 +161,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
 
   it('prefers a node.exe sitting beside the shim, as the shim itself does', () => {
     const sibling = mkdtempSync(join(tmpdir(), 'orca-shim-sibling-'))
+
     try {
       writeFileSync(join(sibling, 'node.exe'), '')
       writeFileSync(join(sibling, 'cli.js'), '')
@@ -247,6 +250,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     const early = mkdtempSync(join(tmpdir(), 'orca-shim-path-early-'))
     const late = mkdtempSync(join(tmpdir(), 'orca-shim-path-late-'))
     const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-path-'))
+
     try {
       writeFileSync(join(late, 'node.exe'), '')
       writeFileSync(join(shimDir, 'cli.js'), '')
@@ -279,6 +283,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     const first = mkdtempSync(join(tmpdir(), 'orca-shim-ext-first-'))
     const second = mkdtempSync(join(tmpdir(), 'orca-shim-ext-second-'))
     const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-ext-'))
+
     try {
       writeFileSync(join(first, 'node.com'), '')
       const nodeExe = join(second, 'node.exe')
@@ -311,6 +316,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     // this returns the deleted path instead of null.
     const nodeDir = mkdtempSync(join(tmpdir(), 'orca-shim-gone-node-'))
     const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-gone-'))
+
     try {
       const nodeExe = join(nodeDir, 'node.exe')
       writeFileSync(nodeExe, '')
@@ -338,6 +344,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
       },
       'win32'
     )
+
     expect(resolved.file.toLowerCase()).not.toContain('cmd.exe')
     expect(resolved.args).toEqual([join(dir, 'cli.js'), 'a b', 'c"d'])
     // Node's own quoting is CommandLineToArgvW-correct; the verbatim line is
@@ -358,6 +365,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
       },
       'win32'
     )
+
     expect(resolved.options.windowsVerbatimArguments).toBeUndefined()
   })
 
@@ -370,6 +378,7 @@ describeOnWindows('resolveWindowsCmdShim', () => {
       },
       'win32'
     )
+
     expect(resolved.file).toBe('C:\\W\\cmd.exe')
     expect(resolved.args[0]).toContain('/d /v:off /s /c')
   })

@@ -71,16 +71,21 @@ export default function JiraIssueWorkspace({
     async (targetIssue: JiraIssue, requestId: number): Promise<void> => {
       setCommentsLoading(true)
       setCommentsError(null)
+
       try {
         let fetched = await jiraIssueComments(providerSettings, targetIssue.key, targetIssue.siteId)
+
         if (requestId !== requestIdRef.current) {
           return
         }
+
         const optimistic = optimisticCommentsRef.current
+
         if (optimistic.length > 0) {
           const fetchedIds = new Set(fetched.map((comment) => comment.id))
           fetched = [...fetched, ...optimistic.filter((comment) => !fetchedIds.has(comment.id))]
         }
+
         setComments(fetched)
       } catch (error) {
         if (requestId === requestIdRef.current) {
@@ -106,6 +111,7 @@ export default function JiraIssueWorkspace({
       setUsers([])
       setCommentDraft('')
       optimisticCommentsRef.current = []
+
       return
     }
 
@@ -124,6 +130,7 @@ export default function JiraIssueWorkspace({
         if (requestId !== requestIdRef.current) {
           return
         }
+
         if (result) {
           setFullIssue(result)
           setTitleDraft(result.title)
@@ -146,6 +153,7 @@ export default function JiraIssueWorkspace({
         if (requestId !== requestIdRef.current) {
           return
         }
+
         setTransitions(nextTransitions)
         setPriorities(nextPriorities)
         setUsers(nextUsers)
@@ -159,8 +167,10 @@ export default function JiraIssueWorkspace({
     if (!displayed) {
       return
     }
+
     try {
       const latest = await jiraGetIssue(providerSettings, displayed.key, displayed.siteId)
+
       if (latest) {
         setFullIssue(latest)
         patchJiraIssue(latest.key, latest, { sourceContext })
@@ -179,17 +189,22 @@ export default function JiraIssueWorkspace({
       if (!displayed || pendingField) {
         return
       }
+
       setPendingField(field)
       const previous = displayed
+
       try {
         if (optimistic) {
           setFullIssue({ ...displayed, ...optimistic })
           patchJiraIssue(displayed.key, optimistic, { sourceContext })
         }
+
         const result = await jiraUpdateIssue(providerSettings, displayed.key, updates, siteId)
+
         if (!result.ok) {
           throw new Error(result.error)
         }
+
         await refreshIssue()
       } catch (error) {
         setFullIssue(previous)
@@ -213,11 +228,15 @@ export default function JiraIssueWorkspace({
     if (!displayed) {
       return
     }
+
     const title = titleDraft.trim()
+
     if (!title || title === displayed.title) {
       setTitleDraft(displayed.title)
+
       return
     }
+
     void mutateIssue('title', { title }, { title })
   }, [displayed, mutateIssue, titleDraft])
 
@@ -225,10 +244,12 @@ export default function JiraIssueWorkspace({
     if (!displayed) {
       return
     }
+
     const labels = labelsDraft
       .split(',')
       .map((label) => label.trim())
       .filter(Boolean)
+
     void mutateIssue('labels', { labels }, { labels })
   }, [displayed, labelsDraft, mutateIssue])
 
@@ -236,10 +257,13 @@ export default function JiraIssueWorkspace({
     if (!displayed || commentSubmitting) {
       return
     }
+
     const bodyState = getCommentBodySubmitState(commentDraft)
+
     if (bodyState.status === 'empty') {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -247,9 +271,12 @@ export default function JiraIssueWorkspace({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setCommentSubmitting(true)
+
     try {
       const result = await jiraAddIssueComment(
         providerSettings,
@@ -257,15 +284,18 @@ export default function JiraIssueWorkspace({
         bodyState.body,
         displayed.siteId
       )
+
       if (!result.ok) {
         throw new Error(result.error)
       }
+
       const comment: JiraComment = {
         id: result.id || createBrowserUuid(),
         body: bodyState.body,
         createdAt: new Date().toISOString(),
         user: { accountId: 'local', displayName: 'You' }
       }
+
       optimisticCommentsRef.current.push(comment)
       setComments((prev) => [...prev, comment])
       setCommentDraft('')
@@ -279,6 +309,7 @@ export default function JiraIssueWorkspace({
       setCommentSubmitting(false)
     }
   }, [commentDraft, commentSubmitting, displayed, providerSettings])
+
   const canSubmitComment = hasBoundedCommentBodyText(commentDraft)
 
   const actionItems = useMemo(

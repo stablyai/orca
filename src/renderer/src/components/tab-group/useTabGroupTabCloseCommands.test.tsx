@@ -16,13 +16,17 @@ vi.mock('../../runtime/web-runtime-session', () => ({
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive
 }))
+
 vi.mock('../terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+
 vi.mock('../../store/slices/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: mocks.destroyWorkspaceWebviews
 }))
+
 vi.mock('../editor/editor-autosave', () => ({
   requestEditorFileClose: mocks.requestEditorFileClose
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
@@ -38,6 +42,7 @@ const BROWSER_TAB = {
 } as Tab
 
 let closeUnifiedTab: ReturnType<typeof vi.fn>
+
 let closeBrowserTab: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
@@ -206,6 +211,7 @@ describe('closing a browser workspace owned by more than one runtime environment
       entityId: 'workspace-b',
       groupId: 'group-1'
     } as Tab
+
     stageWorkspace('workspace-a')
     useAppStore.setState({
       unifiedTabsByWorktree: { 'worktree-a': [BROWSER_TAB, hostTab] },
@@ -254,6 +260,7 @@ describe('shared tab close policies', () => {
       entityId: 'dirty-file',
       contentType: 'editor'
     } as Tab
+
     useAppStore.setState({
       unifiedTabsByWorktree: { 'worktree-a': [editor] },
       openFiles: [{ id: 'dirty-file', isDirty: true, worktreeId: 'worktree-a' }]
@@ -273,10 +280,13 @@ describe('shared tab close policies', () => {
       entityId: 'terminal-entity',
       contentType: 'terminal'
     } as Tab
+
     useAppStore.setState({ unifiedTabsByWorktree: { 'worktree-a': [terminal] } })
+
     const { result } = renderHook(() =>
       useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [terminal] })
     )
+
     result.current.closeItem(terminal.id)
     expect(mocks.closeTerminalTab).toHaveBeenLastCalledWith('terminal-entity', {
       onClosed: expect.any(Function)

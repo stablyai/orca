@@ -79,6 +79,7 @@ function valuesFor(
 ): number[] {
   return samples.flatMap((sample) => {
     const value = sample[key]
+
     return value === null ? [] : [value]
   })
 }
@@ -104,7 +105,9 @@ export function summarizeSamples(samples: SplitLatencySample[], requested: numbe
     ptyExit: samples.filter((sample) => !sample.ptyExitObserved).length,
     cleanup: samples.filter((sample) => sample.cleanupError !== null).length
   }
+
   const success = samples.filter((sample) => sample.success).length
+
   return {
     counts: {
       requested,
@@ -159,10 +162,12 @@ export function buildBenchmarkReport(args: {
 }): BenchmarkReportResult {
   const warmupSummary = summarizeSamples(args.warmupSamples, args.config.warmupCycles)
   const measuredSummary = summarizeSamples(args.measuredSamples, args.config.measuredCycles)
+
   const runComplete =
     warmupSummary.counts.success === args.config.warmupCycles &&
     measuredSummary.counts.success === args.config.measuredCycles &&
     args.abortError === null
+
   const headlineMs = runComplete
     ? {
         shortcutToFocusP50: measuredSummary.distributions.shortcutToFocusMs.p50,
@@ -176,6 +181,7 @@ export function buildBenchmarkReport(args: {
         shortcutToFirstEchoMax: measuredSummary.distributions.shortcutToFirstEchoMs.max
       }
     : null
+
   return {
     report: {
       schemaVersion: 2,

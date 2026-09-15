@@ -23,11 +23,15 @@ export function findRuntimeWorkspaceFileOwner(
     if (root.executionHostId !== executionHostId) {
       continue
     }
+
     const relativePath = relativePathInsideRoot(root.rootPath, absolutePath)
+
     if (relativePath === null) {
       continue
     }
+
     const rootLength = normalizeRuntimePathForComparison(root.rootPath).length
+
     if (
       rootLength > bestRootLength ||
       (rootLength === bestRootLength &&

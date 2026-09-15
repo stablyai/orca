@@ -27,11 +27,14 @@ export function FirstLaunchBanner({
     if (inFlight) {
       return
     }
+
     setInFlight(true)
+
     // acknowledgeBanner doesn't broadcast settings:changed, so refetch or the store keeps optedIn: null.
     try {
       await acknowledgeBanner()
       await fetchSettings()
+
       if (mountedRef.current) {
         onResolve()
       }
@@ -47,11 +50,14 @@ export function FirstLaunchBanner({
     if (inFlight) {
       return
     }
+
     setInFlight(true)
+
     // Route through telemetrySetOptIn(false) so main derives `via` and fires telemetry_opted_out before disabling the SDK.
     try {
       await telemetrySetOptIn(false)
       await fetchSettings()
+
       if (mountedRef.current) {
         onResolve()
       }

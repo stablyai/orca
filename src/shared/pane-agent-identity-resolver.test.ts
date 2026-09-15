@@ -15,6 +15,7 @@ describe('resolvePaneAgentIdentity', () => {
   it('keeps every evidence source ranked exactly once', () => {
     expect(PANE_AGENT_SOURCE_RANK).toBe(PANE_AGENT_EVIDENCE_SOURCES)
     expect(new Set(PANE_AGENT_SOURCE_RANK).size).toBe(PANE_AGENT_SOURCE_RANK.length)
+
     for (const source of PANE_AGENT_EVIDENCE_SOURCES) {
       expect(PANE_AGENT_SOURCE_RANK.indexOf(source)).toBeGreaterThanOrEqual(0)
     }
@@ -28,6 +29,7 @@ describe('resolvePaneAgentIdentity', () => {
           { source: 'title', agent: 'codex' },
           { source, agent: 'grok' }
         ])
+
         expect(result.agent).toBe('grok')
         expect(result.source).toBe(source)
       }
@@ -47,6 +49,7 @@ describe('resolvePaneAgentIdentity', () => {
         { source: 'launch', agent: 'claude' },
         { source: 'title', agent: 'gemini' }
       ])
+
       expect(result.agent).toBe('claude')
     })
   })
@@ -64,6 +67,7 @@ describe('resolvePaneAgentIdentity', () => {
         evidence: shape(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
+
       expect(result).toMatchObject({ agent: 'claude', source: 'completed-hook' })
       expect(result.supersededSources).toEqual([])
     })
@@ -75,6 +79,7 @@ describe('resolvePaneAgentIdentity', () => {
         evidence: shape(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
+
       expect(result).toMatchObject({ agent: 'codex', source: 'title' })
       expect(result.supersededSources).toEqual(['completed-hook'])
     })
@@ -85,10 +90,12 @@ describe('resolvePaneAgentIdentity', () => {
         evidence: shape(7, 7),
         currentRun: { authorityId: H, incarnation: 7 }
       })
+
       const reclaim = resolvePaneAgentIdentity({
         evidence: shape(7, 8),
         currentRun: { authorityId: H, incarnation: 8 }
       })
+
       expect(bug.agent).not.toBe(reclaim.agent)
     })
   })
@@ -99,6 +106,7 @@ describe('resolvePaneAgentIdentity', () => {
         { source: 'completed-hook', agent: 'claude' },
         { source: 'launch', agent: 'codex' }
       ])
+
       expect(result).toMatchObject({ agent: 'codex', source: 'launch' })
     })
 
@@ -108,6 +116,7 @@ describe('resolvePaneAgentIdentity', () => {
         evidence: [{ source: 'completed-hook', agent: 'claude' }],
         currentRun: { authorityId: H, incarnation: 9 }
       })
+
       expect(result.agent).toBe('claude')
     })
 
@@ -117,6 +126,7 @@ describe('resolvePaneAgentIdentity', () => {
           { source: 'completed-hook', agent: 'claude', run: { authorityId: H, incarnation: 3 } }
         ]
       })
+
       expect(result).toMatchObject({ agent: 'claude', supersededSources: [] })
     })
   })
@@ -140,6 +150,7 @@ describe('resolvePaneAgentIdentity', () => {
         ],
         { allowSibling: true }
       )
+
       expect(result.source).toBe('sibling')
     })
   })
@@ -157,6 +168,7 @@ describe('resolvePaneAgentIdentity', () => {
         ],
         currentRun: { authorityId: H, incarnation: 2 }
       })
+
       expect(result.agent).toBeNull()
       expect(result.supersededSources).toEqual(['live-hook', 'title'])
     })
@@ -180,6 +192,7 @@ describe('resolvePaneAgentIdentity', () => {
         { source: 'launch', agent: 'grok' },
         { source: 'live-hook', agent: 'claude' }
       ]
+
       const forward = resolve([...evidence])
       const reverse = resolve(evidence.toReversed())
       expect(forward).toEqual(reverse)
@@ -196,6 +209,7 @@ describe('resolvePaneAgentIdentity', () => {
         { source: 'live-hook', agent: 'claude' },
         { source: 'live-hook', agent: 'codex' }
       ])
+
       expect(result.agent).toBeNull()
       expect(result.ambiguousAt).toBe('live-hook')
     })
@@ -205,6 +219,7 @@ describe('resolvePaneAgentIdentity', () => {
         { source: 'live-hook', agent: 'claude' },
         { source: 'live-hook', agent: 'codex' }
       ]
+
       expect(resolve(a)).toEqual(resolve(a.toReversed()))
     })
 
@@ -225,6 +240,7 @@ describe('resolvePaneAgentIdentity', () => {
         { source: 'live-hook', agent: 'codex' },
         { source: 'title', agent: 'grok' }
       ])
+
       expect(result.agent).toBeNull()
     })
   })
@@ -243,6 +259,7 @@ describe('resolvePaneAgentIdentity', () => {
         ],
         currentRun: { authorityId: 'host-a', incarnation: 2 }
       })
+
       expect(result.agent).toBe('claude')
       expect(result.supersededSources).toEqual([])
     })
@@ -257,6 +274,7 @@ describe('resolvePaneAgentIdentity', () => {
         ],
         currentRun: { authorityId: 'host-a', incarnation: 1 }
       })
+
       expect(result).toMatchObject({ agent: 'codex', source: 'launch' })
     })
 
@@ -267,6 +285,7 @@ describe('resolvePaneAgentIdentity', () => {
         ],
         currentRun: { authorityId: 'host-a', incarnation: 2 }
       })
+
       expect(result.agent).toBeNull()
       expect(result.supersededSources).toEqual(['live-hook'])
     })
@@ -285,6 +304,7 @@ describe('resolvePaneAgentIdentity', () => {
         allowSibling: true,
         minimumSource: 'launch'
       })
+
       expect(result.agent).toBeNull()
     })
 
@@ -296,6 +316,7 @@ describe('resolvePaneAgentIdentity', () => {
         ],
         { minimumSource: 'launch' }
       )
+
       expect(result).toMatchObject({ agent: 'claude', source: 'launch' })
     })
 

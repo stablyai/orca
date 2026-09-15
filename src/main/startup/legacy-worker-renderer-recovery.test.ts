@@ -11,16 +11,21 @@ describe('legacy worker renderer recovery', () => {
     let resolveFirstWindow!: () => void
     let resolveWslBarrier!: () => void
     let resolveProvider!: () => void
+
     const firstWindowReady = new Promise<void>((resolve) => {
       resolveFirstWindow = resolve
     })
+
     const wslBarrierReady = new Promise<void>((resolve) => {
       resolveWslBarrier = resolve
     })
+
     const providerReady = new Promise<void>((resolve) => {
       resolveProvider = resolve
     })
+
     const reconcile = vi.fn().mockResolvedValue(undefined)
+
     const startup = recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: firstWindowReady,
       managedWslCliStartupBarrierReady: wslBarrierReady,
@@ -60,6 +65,7 @@ describe('legacy worker renderer recovery', () => {
     const providerError = new Error('provider failed')
     const reconcile = vi.fn().mockResolvedValue(undefined)
     let reportError!: (error: unknown) => void
+
     const reportedError = new Promise<unknown>((resolve) => {
       reportError = resolve
     })
@@ -80,6 +86,7 @@ describe('legacy worker renderer recovery', () => {
     const recoveryError = new Error('recovery failed')
     const reconcile = vi.fn().mockRejectedValueOnce(recoveryError)
     let reportError!: (error: unknown) => void
+
     const reportedError = new Promise<unknown>((resolve) => {
       reportError = resolve
     })
@@ -99,17 +106,21 @@ describe('legacy worker renderer recovery', () => {
   it('fails open at the hard cap without allowing a premature recovery', async () => {
     vi.useFakeTimers()
     let daemonSignal: AbortSignal | undefined
+
     try {
       const services = startFirstWindowStartupServices({
         startDaemonPtyProvider: (signal) => {
           daemonSignal = signal
+
           return new Promise<void>(() => {})
         },
         startAgentHookServer: () => Promise.resolve(),
         onDaemonError: vi.fn(),
         onAgentHookServerError: vi.fn()
       })
+
       const reconcile = vi.fn().mockResolvedValue(undefined)
+
       const startup = recoverLegacyWorkerTerminalsForRendererStartup({
         firstWindowStartupServicesReady: services.firstWindowReady,
         managedWslCliStartupBarrierReady: Promise.resolve(),

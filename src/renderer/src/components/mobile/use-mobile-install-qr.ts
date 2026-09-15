@@ -25,11 +25,13 @@ export function useMobileInstallQr(
     if (stage !== 'flow') {
       return
     }
+
     setInstallQrUrl(null)
     let cancelled = false
     void (async () => {
       try {
         const dataUrl = await renderQrDataUrl(getInstallCopy(platform, iosChannel).url)
+
         if (!cancelled) {
           setInstallQrUrl(dataUrl)
         }
@@ -39,6 +41,7 @@ export function useMobileInstallQr(
         }
       }
     })()
+
     return () => {
       cancelled = true
     }

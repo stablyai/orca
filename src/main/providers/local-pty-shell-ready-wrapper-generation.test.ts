@@ -36,11 +36,14 @@ describe('ensureShellReadyWrappersAt', () => {
   // content-addressed, so its presence already proves this build wrote it.
   it('does not rewrite a tree that is already present', async () => {
     const userData = mkdtempSync(join(tmpdir(), 'orca-warm-tree-'))
+
     try {
       setTestUserDataPath(userData)
       const generation = await import('./local-pty-shell-ready-wrapper-generation')
+
       const { getShellReadyWrapperRoot: resolveRoot } =
         await import('./local-pty-shell-ready-wrapper-root')
+
       expect(generation.ensureShellReadyWrappersAt()).toBe(true)
       const rcfile = join(resolveRoot(), 'bash', 'rcfile')
       const firstWrite = statSync(rcfile).mtimeMs
@@ -58,11 +61,14 @@ describe('ensureShellReadyWrappersAt', () => {
 
   it('regenerates a tree whose files went missing', async () => {
     const userData = mkdtempSync(join(tmpdir(), 'orca-missing-tree-'))
+
     try {
       setTestUserDataPath(userData)
       const generation = await import('./local-pty-shell-ready-wrapper-generation')
+
       const { getShellReadyWrapperRoot: resolveRoot } =
         await import('./local-pty-shell-ready-wrapper-root')
+
       generation.ensureShellReadyWrappersAt()
       const rcfile = join(resolveRoot(), 'bash', 'rcfile')
       rmSync(rcfile)
@@ -79,6 +85,7 @@ describe('shell-ready wrapper root resolution', () => {
   // Why: daemon-entry fork is plain Node (no electron), so the wrapper root resolves from ORCA_USER_DATA_PATH, not app.getPath.
   it('resolves the wrapper root from ORCA_USER_DATA_PATH', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-userdata-env-'))
+
     try {
       setTestUserDataPath(root)
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
@@ -91,6 +98,7 @@ describe('shell-ready wrapper root resolution', () => {
 })
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
+
 const itWithBash = hasBash ? it : it.skip
 
 function runInteractiveBashRcfile(
@@ -119,6 +127,7 @@ function runInteractiveBashRcfile(
 
   expect(result.error).toBeUndefined()
   expect(result.status).toBe(0)
+
   return result.stdout
 }
 
@@ -127,6 +136,7 @@ function expectBashOsc133Lifecycle(output: string): void {
   const oscC = '\x1b]133;C\x07'
   const oscD = '\x1b]133;D;'
   const firstPromptMarker = output.indexOf(oscA)
+
   const lifecyclePattern = new RegExp(
     `${String.fromCharCode(27)}]133;(?:A|C|D;[0-9]+)${String.fromCharCode(7)}`,
     'g'
@@ -164,6 +174,7 @@ describePosix('local PTY shell-ready launch config', () => {
     } else {
       process.env.ORCA_ORIG_ZDOTDIR = previousOrcaOrigZdotdir
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
   })
@@ -201,6 +212,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -211,6 +223,7 @@ describePosix('local PTY shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -227,6 +240,7 @@ describePosix('local PTY shell-ready launch config', () => {
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
     process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
     process.env.HOME = userDataPath
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -237,11 +251,13 @@ describePosix('local PTY shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousOrigZdotdir === undefined) {
         delete process.env.ORCA_ORIG_ZDOTDIR
       } else {
         process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -257,6 +273,7 @@ describePosix('local PTY shell-ready launch config', () => {
     delete process.env.ZDOTDIR
     process.env.ORCA_ORIG_ZDOTDIR = '/some/other/orca/shell-ready/zsh'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -267,11 +284,13 @@ describePosix('local PTY shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousOrigZdotdir === undefined) {
         delete process.env.ORCA_ORIG_ZDOTDIR
       } else {
         process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -294,11 +313,13 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshenv.indexOf('builtin export ZDOTDIR=')).toBeLessThan(
       zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
     )
+
     // Why nothing else is written: zsh reads .zprofile, .zshrc and .zlogin
     // through ZDOTDIR, which is the user's again by the time it looks.
     for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
       expect(existsSync(join(getShellReadyWrapperRoot(), 'zsh', name))).toBe(false)
     }
+
     // No emulation probe survives: nothing after this file is read via ZDOTDIR,
     // so sh/ksh emulation entered by a user file can no longer hide anything.
     expect(zshenv).not.toContain('$(emulate')
@@ -332,12 +353,16 @@ describePosix('local PTY shell-ready launch config', () => {
     const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     const zlogin = zshrc
     const bashRc = getBashShellReadyRcfileContent()
+
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+
     const mimoRestoreLine =
       '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
@@ -361,6 +386,7 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
+
     for (const wrapperFile of [zshrc, zlogin, bashRc]) {
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')
@@ -473,6 +499,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const previousZdotdir = process.env.ZDOTDIR
     const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
     process.env.ZDOTDIR = userZdotdir
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -491,6 +518,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh/'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -501,6 +529,7 @@ describePosix('local PTY shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -514,6 +543,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = '/'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -524,6 +554,7 @@ describePosix('local PTY shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -536,6 +567,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const previousZdotdir = process.env.ZDOTDIR
     const userZdotdir = makeUserZdotdir(userDataPath, 'shell-ready', 'zsh-custom')
     process.env.ZDOTDIR = userZdotdir
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')

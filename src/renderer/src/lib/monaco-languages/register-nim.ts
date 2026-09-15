@@ -5,6 +5,7 @@ import { registerTextMateLanguage } from './textmate-language-registration'
 type MonacoModule = typeof Monaco
 
 export const NIM_LANGUAGE_ID = 'nim'
+
 export const NIM_TEXTMATE_SCOPE = 'source.nim'
 
 export const nimLanguageConfiguration: Monaco.languages.LanguageConfiguration = {
@@ -41,6 +42,7 @@ export async function loadNimTextMateGrammar(scopeName: string): Promise<IRawGra
   // Why: Nim highlighting uses the maintained VS Code TextMate grammar from
   // nim-lang/vscode-nim (MIT; see textmate-grammars/nim-LICENSE.txt).
   const grammarModule = await import('./textmate-grammars/nim.tmLanguage.json')
+
   return grammarModule.default as unknown as IRawGrammar
 }
 

@@ -38,6 +38,7 @@ export function UpdateCard(): React.JSX.Element | null {
   const [exiting, setExiting] = useState(false)
   const isLocalBuild = status.source === 'local'
   const versionRef = useRef<string | null>(null)
+
   if ('version' in status && status.version) {
     versionRef.current = status.version
   } else if (
@@ -47,7 +48,9 @@ export function UpdateCard(): React.JSX.Element | null {
   ) {
     versionRef.current = null
   }
+
   const prevVersionRef = useRef<string | null>(null)
+
   if (status.state === 'available' && status.version !== prevVersionRef.current) {
     prevVersionRef.current = status.version
     hasStartedDownload.current = false
@@ -55,12 +58,16 @@ export function UpdateCard(): React.JSX.Element | null {
     setMediaLoaded(false)
     setInstallError(null)
   }
+
   const prevStateRef = useRef(status.state)
+
   if (status.state !== prevStateRef.current) {
     prevStateRef.current = status.state
+
     if (autoDismissed) {
       setAutoDismissed(false)
     }
+
     if (exiting) {
       setExiting(false)
     }
@@ -68,11 +75,14 @@ export function UpdateCard(): React.JSX.Element | null {
 
   const shouldAutoDismissLatest =
     status.state === 'not-available' && 'userInitiated' in status && Boolean(status.userInitiated)
+
   useEffect(() => {
     if (!shouldAutoDismissLatest) {
       return
     }
+
     const timer = window.setTimeout(() => setAutoDismissed(true), 3000)
+
     return () => window.clearTimeout(timer)
   }, [shouldAutoDismissLatest])
   useEffect(() => {
@@ -84,16 +94,19 @@ export function UpdateCard(): React.JSX.Element | null {
   }, [status.state])
 
   const prefersReducedMotion = usePrefersReducedMotion()
+
   const clearAnimationTimers = useCallback(() => {
     if (dismissAnimationTimerRef.current !== null) {
       window.clearTimeout(dismissAnimationTimerRef.current)
       dismissAnimationTimerRef.current = null
     }
+
     if (collapseAnimationTimerRef.current !== null) {
       window.clearTimeout(collapseAnimationTimerRef.current)
       collapseAnimationTimerRef.current = null
     }
   }, [])
+
   const cardRootRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null) {
@@ -102,7 +115,9 @@ export function UpdateCard(): React.JSX.Element | null {
     },
     [clearAnimationTimers]
   )
+
   const cachedVersion = versionRef.current
+
   if (
     !isUpdateCardVisible({
       status,
@@ -118,23 +133,29 @@ export function UpdateCard(): React.JSX.Element | null {
 
   const handleUpdate = (): void => {
     hasStartedDownload.current = true
+
     if (!reassuranceSeen) {
       markReassuranceSeen()
     }
+
     void window.api.updater.download()
   }
+
   const handleClose = (): void => {
     dismissUpdate()
   }
+
   const handleInstallRetry = (): void => {
     void window.api.updater.quitAndInstall().catch((error) => {
       setInstallError(String((error as Error)?.message ?? error))
     })
   }
+
   const handleEnableHttp1Compatibility = (): void => {
     if (compatibilityRelaunching) {
       return
     }
+
     setCompatibilityRelaunching(true)
     setCompatibilitySetupError(null)
     void window.api.settings
@@ -147,6 +168,7 @@ export function UpdateCard(): React.JSX.Element | null {
         setCompatibilityRelaunching(false)
       })
   }
+
   const errorCard = buildUpdateCardErrorModel({
     status,
     isLocalBuild,
@@ -160,44 +182,58 @@ export function UpdateCard(): React.JSX.Element | null {
     onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
     onInstallRetry: handleInstallRetry
   })
+
   const linuxPackageRecovery =
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
       ? { recovery: status.recovery, diagnostic: status.message }
       : null
+
   const handleDismissWithAnimation = (): void => {
     if (prefersReducedMotion) {
       handleClose()
+
       return
     }
+
     setExiting(true)
+
     if (dismissAnimationTimerRef.current !== null) {
       window.clearTimeout(dismissAnimationTimerRef.current)
     }
+
     dismissAnimationTimerRef.current = window.setTimeout(() => {
       dismissAnimationTimerRef.current = null
       handleClose()
     }, 150)
   }
+
   const handleCollapseWithAnimation = (): void => {
     if (prefersReducedMotion) {
       setCollapsed(true)
+
       return
     }
+
     setExiting(true)
+
     if (collapseAnimationTimerRef.current !== null) {
       window.clearTimeout(collapseAnimationTimerRef.current)
     }
+
     collapseAnimationTimerRef.current = window.setTimeout(() => {
       collapseAnimationTimerRef.current = null
       setCollapsed(true)
       setExiting(false)
     }, 150)
   }
+
   const handleKeyDown = (event: React.KeyboardEvent): void => {
     if (event.key !== 'Escape') {
       return
     }
+
     event.preventDefault()
+
     if (
       status.state === 'downloading' ||
       status.state === 'downloaded' ||
@@ -234,9 +270,11 @@ export function UpdateCard(): React.JSX.Element | null {
     : exiting
       ? 'animate-update-card-exit'
       : 'animate-update-card-enter'
+
   const showReassurance =
     !reassuranceSeen &&
     ((status.state === 'available' && !status.externallyManaged) || status.state === 'downloading')
+
   return (
     <div ref={cardRootRef} className="flex flex-col gap-2">
       {showReassurance && (

@@ -198,9 +198,11 @@ describe('Orca cloud org members service (dev auth)', () => {
 
   it('serves an in-memory roster the caller can manage', async () => {
     const result = await listOrcaProfileOrgMembers(userDataPath, 'dev-list-org')
+
     if (result.status !== 'ok') {
       throw new Error(`Expected ok, got ${result.status}`)
     }
+
     expect(result.roster.canManageMembers).toBe(true)
     expect(result.roster.viewerRole).toBe('owner')
     expect(result.roster.members[0]).toMatchObject({ role: 'owner' })
@@ -220,9 +222,11 @@ describe('Orca cloud org members service (dev auth)', () => {
     ).resolves.toEqual({ status: 'ok' })
 
     const afterInvite = await listOrcaProfileOrgMembers(userDataPath, orgId)
+
     if (afterInvite.status !== 'ok') {
       throw new Error('expected ok')
     }
+
     expect(afterInvite.roster.pendingInvites.some((i) => i.email === 'fresh@orca.local')).toBe(true)
 
     await expect(
@@ -244,9 +248,11 @@ describe('Orca cloud org members service (dev auth)', () => {
   it('blocks changing the dev owner (self) role', async () => {
     const orgId = 'dev-self-org'
     const list = await listOrcaProfileOrgMembers(userDataPath, orgId)
+
     if (list.status !== 'ok') {
       throw new Error('expected ok')
     }
+
     const self = list.roster.members.find((member) => member.role === 'owner')
     await expect(
       changeOrcaProfileOrgMemberRole(userDataPath, {

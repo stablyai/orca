@@ -28,6 +28,7 @@ export function getWorktreeJumpPaletteEmptyState(controller: WorktreeJumpPalette
       )
     }
   }
+
   if (
     (controller.hasAnySearchableWorktrees ||
       controller.hasAnyProjectSearchCandidates ||
@@ -46,6 +47,7 @@ export function getWorktreeJumpPaletteEmptyState(controller: WorktreeJumpPalette
       )
     }
   }
+
   if (!controller.hasQuery && controller.hasAnyWorktrees && !controller.hasAnyOpenTabs) {
     return {
       title: translate(
@@ -58,6 +60,7 @@ export function getWorktreeJumpPaletteEmptyState(controller: WorktreeJumpPalette
       )
     }
   }
+
   return {
     title: translate(
       'auto.components.WorktreeJumpPalette.1628fd7dfa',

@@ -18,6 +18,7 @@ import { getOptionAsAltProbe } from './option-as-alt-probe'
 
 export function useDetectedOptionAsAlt(): DetectedLayoutCategory {
   const probe = getOptionAsAltProbe()
+
   return useSyncExternalStore(
     (notify) => probe.subscribe(() => notify()),
     () => probe.getCurrent(),
@@ -29,5 +30,6 @@ export function useEffectiveMacOptionAsAlt(
   setting: 'auto' | 'true' | 'false' | 'left' | 'right' | undefined
 ): EffectiveMacOptionAsAlt {
   const detected = useDetectedOptionAsAlt()
+
   return effectiveMacOptionAsAlt(setting ?? 'auto', detected)
 }

@@ -15,6 +15,7 @@ import { renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
  */
 async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
+
   try {
     handle = await open(directory, 'r')
     await handle.sync()
@@ -27,6 +28,7 @@ async function syncDirectory(directory: string): Promise<void> {
 
 function syncDirectorySync(directory: string): void {
   let fd: number | null = null
+
   try {
     fd = openSync(directory, 'r')
     fsyncSync(fd)
@@ -63,6 +65,7 @@ export async function writeTempFileDurable(
   mode?: number
 ): Promise<void> {
   const handle = await open(tmpPath, 'w', mode)
+
   try {
     await handle.writeFile(payload, 'utf-8')
     await handle.sync()
@@ -79,6 +82,7 @@ export async function writeTempFileDurable(
 export async function copyFileDurable(sourcePath: string, finalPath: string): Promise<boolean> {
   const tmpPath = durableWriteTempPath(finalPath)
   let renamed = false
+
   try {
     try {
       // copyFile stays in the kernel — and clones the extents outright on APFS and btrfs — so
@@ -88,17 +92,22 @@ export async function copyFileDurable(sourcePath: string, finalPath: string): Pr
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return false
       }
+
       throw error
     }
+
     const handle = await open(tmpPath, 'r+')
+
     try {
       await handle.sync()
     } finally {
       await handle.close()
     }
+
     await rename(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
+
     return true
   } finally {
     if (!renamed) {
@@ -129,15 +138,19 @@ export async function writeFileDurableIfCurrent(
   isCurrent: () => boolean
 ): Promise<boolean> {
   let renamed = false
+
   try {
     // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
     await writeTempFileDurable(tmpPath, payload)
+
     if (!isCurrent()) {
       return false
     }
+
     await rename(tmpPath, finalPath)
     renamed = true
     await syncDirectory(dirname(finalPath))
+
     return true
   } finally {
     if (!renamed) {
@@ -163,6 +176,7 @@ export async function removeStaleDurableWriteTempFiles(
   const directory = dirname(finalPath)
   const prefix = `${basename(finalPath)}.`
   const ownPrefix = `${prefix}${process.pid}.`
+
   try {
     const names = await readdir(directory)
     await Promise.all(
@@ -172,12 +186,15 @@ export async function removeStaleDurableWriteTempFiles(
         )
         .map(async (name) => {
           const path = join(directory, name)
+
           if (options.minimumAgeMs) {
             const info = await stat(path).catch(() => null)
+
             if (!info || Date.now() - info.mtimeMs < options.minimumAgeMs) {
               return
             }
           }
+
           await rm(path, { force: true }).catch(() => {})
         })
     )
@@ -193,15 +210,18 @@ export function writeFileDurableSync(
   payload: string | Uint8Array
 ): void {
   let renamed = false
+
   try {
     // A Uint8Array payload is written verbatim; a string still defaults to UTF-8.
     writeFileSync(tmpPath, payload)
     const fd = openSync(tmpPath, 'r+')
+
     try {
       fsyncSync(fd)
     } finally {
       closeSync(fd)
     }
+
     renameFileWithWindowsRetry(tmpPath, finalPath)
     renamed = true
     syncDirectorySync(dirname(finalPath))

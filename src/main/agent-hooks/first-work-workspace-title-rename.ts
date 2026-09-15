@@ -22,7 +22,9 @@ export async function runFolderWorkspaceTitleAutoRename(
   if (deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true) {
     return stop('folder workspace is not pending title rename', true)
   }
+
   const folderPath = deps.getFolderWorkspacePath?.(worktreeId)
+
   if (!folderPath) {
     return stop('folder workspace path unavailable')
   }
@@ -30,18 +32,23 @@ export async function runFolderWorkspaceTitleAutoRename(
   const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
   const settings = deps.getSettings()
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
+
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)
+
     return stop(`no generation agent: ${resolvedParams.error}`)
   }
+
   const target = await resolveGenerationTarget(
     folderPath,
     resolvedParams.params.agentId,
     null,
     deps
   )
+
   if (!target) {
     deps.setRenameError(worktreeId, 'Could not prepare the workspace-name generation environment.')
+
     return retry('could not prepare generation environment')
   }
 
@@ -50,6 +57,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     resolvedParams.params,
     target
   )
+
   // Generation may outlive a manual rename or workspace removal.
   if (
     deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true ||
@@ -57,10 +65,12 @@ export async function runFolderWorkspaceTitleAutoRename(
   ) {
     return stop('folder workspace changed during generation', true)
   }
+
   if (!generated.success) {
     if (!generated.canceled) {
       deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
     }
+
     return retry(`generation failed: ${generated.error}`)
   }
 
@@ -69,5 +79,6 @@ export async function runFolderWorkspaceTitleAutoRename(
   deps.setRenameError(worktreeId, null)
   deps.onRenamed(worktreeId)
   console.info(`[auto-branch-rename] renamed folder workspace title -> "${newDisplayName}"`)
+
   return true
 }

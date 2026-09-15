@@ -51,6 +51,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -112,6 +113,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
       setActiveWorktree: mocks.setActiveWorktree
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -120,6 +122,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         result: { browserPageId: 'remote-browser-page-1' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -195,6 +198,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   it('cleans up and reports failure when the created browser cannot reconcile', async () => {
     mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -209,6 +213,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       })
       .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
       .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -252,35 +257,46 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     })
     let resolveFirstList!: (response: unknown) => void
     let resolveSecondList!: (response: unknown) => void
+
     const firstList = new Promise((resolve) => {
       resolveFirstList = resolve
     })
+
     const secondList = new Promise((resolve) => {
       resolveSecondList = resolve
     })
+
     let createCount = 0
     let listCount = 0
+
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
         createCount += 1
+
         return Promise.resolve({
           id: `create-${createCount}`,
           ok: true,
           result: { browserPageId: `remote-browser-page-${createCount}` }
         })
       }
+
       if (request.method === 'session.tabs.list') {
         listCount += 1
+
         if (listCount === 1) {
           return firstList
         }
+
         if (listCount === 2) {
           return secondList
         }
+
         return Promise.resolve({ id: 'list-after-close', ok: true, result: makeSnapshot() })
       }
+
       return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
     })
+
     mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
       (_state, _environmentId, _worktreeId, remotePageId) =>
         remotePageId === 'remote-browser-page-2'
@@ -294,7 +310,9 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: true,
       focusOnCreate: false
     })
+
     await vi.waitFor(() => expect(listCount).toBe(1))
+
     const second = createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
       environmentId: SECOND_ENVIRONMENT_ID,
@@ -302,6 +320,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: false,
       focusOnCreate: false
     })
+
     await vi.waitFor(() => expect(createCount).toBe(2))
     expect(
       isWebSessionBrowserPlacementGroupReserved({
@@ -341,6 +360,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     })
     let rejectFirst!: (error: Error) => void
     let rejectSecond!: (error: Error) => void
+
     const runtimeCall = vi
       .fn()
       .mockReturnValueOnce(
@@ -353,6 +373,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
           rejectSecond = reject
         })
       )
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const first = createWebRuntimeSessionBrowserTab({
@@ -362,6 +383,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: true,
       focusOnCreate: false
     })
+
     const second = createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
       environmentId: SECOND_ENVIRONMENT_ID,
@@ -369,6 +391,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: false,
       focusOnCreate: false
     })
+
     rejectFirst(new Error('first host offline'))
     await expect(first).rejects.toThrow('did not confirm whether the browser tab was created')
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
@@ -390,24 +413,31 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       )
     })
     let resolveClose!: (response: unknown) => void
+
     const closeResponse = new Promise((resolve) => {
       resolveClose = resolve
     })
+
     let createCount = 0
     let listCount = 0
+
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
         createCount += 1
+
         return Promise.resolve({
           id: `create-${createCount}`,
           ok: true,
           result: { browserPageId: `remote-browser-page-${createCount}` }
         })
       }
+
       if (request.method === 'browser.tabClose') {
         return closeResponse
       }
+
       listCount += 1
+
       return Promise.resolve(
         listCount === 1
           ? {
@@ -418,6 +448,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
           : { id: `list-${listCount}`, ok: true, result: makeSnapshot() }
       )
     })
+
     mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
       (_state, _environmentId, _worktreeId, remotePageId) =>
         remotePageId === 'remote-browser-page-2'
@@ -431,11 +462,13 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: true,
       focusOnCreate: false
     })
+
     await vi.waitFor(() =>
       expect(
         runtimeCall.mock.calls.some(([request]) => request.method === 'browser.tabClose')
       ).toBe(true)
     )
+
     const second = createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
       environmentId: SECOND_ENVIRONMENT_ID,
@@ -443,6 +476,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: false,
       focusOnCreate: false
     })
+
     await vi.waitFor(() => expect(createCount).toBe(2))
 
     resolveClose({ id: 'close', ok: true, result: { closed: true } })

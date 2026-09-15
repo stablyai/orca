@@ -12,12 +12,14 @@ export const nativeNotificationSettingsOperations: NotificationSettingsOperation
     if (request) {
       await ensureNotificationPermissions()
     }
+
     return getNotificationPermissionState()
   },
   async preference(enabled) {
     if (enabled !== undefined) {
       await setRemotePushEnabled(enabled)
     }
+
     return { enabled: await loadPushNotificationsEnabled() }
   },
   openSettings: () => Linking.openSettings()

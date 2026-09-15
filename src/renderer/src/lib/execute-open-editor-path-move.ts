@@ -39,6 +39,7 @@ export async function executeOpenEditorPathMove(args: {
   // runtime) is a distinct file the rename never touched — keep it out of the move.
   const moveState = useAppStore.getState()
   const initiatingHostId = getExecutionHostIdForWorktree(moveState, worktreeId)
+
   const affected = moveState.openFiles.filter(
     (f) =>
       isPathInsideOrEqual(fromPath, f.filePath) &&
@@ -50,13 +51,17 @@ export async function executeOpenEditorPathMove(args: {
   // even though it wasn't in `affected`.
   const ownerSubOps: string[] = []
   const scopes = new Map<string, { worktreeId: string; owner: string | null }>()
+
   const addScope = (wtId: string, owner: string | null): void => {
     scopes.set(`${wtId}::${owner ?? 'local'}`, { worktreeId: wtId, owner })
   }
+
   addScope(worktreeId, getRuntimeEnvironmentIdForWorktree(moveState, worktreeId))
+
   for (const f of affected) {
     addScope(f.worktreeId, f.runtimeEnvironmentId?.trim() || null)
   }
+
   for (const [key, scope] of scopes) {
     const subOperationId = `${operationId}::${key}`
     ownerSubOps.push(subOperationId)
@@ -79,6 +84,7 @@ export async function executeOpenEditorPathMove(args: {
     for (const subOperationId of ownerSubOps) {
       settleEditorPathMove(subOperationId)
     }
+
     throw err
   }
 
@@ -101,16 +107,19 @@ export async function executeOpenEditorPathMove(args: {
       worktreeId,
       moveOperationId: operationId
     })
+
     if (!rekeyResult.ok) {
       // The disk rename succeeded but the editor state couldn't be retargeted
       // (a destination collision or stale plan). Undo the on-disk move so the
       // still-open source session isn't stranded pointing at a vanished path.
       let rollbackError: unknown
+
       try {
         await renameRuntimePath(context, toPath, fromPath)
       } catch (err) {
         rollbackError = err
       }
+
       const base = `Could not retarget open editors for the move (${rekeyResult.reason}).`
       throw new Error(
         rollbackError
@@ -138,6 +147,7 @@ export async function executeOpenEditorPathMove(args: {
     .getState()
     .openFiles.filter((f) => f.pendingSelfMoveEcho?.operationId === operationId)
     .map((f) => f.id)
+
   if (gatedTabIds.length > 0) {
     verifyLatchedMoveDestinations(worktreePath, context.connectionId, gatedTabIds)
   }

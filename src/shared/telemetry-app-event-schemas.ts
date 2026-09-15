@@ -29,12 +29,16 @@ export const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 export const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
 
 export const featureInteractionIdSchema = z.enum(FEATURE_INTERACTION_IDS)
+
 export const featureInteractionCategorySchema = z.enum(FEATURE_INTERACTION_CATEGORIES)
+
 export const featureInteractionUsageBucketSchema = z.enum(FEATURE_INTERACTION_USAGE_BUCKETS)
+
 export const featureInteractionUsageBucketSourceSchema = z.enum([
   'crossed_now',
   'observed_existing'
 ])
+
 export const featureInteractionUsageBucketReachedSchema = z
   .object({
     feature_id: featureInteractionIdSchema,
@@ -115,6 +119,7 @@ export const agentStartedSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
 export const agentPromptSentSchema = z
   .object({
     agent_kind: agentKindSchema,

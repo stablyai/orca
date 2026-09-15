@@ -72,6 +72,7 @@ export class SessionSearchFileRecords {
     const row = this.db
       .prepare('SELECT content_hash, content_hash_count FROM sessions WHERE id = ?')
       .get(rowId) as { content_hash: string | null; content_hash_count: number } | undefined
+
     return row ? { hash: row.content_hash, count: row.content_hash_count } : EMPTY_CONTENT_HASH
   }
 
@@ -92,6 +93,7 @@ export class SessionSearchFileRecords {
       contentHash.hash,
       contentHash.count
     ]
+
     this.db
       .prepare(
         `UPDATE sessions SET agent = ?, session_id = ?, file_path = ?, codex_home = ?, title = ?,

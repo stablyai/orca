@@ -6,6 +6,7 @@ import type { IPty } from 'node-pty'
 // require()'d child_process does not: the first version of this test passed
 // even with a fork() reintroduced, which is the failure it exists to catch.
 const forkMock = vi.hoisted(() => vi.fn())
+
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof ChildProcess>()),
   fork: forkMock

@@ -58,6 +58,7 @@ export class LogicalClientConnectionPath {
   setRecovery(path: MobileConnectionPath | null, attempt?: number): void {
     this.update(() => {
       this.recovery = path
+
       if (path === null) {
         this.recoveryAttempt = 0
       } else if (attempt !== undefined) {
@@ -74,6 +75,7 @@ export class LogicalClientConnectionPath {
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
@@ -83,6 +85,7 @@ export class LogicalClientConnectionPath {
     const previousRejected = this.pairingRejected
     const previousSignedOut = this.hostSignedOut
     apply()
+
     if (
       previousPath === this.pending() &&
       previousAttempt === this.reconnectAttempt(0) &&
@@ -91,6 +94,7 @@ export class LogicalClientConnectionPath {
     ) {
       return
     }
+
     for (const listener of this.listeners) {
       listener()
     }

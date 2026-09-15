@@ -39,7 +39,9 @@ const PENDING = {
 } as const
 
 const MAX_CODEX_PROMPT_QUESTIONS = 64
+
 const MAX_CODEX_PROMPT_OPTIONS = 64
+
 const PROMPT_OPTION_LIMITS = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1024 }
 
 function readParams(params: unknown): Record<string, unknown> {
@@ -48,6 +50,7 @@ function readParams(params: unknown): Record<string, unknown> {
 
 function readString(source: Record<string, unknown>, key: string): string | null {
   const value = source[key]
+
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
@@ -67,12 +70,15 @@ function boundPromptOptionLabel(value: string): string {
  */
 export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[] {
   const available = readParams(params).availableDecisions
+
   const offered = Array.isArray(available)
     ? available.filter((decision): decision is CodexApprovalDecision =>
         (CODEX_APPROVAL_DECISIONS as readonly unknown[]).includes(decision)
       )
     : []
+
   const decisions = offered.length > 0 ? offered : CODEX_APPROVAL_DECISIONS
+
   return decisions.map((decision) => ({ id: decision, label: APPROVAL_DECISION_LABELS[decision] }))
 }
 
@@ -84,6 +90,7 @@ export function codexApprovalItem(input: {
   detail: string | null
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
+
   return {
     kind: 'approval',
     title:
@@ -104,17 +111,23 @@ function boundNullablePromptText(value: string | null): string | null {
 
 function approvalDetail(params: Record<string, unknown>): string | null {
   const command = params.command
+
   if (typeof command === 'string' && command.length > 0) {
     return command
   }
+
   if (Array.isArray(command) && command.every((part) => typeof part === 'string')) {
     return command.join(' ')
   }
+
   const reason = readString(params, 'reason')
+
   if (reason) {
     return reason
   }
+
   const detail = params.grantRoot ?? params.changes
+
   return detail === undefined ? null : JSON.stringify(detail)
 }
 
@@ -136,17 +149,22 @@ export function codexQuestionItems(input: {
   params: unknown
 }): CodexQuestionItem[] {
   const questions = readParams(input.params).questions
+
   if (!Array.isArray(questions)) {
     return []
   }
+
   const items: CodexQuestionItem[] = []
+
   for (const entry of questions.slice(0, MAX_CODEX_PROMPT_QUESTIONS)) {
     const question = readParams(entry)
     const questionId = readString(question, 'id')
     const prompt = readString(question, 'question') ?? readString(question, 'header')
+
     if (!questionId || !prompt) {
       continue
     }
+
     items.push({
       questionId,
       identity: codexPromptIdentity({ ...input, questionId }),
@@ -161,11 +179,13 @@ export function codexQuestionItems(input: {
       }
     })
   }
+
   return items
 }
 
 function questionAllowsFreeText(question: Record<string, unknown>): boolean {
   const options = question.options
+
   return (
     !Array.isArray(options) ||
     options.length === 0 ||
@@ -178,16 +198,21 @@ function questionOptions(
   questionId: string
 ): AgentJournalPromptOption[] {
   const options = question.options
+
   if (!Array.isArray(options)) {
     return []
   }
+
   const mapped: AgentJournalPromptOption[] = []
+
   for (const entry of options) {
     if (mapped.length >= MAX_CODEX_PROMPT_OPTIONS) {
       break
     }
+
     const option = readParams(entry)
     const label = readString(option, 'label')
+
     if (label !== null && option.isOther !== true) {
       // The option id has to name its question: Codex's reply is a map keyed by
       // question id, and the client only ever hands back an option id.
@@ -197,6 +222,7 @@ function questionOptions(
       })
     }
   }
+
   return mapped
 }
 
@@ -212,6 +238,7 @@ export function codexPromptIdentity(input: {
   const suffix = input.questionId ? `:${codexJournalPromptIdPart(input.questionId)}` : ''
   const threadId = codexJournalPromptIdPart(input.threadId)
   const promptKey = codexJournalPromptIdPart(input.promptKey)
+
   return {
     provider: 'orca',
     clientMessageId: `codex-prompt:${threadId}:${promptKey}${suffix}`

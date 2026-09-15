@@ -82,6 +82,7 @@ export function createRichMarkdownKeyHandler(
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+
     if (
       handleRichMarkdownCitationKey({
         editor: ctx.editorRef.current,
@@ -92,6 +93,7 @@ export function createRichMarkdownKeyHandler(
     ) {
       return true
     }
+
     if (
       isMarkdownPreviewFindShortcut(
         event,
@@ -101,11 +103,14 @@ export function createRichMarkdownKeyHandler(
     ) {
       event.preventDefault()
       ctx.openSearchRef.current()
+
       return true
     }
+
     if (handleRichMarkdownSaveShortcut(ctx, event)) {
       return true
     }
+
     if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {
       return true
     }
@@ -115,6 +120,7 @@ export function createRichMarkdownKeyHandler(
     if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
       event.preventDefault()
       ctx.editorRef.current?.chain().focus().toggleStrike().run()
+
       return true
     }
 
@@ -135,6 +141,7 @@ export function createRichMarkdownKeyHandler(
 
     if (event.key === 'Backspace') {
       const ed = ctx.editorRef.current
+
       if (
         ed &&
         !isComposingMarkdownInput(event, ed) &&
@@ -144,24 +151,28 @@ export function createRichMarkdownKeyHandler(
           handleRichMarkdownTableBackspace(ed))
       ) {
         event.preventDefault()
+
         return true
       }
     }
 
     if (event.key === 'Delete') {
       const ed = ctx.editorRef.current
+
       if (
         ed &&
         !isComposingMarkdownInput(event, ed) &&
         deleteAdjacentEmptyParagraph(ed, 'forward')
       ) {
         event.preventDefault()
+
         return true
       }
     }
 
     if (event.key === 'Enter') {
       const ed = ctx.editorRef.current
+
       if (
         ed &&
         !isComposingMarkdownInput(event, ed) &&
@@ -170,12 +181,16 @@ export function createRichMarkdownKeyHandler(
       ) {
         ctx.typedEmptyOrderedListMarkerRef.current = false
         event.preventDefault()
+
         return true
       }
+
       if (ed && !isComposingMarkdownInput(event, ed) && exitTrailingEmptyOrderedListItem(ed)) {
         event.preventDefault()
+
         return true
       }
+
       // Why: table Enter (cell below / add row) must run before ProseMirror
       // inserts an in-cell paragraph that GFM serialization cannot keep — but
       // the slash/doc-link menus own Enter while open (their blocks run later).
@@ -187,6 +202,7 @@ export function createRichMarkdownKeyHandler(
         handleRichMarkdownTableEnter(ed)
       ) {
         event.preventDefault()
+
         return true
       }
     }
@@ -198,9 +214,11 @@ export function createRichMarkdownKeyHandler(
     if (event.key === 'Tab' && !ctx.slashMenuRef.current && !ctx.docLinkMenuRef.current) {
       event.preventDefault()
       const ed = ctx.editorRef.current
+
       if (!ed) {
         return true
       }
+
       flushPendingProseMirrorSelection(ed)
 
       // Why: Orca's Tab handler runs before TipTap Table shortcuts and used to
@@ -213,17 +231,20 @@ export function createRichMarkdownKeyHandler(
         if (!outdentRichMarkdownCodeBlock(ed)) {
           outdentRichMarkdownListItem(ed)
         }
+
         return true
       }
 
       if (ed.isActive('codeBlock')) {
         ed.commands.insertContent(RICH_MARKDOWN_CODE_BLOCK_INDENT)
+
         return true
       }
 
       // Why: sinkListItem succeeds when the item has a previous sibling;
       // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
       indentRichMarkdownListItem(ed)
+
       return true
     }
 
@@ -235,6 +256,7 @@ export function createRichMarkdownKeyHandler(
     // closed, fall through (no early return) so the slash-menu block below
     // still gets a chance.
     const currentDocLinkMenu = ctx.docLinkMenuRef.current
+
     if (currentDocLinkMenu) {
       const currentFilteredDocLinkRows = ctx.filteredDocLinkRowsRef.current
       const activeEditorForDocLink = ctx.editorRef.current
@@ -243,24 +265,30 @@ export function createRichMarkdownKeyHandler(
         if (currentFilteredDocLinkRows.length === 0) {
           return false
         }
+
         event.preventDefault()
         ctx.setSelectedDocLinkIndex(
           (currentIndex) => (currentIndex + 1) % currentFilteredDocLinkRows.length
         )
+
         return true
       }
+
       if (event.key === 'ArrowUp') {
         if (currentFilteredDocLinkRows.length === 0) {
           return false
         }
+
         event.preventDefault()
         ctx.setSelectedDocLinkIndex(
           (currentIndex) =>
             (currentIndex - 1 + currentFilteredDocLinkRows.length) %
             currentFilteredDocLinkRows.length
         )
+
         return true
       }
+
       if (event.key === 'Enter' || event.key === 'Tab') {
         // Why: with zero rows (empty state), Enter must fall through so it
         // behaves as a normal paragraph break instead of silently eating the
@@ -268,18 +296,24 @@ export function createRichMarkdownKeyHandler(
         if (currentFilteredDocLinkRows.length === 0 || !activeEditorForDocLink) {
           return false
         }
+
         event.preventDefault()
+
         const selectedRow =
           currentFilteredDocLinkRows[ctx.selectedDocLinkIndexRef.current] ??
           currentFilteredDocLinkRows[0]
+
         if (selectedRow) {
           commitRow(activeEditorForDocLink, currentDocLinkMenu, selectedRow)
         }
+
         return true
       }
+
       if (event.key === 'Escape') {
         event.preventDefault()
         ctx.setDocLinkMenu(null)
+
         return true
       }
       // Any other key (including ArrowLeft/ArrowRight, Backspace, printable
@@ -290,6 +324,7 @@ export function createRichMarkdownKeyHandler(
 
     // ── Slash menu navigation ─────────────────────────
     const currentSlashMenu = ctx.slashMenuRef.current
+
     if (!currentSlashMenu) {
       return false
     }
@@ -299,6 +334,7 @@ export function createRichMarkdownKeyHandler(
     if (event.key === 'Escape') {
       event.preventDefault()
       ctx.setSlashMenu(null)
+
       return true
     }
 
@@ -309,6 +345,7 @@ export function createRichMarkdownKeyHandler(
     // Why: handleKeyDown is frozen from the first render, so this closure
     // must read editorRef to get the live editor instance.
     const activeEditor = ctx.editorRef.current
+
     if (!activeEditor) {
       return false
     }
@@ -318,8 +355,10 @@ export function createRichMarkdownKeyHandler(
       ctx.setSelectedCommandIndex(
         (currentIndex) => (currentIndex + 1) % currentFilteredSlashCommands.length
       )
+
       return true
     }
+
     if (event.key === 'ArrowUp') {
       event.preventDefault()
       ctx.setSelectedCommandIndex(
@@ -327,13 +366,16 @@ export function createRichMarkdownKeyHandler(
           (currentIndex - 1 + currentFilteredSlashCommands.length) %
           currentFilteredSlashCommands.length
       )
+
       return true
     }
+
     if (event.key === 'Enter' || event.key === 'Tab') {
       event.preventDefault()
       // Why: this key handler is stable for the editor lifetime, so the ref
       // mirrors the latest highlighted slash-menu item for keyboard picks.
       const selectedCommand = currentFilteredSlashCommands[ctx.selectedCommandIndexRef.current]
+
       if (selectedCommand) {
         runSlashCommand(
           activeEditor,
@@ -343,8 +385,10 @@ export function createRichMarkdownKeyHandler(
           () => ctx.handleEmojiPickRef.current(currentSlashMenu)
         )
       }
+
       return true
     }
+
     return false
   }
 }

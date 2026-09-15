@@ -7,6 +7,7 @@ export function seedPowerlevel10kWizardEnv(
   if (options.envToDelete?.includes(POWERLEVEL10K_WIZARD_DISABLE_ENV)) {
     return
   }
+
   // Why: p10k's first-run wizard blocks shell startup and queued commands.
   // Users can still run `p10k configure` manually inside an Orca terminal.
   env[POWERLEVEL10K_WIZARD_DISABLE_ENV] ??= 'true'

@@ -20,11 +20,13 @@ beforeEach(() => {
   executables = new Map()
   statSyncMock.mockReset().mockImplementation((candidate: string) => {
     const entry = executables.get(candidate)
+
     if (!entry) {
       const error = new Error(`ENOENT: ${candidate}`) as NodeJS.ErrnoException
       error.code = 'ENOENT'
       throw error
     }
+
     return { isFile: () => entry.file, mode: entry.mode }
   })
 })
@@ -127,6 +129,7 @@ describe('buildLinuxPackageInstallCommand', () => {
     install('/usr/bin/sudo')
     install('/usr/bin/apt')
     const { buildLinuxPackageInstallCommand } = await loadCommandModule()
+
     for (const packagePath of ['orca.deb', './orca.deb', '--force-all', '-i']) {
       expect(buildLinuxPackageInstallCommand('deb', packagePath)).toEqual({
         ok: false,

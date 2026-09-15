@@ -29,19 +29,24 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     if (options?.env) {
       this.env = options.env
     }
+
     if (options?.userDataPath) {
       // Why: dev builds share one userData path; namespace per instance while packaged keeps the stable path for PTY reconnect.
       this.configureEndpointPaths(options.userDataPath, options.endpointNamespace)
     }
+
     this.token = randomUUID()
     this.endpointFileWritten = false
     this.lastWrittenJson = null
+
     if (!this.ownerStateInitialized) {
       // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
       if (this.lastStatusFilePath) {
         this.hydrateLastStatusFromDisk()
       }
+
       this.captureHydratedAuthorityCommitments()
+
       // Drain before binding the listener so replay cannot race a live hook during startup.
       if (this.endpointDir) {
         drainAgentHookSpool({
@@ -51,20 +56,26 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
         })
       }
+
       this.ownerStateInitialized = true
     }
+
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
         res.end()
+
         return
       }
+
       // Why: authenticate before spending work reading an untrusted body.
       if (req.headers['x-orca-agent-hook-token'] !== this.token) {
         res.writeHead(403)
         res.end()
+
         return
       }
+
       // Why: bound request time so a stalled client can't hold a socket open (slowloris).
       // Why: track our own destroy so the slowloris cap can't be misread as outside interference.
       let destroyedBySlowlorisCap = false
@@ -73,28 +84,38 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         req.destroy()
       })
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+
       try {
         const body = await readRequestBody(req)
+
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
           const statusLineEvent = parseClaudeStatusLineBody(body)
+
           if (statusLineEvent) {
             this.onClaudeStatusLine?.(statusLineEvent)
           }
+
           res.writeHead(204)
           res.end()
+
           return
         }
+
         const source = resolveHookSource(pathname)
+
         if (!source) {
           res.writeHead(404)
           res.end()
+
           return
         }
+
         // Why: merge transport headers before normalization so relay-compatible fields have one canonical path.
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
         trackEmptyPaneKeyHook(hookBody)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
               source,
@@ -104,21 +125,25 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
               launchToken: normalized.event.launchToken
             })
           : 'suppress'
+
         if (normalized.event && statusDisposition !== 'suppress') {
           const event =
             statusDisposition === 'restart'
               ? { ...normalized.event, launchToken: undefined }
               : normalized.event
+
           if (statusDisposition === 'restart') {
             // Why: a retired pane accepting a new turn is a different agent session behind the
             // same key — later observations must not be ordered against the retired one.
             this.observations.rebind(event.paneKey)
           }
+
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
           this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
         }
+
         res.writeHead(204)
         res.end()
       } catch (error) {
@@ -128,33 +153,40 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
           this.transportInterference.record({ source: resolveHookSource(pathname) ?? null, error })
         }
+
         // Why: fail open — return success on malformed payloads so a broken hook never blocks the agent.
         res.writeHead(204)
         res.end()
       }
     }
+
     // Why: node ignores a returned promise, so the handler must settle it itself; handleRequest never rejects.
     this.server = createServer((req, res) => {
       void handleRequest(req, res)
     })
+
     try {
       await new Promise<void>((resolve, reject) => {
         const onStartupError = (err: Error): void => {
           this.server?.off('listening', onListening)
           reject(err)
         }
+
         const onListening = (): void => {
           this.server?.off('error', onStartupError)
           this.server?.on('error', (err) => {
             console.error('[agent-hooks] server error', err)
           })
           const address = this.server!.address()
+
           if (address && typeof address === 'object') {
             this.port = address.port
           }
+
           this.maybeWriteEndpointFile()
           resolve()
         }
+
         this.server!.once('error', onStartupError)
         this.server!.listen(0, '127.0.0.1', onListening)
       })
@@ -182,9 +214,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()
+
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
+
     this.assistantMessageRetryTimers.clear()
     this.clearAllCodexSubagentPolls()
     this.endpointDir = null

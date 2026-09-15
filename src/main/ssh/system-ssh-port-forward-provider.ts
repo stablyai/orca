@@ -16,6 +16,7 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
 
   async start(conn: SshConnection, options: PortForwardStartOptions): Promise<StartedPortForward> {
     const target = conn.getTarget()
+
     const forward = await startSystemSshPortForwardProcess(
       target,
       options.localPort,
@@ -31,12 +32,15 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
     // (mirrors MAX_RELAY_STARTUP_BUFFER_BYTES in ssh-relay-deploy-helpers).
     const MAX_STDERR_TAIL_BYTES = 64 * 1024
     let stderr = ''
+
     const onStderr = (chunk: Buffer): void => {
       stderr += chunk.toString('utf-8')
+
       if (stderr.length > MAX_STDERR_TAIL_BYTES) {
         stderr = stderr.slice(-MAX_STDERR_TAIL_BYTES)
       }
     }
+
     forward.process.stderr?.on('data', onStderr)
 
     const entry = {

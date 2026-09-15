@@ -34,6 +34,7 @@ function ownerHello(overrides: Partial<PtyConsumerSessionHello> = {}): PtyConsum
 
 function createSession(options: { now?: () => number } = {}): PtyConsumerSession {
   let lease = 0
+
   return new PtyConsumerSession({
     serverBuildId: 'relay-build',
     createLease: () => `lease-${++lease}`,
@@ -124,6 +125,7 @@ describe('PtyConsumerSession', () => {
 
   it('cannot self-promote an authenticated but owner-ineligible principal', () => {
     const session = createSession()
+
     const admission = session.admit(
       ownerHello(),
       auth('connection-1', { allowSessionOwner: false })
@@ -155,6 +157,7 @@ describe('PtyConsumerSession', () => {
       }),
       auth('connection-2')
     )
+
     recovered.commitPublication()
 
     expect(recovered.grant).toMatchObject({
@@ -206,10 +209,12 @@ describe('PtyConsumerSession', () => {
       }),
       auth('connection-2')
     )
+
     recovered.rollbackPublication()
 
     expect(session.activeGrant('connection-1')).toBe(first.grant)
     expect(session.activeGrant('connection-2')).toBeNull()
+
     // Why: the restored incumbent must still hold the lease it was admitted with.
     const reclaimed = session.admit(
       ownerHello({
@@ -220,6 +225,7 @@ describe('PtyConsumerSession', () => {
       }),
       auth('connection-3')
     )
+
     expect(reclaimed.displacedOwner?.connectionId).toBe('connection-1')
   })
 
@@ -238,6 +244,7 @@ describe('PtyConsumerSession', () => {
       }),
       auth('connection-2')
     )
+
     session.close('connection-1')
     recovered.rollbackPublication()
 
@@ -273,10 +280,12 @@ describe('PtyConsumerSession', () => {
     const session = createSession()
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
+
     const resume = {
       ownerGeneration: first.grant.ownerGeneration!,
       ownerLease: first.grant.ownerLease!
     }
+
     const replacement = session.admit(ownerHello({ resume }), auth('connection-2'))
 
     expect(() => session.admit(ownerHello({ resume }), auth('connection-3'))).toThrow(
@@ -312,10 +321,12 @@ describe('PtyConsumerSession', () => {
     const session = createSession()
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
+
     const resume = {
       ownerGeneration: first.grant.ownerGeneration!,
       ownerLease: first.grant.ownerLease!
     }
+
     const replacement = session.admit(ownerHello({ resume }), auth('connection-2'))
     replacement.commitPublication()
     session.close('connection-2')
@@ -333,10 +344,12 @@ describe('PtyConsumerSession', () => {
     const session = createSession()
     const first = session.admit(ownerHello(), auth('connection-1'))
     first.commitPublication()
+
     const resume = {
       ownerGeneration: first.grant.ownerGeneration!,
       ownerLease: first.grant.ownerLease!
     }
+
     const replacement = session.admit(ownerHello({ resume }), auth('connection-2'))
 
     expect(() => session.admit(ownerHello({ resume }), auth('connection-3'))).toThrow(
@@ -379,6 +392,7 @@ describe('PtyConsumerSession', () => {
       ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'lease-1' } }),
       auth('connection-5')
     )
+
     expect(recovered.grant).toMatchObject({
       role: 'session-owner',
       ownerGeneration: 2,
@@ -437,6 +451,7 @@ describe('PtyConsumerSession', () => {
     )
 
     now += 5_000
+
     const recovered = session.admit(
       ownerHello({ resume: { ownerGeneration: 1, ownerLease: 'lease-1' } }),
       auth('connection-4')
@@ -507,6 +522,7 @@ describe('PtyConsumerSession', () => {
       ownerHello({ clientInstanceId: 'client-b' }),
       auth('connection-2', { principal: 'other' })
     )
+
     expect(next.grant).toMatchObject({ role: 'session-owner', ownerGeneration: 2 })
   })
 
@@ -516,6 +532,7 @@ describe('PtyConsumerSession', () => {
       outputFlowControl: { versions: [1], maxWindowSu: 64 },
       createLease: () => 'lease'
     })
+
     const admission = session.admit(
       ownerHello({
         capabilities: {

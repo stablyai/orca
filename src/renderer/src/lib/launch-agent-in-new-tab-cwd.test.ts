@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockQueueTabInitialCwd = vi.fn()
+
 const mockLaunchAgentInWebHostTab = vi.fn()
+
 const mockIsWebRuntimeSessionActive = vi.fn()
 
 const store = {

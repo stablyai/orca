@@ -109,12 +109,15 @@ export class OrchestrationStructuredMailboxPointerDelivery<
 
   deliverForHandle(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): boolean {
     const target = this.deps.resolveStructuredTarget(mailboxHandle)
+
     if (!target) {
       return false
     }
+
     void this.deliver(mailboxHandle, target, reservedTypes).catch(() => {
       // Durable mail stays available to an explicit check or the next settle edge.
     })
+
     return true
   }
 
@@ -125,13 +128,16 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       if (parked.sessionId !== sessionId) {
         continue
       }
+
       this.parkedUntilJournalEdge.delete(mailboxHandle)
       const target = this.deps.resolveStructuredTarget(mailboxHandle)
+
       if (target?.sessionId !== sessionId) {
         // The mailbox moved off this session (or cannot be resolved right now); its own edge or an
         // explicit check is what retries it, not this session's journal.
         continue
       }
+
       void this.deliver(mailboxHandle, target, parked.reservedTypes).catch(() => undefined)
     }
   }
@@ -157,9 +163,11 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes?: ReadonlySet<string>
   ): Promise<void> {
     const db = this.deps.getDb()
+
     if (!db || this.inFlight.has(mailboxHandle)) {
       return
     }
+
     // Don't re-nudge a mailbox whose consumer still holds an unacknowledged batch. The lookup is
     // keyed on the exact handle being nudged, so a coordinator's own `run:` delivery is invisible
     // to a worker's `dispatch:` gate and cannot suppress the nudges a coordinator sends its
@@ -168,16 +176,20 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
       return
     }
+
     const unread = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters: this.deps.getMessageWaiters(mailboxHandle),
       reservedTypes
     })
+
     if (unread.length === 0) {
       return
     }
+
     this.inFlight.add(mailboxHandle)
+
     try {
       await this.attempt(db, mailboxHandle, target, unread, reservedTypes)
     } finally {
@@ -194,6 +206,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   ): Promise<void> {
     const sessionId = target.sessionId
     const session = this.deps.host.readGateFacts(sessionId)
+
     // `target.refusal` is the snapshot the resolver already admitted, so this branch re-runs the
     // owner test on frozen input and can only agree with it. What actually fences an owner that
     // changed since resolution is `expectedRuntimeFence` below: a handoff bumps the lease fence,
@@ -203,21 +216,29 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const decision = target.refusal
       ? decideStructuredPointerDelivery({ session, refusal: target.refusal })
       : decideStructuredSessionPointerDelivery({ session })
+
     if (!decision.deliver) {
       this.retain(mailboxHandle, sessionId, decision.retain, reservedTypes)
+
       return
     }
+
     const fence = this.deps.host.currentFence(sessionId)
+
     if (fence === null) {
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
+
       return
     }
+
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
       blocks: [{ type: 'text', text: formatMessagePointer(unread.length, mailboxHandle).trim() }]
     }
+
     const staged = unread.map((message) => message.id)
+
     const operation = resolveStructuredPointerOperation({
       db,
       mailboxHandle,
@@ -225,6 +246,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       body,
       messageIds: staged
     })
+
     const outcome = await this.deps.host.send({
       sessionId,
       dispatchId: target.dispatchId,
@@ -233,22 +255,28 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       expectedRuntimeFence: fence,
       body
     })
+
     if (outcome.kind === 'unattached') {
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
+
       return
     }
+
     if (!structuredDispatchDelivered(outcome.state)) {
       if (outcome.state === 'rejected') {
         db.deleteStructuredPointerOperation(mailboxHandle)
       }
+
       this.retain(
         mailboxHandle,
         sessionId,
         retainReasonForDispatch(outcome.state as Exclude<StructuredDispatchState, 'accepted'>),
         reservedTypes
       )
+
       return
     }
+
     db.markAsDelivered(staged)
     // The nudge landed as its own turn, so the next settle edge is the natural retry point for
     // anything that arrives while it runs.
@@ -263,6 +291,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes: ReadonlySet<string> | undefined
   ): void {
     this.deps.onRetain?.({ mailboxHandle, sessionId, reason })
+
     if (retainWaitsForJournalEdge(reason)) {
       this.parkedUntilJournalEdge.set(mailboxHandle, { sessionId, reservedTypes })
     }

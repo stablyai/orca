@@ -50,9 +50,11 @@ export function shouldRefreshGitStatusForFileChange(
     if (event.kind === 'overflow') {
       return true
     }
+
     if (event.isDirectory === true) {
       return false
     }
+
     return relativePathInsideRoot(worktreePath, event.absolutePath) !== null
   })
 }
@@ -74,8 +76,10 @@ export function useGitStatusFileWatchRefresh({
   const activeRuntimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
   )
+
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus
+
   const shouldSubscribe =
     enabled &&
     !!activeWorktreeId &&
@@ -103,38 +107,49 @@ export function useGitStatusFileWatchRefresh({
       if (!isWindowVisible()) {
         return
       }
+
       if (refreshTimer) {
         clearTimeout(refreshTimer)
       }
+
       // Why: file watchers deliver atomic writes as bursts, but git status is
       // already coalesced and should only be nudged once per burst.
       refreshTimer = setTimeout(() => {
         refreshTimer = null
+
         if (!isWindowVisible()) {
           return
         }
+
         fetchStatusRef.current()
       }, WATCH_REFRESH_DEBOUNCE_MS)
     }
+
     const handleFsChanged = (event: Event): void => {
       const detail = (event as CustomEvent<WorktreeFileChangeEventDetail>).detail
+
       if (!detail) {
         return
       }
+
       if ((detail.runtimeEnvironmentId ?? null) !== (activeRuntimeEnvironmentId ?? null)) {
         return
       }
+
       const { payload } = detail
+
       if (shouldRefreshGitStatusForFileChange(payload, worktreePath)) {
         scheduleRefresh()
       }
     }
+
     window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleFsChanged as EventListener)
 
     return () => {
       if (refreshTimer) {
         clearTimeout(refreshTimer)
       }
+
       window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleFsChanged as EventListener)
     }
   }, [activeRuntimeEnvironmentId, shouldSubscribe, worktreePath])

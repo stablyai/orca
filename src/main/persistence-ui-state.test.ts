@@ -24,6 +24,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -43,9 +44,11 @@ async function createStore() {
     encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     },
     describeProtectionGap: () => null
@@ -55,6 +58,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
@@ -151,6 +155,7 @@ describe('Store', () => {
 
   it('updateUI skips save and notification when normalized UI is unchanged', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       const notifications: PersistedState['ui'][] = []
@@ -447,6 +452,7 @@ describe('Store', () => {
     const persisted = readDataFile() as PersistedState & {
       ui: Record<string, unknown>
     }
+
     expect(persisted.featureInteractionTelemetryBuckets).toEqual({ tasks: 'count_2' })
     expect(persisted.ui.featureInteractionTelemetryBuckets).toBeUndefined()
   })
@@ -708,6 +714,7 @@ describe('Store', () => {
     const persisted = readDataFile() as {
       sshPtyConsumerRecoveries: { ownerLease: string }[]
     }
+
     expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).not.toBe('secret-owner-lease')
     expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(false)
 

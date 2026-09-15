@@ -43,6 +43,7 @@ vi.mock('react-native-safe-area-context', () => ({
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
+
   return {
     useFocusEffect(effect: () => void | (() => void)): void {
       React.useEffect(effect, [effect])
@@ -75,9 +76,11 @@ vi.mock('./transport/client-context', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       if (method === 'accounts.consumeCodexResetCredit') {
         return dependencies.resetRequest(params, options)
       }
+
       if (
         method === 'accounts.selectCodex' ||
         method === 'accounts.selectCodexForTarget' ||
@@ -85,17 +88,21 @@ vi.mock('./transport/client-context', () => {
       ) {
         return dependencies.selectRequest(method, params)
       }
+
       if (method === 'accounts.list') {
         return { id: 'list', ok: true, result: AVAILABLE_SNAPSHOT }
       }
+
       throw new Error(`Unexpected request: ${method}`)
     },
     subscribe: (_method: string, _params: unknown, onData: (payload: unknown) => void) => {
       dependencies.subscriptionListeners.push(onData)
       onData({ type: 'ready', snapshot: AVAILABLE_SNAPSHOT })
+
       return vi.fn()
     }
   }
+
   return {
     useHostClient: () => ({ client, state: 'connected' })
   }
@@ -163,9 +170,11 @@ async function renderAccountsRoute(): Promise<ReactTestRenderer> {
     renderer = create(createElement(AccountsScreen))
     await Promise.resolve()
   })
+
   if (!renderer) {
     throw new Error('Accounts route did not render')
   }
+
   return renderer
 }
 
@@ -185,6 +194,7 @@ function systemDefaultButtons(renderer: ReactTestRenderer) {
 
 async function findResetButton(renderer: ReactTestRenderer) {
   await vi.waitFor(() => expect(resetButtons(renderer)).toHaveLength(1))
+
   return resetButtons(renderer)[0]!
 }
 
@@ -192,10 +202,13 @@ function getLatestConfirmAction(): () => void {
   const call = dependencies.alert.mock.calls
     .toReversed()
     .find(([title]) => title === 'Use a rate-limit reset?')
+
   const action = call?.[2]?.[1]?.onPress
+
   if (typeof action !== 'function') {
     throw new Error('Reset confirmation action not found')
   }
+
   return action
 }
 
@@ -329,6 +342,7 @@ describe('accounts route Codex reset credit', () => {
         activeAccountIdsByRuntime: { host: null, wsl: {} }
       }
     }
+
     dependencies.resetRequest.mockImplementation((params) => ({
       id: 'reset',
       ok: true,
@@ -364,6 +378,7 @@ describe('accounts route Codex reset credit', () => {
 
   it('passes the active WSL target when clearing the Codex selection', async () => {
     const renderer = await renderAccountsRoute()
+
     const wslSnapshot = {
       ...AVAILABLE_SNAPSHOT,
       codex: {

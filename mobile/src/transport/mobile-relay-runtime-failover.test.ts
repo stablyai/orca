@@ -21,9 +21,11 @@ import type { ConnectionState, HostProfile, RpcResponse } from './types'
 // LAN endpoint forever and never recovered a relay runtime session.
 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+
 vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked'
 }))
+
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length)
 }))
@@ -61,11 +63,13 @@ class FakeSession implements RpcClient {
   getLastConnectedAt = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
   publishState(state: ConnectionState): void {
     this.state = state
+
     for (const listener of this.listeners) {
       listener(state)
     }
@@ -108,6 +112,7 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
       session.close()
       throw new Error(`replacement session ${session.getState()}`)
     }
+
     this.path = path
     this.recoveryPath = null
     this.recoveryAttempt = 0
@@ -123,11 +128,13 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     const previous = this.getPendingPath()
     const previousAttempt = this.getReconnectAttempt()
     this.recoveryPath = path
+
     if (path === null) {
       this.recoveryAttempt = 0
     } else if (attempt !== undefined) {
       this.recoveryAttempt = attempt
     }
+
     if (previous !== this.getPendingPath() || previousAttempt !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
@@ -139,7 +146,9 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     if (this.pairingRejected === rejected) {
       return
     }
+
     this.pairingRejected = rejected
+
     for (const listener of this.pathListeners) {
       listener()
     }
@@ -150,7 +159,9 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     if (this.hostSignedOut === signedOut) {
       return
     }
+
     this.hostSignedOut = signedOut
+
     for (const listener of this.pathListeners) {
       listener()
     }
@@ -162,11 +173,13 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
       this.pairingRejected = false
       this.hostSignedOut = false
     }
+
     super.publishState(state)
   }
   setRecoveryAttempt = vi.fn((attempt: number) => {
     const previous = this.getReconnectAttempt()
     this.recoveryAttempt = attempt
+
     if (previous !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
@@ -175,6 +188,7 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   })
   onConnectionPathChange = vi.fn((listener: () => void) => {
     this.pathListeners.add(listener)
+
     return () => this.pathListeners.delete(listener)
   })
   getGeneration = () => this.generation
@@ -256,13 +270,16 @@ describe('relay runtime recovery without direct connectivity', () => {
 
   it('recovers from a rejected outer credential once a fresher bundle is durable', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const openRelay = vi
       .fn()
       .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4401)))
       .mockImplementation(() => new FakeRelaySession('connected'))
+
     const readBundle = vi
       .fn(async () => bundleWith(3, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(bundleWith(2, Number.MAX_SAFE_INTEGER))
+
     const deps = dependencies({ openRelay, readBundle })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -285,9 +302,11 @@ describe('relay runtime recovery without direct connectivity', () => {
 
   it('recovers when the credential bundle was unreadable at supervisor start', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const readBundle = vi
       .fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(null)
+
     const deps = dependencies({ readBundle })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -325,12 +344,14 @@ describe('relay runtime recovery without direct connectivity', () => {
 
   it('retries after an E2EE authentication rejection without a UI nudge', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const openRelay = vi
       .fn()
       .mockReturnValueOnce(
         new FakeRelaySession('disconnected', new MobileE2EEAuthenticationError())
       )
       .mockImplementation(() => new FakeRelaySession('connected'))
+
     const deps = dependencies({ openRelay })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -350,10 +371,12 @@ describe('relay runtime recovery without direct connectivity', () => {
     // keeping current.version — version comparison cannot see this freshness.
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const expired = bundleWith(2, Date.now() - 1)
+
     const readBundle = vi
       .fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(expired)
       .mockResolvedValueOnce(expired)
+
     const deps = dependencies({ readBundle })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -377,13 +400,16 @@ describe('relay runtime recovery without direct connectivity', () => {
     // Why: re-pairing overwrites the same keychain slot with a NEW credential
     // record whose counter restarts at 1 — lower than the rejected version.
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const openRelay = vi
       .fn()
       .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4401)))
       .mockImplementation(() => new FakeRelaySession('connected'))
+
     const readBundle = vi
       .fn(async () => bundleWith(1, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(bundleWith(4, Number.MAX_SAFE_INTEGER))
+
     const deps = dependencies({ openRelay, readBundle })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -427,12 +453,14 @@ describe('relay runtime recovery without direct connectivity', () => {
 
   it('recovers immediately on a background/foreground cycle after an E2EE rejection', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const openRelay = vi
       .fn()
       .mockReturnValueOnce(
         new FakeRelaySession('disconnected', new MobileE2EEAuthenticationError())
       )
       .mockImplementation(() => new FakeRelaySession('connected'))
+
     const deps = dependencies({ openRelay })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -537,6 +565,7 @@ describe('failover with a real direct rpc-client', () => {
       connect(DIRECT_ENDPOINT, host.deviceToken, host.publicKeyB64),
       'tailscale' as MobileConnectionPath
     )
+
     const deps = dependencies()
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
@@ -554,12 +583,15 @@ describe('failover with a real direct rpc-client', () => {
       connect(DIRECT_ENDPOINT, host.deviceToken, host.publicKeyB64),
       'tailscale' as MobileConnectionPath
     )
+
     const deps = dependencies({
       readBundle: vi.fn(async () => {
         await new Promise((resolve) => setTimeout(resolve, 200))
+
         return bundleWith(2, Number.MAX_SAFE_INTEGER)
       })
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     const started = supervisor.start()

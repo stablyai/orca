@@ -50,23 +50,31 @@ export async function readWorkerTranscript(args: {
   filesystemProvider?: IFilesystemProvider
 }): Promise<WorkerTranscriptReadResult> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
+
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
+
   const decode = nativeChatLineDecoderForAgent(args.agent)
+
   if (!decode) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
+
   let filePath: string | null
+
   if (args.filesystemProvider) {
     // A remote provider can only read the hook-attested path. Never search the
     // desktop's provider roots for a remote session (same-path sentinels are a
     // real authority boundary, not merely a portability concern).
     filePath = args.transcriptPath?.trim() || null
+
     if (!filePath) {
       return { ok: false, reason: 'transcript_missing', warnings: [] }
     }
+
     const page = await readRemoteWorkerTranscript(args, filePath, decode)
+
     if (
       page.ok &&
       args.expectedSourceFingerprint &&
@@ -74,8 +82,10 @@ export async function readWorkerTranscript(args: {
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
+
     return page
   }
+
   try {
     filePath = await resolveSessionFilePath(args.agent, args.sessionId, {
       transcriptPath: args.transcriptPath,
@@ -84,10 +94,13 @@ export async function readWorkerTranscript(args: {
   } catch {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
+
   if (!filePath) {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
   }
+
   const limit = clampWorkerTranscriptLimit(args.limit)
+
   try {
     const page =
       args.offset === undefined
@@ -99,16 +112,20 @@ export async function readWorkerTranscript(args: {
             decode,
             args.expectedBoundaryCheckpoint
           )
+
     if (!page.ok) {
       return page
     }
+
     if (
       args.expectedSourceFingerprint &&
       page.sourceFingerprint !== args.expectedSourceFingerprint
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
+
     const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+
     return {
       ok: true,
       filePath,
@@ -125,6 +142,7 @@ export async function readWorkerTranscript(args: {
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code
+
     return {
       ok: false,
       reason:

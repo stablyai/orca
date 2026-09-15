@@ -18,6 +18,7 @@ const assignment = {
   assignmentEpoch: 3,
   lease: 'synthetic-assignment'
 }
+
 const window = {
   generation: 1,
   assignmentEpoch: 3,
@@ -25,6 +26,7 @@ const window = {
   expiresAt: 100_000_000,
   policyVersion: 1
 }
+
 function request(fetch: typeof globalThis.fetch) {
   return requestRelayAssignment({
     directorUrl: 'https://director.example.test',
@@ -41,13 +43,16 @@ function request(fetch: typeof globalThis.fetch) {
 describe('relay correction mixed-version wire contracts', () => {
   it('new desktop falls back against the actual pinned old director parser', async () => {
     const bodies: unknown[] = []
+
     const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
       const body: unknown = JSON.parse(String(init?.body))
       bodies.push(body)
+
       return BaselineRequest.safeParse(body).success
         ? Response.json(BaselineResponse.parse(assignment))
         : new Response(null, { status: 400 })
     })
+
     expect(await request(fetch)).toEqual(assignment)
     expect(bodies).toHaveLength(2)
     expect(AssignmentRequestSchema.safeParse(bodies[0]).success).toBe(true)
@@ -74,6 +79,7 @@ describe('relay correction mixed-version wire contracts', () => {
       hostPublicKeyB64: Buffer.alloc(32).toString('base64'),
       appVersion: 'test'
     }
+
     expect(BaselineHello.parse(HostHelloSchema.parse(hello))).toEqual(hello)
     expect(BaselineHello.safeParse({ ...hello, idleRegionalRehome: true }).success).toBe(false)
   })

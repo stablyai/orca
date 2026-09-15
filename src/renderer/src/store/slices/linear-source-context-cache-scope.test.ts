@@ -8,23 +8,38 @@ import {
 import { createTestStore, deferred, issue, project } from './linear-slice-test-harness'
 
 const linearStatus = vi.fn()
+
 const linearConnect = vi.fn()
+
 const linearDisconnect = vi.fn()
+
 const linearListIssues = vi.fn()
+
 const linearSearchIssues = vi.fn()
+
 const linearListTeams = vi.fn()
+
 const linearGetIssue = vi.fn()
+
 const linearListProjects = vi.fn()
+
 const linearGetCustomView = vi.fn()
+
 const linearGetProject = vi.fn()
+
 const linearListProjectIssues = vi.fn()
+
 const linearListCustomViews = vi.fn()
+
 const linearListCustomViewIssues = vi.fn()
+
 const linearListCustomViewProjects = vi.fn()
+
 const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearConnect: (...args: unknown[]) => linearConnect(...args),
@@ -40,6 +55,7 @@ vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
 
 vi.mock('@/runtime/runtime-linear-issue-mutations', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
@@ -48,6 +64,7 @@ vi.mock('@/runtime/runtime-linear-issue-mutations', async (importOriginal) => {
 
 vi.mock('@/runtime/runtime-linear-project-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
@@ -117,6 +134,7 @@ describe('createLinearSlice caching', () => {
     const request = store
       .getState()
       .listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { sourceContext })
+
     store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
 
     sourceResult.resolve({ items: [issue('LIN-SOURCE')] })

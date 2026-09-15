@@ -29,6 +29,7 @@ import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-pro
 // indefinitely. Accepted tradeoff: high-scrollback users rely on unmount
 // eviction, not demotion.
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
+
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
 
 export function createTerminalWorktreeTopologyProjection(
@@ -54,6 +55,7 @@ export function hasPendingRetentionSpawnWork(
   if (pendingStartupByTabId[tab.id] !== undefined) {
     return true
   }
+
   // Why: paired mirrors never spawn locally; their host-backed PTY id proves
   // activation's sort-suppression residue cannot represent unfinished work.
   return Boolean(tab.pendingActivationSpawn && (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId)))
@@ -84,13 +86,17 @@ export function classifyEvictionExemptTerminalPty(
   if (!ptyId || isRemoteExecutionHostPtyId(ptyId)) {
     return null
   }
+
   const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+
   if (separatorIdx === -1) {
     return 'fail-open'
   }
+
   if (ptyId.slice(0, separatorIdx) !== worktreeId) {
     return 'foreign-worktree'
   }
+
   return terminalProviderHasAuthoritativeSnapshot(ptyId) ? null : 'capability-unknown'
 }
 
@@ -112,6 +118,7 @@ export function countEvictionExemptTabRoutes(
     capabilityUnknown: 0,
     splitPane: 0
   }
+
   for (const tab of tabs) {
     switch (classifyEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
       case 'fail-open':
@@ -128,6 +135,7 @@ export function countEvictionExemptTabRoutes(
         break
     }
   }
+
   return counts
 }
 
@@ -176,8 +184,10 @@ export function selectRetentionForceParkedTerminalWorktrees(
   if (!args.parkingEnabled || !args.retentionBudgetEnabled) {
     return new Set()
   }
+
   const coldParkDelayMs = args.coldParkDelayMs ?? TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
   const candidates: ColdParkRetainCandidate[] = []
+
   for (const worktree of args.worktrees) {
     if (
       worktree.hiddenSinceMs === null ||
@@ -191,14 +201,18 @@ export function selectRetentionForceParkedTerminalWorktrees(
     ) {
       continue
     }
+
     candidates.push({ id: worktree.worktreeId, hiddenSinceMs: worktree.hiddenSinceMs })
   }
+
   const retentionTtlMs = args.retentionTtlMs ?? TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS
+
   const forceParkedIds = selectIdsBeyondHotRetain(candidates, {
     nowMs: args.nowMs,
     hotRetainMs: retentionTtlMs,
     hotRetainLimit: args.retentionLimit ?? TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT
   })
+
   // Why re-applied here: selectIdsBeyondHotRetain spares the last-active id from
   // its clock too, which is right for the warm cap (instant return after a
   // meeting) but makes "none past 15 minutes" false for a lone hidden worktree.
@@ -207,6 +221,7 @@ export function selectRetentionForceParkedTerminalWorktrees(
       forceParkedIds.add(candidate.id)
     }
   }
+
   return forceParkedIds
 }
 

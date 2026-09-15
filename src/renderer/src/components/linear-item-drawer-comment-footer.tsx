@@ -44,18 +44,22 @@ export function LinearIssueCommentFooter({
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
+
     if (!el) {
       return
     }
+
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`
   }, [])
 
   const handleSubmit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
+
     if (bodyState.status === 'empty') {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -63,9 +67,12 @@ export function LinearIssueCommentFooter({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setSubmitting(true)
+
     try {
       const result = await linearAddIssueComment(
         providerSettings,
@@ -73,10 +80,13 @@ export function LinearIssueCommentFooter({
         bodyState.body,
         workspaceId
       )
+
       const typed = result as { ok: boolean; id?: string; error?: string }
+
       if (!mountedRef.current) {
         return
       }
+
       if (typed.ok) {
         setBody('')
         useAppStore.getState().recordFeatureInteraction('linear-tasks')
@@ -105,6 +115,7 @@ export function LinearIssueCommentFooter({
       }
     }
   }, [body, issueId, onCommentAdded, providerSettings, workspaceId])
+
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(

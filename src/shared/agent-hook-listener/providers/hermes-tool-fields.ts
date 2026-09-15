@@ -24,6 +24,7 @@ export function extractHermesToolFields(
       (eventName === 'pre_approval_request' || eventName === 'post_approval_response'
         ? 'approval'
         : undefined)
+
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.args) ??
@@ -34,6 +35,7 @@ export function extractHermesToolFields(
       deriveFallbackToolInputPreview(hookPayload.input) ??
       readString(hookPayload, 'command') ??
       readString(hookPayload, 'description')
+
     const update: ToolSnapshot = toolUpdate(
       { toolName, toolInput },
       {
@@ -46,26 +48,32 @@ export function extractHermesToolFields(
         ])
       }
     )
+
     if (eventName === 'post_tool_call') {
       const responseText =
         extractToolResponseText(hookPayload.result) ??
         extractToolResponseText(hookPayload.tool_response) ??
         extractToolResponseText(hookPayload.output)
+
       if (responseText) {
         update.lastAssistantMessage = responseText
         update.lastAssistantMessageIsToolOutput = true
       }
     }
+
     return update
   }
+
   if (eventName === 'post_llm_call') {
     const message =
       readString(hookPayload, 'last_assistant_message') ??
       readString(hookPayload, 'assistant_response') ??
       readString(hookPayload, 'response_text')
+
     if (message) {
       return { lastAssistantMessage: message }
     }
   }
+
   return {}
 }

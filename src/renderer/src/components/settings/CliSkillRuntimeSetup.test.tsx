@@ -21,29 +21,35 @@ function decodeWslLoginShellScript(command: string): string {
     /(?:--|--exec) sh -c '(?:eval \\"`|sh -c \\"\$\()?printf %s ([A-Za-z0-9+/=]+) \| base64 -d/.exec(
       command
     )?.[1]
+
   expect(encoded).toBeDefined()
+
   return Buffer.from(encoded!, 'base64').toString('utf8')
 }
 
 function getWslOuterShellScript(command: string): string {
   const script = /(?:--|--exec) sh -c '([^']+)' \} # Runs:/.exec(command)?.[1]
   expect(script).toBeDefined()
+
   // Simulate PowerShell 5.1's native argv boundary consuming quote escapes.
   return script!.replaceAll('\\"', '"')
 }
 
 describe('CliSkillRuntimeSetup runtime helpers', () => {
   const windowsNpxPreflightPrefix = 'cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 ('
+
   const windowsNpxGuidance =
     'echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1'
 
   it('keeps copied WSL skill installs valid for the target POSIX shell', () => {
     const skillCommand = 'npx skills add orchestration --global'
+
     const runtime = {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
     } as const
+
     const command = buildSkillInstallCommandForRuntime(skillCommand, runtime)
     const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
     const encoded = Buffer.from(buildWslLoginShellCommand(skillCommand), 'utf8').toString('base64')
@@ -59,11 +65,13 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
 
   it('keeps a Windows-selected WSL install inside WSL without the host preflight', () => {
     const skillCommand = 'npx skills add orchestration --global'
+
     const runtime = {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
     } as const
+
     const command = buildSkillCommandForRuntime(skillCommand, runtime, 'win32')
     const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
 
@@ -81,6 +89,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
       wslDistro: 'Fedora Remix',
       label: 'WSL Fedora Remix'
     } as const
+
     const command = buildSkillCommandForRuntime('npx skills update orchestration --global', runtime)
     const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
 
@@ -132,10 +141,12 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
           runtime: 'wsl',
           label: 'WSL'
         } as const
+
         const copied = buildSkillCommandForRuntime(
           'npx skills update orchestration --global',
           runtime
         )
+
         const wrapped = buildSkillSetupTerminalCommand(copied, 'powershell.exe', runtime, 'win32')
         expect(
           execFileSync('/bin/sh', ['-c', getWslOuterShellScript(wrapped)], {
@@ -317,6 +328,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         { runtime: 'host', label: 'Windows' },
         'win32'
       )
+
       expect(buildSkillSetupTerminalCommand(copied, undefined, undefined, 'win32')).toBe(copied)
       // An already-wrapped command must not gain a second preflight.
       expect(buildSkillSetupTerminalCommand(copied, 'powershell.exe', undefined, 'win32')).toBe(
@@ -351,12 +363,15 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
 
   it('preserves the exact WSL script when adapting setup-terminal auto-paste', () => {
     const skillCommand = "printf 'héllo\n# Runs: unchanged'"
+
     const runtime = {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
       label: 'WSL Ubuntu'
     } as const
+
     const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime)
+
     const powershellCommand = buildSkillSetupTerminalCommand(
       copiedCommand,
       'powershell.exe',
@@ -413,6 +428,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(wrapped.match(/"/g)).toHaveLength(2)
     const blocks = /if errorlevel 1 \((.*)\) else \((.*)\)"$/.exec(wrapped)
     expect(blocks).not.toBeNull()
+
     for (const block of [blocks![1], blocks![2]]) {
       // Any of these would close the block early or redirect inside cmd.exe.
       expect(block).not.toMatch(/[()"%!^|<>]/)
@@ -421,6 +437,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
 
   it('forces PowerShell for the skill terminal when Windows runs a POSIX-family shell', () => {
     const hostRuntime = { runtime: 'host', label: 'Windows' } as const
+
     const overrideFor = (terminalWindowsShell: string): string | undefined =>
       getAgentSkillTerminalShellOverride(
         'win32',

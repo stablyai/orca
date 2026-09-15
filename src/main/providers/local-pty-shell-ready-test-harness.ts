@@ -24,6 +24,7 @@ export function restoreUserDataPathAfterEach(): void {
 export async function importFreshLocalPtyShellReady() {
   vi.resetModules()
   const module = await import('./local-pty-shell-ready')
+
   // Why the two adapters: the module exposes one feature-driven entry point, and
   // these are the two launch intents the call sites select between.
   return {
@@ -43,6 +44,7 @@ export const describePosix: ConditionalDescribe =
 
 const hasZsh = (() => {
   const result = spawnSync('which', ['zsh'], { encoding: 'utf8' })
+
   return result.status === 0
 })()
 

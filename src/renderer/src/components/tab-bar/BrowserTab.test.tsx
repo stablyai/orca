@@ -8,6 +8,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useEffect: () => {},
@@ -18,16 +19,19 @@ vi.mock('react', async () => {
     useCallback: <T,>(fn: T) => fn,
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
+
       if (!(stateIndex in reactHookRuntime.states)) {
         reactHookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         reactHookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(reactHookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [reactHookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -166,6 +170,7 @@ function baseBrowserTab(overrides: Partial<BrowserTabState> = {}): BrowserTabSta
 async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./BrowserTab')
+
   return module.default({
     tab,
     isActive: true,
@@ -197,13 +202,17 @@ function expandNode(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map(expandNode)
   }
+
   const el = node as ReactElementLike
+
   if (typeof el.type === 'function') {
     return expandNode(el.type(el.props))
   }
+
   return {
     ...el,
     props: {
@@ -215,23 +224,31 @@ function expandNode(node: unknown): unknown {
 
 function findElementsByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     const el = current as ReactElementLike
+
     if (el.type === typeName) {
       results.push(el)
     }
+
     visit(el.props?.children)
   }
+
   visit(node)
+
   return results
 }
 
@@ -285,6 +302,7 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
   it('falls back to the globe after the favicon image errors', async () => {
     const tab = baseBrowserTab({ faviconUrl: 'https://example.com/favicon.ico' })
     const firstRender = await renderExpandedBrowserTab(tab)
+
     const image = findElementsByType(firstRender, 'img')[0]
 
     ;(image.props.onError as () => void)()
@@ -297,6 +315,7 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
   it('resets the image-error fallback when faviconUrl changes', async () => {
     const tab = baseBrowserTab({ faviconUrl: 'https://example.com/favicon.ico' })
     const firstRender = await renderExpandedBrowserTab(tab)
+
     const image = findElementsByType(firstRender, 'img')[0]
 
     ;(image.props.onError as () => void)()
@@ -304,6 +323,7 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(findElementsByType(failedRender, 'Globe')).toHaveLength(1)
 
     const nextIconUrl = 'data:image/png;base64,abc123'
+
     const resetRender = await renderExpandedBrowserTab(
       baseBrowserTab({ id: tab.id, faviconUrl: nextIconUrl })
     )
@@ -318,6 +338,7 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     const iconUrl = 'https://example.com/favicon.ico'
     const tab = baseBrowserTab({ faviconUrl: iconUrl })
     const firstRender = await renderExpandedBrowserTab(tab)
+
     const image = findElementsByType(firstRender, 'img')[0]
 
     ;(image.props.onError as () => void)()
@@ -328,6 +349,7 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     const loadingRender = await renderExpandedBrowserTab(
       baseBrowserTab({ id: tab.id, faviconUrl: null })
     )
+
     expect(findElementsByType(loadingRender, 'Globe')).toHaveLength(1)
 
     const retryRender = await renderExpandedBrowserTab(

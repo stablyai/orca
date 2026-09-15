@@ -21,14 +21,18 @@ import {
 export { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 
 const EMPTY_WORKTREES: Worktree[] = []
+
 const EMPTY_TABS: TerminalTab[] = []
+
 const EMPTY_BROWSER_TABS: NonNullable<AppState['browserTabsByWorktree'][string]> = []
+
 const EMPTY_UNIFIED_TABS: NonNullable<AppState['unifiedTabsByWorktree'][string]> = []
 
 type FloatingVisibleTabCountState = Pick<
   AppState,
   'browserTabsByWorktree' | 'openFiles' | 'tabsByWorktree' | 'unifiedTabsByWorktree'
 >
+
 type FloatingVisibleTabCountCache = {
   terminalTabs: NonNullable<AppState['tabsByWorktree'][string]>
   browserTabs: NonNullable<AppState['browserTabsByWorktree'][string]>
@@ -38,10 +42,12 @@ type FloatingVisibleTabCountCache = {
 }
 
 const hasAnyWorktreesCache = new WeakMap<AppState['worktreesByRepo'], boolean>()
+
 let floatingVisibleTabCountCache: FloatingVisibleTabCountCache | null = null
 
 function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']): boolean {
   const cached = hasAnyWorktreesCache.get(worktreesByRepo)
+
   if (cached !== undefined) {
     return cached
   }
@@ -50,16 +56,21 @@ function getCachedHasAnyWorktrees(worktreesByRepo: AppState['worktreesByRepo']):
   // identity so unrelated store writes do not rescan every repo bucket.
   const hasWorktrees = Object.values(worktreesByRepo).some((worktrees) => worktrees.length > 0)
   hasAnyWorktreesCache.set(worktreesByRepo, hasWorktrees)
+
   return hasWorktrees
 }
 
 export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountState): number {
   const terminalTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
+
   const browserTabs =
     state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
+
   const unifiedTabs =
     state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
+
   const cached = floatingVisibleTabCountCache
+
   if (
     cached &&
     cached.terminalTabs === terminalTabs &&
@@ -71,14 +82,19 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
   }
 
   const terminalIds = new Set<string>()
+
   for (const tab of terminalTabs) {
     terminalIds.add(tab.id)
   }
+
   const browserIds = new Set<string>()
+
   for (const tab of browserTabs) {
     browserIds.add(tab.id)
   }
+
   const editorIds = new Set<string>()
+
   for (const file of state.openFiles) {
     if (file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       editorIds.add(file.id)
@@ -86,6 +102,7 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
   }
 
   let count = 0
+
   for (const tab of unifiedTabs) {
     if (tab.contentType === 'terminal') {
       count += terminalIds.has(tab.entityId) ? 1 : 0
@@ -107,6 +124,7 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
     unifiedTabs,
     count
   }
+
   return count
 }
 
@@ -118,6 +136,7 @@ type FloatingWorkspaceUnreadState = Pick<
   AppState,
   'tabsByWorktree' | 'unreadTerminalTabs' | 'unreadAgentCompletionPanes'
 >
+
 type FloatingWorkspaceUnreadCache = {
   tabs: NonNullable<AppState['tabsByWorktree'][string]>
   unreadTerminalTabs: AppState['unreadTerminalTabs']
@@ -144,6 +163,7 @@ let floatingWorkspaceUnreadCache: FloatingWorkspaceUnreadCache | null = null
 export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadState): boolean {
   const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
   const cached = floatingWorkspaceUnreadCache
+
   if (
     cached &&
     cached.tabs === tabs &&
@@ -154,21 +174,26 @@ export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadS
   }
 
   let hasUnread = false
+
   if (tabs.length > 0) {
     const floatingTabIds = new Set<string>()
+
     for (const tab of tabs) {
       if (state.unreadTerminalTabs[tab.id]) {
         hasUnread = true
         break
       }
+
       floatingTabIds.add(tab.id)
     }
+
     if (!hasUnread) {
       // paneKey is `${tabId}:${leafId}` and tabIds never contain ":", so the
       // prefix up to the first ":" is the owning tab id.
       for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
         const separatorIndex = paneKey.indexOf(':')
         const tabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
+
         if (floatingTabIds.has(tabId)) {
           hasUnread = true
           break
@@ -183,6 +208,7 @@ export function selectFloatingWorkspaceHasUnread(state: FloatingWorkspaceUnreadS
     unreadAgentCompletionPanes: state.unreadAgentCompletionPanes,
     hasUnread
   }
+
   return hasUnread
 }
 
@@ -211,6 +237,7 @@ export function getWorktreeOnHostFromState(
   hostId: ExecutionHostId | undefined
 ): Worktree | undefined {
   const rows = getCachedWorktreesById(state.worktreesByRepo, worktreeId)
+
   return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
 }
 
@@ -224,8 +251,10 @@ export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string,
 
 // ─── Repos ──────────────────────────────────────────────────────────
 export const useRepos = () => useAppStore((s) => s.repos)
+
 export const useActiveRepo = () =>
   useAppStore(useShallow((s) => selectRepoByIdForActiveWorkspace(s, s.activeRepoId)))
+
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
 
 type ActiveWorkspaceRepoState = Pick<
@@ -244,20 +273,25 @@ function resolveRepoOnActiveWorkspaceHost(
   activeWorkspaceExecutionHostId: ExecutionHostId
 ): Repo | null {
   const repoCandidates = state.repos.filter((candidate) => candidate.id === repoId)
+
   const hostMatch = repoCandidates.find(
     (candidate) => getRepoExecutionHostId(candidate) === activeWorkspaceExecutionHostId
   )
+
   if (hostMatch) {
     return hostMatch
   }
+
   // Why: withRepoHostOwnership keeps a paired-hub worktree on its own SSH host while the repo
   // stays hub-owned, so that one mismatch still names the right repo; every other stays closed.
   if (parseExecutionHostId(activeWorkspaceExecutionHostId)?.kind !== 'ssh') {
     return null
   }
+
   const pairedHubRepos = repoCandidates.filter(
     (candidate) => parseExecutionHostId(getRepoExecutionHostId(candidate))?.kind === 'runtime'
   )
+
   return pairedHubRepos.length === 1 ? pairedHubRepos[0] : null
 }
 
@@ -268,38 +302,51 @@ export function selectRepoByIdForActiveWorkspace(
   if (!repoId) {
     return null
   }
+
   const repo = getCachedRepoMap(state.repos).get(repoId) ?? null
   const activeWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId
+
   if (repoId !== state.activeRepoId || !activeWorkspaceExecutionHostId) {
     return repo
   }
+
   // The branch below only fires for the active repo, so the host id fully keys it.
   let byHost = activeWorkspaceRepoCache.get(state.repos)
+
   if (!byHost) {
     byHost = new Map()
     activeWorkspaceRepoCache.set(state.repos, byHost)
   }
+
   const cacheKey = `${activeWorkspaceExecutionHostId}\u0000${repoId}`
   const cached = byHost.get(cacheKey)
+
   if (cached !== undefined) {
     return cached
   }
+
   const resolved = resolveRepoOnActiveWorkspaceHost(state, repoId, activeWorkspaceExecutionHostId)
   byHost.set(cacheKey, resolved)
+
   return resolved
 }
 
 export const useRepoById = (repoId: string | null) =>
   useAppStore((s) => selectRepoByIdForActiveWorkspace(s, repoId))
+
 export const useProjectHostSetupProjection = () =>
   useAppStore((s) => getProjectHostSetupProjectionFromState(s))
 
 // ─── Worktrees ──────────────────────────────────────────────────────
 export const useActiveWorktreeId = () => useAppStore((s) => s.activeWorktreeId)
+
 export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
+
 export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
+
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
+
 export const useWorktreeById = (worktreeId: string | null, executionHostId?: ExecutionHostId) =>
   useAppStore((s) =>
     worktreeId
@@ -312,8 +359,10 @@ export const useWorktreeById = (worktreeId: string | null, executionHostId?: Exe
         ) ?? null)
       : null
   )
+
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
+
   return useAppStore((s) =>
     activeWorktreeId
       ? (s.getKnownWorktreeById(activeWorktreeId, s.activeWorkspaceExecutionHostId ?? undefined) ??

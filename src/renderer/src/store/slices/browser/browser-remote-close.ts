@@ -26,6 +26,7 @@ export function closeRemoteBrowserPageInOwningEnvironment(
     if (!isDurableClientHostedBrowserHandle(handle) || isBrowserPageDefinitivelyGone(error)) {
       return
     }
+
     recordCloseIntents([
       { environmentId: handle.environmentId, browserPageId: handle.remotePageId, worktreeId }
     ])

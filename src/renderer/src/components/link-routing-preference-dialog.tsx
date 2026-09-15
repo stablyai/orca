@@ -32,7 +32,9 @@ type LinkRoutingPreferenceDialogContextValue = (
 ) => Promise<boolean>
 
 const PREVIEW_STORAGE_KEY = 'orca.previewLinkRoutingPreferenceDialog'
+
 const PREVIEW_DEFAULT_STORAGE_KEY = `${PREVIEW_STORAGE_KEY}.default`
+
 const LinkRoutingPreferenceDialogContext =
   createContext<LinkRoutingPreferenceDialogContextValue | null>(null)
 
@@ -40,6 +42,7 @@ function displayHostForUrl(url: string | undefined): string | null {
   if (!url) {
     return null
   }
+
   try {
     return new URL(url).host
   } catch {
@@ -56,14 +59,18 @@ export function LinkRoutingPreferenceDialogProvider({
   const [queue, setQueue] = useState<LinkRoutingPreferenceDialogRequest[]>([])
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
+
   const setContextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.setContextualToursBlockingSurfaceVisible
   )
+
   const lastDisplayedRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
   activeRequestRef.current = activeRequest
+
   if (activeRequest) {
     lastDisplayedRequestRef.current = activeRequest
   }
+
   // Why: Radix keeps dialog content mounted while closing; keep copy stable during exit animation.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
   const displayHost = displayHostForUrl(displayedRequest?.options.url)
@@ -73,6 +80,7 @@ export function LinkRoutingPreferenceDialogProvider({
 
   useEffect(() => {
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
+
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
@@ -83,6 +91,7 @@ export function LinkRoutingPreferenceDialogProvider({
         options,
         resolve
       }
+
       nextIdRef.current += 1
       setQueue((currentQueue) => [...currentQueue, request])
     })
@@ -92,9 +101,11 @@ export function LinkRoutingPreferenceDialogProvider({
     if (!import.meta.env.DEV || typeof window === 'undefined') {
       return
     }
+
     if (window.sessionStorage.getItem(PREVIEW_STORAGE_KEY) !== '1') {
       return
     }
+
     const previewDefault = window.sessionStorage.getItem(PREVIEW_DEFAULT_STORAGE_KEY)
     window.sessionStorage.removeItem(PREVIEW_STORAGE_KEY)
     window.sessionStorage.removeItem(PREVIEW_DEFAULT_STORAGE_KEY)
@@ -107,14 +118,17 @@ export function LinkRoutingPreferenceDialogProvider({
 
   const settleActiveRequest = useCallback((openInOrca: boolean) => {
     const request = activeRequestRef.current
+
     if (!request) {
       return
     }
+
     request.resolve(openInOrca)
     setQueue((currentQueue) => {
       if (currentQueue[0]?.id === request.id) {
         return currentQueue.slice(1)
       }
+
       return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
     })
   }, [])
@@ -251,10 +265,12 @@ export function LinkRoutingPreferenceDialogProvider({
 
 export function useLinkRoutingPreferenceDialog(): LinkRoutingPreferenceDialogContextValue {
   const requestPreference = useContext(LinkRoutingPreferenceDialogContext)
+
   if (!requestPreference) {
     throw new Error(
       'useLinkRoutingPreferenceDialog must be used inside LinkRoutingPreferenceDialogProvider'
     )
   }
+
   return requestPreference
 }

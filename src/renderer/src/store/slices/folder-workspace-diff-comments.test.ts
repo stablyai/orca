@@ -13,7 +13,9 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { createDiffCommentsSlice } from './diffComments'
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const folderWorkspacesUpdate = vi.fn()
 
 globalThis.window = {
@@ -26,6 +28,7 @@ globalThis.window = {
 function createTestStore() {
   return create<AppState>()((...args) => {
     const slice = createDiffCommentsSlice(...args)
+
     return {
       ...slice,
       settings: null,
@@ -53,17 +56,20 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 
 function seedLocalFolderWorkspace(store: ReturnType<typeof createTestStore>): FolderWorkspace {
   const folderWorkspace = makeFolderWorkspace()
+
   const projectGroup = {
     id: folderWorkspace.projectGroupId,
     parentPath: '/workspace',
     executionHostId: 'local'
   } as ProjectGroup
+
   store.setState({
     activeWorktreeId: folderWorkspaceKey(folderWorkspace.id),
     activeWorkspaceExecutionHostId: 'local',
     projectGroups: [projectGroup],
     folderWorkspaces: [folderWorkspace]
   })
+
   return folderWorkspace
 }
 
@@ -130,13 +136,16 @@ describe('folder workspace diff comments', () => {
     const store = createTestStore()
     const folderWorkspace = seedLocalFolderWorkspace(store)
     let releaseFirstWrite: (() => void) | undefined
+
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve
     })
+
     folderWorkspacesUpdate.mockImplementation(async ({ updates }) => {
       if (folderWorkspacesUpdate.mock.calls.length === 1) {
         await firstWrite
       }
+
       return { ...folderWorkspace, ...updates }
     })
 
@@ -148,7 +157,9 @@ describe('folder workspace diff comments', () => {
       body: 'first note',
       side: 'modified'
     })
+
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1))
+
     const addSecond = store.getState().addDiffComment({
       worktreeId: folderWorkspaceKey(folderWorkspace.id),
       filePath: 'README.md',
@@ -157,6 +168,7 @@ describe('folder workspace diff comments', () => {
       body: 'second note',
       side: 'modified'
     })
+
     releaseFirstWrite?.()
 
     await Promise.all([addFirst, addSecond])
@@ -179,17 +191,20 @@ describe('folder workspace diff comments', () => {
     const store = createTestStore()
     const workspaceId = 'shared-folder-id'
     const workspaceKey = folderWorkspaceKey(workspaceId)
+
     const localWorkspace = makeFolderWorkspace({
       id: workspaceId,
       projectGroupId: 'local-group',
       folderPath: '/workspace/local'
     })
+
     const runtimeWorkspace = makeFolderWorkspace({
       id: workspaceId,
       projectGroupId: 'runtime-group',
       folderPath: '/workspace/runtime',
       executionHostId: 'runtime:env-owner'
     })
+
     let resolveLocal!: () => void
     folderWorkspacesUpdate.mockImplementation(
       ({ updates }) =>
@@ -226,9 +241,11 @@ describe('folder workspace diff comments', () => {
       body: 'local note',
       side: 'modified'
     })
+
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledOnce())
 
     store.setState({ activeWorkspaceExecutionHostId: 'runtime:env-owner' })
+
     const runtimeAdd = store.getState().addDiffComment({
       worktreeId: workspaceKey,
       filePath: 'REMOTE.md',
@@ -237,6 +254,7 @@ describe('folder workspace diff comments', () => {
       body: 'runtime note',
       side: 'modified'
     })
+
     await vi.waitFor(() =>
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -289,6 +307,7 @@ describe('folder workspace diff comment rollback convergence', () => {
           rejectFirst = reject
         })
       }
+
       return Promise.reject(new Error('disk full'))
     })
 
@@ -326,6 +345,7 @@ describe('folder workspace diff comment rollback convergence', () => {
       if (folderWorkspacesUpdate.mock.calls.length > 1) {
         throw new Error('disk full')
       }
+
       return { ...folderWorkspace, ...updates }
     })
 
@@ -356,8 +376,10 @@ describe('folder workspace diff comment rollback convergence', () => {
         await new Promise<void>((resolve) => {
           releaseFirst = resolve
         })
+
         return { ...folderWorkspace, ...updates }
       }
+
       throw new Error('disk full')
     })
 
@@ -411,6 +433,7 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
+
     store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
 
     await addNote(store, key, 'D', 4)
@@ -429,11 +452,13 @@ describe('folder workspace diff comment rollback convergence', () => {
           rejectFirst = reject
         })
       }
+
       return Promise.reject(new Error('disk full'))
     })
 
     const addA = addNote(store, key, 'note A', 1)
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1))
+
     const hydrated = [
       {
         id: 'h1',
@@ -445,6 +470,7 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
+
     store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
     const addE = addNote(store, key, 'note E', 2)
     rejectFirst(new Error('disk full'))
@@ -463,13 +489,16 @@ describe('folder workspace diff comment rollback convergence', () => {
         await new Promise<void>((resolve) => {
           releaseFirst = resolve
         })
+
         return { ...folderWorkspace, ...updates }
       }
+
       throw new Error('disk full')
     })
 
     const addA = addNote(store, key, 'note A', 1)
     await vi.waitFor(() => expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1))
+
     const hydrated = [
       {
         id: 'h1',
@@ -481,6 +510,7 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
+
     store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
     // Why: the chain break re-seeds the floor to `hydrated`; A's success must not restore its pre-replacement capture.
     const addE = addNote(store, key, 'note E', 2)
@@ -498,11 +528,13 @@ describe('folder workspace diff comment rollback convergence', () => {
       if (folderWorkspacesUpdate.mock.calls.length > 1) {
         throw new Error('disk full')
       }
+
       return { ...folderWorkspace, ...updates }
     })
 
     // Why: no await, so the replacement + E land before A dequeues — A's payload already carries `hydrated`.
     const addA = addNote(store, key, 'note A', 1)
+
     const hydrated = [
       {
         id: 'h1',
@@ -514,6 +546,7 @@ describe('folder workspace diff comment rollback convergence', () => {
         side: 'modified'
       } as DiffComment
     ]
+
     store.setState({ folderWorkspaces: [{ ...folderWorkspace, diffComments: hydrated }] })
     const addE = addNote(store, key, 'note E', 2)
 
@@ -598,11 +631,13 @@ describe('folder workspace diff comment rollback convergence', () => {
     const workspaceId = 'shared-folder-id'
     const key = folderWorkspaceKey(workspaceId)
     const localWorkspace = makeFolderWorkspace({ id: workspaceId, projectGroupId: 'local-group' })
+
     const runtimeWorkspace = makeFolderWorkspace({
       id: workspaceId,
       projectGroupId: 'runtime-group',
       executionHostId: 'runtime:env-owner'
     })
+
     store.setState({
       activeWorktreeId: key,
       activeWorkspaceExecutionHostId: 'runtime:env-owner',

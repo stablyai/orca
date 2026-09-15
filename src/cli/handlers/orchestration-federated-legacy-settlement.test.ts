@@ -1,7 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'

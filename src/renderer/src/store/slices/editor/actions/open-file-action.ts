@@ -15,6 +15,7 @@ export function createOpenFileAction(
     openFile: (file, options) => {
       const editorItemWorktreeId = file.worktreeId
       const editorItemLabel = file.relativePath
+
       const editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
         file.mode === 'conflict-review'
           ? 'conflict-review'
@@ -23,11 +24,14 @@ export function createOpenFileAction(
             : file.mode === 'diff'
               ? 'diff'
               : 'editor'
+
       const scratch = {
         editorItemFileId: file.filePath,
         editorItemTargetGroupId: options?.targetGroupId
       }
+
       set((s) => applyOpenFileToState(s, file, options, scratch))
+
       const editorItemViewStateId = openWorkspaceEditorItem(
         get(),
         scratch.editorItemFileId,
@@ -37,6 +41,7 @@ export function createOpenFileAction(
         options?.preview ?? false,
         scratch.editorItemTargetGroupId
       )
+
       if (options?.focusEditor) {
         set({
           pendingEditorFocusRequest: {
@@ -48,6 +53,7 @@ export function createOpenFileAction(
           }
         })
       }
+
       return scratch.editorItemFileId
     }
   }

@@ -42,20 +42,24 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     githubListRestoreWriteRef,
     taskListPositionRef
   } = model
+
   // Why: the dialog's "Use" button routes through the same direct-launch flow as the row-level "Use" CTA so behavior is consistent regardless of entry point.
   const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
+
   const dialogWorkItemKey = githubTaskDrawerWorkItem
     ? {
         id: githubTaskDrawerWorkItem.id,
         repoId: githubTaskDrawerWorkItem.repoId
       }
     : null
+
   const appliedWorkItemsCacheQuery = useMemo(
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
     [appliedTaskSearch]
   )
+
   const selectedWorkItemsCacheEntries = useAppStore(
     useShallow((s) =>
       selectTaskPageWorkItemsCacheEntries(
@@ -71,14 +75,18 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
+
   const dialogWorkItem = dialogWorkItemKey
     ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
     : null
+
   useLayoutEffect(() => {
     const target = pendingGithubScrollRestoreRef.current
+
     if (target === null || !githubListScrollRef.current || !pages[currentPage]) {
       return
     }
+
     return startGitHubListScrollRestore({
       target,
       scrollElementRef: githubListScrollRef,
@@ -105,10 +113,12 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     taskListPositionRef
   ])
   const dialogRepoPath = dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
+
   const dialogSourceContext = useMemo(() => {
     if (!dialogWorkItem) {
       return null
     }
+
     if (
       pageData.openGitHubSourceContext?.provider === 'github' &&
       pageData.openGitHubWorkItem?.id === dialogWorkItem.id &&
@@ -116,8 +126,10 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     ) {
       return pageData.openGitHubSourceContext
     }
+
     return getTaskPageRepoSourceContext(repoMap.get(dialogWorkItem.repoId), 'github')
   }, [dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem, repoMap])
+
   const gitlabDialogRepo = useMemo(
     () =>
       gitlabDialogItem
@@ -125,10 +137,12 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
         : null,
     [gitlabDialogItem, primaryRepo, selectedRepos]
   )
+
   const gitlabDialogSourceContext = useMemo(() => {
     if (!gitlabDialogItem) {
       return null
     }
+
     if (
       pageData.openGitLabSourceContext?.provider === 'gitlab' &&
       pageData.openGitLabWorkItem?.id === gitlabDialogItem.id &&
@@ -136,6 +150,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     ) {
       return pageData.openGitLabSourceContext
     }
+
     return getTaskPageRepoSourceContext(gitlabDialogRepo, 'gitlab', gitlabDialogItem.projectRef)
   }, [
     gitlabDialogItem,
@@ -143,6 +158,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     pageData.openGitLabSourceContext,
     pageData.openGitLabWorkItem
   ])
+
   const setDialogWorkItem = useCallback(
     (item: GitHubWorkItem | null, initialTab: ItemDialogTab = 'conversation') => {
       setDialogInitialTab(item ? initialTab : 'conversation')
@@ -150,17 +166,21 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     },
     [setGithubTaskDrawerWorkItem]
   )
+
   useEffect(() => {
     if (!pageData.openGitHubWorkItem) {
       setDialogWorkItem(null)
+
       return
     }
+
     setGithubMode('items')
     setDialogWorkItem(pageData.openGitHubWorkItem, pageData.openGitHubInitialTab)
   }, [pageData.openGitHubInitialTab, pageData.openGitHubWorkItem, setDialogWorkItem, setGithubMode])
   useEffect(() => {
     setGitlabDialogItem(pageData.openGitLabWorkItem ?? null)
   }, [pageData.openGitLabWorkItem, setGitlabDialogItem])
+
   const openGitHubDetailPage = useCallback(
     (item: GitHubWorkItem, initialTab: ItemDialogTab = 'conversation') => {
       const scrollTop = getTaskPageScrollTop(githubListScrollRef, githubListScrollTopRef.current)
@@ -196,6 +216,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
       taskListPositionRef
     ]
   )
+
   const openGitLabDetailPage = useCallback(
     (item: GitLabWorkItem) => {
       openTaskPage(
@@ -216,6 +237,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     },
     [openTaskPage, repoMap]
   )
+
   const nextModel = model as typeof model & {
     githubTaskDrawerWorkItem: typeof githubTaskDrawerWorkItem
     setGithubTaskDrawerWorkItem: typeof setGithubTaskDrawerWorkItem
@@ -234,6 +256,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     openGitHubDetailPage: typeof openGitHubDetailPage
     openGitLabDetailPage: typeof openGitLabDetailPage
   }
+
   nextModel.githubTaskDrawerWorkItem = githubTaskDrawerWorkItem
   nextModel.setGithubTaskDrawerWorkItem = setGithubTaskDrawerWorkItem
   nextModel.dialogInitialTab = dialogInitialTab
@@ -250,6 +273,8 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
   nextModel.setDialogWorkItem = setDialogWorkItem
   nextModel.openGitHubDetailPage = openGitHubDetailPage
   nextModel.openGitLabDetailPage = openGitLabDetailPage
+
   return nextModel
 }
+
 export type TaskPageGitHubDetailModel = ReturnType<typeof useTaskPageGitHubDetail>

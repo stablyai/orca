@@ -25,6 +25,7 @@ export function isDuplicateWorktreeVisibilitySource(
   candidate: CustomWorktreeVisibilitySource
 ): boolean {
   const current = resolveCustomWorktreeVisibilitySources(repo, defaults)
+
   return (
     normalizeCustomWorktreeVisibilitySources([...current, candidate])?.length !== current.length + 1
   )

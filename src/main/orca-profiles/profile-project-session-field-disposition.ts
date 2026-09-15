@@ -138,7 +138,9 @@ type UnclassifiedSessionField = Exclude<
   keyof WorkspaceSessionState,
   keyof typeof WORKSPACE_SESSION_FIELD_DISPOSITION
 >
+
 const exhaustive: [UnclassifiedSessionField] extends [never] ? true : never = true
+
 void exhaustive
 
 const SESSION_FIELDS = Object.keys(

@@ -3,9 +3,11 @@ import { buildWindowsCmdRunnerDelayedLaunchCommand } from './windows-cmd-runner-
 
 function decodePayload(command: string): string {
   const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+
   if (!encoded) {
     throw new Error(`no -EncodedCommand payload in: ${command}`)
   }
+
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 

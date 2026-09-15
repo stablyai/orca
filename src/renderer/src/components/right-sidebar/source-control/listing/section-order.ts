@@ -3,7 +3,9 @@ import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlGroupOrder } from '../../../../../../shared/ui-chrome-types'
 
 export const SOURCE_CONTROL_AREAS = ['unstaged', 'staged', 'untracked'] as const
+
 export type SourceControlSectionArea = (typeof SOURCE_CONTROL_AREAS)[number]
+
 export type SourceControlDisplaySectionId = SourceControlSectionArea | 'conflicts'
 
 export type SourceControlEntryGroups = Record<SourceControlSectionArea, GitStatusEntry[]>
@@ -55,20 +57,26 @@ export function getSourceControlSectionViewAction(
 ): SourceControlSectionViewAction | null {
   if (section.id === 'conflicts') {
     const entries = getConflictReviewEntries(section.items)
+
     if (entries.length > 0) {
       return { kind: 'conflict-review', entries }
     }
+
     if (section.items.length === 0) {
       return null
     }
+
     const [firstItem] = section.items
+
     const area = section.items.every((item) => item.area === firstItem?.area)
       ? firstItem?.area
       : undefined
+
     return area
       ? { kind: 'combined-diff', area, entries: section.items }
       : { kind: 'combined-diff', entries: section.items }
   }
+
   return { kind: 'combined-diff', area: section.area, entries: section.items }
 }
 
@@ -83,11 +91,13 @@ export function splitPinnedSourceControlConflicts(
   const pinnedConflicts = SOURCE_CONTROL_AREAS.flatMap((area) =>
     groups[area].filter(isPinnedConflictEntry)
   )
+
   // Why: preserve referential identity of `groups` when nothing is pinned so
   // downstream memos (tree rebuilds, etc.) don't fire on every status refresh.
   if (pinnedConflicts.length === 0) {
     return { pinnedConflicts, normalGroups: groups }
   }
+
   return {
     pinnedConflicts,
     normalGroups: {
@@ -111,6 +121,7 @@ export function buildSourceControlDisplaySectionsFromSplit(
 
   for (const area of order) {
     const items = normalGroups[area]
+
     if (items.length > 0) {
       sections.push({ id: area, area, items })
     }

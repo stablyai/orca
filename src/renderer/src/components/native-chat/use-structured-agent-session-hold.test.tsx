@@ -53,6 +53,7 @@ describe('a mounted structured chat', () => {
 
   it('does not release a hold that has not landed yet', async () => {
     let settleHold = (): void => {}
+
     mocks.call.mockImplementation((_target: unknown, method: string) =>
       method === 'agentSession.hold'
         ? new Promise<void>((resolve) => {
@@ -60,6 +61,7 @@ describe('a mounted structured chat', () => {
           })
         : Promise.resolve()
     )
+
     const { unmount } = renderHook(() =>
       useStructuredAgentSessionHold({
         sessionId: 'session-alpha',
@@ -67,6 +69,7 @@ describe('a mounted structured chat', () => {
         surface: 'desktop-chat'
       })
     )
+
     await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(1))
 
     unmount()
@@ -88,6 +91,7 @@ describe('a mounted structured chat', () => {
         }),
       { initialProps: { sessionId: 'session-alpha' } }
     )
+
     await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(1))
 
     rerender({ sessionId: 'session-alpha' })

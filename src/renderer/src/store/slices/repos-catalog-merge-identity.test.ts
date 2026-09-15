@@ -75,9 +75,13 @@ const cachedPathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry> = 
 }
 
 const projectGroupsList = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
 
 // Why: catalogs arrive over IPC, so every fetch must hand back freshly allocated objects.

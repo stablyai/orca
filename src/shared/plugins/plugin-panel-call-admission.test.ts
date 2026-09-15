@@ -4,6 +4,7 @@ import { createPluginPanelCallAdmission } from './plugin-panel-call-admission'
 describe('createPluginPanelCallAdmission', () => {
   it('shares the rate budget across panel sessions for one plugin', () => {
     let now = 0
+
     const admission = createPluginPanelCallAdmission({
       limits: { maxMessages: 2, perMs: 1_000 },
       now: () => now

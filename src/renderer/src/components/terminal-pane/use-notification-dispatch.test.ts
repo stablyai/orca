@@ -16,11 +16,13 @@ import {
 
 vi.mock('@/store', async () => {
   const harness = await import('./notification-dispatch-test-harness')
+
   return harness.createNotificationDispatchStoreModuleMock()
 })
 
 vi.mock('@/lib/desktop-notification-sound', async () => {
   const harness = await import('./notification-dispatch-test-harness')
+
   return harness.createDesktopNotificationSoundModuleMock()
 })
 

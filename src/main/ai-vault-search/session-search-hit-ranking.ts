@@ -55,6 +55,7 @@ export function rankSessionHits(
   const scored = collapseForks(
     sessions.map((session) => {
       const message = matches.get(session.id) ?? null
+
       return {
         session,
         message,
@@ -63,6 +64,7 @@ export function rankSessionHits(
       }
     })
   )
+
   // Why a total order and not just the key: a cursor is an offset into this
   // list, so two entries that tie must not be free to swap between pages.
   scored.sort(
@@ -71,6 +73,7 @@ export function rankSessionHits(
         ? (right.session.updated_at ?? '').localeCompare(left.session.updated_at ?? '')
         : right.score - left.score) || left.session.id - right.session.id
   )
+
   return scored
 }
 
@@ -81,29 +84,36 @@ export function rankSessionHits(
  */
 function collapseForks(scored: RankedSession[]): RankedSession[] {
   const groups = new Map<string, RankedSession[]>()
+
   for (const entry of scored) {
     const { content_hash: hash, content_hash_count: count, id } = entry.session
     const key = isCollapsibleContentHash(hash, count) ? `hash:${hash}` : `session:${id}`
     const group = groups.get(key)
+
     if (group) {
       group.push(entry)
     } else {
       groups.set(key, [entry])
     }
   }
+
   const collapsed: RankedSession[] = []
+
   for (const group of groups.values()) {
     if (group.length === 1) {
       collapsed.push(group[0]!)
       continue
     }
+
     const winner = group.reduce((best, entry) => (isNewer(entry, best) ? entry : best))
     collapsed.push({ ...winner, duplicateCount: group.length })
   }
+
   return collapsed
 }
 
 function isNewer(entry: RankedSession, best: RankedSession): boolean {
   const order = (entry.session.updated_at ?? '').localeCompare(best.session.updated_at ?? '')
+
   return order === 0 ? entry.score > best.score : order > 0
 }

@@ -43,6 +43,7 @@ export async function createOrAttachTerminalSession(
     if (opts.attachOnly) {
       throw new SessionNotFoundError(opts.sessionId)
     }
+
     // A create can wait teardown out instead, and must: a pane respawning onto its own stable id
     // reaches this a beat after the attach that retired it, and refusing surfaced the raw
     // SessionNotFoundError to the user. Windows makes it the common case, where the plain-shell
@@ -53,6 +54,7 @@ export async function createOrAttachTerminalSession(
     ])
     deps.assertCreateAllowed()
     existing = deps.sessions.get(opts.sessionId)
+
     // Unkillable child, or a fresh teardown claimed it while we waited: still nobody's to recreate.
     if (existing?.isAlive && existing.isTerminating) {
       throw new SessionNotFoundError(opts.sessionId)
@@ -69,6 +71,7 @@ export async function createOrAttachTerminalSession(
     const snapshot = existing.getSnapshot()
     existing.detachAllClients()
     const token = existing.attachClient(opts.streamClient)
+
     return {
       isNew: false,
       snapshot,
@@ -85,6 +88,7 @@ export async function createOrAttachTerminalSession(
     // generations behind the same public session id.
     throw new Error(`Session "${opts.sessionId}" is terminating`)
   }
+
   if (opts.attachOnly) {
     // Why: an adopted claim proves only one owner generation; it must never
     // turn an exit race into permission to spawn an unclaimed shell.
@@ -100,6 +104,7 @@ export async function createOrAttachTerminalSession(
   deps.killedTombstones.clearForCreate(opts.sessionId)
   const size = normalizePtySize(opts.cols, opts.rows)
   const wslDistro = resolveWslSessionContext(opts)?.distro
+
   return await spawnAndPublishSession(opts, deps, { size, wslDistro })
 }
 
@@ -111,6 +116,7 @@ async function spawnAndPublishSession(
   const { size, wslDistro } = ctx
   // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
   const cwdReadableByDaemon = opts.cwd && !wslDistro ? isCwdReadableByThisProcess(opts.cwd) : null
+
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -133,6 +139,7 @@ async function spawnAndPublishSession(
   const shellReadySupported =
     (opts.shellReadySupported ?? false) &&
     (subprocess.shellPath === undefined || shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
+
   const session = new Session({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -161,11 +168,13 @@ async function spawnAndPublishSession(
     // Retain cleanup ownership if the native child refuses to exit.
     deps.sessions.set(opts.sessionId, session)
     await session.forceKillAndDisposeSubprocess()
+
     if (deps.sessions.get(opts.sessionId) === session) {
       session.dispose()
       deps.sessions.delete(opts.sessionId)
       deps.onDeadSessionRemoved(opts.sessionId)
     }
+
     throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
@@ -175,6 +184,7 @@ async function spawnAndPublishSession(
 
   const startupCommandWritten =
     Boolean(opts.command) && !subprocess.startupCommandDeliveredInShellArgs
+
   // Why: without this, a missing command and a lost one log identically.
   // Length, never the text -- launches can carry credentials.
   try {
@@ -189,6 +199,7 @@ async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
+
   if (startupCommandWritten && opts.command) {
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
@@ -218,9 +229,11 @@ async function spawnAndPublishSession(
 function isCwdReadableByThisProcess(cwd: string): boolean {
   try {
     accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
+
     return true
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
+
     return code !== 'EACCES' && code !== 'EPERM'
   }
 }

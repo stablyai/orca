@@ -18,22 +18,27 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
   test.setTimeout(240_000)
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
+
   const hostBrowser = await orcaPage.evaluate(() => {
     const state = window.__store!.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('Host has no active worktree for the paired Cmd-J fixture')
     }
+
     const workspace = state.createBrowserTab(
       worktreeId,
       'data:text/html,<title>Remote browser proof</title>',
       { activate: false, title: 'Remote browser proof' }
     )
+
     return { worktreeId, workspaceId: workspace.id }
   })
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   let client: PairedElectronClient | null = null
+
   try {
     client = await launchPairedElectronClient(offer, testInfo, 'Cmd-J host-qualified tabs')
     const page = client.page
@@ -41,6 +46,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       window.localStorage.setItem('orca.browser.markup-draw-hint-seen', 'true')
     })
     const drawHintDismiss = page.getByRole('button', { name: 'Got it', exact: true })
+
     const drawHintVisible = await drawHintDismiss
       .waitFor({ state: 'visible', timeout: 2_000 })
       .then(() => true)
@@ -48,11 +54,14 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         if (error instanceof errors.TimeoutError) {
           return false
         }
+
         throw error
       })
+
     if (drawHintVisible) {
       await drawHintDismiss.click()
     }
+
     const remoteHostId = `runtime:${encodeURIComponent(client.environmentId)}` as const
     await expect
       .poll(
@@ -60,10 +69,12 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           page.evaluate(
             ({ worktreeId, workspaceId }) => {
               const state = window.__store?.getState()
+
               const tab = (state?.unifiedTabsByWorktree[worktreeId] ?? []).find(
                 (candidate) =>
                   candidate.contentType === 'browser' && candidate.entityId === workspaceId
               )
+
               return tab?.executionHostId ?? null
             },
             { worktreeId: hostBrowser.worktreeId, workspaceId: hostBrowser.workspaceId }
@@ -86,31 +97,41 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
         )
     )
+
     const seeded = await page.evaluate(
       ({ remoteHostId, sharedWorktreeId, hostWorkspaceId }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Paired client store is unavailable')
         }
+
         const state = store.getState()
+
         const seed = state
           .allWorktrees()
           .find((worktree) => worktree.id === sharedWorktreeId && worktree.hostId === remoteHostId)
+
         const seedRepo = state.repos.find(
           (repo) => repo.id === seed?.repoId && repo.executionHostId === remoteHostId
         )
+
         const remoteBrowser = (state.browserTabsByWorktree[sharedWorktreeId] ?? []).find(
           (workspace) => workspace.id === hostWorkspaceId
         )
+
         const remotePage = remoteBrowser
           ? (state.browserPagesByWorkspace[remoteBrowser.id] ?? [])[0]
           : null
+
         const remoteUnifiedTab = (state.unifiedTabsByWorktree[sharedWorktreeId] ?? []).find(
           (tab) => tab.contentType === 'browser' && tab.entityId === remoteBrowser?.id
         )
+
         const remoteGroup = (state.groupsByWorktree[sharedWorktreeId] ?? []).find(
           (group) => group.id === remoteUnifiedTab?.groupId
         )
+
         if (
           !seed ||
           !seedRepo ||
@@ -121,35 +142,44 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         ) {
           throw new Error('Paired client did not retain the mirrored host browser topology')
         }
+
         // Why: the fixture nests the client's own layout under its local pane, so the remote group
         // has to already be rendered there — otherwise the remote rows silently stop being visible.
         const renderedGroupIds = new Set<string>()
         const pendingLayoutNodes = [state.layoutByWorktree[sharedWorktreeId]]
+
         while (pendingLayoutNodes.length > 0) {
           const node = pendingLayoutNodes.pop()
+
           if (!node) {
             continue
           }
+
           if (node.type === 'leaf') {
             renderedGroupIds.add(node.groupId)
             continue
           }
+
           pendingLayoutNodes.push(node.first, node.second)
         }
+
         if (renderedGroupIds.size > 0 && !renderedGroupIds.has(remoteGroup.id)) {
           throw new Error('Paired client layout does not render the mirrored host browser group')
         }
+
         const local = {
           ...seed,
           hostId: 'local' as const,
           runtimeOwnerEnvironmentId: undefined,
           displayName: 'Local collision workspace'
         }
+
         const remote = {
           ...seed,
           hostId: remoteHostId,
           displayName: 'Remote collision workspace'
         }
+
         const localBrowser = {
           id: 'browser-local',
           worktreeId: sharedWorktreeId,
@@ -164,10 +194,12 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           loadError: null,
           createdAt: 1
         }
+
         const seededRemoteBrowser = {
           ...remoteBrowser,
           title: 'Remote browser proof'
         }
+
         const tab = (
           id: string,
           entityId: string,
@@ -188,6 +220,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           sortOrder: 0,
           createdAt: 1
         })
+
         // Why: a session.tabs frame rebuilds the host's live tabs from the snapshot either way;
         // keeping their ids in the groups' tabOrder is what makes placement treat them as already
         // known, so the frame re-lands them where they are instead of adopting them into a group.
@@ -197,6 +230,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
               ? { ...candidate, executionHostId: remoteHostId }
               : candidate
         )
+
         const tabs = [
           tab('browser-tab-local', 'browser-local', 'group-local', 'local', 'browser', 'Local'),
           tab(
@@ -217,6 +251,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           ),
           ...retainedMirroredTabs
         ]
+
         store.setState({
           worktreesByRepo: { ...state.worktreesByRepo, [seed.repoId]: [local, remote] },
           activeRepoId: seed.repoId,
@@ -297,6 +332,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
             [sharedWorktreeId]: 'browser'
           }
         })
+
         return {
           remoteGroupId: remoteGroup.id,
           remotePageId: remotePage.id,
@@ -315,6 +351,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     const backing = await page.evaluate(
       ({ tabIds, worktreeId }) => {
         const state = window.__store!.getState()
+
         return {
           browserCount: state.browserTabsByWorktree[worktreeId]?.length,
           owners: state.unifiedTabsByWorktree[worktreeId]
@@ -331,6 +368,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         worktreeId: seeded.sharedWorktreeId
       }
     )
+
     expect(backing).toEqual({
       browserCount: 2,
       owners: [
@@ -344,6 +382,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         [seeded.remoteWorkspaceId, seeded.sharedWorktreeId]
       ]
     })
+
     // Why: a live catalog refresh that reaps one same-id row re-hosts the surviving palette
     // entry, so assert the collision still exists at click time instead of blaming the palette.
     const expectSameIdCollisionIntact = async (step: string): Promise<void> => {
@@ -361,18 +400,24 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         `same-id host rows before ${step}`
       ).toEqual(['local', remoteHostId].sort())
     }
+
     await page.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     let palette = page.getByRole('dialog', { name: 'Jump to...' })
+
     let input = palette.getByPlaceholder(
       'Search chats, terminals, worktrees, settings, and actions...'
     )
+
     await expectSameIdCollisionIntact('remote browser page palette open')
+
     const remoteBrowserAfterOpen = await page.evaluate(
       ({ tabId, worktreeId }) => {
         const state = window.__store!.getState()
+
         const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
           (candidate) => candidate.id === tabId
         )
+
         return {
           browserCount: state.browserTabsByWorktree[worktreeId]?.length ?? 0,
           owner: tab?.executionHostId ?? null
@@ -383,6 +428,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         worktreeId: seeded.sharedWorktreeId
       }
     )
+
     const remoteBrowserIdentity = encodePaletteIdentity([
       'browser-page',
       remoteHostId,
@@ -390,6 +436,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       seeded.remoteWorkspaceId,
       seeded.remotePageId
     ])
+
     const localBrowserIdentity = encodePaletteIdentity([
       'browser-page',
       'local',
@@ -397,18 +444,21 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       'browser-local',
       'page-local'
     ])
+
     const remoteSimulatorIdentity = encodePaletteIdentity([
       'simulator-tab',
       remoteHostId,
       seeded.sharedWorktreeId,
       'simulator-remote'
     ])
+
     const localSimulatorIdentity = encodePaletteIdentity([
       'simulator-tab',
       'local',
       seeded.sharedWorktreeId,
       'simulator-local'
     ])
+
     expect(remoteBrowserAfterOpen.browserCount).toBe(2)
     expect(remoteBrowserAfterOpen.owner).toBe(remoteHostId)
     await input.fill('New Tab')
@@ -427,6 +477,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         page.evaluate((worktreeId) => {
           const state = window.__store!.getState()
           const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
           return [
             state.activeWorkspaceExecutionHostId,
             state.activeBrowserTabId,
@@ -470,6 +521,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         page.evaluate((worktreeId) => {
           const state = window.__store!.getState()
           const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
           return [
             state.activeWorkspaceExecutionHostId,
             state.activeBrowserTabId,
@@ -502,6 +554,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         page.evaluate((worktreeId) => {
           const state = window.__store!.getState()
           const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
           return [
             state.activeWorkspaceExecutionHostId,
             activeGroupId,
@@ -532,6 +585,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
         page.evaluate((worktreeId) => {
           const state = window.__store!.getState()
           const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
           return [
             state.activeWorkspaceExecutionHostId,
             activeGroupId,

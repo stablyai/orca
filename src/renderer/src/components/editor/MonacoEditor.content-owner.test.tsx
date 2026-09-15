@@ -7,10 +7,12 @@ const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown>
 vi.mock('@monaco-editor/react', () => ({
   default: (props: Record<string, unknown>) => {
     editorProps.current = props
+
     return null
   },
   loader: { config: vi.fn() }
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -26,9 +28,11 @@ vi.mock('@/store', () => ({
       worktreeDiffComments: {}
     })
 }))
+
 vi.mock('../diff-comments/useDiffCommentDecorator', () => ({
   useDiffCommentDecorator: vi.fn()
 }))
+
 vi.mock('./useContextualCopySetup', () => ({
   useContextualCopySetup: () => ({ setupCopy: vi.fn(), toastNode: null })
 }))

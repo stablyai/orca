@@ -88,13 +88,17 @@ export function useSourceControlHostedReviewEligibility({
     ) {
       setHostedReviewCreationState(null)
       setHostedReviewCreationRequestState(null)
+
       return
     }
+
     // Why: skip refetches while a PR flow is mid-flight — recomputing eligibility then can tear down the composer before the final refresh restores truth.
     if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
       setHostedReviewCreationRequestState(null)
+
       return
     }
+
     let stale = false
     setHostedReviewCreationRequestState({
       repoId: activeRepoId,
@@ -134,9 +138,11 @@ export function useSourceControlHostedReviewEligibility({
       })
       .catch((error) => {
         console.warn('[SourceControl] hosted review creation eligibility failed', error)
+
         if (stale) {
           return
         }
+
         // Why: a failed remote probe can give branch guidance but cannot authorize hosted-review creation.
         const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
           resolveCurrentHostedReviewCreationProvider(),
@@ -149,6 +155,7 @@ export function useSourceControlHostedReviewEligibility({
             behind: remoteStatus?.behind
           }
         )
+
         if (localBlocker) {
           setHostedReviewCreationState({
             repoId: activeRepoId,
@@ -157,8 +164,10 @@ export function useSourceControlHostedReviewEligibility({
             data: localBlocker
           })
           setHostedReviewCreationRequestState(null)
+
           return
         }
+
         setHostedReviewCreationState(null)
         setHostedReviewCreationRequestState({
           repoId: activeRepoId,
@@ -167,6 +176,7 @@ export function useSourceControlHostedReviewEligibility({
           status: 'failed'
         })
       })
+
     return () => {
       stale = true
     }

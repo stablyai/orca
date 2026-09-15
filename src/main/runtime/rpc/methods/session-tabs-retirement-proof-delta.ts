@@ -24,18 +24,25 @@ export function createSessionTabsRetirementProofDelta(
   if (!clientCapabilities?.includes(SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY)) {
     return (frame) => frame
   }
+
   const sentByWorktree = new Map<string, Set<string>>()
+
   return <TFrame extends ProofCarrier>(frame: TFrame): TFrame => {
     if (frame.removed === true || frame.retiredTerminalSurfaces === undefined) {
       sentByWorktree.delete(frame.worktree)
+
       return frame
     }
+
     const sent = sentByWorktree.get(frame.worktree)
+
     const fresh = sent
       ? frame.retiredTerminalSurfaces.filter((proof) => !sent.has(proofKey(proof)))
       : frame.retiredTerminalSurfaces
+
     // Why: track exactly the current list, so a proof that leaves and returns is sent again.
     sentByWorktree.set(frame.worktree, new Set(frame.retiredTerminalSurfaces.map(proofKey)))
+
     // Why: an empty list is a real signal ("nothing new, keep yours"). Omitting the field would be
     // indistinguishable from a host that holds no proofs, which is what tells the client to forget.
     return fresh.length === frame.retiredTerminalSurfaces.length

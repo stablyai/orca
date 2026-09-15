@@ -25,6 +25,7 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
   ) {
     return next
   }
+
   return {
     ...next,
     clientHostedBrowserPagesByWorktree: prior.clientHostedBrowserPagesByWorktree

@@ -19,6 +19,7 @@ function createRig(
 ) {
   const webviews: Electron.WebviewTag[] = []
   let nextId = 40
+
   const registry = new BrowserClientPageRetainedRegistry({
     document,
     ...options,
@@ -30,19 +31,25 @@ function createRig(
           if (webview.dataset.attached !== 'true') {
             throw new Error('guest not attached')
           }
+
           const current = Number(webview.dataset.webContentsId)
+
           if (Number.isInteger(current) && current > 0) {
             return current
           }
+
           const webContentsId = ++nextId
           webview.dataset.webContentsId = String(webContentsId)
+
           return webContentsId
         })
       })
       webviews.push(webview)
+
       return webview
     }
   })
+
   return { registry, webviews }
 }
 
@@ -178,10 +185,12 @@ describe('browser client page retained registry', () => {
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frames.push(callback)
+
       return frames.length
     })
     const cancelled = vi.fn()
     vi.stubGlobal('cancelAnimationFrame', cancelled)
+
     try {
       const { registry, webviews } = createRig()
       const mounting = registry.mountPage(PAGE)
@@ -189,6 +198,7 @@ describe('browser client page retained registry', () => {
       await mounting
       const retainedHost = webviews[0]!.parentElement as HTMLDivElement
       const viewport = document.createElement('div')
+
       const rect = (left: number): DOMRect =>
         ({
           bottom: 260,
@@ -201,12 +211,15 @@ describe('browser client page retained registry', () => {
           y: 60,
           toJSON: () => ({})
         }) as DOMRect
+
       const bounds = vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(rect(40))
       document.body.appendChild(viewport)
+
       const attachment = registry.attachPage(
         { browserPageId: PAGE.browserPageId, pageHostGeneration: PAGE.pageHostGeneration },
         viewport
       )
+
       expect(retainedHost.style.cssText).toContain('left: 40px')
 
       // Why: dragging a tab across an even split moves the pane without resizing it.
@@ -246,6 +259,7 @@ describe('browser client page retained registry', () => {
     await mounting
     const viewport = document.createElement('div')
     document.body.appendChild(viewport)
+
     const attachment = registry.attachPage(
       {
         browserPageId: PAGE.browserPageId,
@@ -312,11 +326,13 @@ describe('browser client page retained registry', () => {
     await expect(
       registry.mountPage({ ...PAGE, browserPageId: 'page-b', pageHostGeneration: 8 })
     ).rejects.toThrow('browser_client_page_renderer_partition_capacity')
+
     const otherPartition = registry.mountPage({
       ...PAGE,
       partition: 'persist:route-b',
       browserPageId: 'page-b'
     })
+
     await expect(
       registry.mountPage({
         ...PAGE,
@@ -425,6 +441,7 @@ describe('browser client page retained registry', () => {
     vi.useFakeTimers()
     const { registry, webviews } = createRig({ attachTimeoutMs: 50 })
     const mounting = registry.mountPage(PAGE)
+
     const rejection = expect(mounting).rejects.toThrow(
       'browser_client_page_renderer_attach_timeout'
     )

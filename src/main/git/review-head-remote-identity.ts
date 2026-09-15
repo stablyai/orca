@@ -13,14 +13,17 @@ export async function getReviewHeadRemoteComponent(
   localGitExecOptions: LocalGitExecOptions
 ): Promise<string> {
   let remoteUrl: string
+
   try {
     const { stdout } = await gitExecFileAsync(['remote', 'get-url', remote], localGitExecOptions)
     remoteUrl = stdout.trim()
   } catch {
     remoteUrl = ''
   }
+
   if (!remoteUrl) {
     throw new Error(`Remote "${remote}" is not configured.`)
   }
+
   return reviewHeadRemoteRefComponent(remote, remoteUrl)
 }

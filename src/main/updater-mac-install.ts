@@ -38,13 +38,17 @@ export function registerMacUpdaterEvents({
     if (!shouldDeferMacQuitForInstall()) {
       return
     }
+
     if (consumeMacInstallGuardBypass()) {
       recordUpdaterLifecycle('macos_before_quit_guard_bypassed')
+
       return
     }
+
     if (isMacQuitAndInstallInFlight()) {
       return
     }
+
     if (
       deferMacQuitUntilInstallerReady(
         getCurrentStatus(),
@@ -63,16 +67,20 @@ export function registerMacUpdaterEvents({
 
 /** Whether Squirrel.Mac has finished downloading the update from the localhost proxy. */
 let squirrelReady = false
+
 /** Remembers a user/app quit request that arrived before Squirrel.Mac had a
  * staged update ready to apply. Without this handoff, quitting during the
  * localhost-proxy phase exits back into the old app and the update is lost. */
 let installRequestedAfterSquirrelReady = false
+
 /** Prevents the updater-specific before-quit guard from re-blocking the
  * quitAndInstall-triggered shutdown that is supposed to apply the update. */
 let quitAndInstallInFlight = false
+
 /** Lets a timed-out quit attempt proceed exactly once so the app never gets
  * trapped open if Squirrel.Mac stops short of the native ready signal. */
 let bypassMacInstallGuardOnce = false
+
 let pendingInstallTimeout: ReturnType<typeof setTimeout> | null = null
 
 function clearPendingInstallTimeout(): void {
@@ -105,7 +113,9 @@ export function consumeMacInstallGuardBypass(): boolean {
   if (!bypassMacInstallGuardOnce) {
     return false
   }
+
   bypassMacInstallGuardOnce = false
+
   return true
 }
 
@@ -150,6 +160,7 @@ export function deferMacQuitUntilInstallerReady(
 
   pendingInstallTimeout = setTimeout(() => {
     pendingInstallTimeout = null
+
     if (!installRequestedAfterSquirrelReady || quitAndInstallInFlight) {
       return
     }
@@ -195,6 +206,7 @@ export function handleMacInstallerReady(
           { level: 'warn', message: 'Deferred macOS install handoff failed' }
         )
       })
+
     return
   }
 

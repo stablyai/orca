@@ -19,10 +19,15 @@ import { useAppStore } from '@/store'
 import { WorkspacePortScanner } from './WorkspacePortScanner'
 
 const localScan = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const remoteScanKey = 'environment:env-1:all'
+
 const remoteWorktreeId = 'repo-1::/remote/repo'
+
 let container: HTMLDivElement | null = null
+
 let root: Root | null = null
 
 const emptyScan: WorkspacePortScanResult = {
@@ -30,6 +35,7 @@ const emptyScan: WorkspacePortScanResult = {
   scannedAt: 1,
   ports: []
 }
+
 const liveScan: WorkspacePortScanResult = {
   platform: 'linux',
   scannedAt: 1,
@@ -109,6 +115,7 @@ function overrideDocumentVisibilityState(
     configurable: true,
     get: getVisibilityState
   })
+
   return () => {
     if (descriptor) {
       Object.defineProperty(document, 'visibilityState', descriptor)
@@ -177,9 +184,11 @@ beforeEach(() => {
     if (method === 'status.get') {
       return Promise.resolve({ ok: true, result: compatibleStatus })
     }
+
     if (method === 'workspacePorts.scan') {
       return Promise.resolve({ ok: true, result: emptyScan })
     }
+
     return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
   })
   vi.stubGlobal('window', {
@@ -210,6 +219,7 @@ afterEach(() => {
   if (root) {
     act(() => root?.unmount())
   }
+
   root = null
   container?.remove()
   container = null
@@ -338,10 +348,13 @@ describe('WorkspacePortScanner', () => {
       if (method !== 'workspacePorts.scan') {
         return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
       }
+
       if (selector !== 'env-1') {
         return Promise.resolve({ ok: true, result: emptyScan })
       }
+
       env1Attempts += 1
+
       return Promise.resolve({ ok: true, result: liveScan })
     })
 
@@ -374,14 +387,18 @@ describe('WorkspacePortScanner', () => {
       if (method !== 'workspacePorts.scan') {
         return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
       }
+
       if (selector !== 'env-1') {
         return Promise.resolve({ ok: true, result: emptyScan })
       }
+
       env1Attempts += 1
+
       return Promise.resolve({ ok: true, result: liveScan })
     })
     let visibilityState: DocumentVisibilityState = 'visible'
     const restoreVisibilityState = overrideDocumentVisibilityState(() => visibilityState)
+
     try {
       await act(async () => {
         root?.render(<WorkspacePortScanner />)
@@ -420,18 +437,24 @@ describe('WorkspacePortScanner', () => {
     let env1Calls = 0
     let env2Calls = 0
     let resolveSecondPoll!: (result: { ok: true; result: WorkspacePortScanResult }) => void
+
     const secondPoll = new Promise<{ ok: true; result: WorkspacePortScanResult }>((resolve) => {
       resolveSecondPoll = resolve
     })
+
     runtimeEnvironmentCall.mockImplementation(({ selector, method }) => {
       if (method !== 'workspacePorts.scan') {
         return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
       }
+
       if (selector === 'env-1') {
         env1Calls += 1
+
         return env1Calls === 1 ? Promise.resolve({ ok: true, result: liveScan }) : secondPoll
       }
+
       env2Calls += 1
+
       return env2Calls === 1 ? Promise.resolve({ ok: true, result: emptyScan }) : secondPoll
     })
     markRuntimeEnvironmentCompatible('env-2')
@@ -477,11 +500,13 @@ describe('WorkspacePortScanner', () => {
     })
 
     let mapNotifications = 0
+
     const unsubscribe = useAppStore.subscribe((state, previousState) => {
       if (state.workspacePortScansByKey !== previousState.workspacePortScansByKey) {
         mapNotifications += 1
       }
     })
+
     await act(async () => {
       removeRemoteWorkspaces(['env-2', 'env-3'])
       await flushPromises()
@@ -529,6 +554,7 @@ describe('WorkspacePortScanner', () => {
       if (method === 'workspacePorts.scan') {
         return Promise.resolve({ ok: true, result: liveScan })
       }
+
       return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
     })
 
@@ -554,10 +580,13 @@ describe('WorkspacePortScanner', () => {
       if (method !== 'workspacePorts.scan') {
         return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
       }
+
       scanAttempts += 1
+
       if (scanAttempts === 1) {
         return Promise.resolve({ ok: true, result: liveScan })
       }
+
       return Promise.reject(new Error('temporary runtime failure'))
     })
 
@@ -571,10 +600,12 @@ describe('WorkspacePortScanner', () => {
     let mapNotifications = 0
     let projectionNotifications = 0
     const firstProjection = useAppStore.getState().workspacePortScan
+
     const unsubscribe = useAppStore.subscribe((state, previousState) => {
       if (state.workspacePortScansByKey !== previousState.workspacePortScansByKey) {
         mapNotifications += 1
       }
+
       if (state.workspacePortScan !== previousState.workspacePortScan) {
         projectionNotifications += 1
       }
@@ -611,12 +642,14 @@ describe('advertised URL refresh bursts', () => {
       await flushPromises()
     })
     localScan.mockClear()
+
     return vi.mocked(window.api.workspacePorts.onAdvertisedUrlChanged).mock
       .calls[0][0] as () => void
   }
 
   it('coalesces sequential URL changes into one immediate scan and one settled scan', async () => {
     const changed = await mountLocalScanner()
+
     for (let index = 0; index < 5; index++) {
       await act(async () => {
         changed()
@@ -624,6 +657,7 @@ describe('advertised URL refresh bursts', () => {
         await vi.advanceTimersByTimeAsync(100)
       })
     }
+
     expect(localScan).toHaveBeenCalledTimes(1)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000)
@@ -651,6 +685,7 @@ describe('advertised URL refresh bursts', () => {
   it('skips the settled scan while hidden and accepts the next visible URL change', async () => {
     let visibility: DocumentVisibilityState = 'visible'
     const restore = overrideDocumentVisibilityState(() => visibility)
+
     try {
       const changed = await mountLocalScanner()
       await act(async () => {
@@ -677,14 +712,17 @@ describe('advertised URL refresh bursts', () => {
 it('releases the URL burst when its leading scan finishes while hidden', async () => {
   let visibility: DocumentVisibilityState = 'visible'
   const restore = overrideDocumentVisibilityState(() => visibility)
+
   try {
     useAppStore.setState({ settings: getDefaultSettings('/tmp/orca-workspaces') })
     await act(async () => {
       root?.render(<WorkspacePortScanner />)
       await flushPromises()
     })
+
     const changed = vi.mocked(window.api.workspacePorts.onAdvertisedUrlChanged).mock
       .calls[0][0] as () => void
+
     let finish!: (scan: WorkspacePortScanResult) => void
     localScan.mockClear()
     localScan.mockImplementationOnce(

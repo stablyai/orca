@@ -53,12 +53,14 @@ describe('ClaudeAccountService credential capture', () => {
   it('removes command listeners when Claude sign-in times out', async () => {
     vi.resetModules()
     vi.useFakeTimers()
+
     const child = new EventEmitter() as EventEmitter & {
       stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: () => void
     }
+
     child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
@@ -69,11 +71,13 @@ describe('ClaudeAccountService credential capture', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       const service = new ClaudeAccountService(
         createService() as never,
         createService() as never,
         createService() as never
       )
+
       const commandPromise = (
         service as unknown as {
           runClaudeCommand(
@@ -89,6 +93,7 @@ describe('ClaudeAccountService credential capture', () => {
         1000,
         { keepStdinOpen: true }
       )
+
       const rejection = expect(commandPromise).rejects.toThrow(
         'Claude sign-in took too long to finish.'
       )
@@ -114,28 +119,35 @@ describe('ClaudeAccountService credential capture', () => {
     commandMocks.resolveClaudeCommand.mockReturnValueOnce(
       'C:\\Users\\First Last\\AppData\\Roaming\\npm\\claude.cmd'
     )
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+
     const spawnMock = vi.fn(() => {
       child.stdout.write('{"email":"user@example.com"}\n')
       queueMicrotask(() => child.emit('close', 0))
+
       return child
     })
+
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       const service = new ClaudeAccountService(
         createService() as never,
         createService() as never,
         createService() as never
       )
+
       await (
         service as unknown as {
           runClaudeCommand(
@@ -170,28 +182,35 @@ describe('ClaudeAccountService credential capture', () => {
     setPlatform('win32')
     vi.resetModules()
     commandMocks.resolveClaudeCommand.mockClear()
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
     child.kill = vi.fn()
+
     const spawnMock = vi.fn(() => {
       child.stdout.write('{"email":"user@example.com"}\n')
       queueMicrotask(() => child.emit('close', 0))
+
       return child
     })
+
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       const service = new ClaudeAccountService(
         createService() as never,
         createService() as never,
         createService() as never
       )
+
       await (
         service as unknown as {
           runClaudeCommand(
@@ -232,24 +251,29 @@ describe('ClaudeAccountService credential capture', () => {
     setPlatform('linux')
     vi.resetModules()
     vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
+
     const loginChild = new EventEmitter() as EventEmitter & {
       stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+
     loginChild.stdin = new PassThrough()
     loginChild.stdout = new PassThrough()
     loginChild.stderr = new PassThrough()
     loginChild.kill = vi.fn()
+
     const statusChild = new EventEmitter() as EventEmitter & {
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+
     statusChild.stdout = new PassThrough()
     statusChild.stderr = new PassThrough()
     statusChild.kill = vi.fn()
+
     const spawnMock = vi.fn(
       (_command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
         if (args[1] === 'login') {
@@ -259,37 +283,47 @@ describe('ClaudeAccountService credential capture', () => {
             'utf-8'
           )
           queueMicrotask(() => loginChild.emit('close', 0))
+
           return loginChild
         }
+
         statusChild.stdout.write('{"email":"user@example.com"}\n')
         queueMicrotask(() => statusChild.emit('close', 0))
+
         return statusChild
       }
     )
+
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       let settings = {
         claudeManagedAccounts: [] as ClaudeManagedAccount[],
         activeClaudeManagedAccountId: null,
         activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
       }
+
       const store = {
         getSettings: vi.fn(() => settings),
         updateSettings: vi.fn((updates: Partial<typeof settings>) => {
           settings = { ...settings, ...updates }
+
           return settings
         })
       }
+
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
+
       const rateLimits = {
         evictInactiveClaudeCache: vi.fn(),
         refreshForClaudeAccountChange: vi.fn()
       }
+
       const service = new ClaudeAccountService(
         store as never,
         rateLimits as never,
@@ -318,6 +352,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('rejects immediately when Claude sign-in is denied', async () => {
     vi.resetModules()
+
     const child = new EventEmitter() as EventEmitter & {
       stdin: PassThrough
       stdout: PassThrough
@@ -325,6 +360,7 @@ describe('ClaudeAccountService credential capture', () => {
       kill: ReturnType<typeof vi.fn>
       pid: number
     }
+
     child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
@@ -339,11 +375,13 @@ describe('ClaudeAccountService credential capture', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       const service = new ClaudeAccountService(
         createService() as never,
         createService() as never,
         createService() as never
       )
+
       const commandPromise = (
         service as unknown as {
           runClaudeCommand(
@@ -378,12 +416,14 @@ describe('ClaudeAccountService credential capture', () => {
 
   it('cancels an in-flight Claude account add', async () => {
     vi.resetModules()
+
     const child = new EventEmitter() as EventEmitter & {
       stdin: PassThrough
       stdout: PassThrough
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+
     child.stdin = new PassThrough()
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
@@ -394,26 +434,32 @@ describe('ClaudeAccountService credential capture', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       let settings = {
         claudeManagedAccounts: [],
         activeClaudeManagedAccountId: null,
         activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
       }
+
       const store = {
         getSettings: vi.fn(() => settings),
         updateSettings: vi.fn((updates: Partial<typeof settings>) => {
           settings = { ...settings, ...updates }
+
           return settings
         })
       }
+
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
+
       const rateLimits = {
         evictInactiveClaudeCache: vi.fn(),
         refreshForClaudeAccountChange: vi.fn()
       }
+
       const service = new ClaudeAccountService(
         store as never,
         rateLimits as never,
@@ -444,6 +490,7 @@ describe('ClaudeAccountService credential capture', () => {
     setPlatform('linux')
     vi.resetModules()
     let releaseKeychainRead: (value: string | null) => void = () => {}
+
     vi.mocked(readActiveClaudeKeychainCredentials).mockReturnValue(
       new Promise<string | null>((resolve) => {
         releaseKeychainRead = resolve
@@ -454,26 +501,32 @@ describe('ClaudeAccountService credential capture', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       let settings = {
         claudeManagedAccounts: [],
         activeClaudeManagedAccountId: null,
         activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
       }
+
       const store = {
         getSettings: vi.fn(() => settings),
         updateSettings: vi.fn((updates: Partial<typeof settings>) => {
           settings = { ...settings, ...updates }
+
           return settings
         })
       }
+
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
+
       const rateLimits = {
         evictInactiveClaudeCache: vi.fn(),
         refreshForClaudeAccountChange: vi.fn()
       }
+
       const service = new ClaudeAccountService(
         store as never,
         rateLimits as never,
@@ -502,6 +555,7 @@ describe('ClaudeAccountService credential capture', () => {
     setPlatform('win32')
     vi.resetModules()
     vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
+
     const child = new EventEmitter() as EventEmitter & {
       pid: number
       stdin: PassThrough
@@ -509,6 +563,7 @@ describe('ClaudeAccountService credential capture', () => {
       stderr: PassThrough
       kill: ReturnType<typeof vi.fn>
     }
+
     child.pid = 1234
     child.stdin = new PassThrough()
     child.stdout = new PassThrough()
@@ -519,6 +574,7 @@ describe('ClaudeAccountService credential capture', () => {
     const spawnMock = vi.fn((command: string) => (command === 'taskkill.exe' ? taskkill : child))
     const cleanupInteractiveLogin = vi.fn()
     let publishTerminationPid: (pid: number) => void = () => {}
+
     const buildInteractiveLoginSpawn = vi.fn(() => ({
       command: getCmdExePath(),
       args: ['/d', '/c', 'start', '', '/wait', 'claude', 'auth', 'login', '--claudeai'],
@@ -531,6 +587,7 @@ describe('ClaudeAccountService credential capture', () => {
           publishTerminationPid = resolve
         })
     }))
+
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({
       buildWindowsHostInteractiveLoginSpawn: buildInteractiveLoginSpawn
@@ -538,26 +595,32 @@ describe('ClaudeAccountService credential capture', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       let settings = {
         claudeManagedAccounts: [],
         activeClaudeManagedAccountId: null,
         activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
       }
+
       const store = {
         getSettings: vi.fn(() => settings),
         updateSettings: vi.fn((updates: Partial<typeof settings>) => {
           settings = { ...settings, ...updates }
+
           return settings
         })
       }
+
       const runtimeAuth = {
         clearLastWrittenCredentialsJson: vi.fn(),
         forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
       }
+
       const rateLimits = {
         evictInactiveClaudeCache: vi.fn(),
         refreshForClaudeAccountChange: vi.fn()
       }
+
       const service = new ClaudeAccountService(
         store as never,
         rateLimits as never,

@@ -33,15 +33,19 @@ import {
 } from './ssh-security-key-identity.test-fixture'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -85,6 +89,7 @@ describe('SshConnection', () => {
   it('keeps concurrent exec commands disabled for system SSH without a reusable socket', async () => {
     getOrcaControlSocketPathMock.mockReturnValue(null)
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+
     const conn = new SshConnection(
       createTarget({ configHost: 'fdpass-host', systemSshConnectionReuse: false }),
       createCallbacks()
@@ -154,6 +159,7 @@ describe('SshConnection', () => {
 
   it('retries a generic system SSH probe timeout without ControlMaster', async () => {
     vi.useFakeTimers()
+
     try {
       getOrcaControlSocketPathMock.mockImplementation(
         (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
@@ -213,6 +219,7 @@ describe('SshConnection', () => {
 
   it('retries a generic direct system SSH timeout without ControlMaster', async () => {
     vi.useFakeTimers()
+
     try {
       getOrcaControlSocketPathMock.mockImplementation(
         (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
@@ -306,6 +313,7 @@ describe('SshConnection', () => {
     ssh2Mock.connectErrorMessage =
       'connect EHOSTUNREACH 192.168.0.210:22 - Local (192.168.0.2:52112)'
     ssh2Mock.connectErrorCode = 'EHOSTUNREACH'
+
     const conn = new SshConnection(
       createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
       createCallbacks()
@@ -331,10 +339,12 @@ describe('SshConnection', () => {
     spawnSystemSshCommandMock.mockImplementation(() => {
       throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
     })
+
     const conn = new SshConnection(
       createTarget({ host: '192.168.0.210', label: 'LAN Linux', username: 'hydra' }),
       createCallbacks()
     )
+
     const privateConn = conn as unknown as {
       attemptConnect: () => Promise<void>
     }

@@ -24,11 +24,14 @@ export function parseWorkspaceSessionSalvaging(raw: unknown): SalvagedWorkspaceS
     droppedPaths,
     droppedCount
   } = collectSalvageDrops(() => safeParseWorkspaceSession(raw))
+
   if (!result) {
     return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
   }
+
   if (!result.success) {
     return { ok: false, error: describeWorkspaceSessionError(result.error) }
   }
+
   return { ok: true, value: withoutSalvagedAwayFields(result.data), droppedPaths, droppedCount }
 }

@@ -4,6 +4,7 @@ import { rovoPartsText } from './session-scanner-graph-parsers'
 describe('AI Vault graph session parsers', () => {
   it('folds large Rovo prompt parts without joining the selected text', () => {
     const joinSpy = vi.spyOn(Array.prototype, 'join')
+
     const result = rovoPartsText(
       [
         { part_kind: 'tool-output', content: 'ignored' },
@@ -12,6 +13,7 @@ describe('AI Vault graph session parsers', () => {
       ],
       'user'
     )
+
     const joinCalls = joinSpy.mock.calls.length
 
     expect(joinCalls).toBe(0)

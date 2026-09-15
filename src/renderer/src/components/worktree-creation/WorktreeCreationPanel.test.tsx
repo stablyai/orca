@@ -98,17 +98,21 @@ describe('WorktreeCreationPanel', () => {
 
     expect(container.textContent).toContain('New workspace')
     expect(container.textContent).toContain('Creating worktree…')
+
     const title = [...container.querySelectorAll('span')].find(
       (node) => node.textContent === 'New workspace'
     )
+
     expect(title?.closest('div')?.className).toContain('border-r')
   })
 
   it('reserves collapsed left-titlebar space before the faux tab', async () => {
     const container = await renderPanel(true)
+
     const title = [...container.querySelectorAll('span')].find(
       (node) => node.textContent === 'New workspace'
     )
+
     const spacer = title?.closest('div')?.previousElementSibling as HTMLElement | null
 
     expect(spacer?.style.width).toBe('var(--collapsed-sidebar-header-width)')
@@ -116,6 +120,7 @@ describe('WorktreeCreationPanel', () => {
 
   it('does not reserve left-titlebar space when the header is not floating', async () => {
     const container = await renderPanel(false)
+
     const title = [...container.querySelectorAll('span')].find(
       (node) => node.textContent === 'New workspace'
     )
@@ -138,10 +143,12 @@ describe('WorktreeCreationPanel', () => {
     )
     // Constant height so the log box never grows before the scroll kicks in.
     expect(container.querySelector('pre')?.className).toContain('h-72')
+
     // A visible Cancel control, not just the tiny tab X, since the hint says Cancel stops provisioning.
     const cancel = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Cancel'
     )
+
     expect(cancel).toBeTruthy()
   })
 

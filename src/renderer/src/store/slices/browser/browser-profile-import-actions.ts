@@ -23,11 +23,13 @@ export function createBrowserProfileImportActions(
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
+
       if (getBrowserSettingsRuntimeEnvironmentId(initialState)) {
         const reason = translate(
           'auto.store.slices.browser.remoteCookieImportUnavailable',
           'Manual cookie file import is unavailable while a remote runtime is active.'
         )
+
         set((state) =>
           browserImportStateForHostUpdate(state, hostId, {
             profileId,
@@ -36,6 +38,7 @@ export function createBrowserProfileImportActions(
             error: reason
           })
         )
+
         return retainCookieImportExecutionHost(
           { ok: false as const, reason },
           hostId,
@@ -43,6 +46,7 @@ export function createBrowserProfileImportActions(
           'client'
         )
       }
+
       set((state) =>
         browserImportStateForHostUpdate(state, hostId, {
           profileId,
@@ -51,10 +55,12 @@ export function createBrowserProfileImportActions(
           error: null
         })
       )
+
       try {
         const result = (await window.api.browser.sessionImportCookies({
           profileId
         })) as BrowserCookieImportResult
+
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
@@ -65,6 +71,7 @@ export function createBrowserProfileImportActions(
               error: null
             })
           )
+
           if (getBrowserSettingsHostId(get()) === hostId) {
             await get()
               .fetchBrowserSessionProfiles()
@@ -80,6 +87,7 @@ export function createBrowserProfileImportActions(
             })
           )
         }
+
         return retainCookieImportExecutionHost(result, hostId, executionHostLabel, 'client')
       } catch (err) {
         const reason = String((err as Error)?.message ?? err)
@@ -91,6 +99,7 @@ export function createBrowserProfileImportActions(
             error: reason
           })
         )
+
         return retainCookieImportExecutionHost(
           { ok: false as const, reason },
           hostId,
@@ -107,14 +116,17 @@ export function createBrowserProfileImportActions(
     fetchDetectedBrowsers: async () => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+
       if (runtimeEnvironmentId) {
         const hostLabel = selectExecutionHostDisplayLabel(get(), hostId)
+
         try {
           // Why: the import runs on whichever machine hosts the pages, so the picker must offer that
           // machine's browsers -- client-hosted means this desktop, not the (usually headless) remote.
           const clientHostBrowsers = await window.api.browser.sessionDetectBrowsersForClientHost({
             environmentId: runtimeEnvironmentId
           })
+
           const browsers =
             clientHostBrowsers ??
             (
@@ -125,11 +137,13 @@ export function createBrowserProfileImportActions(
                 { timeoutMs: 15_000 }
               )
             ).browsers
+
           // Why: retain which machine answered so import menus can say where imports read and store.
           const detectedBrowsersHost = {
             machine: clientHostBrowsers ? ('client' as const) : ('remote' as const),
             hostLabel
           }
+
           set((s) =>
             getBrowserSettingsHostId(s) === hostId
               ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost }
@@ -142,11 +156,14 @@ export function createBrowserProfileImportActions(
               : s
           )
         }
+
         return
       }
+
       if (get().detectedBrowsersLoaded) {
         return
       }
+
       try {
         const browsers = (await window.api.browser.sessionDetectBrowsers()) as {
           family: string
@@ -154,6 +171,7 @@ export function createBrowserProfileImportActions(
           profiles: { name: string; directory: string }[]
           selectedProfile: string
         }[]
+
         set((s) =>
           getBrowserSettingsHostId(s) === hostId
             ? {

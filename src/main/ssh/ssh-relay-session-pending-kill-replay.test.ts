@@ -12,9 +12,11 @@ const { muxRequestMock, openConsumerSessionMock, listProcessesMock, shutdownMock
 )
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -30,7 +32,9 @@ vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   installSshPtySourceAckPublisher: vi.fn(() => () => {}),
   installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
 }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
+
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
@@ -44,6 +48,7 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     isDisposed = vi.fn().mockReturnValue(false)
   }
 }))
+
 vi.mock('../providers/ssh-pty-provider', () => ({
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
@@ -55,12 +60,15 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({ SshGitProvider: class MockSshGitProvider {} }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -79,11 +87,13 @@ vi.mock('../ipc/pty', () => ({
   restorePtyIncarnation: vi.fn(),
   isCurrentPtyExit: vi.fn(() => true)
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -113,6 +123,7 @@ describe('SshRelaySession pending PTY kill replay', () => {
     ])
     vi.mocked(mockStore.getSshRemotePtyLeases).mockImplementation(() => {
       order.push('read-leases')
+
       return []
     })
     let live = true

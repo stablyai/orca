@@ -3,10 +3,12 @@ import { runVirtualizedScrollAnchorRestore } from './virtualized-scroll-anchor-r
 
 function createReactHookHarness() {
   const refs: { current: unknown }[] = []
+
   const effects: {
     deps: readonly unknown[] | undefined
     effect: () => void | (() => void)
   }[] = []
+
   let refIndex = 0
 
   return {
@@ -25,6 +27,7 @@ function createReactHookHarness() {
         const index = refIndex
         refIndex += 1
         refs[index] ??= { current: initialValue }
+
         return refs[index] as { current: T }
       }
     }
@@ -45,11 +48,13 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
     const anchorRef = { current: null }
     const scrollElementRef = { current: null }
     const scrollOffsetRef = { current: 0 }
+
     const virtualizer = {
       getVirtualItems: () => [],
       isScrolling: false,
       scrollToIndex: vi.fn()
     }
+
     const renderWithRows = (rows: readonly string[]) => {
       harness.beginRender()
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
@@ -62,6 +67,7 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
         totalSize: rows.length,
         virtualizer
       } as never)
+
       return harness.effects[0]?.deps
     }
 
@@ -81,6 +87,7 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
     const { useVirtualizedScrollAnchor } = await import('./useVirtualizedScrollAnchor')
 
     const anchorRef = { current: { key: 'row-1', offset: 3358 } }
+
     const scrollElementRef = {
       current: {
         clientHeight: 880,
@@ -90,7 +97,9 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
         removeEventListener: vi.fn()
       }
     }
+
     const scrollOffsetRef = { current: 0 }
+
     const virtualizer = {
       getVirtualItems: () => [
         { index: 8, start: 0, end: 30_000 },
@@ -128,6 +137,7 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
     const capturedScrollHandler: { current: (() => void) | null } = { current: null }
     const savedAnchor = { key: 'row-1', offset: 3358 }
     const anchorRef = { current: savedAnchor }
+
     const scrollElementRef = {
       current: {
         clientHeight: 880,
@@ -141,7 +151,9 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
         removeEventListener: vi.fn()
       }
     }
+
     const scrollOffsetRef = { current: 0 }
+
     const virtualizer = {
       getVirtualItems: () => [
         { index: 0, start: 0, end: 3_000 },
@@ -176,9 +188,13 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
 // Sidebar geometry from the reported jump: 12 rows x 100px in a 300px viewport,
 // scrolled to 520 so the parent worktree ("p") sits 20px above the top edge.
 type FakeRow = { key: string; size: number }
+
 const VIEWPORT_HEIGHT = 300
+
 const ITEM_SELECTOR = '[data-worktree-virtual-row]'
+
 const PARENT_KEY = 'wt:sec:p'
+
 const GROUP_KEY = 'lineage-group:sec:lineage:p'
 
 function row(key: string, size = 100): FakeRow {
@@ -186,20 +202,26 @@ function row(key: string, size = 100): FakeRow {
 }
 
 const LEADING_ROWS = ['r0', 'r1', 'r2', 'r3', 'r4'].map((id) => row(`wt:sec:${id}`))
+
 const TRAILING_ROWS = ['s0', 's1', 's2', 'r10', 'r11'].map((id) => row(`wt:sec:${id}`))
+
 // Before the child exists: parent and its (future) child are separate rows.
 const UNFOLDED_ROWS = [...LEADING_ROWS, row(PARENT_KEY), row('wt:sec:c'), ...TRAILING_ROWS]
+
 // After the child is created: both fold into one 200px lineage-group row that
 // still starts at 500px, so nothing on screen actually moved.
 const FOLDED_ROWS = [...LEADING_ROWS, row(GROUP_KEY, 200), ...TRAILING_ROWS]
+
 // Parent genuinely deleted: the rows below slide up by 200px.
 const DELETED_ROWS = [...LEADING_ROWS, ...TRAILING_ROWS]
+
 // Last child deleted: the 200px group collapses back to a 100px card.
 const DISSOLVED_ROWS = [...LEADING_ROWS, row(PARENT_KEY), ...TRAILING_ROWS]
 
 function createFakeScroller(rows: readonly FakeRow[], scrollTop: number) {
   const starts: number[] = []
   let total = 0
+
   for (const item of rows) {
     starts.push(total)
     total += item.size
@@ -214,11 +236,13 @@ function createFakeScroller(rows: readonly FakeRow[], scrollTop: number) {
     getBoundingClientRect: () => ({ top: 0, bottom: VIEWPORT_HEIGHT, height: VIEWPORT_HEIGHT }),
     querySelectorAll: () => elements
   }
+
   const elements = rows.map((item, index) => ({
     isConnected: true,
     rowKey: item.key,
     getBoundingClientRect: () => {
       const top = (starts[index] as number) - el.scrollTop
+
       return { top, bottom: top + item.size, height: item.size }
     }
   }))
@@ -265,6 +289,7 @@ function restore(args: {
     scrollOffsetRef: { current: args.scrollTop },
     virtualizer: scroller.virtualizer
   } as never)
+
   return scroller.el.scrollTop
 }
 
@@ -378,6 +403,7 @@ describe('useVirtualizedScrollAnchor with sidebar row re-keying', () => {
   it('does not scroll when a child worktree folds the anchored parent into a group', async () => {
     const harness = createReactHookHarness()
     vi.doMock('react', () => harness.react)
+
     const { useVirtualizedScrollAnchor, VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } =
       await import('./useVirtualizedScrollAnchor')
 

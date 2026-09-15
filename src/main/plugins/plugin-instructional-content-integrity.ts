@@ -10,18 +10,23 @@ export async function verifyInstructionalPluginContent(
   if (!hasInstructionalPluginContributions(plugin.manifest)) {
     return
   }
+
   if (!plugin.consentContentHash) {
     throw new Error(`plugin ${plugin.pluginKey} has no instructional consent content identity`)
   }
+
   const actual = await hashPluginTree(plugin.rootDir)
+
   if (!actual.ok) {
     throw new Error(
       `plugin ${plugin.pluginKey} instructional content is unreadable: ${actual.error}`
     )
   }
+
   const matches =
     actual.hash === plugin.consentContentHash ||
     (plugin.consentContentHash.length === 32 && actual.hash.startsWith(plugin.consentContentHash))
+
   if (!matches) {
     throw new Error(
       `plugin ${plugin.pluginKey} instructional content changed since it was reviewed`

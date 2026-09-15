@@ -39,10 +39,15 @@ test.use({
 // exception is the last-active (most-recently-hidden) tab, which is exempt
 // from parking so returning to it is instant — so 7 of the 8 park.
 const SCROLLBACK_TAB_COUNT = 8
+
 const SCROLLBACK_LINE_COUNT = 3000
+
 const PARK_SETTLE_MS = 2_000
+
 const HEAP_SAMPLE_COUNT = 5
+
 const HEAP_SAMPLE_INTERVAL_MS = 250
+
 // Why: each test launches a fresh app, fills 8 terminals with ~3000 lines of
 // scrollback each, then waits out the parking window — well past the default
 // 120s per-test budget.
@@ -69,6 +74,7 @@ function writeScrollbackFillScript(
     `process.stdout.write(lines.join('\\n') + '\\n')`,
     `process.stdout.write('PARKED_MEMORY_FILL_DONE_${runId}_' + tabIndex + '\\n')`
   ].join('\n')
+
   writeFileSync(scriptPath, `${script}\n`)
 }
 
@@ -78,10 +84,12 @@ function writeScrollbackFillScript(
 async function skipUnlessParkingWired(page: Page): Promise<void> {
   const deadline = Date.now() + 2_000
   let present = await page.evaluate(() => window.__terminalParkingDebug !== undefined)
+
   while (!present && Date.now() < deadline) {
     await page.waitForTimeout(250)
     present = await page.evaluate(() => window.__terminalParkingDebug !== undefined)
   }
+
   test.skip(
     !present,
     'terminal hidden view parking wiring has not landed (window.__terminalParkingDebug missing)'
@@ -98,6 +106,7 @@ type TerminalTabViewState = {
 async function readTerminalTabViewState(page: Page, tabId: string): Promise<TerminalTabViewState> {
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
+
     return {
       hasManager: manager !== undefined,
       paneCount: manager?.getPanes?.().length ?? 0
@@ -133,13 +142,16 @@ type ScrollbackTab = {
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<ScrollbackTab> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('createActiveTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
 
@@ -152,9 +164,11 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
   await waitForActiveTerminalManager(page, 30_000)
   const snapshot = await waitForPaneIdentitySnapshot(page, 1)
   const ptyId = snapshot.panes[0]?.ptyId
+
   if (snapshot.tabId !== tabId || !ptyId) {
     throw new Error('createActiveTerminalTab: new tab did not bind a PTY')
   }
+
   return { tabId, ptyId }
 }
 
@@ -193,17 +207,20 @@ async function setUpScrollbackTabs(
   await waitForActiveTerminalManager(page, 30_000)
   const baselineSnapshot = await waitForPaneIdentitySnapshot(page, 1)
   const baselinePtyId = baselineSnapshot.panes[0]?.ptyId
+
   if (!baselinePtyId) {
     throw new Error('parked memory spec: baseline terminal tab did not bind a PTY')
   }
 
   const scrollbackTabs: ScrollbackTab[] = [{ tabId: baselineSnapshot.tabId, ptyId: baselinePtyId }]
   await fillActiveTerminalWithScrollback(page, baselinePtyId, scriptPath, 0, runId)
+
   for (let tabIndex = 1; tabIndex < SCROLLBACK_TAB_COUNT; tabIndex += 1) {
     const tab = await createActiveTerminalTab(page, worktreeId)
     scrollbackTabs.push(tab)
     await fillActiveTerminalWithScrollback(page, tab.ptyId, scriptPath, tabIndex, runId)
   }
+
   return { worktreeId, scrollbackTabs }
 }
 
@@ -221,6 +238,7 @@ type ParkedMemoryMetrics = {
 // heap figure tracks only the on-heap share.
 async function sampleParkedMemoryMetrics(page: Page): Promise<ParkedMemoryMetrics> {
   await page.waitForTimeout(PARK_SETTLE_MS)
+
   try {
     const session = await page.context().newCDPSession(page)
     await session.send('HeapProfiler.collectGarbage')
@@ -230,16 +248,21 @@ async function sampleParkedMemoryMetrics(page: Page): Promise<ParkedMemoryMetric
   }
 
   let minHeapBytes: number | null = null
+
   for (let sample = 0; sample < HEAP_SAMPLE_COUNT; sample += 1) {
     const heapBytes = await page.evaluate(() => {
       const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
+
       return memory?.usedJSHeapSize ?? null
     })
+
     if (heapBytes !== null) {
       minHeapBytes = minHeapBytes === null ? heapBytes : Math.min(minHeapBytes, heapBytes)
     }
+
     await page.waitForTimeout(HEAP_SAMPLE_INTERVAL_MS)
   }
+
   if (minHeapBytes === null) {
     throw new Error('sampleParkedMemoryMetrics: performance.memory.usedJSHeapSize is unavailable')
   }
@@ -248,6 +271,7 @@ async function sampleParkedMemoryMetrics(page: Page): Promise<ParkedMemoryMetric
     liveTerminals: document.querySelectorAll('.xterm').length,
     livePaneManagers: window.__paneManagers?.size ?? 0
   }))
+
   return { heapUsedMB: minHeapBytes / (1024 * 1024), ...liveCounts }
 }
 
@@ -272,6 +296,7 @@ test.describe('Terminal parked memory', () => {
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-parked-memory-${runId}.mjs`)
     writeScrollbackFillScript(scriptPath, runId)
+
     try {
       const { worktreeId, scrollbackTabs } = await setUpScrollbackTabs(orcaPage, scriptPath, runId)
 
@@ -280,9 +305,11 @@ test.describe('Terminal parked memory', () => {
       // the other 7 park.
       const visibleTab = await createActiveTerminalTab(orcaPage, worktreeId)
       const lastActiveTab = scrollbackTabs.at(-1)
+
       if (!lastActiveTab) {
         throw new Error('parked memory spec: no scrollback tabs were created')
       }
+
       const parkableTabs = scrollbackTabs.slice(0, -1)
       await waitForTabsParkedExceptLastActive(
         orcaPage,
@@ -300,6 +327,7 @@ test.describe('Terminal parked memory', () => {
       for (const tab of parkableTabs) {
         expect((await readTerminalTabViewState(orcaPage, tab.tabId)).hasManager).toBe(false)
       }
+
       expect((await readTerminalTabViewState(orcaPage, lastActiveTab.tabId)).hasManager).toBe(true)
       const visibleState = await readTerminalTabViewState(orcaPage, visibleTab.tabId)
       expect(visibleState.hasManager).toBe(true)
@@ -327,9 +355,11 @@ test.describe('Terminal parked memory', () => {
     // wiring is needed.
     await orcaPage.evaluate(async () => {
       const store = window.__store
+
       if (!store) {
         throw new Error('parked memory spec: window.__store is unavailable')
       }
+
       await store.getState().updateSettings({ terminalHiddenViewParking: false })
     })
     await expect
@@ -343,6 +373,7 @@ test.describe('Terminal parked memory', () => {
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-parked-memory-${runId}.mjs`)
     writeScrollbackFillScript(scriptPath, runId)
+
     try {
       const { worktreeId, scrollbackTabs } = await setUpScrollbackTabs(orcaPage, scriptPath, runId)
       const scrollbackTabIds = scrollbackTabs.map((tab) => tab.tabId)
@@ -367,6 +398,7 @@ test.describe('Terminal parked memory', () => {
         expect(state.hasManager).toBe(true)
         expect(state.paneCount).toBeGreaterThan(0)
       }
+
       expect((await readTerminalTabViewState(orcaPage, visibleTab.tabId)).hasManager).toBe(true)
       expect(metrics.livePaneManagers).toBe(SCROLLBACK_TAB_COUNT + 1)
       expect(metrics.liveTerminals).toBe(SCROLLBACK_TAB_COUNT + 1)
@@ -392,25 +424,34 @@ test.describe('Terminal parked memory', () => {
 //    most of what is released; renderer RSS is recorded and only gated as
 //    non-growth because it moves with GC timing and compositor allocations.
 const RETENTION_TAB_COUNT = 4
+
 const RETENTION_FILL_LINE_COUNT = 12_000
+
 const RETENTION_SCROLLBACK_ROWS = 25_000
+
 // Why 12: xterm packs each cell as 3 uint32s in the BufferLine typed array.
 const XTERM_BYTES_PER_CELL = 12
+
 // Why 40: this staging measures ~87 MB of retained buffer, so half of that is a
 // floor that fails loudly if the fill silently stops producing scrollback.
 const MIN_STAGED_BUFFER_MB = 40
+
 // Why 2s: force-park is a synchronous verdict re-run on the setting flip and
 // measured 23-25ms locally; anything near a timer/TTL wait blows this budget.
 const MAX_FORCE_PARK_EVICTION_MS = 2_000
+
 // Why 0.05: only the exempt decoy's unfilled pane may survive (~0.1% of the
 // baseline). One retained filled pane would be ~25%, so this fails on a partial
 // eviction instead of passing it.
 const MAX_RETAINED_CELL_FRACTION = 0.05
+
 // Why a band, not zero: RSS is sampled and moved only -0.7 to -3.0 MB on a
 // ~453 MB baseline across runs, so "must not grow" would flake on noise. 5 MB
 // still fails loudly if an eviction starts planting 512KB/pane capture strings.
 const RENDERER_RSS_NOISE_MB = 5
+
 const RETENTION_TEST_TIMEOUT_MS = 420_000
+
 const UNPARKABLE_PTY_PREFIX = 'remote:e2e-retention-'
 
 type RetainedBufferSample = {
@@ -427,17 +468,21 @@ async function readRetainedTerminalBufferCells(page: Page): Promise<RetainedBuff
     let cells = 0
     let rows = 0
     let panes = 0
+
     for (const manager of window.__paneManagers?.values() ?? []) {
       for (const pane of manager.getPanes?.() ?? []) {
         const buffer = pane.terminal?.buffer?.active
+
         if (!buffer) {
           continue
         }
+
         panes += 1
         rows += buffer.length
         cells += buffer.length * pane.terminal.cols
       }
     }
+
     return { cells, rows, panes }
   })
 }
@@ -448,6 +493,7 @@ async function readRendererResidentMb(page: Page): Promise<number | null> {
   return page.evaluate(async () => {
     const snapshot = await window.api?.memory?.getSnapshot?.()
     const bytes = snapshot?.app?.renderer?.memory
+
     return typeof bytes === 'number' && bytes > 0 ? bytes / (1024 * 1024) : null
   })
 }
@@ -463,6 +509,7 @@ type RetentionMemorySample = {
 async function readRetentionMemorySample(page: Page): Promise<RetentionMemorySample> {
   const metrics = await sampleParkedMemoryMetrics(page)
   const buffers = await readRetainedTerminalBufferCells(page)
+
   return {
     buffers,
     bufferMb: (buffers.cells * XTERM_BYTES_PER_CELL) / (1024 * 1024),
@@ -492,22 +539,28 @@ async function stageUnparkableWorktreeTabs(page: Page, worktreeId: string): Prom
   return page.evaluate(
     ({ worktreeId, prefix }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('stageUnparkableWorktreeTabs: window.__store is unavailable')
       }
+
       const state = store.getState()
       const tabs = state.tabsByWorktree[worktreeId] ?? []
+
       if (tabs.length === 0) {
         throw new Error(`stageUnparkableWorktreeTabs: ${worktreeId} has no terminal tabs`)
       }
+
       const staged = tabs.map((tab) =>
         typeof tab.ptyId === 'string' && tab.ptyId.startsWith(prefix)
           ? tab
           : { ...tab, ptyId: `${prefix}${tab.id}` }
       )
+
       ;(store as unknown as { setState: (partial: unknown) => void }).setState({
         tabsByWorktree: { ...state.tabsByWorktree, [worktreeId]: staged }
       })
+
       return staged.length
     },
     { worktreeId, prefix: UNPARKABLE_PTY_PREFIX }
@@ -523,6 +576,7 @@ async function waitForUnparkableWorktreeTabs(page: Page, worktreeId: string): Pr
         page.evaluate(
           ({ worktreeId, prefix }) => {
             const tabs = window.__store?.getState().tabsByWorktree[worktreeId] ?? []
+
             return (
               tabs.length > 0 &&
               tabs.every((tab) => typeof tab.ptyId === 'string' && tab.ptyId.startsWith(prefix))
@@ -550,15 +604,19 @@ async function waitForFillMarkerInTab(page: Page, tabId: string, marker: string)
             const manager = window.__paneManagers?.get(tabId)
             const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
             const buffer = pane?.terminal?.buffer?.active
+
             if (!buffer) {
               return false
             }
+
             const firstRow = Math.max(0, buffer.length - 200)
+
             for (let row = buffer.length - 1; row >= firstRow; row -= 1) {
               if (buffer.getLine(row)?.translateToString(true).includes(marker) === true) {
                 return true
               }
             }
+
             return false
           },
           { tabId, marker }
@@ -574,9 +632,11 @@ async function updateTerminalSettings(
 ): Promise<void> {
   await page.evaluate(async (patch) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('updateTerminalSettings: window.__store is unavailable')
     }
+
     await store.getState().updateSettings(patch)
   }, patch)
 }
@@ -619,6 +679,7 @@ test.describe('Terminal hidden worktree retention budget', () => {
     const decoyWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (worktreeId) => worktreeId !== victimWorktreeId
     )
+
     if (!decoyWorktreeId) {
       throw new Error('retention budget spec: the fixture seeded only one worktree')
     }
@@ -635,20 +696,24 @@ test.describe('Terminal hidden worktree retention budget', () => {
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-retention-memory-${runId}.mjs`)
     writeScrollbackFillScript(scriptPath, runId, RETENTION_FILL_LINE_COUNT)
+
     try {
       await ensureTerminalVisible(orcaPage)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       const baselineSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
       const baselinePtyId = baselineSnapshot.panes[0]?.ptyId
+
       if (!baselinePtyId) {
         throw new Error('retention budget spec: baseline terminal tab did not bind a PTY')
       }
 
       const victimTabs: ScrollbackTab[] = [{ tabId: baselineSnapshot.tabId, ptyId: baselinePtyId }]
+
       for (let tabIndex = 0; tabIndex < RETENTION_TAB_COUNT; tabIndex += 1) {
         if (tabIndex > 0) {
           victimTabs.push(await createActiveTerminalTab(orcaPage, victimWorktreeId))
         }
+
         const tab = victimTabs[tabIndex]
         await sendToTerminal(
           orcaPage,
@@ -712,6 +777,7 @@ test.describe('Terminal hidden worktree retention budget', () => {
             const victimMounted = await countMountedPaneManagers(orcaPage, victimTabIds)
             const decoyMounted = await countMountedPaneManagers(orcaPage, decoyTabIds)
             const heldLongEnough = Date.now() - controlArmStartedAt >= PARKING_DELAY_MS * 4
+
             return {
               victimMounted,
               decoyMounted,
@@ -764,6 +830,7 @@ test.describe('Terminal hidden worktree retention budget', () => {
       // The decoy holds the cap's last-active exemption, so it stays mounted —
       // this is the same run proving the cap did not simply evict everything.
       expect(await countMountedPaneManagers(orcaPage, decoyTabIds)).toBe(decoyTabIds.length)
+
       // Secondary only: freed typed arrays return to the allocator's free lists,
       // not the OS, so RSS fell just 0.7-3.0 MB locally while 87 MB of buffer was
       // released — a strict non-growth assertion would be reading sampling noise.
@@ -772,6 +839,7 @@ test.describe('Terminal hidden worktree retention budget', () => {
       if (before.rendererMb !== null && after.rendererMb !== null) {
         expect(after.rendererMb).toBeLessThanOrEqual(before.rendererMb + RENDERER_RSS_NOISE_MB)
       }
+
       expect(evictionMs).toBeLessThan(MAX_FORCE_PARK_EVICTION_MS)
     } finally {
       rmSync(scriptPath, { force: true })

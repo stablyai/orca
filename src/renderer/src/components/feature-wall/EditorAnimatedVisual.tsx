@@ -300,6 +300,7 @@ function DocBlock(props: { children: ReactNode; listItem?: boolean }): JSX.Eleme
       </div>
     )
   }
+
   return (
     <div className="mt-1.5 min-h-[18px] py-px text-[13px] leading-[1.55]">{props.children}</div>
   )

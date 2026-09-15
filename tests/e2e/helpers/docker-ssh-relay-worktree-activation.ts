@@ -20,20 +20,25 @@ export async function createAndActivateDockerSshRelayWorktree(
         worktreeId = await page.evaluate(
           async ({ repoId, worktreeName }) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('Store unavailable')
             }
+
             // Why: a retried create must reuse a prior attempt's worktree
             // instead of failing forever on "already exists".
             const existing = (store.getState().worktreesByRepo[repoId] ?? []).find((candidate) =>
               candidate.path.endsWith(`/${worktreeName}`)
             )
+
             if (existing) {
               return existing.id
             }
+
             try {
               const result = await store.getState().createWorktree(repoId, worktreeName)
               await store.getState().fetchWorktrees(repoId)
+
               return result.worktree.id
             } catch {
               return null
@@ -41,6 +46,7 @@ export async function createAndActivateDockerSshRelayWorktree(
           },
           { repoId, worktreeName }
         )
+
         return worktreeId
       },
       {
@@ -49,19 +55,26 @@ export async function createAndActivateDockerSshRelayWorktree(
       }
     )
     .not.toBeNull()
+
   if (!worktreeId) {
     throw new Error(`remote worktree ${worktreeName} did not resolve an id`)
   }
+
   await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     store.getState().setActiveWorktree(id)
+
     if ((store.getState().tabsByWorktree[id] ?? []).length === 0) {
       store.getState().createTab(id)
     }
+
     store.getState().setActiveTabType('terminal')
   }, worktreeId)
+
   return { worktreeId }
 }

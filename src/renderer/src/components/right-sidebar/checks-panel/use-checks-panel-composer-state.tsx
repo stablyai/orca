@@ -90,6 +90,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     commentResolutionLaunchAcceptedRef,
     updatePullRequestGenerationRecord
   } = model
+
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
     base: prBase,
@@ -143,6 +144,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
   })
+
   const stackParentReview = useHostedReviewStackParent({
     enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
     repoPath: repo?.path ?? '',
@@ -154,6 +156,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     head: branch,
     fetchHostedReviewForBranch
   })
+
   useEffect(() => {
     // Why: PR generation can finish while this composer is hidden by a worktree switch; hydrate once the original composer is visible again.
     if (
@@ -166,6 +169,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     ) {
       return
     }
+
     if (
       !shouldHydratePullRequestGenerationResult({
         record: activePullRequestGenerationRecord
@@ -173,6 +177,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     ) {
       return
     }
+
     applyGeneratedPullRequestFields(
       activePullRequestGenerationRecord.result,
       activePullRequestGenerationRecord.seedFieldRevisions
@@ -184,6 +189,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
       ) {
         return null
       }
+
       return {
         ...record,
         hydrated: true
@@ -196,6 +202,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     pullRequestFieldsInitialized,
     updatePullRequestGenerationRecord
   ])
+
   const handlePrBaseChange = useCallback(
     (value: string): void => {
       setCreatePrError(null)
@@ -203,6 +210,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     },
     [setPrBase, setCreatePrError]
   )
+
   const handlePrTitleChange = useCallback(
     (value: string): void => {
       setCreatePrError(null)
@@ -210,6 +218,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     },
     [setPrTitle, setCreatePrError]
   )
+
   const stateRequestKey =
     repo && branch
       ? activeGitLabReview
@@ -222,6 +231,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
           )
         : checksPanelAsyncResultKey(prCacheKey, branch, prNumber, pr?.prRepo, pr?.headSha)
       : ''
+
   asyncResultKeyRef.current = stateRequestKey
 
   const isCurrentAsyncResult = useCallback(
@@ -229,6 +239,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
       shouldCommitChecksPanelAsyncResult(asyncResultKeyRef.current, requestKey),
     [asyncResultKeyRef]
   )
+
   useEffect(() => {
     // Why: compare without headSha — PR head can move while the agent is still starting.
     if (
@@ -237,6 +248,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
         checksPanelReviewStableKey(stateRequestKey)
     ) {
       setAgentComposerState(null)
+
       if (!commentResolutionLaunchAcceptedRef.current) {
         pendingCommentResolutionRef.current = null
         claimedCommentResolutionRef.current = null
@@ -251,6 +263,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setAgentComposerState,
     commentResolutionLaunchAcceptedRef
   ])
+
   return {
     prAiGenerationEnabled,
     prBase,

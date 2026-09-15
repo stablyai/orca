@@ -19,6 +19,7 @@ import type {
   LinearGroupBy,
   LinearOrderBy
 } from '@/components/task-page-localized-options'
+
 export function TaskPageLinearIssueToolbar({
   model
 }: {
@@ -46,6 +47,7 @@ export function TaskPageLinearIssueToolbar({
     effectiveLinearDisplayProperties,
     toggleLinearDisplayProperty
   } = model
+
   return (
     <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
       <div className="flex min-w-0 items-center gap-2">
@@ -56,8 +58,10 @@ export function TaskPageLinearIssueToolbar({
             onClick={() => {
               if (selectedLinearProject) {
                 setLinearProjectTab('overview')
+
                 return
               }
+
               setSelectedLinearCustomView(null)
               setLinearProjectParentView(null)
               setTaskResumeState({
@@ -83,6 +87,7 @@ export function TaskPageLinearIssueToolbar({
         >
           {linearViewOptions.map(({ id, label, Icon }) => {
             const active = linearViewMode === id
+
             return (
               <Tooltip key={id}>
                 <TooltipTrigger asChild>

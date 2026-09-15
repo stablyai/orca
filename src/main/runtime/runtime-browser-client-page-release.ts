@@ -24,14 +24,17 @@ export function releaseRuntimeBrowserClientPageRecord(
 ): boolean {
   const pages = getRuntimeBrowserPageRegistry(runtime)
   const page = pages.getPage(browserPageId)
+
   if (!page || !pages.retirePage(browserPageId, placement)) {
     return false
   }
+
   if (runtime.retireRuntimeOwnedBrowserSessionTab) {
     runtime.retireRuntimeOwnedBrowserSessionTab(page.workspaceId, browserPageId)
   } else {
     runtime.notifyMobileSessionTabsChanged?.(page.workspaceId)
   }
+
   return true
 }
 
@@ -60,11 +63,14 @@ export function retainRuntimeBrowserClientPageRecord(
 ): boolean {
   const pages = getRuntimeBrowserPageRegistry(runtime)
   const page = pages.getPage(browserPageId)
+
   if (!page || !sameRuntimeBrowserPlacement(page.placement, placement)) {
     return false
   }
+
   // Why: the page is still listed but nothing can drive it, so republish to settle transient state.
   pages.updatePage(browserPageId, page.placement, { loading: false })
   runtime.notifyMobileSessionTabsChanged?.(page.workspaceId)
+
   return true
 }

@@ -55,6 +55,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     openDirtyFile(store)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       dispatchExternalChange()
 
@@ -80,6 +81,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     store.getState().setExternalMutation('/repo/file.ts', 'changed')
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       dispatchExternalChange()
 
@@ -101,6 +103,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     recordSelfWrite('/repo/file.ts', 'orca save')
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       dispatchExternalChange()
 
@@ -120,6 +123,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     store.getState().setExternalMutation('/repo/file.ts', 'changed')
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await vi.advanceTimersByTimeAsync(1500)
       expect(writeFile).not.toHaveBeenCalled()
@@ -154,6 +158,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     } as never)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await vi.advanceTimersByTimeAsync(1500)
       expect(writeFile).not.toHaveBeenCalled()
@@ -178,6 +183,7 @@ describe('editor autosave changed-on-disk conflict flow', () => {
     store.getState().setExternalMutation('/repo/file.ts', 'changed')
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestEditorFileSave({ fileId: '/repo/file.ts' })
 

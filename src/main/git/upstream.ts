@@ -39,6 +39,7 @@ async function getBehindCommitsArePatchEquivalent(
       ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
       gitExecOptions(worktreePath, options)
     )
+
     return upstreamOnlyCommitsArePatchEquivalent(stdout)
   } catch {
     // Why: patch-equivalence is an optimization for the rebase case. If the
@@ -55,12 +56,14 @@ async function readUpstreamStatus(
   try {
     if (pushTarget) {
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
+
       return await getPublishTargetStatus(
         (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
         target,
         (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
       )
     }
+
     return await getEffectiveGitUpstreamStatus(
       (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
       (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
@@ -78,6 +81,7 @@ async function readUpstreamStatus(
         behind: 0
       }
     }
+
     // Why: parity with gitPush/gitPull/gitFetch — normalize before crossing
     // the IPC boundary so renderers don't see execFile stderr preambles or local paths.
     throw new Error(normalizeGitErrorMessage(error, 'upstream'))
@@ -92,6 +96,7 @@ export function getUpstreamStatus(
   const executionIdentity = options.wslDistro
     ? ({ kind: 'wsl', distro: options.wslDistro } as const)
     : ({ kind: 'native' } as const)
+
   return nativeAndWslGitUpstreamStatusReadOwner.read(
     executionIdentity,
     worktreePath,

@@ -36,28 +36,37 @@ vi.mock('electron', () => ({
 const { Store } = await import('./store')
 
 const META_ROWS = 1_200
+
 const IDENTITY_ROWS = 1_191
+
 const HISTORY_ENTRIES = 200
+
 /** local + 9 more, matching the reporting install. */
 const REMOTE_HOSTS = Array.from({ length: 9 }, (_, index) => `runtime:env-${index}`)
+
 /** The measured shape: 3 of the 9 held a byte-identical replica of local's history. */
 const HOSTS_WITH_REPLICA = REMOTE_HOSTS.slice(0, 3)
+
 /** 1 row in 40 carries a real link, so its slots must stay written. */
 const LINKED_ROW_STRIDE = 40
+
 /** Recent enough that the 30-day stale-metadata GC leaves the fixture alone. */
 const RECENTLY = Date.now()
 
 const stores: InstanceType<typeof Store>[] = []
+
 afterEach(() => {
   for (const store of stores.splice(0)) {
     store.freezeWrites()
   }
+
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
   const store = new Store({ dataFile })
   stores.push(store)
+
   return store
 }
 
@@ -107,21 +116,27 @@ function session(overrides: Partial<WorkspaceSessionState>): WorkspaceSessionSta
  *  fields replicated into the host partitions the split used to seed from one shared template. */
 function writeLegacyFile(dataFile: string): void {
   const worktreeMeta: Record<string, WorktreeMeta> = {}
+
   for (let index = 0; index < META_ROWS; index++) {
     worktreeMeta[`repo-1::/tmp/wt-${index}`] = legacyMeta(index)
   }
+
   const worktreeMetaByIdentity: Record<string, WorktreeMeta> = {}
+
   for (let index = 0; index < IDENTITY_ROWS; index++) {
     worktreeMetaByIdentity[`wt2:local:instance-${index}`] = legacyMeta(index)
   }
+
   const history = browserHistory()
   const workspaceSessionsByHostId: Record<string, WorkspaceSessionState> = {}
+
   for (const hostId of REMOTE_HOSTS) {
     workspaceSessionsByHostId[hostId] = session({
       activeTabId: `tab-${hostId}`,
       ...(HOSTS_WITH_REPLICA.includes(hostId) ? { browserUrlHistory: history } : {})
     })
   }
+
   const state = {
     // Registered: the load-time deregistered-repo sweep drops residue rows for unknown repos.
     repos: [{ id: 'repo-1', name: 'repo-1', path: '/tmp/repo-1', worktreesPath: '/tmp' }],
@@ -133,6 +148,7 @@ function writeLegacyFile(dataFile: string): void {
     workspaceSession: session({ activeTabId: 'local-tab', browserUrlHistory: history }),
     workspaceSessionsByHostId
   } as unknown as PersistedState
+
   writeFileSync(dataFile, JSON.stringify(state), 'utf-8')
 }
 
@@ -140,29 +156,36 @@ function writeLegacyFile(dataFile: string): void {
  *  would have written for the same state. */
 function reexpandToLegacyShape(state: PersistedState): PersistedState {
   const expanded = structuredClone(state)
+
   for (const map of [expanded.worktreeMeta, expanded.worktreeMetaByIdentity]) {
     for (const [key, meta] of Object.entries(map ?? {})) {
       ;(map as Record<string, WorktreeMeta>)[key] = { ...WORKTREE_META_PERSISTED_DEFAULTS, ...meta }
     }
   }
+
   for (const hostId of REMOTE_HOSTS) {
     const slice = expanded.workspaceSessionsByHostId?.[hostId as never]
+
     if (!slice) {
       continue
     }
+
     slice.browserUrlHistory = HOSTS_WITH_REPLICA.includes(hostId)
       ? expanded.workspaceSession.browserUrlHistory
       : []
     slice.workspaceDocHistory = []
   }
+
   return expanded
 }
 
 function defaultedSlotOccurrences(json: string): number {
   let count = 0
+
   for (const field of Object.keys(WORKTREE_META_PERSISTED_DEFAULTS)) {
     count += json.split(`"${field}":`).length - 1
   }
+
   return count
 }
 
@@ -176,6 +199,7 @@ describe('persisted-state redundancy', () => {
     openStore(dataFile).flush()
 
     const loaded = openStore(dataFile)
+
     const before = {
       meta: structuredClone(loaded.getAllWorktreeMeta()),
       local: structuredClone(loaded.getWorkspaceSession()),
@@ -183,6 +207,7 @@ describe('persisted-state redundancy', () => {
         REMOTE_HOSTS.map((hostId) => [hostId, structuredClone(loaded.getWorkspaceSession(hostId))])
       )
     }
+
     // The refill ran, so absence never reaches a consumer as `undefined`.
     for (const meta of Object.values(before.meta)) {
       for (const field of Object.keys(WORKTREE_META_PERSISTED_DEFAULTS)) {
@@ -199,11 +224,13 @@ describe('persisted-state redundancy', () => {
     )
     // And no non-local partition carries a global the merge only ever reads off 'local'.
     const onDisk = JSON.parse(rewritten) as PersistedState
+
     for (const hostId of REMOTE_HOSTS) {
       for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
         expect(onDisk.workspaceSessionsByHostId?.[hostId]).not.toHaveProperty(field)
       }
     }
+
     // Apples to apples: re-expand the file we just wrote back into the old shape and compare, so
     // the number is the redundancy alone and not the settings defaults a synthetic fixture lacks.
     expect(Buffer.byteLength(rewritten)).toBeLessThan(
@@ -214,6 +241,7 @@ describe('persisted-state redundancy', () => {
     const reloaded = openStore(dataFile)
     expect(reloaded.getAllWorktreeMeta()).toEqual(before.meta)
     expect(reloaded.getWorkspaceSession()).toEqual(before.local)
+
     for (const hostId of REMOTE_HOSTS) {
       expect(reloaded.getWorkspaceSession(hostId)).toEqual(before.byHost[hostId])
     }
@@ -236,6 +264,7 @@ describe('persisted-state redundancy', () => {
 
     expect(fromCompact.getAllWorktreeMeta()).toEqual(fromLegacy.getAllWorktreeMeta())
     expect(fromCompact.getWorkspaceSession()).toEqual(fromLegacy.getWorkspaceSession())
+
     for (const hostId of REMOTE_HOSTS) {
       expect(fromCompact.getWorkspaceSession(hostId)).toEqual(
         fromLegacy.getWorkspaceSession(hostId)

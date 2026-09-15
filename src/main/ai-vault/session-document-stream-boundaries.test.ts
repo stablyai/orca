@@ -17,16 +17,20 @@ const file = {
   mtimeMs: 0,
   modifiedAt: new Date(0).toISOString()
 }
+
 const options = {
   executionHostId: 'ssh:independent-review' as const,
   executionHostPlatform: 'linux' as const
 }
+
 async function* bytes(data: Buffer | string, size = 3) {
   const b = typeof data === 'string' ? Buffer.from(data) : data
+
   for (let i = 0; i < b.length; i += size) {
     yield b.subarray(i, i + size)
   }
 }
+
 async function outcome(run: () => unknown) {
   try {
     return { value: await run() }
@@ -34,11 +38,14 @@ async function outcome(run: () => unknown) {
     return { error: error instanceof Error ? error.name : typeof error }
   }
 }
+
 async function lines(content: Iterable<string> | AsyncIterable<string>) {
   const result: string[] = []
+
   for await (const line of content) {
     result.push(line)
   }
+
   return result
 }
 
@@ -50,6 +57,7 @@ describe('independent JSON boundary review', () => {
       ).toEqual(await outcome(() => parseHermesSessionContent(file, content, 'linux', options)))
     })
   }
+
   for (const invalid of [[255], [195], [237, 160, 128], [240, 128, 128, 128], [226, 40, 161]]) {
     it(`preserves legacy replacement decoding for UTF8 ${invalid.join('-')}`, async () => {
       const data = Buffer.concat([
@@ -57,6 +65,7 @@ describe('independent JSON boundary review', () => {
         Buffer.from(invalid),
         Buffer.from(' after"}]}')
       ])
+
       expect(
         await outcome(() => parseHermesSessionDocument(file, bytes(data, 1), 'linux', options))
       ).toEqual(
@@ -66,6 +75,7 @@ describe('independent JSON boundary review', () => {
       )
     })
   }
+
   it('ignores errors in an overwritten Cline messages array', async () => {
     const metadata = '{"session_id":"id","prompt":"fallback"}'
     const messages = '{"messages":[{"role":"user","content":"discarded","ts":1e300}],"messages":[]}'
@@ -90,6 +100,7 @@ describe('independent JSON boundary review', () => {
     )
     expect(Reflect.get({}, 'polluted')).toBeUndefined()
   })
+
   for (const content of [
     '{"messages":[],}',
     '{"messages":[1,]}',

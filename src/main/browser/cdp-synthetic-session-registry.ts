@@ -26,6 +26,7 @@ export class CdpSyntheticSessionRegistry {
     const sessionId = this.nextSyntheticPageSessionId()
     this.clientSessionIds.add(sessionId)
     this.clientSessionId ??= sessionId
+
     return sessionId
   }
 
@@ -33,6 +34,7 @@ export class CdpSyntheticSessionRegistry {
     // Why: Playwright needs a distinct browser session before it attaches to the selected page.
     const sessionId = this.nextSyntheticBrowserSessionId()
     this.clientBrowserSessionIds.add(sessionId)
+
     return sessionId
   }
 
@@ -40,6 +42,7 @@ export class CdpSyntheticSessionRegistry {
     if (typeof detachedSessionId === 'string') {
       this.clientSessionIds.delete(detachedSessionId)
       this.clientBrowserSessionIds.delete(detachedSessionId)
+
       if (detachedSessionId === this.clientSessionId) {
         this.clientSessionId = this.clientSessionIds.values().next().value
       }
@@ -50,11 +53,13 @@ export class CdpSyntheticSessionRegistry {
     const syntheticSession =
       (msgSessionId && this.clientSessionIds.has(msgSessionId)) ||
       (msgSessionId && this.clientBrowserSessionIds.has(msgSessionId))
+
     return msgSessionId && !syntheticSession ? msgSessionId : undefined
   }
 
   private nextSyntheticPageSessionId(): string {
     this.nextClientSessionOrdinal += 1
+
     return this.nextClientSessionOrdinal === 1
       ? 'orca-proxy-session'
       : `orca-proxy-session-${this.nextClientSessionOrdinal}`
@@ -62,6 +67,7 @@ export class CdpSyntheticSessionRegistry {
 
   private nextSyntheticBrowserSessionId(): string {
     this.nextClientBrowserSessionOrdinal += 1
+
     return this.nextClientBrowserSessionOrdinal === 1
       ? 'orca-proxy-browser-session'
       : `orca-proxy-browser-session-${this.nextClientBrowserSessionOrdinal}`

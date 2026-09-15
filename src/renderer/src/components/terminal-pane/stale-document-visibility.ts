@@ -13,7 +13,9 @@ import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 type StaleVisibilityRecoveryListener = () => void
 
 const recoveryListeners = new Set<StaleVisibilityRecoveryListener>()
+
 let visibilityProvenStale = false
+
 let globalListenersInstalled = false
 
 export function isDocumentVisibilityProvenStale(): boolean {
@@ -24,6 +26,7 @@ function onUserInteractionWithDocument(): void {
   if (visibilityProvenStale || document.visibilityState !== 'hidden') {
     return
   }
+
   visibilityProvenStale = true
   recordTerminalFreezeBreadcrumb('stale-visibility-latch', {
     recoveryListenerCount: recoveryListeners.size
@@ -32,6 +35,7 @@ function onUserInteractionWithDocument(): void {
     '[terminal] user input arrived while document.visibilityState is hidden — treating occlusion state as stale and re-syncing terminal delivery',
     { recoveryListenerCount: recoveryListeners.size }
   )
+
   for (const listener of recoveryListeners) {
     try {
       listener()
@@ -60,6 +64,7 @@ function installGlobalListeners(): void {
   ) {
     return
   }
+
   globalListenersInstalled = true
   // Capture phase so no stopPropagation in the app can hide the proof; the
   // handler is a single property read when visibility is healthy.
@@ -79,6 +84,7 @@ function removeGlobalListeners(): void {
   if (!globalListenersInstalled) {
     return
   }
+
   globalListenersInstalled = false
   document.removeEventListener('keydown', onUserInteractionWithDocument, { capture: true })
   document.removeEventListener('pointerdown', onUserInteractionWithDocument, { capture: true })
@@ -94,8 +100,10 @@ export function registerStaleDocumentVisibilityRecovery(
 ): () => void {
   installGlobalListeners()
   recoveryListeners.add(listener)
+
   return () => {
     recoveryListeners.delete(listener)
+
     if (recoveryListeners.size === 0) {
       removeGlobalListeners()
     }

@@ -20,6 +20,7 @@ import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-termina
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+
 const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
 function processResult(
@@ -34,6 +35,7 @@ function createCoordinator(
   overrides: Partial<AgentCompletionCoordinatorOptions> = {}
 ) {
   const dispatchCompletion = vi.fn()
+
   const coordinator = createAgentCompletionCoordinator({
     paneKey: 'tab-1:leaf-1',
     getPtyId: () => 'pty-1',
@@ -45,6 +47,7 @@ function createCoordinator(
     isProcessInspectionCostly: () => true,
     ...overrides
   })
+
   return { coordinator, dispatchCompletion }
 }
 
@@ -80,6 +83,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     // was excluded from the no-evidence tier on every client platform.
     const sshPtyId = toAppSshPtyId('target-1', 'pty-1')
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       getPtyId: () => sshPtyId,
       isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, sshPtyId)
@@ -97,6 +101,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     // wait out the relaxed interval.
     const runtimePtyId = toRemoteRuntimePtyId('term_1', 'env-a')
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       getPtyId: () => runtimePtyId,
       isProcessInspectionCostly: () => isAgentProcessInspectionCostly(MAC_UA, runtimePtyId)
@@ -113,6 +118,7 @@ describe('agent completion no-evidence inspection cadence', () => {
 
   it('keeps the full 2s idle cadence on hosts where inspection is cheap', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       isProcessInspectionCostly: () => false
     })
@@ -126,6 +132,7 @@ describe('agent completion no-evidence inspection cadence', () => {
 
   it('keeps the full cadence when the coordinator has no cost source', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       isProcessInspectionCostly: undefined
     })
@@ -138,6 +145,7 @@ describe('agent completion no-evidence inspection cadence', () => {
 
   it('costs zero idle inspections when the host publishes foreground evidence', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       shouldPollNoEvidenceProcessCadence: () => false
     })
@@ -150,6 +158,7 @@ describe('agent completion no-evidence inspection cadence', () => {
 
   it('starts a bounded hot cadence after output on an evidence-publishing host', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       shouldPollNoEvidenceProcessCadence: () => false
     })
@@ -170,6 +179,7 @@ describe('agent completion no-evidence inspection cadence', () => {
 
   it('does not re-arm no-evidence scans for output from hidden panes', async () => {
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       shouldPollProcessCadence: () => false,
       shouldPollNoEvidenceProcessCadence: () => false
@@ -187,12 +197,14 @@ describe('agent completion no-evidence inspection cadence', () => {
     // activity re-arm has to stay under the visibility/tracking gate — a
     // background `npm run dev` pane must not resume 3s host scans (#6288).
     const inspectProcess = vi.fn(async () => processResult(null, false))
+
     const { coordinator } = createCoordinator(inspectProcess, {
       shouldPollProcessCadence: () => false,
       shouldPollNoEvidenceProcessCadence: undefined
     })
 
     coordinator.startProcessTracking()
+
     for (let tick = 0; tick < 12; tick += 1) {
       coordinator.observeOutputActivity()
       await vi.advanceTimersByTimeAsync(5_000)
@@ -270,6 +282,7 @@ describe('agent completion no-evidence inspection cadence', () => {
     const inspectProcess = vi.fn(async () => {
       throw new Error('scan failed')
     })
+
     const { coordinator } = createCoordinator(inspectProcess)
 
     coordinator.startProcessTracking()

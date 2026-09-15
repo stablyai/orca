@@ -33,22 +33,28 @@ export function selectChecksPanelReview({
   linkedGiteaPR
 }: ChecksPanelReviewSelectionInput): ChecksPanelReview | null {
   const gitLabHostedReview = hostedReview?.provider === 'gitlab' ? hostedReview : null
+
   if (gitLabHostedReview) {
     return gitLabHostedReview
   }
+
   const hasNonGitHubLinkedReview =
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
     linkedGiteaPR !== null
+
   if (hasNonGitHubLinkedReview) {
     return null
   }
+
   if (pr && linkedPR !== null && pr.number !== linkedPR) {
     return null
   }
+
   if (pr && isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, pr.number)) {
     return null
   }
+
   return pr ? gitHubPRToChecksPanelReview(pr) : null
 }

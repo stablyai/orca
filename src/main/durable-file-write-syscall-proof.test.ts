@@ -13,14 +13,17 @@ const syscalls: ('fsync:file' | 'fsync:directory' | 'rename')[] = []
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     fsyncSync: (fd: number) => {
       syscalls.push(actual.fstatSync(fd).isDirectory() ? 'fsync:directory' : 'fsync:file')
+
       return actual.fsyncSync(fd)
     },
     renameSync: (from: NodeFs.PathLike, to: NodeFs.PathLike) => {
       syscalls.push('rename')
+
       return actual.renameSync(from, to)
     }
   }
@@ -30,9 +33,11 @@ vi.mock('node:fs', async () => {
  *  assume, so the expectation tracks the real platform instead of a hardcoded OS list. */
 function directoryFsyncSupported(directory: string): boolean {
   let fd: number | null = null
+
   try {
     fd = openSync(directory, 'r')
     fsyncSync(fd)
+
     return true
   } catch {
     return false
@@ -50,6 +55,7 @@ function directoryFsyncSupported(directory: string): boolean {
 it('fsyncs the file before rename, and the directory after where supported', async () => {
   const { writeFileDurableSync } = await import('./durable-file-write')
   const dir = mkdtempSync(join(tmpdir(), 'orca-fsync-'))
+
   try {
     const supported = directoryFsyncSupported(dir)
     syscalls.length = 0 // Discard the probe's own fsync.

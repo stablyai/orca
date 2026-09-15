@@ -8,6 +8,7 @@ export function resolveZoomTarget(args: {
   activeElement: unknown
 }): 'terminal' | 'editor' | 'simulator' | 'ui' {
   const { activeView, activeTabType, activeElement } = args
+
   const terminalInputFocused =
     typeof activeElement === 'object' &&
     activeElement !== null &&
@@ -17,6 +18,7 @@ export function resolveZoomTarget(args: {
     (activeElement as { classList: { contains: (token: string) => boolean } }).classList.contains(
       'xterm-helper-textarea'
     )
+
   const editorFocused =
     typeof activeElement === 'object' &&
     activeElement !== null &&
@@ -35,24 +37,30 @@ export function resolveZoomTarget(args: {
   if (activeView !== 'terminal') {
     return 'ui'
   }
+
   if (activeTabType === 'simulator') {
     return 'simulator'
   }
+
   // Why: keyboard/menu zoom in an active browser tab belongs to Orca chrome.
   // Browser page zoom has a dedicated route for wheel and page-specific IPC.
   if (activeTabType === 'browser') {
     return 'ui'
   }
+
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'
   }
+
   // Why: terminal zoom is focus-owned. After the user clicks app chrome or
   // whitespace, the active terminal tab remains visible but app zoom should own
   // Cmd/Ctrl +/- until xterm focus returns.
   if (terminalInputFocused) {
     return 'terminal'
   }
+
   return 'ui'
 }
+
 import type { TopLevelView } from '../../../shared/ui-chrome-types'
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'

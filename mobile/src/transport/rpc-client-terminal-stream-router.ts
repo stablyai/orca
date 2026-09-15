@@ -19,13 +19,16 @@ export class RpcClientTerminalStreamRouter {
 
   reset(requestId: string): void {
     const streamIds = this.idsByRequest.get(requestId)
+
     if (!streamIds) {
       return
     }
+
     for (const streamId of streamIds) {
       this.listeners.delete(streamId)
       this.snapshots.delete(streamId)
     }
+
     this.idsByRequest.delete(requestId)
   }
 

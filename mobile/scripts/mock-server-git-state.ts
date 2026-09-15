@@ -19,6 +19,7 @@ type MockGitResponse = {
 }
 
 type MockGitRespond = (response: MockGitResponse) => void
+
 type MockGitSuccess = (id: string, result: unknown) => MockGitResponse
 
 let fakeGitEntries: FakeGitEntry[] = [
@@ -26,12 +27,16 @@ let fakeGitEntries: FakeGitEntry[] = [
   { path: 'src/auth/jwt.ts', status: 'untracked', area: 'untracked' },
   { path: 'README.md', status: 'modified', area: 'staged' }
 ]
+
 let fakeAhead = 1
+
 let fakeBehind = 0
+
 let fakeHasUpstream = true
 
 function toGitStatusEntry(entry: FakeGitEntry): MobileGitStatusEntry {
   const { stagedFromUntracked: _stagedFromUntracked, ...statusEntry } = entry
+
   return statusEntry
 }
 
@@ -39,9 +44,11 @@ function stageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeGit
   if (!filePaths.has(entry.path)) {
     return entry
   }
+
   if (entry.area === 'untracked') {
     return { ...entry, area: 'staged', status: 'added', stagedFromUntracked: true }
   }
+
   return { ...entry, area: 'staged' }
 }
 
@@ -49,9 +56,11 @@ function unstageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeG
   if (!filePaths.has(entry.path)) {
     return entry
   }
+
   if (entry.stagedFromUntracked) {
     return { ...entry, area: 'untracked', status: 'untracked', stagedFromUntracked: false }
   }
+
   return { ...entry, area: 'unstaged' }
 }
 
@@ -75,6 +84,7 @@ export function handleMockGitRequest(
           }
         })
       )
+
       return true
 
     case 'git.upstreamStatus':
@@ -86,12 +96,14 @@ export function handleMockGitRequest(
           behind: fakeBehind
         })
       )
+
       return true
 
     case 'git.stage': {
       const filePath = String(request.params?.filePath ?? '')
       fakeGitEntries = fakeGitEntries.map((entry) => stageFakeGitEntry(entry, new Set([filePath])))
       respond(success(request.id, { ok: true }))
+
       return true
     }
 
@@ -99,6 +111,7 @@ export function handleMockGitRequest(
       const filePaths = new Set((request.params?.filePaths as string[] | undefined) ?? [])
       fakeGitEntries = fakeGitEntries.map((entry) => stageFakeGitEntry(entry, filePaths))
       respond(success(request.id, { ok: true }))
+
       return true
     }
 
@@ -108,6 +121,7 @@ export function handleMockGitRequest(
         unstageFakeGitEntry(entry, new Set([filePath]))
       )
       respond(success(request.id, { ok: true }))
+
       return true
     }
 
@@ -115,6 +129,7 @@ export function handleMockGitRequest(
       const filePaths = new Set((request.params?.filePaths as string[] | undefined) ?? [])
       fakeGitEntries = fakeGitEntries.map((entry) => unstageFakeGitEntry(entry, filePaths))
       respond(success(request.id, { ok: true }))
+
       return true
     }
 
@@ -122,6 +137,7 @@ export function handleMockGitRequest(
       const filePath = String(request.params?.filePath ?? '')
       fakeGitEntries = fakeGitEntries.filter((entry) => entry.path !== filePath)
       respond(success(request.id, { ok: true }))
+
       return true
     }
 
@@ -129,15 +145,18 @@ export function handleMockGitRequest(
       fakeGitEntries = fakeGitEntries.filter((entry) => entry.area !== 'staged')
       fakeAhead += 1
       respond(success(request.id, { success: true }))
+
       return true
 
     case 'git.fetch':
       respond(success(request.id, { ok: true }))
+
       return true
 
     case 'git.pull':
       fakeBehind = 0
       respond(success(request.id, { ok: true }))
+
       return true
 
     case 'git.diff':
@@ -150,12 +169,14 @@ export function handleMockGitRequest(
           modifiedIsBinary: false
         })
       )
+
       return true
 
     case 'git.push':
       fakeHasUpstream = true
       fakeAhead = 0
       respond(success(request.id, { ok: true }))
+
       return true
 
     default:

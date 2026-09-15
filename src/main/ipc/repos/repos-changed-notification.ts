@@ -14,9 +14,11 @@ export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier):
 
 export function notifyReposChanged(mainWindow: BrowserWindow): void {
   wakeFolderRepoGitUpgradeWatch()
+
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
+
   // Why: paired clients only refetch a remote catalog on this event; without it a
   // host-side delete or rename stays invisible to them indefinitely (#11994).
   try {
@@ -25,5 +27,6 @@ export function notifyReposChanged(mainWindow: BrowserWindow): void {
     // Why: a broadcast failure must never fail the mutation the user actually asked for.
     console.error('[repos] failed to notify remote clients of repo change', err)
   }
+
   scheduleCurrentWorktreeBaseDirectoryWatcherSync()
 }

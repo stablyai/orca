@@ -2,7 +2,9 @@ import * as path from 'node:path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
 import { windowsLongPathGitArgs } from '../shared/windows-long-path-git-args'
 import type { GitExec } from './git-handler-ops'
+
 export { removeWorktreeOp } from './git-handler-worktree-remove'
+
 export { readRelayWorktreeList } from './git-handler-worktree-list'
 
 async function persistRelayWorktreeCreationBase(
@@ -12,10 +14,12 @@ async function persistRelayWorktreeCreationBase(
   effectiveBase: string
 ): Promise<void> {
   const configKey = `branch.${branchName}.base`
+
   try {
     await git(['config', '--local', '--replace-all', configKey, effectiveBase], targetDir)
   } catch (error) {
     console.warn(`relay addWorktree: failed to set ${configKey} for ${targetDir}`, error)
+
     try {
       // Why: SSH worktree creation shares branch config by name; clear stale
       // metadata if replacing an old same-name base fails.
@@ -61,6 +65,7 @@ export async function addWorktreeOp(
       ? await resolveWorktreeAddBaseRef(base, async (qualifiedRef) => {
           try {
             await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`], repoPath)
+
             return true
           } catch {
             return false
@@ -70,13 +75,16 @@ export async function addWorktreeOp(
 
   // Why: a Windows SSH host hits the same MAX_PATH ceiling as a local Windows checkout.
   const longPathArgs = windowsLongPathGitArgs(targetDir, platform)
+
   const args = checkoutExistingBranch
     ? [...longPathArgs, 'worktree', 'add', targetDir, branchName]
     : [...longPathArgs, 'worktree', 'add', '--no-track', '-b', branchName, targetDir]
+
   if (!checkoutExistingBranch && noCheckout) {
     // Why: offset by the global-option prefix so --no-checkout still lands before -b.
     args.splice(longPathArgs.length + 3, 0, '--no-checkout')
   }
+
   if (effectiveBase) {
     args.push(effectiveBase)
   }
@@ -99,6 +107,7 @@ export async function addWorktreeOp(
   // Mirrors local addWorktree exactly.
   try {
     let alreadySet = false
+
     try {
       await git(['config', '--get', 'push.autoSetupRemote'], targetDir)
       alreadySet = true
@@ -108,10 +117,12 @@ export async function addWorktreeOp(
       // locked file) — surface it via the outer catch instead of falling
       // through to overwrite the user's actual value.
       const code = (readError as { code?: unknown })?.code
+
       if (code !== 1) {
         throw readError
       }
     }
+
     if (!alreadySet) {
       await git(['config', '--local', 'push.autoSetupRemote', 'true'], targetDir)
     }
@@ -132,9 +143,11 @@ function normalizeRelayWorktreePathForCompare(value: string): string {
   if (isPosixAbsolutePath(value)) {
     return path.posix.normalize(path.posix.resolve(value))
   }
+
   if (isWindowsAbsolutePath(value)) {
     return path.win32.normalize(path.win32.resolve(value))
   }
+
   return path.normalize(path.resolve(value))
 }
 
@@ -142,6 +155,7 @@ export function areRelayWorktreePathsEqual(leftPath: string, rightPath: string):
   const left = normalizeRelayWorktreePathForCompare(leftPath)
   const right = normalizeRelayWorktreePathForCompare(rightPath)
   const compareCaseInsensitive = isWindowsAbsolutePath(leftPath) && isWindowsAbsolutePath(rightPath)
+
   return compareCaseInsensitive ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
@@ -151,11 +165,14 @@ export async function worktreeIsCleanOp(
 ): Promise<{ clean: boolean; stdout?: string }> {
   const worktreePath = params.worktreePath as string
   const includeUntracked = params.includeUntracked !== false
+
   const { stdout } = await git(
     ['status', '--porcelain', includeUntracked ? '--untracked-files=all' : '--untracked-files=no'],
     worktreePath
   )
+
   const clean = !stdout.trim()
+
   return { clean, stdout: clean ? undefined : stdout }
 }
 
@@ -174,6 +191,7 @@ export async function commitChangesRelay(
 
   try {
     await git(['commit', '-m', message], worktreePath)
+
     return { success: true }
   } catch (error) {
     // Why: surface whichever channel carries the useful message. Pre-commit/GPG
@@ -183,16 +201,20 @@ export async function commitChangesRelay(
     const readStringField = (field: string): string | null => {
       if (typeof error === 'object' && error && field in error) {
         const v = (error as Record<string, unknown>)[field]
+
         if (typeof v === 'string' && v.length > 0) {
           return v
         }
       }
+
       return null
     }
+
     const errorMessage =
       readStringField('stderr') ??
       readStringField('stdout') ??
       (error instanceof Error ? error.message : 'Commit failed')
+
     return { success: false, error: errorMessage }
   }
 }

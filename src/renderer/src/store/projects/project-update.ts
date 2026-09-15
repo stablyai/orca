@@ -16,6 +16,7 @@ export function createProjectUpdateActions(
     updateProject: async (projectId, updates) => {
       try {
         const target = getProjectUpdateRuntimeTarget(get(), projectId)
+
         const updatedProject =
           target.kind === 'local'
             ? await window.api.projects.update({ projectId, updates })
@@ -27,9 +28,11 @@ export function createProjectUpdateActions(
                   { timeoutMs: 15_000 }
                 )
               ).project
+
         if (!updatedProject) {
           return false
         }
+
         // Why: the merge spreads updatedProject.sourceRepoIds, which throws if the host sent a non-array.
         const normalizedProject = normalizeProjectRow(updatedProject)
         const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
@@ -41,13 +44,16 @@ export function createProjectUpdateActions(
           ),
           folderWorkspacePathStatuses: {}
         }))
+
         if (runtimePreferenceChanged) {
           get().clearLocalDetectedAgents()
           notifyInstalledAgentSkillsChanged()
         }
+
         return true
       } catch (err) {
         console.error('Failed to update project:', err)
+
         return false
       }
     }

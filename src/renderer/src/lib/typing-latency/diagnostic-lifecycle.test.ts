@@ -6,6 +6,7 @@ import type { TypingInputRegistration, TypingInputSignal } from './input-events'
 
 const mocks = vi.hoisted(() => {
   const panes = [{ id: 1 }, { id: 2 }]
+
   return {
     discardUndispatchedKeystroke: vi.fn<() => PreventedKeystrokeDiscard>(() => null),
     detachInputEvents: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('./echo-instrumentation', () => ({
 vi.mock('./input-events', () => ({
   installTypingLatencyInputEvents: vi.fn((_target, listener) => {
     mocks.inputListener = listener
+
     return mocks.detachInputEvents
   })
 }))
@@ -56,6 +58,7 @@ describe('typing latency diagnostic lifecycle', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     installTypingLatencyDiagnostic()
     const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+
     if (!bridge) {
       throw new Error('Typing latency diagnostic bridge was not installed')
     }
@@ -72,9 +75,11 @@ describe('typing latency diagnostic lifecycle', () => {
     })
 
     const inputListener = mocks.inputListener
+
     if (!inputListener) {
       throw new Error('Typing latency input listener was not installed')
     }
+
     const event = new KeyboardEvent('keydown', { key: 'a' })
     Object.defineProperty(event, 'target', { value: document.body })
     inputListener({ event, source: 'direct', text: 'a' })
@@ -88,6 +93,7 @@ describe('typing latency diagnostic lifecycle', () => {
     mocks.drainTimedOutEchoCandidates.mockReturnValueOnce(1)
     installTypingLatencyDiagnostic()
     const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+
     if (!bridge) {
       throw new Error('Typing latency diagnostic bridge was not installed')
     }
@@ -105,9 +111,11 @@ describe('typing latency diagnostic lifecycle', () => {
     mocks.discardUndispatchedKeystroke.mockReturnValueOnce('counted-unmatched')
     installTypingLatencyDiagnostic()
     const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+
     if (!bridge || !mocks.inputListener) {
       throw new Error('Typing latency diagnostic did not start')
     }
+
     bridge.start()
 
     const registration = mocks.inputListener({
@@ -115,6 +123,7 @@ describe('typing latency diagnostic lifecycle', () => {
       source: 'ime',
       text: '한'
     })
+
     expect(bridge.report().sampling.unmatchedKeystrokes).toBe(1)
     registration?.settleAfterPropagation(true)
 
@@ -131,9 +140,11 @@ describe('typing latency diagnostic lifecycle', () => {
     mocks.discardUndispatchedKeystroke.mockReturnValueOnce('pending')
     installTypingLatencyDiagnostic()
     const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+
     if (!bridge || !mocks.inputListener) {
       throw new Error('Typing latency diagnostic did not start')
     }
+
     bridge.start()
 
     const registration = mocks.inputListener({
@@ -141,6 +152,7 @@ describe('typing latency diagnostic lifecycle', () => {
       source: 'ime',
       text: '한'
     })
+
     registration?.settleAfterPropagation(true)
 
     expect(bridge.report()).toMatchObject({
@@ -159,9 +171,11 @@ describe('typing latency diagnostic lifecycle', () => {
     mocks.discardUndispatchedKeystroke.mockReturnValueOnce(null)
     installTypingLatencyDiagnostic()
     const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+
     if (!bridge || !mocks.inputListener) {
       throw new Error('Typing latency diagnostic did not start')
     }
+
     bridge.start()
 
     const registration = mocks.inputListener({
@@ -169,6 +183,7 @@ describe('typing latency diagnostic lifecycle', () => {
       source: 'ime',
       text: '한'
     })
+
     registration?.settleAfterPropagation(true)
 
     expect(bridge.report().byInputSource).toMatchObject({
@@ -185,9 +200,11 @@ describe('typing latency diagnostic lifecycle', () => {
     mocks.discardUndispatchedKeystroke.mockReturnValueOnce('counted-unmatched')
     installTypingLatencyDiagnostic()
     const bridge = (window as DiagnosticWindow).__orcaTypingDiagnostic
+
     if (!bridge || !mocks.inputListener) {
       throw new Error('Typing latency diagnostic did not start')
     }
+
     bridge.start()
 
     const registration = mocks.inputListener({
@@ -195,6 +212,7 @@ describe('typing latency diagnostic lifecycle', () => {
       source: 'ime',
       text: '한'
     })
+
     expect(bridge.report().sampling.unmatchedKeystrokes).toBe(1)
     registration?.settleAfterPropagation(true)
 

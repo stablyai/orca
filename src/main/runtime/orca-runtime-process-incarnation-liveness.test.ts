@@ -5,6 +5,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 
 const SSH_SCOPE = JSON.stringify({ kind: 'ssh', targetId: 'ssh-1' })
+
 const PROCESS_INCARNATION = 'remote:ssh-1:pty-1:inc-1'
 
 function runtimeWithInventory(
@@ -17,6 +18,7 @@ function runtimeWithInventory(
     getForegroundProcess: async () => null,
     listProcesses
   })
+
   return runtime
 }
 
@@ -30,6 +32,7 @@ describe('terminal process incarnation liveness', () => {
         title: 'worker'
       }
     ])
+
     const runtime = runtimeWithInventory(listProcesses)
 
     await expect(
@@ -50,6 +53,7 @@ describe('terminal process incarnation liveness', () => {
         { id: 'remote:ssh-1:pty-1', incarnationId: ' inc-1 ', cwd: '', title: 'worker' }
       ])
       .mockRejectedValueOnce(new Error('provider unavailable'))
+
     const runtime = runtimeWithInventory(listProcesses)
 
     await expect(

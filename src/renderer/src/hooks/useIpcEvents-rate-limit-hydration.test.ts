@@ -11,6 +11,7 @@ describe('useIpcEvents rate-limit hydration', () => {
   it('does not miss startup usage updates that land between get and subscription', async () => {
     const setRateLimitsFromPush = vi.fn()
     const staleState = createEmptyRateLimitState()
+
     const freshState = {
       ...staleState,
       claude: {
@@ -43,6 +44,7 @@ describe('useIpcEvents rate-limit hydration', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -121,15 +123,18 @@ describe('useIpcEvents rate-limit hydration', () => {
           if (prop in namespace) {
             return Reflect.get(namespace, prop)
           }
+
           return () => () => {}
         }
       })
 
     let rateLimitUpdateListener: ((state: unknown) => void) | null = null
+
     const getRateLimits = vi.fn(() => {
       if (rateLimitUpdateListener) {
         rateLimitUpdateListener(freshState)
       }
+
       return Promise.resolve(staleState)
     })
 
@@ -153,6 +158,7 @@ describe('useIpcEvents rate-limit hydration', () => {
           get: getRateLimits,
           onUpdate: (listener: (state: unknown) => void) => {
             rateLimitUpdateListener = listener
+
             return () => {}
           }
         },

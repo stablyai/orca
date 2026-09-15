@@ -22,6 +22,7 @@ export function skillProviderDirectoryLabel(
   scope: 'global' | 'workspace'
 ): string {
   const joined = segments.join('/')
+
   return scope === 'global' ? `~/${joined}` : joined
 }
 
@@ -31,20 +32,25 @@ export function groupSkillInstallProviders(
 ): SkillInstallProviderGroups {
   const canonical: SkillInstallProviderDefinition[] = []
   const selectable: SkillInstallProviderChoice[] = []
+
   for (const provider of SKILL_INSTALL_PROVIDERS) {
     const segments = scope === 'global' ? provider.globalSegments : provider.workspaceSegments
+
     if (segments) {
       selectable.push({ provider, directory: skillProviderDirectoryLabel(segments, scope) })
     } else {
       canonical.push(provider)
     }
   }
+
   if (!detectedAgents) {
     return { canonical, selectable }
   }
+
   // Why: agents the machine does not have are still offered — you may install
   // one later — but they belong under the ones the choice actually affects.
   const installed = new Set(detectedAgents)
+
   return {
     canonical,
     selectable: [
@@ -63,10 +69,13 @@ export function defaultSelectedSkillProviders(
   detectedAgents: readonly string[] | null
 ): Set<SkillInstallProviderId> {
   const ids = SKILL_INSTALL_PROVIDERS.map((provider) => provider.id)
+
   if (!detectedAgents) {
     return new Set(ids)
   }
+
   const detected = new Set(detectedAgents)
+
   return new Set(ids.filter((id) => detected.has(id)))
 }
 
@@ -76,10 +85,12 @@ export function toggledSkillProviderSelection(
   selected: boolean
 ): Set<SkillInstallProviderId> {
   const next = new Set(current)
+
   if (selected) {
     next.add(provider)
   } else {
     next.delete(provider)
   }
+
   return next
 }

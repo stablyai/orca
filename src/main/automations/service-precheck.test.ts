@@ -9,6 +9,7 @@ import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
+
 const testState = { dir: '' }
 
 vi.mock('electron', () => ({
@@ -31,6 +32,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -72,6 +74,7 @@ describe('AutomationService prechecks', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo({ path: '/repo/path' }))
+
     const automation = store.createAutomation({
       name: 'Conditional check',
       prompt: 'Check the repo',
@@ -86,7 +89,9 @@ describe('AutomationService prechecks', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
+
     const precheckResult = {
       command: 'test -f ready',
       exitCode: 0,
@@ -100,6 +105,7 @@ describe('AutomationService prechecks', () => {
       startedAt: Date.now(),
       completedAt: Date.now()
     }
+
     runAutomationPrecheckMock.mockResolvedValue(precheckResult)
     const service = new AutomationService(store, { tickMs: 60_000 })
 
@@ -123,6 +129,7 @@ describe('AutomationService prechecks', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ path: '/repo/current' }))
     const setup = store.getProjectHostSetups()[0]!
+
     const automation = store.createAutomation({
       name: 'Conditional check',
       prompt: 'Check the repo',
@@ -137,7 +144,9 @@ describe('AutomationService prechecks', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
+
     const staleRunContext = {
       kind: 'workspace-run',
       projectId: setup.projectId,
@@ -146,6 +155,7 @@ describe('AutomationService prechecks', () => {
       repoId: setup.repoId,
       path: '/repo/old'
     }
+
     mutateDataFile((state) => {
       state.automations[0].runContext = staleRunContext
       state.automationRuns[0].runContext = staleRunContext
@@ -167,6 +177,7 @@ describe('AutomationService prechecks', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Manual check',
       prompt: 'Check the repo',
@@ -181,6 +192,7 @@ describe('AutomationService prechecks', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'manual')
     const service = new AutomationService(store, { tickMs: 60_000 })
 
@@ -192,6 +204,7 @@ describe('AutomationService prechecks', () => {
     vi.setSystemTime(new Date('2026-05-12T08:59:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Conditional remote check',
       prompt: 'Check the repo',
@@ -206,6 +219,7 @@ describe('AutomationService prechecks', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00Z').getTime()
     })
+
     runAutomationPrecheckMock.mockResolvedValue({
       command: 'test -f ready',
       exitCode: 1,
@@ -220,11 +234,13 @@ describe('AutomationService prechecks', () => {
       completedAt: Date.now()
     })
     const headlessDispatcher = vi.fn()
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
       headlessDispatcher
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
 
     await runHeadlessAutomationDispatch({

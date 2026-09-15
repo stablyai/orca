@@ -54,16 +54,20 @@ export function createTerminalShutdownGuardController({
     if (exitGuardPtyIds.length === 0) {
       return
     }
+
     set((state) => {
       const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
       // Why copy-on-write: re-guarding an already-suppressed pty writes the same `true`.
       const suppressedPtyExitIds = copyOnWriteRecord(state.suppressedPtyExitIds)
+
       for (const ptyId of exitGuardPtyIds) {
         pendingPtyShutdownIds[ptyId] = (pendingPtyShutdownIds[ptyId] ?? 0) + 1
+
         if (state.suppressedPtyExitIds[ptyId] !== true) {
           suppressedPtyExitIds.set(ptyId, true)
         }
       }
+
       return { suppressedPtyExitIds: suppressedPtyExitIds.read(), pendingPtyShutdownIds }
     })
   }
@@ -75,26 +79,33 @@ export function createTerminalShutdownGuardController({
     set((state) => {
       const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
       const suppressedPtyExitIds = { ...state.suppressedPtyExitIds }
+
       for (const ptyId of exitGuardPtyIds) {
         const remainingOwners = (pendingPtyShutdownIds[ptyId] ?? 0) - 1
+
         if (remainingOwners > 0) {
           pendingPtyShutdownIds[ptyId] = remainingOwners
         } else {
           delete pendingPtyShutdownIds[ptyId]
+
           if (!stoppedPtyIds.has(ptyId)) {
             delete suppressedPtyExitIds[ptyId]
           }
         }
       }
+
       if (!clearStoppedTabBindings) {
         return { pendingPtyShutdownIds, suppressedPtyExitIds }
       }
+
       const ptyIdsByTabId = { ...state.ptyIdsByTabId }
+
       for (const tab of tabs) {
         ptyIdsByTabId[tab.id] = (state.ptyIdsByTabId[tab.id] ?? []).filter(
           (ptyId) => !stoppedPtyIds.has(ptyId)
         )
       }
+
       return { ptyIdsByTabId, pendingPtyShutdownIds, suppressedPtyExitIds }
     })
   }
@@ -103,27 +114,34 @@ export function createTerminalShutdownGuardController({
     if (handlerSnapshots.length > 0) {
       restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
     }
+
     set((state) => {
       const suppressedPtyExitIds = { ...state.suppressedPtyExitIds }
       const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
+
       for (const ptyId of exitGuardPtyIds) {
         const remainingOwners = (pendingPtyShutdownIds[ptyId] ?? 0) - 1
+
         if (remainingOwners > 0) {
           pendingPtyShutdownIds[ptyId] = remainingOwners
         } else {
           delete pendingPtyShutdownIds[ptyId]
+
           if (!hasCommittedPtyShutdownSettlement(ptyId)) {
             delete suppressedPtyExitIds[ptyId]
           }
         }
       }
+
       return { suppressedPtyExitIds, pendingPtyShutdownIds }
     })
     const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
     const committedPtyIds = settledPtyIds.filter(hasCommittedPtyShutdownSettlement)
+
     const rolledBackPtyIds = settledPtyIds.filter(
       (ptyId) => !hasCommittedPtyShutdownSettlement(ptyId)
     )
+
     markCommittedPtyShutdowns(committedPtyIds)
     settleDeferredPtyShutdownExits(committedPtyIds, 'committed')
     settleDeferredPtyShutdownExits(rolledBackPtyIds, 'rolled-back')
@@ -135,16 +153,20 @@ export function createTerminalShutdownGuardController({
     failure?: PromiseRejectedResult
   }> => {
     const localPtyIds = rendererShutdownPtyIds.filter((ptyId) => !ptyId.startsWith('remote:'))
+
     const results = await Promise.allSettled(
       localPtyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
     )
+
     const stoppedPtyIds = [
       ...(runtimeEnvironmentId
         ? rendererShutdownPtyIds.filter((ptyId) => ptyId.startsWith('remote:'))
         : []),
       ...localPtyIds.filter((_, index) => results[index]?.status === 'fulfilled')
     ]
+
     disposeParkedTerminalWatchersForPtyIds(stoppedPtyIds)
+
     return {
       stoppedPtyIds,
       failure: results.find(
@@ -158,9 +180,11 @@ export function createTerminalShutdownGuardController({
     const stopped = new Set(stoppedPtyIds)
     const stoppedSnapshots = handlerSnapshots.filter((snapshot) => stopped.has(snapshot.ptyId))
     const failedSnapshots = handlerSnapshots.filter((snapshot) => !stopped.has(snapshot.ptyId))
+
     for (const snapshot of stoppedSnapshots) {
       snapshot.commit?.()
     }
+
     restorePtyDataHandlersAfterFailedShutdown(failedSnapshots)
     noteCommittedPtyShutdownSettlements(stoppedPtyIds)
     settleGuards(stopped, true)
@@ -176,6 +200,7 @@ export function createTerminalShutdownGuardController({
       for (const snapshot of handlerSnapshots) {
         snapshot.commit?.()
       }
+
       noteCommittedPtyShutdownSettlements(exitGuardPtyIds)
     },
     markShutdownPending,

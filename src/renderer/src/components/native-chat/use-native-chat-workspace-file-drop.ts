@@ -51,8 +51,10 @@ function claimWorkspaceFileDrag(event: React.DragEvent<HTMLDivElement>): void {
 function setDropEffect(dataTransfer: DataTransfer, effect: 'copy' | 'none'): void {
   if (effect === 'none') {
     dataTransfer.dropEffect = 'none'
+
     return
   }
+
   if (
     dataTransfer.effectAllowed === 'all' ||
     dataTransfer.effectAllowed === 'copy' ||
@@ -85,6 +87,7 @@ export function useNativeChatWorkspaceFileDrop({
       if (!hasWorkspaceFileDragType(event.dataTransfer)) {
         return
       }
+
       claimWorkspaceFileDrag(event)
       // A guarded composer answers `none` rather than promising a copy it will
       // then drop on the floor: the cursor refuses, and no drop event follows.
@@ -98,62 +101,84 @@ export function useNativeChatWorkspaceFileDrop({
       if (!hasWorkspaceFileDragType(event.dataTransfer)) {
         return
       }
+
       claimWorkspaceFileDrag(event)
+
       if (disabled) {
         setDropEffect(event.dataTransfer, 'none')
+
         return
       }
+
       setDropEffect(event.dataTransfer, 'copy')
 
       const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer)
+
       if (dragPaths.status === 'rejected') {
         setNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+
         return
       }
+
       if (dragPaths.paths.length === 0) {
         return
       }
 
       const state = useAppStore.getState()
+
       const workspaceId =
         structuredWorktreeId ?? findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
+
       const source = readWorkspaceFileDragSource(event.dataTransfer)
+
       if (!workspaceId || !source || source.workspaceId !== workspaceId) {
         setNotice(nativeChatWorkspaceAttachmentMismatchNotice())
+
         return
       }
+
       const owner = resolveNativeChatAttachmentOwnerForWorktree(
         state,
         workspaceId,
         structuredWorktreeId ? undefined : terminalTabId
       )
+
       if (owner.kind === 'not-ready') {
         setNotice(nativeChatWorktreeNotReadyNotice())
+
         return
       }
+
       const targetExecutionHostId = getExecutionHostIdForWorktree(state, workspaceId)
+
       if (
         !isResolvedWorkspaceFileDragExecutionHost(targetExecutionHostId) ||
         source.executionHostId !== targetExecutionHostId
       ) {
         setNotice(nativeChatWorkspaceAttachmentMismatchNotice())
+
         return
       }
 
       const targetOwnerIsCurrent = (): boolean => {
         const currentState = useAppStore.getState()
+
         const currentWorkspaceId =
           structuredWorktreeIdRef.current ??
           findTerminalTabWorktreeId(currentState.tabsByWorktree, terminalTabId)
+
         if (currentWorkspaceId !== source.workspaceId) {
           return false
         }
+
         const currentHostId = getExecutionHostIdForWorktree(currentState, currentWorkspaceId)
+
         const currentOwner = resolveNativeChatAttachmentOwnerForWorktree(
           currentState,
           currentWorkspaceId,
           structuredWorktreeIdRef.current ? undefined : terminalTabId
         )
+
         return (
           isResolvedWorkspaceFileDragExecutionHost(currentHostId) &&
           currentHostId === source.executionHostId &&

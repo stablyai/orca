@@ -37,6 +37,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     if (args.connectionId) {
       return this.resolveAllowedRemoteTerminalArtifactPath(args.absolutePath, args.connectionId)
     }
+
     return resolveAllowedLocalTerminalArtifactPath(args.absolutePath, args.worktreePath)
   }
 
@@ -47,10 +48,13 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     if (!connectionId) {
       return canonicalPathForArtifactComparison(absolutePath)
     }
+
     const provider = getSshFilesystemProvider(connectionId)
+
     if (!provider) {
       throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
+
     return provider.realpath(absolutePath)
   }
 
@@ -66,7 +70,9 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     const stats = args.connectionId
       ? await this.statRemoteTerminalPath(args.artifactPath, args.connectionId)
       : await this.statLocalTerminalPath(args.artifactPath)
+
     const isDirectory = stats.isDirectory()
+
     if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
       return {
         worktree: args.worktreeId,
@@ -76,6 +82,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
         isDirectory: false
       }
     }
+
     const grant = isDirectory
       ? null
       : this.createTerminalFileGrant({
@@ -88,6 +95,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
           provenance: args.provenance ?? 'terminal-output',
           stats
         })
+
     return {
       worktree: args.worktreeId,
       relativePath: null,
@@ -111,21 +119,27 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     connectionId: string
   ): Promise<string | null> {
     const provider = getSshFilesystemProvider(connectionId)
+
     if (!provider) {
       throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
+
     const roots = ['/tmp', '/private/tmp']
     const providerTempDir = await provider.getTempDir?.().catch(() => null)
+
     if (providerTempDir) {
       roots.push(providerTempDir)
     }
+
     if (!roots.some((root) => isPathInsideOrEqual(root, absolutePath))) {
       return null
     }
+
     const [realArtifactPath, ...realRoots] = await Promise.all([
       provider.realpath(absolutePath),
       ...roots.map((root) => provider.realpath(root).catch(() => root))
     ])
+
     // Why: SSH I/O follows symlinks on the relay; grant the canonical target so a /tmp link can't escape the temp boundary.
     return realRoots.some((root) => isPathInsideOrEqual(root, realArtifactPath))
       ? realArtifactPath
@@ -137,6 +151,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
   ): Promise<RuntimeFileStatLike & { isDirectory: () => boolean }> {
     await assertLocalTerminalArtifactPathStillCanonical(absolutePath)
     const handle = await open(absolutePath, 'r')
+
     try {
       return handle.stat()
     } finally {
@@ -155,6 +170,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     stats: RuntimeFileStatLike
   }): TerminalFileGrant {
     assertTerminalArtifactNotHardLinked(args.stats)
+
     const grant: TerminalFileGrant = {
       id: randomUUID(),
       worktreeId: args.worktreeId,
@@ -167,8 +183,10 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
       readOnly: args.readOnly === true,
       provenance: args.provenance
     }
+
     this.terminalFileGrants.set(grant.id, grant)
     this.scheduleTerminalFileGrantExpiry(grant)
+
     return grant
   }
 
@@ -181,13 +199,16 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     this.pruneExpiredTerminalFileGrants()
     const grant = this.terminalFileGrants.get(grantId)
+
     if (!grant) {
       throw new Error('terminal_file_grant_expired')
     }
+
     if (grant.expiresAt <= Date.now()) {
       this.releaseTerminalFileGrant(grantId, grant)
       throw new Error('terminal_file_grant_expired')
     }
+
     if (
       grant.worktreeId !== target.worktree.id ||
       grant.absolutePath !== absolutePath ||
@@ -196,6 +217,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     ) {
       throw new Error('terminal_file_grant_mismatch')
     }
+
     return { grant, target }
   }
 
@@ -206,6 +228,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
 
   protected pruneExpiredTerminalFileGrants(): void {
     const now = Date.now()
+
     for (const [id, grant] of this.terminalFileGrants) {
       if (grant.expiresAt <= now) {
         this.releaseTerminalFileGrant(id, grant)

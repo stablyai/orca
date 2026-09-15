@@ -16,12 +16,15 @@ export const createCommentFetchActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -32,12 +35,15 @@ export const createCommentFetchActions = (
       options?.sourceContext,
       repo !== undefined
     )
+
     const cached = get().commentsCache[cacheKey]
+
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? []
     }
 
     const inflightRequest = inflightCommentsRequests.get(cacheKey)
+
     if (inflightRequest) {
       return inflightRequest
     }
@@ -51,6 +57,7 @@ export const createCommentFetchActions = (
           repoPath,
           options?.sourceContext
         )
+
         const comments =
           requestContext.target.kind === 'environment'
             ? await callRuntimeRpc<PRComment[]>(
@@ -72,15 +79,18 @@ export const createCommentFetchActions = (
                 noCache: options?.force,
                 sourceContext: options?.sourceContext
               })) as PRComment[])
+
         set((s) => ({
           commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
             data: comments,
             fetchedAt: Date.now()
           })
         }))
+
         return comments
       } catch (err) {
         console.error('Failed to fetch PR comments:', err)
+
         return get().commentsCache[cacheKey]?.data ?? []
       } finally {
         inflightCommentsRequests.delete(cacheKey)
@@ -88,6 +98,7 @@ export const createCommentFetchActions = (
     })()
 
     inflightCommentsRequests.set(cacheKey, request)
+
     return request
   }
 })

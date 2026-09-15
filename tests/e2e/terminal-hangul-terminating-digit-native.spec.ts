@@ -64,14 +64,20 @@ import {
 } from './terminal-ime-byte-reader'
 
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
+
 const REPETITIONS = Number(process.env.ORCA_E2E_DIGIT_REPETITIONS ?? 3)
+
 const INJECTOR = process.env.ORCA_E2E_IME_INJECTOR ?? 'xdotool'
+
 const WAYLAND_INJECT = process.env.ORCA_E2E_WAYLAND_INJECT ?? '/tmp/ime15299/wayland-inject.py'
+
 // The nested compositor is one X11 window; keys land on it and mutter routes
 // them to the focused Wayland client through the IME.
 const NESTED_FOCUS_CMD = process.env.ORCA_E2E_NESTED_FOCUS_CMD ?? '/tmp/ime15299/focus-nested.sh'
+
 // Dubeolsik: d=ㅇ, k=ㅏ, so `d k` composes 아 and the digit terminates it.
 const KEY_TOKENS = (process.env.ORCA_E2E_DIGIT_KEYS ?? 'd k 1 Return').split(' ').filter(Boolean)
+
 const EXPECTED_LINE = process.env.ORCA_E2E_DIGIT_EXPECTED ?? '아1'
 
 test.use({
@@ -93,8 +99,10 @@ function injectKeys(tokens: string[]): void {
       stdio: 'pipe',
       timeout: NATIVE_COMMAND_TIMEOUT_MS
     })
+
     return
   }
+
   for (const token of tokens) {
     execFileSync('xdotool', ['key', '--clearmodifiers', token], {
       stdio: 'pipe',
@@ -107,6 +115,7 @@ function injectKeys(tokens: string[]): void {
  *  Escape has to run before the byte reader starts or those Escapes land in it. */
 function leaveNestedOverview(): void {
   execFileSync(NESTED_FOCUS_CMD, [], { stdio: 'pipe', timeout: NATIVE_COMMAND_TIMEOUT_MS })
+
   for (let index = 0; index < 2; index += 1) {
     execFileSync('xdotool', ['key', 'Escape'], {
       stdio: 'pipe',
@@ -131,6 +140,7 @@ async function focusNativeTerminalWindow(page: Page): Promise<void> {
     document.title = nextTitle
   }, title)
   await expect.poll(() => page.title(), { timeout: 5_000 }).toBe(title)
+
   if (INJECTOR === 'nested') {
     execFileSync(NESTED_FOCUS_CMD, [], {
       stdio: 'pipe',
@@ -142,14 +152,17 @@ async function focusNativeTerminalWindow(page: Page): Promise<void> {
       timeout: NATIVE_COMMAND_TIMEOUT_MS
     })
   }
+
   execFileSync('ibus', ['engine', 'hangul'], {
     stdio: 'pipe',
     timeout: NATIVE_COMMAND_TIMEOUT_MS
   })
+
   const engine = execFileSync('ibus', ['engine'], {
     encoding: 'utf8',
     timeout: NATIVE_COMMAND_TIMEOUT_MS
   }).trim()
+
   expect(engine).toBe('hangul')
 }
 
@@ -188,7 +201,9 @@ test.describe('Hangul terminating digit @headful', () => {
         bounds: window.getBounds()
       }))
     }))
+
     console.log(`[digit-diag] ${JSON.stringify(launchDiagnostics)}`)
+
     if (INJECTOR === 'nested') {
       expect(launchDiagnostics.ozonePlatform).toBe('wayland')
       expect(launchDiagnostics.waylandDisplay).toBeTruthy()
@@ -202,6 +217,7 @@ test.describe('Hangul terminating digit @headful', () => {
       })
       await page.waitForTimeout(2_000)
     }
+
     await waitForSessionReady(page)
     await waitForActiveWorktree(page)
     await ensureTerminalVisible(page)
@@ -211,23 +227,28 @@ test.describe('Hangul terminating digit @headful', () => {
     const reader = createTerminalImeByteReader(testRepoPath, REPETITIONS)
     let receivedBytes: string[] = []
     const expectedHex = Buffer.from(`${EXPECTED_LINE}\n`).toString('hex')
+
     try {
       if (INJECTOR === 'nested') {
         leaveNestedOverview()
         await page.waitForTimeout(1_500)
         captureNestedScreen('nested-before-reader')
       }
+
       await startTerminalImeByteReader(page, ptyId, reader)
       await focusNativeTerminalWindow(page)
+
       if (INJECTOR === 'nested') {
         captureNestedScreen('nested-before-typing')
       }
+
       await installTerminalImeBoundaryProbe(page)
 
       for (let index = 0; index < REPETITIONS; index += 1) {
         injectKeys(KEY_TOKENS)
         await page.waitForTimeout(500)
       }
+
       if (INJECTOR === 'nested') {
         captureNestedScreen('nested-after-typing')
       }

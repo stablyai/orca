@@ -27,15 +27,20 @@ export class PtyShellOwnershipMirror {
     if (this.disposed) {
       return
     }
+
     let rest = data
+
     while (rest.length > 0) {
       const events = this.scanner.scan(rest)
+
       if (events.cleanExitCandidate) {
         this.startConfirmation(events.cleanExitCandidate.generation)
       }
+
       if (events.uncleanDeathTriggerEnd === undefined) {
         return
       }
+
       // The stream owner already resolved this boundary; ask it, keep scanning.
       this.startConfirmation(this.scanner.generation)
       rest = rest.slice(events.uncleanDeathTriggerEnd)
@@ -57,11 +62,14 @@ export class PtyShellOwnershipMirror {
   async settle(): Promise<void> {
     const target = this.scanner.generation
     let deadlineHit = false
+
     const deadline = setTimeout(() => {
       deadlineHit = true
       this.resolveSettleWaiters()
     }, SETTLE_DEADLINE_MS)
+
     deadline.unref?.()
+
     try {
       while (
         this.confirmInFlight &&
@@ -83,12 +91,15 @@ export class PtyShellOwnershipMirror {
 
   private startConfirmation(generation: number): void {
     this.latestCandidateGeneration = generation
+
     if (this.confirmInFlight || this.disposed) {
       return
     }
+
     this.confirmInFlight = true
     const requested = generation
     const attempt = ++this.confirmAttempt
+
     // Why the deadline: a confirm that never settles (hung RPC) must not wedge
     // ownership confirmation for the rest of the PTY's life; retire the attempt
     // so a later candidate can start a fresh one.
@@ -96,15 +107,18 @@ export class PtyShellOwnershipMirror {
       () => this.retireConfirmAttempt(attempt, requested),
       SETTLE_DEADLINE_MS
     )
+
     deadline.unref?.()
     // Why the guard: the callback is injected; a synchronous throw must not
     // strand confirmInFlight.
     let proof: Promise<boolean>
+
     try {
       proof = this.confirm()
     } catch {
       proof = Promise.resolve(false)
     }
+
     void proof
       .then((confirmed) => {
         // A retired attempt's late verdict is inert: an unsettled proof already
@@ -124,9 +138,11 @@ export class PtyShellOwnershipMirror {
     if (attempt !== this.confirmAttempt) {
       return
     }
+
     this.confirmAttempt += 1
     this.confirmInFlight = false
     const latest = this.latestCandidateGeneration
+
     if (
       latest !== undefined &&
       latest !== requested &&
@@ -136,12 +152,14 @@ export class PtyShellOwnershipMirror {
       // One superseding candidate can still be current; stale ones are not retried.
       this.startConfirmation(latest)
     }
+
     this.resolveSettleWaiters()
   }
 
   private resolveSettleWaiters(): void {
     const waiters = this.settleWaiters
     this.settleWaiters = []
+
     for (const waiter of waiters) {
       waiter()
     }

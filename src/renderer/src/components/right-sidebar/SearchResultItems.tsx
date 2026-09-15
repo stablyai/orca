@@ -151,10 +151,12 @@ export function MatchResultRow({
       // search view (see searchTreeModel/match.ts#preview → lcut).
       const BEFORE_MAX = 26
       const rawBefore = content.slice(0, col).trimStart()
+
       const before =
         rawBefore.length > BEFORE_MAX
           ? `…${rawBefore.slice(rawBefore.length - BEFORE_MAX)}`
           : rawBefore
+
       return {
         before,
         match: content.slice(col, col + len),

@@ -58,25 +58,31 @@ function review(number: number): HostedReviewInfo {
 describe('parent PR checks projection selector', () => {
   it('does not inspect tracked keys when cache map references are unchanged', () => {
     const cacheRead = vi.fn()
+
     const observedCache = new Proxy(
       {},
       {
         get: (target, property, receiver) => {
           cacheRead(property)
+
           return Reflect.get(target, property, receiver)
         }
       }
     )
+
     const buildProjection = vi.fn(buildParentPrChecksProjection)
+
     const select = createParentPrChecksProjectionSelector(
       { worktrees: [worktree(0)], repos: [repo()], settings: null, refreshOutcomes: new Map() },
       buildProjection
     )
+
     const state = {
       hostedReviewCache: observedCache,
       prCache: observedCache,
       checksCache: observedCache
     }
+
     const projection = select(state)
     cacheRead.mockClear()
 
@@ -91,10 +97,12 @@ describe('parent PR checks projection selector', () => {
   it('ignores unrelated global review-cache replacements at scale', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) => worktree(index))
     const buildProjection = vi.fn(buildParentPrChecksProjection)
+
     const select = createParentPrChecksProjectionSelector(
       { worktrees, repos: [repo()], settings: null, refreshOutcomes: new Map() },
       buildProjection
     )
+
     let state = { hostedReviewCache: {}, prCache: {}, checksCache: {} }
     let projection = select(state)
     let wholeMapInvalidations = 0
@@ -114,6 +122,7 @@ describe('parent PR checks projection selector', () => {
       scopedInvalidations += Number(projection !== next)
       projection = next
     }
+
     for (let write = 0; write < 200; write += 1) {
       const previous = state
       state = {
@@ -128,6 +137,7 @@ describe('parent PR checks projection selector', () => {
       scopedInvalidations += Number(projection !== next)
       projection = next
     }
+
     for (let write = 0; write < 200; write += 1) {
       const previous = state
       state = {
@@ -152,6 +162,7 @@ describe('parent PR checks projection selector', () => {
     const activeRepo = repo()
     const activeWorktree = worktree(0)
     const buildProjection = vi.fn(buildParentPrChecksProjection)
+
     const select = createParentPrChecksProjectionSelector(
       {
         worktrees: [activeWorktree],
@@ -161,8 +172,10 @@ describe('parent PR checks projection selector', () => {
       },
       buildProjection
     )
+
     const initialState = { hostedReviewCache: {}, prCache: {}, checksCache: {} }
     const initial = select(initialState)
+
     const relevantKey = getHostedReviewCacheKey(
       activeRepo.path,
       'feature-0',
@@ -172,11 +185,14 @@ describe('parent PR checks projection selector', () => {
       activeRepo.executionHostId,
       true
     )
+
     const reviewEntry = { data: review(7), fetchedAt: 1, linkedReviewHintKey: '' }
+
     const relevantState = {
       ...initialState,
       hostedReviewCache: { [relevantKey]: reviewEntry }
     }
+
     const updated = select(relevantState)
 
     expect(updated).not.toBe(initial)
@@ -187,6 +203,7 @@ describe('parent PR checks projection selector', () => {
       ...relevantState,
       checksCache: { unrelated: { data: [], fetchedAt: 2 } }
     }
+
     expect(select(unrelatedState)).toBe(updated)
     expect(buildProjection).toHaveBeenCalledTimes(2)
   })

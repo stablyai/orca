@@ -56,36 +56,46 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
   let deferredUntilIdle = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
   const messageIds = input.messages.map((message) => message.id)
+
   const reservationTarget = {
     ptyId: input.ptyId,
     processIncarnation: input.expectedTarget.processIncarnation
   }
+
   void deps
     .isLeafPtyProvenAbsent(input.ptyId)
     .then(async (absent) => {
       if (absent) {
         clearAndRedrive = true
+
         return
       }
+
       if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         finalizeReservation = false
+
         return
       }
+
       const target = deps.resolveSubmitTarget(input.leaf, input.ptyId)
+
       const exactTarget =
         target?.terminalHandle === input.expectedTarget.terminalHandle &&
         target.processIncarnation === input.expectedTarget.processIncarnation
           ? target
           : null
+
       const sameMailbox =
         exactTarget &&
         deps.mailboxOwner.resolve(exactTarget.leaf, undefined, {
           terminalHandle: exactTarget.terminalHandle
         }) === input.mailboxHandle
+
       const queueSafe =
         exactTarget?.leaf.lastAgentStatusObservedLive === true &&
         (exactTarget.leaf.lastAgentStatus === 'idle' ||
           exactTarget.leaf.lastAgentStatus === 'working')
+
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
       } else if (
@@ -111,16 +121,21 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         } else {
           preserveAmbiguousDelivery = true
           const db = deps.getDb()
+
           if (!db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
             return
           }
+
           expectedPhase = MAILBOX_POINTER_ENTER_ATTEMPTED
           const enterSettlement = await deps.writePty(input.ptyId, '\r')
           submitted = enterSettlement.outcome === 'accepted'
+
           if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
             finalizeReservation = false
+
             return
           }
+
           // An unverifiable Enter stays at ENTER_ATTEMPTED: neither settling it as delivered
           // nor rolling it back to a state that would send a second Enter is provable here.
           if (enterSettlement.outcome === 'refused') {
@@ -139,8 +154,10 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       if (deferredUntilIdle) {
         return
       }
+
       let released = false
       let rollbackPersisted = true
+
       if (finalizeReservation) {
         if (clearAndRedrive) {
           try {
@@ -156,12 +173,15 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
             // A surviving pending row is revalidated against live agent state after restart.
           }
         }
+
         released =
           submitted || clearAndRedrive || releaseWithoutRedrive
             ? deps.state.clearWatermark(input.mailboxHandle, input.newestSequence, input.ptyId)
             : deps.state.deactivateWatermark(input.mailboxHandle, input.newestSequence, input.ptyId)
       }
+
       deps.settle(input.ptyId, input.flight)
+
       if (
         released &&
         rollbackPersisted &&

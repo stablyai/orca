@@ -21,8 +21,11 @@ const input = {
   head: 'stack/child',
   title: 'Child'
 }
+
 const repository = { owner: 'acme', repo: 'orca', host: 'github.com' }
+
 const parentReview = { number: 41, url: 'https://github.com/acme/orca/pull/41' }
+
 const currentReview = { number: 42, url: 'https://github.com/acme/orca/pull/42' }
 
 beforeEach(() => {

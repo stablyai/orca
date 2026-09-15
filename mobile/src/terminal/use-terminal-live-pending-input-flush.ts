@@ -104,6 +104,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         // active terminal would inherit wrong erase counts. A null tab type is
         // "unknown" during tab-list lag, not "left the terminal", so it must not trip.
         resetMirrorState()
+
         return false
       }
 
@@ -111,6 +112,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         commitHeld,
         composing
       })
+
       sentLiveInputTextRef.current = step.nextSentText
       heldLiveInputTextRef.current = step.heldText
       liveInputComposingRef.current = composing
@@ -118,6 +120,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         step.heldText.length > 0 || step.nextSentText.length > 0 ? handle : null
 
       clearHeldCommitTimer()
+
       // Why: text the platform positively marked as preedit is not text yet, so
       // no idle timer may commit it. Only an unreported hold is a guess that has
       // to settle on its own.
@@ -130,9 +133,11 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       }
 
       const payload = buildTerminalLiveMirrorPayload(step)
+
       if (payload.length === 0) {
         return waitForPendingLiveInputFlush()
       }
+
       return queueTerminalLiveMirrorSend(
         pendingLiveInputFlushRef.current,
         handle,
@@ -150,6 +155,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       waitForPendingLiveInputFlush
     ]
   )
+
   // Why: assigning during render is not replay-safe. The only read is inside a
   // held-commit timer, which fires long after commit, so an effect is soon enough.
   useEffect(() => {
@@ -165,15 +171,19 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const flushPendingLiveInputText = useCallback(
     async (expectedHandle: string | null): Promise<boolean> => {
       const handle = pendingLiveInputHandleRef.current
+
       if (!handle) {
         return waitForPendingLiveInputFlush()
       }
+
       if (expectedHandle !== null && handle !== expectedHandle) {
         clearPendingLiveInputCommit()
+
         return waitForPendingLiveInputFlush()
       }
 
       const heldText = heldLiveInputTextRef.current
+
       const result =
         heldText.length > 0
           ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
@@ -182,6 +192,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       // Why: an explicit flush ends the field's editing session; the echoed PTY
       // text stays, so local mirror state must restart from empty.
       clearPendingLiveInputCommit()
+
       return result
     },
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
@@ -193,6 +204,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         clearTimeout(heldCommitTimerRef.current)
         heldCommitTimerRef.current = null
       }
+
       heldLiveInputTextRef.current = ''
       liveInputComposingRef.current = undefined
       sentLiveInputTextRef.current = ''

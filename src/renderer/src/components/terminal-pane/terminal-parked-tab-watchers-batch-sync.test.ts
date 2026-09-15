@@ -11,9 +11,13 @@ type StartEvent = {
   drivesTabTitle: boolean
   restoreTitleOnRegister: boolean
 }
+
 type DisposeEvent = { kind: 'dispose'; worktreeId: string; tabId: string; ptyId: string }
+
 type ClearTitleEvent = { kind: 'clearTitle'; tabId: string; paneId: number }
+
 type DiscardEvent = { kind: 'discard'; ptyId: string }
+
 type WatcherEvent = StartEvent | DisposeEvent | ClearTitleEvent | DiscardEvent
 
 let events: WatcherEvent[] = []
@@ -29,6 +33,7 @@ const startParkedTerminalByteWatcher = vi.fn((options: ParkedTerminalByteWatcher
     drivesTabTitle: options.drivesTabTitle === true,
     restoreTitleOnRegister: options.restoreTitleOnRegister === true
   })
+
   return () => {
     events.push({
       kind: 'dispose',
@@ -60,6 +65,7 @@ vi.mock('../terminal/terminal-tab-actions', () => ({
 }))
 
 type TabModel = { id: string; ptyId: string | null }
+
 type MockStoreState = {
   tabsByWorktree: Record<string, TabModel[]>
   terminalLayoutsByTabId: Record<
@@ -129,10 +135,12 @@ function makeStore(): MockStoreState {
 /** Counts entries visited by `for...of` over the module-level registries. */
 function instrumentRegistryIteration(): { count: number; restore: () => void } {
   const counter = { count: 0, restore: () => {} }
+
   const patched: Map<unknown, unknown>[] = [
     parkedWatchersByTabId as Map<unknown, unknown>,
     capturedPanesByTabId as Map<unknown, unknown>
   ]
+
   for (const map of patched) {
     Object.defineProperty(map, Symbol.iterator, {
       configurable: true,
@@ -145,11 +153,13 @@ function instrumentRegistryIteration(): { count: number; restore: () => void } {
       }
     })
   }
+
   counter.restore = () => {
     for (const map of patched) {
       Reflect.deleteProperty(map, Symbol.iterator)
     }
   }
+
   return counter
 }
 
@@ -181,9 +191,11 @@ describe('parked terminal watcher batch synchronization', () => {
         { length: WORKSPACE_COUNT },
         (_, index) => `repo::/worktree-${index}`
       )
+
       const tabsByWorktreeId = new Map<string, TabModel[]>(
         workspaceIds.map((workspaceId) => [workspaceId, [] as TabModel[]])
       )
+
       for (let index = 0; index < TAB_COUNT; index += 1) {
         const worktreeId = workspaceIds[index % WORKSPACE_COUNT]
         const tabId = `tab-${index}`
@@ -201,6 +213,7 @@ describe('parked terminal watcher batch synchronization', () => {
           { ptyId, paneId: 1, leafId: leafId(index), drivesTabTitle: true }
         ])
       }
+
       return { workspaceIds, tabsByWorktreeId }
     }
 
@@ -210,6 +223,7 @@ describe('parked terminal watcher batch synchronization', () => {
       expect(registryRows).toBe(TAB_COUNT * 2)
 
       const perSurface = instrumentRegistryIteration()
+
       for (const workspaceId of workspaceIds) {
         syncParkedTerminalTabWatchers({
           worktreeId: workspaceId,
@@ -217,16 +231,19 @@ describe('parked terminal watcher batch synchronization', () => {
           parkedTabIds: new Set()
         })
       }
+
       const perSurfaceVisits = perSurface.count
       perSurface.restore()
 
       const batched = instrumentRegistryIteration()
+
       const entries = new Map<string, ParkedTerminalTabWatcherSyncEntry>(
         workspaceIds.map((workspaceId) => [
           workspaceId,
           { tabs: tabsByWorktreeId.get(workspaceId)!, parkedTabIds: new Set<string>() }
         ])
       )
+
       syncParkedTerminalTabWatchersForWorkspaces(entries)
       const batchedVisits = batched.count
       batched.restore()
@@ -411,6 +428,7 @@ describe('parked terminal watcher batch synchronization', () => {
       clearTerminalProviderSnapshotCapabilities()
       mockStoreState = makeStore()
       const allPtyIds = new Set<string>()
+
       for (const workspace of scenario.workspaces) {
         for (const tab of workspace.tabs) {
           if (tab.ptyId) {
@@ -418,15 +436,18 @@ describe('parked terminal watcher batch synchronization', () => {
           }
         }
       }
+
       for (const row of [...scenario.preParkedTabs, ...scenario.preCapturedTabs]) {
         if (row.ptyId) {
           allPtyIds.add(row.ptyId)
         }
       }
+
       await synchronizeTerminalProviderSnapshotCapabilities(Array.from(allPtyIds), async (ids) =>
         ids.map((id) => ({ id, authoritative: true }))
       )
       let paneOrdinal = 0
+
       for (const row of scenario.preParkedTabs) {
         paneOrdinal += 1
         parkedWatchersByTabId.set(row.tabId, {
@@ -450,19 +471,24 @@ describe('parked terminal watcher batch synchronization', () => {
             : new Map()
         })
       }
+
       for (const [index, row] of scenario.preCapturedTabs.entries()) {
         captureParkedTerminalPaneCandidates(row.tabId, row.worktreeId, [
           { ptyId: row.ptyId, paneId: 100 + index, leafId: leafId(index + 1), drivesTabTitle: true }
         ])
       }
+
       events = []
       run(scenario)
 
       const eventsByWorktree: Record<string, WatcherEvent[]> = {}
+
       for (const event of events) {
         const key = 'worktreeId' in event ? event.worktreeId : 'shared'
+
         ;(eventsByWorktree[key] ??= []).push(event)
       }
+
       // Why per-worktree, not one global sequence: batching deliberately hoists
       // every workspace's dispose sweep ahead of every workspace's start pass.
       // Registry rows are tab-id keyed and a tab belongs to exactly one
@@ -476,6 +502,7 @@ describe('parked terminal watcher batch synchronization', () => {
           )
         }
       }
+
       return {
         eventsByWorktree,
         registry: Array.from(

@@ -42,21 +42,26 @@ export function importFederatedRelayItem(
   lifecycle?: WorkerReportSettlement | { action: 'rejected'; code: string; reason: string }
 } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const federated = this.getFederatedDispatch(params.dispatchId)
+
     if (!federated) {
       throw new OrchestrationError(
         'dispatch_not_found',
         `Federated Dispatch ${params.dispatchId} was not found.`
       )
     }
+
     const duplicate = params.sequence <= federated.to_home_imported_sequence
+
     if (duplicate && !this.getMessageById(params.message.id)) {
       throw new OrchestrationError(
         'operation_unknown',
         `Federated relay sequence ${params.sequence} was committed without its message.`
       )
     }
+
     if (!duplicate && params.sequence !== federated.to_home_imported_sequence + 1) {
       throw new OrchestrationError(
         'operation_unknown',
@@ -65,6 +70,7 @@ export function importFederatedRelayItem(
     }
 
     let message = this.getMessageById(params.message.id)
+
     if (!message) {
       message = this.insertMessage(params.message)
     } else if (
@@ -77,6 +83,7 @@ export function importFederatedRelayItem(
         `Federated relay message ${params.message.id} conflicts with an existing message.`
       )
     }
+
     if (message.type === 'question') {
       this.registerFederatedQuestion({
         messageId: message.id,
@@ -84,10 +91,12 @@ export function importFederatedRelayItem(
         dispatchId: params.dispatchId
       })
     }
+
     let lifecycle:
       | WorkerReportSettlement
       | { action: 'rejected'; code: string; reason: string }
       | undefined
+
     if (params.lifecycle.kind === 'heartbeat' && !duplicate) {
       this.recordHeartbeat(params.dispatchId, params.lifecycle.at)
     } else if (params.lifecycle.kind === 'worker_report') {
@@ -97,6 +106,7 @@ export function importFederatedRelayItem(
         outcome: params.lifecycle.outcome,
         result: params.lifecycle.result
       })
+
       if (lifecycle.action === 'rejected' && !duplicate) {
         message = this.convertLifecycleMessageToRejection(
           message.id,
@@ -110,6 +120,7 @@ export function importFederatedRelayItem(
         code: params.lifecycle.code,
         reason: params.lifecycle.reason
       }
+
       if (!duplicate) {
         message = this.convertLifecycleMessageToRejection(
           message.id,
@@ -118,10 +129,13 @@ export function importFederatedRelayItem(
         ) as MessageRow
       }
     }
+
     if (!duplicate) {
       this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
     }
+
     this.db.exec('COMMIT')
+
     return { message, duplicate, ...(lifecycle ? { lifecycle } : {}) }
   } catch (error) {
     this.db.exec('ROLLBACK')

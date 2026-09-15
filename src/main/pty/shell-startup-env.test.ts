@@ -43,11 +43,13 @@ describe('readShellStartupEnvVar', () => {
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+
     if (originalShell === undefined) {
       delete process.env.SHELL
     } else {
       process.env.SHELL = originalShell
     }
+
     if (originalXdgConfigHome === undefined) {
       delete process.env.XDG_CONFIG_HOME
     } else {
@@ -59,16 +61,20 @@ describe('readShellStartupEnvVar', () => {
     const hasAbsoluteKeys = Object.keys(files).some((path) => path.startsWith('/'))
     existsSyncMock.mockImplementation((p: string) => {
       const file = p.split('/').pop() ?? ''
+
       return p in files || (!hasAbsoluteKeys && file in files)
     })
     readFileSyncMock.mockImplementation((p: string) => {
       const file = p.split('/').pop() ?? ''
+
       if (p in files) {
         return files[p]
       }
+
       if (!hasAbsoluteKeys && file in files) {
         return files[file]
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
   }
@@ -91,6 +97,7 @@ describe('readShellStartupEnvVar', () => {
   it('returns undefined when HOME is unset', () => {
     const savedHome = process.env.HOME
     delete process.env.HOME
+
     try {
       expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR')).toBeUndefined()
       expect(existsSyncMock).not.toHaveBeenCalled()
@@ -110,6 +117,7 @@ describe('readShellStartupEnvVar', () => {
 
   it('reports startup-env probing as supported on macOS and Linux', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
     try {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
       expect(isShellStartupEnvProbeSupported()).toBe(true)
@@ -327,9 +335,11 @@ describe('readShellStartupEnvVar', () => {
       if (p.endsWith('.zshenv')) {
         throw new Error('EACCES')
       }
+
       if (p.endsWith('.zshrc')) {
         return 'export OPENCODE_CONFIG_DIR=/found\n'
       }
+
       return ''
     })
     expect(readShellStartupEnvVar('OPENCODE_CONFIG_DIR', '/home/alice')).toBe('/found')
@@ -353,6 +363,7 @@ describe('readShellStartupEnvVar', () => {
         if (dir === '/home/alice/.config/fish/conf.d' || dir === '/cfg/fish/conf.d') {
           return snippets
         }
+
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       })
       mockStartupFiles(files)

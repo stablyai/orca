@@ -120,6 +120,7 @@ function foregroundSkipReason(
     // observation is not the observation of absence.
     return 'host published no foreground-process observation'
   }
+
   // The record reaches this decision straight off the wire — `mapSshPtyProcessList` validates the
   // ownership fields and spreads the rest through, and `PtyProcessListAdmission` is not on the
   // sweep path. Shape-check it here, because the age gate below is the one comparison in this file
@@ -128,25 +129,30 @@ function foregroundSkipReason(
   if (!isForegroundProcessEvidence(evidence)) {
     return 'host foreground observation is malformed'
   }
+
   if (
     !Number.isFinite(context.evidenceAgeSinceListingMs) ||
     !Number.isFinite(context.maximumEvidenceAgeMs)
   ) {
     return 'sweep has no usable evidence-age budget'
   }
+
   // Before anything is read out of it: an observation is only a claim about the instant it was
   // taken. Age is checked on both verdicts because a stale `unverifiable` is no better.
   if (evidence.capturedAgeMs + context.evidenceAgeSinceListingMs > context.maximumEvidenceAgeMs) {
     return 'host foreground observation is too old to authorize a stop'
   }
+
   if (evidence.verdict !== 'live') {
     return 'host could not observe the pane foreground process'
   }
+
   if (evidence.processName !== null) {
     // The host named something running in the pane. It registered no agent session, which is
     // exactly the hand-launched `claude`/`codex` case agentSessionOwners cannot see.
     return 'host observes a named foreground process'
   }
+
   if (evidence.shellOwnsEveryTtyProcessGroup !== true) {
     // The host saw work inside the stop's blast radius: another process group on the pane's
     // terminal (a foreground command, a job backgrounded with `&`, a Ctrl-Z'd editor), or another
@@ -155,6 +161,7 @@ function foregroundSkipReason(
     // of those is a pane to reclaim.
     return 'host does not attest an idle shell'
   }
+
   return null
 }
 
@@ -167,38 +174,49 @@ function skipReason(
     // id can hit whatever holds that id by the time it lands.
     return 'host published no PTY incarnation'
   }
+
   if (typeof entry.ownerClientInstanceId !== 'string' || entry.ownerClientInstanceId.length === 0) {
     return 'host attested no owning client'
   }
+
   if (entry.ownerClientInstanceId !== context.clientInstanceId) {
     return 'host attests another client created it'
   }
+
   if (entry.paneBound !== true) {
     // Covers both a bare host shell (a remote CLI terminal nobody's pane owns) and a host that
     // never published the field. Neither is a pane this client lost.
     return 'not a pane-bound PTY'
   }
+
   if (entry.agentSessionOwners !== undefined && entry.agentSessionOwners.length > 0) {
     // The host still advertises this session as adoptable, so a later spawn can reclaim the running
     // agent. Reaping it converts a recoverable session into a destroyed one.
     return 'host still advertises an adoptable agent session'
   }
+
   const foregroundSkip = foregroundSkipReason(entry.foregroundProcessEvidence, context)
+
   if (foregroundSkip !== null) {
     return foregroundSkip
   }
+
   if (typeof entry.hostAgeMs !== 'number' || !Number.isFinite(entry.hostAgeMs)) {
     return 'host published no age'
   }
+
   if (entry.hostAgeMs < context.minimumHostAgeMs) {
     return 'younger than the sweep floor'
   }
+
   if (context.routedPtyIds.has(entry.ptyId)) {
     return 'this client still has a route to it'
   }
+
   if (context.expiredLeasePtyIds.has(entry.ptyId)) {
     return 'this client expired its lease without ordering a stop'
   }
+
   return null
 }
 
@@ -217,16 +235,20 @@ export function planRelayPtySweep(
       }))
     }
   }
+
   const sweep: RelayPtySweepTarget[] = []
   const skipped: RelayPtySweepSkip[] = []
+
   for (const entry of entries) {
     const reason = skipReason(entry, context)
+
     if (reason !== null) {
       skipped.push({ ptyId: entry.ptyId, reason })
     } else {
       sweep.push({ ptyId: entry.ptyId, incarnationId: entry.incarnationId as string })
     }
   }
+
   if (sweep.length > RELAY_PTY_SWEEP_MAX_PER_PASS) {
     // Why refuse rather than truncate: at this size the disagreement is about ownership, not about
     // a handful of leaked slots, and a truncated pass would work through the same list one connect
@@ -242,5 +264,6 @@ export function planRelayPtySweep(
       ]
     }
   }
+
   return { sweep, skipped }
 }

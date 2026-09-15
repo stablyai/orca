@@ -3,15 +3,20 @@ import type { PRInfo } from '../../shared/github/pull-request-types'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
@@ -25,10 +30,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -63,6 +70,7 @@ describe('pr-refresh-coordinator', () => {
   it('lets an active worktree refresh bypass a delayed visible follow-up', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock
       .mockResolvedValueOnce({
         kind: 'found',
@@ -122,6 +130,7 @@ describe('pr-refresh-coordinator', () => {
     const inFlightEvents = sendMock.mock.calls
       .map(([, event]) => event)
       .filter((event) => event.status === 'in-flight')
+
     const queuedEvents = sendMock.mock.calls
       .map(([, event]) => event)
       .filter((event) => event.status === 'queued')
@@ -134,11 +143,13 @@ describe('pr-refresh-coordinator', () => {
   it('preserves an active refresh queued while a visible refresh is in flight', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     const visibleOutcome = deferred<{
       kind: 'found'
       pr: PRInfo
       fetchedAt: number
     }>()
+
     getPRForBranchOutcomeMock.mockReturnValueOnce(visibleOutcome.promise).mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({ checksStatus: 'success', state: 'merged' }),

@@ -12,6 +12,7 @@ export function clearPendingSectionReloadTimers(timers: Map<number, number>): vo
   for (const timer of timers.values()) {
     window.clearTimeout(timer)
   }
+
   timers.clear()
 }
 
@@ -58,6 +59,7 @@ export function useCombinedDiffSectionLoadRegistry(
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current
     scheduler.reset()
+
     return () => {
       clearPendingSectionReloadTimers(reloadTimers)
       scheduler.dispose()

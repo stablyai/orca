@@ -14,13 +14,17 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type * as Fs from 'node:fs'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
+
 const existsSyncMock = vi.hoisted(() => vi.fn(() => false))
 
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
+
   return { ...actual, existsSync: existsSyncMock }
 })
+
 vi.mock('../ssh/ssh-target-registry', () => ({ getActiveMultiplexer: vi.fn() }))
 
 function sshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
@@ -222,10 +226,12 @@ describe('scoped external automations', () => {
     vi.mocked(getActiveMultiplexer).mockReturnValue(
       undefined as unknown as ReturnType<typeof getActiveMultiplexer>
     )
+
     const engine = createScopedExternalAutomations({
       registry: {
         getSshTargets: () => {
           health.read()
+
           return [sshTarget()]
         }
       },
@@ -237,6 +243,7 @@ describe('scoped external automations', () => {
       owner: desktopSsh('target-a', 3),
       provider: 'hermes'
     })
+
     const healthy = await engine.listManager({ owner: desktopSelf, provider: 'hermes' })
 
     expect(failed.manager?.status).toBe('unavailable')

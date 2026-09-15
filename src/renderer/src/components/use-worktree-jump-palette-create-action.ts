@@ -39,8 +39,10 @@ export function useWorktreeJumpPaletteCreateAction({
     if (!visible || hasQuery || query.length > 0) {
       return
     }
+
     return subscribeCmdJRowIndexJump((index) => {
       const item = digitShortcutItemsRef.current[index]
+
       if (item) {
         handleSelectItem(item)
       }
@@ -51,12 +53,15 @@ export function useWorktreeJumpPaletteCreateAction({
 
   const handleCloseAutoFocus = useCallback((event: Event) => event.preventDefault(), [])
   const focusPaletteInput = useCallback(() => inputRef.current?.focus(), [inputRef])
+
   const setDialogElementFromNode = useCallback(
     (node: HTMLDivElement | null) =>
       setDialogElement(node?.closest<HTMLElement>('[role="dialog"]') ?? null),
     [setDialogElement]
   )
+
   const handleOpenAutoFocus = useCallback((_event: Event) => {}, [])
+
   return {
     handleCreateWorktree,
     handleCloseAutoFocus,

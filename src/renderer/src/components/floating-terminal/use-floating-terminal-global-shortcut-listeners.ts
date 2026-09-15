@@ -31,20 +31,27 @@ export function useFloatingTerminalGlobalShortcutListeners({
     if (!open || typeof document === 'undefined') {
       return
     }
+
     const doubleTapDetector = doubleTapDetectorRef.current
+
     const isPanelFocused = (): boolean => {
       const panel = panelRef.current
       const active = document.activeElement
+
       return Boolean(panel && active instanceof HTMLElement && panel.contains(active))
     }
+
     const handleFloatingPanelKeyDown = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) {
         return
       }
+
       if (!isEventTargetInsideFloatingWorkspacePanel(event.target) && !isPanelFocused()) {
         doubleTapDetector?.reset()
+
         return
       }
+
       const detected = doubleTapDetector?.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',
@@ -58,25 +65,32 @@ export function useFloatingTerminalGlobalShortcutListeners({
         }),
         Date.now()
       )
+
       if (event.repeat) {
         return
       }
+
       const state = useAppStore.getState()
+
       const context: KeybindingContext = isFloatingWorkspaceTerminalInputTarget(event.target)
         ? 'terminal'
         : 'app'
+
       const matches = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, event, getShortcutPlatform(), state.keybindings, {
           context,
           terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
         })
+
       const consume = (): void => {
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
       }
+
       const dispatchShortcut =
         floatingShortcutListenersRef.current.handleFloatingPanelShortcutAction
+
       if (
         detected &&
         dispatchShortcut(
@@ -86,19 +100,23 @@ export function useFloatingTerminalGlobalShortcutListeners({
       ) {
         return
       }
+
       if (dispatchShortcut(event, consume) !== 'unmatched') {
         return
       }
+
       const switchSameTypeDirection = matches('tab.nextSameType')
         ? 1
         : matches('tab.previousSameType')
           ? -1
           : null
+
       const switchAllTypesDirection = matches('tab.nextAllTypes')
         ? 1
         : matches('tab.previousAllTypes')
           ? -1
           : null
+
       if (switchSameTypeDirection !== null || switchAllTypesDirection !== null) {
         consume()
         switchFloatingWorkspaceTab(
@@ -106,23 +124,29 @@ export function useFloatingTerminalGlobalShortcutListeners({
           switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
           switchAllTypesDirection !== null ? 'all-types' : 'same-type'
         )
+
         return
       }
+
       const terminalTabDirection = matches('tab.nextTerminal')
         ? 1
         : matches('tab.previousTerminal')
           ? -1
           : null
+
       if (terminalTabDirection !== null) {
         consume()
         switchFloatingWorkspaceTab(useAppStore.getState(), terminalTabDirection, 'terminal')
       }
     }
+
     const handleFloatingPanelKeyUp = (event: KeyboardEvent): void => {
       if (!isPanelFocused()) {
         doubleTapDetector?.reset()
+
         return
       }
+
       doubleTapDetector?.process(
         toModifierDoubleTapEvent({
           type: 'keyUp',
@@ -136,10 +160,12 @@ export function useFloatingTerminalGlobalShortcutListeners({
         Date.now()
       )
     }
+
     const handleFloatingPanelBlur = (): void => doubleTapDetector?.reset()
     window.addEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
     window.addEventListener('keyup', handleFloatingPanelKeyUp, { capture: true })
     window.addEventListener('blur', handleFloatingPanelBlur)
+
     return () => {
       window.removeEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
       window.removeEventListener('keyup', handleFloatingPanelKeyUp, { capture: true })

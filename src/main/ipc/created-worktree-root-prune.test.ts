@@ -17,11 +17,13 @@ const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+
   return { ...actual, stat: statMock }
 })
 
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
+
   return { ...actual, listRepoWorktreeGraph: vi.fn() }
 })
 
@@ -48,6 +50,7 @@ function makeStore(): Store {
 function statError(code: string): NodeJS.ErrnoException {
   const error = new Error(code) as NodeJS.ErrnoException
   error.code = code
+
   return error
 }
 
@@ -111,9 +114,11 @@ describe('recovered worktree root pruning', () => {
   it('refuses a recovered root at capacity instead of evicting an authorized one', async () => {
     const store = makeStore()
     const first = resolve('/linked/recovered-0')
+
     for (let i = 0; i < 64; i += 1) {
       registerCreatedWorktreeRoot(store, repo.id, resolve(`/linked/recovered-${i}`))
     }
+
     const overflow = resolve('/linked/recovered-overflow')
     registerCreatedWorktreeRoot(store, repo.id, overflow)
 

@@ -17,6 +17,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 
 vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
 })
 
@@ -29,7 +30,9 @@ import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parke
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
 const LEAF = '22222222-2222-4222-8222-222222222222'
+
 const PARKED_PTY = 'wt-1::/tmp/wt@@parked-pty'
+
 const TAB_ID = 'parked-tab-1'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
@@ -69,6 +72,7 @@ function parkedState(
   activeLeafId: string = LEAF
 ): AppState {
   const leafIds = Object.keys(ptyIdsByLeafId)
+
   const root = leafIds.slice(1).reduce<Record<string, unknown>>(
     (first, leafId) => ({
       type: 'split',
@@ -78,6 +82,7 @@ function parkedState(
     }),
     { type: 'leaf', leafId: leafIds[0] }
   )
+
   return makeState({
     tabsByWorktree: { 'wt-1': [parkedTab()] } as AppState['tabsByWorktree'],
     terminalLayoutsByTabId: {
@@ -123,15 +128,18 @@ async function captureGraph(
   const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
   vi.stubGlobal('HTMLElement', class HTMLElement {})
+
   // Why opt-out: a case that needs a non-default layout installs its own getter
   // before calling in, and must not have it overwritten here.
   if (options.seedState !== false) {
     setRuntimeGraphStoreStateGetter(() => parkedState())
   }
+
   setRuntimeGraphSyncEnabled(true)
   await vi.advanceTimersByTimeAsync(20)
   await flushMicrotasks()
   expect(syncWindowGraph).toHaveBeenCalledTimes(1)
+
   return syncWindowGraph.mock.calls[0]?.[0] as RuntimeSyncWindowGraph
 }
 

@@ -31,6 +31,7 @@ function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
   if (!value) {
     return false
   }
+
   switch (value.kind) {
     case 'users':
       return Boolean(value.users[0]?.login)
@@ -59,13 +60,16 @@ function createFieldOrderIndex(field: GitHubProjectField): ReadonlyMap<string, n
       : field.kind === 'single-select'
         ? (field.options ?? [])
         : []
+
   const indices = new Map<string, number>()
   entries.forEach((entry, index) => {
     const id = entry.id
+
     if (!indices.has(id)) {
       indices.set(id, index)
     }
   })
+
   return indices
 }
 
@@ -76,6 +80,7 @@ function getFieldValueForGrouping(
   orderIndex: ReadonlyMap<string, number>
 ): { key: string; label: string; orderHint: number; iteration: ProjectGroup['iteration'] } {
   const value = row.fieldValuesByFieldId[field.id]
+
   if (!hasNonEmptyFieldValue(value)) {
     return {
       key: EMPTY_GROUP_KEY,
@@ -84,10 +89,12 @@ function getFieldValueForGrouping(
       iteration: null
     }
   }
+
   if (field.kind === 'iteration' && value.kind === 'iteration') {
     const iterations = field.iterations ?? []
     const idx = orderIndex.get(value.iterationId) ?? -1
     const meta = iterations[idx]
+
     return {
       key: value.iterationId,
       label: value.title || meta?.title || 'Iteration',
@@ -97,8 +104,10 @@ function getFieldValueForGrouping(
         : null
     }
   }
+
   if (field.kind === 'single-select' && value.kind === 'single-select') {
     const idx = orderIndex.get(value.optionId) ?? -1
+
     return {
       key: value.optionId,
       label: value.name,
@@ -106,7 +115,9 @@ function getFieldValueForGrouping(
       iteration: null
     }
   }
+
   const label = deriveStringValue(value)
+
   return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
 }
 
@@ -138,10 +149,13 @@ export function groupRows(
   rowsInOrder: GitHubProjectRow[]
 ): ProjectGroup[] {
   const groupField = table.selectedView.groupByFields[0]
+
   if (!groupField) {
     return [{ key: 'all', label: '', iteration: null, rows: rowsInOrder }]
   }
+
   const groupOrderIndex = createFieldOrderIndex(groupField)
+
   const buckets = new Map<
     string,
     {
@@ -151,33 +165,42 @@ export function groupRows(
       rows: GitHubProjectRow[]
     }
   >()
+
   for (const row of rowsInOrder) {
     const { key, label, orderHint, iteration } = getFieldValueForGrouping(
       row,
       groupField,
       groupOrderIndex
     )
+
     let bucket = buckets.get(key)
+
     if (!bucket) {
       bucket = { label, orderHint, iteration, rows: [] }
       buckets.set(key, bucket)
     }
+
     bucket.rows.push(row)
   }
+
   const entries = Array.from(buckets.entries())
   // Ordering rules per design doc §Grouping.
   entries.sort((a, b) => {
     if (a[0] === EMPTY_GROUP_KEY) {
       return 1
     }
+
     if (b[0] === EMPTY_GROUP_KEY) {
       return -1
     }
+
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
     }
+
     return a[1].label.localeCompare(b[1].label)
   })
+
   return entries.map(([key, v]) => ({
     key,
     label: v.label,
@@ -198,11 +221,13 @@ function compareSort(
   // Why: return before the trailing DESC flip so empty sorts last in both directions.
   const aFilled = hasNonEmptyFieldValue(aValue)
   const bFilled = hasNonEmptyFieldValue(bValue)
+
   if (!aFilled || !bFilled) {
     return aFilled === bFilled ? 0 : aFilled ? -1 : 1
   }
 
   let cmp = 0
+
   if (
     field.kind === 'single-select' &&
     aValue.kind === 'single-select' &&
@@ -236,6 +261,7 @@ function compareSort(
     // to tie-breaks (and eventually row.position).
     return 0
   }
+
   return sort.direction === 'DESC' ? -cmp : cmp
 }
 
@@ -244,25 +270,32 @@ export function sortRows(table: GitHubProjectTable, rows: GitHubProjectRow[]): G
     sort,
     orderIndex: createFieldOrderIndex(sort.field)
   }))
+
   const out = [...rows]
   out.sort((a, b) => {
     for (const { sort, orderIndex } of sorts) {
       const cmp = compareSort(a, b, sort, orderIndex)
+
       if (cmp !== 0) {
         return cmp
       }
     }
+
     return (a.position ?? UNKNOWN_INDEX_SENTINEL) - (b.position ?? UNKNOWN_INDEX_SENTINEL)
   })
+
   return out
 }
 
 export function isIterationCurrent(iteration: { startDate: string; duration: number }): boolean {
   const start = new Date(`${iteration.startDate}T00:00:00Z`).getTime()
+
   if (Number.isNaN(start)) {
     return false
   }
+
   const end = start + iteration.duration * 86_400_000
   const now = Date.now()
+
   return now >= start && now < end
 }

@@ -36,11 +36,15 @@ export async function awaitStructuredWorkerSetupGate(args: {
   if (args.setup.startupPolicy !== 'wait-for-setup' || args.setup.state !== 'running') {
     return null
   }
+
   const setupTerminal = args.effects.find((effect) => effect.kind === 'setup')?.terminalId
+
   if (!setupTerminal) {
     return null
   }
+
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       args.runtime.waitForSetupTerminalCompletion(setupTerminal).then((completion) => ({
@@ -60,6 +64,7 @@ export async function awaitStructuredWorkerSetupGate(args: {
       action: 'wait_unevaluated',
       state: error instanceof Error ? error.message : String(error)
     })
+
     return null
   } finally {
     clearTimeout(timer)

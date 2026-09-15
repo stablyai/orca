@@ -54,7 +54,9 @@ export function resolveCmdJActiveGroupId(
   if (!worktreeId) {
     return null
   }
+
   const groups = state.groupsByWorktree[worktreeId] ?? []
+
   if (groups.length === 0) {
     return null
   }
@@ -63,13 +65,16 @@ export function resolveCmdJActiveGroupId(
     if (snapshot.groupId && groups.some((group) => group.id === snapshot.groupId)) {
       return snapshot.groupId
     }
+
     return groups[0]?.id ?? null
   }
 
   const focusedGroupId = state.activeGroupIdByWorktree[worktreeId]
+
   if (focusedGroupId && groups.some((group) => group.id === focusedGroupId)) {
     return focusedGroupId
   }
+
   return groups[0]?.id ?? null
 }
 
@@ -80,6 +85,7 @@ export function captureCmdJActiveGroupSnapshot(
   if (!worktreeId) {
     return null
   }
+
   return {
     worktreeId,
     groupId: resolveCmdJActiveGroupId(state, worktreeId)
@@ -93,11 +99,14 @@ export function getActiveWorktreeSshStatus(
   if (!activeWorktree) {
     return null
   }
+
   const repo = state.repos.find((entry) => entry.id === activeWorktree.repoId)
   const connectionId = repo?.connectionId ?? null
+
   if (!connectionId) {
     return null
   }
+
   return state.sshConnectionStates.get(connectionId)?.status ?? 'disconnected'
 }
 
@@ -110,15 +119,19 @@ export function getWorkspaceScopedActionAvailability(
   if (!ctx.activeWorktreeId) {
     return { available: false, reason: 'no-active-workspace' }
   }
+
   if (ctx.isLoading) {
     return { available: false, reason: 'loading' }
   }
+
   if (ctx.sshStatus != null && ctx.sshStatus !== 'connected') {
     return { available: false, reason: 'ssh-disconnected' }
   }
+
   if (!ctx.activeGroupId) {
     return { available: false, reason: 'no-active-group' }
   }
+
   return { available: true }
 }
 
@@ -128,6 +141,7 @@ export function getBrowserWorkspaceActionAvailability(
   if (ctx.managedBrowserCreationEnabled === false) {
     return { available: false, reason: 'client-action-unsupported' }
   }
+
   return getWorkspaceScopedActionAvailability(ctx)
 }
 
@@ -137,12 +151,15 @@ export function getCurrentWorkspaceActionAvailability(
   if (ctx.activeView !== 'terminal' || !ctx.activeWorktreeId) {
     return { available: false, reason: 'no-active-workspace' }
   }
+
   if (ctx.isLoading) {
     return { available: false, reason: 'loading' }
   }
+
   if (ctx.sshStatus != null && ctx.sshStatus !== 'connected') {
     return { available: false, reason: 'ssh-disconnected' }
   }
+
   return { available: true }
 }
 
@@ -157,24 +174,30 @@ export function buildCmdJQuickActionContext(args: {
   openAddQuickCommand: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
+
   const activeWorktree = activeWorktreeId
     ? (findWorktreeById(args.state.worktreesByRepo, activeWorktreeId) ?? null)
     : null
+
   const activeGroupId = resolveCmdJActiveGroupId(
     args.state,
     activeWorktreeId,
     args.activeGroupSnapshot
   )
+
   const isLoading =
     args.state.repos.length > 0 && Object.keys(args.state.worktreesByRepo).length === 0
+
   const runtimeMode =
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ &&
     args.state.settings?.activeRuntimeEnvironmentId?.trim()
       ? 'paired-web'
       : 'local-desktop'
+
   const managedBrowserCreationEnabled =
     getClientCreationActionPolicy(args.state, activeWorktreeId)['managed-browser'].state ===
     'enabled'
+
   const activeChatTarget =
     args.state.activeView === 'terminal'
       ? resolveActiveNativeChatSplitTarget(args.state, activeWorktreeId, activeGroupId)

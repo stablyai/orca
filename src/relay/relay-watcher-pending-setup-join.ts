@@ -15,6 +15,7 @@ export async function joinRelayWatcherPendingSetup(
     // Why: the previous caller's failure must not poison a later same-root
     // attempt once its single serialized setup generation has released.
   }
+
   if (!signal?.aborted) {
     await retry()
   }

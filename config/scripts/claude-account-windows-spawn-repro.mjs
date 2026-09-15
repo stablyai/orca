@@ -5,11 +5,13 @@ import { join } from 'node:path'
 import { buildWindowsCommandInvocation } from '../../src/main/claude-accounts/windows-command-invocation.ts'
 
 const strategy = process.argv[2]
+
 if (!['baseline', 'candidate', 'explicit-cmd'].includes(strategy)) {
   throw new Error(
     'Usage: node config/scripts/claude-account-windows-spawn-repro.mjs <baseline|candidate|explicit-cmd>'
   )
 }
+
 if (process.platform !== 'win32') {
   throw new Error('This reproduction requires a physical Windows host.')
 }
@@ -30,17 +32,29 @@ const expectedArgs = [
   'bang!value',
   '한글-λ'
 ]
+
 const tempRoot = await mkdtemp(join(tmpdir(), 'orca-claude-spawn-'))
+
 const reportedDir = join(tempRoot, 'Profile with spaces 한글')
+
 const reportedCapturePath = join(reportedDir, 'capture.json')
+
 const reportedPidPath = join(reportedDir, 'pids.json')
+
 const reportedShimPath = join(reportedDir, 'claude fixture.cmd')
+
 const reportedFixturePath = join(reportedDir, 'capture-child.cjs')
+
 const fixtureDir = join(tempRoot, 'Profile space & ^ (paren) %ORCA_PATH_TRAP% !bang! 한글')
+
 const capturePath = join(fixtureDir, 'capture.json')
+
 const pidPath = join(fixtureDir, 'pids.json')
+
 const shimPath = join(fixtureDir, 'claude fixture.cmd')
+
 const fixturePath = join(fixtureDir, 'capture-child.cjs')
+
 const fixtureEnv = {
   ...process.env,
   CLAUDE_CONFIG_DIR: join(fixtureDir, 'config space & ^ (paren) %ORCA_ENV_LITERAL% !bang! 한글'),
@@ -50,6 +64,7 @@ const fixtureEnv = {
   ORCA_FIXTURE_PIDS: pidPath,
   ORCA_FIXTURE_NODE: process.execPath
 }
+
 const reportedEnv = {
   ...fixtureEnv,
   CLAUDE_CONFIG_DIR: join(reportedDir, 'config with spaces 한글'),
@@ -65,6 +80,7 @@ function launch(args, command = shimPath, env = fixtureEnv) {
   if (strategy === 'baseline') {
     return spawn(command, args, { cwd: tempRoot, env, shell: true, windowsHide: true })
   }
+
   if (strategy === 'candidate') {
     return spawn(quoteForCandidate(command), args, {
       cwd: tempRoot,
@@ -73,7 +89,9 @@ function launch(args, command = shimPath, env = fixtureEnv) {
       windowsHide: true
     })
   }
+
   const invocation = buildWindowsCommandInvocation(command, args)
+
   return spawn(invocation.command, invocation.args, {
     cwd: tempRoot,
     env,
@@ -96,6 +114,7 @@ function collect(child) {
 
 async function waitForFile(path, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     try {
       return JSON.parse(await readFile(path, 'utf8'))
@@ -103,6 +122,7 @@ async function waitForFile(path, timeoutMs = 5_000) {
       await new Promise((resolve) => setTimeout(resolve, 25))
     }
   }
+
   throw new Error(`Timed out waiting for fixture output: ${path}`)
 }
 
@@ -112,9 +132,11 @@ async function taskExists(pid) {
       windowsHide: true
     })
   )
+
   if (result.error || result.code !== 0) {
     throw new Error(`tasklist failed for PID ${pid}: ${result.error ?? result.stderr}`)
   }
+
   return result.stdout.includes(`"${pid}"`)
 }
 
@@ -122,6 +144,7 @@ async function killTree(pid) {
   const result = await collect(
     spawn('taskkill.exe', ['/pid', String(pid), '/t', '/f'], { windowsHide: true })
   )
+
   if (result.error || result.code !== 0) {
     throw new Error(`taskkill failed for PID ${pid}: ${result.error ?? result.stderr}`)
   }
@@ -130,17 +153,21 @@ async function killTree(pid) {
 async function waitForTreeExit(pids, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs
   let alive = {}
+
   do {
     alive = Object.fromEntries(
       await Promise.all(
         Object.entries(pids).map(async ([name, pid]) => [name, await taskExists(pid)])
       )
     )
+
     if (!Object.values(alive).some(Boolean)) {
       return alive
     }
+
     await new Promise((resolve) => setTimeout(resolve, 50))
   } while (Date.now() < deadline)
+
   return alive
 }
 
@@ -153,6 +180,7 @@ const results = {
   error: null,
   cancellation: null
 }
+
 const fixtureSource =
   `const { spawn } = require('node:child_process')\n` +
   `const { writeFileSync } = require('node:fs')\n` +
@@ -164,8 +192,11 @@ const fixtureSource =
   `} else {\n` +
   `  writeFileSync(process.env.ORCA_FIXTURE_CAPTURE, JSON.stringify({ argv: process.argv.slice(2), configDir: process.env.CLAUDE_CONFIG_DIR }))\n` +
   `}\n`
+
 const shimSource = '@echo off\r\n"%ORCA_FIXTURE_NODE%" "%~dp0capture-child.cjs" %*\r\n'
+
 let lingeringShellPid = null
+
 try {
   await mkdir(fixtureDir, { recursive: true })
   await mkdir(reportedDir, { recursive: true })
@@ -177,9 +208,11 @@ try {
   const reportedArgs = ['auth', 'status', '--json']
   const reportedRun = await collect(launch(reportedArgs, reportedShimPath, reportedEnv))
   let reportedCapture = null
+
   try {
     reportedCapture = await waitForFile(reportedCapturePath, 1_000)
   } catch {}
+
   results.reportedPath = {
     ...reportedRun,
     actual: reportedCapture,
@@ -205,16 +238,20 @@ try {
     await mkdir(directory, { recursive: true })
     await writeFile(join(directory, 'capture-child.cjs'), fixtureSource, 'utf8')
     await writeFile(command, shimSource, 'utf8')
+
     const env = {
       ...fixtureEnv,
       CLAUDE_CONFIG_DIR: join(directory, 'config'),
       ORCA_FIXTURE_CAPTURE: captureFile
     }
+
     const run = await collect(launch(reportedArgs, command, env))
     let actual = null
+
     try {
       actual = await waitForFile(captureFile, 500)
     } catch {}
+
     results.pathMatrix[name] = {
       code: run.code,
       stderr: run.stderr.trim(),
@@ -243,9 +280,11 @@ try {
     const env = { ...reportedEnv, ORCA_FIXTURE_CAPTURE: captureFile }
     const run = await collect(launch(args, reportedShimPath, env))
     let actual = null
+
     try {
       actual = await waitForFile(captureFile, 500)
     } catch {}
+
     results.argvMatrix[name] = {
       code: run.code,
       stderr: run.stderr.trim(),
@@ -256,9 +295,11 @@ try {
 
   const argvRun = await collect(launch(expectedArgs))
   let capture = null
+
   try {
     capture = await waitForFile(capturePath, 1_000)
   } catch {}
+
   results.hostilePathAndArgv = {
     ...argvRun,
     actual: capture,
@@ -276,14 +317,17 @@ try {
   const lingering = launch(['--linger'], reportedShimPath, reportedEnv)
   lingeringShellPid = lingering.pid
   const lingeringResult = collect(lingering)
+
   try {
     const pids = await waitForFile(reportedPidPath)
     await killTree(lingering.pid)
+
     const alive = await waitForTreeExit({
       shell: lingering.pid,
       child: pids.child,
       grandchild: pids.grandchild
     })
+
     results.cancellation = {
       shell: lingering.pid,
       ...pids,
@@ -294,6 +338,7 @@ try {
     if (await taskExists(lingering.pid)) {
       await killTree(lingering.pid)
     }
+
     const launchResult = await Promise.race([
       lingeringResult,
       new Promise((resolve) =>
@@ -303,6 +348,7 @@ try {
         )
       )
     ])
+
     results.cancellation = {
       shell: lingering.pid,
       launchResult,
@@ -314,23 +360,28 @@ try {
   if (lingeringShellPid && (await taskExists(lingeringShellPid))) {
     await killTree(lingeringShellPid)
   }
+
   try {
     let pids
+
     try {
       pids = JSON.parse(await readFile(reportedPidPath, 'utf8'))
     } catch {
       pids = JSON.parse(await readFile(pidPath, 'utf8'))
     }
+
     for (const pid of [pids.child, pids.grandchild]) {
       if (await taskExists(pid)) {
         await killTree(pid)
       }
     }
   } catch {}
+
   await rm(tempRoot, { recursive: true, force: true })
 }
 
 console.log(JSON.stringify(results, null, 2))
+
 process.exitCode =
   results.reportedPath?.pass &&
   Object.values(results.pathMatrix).every((result) => result.pass) &&

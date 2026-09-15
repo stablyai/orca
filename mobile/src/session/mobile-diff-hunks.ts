@@ -28,6 +28,7 @@ export function buildMobileDiffHunks(lines: readonly MobileDiffLine[]): MobileDi
     if (startIndex === null) {
       return
     }
+
     hunks.push({
       index: hunks.length,
       startIndex,
@@ -45,12 +46,15 @@ export function buildMobileDiffHunks(lines: readonly MobileDiffLine[]): MobileDi
   lines.forEach((line, index) => {
     if (!isChangedLine(line)) {
       closeHunk(index - 1)
+
       return
     }
+
     if (startIndex === null) {
       startIndex = index
       firstLineNumber = lineNumberForHunk(line)
     }
+
     if (line.kind === 'add') {
       addedLines += 1
     } else {
@@ -58,6 +62,7 @@ export function buildMobileDiffHunks(lines: readonly MobileDiffLine[]): MobileDi
     }
   })
   closeHunk(lines.length - 1)
+
   return hunks
 }
 
@@ -68,6 +73,7 @@ export function findNextMobileDiffHunkIndex(
   if (hunks.length === 0) {
     return null
   }
+
   return hunks.find((hunk) => hunk.startIndex > currentLineIndex)?.index ?? hunks[0]?.index ?? null
 }
 
@@ -78,11 +84,14 @@ export function findPreviousMobileDiffHunkIndex(
   if (hunks.length === 0) {
     return null
   }
+
   for (let index = hunks.length - 1; index >= 0; index -= 1) {
     const hunk = hunks[index]
+
     if (hunk && hunk.startIndex < currentLineIndex) {
       return hunk.index
     }
   }
+
   return hunks[hunks.length - 1]?.index ?? null
 }

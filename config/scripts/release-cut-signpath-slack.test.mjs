@@ -17,11 +17,13 @@ describe('release-cut SignPath Slack approval pings', () => {
     expect(cutOutputs.source_short_sha).toContain('steps.resolve.outputs.short_sha')
 
     const steps = workflow.jobs.build.steps
+
     const notifySteps = steps.filter(
       (step) =>
         step.name === 'Notify Slack that inner-binary signing is waiting for approval' ||
         step.name === 'Notify Slack that Windows signing is waiting for approval'
     )
+
     expect(notifySteps).toHaveLength(2)
 
     for (const step of notifySteps) {

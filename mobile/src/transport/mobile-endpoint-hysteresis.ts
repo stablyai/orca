@@ -22,10 +22,13 @@ export class MobileEndpointHysteresis {
     if (now < this.cooldownUntil) {
       return false
     }
+
     if (this.consecutiveDirectSuccesses === 0) {
       this.directObservationStartedAt = now
     }
+
     this.consecutiveDirectSuccesses += 1
+
     return (
       this.consecutiveDirectSuccesses >= this.options.directSuccessesRequired &&
       this.directObservationStartedAt !== null &&

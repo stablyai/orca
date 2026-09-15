@@ -22,10 +22,12 @@ vi.mock('../hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+
 vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 
@@ -35,6 +37,7 @@ vi.mock('../ipc/registered-worktree-roots-cache', () => ({
 
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
@@ -44,11 +47,13 @@ vi.mock('../git/repo', async (importOriginal) => {
 
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
 // Why: default the mock store to the clamp floor (5_000ms) so legacy "restore fires after delay" assertions hold; the real default is indefinite/null.
 const LEGACY_RESTORE_MS = 5_000
+
 const settingsState = {
   mobileAutoRestoreFitMs: LEGACY_RESTORE_MS as number | null
 }
@@ -104,6 +109,7 @@ function createRuntime() {
     resize: (ptyId, cols, rows) => {
       ptySizes.set(ptyId, { cols, rows })
       resizes.push({ ptyId, cols, rows })
+
       return true
     },
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null
@@ -152,12 +158,15 @@ describe('mobile subscribe integration', () => {
     type HeadlessStateForTest = {
       emulator: { write: (data: string) => Promise<void> | void }
     }
+
     const headless = (
       runtime as unknown as { headlessTerminals: Map<string, HeadlessStateForTest> }
     ).headlessTerminals.get('pty-1')
+
     expect(headless).toBeDefined()
     const originalWrite = headless!.emulator.write.bind(headless!.emulator)
     const secondWriteGate: { release: (() => void) | null } = { release: null }
+
     const secondWriteStarted = new Promise<void>((resolve) => {
       headless!.emulator.write = async (data: string): Promise<void> => {
         if (data === second) {
@@ -166,6 +175,7 @@ describe('mobile subscribe integration', () => {
             secondWriteGate.release = release
           })
         }
+
         await originalWrite(data)
       }
     })
@@ -175,9 +185,11 @@ describe('mobile subscribe integration', () => {
       await secondWriteStarted
       const racedSnapshot = runtime.serializeMainTerminalBuffer('pty-1')
       runtime.onPtyData('pty-1', third, Date.now())
+
       if (!secondWriteGate.release) {
         throw new Error('second write did not block')
       }
+
       secondWriteGate.release()
 
       const snapshot = await racedSnapshot
@@ -198,6 +210,7 @@ describe('mobile subscribe integration', () => {
 
   it('serializeMainTerminalBuffer returns an empty snapshot for an empty headless buffer', async () => {
     const { runtime } = createRuntime()
+
     type HeadlessStateForTest = {
       emulator: {
         isAlternateScreen: boolean
@@ -212,9 +225,11 @@ describe('mobile subscribe integration', () => {
       writeChain: Promise<void>
       ownership: { settle: () => Promise<void>; owner: undefined }
     }
+
     const runtimePrivate = runtime as unknown as {
       headlessTerminals: Map<string, HeadlessStateForTest>
     }
+
     runtimePrivate.headlessTerminals.set('pty-empty', {
       emulator: {
         isAlternateScreen: false,

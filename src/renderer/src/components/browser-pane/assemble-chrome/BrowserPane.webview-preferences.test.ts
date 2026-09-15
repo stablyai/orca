@@ -22,6 +22,7 @@ function createContainer(id: string): HTMLDivElement {
   const container = document.createElement('div')
   container.dataset.testid = id
   document.body.appendChild(container)
+
   return container
 }
 
@@ -74,12 +75,15 @@ describe('BrowserPane webview preferences', () => {
 
     const refreshedContainer = document.createElement('div')
     refreshedContainer.dataset.testid = 'refreshed'
+
     const resolveContainer = vi.fn(() => {
       if (!refreshedContainer.isConnected) {
         document.body.appendChild(refreshedContainer)
       }
+
       return refreshedContainer
     })
+
     registryMocks.destroyPersistentWebview.mockImplementation(() => {
       staleWebview.remove()
       staleContainer.remove()

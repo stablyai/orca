@@ -48,18 +48,24 @@ export function useRemoteFileBrowserFilterKeyCommands({
           // Path mode Enter.
           if (preview.error || preview.loading) {
             e.preventDefault()
+
             return
           }
+
           const parsed = parsePathInput(filter, pathFlavor)
+
           // Fully-resolved directory (trailing `/` or bare base marker): navigate to the preview path itself.
           if (parsed.mode === 'path' && parsed.trailingFilter === '') {
             e.preventDefault()
             navigate(preview.resolvedPath)
+
             return
           }
+
           // Trailing filter: resolve to a single folder match in the preview listing, mirroring filter-mode Enter.
           const filtered = filterEntries(preview.entries, preview.filter)
           const action = decideEnterAction(filtered)
+
           if (action.type === 'navigate') {
             e.preventDefault()
             navigate(joinPath(preview.resolvedPath, action.name, pathFlavor))
@@ -69,9 +75,12 @@ export function useRemoteFileBrowserFilterKeyCommands({
           } else {
             e.preventDefault()
           }
+
           return
         }
+
         const action = decideEnterAction(filteredEntries)
+
         if (action.type === 'navigate') {
           e.preventDefault()
           navigateInto(action.name)
@@ -79,10 +88,13 @@ export function useRemoteFileBrowserFilterKeyCommands({
           e.preventDefault()
           triggerFileHint()
         }
+
         return
       }
+
       if (e.key === 'Escape') {
         const action = decideEscAction(filter)
+
         if (action.type === 'clearFilter') {
           e.stopPropagation()
           e.preventDefault()
@@ -93,6 +105,7 @@ export function useRemoteFileBrowserFilterKeyCommands({
           onCancel()
         }
       }
+
       if (e.key === 'Backspace' && filter === '' && !preview) {
         // Backspace in an empty input climbs to the parent; in-word backspaces are untouched.
         if (resolvedPath !== '/') {

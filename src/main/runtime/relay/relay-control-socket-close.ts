@@ -2,6 +2,7 @@ import type WebSocket from 'ws'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 
 const NORMAL_CLOSE_CODE = 1000
+
 const REASONED_CLOSE_FLUSH_MS = 1_000
 
 // hostCloseReason: only auth loss names itself. Every other control close
@@ -16,11 +17,14 @@ export function closeRelayControlSocket(
   if (!socket) {
     return
   }
+
   if (hostCloseReason && socket.readyState === socket.OPEN) {
     socket.close(NORMAL_CLOSE_CODE, hostCloseReason)
     const timer = setTimeout(() => socket.terminate(), REASONED_CLOSE_FLUSH_MS)
     timer.unref?.()
+
     return
   }
+
   socket.terminate()
 }

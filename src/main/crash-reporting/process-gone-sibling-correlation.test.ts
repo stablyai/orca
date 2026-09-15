@@ -14,6 +14,7 @@ import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-siblin
 import { _resetTracerForTests } from '../observability/tracer'
 
 const noMinidump = async () => null
+
 const CONCURRENT = 'concurrent-process-deaths'
 
 function recorderStore() {
@@ -44,11 +45,13 @@ const networkServiceCrash = event({
     type: 'Utility'
   }
 })
+
 const audioServiceCrash = event({
   source: 'child',
   processType: 'Utility',
   details: { name: 'Audio Service', serviceName: 'audio.mojom.AudioService', type: 'Utility' }
 })
+
 const gpuCrash = event({
   source: 'child',
   processType: 'GPU',
@@ -205,6 +208,7 @@ describe('sibling process-death attribution', () => {
 
     at(rendererAt)
     record(store, event())
+
     for (let index = 1; index <= 20; index += 1) {
       at(rendererAt + index)
       record(store, networkServiceCrash)
@@ -227,10 +231,12 @@ describe('sibling process-death attribution', () => {
     record(store, networkServiceCrash)
     at(rendererAt)
     record(store, event())
+
     for (let index = 1; index <= 16; index += 1) {
       at(rendererAt + index)
       record(churnStore, event({ ...gpuCrash, reason: 'killed' }))
     }
+
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     expect(recordedDetails(store)).toMatchObject({
@@ -268,6 +274,7 @@ describe('sibling process-death attribution', () => {
       at(rendererAt - index)
       record(store, churn[index % churn.length] as ProcessGoneCrashEvent)
     }
+
     at(rendererAt)
     record(store, event())
 

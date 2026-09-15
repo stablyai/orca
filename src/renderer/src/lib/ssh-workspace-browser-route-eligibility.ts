@@ -16,10 +16,12 @@ export function resolveSshWorkspaceBrowserRouteEligibility(
   settings: SshBrowserRoutingSettings | null | undefined
 ): SshWorkspaceBrowserRouteEligibility | null {
   const parsed = parseExecutionHostId(executionHostId)
+
   // Why: runtime-owned ephemeral SSH targets belong to the paired runtime's browser route.
   if (parsed?.kind !== 'ssh' || isRuntimeOwnedSshTargetId(parsed.targetId)) {
     return null
   }
+
   return {
     targetId: parsed.targetId,
     eligible:

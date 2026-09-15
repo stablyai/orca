@@ -64,7 +64,9 @@ export function BrowserGuestAnnotateOverlays({
     dismissGrabToast,
     setGrabToast
   } = grabAnnotations
+
   const markupTarget = markupPortalContainer ?? containerRef.current
+
   const {
     browserAnnotations,
     browserAnnotationTrayOpen,
@@ -131,8 +133,10 @@ export function BrowserGuestAnnotateOverlays({
             // Why: skip rearm if a menu action already handled it — see grabMenuActionTakenRef.
             if (grabMenuActionTakenRef.current) {
               grabMenuActionTakenRef.current = false
+
               return
             }
+
             grab.rearm()
           }
         }}
@@ -146,12 +150,14 @@ export function BrowserGuestAnnotateOverlays({
               if (!grab.payload) {
                 return { left: 0, top: 0 }
               }
+
               const rect = grab.payload.target.rectViewport
               const webview = webviewRef.current
               const webviewRect = webview?.getBoundingClientRect()
               const cRect = containerRef.current?.getBoundingClientRect()
               const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
               const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
+
               return {
                 left: offsetX + rect.x + rect.width / 2,
                 top: offsetY + rect.y + rect.height / 2

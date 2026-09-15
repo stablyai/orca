@@ -62,6 +62,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -86,6 +87,7 @@ const handler = channelHandlerLookup(handleMock)
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -136,12 +138,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     expect(
       await call(null, { selector: 'desk', method: 'repo.list', timeoutMs: 75 })
     ).toMatchObject({
@@ -171,6 +175,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return {
         id: 'repo-list',
         ok: true,
@@ -183,12 +188,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
       ok: true,
       result: { repos: [{ id: 'repo-1' }] }
@@ -214,12 +221,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     expect(
       await call(null, {
         selector: 'desk',
@@ -263,12 +272,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await expect(
       call(null, {
         selector: 'desk',
@@ -326,12 +337,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
       ok: true,
       result: { repos: [{ id: 'repo-1' }] }
@@ -368,6 +381,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       if (method === 'status.get') {
         statusCalls += 1
         const supportsShared = statusCalls === 1
+
         return {
           id: 'status',
           ok: true,
@@ -378,6 +392,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           _meta: { runtimeId: supportsShared ? 'runtime-remote' : 'runtime-downgraded' }
         }
       }
+
       return {
         id: 'repo-list',
         ok: true,
@@ -396,12 +411,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await call(null, { selector: 'desk', method: 'repo.list' })
     environmentStore.markEnvironmentUsed(userDataPath, added.environment.id, {
       runtimeId: 'runtime-downgraded'
@@ -418,10 +435,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
   it('rejects an import mutation when its capability-proven runtime was replaced before routing', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
+
     const add = handler<
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     environmentStore.markEnvironmentUsed(userDataPath, added.environment.id, {
       runtimeId: 'runtime-replacement'
@@ -435,6 +454,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       },
       RuntimeRpcResponse<unknown>
     >('runtimeEnvironments:call')
+
     await expect(
       call(null, {
         selector: 'desk',
@@ -478,7 +498,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         { name: string; pairingCode: string },
         { environment: { id: string; name: string } }
       >('runtimeEnvironments:addFromPairingCode')
+
       await add(null, { name: 'desk', pairingCode: pairingCode() })
+
       const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
         'runtimeEnvironments:call'
       )
@@ -489,6 +511,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         error: { code: expectedCode, message: expectedMessage }
       })
       expect(response.ok).toBe(false)
+
       if (response.ok === false) {
         expect(response.error).toEqual({ code: expectedCode, message: expectedMessage })
       }
@@ -503,7 +526,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
+
     const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
       'runtimeEnvironments:call'
     )
@@ -531,12 +556,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await expect(call(null, { selector: 'desk', method: 'repo.list' })).rejects.toThrow(
       'shared down'
     )
@@ -570,7 +597,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
+
     const call = handler<
       { selector: string; method: string; params?: unknown },
       { ok: true; result: unknown }
@@ -597,6 +626,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return await new Promise((resolve) => pendingBackground.push(resolve))
     })
     sendRemoteRuntimeConnectionRequestMock.mockResolvedValue({
@@ -610,22 +640,26 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     const bg1 = call(null, { selector: 'desk', method: 'hostedReview.forBranch' })
     const bg2 = call(null, { selector: 'desk', method: 'github.listWorkItems' })
     await vi.waitFor(() => expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledTimes(3))
 
     const bg3 = call(null, { selector: 'desk', method: 'git.status' })
+
     const foreground = call(null, {
       selector: 'desk',
       method: 'terminal.send',
       params: { terminal: 'term-1', text: 'a' }
     })
+
     await vi.waitFor(() =>
       expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
         'status.get',

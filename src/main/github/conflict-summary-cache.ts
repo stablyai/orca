@@ -13,6 +13,7 @@ export const CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS = 60_000
 // Why bounded: the main process is long-lived; cap the maps so repos and PRs
 // that stop refreshing can't accumulate entries forever.
 const BASE_OID_CACHE_MAX = 64
+
 const SUMMARY_CACHE_MAX = 128
 
 export type FreshBaseTipResolution =
@@ -33,8 +34,11 @@ type CachedSummary = {
 }
 
 const baseOidCache = new Map<string, CachedBaseTipResolution>()
+
 const summaryCache = new Map<string, CachedSummary>()
+
 const inFlightBaseOidResolves = new Map<string, Promise<FreshBaseTipResolution>>()
+
 const inFlightSummaryDerivations = new Map<string, Promise<PRConflictSummary | undefined>>()
 
 // Why: WSL distros have their own git binary, filesystem view, and remote
@@ -52,13 +56,17 @@ export function buildConflictSummaryCacheKey(...parts: string[]): string {
 
 export function readFreshBaseTipResolution(baseKey: string): FreshBaseTipResolution | null {
   const entry = baseOidCache.get(baseKey)
+
   if (!entry) {
     return null
   }
+
   if (Date.now() - entry.resolvedAt >= CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS) {
     baseOidCache.delete(baseKey)
+
     return null
   }
+
   return entry.oid ? { kind: 'resolved', oid: entry.oid } : { kind: 'fallback-unresolved' }
 }
 
@@ -77,13 +85,17 @@ export function rememberUnresolvedBaseTip(baseKey: string): void {
 
 export function readCachedSummary(summaryKey: string): CachedSummary | null {
   const entry = summaryCache.get(summaryKey)
+
   if (!entry) {
     return null
   }
+
   if (entry.staleAt !== null && Date.now() >= entry.staleAt) {
     summaryCache.delete(summaryKey)
+
     return null
   }
+
   return entry
 }
 
@@ -117,12 +129,16 @@ function setBoundedMapEntry<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: 
   if (map.has(key)) {
     map.delete(key)
   }
+
   map.set(key, value)
+
   while (map.size > maxEntries) {
     const oldest = map.keys().next()
+
     if (oldest.done) {
       return
     }
+
     map.delete(oldest.value)
   }
 }

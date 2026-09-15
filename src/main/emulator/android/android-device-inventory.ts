@@ -14,6 +14,7 @@ export async function listRunningAdbDevices(
   sdk: AndroidSdkPaths
 ): Promise<AndroidAdbDevice[]> {
   const result = await runner(sdk.adb, adbDevicesArgs)
+
   return parseAdbDevices(result.stdout).filter((device) => device.state === 'device')
 }
 
@@ -29,11 +30,13 @@ export async function resolveRunningAvdNames(
       .map(async (device) => {
         const out = await runner(sdk.adb, ['-s', device.serial, 'emu', 'avd', 'name'])
         const name = firstNonStatusLine(out.stdout)
+
         if (name) {
           names.set(device.serial, name)
         }
       })
   )
+
   return names
 }
 
@@ -44,11 +47,13 @@ export async function findRunningAvdSerial(
   running: AndroidAdbDevice[]
 ): Promise<string | null> {
   const names = await resolveRunningAvdNames(runner, sdk, running)
+
   for (const [serial, name] of names) {
     if (name === avdName) {
       return serial
     }
   }
+
   return null
 }
 
@@ -60,8 +65,10 @@ export async function listAndroidDevices(
     listRunningAdbDevices(runner, sdk),
     runner(sdk.emulator, listAvdsArgs)
   ])
+
   const avds = parseAvdList(avdsResult.stdout)
   const runningAvdBySerial = await resolveRunningAvdNames(runner, sdk, running)
+
   return mergeAndroidDevices(running, avds, runningAvdBySerial)
 }
 
@@ -69,10 +76,12 @@ export async function listAndroidDevices(
 function firstNonStatusLine(stdout: string): string | null {
   for (const raw of stdout.split('\n')) {
     const line = raw.trim()
+
     if (line !== '' && line !== 'OK') {
       return line
     }
   }
+
   return null
 }
 
@@ -100,6 +109,7 @@ export function mergeAndroidDevices(
     if (bootedAvdNames.has(avd)) {
       continue
     }
+
     devices.push({
       backend: 'android',
       id: avd,

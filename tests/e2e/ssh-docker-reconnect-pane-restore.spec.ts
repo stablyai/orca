@@ -63,6 +63,7 @@ test.describe('SSH reconnect pane restore', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       // The fixture image's shell emits no OSC 0, so without this every tab keeps its placeholder
@@ -142,11 +143,14 @@ test.describe('SSH reconnect pane restore', () => {
               const store = window.__store
               const state = store?.getState()
               const worktreeId = state?.activeWorktreeId
+
               if (!state || !worktreeId) {
                 return null
               }
+
               const activeTabId = state.activeTabIdByWorktree?.[worktreeId]
               const tabs = state.tabsByWorktree?.[worktreeId] ?? []
+
               return tabs.find((tab) => tab.id === activeTabId)?.title ?? null
             }),
           { timeout: 60_000, message: 'New tab kept its placeholder title' }

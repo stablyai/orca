@@ -33,6 +33,7 @@ function createRuntimeForDedupe(
     })),
     issuePtyHandle: vi.fn((pty: { ptyId: string }) => handleByPtyId.get(pty.ptyId))
   })
+
   return { runtime, listProcesses }
 }
 
@@ -59,9 +60,11 @@ describe('terminal create idempotency', () => {
   it('shares an in-flight create without scanning inventory on the initial request', async () => {
     const { runtime, listProcesses } = createRuntimeForDedupe()
     let resolveCreate: (value: RuntimeTerminalCreate) => void = () => {}
+
     const pending = new Promise<RuntimeTerminalCreate>((resolve) => {
       resolveCreate = resolve
     })
+
     const create = vi.fn<CreateRun>(() => pending)
 
     const first = runtime.dedupeTerminalCreate(
@@ -71,6 +74,7 @@ describe('terminal create idempotency', () => {
       false,
       create
     )
+
     const retry = runtime.dedupeTerminalCreate(
       'device-a',
       'worktree-1',
@@ -78,6 +82,7 @@ describe('terminal create idempotency', () => {
       false,
       create
     )
+
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     const stableHandle = create.mock.calls[0][1]
     resolveCreate(createdTerminal(stableHandle ?? 'missing'))
@@ -94,6 +99,7 @@ describe('terminal create idempotency', () => {
     const firstRuntime = createRuntimeForDedupe(vi.fn(async () => liveSessions)).runtime
     const secondInventory = vi.fn(async () => liveSessions)
     const secondRuntime = createRuntimeForDedupe(secondInventory).runtime
+
     const startup = vi.fn<CreateRun>(async (_selector, handle) => {
       liveSessions.push({
         id: 'worktree-1@@session-a',
@@ -102,6 +108,7 @@ describe('terminal create idempotency', () => {
         worktreeId: 'worktree-1',
         terminalHandle: handle
       })
+
       return createdTerminal(handle ?? 'missing')
     })
 
@@ -112,7 +119,9 @@ describe('terminal create idempotency', () => {
       false,
       startup
     )
+
     const retrySpawn = vi.fn<CreateRun>()
+
     const recovered = await secondRuntime.dedupeTerminalCreate(
       'device-a',
       'worktree-1',
@@ -130,6 +139,7 @@ describe('terminal create idempotency', () => {
 
   it('creates with the same stable handle after authoritative inventory proves absence', async () => {
     const { runtime, listProcesses } = createRuntimeForDedupe()
+
     const create = vi.fn<CreateRun>(async (_selector, handle) =>
       createdTerminal(handle ?? 'missing')
     )
@@ -150,6 +160,7 @@ describe('terminal create idempotency', () => {
     const listProcesses = vi.fn(async (): Promise<PtyProcessInfo[]> => {
       throw new Error('controller offline')
     })
+
     const { runtime } = createRuntimeForDedupe(listProcesses)
     const create = vi.fn<CreateRun>()
 
@@ -170,6 +181,7 @@ describe('terminal create idempotency', () => {
         }
       ])
     )
+
     const create = vi.fn<CreateRun>()
 
     await expect(
@@ -180,6 +192,7 @@ describe('terminal create idempotency', () => {
 
   it('adopts an exact identity even when another legacy PTY lacks metadata', async () => {
     const handle = deriveRemoteRuntimeTerminalCreateHandle('device-a', 'worktree-1', 'mutation-1')
+
     const { runtime } = createRuntimeForDedupe(
       vi.fn(async () => [
         {
@@ -211,6 +224,7 @@ describe('terminal create idempotency', () => {
 
   it('fails closed when a matching handle belongs to another worktree', async () => {
     const handle = deriveRemoteRuntimeTerminalCreateHandle('device-a', 'worktree-1', 'mutation-1')
+
     const { runtime } = createRuntimeForDedupe(
       vi.fn(async () => [
         {
@@ -222,6 +236,7 @@ describe('terminal create idempotency', () => {
         }
       ])
     )
+
     const create = vi.fn<CreateRun>()
 
     await expect(
@@ -233,6 +248,7 @@ describe('terminal create idempotency', () => {
   it('bounds concurrent creates and releases capacity after settlement', async () => {
     const idempotency = new RemoteRuntimeTerminalCreateIdempotency(1)
     let resolveFirst: (value: RuntimeTerminalCreate) => void = () => {}
+
     const first = idempotency.run(
       'device-a',
       'worktree-1',
@@ -267,17 +283,22 @@ function createHostScopedInventory(hosts: {
 }) {
   const local = hosts.local ?? []
   const ssh = hosts.ssh ?? {}
+
   return vi.fn(async (connectionId?: string | null): Promise<PtyProcessInfo[]> => {
     if (connectionId === null) {
       return local
     }
+
     if (typeof connectionId === 'string') {
       const host = ssh[connectionId]
+
       if (host === undefined || host === 'unreachable') {
         throw new Error('ssh relay did not answer')
       }
+
       return host
     }
+
     return [
       ...local,
       ...Object.values(ssh)
@@ -303,6 +324,7 @@ describe('terminal create reconciliation scopes inventory to the owning executio
       // The first create's shell is alive on ssh-1; the relay simply cannot be asked about it.
       ssh: { 'ssh-1': 'unreachable', 'ssh-2': [remoteSession(undefined, 'worktree-9')] }
     })
+
     const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: 'ssh-1' })
     const create = vi.fn<CreateRun>()
 
@@ -329,7 +351,9 @@ describe('terminal create reconciliation scopes inventory to the owning executio
     const listProcesses = createHostScopedInventory({
       ssh: { 'ssh-1': [remoteSession(undefined, 'worktree-other')] }
     })
+
     const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: 'ssh-1' })
+
     const create = vi.fn<CreateRun>(async (_selector, handle) =>
       createdTerminal(handle ?? 'missing')
     )
@@ -348,9 +372,11 @@ describe('terminal create reconciliation scopes inventory to the owning executio
 
   it('scopes the listing to the local host for a workspace with no connection', async () => {
     const handle = deriveRemoteRuntimeTerminalCreateHandle('device-a', 'worktree-1', 'mutation-1')
+
     const listProcesses = createHostScopedInventory({
       local: [{ ...remoteSession(handle), cwd: '/local/workspace', title: 'pwsh' }]
     })
+
     const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: null })
     const create = vi.fn<CreateRun>()
 
@@ -364,6 +390,7 @@ describe('terminal create reconciliation scopes inventory to the owning executio
   it('scopes the listing to the local host for a folder workspace with no connection', async () => {
     const listProcesses = createHostScopedInventory({})
     const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: null })
+
     const create = vi.fn<CreateRun>(async (_selector, handle) =>
       createdTerminal(handle ?? 'missing', 'folder:folder-1')
     )

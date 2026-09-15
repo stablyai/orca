@@ -3,19 +3,24 @@ import { getLegacyViewerPath } from './linear-credential-paths'
 import type { LinearViewer } from '../../shared/linear/workspace-types'
 
 let cachedLegacyViewer: LinearViewer | null = null
+
 let legacyViewerLoadedFromDisk = false
 
 function readLegacyViewerFromDisk(): LinearViewer | null {
   const path = getLegacyViewerPath()
+
   if (!existsSync(path)) {
     return null
   }
+
   try {
     const raw = readFileSync(path, { encoding: 'utf-8' })
     const parsed = JSON.parse(raw) as Partial<LinearViewer>
+
     if (typeof parsed?.displayName !== 'string' || typeof parsed?.organizationName !== 'string') {
       return null
     }
+
     return {
       displayName: parsed.displayName,
       email: typeof parsed.email === 'string' ? parsed.email : null,
@@ -34,6 +39,7 @@ export function getLegacyViewer(): LinearViewer | null {
     cachedLegacyViewer = readLegacyViewerFromDisk()
     legacyViewerLoadedFromDisk = true
   }
+
   return cachedLegacyViewer
 }
 

@@ -20,6 +20,7 @@ describe('admitWorktreeCatalogResponse', () => {
       { worktrees: [{ id: 'worktree-1' }], snapshotId: 'snapshot-1' },
       null
     )
+
     const unchanged = admitWorktreeCatalogResponse(
       { unchanged: true, snapshotId: 'snapshot-1' },
       'snapshot-1'
@@ -96,10 +97,12 @@ function clientWithResults(...results: unknown[]): RpcClient {
 describe('WorktreeCatalogSnapshotClient', () => {
   it('returns the confirmed rows on unchanged responses so callers can reassert them', async () => {
     const rows = [{ worktreeId: 'worktree-1' }]
+
     const client = clientWithResults(
       { worktrees: rows, snapshotId: 'snapshot-1' },
       { unchanged: true, snapshotId: 'snapshot-1' }
     )
+
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     const first = admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
@@ -114,6 +117,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
       { worktrees: [], snapshotId: 'snapshot-1' },
       { worktrees: [], snapshotId: 'snapshot-1' }
     )
+
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     await snapshots.fetch(client, 'host-1')
@@ -145,6 +149,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
       { unchanged: true, snapshotId: 'snapshot-2' },
       { worktrees: [], snapshotId: 'snapshot-3' }
     )
+
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
@@ -196,9 +201,11 @@ describe('WorktreeCatalogSnapshotClient', () => {
       { id: 'request', ok: false, error: { code: 'forbidden', message: 'nope' } },
       { id: 'request', ok: true, result: { unchanged: true, snapshotId: 'snapshot-1' } }
     ]
+
     const client = {
       sendRequest: vi.fn(async () => responses.shift())
     } as unknown as RpcClient
+
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
@@ -216,6 +223,7 @@ describe('WorktreeCatalogSnapshotClient', () => {
     const client = {
       sendRequest: vi.fn(async () => ({ id: 'request', ok: false, error: { message: 'x' } }))
     } as unknown as RpcClient
+
     const snapshots = new WorktreeCatalogSnapshotClient()
 
     expect(await snapshots.fetch(client, 'host-1')).toEqual({

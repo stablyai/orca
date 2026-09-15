@@ -6,6 +6,7 @@ import type {
 } from './direct-ssh-reconnect-product-telemetry-types'
 
 const MAX_COUNT = 1_000_000
+
 const MAX_DURATION_MS = 86_400_000
 
 function boundedInteger(value: number, maximum = MAX_COUNT): number {
@@ -22,8 +23,10 @@ function durationDistribution(values: readonly number[]): {
   const sorted = values
     .map((value) => boundedInteger(value, MAX_DURATION_MS))
     .toSorted((a, b) => a - b)
+
   const percentile = (quantile: number): number =>
     sorted.length === 0 ? 0 : sorted[Math.max(0, Math.ceil(sorted.length * quantile) - 1)]
+
   return {
     count: boundedInteger(sorted.length),
     p50: percentile(0.5),
@@ -57,6 +60,7 @@ export function toDirectSshReconnectProductProps(
 ): DirectSshReconnectProductProps {
   const queueWait = durationDistribution(event.queueWaitDurationsMs)
   const providerExecution = durationDistribution(event.providerExecutionDurationsMs)
+
   return {
     mode: event.mode === 'prepare-only' ? 'prepare_only' : 'reconnect',
     reason: event.reason.replaceAll('-', '_') as DirectSshReconnectProductProps['reason'],

@@ -15,6 +15,7 @@ export function clearHostedReviewConflictingPrCache(args: {
   if (!args.review || args.review.provider === 'github') {
     return args.cache
   }
+
   const keys = [
     getGitHubPRCacheKey(
       args.repoPath,
@@ -28,12 +29,16 @@ export function clearHostedReviewConflictingPrCache(args: {
     getLegacyGitHubPRCacheKey(args.repoPath, args.repoId, args.branch),
     getLegacyGitHubPRCacheKey(args.repoPath, undefined, args.branch)
   ]
+
   if (!keys.some((key) => args.cache[key])) {
     return args.cache
   }
+
   const next = { ...args.cache }
+
   for (const key of keys) {
     delete next[key]
   }
+
   return next
 }

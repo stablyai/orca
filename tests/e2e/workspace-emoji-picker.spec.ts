@@ -6,6 +6,7 @@ async function captureProof(page: Page, testInfo: TestInfo, name: string): Promi
   if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
     return
   }
+
   const screenshotPath = testInfo.outputPath(name)
   await page.screenshot({ path: screenshotPath })
   await testInfo.attach(name, { path: screenshotPath, contentType: 'image/png' })
@@ -41,12 +42,15 @@ test.describe('Workspace emoji picker', () => {
 
     await orcaPage.evaluate(() => {
       const state = window.__store!.getState()
+
       const worktree = Object.values(state.worktreesByRepo)
         .flat()
         .find((candidate) => candidate.id === state.activeWorktreeId)
+
       if (!worktree) {
         throw new Error('Active worktree not found')
       }
+
       state.openModal('edit-meta', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
@@ -71,9 +75,11 @@ test.describe('Workspace emoji picker', () => {
 
     await orcaPage.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
+
     const paletteInput = palette.getByPlaceholder(
       'Search chats, terminals, worktrees, settings, and actions...'
     )
+
     await expect(paletteInput).toBeFocused()
     await captureProof(orcaPage, testInfo, 'cmd-j-before.png')
     await paletteInput.pressSequentially(':wink', { delay: 60 })

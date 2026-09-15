@@ -20,13 +20,17 @@ export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerConte
       // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getRemoteFileUrl(args.worktreePath, args.relativePath, args.line)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
+
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
     }
   )
@@ -38,16 +42,21 @@ export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerConte
       args: { worktreePath: string; sha: string; connectionId?: string }
     ): Promise<string | null> => {
       const sha = validateFullGitObjectId(args.sha, 'sha')
+
       // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getRemoteCommitUrl(args.worktreePath, sha)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
+
       return getRemoteCommitUrl(worktreePath, sha)
     }
   )

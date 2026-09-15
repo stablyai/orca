@@ -30,12 +30,15 @@ export function BaseRefPicker({
   const focusedRuntimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForRepo(state, repoId)
   )
+
   const selectedHost = parseExecutionHostId(hostId)
+
   const activeRuntimeEnvironmentId = hostId
     ? selectedHost?.kind === 'runtime'
       ? selectedHost.environmentId
       : null
     : focusedRuntimeEnvironmentId
+
   // Why: null until the IPC resolves (or when the repo has no default base ref
   // available). We avoid seeding with 'origin/main' because that would display
   // a fabricated default in repos that don't actually have origin/main.
@@ -54,17 +57,22 @@ export function BaseRefPicker({
   // regions, so we scroll the results list manually (same pattern as CommandList).
   useEffect(() => {
     const el = baseRefResultsListRef.current
+
     if (!el) {
       return
     }
+
     const onWheel = (event: WheelEvent): void => {
       if (el.scrollHeight <= el.clientHeight) {
         return
       }
+
       event.preventDefault()
       el.scrollTop += event.deltaY
     }
+
     el.addEventListener('wheel', onWheel, { passive: false })
+
     return () => el.removeEventListener('wheel', onWheel)
   }, [baseRefResults.length])
 
@@ -78,12 +86,14 @@ export function BaseRefPicker({
           repoId,
           hostId
         )
+
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
           setRemoteCount(result.remoteCount)
         }
       } catch (err) {
         console.error('[BaseRefPicker] getBaseRefDefault failed', err)
+
         if (!stale) {
           setDefaultBaseRef(null)
           setRemoteCount(0)
@@ -109,12 +119,16 @@ export function BaseRefPicker({
     if (!isRuntimeRepoRefSearchQueryWithinLimit(baseRefQuery)) {
       setBaseRefResults([])
       setIsSearchingBaseRefs(false)
+
       return
     }
+
     const trimmedQuery = baseRefQuery.trim()
+
     if (trimmedQuery.length < 2) {
       setBaseRefResults([])
       setIsSearchingBaseRefs(false)
+
       return
     }
 
@@ -136,6 +150,7 @@ export function BaseRefPicker({
         })
         .catch((err) => {
           console.error('[BaseRefPicker] searchBaseRefs failed', err)
+
           if (!stale) {
             setBaseRefResults([])
           }

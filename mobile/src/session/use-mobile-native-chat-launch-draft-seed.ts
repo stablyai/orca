@@ -55,18 +55,22 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     ) {
       return
     }
+
     // Why: `session.tabs` carries launchDraft before the transcript read settles,
     // and an empty (or previous tab's) list would let the decline below misjudge
     // an already-submitted prefill — long enough for a send to duplicate it.
     if (transcriptLoading) {
       return
     }
+
     // A user turn already in the transcript means the TUI prefill was submitted
     // or deliberately cleared; decline instead of resurrecting it.
     if (messages.some((message) => normalizedUserText(message) !== null)) {
       seededLaunchDraftByKeyRef.current.set(draftKey, null)
+
       return
     }
+
     seededLaunchDraftByKeyRef.current.set(draftKey, {
       text: launchDraft,
       createdAt: launchDraftCreatedAt ?? null
@@ -94,14 +98,19 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     if (!draftKey || !chatActive || transcriptLoading) {
       return
     }
+
     const seeded = seededLaunchDraftByKeyRef.current.get(draftKey)
+
     if (!seeded) {
       return
     }
+
     const hasUserTurn = messages.some((message) => normalizedUserText(message) !== null)
+
     if (!hasUserTurn && launchDraft?.trim()) {
       return
     }
+
     seededLaunchDraftByKeyRef.current.set(draftKey, null)
     setDrafts((previous) =>
       (previous[draftKey] ?? '') === seeded.text ? { ...previous, [draftKey]: '' } : previous
@@ -113,6 +122,7 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     () => (draftKey ? (seededLaunchDraftByKeyRef.current.get(draftKey)?.text ?? null) : null),
     [draftKey]
   )
+
   const readSeededLaunchDraftSeed = useCallback(
     () => (draftKey ? (seededLaunchDraftByKeyRef.current.get(draftKey) ?? null) : null),
     [draftKey]

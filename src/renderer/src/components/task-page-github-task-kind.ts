@@ -7,7 +7,9 @@ export function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: stri
   if (preset === 'prs' || preset === 'my-prs' || preset === 'review') {
     return true
   }
+
   const parsed = parseTaskQuery(query)
+
   return (
     parsed.scope === 'pr' ||
     parsed.state === 'merged' ||
@@ -34,14 +36,18 @@ export function getDefaultPresetForGitHubTaskKind(kind: GitHubTaskKind): TaskVie
 
 export function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
   const trimmed = query.trim()
+
   if (!trimmed) {
     return getTaskPresetQuery(getDefaultPresetForGitHubTaskKind(kind))
   }
+
   if (/\bis:(?:issue|pr|pull-request)\b/i.test(trimmed)) {
     return trimmed
   }
+
   const parsed = parseTaskQuery(trimmed)
   // Why: the issue arm still fires for quoted forms like is:"issue" that the literal regex above misses.
   const inferredKind = parsed.scope === 'pr' ? 'prs' : parsed.scope === 'issue' ? 'issues' : kind
+
   return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }

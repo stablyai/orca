@@ -51,6 +51,7 @@ describe('parseServerShareAddress', () => {
     ]) {
       expect(parseServerShareAddress(bad).ok).toBe(false)
     }
+
     expect(parseServerShareAddress('a'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS + 1)).ok).toBe(false)
   })
 

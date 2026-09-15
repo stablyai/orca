@@ -13,9 +13,11 @@ const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
   message: vi.fn()
 }))
+
 vi.mock('sonner', () => ({ toast: toastMocks }))
 
 const mocks = vi.hoisted(() => ({ attach: vi.fn() }))
+
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
@@ -31,6 +33,7 @@ const PLACEMENT = {
   browserHostGeneration: 3,
   pageHostGeneration: 7
 }
+
 const FAILED_URL = 'https://selfsigned.internal/'
 
 let webview: ReturnType<typeof createWebview>
@@ -107,6 +110,7 @@ function StoreDrivenPane(): React.JSX.Element {
   const browserTab = useAppStore((s) => (s.browserPagesByWorkspace['workspace-a'] ?? [])[0])
   const updateBrowserPageState = useAppStore((s) => s.updateBrowserPageState)
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
+
   return (
     <TooltipProvider>
       <ClientHostedBrowserPagePane
@@ -143,9 +147,11 @@ function failLoad(): void {
 
 function storedPage(): BrowserPage {
   const page = (useAppStore.getState().browserPagesByWorkspace['workspace-a'] ?? [])[0]
+
   if (!page) {
     throw new Error('seeded page missing from the store')
   }
+
   return page
 }
 
@@ -163,6 +169,7 @@ function seedStore(): void {
     loadError: null,
     createdAt: 1
   }
+
   const workspace: BrowserWorkspace = {
     id: 'workspace-a',
     worktreeId: 'worktree-a',
@@ -177,6 +184,7 @@ function seedStore(): void {
     loadError: null,
     createdAt: 1
   }
+
   useAppStore.setState({
     browserPagesByWorkspace: { 'workspace-a': [page] },
     browserTabsByWorktree: { 'worktree-a': [workspace] },
@@ -200,6 +208,7 @@ function createWebview(): Electron.WebviewTag & { getURL: ReturnType<typeof vi.f
   const element = document.createElement('webview') as Electron.WebviewTag & {
     getURL: ReturnType<typeof vi.fn>
   }
+
   Object.assign(element, {
     getURL: vi.fn(() => FAILED_URL),
     getTitle: vi.fn(() => 'Selfsigned'),
@@ -223,5 +232,6 @@ function createWebview(): Electron.WebviewTag & { getURL: ReturnType<typeof vi.f
     send: vi.fn(),
     style: element.style
   })
+
   return element
 }

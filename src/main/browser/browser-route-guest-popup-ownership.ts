@@ -22,6 +22,7 @@ export function registerBrowserRouteGuestPopup(input: {
   ) {
     return
   }
+
   openerByPopupWebContentsId.set(input.popupWebContentsId, input.openerWebContentsId)
 }
 

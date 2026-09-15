@@ -2,16 +2,20 @@ import * as mocks from './orca-runtime-test-mocks.spec'
 import type { Mock } from 'vitest'
 
 const { HEADLESS_RUNTIME_WINDOW_ID, OrcaRuntimeService, electronMocks } = mocks
+
 const { getBrowserHostLeaseRegistry, getDefaultWorkspaceSession, getRuntimeBrowserPageRegistry } =
   mocks
+
 const { gitRunner, vi } = mocks
 
 import * as fixtures from './orca-runtime-test-fixtures.spec'
 
 const { HEADLESS_LEAF_ID, TEST_REPO_ID, TEST_REPO_PATH, TEST_WINDOW_ID, TEST_WORKTREE_ID } =
   fixtures
+
 const { TEST_WORKTREE_PATH, makeHeadlessTerminalLayout, makeRuntimeStoreWithWorkspaceSession } =
   fixtures
+
 const { makeWorkspaceSessionWithHeadlessTerminal, store } = fixtures
 
 import type {
@@ -23,6 +27,7 @@ import type {
 import type { OrchestrationDb } from './orchestration/db'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
+
 type TestMock = Mock
 
 type MobileCreateTestNotifier = {
@@ -44,6 +49,7 @@ type MobileCreateTestNotifier = {
 function attachClientBrowserHost(runtime: RuntimeService) {
   const leases = getBrowserHostLeaseRegistry(runtime)
   let commands: BrowserClientHostCommandEvent[] = []
+
   const { lease } = leases.attach({
     browserHostClientId: 'host-a',
     connectionId: 'connection-a',
@@ -54,25 +60,31 @@ function attachClientBrowserHost(runtime: RuntimeService) {
     pageInventory: [],
     pageReconciliationProtocolVersion: 1
   })
+
   const identity = {
     authorityEpoch: lease.authorityEpoch,
     browserHostClientId: lease.browserHostClientId,
     browserHostGeneration: lease.browserHostGeneration,
     pairedDeviceId: lease.pairedDeviceId
   }
+
   const detachDelivery = leases.attachCommandDelivery(identity, (event) => commands.push(event))
+
   return {
     detachDelivery,
     takeCommands(): BrowserClientHostCommandEvent[] {
       const taken = commands
       commands = []
+
       return taken
     },
     settleLatest(): void {
       const command = commands.at(-1)
+
       if (!command) {
         throw new Error('no command was delivered to the client host')
       }
+
       leases.settleClientPageCommand(
         { ...identity, connectionId: lease.connectionId },
         {
@@ -108,6 +120,7 @@ async function publishClientHostedPage(
     browserProfileId: 'profile-a',
     executionHostKey: 'native:runtime-a:7'
   })
+
   host.settleLatest()
   const placement = await creation
   getRuntimeBrowserPageRegistry(runtime).publishClientPage({
@@ -121,6 +134,7 @@ async function publishClientHostedPage(
     active: true
   })
   host.takeCommands()
+
   return placement
 }
 
@@ -131,6 +145,7 @@ const wireHeadlessServeRuntime = (): RuntimeService => {
   const runtime = new OrcaRuntimeService(store)
   electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+
   return runtime
 }
 
@@ -160,6 +175,7 @@ function publishLegacyWorkerReveal(
       }
     ]
   })
+
   return { tabId: identity.tabId, identity }
 }
 
@@ -191,6 +207,7 @@ function makePostRevealWorkerRecoveryHarness(
   const ptyId = 'pty-post-reveal'
   const incarnationId = '45454545-4545-4545-8545-454545454545'
   const terminalHandle = 'term_post_reveal'
+
   const session: WorkspaceSessionState = {
     ...getDefaultWorkspaceSession(),
     tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
@@ -209,12 +226,15 @@ function makePostRevealWorkerRecoveryHarness(
       }
     }
   }
+
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+
   const runtime = new OrcaRuntimeService(
     { ...runtimeStore, flushOrThrow: vi.fn() } as never,
     undefined,
     { canRecoverPersistentLocalPtys: () => true }
   )
+
   runtime.setOrchestrationDb({
     getActiveDispatchForTerminal: () => undefined,
     listLegacyWorkerTerminalRecoveryRows: () => [
@@ -252,6 +272,7 @@ function makePostRevealWorkerRecoveryHarness(
         }
       ])
   })
+
   const revealTerminalSession = vi.fn().mockResolvedValue({
     tabId: 'legacy-post-reveal',
     identity: {
@@ -261,11 +282,13 @@ function makePostRevealWorkerRecoveryHarness(
       ptyId
     }
   })
+
   const resolveLegacyWorkerTerminalRecovery = vi.fn()
   runtime.setNotifier({
     revealTerminalSession,
     resolveLegacyWorkerTerminalRecovery
   } as never)
+
   return {
     runtime,
     getSession,
@@ -284,6 +307,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
   spawn: ReturnType<typeof vi.fn>
 } {
   const spawn = vi.fn().mockResolvedValue({ id: 'serve-materialized-pty' })
+
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
@@ -306,6 +330,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
       }
     })
   )
+
   const runtime = new OrcaRuntimeService({
     ...runtimeStore,
     getSettings: () => ({
@@ -313,6 +338,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
       disabledTuiAgents: opts.disabledTuiAgents ?? []
     })
   } as never)
+
   runtime.setPtyController({
     spawn,
     write: () => true,
@@ -321,6 +347,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
     listProcesses: async () => []
   })
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
   return { runtime, spawn }
 }
 
@@ -350,6 +377,7 @@ function createWorktreeRemovalRuntime(runtimeStore: unknown = store): RuntimeSer
     listProcesses: vi.fn(async () => []),
     shutdown: vi.fn(async () => {})
   }
+
   return new OrcaRuntimeService(runtimeStore as never, undefined, {
     getLocalProvider: () => emptyPtyProvider as never,
     getSshProvider: () => emptyPtyProvider as never
@@ -373,6 +401,7 @@ function createReconcileRuntime(): {
     worktreeBaseStatus,
     worktreeRemoteBranchConflict: vi.fn()
   } as never)
+
   return { runtime, worktreeBaseStatus }
 }
 
@@ -386,6 +415,7 @@ function mockReconcileGit(options: {
   return vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
     const command = args as string[]
     const cwd = (options as { cwd?: string } | undefined)?.cwd
+
     if (
       cwd === TEST_REPO_PATH &&
       command[0] === 'rev-parse' &&
@@ -395,23 +425,30 @@ function mockReconcileGit(options: {
       if (baseRefMissing) {
         throw new Error('missing base ref')
       }
+
       return { stdout: `${postFetchSha}\n`, stderr: '' }
     }
+
     if (cwd === TEST_REPO_PATH && command[0] === 'merge-base') {
       if (!ancestor) {
         throw new Error('not ancestor')
       }
+
       return { stdout: '', stderr: '' }
     }
+
     if (cwd === TEST_REPO_PATH && command[0] === 'rev-list') {
       return { stdout: '3\n', stderr: '' }
     }
+
     if (cwd === TEST_REPO_PATH && command[0] === 'log') {
       return { stdout: 'base commit 3\nbase commit 2\n', stderr: '' }
     }
+
     if (cwd === TEST_REPO_PATH && command[0] === 'config') {
       throw new Error('config missing')
     }
+
     if (
       cwd === TEST_REPO_PATH &&
       command[0] === 'rev-parse' &&
@@ -420,6 +457,7 @@ function mockReconcileGit(options: {
     ) {
       throw new Error('no publish branch conflict')
     }
+
     throw new Error(`unexpected git command: ${command.join(' ')}`)
   })
 }
@@ -436,19 +474,26 @@ async function reconcileWithToken(runtime: RuntimeService, token: string): Promi
     fetchPromise: Promise.resolve({ ok: true })
   })
 }
+
 function createSideEffectRuntime(): {
   runtime: RuntimeService
   batches: TerminalSideEffectBatch[]
 } {
   const batches: TerminalSideEffectBatch[] = []
+
   const runtime = new OrcaRuntimeService(store, undefined, {
     onTerminalSideEffects: (batch) => batches.push(batch)
   })
+
   return { runtime, batches }
 }
 
 export { attachClientBrowserHost, createMobileCreateTestNotifier, createReconcileRuntime }
+
 export { createSideEffectRuntime, createWorktreeRemovalRuntime }
+
 export { makePendingAgentTabActivationRuntime, makePostRevealWorkerRecoveryHarness }
+
 export { mockReconcileGit, publishClientHostedPage, publishLegacyWorkerReveal, reconcileWithToken }
+
 export { remoteTrackingBase, wireHeadlessServeRuntime }

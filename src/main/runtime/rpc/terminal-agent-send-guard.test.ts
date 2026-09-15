@@ -32,10 +32,12 @@ describe('terminal agent send guard', () => {
 
   it('rechecks a transient no-agent result before refusing a guarded send', async () => {
     vi.useFakeTimers()
+
     const getTerminalAgentStatus = vi
       .fn()
       .mockResolvedValueOnce({ handle: 'terminal-1', isRunningAgent: false, status: null })
       .mockResolvedValue({ handle: 'terminal-1', isRunningAgent: true, status: 'working' })
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -46,6 +48,7 @@ describe('terminal agent send guard', () => {
         bytesWritten: 1
       })
     })
+
     const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
       guardedSendRequest()
     )
@@ -61,12 +64,15 @@ describe('terminal agent send guard', () => {
 
   it('rechecks a transient no-agent result immediately before the PTY write', async () => {
     vi.useFakeTimers()
+
     const getTerminalAgentStatus = vi
       .fn()
       .mockResolvedValueOnce({ handle: 'terminal-1', isRunningAgent: true, status: 'working' })
       .mockResolvedValueOnce({ handle: 'terminal-1', isRunningAgent: false, status: null })
       .mockResolvedValue({ handle: 'terminal-1', isRunningAgent: true, status: 'working' })
+
     const write = vi.fn()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -74,9 +80,11 @@ describe('terminal agent send guard', () => {
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         await options.beforeWrite('pty-1')
         write()
+
         return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
       })
     })
+
     const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
       guardedSendRequest()
     )
@@ -93,18 +101,22 @@ describe('terminal agent send guard', () => {
 
   it('still refuses after the bounded recheck window without positive evidence', async () => {
     vi.useFakeTimers()
+
     const getTerminalAgentStatus = vi.fn().mockResolvedValue({
       handle: 'terminal-1',
       isRunningAgent: false,
       status: null
     })
+
     const sendTerminal = vi.fn()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatus,
       sendTerminal
     })
+
     const responsePromise = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatch(
       guardedSendRequest()
     )

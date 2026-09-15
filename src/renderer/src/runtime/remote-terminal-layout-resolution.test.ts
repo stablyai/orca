@@ -32,6 +32,7 @@ describe('resolveTerminalLayoutRoot', () => {
       authoritativeRoot: verticalSplit,
       leafIds: ['a', 'b']
     })
+
     expect(root).toBe(verticalSplit)
     expect(root?.type === 'split' && root.direction).toBe('vertical')
   })
@@ -44,6 +45,7 @@ describe('resolveTerminalLayoutRoot', () => {
       existingRoot: verticalSplit,
       leafIds: ['a', 'b']
     })
+
     expect(root).toBe(verticalSplit)
   })
 
@@ -76,11 +78,13 @@ describe('resolveTerminalLayoutRoot', () => {
       first: { type: 'leaf', leafId: 'a' },
       second: { type: 'leaf', leafId: 'b' }
     }
+
     const root = resolveTerminalLayoutRoot({
       authoritativeRoot: verticalSplit,
       existingRoot: horizontalSplit,
       leafIds: ['a', 'b']
     })
+
     expect(root).toBe(verticalSplit)
   })
 })

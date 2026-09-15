@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.fn()
+
 vi.mock('../shared/child-process/run-process', () => ({
   runProcess: (spec: unknown) => runProcessMock(spec)
 }))
@@ -34,14 +35,18 @@ const SELF_PIDS = new Set([process.pid, process.ppid])
 
 function pidUnlikeSelf(seed: number): number {
   let pid = seed
+
   while (SELF_PIDS.has(pid)) {
     pid += 1
   }
+
   return pid
 }
 
 const NETSTAT_PID = pidUnlikeSelf(2468)
+
 const SSHD_PID = pidUnlikeSelf(4321)
+
 const POWERSHELL_PID = pidUnlikeSelf(1234)
 
 const NETSTAT_STDOUT = [
@@ -318,6 +323,7 @@ describe('scanWindowsListeningPorts', () => {
       (_, index) =>
         `  TCP    10.0.0.1:${1000 + (index % 5000)}      10.0.0.2:443           TIME_WAIT       4`
     ).join('\r\n')
+
     runProcessMock
       .mockResolvedValueOnce(ok(`${NETSTAT_STDOUT}\r\n${filler}`.slice(0, 4 * 1024 * 1024)))
       .mockResolvedValueOnce(ok('[]'))
@@ -340,6 +346,7 @@ describe('scanWindowsListeningPorts', () => {
     // netstat answered, then the request was abandoned before names were needed.
     runProcessMock.mockImplementationOnce(() => {
       controller.abort()
+
       return Promise.resolve(ok(NETSTAT_STDOUT))
     })
 
@@ -358,12 +365,15 @@ describe('scanWindowsListeningPorts', () => {
   // can diagnose. Pin the stream, not just the fact that something was called.
   it('reports leaving the native path on the relay diagnostic stream, once', async () => {
     const lines: string[] = []
+
     const stderr = vi
       .spyOn(process.stderr, 'write')
       .mockImplementation((chunk: string | Uint8Array) => {
         lines.push(String(chunk))
+
         return true
       })
+
     try {
       runProcessMock.mockResolvedValue(ok(''))
       await scanWindowsListeningPorts()

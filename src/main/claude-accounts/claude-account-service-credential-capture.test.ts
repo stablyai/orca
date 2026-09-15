@@ -45,11 +45,13 @@ async function readCapturedCredentials(
   previousLegacyKeychain: string | null
 ): Promise<string | null> {
   const { ClaudeAccountService } = await import('./service')
+
   const service = new ClaudeAccountService(
     createService() as never,
     createService() as never,
     createService() as never
   )
+
   return (
     service as unknown as {
       readCapturedCredentials(
@@ -71,6 +73,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   afterEach(() => {
     restorePlatform()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -134,15 +137,18 @@ describe('ClaudeAccountService credential capture', () => {
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue('captured-scoped')
     vi.mocked(writeActiveClaudeKeychainCredentials).mockRejectedValue(new Error('restore failed'))
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       createService() as never,
       createService() as never,
       createService() as never
     )
+
     const testService = service as unknown as {
       runClaudeCommand: () => Promise<string>
       runClaudeLoginAndCapture(): Promise<{ credentialsJson: string }>
     }
+
     testService.runClaudeCommand = vi.fn(async () => '{"account":{"email":"user@example.com"}}')
 
     await expect(testService.runClaudeLoginAndCapture()).rejects.toThrow('restore failed')

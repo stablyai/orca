@@ -5,6 +5,7 @@ import { MobileOnboardingPage } from './MobileOnboardingPage'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   return {
     ActivityIndicator: 'ActivityIndicator',
     Pressable: 'Pressable',
@@ -36,11 +37,13 @@ describe('MobileOnboardingPage', () => {
   ) {
     const onSessionChoice = vi.fn()
     const onNotificationChoice = vi.fn()
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
         throw new Error(String(args[0]))
       }
     })
+
     await act(async () => {
       renderer = create(
         createElement(MobileOnboardingPage, {
@@ -55,6 +58,7 @@ describe('MobileOnboardingPage', () => {
       )
     })
     consoleError.mockRestore()
+
     return { onSessionChoice, onNotificationChoice }
   }
 

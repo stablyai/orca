@@ -70,20 +70,26 @@ export class AgentSessionPtyWriteGate {
    */
   bindPtyForAttempt(ptyId: string, sessionId: string, attemptToken: string): boolean {
     const current = this.panesByPtyId.get(ptyId)
+
     if (current && current.attemptToken === null) {
       return false
     }
+
     this.panesByPtyId.set(ptyId, { sessionId, attemptToken })
+
     return true
   }
 
   /** Promote this attempt's claim to a settled binding once its owner is proven. */
   settlePtyAttempt(ptyId: string, attemptToken: string): boolean {
     const current = this.panesByPtyId.get(ptyId)
+
     if (current?.attemptToken !== attemptToken) {
       return false
     }
+
     this.panesByPtyId.set(ptyId, { sessionId: current.sessionId, attemptToken: null })
+
     return true
   }
 
@@ -96,7 +102,9 @@ export class AgentSessionPtyWriteGate {
     if (this.panesByPtyId.get(ptyId)?.attemptToken !== attemptToken) {
       return false
     }
+
     this.panesByPtyId.delete(ptyId)
+
     return true
   }
 
@@ -113,6 +121,7 @@ export class AgentSessionPtyWriteGate {
     if (!this.enforcing) {
       return ADMITTED_UNBOUND
     }
+
     return evaluateAgentSessionPtyWriteAdmission(this.binding(ptyId))
   }
 
@@ -120,16 +129,19 @@ export class AgentSessionPtyWriteGate {
   admitProof(ptyId: string, authority: { sessionId: string; spawnToken: string }): boolean {
     const binding = this.binding(ptyId)
     const lease = binding?.record?.lease
+
     const provingReservation =
       lease?.claimStatus === 'reserved' &&
       lease.handoffStage === 'new-owner-proving' &&
       lease.reservedSpawnToken === authority.spawnToken &&
       (lease.ownerProcess === null || lease.ownerProcess.spawnToken === authority.spawnToken)
+
     const reprovingLiveOwner =
       lease?.claimStatus === 'live' &&
       lease.handoffStage === null &&
       lease.ownerProcess?.spawnToken === authority.spawnToken &&
       lease.provenHandleLinkId !== null
+
     return Boolean(
       binding?.sessionId === authority.sessionId &&
       binding.record?.sessionId === authority.sessionId &&
@@ -144,20 +156,24 @@ export class AgentSessionPtyWriteGate {
     if (admitted.sessionId === null && !this.enforcing) {
       return ADMITTED_UNBOUND
     }
+
     return reevaluateAgentSessionPtyWriteAdmission({ admitted, binding: this.binding(ptyId) })
   }
 
   /** Admit or throw the typed refusal. Used where the caller already reports errors to a client. */
   assertAdmitted(ptyId: string): AgentSessionPtyWriteAdmittance {
     const admission = this.admit(ptyId)
+
     if (!admission.admitted) {
       throw new AgentSessionPtyWriteRefusedError(admission.refusal)
     }
+
     return { sessionId: admission.sessionId, runtimeFence: admission.runtimeFence }
   }
 
   assertReadmitted(ptyId: string, admitted: AgentSessionPtyWriteAdmittance): void {
     const admission = this.readmit(ptyId, admitted)
+
     if (!admission.admitted) {
       throw new AgentSessionPtyWriteRefusedError(admission.refusal)
     }
@@ -165,9 +181,11 @@ export class AgentSessionPtyWriteGate {
 
   private binding(ptyId: string): AgentSessionPtyBinding | null {
     const pane = this.panesByPtyId.get(ptyId)
+
     if (pane === undefined) {
       return null
     }
+
     return { sessionId: pane.sessionId, record: this.lookup?.(pane.sessionId) ?? null }
   }
 }

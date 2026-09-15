@@ -7,12 +7,14 @@ import { startBrowserScreencast } from './browser-screencast-stream'
 
 function createWebContents() {
   let attached = false
+
   const debuggerApi = new EventEmitter() as EventEmitter & {
     isAttached: ReturnType<typeof vi.fn>
     attach: ReturnType<typeof vi.fn>
     detach: ReturnType<typeof vi.fn>
     sendCommand: ReturnType<typeof vi.fn>
   }
+
   debuggerApi.isAttached = vi.fn(() => attached)
   debuggerApi.attach = vi.fn(() => {
     attached = true
@@ -21,6 +23,7 @@ function createWebContents() {
     attached = false
   })
   debuggerApi.sendCommand = vi.fn(async () => ({}))
+
   return { isDestroyed: vi.fn(() => false), debugger: debuggerApi }
 }
 
@@ -28,6 +31,7 @@ describe('browser screencast lifecycle', () => {
   it('updates a live shared stream viewport and clears an obsolete override', async () => {
     const webContents = createWebContents()
     const onFrame = vi.fn()
+
     const session = await startBrowserScreencast(webContents as never, {
       format: 'jpeg',
       quality: 70,
@@ -81,6 +85,7 @@ describe('browser screencast lifecycle', () => {
   it('restarts the screencast and retimes the pacer when the shared frame budget changes', async () => {
     const webContents = createWebContents()
     const onFrame = vi.fn()
+
     const session = await startBrowserScreencast(webContents as never, {
       format: 'jpeg',
       quality: 70,
@@ -113,6 +118,7 @@ describe('browser screencast lifecycle', () => {
         metadata: {}
       })
     }
+
     emitFrame(1)
     emitFrame(2)
     // Why: the new interval only takes effect if the pacer reads it live off the shared
@@ -126,6 +132,7 @@ describe('browser screencast lifecycle', () => {
   it('acks malformed frames when Chromium supplied a valid session id', () => {
     const webContents = createWebContents()
     const ackScreencastFrame = vi.fn()
+
     const handler = createBrowserScreencastMessageHandler({
       dbg: webContents.debugger as never,
       options: {

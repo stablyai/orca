@@ -14,6 +14,7 @@ export function createNestedRuntimeProxyJumpFixture(): NestedRuntimeProxyJumpFix
   const directory = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-proxy-jump-'))
   const configPath = path.join(directory, 'ssh-config')
   const wrapperPath = path.join(directory, 'ssh')
+
   try {
     // Why: OpenSSH ignores an overridden HOME on macOS, so force the disposable HUB-only config explicitly.
     writeFileSync(wrapperPath, `#!/bin/sh\nexec /usr/bin/ssh -F "${configPath}" "$@"\n`, {
@@ -24,6 +25,7 @@ export function createNestedRuntimeProxyJumpFixture(): NestedRuntimeProxyJumpFix
     rmSync(directory, { force: true, recursive: true })
     throw error
   }
+
   return {
     configPath,
     directory,

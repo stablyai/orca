@@ -21,30 +21,44 @@ const { confirm, toastError } = vi.hoisted(() => ({
   confirm: vi.fn(),
   toastError: vi.fn()
 }))
+
 const fsReadFile = vi.fn()
+
 const fsDeletePath = vi.fn()
+
 const fsRenamePath = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
+
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))
+
 vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
   requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('@/components/right-sidebar/fileExplorerUndoRedo', () => ({
   commitFileExplorerOp: vi.fn()
 }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 const initialState = useAppStore.getInitialState()
+
 const SSH_ID = 'ssh-target-1'
+
 const FOLDER_ID = 'folder-workspace-1'
+
 const LOCAL_REPO_ID = 'repo-shared'
+
 const LOCAL_WORKTREE_ID = `${LOCAL_REPO_ID}::/tmp/project`
+
 const localNode: TreeNode = {
   name: 'index.ts',
   path: '/tmp/project/src/index.ts',
@@ -136,6 +150,7 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation((args: { selector?: string; method: string }) => {
       const runtimeId = args.selector ?? 'env-1'
+
       return (
         createCompatibleRuntimeStatusResponseIfNeeded(args, runtimeId) ?? {
           id: 'rpc-1',
@@ -414,6 +429,7 @@ describe('file explorer deletion owner provenance', () => {
     expect(owner).toEqual({ kind: 'unresolved' })
 
     const { result } = renderDelete(LOCAL_WORKTREE_ID)
+
     const nodeA: TreeNode = {
       ...localNode,
       name: 'a.ts',
@@ -421,6 +437,7 @@ describe('file explorer deletion owner provenance', () => {
       relativePath: 'src/a.ts',
       operationOwner: owner
     }
+
     const nodeB: TreeNode = {
       ...localNode,
       name: 'b.ts',
@@ -428,6 +445,7 @@ describe('file explorer deletion owner provenance', () => {
       relativePath: 'src/b.ts',
       operationOwner: owner
     }
+
     await act(async () => {
       result.current.requestDeleteAll([nodeA, nodeB])
     })

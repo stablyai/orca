@@ -34,6 +34,7 @@ export async function startClientHostedMarkerFixture(
         `<body><h1 id="marker">${marker}</h1></body></html>`
     )
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -42,6 +43,7 @@ export async function startClientHostedMarkerFixture(
     })
   })
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -85,9 +87,11 @@ export async function waitForPairedWorktreeId(page: Page, repoPath: string): Pro
     })
     .not.toBeNull()
   const worktreeId = await findPairedWorktreeId(page, repoPath)
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -104,6 +108,7 @@ export async function selectPairedWorktreeGroup(
             ({ environmentId, worktreeId }) => {
               const state = window.__store?.getState()
               state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+
               return state?.activeGroupIdByWorktree[worktreeId] ?? null
             },
             { environmentId, worktreeId }
@@ -123,15 +128,19 @@ export async function findMirroredBrowserPage(
     page.evaluate(
       ({ url, worktreeId }) => {
         const state = window.__store?.getState()
+
         for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
           for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
             if (!browserPage.url.startsWith(url)) {
               continue
             }
+
             const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
             const visibleTab = (state?.unifiedTabsByWorktree[worktreeId] ?? []).find(
               (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
             )
+
             return {
               localPageId: browserPage.id,
               placementKind: handle?.placement?.kind ?? null,
@@ -142,6 +151,7 @@ export async function findMirroredBrowserPage(
             }
           }
         }
+
         return null
       },
       { url, worktreeId }
@@ -159,6 +169,7 @@ export async function readClientBrowserRows(
       page.evaluate((worktreeId) => {
         const state = window.__store?.getState()
         const rows: { pageId: string; placementKind: string | null; url: string }[] = []
+
         for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
           for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
             rows.push({
@@ -169,6 +180,7 @@ export async function readClientBrowserRows(
             })
           }
         }
+
         return rows
       }, worktreeId)
     )) ?? []
@@ -182,13 +194,17 @@ export async function openClientHostedFixturePage(
 ): Promise<MirroredBrowserPage> {
   await client.page.evaluate(async (url) => {
     const state = window.__store?.getState()
+
     if (!state?.activeWorktreeId) {
       throw new Error('Paired client has no active worktree')
     }
+
     const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId]
+
     if (!groupId) {
       throw new Error('Paired client has no active tab group')
     }
+
     state.setBrowserDefaultUrl(url)
     await state.openNewBrowserTabInActiveWorkspace(groupId)
   }, url)
@@ -199,13 +215,16 @@ export async function openClientHostedFixturePage(
     })
     .not.toBeNull()
   const mirrored = await findMirroredBrowserPage(client.page, worktreeId, url)
+
   if (!mirrored) {
     throw new Error(`Mirrored browser page disappeared for ${url}`)
   }
+
   expect(mirrored.placementKind, 'fixture page must be hosted on the viewing desktop').toBe(
     'client'
   )
   await focusClientBrowserRow(client.page, worktreeId, mirrored.localPageId)
+
   return mirrored
 }
 
@@ -215,20 +234,25 @@ export async function navigateGuest(page: Page, fromUrl: string, toUrl: string):
     async ({ fromUrl, toUrl }) => {
       for (const candidate of document.querySelectorAll('webview')) {
         const webview = candidate as Electron.WebviewTag
+
         try {
           if (!webview.getURL().startsWith(fromUrl)) {
             continue
           }
+
           await webview.loadURL(toUrl)
+
           return true
         } catch {
           // The guest may still be attaching.
         }
       }
+
       return false
     },
     { fromUrl, toUrl }
   )
+
   if (!navigated) {
     throw new Error(`No client-hosted guest was showing ${fromUrl} to navigate`)
   }
@@ -250,12 +274,15 @@ export async function readClientWebviewMarker(
       const host = document.querySelector(
         `[data-browser-client-page-id="${CSS.escape(remotePageId)}"]`
       )
+
       for (const candidate of host?.querySelectorAll('webview') ?? []) {
         const webview = candidate as Electron.WebviewTag
+
         try {
           if (!webview.getURL().startsWith(urlPrefix)) {
             continue
           }
+
           return (await webview.executeJavaScript(
             'document.querySelector("#marker")?.textContent ?? null'
           )) as string | null
@@ -263,6 +290,7 @@ export async function readClientWebviewMarker(
           // The guest may still be attaching.
         }
       }
+
       return null
     }, target)
   )
@@ -277,9 +305,11 @@ export async function waitForRenderedClientWebview(
     .poll(() => readClientWebviewMarker(page, target), { timeout: 120_000, message })
     .not.toBeNull()
   const marker = await readClientWebviewMarker(page, target)
+
   if (!marker) {
     throw new Error(`Client-hosted guest for ${target.urlPrefix} lost its marker`)
   }
+
   return marker
 }
 

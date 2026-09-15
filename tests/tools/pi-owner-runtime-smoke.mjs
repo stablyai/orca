@@ -10,17 +10,24 @@ import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 
 const piRoot = resolve(process.argv[2] || '')
+
 assert.ok(process.argv[2], 'Pass an installed pi-coding-agent package directory')
+
 const scratch = await mkdtemp(join(tmpdir(), 'orca-pi-owner-'))
+
 const received = []
+
 const server = createServer(async (request, response) => {
   let body = ''
+
   for await (const chunk of request) {
     body += chunk
   }
+
   received.push(JSON.parse(body))
   response.end('{}')
 })
+
 try {
   const bundle = join(scratch, 'orca.cjs')
   await build({
@@ -40,10 +47,12 @@ try {
   const { getPiAgentStatusExtensionSource, runProcess } = createRequire(import.meta.url)(bundle)
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
+
   const dead = await runProcess({
     program: process.execPath,
     args: ['-e', 'console.log(process.pid)']
   })
+
   assert.equal(dead.code, 0)
   const deadPid = Number(dead.stdout.trim())
   assert.throws(() => process.kill(deadPid, 0), { code: 'ESRCH' })
@@ -68,11 +77,14 @@ try {
   `
   )
   const results = []
+
   for (const kind of ['pi', 'omp', 'prime-agent']) {
     const ownerKey =
       kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+
     for (const scenario of ['baseline-dead', 'fixed-dead', 'fixed-live']) {
       let source = getPiAgentStatusExtensionSource(kind)
+
       if (scenario === 'baseline-dead') {
         const guard = 'if (ownerPid && ownerPid !== selfPid && isStatusOwnerAlive(ownerPid)) return'
         assert.ok(
@@ -81,10 +93,12 @@ try {
         )
         source = source.replace(guard, 'if (ownerPid && ownerPid !== selfPid) return')
       }
+
       const extension = join(scratch, `${kind}-${scenario}.ts`)
       await writeFile(extension, source)
       const before = received.length
       const owner = scenario === 'fixed-live' ? process.pid : deadPid
+
       const child = await runProcess({
         program: process.execPath,
         args: [worker, extension, ownerKey],
@@ -104,6 +118,7 @@ try {
         },
         timeoutMs: 15000
       })
+
       assert.equal(child.code, 0, child.stderr)
       const observation = JSON.parse(child.stdout.trim().split('\n').at(-1))
       const shouldReport = scenario === 'fixed-dead'
@@ -114,12 +129,15 @@ try {
       )
       assert.equal(observation.owner, String(shouldReport ? observation.pid : owner))
       assert.equal(observation.handlers > 0, shouldReport)
+
       if (shouldReport) {
         assert.equal(received.at(-1).payload.hook_event_name, 'agent_start')
       }
+
       results.push({ kind, scenario, posts: received.length - before, ...observation })
     }
   }
+
   console.log(JSON.stringify({ platform: process.platform, results }, null, 2))
 } finally {
   server.closeAllConnections()

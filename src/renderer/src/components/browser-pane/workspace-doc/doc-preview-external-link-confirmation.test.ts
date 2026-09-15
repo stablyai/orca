@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
@@ -24,15 +25,18 @@ function installSubscription(confirm: ConfirmationDialogContextValue): (url: str
       docPreview: {
         onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
           listener = callback
+
           return () => {}
         }
       }
     }
   })
   subscribeDocPreviewExternalLinkConfirmation(confirm)
+
   if (!listener) {
     throw new Error('external-link confirmation did not subscribe')
   }
+
   return (url) => listener?.({ url })
 }
 
@@ -75,6 +79,7 @@ describe('document preview external-link confirmation', () => {
 
   it('surfaces a confirmed link that the browser refuses', async () => {
     mocks.openBrowserProfileTabInActiveWorkspace.mockResolvedValue(false)
+
     const emit = installSubscription(
       vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(true)
     )

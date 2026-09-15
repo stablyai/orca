@@ -29,12 +29,15 @@ describe('createUntitledMarkdownFile', () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(false)
+
     const stat = vi.fn(async (args: { filePath: string }) => {
       if (args.filePath.endsWith('untitled.md')) {
         return { size: 0, isDirectory: false, mtime: 1 }
       }
+
       throw new Error('ENOENT: no such file')
     })
+
     const createFile = vi
       .fn()
       .mockRejectedValueOnce(new Error('EEXIST: file already exists'))
@@ -122,10 +125,12 @@ describe('createUntitledMarkdownFile', () => {
   it('writes selected template content with placeholders after creating the untitled file', async () => {
     const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
     const createFile = vi.fn().mockResolvedValueOnce(undefined)
+
     const readFile = vi.fn().mockResolvedValueOnce({
       content: '# {{ title }}\n{{date}}\n{{filename}}\n',
       isBinary: false
     })
+
     const writeFile = vi.fn().mockResolvedValueOnce(undefined)
 
     vi.stubGlobal('window', {
@@ -172,21 +177,28 @@ describe('createUntitledMarkdownFile', () => {
       { name: 'daily.md', isDirectory: false, isSymlink: false },
       { name: 'draft.txt', isDirectory: false, isSymlink: false }
     ])
+
     const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
     const createFile = vi.fn().mockResolvedValueOnce(undefined)
+
     const readFile = vi.fn().mockResolvedValueOnce({
       content: '# {{title}}\n',
       isBinary: false
     })
+
     const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+
     const pathExists = vi.fn(async ({ filePath }: { filePath: string }) =>
       filePath.endsWith('/.orca/templates')
     )
+
     const unsubscribe = subscribeMarkdownTemplatePicker((request) => {
       const template = request.templates[0]
+
       if (!template) {
         throw new Error('Expected a discovered template')
       }
+
       request.resolve({ type: 'template', template })
     })
 
@@ -228,6 +240,7 @@ describe('createUntitledMarkdownFile', () => {
     clearRuntimeCompatibilityCacheForTests()
     const stat = vi.fn()
     const createFile = vi.fn()
+
     const runtimeEnvironmentCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -242,6 +255,7 @@ describe('createUntitledMarkdownFile', () => {
         result: { ok: true },
         _meta: { runtimeId: 'remote-runtime' }
       })
+
     const runtimeEnvironmentTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
       return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
     })

@@ -25,6 +25,7 @@ export function createTerminalPanePtyDeps(args: {
     mountFollowsTerminalPark,
     deferredSplitHandoffs
   } = args
+
   // A concrete PTY owns the input queue and settles the split admission fence,
   // so the deferred lookup stops being reusable. Both layout-binding variants
   // must run this: main routes live binds through the leaf-keyed one.
@@ -32,13 +33,17 @@ export function createTerminalPanePtyDeps(args: {
     if (!ptyId) {
       return
     }
+
     const deferredSplitHandoff = deferredSplitHandoffs.get(paneId)
+
     if (deferredSplitHandoff) {
       clearDeferredSplitPaneHandoff(deferredSplitHandoff)
       deferredSplitHandoffs.delete(paneId)
     }
+
     settlePaneCwdDeferredSpawn(deps.paneCwdRef.current, paneId)
   }
+
   return {
     tabId: deps.tabId,
     worktreeId: deps.worktreeId,
@@ -97,6 +102,7 @@ export function createTerminalPanePtyDeps(args: {
     deferPtyInput: (paneId, data, forward) => {
       const suppression =
         refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression
+
       if (suppression) {
         suppression.handlePtyInput(data, forward)
       } else {

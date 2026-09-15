@@ -54,9 +54,11 @@ export function isAdoptionResult(value: unknown): value is RuntimeTerminalOrphan
 export function isStableAdoptionFailure(error: unknown): boolean {
   const errorPayload = isRecord(error) && isRecord(error.error) ? error.error : error
   const clientError = toRemoteRuntimeClientErrorLike(errorPayload)
+
   if (isRecoverableRemoteRuntimeConnectionError(clientError)) {
     return false
   }
+
   return [...STABLE_ADOPTION_FAILURE_CODES].some((code) => hasRuntimeRpcErrorCode(error, code))
 }
 
@@ -64,10 +66,13 @@ export function isRpcResponse(value: unknown): value is RuntimeRpcResponse<unkno
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
     return false
   }
+
   if (value.ok) {
     return 'result' in value
   }
+
   const error = value.error
+
   return isRecord(error) && typeof error.code === 'string' && typeof error.message === 'string'
 }
 
@@ -90,6 +95,7 @@ export async function readClientSessionSnapshotAfterAdoption(args: {
         expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
       })
     )
+
     return isRpcResponse(response) &&
       response.ok &&
       (args.expectedRuntimeId === undefined ||
@@ -117,6 +123,7 @@ export function retainedSharesClaimedTab(
   claims: readonly RuntimeTerminalOrphanAdoptionClaim[]
 ): boolean {
   const claimedTabIds = new Set(claims.map((claim) => claim.tabId))
+
   return retained.some((surface) => claimedTabIds.has(surface.tabId))
 }
 
@@ -157,17 +164,21 @@ export function mergeAdoptionResponse(
   removed: ReadonlySet<string>
 ): RuntimeMobileSessionTabsResult {
   const rowsBySurface = terminalRowsBySurface(snapshot)
+
   const readyKeys = new Set(
     [...rowsBySurface.entries()]
       .filter(([, rows]) => rows.some(isValidReadySurface))
       .map(([key]) => key)
   )
+
   const effectiveRemoved = new Set([...removed].filter((key) => !rowsBySurface.has(key)))
+
   // A later host rebind or exact retirement outranks the pre-adoption inventory.
   const retainedSurfaces = [...retained, ...missingClaims].filter((surface) => {
     if (readyKeys.has(surface.surfaceKey)) {
       return false
     }
+
     if (
       surface.handle &&
       hasTerminalHandleRetirementProof(snapshot, {
@@ -179,9 +190,12 @@ export function mergeAdoptionResponse(
       if (!rowsBySurface.has(surface.surfaceKey)) {
         effectiveRemoved.add(surface.surfaceKey)
       }
+
       return false
     }
+
     return !effectiveRemoved.has(surface.surfaceKey)
   })
+
   return mergeRetainedTerminalSurfaces(snapshot, retainedSurfaces, effectiveRemoved)
 }

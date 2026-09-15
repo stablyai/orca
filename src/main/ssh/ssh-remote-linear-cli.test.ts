@@ -189,6 +189,7 @@ function createRuntime() {
       }
     }))
   } as unknown as OrcaRuntimeService
+
   return runtime
 }
 
@@ -206,10 +207,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { current: boolean; context: Record<string, unknown> } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       current: true,
@@ -233,10 +236,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { input: string; include: Record<string, boolean> } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       input: 'ENG-123',
@@ -254,10 +259,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { query: string; limit: number; workspaceId: string } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toEqual({
       query: 'auth bug',
@@ -274,11 +281,13 @@ describe('runRemoteOrcaCli Linear commands', () => {
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
     })
+
     const labels = await runRemoteOrcaCli(runtime, {
       argv: ['linear', 'team', 'labels', '--team', 'ENG', '--workspace', 'workspace-1', '--json'],
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
     })
+
     const list = await runRemoteOrcaCli(runtime, {
       argv: [
         'linear',
@@ -296,6 +305,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
     })
+
     const projects = await runRemoteOrcaCli(runtime, {
       argv: [
         'linear',
@@ -401,10 +411,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { input: string; to: string; context: Record<string, unknown> } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       input: 'ENG-123',
@@ -430,10 +442,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { input: string; operation: string; priority: number } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       input: 'ENG-123',
@@ -465,10 +479,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { title: string; teamInput: string; projectInput: string } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       title: 'Follow-up',
@@ -507,10 +523,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { input: string; operation: string; assigneeMe: boolean } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       input: 'ENG-123',
@@ -539,10 +557,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { operation: string; labelMode: string; labels: string[] } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request).toMatchObject({
       operation: 'labels',
@@ -576,10 +596,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { request: { body: string } }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.request.body).toBe('line one\nline two\n')
   })
@@ -594,10 +616,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(1)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       error: { code: string; message: string }
     }
+
     expect(payload.ok).toBe(false)
     expect(payload.error).toMatchObject({
       code: 'invalid_argument',
@@ -615,10 +639,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(1)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       error: { code: string; message: string }
     }
+
     expect(payload.ok).toBe(false)
     expect(payload.error).toMatchObject({
       code: 'invalid_argument',
@@ -647,9 +673,11 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('prints SSH Linear search partial warnings to stderr in non-json mode', async () => {
     const runtime = createRuntime()
+
     const linearSearchForAgents = (
       runtime as unknown as { linearSearchForAgents: ReturnType<typeof vi.fn> }
     ).linearSearchForAgents
+
     linearSearchForAgents.mockResolvedValueOnce({
       issues: [],
       meta: {
@@ -681,9 +709,11 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('formats older SSH Linear search results without workspaceErrors in non-json mode', async () => {
     const runtime = createRuntime()
+
     const linearSearchForAgents = (
       runtime as unknown as { linearSearchForAgents: ReturnType<typeof vi.fn> }
     ).linearSearchForAgents
+
     linearSearchForAgents.mockResolvedValueOnce({
       issues: [],
       meta: {
@@ -708,9 +738,11 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('prints SSH Linear non-json failures to stderr instead of stdout', async () => {
     const runtime = createRuntime()
+
     const linearIssueContext = (
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
+
     linearIssueContext.mockRejectedValueOnce(new Error('Linear is not connected.'))
 
     const result = await runRemoteOrcaCli(runtime, {
@@ -726,9 +758,11 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('prints SSH Linear non-json next steps from structured errors', async () => {
     const runtime = createRuntime()
+
     const linearIssueAddComment = (
       runtime as unknown as { linearIssueAddComment: ReturnType<typeof vi.fn> }
     ).linearIssueAddComment
+
     linearIssueAddComment.mockRejectedValueOnce(
       Object.assign(new Error('Linear may have applied the write.'), {
         code: 'linear_write_unconfirmed',
@@ -750,6 +784,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('shows SSH Linear command help without dispatching to the runtime', async () => {
     const runtime = createRuntime()
+
     const linearIssueContext = (
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
@@ -768,6 +803,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('shows SSH Linear group help without dispatching to the runtime', async () => {
     const runtime = createRuntime()
+
     const linearIssueContext = (
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
@@ -790,6 +826,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
 
   it('shows SSH Linear help through the local help command form', async () => {
     const runtime = createRuntime()
+
     const linearIssueContext = (
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
@@ -799,6 +836,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
       cwd: '/home/alice/remote-repo',
       env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
     })
+
     const issue = await runRemoteOrcaCli(runtime, {
       argv: ['help', 'linear', 'issue'],
       cwd: '/home/alice/remote-repo',
@@ -822,10 +860,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(1)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       error: { code: string; message: string }
     }
+
     expect(payload.ok).toBe(false)
     expect(payload.error).toMatchObject({
       code: 'invalid_argument',
@@ -843,10 +883,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(1)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       error: { code: string; message: string }
     }
+
     expect(payload.ok).toBe(false)
     expect(payload.error).toMatchObject({
       code: 'invalid_argument',
@@ -864,10 +906,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
     })
 
     expect(result.exitCode).toBe(1)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       error: { code: string; message: string }
     }
+
     expect(payload.ok).toBe(false)
     expect(payload.error).toMatchObject({
       code: 'linear_invalid_workspace',

@@ -15,6 +15,7 @@ function createPane() {
       terminal.rows = rows
     })
   }
+
   return {
     terminal,
     container: {

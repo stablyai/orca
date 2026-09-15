@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const TAB_ID = 'tab-1'
+
 const PTY_ID = `${WORKTREE_ID}@@session-1`
+
 const SECOND_PTY_ID = `${WORKTREE_ID}@@session-2`
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 type MockStoreState = {
@@ -26,6 +31,7 @@ type MockStoreState = {
 }
 
 let mockStoreState: MockStoreState
+
 const preHandlerExitPtyIds = new Set<string>()
 
 vi.mock('@/store', () => ({

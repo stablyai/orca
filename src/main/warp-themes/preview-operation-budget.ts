@@ -19,6 +19,7 @@ export function createPreviewOperationBudget(
   const now = options.now ?? Date.now
   const budgetMs = options.operationBudgetMs ?? DEFAULT_PREVIEW_BUDGET_MS
   const deadline = now() + Math.max(0, budgetMs)
+
   return {
     isExpired: () => now() >= deadline,
     remainingMs: () => Math.max(0, deadline - now()),

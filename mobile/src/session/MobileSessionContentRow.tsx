@@ -23,6 +23,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     handleOpenedFileDiff,
     handleSessionContentRowLayout
   } = controller
+
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
       <View style={styles.sessionContentMain}>

@@ -46,15 +46,18 @@ describe('OpenCode plugin MessagePart throttling', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-plugin-test-'))
     posts = []
     savedEnv = {}
+
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     process.env.ORCA_AGENT_HOOK_PORT = '45678'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       posts.push({ url: String(url), body: JSON.parse(String(init?.body)) })
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
     vi.useFakeTimers()
@@ -63,6 +66,7 @@ describe('OpenCode plugin MessagePart throttling', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.fetch = savedFetch
+
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) {
         delete process.env[key]
@@ -70,22 +74,27 @@ describe('OpenCode plugin MessagePart throttling', () => {
         process.env[key] = savedEnv[key]
       }
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
   async function loadPluginEventHandler(): Promise<PluginEventHandler> {
     const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+
     const module = (await import(pathToFileURL(pluginPath).href)) as {
       OrcaOpenCodeStatusPlugin: (ctx: unknown) => Promise<{ event: PluginEventHandler }>
     }
+
     const client = {
       session: {
         // No parentID → root session, events flow through.
         list: async () => ({ data: [{ id: 'session-1' }] })
       }
     }
+
     const hooks = await module.OrcaOpenCodeStatusPlugin({ client })
+
     return hooks.event
   }
 
@@ -124,6 +133,7 @@ describe('OpenCode plugin MessagePart throttling', () => {
     // Simulate a streaming turn: 50 part updates, each carrying the full
     // accumulated text so far (how OpenCode actually publishes parts).
     let text = ''
+
     for (let i = 0; i < 50; i++) {
       text += 'chunk-of-streamed-reply-text-'.repeat(10)
       await handler(assistantPartEvent(text))
@@ -169,15 +179,19 @@ describe('OpenCode plugin MessagePart throttling', () => {
 
   it('waits for an in-flight preview before delivering SessionIdle', async () => {
     let releasePart: (() => void) | undefined
+
     const delayedPart = new Promise<void>((resolve) => {
       releasePart = resolve
     })
+
     globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const post = { url: String(url), body: JSON.parse(String(init?.body)) } as RecordedPost
       posts.push(post)
+
       if (post.body.payload.hook_event_name === 'MessagePart') {
         await delayedPart
       }
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
     const handler = await loadPluginEventHandler()
@@ -191,9 +205,11 @@ describe('OpenCode plugin MessagePart throttling', () => {
     posts.length = 0
 
     await handler(assistantPartEvent('completed reply'))
+
     const idle = handler({
       event: { type: 'session.idle', properties: { sessionID: 'session-1' } }
     })
+
     await vi.advanceTimersByTimeAsync(0)
     expect(posts.map((post) => post.body.payload.hook_event_name)).toEqual(['MessagePart'])
 

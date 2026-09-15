@@ -40,8 +40,10 @@ const URL_USERINFO = /(https?:\/\/)([^/@\s]+)@/g
 
 // Per-line .env shape. `m` anchors `^` in multi-line strings; `\S.*` redacts the whole value (so `FOO=Bearer <jwt>` can't leak its tail), leading `\S` skips empty `FOO=`.
 const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/my
+
 // Exact `\s*` for the non-ASCII whitespace runs the inline scan hands off (NBSP, BOM, U+2028\u2026).
 const WHITESPACE_RUN = /\s*/y
+
 // The terminator set `.` and `^`/m use; scanned with `indexOf` so no-match lines never enter the regex engine.
 const LINE_TERMINATORS = ['\n', '\r', '\u2028', '\u2029'] as const
 
@@ -79,9 +81,11 @@ export type RedactorMode = 'client' | 'server'
 function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
   const k = key.toLowerCase()
   const normalized = k.replace(/[^a-z0-9]+/g, '')
+
   if (CLIENT_ATTR_BLOCKLIST.has(k)) {
     return true
   }
+
   // Drop by key family: keys like `ANTHROPIC_API_KEY`/`x-api-key` carry plain values string redaction can't classify.
   if (
     /\b(api[-_]?key|token|secret|password|bearer|authorization|private[-_]?key)\b/i.test(key) ||
@@ -89,9 +93,11 @@ function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
   ) {
     return true
   }
+
   if (mode === 'server' && SERVER_ATTR_BLOCKLIST_EXTRA.has(k)) {
     return true
   }
+
   return false
 }
 
@@ -100,6 +106,7 @@ export function redactString(input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     return input
   }
+
   let out = input
 
   // Rule 1 — labeled key-value. Drop the key alongside the value; the label name adds no debug context once the value is gone.
@@ -122,8 +129,10 @@ export function redactString(input: string): string {
 /** Index of the first non-`\s` code unit at or after `index`, or `input.length`. ASCII is the spec-fixed set; anything else defers to the engine. */
 function skipWhitespace(input: string, index: number): number {
   const length = input.length
+
   while (index < length) {
     const code = input.charCodeAt(index)
+
     if (code === 0x20 || (code >= 0x09 && code <= 0x0d)) {
       index++
     } else if (code < 0x80) {
@@ -131,12 +140,15 @@ function skipWhitespace(input: string, index: number): number {
     } else {
       WHITESPACE_RUN.lastIndex = index
       WHITESPACE_RUN.test(input)
+
       if (WHITESPACE_RUN.lastIndex === index) {
         return index
       }
+
       index = WHITESPACE_RUN.lastIndex
     }
   }
+
   return index
 }
 
@@ -146,16 +158,21 @@ function redactEnvironmentLines(input: string): string {
   let start = 0
   // Each terminator kind is searched at most once per occurrence; -2 marks "not searched yet", -1 "none remain".
   const nextTerminator = [-2, -2, -2, -2]
+
   while (start < input.length) {
     const content = skipWhitespace(input, start)
+
     if (content === input.length) {
       break
     }
+
     // Only a `[A-Z_]` first content char can match; failed starts within the leading whitespace all see the same key.
     const code = input.charCodeAt(content)
+
     if ((code >= 0x41 && code <= 0x5a) || code === 0x5f) {
       ENV_LINE.lastIndex = start
       const match = ENV_LINE.exec(input)
+
       if (match) {
         parts.push(input.slice(copiedThrough, start), `${match[1]}=[redacted:env-value]`)
         copiedThrough = ENV_LINE.lastIndex
@@ -164,26 +181,35 @@ function redactEnvironmentLines(input: string): string {
         continue
       }
     }
+
     let terminator = -1
+
     for (let kind = 0; kind < LINE_TERMINATORS.length; kind++) {
       let next = nextTerminator[kind]!
+
       if (next !== -1 && next < content) {
         next = input.indexOf(LINE_TERMINATORS[kind]!, content)
         nextTerminator[kind] = next
       }
+
       if (next !== -1 && (terminator === -1 || next < terminator)) {
         terminator = next
       }
     }
+
     if (terminator === -1) {
       break
     }
+
     start = terminator + 1
   }
+
   if (parts.length === 0) {
     return input
   }
+
   parts.push(input.slice(copiedThrough))
+
   return parts.join('')
 }
 
@@ -200,37 +226,49 @@ export function redactValue(
   if (value === null || value === undefined) {
     return value
   }
+
   if (typeof value === 'string') {
     return redactString(value)
   }
+
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return value
   }
+
   if (Array.isArray(value)) {
     if (seen.has(value)) {
       return '[Circular]'
     }
+
     seen.add(value)
+
     return value.map((entry) => redactValue(entry, mode, seen))
   }
+
   if (value instanceof Date) {
     return value
   }
+
   if (typeof value === 'object') {
     if (seen.has(value)) {
       return '[Circular]'
     }
+
     seen.add(value)
     const out: Record<string, unknown> = {}
+
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       // Why: re-redacting parsed NDJSON can surface secrets nested below attributes (headers, identity payloads).
       if (shouldDropAttributeKey(k, mode)) {
         continue
       }
+
       out[k] = redactValue(v, mode, seen)
     }
+
     return out
   }
+
   // Functions / symbols: coerce to a label; they don't appear in legitimate spans.
   return `[unsupported:${typeof value}]`
 }
@@ -241,12 +279,15 @@ export function redactAttributes(
   mode: RedactorMode = 'client'
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
+
   for (const [k, v] of Object.entries(attrs)) {
     if (shouldDropAttributeKey(k, mode)) {
       continue
     }
+
     out[k] = redactValue(v, mode)
   }
+
   return out
 }
 
@@ -284,14 +325,17 @@ export type RedactableSpan = {
  */
 export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'): RedactableSpan {
   const redactedAttrs = redactAttributes(span.attributes, mode)
+
   const redactedEvents: SpanEvent[] = span.events.map((ev) => ({
     name: ev.name,
     timeUnixNano: ev.timeUnixNano,
     attributes: redactAttributes(ev.attributes, mode)
   }))
+
   const exit: SpanExit = span.exit.cause
     ? { _tag: span.exit._tag, cause: redactString(span.exit.cause) }
     : { _tag: span.exit._tag }
+
   return {
     name: span.name,
     traceId: span.traceId,

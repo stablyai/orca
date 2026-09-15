@@ -79,6 +79,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
         setLinkedTaskSourceContext(null)
         setLinkedWorkItem(linkedItem)
         const nextName = getLinkedItemDisplayName(linkedItem)
+
         if (
           nextName &&
           shouldApplyWorkspaceSourceAutoName({
@@ -89,8 +90,10 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
           setName(nextName)
           lastAutoNameRef.current = nextName
         }
+
         return
       }
+
       applyLinkedGitLabWorkItem(item)
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
@@ -99,16 +102,22 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
       branchAutoNameRef.current = ''
       // Why: MR metadata can be sourced from one host/account while the workspace is created on another for the same logical project.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
+
       if (item.type !== 'mr' || !runRepo) {
         setCompareBaseRef(undefined)
+
         return
       }
+
       setCompareBaseRef(undefined)
+
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },
         runRepo.id
       )
+
       const target = getActiveRuntimeTarget(itemRepoSettings)
+
       const resolveMrBase =
         target.kind === 'local'
           ? window.api.worktrees.resolveMrBase({
@@ -137,6 +146,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
               },
               { timeoutMs: 30_000 }
             )
+
       void resolveMrBase
         .then((result) => {
           if ('error' in result) {
@@ -145,8 +155,10 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
             setCompareBaseRef(undefined)
             setPushTarget(undefined)
             toast.error(result.error)
+
             return
           }
+
           handleBaseBranchMrSelect(
             result.baseBranch,
             item,

@@ -14,7 +14,9 @@ import type { AgentHookSource } from '../shared/agent-hook-relay'
 import { CodexSubagentPollScheduler } from '../shared/codex-subagent-poll-scheduler'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+
 const ASSISTANT_MESSAGE_RETRY_MS = 50
+
 const CODEX_SUBAGENT_POLL_MS = 1_000
 
 type CodexSubagentPoll = {
@@ -55,15 +57,18 @@ export class AgentHookResultRetryScheduler {
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
+
     this.assistantMessageRetryTimers.clear()
     this.codexSubagentPollScheduler.clearAll()
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
     const timer = this.assistantMessageRetryTimers.get(paneKey)
+
     if (!timer) {
       return
     }
+
     clearTimeout(timer)
     this.assistantMessageRetryTimers.delete(paneKey)
   }
@@ -83,10 +88,13 @@ export class AgentHookResultRetryScheduler {
     if (source !== 'codex') {
       return
     }
+
     this.codexSubagentPollScheduler.clear(original.paneKey)
+
     if (!hasCodexTranscriptSubagents(this.host.state, original.paneKey)) {
       return
     }
+
     this.codexSubagentPollScheduler.schedule(original.paneKey, {
       source,
       body,
@@ -98,6 +106,7 @@ export class AgentHookResultRetryScheduler {
 
   private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
     const { source, body, original, env, version } = poll
+
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
@@ -107,16 +116,22 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
+
     const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+
     if (!event) {
       return
     }
+
     const subagentsChanged =
       JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
+
     const next = subagentsChanged ? event : original
+
     if (subagentsChanged) {
       this.host.applyEvent(event, source, env, version)
     }
+
     this.scheduleCodexSubagentPoll(source, body, next, env, version)
   }
 
@@ -136,9 +151,12 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
+
     this.clearAssistantMessageRetry(original.paneKey)
+
     if (!discoveryReady) {
       const discovery = preparePendingGrokResultDiscovery(source, body)
+
       if (discovery) {
         // Why: slug-group discovery can outlive the bounded flush timers, so its completion drives the first retry.
         void discovery
@@ -152,9 +170,11 @@ export class AgentHookResultRetryScheduler {
               `[relay-hook-server] Grok result discovery failed: ${err instanceof Error ? err.message : String(err)}\n`
             )
           })
+
         return
       }
     }
+
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
@@ -173,7 +193,9 @@ export class AgentHookResultRetryScheduler {
         )
       }
     }, ASSISTANT_MESSAGE_RETRY_MS)
+
     this.assistantMessageRetryTimers.set(original.paneKey, timer)
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -189,6 +211,7 @@ export class AgentHookResultRetryScheduler {
     requireExactOriginal: boolean
   ): void {
     const current = this.host.state.lastStatusByPaneKey.get(original.paneKey)
+
     if (
       !current ||
       (requireExactOriginal && current !== original) ||
@@ -198,7 +221,9 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
+
     const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+
     if (!event?.payload.lastAssistantMessage) {
       this.scheduleAssistantMessageRetry(
         source,
@@ -209,8 +234,10 @@ export class AgentHookResultRetryScheduler {
         nextAttempt,
         requireExactOriginal
       )
+
       return
     }
+
     this.host.applyEvent(event, source, env, version)
   }
 }

@@ -19,10 +19,13 @@ export async function readTerminalMultiplexLifecycle(
         }
       }
     ).__remoteTerminalMultiplexAckGate
+
     if (!gate) {
       throw new Error('remote terminal multiplex lifecycle observer unavailable')
     }
+
     const snapshot = gate.snapshot()
+
     return {
       activeStreams: snapshot.activeStreams,
       streamSubscribeCount: snapshot.streamSubscribeCount,
@@ -38,8 +41,10 @@ export async function startTerminalReconnectUiObserver(page: Page): Promise<void
     const target = window as typeof window & {
       __sta4150ReconnectUiObserver?: { disconnect: () => void; events: string[] }
     }
+
     target.__sta4150ReconnectUiObserver?.disconnect()
     const events: string[] = []
+
     const scan = (): void => {
       for (const selector of [
         '[data-terminal-remote-runtime-reconnect-banner]',
@@ -50,6 +55,7 @@ export async function startTerminalReconnectUiObserver(page: Page): Promise<void
         }
       }
     }
+
     const observer = new MutationObserver(scan)
     observer.observe(document.body, { childList: true, subtree: true })
     scan()

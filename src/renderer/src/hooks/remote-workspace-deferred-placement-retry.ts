@@ -59,24 +59,32 @@ export function createDeferredSnapshotPlacementRetries(
     watchers.delete(authority.targetId)
     // A watch armed from outside a retry is a fresh snapshot arrival, not a continued chain.
     const previous = applying.has(authority.targetId) ? chains.get(authority.targetId) : undefined
+
     if (stopped || worktreePaths.length === 0) {
       chains.delete(authority.targetId)
+
       return
     }
+
     const stalledDepth =
       previous && worktreePaths.length >= previous.unplacedCount ? previous.stalledDepth + 1 : 0
+
     if (stalledDepth >= MAX_STALLED_DEFERRED_PLACEMENT_CHAIN) {
       // Leave the target on `conflict`: the paths are not becoming placeable by re-pulling.
       chains.delete(authority.targetId)
+
       return
     }
+
     chains.set(authority.targetId, { stalledDepth, unplacedCount: worktreePaths.length })
     const controller = new AbortController()
     watchers.set(authority.targetId, controller)
+
     const isCurrent = (): boolean =>
       !stopped &&
       watchers.get(authority.targetId) === controller &&
       directSshAuthoritiesEqual(deps.getCurrentAuthority(authority.targetId), authority)
+
     void (async () => {
       try {
         const placed = await waitForSnapshotWorktreePlacement(
@@ -87,14 +95,19 @@ export function createDeferredSnapshotPlacementRetries(
           controller.signal,
           DEFERRED_SNAPSHOT_PLACEMENT_TIMEOUT_MS
         )
+
         if (!placed || !isCurrent()) {
           return
         }
+
         const snapshot = await deps.getSnapshot(authority.targetId)
+
         if (!snapshot || snapshot.revision <= 0 || !isCurrent()) {
           return
         }
+
         applying.add(authority.targetId)
+
         try {
           await deps.applySnapshot(authority.targetId, snapshot)
         } finally {
@@ -119,9 +132,11 @@ export function createDeferredSnapshotPlacementRetries(
     watch,
     stop: () => {
       stopped = true
+
       for (const controller of watchers.values()) {
         controller.abort()
       }
+
       watchers.clear()
       chains.clear()
     }

@@ -6,13 +6,16 @@ import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 type PaneGetter = () => Iterable<ManagedPaneInternal>
 
 const pendingRevealRepaints = new Set<PaneGetter>()
+
 let revealRepaintScheduled = false
 
 function scheduleSettledFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
     globalThis.setTimeout(callback, 0)
+
     return
   }
+
   // Why: the first frame after a reveal can still be laying out the tab
   // overlay; the WebGL renderer silently drops redraw requests until the pane
   // is attached and measured, so repaint on the frame after layout settles.
@@ -59,6 +62,7 @@ function flushPaneRevealRepaints(): void {
       /* ignore — one pane's teardown must not block global recovery */
     }
   }
+
   if (livePanes.size > 0) {
     resetAndRefreshAllTerminalWebglAtlases('settled-reveal')
   }
@@ -77,9 +81,11 @@ function flushPaneRevealRepaints(): void {
  */
 export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneInternal>): void {
   pendingRevealRepaints.add(getPanes)
+
   if (revealRepaintScheduled) {
     return
   }
+
   revealRepaintScheduled = true
   scheduleSettledFrame(flushPaneRevealRepaints)
 }

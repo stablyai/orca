@@ -29,6 +29,7 @@ describe('OrcaRuntimeService', () => {
     const ptyId = `ssh:${connectionId}@@pty-legacy-worker`
     const workerPaneKey = `legacy-ssh-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '77777777-7777-4777-8777-777777777777'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
@@ -48,23 +49,30 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const localSession = getDefaultWorkspaceSession()
     let sshSession = session
+
     const getWorkspaceSession = vi.fn((hostId?: string | null) =>
       hostId === `ssh:${connectionId}` ? sshSession : localSession
     )
+
     const setWorkspaceSession = vi.fn((next: WorkspaceSessionState, hostId?: string | null) => {
       if (hostId !== `ssh:${connectionId}`) {
         throw new Error(`unexpected workspace-session host ${hostId ?? 'default'}`)
       }
+
       sshSession = next
     })
+
     const getSession = (): WorkspaceSessionState => sshSession
+
     const remoteRepo = {
       ...store.getRepos()[0],
       connectionId
     }
+
     const listProcesses = vi.fn(async () => [
       {
         id: ptyId,
@@ -76,12 +84,15 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue(null)
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n',
       cols: 80,
       rows: 24
     })
+
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -94,6 +105,7 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
@@ -120,6 +132,7 @@ describe('OrcaRuntimeService', () => {
       serializeProviderBuffer,
       hasRendererSerializer: () => true
     })
+
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
         worktreeId: TEST_WORKTREE_ID,
@@ -128,6 +141,7 @@ describe('OrcaRuntimeService', () => {
         ptyId
       })
     )
+
     runtime.setNotifier({ revealTerminalSession } as never)
     registerSshGitProvider(connectionId, {
       listWorktrees: vi.fn(async () => [
@@ -200,6 +214,7 @@ describe('OrcaRuntimeService', () => {
     const workerPaneKey = `legacy-wsl-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '88888888-8888-4888-8888-888888888888'
     let observedDistro = 'Debian'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
@@ -218,7 +233,9 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -242,6 +259,7 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
@@ -258,6 +276,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
+
     // Declares the scope parameter so mock.calls keeps it — the runtime passes a deadline
     // alongside it, and a bare `async () =>` would type the call tuple as empty.
     const listProcesses = vi.fn(async (_connectionId?: string | null) => [
@@ -271,6 +290,7 @@ describe('OrcaRuntimeService', () => {
         wslDistro: observedDistro
       }
     ])
+
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -278,6 +298,7 @@ describe('OrcaRuntimeService', () => {
       hasPty: (ptyId) => ptyId === 'pty-wsl-legacy',
       listProcesses
     })
+
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
         worktreeId: TEST_WORKTREE_ID,
@@ -286,6 +307,7 @@ describe('OrcaRuntimeService', () => {
         ptyId: 'pty-wsl-legacy'
       })
     )
+
     runtime.setNotifier({ revealTerminalSession } as never)
 
     await expect(
@@ -352,6 +374,7 @@ describe('OrcaRuntimeService', () => {
         [`terminal-3:${HEADLESS_LEAF_ID}`]: 'inc-new'
       }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     runtime.setPtyController({
@@ -508,11 +531,13 @@ describe('OrcaRuntimeService', () => {
 
   it('canonicalizes an equivalent persisted worktree key without duplicating terminal topology', async () => {
     const aliasWorktreeId = `${TEST_REPO_ID}::/tmp//worktree-a/`
+
     const base = makeWorkspaceSessionWithHeadlessTerminal({
       terminalPtyIncarnationsByPaneKey: {
         [`host-tab:${HEADLESS_LEAF_ID}`]: 'inc-alias'
       }
     })
+
     const session: WorkspaceSessionState = {
       ...base,
       activeTabIdByWorktree: { [aliasWorktreeId]: 'host-tab' },
@@ -523,6 +548,7 @@ describe('OrcaRuntimeService', () => {
         }))
       }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
     runtime.setPtyController({

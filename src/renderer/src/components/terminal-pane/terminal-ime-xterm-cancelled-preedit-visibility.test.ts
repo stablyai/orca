@@ -4,6 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const CELL_WIDTH_PX = 8
+
 const CELL_HEIGHT_PX = 16
 
 type RecordedEvent = {
@@ -59,24 +60,31 @@ function buildEvent(recorded: RecordedEvent): Event {
       isComposing: recorded.isComposing,
       key: recorded.key ?? ''
     })
+
     Object.defineProperty(keyboard, 'keyCode', { value: recorded.keyCode })
+
     return keyboard
   }
+
   if (recorded.type === 'input' || recorded.type === 'beforeinput') {
     const input = new InputEvent(recorded.type, {
       bubbles: true,
       isComposing: recorded.isComposing
     })
+
     // happy-dom drops these from InputEventInit; Chromium supplies them.
     Object.defineProperty(input, 'inputType', {
       value: recorded.inputType ?? 'insertCompositionText'
     })
     Object.defineProperty(input, 'data', { value: recorded.data ?? null })
     Object.defineProperty(input, 'composed', { value: true })
+
     return input
   }
+
   const composition = new CompositionEvent(recorded.type, { bubbles: true })
   Object.defineProperty(composition, 'data', { value: recorded.data ?? '' })
+
   return composition
 }
 
@@ -93,9 +101,11 @@ function openTerminal(): Rig {
   terminal.open(container)
   const textarea = terminal.textarea
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!textarea || !compositionView) {
     throw new Error('xterm did not create the helper textarea and composition view')
   }
+
   openTerminals.push(terminal)
 
   const cell = (
@@ -105,6 +115,7 @@ function openTerminal(): Rig {
       }
     }
   )._core._renderService.dimensions.css.cell
+
   cell.width = CELL_WIDTH_PX
   cell.height = CELL_HEIGHT_PX
 
@@ -117,12 +128,15 @@ function openTerminal(): Rig {
       if (recorded.type === 'keydown' || recorded.type === 'keyup') {
         await nextEventLoop()
       }
+
       if (recorded.value !== undefined) {
         textarea.value = recorded.value
         textarea.setSelectionRange(recorded.value.length, recorded.value.length)
       }
+
       textarea.dispatchEvent(buildEvent(recorded))
     }
+
     // The overlay is re-derived on a deferred task, exactly as the position update is.
     await nextEventLoop()
     await nextEventLoop()
@@ -137,6 +151,7 @@ function displayedPreedit(view: HTMLElement): {
 } {
   const shown = view.classList.contains('active')
   const preedit = (view.textContent ?? '').replaceAll('‎', '')
+
   return { preedit, shown }
 }
 
@@ -152,9 +167,11 @@ describe('preedit visibility when the IME cancels a composition', () => {
     // updateCompositionElements re-arms on a timer; let the pending one run before dispose.
     await nextEventLoop()
     await nextEventLoop()
+
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })

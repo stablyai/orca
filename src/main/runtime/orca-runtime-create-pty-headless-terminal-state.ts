@@ -17,6 +17,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   ): RuntimeHeadlessTerminal {
     let state: RuntimeHeadlessTerminal | null = null
     const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
+
     const emulator = new HeadlessEmulator({
       cols: dims.cols,
       rows: dims.rows,
@@ -40,6 +41,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           ) {
             return
           }
+
           // Why this write is safe pre-shell-ready: daemon Session.write
           // QUEUES (never drops) input while the POSIX shell-ready gate is
           // pending and flushes at the ready marker or the 15s
@@ -49,16 +51,20 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         }
       }
     })
+
     if (isNativeWindowsConptyPty(ptyId)) {
       emulator.installConptyPrimaryDeviceAttributesOverride()
     }
+
     // Why the lazy getter: replies must use the freshest renderer push at
     // parse time, and stay silent (never default) before the first push.
     emulator.installViewAttributeResponder(() => getTerminalViewAttributes())
     const viewAttributes = getTerminalViewAttributes()
+
     if (viewAttributes) {
       emulator.applyPushedViewAttributes(viewAttributes)
     }
+
     const constructed: RuntimeHeadlessTerminal = {
       emulator,
       outputSequence: 0,
@@ -66,13 +72,16 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
       ownership: new PtyShellOwnershipMirror(async () => {
         const controller = this.ptyController
         const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+
         if (
           !controller?.confirmShellForeground ||
           this.headlessTerminals.get(ptyId) !== constructed
         ) {
           return false
         }
+
         const confirmed = await controller.confirmShellForeground(ptyId)
+
         return (
           confirmed &&
           this.headlessTerminals.get(ptyId) === constructed &&
@@ -80,7 +89,9 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         )
       })
     }
+
     state = constructed
+
     return state
   }
 
@@ -95,12 +106,15 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
 
   protected getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal {
     const existing = this.headlessTerminals.get(ptyId)
+
     if (existing) {
       return existing
     }
+
     const size = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, size)
     this.headlessTerminals.set(ptyId, state)
+
     return state
   }
 
@@ -113,25 +127,33 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     state.writeChain = state.writeChain
       .then(async () => {
         const snapshot = await this.serializeProviderTerminalBuffer(ptyId)
+
         if (!snapshot) {
           return
         }
+
         const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
+
         // Why: a newer live OSC 7 can arrive while the snapshot is in flight;
         // only seed metadata while no post-correction CWD has won the race.
         if (!this.terminalCwdByPtyId.has(ptyId)) {
           this.recordOsc7MetadataForPty(ptyId, data)
         }
+
         await state.emulator.write(data)
+
         if (snapshot.cwd !== undefined) {
           state.emulator.setCwd(snapshot.cwd)
+
           if (!this.terminalCwdByPtyId.has(ptyId) && snapshot.cwd?.trim()) {
             this.terminalCwdByPtyId.set(ptyId, snapshot.cwd)
           }
         }
+
         if (snapshot.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(snapshot.oscLinks)
         }
+
         state.ownership.seedOwner(snapshot.terminalOwner, {
           alternateScreen: state.emulator.isAlternateScreen
         })
@@ -147,9 +169,11 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
 
   protected resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
     const state = this.headlessTerminals.get(ptyId)
+
     if (!state) {
       return
     }
+
     // Why: terminal reflow is a parser operation. It must sit in the same
     // per-PTY stream as output bytes or restore snapshots can bake in wraps
     // from the wrong terminal width.
@@ -171,6 +195,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     if (cols <= 0 || rows <= 0) {
       return
     }
+
     this.resizeHeadlessTerminal(ptyId, cols, rows)
   }
 
@@ -178,9 +203,11 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   // mirror or a resubscribing mobile client resurrects the cleared scrollback.
   async clearHeadlessTerminalBuffer(ptyId: string): Promise<void> {
     const state = this.headlessTerminals.get(ptyId)
+
     if (!state) {
       return
     }
+
     // Why: headless writes are queued to preserve xterm parser order. Clear
     // must join that same chain or an earlier PTY chunk can finish after the
     // clear request and repopulate mobile scrollback.

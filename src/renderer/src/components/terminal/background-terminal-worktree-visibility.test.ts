@@ -8,6 +8,7 @@ import {
 describe('scheduleBackgroundTerminalWorktreeMeasure', () => {
   it('marks a hidden worktree measurable for the first mount window', () => {
     vi.useFakeTimers()
+
     try {
       const mountedWorktreeIds = new Set<string>()
       const measurableBackgroundWorktreeIds = new Set<string>()
@@ -44,6 +45,7 @@ describe('scheduleBackgroundTerminalWorktreeMeasure', () => {
 
   it('refreshes the measurable timer for repeated background-mount events', () => {
     vi.useFakeTimers()
+
     try {
       const mountedWorktreeIds = new Set<string>()
       const measurableBackgroundWorktreeIds = new Set<string>()

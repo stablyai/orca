@@ -27,6 +27,7 @@ function installAudioContext(): FakeAudioProcessor {
     disconnect: vi.fn(),
     onaudioprocess: null
   }
+
   const source = { connect: vi.fn(), disconnect: vi.fn() }
   vi.stubGlobal(
     'AudioContext',
@@ -40,6 +41,7 @@ function installAudioContext(): FakeAudioProcessor {
       close = vi.fn(async () => undefined)
     }
   )
+
   return processor
 }
 

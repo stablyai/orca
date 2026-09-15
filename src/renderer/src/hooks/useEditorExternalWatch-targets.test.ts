@@ -9,6 +9,7 @@ vi.mock('@/store', () => ({
     getState: vi.fn()
   }
 }))
+
 vi.mock('@/components/editor/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   getOpenFilesForExternalFileChange: vi.fn(() => [])
@@ -86,9 +87,11 @@ describe('getEditorExternalWatchTargets', () => {
   it('preserves the snapshot when open-file metadata changes without changing watched roots', () => {
     const repo = makeRepo('repo-1')
     const worktree = makeWorktree(repo.id, 'wt-1')
+
     const first = getEditorExternalWatchTargets(
       makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false)] })
     )
+
     const second = getEditorExternalWatchTargets(
       makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, true)] })
     )
@@ -148,6 +151,7 @@ describe('getEditorExternalWatchTargets', () => {
       const worktree = makeWorktree(repo.id, 'wt-missing-host')
       worktree.path = 'C:\\repo'
       worktree.hostId = 'local'
+
       if (stampOwner === 'worktree') {
         worktree.hostId = undefined
       } else {
@@ -170,6 +174,7 @@ describe('getEditorExternalWatchTargets', () => {
       worktree.path = 'C:\\repo'
       worktree.hostId = 'local'
       repo.executionHostId = 'local'
+
       if (stampOwner === 'worktree') {
         worktree.hostId = 'future:host' as never
       } else {
@@ -189,11 +194,13 @@ describe('getEditorExternalWatchTargets', () => {
     const worktree = makeWorktree(repo.id)
     const folderWorkspaceId = 'folder-local'
     const workspaceKey = `folder:${folderWorkspaceId}`
+
     const state = makeState({
       repo,
       worktree,
       openFiles: [makeOpenFile(workspaceKey)]
     })
+
     state.folderWorkspaces = [
       {
         id: folderWorkspaceId,
@@ -231,11 +238,13 @@ describe('getEditorExternalWatchTargets', () => {
       const worktree = makeWorktree(repo.id)
       const folderWorkspaceId = `folder-${ownerCase}`
       const workspaceKey = `folder:${folderWorkspaceId}`
+
       const state = makeState({
         repo,
         worktree,
         openFiles: [makeOpenFile(workspaceKey)]
       })
+
       state.folderWorkspaces = [
         {
           id: folderWorkspaceId,
@@ -427,9 +436,11 @@ describe('getEditorExternalWatchTargets', () => {
     const localRepo = makeRepo('repo-remote', null)
     const remoteRepo = makeRepo('repo-remote', 'ssh-1')
     const worktree = makeWorktree(localRepo.id, 'wt-remote')
+
     const local = getEditorExternalWatchTargets(
       makeState({ repo: localRepo, worktree, openFiles: [makeOpenFile(worktree.id)] })
     )
+
     const remote = getEditorExternalWatchTargets(
       makeState({
         repo: remoteRepo,
@@ -454,6 +465,7 @@ describe('getEditorExternalWatchTargets', () => {
     const repo = makeRepo('repo-mixed')
     const worktree = makeWorktree(repo.id, 'wt-mixed')
     const localFile = makeOpenFile(worktree.id)
+
     const runtimeFile = {
       ...makeOpenFile(worktree.id),
       id: 'runtime-file',
@@ -488,11 +500,13 @@ describe('getEditorExternalWatchTargets', () => {
   it('keeps restored ownerless tabs local when an active runtime is selected', () => {
     const repo = makeRepo('repo-restored')
     const worktree = makeWorktree(repo.id, 'wt-restored')
+
     const restoredLocalFile = {
       ...makeOpenFile(worktree.id),
       id: 'restored-local-file',
       runtimeEnvironmentId: undefined
     }
+
     const runtimeFile = {
       ...makeOpenFile(worktree.id),
       id: 'runtime-file',

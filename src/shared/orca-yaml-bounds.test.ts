@@ -74,6 +74,7 @@ describe('orca.yaml parse bounds', () => {
     const tabs = Array.from({ length: MAX_ORCA_YAML_COLLECTION_ENTRIES }, (_, index) => ({
       title: `tab-${index}`
     }))
+
     returnYamlRoot({ defaultTabs: tabs })
     expect(parseOrcaYaml('exact')?.defaultTabs).toHaveLength(MAX_ORCA_YAML_COLLECTION_ENTRIES)
 

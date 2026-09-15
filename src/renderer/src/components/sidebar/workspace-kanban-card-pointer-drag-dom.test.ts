@@ -52,6 +52,7 @@ describe('workspace kanban pointer drag card drop index', () => {
       { top: 48, bottom: 88, index: 21 },
       { top: 96, bottom: 136, index: 22 }
     ]
+
     expect(resolveWorkspaceCardDropIndexFromRects(virtualized, 10)).toBe(20)
     expect(resolveWorkspaceCardDropIndexFromRects(virtualized, 70)).toBe(22)
     expect(resolveWorkspaceCardDropIndexFromRects(virtualized, 140)).toBe(23)
@@ -79,6 +80,7 @@ describe('workspace kanban drop indicator placement', () => {
       { top: 100, bottom: 140, index: 20 },
       { top: 148, bottom: 188, index: 21 }
     ]
+
     expect(resolveWorkspaceCardDropIndicatorY(virtualized, 20, 90)).toBe(95)
     expect(resolveWorkspaceCardDropIndicatorY(virtualized, 21, 90)).toBe(144)
     expect(resolveWorkspaceCardDropIndicatorY(virtualized, 22, 90)).toBe(193)

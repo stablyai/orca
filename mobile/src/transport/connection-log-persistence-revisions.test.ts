@@ -8,6 +8,7 @@ const entry = (id: number): ConnectionLogEntry => ({
   level: 'info',
   message: `event ${id}`
 })
+
 const drain = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 describe('connection log persistence revisions', () => {
@@ -17,10 +18,12 @@ describe('connection log persistence revisions', () => {
     await Promise.all(['a', 'b'].map((host) => store.hydrate(host)))
     await drain()
     save.mockClear()
+
     for (let i = 0; i < 1000; i++) {
       store.append('a', entry(i))
       store.append('b', entry(i + 2000))
     }
+
     await drain()
     expect(save).toHaveBeenCalledTimes(2)
     expect(save).toHaveBeenCalledWith('a', store.get('a'))
@@ -30,6 +33,7 @@ describe('connection log persistence revisions', () => {
   it('shares one snapshot across startup appends waiting on hydration', async () => {
     let loaded!: (entries: ConnectionLogEntry[]) => void
     const save = vi.fn<ConnectionLogPersistence['save']>(async () => {})
+
     const store = createConnectionLogStore(200, {
       load: () =>
         new Promise((resolve) => {
@@ -37,9 +41,11 @@ describe('connection log persistence revisions', () => {
         }),
       save
     })
+
     for (let i = 1; i <= 100; i++) {
       store.append('a', entry(i))
     }
+
     loaded([entry(0)])
     await store.hydrate('a')
     await drain()
@@ -54,10 +60,12 @@ describe('connection log persistence revisions', () => {
     const saved: string[][] = []
     let release!: () => void
     let delay = false
+
     const store = createConnectionLogStore(2, {
       load: async () => [],
       save: async (_host, entries) => {
         saved.push(entries.map((item) => item.id))
+
         if (delay) {
           delay = false
           await new Promise<void>((resolve) => {
@@ -66,6 +74,7 @@ describe('connection log persistence revisions', () => {
         }
       }
     })
+
     await store.hydrate('a')
     await drain()
     saved.length = 0
@@ -95,6 +104,7 @@ describe('connection log persistence revisions', () => {
     await drain()
     expect(save).toHaveBeenCalledTimes(3)
     expect(save.mock.calls[2]?.[1]).toBe(save.mock.calls[0]?.[1])
+
     for (const [, snapshot] of save.mock.calls) {
       expect(snapshot).toEqual([entry(1), entry(2), entry(3)])
     }
@@ -105,9 +115,11 @@ describe('connection log persistence revisions', () => {
     await store.hydrate('a')
     await drain()
     save.mockReset().mockRejectedValue(new Error('unavailable'))
+
     for (let i = 0; i < 3; i++) {
       store.append('a', entry(i))
     }
+
     await drain()
     expect(save).toHaveBeenCalledTimes(6)
     save.mockClear().mockResolvedValue(undefined)

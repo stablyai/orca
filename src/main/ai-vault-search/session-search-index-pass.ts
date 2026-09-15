@@ -41,10 +41,12 @@ export async function runSessionSearchIndexPass(
   const cutoffMs = store.retentionCutoff
   let read = 0
   let outOfTime = false
+
   for (const candidate of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
     const path = candidate.file.path
     const row = options.rows.get(path)
+
     const decision = sessionSearchReadDecision({
       candidate,
       row,
@@ -53,20 +55,25 @@ export async function runSessionSearchIndexPass(
       cursor: row ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
       cutoffMs
     })
+
     if (decision === 'skip') {
       continue
     }
+
     // The decide step is one cursor lookup, so it runs for the whole list even
     // once the deadline has gone: knowing what is owed costs nothing, and the
     // count of what a pass left is worth more than the microseconds.
     outOfTime ||= read > 0 && options.overdue?.() === true
+
     if (outOfTime) {
       continue
     }
+
     // The clock the deadline reads is one the owner may close behind: the read
     // below writes to the store, so stop here rather than on a shut handle.
     throwIfAiVaultScanCancelled(options.signal)
     read += 1
+
     try {
       await parseAgentSessionFileCached(candidate, process.platform, stats, decision)
     } catch (error) {
@@ -80,5 +87,6 @@ export async function runSessionSearchIndexPass(
       )
     }
   }
+
   return { stats, outOfTime }
 }

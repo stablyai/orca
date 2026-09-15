@@ -68,6 +68,7 @@ describe('pruneAutomationRuns', () => {
       run({ id: 'x', automationId: 'a', createdAt: 5, scheduledFor: 1 }),
       run({ id: 'y', automationId: 'a', createdAt: 5, scheduledFor: 2 })
     ]
+
     expect(pruneAutomationRuns(runs, 1).map((r) => r.id)).toEqual(['y'])
   })
 
@@ -84,6 +85,7 @@ describe('pruneAutomationRuns', () => {
       run({ id: 'old-dispatching', automationId: 'a', status: 'dispatching', createdAt: -2 }),
       run({ id: 'old-dispatched', automationId: 'a', status: 'dispatched', createdAt: -1 })
     ]
+
     const kept = pruneAutomationRuns([...inFlight, ...makeRuns('a', 10)], 3)
     expect(kept.map((r) => r.id)).toEqual([
       'old-pending',
@@ -102,6 +104,7 @@ describe('pruneAutomationRuns', () => {
       ...makeRuns('c', 2796),
       ...makeRuns('d', 2796)
     ]
+
     expect(runaway).toHaveLength(11_184)
     expect(pruneAutomationRuns(runaway)).toHaveLength(4 * MAX_AUTOMATION_RUNS_PER_AUTOMATION)
   })
@@ -114,6 +117,7 @@ describe('backfillAutomationRunNumbers', () => {
       run({ id: 'b-0', automationId: 'b' }),
       run({ id: 'a-1', automationId: 'a' })
     ]
+
     expect(backfillAutomationRunNumbers(runs).map((r) => r.runNumber)).toEqual([1, 1, 2])
   })
 
@@ -130,6 +134,7 @@ describe('backfillAutomationRunNumbers', () => {
       run({ id: 'a-0', automationId: 'a', runNumber: 2 }),
       run({ id: 'a-1', automationId: 'a' })
     ]
+
     const numbers = backfillAutomationRunNumbers(runs).map((r) => r.runNumber)
     expect(numbers).toEqual([2, 3])
     expect(new Set(numbers).size).toBe(numbers.length)
@@ -142,6 +147,7 @@ describe('backfillAutomationRunNumbers', () => {
       run({ id: 'a-1', automationId: 'a' }),
       run({ id: 'b-1', automationId: 'b' })
     ]
+
     expect(backfillAutomationRunNumbers(runs).map((r) => r.runNumber)).toEqual([200, 7, 201, 8])
   })
 })
@@ -152,6 +158,7 @@ describe('nextAutomationRunNumber', () => {
       run({ id: 'a-0', automationId: 'a', runNumber: 2795 }),
       run({ id: 'a-1', automationId: 'a', runNumber: 2796 })
     ]
+
     expect(nextAutomationRunNumber(retained)).toBe(2797)
   })
 
@@ -174,20 +181,24 @@ describe('nextAutomationRunNumber', () => {
 
 it('does not inspect ordering timestamps when an automation is within its retention cap', () => {
   let reads = 0
+
   const runs = Array.from({ length: 100 }, (_, index) =>
     run({
       id: `run-${index}`,
       automationId: 'a'
     })
   )
+
   for (const [index, entry] of runs.entries()) {
     Object.defineProperty(entry, 'createdAt', {
       get() {
         reads += 1
+
         return (index * 37) % 100
       }
     })
   }
+
   const kept = pruneAutomationRuns(runs)
   expect(kept).toHaveLength(100)
   expect(kept.every((entry, index) => entry === runs[index])).toBe(true)

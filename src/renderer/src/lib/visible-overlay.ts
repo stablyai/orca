@@ -24,18 +24,23 @@ export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
     if (!(element instanceof HTMLElement)) {
       return false
     }
+
     if (element.closest('[aria-hidden="true"]')) {
       return false
     }
+
     if (options?.ignoreSelector && element.closest(options.ignoreSelector)) {
       return false
     }
+
     if (options?.ignoreMatches && element.matches(options.ignoreMatches)) {
       return false
     }
+
     if (options?.ignoreContaining && element.contains(options.ignoreContaining)) {
       return false
     }
+
     // Why: overlays stay mounted and painted through their exit animation, so a
     // dismissed one would otherwise keep owning a queued focus for ~300ms. Escape
     // callers opt out: they run before the attribute flips, so it only ever hides
@@ -43,7 +48,9 @@ export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
     if (options?.ignoreDismissed && element.getAttribute('data-state') === 'closed') {
       return false
     }
+
     const style = window.getComputedStyle(element)
+
     return (
       style.display !== 'none' &&
       style.visibility !== 'hidden' &&

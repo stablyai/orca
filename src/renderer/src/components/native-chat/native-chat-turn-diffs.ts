@@ -30,24 +30,32 @@ export function nativeChatTurnDiffs(
   turnKeys: readonly (string | undefined)[]
 ): Map<string, NativeChatTurnDiff> {
   const turns = new Map<string, Map<string, NativeChatTurnDiffFile>>()
+
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
+
     if (!turnKey) {
       continue
     }
+
     for (const edit of buildDiffSummaries(message.blocks).values()) {
       let files = turns.get(turnKey)
+
       if (!files) {
         files = new Map()
         turns.set(turnKey, files)
       }
+
       for (const [fileIndex, file] of edit.files.entries()) {
         const previous = files.get(file.path)
+
         const renamed =
           file.oldPath && file.oldPath !== file.path ? files.get(file.oldPath) : undefined
+
         if (renamed) {
           files.delete(renamed.path)
         }
+
         files.set(file.path, {
           path: file.path,
           added: file.added + (previous?.added ?? 0) + (renamed?.added ?? 0),
@@ -59,9 +67,11 @@ export function nativeChatTurnDiffs(
       }
     }
   }
+
   return new Map(
     Array.from(turns, ([key, byPath]) => {
       const files = Array.from(byPath.values())
+
       return [
         key,
         {

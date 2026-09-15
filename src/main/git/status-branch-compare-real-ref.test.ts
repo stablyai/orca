@@ -40,12 +40,14 @@ describe('getBranchCompare real refs', () => {
       'origin/tagbase'
     )
     const rawOid = git(client, ['rev-parse', '--verify', 'refs/remotes/origin/tagbase'])
+
     const peeledOid = git(client, [
       'rev-parse',
       '--verify',
       '--quiet',
       'refs/remotes/origin/tagbase^{commit}'
     ])
+
     expect(rawOid).not.toBe(peeledOid)
 
     const result = await getBranchCompare(client, 'origin/tagbase')

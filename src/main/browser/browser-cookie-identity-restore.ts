@@ -5,6 +5,7 @@ export async function restoreEveryCookieIdentity(
   restore: (identity: CookieClearIdentity) => Promise<void>
 ): Promise<void> {
   const failures: unknown[] = []
+
   for (const identity of identities) {
     try {
       await restore(identity)
@@ -12,6 +13,7 @@ export async function restoreEveryCookieIdentity(
       failures.push(error)
     }
   }
+
   if (failures.length > 0) {
     throw new AggregateError(failures, `Could not restore ${failures.length} cookie(s)`)
   }

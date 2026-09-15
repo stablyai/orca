@@ -7,6 +7,7 @@ import {
 } from './agent-browser-bridge-mouse'
 
 const MULTI_CLICK_INTERVAL_MS = 500
+
 const MULTI_CLICK_SLOP_PX = 2
 
 type LastPointerClick = {
@@ -32,6 +33,7 @@ const pointerStates = new WeakMap<WebContents, CdpPointerState>()
 
 export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
   let state = pointerStates.get(webContents)
+
   if (!state) {
     state = {
       x: 0,
@@ -43,6 +45,7 @@ export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
     }
     pointerStates.set(webContents, state)
   }
+
   return state
 }
 
@@ -51,14 +54,17 @@ export function cdpPointerStateFor(webContents: WebContents): CdpPointerState {
 export function trackCdpClickCount(state: CdpPointerState, button: CdpPointerButton): number {
   const now = Date.now()
   const previous = state.lastClick
+
   const repeated =
     previous !== null &&
     previous.button === button &&
     Math.abs(previous.x - state.x) <= MULTI_CLICK_SLOP_PX &&
     Math.abs(previous.y - state.y) <= MULTI_CLICK_SLOP_PX &&
     now - previous.at <= MULTI_CLICK_INTERVAL_MS
+
   const count = repeated ? (previous.count >= 3 ? 1 : previous.count + 1) : 1
   state.lastClick = { button, x: state.x, y: state.y, at: now, count }
+
   return count
 }
 

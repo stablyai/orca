@@ -9,6 +9,7 @@ import { executeSkillInstallRequest } from './skill-install-request-service'
 import { createSkillPackageArchive } from './skill-package-creation'
 
 const execFileAsync = promisify(execFile)
+
 const RUN_REAL_WINDOWS =
   process.platform === 'win32' && process.env.ORCA_REAL_WINDOWS_SKILL_TEST === '1'
 
@@ -33,6 +34,7 @@ describe.runIf(RUN_REAL_WINDOWS)('real Windows skill workspace installation', ()
         GIT_TERMINAL_PROMPT: '0'
       }
     })
+
     return stdout.trim()
   }
 
@@ -121,10 +123,12 @@ describe.runIf(RUN_REAL_WINDOWS)('real Windows skill workspace installation', ()
 
   it('installs independently into a real Git worktree and a plain folder workspace', async () => {
     expect(await git(['rev-parse', '--is-inside-work-tree'], gitWorktree)).toBe('true')
+
     const worktreeResult = await install(
       { scope: 'workspace', worktreeId: 'real-worktree' },
       'worktree'
     )
+
     const folderResult = await install(
       { scope: 'workspace', folderWorkspaceId: 'real-folder' },
       'folder'
@@ -132,6 +136,7 @@ describe.runIf(RUN_REAL_WINDOWS)('real Windows skill workspace installation', ()
 
     expect(worktreeResult.status).toBe('installed')
     expect(folderResult.status).toBe('installed')
+
     for (const workspace of [gitWorktree, folderWorkspace]) {
       expect(
         await readFile(

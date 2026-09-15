@@ -57,6 +57,7 @@ export function GitHubItemDialogIssueHeader({
   issueAttachedWorkspaceLabel: string | null
 }): React.JSX.Element {
   const ownerRepo = parseOwnerRepoFromItemUrl(workItem.url)
+
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
 

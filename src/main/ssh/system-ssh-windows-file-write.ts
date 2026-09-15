@@ -49,6 +49,7 @@ export function makeWindowsPublishStagedFileCommand(
     '$parent = [System.IO.Path]::GetDirectoryName($path)',
     'if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }'
   ]
+
   if (mode === 'append') {
     return powerShellCommand(
       [
@@ -63,9 +64,11 @@ export function makeWindowsPublishStagedFileCommand(
       ].join('; ')
     )
   }
+
   if (mode === 'exclusive') {
     return powerShellCommand([...preamble, '[System.IO.File]::Move($staging, $path)'].join('; '))
   }
+
   return powerShellCommand(
     [
       ...preamble,
@@ -102,13 +105,16 @@ export function windowsRemoteAncestorDirectories(remotePath: string): string[] {
   const segments = normalized.split('/')
   segments.pop()
   const ancestors: string[] = []
+
   // Start past the drive (`C:`) or the UNC host, which are never created.
   for (let depth = 2; depth <= segments.length; depth += 1) {
     const directory = segments.slice(0, depth).join('/')
+
     if (directory) {
       ancestors.push(directory)
     }
   }
+
   return ancestors
 }
 
@@ -123,6 +129,7 @@ export function makeWindowsWriteFileCommand(
   options?: { append?: boolean; exclusive?: boolean; executable?: 'powershell.exe' | 'pwsh.exe' }
 ): string {
   const fileMode = options?.append ? 'Append' : options?.exclusive ? 'CreateNew' : 'Create'
+
   return powerShellCommand(
     [
       '$ErrorActionPreference = "Stop"',

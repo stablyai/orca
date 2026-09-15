@@ -33,16 +33,20 @@ export function submissionBytesByItemId(
   submissions: readonly AgentJournalSubmission[]
 ): ReadonlyMap<string, number> {
   const cached = bytesBySubmissions.get(submissions)
+
   if (cached) {
     return cached
   }
+
   const bytes = new Map(
     submissions.map((submission) => [
       agentJournalSubmissionKey(submission.clientMessageId),
       Buffer.byteLength(JSON.stringify(submission), 'utf8')
     ])
   )
+
   bytesBySubmissions.set(submissions, bytes)
+
   return bytes
 }
 
@@ -69,18 +73,23 @@ export function boundHistoryItemsByBytes(
   const ordered = groupItemsBySequence(items, keep)
   const kept: AgentJournalRenderItem[][] = []
   let total = 0
+
   for (const group of ordered) {
     const bytes = group.reduce((sum, item) => sum + historyEntryBytes(item, submissionBytes), 0)
+
     if (kept.length === 0 && bytes > maxBytes) {
       kept.push(group.map((item) => oversizedHistoryItem(item, bytes)))
       break
     }
+
     if (total + bytes > maxBytes) {
       break
     }
+
     kept.push(group)
     total += bytes
   }
+
   return {
     items: (keep === 'newest' ? kept.toReversed() : kept).flat(),
     dropped: items.length - kept.reduce((count, group) => count + group.length, 0)
@@ -95,21 +104,26 @@ function* groupItemsBySequence(
   keep: 'newest' | 'oldest'
 ): Generator<AgentJournalRenderItem[]> {
   let cursor = keep === 'newest' ? items.length : 0
+
   while (keep === 'newest' ? cursor > 0 : cursor < items.length) {
     if (keep === 'newest') {
       let start = cursor - 1
       const sequence = items[start].sequence
+
       while (start > 0 && items[start - 1].sequence === sequence) {
         start -= 1
       }
+
       yield items.slice(start, cursor)
       cursor = start
     } else {
       let end = cursor + 1
       const sequence = items[cursor].sequence
+
       while (end < items.length && items[end].sequence === sequence) {
         end += 1
       }
+
       yield items.slice(cursor, end)
       cursor = end
     }
@@ -122,12 +136,15 @@ export function newestWholeSequenceGroups(
 ): AgentJournalRenderItem[] {
   const selected: AgentJournalRenderItem[][] = []
   let count = 0
+
   for (const group of groupItemsBySequence(items, 'newest')) {
     if (selected.length > 0 && count + group.length > limit) {
       break
     }
+
     selected.push(group)
     count += group.length
   }
+
   return selected.toReversed().flat()
 }

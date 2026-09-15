@@ -16,6 +16,7 @@ it('resolves repeated nested and unmatched cwd paths once per attribution batch'
       }
     ])
   )
+
   const input: ClaudeUsageParsedTurn[] = Array.from({ length: 1000 }, (_, index) => ({
     sessionId: String(index),
     timestamp: '2026-09-07T00:00:00Z',
@@ -28,8 +29,10 @@ it('resolves repeated nested and unmatched cwd paths once per attribution batch'
     cacheWriteTokens: 0,
     cacheWrite1hTokens: 0
   }))
+
   const original = String.prototype.startsWith
   let comparisons = 0
+
   const spy = vi.spyOn(String.prototype, 'startsWith').mockImplementation(function (
     this: string,
     search: string,
@@ -38,14 +41,18 @@ it('resolves repeated nested and unmatched cwd paths once per attribution batch'
     if (search.slice(0, 6) === '/repo-') {
       comparisons += 1
     }
+
     return original.call(this, search, position)
   })
+
   let result: Awaited<ReturnType<typeof attributeClaudeUsageTurns>>
+
   try {
     result = await attributeClaudeUsageTurns(input, lookup)
   } finally {
     spy.mockRestore()
   }
+
   expect(comparisons).toBeLessThanOrEqual(200)
   expect(result![0].worktreeId).toBe('wt-99')
   expect(result![1].worktreeId).toBeNull()

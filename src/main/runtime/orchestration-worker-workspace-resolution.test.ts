@@ -9,6 +9,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -16,12 +17,15 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const scanLocalRepoWorktreesForResolution = vi.hoisted(() => vi.fn())
+
 vi.mock('./repo-worktree-resolution-scan', () => ({ scanLocalRepoWorktreesForResolution }))
 
 const getSshGitProvider = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -40,8 +44,11 @@ import {
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-1'
+
 const REPO_PATH = '/repo'
+
 const WORKTREE_PATH = '/repo/feature'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 function makeMeta(displayName: string, hostId?: WorktreeMeta['hostId']): WorktreeMeta {
@@ -79,7 +86,9 @@ function makeStore(
       addedAt: 1
     }
   ]
+
   const meta = options.meta ?? { [WORKTREE_ID]: makeMeta('Feature') }
+
   const store = {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
@@ -87,6 +96,7 @@ function makeStore(
     getWorktreeMeta: (id: string) => meta[id],
     setWorktreeMeta: (id: string, patch: Partial<WorktreeMeta>) => {
       meta[id] = { ...(meta[id] ?? makeMeta('')), ...patch }
+
       return meta[id]
     },
     getAllWorktreeLineage: () => ({}),
@@ -105,6 +115,7 @@ function makeStore(
     getFolderWorkspaces: () => options.folderWorkspaces ?? [],
     getProjectGroups: () => options.projectGroups ?? []
   }
+
   return store
 }
 
@@ -154,6 +165,7 @@ describe('orchestration worker workspace resolution', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     } satisfies Repo
+
     const runtime = new OrcaRuntimeService(
       makeStore({
         repos: [remoteRepo],
@@ -185,6 +197,7 @@ describe('orchestration worker workspace resolution', () => {
         { path: secondPath, head: 'b', branch: 'two', isBare: false, isMainWorktree: false }
       ]
     })
+
     const runtime = new OrcaRuntimeService(
       makeStore({
         meta: {
@@ -208,6 +221,7 @@ describe('orchestration worker workspace resolution', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     } satisfies Repo
+
     getSshGitProvider.mockReturnValue({
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -219,6 +233,7 @@ describe('orchestration worker workspace resolution', () => {
         }
       ])
     })
+
     const runtime = new OrcaRuntimeService(
       makeStore({
         repos: [makeStore().getRepos()[0], remoteRepo],
@@ -238,12 +253,14 @@ describe('orchestration worker workspace resolution', () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-worker-local-folder-'))
     tempPaths.push(localPath)
     const group = { id: 'group-1', name: 'Group', parentPath: localPath } as ProjectGroup
+
     const localFolder = {
       id: 'local-folder',
       projectGroupId: group.id,
       name: 'Local folder',
       folderPath: localPath
     } as FolderWorkspace
+
     const remoteFolder = {
       ...localFolder,
       id: 'remote-folder',
@@ -251,9 +268,11 @@ describe('orchestration worker workspace resolution', () => {
       folderPath: '/srv/app',
       connectionId: 'ssh-folder'
     }
+
     registerSshFilesystemProvider('ssh-folder', {
       stat: vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 1 })
     } as never)
+
     try {
       const runtime = new OrcaRuntimeService(
         makeStore({
@@ -275,18 +294,21 @@ describe('orchestration worker workspace resolution', () => {
     } finally {
       unregisterSshFilesystemProvider('ssh-folder')
     }
+
     expect(scanLocalRepoWorktreesForResolution).not.toHaveBeenCalled()
   })
 
   it('rejects a folder workspace whose execution host is ambiguous', async () => {
     const folderPath = '/workspace'
     const group = { id: 'group-1', name: 'Group', parentPath: folderPath } as ProjectGroup
+
     const folder = {
       id: 'folder-1',
       projectGroupId: group.id,
       name: 'Ambiguous folder',
       folderPath
     } as FolderWorkspace
+
     const repos = [
       { id: 'local', path: '/workspace/local', projectGroupId: group.id },
       { id: 'remote', path: '/workspace/remote', projectGroupId: group.id, connectionId: 'ssh-1' }
@@ -296,6 +318,7 @@ describe('orchestration worker workspace resolution', () => {
       addedAt: 1,
       ...repo
     })) as Repo[]
+
     const runtime = new OrcaRuntimeService(
       makeStore({ repos, folderWorkspaces: [folder], projectGroups: [group] }) as never
     )

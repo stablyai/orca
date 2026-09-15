@@ -39,30 +39,39 @@ export default function BrowserPane({
   chromeShortcutScope?: BrowserChromeShortcutScope
 }): React.JSX.Element {
   const resolvedChromeShortcutScope = chromeShortcutScope ?? (isActive ? 'focused' : 'inactive')
+
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, browserTab.worktreeId)
   )
+
   const browserPages = useAppStore((s) =>
     getBrowserPagesForWorkspace(s.browserPagesByWorkspace, browserTab.id)
   )
+
   const activeBrowserPage =
     browserPages.find((page) => page.id === browserTab.activePageId) ?? browserPages[0] ?? null
+
   const updateBrowserPageState = useAppStore((s) => s.updateBrowserPageState)
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
+
   const activeBrowserRuntimeEnvironmentId = activeBrowserPage
     ? getBrowserPageRuntimeEnvironmentId(activeBrowserPage, activeRuntimeEnvironmentId)
     : null
+
   const runtimeEnvironmentActive = Boolean(activeBrowserRuntimeEnvironmentId)
   const activeBrowserPageId = activeBrowserPage?.id ?? null
+
   const activeRemotePageHandle = useAppStore((state) =>
     activeBrowserPageId
       ? (state.remoteBrowserPageHandlesByPageId[activeBrowserPageId] ?? null)
       : null
   )
+
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
   const mobileDrivenPageIds = useBrowserMobileDrivenPageIds(browserPageIds)
   const remotelyViewedPageIds = useBrowserRemotelyViewedPageIds(browserPageIds)
+
   const localBrowserPages = useMemo(
     () =>
       browserPages.filter(
@@ -70,11 +79,13 @@ export default function BrowserPane({
       ),
     [browserPages, activeRuntimeEnvironmentId]
   )
+
   // Routing guards every local guest, including pages hidden after their first activation.
   const localBrowserPageIds = useMemo(
     () => localBrowserPages.map((page) => page.id),
     [localBrowserPages]
   )
+
   const hasAdmittedPage = useAnyBrowserPageMountAdmission(localBrowserPageIds)
   const pageDriver = useBrowserDriverForPage(activeBrowserPageId)
   // Why: a runtime-backed page is streamed, never locally driven, so its driver must read idle.
@@ -84,6 +95,7 @@ export default function BrowserPane({
     if (!runtimeEnvironmentActive) {
       return
     }
+
     for (const page of browserPages) {
       if (getBrowserPageRuntimeEnvironmentId(page, activeRuntimeEnvironmentId)) {
         destroyPersistentWebview(page.id)
@@ -101,7 +113,9 @@ export default function BrowserPane({
     if (!activeBrowserPageId) {
       return
     }
+
     const { reclaimed } = await window.api.runtime.reclaimBrowserForDesktop(activeBrowserPageId)
+
     if (!reclaimed) {
       throw new Error('Could not reclaim browser control')
     }
@@ -112,18 +126,22 @@ export default function BrowserPane({
       activeRemotePageHandle?.environmentId === activeBrowserRuntimeEnvironmentId
         ? activeRemotePageHandle
         : null
+
     const clientPlacement =
       environmentHandle?.placement?.kind === 'client' ? environmentHandle.placement : null
+
     // Why: a staged page this client expects to host itself mounts the client-hosted pane from the
     // first frame. The host mints the placement, so keying on it would swap component and key at
     // adoption — a remount that replays open dropdowns and throws away focus and drafts. The pane
     // renders connecting until adoption fills the placement in.
     const stagedClientHosted =
       environmentHandle?.staged === true && environmentHandle.stagedClientHosted === true
+
     // Why: a row restored from a previous run has no placement until the relaunched host recovers
     // the page, and the streamed pane would meanwhile open a server screencast the host refuses
     // for a client-placed page. It mounts quiet on the client pane until adoption fills it in.
     const restoredClientHosted = environmentHandle?.restoredClientHosted === true
+
     return activeBrowserPage ? (
       clientPlacement || stagedClientHosted || restoredClientHosted ? (
         <ClientHostedBrowserPagePane

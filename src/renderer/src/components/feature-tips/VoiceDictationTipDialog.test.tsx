@@ -8,7 +8,9 @@ import { FEATURE_TIPS, type FeatureTip } from '../../../../shared/feature-tips'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
 const shortcutMock = vi.hoisted(() => vi.fn(() => ({ keys: ['⌘', 'E'], doubleTap: false })))
+
 const dialogContentPropsMock = vi.hoisted(() => vi.fn())
+
 const featureTipActionsPropsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -29,6 +31,7 @@ vi.mock('@/components/ui/dialog', () => ({
     onOpenAutoFocus?: (event: Event) => void
   }) => {
     dialogContentPropsMock(props)
+
     return <div>{children}</div>
   },
   DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
@@ -40,15 +43,18 @@ vi.mock('@/components/ui/dialog', () => ({
 vi.mock('./FeatureTipActions', () => ({
   FeatureTipActions: (props: { primaryButtonRef?: RefObject<HTMLButtonElement | null> }) => {
     featureTipActionsPropsMock(props)
+
     return <button ref={props.primaryButtonRef}>Primary action</button>
   }
 }))
 
 function getVoiceTip(): FeatureTip {
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'voice-dictation')
+
   if (!tip) {
     throw new Error('Expected voice-dictation feature tip fixture')
   }
+
   return { ...tip }
 }
 

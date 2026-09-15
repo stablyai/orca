@@ -97,6 +97,7 @@ describe('runBackgroundWorktreeCreation linked-item dedupe', () => {
         path: '/repo'
       }
     })
+
     store.pendingWorktreeCreations = {
       existing: makePendingCreation(linkedRequest)
     }

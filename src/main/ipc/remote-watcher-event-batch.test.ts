@@ -31,6 +31,7 @@ describe('createRemoteWatcherEventBatch', () => {
       batch.push([{ kind: 'update', absolutePath: `${ROOT}/file-${i}.ts` }])
       vi.advanceTimersByTime(1)
     }
+
     expect(deliver).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(150)
@@ -188,6 +189,7 @@ describe('createRemoteWatcherEventBatch', () => {
         }))
       )
     }
+
     vi.advanceTimersByTime(150)
 
     expect(deliver).toHaveBeenCalledTimes(1)
@@ -260,6 +262,7 @@ describe('createRemoteWatcherEventBatch', () => {
       { kind: 'update', absolutePath: '/home/u/A' },
       { kind: 'update', absolutePath: '/home/u/a' }
     ])
+
     for (const event of delivered) {
       expect(event.absolutePath).not.toContain('\\')
       expect(event.absolutePath).not.toMatch(/^[a-zA-Z]:/)
@@ -284,6 +287,7 @@ describe('createRemoteWatcherEventBatch', () => {
 
   it('still coalesces equivalent Windows path spellings', () => {
     const deliver = vi.fn()
+
     const batch = createRemoteWatcherEventBatch({
       rootPath: 'C:\\Repo',
       deliver,

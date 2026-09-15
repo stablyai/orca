@@ -41,6 +41,7 @@ export function WorkspaceCombobox({
       if (node === null) {
         cancelFocusFrame()
       }
+
       inputRef.current = node
     },
     [cancelFocusFrame]
@@ -57,6 +58,7 @@ export function WorkspaceCombobox({
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (!nextOpen) {
         cancelFocusFrame()
       }

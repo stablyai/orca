@@ -11,14 +11,18 @@ function countCommitMessageRows(message: string): number {
 
   const scanLength = Math.min(message.length, COMMIT_MESSAGE_ROW_SCAN_CODE_UNITS)
   let rows = 1
+
   for (let index = 0; index < scanLength; index += 1) {
     if (message.charCodeAt(index) !== 10) {
       continue
     }
+
     rows += 1
+
     if (rows >= 12) {
       return rows
     }
   }
+
   return rows
 }

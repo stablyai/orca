@@ -40,26 +40,33 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   if (value === undefined || value === null) {
     return {}
   }
+
   if (typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Invalid SSH PTY attach response')
   }
+
   const result = value as {
     replay?: unknown
     incarnationId?: unknown
     sourceRecovery?: unknown
     sourceActivation?: unknown
   }
+
   if (result.replay !== undefined && typeof result.replay !== 'string') {
     throw new Error('Invalid SSH PTY attach replay')
   }
+
   if (result.incarnationId !== undefined && !isPtyIncarnationId(result.incarnationId)) {
     // Why: a present-but-invalid identity cannot safely fence delayed exits from a reused relay id.
     throw new Error('Invalid SSH PTY attach incarnation')
   }
+
   const sourceRecovery = parseSourceRecoveryResult(result.sourceRecovery)
   const sourceActivation = parsePtySourceReceivingActivation(result.sourceActivation)
+
   const activation =
     sourceActivation ?? (sourceRecovery?.status === 'pending' ? sourceRecovery : undefined)
+
   if (
     activation &&
     (!isPtyIncarnationId(result.incarnationId) ||
@@ -68,6 +75,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   ) {
     throw new Error('Invalid SSH PTY source activation identity')
   }
+
   return {
     ...(typeof result.replay === 'string' ? { replay: result.replay } : {}),
     ...(isPtyIncarnationId(result.incarnationId) ? { incarnationId: result.incarnationId } : {}),
@@ -89,22 +97,27 @@ export async function requestSshPtyAttach(args: {
   rememberPtyIncarnation?: (relayPtyId: string, incarnationId: unknown) => void
 }): Promise<SshPtyAttachResult> {
   let activationLease: SshPtyReceivingActivationLease | undefined
+
   const installFromResult = (result: SshPtyAttachResult): void => {
     if (!activationLease && result.sourceActivation && args.installSourceActivation) {
       activationLease = args.installSourceActivation(args.relayPtyId, result.sourceActivation)
     }
   }
+
   try {
     const rawResult = await args.mux.request('pty.attach', args.params, {
       ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs }),
       beforeResolve: (value) => installFromResult(parseSshPtyAttachResult(value))
     })
+
     const result = parseSshPtyAttachResult(rawResult)
     installFromResult(result)
     args.rememberPtyIncarnation?.(args.relayPtyId, result.incarnationId)
+
     if (args.commitSourceActivation) {
       activationLease?.commit()
     }
+
     return {
       ...result,
       ...(activationLease ? { sourceActivationLease: activationLease } : {})
@@ -119,13 +132,17 @@ function parseSourceRecoveryResult(value: unknown): PtySourceRecoveryResult | un
   if (value === undefined) {
     return undefined
   }
+
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Invalid SSH PTY source recovery response')
   }
+
   const input = value as Record<string, unknown>
+
   if (input.status === 'restoreRequired' && typeof input.reason === 'string') {
     return Object.freeze({ status: 'restoreRequired', reason: input.reason })
   }
+
   if (
     input.status !== 'pending' ||
     typeof input.deliveryToken !== 'string' ||
@@ -140,6 +157,7 @@ function parseSourceRecoveryResult(value: unknown): PtySourceRecoveryResult | un
   ) {
     throw new Error('Invalid SSH PTY source recovery response')
   }
+
   return Object.freeze({
     status: 'pending',
     deliveryToken: input.deliveryToken,
@@ -190,10 +208,12 @@ export async function reattachSshPtySession(args: {
 }): Promise<SshPtyReattachResult> {
   const relaySessionId = toRelaySshPtyId(args.connectionId, args.sessionId)
   console.warn(`[ssh-pty] spawn() called with sessionId=${args.sessionId}, attempting pty.attach`)
+
   try {
     // Why: expected pane identity prevents a reused relay id from attaching the wrong shell.
     const expectedPaneKey = args.options.paneKey ?? args.options.env?.ORCA_PANE_KEY
     const expectedTabId = args.options.tabId ?? args.options.env?.ORCA_TAB_ID
+
     const attachResult = await requestSshPtyAttach({
       mux: args.mux,
       relayPtyId: relaySessionId,
@@ -213,9 +233,11 @@ export async function reattachSshPtySession(args: {
       installSourceActivation: args.installSourceActivation,
       rememberPtyIncarnation: args.rememberPtyIncarnation
     })
+
     console.warn(
       `[ssh-pty] pty.attach succeeded for ${args.sessionId}, replay=${!!attachResult.replay}`
     )
+
     return {
       id: toAppSshPtyId(args.connectionId, relaySessionId),
       isReattach: true,
@@ -230,6 +252,7 @@ export async function reattachSshPtySession(args: {
   } catch (error) {
     // Why: an expired relay lease must be surfaced distinctly so the renderer clears its binding.
     console.warn(`[ssh-pty] pty.attach FAILED for ${args.sessionId}:`, error)
+
     if (isSshPtyNotFoundError(error)) {
       if (isSshPtyIdentityMismatchError(error)) {
         // The id names a LIVE PTY owned by another pane, so this is not evidence of absence.
@@ -237,6 +260,7 @@ export async function reattachSshPtySession(args: {
           `${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId} ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
         )
       }
+
       // Why the class: the relay answered for this exact id, so callers holding a pane binding may
       // retire it and spawn fresh. Plain `SSH_SESSION_EXPIRED` cannot say that — a restarted relay
       // renumbers from pty-1, so the message alone is indistinguishable from a lost link.
@@ -247,8 +271,10 @@ export async function reattachSshPtySession(args: {
       if (isProvenExitedPtyAttachRefusal(error)) {
         throw new SshPtyProvenExitedOnRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
       }
+
       throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
     }
+
     throw error
   }
 }
@@ -260,9 +286,11 @@ export async function reattachSshPtySessionWithExitFence(
 ): Promise<SshPtyReattachResult> {
   const operation = args.exitRaceTracker.begin()
   let result: SshPtyReattachResult | undefined
+
   try {
     result = await reattachSshPtySession(args)
     const relayPtyId = toRelaySshPtyId(args.connectionId, result.id)
+
     if (
       args.exitRaceTracker.didMatchingExitArrive(operation, {
         id: relayPtyId,
@@ -271,6 +299,7 @@ export async function reattachSshPtySessionWithExitFence(
     ) {
       throw new Error('agent_session_exited_during_start')
     }
+
     return result
   } catch (error) {
     result?.sourceActivationLease?.rollback()
@@ -295,35 +324,44 @@ export async function reattachSshPtySessionForSpawn(
   }
 ): Promise<PtySpawnResult> {
   let restoreRequiredReason = 'unknown'
+
   // The relay retires the stale delivery as it answers restoreRequired, so the next attach opens a
   // fresh one with full replay. One immediate retry keeps the ordinary reconnect off the renderer's
   // 15s-cooldown pane-recovery ladder.
   for (let attempt = 0; attempt < RESTORE_REQUIRED_ATTACH_ATTEMPTS; attempt++) {
     let result: SshPtyReattachResult | undefined
+
     try {
       result = await reattachSshPtySessionWithExitFence(args)
+
       if (result.sourceRecovery?.status === 'restoreRequired') {
         restoreRequiredReason = result.sourceRecovery.reason
         const lease = result.sourceActivationLease
+
         // An unconfirmed cancellation must not stack a second delivery on the first.
         if (lease && !(await lease.rollback())) {
           break
         }
+
         continue
       }
+
       args.acceptLivePty(result.id)
       result.sourceActivationLease?.commit()
+
       const {
         sourceActivationLease: _lease,
         sourceRecovery: _sourceRecovery,
         ...spawnResult
       } = result
+
       return spawnResult
     } catch (error) {
       result?.sourceActivationLease?.rollback()
       throw error
     }
   }
+
   // Why not SSH_SESSION_EXPIRED: the relay only reaches a restoreRequired reply after finding the
   // managed PTY and confirming its process is alive, so this is `unverifiable` about the delivery
   // and positive evidence the PTY is live. Claiming expiry here made the caller retire the pane

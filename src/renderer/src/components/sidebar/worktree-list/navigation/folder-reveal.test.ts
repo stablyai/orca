@@ -72,6 +72,7 @@ function makeWorktree(id: string): Worktree {
 describe('worktree list folder reveal', () => {
   it('resolves synthetic folder workspace ids as known sidebar worktrees', () => {
     const folderWorkspace = makeFolderWorkspace()
+
     const folderWorktree = getKnownSidebarWorktreeById(
       folderWorkspaceKey(folderWorkspace.id),
       new Map(),
@@ -103,11 +104,13 @@ describe('worktree list folder reveal', () => {
 
   it('returns project group keys from root to nested folder workspace owner', () => {
     const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+
     const child = makeProjectGroup({
       id: 'group-child',
       name: 'Platform',
       parentGroupId: root.id
     })
+
     const folderWorkspace = makeFolderWorkspace({ projectGroupId: child.id })
 
     expect(
@@ -133,6 +136,7 @@ describe('reveal keys under non-repo grouping', () => {
       workspaceStatuses: [],
       defaultHostId: 'local'
     })
+
     expect(keys).toContain('workspace-status:in-progress')
   })
 
@@ -142,6 +146,7 @@ describe('reveal keys under non-repo grouping', () => {
       workspaceStatuses: [],
       defaultHostId: 'local'
     })
+
     expect(keys).toContain('host:ssh:target-1')
   })
 
@@ -151,6 +156,7 @@ describe('reveal keys under non-repo grouping', () => {
       workspaceStatuses: [],
       defaultHostId: 'local'
     })
+
     expect(keys).toContain(getProjectGroupHeaderKey(group.id))
     expect(keys.some((key) => key.startsWith('workspace-status:'))).toBe(false)
   })

@@ -19,6 +19,7 @@ export function collectBrowserWebviewIds(
   browserPagesByWorkspace: Record<string, BrowserPage[]>
 ): Set<string> {
   const ids = new Set<string>()
+
   for (const pages of Object.values(browserPagesByWorkspace)) {
     for (const page of pages) {
       ids.add(page.id)
@@ -32,6 +33,7 @@ export function collectBrowserWebviewIds(
       }
     }
   }
+
   return ids
 }
 
@@ -51,9 +53,11 @@ export function destroyWorktreeBrowserGuests(
     // Legacy sessions persisted before pages existed key their webview by the
     // workspace tab id (same fallback as collectBrowserWebviewIds).
     const guestIds = pages.length === 0 ? [tab.id] : pages.map((page) => page.id)
+
     for (const guestId of guestIds) {
       const explicitZoomLevel = getExplicitBrowserPageZoomLevel(guestId)
       destroyRemovedBrowserWebview(guestId)
+
       if (explicitZoomLevel !== null) {
         rememberExplicitBrowserPageZoomLevel(guestId, explicitZoomLevel)
       }
@@ -66,12 +70,15 @@ export function destroyWorkspaceWebviews(
   workspaceId: string
 ): void {
   const pages = browserPagesByWorkspace[workspaceId] ?? []
+
   if (pages.length === 0) {
     // Why: legacy sessions persisted before pages existed still key their
     // webview by workspace id. Preserve the legacy destroy as a fallback.
     destroyRemovedBrowserWebview(workspaceId)
+
     return
   }
+
   for (const page of pages) {
     destroyRemovedBrowserWebview(page.id)
   }

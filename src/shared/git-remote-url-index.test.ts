@@ -6,6 +6,7 @@ import {
 } from './git-remote-url-index'
 
 const SSH_URL = 'git@github.com:contributor/orca.git'
+
 const HTTPS_URL = 'https://github.com/contributor/orca.git'
 
 function verbose(rows: readonly (readonly [string, string])[]): string {
@@ -48,6 +49,7 @@ describe('parseGitRemoteFetchUrls', () => {
       ['b', `${HTTPS_URL} (fetch)`],
       ['b', 'https://github.com/contributor/other.git (push)']
     ])
+
     expect([...parseGitRemoteFetchUrls(stdout)]).toEqual([
       ['a', SSH_URL],
       ['b', HTTPS_URL]
@@ -65,6 +67,7 @@ describe('parseGitRemoteFetchUrls', () => {
       ['multi', `${SSH_URL} (push)`],
       ['multi', `${HTTPS_URL} (push)`]
     ])
+
     expect(parseGitRemoteFetchUrls(stdout).get('multi')).toBe(SSH_URL)
   })
 
@@ -73,9 +76,11 @@ describe('parseGitRemoteFetchUrls', () => {
       `r${index}`,
       `https://example.com/o${index}/repo.git`
     ])
+
     const stdout = rows
       .flatMap(([name, url]) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
       .join('\n')
+
     const parsed = [...parseGitRemoteFetchUrls(stdout)]
     expect(parsed).toHaveLength(58)
     expect(parsed[0]).toEqual(['r0', 'https://example.com/o0/repo.git'])
@@ -106,6 +111,7 @@ describe('findGitRemoteNameByFetchUrl', () => {
       ['split', `${SSH_URL} (fetch)`],
       ['split', `${HTTPS_URL} (push)`]
     ])
+
     expect(findGitRemoteNameByFetchUrl(split, (url) => url === SSH_URL)).toBe('split')
     expect(findGitRemoteNameByFetchUrl(split, (url) => url === HTTPS_URL)).toBeNull()
   })

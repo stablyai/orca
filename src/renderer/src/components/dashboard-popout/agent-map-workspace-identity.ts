@@ -4,11 +4,13 @@ export function agentMapCardTopologyIdentity(card: DashboardCard): string {
   const parentPaneKey = card.parentPaneKey ?? ''
   const parentWorktreeId = card.parentWorktreeId ?? ''
   const executionHostId = card.executionHostId ?? ''
+
   return `${card.repoId.length}:${card.repoId}${card.worktreeId.length}:${card.worktreeId}${executionHostId.length}:${executionHostId}${card.paneKey.length}:${card.paneKey}${parentPaneKey.length}:${parentPaneKey}${parentWorktreeId.length}:${parentWorktreeId}`
 }
 
 export function agentMapWorkspaceTopologyIdentity(workspace: DashboardWorkspace): string {
   const parentWorktreeId = workspace.parentWorktreeId ?? ''
+
   return `${workspace.repoId.length}:${workspace.repoId}${workspace.worktreeId.length}:${workspace.worktreeId}${workspace.executionHostId.length}:${workspace.executionHostId}${parentWorktreeId.length}:${parentWorktreeId}`
 }
 
@@ -17,6 +19,7 @@ export function agentMapWorktreeIdentityFromParts(
   executionHostId: DashboardCard['executionHostId']
 ): string {
   const hostId = executionHostId ?? ''
+
   return `${worktreeId.length}:${worktreeId}${hostId.length}:${hostId}`
 }
 

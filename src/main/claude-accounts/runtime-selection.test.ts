@@ -23,6 +23,7 @@ function createAccount(
   overrides: Partial<ClaudeManagedAccount> & Pick<ClaudeManagedAccount, 'id'>
 ): ClaudeManagedAccount {
   const { id, ...rest } = overrides
+
   return {
     id,
     email: `${id}@example.com`,
@@ -45,6 +46,7 @@ describe('Claude runtime account selection', () => {
     const first = setSelectedClaudeAccountIdForTarget({ host: null, wsl: {} }, 'host-account', {
       runtime: 'host'
     })
+
     const next = setSelectedClaudeAccountIdForTarget(first, 'wsl-account', {
       runtime: 'wsl',
       wslDistro: 'Ubuntu'

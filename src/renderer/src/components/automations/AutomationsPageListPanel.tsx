@@ -23,6 +23,7 @@ export function AutomationsPageListPanel({
     externalActions,
     presentation
   } = controller
+
   const {
     projectHostSetups,
     repoMap,
@@ -30,6 +31,7 @@ export function AutomationsPageListPanel({
     sshConnectionStates,
     runtimeStatusByEnvironmentId
   } = store
+
   const {
     listSearchQuery,
     setListSearchQuery,
@@ -41,6 +43,7 @@ export function AutomationsPageListPanel({
     isLoading,
     setPageView
   } = local
+
   const {
     hostCatalog,
     hasListItems,
@@ -50,12 +53,15 @@ export function AutomationsPageListPanel({
     selectedExternal,
     searchCounts
   } = list
+
   const onListFilterChange = (next: typeof listFilter): void => {
     setListFilter(next)
+
     if ((next.hostStableKeys?.length ?? 0) > 0 && hostCatalog.resolution.effective.kind !== 'all') {
       hostCatalog.selectHost({ kind: 'all' })
     }
   }
+
   return (
     <AutomationsListPanel
       hasListItems={hasListItems}
@@ -74,6 +80,7 @@ export function AutomationsPageListPanel({
       onSelectHost={hostCatalog.selectHost}
       onRecoverHost={(action, entry) => {
         hostCatalog.recover(action, entry)
+
         if (action === 'retry') {
           void pageRefresh.refresh()
         }

@@ -31,12 +31,15 @@ type Harness = {
 function createHarness(cols = 80, rows = 24): Harness {
   const terminal = new Terminal({ cols, rows, allowProposedApi: true })
   const requests: SpanRequest[] = []
+
   const target = terminal as unknown as ForegroundTerminalOutputTarget & {
     refresh: (start: number, end: number) => void
   }
+
   target.refresh = (start: number, end: number) => {
     requests.push({ start, end })
   }
+
   return { terminal, target, requests }
 }
 
@@ -45,16 +48,21 @@ function serializeRow(terminal: Terminal, viewportRow: number): string {
   // line at `viewportY`. Comparing raw buffer indices would compare scrollback
   // that no write can touch and make the oracle vacuous.
   const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + viewportRow)
+
   if (!line) {
     return '<missing>'
   }
+
   const parts: string[] = []
+
   for (let x = 0; x < terminal.cols; x++) {
     const cell = line.getCell(x)
+
     if (!cell) {
       parts.push('~')
       continue
     }
+
     parts.push(
       [
         cell.getChars(),
@@ -75,24 +83,29 @@ function serializeRow(terminal: Terminal, viewportRow: number): string {
       ].join(':')
     )
   }
+
   return parts.join('|')
 }
 
 function snapshotViewport(terminal: Terminal): string[] {
   const rows: string[] = []
+
   for (let y = 0; y < terminal.rows; y++) {
     rows.push(serializeRow(terminal, y))
   }
+
   return rows
 }
 
 function changedRows(before: string[], after: string[]): number[] {
   const changed: number[] = []
+
   for (let y = 0; y < Math.max(before.length, after.length); y++) {
     if (before[y] !== after[y]) {
       changed.push(y)
     }
   }
+
   return changed
 }
 
@@ -105,6 +118,7 @@ async function writeAndSettle(harness: Harness, data: string): Promise<void> {
       shouldRefreshViewportSynchronously: () => false,
       onParsed: () => resolve()
     })
+
     expect(accepted).toBe(true)
   })
 }
@@ -248,9 +262,11 @@ describe('foreground repaint convergence', () => {
   for (const testCase of CASES) {
     it(`covers every changed row: ${testCase.name}`, async () => {
       const harness = createHarness(testCase.cols ?? 80, testCase.rows ?? 24)
+
       if (testCase.setup) {
         await seed(harness, testCase.setup)
       }
+
       const before = snapshotViewport(harness.terminal)
       const cursorBefore = harness.terminal.buffer.active.cursorY
       harness.requests.length = 0
@@ -263,6 +279,7 @@ describe('foreground repaint convergence', () => {
 
       const request = harness.requests[0]!
       const isFullGrid = request.start === 0 && request.end === harness.terminal.rows - 1
+
       if (testCase.expectFullGrid) {
         expect(isFullGrid).toBe(true)
       }
@@ -270,12 +287,14 @@ describe('foreground repaint convergence', () => {
       const dirty = changedRows(before, after)
       // Guard against a vacuous oracle: every corpus entry must move the screen.
       expect(dirty.length).toBeGreaterThan(0)
+
       for (const row of dirty) {
         expect(
           row >= request.start && row <= request.end,
           `row ${row} changed but repaint span was ${request.start}..${request.end}`
         ).toBe(true)
       }
+
       // The cursor row must be repainted: xterm's WebGL model drops the caret
       // whenever an update pass excludes it.
       expect(cursorBefore).toBeGreaterThanOrEqual(request.start)
@@ -308,7 +327,9 @@ describe('foreground repaint convergence', () => {
     // WebGL model drops the caret when an update pass excludes the cursor row.
     const requests: SpanRequest[] = []
     let fire: (event: { start: number; end: number } | undefined) => void = () => {}
+
     const active = { type: 'normal', cursorY: 2, baseY: 0, viewportY: 0 }
+
     const target: ForegroundTerminalOutputTarget = {
       rows: 24,
       buffer: { active },
@@ -322,11 +343,13 @@ describe('foreground repaint convergence', () => {
         _inputHandler: {
           onRequestRefreshRows: (listener) => {
             fire = listener
+
             return { dispose: () => {} }
           }
         }
       }
     } as unknown as ForegroundTerminalOutputTarget
+
     writeForegroundTerminalChunk(target, 'x', {
       forceViewportRefresh: true,
       shouldRefreshViewportSynchronously: () => false
@@ -336,6 +359,7 @@ describe('foreground repaint convergence', () => {
 
   it('repaints the whole viewport when the parse span cannot be observed', async () => {
     const requests: SpanRequest[] = []
+
     const target: ForegroundTerminalOutputTarget = {
       rows: 24,
       buffer: {
@@ -344,6 +368,7 @@ describe('foreground repaint convergence', () => {
       refresh: (start, end) => requests.push({ start, end }),
       write: (_data, callback) => callback?.()
     }
+
     writeForegroundTerminalChunk(target, 'x', {
       forceViewportRefresh: true,
       shouldRefreshViewportSynchronously: () => false

@@ -41,22 +41,26 @@ describe('relay watch-root capacity', () => {
 
   it('blocks replacement watches behind physical unsubscribe and counts the pending slot', async () => {
     let resolveUnsubscribe: () => void = () => {}
+
     const unsubscribe = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveUnsubscribe = resolve
         })
     )
+
     mockSubscribe.mockResolvedValue({ unsubscribe })
     await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
     dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
 
     const replacement = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
+
     for (let index = 0; index < 19; index += 1) {
       await dispatcher.callRequest('fs.watch', {
         rootPath: path.join(tmpDir, `pending-cap-${index}`)
       })
     }
+
     // The replacement claims the slot the teardown releases, so this cap is genuinely full: the
     // request waits for the release event and is still refused once it has happened.
     const overCap = dispatcher
@@ -65,6 +69,7 @@ describe('relay watch-root capacity', () => {
         () => null,
         (error: Error) => error
       )
+
     expect(mockSubscribe).toHaveBeenCalledTimes(20)
 
     resolveUnsubscribe()
@@ -75,6 +80,7 @@ describe('relay watch-root capacity', () => {
 
   it('waits out a teardown that frees a slot instead of refusing on it', async () => {
     let resolveUnsubscribe: () => void = () => {}
+
     mockSubscribe.mockResolvedValue({
       unsubscribe: vi.fn(
         () =>
@@ -83,19 +89,23 @@ describe('relay watch-root capacity', () => {
           })
       )
     })
+
     for (let index = 0; index < 20; index += 1) {
       await dispatcher.callRequest('fs.watch', { rootPath: path.join(tmpDir, `full-${index}`) })
     }
+
     dispatcher.callNotification('fs.unwatch', { rootPath: path.join(tmpDir, 'full-0') })
 
     // Why not a refusal: the slot is already promised back, and the client answers a capacity
     // refusal with a 60s-to-30min dormancy that no release event can shorten.
     let settled = false
+
     const fresh = dispatcher
       .callRequest('fs.watch', { rootPath: path.join(tmpDir, 'fresh') })
       .then(() => {
         settled = true
       })
+
     await Promise.resolve()
     expect(settled).toBe(false)
     expect(mockSubscribe).toHaveBeenCalledTimes(20)

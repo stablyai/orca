@@ -1,5 +1,6 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+
 export function createUpdateWorktreeBaseStatus(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet

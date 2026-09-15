@@ -8,6 +8,7 @@ export function browserClientPageCommandFailureCode(error: unknown, signal: Abor
   if (error instanceof BrowserClientPageCommandError) {
     return error.message
   }
+
   return signal.aborted
     ? 'browser_client_page_command_aborted'
     : 'browser_client_page_command_failed'

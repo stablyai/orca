@@ -38,18 +38,23 @@ const localTwin = repo('local-uuid', {
   path: '/laptop/shared',
   executionHostId: 'local'
 })
+
 const remoteATwin = repo('env-a-uuid', {
   path: '/mini/shared',
   executionHostId: 'runtime:env-a'
 })
+
 const remoteBTwin = repo('env-b-uuid', {
   path: '/server/shared',
   executionHostId: 'runtime:env-b'
 })
 
 const reposRemove = vi.fn()
+
 const reposRemoveForHost = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn<(args: RuntimeCall) => unknown>()
 
 type RuntimeCall = RuntimeEnvironmentCallRequest & {
@@ -71,6 +76,7 @@ function answerRepoRm(options: { failingSelector?: string; code?: string } = {})
         _meta: { runtimeId: `runtime-${args.selector}` }
       }
     }
+
     return {
       id: 'rpc',
       ok: true,
@@ -84,6 +90,7 @@ function answerRepoRm(options: { failingSelector?: string; code?: string } = {})
 function answerCatalogs(reposByEnvironment: Record<string, Repo[]>): void {
   runtimeEnvironmentCall.mockImplementation((args: RuntimeCall) => {
     const meta = { runtimeId: `runtime-${args.selector}` }
+
     if (args.method === 'repo.list') {
       return {
         id: 'rpc-repo-list',
@@ -92,6 +99,7 @@ function answerCatalogs(reposByEnvironment: Record<string, Repo[]>): void {
         _meta: meta
       }
     }
+
     if (args.method === 'project.list') {
       return {
         id: 'rpc-project-list',
@@ -100,6 +108,7 @@ function answerCatalogs(reposByEnvironment: Record<string, Repo[]>): void {
         _meta: meta
       }
     }
+
     if (args.method === 'projectHostSetup.list') {
       return {
         id: 'rpc-setup-list',
@@ -108,6 +117,7 @@ function answerCatalogs(reposByEnvironment: Record<string, Repo[]>): void {
         _meta: meta
       }
     }
+
     return { id: 'rpc', ok: true, result: {}, _meta: meta }
   })
 }
@@ -118,6 +128,7 @@ function seed(repos: readonly Repo[], activeRuntimeEnvironmentId: string | null 
     settings: { activeRuntimeEnvironmentId } as never,
     repos: [...repos]
   })
+
   return store
 }
 
@@ -133,6 +144,7 @@ function remainingRepoIds(store: ReturnType<typeof seed>): string[] {
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
+
   for (const mock of [
     reposRemove,
     reposRemoveForHost,
@@ -141,6 +153,7 @@ beforeEach(() => {
   ]) {
     mock.mockReset()
   }
+
   runtimeEnvironmentTransportCall.mockImplementation(
     (args) => createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   )
@@ -212,6 +225,7 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
     path: '/laptop/dup',
     executionHostId: 'local'
   })
+
   const duplicateRemote = repo('dup-id', {
     path: '/mini/dup',
     executionHostId: 'runtime:env-a'
@@ -273,10 +287,12 @@ describe('refetching one host catalog after its own delete', () => {
       path: '/laptop/dup',
       executionHostId: 'local'
     })
+
     const duplicateRemote = repo('dup-id', {
       path: '/mini/dup',
       executionHostId: 'runtime:env-a'
     })
+
     answerCatalogs({ 'env-a': [] })
     const store = seed([duplicateLocal, duplicateRemote], 'env-a')
 

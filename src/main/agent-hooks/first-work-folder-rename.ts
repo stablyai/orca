@@ -44,9 +44,11 @@ export async function renameWorktreeFolderOnFirstWork(
   // `::workspace:<uuid>` suffix to the backing folder; identity is migrated
   // separately via the untouched worktreeId.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
+
   if (!repo || !parsed) {
     return false
   }
+
   const plan = planWorktreeFolderRename({
     repoId: repo.id,
     repoPath: repo.path,
@@ -59,16 +61,20 @@ export async function renameWorktreeFolderOnFirstWork(
     platform: process.platform,
     isRemote: getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
   })
+
   if (!plan) {
     return false
   }
+
   if (await deps.pathExists(plan.newPath)) {
     return false
   }
+
   await deps.moveWorktree(repo.path, plan.oldPath, plan.newPath)
   // Order: move first (point of no return), then re-key identity synchronously so
   // nothing interleaves before the worktree's state is re-bound to the new id.
   deps.migrateWorktreeIdentity(worktreeId, plan.newWorktreeId)
   deps.notifyWorktreeRenamed(repo.id, worktreeId, plan.newWorktreeId)
+
   return true
 }

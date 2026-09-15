@@ -1,4 +1,5 @@
 export const CLI_GLOBAL_VALUE_FLAGS: readonly string[] = ['pairing-code', 'environment']
+
 export const CLI_GLOBAL_FLAGS: readonly string[] = ['help', 'json', ...CLI_GLOBAL_VALUE_FLAGS]
 
 export const CLI_BOOLEAN_FLAGS = new Set([
@@ -53,17 +54,21 @@ function commandPathStartsAt(
   path: readonly string[]
 ): boolean {
   let cursor = tokenIndex
+
   for (const part of path) {
     while (argv[cursor]?.startsWith('--')) {
       const assignment = argv[cursor].slice(2)
       const flag = assignment.split('=', 1)[0]
       cursor += assignment.includes('=') || CLI_BOOLEAN_FLAGS.has(flag) ? 1 : 2
     }
+
     if (argv[cursor] !== part) {
       return false
     }
+
     cursor += 1
   }
+
   return true
 }
 
@@ -77,6 +82,7 @@ export function findCliCommandIndex(
 
   for (let index = 0; index < argv.length;) {
     const token = argv[index]
+
     if (!token.startsWith('--')) {
       return startsCommandAt(index) ? index : -1
     }
@@ -84,6 +90,7 @@ export function findCliCommandIndex(
     const assignment = token.slice(2)
     const flag = assignment.split('=', 1)[0]
     const next = argv[index + 1]
+
     const takesNext =
       !assignment.includes('=') &&
       !CLI_BOOLEAN_FLAGS.has(flag) &&
@@ -94,5 +101,6 @@ export function findCliCommandIndex(
 
     index += takesNext ? 2 : 1
   }
+
   return -1
 }

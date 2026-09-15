@@ -13,9 +13,11 @@ vi.mock('@/components/browser-pane/host-guest/browser-automation-visibility', ()
   acquireBrowserAutomationVisibility: mocks.acquireVisibility,
   releaseBrowserAutomationVisibility: mocks.releaseVisibility
 }))
+
 vi.mock('@/components/terminal/background-terminal-worktree-mount', () => ({
   requestBackgroundTerminalWorktreeMount: mocks.requestBackgroundMount
 }))
+
 vi.mock('../../store', () => ({
   useAppStore: {
     getState: () => ({

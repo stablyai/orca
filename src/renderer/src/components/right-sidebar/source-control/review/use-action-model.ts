@@ -9,7 +9,9 @@ import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
 import type { SourceControlEntryGroups } from '../listing/section-order'
 
 type PrimaryInput = Parameters<typeof resolveCommitAreaPrimaryAction>[0]
+
 type HeaderInput = Parameters<typeof resolveCreatePrHeaderAction>[0]
+
 type DropdownInput = Parameters<typeof resolveDropdownItems>[0]
 
 export function useSourceControlActionModel({
@@ -66,21 +68,27 @@ export function useSourceControlActionModel({
   effectiveBaseRef: string | null
 }) {
   const createReviewEligibility = hasSuppressedGitHubPRState ? null : hostedReviewCreation
+
   const createReviewHeaderEligibility = hasSuppressedGitHubPRState
     ? null
     : hostedReviewCreationForHeader
+
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
+
   const hasStageableChanges = useMemo(
     () =>
       grouped.unstaged.some(isStageableStatusEntry) ||
       grouped.untracked.some(isStageableStatusEntry),
     [grouped.unstaged, grouped.untracked]
   )
+
   const hasPartiallyStagedChanges = useMemo(() => {
     if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
       return false
     }
+
     const unstagedPaths = new Set(grouped.unstaged.map((entry) => entry.path))
+
     return grouped.staged.some((entry) => unstagedPaths.has(entry.path))
   }, [grouped.staged, grouped.unstaged])
 
@@ -133,6 +141,7 @@ export function useSourceControlActionModel({
     if (hasSuppressedGitHubPRState) {
       return null
     }
+
     const action = resolveCreatePrHeaderAction({
       stagedCount: grouped.staged.length,
       hasUnstagedChanges,
@@ -154,6 +163,7 @@ export function useSourceControlActionModel({
       hasCurrentBranch: Boolean(branchName),
       isPrIntentInFlight: isCreatePrIntentInFlight
     })
+
     if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
       return {
         ...action,
@@ -170,6 +180,7 @@ export function useSourceControlActionModel({
         disabled: true
       }
     }
+
     return action
   }, [
     branchName,
@@ -196,13 +207,16 @@ export function useSourceControlActionModel({
     remoteStatus,
     unresolvedConflictCount
   ])
+
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&
     createReviewEligibility?.canCreate === true &&
     (!createPrHeaderAction.disabled || isCreatingPr || prGenerating)
       ? createPrHeaderAction
       : null
+
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({ createPrHeaderAction })
+
   const dropdownItems = useMemo(
     () =>
       resolveDropdownItems({
@@ -253,6 +267,7 @@ export function useSourceControlActionModel({
       unresolvedConflictCount
     ]
   )
+
   return {
     hasPartiallyStagedChanges,
     primaryAction,

@@ -12,12 +12,19 @@ import type { RepoSlug } from './github/links'
 import { parseGitHubIssueOrPRLink } from './github/links'
 
 const GITHUB_PR_PATH_MARKER = '/pull/'
+
 const TERMINAL_SGR_PATTERN = /\x1b\[[0-?]*[ -/]*m/g
+
 const TERMINAL_CURSOR_CONTROL_PATTERN = /[\x08\x0b\x0c]/g
+
 const TERMINAL_CONTROL_GUARD = '\ufffd'
+
 const HTTP_SCHEME_PREFIXES = ['https://', 'http://'] as const
+
 const TRAILING_TERMINAL_PUNCTUATION_RE = /[),.;\]}]+$/
+
 const MAX_CARRY_LENGTH = 512
+
 const MAX_TERMINAL_GITHUB_PR_URL_LENGTH = 2048
 
 export type TerminalGitHubPRLink = {
@@ -34,11 +41,14 @@ function parseTerminalGitHubPRUrl(candidate: string): TerminalGitHubPRLink | nul
   if (candidate.includes('\x1b') || candidate.includes(TERMINAL_CONTROL_GUARD)) {
     return null
   }
+
   const url = trimTerminalUrl(candidate)
   const parsed = parseGitHubIssueOrPRLink(url)
+
   if (!parsed || parsed.type !== 'pr') {
     return null
   }
+
   return { url, slug: parsed.slug, number: parsed.number }
 }
 
@@ -50,18 +60,22 @@ function endsWithHttpSchemePrefixFragment(value: string): string {
       }
     }
   }
+
   return ''
 }
 
 function lastIndexOfHttpScheme(value: string, fromIndex?: number): number {
   let lastIndex = -1
+
   for (const prefix of HTTP_SCHEME_PREFIXES) {
     const candidate =
       fromIndex === undefined ? value.lastIndexOf(prefix) : value.lastIndexOf(prefix, fromIndex)
+
     if (candidate > lastIndex) {
       lastIndex = candidate
     }
   }
+
   return lastIndex
 }
 
@@ -71,17 +85,21 @@ function getPotentialGitHubPRCarry(value: string): string {
   const windowStart = value.length > MAX_CARRY_LENGTH ? value.length - MAX_CARRY_LENGTH : 0
   const tailWindow = windowStart === 0 ? value : value.slice(windowStart)
   const schemeIndexInWindow = lastIndexOfHttpScheme(tailWindow)
+
   if (schemeIndexInWindow !== -1) {
     const schemeIndex = windowStart + schemeIndexInWindow
+
     return hasTerminalUrlWhitespace(value, schemeIndex, value.length)
       ? ''
       : value.slice(schemeIndex)
   }
 
   const fragment = endsWithHttpSchemePrefixFragment(tailWindow)
+
   if (fragment === '' || windowStart === 0) {
     return fragment
   }
+
   // Why look behind: an older scheme means the URL already overran the cap, so the
   // carry is abandoned rather than restarted from this fragment.
   return lastIndexOfHttpScheme(value, windowStart - 1) === -1 ? fragment : ''
@@ -93,6 +111,7 @@ function hasTerminalUrlWhitespace(value: string, start: number, end: number): bo
       return true
     }
   }
+
   return false
 }
 
@@ -103,12 +122,15 @@ type TerminalUrlCandidate = {
 
 function findNextHttpSchemeIndex(value: string, start: number): number {
   let nextIndex = -1
+
   for (const prefix of HTTP_SCHEME_PREFIXES) {
     const candidate = value.indexOf(prefix, start)
+
     if (candidate !== -1 && (nextIndex === -1 || candidate < nextIndex)) {
       nextIndex = candidate
     }
   }
+
   return nextIndex
 }
 
@@ -118,11 +140,13 @@ function isTerminalUrlTerminator(char: string): boolean {
 
 function findTerminalUrlCandidateEnd(value: string, start: number): number {
   const scanEnd = Math.min(value.length, start + MAX_TERMINAL_GITHUB_PR_URL_LENGTH + 1)
+
   for (let index = start; index < scanEnd; index += 1) {
     if (isTerminalUrlTerminator(value.charAt(index))) {
       return index
     }
   }
+
   return scanEnd
 }
 
@@ -131,6 +155,7 @@ function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCand
 
   while (searchStart < value.length) {
     const candidateStart = findNextHttpSchemeIndex(value, searchStart)
+
     if (candidateStart === -1) {
       return
     }
@@ -138,6 +163,7 @@ function* iterateTerminalUrlCandidates(value: string): Generator<TerminalUrlCand
     const candidateEnd = findTerminalUrlCandidateEnd(value, candidateStart)
     const rawUrl = value.slice(candidateStart, candidateEnd)
     searchStart = Math.max(candidateEnd, candidateStart + 1)
+
     if (
       rawUrl.length > MAX_TERMINAL_GITHUB_PR_URL_LENGTH ||
       !rawUrl.includes(GITHUB_PR_PATH_MARKER)
@@ -160,8 +186,10 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
     // chunks that cannot contain a GitHub pull-request URL.
     if (!rawCombined.includes(GITHUB_PR_PATH_MARKER)) {
       carry = getPotentialGitHubPRCarry(rawCombined)
+
       return []
     }
+
     // Why: SGR styling has no screen width, so removing it is safe. Cursor
     // controls get a guard; other escape sequences remain URL-invalid.
     const combined = rawCombined
@@ -169,6 +197,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       .replace(TERMINAL_CURSOR_CONTROL_PATTERN, TERMINAL_CONTROL_GUARD)
 
     const links: TerminalGitHubPRLink[] = []
+
     // Why: PTY data may echo a huge pasted line. Scan URL candidates directly
     // instead of running a global regex across the whole chunk when it contains
     // a /pull/ substring.
@@ -180,14 +209,17 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       }
 
       const parsed = parseTerminalGitHubPRUrl(rawUrl)
+
       if (!parsed || seenUrls.has(parsed.url)) {
         continue
       }
+
       seenUrls.add(parsed.url)
       links.push(parsed)
     }
 
     carry = getPotentialGitHubPRCarry(rawCombined)
+
     return links
   }
 }

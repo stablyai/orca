@@ -96,6 +96,7 @@ describe('project view host authentication boundary', () => {
   it('uses a pasted github.com URL instead of the ambient Enterprise host', async () => {
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       return query.includes('projectV2')
         ? {
             stdout: JSON.stringify({

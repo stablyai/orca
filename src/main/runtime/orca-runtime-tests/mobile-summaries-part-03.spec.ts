@@ -25,11 +25,13 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const runtime = new OrcaRuntimeService(
       runtimeStore as never,
       undefined,
       makeAgentStatusStoreWiring().deps
     )
+
     runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       connectionId: 'ssh-osc-1',
@@ -55,7 +57,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -97,7 +101,9 @@ describe('OrcaRuntimeService', () => {
         ]
       }
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -126,7 +132,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -160,6 +168,7 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-6072'
     }
+
     const remoteWorktree = {
       path: '/home/me/project/.worktrees/feature-agents',
       head: 'def',
@@ -167,10 +176,13 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const remoteWorktreeId = `${remoteRepo.id}::${remoteWorktree.path}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [remoteWorktreeId]: makeWorktreeMeta({ displayName: 'Remote agents' })
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -179,10 +191,12 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getWorkspaceSession: () => getDefaultWorkspaceSession()
     }
+
     registerSshGitProvider('ssh-6072', {
       listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
     } as never)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -211,6 +225,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -228,6 +243,7 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const remoteWorktree = {
       path: '/home/me/project/.worktrees/feature-mobile',
       head: 'def',
@@ -235,12 +251,15 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const metaById: Record<string, WorktreeMeta> = {
       [`${remoteRepo.id}::${remoteWorktree.path}`]: makeWorktreeMeta({
         displayName: 'Remote mobile'
       })
     }
+
     const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -249,14 +268,17 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     registerSshGitProvider('ssh-1', {
       listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
     } as never)
 
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         Array.from({ length: 100 }, (_, index) => ({
@@ -271,6 +293,7 @@ describe('OrcaRuntimeService', () => {
           stateStartedAt: now - 100
         }))
     })
+
     const summaries = await runtime.getWorktreePs()
 
     // Why: equal keys prove polled worktree.ps rows can share the per-request index instead of repeating path scans.
@@ -314,6 +337,7 @@ describe('OrcaRuntimeService', () => {
     'handles %s worktree paths when projecting mobile agents',
     async (_kind, repoPath, backslashPath, slashPath, projectedPath, includeSlashWorktree) => {
       setPlatform('win32')
+
       const remoteRepo = {
         id: 'repo-relative-ssh',
         path: repoPath,
@@ -322,6 +346,7 @@ describe('OrcaRuntimeService', () => {
         addedAt: 1,
         connectionId: 'ssh-relative'
       }
+
       const backslashWorktree = {
         path: backslashPath,
         head: 'abc',
@@ -329,11 +354,13 @@ describe('OrcaRuntimeService', () => {
         isBare: false,
         isMainWorktree: false
       }
+
       const slashWorktree = {
         ...backslashWorktree,
         path: slashPath,
         branch: 'refs/heads/slash'
       }
+
       const runtimeStore = {
         ...store,
         getRepos: () => [remoteRepo],
@@ -341,6 +368,7 @@ describe('OrcaRuntimeService', () => {
         getAllWorktreeMeta: () => ({}),
         getWorktreeMeta: () => undefined
       }
+
       registerSshGitProvider('ssh-relative', {
         listWorktrees: vi
           .fn()
@@ -350,6 +378,7 @@ describe('OrcaRuntimeService', () => {
       } as never)
 
       const now = Date.now()
+
       const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
         getAgentStatusSnapshot: () =>
           Array.from({ length: 100 }, (_, index) => ({
@@ -366,9 +395,11 @@ describe('OrcaRuntimeService', () => {
       })
 
       const summaries = await runtime.getWorktreePs()
+
       const backslashSummary = summaries.worktrees.find(
         (worktree) => worktree.path === backslashWorktree.path
       )
+
       const slashSummary = summaries.worktrees.find(
         (worktree) => worktree.path === slashWorktree.path
       )
@@ -377,14 +408,17 @@ describe('OrcaRuntimeService', () => {
       expect(backslashSummary?.agents).toHaveLength(100)
       expect(slashSummary?.agents).toEqual(includeSlashWorktree ? [] : undefined)
       const comparisonPlatform = repoPath.startsWith('C:') ? 'win32' : 'linux'
+
       const backslashKey = worktreePathComparison.worktreePathComparisonKey(
         backslashPath,
         comparisonPlatform
       )
+
       const slashKey = worktreePathComparison.worktreePathComparisonKey(
         slashPath,
         comparisonPlatform
       )
+
       expect(backslashKey === slashKey).toBe(!includeSlashWorktree)
     }
   )
@@ -398,12 +432,16 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-pair-aware-scale'
     }
+
     let pathReadCount = 0
+
     const remoteWorktrees = Array.from({ length: 100 }, (_, index) => {
       const path = `C:relative\\feature-${String(index).padStart(3, '0')}`
+
       return {
         get path() {
           pathReadCount += 1
+
           return path
         },
         head: `head-${index}`,
@@ -412,6 +450,7 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -419,10 +458,12 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
+
     registerSshGitProvider('ssh-pair-aware-scale', {
       listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
     } as never)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         remoteWorktrees.map((worktree, index) => ({
@@ -455,12 +496,16 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-malformed-scale'
     }
+
     let pathReadCount = 0
+
     const remoteWorktrees = Array.from({ length: 2_000 }, (_, index) => {
       const path = `/remote/worktree-${String(index).padStart(4, '0')}`
+
       return {
         get path() {
           pathReadCount += 1
+
           return path
         },
         head: `head-${index}`,
@@ -469,7 +514,9 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     })
+
     const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -477,10 +524,12 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
+
     registerSshGitProvider('ssh-malformed-scale', {
       listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
     } as never)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         Array.from({ length: 2_000 }, (_, index) => ({
@@ -514,6 +563,7 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-repeated-miss'
     }
+
     const remoteWorktree = {
       path: '/remote/existing',
       head: 'head-existing',
@@ -521,6 +571,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -528,10 +579,12 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
+
     registerSshGitProvider('ssh-repeated-miss', {
       listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
     } as never)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () =>
         Array.from({ length: 2_000 }, (_, index) => ({
@@ -546,6 +599,7 @@ describe('OrcaRuntimeService', () => {
           stateStartedAt: now - 100
         }))
     })
+
     const cwdSpy = vi.spyOn(process, 'cwd')
 
     try {
@@ -568,7 +622,9 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-truncated'
     }
+
     const targetPath = '/remote/zzz-live-agent'
+
     const remoteWorktrees = [
       ...Array.from({ length: 200 }, (_, index) => ({
         path: `/remote/inactive-${String(index).padStart(3, '0')}`,
@@ -585,6 +641,7 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ]
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -592,10 +649,12 @@ describe('OrcaRuntimeService', () => {
       getAllWorktreeMeta: () => ({}),
       getWorktreeMeta: () => undefined
     }
+
     registerSshGitProvider('ssh-truncated', {
       listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
     } as never)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {

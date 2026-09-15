@@ -9,10 +9,13 @@ export function beginProgrammaticContentSync(filePath: string): void {
 
 export function endProgrammaticContentSync(filePath: string): void {
   const depth = programmaticContentSyncDepthByFilePath.get(filePath) ?? 0
+
   if (depth <= 1) {
     programmaticContentSyncDepthByFilePath.delete(filePath)
+
     return
   }
+
   programmaticContentSyncDepthByFilePath.set(filePath, depth - 1)
 }
 

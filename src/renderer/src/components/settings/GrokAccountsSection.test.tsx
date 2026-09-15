@@ -19,9 +19,11 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
     let result = fallback
+
     for (const [key, value] of Object.entries(values ?? {})) {
       result = result.replace(`{{${key}}}`, value)
     }
+
     return result
   }
 }))

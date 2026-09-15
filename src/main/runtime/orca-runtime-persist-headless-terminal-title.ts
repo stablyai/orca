@@ -25,13 +25,17 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     title: string | null
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+
     const tabs = session.tabsByWorktree[worktreeId]
+
     if (!tabs?.some((tab) => tab.id === tabId)) {
       return
     }
+
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
       tabsByWorktree: {
@@ -48,48 +52,61 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
   ): string[] {
     const normalized: string[] = []
     const seen = new Set<string>()
+
     for (const tabId of tabOrder) {
       const hostTabId = this.resolveMobileSessionHostTabId(snapshot, tabId)
+
       if (!hostTabId) {
         throw new Error('invalid_tab_order')
       }
+
       if (seen.has(hostTabId)) {
         throw new Error('duplicate_tab_order')
       }
+
       seen.add(hostTabId)
       normalized.push(hostTabId)
     }
 
     const returnedIds = this.collectPublicMobileSessionTabIds(snapshot)
+
     const expected = targetGroup.tabOrder
       .map((tabId) => this.resolveMobileSessionHostTabId(snapshot, tabId) ?? tabId)
       // Why: clients reorder the sanitized session.tabs.list model; raw groups
       // can still contain stale browser ids hidden from paired web clients.
       .filter((tabId) => returnedIds.has(tabId))
+
     const structuredIds = expected.filter((tabId) =>
       snapshot?.tabs.some((tab) => tab.type === 'agent-session' && tab.id === tabId)
     )
+
     if (structuredIds.some((tabId) => !seen.has(tabId))) {
       if (structuredIds.some((tabId) => seen.has(tabId))) {
         throw new Error('invalid_tab_order')
       }
+
       const visibleExpected = expected.filter((tabId) => !structuredIds.includes(tabId))
+
       if (
         normalized.length !== visibleExpected.length ||
         visibleExpected.some((tabId) => !seen.has(tabId))
       ) {
         throw new Error('invalid_tab_order')
       }
+
       for (const tabId of structuredIds) {
         normalized.splice(Math.min(expected.indexOf(tabId), normalized.length), 0, tabId)
       }
+
       return normalized
     }
+
     // Why: reorder is a pure permutation of one existing group. Missing or
     // extra ids would let a paired web client silently move/lose host tabs.
     if (normalized.length !== expected.length || expected.some((tabId) => !seen.has(tabId))) {
       throw new Error('invalid_tab_order')
     }
+
     return normalized
   }
 
@@ -97,27 +114,35 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     snapshot: RuntimeMobileSessionTabsSnapshot | undefined
   ): Set<string> {
     const ids = new Set<string>()
+
     if (!snapshot) {
       return ids
     }
+
     const liveBrowserTabsByPageId = this.getLiveBrowserTabsByPageId(snapshot.worktree)
+
     for (const tab of snapshot.tabs) {
       if (tab.type === 'browser') {
         const liveTab = tab.browserPageId
           ? liveBrowserTabsByPageId.get(tab.browserPageId)
           : undefined
+
         if (!liveTab) {
           continue
         }
+
         ids.add(tab.id)
         ids.add(tab.browserWorkspaceId)
         continue
       }
+
       ids.add(tab.id)
+
       if (tab.type === 'terminal') {
         ids.add(tab.parentTabId)
       }
     }
+
     return ids
   }
 
@@ -133,9 +158,11 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
       snapshot?.tabs.find(
         (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
       )
+
     if (!tab) {
       return null
     }
+
     return tab.type === 'terminal' ? tab.parentTabId : tab.id
   }
 
@@ -144,9 +171,11 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     tabId: string
   ): Promise<RuntimeMarkdownReadTabResult> {
     const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
+
     if (!this.notifier?.readMobileMarkdownTab) {
       throw new Error('renderer_unavailable')
     }
+
     return await this.notifier.readMobileMarkdownTab(worktreeId, tabId)
   }
 
@@ -157,9 +186,11 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult> {
     const worktreeId = await this.resolveMobileMarkdownWorktreeId(worktreeSelector, tabId)
+
     if (!this.notifier?.saveMobileMarkdownTab) {
       throw new Error('renderer_unavailable')
     }
+
     return await this.notifier.saveMobileMarkdownTab(worktreeId, tabId, baseVersion, content)
   }
 
@@ -176,17 +207,22 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     const store = this.requireStore()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const routing = resolveWorktreeHostRouting(store.getRepos(), worktree)
+
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
+
     const executionHostId = routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
+
     // Metadata only (shared-link paths, source-control AI defaults); routing is `executionHostId`.
     const repo =
       (routing.kind === 'resolved' ? routing.repo : null) ?? store.getRepo(worktree.repoId)
+
     const localGitOptions =
       repo && executionHostId === LOCAL_EXECUTION_HOST_ID
         ? getLocalProjectWorktreeGitOptions(store, repo)
         : {}
+
     return { worktree, repo, executionHostId, localGitOptions }
   }
 
@@ -198,6 +234,7 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     executionHostId: ExecutionHostId
   }> {
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(worktreeSelector)
+
     if (folderScope?.folderWorkspace) {
       // A folder workspace has no repo row to disagree with; its own inference already threw on an
       // ambiguous one, and it is never hosted by a runtime environment.
@@ -212,9 +249,11 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     const store = this.requireStore()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const routing = resolveWorktreeHostRouting(store.getRepos(), worktree)
+
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
+
     return {
       worktree,
       executionHostId: routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID

@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -296,6 +303,7 @@ describe('getPRForBranch', () => {
 
   it('skips the unsupported merge-tree --merge-base retry after the first capability miss', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+
     const branchLookup = {
       number: 42,
       title: 'Fix PR discovery',
@@ -307,6 +315,7 @@ describe('getPRForBranch', () => {
       base: { ref: 'main', sha: 'base-oid' },
       head: { ref: 'feature/test', sha: 'head-oid' }
     }
+
     const exactLookup = {
       number: 42,
       title: 'Fix PR discovery',
@@ -321,6 +330,7 @@ describe('getPRForBranch', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
+
     // Why a second head OID: identical inputs now hit the summary result
     // cache outright; a pushed head re-derives and must still skip the
     // unsupported --merge-base retry via the capability cache.
@@ -348,8 +358,10 @@ describe('getPRForBranch', () => {
     const modernMergeTreeCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
       (args as string[]).includes('--merge-base')
     )
+
     const legacyMergeTreeCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => {
       const argv = args as string[]
+
       return argv[0] === 'merge-tree' && !argv.includes('--merge-base')
     })
 

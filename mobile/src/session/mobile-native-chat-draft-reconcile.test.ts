@@ -28,10 +28,12 @@ describe('mobile native chat image preview reconciliation', () => {
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'look at this[Image #1]')
     ]
+
     const preview = {
       ...pending('pending', ['file:///a.jpg']),
       text: 'look at this'
     }
+
     const unconfirmed: UnconfirmedSend = {
       draftKey: 'draft',
       pendingKey: 'pending-key',
@@ -56,6 +58,7 @@ describe('mobile native chat image preview reconciliation', () => {
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'look at this[Image #1] is it still working?')
     ]
+
     const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
 
     expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
@@ -68,6 +71,7 @@ describe('mobile native chat image preview reconciliation', () => {
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'totally different[Image #1]')
     ]
+
     const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
 
     expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([])
@@ -79,6 +83,7 @@ describe('mobile native chat image preview reconciliation', () => {
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'look at this[Image #1] is it still working?')
     ]
+
     const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
 
     expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
@@ -91,7 +96,9 @@ describe('mobile native chat image preview reconciliation', () => {
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'look [Image #1] here')
     ]
+
     const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look here' }
+
     const unconfirmed: UnconfirmedSend = {
       draftKey: 'draft',
       pendingKey: 'pending-key',
@@ -116,6 +123,7 @@ describe('mobile native chat image preview reconciliation', () => {
         { type: 'text', text: '[Image #1] here' }
       ]
     }
+
     const preview = { ...pending('pending', ['file:///a.jpg']), text: 'look here' }
 
     expect(findLandedImagePreviewEchoes([prompt], [preview])).toEqual([
@@ -162,6 +170,7 @@ describe('mobile native chat image preview reconciliation', () => {
   it('moves an early standalone preview to the later folded prompt id', () => {
     const sessionKey = 'host\0worktree\0tab\0session'
     const previous = { [sessionKey]: { source: ['file:///a.jpg'] } }
+
     const messages = [
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', '[Image #1]')
@@ -175,6 +184,7 @@ describe('mobile native chat image preview reconciliation', () => {
   it('moves an early standalone preview to a trailing-marker prompt id', () => {
     const sessionKey = 'host\0worktree\0tab\0session'
     const previous = { [sessionKey]: { source: ['file:///a.jpg'] } }
+
     const messages = [
       userText('source', '[Image: source: /tmp/a.png]'),
       userText('prompt', 'look[Image #1]')
@@ -188,6 +198,7 @@ describe('mobile native chat image preview reconciliation', () => {
   it('moves a preview when the prompt marker is in a later text block', () => {
     const sessionKey = 'host\0worktree\0tab\0session'
     const previous = { [sessionKey]: { source: ['file:///a.jpg'] } }
+
     const prompt: NativeChatMessage = {
       ...userText('prompt', 'unused'),
       blocks: [

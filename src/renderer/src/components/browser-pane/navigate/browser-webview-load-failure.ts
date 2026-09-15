@@ -20,8 +20,10 @@ export function resolveBrowserWebviewLoadFailure(
   if (event.isMainFrame === false || event.errorCode === -3) {
     return null
   }
+
   const fallbackUrl =
     typeof options.fallbackUrl === 'function' ? options.fallbackUrl() : options.fallbackUrl
+
   return {
     code: event.errorCode ?? -1,
     description: event.errorDescription || 'Unknown load failure',

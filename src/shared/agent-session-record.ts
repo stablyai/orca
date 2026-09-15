@@ -149,11 +149,17 @@ export type AgentSessionOptionsReplacement = {
 }
 
 const MAX_ID_LENGTH = 512
+
 const MAX_PATH_LENGTH = 4096
+
 const MAX_LAUNCH_ENV_ENTRIES = 256
+
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
+
 const MAX_LAUNCH_ARGS = 256
+
 const MAX_LAUNCH_ARGS_BYTES = 16 * 1024
+
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 function isBoundedString(value: unknown, max: number): value is string {
@@ -193,7 +199,9 @@ export function isAgentSessionExecutionLocation(
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const location = value as Partial<AgentSessionExecutionLocation>
+
   return (
     isBoundedString(location.executionHostId, MAX_ID_LENGTH) &&
     (location.wslDistro === null || isBoundedString(location.wslDistro, MAX_ID_LENGTH)) &&
@@ -208,7 +216,9 @@ export function isAgentSessionProcessIdentity(
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const identity = value as Partial<AgentSessionProcessIdentity>
+
   return (
     isBoundedString(identity.hostId, MAX_ID_LENGTH) &&
     Number.isSafeInteger(identity.pid) &&
@@ -224,7 +234,9 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const home = value as Partial<AgentSessionAccountHome>
+
   return (
     (home.variable === 'CLAUDE_CONFIG_DIR' || home.variable === 'CODEX_HOME') &&
     isBoundedString(home.path, MAX_PATH_LENGTH)
@@ -235,7 +247,9 @@ export function isAgentSessionOptions(value: unknown): value is Record<string, s
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
+
   const entries = Object.entries(value)
+
   return (
     entries.length <= 32 &&
     entries.every(
@@ -249,7 +263,9 @@ export function isAgentSessionLaunchEnv(value: unknown): value is AgentSessionLa
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
+
   const entries = Object.entries(value)
+
   return (
     entries.length <= MAX_LAUNCH_ENV_ENTRIES &&
     entries.every(
@@ -265,7 +281,9 @@ function isAgentSessionJournalCheckpoint(value: unknown): value is AgentSessionJ
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const checkpoint = value as Partial<AgentSessionJournalCheckpoint>
+
   return (
     Number.isSafeInteger(checkpoint.epoch) &&
     (checkpoint.epoch as number) >= 0 &&
@@ -278,7 +296,9 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const evidence = value as Partial<AgentSessionDeathEvidence>
+
   return (
     (evidence.kind === 'exit-observed' ||
       evidence.kind === 'pid-absent' ||
@@ -293,7 +313,9 @@ function isAgentSessionLease(value: unknown): value is AgentSessionLease {
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const lease = value as Partial<AgentSessionLease>
+
   return (
     isAgentSessionId(lease.sessionId) &&
     (lease.runtimeKind === 'native' || lease.runtimeKind === 'tui') &&
@@ -336,7 +358,9 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const record = value as Partial<AgentSessionRecord>
+
   const shapeValid =
     record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
     isAgentSessionId(record.sessionId) &&
@@ -356,11 +380,14 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     record.lease.sessionId === record.sessionId &&
     Number.isSafeInteger(record.createdAt) &&
     Number.isSafeInteger(record.updatedAt)
+
   if (!shapeValid) {
     return false
   }
+
   const validated = record as AgentSessionRecord
   const head = validated.providerHandleChain.at(-1)
+
   return (
     validated.providerHandleChain.every((link) => link.handle.provider === validated.provider) &&
     (validated.lease.claimStatus !== 'live' ||

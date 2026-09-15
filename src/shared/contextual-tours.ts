@@ -242,10 +242,12 @@ export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
   }
 
   const seen = new Set<ContextualTourId>()
+
   for (const item of value) {
     if (isContextualTourId(item)) {
       seen.add(item)
     }
   }
+
   return [...seen]
 }

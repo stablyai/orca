@@ -14,8 +14,11 @@ import {
 export type { BrowserRoutePartitionBinding } from './browser-route-partition-binding-file'
 
 const DEFAULT_MAX_BINDINGS = 512
+
 const DEFAULT_MAX_FILE_BYTES = 256 * 1024
+
 const TOUCH_INTERVAL_MS = 24 * 60 * 60 * 1000
+
 const PERSIST_PARTITION_PREFIX = 'persist:'
 
 type BindingState = {
@@ -50,6 +53,7 @@ export class BrowserRoutePartitionBindingStore {
     assertBinding(partition, 'a'.repeat(64))
     const state = this.load()
     this.assertMetadataPrecedesPartitionData(partition, state)
+
     return state.bindings[partition]?.fingerprint ?? null
   }
 
@@ -62,16 +66,20 @@ export class BrowserRoutePartitionBindingStore {
     const state = this.load()
     const remaining = { ...state.bindings }
     let removed = 0
+
     for (const partition of partitions) {
       if (remaining[partition] !== undefined) {
         delete remaining[partition]
         removed += 1
       }
     }
+
     if (removed === 0) {
       return 0
     }
+
     this.persist({ bindings: remaining })
+
     return removed
   }
 
@@ -82,6 +90,7 @@ export class BrowserRoutePartitionBindingStore {
         return partition
       }
     }
+
     return null
   }
 
@@ -90,9 +99,11 @@ export class BrowserRoutePartitionBindingStore {
     assertBinding(partition, fingerprint)
     assertStorageScope(storageScope)
     const state = this.load()
+
     if (state.bindings[partition] === undefined) {
       throw new Error('browser_route_partition_binding_invalid')
     }
+
     this.persist({
       bindings: {
         ...state.bindings,
@@ -105,6 +116,7 @@ export class BrowserRoutePartitionBindingStore {
   touch(partition: string): void {
     const state = this.load()
     const existing = state.bindings[partition]
+
     if (existing) {
       this.refreshIfStale(state, partition, existing)
     }
@@ -122,25 +134,34 @@ export class BrowserRoutePartitionBindingStore {
     const state = this.load()
     this.assertMetadataPrecedesPartitionData(partition, state)
     const existing = state.bindings[partition]
+
     if (existing?.fingerprint === fingerprint && existing.storageScope === storageScope) {
       this.refreshIfStale(state, partition, existing)
+
       return []
     }
+
     if (existing !== undefined && existing.fingerprint !== fingerprint) {
       throw new Error('browser_route_partition_binding_conflict')
     }
+
     const bindings = { ...state.bindings }
     const evicted: string[] = []
+
     while (existing === undefined && Object.keys(bindings).length >= this.maxBindings) {
       const victim = this.leastRecentlyUsedReleasable(bindings)
+
       if (victim === null) {
         throw new Error('browser_route_partition_binding_capacity')
       }
+
       delete bindings[victim]
       evicted.push(victim)
     }
+
     bindings[partition] = { fingerprint, storageScope, lastUsedAt: Date.now() }
     this.persist({ bindings })
+
     return evicted
   }
 
@@ -150,10 +171,12 @@ export class BrowserRoutePartitionBindingStore {
     binding: BrowserRoutePartitionBinding
   ): void {
     const now = Date.now()
+
     // Why: preparing a page must not cost a store write, so coarse recency is enough for LRU.
     if (now - binding.lastUsedAt < TOUCH_INTERVAL_MS) {
       return
     }
+
     this.persist({
       bindings: { ...state.bindings, [partition]: { ...binding, lastUsedAt: now } }
     })
@@ -164,12 +187,14 @@ export class BrowserRoutePartitionBindingStore {
   ): string | null {
     let victim: string | null = null
     let victimLastUsedAt = Number.POSITIVE_INFINITY
+
     for (const [partition, binding] of Object.entries(bindings)) {
       if (binding.lastUsedAt < victimLastUsedAt && !this.isPartitionRetained(partition)) {
         victim = partition
         victimLastUsedAt = binding.lastUsedAt
       }
     }
+
     return victim
   }
 
@@ -184,14 +209,18 @@ export class BrowserRoutePartitionBindingStore {
     if (!existsSync(this.options.filePath)) {
       return { bindings: {} }
     }
+
     try {
       const parsed: unknown = JSON.parse(
         readBoundedUtf8File(this.options.filePath, this.maxFileBytes)
       )
+
       const bindings = parseBindings(parsed, this.maxBindings)
+
       if (!bindings) {
         throw new Error('invalid binding state')
       }
+
       return { bindings }
     } catch {
       throw new Error('browser_route_partition_binding_store_invalid')
@@ -202,18 +231,22 @@ export class BrowserRoutePartitionBindingStore {
     if (state.bindings[partition] !== undefined || !this.options.partitionDataRoot) {
       return
     }
+
     const partitionPath = join(
       this.options.partitionDataRoot,
       partition.slice(PERSIST_PARTITION_PREFIX.length)
     )
+
     try {
       statSync(partitionPath)
     } catch (error) {
       if (hasErrorCode(error, 'ENOENT')) {
         return
       }
+
       throw new Error('browser_route_partition_binding_store_invalid')
     }
+
     throw new Error('browser_route_partition_binding_store_invalid')
   }
 
@@ -228,6 +261,7 @@ export class BrowserRoutePartitionBindingStore {
       if (!isPermissionError(error) || process.platform !== 'win32') {
         throw error
       }
+
       grantDirAcl(dirname(this.options.filePath))
       writeFileDurableSync(
         durableWriteTempPath(this.options.filePath),

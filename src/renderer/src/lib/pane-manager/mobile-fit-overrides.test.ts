@@ -17,6 +17,7 @@ afterEach(() => {
   // Reset module-level maps between tests by clearing all overrides
   // and unbinding all known panes.
   hydrateOverrides([])
+
   // Unbind any panes bound during tests. We don't have direct access
   // to the internal map, but we can unbind known test keys.
   for (const tabId of ['tab-0', 'tab-1', 'tab-2']) {

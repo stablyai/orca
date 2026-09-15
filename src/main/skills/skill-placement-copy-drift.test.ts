@@ -23,8 +23,10 @@ async function fixture() {
     writeFile(join(canonicalPath, 'SKILL.md'), 'old skill'),
     writeFile(join(placementPath, 'SKILL.md'), 'old skill')
   ])
+
   const packageDigest = (await nativeSkillInstallFilesystem.observeSkill(canonicalPath))
     .observedDigest
+
   const receipt: SkillInstallReceiptV1 = {
     schemaVersion: 1,
     packageId: 'package_1',
@@ -45,6 +47,7 @@ async function fixture() {
     installedAt: '2026-08-11T00:00:00.000Z',
     hostIdentity: 'test'
   }
+
   return { canonicalPath, providerRoot, placementPath, receipt }
 }
 
@@ -57,6 +60,7 @@ describe('independent skill placement copy drift', () => {
     const value = await fixture()
     await writeFile(join(value.canonicalPath, 'SKILL.md'), 'new cloud version')
     await writeFile(join(value.placementPath, 'local.md'), 'local change')
+
     const packageDigest = (await nativeSkillInstallFilesystem.observeSkill(value.canonicalPath))
       .observedDigest
 

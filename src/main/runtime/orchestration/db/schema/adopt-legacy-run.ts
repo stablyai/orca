@@ -7,6 +7,7 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
   const existing = this.db
     .prepare('SELECT * FROM legacy_adoptions WHERE source_run_id = ?')
     .get(LEGACY_RUN_ID) as LegacyAdoptionRow | undefined
+
   const hasGraph = this.db
     .prepare(
       `SELECT 1
@@ -18,6 +19,7 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
           OR EXISTS(SELECT 1 FROM deliveries WHERE run_id = ?)`
     )
     .get(LEGACY_RUN_ID, LEGACY_RUN_ID, LEGACY_RUN_ID, LEGACY_RUN_ID, LEGACY_RUN_ID, LEGACY_RUN_ID)
+
   if (!existing && !hasGraph) {
     return
   }
@@ -61,6 +63,7 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
        WHERE run_id = ? AND status = 'outstanding'`
     )
     .run(LEGACY_RUN_ID)
+
   for (const table of [
     'tasks',
     'dispatch_contexts',
@@ -73,6 +76,7 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
       .prepare(`UPDATE ${table} SET run_id = ? WHERE run_id = ?`)
       .run(adoptedRunId, LEGACY_RUN_ID)
   }
+
   this.db
     .prepare(
       `UPDATE runs
@@ -126,6 +130,7 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
           )`
     )
     .get(LEGACY_RUN_ID, adoptedRunId)
+
   if (mismatch) {
     throw new Error('Legacy orchestration adoption produced inconsistent Run ownership.')
   }

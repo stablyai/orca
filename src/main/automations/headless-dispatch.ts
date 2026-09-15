@@ -39,11 +39,14 @@ export function createHeadlessAutomationOutputSnapshotBuffer(): {
       if (!chunk) {
         return
       }
+
       chunks.push(chunk)
       totalChars += chunk.length
       let overflowChars = totalChars - MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS
+
       while (overflowChars > 0 && chunks.length > 0) {
         const firstChunk = chunks[0]!
+
         if (firstChunk.length <= overflowChars) {
           chunks.shift()
           totalChars -= firstChunk.length
@@ -51,6 +54,7 @@ export function createHeadlessAutomationOutputSnapshotBuffer(): {
           truncated = true
           continue
         }
+
         chunks[0] = firstChunk.slice(overflowChars)
         totalChars -= overflowChars
         truncated = true
@@ -59,9 +63,11 @@ export function createHeadlessAutomationOutputSnapshotBuffer(): {
     },
     snapshot(): AutomationRunOutputSnapshot | null {
       const content = chunks.join('').trim()
+
       if (!content) {
         return null
       }
+
       return {
         format: 'plain_text',
         content,

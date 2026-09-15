@@ -9,9 +9,13 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { createTestStore } from './store-test-helpers'
 
 const projectsCreateHostSetup = vi.fn()
+
 const projectsUpdateHostSetup = vi.fn()
+
 const projectsDeleteHostSetup = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 const project: Project = {
@@ -78,6 +82,7 @@ describe('repo slice project host setup lifecycle', () => {
       path: '',
       setupState: 'setting-up'
     }
+
     projectsCreateHostSetup.mockResolvedValue({ project, setup })
     const store = createTestStore()
 
@@ -186,6 +191,7 @@ describe('repo slice project host setup lifecycle', () => {
       hostId: 'local',
       displayName: 'Local setup'
     }
+
     const updatedLocalSetup = { ...localSetup, displayName: 'Local renamed', updatedAt: 2 }
     projectsUpdateHostSetup.mockResolvedValue({
       project,
@@ -217,6 +223,7 @@ describe('repo slice project host setup lifecycle', () => {
       hostId: 'local',
       displayName: 'Local setup'
     }
+
     projectsDeleteHostSetup.mockResolvedValue({ project, setup: localSetup })
     const store = createTestStore()
     store.setState({
@@ -241,6 +248,7 @@ describe('repo slice project host setup lifecycle', () => {
       path: '',
       setupState: 'setting-up'
     }
+
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         return {
@@ -250,6 +258,7 @@ describe('repo slice project host setup lifecycle', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'project.list') {
         return {
           id: 'rpc-projects',
@@ -258,6 +267,7 @@ describe('repo slice project host setup lifecycle', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'projectHostSetup.list') {
         return {
           id: 'rpc-setups',
@@ -266,6 +276,7 @@ describe('repo slice project host setup lifecycle', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       throw new Error(`Unexpected runtime method: ${args.method}`)
     })
     const store = createTestStore()

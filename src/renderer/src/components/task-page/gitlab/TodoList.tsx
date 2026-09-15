@@ -1,12 +1,14 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
 import { ExternalLink } from 'lucide-react'
+
 export function TaskPageGitLabTodoList({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const { primaryRepo, gitlabTodos, gitlabTodosLoading } = model
+
   return (
     <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
       <div className="flex-none grid grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">

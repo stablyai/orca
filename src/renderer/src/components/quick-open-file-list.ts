@@ -31,6 +31,7 @@ export type RuntimeFileListState = {
 
 export function cleanRuntimeFileListError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
+
   return raw.replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, '')
 }
 
@@ -45,11 +46,14 @@ function debounceRuntimeFilePathSearch(
       window.clearTimeout(timer)
       reject(createRuntimeRpcAbortError())
     }
+
     const timer = window.setTimeout(() => {
       signal.removeEventListener('abort', onAbort)
       void search().then(resolve, reject)
     }, delayMs)
+
     signal.addEventListener('abort', onAbort, { once: true })
+
     if (signal.aborted) {
       onAbort()
     }
@@ -65,6 +69,7 @@ export function isNestedWorktreePath(parentPath: string, childPath: string): boo
   // nested linked worktree from file scans.
   const comparableParent = windowsPath ? parent.toLowerCase() : parent
   const comparableChild = windowsPath ? child.toLowerCase() : child
+
   return comparableChild.startsWith(`${comparableParent}/`)
 }
 
@@ -98,9 +103,11 @@ export function getRuntimeFileListTarget(
   repoWorktrees: readonly Worktree[]
 ): RuntimeFileListTarget {
   const resolvedWorktreePath = worktreePath ?? null
+
   if (!worktreeId || !resolvedWorktreePath) {
     return { canList: false, excludeRequest: { paths: [], key: '[]' }, worktreePath: null }
   }
+
   return {
     canList: true,
     excludeRequest: getNestedWorktreeExcludeRequest(
@@ -120,7 +127,9 @@ export function getNestedWorktreeExcludeRequest(
   if (!worktreeId || !worktreePath || repoWorktrees.length === 0) {
     return { paths: [], key: '[]' }
   }
+
   const paths = getNestedWorktreeExcludePaths(worktreeId, worktreePath, repoWorktrees)
+
   // Why: worktree paths can contain newlines. Use JSON as a stable dependency
   // key while passing the original array to IPC so paths stay lossless.
   return { paths, key: JSON.stringify(paths) }
@@ -139,21 +148,25 @@ export function useRuntimeFileListForWorktree({
     // Why: folder workspaces live behind getKnownWorktreeById, not worktreesByRepo.
     worktreeId ? (state.getKnownWorktreeById(worktreeId) ?? null) : null
   )
+
   const worktreePath = worktree?.path ?? null
   const repoWorktrees = useWorktreesForRepo(worktree?.repoId ?? null)
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
+
   const [listedOperationOwner, setListedOperationOwner] = useState<FileExplorerOperationOwner>({
     kind: 'unresolved'
   })
+
   const lastRequestKeyRef = useRef('')
 
   const target = useMemo(
     () => getRuntimeFileListTarget(worktreeId, worktreePath, repoWorktrees),
     [repoWorktrees, worktreeId, worktreePath]
   )
+
   const { excludeRequest } = target
 
   const operationOwnerState = useAppStore(
@@ -167,10 +180,12 @@ export function useRuntimeFileListForWorktree({
       restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
     }))
   )
+
   const operationOwner = useMemo(
     () => getFileExplorerOperationOwnerFromState(operationOwnerState, worktreeId),
     [operationOwnerState, worktreeId]
   )
+
   const operationOwnerKey = JSON.stringify(operationOwner)
   const operationOwnerRef = useRef(operationOwner)
   operationOwnerRef.current = operationOwner
@@ -178,17 +193,22 @@ export function useRuntimeFileListForWorktree({
   const operationRouteAvailable = operationRoute !== null
   const connectionId = operationRoute?.connectionId
   const runtimeEnvironmentId = operationRoute?.settings.activeRuntimeEnvironmentId ?? null
+
   const activeTargetStatus = useAppStore((state) =>
     connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
   )
+
   const connectionPending =
     activeTargetStatus === 'connecting' ||
     activeTargetStatus === 'deploying-relay' ||
     activeTargetStatus === 'reconnecting'
+
   const usesRuntimePathSearch =
     (runtimeEnvironmentId !== null || connectionId !== undefined) && query !== undefined
+
   const remoteQuery = usesRuntimePathSearch ? query.trim() : ''
   const remoteQueryTooLarge = usesRuntimePathSearch && isQuickOpenRemoteQueryTooLarge(remoteQuery)
+
   const requestKey = useMemo(
     () =>
       `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}${usesRuntimePathSearch ? `\n${remoteQuery}` : ''}`,
@@ -207,6 +227,7 @@ export function useRuntimeFileListForWorktree({
       setLoading(false)
       setTruncated(false)
       setListedOperationOwner({ kind: 'unresolved' })
+
       return
     }
 
@@ -216,14 +237,17 @@ export function useRuntimeFileListForWorktree({
       setLoadError(operationRouteAvailable ? null : getFileExplorerOwnerUnresolvedMessage())
       setLoading(false)
       setTruncated(false)
+
       return
     }
 
     let cancelled = false
     const requestKeyChanged = lastRequestKeyRef.current !== requestKey
+
     if (requestKeyChanged) {
       setFiles([])
     }
+
     lastRequestKeyRef.current = requestKey
     setLoadError(null)
     setTruncated(false)
@@ -232,6 +256,7 @@ export function useRuntimeFileListForWorktree({
       setFiles([])
       setLoading(false)
       setListedOperationOwner(operationOwnerRef.current)
+
       return
     }
 
@@ -241,6 +266,7 @@ export function useRuntimeFileListForWorktree({
     const requestToken = createBrowserUuid()
     const requestAbortController = new AbortController()
     const requestOperationOwner = operationOwnerRef.current
+
     const requestContext = {
       settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
       worktreeId,

@@ -19,6 +19,7 @@ function git(cwd, args) {
 
 function withGitRepo(run) {
   const dir = mkdtempSync(join(tmpdir(), 'orca-rc-history-'))
+
   try {
     git(dir, ['init', '--initial-branch=main'])
     git(dir, ['config', 'user.name', 'Test Bot'])
@@ -31,9 +32,11 @@ function withGitRepo(run) {
 
 function commit(cwd, message, { allowEmpty = true } = {}) {
   const args = ['commit', '-m', message]
+
   if (allowEmpty) {
     args.splice(1, 0, '--allow-empty')
   }
+
   git(cwd, args)
 }
 

@@ -49,11 +49,15 @@ function getActiveUnifiedTabId({
   if (!isCurrentWorktree) {
     return null
   }
+
   const activeGroupId = activeGroupIdByWorktree[worktreeId]
+
   const activeGroup = activeGroupId
     ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
     : undefined
+
   const activeUnifiedTabId = activeGroup?.activeTabId ?? null
+
   return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
 }
 
@@ -83,14 +87,18 @@ function isCurrentWorkspaceTab({
   if (!isCurrentWorktree) {
     return false
   }
+
   if (activeUnifiedTabId) {
     return activeUnifiedTabId === tab.id
   }
+
   const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
   const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
+
   if (storedType !== visibleType) {
     return false
   }
+
   return visibleType === 'terminal'
     ? (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
     : (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
@@ -125,35 +133,43 @@ export function buildSearchableWorkspaceTabEntries({
   const entries: SearchableWorkspaceTab[] = []
   const seenTabIdentities = new Set<string>()
   const openFilesById = new Map<string, OpenFile[]>()
+
   for (const file of openFiles) {
     const bucket = openFilesById.get(file.id)
+
     if (bucket) {
       bucket.push(file)
     } else {
       openFilesById.set(file.id, [file])
     }
   }
+
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
     retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey
   })
+
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
 
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
+
     const worktreeName = resolveWorktreeDisplayName(worktree)
     const branch = resolveWorktreeBranchLabel(worktree)
+
     const worktreeSortIndex =
       worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
+
     const isCurrentWorktree = isPaletteCurrentWorktree(
       worktree,
       activeWorktreeId,
       activeWorkspaceExecutionHostId
     )
+
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
       isCurrentWorktree,
@@ -161,19 +177,24 @@ export function buildSearchableWorkspaceTabEntries({
       activeGroupIdByWorktree,
       groupsByWorktree
     })
+
     const groups = groupsByWorktree[worktree.id] ?? []
     const groupOrder = new Map(groups.map((group, index) => [group.id, index]))
     const tabOrder = new Map<string, number>()
+
     for (const group of groups) {
       group.tabOrder.forEach((tabId, index) => tabOrder.set(tabId, index))
     }
+
     const terminalTabs = new Map<string, TerminalTab | null>()
+
     for (const terminalTab of tabsByWorktree[worktree.id] ?? []) {
       terminalTabs.set(terminalTab.id, terminalTabs.has(terminalTab.id) ? null : terminalTab)
     }
 
     const unifiedTabs = unifiedTabsByWorktree[worktree.id] ?? []
     const duplicateTabIds = findDuplicateIds(unifiedTabs)
+
     for (const rawTab of unifiedTabs) {
       if (
         duplicateTabIds.has(rawTab.id) ||
@@ -182,14 +203,18 @@ export function buildSearchableWorkspaceTabEntries({
       ) {
         continue
       }
+
       const tab = rawTab as Tab & { contentType: WorkspaceTabContentType }
+
       const tabIdentity = JSON.stringify([
         getUnifiedTabPaletteExecutionHostId(tab, worktree) ?? null,
         tab.id
       ])
+
       if (seenTabIdentities.has(tabIdentity)) {
         continue
       }
+
       const baseEntry = {
         tab,
         worktree,
@@ -210,14 +235,18 @@ export function buildSearchableWorkspaceTabEntries({
         }),
         isCurrentWorktree
       }
+
       if (tab.contentType === 'terminal') {
         const terminalTab = terminalTabs.get(tab.entityId)
+
         if (terminalTab === null) {
           continue
         }
+
         const terminalTitle = terminalTab
           ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
           : 'Terminal'
+
         const title = resolveUnifiedTabLabel(
           {
             ...tab,
@@ -228,6 +257,7 @@ export function buildSearchableWorkspaceTabEntries({
           generatedTitlesEnabled,
           terminalTitle
         )
+
         seenTabIdentities.add(tabIdentity)
         entries.push({
           ...baseEntry,
@@ -265,10 +295,13 @@ export function buildSearchableWorkspaceTabEntries({
         })
         continue
       }
+
       const files = openFilesById.get(tab.entityId)
+
       if (files?.length !== 1) {
         continue
       }
+
       const file = files.find(
         (candidate) =>
           candidate.worktreeId === worktree.id &&
@@ -277,9 +310,11 @@ export function buildSearchableWorkspaceTabEntries({
           ) ||
             isOpenFileOwnedByWorktree(candidate, worktree))
       )
+
       if (!file) {
         continue
       }
+
       const title = getEditorDisplayLabel(file)
       seenTabIdentities.add(tabIdentity)
       entries.push({
@@ -301,5 +336,6 @@ export function buildSearchableWorkspaceTabEntries({
       })
     }
   }
+
   return entries
 }

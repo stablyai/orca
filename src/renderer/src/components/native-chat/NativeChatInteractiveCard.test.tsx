@@ -185,6 +185,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     let settleDelivery: ((delivered: boolean) => void) | undefined
     mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
       settleDelivery = onDeliverySettled
+
       return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
     })
     renderCard()
@@ -200,6 +201,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     let settleDelivery: ((delivered: boolean) => void) | undefined
     mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
       settleDelivery = onDeliverySettled
+
       return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
     })
     renderCard()
@@ -266,6 +268,7 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     let settleDelivery: ((delivered: boolean) => void) | undefined
     mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
       settleDelivery = onDeliverySettled
+
       return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
     })
     chooseSpacesAndSubmit()
@@ -287,10 +290,12 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
   // `/clear` cannot come back as a permanent card sitting over the composer.
   it('drops an ask abandoned by /clear', () => {
     const abandoned = { ...askCallMessage('Tabs or spaces?'), timestamp: 100 }
+
     const trimmed = applyCommandMarkerBoundaries(
       [abandoned as unknown as NativeChatMessage],
       [{ id: 'clear-1', command: '/clear', sentAt: 200 }]
     )
+
     render(cardElement(true, trimmed))
 
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()

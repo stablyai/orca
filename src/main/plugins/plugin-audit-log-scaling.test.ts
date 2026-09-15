@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { PluginAuditLog } from './plugin-audit-log'
 
 const source = vi.hoisted(() => ({ content: '' }))
+
 vi.mock('node:fs/promises', () => ({
   readFile: async (path: string) => (path.endsWith('.1') ? '' : source.content)
 }))
@@ -10,12 +11,14 @@ it('extracts the recent window without splitting all historical log records', as
   source.content = `${Array.from({ length: 10000 }, (_, ts) => JSON.stringify({ ts })).join('\n')}\n`
   const split = vi.spyOn(String.prototype, 'split')
   let entries: Awaited<ReturnType<PluginAuditLog['readRecent']>>
+
   try {
     entries = await new PluginAuditLog('/logs').readRecent(200)
     expect(split.mock.calls.length).toBe(0)
   } finally {
     split.mockRestore()
   }
+
   expect(entries!.map((entry) => entry.ts)).toEqual(
     Array.from({ length: 200 }, (_, index) => 9800 + index)
   )
@@ -23,6 +26,7 @@ it('extracts the recent window without splitting all historical log records', as
 
 it('preserves blank, malformed, unterminated and unusual-limit selection', async () => {
   source.content = '\n{"ts":1}\n\ninvalid\n \n{"ts":2}'
+
   const original = (limit: number) =>
     source.content
       .split('\n')
@@ -35,7 +39,9 @@ it('preserves blank, malformed, unterminated and unusual-limit selection', async
           return []
         }
       })
+
   const log = new PluginAuditLog('/logs')
+
   for (const limit of [1, 2, 3, 4, 5, 0, -1, 0.5, 1.5, Infinity, Number.NaN]) {
     expect(await log.readRecent(limit)).toEqual(original(limit))
   }
@@ -51,8 +57,10 @@ function referenceRecentLines(text: string, limit: number): string[] {
 
 function makeRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state * 1664525 + 1013904223) >>> 0
+
     return state / 0x100000000
   }
 }
@@ -60,12 +68,15 @@ function makeRandom(seed: number): () => number {
 it('selects the identical line set as the full split over randomized log shapes', async () => {
   const log = new PluginAuditLog('/logs')
   let nonEmptyCases = 0
+
   for (let seed = 1; seed <= 1500; seed += 1) {
     const random = makeRandom(seed)
     const pieces: string[] = []
     const lineCount = Math.floor(random() * 12)
+
     for (let i = 0; i < lineCount; i += 1) {
       const kind = random()
+
       // Blank lines, whitespace-only lines, CRLF rows, non-JSON rows and multi-byte
       // payloads all have to land on the same boundaries the split-based scan found.
       if (kind < 0.15) {
@@ -80,6 +91,7 @@ it('selects the identical line set as the full split over randomized log shapes'
         pieces.push(JSON.stringify({ ts: i, actor: 'plugin:x' }))
       }
     }
+
     // Half the corpora end without a trailing newline (a torn final append).
     source.content = pieces.join('\n') + (random() < 0.5 ? '\n' : '')
 
@@ -91,12 +103,15 @@ it('selects the identical line set as the full split over randomized log shapes'
           return []
         }
       })
+
       expect(await log.readRecent(limit), `seed ${seed} limit ${limit}`).toEqual(expected)
+
       if (expected.length > 0) {
         nonEmptyCases += 1
       }
     }
   }
+
   expect(nonEmptyCases).toBeGreaterThan(1000)
 })
 

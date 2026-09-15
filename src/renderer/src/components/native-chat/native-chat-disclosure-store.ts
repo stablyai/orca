@@ -22,22 +22,28 @@ export const MAX_NATIVE_CHAT_DISCLOSURES = 512
 
 export function useNativeChatDisclosures(): NativeChatDisclosureStore {
   const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() => new Map())
+
   const write = useCallback((key: string, next: boolean) => {
     setOpen((current) => {
       if (current.get(key) === next) {
         return current
       }
+
       const updated = new Map(current)
       updated.set(key, next)
+
       if (updated.size > MAX_NATIVE_CHAT_DISCLOSURES) {
         const oldest = updated.keys().next().value
+
         if (oldest !== undefined && oldest !== key) {
           updated.delete(oldest)
         }
       }
+
       return updated
     })
   }, [])
+
   return useMemo(() => ({ read: (key: string) => open.get(key), write }), [open, write])
 }
 
@@ -55,17 +61,22 @@ export function useNativeChatDisclosure(
   const [local, setLocal] = useState({ key, initialOpen, open: initialOpen })
   const write = store?.write
   const isStored = key !== undefined && store !== null
+
   const localOpen =
     local.key === key && local.initialOpen === initialOpen ? local.open : initialOpen
+
   const open = isStored ? (store.read(key) ?? localOpen) : localOpen
+
   const setOpen = useCallback(
     (next: boolean) => {
       setLocal({ key, initialOpen, open: next })
+
       if (key !== undefined && write) {
         write(key, next)
       }
     },
     [initialOpen, key, write]
   )
+
   return { open, setOpen }
 }

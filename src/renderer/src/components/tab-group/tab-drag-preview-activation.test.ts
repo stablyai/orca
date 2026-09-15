@@ -64,6 +64,7 @@ describe('restoreTabDragActivationSnapshot', () => {
     const snapshot = captureTabDragActivationSnapshot(WT)
     const subscriber = vi.fn()
     const unsubscribe = useAppStore.subscribe(subscriber)
+
     try {
       applyDragPreviewTab({
         worktreeId: WT,

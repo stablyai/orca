@@ -18,10 +18,15 @@ import type {
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
 const markLiveCodexSessionsForRestart = vi.fn(async () => {})
+
 const toastSuccess = vi.fn()
+
 const toastError = vi.fn()
+
 const fetchInactiveCodexAccountUsage = vi.fn(async () => {})
+
 const fetchSettings = vi.fn(async () => {})
+
 const reauthenticate = vi.fn(async (_args: unknown) => codexSnapshot(null))
 
 let storeSettings: GlobalSettings
@@ -129,6 +134,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
         },
         children
       )
+
   return {
     DropdownMenu: passthrough(),
     DropdownMenuCheckboxItem: passthrough(),
@@ -163,9 +169,12 @@ vi.mock('../../store', () => {
       codexTarget: { runtime: 'host', wslDistro: null }
     }
   })
+
   const useAppStore = (selector: (value: Record<string, unknown>) => unknown): unknown =>
     selector(state())
+
   useAppStore.getState = state
+
   return { useAppStore }
 })
 
@@ -215,8 +224,10 @@ describe('status bar Codex sign-in action', () => {
         email: 'same@example.com',
         workspaceLabel
       }))
+
       const { selectCodexProviderAccount } =
         await import('@/runtime/runtime-provider-accounts-client')
+
       vi.mocked(selectCodexProviderAccount).mockResolvedValueOnce({
         accounts: storeSettings.codexManagedAccounts,
         activeAccountId: 'account-2',

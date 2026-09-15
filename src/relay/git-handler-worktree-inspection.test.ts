@@ -39,12 +39,14 @@ describe('GitHandler', () => {
       const result = (await dispatcher.callRequest('git.listWorktrees', {
         repoPath: tmpDir
       })) as Record<string, unknown>[]
+
       expect(result.length).toBeGreaterThanOrEqual(1)
       expect(result[0].isMainWorktree).toBe(true)
     })
 
     it('passes request cancellation to the git worktree list subprocess', async () => {
       const controller = new AbortController()
+
       const gitSpy = vi
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockRejectedValue(new Error('aborted'))
@@ -84,6 +86,7 @@ describe('GitHandler', () => {
         const result = (await dispatcher.callRequest('git.listWorktrees', {
           repoPath: await fs.realpath(worktreePath)
         })) as Record<string, unknown>[]
+
         const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
 
         expect(mainWorktree).toMatchObject({
@@ -109,6 +112,7 @@ describe('GitHandler', () => {
         const result = (await dispatcher.callRequest('git.listWorktrees', {
           repoPath: linkedRepoPath
         })) as Record<string, unknown>[]
+
         const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
 
         expect(mainWorktree).toMatchObject({
@@ -137,6 +141,7 @@ describe('GitHandler', () => {
         const result = (await dispatcher.callRequest('git.listWorktrees', {
           repoPath: resolvedLinked
         })) as Record<string, unknown>[]
+
         const mainWorktree = result.find((worktree) => worktree.isMainWorktree === true)
 
         expect(mainWorktree).toMatchObject({
@@ -153,6 +158,7 @@ describe('GitHandler', () => {
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
         gitCommit(tmpDir, 'initial')
+
         const worktreePath = path.join(
           path.dirname(tmpDir),
           `${path.basename(tmpDir)}-linked\nremote`

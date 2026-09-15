@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import { linearCreateProject } from '@/runtime/runtime-linear-project-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+
 export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreationModel) {
   const {
     settings,
@@ -37,15 +38,20 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
     newLinearProjectTargetTeam,
     discardNewLinearProjectDraft
   } = model
+
   const handleCreateNewLinearProject = useCallback(async (): Promise<void> => {
     if (!newLinearProjectTargetTeam) {
       return
     }
+
     const name = newLinearProjectName.trim()
+
     if (!name || newLinearProjectSubmitting) {
       return
     }
+
     setNewLinearProjectSubmitting(true)
+
     try {
       const result = await linearCreateProject(linearTaskSourceContext ?? settings, {
         name,
@@ -60,13 +66,16 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
         startDate: newLinearProjectStartDate || undefined,
         targetDate: newLinearProjectTargetDate || undefined
       })
+
       if (!result.ok) {
         toast.error(
           result.error ||
             translate('auto.components.TaskPage.3ca9b424a3', 'Failed to create project.')
         )
+
         return
       }
+
       toast.success(
         translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
           value0: result.project.name
@@ -142,10 +151,14 @@ export function useTaskPageLinearProjectCreation(model: TaskPageGitHubIssueCreat
     setNewLinearProjectSubmitting,
     setAppliedLinearProjectSearch
   ])
+
   const nextModel = model as typeof model & {
     handleCreateNewLinearProject: typeof handleCreateNewLinearProject
   }
+
   nextModel.handleCreateNewLinearProject = handleCreateNewLinearProject
+
   return nextModel
 }
+
 export type TaskPageLinearProjectCreationModel = ReturnType<typeof useTaskPageLinearProjectCreation>

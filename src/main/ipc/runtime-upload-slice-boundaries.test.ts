@@ -19,7 +19,9 @@ import type { StagedRuntimeUploadFileIdentity } from '../../shared/runtime-uploa
 vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 
 type ChunkParams = { relativePath: string; contentBase64: string; append: boolean }
+
 type CallOptions = { expectedEnvironmentRuntimeId?: string; signal?: AbortSignal }
+
 type CallArgs = [
   userDataPath: string,
   environmentId: string,
@@ -32,25 +34,32 @@ type CallArgs = [
 ]
 
 const callRuntimeEnvironment = vi.fn<(...args: CallArgs) => Promise<unknown>>()
+
 // Why: vi.fn retains every call's params; a 2 GiB stream would pin ~2.8 GB of
 // base64 in mock.calls and masquerade as a leak. Big tests swap in a plain fn.
 let transportImpl: (...args: CallArgs) => Promise<unknown> = (...args) =>
   callRuntimeEnvironment(...args)
+
 vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: CallArgs) => transportImpl(...args)
 }))
 
 const { RUNTIME_UPLOAD_SLICE_BYTES, streamExternalFileToRuntime } =
   await import('./runtime-upload-file-stream')
+
 const { stageOneSourceForRuntimeUpload } = await import('./filesystem-runtime-upload-staging')
+
 const { REMOTE_IMPORT_MAX_FILE_BYTES, REMOTE_IMPORT_MAX_TOTAL_BYTES, formatByteCeiling } =
   await import('./runtime-import-limits')
 
 const SLICE = RUNTIME_UPLOAD_SLICE_BYTES
+
 const WIRE_CHUNK_CHARS = 512 * 1024
+
 const OK = { id: 'x', ok: true, result: {}, _meta: {} }
 
 let workDir: string
+
 let remoteDir: string
 
 beforeEach(async () => {
@@ -85,17 +94,20 @@ function installRealHostWrites(): void {
         }
       )
     }
+
     return OK
   })
 }
 
 async function identityOf(path: string): Promise<StagedRuntimeUploadFileIdentity> {
   const s = await stat(path)
+
   return { byteLength: s.size, inode: s.ino, deviceId: s.dev, modifiedAtMs: s.mtimeMs }
 }
 
 async function argsFor(sourceRootPath: string, entryRelativePath = '', relativePath = 'dest.tmp') {
   const target = entryRelativePath ? join(sourceRootPath, entryRelativePath) : sourceRootPath
+
   return {
     userDataPath: '/user-data',
     environmentId: 'env-1',
@@ -111,9 +123,11 @@ async function argsFor(sourceRootPath: string, entryRelativePath = '', relativeP
 
 function patterned(size: number, seed: number): Buffer {
   const buffer = Buffer.allocUnsafe(size)
+
   for (let i = 0; i < size; i += 1) {
     buffer[i] = (i * 31 + seed) & 0xff
   }
+
   return buffer
 }
 
@@ -148,14 +162,18 @@ describe('slice boundaries', () => {
       const expectedChunks = Math.ceil(size / SLICE)
       expect(calls).toHaveLength(expectedChunks)
       expect(calls.map((c) => c.append)).toEqual(calls.map((_, i) => i > 0))
+
       for (const [index, call] of calls.entries()) {
         const isLast = index === calls.length - 1
         expect(call.contentBase64.length).toBeLessThanOrEqual(WIRE_CHUNK_CHARS)
+
         if (!isLast) {
           expect(call.contentBase64.length).toBe(WIRE_CHUNK_CHARS)
         }
+
         expect(call.relativePath).toBe(dest)
       }
+
       const remote = await readFile(join(remoteDir, dest))
       expect(remote.equals(contents)).toBe(true)
     })
@@ -189,7 +207,9 @@ describe('slice boundaries', () => {
     const chunkInvocations = callRuntimeEnvironment.mock.calls.filter(
       ([, , method]) => method === 'files.writeBase64Chunk'
     )
+
     expect(chunkInvocations).toHaveLength(3)
+
     for (const [, environmentId, , , timeoutMs, revision, envelope, options] of chunkInvocations) {
       expect(environmentId).toBe('env-1')
       expect(timeoutMs).toBe(30_000)
@@ -205,6 +225,7 @@ describe('staging → streaming end to end on a real filesystem', () => {
     installRealHostWrites()
     const root = join(workDir, 'drop me')
     await mkdir(join(root, 'sub', 'deeper'), { recursive: true })
+
     const files: Record<string, Buffer> = {
       'a.txt': Buffer.from('alpha'),
       '..keep': Buffer.from('dot-dot-prefixed name is a valid child'),
@@ -212,15 +233,18 @@ describe('staging → streaming end to end on a real filesystem', () => {
       'sub/empty': Buffer.alloc(0),
       'sub/deeper/big.bin': patterned(2 * SLICE + 5, 11)
     }
+
     for (const [rel, body] of Object.entries(files)) {
       await writeFile(join(root, rel), body)
     }
 
     const staged = await stageOneSourceForRuntimeUpload(root)
     expect(staged.status).toBe('staged')
+
     if (staged.status !== 'staged') {
       return
     }
+
     const fileEntries = staged.entries.filter((e) => e.kind === 'file')
     expect(fileEntries.map((e) => e.relativePath).sort()).toEqual(Object.keys(files).sort())
 
@@ -228,6 +252,7 @@ describe('staging → streaming end to end on a real filesystem', () => {
       if (entry.kind !== 'file') {
         continue
       }
+
       const dest = `up-${entry.relativePath.replace(/[^a-z0-9]/gi, '_')}.tmp`
       await expect(
         streamExternalFileToRuntime({
@@ -258,11 +283,14 @@ describe('staging → streaming end to end on a real filesystem', () => {
 
     const staged = await stageOneSourceForRuntimeUpload(source)
     expect(staged.status).toBe('staged')
+
     if (staged.status !== 'staged') {
       return
     }
+
     const entry = staged.entries[0]!
     expect(entry.kind).toBe('file')
+
     if (entry.kind !== 'file') {
       return
     }
@@ -291,6 +319,7 @@ describe('source mutation during transfer', () => {
       if (method === 'files.writeBase64Chunk' && chunkCalls().length === 1) {
         await appendFile(source, 'extra')
       }
+
       return OK
     })
 
@@ -307,6 +336,7 @@ describe('source mutation during transfer', () => {
       if (method === 'files.writeBase64Chunk' && chunkCalls().length === 1) {
         await truncate(source, SLICE)
       }
+
       return OK
     })
 
@@ -345,6 +375,7 @@ describe('source mutation during transfer', () => {
       if (method !== 'files.writeBase64Chunk') {
         return OK
       }
+
       if (chunkCalls().length === 2) {
         return new Promise((_resolve, reject) => {
           options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
@@ -353,6 +384,7 @@ describe('source mutation during transfer', () => {
           controller.abort(new Error('window gone'))
         })
       }
+
       return OK
     })
 

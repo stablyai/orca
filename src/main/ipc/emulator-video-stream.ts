@@ -13,13 +13,16 @@ export function registerEmulatorVideoStreamHandlers(): void {
     unsubscribe: () => void
     onOwnerDestroyed: () => void
   }
+
   const subscriptions = new Map<string, Subscription>()
 
   const stopSubscription = (streamId: string, owner?: WebContents): void => {
     const subscription = subscriptions.get(streamId)
+
     if (!subscription || (owner && subscription.owner !== owner)) {
       return
     }
+
     subscription.unsubscribe()
     // Why: `.once('destroyed')` self-removes only when that event fires (window
     // close), so an explicit stop must drop it or each show/hide cycle leaks one.
@@ -31,34 +34,43 @@ export function registerEmulatorVideoStreamHandlers(): void {
     'emulator:videoStreamStart',
     (event, args: { deviceId: string; streamId?: string }) => {
       const owner = event.sender
+
       if (!BrowserWindow.fromWebContents(owner)) {
         throw new Error('Emulator video stream must originate from a BrowserWindow.')
       }
+
       if (typeof args?.deviceId !== 'string') {
         throw new Error('Emulator video stream requires a deviceId string.')
       }
+
       emulatorProbe('video.subscribe', { deviceId: args.deviceId })
       const streamId = args.streamId ?? randomUUID()
       const existing = subscriptions.get(streamId)
+
       if (existing && existing.owner !== owner) {
         throw new Error('Video stream id is already in use by another renderer')
       }
+
       stopSubscription(streamId, owner)
       const onOwnerDestroyed = (): void => stopSubscription(streamId, owner)
+
       const pendingSubscription: Subscription = {
         owner,
         unsubscribe: () => {},
         onOwnerDestroyed
       }
+
       subscriptions.set(streamId, pendingSubscription)
       setTimeout(() => {
         if (owner.isDestroyed() || subscriptions.get(streamId) !== pendingSubscription) {
           return
         }
+
         const unsubscribe = scrcpyVideoRegistry.subscribe(args.deviceId, (videoEvent) => {
           if (owner.isDestroyed()) {
             return
           }
+
           if (videoEvent.type === 'meta') {
             owner.send('emulator:videoStreamMeta', {
               streamId,
@@ -73,9 +85,11 @@ export function registerEmulatorVideoStreamHandlers(): void {
             })
           }
         })
+
         pendingSubscription.unsubscribe = unsubscribe
       }, 0)
       owner.once('destroyed', onOwnerDestroyed)
+
       return { streamId }
     }
   )

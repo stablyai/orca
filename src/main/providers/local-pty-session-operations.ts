@@ -29,11 +29,15 @@ export function writeLocalPty(id: string, data: string): boolean {
   if (startupIngressByPty.get(id)?.answerLiveQueryReply(data)) {
     return true
   }
+
   const proc = ptyProcesses.get(id)
+
   if (!proc) {
     return false
   }
+
   proc.write(data)
+
   return true
 }
 
@@ -63,17 +67,21 @@ export async function getLocalPtyAppliedSize(
   id: string
 ): Promise<{ cols: number; rows: number } | null> {
   const proc = ptyProcesses.get(id)
+
   if (!proc || proc.cols <= 0 || proc.rows <= 0) {
     return null
   }
+
   return { cols: proc.cols, rows: proc.rows }
 }
 
 export async function sendLocalPtySignal(id: string, signal: string): Promise<void> {
   const proc = ptyProcesses.get(id)
+
   if (!proc) {
     return
   }
+
   const signalRootPid = (): void => {
     try {
       process.kill(proc.pid, signal)
@@ -81,21 +89,26 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
       /* Process may already be dead */
     }
   }
+
   // Why only SIGWINCH: see posix-pty-foreground-group — a real resize reaches the
   // tty's foreground group, which proc.pid is never a member of.
   if (signal === 'SIGWINCH') {
     signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid)
+
     return
   }
+
   signalRootPid()
 }
 
 export async function getLocalPtyCwd(id: string): Promise<string> {
   const proc = ptyProcesses.get(id)
+
   // Why: '' not throw on unknown id — renderer reads empty as "try next fallback"; throwing is noisy for a normal case.
   if (!proc) {
     return ''
   }
+
   // Why: let resolveProcessCwd's '' surface for the renderer fallback chain; a fabricated cwd would short-circuit it.
   return resolveProcessCwd(proc.pid)
 }
@@ -133,6 +146,7 @@ export async function getDefaultLocalPtyShell(
   if (process.platform === 'win32') {
     return getOptions().getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
   }
+
   return process.env.SHELL || '/bin/zsh'
 }
 
@@ -142,26 +156,34 @@ export async function getLocalPtyProfiles(): Promise<{ name: string; path: strin
       { name: 'PowerShell', path: 'powershell.exe' },
       { name: 'Command Prompt', path: 'cmd.exe' }
     ]
+
     const gitBashPath = resolveGitBashPath()
+
     if (gitBashPath) {
       profiles.push({ name: 'Git Bash', path: gitBashPath })
     }
+
     if (await isWslAvailableAsync()) {
       profiles.push({ name: 'WSL', path: 'wsl.exe' })
     }
+
     return profiles
   }
+
   const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
+
   return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
 }
 
 export function onLocalPtyData(callback: DataCallback): () => void {
   dataListeners.add(callback)
+
   return () => dataListeners.delete(callback)
 }
 
 export function onLocalPtyExit(callback: ExitCallback): () => void {
   exitListeners.add(callback)
+
   return () => exitListeners.delete(callback)
 }
 

@@ -11,9 +11,11 @@ export function persistMobileStructuredOptionPicks(args: {
   picks: readonly StructuredSessionOptionPick[]
 }): Promise<void> {
   const { agent, client, picks } = args
+
   if (!client || picks.length === 0) {
     return Promise.resolve()
   }
+
   return client
     .sendRequest('settings.mutateNativeChatSessionOptions', {
       type: 'apply-picks',

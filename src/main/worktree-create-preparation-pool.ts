@@ -22,6 +22,7 @@ import {
 } from './worktree-preparation-discard-retry'
 
 export const WORKTREE_CREATE_PREPARATION_TTL_MS = 5 * 60_000
+
 export const WORKTREE_CREATE_PREPARATION_LIMIT = 3
 
 export type PreparationEntry = {
@@ -70,9 +71,11 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
   // A failed checkout self-discards, but that self-discard is best-effort too, so it can strand the
   // registration for the same reason the discard here can. Enrol either way.
   await entry.ready.catch(() => {})
+
   if (!entry.checkoutStarted) {
     return
   }
+
   await discardPreparationWithRetry({
     hostKey: preparationHostKey(entry.repoPathKey, entry.wslDistro),
     repoPath: entry.repoPath,
@@ -90,6 +93,7 @@ function expireEntry(entry: PreparationEntry): void {
   if (preparations.get(entry.key) !== entry) {
     return
   }
+
   preparations.delete(entry.key)
   entry.controller.abort()
   discardEntryInBackground(entry)
@@ -112,6 +116,7 @@ function enforcePreparationLimit(
 ): void {
   while (preparations.size >= WORKTREE_CREATE_PREPARATION_LIMIT) {
     const byAge = [...preparations.values()].sort((left, right) => left.createdAt - right.createdAt)
+
     const victim =
       byAge.find(
         (entry) =>
@@ -119,9 +124,11 @@ function enforcePreparationLimit(
           entry.workspaceRootKey === workspaceRootKey &&
           entry.wslDistro === wslDistro
       ) ?? byAge[0]
+
     if (!victim) {
       return
     }
+
     preparations.delete(victim.key)
     clearTimeout(victim.expiration)
     victim.controller.abort()
@@ -165,15 +172,19 @@ export function startPreparation({
   enforcePreparationLimit(repoPathKey, workspaceRootKey, wslDistro)
   const preparationId = `${process.pid}-${randomUUID()}`
   const lockReason = createWorktreePreparationLockReason(preparationId)
+
   const preparationRoot = pathOps(workspaceRoot).join(
     workspaceRoot,
     WORKTREE_CREATE_PREPARATION_DIRECTORY
   )
+
   const preparedPath = pathOps(workspaceRoot).join(preparationRoot, preparationId)
   const controller = new AbortController()
+
   const signal = options.signal
     ? AbortSignal.any([options.signal, controller.signal])
     : controller.signal
+
   const entry = {} as PreparationEntry
   const expiration = setTimeout(() => expireEntry(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
   expiration.unref()
@@ -216,6 +227,7 @@ export function startPreparation({
       clearTimeout(entry.expiration)
     }
   })
+
   return entry.ready
 }
 

@@ -13,8 +13,11 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
+
 const reportVisiblePRRefreshCandidates = vi.fn().mockResolvedValue(true)
 
 const mockApi = {

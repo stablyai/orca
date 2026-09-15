@@ -7,7 +7,9 @@ import type {
 } from '../../shared/developer-permissions-types'
 
 const CONNECT_TIMEOUT_MS = 4_000
+
 const CHILD_TIMEOUT_MS = CONNECT_TIMEOUT_MS + 1_000
+
 const CONNECT_SCRIPT = `
 const net = require('node:net')
 const host = process.argv[1]
@@ -63,7 +65,9 @@ function normalizeTargetHost(rawHost: unknown): string | null {
   if (typeof rawHost !== 'string') {
     return null
   }
+
   const host = rawHost.trim().replace(/^\[|\]$/g, '')
+
   if (
     !host ||
     host.startsWith('-') ||
@@ -74,12 +78,16 @@ function normalizeTargetHost(rawHost: unknown): string | null {
   ) {
     return null
   }
+
   const addressWithoutZone = host.split('%', 1)[0] ?? host
   const kind = classifyRemotePairingHostname(addressWithoutZone)
+
   if (isIP(addressWithoutZone) === 0) {
     return kind === 'loopback' ? null : host
   }
+
   const isLinkLocalIpv4 = addressWithoutZone.startsWith('169.254.')
+
   return kind === 'lan' || isLinkLocalIpv4 ? host : null
 }
 
@@ -99,7 +107,9 @@ function failureFromChild(
   if (error.killed || error.signal) {
     return 'timeout'
   }
+
   const code = stderr.trim().split(/\s/, 1)[0]
+
   switch (code) {
     case 'INVALID_TARGET':
       return 'invalid-target'
@@ -125,6 +135,7 @@ export function testLocalNetworkConnection(
   const testedAt = (options.now ?? Date.now)()
   const host = normalizeTargetHost(args.host)
   const port = normalizeTargetPort(args.port)
+
   if (!host || !port) {
     return Promise.resolve({
       ok: false,
@@ -134,11 +145,13 @@ export function testLocalNetworkConnection(
       failure: 'invalid-target'
     })
   }
+
   if ((options.platform ?? process.platform) !== 'darwin') {
     return Promise.resolve({ ok: false, host, port, testedAt, failure: 'unsupported' })
   }
 
   const runChild = options.runChild ?? (execFile as ConnectionChildRunner)
+
   return new Promise((resolve) => {
     runChild(
       process.execPath,
@@ -152,8 +165,10 @@ export function testLocalNetworkConnection(
       (error, _stdout, stderr) => {
         if (!error) {
           resolve({ ok: true, host, port, testedAt })
+
           return
         }
+
         resolve({
           ok: false,
           host,

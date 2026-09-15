@@ -5,10 +5,12 @@ const FIRST_SOURCE = {
   browserPageId: 'page-1',
   browserWorkspaceId: 'workspace-1'
 }
+
 const SAME_WORKSPACE_SOURCE = {
   browserPageId: 'page-2',
   browserWorkspaceId: FIRST_SOURCE.browserWorkspaceId
 }
+
 const SAME_PAGE_SOURCE = {
   browserPageId: FIRST_SOURCE.browserPageId,
   browserWorkspaceId: 'workspace-2'

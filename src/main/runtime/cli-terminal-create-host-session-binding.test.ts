@@ -36,6 +36,7 @@ function createRuntimeWithAttachedWindow(): {
     getForegroundProcess: async () => null
   } as never)
   runtime.attachWindow(1)
+
   return { runtime, spawn }
 }
 
@@ -58,6 +59,7 @@ describe('host-initiated terminal creation under an attached window', () => {
         ptysById: Map<string, { runtimeSessionOwned: boolean; connected: boolean }>
       }
     ).ptysById.get('repo-1::/tmp/wt-cli@@a1b2c3d4')
+
     expect(pty?.connected).toBe(true)
     expect(pty?.runtimeSessionOwned).toBe(true)
   })

@@ -73,6 +73,7 @@ describe('pty-bound agent draft readiness budget', () => {
 
   it('keeps the 8s readiness deadline for non-Codex agents', async () => {
     const onTimeout = vi.fn()
+
     const promise = pasteDraftToAgentPtyWhenReady({
       tabId: 'tab-1',
       ptyId: 'pty-1',

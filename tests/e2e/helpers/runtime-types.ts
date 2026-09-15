@@ -42,16 +42,21 @@ export type PaneManagerLike = {
 }
 
 export type ExplorerFileSummary = Pick<OpenFile, 'id' | 'filePath' | 'relativePath'>
+
 export type BrowserTabSummary = Pick<BrowserWorkspace, 'id' | 'url' | 'title'>
+
 export type TerminalTabSummary = Pick<TerminalTab, 'id' | 'title' | 'customTitle'>
+
 export type SidebarStateSummary = {
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
 }
+
 export type TestRepoState = {
   repos: Repo[]
   worktreesByRepo: Record<string, Worktree[]>
 }
+
 export type TerminalViewState = {
   activeTabId: string | null
   activeTabType: WorkspaceVisibleTabType
@@ -75,6 +80,7 @@ export function getWindowStore(): AppStore | null {
 
 export function getAppState(): AppState {
   const store = getWindowStore()
+
   if (!store) {
     throw new Error('window.__store is not available — is the app in dev mode?')
   }

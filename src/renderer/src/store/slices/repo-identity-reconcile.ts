@@ -25,17 +25,23 @@ export function reconcileCatalogRows<T>(
 ): readonly T[] {
   const previousByIdentity = new Map(previous.map((row) => [getIdentity(row), row]))
   let identical = next.length === previous.length
+
   const reconciled = next.map((row, index) => {
     const existing = previousByIdentity.get(getIdentity(row))
+
     if (existing !== undefined && structuralValuesEqual(existing, row)) {
       if (existing !== previous[index]) {
         identical = false
       }
+
       return existing
     }
+
     identical = false
+
     return row
   })
+
   return identical ? previous : reconciled
 }
 
@@ -59,14 +65,18 @@ export function reuseEqualRecordMap<T>(
   // means the key sets match, so a removed key always lands as either a count or a lookup miss.
   let identical = nextKeys.length === Object.keys(previous).length
   const reconciled: Record<string, T> = {}
+
   for (const key of nextKeys) {
     const existing = Object.hasOwn(previous, key) ? previous[key] : undefined
+
     if (existing !== undefined && structuralValuesEqual(existing, next[key])) {
       reconciled[key] = existing
       continue
     }
+
     identical = false
     reconciled[key] = next[key]
   }
+
   return identical ? previous : reconciled
 }

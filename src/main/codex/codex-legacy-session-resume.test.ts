@@ -28,6 +28,7 @@ const lstatFaults = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     lstat: async (...args: Parameters<typeof actual.lstat>) => {
@@ -36,6 +37,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         error.code = 'EBUSY'
         throw error
       }
+
       return actual.lstat(...args)
     }
   }
@@ -120,6 +122,7 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     'preserves %s without materializing it',
     async (_label, codexHomeTemplate, executionHostId) => {
       const codexHome = codexHomeTemplate.replace(rootPlaceholder(), root)
+
       const result = await prepareLegacySharedCodexSessionResume(
         {
           agent: 'codex',
@@ -223,6 +226,7 @@ describe('per-account resume repin', () => {
     async (order) => {
       const recorded = rolloutCandidate(recordedRolloutPath, selectedHome)
       const bridged = rolloutCandidate(bridgedRolloutPath, peerHome)
+
       const survivors = dedupeCodexRolloutFileAliases(
         order === 'recorded rollout first' ? [recorded, bridged] : [bridged, recorded],
         rolloutCandidateAccessors
@@ -280,6 +284,7 @@ describe('per-account resume repin', () => {
       'ffffffff-cccc-4ccc-8ccc-ffffffffffff',
       'home'
     )
+
     mkdirSync(unbridgedSelectedHome, { recursive: true })
 
     const result = await prepareLegacySharedCodexSessionResume(
@@ -328,6 +333,7 @@ describe('per-account resume repin', () => {
   it('does not consult the host selection while resuming a WSL account session', async () => {
     const wslHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\orca\\codex-accounts\\account-1\\home'
+
     const result = await prepareLegacySharedCodexSessionResume(
       {
         agent: 'codex',
@@ -372,6 +378,7 @@ describe('per-account resume repin', () => {
 
   function rolloutCandidate(filePath: string, codexHome: string) {
     const stat = statSync(filePath)
+
     return {
       filePath,
       codexHome,

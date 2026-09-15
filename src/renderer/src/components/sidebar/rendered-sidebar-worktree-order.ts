@@ -22,8 +22,11 @@ import {
 } from './worktree-list/listing/host-filtering'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
+
 const EMPTY_IMPORTED_BY_REPO = Object.freeze(new Map()) as never
+
 const EMPTY_INBOX_BY_REPO = Object.freeze(new Map()) as never
+
 const EMPTY_PENDING_CREATIONS = Object.freeze([]) as never
 
 /**
@@ -42,11 +45,14 @@ export function computeRenderedSidebarWorktrees(
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(state.settings)
   const projection = getProjectHostSetupProjectionFromState(state)
+
   const visibleHostIdSet = getVisibleSidebarHostIdSet(
     state.visibleWorkspaceHostIds,
     state.workspaceHostScope
   )
+
   const projectGroups = state.projectGroups ?? []
+
   const { prCache } = selectWorktreeListReviewCacheInputs(
     state,
     state.groupBy,
@@ -89,6 +95,7 @@ export function computeRenderedSidebarWorktrees(
   // Deliberately a superset of its internal guards — on <=1 host it still no-ops, wasting only the registry build.
   const needsHostSections =
     state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || state.visibleWorkspaceHostIds != null
+
   const sectionRows = needsHostSections
     ? addHostSectionRows({
         rows,

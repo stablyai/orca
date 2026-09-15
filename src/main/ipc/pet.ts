@@ -20,6 +20,7 @@ export function registerPetHandlers(): void {
   ipcMain.handle('pet:import', async (event): Promise<CustomPet | null> => {
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
+
     const options: Electron.OpenDialogOptions = {
       title: 'Pick pet',
       properties: ['openFile'],
@@ -31,26 +32,34 @@ export function registerPetHandlers(): void {
         }
       ]
     }
+
     const result = senderWindow
       ? await dialog.showOpenDialog(senderWindow, options)
       : await dialog.showOpenDialog(options)
+
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
+
     const src = result.filePaths[0]
     const classified = classifyFile(src)
+
     if (!classified) {
       throw new Error('Unsupported file. Pick a PNG, APNG, JPG, GIF, WebP, or SVG.')
     }
+
     let srcStat: Awaited<ReturnType<typeof stat>>
+
     try {
       srcStat = await stat(src)
     } catch {
       throw new Error('Could not read the selected file.')
     }
+
     if (!srcStat.isFile()) {
       throw new Error('Selected path is not a file')
     }
+
     if (srcStat.size > MAX_BYTES) {
       throw new Error(
         `File is too large (${(srcStat.size / (1024 * 1024)).toFixed(1)} MB). Max is ${MAX_BYTES / (1024 * 1024)} MB.`
@@ -63,6 +72,7 @@ export function registerPetHandlers(): void {
     // Why: keep the original extension in the on-disk name so pet:read can rebuild the Blob MIME without a separate lookup.
     const fileName = `${id}${classified.ext}`
     const dest = join(dir, fileName)
+
     try {
       await copyFile(src, dest)
     } catch {
@@ -72,6 +82,7 @@ export function registerPetHandlers(): void {
 
     const rawLabel = basename(src, extname(src)).trim()
     const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Custom pet'
+
     return {
       id,
       label,
@@ -95,21 +106,27 @@ export function registerPetHandlers(): void {
     ): Promise<ArrayBuffer | null> => {
       // Why: renderer inputs are untrusted; validate shape before any path logic.
       let parsed: z.infer<typeof PetFileRequestSchema>
+
       try {
         parsed = PetFileRequestSchema.parse({ id, fileName, kind })
       } catch {
         throw new Error('Invalid pet:read arguments')
       }
+
       // Why: default 'image' for backwards compat with pre-bundle persisted state.
       const filePath = resolvePetFile(parsed.id, parsed.fileName, parsed.kind ?? 'image')
+
       if (!filePath) {
         return null
       }
+
       try {
         const buf = await readFile(filePath)
+
         return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
       } catch (error) {
         console.warn('[pet-overlay] pet:read failed', error)
+
         return null
       }
     }
@@ -120,32 +137,41 @@ export function registerPetHandlers(): void {
     async (_event, id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> => {
       // Why: validate IPC inputs before any path logic.
       let parsed: z.infer<typeof PetFileRequestSchema>
+
       try {
         parsed = PetFileRequestSchema.parse({ id, fileName, kind })
       } catch {
         throw new Error('Invalid pet:delete arguments')
       }
+
       if (!isSafeId(parsed.id)) {
         return
       }
+
       if ((parsed.kind ?? 'image') === 'bundle') {
         // Why: defense in depth — verify path stays under pets root before recursive removal.
         const root = normalize(getPetsDir())
         const target = normalize(join(root, parsed.id))
+
         if (!target.startsWith(root + sep)) {
           return
         }
+
         try {
           await rm(target, { recursive: true, force: true })
         } catch (error) {
           console.warn('[pet-overlay] pet:delete (bundle) failed', error)
         }
+
         return
       }
+
       const filePath = resolvePetFile(parsed.id, parsed.fileName, 'image')
+
       if (!filePath) {
         return
       }
+
       try {
         await rm(filePath, { force: true })
       } catch (error) {

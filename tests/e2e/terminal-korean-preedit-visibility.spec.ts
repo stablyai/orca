@@ -76,6 +76,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
+
     try {
       await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
       await expectPreeditHidden(orcaPage, 'before composing')
@@ -113,6 +114,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
     // the visibility fix in xterm's own composition helper one layer below this one.
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       // Synthesised, not replayed — see dispatchResumedCompositionUpdate for why the recorded
       // corpus cannot supply this ordering and why it is still reachable in production.
@@ -141,11 +143,14 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
     await applyImePlatformPolicy(orcaPage, 'windows')
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       const replay = await replayRecordedImeDomTrace(orcaPage, RECORDED_TRACE)
+
       const updates = replay.samples.filter(
         (sample) => sample.type === 'compositionupdate' && sample.data.length > 0
       )
+
       // If the fixture is ever replaced with one that carries no updates this assertion keeps the
       // rest of the test from passing vacuously.
       expect(updates.length, 'the recorded trace carries no composition updates').toBe(37)
@@ -153,6 +158,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
       const invisible = updates.filter(
         (sample) => sample.overlay.rect.width === 0 || sample.overlay.rect.height === 0
       )
+
       expect(
         invisible.map((sample) => ({ index: sample.index, data: sample.data })),
         'these recorded preedit frames were written into an overlay with no size'
@@ -161,6 +167,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
       const committed = replay.samples
         .filter((sample) => sample.type === 'compositionend' && sample.data.length > 0)
         .map((sample) => sample.data)
+
       expect(committed.join('')).toBe('문제모르겠네안녕하세요')
 
       // The capture's own byte stream, asserted rather than carried unused: it is the only thing
@@ -181,8 +188,10 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
+
     try {
       await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
+
       // No settle time between frames or between syllables: the cadence a fast typist produces,
       // and the one that used to drop or double a syllable at the boundary.
       for (let repetition = 0; repetition < 4; repetition += 1) {
@@ -191,6 +200,7 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
         await composeHangulSyllable(arena.session, orcaPage, GEUL_FRAMES, 0)
         await commitImeText(arena.session, '글')
       }
+
       await dispatchPlainEnter(arena.session)
 
       const received = await waitForTerminalImeBytes(orcaPage, reader)

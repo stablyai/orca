@@ -25,10 +25,13 @@ const STREAM_DATA_BATCH_INTERVAL_MS = 2
 // 128KB stays above the socket's ~16KB highWaterMark so a held state implies a false write() and thus a guaranteed 'drain' wake-up.
 const SHALLOW_SOCKET_WRITE_GATE_BYTES =
   process.env.ORCA_DAEMON_SHALLOW_SOCKET_GATE === '0' ? Number.POSITIVE_INFINITY : 128 * 1024
+
 // Sliced writes: a coalesced entry can grow to megabytes; writing it whole would re-deepen the socket past the gate in one call.
 const BULK_WRITE_SLICE_CHARS = 64 * 1024
+
 // Safety valve: past this, write through — bounded daemon memory beats bounded echo latency in the extreme. Must sit FAR above the pacer's pause watermark + overshoot (~5MB) or an engaged valve buries interactive echo behind the whole backlog.
 const HELD_WRITE_THROUGH_TOTAL_CHARS = 32 * 1024 * 1024
+
 // Small-session bypass: a few-KB session (echo, redraws, query replies) is never the flood, so it must not wait FIFO behind others' megabytes; backstops the 100ms interactive fast-path, which misses under event-loop load.
 const SMALL_SESSION_HOLD_BYPASS_CHARS = 4 * 1024
 
@@ -68,6 +71,7 @@ export class DaemonStreamDataBatcher {
     options: DaemonStreamEnqueueOptions = {}
   ): void {
     const client = this.getClient(clientId)
+
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       return
     }
@@ -90,8 +94,10 @@ export class DaemonStreamDataBatcher {
         (options.flushMaxChars ?? Number.POSITIVE_INFINITY)
     ) {
       this.flushSession(clientId, sessionId)
+
       return
     }
+
     if (!batch.timer) {
       batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
     }
@@ -100,11 +106,14 @@ export class DaemonStreamDataBatcher {
   /** Append a pre-shaped stream event at the current position in the session's byte order (scan handoff markers, gaps, transient facts). */
   enqueueControlEvent(clientId: string, sessionId: string, control: DaemonEvent): void {
     const client = this.getClient(clientId)
+
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       return
     }
+
     const batch = this.getOrCreateBatch(clientId)
     batch.queue.push({ sessionId, data: '', control })
+
     if (!batch.timer) {
       batch.timer = setTimeout(() => this.flush(clientId), STREAM_DATA_BATCH_INTERVAL_MS)
     }
@@ -117,6 +126,7 @@ export class DaemonStreamDataBatcher {
 
   private getOrCreateBatch(clientId: string): PendingStreamDataBatch {
     let batch = this.pendingByClient.get(clientId)
+
     if (!batch) {
       batch = {
         timer: null,
@@ -127,6 +137,7 @@ export class DaemonStreamDataBatcher {
       }
       this.pendingByClient.set(clientId, batch)
     }
+
     return batch
   }
 
@@ -136,6 +147,7 @@ export class DaemonStreamDataBatcher {
 
   flush(clientId: string): void {
     const batch = this.pendingByClient.get(clientId)
+
     if (!batch) {
       return
     }
@@ -146,9 +158,11 @@ export class DaemonStreamDataBatcher {
     }
 
     const client = this.getClient(clientId)
+
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       // A vanished stream socket drops the batch — the model owns the bytes and reconnect restores from a snapshot.
       this.pendingByClient.delete(clientId)
+
       return
     }
 
@@ -156,8 +170,10 @@ export class DaemonStreamDataBatcher {
     // A session that held an entry must hold all its later entries this pass — writing around a held entry would reorder that session's bytes.
     const heldSessions = new Set<string>()
     const retained: PendingStreamDataBatch['queue'] = []
+
     while (batch.queue.length > 0) {
       const entry = batch.queue[0]
+
       if (entry.control) {
         // Control entries only respect the held-session order latch; at ~100B, writing them onto a deep socket is as harmless as the small-session bypass.
         if (heldSessions.has(entry.sessionId)) {
@@ -165,14 +181,18 @@ export class DaemonStreamDataBatcher {
           batch.queue.shift()
           continue
         }
+
         batch.queue.shift()
         socket.write(encodeNdjson(entry.control))
         this.onAfterSocketWrite?.()
         continue
       }
+
       const socketDeep = (socket.writableLength ?? 0) >= SHALLOW_SOCKET_WRITE_GATE_BYTES
+
       if (socketDeep && batch.queuedChars <= HELD_WRITE_THROUGH_TOTAL_CHARS) {
         const sessionHeld = batch.queuedCharsBySession.get(entry.sessionId) ?? 0
+
         if (heldSessions.has(entry.sessionId) || sessionHeld > SMALL_SESSION_HOLD_BYPASS_CHARS) {
           // Hold this flooding session's entry; small talkers keep flowing. No timer: a deep socket implies a prior false write(), so 'drain' (routed back to flush) is guaranteed to resume held bulk.
           heldSessions.add(entry.sessionId)
@@ -187,17 +207,21 @@ export class DaemonStreamDataBatcher {
           socketBufferedBytes: socket.writableLength ?? 0
         })
       }
+
       const end =
         entry.transformed || entry.data.length <= BULK_WRITE_SLICE_CHARS
           ? entry.data.length
           : clampToSafeSplitIndex(entry.data, 0, BULK_WRITE_SLICE_CHARS)
+
       const slice = entry.data.slice(0, end)
       const entrySequenceChars = entry.sequenceChars ?? entry.data.length
+
       const sliceSequenceChars = entry.transformed
         ? entrySequenceChars
         : entrySequenceChars === 0
           ? 0
           : slice.length
+
       if (end >= entry.data.length) {
         batch.queue.shift()
       } else {
@@ -206,15 +230,19 @@ export class DaemonStreamDataBatcher {
         entry.sequenceChars =
           remainingSequenceChars === entry.data.length ? undefined : remainingSequenceChars
       }
+
       batch.queuedChars -= slice.length
+
       const sessionHeldAfter =
         (batch.queuedCharsBySession.get(entry.sessionId) ?? slice.length) - slice.length
+
       if (sessionHeldAfter <= 0) {
         batch.queuedCharsBySession.delete(entry.sessionId)
         batch.droppableQueuedSessionIds.delete(entry.sessionId)
       } else {
         batch.queuedCharsBySession.set(entry.sessionId, sessionHeldAfter)
       }
+
       writeStreamDataEvents(
         socket,
         entry.sessionId,
@@ -226,12 +254,15 @@ export class DaemonStreamDataBatcher {
       )
       this.onAfterSocketWrite?.()
     }
+
     if (retained.length > 0) {
       batch.queue = retained
       // 'drain' only fires when the buffer fully empties (one gate-depth/turn = seconds for multi-MB backlogs); arm a no-op data event whose flush callback re-flushes while bytes are still in flight.
       this.armHeldQueueRefill(socket, clientId, retained[0].sessionId)
+
       return
     }
+
     this.pendingByClient.delete(clientId)
   }
 
@@ -241,6 +272,7 @@ export class DaemonStreamDataBatcher {
     if (this.refillArmedClients.has(clientId) || socket.destroyed) {
       return
     }
+
     this.refillArmedClients.add(clientId)
     // Must be a real protocol no-op line, not an empty write: an empty write's callback fires immediately, defeating the in-flight re-flush.
     socket.write(encodeStreamDataEvent(sessionId, ''), () => {
@@ -255,19 +287,23 @@ export class DaemonStreamDataBatcher {
     stopAfter = Number.POSITIVE_INFINITY
   ): number {
     let chars = 0
+
     for (const entry of batch.queue) {
       if (entry.sessionId === sessionId) {
         chars += entry.data.length
+
         if (chars > stopAfter) {
           return chars
         }
       }
     }
+
     return chars
   }
 
   private flushSession(clientId: string, sessionId: string): void {
     const batch = this.pendingByClient.get(clientId)
+
     if (!batch) {
       return
     }
@@ -275,6 +311,7 @@ export class DaemonStreamDataBatcher {
     const flushed: PendingStreamDataBatch['queue'] = []
     const retained: PendingStreamDataBatch['queue'] = []
     let flushedChars = 0
+
     for (const entry of batch.queue) {
       if (entry.sessionId === sessionId) {
         flushed.push(entry)
@@ -283,6 +320,7 @@ export class DaemonStreamDataBatcher {
         retained.push(entry)
       }
     }
+
     if (flushed.length === 0) {
       return
     }
@@ -291,15 +329,18 @@ export class DaemonStreamDataBatcher {
     batch.queuedChars -= flushedChars
     batch.queuedCharsBySession.delete(sessionId)
     batch.droppableQueuedSessionIds.delete(sessionId)
+
     if (batch.queue.length === 0) {
       if (batch.timer) {
         clearTimeout(batch.timer)
         batch.timer = null
       }
+
       this.pendingByClient.delete(clientId)
     }
 
     const client = this.getClient(clientId)
+
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       return
     }
@@ -333,6 +374,7 @@ export class DaemonStreamDataBatcher {
       if (batch?.timer) {
         clearTimeout(batch.timer)
       }
+
       this.pendingByClient.delete(id)
     }
   }

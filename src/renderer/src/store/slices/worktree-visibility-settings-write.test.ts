@@ -10,10 +10,12 @@ it('preserves the active runtime default during unrelated local settings writes'
     activeRuntimeEnvironmentId: 'env-1',
     worktreeVisibilityDefaults: { external: 'show' }
   } as GlobalSettings
+
   let state = {
     settings: currentSettings,
     worktreeVisibilityDefaultsByHost: { 'runtime:env-1': { external: 'show' } }
   } as unknown as AppState
+
   vi.stubGlobal('window', {
     api: {
       settings: {
@@ -65,14 +67,17 @@ it('does not restore a stale owner after its visibility write resolves', async (
       }
     }
   })
+
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a',
     worktreeVisibilityDefaults: { external: 'hide' }
   } as GlobalSettings
+
   let state = {
     settings: currentSettings,
     worktreeVisibilityDefaultsByHost: {}
   } as unknown as AppState
+
   const write = persistVisibilityAwareSettings({
     normalizedUpdates: { worktreeVisibilityDefaults: { external: 'show' } },
     currentSettings,
@@ -81,6 +86,7 @@ it('does not restore a stale owner after its visibility write resolves', async (
       state = { ...state, ...updater(state) }
     }
   })
+
   state = { ...state, settings: { activeRuntimeEnvironmentId: 'env-b' } as GlobalSettings }
   resolveUpdate({
     ok: true,
@@ -96,6 +102,7 @@ it('does not restore a stale owner after its visibility write resolves', async (
 it('rejects source-default writes before contacting an older runtime host', async () => {
   const runtimeCall = vi.fn()
   vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a',
     worktreeVisibilityDefaults: { external: 'hide' }
@@ -121,6 +128,7 @@ it('rejects source-default writes before contacting an older runtime host', asyn
 it('rejects base visibility writes before contacting an unsupported runtime host', async () => {
   const runtimeCall = vi.fn()
   vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a'
   } as GlobalSettings
@@ -139,14 +147,17 @@ it('rejects base visibility writes before contacting an unsupported runtime host
 
 it('does not publish a visibility write after a newer hydration starts', async () => {
   markRuntimeEnvironmentCompatible('env-a')
+
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a',
     worktreeVisibilityDefaults: { external: 'hide' }
   } as GlobalSettings
+
   let state = {
     settings: currentSettings,
     worktreeVisibilityDefaultsByHost: {}
   } as unknown as AppState
+
   vi.stubGlobal('window', {
     api: {
       runtimeEnvironments: {
@@ -175,15 +186,18 @@ it('does not publish a visibility write after a newer hydration starts', async (
 
 it('publishes successful local fields when the paired runtime write fails', async () => {
   markRuntimeEnvironmentCompatible('env-a')
+
   const currentSettings = {
     activeRuntimeEnvironmentId: 'env-a',
     pluginSystemEnabled: false,
     worktreeVisibilityDefaults: { external: 'show' }
   } as GlobalSettings
+
   let state = {
     settings: currentSettings,
     worktreeVisibilityDefaultsByHost: { 'runtime:env-a': { external: 'show' } }
   } as unknown as AppState
+
   vi.stubGlobal('window', {
     api: {
       settings: {

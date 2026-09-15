@@ -12,6 +12,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSnapshot } from './types'
 
 const REATTACH_BUDGET_MS = 2_000
+
 // Why above DURABLE_HISTORY_OVERLAY_DEADLINE_MS: this asserts the reattach gives up on its own
 // stalled checkpoint, so the window must outlast the deadline it is proving.
 const DEADLINE_BUDGET_MS = 20_000
@@ -19,6 +20,7 @@ const DEADLINE_BUDGET_MS = 20_000
 function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) => void } {
   let onData: ((data: string) => void) | undefined
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 4242,
     getForegroundProcess: vi.fn(() => null),
@@ -44,9 +46,11 @@ function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) =
 /** Resolves 'timed-out' instead of hanging, so a wedged reattach fails the test rather than the run. */
 async function withinBudget<T>(work: Promise<T>, budgetMs: number): Promise<T | 'timed-out'> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const deadline = new Promise<'timed-out'>((resolve) => {
     timer = setTimeout(() => resolve('timed-out'), budgetMs)
   })
+
   try {
     return await Promise.race([work, deadline])
   } finally {
@@ -71,6 +75,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
       spawnSubprocess: () => {
         const subprocess = createMockSubprocess()
         subprocesses.push(subprocess)
+
         return subprocess
       }
     })
@@ -101,9 +106,11 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
     const original = manager!.checkpoint.bind(manager!)
     let entered = 0
     let release = (): void => {}
+
     const stalled = new Promise<void>((resolve) => {
       release = resolve
     })
+
     vi.spyOn(manager!, 'checkpoint').mockImplementation(
       async (
         sessionId: string,
@@ -113,17 +120,21 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
         if (sessionId !== stalledSessionId) {
           return await original(sessionId, snapshot, opts)
         }
+
         entered += 1
         await stalled
+
         return await original(sessionId, snapshot, opts)
       }
     )
+
     return { entered: () => entered, release }
   }
 
   async function spawnWithOutput(sessionId: string, output: string): Promise<string> {
     const { id } = await adapter.spawn({ cols: 80, rows: 24, sessionId, cwd: '/tmp' })
     subprocesses.at(-1)!.emitData(output)
+
     return id
   }
 
@@ -180,30 +191,37 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
 
   it('bounds overlay compacts across distinct sessions without blocking reattach', async () => {
     const stalledIds = ['fanout-a', 'fanout-b', 'fanout-c', 'fanout-d']
+
     for (const sessionId of stalledIds) {
       await spawnWithOutput(sessionId, `${sessionId.toUpperCase()}\r\n`)
     }
+
     const overflowId = await spawnWithOutput('fanout-overflow', 'FANOUT_OVERFLOW\r\n')
     const manager = adapter.getHistoryManager()!
     const original = manager.checkpoint.bind(manager)
     const entered = new Set<string>()
     const checkpointed: string[] = []
     let release = (): void => {}
+
     const stalled = new Promise<void>((resolve) => {
       release = resolve
     })
+
     vi.spyOn(manager, 'checkpoint').mockImplementation(async (sessionId, snapshot, opts) => {
       checkpointed.push(sessionId)
+
       if (stalledIds.includes(sessionId)) {
         entered.add(sessionId)
         await stalled
       }
+
       return await original(sessionId, snapshot, opts)
     })
 
     const reattaches = stalledIds.map((sessionId) =>
       adapter.spawn({ cols: 80, rows: 24, sessionId, cwd: '/tmp' })
     )
+
     try {
       await vi.waitFor(() => expect(entered.size).toBe(stalledIds.length))
 
@@ -211,6 +229,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
         adapter.spawn({ cols: 80, rows: 24, sessionId: overflowId, cwd: '/tmp' }),
         REATTACH_BUDGET_MS
       )
+
       expect(overflowReattach).not.toBe('timed-out')
       expect(overflowReattach).toMatchObject({ isReattach: true })
       expect((overflowReattach as { snapshot: string }).snapshot).toContain('FANOUT_OVERFLOW')
@@ -229,6 +248,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
       adapter.spawn({ cols: 80, rows: 24, sessionId: stalledId, cwd: '/tmp' }),
       DEADLINE_BUDGET_MS
     )
+
     expect(reattach).not.toBe('timed-out')
 
     stall.release()
@@ -238,6 +258,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
       const restore = await new HistoryReader(join(dir, 'history')).detectColdRestore(stalledId, {
         ignoreCleanEnd: true
       })
+
       expect(`${restore?.scrollbackAnsi ?? ''}${restore?.snapshotAnsi ?? ''}`).toContain(
         'RESUMED_OUTPUT'
       )

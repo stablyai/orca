@@ -111,6 +111,7 @@ export function createStoreSessionMockApi(): StoreSessionMockApi {
 
   // @ts-expect-error -- mock
   globalThis.window = { api: mockApi }
+
   return mockApi
 }
 

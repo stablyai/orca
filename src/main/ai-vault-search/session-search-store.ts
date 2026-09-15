@@ -85,9 +85,11 @@ export class SessionSearchStore {
    */
   private scheduleOrphanDrain(): void {
     this.drainRequested = true
+
     if (this.draining || this.closed) {
       return
     }
+
     this.draining = true
     // Off the committing stack. An async function runs synchronously up to its
     // first `await`, so calling the drain here would put its first batch back
@@ -152,6 +154,7 @@ export class SessionSearchStore {
       return this.writer.indexedFile(path, identity)
     } catch (error) {
       this.onError(error)
+
       return null
     }
   }
@@ -166,10 +169,12 @@ export class SessionSearchStore {
     if (this.closed || !this.withinRetention(candidate)) {
       return null
     }
+
     try {
       return this.writer.beginWrite(candidate, mode, previousByteOffset, identity)
     } catch (error) {
       this.reportWriteFailure(error)
+
       return null
     }
   }
@@ -254,8 +259,10 @@ export class SessionSearchStore {
                failed_mtime_ms = excluded.failed_mtime_ms`
           )
           .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+
         return
       }
+
       this.db
         .prepare(
           'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
@@ -272,10 +279,13 @@ export class SessionSearchStore {
       state: SessionSearchFileState
       n: number
     }[]
+
     const counts: SessionSearchStateCounts = { current: 0, due: 0, failed: 0 }
+
     for (const row of rows) {
       counts[row.state] = Number(row.n)
     }
+
     return counts
   }
 
@@ -313,6 +323,7 @@ export class SessionSearchStore {
     if (this.closed) {
       return
     }
+
     this.closed = true
     this.db.close()
   }

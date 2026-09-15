@@ -26,13 +26,17 @@ function makeProjectWithCli(
     JSON.stringify({ bin: { orca: './out/cli/index.js' }, type: rootPackageType }),
     'utf8'
   )
+
   if (writeOutPackageJson) {
     writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'commonjs' }), 'utf8')
   }
+
   writeFileSync(cliPath, content, 'utf8')
+
   if (process.platform !== 'win32') {
     chmodSync(cliPath, mode)
   }
+
   return { projectDir, cliPath, outPackageJsonPath }
 }
 
@@ -81,6 +85,7 @@ describe('verifyPackageCliBin', () => {
     const { projectDir, outPackageJsonPath } = makeProjectWithCli(
       '#!/usr/bin/env node\nconsole.log("orca")\n'
     )
+
     writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'module' }), 'utf8')
 
     expect(() => verifyPackageCliBin({ projectDir })).toThrow('type=commonjs')
@@ -106,9 +111,11 @@ describe('verifyPackageCliBin', () => {
 
     verifyPackageCliBin({ projectDir, fixExecutable: true, fixPackageJson: true })
     expect(JSON.parse(readFileSync(outPackageJsonPath, 'utf8')).type).toBe('commonjs')
+
     if (process.platform !== 'win32') {
       expect(statSync(cliPath).mode & 0o111).not.toBe(0)
     }
+
     rmSync(projectDir, { recursive: true, force: true })
   })
 })

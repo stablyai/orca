@@ -30,21 +30,29 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
     // Why (F10): a connection blip re-runs this effect; the reader's hunk position must
     // survive it and reset only when the reviewed item actually changes.
     const hunkKey = currentItem?.key ?? null
+
     if (hunkResetKeyRef.current !== hunkKey) {
       hunkResetKeyRef.current = hunkKey
       setActiveHunkIndex(null)
     }
+
     if (!currentItem || !screenReady) {
       setDiffState({ kind: 'idle' })
+
       return
     }
+
     const itemKey = currentItem.key
+
     const keepLoadedDiff = (fallback: ReviewDiffState) => (prev: ReviewDiffState) =>
       prev.kind === 'ready' && prev.itemKey === itemKey ? prev : fallback
+
     if (!client || connState !== 'connected') {
       setDiffState(keepLoadedDiff({ kind: 'error', itemKey, message: 'Waiting for desktop...' }))
+
       return
     }
+
     let stale = false
     setDiffState(keepLoadedDiff({ kind: 'loading', itemKey }))
     void loadMobileDiffReviewDiff({
@@ -70,6 +78,7 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
           )
         }
       })
+
     return () => {
       stale = true
     }

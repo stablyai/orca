@@ -28,6 +28,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('removes stale scrollback refs from mirrored terminal layouts', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const ptyId = 'remote:web-env-1@@terminal-1'
+
     const existingTab: TerminalTab = {
       id: mirroredId,
       ptyId,
@@ -81,6 +82,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('hydrates host split tab groups with mirrored terminal tab ids', () => {
     const rightLeafId = SECOND_LEAF_ID
+
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot(
@@ -251,6 +253,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('preserves local browser position when appending a new remote terminal', () => {
     const firstTerminalId = toWebTerminalSurfaceTabId('host-tab-1')
     const secondTerminalId = toWebTerminalSurfaceTabId('host-tab-2')
+
     const localBrowserWorkspace: BrowserWorkspace = {
       id: 'local-browser-workspace',
       worktreeId: WT,
@@ -267,6 +270,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW + 1
     }
+
     const localBrowserPage: BrowserPage = {
       id: 'local-browser-page',
       workspaceId: localBrowserWorkspace.id,
@@ -282,6 +286,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       browserRuntimeEnvironmentId: null,
       viewportPresetId: null
     }
+
     const localBrowserTab: Tab = {
       id: 'local-browser-tab',
       entityId: localBrowserWorkspace.id,
@@ -406,6 +411,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPreview: false,
       isPinned: false
     }
+
     const currentLayout = {
       type: 'split' as const,
       direction: 'horizontal' as const,
@@ -488,6 +494,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPreview: false,
       isPinned: false
     }
+
     const currentLayout = {
       type: 'split' as const,
       direction: 'horizontal' as const,

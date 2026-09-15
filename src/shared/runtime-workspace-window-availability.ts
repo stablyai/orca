@@ -10,5 +10,6 @@ export function isRuntimeWorkspaceWindowClosed(status: RuntimeStatus | null | un
   if (!status) {
     return false
   }
+
   return status.graphStatus !== 'ready' && status.desktopWindowStatus === 'openable'
 }

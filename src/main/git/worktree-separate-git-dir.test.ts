@@ -9,14 +9,17 @@ import type * as GitRunner from './runner'
 // running real git, proving the main-entry-equals-repoPath early return skips
 // the extra subprocess for an ordinary repo scanned at its own root.
 const revParseTopLevelCalls = { count: 0 }
+
 vi.mock('./runner', async () => {
   const actual = await vi.importActual<typeof GitRunner>('./runner')
+
   return {
     ...actual,
     gitExecFileAsync: (args: string[], options?: unknown) => {
       if (args[0] === 'rev-parse' && args.includes('--show-toplevel')) {
         revParseTopLevelCalls.count += 1
       }
+
       return (actual.gitExecFileAsync as (a: string[], o?: unknown) => Promise<unknown>)(
         args,
         options
@@ -43,6 +46,7 @@ async function createCommittedRepo(root: string, name: string): Promise<string> 
   await writeFile(path.join(repoPath, 'README.md'), `${name}\n`)
   git(repoPath, ['add', 'README.md'])
   git(repoPath, ['commit', '--quiet', '-m', 'initial'])
+
   return realpath(repoPath)
 }
 
@@ -74,6 +78,7 @@ async function createSeparateGitDirRepo(): Promise<{
 async function createNormalRepo(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-normal-worktree-'))
   tempRoots.push(root)
+
   return createCommittedRepo(root, 'repo')
 }
 
@@ -82,6 +87,7 @@ async function createBareRepo(): Promise<string> {
   tempRoots.push(root)
   const repoPath = path.join(root, 'repo.git')
   execFileSync('git', ['init', '--bare', '--quiet', repoPath])
+
   return realpath(repoPath)
 }
 

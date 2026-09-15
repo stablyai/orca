@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   SKIP_MARKER_FILENAME,
   applyNodePtyMasterCloexecPatch,
@@ -18,7 +19,9 @@ const STOCK_SOURCE = readFileSync(
   resolve(import.meta.dirname, '__fixtures__', 'node-pty-1.1.0-unix-pty.cc'),
   'utf8'
 )
+
 const projectDir = resolve(import.meta.dirname, '..', '..')
+
 const cleanupDirs = []
 
 afterEach(() => {
@@ -72,6 +75,7 @@ describe('SSH relay node-pty pty fd-leak patch', () => {
     const drifted = writeRelayFixture({
       source: `${STOCK_SOURCE}\n// drift\n`
     })
+
     expect(() => patchNodePtyMasterCloexecSource(drifted.root)).toThrow('unexpected node-pty')
 
     const tampered = writeRelayFixture()
@@ -140,6 +144,7 @@ describe('SSH relay node-pty pty fd-leak patch', () => {
       rebuild: () => calls.push('rebuild'),
       verify: () => 'isolated'
     })
+
     expect(again).toBe('skipped:earlier-attempt-failed')
     expect(calls).toEqual(['rebuild'])
   })
@@ -163,11 +168,13 @@ describe('SSH relay node-pty pty fd-leak patch', () => {
   it('never compiles on a platform with no pty fds to leak', () => {
     const fixture = writeRelayFixture()
     const calls = []
+
     const status = applyNodePtyMasterCloexecPatch(fixture.root, {
       platform: 'win32',
       rebuild: () => calls.push('rebuild'),
       verify: () => 'isolated'
     })
+
     expect(status).toBe('skipped:unsupported-platform')
     expect(calls).toEqual([])
     expect(readFileSync(fixture.sourcePath, 'utf8')).toBe(STOCK_SOURCE)
@@ -305,6 +312,7 @@ function writeRelayFixture({
   mkdirSync(join(nodePtyDir, 'src', 'unix'), { recursive: true })
   writeFileSync(join(nodePtyDir, 'package.json'), JSON.stringify({ version }))
   writeFileSync(sourcePath, source)
+
   const fixture = {
     root,
     arch,
@@ -316,9 +324,11 @@ function writeRelayFixture({
     backupDir: join(nodePtyDir, '.orca-cloexec-prepatch-release'),
     skipMarkerPath: join(root, SKIP_MARKER_FILENAME)
   }
+
   if (build) {
     writeBuild(fixture, 'stock-build')
   }
+
   return fixture
 }
 

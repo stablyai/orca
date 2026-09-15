@@ -28,9 +28,11 @@ describe('terminal subscribe renderer recovery output ordering', () => {
     const registry = createSubscriptionRegistryDouble()
     let outputSequence = 0
     let rendererSerializeCalls = 0
+
     let onData:
       | ((data: string, meta?: { seq?: number; rawLength?: number; cwd?: string }) => void)
       | undefined
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -45,6 +47,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       handleMobileUnsubscribe: vi.fn(),
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         onData = listener
+
         return vi.fn()
       }),
       registerRemoteTerminalViewSubscriber: vi.fn(() => vi.fn()),
@@ -52,11 +55,14 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
       serializeRendererTerminalBuffer: vi.fn(async () => {
         rendererSerializeCalls += 1
+
         if (rendererSerializeCalls === 1) {
           outputSequence = 6
           onData?.('during', { seq: 6, rawLength: 6 })
+
           return { data: 'stale renderer', cols: 80, rows: 24 }
         }
+
         return { data: 'restored history', cols: 80, rows: 24, seq: 0 }
       }),
       replaceHeadlessTerminalFromRendererSnapshotForRecovery: vi.fn(() => {
@@ -74,6 +80,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -90,6 +97,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
         .join('')
+
       expect(output).toBe('duringafter')
     })
 
@@ -98,6 +106,7 @@ describe('terminal subscribe renderer recovery output ordering', () => {
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => decodeTerminalStreamText(frame!.payload))
       .join('')
+
     expect(snapshot).toBe('restored history')
     expect(rendererSerializeCalls).toBe(2)
 

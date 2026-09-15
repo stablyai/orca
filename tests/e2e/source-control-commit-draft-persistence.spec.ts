@@ -23,6 +23,7 @@ function createWorktreeWithStagedChange(repoPath: string): E2eWorktree {
     '# Commit Draft Persistence E2E\n\nPreserve this draft across remounts.\n'
   )
   execFileSync('git', ['add', 'README.md'], { cwd: worktreePath, stdio: 'pipe' })
+
   return { branchName, worktreePath }
 }
 
@@ -40,6 +41,7 @@ function cleanupWorktree(repoPath: string, worktreePath: string, branchName: str
       // Best effort: the branch delete below is still worth attempting.
     }
   }
+
   try {
     execFileSync('git', ['branch', '-D', branchName], { cwd: repoPath, stdio: 'pipe' })
   } catch {

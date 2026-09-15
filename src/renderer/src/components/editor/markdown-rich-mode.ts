@@ -86,6 +86,7 @@ export function resolveMarkdownRichModeUnsupportedMessage(
   if (reason === null) {
     return null
   }
+
   return UNSUPPORTED_PATTERNS.find((matcher) => matcher.reason === reason)?.message ?? null
 }
 
@@ -113,6 +114,7 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
+
     if (matcher.pattern.test(contentWithoutCode)) {
       return matcher.reason
     }
@@ -123,9 +125,11 @@ export function getMarkdownRichModeUnsupportedReason(
     // on the main thread. For large files this blocks for seconds, so we skip it and conservatively block rich mode for HTML files
     // above this threshold.
     const roundTripOutput = body.length <= 50_000 ? getRichMarkdownRoundTripOutput(body) : null
+
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
     }
+
     return htmlMatcher!.reason
   }
 
@@ -150,6 +154,7 @@ export function getMarkdownRichModeEligibility(params: {
   sizeOverridden: boolean
 }): MarkdownRichModeEligibility {
   const decision = getMarkdownRichModeEligibilityDecision(params)
+
   return {
     exceedsSizeLimit: decision.exceedsSizeLimit,
     unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
@@ -159,14 +164,17 @@ export function getMarkdownRichModeEligibility(params: {
 function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
   // A missing closer after the first opener rules out every later opener.
   const commentStart = content.indexOf('<!--')
+
   if (commentStart !== -1 && content.includes('-->', commentStart + 4)) {
     return true
   }
+
   for (const match of content.matchAll(new RegExp(pattern, 'g'))) {
     if (isHtmlOrJsxFragment(match[0])) {
       return true
     }
   }
+
   return false
 }
 
@@ -177,11 +185,13 @@ function isHtmlOrJsxFragment(fragment: string): boolean {
 
   const tagMatch = fragment.match(/^<([A-Za-z][\w.:-]*)/)
   const tagName = tagMatch?.[1]
+
   if (!tagName) {
     return false
   }
 
   const suffix = fragment.slice(tagName.length + 1, -1)
+
   return suffix.length > 0 || KNOWN_MARKDOWN_HTML_TAG_NAMES.has(tagName.toLowerCase())
 }
 
@@ -196,6 +206,7 @@ function stripMarkdownCode(content: string): string {
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     const line = content.slice(lineStart, lineEnd)
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
+
     if (fenceMatch) {
       const fenceMarker = fenceMatch[1][0] as '`' | '~'
       activeFence = activeFence === fenceMarker ? null : fenceMarker
@@ -206,6 +217,7 @@ function stripMarkdownCode(content: string): string {
     if (index < content.length) {
       sanitized += '\n'
     }
+
     lineStart = index + 1
   }
 
@@ -214,12 +226,16 @@ function stripMarkdownCode(content: string): string {
 
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
   let searchIndex = 0
+
   return forEachEmbeddedHtmlFragment(contentWithoutCode, (fragment) => {
     const foundIndex = roundTripOutput.indexOf(fragment, searchIndex)
+
     if (foundIndex === -1) {
       return false
     }
+
     searchIndex = foundIndex + fragment.length
+
     return true
   })
 }
@@ -229,12 +245,14 @@ function forEachEmbeddedHtmlFragment(
   visit: (fragment: string) => boolean
 ): boolean {
   const lastCommentClose = content.lastIndexOf('-->')
+
   for (let index = 0; index < content.length; index++) {
     if (content.charCodeAt(index) !== 60) {
       continue
     }
 
     let fragmentEnd: number | null = null
+
     if (content.startsWith('<!--', index)) {
       const commentEnd = index + 4 <= lastCommentClose ? content.indexOf('-->', index + 4) : -1
       fragmentEnd = commentEnd === -1 ? null : commentEnd + 3
@@ -249,6 +267,7 @@ function forEachEmbeddedHtmlFragment(
     if (!visit(content.slice(index, fragmentEnd))) {
       return false
     }
+
     index = fragmentEnd - 1
   }
 
@@ -265,6 +284,7 @@ function getHtmlTagEnd(content: string, startIndex: number): number | null {
   if (!isHtmlTagNameStart(content.charCodeAt(index))) {
     return null
   }
+
   index++
 
   while (isHtmlTagNamePart(content.charCodeAt(index))) {
@@ -272,25 +292,32 @@ function getHtmlTagEnd(content: string, startIndex: number): number | null {
   }
 
   const nextCode = content.charCodeAt(index)
+
   if (nextCode === 62) {
     return index + 1
   }
+
   if (nextCode === 47 && content.charCodeAt(index + 1) === 62) {
     return index + 2
   }
+
   if (!isHtmlWhitespace(nextCode)) {
     return null
   }
 
   index++
+
   while (index < content.length) {
     const code = content.charCodeAt(index)
+
     if (code === 60) {
       return null
     }
+
     if (code === 62) {
       return index + 1
     }
+
     index++
   }
 

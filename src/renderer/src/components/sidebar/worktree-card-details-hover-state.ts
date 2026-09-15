@@ -19,8 +19,10 @@ export function useWorktreeCardDetailsHoverControl() {
       // mounted until the menu closes so the menu items stay clickable.
       if (openMenu) {
         pendingHoverCloseRef.current = !next
+
         return
       }
+
       pendingHoverCloseRef.current = false
       setOpen(next)
     },
@@ -29,6 +31,7 @@ export function useWorktreeCardDetailsHoverControl() {
 
   const setDetailMenuOpen = useCallback((menu: WorktreeCardDetailMenu, next: boolean) => {
     setOpenMenu(next ? menu : null)
+
     if (!next && pendingHoverCloseRef.current) {
       pendingHoverCloseRef.current = false
       setOpen(false)

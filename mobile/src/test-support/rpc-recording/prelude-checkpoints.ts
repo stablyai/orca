@@ -22,6 +22,7 @@ export function hoistPreludeCheckpoints(
   if (!variants.length) {
     throw new Error(`No variants to hoist: ${base.id}`)
   }
+
   for (const { scenario, divergence } of variants) {
     if (
       stepsKey(scenario.steps.slice(0, divergence)) !== stepsKey(base.steps.slice(0, divergence))
@@ -29,9 +30,11 @@ export function hoistPreludeCheckpoints(
       throw new Error(`Variant diverges from the base before its divergence index: ${scenario.id}`)
     }
   }
+
   const shared = Math.max(...variants.map((variant) => variant.divergence))
   const preludeSteps = base.steps.slice(0, shared)
   const scenarios: RecordingScenario[] = []
+
   if (preludeSteps.some((step) => 'checkpoint' in step)) {
     scenarios.push({
       ...base,
@@ -40,14 +43,18 @@ export function hoistPreludeCheckpoints(
       steps: preludeSteps
     })
   }
+
   for (const { scenario, divergence } of variants) {
     const steps = scenario.steps.filter(
       (step, index) => !('checkpoint' in step) || index >= divergence
     )
+
     if (!steps.some((step) => 'checkpoint' in step)) {
       throw new Error(`Variant has no checkpoint at or after its divergence: ${scenario.id}`)
     }
+
     scenarios.push({ ...scenario, steps })
   }
+
   return scenarios
 }

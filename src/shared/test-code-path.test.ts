@@ -48,6 +48,7 @@ describe('isTestCodePath', () => {
     ]) {
       expect(isTestCodePath(filePath), filePath).toBe(false)
     }
+
     // ...but a real test inside one still matches on its basename.
     expect(isTestCodePath('src/cli/specs/account.test.ts')).toBe(true)
     expect(isTestCodePath('spec/models/user_spec.rb')).toBe(true)

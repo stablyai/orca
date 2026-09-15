@@ -36,6 +36,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -60,10 +61,15 @@ import {
 } from './worktrees'
 
 const WT1 = 'repo1::/path/wt1'
+
 const WT2 = 'repo1::/path/wt2'
+
 const TAB1 = 'tab-wt1'
+
 const TAB2 = 'tab-wt2'
+
 const TOKEN1 = 'launch-1'
+
 const TOKEN2 = 'launch-2'
 
 function seedMaps(store: ReturnType<typeof createTestStore>): void {

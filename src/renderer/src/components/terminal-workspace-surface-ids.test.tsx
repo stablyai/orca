@@ -22,9 +22,11 @@ function countingSurfaces(ids: string[]): { surfaces: WorkspaceSurface[]; mapCal
     configurable: true,
     value(this: WorkspaceSurface[], ...args: Parameters<WorkspaceSurface[]['map']>) {
       mapCalls += 1
+
       return Array.prototype.map.apply(this, args)
     }
   })
+
   return { surfaces, mapCalls: () => mapCalls }
 }
 
@@ -77,6 +79,7 @@ describe('workspace surface ids', () => {
   it('does not rebuild a surface-id array or set on a cold-activation render', () => {
     const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
     const { surfaces, mapCalls } = countingSurfaces(ids)
+
     const controller = {
       activationDeferralPlanRevisionRef: { current: 0 },
       activationDeferredMountTabIdsByWorktreeRef: { current: new Map() },
@@ -116,10 +119,12 @@ describe('workspace surface ids', () => {
   it('does not rebuild a surface-id array or set on a parking pass', () => {
     const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
     const { surfaces, mapCalls } = countingSurfaces(ids)
+
     const hiddenSince = new Map<string, number>([
       ['repo::/worktree-0', 1],
       ['repo::/stale', 2]
     ])
+
     const controller = {
       activeView: 'terminal',
       activityTerminalPortals: [],
@@ -151,9 +156,11 @@ describe('workspace surface ids', () => {
   })
   it('keeps the surface projection stable across a git-worktree switch', () => {
     const repo = makeRepo()
+
     const worktrees = Array.from({ length: 423 }, (_, index) =>
       makeWorktree(`repo-1::/worktree-${index}`, `Workspace ${index}`)
     )
+
     useAppStore.setState({
       worktreesByRepo: { [repo.id]: worktrees },
       activeWorktreeId: worktrees[0].id
@@ -180,6 +187,7 @@ describe('workspace surface ids', () => {
 
   it('still re-projects when the active folder workspace owns the collision tie-break', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const localFolder: FolderWorkspace = {
       id: 'folder-shared',
       projectGroupId: 'group-shared',
@@ -197,11 +205,13 @@ describe('workspace surface ids', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const runtimeFolder: FolderWorkspace = {
       ...localFolder,
       folderPath: '/remote/orca',
       executionHostId: 'runtime:env-1'
     }
+
     useAppStore.setState({
       folderWorkspaces: [localFolder, runtimeFolder],
       activeWorktreeId: 'folder:folder-shared',
@@ -229,9 +239,11 @@ describe('workspace surface ids', () => {
 
   it('stops idle worktree writes from re-firing surface-keyed terminal effects', () => {
     const repo = makeRepo()
+
     const worktrees = Array.from({ length: 20 }, (_, index) =>
       makeWorktree(`wt-${index}`, `Workspace ${index}`)
     )
+
     useAppStore.setState({ worktreesByRepo: { [repo.id]: worktrees } })
 
     const fires = { surfaceKeyed: 0, idKeyed: 0 }

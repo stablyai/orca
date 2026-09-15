@@ -27,6 +27,7 @@ export { scanWorkspaceCleanup }
 // Why: module scope — handler re-registration on a new main window must not
 // orphan the previous window's controllers in a discarded map.
 const activeScans = new Map<string, AbortController>()
+
 // Keyed by sender AND scan mode: legacy suggestion-only and full-workspace
 // broad scans are separate lanes and must not supersede each other, matching
 // the renderer's broad-scan registry.
@@ -54,11 +55,14 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       const sender = event.sender
       const scanKey = getWorkspaceCleanupScanKey(sender.id, scanArgs.scanId)
       const controller = new AbortController()
+
       if (scanKey) {
         activeScans.set(scanKey, controller)
       }
+
       const targeted = hasTargetedWorkspaceCleanupScan(scanArgs)
       const broadScanKey = getBroadScanModeKey(sender.id, scanArgs)
+
       if (!targeted) {
         // Why: two same-mode broad fleet scans from one renderer can only be a
         // refresh race; running both doubles git subprocess and fs load for a
@@ -66,10 +70,12 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         broadScanControllersBySenderMode.get(broadScanKey)?.abort()
         broadScanControllersBySenderMode.set(broadScanKey, controller)
       }
+
       // Why: a window close or reload must stop the fleet scan's git and fs
       // work, not merely mute its progress events.
       const onSenderDestroyed = (): void => controller.abort()
       sender.once('destroyed', onSenderDestroyed)
+
       try {
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
@@ -81,20 +87,24 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
               }
             : undefined
         })
+
         // Focused scans are live-only; persisting each rewrites and fsyncs the
         // fleet snapshot. worktreeIds: [] is still targeted — persisting its
         // empty result would wipe the fleet cache.
         if (!targeted) {
           void persistWorkspaceCleanupScanResult(snapshotDirectory, scanArgs, result)
         }
+
         return result
       } finally {
         if (!sender.isDestroyed()) {
           sender.removeListener('destroyed', onSenderDestroyed)
         }
+
         if (scanKey && activeScans.get(scanKey) === controller) {
           activeScans.delete(scanKey)
         }
+
         if (!targeted && broadScanControllersBySenderMode.get(broadScanKey) === controller) {
           broadScanControllersBySenderMode.delete(broadScanKey)
         }
@@ -105,10 +115,13 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
   ipcMain.handle('workspaceCleanup:cancelScan', (event, scanId: string): boolean => {
     const scanKey = getWorkspaceCleanupScanKey(event.sender.id, scanId)
     const controller = scanKey ? activeScans.get(scanKey) : undefined
+
     if (!controller || controller.signal.aborted) {
       return false
     }
+
     controller.abort()
+
     return true
   })
 
@@ -118,6 +131,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
 
   ipcMain.handle('workspaceCleanup:dismiss', (_event, args: WorkspaceCleanupDismissArgs) => {
     const next = { ...store.getUI().workspaceCleanup?.dismissals }
+
     for (const worktreeId of args.removedWorktreeIds ?? []) {
       for (const [identity, dismissal] of Object.entries(next)) {
         if (dismissal.worktreeId === worktreeId) {
@@ -125,6 +139,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         }
       }
     }
+
     for (const dismissal of args.dismissals ?? []) {
       if (
         dismissal &&
@@ -136,9 +151,11 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         const identity = dismissal.executionHostId
           ? getWorkspaceCleanupHostIdentity(dismissal.executionHostId, dismissal.worktreeId)
           : dismissal.worktreeId
+
         next[identity] = dismissal
       }
     }
+
     store.updateUI({ workspaceCleanup: { dismissals: next } })
   })
 
@@ -175,6 +192,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       if (isSnapshotPruneBatchId(args?.batchId)) {
         return finishWorkspaceCleanupRemovalSnapshotPruneBatch(snapshotDirectory, args)
       }
+
       return undefined
     }
   )

@@ -40,6 +40,7 @@ function EgressIndicatorButton({
   const [open, setOpen] = useState(false)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+
   return (
     <Popover modal={false} open={open} onOpenChange={setOpen}>
       {/* Why: suppress the hover tooltip while the popover is open — both anchor below the icon and would overlap. */}
@@ -105,14 +106,18 @@ export function SshEgressIndicator({
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const settings = useAppStore((s) => s.settings)
   const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(executionHostId, settings)
+
   if (!routeEligibility) {
     return <Globe className="size-4 shrink-0 text-muted-foreground" />
   }
+
   const { targetId, eligible: routed } = routeEligibility
+
   const hostLabel =
     getHostSettingOverride(settings, toSshExecutionHostId(targetId), 'displayLabel') ??
     sshTargetLabels.get(targetId) ??
     targetId
+
   return (
     <EgressIndicatorButton
       icon={routed ? <Server className="size-4" /> : <Monitor className="size-4" />}
@@ -155,10 +160,12 @@ export function RemoteRuntimeEgressIndicator({
   presentation: 'client-hosted' | 'streamed'
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+
   const environmentName = useAppStore(
     (s) =>
       s.runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name
   )
+
   const hostLabel =
     getHostSettingOverride(
       settings,
@@ -167,7 +174,9 @@ export function RemoteRuntimeEgressIndicator({
     ) ??
     environmentName ??
     runtimeEnvironmentId
+
   const clientHosted = presentation === 'client-hosted'
+
   return (
     <EgressIndicatorButton
       icon={<Server className="size-4" />}

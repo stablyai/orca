@@ -27,6 +27,7 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
 }
 
 const hasLinkedPR = (worktree: Worktree): boolean => worktree.linkedPR != null
+
 const matchesAnyHost = (): boolean => true
 
 describe('routeListingBranchSwitchesThroughGitIdentity', () => {
@@ -164,6 +165,7 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
 
   it('rejects a listing response when the branch changed again after the request started', () => {
     const updateWorktreeGitIdentity = vi.fn()
+
     const current = [
       makeWorktree({
         id: 'repo1::/path/wt1',
@@ -225,6 +227,7 @@ describe('routeListingBranchSwitchesThroughGitIdentity', () => {
 
   it('fails closed when the same worktree id belongs to multiple execution hosts', () => {
     const updateWorktreeGitIdentity = vi.fn()
+
     const requestStarted = [
       makeWorktree({ id: 'repo1::/same/path', hostId: 'local', linkedPR: 101 }),
       makeWorktree({ id: 'repo1::/same/path', hostId: 'ssh:ssh-1', linkedPR: 202 })

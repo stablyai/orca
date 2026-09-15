@@ -19,11 +19,13 @@ export function adapterSourceByOperation(
 ): Map<string, string> {
   const modules = operationModuleLoader(root)
   const owners = new Map<string, string>()
+
   for (const module of registered) {
     for (const operation of Object.keys(module.mounts(modules, {}))) {
       owners.set(operation, module.source)
     }
   }
+
   return owners
 }
 
@@ -42,22 +44,28 @@ export function adapterSha256(
   registered: readonly MountedOperationModule[] = MOUNTED_OPERATION_MODULES
 ): string {
   const owners = adapterSourceByOperation(root, registered)
+
   const sources = [
     ...new Set(
       scenarios.map((scenario) => {
         const source = owners.get(scenario.operation)
+
         if (source === undefined) {
           throw new Error(`No adapter module mounts ${scenario.operation}`)
         }
+
         return source
       })
     )
   ].sort()
+
   const key = `${root}\0${sources.join('\0')}`
   const cached = digests.get(key)
+
   if (cached !== undefined) {
     return cached
   }
+
   const digest = createHash('sha256')
     .update(
       sources
@@ -68,6 +76,8 @@ export function adapterSha256(
         .join('\n')
     )
     .digest('hex')
+
   digests.set(key, digest)
+
   return digest
 }

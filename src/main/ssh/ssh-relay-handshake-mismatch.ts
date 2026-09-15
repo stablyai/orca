@@ -15,10 +15,13 @@ export function buildRelayHandshakeRefusalError(
   if (exitCode === RELAY_EXIT_CODE_CREDENTIAL_MISMATCH) {
     return new RelayCredentialMismatchError(stderr.trim())
   }
+
   if (exitCode !== RELAY_EXIT_CODE_VERSION_MISMATCH) {
     return null
   }
+
   const { expected, got } = parseHandshakeMismatchStderr(stderr)
+
   return new RelayVersionMismatchError(expected, got, stderr.trim())
 }
 
@@ -29,8 +32,10 @@ function parseHandshakeMismatchStderr(stderr: string): {
   got: string | undefined
 } {
   const match = /expected=([^,\s]+),\s*daemon=([^\s;]+)/.exec(stderr)
+
   if (!match) {
     return { expected: undefined, got: undefined }
   }
+
   return { expected: match[1], got: match[2] }
 }

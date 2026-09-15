@@ -47,6 +47,7 @@ function bypassEvent(
 describe('issue #8299 Shift+Space input-source switch regression', () => {
   it('does not globally steal Shift+Space via xterm bypass (opt-in only)', () => {
     const opts = { isMac: true, hasSelection: false }
+
     for (const type of ['keydown', 'keyup'] as const) {
       expect(
         shouldBypassXtermKeyboardEvent(
@@ -59,6 +60,7 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
 
   it('configures Shift+Space as native-only input-source switch without sendInput', () => {
     const overrides = { 'terminal.switchInputSource': ['Shift+Space'] }
+
     const action = resolveTerminalShortcutAction(
       shortcutEvent({ key: ' ', code: 'Space', shiftKey: true }),
       true,
@@ -67,6 +69,7 @@ describe('issue #8299 Shift+Space input-source switch regression', () => {
       false,
       overrides
     )
+
     expect(action).toEqual({ type: 'switchInputSource' })
     expect(action).not.toMatchObject({ type: 'sendInput' })
   })

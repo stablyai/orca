@@ -7,6 +7,7 @@ const { execFileMock, existsSyncMock, stdinEndMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
 
 import { runMacosLoginSessionPtyProbe } from './macos-login-session-pty-probe'
@@ -25,6 +26,7 @@ describe('runMacosLoginSessionPtyProbe', () => {
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
         callback(null, '^D\b\bORCA_LOGIN_PREFLIGHT_OK', '')
+
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -58,6 +60,7 @@ describe('runMacosLoginSessionPtyProbe', () => {
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
         callback(null, 'Login incorrect\r\nlogin: ', '')
+
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -73,6 +76,7 @@ describe('runMacosLoginSessionPtyProbe', () => {
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
         callback(Object.assign(new Error('killed'), { killed: true }), '', '')
+
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -91,6 +95,7 @@ describe('runMacosLoginSessionPtyProbe', () => {
           '',
           ''
         )
+
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -105,6 +110,7 @@ describe('runMacosLoginSessionPtyProbe', () => {
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
         callback(Object.assign(new Error('expect Tcl error'), { code: 1 }), '', '')
+
         return { stdin: { end: stdinEndMock } }
       }
     )

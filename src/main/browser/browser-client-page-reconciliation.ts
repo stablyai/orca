@@ -60,7 +60,9 @@ async function reclaimPage(
   if (event.command.type !== 'reclaimPage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   const page = context.pages.get(event.browserPageId)
+
   if (
     !page ||
     page.retiring ||
@@ -72,25 +74,31 @@ async function reclaimPage(
   ) {
     throw new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
   }
+
   assertBrowserClientPageCommandNotAborted(signal)
   assertCurrentBrowserClientPageRenderer(page.renderer)
   context.assertAvailable()
   page.reconciling = true
+
   if (!context.routeWebContents.revokeNavigation(page.lifecycleClaim)) {
     page.reconciling = false
     throw new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
   }
+
   const previousRendererPage = browserClientPageIdentity(
     page.registration,
     page.registration.partition
   )
+
   const nextRegistration = { ...page.registration, pageHostGeneration: event.pageHostGeneration }
   const nextRendererPage = browserClientPageIdentity(nextRegistration, nextRegistration.partition)
   const rekeyGuestLifecycle = context.routeWebContents.rekeyGuestLifecycle
   const grantReconciledNavigation = context.routeWebContents.grantReconciledNavigation
   const rekeyRendererPage = page.renderer.rekeyPage
+
   if (!rekeyGuestLifecycle || !grantReconciledNavigation || !rekeyRendererPage) {
     page.reconciling = false
+
     if (
       !grantReconciledNavigation ||
       !grantReconciledNavigation.call(context.routeWebContents, page.lifecycleClaim)
@@ -101,15 +109,19 @@ async function reclaimPage(
         new BrowserClientPageCommandError('browser_client_page_reconciliation_unsupported')
       )
     }
+
     throw new BrowserClientPageCommandError('browser_client_page_reconciliation_unsupported')
   }
+
   const rekeyed = rekeyGuestLifecycle.call(
     context.routeWebContents,
     page.lifecycleClaim,
     nextRegistration
   )
+
   if (!rekeyed) {
     page.reconciling = false
+
     if (!grantReconciledNavigation.call(context.routeWebContents, page.lifecycleClaim)) {
       await failClosedRekeyedPage(
         context,
@@ -117,21 +129,26 @@ async function reclaimPage(
         new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
       )
     }
+
     throw new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
   }
+
   page.generation = event.pageHostGeneration
   page.registration = nextRegistration
   page.lifecycleClaim = rekeyed.lifecycleClaim
   page.routeSession = rekeyed.routeSession
   page.inventory = createReconciliationInventory(event, 'outcomeUnknown', page.inventory.currentUrl)
+
   try {
     await rekeyRendererPage.call(page.renderer, previousRendererPage, nextRendererPage, signal)
     assertBrowserClientPageCommandNotAborted(signal)
     context.assertAvailable()
     assertCurrentBrowserClientPageRenderer(page.renderer)
+
     if (!grantReconciledNavigation.call(context.routeWebContents, rekeyed.lifecycleClaim)) {
       throw new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
     }
+
     page.inventory = createReconciliationInventory(event, 'active', page.inventory.currentUrl)
     page.reconciling = false
   } catch (error) {
@@ -147,7 +164,9 @@ async function closeReconciledPage(
   if (event.command.type !== 'closePage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   const page = context.pages.get(event.browserPageId)
+
   if (
     !page ||
     page.retiring ||
@@ -157,7 +176,9 @@ async function closeReconciledPage(
   ) {
     throw new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
   }
+
   assertBrowserClientPageCommandNotAborted(signal)
+
   if (!(await context.retirePage(event.browserPageId, page.generation))) {
     throw new BrowserClientPageCommandError('browser_client_page_reconciliation_authority_stale')
   }
@@ -171,10 +192,13 @@ async function restorePage(
   if (event.command.type !== 'restorePage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   await context.createPage(reconciliationCreateEvent(event), signal)
+
   if (!event.command.url) {
     return
   }
+
   try {
     await context.navigate(
       { ...event, command: { type: 'navigate', url: event.command.url } },
@@ -188,6 +212,7 @@ async function restorePage(
         cause: new AggregateError([error, cleanupError], 'Browser page restore failed')
       })
     }
+
     throw error
   }
 }
@@ -200,8 +225,10 @@ async function failClosedRekeyedPage(
 ): Promise<never> {
   page.reconciling = false
   page.retiring ??= context.cleanupPage(page, previousRendererPage)
+
   try {
     await page.retiring
+
     if (context.pages.get(page.inventory.browserPageId) === page) {
       context.pages.delete(page.inventory.browserPageId)
     }
@@ -212,6 +239,7 @@ async function failClosedRekeyedPage(
       cause: new AggregateError([error, cleanupError], 'Browser page reclaim failed')
     })
   }
+
   throw error
 }
 
@@ -221,6 +249,7 @@ function reconciliationCreateEvent(
   if (event.command.type !== 'reclaimPage' && event.command.type !== 'restorePage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   return {
     ...event,
     command: {
@@ -238,5 +267,6 @@ function createReconciliationInventory(
   currentUrl?: string
 ): BrowserClientHostedPageInventory {
   const inventory = createBrowserClientPageInventory(reconciliationCreateEvent(event), state)
+
   return currentUrl ? updateBrowserClientPageInventoryCurrentUrl(inventory, currentUrl) : inventory
 }

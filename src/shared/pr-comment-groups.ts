@@ -13,20 +13,25 @@ export function groupPRComments(comments: readonly PRComment[]): PRCommentGroup[
       groups.push({ kind: 'standalone', comment })
       continue
     }
+
     const existing = threads.get(comment.threadId)
+
     if (existing) {
       existing.replies.push(comment)
       continue
     }
+
     const group: Extract<PRCommentGroup, { kind: 'thread' }> = {
       kind: 'thread',
       threadId: comment.threadId,
       root: comment,
       replies: []
     }
+
     threads.set(comment.threadId, group)
     groups.push(group)
   }
+
   return groups
 }
 

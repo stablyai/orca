@@ -14,6 +14,7 @@ export function resolveBrowserWorkspaceOwner(
     if (requiredWorktreeId && worktreeId !== requiredWorktreeId) {
       continue
     }
+
     for (const workspace of workspaces) {
       if (
         workspace.id === sourceId ||
@@ -23,5 +24,6 @@ export function resolveBrowserWorkspaceOwner(
       }
     }
   }
+
   return null
 }

@@ -11,7 +11,9 @@ vi.mock('electron', () => ({
 import { ArtifactCloudService } from './artifact-cloud-service'
 
 const createdPaths: string[] = []
+
 const apiUrl = 'http://localhost:3000'
+
 const writeRequest = {
   sourceKey: '/repo/report.html',
   content: '<h1>Recovery</h1>',
@@ -215,20 +217,25 @@ class ArtifactFaultServer {
 
   artifactContent(slug: string): string | undefined {
     const body = this.artifacts.get(slug)
+
     return body ? (JSON.parse(body) as { content?: string }).content : undefined
   }
 
   private async handle(input: string | URL | Request, init?: RequestInit): Promise<Response> {
     const method = init?.method ?? 'GET'
+
     if (method === 'POST') {
       return this.create(init)
     }
+
     if (method === 'PUT') {
       return this.update(String(input), init)
     }
+
     if (method === 'DELETE') {
       return this.delete(String(input))
     }
+
     throw new Error(`Unexpected artifact request: ${method} ${String(input)}`)
   }
 
@@ -236,21 +243,28 @@ class ArtifactFaultServer {
     if (this.rejectNextCreateStatus !== null) {
       const status = this.rejectNextCreateStatus
       this.rejectNextCreateStatus = null
+
       return jsonResponse({ code: 'artifact_validation_failed' }, status)
     }
+
     const key = new Headers(init?.headers).get('idempotency-key')
+
     if (new Headers(init?.headers).get('authorization') !== 'Bearer token-a') {
       throw new Error('Missing artifact authorization')
     }
+
     if (!key) {
       throw new Error('Missing idempotency key')
     }
+
     const body = String(init?.body)
     const existing = this.createsByKey.get(key)
+
     if (existing) {
       if (existing.body !== body) {
         throw new Error('Idempotency key reused with another request')
       }
+
       return jsonResponse(existing.response, 201)
     }
 
@@ -259,10 +273,12 @@ class ArtifactFaultServer {
     const response = createResponseBody(slug)
     this.createsByKey.set(key, { body, response })
     this.artifacts.set(slug, body)
+
     if (this.loseNextCreateResponse) {
       this.loseNextCreateResponse = false
       throw new TypeError('response lost after committed create')
     }
+
     return jsonResponse(response, 201)
   }
 
@@ -270,17 +286,23 @@ class ArtifactFaultServer {
     if (this.rejectNextDeleteCode !== null) {
       const code = this.rejectNextDeleteCode
       this.rejectNextDeleteCode = null
+
       return jsonResponse({ code }, 404)
     }
+
     const slug = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
+
     if (!this.artifacts.delete(slug)) {
       return jsonResponse({ code: 'artifact_not_found' }, 404)
     }
+
     this.deleteMutations += 1
+
     if (this.loseNextDeleteResponse) {
       this.loseNextDeleteResponse = false
       throw new TypeError('response lost after committed delete')
     }
+
     return new Response(null, { status: 204 })
   }
 
@@ -288,20 +310,27 @@ class ArtifactFaultServer {
     if (this.rejectNextUpdateStatus !== null) {
       const status = this.rejectNextUpdateStatus
       this.rejectNextUpdateStatus = null
+
       return jsonResponse({ code: 'artifact_update_failed' }, status)
     }
+
     const slug = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
+
     if (!this.artifacts.has(slug)) {
       return jsonResponse({ code: 'artifact_not_found' }, 404)
     }
+
     const headers = new Headers(init?.headers)
+
     if (
       headers.get('authorization') !== 'Bearer token-a' ||
       headers.get('x-orca-edit-token') !== `edit-${slug}`
     ) {
       return jsonResponse({ code: 'artifact_forbidden' }, 403)
     }
+
     this.artifacts.set(slug, String(init?.body))
+
     return jsonResponse(createResponseBody(slug), 200)
   }
 }
@@ -309,6 +338,7 @@ class ArtifactFaultServer {
 async function createUserDataPath(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), 'orca-artifact-recovery-'))
   createdPaths.push(path)
+
   return path
 }
 
@@ -322,6 +352,7 @@ async function publishedLink(userDataPath: string): Promise<string | null> {
     apiUrl,
     authToken: 'token-a'
   })
+
   return result.status === 'ok' ? (result.value?.shareUrl ?? null) : null
 }
 

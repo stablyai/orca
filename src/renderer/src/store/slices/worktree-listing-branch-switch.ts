@@ -5,12 +5,15 @@ function indexUnambiguousWorktrees(
   include?: (worktree: Worktree) => boolean
 ): Map<string, Worktree | null> {
   const byId = new Map<string, Worktree | null>()
+
   for (const worktree of worktrees) {
     if (include && !include(worktree)) {
       continue
     }
+
     byId.set(worktree.id, byId.has(worktree.id) ? null : worktree)
   }
+
   return byId
 }
 
@@ -62,6 +65,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
     hasBranchScopedReviewContext,
     updateWorktreeGitIdentity
   } = args
+
   if (!requestStarted?.length || !current?.length) {
     return incoming
   }
@@ -70,10 +74,12 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
   const startedById = indexUnambiguousWorktrees(requestStarted, matchesRefreshHost)
   const latestById = indexUnambiguousWorktrees(current, matchesRefreshHost)
   let reconciled: Worktree[] | null = null
+
   for (const [index, worktree] of incoming.entries()) {
     const requestStartedWorktree = startedById.get(worktree.id)
     const existing = latestById.get(worktree.id)
     const isAmbiguousAcrossHosts = allLatestById.get(worktree.id) === null
+
     if (
       requestStartedWorktree &&
       existing &&
@@ -87,6 +93,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       reconciled[index] = existing
       continue
     }
+
     if (
       isAmbiguousAcrossHosts ||
       !requestStartedWorktree ||
@@ -96,6 +103,7 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
     ) {
       continue
     }
+
     updateWorktreeGitIdentity(worktree.id, {
       head: worktree.head,
       // Empty branch means detached HEAD in listing results; null is the
@@ -103,5 +111,6 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
       branch: worktree.branch === '' ? null : worktree.branch
     })
   }
+
   return reconciled ?? incoming
 }

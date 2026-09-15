@@ -12,15 +12,18 @@ import {
 } from './wsl-login-shell-command'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
+
 let wslShAvailable: boolean | null = null
 
 function canRunWslSh(): boolean {
   if (process.platform !== 'win32') {
     return false
   }
+
   if (wslShAvailable !== null) {
     return wslShAvailable
   }
+
   try {
     execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'true'], {
       timeout: WSL_TEST_COMMAND_TIMEOUT_MS
@@ -29,12 +32,14 @@ function canRunWslSh(): boolean {
   } catch {
     wslShAvailable = false
   }
+
   return wslShAvailable
 }
 
 function expectValidShSyntax(command: string): void {
   try {
     execFileSync('sh', ['-n'], { input: command, timeout: WSL_TEST_COMMAND_TIMEOUT_MS })
+
     return
   } catch (error) {
     if (
@@ -44,9 +49,11 @@ function expectValidShSyntax(command: string): void {
       throw error
     }
   }
+
   if (!canRunWslSh()) {
     return
   }
+
   execFileSync('wsl.exe', ['--exec', 'sh', '-n'], {
     input: command,
     timeout: WSL_TEST_COMMAND_TIMEOUT_MS
@@ -89,6 +96,7 @@ describe('wsl login shell command helpers', () => {
         loginShell,
         '#!/bin/sh\nexport PATH="$ORCA_TEST_CODEX_BIN:/usr/bin:/bin"\nexec /bin/sh -c "$2"\n'
       )
+
       for (const [bin, label] of [
         [v1Bin, 'v1'],
         [v2Bin, 'v2']
@@ -98,10 +106,12 @@ describe('wsl login shell command helpers', () => {
         chmodSync(join(bin, 'codex'), 0o755)
         chmodSync(join(bin, 'node'), 0o755)
       }
+
       chmodSync(join(tools, 'getent'), 0o755)
       chmodSync(loginShell, 0o755)
 
       const command = buildWslLoginShellCommand('exec codex')
+
       const run = (codexBin: string): string =>
         execFileSync('/bin/sh', ['-c', command], {
           encoding: 'utf8',
@@ -219,6 +229,7 @@ describe('wsl login shell command helpers', () => {
         const captured = buildWslCapturedLoginShellCommand('printf partial; exit 2')
 
         let status: number | undefined
+
         try {
           execFileSync('wsl.exe', buildWslExecArgs(undefined, ['sh', '-lc', captured.command]), {
             encoding: 'utf8',
@@ -279,6 +290,7 @@ describe('wsl login shell command helpers', () => {
       'reads a clean payload back from a real distro login shell',
       () => {
         const captured = buildWslCapturedLoginShellCommand('printf directory')
+
         const stdout = execFileSync(
           'wsl.exe',
           buildWslExecArgs(undefined, ['sh', '-lc', captured.command]),
@@ -327,6 +339,7 @@ describe('in-guest wrapper root resolution', () => {
     const script = buildWslInteractiveLoginShellCommand()
     // Run only the root-resolution prologue, then report what it picked.
     const prologue = script.split('_orca_wsl_shell_name=')[0] as string
+
     const probe = [
       'ORCA_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',
       'ORCA_USER_DATA_PATH=/mnt/c/ud',
@@ -334,6 +347,7 @@ describe('in-guest wrapper root resolution', () => {
       prologue,
       'printf "%s" "$_orca_shell_ready_root"'
     ].join('\n')
+
     const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
     expect(result.status).toBe(0)
     expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')

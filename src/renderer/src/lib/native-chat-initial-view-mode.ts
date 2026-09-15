@@ -31,21 +31,25 @@ export function decideInitialAgentTabViewMode(args: {
   if (!agentTabsDefaultToNativeChat(args)) {
     return undefined
   }
+
   if (!isNativeChatSupportedAgent(args.agent)) {
     return undefined
   }
+
   if (
     nativeChatRequiresLocalTranscript(args.agent) &&
     args.nativeChatTranscriptIsLocalReadable !== true
   ) {
     return undefined
   }
+
   if (
     args.promptDelivery === 'draft' &&
     !canMirrorLaunchDraftToNativeChat(args.launchDraftText ?? '')
   ) {
     return undefined
   }
+
   return 'chat'
 }
 
@@ -69,5 +73,6 @@ export function initialAgentTabViewModeProps(
     launchDraftText: options.launchDraftText,
     nativeChatTranscriptIsLocalReadable: options.nativeChatTranscriptIsLocalReadable
   })
+
   return viewMode ? { viewMode } : {}
 }

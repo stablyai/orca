@@ -38,17 +38,21 @@ function runtimeConstruction(relativePath: string): string {
   const start = source.indexOf('new OrcaRuntimeService(')
   expect(start).toBeGreaterThanOrEqual(0)
   let depth = 0
+
   for (let index = source.indexOf('(', start); index < source.length; index += 1) {
     const character = source[index]
+
     if (character === '(') {
       depth += 1
     } else if (character === ')') {
       depth -= 1
+
       if (depth === 0) {
         return source.slice(start, index + 1)
       }
     }
   }
+
   throw new Error(`unbalanced OrcaRuntimeService construction in ${relativePath}`)
 }
 
@@ -63,6 +67,7 @@ describe('every host that constructs a runtime wires the agent-status store', ()
     '%s passes both store deps',
     (relativePath) => {
       const construction = runtimeConstruction(relativePath)
+
       for (const dep of AGENT_STATUS_STORE_DEPS) {
         expect(construction).toContain(`${dep}:`)
       }

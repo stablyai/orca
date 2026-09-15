@@ -24,6 +24,7 @@ describe('pty dispatcher delivery interest', () => {
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((cb: (payload: { id: string; code: number }) => void) => {
             exitCallback ??= cb
+
             return () => {}
           }),
           ackData: vi.fn()

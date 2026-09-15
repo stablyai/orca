@@ -1,8 +1,10 @@
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from './local-build-compatibility-contract'
 
 export const LOCAL_BUILD_COMPATIBILITY_FILENAME = 'orca-local-build.json'
+
 export const LOCAL_BUILD_COMPATIBILITY_FORMAT_VERSION =
   LOCAL_BUILD_COMPATIBILITY_CONTRACT.formatVersion
+
 export const ORCA_APP_ID = LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId
 
 export type LocalBuildArchitecture = 'arm64' | 'x64'
@@ -34,8 +36,10 @@ export function parseLocalBuildCompatibility(value: unknown): LocalBuildCompatib
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('The selected build has invalid compatibility metadata.')
   }
+
   const record = value as Record<string, unknown>
   const architecture = record.architecture
+
   if (
     record.formatVersion !== LOCAL_BUILD_COMPATIBILITY_FORMAT_VERSION ||
     record.appId !== ORCA_APP_ID ||
@@ -59,6 +63,7 @@ export function parseLocalBuildCompatibility(value: unknown): LocalBuildCompatib
   ) {
     throw new Error('The selected build has invalid compatibility metadata.')
   }
+
   if (
     !(record.readableStateSchemaVersions as number[]).includes(
       record.stateSchemaVersion as number
@@ -69,6 +74,7 @@ export function parseLocalBuildCompatibility(value: unknown): LocalBuildCompatib
   ) {
     throw new Error('The selected build has inconsistent compatibility metadata.')
   }
+
   return record as LocalBuildCompatibility
 }
 
@@ -80,11 +86,14 @@ export function getLocalBuildCompatibilityError(
   if (!target.readableStateSchemaVersions.includes(currentStateSchemaVersion)) {
     return `This build cannot read Orca workspace state schema ${currentStateSchemaVersion}. Your workspace was not changed.`
   }
+
   const unsupportedProtocols = liveDaemonProtocols.filter(
     (protocol) => !target.attachableDaemonProtocolVersions.includes(protocol)
   )
+
   if (unsupportedProtocols.length > 0) {
     return `This build cannot reconnect terminal daemon protocol ${unsupportedProtocols.join(', ')}. Close those terminals or choose a compatible build.`
   }
+
   return null
 }

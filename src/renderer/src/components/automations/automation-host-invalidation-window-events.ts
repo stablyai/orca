@@ -22,6 +22,7 @@ export function toAutomationAuthorityChangeEvent(
   const authority: StableAutomationAuthorityRef = detail.environmentId
     ? { kind: 'runtime', environmentId: detail.environmentId }
     : { kind: 'desktop' }
+
   return {
     authority,
     ...(detail.selector ? { selector: detail.selector } : {}),
@@ -36,6 +37,8 @@ export function subscribeAutomationHostInvalidation(
   const listener = (event: Event): void => {
     handle(toAutomationAuthorityChangeEvent(automationsChangedWindowDetail(event)))
   }
+
   target.addEventListener(AUTOMATIONS_CHANGED_EVENT, listener)
+
   return () => target.removeEventListener(AUTOMATIONS_CHANGED_EVENT, listener)
 }

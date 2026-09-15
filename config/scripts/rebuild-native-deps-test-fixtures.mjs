@@ -13,15 +13,19 @@ import { fileURLToPath } from 'node:url'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mjs', import.meta.url))
+
 const sourceInstallScriptPath = fileURLToPath(
   new URL('./install-electron-package-binary.mjs', import.meta.url)
 )
+
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cjs', import.meta.url)
 )
+
 const sourceWindowsProcessTreeGypRebuildPath = fileURLToPath(
   new URL('./windows-process-tree-gyp-rebuild.mjs', import.meta.url)
 )
+
 const sourceWindowsProcessTreePatchPath = fileURLToPath(
   new URL('../patches/@vscode__windows-process-tree@0.8.0.patch', import.meta.url)
 )
@@ -39,16 +43,20 @@ const sourceWindowsProcessTreePatchPath = fileURLToPath(
  */
 function unpatchedWindowsProcessTreeCommandLineSource() {
   const lines = readFileSync(sourceWindowsProcessTreePatchPath, 'utf8').split('\n')
+
   const start = lines.findIndex((line) =>
     line.startsWith('diff --git a/src/process_commandline.cc ')
   )
+
   const rest = lines.slice(start + 1)
   const end = rest.findIndex((line) => line.startsWith('diff --git '))
+
   const preImage = (end === -1 ? rest : rest.slice(0, end))
     .filter((line) => line.startsWith(' ') || line.startsWith('-'))
     .filter((line) => !line.startsWith('---'))
     .map((line) => line.slice(1).replace(/\r$/, ''))
     .join('\r\n')
+
   // Splitting drops the file's own trailing newline as an empty element, and
   // `git apply` needs the bytes exact.
   return `${preImage}\r\n`
@@ -67,6 +75,7 @@ function unpatchedWindowsProcessTreeCommandLineSource() {
 export function gitLineEndingEnv(autocrlf) {
   const home = mkdtempSync(join(tmpdir(), `orca-git-home-${autocrlf}-`))
   writeFileSync(join(home, '.gitconfig'), `[core]\n\tautocrlf = ${autocrlf}\n`)
+
   return { HOME: home, USERPROFILE: home }
 }
 
@@ -98,6 +107,7 @@ export function mkTempProject() {
     sourceWindowsProcessTreeGypRebuildPath,
     join(projectDir, 'config', 'scripts', 'windows-process-tree-gyp-rebuild.mjs')
   )
+
   return projectDir
 }
 
@@ -108,6 +118,7 @@ export function runRebuildScript(projectDir, extraEnv = {}, args = []) {
     npm_config_arch: 'x64',
     ORCA_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs')
   }
+
   for (const key of Object.keys(env)) {
     if (
       key.toLowerCase() === 'orca_strict_electron_install' ||
@@ -116,6 +127,7 @@ export function runRebuildScript(projectDir, extraEnv = {}, args = []) {
       delete env[key]
     }
   }
+
   return spawnSync(process.execPath, ['config/scripts/rebuild-native-deps.mjs', ...args], {
     cwd: projectDir,
     encoding: 'utf8',
@@ -229,6 +241,7 @@ export function writeFakeElectronRebuild(projectDir, { logPathEnv = null, addon 
   const rebuildDir = join(projectDir, 'node_modules', '@electron', 'rebuild')
   mkdirSync(rebuildDir, { recursive: true })
   writeFileSync(join(rebuildDir, 'package.json'), JSON.stringify({ type: 'module' }))
+
   const emitAddon =
     addon === 'none'
       ? ''
@@ -241,10 +254,12 @@ export function writeFakeElectronRebuild(projectDir, { logPathEnv = null, addon 
       ${JSON.stringify(FAKE_ADDON_BYTES[addon])}
     )
   }`
+
   const emitImports =
     addon === 'none'
       ? ''
       : "import { existsSync, mkdirSync, writeFileSync } from 'node:fs'\nimport { join } from 'node:path'\n"
+
   writeFileSync(
     join(rebuildDir, 'index.js'),
     logPathEnv
@@ -284,6 +299,7 @@ export function writeFakeUsableElectronPackage(projectDir, { platform = 'linux' 
   mkdirSync(join(electronDir, 'dist'), { recursive: true })
   writeFileSync(join(electronDir, 'path.txt'), platformExecutable)
   writeFileSync(join(electronDir, 'dist', 'version'), 'v41.5.0')
+
   if (platform === 'win32') {
     copyFileSync(process.execPath, electronPath)
   } else {
@@ -314,6 +330,7 @@ export function writeFakeNodePtyConptyPayload(projectDir, arch) {
   const releaseDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(releaseDir, { recursive: true })
   writeFileSync(join(releaseDir, 'conpty.node'), 'native addon')
+
   const sourceDir = join(
     projectDir,
     'node_modules',
@@ -323,6 +340,7 @@ export function writeFakeNodePtyConptyPayload(projectDir, arch) {
     '0.1.0',
     `win10-${arch}`
   )
+
   mkdirSync(sourceDir, { recursive: true })
   writeFileSync(join(sourceDir, 'conpty.dll'), `conpty.dll ${arch}`)
   writeFileSync(join(sourceDir, 'OpenConsole.exe'), `OpenConsole.exe ${arch}`)
@@ -437,14 +455,18 @@ export function writeNodePtyPatchFile(projectDir) {
 export function writePatchedNodePtyBuildArtifacts(projectDir) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
+
   if (process.platform === 'win32') {
     writeFileSync(join(buildDir, 'conpty.node'), '')
     mkdirSync(join(buildDir, 'conpty'), { recursive: true })
     writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
     writeFileSync(join(buildDir, 'conpty', 'OpenConsole.exe'), '')
+
     return
   }
+
   writeFileSync(join(buildDir, 'pty.node'), '')
+
   if (process.platform === 'darwin') {
     writeFileSync(join(buildDir, 'spawn-helper'), '')
   }

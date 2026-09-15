@@ -80,5 +80,6 @@ export default function TaskPage(): React.JSX.Element {
   const stage37 = useTaskPageLinearCollectionEffects(stage36)
   const stage38 = useTaskPageJiraListEffects(stage37)
   const stage39 = useTaskPageComposerActions(stage38)
+
   return <TaskPageSurface model={stage39} />
 }

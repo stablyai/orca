@@ -26,6 +26,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     session.cancelFreshSpawnFollowReset()
     markTerminalFollowOutput(session.pane.terminal)
     let nativeFollowResetComplete = false
+
     const tryResetNativeFollow = (): void => {
       if (
         session.disposed ||
@@ -38,6 +39,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
       ) {
         return
       }
+
       try {
         session.pane.terminal.scrollToBottom()
         nativeFollowResetComplete = true
@@ -49,7 +51,9 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
         }
       }
     }
+
     tryResetNativeFollow()
+
     if (!nativeFollowResetComplete) {
       // Why: xterm's browser viewport can reject scrolling while its renderer
       // is detached; the first render/resize is the earliest safe native retry.
@@ -62,22 +66,29 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
 
   function trailingIncompleteCsiSequence(data: string): string {
     const escapeIndex = data.lastIndexOf('\x1b')
+
     if (escapeIndex === -1) {
       return ''
     }
+
     const tail = data.slice(escapeIndex)
+
     if (tail === '\x1b') {
       return tail
     }
+
     if (!tail.startsWith('\x1b[')) {
       return ''
     }
+
     for (let index = 2; index < tail.length; index++) {
       const code = tail.charCodeAt(index)
+
       if (code >= 0x40 && code <= 0x7e) {
         return ''
       }
     }
+
     // Why: keep the head — a suffix slice of an oversized parameter run drops
     // the `\x1b[` the next scan needs to recognize the carried sequence.
     return tail.slice(0, TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
@@ -87,13 +98,17 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!data) {
       return false
     }
+
     const scanData = session.foregroundRefreshRiskScanTail
       ? `${session.foregroundRefreshRiskScanTail}${data}`
       : data
+
     const prefersRefresh =
       (scanData.includes('\x1b[') || session.containsNonAsciiOutput(scanData)) &&
       terminalOutputPrefersRenderRefresh(scanData)
+
     session.foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
+
     return prefersRefresh
   }
 
@@ -120,6 +135,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
     // merely after the write was queued.
     flushTerminalOutput(session.pane.terminal)
+
     return replayIntoTerminalAsync(session.pane, session.deps.replayingPanesRef, data, {
       breadcrumbIdentity: {
         tabId: session.deps.tabId,
@@ -145,14 +161,17 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (ownerProcessEnded) {
       return POST_REPLAY_MODE_RESET
     }
+
     if (terminalOwner === 'shell') {
       return (isAlternateScreen ?? session.kittyKeyboardModes.isAlternateScreen)
         ? POST_REPLAY_DEAD_TUI_RESET
         : POST_REPLAY_REATTACH_RESET
     }
+
     if (session.shouldPreserveAgentReattachModes()) {
       return buildPostReplayLiveAgentReattachReset(payload)
     }
+
     // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
     // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
     return (isAlternateScreen ?? session.kittyKeyboardModes.isAlternateScreen)
@@ -170,9 +189,11 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
 
   session.prepareFreshShellViewportForSpawn = (options: FreshSpawnOptions): void => {
     const hadRestoredViewport = session.consumeRestoredViewportBlankingMarker()
+
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
+
     // Why: fresh Windows ConPTY output paints at screen coordinates, so
     // restored rows must leave the viewport before the first prompt redraw.
     session.writeFreshShellViewportBlanking()

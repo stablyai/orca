@@ -45,7 +45,9 @@ export function useFileExplorerSelection(
         // apply it across the whole selected set so stale multi-selections converge.
         return updateFileExplorerSelectionPaths(prev, value)
       }
+
       const nextPath = value
+
       return createSingleFileExplorerSelection(nextPath)
     })
   }, [])
@@ -61,6 +63,7 @@ export function useFileExplorerSelection(
         : paths.size > 0
           ? [...paths][0]
           : null
+
       return { activePath: nextActive, anchorPath: nextActive, selectedPaths: paths }
     })
   }, [])
@@ -87,6 +90,7 @@ export function useFileExplorerSelection(
 
       if (selectionMode === 'replace') {
         onReplaceClick(node)
+
         return
       }
 
@@ -110,9 +114,11 @@ export function useFileExplorerSelection(
 
   const copyPathsForNode = useCallback((node: TreeNode, pathKind: 'absolute' | 'relative') => {
     const { selectedPaths } = selectionStateRef.current
+
     const selectedNodes = selectedPaths.has(node.path)
       ? rowProjectionRef.current.getRowsByPaths(selectedPaths)
       : []
+
     const actionNodes = selectedNodes.length > 0 ? selectedNodes : [node]
     void window.api.ui.writeClipboardText(
       formatFileExplorerPathsForClipboard(actionNodes, pathKind)

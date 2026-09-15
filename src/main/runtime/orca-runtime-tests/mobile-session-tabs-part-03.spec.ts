@@ -70,12 +70,14 @@ describe('OrcaRuntimeService', () => {
     async (withOffscreen) => {
       const runtime = new OrcaRuntimeService(store)
       const pages = getRuntimeBrowserPageRegistry(runtime)
+
       const placement = {
         kind: 'client' as const,
         browserHostClientId: 'host-a',
         browserHostGeneration: 3,
         pageHostGeneration: 9
       }
+
       pages.publishClientPage({
         browserPageId: 'client-page-1',
         workspaceId: TEST_WORKTREE_ID,
@@ -87,12 +89,14 @@ describe('OrcaRuntimeService', () => {
         active: true
       })
       const closeOffscreenTab = vi.fn()
+
       if (withOffscreen) {
         runtime.setOffscreenBrowserBackend({
           createTab: vi.fn(),
           closeTab: closeOffscreenTab
         })
       }
+
       runtime.syncWindowGraph(0, {
         tabs: [],
         leaves: [],
@@ -124,10 +128,12 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+
       const closeClientPage = vi
         .spyOn(runtime, 'browserTabClose')
         .mockImplementation(async ({ page }) => {
           expect(pages.retirePage(page!, placement)).toBe(true)
+
           return { closed: true }
         })
 
@@ -172,6 +178,7 @@ describe('OrcaRuntimeService', () => {
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
+
     const browserTab = {
       type: 'browser' as const,
       id: 'offscreen-page-1',
@@ -184,6 +191,7 @@ describe('OrcaRuntimeService', () => {
       canGoForward: false,
       isActive: true
     }
+
     runtime.syncWindowGraph(0, {
       tabs: [],
       leaves: [],
@@ -204,6 +212,7 @@ describe('OrcaRuntimeService', () => {
       `id:${TEST_WORKTREE_ID}`,
       browserTab.browserPageId
     )
+
     await vi.waitFor(() => expect(closeOffscreenTab).toHaveBeenCalledWith(browserTab.browserPageId))
 
     runtime.syncWindowGraph(0, {
@@ -250,6 +259,7 @@ describe('OrcaRuntimeService', () => {
   it('creates mobile session terminals in a headless runtime server', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-headless' })
     const runtime = new OrcaRuntimeService(store)
+
     const persistViewMode = vi.spyOn(
       runtime as unknown as {
         persistHeadlessSessionTabProps: (
@@ -260,6 +270,7 @@ describe('OrcaRuntimeService', () => {
       },
       'persistHeadlessSessionTabProps'
     )
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -316,6 +327,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const webContents: {
       isDestroyed: () => boolean
       setBackgroundThrottling: typeof setBackgroundThrottling
@@ -325,6 +337,7 @@ describe('OrcaRuntimeService', () => {
       setBackgroundThrottling,
       send: vi.fn()
     }
+
     webContents.send.mockImplementation((_channel: string, payload: { requestId: string }) => {
       expect(setBackgroundThrottling).toHaveBeenCalledWith(false)
       runtime.registerPty('pty-paired-headed', TEST_WORKTREE_ID, null, {
@@ -408,6 +421,7 @@ describe('OrcaRuntimeService', () => {
     const host = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const clientA = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-a')
     const clientB = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`, 'device-b')
+
     const inventory = (snapshot: RuntimeMobileSessionTabsResult) =>
       snapshot.tabs.map((tab) =>
         tab.type === 'terminal'
@@ -420,6 +434,7 @@ describe('OrcaRuntimeService', () => {
             }
           : { id: tab.id, type: tab.type }
       )
+
     expect(inventory(clientA)).toEqual(inventory(host))
     expect(inventory(clientB)).toEqual(inventory(host))
 
@@ -433,14 +448,17 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     const restoredHost = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const restoredClientA = await runtime.listMobileSessionTabs(
       `id:${TEST_WORKTREE_ID}`,
       'device-a'
     )
+
     const restoredClientB = await runtime.listMobileSessionTabs(
       `id:${TEST_WORKTREE_ID}`,
       'device-b'
     )
+
     expect(inventory(restoredHost)).toEqual(inventory(host))
     expect(inventory(restoredClientA)).toEqual(inventory(host))
     expect(inventory(restoredClientB)).toEqual(inventory(host))
@@ -470,6 +488,7 @@ describe('OrcaRuntimeService', () => {
         isDestroyed: () => false,
         webContents: { isDestroyed: () => false, send, setBackgroundThrottling: vi.fn() }
       })
+
       if (graphStatus === 'reloading') {
         runtime.markRendererReloading(1)
       } else {
@@ -507,10 +526,13 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     let resolutionStarted = (): void => {}
+
     const started = new Promise<void>((resolve) => {
       resolutionStarted = resolve
     })
+
     let releaseResolution = (): void => {}
+
     vi.mocked(listWorktrees).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -523,6 +545,7 @@ describe('OrcaRuntimeService', () => {
       clientNavigationId: 'device-a',
       navigation: 'caller'
     })
+
     await started
     expect(spawn).not.toHaveBeenCalled()
     runtime.markRendererReloading(1)

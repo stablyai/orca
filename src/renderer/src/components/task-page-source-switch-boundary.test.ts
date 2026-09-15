@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { readTaskPageSource } from './task-page-source-family.test-support'
 
 const CONTENT_SOURCE = readTaskPageSource('task-page/Content.tsx')
+
 const SOURCE_BAR_SOURCE = readTaskPageSource('task-page/SourceBar.tsx')
+
 const SOURCE_CONTEXT_SOURCE = readTaskPageSource('task-page-source-context.tsx')
+
 const RUNTIME_HOSTS_SOURCE = readTaskPageSource('use-task-page-runtime-hosts.ts')
+
 const GITHUB_DETAIL_SOURCE = readTaskPageSource('use-task-page-github-detail.ts')
+
 const WORKSPACE_ACTIONS_SOURCE = readTaskPageSource('use-task-page-workspace-actions.ts')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
@@ -13,6 +18,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -79,6 +85,7 @@ describe('TaskPage source switching host boundary', () => {
       'function getTaskPageRepoSourceContext',
       'function getTaskSourceHostAvailabilityForHost'
     )
+
     expect(sourceContextBuilder).toContain('gitlabProjectRef?: GitLabProjectRef | null')
     expect(sourceContextBuilder).toContain('buildGitLabProviderIdentity(gitlabProjectRef)')
 
@@ -87,6 +94,7 @@ describe('TaskPage source switching host boundary', () => {
       'const openGitLabDetailPage = useCallback(',
       'const nextModel'
     )
+
     expect(openGitLabDetail).toContain('item.projectRef')
 
     const startGitLabWorkspace = sourceBetween(
@@ -94,6 +102,7 @@ describe('TaskPage source switching host boundary', () => {
       'const openComposerForGitLabItem = useCallback(',
       'const handleUseGitLabItem = useCallback('
     )
+
     expect(startGitLabWorkspace).toContain('item.projectRef')
   })
 })

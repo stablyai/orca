@@ -34,6 +34,7 @@ describe('OrcaRuntimeService', () => {
   it('launches SSH setup terminals for runtime task-created worktrees', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: '/remote/mobile-setup',
       head: 'def',
@@ -41,6 +42,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -55,7 +57,9 @@ describe('OrcaRuntimeService', () => {
         scripts: { setup: '', archive: '' }
       }
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -64,53 +68,66 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'rev-parse' && args[1] === '--git-path') {
           return {
             stdout: '/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh\n',
             stderr: ''
           }
         }
+
         if (args[0] === 'rev-parse') {
           throw new Error('missing local branch')
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
+
     vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { setup: 'pnpm worktree:setup' }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-remote-agent' })
       .mockResolvedValueOnce({ id: 'pty-remote-setup' })
+
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote' })
     registerSshGitProvider('ssh-1', provider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
@@ -139,6 +156,7 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
 
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
+
     try {
       const result = await runtime.createManagedWorktree({
         repoSelector: TEST_REPO_ID,
@@ -174,10 +192,12 @@ describe('OrcaRuntimeService', () => {
           worktreeId: result.worktree.id
         })
       )
+
       const startup = spawn.mock.calls[0]![0] as {
         command: string
         env: Record<string, string>
       }
+
       const startupCommand = startup.command
       const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
       const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
@@ -206,6 +226,7 @@ describe('OrcaRuntimeService', () => {
   it('honors split setup placement for SSH worktrees without startup agents', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: '/remote/mobile-setup-split',
       head: 'def',
@@ -213,6 +234,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -221,7 +243,9 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getSettings: () => ({
@@ -234,53 +258,66 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'rev-parse' && args[1] === '--git-path') {
           return {
             stdout: '/remote/repo/.git/worktrees/mobile-setup-split/orca/setup-runner.sh\n',
             stderr: ''
           }
         }
+
         if (args[0] === 'rev-parse') {
           throw new Error('missing local branch')
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({ isBinary: false, content: 'hooks:\n' }),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
+
     vi.mocked(getEffectiveHooksFromConfig).mockReturnValue({
       scripts: { setup: 'pnpm worktree:setup' }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-remote-initial' })
       .mockResolvedValueOnce({ id: 'pty-remote-setup-split' })
+
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote-split' })
     registerSshGitProvider('ssh-1', provider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
@@ -338,6 +375,7 @@ describe('OrcaRuntimeService', () => {
 
   it('removes SSH-backed runtime worktrees through the SSH git provider', async () => {
     vi.mocked(listWorktrees).mockClear()
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -359,6 +397,7 @@ describe('OrcaRuntimeService', () => {
         connectionId: 'ssh-1'
       })
     }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -378,7 +417,9 @@ describe('OrcaRuntimeService', () => {
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', gitProvider as never)
+
     const ptyProvider = {
       listProcesses: vi.fn().mockResolvedValue([
         {
@@ -391,6 +432,7 @@ describe('OrcaRuntimeService', () => {
       shutdown: vi.fn().mockResolvedValue(undefined),
       deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
     }
+
     const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
       getSshProvider: () => ptyProvider as never
     })
@@ -432,7 +474,9 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const remoteStore = { ...store, getRepos: () => [remoteRepo], getRepo: () => remoteRepo }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -452,14 +496,18 @@ describe('OrcaRuntimeService', () => {
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', gitProvider as never)
+
     const ptyProvider = {
       listProcesses: vi.fn().mockResolvedValue([]),
       shutdown: vi.fn().mockResolvedValue(undefined)
     }
+
     const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
       getSshProvider: () => ptyProvider as never
     })
+
     const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
       write: () => true,
@@ -503,6 +551,7 @@ describe('OrcaRuntimeService', () => {
         connectionId: 'ssh-1'
       })
     }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -515,6 +564,7 @@ describe('OrcaRuntimeService', () => {
       ]),
       removeWorktree: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
@@ -544,12 +594,14 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({
         content: 'scripts:\n  setup: pnpm install\n',
         isBinary: false
       })
     }
+
     vi.mocked(parseOrcaYaml).mockReturnValue({ scripts: { setup: 'pnpm install' } })
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -579,6 +631,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: { setup: 'echo yaml setup\necho local setup' }
     })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [
@@ -595,6 +648,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await expect(runtime.getRepoHooks('id:repo-1')).resolves.toMatchObject({

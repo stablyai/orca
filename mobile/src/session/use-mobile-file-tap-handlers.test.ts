@@ -6,6 +6,7 @@ import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 const push = vi.fn()
 
 vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
+
 vi.mock('../platform/haptics', () => ({ triggerSelection: vi.fn() }))
 
 type Handlers = ReturnType<typeof useMobileFileTapHandlers>
@@ -50,6 +51,7 @@ describe('useMobileFileTapHandlers', () => {
 
   function Harness({ options }: { options: ReturnType<typeof createOptions> }): null {
     handlers = useMobileFileTapHandlers(options)
+
     return null
   }
 
@@ -145,12 +147,14 @@ describe('useMobileFileTapHandlers', () => {
 
   it('lets structured chat file taps resolve without a backing terminal handle', async () => {
     const sendRequest = vi.fn(async () => ok({ exists: false, isDirectory: false }))
+
     const options = {
       ...createOptions(sendRequest),
       activeHandleRef: { current: null as string | null },
       getActiveSessionTabId: () => 'agent-tab-1',
       getActiveSessionTabType: () => 'agent-session'
     }
+
     act(() => {
       renderer = create(createElement(Harness, { options }))
     })

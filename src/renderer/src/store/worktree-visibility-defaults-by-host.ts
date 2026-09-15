@@ -12,8 +12,10 @@ export function getRepoOwnerWorktreeVisibilityDefaults(
   defaultsByHost: Partial<Record<ExecutionHostId, WorktreeVisibilityDefaults | null>> | undefined
 ): WorktreeVisibilityDefaults | undefined {
   const hostId = getRepoExecutionHostId(repo)
+
   if (parseExecutionHostId(hostId)?.kind === 'runtime') {
     return defaultsByHost?.[hostId] ?? undefined
   }
+
   return defaultsByHost?.local ?? settings?.worktreeVisibilityDefaults
 }

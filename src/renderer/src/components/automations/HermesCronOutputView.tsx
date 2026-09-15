@@ -33,9 +33,11 @@ function isErrorSection(section: ParsedHermesSection): boolean {
 
 function getScheduleDisplay(value: string): string | null {
   const trimmed = value.trim()
+
   if (!isRunnableAutomationSchedule(trimmed)) {
     return null
   }
+
   return formatUiAutomationSchedule(trimmed)
 }
 
@@ -51,6 +53,7 @@ type MetadataIconStyle = { icon: LucideIcon; iconClass: string; ringClass: strin
 
 function getMetadataIconStyle(label: string): MetadataIconStyle {
   const normalized = label.toLowerCase()
+
   if (/(^|\s)(job\s*id|id)(\s|$)/.test(normalized)) {
     return {
       icon: Fingerprint,
@@ -58,6 +61,7 @@ function getMetadataIconStyle(label: string): MetadataIconStyle {
       ringClass: 'bg-violet-500/10 ring-1 ring-violet-500/30'
     }
   }
+
   if (/time|run/.test(normalized)) {
     return {
       icon: Clock,
@@ -65,6 +69,7 @@ function getMetadataIconStyle(label: string): MetadataIconStyle {
       ringClass: 'bg-sky-500/10 ring-1 ring-sky-500/30'
     }
   }
+
   if (/schedule|cron/.test(normalized)) {
     return {
       icon: CalendarClock,
@@ -72,6 +77,7 @@ function getMetadataIconStyle(label: string): MetadataIconStyle {
       ringClass: 'bg-amber-500/10 ring-1 ring-amber-500/30'
     }
   }
+
   return {
     icon: Sparkles,
     iconClass: 'text-muted-foreground',
@@ -97,6 +103,7 @@ function CollapsibleSection({
   iconClass
 }: CollapsibleSectionProps): React.JSX.Element {
   const [open, setOpen] = useState(defaultOpen)
+
   return (
     <section
       className={cn(
@@ -126,6 +133,7 @@ type SectionCardProps = {
 
 function SectionCard({ title, accent = 'default', children }: SectionCardProps): React.JSX.Element {
   const Icon = accent === 'error' ? AlertTriangle : CheckCircle2
+
   return (
     <section
       className={cn(
@@ -173,6 +181,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
   const responseSection = parsed.sections.find(isResponseSection)
   const errorSection = parsed.sections.find(isErrorSection)
   const promptSection = parsed.sections.find(isPromptSection)
+
   const otherSections = parsed.sections.filter(
     (section) =>
       !isResponseSection(section) && !isErrorSection(section) && !isPromptSection(section)
@@ -197,6 +206,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
         <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {parsed.metadata.map((entry) => {
             const { icon: Icon, iconClass, ringClass } = getMetadataIconStyle(entry.label)
+
             return (
               <div
                 key={entry.label}

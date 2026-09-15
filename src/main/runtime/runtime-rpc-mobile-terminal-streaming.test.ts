@@ -34,6 +34,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -59,6 +60,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const endpoint = metadata!.transports[0]!.endpoint
     const authToken = metadata!.authToken
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const createResponse = await sendRequest(endpoint, {
       id: 'laptop_create',
       authToken,
@@ -108,6 +110,7 @@ describe('OrcaRuntimeRpcServer', () => {
         terminal: { handle: string }
       }
     ).terminal
+
     expect(listResponse).toMatchObject({
       id: 'phone_list',
       ok: true,
@@ -138,6 +141,7 @@ describe('OrcaRuntimeRpcServer', () => {
         terminal: terminal.handle
       }
     })
+
     expect(readResponse).toMatchObject({
       id: 'phone_read',
       ok: true,
@@ -160,11 +164,13 @@ describe('OrcaRuntimeRpcServer', () => {
       spawn,
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -179,10 +185,13 @@ describe('OrcaRuntimeRpcServer', () => {
       name: 'phone',
       scope: 'mobile'
     })
+
     expect(phoneOffer.available).toBe(true)
+
     if (!phoneOffer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
+
     expect(parsePairingCode(phoneOffer.pairingUrl)?.scope).toBe('mobile')
     const phone = await authenticateMobileWsSession(phoneOffer.pairingUrl)
     const phoneResponses = createEncryptedWsResponseReader(phone)
@@ -201,6 +210,7 @@ describe('OrcaRuntimeRpcServer', () => {
       await expect(
         phoneResponses.next('phone_subscribe_tabs', (response) => {
           const result = response.result as { type?: string; tabs?: unknown[] } | undefined
+
           return result?.type === 'snapshot' && result.tabs?.length === 0
         })
       ).resolves.toMatchObject({
@@ -211,8 +221,10 @@ describe('OrcaRuntimeRpcServer', () => {
       const blockedUpdate = phoneResponses.next('phone_subscribe_tabs', (response) => {
         const result = response.result as { type?: string; tabs?: unknown[] } | undefined
         const tab = result?.tabs?.[0] as { agentStatus?: { state?: string } } | undefined
+
         return result?.type === 'updated' && tab?.agentStatus?.state === 'blocked'
       })
+
       const createResponse = await sendRequest(laptopEndpoint, {
         id: 'laptop_create',
         authToken: laptopAuthToken,
@@ -225,11 +237,13 @@ describe('OrcaRuntimeRpcServer', () => {
           activate: true
         }
       })
+
       const terminal = (
         createResponse.result as {
           terminal: { handle: string }
         }
       ).terminal
+
       runtime.onPtyData('paired-laptop-pty', '\x1b]0;Claude waiting for permission\x07', 456)
       runtime.onPtyData('paired-laptop-pty', 'Need approval\r\n', 457)
 
@@ -304,12 +318,14 @@ describe('OrcaRuntimeRpcServer', () => {
       getCwd: async () => '/tmp/worktree-a',
       getForegroundProcess: async () => null
     })
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     // Real artifact under the temp root so the grant path stats it.
     const artifactPath = join(tmpdir(), `orca-artifact-${process.pid}-${Date.now()}.json`)
     await writeFile(artifactPath, '{"ok":true}')
@@ -340,20 +356,25 @@ describe('OrcaRuntimeRpcServer', () => {
     runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
 
     await server.start()
+
     const offer = server.createPairingOffer({
       address: '127.0.0.1',
       name: 'phone',
       scope: 'mobile'
     })
+
     expect(offer.available).toBe(true)
+
     if (!offer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
+
     // Full direct E2EE authentication drives MobileSocketWiring.onReady (the
     // relay transport attaches through the same wiring), which must backfill
     // candidates from the raw window without any direct activation call.
     const phone = await authenticateMobileWsSession(offer.pairingUrl)
     const phoneResponses = createEncryptedWsResponseReader(phone)
+
     try {
       // Post-connect pathless output scrolls the artifact out of the raw
       // 64KiB window; only the connect-time backfilled candidate can answer.
@@ -365,8 +386,10 @@ describe('OrcaRuntimeRpcServer', () => {
         params: { worktree: 'id:repo-1::/tmp/worktree-a' }
       })
       const listResponse = await phoneResponses.next('phone_terminals')
+
       const handle = (listResponse.result as { terminals: { handle: string }[] }).terminals[0]!
         .handle
+
       expect(handle).toBeTruthy()
 
       sendEncryptedWsRequest(phone, {
@@ -400,6 +423,7 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('completes remote E2EE authentication against a runtime proxy without activateRecentPtyPathCandidateTracking', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+
     // Why: a remote-host runtime proxy only implements RPC-forwarded methods;
     // activation is a local-host concern, so the proxy legitimately lacks
     // activateRecentPtyPathCandidateTracking and onReady must not throw.
@@ -412,10 +436,12 @@ describe('OrcaRuntimeRpcServer', () => {
       cancelMobileDictationForConnection: () => {},
       onClientDisconnected: () => {}
     } as unknown as OrcaRuntimeService
+
     expect(
       (runtimeProxy as { activateRecentPtyPathCandidateTracking?: unknown })
         .activateRecentPtyPathCandidateTracking
     ).toBeUndefined()
+
     const server = new OrcaRuntimeRpcServer({
       runtime: runtimeProxy,
       userDataPath,
@@ -424,19 +450,24 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.start()
+
     const offer = server.createPairingOffer({
       address: '127.0.0.1',
       name: 'remote',
       scope: 'runtime'
     })
+
     expect(offer.available).toBe(true)
+
     if (!offer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
+
     // Real E2EE pairing + authentication drives MobileSocketWiring.onReady
     // before e2ee_authenticated is sent; a throwing onReady never authenticates.
     const session = await authenticateMobileWsSession(offer.pairingUrl)
     const responses = createEncryptedWsResponseReader(session)
+
     try {
       sendEncryptedWsRequest(session, { id: 'proxy_status', method: 'status.get' })
       await expect(responses.next('proxy_status')).resolves.toMatchObject({
@@ -455,19 +486,23 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const writes: { terminal: string; text: string }[] = []
     const runtime = new OrcaRuntimeService(makeStore() as never)
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'multiplex-background-pty' })
       .mockResolvedValueOnce({ id: 'multiplex-active-pty' })
+
     runtime.setPtyController({
       spawn,
       write: (ptyId, data) => {
         writes.push({ terminal: ptyId, text: data })
+
         return true
       },
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -482,12 +517,16 @@ describe('OrcaRuntimeRpcServer', () => {
       name: 'phone',
       scope: 'mobile'
     })
+
     expect(phoneOffer.available).toBe(true)
+
     if (!phoneOffer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
+
     const pairing = parsePairingCode(phoneOffer.pairingUrl)
     expect(pairing).toBeTruthy()
+
     if (!pairing) {
       throw new Error('Pairing URL did not parse')
     }
@@ -498,6 +537,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const worktree = 'id:repo-1::/tmp/worktree-a'
     const backgroundLeafId = '11111111-1111-4111-8111-111111111111'
     const activeLeafId = '22222222-2222-4222-8222-222222222222'
+
     const backgroundCreateResponse = await sendRequest(laptopEndpoint, {
       id: 'laptop_create_background',
       authToken: laptopAuthToken,
@@ -509,6 +549,7 @@ describe('OrcaRuntimeRpcServer', () => {
         leafId: backgroundLeafId
       }
     })
+
     const activeCreateResponse = await sendRequest(laptopEndpoint, {
       id: 'laptop_create_active',
       authToken: laptopAuthToken,
@@ -521,14 +562,17 @@ describe('OrcaRuntimeRpcServer', () => {
         activate: true
       }
     })
+
     const backgroundTerminal = (backgroundCreateResponse.result as { terminal: { handle: string } })
       .terminal
+
     const activeTerminal = (activeCreateResponse.result as { terminal: { handle: string } })
       .terminal
 
     const responses: Record<string, unknown>[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const onError = vi.fn()
+
     const subscription = await subscribeRemoteRuntimeRequest(
       pairing,
       'terminal.multiplex',
@@ -580,6 +624,7 @@ describe('OrcaRuntimeRpcServer', () => {
           .map((response) => response.result as { type?: string; streamId?: number } | undefined)
           .filter((result) => result?.type === 'subscribed')
           .map((result) => result?.streamId)
+
         expect(subscribedStreamIds).toEqual(expect.arrayContaining([21, 22]))
       })
       binaryFrames.splice(0)
@@ -590,10 +635,12 @@ describe('OrcaRuntimeRpcServer', () => {
         const backgroundFrames = binaryFrames
           .map((frame) => decodeTerminalStreamFrame(frame))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+
         const backgroundBytes = backgroundFrames.reduce(
           (total, frame) => total + (frame?.payload.byteLength ?? 0),
           0
         )
+
         expect(backgroundBytes).toBeGreaterThan(0)
         expect(backgroundBytes).toBeLessThan(backgroundOutput.length)
       })
@@ -607,6 +654,7 @@ describe('OrcaRuntimeRpcServer', () => {
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 22)
           .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
           .join('')
+
         expect(activeOutput).toContain('ACTIVE_MULTIPLEX_READY')
       })
 
@@ -629,6 +677,7 @@ describe('OrcaRuntimeRpcServer', () => {
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
         .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+
       subscription.sendBinary(
         encodeTerminalStreamFrame({
           seq: 4,
@@ -642,6 +691,7 @@ describe('OrcaRuntimeRpcServer', () => {
           .map((frame) => decodeTerminalStreamFrame(frame))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
           .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+
         expect(backgroundBytesAfterAck).toBeGreaterThan(backgroundBytesBeforeAck)
       })
       expect(onError).not.toHaveBeenCalled()

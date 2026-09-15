@@ -34,13 +34,19 @@ import {
 export { RELAY_REGIONS, type RelayRegion } from './relay-region-probe'
 
 const RELAY_REGION_CACHE_FILENAME = 'orca-relay-region-preference.json'
+
 const CACHE_MAX_BYTES = 8 * 1024
+
 const CACHE_TTL_MS = 24 * 60 * 60_000
+
 // A withheld hint is cheap to revisit but expensive to re-measure on every
 // reconnect, so it is remembered for far less time than a chosen region.
 const NO_HINT_TTL_MS = 60 * 60_000
+
 const SWITCH_MINIMUM_MS = 25
+
 const SWITCH_RATIO = 0.8
+
 const FAR_CELL_RATIO = 3
 
 const RelayRegionCacheSchema = z
@@ -87,15 +93,18 @@ export class RelayRegionPreferenceResolver {
 
   async resolve(): Promise<RelayRegion | undefined> {
     const override = this.overrideRegion()
+
     if (override) {
       this.log(
         relayRegionOverrideEvent({ directorUrl: this.options.directorUrl, region: override })
       )
+
       return override
     }
 
     const now = (this.options.now ?? Date.now)()
     const cache = readRelayRegionCache(this.cachePath(), this.options.directorUrl, now)
+
     if (cache && cache.expiresAt > now) {
       this.log(
         relayRegionCacheHitEvent({
@@ -104,13 +113,16 @@ export class RelayRegionPreferenceResolver {
           ttlMs: cache.expiresAt - now
         })
       )
+
       return cache.region ?? undefined
     }
+
     if (this.pending) {
       return await this.pending
     }
 
     this.pending = this.refresh(cache, now).catch(() => undefined)
+
     try {
       return await this.pending
     } finally {
@@ -124,13 +136,17 @@ export class RelayRegionPreferenceResolver {
     if (this.overrideRegion() || this.selfHealedCells.has(assignedCellOrigin)) {
       return
     }
+
     const now = (this.options.now ?? Date.now)()
     const cache = readRelayRegionCache(this.cachePath(), this.options.directorUrl, now)
+
     // An absent, expired, or no-hint cache is already re-measured by resolve().
     if (!cache?.region || cache.expiresAt <= now) {
       return
     }
+
     this.selfHealedCells.add(assignedCellOrigin)
+
     const outcome: Omit<RelayRegionSelfHealLogEvent, 'directorHost'> = {
       event: RELAY_REGION_SELF_HEAL_EVENT,
       cachedRegion: cache.region,
@@ -141,6 +157,7 @@ export class RelayRegionPreferenceResolver {
       decision: 'kept',
       reason: 'catalog-unavailable'
     }
+
     try {
       const fetch = this.options.fetch ?? globalThis.fetch
       const probe = this.createProbe(fetch)
@@ -151,20 +168,25 @@ export class RelayRegionPreferenceResolver {
       outcome.bestRegion = best?.region ?? null
       outcome.bestLatencyMs = best?.latencyMs ?? null
       outcome.reason = best ? 'best-matches-cache' : 'no-region-measured'
+
       // A far cell under a cache that still names the best region is the
       // director declining the hint; deleting it would only re-probe.
       if (!best || best.region === cache.region) {
         this.logSelfHeal(outcome)
+
         return
       }
+
       const assignedMs = await measureOriginLatency(assignedCellOrigin, probe)
       outcome.assignedLatencyMs = assignedMs
       const far = assignedMs !== null && assignedMs > best.latencyMs * FAR_CELL_RATIO
       outcome.decision = far ? 'deleted' : 'kept'
       outcome.reason = far ? 'assigned-cell-far' : 'assigned-cell-near'
+
       if (far) {
         rmSync(this.cachePath(), { force: true })
       }
+
       this.logSelfHeal(outcome)
     } catch {
       // Self-heal is best effort; a failed probe must never disturb the session.
@@ -180,12 +202,15 @@ export class RelayRegionPreferenceResolver {
     now: number
   ): Promise<RelayRegion | undefined> {
     const fetch = this.options.fetch ?? globalThis.fetch
+
     // Only a refresh withholds a hint, so only a refresh reports the catalog
     // failure as a probe event; self-heal reports it as its own outcome.
     const reports = await this.probeCatalog(fetch, () =>
       this.log(relayRegionCatalogFailureEvent(this.options.directorUrl))
     )
+
     const measurements = measuredRegions(reports)
+
     // Why: a region may only win against a measured competitor. A rejected or
     // unmeasurable peer, or one the director left out of the catalog because it
     // has no serving cell right now (a roll wave), means director default
@@ -195,6 +220,7 @@ export class RelayRegionPreferenceResolver {
       measurements.length < reports.length || reports.length < RELAY_REGIONS.length
         ? null
         : selectRegionMeasurement(measurements, previous?.region ?? null)
+
     const ttlMs = selected ? CACHE_TTL_MS : NO_HINT_TTL_MS
     this.log(
       relayRegionRefreshEvent({
@@ -211,6 +237,7 @@ export class RelayRegionPreferenceResolver {
         : { region: null, ttlMs },
       now
     )
+
     return selected?.region
   }
 
@@ -219,6 +246,7 @@ export class RelayRegionPreferenceResolver {
     onCatalogFailure?: () => void
   ): Promise<RelayRegionProbeReport[]> {
     let catalog: RelayRegionCatalog
+
     try {
       catalog = await fetchRelayRegionCatalog(
         this.options.directorUrl,
@@ -229,7 +257,9 @@ export class RelayRegionPreferenceResolver {
       onCatalogFailure?.()
       throw error
     }
+
     const probe = this.createProbe(fetch)
+
     return await Promise.all(catalog.regions.map((entry) => measureRegion(entry, probe)))
   }
 
@@ -258,6 +288,7 @@ export class RelayRegionPreferenceResolver {
     const override = RelayRegionSchema.safeParse(
       this.options.diagnosticOverride ?? process.env.ORCA_RELAY_REGION_OVERRIDE
     )
+
     return override.success ? override.data : undefined
   }
 
@@ -287,6 +318,7 @@ function measuredRegions(reports: RelayRegionProbeReport[]): RegionMeasurement[]
 
 function bestMeasurement(measurements: RegionMeasurement[]): RegionMeasurement | null {
   const order = new Map(RELAY_REGIONS.map((region, index) => [region, index]))
+
   return (
     [...measurements].sort(
       (left, right) =>
@@ -300,16 +332,21 @@ function selectRegionMeasurement(
   previousRegion: RelayRegion | null
 ): RegionMeasurement | null {
   const best = bestMeasurement(measurements)
+
   if (!best || !previousRegion || best.region === previousRegion) {
     return best
   }
+
   const current = measurements.find((measurement) => measurement.region === previousRegion)
+
   if (!current) {
     return best
   }
+
   const meaningful =
     current.latencyMs - best.latencyMs >= SWITCH_MINIMUM_MS &&
     best.latencyMs <= current.latencyMs * SWITCH_RATIO
+
   return meaningful ? best : current
 }
 
@@ -318,11 +355,15 @@ function readRelayRegionCache(path: string, directorUrl: string, now: number) {
     if (!existsSync(path)) {
       return null
     }
+
     hardenExistingSecureFile(path)
+
     if (statSync(path).size > CACHE_MAX_BYTES) {
       return null
     }
+
     const parsed = RelayRegionCacheSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')))
+
     return parsed.success &&
       parsed.data.directorUrl === directorUrl &&
       parsed.data.expiresAt <= now + CACHE_TTL_MS

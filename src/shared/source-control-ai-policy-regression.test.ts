@@ -38,6 +38,7 @@ describe('source-control AI policy regressions', () => {
         commitMessage: 'global instruction'
       }
     }
+
     const repo = {
       sourceControlAi: {
         modelOverridesByOperation: {

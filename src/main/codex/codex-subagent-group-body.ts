@@ -17,6 +17,7 @@ export function codexSubagentGroupBody(
     id: boundSubagentField(agent.id, index),
     label: boundSubagentField(agent.label, index)
   }))
+
   return {
     kind: 'message',
     role: 'system',
@@ -41,11 +42,13 @@ export function boundSubagentField(value: string, index: number): string {
   if (value.length <= MAX_SUBAGENT_FIELD_CHARS) {
     return value
   }
+
   const suffix = `…~${index}`
   const keep = MAX_SUBAGENT_FIELD_CHARS - suffix.length
   // Slicing UTF-16 units can split a surrogate pair; a lone surrogate is
   // malformed in a durable row and lossy through any non-JSON UTF-8 hop.
   const last = value.charCodeAt(keep - 1)
   const end = last >= 0xd800 && last <= 0xdbff ? keep - 1 : keep
+
   return `${value.slice(0, end)}${suffix}`
 }

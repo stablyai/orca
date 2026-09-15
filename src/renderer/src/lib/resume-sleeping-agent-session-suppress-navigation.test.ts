@@ -114,6 +114,7 @@ describe('resumeSleepingAgentSessionsForWorktree navigation suppression', () => 
     const resumedTab = useAppStore
       .getState()
       .tabsByWorktree['wt-1']?.find((tab) => tab.id !== 'tab-1')
+
     // Why: the dispatcher background-mounts exactly these tabs — an
     // activate:false tab otherwise never mounts and its startup never runs.
     expect(resumedTab).toBeDefined()

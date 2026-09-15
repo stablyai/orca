@@ -26,11 +26,13 @@ export function resolveBrowserReloadIntent(
   if (trigger === 'button' && state.loading) {
     return 'stop'
   }
+
   if (state.loadErrorCode !== null) {
     return state.loadErrorCode === BROWSER_GUEST_RECOVERY_ERROR_CODE
       ? 'retry-guest-recovery'
       : 'retry-load'
   }
+
   return trigger === 'hard-reload' ? 'hard-reload' : 'reload'
 }
 
@@ -50,6 +52,7 @@ export function reloadBrowserPageWebview(
   } catch {
     return 'guest-missing'
   }
+
   try {
     if (ignoreCache) {
       webview.reloadIgnoringCache()
@@ -63,8 +66,10 @@ export function reloadBrowserPageWebview(
       // Why: the guest can be destroyed between the liveness probe and reload.
       return 'guest-missing'
     }
+
     return 'not-ready'
   }
+
   return 'reloaded'
 }
 
@@ -77,5 +82,6 @@ export function resolveBrowserReloadButtonLabelKind(
   if (state.loading) {
     return 'stop'
   }
+
   return state.loadErrorCode !== null ? 'retry' : 'reload'
 }

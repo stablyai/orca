@@ -51,6 +51,7 @@ export function createLifecycleClaim(
 export function createHarness(options: { maxPages?: number } = {}) {
   const order: string[] = []
   let rendererCurrent = true
+
   const route = {
     key: 'execution-host-a',
     executionHostIdentity: 'execution-host-record-a',
@@ -60,23 +61,27 @@ export function createHarness(options: { maxPages?: number } = {}) {
       order.push('release-route')
     })
   }
+
   const routeSession = {
     partition,
     release: vi.fn(() => {
       order.push('release-session')
     })
   }
+
   const renderer = {
     rendererWebContentsId: 11,
     isCurrent: vi.fn(() => rendererCurrent),
     mountPage: vi.fn(async () => {
       order.push('mount-page')
+
       return { webContentsId: 41 }
     }),
     retirePage: vi.fn(async () => {
       order.push('retire-renderer-page')
     })
   }
+
   const dependencies = {
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-record-a',
@@ -85,12 +90,14 @@ export function createHarness(options: { maxPages?: number } = {}) {
     maxPages: options.maxPages,
     retainNetworkRoute: vi.fn(async () => {
       order.push('retain-route')
+
       return route
     }),
     selectRenderer: vi.fn(() => renderer),
     routeSessions: {
       preparePage: vi.fn(async () => {
         order.push('prepare-page')
+
         return routeSession
       })
     },
@@ -107,30 +114,37 @@ export function createHarness(options: { maxPages?: number } = {}) {
     routeWebContents: {
       claimGuestLifecycle: vi.fn((registration: BrowserRoutePageGuestIdentity) => {
         order.push('claim-guest')
+
         return createLifecycleClaim(registration)
       }),
       registerGuest: vi.fn(() => {
         order.push('register-guest')
+
         return true
       }),
       grantNavigation: vi.fn(() => {
         order.push('grant-navigation')
+
         return true
       }),
       revokeNavigation: vi.fn(() => {
         order.push('revoke-navigation')
+
         return true
       }),
       navigateGuest: vi.fn(async () => {
         order.push('navigate-guest')
+
         return true
       }),
       beginGuestRetirement: vi.fn(() => {
         order.push('retire-guest')
+
         return Promise.resolve()
       })
     }
   }
+
   return {
     dependencies,
     executor: new BrowserClientPageCommandExecutor(dependencies),

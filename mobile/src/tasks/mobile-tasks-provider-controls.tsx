@@ -30,6 +30,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
     sortLabel,
     taskUiReady
   } = model
+
   return (
     <ScrollView
       horizontal
@@ -44,6 +45,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
           if (!taskUiReady) {
             return
           }
+
           setShowProviderPicker(true)
         }}
       >
@@ -59,6 +61,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
             if (!taskUiReady) {
               return
             }
+
             setShowRepoPicker(true)
           }}
         >
@@ -90,6 +93,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
               if (!taskUiReady) {
                 return
               }
+
               setShowGitLabViewPicker(true)
             }}
           >
@@ -105,6 +109,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
                 if (!taskUiReady) {
                   return
                 }
+
                 setShowGitLabFilterPicker(true)
               }}
             >
@@ -124,6 +129,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
             if (!taskUiReady) {
               return
             }
+
             setShowSortPicker(true)
           }}
         >

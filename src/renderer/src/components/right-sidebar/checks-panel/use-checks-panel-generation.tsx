@@ -58,6 +58,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
     setPullRequestGenerationRecord,
     updatePullRequestGenerationRecord
   } = model
+
   const handleGeneratePullRequestFieldsForActive = useCallback(
     async (
       fields: PullRequestGenerationFields,
@@ -67,13 +68,17 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
       if (!repo || !activePullRequestGenerationKey || !activeWorktreePath || !branch) {
         return
       }
+
       const generationKey = activePullRequestGenerationKey
+
       if (
         useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status === 'running'
       ) {
         return
       }
+
       const requestId = allocatePullRequestGenerationRequestId()
+
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath: activeWorktreePath,
@@ -83,10 +88,13 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         branch,
         runtimeTargetSettings: ownerSettings
       }
+
       const seed = { ...fields }
+
       const previousRequiresPushBeforeCreate =
         useAppStore.getState().pullRequestGenerationRecords[generationKey]
           ?.requiresPushBeforeCreate === true
+
       // Why: ChecksPanel unsets the composer on navigate-away; persist the request so generation can finish in the background.
       const runningRecord = createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
       setPullRequestGenerationRecord(
@@ -115,12 +123,15 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
           },
           overrides
         )
+
         if (result.branchChangedByPreparation) {
           await handleBranchChangedByPullRequestGeneration(generationKey, context)
         }
+
         if (result.success) {
           useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
         }
+
         updatePullRequestGenerationRecord(generationKey, (record) => {
           if (!result.success) {
             return resolvePullRequestGenerationFailure({
@@ -130,6 +141,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
               error: result.canceled ? null : result.error
             })
           }
+
           return resolvePullRequestGenerationSuccess({
             record,
             requestId,
@@ -167,19 +179,24 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
       updatePullRequestGenerationRecord
     ]
   )
+
   const handleCancelGeneratePullRequestFieldsForActive = useCallback((): void => {
     if (!activePullRequestGenerationKey) {
       return
     }
+
     const record = prGenerationRecords[activePullRequestGenerationKey]
+
     if (!record || record.status !== 'running') {
       return
     }
+
     const generationKey = activePullRequestGenerationKey
     updatePullRequestGenerationRecord(generationKey, (current) => {
       if (!current || current.context.requestId !== record.context.requestId) {
         return null
       }
+
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
@@ -193,6 +210,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         if (!current || current.context.requestId !== record.context.requestId) {
           return null
         }
+
         return {
           ...current,
           status: 'failed',
@@ -202,10 +220,12 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
       })
     })
   }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+
   const handlePullRequestGenerationSeedRestored = useCallback((): void => {
     if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {
       return
     }
+
     const requestId = activePullRequestGenerationRecord.context.requestId
     updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) =>
       markPullRequestGenerationTerminalSeedRestored({
@@ -218,6 +238,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
     activePullRequestGenerationRecord,
     updatePullRequestGenerationRecord
   ])
+
   return {
     handleGeneratePullRequestFieldsForActive,
     handleCancelGeneratePullRequestFieldsForActive,

@@ -39,6 +39,7 @@ export function installDiffCommentAddButtonOverlay({
 
   const getLineHeight = (): number => {
     const h = editor.getOption(monaco.editor.EditorOption.lineHeight)
+
     return typeof h === 'number' && h > 0 ? h : 19
   }
 
@@ -50,6 +51,7 @@ export function installDiffCommentAddButtonOverlay({
     if (lastDisplay === value) {
       return
     }
+
     plus.style.display = value
     lastDisplay = value
   }
@@ -91,23 +93,28 @@ export function installDiffCommentAddButtonOverlay({
     if (commentableLineSet === null) {
       return true
     }
+
     const from = Math.min(startLine, endLine)
     const to = Math.max(startLine, endLine)
+
     for (let line = from; line <= to; line++) {
       if (!commentableLineSet.has(line)) {
         return false
       }
     }
+
     return true
   }
 
   const positionAtLine = (lineNumber: number): void => {
     const lineTop = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
     const top = Math.round(lineTop + (getLineHeight() - BUTTON_SIZE) / 2)
+
     if (top !== lastTop) {
       plus.style.top = `${top}px`
       lastTop = top
     }
+
     setDisplay('flex')
   }
 
@@ -119,18 +126,23 @@ export function installDiffCommentAddButtonOverlay({
     const currentDrag = dragState
     dragState = null
     clearRangeDecoration()
+
     if (!currentDrag) {
       return
     }
+
     if (!canCommentOnRange(currentDrag.startLine, currentDrag.endLine)) {
       return
     }
+
     const startLine = Math.min(currentDrag.startLine, currentDrag.endLine)
     const lineNumber = Math.max(currentDrag.startLine, currentDrag.endLine)
     const top = getDiffCommentPopoverTop(editor, lineNumber, getLineHeight())
+
     if (top == null) {
       return
     }
+
     onAddCommentClickRef.current({
       lineNumber,
       startLine: startLine === lineNumber ? undefined : startLine,
@@ -142,7 +154,9 @@ export function installDiffCommentAddButtonOverlay({
     if (!dragState) {
       return
     }
+
     const line = getLineAtClientPoint(ev.clientX, ev.clientY)
+
     if (
       line == null ||
       line === dragState.endLine ||
@@ -151,6 +165,7 @@ export function installDiffCommentAddButtonOverlay({
     ) {
       return
     }
+
     dragState = { ...dragState, endLine: line }
     updateRangeDecoration(dragState.startLine, line)
   }
@@ -159,35 +174,45 @@ export function installDiffCommentAddButtonOverlay({
     ev.preventDefault()
     ev.stopPropagation()
     const line = hoverLineRef.current
+
     if (line == null || !canCommentOnLine(line)) {
       return
     }
+
     dragState = { startLine: line, endLine: line }
     updateRangeDecoration(line, line)
     document.addEventListener('mousemove', handleRangeDragMove)
     document.addEventListener('mouseup', finishRangeDrag)
   }
+
   plus.addEventListener('mousedown', handleMouseDown)
 
   const onMouseMove = editor.onMouseMove((e) => {
     // Monaco reports null position over our "+" button; hiding on null would flicker-loop, so keep it visible while the cursor's on it.
     const srcEvent = e.event?.browserEvent as MouseEvent | undefined
+
     if (srcEvent && plus.contains(srcEvent.target as Node)) {
       return
     }
+
     const ln = e.target.position?.lineNumber ?? null
+
     if (ln == null || !canCommentOnLine(ln)) {
       hoverLineRef.current = null
       setDisplay('none')
+
       return
     }
+
     hoverLineRef.current = ln
     positionAtLine(ln)
   })
+
   // Keep hoverLineRef on mouse-leave: Monaco's content-area leave fires before the button's, so a click in that gap still resolves to the last-hovered line.
   const onMouseLeave = editor.onMouseLeave(() => {
     setDisplay('none')
   })
+
   const onScroll = editor.onDidScrollChange(() => {
     if (hoverLineRef.current != null) {
       positionAtLine(hoverLineRef.current)
@@ -200,6 +225,7 @@ export function installDiffCommentAddButtonOverlay({
     for (const d of disposablesRef.current) {
       d.dispose()
     }
+
     disposablesRef.current = []
     document.removeEventListener('mousemove', handleRangeDragMove)
     document.removeEventListener('mouseup', finishRangeDrag)

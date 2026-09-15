@@ -33,17 +33,21 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     ) {
       return
     }
+
     session.clearPendingAgentTaskCompleteNotification()
     let graceElapsed = false
     const generationAtSchedule = session.agentTaskCompleteNotificationGeneration
     const agentStatusAtSchedule = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
     const hasNewerActiveHookStatus = (): boolean => {
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
       const scheduledAgentType = agentStatusAtSchedule?.agentType
+
       const currentAgentForScheduledTurn = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         scheduledAgentType
       )
+
       const hasDifferentKnownAgent = Boolean(
         currentStatus?.agentType &&
         scheduledAgentType &&
@@ -51,6 +55,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
         scheduledAgentType !== 'unknown' &&
         currentAgentForScheduledTurn !== scheduledAgentType
       )
+
       return (
         options.agentCompletionSource === 'process-exit' &&
         isFreshNonDoneAgentStatus(currentStatus) &&
@@ -63,6 +68,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
 
     const dispatch = (): void => {
       session.clearPendingAgentTaskCompleteNotification()
+
       if (
         generationAtSchedule !== session.agentTaskCompleteNotificationGeneration ||
         !session.syncAgentTaskCompleteTrackingEnabled() ||
@@ -70,9 +76,11 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       ) {
         return
       }
+
       if (session.disposed) {
         return
       }
+
       // Why: terminal attention is a visual pane affordance, not an OS
       // notification. Route through dispatch so stale pane completions are
       // rejected before unread attention is marked.
@@ -94,12 +102,16 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
         // Why: the confirmed exit belongs to the row captured above; a replaced
         // active row means a newer turn started during the notification delay.
         session.clearPendingAgentTaskCompleteNotification()
+
         return
       }
+
       if (!graceElapsed) {
         return
       }
+
       const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
       if (canDispatchAgentNotificationAfterGrace(entry, options)) {
         dispatch()
       }
@@ -118,6 +130,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
+
   session.agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteTrackingEnabled(() => {
     if (session.syncAgentTaskCompleteTrackingEnabled()) {
       session.agentCompletionCoordinator.startProcessTracking()
@@ -147,18 +160,23 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     // state only; never schedule completion attention from it.
     if (meta?.staleWorkingTitleClear) {
       session.deps.setCacheTimerStartedAt(session.cacheKey, null)
+
       return
     }
+
     const currentState = useAppStore.getState()
     const activeHookStatus = currentState.agentStatusByPaneKey[session.cacheKey]
+
     if (session.shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)) {
       // Why: agent CLIs can briefly publish an idle title while hook status
       // still says the same agent turn is active (e.g. during tool output).
       if (activeHookStatus) {
         session.preserveSuppressedTitleSideEffects(title, activeHookStatus)
       }
+
       return
     }
+
     // Why: only start the prompt-cache countdown for Claude agents — other
     // agents have different (or no) prompt-caching semantics and showing a
     // timer for them would be misleading.
@@ -170,18 +188,23 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     // CacheTimer component gates rendering on the enabled flag, so a
     // spurious write when the feature turns out to be disabled is harmless.
     const settings = currentState.settings
+
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       session.deps.setCacheTimerStartedAt(session.cacheKey, Date.now())
     }
+
     if (detectAgentStatusFromTitle(title) === 'idle') {
       session.setFocusReportSuppressionForAgentCompletion(title, activeHookStatus?.agentType)
     }
+
     if (session.syncAgentTaskCompleteTrackingEnabled()) {
       session.agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
+
     // Why: some agent TUIs leave xterm renderer modes active after a turn.
     // Reset cursor everywhere, and Kitty keyboard state on native Windows.
     session.queueAgentIdleTerminalModeReset()
   }
+
   installAgentIdleWorkingHandlers(session)
 }

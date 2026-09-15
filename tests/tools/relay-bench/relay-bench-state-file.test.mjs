@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readSecretFile, writeSecretFile } from './relay-bench-state-file.mjs'
 
 const posix = process.platform !== 'win32'
+
 let dir
 
 beforeEach(() => {

@@ -16,6 +16,7 @@ export function buildMobileFilePreviewSyntax(
   try {
     const language = resolveMobileSyntaxLanguage(relativePath)
     const result = highlightMobileCode(content, language)
+
     return {
       language,
       segments: result.segments.length > 0 ? result.segments : plainSegments(content)

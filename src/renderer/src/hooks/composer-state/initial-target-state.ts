@@ -45,6 +45,7 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     workspaceHostScope,
     workspaceStatuses
   } = input
+
   const { resolveInitialWorkspaceRunSeed } = decisions
 
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
@@ -145,11 +146,13 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     ) {
       return
     }
+
     const nextGroup = findActionableFolderProjectGroup({
       projectGroups,
       groupId: initialFolderProjectGroupId,
       actionableHostIds
     })
+
     if (nextGroup) {
       initialProjectGroupAppliedRef.current = true
       setSelectedProjectGroupId(nextGroup.id)

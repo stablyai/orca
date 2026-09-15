@@ -37,18 +37,23 @@ export function gitBlobSha(bytes: Buffer): Buffer {
 
 export function skillPackageGitTreeSha(entries: readonly SkillGitTreeFileEntry[]): string {
   const root: SkillGitTreeDirectory = { directories: new Map(), files: [] }
+
   for (const entry of entries) {
     const parts = entry.path.split('/')
     const filename = parts.pop() as string
     let directory = root
+
     for (const part of parts) {
       let child = directory.directories.get(part)
+
       if (!child) {
         child = { directories: new Map(), files: [] }
         directory.directories.set(part, child)
       }
+
       directory = child
     }
+
     directory.files.push({ filename, executable: entry.executable, blobSha: entry.blobSha })
   }
 
@@ -70,11 +75,13 @@ export function skillPackageGitTreeSha(entries: readonly SkillGitTreeFileEntry[]
       // Git orders tree entries as raw bytes with directory names read as `name/`.
       return left.sortKey.compare(right.sortKey)
     })
+
     const body = Buffer.concat(
       children.map(({ mode, name, hash }) =>
         Buffer.concat([Buffer.from(`${mode} ${name}\0`, 'utf8'), hash])
       )
     )
+
     return gitObjectSha('tree', body)
   }
 

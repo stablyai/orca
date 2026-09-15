@@ -31,12 +31,14 @@ describe('hook status session-tabs republish', () => {
   it('delivers provider-only changes and authority retirement from the owner mutation stream', () => {
     const server = new AgentHookServer()
     const touch = vi.fn()
+
     const uninstall = installHookStatusSessionTabsRepublish(server, () => ({
       getTerminalWorktreeIdForHandle: () => null,
       getTerminalWorktreeIdForPaneKey: () => null,
       scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree: vi.fn(),
       touchMobileSessionTabsForWorktree: touch
     }))
+
     try {
       providerOnly(server, '/sessions/first.jsonl')
       expect(touch).toHaveBeenLastCalledWith('repo::/worktree')
@@ -61,12 +63,14 @@ describe('hook status session-tabs republish', () => {
     const server = new AgentHookServer()
     const touch = vi.fn()
     providerOnly(server, '/sessions/first.jsonl')
+
     const uninstall = installHookStatusSessionTabsRepublish(server, () => ({
       getTerminalWorktreeIdForHandle: () => null,
       getTerminalWorktreeIdForPaneKey: () => null,
       scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree: vi.fn(),
       touchMobileSessionTabsForWorktree: touch
     }))
+
     try {
       server.transferPaneAuthority(PANE, 'tab-new:22222222-2222-4222-8222-222222222222')
       expect(touch).toHaveBeenCalledTimes(1)
@@ -85,6 +89,7 @@ describe('hook status session-tabs republish', () => {
     const enrichedStatuses = vi.fn()
     const semanticStatuses = vi.fn()
     let heartbeat: ReturnType<typeof createMobileSessionTabsAgentStatusHeartbeat>
+
     const runtime = {
       getTerminalWorktreeIdForHandle: () => null,
       getTerminalWorktreeIdForPaneKey: () => null,
@@ -95,6 +100,7 @@ describe('hook status session-tabs republish', () => {
         publications.push(Date.now())
       }
     }
+
     heartbeat = createMobileSessionTabsAgentStatusHeartbeat(
       () => [],
       (worktreeId) => runtime.touchMobileSessionTabsForWorktree(worktreeId)
@@ -103,6 +109,7 @@ describe('hook status session-tabs republish', () => {
     server.subscribeStatusRowMutations(rowMutations)
     server.subscribeEnrichedStatus(enrichedStatuses)
     server.subscribeStatusChanges(semanticStatuses)
+
     const observation = {
       paneKey: PANE,
       tabId: 'tab-provider',
@@ -112,6 +119,7 @@ describe('hook status session-tabs republish', () => {
 
     try {
       server.ingestTerminalStatus(observation)
+
       for (let minute = 1; minute <= 31; minute += 1) {
         vi.advanceTimersByTime(60_000)
         server.ingestTerminalStatus(observation)

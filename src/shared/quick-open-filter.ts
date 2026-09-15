@@ -57,19 +57,26 @@ export function shouldIncludeQuickOpenPath(path: string): boolean {
       return false
     }
   }
+
   let start = 0
   const len = path.length
+
   while (start < len) {
     let end = path.indexOf('/', start)
+
     if (end === -1) {
       end = len
     }
+
     const segment = path.substring(start, end)
+
     if (segment === NON_DOTTED_PRUNE || HIDDEN_DIR_BLOCKLIST.has(segment)) {
       return false
     }
+
     start = end + 1
   }
+
   return true
 }
 
@@ -84,26 +91,36 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
   if (!Array.isArray(excludePaths)) {
     return []
   }
+
   const out: string[] = []
+
   for (const raw of excludePaths) {
     if (typeof raw !== 'string' || raw.length === 0) {
       continue
     }
+
     const relativePath = relativePathInsideRoot(rootPath, raw)
+
     if (relativePath === null) {
       continue
     }
+
     let rel = relativePath.replace(/\\/g, '/')
+
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
+
     // Strip any trailing slash so boundary checks are unambiguous.
     rel = rel.replace(/\/+$/, '')
+
     if (rel.length === 0) {
       continue
     }
+
     out.push(rel)
   }
+
   return out
 }
 
@@ -119,10 +136,12 @@ export function shouldExcludeQuickOpenRelPath(
     if (relPath === prefix) {
       return true
     }
+
     if (relPath[prefix.length] === '/' && relPath.startsWith(prefix)) {
       return true
     }
   }
+
   return false
 }
 
@@ -133,10 +152,12 @@ const GLOB_META = new Set<string>(['*', '?', '[', ']', '{', '}', '\\'])
 
 function escapeGlob(segment: string): string {
   let out = ''
+
   for (let i = 0; i < segment.length; i++) {
     const ch = segment[i]
     out += GLOB_META.has(ch) ? `\\${ch}` : ch
   }
+
   return out
 }
 
@@ -160,12 +181,15 @@ function isParentRelativePath(relPath: string): boolean {
 export function buildHiddenDirExcludeGlobs(): string[] {
   const names = [NON_DOTTED_PRUNE, ...HIDDEN_DIR_BLOCKLIST]
   const out: string[] = []
+
   for (const name of names) {
     out.push('--glob', `!**/${escapeGlob(name)}`)
   }
+
   for (const blockedPath of HIDDEN_PATH_BLOCKLIST) {
     out.push('--glob', `!**/${escapeGlobPath(blockedPath)}`)
   }
+
   return out
 }
 
@@ -196,6 +220,7 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
   const sepArgs = opts.forceSlashSeparator ? ['--path-separator', '/'] : []
   const hiddenDirGlobs = buildHiddenDirExcludeGlobs()
   const excludeGlobs: string[] = []
+
   for (const prefix of opts.excludePathPrefixes) {
     // Directory-match form so rg prunes the nested worktree's traversal, not just its listed files.
     excludeGlobs.push('--glob', `!${escapeGlobPath(prefix)}`)
@@ -240,36 +265,48 @@ export type RgOutputMode =
  */
 export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMode): string | null {
   let line = rawLine
+
   // Strip CR so CRLF from rg on Windows doesn't leak into results.
   if (line.length > 0 && line.charCodeAt(line.length - 1) === 13) {
     line = line.substring(0, line.length - 1)
   }
+
   if (!line) {
     return null
   }
+
   const normalized = line.replace(/\\/g, '/')
+
   if (outputMode.kind === 'cwd-relative') {
     let rel = normalized
+
     if (rel.startsWith('./')) {
       rel = rel.slice(2)
     } else if (rel === '.') {
       return null
     }
+
     if (!rel || rel.startsWith('/') || isParentRelativePath(rel)) {
       return null
     }
+
     return rel
   }
+
   // Absolute mode: strip the root prefix.
   // Why: only replace backslashes; collapsing repeated slashes would break Windows UNC roots (`\\server\share`).
   const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
+
   if (normalized.startsWith(normalizedRoot)) {
     const rel = normalized.substring(normalizedRoot.length)
+
     if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       return null
     }
+
     return rel
   }
+
   return null
 }
 
@@ -288,10 +325,12 @@ export function buildGitLsFilesArgsForQuickOpen(
   excludePathPrefixes: readonly string[] = []
 ): GitLsFilesArgs {
   const excludeSpecs: string[] = []
+
   for (const prefix of excludePathPrefixes) {
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}`)
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}/**`)
   }
+
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
   // Why: collapse untracked trees so callers expand only allowed dir placeholders via the bounded walker.
   const directoryCollapseArgs = ['--directory', '--no-empty-directory']
@@ -306,6 +345,7 @@ export function buildGitLsFilesArgsForQuickOpen(
     ...directoryCollapseArgs,
     ...trailingPathspecs
   ]
+
   const ignoredPass = [
     '-z',
     '-s',
@@ -315,5 +355,6 @@ export function buildGitLsFilesArgsForQuickOpen(
     ...directoryCollapseArgs,
     ...trailingPathspecs
   ]
+
   return { primary, ignoredPass }
 }

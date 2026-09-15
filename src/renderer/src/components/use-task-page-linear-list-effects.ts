@@ -17,6 +17,7 @@ import type { LinearCollectionResult } from '../../../shared/linear/workspace-ty
 import { linearIssueAttributeFilterSignature } from '../../../shared/linear/issue-attribute-filter'
 import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from '@/components/task-page-cache-selectors'
 import { LINEAR_ITEM_LIMIT, TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-context'
+
 export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) {
   const {
     setTaskResumeState,
@@ -58,24 +59,30 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     lastLinearRequestRef,
     landingLinearRefreshKeysRef
   } = model
+
   // Why: debounce the Linear search input so we don't fire a request per keystroke (300ms, matching GitHub search).
   useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
+
     const timeout = window.setTimeout(() => {
       setAppliedLinearSearch(linearSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
+
     return () => window.clearTimeout(timeout)
   }, [linearSearchInput, taskResumeApplied, setAppliedLinearSearch])
   useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
+
     if (!linearSearchPersistReadyRef.current) {
       linearSearchPersistReadyRef.current = true
+
       return
     }
+
     setTaskResumeState({
       linearQuery: appliedLinearSearch.trim()
     })
@@ -84,10 +91,13 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     if (!taskResumeApplied) {
       return
     }
+
     if (!linearViewPersistReadyRef.current) {
       linearViewPersistReadyRef.current = true
+
       return
     }
+
     saveLinearIssueView(
       serializeLinearIssueViewResumeState({
         viewMode: linearViewMode,
@@ -129,20 +139,25 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
     if (!taskResumeApplied) {
       return
     }
+
     if (taskSource !== 'linear') {
       return
     }
+
     if (linearMode !== 'issues') {
       return
     }
+
     if (!linearConnected) {
       return
     }
+
     let cancelled = false
     setLinearError(null)
     const trimmed = appliedLinearSearch.trim()
     const effectiveLinearIssueLimit = clampLinearIssueListLimit(linearIssueLimit)
     const searchActive = trimmed.length > 0
+
     const listReadArgs = buildLinearIssueListReadArgs({
       filter: 'all',
       limit: effectiveLinearIssueLimit,
@@ -150,6 +165,7 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
       searchActive,
       allowAttributeFilter: selectedLinearWorkspaceId !== 'all'
     })
+
     const readArgs = searchActive
       ? ({
           kind: 'search',
@@ -157,11 +173,14 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
           limit: LINEAR_ITEM_LIMIT
         } as const)
       : listReadArgs
+
     const cachedResult = getCachedLinearIssues(readArgs, {
       sourceContext: linearTaskSourceContext
     })
+
     if (readArgs.kind === 'search') {
       setLinearIssuesHasMore(false)
+
       if (cachedResult) {
         setLinearIssues(cachedResult as LinearIssue[])
       }
@@ -172,17 +191,21 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
         Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_ISSUE_LIST_MAX
       )
     }
+
     const nextFilterRead: LinearIssueListFilterRead = {
       workspaceId: linearAttributeFilterWorkspaceId,
       signature: linearIssueAttributeFilterSignature(linearAttributeFilter)
     }
+
     const previousFilterRead = linearAttributeFilterReadRef.current
     linearAttributeFilterReadRef.current = nextFilterRead
+
     const filterForce = shouldForceLinearIssueListRead({
       previousFilterRead,
       nextFilterRead,
       refreshForced: false
     })
+
     const requestSignature = buildLinearIssueListRequestSignature({
       sourceContext: linearTaskSourceContext,
       workspaceId: selectedLinearWorkspaceId,
@@ -191,20 +214,25 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
       attributeFilter: linearAttributeFilter,
       searchQuery: searchActive ? trimmed : undefined
     })
+
     const previousRequest = lastLinearRequestRef.current
+
     const forceRefresh =
       filterForce ||
       (linearRefreshNonce > 0 &&
         previousRequest?.nonce !== linearRefreshNonce &&
         previousRequest?.signature === requestSignature)
+
     lastLinearRequestRef.current = {
       nonce: linearRefreshNonce,
       signature: requestSignature
     }
+
     const shouldProbeOnLanding =
       !forceRefresh &&
       cachedResult !== null &&
       !landingLinearRefreshKeysRef.current.has(requestSignature)
+
     if (shouldProbeOnLanding) {
       landingLinearRefreshKeysRef.current = new Set([
         ...landingLinearRefreshKeysRef.current,
@@ -214,6 +242,7 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
 
     // Why: keep cached rows visible on navigation; only explicit refresh or a true cache miss shows the blocking loading state.
     setLinearLoading(forceRefresh || cachedResult === null)
+
     const request =
       readArgs.kind === 'search'
         ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, {
@@ -224,6 +253,7 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
             force: forceRefresh || shouldProbeOnLanding,
             sourceContext: linearTaskSourceContext
           })
+
     void request
       .then((result) => {
         if (
@@ -233,9 +263,11 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
         ) {
           return
         }
+
         if (readArgs.kind === 'search') {
           const issues = result as LinearIssue[]
           setLinearIssuesHasMore(false)
+
           if (shouldProbeOnLanding) {
             setLinearIssues((current) =>
               reconcileTaskPageLinearIssuesAfterLandingRefresh(current, issues)
@@ -254,6 +286,7 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
               : collection.items
           )
         }
+
         setLinearLoading(false)
       })
       .catch((err) => {
@@ -264,9 +297,11 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
         ) {
           return
         }
+
         setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
         setLinearLoading(false)
       })
+
     return () => {
       cancelled = true
     }
@@ -290,4 +325,5 @@ export function useTaskPageLinearListEffects(model: TaskPageGlobalEffectsModel) 
   // Why: Has Worktree loads Linear tickets linked on local worktrees, not a Linear list/search query.
   return model
 }
+
 export type TaskPageLinearListEffectsModel = ReturnType<typeof useTaskPageLinearListEffects>

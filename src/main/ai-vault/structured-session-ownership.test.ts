@@ -92,6 +92,7 @@ function installOwnership(overrides: Partial<StructuredProviderSessionOwnership>
     lease: agentSessionLeaseFixture(),
     ...overrides
   }
+
   const record = agentSessionRecordFixture(ownership.lease)
   setStructuredAgentSessionHost({
     deps: {
@@ -139,5 +140,6 @@ function listResult(): AiVaultListResult {
     resumeCommand: `codex resume '${PROVIDER_SESSION}'`,
     subagent: null
   }
+
   return { sessions: [session], issues: [], scannedAt: '2026-08-11T00:00:00.000Z' }
 }

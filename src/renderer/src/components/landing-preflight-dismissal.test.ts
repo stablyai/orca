@@ -26,6 +26,7 @@ const folderRepo = (id: string): Repo => repo({ id })
 
 function createMemoryStorage(): Storage {
   const map = new Map<string, string>()
+
   return {
     get length() {
       return map.size
@@ -53,6 +54,7 @@ describe('githubProjectKeys', () => {
       gitlabRepo('b'),
       folderRepo('c')
     ])
+
     expect(keys).toEqual(['github:stablyai/orca'])
   })
 
@@ -62,6 +64,7 @@ describe('githubProjectKeys', () => {
       githubRepo('a1', 'stablyai', 'orca'),
       githubRepo('z', 'octocat', 'hello')
     ])
+
     expect(keys).toEqual(['github:octocat/hello', 'github:stablyai/orca'])
   })
 

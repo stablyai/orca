@@ -76,9 +76,11 @@ function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -635,6 +637,7 @@ describe('openDiffNotesSendMenuForActiveWorktree', () => {
       setRightSidebarTab,
       setRightSidebarOpen: vi.fn()
     } as unknown as Partial<AppState>)
+
     return { store, setRightSidebarTab }
   }
 

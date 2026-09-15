@@ -7,11 +7,13 @@ export type BrowserRoutePartitionBindingStoreFake = BrowserRoutePartitionBinding
 /** In-memory stand-in for the persisted binding store, for tests that only need its semantics. */
 export function createBrowserRoutePartitionBindingStoreFake(): BrowserRoutePartitionBindingStoreFake {
   const entries = new Map<string, { fingerprint: string; storageScope: string }>()
+
   return {
     entries,
     get: (partition) => entries.get(partition)?.fingerprint ?? null,
     set: (partition, fingerprint, storageScope) => {
       entries.set(partition, { fingerprint, storageScope })
+
       return []
     },
     touch: () => {},
@@ -21,6 +23,7 @@ export function createBrowserRoutePartitionBindingStoreFake(): BrowserRouteParti
           return partition
         }
       }
+
       return null
     },
     rebind: (partition, fingerprint, storageScope) => {

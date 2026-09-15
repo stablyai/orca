@@ -17,10 +17,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (cause: unknown) => void
+
   const promise = new Promise<T>((complete, fail) => {
     resolve = complete
     reject = fail
   })
+
   return { promise, resolve, reject }
 }
 
@@ -29,15 +31,20 @@ function inventory(scannedAt: number, eligibleUpdateNames: string[] = []): Skill
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let state: SkillFreshnessState | null = null
+
 const states = new Map<string, SkillFreshnessState>()
+
 const renderedInventories: (SkillFreshnessInventory | null)[] = []
 
 function Probe({ id = 'default', enabled = true }: { id?: string; enabled?: boolean }): null {
   state = useSkillFreshness(enabled)
   states.set(id, state)
   renderedInventories.push(state.inventory)
+
   return null
 }
 
@@ -55,9 +62,11 @@ describe('useSkillFreshness', () => {
   afterEach(async () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null
@@ -66,10 +75,12 @@ describe('useSkillFreshness', () => {
   it('runs a follow-up scan when invalidated during an in-flight request', async () => {
     const first = deferred<SkillFreshnessInventory>()
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe />))
@@ -103,11 +114,14 @@ describe('useSkillFreshness', () => {
 
   it('forces one fresh scan before restoring authority after re-enable', async () => {
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockResolvedValueOnce(inventory(1, ['orca-cli']))
       .mockReturnValueOnce(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
+
     const renderProbes = (enabled: boolean): void => {
       root?.render(
         <StrictMode>
@@ -145,10 +159,12 @@ describe('useSkillFreshness', () => {
   it('skips focus rescans inside the cooldown but honors install-change events', async () => {
     const first = deferred<SkillFreshnessInventory>()
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe />))
@@ -168,10 +184,12 @@ describe('useSkillFreshness', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-15T00:00:00Z'))
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockResolvedValueOnce(inventory(1, ['orca-cli']))
       .mockReturnValueOnce(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe />))
@@ -191,10 +209,12 @@ describe('useSkillFreshness', () => {
   it('coalesces multiple consumers into one rescan per invalidation event', async () => {
     const first = deferred<SkillFreshnessInventory>()
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValue(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () =>
@@ -215,10 +235,12 @@ describe('useSkillFreshness', () => {
 
   it('publishes a manual refresh to every consumer', async () => {
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockResolvedValueOnce(inventory(1))
       .mockReturnValueOnce(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () =>
@@ -249,10 +271,12 @@ describe('useSkillFreshness', () => {
 
   it('fails closed when an invalidation scan rejects', async () => {
     const second = deferred<SkillFreshnessInventory>()
+
     const freshnessInventory = vi
       .fn()
       .mockResolvedValueOnce(inventory(1))
       .mockReturnValueOnce(second.promise)
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe />))

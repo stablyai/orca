@@ -42,12 +42,16 @@ export function useStructuredAgentSessionMutate(args: {
       if (stateRef.current.fence === null) {
         return null
       }
+
       const targetFence = stateRef.current.fence
       const key = `${sessionId}:${fingerprintMethod}:${JSON.stringify(fields)}`
+
       const clientOperationId =
         operationIdOverride ?? operationIds.current.get(key) ?? structuredSessionOperationId()
+
       operationIds.current.set(key, clientOperationId)
       let result: AgentSessionMutationResult<T>
+
       try {
         result = await callStructuredAgentSession<AgentSessionMutationResult<T>>(target, method, {
           envelope: {
@@ -66,8 +70,10 @@ export function useStructuredAgentSessionMutate(args: {
         if (stateRef.current.fence === targetFence) {
           setWriteError(error instanceof Error ? error.message : 'Request was not sent')
         }
+
         return null
       }
+
       if (!result.ok) {
         if (
           agentSessionRefusalOperationState(fingerprintMethod, result.refusal.code) ===
@@ -75,18 +81,24 @@ export function useStructuredAgentSessionMutate(args: {
         ) {
           operationIds.current.delete(key)
         }
+
         if (stateRef.current.fence === targetFence) {
           setWriteError(result.refusal.message)
         }
+
         return null
       }
+
       if (stateRef.current.fence !== targetFence) {
         return null
       }
+
       if (!conversationCommands.isUnconfirmedConversationCommand(fingerprintMethod, result.value)) {
         operationIds.current.delete(key)
       }
+
       setWriteError(null)
+
       return result.value
     },
     [sessionId, stateRef, target]

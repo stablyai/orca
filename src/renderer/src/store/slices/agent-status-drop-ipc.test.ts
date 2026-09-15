@@ -18,6 +18,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+
   if (originalWindow === undefined) {
     delete (globalThis as { window?: unknown }).window
   } else {
@@ -30,10 +31,13 @@ function stubWindowApi(): {
   dropByTabPrefix: ReturnType<typeof vi.fn>
 } {
   const drop = vi.fn()
+
   const dropByTabPrefix = vi.fn()
+
   ;(globalThis as { window?: unknown }).window = {
     api: { agentStatus: { drop, dropByTabPrefix } }
   }
+
   return { drop, dropByTabPrefix }
 }
 
@@ -145,6 +149,7 @@ describe('dismissRetainedAgentsByWorktree → IPC fan-out', () => {
     const { drop } = stubWindowApi()
     const store = createTestStore()
     const now = Date.now()
+
     function makeRetained(paneKey: string, worktreeId: string): RetainedAgentEntry {
       const entry: AgentStatusEntry = {
         state: 'done',
@@ -154,6 +159,7 @@ describe('dismissRetainedAgentsByWorktree → IPC fan-out', () => {
         paneKey,
         stateHistory: []
       }
+
       return {
         entry,
         worktreeId,
@@ -162,6 +168,7 @@ describe('dismissRetainedAgentsByWorktree → IPC fan-out', () => {
         startedAt: now
       }
     }
+
     store
       .getState()
       .retainAgents([

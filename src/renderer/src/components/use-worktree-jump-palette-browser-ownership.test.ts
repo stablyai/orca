@@ -15,6 +15,7 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     makeWorktree('same-id', 'Local workspace', { hostId: 'local' }),
     makeWorktree('same-id', 'Remote workspace', { hostId: 'runtime:paired' })
   ]
+
   const page: BrowserPage = {
     id: 'page',
     workspaceId: 'browser',
@@ -28,19 +29,23 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     loadError: null,
     createdAt: 1
   }
+
   const workspace: BrowserWorkspace = {
     ...page,
     id: 'browser',
     activePageId: page.id,
     pageIds: [page.id]
   }
+
   const tab: Tab = {
     ...makeUnifiedTab('tab', 'same-id', 'browser', 'Browser proof'),
     contentType: 'browser',
     executionHostId: 'runtime:paired',
     lastFocusedAt: 5_000
   }
+
   type PaletteInput = Parameters<typeof useWorktreeJumpPaletteOpenTabs>[0]
+
   const input: Partial<PaletteInput> = {
     ...useAppStore.getInitialState(),
     // The store holds {key, result}; the hook takes the unwrapped result.
@@ -58,10 +63,12 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     browserPagesByWorkspace: { browser: [page] },
     unifiedTabsByWorktree: { 'same-id': [tab] }
   }
+
   const { result, rerender } = renderHook(
     (props: Partial<PaletteInput>) => useWorktreeJumpPaletteOpenTabs(props as PaletteInput),
     { initialProps: input }
   )
+
   // lastActiveAt rides the same map: without it every browser row sorts as never-focused.
   const owners = () =>
     result.current.browserItems.map(({ result: entry }) => [

@@ -86,6 +86,7 @@ export function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return `${item.source.type}-${item.source.number}`
   }
+
   return item.source.identifier.toLowerCase()
 }
 

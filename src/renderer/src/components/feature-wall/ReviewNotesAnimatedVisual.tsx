@@ -27,7 +27,9 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     if (reducedMotion) {
       return
     }
+
     const root = rootRef.current
+
     if (!root) {
       return
     }
@@ -44,6 +46,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     const diffBodyMaybe = root.querySelector<HTMLDivElement>('[data-diff-body]')
     const diffScrollMaybe = root.querySelector<HTMLDivElement>('[data-diffscroll]')
     const termMaybe = root.querySelector<HTMLDivElement>('[data-term]')
+
     if (
       !cursorMaybe ||
       !popoverMaybe ||
@@ -60,6 +63,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     ) {
       return
     }
+
     // Re-bind to non-null locals so closures across `await` keep their
     // narrowed types — TS flow analysis drops narrowing through async
     // boundaries.
@@ -79,6 +83,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
 
     let cancelled = false
     const timers: number[] = []
+
     const wait = (ms: number): Promise<void> =>
       new Promise((resolve) => {
         const id = window.setTimeout(() => resolve(), ms)
@@ -113,6 +118,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
       const popH = popover.offsetHeight || 110
       const spaceBelow = dr.bottom - rr.bottom
       const flipAbove = spaceBelow < popH + 12
+
       if (flipAbove) {
         const yAbove = rr.top - dr.top - popH - 4
         popover.style.top = `${Math.max(8, yAbove)}px`
@@ -127,13 +133,16 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
       // generated note text. Mock: docs/feature-wall-review-tile-mock.html.
       popInput.innerHTML = '<span data-pop-typed></span><span class="ravs-caret"></span>'
       const typed = popInput.querySelector<HTMLSpanElement>('[data-pop-typed]')
+
       if (!typed) {
         return
       }
+
       for (const ch of text) {
         if (cancelled) {
           return
         }
+
         typed.textContent = (typed.textContent ?? '') + ch
         await wait(18)
       }
@@ -141,19 +150,24 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
 
     function showSavedNote(target: { hunk: number; lineIdx: number; body: string }): void {
       const slot = rootEl.querySelector<HTMLDivElement>(`[data-hunk-slot="${target.hunk}"]`)
+
       if (!slot) {
         return
       }
+
       const lineEl = slot.querySelector<HTMLSpanElement>('[data-slot-line]')
       const bodyEl = slot.querySelector<HTMLSpanElement>('[data-slot-body]')
       const row = findDiffRow(target.hunk, target.lineIdx)
+
       if (row && lineEl) {
         const lns = row.querySelectorAll('.ravs-ln')
         lineEl.textContent = lns[1]?.textContent ?? ''
       }
+
       if (bodyEl) {
         bodyEl.textContent = target.body
       }
+
       slot.classList.add('is-visible')
     }
 
@@ -180,6 +194,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     function getNewLineNo(target: { hunk: number; lineIdx: number }): string {
       const row = findDiffRow(target.hunk, target.lineIdx)
       const lns = row?.querySelectorAll('.ravs-ln')
+
       return lns?.[1]?.textContent ?? '?'
     }
 
@@ -187,6 +202,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
       while (!cancelled) {
         resetState()
         await wait(520)
+
         if (cancelled) {
           return
         }
@@ -194,6 +210,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
         for (let i = 0; i < NOTE_TARGETS.length; i++) {
           const target = NOTE_TARGETS[i]
           const row = findDiffRow(target.hunk, target.lineIdx)
+
           if (!row) {
             continue
           }
@@ -202,21 +219,25 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           moveCursor(row, -8, 4)
           anchorAddBtnTo(row)
           await wait(700)
+
           if (cancelled) {
             return
           }
 
           moveCursor(addBtn, 4, 4)
           await wait(360)
+
           if (cancelled) {
             return
           }
 
           cursor.classList.add('is-clicking')
           await wait(220)
+
           if (cancelled) {
             return
           }
+
           cursor.classList.remove('is-clicking')
           addBtn.classList.remove('is-visible')
           const lns = row.querySelectorAll('.ravs-ln')
@@ -228,40 +249,53 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           popover.classList.add('is-visible')
           moveCursor(popInput, 12, 18)
           await wait(280)
+
           if (cancelled) {
             return
           }
 
           await fillPopoverInput(target.body)
+
           if (cancelled) {
             return
           }
+
           await wait(360)
+
           if (cancelled) {
             return
           }
 
           const addPopBtn = popover.querySelector<HTMLButtonElement>('.ravs-pop-btn.is-add')
+
           if (addPopBtn) {
             moveCursor(addPopBtn, 30, 10)
           }
+
           await wait(280)
+
           if (cancelled) {
             return
           }
+
           cursor.classList.add('is-clicking')
           await wait(200)
+
           if (cancelled) {
             return
           }
+
           cursor.classList.remove('is-clicking')
           popover.classList.remove('is-visible')
           showSavedNote(target)
           aiCount.textContent = String(i + 1)
+
           if (!sendChip.classList.contains('is-visible')) {
             sendChip.classList.add('is-visible')
           }
+
           await wait(620)
+
           if (cancelled) {
             return
           }
@@ -269,45 +303,60 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
 
         moveCursor(sendBtn, 6, 8)
         await wait(420)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.add('is-clicking')
         await wait(200)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.remove('is-clicking')
         sendMenu.classList.add('is-visible')
         await wait(420)
+
         if (cancelled) {
           return
         }
 
         const claudeRow = sendMenu.querySelector<HTMLDivElement>('[data-send-row="claude"]')
+
         if (claudeRow) {
           claudeRow.classList.add('is-hot')
           moveCursor(claudeRow, 24, 10)
         }
+
         await wait(540)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.add('is-clicking')
         await wait(220)
+
         if (cancelled) {
           return
         }
+
         cursor.classList.remove('is-clicking')
+
         if (claudeRow) {
           claudeRow.classList.remove('is-hot')
         }
+
         sendMenu.classList.remove('is-visible')
         sendBtn.classList.add('is-flash')
         await wait(560)
+
         if (cancelled) {
           return
         }
+
         sendBtn.classList.remove('is-flash')
         cursor.classList.remove('is-visible')
 
@@ -318,11 +367,13 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           isCancelled: () => cancelled,
           getNewLineNo
         })
+
         if (cancelled) {
           return
         }
 
         await wait(800)
+
         if (cancelled) {
           return
         }

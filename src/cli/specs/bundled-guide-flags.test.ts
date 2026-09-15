@@ -21,24 +21,30 @@ const SPECS_BY_DEPTH: CommandSpec[] = [...COMMAND_SPECS].sort(
 function findSpecForInvocation(invocation: string): CommandSpec | undefined {
   return SPECS_BY_DEPTH.find((spec) => {
     const prefix = `${spec.path.join(' ')} `
+
     return invocation === spec.path.join(' ') || invocation.startsWith(prefix)
   })
 }
 
 function collectGuideInvocations(): GuideInvocation[] {
   const found: GuideInvocation[] = []
+
   for (const guide of BUNDLED_SKILL_GUIDES) {
     for (const match of guide.fullMarkdown.matchAll(CLI_INVOCATION)) {
       const invocation = match[1].trim()
       const spec = findSpecForInvocation(invocation)
+
       if (!spec) {
         continue
       }
+
       // Why: a quoted flag value belongs to the nested program (`--command 'codex --model ...'`), not to orca.
       const orcaArgs = invocation.replace(/'[^']*'|"[^"]*"/g, ' ')
+
       const flags = [...orcaArgs.matchAll(/(?:^|[\s[(])--([a-z][a-z0-9-]*)/g)].map(
         (flag) => flag[1]
       )
+
       for (const flag of flags) {
         found.push({
           guide: guide.name,
@@ -49,6 +55,7 @@ function collectGuideInvocations(): GuideInvocation[] {
       }
     }
   }
+
   return found
 }
 
@@ -70,11 +77,13 @@ describe('bundled skill guides', () => {
           commandPath: invocation.command.split(' '),
           flags: new Map([[invocation.flag, 'placeholder']])
         })
+
         return false
       } catch {
         return true
       }
     })
+
     expect(
       rejected.map((entry) => `${entry.guide}: ${entry.command} --${entry.flag} (${entry.snippet})`)
     ).toEqual([])

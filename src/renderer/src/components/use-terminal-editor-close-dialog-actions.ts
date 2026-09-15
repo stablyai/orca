@@ -27,19 +27,23 @@ export function useTerminalEditorCloseDialogActions(
     waitForFileClosed,
     windowCloseAfterDirtyRef
   } = controller
+
   const handleSaveDialogSave = useCallback(async () => {
     if (isClosingRef.current || !saveDialogFileId) {
       return
     }
+
     isClosingRef.current = true
     const fileId = saveDialogFileId
     const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
+
     if (!file) {
       pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
         (id) => id !== fileId
       )
       advanceEditorCloseQueue()
       releaseCloseDialogGuardAfterDebounce()
+
       return
     }
 
@@ -47,6 +51,7 @@ export function useTerminalEditorCloseDialogActions(
     window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
     inFlightSaveFileIdRef.current = fileId
     let closed = false
+
     try {
       closed = await waitForFileClosed(fileId, 10_000)
     } finally {
@@ -54,6 +59,7 @@ export function useTerminalEditorCloseDialogActions(
         inFlightSaveFileIdRef.current = null
       }
     }
+
     if (!closed) {
       if (!useAppStore.getState().openFiles.some((candidate) => candidate.id === fileId)) {
         pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
@@ -61,8 +67,10 @@ export function useTerminalEditorCloseDialogActions(
         )
         advanceEditorCloseQueue()
         releaseCloseDialogGuardAfterDebounce()
+
         return
       }
+
       toast.error(
         translate(
           'auto.components.Terminal.a2a279b32a',
@@ -71,8 +79,10 @@ export function useTerminalEditorCloseDialogActions(
       )
       setSaveDialogFileId(fileId)
       isClosingRef.current = false
+
       return
     }
+
     pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
       (id) => id !== fileId
     )
@@ -90,14 +100,17 @@ export function useTerminalEditorCloseDialogActions(
     if (isClosingRef.current || !saveDialogFileId) {
       return
     }
+
     isClosingRef.current = true
     const fileId = saveDialogFileId
     setSaveDialogFileId(null)
+
     try {
       await requestEditorSaveQuiesce({ fileId })
     } catch (error) {
       console.warn('Autosave quiesce failed before discard', error)
     }
+
     markFileDirty(fileId, false)
     closeFile(fileId)
     pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
@@ -118,6 +131,7 @@ export function useTerminalEditorCloseDialogActions(
     if (isClosingRef.current) {
       return
     }
+
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
@@ -130,15 +144,19 @@ export function useTerminalEditorCloseDialogActions(
     const onRequestEditorClose = (event: Event): void => {
       const customEvent = event as CustomEvent<EditorRequestFileCloseDetail>
       const fileId = customEvent.detail?.fileId
+
       if (!fileId) {
         return
       }
+
       queueEditorCloseRequests([fileId])
     }
+
     window.addEventListener(
       ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
       onRequestEditorClose as EventListener
     )
+
     return () =>
       window.removeEventListener(
         ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,

@@ -59,10 +59,12 @@ export function operationIdentity(
 ): { key: string; payloadHash: string } {
   const canonical = JSON.stringify(canonicalize(payload))
   const payloadHash = createHash('sha256').update(canonical).digest('hex')
+
   const semantic =
     method === 'worker_done' || method === 'reply' || method === 'ask'
       ? `${method}:${payloadHash}`
       : `${method}:${randomUUID()}`
+
   return {
     key: request.compatibilityInvocationId
       ? `invocation:${request.compatibilityInvocationId}`
@@ -75,29 +77,35 @@ export function parseLegacyPayload(raw: string | undefined): Record<string, unkn
   if (!raw) {
     return {}
   }
+
   try {
     const parsed: unknown = JSON.parse(raw)
+
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>
     }
   } catch {
     // Fall through to one stable validation error.
   }
+
   throw new OrchestrationError('invalid_argument', 'Message payload must be valid JSON.')
 }
 
 export function parseLegacyMailAck(raw: string): { messageIds: string[]; types?: MessageType[] } {
   try {
     const parsed: unknown = JSON.parse(raw)
+
     const messageIds = Array.isArray(parsed)
       ? parsed
       : parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as { messageIds?: unknown }).messageIds
         : undefined
+
     const types =
       parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as { types?: unknown }).types
         : undefined
+
     if (
       Array.isArray(messageIds) &&
       messageIds.length > 0 &&
@@ -114,6 +122,7 @@ export function parseLegacyMailAck(raw: string): { messageIds: string[]; types?:
   } catch {
     // Fall through to one stable validation error.
   }
+
   throw new OrchestrationError('invalid_argument', 'Invalid compatibility acknowledgment.')
 }
 
@@ -123,6 +132,7 @@ export function parseLegacyQuestionAck(raw: string): {
 } {
   try {
     const parsed: unknown = JSON.parse(raw)
+
     if (
       parsed &&
       typeof parsed === 'object' &&
@@ -135,6 +145,7 @@ export function parseLegacyQuestionAck(raw: string): {
   } catch {
     // Fall through to one stable validation error.
   }
+
   throw new OrchestrationError('invalid_argument', 'Invalid legacy question acknowledgment.')
 }
 
@@ -143,10 +154,13 @@ export function parseLegacyTypes(raw: string | undefined): MessageType[] | undef
     ?.split(',')
     .map((value) => value.trim())
     .filter(Boolean)
+
   const invalidValues = values?.filter((value) => !MESSAGE_TYPE_SET.has(value))
+
   if (invalidValues && invalidValues.length > 0) {
     throw new OrchestrationError('invalid_argument', `Invalid --types: ${invalidValues.join(',')}`)
   }
+
   return values && values.length > 0 ? (values as MessageType[]) : undefined
 }
 
@@ -170,6 +184,7 @@ export function supportedLegacyHints(
   ) {
     return []
   }
+
   return [
     `${cliCommand} orchestration reply --id ${message.id} --from ${principal.terminal_handle} --body "..."`
   ]
@@ -177,6 +192,7 @@ export function supportedLegacyHints(
 
 export function inferLegacyWorkerOutcome(subject: string): 'succeeded' | 'failed' {
   const normalized = subject.trim()
+
   return normalized === 'Failed' || normalized.startsWith('Failed:') ? 'failed' : 'succeeded'
 }
 
@@ -196,10 +212,13 @@ function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonicalize)
   }
+
   if (!value || typeof value !== 'object') {
     return value
   }
+
   const source = value as Record<string, unknown>
+
   return Object.fromEntries(
     Object.keys(source)
       .sort()

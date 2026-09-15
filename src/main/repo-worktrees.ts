@@ -75,7 +75,9 @@ async function listRoutedRepoWorktrees(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
+
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+
   if (route.kind === 'runtime') {
     // A runtime row's `connectionId` names a target in the *server's* namespace, not one this
     // client may dial. Reading it here would answer from a same-named local target.
@@ -83,6 +85,7 @@ async function listRoutedRepoWorktrees(
       `Worktree catalog unavailable for ${repo.path}: host ${route.hostId} is not reachable from this process.`
     )
   }
+
   if (route.kind === 'ssh') {
     // Why: runtime worktree resolution can run before SSH providers have reattached during startup.
     // Never fall back to local git against a server path, and never report the unreachable host as an
@@ -92,11 +95,14 @@ async function listRoutedRepoWorktrees(
         `Worktree catalog unavailable for ${repo.path}: SSH connection "${route.connectionId}" is not connected.`
       )
     }
+
     return await route.provider.listWorktrees(repo.path)
   }
+
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listLocal(repo.path, options)
     : await listLocal(repo.path)
+
   return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
@@ -114,19 +120,24 @@ export async function listRepoWorktreeGraph(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
+
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+
   // An unreachable remote host answers `[]` here, unlike listRepoWorktrees above, which throws.
   // Preserved as-is: this call site's callers treat the graph as best-effort. The inconsistency is
   // real but is a separate behavior decision from resolving the host correctly.
   if (route.kind === 'runtime') {
     return []
   }
+
   if (route.kind === 'ssh') {
     return route.provider ? await route.provider.listWorktrees(repo.path) : []
   }
+
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
     : await listWorktreeGraph(repo.path)
+
   return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }
 
@@ -137,11 +148,14 @@ export async function listLocalRepoWorktreesStrict(
   if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     throw new Error('Cannot list worktrees for a remote repository')
   }
+
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
+
   const worktrees = hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreesStrict(repo.path, options)
     : await listWorktreesStrict(repo.path)
+
   return preserveFolderUpgradeWorktreePath(repo, worktrees)
 }

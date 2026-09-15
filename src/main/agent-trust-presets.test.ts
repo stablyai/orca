@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
       if (name === 'userData') {
         return testState.userDataDir
       }
+
       throw new Error(`unexpected app.getPath(${name})`)
     }
   }
@@ -32,6 +33,7 @@ vi.mock('electron', () => ({
 vi.mock('node:os', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const actual = await vi.importActual<typeof import('node:os')>('node:os')
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -40,6 +42,7 @@ vi.mock('node:os', async () => {
 
 const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
   await import('./agent-trust-presets')
+
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
 
@@ -53,11 +56,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
+
   if (testState.previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
   }
+
   testState.fakeHomeDir = ''
   testState.userDataDir = ''
   testState.previousUserDataPath = undefined
@@ -66,6 +71,7 @@ afterEach(() => {
 describe('markCursorWorkspaceTrusted', () => {
   it('writes ~/.cursor/projects/<slug>/.workspace-trusted with the cwd payload', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
+
     try {
       markCursorWorkspaceTrusted(workspace)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
@@ -83,6 +89,7 @@ describe('markCursorWorkspaceTrusted', () => {
 
   it('is idempotent — re-marking the same workspace does not overwrite trustedAt', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
+
     try {
       markCursorWorkspaceTrusted(workspace)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
@@ -101,6 +108,7 @@ describe('markCursorWorkspaceTrusted', () => {
 describe('markCopilotFolderTrusted', () => {
   it('appends the workspace to trustedFolders in ~/.copilot/config.json', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+
     try {
       markCopilotFolderTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
@@ -117,6 +125,7 @@ describe('markCopilotFolderTrusted', () => {
   it('preserves existing config keys and dedups already-trusted folders', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
     const realpath = realpathSync(workspace)
+
     try {
       mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
       writeFileSync(
@@ -127,9 +136,11 @@ describe('markCopilotFolderTrusted', () => {
         })
       )
       markCopilotFolderTrusted(workspace)
+
       const parsed = JSON.parse(
         readFileSync(join(testState.fakeHomeDir, '.copilot', 'config.json'), 'utf-8')
       )
+
       expect(parsed.firstLaunchAt).toBe('2026-01-01T00:00:00.000Z')
       expect(parsed.trustedFolders).toHaveLength(1)
     } finally {
@@ -146,9 +157,11 @@ describe('markCodexProjectTrusted', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     let releaseGrant!: () => void
+
     const grantHoldingTheFile = new Promise<void>((resolve) => {
       releaseGrant = resolve
     })
+
     try {
       const held = runExclusivelyForCodexTrustConfig(configPath, () => grantHoldingTheFile)
       const marked = markCodexProjectTrusted(workspace)
@@ -169,6 +182,7 @@ describe('markCodexProjectTrusted', () => {
     const repository = join(fixtureRoot, 'repo')
     const workspace = join(fixtureRoot, 'worktrees', 'feature')
     const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
+
     try {
       mkdirSync(worktreeGitDir, { recursive: true })
       mkdirSync(workspace, { recursive: true })
@@ -180,12 +194,14 @@ describe('markCodexProjectTrusted', () => {
       const repositoryRoot = realpathSync.native(repository)
       const workspaceRoot = realpathSync.native(workspace)
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+
       const runtimeConfigPath = join(
         testState.userDataDir,
         'codex-runtime-home',
         'home',
         'config.toml'
       )
+
       for (const written of [
         readFileSync(configPath, 'utf-8'),
         readFileSync(runtimeConfigPath, 'utf-8')
@@ -203,6 +219,7 @@ describe('markCodexProjectTrusted', () => {
     const workspace = join(fixtureRoot, 'workspace')
     const arbitraryGitDir = join(fixtureRoot, 'metadata', 'feature')
     const unrelatedRoot = join(fixtureRoot, 'unrelated')
+
     try {
       mkdirSync(arbitraryGitDir, { recursive: true })
       mkdirSync(workspace, { recursive: true })
@@ -231,16 +248,19 @@ describe('markCodexProjectTrusted', () => {
 
   it('writes ~/.codex/config.toml with the project marked trusted', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+
     try {
       const realpath = realpathSync.native(workspace)
       await markCodexProjectTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+
       const runtimeConfigPath = join(
         testState.userDataDir,
         'codex-runtime-home',
         'home',
         'config.toml'
       )
+
       expect(existsSync(configPath)).toBe(true)
       expect(existsSync(runtimeConfigPath)).toBe(true)
       const written = readFileSync(configPath, 'utf-8')
@@ -257,6 +277,7 @@ describe('markCodexProjectTrusted', () => {
   it('preserves existing config keys and updates an existing project block', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const realpath = realpathSync.native(workspace)
+
     try {
       const codexDir = join(testState.fakeHomeDir, '.codex')
       const runtimeCodexDir = join(testState.userDataDir, 'codex-runtime-home', 'home')

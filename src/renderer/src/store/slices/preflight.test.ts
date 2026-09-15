@@ -9,7 +9,9 @@ import { createRuntimeStatusSlice } from './runtime-status'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const preflightCheck = vi.fn()
+
 const callRuntimeRpc = vi.fn()
+
 const platformGet = vi.fn(() => ({ platform: 'linux' }))
 
 vi.mock('sonner', () => ({
@@ -25,6 +27,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
     settings?: { activeRuntimeEnvironmentId?: string | null } | null
   ): { kind: 'local' } | { kind: 'environment'; environmentId: string } => {
     const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+
     return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
   }
 }))
@@ -110,10 +113,12 @@ function makeWorktree(
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 

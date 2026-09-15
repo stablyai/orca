@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
   const seen = new Set<string>()
   const collisions = new Set<string>()
+
   for (const item of worktrees) {
     if (seen.has(item.id)) {
       collisions.add(item.id)
@@ -23,6 +24,7 @@ function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
       seen.add(item.id)
     }
   }
+
   return collisions
 }
 
@@ -31,6 +33,7 @@ function getTargetHostLabel(
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
 ): string {
   const hostId = parseExecutionHostId(worktree.hostId)?.id
+
   return hostId
     ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
     : translate('components.workspace.cleanup.host.unknown', 'Unknown host')
@@ -55,18 +58,22 @@ export function DeleteWorktreeTargetPreview({
 }): JSX.Element | null {
   const targetIdPrefix = useId()
   const collisionIds = getCollisionIds(collisionWorktrees)
+
   if (isBatchDelete) {
     return (
       <ScrollArea className="max-h-48 rounded-md border border-border/70 bg-muted/35 text-xs">
         <div className="space-y-1 px-3 py-2" role="list">
           {worktrees.map((item, index) => {
             const itemDeleteState = getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)
+
             const labelIds = {
               name: `${targetIdPrefix}-${index}-name`,
               path: `${targetIdPrefix}-${index}-path`,
               host: `${targetIdPrefix}-${index}-host`
             }
+
             const showHost = collisionIds.has(item.id)
+
             return (
               <div
                 key={getWorktreeHostIdentity(item)}
@@ -113,12 +120,15 @@ export function DeleteWorktreeTargetPreview({
   if (!worktree) {
     return null
   }
+
   const labelIds = {
     name: `${targetIdPrefix}-name`,
     path: `${targetIdPrefix}-path`,
     host: `${targetIdPrefix}-host`
   }
+
   const showHost = collisionIds.has(worktree.id)
+
   return (
     <div
       role="region"

@@ -6,7 +6,9 @@ import type { OpenFile } from '@/store/slices/editor'
 import { useWorktreeFiles } from './use-worktree-files'
 
 const ACTIVE_WORKTREE_ID = 'wt-active'
+
 const OTHER_WORKTREE_ID = 'wt-other'
+
 type WorktreeFilesProps = { openFiles: OpenFile[]; worktreeId: string | null }
 
 function installFilterReadCounter(files: OpenFile[], worktreeIdReads: { value: number }): void {
@@ -16,6 +18,7 @@ function installFilterReadCounter(files: OpenFile[], worktreeIdReads: { value: n
     value: (predicate: (file: OpenFile, index: number, array: OpenFile[]) => unknown): OpenFile[] =>
       filter((file, index, array) => {
         worktreeIdReads.value += 1
+
         return predicate(file, index, array)
       })
   })
@@ -26,8 +29,10 @@ function makeCountedOpenFiles(count: number): {
   worktreeIdReads: { value: number }
 } {
   const worktreeIdReads = { value: 0 }
+
   const files = Array.from({ length: count }, (_, index) => {
     const worktreeId = index % 2 === 0 ? ACTIVE_WORKTREE_ID : OTHER_WORKTREE_ID
+
     return {
       id: `file-${index}`,
       filePath: `/repo/${index}.ts`,
@@ -38,7 +43,9 @@ function makeCountedOpenFiles(count: number): {
       worktreeId
     } as OpenFile
   })
+
   installFilterReadCounter(files, worktreeIdReads)
+
   return { files, worktreeIdReads }
 }
 
@@ -47,6 +54,7 @@ afterEach(cleanup)
 describe('useWorktreeFiles', () => {
   it('does not rescan stable open files across 100 unchanged renders', () => {
     const { files, worktreeIdReads } = makeCountedOpenFiles(10_000)
+
     const view = renderHook<OpenFile[], WorktreeFilesProps>(
       ({ openFiles, worktreeId }: WorktreeFilesProps) => useWorktreeFiles(openFiles, worktreeId),
       {
@@ -56,6 +64,7 @@ describe('useWorktreeFiles', () => {
         } satisfies WorktreeFilesProps
       }
     )
+
     const first = view.result.current
 
     expect(first).toHaveLength(5_000)
@@ -71,6 +80,7 @@ describe('useWorktreeFiles', () => {
 
   it('recomputes when the open-file array or rendered worktree changes', () => {
     const { files, worktreeIdReads } = makeCountedOpenFiles(10)
+
     const view = renderHook<OpenFile[], WorktreeFilesProps>(
       ({ openFiles, worktreeId }: WorktreeFilesProps) => useWorktreeFiles(openFiles, worktreeId),
       {
@@ -80,6 +90,7 @@ describe('useWorktreeFiles', () => {
         } satisfies WorktreeFilesProps
       }
     )
+
     const first = view.result.current
     expect(first).toHaveLength(5)
     expect(worktreeIdReads.value).toBe(10)

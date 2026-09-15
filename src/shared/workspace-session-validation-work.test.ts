@@ -24,11 +24,15 @@ z.config({
       inst._zod.deferred ??= []
       inst._zod.deferred.push(() => {
         const base = inst._zod.parse
+
         const wrapped = (payload: unknown, ctx: unknown): unknown => {
           containerRuns += 1
+
           return base(payload, ctx)
         }
+
         inst._zod.parse = wrapped
+
         if (inst._zod.run === base) {
           inst._zod.run = wrapped
         }
@@ -38,6 +42,7 @@ z.config({
 } as never)
 
 const WORKTREES = 30
+
 const TABS_PER_WORKTREE = 4
 
 function worktreeId(index: number): string {
@@ -86,6 +91,7 @@ function fixedSession(): Record<string, unknown> {
     const wt = worktreeId(w)
     const tabs: Record<string, unknown>[] = []
     const unified: Record<string, unknown>[] = []
+
     for (let t = 0; t < TABS_PER_WORKTREE; t += 1) {
       const id = `tab-${w}-${t}`
       tabs.push(terminalTab(id, wt, t))
@@ -112,6 +118,7 @@ function fixedSession(): Record<string, unknown> {
       }
       terminalPtyIncarnationsByPaneKey[`${id}:a`] = `inc-${id}`
     }
+
     tabsByWorktree[wt] = tabs
     unifiedTabs[wt] = unified
     tabGroups[wt] = [
@@ -167,10 +174,12 @@ describe('workspace session validation work', () => {
     const result = parse(payload)
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedCount).toBe(0)
       expect(Object.keys(result.value.tabsByWorktree)).toHaveLength(WORKTREES)
     }
+
     expect(containerRuns).toBeGreaterThan(0)
     expect(containerRuns).toBeLessThanOrEqual(MAX_CONTAINER_RUNS)
   })

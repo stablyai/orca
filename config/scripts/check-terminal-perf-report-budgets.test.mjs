@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = 'config/scripts/check-terminal-perf-report-budgets.mjs'
+
 const tempDirs = []
 
 function writeReport(annotationDescription, annotationType = 'opencode-test') {
@@ -34,6 +35,7 @@ function writeReport(annotationDescription, annotationType = 'opencode-test') {
       ]
     })
   )
+
   return reportPath
 }
 
@@ -127,6 +129,7 @@ describe('check-terminal-perf-report-budgets', () => {
       cwd: process.cwd(),
       encoding: 'utf8'
     })
+
     expect(passOutput).toContain('Terminal perf budget check passed for 1 annotation row(s).')
   })
 
@@ -137,6 +140,7 @@ describe('check-terminal-perf-report-budgets', () => {
       ),
       'opencode-cross-workspace-typing'
     )
+
     const failResult = runChecker(failPath)
     expect(failResult.status).toBe(1)
     expect(failResult.stderr).toContain('timer drift 3501ms exceeded budget 3500ms')

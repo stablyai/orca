@@ -35,8 +35,10 @@ export function useSourceControlHostedReviewState({
 }) {
   const [hostedReviewCreationState, setHostedReviewCreationState] =
     useState<HostedReviewCreationState | null>(null)
+
   const [hostedReviewCreationRequestState, setHostedReviewCreationRequestState] =
     useState<HostedReviewCreationRequestState | null>(null)
+
   const hostedReviewCreationProviderHintRef = useRef<HostedReviewCreationProviderHint>({
     repoId: null,
     worktreeId: null,
@@ -51,19 +53,25 @@ export function useSourceControlHostedReviewState({
     branchName === hostedReviewCreationState.branch
       ? hostedReviewCreationState.data
       : null
+
   const rawHostedReview: HostedReviewInfo | null = useMemo(() => {
     if (!hostedReviewCacheKey) {
       return null
     }
+
     if (activePrFromQueue) {
       return { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
     }
+
     return hostedReviewEntryData
   }, [activePrFromQueue, hostedReviewCacheKey, hostedReviewEntryData])
+
   const hasSuppressedGitHubPR =
     rawHostedReview?.provider === 'github' &&
     isGitHubPRSuppressed({ linkedPR, suppressedGitHubPR }, rawHostedReview.number)
+
   const hostedReview = hasSuppressedGitHubPR ? null : rawHostedReview
+
   const hostedReviewCreation =
     hasSuppressedGitHubPR && rawHostedReview
       ? {
@@ -75,9 +83,11 @@ export function useSourceControlHostedReviewState({
           reviewLookupOutcome: 'found' as const
         }
       : scopedHostedReviewCreation
+
   const hostedReviewCreateProvider = resolveHostedReviewCreationProvider(
     hostedReviewCreation?.provider
   )
+
   const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
 
   return {

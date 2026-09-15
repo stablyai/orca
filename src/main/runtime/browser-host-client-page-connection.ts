@@ -27,9 +27,11 @@ export function requireBrowserClientPageConnection(
       pairedDeviceId: input.pairedDeviceId
     }
   )
+
   if (state.lease.connectionId !== input.connectionId) {
     throw new Error('browser_host_lease_stale')
   }
+
   return dependencies.pagePlacements.requireClientPage({
     authorityRuntimeId: dependencies.authorityRuntimeId,
     authorityEpoch: dependencies.authorityEpoch,

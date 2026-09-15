@@ -5,9 +5,11 @@ describe('NativeProviderLineBuffer', () => {
   it('keeps partial lines and original whitespace while omitting blank lines', () => {
     const buffer = new NativeProviderLineBuffer()
     const lines: string[] = []
+
     const record = (line: string): void => {
       lines.push(line)
     }
+
     buffer.push(' \t\r\n  first\r\nsecond', record)
     expect(lines).toEqual(['  first\r'])
     buffer.push(' half\n\nthird\npartial', record)
@@ -20,11 +22,13 @@ describe('NativeProviderLineBuffer', () => {
   it('preserves split surrogate pairs and lone surrogate code units', () => {
     const buffer = new NativeProviderLineBuffer()
     const lines: string[] = []
+
     for (const chunk of ['\ud83d', '\ude00\n\ud83d', '\n\udc00', '\n']) {
       buffer.push(chunk, (line) => {
         lines.push(line)
       })
     }
+
     expect(lines).toEqual(['😀', '\ud83d', '\udc00'])
   })
 
@@ -34,6 +38,7 @@ describe('NativeProviderLineBuffer', () => {
     expect(() =>
       buffer.push('first\nsecond\npartial', (line) => {
         lines.push(line)
+
         if (line === 'second') {
           throw new Error('callback failure')
         }
@@ -75,13 +80,16 @@ describe('NativeProviderLineBuffer', () => {
     const buffer = new NativeProviderLineBuffer()
     const lines: string[] = []
     let reentered = false
+
     const record = (line: string): void => {
       lines.push(line)
+
       if (!reentered) {
         reentered = true
         buffer.push('extra\n', record)
       }
     }
+
     buffer.push('first\nsecond\npartial', record)
     buffer.push('\n', record)
     expect(lines).toEqual(['first', 'first', 'second', 'partialextra', 'second', 'partial'])
@@ -90,9 +98,11 @@ describe('NativeProviderLineBuffer', () => {
   it('preserves a reentrant clear and partial feed when the outer callback throws', () => {
     const buffer = new NativeProviderLineBuffer()
     const lines: string[] = []
+
     const record = (line: string): void => {
       lines.push(line)
     }
+
     expect(() =>
       buffer.push('old\npartial', () => {
         buffer.clear()

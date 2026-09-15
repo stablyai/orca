@@ -29,6 +29,7 @@ function createService(): ClaudeAccountService {
     activeClaudeManagedAccountId: null,
     activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
   }
+
   return new ClaudeAccountService(
     { getSettings: () => settings, updateSettings: vi.fn() } as never,
     {} as never,
@@ -38,6 +39,7 @@ function createService(): ClaudeAccountService {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   return { promise: new Promise<void>((done) => (resolve = done)), resolve }
 }
 
@@ -55,6 +57,7 @@ describe('ClaudeAccountService API parity', () => {
     const service = createService()
     const first = deferred()
     const calls: string[] = []
+
     const registration = (
       service as unknown as {
         registration: {
@@ -62,11 +65,14 @@ describe('ClaudeAccountService API parity', () => {
         }
       }
     ).registration
+
     registration.add = vi.fn(async (target) => {
       calls.push(target?.wslDistro ?? 'host')
+
       if (calls.length === 1) {
         await first.promise
       }
+
       return {
         accounts: [],
         activeAccountId: null,
@@ -86,19 +92,23 @@ describe('ClaudeAccountService API parity', () => {
     const firstService = createService()
     const secondService = createService()
     const first = deferred()
+
     const firstAdd = vi.fn(async () => {
       await first.promise
+
       return {
         accounts: [],
         activeAccountId: null,
         activeAccountIdsByRuntime: { host: null, wsl: {} }
       }
     })
+
     const secondAdd = vi.fn(async () => ({
       accounts: [],
       activeAccountId: null,
       activeAccountIdsByRuntime: { host: null, wsl: {} }
     }))
+
     ;(firstService as unknown as { registration: { add: typeof firstAdd } }).registration.add =
       firstAdd
     ;(secondService as unknown as { registration: { add: typeof secondAdd } }).registration.add =

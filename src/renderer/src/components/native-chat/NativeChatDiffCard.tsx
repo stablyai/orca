@@ -26,12 +26,15 @@ function verbLabel(file: NativeChatEditFile): string {
 
 function VerbIcon({ kind }: { kind: NativeChatEditFile['changeKind'] }): React.JSX.Element {
   const className = 'size-3.5 shrink-0 text-muted-foreground'
+
   if (kind === 'added') {
     return <FilePlus2 className={className} />
   }
+
   if (kind === 'deleted') {
     return <FileMinus2 className={className} />
   }
+
   return <FilePen className={className} />
 }
 
@@ -64,6 +67,7 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
   if (line.kind === 'gap') {
     return <DiffGapRow />
   }
+
   return (
     <div
       className={cn(
@@ -128,6 +132,7 @@ export function NativeChatDiffCard({
     disclosureKey,
     initiallyExpanded
   )
+
   const cardRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (revealSignal && cardRef.current) {
@@ -141,9 +146,11 @@ export function NativeChatDiffCard({
   // work, and a collapsed card renders none of those rows.
   const copyText = useMemo(() => patchText(file.lines), [file.lines])
   const hasBody = file.lines.length > 0
+
   const widest = file.lineNumbersKnown
     ? file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
     : 0
+
   const gutterWidth = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
 
   return (
@@ -207,10 +214,12 @@ export function NativeChatDiffCard({
         >
           {(() => {
             const seen = new Map<string, number>()
+
             return file.lines.map((line) => {
               const signature = `${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${line.text}`
               const occurrence = seen.get(signature) ?? 0
               seen.set(signature, occurrence + 1)
+
               return (
                 <DiffRow key={`${signature}:${occurrence}`} line={line} gutterWidth={gutterWidth} />
               )

@@ -23,14 +23,19 @@ function getWindowStorage(): Storage | null {
 export function readPersistedFloatingTerminalPanelViewState(): FloatingTerminalPanelViewState | null {
   try {
     const serialized = getWindowStorage()?.getItem(FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY)
+
     if (!serialized) {
       return null
     }
+
     const parsed: unknown = JSON.parse(serialized)
+
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
+
     const record = parsed as Record<string, unknown>
+
     // Why each flag is read independently: a record written before the other flag
     // existed must still restore the half it does carry.
     return {

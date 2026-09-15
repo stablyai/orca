@@ -7,10 +7,15 @@ import {
 } from '../../../../../../shared/git-history-graph'
 
 const SWIMLANE_HEIGHT = 24
+
 const SWIMLANE_WIDTH = 11
+
 const SWIMLANE_CURVE_RADIUS = 5
+
 const SWIMLANE_NODE_Y = SWIMLANE_HEIGHT / 2
+
 const CIRCLE_RADIUS = 3.5
+
 const CIRCLE_STROKE_WIDTH = 1.5
 
 export function graphColor(color: GitHistoryGraphColorId): string {
@@ -47,6 +52,7 @@ export function GitHistoryGraphSvg({
   const outputSwimlanes = viewModel.outputSwimlanes
   const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id)
   const circleIndex = getGitHistoryItemLaneIndex(viewModel)
+
   const circleColor =
     circleIndex < outputSwimlanes.length
       ? outputSwimlanes[circleIndex]!.color
@@ -59,6 +65,7 @@ export function GitHistoryGraphSvg({
 
   for (let index = 0; index < inputSwimlanes.length; index += 1) {
     const color = inputSwimlanes[index]!.color
+
     if (inputSwimlanes[index]!.id === historyItem.id) {
       if (index !== circleIndex) {
         paths.push(
@@ -75,6 +82,7 @@ export function GitHistoryGraphSvg({
       } else {
         outputSwimlaneIndex += 1
       }
+
       continue
     }
 
@@ -110,6 +118,7 @@ export function GitHistoryGraphSvg({
           />
         )
       }
+
       outputSwimlaneIndex += 1
     }
   }
@@ -117,9 +126,11 @@ export function GitHistoryGraphSvg({
   for (let index = 1; index < historyItem.parentIds.length; index += 1) {
     const parentId = historyItem.parentIds[index]!
     const parentOutputIndex = getGitHistoryMergeParentLaneIndex(viewModel, parentId)
+
     if (parentOutputIndex === -1) {
       continue
     }
+
     paths.push(
       <GraphPath
         key={`merge-parent-${parentId}`}
@@ -143,6 +154,7 @@ export function GitHistoryGraphSvg({
       />
     )
   }
+
   if (historyItem.parentIds.length > 0) {
     paths.push(
       <GraphPath
@@ -156,8 +168,10 @@ export function GitHistoryGraphSvg({
   const cx = SWIMLANE_WIDTH * (circleIndex + 1)
   const cy = SWIMLANE_NODE_Y
   const width = SWIMLANE_WIDTH * (Math.max(inputSwimlanes.length, outputSwimlanes.length, 1) + 1)
+
   const isBoundaryNode =
     viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+
   const isMergeNode = historyItem.parentIds.length > 1
 
   return (

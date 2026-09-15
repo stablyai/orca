@@ -15,6 +15,7 @@ export function logSharedControlSocketClose(args: {
   if (!args.error && !args.lastClose) {
     return
   }
+
   console.warn('[remote-runtime.shared-control] socket closed', {
     environmentId: args.environmentId ?? 'unknown',
     state: args.state,

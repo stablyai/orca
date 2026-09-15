@@ -102,6 +102,7 @@ describe('getGitHubMutationRoutingSettings', () => {
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
       repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }]
     }
+
     expect(
       resolveTarget(localRepo, 'repo-1', {
         ...runtimeSourceContext,
@@ -126,6 +127,7 @@ describe('getGitHubMutationRoutingSettings', () => {
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
       repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }]
     }
+
     expect(
       resolveTarget(noOwnerRepo, 'repo-1', {
         ...runtimeSourceContext,

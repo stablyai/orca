@@ -29,6 +29,7 @@ test('shows the egress indicator on a live routed SSH page and holds', async ({
 }, testInfo) => {
   test.setTimeout((HOLD_MINUTES + 15) * 60_000)
   let target: DockerSshRelayTarget | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
@@ -48,9 +49,11 @@ test('shows the egress indicator on a live routed SSH page and holds', async ({
     await orcaPage.evaluate(
       ({ worktreeId, url }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('store unavailable')
         }
+
         state.setActiveWorktree(worktreeId)
         state.createBrowserTab(worktreeId, url, { title: 'Routed preview', activate: true })
       },

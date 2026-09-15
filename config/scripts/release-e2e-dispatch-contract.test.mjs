@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const releaseWorkflow = parse(
   readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
 )
+
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
 describe('release E2E dispatch contract', () => {
@@ -63,6 +65,7 @@ describe('release E2E dispatch contract', () => {
     ).toEqual({
       'native-runtime': 'electron'
     })
+
     for (const jobName of ['e2e', 'changed-e2e', 'ssh-docker-watcher-isolation']) {
       expect(e2eWorkflow.jobs[jobName].needs, jobName).toEqual(['build', 'prepare-native-cache'])
     }

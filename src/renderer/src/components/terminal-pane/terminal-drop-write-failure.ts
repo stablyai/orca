@@ -9,6 +9,7 @@ export function showTerminalDropWriteFailure(
   if (!reason || reason === 'target-stale') {
     return
   }
+
   toast.error(
     reason === 'operation-timeout'
       ? translate(

@@ -16,9 +16,13 @@ import {
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-probe-gap-'))
+
 const fixturePath = path.join(scratch, 'probe-gap-terminal.mjs')
+
 const processedInputPath = path.join(scratch, 'processed-input.txt')
+
 writeFileSync(processedInputPath, '')
+
 writeFileSync(
   fixturePath,
   [
@@ -50,6 +54,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(): string {
   const command = [process.execPath, fixturePath, processedInputPath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -59,9 +64,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -73,17 +80,22 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
   orcaPage
 }) => {
   test.setTimeout(90_000)
+
   const worktreeId = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
     const id = state?.activeWorktreeId
+
     if (!id || !state?.allWorktrees().some((candidate) => candidate.id === id)) {
       throw new Error('Headed host did not select its seeded worktree')
     }
+
     return id
   })
+
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedWebClient(electronApp, offer)
   let terminal: string | null = null
+
   try {
     await expect
       .poll(
@@ -99,6 +111,7 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
         { timeout: 30_000 }
       )
       .toBe(true)
+
     const created = await callRuntime<{
       tab: { parentTabId: string; terminal: string | null }
     }>(client.page, 'session.tabs.createTerminal', {
@@ -108,10 +121,13 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
       select: false,
       navigation: 'caller'
     })
+
     terminal = created.tab.terminal
+
     if (!terminal) {
       throw new Error('Paired runtime did not publish the probe-gap fixture')
     }
+
     const webTabId = toWebTerminalSurfaceTabId(created.tab.parentTabId)
     await client.page.evaluate((id) => window.__store?.getState().setActiveWorktree(id), worktreeId)
     const tab = client.page.locator(`[data-testid="sortable-tab"][data-tab-id="${webTabId}"]`)
@@ -119,11 +135,13 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
     await tab.click()
     await expect(tab).toHaveAttribute('data-active', 'true')
     const originalPtyId = await waitForActivePanePtyId(client.page, 30_000)
+
     const originalHostTerminal = await callRuntime<{ terminal: RuntimeTerminalShow }>(
       orcaPage,
       'terminal.show',
       { terminal }
     )
+
     expect(originalHostTerminal.terminal.ptyId).not.toBeNull()
     await expect
       .poll(() => getTerminalContent(client.page), { timeout: 30_000 })
@@ -140,9 +158,11 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
             }
           }
         ).__remoteTerminalMultiplexAckGate
+
         if (!gate) {
           throw new Error('Remote terminal multiplex output gate is unavailable')
         }
+
         return gate.dropOutputUntilResubscribe([target])
       }, terminal)
     ).toBe(1)
@@ -161,6 +181,7 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
                 }
               }
             ).__remoteTerminalMultiplexAckGate
+
             return gate?.snapshot().droppedOutputFrames ?? 0
           }),
         { timeout: 10_000 }
@@ -177,6 +198,7 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
             'terminal.read',
             { terminal }
           )
+
           return result.terminal.tail.join('\n')
         },
         { timeout: 10_000 }
@@ -189,16 +211,20 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
       .toContain(`LIVE:${missingMarker}`)
     await expect(tab).toHaveAttribute('data-active', 'true')
     expect(await waitForActivePanePtyId(client.page, 30_000)).toBe(originalPtyId)
+
     const recoveredHostTerminal = await callRuntime<{ terminal: RuntimeTerminalShow }>(
       orcaPage,
       'terminal.show',
       { terminal }
     )
+
     expect(recoveredHostTerminal.terminal.ptyId).toBe(originalHostTerminal.terminal.ptyId)
+
     const hostTerminals = await callRuntime<RuntimeTerminalListResult>(orcaPage, 'terminal.list', {
       worktree: `id:${worktreeId}`,
       requireFreshPtyLiveness: true
     })
+
     expect(
       hostTerminals.terminals
         .filter((candidate) => candidate.tabId === created.tab.parentTabId)
@@ -226,9 +252,11 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
         ).__remoteTerminalMultiplexAckGate?.release()
       })
       .catch(() => undefined)
+
     if (terminal) {
       await callRuntime(orcaPage, 'terminal.closeTab', { terminal }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 })

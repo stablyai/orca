@@ -25,7 +25,9 @@ import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-env
 import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
+
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
+
 const X_URL = 'https://x.com/orca_build'
 
 type SubmitIdentity = {
@@ -67,6 +69,7 @@ export function SidebarFeedbackDialog({
   const [submitAnonymously, setSubmitAnonymously] = useState(false)
   const mountedRef = useMountedRef()
   const feedbackTextareaRef = useRef<HTMLTextAreaElement>(null)
+
   const {
     images,
     pendingImageReadCount,
@@ -123,8 +126,10 @@ export function SidebarFeedbackDialog({
     if (isSubmitting || hasPendingImageReads()) {
       return
     }
+
     const trimmed = feedback.trim()
     const userText = stripClientEnvironmentFooter(feedback).trim()
+
     if (!trimmed || !userText) {
       toast.warning(
         translate(
@@ -132,12 +137,15 @@ export function SidebarFeedbackDialog({
           'Please enter feedback before submitting.'
         )
       )
+
       return
     }
 
     setIsSubmitting(true)
+
     try {
       const identity = getSubmitIdentity(viewer, submitAnonymously)
+
       // Why: submission is proxied through the main process via IPC because
       // the packaged Mac build loads the renderer from file://, which makes
       // cross-origin fetch() fail CORS preflight. Electron's net module in
@@ -176,6 +184,7 @@ export function SidebarFeedbackDialog({
             )
           )
         }
+
         setFeedback('')
         setSubmitAnonymously(false)
         clearImages()
@@ -190,6 +199,7 @@ export function SidebarFeedbackDialog({
           )
         )
       }
+
       console.error('Failed to submit feedback:', err)
     } finally {
       if (mountedRef.current) {
@@ -211,15 +221,18 @@ export function SidebarFeedbackDialog({
         // screenshot lands whether or not the caret is in the message box.
         onPaste={(event) => {
           const pasted = extractImageFilesFromDataTransfer(event.clipboardData)
+
           if (pasted.length === 0) {
             return
           }
+
           // Why: consume the paste only when something is actually attachable.
           // An unsupported image still routes through for its rejection toast,
           // but preventing default there would silently eat co-pasted text.
           if (hasAttachableFeedbackImage(pasted, getReservedImageSlots())) {
             event.preventDefault()
           }
+
           handleAddFiles(pasted)
         }}
         // Why: dragenter/leave fire per nested child; the hook counts depth so

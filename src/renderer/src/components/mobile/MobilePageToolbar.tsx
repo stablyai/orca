@@ -17,6 +17,7 @@ export function MobilePageToolbar({
   const sidebarToggleLabel = showMobileButton
     ? translate('auto.components.mobile.MobilePageToolbar.c669abcf8f', 'Hide from sidebar')
     : translate('auto.components.mobile.MobilePageToolbar.fb5f28330e', 'Show in sidebar')
+
   const sidebarToggleTooltip = showMobileButton
     ? translate(
         'auto.components.mobile.MobilePageToolbar.e1c7b4a92d',

@@ -13,9 +13,11 @@ export type TerminalFileUrlTargetOptions = {
 function parseFileUrlLineHash(hash: string): { line: number; column: number | null } | null {
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash
   const match = /^L(\d+)(?:C(\d+))?$/i.exec(trimmed)
+
   if (!match) {
     return null
   }
+
   return {
     line: Number(match[1]),
     column: match[2] ? Number(match[2]) : null
@@ -24,9 +26,11 @@ function parseFileUrlLineHash(hash: string): { line: number; column: number | nu
 
 function parseFilePathTrailingLineTarget(filePath: string): TerminalFileUrlTarget | null {
   const match = /^(.*?)(?::(\d+))(?::(\d+))?$/.exec(filePath)
+
   if (!match || !match[1] || match[1].endsWith('/') || match[1].endsWith('\\')) {
     return null
   }
+
   return {
     filePath: match[1],
     line: Number(match[2]),
@@ -43,11 +47,13 @@ export function resolveTerminalFileUrlTarget(
   }
 
   const filePath = fileUriToFilesystemPath(parsed)
+
   if (!filePath) {
     return null
   }
 
   const hashTarget = parseFileUrlLineHash(parsed.hash)
+
   if (hashTarget) {
     return { filePath, line: hashTarget.line, column: hashTarget.column }
   }

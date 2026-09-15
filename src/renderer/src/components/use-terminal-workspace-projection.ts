@@ -27,19 +27,24 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     tabsByWorktree,
     workspaceSessionReady
   } = controller
+
   const foregroundTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
+
     if (activeView === 'terminal' && activeTabType === 'terminal' && activeTabId) {
       ids.add(activeTabId)
     }
+
     for (const portal of activityTerminalPortals) {
       ids.add(portal.tabId)
     }
+
     return Array.from(ids)
   }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
 
   useEffect(() => {
     setForegroundTerminalTabIds(foregroundTerminalTabIds)
+
     return () => setForegroundTerminalTabIds([])
   }, [foregroundTerminalTabIds])
 
@@ -50,37 +55,47 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
         : [],
     [renderedActiveWorktreeId, tabsByWorktree]
   )
+
   const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
     workspaceSessionReady && hydrationSucceeded
   )
+
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
 
   useEffect(() => {
     if (!activeWorktreeId) {
       return
     }
+
     ensureWorktreeRootGroup(activeWorktreeId)
   }, [activeWorktreeId, ensureWorktreeRootGroup])
 
   const worktreeFiles = useWorktreeFiles(openFiles, renderedActiveWorktreeId)
+
   const worktreeBrowserTabs = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
     : []
+
   // Why: this strip only renders before the worktree has a layout, which is exactly when a paired
   // client can have opened a page the host never has. Without a row here it stays uncloseable.
   const worktreeClientHostedBrowserRows = useClientHostedBrowserRows(renderedActiveWorktreeId ?? '')
+
   const getEffectiveLayoutForWorktree = useCallback(
     (worktreeId: string) =>
       getEffectiveLayout(worktreeId, layoutByWorktree, groupsByWorktree, activeGroupIdByWorktree),
     [activeGroupIdByWorktree, groupsByWorktree, layoutByWorktree]
   )
+
   const effectiveActiveLayout = renderedActiveWorktreeId
     ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
     : undefined
+
   const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
+
   const activeContextualTourId = useAppStore((state) => state.activeContextualTourId)
+
   const hasSplitTerminalPane = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
   )

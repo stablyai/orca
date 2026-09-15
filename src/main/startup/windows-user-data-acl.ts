@@ -31,6 +31,7 @@ import { getIcaclsExePath, resolveCurrentWindowsIdentity } from '../win32-utils'
  */
 
 export const WINDOWS_ACL_GRANT_MARKER_FILE = 'windows-acl-grant.json'
+
 export const WINDOWS_ACL_GRANT_SCHEME_VERSION = 1
 
 const GRANT_TIMEOUT_MS = 120_000
@@ -60,6 +61,7 @@ function readMarker(userDataPath: string): WindowsAclGrantMarker | null {
     const parsed = JSON.parse(
       readFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), 'utf-8')
     ) as Partial<WindowsAclGrantMarker>
+
     if (
       parsed.schemeVersion === WINDOWS_ACL_GRANT_SCHEME_VERSION &&
       typeof parsed.identity === 'string'
@@ -69,6 +71,7 @@ function readMarker(userDataPath: string): WindowsAclGrantMarker | null {
   } catch {
     // missing or corrupt → re-grant
   }
+
   return null
 }
 
@@ -78,6 +81,7 @@ function writeMarker(userDataPath: string, identity: string): void {
     identity,
     grantedAt: Date.now()
   }
+
   writeFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), JSON.stringify(marker))
 }
 
@@ -98,19 +102,24 @@ function runIcaclsGrant(
         windowsHide: true
       }
     )
+
     let settled = false
+
     const settle = (ok: boolean, reason?: string): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       resolve(ok ? { ok } : { ok, reason })
     }
+
     const timer = setTimeout(() => {
       child.kill()
       settle(false, 'timeout')
     }, GRANT_TIMEOUT_MS)
+
     timer.unref?.()
     child.on('error', (error) => settle(false, error.message))
     child.on('exit', (code) => settle(code === 0, code === 0 ? undefined : `exit ${code}`))
@@ -127,17 +136,24 @@ export function ensureWindowsUserDataAclGrant(
   options: EnsureOptions = {}
 ): void {
   const onDone = options.onDone ?? ((): void => undefined)
+
   const identity =
     options.identity !== undefined ? options.identity : resolveCurrentWindowsIdentity()
+
   if (!identity) {
     onDone({ mode: 'no-identity' })
+
     return
   }
+
   const marker = readMarker(userDataPath)
+
   if (marker && marker.identity === identity) {
     onDone({ mode: 'marker-hit' })
+
     return
   }
+
   const spawnFn = options.spawnFn ?? spawn
   void (async () => {
     // Immediate children first: those explicit ACEs are the durable fix
@@ -146,6 +162,7 @@ export function ensureWindowsUserDataAclGrant(
     // directly under userData succeed before Chromium's first reset.
     const children = await runIcaclsGrant(spawnFn, join(userDataPath, '*'), identity)
     const root = await runIcaclsGrant(spawnFn, userDataPath, identity)
+
     if (children.ok && root.ok) {
       try {
         writeMarker(userDataPath, identity)
@@ -153,8 +170,10 @@ export function ensureWindowsUserDataAclGrant(
       } catch (error) {
         onDone({ mode: 'failed', reason: `marker write: ${String(error)}` })
       }
+
       return
     }
+
     onDone({
       mode: 'failed',
       reason: [children.reason, root.reason].filter(Boolean).join('; ') || 'unknown'

@@ -25,17 +25,22 @@ const BASELINE_TAB_CREATE_SOURCES = [
 
 async function importBaselineTabCreate(checkout: ReleaseCheckout): Promise<Schema> {
   const attempted: string[] = []
+
   for (const [file, exportName] of BASELINE_TAB_CREATE_SOURCES) {
     attempted.push(`${file}#${exportName}`)
+
     const loaded = await importReleaseCheckoutModule(
       checkout,
       `/src/main/runtime/rpc/methods/${file}`
     ).catch(() => null)
+
     const schema = loaded?.[exportName] as Schema | undefined
+
     if (schema?.parse) {
       return schema
     }
   }
+
   throw new Error(
     `Baseline release at ${checkout.root} exposes no tab-create schema (tried ${attempted.join(', ')}).`
   )
@@ -51,18 +56,23 @@ const legacyRequest = {
 }
 
 let baselineRef: string
+
 let baselineRevision: string
+
 let baselineTabCreate: Schema
+
 let baselineProtocol: Record<string, unknown>
 
 beforeAll(async () => {
   baselineRef = LEGACY_BROWSER_PLACEMENT_RELEASE_REF
   const checkout = await materializeReleaseCheckout(baselineRef)
   baselineRevision = checkout.commit
+
   const [tabCreate, protocol] = await Promise.all([
     importBaselineTabCreate(checkout),
     importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts')
   ])
+
   baselineTabCreate = tabCreate
   baselineProtocol = protocol
 })

@@ -23,6 +23,7 @@ async function replayInto(
   paneOnAlternateScreen: boolean
 ): Promise<void> {
   const snapshot = buildParityMainBufferSnapshot(model, 1)
+
   for (const write of buildMainModelSnapshotReplayWrites(snapshot, { paneOnAlternateScreen })) {
     await writeToTerminal(terminal, write)
   }
@@ -35,19 +36,25 @@ function row(terminal: Terminal, index: number): string {
 /** Text alone cannot see a stranded pen: include the attributes per cell. */
 function rowWithAttributes(terminal: Terminal, index: number): string {
   const line = terminal.buffer.active.getLine(index)
+
   if (!line) {
     return ''
   }
+
   const cells: string[] = []
+
   for (let column = 0; column < line.length; column++) {
     const cell = line.getCell(column)
+
     if (!cell) {
       continue
     }
+
     cells.push(
       `${cell.getChars()}|${cell.isBold() ? 'b' : ''}${cell.isInverse() ? 'i' : ''}${cell.getFgColor()}`
     )
   }
+
   return cells.join(',')
 }
 
@@ -68,6 +75,7 @@ describe('line-drawing survives a replay for every real terminfo strategy', () =
     it(`draws a box after a normal-buffer replay under ${term}`, async () => {
       const model = createRendererParityTerminal({ cols: 20, rows: 4 })
       const pane = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
+
       try {
         await writeToTerminal(model.terminal, 'restored output')
         // The application initialises its charsets once, before the gap.
@@ -86,6 +94,7 @@ describe('line-drawing survives a replay for every real terminfo strategy', () =
     it(`draws a box after an alt-screen replay under ${term}`, async () => {
       const model = createRendererParityTerminal({ cols: 20, rows: 4 })
       const pane = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
+
       try {
         await writeToTerminal(model.terminal, '\x1b[?1049hTUI FRAME')
         await writeToTerminal(pane, `\x1b[?1049h${enacs}`)
@@ -106,6 +115,7 @@ describe('line-drawing survives a replay for every real terminfo strategy', () =
   it('renders the restored frame as ASCII even if the gap stranded a shift-out', async () => {
     const model = createRendererParityTerminal({ cols: 20, rows: 4 })
     const pane = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
+
     try {
       await writeToTerminal(model.terminal, 'qqq plain text')
       await writeToTerminal(pane, '\x1b(B\x1b)0\x0e')
@@ -127,6 +137,7 @@ describe('real TUI shapes survive a replay', () => {
   it('keeps an editor scroll region and status line after a replay', async () => {
     const model = createRendererParityTerminal({ cols: 20, rows: 6 })
     const pane = new Terminal({ cols: 20, rows: 6, allowProposedApi: true })
+
     try {
       await writeToTerminal(model.terminal, '\x1b[?1049h\x1b[1;5r\x1b[1;1Hline one')
       await writeToTerminal(model.terminal, '\x1b[6;1H-- INSERT --')
@@ -154,6 +165,7 @@ describe('real TUI shapes survive a replay', () => {
   it('keeps every column of a pager frame when the gap stranded autowrap off', async () => {
     const model = createRendererParityTerminal({ cols: 10, rows: 4 })
     const pane = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
+
     try {
       await writeToTerminal(model.terminal, 'ABCDEFGHIJKLMN')
       await writeToTerminal(pane, '\x1b[?7l')
@@ -172,6 +184,7 @@ describe('real TUI shapes survive a replay', () => {
   it('keeps a live repaint overwriting when the gap stranded insert mode', async () => {
     const model = createRendererParityTerminal({ cols: 12, rows: 3 })
     const pane = new Terminal({ cols: 12, rows: 3, allowProposedApi: true })
+
     try {
       await writeToTerminal(model.terminal, 'OLDTEXT')
       await writeToTerminal(pane, '\x1b[4h')
@@ -190,6 +203,7 @@ describe('real TUI shapes survive a replay', () => {
   it('keeps a live backspace from chewing the row above after a replay', async () => {
     const model = createRendererParityTerminal({ cols: 8, rows: 3 })
     const pane = new Terminal({ cols: 8, rows: 3, allowProposedApi: true })
+
     try {
       await writeToTerminal(model.terminal, 'AAAAAAAABBBB')
       await writeToTerminal(pane, '\x1b[?45h')
@@ -213,15 +227,20 @@ describe('real TUI shapes survive a replay', () => {
       allowProposedApi: true,
       vtExtensions: { kittyKeyboard: true }
     }
+
     const readFlags = (term: Terminal): unknown => {
       const flags = (term as unknown as { _core: { coreService: { kittyKeyboard: unknown } } })
         ._core.coreService.kittyKeyboard
+
       expect(flags).toBeDefined()
+
       return flags
     }
+
     const model = createRendererParityTerminal({ cols: 20, rows: 4 })
     const pane = new Terminal(options)
     const untouched = new Terminal(options)
+
     try {
       await writeToTerminal(model.terminal, 'shell output')
       await writeToTerminal(pane, '\x1b[>1u')
@@ -245,20 +264,24 @@ describe('repeated gap and restore cycles', () => {
     const model = createRendererParityTerminal({ cols: 20, rows: 4 })
     const once = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
     const thrice = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
+
     // Attributes and a mode-sensitive operation, not just text: stranded bold,
     // margins and autowrap are all invisible to a text-only comparison.
     const describeFrame = async (terminal: Terminal): Promise<string> => {
       await writeToTerminal(terminal, '\x1b[3;1Hzz\bY')
+
       return JSON.stringify({
         type: terminal.buffer.active.type,
         rows: [0, 1, 2, 3].map((index) => rowWithAttributes(terminal, index)),
         cursor: [terminal.buffer.active.cursorX, terminal.buffer.active.cursorY]
       })
     }
+
     try {
       await writeToTerminal(model.terminal, '\x1b[?1049hframe body')
 
       await replayInto(once, model, false)
+
       for (let cycle = 0; cycle < 3; cycle++) {
         // A fresh gap strands new state before each restore.
         await writeToTerminal(thrice, '\x1b[1m\x1b[2;3r\x1b[?7l\x1b]0;TRUNC')
@@ -290,6 +313,7 @@ describe('content fidelity through a replay', () => {
       const model = createRendererParityTerminal({ cols: 20, rows: 4 })
       const clean = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
       const dirty = new Terminal({ cols: 20, rows: 4, allowProposedApi: true })
+
       try {
         await writeToTerminal(model.terminal, body)
         await replayInto(clean, model, false)

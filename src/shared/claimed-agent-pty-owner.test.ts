@@ -32,6 +32,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
   it('joins concurrent exact ensures and spawns once', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     let finish!: (result: { ptyId: string }) => void
+
     const spawn = vi.fn(
       () =>
         new Promise<{ ptyId: string }>((resolve) => {
@@ -88,6 +89,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('generation-guards release across a replacement owner', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const first = await registry.ensure({
       claim: claim(),
       surface,
@@ -126,12 +128,15 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('does not let a late liveness result adopt a released generation', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const created = await registry.ensure({
       claim: claim(),
       surface,
       spawn: async () => ({ ptyId: 'pty-1' })
     })
+
     let finishProof!: (live: boolean) => void
+
     const adoption = registry.ensure({
       claim: claim(),
       surface,
@@ -155,6 +160,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('rejects a recovered owner that reuses only one half of its generation identity', () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const owner = {
       claim: claim(),
       generation: 'generation-1',
@@ -162,6 +168,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       ptyId: 'pty-1',
       surface
     }
+
     registry.register(owner)
 
     expect(() => registry.register({ ...owner, ptyId: 'pty-2' })).toThrow('agent_session_conflict')
@@ -172,6 +179,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('retains only allowlisted owner fields', () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const owner = {
       claim: { ...claim(), unknownPayload: 'claim payload' },
       generation: 'generation-1',
@@ -196,6 +204,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('fails closed when recovered owner evidence reaches the process-wide cap', () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const owners = Array.from({ length: MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES }, (_, index) => ({
       claim: claim(`identity-${index}`),
       generation: `generation-${index}`,
@@ -203,6 +212,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       ptyId: `pty-${index}`,
       surface
     }))
+
     registry.reconcileAuthoritative(owners)
 
     expect(() =>
@@ -219,6 +229,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('atomically converges from conflicting provider evidence to one owner', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const ownerA = {
       claim: claim(),
       generation: 'generation-a',
@@ -226,6 +237,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       ptyId: 'pty-a',
       surface
     }
+
     const ownerB = {
       ...ownerA,
       generation: 'generation-b',
@@ -250,6 +262,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('prunes an advertised generation when an authoritative snapshot omits it', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const recovered = {
       claim: claim(),
       generation: 'generation-old',
@@ -257,6 +270,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       ptyId: 'pty-reused',
       surface
     }
+
     registry.reconcileAuthoritative([recovered])
     registry.reconcileAuthoritative([])
 
@@ -270,6 +284,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
 
   it('replaces a reused PTY id with the exact newly advertised generation', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
+
     const oldOwner = {
       claim: claim(),
       generation: 'generation-old',
@@ -277,6 +292,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
       ptyId: 'pty-reused',
       surface
     }
+
     const newOwner = { ...oldOwner, generation: 'generation-new' }
     registry.reconcileAuthoritative([oldOwner])
     registry.reconcileAuthoritative([newOwner])
@@ -296,12 +312,14 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
   it('does not let reconciliation erase an in-flight reservation', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     let finish!: (result: { ptyId: string }) => void
+
     const spawn = vi.fn(
       () =>
         new Promise<{ ptyId: string }>((resolve) => {
           finish = resolve
         })
     )
+
     const first = registry.ensure({ claim: claim(), surface, spawn })
 
     registry.reconcileAuthoritative([])

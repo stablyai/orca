@@ -45,6 +45,7 @@ export function activeAgentNotesSendFailureMessage(
 ): string {
   const target = options.explicitTarget ? 'selected' : 'active'
   let message: string
+
   switch (status) {
     case 'empty':
       message = 'No notes to send.'
@@ -80,5 +81,6 @@ export function activeAgentNotesSendFailureMessage(
       message = ''
       break
   }
+
   return options.code ? `${message} (${options.code})` : message
 }

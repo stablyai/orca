@@ -56,6 +56,7 @@ describe('orchestration send and reply receipts', () => {
     )) as { message: Record<string, unknown> }
 
     expect(result.message).toMatchObject({ subject: 'plumbing' })
+
     for (const column of INTERNAL_COLUMNS) {
       expect(result.message).not.toHaveProperty(column)
     }
@@ -78,6 +79,7 @@ describe('orchestration send and reply receipts', () => {
     )) as { messages: Record<string, unknown>[] }
 
     expect(result.messages).toHaveLength(1)
+
     for (const message of result.messages) {
       for (const column of INTERNAL_COLUMNS) {
         expect(message).not.toHaveProperty(column)
@@ -87,6 +89,7 @@ describe('orchestration send and reply receipts', () => {
 
   it('keeps delivery plumbing out of a reply receipt', async () => {
     setup()
+
     const original = db.insertMessage({
       from: 'term_worker',
       to: `run:${activeRunId}`,
@@ -100,6 +103,7 @@ describe('orchestration send and reply receipts', () => {
     )) as { message: Record<string, unknown> }
 
     expect(result.message).toMatchObject({ subject: 'Re: Need an answer' })
+
     for (const column of INTERNAL_COLUMNS) {
       expect(result.message).not.toHaveProperty(column)
     }

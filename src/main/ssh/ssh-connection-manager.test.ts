@@ -58,6 +58,7 @@ describe('SshConnectionManager', () => {
       }),
       Promise.resolve()
     )
+
     const manager = new SshConnectionManager({
       onStateChange: vi.fn()
     })
@@ -80,6 +81,7 @@ describe('SshConnectionManager', () => {
       }),
       Promise.resolve()
     )
+
     const manager = new SshConnectionManager({
       onStateChange: vi.fn()
     })

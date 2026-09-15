@@ -34,6 +34,7 @@ function chunkedWindowsPaste() {
 describe('terminal paste operation ordering', () => {
   it('starts an uncontended paste operation synchronously', async () => {
     let started = false
+
     const operation = runTerminalPtyInputTransaction('pty-1', async () => {
       started = true
     })
@@ -45,8 +46,10 @@ describe('terminal paste operation ordering', () => {
   it('keeps startup context outside an active chunked user paste frame', async () => {
     const writes: string[] = []
     let startupDraft: Promise<boolean> | null = null
+
     const writePty = async (data: string): Promise<boolean> => {
       writes.push(data)
+
       return true
     }
 
@@ -57,6 +60,7 @@ describe('terminal paste operation ordering', () => {
         startupDraft ??= sendAgentDraftPasteContent(null, 'pty-1', 'GENERATED_CONTEXT', writePty)
       }
     })
+
     await startupDraft
 
     expect(userPasteResult.status).toBe('pasted')
@@ -73,34 +77,41 @@ describe('terminal paste operation ordering', () => {
     const writes: { owner: 'startup' | 'user'; data: string }[] = []
     let releaseStartup!: () => void
     let startupOpened!: () => void
+
     const opened = new Promise<void>((resolve) => {
       startupOpened = resolve
     })
+
     const startup = sendAgentDraftPasteContent(
       null,
       'pty-1',
       'G'.repeat(64 * 1024 + 1),
       async (data) => {
         writes.push({ owner: 'startup', data })
+
         if (data === BRACKETED_PASTE_START) {
           startupOpened()
           await new Promise<void>((resolve) => {
             releaseStartup = resolve
           })
         }
+
         return true
       }
     )
+
     await opened
 
     const user = executeTerminalPastePlan(chunkedWindowsPaste(), {
       pasteText: () => {},
       writePty: async (data) => {
         writes.push({ owner: 'user', data })
+
         return true
       },
       yieldToEventLoop: async () => {}
     })
+
     await Promise.resolve()
     expect(writes).toEqual([{ owner: 'startup', data: BRACKETED_PASTE_START }])
 
@@ -120,15 +131,18 @@ describe('terminal paste operation ordering', () => {
   it('does not block paste operations for another PTY', async () => {
     let releaseFirst!: () => void
     let firstStarted!: () => void
+
     const started = new Promise<void>((resolve) => {
       firstStarted = resolve
     })
+
     const first = runTerminalPtyInputTransaction('pty-1', async () => {
       firstStarted()
       await new Promise<void>((resolve) => {
         releaseFirst = resolve
       })
     })
+
     await started
 
     await expect(

@@ -4,7 +4,9 @@ import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { openHttpLinkAtBufferPosition } from './terminal-url-link-hit-testing'
 
 const COLS = 40
+
 const WIDE_GLYPH = '界'
+
 const openUrlMock = vi.fn()
 
 function makeBufferLine(content: string, cols = COLS): IBufferLine {
@@ -21,18 +23,23 @@ function makeBufferLineFromCells(
   const columns: number[] = []
   let column = 0
   let text = ''
+
   for (const cell of cells) {
     text += cell.text
+
     for (let index = 0; index < cell.text.length; index++) {
       columns.push(column)
     }
+
     column += cell.width
   }
+
   while (column < cols) {
     text += ' '
     columns.push(column)
     column++
   }
+
   columns.push(column)
 
   return {
@@ -45,6 +52,7 @@ function makeBufferLineFromCells(
       outColumns?: number[]
     ) => {
       outColumns?.splice(0, outColumns.length, ...columns.slice(startColumn, endColumn + 1))
+
       return text.slice(startColumn, endColumn)
     }
   } as IBufferLine
@@ -99,6 +107,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     const firstRow = `${prefix}${'c'.repeat(COLS - 1 - prefix.length)}`
     const continuationRow = `${wideCell}tail`
     const expectedUrl = new URL(`${firstRow}${continuationRow}`).toString()
+
     const rows = [
       makeBufferLine(firstRow),
       makeBufferLineFromCells([
@@ -106,6 +115,7 @@ describe('edge-wrapped terminal HTTP links', () => {
         ...Array.from('tail', (text) => ({ text, width: 1 }))
       ])
     ]
+
     const buffer = { getLine: (y: number) => rows[y] }
 
     expect(
@@ -257,9 +267,11 @@ describe('edge-wrapped terminal HTTP links', () => {
     const prefix = `${'P'.repeat(179)} `
     const url = `https://example.com/${'a'.repeat(1_880)}`
     const displayed = `${prefix}${url}`
+
     const rowTexts = Array.from({ length: Math.ceil(displayed.length / cols) }, (_value, index) =>
       displayed.slice(index * cols, (index + 1) * cols)
     )
+
     const rows = rowTexts.map((row) => makeBufferLine(row, cols))
     const buffer = { getLine: (y: number) => rows[y] }
 
@@ -287,9 +299,11 @@ describe('edge-wrapped terminal HTTP links', () => {
 
   it('reconstructs a narrow-terminal URL spanning more than 20 rows from either end', () => {
     const url = `https://example.com/${'a'.repeat(1_000)}`
+
     const rowTexts = Array.from({ length: Math.ceil(url.length / COLS) }, (_value, index) =>
       url.slice(index * COLS, (index + 1) * COLS)
     )
+
     const rows = rowTexts.map((row) => makeBufferLine(row))
     const buffer = { getLine: (y: number) => rows[y] }
 
@@ -321,19 +335,24 @@ describe('edge-wrapped terminal HTTP links', () => {
     const rowTexts: string[] = []
     let row = ''
     let width = 0
+
     for (const char of url) {
       const charWidth = char === WIDE_GLYPH ? 2 : 1
+
       if (width + charWidth > COLS) {
         rowTexts.push(row)
         row = ''
         width = 0
       }
+
       row += char
       width += charWidth
     }
+
     if (row.length > 0) {
       rowTexts.push(row)
     }
+
     const rows = rowTexts.map((rowText) => makeBufferLine(rowText))
     const buffer = { getLine: (y: number) => rows[y] }
 
@@ -388,6 +407,7 @@ describe('edge-wrapped terminal HTTP links', () => {
     const embeddedUrl = `abchttps://example.com/${'a'.repeat(
       COLS - 'abchttps://example.com/'.length
     )}`
+
     const rows = [makeBufferLine(embeddedUrl), makeBufferLine('tail')]
     const buffer = { getLine: (y: number) => rows[y] }
 
@@ -404,9 +424,11 @@ describe('edge-wrapped terminal HTTP links', () => {
     const cols = 200
     const url = `https://example.com/${'a'.repeat(2_020)}`
     const displayed = `${url} ${'L'.repeat(159)}`
+
     const rowTexts = Array.from({ length: Math.ceil(displayed.length / cols) }, (_value, index) =>
       displayed.slice(index * cols, (index + 1) * cols)
     )
+
     const rows = rowTexts.map((row) => makeBufferLine(row, cols))
     const buffer = { getLine: (y: number) => rows[y] }
 

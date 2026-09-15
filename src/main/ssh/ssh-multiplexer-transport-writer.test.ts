@@ -21,16 +21,19 @@ function transportHarness(writeResults: (boolean | void)[]): WriterHarness {
   const writes: Buffer[] = []
   const callbacks: ((result: MultiplexerTransportWriteResult) => void)[] = []
   const removeDrain = vi.fn()
+
   return {
     transport: {
       write: (data, onSettled) => {
         writes.push(data)
         callbacks.push(onSettled!)
+
         return writeResults.shift()
       },
       supportsWriteSettlement: true,
       onDrain: (callback) => {
         emitter.on('drain', callback)
+
         return () => {
           removeDrain()
           emitter.off('drain', callback)
@@ -73,6 +76,7 @@ describe('SshMultiplexerTransportWriter', () => {
 
     writer.enqueue(Buffer.from('ordinary-1'), 'ordinary')
     writer.enqueue(Buffer.from('ordinary-2'), 'ordinary')
+
     for (let index = 1; index <= 6; index++) {
       writer.enqueue(Buffer.from(`control-${index}`), 'control')
     }
@@ -224,6 +228,7 @@ describe('SshMultiplexerTransportWriter', () => {
   it('settles legacy callback-less transports on acceptance and drain', () => {
     const emitter = new EventEmitter()
     const write = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(undefined)
+
     const transport: MultiplexerTransport = {
       write,
       onDrain: (callback) => {
@@ -232,6 +237,7 @@ describe('SshMultiplexerTransportWriter', () => {
       onData: vi.fn(),
       onClose: vi.fn()
     }
+
     const writer = new SshMultiplexerTransportWriter(transport, vi.fn())
     const first = vi.fn()
     const second = vi.fn()
@@ -248,10 +254,13 @@ describe('SshMultiplexerTransportWriter', () => {
 
   it('does not miss a drain emitted synchronously by a hostile transport', () => {
     let drain = (): void => {}
+
     const write = vi.fn(() => {
       drain()
+
       return false
     })
+
     const writer = new SshMultiplexerTransportWriter(
       {
         write,
@@ -263,6 +272,7 @@ describe('SshMultiplexerTransportWriter', () => {
       },
       vi.fn()
     )
+
     const first = vi.fn()
     const second = vi.fn()
 
@@ -276,6 +286,7 @@ describe('SshMultiplexerTransportWriter', () => {
 
   it('fails deterministically when write(false) has no drain source', () => {
     const failed = vi.fn()
+
     const writer = new SshMultiplexerTransportWriter(
       {
         write: () => false,
@@ -284,6 +295,7 @@ describe('SshMultiplexerTransportWriter', () => {
       },
       failed
     )
+
     const settled = vi.fn()
 
     expect(writer.enqueue(Buffer.from('data'), 'ordinary', settled)).toBe(true)

@@ -25,29 +25,36 @@ function relevantRecordEqual<T>(
   if (current === previous) {
     return true
   }
+
   let currentCount = 0
   let previousCount = 0
+
   for (const [key, entry] of Object.entries(current)) {
     if (!relevant(entry)) {
       continue
     }
+
     currentCount++
     const previousEntry = previous[key]
+
     if (!previousEntry || !relevant(previousEntry) || !equal(entry, previousEntry)) {
       return false
     }
   }
+
   for (const entry of Object.values(previous)) {
     if (relevant(entry)) {
       previousCount++
     }
   }
+
   return currentCount === previousCount
 }
 
 function agentRecordsEqual(current: AppState, previous: AppState): boolean {
   const relevantStatus = (entry: AppState['agentStatusByPaneKey'][string]): boolean =>
     isAiVaultTitleAgent(entry.agentType) && Boolean(entry.providerSession?.id)
+
   const statusEqual = relevantRecordEqual(
     current.agentStatusByPaneKey,
     previous.agentStatusByPaneKey,
@@ -59,12 +66,14 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
       left.worktreeId === right.worktreeId &&
       providerSessionEqual(left.providerSession, right.providerSession)
   )
+
   if (!statusEqual) {
     return false
   }
 
   const relevantRetained = (entry: AppState['retainedAgentsByPaneKey'][string]): boolean =>
     isAiVaultTitleAgent(entry.agentType) && Boolean(entry.entry.providerSession?.id)
+
   const retainedEqual = relevantRecordEqual(
     current.retainedAgentsByPaneKey,
     previous.retainedAgentsByPaneKey,
@@ -76,12 +85,14 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
       left.entry.tabId === right.entry.tabId &&
       providerSessionEqual(left.entry.providerSession, right.entry.providerSession)
   )
+
   if (!retainedEqual) {
     return false
   }
 
   const relevantSleeping = (entry: AppState['sleepingAgentSessionsByPaneKey'][string]): boolean =>
     isAiVaultTitleAgent(entry.agent) && Boolean(entry.providerSession.id)
+
   return relevantRecordEqual(
     current.sleepingAgentSessionsByPaneKey,
     previous.sleepingAgentSessionsByPaneKey,
@@ -109,18 +120,23 @@ function titleEqual(
 function terminalTabsEqual(current: AppState, previous: AppState): boolean {
   const currentKeys = Object.keys(current.tabsByWorktree)
   const previousKeys = Object.keys(previous.tabsByWorktree)
+
   if (currentKeys.length !== previousKeys.length) {
     return false
   }
+
   for (const worktreeId of currentKeys) {
     const currentTabs = current.tabsByWorktree[worktreeId]
     const previousTabs = previous.tabsByWorktree[worktreeId]
+
     if (!previousTabs || currentTabs.length !== previousTabs.length) {
       return false
     }
+
     for (let index = 0; index < currentTabs.length; index++) {
       const left = currentTabs[index]
       const right = previousTabs[index]
+
       if (
         left.id !== right.id ||
         left.worktreeId !== right.worktreeId ||
@@ -130,15 +146,18 @@ function terminalTabsEqual(current: AppState, previous: AppState): boolean {
       }
     }
   }
+
   return true
 }
 
 function activePanesEqual(current: AppState, previous: AppState): boolean {
   const currentKeys = Object.keys(current.terminalLayoutsByTabId)
   const previousKeys = Object.keys(previous.terminalLayoutsByTabId)
+
   if (currentKeys.length !== previousKeys.length) {
     return false
   }
+
   return currentKeys.every(
     (tabId) =>
       current.terminalLayoutsByTabId[tabId]?.activeLeafId ===
@@ -151,13 +170,16 @@ function requestOwnersEqual(current: AppState, previous: AppState): boolean {
     ...collectAiVaultTitleRequests(current).map((request) => request.worktreeId),
     ...collectAiVaultTitleRequests(previous).map((request) => request.worktreeId)
   ])
+
   for (const worktreeId of worktreeIds) {
     const currentHost = getExecutionHostIdForWorktree(current, worktreeId)
     const previousHost = getExecutionHostIdForWorktree(previous, worktreeId)
+
     if (currentHost !== previousHost) {
       return false
     }
   }
+
   return true
 }
 
@@ -166,12 +188,15 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
     current.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
     current.retainedAgentsByPaneKey !== previous.retainedAgentsByPaneKey ||
     current.sleepingAgentSessionsByPaneKey !== previous.sleepingAgentSessionsByPaneKey
+
   if (agentRecordsChanged && !agentRecordsEqual(current, previous)) {
     return true
   }
+
   if (current.tabsByWorktree !== previous.tabsByWorktree && !terminalTabsEqual(current, previous)) {
     return true
   }
+
   if (
     current.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId &&
     !activePanesEqual(current, previous)
@@ -193,5 +218,6 @@ export function aiVaultTitleSyncInputsChanged(current: AppState, previous: AppSt
     current.runtimeEnvironments !== previous.runtimeEnvironments ||
     current.runtimeEnvironmentCatalogHydrated !== previous.runtimeEnvironmentCatalogHydrated ||
     current.removedRuntimeEnvironmentIds !== previous.removedRuntimeEnvironmentIds
+
   return ownerInputsChanged && !requestOwnersEqual(current, previous)
 }

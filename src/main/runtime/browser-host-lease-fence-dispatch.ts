@@ -22,17 +22,22 @@ export function dispatchBrowserHostLeaseFence(
   dependencies: BrowserHostLeaseFenceDependencies
 ): void {
   dependencies.clearReconnect(state)
+
   if (dependencies.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
     return
   }
+
   dependencies.fenceReconciliation(state)
+
   const fencedPages = dependencies.pagePlacements.fenceClientHostPlacements({
     browserHostClientId: state.lease.browserHostClientId,
     browserHostGeneration: state.lease.browserHostGeneration
   })
+
   fenceBrowserHostLease(state, reason, dependencies.leasesByClientId, (route, routeReason) =>
     dependencies.fenceRoute(route, routeReason)
   )
+
   // Why: a fenced page never completes retirement through the client, so complete it here or the
   // placement and its capacity stay stranded for the runtime's life. The runtime page record is
   // deliberately kept — retention is what lets a returning host of the same identity recover the

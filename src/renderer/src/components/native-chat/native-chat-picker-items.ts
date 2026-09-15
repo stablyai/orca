@@ -41,6 +41,7 @@ export type NativeChatSkillDiscoverySnapshot = {
 }
 
 const PICKER_RESULT_LIMIT = 50
+
 const SCOPE_PRIORITY: Record<SkillSourceKind, number> = {
   repo: 0,
   home: 1,
@@ -58,20 +59,26 @@ export function buildNativeChatPickerItems(
   // A name can only collide when both kinds invoke through the same sigil;
   // where skills carry their own, `/review` and `$review` are distinct entries.
   const sharedSigil = skillSigil === '/'
+
   const unclassifiedNames = new Set(
     commands.filter((command) => command.kindUnspecified).map((command) => command.name)
   )
+
   const mergedSkills = mergeNativeChatSkills(
     skills,
     sessionSkillNames,
     unclassifiedNames,
     skillSigil
   )
+
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
+
   const resolvedCommands = commands.filter(
     (command) => !(sharedSigil && command.kindUnspecified && skillNames.has(command.name))
   )
+
   const commandNames = new Set(resolvedCommands.map((command) => command.name))
+
   const commandItems = rankItems(
     resolvedCommands.map((command, index) => ({
       item: {
@@ -91,12 +98,14 @@ export function buildNativeChatPickerItems(
     })),
     query
   )
+
   const skillItems = rankItems(
     mergedSkills
       .filter((skill) => !(sharedSigil && commandNames.has(skill.name)))
       .map((item, index) => ({ item, stableOrder: index })),
     query
   )
+
   return [
     ...commandItems.slice(0, PICKER_RESULT_LIMIT),
     ...skillItems.slice(0, PICKER_RESULT_LIMIT)
@@ -110,25 +119,32 @@ function mergeNativeChatSkills(
   skillSigil: '/' | '$'
 ): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
   const exactPaths = new Map<string, DiscoveredSkill>()
+
   for (const skill of skills) {
     if (skill.installed && !exactPaths.has(skill.skillFilePath)) {
       exactPaths.set(skill.skillFilePath, skill)
     }
   }
+
   const byName = new Map<string, DiscoveredSkill[]>()
+
   for (const skill of exactPaths.values()) {
     const safeName = getSafeSkillName(skill)
+
     if (!safeName) {
       continue
     }
+
     byName.set(safeName, [...(byName.get(safeName) ?? []), { ...skill, name: safeName }])
   }
+
   const discovered = new Map(
     [...byName.entries()].map(([name, namedSkills]) => [
       name,
       pickerSkill(name, namedSkills, skillSigil)
     ])
   )
+
   // Why: when the running session reports its own skills, that report is the
   // authority on which ones exist — a disk scan cannot see what the session
   // actually loaded (plugin roots, setting-source filters), and a scanned root
@@ -141,6 +157,7 @@ function mergeNativeChatSkills(
           ...[...discovered.keys()].filter((name) => unclassifiedNames.has(name))
         ]
       : [...discovered.keys()]
+
   return [...new Set(names)]
     .map((name) => discovered.get(name) ?? pickerSkill(name, [], skillSigil))
     .sort(comparePickerSkills)
@@ -152,6 +169,7 @@ function pickerSkill(
   skillSigil: '/' | '$'
 ): Extract<NativeChatPickerItem, { kind: 'skill' }> {
   const sorted = [...namedSkills].sort(compareDiscoveredSkills)
+
   return {
     kind: 'skill' as const,
     id: `skill:${name}`,
@@ -172,6 +190,7 @@ function rankItems<T extends NativeChatPickerItem>(
   if (!query) {
     return entries.map((entry) => entry.item)
   }
+
   return entries
     .map((entry) => ({ ...entry, rank: getMatchRank(entry.item, query) }))
     .filter((entry) => entry.rank !== null)
@@ -185,34 +204,43 @@ function getMatchRank(
 ): number | null {
   const normalizedQuery = query.toLocaleLowerCase()
   const name = item.name.toLocaleLowerCase()
+
   if (name === normalizedQuery) {
     return 0
   }
+
   if (name.startsWith(normalizedQuery)) {
     return 1
   }
+
   if (name.includes(normalizedQuery)) {
     return 2
   }
+
   if (isSubsequence(normalizedQuery, name)) {
     return 3
   }
+
   if (item.description?.toLocaleLowerCase().includes(normalizedQuery)) {
     return 4
   }
+
   return null
 }
 
 function isSubsequence(query: string, value: string): boolean {
   let queryIndex = 0
+
   for (const character of value) {
     if (character === query[queryIndex]) {
       queryIndex += 1
     }
+
     if (queryIndex === query.length) {
       return true
     }
   }
+
   return false
 }
 
@@ -224,7 +252,9 @@ function getSafeSkillName(skill: DiscoveredSkill): string | null {
   if (isTokenSafe(skill.name)) {
     return skill.name
   }
+
   const directoryName = skill.directoryPath.split(/[\\/]/).findLast(Boolean) ?? ''
+
   return isTokenSafe(directoryName) ? directoryName : null
 }
 
@@ -255,6 +285,7 @@ const UNLOCATED_SCOPE_PRIORITY = Object.keys(SCOPE_PRIORITY).length
 
 function skillScopePriority(item: Extract<NativeChatPickerItem, { kind: 'skill' }>): number {
   const sourceKind = item.sources[0]?.sourceKind
+
   return sourceKind === undefined ? UNLOCATED_SCOPE_PRIORITY : SCOPE_PRIORITY[sourceKind]
 }
 
@@ -272,6 +303,7 @@ function comparePickerSkills(
 // the one that can dispatch; elsewhere the token starts after whitespace and its
 // query stops at the next `/` so file paths stay prose.
 export const LEADING_SLASH_TRIGGER = /^\/(\S*)$/
+
 export const MID_PROMPT_SLASH_TRIGGER = /\s\/([^\s/]*)$/
 
 /** Replaces the typed `/token` with the item's own token, which for a skill is
@@ -284,11 +316,14 @@ export function applyPickerSuggestion(
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)
   const match = before.match(LEADING_SLASH_TRIGGER) ?? before.match(MID_PROMPT_SLASH_TRIGGER)
+
   if (!match) {
     return { draft, caret, insertedToken: '' }
   }
+
   const query = match.at(-1) ?? ''
   const tokenStart = before.length - query.length - 1
   const nextBefore = `${before.slice(0, tokenStart)}${item.token} `
+
   return { draft: nextBefore + after, caret: nextBefore.length, insertedToken: item.token }
 }

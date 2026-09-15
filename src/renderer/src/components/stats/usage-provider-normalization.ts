@@ -8,6 +8,7 @@ function getCodexNewInputTokens(summary: CodexUsageSummary | null): number {
   if (!summary) {
     return 0
   }
+
   return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
 }
 
@@ -15,14 +16,17 @@ function getOpenCodeNewInputTokens(summary: OpenCodeUsageSummary | null): number
   if (!summary) {
     return 0
   }
+
   return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
 }
 
 export function createClaudeProvider(input: UsageOverviewInput['claude']): UsageProviderOverview {
   const summary = input.summary
+
   const dailyActiveDays = input.daily
     .filter((entry) => getClaudeDailyTotal(entry) > 0)
     .map((entry) => entry.day)
+
   return {
     id: 'claude',
     label: translate('auto.components.stats.usage.overview.model.544d6d4c16', 'Claude'),
@@ -53,9 +57,11 @@ export function createClaudeProvider(input: UsageOverviewInput['claude']): Usage
 
 export function createCodexProvider(input: UsageOverviewInput['codex']): UsageProviderOverview {
   const summary = input.summary
+
   const dailyActiveDays = input.daily
     .filter((entry) => entry.totalTokens > 0)
     .map((entry) => entry.day)
+
   return {
     id: 'codex',
     label: translate('auto.components.stats.usage.overview.model.eb220d193b', 'Codex'),
@@ -83,9 +89,11 @@ export function createOpenCodeProvider(
   input: UsageOverviewInput['opencode']
 ): UsageProviderOverview {
   const summary = input.summary
+
   const dailyActiveDays = input.daily
     .filter((entry) => entry.totalTokens > 0)
     .map((entry) => entry.day)
+
   return {
     id: 'opencode',
     label: translate('auto.components.stats.usage.overview.model.bc474051e5', 'OpenCode'),

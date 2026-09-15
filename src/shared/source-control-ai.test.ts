@@ -21,6 +21,7 @@ import type { GlobalSettings } from './global-settings-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
+
   return {
     ...base,
     defaultTuiAgent: 'codex' as const,
@@ -52,10 +53,13 @@ function resolve(operation: SourceControlAiOperation, overrides?: RepoSourceCont
       openAfterCreate: false
     }
   })
+
   expect(result.ok).toBe(true)
+
   if (!result.ok) {
     throw new Error(result.error)
   }
+
   return result.value
 }
 
@@ -84,6 +88,7 @@ describe('source-control AI resolution', () => {
       repo: null,
       operation: 'pullRequest'
     })
+
     expect(generation.ok).toBe(true)
     expect(generation.ok && generation.value.params.model).toBe('gpt-5.5')
     expect(
@@ -168,6 +173,7 @@ describe('source-control AI resolution', () => {
       repo: null,
       operation: 'pullRequest'
     })
+
     expect(generation.ok).toBe(false)
     expect(
       resolveSourceControlAiPrCreationDefaults({
@@ -203,6 +209,7 @@ describe('source-control AI resolution', () => {
       operation: 'commitMessage',
       discoveryHostKey: 'local'
     })
+
     expect(result.ok && result.value.params.agentId).toBe('codex')
     expect(result.ok && result.value.params.model).toBe('gpt-5.4')
   })
@@ -212,12 +219,14 @@ describe('source-control AI resolution', () => {
     base.sourceControlAi!.modelOverridesByOperation = {
       pullRequest: { selectedModelByAgent: { codex: 'gpt-5.4' } }
     }
+
     const result = resolveSourceControlAiForOperation({
       settings: base,
       repo: null,
       operation: 'pullRequest',
       discoveryHostKey: 'local'
     })
+
     expect(result.ok && result.value.params.model).toBe('gpt-5.4')
   })
 
@@ -226,6 +235,7 @@ describe('source-control AI resolution', () => {
     base.sourceControlAi!.modelOverridesByOperation = {
       commitMessage: { selectedModelByAgent: { codex: 'gpt-5.4' } }
     }
+
     const result = resolveSourceControlAiForOperation({
       settings: base,
       repo: {
@@ -238,6 +248,7 @@ describe('source-control AI resolution', () => {
       operation: 'commitMessage',
       discoveryHostKey: 'local'
     })
+
     expect(result.ok && result.value.params.model).toBe('gpt-5.4-mini')
   })
 
@@ -286,12 +297,14 @@ describe('source-control AI resolution', () => {
     base.sourceControlAi!.selectedThinkingByModel = {
       'gpt-5.5': 'unsupported'
     } as Record<string, string>
+
     const result = resolveSourceControlAiForOperation({
       settings: base,
       repo: null,
       operation: 'commitMessage',
       discoveryHostKey: 'local'
     })
+
     expect(result.ok && result.value.params.thinkingLevel).toBe('low')
   })
 
@@ -373,6 +386,7 @@ describe('source-control AI resolution', () => {
       customPrompt: 'Legacy commit prompt',
       customAgentCommand: ''
     })
+
     expect(migrated.instructionsByOperation.commitMessage).toBe('Legacy commit prompt')
     expect(migrated.instructionsByOperation.pullRequest).toBe('')
     expect(migrated.instructionsByOperation.branchName).toBe('Legacy commit prompt')
@@ -386,6 +400,7 @@ describe('source-control AI resolution', () => {
 
   it('merges legacy commit-message updates without wiping PR-only settings', () => {
     const base = settings().sourceControlAi!
+
     const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(base, {
       enabled: false,
       agentId: 'claude',
@@ -489,6 +504,7 @@ describe('source-control AI resolution', () => {
         }
       }
     }
+
     const legacy = projectSourceControlAiToLegacyCommitMessageAi(source)
     const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(source, legacy)
 
@@ -524,6 +540,7 @@ describe('source-control AI resolution', () => {
       selectedThinkingByModel: { 'gpt-5.5': 'medium' },
       modelOverridesByOperation: undefined
     }
+
     const legacy = projectSourceControlAiToLegacyCommitMessageAi(source)
     const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(source, legacy)
 
@@ -544,6 +561,7 @@ describe('source-control AI resolution', () => {
       },
       modelOverridesByOperation: undefined
     }
+
     const legacy = projectSourceControlAiToLegacyCommitMessageAi(source)
     legacy.selectedModelByAgent = {
       ...legacy.selectedModelByAgent,
@@ -578,6 +596,7 @@ describe('source-control AI resolution', () => {
         }
       }
     }
+
     const legacy = projectSourceControlAiToLegacyCommitMessageAi(source)
     delete legacy.selectedModelByAgent.codex
     delete legacy.selectedThinkingByModel['gpt-5.4']
@@ -594,6 +613,7 @@ describe('source-control AI resolution', () => {
       'codex',
       'gpt-5.4'
     )
+
     expect(localChoice).toEqual({
       selectedModelByAgent: { codex: 'gpt-5.4' },
       selectedModelByAgentByHost: { local: { codex: 'gpt-5.4' } }
@@ -605,6 +625,7 @@ describe('source-control AI resolution', () => {
       'codex',
       'remote-model'
     )
+
     expect(readSourceControlAiModelChoiceForHost(remoteChoice, 'local', 'codex')).toBe('gpt-5.4')
     expect(readSourceControlAiModelChoiceForHost(remoteChoice, 'ssh:conn-1', 'codex')).toBe(
       'remote-model'

@@ -22,18 +22,23 @@ export async function getRemoteSnapshot(
   target: SshTarget
 ): Promise<RemoteWorkspaceObservedSnapshot | null> {
   const mux = getActiveMultiplexer(target.id)
+
   if (!mux) {
     return null
   }
+
   const namespace = getRemoteWorkspaceNamespace(target)
+
   try {
     const raw = await mux.request('workspace.get', { namespace })
     const snapshot = normalizeSnapshot(raw, namespace)
+
     return rememberRemoteWorkspaceSnapshot(target.id, snapshot)
   } catch (err) {
     if ((err as { code?: unknown })?.code === -32601) {
       return null
     }
+
     throw err
   }
 }
@@ -48,11 +53,13 @@ function observePatchResult(
       snapshot: rememberLocallyPatchedRemoteWorkspaceSnapshot(targetId, result.snapshot)
     }
   }
+
   const failure = {
     ok: false as const,
     reason: result.reason,
     ...(result.message !== undefined ? { message: result.message } : {})
   }
+
   return result.snapshot
     ? {
         ...failure,
@@ -66,12 +73,16 @@ export async function patchRemoteWorkspaceSession(
   session: RemoteWorkspaceSession
 ): Promise<RemoteWorkspaceObservedPatchResult | null> {
   const mux = getActiveMultiplexer(target.id)
+
   if (!mux) {
     return null
   }
+
   const namespace = getRemoteWorkspaceNamespace(target)
+
   const current =
     getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
+
   if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
     // Why: a pulled workspace snapshot rehydrates local state and can trigger
     // session persistence. Identical target sessions must stay a local no-op or
@@ -105,6 +116,7 @@ export async function patchRemoteWorkspaceSession(
   }
 
   const result = observePatchResult(target.id, await requestPatch(current?.revision))
+
   if (result.ok) {
     return result
   }
@@ -118,6 +130,7 @@ export async function patchRemoteWorkspaceSession(
     if (remoteWorkspaceSessionMatchesSnapshot(result.snapshot, session)) {
       return { ok: true, snapshot: result.snapshot }
     }
+
     // Why: a relay reset can legitimately move the remote snapshot revision
     // backwards while this process still has the old cached revision. Retrying
     // only for backwards revisions restores the blank-slate target without

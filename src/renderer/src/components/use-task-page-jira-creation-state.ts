@@ -4,6 +4,7 @@ import type { JiraIssueType, JiraCreateField } from '../../../shared/jira-types'
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import { writeNewJiraIssueDraft } from './task-page-draft-storage'
 import { useTaskPageJiraCreationProjects } from './use-task-page-jira-creation-projects'
+
 export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutationStateModel) {
   const {
     providerRuntimeContextKey,
@@ -21,6 +22,7 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
     setNewLinearIssueProjects,
     setNewLinearIssueProjectsLoading
   } = model
+
   const [newJiraIssueOpen, setNewJiraIssueOpen] = useState(false)
   const [newJiraIssueTitle, setNewJiraIssueTitle] = useState('')
   const [newJiraIssueBody, setNewJiraIssueBody] = useState('')
@@ -36,9 +38,11 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
   const [jiraCreateFields, setJiraCreateFields] = useState<JiraCreateField[]>([])
   const [jiraCreateFieldsLoading, setJiraCreateFieldsLoading] = useState(false)
   const [jiraCreateFieldsError, setJiraCreateFieldsError] = useState<string | null>(null)
+
   const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
     Record<string, string>
   >({})
+
   const discardNewJiraIssueDraft = useTaskCreationDraftRetention({
     open: newJiraIssueOpen,
     draft: {
@@ -47,13 +51,16 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
     },
     writeDraft: writeNewJiraIssueDraft
   })
+
   const previousProviderRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   // Why: provider changes must clear dependent composer state before stale values can be submitted.
   useEffect(() => {
     if (previousProviderRuntimeContextKeyRef.current === providerRuntimeContextKey) {
       return
     }
+
     previousProviderRuntimeContextKeyRef.current = providerRuntimeContextKey
+
     if (newLinearIssueOpen) {
       setNewLinearIssueOpen(false)
       setNewLinearIssueTitle('')
@@ -68,6 +75,7 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
       setNewLinearIssueProjectsLoading(false)
       setNewLinearIssueSubmitting(false)
     }
+
     if (newJiraIssueOpen) {
       setNewJiraIssueOpen(false)
       setNewJiraIssueTitle('')
@@ -102,6 +110,7 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
     setNewLinearIssueOpen,
     setNewLinearIssueProjectId
   ])
+
   const nextModel = model as typeof model & {
     newJiraIssueOpen: typeof newJiraIssueOpen
     setNewJiraIssueOpen: typeof setNewJiraIssueOpen
@@ -137,6 +146,7 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
     discardNewJiraIssueDraft: typeof discardNewJiraIssueDraft
     previousProviderRuntimeContextKeyRef: typeof previousProviderRuntimeContextKeyRef
   }
+
   nextModel.newJiraIssueOpen = newJiraIssueOpen
   nextModel.setNewJiraIssueOpen = setNewJiraIssueOpen
   nextModel.newJiraIssueTitle = newJiraIssueTitle
@@ -170,13 +180,18 @@ export function useTaskPageJiraCreationStatePrelude(model: TaskPageGitHubMutatio
   nextModel.setNewJiraIssueCustomFieldValues = setNewJiraIssueCustomFieldValues
   nextModel.discardNewJiraIssueDraft = discardNewJiraIssueDraft
   nextModel.previousProviderRuntimeContextKeyRef = previousProviderRuntimeContextKeyRef
+
   return nextModel
 }
+
 export type TaskPageJiraCreationStatePreludeModel = ReturnType<
   typeof useTaskPageJiraCreationStatePrelude
 >
+
 export function useTaskPageJiraCreationState(model: TaskPageGitHubMutationStateModel) {
   const stateModel = useTaskPageJiraCreationStatePrelude(model)
+
   return useTaskPageJiraCreationProjects(stateModel)
 }
+
 export type TaskPageJiraCreationStateModel = ReturnType<typeof useTaskPageJiraCreationState>

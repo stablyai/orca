@@ -19,9 +19,11 @@ export function mergeWorktree(
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta?.creatorProvenance)
   const worktreeId = `${repoId}::${git.path}`
   const automaticDisplayName = branchShort || defaultDisplayName || basename(git.path)
+
   // CLI-created labels predate displayNameIsPinned but are still explicit names.
   const legacyCliDisplayNameIsPinned =
     meta?.displayNameIsPinned === undefined && meta?.cliProvenance?.kind === 'created-by-cli'
+
   return {
     id: worktreeId,
     ...(meta?.instanceId && meta.hostId

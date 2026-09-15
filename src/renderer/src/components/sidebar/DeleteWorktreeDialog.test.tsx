@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
       }
     >
   }
+
   return { state, buttonProps: [] as Record<string, unknown>[] }
 })
 
@@ -62,6 +63,7 @@ vi.mock('@/store/selectors', () => ({
     const rows = mocks.state
       .allWorktrees()
       .filter((worktree: { id: string }) => worktree.id === worktreeId)
+
     return hostId
       ? rows.find((worktree: { hostId?: string }) => worktree.hostId === hostId)
       : rows[0]
@@ -84,6 +86,7 @@ vi.mock('@/components/ui/button', () => ({
     ...props
   }: ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode }) => {
     mocks.buttonProps.push({ ...props, children })
+
     return <button {...props}>{children}</button>
   }
 }))
@@ -189,12 +192,14 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       displayName: 'Local sibling',
       hostId: 'local' as const
     }
+
     const ssh = {
       ...makeWorktree('shared', '/workspaces/ssh'),
       instanceId: 'ssh-instance',
       displayName: 'SSH target',
       hostId: 'ssh:builder' as const
     }
+
     mocks.state.modalData = {
       worktreeId: ssh.id,
       worktreeDeleteIdentities: [{ id: ssh.id, instanceId: ssh.instanceId, hostId: ssh.hostId }]
@@ -224,9 +229,11 @@ describe('DeleteWorktreeDialog lineage copy', () => {
 
     const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
     renderToStaticMarkup(<DeleteWorktreeDialog />)
+
     const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
       | { onClick?: () => void }
       | undefined
+
     deleteButton?.onClick?.()
 
     expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
@@ -261,6 +268,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     expect(markup).not.toContain('Don&apos;t ask again')
 
     const destructiveButton = mocks.buttonProps.find((props) => props.variant === 'destructive')
+
     const parentOnlyButton = mocks.buttonProps.find((props) =>
       buttonText(props).includes('Delete Parent Only')
     )
@@ -282,6 +290,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       'docs-file-upload-discovery-with-a-very-long-name',
       '/Users/jinjingliang/Documents/projects/agent-slack/docs-file-upload-discovery-with-a-very-long-path-segment'
     )
+
     const { DeleteWorktreeLineageNotice } = await import('./DeleteWorktreeLineageNotice')
 
     const markup = renderToStaticMarkup(
@@ -302,6 +311,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       ...makeWorktree('Folder workspace', '/projects/folder'),
       repoId: 'folder-repo'
     }
+
     mocks.state.modalData = { worktreeId: workspace.id }
     mocks.state.allWorktrees.mockReturnValue([workspace])
     mocks.state.repos = [
@@ -397,6 +407,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
       | { onClick?: (event: never) => void }
       | undefined
+
     expect(deleteButton).toBeDefined()
     deleteButton?.onClick?.(undefined as never)
 
@@ -404,9 +415,11 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       force: true,
       onForceDeleted: expect.any(Function)
     })
+
     const options = vi.mocked(runWorktreeDeletesInParallel).mock.calls[0]?.[1] as
       | { onForceDeleted?: (target: WorktreeRemovalTarget) => void }
       | undefined
+
     options?.onForceDeleted?.({ id: workspace.id, executionHostId: null })
 
     expect(onDeleted).toHaveBeenCalledWith([{ id: workspace.id, executionHostId: null }])
@@ -428,6 +441,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
       | { onClick?: (event: never) => void }
       | undefined
+
     deleteButton?.onClick?.(undefined as never)
 
     expect(showWorkspaceListChangedToast).toHaveBeenCalledOnce()
@@ -457,6 +471,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
       | { onClick?: () => void }
       | undefined
+
     deleteButton?.onClick?.()
 
     expect(showWorkspaceListChangedToast).toHaveBeenCalledOnce()

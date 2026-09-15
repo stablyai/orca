@@ -4,8 +4,10 @@ export type NodePtyDiagnostic = {
 }
 
 const NODE_PTY_DIAGNOSTIC_RE = /^node-pty: ([A-Za-z0-9_]+) failed: .*?\(errno (\d+)(?:, [^)]*)?\)/
+
 const NODE_PTY_DIAGNOSTIC_ANYWHERE_RE =
   /node-pty: ([A-Za-z0-9_]+) failed: .*?\(errno (\d+)(?:, [^)]*)?\)/
+
 const GENERIC_PTY_ALLOCATION_RE = /\b(?:openpty|forkpty)\(3\) failed\b/i
 
 const PTY_ALLOCATION_STEPS = new Set([
@@ -44,6 +46,7 @@ const TERMINAL_PROCESS_LIMIT_HINT = [
 export function parseNodePtyDiagnostic(message: string): NodePtyDiagnostic | null {
   const match =
     NODE_PTY_DIAGNOSTIC_RE.exec(message) ?? NODE_PTY_DIAGNOSTIC_ANYWHERE_RE.exec(message)
+
   if (!match) {
     return null
   }
@@ -58,30 +61,37 @@ export function getNodePtyRecoveryHint(diagnostic: NodePtyDiagnostic): string | 
   if (diagnostic.step === 'posix_spawn' && diagnostic.errno === 2) {
     return "Daemon's node-pty install is gone (worktree deleted?). Restart Orca."
   }
+
   if (
     PTY_ALLOCATION_STEPS.has(diagnostic.step) &&
     RESOURCE_EXHAUSTION_ERRNOS.has(diagnostic.errno)
   ) {
     return PTY_ALLOCATION_HINT
   }
+
   if (diagnostic.step === 'posix_spawn' && RESOURCE_EXHAUSTION_ERRNOS.has(diagnostic.errno)) {
     return TERMINAL_PROCESS_LIMIT_HINT
   }
+
   return null
 }
 
 export function addNodePtyRecoveryHint(message: string): string {
   const diagnostic = parseNodePtyDiagnostic(message)
+
   if (!diagnostic) {
     if (GENERIC_PTY_ALLOCATION_RE.test(message) && !message.startsWith(PTY_ALLOCATION_HINT)) {
       return `${PTY_ALLOCATION_HINT} ${message}`
     }
+
     return message
   }
 
   const hint = getNodePtyRecoveryHint(diagnostic)
+
   if (hint && message.startsWith(hint)) {
     return message
   }
+
   return hint ? `${hint} ${message}` : message
 }

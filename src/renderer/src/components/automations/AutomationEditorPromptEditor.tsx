@@ -29,19 +29,24 @@ function installPromptEditorEscapeDismiss(
     if (event.key !== 'Escape' || event.repeat) {
       return
     }
+
     if (isMonacoFindWidgetOpen(target)) {
       return
     }
+
     // Why: Monaco swallows Escape even with find closed; the wrapping
     // dialog still needs the same dismiss path a textarea used to have.
     if (!onDismissRef.current) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     onDismissRef.current()
   }
+
   target.addEventListener('keydown', handleEscape, true)
+
   return () => target.removeEventListener('keydown', handleEscape, true)
 }
 
@@ -75,6 +80,7 @@ export function AutomationEditorPromptEditor({
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const fontFamily = resolveEditorFontFamily(settings)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
+
   const options = useMemo(
     () =>
       buildAutomationPromptEditorOptions({
@@ -91,6 +97,7 @@ export function AutomationEditorPromptEditor({
       if (isApplyingProgrammaticContentRef.current) {
         return
       }
+
       const next = nextValue ?? ''
       lastSyncedContentRef.current = next
       onChange(next)
@@ -104,6 +111,7 @@ export function AutomationEditorPromptEditor({
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
     const cleanupEscapeDismiss = installPromptEditorEscapeDismiss(editorDomNode, onDismissRef)
     isApplyingProgrammaticContentRef.current = true
+
     try {
       if (syncContentOnMount(editorInstance, contentRef.current)) {
         lastSyncedContentRef.current = contentRef.current
@@ -111,9 +119,11 @@ export function AutomationEditorPromptEditor({
     } finally {
       isApplyingProgrammaticContentRef.current = false
     }
+
     editorInstance.onDidDispose(() => {
       cleanupFindShortcut()
       cleanupEscapeDismiss()
+
       if (editorRef.current === editorInstance) {
         editorRef.current = null
       }
@@ -125,10 +135,13 @@ export function AutomationEditorPromptEditor({
   useLayoutEffect(() => {
     contentRef.current = value
     const mountedEditor = editorRef.current
+
     if (!mountedEditor || lastSyncedContentRef.current === value) {
       return
     }
+
     isApplyingProgrammaticContentRef.current = true
+
     try {
       syncContentUpdate(mountedEditor, value)
       lastSyncedContentRef.current = value

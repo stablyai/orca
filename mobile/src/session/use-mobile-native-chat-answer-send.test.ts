@@ -86,6 +86,7 @@ describe('useMobileNativeChatAnswerSend', () => {
       onSendError: mountedOnSendError!
     })
     acceptedAnswerAsk = useNativeChatAcceptedAction(answerSend.answerAsk, onAccepted)
+
     return null
   }
 
@@ -131,6 +132,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         }
       ]
     }
+
     let result: Promise<boolean> | undefined
     await act(async () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [0, 2] }])
@@ -157,6 +159,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     let result: Promise<boolean> | undefined
     await act(async () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
@@ -173,12 +176,15 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('bounds a stepped answer with one shared budget, crediting back the pacing waits', async () => {
     const timeouts: number[] = []
+
     const sendRequest = vi.fn(async (_method: string, _params?: unknown, options?: unknown) => {
       timeouts.push((options as { timeoutMs: number }).timeoutMs)
       // A slow write must eat into what the rest of the answer has left.
       vi.advanceTimersByTime(6_000)
+
       return acceptedResponse()
     })
+
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
     const prompt: AskPrompt = {
@@ -187,6 +193,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     let result: Promise<boolean> | undefined
     await act(async () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
@@ -241,6 +248,7 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('does not send a trailing Enter after Codex submits a multi-question answer', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
+
     const prompt: AskPrompt = {
       questions: [
         { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
@@ -302,12 +310,14 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('does not answer when the healing clear is rejected, keeping the marker', async () => {
     const onSendError = vi.fn()
+
     const sendRequest = vi.fn().mockResolvedValue({
       id: 'send',
       ok: true as const,
       result: { send: { accepted: false } },
       _meta: { runtimeId: 'runtime' }
     })
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError, 'grok')
     markMobileNativeChatInputStale('terminal')
 
@@ -321,12 +331,14 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('stops at the first rejected write and reports failure', async () => {
     const onSendError = vi.fn()
+
     const sendRequest = vi.fn().mockResolvedValue({
       id: 'send',
       ok: true,
       result: { send: { accepted: false } },
       _meta: { runtimeId: 'runtime' }
     })
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
@@ -336,12 +348,15 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('does not call a budget-truncated multi-question answer a definite non-send', async () => {
     const onSendError = vi.fn()
+
     const sendRequest = vi.fn(async () => {
       // A slow relay: the first group lands, then the shared budget is gone and the
       // next write short-circuits to 'rejected' without reaching the wire.
       vi.advanceTimersByTime(16_000)
+
       return acceptedResponse()
     })
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     const prompt: AskPrompt = {
@@ -350,6 +365,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     let result: Promise<boolean> | undefined
     await act(async () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
@@ -364,9 +380,11 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('reports an ambiguous write as unconfirmed instead of a definite failure', async () => {
     const onSendError = vi.fn()
+
     const sendRequest = vi
       .fn()
       .mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
@@ -391,6 +409,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     let result: Promise<boolean> | undefined
     await act(async () => {
       result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
@@ -445,6 +464,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     let first: Promise<boolean> | undefined
     let second: Promise<boolean> | undefined
     await act(async () => {
@@ -467,6 +487,7 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('does not write a successor after the prior in-flight key is accepted', async () => {
     let resolveFirst: (response: unknown) => void = () => undefined
+
     const sendRequest = vi
       .fn()
       .mockImplementationOnce(
@@ -476,6 +497,7 @@ describe('useMobileNativeChatAnswerSend', () => {
           })
       )
       .mockResolvedValue(acceptedResponse())
+
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
     const prompt: AskPrompt = {
@@ -484,6 +506,7 @@ describe('useMobileNativeChatAnswerSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     let first: Promise<boolean> | undefined
     let second: Promise<boolean> | undefined
     await act(async () => {
@@ -508,6 +531,7 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('lets a queued successor continue after the prior key is definitely rejected', async () => {
     let resolveFirst: (response: unknown) => void = () => undefined
+
     const sendRequest = vi
       .fn()
       .mockImplementationOnce(
@@ -517,6 +541,7 @@ describe('useMobileNativeChatAnswerSend', () => {
           })
       )
       .mockResolvedValue(acceptedResponse())
+
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
     let first: Promise<boolean> | undefined
@@ -545,6 +570,7 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('does not write a successor after the prior delivery becomes ambiguous', async () => {
     let rejectFirst: (error: Error) => void = () => undefined
+
     const sendRequest = vi
       .fn()
       .mockImplementationOnce(
@@ -554,6 +580,7 @@ describe('useMobileNativeChatAnswerSend', () => {
           })
       )
       .mockResolvedValue(acceptedResponse())
+
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
     let first: Promise<boolean> | undefined
@@ -580,6 +607,7 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('tells the user when a queued answer is fenced instead of dropping it silently', async () => {
     const onSendError = vi.fn()
     let rejectFirst: (error: Error) => void = () => undefined
+
     const sendRequest = vi
       .fn()
       .mockImplementationOnce(
@@ -589,6 +617,7 @@ describe('useMobileNativeChatAnswerSend', () => {
           })
       )
       .mockResolvedValue(acceptedResponse())
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     let first: Promise<boolean> | undefined
@@ -618,12 +647,14 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('tells the user when a dropped lease fences a queued answer whose predecessor landed', async () => {
     const onSendError = vi.fn()
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     let first: Promise<boolean> | undefined
@@ -655,12 +686,14 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('keeps the terminal locked while a queued successor writes', async () => {
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
     let first: Promise<boolean> | undefined
@@ -698,12 +731,14 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('does not retire the fence banner when the superseded answer lands', async () => {
     const onSendError = vi.fn()
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     let first: Promise<boolean> | undefined
@@ -735,12 +770,14 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('does not retire the fence banner when a superseded pasted answer lands', async () => {
     const onSendError = vi.fn()
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError, 'grok')
 
     let first: Promise<boolean> | undefined
@@ -769,12 +806,14 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('reports a landed answer that Stop cancelled with no successor waiting', async () => {
     const onSendError = vi.fn()
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     let first: Promise<boolean> | undefined
@@ -801,12 +840,14 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('reports a landed pasted answer that Stop cancelled with no successor', async () => {
     const onSendError = vi.fn()
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError, 'grok')
 
     let first: Promise<boolean> | undefined
@@ -830,12 +871,14 @@ describe('useMobileNativeChatAnswerSend', () => {
   it('fences a third answer behind an already-fenced successor, reporting once', async () => {
     const onSendError = vi.fn()
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
     let first: Promise<boolean> | undefined
@@ -872,12 +915,14 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   it('queues a late third answer behind the successor already on the wire', async () => {
     const settle: Array<(response: unknown) => void> = []
+
     const sendRequest = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           settle.push(resolve)
         })
     )
+
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
     let first: Promise<boolean> | undefined

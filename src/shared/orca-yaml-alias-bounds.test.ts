@@ -36,6 +36,7 @@ ${tabs}
     // The parser rejects on uses x subtree-alias-count, so depth is what it catches: this is a few
     // hundred bytes of source that would otherwise materialize millions of nodes.
     let source = 'a0: &a0 [x, x, x, x, x, x, x, x, x]\n'
+
     for (let level = 1; level <= 8; level += 1) {
       source += `a${level}: &a${level} [${Array(9)
         .fill(`*a${level - 1}`)

@@ -12,7 +12,9 @@ import {
 import { EXIT_CODE_CREDENTIAL_MISMATCH } from './relay-handshake'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
+
 let bundleDir: string
+
 let relayEntry: string
 
 beforeAll(async () => {
@@ -41,6 +43,7 @@ function captureStderr(proc: RelayProcess): () => string {
   proc.proc.stderr!.on('data', (chunk: Buffer) => {
     text += chunk.toString('utf8')
   })
+
   return () => text
 }
 
@@ -62,7 +65,9 @@ describe.skipIf(process.platform === 'win32')('relay endpoint credential publica
       '--credential-file',
       credentialFile
     ])
+
     live.push(daemon)
+
     return daemon
   }
 
@@ -74,7 +79,9 @@ describe.skipIf(process.platform === 'win32')('relay endpoint credential publica
       '--credential-file',
       file
     ])
+
     live.push(bridge)
+
     return bridge
   }
 
@@ -85,6 +92,7 @@ describe.skipIf(process.platform === 'win32')('relay endpoint credential publica
         await proc.waitForExit().catch(() => {})
       }
     }
+
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
   })
 

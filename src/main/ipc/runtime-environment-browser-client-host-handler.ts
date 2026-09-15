@@ -24,6 +24,7 @@ export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
       const userDataPath = options.getUserDataPath()
       const initialEnvironment = resolveEnvironment(userDataPath, args.selector)
       requireConnected(initialEnvironment.id)
+
       const placement = await prepareBrowserClientHostPlacement({
         selector: initialEnvironment.id,
         expectedPairingRevision: args.expectedPairingRevision,
@@ -32,15 +33,19 @@ export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
         resolveEnvironment: (selector) => resolveEnvironment(userDataPath, selector),
         getStatus: async (environmentId) => {
           requireConnected(environmentId)
+
           const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, undefined, {
             observeOnly: true
           })
+
           requireConnected(environmentId)
+
           return status
         },
         startHost: startPairedRuntimeBrowserClientHost,
         closeHost: closePairedRuntimeBrowserClientHostEnvironment
       })
+
       if (placement.kind === 'client') {
         try {
           requireConnected(initialEnvironment.id)
@@ -52,6 +57,7 @@ export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
           throw reason
         }
       }
+
       return placement
     }
   )

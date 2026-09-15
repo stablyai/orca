@@ -13,15 +13,18 @@ let overrideUpdateQueue = Promise.resolve()
 /** Normalized lookup of author logins the user manually marked as bots. */
 export function usePRBotAuthorOverrides(): ReadonlySet<string> {
   const overrides = useAppStore((s) => s.settings?.prBotAuthorOverrides)
+
   return useMemo(() => createBotAuthorOverrideSet(overrides), [overrides])
 }
 
 /** Adds or removes a manual bot override for the given comment author. */
 export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
   const normalized = normalizePRCommentAuthorLogin(author)
+
   if (!normalized) {
     return
   }
+
   // Why: settings writes are asynchronous; serialize read-modify-write updates
   // so marking two authors quickly cannot make the later write drop the first.
   overrideUpdateQueue = overrideUpdateQueue
@@ -32,8 +35,10 @@ export function setPRBotAuthorOverride(author: string, isBot: boolean): void {
         author: normalized,
         isBot
       })
+
       useAppStore.setState({ settings })
       const current = createBotAuthorOverrideSet(settings.prBotAuthorOverrides)
+
       if (isBot && !current.has(normalized) && current.size >= MAX_PR_BOT_AUTHOR_OVERRIDES) {
         toast.warning(
           translate(

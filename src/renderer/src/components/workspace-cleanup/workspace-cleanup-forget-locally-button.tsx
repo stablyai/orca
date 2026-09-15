@@ -23,6 +23,7 @@ export function WorkspaceCleanupForgetLocallyButton({
     'auto.components.sidebar.ForgetSshWorkspaceDialog.forget',
     'Remove from Orca'
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

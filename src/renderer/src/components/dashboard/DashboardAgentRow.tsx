@@ -18,9 +18,11 @@ import { lastEnteredDoneAt } from './agent-finished-timestamp'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
+
   if (delta < 60_000) {
     return 'just now'
   }
+
   return `${formatCompactDuration(delta)} ago`
 }
 
@@ -32,6 +34,7 @@ function stateDotTooltipLabel(
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
+
   // Why: report the observation, not a verdict on the agent — the elapsed gap is what
   // lets the user apply context Orca has no way to know (a long build, a slow download).
   return dotState === 'unverifiable'
@@ -92,10 +95,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+
   const [expanded, setExpanded] = useState(false)
+
   const handleToggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev)
   }, [])
+
   // Why: stop propagation so the surrounding card's click handler can't override our tab activation.
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
@@ -105,26 +111,32 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     },
     [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]
   )
+
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
       if (!sendTargetStatus) {
         return
       }
+
       const target = e.target
+
       if (
         target instanceof Element &&
         target.closest('button, a, input, textarea, select, [role="button"]')
       ) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
+
       if (sendTargetStatus === 'eligible') {
         onSendTargetClick?.(agent.paneKey)
       }
     },
     [agent.paneKey, onSendTargetClick, sendTargetStatus]
   )
+
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const conversationName = useAgentRowConversationName(agent)
@@ -146,16 +158,19 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const isLineageChild = lineage?.depth === 1
   const lineageChildCount = lineage?.childCount ?? 0
   const participatesInLineage = isLineageChild || lineageChildCount > 0
+
   const identityTitle =
     lineageChildCount > 0
       ? `${formatAgentTypeLabel(agent.agentType)} - dispatched ${lineageChildCount} ${
           lineageChildCount === 1 ? 'agent' : 'agents'
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
+
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
   const dotState: AgentDotState = isInterrupted
     ? 'interrupted'
     : asDotState(agent.state, agent.entry.workingMode)
+
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
@@ -167,9 +182,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
+
   if (startedTimeAgo !== null) {
     tsParts.push(`started ${startedTimeAgo}`)
   }
+
   if (doneTimeAgo !== null) {
     tsParts.push(`done ${doneTimeAgo}`)
   }

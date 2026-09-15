@@ -42,13 +42,16 @@ export function shouldRetryPaneSpawnOnSshReconnect(args: {
   // not absent — never this target's to respawn.
   const isAddressable = (ptyId: string | null | undefined): boolean =>
     isPtyBindingStillAddressable(ptyId, args.disownedPtyIds)
+
   const hasBoundPty =
     isAddressable(args.tabPtyId) ||
     (args.tabPtyIds?.some(isAddressable) ?? false) ||
     (args.leafPtyIds?.some(isAddressable) ?? false)
+
   if (!hasBoundPty) {
     return true
   }
+
   return (
     args.deferredSessionId != null &&
     parseAppSshPtyId(args.deferredSessionId)?.connectionId === args.targetId

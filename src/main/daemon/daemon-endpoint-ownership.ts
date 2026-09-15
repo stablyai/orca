@@ -69,21 +69,26 @@ export async function publishDaemonEndpoint(
     // Named pipes are exclusive by name and vanish with the process; listen is the whole protocol.
     return { status: 'published', identity: null }
   }
+
   // Stat the bound name, not the canonical one: the link shares the inode, so nothing racing the
   // canonical name can corrupt this reading. Failing here is cheap; startup protects nothing yet.
   const identity = readDaemonSocketIdentity(boundPath)
+
   if (!identity) {
     throw new Error(`Cannot identify the bound daemon endpoint at ${boundPath}`)
   }
+
   // Losing the name mid-protocol is not an error, it just invalidates the evidence; re-run.
   for (let attempt = 0; attempt < PUBLISH_ATTEMPTS; attempt++) {
     try {
       linkSync(boundPath, canonicalPath)
     } catch (error) {
       const noHardLinks = isLinkUnsupportedError(error)
+
       if (!isFileExistsError(error) && !noHardLinks) {
         throw error
       }
+
       // Without hard links we lose `link`'s exclusivity but not the death proof, the continuity
       // re-check, or the post-publish verification — and that last one is what keeps replacing an
       // unclaimable name safe rather than a silent overwrite.
@@ -93,18 +98,23 @@ export async function publishDaemonEndpoint(
         probeEndpoint,
         noHardLinks
       )
+
       if (blocked === 'evidence-stale') {
         continue
       }
+
       return blocked ?? confirmPublishedEndpoint(canonicalPath, identity)
     }
+
     try {
       unlinkSync(boundPath)
     } catch {
       // Inert: clients resolve the canonical link, and the bind name is unique to us.
     }
+
     return confirmPublishedEndpoint(canonicalPath, identity)
   }
+
   // Inconclusive, not occupied: being outrun says the name keeps changing hands, not that anything
   // is serving it — no probe ever connected.
   return { status: 'inconclusive' }
@@ -137,31 +147,39 @@ async function replaceProvenDeadEndpoint(
   // probe that stalled while another daemon published would license destroying that daemon.
   const proven = readDaemonEndpointEntryIdentity(canonicalPath)
   const outcome = await probeEndpointSafely(canonicalPath, probeEndpoint)
+
   if (outcome === 'connected') {
     return { status: 'occupied' }
   }
+
   if (!endpointIsProvenDead(outcome)) {
     // Collapsing "could not classify" into "dead" deletes endpoints that are still serving.
     return { status: 'inconclusive' }
   }
+
   if (
     !isSameEndpointEntry(proven, readDaemonEndpointEntryIdentity(canonicalPath), absentIsStable)
   ) {
     // The name changed hands while we probed, so the death proof describes an entry that is gone.
     return 'evidence-stale'
   }
+
   // Ask again rather than compare metadata: the entry we proved dead can be unlinked and its inode
   // number handed straight back to a replacement, which then matches on dev+ino and looks like
   // continuity. Whether anything is *serving* is the property that matters, and connecting asks it.
   const stillDead = await probeEndpointSafely(canonicalPath, probeEndpoint)
+
   if (stillDead === 'connected') {
     return { status: 'occupied' }
   }
+
   if (!endpointIsProvenDead(stillDead)) {
     // Same three-way split: 'occupied' would send the launcher to adopt a daemon that may not exist.
     return { status: 'inconclusive' }
   }
+
   renameSync(boundPath, canonicalPath)
+
   // null means "the name is ours now" — the caller still has to confirm it kept it.
   return null
 }
@@ -186,6 +204,7 @@ function isSameEndpointEntry(
     // filesystem has no hard links, absent-then-absent is stable and there is nothing to destroy.
     return absentIsStable && !a && !b
   }
+
   return isSameInode(a, b)
 }
 
@@ -199,6 +218,7 @@ function confirmPublishedEndpoint(
   identity: DaemonSocketIdentity
 ): DaemonEndpointPublishOutcome {
   let published: DaemonSocketIdentity | null = null
+
   try {
     const stats = statSync(canonicalPath, { bigint: true })
     published = { dev: stats.dev, ino: stats.ino }
@@ -206,6 +226,7 @@ function confirmPublishedEndpoint(
     // The name is gone or unreadable, so we have no evidence we are reachable.
     return isMissingFileError(error) ? { status: 'lost' } : { status: 'inconclusive' }
   }
+
   // The fresh reading: this is what the watchdog compares against, so it must describe the entry
   // as it now stands, not as it was before the link or rename that published it.
   return isSameInode(published, identity)
@@ -221,8 +242,10 @@ function readDaemonEndpointEntryIdentity(socketPath: string): DaemonSocketIdenti
   if (process.platform === 'win32') {
     return null
   }
+
   try {
     const stats = lstatSync(socketPath, { bigint: true })
+
     return { dev: stats.dev, ino: stats.ino }
   } catch {
     return null
@@ -237,7 +260,9 @@ function isLinkUnsupportedError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error)) {
     return false
   }
+
   const code = (error as NodeJS.ErrnoException).code
+
   return code === 'EPERM' || code === 'EOPNOTSUPP' || code === 'ENOTSUP' || code === 'ENOSYS'
 }
 
@@ -249,8 +274,10 @@ export function readDaemonSocketIdentity(socketPath: string): DaemonSocketIdenti
   if (process.platform === 'win32') {
     return null
   }
+
   try {
     const stats = statSync(socketPath, { bigint: true })
+
     return { dev: stats.dev, ino: stats.ino }
   } catch {
     return null
@@ -267,8 +294,10 @@ export function readDaemonEndpointOwnershipState(
   if (process.platform === 'win32' || !owned) {
     return 'indeterminate'
   }
+
   try {
     const stats = statSync(socketPath, { bigint: true })
+
     // dev+ino suffices: `owned` is our own socket and its listener is open whenever this runs, so
     // the kernel cannot recycle that number. A false loss is sticky and retires a healthy daemon.
     return isSameInode({ dev: stats.dev, ino: stats.ino }, owned) ? 'owned' : 'lost'

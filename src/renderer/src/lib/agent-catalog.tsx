@@ -32,15 +32,19 @@ export type AgentCatalogEntry = {
 
 function getCatalogPlatform(): NodeJS.Platform {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+
   if (userAgent.includes('Windows')) {
     return 'win32'
   }
+
   if (userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   if (userAgent) {
     return 'linux'
   }
+
   return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
@@ -332,33 +336,43 @@ export function AgentIcon({
   if (!agent) {
     return <AgentLetterIcon letter="?" size={size} />
   }
+
   if (agent === 'claude' || agent === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
+
   if (agent === 'codex') {
     return <OpenAIIcon size={size} />
   }
+
   if (agent === 'droid') {
     return <DroidIcon size={size} />
   }
+
   if (agent === 'pi') {
     return <PiIcon size={size} />
   }
+
   if (agent === 'omp') {
     return <OmpIcon size={size} />
   }
+
   if (agent === 'aider') {
     return <AiderIcon size={size} />
   }
+
   if (agent === 'kilo') {
     return <KiloIcon size={size} />
   }
+
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
   }
+
   if (agent === 'opencode') {
     return <OpenCodeIcon size={size} />
   }
+
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   // Why: prefer the favicon bundled at build time so the icon renders without a
   // live network request — Google's favicon service is unreachable in some
@@ -367,6 +381,7 @@ export function AgentIcon({
   // Why: one resolved src for guard + attribute so empty `iconUrl` cannot pass
   // a truthy `||` check while `??` still renders a broken `<img src="">`.
   const iconSrc = catalogEntry?.iconUrl ?? bundledFaviconUrl
+
   if (iconSrc) {
     return (
       <img
@@ -379,6 +394,7 @@ export function AgentIcon({
       />
     )
   }
+
   if (catalogEntry?.faviconDomain) {
     // Why: agents without a published SVG icon or bundled favicon fall back to
     // their site favicon via Google's favicon service — same source the README
@@ -394,6 +410,8 @@ export function AgentIcon({
       />
     )
   }
+
   const label = catalogEntry?.label ?? agent
+
   return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
 }

@@ -17,12 +17,15 @@ export const createConversationCommentActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -33,6 +36,7 @@ export const createConversationCommentActions = (
       options?.sourceContext,
       repo !== undefined
     )
+
     const requestContext = getGitHubWorkItemRequestContext(
       get(),
       requestSettings,
@@ -40,7 +44,9 @@ export const createConversationCommentActions = (
       repoPath,
       options?.sourceContext
     )
+
     let result: GitHubCommentResult
+
     try {
       result =
         requestContext.target.kind === 'environment'
@@ -67,8 +73,10 @@ export const createConversationCommentActions = (
             })
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to post comment.'
+
       return { ok: false, error }
     }
+
     if (!hasUsableCommentPayload(result)) {
       return result.ok
         ? {
@@ -80,8 +88,10 @@ export const createConversationCommentActions = (
           }
         : result
     }
+
     set((s) => {
       const entry = s.commentsCache[cacheKey]
+
       return {
         commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
           data: mergePRCommentIntoList(entry?.data, result.comment),
@@ -89,6 +99,7 @@ export const createConversationCommentActions = (
         })
       }
     })
+
     return result
   }
 })

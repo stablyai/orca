@@ -3,7 +3,9 @@ import {
   projectWslSkillDiscovery,
   type WslSkillDiscoveryObservation
 } from './skill-discovery-wsl-observation'
+
 export { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl-observation'
+
 import { posix as pathPosix } from 'node:path'
 import type { SkillDiscoveryResult, SkillSourceKind } from '../../shared/skills'
 import { quoteBashString } from '../wsl-bash-command'
@@ -16,7 +18,9 @@ import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
 import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
+
 const WSL_SCAN_TIMEOUT_MS = 10_000
+
 const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 
 export function buildWslSkillDiscoveryCommand(
@@ -26,8 +30,10 @@ export function buildWslSkillDiscoveryCommand(
   const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const nameFilterHelpers: string[] = []
   const nameFilterBody: string[] = []
+
   if (normalizedNames?.length) {
     const asciiNames = [...new Set(normalizedNames.filter((name) => /^[\x20-\x7e]+$/.test(name)))]
+
     const matchBody = asciiNames.length
       ? [
           '  case "$normalized_name" in',
@@ -36,6 +42,7 @@ export function buildWslSkillDiscoveryCommand(
           '  esac'
         ]
       : ['  return 1']
+
     nameFilterHelpers.push(
       'is_ascii_name() {',
       "  local LC_ALL=C non_ascii_pattern='[^ -~]'",
@@ -104,6 +111,7 @@ export function buildWslSkillDiscoveryCommand(
       '    fi'
     )
   }
+
   const lines = [
     'set -u',
     'set -o pipefail',
@@ -129,10 +137,12 @@ export function buildWslSkillDiscoveryCommand(
     `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" \\( -name '${SKILL_STAGING_GLOB}' -prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\) 2>/dev/null)`,
     '}'
   ]
+
   roots.forEach((root, index) => {
     const maxDepth = skillFileMaxDepth(root.sourceKind)
     lines.push(`scan_root ${index} ${quoteBashString(root.path)} ${maxDepth}`)
   })
+
   return lines.join('\n')
 }
 
@@ -149,12 +159,14 @@ async function executeWslSkillDiscovery(distro: string, script: string): Promise
     timeoutMs: WSL_SCAN_TIMEOUT_MS,
     maxOutputBytes: WSL_SCAN_MAX_OUTPUT_BYTES
   })
+
   // Why throw: runWslProcess resolves on a non-zero exit, and an empty stdout
   // parses into a valid "zero skills" result -- which reads as "nothing is
   // installed" and re-offers installs for skills that are present.
   if (result.code !== 0 || result.timedOut) {
     throw new Error('skill-discovery-wsl-scan-failed')
   }
+
   return result.stdout
 }
 
@@ -191,6 +203,7 @@ export async function discoverSkillObservationInWsl(
   // not abort the mandatory native/home/repo/bundled scan.
   const cwd = args.cwd ?? args.homeDir
   let pluginRoots: SkillScanRoot[] = []
+
   if (!args.sourceKinds?.length || args.sourceKinds.includes('plugin')) {
     try {
       pluginRoots = await discoverClaudePluginSkillSourcesInWsl({ ...args, cwd })
@@ -198,6 +211,7 @@ export async function discoverSkillObservationInWsl(
       pluginRoots = []
     }
   }
+
   const roots = [
     ...buildSkillDiscoverySources({
       homeDir: args.homeDir,
@@ -209,11 +223,13 @@ export async function discoverSkillObservationInWsl(
     }),
     ...pluginRoots
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+
   // Why: UNC traversal applies Windows casing and symlink rules. The distro
   // must own enumeration, metadata reads, and canonical path identity.
   const output = await executeWslSkillDiscovery(
     args.distro,
     buildWslSkillDiscoveryCommand(roots, args.names)
   )
+
   return readWslSkillDiscoveryObservation(output, roots)
 }

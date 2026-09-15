@@ -34,10 +34,13 @@ function recordOrEmpty<T>(value: unknown): Record<string, T> {
 export function readProfileState(profileId: string, userDataPath: string): TransferProfileState {
   const defaults = getDefaultPersistedState(homedir())
   const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
+
   if (!existsSync(dataFile)) {
     return structuredClone(defaults)
   }
+
   const parsed: Partial<PersistedState> = JSON.parse(readFileSync(dataFile, 'utf-8'))
+
   return rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
@@ -116,19 +119,24 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
   const currentRepoIds = new Set(state.repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
+
   const independentSetups = state.projectHostSetups
     .filter((setup) => {
       if (projectedSetupIds.has(setup.id)) {
         return false
       }
+
       return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
     })
     // Why: follow the repo's project through a derived-id change so no ghost project row survives.
     .map((setup) => {
       const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
+
       return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup
     })
+
   const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
+
   const independentProjects = state.projects
     .filter(
       (project) => independentProjectIds.has(project.id) && !projectedProjectIds.has(project.id)
@@ -137,6 +145,7 @@ export function rebuildRepoBackedProjectState(state: TransferProfileState): Tran
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+
   return {
     ...state,
     projects: [...succession.projects, ...independentProjects],

@@ -16,10 +16,12 @@ import { usePrimarySelectionPaste } from './usePrimarySelectionPaste'
 const originalUserAgent = navigator.userAgent
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function Probe(): null {
   usePrimarySelectionPaste(true)
+
   return null
 }
 
@@ -44,6 +46,7 @@ function appendXtermHelperTextarea(): HTMLTextAreaElement {
   textarea.className = 'xterm-helper-textarea'
   terminal.appendChild(textarea)
   document.body.appendChild(terminal)
+
   return textarea
 }
 
@@ -54,7 +57,9 @@ function dispatchPasteBeforeInput(target: HTMLElement): Event {
     data: 'pasted',
     inputType: 'insertFromPaste'
   })
+
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -63,6 +68,7 @@ function dispatchPasteBeforeInput(target: HTMLElement): Event {
 function dispatchClipboardPaste(target: HTMLElement): Event {
   const event = new Event('paste', { bubbles: true, cancelable: true })
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -77,6 +83,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null

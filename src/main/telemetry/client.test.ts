@@ -35,6 +35,7 @@ describe('track()', () => {
     expect(call.event).toBe('app_opened')
     expect(call.distinctId).toBe(BASE_COMMON.install_id)
     expect(call.properties.$process_person_profile).toBe(false)
+
     for (const key of Object.keys(BASE_COMMON) as (keyof CommonProps)[]) {
       expect(call.properties[key]).toBe(BASE_COMMON[key])
     }
@@ -46,12 +47,14 @@ describe('track()', () => {
   it('serialized property set is exactly CommonProps plus EventProps plus $process_person_profile', () => {
     track('workspace_created', { source: 'command_palette', from_existing_branch: true })
     const call = mock.capture.mock.calls[0]![0]
+
     const allowed = new Set([
       ...Object.keys(BASE_COMMON),
       'source',
       'from_existing_branch',
       '$process_person_profile'
     ])
+
     for (const key of Object.keys(call.properties)) {
       expect(allowed.has(key)).toBe(true)
     }
@@ -74,13 +77,17 @@ describe('track()', () => {
         existedBeforeTelemetryRelease: false
       }
     })
+
     for (let i = 0; i < 30; i++) {
       track('app_opened', {})
     }
+
     const callsAtBoundary = (store.getSettings as ReturnType<typeof vi.fn>).mock.calls.length
+
     for (let i = 0; i < 20; i++) {
       track('app_opened', {})
     }
+
     expect((store.getSettings as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAtBoundary)
     expect(mock.capture).not.toHaveBeenCalled()
   })
@@ -89,18 +96,21 @@ describe('track()', () => {
     for (let i = 0; i < 50; i++) {
       track('app_opened', {})
     }
+
     expect(mock.capture).toHaveBeenCalledTimes(30)
   })
 
   it('enforces the per-session 1000-event global ceiling across event names', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-03T00:00:00Z'))
+
     // Advance time between calls so the per-event token buckets refill; the
     // only remaining cap is the session ceiling.
     for (let i = 0; i < 1500; i++) {
       vi.advanceTimersByTime(10_000)
       track('app_opened', {})
     }
+
     expect(mock.capture).toHaveBeenCalledTimes(1000)
     vi.useRealTimers()
   })

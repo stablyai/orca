@@ -23,12 +23,15 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => false),
   callRuntimeRpc: vi.fn(async () => ({}))
 }))
+
 vi.mock('@/lib/workspace-browser-tab-open', () => ({
   openWorkspaceBrowserTab: vi.fn(async () => {})
 }))
+
 vi.mock('../annotate/markup-clipboard-delivery', () => ({
   deliverMarkupToClipboard: vi.fn(async () => {})
 }))
+
 vi.mock('../annotate/useMarkupMode', () => ({
   useMarkupMode: () => ({
     isActive: false,
@@ -39,6 +42,7 @@ vi.mock('../annotate/useMarkupMode', () => ({
     complete: vi.fn()
   })
 }))
+
 vi.mock('./use-remote-browser-page-lifecycle', () => ({
   useRemoteBrowserPageLifecycle: () => ({
     lifecycle: { session: {}, tokens: {} },
@@ -63,9 +67,11 @@ vi.mock('./use-remote-browser-page-lifecycle', () => ({
     setFrameMetadata: vi.fn()
   })
 }))
+
 vi.mock('./use-remote-browser-page-stream', () => ({
   useRemoteBrowserPageStream: () => ({ reconnectRemoteStream: vi.fn() })
 }))
+
 vi.mock('./use-remote-browser-page-input', () => ({
   useRemoteBrowserPageInputQueue: () => ({
     enqueueRemoteInput: vi.fn(),
@@ -82,7 +88,9 @@ vi.mock('./use-remote-browser-page-input', () => ({
     handleRemoteScreenshotKeyDown: mocks.handleRemoteScreenshotKeyDown
   })
 }))
+
 vi.mock('./use-remote-browser-page-wheel', () => ({ useRemoteBrowserPageWheel: vi.fn() }))
+
 vi.mock('./remote-browser-page-context-menu', () => ({
   RemoteBrowserPageContextMenu: () => null,
   useRemoteBrowserPageContextMenu: () => ({
@@ -91,6 +99,7 @@ vi.mock('./remote-browser-page-context-menu', () => ({
     handleRemoteContextMenu: vi.fn()
   })
 }))
+
 vi.mock('./use-remote-browser-page-navigation', () => ({
   useRemoteBrowserPageNavigation: () => ({
     addressBarValue: 'https://example.internal/app',
@@ -119,6 +128,7 @@ vi.mock('./remote-browser-page-viewport', () => ({
   }) => {
     mocks.remoteError.current = remoteError
     mocks.viewportRenders.current += 1
+
     return (
       <div ref={remoteViewportRef} tabIndex={-1} data-testid="viewport">
         <img
@@ -238,6 +248,7 @@ describe('streamed browser pane chrome chords', () => {
   // would swallow the chord out from under a focused terminal in the sibling split.
   it('leaves find to the focused split when this pane is not the focused one', () => {
     renderPane('inactive')
+
     const event = new KeyboardEvent('keydown', {
       key: 'f',
       metaKey: true,
@@ -255,6 +266,7 @@ describe('streamed browser pane chrome chords', () => {
 
   it('leaves reload to the focused split when this pane is not the focused one', () => {
     renderPane('inactive')
+
     const event = new KeyboardEvent('keydown', {
       key: 'r',
       metaKey: true,
@@ -309,6 +321,7 @@ describe('streamed browser pane chrome chords', () => {
 
   it('retracts the find notice on its own', () => {
     vi.useFakeTimers()
+
     try {
       renderPane()
       act(() => {

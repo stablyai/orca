@@ -27,6 +27,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
       }
     })
+
     const pendingGet = deferred<RemoteWorkspaceObservedSnapshot | null>()
     const harness = createHarness(state, () => pendingGet.promise)
 
@@ -51,12 +52,14 @@ describe('createRemoteWorkspaceTargetSync', () => {
   ] as const)('localizes the %s upload fallback', async (reason, message) => {
     const previousLanguage = i18n.language
     await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+
     try {
       const state = appState({
         tabsByWorktree: {
           'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
         }
       })
+
       const harness = createHarness(state, async () => snapshot(0), {
         ok: false,
         reason
@@ -95,6 +98,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('prepares an unsolicited snapshot once and preserves newer local terminal fields', async () => {
     const calls: string[] = []
+
     const state = appState({
       tabsByWorktree: {
         'repo-a::/remote/work': [
@@ -120,11 +124,14 @@ describe('createRemoteWorkspaceTargetSync', () => {
         calls.push('reconnect')
       })
     })
+
     const harness = createHarness(state, async () => null)
     harness.finalizeHydratedTerminals.mockImplementation(() => {
       calls.push('finalize')
+
       return 1
     })
+
     const incoming = snapshot(3, {
       '/remote/work': [
         {
@@ -157,6 +164,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('preserves a higher local generation from an older remote snapshot', async () => {
     const hydrateTabsSession = vi.fn()
+
     const state = appState({
       tabsByWorktree: {
         'repo-a::/remote/work': [
@@ -170,7 +178,9 @@ describe('createRemoteWorkspaceTargetSync', () => {
       },
       hydrateTabsSession
     })
+
     const harness = createHarness(state, async () => null)
+
     const incoming = snapshot(5, {
       '/remote/work': [
         {
@@ -191,6 +201,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('admits a genuinely newer remote generation without local recovery state', async () => {
     const hydrateTabsSession = vi.fn()
+
     const state = appState({
       tabsByWorktree: {
         'repo-a::/remote/work': [
@@ -204,7 +215,9 @@ describe('createRemoteWorkspaceTargetSync', () => {
       },
       hydrateTabsSession
     })
+
     const harness = createHarness(state, async () => null)
+
     const incoming = snapshot(6, {
       '/remote/work': [
         {
@@ -225,6 +238,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('does not preserve recovery evidence from another authority', async () => {
     const hydrateTabsSession = vi.fn()
+
     const state = appState({
       tabsByWorktree: {
         'repo-a::/remote/work': [
@@ -249,7 +263,9 @@ describe('createRemoteWorkspaceTargetSync', () => {
       },
       hydrateTabsSession
     })
+
     const harness = createHarness(state, async () => null)
+
     const incoming = snapshot(7, {
       '/remote/work': [
         {
@@ -271,12 +287,15 @@ describe('createRemoteWorkspaceTargetSync', () => {
   it('does not finalize an older snapshot superseded during terminal reattach', async () => {
     const firstReattach = deferred<void>()
     let reattachCount = 0
+
     const state = appState({
       reconnectPersistedTerminals: vi.fn(() => {
         reattachCount += 1
+
         return reattachCount === 1 ? firstReattach.promise : Promise.resolve()
       })
     })
+
     const harness = createHarness(state, async () => null)
 
     const first = harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(7))
@@ -293,19 +312,24 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('keeps staged snapshot PTYs retryable until pane transport acknowledgment', async () => {
     const calls: string[] = []
+
     const recordLiveBindings = vi.fn(() => {
       calls.push('record')
+
       return 1
     })
+
     const state = appState({
       reconnectPersistedTerminals: vi.fn(async () => {
         calls.push('reconnect')
       }),
       recordDirectSshTargetLivePtyBindings: recordLiveBindings
     })
+
     const harness = createHarness(state, async () => null)
     harness.finalizeHydratedTerminals.mockImplementation(() => {
       calls.push('finalize')
+
       return 0
     })
 
@@ -321,6 +345,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         throw new Error('reattach failed')
       })
     })
+
     const harness = createHarness(state, async () => null)
 
     await harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(10))
@@ -334,6 +359,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     harness.prepareOnly.mockImplementation(async (input) => {
       const preparedToken = token(input.snapshotRevision ?? null, input.catalogRevision)
       harness.advanceCatalog()
+
       return {
         status: 'complete' as const,
         token: preparedToken,
@@ -385,12 +411,15 @@ describe('createRemoteWorkspaceTargetSync', () => {
     vi.useFakeTimers()
     const pendingReattach = deferred<void>()
     let reconnectSignal: AbortSignal | undefined
+
     const state = appState({
       reconnectPersistedTerminals: vi.fn((signal?: AbortSignal) => {
         reconnectSignal = signal
+
         return pendingReattach.promise
       })
     })
+
     const harness = createHarness(state, async () => null)
 
     const pending = harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(11))
@@ -415,16 +444,20 @@ describe('createRemoteWorkspaceTargetSync', () => {
       enumerable: true,
       get: () => {
         catalogProjectionReads += 1
+
         return []
       }
     })
+
     const state = appState({
       worktreesByRepo: emptyWorktreesByRepo,
       hydrateTabsSession,
       markRemoteWorkspaceHydrated,
       clearRemoteWorkspaceHydrated
     })
+
     const harness = createHarness(state, async () => null)
+
     const incoming = snapshot(12, {
       '/remote/work': [
         {
@@ -438,9 +471,11 @@ describe('createRemoteWorkspaceTargetSync', () => {
     const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
     await flush()
     const readsBeforeUnrelatedWrites = catalogProjectionReads
+
     for (let write = 0; write < 100; write += 1) {
       harness.publishState()
     }
+
     expect(catalogProjectionReads).toBe(readsBeforeUnrelatedWrites)
     state.worktreesByRepo = appState().worktreesByRepo
     harness.advanceCatalog()
@@ -461,11 +496,13 @@ describe('createRemoteWorkspaceTargetSync', () => {
     vi.useFakeTimers()
     const hydrateTabsSession = vi.fn()
     const markRemoteWorkspaceHydrated = vi.fn()
+
     const state = appState({
       worktreesByRepo: {},
       hydrateTabsSession,
       markRemoteWorkspaceHydrated
     })
+
     const incoming = snapshot(12, {
       '/remote/work': [
         {
@@ -475,8 +512,10 @@ describe('createRemoteWorkspaceTargetSync', () => {
         } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
       ]
     })
+
     const get = vi.fn(async () => incoming)
     const harness = createHarness(state, get)
+
     try {
       const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
       await flush()
@@ -520,6 +559,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     const state = appState({ worktreesByRepo: {}, hydrateTabsSession })
     const harness = createHarness(state, async () => null)
     const pending: Promise<void>[] = []
+
     try {
       for (let revision = 20; revision < 52; revision += 1) {
         pending.push(
@@ -566,6 +606,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     const state = appState({ workspaceSessionReady: false })
     const harness = createHarness(state, async () => null)
     const pending: Promise<void>[] = []
+
     try {
       for (let revision = 53; revision < 85; revision += 1) {
         pending.push(harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(revision)))
@@ -590,8 +631,10 @@ describe('createRemoteWorkspaceTargetSync', () => {
         'repo-a::/remote/work': [{ id: 'tab-a', worktreeId: 'repo-a::/remote/work', ptyId: null }]
       }
     })
+
     const pendingPush =
       deferred<{ targetId: string; result: RemoteWorkspaceObservedPatchResult }[]>()
+
     const pendingCapture = deferred<DirectSshPreparationInput>()
     const harness = createHarness(state, async () => snapshot(0))
     harness.setForConnectedTargets.mockImplementationOnce(() => pendingPush.promise)
@@ -627,6 +670,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     vi.useFakeTimers()
     const state = appState({ worktreesByRepo: {} })
     const harness = createHarness(state, async () => null)
+
     const pending = harness.sync.applyUnsolicitedSnapshot(
       'target-a',
       snapshot(52, {
@@ -639,6 +683,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
         ]
       })
     )
+
     try {
       await flush()
       expect(harness.activeStateListenerCount()).toBe(1)
@@ -658,6 +703,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
   it('fails closed on duplicate target paths and keeps folder workspaces out of projection', async () => {
     const hydrateTabsSession = vi.fn()
+
     const state = appState({
       repos: [repo('repo-a'), repo('repo-b')],
       worktreesByRepo: {
@@ -669,7 +715,9 @@ describe('createRemoteWorkspaceTargetSync', () => {
       },
       hydrateTabsSession
     })
+
     const harness = createHarness(state, async () => null)
+
     const incoming = snapshot(4, {
       '/same': [
         {
@@ -681,6 +729,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     })
 
     vi.useFakeTimers()
+
     try {
       const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
       await vi.advanceTimersByTimeAsync(10_000)

@@ -10,9 +10,11 @@ export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMeta
 
 export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
+
   if (!existsSync(metadataPath)) {
     return null
   }
+
   return JSON.parse(readFileSync(metadataPath, 'utf-8')) as RuntimeMetadata
 }
 
@@ -21,14 +23,17 @@ export async function readRuntimeMetadataAsync(
   userDataPath: string
 ): Promise<RuntimeMetadata | null> {
   let raw: string
+
   try {
     raw = await readFile(getRuntimeMetadataPath(userDataPath), 'utf-8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
+
   return JSON.parse(raw) as RuntimeMetadata
 }
 
@@ -56,15 +61,19 @@ export function clearRuntimeMetadataIfOwned(
   ownedRuntimeId: string
 ): void {
   const current = readRuntimeMetadata(userDataPath)
+
   if (!current) {
     return
   }
+
   if (current.pid !== ownedPid) {
     return
   }
+
   if (current.runtimeId !== ownedRuntimeId) {
     return
   }
+
   clearRuntimeMetadata(userDataPath)
 }
 

@@ -38,10 +38,12 @@ export function scheduleMainWindowAutoUpdaterSetup(
 ): void {
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
   let updaterSetupDone = false
+
   const setupAutoUpdaterDeferred = (): void => {
     if (updaterSetupDone || mainWindow.isDestroyed()) {
       return
     }
+
     updaterSetupDone = true
     setupAutoUpdater(mainWindow, {
       getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
@@ -73,6 +75,7 @@ export function scheduleMainWindowAutoUpdaterSetup(
     })
     logStartupMilestone('updater-setup-done')
   }
+
   pendingAutoUpdaterSetup = setupAutoUpdaterDeferred
   mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
   const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
@@ -95,6 +98,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:getVersion', () => app.getVersion())
   ipcMain.handle('updater:check', (_event, options?: UpdateCheckOptions) => {
     ensureAutoUpdaterConfigured()
+
     return checkForUpdatesFromMenu(options)
   })
   ipcMain.handle('updater:download', () => downloadUpdate())
@@ -105,10 +109,12 @@ export function registerUpdaterHandlers(_store: Store): void {
   // neither may be reached from a guest, dashboard popout, stale window, or utility renderer.
   ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
     assertTrustedUpdaterRecoverySender(event)
+
     return getLinuxPackageInstallInstructions()
   })
   ipcMain.handle('updater:showLinuxPackage', (event) => {
     assertTrustedUpdaterRecoverySender(event)
+
     return showLinuxPackage()
   })
   ipcMain.handle(
@@ -117,6 +123,7 @@ export function registerUpdaterHandlers(_store: Store): void {
       if (!RELEASE_CHANNELS.includes(channel)) {
         return { ok: false, channel, message: `Unknown release channel "${channel}".` }
       }
+
       try {
         return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }
       } catch (error) {

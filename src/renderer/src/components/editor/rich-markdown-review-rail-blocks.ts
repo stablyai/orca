@@ -21,11 +21,13 @@ export function getRichMarkdownReviewRailBlocks(
   const markdown = editor.markdown
   const serialize = markdown?.serialize
   const cached = blocksByEditor.get(editor)
+
   if (cached?.doc === doc && cached.markdown === markdown && cached.serialize === serialize) {
     return cached.blocks
   }
 
   const blocks = buildRichMarkdownCommentBlocks(editor)
   blocksByEditor.set(editor, { doc, markdown, serialize, blocks })
+
   return blocks
 }

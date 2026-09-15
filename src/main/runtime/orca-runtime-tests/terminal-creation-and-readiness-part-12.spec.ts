@@ -14,6 +14,7 @@ describe('OrcaRuntimeService', () => {
     expect(read.latestCursor).toBe('3000')
     expect(read.oldestCursor).not.toBe('0')
     expect(read.tail.length).toBeLessThan(100)
+
     for (const line of read.tail) {
       expect(line.length).toBeLessThanOrEqual(4000)
       expect(line.endsWith('Z')).toBe(true)

@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
+
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
+
 const PROCESS_TABLE_MAX_BYTES = 64 * 1024
 
 export type PosixPtyForegroundGroupDeps = {
@@ -47,6 +49,7 @@ function readOwnProcessRow(currentPid: number): string {
     // A throw is not cached: the caller already treats a failed read as "no group".
     ownRowCache = { pid: currentPid, row: runPs(currentPid) }
   }
+
   return ownRowCache.row
 }
 
@@ -68,16 +71,21 @@ function readForegroundGroupTable(rootPid: number, currentPid: number): string {
 
 function parseProcessRows(output: string): ProcessRow[] {
   const rows: ProcessRow[] = []
+
   for (const line of output.split(/\r?\n/)) {
     const match = /^\s*(\d+)\s+(-?\d+)\s+(\S+)/.exec(line)
+
     if (!match) {
       continue
     }
+
     const pid = Number(match[1])
+
     if (pid > 0) {
       rows.push({ pid, tpgid: Number(match[2]), tty: match[3] })
     }
   }
+
   return rows
 }
 
@@ -98,19 +106,23 @@ export function getPosixPtyForegroundGroup(
 ): number | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
+
   if (!root || !hasUsableTty(root.tty)) {
     return null
   }
+
   // Why: `ps -p` answers for whatever owns the pid now. Without pinning the tty we
   // captured at spawn, a recycled pid could aim a group signal at a real terminal.
   if (normalizeTty(root.tty) !== normalizeTty(ptsName)) {
     return null
   }
+
   // Why: a development daemon can inherit its launch TTY. Never group-signal when
   // this process shares the PTY; fall back to the already-scoped root signal.
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }
+
   // tpgid is -1 when no foreground group owns the tty, and pid 1 is never one.
   return root.tpgid > 1 ? root.tpgid : null
 }
@@ -131,10 +143,13 @@ export function signalPosixPtyForegroundGroup(
 ): void {
   if ((deps.platform ?? process.platform) === 'win32' || !ptsName) {
     fallback()
+
     return
   }
+
   const currentPid = deps.currentPid ?? process.pid
   let pgid: number | null
+
   try {
     pgid = getPosixPtyForegroundGroup(
       (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
@@ -145,10 +160,13 @@ export function signalPosixPtyForegroundGroup(
   } catch {
     pgid = null
   }
+
   if (pgid === null) {
     fallback()
+
     return
   }
+
   try {
     process.kill(-pgid, signal as NodeJS.Signals)
   } catch (error) {

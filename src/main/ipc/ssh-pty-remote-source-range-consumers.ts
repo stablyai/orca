@@ -72,6 +72,7 @@ export class SshPtyRemoteSourceRangeConsumers {
     if (!Number.isSafeInteger(modelSequenceEnd) || modelSequenceEnd < 0) {
       throw new Error('ssh_remote_source_range_model_sequence_invalid')
     }
+
     for (const [consumerId, state] of this.consumersByPty.get(ptyId) ?? []) {
       if (requiredConsumers.includes(`remote:${consumerId}`)) {
         state.spans.set(
@@ -87,6 +88,7 @@ export class SshPtyRemoteSourceRangeConsumers {
 
   closeGeneration(providerGeneration: number, reason: string): void {
     this.replacements.closeGeneration(providerGeneration, reason)
+
     for (const consumers of this.consumersByPty.values()) {
       for (const state of consumers.values()) {
         for (const [spanId, tracked] of state.spans) {
@@ -102,10 +104,13 @@ export class SshPtyRemoteSourceRangeConsumers {
   private attach(identity: RemoteTerminalSourceRangeStreamIdentity): boolean {
     const consumers =
       this.consumersByPty.get(identity.ptyId) ?? new Map<string, RemoteConsumerState>()
+
     const current = consumers.get(identity.consumerId)
+
     if (current && current.streamGeneration !== identity.streamGeneration) {
       return false
     }
+
     consumers.set(
       identity.consumerId,
       current ?? {
@@ -115,6 +120,7 @@ export class SshPtyRemoteSourceRangeConsumers {
       }
     )
     this.consumersByPty.set(identity.ptyId, consumers)
+
     return true
   }
 
@@ -125,22 +131,29 @@ export class SshPtyRemoteSourceRangeConsumers {
     if (!this.isCurrent(identity)) {
       return
     }
+
     const state = this.requireState(identity)
     const consumer = remoteConsumerId(identity)
     const nextEnds = new Map(state.ackedEndBySpan)
     const completed = new Set<string>()
+
     for (const range of ranges) {
       const tracked = state.spans.get(range.spanId)
+
       if (!tracked) {
         continue
       }
+
       const source = tracked.identity
+
       if (!this.coordinator.hasRetainedSpan(range.spanId)) {
         state.spans.delete(range.spanId)
         nextEnds.delete(range.spanId)
         continue
       }
+
       const currentEnd = nextEnds.get(range.spanId) ?? source.sourceStartSu
+
       if (
         !sameTerminalOutputSourceIdentity(source, range) ||
         range.sourceStartSu !== currentEnd ||
@@ -148,19 +161,25 @@ export class SshPtyRemoteSourceRangeConsumers {
       ) {
         throw new Error('ssh_remote_source_range_settlement_invalid')
       }
+
       nextEnds.set(range.spanId, range.sourceEndSu)
+
       if (range.sourceEndSu === source.sourceEndSu) {
         completed.add(range.spanId)
       }
     }
+
     state.ackedEndBySpan = nextEnds
+
     for (const spanId of completed) {
       const tracked = state.spans.get(spanId)
+
       if (!tracked || !this.coordinator.hasRetainedSpan(spanId)) {
         state.spans.delete(spanId)
         state.ackedEndBySpan.delete(spanId)
         continue
       }
+
       const source = tracked.identity
       this.coordinator.settle({
         identity: source,
@@ -171,6 +190,7 @@ export class SshPtyRemoteSourceRangeConsumers {
       state.spans.delete(spanId)
       state.ackedEndBySpan.delete(spanId)
     }
+
     for (const range of ranges) {
       this.onProgress(range)
     }
@@ -184,16 +204,20 @@ export class SshPtyRemoteSourceRangeConsumers {
     if (!this.isCurrent(identity)) {
       throw new Error('ssh_remote_source_range_stale_generation')
     }
+
     const state = this.requireState(identity)
+
     for (const spanId of state.spans.keys()) {
       if (!this.coordinator.hasRetainedSpan(spanId)) {
         state.spans.delete(spanId)
         state.ackedEndBySpan.delete(spanId)
       }
     }
+
     const spanIds = Array.from(state.spans)
       .filter(([, tracked]) => tracked.modelSequenceEnd <= requiredSeq)
       .map(([spanId]) => spanId)
+
     return this.replacements.reserve(identity, spanIds, requiredSeq, reason)
   }
 
@@ -207,6 +231,7 @@ export class SshPtyRemoteSourceRangeConsumers {
       this.isCurrent(reservation.identity),
       (spanIds) => {
         const state = this.requireState(reservation.identity)
+
         for (const spanId of spanIds) {
           state.spans.delete(spanId)
           state.ackedEndBySpan.delete(spanId)
@@ -230,25 +255,33 @@ export class SshPtyRemoteSourceRangeConsumers {
     if (!this.isCurrent(identity)) {
       return
     }
+
     this.replacements.rollbackIdentity(identity, `${reason}-replacement-aborted`)
     const consumer = remoteConsumerId(identity)
     const state = this.requireState(identity)
+
     const spanIds = new Set([
       ...state.spans.keys(),
       ...uniqueSpanIds(ranges).filter((spanId) => state.spans.has(spanId))
     ])
+
     for (const spanId of spanIds) {
       const tracked = state.spans.get(spanId)
+
       if (!tracked || !this.coordinator.hasRetainedSpan(spanId)) {
         continue
       }
+
       const source = tracked.identity
       const transition = { identity: source, spanId, consumer, reason }
+
       if (this.coordinator.beginTransfer(transition, consumer)) {
         this.coordinator.cancelTransfer(transition)
       }
     }
+
     this.detachIdentity(identity)
+
     for (const range of ranges) {
       this.onProgress(range)
     }
@@ -263,21 +296,26 @@ export class SshPtyRemoteSourceRangeConsumers {
 
   private requireState(identity: RemoteTerminalSourceRangeStreamIdentity): RemoteConsumerState {
     const state = this.consumersByPty.get(identity.ptyId)?.get(identity.consumerId)
+
     if (!state || state.streamGeneration !== identity.streamGeneration) {
       throw new Error('ssh_remote_source_range_stale_generation')
     }
+
     return state
   }
 
   private detachIdentity(identity: RemoteTerminalSourceRangeStreamIdentity): void {
     const consumers = this.consumersByPty.get(identity.ptyId)
+
     if (
       !consumers ||
       consumers.get(identity.consumerId)?.streamGeneration !== identity.streamGeneration
     ) {
       return
     }
+
     consumers.delete(identity.consumerId)
+
     if (consumers.size === 0) {
       this.consumersByPty.delete(identity.ptyId)
     }

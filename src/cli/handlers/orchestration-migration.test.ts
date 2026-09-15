@@ -16,6 +16,7 @@ describe('orchestration CLI migration recovery', () => {
     'accepts an attested legacy worker_done settlement (replayed: %s)',
     async (replayed) => {
       process.env.ORCA_PANE_KEY = 'tab-worker:leaf-worker'
+
       const call = vi.fn().mockResolvedValue({
         result: {
           message: { id: 'msg_done' },

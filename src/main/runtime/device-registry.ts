@@ -43,7 +43,9 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
   if (!value || typeof value !== 'object') {
     return undefined
   }
+
   const binding = value as Partial<RelayDeviceBinding>
+
   return binding.relayDeviceId === deviceId &&
     typeof binding.relayHostId === 'string' &&
     typeof binding.ownerIdentityKey === 'string'
@@ -97,10 +99,12 @@ export class DeviceRegistry {
       lastSeenAt: 0,
       pairingReach
     }
+
     const nextDevices = [...existingDevices, entry]
     // Why: a credential is not valid until its durable registry write succeeds.
     this.save(nextDevices)
     this.devices = nextDevices
+
     return entry
   }
 
@@ -116,6 +120,7 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach = 'network'
   ): DeviceEntry {
     const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
+
     if (existing) {
       // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
       // or a link already handed out for off-host use would stop being served after the next launch.
@@ -123,18 +128,22 @@ export class DeviceRegistry {
         ? this.setPairingReach(existing, 'network')
         : existing
     }
+
     return this.addDevice(name, scope, pairingReach)
   }
 
   private setPairingReach(existing: DeviceEntry, pairingReach: RuntimePairingReach): DeviceEntry {
     const updated: DeviceEntry = { ...existing, pairingReach }
+
     const nextDevices = this.devices.map((device) =>
       device.deviceId === existing.deviceId ? updated : device
     )
+
     // Why: persist before the memory swap so a failed write cannot leave the bind decision reading a
     // reach that never reached disk.
     this.save(nextDevices)
     this.devices = nextDevices
+
     return updated
   }
 
@@ -150,18 +159,22 @@ export class DeviceRegistry {
     pairingReach: RuntimePairingReach = 'network'
   ): DeviceEntry {
     const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
+
     return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
   }
 
   removeDevice(deviceId: string): boolean {
     const nextDevices = this.devices.filter((d) => d.deviceId !== deviceId)
+
     if (nextDevices.length === this.devices.length) {
       return false
     }
+
     // Why: persist before memory swap so a failed write does not drop a device
     // only in-process while disk still lists it (and vice versa on reload).
     this.save(nextDevices)
     this.devices = nextDevices
+
     return true
   }
 
@@ -175,57 +188,73 @@ export class DeviceRegistry {
 
   setRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+
     if (index === -1 || binding.relayDeviceId !== deviceId) {
       return false
     }
+
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, relayBinding: binding } : device
     )
+
     this.save(nextDevices)
     this.devices = nextDevices
+
     return true
   }
 
   /** Passing null clears the registration (unregister, or a token the gateway reported dead). */
   setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+
     if (index === -1 || this.devices[index]?.scope !== 'mobile') {
       return false
     }
+
     const nextDevices = this.devices.map((device, candidateIndex) => {
       if (candidateIndex !== index) {
         return device
       }
+
       const { pushRegistration: _dropped, ...rest } = device
+
       return registration ? { ...rest, pushRegistration: registration } : rest
     })
+
     // Why: persist before the memory swap so a failed write cannot leave the dispatcher
     // pushing to a registration disk says is gone (or vice versa on reload).
     this.save(nextDevices)
     this.devices = nextDevices
+
     return true
   }
 
   setMobilePairingConnectionMode(deviceId: string, mode: MobilePairingConnectionMode): boolean {
     const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+
     if (index === -1 || this.devices[index]?.scope !== 'mobile') {
       return false
     }
+
     // Why: persist before swapping memory so a failed write does not leave a
     // mode the UI/runtime believe was stored.
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, mobilePairingConnectionMode: mode } : device
     )
+
     this.save(nextDevices)
     this.devices = nextDevices
+
     return true
   }
 
   getMobilePairingConnectionMode(deviceId: string): MobilePairingConnectionMode | null {
     const device = this.devices.find((candidate) => candidate.deviceId === deviceId)
+
     if (!device || device.scope !== 'mobile') {
       return null
     }
+
     // Why: pairings created before this preference existed used automatic
     // direct-first Relay fallback, so missing state must preserve that behavior.
     return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
@@ -241,15 +270,19 @@ export class DeviceRegistry {
 
   updateLastSeen(deviceId: string): void {
     const index = this.devices.findIndex((d) => d.deviceId === deviceId)
+
     if (index === -1) {
       return
     }
+
     // Why: persist before memory swap so a failed write cannot leave a scanned
     // device looking never-scanned on disk, where rotation would drop it.
     const seenAt = Date.now()
+
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
     )
+
     this.save(nextDevices)
     this.devices = nextDevices
     this.cancelPendingLastSeenFlush()
@@ -263,20 +296,26 @@ export class DeviceRegistry {
    */
   updateLastSeenDeferred(deviceId: string): void {
     const index = this.devices.findIndex((d) => d.deviceId === deviceId)
+
     if (index === -1) {
       return
     }
+
     if (this.devices[index]!.lastSeenAt === 0) {
       this.updateLastSeen(deviceId)
+
       return
     }
+
     const seenAt = Date.now()
     this.devices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, lastSeenAt: seenAt } : device
     )
+
     if (this.pendingLastSeenFlush) {
       return
     }
+
     this.pendingLastSeenFlush = setTimeout(
       () => this.flushPendingLastSeen(),
       LAST_SEEN_FLUSH_DELAY_MS
@@ -290,7 +329,9 @@ export class DeviceRegistry {
     if (!this.pendingLastSeenFlush) {
       return
     }
+
     this.cancelPendingLastSeenFlush()
+
     try {
       this.save(this.devices)
     } catch (error) {
@@ -309,8 +350,10 @@ export class DeviceRegistry {
   private load(): void {
     if (!existsSync(this.registryPath)) {
       this.devices = []
+
       return
     }
+
     try {
       hardenExistingSecureFile(this.registryPath)
       const parsed = JSON.parse(readFileSync(this.registryPath, 'utf-8')) as DeviceEntry[]
@@ -344,6 +387,7 @@ export class DeviceRegistry {
         `Cannot read the device registry at ${this.registryPath}: the read failed. Refusing to overwrite it, which would revoke every paired device.`
       )
     }
+
     writeSecureJsonFile(this.registryPath, devices)
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()

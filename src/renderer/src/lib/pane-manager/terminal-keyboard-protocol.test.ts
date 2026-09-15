@@ -6,7 +6,9 @@ import {
 } from './terminal-keyboard-protocol'
 
 const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)'
+
 const LINUX_UA = 'Mozilla/5.0 (X11; Linux x86_64)'
 
 const localWindowsConpty = {

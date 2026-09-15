@@ -15,6 +15,7 @@
 export type WebviewDragPassthroughSurface = (passthrough: boolean) => void
 
 const passthroughTokens = new Set<symbol>()
+
 const passthroughSurfaces = new Set<WebviewDragPassthroughSurface>()
 
 export function isWebviewDragPassthroughActive(): boolean {
@@ -25,6 +26,7 @@ export function registerWebviewDragPassthroughSurface(
   surface: WebviewDragPassthroughSurface
 ): () => void {
   passthroughSurfaces.add(surface)
+
   return () => {
     passthroughSurfaces.delete(surface)
   }
@@ -34,6 +36,7 @@ function notifyWebviewDragPassthroughSurfaces(): void {
   const passthrough = isWebviewDragPassthroughActive()
   // Copied: a surface may enrol or drop out while being notified.
   const notified = Array.from(passthroughSurfaces)
+
   for (const surface of notified) {
     surface(passthrough)
   }
@@ -52,6 +55,7 @@ export function acquireWebviewsDragPassthrough(): () => void {
     if (released) {
       return
     }
+
     released = true
     passthroughTokens.delete(token)
     notifyWebviewDragPassthroughSurfaces()

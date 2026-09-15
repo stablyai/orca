@@ -28,19 +28,27 @@ import {
 } from './ai-vault-typing-bench-renderer-probe'
 
 const BENCH_ENABLED = process.env.ORCA_AI_VAULT_TYPING_BENCH === '1'
+
 const RESULTS_DIR = path.resolve(__dirname, '..', 'tools', 'benchmarks', 'results')
 
 function readPositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name])
+
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
 const ITERATIONS = readPositiveInt('ORCA_AI_VAULT_BENCH_ITERATIONS', 3)
+
 const SESSION_COUNT = readPositiveInt('ORCA_AI_VAULT_BENCH_SESSIONS', 300)
+
 const PAYLOAD_KIB = readPositiveInt('ORCA_AI_VAULT_BENCH_PAYLOAD_KIB', 128)
+
 const KEY_COUNT = readPositiveInt('ORCA_AI_VAULT_BENCH_KEYS', 100)
+
 const KEY_CADENCE_MS = readPositiveInt('ORCA_AI_VAULT_BENCH_CADENCE_MS', 30)
+
 const BENCH_LABEL = process.env.ORCA_AI_VAULT_BENCH_LABEL ?? 'dev'
+
 const TYPING_ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 
 type ArmResult = {
@@ -58,9 +66,11 @@ type ArmResult = {
 async function openAiVaultSidebar(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     store.getState().setRightSidebarOpen(true)
     store.getState().setRightSidebarTab('vault')
   })
@@ -74,6 +84,7 @@ async function typeAtCadence(page: Page, target: string): Promise<void> {
     const startedAt = performance.now()
     await page.keyboard.type(char)
     const remaining = KEY_CADENCE_MS - (performance.now() - startedAt)
+
     if (remaining > 0) {
       await page.waitForTimeout(remaining)
     }
@@ -92,32 +103,41 @@ async function runArm(args: {
   writeFileSync(args.scriptPath, typingEchoScript(readyMarker))
   await sendToTerminal(args.page, args.ptyId, `node ${JSON.stringify(args.scriptPath)}\r`)
   await waitForTerminalOutput(args.page, readyMarker, 15_000)
+
   const target = TYPING_ALPHABET.repeat(Math.ceil(KEY_COUNT / TYPING_ALPHABET.length)).slice(
     0,
     KEY_COUNT
   )
+
   await installCodexEchoLatencyProbe(args.page, target)
   await startRendererJankProbe(args.page)
+
   if (args.scenario === 'vault-refresh') {
     await triggerVaultRefresh(args.page)
   }
+
   await focusActiveTerminalInput(args.page)
   await typeAtCadence(args.page, target)
+
   if (args.scenario === 'vault-refresh') {
     await expect(args.page.getByRole('button', { name: 'Refresh Session History' })).toBeEnabled({
       timeout: 120_000
     })
   }
+
   const refreshDurationMs =
     args.scenario === 'vault-refresh' ? await readVaultRefreshDuration(args.page) : null
+
   await args.page.waitForTimeout(100)
   const echo = await collectCodexEchoLatencyReport(args.page)
   const rendererJank = await stopRendererJankProbe(args.page)
   await sendToTerminal(args.page, args.ptyId, '\x03').catch(() => undefined)
   const parse = summarizeLatencies(echo.samples.map((sample) => sample.keyToParseMs))
+
   const render = summarizeLatencies(
     echo.samples.flatMap((sample) => (sample.keyToRenderMs === null ? [] : [sample.keyToRenderMs]))
   )
+
   return {
     iteration: args.iteration,
     scenario: args.scenario,
@@ -133,6 +153,7 @@ async function runArm(args: {
 
 function aggregate(arms: ArmResult[], scenario: ArmResult['scenario']): object {
   const selected = arms.filter((arm) => arm.scenario === scenario)
+
   return {
     parse: summarizeLatencies(
       selected.flatMap((arm) => arm.echo.samples.map((s) => s.keyToParseMs))
@@ -167,6 +188,7 @@ function writeReport(testInfo: TestInfo, arms: ArmResult[], seededBytes: number)
     },
     arms
   }
+
   mkdirSync(RESULTS_DIR, { recursive: true })
   const stamp = report.timestamp.replace(/[:.]/g, '-')
   const outPath = path.join(RESULTS_DIR, `ai-vault-typing-${BENCH_LABEL}-${stamp}.json`)
@@ -174,6 +196,7 @@ function writeReport(testInfo: TestInfo, arms: ArmResult[], seededBytes: number)
   testInfo.annotations.push({ type: 'ai-vault-typing-bench', description: outPath })
   console.log(`[ai-vault-typing] report ${outPath}`)
   console.log(`[ai-vault-typing] ${JSON.stringify(report.aggregate)}`)
+
   return outPath
 }
 
@@ -206,11 +229,15 @@ test.describe('Terminal typing during AI Vault refresh bench', () => {
           sessionCount: SESSION_COUNT,
           payloadBytes: PAYLOAD_KIB * 1024
         })
+
         seededBytes += batch.totalBytes
+
         const scenarios: ArmResult['scenario'][] =
           iteration % 2 === 0 ? ['control', 'vault-refresh'] : ['vault-refresh', 'control']
+
         for (const [order, scenario] of scenarios.entries()) {
           arms.push(await runArm({ page: orcaPage, ptyId, scriptPath, iteration, scenario, order }))
+
           if (scenario === 'vault-refresh') {
             await expect(
               orcaPage.getByText(batch.newestTitle, { exact: true }).first()
@@ -220,6 +247,7 @@ test.describe('Terminal typing during AI Vault refresh bench', () => {
           }
         }
       }
+
       writeReport(testInfo, arms, seededBytes)
       expect(arms.every((arm) => arm.missingEchoCount === 0)).toBe(true)
     } finally {

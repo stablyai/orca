@@ -16,6 +16,7 @@ export {
 // get mildly lifted — accepted because those were already near-illegible, so the nudge helps rather
 // than harms (see the builtin-catalog exceptions pinned in terminal-contrast-correction.test.ts).
 export const LIGHT_BG_MIN_CONTRAST = 4.5
+
 export const DARK_BG_MIN_CONTRAST = 3
 
 // Why gate by background luminance, not app mode (#7934): either theme slot can hold either kind of
@@ -28,9 +29,11 @@ export function resolveTerminalMinimumContrastRatio(
   override?: number
 ): number {
   const configured = normalizeTerminalMinimumContrastRatio(override)
+
   if (configured !== undefined) {
     return configured
   }
+
   return isTerminalBackgroundLight(background, { appSurface })
     ? LIGHT_BG_MIN_CONTRAST
     : DARK_BG_MIN_CONTRAST

@@ -38,8 +38,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -60,6 +63,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -69,6 +73,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -89,6 +94,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -99,9 +105,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -111,9 +119,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -122,6 +132,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -146,6 +157,7 @@ function seedUnverifiableRestoredPane() {
       }
     }
   } as StoreState
+
   return createDeps({
     restoredLeafId: LEAF_2,
     restoredPtyIdByLeafId: { [LEAF_2]: 'unverifiable-pty' }
@@ -180,11 +192,13 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -206,15 +220,18 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
+
       const hasPty = vi.fn(async () => false)
 
       const binding = connectPanePty(createPane(2) as never, manager as never, deps as never)
@@ -232,6 +249,7 @@ describe('connectPanePty', () => {
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -249,18 +267,22 @@ describe('connectPanePty', () => {
 
     it('does not apply a stale targeted liveness result after reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+
       let resolveHasPty: (value: boolean) => void = () => {
         throw new Error('hasPty promise resolver was not initialized')
       }
+
       const hasPty = vi.fn(
         () =>
           new Promise<boolean>((resolve) => {
             resolveHasPty = resolve
           })
       )
+
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -284,11 +306,13 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -297,9 +321,11 @@ describe('connectPanePty', () => {
       const binding = connectPanePty(createPane(2) as never, manager as never, deps as never)
       // Why: clear the freshly-split early-return guard so the only remaining protection is the freshness guard under test.
       capturedDataCallback.current?.('shell prompt')
+
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
+
       expect(onPtySpawn).toBeTypeOf('function')
 
       // Record boundAt via the spawn chokepoint; bracket it with a real timestamp.
@@ -320,11 +346,13 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -333,9 +361,11 @@ describe('connectPanePty', () => {
       const binding = connectPanePty(createPane(2) as never, manager as never, deps as never)
       // Why: clear the freshly-split early-return guard so onExit reaches close.
       capturedDataCallback.current?.('shell prompt')
+
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
+
       expect(onPtySpawn).toBeTypeOf('function')
 
       onPtySpawn?.('pty-pane-2')
@@ -368,6 +398,7 @@ describe('connectPanePty', () => {
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -388,6 +419,7 @@ describe('connectPanePty', () => {
       transport.getConnectionId.mockReturnValue(null)
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -407,6 +439,7 @@ describe('connectPanePty', () => {
       transport.getConnectionId.mockReturnValue('ssh-target-1')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -425,6 +458,7 @@ describe('connectPanePty', () => {
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         consumeSuppressedPtyExit: vi.fn(() => true),
@@ -448,16 +482,19 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       // First exit is suppressed (intentional restart); later exits are real.
       const consumeSuppressedPtyExit = vi
         .fn<(ptyId: string) => boolean>()
         .mockImplementationOnce(() => true)
         .mockImplementation(() => false)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         consumeSuppressedPtyExit,
@@ -466,6 +503,7 @@ describe('connectPanePty', () => {
 
       connectPanePty(createPane(2) as never, manager as never, deps as never)
       capturedDataCallback.current?.('shell prompt')
+
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -487,6 +525,7 @@ describe('connectPanePty', () => {
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -509,11 +548,13 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -521,9 +562,11 @@ describe('connectPanePty', () => {
 
       const binding = connectPanePty(createPane(2) as never, manager as never, deps as never)
       capturedDataCallback.current?.('shell prompt')
+
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
+
       expect(onPtyExit).toBeTypeOf('function')
 
       binding.reconcileIfSessionDead(new Set(['pty-pane-1']))
@@ -541,11 +584,13 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       // consumeSuppressedPtyExit always returns false for this genuinely-dead id.
       const deps = createDeps({
         restoredLeafId: LEAF_2,
@@ -555,6 +600,7 @@ describe('connectPanePty', () => {
 
       const binding = connectPanePty(createPane(2) as never, manager as never, deps as never)
       capturedDataCallback.current?.('shell prompt')
+
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -573,6 +619,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
       opts.callbacks?.onError?.('terminal_pane_owner_unverified')
+
       return undefined
     })
     transportFactoryQueue.push(transport)
@@ -624,14 +671,18 @@ describe('connectPanePty', () => {
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
+
       const pane = createPane(2)
+
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
       }
+
       return {
         binding,
         transport,
@@ -670,11 +721,13 @@ describe('connectPanePty', () => {
       const calls: string[] = []
       listSessions.mockImplementation(() => {
         calls.push('listSessions')
+
         return Promise.resolve([])
       })
       const { binding, transport, typeKeystroke } = await connectActivePaneWithInput()
       transport.sendInput.mockImplementation(() => {
         calls.push('sendInput')
+
         return true
       })
 

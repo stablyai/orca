@@ -44,6 +44,7 @@ export function clampMarkupScale(scale: number): number {
   if (!Number.isFinite(scale) || scale <= 0) {
     return 1
   }
+
   return Math.min(Math.max(scale, 1), 4)
 }
 
@@ -58,9 +59,11 @@ export function effectiveMarkupScale(
 ): number {
   const scale = clampMarkupScale(outputScale)
   const area = displayCssWidth * displayCssHeight
+
   if (area <= 0 || !Number.isFinite(maxPixels) || maxPixels <= 0) {
     return scale
   }
+
   return Math.min(scale, Math.sqrt(maxPixels / area))
 }
 
@@ -71,6 +74,7 @@ export function markupCanvasSize(
   maxPixels: number = Number.POSITIVE_INFINITY
 ): { width: number; height: number } {
   const scale = effectiveMarkupScale(displayCssWidth, displayCssHeight, outputScale, maxPixels)
+
   // Why: floor (not round) so a rounded-up dimension can't nudge the area back
   // over maxPixels at the budget boundary.
   return {
@@ -82,11 +86,14 @@ export function markupCanvasSize(
 // Bytes represented by a `data:...;base64,<payload>` URL's payload.
 export function dataUrlByteLength(dataUrl: string): number {
   const commaIndex = dataUrl.indexOf(',')
+
   if (commaIndex === -1) {
     return 0
   }
+
   const payload = dataUrl.slice(commaIndex + 1)
   const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
+
   return Math.max(0, Math.floor((payload.length * 3) / 4) - padding)
 }
 
@@ -100,6 +107,7 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(width))
   canvas.height = Math.max(1, Math.round(height))
+
   return canvas
 }
 
@@ -110,21 +118,27 @@ function renderComposite(input: MarkupComposeInput): HTMLCanvasElement {
     input.outputScale,
     input.maxPixels
   )
+
   const size = markupCanvasSize(
     input.displayCssWidth,
     input.displayCssHeight,
     input.outputScale,
     input.maxPixels
   )
+
   const canvas = createCanvas(size.width, size.height)
   const ctx = canvas.getContext('2d')
+
   if (!ctx) {
     throw new Error('markup compose: 2d context unavailable')
   }
+
   ctx.drawImage(input.image, 0, 0, size.width, size.height)
+
   for (const shape of input.shapes) {
     drawShapes(ctx, [scaleShape(shape, scale)])
   }
+
   return canvas
 }
 
@@ -132,12 +146,16 @@ function downscaleCanvas(source: HTMLCanvasElement, factor: number): HTMLCanvasE
   if (factor >= 1) {
     return source
   }
+
   const next = createCanvas(source.width * factor, source.height * factor)
   const ctx = next.getContext('2d')
+
   if (!ctx) {
     return source
   }
+
   ctx.drawImage(source, 0, 0, next.width, next.height)
+
   return next
 }
 
@@ -153,8 +171,10 @@ function canvasToPngDataUrl(canvas: HTMLCanvasElement): Promise<string> {
         } catch (error) {
           reject(error instanceof Error ? error : new Error('markup compose: toDataURL failed'))
         }
+
         return
       }
+
       const reader = new FileReader()
       reader.onload = () => resolve(reader.result as string)
       reader.onerror = () => reject(reader.error ?? new Error('markup compose: blob read failed'))
@@ -173,10 +193,12 @@ export async function composeMarkupDataUrl(
   const composite = renderComposite(input)
 
   let smallest: MarkupComposeResult | null = null
+
   for (const step of MARKUP_DOWNSCALE_STEPS) {
     const canvas = downscaleCanvas(composite, step)
     const dataUrl = await canvasToPngDataUrl(canvas)
     const byteLength = dataUrlByteLength(dataUrl)
+
     const result: MarkupComposeResult = {
       dataUrl,
       mimeType: 'image/png',
@@ -184,9 +206,11 @@ export async function composeMarkupDataUrl(
       height: canvas.height,
       byteLength
     }
+
     if (byteLength <= input.maxBytes) {
       return result
     }
+
     smallest = result
   }
 
@@ -197,5 +221,6 @@ export async function composeMarkupDataUrl(
     // Unreachable: MARKUP_DOWNSCALE_STEPS is non-empty, so the loop always sets it.
     throw new Error('markup compose: no downscale step produced output')
   }
+
   return smallest
 }

@@ -19,17 +19,21 @@ const capturedHooks = readFileSync(
 function parseCapturedHook(line: string): Record<string, unknown> {
   // JSON.parse returns any; the runtime guard below is what actually proves the shape.
   const parsed: Record<string, unknown> = JSON.parse(line)
+
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error('Captured Grok hook must be an object')
   }
+
   return parsed
 }
 
 function capturedHook(predicate: (payload: Record<string, unknown>) => boolean) {
   const hook = capturedHooks.find(predicate)
+
   if (!hook) {
     throw new Error('Captured Grok hook not found')
   }
+
   return hook
 }
 
@@ -52,6 +56,7 @@ describe('Grok completion observations', () => {
           hook.hookEventName === 'stop' && hook.promptId === '8e3fbed9-8839-49a3-8078-0fc261228383'
       )
     )
+
     const followUp = normalize(
       capturedHook(
         (hook) =>
@@ -73,6 +78,7 @@ describe('Grok completion observations', () => {
     const sessionEnd = normalize(
       capturedHook((hook) => hook.hookEventName === 'session_end' && hook.reason === 'shutdown')
     )
+
     const shutdownStop = normalize(
       capturedHook(
         (hook) =>
@@ -221,12 +227,15 @@ describe('Grok completion observations', () => {
     const taskComplete = normalize(
       capturedHook((hook) => hook.notificationType === 'task_complete')
     )
+
     const idlePrompt = normalize(capturedHook((hook) => hook.notificationType === 'idle_prompt'))
+
     const idlePromptWithQuestionCopy = normalize({
       hookEventName: 'Notification',
       notificationType: 'idle_prompt',
       message: 'Grok needs your feedback before the next prompt'
     })
+
     const agentError = normalize({
       hookEventName: 'Notification',
       notificationType: 'agent_error',
@@ -279,6 +288,7 @@ describe('Grok completion observations', () => {
       promptId: 'prompt-old',
       prompt: 'old turn'
     })
+
     const replacement = normalizeHookPayload(
       state,
       'grok',
@@ -293,6 +303,7 @@ describe('Grok completion observations', () => {
       },
       'production'
     )
+
     expect(replacement).toMatchObject({
       grokPromptBoundary: true,
       payload: { state: 'working', prompt: 'new turn' }
@@ -350,6 +361,7 @@ describe('Grok completion observations', () => {
       },
       'production'
     )
+
     expect(toolEvent).toMatchObject({
       providerPromptId: 'prompt-new',
       grokPromptBoundary: true

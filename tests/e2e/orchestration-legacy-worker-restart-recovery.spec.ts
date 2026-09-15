@@ -31,14 +31,21 @@ import {
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
+
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
+
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
+
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
+
 const authorityLedgerPath = path.join(fakeCliDir, 'authority.jsonl')
+
 const lifecycleLedgerPath = path.join(fakeCliDir, 'lifecycle.jsonl')
+
 const fakeCodexCommand = buildFakeAgentCommandOverride(
   path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 )
+
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
@@ -216,6 +223,7 @@ function readLedger(ledgerPath: string): LedgerEvent[] {
   if (!existsSync(ledgerPath)) {
     return []
   }
+
   return readFileSync(ledgerPath, 'utf8')
     .split(/\r?\n/)
     .filter(Boolean)
@@ -225,6 +233,7 @@ function readLedger(ledgerPath: string): LedgerEvent[] {
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -254,6 +263,7 @@ async function readRendererRecoveryState(
   return page.evaluate(
     ({ workerPaneKey, workerTabId }) => {
       const state = window.__store?.getState()
+
       return {
         sleeping: Boolean(state?.sleepingAgentSessionsByPaneKey[workerPaneKey]),
         resumeClaim: Boolean(state?.automaticAgentResumeClaimsByTabId[workerTabId]),
@@ -275,13 +285,17 @@ function stripLegacyWorkerRendererBinding(
 ): void {
   const data = readPersistedData(userDataDir)
   const session = data.workspaceSession
+
   if (!session) {
     throw new Error('Expected a persisted workspace session')
   }
+
   const sleeping = session.sleepingAgentSessionsByPaneKey?.[input.workerPaneKey]
+
   if (sleeping?.providerSession?.id !== PROVIDER_SESSION_ID) {
     throw new Error('Expected the legacy worker resume record before removing its tab binding')
   }
+
   session.tabsByWorktree = {
     ...session.tabsByWorktree,
     [input.worktreeId]: (session.tabsByWorktree?.[input.worktreeId] ?? []).filter(
@@ -289,18 +303,22 @@ function stripLegacyWorkerRendererBinding(
     )
   }
   delete session.terminalLayoutsByTabId?.[input.workerTabId]
+
   if (session.unifiedTabs?.[input.worktreeId]) {
     session.unifiedTabs[input.worktreeId] = session.unifiedTabs[input.worktreeId].filter(
       (tab) => tab.id !== input.workerTabId && tab.entityId !== input.workerTabId
     )
   }
+
   for (const group of session.tabGroups?.[input.worktreeId] ?? []) {
     group.tabOrder = group.tabOrder.filter((tabId) => tabId !== input.workerTabId)
     group.recentTabIds = group.recentTabIds?.filter((tabId) => tabId !== input.workerTabId)
+
     if (group.activeTabId === input.workerTabId) {
       group.activeTabId = input.coordinatorTabId
     }
   }
+
   session.activeTabId = input.coordinatorTabId
   session.activeTabIdByWorktree = {
     ...session.activeTabIdByWorktree,
@@ -322,6 +340,7 @@ function assertDispatchRemainsCurrent(
   }
 ): void {
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     const authority = db
       .prepare(
@@ -333,6 +352,7 @@ function assertDispatchRemainsCurrent(
          WHERE dc.id = ?`
       )
       .get(input.dispatchId)
+
     expect(authority).toEqual({
       dispatch_status: 'dispatched',
       assignee_handle: input.terminalHandle,
@@ -361,6 +381,7 @@ function markAssignmentAsPreUpdateLegacy(
   }
 ): void {
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     const authority = db
       .prepare(
@@ -372,6 +393,7 @@ function markAssignmentAsPreUpdateLegacy(
          WHERE dc.id = ?`
       )
       .get(input.dispatchId)
+
     expect(authority).toEqual({
       dispatch_status: 'dispatched',
       assignee_handle: input.terminalHandle,
@@ -418,9 +440,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
     rmSync(interruptionLedgerPath, { force: true })
     rmSync(authorityLedgerPath, { force: true })
     rmSync(lifecycleLedgerPath, { force: true })
+
     const repoPath = existsSync(TEST_REPO_PATH_FILE)
       ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
       : ''
+
     test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
 
     const session = createRestartSession(testInfo, {
@@ -431,6 +455,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       ORCA_E2E_LIFECYCLE_LEDGER: lifecycleLedgerPath,
       ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
     })
+
     let firstApp: ElectronApplication | null = null
     let secondApp: ElectronApplication | null = null
 
@@ -454,33 +479,40 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       await waitForActivePanePtyId(first.page)
       const coordinatorPane = await waitForActivePaneHookDescriptor(first.page)
       const firstClient = new RuntimeClient(session.userDataDir, 30_000, null, null)
+
       const coordinator = await firstClient.call<{ terminal: { handle: string } }>(
         'terminal.resolvePane',
         { paneKey: coordinatorPane.paneKey }
       )
+
       const coordinatorTerminal = await firstClient.call<{
         terminal: { worktreeId: string }
       }>('terminal.show', { terminal: coordinator.result.terminal.handle })
+
       await expect
         .poll(async () => {
           const listed = await firstClient.call<{ worktrees: { id: string }[] }>(
             'worktree.list',
             {}
           )
+
           return listed.result.worktrees.some(
             (candidate) => candidate.id === coordinatorTerminal.result.terminal.worktreeId
           )
         })
         .toBe(true)
+
       const run = await firstClient.call<{ run: { id: string } }>('orchestration.runCreate', {
         objective: 'Legacy worker restart recovery',
         from: coordinator.result.terminal.handle
       })
+
       const task = await firstClient.call<{ task: { id: string } }>('orchestration.taskCreate', {
         spec: 'Respond ACK and remain idle',
         run: run.result.run.id,
         callerTerminalHandle: coordinator.result.terminal.handle
       })
+
       const started = await firstClient.call<{
         effects: { kind: string; role?: string; id?: string }[]
       }>('orchestration.workerStart', {
@@ -489,18 +521,22 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
         agent: 'codex',
         timeoutMs: 15_000
       })
+
       const workerHandle = started.result.effects.find(
         (effect) => effect.kind === 'terminal' && effect.role === 'agent'
       )?.id
+
       expect(workerHandle).toBeTruthy()
 
       let worker = (
         await firstClient.call<RuntimeTerminalListResult>('terminal.list')
       ).result.terminals.find((terminal) => terminal.title === 'Codex Ready')
+
       await expect
         .poll(async () => {
           const listed = await firstClient.call<RuntimeTerminalListResult>('terminal.list')
           worker = listed.result.terminals.find((terminal) => terminal.title === 'Codex Ready')
+
           return worker?.ptyId ?? null
         })
         .toBeTruthy()
@@ -512,9 +548,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
             terminal: worker!.handle,
             limit: 200
           })
+
           return read.result.terminal.tail.join('\n')
         })
         .toContain('ACK')
+
       const initialWorker = {
         ptyId: worker!.ptyId,
         incarnationId: worker!.incarnationId,
@@ -522,6 +560,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
         tabId: worker!.tabId,
         leafId: worker!.leafId
       }
+
       const initialDispatch = await firstClient.call<{
         dispatch: {
           id: string
@@ -531,6 +570,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
           process_incarnation: string
         } | null
       }>('orchestration.dispatchShow', { task: task.result.task.id })
+
       expect(initialDispatch.result.dispatch).toEqual(
         expect.objectContaining({
           task_id: task.result.task.id,
@@ -619,6 +659,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
         workerTabId: worker!.tabId,
         workerPaneKey
       })
+
       const dispatchIdentity = {
         taskId: task.result.task.id,
         dispatchId: initialDispatch.result.dispatch!.id,
@@ -627,6 +668,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
         processIncarnation: `${initialWorker.ptyId}:${initialWorker.incarnationId}`,
         worktreeId: initialWorker.worktreeId
       }
+
       if (contractVersion === LEGACY_CONTRACT_VERSION) {
         markAssignmentAsPreUpdateLegacy(session.userDataDir, dispatchIdentity)
       } else {
@@ -638,16 +680,21 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       await waitForSessionReady(second.page)
       expect(await waitForActiveWorktree(second.page)).toBe(worktreeId)
       const secondClient = new RuntimeClient(session.userDataDir, 30_000, null, null)
+
       let recovered = (
         await secondClient.call<RuntimeTerminalListResult>('terminal.list')
       ).result.terminals.find((terminal) => terminal.ptyId === initialWorker.ptyId)
+
       await expect
         .poll(async () => {
           const listed = await secondClient.call<RuntimeTerminalListResult>('terminal.list')
+
           const matches = listed.result.terminals.filter(
             (terminal) => terminal.ptyId === initialWorker.ptyId
           )
+
           recovered = matches[0]
+
           return matches
         })
         .toEqual([
@@ -661,6 +708,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       const recoveredTab = second.page.locator(
         `[data-testid="sortable-tab"][data-tab-id="${initialWorker.tabId}"]`
       )
+
       await expect(recoveredTab).toBeVisible()
       await expect(recoveredTab).toHaveCount(1)
       await expect(recoveredTab).toHaveAttribute('data-active', 'false')
@@ -673,11 +721,13 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
             terminal: recovered!.handle,
             limit: 200
           })
+
           return read.result.terminal.tail.join('\n')
         })
         .toContain('ACK')
 
       let assignmentRunId = run.result.run.id
+
       if (contractVersion === LEGACY_CONTRACT_VERSION) {
         const runs = await listAllOrchestrationRuns(secondClient)
         assignmentRunId = runs.find(
@@ -685,17 +735,22 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
             candidate.objective === 'Recovered orchestration work from a contract update'
         )!.id
       }
+
       const restoredRun = await secondClient.call<{ run: { id: string } }>(
         'orchestration.runShow',
         { id: assignmentRunId }
       )
+
       expect(restoredRun.result.run.id).toBe(assignmentRunId)
+
       const tasks = await secondClient.call<{ tasks: { id: string }[] }>('orchestration.taskList', {
         run: assignmentRunId
       })
+
       expect(tasks.result.tasks).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: task.result.task.id })])
       )
+
       const recoveredDispatch = await secondClient.call<{
         dispatch: {
           id: string
@@ -706,6 +761,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
           contract_version: number
         } | null
       }>('orchestration.dispatchShow', { task: task.result.task.id })
+
       expect(recoveredDispatch.result.dispatch).toEqual(
         expect.objectContaining({
           id: initialDispatch.result.dispatch!.id,
@@ -741,6 +797,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
             dispatchId: initialDispatch.result.dispatch!.id
           })
         ).toString('base64')
+
         await secondClient.call('terminal.send', {
           terminal: recovered!.handle,
           text: `ORCA_E2E_RUN_LEGACY_DONE:${legacyCompletion}`,
@@ -780,9 +837,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
             const dispatch = await secondClient.call<{
               dispatch: { id: string; status: string } | null
             }>('orchestration.dispatchShow', { task: task.result.task.id })
+
             const listedTasks = await secondClient.call<{
               tasks: { id: string; status: string }[]
             }>('orchestration.taskList', { run: assignmentRunId })
+
             return {
               dispatch: dispatch.result.dispatch?.status,
               task: listedTasks.result.tasks.find(
@@ -816,9 +875,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       if (secondApp) {
         await session.close(secondApp).catch(() => undefined)
       }
+
       if (firstApp) {
         await session.close(firstApp).catch(() => undefined)
       }
+
       await session.dispose()
     }
   })

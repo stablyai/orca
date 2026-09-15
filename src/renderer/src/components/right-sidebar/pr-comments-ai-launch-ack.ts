@@ -42,16 +42,19 @@ export function canPostPRReviewThreadReply(
   if (!Number.isSafeInteger(comment.id) || comment.id <= 0) {
     return false
   }
+
   // Why: review-summary anchors use #pullrequestreview-N; that id is not a review
   // comment id and will 404 on the replies endpoint.
   if (typeof comment.url === 'string' && comment.url.includes('pullrequestreview')) {
     return false
   }
+
   // Why: threadId is the GraphQL thread key; path marks review comments even when
   // thread metadata is missing; #discussion_r is the REST anchor for review comments.
   if (Boolean(comment.threadId) || Boolean(comment.path)) {
     return true
   }
+
   return typeof comment.url === 'string' && comment.url.includes('discussion_r')
 }
 
@@ -93,15 +96,19 @@ export function resolvePRReviewReplyThreadId(args: {
   if (args.parent.threadId) {
     return args.parent.threadId
   }
+
   const byId = args.existingComments.find(
     (comment) => comment.id === args.parent.id && Boolean(comment.threadId)
   )
+
   if (byId?.threadId) {
     return byId.threadId
   }
+
   if (!args.parent.path) {
     return undefined
   }
+
   const siblingThreadIds = new Set(
     args.existingComments.flatMap((comment) =>
       comment.threadId &&
@@ -111,6 +118,7 @@ export function resolvePRReviewReplyThreadId(args: {
         : []
     )
   )
+
   // Why: several threads on one file give no reliable parent; a wrong threadId misfiles the reply.
   return siblingThreadIds.size === 1 ? [...siblingThreadIds][0] : undefined
 }
@@ -122,9 +130,11 @@ export function resolvePRReviewReplyThreadId(args: {
  */
 export function checksPanelReviewStableKey(asyncResultKey: string): string {
   const parts = asyncResultKey.split('::')
+
   if (parts.length <= 1) {
     return asyncResultKey
   }
+
   return parts.slice(0, -1).join('::')
 }
 
@@ -149,6 +159,7 @@ async function mapWithBoundedConcurrency<T, R>(
 ): Promise<R[]> {
   const results = Array.from<R>({ length: items.length })
   let next = 0
+
   const workers = Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, async () => {
     while (next < items.length) {
       const index = next
@@ -156,7 +167,9 @@ async function mapWithBoundedConcurrency<T, R>(
       results[index] = await run(items[index]!)
     }
   })
+
   await Promise.all(workers)
+
   return results
 }
 
@@ -206,6 +219,7 @@ export async function acknowledgePRCommentsAfterAiLaunch(args: {
         (group) => !canPostPRReviewThreadReply(getPRCommentGroupReplyTarget(group))
       )
     : []
+
   const batch = await postBatchedConversationReply(conversationGroups, args.deps)
 
   const perGroup = await mapWithBoundedConcurrency(
@@ -232,9 +246,11 @@ async function postBatchedConversationReply(
   if (groups.length === 0) {
     return NO_BATCHED_CONVERSATION_REPLY
   }
+
   const replyOk = await deps.replyAsConversation(
     buildPRCommentBatchConversationReplyBody(groups.map(getPRCommentGroupReplyTarget))
   )
+
   return {
     // Why: one host POST covers the whole set, so the toast must count it once.
     counts: { ...EMPTY_ACK_COUNTS, replied: replyOk ? 1 : 0, failed: replyOk ? 0 : 1 },
@@ -255,18 +271,23 @@ async function acknowledgePRCommentGroup(
     } else {
       counts.failed += 1
     }
+
     return counts
   }
 
   if (!deps.canReply) {
     counts.skipped += 1
+
     return counts
   }
+
   // The combined conversation post already covered this group and counted itself.
   if (batch.handled.has(group)) {
     return counts
   }
+
   await postInThreadFixingReply(group, deps, counts)
+
   return counts
 }
 
@@ -280,6 +301,7 @@ async function postInThreadFixingReply(
     getPRCommentGroupReplyTarget(group),
     PR_COMMENT_AI_FIXING_REPLY
   )
+
   if (replyOk) {
     counts.replied += 1
   } else {
@@ -339,12 +361,14 @@ export function setPendingPRCommentAiAck(payload: PendingPRCommentAiAck): void {
       payload.reviewContextKey
     )
   }
+
   pendingAiCommentAck = payload
 }
 
 export function takePendingPRCommentAiAck(): PendingPRCommentAiAck | null {
   const payload = pendingAiCommentAck
   pendingAiCommentAck = null
+
   return payload
 }
 

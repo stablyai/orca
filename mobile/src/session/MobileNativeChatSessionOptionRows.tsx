@@ -207,6 +207,7 @@ export function DescriptorRows({
   onInvokeAction: () => void
 }): React.JSX.Element {
   const locked = disabled || !descriptor.settable
+
   // Why: flip-only without a baseline is an action — never claim On/Off.
   if (descriptor.action?.type === 'toggle-command') {
     return (
@@ -218,6 +219,7 @@ export function DescriptorRows({
       />
     )
   }
+
   // Why: agent-picker opens the TUI; it is not a set of radio choices.
   if (descriptor.action?.type === 'agent-picker') {
     return (
@@ -229,6 +231,7 @@ export function DescriptorRows({
       />
     )
   }
+
   // One switch, not an On/Off pair: the option is binary. The value always
   // renders; the marker is what keeps an unpicked one from reading as confirmed,
   // since the switch itself cannot say "nobody said".
@@ -244,7 +247,9 @@ export function DescriptorRows({
       />
     )
   }
+
   const { currentValue, choices } = descriptor.kind
+
   return (
     <>
       {choices.map((choice, index) => (

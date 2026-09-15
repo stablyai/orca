@@ -31,16 +31,20 @@ export function useDocPreviewWebviewHistory(
     ) {
       return
     }
+
     depthRef.current = next
     setDepth(next)
   }, [])
 
   const sync = useCallback((): void => {
     const webview = webviewRef.current
+
     if (!webview) {
       apply({ canGoBack: false, canGoForward: false })
+
       return
     }
+
     try {
       apply({ canGoBack: webview.canGoBack(), canGoForward: webview.canGoForward() })
     } catch {

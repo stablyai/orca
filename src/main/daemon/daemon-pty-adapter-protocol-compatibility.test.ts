@@ -28,6 +28,7 @@ const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMo
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -36,6 +37,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -53,6 +55,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     const harness = await startDaemonAdapterHarness(() => {
       return createMockSubprocess()
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -72,6 +75,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('mode 2031 fact compatibility (#9993)', () => {
     let onEventSpy: ReturnType<typeof vi.spyOn>
+
     // Why these tests exist: daemons survive app updates, so a NEW desktop can be
     // driving a PRESERVED older daemon. Those daemons emit '2031-subscribe' but have
     // no unsubscribe fact at all. For a gate-managed pane the renderer never sees the
@@ -91,12 +95,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const listeners: ((event: unknown) => void)[] = []
       onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
         listeners.push(listener)
+
         return () => {}
       })
+
       return {
         kinds: () => forwarded,
         emit: (fact) => {
           expect(listeners.length).toBeGreaterThan(0)
+
           for (const listener of listeners) {
             // `type: 'event'` is the envelope the routing switch requires.
             listener({
@@ -114,6 +121,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // v28 is the version shipping today, so this is the live upgrade hazard: a v28
       // daemon preserved across an app update, still holding real sessions.
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+
       try {
         const captured = captureForwardedFacts(legacy)
         // Force a fresh wire-up so the spy above is the listener the adapter installs.
@@ -139,6 +147,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // exit while hidden with no party able to emit the withdrawal — #9993 via upgrade.
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+
       try {
         legacy.setPtyBackgrounded('v28-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
@@ -154,6 +163,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('delegates scan authority to a v32 daemon with faithful snapshots', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
+
       try {
         current.setPtyBackgrounded('v32-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
@@ -173,11 +183,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const listeners: ((event: unknown) => void)[] = []
       onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
         listeners.push(listener)
+
         return () => {}
       })
+
       try {
         current['removeEventListener'] = null
         current['setupEventRouting']()
+
         for (const listener of listeners) {
           listener({
             type: 'event',
@@ -211,6 +224,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // never is. A stale relay tracker on a preserved daemon must still be able to
       // clear a subscription rather than be silenced into stranding it.
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+
       try {
         const captured = captureForwardedFacts(legacy)
         legacy['removeEventListener'] = null
@@ -226,6 +240,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('forwards 2031 facts from a v29 daemon that can retract them', () => {
       const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+
       try {
         const captured = captureForwardedFacts(current)
         current['removeEventListener'] = null
@@ -244,6 +259,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   describe('background stream thinning compatibility', () => {
     it('reports authoritative snapshot support only for the corrected serializer protocol', () => {
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
+
       try {
         expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
         expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
@@ -254,6 +270,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('reports background state on the authoritative-snapshot protocol', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+
       try {
         adapter.setPtyBackgrounded('current-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
@@ -268,6 +285,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('keeps preserved v31 sessions unthinned because their snapshots can corrupt replay', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
+
       try {
         legacy.setPtyBackgrounded('legacy-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
@@ -284,14 +302,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
         isNew: true,
         pid: null,
         shellState: 'unsupported',
         snapshot: null
       } as never)
+
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
+
       try {
         await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -321,15 +342,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         const ensureConnectedSpy = vi
           .spyOn(DaemonClient.prototype, 'ensureConnected')
           .mockResolvedValue()
+
         const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
           isNew: true,
           pid: null,
           shellState: 'unsupported',
           snapshot: null
         } as never)
+
         const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
         const target = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
         const sessionId = `spawn-v${protocolVersion}-session`
+
         try {
           await target.spawn({ sessionId, cols: 80, rows: 24 })
 
@@ -364,6 +388,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) =>
@@ -371,8 +396,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             ? ({ size: { cols: 80, rows: 24 } } as never)
             : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
         )
+
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+
       try {
         await legacy.attach('preserved-v28-session')
 
@@ -395,6 +422,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) =>
@@ -402,8 +430,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             ? ({ size: { cols: 80, rows: 24 } } as never)
             : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
         )
+
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
+
       try {
         await current.attach('preserved-v32-session')
 
@@ -423,6 +453,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
         isNew: false,
         pid: 123,
@@ -436,7 +467,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           rows: 24
         }
       } as never)
+
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
+
       try {
         const result = await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -459,8 +492,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   describe('probePtyLiveness', () => {
     it('reads daemon truth before a fresh adapter has attached the session', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
       const activeSessionIds = (adapter as unknown as { activeSessionIds: Set<string> })
         .activeSessionIds
+
       activeSessionIds.clear()
 
       expect(adapter.hasPty(id)).toBe(false)
@@ -474,6 +509,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       vi.spyOn(client, 'request').mockRejectedValueOnce(new Error('unavailable'))
 
       await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
@@ -484,11 +520,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       request: ReturnType<typeof vi.fn>
     ): DaemonPtyAdapter {
       const probeAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+
       ;(
         probeAdapter as unknown as {
           client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
         }
       ).client = { request, disconnect: vi.fn() }
+
       return probeAdapter
     }
 
@@ -501,6 +539,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         if (type !== 'listSessions') {
           throw new Error(`Unknown request type: ${type}`)
         }
+
         return {
           sessions: [
             { sessionId: 'legacy-live', isAlive: true },
@@ -508,6 +547,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           ]
         }
       })
+
       const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
 
       await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBe(true)
@@ -524,6 +564,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const request = vi.fn(async () => {
         throw new Error('Not connected')
       })
+
       const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
 
       await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBeNull()
@@ -539,8 +580,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         if (type === 'getSize') {
           throw new Error(`Unknown request type: ${type}`)
         }
+
         return { sessions: [{ sessionId: 'ambiguous-live', isAlive: true }] }
       })
+
       const ambiguous = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
 
       await expect(ambiguous.probePtyLiveness('ambiguous-live')).resolves.toBe(true)
@@ -566,8 +609,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         if (type === 'getSize') {
           throw new Error('Connection lost')
         }
+
         return { sessions: [] }
       })
+
       const flaky = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
 
       await expect(flaky.probePtyLiveness('live-elsewhere')).resolves.toBeNull()
@@ -593,6 +638,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnected = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const request = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) => {
@@ -600,8 +646,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             if (args.getSizeError) {
               throw args.getSizeError
             }
+
             return (args.getSizeResponse ?? { size: null }) as never
           }
+
           if (type === 'listSessions') {
             return {
               sessions: [
@@ -614,6 +662,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
               ]
             } as never
           }
+
           if (type === 'createOrAttach') {
             return {
               isNew: false,
@@ -623,24 +672,29 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
               incarnationId: 'compat-attach-incarnation'
             } as never
           }
+
           return {} as never
         })
+
       const adapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         protocolVersion: args.protocolVersion
       })
+
       return { request, ensureConnected, adapter }
     }
 
     it('uses inventory dimensions when attaching to a pre-getSize daemon', async () => {
       const sessionId = 'legacy-v17-session'
+
       const rig = mockAttachRequest({
         sessionId,
         cols: 137,
         rows: 41,
         protocolVersion: GET_SIZE_PROTOCOL_VERSION - 1
       })
+
       try {
         await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
         expect(rig.request).not.toHaveBeenCalledWith('getSize', expect.anything())
@@ -658,6 +712,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('falls back to inventory when a versioned daemon rejects getSize', async () => {
       const sessionId = 'ambiguous-get-size-session'
+
       const rig = mockAttachRequest({
         sessionId,
         cols: 120,
@@ -665,6 +720,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         protocolVersion: GET_SIZE_PROTOCOL_VERSION,
         getSizeError: new Error('Unknown request type: getSize')
       })
+
       try {
         await expect(rig.adapter.attach(sessionId)).resolves.toBeUndefined()
         expect(rig.request).toHaveBeenCalledWith('listSessions', undefined)
@@ -681,6 +737,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('preserves a size-probe transport failure as unverifiable', async () => {
       const transportError = new Error('Connection lost')
+
       const rig = mockAttachRequest({
         sessionId: 'disconnected-attach-session',
         cols: 80,
@@ -688,6 +745,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         protocolVersion: GET_SIZE_PROTOCOL_VERSION,
         getSizeError: transportError
       })
+
       try {
         await expect(rig.adapter.attach('disconnected-attach-session')).rejects.toBe(transportError)
         expect(rig.request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
@@ -713,10 +771,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         tokenPath,
         protocolVersion
       })
+
       ;(inspectionAdapter as unknown as ClientInternals).client = {
         request,
         disconnect: vi.fn()
       }
+
       return inspectionAdapter
     }
 

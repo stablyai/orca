@@ -51,6 +51,7 @@ describe('worktree RPC schemas', () => {
       url: ' https://company.atlassian.net/browse/ORCA-123 ',
       jiraIdentifier: ' ORCA-123 '
     }
+
     const linkedTaskSourceContext = {
       kind: 'task-source',
       provider: 'jira',
@@ -63,6 +64,7 @@ describe('worktree RPC schemas', () => {
         projectKey: 'ORCA'
       }
     }
+
     const parsed = WorktreeCreate.parse({
       repo: 'repo-1',
       name: 'jira-link',

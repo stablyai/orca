@@ -5,11 +5,13 @@ import type { StickyHideEntry } from './task-page-github-work-item-mutation-regi
 
 function includesLogin(users: readonly GitHubAssignableUser[] | undefined, login: string): boolean {
   const target = login.toLowerCase()
+
   return (users ?? []).some((user) => user.login.toLowerCase() === target)
 }
 
 function resolveMeLogin(viewerLogin: string | null): string | null {
   const trimmed = viewerLogin?.trim()
+
   return trimmed ? trimmed.toLowerCase() : null
 }
 
@@ -56,6 +58,7 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
   // Assignee membership
   if (query.assignee) {
     const assignee = query.assignee.trim()
+
     if (assignee.toLowerCase() === '@me') {
       if (!skipMeQualifiers && viewer && !includesLogin(item.assignees, viewer)) {
         return true
@@ -68,6 +71,7 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
   // Review-requested membership
   if (query.reviewRequested) {
     const requested = query.reviewRequested.trim()
+
     if (requested.toLowerCase() === '@me') {
       if (!skipMeQualifiers && viewer && !includesLogin(item.reviewRequests, viewer)) {
         return true
@@ -96,8 +100,10 @@ export function recomputeTaskPageGitHubItemSoftHide(args: {
     viewerLogin: args.viewerLogin,
     skipMeQualifiers: args.skipMeQualifiers
   })
+
   const stickyEntry = args.sticky.get(args.itemKey)
   const stickyActive = Boolean(stickyEntry && stickyEntry.queryKey === args.queryKey)
+
   // Why: sticky keeps successful membership exits hidden after pending clears;
   // pending membership hide still applies before confirm.
   return {

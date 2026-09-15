@@ -21,14 +21,18 @@ export function createWorktreeTabModelReconciliationBatch(
   state: Pick<AppState, 'openFiles'>
 ): WorktreeTabModelReconciliationBatch {
   const liveEditorIdsByWorktree = new Map<string, Set<string>>()
+
   for (const file of state.openFiles) {
     let ids = liveEditorIdsByWorktree.get(file.worktreeId)
+
     if (!ids) {
       ids = new Set<string>()
       liveEditorIdsByWorktree.set(file.worktreeId, ids)
     }
+
     ids.add(file.id)
   }
+
   return { ownedStateKeys: new Set<string>(), liveEditorIdsByWorktree }
 }
 
@@ -47,8 +51,10 @@ export function writeBatchedWorkspaceRecordEntry<T>(
 ): Record<string, T> {
   if (batch?.ownedStateKeys.has(stateKey)) {
     ;(current as Record<string, T | undefined>)[worktreeId] = value
+
     return current
   }
+
   // Why: the reconciliation gate writes every map when any one changed; spreading an
   // already-equal entry would rerender its selectors for no data change. Nothing was
   // cloned, so ownership is deliberately not claimed. Absent keys still get stored,
@@ -56,7 +62,9 @@ export function writeBatchedWorkspaceRecordEntry<T>(
   if (worktreeId in current && Object.is(current[worktreeId], value)) {
     return current
   }
+
   const next = { ...current, [worktreeId]: value } as Record<string, T>
   batch?.ownedStateKeys.add(stateKey)
+
   return next
 }

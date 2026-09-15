@@ -45,6 +45,7 @@ describe('daemon authenticated client activity', () => {
     await new Promise<void>((resolve, reject) => {
       socket.once('data', (data) => {
         const response = JSON.parse(data.toString().trim()) as { ok?: boolean; error?: string }
+
         if (response.ok) {
           resolve()
         } else {
@@ -53,6 +54,7 @@ describe('daemon authenticated client activity', () => {
       })
       socket.once('error', reject)
     })
+
     return socket
   }
 

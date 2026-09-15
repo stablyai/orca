@@ -16,12 +16,14 @@ const MAX_HISTORY = 50
 
 // Why: entries may be page sentinels, not just worktree IDs; names keep the "worktree" prefix for call-site stability.
 export type WorktreeNavHistorySimpleViewEntry = 'tasks' | 'automations' | 'artifacts' | 'skills'
+
 const SIMPLE_VIEW_ENTRIES: readonly WorktreeNavHistorySimpleViewEntry[] = [
   'tasks',
   'automations',
   'artifacts',
   'skills'
 ]
+
 export type WorktreeNavHistoryTaskDetailEntry =
   | {
       kind: 'task-detail'
@@ -48,9 +50,11 @@ export type WorktreeNavHistoryTaskDetailEntry =
       issue: JiraIssue
       sourceContext?: TaskSourceContext | null
     }
+
 export type WorktreeNavHistoryViewEntry =
   | WorktreeNavHistorySimpleViewEntry
   | WorktreeNavHistoryTaskDetailEntry
+
 export type WorktreeNavHistoryEntry = (string & {}) | WorktreeNavHistoryViewEntry
 
 export type WorktreeNavHistorySlice = {
@@ -68,10 +72,12 @@ export type WorktreeNavHistorySlice = {
 }
 
 type ActivateFn = (worktreeId: string) => unknown
+
 type ViewActivateFn = (entry: WorktreeNavHistoryViewEntry) => void
 
 // Why: injected via setWorktreeNavActivator to avoid an import cycle (activation imports the store).
 let activator: ActivateFn | null = null
+
 let viewActivator: ViewActivateFn | null = null
 
 export function setWorktreeNavActivator(fn: ActivateFn | null): void {
@@ -105,31 +111,39 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
   if (typeof entry === 'string') {
     return isSimpleViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
   }
+
   if (entry.source === 'github') {
     const sourceScope =
       entry.sourceContext?.provider === 'github'
         ? getTaskSourceCacheScope(entry.sourceContext)
         : 'legacy'
+
     return `view:task-detail:github:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}:${entry.initialTab ?? 'conversation'}`
   }
+
   if (entry.source === 'gitlab') {
     const sourceScope =
       entry.sourceContext?.provider === 'gitlab'
         ? getTaskSourceCacheScope(entry.sourceContext)
         : 'legacy'
+
     return `view:task-detail:gitlab:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}`
   }
+
   if (entry.source === 'jira') {
     const sourceScope =
       entry.sourceContext?.provider === 'jira'
         ? getTaskSourceCacheScope(entry.sourceContext)
         : 'legacy'
+
     return `view:task-detail:jira:${sourceScope}:${entry.issue.siteId ?? 'selected'}:${entry.issue.key}`
   }
+
   const sourceScope =
     entry.sourceContext?.provider === 'linear'
       ? getTaskSourceCacheScope(entry.sourceContext)
       : 'legacy'
+
   return `view:task-detail:linear:${sourceScope}:${entry.issue.workspaceId ?? 'selected'}:${entry.issue.id}`
 }
 
@@ -137,12 +151,15 @@ function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   if (isViewEntry(entry)) {
     return true
   }
+
   const workspaceScope = parseWorkspaceKey(entry)
+
   if (workspaceScope?.type === 'folder') {
     return state.folderWorkspaces.some(
       (workspace) => workspace.id === workspaceScope.folderWorkspaceId
     )
   }
+
   return findWorktreeById(state.worktreesByRepo, entry) !== undefined
 }
 
@@ -152,6 +169,7 @@ function appendHistoryEntry(
 ): { worktreeNavHistory: WorktreeNavHistoryEntry[]; worktreeNavHistoryIndex: number } {
   // Why: de-dup only against the current entry so A -> B -> A stays a valid stack.
   const current = s.worktreeNavHistory[s.worktreeNavHistoryIndex]
+
   if (current !== undefined && getHistoryEntryKey(current) === getHistoryEntryKey(entry)) {
     return s
   }
@@ -180,16 +198,19 @@ export function findPrevLiveWorktreeHistoryIndex(state: AppState): number | null
       return i
     }
   }
+
   return null
 }
 
 export function findPrevLiveNonTaskStackHistoryIndex(state: AppState): number | null {
   for (let i = state.worktreeNavHistoryIndex - 1; i >= 0; i--) {
     const entry = state.worktreeNavHistory[i]
+
     if (!isTaskStackEntry(entry) && isLiveEntry(entry, state)) {
       return i
     }
   }
+
   return null
 }
 
@@ -199,6 +220,7 @@ export function findNextLiveWorktreeHistoryIndex(state: AppState): number | null
       return i
     }
   }
+
   return null
 }
 
@@ -210,6 +232,7 @@ export function rewindHistoryIndexPastView(
   if (state.worktreeNavHistory[state.worktreeNavHistoryIndex] !== view) {
     return state.worktreeNavHistoryIndex
   }
+
   return findPrevLiveWorktreeHistoryIndex(state) ?? state.worktreeNavHistoryIndex
 }
 
@@ -254,6 +277,7 @@ function navigateToIndex(
   direction: 'back' | 'forward'
 ): void {
   const state = get()
+
   if (direction === 'back') {
     if (state.worktreeNavHistoryIndex <= 0) {
       return
@@ -263,18 +287,22 @@ function navigateToIndex(
       return
     }
   }
+
   const targetIndex =
     direction === 'back'
       ? findPrevLiveWorktreeHistoryIndex(state)
       : findNextLiveWorktreeHistoryIndex(state)
+
   if (targetIndex === null) {
     return
   }
+
   const targetEntry = state.worktreeNavHistory[targetIndex]
 
   // Why: capture-and-restore (not force false) so re-entrant navigation doesn't clobber the flag.
   const prevNavigating = get().isNavigatingHistory
   set({ isNavigatingHistory: true } as Partial<AppState>)
+
   try {
     if (isViewEntry(targetEntry)) {
       if (!viewActivator) {
@@ -282,8 +310,10 @@ function navigateToIndex(
         console.warn(
           `go${direction === 'back' ? 'Back' : 'Forward'}Worktree: view activator not registered`
         )
+
         return
       }
+
       // Why: use setActiveView (not open*Page) so replay doesn't mutate previousViewBefore* or fire page-open side effects.
       viewActivator(targetEntry)
       set({ worktreeNavHistoryIndex: targetIndex } as Partial<AppState>)
@@ -293,10 +323,13 @@ function navigateToIndex(
         console.warn(
           `go${direction === 'back' ? 'Back' : 'Forward'}Worktree called before worktree activator was registered`
         )
+
         return
       }
+
       // Why: `false` is the activator's only failure signal — advance the index only on success.
       const result = activator(targetEntry)
+
       if (result !== false) {
         set({ worktreeNavHistoryIndex: targetIndex } as Partial<AppState>)
       }

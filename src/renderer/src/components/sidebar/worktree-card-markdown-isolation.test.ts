@@ -3,7 +3,9 @@ import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const rendererSrc = join(__dirname, '../..')
+
 const entry = join(rendererSrc, 'main.tsx')
+
 const COMMENT_MARKDOWN = join(rendererSrc, 'components/sidebar/CommentMarkdown.tsx')
 
 function source(relativePath: string): string {
@@ -18,21 +20,27 @@ function resolveImport(specifier: string, fromFile: string): string | null {
     : specifier.startsWith('.')
       ? resolve(dirname(fromFile), specifier)
       : null
+
   if (base === null) {
     return null
   }
+
   for (const extension of ['', ...MODULE_EXTENSIONS]) {
     const candidate = base + extension
+
     if (existsSync(candidate) && statSync(candidate).isFile()) {
       return candidate
     }
   }
+
   for (const extension of MODULE_EXTENSIONS) {
     const candidate = join(base, `index${extension}`)
+
     if (existsSync(candidate) && statSync(candidate).isFile()) {
       return candidate
     }
   }
+
   return null
 }
 
@@ -45,31 +53,39 @@ const STATIC_IMPORT =
 function eagerModuleGraph(): Map<string, string | null> {
   const parents = new Map<string, string | null>([[entry, null]])
   const queue = [entry]
+
   while (queue.length > 0) {
     const current = queue.shift() as string
     const contents = readFileSync(current, 'utf8')
+
     for (const match of contents.matchAll(STATIC_IMPORT)) {
       if (/^\s*(?:import|export)\s+type\b/.test(match[0].replace(/^[\n;]/, ''))) {
         continue
       }
+
       const resolved = resolveImport(match[1], current)
+
       if (resolved === null || parents.has(resolved)) {
         continue
       }
+
       parents.set(resolved, current)
       queue.push(resolved)
     }
   }
+
   return parents
 }
 
 function importChain(parents: Map<string, string | null>, module: string): string[] {
   const chain: string[] = []
   let cursor: string | null | undefined = module
+
   while (cursor) {
     chain.push(cursor.slice(rendererSrc.length + 1))
     cursor = parents.get(cursor)
   }
+
   return chain.toReversed()
 }
 

@@ -24,7 +24,9 @@ export type VirtualizedScrollAnchor = {
   // recorded. Optional: anchors persisted before this field existed lack it.
   scrollTop?: number
 } | null
+
 export const VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT = 'orca-record-virtualized-scroll-anchor'
+
 const RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS = 150
 
 type UseVirtualizedScrollAnchorOptions<
@@ -102,10 +104,12 @@ export function useVirtualizedScrollAnchor<
     if (providedRowIndexByKey) {
       return providedRowIndexByKey
     }
+
     const indexByKey = new Map<string, number>()
     rows.forEach((row, index) => {
       indexByKey.set(getRowKey(row), index)
     })
+
     return indexByKey
   }, [getRowKey, providedRowIndexByKey, rows])
 
@@ -124,6 +128,7 @@ export function useVirtualizedScrollAnchor<
   const recordScrollAnchor = useCallback(
     (scrollTop: number) => {
       const scrollElement = scrollElementRef.current
+
       if (scrollElement && itemElementSelector && getItemElementKey) {
         const domAnchor = findVirtualizedDomScrollAnchor<TItemElement>({
           getItemElementKey,
@@ -131,8 +136,10 @@ export function useVirtualizedScrollAnchor<
           rowIndexByKey,
           scrollElement
         })
+
         if (domAnchor) {
           anchorRef.current = domAnchor
+
           return
         }
       }
@@ -178,22 +185,26 @@ export function useVirtualizedScrollAnchor<
 
   useLayoutEffect(() => {
     const el = scrollElementRef.current
+
     if (!el) {
       return
     }
 
     let frameId: number | null = null
     let idleTimerId: number | null = null
+
     const cancelScheduledRecord = (): void => {
       if (idleTimerId !== null) {
         window.clearTimeout(idleTimerId)
         idleTimerId = null
       }
+
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId)
         frameId = null
       }
     }
+
     const scheduleRecordAnchor = (): void => {
       cancelScheduledRecord()
       idleTimerId = window.setTimeout(() => {
@@ -206,11 +217,13 @@ export function useVirtualizedScrollAnchor<
         })
       }, RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS)
     }
+
     const recordCurrentAnchor = (): void => {
       cancelScheduledRecord()
       scrollOffsetRef.current = el.scrollTop
       recordScrollAnchorRef.current(el.scrollTop)
     }
+
     const onScroll = createVirtualizedScrollAnchorListener({
       el,
       getHasDirectScrollInput: () => hasDirectScrollInputRef.current,
@@ -222,6 +235,7 @@ export function useVirtualizedScrollAnchor<
         // the next structural restore.
         scrollOffsetRef.current = scrollTop
         const anchor = anchorRef.current
+
         if (anchor && anchor.scrollTop !== undefined) {
           anchor.scrollTop = scrollTop
         }
@@ -239,12 +253,15 @@ export function useVirtualizedScrollAnchor<
 
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
+
     return () => {
       cancelScheduledRecord()
+
       if (recordAnchorOnCleanupRef.current) {
         scrollOffsetRef.current = el.scrollTop
         recordScrollAnchorRef.current(el.scrollTop)
       }
+
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
@@ -255,43 +272,53 @@ export function useVirtualizedScrollAnchor<
   useLayoutEffect(() => {
     const anchor = anchorRef.current
     const el = scrollElementRef.current
+
     if (!anchor || !el) {
       return
     }
+
     if (restoreSignal !== undefined) {
       const signalChanged = prevRestoreSignalRef.current !== restoreSignal
       prevRestoreSignalRef.current = restoreSignal
+
       if (!signalChanged && !pendingRestoreRef.current) {
         // Why: no structural row change and no restore mid-convergence. Pure
         // measurement churn is compensated by the virtualizer's own scroll
         // adjustment; restoring here would fight concurrent user scrolling.
         return
       }
+
       // Why: pending restores own layout shifts; unmarked user scrolls disarm them in the listener.
       if (anchor.scrollTop !== undefined && !pendingRestoreRef.current) {
         const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
+
         const clampExplained =
           anchor.scrollTop > maxScrollTop + 1 && el.scrollTop >= maxScrollTop - 2
+
         if (Math.abs(el.scrollTop - anchor.scrollTop) > 1 && !clampExplained) {
           // Why: the viewport moved after this anchor was recorded and no
           // browser clamp explains it — the user scrolled. Their position
           // wins; restoring would undo their input.
           pendingRestoreRef.current = false
+
           return
         }
       }
+
       // Why: armed before the skip guards below, so a restore owed to a
       // signal change survives being skipped during active input and retries
       // on the next tick instead of being silently consumed. User scrolls
       // disarm it via the scroll listener.
       pendingRestoreRef.current = true
     }
+
     if (virtualizer.isScrolling && hasDirectScrollInputRef.current?.() === true) {
       // Why: remeasurement during wheel scrolling can change totalSize. Restoring
       // the anchor in that window writes scrollTop and fights the user's wheel.
       // Programmatic scrolls during remount still need anchor correction.
       return
     }
+
     if (shouldSkipRestore?.()) {
       return
     }

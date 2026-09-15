@@ -12,11 +12,15 @@ import { translate } from '@/i18n/i18n'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
+
 const AUTO_INSERT_DELAY_MS = 250
+
 const READY_RETRY_MS = 100
+
 // Why: PTY startup can fail before [data-pty-id] appears; cap polling so the
 // setup panel does not leave a hidden retry timer alive forever.
 export const READY_MAX_ATTEMPTS = 50
+
 const PTY_TEXT_FALLBACK_MS = 750
 
 type OnboardingInlineCommandTerminalProps = {
@@ -67,10 +71,12 @@ export function OnboardingInlineCommandTerminal({
     () => brandEphemeralSetupTerminalWorktreeId(worktreeIdProp),
     [worktreeIdProp]
   )
+
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
+
   const prefersReducedMotion = useMemo(
     () =>
       typeof window !== 'undefined' &&
@@ -78,11 +84,14 @@ export function OnboardingInlineCommandTerminal({
       window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     []
   )
+
   const [cwd, setCwd] = useState<string | null>(null)
+
   const [createdTab, setCreatedTab] = useState<{
     id: string
     shellOverride: string | undefined
   } | null>(null)
+
   const tabId = createdTab?.id ?? null
   // Why: starts at `prefersReducedMotion` so users opted out of motion never
   // see the slide-in frame; otherwise we flip to true after first paint so the
@@ -100,14 +109,19 @@ export function OnboardingInlineCommandTerminal({
     if (!onCommandFinished) {
       return
     }
+
     const handleCommandFinished = (event: Event): void => {
       const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
+
       if (detail?.worktreeId !== worktreeId) {
         return
       }
+
       onCommandFinished(detail.exitCode)
     }
+
     window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+
     return () => {
       window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
     }
@@ -120,6 +134,7 @@ export function OnboardingInlineCommandTerminal({
         setCwd(nextCwd)
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -131,9 +146,11 @@ export function OnboardingInlineCommandTerminal({
       recordInteraction: false,
       forceHostRuntime
     })
+
     setActiveTabForWorktree(worktreeId, tab.id)
     setTabCustomTitle(tab.id, title, { recordInteraction: false })
     setCreatedTab({ id: tab.id, shellOverride: tab.shellOverride })
+
     return () => {
       // Why: inline setup panels can disappear after detection succeeds; close
       // the backing tab so installer shells do not keep running invisibly.
@@ -154,21 +171,27 @@ export function OnboardingInlineCommandTerminal({
     if (!autoScrollIntoView) {
       return undefined
     }
+
     if (prefersReducedMotion) {
       const scrollFrame = window.requestAnimationFrame(() => {
         terminalSectionRef.current?.scrollIntoView({ behavior: 'auto', block: 'center' })
       })
+
       return () => window.cancelAnimationFrame(scrollFrame)
     }
+
     // Why: double rAF guarantees the browser commits the initial collapsed
     // styles before we flip to `entered`, so the height/opacity transition
     // actually plays instead of snapping straight to the final state.
     let enteredFrame: number | null = null
+
     const enterFrame = window.requestAnimationFrame(() => {
       enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
+
     return () => {
       window.cancelAnimationFrame(enterFrame)
+
       if (enteredFrame !== null) {
         window.cancelAnimationFrame(enteredFrame)
       }
@@ -179,12 +202,16 @@ export function OnboardingInlineCommandTerminal({
     if (autoScrollIntoView) {
       return undefined
     }
+
     let enteredFrame: number | null = null
+
     const enterFrame = window.requestAnimationFrame(() => {
       enteredFrame = window.requestAnimationFrame(() => setEntered(true))
     })
+
     return () => {
       window.cancelAnimationFrame(enterFrame)
+
       if (enteredFrame !== null) {
         window.cancelAnimationFrame(enteredFrame)
       }
@@ -200,13 +227,17 @@ export function OnboardingInlineCommandTerminal({
     if (!autoScrollIntoView || !entered || prefersReducedMotion) {
       return
     }
+
     const section = terminalSectionRef.current
+
     if (!section) {
       return
     }
+
     const scrollTimer = window.setTimeout(() => {
       section.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 500)
+
     return () => window.clearTimeout(scrollTimer)
   }, [autoScrollIntoView, entered, prefersReducedMotion])
 
@@ -214,20 +245,25 @@ export function OnboardingInlineCommandTerminal({
     if (!createdTab) {
       return
     }
+
     const terminalCommand = prepareCommandForShell?.(command, createdTab.shellOverride) ?? command
+
     if (
       autoInsertedRef.current?.tabId === createdTab.id &&
       autoInsertedRef.current.command === terminalCommand
     ) {
       return
     }
+
     autoInsertedRef.current = { tabId: createdTab.id, command: terminalCommand }
+
     if (autoScrollIntoView) {
       terminalSectionRef.current?.scrollIntoView({
         behavior: 'auto',
         block: 'nearest'
       })
     }
+
     window.dispatchEvent(
       new CustomEvent<PasteTerminalTextDetail>(PASTE_TERMINAL_TEXT_EVENT, {
         detail: {
@@ -243,6 +279,7 @@ export function OnboardingInlineCommandTerminal({
     if (!tabId || !cwd) {
       return
     }
+
     let canceled = false
     let insertionTimer: number | null = null
     let retryTimer: number | null = null
@@ -252,6 +289,7 @@ export function OnboardingInlineCommandTerminal({
       if (insertionTimer !== null) {
         return
       }
+
       insertionTimer = window.setTimeout(() => {
         if (!canceled) {
           insertCommand()
@@ -263,36 +301,47 @@ export function OnboardingInlineCommandTerminal({
       if (canceled) {
         return
       }
+
       const terminalElement = findTerminalTabElement(tabId)
       const hasPty = Boolean(terminalElement?.querySelector('[data-pty-id]'))
+
       if (terminalReadyForCommand(terminalElement)) {
         scheduleInsert()
+
         return
       }
+
       if (hasPty) {
         ptyFirstSeenAt ??= Date.now()
+
         // Why: GPU/canvas terminal renderers may not expose visible prompt text
         // in .xterm-rows. Once the PTY has settled briefly, paste the draft
         // instead of waiting on a DOM signal that may never arrive.
         if (Date.now() - ptyFirstSeenAt >= PTY_TEXT_FALLBACK_MS) {
           scheduleInsert()
+
           return
         }
       } else {
         ptyFirstSeenAt = null
       }
+
       const nextAttempt = getNextTerminalReadyRetryAttempt(attempt)
+
       if (nextAttempt !== null) {
         retryTimer = window.setTimeout(() => waitForTerminal(nextAttempt), READY_RETRY_MS)
       }
     }
 
     waitForTerminal(0)
+
     return () => {
       canceled = true
+
       if (retryTimer !== null) {
         window.clearTimeout(retryTimer)
       }
+
       if (insertionTimer !== null) {
         window.clearTimeout(insertionTimer)
       }
@@ -364,6 +413,7 @@ function findTerminalTabElement(tabId: string): HTMLElement | null {
       return element
     }
   }
+
   return null
 }
 
@@ -375,8 +425,10 @@ function terminalReadyForCommand(element: HTMLElement | null): boolean {
   if (!element?.querySelector('[data-pty-id]')) {
     return false
   }
+
   // Why: pasting before the login shell renders a prompt can double-echo the
   // draft command. Visible terminal text is the least intrusive readiness signal.
   const renderedText = element.querySelector('.xterm-rows')?.textContent?.trim() ?? ''
+
   return renderedText.length > 0
 }

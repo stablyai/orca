@@ -23,6 +23,7 @@ import {
   type WorkspaceCleanupWorktreeFacts
 } from './workspace-cleanup-host-identity'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupFacetSources = {
@@ -96,18 +97,22 @@ export function buildWorkspaceCleanupFacets(
     getWorkspaceCleanupCandidateHostId(candidate),
     candidate.worktreeId
   )
+
   const worktree =
     sources.worktreeById?.get(hostIdentity) ??
     sources.worktreeById?.get(candidate.worktreeId) ??
     null
+
   const review =
     sources.reviewInfoByWorktreeId?.get(hostIdentity) ??
     sources.reviewInfoByWorktreeId?.get(candidate.worktreeId) ??
     EMPTY_REVIEW_INFO
+
   const ticketSources = getTicketSources(worktree)
   const localContextCount = getLocalContextCount(candidate)
   const hasComment = (worktree?.comment ?? '').trim().length > 0
   const branch = getBranchDisplayName(worktree?.branch ?? candidate.branch)
+
   const facets: Omit<WorkspaceCleanupFacets, 'searchText'> = {
     candidate,
     worktreeId: candidate.worktreeId,
@@ -162,6 +167,7 @@ export function buildWorkspaceCleanupFacets(
     isCompletelyEmpty:
       localContextCount === 0 && !review.hasReview && ticketSources.length === 0 && !hasComment
   }
+
   return { ...facets, searchText: buildSearchText(facets) }
 }
 
@@ -184,11 +190,13 @@ function toWorkspaceCleanupAgentState(
   if (status === undefined) {
     return 'idle'
   }
+
   return status === 'monitoring' ? 'working' : status
 }
 
 function getLocalContextCount(candidate: WorkspaceCleanupCandidate): number {
   const context = candidate.localContext
+
   return (
     context.terminalTabCount +
     context.cleanEditorTabCount +
@@ -204,16 +212,21 @@ function getTicketSources(
   if (!worktree) {
     return []
   }
+
   const sources: WorkspaceCleanupTicketSource[] = []
+
   if (worktree.linkedWorkItem != null) {
     sources.push('work-item')
   }
+
   if ((worktree.linkedLinearIssue ?? '').length > 0) {
     sources.push('linear')
   }
+
   if (worktree.linkedIssue != null) {
     sources.push('issue')
   }
+
   return sources
 }
 
@@ -240,6 +253,7 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
 
 function normalizeStatus(status: string | undefined): string | null {
   const trimmed = (status ?? '').trim()
+
   return trimmed.length > 0 ? trimmed : null
 }
 
@@ -250,7 +264,9 @@ function getWorkspaceStatusLabel(
   if (!worktree || !statuses?.length) {
     return null
   }
+
   const statusId = getWorkspaceStatus({ workspaceStatus: worktree.workspaceStatus }, statuses)
+
   return statuses.find((status) => status.id === statusId)?.label ?? statusId
 }
 

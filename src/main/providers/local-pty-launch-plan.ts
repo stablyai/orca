@@ -22,6 +22,7 @@ import { assertSafeAgentStartupCwd } from './pty-default-cwd'
 import type { PtySpawnOptions } from './types'
 
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
+
 type LocalPtyLaunchSeed = {
   args: PtySpawnOptions
   startupAgentRecognition: ReturnType<typeof recognizeAgentProcessFromCommandLine>
@@ -77,11 +78,14 @@ function finalizeLocalPtyLaunchPlan(
   }
 ): LocalPtyLaunchPlan {
   ensureNodePtySpawnHelperExecutable()
+
   if (seed.args.prevalidatedCwd !== shell.validationCwd) {
     validateWorkingDirectory(shell.validationCwd)
   }
+
   const isWslShell =
     Boolean(seed.wslInfo) || pathWin32.basename(shell.shellPath).toLowerCase() === 'wsl.exe'
+
   return {
     startupAgentRecognition: seed.startupAgentRecognition,
     defaultCwd: seed.defaultCwd,
@@ -109,34 +113,43 @@ function createWindowsLocalPtyLaunchPlan(
   getOptions: () => LocalPtyProviderOptions
 ): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
   const { args, cwd, defaultCwd, worktreeWslContext } = seed
+
   // Why: shellOverride opens one tab in a non-default shell without changing the user's setting; it wins over the setting.
   const requestedShellFamily =
     args.shellOverride ||
     getOptions().getWindowsShell?.() ||
     process.env.COMSPEC ||
     'powershell.exe'
+
   const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
+
   if (!seed.launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
     seed.launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
   }
+
   const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
   const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
   // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
   const powerShellImplementation = getOptions().getWindowsPowerShellImplementation?.()
+
   const resolvedShellFamily: WindowsPowerShellShellFamily =
     normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
       ? normalizedShellFamily
       : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
         ? normalizedShellFamily
         : undefined
+
   const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
     shellFamily: resolvedShellFamily,
     implementation: powerShellImplementation
   })
+
   const shouldResolvePowerShellFamily =
     powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
+
   const finish = (pwshAvailable: boolean): LocalPtyLaunchPlan => {
     let shellPath: string
+
     if (resolvedGitBashPath) {
       shellPath = resolvedGitBashPath
     } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
@@ -150,6 +163,7 @@ function createWindowsLocalPtyLaunchPlan(
           }) ?? shellFamily)
         : shellFamily
     }
+
     // Why: bare `pwsh.exe` resolves to the Store App Execution Alias stub whose spawn fails (code 5); use an absolute exe + cmd.exe fallback.
     const windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
@@ -158,7 +172,9 @@ function createWindowsLocalPtyLaunchPlan(
       wslContext: seed.launchWslContext,
       startupCommand: args.command
     })
+
     const primaryAttempt = windowsFallbackAttempts[0]
+
     if (primaryAttempt) {
       return finalizeLocalPtyLaunchPlan(seed, {
         shellPath: primaryAttempt.shellPath,
@@ -169,6 +185,7 @@ function createWindowsLocalPtyLaunchPlan(
         windowsFallbackAttempts
       })
     }
+
     const resolved = resolveWindowsShellLaunchArgs(
       shellPath,
       cwd,
@@ -176,6 +193,7 @@ function createWindowsLocalPtyLaunchPlan(
       seed.launchWslContext,
       args.command
     )
+
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
       shellArgs: resolved.shellArgs,
@@ -185,6 +203,7 @@ function createWindowsLocalPtyLaunchPlan(
       windowsFallbackAttempts
     })
   }
+
   return shouldProbePwsh
     ? new DeferredLocalPtyLaunchPlan(getOptions().pwshAvailable?.() ?? false, finish)
     : finish(false)
@@ -200,17 +219,22 @@ export function createLocalPtyLaunchPlan(
 
   const defaultCwd = getDefaultCwd()
   const cwd = args.cwd || defaultCwd
+
   // Why: gate on the effective cwd, not raw args.cwd — an omitted cwd becomes a safe default and must not be rejected as root-like.
   if (args.command && startupAgentRecognition) {
     assertSafeAgentStartupCwd(cwd, args.command)
   }
+
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
+
   const worktreeWslContext =
     process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined
+
   const preferredWslContext =
     process.platform === 'win32'
       ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
       : undefined
+
   const seed: LocalPtyLaunchSeed = {
     args,
     startupAgentRecognition,
@@ -224,9 +248,11 @@ export function createLocalPtyLaunchPlan(
         ? getWslContextFromPreferredDistro(wslInfo.distro)
         : (worktreeWslContext ?? preferredWslContext)
   }
+
   if (wslInfo) {
     const shellPath = 'wsl.exe'
     const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
       shellArgs: resolved.shellArgs,
@@ -234,10 +260,13 @@ export function createLocalPtyLaunchPlan(
       validationCwd: resolved.validationCwd
     })
   }
+
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
+
   const shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
+
   return finalizeLocalPtyLaunchPlan(seed, {
     shellPath,
     shellArgs: ['-l'],

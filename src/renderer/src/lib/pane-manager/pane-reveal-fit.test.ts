@@ -20,12 +20,15 @@ vi.mock('./pane-fit', () => ({
   readFitClientSize: mocks.readFitClientSize,
   flushDeferredPaneMetricOptionsIfMeasurable: mocks.flushDeferredPaneMetricOptionsIfMeasurable
 }))
+
 vi.mock('./pane-fit-resize-observer', () => ({
   requestStablePaneFit: mocks.requestStablePaneFit
 }))
+
 vi.mock('./pane-fit-continuation-retry', () => ({
   clearPaneFitContinuationRetry: mocks.clearPaneFitContinuationRetry
 }))
+
 vi.mock('./pane-scroll', () => ({
   resumePendingFitScrollRestoreAfterFit: mocks.resumePendingFitScrollRestoreAfterFit
 }))
@@ -44,7 +47,9 @@ function createPane(options: {
     terminal: options.terminal,
     fitAddon: { proposeDimensions: vi.fn(() => options.proposed ?? undefined) }
   } as unknown as RevealTestPane
+
   mocks.readFitClientSize.mockImplementation(() => options.currentSize)
+
   return pane
 }
 
@@ -62,6 +67,7 @@ describe('fitRevealedPane routing', () => {
     // synchronous fit would reflow on the WebGL/DOM metric wobble and corrupt a
     // diff-painting inline TUI.
     mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(true)
+
     const pane = createPane({
       lastFitClientSize: { width: 800, height: 600 },
       currentSize: { width: 800, height: 600 },
@@ -78,6 +84,7 @@ describe('fitRevealedPane routing', () => {
 
   it('still flushes parked metric options when the pane also resized while hidden', () => {
     mocks.flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValue(true)
+
     const pane = createPane({
       lastFitClientSize: { width: 800, height: 600 },
       currentSize: { width: 640, height: 480 },
@@ -159,6 +166,7 @@ describe('fitRevealedPane routing', () => {
 
   it('does not release continuations when an unchanged pane is unmeasurable', () => {
     mocks.canMeasurePaneForFit.mockReturnValue(false)
+
     const pane = createPane({
       lastFitClientSize: { width: 800, height: 600 },
       currentSize: { width: 800, height: 600 },

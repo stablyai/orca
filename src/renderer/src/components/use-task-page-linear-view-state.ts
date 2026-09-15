@@ -28,9 +28,11 @@ import type {
 } from '@/components/task-page-linear-issue-request'
 import type { LinearProjectTab } from './task-page-linear-issue-model'
 import { useTaskPageLinearContextState } from './use-task-page-linear-context-state'
+
 export type TaskPageLinearViewStatePreludeModel = ReturnType<
   typeof useTaskPageLinearViewStatePrelude
 >
+
 export function useTaskPageLinearViewStatePrelude(model: TaskPageDetailRoutingModel) {
   const { selectedLinearWorkspaceId } = model
   // Linear tab state
@@ -38,21 +40,26 @@ export function useTaskPageLinearViewStatePrelude(model: TaskPageDetailRoutingMo
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [linearIssueLimit, setLinearIssueLimit] = useState(LINEAR_ITEM_LIMIT)
   const [linearIssuePage, setLinearIssuePage] = useState(0)
+
   const [linearIssueLoadingTargetPage, setLinearIssueLoadingTargetPage] = useState<number | null>(
     null
   )
+
   const [linearIssuesHasMore, setLinearIssuesHasMore] = useState(false)
   const [linearLoading, setLinearLoading] = useState(false)
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
+
   const [linearIssueFiltersByWorkspaceId, setLinearIssueFiltersByWorkspaceId] = useState<
     Record<string, LinearIssueAttributeFilter>
   >(() => ({}))
+
   const linearAttributeFilterWorkspaceId =
     selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
       ? selectedLinearWorkspaceId
       : null
+
   const linearAttributeFilter = useMemo(
     () =>
       selectLinearWorkspaceIssueFilter(
@@ -61,45 +68,58 @@ export function useTaskPageLinearViewStatePrelude(model: TaskPageDetailRoutingMo
       ),
     [linearAttributeFilterWorkspaceId, linearIssueFiltersByWorkspaceId]
   )
+
   const linearAttributeFilterReadRef = useRef<LinearIssueListFilterRead | null>(null)
   const linearPrimaryTeamRef = useRef<LinearPrimaryTeamObservation | null>(null)
   const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>(DEFAULT_LINEAR_VIEW_MODE)
   const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>(DEFAULT_LINEAR_GROUP_BY)
   const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>(DEFAULT_LINEAR_ORDER_BY)
+
   const [linearDisplayProperties, setLinearDisplayProperties] = useState<
     ReadonlySet<LinearDisplayProperty>
   >(() => new Set(LINEAR_DISPLAY_PROPERTIES))
+
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
   const [linearProjectSearchInput, setLinearProjectSearchInput] = useState('')
   const [appliedLinearProjectSearch, setAppliedLinearProjectSearch] = useState('')
+
   const [linearProjectsResult, setLinearProjectsResult] = useState<
     LinearCollectionResult<LinearProjectSummary>
   >({
     items: []
   })
+
   const [linearProjectsLoading, setLinearProjectsLoading] = useState(false)
   const [linearProjectsError, setLinearProjectsError] = useState<string | null>(null)
+
   const [selectedLinearProject, setSelectedLinearProject] = useState<LinearProjectSummary | null>(
     null
   )
+
   const [selectedLinearProjectDetail, setSelectedLinearProjectDetail] =
     useState<LinearProjectDetail | null>(null)
+
   const [linearProjectDetailLoading, setLinearProjectDetailLoading] = useState(false)
   const [linearProjectDetailError, setLinearProjectDetailError] = useState<string | null>(null)
   const [linearProjectTab, setLinearProjectTab] = useState<LinearProjectTab>('overview')
+
   const [linearProjectIssuesResult, setLinearProjectIssuesResult] = useState<
     LinearCollectionResult<LinearIssue>
   >({
     items: []
   })
+
   const [linearProjectIssueLimit, setLinearProjectIssueLimit] = useState(LINEAR_ITEM_LIMIT)
   const [linearProjectIssuePage, setLinearProjectIssuePage] = useState(0)
+
   const [linearProjectIssueLoadingTargetPage, setLinearProjectIssueLoadingTargetPage] = useState<
     number | null
   >(null)
+
   const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
   const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
+
   const nextModel = model as typeof model & {
     linearMode: typeof linearMode
     setLinearMode: typeof setLinearMode
@@ -172,6 +192,7 @@ export function useTaskPageLinearViewStatePrelude(model: TaskPageDetailRoutingMo
     linearProjectIssuesError: typeof linearProjectIssuesError
     setLinearProjectIssuesError: typeof setLinearProjectIssuesError
   }
+
   nextModel.linearMode = linearMode
   nextModel.setLinearMode = setLinearMode
   nextModel.linearIssues = linearIssues
@@ -242,10 +263,14 @@ export function useTaskPageLinearViewStatePrelude(model: TaskPageDetailRoutingMo
   nextModel.setLinearProjectIssuesLoading = setLinearProjectIssuesLoading
   nextModel.linearProjectIssuesError = linearProjectIssuesError
   nextModel.setLinearProjectIssuesError = setLinearProjectIssuesError
+
   return nextModel
 }
+
 export function useTaskPageLinearViewState(model: TaskPageDetailRoutingModel) {
   const preludeModel = useTaskPageLinearViewStatePrelude(model)
+
   return useTaskPageLinearContextState(preludeModel)
 }
+
 export type TaskPageLinearViewStateModel = ReturnType<typeof useTaskPageLinearViewState>

@@ -21,6 +21,7 @@ export async function readLegacyFederatedTerminal(args: {
   limit: number | undefined
 }) {
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
+
   if (args.source === 'transcript' || cursor?.source === 'transcript') {
     throw new OrchestrationError(
       'transcript_required',
@@ -28,6 +29,7 @@ export async function readLegacyFederatedTerminal(args: {
       { reason: 'remote_capability_unavailable' }
     )
   }
+
   const remote = (await args.runtime.callOrchestrationWorkerServer(
     args.server.environmentId,
     'orchestration.federationRead',
@@ -40,12 +42,14 @@ export async function readLegacyFederatedTerminal(args: {
     undefined,
     { expectedEnvironmentPairingRevision: args.server.pairingRevision }
   )) as { runtimeEpoch: string; terminal: RuntimeTerminalRead }
+
   const sourceIdentity = createWorkerOutputSourceIdentity([
     'legacy-remote-terminal',
     args.federated.peer_fingerprint,
     args.dispatchId,
     remote.runtimeEpoch
   ])
+
   if (
     cursor?.source === 'terminal' &&
     cursor.sourceIdentity !== null &&
@@ -56,10 +60,12 @@ export async function readLegacyFederatedTerminal(args: {
       'The worker output source changed. Start a fresh worker-read without the old cursor.'
     )
   }
+
   const nextPosition =
     remote.terminal.nextCursor !== null && /^\d+$/.test(remote.terminal.nextCursor)
       ? Number.parseInt(remote.terminal.nextCursor, 10)
       : null
+
   return {
     dispatchId: args.dispatchId,
     source: 'terminal' as const,

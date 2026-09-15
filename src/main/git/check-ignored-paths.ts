@@ -22,12 +22,15 @@ async function runCheckIgnoredPaths(
       stdin: encodeGitCheckIgnorePaths(relativePaths),
       timeout: GIT_CHECK_IGNORE_TIMEOUT_MS
     })
+
     return parseGitCheckIgnorePaths(stdout)
   } catch (error) {
     const gitError = error as GitExecError
+
     if (gitError.code === 1) {
       return parseGitCheckIgnorePaths(gitError.stdout ?? '')
     }
+
     throw error
   }
 }
@@ -40,11 +43,14 @@ export async function checkIgnoredPaths(
   if (relativePaths.length === 0) {
     return []
   }
+
   const ignored = new Set<string>()
+
   for (const chunk of splitGitCheckIgnorePathsByStdinBytes(relativePaths)) {
     for (const ignoredPath of await runCheckIgnoredPaths(worktreePath, chunk, options)) {
       ignored.add(ignoredPath)
     }
   }
+
   return Array.from(ignored)
 }

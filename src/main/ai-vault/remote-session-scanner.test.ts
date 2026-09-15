@@ -181,12 +181,14 @@ describe('scanRemoteAiVaultSessions', () => {
   it('collapses a bridged rollout present in both remote Codex homes to one row', async () => {
     const provider = new MemoryRemoteProvider()
     const rolloutName = 'rollout-2026-07-04T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
+
     const transcript = codexTranscript({
       sessionId: '019f0000-1111-7222-8333-444444444444',
       title: 'Bridged both-homes session',
       cwd: '/home/ada/repo',
       timestamp: '2026-07-04T10:00:00.000Z'
     })
+
     // Same rollout name in both homes — the in-distro bridge/backfill hardlink.
     provider.addFile(`/home/ada/.codex/sessions/2026/07/04/${rolloutName}`, transcript, 3_000)
     provider.addFile(
@@ -352,6 +354,7 @@ describe('scanRemoteAiVaultSessions', () => {
   it('keeps Antigravity SSH discovery to one listing as the session store grows', async () => {
     const provider = new MemoryRemoteProvider()
     const brainDir = '/home/ada/.gemini/antigravity-cli/brain'
+
     for (let index = 0; index < 40; index++) {
       provider.addFile(
         `${brainDir}/session-${index}/.system_generated/logs/transcript.jsonl`,
@@ -737,6 +740,7 @@ describe('scanRemoteAiVaultSessions', () => {
 
   it('keeps looking past newer out-of-scope candidates during scoped backfill', async () => {
     const provider = new MemoryRemoteProvider()
+
     for (const [sessionId, mtimeMs, hour] of [
       ['other-newest', 50, '05'],
       ['other-newer', 40, '04']
@@ -752,6 +756,7 @@ describe('scanRemoteAiVaultSessions', () => {
         mtimeMs
       )
     }
+
     provider.addFile(
       '/home/ada/.codex/sessions/scoped.jsonl',
       codexTranscript({
@@ -791,6 +796,7 @@ describe('scanRemoteAiVaultSessions', () => {
       }),
       50
     )
+
     for (const [sessionId, mtimeMs] of [
       ['newer-scoped', 30],
       ['older-scoped', 20]

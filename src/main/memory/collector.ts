@@ -68,21 +68,26 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
   if (inflight) {
     return inflight
   }
+
   inflight = runSnapshot(store)
     .catch((err) => {
       console.warn('[memory] snapshot failed; returning empty', err)
+
       return emptyMemorySnapshot()
     })
     .finally(() => {
       inflight = null
     })
+
   return inflight
 }
 
 // ─── Internals ──────────────────────────────────────────────────────
 
 const execAsync = promisify(exec)
+
 const PS_EXEC_TIMEOUT_MS = 5_000
+
 const PS_MAX_BUFFER = 10 * 1024 * 1024
 
 /** One row from the host-wide process listing. */
@@ -122,6 +127,7 @@ async function enumerateProcesses(): Promise<ProcIndex> {
     byPid.set(row.pid, row)
     hasPrivateMemory ||= row.privateMemory !== undefined
     const siblings = childrenOf.get(row.ppid)
+
     if (siblings) {
       siblings.push(row.pid)
     } else {
@@ -143,9 +149,11 @@ async function enumerateUnix(): Promise<ProcRow[]> {
       timeout: PS_EXEC_TIMEOUT_MS,
       env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
     })
+
     return parsePsOutput(stdout)
   } catch (err) {
     console.warn('[memory] ps enumeration failed', err)
+
     return []
   }
 }
@@ -153,18 +161,23 @@ async function enumerateUnix(): Promise<ProcRow[]> {
 /** Exported for tests: parses `ps -eo pid=,ppid=,pcpu=,rss=` output. */
 export function parsePsOutput(stdout: string): ProcRow[] {
   const rows: ProcRow[] = []
+
   for (const line of iterateProcessOutputLines(stdout)) {
     const fields = getProcessOutputFields(line, 4)
+
     if (fields.length < 4) {
       continue
     }
+
     const pid = Number.parseInt(fields[0], 10)
     const ppid = Number.parseInt(fields[1], 10)
     const cpu = Number.parseFloat(fields[2])
     const rssKb = Number.parseInt(fields[3], 10)
+
     if (Number.isNaN(pid) || Number.isNaN(ppid)) {
       continue
     }
+
     rows.push({
       pid,
       ppid,
@@ -172,12 +185,14 @@ export function parsePsOutput(stdout: string): ProcRow[] {
       memory: Number.isFinite(rssKb) && rssKb > 0 ? rssKb * 1024 : 0
     })
   }
+
   return rows
 }
 
 async function enumerateWindows(): Promise<ProcRow[]> {
   return enumerateWindowsProcessResources()
 }
+
 /** Walk every descendant PID of `root`, inclusive. Exported for tests. */
 export function collectSubtree(
   index: ProcIndex,
@@ -187,28 +202,36 @@ export function collectSubtree(
   const result: number[] = []
   const seen = new Set<number>()
   const queue = [root]
+
   while (queue.length > 0) {
     const pid = queue.pop()
+
     if (pid === undefined) {
       break
     }
+
     // Once a PID was attributed to an earlier PTY, its complete subtree was
     // already traversed. Do not walk those descendants again for overlapping
     // PTY roots (common when several panes share a supervisor).
     if (seen.has(pid) || excludedPids?.has(pid)) {
       continue
     }
+
     seen.add(pid)
+
     if (index.byPid.has(pid)) {
       result.push(pid)
     }
+
     const kids = index.childrenOf.get(pid)
+
     if (kids) {
       for (const kid of kids) {
         queue.push(kid)
       }
     }
   }
+
   return result
 }
 
@@ -221,9 +244,11 @@ function electronMetricMemoryBytes(
   processIndex: ProcIndex
 ): number {
   const hostMemory = processIndex.byPid.get(proc.pid)?.memory
+
   if (typeof hostMemory === 'number' && Number.isFinite(hostMemory) && hostMemory > 0) {
     return hostMemory
   }
+
   // Why: on macOS, getAppEnvironment().getAppMetrics().workingSetSize can include large shared
   // Chromium/Electron mappings. Prefer the host RSS sweep used elsewhere, but
   // keep workingSetSize as a fallback when the process disappears mid-snapshot.
@@ -246,6 +271,7 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
     // casing ('browser' vs 'Browser') still bucket correctly.
     const type = (typeof proc.type === 'string' ? proc.type : '').toLowerCase()
     let target = other
+
     if (type === 'browser') {
       target = main
     } else if (type === 'renderer' || type === 'tab') {
@@ -294,6 +320,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     ORPHAN_WORKTREE_ID,
     'Other'
   )
+
   const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
 
   for (const pty of ptys) {
@@ -306,10 +333,13 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
         if (claimed.has(pid)) {
           continue
         }
+
         const row = processIndex.byPid.get(pid)
+
         if (!row) {
           continue
         }
+
         claimed.add(pid)
         sessionCpu += row.cpu
         sessionMemory += row.memory
@@ -329,8 +359,10 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     }
 
     let bucket: WorktreeMemoryBucket
+
     if (pty.worktreeId) {
       const existing = worktreeBuckets.get(pty.worktreeId)
+
       if (existing) {
         bucket = existing
       } else {
@@ -354,6 +386,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
 
   const bucketList: WorktreeMemoryBucket[] = [...worktreeBuckets.values()]
+
   if (orphan.sessions.length > 0) {
     bucketList.push(orphan)
   }
@@ -363,9 +396,11 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   // acts as a keep-alive so active worktrees survive the staleness sweep.
   const now = Date.now()
   pushAppMemoryHistory(appBuckets.memory, now)
+
   for (const bucket of bucketList) {
     pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
   }
+
   sweepStaleMemoryHistory(now)
 
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
@@ -377,6 +412,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   let sessionCpuTotal = 0
   let sessionMemoryTotal = 0
   let sessionPrivateTotal = 0
+
   for (const wt of worktrees) {
     sessionCpuTotal += wt.cpu
     sessionMemoryTotal += wt.memory

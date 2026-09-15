@@ -14,13 +14,16 @@ function createFakeDocument(options?: FakeDocOptions) {
   const stopImmediatePropagation = vi.fn()
   const createElement = vi.fn()
   const appendChild = vi.fn()
+
   const execCommand = vi.fn((command: string) => {
     if (options?.execCommandThrows) {
       throw new Error('execCommand denied')
     }
+
     if (command !== 'copy') {
       return false
     }
+
     if (options?.dispatchesCopyEvent ?? true) {
       for (const listener of listeners.slice()) {
         listener({
@@ -30,8 +33,10 @@ function createFakeDocument(options?: FakeDocOptions) {
         })
       }
     }
+
     return options?.execCommandResult ?? true
   })
+
   const doc = {
     activeElement: { focus: vi.fn() },
     createElement,
@@ -44,6 +49,7 @@ function createFakeDocument(options?: FakeDocOptions) {
     removeEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
       if (type === 'copy') {
         const index = listeners.indexOf(listener)
+
         if (index !== -1) {
           listeners.splice(index, 1)
         }
@@ -124,12 +130,14 @@ describe('copyClipboardTextViaExecCommand', () => {
   it('leaves focus and the page selection untouched', () => {
     const { doc } = createFakeDocument()
     const focus = vi.fn()
+
     const selection = {
       rangeCount: 1,
       getRangeAt: vi.fn(),
       removeAllRanges: vi.fn(),
       addRange: vi.fn()
     }
+
     ;(doc as unknown as { activeElement: unknown }).activeElement = { focus }
     ;(doc as unknown as { getSelection: () => unknown }).getSelection = () => selection
 

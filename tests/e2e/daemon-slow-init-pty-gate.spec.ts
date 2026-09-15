@@ -27,10 +27,13 @@ function readDaemonPid(userDataDir: string): number {
     path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
     'utf8'
   )
+
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -39,8 +42,10 @@ test.describe.configure({ mode: 'serial' })
 test('reattaches daemon PTYs when daemon init outlasts the first-window timeout', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -74,6 +79,7 @@ test('reattaches daemon PTYs when daemon init outlasts the first-window timeout'
     // relaunched app's main process and delays initDaemonPtyProvider past the
     // first-window timeout.
     process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS = String(DAEMON_INIT_DELAY_MS)
+
     try {
       const secondLaunch = await session.launch()
       secondApp = secondLaunch.app
@@ -105,9 +111,11 @@ test('reattaches daemon PTYs when daemon init outlasts the first-window timeout'
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

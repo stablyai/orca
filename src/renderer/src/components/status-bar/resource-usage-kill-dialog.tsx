@@ -30,9 +30,11 @@ export function renderResourceUsageKillDialog({
         if (next) {
           return
         }
+
         if (killing) {
           return
         }
+
         setKillConfirm(null)
       }}
     >

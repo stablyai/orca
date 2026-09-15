@@ -7,8 +7,11 @@ const HAS_CSS_ANCHOR_POSITIONING =
   CSS.supports('position-anchor', '--orca-terminal-overlay-probe') &&
   CSS.supports('top', 'anchor(--orca-terminal-overlay-probe top)') &&
   CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
+
 const MIN_OVERLAY_FIT_WIDTH_PX = 48
+
 const MIN_OVERLAY_FIT_HEIGHT_PX = 24
+
 const FALLBACK_RECT_MIN_CHANGE_PX = 1
 
 function shouldUseCssAnchorPositioning(): boolean {
@@ -47,9 +50,11 @@ export function RetainedPaneHost({
 }: RetainedPaneHostProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
   const overlayRef = useRef<HTMLDivElement | null>(null)
+
   const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
     null
   )
+
   useLayoutEffect(() => {
     if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
       return
@@ -61,6 +66,7 @@ export function RetainedPaneHost({
           return candidate
         }
       }
+
       return null
     }
 
@@ -68,18 +74,23 @@ export function RetainedPaneHost({
       const overlay = overlayRef.current
       const parent = overlay?.parentElement
       const body = findBody()
+
       if (!parent || !body) {
         setMeasuredFallbackRect(null)
+
         return
       }
+
       const parentRect = parent.getBoundingClientRect()
       const bodyRect = body.getBoundingClientRect()
+
       const next: MeasuredFallbackRect = {
         top: bodyRect.top - parentRect.top,
         left: bodyRect.left - parentRect.left,
         width: bodyRect.width,
         height: bodyRect.height
       }
+
       // Why: ResizeObserver and xterm fit can otherwise amplify sub-pixel jitter forever.
       setMeasuredFallbackRect((prev) =>
         prev &&
@@ -96,13 +107,17 @@ export function RetainedPaneHost({
     const body = findBody()
     const parent = overlayRef.current?.parentElement
     const resizeObserver = new ResizeObserver(updateRect)
+
     if (body) {
       resizeObserver.observe(body)
     }
+
     if (parent) {
       resizeObserver.observe(parent)
     }
+
     window.addEventListener('resize', updateRect)
+
     return () => {
       resizeObserver.disconnect()
       window.removeEventListener('resize', updateRect)
@@ -113,8 +128,10 @@ export function RetainedPaneHost({
     if (!fitTerminal || !isVisible || !anchorName) {
       return
     }
+
     const dispatchFitIfMeasurable = (): void => {
       const rect = overlayRef.current?.getBoundingClientRect()
+
       if (
         !rect ||
         rect.width < MIN_OVERLAY_FIT_WIDTH_PX ||
@@ -122,6 +139,7 @@ export function RetainedPaneHost({
       ) {
         return
       }
+
       window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
     }
 
@@ -131,12 +149,15 @@ export function RetainedPaneHost({
     const frameId = requestAnimationFrame(() => {
       dispatchFitIfMeasurable()
     })
+
     const retryId = window.setTimeout(() => {
       dispatchFitIfMeasurable()
     }, 50)
+
     const settledRetryId = window.setTimeout(() => {
       dispatchFitIfMeasurable()
     }, 150)
+
     return () => {
       cancelAnimationFrame(frameId)
       window.clearTimeout(retryId)
@@ -183,6 +204,7 @@ export function RetainedPaneHost({
             },
     [anchorName, isVisible, measuredFallbackRect, measureWhileHidden]
   )
+
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
       onFocusOwningGroup(groupId)

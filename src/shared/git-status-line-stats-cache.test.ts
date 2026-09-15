@@ -104,6 +104,7 @@ describe('git status line stats cache', () => {
     const entries: { path: string; status: string; area: string; added?: number }[] = [
       { path: 'src/a.ts', status: 'modified', area: 'unstaged' }
     ]
+
     expect(
       applyCachedGitStatusLineStats({ cacheKey: 'native\0/repo', head: 'head-1', entries })
     ).toBe(true)
@@ -127,6 +128,7 @@ describe('git status line stats cache', () => {
         isAborted: () => aborted,
         recompute: async () => {
           aborted = true
+
           return true
         }
       })
@@ -137,6 +139,7 @@ describe('git status line stats cache', () => {
     const entries: { path: string; status: string; area: string; added?: number }[] = [
       { path: 'src/a.ts', status: 'modified', area: 'unstaged' }
     ]
+
     expect(
       applyCachedGitStatusLineStats({ cacheKey: 'native\0/repo', head: 'head-1', entries })
     ).toBe(true)
@@ -174,6 +177,7 @@ describe('git status line stats cache', () => {
       entries: cachedEntries,
       writeToken: olderWrite
     })
+
     const entries: { path: string; status: string; area: string; added?: number }[] = [
       { path: 'src/a.ts', status: 'modified', area: 'unstaged' }
     ]

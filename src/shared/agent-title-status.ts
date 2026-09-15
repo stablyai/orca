@@ -41,6 +41,7 @@ export function clearWorkingIndicators(title: string): string {
   // Why: Pi/OMP's static working marker survives every strip below, so a stale native
   // title would keep re-arming the 3s clear timer without ever leaving working (#13890).
   const clearedPiStateMarker = clearPiStateWorkingMarker(title)
+
   if (clearedPiStateMarker) {
     return clearedPiStateMarker
   }
@@ -51,14 +52,17 @@ export function clearWorkingIndicators(title: string): string {
   cleaned = cleaned.replace(GEMINI_SILENT_WORKING, '')
   cleaned = cleaned.replace(BRAILLE_SPINNER_RE, '')
   cleaned = cleaned.replace(QUARTER_CIRCLE_SPINNER_RE, '')
+
   if (cleaned.startsWith('. ')) {
     cleaned = cleaned.slice(2)
   }
+
   if (containsAgentName(cleaned)) {
     cleaned = cleaned.replace(STRONG_WORKING_KEYWORDS_RE_GLOBAL, '')
   }
 
   cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
+
   return cleaned || title
 }
 
@@ -80,20 +84,25 @@ export function createAgentStatusTracker(
   // callbacks, or a hidden working agent can miss its later idle transition.
   let lastStatus: AgentStatus | null =
     initialTitle !== undefined ? detectAgentStatusFromTitle(initialTitle) : null
+
   let restorableExitStatus: AgentStatus | null = null
 
   return {
     handleTitle(title: string): void {
       const newStatus = detectAgentStatusFromTitle(title)
+
       if (newStatus !== null) {
         restorableExitStatus = null
       }
+
       if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
         onBecameIdle(title)
       }
+
       if (lastStatus !== 'working' && newStatus === 'working') {
         onBecameWorking?.()
       }
+
       // Why: reverting to a plain shell prompt after idle/permission means the
       // agent exited; while working it can just be a transient internal title.
       if (lastStatus !== null && lastStatus !== 'working' && newStatus === null) {
@@ -101,6 +110,7 @@ export function createAgentStatusTracker(
         lastStatus = null
         onAgentExited?.()
       }
+
       if (newStatus !== null) {
         lastStatus = newStatus
       }
@@ -111,10 +121,13 @@ export function createAgentStatusTracker(
     },
     restoreLastExit(confirmedStatus?: AgentStatus): AgentStatus | null {
       const restoredStatus = confirmedStatus ?? (lastStatus === null ? restorableExitStatus : null)
+
       if (restoredStatus !== null) {
         lastStatus = restoredStatus
       }
+
       restorableExitStatus = null
+
       return restoredStatus
     },
     reset(): void {
@@ -136,12 +149,15 @@ export function normalizeTerminalTitle(title: string): string {
   // state marker is explicit, so it outranks glyph sniffing here as it does in detection.
   if (!getPiStateTitleStatus(title) && isGeminiTerminalTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
+
     if (status === 'permission') {
       return `${GEMINI_PERMISSION} Gemini CLI`
     }
+
     if (status === 'working') {
       return `${GEMINI_WORKING} Gemini CLI`
     }
+
     if (status === 'idle') {
       return `${GEMINI_IDLE} Gemini CLI`
     }
@@ -171,11 +187,13 @@ export function normalizeTerminalTitle(title: string): string {
 /** Why: any braille frame reads as the same animation step, so consecutive frames dedupe. */
 function canonicalizeBrailleSpinnerFrame(title: string): string {
   let canonical = ''
+
   for (const char of title) {
     const codePoint = char.codePointAt(0)
     canonical +=
       codePoint !== undefined && codePoint >= 0x2800 && codePoint <= 0x28ff ? '\u280b' : char
   }
+
   return canonical
 }
 
@@ -183,6 +201,7 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }
+
   if (title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER) {
     return null
   }
@@ -194,6 +213,7 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   // Why: Pi/OMP's marker is an explicit state protocol, so it wins over the glyph and
   // keyword gates below — its label is free-form cwd/session text that can carry either.
   const piStateStatus = getPiStateTitleStatus(title)
+
   if (piStateStatus) {
     return piStateStatus
   }
@@ -201,9 +221,11 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (title.includes(GEMINI_PERMISSION)) {
     return 'permission'
   }
+
   if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
     return 'working'
   }
+
   if (title.includes(GEMINI_IDLE)) {
     return 'idle'
   }
@@ -211,6 +233,7 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   // Why: resolve synthetic Pi/OMP permission/idle labels before the broader
   // Pi and braille-spinner checks below.
   const piCompatibleSyntheticAgentStatus = getPiCompatibleSyntheticAgentStatus(title)
+
   if (piCompatibleSyntheticAgentStatus) {
     return piCompatibleSyntheticAgentStatus
   }
@@ -218,38 +241,49 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return 'idle'
   }
+
   // Why: read the state separator before the blanket idle below — `π ! <label>` is a
   // blocked agent, and treating it as idle hides an OMP pane waiting on the user.
   const piCompatibleSeparatorStatus = getPiCompatibleTitleSeparatorStatus(title)
+
   if (piCompatibleSeparatorStatus) {
     return piCompatibleSeparatorStatus
   }
+
   if (isPiTerminalTitle(title)) {
     return 'idle'
   }
+
   if (containsAgentSpinnerGlyph(title)) {
     return 'working'
   }
+
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
+
   if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
     return null
   }
+
   if (containsAny(title, ['action required', 'permission', 'waiting'])) {
     return 'permission'
   }
+
   // Why: boundary-aware regexes avoid cwd/path and substring false positives.
   if (STRONG_IDLE_KEYWORDS_RE.test(title)) {
     return 'idle'
   }
+
   if (STRONG_WORKING_KEYWORDS_RE.test(title)) {
     return 'working'
   }
+
   if (title.startsWith('. ')) {
     return 'working'
   }
+
   if (title.startsWith('* ')) {
     return 'idle'
   }
@@ -279,5 +313,6 @@ export function isQuarterCircleSpinnerOnlyAgentTitle(title: string | null | unde
   if (!title || !containsQuarterCircleSpinner(title)) {
     return false
   }
+
   return detectAgentStatusFromTitle(title.replace(QUARTER_CIRCLE_SPINNER_RE, '').trim()) === null
 }

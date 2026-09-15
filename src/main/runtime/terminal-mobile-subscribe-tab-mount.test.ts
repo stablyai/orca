@@ -32,6 +32,7 @@ function seedRuntime(seeds: HandleSeed[]): {
 } {
   const runtime = new OrcaRuntimeService()
   const internals = runtime as unknown as RuntimeInternals
+
   for (const seed of seeds) {
     internals.handles.set(seed.handle, {
       ...seed,
@@ -41,14 +42,17 @@ function seedRuntime(seeds: HandleSeed[]): {
       ptyGeneration: 1
     })
   }
+
   const send = vi.fn()
   internals.getAuthoritativeWindow = () => ({ webContents: { send } })
+
   return { runtime, send }
 }
 
 describe('mobile terminal subscribe tab mount', () => {
   it('keeps a waiting real-tab handle usable when the mount binds its first PTY', async () => {
     const runtime = new OrcaRuntimeService()
+
     const syncGraph = (ptyId: string | null): void => {
       runtime.syncWindowGraph(1, {
         tabs: [
@@ -76,9 +80,11 @@ describe('mobile terminal subscribe tab mount', () => {
     syncGraph(null)
     const internals = runtime as unknown as RuntimeInternals
     const leaf = internals.leaves.values().next().value
+
     if (!leaf) {
       throw new Error('expected terminal leaf')
     }
+
     const handle = internals.issueHandle(leaf)
     const ptyWait = runtime.waitForLeafPtyId(handle)
 
@@ -152,6 +158,7 @@ describe('mobile terminal subscribe tab mount', () => {
     const { runtime } = seedRuntime([
       { handle: 'h1', worktreeId: 'wt-1', tabId: 'tab-1', ptyId: null }
     ])
+
     const internals = runtime as unknown as RuntimeInternals
     internals.getAuthoritativeWindow = () => {
       throw new Error('no window')

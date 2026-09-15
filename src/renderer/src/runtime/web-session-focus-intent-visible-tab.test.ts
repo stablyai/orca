@@ -12,6 +12,7 @@ import {
 import { makeState, WT } from './web-session-tabs-sync-test-harness'
 
 const GROUP_A = 'group-a'
+
 const GROUP_B = 'group-b'
 
 function tab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'entityId' | 'contentType'>): Tab {
@@ -39,6 +40,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
     'resolves a focused %s tab instead of returning null',
     (contentType) => {
       const visible = tab({ id: 'tab-1', entityId: 'file-1', contentType })
+
       const state = makeState({
         unifiedTabsByWorktree: { [WT]: [visible] },
         groupsByWorktree: {
@@ -57,6 +59,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
   it('returns the group active tab, not the tab the stale coarse address names', () => {
     const shown = tab({ id: 'tab-shown', entityId: 'file-shown', contentType: 'editor' })
     const stale = tab({ id: 'tab-stale', entityId: 'file-stale', contentType: 'editor' })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [stale, shown] },
       groupsByWorktree: {
@@ -83,7 +86,9 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
       contentType: 'diff',
       groupId: GROUP_A
     })
+
     const focused = tab({ id: 'tab-fg', entityId: 'file-1', contentType: 'diff', groupId: GROUP_B })
+
     const state = makeState({
       // Why: background copy first — array order must not decide.
       unifiedTabsByWorktree: { [WT]: [background, focused] },
@@ -111,6 +116,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
       contentType: 'editor',
       groupId: GROUP_A
     })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [background] },
       groupsByWorktree: {
@@ -136,6 +142,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
       contentType: 'diff',
       groupId: GROUP_B
     })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [mismatched] },
       groupsByWorktree: {
@@ -152,6 +159,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
   it('follows the entity when the visible tab is rematerialized under a new id', () => {
     const local = tab({ id: 'local-editor', entityId: '/repo/index.html', contentType: 'editor' })
     const mirrored = tab({ id: 'host-editor', entityId: '/repo/index.html', contentType: 'editor' })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [local] },
       groupsByWorktree: {
@@ -166,12 +174,14 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
 
   it('does not follow a rematerialized entity into a different group', () => {
     const local = tab({ id: 'local-editor', entityId: '/repo/index.html', contentType: 'editor' })
+
     const elsewhere = tab({
       id: 'host-editor',
       entityId: '/repo/index.html',
       contentType: 'editor',
       groupId: GROUP_B
     })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [local] },
       groupsByWorktree: {
@@ -185,6 +195,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
 
   it('falls back to the first group when the active group id is stale', () => {
     const visible = tab({ id: 'tab-1', entityId: 'file-1', contentType: 'diff' })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [visible] },
       groupsByWorktree: {
@@ -200,6 +211,7 @@ describe('resolveWebSessionVisibleTabId — grouped state is authoritative', () 
 describe('resolveWebSessionVisibleTabId — no-group compatibility path', () => {
   it('resolves a diff through the projection when there are no group records', () => {
     const visible = tab({ id: 'tab-1', entityId: 'file-1', contentType: 'diff' })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [visible] },
       groupsByWorktree: {},
@@ -213,6 +225,7 @@ describe('resolveWebSessionVisibleTabId — no-group compatibility path', () => 
 
   it('keeps remembered-terminal behaviour when there are no group records', () => {
     const terminal = tab({ id: 'term-1', entityId: 'term-1', contentType: 'terminal' })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [terminal] },
       groupsByWorktree: {},
@@ -226,6 +239,7 @@ describe('resolveWebSessionVisibleTabId — no-group compatibility path', () => 
 
   it('does not match a browser tab against an editor coarse address', () => {
     const browser = tab({ id: 'tab-1', entityId: 'ws-1', contentType: 'browser' })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [browser] },
       groupsByWorktree: {},
@@ -241,12 +255,14 @@ describe('resolveWebSessionVisibleTabId — no-group compatibility path', () => 
 describe('resolveWebSessionSiblingVisibleTabId', () => {
   it('returns the sibling whose active tab matches the remembered visible type', () => {
     const editor = tab({ id: 'tab-editor', entityId: 'file-1', contentType: 'editor' })
+
     const terminal = tab({
       id: 'tab-terminal',
       entityId: 'term-1',
       contentType: 'terminal',
       groupId: GROUP_B
     })
+
     const state = makeState({
       unifiedTabsByWorktree: { [WT]: [editor, terminal] },
       groupsByWorktree: {

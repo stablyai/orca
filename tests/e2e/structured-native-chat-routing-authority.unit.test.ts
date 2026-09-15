@@ -14,6 +14,7 @@ import {
 
 vi.mock('../../src/shared/structured-native-chat-launch-route', async (importOriginal) => {
   const actual = await importOriginal<typeof SharedLaunchRoute>()
+
   return {
     ...actual,
     resolveStructuredNativeChatSupport: vi.fn(actual.resolveStructuredNativeChatSupport)
@@ -25,7 +26,9 @@ const settings = {
   experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }
+
 const predicate = vi.mocked(resolveStructuredNativeChatSupport)
+
 afterEach(() => predicate.mockReset())
 
 const placements = [
@@ -39,6 +42,7 @@ const placements = [
   { model: 'opus', effort: 'high' },
   { worktree: 'new-child', model: 'opus', effort: 'high' }
 ]
+
 const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
@@ -61,6 +65,7 @@ describe('shared feasibility owns every caller decision', () => {
             ...(customized ? { agentDefaultArgs: { [agent]: '--custom' } } : {})
           }
         }
+
         predicate.mockReturnValue({ supported: true })
         expect(decideWorkerStartMode(input).mode).toBe('structured')
         expect(predicate).toHaveBeenLastCalledWith(
@@ -71,12 +76,14 @@ describe('shared feasibility owns every caller decision', () => {
             requiresTuiLaunchCustomization: customized
           })
         )
+
         for (const blocker of blockers) {
           predicate.mockReturnValue({ supported: false, blocker })
           const receipt = decideWorkerStartMode(input)
           expect(receipt).toMatchObject({ mode: 'terminal', preferred: 'structured' })
           expect(receipt.reason).not.toBe('user_default')
           expect(receipt.detail).toContain('Your default is a structured chat session')
+
           if (blocker === 'runtime-capability-unknown') {
             expect(receipt.reason).toBe('structured_support_unknown')
             expect(receipt.detail).toContain('has not established')
@@ -100,6 +107,7 @@ describe('shared feasibility owns every caller decision', () => {
             workspaceKind: 'folder',
             initialSessionOptions: { model: 'model-1', effort: 'high' }
           }
+
           predicate.mockReturnValue({ supported: true })
           expect(resolveAgentLaunchRoute(input)).toBe('structured-native-chat')
           expect(structuredAgentLaunchSupported(input)).toBe(true)
@@ -115,6 +123,7 @@ describe('shared feasibility owns every caller decision', () => {
           expect(predicate).toHaveBeenLastCalledWith(
             expect.not.objectContaining({ isDraftPrompt: expect.anything() })
           )
+
           for (const blocker of blockers) {
             predicate.mockReturnValue({ supported: false, blocker })
             expect(resolveAgentLaunchRoute(input)).not.toBe('structured-native-chat')

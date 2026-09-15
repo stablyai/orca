@@ -14,6 +14,7 @@ const CREATED = {
   isBare: false,
   isMainWorktree: false
 }
+
 const MAIN = { ...CREATED, path: '/repo', branch: 'refs/heads/main', isMainWorktree: true }
 
 describe('findCreatedWorktree', () => {

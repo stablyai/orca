@@ -115,10 +115,12 @@ function hasExplicitSpaceAfterFallback(source: string, fallback: string): boolea
   // require an explicit {' '} after the closing )} so JSX whitespace is not
   // left to indentation alone.
   const escaped = fallback.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
   const pattern = new RegExp(
     String.raw`translate\(\s*'[^']+',\s*(?:'[^']*${escaped}'|"[^"]*${escaped}")\s*(?:,\s*\{[^}]*\})?\s*\)\s*\}\s*\{\s*['"]\s['"]\s*\}`,
     'm'
   )
+
   return pattern.test(source)
 }
 

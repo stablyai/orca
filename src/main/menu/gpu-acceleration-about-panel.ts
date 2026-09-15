@@ -15,21 +15,27 @@ export function describeGpuAcceleration(
   }
 
   const compositing = gpuFeatureStatus?.gpu_compositing.trim().toLowerCase()
+
   if (!compositing || compositing === 'undefined') {
     return 'Status unavailable'
   }
+
   if (compositing === 'enabled') {
     return 'Enabled'
   }
+
   if (compositing.includes('software')) {
     return 'Software rendering'
   }
+
   if (compositing.startsWith('disabled')) {
     return 'Disabled'
   }
+
   if (compositing.startsWith('unavailable')) {
     return 'Unavailable'
   }
+
   return `Unknown (${compositing})`
 }
 
@@ -41,6 +47,7 @@ export function createGpuAccelerationAboutPanelOptions({
   gpuFeatureStatus
 }: GpuAccelerationAboutPanelOptions): Electron.AboutPanelOptionsOptions {
   const status = `GPU acceleration: ${describeGpuAcceleration(gpuFeatureStatus, gpuFallbackActive)}`
+
   return {
     applicationName: appName,
     applicationVersion: appVersion,

@@ -62,20 +62,26 @@ export function resolvePaletteResultQualityClass(args: {
   isContainerOnly?: boolean
 }): PaletteResultQualityClass {
   const { worstQuality, usesSupportingEvidence, isContainerOnly } = args
+
   if (isFuzzyPaletteMatchQuality(worstQuality)) {
     return 'fuzzy-evidence'
   }
+
   if (isContainerOnly) {
     return isExactPaletteMatchQuality(worstQuality) ? 'exact-evidence' : 'partial-evidence'
   }
+
   if (usesSupportingEvidence) {
     return isExactPaletteMatchQuality(worstQuality) ? 'exact-evidence' : 'partial-evidence'
   }
+
   if (isExactPaletteMatchQuality(worstQuality)) {
     return 'exact-visible'
   }
+
   if (isPrefixOrBoundaryPaletteMatchQuality(worstQuality)) {
     return 'visible-prefix'
   }
+
   return 'partial-evidence'
 }

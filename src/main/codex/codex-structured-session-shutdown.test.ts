@@ -10,7 +10,9 @@ import {
 } from './codex-structured-session-adapter'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-1'
+
 const LAUNCH: CodexStructuredLaunch = {
   command: 'codex',
   args: ['app-server'],
@@ -32,6 +34,7 @@ function identity(): AgentSessionJournalIdentity {
 describe('CodexStructuredSessionAdapter shutdown', () => {
   it('refuses acquisitions that enter after closeAll starts', async () => {
     const connections: CodexAppServerConnection[] = []
+
     const openConnection = (async () => {
       const connection = {
         pid: 4321,
@@ -43,19 +46,25 @@ describe('CodexStructuredSessionAdapter shutdown', () => {
         respondWithError: () => {},
         close: async () => true
       } satisfies CodexAppServerConnection
+
       connections.push(connection)
+
       return connection
     }) as typeof openCodexAppServerConnection
+
     const firstLaunch = Promise.withResolvers<CodexStructuredLaunch>()
     let launchCount = 0
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: () => {
         launchCount += 1
+
         return launchCount === 1 ? firstLaunch.promise : Promise.resolve(LAUNCH)
       },
       openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const first = adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-1' })
     await vi.waitFor(() => expect(launchCount).toBe(1))
 
@@ -76,6 +85,7 @@ describe('CodexStructuredSessionAdapter shutdown', () => {
 
   it('bounds shutdown when a provider child never proves exit', async () => {
     const close = vi.fn(async () => false)
+
     const openConnection = (async () =>
       ({
         pid: 4321,
@@ -87,6 +97,7 @@ describe('CodexStructuredSessionAdapter shutdown', () => {
         respondWithError: () => {},
         close
       }) satisfies CodexAppServerConnection) as typeof openCodexAppServerConnection
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => LAUNCH,
       openConnection,

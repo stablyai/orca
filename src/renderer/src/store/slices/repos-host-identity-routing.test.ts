@@ -37,22 +37,32 @@ const sshDuplicate: Repo = {
 }
 
 const reposRemove = vi.fn()
+
 const reposRemoveForHost = vi.fn()
+
 const reposUpdate = vi.fn()
+
 const reposReorder = vi.fn()
+
 const reposReorderForHost = vi.fn()
+
 const ptyKill = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const uiSet = vi.fn()
 
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -235,14 +245,18 @@ describe('repo slice host identity routing', () => {
       result: { repo: Repo }
       _meta: { runtimeId: string }
     }>()
+
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.update') {
         const { updates } = (args as unknown as { params: { updates: { displayName: string } } })
           .params
+
         const displayName = updates.displayName
+
         if (displayName === 'Remote slow') {
           return firstUpdate.promise
         }
+
         return Promise.resolve({
           id: 'rpc-queued-update',
           ok: true,
@@ -250,6 +264,7 @@ describe('repo slice host identity routing', () => {
           _meta: { runtimeId: 'runtime-remote' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-other',
         ok: true,
@@ -306,11 +321,13 @@ describe('repo slice host identity routing', () => {
       id: 'same-repo::/local/wt',
       repoId: 'same-repo'
     })
+
     const remoteWorktree = makeWorktree({
       id: 'same-repo::/remote/wt',
       repoId: 'same-repo',
       hostId: 'runtime:env-1'
     })
+
     const store = createTestStore()
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
@@ -373,15 +390,18 @@ describe('repo slice host identity routing', () => {
   })
   it('purges hostless worktree state when two hosts collide on repoId and path', async () => {
     const sharedWorktreeId = 'same-repo::/shared'
+
     const localWorktree = makeWorktree({
       id: sharedWorktreeId,
       repoId: 'same-repo'
     })
+
     const remoteWorktree = makeWorktree({
       id: sharedWorktreeId,
       repoId: 'same-repo',
       hostId: 'runtime:env-1'
     })
+
     const store = createTestStore()
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
@@ -422,11 +442,13 @@ describe('repo slice host identity routing', () => {
   it('preserves qualified recency for an exact-id sibling host', async () => {
     const worktreeId = 'same-repo::/shared/wt'
     const localWorktree = makeWorktree({ id: worktreeId, repoId: 'same-repo' })
+
     const remoteWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'same-repo',
       hostId: 'runtime:env-1'
     })
+
     const store = createTestStore()
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
@@ -452,11 +474,13 @@ describe('repo slice host identity routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const localWorktree = makeWorktree({ id: 'same-repo::/local/wt', repoId: 'same-repo' })
+
     const remoteWorktree = makeWorktree({
       id: 'same-repo::/remote/wt',
       repoId: 'same-repo',
       hostId: 'runtime:env-1'
     })
+
     const store = createTestStore()
     // Focus is local (no active runtime env). Without deriving the target from the
     // explicit hostId, this would route to the focused (local) host and delete the
@@ -495,11 +519,13 @@ describe('repo slice host identity routing', () => {
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1'
     }
+
     const sshWorktree = makeWorktree({
       id: 'same-repo::/home/orca/wt',
       repoId: 'same-repo',
       hostId: 'ssh:ssh-1'
     })
+
     const store = createTestStore()
     // A runtime env is focused, but the row being removed is SSH-owned.
     store.setState({
@@ -525,15 +551,18 @@ describe('repo slice host identity routing', () => {
       result: { status: 'removed' },
       _meta: { runtimeId: 'runtime-remote' }
     })
+
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo'
     })
+
     const remoteWorktree = makeWorktree({
       id: 'same-repo::/remote/wt',
       repoId: 'same-repo',
       hostId: 'runtime:env-1'
     })
+
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
@@ -684,6 +713,7 @@ describe('repo slice host identity routing', () => {
     reposReorderForHost.mockResolvedValue({ status: 'applied' })
     const alpha = { ...localDuplicate, id: 'alpha' }
     const bravo = { ...localDuplicate, id: 'bravo' }
+
     const charlie = {
       ...localDuplicate,
       id: 'charlie',
@@ -691,6 +721,7 @@ describe('repo slice host identity routing', () => {
       connectionId: 'target',
       executionHostId: undefined
     }
+
     const delta = { ...charlie, id: 'delta', path: '/ssh/delta' }
     const store = createTestStore()
     store.setState({ repos: [alpha, charlie, bravo, delta] })
@@ -750,6 +781,7 @@ describe('repo slice host identity routing', () => {
       repos: [alpha, bravo],
       fetchReposForAllHosts: resync
     })
+
     try {
       await store.getState().reorderRepos(['bravo', 'alpha'])
     } finally {

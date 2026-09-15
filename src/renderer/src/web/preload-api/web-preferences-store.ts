@@ -33,6 +33,7 @@ export function getStoredSettings(): GlobalSettings {
   const defaults = getDefaultSettings('~')
   const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+
   const migratedStored = {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
@@ -41,6 +42,7 @@ export function getStoredSettings(): GlobalSettings {
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
+
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
@@ -59,8 +61,10 @@ export function getStoredSettings(): GlobalSettings {
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown
+
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         writeJson(SETTINGS_STORAGE_KEY, migratedStored)
+
         if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
           // Why a raw merge, not readLocalWebUIState(): that path calls back into
           // getStoredSettings(), and writing through it here would recurse.
@@ -74,6 +78,7 @@ export function getStoredSettings(): GlobalSettings {
       // Keep readJson's invalid-JSON fallback non-destructive.
     }
   }
+
   return mergeSettings(
     {
       ...defaults,
@@ -90,76 +95,94 @@ export function writeStoredSettings(
   explicitActiveRuntimeEnvironmentId?: string | null
 ): void {
   const durable = { ...settings }
+
   if (explicitActiveRuntimeEnvironmentId !== undefined) {
     durable.activeRuntimeEnvironmentId = explicitActiveRuntimeEnvironmentId
   } else {
     const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+
     if (Object.hasOwn(stored, 'activeRuntimeEnvironmentId')) {
       durable.activeRuntimeEnvironmentId = stored.activeRuntimeEnvironmentId ?? null
     } else {
       delete durable.activeRuntimeEnvironmentId
     }
   }
+
   writeJson(SETTINGS_STORAGE_KEY, durable)
 }
 
 export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
   const local = getStoredSettings()
   const requestedEnvironment = requireActiveEnvironmentOrNull()
+
   if (!requestedEnvironment) {
     return local
   }
+
   try {
     const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
       'settings.get',
       undefined,
       15_000
     )
+
     const runtimeSettings: Partial<GlobalSettings> = {}
     const currentEnvironment = requireActiveEnvironmentOrNull()
+
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
         result.settings.worktreeVisibilityDefaults
       )
+
       webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId = visibilityDefaults
         ? requestedEnvironment.id
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
+
     if (typeof result.settings.experimentalNewWorktreeCardStyle === 'boolean') {
       runtimeSettings.experimentalNewWorktreeCardStyle =
         result.settings.experimentalNewWorktreeCardStyle
     }
+
     if (typeof result.settings.compactWorktreeCards === 'boolean') {
       runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
     }
+
     if (typeof result.settings.minimaxGroupId === 'string') {
       runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
     }
+
     if (typeof result.settings.minimaxUsageModels === 'string') {
       runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
     }
+
     if (
       result.settings.minimaxEndpoint === 'overseas' ||
       result.settings.minimaxEndpoint === 'cn'
     ) {
       runtimeSettings.minimaxEndpoint = result.settings.minimaxEndpoint
     }
+
     if (Array.isArray(result.settings.prBotAuthorOverrides)) {
       runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         result.settings.prBotAuthorOverrides
       )
     }
+
     // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
     // sends it back, so web shows what the host enforces instead of a local value it ignores.
     if (typeof result.settings.artifactSharingEnabled === 'boolean') {
       runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
     }
+
     if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
       runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
     }
+
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
+
     return settingsForActiveVisibilityOwner(next)
   } catch {
     // Why: unpaired/offline web clients keep a local settings fallback.
@@ -169,9 +192,11 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
 
 export function settingsForActiveVisibilityOwner(settings: GlobalSettings): GlobalSettings {
   const environment = requireActiveEnvironmentOrNull()
+
   if (!environment) {
     return settings
   }
+
   if (
     environment.id === webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId &&
     webRuntimeState.worktreeVisibilityDefaultsRuntimeValue
@@ -181,7 +206,9 @@ export function settingsForActiveVisibilityOwner(settings: GlobalSettings): Glob
       worktreeVisibilityDefaults: webRuntimeState.worktreeVisibilityDefaultsRuntimeValue
     }
   }
+
   const { worktreeVisibilityDefaults: _unsupported, ...supportedSettings } = settings
+
   return supportedSettings as GlobalSettings
 }
 
@@ -190,48 +217,62 @@ export async function syncRuntimeBackedSettings(
   localNext: GlobalSettings
 ): Promise<GlobalSettings> {
   const requestedEnvironment = requireActiveEnvironmentOrNull()
+
   if (!requestedEnvironment) {
     return localNext
   }
+
   const runtimeUpdates: Partial<GlobalSettings> = {}
   const visibilityDefaults = normalizeWorktreeVisibilityDefaults(updates.worktreeVisibilityDefaults)
+
   if (visibilityDefaults) {
     runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
   }
+
   if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
     runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
   }
+
   if (typeof updates.compactWorktreeCards === 'boolean') {
     runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
   }
+
   if (typeof updates.minimaxGroupId === 'string') {
     runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
   }
+
   if (typeof updates.minimaxUsageModels === 'string') {
     runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
   }
+
   if (updates.minimaxEndpoint === 'overseas' || updates.minimaxEndpoint === 'cn') {
     runtimeUpdates.minimaxEndpoint = updates.minimaxEndpoint
   }
+
   if (Array.isArray(updates.prBotAuthorOverrides)) {
     runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
       updates.prBotAuthorOverrides
     )
   }
+
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }
+
   try {
     const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
       'settings.update',
       runtimeUpdates,
       15_000
     )
+
     const runtimeSettings = { ...result.settings }
     delete runtimeSettings.activeRuntimeEnvironmentId
+
     const updatedVisibilityDefaults = normalizeWorktreeVisibilityDefaults(
       runtimeSettings.worktreeVisibilityDefaults
     )
+
     if (
       requireActiveEnvironmentOrNull()?.id === requestedEnvironment.id &&
       updatedVisibilityDefaults
@@ -239,14 +280,17 @@ export async function syncRuntimeBackedSettings(
       webRuntimeState.worktreeVisibilityDefaultsRuntimeEnvironmentId = requestedEnvironment.id
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
     }
+
     delete runtimeSettings.worktreeVisibilityDefaults
     const next = mergeSettings(localNext, runtimeSettings)
     writeStoredSettings(next)
+
     return next
   } catch (error) {
     if (visibilityDefaults) {
       throw error
     }
+
     // Why: unpaired/offline web clients still need local settings persistence.
     return localNext
   }
@@ -257,6 +301,7 @@ export async function updateRuntimePRBotAuthorOverride(args: {
   isBot: boolean
 }): Promise<GlobalSettings> {
   const local = getStoredSettings()
+
   if (requireActiveEnvironmentOrNull()) {
     // Why: don't report a successful mark the authoritative runtime failed to persist and will later overwrite.
     const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
@@ -264,12 +309,16 @@ export async function updateRuntimePRBotAuthorOverride(args: {
       args,
       15_000
     )
+
     const next = mergeSettings(local, {
       prBotAuthorOverrides: normalizePRBotAuthorOverrides(result.settings.prBotAuthorOverrides)
     })
+
     writeStoredSettings(next)
+
     return next
   }
+
   const next = mergeSettings(local, {
     prBotAuthorOverrides: applyPRBotAuthorOverride(
       local.prBotAuthorOverrides,
@@ -277,7 +326,9 @@ export async function updateRuntimePRBotAuthorOverride(args: {
       args.isBot
     )
   })
+
   writeStoredSettings(next)
+
   return next
 }
 
@@ -288,6 +339,7 @@ export function readLocalWebUIState(): PersistedUIState {
   // every caller then writes back, erasing the arm the stamp can never raise again.
   const storedSettings = getStoredSettings()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+
   const base = {
     ...defaults,
     // Why: mirror the main-process missing-property seed from legacy card layout mode when runtime ui.get is unavailable.
@@ -295,9 +347,11 @@ export function readLocalWebUIState(): PersistedUIState {
       storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
     )
   }
+
   if (typeof stored.rightSidebarOpen === 'boolean') {
     return mergeWebUIState(base, stored)
   }
+
   return mergeWebUIState(base, {
     ...stored,
     // Why: web fallback lacks main-process normalization; migrate the retired setting only when local UI preference is absent.

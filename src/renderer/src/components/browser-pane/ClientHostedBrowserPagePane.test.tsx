@@ -44,6 +44,7 @@ vi.mock('./assemble-chrome/BrowserAddressBar', () => ({
     inputRef: React.RefObject<HTMLInputElement | null>
   }) => {
     mocks.addressBar.current = props
+
     return <input aria-label="Address" ref={props.inputRef} value={props.value} readOnly />
   }
 }))
@@ -69,6 +70,7 @@ describe('ClientHostedBrowserPagePane', () => {
     mocks.attach.mockReturnValue(retainedAttachment(webview, detach))
     const onUpdatePageState = vi.fn()
     const onSetUrl = vi.fn()
+
     const view = render(
       <ClientHostedBrowserPagePane
         browserTab={page()}
@@ -188,6 +190,7 @@ describe('ClientHostedBrowserPagePane', () => {
     const { webview } = createWebview()
     mocks.attach.mockReturnValue(retainedAttachment(webview))
     const onUpdatePageState = vi.fn()
+
     const view = render(
       <ClientHostedBrowserPagePane
         browserTab={page()}
@@ -201,6 +204,7 @@ describe('ClientHostedBrowserPagePane', () => {
         onSetUrl={vi.fn()}
       />
     )
+
     onUpdatePageState.mockClear()
 
     act(() =>
@@ -225,11 +229,13 @@ describe('ClientHostedBrowserPagePane', () => {
         })
       )
     )
+
     const loadError = {
       code: -105,
       description: 'ERR_NAME_NOT_RESOLVED',
       validatedUrl: 'https://google%20maps/'
     }
+
     expect(onUpdatePageState).toHaveBeenCalledWith('page-a', { loading: false, loadError })
     // Why: did-stop-loading follows did-fail-load and must not wipe the failure.
     onUpdatePageState.mockClear()
@@ -312,11 +318,13 @@ describe('ClientHostedBrowserPagePane', () => {
 
   it('requests the one-time intro tour on the first active client-hosted page', async () => {
     const { useAppStore } = await import('@/store')
+
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
       contextualToursSeenIds: useAppStore.getState().contextualToursSeenIds,
       activeContextualTourId: useAppStore.getState().activeContextualTourId
     }
+
     useAppStore.setState({
       persistedUIReady: true,
       contextualToursSeenIds: [],
@@ -324,6 +332,7 @@ describe('ClientHostedBrowserPagePane', () => {
     })
     const { webview } = createWebview()
     mocks.attach.mockReturnValue(retainedAttachment(webview))
+
     try {
       render(
         <ClientHostedBrowserPagePane
@@ -338,10 +347,12 @@ describe('ClientHostedBrowserPagePane', () => {
           onSetUrl={vi.fn()}
         />
       )
+
       // Why: happy-dom rects are zero-sized and the tour gate requires a measurable target.
       const target = document.querySelector<HTMLElement>(
         '[data-contextual-tour-target="client-hosted-browser-controls"]'
       )
+
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
@@ -355,11 +366,13 @@ describe('ClientHostedBrowserPagePane', () => {
 
   it('never re-requests the intro tour once it has been seen', async () => {
     const { useAppStore } = await import('@/store')
+
     const prior = {
       persistedUIReady: useAppStore.getState().persistedUIReady,
       contextualToursSeenIds: useAppStore.getState().contextualToursSeenIds,
       activeContextualTourId: useAppStore.getState().activeContextualTourId
     }
+
     useAppStore.setState({
       persistedUIReady: true,
       contextualToursSeenIds: ['client-hosted-browser'],
@@ -367,6 +380,7 @@ describe('ClientHostedBrowserPagePane', () => {
     })
     const { webview } = createWebview()
     mocks.attach.mockReturnValue(retainedAttachment(webview))
+
     try {
       render(
         <ClientHostedBrowserPagePane
@@ -381,10 +395,12 @@ describe('ClientHostedBrowserPagePane', () => {
           onSetUrl={vi.fn()}
         />
       )
+
       // Why: same measurable target as the positive case — only seenIds differs.
       const target = document.querySelector<HTMLElement>(
         '[data-contextual-tour-target="client-hosted-browser-controls"]'
       )
+
       expect(target).not.toBeNull()
       target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
       await act(async () => {
@@ -443,6 +459,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     frameCallbacks = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', () => {})
@@ -463,6 +480,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     for (let index = 0; index < cycles; index += 1) {
       const pending = frameCallbacks
       frameCallbacks = []
+
       for (const callback of pending) {
         callback(0)
       }
@@ -527,6 +545,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     const { webview, focus, setUrl } = createWebview()
     setUrl('https://remote.internal/path')
     mocks.attach.mockReturnValue(retainedAttachment(webview))
+
     const renderPane = (isActive: boolean): React.JSX.Element => (
       <ClientHostedBrowserPagePane
         browserTab={page()}
@@ -540,6 +559,7 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
         onSetUrl={vi.fn()}
       />
     )
+
     const view = render(renderPane(true))
     act(() => flushFrames())
     focus.mockClear()
@@ -664,6 +684,7 @@ function createWebview(): {
     reload: vi.fn(),
     loadURL: vi.fn(async () => {})
   })
+
   return {
     webview,
     focus,
@@ -679,6 +700,7 @@ function createWebview(): {
 
 function retainedAttachment(webview: Electron.WebviewTag, detach = vi.fn()) {
   let revision = 0
+
   return {
     webview,
     detach,

@@ -19,6 +19,7 @@ export async function runLegacyWorkerTerminalRecovery(
   const exitedDispatchIds: string[] = []
   const deferredDispatchIds = new Set(plan.ambiguousDispatchIds)
   const pendingResolutions: LegacyWorkerRecoveryResolution[] = []
+
   const providers = new Map<
     string,
     {
@@ -29,10 +30,12 @@ export async function runLegacyWorkerTerminalRecovery(
       }[]
     }
   >()
+
   for (const candidate of plan.candidates) {
     try {
       const workspace = await ports.resolveWorkspace(candidate)
       const sshPty = parseAppSshPtyId(candidate.ptyId)
+
       if (workspace.scope.connectionId) {
         if (
           options.connectionId !== workspace.scope.connectionId ||
@@ -49,6 +52,7 @@ export async function runLegacyWorkerTerminalRecovery(
         deferredDispatchIds.add(candidate.dispatchId)
         continue
       }
+
       const connectionId = workspace.scope.connectionId
       const providerKey = connectionId === null ? 'local' : `ssh:${connectionId}`
       const provider = providers.get(providerKey) ?? { connectionId, entries: [] }
@@ -58,17 +62,21 @@ export async function runLegacyWorkerTerminalRecovery(
       deferredDispatchIds.add(candidate.dispatchId)
     }
   }
+
   for (const provider of providers.values()) {
     const resolvedWorktrees = [
       ...new Map(
         provider.entries.map(({ workspace }) => [workspace.resolved.id, workspace.resolved])
       ).values()
     ]
+
     const inventory = await ports.refreshInventory(resolvedWorktrees, provider.connectionId)
+
     if (!inventory) {
       provider.entries.forEach(({ candidate }) => deferredDispatchIds.add(candidate.dispatchId))
       continue
     }
+
     for (const { candidate, workspace } of provider.entries) {
       await reconcileLegacyWorkerCandidate({
         controller,
@@ -83,35 +91,44 @@ export async function runLegacyWorkerTerminalRecovery(
       })
     }
   }
+
   const persistedDispatchIds = await ports.persist(pendingResolutions)
+
   for (const { candidate, resolution } of pendingResolutions) {
     if (!persistedDispatchIds.has(candidate.dispatchId)) {
       deferredDispatchIds.add(candidate.dispatchId)
       continue
     }
+
     if (resolution === 'adopted') {
       controller.addRecoveredPty(candidate.ptyId)
       ports.notifyResolution(candidate, 'adopted')
       adoptedDispatchIds.push(candidate.dispatchId)
       continue
     }
+
     ports.rollback(candidate)
+
     if (!ports.reconcileMissing(candidate)) {
       deferredDispatchIds.add(candidate.dispatchId)
       continue
     }
+
     ports.notifyResolution(candidate, 'exited')
     exitedDispatchIds.push(candidate.dispatchId)
   }
+
   const result = {
     adoptedDispatchIds,
     exitedDispatchIds,
     deferredDispatchIds: [...deferredDispatchIds]
   }
+
   ports.updateRetry(plan, deferredDispatchIds, options)
   // Why: releases may only finish after the owning provider's terminals are rediscovered.
   void ports.reconcileRequestedReleases().catch((error) => {
     console.warn('[orchestration] worker terminal release reconciliation failed', { error })
   })
+
   return result
 }

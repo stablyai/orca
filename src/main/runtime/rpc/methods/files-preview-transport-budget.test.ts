@@ -19,13 +19,16 @@ describe('file preview RPC transport budgets', () => {
         isImage: true,
         mimeType: 'image/png'
       }
+
       const readFileExplorerPreview = vi.fn().mockResolvedValue(preview)
       const readTerminalArtifactPreview = vi.fn().mockResolvedValue(preview)
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         readFileExplorerPreview,
         readTerminalArtifactPreview
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
       const id = '\u0001'.repeat(8_192)
       const reply = vi.fn()

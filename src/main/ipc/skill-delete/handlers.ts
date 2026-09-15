@@ -32,13 +32,16 @@ export function registerSkillDeleteIpcHandlers(store: Store, runtime?: OrcaRunti
       : {}),
     userDataPath: app.getPath('userData')
   }
+
   const resolve = (value: unknown) => {
     const request = SkillDeleteRequestSchema.parse(value)
+
     // Send exactly what the scan sent: the nested target keeps discovery's own
     // stripping schema, while the request itself is strict.
     const target = resolveSkillDiscoveryTarget(
       request.target ? SkillDiscoveryTargetSchema.parse(request.target) : undefined
     )
+
     return { request, target }
   }
 
@@ -46,6 +49,7 @@ export function registerSkillDeleteIpcHandlers(store: Store, runtime?: OrcaRunti
     'skills:previewDelete',
     async (_event, value: unknown): Promise<SkillDeletePlan> => {
       const { request, target } = resolve(value)
+
       return previewSkillDeleteRequest(request, target, dependencies)
     }
   )
@@ -54,6 +58,7 @@ export function registerSkillDeleteIpcHandlers(store: Store, runtime?: OrcaRunti
     'skills:delete',
     async (_event, value: unknown): Promise<SkillDeleteResult> => {
       const { request, target } = resolve(value)
+
       return runSkillDeleteRequest(request, target, dependencies)
     }
   )

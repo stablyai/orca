@@ -82,12 +82,15 @@ describe('network.browserTunnel RPC', () => {
   it('rejects missing capabilities before registering binary traffic', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_NETWORK_TUNNEL_METHODS
     })
+
     const replies: string[] = []
     const registerBinaryMessageHandler = vi.fn()
+
     const baseOptions = {
       connectionId: 'connection-a',
       clientKind: 'runtime' as const,
@@ -118,10 +121,12 @@ describe('network.browserTunnel RPC', () => {
   it('rejects SSH and WSL routing without the execution-host capability', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_NETWORK_TUNNEL_METHODS
     })
+
     const replies: string[] = []
     const registerBinaryMessageHandler = vi.fn()
 
@@ -191,6 +196,7 @@ describe('network.browserTunnel RPC', () => {
       connectionGeneration: 1
     })
     const resolveExecutionRoute = vi.fn()
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(
@@ -198,6 +204,7 @@ describe('network.browserTunnel RPC', () => {
         resolveExecutionRoute
       )
     })
+
     const replies: string[] = []
     const registerBinaryMessageHandler = vi.fn()
 
@@ -232,9 +239,11 @@ describe('network.browserTunnel RPC', () => {
   it('opens no binary handler when the execution-host authority is stale', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const resolveExecutionRoute = vi
       .fn()
       .mockRejectedValue(new Error('browser_tunnel_execution_host_stale'))
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(
@@ -242,14 +251,17 @@ describe('network.browserTunnel RPC', () => {
         resolveExecutionRoute
       )
     })
+
     const replies: string[] = []
     const registerBinaryMessageHandler = vi.fn()
+
     const executionHost = {
       kind: 'ssh' as const,
       targetId: 'target-a',
       providerEpoch: 'provider-epoch-a',
       connectionGeneration: 2
     }
+
     grantExecutionHost(hostRuntime, lease, executionHost)
 
     await dispatcher.dispatchStreaming(
@@ -285,6 +297,7 @@ describe('network.browserTunnel RPC', () => {
     const invalidated = new AbortController()
     const closeExecutionRoute = vi.fn()
     const memoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(memoryBudgets, async ({ executionHost }) => ({
@@ -299,16 +312,20 @@ describe('network.browserTunnel RPC', () => {
         close: closeExecutionRoute
       }))
     })
+
     const unregister = vi.fn()
     const registerBinaryMessageHandler = vi.fn(() => unregister)
     const replies: string[] = []
+
     const executionHost = {
       kind: 'ssh' as const,
       targetId: 'target-a',
       providerEpoch: 'provider-epoch-a',
       connectionGeneration: 2
     }
+
     grantExecutionHost(hostRuntime, lease, executionHost)
+
     const dispatch = dispatcher.dispatchStreaming(
       request(lease, { executionHost }),
       (reply) => replies.push(reply),
@@ -324,6 +341,7 @@ describe('network.browserTunnel RPC', () => {
         registerBinaryMessageHandler
       }
     )
+
     await vi.waitFor(() => expect(registerBinaryMessageHandler).toHaveBeenCalledOnce())
 
     invalidated.abort()
@@ -337,13 +355,16 @@ describe('network.browserTunnel RPC', () => {
   it('does not expose execution-route diagnostic detail to the paired caller', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const executionHost = {
       kind: 'ssh' as const,
       targetId: 'target-a',
       providerEpoch: 'provider-epoch-a',
       connectionGeneration: 2
     }
+
     grantExecutionHost(hostRuntime, lease, executionHost)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(
@@ -351,6 +372,7 @@ describe('network.browserTunnel RPC', () => {
         vi.fn().mockRejectedValue(new Error('Bad owner or permissions on /Users/alice/.ssh/key'))
       )
     })
+
     const replies: string[] = []
 
     await dispatcher.dispatchStreaming(
@@ -376,22 +398,27 @@ describe('network.browserTunnel RPC', () => {
   it('rejects a grant revoked during connector startup and closes the connector', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const executionHost = {
       kind: 'ssh' as const,
       targetId: 'target-a',
       providerEpoch: 'provider-epoch-a',
       connectionGeneration: 2
     }
+
     const grant = grantExecutionHost(hostRuntime, lease, executionHost)
     let resolveExecutionRoute: ((route: BrowserNetworkExecutionRoute) => void) | undefined
     let executionRouteSignal: AbortSignal | undefined
     const close = vi.fn()
+
     const resolver: BrowserNetworkExecutionRouteResolver = vi.fn((context) => {
       executionRouteSignal = context.signal
+
       return new Promise<BrowserNetworkExecutionRoute>((resolve) => {
         resolveExecutionRoute = resolve
       })
     })
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(
@@ -399,8 +426,10 @@ describe('network.browserTunnel RPC', () => {
         resolver
       )
     })
+
     const replies: string[] = []
     const registerBinaryMessageHandler = vi.fn()
+
     const dispatch = dispatcher.dispatchStreaming(
       request(lease, { executionHost }),
       (reply) => replies.push(reply),
@@ -416,6 +445,7 @@ describe('network.browserTunnel RPC', () => {
         registerBinaryMessageHandler
       }
     )
+
     await vi.waitFor(() => expect(resolver).toHaveBeenCalledOnce())
 
     grant.release()
@@ -438,11 +468,14 @@ describe('network.browserTunnel RPC', () => {
   it('rejects a self-asserted or stale browser host lease', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_NETWORK_TUNNEL_METHODS
     })
+
     const replies: string[] = []
+
     const options = {
       connectionId: 'connection-a',
       clientKind: 'runtime' as const,
@@ -474,10 +507,12 @@ describe('network.browserTunnel RPC', () => {
   it('rejects an execution-host revision not owned by this runtime', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_NETWORK_TUNNEL_METHODS
     })
+
     const replies: string[] = []
 
     await dispatcher.dispatchStreaming(
@@ -504,13 +539,16 @@ describe('network.browserTunnel RPC', () => {
   it('opens no route or binary handler when process memory admission is exhausted', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const memoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
       processMaxLeases: 0
     })
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(memoryBudgets)
     })
+
     const replies: string[] = []
     const registerBinaryMessageHandler = vi.fn()
 
@@ -537,13 +575,16 @@ describe('network.browserTunnel RPC', () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
     const lease = attachLease(hostRuntime)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_NETWORK_TUNNEL_METHODS
     })
+
     const unregister = vi.fn()
     const registerBinaryMessageHandler = vi.fn(() => unregister)
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(request(lease), (reply) => replies.push(reply), {
       connectionId: 'connection-a',
       clientKind: 'runtime',
@@ -571,11 +612,14 @@ describe('network.browserTunnel RPC', () => {
     const hostRuntime = runtime(cleanups)
     const lease = attachLease(hostRuntime)
     const memoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: createBrowserNetworkTunnelMethods(memoryBudgets)
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(request(lease), (reply) => replies.push(reply), {
       connectionId: 'connection-a',
       clientKind: 'runtime',
@@ -586,6 +630,7 @@ describe('network.browserTunnel RPC', () => {
         throw new Error('unregister failed')
       })
     })
+
     await vi.waitFor(() => expect(replies).toHaveLength(1))
 
     expect(() => cleanups.values().next().value?.()).toThrow('unregister failed')
@@ -596,12 +641,15 @@ describe('network.browserTunnel RPC', () => {
   it('fences an older route when the same lease replaces it', async () => {
     const hostRuntime = runtime()
     const lease = attachLease(hostRuntime)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_NETWORK_TUNNEL_METHODS
     })
+
     const firstReplies: string[] = []
     const secondReplies: string[] = []
+
     const baseOptions = {
       clientKind: 'runtime' as const,
       pairedDeviceId: 'device-a',
@@ -609,6 +657,7 @@ describe('network.browserTunnel RPC', () => {
       sendBinary: vi.fn(() => true),
       registerBinaryMessageHandler: vi.fn(() => vi.fn())
     }
+
     const first = dispatcher.dispatchStreaming(
       request(lease),
       (reply) => firstReplies.push(reply),
@@ -617,7 +666,9 @@ describe('network.browserTunnel RPC', () => {
         connectionId: 'connection-a'
       }
     )
+
     await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
+
     const second = dispatcher.dispatchStreaming(
       request(lease),
       (reply) => secondReplies.push(reply),

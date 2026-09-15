@@ -51,11 +51,13 @@ function createRuntime(provider?: {
     undefined,
     provider ? { getLocalProvider: () => provider as never } : undefined
   )
+
   const internal = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
     markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
     markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
   }
+
   internal.resolveTerminalWorkspaceLaunchScope = vi.fn(async () => ({
     id: 'worktree-1',
     path: '/tmp/worktree-1',
@@ -63,6 +65,7 @@ function createRuntime(provider?: {
   }))
   internal.markLocalWorkspaceTrustedForAgent = vi.fn()
   internal.markRemoteWorkspaceTrustedForAgent = vi.fn()
+
   return runtime
 }
 
@@ -97,16 +100,19 @@ async function fenceRemoteAgentSessionSpawn(runtime: OrcaRuntimeService) {
   const failure = Object.assign(new Error('execution_owner_unavailable'), {
     agentSessionOperationOutcome: 'unknown' as const
   })
+
   const createTerminal = vi
     .spyOn(runtime, 'createTerminal')
     .mockImplementation(async (_worktree, opts) => {
       opts?.onPtySpawnCommitted?.()
       throw failure
     })
+
   const id = operationId()
   await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
     failure.message
   )
+
   return { createTerminal, failure, id }
 }
 
@@ -116,11 +122,14 @@ describe('agent-session create operation ledger', () => {
       supportsAgentSessionClaims: vi.fn(() => false),
       supportsAgentSessionCreateOperations: vi.fn(() => false)
     }
+
     const runtime = createRuntime(provider)
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
     const internal = runtime as unknown as {
       markLocalWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
     }
+
     const id = operationId()
 
     await expect(runtime.createAgentSession(request(id))).rejects.toThrow(
@@ -156,9 +165,11 @@ describe('agent-session create operation ledger', () => {
       supportsAgentSessionClaims: () => true,
       supportsAgentSessionCreateOperations: () => true
     })
+
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
     }
+
     internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
       id: 'worktree-1',
       path: '/repo/worktree-1',
@@ -186,9 +197,11 @@ describe('agent-session create operation ledger', () => {
 
   it('requests exact client legacy fallback before nested SSH side effects', async () => {
     const runtime = createRuntime()
+
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
     }
+
     internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
       id: 'worktree-1',
       path: '/remote/worktree-1',
@@ -230,10 +243,12 @@ describe('agent-session create operation ledger', () => {
 
   it('selects nested SSH legacy fallback before reading a Pi transcript path locally', async () => {
     const runtime = createRuntime()
+
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
       markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
     }
+
     internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
       id: 'worktree-1',
       path: '/remote/worktree-1',
@@ -275,12 +290,14 @@ describe('agent-session create operation ledger', () => {
   it('joins concurrent retries and conflicts on a changed fingerprint', async () => {
     const runtime = createRuntime()
     let finish!: (result: ReturnType<typeof terminal>) => void
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockImplementation(
       () =>
         new Promise((resolve) => {
           finish = resolve
         })
     )
+
     const id = operationId()
     const first = runtime.createAgentSession(request(id), { clientId: 'device-a' })
     const joined = runtime.createAgentSession(request(id), { clientId: 'device-a' })
@@ -322,10 +339,12 @@ describe('agent-session create operation ledger', () => {
 
   it('releases a failed pre-spawn operation for a safe retry', async () => {
     const runtime = createRuntime()
+
     const createTerminal = vi
       .spyOn(runtime, 'createTerminal')
       .mockRejectedValueOnce(new Error('pre-spawn failure'))
       .mockResolvedValueOnce(terminal())
+
     const id = operationId()
 
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
@@ -353,12 +372,14 @@ describe('agent-session create operation ledger', () => {
   ])('retains a replay fence when %s after physical spawn commit', async (_case, message) => {
     const runtime = createRuntime()
     const failure = new Error(message)
+
     const createTerminal = vi
       .spyOn(runtime, 'createTerminal')
       .mockImplementation(async (_worktree, opts) => {
         opts?.onPtySpawnCommitted?.()
         throw failure
       })
+
     const id = operationId()
 
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
@@ -412,9 +433,11 @@ describe('agent-session create operation ledger', () => {
 
   it('replays the fenced failure when the remote host cannot answer', async () => {
     const runtime = createRuntime()
+
     const listProcesses = vi.fn(async () => {
       throw new Error('relay offline')
     })
+
     installRemoteReclaimHarness(runtime, listProcesses)
     const { createTerminal, id, failure } = await fenceRemoteAgentSessionSpawn(runtime)
 
@@ -447,9 +470,11 @@ describe('agent-session create operation ledger', () => {
 
   it('retains a replay fence when the provider reports an unknown spawn outcome', async () => {
     const runtime = createRuntime()
+
     const failure = Object.assign(new Error('cleanup could not prove exit'), {
       agentSessionOperationOutcome: 'unknown' as const
     })
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockRejectedValue(failure)
     const id = operationId()
 
@@ -457,6 +482,7 @@ describe('agent-session create operation ledger', () => {
       runtime.createAgentSession(request(id), { clientId: 'device-a' }),
       runtime.createAgentSession(request(id), { clientId: 'device-a' })
     ]
+
     await expect(Promise.all(attempts)).rejects.toThrow(failure.message)
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
       failure.message

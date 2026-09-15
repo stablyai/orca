@@ -50,9 +50,11 @@ describe('Jira issue summary timeout', () => {
 
   it('bounds stalled reads and releases their request slot', async () => {
     vi.useFakeTimers()
+
     try {
       const { getIssueSummary } = await import('./issues')
       const read = getIssueSummary('ALP-1', 'site-1')
+
       const rejected = expect(read).rejects.toSatisfy(
         (error: unknown) => getJiraSummaryLookupErrorCode(error) === 'read-failed'
       )

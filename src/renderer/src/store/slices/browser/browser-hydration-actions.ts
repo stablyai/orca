@@ -26,18 +26,23 @@ export function createBrowserHydrationActions(
     hydrateBrowserSession: (session, options) => {
       const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
       const currentState = get()
+
       const validWorktreeIdsForCleanup = buildValidWorktreeIdsForSessionHydration(
         currentState,
         Object.keys(persistedTabsByWorktree)
       )
+
       validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
+
       for (const workspace of currentState.folderWorkspaces) {
         validWorktreeIdsForCleanup.add(folderWorkspaceKey(workspace.id))
       }
+
       addAdditionalValidWorkspaceKeys(validWorktreeIdsForCleanup, options)
 
       // Why: destroy dropped workspaces' webviews before the pure reducer; no-op today (boot registry empty), defends future re-hydration callers.
       const droppedWorkspaceIds: string[] = []
+
       for (const [worktreeId, tabs] of Object.entries(persistedTabsByWorktree)) {
         if (!validWorktreeIdsForCleanup.has(worktreeId)) {
           for (const tab of tabs) {
@@ -45,6 +50,7 @@ export function createBrowserHydrationActions(
           }
         }
       }
+
       for (const workspaceId of droppedWorkspaceIds) {
         destroyWorkspaceWebviews(currentState.browserPagesByWorkspace, workspaceId)
       }
@@ -53,14 +59,18 @@ export function createBrowserHydrationActions(
         const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
         const persistedActiveBrowserTabIdByWorktree = session.activeBrowserTabIdByWorktree ?? {}
         const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
+
         const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
           s,
           Object.keys(persistedTabsByWorktree)
         )
+
         validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+
         for (const workspace of s.folderWorkspaces) {
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
+
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
 
         const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
@@ -70,10 +80,13 @@ export function createBrowserHydrationActions(
           if (!validWorktreeIds.has(worktreeId)) {
             continue
           }
+
           const hydratedTabs: BrowserWorkspace[] = []
+
           for (const tab of tabs) {
             // Salvage can leave an empty page array; hydrate it like a missing array.
             const storedPages = persistedPagesByWorkspace[tab.id]
+
             const persistedPages = storedPages?.length
               ? storedPages
               : [
@@ -95,12 +108,14 @@ export function createBrowserHydrationActions(
                     docLocation: tab.docLocation ?? null
                   } satisfies BrowserPage
                 ]
+
             const nextPages = persistedPages.map((page) => {
               // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
               const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =
                 page as typeof page & {
                   allowWindowClose?: boolean
                 }
+
               return {
                 ...persistedPage,
                 workspaceId: tab.id,
@@ -113,6 +128,7 @@ export function createBrowserHydrationActions(
                 loadError: page.loadError ?? null
               }
             })
+
             browserPagesByWorkspace[tab.id] = nextPages
             hydratedTabs.push(
               mirrorWorkspaceFromActivePage(
@@ -127,6 +143,7 @@ export function createBrowserHydrationActions(
               )
             )
           }
+
           if (hydratedTabs.length > 0) {
             browserTabsByWorktree[worktreeId] = hydratedTabs
           }
@@ -139,6 +156,7 @@ export function createBrowserHydrationActions(
         )
 
         const activeBrowserTabIdByWorktree: Record<string, string | null> = {}
+
         for (const [worktreeId, tabs] of Object.entries(browserTabsByWorktree)) {
           const persistedTabId = persistedActiveBrowserTabIdByWorktree[worktreeId]
           activeBrowserTabIdByWorktree[worktreeId] =
@@ -148,14 +166,17 @@ export function createBrowserHydrationActions(
         }
 
         const activeWorktreeId = s.activeWorktreeId
+
         const activeBrowserTabId =
           activeWorktreeId && activeBrowserTabIdByWorktree[activeWorktreeId]
             ? activeBrowserTabIdByWorktree[activeWorktreeId]
             : null
 
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+
         for (const worktreeId of validWorktreeIds) {
           const hasBrowserTabs = (browserTabsByWorktree[worktreeId] ?? []).length > 0
+
           if (
             persistedActiveTabTypeByWorktree[worktreeId] === 'browser' &&
             hasBrowserTabs &&
@@ -164,6 +185,7 @@ export function createBrowserHydrationActions(
             nextActiveTabTypeByWorktree[worktreeId] = 'browser'
             continue
           }
+
           if (nextActiveTabTypeByWorktree[worktreeId] === 'browser' && !hasBrowserTabs) {
             nextActiveTabTypeByWorktree[worktreeId] = getFallbackTabTypeForWorktree(
               worktreeId,
@@ -178,16 +200,20 @@ export function createBrowserHydrationActions(
           if (!activeWorktreeId) {
             return s.activeTabType
           }
+
           const restoredTabType = nextActiveTabTypeByWorktree[activeWorktreeId]
+
           if (restoredTabType === 'browser' && activeBrowserTabId) {
             return 'browser'
           }
+
           if (
             restoredTabType === 'editor' &&
             s.openFiles.some((file) => file.worktreeId === activeWorktreeId)
           ) {
             return 'editor'
           }
+
           return getFallbackTabTypeForWorktree(
             activeWorktreeId,
             s.openFiles,
@@ -222,11 +248,13 @@ export function createBrowserHydrationActions(
       // Why here and not in the startup chain: the seeded handles are the only record that this
       // desktop was hosting pages, and the runtime only hands them back once it sees an attach.
       void ensureBrowserClientHostsForRestoredPages(state)
+
       for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
         for (const bt of browserTabs) {
           const exists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
             (t) => t.contentType === 'browser' && t.entityId === bt.id
           )
+
           if (!exists) {
             state.createUnifiedTab(worktreeId, 'browser', {
               entityId: bt.id,
@@ -242,6 +270,7 @@ export function createBrowserHydrationActions(
       set((s) => {
         for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
           const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
+
           if (tabIndex !== -1) {
             const updatedTabs = [...tabs]
             updatedTabs[tabIndex] = {
@@ -249,6 +278,7 @@ export function createBrowserHydrationActions(
               sessionProfileId: profileId,
               sessionPartition: sessionPartition ?? null
             }
+
             return {
               browserTabsByWorktree: {
                 ...s.browserTabsByWorktree,
@@ -257,6 +287,7 @@ export function createBrowserHydrationActions(
             }
           }
         }
+
         return s
       })
     }

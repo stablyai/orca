@@ -9,15 +9,19 @@ export function buildTerminalSendPayload(action: {
   interrupt?: boolean
 }): string | null {
   let payload = ''
+
   if (typeof action.text === 'string' && action.text.length > 0) {
     payload += action.text
   }
+
   if (action.enter) {
     payload += '\r'
   }
+
   if (action.interrupt) {
     payload += '\x03'
   }
+
   return payload.length > 0 ? payload : null
 }
 

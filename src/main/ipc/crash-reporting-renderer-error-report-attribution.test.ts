@@ -11,6 +11,7 @@ import {
 } from './crash-reporting-renderer-error-report'
 
 vi.mock('electron', () => ({ app: { getVersion: () => '1.4.188' } }))
+
 vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
   getCrashBreadcrumbSnapshot: () => []
 }))
@@ -35,6 +36,7 @@ function makeStore(): { store: CrashReportStore; record: ReturnType<typeof vi.fn
     chromeVersion: '141.0.0',
     details: sanitizeCrashReportDetails(input.details)
   }))
+
   return { store: { record } as unknown as CrashReportStore, record }
 }
 

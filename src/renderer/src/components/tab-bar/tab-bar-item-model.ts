@@ -52,12 +52,15 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   if (item.type === 'terminal') {
     return resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
   }
+
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
   }
+
   if (item.type === 'simulator' || item.type === 'agent-session') {
     return item.data.label || 'Mobile Emulator'
   }
+
   return getEditorDisplayLabel(item.data)
 }
 
@@ -74,29 +77,37 @@ export function getTabLayoutSignature(
   }
 ): string {
   const label = getTabDragLabel(item, generatedTitlesEnabled)
+
   if (item.type === 'terminal') {
     return `${item.type}:${item.id}:${item.isPinned}:${isExpanded}:${Boolean(item.data.color)}:${label}`
   }
+
   if (item.type === 'browser') {
     return `${item.type}:${item.id}:${item.isPinned}:${item.data.loading}:${Boolean(item.data.loadError)}:${label}`
   }
+
   if (item.type === 'editor') {
     return `${item.type}:${item.id}:${item.isPinned}:${item.data.isDirty}:${item.data.isPreview}:${item.data.externalMutation ?? ''}:${status ?? ''}:${label}`
   }
+
   return `${item.type}:${item.id}:${item.isPinned}:${label}`
 }
 
 export function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
   const lookup = new Map<string, Tab>()
+
   for (const tab of tabs) {
     if (tab.groupId !== groupId) {
       continue
     }
+
     lookup.set(tab.id, tab)
+
     if (tab.contentType === 'terminal' || tab.contentType === 'browser') {
       lookup.set(tab.entityId, tab)
     }
   }
+
   return lookup
 }
 
@@ -133,9 +144,12 @@ export function buildOrderedTabItems({
     simulatorTabIds,
     agentSessionTabIds
   )
+
   const items: TabBarItem[] = []
+
   for (const id of ids) {
     const terminal = terminalMap.get(id)
+
     if (terminal) {
       const unifiedTab = unifiedTabByVisibleId.get(id)
       items.push({
@@ -147,7 +161,9 @@ export function buildOrderedTabItems({
       })
       continue
     }
+
     const file = editorMap.get(id)
+
     if (file) {
       const unifiedTab = unifiedTabByVisibleId.get(id) ?? unifiedTabByVisibleId.get(file.id)
       items.push({
@@ -159,7 +175,9 @@ export function buildOrderedTabItems({
       })
       continue
     }
+
     const browserTab = browserMap.get(id)
+
     if (browserTab) {
       const unifiedTab = unifiedTabByVisibleId.get(id)
       items.push({
@@ -171,7 +189,9 @@ export function buildOrderedTabItems({
       })
       continue
     }
+
     const simulatorTab = unifiedTabByVisibleId.get(id)
+
     if (simulatorTab?.contentType === 'simulator') {
       items.push({
         type: 'simulator',
@@ -182,7 +202,9 @@ export function buildOrderedTabItems({
       })
       continue
     }
+
     const agentSession = agentSessionMap.get(id)
+
     if (agentSession) {
       items.push({
         type: 'agent-session',
@@ -193,6 +215,7 @@ export function buildOrderedTabItems({
       })
     }
   }
+
   return items
 }
 
@@ -201,12 +224,14 @@ export function buildTabDropIndicators(
   insertion: HoveredTabInsertion | null
 ): Map<string, DropIndicator> {
   const indicators = new Map<string, DropIndicator>()
+
   for (const edge of resolveTabIndicatorEdges(
     items.map((item) => item.id),
     insertion
   )) {
     indicators.set(edge.visibleTabId, edge.side)
   }
+
   return indicators
 }
 
@@ -227,23 +252,28 @@ export function findActiveVisibleTabId(
         item.id === active.activeTabId
       )
     }
+
     if (item.type === 'browser') {
       return active.activeTabType === 'browser' && item.id === active.activeBrowserTabId
     }
+
     if (item.type === 'simulator') {
       return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
     }
+
     if (item.type === 'agent-session') {
       // Reachable only from TabGroupPanel, which passes the structured tab's own id; the store's
       // `activeTabId` names a background terminal here (cf. TerminalTitlebarTabs, which resolves
       // `getActiveTab(...)?.id` for 'simulator' and never renders agent-session items).
       return active.activeTabType === 'agent-session' && item.id === active.activeTabId
     }
+
     return (
       (active.activeTabType === 'editor' || active.activeTabType === 'simulator') &&
       active.activeFileId === item.id
     )
   })
+
   return activeItem?.id ?? null
 }
 

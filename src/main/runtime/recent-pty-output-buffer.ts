@@ -32,6 +32,7 @@ export class RecentPtyOutputBuffer {
   constructor(options?: { preserveChunkBoundaries?: boolean; limit?: number }) {
     this.preserveChunkBoundaries = options?.preserveChunkBoundaries ?? true
     this.limit = options?.limit ?? RECENT_PTY_OUTPUT_LIMIT
+
     if (!Number.isSafeInteger(this.limit) || this.limit <= 0) {
       throw new Error(`RecentPtyOutputBuffer limit must be a positive integer, got ${this.limit}`)
     }
@@ -41,19 +42,24 @@ export class RecentPtyOutputBuffer {
     if (data.length === 0) {
       return
     }
+
     if (data.length >= this.limit) {
       this.chunks = [data.slice(-this.limit)]
       this.headIndex = 0
       this.headOffset = 0
       this.totalLen = this.limit
       this.headChunkIsPartial = data.length > this.limit
+
       return
     }
+
     this.chunks.push(data)
     this.totalLen += data.length
+
     while (this.totalLen > this.limit) {
       const headRemaining = this.chunks[this.headIndex].length - this.headOffset
       const excess = this.totalLen - this.limit
+
       if (headRemaining <= excess) {
         // Release the dropped chunk's reference; the slot is reclaimed on compaction.
         this.chunks[this.headIndex] = ''
@@ -66,6 +72,7 @@ export class RecentPtyOutputBuffer {
         this.totalLen -= excess
       }
     }
+
     if (this.headIndex >= DROPPED_HEAD_COMPACT_THRESHOLD) {
       this.chunks = this.chunks.slice(this.headIndex)
       this.headIndex = 0
@@ -78,21 +85,28 @@ export class RecentPtyOutputBuffer {
       // still owed to retainedChunks(); reads are rare before compact().
       if (this.chunks.length - this.headIndex > 1) {
         const retained = this.chunks.slice(this.headIndex)
+
         if (this.headOffset > 0) {
           retained[0] = retained[0].slice(this.headOffset)
         }
+
         return retained.join('')
       }
+
       const head = this.chunks[this.headIndex] ?? ''
+
       return this.headOffset > 0 ? head.slice(this.headOffset) : head
     }
+
     if (this.chunks.length - this.headIndex > 1) {
       // Collapse to the joined tail so repeated reads stay O(1).
       const retained = this.chunks.slice(this.headIndex)
+
       if (this.headOffset > 0) {
         retained[0] = retained[0].slice(this.headOffset)
         this.headOffset = 0
       }
+
       this.chunks = [retained.join('')]
       this.headIndex = 0
     } else if (this.headOffset > 0) {
@@ -100,6 +114,7 @@ export class RecentPtyOutputBuffer {
       this.chunks[this.headIndex] = this.chunks[this.headIndex].slice(this.headOffset)
       this.headOffset = 0
     }
+
     return this.chunks[this.headIndex] ?? ''
   }
 

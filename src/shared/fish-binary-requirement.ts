@@ -30,10 +30,13 @@ export function resolveFishBinary(minMajorVersion = 1): FishBinaryLookup {
 
   for (const path of FISH_CANDIDATES) {
     const probe = spawnSync(path, ['--version'], { encoding: 'utf8' })
+
     if (probe.status !== 0) {
       continue
     }
+
     const majorVersion = Number(/version (\d+)/.exec(probe.stdout ?? '')?.[1] ?? '0')
+
     if (majorVersion < minMajorVersion) {
       return {
         available: false,
@@ -42,6 +45,7 @@ export function resolveFishBinary(minMajorVersion = 1): FishBinaryLookup {
         reason: `fish ${minMajorVersion}+ required, found ${probe.stdout?.trim() || 'an unknown version'} at ${path}`
       }
     }
+
     return { available: true, path, majorVersion }
   }
 
@@ -61,5 +65,6 @@ export function fishRequirementViolation(
   if (lookup.available || env[REQUIRE_FISH_ENV_VAR] !== '1') {
     return null
   }
+
   return `${REQUIRE_FISH_ENV_VAR}=1 but the live fish tests would skip: ${lookup.reason}`
 }

@@ -18,25 +18,30 @@ export function summarizeInventory(
   if (!inventory) {
     return 'loading'
   }
+
   if (inventory.eligibleUpdateNames.length > 0) {
     return 'eligible'
   }
+
   // Why: a named skill the update can't converge outranks a coverage gap — the gap
   // says something might be unchecked, the group says something definitely is wrong.
   if (hasBlockedGroup) {
     return 'attention'
   }
+
   // Why: a fault on the user's disk, or a bound that ended the walk early. Skipping a
   // single folder is not either one — headlining that would put a permanent warning on
   // any ordinary large plugin cache, the unclearable amber this change removes.
   if (hasIncompleteScan) {
     return 'scan-incomplete'
   }
+
   // Why: ordered after the scan checks so a scan that never completed is not reported
   // as an empty machine — "none found" would be a claim the scan cannot support.
   if (inventory.installations.length === 0) {
     return 'empty'
   }
+
   return 'current'
 }
 
@@ -61,6 +66,7 @@ export function SummaryHeadline({
       </div>
     )
   }
+
   if (kind === 'empty') {
     return (
       <p className="text-xs text-muted-foreground">
@@ -71,6 +77,7 @@ export function SummaryHeadline({
       </p>
     )
   }
+
   if (kind === 'current') {
     return (
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -82,6 +89,7 @@ export function SummaryHeadline({
       </div>
     )
   }
+
   if (kind === 'attention') {
     // No follow-up sentence: skipped rows open themselves, so the reason is
     // already on screen directly under this headline.
@@ -95,6 +103,7 @@ export function SummaryHeadline({
       </div>
     )
   }
+
   if (kind === 'scan-incomplete') {
     // No follow-up sentence, matching 'attention': the skipped folders are listed
     // directly under this headline, so pointing at a details panel would be stale.
@@ -108,6 +117,7 @@ export function SummaryHeadline({
       </div>
     )
   }
+
   return (
     <div className="space-y-1">
       <p className="text-sm font-medium text-foreground">

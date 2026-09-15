@@ -34,9 +34,13 @@ import type { PtyTransport } from './pty-transport-types'
 type ResolvePaneOutcome = { handle: string } | { error: Error }
 
 const PANE_TAB_ID = 'tab-1'
+
 const PANE_LEAF_ID = 'pane:1'
+
 const PANE_WORKTREE_ID = 'wt-1'
+
 const FIRST_HANDLE = 'terminal-1'
+
 const FIRST_PTY_ID = 'remote:env-1@@terminal-1'
 
 describe('remote runtime resubscribe failure: recovery routing', () => {
@@ -44,12 +48,14 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
   const runtimeSubscribe = vi.fn()
   const refreshSessionTabsSnapshot = vi.fn(async () => {})
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError?: (error: { code: string; message: string }) => void
     onClose?: () => void
   } | null = null
+
   /** Consumed in order by terminal.resolvePane; the last entry repeats. */
   let resolvePaneOutcomes: ResolvePaneOutcome[] = [{ handle: FIRST_HANDLE }]
   let recoverPaneOutcome: ResolvePaneOutcome = { handle: FIRST_HANDLE }
@@ -64,13 +70,17 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     const frame = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .findLast((candidate) => candidate?.opcode === TerminalStreamOpcode.Subscribe)
+
     if (!frame) {
       throw new Error('missing terminal subscribe frame')
     }
+
     const payload = decodeTerminalStreamJson<{ streamId: number; terminal: string }>(frame.payload)
+
     if (!payload) {
       throw new Error('invalid terminal subscribe payload')
     }
+
     return payload
   }
 
@@ -81,7 +91,9 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return []
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         return payload ? [payload.terminal] : []
       })
   }
@@ -119,6 +131,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
 
   function paneResult(handle: string, paneKey: string, worktreeId: string): unknown {
     const separator = paneKey.indexOf(':')
+
     return {
       ok: true,
       result: {
@@ -147,6 +160,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
   ): Promise<PtyTransport> {
     const { onError, onPtyExit, onPtyRebind, ...ids } = overrides
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: PANE_WORKTREE_ID,
       ...('tabId' in ids ? { tabId: ids.tabId } : { tabId: PANE_TAB_ID }),
@@ -154,6 +168,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
       onPtyExit,
       onPtyRebind
     })
+
     transport.attach({
       existingPtyId: FIRST_PTY_ID,
       cols: 80,
@@ -163,6 +178,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
     emitSnapshot(latestSubscribePayload().streamId, 'live before the fault')
     expect(transport.isConnected()).toBe(true)
+
     return transport
   }
 
@@ -186,31 +202,41 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     methodLog = []
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
       methodLog.push(request.method)
+
       if (request.method === 'terminal.resolvePane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         const outcome = nextOutcome(resolvePaneOutcomes)
+
         if ('error' in outcome) {
           throw outcome.error
         }
+
         return paneResult(outcome.handle, params.paneKey, params.worktreeId)
       }
+
       if (request.method === 'terminal.recoverPane') {
         const params = request.params as { paneKey: string; worktreeId: string }
+
         if ('error' in recoverPaneOutcome) {
           throw recoverPaneOutcome.error
         }
+
         return paneResult(recoverPaneOutcome.handle, params.paneKey, params.worktreeId)
       }
+
       return { ok: true, result: { terminal: { handle: FIRST_HANDLE } } }
     })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         const outcome = subscribeOutcomes.shift()
+
         if (outcome) {
           throw outcome
         }
+
         subscriptionCallbacks = callbacks
         queueMicrotask(emitMultiplexReady)
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -269,6 +295,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
   it('retires a pane whose stale resubscribe has no tab/leaf ids to re-resolve', async () => {
     const onError = vi.fn()
     const onPtyExit = vi.fn()
+
     const transport = await attachLivePane({
       tabId: undefined,
       leafId: undefined,
@@ -337,6 +364,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
   it('keeps an oversized-snapshot resubscribe failure informational', async () => {
     const { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } =
       await import('../../runtime/remote-runtime-terminal-multiplexer')
+
     const onError = vi.fn()
     const onPtyExit = vi.fn()
     const transport = await attachLivePane({ onError, onPtyExit })

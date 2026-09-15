@@ -23,9 +23,11 @@ export function createBrowserRouteGuestState(
   }
 ): BrowserRouteGuestState {
   let resolveDestroyed = (): void => {}
+
   const whenDestroyed = new Promise<void>((resolve) => {
     resolveDestroyed = resolve
   })
+
   const state: BrowserRouteGuestState = {
     guest,
     guestAuthority: Symbol('browser-route-guest'),
@@ -51,6 +53,7 @@ export function createBrowserRouteGuestState(
       callbacks.release(state)
     }
   }
+
   return state
 }
 
@@ -66,6 +69,7 @@ export function installBrowserRouteGuestQuarantine(
     isNavigationAllowed: (url) => state.isNavigationAllowed(url),
     dependencies
   })
+
   state.popups = popups
   state.guest.setWindowOpenHandler(popups.windowOpenHandler)
   state.guest.on('will-navigate', state.onNavigate)
@@ -81,6 +85,7 @@ export function isBrowserRouteGuestNavigationAllowed(
 ): boolean {
   try {
     const normalized = normalizeBrowserNavigationUrl(rawUrl)
+
     return (
       normalized === ORCA_BROWSER_BLANK_URL ||
       Boolean(
@@ -103,6 +108,7 @@ export async function navigateBrowserRouteGuest(
   isCurrent: () => boolean
 ): Promise<boolean> {
   const normalized = normalizeBrowserNavigationUrl(rawUrl)
+
   if (
     !isValidRoutePageRegistration(registration) ||
     !state?.registration ||
@@ -114,8 +120,10 @@ export async function navigateBrowserRouteGuest(
   ) {
     return false
   }
+
   try {
     await state.guest.loadURL(normalized)
+
     return true
   } catch {
     return false
@@ -133,6 +141,7 @@ export function beginBrowserRouteGuestRetirement(input: {
   if (!input.state || input.state.guestAuthority !== input.claim.guestAuthority) {
     return input.claim.whenDestroyed
   }
+
   return retireBrowserRouteGuest({
     ...input,
     registration: input.claim.registration
@@ -156,17 +165,21 @@ export function retireBrowserRouteGuest(input: {
   ) {
     return 'rejected'
   }
+
   if (input.state.registration) {
     if (browserRoutePageKey(input.state.registration) !== browserRoutePageKey(input.registration)) {
       return 'rejected'
     }
+
     input.retireRegistered(input.state)
   } else {
     if (!input.hasPreparedAuthority()) {
       return 'rejected'
     }
+
     input.state.retirementRequested = true
     input.revokeUnregistered(input.state)
   }
+
   return isRouteGuestDestroyed(input.state.guest) ? 'retired' : 'retiring'
 }

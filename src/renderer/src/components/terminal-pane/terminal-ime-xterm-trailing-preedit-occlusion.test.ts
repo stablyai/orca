@@ -20,7 +20,9 @@ import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const CELL_WIDTH_PX = 8
+
 const CELL_HEIGHT_PX = 16
+
 const THEME = { background: '#112233', foreground: '#aabbcc' }
 
 const openTerminals: Terminal[] = []
@@ -45,9 +47,11 @@ function openTerminal(): Rig {
   terminal.open(container)
   const textarea = terminal.textarea
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!textarea || !compositionView) {
     throw new Error('xterm did not create the helper textarea and composition view')
   }
+
   openTerminals.push(terminal)
 
   const cell = (
@@ -57,6 +61,7 @@ function openTerminal(): Rig {
       }
     }
   )._core._renderService.dimensions.css.cell
+
   cell.width = CELL_WIDTH_PX
   cell.height = CELL_HEIGHT_PX
 
@@ -102,6 +107,7 @@ async function typeHangulRun(rig: Rig, syllables: readonly string[]): Promise<vo
     if (index > 0) {
       await rig.commit(syllables[index - 1]!)
     }
+
     rig.composeStart()
     rig.composeUpdate(syllables[index]!)
     await nextEventLoop()
@@ -120,9 +126,11 @@ describe('#12729 — the block over a trailing Korean syllable is the preedit ov
     // updateCompositionElements re-arms on a timer; let the pending one run before dispose.
     await nextEventLoop()
     await nextEventLoop()
+
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })

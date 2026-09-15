@@ -43,10 +43,12 @@ export function createAllHostRepoCatalogActions(
       let generation = 0
       set((s) => {
         generation = s.reposFetchGeneration + 1
+
         return { reposFetchGeneration: generation }
       })
       latestAllHostRepoCatalogGenerationByStore.set(get, generation)
       claimRepoCatalogGeneration(get, LOCAL_EXECUTION_HOST_ID, generation)
+
       // Why: fetching only the active host hides every other host's repos ("my projects vanished"); load local + all runtime envs, each failing soft.
       const applyCatalog = (catalog: FetchedRepoCatalog): void => {
         // Why: a concurrent all-host refresh must not let the older catalog resurrect a migrated SSH owner.
@@ -56,19 +58,23 @@ export function createAllHostRepoCatalogActions(
         ) {
           return
         }
+
         let hostRepos: Repo[] = []
         set((s) => {
           // Why: skip a catalog whose env was tombstoned mid-load (removed), not one merely absent from the not-yet-hydrated saved list (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
             return s
           }
+
           const result = mergeFetchedRepoCatalog(catalog, s.repos)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
+
           const projectCompatibility = projectCompatibilityForReconciledRepos(
             finalizedRepos,
             catalog.projectHostSetupCompatibility
           )
+
           const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
             previous: {
               projects: s.projects,
@@ -82,9 +88,11 @@ export function createAllHostRepoCatalogActions(
             repos: finalizedRepos,
             hostId: result.hostId
           })
+
           hostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
+
           return {
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
@@ -101,10 +109,12 @@ export function createAllHostRepoCatalogActions(
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(get, hostRepos)
       }
+
       const validateRepoScopedUi = (): void => {
         set((s) => {
           const validRepoIds = new Set(s.repos.map((repo) => repo.id))
           const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
+
           return {
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
@@ -121,6 +131,7 @@ export function createAllHostRepoCatalogActions(
       // Local first so local repos are present even if a remote fetch stalls.
       let failed = false
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
+
       try {
         applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }))
       } catch (err) {
@@ -128,12 +139,15 @@ export function createAllHostRepoCatalogActions(
         localCatalogOutcome = { status: 'rejected', reason: err }
         console.error('Failed to fetch local repos for all-host load:', err)
       }
+
       // Why: startup hydration needs the newest local catalog, not unreachable remote hosts.
       settleLocalCatalog(localCatalogOutcome)
+
       // Why: a newer local-only refresh must not cancel this load's unrelated remote catalogs.
       if (latestAllHostRepoCatalogGenerationByStore.get(get) !== generation) {
         return
       }
+
       if (options?.remoteHosts === 'skip') {
         return
       }
@@ -146,7 +160,9 @@ export function createAllHostRepoCatalogActions(
             kind: 'environment' as const,
             environmentId: environment.id
           }
+
           claimRepoCatalogGeneration(get, getRuntimeTargetHostId(target), generation)
+
           const [catalogResult, visibilitySnapshot] = await Promise.all([
             fetchRepoCatalogForTarget(target).then(
               (catalog) => ({ ok: true as const, catalog }),
@@ -154,8 +170,10 @@ export function createAllHostRepoCatalogActions(
             ),
             readRuntimeWorktreeVisibilitySnapshot(environment.id)
           ])
+
           const visibilityDefaults = visibilitySnapshot.defaults
           const hostId = getRuntimeTargetHostId(target)
+
           if (
             visibilityDefaults !== undefined &&
             latestAllHostRepoCatalogGenerationByStore.get(get) === generation &&
@@ -179,6 +197,7 @@ export function createAllHostRepoCatalogActions(
                   }
             )
           }
+
           if (catalogResult.ok) {
             applyCatalog(catalogResult.catalog)
           } else {
@@ -190,6 +209,7 @@ export function createAllHostRepoCatalogActions(
           }
         })
       )
+
       // Why: validate repo-scoped UI only after every host answers; first-paint loads only local repos, so an offline runtime would erase its saved filters.
       if (!failed && get().reposFetchGeneration === generation) {
         validateRepoScopedUi()

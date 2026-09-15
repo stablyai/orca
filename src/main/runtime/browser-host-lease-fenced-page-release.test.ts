@@ -98,12 +98,14 @@ describe('fenced client page retention', () => {
 
   it('keeps a runtime page a newer placement already owns', () => {
     const runtime = createRuntime()
+
     const stale = Object.freeze({
       kind: 'client' as const,
       browserHostClientId: 'host-a',
       browserHostGeneration: 1,
       pageHostGeneration: 1
     })
+
     publishPage(runtime, 'page-a', { ...stale, browserHostGeneration: 2 })
 
     // Why: a fence never authorizes touching a record another generation now owns.
@@ -200,9 +202,11 @@ function placeClientPage(
     browserPageId,
     browserHostClientId
   )
+
   if (placement.kind !== 'client') {
     throw new Error('expected client placement')
   }
+
   return placement
 }
 

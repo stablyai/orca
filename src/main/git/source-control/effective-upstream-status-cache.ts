@@ -4,6 +4,7 @@ import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
 
 const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+
 export const MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES = 512
 
 type EffectiveUpstreamStatusCacheEntry = {
@@ -12,7 +13,9 @@ type EffectiveUpstreamStatusCacheEntry = {
 }
 
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+
 export const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+
 const retiredEffectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 
 export const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
@@ -55,6 +58,7 @@ export function clearEffectiveUpstreamNegativeStatusCache(identity: {
     identity.upstreamName,
     identity.options
   )
+
   retireEffectiveUpstreamStatusProbe(cacheKey)
   effectiveUpstreamStatusCache.delete(cacheKey)
   effectiveUpstreamStatusInFlight.delete(cacheKey)
@@ -67,9 +71,11 @@ export function clearEffectiveUpstreamNegativeStatusCache(identity: {
 
 function retireEffectiveUpstreamStatusProbe(cacheKey: string): void {
   const retiredProbe = effectiveUpstreamStatusInFlight.get(cacheKey)
+
   if (!retiredProbe) {
     return
   }
+
   retiredEffectiveUpstreamStatusInFlight.set(cacheKey, retiredProbe)
   void retiredProbe
     .finally(() => {
@@ -95,9 +101,11 @@ export function trimEffectiveUpstreamStatusGeneration(): void {
     ) {
       break
     }
+
     if (hasPendingEffectiveUpstreamStatusProbe(cacheKey)) {
       continue
     }
+
     effectiveUpstreamStatusWriteGeneration.delete(cacheKey)
   }
 }
@@ -107,13 +115,17 @@ export function readCachedEffectiveUpstreamStatus(
   now: number
 ): GitUpstreamStatus | undefined {
   const entry = effectiveUpstreamStatusCache.get(cacheKey)
+
   if (!entry) {
     return undefined
   }
+
   if (entry.expiresAt <= now) {
     effectiveUpstreamStatusCache.delete(cacheKey)
+
     return undefined
   }
+
   return entry.status
 }
 
@@ -129,26 +141,34 @@ export function rememberEffectiveUpstreamStatus(
     effectiveUpstreamStatusCache.delete(cacheKey)
     effectiveUpstreamStatusWriteGeneration.set(cacheKey, writeGeneration + 1)
     trimEffectiveUpstreamStatusGeneration()
+
     return
   }
+
   if ((effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) !== writeGeneration) {
     return
   }
+
   if (!probedSameNameOriginRef) {
     return
   }
+
   // Why: cache the negative so a stable no-upstream branch doesn't re-probe every poll (TTL lets push/fetch refs appear).
   effectiveUpstreamStatusCache.set(cacheKey, {
     status,
     expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
   })
+
   while (effectiveUpstreamStatusCache.size > MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES) {
     const oldest = effectiveUpstreamStatusCache.keys().next()
+
     if (oldest.done) {
       break
     }
+
     effectiveUpstreamStatusCache.delete(oldest.value)
     effectiveUpstreamStatusWriteGeneration.delete(oldest.value)
   }
+
   trimEffectiveUpstreamStatusGeneration()
 }

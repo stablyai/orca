@@ -57,14 +57,18 @@ export function useGitHubItemDialogDetails({
     if (!repoPath && !effectiveRepoId) {
       return undefined
     }
+
     return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
       ?.issueSourcePreference
   })
+
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
+
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !effectiveRepoId || !canUseDetailsRepoContext) {
       return null
     }
+
     return getWorkItemDetailsCacheKey({
       repoPath: repoPath ?? '',
       repoId: effectiveRepoId,
@@ -88,9 +92,12 @@ export function useGitHubItemDialogDetails({
     workItem && effectiveRepoId && detailsCacheKey && canUseDetailsRepoContext
       ? `${workItem.id}\0${initialTab ?? ''}`
       : null
+
   const [resolvedTabKey, setResolvedTabKey] = useState(tabResetKey)
+
   if (resolvedTabKey !== tabResetKey) {
     setResolvedTabKey(tabResetKey)
+
     if (workItem && tabResetKey) {
       setTab(normalizeItemDialogTab(workItem, initialTab))
     }
@@ -117,21 +124,27 @@ export function useGitHubItemDialogDetails({
   const details = useMemo<GitHubWorkItemDetails | null>(() => {
     const cachedDetails = cachedEntry?.details ?? null
     const opt = optimisticCommentsRef.current
+
     if (!cachedDetails) {
       // Why: on cold open, details may still be loading — surface optimistic comments via a minimal shell so a pre-fetch comment isn't invisible.
       if (opt.length > 0 && workItem) {
         return { item: workItem, body: '', comments: [...opt] }
       }
+
       return null
     }
+
     if (opt.length === 0) {
       return cachedDetails
     }
+
     const ids = new Set(cachedDetails.comments.map((c) => c.id))
     const missing = opt.filter((c) => !ids.has(c.id))
+
     if (missing.length === 0) {
       return cachedDetails
     }
+
     return {
       ...cachedDetails,
       comments: [...cachedDetails.comments, ...missing]
@@ -156,10 +169,12 @@ export function useGitHubItemDialogDetails({
     if (!workItem || !effectiveRepoId || !detailsCacheKey || !canUseDetailsRepoContext) {
       return
     }
+
     // Why: clear optimistic comments only on item switch — on reopen, gh's 60s cache omits the just-posted comment, so keep the ref to re-merge.
     if (workItem.id !== prevItemIdRef.current) {
       optimisticCommentsRef.current = []
     }
+
     prevItemIdRef.current = workItem.id
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
@@ -208,9 +223,11 @@ export function useGitHubItemDialogDetails({
     if (!workItem) {
       return null
     }
+
     if (!details?.item) {
       return workItem
     }
+
     return { ...workItem, ...details.item, repoId: workItem.repoId }
   }, [details?.item, workItem])
 
@@ -218,6 +235,7 @@ export function useGitHubItemDialogDetails({
     if (!workItem || details?.item.reviewRequests === undefined) {
       return
     }
+
     // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     onReviewRequestsChange?.(
       { id: workItem.id, repoId: workItem.repoId },
@@ -232,11 +250,14 @@ export function useGitHubItemDialogDetails({
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       // Why: skip refreshDetails() — gh's 60s cache would overwrite the optimistic comment; next open picks up the server version.
       optimisticCommentsRef.current.push(comment)
+
       // Why: write through the module cache so concurrent drawers re-render; mark fetchedAt stale (0) so next open refetches server fields.
       if (detailsCacheKey) {
         const prev = workItemDetailsCache.get(detailsCacheKey)
+
         if (prev?.details) {
           const ids = new Set(prev.details.comments.map((c) => c.id))
+
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
               details: {
@@ -246,10 +267,12 @@ export function useGitHubItemDialogDetails({
               fetchedAt: 0,
               error: undefined
             })
+
             return
           }
         }
       }
+
       // Why: no cache write fires while details are still loading; bump local state so the memo re-runs and shows the optimistic comment.
       setOptimisticTick((n) => n + 1)
     },
@@ -260,6 +283,7 @@ export function useGitHubItemDialogDetails({
     if (!workItem) {
       return
     }
+
     // Why: local repos invalidate all source-pref variants; runtime-only entries need their exact source-scoped key (no local path).
     if (repoPath) {
       invalidateWorkItemDetailsCacheByMatch({
@@ -268,8 +292,10 @@ export function useGitHubItemDialogDetails({
         type: workItem.type,
         number: workItem.number
       })
+
       return
     }
+
     if (detailsCacheKey) {
       invalidateWorkItemDetailsCacheForKey(detailsCacheKey)
     }

@@ -23,6 +23,7 @@ const DAEMON_ENTRY_MARKER = 'daemon-entry.js'
 export function defaultUserDataDir() {
   const appData =
     process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming')
+
   return path.join(appData, 'Orca')
 }
 
@@ -38,6 +39,7 @@ export function defaultUserDataDir() {
  */
 export function findDaemonProcesses(scope = '') {
   assertWin32('daemon-processes')
+
   // Match by command-line marker only, never by exe name: with
   // ELECTRON_RUN_AS_NODE the daemon's image is Orca.exe today but a relocated
   // Phase 1 host may run from a differently-named copied binary. @() around the
@@ -54,6 +56,7 @@ export function findDaemonProcesses(scope = '') {
 
   const parsed = runJsonCommand(command)
   const scopeNeedle = scope.toLowerCase()
+
   return normalizeArray(parsed.processes).filter(
     (p) =>
       typeof p.commandLine === 'string' &&
@@ -69,18 +72,23 @@ export function findDaemonProcesses(scope = '') {
  */
 export function readDaemonPidFiles(userDataDir = defaultUserDataDir()) {
   const daemonDir = path.join(userDataDir, 'daemon')
+
   if (!existsSync(daemonDir)) {
     return []
   }
+
   const records = []
+
   for (const entry of readdirSync(daemonDir)) {
     if (!entry.startsWith('daemon-v') || !entry.endsWith('.pid')) {
       continue
     }
+
     const filePath = path.join(daemonDir, entry)
     // Read once: a PID file can vanish between readdir and here, and re-reading
     // it in the catch path would crash discovery on a single stale file.
     let raw = ''
+
     try {
       raw = readFileSync(filePath, 'utf8').trim()
       const parsed = JSON.parse(raw)
@@ -88,11 +96,13 @@ export function readDaemonPidFiles(userDataDir = defaultUserDataDir()) {
     } catch {
       // Legacy/partial pid files may hold a bare integer.
       const pid = Number(raw)
+
       if (Number.isInteger(pid)) {
         records.push({ file: filePath, pid })
       }
     }
   }
+
   return records
 }
 
@@ -101,34 +111,44 @@ export function isPidAlive(pid, runCommand = runCommandSync) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false
   }
+
   const { stdout, stderr, code, error } = runCommand(
     `if (Get-Process -Id ${pid} -ErrorAction SilentlyContinue) { 'alive' } else { 'dead' }`
   )
+
   if (error) {
     throw new Error(`PID liveness probe failed to spawn: ${error.message}`)
   }
+
   if (code !== 0) {
     throw new Error(`PID liveness probe failed (exit ${code}): ${stderr.trim()}`)
   }
+
   const state = stdout.trim()
+
   if (state !== 'alive' && state !== 'dead') {
     // Why: blank or unexpected output is unavailable evidence, not proof that
     // a process died; crash-survival assertions must fail closed.
     throw new Error(`PID liveness probe returned an invalid state: ${JSON.stringify(state)}`)
   }
+
   return state === 'alive'
 }
 
 function runJsonCommand(command) {
   const { stdout, stderr, code, error } = runCommandSync(command)
+
   if (error) {
     throw new Error(`PowerShell spawn failed: ${error.message}`)
   }
+
   const trimmed = stdout.trim()
+
   if (!trimmed) {
     // No matches: ConvertTo-Json of an empty array can emit nothing.
     return { processes: [] }
   }
+
   try {
     return JSON.parse(trimmed)
   } catch (parseError) {
@@ -143,11 +163,13 @@ function normalizeArray(raw) {
   if (!raw) {
     return []
   }
+
   return Array.isArray(raw) ? raw : [raw]
 }
 
 function parseUserDataArg(argv) {
   const idx = argv.indexOf('--user-data')
+
   return idx !== -1 && argv[idx + 1] ? argv[idx + 1] : defaultUserDataDir()
 }
 

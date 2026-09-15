@@ -27,10 +27,13 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
     if (!client || submitting || parsed === null) {
       return
     }
+
     setSubmitting(true)
     setError(null)
+
     try {
       const outcome = await linkMobilePr(client, worktreeId, parsed)
+
       if (outcome.ok) {
         triggerSuccess()
         onLinked()

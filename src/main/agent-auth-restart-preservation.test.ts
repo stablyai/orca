@@ -250,6 +250,7 @@ describe('preserveAgentAuthBeforeRestart', () => {
   it('bounds a store flush that never settles', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const preservation = preserveAgentAuthBeforeRestart({
       store: { flushPendingOrThrowAsync: vi.fn(() => new Promise<void>(() => {})) }
     })

@@ -13,6 +13,7 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
     import('./session-scanner-opencode-sqlite-list'),
     import('./session-scanner-opencode-sqlite')
   ])
+
   return {
     listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
     parseOpenCodeSqliteSessionViaWorker: parseOpenCodeSqliteSession
@@ -20,13 +21,16 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async () => {
 })
 
 let tempRoots: string[] = []
+
 let tempDbDirs: string[] = []
 
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
+
   for (const dir of tempDbDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   tempRoots = []
   tempDbDirs = []
 })
@@ -60,6 +64,7 @@ function createTempOpenCodeDb(): { db: Database.Database; path: string } {
   const dir = mkdtempSync(join(tmpdir(), 'orca-ai-vault-sqlite-'))
   tempDbDirs.push(dir)
   const path = join(dir, 'opencode.db')
+
   return { db: new Database(path), path }
 }
 

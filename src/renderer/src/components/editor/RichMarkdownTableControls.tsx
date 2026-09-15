@@ -37,6 +37,7 @@ import {
 function contentRect(element: Element, container: HTMLElement) {
   const elementRect = element.getBoundingClientRect()
   const containerRect = container.getBoundingClientRect()
+
   return {
     bottom: elementRect.bottom - containerRect.top + container.scrollTop,
     left: elementRect.left - containerRect.left + container.scrollLeft,
@@ -99,9 +100,11 @@ function TableActionMenu({
   style: React.CSSProperties
 }): React.JSX.Element {
   const isRow = axis === 'row'
+
   const label = isRow
     ? translate('auto.components.editor.RichMarkdownTableControls.rowActions', 'Row actions')
     : translate('auto.components.editor.RichMarkdownTableControls.columnActions', 'Column actions')
+
   const beforeLabel = isRow
     ? translate(
         'auto.components.editor.RichMarkdownTableControls.insertRowAbove',
@@ -111,6 +114,7 @@ function TableActionMenu({
         'auto.components.editor.RichMarkdownTableControls.insertColumnLeft',
         'Insert column left'
       )
+
   const afterLabel = isRow
     ? translate(
         'auto.components.editor.RichMarkdownTableControls.insertRowBelow',
@@ -120,12 +124,15 @@ function TableActionMenu({
         'auto.components.editor.RichMarkdownTableControls.insertColumnRight',
         'Insert column right'
       )
+
   const deleteLabel = isRow
     ? translate('auto.components.editor.RichMarkdownTableControls.deleteRow', 'Delete row')
     : translate('auto.components.editor.RichMarkdownTableControls.deleteColumn', 'Delete column')
+
   const run = (action: RichMarkdownTableAction): void => {
     runRichMarkdownTableAction(editor, action, { cellPosition })
   }
+
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
       <Tooltip>
@@ -194,6 +201,7 @@ export function RichMarkdownTableControls({
     editor,
     scrollContainerRef
   )
+
   const [openAxis, setOpenAxis] = useState<TableAxis | null>(null)
   useRichMarkdownTableContextMenu(editor)
 
@@ -201,18 +209,22 @@ export function RichMarkdownTableControls({
     if (!active || !openAxis || !(active.cell.parentElement instanceof HTMLTableRowElement)) {
       return
     }
+
     const cells =
       openAxis === 'row'
         ? Array.from(active.cell.parentElement.cells)
         : Array.from(active.table.rows, (tableRow) =>
             tableRow.cells.item(active.cell.cellIndex)
           ).filter((cell): cell is HTMLTableCellElement => cell !== null)
+
     cells.forEach((cell) => cell.classList.add('rich-markdown-table-control-active'))
+
     return () =>
       cells.forEach((cell) => cell.classList.remove('rich-markdown-table-control-active'))
   }, [active, openAxis])
 
   const scrollContainer = scrollContainerRef.current
+
   if (
     disabled ||
     !editor ||
@@ -223,44 +235,55 @@ export function RichMarkdownTableControls({
   ) {
     return null
   }
+
   const row = active.cell.parentElement
   const finalRow = active.table.rows.item(active.table.rows.length - 1)
   const firstRow = active.table.rows.item(0)
   const addRowCell = finalRow?.cells.item(0) ?? null
   const addColumnCell = firstRow?.cells.item(firstRow.cells.length - 1) ?? null
   const cellPosition = richMarkdownTableCellPositionAtElement(editor, active.cell)
+
   const addRowPosition = addRowCell
     ? richMarkdownTableCellPositionAtElement(editor, addRowCell)
     : null
+
   const addColumnPosition = addColumnCell
     ? richMarkdownTableCellPositionAtElement(editor, addColumnCell)
     : null
+
   if (!(row instanceof HTMLTableRowElement) || cellPosition === null) {
     return null
   }
+
   const tableRect = contentRect(active.table, scrollContainer)
+
   const layout = getRichMarkdownTableControlLayout({
     cell: contentRect(active.cell, scrollContainer),
     container: scrollContainer,
     row: contentRect(row, scrollContainer),
     table: tableRect
   })
+
   const style = (point: { left: number; top: number }): React.CSSProperties => ({
     left: point.left,
     top: point.top
   })
+
   const viewportRight = scrollContainer.scrollLeft + scrollContainer.clientWidth - 4
   const viewportBottom = scrollContainer.scrollTop + scrollContainer.clientHeight - 4
+
   const visibleTableWidth = Math.max(
     0,
     Math.min(tableRect.right, viewportRight) -
       Math.max(tableRect.left, scrollContainer.scrollLeft + 4)
   )
+
   const visibleTableHeight = Math.max(
     0,
     Math.min(tableRect.bottom, viewportBottom) -
       Math.max(tableRect.top, scrollContainer.scrollTop + 4)
   )
+
   return (
     <div
       className="rich-markdown-table-controls"

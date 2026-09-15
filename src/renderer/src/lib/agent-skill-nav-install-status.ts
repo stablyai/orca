@@ -20,9 +20,11 @@ export function getAgentSkillNavInstallStatus({
   if (loading) {
     return 'checking'
   }
+
   if (!installed) {
     return 'install'
   }
+
   return getSkillFreshnessDisplayStatus(inventory, name)
 }
 
@@ -34,5 +36,6 @@ export function getLinearAgentSkillNavInstallStatus(
   // Why: the sidebar must evaluate the same installed name the card will update,
   // including legacy-only linear-tickets installs.
   const updateTarget = getLinearAgentSkillUpdateTarget(input.skills, input.installed)
+
   return getAgentSkillNavInstallStatus({ ...input, name: updateTarget.skillName })
 }

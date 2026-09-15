@@ -158,9 +158,11 @@ function stagedRelayAddonIsUnpatched(): boolean {
   // Production always has one, and a require that just succeeded proves the
   // path is readable -- "cannot tell" here is never a real deployment.
   const addonPath = requireNative.resolve?.(RELAY_ADDON_FILENAME)
+
   if (!addonPath) {
     return false
   }
+
   try {
     return readFileSync(addonPath).includes(FLAGGED_ADDON_IMPORT)
   } catch {
@@ -169,7 +171,9 @@ function stagedRelayAddonIsUnpatched(): boolean {
 }
 
 let cachedModule: WindowsProcessTreeModule | null | undefined
+
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
+
 let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 
 /** Present the bare addon through the same shape as the npm package. */
@@ -198,26 +202,34 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
   if (cachedModule !== undefined) {
     return cachedModule
   }
+
   if (process.platform !== 'win32') {
     cachedModule = null
+
     return cachedModule
   }
+
   try {
     cachedModule = requireNative('@vscode/windows-process-tree') as WindowsProcessTreeModule
+
     return cachedModule
   } catch {
     // Not an error here: the relay never has the package. Try the staged addon.
   }
+
   try {
     const addon = requireNative(RELAY_ADDON_FILENAME) as WindowsProcessTreeAddon
+
     // Why check the shape: a truncated upload or an addon built for another
     // arch can load and still not answer. Binding to it would then reject every
     // read forever, where falling through reaches a scan that works.
     if (typeof addon?.getProcessList !== 'function') {
       /* v8 ignore next 2 */
       cachedModule = null
+
       return cachedModule
     }
+
     if (stagedRelayAddonIsUnpatched()) {
       console.warn(
         `[windows-process-table] the addon staged beside the relay bundle still imports ` +
@@ -226,12 +238,15 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
           'relay so the staged addon is rebuilt.'
       )
       cachedModule = null
+
       return cachedModule
     }
+
     cachedModule = adaptAddon(addon)
   } catch {
     cachedModule = null
   }
+
   return cachedModule
 }
 
@@ -261,7 +276,9 @@ const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 3_000
  * callback can only clear its own wedge.
  */
 const unreturnedReads = new Set<number>()
+
 let readSequence = 0
+
 let nativeReaderEpoch = 0
 
 /**
@@ -355,11 +372,13 @@ function ignoreSettlement(): void {}
 function readNativeRows<Row>(projection: ProcessRowProjection<Row>): Promise<Row[]> {
   const attempt = nativeReadGate.then(() => readOneSnapshot(projection))
   nativeReadGate = attempt.then(ignoreSettlement, ignoreSettlement)
+
   return attempt
 }
 
 function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Row[]> {
   const native = moduleLoader()
+
   if (!native) {
     if (process.platform === 'win32' && projection.cimFallback) {
       // Why only when the module is absent: a binding that loads is the fast
@@ -369,30 +388,36 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
       // docs/reference/windows-process-enumeration.md.
       return projection.cimFallback()
     }
+
     // Reject rather than resolve empty: an empty table is a claim that nothing
     // is running, and callers act on that by force-killing or by declaring a
     // tree dead. "Unavailable" has to stay distinguishable from "empty".
     return Promise.reject(new Error('windows process table unavailable'))
   }
+
   if (unreturnedReads.size > 0) {
     return Promise.reject(
       new Error('windows process table is wedged: an earlier read has not returned')
     )
   }
+
   const readId = ++readSequence
   const readerEpoch = nativeReaderEpoch
   const flags = projection.flags(native)
+
   return new Promise((resolve, reject) => {
     // Hoisted so a synchronous throw from getAllProcesses can clear it. An
     // orphaned timer would otherwise fire later and wedge a reader that had
     // already recovered.
     let deadline: ReturnType<typeof setTimeout> | undefined
+
     try {
       deadline = setTimeout(() => {
         // Test resets invalidate deadlines owned by the prior injected reader.
         if (readerEpoch === nativeReaderEpoch) {
           unreturnedReads.add(readId)
         }
+
         reject(new Error('windows process table timed out'))
       }, WINDOWS_PROCESS_QUERY_TIMEOUT_MS)
       deadline.unref?.()
@@ -402,10 +427,13 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
         // dropping an id that was never added is a no-op, and only the read
         // that actually wedged can be holding the gate shut.
         unreturnedReads.delete(readId)
+
         if (!processes) {
           reject(new Error('windows process table returned no snapshot'))
+
           return
         }
+
         // Why check for ourselves: the native snapshot returns an EMPTY list --
         // not an error -- when CreateToolhelp32Snapshot fails, which is the
         // normal outcome under an EDR hook or a restricted token. An empty
@@ -415,12 +443,15 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
         // catches empty, truncated and permission-filtered tables alike.
         if (!processes.some((row) => row.pid === process.pid)) {
           reject(new Error('windows process table is unreadable'))
+
           return
         }
+
         // Only meaningful when a command line was actually asked for.
         if ((flags & native.ProcessDataFlag.CommandLine) !== 0) {
           reportWindowsCommandLineRecoveryHealth(processes)
         }
+
         resolve(processes.map(projection.fromNative))
       }, flags)
     } catch (error) {
@@ -439,9 +470,11 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
  */
 async function readCimRows(): Promise<WindowsProcessRow[]> {
   const rows = await cimScan()
+
   if (!rows.some((row) => row.pid === process.pid)) {
     throw new Error('windows process table is unreadable')
   }
+
   return rows
 }
 
@@ -458,6 +491,7 @@ const identityReader = createProcessTableSnapshotReader<WindowsProcessIdentityRo
   runPs: () => readNativeRows(IDENTITY_PROJECTION),
   now: () => Date.now()
 })
+
 const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
   runPs: () => readNativeRows(DETAILED_PROJECTION),
   now: () => Date.now()
@@ -472,8 +506,10 @@ const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
 async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
   if (moduleLoader() === null) {
     const rows = await (fresh ? detailedReader.getFreshSnapshot() : detailedReader.getSnapshot())
+
     return rows.map(toIdentityRow)
   }
+
   return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
 }
 
@@ -522,6 +558,7 @@ export function isWindowsProcessTableAvailable(): boolean {
  */
 export function isWindowsProcessStartTimeAvailable(): boolean {
   const native = moduleLoader()
+
   return (
     native !== null &&
     ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0

@@ -36,13 +36,17 @@ export function initCohortClassifier(store: Store): void {
 export function getCohortAtEmit(): { nth_repo_added: number | undefined } {
   if (!storeRef) {
     warnOnce('store not initialized')
+
     return { nth_repo_added: undefined }
   }
+
   try {
     const length = storeRef.getRepoCount()
+
     return { nth_repo_added: length }
   } catch (err) {
     warnOnce(err instanceof Error ? err.message : String(err))
+
     return { nth_repo_added: undefined }
   }
 }
@@ -51,6 +55,7 @@ function warnOnce(reason: string): void {
   if (warnedThisSession) {
     return
   }
+
   warnedThisSession = true
   console.warn('[telemetry-cohort] classifier returned undefined', { reason })
 }

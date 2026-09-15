@@ -24,7 +24,9 @@ import {
 } from './status'
 
 const worktreePath = path.resolve('repo')
+
 const windowsRelativePath = 'tests\\breakgit'
+
 const wslOptions = { wslDistro: 'Ubuntu' }
 
 describe('WSL git pathspecs', () => {
@@ -44,6 +46,7 @@ describe('WSL git pathspecs', () => {
     const pathspecs = gitExecFileAsyncMock.mock.calls.flatMap(([args]) =>
       (args as string[]).filter((arg) => arg.startsWith(':(literal)'))
     )
+
     expect(pathspecs).toEqual(Array(8).fill(':(literal)tests/breakgit'))
   })
 

@@ -41,12 +41,16 @@ export async function probeDaemonProcessIdentity(
   if (!exactIncarnation) {
     return unknown('exact_identity_unavailable', ['pid_record'])
   }
+
   const platform = dependencies.platform ?? process.platform
+
   if (platform !== 'linux' && platform !== 'darwin' && platform !== 'win32') {
     return unknown('inspection_failed', ['process_signal'])
   }
+
   const signalProcess = dependencies.signalProcess ?? inspectProcessSignal
   const signal = signalProcess(exactIncarnation.identity.pid)
+
   if (platform !== 'win32' && signal === 'missing') {
     return gone('pid_missing', ['process_signal', 'endpoint_identity'], exactIncarnation)
   }
@@ -54,9 +58,11 @@ export async function probeDaemonProcessIdentity(
   if (platform === 'linux') {
     return await probeLinuxProcess(exactIncarnation, endpoint, signal, dependencies)
   }
+
   if (platform === 'win32') {
     return await probeWindowsProcess(exactIncarnation, endpoint, signal, dependencies)
   }
+
   return await probeMacosProcess(exactIncarnation, endpoint, signal, dependencies)
 }
 
@@ -67,12 +73,14 @@ async function probeLinuxProcess(
   dependencies: DaemonProcessProbeDependencies
 ): Promise<DaemonProcessEvidence> {
   const stat = await (dependencies.readLinuxStat ?? readLinuxStat)(exactIncarnation.identity.pid)
+
   if (stat.status === 'missing') {
     return unknown(signal === 'permission_denied' ? 'permission_denied' : 'inspection_failed', [
       'linux_proc_stat',
       'process_signal'
     ])
   }
+
   if (stat.status === 'unavailable') {
     return unknown(signal === 'permission_denied' ? 'permission_denied' : 'inspection_failed', [
       'linux_proc_stat',
@@ -82,14 +90,18 @@ async function probeLinuxProcess(
 
   const expectedTicks = exactIncarnation.linuxStartTicks
   const expectedBootId = exactIncarnation.bootId
+
   if (expectedTicks || expectedBootId) {
     if (!expectedTicks || !expectedBootId) {
       return unknown('linux_identity_incomplete', ['pid_record'])
     }
+
     const bootId = await (dependencies.readBootIdentity ?? readBootIdentity)()
+
     if (!bootId) {
       return unknown('inspection_failed', ['boot_identity'])
     }
+
     if (bootId !== expectedBootId) {
       return gone(
         'linux_boot_changed',
@@ -97,10 +109,13 @@ async function probeLinuxProcess(
         exactIncarnation
       )
     }
+
     const currentTicks = parseLinuxStartTicks(stat.value)
+
     if (!currentTicks) {
       return unknown('inspection_failed', ['linux_proc_stat'])
     }
+
     if (currentTicks !== expectedTicks) {
       return gone(
         'linux_start_ticks_mismatch',
@@ -108,6 +123,7 @@ async function probeLinuxProcess(
         exactIncarnation
       )
     }
+
     if (parseLinuxProcessState(stat.value) === 'Z') {
       return gone(
         'linux_zombie',
@@ -121,12 +137,15 @@ async function probeLinuxProcess(
     exactIncarnation.identity.pid,
     'linux'
   )
+
   if (commandLine === undefined) {
     return unknown('command_line_unavailable', ['process_command_line'])
   }
+
   if (!commandLineMatchesDaemon(commandLine, endpoint.socketPath, endpoint.tokenPath)) {
     return unknown('command_line_mismatch', ['process_command_line'])
   }
+
   if (expectedTicks && expectedBootId) {
     return present('linux_identity_match', [
       'linux_proc_stat',
@@ -139,9 +158,11 @@ async function probeLinuxProcess(
   const startedAtMs = await (dependencies.readProcessStartedAtMs ?? readLinuxProcessStartedAtMs)(
     exactIncarnation.identity.pid
   )
+
   if (startedAtMs === null) {
     return unknown('process_start_time_unavailable', ['process_start_time'])
   }
+
   return startTimesWithinTolerance(
     startedAtMs,
     exactIncarnation.identity.startedAtMs,
@@ -165,21 +186,26 @@ async function probeMacosProcess(
     exactIncarnation.identity.pid,
     'darwin'
   )
+
   if (commandLine === undefined) {
     return unknown(
       signal === 'permission_denied' ? 'permission_denied' : 'command_line_unavailable',
       ['process_command_line', 'process_signal']
     )
   }
+
   if (!commandLineMatchesDaemon(commandLine, endpoint.socketPath, endpoint.tokenPath)) {
     return unknown('command_line_mismatch', ['process_command_line'])
   }
+
   const startedAtMs = await (dependencies.readProcessStartedAtMs ?? readMacosProcessStartedAtMs)(
     exactIncarnation.identity.pid
   )
+
   if (startedAtMs === null) {
     return unknown('process_start_time_unavailable', ['process_start_time'])
   }
+
   return startTimesWithinTolerance(
     startedAtMs,
     exactIncarnation.identity.startedAtMs,
@@ -202,18 +228,22 @@ async function probeWindowsProcess(
   const identity = await (dependencies.queryWindowsProcess ?? queryWindowsProcess)(
     exactIncarnation.identity.pid
   )
+
   if (identity.status === 'missing') {
     return gone('windows_process_missing', ['windows_cim', 'endpoint_identity'], exactIncarnation)
   }
+
   if (identity.status === 'unavailable') {
     return unknown(signal === 'permission_denied' ? 'permission_denied' : 'inspection_failed', [
       'windows_cim',
       'process_signal'
     ])
   }
+
   if (identity.startedAtMs === null) {
     return unknown('windows_process_start_time_unavailable', ['windows_cim'])
   }
+
   if (
     !startTimesWithinTolerance(
       identity.startedAtMs,
@@ -227,6 +257,7 @@ async function probeWindowsProcess(
       exactIncarnation
     )
   }
+
   return present(
     'windows_identity_match',
     identity.commandLine &&
@@ -238,9 +269,11 @@ async function probeWindowsProcess(
 
 export function parseLinuxProcessState(statLine: string): string | null {
   const commandEnd = statLine.lastIndexOf(')')
+
   if (commandEnd === -1) {
     return null
   }
+
   return (
     statLine
       .slice(commandEnd + 1)

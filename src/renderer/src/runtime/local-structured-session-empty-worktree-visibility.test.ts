@@ -12,7 +12,9 @@ import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 // leaves the tab in store but permanently off screen (empty-worktree launch P0).
 
 const GIT_WT = 'repo-1::/tmp/wt1'
+
 const FOLDER_WT = 'folder:folder-1'
+
 const LOCAL_ROOT = 'local-root-group'
 
 afterEach(() => {
@@ -90,6 +92,7 @@ function applyStructured(
     1_700_000_000_000,
     { preserveLocalLayout: true, terminalPtyMode: 'local' }
   )
+
   return { ...state, ...patch } as WebSessionTabsSyncState
 }
 
@@ -98,6 +101,7 @@ function expectChatTabRendered(state: WebSessionTabsSyncState, worktreeId: strin
   const chatTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
     (tab) => tab.contentType === 'agent-session'
   )
+
   expect(chatTab).toBeDefined()
   const groups = state.groupsByWorktree[worktreeId] ?? []
   const owningGroup = groups.find((group) => group.tabOrder.includes(chatTab!.id))
@@ -105,6 +109,7 @@ function expectChatTabRendered(state: WebSessionTabsSyncState, worktreeId: strin
   expect(chatTab!.groupId).toBe(owningGroup!.id)
   const renderedGroupIds = collectClientLayoutGroupIds(state.layoutByWorktree[worktreeId] ?? null)
   expect(renderedGroupIds.has(owningGroup!.id)).toBe(true)
+
   return chatTab!
 }
 
@@ -166,6 +171,7 @@ describe('structured session visibility on empty worktrees', () => {
       sortOrder: 0,
       createdAt: 1
     }
+
     const state = emptyState({
       activeWorktreeId: FOLDER_WT,
       tabsByWorktree: {

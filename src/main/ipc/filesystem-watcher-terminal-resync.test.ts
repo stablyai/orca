@@ -9,13 +9,18 @@ const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners 
 )
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('fs/promises', () => ({ stat: vi.fn() }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   onSshFilesystemProviderRegistered: (listener: (connectionId: string) => void) => {
     providerRegistrationListeners.add(listener)
+
     return () => providerRegistrationListeners.delete(listener)
   }
 }))
@@ -29,10 +34,13 @@ import {
 } from './filesystem-watcher'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
+
 type TerminalErrorHandler = (error: Error) => void
 
 const WORKTREE_PATH = '/home/me/repo'
+
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
+
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
   events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
@@ -49,6 +57,7 @@ type MockSender = {
 function createSender(id: number): MockSender {
   let destroyed = false
   const destroyedHandlers: (() => void)[] = []
+
   return {
     isDestroyed: () => destroyed,
     send: vi.fn(),
@@ -60,6 +69,7 @@ function createSender(id: number): MockSender {
     id,
     destroy: () => {
       destroyed = true
+
       for (const handler of destroyedHandlers) {
         handler()
       }
@@ -74,9 +84,11 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.useRealTimers()
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -96,17 +108,22 @@ describe('remote filesystem watcher terminal retry resync', () => {
     const senderOne = createSender(1)
     const senderTwo = createSender(2)
     let terminalError: TerminalErrorHandler = () => {}
+
     let resolveRetry: (unwatch: () => void) => void = () => {}
+
     const retryInstall = new Promise<() => void>((resolve) => {
       resolveRetry = resolve
     })
+
     const watchMock = vi
       .fn()
       .mockImplementationOnce((_path, _events, options) => {
         terminalError = options.onTerminalError
+
         return Promise.resolve(vi.fn())
       })
       .mockReturnValueOnce(retryInstall)
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender: senderOne }, ARGS)
@@ -133,10 +150,12 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
+
     const watchMock = vi
       .fn()
       .mockRejectedValueOnce(new Error('provider not ready'))
       .mockResolvedValueOnce(vi.fn())
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -151,17 +170,22 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
     terminalError(new Error('old relay watcher died'))
+
     for (const listener of providerRegistrationListeners) {
       listener('conn-1')
     }
+
     await vi.advanceTimersByTimeAsync(0)
 
     expect(watchMock).toHaveBeenCalledTimes(2)
@@ -178,22 +202,29 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     let retrySignal: AbortSignal | undefined
     let resolveRetry: (unwatch: () => void) => void = () => {}
+
     const retryInstall = new Promise<() => void>((resolve) => {
       resolveRetry = resolve
     })
+
     const retryUnwatch = vi.fn()
+
     const staleWatch = vi
       .fn()
       .mockImplementationOnce((_path, _events, options) => {
         terminalError = options.onTerminalError
+
         return Promise.resolve(vi.fn())
       })
       .mockImplementationOnce((_path, _events, options) => {
         retrySignal = options.signal
+
         return retryInstall
       })
+
     const replacementWatch = vi.fn().mockResolvedValue(vi.fn())
     getSshFilesystemProviderMock.mockReturnValue({ watch: staleWatch })
 
@@ -203,9 +234,11 @@ describe('remote filesystem watcher terminal retry resync', () => {
     expect(staleWatch).toHaveBeenCalledTimes(2)
 
     getSshFilesystemProviderMock.mockReturnValue({ watch: replacementWatch })
+
     for (const listener of providerRegistrationListeners) {
       listener('conn-1')
     }
+
     expect(retrySignal?.aborted).toBe(true)
 
     resolveRetry(retryUnwatch)
@@ -222,10 +255,13 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     const terminalErrors: TerminalErrorHandler[] = []
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalErrors.push(options.onTerminalError)
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -251,10 +287,13 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -271,10 +310,13 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -291,10 +333,13 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -311,17 +356,22 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     let resolveClose: () => void = () => {}
+
     const closeWatch = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveClose = resolve
         })
     )
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -346,17 +396,22 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     let rejectClose: (error: Error) => void = () => {}
+
     const closeWatch = vi.fn(
       () =>
         new Promise<void>((_resolve, reject) => {
           rejectClose = reject
         })
     )
+
     const watchMock = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(vi.fn())
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock, closeWatch })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)
@@ -378,10 +433,13 @@ describe('remote filesystem watcher terminal retry resync', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sender = createSender(1)
     let terminalError: TerminalErrorHandler = () => {}
+
     const initialWatch = vi.fn().mockImplementation((_path, _events, options) => {
       terminalError = options.onTerminalError
+
       return Promise.resolve(() => terminalError(new Error('shutdown terminated watcher')))
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: initialWatch })
 
     await handlers['fs:watchWorktree']({ sender }, ARGS)

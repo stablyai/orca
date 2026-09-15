@@ -15,11 +15,13 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
   const uiLanguage = useAppStore((state) => state.settings?.uiLanguage ?? null)
   const pluginLanguagePacks = usePluginLanguagePacks()
   const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)
+
   const locale =
     uiLanguage === null
       ? null
       : (selectedPluginLanguage?.resourceLanguage ??
         (isPluginUiLanguage(uiLanguage) ? 'en' : resolveUiLocale(uiLanguage)))
+
   const requestedLocale = useRef<string | null>(null)
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
     if (locale === null || requestedLocale.current === locale) {
       return
     }
+
     requestedLocale.current = locale
     void i18n.changeLanguage(locale)
   }, [locale, pluginLanguagePacks])

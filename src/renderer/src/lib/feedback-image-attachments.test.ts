@@ -22,6 +22,7 @@ function pngHeader(width = 1, height = 1): Uint8Array<ArrayBuffer> {
   bytes.set([73, 72, 68, 82], 12)
   view.setUint32(16, width)
   view.setUint32(20, height)
+
   return bytes
 }
 
@@ -29,7 +30,9 @@ function pngFile(name: string, size = 24, dimensions = { width: 1, height: 1 }):
   const file = new File([pngHeader(dimensions.width, dimensions.height)], name, {
     type: 'image/png'
   })
+
   Object.defineProperty(file, 'size', { value: size })
+
   return file
 }
 
@@ -172,6 +175,7 @@ describe('readFeedbackImageFiles', () => {
       configurable: true,
       value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }
     })
+
     try {
       const { images, errors } = await readFeedbackImageFiles([pngFile('a.png')], 0)
       expect(errors).toEqual([])

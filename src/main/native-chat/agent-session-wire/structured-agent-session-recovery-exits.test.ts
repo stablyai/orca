@@ -23,10 +23,15 @@ import {
 const CALLER = { callerKey: 'client-1' }
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 const spawnedOwners = new Set<ReturnType<typeof spawnProcess>>()
+
 const supersededHosts = new Set<StructuredAgentSessionHost>()
 
 async function spawnOwner(spawnToken: string) {
@@ -35,15 +40,20 @@ async function spawnOwner(spawnToken: string) {
     args: ['-e', 'setInterval(() => {}, 1_000)'],
     env: { ...process.env, [CODEX_SPAWN_TOKEN_ENV]: spawnToken }
   })
+
   spawnedOwners.add(child)
   const pid = child.pid
+
   if (!pid) {
     throw new Error('owner process did not start')
   }
+
   const processStartTimeMs = await readProcessStartTimeMs(pid)
+
   if (processStartTimeMs === null) {
     throw new Error('owner process start time was unavailable')
   }
+
   return {
     child,
     process: { hostId: 'local', pid, processStartTimeMs, spawnToken }
@@ -56,6 +66,7 @@ async function stopOwner(child: ReturnType<typeof spawnProcess>): Promise<void> 
     child.kill('SIGTERM')
     await closed
   }
+
   spawnedOwners.delete(child)
 }
 
@@ -213,9 +224,11 @@ describe('recovery exits', () => {
     await reopenStore()
 
     let orphanAlive = true
+
     const stopOwnerProcess = vi.fn((_pid: number, _signal: 'SIGTERM' | 'SIGKILL') => {
       orphanAlive = false
     })
+
     openHost({
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () =>
@@ -247,9 +260,11 @@ describe('recovery exits', () => {
     await reopenStore()
 
     let orphanAlive = true
+
     const stopOwnerProcess = vi.fn(() => {
       orphanAlive = false
     })
+
     openHost({
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async () =>
@@ -306,6 +321,7 @@ describe('recovery exits', () => {
       mintSpawnToken: () => 'spawn-b',
       probeOwner: async (record) => {
         const probe = await realProbe(record)
+
         if (!overlapDriven) {
           overlapDriven = true
           await outgoingStore.renewLease({
@@ -316,6 +332,7 @@ describe('recovery exits', () => {
           })
           await stopOwner(outgoing.child)
         }
+
         return probe
       }
     })

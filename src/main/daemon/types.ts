@@ -22,9 +22,13 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+
 export type { TerminalModes } from './terminal-modes'
+
 import type { TerminalSnapshot } from './terminal-snapshot'
+
 export type { TerminalSnapshot } from './terminal-snapshot'
+
 export {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
@@ -347,6 +351,7 @@ export type RpcResponseError = {
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
 export type { DaemonCreateOrAttachResult as CreateOrAttachResult } from './daemon-create-or-attach-result'
+
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null
 }

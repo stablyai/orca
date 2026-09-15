@@ -45,8 +45,10 @@ export function MobileNativeChatQuestion({
     if (sendingRef.current) {
       return false
     }
+
     sendingRef.current = true
     setSending(true)
+
     try {
       return await onAnswer(text)
     } finally {
@@ -66,10 +68,12 @@ export function MobileNativeChatQuestion({
     if (selectedOptionIndexes.length === 0) {
       return
     }
+
     const answer =
       question.freeTextToken && trimmedFreeText.length > 0
         ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
         : formatQuestionAnswerByIndexes(question, selectedOptionIndexes)
+
     if (await sendAnswer(answer)) {
       setFreeText('')
     }
@@ -79,10 +83,12 @@ export function MobileNativeChatQuestion({
     if (trimmedFreeText.length === 0) {
       return
     }
+
     const answer =
       question.multiSelect && question.freeTextToken && selectedOptionIndexes.length > 0
         ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
         : formatQuestionFreeTextAnswer(question, trimmedFreeText)
+
     if (await sendAnswer(answer)) {
       setFreeText('')
     }
@@ -124,6 +130,7 @@ export function MobileNativeChatQuestion({
         <View style={styles.options}>
           {optionRows.map(({ label, description, key }, optIndex) => {
             const isSelected = selectedOptionIndexes.includes(optIndex)
+
             return (
               <Pressable
                 key={key}

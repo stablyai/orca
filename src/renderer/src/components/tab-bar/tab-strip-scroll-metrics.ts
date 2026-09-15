@@ -60,12 +60,15 @@ export function getTabStripScrollMaskClassName(
   }
 
   const classes: string[] = []
+
   if (metrics.canScrollStart) {
     classes.push('terminal-tab-strip--fade-start')
   }
+
   if (metrics.canScrollEnd) {
     classes.push('terminal-tab-strip--fade-end')
   }
+
   return classes.join(' ')
 }
 

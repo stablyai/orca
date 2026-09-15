@@ -10,9 +10,13 @@ import {
 } from '../navigation/host-stack-navigation'
 
 export type MobileHostEditHostRoute = HostStackHostRoute
+
 export type MobileHostEditNavigationState = HostStackNavigationState
+
 export type MobileHostEditRootNavigation = HostStackRootNavigation
+
 export type MobileHostEditRouter = HostStackRouter
+
 export type MobileHostEditNavigationController = HostStackNavigationController
 
 export function mobileHostEditHostRoute(hostId: string): MobileHostEditHostRoute {

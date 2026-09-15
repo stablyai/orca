@@ -29,6 +29,7 @@ import type {
   CodexResetCreditConsumeResult
 } from './codex-account-service-types'
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
+
 export type {
   CodexAccountAddTarget,
   CodexAccountReauthenticateOptions,
@@ -46,6 +47,7 @@ function killLoginProcessTree(
   interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
 ): void {
   const terminationPid = interactiveLogin?.getTerminationPid?.() ?? child.pid
+
   if (
     process.platform === 'win32' &&
     typeof terminationPid === 'number' &&
@@ -68,12 +70,14 @@ function killLoginProcessTree(
         timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
         stdio: 'ignore'
       })
+
       return
     } catch {
       // Why: taskkill can race an already-exited tree; fall back to the plain
       // signal so the direct child never outlives its deadline.
     }
   }
+
   child.kill()
 }
 
@@ -153,6 +157,7 @@ export class CodexAccountService {
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(fn, fn)
     this.mutationQueue = next.catch(() => {})
+
     return next
   }
 

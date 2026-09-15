@@ -28,6 +28,7 @@ export function seedVaultTranscriptBatch(args: {
     const sessionId = `vault-bench-${args.batch}-${index}`
     const title = `Vault benchmark batch ${args.batch} session ${index}`
     const timestamp = new Date(baseTimeMs + index).toISOString()
+
     const content = `${[
       jsonLine({
         timestamp,
@@ -53,6 +54,7 @@ export function seedVaultTranscriptBatch(args: {
         }
       })
     ].join('\n')}\n`
+
     const filePath = path.join(sessionsDir, `rollout-${sessionId}.jsonl`)
     writeFileSync(filePath, content)
     const mtime = new Date(baseTimeMs + index)

@@ -42,7 +42,9 @@ type TitleEntry = {
 }
 
 const serializersByPtyId = new Map<string, SerializerEntry>()
+
 const lastTitleByPtyId = new Map<string, TitleEntry>()
+
 let listenerAttached = false
 
 export function registerPtySerializer(
@@ -53,12 +55,16 @@ export function registerPtySerializer(
   const owner = Symbol(ptyId)
   serializersByPtyId.set(ptyId, { fn: serialize, clear, owner })
   ensureSerializerListener()
+
   return () => {
     const current = serializersByPtyId.get(ptyId)
+
     if (current?.owner === owner) {
       serializersByPtyId.delete(ptyId)
     }
+
     const titleEntry = lastTitleByPtyId.get(ptyId)
+
     if (titleEntry?.owner === owner) {
       // Why: dispose the xterm onTitleChange IDisposable alongside the map
       // cleanup. Without this, the listener stays attached to xterm's emitter
@@ -81,13 +87,16 @@ export function registerPtyTitleSource(
   attach: (handler: (title: string) => void) => IDisposable
 ): () => void {
   const serializerOwner = serializersByPtyId.get(ptyId)?.owner
+
   if (!serializerOwner) {
     // Why: the title source must be registered AFTER the serializer so the
     // owner token is available. Calling out of order is a programming bug.
     throw new Error(`registerPtyTitleSource called before serializer for ptyId ${ptyId}`)
   }
+
   const existing = lastTitleByPtyId.get(ptyId)
   const initialTitle = existing?.owner === serializerOwner ? existing.title : ''
+
   if (existing) {
     // Why: same-PTY remounts can install the new serializer/title source before
     // the stale mount unregisters. Replace the tracked disposable immediately
@@ -95,18 +104,24 @@ export function registerPtyTitleSource(
     existing.disposable.dispose()
     lastTitleByPtyId.delete(ptyId)
   }
+
   const disposable = attach((title) => {
     const current = lastTitleByPtyId.get(ptyId)
+
     if (current && current.owner !== serializerOwner) {
       return
     }
+
     lastTitleByPtyId.set(ptyId, { title, owner: serializerOwner, disposable })
   })
+
   // Seed an entry with an empty title so the disposable is tracked even
   // before the first onTitleChange fires. Subsequent updates overwrite it.
   lastTitleByPtyId.set(ptyId, { title: initialTitle, owner: serializerOwner, disposable })
+
   return () => {
     const entry = lastTitleByPtyId.get(ptyId)
+
     if (entry?.owner === serializerOwner) {
       entry.disposable.dispose()
       lastTitleByPtyId.delete(ptyId)
@@ -122,6 +137,7 @@ function ensureSerializerListener(): void {
   if (listenerAttached) {
     return
   }
+
   listenerAttached = true
 
   window.api.pty.onClearBufferRequest((request) => {
@@ -139,32 +155,41 @@ function ensureSerializerListener(): void {
         // parse wait is in flight; never publish a fossil from the old xterm.
         if (serializersByPtyId.get(request.ptyId) !== entry) {
           window.api.pty.sendSerializedBuffer(request.requestId, null)
+
           return
         }
+
         if (!result) {
           window.api.pty.sendSerializedBuffer(request.requestId, null)
+
           return
         }
+
         const titleEntry = lastTitleByPtyId.get(request.ptyId)
         const lastTitle = titleEntry && titleEntry.title.length > 0 ? titleEntry.title : undefined
+
         const payload: SerializedBuffer = {
           data: result.data,
           cols: result.cols,
           rows: result.rows
         }
+
         if (result.seq !== undefined) {
           payload.seq = result.seq
         }
+
         // Why gated on seq: flags describe a boundary, and an unsequenced
         // snapshot has none for a consumer to reconcile live bytes against.
         if (result.seq !== undefined && result.kittyKeyboardFlags !== undefined) {
           payload.kittyKeyboardFlags = result.kittyKeyboardFlags
         }
+
         if (lastTitle !== undefined) {
           payload.lastTitle = lastTitle
         } else if (result.lastTitle !== undefined) {
           payload.lastTitle = result.lastTitle
         }
+
         window.api.pty.sendSerializedBuffer(request.requestId, payload)
       })
       .catch(() => {

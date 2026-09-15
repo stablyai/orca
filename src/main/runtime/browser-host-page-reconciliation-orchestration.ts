@@ -47,6 +47,7 @@ export class BrowserHostPageReconciliationOrchestrator {
     options: BrowserHostPageReconciliationOptions = {}
   ): Promise<BrowserHostPageReconciliationResult> {
     const claimed = new Set(intents.map((intent) => intent.browserPageId))
+
     return this.run(state, intents, options, (inventory) =>
       inventory.filter((page) => claimed.has(page.browserPageId))
     )
@@ -61,20 +62,25 @@ export class BrowserHostPageReconciliationOrchestrator {
     ) => readonly BrowserClientHostedPageInventory[]
   ): Promise<BrowserHostPageReconciliationResult> {
     const inventory = this.requireInventory(state)
+
     if (this.attempts.has(state.token)) {
       throw new Error('browser_host_page_reconciliation_pending')
     }
+
     if (this.consumedInventories.has(inventory)) {
       throw new Error('browser_host_page_reconciliation_inventory_consumed')
     }
+
     const plan = planBrowserHostPageReconciliation(intents, scope(inventory), {
       inventoryPairedDeviceId: state.lease.pairedDeviceId
     })
+
     this.assertPlanAuthority(state, plan)
     const attempt = new BrowserHostPageReconciliationActions(state, this.placements, plan)
     const removeAbort = forwardAbort(options.signal, attempt.controller)
     this.consumedInventories.add(inventory)
     this.attempts.set(state.token, attempt)
+
     try {
       return await executeBrowserHostPageReconciliation(plan, attempt.handlers, {
         ...options,
@@ -95,6 +101,7 @@ export class BrowserHostPageReconciliationOrchestrator {
 
   observeInventory(state: BrowserHostLeaseState): void {
     const inventory = state.lease.pageInventory
+
     if (inventory && state.commandLedger?.hasOutstandingReconciliation()) {
       this.consumedInventories.add(inventory)
     }
@@ -112,6 +119,7 @@ export class BrowserHostPageReconciliationOrchestrator {
     ) {
       throw new Error('browser_host_reconciliation_protocol_required')
     }
+
     return state.lease.pageInventory
   }
 
@@ -125,6 +133,7 @@ export class BrowserHostPageReconciliationOrchestrator {
       ...plan.restore,
       ...plan.closeThenRestore.map(({ intent }) => intent)
     ]
+
     for (const intent of intents) {
       if (
         intent.authorityRuntimeId !== this.authority.authorityRuntimeId ||
@@ -134,21 +143,27 @@ export class BrowserHostPageReconciliationOrchestrator {
       ) {
         throw new Error('browser_host_page_reconciliation_authority_stale')
       }
+
       state.executionHostGrants.require(intent.executionHostKey)
     }
+
     for (const { intent } of plan.retain) {
       this.placements.requireClientPage(intent)
     }
+
     for (const { intent } of [...plan.reclaim, ...plan.closeThenRestore]) {
       this.assertReplaceablePlacement(intent.browserPageId, plan)
     }
+
     for (const intent of plan.restore) {
       if (this.placements.getPlacement(intent.browserPageId)) {
         throw new Error('browser_page_replacement_requires_retirement')
       }
     }
+
     for (const page of plan.close) {
       const placement = this.placements.getPlacement(page.browserPageId)
+
       if (placement && !this.placementMatchesPage(placement, page)) {
         throw new Error('browser_page_replacement_requires_retirement')
       }
@@ -160,12 +175,15 @@ export class BrowserHostPageReconciliationOrchestrator {
     plan: ReturnType<typeof planBrowserHostPageReconciliation>
   ): void {
     const placement = this.placements.getPlacement(browserPageId)
+
     if (!placement) {
       return
     }
+
     const closePair = plan.closeThenRestore.find(
       ({ intent }) => intent.browserPageId === browserPageId
     )
+
     if (!closePair || !this.placementMatchesPage(placement, closePair.page)) {
       throw new Error('browser_page_replacement_requires_retirement')
     }
@@ -190,11 +208,16 @@ function forwardAbort(signal: AbortSignal | undefined, controller: AbortControll
   if (!signal) {
     return () => {}
   }
+
   const abort = (): void => controller.abort(signal.reason)
+
   if (signal.aborted) {
     abort()
+
     return () => {}
   }
+
   signal.addEventListener('abort', abort, { once: true })
+
   return () => signal.removeEventListener('abort', abort)
 }

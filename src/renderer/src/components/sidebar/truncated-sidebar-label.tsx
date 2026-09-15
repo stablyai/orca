@@ -41,17 +41,21 @@ export function TruncatedSidebarLabel({
       removeResizeListenerRef.current = null
 
       nodeRef.current = node
+
       if (!node) {
         measureTruncated(null)
+
         return
       }
 
       measureTruncated(node)
       const updateTruncated = () => measureTruncated(node)
+
       if (typeof ResizeObserver === 'undefined') {
         window.addEventListener('resize', updateTruncated)
         removeResizeListenerRef.current = () =>
           window.removeEventListener('resize', updateTruncated)
+
         return
       }
 

@@ -57,6 +57,7 @@ export type WorktreeMetaLiveLinks = {
 export function parseExplicitGitHubIssueUrl(input: string): string | null {
   const trimmed = input.trim()
   const link = parseGitHubIssueOrPRLink(trimmed)
+
   if (!link || link.type !== 'issue') {
     return null
   }
@@ -69,6 +70,7 @@ export function parseGitHubWorkItemNumberForMetaField(
   expectedType: 'issue' | 'pr'
 ): number | null {
   const link = parseGitHubIssueOrPRLink(input)
+
   if (link) {
     // Why: issue and PR numbers live in separate GitHub namespaces for refs;
     // a URL path mismatch must not silently link the other field.
@@ -81,20 +83,27 @@ export function parseGitHubWorkItemNumberForMetaField(
 export function parseGitLabMergeRequestNumberForMetaField(input: string): number | null {
   const trimmed = input.trim()
   const direct = trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
+
   if (/^\d+$/.test(direct)) {
     const number = Number(direct)
+
     return Number.isSafeInteger(number) && number > 0 ? number : null
   }
+
   let url: URL
+
   try {
     url = new URL(trimmed)
   } catch {
     return null
   }
+
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return null
   }
+
   const link = parseGitLabIssueOrMRLink(trimmed)
+
   return link?.type === 'mr' && Number.isSafeInteger(link.number) && link.number > 0
     ? link.number
     : null
@@ -109,6 +118,7 @@ function buildDisplayNameUpdate(
   current: WorktreeMetaSnapshot
 ): Partial<WorktreeMeta> {
   const trimmed = draft.displayNameInput.trim()
+
   return trimmed === current.displayName ? {} : { displayName: trimmed }
 }
 
@@ -120,6 +130,7 @@ function buildCommentUpdate(
   current: WorktreeMetaSnapshot
 ): Partial<WorktreeMeta> {
   const trimmed = draft.commentInput.trim()
+
   return trimmed === current.comment ? {} : { comment: trimmed }
 }
 
@@ -135,17 +146,23 @@ function issueLinkIdentity(
   storedLinearOrganizationUrlKey: string | null
 ): string {
   const trimmed = input.trim()
+
   if (trimmed === '') {
     return ''
   }
+
   const parsed = parseIssueLinkInput(trimmed, provider)
+
   if (!parsed) {
     return `raw:${provider}:${trimmed}`
   }
+
   if (parsed.provider === 'github') {
     return `github:${parsed.number}`
   }
+
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
+
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
 }
 
@@ -159,6 +176,7 @@ export function isIssueFieldDirty(
   current: WorktreeMetaSnapshot
 ): boolean {
   const storedOrganizationUrlKey = current.linkedLinearIssueOrganizationUrlKey ?? null
+
   return (
     issueLinkIdentity(draft.issueInput, draft.issueProvider, storedOrganizationUrlKey) !==
     issueLinkIdentity(current.issueInput, current.issueProvider, storedOrganizationUrlKey)
@@ -175,20 +193,25 @@ function keepsLinkedWorkItem(
   live: WorktreeMetaLiveLinks
 ): boolean {
   const parsed = parseIssueLinkInput(input.trim(), provider)
+
   if (!parsed || live.linkedWorkItemType !== 'issue') {
     return false
   }
+
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
   }
+
   if (
     live.linkedWorkItemProvider !== 'linear' ||
     parsed.identifier.toUpperCase() !== live.linkedLinearIssue?.trim().toUpperCase()
   ) {
     return false
   }
+
   const storedOrganizationUrlKey = live.linkedLinearIssueOrganizationUrlKey?.trim()
   const nextOrganizationUrlKey = parsed.organizationUrlKey?.trim()
+
   return (
     !storedOrganizationUrlKey ||
     !nextOrganizationUrlKey ||
@@ -210,6 +233,7 @@ function buildIssueLinkUpdates(
   }
 
   const trimmed = draft.issueInput.trim()
+
   // Why: the linked work item and its source context describe the issue being
   // replaced. Leaving them would keep a stale title badge and mis-scope Linear
   // reads — but only when the save names a *different* issue: a value that
@@ -244,6 +268,7 @@ function buildIssueLinkUpdates(
   }
 
   const parsed = parseIssueLinkInput(trimmed, draft.issueProvider)
+
   if (!parsed) {
     // Why: unparseable input leaves every link untouched. `canSave` already
     // blocks this path, but the builder stays pure rather than relying on it.
@@ -259,6 +284,7 @@ function buildIssueLinkUpdates(
   }
 
   const linearUpdates = buildLinearIssueLinkUpdates(trimmed)
+
   return linearUpdates ? { linkedIssue: null, ...linearUpdates, ...displacedWorkItem } : {}
 }
 
@@ -269,9 +295,11 @@ function buildReviewLinkUpdate(
   provider: WorktreeReviewProvider
 ): Partial<WorktreeMeta> {
   const trimmed = draft.reviewInput.trim()
+
   if (provider === 'github' && trimmed === current.prInput.trim()) {
     return {}
   }
+
   if (trimmed === '') {
     return provider === 'gitlab'
       ? { linkedGitLabMR: null }
@@ -280,13 +308,16 @@ function buildReviewLinkUpdate(
           ...(typeof live.linkedPR === 'number' ? { suppressedGitHubPR: live.linkedPR } : {})
         }
   }
+
   const number =
     provider === 'gitlab'
       ? parseGitLabMergeRequestNumberForMetaField(trimmed)
       : parseGitHubWorkItemNumberForMetaField(trimmed, 'pr')
+
   if (number === null) {
     return {}
   }
+
   return provider === 'gitlab' ? { linkedGitLabMR: number } : { linkedPR: number }
 }
 

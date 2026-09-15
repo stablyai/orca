@@ -6,13 +6,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
 
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
+
 const itWithBash = hasBash ? it : it.skip
+
 const bashMajor = hasBash
   ? Number(spawnSync('bash', ['-lc', 'printf %s "${BASH_VERSINFO[0]}"']).stdout)
   : 0
+
 const bashMinor = hasBash
   ? Number(spawnSync('bash', ['-lc', 'printf %s "${BASH_VERSINFO[1]}"']).stdout)
   : 0
+
 const bashPreservesOddTerminalBackslash = bashMajor > 4 || (bashMajor === 4 && bashMinor >= 4)
 
 function runInteractiveBash(
@@ -23,6 +27,7 @@ function runInteractiveBash(
   const rcfile = join(tempHome, 'rcfile')
   writeFileSync(join(tempHome, '.bash_profile'), profile)
   writeFileSync(rcfile, getDaemonBashShellReadyRcfileContent())
+
   const result = spawnSync(
     'bash',
     ['-lc', '"$BASH" --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
@@ -33,8 +38,10 @@ function runInteractiveBash(
       timeout: 5000
     }
   )
+
   expect(result.error).toBeUndefined()
   expect(result.status, result.stdout).toBe(0)
+
   return result.stdout
 }
 
@@ -43,6 +50,7 @@ function expectLifecycle(output: string, secondExitCode = 1): void {
     `${String.fromCharCode(27)}]133;(?:A|C|D;[0-9]+)${String.fromCharCode(7)}`,
     'g'
   )
+
   expect(output).not.toContain('syntax error')
   expect(output.match(lifecyclePattern)).toEqual([
     '\x1b]133;A\x07',
@@ -136,6 +144,7 @@ describe.skipIf(process.platform === 'win32')('daemon bash PROMPT_COMMAND compos
 __status_b() { printf 'PROMPT_ARRAY_STATUS_B:%s\\n' "$?"; }
 PROMPT_COMMAND=(__status_a __status_b)
 `
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect([...output.matchAll(/PROMPT_ARRAY_STATUS_A:(\d+)/g)].map((match) => match[1])).toEqual([
@@ -154,6 +163,7 @@ PROMPT_COMMAND=(__status_a __status_b)
   itWithBash('keeps a scalar ending in an odd backslash isolated from Orca hooks', () => {
     const profile = String.raw`PROMPT_COMMAND='printf "PROMPT_BACKSLASH:<%s>\n" safe \'
 `
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_BACKSLASH:<safe>')).toHaveLength(4)
@@ -167,6 +177,7 @@ PROMPT_COMMAND=(__status_a __status_b)
   itWithBash('keeps odd-backslash array elements isolated', () => {
     const profile = String.raw`PROMPT_COMMAND=('printf "PROMPT_ARRAY_BACKSLASH:<%s>\n" safe \' 'printf "PROMPT_ARRAY_NEXT\n"')
 `
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_ARRAY_BACKSLASH:<safe>')).toHaveLength(4)
@@ -217,6 +228,7 @@ PROMPT_COMMAND=(__status_a __status_b)
     const profile = `[[ "seed:VALUE" =~ seed:(.*) ]]
 PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
 `
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_REMATCH:<VALUE>')).toHaveLength(4)
@@ -226,6 +238,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
   itWithBash('passes BASH_REMATCH between array hooks', () => {
     const profile = `PROMPT_COMMAND=('[[ "seed:VALUE" =~ seed:(.*) ]]' 'printf "PROMPT_ARRAY_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"')
 `
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_ARRAY_REMATCH:<VALUE>')).toHaveLength(4)
@@ -238,6 +251,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "PROMPT_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "PROMPT_HOOK\\n"; \''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.match(/PROMPT_HOOK\r?\n/g)).toHaveLength(3)
@@ -251,6 +265,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "PROMPT_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "PROMPT_HOOK\\n"\''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_DEBUG:<printf "PROMPT_HOOK\\n">')).toHaveLength(4)
@@ -265,7 +280,9 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "PROMPT_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "PROMPT_HOOK\\n"\''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome, '\ntrue\nfalse\nexit 0\n')
+
     const lifecyclePattern = new RegExp(
       `${String.fromCharCode(27)}]133;(?:A|C|D;[0-9]+)${String.fromCharCode(7)}`,
       'g'
@@ -292,6 +309,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "OLD_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "PROMPT_HOOK\\n"\''
     ].join('\n')
+
     const input = 'trap \'printf "NEW_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG\ntrue\nexit 0\n'
     const output = runInteractiveBash(profile, tempHome, input)
 
@@ -306,6 +324,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "OLD_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "HOOK_FT\\n"\''
     ].join('\n')
+
     const input = 'trap \'printf "NEW_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG\ntrue\nexit 0\n'
     const output = runInteractiveBash(profile, tempHome, input)
 
@@ -322,6 +341,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "OLD_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "HOOK_FT\\n"\''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome, 'trap - DEBUG\ntrue\nexit 0\n')
 
     expect(output.split('OLD_FT:<printf "HOOK_FT\\n">')).toHaveLength(2)
@@ -334,6 +354,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'trap -p DEBUG >/dev/null; printf "QUERY:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "HOOK_QUERY\\n"\''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output).toContain('QUERY:<true>')
@@ -348,6 +369,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'trap \'printf "NOUNSET_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
       'PROMPT_COMMAND=\'printf "HOOK_NOUNSET\\n"\''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output).not.toContain('unbound variable')
@@ -360,6 +382,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       `trap 'trap '\\''__orca_osc133_preexec'\\'' DEBUG 2>/dev/null; printf "PRIVATE_TRAP\\n"' DEBUG`,
       'PROMPT_COMMAND=\'printf "HOOK_PRIVATE\\n"\''
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output).not.toContain('Segmentation fault')
@@ -372,6 +395,7 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
       'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then printf "PROMPT_RETURN:<%s>\\n" "${FUNCNAME[0]-}"; fi\' RETURN'
     ].join('\n')
+
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output).not.toContain('PROMPT_RETURN:<__orca_run_prompt_command_array>')
@@ -385,11 +409,13 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       '__bp_arm() { __bp_armed=1; }',
       'PROMPT_COMMAND=__bp_arm'
     ].join('\n')
+
     const output = runInteractiveBash(
       profile,
       tempHome,
       'echo __orca_osc133_probe\nfalse\nexit 0\n'
     )
+
     const commands = [...output.matchAll(/PROMPT_PREEXEC:<([^>]+)>/g)].map((match) => match[1])
 
     expect(commands).toEqual(['echo __orca_osc133_probe', 'false', 'exit 0'])

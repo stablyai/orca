@@ -10,6 +10,7 @@ describe('MobileRelayBackgroundGraceTimer', () => {
   it('expires once after the 30 second grace', async () => {
     vi.useFakeTimers()
     const onExpired = vi.fn()
+
     const timer = new MobileRelayBackgroundGraceTimer(
       { now: Date.now, setTimer: setTimeout, clearTimer: clearTimeout },
       onExpired
@@ -27,6 +28,7 @@ describe('MobileRelayBackgroundGraceTimer', () => {
 
   it('detects expiry on resume when the background timer was suspended', () => {
     let now = 1_000
+
     const timer = new MobileRelayBackgroundGraceTimer(
       {
         now: () => now,
@@ -46,11 +48,13 @@ describe('MobileRelayBackgroundGraceTimer', () => {
   it('rejects a stale expiry callback after foreground cancellation', () => {
     let callback: (() => void) | null = null
     const onExpired = vi.fn()
+
     const timer = new MobileRelayBackgroundGraceTimer(
       {
         now: () => 1_000,
         setTimer: vi.fn((next) => {
           callback = next
+
           return 1 as unknown as ReturnType<typeof setTimeout>
         }),
         clearTimer: vi.fn()

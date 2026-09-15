@@ -10,6 +10,7 @@ async function flushAsyncTicks(count = 3): Promise<void> {
 describe('createPtySizeReassertion', () => {
   it('forwards the measured terminal size when the applied PTY size drifted', async () => {
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -29,6 +30,7 @@ describe('createPtySizeReassertion', () => {
 
   it('does not forward when the applied PTY size already matches xterm', async () => {
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -48,6 +50,7 @@ describe('createPtySizeReassertion', () => {
 
   it('fits and reads xterm dimensions before reading the applied PTY size', async () => {
     const calls: string[] = []
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -59,10 +62,12 @@ describe('createPtySizeReassertion', () => {
       }),
       getTerminalDimensions: vi.fn(() => {
         calls.push('measure')
+
         return { cols: 82, rows: 30 }
       }),
       getAppliedSize: vi.fn(async () => {
         calls.push('read-applied')
+
         return { cols: 82, rows: 30 }
       }),
       forwardResize: vi.fn()
@@ -77,6 +82,7 @@ describe('createPtySizeReassertion', () => {
 
   it('does not duplicate the resize when fit already triggered xterm onResize', async () => {
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -101,6 +107,7 @@ describe('createPtySizeReassertion', () => {
   it('can verify current dimensions without fitting again', async () => {
     const fitAndRun = vi.fn((continuation: () => void) => continuation())
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -121,6 +128,7 @@ describe('createPtySizeReassertion', () => {
 
   it('skips remote and suppressed PTYs', async () => {
     const getAppliedSize = vi.fn(async () => ({ cols: 120, rows: 30 }))
+
     const remote = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'remote:terminal-1',
@@ -131,6 +139,7 @@ describe('createPtySizeReassertion', () => {
       getAppliedSize,
       forwardResize: vi.fn()
     })
+
     const suppressed = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -151,6 +160,7 @@ describe('createPtySizeReassertion', () => {
 
   it('coalesces overlapping requests and runs again after an in-flight check resolves', async () => {
     let resolveFirst: (value: { cols: number; rows: number }) => void = () => {}
+
     const getAppliedSize = vi
       .fn<() => Promise<{ cols: number; rows: number } | null>>()
       .mockImplementationOnce(
@@ -160,7 +170,9 @@ describe('createPtySizeReassertion', () => {
           })
       )
       .mockResolvedValue({ cols: 120, rows: 30 })
+
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -188,6 +200,7 @@ describe('createPtySizeReassertion', () => {
   it('does not forward a stale target when a newer request is pending', async () => {
     let targetCols = 100
     let resolveFirst: (value: { cols: number; rows: number }) => void = () => {}
+
     const getAppliedSize = vi
       .fn<() => Promise<{ cols: number; rows: number } | null>>()
       .mockImplementationOnce(
@@ -197,7 +210,9 @@ describe('createPtySizeReassertion', () => {
           })
       )
       .mockResolvedValue({ cols: 90, rows: 40 })
+
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -227,6 +242,7 @@ describe('createPtySizeReassertion', () => {
     // pre-reveal grid.
     let dims = { cols: 80, rows: 24 }
     let resolveRead: (value: { cols: number; rows: number }) => void = () => {}
+
     const getAppliedSize = vi
       .fn<() => Promise<{ cols: number; rows: number } | null>>()
       .mockImplementationOnce(
@@ -236,7 +252,9 @@ describe('createPtySizeReassertion', () => {
           })
       )
       .mockResolvedValue({ cols: 145, rows: 78 })
+
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -260,6 +278,7 @@ describe('createPtySizeReassertion', () => {
   it('re-runs against the fresh grid when the PTY kept the old size across a mid-flight refit', async () => {
     let dims = { cols: 80, rows: 24 }
     let resolveRead: (value: { cols: number; rows: number }) => void = () => {}
+
     const getAppliedSize = vi
       .fn<() => Promise<{ cols: number; rows: number } | null>>()
       .mockImplementationOnce(
@@ -269,7 +288,9 @@ describe('createPtySizeReassertion', () => {
           })
       )
       .mockResolvedValue({ cols: 80, rows: 24 })
+
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -301,15 +322,20 @@ describe('createPtySizeReassertion', () => {
       { cols: 80, rows: 24 },
       { cols: 100, rows: 40 }
     ]
+
     let readCount = 0
     let dims = grids[0]
+
     const getAppliedSize = vi.fn(async () => {
       readCount += 1
       // The grid moves during each of the first three flights, then settles.
       dims = grids[Math.min(readCount, grids.length - 1)]
+
       return { cols: 100, rows: 40 }
     })
+
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -333,6 +359,7 @@ describe('createPtySizeReassertion', () => {
   it('does not forward a stale target when the readback fails after a mid-flight refit', async () => {
     let dims = { cols: 80, rows: 24 }
     let rejectRead: (reason: Error) => void = () => {}
+
     const getAppliedSize = vi
       .fn<() => Promise<{ cols: number; rows: number } | null>>()
       .mockImplementationOnce(
@@ -342,7 +369,9 @@ describe('createPtySizeReassertion', () => {
           })
       )
       .mockRejectedValue(new Error('unavailable'))
+
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',
@@ -366,6 +395,7 @@ describe('createPtySizeReassertion', () => {
 
   it('forwards once when applied-size readback fails', async () => {
     const forwardResize = vi.fn()
+
     const reassertion = createPtySizeReassertion({
       isDisposed: () => false,
       getPtyId: () => 'pty-1',

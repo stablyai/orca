@@ -99,6 +99,7 @@ export function resolveSmartGitHubCreateNames({
   if (resolutionKind === 'pr-start-point' && !nameIsAutoManaged && fallbackWorkspaceName) {
     return { workspaceName: fallbackWorkspaceName, displayName: undefined }
   }
+
   return { workspaceName: smartWorkspaceName, displayName: smartDisplayName }
 }
 
@@ -106,6 +107,7 @@ function getLinkedWorkItemSeedName(item: LinkedWorkItemSummary | null | undefine
   if (!item) {
     return ''
   }
+
   return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
 }
 
@@ -123,6 +125,7 @@ export function getInitialAutoManagedWorkspaceName({
   // Why: a prefilled name counts as user input unless it exactly matches the linked-item seed Orca generated.
   const candidateName = draftName ?? initialName
   const seedName = getLinkedWorkItemSeedName(draftLinkedWorkItem ?? initialLinkedWorkItem)
+
   return candidateName && seedName && candidateName === seedName ? candidateName : ''
 }
 
@@ -166,8 +169,10 @@ export function getInitialGitHubPrStartPointSelection({
   if (!item || !repoId) {
     return null
   }
+
   const itemIdentity = resolveGitHubWorkItemIdentity(item)
   const linkedIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
+
   if (
     itemIdentity.type !== 'pr' ||
     linkedIdentity?.type !== 'pr' ||
@@ -175,6 +180,7 @@ export function getInitialGitHubPrStartPointSelection({
   ) {
     return null
   }
+
   return {
     repoId,
     item: { ...item, type: itemIdentity.type, number: itemIdentity.number }
@@ -215,6 +221,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const builtCard = buildComposerCardProps(model)
   const cardProps: ComposerCardProps = builtCard.cardProps
   const { createDisabled } = builtCard
+
   return {
     cardProps,
     composerRef: model.composerRef,

@@ -57,11 +57,13 @@ vi.mock('./useEditorPanelExternalContentEvents', () => ({
 }))
 
 vi.mock('./useEditorPanelFileLoadRetry', () => ({ useEditorPanelFileLoadRetry: vi.fn() }))
+
 vi.mock('./useLocalLogTail', () => ({ useLocalLogTail: vi.fn() }))
 
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 
 const authorizeExternalPath = vi.fn()
+
 let latestFileContents: Record<string, FileContent> = {}
 
 function createOpenFile(overrides: Partial<OpenFile>): OpenFile {
@@ -85,6 +87,7 @@ function HookProbe({ activeFile }: { activeFile: OpenFile }): null {
     gitStatusEntries: undefined,
     editorViewMode: {}
   }).fileContents
+
   return null
 }
 
@@ -119,6 +122,7 @@ describe('remote sibling editor content routing', () => {
 
   it('keeps a client-local live-tail log on the client', async () => {
     const logPath = '/Users/me/.codex/sessions/session.jsonl'
+
     const activeFile = createOpenFile({
       id: logPath,
       filePath: logPath,
@@ -127,6 +131,7 @@ describe('remote sibling editor content routing', () => {
       readOnly: true,
       liveTail: true
     })
+
     mocks.readRuntimeFileContent.mockResolvedValue({ content: 'log line', isBinary: false })
 
     await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
@@ -146,11 +151,13 @@ describe('remote sibling editor content routing', () => {
       relativePath: '/work/repo-b/docs/readme.md',
       worktreeId: 'repo-a::/work/repo-a'
     })
+
     const route = {
       worktreeId: 'repo-b::/work/repo-b',
       relativePath: 'docs/readme.md',
       executionHostId: 'runtime:runtime-1'
     } as const
+
     mocks.findWorkspaceFileRoute.mockReturnValue(route)
 
     await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
@@ -173,6 +180,7 @@ describe('remote sibling editor content routing', () => {
       relativePath: '/work/repo-b/docs/readme.md',
       worktreeId: 'repo-a::/work/repo-a'
     })
+
     mocks.findWorkspaceFileRoute.mockReturnValue({
       worktreeId: 'repo-b::/work/repo-b',
       relativePath: 'docs/readme.md',

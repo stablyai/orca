@@ -40,11 +40,16 @@ function snapshot(cards: DashboardCard[]): DashboardSnapshot {
 }
 
 let apply: (next: DashboardSnapshot) => void
+
 let applyStatus: (next: AgentStatusIpcPayload) => void
+
 let applyClear: (next: AgentStatusClearIpcPayload) => void
+
 const requestSnapshot = vi.fn(async () => {})
+
 const startViewTransition = vi.fn((cb: () => void) => {
   cb()
+
   return {
     finished: Promise.resolve(),
     ready: Promise.resolve(),
@@ -59,6 +64,7 @@ function openTerminalDialog(): HTMLElement {
   el.setAttribute('role', 'dialog')
   el.setAttribute('data-state', 'open')
   document.body.appendChild(el)
+
   return el
 }
 
@@ -68,6 +74,7 @@ describe('useDashboardSnapshot', () => {
       dashboard: {
         onSnapshot: (cb: (next: DashboardSnapshot) => void) => {
           apply = cb
+
           return () => {}
         },
         requestSnapshot
@@ -75,10 +82,12 @@ describe('useDashboardSnapshot', () => {
       agentStatus: {
         onSet: (cb: (next: AgentStatusIpcPayload) => void) => {
           applyStatus = cb
+
           return () => {}
         },
         onClear: (cb: (next: AgentStatusClearIpcPayload) => void) => {
           applyClear = cb
+
           return () => {}
         }
       }
@@ -122,6 +131,7 @@ describe('useDashboardSnapshot', () => {
     const icons = {
       r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
     }
+
     const { result } = renderHook(() => useDashboardSnapshot())
 
     act(() => apply({ ...snapshot([card({})]), repoIconsByRepoId: icons }))
@@ -136,6 +146,7 @@ describe('useDashboardSnapshot', () => {
     const first = {
       r1: { type: 'image' as const, src: 'data:image/png;base64,AAAA', source: 'upload' as const }
     }
+
     const second = { r1: { type: 'emoji' as const, emoji: '🦑' } }
     const { result } = renderHook(() => useDashboardSnapshot())
 
@@ -201,6 +212,7 @@ describe('useDashboardSnapshot', () => {
         })
         vi.advanceTimersByTime(40)
       }
+
       applyClear({ paneKey: 'pk' })
       vi.advanceTimersByTime(249)
     })
@@ -226,8 +238,10 @@ describe('useDashboardSnapshot', () => {
         receivedAt: 300 + index,
         stateStartedAt: 250 + index
       })
+
     act(() => {
       unknown(0)
+
       for (let index = 1; index <= 4; index += 1) {
         vi.advanceTimersByTime(200)
         unknown(index)

@@ -22,6 +22,7 @@ export function WorktreeJumpPaletteSurface({
 }): React.JSX.Element {
   const emptyState = getWorktreeJumpPaletteEmptyState(controller)
   const resultCount = getWorktreeJumpPaletteResultCount(controller)
+
   const paletteDialog = (
     <CommandDialog
       open={controller.visible}

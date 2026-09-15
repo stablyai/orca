@@ -36,6 +36,7 @@ const DEFAULTS_MISSING_EXIT_CODE = 1
 function throwawayDomain(): string {
   const domain = `com.stablyai.orca.defaults-domain-test.${randomUUID()}`
   domains.push(domain)
+
   return domain
 }
 
@@ -74,6 +75,7 @@ describe.skipIf(process.platform !== 'darwin')(
         } catch {
           // The domain may never have been created; nothing to clean up.
         }
+
         // Why the file too: `defaults delete` empties the domain but leaves its plist behind, so
         // without this every run litters the developer's ~/Library/Preferences.
         rmSync(join(homedir(), 'Library', 'Preferences', `${domain}.plist`), { force: true })
@@ -124,6 +126,7 @@ describe.skipIf(process.platform !== 'darwin')(
           args: ['read'],
           stdio: ['ignore', 'ignore', 'ignore']
         })
+
       expect(spawnFailure).toThrow()
       expect(interpretDefaultsRead(spawnFailure)).toBe('unknown')
 
@@ -132,6 +135,7 @@ describe.skipIf(process.platform !== 'darwin')(
         args: ['read', throwawayDomain(), PRESS_AND_HOLD_KEY],
         stdio: ['ignore', 'ignore', 'ignore']
       })
+
       // The one exit code the whole design reads as unset; every other outcome is 'unknown'.
       expect(missingKey.code).toBe(DEFAULTS_MISSING_EXIT_CODE)
       expect(missingKey.timedOut).toBe(false)
@@ -145,6 +149,7 @@ describe.skipIf(process.platform !== 'darwin')(
       const readOnly = join(mkdtempSync(join(tmpdir(), 'orca-press-hold-ro-')), 'locked')
       mkdirSync(readOnly)
       chmodSync(readOnly, 0o500)
+
       try {
         expect(writeDomainPressAndHoldPreference(join(readOnly, 'domain'), false)).toBe(false)
       } finally {
@@ -159,6 +164,7 @@ describe.skipIf(process.platform !== 'darwin')(
       execFileSync('/usr/bin/defaults', ['delete', domain, PRESS_AND_HOLD_KEY], { stdio: 'ignore' })
 
       expect(readDomainPressAndHoldPreference(domain)).toBe('unset')
+
       // A launch that already decided must not rewrite it, which is what makes the delete stick.
       const decided: PressAndHoldRecord = {
         version: 1,
@@ -166,6 +172,7 @@ describe.skipIf(process.platform !== 'darwin')(
         domain,
         decidedAt: '2026-01-01T00:00:00.000Z'
       }
+
       expect(ensureMacPressAndHoldDefault(hostFor(domain, decided))).toBe('already-decided')
       expect(readDomainPressAndHoldPreference(domain)).toBe('unset')
     })

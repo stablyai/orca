@@ -39,42 +39,50 @@ export function useMobileHomeData() {
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
   const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, TaskProvider[]>>({})
+
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
+
   const onboardingCheckedRef = useRef(false)
   const hydratedRef = useRef(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
+
   const connections = useMobileHomeHostConnections(hosts, hostCatalog, {
     setStats: setStatsByHost,
     setWorktreeInfo,
     setAccounts: setAccountsByHost,
     setTaskProviders: setTaskProvidersByHost
   })
+
   const allClientsRef = useRef(connections.allClients)
 
   useEffect(() => {
     if (hydratedRef.current) {
       return
     }
+
     hydratedRef.current = true
     let cancelled = false
     void loadHomeSnapshot().then((snapshot) => {
       if (cancelled || !snapshot) {
         return
       }
+
       setWorktreeInfo((previous) =>
         Object.keys(previous).length > 0 ? previous : snapshot.worktreeInfo
       )
       setAccountsByHost((previous) =>
         Object.keys(previous).length > 0 ? previous : snapshot.accountsByHost
       )
+
       for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
         if (info.lastActiveWorktree) {
           setCachedWorktrees(hostId, [info.lastActiveWorktree])
         }
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -97,12 +105,16 @@ export function useMobileHomeData() {
         if (stale) {
           return
         }
+
         setHostCatalog(catalog)
+
         if (catalog.length === 0 || onboardingCheckedRef.current) {
           return
         }
+
         onboardingCheckedRef.current = true
         const steps = await loadMobileOnboardingSteps()
+
         if (!stale && steps.length > 0) {
           router.replace(mobileOnboardingDestination(steps))
         }
@@ -112,6 +124,7 @@ export function useMobileHomeData() {
           setLastVisited(readLastVisitedWorktreeRecord(raw))
         }
       })
+
       for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
           fetchMobileHomeStats(entry.client, entry.hostId, setStatsByHost, () => stale)
@@ -125,6 +138,7 @@ export function useMobileHomeData() {
           )
         }
       }
+
       return () => {
         stale = true
       }
@@ -135,6 +149,7 @@ export function useMobileHomeData() {
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
+
   const resumeCard = useMemo(
     () =>
       selectHomeResumeCard({
@@ -146,10 +161,13 @@ export function useMobileHomeData() {
       }),
     [sortedHosts, connections.hostStates, worktreeInfo, lastVisited]
   )
+
   const accountsHosts = useMemo(() => {
     const items: { host: HostProfile; snapshot: AccountsSnapshot }[] = []
+
     for (const host of sortedHosts) {
       const snapshot = accountsByHost[host.id]
+
       if (
         connections.hostStates[host.id] === 'connected' &&
         snapshot &&
@@ -158,16 +176,21 @@ export function useMobileHomeData() {
         items.push({ host, snapshot })
       }
     }
+
     return items
   }, [sortedHosts, connections.hostStates, accountsByHost])
+
   const connectedHosts = useMemo(
     () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
     [sortedHosts, connections.hostStates]
   )
+
   const primaryHost = connectedHosts[0] ?? null
+
   const primaryTaskProviders = primaryHost
     ? (taskProvidersByHost[primaryHost.id] ?? ['github'])
     : []
+
   const hostConnectionProjection = useMemo(
     () => projectHomeHostConnections(connections.allClients),
     [connections.allClients]

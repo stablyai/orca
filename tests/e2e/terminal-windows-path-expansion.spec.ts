@@ -6,14 +6,18 @@ import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { execInTerminal, waitForActivePanePtyId, waitForTerminalOutput } from './helpers/terminal'
 
 const probeRoot = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-path-expansion-'))
+
 const probeBin = path.join(probeRoot, 'bin')
+
 mkdirSync(probeBin)
+
 writeFileSync(
   path.join(probeBin, 'orca-path-expansion-probe.cmd'),
   '@echo off\r\necho ORCA_PATH_EXPANSION_OK\r\n'
 )
 
 const test = base
+
 test.use({
   launchEnv: {
     ORCA_E2E_PATH_ROOT: probeRoot,

@@ -4,10 +4,12 @@ import { SshPtyModelAdmission } from './ssh-pty-model-admission'
 function deferred() {
   let resolve!: () => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<void>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -70,6 +72,7 @@ describe('SshPtyModelAdmission', () => {
     const failedCompletion = deferred()
     const siblingCompletion = deferred()
     const failed = accept(admission, failedCompletion.promise)
+
     const sibling = admission.accept({ ptyId: 'pty-2', providerGeneration: 7 }, 'data', 4, () => ({
       sequence: 4,
       completion: siblingCompletion.promise
@@ -93,6 +96,7 @@ describe('SshPtyModelAdmission', () => {
 
   it('resumes every paused provider generation exactly once on disposal', async () => {
     const resumeProvider = vi.fn()
+
     const admission = new SshPtyModelAdmission({
       perPtyHighSourceUnits: 4,
       perPtyHighBytes: 1024,
@@ -103,8 +107,10 @@ describe('SshPtyModelAdmission', () => {
       pauseProvider: () => true,
       resumeProvider
     })
+
     const running = accept(admission, new Promise<void>(() => {}))
     const pressured = accept(admission, Promise.resolve())
+
     const rejected = admission.accept({ ptyId: 'pty-2', providerGeneration: 8 }, 'data', 4, () => ({
       sequence: 4,
       completion: Promise.resolve()
@@ -134,11 +140,13 @@ describe('SshPtyModelAdmission', () => {
 
       admission.closeGeneration(7, 'provider-closed')
       await observed
+
       if (settle === 'resolve') {
         completion.resolve()
       } else {
         completion.reject(new Error('late emulator failure'))
       }
+
       await Promise.resolve()
 
       expect(onResolve).not.toHaveBeenCalled()

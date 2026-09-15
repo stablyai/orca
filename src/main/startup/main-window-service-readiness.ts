@@ -38,5 +38,6 @@ export function requireMainWindowServices<T extends Record<MainWindowServiceKey,
       throw new Error(message)
     }
   }
+
   return services as RequiredServices<T>
 }

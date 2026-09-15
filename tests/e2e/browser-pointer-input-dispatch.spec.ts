@@ -73,12 +73,16 @@ async function startProbeServer(): Promise<{ url: string; close: () => Promise<v
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     response.end(PAGE_HTML)
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
+
   if (address === null || typeof address === 'string') {
     throw new Error('Probe server did not bind a TCP port')
   }
+
   const url = `http://127.0.0.1:${address.port}/`
+
   return {
     url,
     close: () =>
@@ -95,13 +99,16 @@ async function createBrowserTab(page: Page, worktreeId: string, url: string): Pr
         title: 'Pointer input probe',
         activate: true
       })
+
       return created?.activePageId ?? null
     },
     { targetWorktreeId: worktreeId, targetUrl: url }
   )
+
   if (!pageId) {
     throw new Error('Failed to create the probe browser page')
   }
+
   return pageId
 }
 
@@ -128,11 +135,13 @@ async function expectOk(
   expect(response, `${method} failed: ${JSON.stringify(response.error)}`).toMatchObject({
     ok: true
   })
+
   return response.result
 }
 
 async function evaluateInPage(page: Page, pageId: string, expression: string): Promise<unknown> {
   const result = await expectOk(page, 'browser.eval', { page: pageId, expression })
+
   return readProperty(result, 'result')
 }
 
@@ -152,17 +161,21 @@ async function driveRpcSequence(page: Page, pageId: string, steps: RpcStep[]): P
           method,
           params: { page: targetPage, ...params }
         })
+
         if (response === null || typeof response !== 'object' || !('ok' in response)) {
           return `${method} returned no response`
         }
+
         if (response.ok !== true) {
           return `${method} failed: ${JSON.stringify(response)}`
         }
       }
+
       return null
     },
     { targetPage: pageId, sequence: steps }
   )
+
   if (failure !== null) {
     throw new Error(failure)
   }
@@ -183,6 +196,7 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
   // a loaded CI runner needs more than the default budget even when each one is fast.
   test.setTimeout(240_000)
   const server = await startProbeServer()
+
   try {
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -205,22 +219,28 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
           method,
           params: { page: targetPage, ...params }
         })
+
         if (response === null || typeof response !== 'object' || !('ok' in response)) {
           throw new Error(`${method} returned no response`)
         }
+
         if (response.ok !== true) {
           throw new Error(`${method} failed: ${JSON.stringify(response)}`)
         }
       }
+
       // Why: enough to amortize the renderer's ~16.6ms clock coarsening (<1.4ms error
       // against a floor of tens of ms) without spending a CI runner's whole test budget.
       const REPEATS = 12
+
       const meanMs = async (run: (index: number) => Promise<void>): Promise<number> => {
         await run(0)
         const started = performance.now()
+
         for (let i = 0; i < REPEATS; i += 1) {
           await run(i)
         }
+
         return (performance.now() - started) / REPEATS
       }
 
@@ -238,6 +258,7 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
         })
       }
     }, pageId)
+
     const latencyReport = JSON.stringify(latency)
     console.log(`POINTER_LATENCY ${latencyReport}`)
     // Why: Playwright does not surface a passing test's stdout in the CI job log, so the
@@ -268,6 +289,7 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
         )
       )
     )
+
     const pressGapMs = Number(pressTimes[1]) - Number(pressTimes[0])
     const cadenceReport = `${latencyReport} clickPairMs=${clickPairMs} pressGapMs=${pressGapMs}`
     console.log(`POINTER_CADENCE ${cadenceReport}`)
@@ -280,9 +302,12 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
         'JSON.stringify(window.__events.filter((e) => e.type === "click" || e.type === "dblclick"))'
       )
     )
+
     const parsedClicks: unknown[] = JSON.parse(clickEvents)
+
     const eventsOfType = (type: string): unknown[] =>
       parsedClicks.filter((event) => readProperty(event, 'type') === type)
+
     console.log(`POINTER_CLICKS ${clickEvents}`)
     expect(eventsOfType('click'), cadenceReport).toHaveLength(2)
 

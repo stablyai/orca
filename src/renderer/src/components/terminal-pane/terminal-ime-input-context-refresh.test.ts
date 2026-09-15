@@ -14,6 +14,7 @@ describe('refreshTerminalImeInputContext', () => {
     const helper = document.createElement('textarea')
     helper.className = 'xterm-helper-textarea'
     document.body.appendChild(helper)
+
     return helper
   }
 
@@ -37,6 +38,7 @@ describe('refreshTerminalImeInputContext', () => {
     for (const run of scheduled) {
       run()
     }
+
     expect(focus).toHaveBeenCalledOnce()
     expect(document.activeElement).toBe(helper)
   })
@@ -73,9 +75,11 @@ describe('refreshTerminalImeInputContext', () => {
     })
 
     outside.focus()
+
     for (const run of scheduled) {
       run()
     }
+
     expect(focus).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(outside)
   })
@@ -95,9 +99,11 @@ describe('refreshTerminalImeInputContext', () => {
     })
 
     outside.focus()
+
     for (const run of scheduled) {
       run()
     }
+
     expect(onRefocusSkipped).toHaveBeenCalledWith(outside)
   })
 
@@ -113,6 +119,7 @@ describe('refreshTerminalImeInputContext', () => {
       scheduleRefocus: (callback) => scheduled.push(callback)
     })
     vi.spyOn(helper, 'focus').mockImplementation(() => undefined)
+
     for (const run of scheduled) {
       run()
     }

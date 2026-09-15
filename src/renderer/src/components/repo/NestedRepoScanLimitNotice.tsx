@@ -8,14 +8,17 @@ function formatTimeout(timeoutMs: number): string {
   if (timeoutMs >= 1000 && timeoutMs % 1000 === 0) {
     return `${timeoutMs / 1000} seconds`
   }
+
   return `${timeoutMs} ms`
 }
 
 export function nestedRepoScanLimitText(scan: NestedRepoScanResult): string {
   const automaticStops = [`${scan.maxDepth} folder levels`, `${scan.maxRepos} repositories`]
+
   if (scan.timeoutMs !== null) {
     automaticStops.push(formatTimeout(scan.timeoutMs))
   }
+
   return `Scan stops after ${automaticStops.join(' or ')}. You can stop scanning early and import repositories found so far.`
 }
 

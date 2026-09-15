@@ -27,6 +27,7 @@ describe('durable checkpoint ownership seeding without disk history', () => {
       restoreInfo: null,
       pendingRecords: [{ kind: 'output', data: 'plain shell prompt\r\n' }]
     })
+
     expect(durable.terminalOwner).toBe('shell')
   })
 
@@ -36,6 +37,7 @@ describe('durable checkpoint ownership seeding without disk history', () => {
       restoreInfo: null,
       pendingRecords: [{ kind: 'output', data: '\x1b[?1049hLIVE-TUI' }]
     })
+
     expect(durable.terminalOwner).toBeUndefined()
   })
 })

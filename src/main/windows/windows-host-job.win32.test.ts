@@ -24,6 +24,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     // An inaccessible process is still alive; only a missing pid proves exit.
@@ -34,12 +35,15 @@ function isAlive(pid: number): boolean {
 // Job-object teardown is external to fake timers; poll the real process table to a deadline.
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (!isAlive(pid)) {
       return true
     }
+
     await sleep(50)
   }
+
   return !isAlive(pid)
 }
 
@@ -96,11 +100,13 @@ describeOnWindows('host job reaps the tree when the host dies', () => {
     // Force-kill only the host: no tree kill, nothing given a chance to unwind.
     // This is the daemon-crash shape.
     process.kill(host.pid!, 'SIGKILL')
+
     try {
       const [shellExited, grandchildExited] = await Promise.all([
         waitForProcessExit(shellPid, 15_000),
         waitForProcessExit(grandchildPid, 15_000)
       ])
+
       expect(shellExited).toBe(true)
       expect(grandchildExited).toBe(true)
     } finally {

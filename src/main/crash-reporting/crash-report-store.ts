@@ -14,7 +14,9 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_REPORTS = 5
+
 const RELATED_CRASH_WINDOW_MS = 5_000
+
 const WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS = [50, 100, 150, 200, 250]
 
 type CrashReportFile = {
@@ -25,11 +27,14 @@ function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRe
   if (anchor.id === candidate.id || candidate.status !== 'pending') {
     return false
   }
+
   const anchorTime = Date.parse(anchor.createdAt)
   const candidateTime = Date.parse(candidate.createdAt)
+
   if (!Number.isFinite(anchorTime) || !Number.isFinite(candidateTime)) {
     return false
   }
+
   return (
     Math.abs(anchorTime - candidateTime) <= RELATED_CRASH_WINDOW_MS &&
     anchor.reason === candidate.reason &&
@@ -41,6 +46,7 @@ function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRe
 
 function isRetryableWindowsFileOperationError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code
+
   return code === 'EPERM' || code === 'EACCES' || code === 'EBUSY'
 }
 
@@ -53,6 +59,7 @@ async function runCrashReportFileOperationWithWindowsRecovery<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   let repairedAcl = false
+
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await operation()
@@ -64,8 +71,10 @@ async function runCrashReportFileOperationWithWindowsRecovery<T>(
       ) {
         throw error
       }
+
       if (!repairedAcl && isPermissionError(error)) {
         repairedAcl = true
+
         try {
           // Why: Chromium can reset userData ACLs before startup capture or
           // recovery, so both the crash write and next prompt must repair it.
@@ -74,6 +83,7 @@ async function runCrashReportFileOperationWithWindowsRecovery<T>(
           // The bounded retry below still handles transient file locks.
         }
       }
+
       await wait(WINDOWS_FILE_OPERATION_RETRY_DELAYS_MS[attempt])
     }
   }
@@ -100,6 +110,7 @@ export class CrashReportStore {
           ({ origin: _origin, ...breadcrumb }) => breadcrumb
         )
       }
+
       return {
         reports: [report, ...reports].slice(0, MAX_REPORTS),
         result: report
@@ -118,22 +129,27 @@ export class CrashReportStore {
   ): Promise<CrashReportRecord | null> {
     return this.withWrite(async (reports) => {
       let result: CrashReportRecord | null = null
+
       const nextReports = reports.map((report) => {
         if (report.id !== id) {
           return report
         }
+
         result = {
           ...report,
           details: { ...report.details, ...sanitizeCrashReportDetails(extraDetails) }
         }
+
         return result
       })
+
       return { reports: nextReports, result }
     })
   }
 
   async getLatestPending(): Promise<CrashReportRecord | null> {
     const reports = await this.readReports()
+
     return reports.find((report) => report.status === 'pending') ?? null
   }
 
@@ -156,11 +172,13 @@ export class CrashReportStore {
   async formatDiagnosticText(id: string, notes?: string): Promise<string | null> {
     const reports = await this.readReports()
     const report = reports.find((candidate) => candidate.id === id)
+
     return report ? formatCrashReportText(report, notes) : null
   }
 
   async getById(id: string): Promise<CrashReportRecord | null> {
     const reports = await this.readReports()
+
     return reports.find((report) => report.id === id) ?? null
   }
 
@@ -179,6 +197,7 @@ export class CrashReportStore {
     return this.withWrite(async (reports) => {
       let result: CrashReportRecord | null = null
       const anchor = reports.find((report) => report.id === id)
+
       const nextReports = reports.map((report) => {
         if (report.id !== id) {
           // Why: one Electron crash can emit GPU/Network/renderer exits in a
@@ -187,15 +206,21 @@ export class CrashReportStore {
           if (anchor && anchor.status === from && isRelatedCrashEvent(anchor, report)) {
             return { ...report, status: 'dismissed' as const }
           }
+
           return report
         }
+
         if (report.status !== from) {
           result = report
+
           return report
         }
+
         result = { ...report, status }
+
         return result
       })
+
       return { reports: nextReports, result }
     })
   }
@@ -209,12 +234,15 @@ export class CrashReportStore {
       const reports = await this.readReportsFromDisk()
       const { reports: nextReports, result } = await mutate(reports)
       await this.writeReports(nextReports)
+
       return result
     })
+
     this.writeChain = run.then(
       () => undefined,
       () => undefined
     )
+
     return run
   }
 
@@ -222,6 +250,7 @@ export class CrashReportStore {
     // Why: renderer recovery can query the one-shot startup prompt while the
     // crash write is still in flight. Wait so a successful capture is visible.
     await this.writeChain
+
     return this.readReportsFromDisk()
   }
 
@@ -231,12 +260,15 @@ export class CrashReportStore {
         path.dirname(this.filePath),
         () => fs.readFile(this.filePath, 'utf8')
       )
+
       const parsed = JSON.parse(raw) as Partial<CrashReportFile>
+
       return Array.isArray(parsed.reports) ? parsed.reports.slice(0, MAX_REPORTS) : []
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.warn('[crash-reporting] Failed to read crash reports:', error)
       }
+
       return []
     }
   }
@@ -244,6 +276,7 @@ export class CrashReportStore {
   private async writeReports(reports: CrashReportRecord[]): Promise<void> {
     const directory = path.dirname(this.filePath)
     const tmpPath = `${this.filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
+
     try {
       await runCrashReportFileOperationWithWindowsRecovery(directory, async () => {
         await fs.mkdir(directory, { recursive: true })

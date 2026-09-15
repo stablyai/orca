@@ -35,12 +35,14 @@ it('publishes idle provider reloads only when the actual command catalog changes
     }
   })
   publish.mockClear()
+
   const message = {
     type: 'system',
     subtype: 'commands_changed',
     session_id: PROVIDER_SESSION_ID,
     commands: [{ name: 'new-skill', description: '', argumentHint: '' }]
   }
+
   claude.connections[0].handlers.onMessage?.(message)
   expect(adapter.readCommands(identityFor().sessionId)).toEqual([
     { name: 'new-skill', kind: 'command', kindUnspecified: true }
@@ -55,17 +57,22 @@ it('delivers catalog changes through existing frames without resending them on o
   const journals = createTrackedJournalOpener()
   const events: AgentSessionSubscribeEvent[] = []
   let state = EMPTY_STRUCTURED_AGENT_SESSION
+
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
     events.push(event)
     state = reduceStructuredAgentSession(state, { type: 'event', event })
   })
+
   try {
     const journal = await journals.open({ identity: identityFor(), journalDir: root })
     const sessionId = identityFor().sessionId
+
     let commands: AgentSessionSlashCommand[] | undefined = [
       { name: 'loaded', kind: 'command', kindUnspecified: true }
     ]
+
     const subscribers = new AgentSessionSubscribers({ readCommands: () => commands })
+
     const close = subscribers.open({
       id: 'one',
       sessionId,
@@ -73,7 +80,9 @@ it('delivers catalog changes through existing frames without resending them on o
       fence: 7,
       emit: coalescer.push
     })
+
     expect(state.commands).toEqual(commands)
+
     for (let i = 0; i < 25; i++) {
       subscribers.handoff(sessionId, 7, {
         owner: 'none',
@@ -83,6 +92,7 @@ it('delivers catalog changes through existing frames without resending them on o
         operationId: null
       })
     }
+
     coalescer.flush()
     expect(events.filter((event) => 'commands' in event)).toHaveLength(1)
     commands = []

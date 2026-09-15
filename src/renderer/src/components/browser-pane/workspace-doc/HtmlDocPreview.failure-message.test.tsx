@@ -16,7 +16,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DocPreviewFailure } from '../../../../../shared/doc-preview-scheme'
 
 const GRANT_ID = 'a'.repeat(32)
+
 const REMINTED_GRANT_ID = 'c'.repeat(32)
+
 const ENTRY_RELATIVE_PATH = 'doc.html'
 
 const grantRuntime = vi.hoisted(() => ({
@@ -41,6 +43,7 @@ vi.mock('@/lib/doc-preview-grants', () => ({
     grantRuntime.mints += 1
     // Why a fresh id per mint: a re-mint after a reconnect must bind the guest to the new grant.
     const grantId = grantRuntime.mints === 1 ? GRANT_ID : REMINTED_GRANT_ID
+
     return Promise.resolve({ grantId, url: `orca-preview://${grantId}/${ENTRY_RELATIVE_PATH}` })
   },
   releaseDocPreviewGrant: (previewId: string) => {
@@ -124,12 +127,15 @@ describe('HtmlDocPreview failure messages', () => {
       docPreview: {
         authorizeDirectory: (grantId: string, relativePath: string) => {
           grantRuntime.authorizations.push({ grantId, relativePath })
+
           return Promise.resolve(true)
         },
         onLoadFailure: (callback: (payload: DocPreviewFailure) => void) => {
           failureListeners.push(callback)
+
           return () => {
             const index = failureListeners.indexOf(callback)
+
             if (index !== -1) {
               failureListeners.splice(index, 1)
             }
@@ -149,6 +155,7 @@ describe('HtmlDocPreview failure messages', () => {
       act(() => root.unmount())
       mounted = false
     }
+
     container.remove()
   })
 
@@ -277,6 +284,7 @@ describe('HtmlDocPreview failure messages', () => {
         reason: 'authorization-required'
       })
     })
+
     const allowButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Allow folder'
     )
@@ -316,9 +324,11 @@ describe('HtmlDocPreview failure messages', () => {
     })
 
     expect(container.textContent).toContain('This preview wants to read files in assets and data.')
+
     const allowButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Allow 2 folders'
     )
+
     expect(allowButton).toBeDefined()
 
     await act(async () => {
@@ -349,9 +359,11 @@ describe('HtmlDocPreview failure messages', () => {
         reason: 'authorization-required'
       })
     })
+
     const dismissButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Dismiss'
     )
+
     await act(async () => {
       dismissButton?.click()
       emitFailure({
@@ -375,9 +387,11 @@ describe('HtmlDocPreview failure messages', () => {
         reason: 'authorization-required'
       })
     })
+
     const dismissButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Dismiss'
     )
+
     await act(async () => {
       dismissButton?.click()
       emitFailure({

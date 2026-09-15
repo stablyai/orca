@@ -25,6 +25,7 @@ export function syncPRChecksStatus(
   hasRepoOwner = false
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
+
   if (!normalized) {
     return null
   }
@@ -38,20 +39,25 @@ export function syncPRChecksStatus(
     executionHostId,
     hasRepoOwner
   )
+
   const prEntry = state.prCache[prCacheKey]
+
   if (!prEntry?.data) {
     return null
   }
+
   // Why: fork PR rediscovery can retarget the branch cache while an older
   // checks request is still in flight; only the matching PR repo may update it.
   if (prRepo !== undefined && !samePRRepo(prEntry.data.prRepo, prRepo)) {
     return null
   }
+
   if (headSha && prEntry.data.headSha && prEntry.data.headSha !== headSha) {
     return null
   }
 
   const nextStatus = deriveCheckStatusFromChecks(checks)
+
   if (prEntry.data.checksStatus === nextStatus) {
     return null
   }

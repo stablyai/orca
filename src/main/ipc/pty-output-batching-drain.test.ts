@@ -4,45 +4,61 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -53,6 +69,7 @@ describe('registerPtyHandlers', () => {
 
   it('accepts source-classified daemon startup spans before spawn resolves', async () => {
     vi.useFakeTimers()
+
     type ProviderData = {
       id: string
       data: string
@@ -60,9 +77,11 @@ describe('registerPtyHandlers', () => {
       transformed?: boolean
       seq?: number
     }
+
     let dataHandler: ((payload: ProviderData) => void) | null = null
     const write = vi.fn()
     const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+
     const spawn = vi.fn(async (options: { sessionId?: string; startupIngress?: unknown }) => {
       const id = options.sessionId ?? 'daemon-pty'
       dataHandler?.({
@@ -73,8 +92,10 @@ describe('registerPtyHandlers', () => {
         seq: query.length
       })
       dataHandler?.({ id, data: 'daemon-ready' })
+
       return { id }
     })
+
     setLocalPtyProvider({
       spawn,
       write,
@@ -92,6 +113,7 @@ describe('registerPtyHandlers', () => {
       revive: vi.fn(),
       onData: vi.fn((handler: (payload: ProviderData) => void) => {
         dataHandler = handler
+
         return () => {}
       }),
       onReplay: vi.fn(() => () => {}),
@@ -104,6 +126,7 @@ describe('registerPtyHandlers', () => {
 
     try {
       let seq = 0
+
       const runtime = {
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -112,7 +135,9 @@ describe('registerPtyHandlers', () => {
         ),
         registerPty: vi.fn()
       }
+
       registerPtyHandlers(mainWindow as never, runtime as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -147,6 +172,7 @@ describe('registerPtyHandlers', () => {
   })
   it('preserves source raw sequence metadata when a consumed query is batched', async () => {
     vi.useFakeTimers()
+
     type ProviderData = {
       id: string
       data: string
@@ -154,13 +180,17 @@ describe('registerPtyHandlers', () => {
       transformed?: boolean
       seq?: number
     }
+
     const providerEvents: {
       dataHandler?: (payload: ProviderData) => void
     } = {}
+
     const write = vi.fn()
+
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
     }))
+
     setLocalPtyProvider({
       spawn,
       write,
@@ -178,6 +208,7 @@ describe('registerPtyHandlers', () => {
       revive: vi.fn(),
       onData: vi.fn((handler: (payload: ProviderData) => void) => {
         providerEvents.dataHandler = handler
+
         return () => {}
       }),
       onReplay: vi.fn(() => () => {}),
@@ -188,11 +219,13 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     let seq = 0
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => null),
       onPtyData: vi.fn((_id: string, data: string, _at: number, rawLength = data.length) => {
         seq += rawLength
+
         return seq
       }),
       registerPty: vi.fn()
@@ -200,6 +233,7 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never, runtime as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -210,6 +244,7 @@ describe('registerPtyHandlers', () => {
           background: '#111111'
         }
       })) as { id: string }
+
       mainWindow.webContents.send.mockClear()
 
       providerEvents.dataHandler?.({ id: spawnResult.id, data: 'prefix' })
@@ -243,11 +278,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const writeListener = getPtyWriteListener()
 
       writeListener(mainWindowIpcEvent, {
@@ -300,11 +337,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const writeListener = getPtyWriteListener()
 
       writeListener(mainWindowIpcEvent, {
@@ -333,11 +372,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const writeListener = getPtyWriteListener()
 
       writeListener(mainWindowIpcEvent, {
@@ -347,6 +388,7 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
 
       const smallChunk = 'x'.repeat(512)
+
       for (let index = 0; index < 65; index++) {
         mockProc.emitData(smallChunk)
       }
@@ -369,11 +411,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const writeListener = getPtyWriteListener()
 
       writeListener(mainWindowIpcEvent, {
@@ -402,11 +446,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const writeListener = getPtyWriteListener()
       mainWindow.webContents.send.mockClear()
 

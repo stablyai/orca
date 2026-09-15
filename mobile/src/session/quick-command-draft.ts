@@ -44,6 +44,7 @@ export function quickCommandToDraft(command: TerminalQuickCommand): QuickCommand
     command.scope?.type === 'repo' && command.scope.repoId
       ? { type: 'repo', repoId: command.scope.repoId }
       : { type: 'global' }
+
   if (isAgentQuickCommand(command)) {
     return {
       id: command.id,
@@ -56,6 +57,7 @@ export function quickCommandToDraft(command: TerminalQuickCommand): QuickCommand
       scope
     }
   }
+
   return {
     id: command.id,
     label: command.label,
@@ -72,6 +74,7 @@ export function isQuickCommandDraftValid(draft: QuickCommandDraft): boolean {
   if (!draft.label.trim()) {
     return false
   }
+
   if (draft.action === 'agent-prompt') {
     return Boolean(
       draft.agent &&
@@ -79,6 +82,7 @@ export function isQuickCommandDraftValid(draft: QuickCommandDraft): boolean {
       draft.prompt.trim().length > 0
     )
   }
+
   return draft.command.trim().length > 0
 }
 
@@ -89,12 +93,15 @@ export function draftToQuickCommand(draft: QuickCommandDraft): TerminalQuickComm
   if (!isQuickCommandDraftValid(draft)) {
     return null
   }
+
   // Why: timestamps alone collide when desktop and mobile add commands in the
   // same millisecond, which would turn an atomic upsert into an overwrite.
   const id =
     draft.id ??
     `quick-command-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+
   const label = draft.label.trim().slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH)
+
   if (draft.action === 'agent-prompt' && draft.agent) {
     return {
       id,
@@ -105,6 +112,7 @@ export function draftToQuickCommand(draft: QuickCommandDraft): TerminalQuickComm
       scope: draft.scope
     }
   }
+
   return {
     id,
     label,

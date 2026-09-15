@@ -13,6 +13,7 @@ import { resolveRevParsePath } from './worktree-path-comparison'
 export type CanonicalRepoKeyOptions = { wslDistro?: string }
 
 const CACHE_MAX = 512
+
 const cache = new Map<string, string>()
 
 /**
@@ -25,19 +26,24 @@ export function readGitCommonDir(stdout: string, repoPath: string): string | und
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .findLast((line) => line.length > 0 && !line.startsWith('-'))
+
   return commonDir ? resolveRevParsePath(toWslExecutionSpace(repoPath), commonDir) : undefined
 }
 
 function remember(cacheKey: string, value: string): string {
   cache.delete(cacheKey)
   cache.set(cacheKey, value)
+
   while (cache.size > CACHE_MAX) {
     const oldest = cache.keys().next()
+
     if (oldest.done) {
       break
     }
+
     cache.delete(oldest.value)
   }
+
   return value
 }
 
@@ -49,21 +55,26 @@ export async function getCanonicalRepoKey(
   const runtimeKey = options.wslDistro ? `wsl:${options.wslDistro}` : 'local'
   const cacheKey = `${runtimeKey}::${repoPath}`
   const cached = cache.get(cacheKey)
+
   if (cached !== undefined) {
     return remember(cacheKey, cached)
   }
+
   try {
     const { stdout } = await gitExecFileAsync(
       ['rev-parse', '--path-format=absolute', '--git-common-dir'],
       { cwd: repoPath, ...options }
     )
+
     const commonDir = readGitCommonDir(stdout, repoPath)
+
     if (commonDir) {
       return remember(cacheKey, `${runtimeKey}::${commonDir}`)
     }
   } catch {
     // The caller path remains a safe serialization key when canonicalization fails.
   }
+
   return remember(cacheKey, cacheKey)
 }
 

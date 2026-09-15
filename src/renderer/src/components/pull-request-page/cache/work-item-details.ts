@@ -8,24 +8,31 @@ import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-det
 
 // SWR cache: reopening a drawer paints cached data instantly while a background refetch reconciles. See docs/gh-work-item-drawer-cache.md.
 const WORK_ITEM_DETAILS_CACHE_MAX = 50
+
 export const WORK_ITEM_DETAILS_FRESH_MS = 30_000
+
 export const WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE = 'Unable to load details for this GitHub item.'
+
 export type WorkItemDetailsCacheEntry = {
   details: GitHubWorkItemDetails | null
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null>
   error?: string
 }
+
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
 // Why: useSyncExternalStore snapshot stability relies on every cache write replacing the entry object identity (delete+set).
 const workItemDetailsCacheListeners = new Set<() => void>()
+
 export function subscribeWorkItemDetailsCache(listener: () => void): () => void {
   workItemDetailsCacheListeners.add(listener)
+
   return () => {
     workItemDetailsCacheListeners.delete(listener)
   }
 }
+
 function notifyWorkItemDetailsCache(): void {
   for (const listener of workItemDetailsCacheListeners) {
     listener()
@@ -44,6 +51,7 @@ export function getWorkItemDetailsCacheKey(args: {
   const keyParts = args.sourceCacheScope
     ? [args.repoId, args.sourceCacheScope, args.issueSourcePreference ?? 'auto', args.type]
     : [args.repoId, args.issueSourcePreference ?? 'auto', args.type]
+
   return [...keyParts, args.number].join('\0')
 }
 
@@ -51,13 +59,17 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
   // Why: re-insert moves the key to MRU; Map insertion order keeps the oldest key first when evicting.
   workItemDetailsCache.delete(key)
   workItemDetailsCache.set(key, entry)
+
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
     const oldest = workItemDetailsCache.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     workItemDetailsCache.delete(oldest)
   }
+
   notifyWorkItemDetailsCache()
 }
 
@@ -69,6 +81,7 @@ export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   // Why: bump generation so an in-flight fetch launched before this invalidation won't write its stale result back.
   workItemDetailsCacheGeneration.current += 1
   const existed = workItemDetailsCache.delete(key)
+
   if (existed) {
     notifyWorkItemDetailsCache()
   }
@@ -84,12 +97,14 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
   const suffix = `\0${args.type}\0${args.number}`
   const prefix = `${args.repoId ?? args.repoPath}\0`
   let removed = false
+
   for (const key of Array.from(workItemDetailsCache.keys())) {
     if (key.startsWith(prefix) && key.endsWith(suffix)) {
       workItemDetailsCache.delete(key)
       removed = true
     }
   }
+
   if (removed) {
     workItemDetailsCacheGeneration.current += 1
     notifyWorkItemDetailsCache()
@@ -103,33 +118,43 @@ export function patchCachedPRFileViewedState(
 ): GitHubPRFileViewedState | undefined {
   const prev = workItemDetailsCache.get(cacheKey)
   const files = prev?.details?.files
+
   if (!prev?.details || !files) {
     return undefined
   }
+
   let previousState: GitHubPRFileViewedState | undefined
+
   const nextFiles = files.map((file) => {
     if (file.path !== path) {
       return file
     }
+
     previousState = file.viewerViewedState ?? 'UNVIEWED'
+
     return { ...file, viewerViewedState }
   })
+
   if (previousState === undefined || previousState === viewerViewedState) {
     return previousState
   }
+
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
     details: { ...prev.details, files: nextFiles },
     error: undefined
   })
+
   return previousState
 }
 
 export function patchCachedPRChecks(cacheKey: string, checks: PRCheckDetail[]): void {
   const prev = workItemDetailsCache.get(cacheKey)
+
   if (!prev?.details) {
     return
   }
+
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
     details: { ...prev.details, checks },
@@ -143,9 +168,11 @@ export function patchCachedPRReviewRequests(
   reviewRequests: GitHubAssignableUser[]
 ): void {
   const prev = workItemDetailsCache.get(cacheKey)
+
   if (!prev?.details) {
     return
   }
+
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
     details: {
@@ -159,9 +186,11 @@ export function patchCachedPRReviewRequests(
 
 export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
   const prev = workItemDetailsCache.get(cacheKey)
+
   if (!prev?.details) {
     return
   }
+
   touchWorkItemDetailsCache(cacheKey, {
     ...prev,
     details: { ...prev.details, body },
@@ -172,7 +201,9 @@ export function patchCachedWorkItemBody(cacheKey: string, body: string): void {
 
 // Install once at module load (all dialogs share the cache); track the unsubscribe so Vite HMR doesn't accumulate listeners across reloads.
 let workItemMutatedUnsub: (() => void) | undefined
+
 let workItemDetailsCacheEventUnsub: (() => void) | undefined
+
 if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
   workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
     invalidateWorkItemDetailsCacheByMatch({
@@ -186,6 +217,7 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
     invalidateWorkItemDetailsCacheByMatch(payload)
   })
 }
+
 if (import.meta !== undefined && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()

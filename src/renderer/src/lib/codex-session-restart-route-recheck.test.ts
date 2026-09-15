@@ -3,8 +3,11 @@ import { useAppStore } from '@/store'
 import { markLiveCodexSessionsForRestart } from './codex-session-restart'
 
 const ACCOUNT_A = 'account-a@example.com'
+
 const ACCOUNT_B = 'account-b@example.com'
+
 const SYSTEM_DEFAULT = 'System default'
+
 const originalWindow = (globalThis as { window?: typeof window }).window
 
 function seedRouteNotice(args: {

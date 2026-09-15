@@ -30,12 +30,15 @@ function buildProjectByRepoIdLikeSettings(
 ): Map<string, Project> {
   const projectById = new Map(projectList.map((project) => [project.id, project]))
   const byRepoId = new Map<string, Project>()
+
   for (const setup of setups) {
     const project = projectById.get(setup.projectId)
+
     if (project && setup.repoId.trim()) {
       byRepoId.set(setup.repoId, project)
     }
   }
+
   return byRepoId
 }
 
@@ -59,9 +62,11 @@ function badSetups(): ProjectHostSetup[] {
     createdAt: 1,
     updatedAt: 1
   })
+
   const corrupted = base('repo:repo-1::local::2', 'orca-2')
   Reflect.set(corrupted, 'repoId', null)
   Reflect.set(corrupted, 'path', null)
+
   return [base('repo:repo-1::local', 'orca'), corrupted]
 }
 
@@ -92,6 +97,7 @@ describe('project catalog ingest with non-string row fields', () => {
       kind: 'environment',
       environmentId: 'env-1'
     })
+
     expect(adopted.repoId).toBe('')
     expect(adopted.path).toBe('')
     expect(adopted.hostId).toBe('runtime:env-1')
@@ -100,11 +106,13 @@ describe('project catalog ingest with non-string row fields', () => {
   it('lets the Settings projectByRepoId memo run instead of throwing on .trim()', async () => {
     stubProjectsApi(badSetups())
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
+
     const projection = getProjectHostSetupProjectionFromState({
       repos,
       projects: [...ingested.projects],
       projectHostSetups: [...ingested.setups]
     })
+
     expect(() =>
       buildProjectByRepoIdLikeSettings(projection.setups, projection.projects)
     ).not.toThrow()
@@ -126,7 +134,9 @@ describe('project catalog ingest with non-string row fields', () => {
   it('does not add or drop rows because a field was repaired', async () => {
     stubProjectsApi(badSetups())
     const repaired = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
+
     const clean = badSetups()
+
     ;(clean[1] as { repoId: string; path: string }).repoId = ''
     ;(clean[1] as { repoId: string; path: string }).path = ''
     stubProjectsApi(clean)
@@ -143,11 +153,13 @@ describe('project catalog ingest with non-string row fields', () => {
   it('keeps the projection reference-stable per (repos, projects, setups) input', async () => {
     stubProjectsApi(badSetups())
     const ingested = await fetchProjectHostSetupCompatibility({ kind: 'local' }, repos)
+
     const args = {
       repos,
       projects: [...ingested.projects],
       projectHostSetups: [...ingested.setups]
     }
+
     expect(getProjectHostSetupProjectionFromState(args)).toBe(
       getProjectHostSetupProjectionFromState(args)
     )
@@ -157,6 +169,7 @@ describe('project catalog ingest with non-string row fields', () => {
   // rows it was given — TerminalPane and TabBarQuickCommandsButton use them as useMemo deps.
   it('preserves row identity when the catalog is already clean', async () => {
     const clean = badSetups()
+
     ;(clean[1] as { repoId: string; path: string }).repoId = ''
     ;(clean[1] as { repoId: string; path: string }).path = ''
     stubProjectsApi(clean)

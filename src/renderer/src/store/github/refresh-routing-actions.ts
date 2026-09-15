@@ -23,9 +23,11 @@ export const createRefreshRoutingActions = (
     const state = get()
     const worktree = findWorktreeById(state, worktreeId)
     const candidate = worktree ? buildPRRefreshCandidate(state, worktree) : null
+
     if (!candidate) {
       return
     }
+
     if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
       void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
@@ -36,11 +38,14 @@ export const createRefreshRoutingActions = (
         fallbackPRSource: candidate.fallbackPRSource ?? null,
         reason
       })
+
       return
     }
+
     if (!shouldEnqueueLocalPRRefresh(candidate)) {
       return
     }
+
     enqueueLocalGitHubPRRefresh({ candidate, reason, priority }, async () => {
       await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
         force: bypassesGitHubPRRefreshFreshness(reason),
@@ -56,13 +61,17 @@ export const createRefreshRoutingActions = (
 
   reportVisibleGitHubPRRefreshCandidates: (worktreeIds, generation) => {
     const state = get()
+
     const candidates = worktreeIds
       .map((id) => {
         const worktree = findWorktreeById(state, id)
+
         return worktree ? buildPRRefreshCandidate(state, worktree) : null
       })
       .filter((candidate): candidate is GitHubPRRefreshCandidate => candidate !== null)
+
     const localCandidates: GitHubPRRefreshCandidate[] = []
+
     for (const candidate of candidates) {
       if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
         void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
@@ -75,11 +84,14 @@ export const createRefreshRoutingActions = (
         })
         continue
       }
+
       if (shouldEnqueueLocalPRRefresh(candidate)) {
         localCandidates.push(candidate)
       }
     }
+
     const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
+
     if (reportVisible) {
       void reportVisible({ candidates: localCandidates, generation }).catch((err) => {
         console.warn('Failed to report visible PR refresh candidates:', err)

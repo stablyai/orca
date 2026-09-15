@@ -27,6 +27,7 @@ export function createCheckRunDetailsActions(
     openCheckRunDetails: (worktreeId, contextKey, check, state) => {
       const id = buildCheckRunDetailsTabId(worktreeId, check)
       const label = getCheckRunDetailsTabLabel(check)
+
       const checkRunDetails: OpenCheckRunDetailsState = {
         contextKey,
         check,
@@ -37,14 +38,18 @@ export function createCheckRunDetailsActions(
         githubRepository: state.githubRepository ?? null,
         gitlabProjectRef: state.gitlabProjectRef ?? null
       }
+
       set((s) => {
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           const existingDetails = existing.checkRunDetails
+
           const incomingIsStale =
             existingDetails?.contextKey === contextKey &&
             existingDetails.requestId !== undefined &&
             (state.requestId === undefined || state.requestId < existingDetails.requestId)
+
           return {
             openFiles: s.openFiles.map((f) =>
               f.id === id
@@ -91,13 +96,17 @@ export function createCheckRunDetailsActions(
       const id = buildCheckRunDetailsTabId(worktreeId, check)
       set((s) => {
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (!existing?.checkRunDetails) {
           return s
         }
+
         const current = existing.checkRunDetails
+
         if (current.contextKey !== contextKey) {
           return s
         }
+
         if (
           state.requestId !== undefined &&
           current.requestId !== undefined &&
@@ -105,10 +114,12 @@ export function createCheckRunDetailsActions(
         ) {
           return s
         }
+
         // Why: the sidebar resolves the MR's project asynchronously, so an early patch
         // must not blank a ref we already know.
         const githubRepository = state.githubRepository ?? current.githubRepository ?? null
         const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
+
         const nextCheckRunDetails: OpenCheckRunDetailsState = {
           contextKey,
           check,
@@ -119,6 +130,7 @@ export function createCheckRunDetailsActions(
           githubRepository,
           gitlabProjectRef
         }
+
         if (
           current.contextKey === nextCheckRunDetails.contextKey &&
           current.requestId === nextCheckRunDetails.requestId &&
@@ -132,6 +144,7 @@ export function createCheckRunDetailsActions(
         ) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
@@ -144,17 +157,22 @@ export function createCheckRunDetailsActions(
       const state = get()
       const file = state.openFiles.find((candidate) => candidate.id === fileId)
       const checkRunDetails = file?.checkRunDetails
+
       if (!file || file.mode !== 'check-details' || !checkRunDetails) {
         return
       }
+
       const { contextKey, check } = checkRunDetails
       const requestId = createCheckRunDetailsRequestId()
+
       const patch = (next: CheckRunDetailsTabPatch): void => {
         get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, { ...next, requestId })
       }
+
       const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
       const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
       const repo = state.repos.find((candidate) => candidate.id === repoId)
+
       if (!repo?.path) {
         patch({
           details: checkRunDetails.details,
@@ -164,9 +182,12 @@ export function createCheckRunDetailsActions(
             'Repository details are unavailable for this check.'
           )
         })
+
         return
       }
+
       patch({ details: checkRunDetails.details, loading: true, error: null })
+
       try {
         // Why: refreshing a GitLab job tab through the GitHub check-runs API returns
         // null and would blank the tab the user just asked to reload.
@@ -190,6 +211,7 @@ export function createCheckRunDetailsActions(
               },
               { repoId: repo.id }
             )
+
         patch({
           details,
           loading: false,

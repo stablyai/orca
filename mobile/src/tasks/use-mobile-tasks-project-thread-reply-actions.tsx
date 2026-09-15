@@ -27,19 +27,25 @@ export function useMobileTasksProjectThreadReplyActions(
     setProjectRowDetail,
     setProjectRowDetailError
   } = model
+
   const deleteProjectRowComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
       if (!client || projectMutating) {
         return
       }
+
       const slug = splitRepositorySlug(row.content.repository)
       const commentId = Number(comment.id)
+
       if (!slug || !Number.isInteger(commentId) || commentId <= 0) {
         setProjectRowDetailError('This project comment cannot be deleted from mobile.')
+
         return
       }
+
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.project.deleteIssueCommentBySlug',
@@ -51,13 +57,16 @@ export function useMobileTasksProjectThreadReplyActions(
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as {
           ok?: boolean
           error?: string | { message?: string }
         }
+
         if (result.ok === false) {
           throw new Error(
             typeof result.error === 'string'
@@ -65,6 +74,7 @@ export function useMobileTasksProjectThreadReplyActions(
               : (result.error?.message ?? 'Failed to delete comment')
           )
         }
+
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -73,6 +83,7 @@ export function useMobileTasksProjectThreadReplyActions(
               }
             : current
         )
+
         if (projectEditingCommentId === String(comment.id)) {
           setProjectEditingCommentId(null)
           setProjectEditingCommentDraft('')
@@ -89,6 +100,7 @@ export function useMobileTasksProjectThreadReplyActions(
   const toggleProjectGitHubReviewThread = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
       const repo = findProjectRowRepo(row)
+
       if (
         !client ||
         projectMutating ||
@@ -98,9 +110,11 @@ export function useMobileTasksProjectThreadReplyActions(
       ) {
         return
       }
+
       const resolve = !comment.isResolved
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.resolveReviewThread',
@@ -112,12 +126,15 @@ export function useMobileTasksProjectThreadReplyActions(
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         if (response.result !== true) {
           throw new Error(resolve ? 'Failed to resolve thread' : 'Failed to reopen thread')
         }
+
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -144,22 +161,28 @@ export function useMobileTasksProjectThreadReplyActions(
   const replyToProjectGitHubComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
       const repo = findProjectRowRepo(row)
+
       if (!client || projectMutating || !repo || !row.content.number) {
         return
       }
+
       const key = String(comment.id)
       const body = (itemReplyDrafts[key] ?? '').trim()
+
       if (!body) {
         return
       }
+
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const canUseReviewReply =
           row.itemType === 'PULL_REQUEST' &&
           comment.path &&
           typeof comment.line === 'number' &&
           typeof comment.id === 'number'
+
         const response = canUseReviewReply
           ? await client.sendRequest(
               'github.addPRReviewCommentReply',
@@ -186,17 +209,21 @@ export function useMobileTasksProjectThreadReplyActions(
               },
               { timeoutMs: 30_000 }
             )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as {
           ok?: boolean
           error?: string
           comment?: DetailComment
         }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to reply')
         }
+
         const reply: DetailComment = result.comment ?? {
           id: `local-${Date.now()}`,
           body,
@@ -206,9 +233,11 @@ export function useMobileTasksProjectThreadReplyActions(
           line: comment.line,
           threadId: comment.threadId
         }
+
         setItemReplyDrafts((current) => {
           const next = { ...current }
           delete next[key]
+
           return next
         })
         setProjectRowDetail((current) =>
@@ -224,6 +253,7 @@ export function useMobileTasksProjectThreadReplyActions(
     },
     [activeGitHubProjectHost, client, findProjectRowRepo, itemReplyDrafts, projectMutating]
   )
+
   return Object.assign(model, {
     deleteProjectRowComment,
     toggleProjectGitHubReviewThread,

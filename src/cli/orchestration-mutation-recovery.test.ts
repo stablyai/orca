@@ -241,6 +241,7 @@ describe('orchestration mutation recovery', () => {
     'round trips POSIX recovery argv through /bin/sh',
     async () => {
       const values = ['with spaces', "apostrophe's", 'literal $(do-not-run)', 'line one\nline two']
+
       const command = renderCommand(
         [
           process.execPath,
@@ -301,6 +302,7 @@ describe('orchestration mutation recovery', () => {
         originalCommand
       })
     ) as RuntimeClientError
+
     const output = JSON.stringify({ message: result.message, data: result.data })
 
     expect(output).not.toContain(secret)

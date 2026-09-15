@@ -62,11 +62,13 @@ const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(env)) {
     if (value !== undefined) {
       next[key] = value
     }
   }
+
   return next
 }
 
@@ -83,23 +85,29 @@ export function claudeSdkOptionsForLaunchArgs(
   let model: string | undefined
   let effort: EffortLevel | undefined
   const extraArgs: Record<string, string | null> = {}
+
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index] ?? ''
+
     if (!token.startsWith('--') || token.length <= 2) {
       throw new Error(
         `claude launch argument ${token} has no SDK option; refusing rather than dropping it`
       )
     }
+
     const equals = token.indexOf('=')
     const flag = equals === -1 ? token : token.slice(0, equals)
     let value = equals === -1 ? null : token.slice(equals + 1)
+
     if (value === null) {
       const next = args[index + 1]
+
       if (next !== undefined && !next.startsWith('-')) {
         value = next
         index += 1
       }
     }
+
     if (flag === '--model' && value !== null) {
       model = value
     } else if (flag === '--effort' && value !== null && EFFORT_LEVELS.includes(value)) {
@@ -108,6 +116,7 @@ export function claudeSdkOptionsForLaunchArgs(
       extraArgs[flag.slice(2)] = value
     }
   }
+
   return {
     ...(model === undefined ? {} : { model }),
     ...(effort === undefined ? {} : { effort }),
@@ -169,6 +178,7 @@ export function claudeSessionIdForOrcaSession(sessionId: string): string {
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80
   const hex = bytes.toString('hex')
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
@@ -178,12 +188,15 @@ export function createClaudeStructuredLaunchResolver(
   return async ({ identity }) => {
     await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
     const record = deps.store.getRecord(identity.sessionId)
+
     if (!record) {
       throw new Error(`no durable agent-session record for ${identity.sessionId}`)
     }
+
     if (record.provider !== 'claude') {
       throw new Error(`session ${identity.sessionId} is a ${record.provider} session`)
     }
+
     if (
       record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
       record.location.wslDistro !== null
@@ -192,9 +205,11 @@ export function createClaudeStructuredLaunchResolver(
         `claude structured sessions run on the local host, not ${record.location.executionHostId}`
       )
     }
+
     if (record.accountHome.variable !== 'CLAUDE_CONFIG_DIR') {
       throw new Error(`claude sessions pin CLAUDE_CONFIG_DIR, not ${record.accountHome.variable}`)
     }
+
     // Every acquisition, not just the first: the account state can change under a live session, and
     // a reacquire after an unexpected exit would otherwise spawn under whatever it has become.
     // Codex has no gate here — it resolves its account on a different path.
@@ -206,7 +221,9 @@ export function createClaudeStructuredLaunchResolver(
         'structured Claude is not offered under the active managed Claude account'
       )
     }
+
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+
     if (
       head?.handle.provider === 'claude' &&
       (identity.providerHandle.kind !== 'claude' ||
@@ -215,10 +232,12 @@ export function createClaudeStructuredLaunchResolver(
     ) {
       throw new Error('claude durable resume identity changed before spawn')
     }
+
     const providerSessionId =
       head?.handle.provider === 'claude'
         ? head.handle.sessionId
         : claudeSessionIdForOrcaSession(identity.sessionId)
+
     const durable = claudeSdkOptionsForLaunchArgs(record.launchArgs ?? [])
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
     const auth = await deps.resolveAuthPolicy()
@@ -226,11 +245,13 @@ export function createClaudeStructuredLaunchResolver(
     // A switch can begin while the policy and overlay resolve, exactly as it can
     // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
     await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+
     // Under a managed account the pinned credential is the only auth this launch may
     // use, so an explicit override is refused rather than silently beating the pin.
     if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {
       throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
     }
+
     // Why the overlay merges onto the inherited env rather than replacing it: the child
     // still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
     // derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
@@ -253,6 +274,7 @@ export function createClaudeStructuredLaunchResolver(
       }),
       { platform: process.platform }
     )
+
     return {
       pathToClaudeCodeExecutable: command,
       options: {

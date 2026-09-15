@@ -2,15 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate } from './pr-refresh-coordinator-test-harness'
@@ -94,6 +99,7 @@ describe('pr-refresh-coordinator', () => {
         1
       )
     }
+
     await vi.advanceTimersByTimeAsync(0)
 
     enqueuePRRefresh(
@@ -132,6 +138,7 @@ describe('pr-refresh-coordinator', () => {
         1
       )
     }
+
     enqueuePRRefresh(
       makeCandidate({
         cacheKey: '/repo::feature/other-window',
@@ -172,6 +179,7 @@ describe('pr-refresh-coordinator', () => {
         1
       )
     }
+
     enqueuePRRefresh(
       makeCandidate({
         cacheKey: 'wsl::repo-1::feature/wsl',
@@ -206,6 +214,7 @@ describe('pr-refresh-coordinator', () => {
   it('does not let a capped active scope block ready visible work', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock.mockResolvedValue({
       kind: 'upstream-error',
       errorType: 'unknown',
@@ -225,6 +234,7 @@ describe('pr-refresh-coordinator', () => {
         1
       )
     }
+
     reportVisiblePRRefreshCandidates(
       [
         makeCandidate({
@@ -246,6 +256,7 @@ describe('pr-refresh-coordinator', () => {
   it('wakes for visible budget spacing before a capped active burst opens', async () => {
     const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock.mockResolvedValue({
       kind: 'upstream-error',
       errorType: 'unknown',
@@ -278,6 +289,7 @@ describe('pr-refresh-coordinator', () => {
         1
       )
     }
+
     reportVisiblePRRefreshCandidates(
       [
         makeCandidate({

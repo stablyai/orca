@@ -111,6 +111,7 @@ export function makeAgentEntry(
 export function makeRecentTabState(overrides: Partial<AppState> = {}): Partial<AppState> {
   const alpha = makeWorktree('wt-alpha', 'Alpha workspace')
   const beta = makeWorktree('wt-beta', 'Beta workspace')
+
   return {
     worktreesByRepo: { 'repo-1': [alpha, beta] },
     showSleepingWorkspaces: true,
@@ -142,6 +143,7 @@ export function makeRecentTabState(overrides: Partial<AppState> = {}): Partial<A
 export function makeDuplicateRecentTabState(): Partial<AppState> {
   const alpha = makeWorktree('wt-alpha', 'Alpha workspace', { hostId: 'ssh:alpha' })
   const beta = makeWorktree('wt-beta', 'Beta workspace', { hostId: 'ssh:beta' })
+
   return {
     worktreesByRepo: { 'repo-1': [alpha, beta] },
     showSleepingWorkspaces: true,
@@ -171,6 +173,7 @@ export function makeDuplicateRecentTabState(): Partial<AppState> {
 /** One tab-heavy worktree plus `count` bare ones, so both sections overflow their caps. */
 export function makeManyTabState(count: number): Partial<AppState> {
   const ids = Array.from({ length: count }, (_, index) => `${index}`)
+
   return {
     worktreesByRepo: {
       'repo-1': [

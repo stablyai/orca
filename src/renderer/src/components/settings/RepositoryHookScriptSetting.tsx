@@ -37,6 +37,7 @@ function getEnvVars(): { name: string; description: string }[] {
 
 function EnvVarChips(): React.JSX.Element {
   const envVars = getEnvVars()
+
   return (
     <div className="space-y-1.5">
       <p className="text-[11px] text-muted-foreground">
@@ -72,7 +73,9 @@ function SaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' }) {
   if (status === 'idle') {
     return null
   }
+
   const isSaving = status === 'saving'
+
   return (
     <span
       className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
@@ -113,11 +116,14 @@ export function RepositoryHookScriptSetting({
     if (value === lastValueRef.current) {
       return
     }
+
     lastValueRef.current = value
     setSaveStatus('saving')
+
     if (savedTimerRef.current !== null) {
       window.clearTimeout(savedTimerRef.current)
     }
+
     savedTimerRef.current = window.setTimeout(() => {
       setSaveStatus('saved')
       savedTimerRef.current = window.setTimeout(() => {
@@ -125,6 +131,7 @@ export function RepositoryHookScriptSetting({
         savedTimerRef.current = null
       }, 1500)
     }, 250)
+
     return () => {
       if (savedTimerRef.current !== null) {
         window.clearTimeout(savedTimerRef.current)
@@ -134,6 +141,7 @@ export function RepositoryHookScriptSetting({
   }, [value])
 
   const showLocalEditor = showLocal || value.length > 0 || !hasShared
+
   return (
     <div
       className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"

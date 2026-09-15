@@ -21,8 +21,10 @@ async function loadStoreModule() {
   })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
+
     return { ...actual, homedir: () => tempHome }
   })
+
   return import('./openai-api-key-store')
 }
 

@@ -24,6 +24,7 @@ describe('hasMaxLinesDisable', () => {
   it('detects a multi-line block where the reason wraps', () => {
     const src =
       '/* eslint-disable max-lines -- Why: this contract is\n * intentionally centralized. */\nimport x from "y"\n'
+
     expect(hasMaxLinesDisable(src)).toBe(true)
   })
 
@@ -76,6 +77,7 @@ describe('collectMobileBumps', () => {
         { files: ['scripts/mock-server.ts'], rules: { 'max-lines': ['error', { max: 407 }] } } // bump (>300)
       ]
     })
+
     expect(collectMobileBumps(cfg)).toEqual([
       'mobile-config app/h/*/tasks.tsx',
       'mobile-config scripts/mock-server.ts'
@@ -86,6 +88,7 @@ describe('collectMobileBumps', () => {
     const cfg = JSON.stringify({
       overrides: [{ files: ['a.tsx'], rules: { 'no-console': 'off' } }]
     })
+
     expect(collectMobileBumps(cfg)).toEqual([])
   })
 })
@@ -103,6 +106,7 @@ describe('diffBaseline', () => {
       ['inline b.ts', 'inline c.ts'],
       new Set(['inline a.ts', 'inline b.ts'])
     )
+
     expect(added).toEqual(['inline c.ts']) // new bypass
     expect(stale).toEqual(['inline a.ts']) // suppression removed
   })

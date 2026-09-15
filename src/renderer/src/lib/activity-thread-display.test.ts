@@ -119,6 +119,7 @@ describe('getActivityThreadTaskTitle', () => {
       dispatchId: 'ctx-1',
       displayName: 'Fix checkout race'
     }
+
     // Terse follow-up → still the same orchestration task.
     expect(
       getActivityThreadTaskTitle({

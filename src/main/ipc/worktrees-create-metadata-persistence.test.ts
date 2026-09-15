@@ -47,83 +47,107 @@ const WORKTREE_HANDLER_CHANNELS = [
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -298,6 +322,7 @@ describe('registerWorktreeHandlers', () => {
     const persistedMeta = store.setWorktreeMeta.mock.calls.find(
       ([worktreeId]) => worktreeId === 'repo-1::/workspace/improve-dashboard'
     )?.[1]
+
     expect(persistedMeta).toBeDefined()
     expect(persistedMeta).not.toHaveProperty('automationProvenance')
   })
@@ -510,12 +535,14 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
+
     const existingPushTarget = {
       remoteName: 'pr-contributor-orca',
       branchName: 'contributor/previous-fix',
       remoteUrl: 'https://github.com/contributor/orca.git',
       remoteCreated: true
     }
+
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-1::/workspace/previous-fix': makeWorktreeMeta({ pushTarget: existingPushTarget })
     })
@@ -524,9 +551,11 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'remote' && args.length === 1) {
         return { stdout: 'pr-contributor-orca\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'https://github.com/contributor/orca.git\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -577,14 +606,18 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         const url =
           args[2] === 'origin' ? ORIGIN_REMOTE_URL : 'git@github.com:org/upstream-repo.git'
+
         return { stdout: `${url}\n`, stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\nupstream\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -632,6 +665,7 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'def456\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 

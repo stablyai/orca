@@ -21,12 +21,19 @@ vi.mock('../store', () => ({
 }))
 
 const EDITOR_GROUP = 'client-editor-group'
+
 const PREVIEW_GROUP = 'client-preview-group'
+
 const EDITOR_FILE_ID = '/repo/paired-html-focus.html'
+
 const EDITOR_TAB_ID = 'local-html-editor'
+
 const HOST_TERMINAL_PARENT = 'host-terminal'
+
 const HOST_TERMINAL_SURFACE = `${HOST_TERMINAL_PARENT}::${LEAF_ID}`
+
 const HOST_BROWSER_TAB = 'host-html-browser-tab'
+
 const HOST_BROWSER_PAGE = 'host-html-browser-page'
 
 function htmlOpenFile(): OpenFile {
@@ -80,6 +87,7 @@ function editorFocusedSplitState(activeGroupId: string): WebSessionTabsSyncState
   const terminalTabId = toWebTerminalSurfaceTabId(HOST_TERMINAL_PARENT)
   const editorTab = htmlEditorTab()
   const openFile = htmlOpenFile()
+
   return makeState({
     activeFileId: openFile.id,
     activeFileIdByWorktree: { [WT]: openFile.id },
@@ -182,6 +190,7 @@ function previewFocus(state: WebSessionTabsSyncState): {
   const activeGroup = (state.groupsByWorktree[WT] ?? []).find(
     (group) => group.id === state.activeGroupIdByWorktree[WT]
   )
+
   return {
     activeGroupId: activeGroup?.id ?? null,
     activeTabId: activeGroup?.activeTabId ?? null,
@@ -211,6 +220,7 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     const next = { ...state, ...patch }
 
     expect(previewFocus(next)).toEqual({
@@ -232,6 +242,7 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     const next = { ...state, ...patch }
 
     expect(previewFocus(next).activeGroupId).not.toBe(EDITOR_GROUP)
@@ -254,6 +265,7 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     const next = { ...state, ...patch }
 
     expect(previewFocus(next)).toEqual({

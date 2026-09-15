@@ -26,6 +26,7 @@ export async function rotateMobileRelayCredential(args: {
   randomBytes?: (length: number) => Uint8Array
 }): Promise<RotationResult> {
   let bundle = args.bundle
+
   if (!bundle.pending) {
     const randomBytes = args.randomBytes ?? ExpoCrypto.getRandomBytes
     const token = encodeBase64Url(randomBytes(32))
@@ -43,21 +44,27 @@ export async function rotateMobileRelayCredential(args: {
   }
 
   const pending = bundle.pending
+
   if (!pending) {
     throw new Error('relay credential rotation pending state missing')
   }
+
   let endpoints = await getEndpoints(args.client, pending.reqId)
+
   if (endpoints.installStatus?.state !== 'committed') {
     const response = await args.client.sendRequest('pairing.provisionRelay', {
       reqId: pending.reqId,
       newResumeTokenHash: pending.hash,
       expectedCurrentHash: bundle.current.hash
     })
+
     if (!response.ok) {
       throw new Error(`${response.error.code}: ${response.error.message}`)
     }
+
     const installed = DeviceCredentialInstalledSchema.parse(response.result)
     endpoints = await getEndpoints(args.client, pending.reqId)
+
     if (
       endpoints.installStatus?.state !== 'committed' ||
       JSON.stringify(endpoints.installStatus.result) !== JSON.stringify(installed)
@@ -65,10 +72,13 @@ export async function rotateMobileRelayCredential(args: {
       throw new Error('relay credential rotation was not authoritatively committed')
     }
   }
+
   if (!endpoints.relay || endpoints.installStatus?.state !== 'committed') {
     throw new Error('relay credential rotation endpoint state missing')
   }
+
   const installed = endpoints.installStatus.result
+
   const next = MobileRelayCredentialBundleSchema.parse({
     ...bundle,
     current: {
@@ -82,7 +92,9 @@ export async function rotateMobileRelayCredential(args: {
       : { grace: undefined }),
     pending: undefined
   })
+
   await args.writeBundle(next)
+
   return { bundle: next, relay: endpoints.relay }
 }
 
@@ -94,6 +106,7 @@ export function mobileRelayCredentialNeedsRotation(
   // can safely replace that unusable cloud credential using its stored hash.
   const malformedCurrentHash =
     bundle.current.hash !== hashMobileRelayCredential(bundle.current.token)
+
   return (
     Boolean(bundle.pending) ||
     malformedCurrentHash ||
@@ -117,6 +130,7 @@ export function applyResumeConfirmation(
       current: { ...bundle.current, expiresAt: confirmation.resumeExpiresAt }
     })
   }
+
   if (
     confirmation.acceptedAs === 'grace' &&
     bundle.grace?.version === usedCredentialVersion &&
@@ -127,6 +141,7 @@ export function applyResumeConfirmation(
       grace: { ...bundle.grace, expiresAt: confirmation.graceExpiresAt }
     })
   }
+
   return bundle
 }
 
@@ -149,31 +164,38 @@ export async function persistResumeConfirmation(args: {
 }): Promise<{ bundle: MobileRelayCredentialBundle; leaseExpiry: number | null }> {
   const confirmation = args.session.getResumeConfirmation()
   let bundle = args.bundle
+
   if (confirmation) {
     bundle = applyResumeConfirmation(bundle, args.usedCredentialVersion, confirmation)
     // Why: the relay is already authenticated; a SecureStore failure must not
     // open another socket or count against transport recovery backoff.
     await args.writeBundle(bundle).catch(() => {})
   }
+
   const leaseExpiry =
     confirmation?.renewed === false
       ? null
       : (confirmation?.resumeExpiresAt ?? args.session.getResumeExpiresAt())
+
   return { bundle, leaseExpiry }
 }
 
 async function getEndpoints(client: RpcClient, installReqId: string) {
   const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
+
   if (!response.ok) {
     throw new Error(`${response.error.code}: ${response.error.message}`)
   }
+
   return PairingGetEndpointsResultSchema.parse(response.result)
 }
 
 function encodeBase64Url(value: Uint8Array): string {
   let binary = ''
+
   for (const byte of value) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

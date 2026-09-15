@@ -19,16 +19,19 @@ function createHandlers(overrides: Partial<GpuFallbackEngagementHandlers> = {}):
   order: string[]
 } {
   const order: string[] = []
+
   const handlers: GpuFallbackEngagementHandlers = {
     isQuitting: () => false,
     persistMarker: vi.fn(() => {
       order.push('persistMarker')
+
       return true
     }),
     confirmMarker: vi.fn(() => order.push('confirmMarker')),
     clearMarker: vi.fn(() => order.push('clearMarker')),
     promptForRestart: vi.fn(async () => {
       order.push('prompt')
+
       return 'restart' as GpuFallbackRestartDecision
     }),
     onPromptFailed: vi.fn(),
@@ -37,6 +40,7 @@ function createHandlers(overrides: Partial<GpuFallbackEngagementHandlers> = {}):
     restartIntoSafeGraphics: vi.fn(() => order.push('restart')),
     ...overrides
   }
+
   return { handlers, order }
 }
 
@@ -49,6 +53,7 @@ describe('engageGpuFallbackAfterCrashBurst', () => {
   // and the next launch retries hardware acceleration, looping forever.
   it('persists the safe-graphics marker before the restart prompt is answered', async () => {
     let resolvePrompt: ((decision: GpuFallbackRestartDecision) => void) | undefined
+
     const { handlers } = createHandlers({
       promptForRestart: vi.fn(
         () =>
@@ -79,6 +84,7 @@ describe('engageGpuFallbackAfterCrashBurst', () => {
     const { handlers, order } = createHandlers({
       promptForRestart: vi.fn(async () => 'continue' as GpuFallbackRestartDecision)
     })
+
     await engageGpuFallbackAfterCrashBurst(ENGAGEMENT, handlers)
     expect(order).toEqual(['persistMarker', 'clearMarker', 'restartDeferred'])
     expect(handlers.restartIntoSafeGraphics).not.toHaveBeenCalled()
@@ -86,11 +92,13 @@ describe('engageGpuFallbackAfterCrashBurst', () => {
 
   it('keeps the marker when the prompt itself fails, so the next launch is still safe', async () => {
     const error = new Error('no display')
+
     const { handlers } = createHandlers({
       promptForRestart: vi.fn(async () => {
         throw error
       })
     })
+
     await engageGpuFallbackAfterCrashBurst(ENGAGEMENT, handlers)
     expect(handlers.persistMarker).toHaveBeenCalledTimes(1)
     expect(handlers.clearMarker).not.toHaveBeenCalled()

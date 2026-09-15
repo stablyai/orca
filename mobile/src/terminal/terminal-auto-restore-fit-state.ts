@@ -10,8 +10,10 @@ export function setTerminalAutoRestoreFitMsForHost(
   value: number | null | undefined
 ): TerminalAutoRestoreFitByHost {
   const nextValue = normalizeTerminalAutoRestoreFitMs(value)
+
   if (current[hostId] === nextValue) {
     return current
   }
+
   return { ...current, [hostId]: nextValue }
 }

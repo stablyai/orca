@@ -12,14 +12,18 @@ type SplitMountLease = {
 }
 
 const queuedRequests: SplitTerminalPaneDetail[] = []
+
 const splitMountLeasesByTarget = new Map<string, SplitMountLease>()
+
 const splitMountLeaseListeners = new Set<() => void>()
+
 let splitMountLeaseTabIds: ReadonlySet<string> = new Set()
 
 function notifySplitMountLeaseChange(): void {
   splitMountLeaseTabIds = new Set(
     [...splitMountLeasesByTarget.values()].map((lease) => lease.tabId)
   )
+
   for (const listener of splitMountLeaseListeners) {
     listener()
   }
@@ -32,6 +36,7 @@ function splitTargetKey(tabId: string, worktreeId: string | undefined): string {
 function removeQueuedRequestsForTarget(tabId: string, worktreeId?: string): void {
   for (let index = queuedRequests.length - 1; index >= 0; index -= 1) {
     const request = queuedRequests[index]
+
     if (
       request.tabId === tabId &&
       (worktreeId === undefined || request.worktreeId === worktreeId)
@@ -43,6 +48,7 @@ function removeQueuedRequestsForTarget(tabId: string, worktreeId?: string): void
 
 function releaseSplitMountLease(tabId: string, worktreeId?: string, token?: symbol): void {
   let changed = false
+
   for (const [key, lease] of splitMountLeasesByTarget) {
     if (
       lease.tabId !== tabId ||
@@ -51,10 +57,12 @@ function releaseSplitMountLease(tabId: string, worktreeId?: string, token?: symb
     ) {
       continue
     }
+
     clearTimeout(lease.timer)
     splitMountLeasesByTarget.delete(key)
     changed = true
   }
+
   if (changed) {
     notifySplitMountLeaseChange()
   }
@@ -62,9 +70,11 @@ function releaseSplitMountLease(tabId: string, worktreeId?: string, token?: symb
 
 function evictOldestSplitMountLease(): void {
   const oldest = splitMountLeasesByTarget.values().next().value as SplitMountLease | undefined
+
   if (!oldest) {
     return
   }
+
   removeQueuedRequestsForTarget(oldest.tabId, oldest.worktreeId)
   releaseSplitMountLease(oldest.tabId, oldest.worktreeId)
 }
@@ -72,6 +82,7 @@ function evictOldestSplitMountLease(): void {
 function acquireSplitMountLease(tabId: string, worktreeId?: string): void {
   const key = splitTargetKey(tabId, worktreeId)
   const existing = splitMountLeasesByTarget.get(key)
+
   if (existing) {
     clearTimeout(existing.timer)
     splitMountLeasesByTarget.delete(key)
@@ -80,11 +91,14 @@ function acquireSplitMountLease(tabId: string, worktreeId?: string): void {
   }
 
   const token = Symbol(tabId)
+
   const timer = setTimeout(() => {
     removeQueuedRequestsForTarget(tabId, worktreeId)
     releaseSplitMountLease(tabId, worktreeId, token)
   }, BACKGROUND_WORKTREE_MEASURE_WINDOW_MS)
+
   splitMountLeasesByTarget.set(key, { timer, token, tabId, worktreeId })
+
   if (!existing) {
     notifySplitMountLeaseChange()
   }
@@ -95,9 +109,11 @@ export function queueTerminalPaneSplitRequest(detail: SplitTerminalPaneDetail): 
   if (!detail.tabId) {
     return
   }
+
   while (queuedRequests.length >= TERMINAL_PANE_SPLIT_QUEUE_CAPACITY) {
     queuedRequests.shift()
   }
+
   queuedRequests.push(detail)
   acquireSplitMountLease(detail.tabId, detail.worktreeId)
 }
@@ -107,8 +123,10 @@ export function takeQueuedTerminalPaneSplitRequests(
   worktreeId?: string
 ): SplitTerminalPaneDetail[] {
   const requests: SplitTerminalPaneDetail[] = []
+
   for (let index = queuedRequests.length - 1; index >= 0; index -= 1) {
     const request = queuedRequests[index]
+
     if (
       request.tabId !== tabId ||
       (worktreeId !== undefined &&
@@ -117,9 +135,11 @@ export function takeQueuedTerminalPaneSplitRequests(
     ) {
       continue
     }
+
     requests.unshift(request)
     queuedRequests.splice(index, 1)
   }
+
   return requests
 }
 
@@ -137,6 +157,7 @@ export function hasTerminalPaneSplitMountLease(tabId: string, worktreeId?: strin
 
 export function subscribeTerminalPaneSplitMountLeases(listener: () => void): () => void {
   splitMountLeaseListeners.add(listener)
+
   return () => splitMountLeaseListeners.delete(listener)
 }
 
@@ -157,6 +178,7 @@ export function registerTerminalPaneSplitRequestHandler(
 ): () => void {
   const listener = (event: Event): void => {
     const detail = (event as CustomEvent<SplitTerminalPaneDetail>).detail
+
     if (
       detail?.tabId === tabId &&
       (detail.worktreeId === undefined || detail.worktreeId === worktreeId)
@@ -164,10 +186,13 @@ export function registerTerminalPaneSplitRequestHandler(
       handler(detail)
     }
   }
+
   window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, listener)
+
   for (const detail of takeQueuedTerminalPaneSplitRequests(tabId, worktreeId)) {
     handler(detail)
   }
+
   return () => window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, listener)
 }
 
@@ -182,9 +207,11 @@ export function resolveTerminalPaneSplitSourceId(
 
 export function _resetTerminalPaneSplitRequestRoutingForTests(): void {
   queuedRequests.splice(0)
+
   for (const lease of splitMountLeasesByTarget.values()) {
     clearTimeout(lease.timer)
   }
+
   splitMountLeasesByTarget.clear()
   splitMountLeaseListeners.clear()
   splitMountLeaseTabIds = new Set()

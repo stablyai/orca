@@ -56,11 +56,13 @@ export async function installLinuxBareOrcaDispatcher(
   options: LinuxBareOrcaDispatcherOptions
 ): Promise<LinuxBareOrcaDispatcherResult> {
   const dispatcherPath = join(options.homePath ?? homedir(), '.local', 'bin', 'orca')
+
   if (existsSync(dispatcherPath) && !(await isOwnedDispatcher(dispatcherPath))) {
     return { state: 'skipped-foreign', dispatcherPath, target: null }
   }
 
   const launcher = await resolveStableLauncherPath(options)
+
   if (!launcher) {
     return { state: 'skipped-launcher-missing', dispatcherPath, target: null }
   }
@@ -69,6 +71,7 @@ export async function installLinuxBareOrcaDispatcher(
     dispatcherPath,
     insertDispatcherMarker(buildBareOrcaCliScript(launcher))
   )
+
   return installed
     ? { state: 'installed', dispatcherPath, target: launcher }
     : { state: 'skipped-foreign', dispatcherPath, target: null }
@@ -89,30 +92,38 @@ async function resolveStableLauncherPath(
 ): Promise<string | null> {
   const hasExplicitAppImagePath = Object.hasOwn(options, 'appImagePath')
   const runtimeIdentity = resolveAppImageRuntimeIdentity({ resourcesPath: options.resourcesPath })
+
   if (!hasExplicitAppImagePath && hasAppImagePathEnvironment() && !runtimeIdentity) {
     return null
   }
+
   const appImagePath = hasExplicitAppImagePath
     ? (options.appImagePath ?? null)
     : (runtimeIdentity?.appImagePath ?? null)
+
   if (appImagePath) {
     const extractionOptions = {
       appImagePath,
       cacheRootPath: options.appImageCacheRootPath,
       runExtract: options.appImageExtractRunner
     }
+
     return withAppImageRegistrationLock(
       resolveAppImageCacheRootPath(extractionOptions),
       async () => {
         const extractedRoot = await ensureAppImageExtractedRoot(extractionOptions)
+
         if (extractedRoot) {
           await pruneAppImageExtractedRoots(extractedRoot.rootPath)
         }
+
         return extractedRoot?.stableLauncherPath ?? null
       }
     )
   }
+
   const launcher = getBundledLauncherPath('linux', options.resourcesPath)
+
   // Why: getBundledLauncherPath only joins the path; guard existence so we never
   // write a script pointing at a missing launcher (which would fail at exec
   // time with a confusing error instead of the command-not-found we fix).
@@ -139,6 +150,7 @@ async function publishDispatcher(dispatcherPath: string, content: string): Promi
   const temporaryPath = join(directoryPath, `.orca-dispatcher-${process.pid}-${randomUUID()}`)
   await mkdir(directoryPath, { recursive: true })
   await writeFile(temporaryPath, content, { encoding: 'utf8', flag: 'wx', mode: 0o755 })
+
   try {
     if (await publishIfVacant(temporaryPath, dispatcherPath)) {
       return true
@@ -148,17 +160,20 @@ async function publishDispatcher(dispatcherPath: string, content: string): Promi
       directoryPath,
       `.orca-preserved-dispatcher-${process.pid}-${randomUUID()}`
     )
+
     try {
       await rename(dispatcherPath, displacedPath)
     } catch (error) {
       if (!hasErrorCode(error, 'ENOENT')) {
         throw error
       }
+
       return await publishIfVacant(temporaryPath, dispatcherPath)
     }
 
     if (!(await isOwnedDispatcher(displacedPath))) {
       await restoreDisplacedDispatcher(displacedPath, dispatcherPath)
+
       return false
     }
 
@@ -168,10 +183,13 @@ async function publishDispatcher(dispatcherPath: string, content: string): Promi
         (await isExactExecutableDispatcher(dispatcherPath, content))
       ) {
         await unlink(displacedPath)
+
         return true
       }
+
       // A concurrently published foreign command owns the public path now.
       await unlink(displacedPath)
+
       return false
     } catch (error) {
       await restoreDisplacedDispatcher(displacedPath, dispatcherPath)
@@ -185,19 +203,23 @@ async function publishDispatcher(dispatcherPath: string, content: string): Promi
 async function publishIfVacant(sourcePath: string, destinationPath: string): Promise<boolean> {
   try {
     await link(sourcePath, destinationPath)
+
     return true
   } catch (error) {
     if (hasErrorCode(error, 'EEXIST')) {
       return false
     }
   }
+
   try {
     await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
+
     return true
   } catch (error) {
     if (hasErrorCode(error, 'EEXIST')) {
       return false
     }
+
     throw error
   }
 }
@@ -220,6 +242,7 @@ async function isExactExecutableDispatcher(
       readFile(dispatcherPath, 'utf8'),
       lstat(dispatcherPath)
     ])
+
     return metadata.isFile() && (metadata.mode & 0o111) !== 0 && actual === content
   } catch {
     return false

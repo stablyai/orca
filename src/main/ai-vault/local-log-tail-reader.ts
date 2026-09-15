@@ -24,12 +24,16 @@ export async function readLocalLogTailRange(
   }
 
   const handle = await open(filePath, 'r')
+
   try {
     const initialStats = await handle.stat()
+
     if (!initialStats.isFile()) {
       throw new Error('Local log tail target is not a file')
     }
+
     const fileIdentity = localLogFileIdentity(initialStats)
+
     if (
       fromByteOffset > initialStats.size ||
       (expectedIdentity !== undefined && expectedIdentity !== fileIdentity)
@@ -46,8 +50,10 @@ export async function readLocalLogTailRange(
 
     const bytesToRead = Math.min(LOCAL_LOG_TAIL_CHUNK_BYTES, initialStats.size - fromByteOffset)
     const buffer = Buffer.allocUnsafe(bytesToRead)
+
     const { bytesRead } =
       bytesToRead > 0 ? await handle.read(buffer, 0, bytesToRead, fromByteOffset) : { bytesRead: 0 }
+
     const nextByteOffset = fromByteOffset + bytesRead
     const finalStats = await handle.stat()
 

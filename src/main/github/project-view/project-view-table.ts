@@ -19,13 +19,17 @@ export async function getProjectViewTable(
   args: GetProjectViewTableArgs
 ): Promise<GetProjectViewTableResult> {
   const ownerCheck = assertSlug(args.owner, 'owner')
+
   if (!ownerCheck.ok) {
     return { ok: false, error: ownerCheck.error }
   }
+
   const numCheck = assertPositiveInt(args.projectNumber, 'projectNumber')
+
   if (!numCheck.ok) {
     return { ok: false, error: numCheck.error }
   }
+
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
     return {
       ok: false,
@@ -39,6 +43,7 @@ export async function getProjectViewTable(
   let selectedRaw: RawProjectView | null = null
   let matchStrength: 'id' | 'number' | 'name' | 'default' | null = null
   const viewsSeen: RawProjectView[] = []
+
   while (true) {
     const page = await fetchProjectViewsPage({
       owner: args.owner,
@@ -47,51 +52,66 @@ export async function getProjectViewTable(
       host: args.host,
       after: cursor
     })
+
     if (!page.ok) {
       return { ok: false, error: page.error }
     }
+
     project = page.project
+
     for (const v of page.views) {
       viewsSeen.push(v)
+
       const m = matchesSelector(v, {
         viewId: args.viewId,
         viewNumber: args.viewNumber,
         viewName: args.viewName
       })
+
       if (m === 'none') {
         continue
       }
+
       // Precedence: id > number > name > default.
       const rank: Record<typeof m, number> = { id: 4, number: 3, name: 2, default: 1 }
       const currentRank = matchStrength ? rank[matchStrength] : 0
+
       if (!selectedRaw || rank[m] > currentRank) {
         selectedRaw = v
         matchStrength = m
       }
     }
+
     // Why: stop on ANY match (incl. 'default' = first table view); walking further pages costs a GraphQL call per page with no re-ranking upside.
     if (selectedRaw) {
       break
     }
+
     if (!page.hasNextPage) {
       break
     }
+
     cursor = page.endCursor
+
     if (typeof cursor !== 'string') {
       break
     }
   }
+
   if (!project) {
     return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
   }
+
   const noSelector =
     args.viewId === undefined && args.viewNumber === undefined && args.viewName === undefined
+
   if (!selectedRaw && noSelector) {
     // Why: `matchesSelector` only defaults to a table view, so a project whose
     // views are all roadmaps resolved to nothing even though we can now render
     // one. Table stays the preferred default; this is the empty-handed case.
     selectedRaw = viewsSeen.find((v) => v.layout === 'ROADMAP_LAYOUT') ?? null
   }
+
   if (!selectedRaw) {
     return { ok: false, error: { type: 'not_found', message: 'Could not find the selected view.' } }
   }
@@ -99,18 +119,23 @@ export async function getProjectViewTable(
   // Paginate view fields if necessary.
   let extraFields: RawProjectV2Field[] = []
   const fieldsPi = selectedRaw.fields?.pageInfo
+
   if (fieldsPi?.hasNextPage === true && typeof fieldsPi.endCursor === 'string' && selectedRaw.id) {
     const cont = await fetchViewFieldsContinuation(selectedRaw.id, fieldsPi.endCursor, args.host)
+
     if (!cont.ok) {
       return { ok: false, error: cont.error }
     }
+
     extraFields = cont.fields
   }
 
   const finalized = finalizeView(selectedRaw, extraFields)
+
   if (!finalized.ok) {
     return { ok: false, error: finalized.drift }
   }
+
   const selectedView = finalized.view
 
   // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
@@ -128,6 +153,7 @@ export async function getProjectViewTable(
       query: effectiveQuery,
       host: args.host
     })
+
     return {
       ok: false,
       error: {
@@ -146,6 +172,7 @@ export async function getProjectViewTable(
     query: effectiveQuery,
     host: args.host
   })
+
   if (!items.ok) {
     return {
       ok: false,
@@ -169,5 +196,6 @@ export async function getProjectViewTable(
     totalCount: items.totalCount,
     parentFieldDropped: items.parentFieldDropped
   }
+
   return { ok: true, data: table }
 }

@@ -8,6 +8,7 @@ export default function MobileAgentSessionHistoryScreen() {
     worktreeId?: string | string[]
     name?: string | string[]
   }>()
+
   return (
     <MobileAgentSessionHistoryPanel
       hostId={firstParam(params.hostId)}

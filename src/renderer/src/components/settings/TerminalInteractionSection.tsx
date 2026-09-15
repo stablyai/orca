@@ -36,6 +36,7 @@ export function TerminalInteractionSection({
   // platform (see use-terminal-pane-context-menu), so macOS wording is
   // "Control-click" while Windows/Linux keep "Ctrl+right-click".
   const isMac = isMacPlatform()
+
   const rightClickPasteDescription = isMac
     ? translate(
         'auto.components.settings.TerminalInteractionSection.567633ff50',
@@ -45,6 +46,7 @@ export function TerminalInteractionSection({
         'auto.components.settings.TerminalPane.af0c3b6e39',
         'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
       )
+
   const rightClickPasteSwitchDescription = isMac
     ? translate(
         'auto.components.settings.TerminalInteractionSection.c64497148a',
@@ -54,6 +56,7 @@ export function TerminalInteractionSection({
         'auto.components.settings.TerminalPane.16753eea48',
         'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
       )
+
   return (
     <section key="pane-interaction" className="space-y-3">
       <SettingsSubsectionHeader

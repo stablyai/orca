@@ -23,6 +23,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
       </View>
     )
   }
+
   if (entry.status === 'error') {
     return (
       <View style={styles.checkDetailArea}>
@@ -30,6 +31,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
       </View>
     )
   }
+
   if (!entry.details) {
     return (
       <View style={styles.checkDetailArea}>
@@ -39,6 +41,7 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
   }
 
   const content = presentCheckDetail(entry.details)
+
   const isEmpty =
     content.summaryLines.length === 0 &&
     content.annotations.length === 0 &&

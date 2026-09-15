@@ -16,6 +16,7 @@ export {
   getLinkedWorktreeMainRepoRoot,
   normalizeGitRepoRootForInputPath
 } from './repo-detection'
+
 export {
   DEFAULT_BASE_REF_PROBES,
   getDefaultBaseRef,
@@ -23,7 +24,9 @@ export {
   resolveDefaultBaseRefViaExec,
   resolveDefaultBaseRefWithLocalGit
 } from './repo-default-base-ref'
+
 export type { GitExec } from './repo-default-base-ref'
+
 export {
   buildSearchBaseRefsArgv,
   mergeBaseRefSearchResultGroups,
@@ -32,13 +35,17 @@ export {
   parseAndFilterSearchRefDetails,
   normalizeRefSearchQuery
 } from './repo-base-ref-search'
+
 export { getBranchConflictKind } from './repo-branch-conflict'
+
 export type { BranchConflictKind } from './repo-branch-conflict'
+
 export { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
 
 /** Get a human-readable name for the repo from its path. */
 export function getRepoName(path: string): string {
   const name = basename(path)
+
   return name.endsWith('.git') ? name.slice(0, -4) : name
 }
 
@@ -66,10 +73,13 @@ export async function getRemoteDrift(
         timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
       }
     )
+
     const counts = parseGitRevListAheadBehindCounts(stdout)
+
     if (counts.status !== 'ok') {
       return null
     }
+
     return { ahead: counts.ahead, behind: counts.behind }
   } catch {
     return null
@@ -92,6 +102,7 @@ export async function getRecentDriftSubjects(
         timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
       }
     )
+
     return stdout.split('\n').filter((subject) => subject.trim().length > 0)
   } catch {
     return []
@@ -107,9 +118,11 @@ export function parseRemoteCount(stdout: string): number {
 export async function getRemoteCount(path: string): Promise<number> {
   try {
     const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+
     return parseRemoteCount(stdout)
   } catch (err) {
     console.warn('[getRemoteCount] git remote failed', { path, err })
+
     return 0
   }
 }
@@ -120,6 +133,7 @@ export async function getDefaultRemote(
   options: LocalGitExecOptions = {}
 ): Promise<string> {
   const defaultRef = await getDefaultBaseRefAsync(path, options)
+
   const defaultBranch = defaultRef
     ? defaultRef.includes('/')
       ? defaultRef.split('/').slice(1).join('/')
@@ -132,7 +146,9 @@ export async function getDefaultRemote(
         ['config', '--get', `branch.${defaultBranch}.remote`],
         gitExecOptions(path, options)
       )
+
       const value = stdout.trim()
+
       if (value) {
         return value
       }
@@ -143,19 +159,24 @@ export async function getDefaultRemote(
 
   try {
     const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
+
     const remotes = stdout
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
+
     if (remotes.includes('origin')) {
       return 'origin'
     }
+
     if (remotes.length === 1) {
       return remotes[0]
     }
+
     if (remotes.length === 0) {
       throw new Error('Repo has no configured git remotes.')
     }
+
     throw new Error(
       `Repo has multiple remotes (${remotes.join(', ')}) and no default is configured. Set branch.<default>.remote.`
     )
@@ -163,6 +184,7 @@ export async function getDefaultRemote(
     if (error instanceof Error) {
       throw error
     }
+
     throw new Error('Failed to resolve default remote for repo.')
   }
 }
@@ -174,13 +196,17 @@ export function getRemoteFileUrl(
   line: number
 ): string | null {
   const remoteUrl = getRemoteUrl(repoPath)
+
   if (!remoteUrl) {
     return null
   }
+
   const defaultBaseRef = getDefaultBaseRef(repoPath)
+
   if (!defaultBaseRef) {
     return null
   }
+
   return buildHostedRemoteFileUrl(
     remoteUrl,
     relativePath,
@@ -192,5 +218,6 @@ export function getRemoteFileUrl(
 /** Build a hosted commit URL when the origin belongs to a supported provider. */
 export function getRemoteCommitUrl(repoPath: string, sha: string): string | null {
   const remoteUrl = getRemoteUrl(repoPath)
+
   return remoteUrl ? buildHostedRemoteCommitUrl(remoteUrl, sha) : null
 }

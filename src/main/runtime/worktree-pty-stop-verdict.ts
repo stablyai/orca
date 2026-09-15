@@ -13,11 +13,14 @@ export function summarizeWorktreePtyStopVerdict(
 ): WorktreePtyStopVerdict {
   let ptyStopVerdict: 'live' | 'unverifiable' | undefined
   let ptyStopReason: string | undefined
+
   for (const ptyId of ptyIds) {
     const verdict = getVerdict(ptyId)
+
     if (verdict?.status === 'live') {
       return { ptyStopVerdict: 'live' }
     }
+
     if (verdict?.status === 'unverifiable') {
       ptyStopVerdict = 'unverifiable'
       ptyStopReason ??= verdict.reason
@@ -26,6 +29,7 @@ export function summarizeWorktreePtyStopVerdict(
       ptyStopReason ??= 'the owning host did not confirm the PTY exit'
     }
   }
+
   return {
     ...(ptyStopVerdict ? { ptyStopVerdict } : {}),
     ...(ptyStopReason ? { ptyStopReason } : {})

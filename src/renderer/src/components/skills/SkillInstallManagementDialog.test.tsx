@@ -12,6 +12,7 @@ import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from '@/hooks/installed-agent-sk
 import { SkillInstallManagementDialog } from './SkillInstallManagementDialog'
 
 const DIGEST = 'a'.repeat(64)
+
 const ARCHIVE_SHA = 'b'.repeat(64)
 
 function version(versionId: string, createdAt: string): SkillCloudVersion {
@@ -69,9 +70,11 @@ function skillsApi(
   details = packageDetails(versions)
 ) {
   const installed = Array.isArray(installedInput) ? installedInput : [installedInput]
+
   let progressListener:
     | ((progress: { operationId: string; phase: 'authorizing' | 'installing' }) => void)
     | null = null
+
   return {
     listManagedInstalls: vi.fn().mockResolvedValue({ status: 'ok', value: installed }),
     getPackage: vi.fn().mockResolvedValue({ status: 'ok', value: details }),
@@ -118,6 +121,7 @@ function skillsApi(
     cancelInstall: vi.fn().mockResolvedValue({ cancelled: true }),
     onInstallProgress: vi.fn((listener) => {
       progressListener = listener
+
       return () => {
         progressListener = null
       }
@@ -129,6 +133,7 @@ function skillsApi(
 
 function bundleVersion(versionId: string, names: string[]): SkillCloudVersion {
   const createdAt = '2026-08-12T00:00:00.000Z'
+
   return {
     ...version(versionId, createdAt),
     name: 'team-skills',
@@ -208,9 +213,11 @@ describe('SkillInstallManagementDialog', () => {
         }
       ]
     })
+
     const skills = skillsApi(install('local_version'), [
       version('local_version', '2026-08-12T00:00:00.000Z')
     ])
+
     let resolveLocal: ((value: unknown) => void) | undefined
     skills.listManagedInstalls
       .mockImplementationOnce(() => new Promise((resolve) => (resolveLocal = resolve)) as never)
@@ -252,14 +259,17 @@ describe('SkillInstallManagementDialog', () => {
         }
       ]
     })
+
     const remoteInstall = {
       ...install('remote_version'),
       name: 'remote-skill',
       packageId: 'pkg_remote'
     }
+
     const skills = skillsApi(install('local_version'), [
       version('local_version', '2026-08-12T00:00:00.000Z')
     ])
+
     let resolveLocalDetails: ((value: unknown) => void) | undefined
     skills.listManagedInstalls
       .mockResolvedValueOnce({ status: 'ok', value: [install('local_version')] })
@@ -304,6 +314,7 @@ describe('SkillInstallManagementDialog', () => {
       version('ver_2', '2026-08-12T00:00:00.000Z'),
       version('ver_1', '2026-08-11T00:00:00.000Z')
     ])
+
     const changed = vi.fn()
     window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, changed)
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
@@ -325,6 +336,7 @@ describe('SkillInstallManagementDialog', () => {
       version('ver_2', '2026-08-12T00:00:00.000Z'),
       version('ver_1', '2026-08-11T00:00:00.000Z')
     ])
+
     skills.installPackageVersion.mockResolvedValue({
       status: 'ok',
       value: {
@@ -353,6 +365,7 @@ describe('SkillInstallManagementDialog', () => {
       version('ver_1', '2026-08-11T00:00:00.000Z'),
       version('ver_2', '2026-08-12T00:00:00.000Z')
     ])
+
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
     render(<SkillInstallManagementDialog open onOpenChange={() => undefined} />)
     await openInstall()
@@ -406,6 +419,7 @@ describe('SkillInstallManagementDialog', () => {
       version('ver_2', '2026-08-12T00:00:00.000Z'),
       version('ver_1', '2026-08-11T00:00:00.000Z')
     ])
+
     skills.installPackageVersion.mockResolvedValue({
       status: 'ok',
       value: {
@@ -462,6 +476,7 @@ describe('SkillInstallManagementDialog', () => {
   it('opens an active bundle link in the existing machine installer', async () => {
     const installed = [bundleInstall('alpha-skill'), bundleInstall('beta-skill')]
     const versions = [bundleVersion('ver_1', ['alpha-skill', 'beta-skill'])]
+
     const details = {
       ...packageDetails(versions),
       management: {
@@ -474,6 +489,7 @@ describe('SkillInstallManagementDialog', () => {
         ]
       }
     }
+
     const skills = skillsApi(installed, versions, details)
     const onOpenChange = vi.fn()
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })

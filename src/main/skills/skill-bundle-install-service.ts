@@ -64,6 +64,7 @@ function conflictResult(
   preview: Awaited<ReturnType<typeof previewLocalExtractedSkillPackage>>
 ): SkillBundleSkillResult {
   const state = preview.currentState
+
   const kind =
     state.kind === 'modified' ||
     state.kind === 'unowned' ||
@@ -71,6 +72,7 @@ function conflictResult(
     state.kind === 'name-collision'
       ? state.kind
       : 'modified'
+
   return {
     skillId: skill.id,
     name: skill.name,
@@ -105,6 +107,7 @@ function completedSkillResult(input: {
             : input.result.status === 'removed'
               ? 'failed'
               : input.result.status
+
   return {
     skillId: input.skill.id,
     name: input.skill.name,
@@ -129,9 +132,11 @@ function bundleStatus(
   if (skills.every((skill) => skill.status === 'cancelled')) {
     return 'cancelled'
   }
+
   if (skills.every((skill) => skill.status === 'failed')) {
     return 'failed'
   }
+
   return skills.some(
     (skill) =>
       ['kept-local', 'failed', 'cancelled'].includes(skill.status) ||
@@ -152,14 +157,18 @@ export async function installSkillBundle(
     expectedPackageId: input.packageId,
     expectedVersionId: input.versionId
   }).destinationRoot
+
   await mkdir(destinationRoot, { recursive: true })
   const stateDirectory = join(input.orcaStateDirectory, 'skill-installs')
+
   const recovery = await beginSkillExtractionRecovery(
     stateDirectory,
     destinationRoot,
     input.wslDistro
   )
+
   const extractionPath = recovery.extractionPath
+
   try {
     const extracted = await extractSkillBundleArchive({
       archivePath: input.archivePath,
@@ -170,12 +179,16 @@ export async function installSkillBundle(
       expectedVersionId: input.versionId,
       signal: input.signal
     })
+
     const selected = new Set(input.selectedSkillIds)
     const skills = extracted.manifest.skills.filter((skill) => selected.has(skill.id))
+
     if (skills.length !== selected.size) {
       throw new Error('skill-bundle-selection-invalid')
     }
+
     const results: SkillBundleSkillResult[] = []
+
     for (const [index, skill] of skills.entries()) {
       try {
         input.onProgress?.({
@@ -188,6 +201,7 @@ export async function installSkillBundle(
       } catch {
         // Why: progress observers cannot participate in the install transaction.
       }
+
       if (input.signal?.aborted) {
         results.push({
           skillId: skill.id,
@@ -198,19 +212,24 @@ export async function installSkillBundle(
         })
         continue
       }
+
       const manifest = skillManifest({
         packageId: extracted.manifest.packageId,
         versionId: extracted.manifest.versionId,
         createdAt: extracted.manifest.createdAt,
         skill
       })
+
       const wrapper = join(extractionPath, 'selected', skill.id)
+
       const extractedSkill: LocalExtractedSkillPackage = {
         extractionPath: wrapper,
         manifest,
         archiveSha256: extracted.archiveSha256
       }
+
       const decision = input.conflictDecisions?.get(skill.id)
+
       const serviceInput: SkillInstallServiceInput = {
         ...input,
         expectedPackageDigest: skill.digest,
@@ -219,21 +238,26 @@ export async function installSkillBundle(
         sourceBundleDigest: extracted.manifest.bundleDigest,
         conflictResolution: decision === 'keep-local' ? undefined : decision
       }
+
       const localInput = skillInstallLocalInput(serviceInput)
       const preview = await previewLocalExtractedSkillPackage(localInput, extractedSkill)
+
       const isConflict = !['missing', 'unchanged', 'clean-update'].includes(
         preview.currentState.kind
       )
+
       if (isConflict && decision !== 'replace-and-discard-local') {
         results.push(conflictResult(skill, preview))
         continue
       }
+
       await mkdir(wrapper, { recursive: true, mode: 0o700 })
       const source = join(extracted.skillsDirectory, skill.name)
       const target = join(wrapper, 'skill')
       await (input.filesystem
         ? input.filesystem.rename(source, target)
         : renameSkillPathWithWindowsRetry(source, target))
+
       try {
         await input.filesystem?.prepareExtractedSkill(target, manifest)
         const result = await installSharedExtractedSkill(serviceInput, extractedSkill)
@@ -250,6 +274,7 @@ export async function installSkillBundle(
         })
       }
     }
+
     return SkillBundleInstallResultSchema.parse({
       operationId: input.operationId,
       packageId: extracted.manifest.packageId,

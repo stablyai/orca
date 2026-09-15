@@ -6,25 +6,32 @@ import type { RpcContext, RpcStreamingMethod, RpcMethod } from '../core'
 it('keeps desktop-disabled events out of legacy live and replay streams', async () => {
   const controller = new RuntimeMobileNotificationController()
   const cleanups: (() => void)[] = []
+
   const runtime = {
     onNotificationDispatched: controller.onDispatched.bind(controller),
     getMobileNotificationEpoch: controller.getEpoch.bind(controller),
     getMissedNotificationsSince: controller.getMissedSince.bind(controller),
     registerSubscriptionCleanup: (_id: string, cleanup: () => void) => cleanups.push(cleanup)
   }
+
   const ctx = { runtime } as unknown as RpcContext
+
   const subscribe = NOTIFICATION_METHODS.find(
     (method) => method.name === 'notifications.subscribe'
   ) as RpcStreamingMethod
+
   const replay = NOTIFICATION_METHODS.find(
     (method) => method.name === 'notifications.getMissedSince'
   ) as RpcMethod
+
   const legacy: unknown[] = []
   const current: unknown[] = []
+
   const pending = [
     subscribe.handler({}, ctx, (event) => legacy.push(event)),
     subscribe.handler({ includeDesktopSuppressed: true }, ctx, (event) => current.push(event))
   ]
+
   controller.dispatch({
     type: 'notification',
     source: 'terminal-bell',
@@ -45,10 +52,12 @@ it('keeps desktop-disabled events out of legacy live and replay streams', async 
   expect(await replay.handler({ lastSeenSeq: 0 }, ctx)).toMatchObject({
     notifications: [{ title: 'done' }]
   })
+
   const result = (await replay.handler(
     { lastSeenSeq: 0, includeDesktopSuppressed: true },
     ctx
   )) as { notifications: unknown[] }
+
   expect(result.notifications).toHaveLength(2)
   cleanups.forEach((cleanup) => cleanup())
   await Promise.all(pending)
@@ -56,6 +65,7 @@ it('keeps desktop-disabled events out of legacy live and replay streams', async 
 
 it('preserves legacy workspace cooldown while letting current phones filter before cooldown', async () => {
   const { createNotificationStreamFilter } = await import('./notification-stream-policy')
+
   const events = [
     {
       type: 'notification' as const,
@@ -74,6 +84,7 @@ it('preserves legacy workspace cooldown while letting current phones filter befo
       emittedAt: 10250
     }
   ]
+
   const controller = new RuntimeMobileNotificationController()
   events.forEach((event) => controller.dispatch(event))
   const recorded = controller.getMissedSince(0)

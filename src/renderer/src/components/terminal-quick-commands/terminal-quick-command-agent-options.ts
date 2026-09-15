@@ -29,6 +29,7 @@ export function getTerminalQuickCommandAgentOptions(
   return [...catalog].sort((a, b) => {
     const aSupported = supportsTerminalAgentQuickCommand(a.id)
     const bSupported = supportsTerminalAgentQuickCommand(b.id)
+
     if (aSupported !== bSupported) {
       return aSupported ? -1 : 1
     }
@@ -36,6 +37,7 @@ export function getTerminalQuickCommandAgentOptions(
     const fallbackRank = QUICK_COMMAND_AGENT_PRESENTATION_ORDER.length
     const aRank = QUICK_COMMAND_AGENT_ORDER_RANK.get(a.id) ?? fallbackRank
     const bRank = QUICK_COMMAND_AGENT_ORDER_RANK.get(b.id) ?? fallbackRank
+
     if (aRank !== bRank) {
       return aRank - bRank
     }

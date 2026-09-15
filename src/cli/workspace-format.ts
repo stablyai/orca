@@ -13,6 +13,7 @@ export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
   const hostAvailable = snapshot.host.availableMemory ?? snapshot.host.freeMemory
   const hostAvailableSource = snapshot.host.availableMemorySource ?? 'free-memory'
+
   const lines = [
     `collectedAt: ${new Date(snapshot.collectedAt).toISOString()}`,
     `totalMemory: ${formatByteCount(snapshot.totalMemory)}`,
@@ -36,16 +37,20 @@ export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
 
   if (topWorktrees.length === 0) {
     lines.push('topWorktrees: none')
+
     return lines.join('\n')
   }
 
   lines.push('', 'Top worktrees:')
+
   for (const worktree of topWorktrees) {
     lines.push(formatWorktreeMemoryLine(worktree))
   }
+
   if (snapshot.worktrees.length > topWorktrees.length) {
     lines.push(`... ${snapshot.worktrees.length - topWorktrees.length} more worktrees`)
   }
+
   return lines.join('\n')
 }
 
@@ -67,6 +72,7 @@ function formatCommitLines(snapshot: MemorySnapshot): string[] {
   if (typeof snapshot.totalPrivateMemory !== 'number') {
     return []
   }
+
   return [
     `totalPrivateMemory: ${formatByteCount(snapshot.totalPrivateMemory)}`,
     `processCommitMetric: ${formatProcessCommitMetric(snapshot.processCommitMetric)}`
@@ -93,14 +99,18 @@ function formatByteCount(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return '0 B'
   }
+
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let value = bytes
   let unitIndex = 0
+
   while (value >= 1024 && unitIndex < units.length - 1) {
     value /= 1024
     unitIndex += 1
   }
+
   const formatted = value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)
+
   return `${formatted} ${units[unitIndex]}`
 }
 
@@ -110,6 +120,7 @@ export function formatEnvironmentList(result: {
   if (result.environments.length === 0) {
     return 'No saved environments.'
   }
+
   return result.environments
     .map(
       (environment) =>
@@ -133,16 +144,20 @@ export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): s
 
 export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreePsResult>): string {
   const scope = formatListingHostScope(result.hostScope)
+
   if (result.worktrees.length === 0) {
     return `No worktrees found.\n${scope}`
   }
+
   const body = result.worktrees
     .map(
       (worktree) =>
         `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
+
   const bodyWithScope = `${body}\n\n${scope}`
+
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
     : bodyWithScope
@@ -152,6 +167,7 @@ export function formatRepoList(result: RuntimeRepoList): string {
   if (result.repos.length === 0) {
     return 'No repos found.'
   }
+
   return result.repos.map((repo) => `${repo.id}  ${repo.displayName}  ${repo.path}`).join('\n')
 }
 
@@ -168,6 +184,7 @@ export function formatRepoRefs(result: RuntimeRepoSearchRefs): string {
   if (result.refs.length === 0) {
     return 'No refs found.'
   }
+
   return result.truncated ? `${result.refs.join('\n')}\n\ntruncated: yes` : result.refs.join('\n')
 }
 
@@ -175,16 +192,21 @@ export function formatWorktreeList(
   result: WithAnnotatedHostScope<RuntimeWorktreeListResult>
 ): string {
   const scope = formatListingHostScope(result.hostScope)
+
   if (result.worktrees.length === 0) {
     return `No worktrees found.\n${scope}`
   }
+
   const body = result.worktrees
     .map((worktree) => {
       const childCount = worktree.childWorktreeIds?.length ?? 0
+
       return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
     })
     .join('\n\n')
+
   const bodyWithScope = `${body}\n\n${scope}`
+
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
     : bodyWithScope
@@ -192,6 +214,7 @@ export function formatWorktreeList(
 
 export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }): string {
   const worktree = result.worktree
+
   return Object.entries(worktree)
     .map(
       ([key, value]) =>

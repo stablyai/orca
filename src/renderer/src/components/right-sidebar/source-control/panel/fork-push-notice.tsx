@@ -12,6 +12,7 @@ export function SourceControlForkPushNotice({
   if (!pushTarget || pushTarget.remoteName === 'origin') {
     return null
   }
+
   return (
     <div
       className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground"

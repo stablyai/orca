@@ -47,11 +47,17 @@ const EMPTY_TALLY: TccPromptTally = {
 }
 
 let tally: TccPromptTally = { ...EMPTY_TALLY }
+
 let mainWindowRef: BrowserWindow | null = null
+
 let watch: MacosTccPromptWatch | null = null
+
 let nextClaimId = 0
+
 let pendingClaim: { claimId: number; ownerToken: number } | null = null
+
 let deferredWatchStartTimer: ReturnType<typeof setTimeout> | null = null
+
 let deferredWatchStartGeneration = 0
 
 function tallyPath(): string {
@@ -62,6 +68,7 @@ function loadTally(): TccPromptTally {
   try {
     const parsed = JSON.parse(readFileSync(tallyPath(), 'utf-8')) as Partial<TccPromptTally>
     const dismissed = parsed.dismissed === true
+
     if (dismissed) {
       return {
         noticeVersion: TCC_PROMPT_NOTICE_VERSION,
@@ -71,14 +78,18 @@ function loadTally(): TccPromptTally {
         acknowledgedAfterClose: true
       }
     }
+
     if (parsed.noticeVersion !== TCC_PROMPT_NOTICE_VERSION) {
       return { ...EMPTY_TALLY }
     }
+
     if (typeof parsed.acknowledgedAfterClose !== 'boolean') {
       // Why: an incomplete tally proves only a past prompt, not that access is still missing.
       return { ...EMPTY_TALLY }
     }
+
     const acknowledgedAfterClose = parsed.acknowledgedAfterClose === true
+
     return {
       noticeVersion: TCC_PROMPT_NOTICE_VERSION,
       promptCount: typeof parsed.promptCount === 'number' ? parsed.promptCount : 0,
@@ -107,11 +118,14 @@ function recordPrompt(): TccPromptNoticePayload | null {
   if (tally.dismissed || tally.notified || tally.promptCount >= TCC_PROMPT_NOTICE_THRESHOLD) {
     return null
   }
+
   tally = { ...tally, promptCount: tally.promptCount + 1 }
   saveTally()
+
   if (tally.promptCount < TCC_PROMPT_NOTICE_THRESHOLD) {
     return null
   }
+
   return { promptCount: tally.promptCount }
 }
 
@@ -124,8 +138,10 @@ export function consumePendingTccPromptNotice(ownerToken: number): TccPromptNoti
   ) {
     return null
   }
+
   const claimId = ++nextClaimId
   pendingClaim = { claimId, ownerToken }
+
   return { claimId, promptCount: tally.promptCount }
 }
 
@@ -138,6 +154,7 @@ export function acknowledgePendingTccPromptNotice(ownerToken: number, claimId: n
   ) {
     return
   }
+
   pendingClaim = null
   tally = { ...tally, notified: true, acknowledgedAfterClose: true }
   saveTally()
@@ -173,6 +190,7 @@ function sendTccPromptNotice(mainWindow: BrowserWindow, payload: TccPromptNotice
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     return
   }
+
   try {
     mainWindow.webContents.send(TCC_PROMPT_NOTICE_CHANNEL, payload)
   } catch {
@@ -182,6 +200,7 @@ function sendTccPromptNotice(mainWindow: BrowserWindow, payload: TccPromptNotice
 
 function cancelDeferredWatchStart(): void {
   deferredWatchStartGeneration += 1
+
   if (deferredWatchStartTimer) {
     clearTimeout(deferredWatchStartTimer)
     deferredWatchStartTimer = null
@@ -194,15 +213,20 @@ function startWatchAfterFirstVisibleProgress(
   deferUntilReadyToShow: boolean
 ): void {
   cancelDeferredWatchStart()
+
   if (!deferUntilReadyToShow) {
     targetWatch.start()
+
     return
   }
+
   const generation = deferredWatchStartGeneration
+
   const startDeferredWatch = (): void => {
     if (deferredWatchStartGeneration !== generation) {
       return
     }
+
     cancelDeferredWatchStart()
     const startGeneration = deferredWatchStartGeneration
     setImmediate(() => {
@@ -211,6 +235,7 @@ function startWatchAfterFirstVisibleProgress(
       }
     })
   }
+
   mainWindow.once('ready-to-show', startDeferredWatch)
   deferredWatchStartTimer = setTimeout(startDeferredWatch, TCC_PROMPT_WATCH_START_FALLBACK_MS)
   deferredWatchStartTimer.unref?.()
@@ -223,6 +248,7 @@ export function initTccPromptNotice(
   if (process.platform !== 'darwin') {
     return
   }
+
   if (watch) {
     trackMainWindow(mainWindow)
     startWatchAfterFirstVisibleProgress(
@@ -230,29 +256,39 @@ export function initTccPromptNotice(
       watch,
       options?.deferWatchUntilReadyToShow === true
     )
+
     return
   }
+
   tally = loadTally()
+
   if (tally.dismissed || tally.notified) {
     return
   }
+
   if (tally.promptCount >= TCC_PROMPT_NOTICE_THRESHOLD) {
     sendTccPromptNotice(mainWindow, {
       promptCount: tally.promptCount
     })
+
     return
   }
+
   trackMainWindow(mainWindow)
   watch = new MacosTccPromptWatch({
     onPrompt: () => {
       const payload = recordPrompt()
+
       if (!payload) {
         return
       }
+
       const target = mainWindowRef
+
       if (target) {
         sendTccPromptNotice(target, payload)
       }
+
       // Why: pending state is renderer-acknowledged, so the log child can stop at threshold.
       stopTccPromptNotice()
     }

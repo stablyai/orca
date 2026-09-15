@@ -63,6 +63,7 @@ describe('skill install management', () => {
 
   it('resolves providers once for every skill in a bundle preview', async () => {
     const detectProviders = vi.fn(async () => ['codex', 'claude'])
+
     const preview = await previewSharedSkillBundleInstall(
       {
         package: {

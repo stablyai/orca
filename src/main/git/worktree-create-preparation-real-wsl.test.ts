@@ -21,6 +21,7 @@ it.skipIf(process.platform !== 'win32' || !wslDistro)(
     const preparedPath = join(root, 'prepared checkout')
     const finalPath = join(root, 'final checkout')
     const options = { wslDistro, timeout: 60_000 }
+
     const git = async (cwd: string, args: string[]): Promise<string> =>
       (await gitExecFileAsync(args, { cwd, ...options })).stdout.trim()
 

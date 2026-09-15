@@ -230,15 +230,18 @@ describe('collectRetainedAgentsOnDisappear', () => {
 describe('useRetainedAgentsSync', () => {
   it('does not build a fleet snapshot for a title-only publication across 300 worktrees', async () => {
     const repo = makeRepo()
+
     const worktrees = Array.from({ length: 300 }, (_, index) =>
       makeWorktree({ id: `wt-${index}`, path: `/repo/wt-${index}` })
     )
+
     const tabsByWorktree = Object.fromEntries(
       worktrees.map((worktree, index) => [
         worktree.id,
         [makeTab({ id: `tab-${index}`, worktreeId: worktree.id, title: `Title ${index}` })]
       ])
     )
+
     const retainAgents = vi.fn()
     const pruneRetainedAgents = vi.fn()
     useAppStore.setState({

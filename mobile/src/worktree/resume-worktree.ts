@@ -12,16 +12,21 @@ export function pickResumeWorktree<T extends ResumeCandidate>(worktrees: T[]): T
   if (worktrees.length === 0) {
     return null
   }
+
   const desktopActive = worktrees.find((w) => w.isActive)
+
   if (desktopActive) {
     return desktopActive
   }
+
   // No desktop focus → most recent terminal output, else the first.
   let best = worktrees[0]
+
   for (const w of worktrees) {
     if ((w.lastOutputAt ?? 0) > (best.lastOutputAt ?? 0)) {
       best = w
     }
   }
+
   return best
 }

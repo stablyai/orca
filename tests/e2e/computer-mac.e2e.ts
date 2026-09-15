@@ -19,6 +19,7 @@ import {
 } from './helpers/computer-coordinate-click-driver'
 
 const isMac = process.platform === 'darwin'
+
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => {
@@ -51,10 +52,12 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     const before = parseJsonOutput<{ result: ComputerSnapshotResult }>(
       (await runOrcaCli(['computer', 'get-app-state', '--app', 'TextEdit', '--json'])).stdout
     )
+
     const textTarget = findRoleIndex(
       before.result.snapshot.treeText,
       /^\s*(\d+)\s+(text entry area|text field|HTML content)(?:\s|$)/m
     )
+
     expect(textTarget).toBeGreaterThanOrEqual(0)
 
     await runOrcaCli([
@@ -72,6 +75,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
       (await runOrcaCli(['computer', 'get-app-state', '--app', 'TextEdit', '--json'])).stdout
     )
+
     expect(after.result.snapshot.treeText).toContain(marker)
   })
 
@@ -109,6 +113,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(first.result.action?.path).toBe('accessibility')
     expect(first.result.action?.verification?.state).toBe('verified')
 
@@ -126,10 +131,12 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(selectAll.result.action?.actionName).toBe('AXSelectAll')
     expect(selectAll.result.action?.verification?.state).toBe('verified')
 
     const marker = `orca paste final ${Date.now()}`
+
     const second = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -144,6 +151,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(second.result.action?.actionName).toBe('AXReplaceSelection')
     expect(second.result.action?.verification).toMatchObject({
       state: 'verified',
@@ -163,6 +171,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(after.result.snapshot.treeText).toContain(marker)
     expect(after.result.snapshot.treeText).not.toContain('orca paste first')
   })
@@ -181,10 +190,12 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     const textTarget = findRoleIndex(
       before.result.snapshot.treeText,
       /^\s*(\d+)\s+(text entry area|text field|HTML content)(?:\s|$)/m
     )
+
     expect(textTarget).toBeGreaterThanOrEqual(0)
 
     await runOrcaCli([
@@ -223,10 +234,12 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(selectAll.result.action?.actionName).toBe('AXSelectAll')
     expect(selectAll.result.action?.verification?.state).toBe('verified')
 
     const marker = `orca unfocused final ${Date.now()}`
+
     const replacement = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -241,6 +254,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(replacement.result.action?.actionName).toBe('AXReplaceSelection')
     expect(replacement.result.action?.verification).toMatchObject({
       state: 'verified',
@@ -260,6 +274,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
         ])
       ).stdout
     )
+
     expect(after.result.snapshot.treeText).toContain(marker)
     expect(after.result.snapshot.treeText).not.toContain('orca unfocused first')
   })

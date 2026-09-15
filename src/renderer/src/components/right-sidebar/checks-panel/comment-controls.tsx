@@ -49,6 +49,7 @@ export function CopyButton({
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -63,6 +64,7 @@ export function CopyButton({
         if (!isMountedRef.current) {
           return
         }
+
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {
@@ -150,9 +152,11 @@ export function formatLineRange(comment: PRComment): string | null {
   if (!comment.line) {
     return null
   }
+
   if (comment.startLine && comment.startLine !== comment.line) {
     return `L${comment.startLine}-L${comment.line}`
   }
+
   return `L${comment.line}`
 }
 
@@ -161,9 +165,11 @@ export function isMutablePRConversationComment(comment: PRComment): boolean {
   if (comment.threadId || comment.path) {
     return false
   }
+
   if (comment.url && comment.url.includes('pullrequestreview')) {
     return false
   }
+
   return Number.isSafeInteger(comment.id) && comment.id > 0
 }
 
@@ -189,6 +195,7 @@ export function CommentMoreMenu({
   const hasEdit = Boolean(onStartEdit)
   const hasDelete = Boolean(onDelete)
   const hasQueue = Boolean(onQueueForAgent)
+
   if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue && !hasMarkAsBot) {
     return null
   }
@@ -276,8 +283,10 @@ export function buildCopyText(comment: PRComment): string {
   if (!comment.path) {
     return comment.body
   }
+
   const lineRange = formatLineRange(comment)
   const location = lineRange ? `${comment.path}:${lineRange}` : comment.path
+
   return `File: ${location}\n\n${comment.body}`
 }
 
@@ -292,6 +301,7 @@ export function QueueForAgentButton({
     'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
     'Queue for agent'
   )
+
   // Why: always-visible row action, but ghost styling keeps it from reading as a card-level CTA.
   return (
     <button
@@ -329,6 +339,7 @@ export function PRCommentActionBadge({
       </span>
     )
   }
+
   if (actionState === 'resolved') {
     return (
       <span className={presentation.statusBadgeResolved}>
@@ -336,5 +347,6 @@ export function PRCommentActionBadge({
       </span>
     )
   }
+
   return null
 }

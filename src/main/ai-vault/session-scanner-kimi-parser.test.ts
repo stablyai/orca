@@ -98,6 +98,7 @@ async function writeKimiSession(args: {
   await mkdir(join(sessionDir, 'agents', 'main'), { recursive: true })
 
   const statePath = join(sessionDir, 'state.json')
+
   const state = args.state ?? {
     createdAt: '2026-06-19T07:19:19.118Z',
     updatedAt: '2026-06-19T07:19:19.161Z',
@@ -109,6 +110,7 @@ async function writeKimiSession(args: {
     custom: {},
     lastPrompt: 'Please explain this project briefly'
   }
+
   await writeFile(statePath, JSON.stringify(state))
 
   if (args.workDir !== null) {
@@ -126,6 +128,7 @@ async function writeKimiSession(args: {
   }
 
   const mtimeMs = Date.now()
+
   return { file: { path: statePath, mtimeMs, modifiedAt: new Date(mtimeMs).toISOString() } }
 }
 
@@ -184,6 +187,7 @@ describe('parseKimiSessionFile', () => {
 
   it('keeps preview messages at the 220-char preview limit, not the 96-char title limit', async () => {
     const longReply = 'x'.repeat(300)
+
     const { file } = await writeKimiSession({
       wireLines: [
         {
@@ -201,6 +205,7 @@ describe('parseKimiSessionFile', () => {
         { type: 'context.append_loop_event', event: { type: 'step.end' } }
       ]
     })
+
     const session = await parseKimiSessionFile(file, 'darwin')
     const [userPreview, assistantPreview] = session!.previewMessages
     // 220-char cap = 217 chars + '...'; the 96-char title cap would be 93 + '...'.
@@ -220,6 +225,7 @@ describe('parseKimiSessionFile', () => {
       },
       wireLines: []
     })
+
     const session = await parseKimiSessionFile(file, 'darwin')
     expect(session?.title).toBe('do the thing')
   })
@@ -243,6 +249,7 @@ describe('parseKimiSessionFile', () => {
     for (const indexPath of indexPaths.slice(0, KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS)) {
       await readKimiWorkDirBySessionId(indexPath)
     }
+
     const refreshedFirst = await readKimiWorkDirBySessionId(indexPaths[0])
     expect(refreshedFirst.get('session_0')).toBe('/tmp/kimi-0')
     await readKimiWorkDirBySessionId(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])

@@ -140,6 +140,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         promptDelivery: startupPlan?.draftPrompt ? 'draft' : 'auto-submit',
         initialSessionOptions: startupPlan?.sessionOptions
       })
+
       const structuredLaunch = launchPlan.route === 'structured-native-chat'
       const effectiveBackendStartup = structuredLaunch ? undefined : backendStartup
 
@@ -242,9 +243,12 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       if (settlement?.kind === 'visibility-unknown' || settlement?.kind === 'failed') {
         setSidebarOpen(true)
         onCreated?.()
+
         return
       }
+
       const structuredLaunchAccepted = settlement?.kind === 'structured'
+
       // Why: the workspace was already activated before launch; the fallback's activation, when
       // present, supersedes it.
       const activation =
@@ -255,6 +259,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       if (!structuredLaunchAccepted && startupPlan) {
         const optionScopeKey =
           (activation !== false ? activation.primaryTabId : null) ?? result.startupTerminal?.tabId
+
         if (optionScopeKey) {
           seedNativeChatAppliedSessionOptions(optionScopeKey, tuiAgent, startupPlan.sessionOptions)
         }

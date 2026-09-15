@@ -34,6 +34,7 @@ describe('SshPtyLegacyProjectionLedger', () => {
     const terminality = new SshPtyProjectionTerminality()
     const terminal = terminality.whenTerminal('pty-1', 3, 'incarnation-1', () => true)
     let nextResolved = false
+
     const next = terminality
       .whenTerminal('pty-1', 4, 'incarnation-2', () => true)
       .then(() => {
@@ -61,11 +62,13 @@ describe('SshPtyLegacyProjectionLedger', () => {
 
   it('keeps immutable generation, incarnation, display, sequence, raw length, and scanner facts', () => {
     const ledger = new SshPtyLegacyProjectionLedger()
+
     const first = reserve(ledger, {
       data: '\x1b[?2031h',
       rawLength: 11,
       sequenceEnd: 11
     })
+
     const semantics = ledger.commit(first)
 
     expect(semantics.identity).toMatchObject({
@@ -108,9 +111,11 @@ describe('SshPtyLegacyProjectionLedger', () => {
     ledger.publishPrefix([projection.identity.projectionSemanticsId], 3, 3)
 
     let settled = false
+
     const terminal = ledger.whenPtyTerminal('pty-1', 3, 'incarnation-1').then(() => {
       settled = true
     })
+
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -124,6 +129,7 @@ describe('SshPtyLegacyProjectionLedger', () => {
 
   it('publishes and settles transformed source accounting with no display text', () => {
     const ledger = new SshPtyLegacyProjectionLedger()
+
     const projection = ledger.commit(
       reserve(ledger, {
         data: '',
@@ -149,6 +155,7 @@ describe('SshPtyLegacyProjectionLedger', () => {
       sequenceEnd: 4,
       rawLength: 4
     })
+
     expect(next.semantics.identity).toMatchObject({
       ptyIncarnation: 'incarnation-2',
       displayStart: 0
@@ -158,9 +165,11 @@ describe('SshPtyLegacyProjectionLedger', () => {
 
   it('keeps split publication attached to one immutable desktop span', () => {
     const settled: unknown[] = []
+
     const ledger = new SshPtyLegacyProjectionLedger({
       onSettled: (span) => settled.push(span)
     })
+
     const projection = ledger.commit(
       reserve(ledger, {
         data: 'abcd',
@@ -169,6 +178,7 @@ describe('SshPtyLegacyProjectionLedger', () => {
         source: source(0, 4)
       })
     )
+
     const id = projection.identity.projectionSemanticsId
     expect(ledger.hasUnpublished(id)).toBe(true)
 
@@ -194,9 +204,11 @@ describe('SshPtyLegacyProjectionLedger', () => {
 
   it('preserves scanner and display facts after transfer and delivery-token replacement', () => {
     const transferred: unknown[] = []
+
     const ledger = new SshPtyLegacyProjectionLedger({
       onTransferred: (span) => transferred.push(span)
     })
+
     const partial = ledger.commit(
       reserve(ledger, {
         data: '\x1b[?20',
@@ -205,7 +217,9 @@ describe('SshPtyLegacyProjectionLedger', () => {
         source: source(0, 5)
       })
     )
+
     ledger.transfer([partial.identity.projectionSemanticsId], 'renderer-reload')
+
     const continuation = reserve(ledger, {
       data: '31h',
       rawLength: 3,
@@ -231,6 +245,7 @@ describe('SshPtyLegacyProjectionLedger', () => {
         throw new Error('replacement unavailable')
       }
     })
+
     const projection = ledger.commit(reserve(ledger, { source: source(0, 3) }))
 
     expect(() =>

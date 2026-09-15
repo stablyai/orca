@@ -45,8 +45,10 @@ export function TextInputModal({
   // Why: reset before the opening commit so the drawer never paints the
   // previous modal value while preserving the existing close animation state.
   const shouldResetValue = visible && (!previousVisible || defaultValue !== previousDefaultValue)
+
   if (visible !== previousVisible || shouldResetValue) {
     setPreviousVisible(visible)
+
     if (shouldResetValue) {
       setPreviousDefaultValue(defaultValue)
       setValue(defaultValue)
@@ -55,6 +57,7 @@ export function TextInputModal({
 
   function handleSubmit() {
     const trimmed = value.trim()
+
     if (trimmed || allowEmpty) {
       onSubmit(trimmed)
     }

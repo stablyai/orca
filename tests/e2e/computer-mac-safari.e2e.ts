@@ -15,6 +15,7 @@ import {
 } from './helpers/computer-driver'
 
 const isMac = process.platform === 'darwin'
+
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', () => {
@@ -31,6 +32,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
 
   test('fills a browser-hosted draft using fresh state between actions', async () => {
     const targetArgs = await safariFixtureWindowTargetArgs(fixture.title)
+
     let state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
       (
         await runOrcaCli([
@@ -45,6 +47,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
+
     expect(state.result.snapshot.window.title).toContain(fixture.title)
     expect(state.result.snapshot.treeText).toContain('Draft empty')
 
@@ -52,6 +55,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
       state.result.snapshot.treeText,
       /^\s*(\d+)\s+text field \(settable\) Recipient/m
     )
+
     expect(recipientIndex).toBeGreaterThanOrEqual(0)
 
     await runOrcaCli([
@@ -68,6 +72,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
     ])
 
     const recipient = `agent-${Date.now()}@example.com`
+
     const recipientPaste = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -84,6 +89,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
+
     expect(recipientPaste.result.action?.verification).toMatchObject({
       state: 'verified',
       property: 'focusedText',
@@ -110,6 +116,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
     expect(state.result.snapshot.treeText).toContain('Body')
 
     const body = `hello browser draft ${Date.now()}`
+
     const bodyPaste = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -126,6 +133,7 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
+
     expect(bodyPaste.result.action?.verification).toMatchObject({
       state: 'verified',
       property: 'focusedText',
@@ -165,12 +173,14 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
+
     expect(saved.result.action?.actionName).toBe('AXPress')
     expect(saved.result.snapshot.treeText).toContain(`Draft ready: ${recipient} / ${body}`)
   })
 
   test('delivers an element-index middle click to the browser receiver', async () => {
     const targetArgs = await safariFixtureWindowTargetArgs(fixture.title)
+
     const before = parseJsonOutput<{ result: ComputerSnapshotResult }>(
       (
         await runOrcaCli([
@@ -185,12 +195,14 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
         ])
       ).stdout
     )
+
     expect(before.result.snapshot.treeText).toContain('Middle click waiting')
 
     const receiverIndex = findRoleIndex(
       before.result.snapshot.treeText,
       'button Middle click receiver'
     )
+
     expect(receiverIndex).toBeGreaterThanOrEqual(0)
 
     const middle = parseJsonOutput<{ result: ComputerActionResult }>(
@@ -222,10 +234,13 @@ async function safariFixtureWindowTargetArgs(title: string): Promise<string[]> {
   const windows = parseJsonOutput<{ result: ComputerListWindowsResult }>(
     (await runOrcaCli(['computer', 'list-windows', '--app', 'com.apple.Safari', '--json'])).stdout
   ).result.windows
+
   const target = windows.find((window) => window.title.includes(title))
   expect(target).toBeTruthy()
+
   if (target?.id !== undefined && target.id !== null) {
     return ['--window-id', String(target.id)]
   }
+
   return ['--window-index', String(target?.index ?? 0)]
 }

@@ -35,6 +35,7 @@ export function buildNativeChatPasteBytes(text: string): string {
   if (isMultilineDraft(text)) {
     return wrapTerminalBracketedPasteText(text)
   }
+
   // Why: sanitize even unframed text so pasted scrollback cannot carry a raw
   // terminal escape into the agent composer.
   return sanitizeBracketedPasteText(text)

@@ -7,6 +7,7 @@ export async function performSetOption(
   input: { key: string; value: string }
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {
   let applied: void | Readonly<Record<string, string>>
+
   try {
     applied = await ctx.adapter.setOption({
       sessionId: ctx.sessionId,
@@ -20,9 +21,12 @@ export async function performSetOption(
         refusal: { code: 'agent_session_operation_invalid', message: error.message }
       }
     }
+
     throw error
   }
+
   await ctx.persistOptions(applied ?? { [input.key]: input.value })
   ctx.publish()
+
   return { ok: true, value: { ...input, ...(applied ? { options: { ...applied } } : {}) } }
 }

@@ -16,8 +16,10 @@ export type BrowserDownloadState = Omit<BrowserDownloadRequestedEvent, 'status' 
 export function formatBrowserDownloadProgress(download: BrowserDownloadState): string | null {
   const received = formatByteCount(download.receivedBytes)
   const total = formatByteCount(download.totalBytes)
+
   if (received && total) {
     return `${received} / ${total}`
   }
+
   return received ?? total
 }

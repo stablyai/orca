@@ -37,6 +37,7 @@ describe('nested repository ignore rules', () => {
     ['[literal]+.*', ['literal-suffix'], false]
   ])('matches %s against %j', async (content, segments, expected) => {
     const rules = await readRules(content)
+
     for (let repeat = 0; repeat < 3; repeat++) {
       expect(isIgnoredNestedRepoDirectory(segments.at(-1)!, segments, rules)).toBe(expected)
     }

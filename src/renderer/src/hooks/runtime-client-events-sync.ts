@@ -61,9 +61,11 @@ export function createRuntimeClientEventsSync(
 
   const clearRetryTimer = (environmentId: string): void => {
     const retryTimer = retryTimers.get(environmentId)
+
     if (!retryTimer) {
       return
     }
+
     clearTimeout(retryTimer)
     retryTimers.delete(environmentId)
   }
@@ -77,6 +79,7 @@ export function createRuntimeClientEventsSync(
     const failure = consecutiveFailures.get(environmentId)
     const failures = failure?.key === subscriptionKey ? failure.count : 0
     const capped = Math.min(retryDelayMs * 2 ** Math.max(0, failures - 1), retryMaxDelayMs)
+
     return capped * (0.5 + random() * 0.5)
   }
 
@@ -88,11 +91,13 @@ export function createRuntimeClientEventsSync(
     if (retryTimers.has(environmentId)) {
       return
     }
+
     // Why: useIpcEvents no longer retries on every store mutation; transient
     // subscribe failures still need a bounded retry while the env remains desired.
     const retryTimer = setTimeout(
       () => {
         retryTimers.delete(environmentId)
+
         if (
           subscribeGeneration !== generation ||
           !deps.getDesiredEnvironmentIds().includes(environmentId) ||
@@ -100,35 +105,44 @@ export function createRuntimeClientEventsSync(
         ) {
           return
         }
+
         sync()
       },
       nextRetryDelayMs(environmentId, subscriptionKey)
     )
+
     retryTimers.set(environmentId, retryTimer)
   }
 
   const stop = (): void => {
     generation += 1
+
     for (const subscription of subscriptions.values()) {
       subscription.unsubscribe()
     }
+
     subscriptions.clear()
     pending.clear()
+
     for (const retryTimer of retryTimers.values()) {
       clearTimeout(retryTimer)
     }
+
     retryTimers.clear()
     consecutiveFailures.clear()
   }
 
   const sync = (): void => {
     const desiredIds = new Set(deps.getDesiredEnvironmentIds())
+
     for (const environmentId of retryTimers.keys()) {
       if (desiredIds.has(environmentId)) {
         continue
       }
+
       clearRetryTimer(environmentId)
     }
+
     for (const environmentId of consecutiveFailures.keys()) {
       if (!desiredIds.has(environmentId)) {
         consecutiveFailures.delete(environmentId)
@@ -139,6 +153,7 @@ export function createRuntimeClientEventsSync(
       if (desiredIds.has(environmentId) && subscription.key === getSubscriptionKey(environmentId)) {
         continue
       }
+
       subscription.unsubscribe()
       subscriptions.delete(environmentId)
     }
@@ -146,15 +161,18 @@ export function createRuntimeClientEventsSync(
     for (const environmentId of desiredIds) {
       const subscriptionKey = getSubscriptionKey(environmentId)
       const pendingSubscription = pending.get(environmentId)
+
       if (pendingSubscription && pendingSubscription.key !== subscriptionKey) {
         pending.delete(environmentId)
       }
+
       if (
         subscriptions.get(environmentId)?.key === subscriptionKey ||
         pending.get(environmentId)?.key === subscriptionKey
       ) {
         continue
       }
+
       clearRetryTimer(environmentId)
       const subscribeGeneration = generation
       const pendingSubscriptionToken = { key: subscriptionKey, generation: subscribeGeneration }
@@ -169,9 +187,11 @@ export function createRuntimeClientEventsSync(
         )
         .then((subscription) => {
           const isCurrentPending = pending.get(environmentId) === pendingSubscriptionToken
+
           if (isCurrentPending) {
             pending.delete(environmentId)
           }
+
           if (
             !isCurrentPending ||
             subscribeGeneration !== generation ||
@@ -179,16 +199,20 @@ export function createRuntimeClientEventsSync(
             getSubscriptionKey(environmentId) !== subscriptionKey
           ) {
             subscription.unsubscribe()
+
             return
           }
+
           // Why: a concurrent subscribe for this environment already won the
           // overwrite-orphan race. Keep the existing subscription and unsubscribe
           // this duplicate — overwriting would lose the existing unsubscribe and
           // leak its preload handle forever.
           if (subscriptions.get(environmentId)?.key === subscriptionKey) {
             subscription.unsubscribe()
+
             return
           }
+
           consecutiveFailures.delete(environmentId)
           subscriptions.set(environmentId, {
             key: subscriptionKey,
@@ -197,15 +221,18 @@ export function createRuntimeClientEventsSync(
         })
         .catch((error) => {
           const isCurrentPending = pending.get(environmentId) === pendingSubscriptionToken
+
           if (isCurrentPending) {
             pending.delete(environmentId)
           }
+
           if (
             isCurrentPending &&
             subscribeGeneration === generation &&
             getSubscriptionKey(environmentId) === subscriptionKey
           ) {
             console.warn('[runtime-client-events] failed to subscribe:', error)
+
             // Why: only track a failure when we will actually retry this env.
             // A failure that lands after the env left the desired set must not
             // leave a stale count that makes its first retry after re-entry skip
@@ -231,6 +258,7 @@ export function createRuntimeClientEventsSync(
       ) {
         continue
       }
+
       pending.delete(environmentId)
     }
 

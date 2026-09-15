@@ -13,6 +13,7 @@ const { existsSyncMock, homedirMock, userInfoMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs', () => ({ existsSync: existsSyncMock }))
+
 // Why importOriginal: the site-config tests need a real tmpdir(), and a bare factory would replace
 // the whole module and leave every other export undefined.
 vi.mock('node:os', async (importOriginal) => ({

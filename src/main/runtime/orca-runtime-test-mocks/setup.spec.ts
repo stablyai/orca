@@ -5,7 +5,9 @@ import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracki
 
 // Why: durable review-head refs are scoped by remote identity (name + URL hash).
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
+
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
+
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
@@ -13,9 +15,13 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 type TestMock = Mock
 
 export const ORIGINAL_PLATFORM = process.platform
+
 export const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const removeWorktreeLinkedPathsMock: ReturnType<typeof vi.fn> = vi.hoisted(() => vi.fn())
+
 const findExistingWorktreeSymlinkPathsMock: TestMock = vi.hoisted(() => vi.fn())
+
 const resolveLocalGitUsernameMock: TestMock = vi.hoisted(() => vi.fn(async () => ''))
 
 vi.mock('../../ipc/worktree-symlinks', () => ({
@@ -58,25 +64,31 @@ export function acknowledgeAgentPromptSubmit(
 
 const electronMocks = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => void
+
   const listeners = new Map<string, Set<Listener>>()
+
   const ipcMain = {
     on: vi.fn((channel: string, listener: Listener) => {
       const existing = listeners.get(channel) ?? new Set<Listener>()
       existing.add(listener)
       listeners.set(channel, existing)
+
       return ipcMain
     }),
     removeListener: vi.fn((channel: string, listener: Listener) => {
       listeners.get(channel)?.delete(listener)
+
       return ipcMain
     }),
     emit: vi.fn((channel: string, ...args: unknown[]) => {
       for (const listener of listeners.get(channel) ?? []) {
         listener(...args)
       }
+
       return true
     })
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
     webContents: { fromId: vi.fn((_id: number): unknown => null) },
@@ -86,14 +98,21 @@ const electronMocks = vi.hoisted(() => {
 })
 
 const closeLocalWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
+
 const closeRemoteWatcherForWorktreePathMock: TestMock = vi.hoisted(() => vi.fn())
+
 const restoreLocalWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
+
 const restoreRemoteWatcherAfterFailedRemovalMock: TestMock = vi.hoisted(() => vi.fn())
+
 const forgetLocalWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
+
 const forgetRemoteWatcherRemovalSnapshotMock: TestMock = vi.hoisted(() => vi.fn())
+
 const scanLocalRepoWorktreesForResolutionMock: TestMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
+
 // Why install the port instead of mocking ../ipc/filesystem-watcher: the runtime calls
 // WorktreeWatcherRemoval now, so a module mock would be inert and every assertion below
 // would silently pass against the inert default. Same mocks, same expectations.
@@ -331,11 +350,13 @@ vi.mock('../../providers/ssh-git-dispatch', () => ({
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
   requireSshGitProvider: (connectionId: string) => {
     const provider = getSshGitProviderMock(connectionId)
+
     if (!provider) {
       throw new Error(
         'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
       )
     }
+
     return provider
   },
   registerSshGitProvider: registerSshGitProviderMock,
@@ -402,6 +423,7 @@ vi.mock('../../effective-hook-config', () => ({
 
 vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     computeWorktreePath: computeWorktreePathMock,
@@ -444,6 +466,7 @@ vi.mock('../../source-control/hosted-review', () => ({
 
 vi.mock('../../github/client', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getPRForBranch: getPRForBranchMock,
@@ -482,6 +505,7 @@ vi.mock('../../github/client', async (importOriginal) => {
 
 vi.mock('../../gitlab/client', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     listMergeRequests: listGitLabMergeRequestsMock,
@@ -509,6 +533,7 @@ vi.mock('../../gitlab/client', async (importOriginal) => {
 
 vi.mock('../../gitlab/gl-utils', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getGlabKnownHosts: getGlabKnownHostsMock
@@ -517,6 +542,7 @@ vi.mock('../../gitlab/gl-utils', async (importOriginal) => {
 
 vi.mock('../../gitlab/work-item-details', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getWorkItemDetails: getGitLabWorkItemDetailsMock
@@ -525,6 +551,7 @@ vi.mock('../../gitlab/work-item-details', async (importOriginal) => {
 
 vi.mock('../../github/work-item-details', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getWorkItemDetails: getGitHubWorkItemDetailsMock,
@@ -534,6 +561,7 @@ vi.mock('../../github/work-item-details', async (importOriginal) => {
 
 vi.mock('../../github/issues', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getIssue: getIssueMock
@@ -543,10 +571,12 @@ vi.mock('../../github/issues', async (importOriginal) => {
 // Why: CLI worktree creation resolves a default against fabricated repo paths, so keep the async resolver deterministic.
 vi.mock('../../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   const actualGetBaseRefDefault = actual.getBaseRefDefault as (
     path: string,
     options?: { wslDistro?: string }
   ) => Promise<string | null>
+
   return {
     ...actual,
     // Why: fabricated local test repos need a deterministic default, while WSL coverage must still exercise the real async Git-options path.
@@ -561,6 +591,7 @@ vi.mock('../../git/repo', async (importOriginal) => {
 
 vi.mock('../../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 

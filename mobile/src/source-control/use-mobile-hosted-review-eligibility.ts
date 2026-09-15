@@ -34,6 +34,7 @@ export function buildMobileHostedReviewEligibilityLoadKey(
   input: Omit<MobileHostedReviewEligibilityLoaderInput, 'client' | 'connState'>
 ): MobileHostedReviewEligibilityLoadKey {
   const branch = input.branch ?? ''
+
   return {
     identity: `${input.hostId}\0${input.worktreeId}\0${branch}`,
     fetch: [
@@ -66,20 +67,26 @@ export function renderedMobileHostedReviewEligibilityState(args: {
   if (!args.shouldFetch) {
     return { kind: 'idle' }
   }
+
   const { snapshot, key } = args
+
   if (snapshot.key.identity !== key.identity) {
     return { kind: 'loading', eligibility: null }
   }
+
   const { state } = snapshot
+
   if (snapshot.key.fetch !== key.fetch) {
     return {
       kind: 'loading',
       eligibility: state.kind === 'ready' || state.kind === 'loading' ? state.eligibility : null
     }
   }
+
   if (state.kind === 'idle') {
     return { kind: 'loading', eligibility: null }
   }
+
   return state
 }
 
@@ -97,7 +104,9 @@ export function useMobileHostedReviewEligibility(
     behind,
     hasUncommittedChanges
   } = input
+
   const shouldFetch = shouldFetchMobileHostedReviewEligibility({ client, connState, branch })
+
   const key = buildMobileHostedReviewEligibilityLoadKey({
     hostId,
     worktreeId,
@@ -107,6 +116,7 @@ export function useMobileHostedReviewEligibility(
     behind,
     hasUncommittedChanges
   })
+
   const [snapshot, setSnapshot] = useState<MobileHostedReviewEligibilityLoadSnapshot>({
     key: { identity: '', fetch: '' },
     state: { kind: 'idle' }
@@ -117,10 +127,12 @@ export function useMobileHostedReviewEligibility(
 
     if (!shouldFetch) {
       setSnapshot({ key, state: { kind: 'idle' } })
+
       return () => {
         active = false
       }
     }
+
     if (!client || !branch) {
       return () => {
         active = false
@@ -129,13 +141,16 @@ export function useMobileHostedReviewEligibility(
 
     setSnapshot((previous) => {
       const previousState = previous.state
+
       const eligibility =
         previous.key.identity === key.identity &&
         (previousState.kind === 'ready' || previousState.kind === 'loading')
           ? previousState.eligibility
           : null
+
       return { key, state: { kind: 'loading', eligibility } }
     })
+
     const requestInput: MobileHostedReviewEligibilityInput = {
       branch,
       hasUncommittedChanges,
@@ -143,15 +158,19 @@ export function useMobileHostedReviewEligibility(
       ahead,
       behind
     }
+
     void fetchMobileHostedReviewEligibility(client, worktreeId, requestInput)
       .then((eligibility: HostedReviewCreationEligibility | null) => {
         if (!active) {
           return
         }
+
         if (!eligibility) {
           setSnapshot({ key, state: eligibilityStateAfterMobileHostedReviewError() })
+
           return
         }
+
         setSnapshot({ key, state: { kind: 'ready', eligibility } })
       })
       .catch(() => {
@@ -159,6 +178,7 @@ export function useMobileHostedReviewEligibility(
           setSnapshot({ key, state: eligibilityStateAfterMobileHostedReviewError() })
         }
       })
+
     return () => {
       active = false
     }

@@ -50,13 +50,16 @@ export async function prepareRendererForAppRestart(
 
   try {
     await requestEditorHotExitBackup(eventTarget)
+
     const markCheckpointFailed = (): void => {
       checkpointFailed = true
     }
+
     eventTarget.addEventListener(
       ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
       markCheckpointFailed
     )
+
     try {
       // Why: the aggregate unload verdict also includes unrelated listeners.
       eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))
@@ -66,6 +69,7 @@ export async function prepareRendererForAppRestart(
         markCheckpointFailed
       )
     }
+
     if (checkpointFailed) {
       // Why: the guard publishes the swallowed persist error out-of-band; naming it
       // here is the only way the update-error dialog can say what actually failed.
@@ -76,6 +80,7 @@ export async function prepareRendererForAppRestart(
           : 'Renderer shutdown checkpoint was not completed.'
       )
     }
+
     // Why: the checkpoint only stages synchronously. Navigating before that
     // write lands loses the session snapshot to a crash or power loss.
     await awaitCheckpoint()
@@ -102,10 +107,12 @@ export function createUpdaterQuitAbortRelay(
   abortedEventName: string
 ): UpdaterQuitAbortRelay {
   let prepared = false
+
   const abort = (): void => {
     if (!prepared) {
       return
     }
+
     prepared = false
     eventTarget.dispatchEvent(new Event(abortedEventName))
   }

@@ -4,8 +4,11 @@ const { requestEditorFileSave, toastError } = vi.hoisted(() => ({
   requestEditorFileSave: vi.fn(),
   toastError: vi.fn()
 }))
+
 vi.mock('./editor-autosave', () => ({ requestEditorFileSave }))
+
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
+
 // Return the English fallback so the assertion is stable without initializing i18n.
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 

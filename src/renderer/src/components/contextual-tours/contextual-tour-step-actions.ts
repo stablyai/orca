@@ -27,14 +27,17 @@ export function performContextualTourStepAction(args: {
   switch (args.action.kind) {
     case 'next':
       advanceOrFinish()
+
       return
     case 'complete':
       args.finishTour()
+
       return
     case 'split-terminal-pane':
       if (args.activeTabId) {
         args.dispatchTerminalPaneSplit({ tabId: args.activeTabId, direction: 'vertical' })
       }
+
       return
     case 'create-worktree':
       // Why: opening the composer cancels this tour (it isn't allowed over the
@@ -43,10 +46,12 @@ export function performContextualTourStepAction(args: {
       args.detachContextualTourSource()
       args.setSidebarOpen(true)
       args.openWorkspaceComposer()
+
       return
     case 'show-worktrees':
       args.setSidebarOpen(true)
       advanceOrFinish()
+
       return
     case 'open-tasks':
       // Why: the auto tour starts from the terminal, but this CTA intentionally
@@ -54,12 +59,14 @@ export function performContextualTourStepAction(args: {
       args.detachContextualTourSource()
       args.openTaskPage()
       advanceOrFinish()
+
       return
     case 'open-getting-started':
       args.finishTour()
       args.schedule(() => {
         args.openModal('setup-guide', { telemetrySource: 'contextual_tour' })
       })
+
       return
     case 'open-client-hosted-browser-settings':
       // Why: the settings page replaces the pane the tooltip is anchored to.

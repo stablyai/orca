@@ -8,11 +8,13 @@ describe('reconcileManagedWslCliRegistrations', () => {
       getCandidates: vi.fn(async () => ['Ubuntu', 'Debian']),
       recordObservations: vi.fn(async () => undefined)
     }
+
     const repairUbuntu = vi.fn(async () => ({
       changed: true,
       managed: true,
       status: { state: 'installed' as const }
     }))
+
     const repairDebian = vi.fn(async () => ({
       changed: false,
       managed: false,
@@ -29,6 +31,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         if (distro === 'Ubuntu') {
           return { repairManagedRegistration: repairUbuntu }
         }
+
         return { repairManagedRegistration: repairDebian }
       }
     })
@@ -104,6 +107,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
           if (distro === 'Broken Distro') {
             throw new Error('WSL interop failed')
           }
+
           return {
             changed: false,
             managed: false,
@@ -127,6 +131,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
 
   it('keeps a successful repair result when observation recording fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     try {
       const results = await reconcileManagedWslCliRegistrations({
         platform: 'win32',
@@ -178,15 +183,18 @@ describe('reconcileManagedWslCliRegistrations', () => {
     const events: string[] = []
     let repairStarted!: () => void
     let finishRepair!: () => void
+
     const started = new Promise<void>((resolve) => {
       repairStarted = resolve
     })
+
     const registry = {
       getCandidates: vi.fn(async () => ['Ubuntu']),
       recordObservations: vi.fn(async () => {
         events.push('repair-observed')
       })
     }
+
     const reconciliation = reconcileManagedWslCliRegistrations({
       platform: 'win32',
       isPackaged: true,
@@ -201,6 +209,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
             finishRepair = resolve
           })
           events.push('repair-finished')
+
           return {
             changed: true,
             managed: true,
@@ -209,11 +218,13 @@ describe('reconcileManagedWslCliRegistrations', () => {
         }
       })
     })
+
     await started
 
     const removal = runSerializedWslCliRegistrationOperation('ubuntu', async () => {
       events.push('settings-remove')
     })
+
     await Promise.resolve()
     expect(events).toEqual(['repair-started'])
 

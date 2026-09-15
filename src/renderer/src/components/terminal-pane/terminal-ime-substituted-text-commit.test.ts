@@ -22,16 +22,19 @@ function open(kittyKeyboardFlags = 0) {
   const terminal = new Terminal()
   terminal.open(container)
   const textarea = terminal.textarea!
+
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement: terminal.element,
     isComposing: () => false,
     sendInput: (data) => terminal.input(data),
     getKittyKeyboardFlags: () => kittyKeyboardFlags
   })
+
   terminal.attachCustomKeyEventHandler((event) => {
     if (forwarder.claimKeyEvent(event)) {
       return false
     }
+
     return !shouldBypassXtermKeyboardEvent(event, {
       isMac: true,
       hasSelection: false,
@@ -40,6 +43,7 @@ function open(kittyKeyboardFlags = 0) {
   })
   const emitted: string[] = []
   terminal.onData((d) => emitted.push(d))
+
   return { emitted, terminal, textarea, forwarder }
 }
 
@@ -55,9 +59,11 @@ function key(
     bubbles: true,
     cancelable: true
   })
+
   Object.defineProperty(ev, 'keyCode', { value: init.keyCode })
   Object.defineProperty(ev, 'charCode', { value: type === 'keypress' ? init.keyCode : 0 })
   textarea.dispatchEvent(ev)
+
   return ev
 }
 
@@ -71,12 +77,14 @@ function insertText(textarea: HTMLTextAreaElement, type: string, data: string): 
 
 function press(textarea: HTMLTextAreaElement, c: SubstitutionCase): void {
   const shiftKey = c.shiftKey === true
+
   const kd = key(textarea, 'keydown', {
     key: c.layoutText,
     code: c.code,
     keyCode: c.keyCode,
     shiftKey
   })
+
   if (!kd.defaultPrevented) {
     if (c.imeText.length === 1) {
       key(textarea, 'keypress', {
@@ -86,21 +94,26 @@ function press(textarea: HTMLTextAreaElement, c: SubstitutionCase): void {
         shiftKey
       })
     }
+
     textarea.value = c.imeText
     textarea.setSelectionRange(c.imeText.length, c.imeText.length)
     insertText(textarea, 'beforeinput', c.imeText)
     insertText(textarea, 'input', c.imeText)
   }
+
   key(textarea, 'keyup', { key: c.layoutText, code: c.code, keyCode: c.keyCode, shiftKey })
 }
 
 function type(cases: SubstitutionCase[], kitty = 0): string {
   const { emitted, terminal, textarea, forwarder } = open(kitty)
+
   for (const c of cases) {
     press(textarea, c)
   }
+
   forwarder.dispose()
   terminal.dispose()
+
   return emitted.join('')
 }
 
@@ -111,6 +124,7 @@ const COMMA: SubstitutionCase = {
   layoutText: ',',
   imeText: '，'
 }
+
 const PERIOD: SubstitutionCase = {
   name: 'period',
   code: 'Period',
@@ -118,6 +132,7 @@ const PERIOD: SubstitutionCase = {
   layoutText: '.',
   imeText: '。'
 }
+
 const QUESTION: SubstitutionCase = {
   name: 'question',
   code: 'Slash',
@@ -126,6 +141,7 @@ const QUESTION: SubstitutionCase = {
   layoutText: '?',
   imeText: '？'
 }
+
 const BACKSLASH: SubstitutionCase = {
   name: 'ideographic comma',
   code: 'Backslash',
@@ -133,6 +149,7 @@ const BACKSLASH: SubstitutionCase = {
   layoutText: '\\',
   imeText: '、'
 }
+
 const EM_DASH: SubstitutionCase = {
   name: 'em dash pair',
   code: 'Minus',
@@ -141,6 +158,7 @@ const EM_DASH: SubstitutionCase = {
   layoutText: '_',
   imeText: '——'
 }
+
 const FULLWIDTH_ONE: SubstitutionCase = {
   name: 'full-width one',
   code: 'Digit1',
@@ -148,6 +166,7 @@ const FULLWIDTH_ONE: SubstitutionCase = {
   layoutText: '1',
   imeText: '１'
 }
+
 const TELEX_A: SubstitutionCase = {
   name: 'telex a-acute',
   code: 'KeyS',

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const { prunePackagedNodePty } = require('../packaged-runtime-node-modules.cjs')
 
 /**
@@ -22,11 +23,13 @@ describe('prunePackagedNodePty: the Windows conpty fallback', () => {
   const HOST_ARCH = process.arch
 
   const nodePty = () => join(resources, 'node_modules', 'node-pty')
+
   const write = (relative) => {
     const target = join(nodePty(), relative)
     mkdirSync(join(target, '..'), { recursive: true })
     writeFileSync(target, 'x')
   }
+
   const prebuilt = (name, arch = HOST_ARCH) => join(nodePty(), 'prebuilds', `win32-${arch}`, name)
 
   /** What a real packaged win32 prebuilds/<arch> directory holds. */
@@ -37,6 +40,7 @@ describe('prunePackagedNodePty: the Windows conpty fallback', () => {
     write(join('third_party', 'conpty', 'v1', `win10-${arch}`, 'conpty.dll'))
     write(join('third_party', 'conpty', 'v1', `win10-${arch}`, 'OpenConsole.exe'))
     write(join('prebuilds', `win32-${arch}`, 'conpty.node'))
+
     for (const sibling of SIBLINGS) {
       write(join('prebuilds', `win32-${arch}`, sibling))
     }

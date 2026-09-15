@@ -33,6 +33,7 @@ export async function captureSelectionScreenshot(
     // Electron's image.crop() and cause undefined behavior.
     const safeN = (n: unknown, fallback = 0): number =>
       typeof n === 'number' && Number.isFinite(n) ? n : fallback
+
     const safeRect = {
       x: safeN(rect.x),
       y: safeN(rect.y),
@@ -46,11 +47,13 @@ export async function captureSelectionScreenshot(
     // capturePage() throws (e.g., guest destroyed mid-capture).
     await guest.executeJavaScript(HIDE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
     let image: Electron.NativeImage
+
     try {
       image = await guest.capturePage()
     } finally {
       await guest.executeJavaScript(RESTORE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
     }
+
     if (image.isEmpty()) {
       return null
     }
@@ -64,9 +67,11 @@ export async function captureSelectionScreenshot(
     // compute scaleFactor = bitmapWidth / viewportCSSWidth. This is correct
     // regardless of which display the window is on.
     const viewportCSSWidth: number = await guest.executeJavaScript('window.innerWidth')
+
     if (!viewportCSSWidth || viewportCSSWidth <= 0) {
       return null
     }
+
     const scaleFactor = bitmapSize.width / viewportCSSWidth
 
     // Map CSS-pixel rect to bitmap coordinates
@@ -89,6 +94,7 @@ export async function captureSelectionScreenshot(
     }
 
     const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`
+
     // Why: cropW/cropH are in physical pixels (bitmap coordinates) but the
     // rest of the grab payload uses CSS pixels. Divide by scaleFactor so the
     // screenshot dimensions are consistent with rectViewport/rectPage.

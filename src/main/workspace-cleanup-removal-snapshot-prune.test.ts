@@ -48,15 +48,18 @@ describe('workspace cleanup removal snapshot prune batch', () => {
   it('registers every sequential tombstone immediately and flushes once per sidecar', async () => {
     const snapshotDirectory = '/profile-a'
     const batch = { batchId: 'batch-1' }
+
     const targets = Array.from({ length: 100 }, (_, index) => ({
       worktreeId: `repo-${index % 10}::/workspace-${index}`,
       executionHostId: index % 2 === 0 ? ('local' as const) : (`ssh:ssh-${index % 3}` as const)
     }))
+
     beginWorkspaceCleanupRemovalSnapshotPruneBatch(snapshotDirectory, batch)
 
     for (const target of targets) {
       recordWorkspaceCleanupRemovalSnapshotPrune(snapshotDirectory, { ...batch, ...target })
     }
+
     recordWorkspaceCleanupRemovalSnapshotPrune(snapshotDirectory, { ...batch, ...targets[0] })
 
     expect(registerCleanupTombstonesMock).toHaveBeenCalledTimes(100)
@@ -85,10 +88,12 @@ describe('workspace cleanup removal snapshot prune batch', () => {
   it('finalizes only the matching profile and batch scope', async () => {
     const batch = { batchId: 'shared-id' }
     const profileATarget = { worktreeId: 'repo-a::/workspace', executionHostId: 'local' as const }
+
     const profileBTarget = {
       worktreeId: 'repo-b::/workspace',
       executionHostId: 'ssh:ssh-1' as const
     }
+
     beginWorkspaceCleanupRemovalSnapshotPruneBatch('/profile-a', batch)
     beginWorkspaceCleanupRemovalSnapshotPruneBatch('/profile-b', batch)
     recordWorkspaceCleanupRemovalSnapshotPrune('/profile-a', { ...batch, ...profileATarget })

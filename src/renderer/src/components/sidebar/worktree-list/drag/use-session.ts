@@ -50,6 +50,7 @@ export function useWorktreeDragSession(args: {
   const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
   const worktreeDragUnitGroups = useMemo(() => getWorktreeDragUnitGroups(rows), [rows])
   const naturalDragWorktreeIds = useMemo(() => getNaturalWorktreeIds(rows), [rows])
+
   const worktreeLineageDragRows = useMemo(
     () =>
       rows
@@ -61,30 +62,38 @@ export function useWorktreeDragSession(args: {
         .map((row) => ({ worktreeId: row.worktree.id, depth: row.depth })),
     [naturalDragWorktreeIds, rows]
   )
+
   const getReorderDraggedIds = useCallback(
     (draggedIds: readonly string[]) =>
       expandDraggedWorktreeIdsForVisibleLineage(worktreeLineageDragRows, draggedIds),
     [worktreeLineageDragRows]
   )
+
   const getReorderUnitDraggedIds = useCallback(
     (sourceGroupKey: string, reorderDraggedIds: readonly string[]) => {
       const group = worktreeDragUnitGroups.find((candidate) => candidate.key === sourceGroupKey)
+
       if (!group) {
         return reorderDraggedIds
       }
+
       const unitIds = new Set(group.worktreeIds)
       const filtered = reorderDraggedIds.filter((worktreeId) => unitIds.has(worktreeId))
+
       return filtered.length > 0 ? filtered : reorderDraggedIds
     },
     [worktreeDragUnitGroups]
   )
+
   const { groupKeyByRowKey, groupIndexByRowKey } = useMemo(
     () => getWorktreeDragIndexes(rows),
     [rows]
   )
+
   const refreshWorktreeDragSession = useCallback((): boolean => {
     const session = worktreeDragSessionRef.current
     const container = scrollRef.current
+
     if (!session || !container) {
       return false
     }
@@ -95,9 +104,12 @@ export function useWorktreeDragSession(args: {
       unitGroups: worktreeDragUnitGroups,
       rects: getWorktreeSidebarDragRectsForGroup(container, session.sourceGroupKey)
     })
+
     worktreeDragSessionRef.current = refreshedSession
+
     return refreshedSession !== null
   }, [scrollRef, worktreeDragGroups, worktreeDragUnitGroups])
+
   const computeWorktreeDropForGroup = useCallback(
     (dropArgs: {
       pointerY: number
@@ -109,14 +121,19 @@ export function useWorktreeDragSession(args: {
       anchor?: WorktreeSidebarDropAnchor | null
     }): WorktreeSidebarDropPreview | null => {
       const container = scrollRef.current
+
       if (!container) {
         return null
       }
+
       const group = worktreeDragUnitGroups.find((candidate) => candidate.key === dropArgs.groupKey)
+
       if (!group) {
         return null
       }
+
       const containerRect = container.getBoundingClientRect()
+
       return computeWorktreeSidebarDropPreview({
         pointerY: dropArgs.pointerY,
         containerTop: containerRect.top,
@@ -132,14 +149,18 @@ export function useWorktreeDragSession(args: {
     },
     [scrollRef, worktreeDragUnitGroups]
   )
+
   const computeWorktreeDrop = useCallback(
     (pointerY: number): WorktreeSidebarDropPreview | null => {
       const session = worktreeDragSessionRef.current
       const container = scrollRef.current
+
       if (!session || !container) {
         return null
       }
+
       const scrollTop = container.scrollTop
+
       // Why: only real pointer or scroll movement should re-decide the slot; a
       // card growing under a still pointer must not move it.
       const anchor = shouldReevaluateWorktreeSidebarDropAnchor({
@@ -149,6 +170,7 @@ export function useWorktreeDragSession(args: {
       })
         ? null
         : session.anchor
+
       const preview = computeWorktreeDropForGroup({
         pointerY,
         groupKey: session.sourceGroupKey,
@@ -158,24 +180,30 @@ export function useWorktreeDragSession(args: {
         grab: session.grab,
         anchor
       })
+
       worktreeDragSessionRef.current = {
         ...session,
         anchor: preview ? { beforeWorktreeId: preview.dropAnchorId, pointerY, scrollTop } : null
       }
+
       return preview
     },
     [computeWorktreeDropForGroup, scrollRef]
   )
+
   const computeWorktreeStatusDrop = useCallback(
     (request: WorktreeStatusDropRequest): WorktreeSidebarDropPreview | null => {
       const container = scrollRef.current
+
       if (!container) {
         return null
       }
+
       const groupKey = getWorkspaceStatusGroupKey(request.status)
       const session = worktreeDragSessionRef.current
       const scrollTop = container.scrollTop
       const heldAnchor = statusDropAnchorsRef.current.get(groupKey) ?? null
+
       const anchor = shouldReevaluateWorktreeSidebarDropAnchor({
         anchor: heldAnchor,
         pointerY: request.pointerY,
@@ -183,6 +211,7 @@ export function useWorktreeDragSession(args: {
       })
         ? null
         : heldAnchor
+
       const preview = computeWorktreeDropForGroup({
         pointerY: request.pointerY,
         groupKey,
@@ -192,6 +221,7 @@ export function useWorktreeDragSession(args: {
         grab: session?.grab ?? null,
         anchor
       })
+
       if (preview) {
         statusDropAnchorsRef.current.set(groupKey, {
           beforeWorktreeId: preview.dropAnchorId,
@@ -201,6 +231,7 @@ export function useWorktreeDragSession(args: {
       } else {
         statusDropAnchorsRef.current.delete(groupKey)
       }
+
       return preview
     },
     [computeWorktreeDropForGroup, scrollRef]

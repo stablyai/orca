@@ -14,45 +14,61 @@ import {
 import { registerPtyHandlers, registerSshPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -83,6 +99,7 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn(),
       acknowledgeDataEvent: vi.fn()
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -113,6 +130,7 @@ describe('registerPtyHandlers', () => {
   })
   it('refreshes captured native Agent Teams env for renderer PTY spawns', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
@@ -135,6 +153,7 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
       cols: 80,
       rows: 24,
@@ -199,6 +218,7 @@ describe('registerPtyHandlers', () => {
   })
   it('threads the validated pane identity into registerPty for a renderer PTY spawn (#7587)', async () => {
     const leafId = '88888888-8888-4888-8888-888888888888'
+
     const runtime = {
       setPtyController: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_seam'),
@@ -209,6 +229,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
 
@@ -348,6 +369,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
 
@@ -371,6 +393,7 @@ describe('registerPtyHandlers', () => {
   })
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
@@ -418,12 +441,14 @@ describe('registerPtyHandlers', () => {
   })
   it('restores daemon launch identity without minting renderer authority on reattach', async () => {
     const incarnationId = 'ssh-reattach-incarnation'
+
     const spawn = vi.fn(async () => ({
       id: 'ssh-reattach',
       incarnationId,
       isReattach: true as const,
       launchAgent: 'codex' as const
     }))
+
     registerSshPtyProvider('ssh-reattach-1', {
       spawn,
       write: vi.fn(),
@@ -446,17 +471,20 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn()
     } as never)
     const registerPty = vi.fn()
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty
     }
+
     const tabId = 'tab-reattach'
     const leafId = '77777777-7777-4777-8777-777777777777'
     const worktreeId = 'repo-1::/tmp/reattach'
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
       cols: 80,
       rows: 24,
@@ -500,7 +528,9 @@ describe('registerPtyHandlers', () => {
         preAllocatedHandle?: string
       }): Promise<{ id: string }>
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -518,6 +548,7 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never, runtime as never)
     expect(controller).not.toBeNull()
     const spawnController = controller as unknown as RuntimeSpawnController
+
     const spawned = await spawnController.spawn({
       cols: 80,
       rows: 24,
@@ -541,6 +572,7 @@ describe('registerPtyHandlers', () => {
     const leafId = '22222222-2222-4222-8222-222222222222'
     const teams = new ClaudeAgentTeamsService()
     let handleSeq = 0
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => `term_agent_teams_${++handleSeq}`),
@@ -565,6 +597,7 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     // Why: no worktreeId, so the reservation key only resolves after env assembly — the
     // window where a concurrent winner's reservation appears mid-preflight.
     const spawnArgs = {
@@ -578,9 +611,11 @@ describe('registerPtyHandlers', () => {
       launchConfig: { agentCommand: 'claude --teammate-mode auto', agentArgs: '', agentEnv: {} },
       launchAgent: 'claude'
     }
+
     const winner = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, spawnArgs)) as {
       id: string
     }
+
     expect(teams.getActiveTeamCount()).toBe(1)
 
     const reservationKey = makePaneSpawnReservationKey(
@@ -588,8 +623,10 @@ describe('registerPtyHandlers', () => {
       undefined,
       makePaneKey('tab-1', leafId)
     )!
+
     const winnerReservation = reservePaneSpawn(reservationKey)
     winnerReservation.resolve({ id: winner.id })
+
     try {
       const loser = await handlers.get('pty:spawn')!(mainWindowIpcEvent, spawnArgs)
       expect(loser).toMatchObject({ id: winner.id, isReattach: true })
@@ -606,6 +643,7 @@ describe('registerPtyHandlers', () => {
   it('releases the Agent Teams leader when its provider spawn fails', async () => {
     const leafId = '33333333-3333-4333-8333-333333333333'
     const teams = new ClaudeAgentTeamsService()
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams_failure'),
@@ -628,6 +666,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     spawnMock.mockImplementation(() => {
       throw new Error('provider spawn failed')
     })

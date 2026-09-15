@@ -22,6 +22,7 @@ function getUserSshConfigHosts(refresh: boolean): SshConfigHost[] {
   if (refresh || cachedConfigHosts === null) {
     cachedConfigHosts = loadUserSshConfig()
   }
+
   return cachedConfigHosts
 }
 
@@ -36,6 +37,7 @@ export function searchSshConfigHosts(
       [target.configHost, target.label].map(normalizeSshConfigAlias).filter(Boolean)
     )
   )
+
   const normalizedQuery = query.trim().toLowerCase()
   const suppressedAliasSet = new Set(suppressedAliases.map(normalizeSshConfigAlias))
   const summaries: SshConfigHostSummary[] = []
@@ -46,9 +48,11 @@ export function searchSshConfigHosts(
 
   for (const entry of hosts) {
     const normalizedAlias = normalizeSshConfigAlias(entry.host)
+
     if (seenAliases.has(normalizedAlias)) {
       continue
     }
+
     seenAliases.add(normalizedAlias)
     const alreadyInOrca = existingAliases.has(normalizedAlias)
     // Why: tombstones only block passive bulk import — the picker still lists the
@@ -57,10 +61,13 @@ export function searchSshConfigHosts(
     totalHostCount += 1
     // Why: "Add all" must match importFromSshConfig without reAdopt (tombstones stay).
     newHostCount += alreadyInOrca || previouslyRemoved ? 0 : 1
+
     if (!matchesQuery(entry, normalizedQuery)) {
       continue
     }
+
     matchCount += 1
+
     if (summaries.length < SSH_CONFIG_HOST_RESULT_LIMIT) {
       summaries.push(toSummary(entry, alreadyInOrca, previouslyRemoved))
     }
@@ -97,15 +104,19 @@ export async function resolveUserSshConfigHost(
   loadConfigHosts: () => SshConfigHost[] = () => getUserSshConfigHosts(true)
 ): Promise<SshConfigHostResolution | null> {
   const configHosts = loadConfigHosts()
+
   // Why: `ssh -G` answers for unknown aliases too, echoing the alias back as the hostname.
   // Resolving one would mint a target for a host that is no longer configured.
   if (!configHostMatches(configHosts, alias)) {
     return null
   }
+
   const resolved = await resolver(alias)
+
   if (!resolved?.hostname) {
     return null
   }
+
   return {
     alias,
     hostname: resolved.hostname,
@@ -127,11 +138,13 @@ export async function resolveUserSshConfigHost(
 
 function configHostMatches(hosts: readonly SshConfigHost[], alias: string): boolean {
   const normalized = normalizeSshConfigAlias(alias)
+
   return Boolean(normalized) && hosts.some((entry) => matchesAlias(entry, normalized))
 }
 
 function configHostRequestsGssapi(hosts: readonly SshConfigHost[], alias: string): boolean {
   const normalized = normalizeSshConfigAlias(alias)
+
   return hosts.some((entry) => matchesAlias(entry, normalized) && entry.gssapiAuthentication)
 }
 

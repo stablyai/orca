@@ -15,6 +15,7 @@ export function restorePRCommentThreadSnapshot(
   previousThreadComments: PRComment[]
 ): PRComment[] {
   const previousById = new Map(previousThreadComments.map((comment) => [comment.id, comment]))
+
   return comments.map((comment) =>
     previousById.has(comment.id) ? (previousById.get(comment.id) ?? comment) : comment
   )

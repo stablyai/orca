@@ -13,7 +13,9 @@ const appStoreSnapshot: {
   unifiedTabsByWorktree: {},
   activeGroupIdByWorktree: {}
 }
+
 const pinTabMock: (tabId: string) => void = vi.fn()
+
 const unpinTabMock: (tabId: string) => void = vi.fn()
 
 const useAppStoreMock = vi.fn(
@@ -52,6 +54,7 @@ const useAppStoreMock = vi.fn(
 )
 
 vi.mock('react', async () => await stubHeadlessReact())
+
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
@@ -73,6 +76,7 @@ vi.mock('./tab-strip-drag-scroll', () => ({
 
 const useAppStoreExport = (selector: Parameters<typeof useAppStoreMock>[0]): unknown =>
   useAppStoreMock(selector)
+
 useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
@@ -190,35 +194,46 @@ type ReactElementLike = {
 
 function findChildrenByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null) {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     if (typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     const el = current as ReactElementLike
     const type = el.type as { name?: string } | string | undefined
     const matchedName = typeof type === 'string' ? type : type?.name
+
     if (matchedName === typeName) {
       results.push(el)
     }
+
     if (matchedName === 'TabBarStaticCreateMenu' && typeof el.type === 'function') {
       // Expand the deferred pure menu component in this shallow renderer.
       visit(el.type(el.props))
+
       return
     }
+
     if (el.props && 'children' in el.props) {
       visit(el.props.children)
     }
   }
+
   visit(node)
+
   return results
 }
 
@@ -226,22 +241,29 @@ function extractText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(extractText).join('')
   }
+
   const el = node as ReactElementLike
+
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
 async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
   const tabBarModule = await import('./TabBar')
+
   const candidate = tabBarModule.default as unknown as
     | ((props: Record<string, unknown>) => unknown)
     | { type: (props: Record<string, unknown>) => unknown }
+
   const TabBar = typeof candidate === 'function' ? candidate : candidate.type
+
   return expandNode(
     TabBar({
       activeTabId: null,
@@ -294,6 +316,7 @@ describe('TabBar context menu wiring', () => {
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -329,6 +352,7 @@ describe('TabBar context menu wiring', () => {
       browserTabs: [],
       tabBarOrder: ['term-1', 'unified-editor-1']
     })
+
     const sortable = findChildrenByType(element, 'SortableTab')
     expect(sortable).toHaveLength(1)
     expect(sortable[0].props.tabCount).toBe(2)
@@ -341,10 +365,13 @@ describe('TabBar context menu wiring', () => {
       browserTabs: [],
       tabBarOrder: ['term-1', 'unified-editor-1']
     })
+
     const divs = findChildrenByType(element, 'div')
+
     const stripWrapper = divs.find((candidate) =>
       String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
     )
+
     const strip = divs.find((candidate) =>
       String(candidate.props.className ?? '').includes('terminal-tab-strip')
     )
@@ -365,6 +392,7 @@ describe('TabBar context menu wiring', () => {
     // file entityId. TabGroupPanel must accept this id shape to close right-side
     // tabs from an editor tab — see the matching id|entityId resolver there.
     const onCloseToRight = vi.fn()
+
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -372,6 +400,7 @@ describe('TabBar context menu wiring', () => {
       tabBarOrder: ['term-1', 'unified-editor-1'],
       onCloseToRight
     })
+
     const editorTabs = findChildrenByType(element, 'EditorFileTab')
     expect(editorTabs).toHaveLength(1)
     const onClose = editorTabs[0].props.onCloseToRight as () => void
@@ -382,6 +411,7 @@ describe('TabBar context menu wiring', () => {
   it('wires onCloseToLeft/onCloseOthers and hasTabsToLeft by strip position', async () => {
     const onCloseToLeft = vi.fn()
     const onCloseOthers = vi.fn()
+
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -446,6 +476,7 @@ describe('TabBar context menu wiring', () => {
     vi.useFakeTimers()
     Object.assign(window, { setTimeout, clearTimeout })
     const { focusTerminalTabSurface } = await import('@/lib/focus-terminal-tab-surface')
+
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       activeTabId: 'old-terminal',
@@ -497,6 +528,7 @@ describe('TabBar context menu wiring', () => {
 
   it('omits impossible paired-web actions while keeping terminal and markdown', async () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       onNewFileTab: () => {},
@@ -543,10 +575,13 @@ describe('TabBar context menu wiring', () => {
     const emulatorItem = findChildrenByType(element, 'DropdownMenuItem').find((item) =>
       extractText(item.props.children).includes('Go to Mobile Emulator')
     )
+
     expect(emulatorItem).toBeTruthy()
+
     if (!emulatorItem) {
       throw new Error('Go to Mobile Emulator menu item not rendered')
     }
+
     expect(emulatorItem.props.disabled).toBeUndefined()
     expect(emulatorItem.props.onSelect).toBeTypeOf('function')
     ;(emulatorItem.props.onSelect as () => void)()
@@ -555,6 +590,7 @@ describe('TabBar context menu wiring', () => {
     const tooltip = findChildrenByType(element, 'TooltipContent').find((item) =>
       extractText(item.props.children).includes('Open the existing emulator tab.')
     )
+
     expect(tooltip).toBeTruthy()
   })
 
@@ -562,6 +598,7 @@ describe('TabBar context menu wiring', () => {
     vi.useFakeTimers()
     Object.assign(window, { setTimeout, clearTimeout })
     const { focusTerminalTabSurface } = await import('@/lib/focus-terminal-tab-surface')
+
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       activeTabId: 'old-terminal',
@@ -575,7 +612,9 @@ describe('TabBar context menu wiring', () => {
     })
 
     const newTerminalItem = findChildrenByType(element, 'DropdownMenuItem')[0]
+
     const menuContent = findChildrenByType(element, 'DropdownMenuContent')[0]
+
     ;(newTerminalItem.props.onSelect as () => void)()
     ;(menuContent.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
       preventDefault: vi.fn()

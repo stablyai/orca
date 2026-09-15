@@ -315,5 +315,6 @@ export function getTuiAgentLaunchCommand(
   if (opts?.isRemote && platform === 'linux') {
     return config.launchCmd
   }
+
   return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }

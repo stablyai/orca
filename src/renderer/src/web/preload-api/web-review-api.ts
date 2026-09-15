@@ -5,6 +5,7 @@ import { callRuntimeResult } from './web-runtime-calls'
 export function createRuntimeNamespaceApi(prefix: string): never {
   return createFallbackProxy([prefix], (path, args) => {
     const method = `${prefix}.${path.at(-1) ?? ''}`
+
     return callRuntimeResult(method, mapRuntimeNamespaceArg(prefix, args[0]))
   }) as never
 }
@@ -27,8 +28,10 @@ export function mapRepoPathArg(args: unknown): unknown {
   if (!args || typeof args !== 'object' || !('repoPath' in args)) {
     return args
   }
+
   const record = args as Record<string, unknown>
   const repoId = typeof record.repoId === 'string' && record.repoId.trim() ? record.repoId : null
+
   return {
     ...record,
     // Why: duplicate checked-out repos make path/name selectors ambiguous; prefer the explicit repo id the renderer passes.
@@ -40,5 +43,6 @@ export function mapRuntimeNamespaceArg(prefix: string, args: unknown): unknown {
   if (prefix !== 'hostedReview') {
     return args
   }
+
   return mapRepoPathArg(args)
 }

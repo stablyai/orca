@@ -10,18 +10,22 @@ export async function runTerminalPtyInputTransaction<T>(
 
   const previous = transactionTails.get(ptyId)
   let release!: () => void
+
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
+
   transactionTails.set(ptyId, current)
 
   if (previous) {
     await previous
   }
+
   try {
     return await operation()
   } finally {
     release()
+
     if (transactionTails.get(ptyId) === current) {
       transactionTails.delete(ptyId)
     }

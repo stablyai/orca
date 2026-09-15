@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { SshPtyClosedGenerationRanges } from './ssh-pty-closed-generation-ranges'
 
 const HOSTS = 8
+
 const RECONNECTS = 20_000
 
 function lcg(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state * 1_664_525 + 1_013_904_223) >>> 0
+
     return state / 0x1_0000_0000
   }
 }
@@ -33,6 +36,7 @@ describe('closed provider generations across concurrent SSH targets', () => {
     const closed = new SshPtyClosedGenerationRanges()
     let nextGeneration = 1
     const live = [nextGeneration++, nextGeneration++]
+
     for (let reconnect = 0; reconnect < RECONNECTS; reconnect += 1) {
       const host = reconnect % live.length
       closed.add(live[host]!)
@@ -54,21 +58,26 @@ describe('closed provider generations across concurrent SSH targets', () => {
     const live = Array.from({ length: HOSTS }, () => nextGeneration++)
     const settling: number[] = []
     let peakRanges = 0
+
     for (let reconnect = 0; reconnect < RECONNECTS; reconnect += 1) {
       const host = Math.floor(random() * HOSTS)
       settling.push(live[host]!)
       live[host] = nextGeneration++
+
       if (settling.length > 4) {
         closed.add(settling.splice(Math.floor(random() * settling.length), 1)[0]!)
       }
+
       peakRanges = Math.max(peakRanges, closed.size)
     }
+
     for (const generation of settling) {
       closed.add(generation)
     }
 
     expect(peakRanges).toBeLessThanOrEqual(HOSTS + 4 + 1)
     expect(closed.size).toBeLessThanOrEqual(HOSTS + 1)
+
     for (const generation of live) {
       expect(closed.has(generation)).toBe(false)
     }
@@ -80,6 +89,7 @@ describe('closed provider generations across concurrent SSH targets', () => {
     // structure is bounded by unclosed generations -- not by anything the reconnect loop does.
     const closed = new SshPtyClosedGenerationRanges()
     let nextGeneration = 1
+
     for (let reconnect = 0; reconnect < 5_000; reconnect += 1) {
       nextGeneration += 1
       closed.add(nextGeneration++)

@@ -7,18 +7,22 @@ import type { ConnectionLogEntry, HostProfile, PairingOffer, RpcResponse } from 
 import type { connect, RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(length)
 }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED' }))
 
 const now = Date.UTC(2026, 6, 13)
+
 const directOffer: PairingOffer = {
   v: 2,
   endpoint: 'ws://192.168.1.10:6768',
   deviceToken: 'device-token',
   publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 }
+
 const relayOffer: PairingOffer = {
   ...directOffer,
   relay: {
@@ -59,6 +63,7 @@ function relayProvisioningClient(getJournal: () => MobileRelayPairingJournal) {
       if (method === 'status.get') {
         return success({ path: 'relay' })
       }
+
       const installed = {
         v: 1 as const,
         reqId: getJournal().metadata.installReqId,
@@ -66,9 +71,11 @@ function relayProvisioningClient(getJournal: () => MobileRelayPairingJournal) {
         currentVersion: 1,
         resumeExpiresAt: now + 86_400_000
       }
+
       if (method === 'pairing.provisionRelay') {
         return success(installed)
       }
+
       return success({
         v: 1,
         relay: {
@@ -93,9 +100,11 @@ function relayProvisioningClient(getJournal: () => MobileRelayPairingJournal) {
 
 function dependencies(client: RpcClient, events: string[]) {
   const unavailableRelay = fakeClient([])
+
   ;(unavailableRelay.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(
     new Error('relay unavailable')
   )
+
   return {
     connectDirect: vi.fn(
       (..._args: Parameters<typeof connect>) => (events.push('connect'), client)
@@ -133,7 +142,9 @@ describe('pre-profile pairing coordinator', () => {
     let resolveDirect!: (response: RpcResponse) => void
     let resolveRelay!: (response: RpcResponse) => void
     const direct = fakeClient([])
+
     const relay = fakeClient([])
+
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockReturnValue(
       new Promise<RpcResponse>((resolve) => {
         resolveDirect = resolve
@@ -144,10 +155,12 @@ describe('pre-profile pairing coordinator', () => {
         resolveRelay = resolve
       })
     )
+
     const racing = racePairingCandidates([
       { path: 'direct', client: direct },
       { path: 'relay', client: relay }
     ])
+
     resolveRelay(success({ path: 'relay' }))
     resolveDirect(success({ path: 'direct' }))
 
@@ -188,6 +201,7 @@ describe('pre-profile pairing coordinator', () => {
     deps.resolveHostIdentity = vi.fn(async (publicKeyB64: string, newHostId: string) => {
       expect(publicKeyB64).toBe(directOffer.publicKeyB64)
       expect(newHostId).toBe(`host-${now}`)
+
       return { id: 'host-existing', name: 'Studio Mac' }
     })
 
@@ -211,14 +225,17 @@ describe('pre-profile pairing coordinator', () => {
   it('journals before connecting and publishes only after authoritative direct install', async () => {
     const events: string[] = []
     let journal: MobileRelayPairingJournal | null = null
+
     const client = {
       sendRequest: vi.fn(async (method: string) => {
         if (method === 'status.get') {
           return success({ version: '1.0.0' })
         }
+
         if (!journal) {
           throw new Error('journal was not saved before RPC')
         }
+
         const installed = {
           v: 1 as const,
           reqId: journal.metadata.installReqId,
@@ -226,9 +243,11 @@ describe('pre-profile pairing coordinator', () => {
           currentVersion: 1,
           resumeExpiresAt: now + 86_400_000
         }
+
         if (method === 'pairing.provisionRelay') {
           return success(installed)
         }
+
         return success({
           v: 1,
           relay: {
@@ -249,6 +268,7 @@ describe('pre-profile pairing coordinator', () => {
       }),
       close: vi.fn()
     } as unknown as RpcClient
+
     const deps = dependencies(client, events)
     deps.saveJournal.mockImplementation(async (value) => {
       journal = value
@@ -260,6 +280,7 @@ describe('pre-profile pairing coordinator', () => {
       timeoutMs: 5_000,
       dependencies: deps
     })
+
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(journal).not.toBeNull()
@@ -302,6 +323,7 @@ describe('pre-profile pairing coordinator', () => {
       timeoutMs: 5_000,
       dependencies: deps
     })
+
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(deps.saveHost).toHaveBeenCalledWith(
@@ -318,6 +340,7 @@ describe('pre-profile pairing coordinator', () => {
 
   it('uses relay-basis provisioning when only the relay reaches post-E2EE status', async () => {
     const direct = fakeClient([])
+
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
     let journal: MobileRelayPairingJournal | null = null
     const relay = relayProvisioningClient(() => journal!)
@@ -332,6 +355,7 @@ describe('pre-profile pairing coordinator', () => {
       timeoutMs: 5_000,
       dependencies: deps
     })
+
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(direct.close).toHaveBeenCalled()
@@ -346,7 +370,9 @@ describe('pre-profile pairing coordinator', () => {
 
   it('streams the relay path and the winning path into the pairing log', async () => {
     const entries: ConnectionLogEntry[] = []
+
     const direct = fakeClient([])
+
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
     let journal: MobileRelayPairingJournal | null = null
     const relay = relayProvisioningClient(() => journal!)
@@ -364,6 +390,7 @@ describe('pre-profile pairing coordinator', () => {
         message: 'Relay: dialing cell',
         detail: 'relay-c1.onorca.dev'
       })
+
       return relay
     })
 
@@ -373,6 +400,7 @@ describe('pre-profile pairing coordinator', () => {
       connectOptions: { onLog: (entry) => entries.push(entry) },
       dependencies: deps
     })
+
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(entries.map((entry) => entry.message)).toEqual([
@@ -386,7 +414,9 @@ describe('pre-profile pairing coordinator', () => {
 
   it('attributes each racing candidate so direct retries cannot read as relay', async () => {
     const entries: ConnectionLogEntry[] = []
+
     const direct = fakeClient([])
+
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
     let journal: MobileRelayPairingJournal | null = null
     const relay = relayProvisioningClient(() => journal!)
@@ -398,6 +428,7 @@ describe('pre-profile pairing coordinator', () => {
     // and no path label — the exact shape that was misread as relay retrying.
     deps.connectDirect.mockImplementation((...args) => {
       const options = args[3]
+
       if (options && typeof options !== 'function') {
         options.onLog?.({
           id: 'direct-reconnect',
@@ -407,6 +438,7 @@ describe('pre-profile pairing coordinator', () => {
           detail: '10.5.0.2:6768'
         })
       }
+
       return direct
     })
     deps.connectRelay.mockImplementation((connectArgs) => {
@@ -418,6 +450,7 @@ describe('pre-profile pairing coordinator', () => {
         detail: 'relay-c1.onorca.dev'
       })
       connectArgs.onLog?.({ id: 'relay-open', ts: now, level: 'info', message: 'Cell socket open' })
+
       return relay
     })
 
@@ -427,6 +460,7 @@ describe('pre-profile pairing coordinator', () => {
       connectOptions: { onLog: (entry) => entries.push(entry) },
       dependencies: deps
     })
+
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(entries.map((entry) => entry.message)).toEqual([
@@ -442,17 +476,22 @@ describe('pre-profile pairing coordinator', () => {
 
   it('cancels the disposable physical client without publishing a host', async () => {
     let resolveStatus!: (response: RpcResponse) => void
+
     const status = new Promise<RpcResponse>((resolve) => {
       resolveStatus = resolve
     })
+
     const client = fakeClient([])
+
     ;(client.sendRequest as ReturnType<typeof vi.fn>).mockReturnValue(status)
     const deps = dependencies(client, [])
+
     const attempt = startPreProfilePairing({
       offer: directOffer,
       timeoutMs: 5_000,
       dependencies: deps
     })
+
     await vi.waitFor(() => expect(client.sendRequest).toHaveBeenCalledWith('status.get'))
     attempt.dispose()
     resolveStatus(success({ version: '1.0.0' }))

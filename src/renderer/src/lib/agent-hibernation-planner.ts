@@ -11,7 +11,9 @@ import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planne
 export type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
 export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000
+
 export const MIN_AGENT_HIBERNATION_IDLE_MS = 60 * 1000
+
 export const MAX_AGENT_HIBERNATION_IDLE_MS = 24 * 60 * 60 * 1000
 
 export type AgentHibernationCandidate = {
@@ -42,11 +44,13 @@ function getLivePtyIdsForTab(
   runtimeLivenessRequired: boolean
 ): string[] {
   const ids = new Set<string>()
+
   for (const id of runtimeLivePtyIdsByWorktreeId?.[tab.worktreeId] ?? []) {
     if (typeof id === 'string' && id.length > 0) {
       ids.add(toRuntimePtyId(id))
     }
   }
+
   if (!runtimeLivenessRequired) {
     for (const id of ptyIdsByTabId[tab.id] ?? []) {
       if (typeof id === 'string' && id.length > 0) {
@@ -54,6 +58,7 @@ function getLivePtyIdsForTab(
       }
     }
   }
+
   return [...ids]
 }
 
@@ -68,6 +73,7 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
         // replace the change detection it incidentally provided.
         `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.agentType}:${pane.providerSessionKey}:${pane.providerSessionId}:${pane.providerTranscriptPath}:${pane.state}:${pane.stateStartedAt}:${pane.effectiveIdleStart}:${pane.inputAt}`
     )
+
   return `${worktreeId}|${parts.join('|')}`
 }
 
@@ -79,21 +85,27 @@ function getAgentEntriesByTabId(
   agentStatusByPaneKey: AgentHibernationPlannerSnapshot['agentStatusByPaneKey']
 ): Map<string, AgentStatusEntry[]> {
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
+
   for (const entry of Object.values(agentStatusByPaneKey)) {
     if (!entry) {
       continue
     }
+
     const tabId = getEntryTabId(entry)
+
     if (!tabId) {
       continue
     }
+
     const entries = entriesByTabId.get(tabId)
+
     if (entries) {
       entries.push(entry)
     } else {
       entriesByTabId.set(tabId, [entry])
     }
   }
+
   return entriesByTabId
 }
 
@@ -103,14 +115,18 @@ export function planAgentHibernationCandidates(
   if (snapshot.settings?.experimentalAgentHibernation !== true) {
     return []
   }
+
   const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings.agentHibernationIdleMs)
   const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds.map(toRuntimePtyId))
   const foregroundTerminalTabIds = new Set(snapshot.foregroundTerminalTabIds)
+
   const runtimeLivenessRequiredWorktreeIds = new Set(
     snapshot.runtimeLivenessRequiredWorktreeIds ?? []
   )
+
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
+
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
     // Why: the tab on screen is `foregroundTerminalTabIds` below, and a tab just left is held by
     // the `foregroundTerminalLastSeenAtByTabId` floor in getEligiblePane. Skipping the whole active
@@ -119,26 +135,32 @@ export function planAgentHibernationCandidates(
     if (!worktreeId || tabs.length === 0) {
       continue
     }
+
     if (
       runtimeLivenessRequiredWorktreeIds.has(worktreeId) &&
       !Object.hasOwn(snapshot.runtimeLivePtyIdsByWorktreeId ?? {}, worktreeId)
     ) {
       continue
     }
+
     for (const tab of tabs) {
       if (foregroundTerminalTabIds.has(tab.id)) {
         continue
       }
+
       const tabLivePtyIds = getLivePtyIdsForTab(
         tab,
         snapshot.ptyIdsByTabId,
         snapshot.runtimeLivePtyIdsByWorktreeId,
         runtimeLivenessRequiredWorktreeIds.has(worktreeId)
       )
+
       if (tabLivePtyIds.length === 0) {
         continue
       }
+
       const layout = snapshot.terminalLayoutsByTabId[tab.id]
+
       for (const entry of agentEntriesByTabId.get(tab.id) ?? []) {
         const eligible = getEligiblePane({
           entry,
@@ -154,6 +176,7 @@ export function planAgentHibernationCandidates(
           now: snapshot.now,
           idleMs
         })
+
         if (eligible) {
           candidates.push({
             id: candidateIdFor(worktreeId, eligible.paneKey),
@@ -170,6 +193,7 @@ export function planAgentHibernationCandidates(
       }
     }
   }
+
   return candidates.sort(
     (a, b) => a.worktreeId.localeCompare(b.worktreeId) || a.paneKey.localeCompare(b.paneKey)
   )

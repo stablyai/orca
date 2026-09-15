@@ -28,6 +28,7 @@ describe('ElectronSidecarTabRegistry', () => {
       ],
       'worktree-a'
     )
+
     expect(tabs).toEqual([
       expect.objectContaining({ browserPageId: 'public-a', index: 0 }),
       expect.objectContaining({ browserPageId: 'public-c', index: 1 })

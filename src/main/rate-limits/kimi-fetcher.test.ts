@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
+
 const fsState = vi.hoisted<{
   credentials: string | null
   readError: Error | null
@@ -19,14 +20,17 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', () => ({
   readFile: async (path: string) => {
     fsState.readPaths.push(String(path))
+
     if (fsState.readError) {
       throw fsState.readError
     }
+
     if (fsState.credentials === null) {
       const error = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException
       error.code = 'ENOENT'
       throw error
     }
+
     return fsState.credentials
   }
 }))

@@ -26,7 +26,9 @@ vi.mock('../git/worktree', () => ({
 }))
 
 const initialWorktreePath = join(tmpdir(), 'repo')
+
 const externalWorktreePath = join(tmpdir(), 'external-worktree')
+
 const initialWorktree = {
   path: initialWorktreePath,
   head: 'initial-head',
@@ -34,6 +36,7 @@ const initialWorktree = {
   isBare: false,
   isMainWorktree: true
 }
+
 const externalWorktree = {
   path: externalWorktreePath,
   head: 'external-head',
@@ -41,6 +44,7 @@ const externalWorktree = {
   isBare: false,
   isMainWorktree: false
 }
+
 const reconnectedWorktree = {
   path: join(tmpdir(), 'reconnected-worktree'),
   head: 'reconnected-head',
@@ -54,9 +58,11 @@ function deferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -75,16 +81,21 @@ describe('external worktree discovery for paired clients', () => {
   afterEach(async () => {
     vi.useRealTimers()
     setWorktreeCatalogRemoteClientNotifier(null)
+
     for (const reader of readers.splice(0)) {
       reader.dispose()
     }
+
     for (const session of sessions.splice(0)) {
       session.ws.close()
     }
+
     await Promise.all(servers.splice(0).map((server) => server.stop()))
+
     for (const path of tempDirs.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
+
     vi.clearAllMocks()
   })
 
@@ -95,21 +106,26 @@ describe('external worktree discovery for paired clients', () => {
     setWorktreeCatalogRemoteClientNotifier(runtime)
     const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-'))
     tempDirs.push(userDataPath)
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     servers.push(server)
     await server.start()
 
     const pairingUrls: string[] = []
+
     for (const name of ['client-a', 'client-b']) {
       const offer = server.createPairingOffer({ address: '127.0.0.1', name, scope: 'runtime' })
+
       if (!offer.available) {
         throw new Error('pairing_unavailable')
       }
+
       pairingUrls.push(offer.pairingUrl)
       const client = await authenticate(offer.pairingUrl)
       sessions.push(client)
@@ -134,9 +150,11 @@ describe('external worktree discovery for paired clients', () => {
       name: 'event-ignoring-client',
       scope: 'runtime'
     })
+
     if (!legacyOffer.available) {
       throw new Error('pairing_unavailable')
     }
+
     const legacyClient = await authenticate(legacyOffer.pairingUrl)
     const legacyReader = createReader(legacyClient)
     sessions.push(legacyClient)
@@ -154,6 +172,7 @@ describe('external worktree discovery for paired clients', () => {
     vi.mocked(listWorktreesStrict).mockResolvedValue([initialWorktree, externalWorktree])
 
     const sendToHostRenderer = vi.fn()
+
     const watch = {
       key: 'base:repo-1',
       kind: 'base' as const,
@@ -171,6 +190,7 @@ describe('external worktree discovery for paired clients', () => {
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
+
     vi.useFakeTimers()
     scheduleWorktreeBaseNotification(watch as never, { structureRepoIds: [REPO_ID] })
     scheduleWorktreeBaseNotification(watch as never, { structureRepoIds: [REPO_ID] })
@@ -181,15 +201,19 @@ describe('external worktree discovery for paired clients', () => {
     expect(sendToHostRenderer).toHaveBeenCalledWith('worktrees:changed', { repoId: REPO_ID })
 
     runtime.notifyReposChangedForRemoteClients()
+
     for (const [index, reader] of readers.slice(0, 2).entries()) {
       const observed: string[] = []
+
       for (;;) {
         const type = resultType(await reader.next(`events-${index}`)) ?? 'unknown'
         observed.push(type)
+
         if (type === 'reposChanged') {
           break
         }
       }
+
       expect(observed).toEqual(['worktreesChanged', 'reposChanged'])
     }
 
@@ -278,21 +302,26 @@ describe('external worktree discovery for paired clients', () => {
     setWorktreeCatalogRemoteClientNotifier(runtime)
     const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-race-'))
     tempDirs.push(userDataPath)
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     servers.push(server)
     await server.start()
     const clients: PairedSession[] = []
     const raceReaders: ResponseReader[] = []
+
     for (const name of ['race-client-a', 'race-client-b']) {
       const offer = server.createPairingOffer({ address: '127.0.0.1', name, scope: 'runtime' })
+
       if (!offer.available) {
         throw new Error('pairing_unavailable')
       }
+
       const client = await authenticate(offer.pairingUrl)
       const reader = createReader(client)
       clients.push(client)
@@ -300,6 +329,7 @@ describe('external worktree discovery for paired clients', () => {
       sessions.push(client)
       readers.push(reader)
     }
+
     for (const [index, client] of clients.entries()) {
       send(client, { id: `race-events-${index}`, method: 'runtime.clientEvents.subscribe' })
       await raceReaders[index].next(
@@ -321,12 +351,15 @@ describe('external worktree discovery for paired clients', () => {
     vi.mocked(listWorktreesStrict).mockClear()
     vi.mocked(listWorktreesStrict).mockImplementation(async () => {
       scanCount += 1
+
       if (scanCount === 1) {
         const captured = [...inventory]
         firstScanStarted.resolve()
         await releaseFirstScan.promise
+
         return captured
       }
+
       return inventory
     })
 
@@ -337,6 +370,7 @@ describe('external worktree discovery for paired clients', () => {
         params: { repo: REPO_ID, limit: 100 }
       })
     }
+
     await firstScanStarted.promise
     inventory = [initialWorktree, externalWorktree]
     expect(listWorktreesStrict).toHaveBeenCalledOnce()
@@ -358,6 +392,7 @@ describe('external worktree discovery for paired clients', () => {
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
+
     vi.useFakeTimers()
     scheduleWorktreeBaseNotification(watch as never, { structureRepoIds: [REPO_ID] })
     await vi.advanceTimersByTimeAsync(250)
@@ -388,37 +423,46 @@ describe('external worktree discovery for paired clients', () => {
   it('does not publish an owner-blind event for colliding local and SSH repo IDs', async () => {
     const store = makeStore()
     const localRepo = store.getRepos().find((repo) => repo.id === REPO_ID)
+
     if (!localRepo) {
       throw new Error('local_repo_missing')
     }
+
     const collidingRepos = [
       ...store.getRepos(),
       { ...localRepo, path: '/remote/repo', connectionId: 'ssh-target-1' }
     ]
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepo: (id: string) => collidingRepos.find((repo) => repo.id === id),
       getRepos: () => collidingRepos
     } as never)
+
     setWorktreeCatalogRemoteClientNotifier(runtime)
     const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-collision-'))
     tempDirs.push(userDataPath)
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     servers.push(server)
     await server.start()
+
     const offer = server.createPairingOffer({
       address: '127.0.0.1',
       name: 'collision-client',
       scope: 'runtime'
     })
+
     if (!offer.available) {
       throw new Error('pairing_unavailable')
     }
+
     const client = await authenticate(offer.pairingUrl)
     const reader = createReader(client)
     sessions.push(client)
@@ -427,6 +471,7 @@ describe('external worktree discovery for paired clients', () => {
     await reader.next('collision-events', (response) => resultType(response) === 'ready')
 
     const sendToHostRenderer = vi.fn()
+
     const watch = {
       key: 'base:local-repo-collision',
       kind: 'base' as const,
@@ -444,6 +489,7 @@ describe('external worktree discovery for paired clients', () => {
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
+
     vi.useFakeTimers()
     scheduleWorktreeBaseNotification(watch as never, { structureRepoIds: [REPO_ID] })
     await vi.advanceTimersByTimeAsync(250)
@@ -459,22 +505,27 @@ describe('external worktree discovery for paired clients', () => {
     setWorktreeCatalogRemoteClientNotifier(runtime)
     const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-ssh-owner-'))
     tempDirs.push(userDataPath)
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     servers.push(server)
     await server.start()
+
     const offer = server.createPairingOffer({
       address: '127.0.0.1',
       name: 'nested-ssh-client',
       scope: 'runtime'
     })
+
     if (!offer.available) {
       throw new Error('pairing_unavailable')
     }
+
     const client = await authenticate(offer.pairingUrl)
     const reader = createReader(client)
     sessions.push(client)
@@ -483,6 +534,7 @@ describe('external worktree discovery for paired clients', () => {
     await reader.next('ssh-events', (response) => resultType(response) === 'ready')
 
     const sendToHostRenderer = vi.fn()
+
     const watch = {
       key: 'ssh:repo-collision',
       kind: 'base' as const,
@@ -501,6 +553,7 @@ describe('external worktree discovery for paired clients', () => {
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
+
     vi.useFakeTimers()
     scheduleWorktreeBaseNotification(watch as never, { structureRepoIds: [REPO_ID] })
     await vi.advanceTimersByTimeAsync(250)
@@ -517,22 +570,27 @@ describe('external worktree discovery for paired clients', () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-h-'))
     tempDirs.push(userDataPath)
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     servers.push(server)
     await server.start()
+
     const offer = server.createPairingOffer({
       address: '127.0.0.1',
       name: 'headless-client',
       scope: 'runtime'
     })
+
     if (!offer.available) {
       throw new Error('pairing_unavailable')
     }
+
     const client = await authenticate(offer.pairingUrl)
     const reader = createReader(client)
     sessions.push(client)

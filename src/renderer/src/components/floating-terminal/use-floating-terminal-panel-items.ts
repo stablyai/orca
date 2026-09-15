@@ -32,10 +32,12 @@ export function useFloatingTerminalPanelItems({
         : null),
     [groups, unifiedTabs]
   )
+
   const groupTabs = useMemo(
     () => (activeGroup ? unifiedTabs.filter((tab) => tab.groupId === activeGroup.id) : unifiedTabs),
     [activeGroup, unifiedTabs]
   )
+
   const activeTab = useMemo(
     () =>
       (activeGroup?.activeTabId
@@ -45,8 +47,10 @@ export function useFloatingTerminalPanelItems({
       null,
     [activeGroup, groupTabs]
   )
+
   const activeTerminalId = activeTab?.contentType === 'terminal' ? activeTab.entityId : null
   const activeBrowserId = activeTab?.contentType === 'browser' ? activeTab.entityId : null
+
   const activeEditorUnifiedId =
     activeTab &&
     activeTab.contentType !== 'terminal' &&
@@ -54,6 +58,7 @@ export function useFloatingTerminalPanelItems({
     activeTab.contentType !== 'simulator'
       ? activeTab.id
       : null
+
   const activeEditorFileId =
     activeTab &&
     activeTab.contentType !== 'terminal' &&
@@ -61,9 +66,12 @@ export function useFloatingTerminalPanelItems({
     activeTab.contentType !== 'simulator'
       ? activeTab.entityId
       : null
+
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
+
   const terminalAssignments = useMemo(() => {
     const assignments = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
+
     for (const tab of unifiedTabs) {
       if (tab.contentType === 'terminal') {
         assignments.set(tab.entityId, {
@@ -72,8 +80,10 @@ export function useFloatingTerminalPanelItems({
         })
       }
     }
+
     return assignments
   }, [activeTerminalId, unifiedTabs])
+
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
     terminalTabs: tabs,
@@ -84,15 +94,18 @@ export function useFloatingTerminalPanelItems({
     shouldMeasureHiddenWorktree: false,
     activityTerminalPortals: NO_ACTIVITY_TERMINAL_PORTALS
   })
+
   const terminalItems = useMemo<(TerminalTab & { unifiedTabId: string })[]>(
     () =>
       groupTabs
         .filter((tab) => tab.contentType === 'terminal')
         .flatMap((tab): (TerminalTab & { unifiedTabId: string })[] => {
           const terminalTab = terminalTabById.get(tab.entityId)
+
           if (!terminalTab) {
             return []
           }
+
           return [
             {
               ...terminalTab,
@@ -115,17 +128,20 @@ export function useFloatingTerminalPanelItems({
         }),
     [generatedTabTitlesEnabled, groupTabs, terminalTabById]
   )
+
   const browserItems = useMemo(
     () =>
       groupTabs
         .filter((tab) => tab.contentType === 'browser')
         .map((tab) => {
           const browserTab = browserTabs.find((candidate) => candidate.id === tab.entityId)
+
           return browserTab ? { ...browserTab, tabId: tab.id } : null
         })
         .filter((tab): tab is BrowserTabState & { tabId: string } => tab !== null),
     [browserTabs, groupTabs]
   )
+
   const editorItems = useMemo(
     () =>
       groupTabs
@@ -137,59 +153,75 @@ export function useFloatingTerminalPanelItems({
         )
         .map((tab) => {
           const file = floatingFiles.find((candidate) => candidate.id === tab.entityId)
+
           return file ? { ...file, tabId: tab.id } : null
         })
         .filter((file): file is OpenFile & { tabId: string } => file !== null),
     [floatingFiles, groupTabs]
   )
+
   const simulatorItems = useMemo(
     () => groupTabs.filter((tab) => tab.contentType === 'simulator'),
     [groupTabs]
   )
+
   const hasVisibleFloatingTabs =
     terminalItems.length > 0 ||
     browserItems.length > 0 ||
     editorItems.length > 0 ||
     simulatorItems.length > 0
+
   const visibleFloatingItemCount =
     terminalItems.length + browserItems.length + editorItems.length + simulatorItems.length
+
   const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
+
   const tabBarOrder = useMemo(
     () =>
       (activeGroup?.tabOrder ?? []).map((tabId) => {
         const tab = groupTabs.find((candidate) => candidate.id === tabId)
+
         return tab?.contentType === 'terminal' || tab?.contentType === 'browser'
           ? tab.entityId
           : tabId
       }),
     [activeGroup, groupTabs]
   )
+
   const visibleFloatingTabOrder = useMemo(
     () =>
       tabBarOrder.filter((visibleId) => {
         const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+
         if (!tab) {
           return false
         }
+
         if (tab.contentType === 'terminal') {
           return terminalItems.some((item) => item.unifiedTabId === tab.id)
         }
+
         if (tab.contentType === 'browser') {
           return browserItems.some((item) => item.tabId === tab.id)
         }
+
         if (tab.contentType === 'simulator') {
           return simulatorItems.some((item) => item.id === tab.id)
         }
+
         return editorItems.some((item) => item.tabId === tab.id)
       }),
     [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
   )
+
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
     : null
+
   const activeEditorFile = activeEditorFileId
     ? (floatingFiles.find((file) => file.id === activeEditorFileId) ?? null)
     : null
+
   const activeTabType: 'browser' | 'terminal' | 'simulator' | 'editor' =
     activeTab?.contentType === 'browser'
       ? 'browser'

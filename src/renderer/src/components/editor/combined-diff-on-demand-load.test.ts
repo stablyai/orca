@@ -109,6 +109,7 @@ describe('combined diff on-demand loading', () => {
       { path: 'src/staged.ts', status: 'modified', area: 'staged', added: 4 },
       { path: 'src/compare.ts', status: 'modified', added: 9 }
     ])
+
     expect(
       countedPasses.has(getCombinedDiffCountingPassKey({ path: 'a', status: 'modified' }))
     ).toBe(true)
@@ -127,12 +128,14 @@ describe('combined diff on-demand loading', () => {
   it('separates the two deferral reasons the prompt has to explain', () => {
     // Both defer, but only one is actually large; the prompt copy splits here.
     const overLimit = { added: MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1, path: 'src/schema.ts' }
+
     const uncounted = {
       path: 'resources/build/icon.icns',
       area: 'unstaged' as const,
       added: undefined,
       removed: undefined
     }
+
     expect(shouldLoadCombinedDiffOnDemand(overLimit)).toBe(true)
     expect(shouldLoadCombinedDiffOnDemand(uncounted)).toBe(true)
     expect(isCombinedDiffSizeUnknown(overLimit)).toBe(false)

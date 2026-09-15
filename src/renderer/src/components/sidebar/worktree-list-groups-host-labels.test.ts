@@ -17,6 +17,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 describe('buildRows with pinned worktrees', () => {
   it('groups Windows host and WSL setups on the same runtime host', () => {
     const runtimeHostId = 'runtime:g16'
+
     const windowsRepo: Repo = {
       ...repo,
       id: 'repo-windows',
@@ -24,6 +25,7 @@ describe('buildRows with pinned worktrees', () => {
       displayName: 'orca',
       executionHostId: runtimeHostId
     }
+
     const wslRepo: Repo = {
       ...repo,
       id: 'repo-wsl',
@@ -31,18 +33,21 @@ describe('buildRows with pinned worktrees', () => {
       displayName: 'orca',
       executionHostId: runtimeHostId
     }
+
     const windowsWorktree: Worktree = {
       ...worktree,
       id: 'wt-windows',
       repoId: windowsRepo.id,
       path: String.raw`C:\Users\alice\git\orca\feature`
     }
+
     const wslWorktree: Worktree = {
       ...worktree,
       id: 'wt-wsl',
       repoId: wslRepo.id,
       path: String.raw`\\wsl.localhost\Ubuntu\home\alice\git\orca\feature`
     }
+
     const windowsSetup: ProjectHostSetup = {
       ...projectHostSetups[0]!,
       id: windowsRepo.id,
@@ -51,12 +56,14 @@ describe('buildRows with pinned worktrees', () => {
       path: windowsRepo.path,
       displayName: windowsRepo.displayName
     }
+
     const wslSetup: ProjectHostSetup = {
       ...windowsSetup,
       id: wslRepo.id,
       repoId: wslRepo.id,
       path: wslRepo.path
     }
+
     const rows = buildRows(
       'repo',
       [windowsWorktree, wslWorktree],
@@ -104,11 +111,13 @@ describe('buildRows with pinned worktrees', () => {
       connectionId: null,
       executionHostId: 'runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3'
     }
+
     const runtimeWorktree: Worktree = {
       ...remoteWorktree,
       id: 'wt-runtime',
       repoId: runtimeRepo.id
     }
+
     const runtimeSetup: ProjectHostSetup = {
       ...projectHostSetups[1]!,
       id: runtimeRepo.id,
@@ -116,6 +125,7 @@ describe('buildRows with pinned worktrees', () => {
       repoId: runtimeRepo.id,
       path: runtimeRepo.path
     }
+
     const rows = buildRows(
       'repo',
       [worktree, runtimeWorktree],
@@ -162,11 +172,13 @@ describe('buildRows with pinned worktrees', () => {
       connectionId: 'openclaw',
       executionHostId: 'ssh:openclaw'
     }
+
     const sshWorktree: Worktree = {
       ...remoteWorktree,
       id: 'wt-openclaw',
       repoId: sshRepo.id
     }
+
     const rows = buildRows(
       'workspace-status',
       [worktree, sshWorktree],
@@ -208,21 +220,25 @@ describe('buildRows with pinned worktrees', () => {
       id: 'repo-runtime-a',
       executionHostId: 'runtime:env-a'
     }
+
     const secondRepo: Repo = {
       ...repo,
       id: 'repo-runtime-b',
       executionHostId: 'runtime:env-b'
     }
+
     const firstWorktree: Worktree = {
       ...worktree,
       id: 'wt-runtime-a',
       repoId: firstRepo.id
     }
+
     const secondWorktree: Worktree = {
       ...worktree,
       id: 'wt-runtime-b',
       repoId: secondRepo.id
     }
+
     const rows = buildRows(
       'workspace-status',
       [firstWorktree, secondWorktree],
@@ -267,6 +283,7 @@ describe('buildRows with pinned worktrees', () => {
       id: 'wt-local-2',
       displayName: 'local-only'
     }
+
     const rows = buildRows(
       'repo',
       [worktree, secondLocalWorktree],
@@ -299,6 +316,7 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'item', worktree: { id: worktree.id } },
       { type: 'item', worktree: { id: secondLocalWorktree.id } }
     ])
+
     for (const row of rows) {
       if (row.type === 'item') {
         expect(row.hostContextLabel).toBeUndefined()

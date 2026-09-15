@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/pty-transport', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
   shutdownBufferCaptures: vi.fn()
 }))
@@ -132,6 +135,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
     const tabsByWorktree = store.getState().tabsByWorktree
     const runtimePaneTitlesByTabId = store.getState().runtimePaneTitlesByTabId
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -194,27 +198,33 @@ describe('runtimePaneTitle → sortEpoch', () => {
   it('collapses bulk Codex spinner title churn to the first meaningful publication', () => {
     const store = createTestStore()
     const tabCount = 20
+
     const worktrees = Array.from({ length: tabCount }, (_, index) =>
       makeWorktree({ id: `wt-${index}`, repoId: 'repo1', path: `/path/wt-${index}` })
     )
+
     const tabsByWorktree = Object.fromEntries(
       worktrees.map((worktree, index) => [
         worktree.id,
         [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
       ])
     )
+
     seedStore(store, {
       worktreesByRepo: { repo1: worktrees },
       tabsByWorktree
     })
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
+
     const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧']
 
     for (let tabIndex = 0; tabIndex < tabCount; tabIndex += 1) {
       const tabId = `tab-${tabIndex}`
+
       for (const frame of frames) {
         const title = `${frame} Codex is thinking`
         store.getState().updateTabTitle(tabId, title)
@@ -229,9 +239,11 @@ describe('runtimePaneTitle → sortEpoch', () => {
   it('publishes a bulk tab-title update once across worktrees', () => {
     const store = createTestStore()
     const tabCount = 20
+
     const worktrees = Array.from({ length: tabCount }, (_, index) =>
       makeWorktree({ id: `wt-${index}`, repoId: 'repo1', path: `/path/wt-${index}` })
     )
+
     seedStore(store, {
       worktreesByRepo: { repo1: worktrees },
       tabsByWorktree: Object.fromEntries(
@@ -242,6 +254,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
       )
     })
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -255,6 +268,7 @@ describe('runtimePaneTitle → sortEpoch', () => {
 
     unsubscribe()
     expect(publications).toBe(1)
+
     for (let index = 0; index < tabCount; index += 1) {
       expect(store.getState().tabsByWorktree[`wt-${index}`]?.[0]?.title).toBe(
         `Codex ready ${index}`

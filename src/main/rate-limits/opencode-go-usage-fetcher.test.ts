@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
+
 const cookiesSetMock = vi.hoisted(() => vi.fn())
+
 const clearStorageDataMock = vi.hoisted(() => vi.fn())
+
 const resolveProxyMock = vi.hoisted(() => vi.fn())
+
 const setProxyMock = vi.hoisted(() => vi.fn())
+
 const fromPartitionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
@@ -12,6 +17,7 @@ vi.mock('electron', () => ({
 }))
 
 import { fetchOpenCodeGoRateLimits, normalizeCookieInput } from './opencode-go-usage-fetcher'
+
 const WORKSPACES_SERVER_ID = 'def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f'
 
 function makeResponse(body: string, status = 200): Response {
@@ -182,15 +188,19 @@ describe('fetchOpenCodeGoRateLimits', () => {
   it('finishes each cookie write before starting the next one', async () => {
     let resolveFirstCookie!: () => void
     let markFirstCookieStarted!: () => void
+
     const firstCookiePending = new Promise<void>((resolve) => {
       resolveFirstCookie = resolve
     })
+
     const firstCookieStarted = new Promise<void>((resolve) => {
       markFirstCookieStarted = resolve
     })
+
     cookiesSetMock
       .mockImplementationOnce(() => {
         markFirstCookieStarted()
+
         return firstCookiePending
       })
       .mockRejectedValueOnce(new Error('second cookie rejected'))
@@ -218,6 +228,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
       httpProxyUrl: 'http://proxy.example:8080',
       httpProxyBypassRules: 'localhost, *.internal'
     }
+
     const result = await fetchOpenCodeGoRateLimits('auth=mytoken', undefined, proxySettings)
     const repeatedResult = await fetchOpenCodeGoRateLimits('auth=mytoken', undefined, proxySettings)
 
@@ -307,6 +318,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
       rollingUsage: { usagePercent: 150, resetInSec: 3600 }
       weeklyUsage: { usagePercent: -5, resetInSec: 86400 }
     `
+
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
       .mockResolvedValueOnce(makeResponse(page))
@@ -324,6 +336,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
       rollingUsage:$R[21]={status:"ok",resetInSec:1337,usagePercent:42},
       weeklyUsage:$R[22]={status:"ok",resetInSec:86400,usagePercent:68}
     `
+
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
       .mockResolvedValueOnce(makeResponse(page))
@@ -345,6 +358,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
       monthlyUsage:null,timeMonthlyUsageUpdated:null,
       monthlyUsage:$R[28]={status:"ok",resetInSec:1214779,usagePercent:89}
     `
+
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
       .mockResolvedValueOnce(makeResponse(page))
@@ -362,6 +376,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
       weeklyUsage:$R[22]={status:"ok",resetInSec:86400,usagePercent:20},
       monthlyUsage:null,timeMonthlyUsageUpdated:null
     `
+
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
       .mockResolvedValueOnce(makeResponse(page))

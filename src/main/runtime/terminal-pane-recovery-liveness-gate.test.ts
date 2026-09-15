@@ -42,6 +42,7 @@ describe('terminal.recoverPane liveness gate', () => {
     // the reattach spawn path only expires the lease, so nothing else reaches the runtime record.
     await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(runtime.getPtyLivenessVerdict(ptyId)).toBeNull()
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -110,6 +111,7 @@ describe('terminal.recoverPane liveness gate', () => {
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1, undefined, { hostExitConfirmed: true })
     expect(runtime.getPtyLivenessVerdict(ptyId)?.status).toBe('exited')
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,

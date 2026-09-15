@@ -64,16 +64,20 @@ export function CheckRunDetails({
   const details = state?.details
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
+
   const detailsStatusCheck: PRCheckDetail = {
     ...check,
     status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
     conclusion: (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
   }
+
   const failedJobs =
     details?.jobs.filter((job) => {
       const state = job.conclusion ?? job.status
+
       return isFailureState(state)
     }) ?? []
+
   const jobs = failedJobs.length > 0 ? failedJobs : (details?.jobs ?? [])
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
   const hasAnnotations = (details?.annotations.length ?? 0) > 0
@@ -94,6 +98,7 @@ export function CheckRunDetails({
     if (!worktreeId) {
       return
     }
+
     openCheckRunDetails(worktreeId, checkDetailsContextKey, check, {
       requestId: state?.requestId,
       details: state?.details ?? null,
@@ -318,6 +323,7 @@ export function CheckRunDetails({
                         {job.steps
                           .filter((step) => {
                             const state = step.conclusion ?? step.status
+
                             return isFailureState(state)
                           })
                           .map((step) => (

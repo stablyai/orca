@@ -42,10 +42,12 @@ export function useAutomationsPageStoreState() {
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
+
   const repoForRow = useCallback(
     (row: AutomationListRow): Repo | undefined => automationRepoForRow(row, repos, repoMap),
     [repoMap, repos]
   )
+
   const worktreeForRow = useCallback(
     (
       row: AutomationListRow,
@@ -55,7 +57,9 @@ export function useAutomationsPageStoreState() {
       automationWorktreeForRow(row, worktreesByRepo, repo, worktreeMap, workspaceId),
     [worktreeMap, worktreesByRepo]
   )
+
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
+
   const defaultAgent =
     settings?.defaultTuiAgent &&
     settings.defaultTuiAgent !== 'blank' &&

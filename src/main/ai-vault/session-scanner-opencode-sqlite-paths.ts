@@ -29,19 +29,24 @@ export function splitOpenCodeSqliteCandidate(
   candidatePath: string
 ): { dbPath: string; sessionId: string } | null {
   const separatorIndex = candidatePath.lastIndexOf(OPENCODE_SQLITE_PATH_SEPARATOR)
+
   if (separatorIndex <= 0 || separatorIndex === candidatePath.length - 1) {
     return null
   }
+
   const dbPath = candidatePath.slice(0, separatorIndex)
   const sessionId = candidatePath.slice(separatorIndex + 1)
+
   if (!dbPath || !sessionId) {
     return null
   }
+
   // Why: OpenCode DB files are named opencode*.db; reject anything else so we
   // never misroute a real filesystem path that happens to contain '#'.
   if (!/^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(basename(dbPath))) {
     return null
   }
+
   return { dbPath, sessionId }
 }
 

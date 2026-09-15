@@ -50,6 +50,7 @@ export function parseArgs(argv) {
   if (argv.includes('-h') || argv.includes('--help')) {
     return { help: true }
   }
+
   if (argv.includes('--selftest')) {
     return { selftest: true }
   }
@@ -61,6 +62,7 @@ export function parseArgs(argv) {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
+
     if (arg === '--app-dir' && argv[i + 1]) {
       appDir = argv[i + 1]
       i++
@@ -80,6 +82,7 @@ export function parseArgs(argv) {
   if (!appDir || !workDir) {
     return { error: 'Both --app-dir and --work-dir are required' }
   }
+
   if (!TIERS.includes(tier)) {
     return { error: `Invalid --tier "${tier}" (expected one of: ${TIERS.join(', ')})` }
   }

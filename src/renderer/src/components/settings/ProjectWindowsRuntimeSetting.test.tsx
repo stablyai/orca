@@ -27,6 +27,7 @@ function renderClient(props: React.ComponentProps<typeof ProjectWindowsRuntimeSe
   act(() => {
     root.render(<ProjectWindowsRuntimeSetting {...props} />)
   })
+
   return { container, root }
 }
 
@@ -34,6 +35,7 @@ function clickButton(container: HTMLElement, label: string): void {
   const button = Array.from(container.querySelectorAll('button')).find(
     (entry) => entry.textContent?.trim() === label
   )
+
   expect(button).toBeTruthy()
   act(() => {
     button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -74,6 +76,7 @@ describe('ProjectWindowsRuntimeSetting', () => {
 
   it('persists runtime override changes through the project update path', () => {
     const updateProject = vi.fn()
+
     const { container, root } = renderClient({
       project,
       settings: getDefaultSettings('/tmp'),
@@ -122,6 +125,7 @@ describe('ProjectWindowsRuntimeSetting', () => {
 
   it('shows the selected distro for explicit WSL project overrides', () => {
     const updateProject = vi.fn()
+
     const { container, root } = renderClient({
       project: {
         ...project,
@@ -167,6 +171,7 @@ describe('ProjectWindowsRuntimeSetting', () => {
       const wslButton = Array.from(container.querySelectorAll('button')).find(
         (button) => button.textContent?.trim() === 'WSL'
       )
+
       expect(wslButton).toBeTruthy()
 
       act(() => {
@@ -179,6 +184,7 @@ describe('ProjectWindowsRuntimeSetting', () => {
       const applyButton = Array.from(container.querySelectorAll('button')).find((button) =>
         button.textContent?.includes('Apply runtime change')
       )
+
       expect(applyButton).toBeTruthy()
 
       act(() => {

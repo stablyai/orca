@@ -39,10 +39,12 @@ export function useSmartWorkspaceGithubSearch({
     setOpen,
     setCrossRepoPrompt
   } = foundation
+
   const normalizedGhQuery = useMemo(
     () => normalizeGitHubLinkQuery(sourceQueryWithinLimit ? debouncedQuery : ''),
     [debouncedQuery, sourceQueryWithinLimit]
   )
+
   const parsedGhLink = useMemo(
     () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
     [debouncedQuery, sourceQueryWithinLimit]
@@ -52,15 +54,20 @@ export function useSmartWorkspaceGithubSearch({
     if (disabled || !shouldQueryGithub) {
       setGithubItems([])
       setGithubLoading(false)
+
       return
     }
+
     let stale = false
+
     // Why: clearing the field must not briefly paint the previous non-empty results.
     if (debouncedQuery.trim() === '') {
       setGithubItems([])
     }
+
     const directNumber = normalizedGhQuery.directNumber
     const directLink = parsedGhLink
+
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
       setGithubLoading(true)
       void resolveSmartWorkspaceGithubDirectLink({
@@ -78,7 +85,9 @@ export function useSmartWorkspaceGithubSearch({
           if (stale) {
             return
           }
+
           setGithubItems(result.items)
+
           if (result.prompt) {
             setOpen(false)
             setCrossRepoPrompt(result.prompt)
@@ -94,12 +103,15 @@ export function useSmartWorkspaceGithubSearch({
             setGithubLoading(false)
           }
         })
+
       return () => {
         stale = true
       }
     }
+
     if (directNumber !== null) {
       setGithubLoading(true)
+
       const intent =
         directLink !== null
           ? {
@@ -111,6 +123,7 @@ export function useSmartWorkspaceGithubSearch({
               type: directLink.type
             }
           : { kind: 'hash-number' as const, number: directNumber }
+
       const request = Promise.all(
         repoBackedSearchTargets.map((target) =>
           lookupSmartGitHubSubmitItem({
@@ -128,6 +141,7 @@ export function useSmartWorkspaceGithubSearch({
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
           .slice(0, RESULT_LIMIT)
       )
+
       void request
         .then((items) => {
           if (!stale) {
@@ -144,6 +158,7 @@ export function useSmartWorkspaceGithubSearch({
             setGithubLoading(false)
           }
         })
+
       return () => {
         stale = true
       }
@@ -151,8 +166,10 @@ export function useSmartWorkspaceGithubSearch({
 
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
+
     if (repoBackedSearchTargets.length === 1) {
       const target = repoBackedSearchTargets[0]
+
       const cached = getCachedWorkItems(
         target.repo.id,
         RESULT_LIMIT,
@@ -160,12 +177,14 @@ export function useSmartWorkspaceGithubSearch({
         target.repo.path,
         target.githubSourceContext
       )
+
       if (cached) {
         setGithubItems(cached.slice(0, RESULT_LIMIT))
         setGithubLoading(false)
       } else {
         setGithubLoading(true)
       }
+
       void fetchWorkItems(target.repo.id, target.repo.path, RESULT_LIMIT, query, {
         sourceContext: target.githubSourceContext
       })
@@ -213,6 +232,7 @@ export function useSmartWorkspaceGithubSearch({
           }
         })
     }
+
     return () => {
       stale = true
     }

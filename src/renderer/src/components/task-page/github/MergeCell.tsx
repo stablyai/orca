@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
 import { resolveTaskPullRequestRepo } from '../../task-page-github-review-model'
+
 export function PRMergeCell({
   item,
   repo,
@@ -42,9 +43,11 @@ export function PRMergeCell({
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
   const confirm = useConfirmationDialog()
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -55,6 +58,7 @@ export function PRMergeCell({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   if (item.type !== 'pr') {
     return (
       <span className="text-[11px] text-muted-foreground">
@@ -62,9 +66,11 @@ export function PRMergeCell({
       </span>
     )
   }
+
   const mergePresentation = presentGitHubPRMergeState(item)
   const mergeMethods = resolveGitHubPRMergeMethods(item.mergeMethodSettings)
   const prRepo = resolveTaskPullRequestRepo(item)
+
   const mergeMutationPending = workItemMutation.isIntentPending({
     item,
     intent: {
@@ -72,6 +78,7 @@ export function PRMergeCell({
     },
     sourceContext
   })
+
   const autoMergeMutationPending = mergePresentation.autoMergeAction
     ? workItemMutation.isIntentPending({
         item,
@@ -82,13 +89,17 @@ export function PRMergeCell({
         sourceContext
       })
     : false
+
   const mergeDisabled =
     !repo || merging || mergeMutationPending || !mergePresentation.directMergeAvailable
+
   const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
     if (!repo || mergeDisabled) {
       return
     }
+
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+
     const confirmed = await confirm({
       title: translate('auto.components.TaskPage.844dc193c7', '{{value0}} PR #{{value1}}?', {
         value0: label,
@@ -100,10 +111,13 @@ export function PRMergeCell({
       ),
       confirmLabel: label
     })
+
     if (!confirmed) {
       return
     }
+
     setMerging(true)
+
     try {
       await workItemMutation.run({
         item,
@@ -118,8 +132,10 @@ export function PRMergeCell({
         ),
         mutate: async () => {
           const target = getActiveRuntimeTarget(sourceSettings)
+
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+
           return target.kind === 'environment'
             ? callRuntimeRpc<{
                 ok: boolean
@@ -151,12 +167,15 @@ export function PRMergeCell({
       setMerging(false)
     }
   }
+
   const handleAutoMerge = async (): Promise<void> => {
     if (!repo || autoMergeMutationPending || !mergePresentation.autoMergeAction) {
       return
     }
+
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMerging(true)
+
     try {
       await workItemMutation.run({
         item,
@@ -173,8 +192,10 @@ export function PRMergeCell({
           : translate('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge'),
         mutate: async () => {
           const target = getActiveRuntimeTarget(sourceSettings)
+
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+
           return target.kind === 'environment'
             ? callRuntimeRpc<{
                 ok: boolean
@@ -208,6 +229,7 @@ export function PRMergeCell({
       setMerging(false)
     }
   }
+
   return (
     <DropdownMenu modal={false}>
       <Tooltip>

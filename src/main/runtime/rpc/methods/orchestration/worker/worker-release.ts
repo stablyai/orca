@@ -18,6 +18,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
       const federated = db.getFederatedDispatch(params.dispatch)
+
       if (federated) {
         if (!orchestrationMutation) {
           throw new OrchestrationError(
@@ -25,6 +26,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             'Remote worker-release requires a durable retry request.'
           )
         }
+
         return releaseFederatedWorker({
           runtime,
           server: resolvePinnedFederatedServer(runtime, federated),
@@ -33,7 +35,9 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           requestId: orchestrationMutation.requestId
         })
       }
+
       const requested = db.requestWorkerTerminalRelease(params.dispatch)
+
       if (requested.disposition === 'already_released') {
         return {
           dispatchId: params.dispatch,
@@ -42,9 +46,11 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           archive: archiveSummary(requested.resource)
         }
       }
+
       if (requested.disposition === 'retained') {
         const resource = requested.resource
         const processIncarnation = resource?.process_incarnation
+
         if (
           processIncarnation &&
           (await runtime.inspectTerminalProcessIncarnationLiveness(
@@ -57,8 +63,10 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             resourceId: resource.id,
             processIncarnation
           })
+
           if (reconciled.disposition === 'released') {
             runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+
             return {
               dispatchId: params.dispatch,
               state: 'released',
@@ -67,6 +75,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             }
           }
         }
+
         return {
           dispatchId: params.dispatch,
           state: 'retained',
@@ -75,6 +84,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           archive: archiveSummary(resource)
         }
       }
+
       return completeWorkerTerminalRelease({
         runtime,
         db,
@@ -89,6 +99,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const retained = db.retainWorkerTerminalResource(params.dispatch)
+
       if (retained.disposition === 'already_released') {
         return {
           dispatchId: params.dispatch,
@@ -97,6 +108,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           archive: archiveSummary(retained.resource)
         }
       }
+
       if (retained.disposition === 'no_owned_resource') {
         return {
           dispatchId: params.dispatch,
@@ -106,8 +118,10 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           archive: null
         }
       }
+
       if (retained.disposition === 'release_committed') {
         const unknown = retained.resource.release_state === 'unknown'
+
         return {
           dispatchId: params.dispatch,
           state: unknown ? ('release_unknown' as const) : ('release_pending' as const),
@@ -120,6 +134,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             'Terminal release was already committed and could not be changed to retained; inspect worker-show before taking further action.'
         }
       }
+
       return {
         dispatchId: params.dispatch,
         state: 'retained' as const,
@@ -145,9 +160,11 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         (params.sessionId
           ? runtime.getStructuredWorkerPaneKeyForSession(params.sessionId)
           : runtime.getTerminalPaneKey(params.terminal!))
+
       const changed = paneKey
         ? runtime.getOrchestrationDb().markWorkerTerminalUserOwned(paneKey)
         : 0
+
       return { changed }
     }
   })

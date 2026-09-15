@@ -59,26 +59,33 @@ function valueFromMs(ms: number | null | undefined): RestoreValue {
   if (ms == null) {
     return 'indefinite'
   }
+
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+
   if (exact) {
     return exact.value
   }
+
   // Why: server may return a non-preset ms (custom value, future preset,
   // or server-side clamp). Snap to the closest finite preset so the
   // picker's selected radio agrees with the row sublabel rendered by
   // autoRestoreSummary ("After Xs").
   let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
   let bestDelta = Infinity
+
   for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
     if (opt.ms == null) {
       continue
     }
+
     const delta = Math.abs(opt.ms - ms)
+
     if (delta < bestDelta) {
       bestDelta = delta
       closest = opt
     }
   }
+
   return closest ? closest.value : 'indefinite'
 }
 
@@ -86,10 +93,13 @@ function autoRestoreSummary(ms: number | null | undefined): string {
   if (ms === undefined) {
     return '…'
   }
+
   if (ms === null) {
     return AUTO_RESTORE_FIT_OPTIONS[0]!.label
   }
+
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+
   return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
 }
 
@@ -129,6 +139,7 @@ export default function TerminalSettingsScreen() {
   }, [])
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients } = useFocusedSettingsHostClients(hostIds)
+
   const hostClientsById = useMemo(
     () => new Map(hostClients.map((entry) => [entry.hostId, entry.client])),
     [hostClients]
@@ -147,11 +158,14 @@ export default function TerminalSettingsScreen() {
   useEffect(() => {
     void loadTerminalTextScale().then(setTextScale)
   }, [])
+
   const selectTextSize = useCallback((value: TextSizeValue) => {
     const opt = TEXT_SIZE_OPTIONS.find((o) => o.value === value)
+
     if (!opt) {
       return
     }
+
     setTextScale(opt.scale)
     void saveTerminalTextScale(opt.scale)
   }, [])
@@ -167,10 +181,12 @@ export default function TerminalSettingsScreen() {
         setAutocompleteEnabled(enabled)
       }
     })
+
     return () => {
       stale = true
     }
   }, [])
+
   const toggleAutocomplete = useCallback((next: boolean) => {
     userToggledAutocompleteRef.current = true
     setAutocompleteEnabled(next)
@@ -179,17 +195,21 @@ export default function TerminalSettingsScreen() {
 
   useEffect(() => {
     let cancelled = false
+
     for (const host of hosts) {
       const client = hostClientsById.get(host.id) ?? null
+
       if (!client) {
         continue
       }
+
       void client
         .sendRequest('terminal.getAutoRestoreFit')
         .then((resp) => {
           if (cancelled) {
             return
           }
+
           const value = (resp as { ms?: number | null } | null)?.ms
           // Why: reconnect/status ticks can replay the same value; preserving
           // object identity avoids rerendering every settings row again.
@@ -201,6 +221,7 @@ export default function TerminalSettingsScreen() {
           }
         })
     }
+
     return () => {
       cancelled = true
     }
@@ -208,24 +229,31 @@ export default function TerminalSettingsScreen() {
 
   async function selectValue(hostId: string, value: RestoreValue) {
     const client = hostClientsById.get(hostId) ?? null
+
     if (!client) {
       return
     }
+
     const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
+
     if (!opt) {
       return
     }
+
     setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, opt.ms))
+
     try {
       const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
         ms: opt.ms
       })) as { ms?: number | null } | null
+
       setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
     } catch {
       try {
         const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
           ms?: number | null
         } | null
+
         setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
       } catch {
         // give up silently — the next mount retries
@@ -238,9 +266,11 @@ export default function TerminalSettingsScreen() {
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const scrollOffsetY = useSharedValue(0)
   const scrollContentHeight = useSharedValue(0)
+
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = event.contentOffset.y
   })
+
   // Why: imperative toggle instead of state — a re-render while a drag gesture
   // is active would rebuild the row gestures and could cancel the drag.
   const setScrollEnabled = useCallback(
@@ -249,6 +279,7 @@ export default function TerminalSettingsScreen() {
     },
     [scrollRef]
   )
+
   const handleDragActiveChange = useCallback(
     (active: boolean) => setScrollEnabled(!active),
     [setScrollEnabled]
@@ -291,6 +322,7 @@ export default function TerminalSettingsScreen() {
           <View style={[styles.section, styles.sectionTopGap]}>
             {hosts.map((host, idx) => {
               const client = hostClientsById.get(host.id) ?? null
+
               return (
                 <View key={host.id}>
                   {idx > 0 && <View style={styles.separator} />}

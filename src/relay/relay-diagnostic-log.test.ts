@@ -4,6 +4,7 @@ import { relayLogLine } from './relay-diagnostic-log'
 describe('relayLogLine', () => {
   it('prefixes each log line with an ISO timestamp', () => {
     const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
     try {
       relayLogLine('[relay] Grace started (stdin ended)')
 

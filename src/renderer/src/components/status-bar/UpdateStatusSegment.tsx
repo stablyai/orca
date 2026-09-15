@@ -25,9 +25,11 @@ export function UpdateStatusSegment({
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
       ? status.recovery
       : null
+
   const segment = (() => {
     if (status.state === 'downloading') {
       const pct = Math.max(0, Math.min(100, Math.round(status.percent)))
+
       return {
         icon: <Download className="size-3 text-muted-foreground" />,
         label: `${pct}%`,
@@ -43,8 +45,10 @@ export function UpdateStatusSegment({
         )
       }
     }
+
     const readyVersion =
       status.state === 'downloaded' ? status.version : linuxPackageRecovery?.version
+
     if (readyVersion !== undefined) {
       return {
         icon: <CheckCircle2 className="size-3 text-emerald-500" />,
@@ -63,6 +67,7 @@ export function UpdateStatusSegment({
         )
       }
     }
+
     return {
       icon: <AlertCircle className="size-3 text-yellow-500" />,
       label: translate(

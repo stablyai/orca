@@ -78,6 +78,7 @@ describe('shouldShowNativeChatTypingIndicator', () => {
       timestamp: null,
       source: 'transcript'
     }
+
     expect(
       shouldShowNativeChatTypingIndicator({
         messages: [earlierRunningTool, message('a1', 'assistant'), message('u2', 'user')],

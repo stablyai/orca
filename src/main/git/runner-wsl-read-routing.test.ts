@@ -12,22 +12,27 @@ vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
   spawn: spawnMock
 }))
+
 vi.mock('../observability/instrumentation', () => ({
   withGitSpan: (_attributes: unknown, run: () => unknown) => run()
 }))
+
 vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
 
 import { gitExecFileAsync } from './runner'
 import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 
 afterEach(() => _resetGitAdmissionForTests())
+
 import {
   resetWslGitReadEnvironmentForTests,
   seedWslGitReadEnvironmentForTests
 } from './wsl-git-read-environment'
 
 const DISTRO = 'Ubuntu'
+
 const WSL_CWD = String.raw`\wsl.localhost\Ubuntu\home\alice\repo`
+
 const LOGIN_ENVIRONMENT = {
   gitPath: '/usr/bin/git',
   home: '/home/alice',
@@ -39,8 +44,10 @@ function createMockChild(): EventEmitter & { stdout: EventEmitter; stderr: Event
     stdout: EventEmitter
     stderr: EventEmitter
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child
 }
 
@@ -53,6 +60,7 @@ describe('WSL git read routing', () => {
     execFileMock.mockReset()
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       queueMicrotask(() => callback?.(null, 'ok', ''))
+
       return createMockChild()
     })
     resetWslGitReadEnvironmentForTests()

@@ -46,7 +46,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
     ;(
       runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
     ).setupCompletionTokenByPtyId.set('pty-setup', 'token-live')
@@ -72,7 +74,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
     ;(
       runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
     ).setupCompletionTokenByPtyId.set('pty-fast-setup', 'token-fast')
@@ -113,7 +117,9 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
     ;(
       runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
     ).setupCompletionTokenByPtyId.set('pty-uncertain-setup', 'token-uncertain')
@@ -170,6 +176,7 @@ describe('OrcaRuntimeService', () => {
         recentPtyPathCandidatesById: Map<string, string[]>
       }
     ).ptysById.get('pty-bg')
+
     expect(pty).toMatchObject({
       tailBuffer: [],
       tailPartialLine: '',
@@ -200,6 +207,7 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     const handles: string[] = []
+
     for (let index = 0; index < 140; index += 1) {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
       handles.push(handle)
@@ -213,6 +221,7 @@ describe('OrcaRuntimeService', () => {
       handleByPtyId: Map<string, string>
       recentPtyPathCandidatesById: Map<string, string[]>
     }
+
     expect(internals.ptysById.size).toBeLessThanOrEqual(128)
     expect(internals.ptysById.has('pty-bg-0')).toBe(false)
     expect(internals.ptysById.has('pty-bg-139')).toBe(true)
@@ -254,6 +263,7 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('daemon-pty-1')
+
     expect(pty).toMatchObject({
       connected: false,
       tailBuffer: ['still live'],
@@ -292,6 +302,7 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('daemon-pty-1')
+
     expect(pty).toMatchObject({
       connected: true,
       tailBuffer: ['still live'],
@@ -302,6 +313,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps retained PTY transcript memory when controller refresh times out', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       runtime.setPtyController({
@@ -332,6 +344,7 @@ describe('OrcaRuntimeService', () => {
           >
         }
       ).ptysById.get('daemon-pty-1')
+
       expect(pty).toMatchObject({
         connected: true,
         tailBuffer: ['still live'],
@@ -409,14 +422,17 @@ describe('OrcaRuntimeService', () => {
 
   it('does not treat a Codex launch title as tui-idle readiness', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
+
       const serializeProviderBuffer = vi.fn().mockResolvedValue({
         data: 'OpenAI Codex\r\nmodel: gpt-5.5\r\ndirectory: /repo\r\n',
         cols: 80,
         rows: 24,
         seq: 1
       })
+
       runtime.setPtyController({
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: () => true,
@@ -453,6 +469,7 @@ describe('OrcaRuntimeService', () => {
         condition: 'tui-idle',
         timeoutMs: 1_000
       })
+
       const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
 
       await vi.advanceTimersByTimeAsync(2_000)
@@ -522,9 +539,11 @@ describe('OrcaRuntimeService', () => {
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     let pastedTail = ''
+
     for (let index = 0; index < 90; index += 1) {
       pastedTail += `${'pasted text '.repeat(25)}${index}\n`
     }
+
     const splitSpy = vi.spyOn(String.prototype, 'split')
 
     runtime.onPtyData(
@@ -548,10 +567,13 @@ describe('OrcaRuntimeService', () => {
       satisfied: true,
       status: 'running'
     })
+
     const splitReadyTail = splitSpy.mock.contexts.some((context) => {
       const value = typeof context === 'string' ? context : String(context)
+
       return value.includes('antigravity cli') && value.includes('pasted text pasted text')
     })
+
     expect(splitReadyTail).toBe(false)
   })
 

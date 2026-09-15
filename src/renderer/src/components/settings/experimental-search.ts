@@ -189,9 +189,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
 // instead of silently matching the wrong (or empty) entry.
 function findEntry(title: string): SettingsSearchEntry {
   const entry = getExperimentalPaneSearchEntries().find((e) => e.title === title)
+
   if (!entry) {
     throw new Error(`Missing experimental-pane search entry: "${title}"`)
   }
+
   return entry
 }
 

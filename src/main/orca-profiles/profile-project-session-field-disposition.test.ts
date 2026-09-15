@@ -12,8 +12,11 @@ import { removeRepoFromWorkspaceSession } from './profile-project-session-state'
 import { extractSessionForTransfer } from './profile-project-session-transfer'
 
 const REMOVED_REPO_ID = 'repo-1'
+
 const TRANSFER_TARGET_REPO_ID = 'repo-3'
+
 const REMOVED_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
+
 const RETAINED_WORKTREE_ID = 'repo-2::/tmp/worktree-b'
 
 function clientHostedRow(worktreeId: string): PersistedClientHostedBrowserPage {
@@ -85,6 +88,7 @@ describe('workspace session field disposition census', () => {
       [REMOVED_WORKTREE_ID]: 'removed-value',
       [RETAINED_WORKTREE_ID]: 'retained-value'
     }
+
     return session as WorkspaceSessionState
   }
 

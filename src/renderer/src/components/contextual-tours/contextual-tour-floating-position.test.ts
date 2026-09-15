@@ -37,6 +37,7 @@ function elementWithRect(
   Object.defineProperty(element, 'clientWidth', { value: rect.width })
   Object.defineProperty(element, 'clientHeight', { value: rect.height })
   document.body.appendChild(element)
+
   return element
 }
 
@@ -46,6 +47,7 @@ function arrowElement(): SVGSVGElement {
     value: () => ({ left: 0, right: 18, top: 0, bottom: 8, width: 18, height: 8, x: 0, y: 0 })
   })
   document.body.appendChild(element)
+
   return element
 }
 
@@ -68,6 +70,7 @@ describe('contextual tour floating position', () => {
       width: 1024,
       height: 768
     })
+
     const target = elementWithRect({
       left: 100,
       right: 200,
@@ -76,6 +79,7 @@ describe('contextual tour floating position', () => {
       width: 100,
       height: 40
     })
+
     const panel = elementWithRect({
       left: 0,
       right: 320,
@@ -110,7 +114,9 @@ describe('contextual tour floating position', () => {
       width: 520,
       height: 300
     })
+
     host.style.position = 'fixed'
+
     const target = elementWithRect({
       left: 400,
       right: 500,
@@ -119,7 +125,9 @@ describe('contextual tour floating position', () => {
       width: 100,
       height: 40
     })
+
     host.appendChild(target)
+
     const panel = elementWithRect({
       left: 0,
       right: 320,
@@ -128,6 +136,7 @@ describe('contextual tour floating position', () => {
       width: 320,
       height: 180
     })
+
     panel.style.position = 'absolute'
     Object.defineProperty(panel, 'offsetParent', { configurable: true, value: host })
     host.appendChild(panel)
@@ -157,6 +166,7 @@ describe('contextual tour floating position', () => {
       width: 100,
       height: 40
     })
+
     const panel = elementWithRect({
       left: 0,
       right: 320,
@@ -167,6 +177,7 @@ describe('contextual tour floating position', () => {
     })
 
     const positions: ContextualTourFloatingPosition[] = []
+
     const stopWatching = watchContextualTourFloatingPosition({
       arrowElement: arrowElement(),
       floatingElement: panel,
@@ -201,6 +212,7 @@ describe('contextual tour floating position', () => {
         width: 100,
         height: 40
       })
+
       const panel = elementWithRect({
         left: 0,
         right: 320,
@@ -235,7 +247,9 @@ describe('contextual tour floating position', () => {
       width: 520,
       height: 600
     })
+
     host.style.position = 'fixed'
+
     const target = elementWithRect({
       left: 400,
       right: 500,
@@ -244,7 +258,9 @@ describe('contextual tour floating position', () => {
       width: 100,
       height: 40
     })
+
     host.appendChild(target)
+
     const panel = elementWithRect({
       left: 0,
       right: 320,
@@ -253,6 +269,7 @@ describe('contextual tour floating position', () => {
       width: 320,
       height: 180
     })
+
     panel.style.position = 'absolute'
     Object.defineProperty(panel, 'offsetParent', { configurable: true, value: host })
     host.appendChild(panel)
@@ -287,6 +304,7 @@ function movableTargetElement(initialTop: number): MovableTarget {
     configurable: true,
     value: () => {
       reads += 1
+
       return {
         left: 500,
         right: 600,
@@ -304,6 +322,7 @@ function movableTargetElement(initialTop: number): MovableTarget {
   Object.defineProperty(element, 'clientWidth', { value: 100 })
   Object.defineProperty(element, 'clientHeight', { value: 40 })
   document.body.appendChild(element)
+
   return {
     element,
     moveTo: (next) => {
@@ -320,16 +339,20 @@ function panelElement(): HTMLElement {
 async function countFramesFor(durationMs: number): Promise<number> {
   let frames = 0
   let running = true
+
   const tick = (): void => {
     if (!running) {
       return
     }
+
     frames += 1
     requestAnimationFrame(tick)
   }
+
   requestAnimationFrame(tick)
   await new Promise((resolve) => setTimeout(resolve, durationMs))
   running = false
+
   return frames
 }
 
@@ -340,6 +363,7 @@ function nextFrame(): Promise<void> {
 describe('contextual tour floating position tracking cost', () => {
   it('stops reading the target rect every frame once the target settles', async () => {
     const target = movableTargetElement(400)
+
     const stopWatching = watchContextualTourFloatingPosition({
       arrowElement: arrowElement(),
       floatingElement: panelElement(),
@@ -362,6 +386,7 @@ describe('contextual tour floating position tracking cost', () => {
   it('keeps the panel glued to a target that moves for several frames after one wake', async () => {
     const target = movableTargetElement(400)
     const positions: ContextualTourFloatingPosition[] = []
+
     const stopWatching = watchContextualTourFloatingPosition({
       arrowElement: arrowElement(),
       floatingElement: panelElement(),
@@ -374,11 +399,13 @@ describe('contextual tour floating position tracking cost', () => {
     await new Promise((resolve) => setTimeout(resolve, 200))
     // A layout animation: one wake, then continuous motion with no further events.
     window.dispatchEvent(new Event('scroll'))
+
     for (const top of [420, 440, 460, 480, 500]) {
       target.moveTo(top)
       await nextFrame()
       await nextFrame()
     }
+
     await new Promise((resolve) => setTimeout(resolve, 50))
     stopWatching()
 
@@ -389,6 +416,7 @@ describe('contextual tour floating position tracking cost', () => {
   it('picks a parked target back up when it moves with no observer event', async () => {
     const target = movableTargetElement(400)
     const positions: ContextualTourFloatingPosition[] = []
+
     const stopWatching = watchContextualTourFloatingPosition({
       arrowElement: arrowElement(),
       floatingElement: panelElement(),

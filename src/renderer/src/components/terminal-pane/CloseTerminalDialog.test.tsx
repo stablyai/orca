@@ -38,9 +38,11 @@ function clickButton(label: string): void {
   const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent === label
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   button.click()
 }
 
@@ -117,6 +119,7 @@ describe('CloseTerminalDialog', () => {
     document.body.appendChild(container)
     const root = createRoot(container)
     mountedRoots.push(root)
+
     const render = async (open: boolean): Promise<void> => {
       await act(async () => {
         root.render(<CloseTerminalDialog open={open} onCancel={onCancel} onConfirm={onConfirm} />)

@@ -117,6 +117,7 @@ describe('deriveIntegrationConnectionStatus', () => {
       gh: { installed: true, authenticated: true },
       glab: { installed: false, authenticated: false }
     }
+
     const unresolvedFacts: Partial<StatusFacts>[] = [
       { preflightStatus: cachedGitHub, preflightStatusLoading: true },
       { preflightStatus: cachedGitHub, preflightStatusChecked: false },

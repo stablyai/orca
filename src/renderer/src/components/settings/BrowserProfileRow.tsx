@@ -62,6 +62,7 @@ export function BrowserProfileRow({
     const result = await useAppStore
       .getState()
       .importCookiesFromBrowser(profile.id, browserFamily, browserProfile)
+
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -95,6 +96,7 @@ export function BrowserProfileRow({
 
   const handleImportFromFile = async (): Promise<void> => {
     const result = await useAppStore.getState().importCookiesToProfile(profile.id)
+
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -113,6 +115,7 @@ export function BrowserProfileRow({
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
     : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
+
   const userAgentLabel =
     profile.userAgentMode === 'native'
       ? translate('auto.components.settings.BrowserProfileRow.b5c0479e21', 'Unmodified user agent')
@@ -232,6 +235,7 @@ export function BrowserProfileRow({
             disabled={!profile.source}
             onClick={async () => {
               const ok = await useAppStore.getState().clearDefaultSessionCookies()
+
               if (ok) {
                 toast.success(
                   translate(
@@ -251,6 +255,7 @@ export function BrowserProfileRow({
             className="size-7 text-muted-foreground hover:text-destructive"
             onClick={async () => {
               const ok = await useAppStore.getState().deleteBrowserSessionProfile(profile.id)
+
               if (ok) {
                 toast.success(
                   translate(

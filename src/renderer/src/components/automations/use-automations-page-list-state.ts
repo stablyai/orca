@@ -26,6 +26,7 @@ export function useAutomationsPageListState({
   local: AutomationsPageLocalState
 }) {
   const { repoMap, worktreeMap, repoForRow, worktreeForRow, selectedId, setSelectedId } = store
+
   const {
     automations,
     failedAuthorityKeys,
@@ -40,30 +41,38 @@ export function useAutomationsPageListState({
     setSelectedAutomationRunPageId,
     setSelectedRowKey
   } = local
+
   const hostCatalog = useAutomationHostCatalog({ failedAuthorityKeys })
+
   const externalScopeEntries = useMemo(
     () => externalAutomationScopeEntries(hostCatalog.entries, hostCatalog.resolution),
     [hostCatalog.entries, hostCatalog.resolution]
   )
+
   const scopedExternal = useScopedExternalAutomations({
     catalogEntries: hostCatalog.entries,
     scopeEntries: externalScopeEntries
   })
+
   const unscopedRows = useMemo(() => unscopedAutomationListRows(automations), [automations])
   const visibleRows = hostCatalog.rows.answered ? hostCatalog.rows.rows : unscopedRows
   const capturedAutomationOwners = hostCatalog.rows.capturedOwners
+
   const externalAutomationEntries = useMemo(
     () => buildExternalAutomationListEntries(scopedExternal.managers),
     [scopedExternal.managers]
   )
+
   const attributeFilteredRows = useMemo(
     () => filterAutomationListRows(visibleRows, listFilter),
     [listFilter, visibleRows]
   )
+
   const attributeFilteredExternalEntries = useMemo(
     () => filterExternalAutomationListEntries(externalAutomationEntries, listFilter),
     [externalAutomationEntries, listFilter]
   )
+
   const selectAutomationRow = useCallback(
     (rowKey: string | null): void => {
       const row = rowKey === null ? null : visibleRows.find((candidate) => candidate.key === rowKey)
@@ -73,9 +82,11 @@ export function useAutomationsPageListState({
     },
     [setSelectedAutomationRunPageId, setSelectedId, setSelectedRowKey, visibleRows]
   )
+
   const selectedExternal =
     externalAutomationEntries.find((entry) => entry.key === selectedExternalKey) ??
     (visibleRows.length === 0 ? (externalAutomationEntries[0] ?? null) : null)
+
   const selectedRow =
     selectedExternal === null
       ? selectedId
@@ -86,7 +97,9 @@ export function useAutomationsPageListState({
           null)
         : (visibleRows[0] ?? null)
       : null
+
   const selected = selectedRow?.automation ?? null
+
   const {
     isListSearchQueryTooLarge,
     filteredRows,
@@ -105,19 +118,23 @@ export function useAutomationsPageListState({
     selectAutomationRow,
     selectExternalKey
   })
+
   const selectedAutomationRunsWithWorkspaceNames = useMemo(
     () =>
       selectedAutomationRuns.runs.map((run) => {
         if (!run.workspaceId || run.workspaceDisplayName?.trim()) {
           return run
         }
+
         const displayName =
           (selectedRow
             ? worktreeForRow(selectedRow, repoForRow(selectedRow), run.workspaceId)?.displayName
             : worktreeMap.get(run.workspaceId)?.displayName) ??
           workspaceNameCacheRef.current.get(run.workspaceId) ??
           getWorktreePathBasenameFromId(run.workspaceId)
+
         const trimmedDisplayName = displayName?.trim()
+
         return trimmedDisplayName ? { ...run, workspaceDisplayName: trimmedDisplayName } : run
       }),
     [
@@ -129,13 +146,16 @@ export function useAutomationsPageListState({
       workspaceNameCacheRef
     ]
   )
+
   const externalManagersUncheckedNotice = useMemo(
     () => externalAutomationUncheckedNotice(scopedExternal.failures, hostCatalog.entries),
     [hostCatalog.entries, scopedExternal.failures]
   )
+
   // Why: a language switch changes collation without touching rows, so the locale
   // has to reach the memo as a value.
   const sortLocale = getIntlLocale()
+
   const sortedListItems = useMemo(
     () =>
       sortAutomationListViewItems(

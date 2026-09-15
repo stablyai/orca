@@ -9,6 +9,7 @@ const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
 
 vi.mock('./system-ssh-forward-process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     startSystemSshPortForwardProcess: startSystemSshPortForwardProcessMock
@@ -21,6 +22,7 @@ function createMockConn(forwardOutErr?: Error) {
     on: vi.fn(),
     close: vi.fn()
   }
+
   const mockClient = {
     forwardOut: vi.fn().mockImplementation((_bindAddr, _bindPort, _destHost, _destPort, cb) => {
       if (forwardOutErr) {
@@ -30,6 +32,7 @@ function createMockConn(forwardOutErr?: Error) {
       }
     })
   }
+
   return {
     getClient: vi.fn().mockReturnValue(mockClient),
     usesSystemSshTransport: vi.fn().mockReturnValue(false),
@@ -55,6 +58,7 @@ function createSystemSshConn() {
 
 function createFakeSystemSshForward() {
   const process = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
+
   return {
     process,
     waitForStartup: vi.fn().mockResolvedValue(undefined),
@@ -69,17 +73,20 @@ function createFakeSocket() {
     destroy: ReturnType<typeof vi.fn>
     pipe: ReturnType<typeof vi.fn>
   }
+
   socket.destroyed = false
   socket.destroy = vi.fn().mockImplementation(() => {
     socket.destroyed = true
     socket.emit('close')
   })
   socket.pipe = vi.fn().mockReturnValue(socket)
+
   return socket
 }
 
 function getLastMockServer() {
   const createServerMock = vi.mocked(createServer)
+
   return createServerMock.mock.results.at(-1)?.value as
     | {
         _connectionHandler: (socket: ReturnType<typeof createFakeSocket>) => void
@@ -91,6 +98,7 @@ vi.mock('net', () => {
   return {
     createServer: vi.fn().mockImplementation((connectionHandler) => {
       const listeners = new Map<string, (...args: unknown[]) => void>()
+
       const server = {
         listen: vi.fn().mockImplementation(() => {
           listeners.get('listening')?.()
@@ -106,6 +114,7 @@ vi.mock('net', () => {
         _connectionHandler: connectionHandler,
         _listeners: listeners
       }
+
       return server
     })
   }
@@ -137,6 +146,7 @@ describe('SshPortForwardManager', () => {
       getClient: vi.fn().mockReturnValue(null),
       usesSystemSshTransport: vi.fn().mockReturnValue(false)
     }
+
     await expect(
       manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
     ).rejects.toThrow('SSH connection is not established')
@@ -238,6 +248,7 @@ describe('SshPortForwardManager', () => {
     await manager.addForward('conn-1', conn as never, 3000, '127.0.0.1', 8080)
 
     let resolved = false
+
     const removal = manager.removeAllForwards('conn-1').then(() => {
       resolved = true
     })
@@ -340,16 +351,20 @@ describe('SshPortForwardManager', () => {
       on: vi.fn(),
       close: vi.fn()
     }
+
     let callback!: (error: Error | undefined, channel: typeof mockChannel) => void
+
     const mockClient = {
       forwardOut: vi.fn().mockImplementation((_bindAddr, _bindPort, _destHost, _destPort, cb) => {
         callback = cb
       })
     }
+
     const conn = {
       getClient: vi.fn().mockReturnValue(mockClient),
       usesSystemSshTransport: vi.fn().mockReturnValue(false)
     }
+
     const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
     const server = getLastMockServer()
     const socket = createFakeSocket()
@@ -388,6 +403,7 @@ describe('SshPortForwardManager', () => {
 
   it('stores label in the entry', async () => {
     const conn = createMockConn()
+
     const entry = await manager.addForward(
       'conn-1',
       conn as never,

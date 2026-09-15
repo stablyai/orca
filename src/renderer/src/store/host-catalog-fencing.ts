@@ -24,12 +24,15 @@ export function claimHostCatalogFence(
 ): HostCatalogFence {
   const key = `${kind}:${getRuntimeTargetHostId(target)}`
   let generations = latestHostCatalogGenerationByStore.get(get)
+
   if (!generations) {
     generations = new Map()
     latestHostCatalogGenerationByStore.set(get, generations)
   }
+
   const generation = (generations.get(key) ?? 0) + 1
   generations.set(key, generation)
+
   return {
     key,
     generation,
@@ -47,9 +50,11 @@ export function isHostCatalogFenceCurrent(get: () => AppState, fence: HostCatalo
   if (latestHostCatalogGenerationByStore.get(get)?.get(fence.key) !== fence.generation) {
     return false
   }
+
   if (fence.target.kind !== 'environment') {
     return true
   }
+
   return (
     !isRemovedRuntimeHostId(
       getRuntimeTargetHostId(fence.target),

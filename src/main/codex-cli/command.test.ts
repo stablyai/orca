@@ -13,6 +13,7 @@ import {
 function makeExecutable(path: string): void {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, '')
+
   if (process.platform !== 'win32') {
     chmodSync(path, 0o755)
   }
@@ -21,6 +22,7 @@ function makeExecutable(path: string): void {
 function makeNonExecutableFile(path: string): void {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, '')
+
   if (process.platform !== 'win32') {
     chmodSync(path, 0o644)
   }

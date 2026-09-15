@@ -19,10 +19,12 @@ export function hasExplicitTuiLaunchCustomization(
   const configuredArgs = settings?.agentDefaultArgs?.[agent]
   const configuredEnv = settings?.agentDefaultEnv?.[agent]
   const defaultEnv = getTuiAgentDefaultEnv(agent)
+
   const envIsCustomized =
     configuredEnv !== undefined &&
     (Object.keys(configuredEnv).length !== Object.keys(defaultEnv).length ||
       Object.entries(configuredEnv).some(([key, value]) => defaultEnv[key] !== value))
+
   return (
     Boolean(settings?.agentCmdOverrides?.[agent]?.trim()) ||
     hasExplicitTuiAgentArgs(agent, configuredArgs) ||
@@ -39,5 +41,6 @@ export function hasExplicitTuiAgentArgs(
   value: string | null | undefined
 ): boolean {
   const trimmed = value?.trim() ?? ''
+
   return trimmed.length > 0 && trimmed !== getTuiAgentDefaultArgs(agent).trim()
 }

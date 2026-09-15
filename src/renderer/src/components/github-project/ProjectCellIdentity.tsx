@@ -22,6 +22,7 @@ export function ProjectTitleCell({
       </div>
     )
   }
+
   const content = (
     <div className="flex min-w-0 items-center gap-2">
       {row.itemType === 'PULL_REQUEST' ? (
@@ -33,9 +34,11 @@ export function ProjectTitleCell({
       <span className="truncate text-sm font-medium">{row.content.title}</span>
     </div>
   )
+
   if (row.itemType === 'DRAFT_ISSUE') {
     return <div className="flex items-center gap-2">{content}</div>
   }
+
   return (
     <button
       type="button"
@@ -71,6 +74,7 @@ export function ProjectTypeCell({
       />
     )
   }
+
   const meta =
     row.itemType === 'PULL_REQUEST'
       ? {
@@ -86,7 +90,9 @@ export function ProjectTypeCell({
             Icon: Lock,
             label: translate('auto.components.github.project.ProjectCell.8d669084f6', 'Restricted')
           }
+
   const { Icon, label } = meta
+
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
       <Icon className="size-3.5 shrink-0" />

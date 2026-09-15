@@ -38,6 +38,7 @@ export type AutomationListRow = {
 }
 
 const ROW_KEY_NAMESPACE = 'row'
+
 /** The pre-catalog list has no host to qualify with, so it says so rather than guessing one. */
 const UNSCOPED_HOST_KEY = 'unscoped'
 
@@ -77,11 +78,14 @@ export function automationRepoForRow(
 ): Repo | undefined {
   const repoId = getAutomationRunRepoId(row.automation)
   const authority = row.catalogRef?.authority
+
   if (!authority) {
     return fallback.get(repoId)
   }
+
   return repos.find((repo) => {
     const host = getRepoExecutionHostId(repo)
+
     return (
       repo.id === repoId &&
       (authority.kind === 'runtime'
@@ -101,7 +105,9 @@ export function automationWorktreeForRow(
   if (!workspaceId || !row.catalogRef || !repo) {
     return workspaceId ? fallback.get(workspaceId) : undefined
   }
+
   const hostId = getRepoExecutionHostId(repo)
+
   return Object.values(worktreesByRepo)
     .flat()
     .find(

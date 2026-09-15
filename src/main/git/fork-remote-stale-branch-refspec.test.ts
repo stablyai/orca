@@ -22,6 +22,7 @@ function makeExec(getAllStdout: string): GitExecFn {
     if (args[1] === '--get-all') {
       return { stdout: getAllStdout, stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
 }
@@ -31,9 +32,12 @@ describe('fetchForkRemoteWithStaleRefspecRepair', () => {
     const exec = makeExec(
       '+refs/heads/gone:refs/remotes/fork/gone\n+refs/heads/keep:refs/remotes/fork/keep\n'
     )
+
     let attempts = 0
+
     const runFetch = vi.fn(async () => {
       attempts += 1
+
       if (attempts === 1) {
         throw Object.assign(new Error('boom'), {
           stderr: "fatal: couldn't find remote ref refs/heads/gone\n"
@@ -48,6 +52,7 @@ describe('fetchForkRemoteWithStaleRefspecRepair', () => {
 
   it('rethrows immediately when the error is not a stale-refspec failure', async () => {
     const exec = makeExec('+refs/heads/keep:refs/remotes/fork/keep\n')
+
     const runFetch = vi.fn(async () => {
       throw new Error('network unreachable')
     })
@@ -60,6 +65,7 @@ describe('fetchForkRemoteWithStaleRefspecRepair', () => {
 
   it('rethrows when the reported stale ref is not actually a tracked refspec (fail safe, no infinite loop)', async () => {
     const exec = makeExec('+refs/heads/keep:refs/remotes/fork/keep\n')
+
     const runFetch = vi.fn(async () => {
       throw Object.assign(new Error('boom'), {
         stderr: "fatal: couldn't find remote ref refs/heads/not-tracked\n"
@@ -78,24 +84,33 @@ describe('fetchForkRemoteWithStaleRefspecRepair', () => {
       '+refs/heads/gone-b:refs/remotes/fork/gone-b',
       '+refs/heads/keep:refs/remotes/fork/keep'
     ]
+
     const exec = vi.fn<GitExecFn>(async (args: string[]) => {
       if (args[1] === '--get-all') {
         return { stdout: refspecs.length ? `${refspecs.join('\n')}\n` : '', stderr: '' }
       }
+
       if (args[1] === '--unset-all') {
         refspecs = []
+
         return { stdout: '', stderr: '' }
       }
+
       if (args[1] === '--add') {
         refspecs.push(args[3]!)
+
         return { stdout: '', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     // Why: mirrors real git reporting exactly one missing ref per fetch attempt (see #17828 PR).
     const staleBranches = ['refs/heads/gone-a', 'refs/heads/gone-b']
+
     const runFetch = vi.fn(async () => {
       const stillStale = staleBranches.find((branch) => refspecs.some((r) => r.includes(branch)))
+
       if (stillStale) {
         throw Object.assign(new Error('boom'), {
           stderr: `fatal: couldn't find remote ref ${stillStale}\n`

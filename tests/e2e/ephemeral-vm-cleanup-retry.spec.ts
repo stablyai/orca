@@ -64,6 +64,7 @@ test('stops long-running cleanup and keeps it retryable', async ({ electronApp, 
   const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-cleanup-stop-'))
   const destroyPath = path.join(repoPath, 'destroy.js')
   const destroyStartedPath = path.join(repoPath, 'destroy-started.txt')
+
   try {
     writeFileSync(
       destroyPath,
@@ -78,11 +79,14 @@ test('stops long-running cleanup and keeps it retryable', async ({ electronApp, 
 
     const repoId = await orcaPage.evaluate(async (repo) => {
       const result = await window.api.repos.add({ path: repo })
+
       if ('error' in result) {
         throw new Error(result.error)
       }
+
       return result.repo.id
     }, repoPath)
+
     const userDataPath = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     writeFileSync(
       path.join(userDataPath, 'orca-ephemeral-vm-runtimes.json'),
@@ -148,6 +152,7 @@ test('stops long-running cleanup and keeps it retryable', async ({ electronApp, 
           const runtime = (await window.api.ephemeralVm.listRuntimes()).find(
             (entry) => entry.id === 'runtime-cleanup-stop'
           )
+
           return runtime?.cleanupStatus
         })
       )

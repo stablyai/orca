@@ -4,8 +4,11 @@ import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type * as GateModule from './wsl-transcript-fs-gate'
 
 const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\a.jsonl'
+
 const LEGACY_UNC_PATH = '\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\a.jsonl'
+
 const WINDOWS_PATH = 'C:\\Users\\ada\\.codex\\sessions\\a.jsonl'
+
 const POSIX_PATH = '/home/ada/.codex/sessions/a.jsonl'
 
 const mocks = vi.hoisted(() => ({
@@ -35,6 +38,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => {
   const original = await importOriginal<typeof GateModule>()
   mocks.runTask.mockImplementation(original.runWslTranscriptFsTask)
+
   return { ...original, runWslTranscriptFsTask: mocks.runTask }
 })
 
@@ -68,6 +72,7 @@ beforeEach(() => {
   // runTask keeps the real gate implementation installed by the mock factory;
   // only its call log is cleared.
   mocks.runTask.mockClear()
+
   for (const [name, mock] of Object.entries(mocks)) {
     if (name !== 'runTask') {
       mock.mockReset()
@@ -175,6 +180,7 @@ describe('transcript filesystem accessor on WSL UNC', () => {
         const body = Buffer.from('{"a":1}\n{"b":2}\n')
         const slice = body.subarray(position, Math.min(position + length, body.length))
         slice.copy(buffer, offset)
+
         return { bytesRead: slice.length, buffer }
       }
     )
@@ -182,10 +188,12 @@ describe('transcript filesystem accessor on WSL UNC', () => {
 
     const stream = openTranscriptReadStream(UNC_PATH, {}, 'exact')
     const chunks: unknown[] = []
+
     for await (const chunk of stream) {
       chunks.push(chunk)
       break
     }
+
     stream.destroy()
     await new Promise((resolve) => setImmediate(resolve))
 
@@ -233,14 +241,17 @@ describe('transcript filesystem accessor on WSL UNC', () => {
           release = () => resolve({ size: 0 })
         })
       )
+
       try {
         const controller = new AbortController()
         const reason = new Error('unsubscribed')
         const pending = gated(UNC_PATH, 'exact', controller.signal)
+
         const settled = pending.then(
           () => 'resolved',
           (error: unknown) => error
         )
+
         // Let the gate admit and start the syscall, so this covers the waiter on a
         // RUNNING unabortable call rather than a still-queued one.
         await new Promise((resolve) => setImmediate(resolve))
@@ -266,6 +277,7 @@ describe('transcript filesystem accessor on WSL UNC', () => {
         release = resolve
       })
     )
+
     try {
       const handle = fakeHandle()
       const refused = wslGatedOpen(UNC_PATH, 'exact').catch((error: unknown) => error)
@@ -305,6 +317,7 @@ describe('transcript handle close off WSL UNC', () => {
 describe('per-chunk admission', () => {
   it('carries a codepoint straddling the 1 MiB chunk boundary across chunks', async () => {
     const emoji = Buffer.from('😀', 'utf8')
+
     // Two of the emoji's four bytes land in chunk 1, two in chunk 2 — derived
     // from the production constant so the fixture cannot drift off the boundary.
     const body = Buffer.concat([
@@ -312,11 +325,13 @@ describe('per-chunk admission', () => {
       emoji,
       Buffer.from('tail\n', 'utf8')
     ])
+
     const handle = fakeHandle()
     handle.read.mockImplementation(
       async (buffer: Buffer, offset: number, length: number, position: number) => {
         const slice = body.subarray(position, Math.min(position + length, body.length))
         slice.copy(buffer, offset)
+
         return { bytesRead: slice.length, buffer }
       }
     )
@@ -324,6 +339,7 @@ describe('per-chunk admission', () => {
 
     const stream = openTranscriptReadStream(UNC_PATH, { encoding: 'utf-8' }, 'exact')
     let decoded = ''
+
     for await (const chunk of stream) {
       expect(typeof chunk).toBe('string')
       decoded += chunk as string
@@ -336,28 +352,34 @@ describe('per-chunk admission', () => {
 
   it('surfaces a gate refusal mid-stream as an error event', async () => {
     vi.useFakeTimers()
+
     try {
       let served = 0
       const handle = fakeHandle()
       handle.read.mockImplementation((buffer: Buffer) => {
         if (served++ === 0) {
           buffer.write('x')
+
           return Promise.resolve({ bytesRead: 1, buffer })
         }
+
         return new Promise(() => {})
       })
       mocks.open.mockResolvedValue(handle)
 
       const stream = openTranscriptReadStream(UNC_PATH, {}, 'exact')
+
       const drained = (async () => {
         for await (const chunk of stream) {
           void chunk
         }
       })()
+
       const settled = drained.then(
         () => null,
         (error: unknown) => error
       )
+
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
 
       await expect(settled).resolves.toBeInstanceOf(WslTranscriptFsError)

@@ -34,6 +34,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
 
     const session = createProjectGroupHeaderDragSession({
@@ -68,6 +69,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
 
     const session = createProjectGroupHeaderDragSession({
@@ -100,6 +102,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
 
     const session = createProjectGroupHeaderDragSession({
@@ -136,6 +139,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
 
     const session = createProjectGroupHeaderDragSession({
@@ -173,6 +177,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
 
     const sessionFromActions = createProjectGroupHeaderDragSession({
@@ -189,6 +194,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       sidebarProjectGroupHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
+
     const sessionFromLabel = createProjectGroupHeaderDragSession({
       event: {
         button: 0,
@@ -203,6 +209,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       sidebarProjectGroupHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
+
     const sessionFromRowPadding = createProjectGroupHeaderDragSession({
       event: {
         button: 0,

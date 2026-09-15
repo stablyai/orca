@@ -38,23 +38,31 @@ export function isTabCreateMenuQueryTooLarge(
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
+
 function scoreMenuOption(query: string, option: TabCreateMenuOption): number {
   const normalizedQuery = normalizeMatchQuery(query)
+
   if (!normalizedQuery) {
     return 0
   }
+
   const values = [option.label, ...option.keywords]
   const normalizedLabel = normalizeMatchQuery(option.label)
+
   if (normalizedQuery === normalizedLabel) {
     return 100
   }
+
   const tokenMatch = scoreQueryTokens(normalizedQuery, values)
+
   if (!tokenMatch.allTokensMatched) {
     return 0
   }
+
   if (normalizedLabel.includes(normalizedQuery) || normalizedQuery.includes(normalizedLabel)) {
     return 80 + tokenMatch.score
   }
+
   return tokenMatch.score
 }
 
@@ -149,6 +157,7 @@ export function buildTabCreateMenuOptions(
     const label = context.simulatorIsGoTo
       ? translate('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')
       : translate('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')
+
     options.push({
       id: context.simulatorIsGoTo ? 'go-to-simulator' : 'new-simulator',
       kind: context.simulatorIsGoTo ? 'go-to-simulator' : 'new-simulator',
@@ -175,7 +184,9 @@ export function findMatchingTabCreateMenuOptions(
   if (isTabCreateMenuQueryTooLarge(query)) {
     return []
   }
+
   const normalizedQuery = normalizeMatchQuery(query)
+
   if (!normalizedQuery) {
     return []
   }
@@ -187,6 +198,7 @@ export function findMatchingTabCreateMenuOptions(
       if (left.score !== right.score) {
         return right.score - left.score
       }
+
       return left.index - right.index
     })
     .map((entry) => entry.option)

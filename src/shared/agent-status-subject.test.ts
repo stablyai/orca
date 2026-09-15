@@ -11,7 +11,9 @@ import {
 } from './agent-status-subject'
 
 const RUN_ID = 'run_11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const SESSION_ID = 'session_11111111-1111-4111-8111-111111111111'
 
 function scope(overrides: Partial<AgentStatusExecutionScope> = {}): AgentStatusExecutionScope {
@@ -41,6 +43,7 @@ describe('agent status subjects', () => {
 
   it('isolates identical identities across scope and subject kind', () => {
     const identity = 'identity-1'
+
     const subjects = [
       makePtyRunAgentStatusSubject(scope(), identity),
       makePtyRunAgentStatusSubject(scope({ wslDistro: 'Ubuntu' }), identity),

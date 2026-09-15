@@ -14,6 +14,7 @@ describe('compareFileNames', () => {
       '9 - item.txt',
       '99 - item.txt'
     ]
+
     expect([...names].sort(compareFileNames)).toEqual([
       '1 - item.txt',
       '2 - item.txt',
@@ -52,6 +53,7 @@ describe('sortDirEntries', () => {
       { name: '9 - docs.txt', isDirectory: false },
       { name: '10 - assets', isDirectory: true }
     ]
+
     expect(sortDirEntries(entries).map((e) => e.name)).toEqual([
       '2 - src',
       '10 - assets',

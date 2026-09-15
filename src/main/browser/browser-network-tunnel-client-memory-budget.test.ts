@@ -33,6 +33,7 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
       hostMaxBytes: 10,
       processMaxBytes: 100
     })
+
     const first = createClient(registry.acquire('host-a')!)
     const second = createClient(registry.acquire('host-a')!)
     const firstSocket = await open(first.client)
@@ -62,6 +63,7 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
       hostMaxBytes: 10,
       processMaxBytes: 100
     })
+
     const route = createClient(registry.acquire('host-a')!)
     const socket = await open(route.client)
     socket.on('error', () => undefined)
@@ -82,6 +84,7 @@ describe('BrowserNetworkTunnelClient aggregate memory', () => {
       hostMaxBytes: 10,
       processMaxBytes: 100
     })
+
     const route = createClient(registry.acquire('host-a')!)
     const socket = await open(route.client)
     socket.on('error', () => undefined)
@@ -117,5 +120,6 @@ async function open(
 ): Promise<BrowserNetworkTunnelDuplex> {
   const opening = client.open({ host: 'localhost', port: 8080 })
   client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), streamId))
+
   return opening
 }

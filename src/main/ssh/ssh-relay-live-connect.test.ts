@@ -13,14 +13,19 @@ import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const LIVE_HOST = process.env.ORCA_LIVE_SSH_HOST
+
 const LIVE_USER = process.env.ORCA_LIVE_SSH_USER ?? process.env.USERNAME ?? process.env.USER ?? ''
+
 const LIVE_IDENTITY = resolveSshConfigHomePath(
   process.env.ORCA_LIVE_SSH_IDENTITY ?? '~/.ssh/id_ed25519'
 )
+
 const rawLivePort = process.env.ORCA_LIVE_SSH_PORT
+
 const LIVE_PORT = rawLivePort ? Number.parseInt(rawLivePort, 10) : 22
 
 const startedAt = Date.now()
+
 function log(step: string): void {
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1)
   console.log(`[live-connect +${elapsed}s] ${step}`)
@@ -56,11 +61,13 @@ describe.skipIf(!LIVE_HOST)('live ssh:connect pipeline', () => {
     }
 
     log(`connecting to ${LIVE_USER}@${LIVE_HOST}:${LIVE_PORT}`)
+
     const conn = new SshConnection(target, {
       onStateChange: (_id, state) => {
         log(`state=${state.status}${state.error ? ` error=${state.error}` : ''}`)
       }
     })
+
     cleanups.push(() => conn.disconnect())
     await conn.connect()
     log('ssh connection established')
@@ -71,6 +78,7 @@ describe.skipIf(!LIVE_HOST)('live ssh:connect pipeline', () => {
       30,
       'live-connect-harness'
     )
+
     log(`relay launched (remoteRelayDir=${deployed.remoteRelayDir})`)
 
     const mux = new SshChannelMultiplexer(deployed.transport)
@@ -84,6 +92,7 @@ describe.skipIf(!LIVE_HOST)('live ssh:connect pipeline', () => {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     log(`pty.spawn -> id=${spawned.id}`)
     expect(spawned.id).toBeTruthy()
 

@@ -15,6 +15,7 @@ import {
 // Counts blocking fs calls against orca-runtime.json so the poll tick's I/O stays off the main thread.
 const metadataSyncCalls = vi.hoisted(() => {
   const state = { recording: false, calls: [] as string[] }
+
   return {
     state,
     record(fn: string, target: unknown): void {
@@ -40,29 +41,37 @@ const metadataReadGate = vi.hoisted(() => {
         : new Promise<void>((resolve) => gate.idle.push(resolve))
     }
   }
+
   return gate
 })
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+
   return {
     ...actual,
     default: actual,
     readFile: (async (target: unknown, options: never) => {
       const call = (): unknown =>
         (actual.readFile as (...args: never[]) => unknown)(target as never, options)
+
       if (typeof target !== 'string' || !target.endsWith('orca-runtime.json')) {
         return call()
       }
+
       metadataReadGate.reads += 1
+
       if (metadataReadGate.hold) {
         await new Promise<void>((resolve) => metadataReadGate.parked.push(resolve))
       }
+
       metadataReadGate.active += 1
+
       try {
         return await call()
       } finally {
         metadataReadGate.active -= 1
+
         if (metadataReadGate.active === 0) {
           for (const resolve of metadataReadGate.idle.splice(0)) {
             resolve()
@@ -75,22 +84,28 @@ vi.mock('node:fs/promises', async () => {
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     existsSync: (target: NodeFs.PathLike) => {
       metadataSyncCalls.record('existsSync', target)
+
       return actual.existsSync(target)
     },
     readFileSync: ((target: never, options: never) => {
       metadataSyncCalls.record('readFileSync', target)
+
       return actual.readFileSync(target, options)
     }) as typeof actual.readFileSync
   }
 })
 
 const OWNED_PID = 4242
+
 const OWNED_RUNTIME_ID = 'rt_owner'
+
 const FOREIGN_LIVE_PID = 5151
+
 const FOREIGN_DEAD_PID = 5252
 
 function record(overrides: Partial<RuntimeMetadata> = {}): RuntimeMetadata {
@@ -163,16 +178,21 @@ describe('watchRuntimeMetadataOwnership', () => {
     metadataSyncCalls.state.calls.length = 0
     metadataReadGate.hold = false
     metadataReadGate.reads = 0
+
     for (const resume of metadataReadGate.parked.splice(0)) {
       resume()
     }
+
     metadataReadGate.idle.splice(0)
+
     for (const watch of watches.splice(0)) {
       watch.stop()
     }
+
     for (const dir of userDataPaths.splice(0)) {
       clearRuntimeMetadata(dir)
     }
+
     vi.useRealTimers()
   })
 
@@ -185,7 +205,9 @@ describe('watchRuntimeMetadataOwnership', () => {
       isProcessRunning,
       republish: () => writeRuntimeMetadata(userDataPath, record())
     })
+
     watches.push(watch)
+
     return watch
   }
 
@@ -211,6 +233,7 @@ describe('watchRuntimeMetadataOwnership', () => {
   function makeUserDataPath(): string {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-ownership-'))
     userDataPaths.push(userDataPath)
+
     return userDataPath
   }
 
@@ -331,9 +354,11 @@ describe('watchRuntimeMetadataOwnership', () => {
     expect(metadataReadGate.reads).toBe(1)
 
     metadataReadGate.hold = false
+
     for (const resume of metadataReadGate.parked.splice(0)) {
       resume()
     }
+
     await settleReads()
     await advancePolls(1_000)
 
@@ -343,13 +368,16 @@ describe('watchRuntimeMetadataOwnership', () => {
   it('keeps polling after a republish failure', async () => {
     usePolledTimers()
     const userDataPath = makeUserDataPath()
+
     const republish = vi
       .fn()
       .mockImplementationOnce(() => {
         throw new Error('disk full')
       })
       .mockImplementation(() => writeRuntimeMetadata(userDataPath, record()))
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const watch = watchRuntimeMetadataOwnership({
       userDataPath,
       ownedPid: OWNED_PID,
@@ -358,6 +386,7 @@ describe('watchRuntimeMetadataOwnership', () => {
       isProcessRunning,
       republish
     })
+
     watches.push(watch)
 
     await advancePolls(2_000)

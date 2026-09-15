@@ -14,6 +14,7 @@ const { getMirrorTargets } = vi.hoisted(() => ({ getMirrorTargets: vi.fn() }))
 vi.mock('@/lib/runtime-session-mirror-targets', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeSessionMirrorTargetsModule>()
   getMirrorTargets.mockImplementation(actual.getReachableRuntimeSessionMirrorTargets)
+
   return { ...actual, getReachableRuntimeSessionMirrorTargets: getMirrorTargets }
 })
 
@@ -110,6 +111,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
     const repos = Array.from({ length: 100 }, (_, index) =>
       makeRepo(`repo-${index}`, 'runtime:env-a')
     )
+
     const worktreesByRepo: AppState['worktreesByRepo'] = Object.fromEntries(
       repos.map((repo) => [
         repo.id,
@@ -122,6 +124,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
         ]
       ])
     )
+
     useAppStore.setState({ repos, worktreesByRepo })
     const hook = renderHook(() => useRuntimeSessionMirrorEnvironmentKey())
     const initialCallCount = getMirrorTargets.mock.calls.length
@@ -133,6 +136,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
       for (let index = 0; index < 100; index += 1) {
         useAppStore.setState({ agentStatusEpoch: useAppStore.getState().agentStatusEpoch + 1 })
       }
+
       useAppStore.setState({
         settings: {
           ...useAppStore.getState().settings!,
@@ -307,6 +311,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
   it('invalidates only for state read by the mirror target builder', () => {
     const state = useAppStore.getState()
     const selected = selectRuntimeSessionMirrorTargetInputs(state)
+
     const unrelated = selectRuntimeSessionMirrorTargetInputs({
       ...state,
       agentStatusEpoch: state.agentStatusEpoch + 1,
@@ -329,6 +334,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
       { runtimeEnvironments: [...state.runtimeEnvironments] },
       { runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId) }
     ]
+
     for (const change of relevantChanges) {
       expect(
         shallow(

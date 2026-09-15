@@ -35,6 +35,7 @@ describe('detectAgentPermission', () => {
       state: 'waiting',
       lastAssistantMessage: 'Allow running `rm -rf build`? (y/n)'
     })
+
     expect(result).not.toBeNull()
     expect(result?.title).toBe('Permission requested')
     expect(result?.options).toEqual([
@@ -52,6 +53,7 @@ describe('detectAgentPermission', () => {
         '1. Yes\n' +
         '2. No, and tell Claude what to do differently'
     })
+
     expect(result).not.toBeNull()
     expect(result?.options).toHaveLength(2)
     expect(result?.options[0]).toEqual({ label: 'Yes', send: '1' })
@@ -64,6 +66,7 @@ describe('detectAgentPermission', () => {
       state: 'waiting',
       lastAssistantMessage: 'Approve this command?\n1) Yes\n2) No'
     })
+
     expect(result?.options.map((o) => o.send)).toEqual(['1', '2'])
   })
 
@@ -73,6 +76,7 @@ describe('detectAgentPermission', () => {
       lastAssistantMessage:
         "Allow this tool call?\n1. Yes\n2. Yes, and don't ask again this session\n3. No"
     })
+
     expect(result?.options).toHaveLength(3)
     expect(result?.options.map((o) => o.send)).toEqual(['1', '2', '3'])
   })
@@ -83,6 +87,7 @@ describe('detectAgentPermission', () => {
       lastAssistantMessage:
         'Do you want to allow this? You can allow always for this session. (y/n)'
     })
+
     expect(result?.options.map((o) => o.label)).toEqual(['Allow', 'Allow always', 'Deny'])
     expect(result?.options.map((o) => o.send)).toEqual(['y', 'a', 'n'])
   })
@@ -92,6 +97,7 @@ describe('detectAgentPermission', () => {
       state: 'blocked',
       lastAssistantMessage: 'I need your permission to run this Bash command.'
     })
+
     expect(result).not.toBeNull()
     expect(result?.options.map((o) => o.send)).toEqual(['y', 'n'])
   })
@@ -101,6 +107,7 @@ describe('detectAgentPermission', () => {
       state: 'waiting',
       lastAssistantMessage: 'Please approve or deny this write to /etc/hosts.'
     })
+
     expect(result).not.toBeNull()
     expect(result?.options).toHaveLength(2)
   })
@@ -118,6 +125,7 @@ describe('detectAgentPermission', () => {
       lastAssistantMessage:
         'Proceed?\n1. Yes\n2. No, and explain in great detail exactly why this particular approach is wrong'
     })
+
     const second = result?.options[1]
     expect(second?.send).toBe('2')
     expect((second?.label ?? '').length).toBeLessThanOrEqual(40)
@@ -129,6 +137,7 @@ describe('parseApprovalFromStatus', () => {
     const card = parseApprovalFromStatus(
       JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
     )
+
     expect(card?.title).toBe('Allow Bash?')
     expect(card?.detail).toBe('rm -rf build')
     expect(card?.options.map((o) => o.label)).toEqual(['Allow', 'Deny'])

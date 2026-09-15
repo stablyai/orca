@@ -10,6 +10,7 @@ import { AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT } from '../../../src/share
 import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 
 const STORAGE_KEY = 'orca:mobileStructuredSendOperations:v1'
+
 const OperationEntrySchema = z
   .object({
     operationKey: z.string().regex(/^[0-9a-f]{64}$/),
@@ -19,6 +20,7 @@ const OperationEntrySchema = z
     attachmentPaths: z.array(z.string().max(4096)).max(128)
   })
   .strict()
+
 const OperationJournalSchema = z
   .object({
     v: z.literal(1),
@@ -27,6 +29,7 @@ const OperationJournalSchema = z
   .strict()
 
 type OperationEntry = z.infer<typeof OperationEntrySchema>
+
 type OperationJournal = z.infer<typeof OperationJournalSchema>
 
 const mutations: { tail: Promise<void> } = { tail: Promise.resolve() }
@@ -52,6 +55,7 @@ export function mobileStructuredSendCallerFingerprint(callerIdentity: string): s
 
 function newOperationIdIsAdmissible(operationId: string, now: number): boolean {
   const timestamp = parseAgentSessionOperationTimestamp(operationId)
+
   return (
     timestamp !== null &&
     timestamp <= now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS &&
@@ -63,16 +67,21 @@ function parseJournal(raw: string | null): OperationJournal {
   if (raw === null) {
     return { v: 1, entries: [] }
   }
+
   let value: unknown
+
   try {
     value = JSON.parse(raw)
   } catch {
     throw new Error('Structured send operation journal is unreadable')
   }
+
   const parsed = OperationJournalSchema.safeParse(value)
+
   if (!parsed.success) {
     throw new Error('Structured send operation journal is unreadable')
   }
+
   if (
     new Set(parsed.data.entries.map((entry) => entry.operationKey)).size !==
       parsed.data.entries.length ||
@@ -82,14 +91,17 @@ function parseJournal(raw: string | null): OperationJournal {
   ) {
     throw new Error('Structured send operation journal is unreadable')
   }
+
   return parsed.data
 }
 
 async function writeEntries(entries: OperationEntry[]): Promise<void> {
   if (entries.length === 0) {
     await AsyncStorage.removeItem(STORAGE_KEY)
+
     return
   }
+
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, entries }))
 }
 
@@ -99,6 +111,7 @@ async function serialize<T>(action: () => Promise<T>): Promise<T> {
     () => undefined,
     () => undefined
   )
+
   return operation
 }
 
@@ -121,10 +134,12 @@ export async function getOrCreateMobileStructuredSendOperation(input: {
     const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
     const entries = journal.entries
     const existing = entries.find((entry) => entry.operationKey === input.operationKey)
+
     if (existing) {
       if (existing.callerFingerprint !== callerFingerprint) {
         throw new Error('Structured send caller identity changed')
       }
+
       return {
         operationId: existing.operationId,
         retained: true,
@@ -132,15 +147,19 @@ export async function getOrCreateMobileStructuredSendOperation(input: {
         attachmentPaths: [...existing.attachmentPaths]
       }
     }
+
     // Ambiguity has no TTL. At the fixed capacity, refusing a new send is safer
     // than evicting an id whose message may already be in provider context.
     if (entries.length >= AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT) {
       throw new Error('Structured send operation journal is full')
     }
+
     const operationId = input.createOperationId()
+
     if (!newOperationIdIsAdmissible(operationId, now)) {
       throw new Error('Structured send operation id is invalid')
     }
+
     const entry = OperationEntrySchema.parse({
       operationKey: input.operationKey,
       operationId,
@@ -148,7 +167,9 @@ export async function getOrCreateMobileStructuredSendOperation(input: {
       payloadFingerprint: input.payloadFingerprint,
       attachmentPaths: [...input.attachmentPaths]
     })
+
     await writeEntries([...entries, entry])
+
     return {
       operationId,
       retained: false,
@@ -166,12 +187,15 @@ export async function clearMobileStructuredSendOperation(input: {
     const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
     const entries = journal.entries
     const existing = entries.find((entry) => entry.operationKey === input.operationKey)
+
     if (!existing) {
       return
     }
+
     if (existing.operationId !== input.operationId) {
       throw new Error('Structured send operation identity changed')
     }
+
     await writeEntries(entries.filter((entry) => entry !== existing))
   })
 }
@@ -187,14 +211,18 @@ export async function clearMobileStructuredSettledSendOperations(input: {
         : []
     )
   )
+
   if (settled.size === 0) {
     return
   }
+
   return serialize(async () => {
     const journal = parseJournal(await AsyncStorage.getItem(STORAGE_KEY))
+
     const entries = journal.entries.filter(
       (entry) => !settled.has(`${entry.payloadFingerprint}\u0000${entry.operationId}`)
     )
+
     if (entries.length !== journal.entries.length) {
       await writeEntries(entries)
     }

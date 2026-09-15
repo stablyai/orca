@@ -19,6 +19,7 @@ export function useTerminalCopyTrimsGutter(
     if (!client || connState !== 'connected') {
       return
     }
+
     let stale = false
     void terminalCopyTrimsGutterRead
       .request(client)
@@ -26,7 +27,9 @@ export function useTerminalCopyTrimsGutter(
         if (stale) {
           return
         }
+
         const preference = terminalCopyTrimsGutterRead.interpret(response)
+
         if (preference.accepted) {
           trimsGutterRef.current = preference.value
         }
@@ -34,6 +37,7 @@ export function useTerminalCopyTrimsGutter(
       .catch(() => {
         // Best-effort: an unreachable host leaves the on-by-default trim in place.
       })
+
     return () => {
       stale = true
     }

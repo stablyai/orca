@@ -23,15 +23,18 @@ async function switchToTerminal(
 ): Promise<void> {
   await page.evaluate((targetWorktreeId) => {
     const store = window.__store
+
     if (!store) {
       return
     }
 
     const state = store.getState()
     const terminalTab = (state.tabsByWorktree[targetWorktreeId] ?? [])[0]
+
     if (terminalTab) {
       state.setActiveTab(terminalTab.id)
     }
+
     state.setActiveTabType('terminal')
   }, worktreeId)
 }
@@ -42,11 +45,13 @@ async function switchToEditor(
 ): Promise<void> {
   await page.evaluate((targetFileId) => {
     const store = window.__store
+
     if (!store) {
       return
     }
 
     const state = store.getState()
+
     if (state.openFiles.some((file) => file.id === targetFileId)) {
       state.setActiveFile(targetFileId)
       state.setActiveTabType('editor')
@@ -93,6 +98,7 @@ test.describe('File Open & Markdown Preview', () => {
       '.gitignore',
       'README.md'
     ])
+
     expect(clickedFile).not.toBeNull()
 
     // Wait for the file to be opened in the editor
@@ -140,6 +146,7 @@ test.describe('File Open & Markdown Preview', () => {
     const expectedHeading = clickedFile?.endsWith('README.md')
       ? /Orca E2E Test Repo/i
       : /CLAUDE\.md/i
+
     // Why 25s: first-time markdown open in a headless Electron session waits
     // on two lazy chunks (EditorPanel → RichMarkdownEditor) plus ProseMirror
     // boot + file read. Real-run traces show the heading reliably paints
@@ -167,6 +174,7 @@ test.describe('File Open & Markdown Preview', () => {
       'tsconfig.json',
       '.gitignore'
     ])
+
     expect(clickedFile).not.toBeNull()
 
     // Wait for editor to become active

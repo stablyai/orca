@@ -19,13 +19,17 @@ const WORKSPACES: readonly WorkspaceMock[] = [
 ]
 
 const SELECTED_ID = WORKSPACES[0].id
+
 const STEP_MS = 3600
+
 const CARD_GAP_PX = 4
+
 const CARD_HEIGHT_PX_BY_ID: Record<string, number> = {
   a: 66,
   b: 120,
   c: 92
 }
+
 const VISUAL_HEIGHT_PX =
   WORKSPACES.reduce((height, ws) => height + CARD_HEIGHT_PX_BY_ID[ws.id], 0) +
   CARD_GAP_PX * (WORKSPACES.length - 1)
@@ -45,9 +49,11 @@ function AgentIcon({ kind }: { kind: AgentKind }): JSX.Element {
   if (kind === 'claude') {
     return <ClaudeIcon size={14} />
   }
+
   if (kind === 'codex') {
     return <CodexInlineIcon />
   }
+
   return <OpenCodeGoIcon size={14} />
 }
 
@@ -73,6 +79,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
       map.set(ws.id, top)
       top += CARD_HEIGHT_PX_BY_ID[ws.id] + CARD_GAP_PX
     })
+
     return map
   }, [order])
 
@@ -81,6 +88,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
   const running = useMemo(() => {
     const map = new Map<string, number>()
     WORKSPACES.forEach((ws) => map.set(ws.id, ws.id === SELECTED_ID ? -1 : 0))
+
     return map
   }, [])
 
@@ -88,6 +96,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
     if (reducedMotion) {
       return
     }
+
     // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
     // no-op so revealing the window resumes the cycle instead of skipping a card.
     return installWindowVisibilityInterval({
@@ -95,10 +104,13 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
         setVisualState((current) => {
           const next = current.order.slice()
           const finishing = next.pop()
+
           if (!finishing) {
             return current
           }
+
           next.unshift(finishing)
+
           return { order: next, promotedWorkspaceId: finishing.id }
         })
       },
@@ -118,6 +130,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
           const runningAgentIndex = running.get(ws.id) ?? -1
           const slotTop = slotTopById.get(ws.id) ?? 0
           const isPromoted = ws.id === renderedPromotedWorkspaceId
+
           return (
             <div
               key={ws.id}
@@ -144,6 +157,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
               <div className="flex flex-col gap-2.5 pl-[30px] pr-2 pt-2.5 pb-0.5">
                 {ws.agents.map((kind, i) => {
                   const isRunning = i === runningAgentIndex
+
                   return (
                     <div
                       key={`${ws.id}-${i}`}

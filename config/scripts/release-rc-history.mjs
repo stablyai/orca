@@ -20,6 +20,7 @@ function gitLines(args, cwd) {
 
 export function rcNumberFromTag(base, tag) {
   const prefix = `v${base}-rc.`
+
   if (!tag.startsWith(prefix)) {
     return null
   }
@@ -29,11 +30,13 @@ export function rcNumberFromTag(base, tag) {
   // must advance the shared rc counter, or the next suffixed cut recomputes
   // an existing tag and the workflow refuses to re-cut over it.
   const match = /^(\d+)(?:\.[0-9A-Za-z]+)?$/.exec(suffix)
+
   return match ? Number(match[1]) : null
 }
 
 export function rcNumberFromReleaseSubject(base, subject) {
   const prefix = `release: v${base}-rc.`
+
   if (!subject.startsWith(prefix)) {
     return null
   }
@@ -44,6 +47,7 @@ export function rcNumberFromReleaseSubject(base, subject) {
   // v1.2.3-rc.4.perf tag drops the series back to rc.3 and an explicit
   // 1.2.3-rc.4 is waved through — below what perf-channel clients already run.
   const match = /^(\d+)(?:\.[0-9A-Za-z]+)?(?:\s|$)/.exec(subject.slice(prefix.length))
+
   return match ? Number(match[1]) : null
 }
 
@@ -52,6 +56,7 @@ export function highestRcForBase(base, { cwd = process.cwd() } = {}) {
 
   for (const tag of gitLines(['tag', '--list', `v${base}-rc.*`], cwd)) {
     const rcNumber = rcNumberFromTag(base, tag)
+
     if (rcNumber !== null) {
       numbers.push(rcNumber)
     }
@@ -60,9 +65,11 @@ export function highestRcForBase(base, { cwd = process.cwd() } = {}) {
   const logRefs = ['HEAD', 'origin/main'].filter(
     (ref) => gitLines(['rev-parse', '--verify', '--quiet', ref], cwd).length > 0
   )
+
   if (logRefs.length > 0) {
     for (const subject of gitLines(['log', '--format=%s', ...logRefs], cwd)) {
       const rcNumber = rcNumberFromReleaseSubject(base, subject)
+
       if (rcNumber !== null) {
         numbers.push(rcNumber)
       }
@@ -74,11 +81,13 @@ export function highestRcForBase(base, { cwd = process.cwd() } = {}) {
 
 function main() {
   const base = process.argv[2]
+
   if (!base) {
     throw new Error('Usage: node config/scripts/release-rc-history.mjs <base-version>')
   }
 
   const highest = highestRcForBase(base)
+
   if (highest !== null) {
     process.stdout.write(String(highest))
   }

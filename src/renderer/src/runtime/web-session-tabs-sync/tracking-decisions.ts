@@ -32,10 +32,12 @@ const WEB_SESSION_TABS_FRAME_APPLIED = {
   apply: true,
   settlesHostMirror: true
 } as const satisfies WebSessionTabsSnapshotDecision
+
 export const WEB_SESSION_TABS_FRAME_OUTRANKED = {
   apply: false,
   settlesHostMirror: true
 } as const satisfies WebSessionTabsSnapshotDecision
+
 const WEB_SESSION_TABS_FRAME_UNMIRRORED = {
   apply: false,
   settlesHostMirror: false
@@ -61,7 +63,9 @@ export function decideWebSessionTabsSnapshot(
   if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
+
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+
   if ((snapshot as { removed?: unknown }).removed === true) {
     // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
     // Retain the removal epoch transition before dropping the live freshness
@@ -71,32 +75,42 @@ export function decideWebSessionTabsSnapshot(
     if (snapshot.publicationEpoch !== VISIBILITY_INVENTORY_REMOVAL_EPOCH) {
       noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
     }
+
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
+
     return WEB_SESSION_TABS_FRAME_APPLIED
   }
+
   if (!isHostMirroredWorktree(snapshot.worktree)) {
     // Why: a remote empty same-id snapshot would delete the user's local floating tabs.
     return WEB_SESSION_TABS_FRAME_UNMIRRORED
   }
+
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+
   const currentSharesPublicationLineage = Boolean(
     current &&
     sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch)
   )
+
   const currentIsHeadlessMerge = current
     ? isHeadlessMergeSessionTabsPublication(current.publicationEpoch)
     : false
+
   const comparePublicationVersions =
     currentSharesPublicationLineage &&
     (currentIsHeadlessMerge || !isHeadlessMergeSessionTabsPublication(snapshot.publicationEpoch))
+
   if (
     isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch) &&
     !currentSharesPublicationLineage
   ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
+
   const replayable = replayableSessionTabsSnapshotByWorktree.get(key)
+
   const isExactCurrentReplay = Boolean(
     current &&
     replayable &&
@@ -105,6 +119,7 @@ export function decideWebSessionTabsSnapshot(
     snapshot.publicationEpoch === replayable.publicationEpoch &&
     snapshot.snapshotVersion === replayable.snapshotVersion
   )
+
   // Why: reject stale snapshots only within an epoch; host restarts create a new epoch.
   if (
     current &&
@@ -115,6 +130,7 @@ export function decideWebSessionTabsSnapshot(
   ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
+
   rememberHostTerminalTabCount(environmentId, snapshot)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
@@ -126,6 +142,7 @@ export function decideWebSessionTabsSnapshot(
   recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
+
   return WEB_SESSION_TABS_FRAME_APPLIED
 }
 
@@ -165,10 +182,13 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
   ) {
     return false
   }
+
   if (args.activeWorktreeId !== args.event.worktree) {
     return false
   }
+
   const hostTerminalTabCount = args.event.tabs.filter((tab) => tab.type === 'terminal').length
+
   return hostTerminalTabCount === 0
 }
 
@@ -178,9 +198,11 @@ export function shouldSyncRuntimeSessionTabs(args: {
   workspaceSessionReady: boolean
 }): boolean {
   const environmentId = args.activeWorktreeRuntimeEnvironmentId?.trim()
+
   if (!environmentId || !args.workspaceSessionReady) {
     return false
   }
+
   return Boolean(args.activeWorktreeId?.trim())
 }
 
@@ -189,5 +211,6 @@ export function shouldSyncAllRuntimeSessionTabs(args: {
   workspaceSessionReady: boolean
 }): boolean {
   const environmentId = args.activeRuntimeEnvironmentId?.trim()
+
   return Boolean(environmentId && args.workspaceSessionReady)
 }

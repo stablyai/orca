@@ -49,6 +49,7 @@ async function fetchMiniMaxResponseWithCookie(args: {
   } catch (sessionFetchError) {
     const message =
       sessionFetchError instanceof Error ? sessionFetchError.message : String(sessionFetchError)
+
     console.warn(
       '[minimax] session cookie jar fetch failed; falling back to manual Cookie header',
       {
@@ -57,6 +58,7 @@ async function fetchMiniMaxResponseWithCookie(args: {
         requestHeaderNames: Object.keys(makeMiniMaxRequestHeaders(args.groupId, args.endpointMode))
       }
     )
+
     return await fetchMiniMaxWithManualCookieHeader(args)
   }
 }
@@ -82,15 +84,19 @@ export async function fetchMiniMaxRateLimits(
   if (!rawCookie) {
     return makeMiniMaxUnavailable('MiniMax session cookie not configured')
   }
+
   const cookie = normalizeMiniMaxCookieHeader(rawCookie)
+
   if (!extractMiniMaxCookieValue(cookie, '_token')) {
     return makeMiniMaxError(
       'MiniMax auth cookie not found — paste a Cookie header with _token',
       'missing-credentials'
     )
   }
+
   const groupId =
     options.groupId?.trim() || extractMiniMaxCookieValue(cookie, 'minimax_group_id_v2')
+
   try {
     const fetchResult = await fetchMiniMaxResponseWithCookie({
       cookie,
@@ -99,9 +105,11 @@ export async function fetchMiniMaxRateLimits(
       endpointMode,
       signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
+
     return await parseMiniMaxUsageResponse(fetchResult, options.models)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown MiniMax usage error'
+
     return makeMiniMaxError(redactMiniMaxSecret(message), 'network')
   }
 }
@@ -117,9 +125,11 @@ async function fetchMiniMaxWithApiKeyFlow(args: {
       endpoint: args.endpoint,
       signal: AbortSignal.timeout(MINIMAX_API_KEY_TIMEOUT_MS)
     })
+
     return await parseMiniMaxUsageResponse(fetchResult, args.models)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown MiniMax API key error'
+
     return makeMiniMaxError(redactMiniMaxSecret(message), 'network')
   }
 }

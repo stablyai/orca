@@ -45,12 +45,15 @@ function healthFromCache(
   if (!cached) {
     return null
   }
+
   if (cached.error) {
     return ERROR_HEALTH[cached.error.code] ?? 'stale-error'
   }
+
   if (cached.request) {
     return cached.fetchedAt === null ? 'loading' : 'refreshing'
   }
+
   return cached.fetchedAt === null ? null : 'fresh'
 }
 
@@ -62,14 +65,19 @@ export function automationHostEntryHealth(
   if (entry.authorityHealth === 'unavailable' || entry.authorityHealth === 'incompatible') {
     return entry.authorityHealth
   }
+
   const fromCache = healthFromCache(input.entry(entry.stableKey))
+
   if (fromCache) {
     return fromCache
   }
+
   const authorityKey = automationAuthorityCatalogKey(entry.stableRef.authority)
+
   if (input.failedAuthorityKeys?.has(authorityKey)) {
     return 'stale-error'
   }
+
   return entry.authorityHealth
 }
 
@@ -79,17 +87,23 @@ export function withAutomationHostCacheHealth(
   input: AutomationHostHealthInput
 ): AutomationHostCatalog {
   let changed = false
+
   const entries = catalog.entries.map((entry) => {
     const authorityHealth = automationHostEntryHealth(entry, input)
+
     if (authorityHealth === entry.authorityHealth) {
       return entry
     }
+
     changed = true
+
     return { ...entry, authorityHealth }
   })
+
   if (!changed) {
     return catalog
   }
+
   return {
     entries,
     byStableKey: new Map(entries.map((entry) => [entry.stableKey, entry])),
@@ -118,6 +132,7 @@ const FAILED_HEALTH: ReadonlySet<AutomationAuthorityHealth> = new Set([
  */
 export function automationHostLoadCounts(catalog: AutomationHostCatalog): AutomationHostLoadCounts {
   const counted = catalog.entries.filter((entry) => entry.catalogState !== 'removed')
+
   return {
     failedHostCount: counted.filter((entry) => FAILED_HEALTH.has(entry.authorityHealth)).length,
     totalHostCount: counted.length

@@ -30,6 +30,7 @@ export function SubmodulePlaceholderRow({
               'More submodule changes were omitted'
             )
           : SUBMODULE_LOADING_LABEL
+
   return (
     <div
       className={cn(

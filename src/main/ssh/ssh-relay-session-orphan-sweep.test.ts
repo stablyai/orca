@@ -19,9 +19,11 @@ const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -37,10 +39,13 @@ vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   installSshPtySourceAckPublisher: vi.fn(() => () => {}),
   installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
 }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
+
 vi.mock('./ssh-remote-orca-cli', () => ({
   runRemoteOrcaCli: vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' })
 }))
+
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
@@ -54,9 +59,11 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     isDisposed = vi.fn().mockReturnValue(false)
   }
 }))
+
 vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
   installRemoteManagedAgentHooks: vi.fn()
 }))
+
 vi.mock('../providers/ssh-pty-provider', () => ({
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
@@ -67,14 +74,17 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -88,11 +98,13 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true),
   answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -107,8 +119,10 @@ const OUR_CLIENT = 'client-instance-1'
 // for — so a second `establish` on a shared target silently stops matching the host attestation and
 // every assertion after the first passes for the wrong reason.
 let targetSeq = 0
+
 function nextTarget(): string {
   targetSeq += 1
+
   return `target-${targetSeq}`
 }
 
@@ -190,6 +204,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
       deps.mockStore,
       deps.mockPortForward
     )
+
     await session.establish(deps.mockConn)
     // Both guards exist because every "never stops" case below is trivially satisfiable. The pass
     // has to have run, and it has to have run under the identity the host attests — a session that
@@ -198,6 +213,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
     expect(warn).not.toHaveBeenCalledWith(
       expect.stringContaining('minting a new consumer identity')
     )
+
     return { shutdown, listProcesses }
   }
 
@@ -213,6 +229,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
 
   it('never stops a PTY that still holds a live lease', async () => {
     const target = nextTarget()
+
     const { shutdown } = await establish(
       target,
       [hostEntry(target, { id: `ssh:${target}@@pty-live`, incarnationId: 'inc-live' })],
@@ -227,6 +244,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
     // failed on the transport (dropStalePty), or a pane surface missing from the layout. All three
     // leave the remote process running on purpose.
     const target = nextTarget()
+
     const { shutdown } = await establish(
       target,
       [hostEntry(target, { id: `ssh:${target}@@pty-gone`, incarnationId: 'inc-gone' })],
@@ -240,6 +258,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
     // agentSessionOwners is empty here — the user typed `claude` themselves — so the only thing
     // between a live agent and a stop is the host's own foreground observation.
     const target = nextTarget()
+
     const { shutdown } = await establish(target, [
       hostEntry(target, {
         foregroundProcessEvidence: {
@@ -256,6 +275,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
 
   it('never stops a pane whose foreground observation the relay could not make', async () => {
     const target = nextTarget()
+
     const { shutdown } = await establish(target, [
       hostEntry(target, {
         foregroundProcessEvidence: {
@@ -271,6 +291,7 @@ describe('SshRelaySession orphaned relay PTY sweep', () => {
 
   it('never stops a PTY this relay attributes to a different client', async () => {
     const target = nextTarget()
+
     const { shutdown } = await establish(target, [
       hostEntry(target, { ownerClientInstanceId: 'someone-elses-laptop' })
     ])

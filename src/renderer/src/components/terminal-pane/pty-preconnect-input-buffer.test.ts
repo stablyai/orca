@@ -14,19 +14,23 @@ describe('createPtyPreconnectInputBuffer', () => {
     const accepted = buffer.enqueueAccepted('first')
     expect(buffer.enqueue('second', 'ordinary')).toBe(true)
     expect(buffer.enqueue('third', 'immediate')).toBe(true)
+
     const writer = {
       isCurrent: () => true,
       sendInput: (data: string) => {
         delivered.push(`ordinary:${data}`)
+
         return true
       },
       sendInputImmediate: (data: string) => {
         delivered.push(`immediate:${data}`)
+
         return true
       },
       sendInputAccepted: async (data: string) => {
         const result = await acceptedWrite.promise
         delivered.push(`accepted:${data}`)
+
         return result
       }
     }
@@ -55,15 +59,18 @@ describe('createPtyPreconnectInputBuffer', () => {
       const accepted = buffer.enqueueAccepted('first')
       const laterAccepted = buffer.enqueueAccepted('third')
       expect(buffer.enqueue('second', 'ordinary')).toBe(true)
+
       const flushing = buffer.flush({
         isCurrent: () => true,
         sendInput,
         sendInputImmediate: () => true,
         sendInputAccepted: async () => {
           writeStarted.resolve()
+
           return acceptedWrite.promise
         }
       })
+
       await writeStarted.promise
 
       buffer.clear()
@@ -79,6 +86,7 @@ describe('createPtyPreconnectInputBuffer', () => {
       } else {
         acceptedWrite.reject(new Error('late accepted write failure'))
       }
+
       await flushAsyncTicks()
 
       expect(sendInput).not.toHaveBeenCalled()
@@ -90,18 +98,22 @@ describe('createPtyPreconnectInputBuffer', () => {
     const codeUnitWrite = createDeferred<boolean>()
     const codeUnitWriteStarted = createDeferred<void>()
     const codeUnitBuffer = createPtyPreconnectInputBuffer()
+
     const codeUnitAccepted = codeUnitBuffer.enqueueAccepted(
       'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS)
     )
+
     const codeUnitFlush = codeUnitBuffer.flush({
       isCurrent: () => true,
       sendInput: () => true,
       sendInputImmediate: () => true,
       sendInputAccepted: async () => {
         codeUnitWriteStarted.resolve()
+
         return codeUnitWrite.promise
       }
     })
+
     await codeUnitWriteStarted.promise
 
     expect(codeUnitBuffer.enqueue('overflow', 'ordinary')).toBe(false)
@@ -115,18 +127,22 @@ describe('createPtyPreconnectInputBuffer', () => {
     const entryWriteStarted = createDeferred<void>()
     const entryBuffer = createPtyPreconnectInputBuffer()
     const entryAccepted = entryBuffer.enqueueAccepted('first')
+
     for (let index = 1; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
       expect(entryBuffer.enqueue('', 'ordinary')).toBe(true)
     }
+
     const entryFlush = entryBuffer.flush({
       isCurrent: () => true,
       sendInput: () => true,
       sendInputImmediate: () => true,
       sendInputAccepted: async () => {
         entryWriteStarted.resolve()
+
         return entryWrite.promise
       }
     })
+
     await entryWriteStarted.promise
 
     expect(entryBuffer.enqueue('', 'ordinary')).toBe(false)
@@ -144,6 +160,7 @@ describe('createPtyPreconnectInputBuffer', () => {
         kind: 'ordinary' as const
       }))
     )
+
     let entryWrites = 0
 
     expect(entryBuffer.enqueue('', 'ordinary')).toBe(false)
@@ -151,6 +168,7 @@ describe('createPtyPreconnectInputBuffer', () => {
       isCurrent: () => true,
       sendInput: () => {
         entryWrites += 1
+
         return true
       },
       sendInputImmediate: () => true
@@ -161,6 +179,7 @@ describe('createPtyPreconnectInputBuffer', () => {
       { data: 'x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS), kind: 'ordinary' },
       { data: 'overflow', kind: 'ordinary' }
     ])
+
     const codeUnitWrites: number[] = []
 
     expect(codeUnitBuffer.enqueue('new', 'ordinary')).toBe(false)
@@ -168,6 +187,7 @@ describe('createPtyPreconnectInputBuffer', () => {
       isCurrent: () => true,
       sendInput: (data) => {
         codeUnitWrites.push(data.length)
+
         return true
       },
       sendInputImmediate: () => true

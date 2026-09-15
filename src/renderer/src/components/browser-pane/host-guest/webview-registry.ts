@@ -18,6 +18,7 @@ export { acquireWebviewsDragPassthrough } from './webview-drag-passthrough'
 // store/slices → components → @/store that would otherwise appear if
 // destroyPersistentWebview lived in BrowserPane.tsx.
 export const webviewRegistry = new Map<string, Electron.WebviewTag>()
+
 export const registeredWebContentsIds = new Map<string, number>()
 
 export type BrowserWebviewMemoryProfile = {
@@ -26,10 +27,15 @@ export type BrowserWebviewMemoryProfile = {
 }
 
 const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
+
 let dragListenersAttached = false
+
 let nativeDragPassthroughRelease: (() => void) | null = null
+
 const dragPassthroughPreviousPointerEvents = new Map<Electron.WebviewTag, string>()
+
 const rendererRecoveryPendingPageIds = new Set<string>()
+
 const webviewLifecycleListeners = new Map<
   string,
   {
@@ -50,15 +56,18 @@ function getListenerHost(): (Window & { [DRAG_LISTENER_KEY]?: DragListenerRegist
   if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
     return null
   }
+
   return window as Window & { [DRAG_LISTENER_KEY]?: DragListenerRegistry }
 }
 
 function removeDragListeners(): void {
   const listenerHost = getListenerHost()
   const existingListeners = listenerHost?.[DRAG_LISTENER_KEY]
+
   if (!listenerHost || !existingListeners) {
     return
   }
+
   window.removeEventListener('dragstart', existingListeners.dragstart, true)
   window.removeEventListener('dragend', existingListeners.dragend, true)
   window.removeEventListener('drop', existingListeners.drop, true)
@@ -70,12 +79,15 @@ function removeDragListeners(): void {
 
 function ensureDragListeners(): void {
   const listenerHost = getListenerHost()
+
   if (!listenerHost) {
     return
   }
+
   if (dragListenersAttached && listenerHost[DRAG_LISTENER_KEY]) {
     return
   }
+
   removeDragListeners()
 
   const dragstart = (): void => setWebviewsDragPassthrough(true)
@@ -108,11 +120,13 @@ function applyWebviewsDragPassthrough(passthrough: boolean): void {
       if (!dragPassthroughPreviousPointerEvents.has(webview)) {
         dragPassthroughPreviousPointerEvents.set(webview, webview.style.pointerEvents)
       }
+
       webview.style.pointerEvents = 'none'
       continue
     }
 
     const previous = dragPassthroughPreviousPointerEvents.get(webview)
+
     if (previous !== undefined) {
       webview.style.pointerEvents = previous
       dragPassthroughPreviousPointerEvents.delete(webview)
@@ -127,6 +141,7 @@ export function setWebviewsDragPassthrough(passthrough: boolean): void {
     if (!nativeDragPassthroughRelease) {
       nativeDragPassthroughRelease = acquireWebviewsDragPassthrough()
     }
+
     return
   }
 
@@ -138,9 +153,11 @@ function applyCurrentDragPassthroughToWebview(webview: Electron.WebviewTag): voi
   if (!isWebviewDragPassthroughActive()) {
     return
   }
+
   if (!dragPassthroughPreviousPointerEvents.has(webview)) {
     dragPassthroughPreviousPointerEvents.set(webview, webview.style.pointerEvents)
   }
+
   webview.style.pointerEvents = 'none'
 }
 
@@ -149,6 +166,7 @@ export function registerPersistentWebview(
   webview: Electron.WebviewTag
 ): void {
   const previousListeners = webviewLifecycleListeners.get(browserTabId)
+
   if (previousListeners) {
     previousListeners.webview.removeEventListener(
       'render-process-gone',
@@ -157,12 +175,15 @@ export function registerPersistentWebview(
     previousListeners.webview.removeEventListener('dom-ready', previousListeners.onRendererReady)
     previousListeners.webview.removeEventListener('destroyed', previousListeners.onGuestDestroyed)
   }
+
   const onRendererGone = (): void => {
     rendererRecoveryPendingPageIds.add(browserTabId)
   }
+
   const onRendererReady = (): void => {
     rendererRecoveryPendingPageIds.delete(browserTabId)
   }
+
   const onGuestDestroyed = (): void => {
     // Why: 'destroyed' also fires after an intentional webview.remove(); only a
     // still-attached element means the guest died under a live tab (STA-3448).
@@ -170,6 +191,7 @@ export function registerPersistentWebview(
       rendererRecoveryPendingPageIds.add(browserTabId)
     }
   }
+
   webview.addEventListener('render-process-gone', onRendererGone)
   webview.addEventListener('dom-ready', onRendererReady)
   webview.addEventListener('destroyed', onGuestDestroyed)
@@ -187,6 +209,7 @@ export function registerPersistentWebview(
 export function unregisterPersistentWebview(browserTabId: string): void {
   const webview = webviewRegistry.get(browserTabId)
   const lifecycleListeners = webviewLifecycleListeners.get(browserTabId)
+
   if (lifecycleListeners) {
     lifecycleListeners.webview.removeEventListener(
       'render-process-gone',
@@ -196,11 +219,15 @@ export function unregisterPersistentWebview(browserTabId: string): void {
     lifecycleListeners.webview.removeEventListener('destroyed', lifecycleListeners.onGuestDestroyed)
     webviewLifecycleListeners.delete(browserTabId)
   }
+
   rendererRecoveryPendingPageIds.delete(browserTabId)
+
   if (webview) {
     dragPassthroughPreviousPointerEvents.delete(webview)
   }
+
   webviewRegistry.delete(browserTabId)
+
   if (webviewRegistry.size === 0) {
     removeDragListeners()
   }
@@ -214,17 +241,22 @@ function moveFocusToRendererIfWebviewOwnsFocus(webview: Electron.WebviewTag): bo
   if (typeof document === 'undefined' || typeof window === 'undefined') {
     return false
   }
+
   const activeElement = document.activeElement as HTMLElement | null
+
   if (!activeElement) {
     return false
   }
+
   // Why: hiding/removing a focused webview can let macOS reactivate the
   // previously-frontmost app. Give focus back to Orca's renderer first.
   if (webview === activeElement || webview.contains(activeElement)) {
     activeElement.blur?.()
     window.focus()
+
     return true
   }
+
   return false
 }
 
@@ -245,10 +277,12 @@ function removePersistentWebview(
   { preserveViewport, preserveZoom }: { preserveViewport: boolean; preserveZoom: boolean }
 ): Promise<void> {
   const webview = webviewRegistry.get(browserTabId)
+
   if (!preserveZoom) {
     // The guest is gone, so its user-applied zoom must not be inherited by a later tab that reuses the id.
     forgetExplicitBrowserPageZoomLevel(browserTabId)
   }
+
   if (!webview) {
     // Why: the viewport can outlive a missing webview entry; tear it down on
     // explicit close paths so overlay slots do not leak parked shells.
@@ -256,22 +290,29 @@ function removePersistentWebview(
       clearBrowserPageViewportPresetSize(browserTabId)
       removeBrowserPageViewport(browserTabId)
     }
+
     registeredWebContentsIds.delete(browserTabId)
     clearLiveBrowserUrl(browserTabId)
+
     return Promise.resolve()
   }
+
   const unregisterGuest = Promise.resolve(
     window.api.browser.unregisterGuest({ browserPageId: browserTabId })
   ).catch(() => {})
+
   moveFocusToRendererBeforeWebviewDetach(webview)
   webview.remove()
   unregisterPersistentWebview(browserTabId)
+
   if (!preserveViewport) {
     clearBrowserPageViewportPresetSize(browserTabId)
     removeBrowserPageViewport(browserTabId)
   }
+
   registeredWebContentsIds.delete(browserTabId)
   clearLiveBrowserUrl(browserTabId)
+
   return unregisterGuest
 }
 

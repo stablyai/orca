@@ -27,6 +27,7 @@ export type DaemonRespawnThrottleOptions = {
 // waking to a stale socket, must never trip this. Five failures inside a minute is a
 // daemon that cannot start, not a daemon having a bad moment.
 export const DEFAULT_DAEMON_RESPAWN_MAX_ATTEMPTS = 5
+
 export const DEFAULT_DAEMON_RESPAWN_WINDOW_MS = 60_000
 
 export class DaemonRespawnThrottle {
@@ -45,8 +46,10 @@ export class DaemonRespawnThrottle {
   admit(): DaemonRespawnAdmission {
     const now = this.now()
     this.attempts = this.attempts.filter((at) => now - at < this.windowMs)
+
     if (this.attempts.length >= this.maxAttempts) {
       const oldest = this.attempts[0] as number
+
       return {
         allowed: false,
         reason: 'crash_loop',
@@ -54,7 +57,9 @@ export class DaemonRespawnThrottle {
         retryAfterMs: Math.max(0, this.windowMs - (now - oldest))
       }
     }
+
     this.attempts.push(now)
+
     return { allowed: true }
   }
 

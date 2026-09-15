@@ -37,11 +37,14 @@ export function useWorkspaceCleanupBrowseState(): WorkspaceCleanupBrowseControll
     (key, value) => {
       updateBrowse((current) => {
         const group = current.filters[key]
+
         const next =
           typeof group === 'object' && group !== null ? { ...group, ...(value as object) } : value
+
         // Cast: a computed key over a union widens the spread result past
         // WorkspaceCleanupFilterState even though `key` is constrained to it.
         const filters = { ...current.filters, [key]: next } as WorkspaceCleanupFilterState
+
         return { ...current, filters }
       })
     },
@@ -54,6 +57,7 @@ export function useWorkspaceCleanupBrowseState(): WorkspaceCleanupBrowseControll
       updateBrowse((current) => {
         const direction =
           current.sort.field === field && current.sort.direction === 'asc' ? 'desc' : 'asc'
+
         return { ...current, sort: { field, direction } }
       })
     },

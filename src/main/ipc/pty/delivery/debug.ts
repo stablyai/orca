@@ -39,8 +39,11 @@ export type PtyRendererDeliveryDebugSnapshot = {
 
 // Why module scope: breadcrumb writers live both inside registerPtyHandlers and outside it (renderer lifecycle resets).
 export const mainDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
+
 export let lastPowerSuspendAtMs: number | null = null
+
 export let lastPowerResumeAtMs: number | null = null
+
 let powerSignalBreadcrumbsInstalled = false
 
 // Why: both field freeze variants correlate with display sleep; suspend/resume timestamps let breadcrumbs line up against the wake.
@@ -48,6 +51,7 @@ export function installPowerSignalBreadcrumbs(): void {
   if (powerSignalBreadcrumbsInstalled) {
     return
   }
+
   powerSignalBreadcrumbsInstalled = true
   const powerMonitor = getPtyPower()
   powerMonitor.on('suspend', () => {
@@ -91,9 +95,12 @@ export const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebu
 // Why null-init + wrapper fns (not `export let fn = noop`): rolldown const-folds the noop into
 // call sites and drops the setter's reassignment, so bridged closures never run in the built app (STA-5661).
 let readPtyRendererDeliveryDebugSnapshotImpl: (() => PtyRendererDeliveryDebugSnapshot) | null = null
+
 let resetPtyRendererDeliveryDebugSnapshotImpl: (() => void) | null = null
+
 // Bridged into the registerPtyHandlers closure so the module-scope lifecycle-reset handler can zero closure-owned delivery accounting on renderer reload/crash.
 let resetRendererDeliveryAccountingForLifecycleResetImpl: (() => void) | null = null
+
 // Bridged so a re-registration can cancel the prior closure's dispatcher-ready watchdog before wiring its own.
 let clearRendererDispatcherReadyWatchdogImpl: (() => void) | null = null
 

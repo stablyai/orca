@@ -20,6 +20,7 @@ import {
 } from '../../../shared/terminal-process-inspection'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = `tab-1:${LEAF_ID}`
 
 function makeByteOversizedTerminalInput(): string {
@@ -305,6 +306,7 @@ describe('runtime terminal owner routing', () => {
     }
       ? true
       : false
+
     const typeProof: HostFieldsCannotBeConstructed = true
     expect(typeProof).toBe(true)
     const result = clientOnlyUnverifiableInspection('transport_loss')
@@ -357,6 +359,7 @@ describe('runtime terminal owner routing', () => {
       result: { send: { handle: string; accepted: true; bytesWritten: number } }
       _meta: { runtimeId: string }
     }>()
+
     runtimeCall.mockReturnValue(pendingSend.promise)
     useAppStore.setState({
       terminalLayoutsByTabId: {
@@ -501,6 +504,7 @@ describe('runtime terminal owner routing', () => {
 
   it('yields while validating large fire-and-forget local input before IPC writes', async () => {
     vi.useFakeTimers()
+
     try {
       const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
 
@@ -520,6 +524,7 @@ describe('runtime terminal owner routing', () => {
 
   it('drops byte-oversized fire-and-forget input after deferred validation', async () => {
     vi.useFakeTimers()
+
     try {
       const text = makeByteOversizedTerminalInput()
 
@@ -550,8 +555,10 @@ describe('runtime terminal owner routing', () => {
   it('yields while validating large verified local input before IPC writes', async () => {
     vi.useFakeTimers()
     localWriteAccepted.mockResolvedValue(true)
+
     try {
       const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
       const accepted = sendRuntimePtyInputVerified(
         { activeRuntimeEnvironmentId: null },
         'local-pty',
@@ -572,8 +579,10 @@ describe('runtime terminal owner routing', () => {
 
   it('rejects byte-oversized verified input after deferred validation', async () => {
     vi.useFakeTimers()
+
     try {
       const text = makeByteOversizedTerminalInput()
+
       const accepted = sendRuntimePtyInputVerified(
         { activeRuntimeEnvironmentId: null },
         'local-pty',
@@ -672,18 +681,22 @@ describe('runtime terminal owner routing', () => {
     const layoutCount = 500
     let layoutEnumerations = 0
     let leafEnumerations = 0
+
     const layouts = Object.fromEntries(
       Array.from({ length: layoutCount }, (_, index) => {
         const leafId = `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`
+
         const ptyIdsByLeafId = new Proxy(
           { [leafId]: `pty-${index}` },
           {
             ownKeys: (target) => {
               leafEnumerations += 1
+
               return Reflect.ownKeys(target)
             }
           }
         )
+
         return [
           `tab-${index}`,
           {
@@ -695,12 +708,15 @@ describe('runtime terminal owner routing', () => {
         ]
       })
     )
+
     const observedLayouts = new Proxy(layouts, {
       ownKeys: (target) => {
         layoutEnumerations += 1
+
         return Reflect.ownKeys(target)
       }
     })
+
     useAppStore.setState({ terminalLayoutsByTabId: observedLayouts })
 
     recordRuntimeTerminalInputForPtyId('pty-0', 10_000)
@@ -778,9 +794,11 @@ describe('runtime terminal owner routing', () => {
 
     const firstLayout = layouts['tab-1']
     expect(firstLayout).toBeDefined()
+
     if (!firstLayout) {
       return
     }
+
     firstLayout.ptyIdsByLeafId = Object.create({ [LEAF_ID]: 'rebound-pty' })
     Object.setPrototypeOf(layouts, { 'tab-1': firstLayout })
     delete layouts['tab-1']

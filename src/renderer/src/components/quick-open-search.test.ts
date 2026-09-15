@@ -12,9 +12,11 @@ import {
 describe('quick-open-search', () => {
   it('finds and retains a target after 100k non-matches without retaining the inventory', () => {
     const ranker = new QuickOpenPathRanker('sta-4354-tail-target', 32)
+
     for (let index = 0; index < 100_100; index++) {
       ranker.consider(`data/chunk-${String(index).padStart(6, '0')}/payload.bin`)
     }
+
     ranker.consider('src/sta-4354-tail-target.ts')
 
     expect(ranker.result()).toEqual({
@@ -84,6 +86,7 @@ describe('quick-open-search', () => {
   it('returns 50 top-ranked results from a 100k synthetic list', () => {
     const fillerCount = 99_940
     const topCandidateCount = 60
+
     const files = [
       ...Array.from(
         { length: fillerCount },
@@ -162,6 +165,7 @@ describe('quick-open-search', () => {
 
   it('rejects oversized pasted queries before reading indexed file candidates', () => {
     const oversizedQuery = 'secret-quick-open'.repeat(QUICK_OPEN_QUERY_MAX_BYTES)
+
     const file = {
       path: 'src/secret.ts',
       inputIndex: 0,

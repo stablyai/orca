@@ -9,6 +9,7 @@ type IntendedResultOwner = {
 function openResult(resultOwner: IntendedResultOwner) {
   const openFile = vi.fn()
   const setPendingEditorReveal = vi.fn()
+
   const params = {
     resultOwner,
     fileResult: {
@@ -29,6 +30,7 @@ function openResult(resultOwner: IntendedResultOwner) {
   } satisfies Parameters<typeof openMatchResult>[0]
 
   openMatchResult(params)
+
   return { openFile, setPendingEditorReveal }
 }
 

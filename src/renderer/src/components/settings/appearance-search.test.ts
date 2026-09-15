@@ -19,6 +19,7 @@ describe('getLanguageEntries', () => {
     async (locale) => {
       await i18n.changeLanguage(locale)
       const entry = getLanguageEntries()[0]
+
       for (const word of NATIVE_LANGUAGE_WORDS) {
         expect(matchesSettingsSearch(word, entry)).toBe(true)
       }

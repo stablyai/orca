@@ -83,24 +83,29 @@ export const createRemoteServerUpdatesSlice: StateCreator<
     if (get().remoteServerUpdatesChecking || get().remoteServerUpdatesRunning) {
       return
     }
+
     const checkOptions = options
       ? {
           includePrerelease: Boolean(options.includePrerelease),
           includePerfPrerelease: Boolean(options.includePerfPrerelease)
         }
       : undefined
+
     set({
       remoteServerUpdatesChecking: true,
       ...(checkOptions ? { remoteServerUpdateCheckOptions: checkOptions } : {})
     })
+
     try {
       const listed = await window.api.runtimeEnvironments.list()
       const environments = listed.filter(isUserManagedRuntimeEnvironment)
       get().setRuntimeEnvironments(listed)
       const previous = get().remoteServerUpdates
+
       const initial = new Map(
         environments.map((environment) => {
           const existing = previous.get(environment.id)
+
           return [
             environment.id,
             existing
@@ -109,6 +114,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
           ]
         })
       )
+
       set({ remoteServerUpdates: initial })
       const clientVersion = await window.api.updater.getVersion()
       await Promise.allSettled(
@@ -119,9 +125,11 @@ export const createRemoteServerUpdatesSlice: StateCreator<
             transport,
             checkOptions
           )
+
           set((state) => {
             const next = new Map(state.remoteServerUpdates)
             next.set(environment.id, entry)
+
             return { remoteServerUpdates: next }
           })
         })
@@ -136,23 +144,30 @@ export const createRemoteServerUpdatesSlice: StateCreator<
     if (get().remoteServerUpdatesRunning) {
       return
     }
+
     const selected = new Set(environmentIds ?? [])
     const checkOptions = get().remoteServerUpdateCheckOptions
+
     const entries = [...get().remoteServerUpdates.values()].filter(
       (entry) =>
         (entry.phase === 'available' || entry.phase === 'failed') &&
         (selected.size === 0 || selected.has(entry.environmentId))
     )
+
     if (entries.length === 0) {
       return
     }
+
     set((state) => {
       const next = new Map(state.remoteServerUpdates)
+
       for (const entry of entries) {
         next.set(entry.environmentId, { ...entry, phase: 'queued', error: null })
       }
+
       return { remoteServerUpdates: next, remoteServerUpdatesRunning: true }
     })
+
     try {
       await runRemoteServerUpdateBatch(
         entries,
@@ -165,6 +180,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
               set((state) => {
                 const next = new Map(state.remoteServerUpdates)
                 next.set(entry.environmentId, progress)
+
                 return { remoteServerUpdates: next }
               })
             },

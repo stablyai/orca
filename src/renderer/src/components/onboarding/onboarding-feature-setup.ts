@@ -114,6 +114,7 @@ export function buildOnboardingFeatureSetupClipboardText(
   agentRuntime?: ProjectAgentSkillRuntime
 ): string | null {
   const command = buildOnboardingFeatureSetupSkillCommand(selection)
+
   // Keep clipboard and terminal commands on the same runtime (#12103).
   return command === null ? null : buildSkillCommandForRuntime(command, agentRuntime)
 }
@@ -124,9 +125,11 @@ export function buildOnboardingFeatureSetupSkillCommand(
   const skillNames = selectedOnboardingFeatureSetupIds(selection).map(
     (id) => FEATURE_SKILL_NAMES[id]
   )
+
   if (skillNames.length === 0) {
     return null
   }
+
   return buildAgentFeatureSkillInstallCommand(skillNames)
 }
 
@@ -173,6 +176,7 @@ export function createOnboardingFeatureSetupDeps(
   agentRuntime?: ProjectAgentSkillRuntime
 ): OnboardingFeatureSetupDeps {
   const e2eDeps = getE2EOnboardingFeatureSetupDeps()
+
   if (e2eDeps) {
     return e2eDeps
   }
@@ -180,7 +184,9 @@ export function createOnboardingFeatureSetupDeps(
   // Register `orca` on the same PATH used by the skill install (#12103).
   const wslDistroRequest =
     agentRuntime?.runtime === 'wsl' ? getWslCliDistroRequest(agentRuntime) : undefined
+
   const isWsl = agentRuntime?.runtime === 'wsl'
+
   return {
     getCliStatus: () =>
       isWsl
@@ -202,6 +208,7 @@ function getE2EOnboardingFeatureSetupDeps(): OnboardingFeatureSetupDeps | null {
   if (!e2eConfig.enabled || typeof window === 'undefined') {
     return null
   }
+
   return (
     (window as unknown as { __onboardingFeatureSetupDeps?: OnboardingFeatureSetupDeps })
       .__onboardingFeatureSetupDeps ?? null
@@ -216,6 +223,7 @@ export async function runOnboardingFeatureSetup(
   const agentRuntime = runtimeContext?.installDisabledReason
     ? undefined
     : runtimeContext?.agentRuntime
+
   const deps = explicitDeps ?? createOnboardingFeatureSetupDeps(agentRuntime)
   const selectedIds = selectedOnboardingFeatureSetupIds(selection)
   const warnings: OnboardingFeatureSetupWarning[] = []
@@ -226,9 +234,11 @@ export async function runOnboardingFeatureSetup(
 
   deps.setStorageItem(BROWSER_USE_ENABLED_STORAGE_KEY, selection.browserUse ? '1' : '0')
   deps.setStorageItem(ORCHESTRATION_ENABLED_STORAGE_KEY, selection.orchestration ? '1' : '0')
+
   if (selection.orchestration) {
     deps.removeStorageItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
   }
+
   deps.notifyOrchestrationStateChanged()
 
   if (selectedIds.length === 0) {
@@ -244,6 +254,7 @@ export async function runOnboardingFeatureSetup(
 
   try {
     const status = await deps.getCliStatus()
+
     if (!status.supported) {
       warnings.push({
         featureId: 'cli',
@@ -259,6 +270,7 @@ export async function runOnboardingFeatureSetup(
       await deps.showCliRegistrationPrompt?.()
       const next = await deps.installCli()
       cliTouched = true
+
       if (next.state !== 'installed') {
         warnings.push({
           featureId: 'cli',
@@ -275,6 +287,7 @@ export async function runOnboardingFeatureSetup(
   if (selection.computerUse) {
     try {
       const status = await deps.getComputerUsePermissionStatus()
+
       // Why: when the macOS helper app is missing (e.g. dev builds without
       // `pnpm build:computer-macos`), the status reports all permissions as
       // not-granted alongside a helperUnavailableReason. Without this guard we
@@ -289,6 +302,7 @@ export async function runOnboardingFeatureSetup(
         const needsMacPermissions =
           status.platform === 'darwin' &&
           status.permissions.some((permission) => permission.status !== 'granted')
+
         if (needsMacPermissions) {
           await deps.openComputerUsePermissionSetup()
           computerUsePermissionsOpened = true
@@ -325,14 +339,18 @@ async function copySkillCommands(
   agentRuntime?: ProjectAgentSkillRuntime
 ): Promise<boolean> {
   const clipboardText = buildOnboardingFeatureSetupClipboardText(selection, agentRuntime)
+
   if (!clipboardText) {
     return false
   }
+
   try {
     await deps.writeClipboardText(clipboardText)
+
     return true
   } catch (error) {
     warnings.push({ featureId: 'skills', message: formatFeatureSetupError(error) })
+
     return false
   }
 }

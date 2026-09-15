@@ -9,12 +9,15 @@ export const starNagApi = {
       _event: Electron.IpcRendererEvent,
       payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }
     ): void => callback(payload)
+
     ipcRenderer.on('star-nag:show', listener)
+
     return () => ipcRenderer.removeListener('star-nag:show', listener)
   },
   onHide: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
     ipcRenderer.on('star-nag:hide', listener)
+
     return () => ipcRenderer.removeListener('star-nag:hide', listener)
   },
   dismiss: (): Promise<void> => ipcRenderer.invoke('star-nag:dismiss'),

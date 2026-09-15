@@ -26,6 +26,7 @@ export default function ColumnResizeHandle({
 }: Props): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
   const handleRef = useRef<HTMLDivElement | null>(null)
+
   const dragRef = useRef<{
     startX: number
     startPxA: number
@@ -37,31 +38,39 @@ export default function ColumnResizeHandle({
     if (!dragging) {
       return
     }
+
     const onMove = (e: MouseEvent): void => {
       const drag = dragRef.current
+
       if (!drag) {
         return
       }
+
       const totalPx = drag.startPxA + drag.startPxB
+
       if (totalPx <= 0) {
         return
       }
+
       const proposedPxA = drag.startPxA + (e.clientX - drag.startX)
       const newPxA = Math.max(MIN_COLUMN_WIDTH, Math.min(totalPx - MIN_COLUMN_WIDTH, proposedPxA))
       const newFrA = (drag.totalFr * newPxA) / totalPx
       const newFrB = drag.totalFr - newFrA
       onResize(fieldId, newFrA, nextFieldId, newFrB)
     }
+
     const onUp = (): void => {
       dragRef.current = null
       setDragging(false)
     }
+
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     const prevCursor = document.body.style.cursor
     const prevSelect = document.body.style.userSelect
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+
     return () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
@@ -83,11 +92,14 @@ export default function ColumnResizeHandle({
         if (e.button !== 0) {
           return
         }
+
         const cell = handleRef.current?.parentElement
         const nextCell = cell?.nextElementSibling as HTMLElement | null
+
         if (!cell || !nextCell) {
           return
         }
+
         e.preventDefault()
         e.stopPropagation()
         dragRef.current = {

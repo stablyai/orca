@@ -3,7 +3,9 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 
 function splitLayout(): TerminalLayoutSnapshot {

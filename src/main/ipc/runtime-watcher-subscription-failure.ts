@@ -11,9 +11,12 @@ export function handleRuntimeWatcherSubscriptionFailure(
 ): void {
   if (isWatcherProcessFailure(error) && error.scope === 'supervisor') {
     retireSupervisor(error)
+
     return
   }
+
   releaseAssignment()
+
   if (isWatcherProcessFailure(error) && error.code === 'subscribe_timeout') {
     quarantineOrFuseRoot()
   }

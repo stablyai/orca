@@ -15,13 +15,17 @@ import { TERMINAL_OUTPUT_BATCH_MAX_BYTES } from '../../../shared/terminal-multip
 // reference. See src/shared/utf8-byte-limits.ts (readUtf8CodePointAt).
 function legacyCodePointAt(text: string, index: number): number {
   const leadUnit = text.charCodeAt(index)
+
   if (leadUnit < 0xd800 || leadUnit > 0xdbff || index + 1 >= text.length) {
     return leadUnit
   }
+
   const trailUnit = text.charCodeAt(index + 1)
+
   if (trailUnit < 0xdc00 || trailUnit > 0xdfff) {
     return leadUnit
   }
+
   return (leadUnit - 0xd800) * 0x400 + (trailUnit - 0xdc00) + 0x10000
 }
 
@@ -29,12 +33,15 @@ function legacyUtf8ByteLengthForCodePoint(codePoint: number): number {
   if (codePoint <= 0x7f) {
     return 1
   }
+
   if (codePoint <= 0x7ff) {
     return 2
   }
+
   if (codePoint <= 0xffff) {
     return 3
   }
+
   return 4
 }
 
@@ -44,16 +51,20 @@ function legacyMeasure(
 ): { byteLength: number; exceededLimit: boolean } {
   const stopAfterBytes = options.stopAfterBytes
   let byteLength = 0
+
   for (let index = 0; index < text.length; index += 1) {
     const codePoint = legacyCodePointAt(text, index)
     byteLength += legacyUtf8ByteLengthForCodePoint(codePoint)
+
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return { byteLength, exceededLimit: true }
     }
+
     if (codePoint > 0xffff) {
       index += 1
     }
   }
+
   return { byteLength, exceededLimit: false }
 }
 
@@ -67,11 +78,13 @@ function legacyExceeds(data: string, maxBytes: number): boolean {
 
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state + 0x6d2b79f5) >>> 0
     let t = state
     t = Math.imul(t ^ (t >>> 15), t | 1)
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
@@ -80,27 +93,34 @@ function mulberry32(seed: number): () => number {
 // fixtures exercise every branch of the legacy code-point scan.
 function randomUnit(random: () => number): string {
   const roll = random()
+
   if (roll < 0.4) {
     return String.fromCharCode(Math.floor(random() * 0x80))
   }
+
   if (roll < 0.55) {
     return String.fromCharCode(0x80 + Math.floor(random() * 0x780))
   }
+
   if (roll < 0.72) {
     return String.fromCharCode(0x800 + Math.floor(random() * 0xd000))
   }
+
   if (roll < 0.88) {
     return String.fromCodePoint(0x10000 + Math.floor(random() * 0x100000))
   }
+
   return String.fromCharCode(0xd800 + Math.floor(random() * 0x800))
 }
 
 function randomString(random: () => number, maxUnits: number): string {
   const count = Math.floor(random() * maxUnits)
   let text = ''
+
   for (let index = 0; index < count; index += 1) {
     text += randomUnit(random)
   }
+
   return text
 }
 
@@ -109,9 +129,11 @@ function randomString(random: () => number, maxUnits: number): string {
 function rawUtf16(random: () => number, maxUnits: number): string {
   const count = Math.floor(random() * maxUnits)
   let text = ''
+
   for (let index = 0; index < count; index += 1) {
     text += String.fromCharCode(Math.floor(random() * 0x11000))
   }
+
   return text
 }
 
@@ -161,6 +183,7 @@ describe('measuring a prefix slice that cuts a surrogate pair in half', () => {
     const observedByteLengths = new Set<number>()
     const observedExceeded = new Set<boolean>()
     const observedMeasurements = new Set<string>()
+
     for (let iteration = 0; iteration < 200_000; iteration += 1) {
       observedByteLengths.add(terminalStreamByteLength(sliced))
       observedExceeded.add(terminalStreamByteLengthExceeds(sliced, 15))
@@ -168,6 +191,7 @@ describe('measuring a prefix slice that cuts a surrogate pair in half', () => {
         JSON.stringify(measureTerminalStreamByteLength(sliced, { stopAfterBytes: 15 }))
       )
     }
+
     expect([...observedByteLengths]).toEqual([15])
     expect([...observedExceeded]).toEqual([false])
     expect([...observedMeasurements]).toEqual([
@@ -186,10 +210,12 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
   it('matches the legacy total byte length over every Unicode code point', () => {
     for (let codePoint = 0; codePoint <= 0x10ffff; codePoint += 1) {
       const text = String.fromCodePoint(codePoint)
+
       if (terminalStreamByteLength(text) !== legacyByteLength(text)) {
         throw new Error(`byte length diverged at code point U+${codePoint.toString(16)}`)
       }
     }
+
     expect(terminalStreamByteLength('\u{10ffff}')).toBe(4)
   })
 
@@ -202,34 +228,42 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
 
   it('matches the legacy total byte length over fuzzed mixed and raw UTF-16 input', () => {
     const random = mulberry32(0x5eed01)
+
     for (let iteration = 0; iteration < 20000; iteration += 1) {
       const text = iteration % 2 === 0 ? randomString(random, 24) : rawUtf16(random, 24)
+
       if (terminalStreamByteLength(text) !== legacyByteLength(text)) {
         throw new Error(`byte length diverged for ${JSON.stringify(text)}`)
       }
     }
+
     expect(true).toBe(true)
   })
 
   it('matches the legacy exceededLimit decision across a dense (string, limit) sweep', () => {
     const random = mulberry32(0xc0ffee)
     let compared = 0
+
     for (let iteration = 0; iteration < 10000; iteration += 1) {
       const text = iteration % 2 === 0 ? randomString(random, 16) : rawUtf16(random, 16)
       const total = legacyByteLength(text)
+
       // Sweep every limit from below zero to past the true total so the boundary is hit exactly.
       for (let limit = -2; limit <= total + 2; limit += 1) {
         if (terminalStreamByteLengthExceeds(text, limit) !== legacyExceeds(text, limit)) {
           throw new Error(`exceededLimit diverged for ${JSON.stringify(text)} at limit ${limit}`)
         }
+
         compared += 1
       }
     }
+
     expect(compared).toBeGreaterThan(100000)
   })
 
   it('matches the legacy exceededLimit decision for non-finite and fractional limits', () => {
     const random = mulberry32(0xfeed42)
+
     for (const limit of [
       Number.NaN,
       Number.POSITIVE_INFINITY,
@@ -243,6 +277,7 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
         const text = rawUtf16(random, 12)
         expect(terminalStreamByteLengthExceeds(text, limit)).toBe(legacyExceeds(text, limit))
       }
+
       for (const text of EDGE_STRINGS) {
         expect(terminalStreamByteLengthExceeds(text, limit)).toBe(legacyExceeds(text, limit))
       }
@@ -251,12 +286,15 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
 
   it('matches the legacy measurement pair, byteLength included, across a stopAfterBytes sweep', () => {
     const random = mulberry32(0xa11ce)
+
     for (let iteration = 0; iteration < 3000; iteration += 1) {
       const text = iteration % 2 === 0 ? randomString(random, 20) : rawUtf16(random, 20)
       const total = legacyByteLength(text)
+
       for (let stopAfterBytes = -1; stopAfterBytes <= total + 2; stopAfterBytes += 1) {
         const actual = measureTerminalStreamByteLength(text, { stopAfterBytes })
         const expected = legacyMeasure(text, { stopAfterBytes })
+
         if (
           actual.byteLength !== expected.byteLength ||
           actual.exceededLimit !== expected.exceededLimit
@@ -267,6 +305,7 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
         }
       }
     }
+
     expect(
       measureTerminalStreamByteLength('\u{1f600}\u{1f600}\u{1f600}', { stopAfterBytes: 5 })
     ).toEqual(legacyMeasure('\u{1f600}\u{1f600}\u{1f600}', { stopAfterBytes: 5 }))
@@ -277,11 +316,13 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
     const measurement = measureTerminalStreamByteLength('\u{1f600}\u{1f600}\u{1f600}', {
       stopAfterBytes: 5
     })
+
     expect(measurement).toEqual({ byteLength: 8, exceededLimit: true })
   })
 
   it('matches the legacy measurement with no stopAfterBytes and with an undefined option bag', () => {
     const random = mulberry32(0xb0b)
+
     for (let iteration = 0; iteration < 2000; iteration += 1) {
       const text = rawUtf16(random, 32)
       expect(measureTerminalStreamByteLength(text)).toEqual(legacyMeasure(text))
@@ -296,24 +337,30 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
   // boundary must stay legacy-identical, so sweep it exhaustively rather than by sampling.
   it('matches the legacy result on both sides of the native-call floor', () => {
     const random = mulberry32(0xf100a)
+
     for (let units = 0; units <= MIN_NATIVE_BYTE_LENGTH_CODE_UNITS * 2; units += 1) {
       for (let iteration = 0; iteration < 60; iteration += 1) {
         let text = ''
+
         while (text.length < units) {
           text +=
             iteration % 2 === 0
               ? randomUnit(random)
               : String.fromCharCode(Math.floor(random() * 0x11000))
         }
+
         text = text.slice(0, units)
         const total = legacyByteLength(text)
         expect(terminalStreamByteLength(text)).toBe(total)
+
         for (let limit = -1; limit <= total + 2; limit += 1) {
           if (terminalStreamByteLengthExceeds(text, limit) !== legacyExceeds(text, limit)) {
             throw new Error(`exceeds diverged at ${units} units, limit ${limit}`)
           }
+
           const actual = measureTerminalStreamByteLength(text, { stopAfterBytes: limit })
           const expected = legacyMeasure(text, { stopAfterBytes: limit })
+
           if (
             actual.byteLength !== expected.byteLength ||
             actual.exceededLimit !== expected.exceededLimit
@@ -323,6 +370,7 @@ describe('terminal stream byte length equivalence with the legacy code-point sca
         }
       }
     }
+
     expect(MIN_NATIVE_BYTE_LENGTH_CODE_UNITS).toBeGreaterThan(0)
   })
 })
@@ -340,27 +388,34 @@ function simulateBatcherFlushes(
   const flushes: string[] = []
   let pending: string[] = []
   let bytes = 0
+
   const flush = (): void => {
     if (pending.length === 0) {
       return
     }
+
     flushes.push(pending.join(''))
     pending = []
     bytes = 0
   }
+
   for (const data of chunks) {
     if (!data) {
       continue
     }
+
     pending.push(data)
     const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
     const measurement = measure(data, { stopAfterBytes: remainingBudget })
     bytes += measurement.byteLength
+
     if (measurement.exceededLimit || bytes >= TERMINAL_OUTPUT_BATCH_MAX_BYTES) {
       flush()
     }
   }
+
   flush()
+
   return flushes
 }
 
@@ -370,14 +425,17 @@ describe('terminal output batcher flush boundaries are unchanged', () => {
     { timeout: 60000 },
     () => {
       const random = mulberry32(0x1337)
+
       for (let run = 0; run < 300; run += 1) {
         const chunks: string[] = []
         const chunkCount = 1 + Math.floor(random() * 40)
+
         for (let index = 0; index < chunkCount; index += 1) {
           // Sizes straddle the 64KiB batch cap so single chunks both fit and blow the budget.
           // Sizes straddle the native-call floor too, so runs mix scan-branch and
           // native-branch measurements inside one batcher's byte accounting.
           const scale = random()
+
           const maxUnits =
             scale < 0.25
               ? MIN_NATIVE_BYTE_LENGTH_CODE_UNITS * 2
@@ -386,19 +444,24 @@ describe('terminal output batcher flush boundaries are unchanged', () => {
                 : scale < 0.85
                   ? 20000
                   : 90000
+
           chunks.push(random() < 0.5 ? randomString(random, maxUnits) : rawUtf16(random, maxUnits))
         }
+
         const legacyFlushes = simulateBatcherFlushes(chunks, legacyMeasure)
         const actualFlushes = simulateBatcherFlushes(chunks, measureTerminalStreamByteLength)
+
         if (legacyFlushes.length !== actualFlushes.length) {
           throw new Error(`flush count diverged on run ${run}`)
         }
+
         for (let index = 0; index < legacyFlushes.length; index += 1) {
           if (legacyFlushes[index] !== actualFlushes[index]) {
             throw new Error(`flush ${index} diverged on run ${run}`)
           }
         }
       }
+
       expect(true).toBe(true)
     }
   )
@@ -427,15 +490,19 @@ describe('resync trim byte accounting for a snapshot-sliced chunk', () => {
 
   it('matches the legacy byte length for every suffix slice of multi-byte terminal text', () => {
     const random = mulberry32(0x51ced)
+
     for (let iteration = 0; iteration < 2000; iteration += 1) {
       const data = iteration % 2 === 0 ? randomString(random, 24) : rawUtf16(random, 24)
+
       for (let offset = 0; offset <= data.length; offset += 1) {
         const sliced = data.slice(offset)
+
         if (terminalStreamByteLength(sliced) !== legacyByteLength(sliced)) {
           throw new Error(`sliced byte length diverged for ${JSON.stringify(data)} at ${offset}`)
         }
       }
     }
+
     expect(true).toBe(true)
   })
 })

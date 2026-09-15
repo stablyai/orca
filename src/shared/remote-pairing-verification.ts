@@ -61,7 +61,9 @@ export function verifyRemotePairingRuntimeStatus(
       message: 'The remote host returned an invalid status response.'
     }
   }
+
   const status = value as Partial<RuntimeStatus> & Record<string, unknown>
+
   if (status.deviceScope === 'mobile') {
     return {
       ok: false,
@@ -69,12 +71,14 @@ export function verifyRemotePairingRuntimeStatus(
       message: 'This link grants mobile-only access. Generate a link for another Orca client.'
     }
   }
+
   const versionFields = [
     status.runtimeProtocolVersion,
     status.protocolVersion,
     status.minCompatibleRuntimeClientVersion,
     status.minCompatibleMobileVersion
   ]
+
   if (
     versionFields.some(
       (version) => version !== undefined && (!Number.isSafeInteger(version) || Number(version) < 0)
@@ -86,6 +90,7 @@ export function verifyRemotePairingRuntimeStatus(
       message: 'The remote host returned an invalid protocol version.'
     }
   }
+
   const compatibility = evaluateRuntimeCompat({
     clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
     minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
@@ -93,6 +98,7 @@ export function verifyRemotePairingRuntimeStatus(
     serverMinCompatibleClientProtocolVersion:
       status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
   })
+
   if (compatibility.kind === 'blocked') {
     return {
       ok: false,
@@ -103,6 +109,7 @@ export function verifyRemotePairingRuntimeStatus(
           : 'Update Orca on the remote host before adding it.'
     }
   }
+
   if (!hasValidRuntimeStatusShape(status)) {
     return {
       ok: false,
@@ -110,5 +117,6 @@ export function verifyRemotePairingRuntimeStatus(
       message: 'The remote host returned an invalid status response.'
     }
   }
+
   return { ok: true, runtimeStatus: value as RuntimeStatus }
 }

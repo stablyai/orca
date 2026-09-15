@@ -16,22 +16,30 @@ export function getPtyExecutionHost(ptyId: string | null | undefined): PtyExecut
   if (!ptyId) {
     return null
   }
+
   const ssh = parseAppSshPtyId(ptyId)
+
   if (ssh) {
     const connectionId = ssh.connectionId.trim()
+
     return connectionId && connectionId === ssh.connectionId
       ? toSshExecutionHostId(connectionId)
       : 'foreign'
   }
+
   const remote = parseRemoteRuntimePtyId(ptyId)
+
   if (remote) {
     const environmentId = remote.environmentId?.trim()
+
     return environmentId && environmentId === remote.environmentId
       ? toRuntimeExecutionHostId(environmentId)
       : 'foreign'
   }
+
   if (ptyId.startsWith('ssh:') || ptyId.startsWith('remote:')) {
     return 'foreign'
   }
+
   return null
 }

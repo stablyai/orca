@@ -216,6 +216,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'legacy-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-list-legacy',
         ok: true,
@@ -330,6 +331,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'legacy-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-legacy-list',
         ok: true,
@@ -382,9 +384,12 @@ describe('runtime file client', () => {
           },
           _meta: { runtimeId: 'legacy-runtime' }
         })
+
         return Promise.resolve({ unsubscribe: unsubscribeSearch })
       }
+
       expect(request.method).toBe('files.list')
+
       return Promise.resolve({ unsubscribe: unsubscribeList })
     })
 
@@ -401,6 +406,7 @@ describe('runtime file client', () => {
         signal: controller.signal
       }
     )
+
     await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(2))
 
     controller.abort()
@@ -408,6 +414,7 @@ describe('runtime file client', () => {
     expect(unsubscribeList).toHaveBeenCalledTimes(1)
 
     const retryController = new AbortController()
+
     const retry = searchRuntimeFilePaths(
       {
         settings: { activeRuntimeEnvironmentId: 'env-1' },
@@ -421,6 +428,7 @@ describe('runtime file client', () => {
         signal: retryController.signal
       }
     )
+
     await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(4))
     retryController.abort()
     await expect(retry).rejects.toMatchObject({ name: 'AbortError' })
@@ -436,11 +444,13 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'legacy-runtime' }
         })
       }
+
       const rootPath =
         runtimeEnvironmentCall.mock.calls.filter(([request]) => request.method === 'files.list')
           .length === 1
           ? '/old/root'
           : '/new/root'
+
       return Promise.resolve({
         id: `rpc-list-${rootPath}`,
         ok: true,
@@ -465,6 +475,7 @@ describe('runtime file client', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'folder-1'
     }
+
     await expect(
       searchRuntimeFilePaths({ ...context, worktreePath: '/old/root' }, { query: 'target' })
     ).resolves.toEqual({ files: ['old-target.ts'], truncated: false })
@@ -537,6 +548,7 @@ describe('runtime file client', () => {
       result: [{ relativePath: 'readme.md' }],
       _meta: { runtimeId: 'remote-runtime' }
     })
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',

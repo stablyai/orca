@@ -16,13 +16,17 @@ export function bindStructuredAgentSessionStream(
 ): { isClosed: () => boolean } {
   let closed = false
   let releaseTransportSubscription = (): void => {}
+
   const onTransportAbort = (): void => releaseTransportSubscription()
+
   const cleanup = (): void => {
     closed = true
     ctx.signal?.removeEventListener('abort', onTransportAbort)
     onClose()
   }
+
   let registration: { releaseIfCurrent: () => void }
+
   if (typeof ctx.runtime.registerOwnedSubscriptionCleanup === 'function') {
     registration = ctx.runtime.registerOwnedSubscriptionCleanup(
       subscriptionId,
@@ -33,11 +37,14 @@ export function bindStructuredAgentSessionStream(
     ctx.runtime.registerSubscriptionCleanup(subscriptionId, cleanup, ctx.connectionId)
     registration = { releaseIfCurrent: () => ctx.runtime.cleanupSubscription(subscriptionId) }
   }
+
   releaseTransportSubscription = registration.releaseIfCurrent
   ctx.signal?.addEventListener('abort', onTransportAbort, { once: true })
+
   if (ctx.signal?.aborted) {
     onTransportAbort()
   }
+
   return { isClosed: () => closed }
 }
 
@@ -49,11 +56,15 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
       const host = requireHost(ctx)
       const subscriptionId = structuredAgentSessionStatusSubscriptionId(ctx)
       let dispose = (): void => {}
+
       const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
+
       if (stream.isClosed()) {
         return
       }
+
       dispose = host.subscribeStatus({ id: subscriptionId, emit })
+
       if (stream.isClosed()) {
         dispose()
       }

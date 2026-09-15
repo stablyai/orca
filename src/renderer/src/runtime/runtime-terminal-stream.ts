@@ -31,6 +31,7 @@ export function runtimeTerminalErrorMessage(error: unknown): string {
   if (error instanceof RuntimeRpcCallError) {
     return error.message
   }
+
   return error instanceof Error ? error.message : String(error)
 }
 
@@ -43,21 +44,25 @@ export async function subscribeToRuntimeTerminalData(
 ): Promise<() => void> {
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
     : getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment' || !terminal) {
     return () => {}
   }
 
   let resolveLiveTail: (() => void) | null = null
   let rejectLiveTail: ((error: Error) => void) | null = null
+
   const liveTailReady = options?.startAtLiveTail
     ? new Promise<void>((resolve, reject) => {
         resolveLiveTail = resolve
         rejectLiveTail = reject
       })
     : null
+
   const rejectPendingLiveTail = (message: string): void => {
     rejectLiveTail?.(new Error(message))
     resolveLiveTail = null
@@ -71,6 +76,7 @@ export async function subscribeToRuntimeTerminalData(
       onData: (data) => watcher(data),
       onSnapshot: (data, meta) => {
         options?.onSnapshot?.(data, meta)
+
         if (!options?.startAtLiveTail) {
           if (!options?.onSnapshot) {
             watcher(data)
@@ -102,6 +108,7 @@ export async function subscribeToRuntimeTerminalData(
       () => rejectPendingLiveTail('Timed out waiting for remote terminal live output.'),
       LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS
     )
+
     try {
       // Why: outcome observers must ignore historical snapshots and be armed
       // before the command whose output they classify, including over SSH.

@@ -27,6 +27,7 @@ class FakeIpc {
       this.failNextSend = false
       throw new Error('renderer transport closed')
     }
+
     this.sent.push({ channel, reply })
   }
 
@@ -93,6 +94,7 @@ describe('browser client page renderer preload requests', () => {
 
     requests.subscribe((input) => {
       dispatched.push(input.requestId)
+
       return input.type === 'mountPage'
         ? { type: 'mounted', webContentsId: 41 }
         : { type: 'retired' }
@@ -135,9 +137,11 @@ describe('browser client page renderer preload requests', () => {
   it('lets the latest subscriber take over and fences the replaced callback', async () => {
     const ipc = new FakeIpc()
     const requests = createBrowserClientPageRendererRequests({ ipc, isTopFrame: () => true })
+
     let settleFirst: (value: { type: 'mounted'; webContentsId: number }) => void = () => {
       throw new Error('first subscriber was not dispatched')
     }
+
     requests.subscribe(
       () =>
         new Promise((resolve) => {
@@ -166,10 +170,12 @@ describe('browser client page renderer preload requests', () => {
 
   it('ignores subframes, malformed requests, and duplicate request ids', async () => {
     const subframeIpc = new FakeIpc()
+
     const subframe = createBrowserClientPageRendererRequests({
       ipc: subframeIpc,
       isTopFrame: () => false
     })
+
     expect(subframeIpc.listeners.size).toBe(0)
     expect(() => subframe.subscribe(() => ({ type: 'retired' }))).toThrow(
       'browser_client_page_renderer_top_frame_required'

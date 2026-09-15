@@ -34,6 +34,7 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
       tone: blocker === 'git-status-error' || blocker === 'unknown-base' ? 'destructive' : 'neutral'
     }))
   }
+
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return [
       {
@@ -45,6 +46,7 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
       }
     ]
   }
+
   if (candidate.git.clean === false) {
     return [
       {
@@ -56,6 +58,7 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
       }
     ]
   }
+
   if (candidate.reasons.includes('archived')) {
     return [
       {
@@ -67,6 +70,7 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
       }
     ]
   }
+
   return []
 }
 
@@ -76,6 +80,7 @@ export function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
 
 export function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string[] {
   const details: string[] = []
+
   if (candidate.git.upstreamAhead !== null) {
     details.push(
       candidate.git.upstreamAhead === 0
@@ -83,39 +88,47 @@ export function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate):
         : formatUnpushedCommitCount(candidate.git.upstreamAhead)
     )
   }
+
   return details
 }
 
 export function formatContextDetailLabels(candidate: WorkspaceCleanupCandidate): string[] {
   const parts: string[] = []
+
   if (candidate.localContext.terminalTabCount > 0) {
     parts.push(
       formatWorkspaceCleanupContextDetail('terminal', candidate.localContext.terminalTabCount)
     )
   }
+
   if (candidate.localContext.cleanEditorTabCount > 0) {
     parts.push(
       formatWorkspaceCleanupContextDetail('editor', candidate.localContext.cleanEditorTabCount)
     )
   }
+
   if (candidate.localContext.browserTabCount > 0) {
     parts.push(
       formatWorkspaceCleanupContextDetail('browser', candidate.localContext.browserTabCount)
     )
   }
+
   if (candidate.localContext.diffCommentCount > 0) {
     parts.push(formatWorkspaceCleanupContextDetail('diff', candidate.localContext.diffCommentCount))
   }
+
   if (candidate.localContext.retainedDoneAgentCount > 0) {
     parts.push(
       formatWorkspaceCleanupContextDetail('agent', candidate.localContext.retainedDoneAgentCount)
     )
   }
+
   return parts
 }
 
 export function formatContextDetails(candidate: WorkspaceCleanupCandidate): string | null {
   const parts = formatContextDetailLabels(candidate)
+
   return parts.length > 0 ? parts.join(', ') : null
 }
 
@@ -126,27 +139,34 @@ export function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string |
       'Git status check failed'
     )
   }
+
   if (candidate.blockers.includes('unknown-base')) {
     return translate(
       'components.workspace.cleanup.browse.gitStatusUnverified',
       'Git status could not be verified'
     )
   }
+
   if (candidate.blockers.includes('unpushed-commits')) {
     if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
       return formatUnpushedCommitCount(candidate.git.upstreamAhead)
     }
+
     return getUnpushedCommitsLabel()
   }
+
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return formatUnpushedCommitCount(candidate.git.upstreamAhead)
   }
+
   if (candidate.git.clean === false) {
     return getUncommittedChangesLabel()
   }
+
   if (candidate.git.clean == null) {
     return getGitStatusUnknownLabel()
   }
+
   return null
 }
 
@@ -163,9 +183,11 @@ function hasGitStatusPill(candidate: WorkspaceCleanupCandidate): boolean {
   ) {
     return true
   }
+
   if (candidate.blockers.length > 0) {
     return false
   }
+
   return (candidate.git.upstreamAhead ?? 0) > 0 || candidate.git.clean === false
 }
 

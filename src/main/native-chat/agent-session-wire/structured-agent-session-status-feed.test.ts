@@ -19,12 +19,14 @@ import {
 } from './structured-agent-session-status-feed'
 
 const SESSION = 'status-session'
+
 const TURN_IDENTITY = {
   provider: 'codex',
   threadId: 'thread-1',
   turnId: 'turn-1',
   ordinal: 0
 } as const
+
 const USER_IDENTITY = {
   provider: 'codex',
   threadId: 'thread-1',
@@ -33,6 +35,7 @@ const USER_IDENTITY = {
 } as const
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
@@ -84,6 +87,7 @@ function feedFor(
   statusSink?: StructuredAgentSessionStatusSink
 ) {
   let now = 1_000
+
   const feed = new StructuredAgentSessionStatusFeed({
     ...(onStatusChanged ? { onStatusChanged } : {}),
     ...(statusSink ? { statusSink: () => statusSink } : {}),
@@ -91,6 +95,7 @@ function feedFor(
     sessions: {
       get: (sessionId: string) => {
         const session = sessions.get(sessionId)
+
         return session ? indexed(session) : undefined
       },
       [Symbol.iterator]: function* () {
@@ -102,8 +107,10 @@ function feedFor(
     getRecord: () => record as AgentSessionRecord | null,
     now: () => (now += 1)
   })
+
   const events: AgentSessionStatusEvent[] = []
   const dispose = feed.subscribe({ id: 'list-1', emit: (event) => events.push(event) })
+
   return { feed, events, dispose }
 }
 
@@ -125,9 +132,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
     })
     const firstStatus = events.at(-1)
     expect(firstStatus?.type).toBe('status')
+
     if (firstStatus?.type !== 'status') {
       throw new Error('status publication missing')
     }
+
     const journalTime = firstStatus.session.updatedAt
     sessions.get(SESSION)!.hasProviderChild = false
     feed.publish(SESSION, journal)
@@ -137,9 +146,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
     })
     const secondStatus = events.at(-1)
     expect(secondStatus?.type).toBe('status')
+
     if (secondStatus?.type === 'status') {
       expect(secondStatus.session).not.toHaveProperty('hostExecutionOwned')
     }
+
     dispose()
   })
 
@@ -335,6 +346,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       { fence: 1 }
     )
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
+
     for (let revision = 1; revision <= 20; revision += 1) {
       now += 1
       await journal.appendItem(
@@ -344,6 +356,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
       )
       feed.publish(SESSION)
     }
+
     expect(events).toHaveLength(1)
     now = 200
     await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
@@ -357,10 +370,12 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('carries the record model and the running tool line the sidebar row shows', async () => {
     const journal = await openJournal()
+
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), {
       options: { model: 'gpt-5-codex' },
       providerHandleChain: []
     })
+
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run the tests' }] },
@@ -502,9 +517,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
   it('reports each projection change to the host observer, marking re-projections as replay', async () => {
     const journal = await openJournal()
     const seen: { status: string | null; prompt: string; replay: boolean }[] = []
+
     const { feed } = feedFor(new Map([[SESSION, { journal }]]), null, (summary, options) =>
       seen.push({ status: summary.status, prompt: summary.latestPrompt, replay: options.replay })
     )
+
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fix the auth bug' }] },
@@ -544,10 +561,13 @@ describe('StructuredAgentSessionStatusFeed', () => {
         { fence: 1 }
       )
       const seen: (string | null)[] = []
+
       const { feed } = feedFor(new Map([[SESSION, { journal }]]), null, (summary) =>
         seen.push(summary.status)
       )
+
       const deferred = createDeferredStructuredAgentSessionEventSink()
+
       if (agent === 'claude') {
         const translator = createClaudeJournalTranslator({ sink: deferred.sink })
         translator.handle({
@@ -586,9 +606,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
           })
         }
       }
+
       for (let index = 0; index < 100; index++) {
         deferred.sink.publish()
       }
+
       // This queue is also reached while a previous asynchronous journal write is pending.
       let publications = 0
       let activityPublications = 0
@@ -601,6 +623,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
           } else {
             activityPublications += 1
           }
+
           feed.publish(SESSION, journal)
         }
       })
@@ -615,9 +638,11 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('keeps publishing to subscribers when the host observer throws', async () => {
     const journal = await openJournal()
+
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, () => {
       throw new Error('observer exploded')
     })
+
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
@@ -645,14 +670,17 @@ describe('StructuredAgentSessionStatusFeed', () => {
     )
     const snapshot = vi.spyOn(journal, 'snapshot')
     let taskState: 'working' | 'waiting' = 'working'
+
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
       state: 'monitoring',
       tasks: [{ id: 'child', kind: 'agent', state: taskState }]
     }))
+
     for (let tick = 1; tick <= 100; tick++) {
       taskState = tick % 2 === 1 ? 'waiting' : 'working'
       feed.publish(SESSION)
     }
+
     expect(events).toHaveLength(101)
     expect(snapshot).toHaveBeenCalledTimes(1)
     expect(events.at(-1)).toMatchObject({
@@ -690,13 +718,16 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('projects live background tasks and republishes a task-only state change', async () => {
     const journal = await openJournal()
+
     let tasks = [
       { id: 'task-1', kind: 'agent' as const, name: 'deep_review', state: 'working' as const }
     ]
+
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
       state: 'monitoring',
       tasks
     }))
+
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
@@ -729,13 +760,16 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('omits task usage so a progress tick never re-broadcasts the summary', async () => {
     const journal = await openJournal()
+
     let tasks: AgentSessionBackgroundTask[] = [
       { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', totalTokens: 10 }
     ]
+
     const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
       state: 'monitoring',
       tasks
     }))
+
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
@@ -783,10 +817,12 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
   function sinkFor() {
     const published: AgentSessionStatusSummary[] = []
     const forgotten: string[] = []
+
     const sink: StructuredAgentSessionStatusSink = {
       publish: (summary) => published.push(summary),
       forget: (sessionId) => forgotten.push(sessionId)
     }
+
     return { sink, published, forgotten }
   }
 
@@ -831,6 +867,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
 
   it('keeps publishing to subscribers when the sink throws', async () => {
     const journal = await openJournal()
+
     const sink: StructuredAgentSessionStatusSink = {
       publish: () => {
         throw new Error('store down')
@@ -839,6 +876,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
         throw new Error('store down')
       }
     }
+
     const { feed, events } = feedFor(
       new Map([[SESSION, { journal }]]),
       null,
@@ -846,6 +884,7 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
       undefined,
       sink
     )
+
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },

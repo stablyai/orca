@@ -36,6 +36,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'add a migration' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('copilot')
     expect(result?.payload.prompt).toBe('add a migration')
@@ -47,17 +48,20 @@ describe('Copilot hook normalization', () => {
       buildBody({ hook_event_name: 'userPromptSubmitted', prompt: 'camel event' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('camel event')
   })
 
   it('captures the Copilot provider session from SessionStart and Stop', () => {
     const sessionId = '940237d9-c712-48e8-bca1-fd75fc4a8d4b'
+
     const started = _internals.normalizeHookPayload(
       'copilot',
       buildBody({ hook_event_name: 'SessionStart', session_id: sessionId }),
       'production'
     )
+
     expect(started?.providerSession).toEqual({ key: 'session_id', id: sessionId })
 
     const stopped = _internals.normalizeHookPayload(
@@ -65,6 +69,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ hook_event_name: 'Stop', session_id: sessionId }),
       'production'
     )
+
     expect(stopped?.payload.state).toBe('done')
     expect(stopped?.providerSession).toEqual({ key: 'session_id', id: sessionId })
   })
@@ -75,6 +80,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ hookEventName: 'agentStop', sessionId: 'copilot-camel' }),
       'production'
     )
+
     expect(result?.providerSession).toEqual({ key: 'session_id', id: 'copilot-camel' })
   })
 
@@ -84,6 +90,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ prompt: 'raw prompt payload' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('raw prompt payload')
   })
@@ -94,6 +101,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ initialPrompt: 'first prompt' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('first prompt')
   })
@@ -108,6 +116,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('bash')
     expect(result?.payload.toolInput).toBe('pnpm test')
@@ -123,6 +132,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     const failed = _internals.normalizeHookPayload(
       'copilot',
       buildBody({
@@ -133,6 +143,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
     expect(failed?.payload).toMatchObject({
       state: 'working',
@@ -148,6 +159,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ prompt: 'ask me a question' }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'copilot',
       buildBody({
@@ -160,6 +172,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('blocked')
     expect(result?.payload.prompt).toBe('ask me a question')
     expect(result?.payload.toolName).toBe('ask_user')
@@ -177,6 +190,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('bash')
     expect(result?.payload.toolInput).toBe('rm -rf /tmp/orca-test')
@@ -192,6 +206,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('edit')
     expect(result?.payload.toolInput).toBe('/repo/src/app.ts')
   })
@@ -207,6 +222,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('blocked')
     expect(result?.payload.lastAssistantMessage).toBe('Allow Bash to run?')
   })
@@ -217,6 +233,7 @@ describe('Copilot hook normalization', () => {
       buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'deploy the app' }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'copilot',
       buildBody({
@@ -226,6 +243,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('blocked')
     expect(result?.payload.prompt).toBe('deploy the app')
     expect(result?.payload.lastAssistantMessage).toBe('Which environment?')
@@ -242,6 +260,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('blocked')
     expect(result?.payload.lastAssistantMessage).toBe('Which deployment target should I use?')
   })
@@ -256,6 +275,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'copilot',
       buildBody({
@@ -266,6 +286,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.lastAssistantMessage).toBe('build passed')
   })
@@ -273,6 +294,7 @@ describe('Copilot hook normalization', () => {
   it('Stop reads the final assistant message from Copilot transcript events', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-copilot-transcript-'))
     const transcriptPath = join(tmpDir, 'events.jsonl')
+
     try {
       const lines = [
         {
@@ -287,6 +309,7 @@ describe('Copilot hook normalization', () => {
           data: { content: 'Done - tests pass now.', toolRequests: [] }
         }
       ]
+
       writeFileSync(transcriptPath, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
 
       const result = _internals.normalizeHookPayload(
@@ -308,16 +331,19 @@ describe('Copilot hook normalization', () => {
       buildBody({ hook_event_name: 'somethingElse' }),
       'production'
     )
+
     expect(result).toBeNull()
   })
 
   it('accepts authenticated HTTP posts on /hook/copilot', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
       server.setListener(listener)
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
@@ -347,6 +373,7 @@ describe('Copilot hook normalization', () => {
     const transcriptPath = join(tmpDir, 'events.jsonl')
     writeFileSync(transcriptPath, '')
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
@@ -365,6 +392,7 @@ describe('Copilot hook normalization', () => {
           })
         )
       })
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
@@ -430,6 +458,7 @@ describe('Copilot hook normalization', () => {
     vi.stubEnv('HOME', tmpDir)
     vi.stubEnv('USERPROFILE', tmpDir)
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
@@ -443,6 +472,7 @@ describe('Copilot hook normalization', () => {
         },
         body: JSON.stringify(buildBody({ hookEventName: 'user_prompt_submit', prompt: 'hihi' }))
       })
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
         method: 'POST',
         headers: {

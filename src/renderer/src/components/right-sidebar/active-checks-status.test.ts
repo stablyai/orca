@@ -177,15 +177,18 @@ describe('getActiveChecksStatus caching', () => {
     // computation touches on the state object must invalidate the cache.
     const reads = new Set<PropertyKey>()
     const keyed = new Set<PropertyKey>(ACTIVE_CHECKS_STATUS_INPUT_KEYS)
+
     const state = new Proxy(
       makeState({ 'repo-1::feature/test': { data: makePR('success'), fetchedAt: 2 } }),
       {
         get(target, prop, receiver) {
           reads.add(prop)
+
           return Reflect.get(target, prop, receiver)
         },
         has(target, prop) {
           reads.add(prop)
+
           return Reflect.has(target, prop)
         }
       }

@@ -40,6 +40,7 @@ vi.mock('@/store', () => ({
     if (!mocks.store.current) {
       throw new Error('Store state was not installed')
     }
+
     return selector(mocks.store.current)
   }
 }))
@@ -49,6 +50,7 @@ vi.mock('./source-control-preflight-card-status', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderCard(card: React.ReactNode): Promise<HTMLDivElement> {
@@ -58,6 +60,7 @@ async function renderCard(card: React.ReactNode): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(card)
   })
+
   return container
 }
 
@@ -68,6 +71,7 @@ describe('CLI source-control integration card account scope', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null

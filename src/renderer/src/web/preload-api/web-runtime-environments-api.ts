@@ -36,13 +36,16 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
     list: async () => {
       const environment = requireActiveEnvironmentOrNull()
+
       return environment ? [redactStoredWebRuntimeEnvironment(environment)] : []
     },
     addFromPairingCode: async ({ name, pairingCode }) => {
       const offer = parseWebPairingInput(pairingCode)
+
       if (!offer) {
         throw new Error('Invalid Orca pairing code.')
       }
+
       const previousEnvironment = webRuntimeState.activeEnvironment
       closeActiveRuntimeClients()
       webRuntimeState.activeEnvironment = createStoredWebRuntimeEnvironment({
@@ -52,10 +55,12 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       })
       manuallyDisconnectedEnvironmentIds.clear()
       saveStoredWebRuntimeEnvironment(webRuntimeState.activeEnvironment)
+
       return { environment: redactStoredWebRuntimeEnvironment(webRuntimeState.activeEnvironment) }
     },
     verifyAndAddFromPairingCode: async ({ name, pairingCode, allowLoopback }) => {
       const parsed = parseHostAccessLink(pairingCode)
+
       if (!parsed.ok) {
         return {
           ok: false,
@@ -63,6 +68,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           message: translateHostAccessLinkError(parsed.kind)
         }
       }
+
       if (parsed.value.endpointKind === 'loopback' && !allowLoopback) {
         return {
           ok: false,
@@ -73,13 +79,17 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           )
         }
       }
+
       let client: WebRuntimeClient | null = null
       let runtimeStatus: RuntimeStatus
+
       try {
         client = new WebRuntimeClient(parsed.value.pairing)
+
         const response = (await client.call('status.get', undefined, {
           timeoutMs: 15_000
         })) as RuntimeRpcResponse<RuntimeStatus>
+
         if (!response.ok) {
           return {
             ok: false,
@@ -87,10 +97,13 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
             message: response.error.message
           }
         }
+
         const statusVerification = verifyRemotePairingRuntimeStatus(response.result)
+
         if (!statusVerification.ok) {
           return statusVerification
         }
+
         runtimeStatus = statusVerification.runtimeStatus
       } catch (error) {
         if (error instanceof Error && error.message.startsWith('Invalid public key')) {
@@ -103,6 +116,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
             )
           }
         }
+
         if (
           isWebRuntimeUnauthorizedError(error) ||
           (error instanceof Error && error.message.startsWith('Unauthorized.'))
@@ -113,6 +127,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
             message: error.message
           }
         }
+
         return {
           ok: false,
           kind: 'host-unreachable',
@@ -125,7 +140,9 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       } finally {
         client?.close()
       }
+
       const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
+
       const nextEnvironment = {
         ...createStoredWebRuntimeEnvironment({
           name,
@@ -135,6 +152,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         }),
         ...(runtimeStatus.pairedDeviceId ? { pairedDeviceId: runtimeStatus.pairedDeviceId } : {})
       }
+
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         saveStoredWebRuntimeEnvironment(nextEnvironment)
@@ -148,6 +166,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
           )
         }
       }
+
       manuallyDisconnectedEnvironmentIds.clear()
       closeActiveRuntimeClients()
       webRuntimeState.activeEnvironment = nextEnvironment
@@ -157,6 +176,7 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         result: runtimeStatus,
         _meta: { runtimeId: runtimeStatus.runtimeId }
       })
+
       return {
         ok: true,
         environment: redactStoredWebRuntimeEnvironment(nextEnvironment),
@@ -167,24 +187,30 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
     remove: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
+
       if (webRuntimeState.activeEnvironment?.id === environment.id) {
         removeActiveRuntimeEnvironment()
       }
+
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
+
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
     disconnect: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
+
       if (webRuntimeState.activeEnvironment?.id === environment.id) {
         manuallyDisconnectedEnvironmentIds.add(environment.id)
         disconnectActiveRuntimeEnvironment()
       }
+
       return { disconnected: redactStoredWebRuntimeEnvironment(environment) }
     },
     connect: ({ selector, timeoutMs }) => {
       const environment = resolveEnvironment(selector)
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       closeActiveRuntimeClients()
+
       return callEnvironmentEnvelope<RuntimeStatus>(
         environment.id,
         'status.get',
@@ -204,10 +230,12 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
       const subscription = await client.subscribe(method, params, callbacks, { timeoutMs })
+
       if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
         subscription.unsubscribe()
         throw new Error('runtime_manually_disconnected')
       }
+
       return subscription
     }
   }

@@ -12,6 +12,7 @@ const { filePublicationFailures } = vi.hoisted(() => ({
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
@@ -19,6 +20,7 @@ vi.mock('node:fs', async (importOriginal) => {
         filePublicationFailures.copy -= 1
         throw Object.assign(new Error('copy unsupported'), { code: 'ENOTSUP' })
       }
+
       return actual.copyFileSync(...args)
     },
     linkSync: (...args: Parameters<typeof actual.linkSync>) => {
@@ -26,6 +28,7 @@ vi.mock('node:fs', async (importOriginal) => {
         filePublicationFailures.link -= 1
         throw Object.assign(new Error('link unsupported'), { code: 'ENOTSUP' })
       }
+
       return actual.linkSync(...args)
     },
     renameSync: (...args: Parameters<typeof actual.renameSync>) => {
@@ -33,10 +36,12 @@ vi.mock('node:fs', async (importOriginal) => {
         actual.writeFileSync(args[0], filePublicationFailures.replaceBeforeRename, { mode: 0o755 })
         filePublicationFailures.replaceBeforeRename = ''
       }
+
       return actual.renameSync(...args)
     }
   }
 })
+
 import {
   publishAppImageLauncherEndpoint,
   resolveAppImageLauncherEndpointPath,
@@ -55,6 +60,7 @@ afterEach(async () => {
 async function makeFixture(): Promise<string> {
   const cacheRootPath = await mkdtemp(join(tmpdir(), 'orca-stable-appimage-launcher-'))
   created.push(cacheRootPath)
+
   return cacheRootPath
 }
 

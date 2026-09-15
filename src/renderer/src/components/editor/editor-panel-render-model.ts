@@ -47,16 +47,19 @@ export function getEditorPanelRenderModel({
     activeFile.diffSource !== 'combined-uncommitted' &&
     activeFile.diffSource !== 'combined-branch' &&
     activeFile.diffSource !== 'combined-commit'
+
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-all' ||
       activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
+
   const resolvedLanguage =
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
       : detectLanguage(activeFile.filePath)
+
   // Why: an AI Vault View Log tab must show the exact raw bytes read-only. A
   // rich/preview/mermaid/csv/notebook renderer would depart from raw text (and
   // can look editable), so neutralize specialized viewers + view-mode chrome
@@ -67,6 +70,7 @@ export function getEditorPanelRenderModel({
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
+
   const matchingWorktreeEntry =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'staged' || activeFile.diffSource === 'unstaged')
@@ -78,57 +82,72 @@ export function getEditorPanelRenderModel({
               : entry.area === 'unstaged')
         ) ?? null)
       : null
+
   const matchingBranchEntry =
     activeFile.mode === 'diff' && activeFile.diffSource === 'branch'
       ? (branchEntries.find((entry) => entry.path === activeFile.relativePath) ?? null)
       : null
+
   const openFileState = getEditorHeaderOpenFileState(
     activeFile,
     matchingWorktreeEntry,
     matchingBranchEntry
   )
+
   const markdownViewModes = getMarkdownViewModes({
     language: viewerLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
+
   const hasViewModeToggle = markdownViewModes.length > 0
+
   const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
     language: viewerLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
+
   const storedMarkdownViewMode = markdownViewMode[activeFile.id]
+
   const mdViewMode: MarkdownViewMode =
     hasViewModeToggle &&
     storedMarkdownViewMode !== undefined &&
     markdownViewModes.includes(storedMarkdownViewMode)
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
+
   const editorToggleModes = getEditorToggleModes({
     language: viewerLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
+
   const isBinaryEditSurface =
     activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
+
   const availableEditorToggleModes =
     isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
       ? editorToggleModes.filter((mode) => mode !== 'changes')
       : editorToggleModes
+
   const effectiveToggleValue: EditorToggleValue = isChangesMode
     ? 'changes'
     : hasViewModeToggle
       ? mdViewMode
       : 'edit'
+
   const inlineMarkdownContent =
     activeFile.mode === 'edit'
       ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
       : null
+
   const shouldShowMarkdownExportAction =
     viewerLanguage === 'markdown' &&
     (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
+
   const inlineFileContent = activeFile.mode === 'edit' ? fileContents[activeFile.id] : undefined
+
   const canRenderInlineMarkdown =
     viewerLanguage === 'markdown' &&
     activeFile.mode === 'edit' &&
@@ -139,15 +158,19 @@ export function getEditorPanelRenderModel({
     !inlineFileContent.loadError &&
     activeFile.conflict?.kind !== 'conflict-placeholder' &&
     activeFile.conflict?.conflictStatus !== 'unresolved'
+
   let inlineMarkdownRenderState: MarkdownRenderState | null = null
+
   if (canRenderInlineMarkdown) {
     const shouldClassifyRichMode = mdViewMode === 'rich'
+
     const richModeEligibility = shouldClassifyRichMode
       ? getCachedMarkdownRichModeEligibility({
           content: inlineMarkdownContent,
           sizeOverridden: markdownRichModeSizeOverridden
         })
       : null
+
     const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null
     inlineMarkdownRenderState = {
       renderMode: getMarkdownRenderMode({
@@ -158,6 +181,7 @@ export function getEditorPanelRenderModel({
       richModeUnsupportedMessage
     }
   }
+
   const canExportMarkdownToPdf =
     shouldShowMarkdownExportAction &&
     ((activeFile.mode === 'markdown-preview' &&
@@ -172,6 +196,7 @@ export function getEditorPanelRenderModel({
         fileContents[activeFile.id]?.isBinary !== true &&
         !fileContents[activeFile.id]?.loadError &&
         activeFile.conflict?.conflictStatus !== 'unresolved'))
+
   return {
     isSingleDiff,
     isDiffSurface: isSingleDiff || isChangesMode,

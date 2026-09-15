@@ -125,6 +125,7 @@ describe('hydrateWorkspaceSession canonical terminal rows', () => {
         repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
       }
     })
+
     const makeSleepingRecord = (tabId: string): SleepingAgentSessionRecord => ({
       paneKey: `${tabId}:${leafId}`,
       tabId,

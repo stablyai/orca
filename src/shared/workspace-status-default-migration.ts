@@ -26,6 +26,7 @@ const LEGACY_TODO_FIRST_DEFAULT_STATUS_IDS = [
   'in-review',
   'completed'
 ] as const
+
 const WORKFLOW_DEFAULT_STATUS_IDS = ['completed', 'in-review', 'in-progress', 'todo'] as const
 
 function isLegacyDefaultStatusPayload(
@@ -36,13 +37,16 @@ function isLegacyDefaultStatusPayload(
   if (!Array.isArray(value) || value.length !== orderedIds.length) {
     return false
   }
+
   return value.every((rawStatus, index) => {
     if (!rawStatus || typeof rawStatus !== 'object' || Array.isArray(rawStatus)) {
       return false
     }
+
     const raw = rawStatus as Record<string, unknown>
     const expectedId = orderedIds[index]!
     const expectedVisual = visuals[expectedId]
+
     return (
       Object.keys(raw).length === 4 &&
       raw.id === expectedId &&

@@ -38,12 +38,15 @@ const UNHIDDEN_SPAWNER_PIN = 64
 
 const CHILD_PROCESS_IMPORT =
   /from\s+['"](?:node:)?child_process['"]|require\(\s*['"](?:node:)?child_process['"]/
+
 // Includes the promisified and renamed spellings -- `execAsync`, `spawnDetached`,
 // `execFileCb` -- because a plain-name regex misses a `promisify(exec)` or an
 // `import { spawn as sp }`, and those are real spawns.
 const SPAWN_CALL =
   /\b(?:spawn|spawnSync|spawnDetached|execFile|execFileSync|execFileAsync|execFileCb|exec|execSync|execAsync)\s*\(/g
+
 const SOURCE_ROOT = resolve(__dirname, '../..')
+
 /**
  * `run-process.ts` is the chokepoint: the flag comes from `resolveSpawn` (now
  * in `spawn-resolution.ts`), not from the call, so scanning it flags its own
@@ -59,26 +62,32 @@ const OWNER_FILE = 'shared/child-process/run-process.ts'
 /** The call's argument text, brace-matched so a nested options literal stays whole. */
 function readCallArguments(source: string, openParenIndex: number): string {
   let depth = 0
+
   for (let index = openParenIndex; index < source.length; index += 1) {
     if (source[index] === '(') {
       depth += 1
     } else if (source[index] === ')') {
       depth -= 1
+
       if (depth === 0) {
         return source.slice(openParenIndex, index)
       }
     }
   }
+
   return source.slice(openParenIndex)
 }
 
 function findOffenders(): string[] {
   const offenders = new Set<string>()
+
   for (const file of scanSourceTree(SOURCE_ROOT)) {
     if (file.relativePath === OWNER_FILE) {
       continue
     }
+
     const decommented = stripComments(file.source)
+
     // Resolve `import { spawn as sp }` so a renamed binding is still a spawn.
     // The previous comment claimed this; only three names were hardcoded.
     const aliases = [
@@ -86,11 +95,14 @@ function findOffenders(): string[] {
         /\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g
       )
     ].map((match) => match[1]!)
+
     // Names that resolve to `exec`/`execSync`, which imply shell: true.
     const shellImplying = new Set(['exec', 'execSync'])
+
     for (const match of decommented.matchAll(/\b(exec|execSync)\s+as\s+(\w+)/g)) {
       shellImplying.add(match[2]!)
     }
+
     // `const run = promisify(execFile)` mints a third name, and it can wrap a
     // renamed binding, so this has to run after the aliases are known. A
     // planted `promisify(renamedExecFile)` spawn passed the guard without it.
@@ -99,38 +111,47 @@ function findOffenders(): string[] {
       /(?:const|let|var)\s+(\w+)\s*=\s*\w*[Pp]romisify\s*\(\s*(\w+)\s*\)/g
     )) {
       const wrapped = match[2]!
+
       if (
         aliases.includes(wrapped) ||
         /^(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)$/.test(wrapped)
       ) {
         aliases.push(match[1]!)
+
         if (shellImplying.has(wrapped)) {
           shellImplying.add(match[1]!)
         }
       }
     }
+
     // The import test needs the module name, which blanking would erase; the
     // call scan needs parens inside strings neutralised. Two views, one file.
     if (!CHILD_PROCESS_IMPORT.test(decommented)) {
       continue
     }
+
     // Fail closed: if the lexer lost its bearings, the scan below cannot be
     // trusted, so the file counts as an offender rather than as clean.
     if (blankStringContentsDesynced(decommented)) {
       offenders.add(file.relativePath)
       continue
     }
+
     const source = blankStringContents(decommented)
+
     const calls = aliases.length
       ? new RegExp(`${SPAWN_CALL.source}|\\b(?:${aliases.join('|')})\\s*\\(`, 'g')
       : SPAWN_CALL
+
     for (const match of source.matchAll(calls)) {
       const args = readCallArguments(source, match.index + match[0].length - 1)
+
       // `exec(command: string, …)` is a declaration. Require a type after the
       // colon: `exec(useAlt ? 'a' : 'b', …)` is a call and was being skipped.
       if (/^\(\s*\w+\s*\??\s*:\s*[A-Za-z{[(]/.test(args)) {
         continue
       }
+
       // `shell: true` silently makes windowsHide a no-op (run-process.ts,
       // #14543), and `exec`/`execSync` imply it. A site can therefore read as
       // guarded while still flashing a conhost -- which is exactly how
@@ -148,11 +169,13 @@ function findOffenders(): string[] {
       // computed `shell:` exists in the tree today; if one appears, resolve it
       // rather than widening this regex.
       const impliesShell = shellImplying.has(called) || /shell\s*:\s*true/.test(args)
+
       if (!/windowsHide\s*:\s*true/.test(args) || impliesShell) {
         offenders.add(file.relativePath)
       }
     }
   }
+
   return [...offenders].sort()
 }
 

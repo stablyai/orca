@@ -14,6 +14,7 @@ import {
  * and trivial to state here.
  */
 const ALT_ON = '\x1b[?1049h'
+
 const ALT_OFF = '\x1b[?1049l'
 
 describe('lastAlternateScreenTransition', () => {
@@ -62,6 +63,7 @@ describe('sshReconnectPaintsFromModel', () => {
     // Key presence, not a default parameter: `replay: undefined` is a case under test — "no tail to
     // degrade to" — and a default would silently turn it back into a replay.
     const replay = 'replay' in overrides ? overrides.replay : 'some output'
+
     return {
       snapshot: { alternateScreen: true } as { alternateScreen?: boolean } | null,
       altFrameWouldBeSkipped: false,

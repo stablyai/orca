@@ -17,6 +17,7 @@ const mockTransport = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   return {
     ActivityIndicator: 'ActivityIndicator',
     FlatList: (props: {
@@ -111,9 +112,11 @@ async function renderExplorer(): Promise<ReactTestRenderer> {
       })
     )
   })
+
   if (!renderer) {
     throw new Error('MobileFileExplorerPanel did not render')
   }
+
   return renderer
 }
 
@@ -137,9 +140,11 @@ async function pressByLabel(
   const pressable = renderer.root
     .findAllByType('Pressable')
     .find((node) => node.props.accessibilityLabel === accessibilityLabel)
+
   if (!pressable) {
     throw new Error(`Unable to find pressable: ${accessibilityLabel}`)
   }
+
   await act(async () => {
     pressable.props.onPress()
   })
@@ -165,6 +170,7 @@ describe('MobileFileExplorerPanel', () => {
       '': [entry('src', true), entry('README.md')],
       src: [entry('app.ts'), entry('components', true)]
     })
+
     mockTransport.client = client
 
     const renderer = await renderExplorer()
@@ -193,6 +199,7 @@ describe('MobileFileExplorerPanel', () => {
     const client = createMockClient({
       '': [entry('src', true), entry('README.md')]
     })
+
     mockTransport.client = client
 
     const renderer = await renderExplorer()
@@ -212,6 +219,7 @@ describe('MobileFileExplorerPanel', () => {
     const client = createMockClient({
       '': [entry('src', true), entry('README.md')]
     })
+
     mockTransport.client = client
 
     const renderer = await renderExplorer()
@@ -222,6 +230,7 @@ describe('MobileFileExplorerPanel', () => {
     await updateExplorer(renderer)
 
     let resolveReload: ((response: RpcResponse) => void) | undefined
+
     const reconnectedClient: MockClient = {
       sendRequest: vi.fn(
         () =>
@@ -230,6 +239,7 @@ describe('MobileFileExplorerPanel', () => {
           })
       )
     }
+
     mockTransport.client = reconnectedClient
     mockTransport.connectionState = 'connected'
     await updateExplorer(renderer)
@@ -248,6 +258,7 @@ describe('MobileFileExplorerPanel', () => {
     const client = createMockClient({
       '': [entry('src', true), entry('README.md')]
     })
+
     mockTransport.client = client
 
     const renderer = await renderExplorer()
@@ -262,6 +273,7 @@ describe('MobileFileExplorerPanel', () => {
         throw new Error('refresh failed')
       })
     }
+
     mockTransport.client = failingClient
     mockTransport.connectionState = 'connected'
     await updateExplorer(renderer)
@@ -286,6 +298,7 @@ describe('MobileFileExplorerPanel', () => {
             _meta: { runtimeId: 'runtime-id' }
           }
         }
+
         return {
           id: 'response-id',
           ok: true,
@@ -301,6 +314,7 @@ describe('MobileFileExplorerPanel', () => {
         }
       })
     }
+
     mockTransport.client = legacyClient
 
     const renderer = await renderExplorer()
@@ -329,6 +343,7 @@ describe('MobileFileExplorerPanel', () => {
             _meta: { runtimeId: 'runtime-id' }
           }
         }
+
         return {
           id: 'response-id',
           ok: true,
@@ -341,6 +356,7 @@ describe('MobileFileExplorerPanel', () => {
         }
       })
     }
+
     mockTransport.client = legacyClient
 
     const renderer = await renderExplorer()
@@ -363,6 +379,7 @@ describe('MobileFileExplorerPanel', () => {
             _meta: { runtimeId: 'runtime-id' }
           }
         }
+
         return {
           id: 'response-id',
           ok: false,
@@ -371,6 +388,7 @@ describe('MobileFileExplorerPanel', () => {
         }
       })
     }
+
     mockTransport.client = legacyClient
 
     const renderer = await renderExplorer()

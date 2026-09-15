@@ -94,6 +94,7 @@ describe('ArtifactsSettingsPane', () => {
 
   it('shows reconnect and connecting states', () => {
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'reconnect-required' }
+
     const { rerender } = render(
       <ArtifactsSettingsPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
     )
@@ -153,6 +154,7 @@ describe('ArtifactsSettingsPane', () => {
   it('grants and revokes the publish capability through the toggle', async () => {
     const user = userEvent.setup()
     const updateSettings = vi.fn()
+
     const { rerender } = render(
       <ArtifactsSettingsPane
         settings={{ ...getDefaultSettings('/tmp'), artifactSharingEnabled: false }}

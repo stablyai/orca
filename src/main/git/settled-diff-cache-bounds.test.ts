@@ -26,6 +26,7 @@ function diffOfSize(characters: number): GitDiffResult {
 describe('SettledDiffCache bounds', () => {
   it('evicts the least recently used entry past the entry cap', () => {
     const cache = new SettledDiffCache()
+
     for (let index = 0; index <= MAX_SETTLED_DIFF_CACHE_ENTRIES; index += 1) {
       cache.set(`key-${index}`, settledStamp(`stamp-${index}`), diffOfSize(1), cache.beginRead())
     }
@@ -43,6 +44,7 @@ describe('SettledDiffCache bounds', () => {
   it('keeps a re-read entry alive by refreshing its LRU position', () => {
     const cache = new SettledDiffCache()
     cache.set('hot', settledStamp('hot-stamp'), diffOfSize(1), cache.beginRead())
+
     for (let index = 0; index < MAX_SETTLED_DIFF_CACHE_ENTRIES; index += 1) {
       cache.get('hot', settledStamp('hot-stamp'))
       cache.set(`cold-${index}`, settledStamp(`cold-${index}`), diffOfSize(1), cache.beginRead())

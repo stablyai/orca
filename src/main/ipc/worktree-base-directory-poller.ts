@@ -39,16 +39,21 @@ export function createWorktreePollerWindowVisibility(
   // window visible at least once. null/destroyed (serve/headless, macOS window-recreation
   // gap) stay always-visible so a torn-down window never permanently parks the poller.
   let hasBeenVisible = false
+
   return {
     isWindowVisible: () => {
       const window = getWindow()
+
       if (window === null || window.isDestroyed()) {
         return true
       }
+
       if (isMainWindowVisible(window)) {
         hasBeenVisible = true
+
         return true
       }
+
       return !hasBeenVisible
     },
     onWindowBecameVisible: onMainWindowBecameVisible
@@ -95,6 +100,7 @@ export async function startWorktreeBaseDirectoryPoller(
   const pollIntervalMs = options.pollIntervalMs ?? WORKTREE_BASE_POLL_INTERVAL_MS
   const platform = options.platform ?? process.platform
   const visibility = options.visibility ?? alwaysVisible
+
   if (target.kind === 'git-common') {
     return startGitCommonWatch(
       target,
@@ -108,5 +114,6 @@ export async function startWorktreeBaseDirectoryPoller(
       options.onOverflow
     )
   }
+
   return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options)
 }

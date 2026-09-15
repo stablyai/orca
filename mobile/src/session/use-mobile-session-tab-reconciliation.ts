@@ -42,9 +42,11 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     terminalInventoryRecoveryScope,
     registerTerminalInventoryRecoveryAction
   } = scope
+
   const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
     null
   )
+
   const consumeAcceptedSessionTabs = useCallback(
     (
       _result: SessionTabsResult,
@@ -64,9 +66,11 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         markActiveMarkdownStale: (tabId) => {
           setMarkdownDocs((prev) => {
             const current = prev.get(tabId)
+
             if (current?.status !== 'ready' || current.isDirty) {
               return prev
             }
+
             return new Map(prev).set(tabId, { ...current, stale: true })
           })
         }
@@ -74,6 +78,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     },
     []
   )
+
   const hasSessionTabsRecoveryNeed = useCallback(
     () =>
       closedTabTombstonesRef.current.size > 0 ||
@@ -85,14 +90,17 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       nativeChatStream.hasTabsRecoveryNeed(),
     [nativeChatStream]
   )
+
   const getSessionTabsApplicationRevision = useCallback(
     () => appliedSessionTabsRevisionRef.current,
     []
   )
+
   const pendingTerminalRecoveryContextCache = useMemo(
     () => new PendingTerminalHandleRecoveryContextCache(),
     []
   )
+
   const getPendingTerminalRecoveryContextKey = useCallback(
     () =>
       pendingTerminalRecoveryContextCache.read(
@@ -101,11 +109,14 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       ),
     [pendingTerminalRecoveryContextCache, sessionTabsRef, activeSessionTabIdRef]
   )
+
   const pendingTerminalRecoveryContextKey = getPendingTerminalRecoveryContextKey()
+
   const sessionTabsFetchReporting = useMobileSessionTabsFetchReporting<SessionTabsResult>({
     worktreeId,
     diagnosticsRef: terminalDiagnosticsRef
   })
+
   const {
     fetchSessionTabs,
     ensureSessionTabs,
@@ -137,11 +148,13 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     if (connState === 'connected') {
       return
     }
+
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
       }
     }
+
     terminalGestureInputQueuesRef.current.clear()
     terminalGestureInputInFlightRef.current.clear()
   }, [connState])
@@ -156,8 +169,10 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setQuickCommandsSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
+
       return
     }
+
     // Why: a client swap can keep the route connected while moving to an older
     // host; clear the prior capability before exposing host-specific actions.
     setBrowserScreencastSupported(null)
@@ -166,6 +181,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
+
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
     // status.get without changing connState, which used to latch these hidden.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
@@ -182,6 +198,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       )
     })
   }, [client, connState])
+
   return {
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,

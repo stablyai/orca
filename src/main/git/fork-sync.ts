@@ -18,6 +18,7 @@ export async function gitSyncForkDefaultBranch(
   const signal = options.signal
     ? AbortSignal.any([options.signal, AbortSignal.timeout(60_000)])
     : AbortSignal.timeout(60_000)
+
   try {
     return await syncForkDefaultBranch(
       (args) =>

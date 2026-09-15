@@ -25,9 +25,11 @@ export function resolveFocusedTabAgent(
   tabId: string
 ): TuiAgent | null {
   const activeLeafId = layout?.activeLeafId
+
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return agentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
   }
+
   // Why: hook events can arrive while the terminal layout is temporarily
   // unmounted; with no focused leaf to compare, same-tab hook status is primary.
   return resolveAnyTabAgent(agentStatusByPaneKey, tabId)
@@ -40,9 +42,11 @@ export function resolveSiblingTabAgent(
 ): TuiAgent | null {
   const activeLeafId =
     layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
+
   if (!activeLeafId) {
     return null
   }
+
   return resolveAnyTabAgent(agentStatusByPaneKey, tabId, activeLeafId)
 }
 
@@ -61,6 +65,7 @@ function agentFromStatusEntry(entry: AgentStatusEntry | undefined): TuiAgent | n
   if (!entry || entry.state === 'done') {
     return null
   }
+
   return agentTypeToIconAgent(entry.agentType)
 }
 
@@ -70,9 +75,11 @@ export function resolveFocusedCompletedTabAgent(
   tabId: string
 ): TuiAgent | null {
   const activeLeafId = layout?.activeLeafId
+
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return completedAgentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
   }
+
   return resolveAnyCompletedTabAgent(agentStatusByPaneKey, tabId)
 }
 
@@ -83,9 +90,11 @@ export function resolveSiblingCompletedTabAgent(
 ): TuiAgent | null {
   const activeLeafId =
     layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
+
   if (!activeLeafId) {
     return null
   }
+
   return resolveAnyCompletedTabAgent(agentStatusByPaneKey, tabId, activeLeafId)
 }
 
@@ -104,6 +113,7 @@ function completedAgentFromStatusEntry(entry: AgentStatusEntry | undefined): Tui
   if (!entry || entry.state !== 'done') {
     return null
   }
+
   return agentTypeToIconAgent(entry.agentType)
 }
 
@@ -113,9 +123,11 @@ export function resolveFocusedRetainedTabAgent(
   tabId: string
 ): TuiAgent | null {
   const activeLeafId = layout?.activeLeafId
+
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return agentFromRetainedEntry(retainedAgentsByPaneKey[makePaneKey(tabId, activeLeafId)])
   }
+
   return resolveAnyRetainedTabAgent(retainedAgentsByPaneKey, tabId)
 }
 
@@ -126,9 +138,11 @@ export function resolveSiblingRetainedTabAgent(
 ): TuiAgent | null {
   const activeLeafId =
     layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId) ? layout.activeLeafId : null
+
   if (!activeLeafId) {
     return null
   }
+
   return resolveAnyRetainedTabAgent(retainedAgentsByPaneKey, tabId, activeLeafId)
 }
 

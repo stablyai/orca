@@ -50,6 +50,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo\\feature\\',
@@ -96,6 +97,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
@@ -139,8 +141,10 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } =
         await import('../shared/terminal-git-credential-guard')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         'C:\\repo\\feature',
@@ -163,6 +167,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
@@ -225,6 +230,7 @@ describe('createSetupRunnerScript', () => {
       const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
 
       const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
+
       try {
         const runnerPath = join(dir, 'setup-runner.sh')
         writeFileSync(
@@ -279,6 +285,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         {
           ...makeRepo(),
@@ -328,6 +335,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
+
       const result = createSetupRunnerScript(
         makeRepo(),
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\feature',
@@ -387,6 +395,7 @@ describe('createIssueCommandRunnerScript', () => {
 
     try {
       const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
+
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         '/test/repo-feature',
@@ -428,6 +437,7 @@ describe('createIssueCommandRunnerScript', () => {
 
     try {
       const { createIssueCommandRunnerScript } = await import('./worktree-runner-script')
+
       const result = createIssueCommandRunnerScript(
         makeRepo(),
         'C:\\repo\\feature',

@@ -31,6 +31,7 @@ export function getCronScheduleStatusLabel(
   validateSchedule: (schedule: string) => boolean
 ): { kind: 'empty' | 'invalid' | 'valid'; label: string } {
   const trimmed = schedule.trim()
+
   if (!trimmed) {
     return {
       kind: 'empty',
@@ -40,6 +41,7 @@ export function getCronScheduleStatusLabel(
       )
     }
   }
+
   if (!validateSchedule(trimmed)) {
     return {
       kind: 'invalid',
@@ -49,8 +51,10 @@ export function getCronScheduleStatusLabel(
       )
     }
   }
+
   // Why: branch on the parsed kind, not on rendered copy — the label is localized.
   const descriptor = describeAutomationSchedule(trimmed)
+
   if (descriptor.kind === 'custom') {
     return {
       kind: 'valid',
@@ -60,11 +64,13 @@ export function getCronScheduleStatusLabel(
       )
     }
   }
+
   return { kind: 'valid', label: formatUiAutomationScheduleDescriptor(descriptor) }
 }
 
 export function getCronFieldValues(schedule: string): readonly string[] {
   const parts = getAutomationCronExpressionFields(schedule)
+
   return AUTOMATION_CRON_FIELD_IDS.map((_, index) => parts[index] ?? '...')
 }
 
@@ -83,6 +89,7 @@ export function AutomationCustomCronPanel({
     draft.customSchedule,
     validateAdvancedSchedule
   )
+
   const cronFieldValues = getCronFieldValues(draft.customSchedule)
   const cronFieldLabels = getAutomationCronFieldLabels()
 

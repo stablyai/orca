@@ -25,24 +25,31 @@ export class RuntimeWatcherQuarantineQueue<T> {
         )
       )
     }
+
     return new Promise((resolve, reject) => {
       let settled = false
+
       const finish = (callback: () => void): void => {
         if (settled) {
           return
         }
+
         settled = true
         const index = this.waiters.indexOf(waiter)
+
         if (index !== -1) {
           this.waiters.splice(index, 1)
         }
+
         callback()
       }
+
       const waiter: QuarantineWaiter<T> = {
         dir,
         grant: (value) => finish(() => resolve(value)),
         fail: (error) => finish(() => reject(error))
       }
+
       this.waiters.push(waiter)
     })
   }
@@ -50,6 +57,7 @@ export class RuntimeWatcherQuarantineQueue<T> {
   grantNext(value: T): boolean {
     const waiter = this.waiters.shift()
     waiter?.grant(value)
+
     return Boolean(waiter)
   }
 

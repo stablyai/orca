@@ -67,9 +67,11 @@ export function AgentDashboardMapView({
     () => [...countAgentMapAgentTypes(snapshot.cards).keys()],
     [snapshot.cards]
   )
+
   const mapFilters = useAgentMapFilters(agentTypes)
   const [showAgentlessWorkspaces, setShowAgentlessWorkspaces] = useState(false)
   const [showOrchestrationLinks, setShowOrchestrationLinks] = useState(true)
+
   const agentlessWorkspaces = useMemo(
     () =>
       selectAgentlessMapWorkspaces({
@@ -80,6 +82,7 @@ export function AgentDashboardMapView({
       }),
     [snapshot.cards, snapshot.workspaces]
   )
+
   // The map's own facets run here so the panel can report one shown-count that
   // matches what the canvas actually draws.
   const visibleCards = useMemo(
@@ -104,6 +107,7 @@ export function AgentDashboardMapView({
       now
     ]
   )
+
   const visibleAgentlessWorkspaces = useMemo(
     () =>
       showAgentlessWorkspaces ? filterDashboardWorkspaces(agentlessWorkspaces, query, filters) : [],

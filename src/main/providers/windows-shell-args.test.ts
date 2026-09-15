@@ -9,6 +9,7 @@ import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
+
 const CMD_CODEX_LAUNCH_PREFLIGHT =
   'if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
 
@@ -18,11 +19,13 @@ function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
   // expectation from the helper under test would still pass if it regressed
   // to the `--` separator.
   const shellArgs = ['--exec', 'sh', '-c', command]
+
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
 function decodePowerShellCommand(result: ReturnType<typeof resolveWindowsShellLaunchArgs>): string {
   expect(result.shellArgs.slice(0, 3)).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand'])
+
   return Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
 }
 
@@ -32,9 +35,11 @@ function expectedPowerShellRestoreCwdCommand(cwdLiteral: string): string {
 
 function getGitBashRcfilePath(command: string): string {
   const rcfilePath = command.match(/--rcfile '([^']+)'/)?.[1]
+
   if (!rcfilePath) {
     throw new Error(`Git Bash launch command has no rcfile: ${command}`)
   }
+
   return rcfilePath
 }
 
@@ -54,6 +59,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -66,6 +72,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       CODEX_LAUNCH_PREFLIGHT
     )
+
     expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
@@ -81,6 +88,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'codex --no-alt-screen',
       CODEX_LAUNCH_PREFLIGHT
     )
+
     expect(result.shellArgs).toEqual([
       '/K',
       `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & codex --no-alt-screen`
@@ -98,6 +106,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       'cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"'
     )
+
     expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
@@ -111,6 +120,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       `codex ${'x'.repeat(7000)}`,
       CODEX_LAUNCH_PREFLIGHT
     )
+
     expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
@@ -121,13 +131,16 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice',
       'C:\\Users\\alice'
     )
+
     expect(result.shellArgs).toEqual(['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)])
 
     const command = decodePowerShellCommand(result)
     const outputEncodingIndex = command.indexOf('[Console]::OutputEncoding')
+
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
+
     const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
     const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
     const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
@@ -135,6 +148,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const ompExtensionIndex = command.indexOf('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
     const promptIndex = command.indexOf('function Global:prompt')
+
     const cwdRestoreIndex = command.indexOf(
       expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'")
     )
@@ -143,11 +157,13 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(command).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(command).not.toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
+
     for (const restoreIndex of [opencodeRestoreIndex, mimocodeRestoreIndex, codexRestoreIndex]) {
       expect(restoreIndex).toBeGreaterThanOrEqual(0)
       expect(restoreIndex).toBeLessThan(duplicateStateGuardIndex)
       expect(restoreIndex).toBeLessThan(languageModeGuardIndex)
     }
+
     expect(outputEncodingIndex).toBeGreaterThan(languageModeGuardIndex)
     expect(outputEncodingIndex).toBeGreaterThan(duplicateStateGuardIndex)
     expect(ompWrapperIndex).toBeGreaterThan(outputEncodingIndex)
@@ -195,6 +211,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       "& 'codex' '--no-alt-screen'"
     )
+
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
 
     const command = decodePowerShellCommand(result)
@@ -206,6 +223,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
     const startupCommand =
       '& "C:\\Program Files\\Orca CLI\\orca.exe" "--label" "quoted value"; $env:ORCA_VALUE = "nested"'
+
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
@@ -248,6 +266,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice',
       'C:\\Users\\alice'
     )
+
     const withWindowsPreflight = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
@@ -317,6 +336,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       CODEX_LAUNCH_PREFLIGHT
     )
+
     const gitBash = resolveWindowsShellLaunchArgs(
       'C:\\Program Files\\Git\\bin\\bash.exe',
       'C:\\Users\\alice',
@@ -355,6 +375,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       'codex'
     )
+
     const result = resolveWindowsShellLaunchArgs(
       'wsl.exe',
       'C:\\Users\\alice\\code',
@@ -363,6 +384,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'codex',
       CODEX_LAUNCH_PREFLIGHT
     )
+
     expect(result).toEqual(baseline)
     expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
@@ -388,6 +410,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const bashRcfile = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
     // Why .zshenv: the omp wrapper is part of the epilogue defined there.
     const zshEnv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
+
     for (const wrapperFile of [bashRcfile, zshEnv]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
       expect(wrapperFile).toContain('function omp { __orca_omp "$@"; }')
@@ -449,6 +472,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
         'C:\\Users\\alice'
       )
+
       expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo', 'Ubuntu'))
       expect(result.effectiveCwd).toBe('C:\\Users\\alice')
       expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
@@ -479,6 +503,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice',
       'C:\\Users\\alice'
     )
+
     expect(result.shellArgs).toEqual([])
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice')
@@ -508,6 +533,7 @@ describe('issue #7236: PowerShell setup-runner command delivery', () => {
 
   it('delivers the setup-runner command through -EncodedCommand, never raw stdin', () => {
     const { command } = resolveSetupRunnerCommand(runnerPath, 'windows')
+
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice\\repo',

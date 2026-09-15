@@ -22,6 +22,7 @@ import {
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const saveQueue = createEditorSaveQueue(store)
+
   const { queueSave, quiesceFileSave, clearAutoSaveTimer, bumpSaveGeneration, syncAutoSave } =
     saveQueue
 
@@ -40,12 +41,14 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const handleSaveAndClose = async (event: Event): Promise<void> => {
     const { fileId } = (event as CustomEvent<{ fileId: string }>).detail
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
+
     if (!file) {
       return
     }
 
     flushPendingEditorChange(file.id)
     const draft = store.getState().editorDrafts[fileId]
+
     if (draft !== undefined) {
       try {
         await queueSave(file, draft)
@@ -53,11 +56,13 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
     }
+
     store.getState().closeFile(fileId)
   }
 
   const handleSaveFile = async (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<EditorSaveFileDetail>).detail
+
     if (!detail) {
       return
     }
@@ -65,20 +70,26 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     try {
       detail.claim()
       const file = store.getState().openFiles.find((openFile) => openFile.id === detail.fileId)
+
       if (!file) {
         detail.resolve()
+
         return
       }
+
       if (file.pendingOwnerMigration === true) {
         detail.reject('This file is still restoring its workspace owner. Try saving again.')
+
         return
       }
 
       flushPendingEditorChange(file.id)
 
       const content = store.getState().editorDrafts[file.id] ?? detail.fallbackContent
+
       if (content === undefined) {
         detail.resolve()
+
         return
       }
 
@@ -91,9 +102,11 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
   const handleQuiesce = async (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<EditorSaveQuiesceDetail>).detail
+
     if (!detail) {
       return
     }
+
     detail.claim()
 
     const matchingFiles =
@@ -107,14 +120,18 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
   // Why: the root subscriber fires on every store tick; skip the scan unless the four autosave inputs changed.
   let previousAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
+
   const unsubscribe = store.subscribe(() => {
     const nextAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
+
     if (autosaveSubscriberInputsEqual(previousAutosaveInputs, nextAutosaveInputs)) {
       return
     }
+
     previousAutosaveInputs = nextAutosaveInputs
     syncAutoSave()
   })
+
   syncAutoSave()
 
   window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)

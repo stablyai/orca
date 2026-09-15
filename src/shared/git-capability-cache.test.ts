@@ -15,15 +15,18 @@ describe('GitCapabilityCache', () => {
   it('coalesces concurrent capability probes after an unsupported result', async () => {
     const cache = new GitCapabilityCache()
     let rejectProbe!: (error: Error) => void
+
     const firstPreferred = vi.fn(
       () =>
         new Promise<string>((_resolve, reject) => {
           rejectProbe = reject
         })
     )
+
     const secondPreferred = vi.fn(async () => 'unexpected')
     const firstFallback = vi.fn(async () => 'first-fallback')
     const secondFallback = vi.fn(async () => 'second-fallback')
+
     const isUnsupported = (error: unknown): boolean =>
       error instanceof Error && error.message === 'unsupported'
 
@@ -33,12 +36,14 @@ describe('GitCapabilityCache', () => {
       firstFallback,
       isUnsupported
     )
+
     const second = cache.runWithFallback(
       'for-each-ref-exclude',
       secondPreferred,
       secondFallback,
       isUnsupported
     )
+
     rejectProbe(new Error('unsupported'))
 
     await expect(Promise.all([first, second])).resolves.toEqual([
@@ -64,6 +69,7 @@ describe('GitCapabilityCache', () => {
     const releases: (() => void)[] = []
     let activeCalls = 0
     let maxConcurrentCalls = 0
+
     const runPreferred = vi.fn(
       () =>
         new Promise<string>((resolve) => {
@@ -82,6 +88,7 @@ describe('GitCapabilityCache', () => {
       async () => 'unexpected-fallback',
       isUnsupported
     )
+
     const second = cache.runWithFallback(
       'for-each-ref-exclude',
       runPreferred,
@@ -91,16 +98,20 @@ describe('GitCapabilityCache', () => {
 
     expect(runPreferred).toHaveBeenCalledTimes(2)
     expect(maxConcurrentCalls).toBe(2)
+
     for (const release of releases) {
       release()
     }
+
     await expect(Promise.all([first, second])).resolves.toEqual(['result', 'result'])
   })
 
   it('drops known support when a later call reports the capability unsupported', async () => {
     const cache = new GitCapabilityCache()
+
     const isUnsupported = (error: unknown): boolean =>
       error instanceof Error && error.message === 'unsupported'
+
     await cache.runWithFallback(
       'for-each-ref-exclude',
       async () => 'supported',

@@ -43,11 +43,17 @@ import {
 const SUITE_TIMEOUT_MS = 180_000
 
 const SESSION = 'session-alpha'
+
 const WORKSPACE = 'workspace-1'
+
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+
 const NOW = 1_800_000_000_000
+
 const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
+
 const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
+
 const REWIND_METHOD = 'agentSession.rewind'
 
 /** Every method the structured surface publishes: the host method it must reach,
@@ -147,8 +153,11 @@ const STRUCTURED_CALLS: {
 ]
 
 let baselineRef: string
+
 let current: AgentSessionWireBuild
+
 let baseline: AgentSessionWireBuild
+
 let operations = 0
 
 beforeAll(async () => {
@@ -160,6 +169,7 @@ beforeAll(async () => {
 /** `<13-digit ms>-<32 hex>`, the only shape the durable ledger accepts. */
 function operationId(): string {
   operations += 1
+
   return `${NOW}-${operations.toString(16).padStart(32, '0')}`
 }
 
@@ -195,6 +205,7 @@ function attachParams(fence: number | null): Record<string, unknown> {
     runtimeKind: 'native',
     providerHandle: { kind: 'codex', threadId: THREAD }
   }
+
   return {
     ...params,
     envelope: {
@@ -211,17 +222,20 @@ function attachParams(fence: number | null): Record<string, unknown> {
 function createIntentParams(): Record<string, unknown> {
   const worktree = `id:${WORKSPACE}`
   const fields = { worktree, agent: 'codex' }
+
   return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
 }
 
 function sendParams(text: string, fence: number): Record<string, unknown> {
   const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+
   return { envelope: envelope({ method: 'agentSession.send', fields: { body }, fence }), body }
 }
 
 /** Schema-valid params per method; values only need to survive validation. */
 function paramsFor(method: string): unknown {
   const fence = 1
+
   switch (method) {
     case 'agentSession.createSupport':
       return { worktree: `id:${WORKSPACE}`, agent: 'codex' }
@@ -231,14 +245,18 @@ function paramsFor(method: string): unknown {
       return attachParams(fence)
     case 'agentSession.conversationCommand': {
       const fields = { command: 'compact' }
+
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+
     case 'agentSession.send':
       return sendParams('hi', fence)
     case REWIND_METHOD: {
       const fields = { itemId: 'item-1', expectedEpoch: 'current-epoch' }
+
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+
     case 'agentSession.cancel':
       return {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
@@ -247,20 +265,26 @@ function paramsFor(method: string): unknown {
     case 'agentSession.respondToApproval':
     case 'agentSession.respondToQuestion': {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
+
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+
     case 'agentSession.requestHandoff': {
       const fields = {
         direction: 'to-tui' as const,
         mode: 'now' as const,
         action: 'start' as const
       }
+
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
+
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
     case 'agentSession.hold':
@@ -273,6 +297,7 @@ function paramsFor(method: string): unknown {
 
 function runtimeStub(): unknown {
   const cleanups = new Map<string, () => void>()
+
   return {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -284,6 +309,7 @@ function runtimeStub(): unknown {
         providerHandle: _providerHandle,
         ...resolved
       } = attachParams(null)
+
       return resolved
     },
     publishStructuredAgentSessionTab: () => {},
@@ -338,6 +364,7 @@ async function callBuild(
       (raw) => replies.push(JSON.parse(raw) as RpcReply),
       client
     )
+
   return replies
 }
 
@@ -359,22 +386,26 @@ async function expectDeclaredSurfaceExecutes(
     // Two methods share one host method, so "has been called" would already be
     // true from the earlier one: only this call's own delta pins the pairing.
     const before = hostMethod ? hostCalls[hostMethod].mock.calls.length : 0
+
     const replies = await callBuild(build, method, paramsFor(method), {
       clientKind: 'runtime',
       clientCapabilities
     })
+
     if (hostMethod) {
       expect(
         hostCalls[hostMethod].mock.calls.length - before,
         `${build.label}: ${method} did not reach the host`
       ).toBe(1)
     }
+
     for (const reply of replies) {
       expect(
         reply,
         `${build.label}: ${method} was refused: ${JSON.stringify(reply)}`
       ).toMatchObject({ ok: true })
     }
+
     if (result) {
       // The declared answer, not merely a non-refusal: a handler that is
       // registered and returns an execution error, or hands back someone else's
@@ -420,17 +451,20 @@ describe('cross-version structured agent sessions', () => {
       // Anti-vacuous: the old client still advertises a real list, so the refusal
       // below is the capability gate answering, not an empty negotiation.
       expect(legacyClientCapabilities().length).toBeGreaterThan(0)
+
       for (const { method } of STRUCTURED_CALLS) {
         const replies = await callBuild(current, method, paramsFor(method), {
           clientKind: 'runtime',
           clientCapabilities: legacyClientCapabilities()
         })
+
         expect(replies, `${method} must answer exactly once`).toHaveLength(1)
         expect(replies[0]).toMatchObject({
           ok: false,
           error: { message: expect.stringContaining('structured_agent_session_unsupported') }
         })
       }
+
       for (const [name, spy] of Object.entries(hostCalls)) {
         expect(spy, `${name} ran for a client without the capability`).not.toHaveBeenCalled()
       }
@@ -450,6 +484,7 @@ describe('cross-version structured agent sessions', () => {
 
     it('is published the status carrier where a capable client gets the turn item', async () => {
       const params = paramsFor('agentSession.history')
+
       for (const [clientCapabilities, item] of turnItemSkew.clients(baseline, current)) {
         const client = { clientKind: 'runtime' as const, clientCapabilities }
         const replies = await callBuild(current, 'agentSession.history', params, client)
@@ -475,6 +510,7 @@ describe('cross-version structured agent sessions', () => {
       expect(baseline.capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)).toBe(
         baselineStructuredMethods().length > 0
       )
+
       // The status feed is additive to a surface that already shipped, so it carries its own
       // capability or a client cannot tell "host too old" from "the call failed" — and it
       // would relay-retry a method_not_found forever instead of degrading once.
@@ -486,6 +522,7 @@ describe('cross-version structured agent sessions', () => {
           build.methodNames.includes(REWIND_METHOD)
         )
       }
+
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
@@ -493,15 +530,18 @@ describe('cross-version structured agent sessions', () => {
 
     it('gets a clean answer from the old dispatcher rather than silence', async () => {
       const registered = new Set(baselineStructuredMethods())
+
       for (const { method } of STRUCTURED_CALLS) {
         const replies = await callBuild(baseline, method, paramsFor(method), {
           clientKind: 'runtime',
           clientCapabilities: current.capabilities
         })
+
         // Silence is the failure mode a new client cannot recover from, whatever
         // the old build knows; the refusal code is only asserted for the methods
         // that release genuinely does not have.
         expect(replies, `${method} must answer exactly once`).toHaveLength(1)
+
         if (!registered.has(method)) {
           expect(replies[0], `${method} on the old host`).toMatchObject({
             ok: false,
@@ -536,6 +576,7 @@ describe('cross-version structured agent sessions', () => {
         // gate uses, and the run would read as a refusal rather than a miss.
         const hostCalls = structuredHostStub(SESSION, WORKSPACE)
         await releasedCurrent.installStructuredHost(hostCalls)
+
         try {
           await expectDeclaredSurfaceExecutes(
             releasedCurrent,
@@ -584,6 +625,7 @@ describe('cross-version structured agent sessions', () => {
       )
 
       expect(replies).toHaveLength(1)
+
       if (!baseline.methodNames.includes(CLIENT_CAPABILITY_UPDATE_METHOD)) {
         expect(replies[0]).toMatchObject({
           ok: false,
@@ -605,6 +647,7 @@ describe('cross-version structured agent sessions', () => {
         directory: join(root, 'store'),
         hostId: 'local'
       })
+
       const host = new StructuredAgentSessionHost({
         store,
         adapter: {
@@ -633,6 +676,7 @@ describe('cross-version structured agent sessions', () => {
         mintSpawnToken: () => 'spawn-vault',
         now: () => NOW
       })
+
       setStructuredAgentSessionHost(host)
       const attached = await host.attach({ callerKey: 'test' }, attachParams(null) as never)
       expect(attached.ok).toBe(true)
@@ -690,6 +734,7 @@ describe('cross-version structured agent sessions', () => {
           runtime
         )
       )[0]
+
       expect(oldReply).toMatchObject({ ok: true, result: { sessions: [] } })
 
       const capableReply = (
@@ -704,6 +749,7 @@ describe('cross-version structured agent sessions', () => {
           runtime
         )
       )[0]
+
       expect(capableReply).toMatchObject({
         ok: true,
         result: {
@@ -722,6 +768,7 @@ describe('cross-version structured agent sessions', () => {
         filePath: `/home/dev/.codex/sessions/rollout-${THREAD}.jsonl`,
         codexHome: '/home/dev/.codex'
       }
+
       expect(
         (
           await callBuild(
@@ -826,6 +873,7 @@ describe('cross-version structured agent sessions', () => {
         directory: join(root, 'store'),
         hostId: 'local'
       })
+
       const host = new StructuredAgentSessionHost({
         store,
         adapter: adapter(),
@@ -837,7 +885,9 @@ describe('cross-version structured agent sessions', () => {
         probeOwner: async () => ({ outcome: 'pid-absent' }),
         now: () => NOW
       })
+
       setStructuredAgentSessionHost(host)
+
       return host
     }
 
@@ -860,6 +910,7 @@ describe('cross-version structured agent sessions', () => {
       expect(currentFence).toBeGreaterThan(staleFence)
       const reattached = await answer('agentSession.ensure', attachParams(currentFence ?? 0))
       expect(reattached).toMatchObject({ ok: true })
+
       return reattached
     }
 
@@ -881,9 +932,11 @@ describe('cross-version structured agent sessions', () => {
     /** The host's own answer, which carries its refusals inside a successful RPC. */
     async function answer(method: string, params: unknown): Promise<HostAnswer> {
       const reply = (await call(method, params))[0]
+
       if (!reply?.ok) {
         throw new Error(`${method} failed at the wire: ${JSON.stringify(reply?.error ?? reply)}`)
       }
+
       return reply.result as HostAnswer
     }
 
@@ -919,6 +972,7 @@ describe('cross-version structured agent sessions', () => {
       const events = (
         await call('agentSession.subscribe', { sessionId: SESSION, cursor: held })
       ).map((reply) => reply.result as AgentSessionSubscribeEvent)
+
       expect(events.map((event) => event.type)).toEqual(['batch'])
       const batch = events[0]?.type === 'batch' ? events[0].batch : null
       const rendered = JSON.stringify(batch?.items ?? [])

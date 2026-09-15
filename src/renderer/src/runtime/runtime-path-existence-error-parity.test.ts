@@ -10,7 +10,9 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
 } from '../../../shared/protocol-version'
+
 installRuntimeFileClientEnvironment()
+
 for (const mode of ['scalar', 'batch'] as const) {
   it(`${mode} preserves missing-owner error interpretation`, async () => {
     runtimeEnvironmentTransportCall.mockImplementation(async (args) =>
@@ -32,11 +34,13 @@ for (const mode of ['scalar', 'batch'] as const) {
       ok: false,
       error: { code: 'not_found', message: 'Worktree not found: id:folder-1' }
     })
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
+
     if (mode === 'scalar') {
       expect(await runtimePathExists(context, '/folder/file.ts')).toBe(false)
     } else {
@@ -66,12 +70,15 @@ for (const stage of ['status', 'operation'] as const) {
         : runtimeEnvironmentCall(args)
     )
     runtimeEnvironmentCall.mockImplementation(async () => failure())
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
+
     expect(await runtimePathsExist(context, ['/folder/file.ts'])).toEqual([{ exists: false }])
+
     for (message of ['permission denied', 'SSH connection closed']) {
       await expect(runtimePathsExist(context, ['/folder/file.ts'])).rejects.toThrow(message)
     }

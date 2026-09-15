@@ -13,10 +13,15 @@ import {
 } from './windows-process-tree-gyp-rebuild.mjs'
 
 const require = createRequire(import.meta.url)
+
 const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+
 const { assertWindowsProcessTreeCreationTime } = require('./windows-process-tree-creation-time.cjs')
+
 const scriptPath = import.meta.filename
+
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const runtime = readRuntimeArg()
 
 const NATIVE_MODULES = [
@@ -25,17 +30,22 @@ const NATIVE_MODULES = [
     ? ['@orca/windows-registry', '@vscode/windows-process-tree']
     : [])
 ]
+
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
+
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
   const failures = collectNativeModuleFailures()
+
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(`${failure.moduleName}: ${failure.message}`)
     }
+
     process.exit(1)
   }
+
   process.exit(0)
 }
 
@@ -50,11 +60,13 @@ if (runtime === 'node') {
 
 function readRuntimeArg() {
   const inline = process.argv.find((arg) => arg.startsWith('--runtime='))
+
   if (inline) {
     return inline.slice('--runtime='.length)
   }
 
   const runtimeIndex = process.argv.indexOf('--runtime')
+
   if (runtimeIndex !== -1) {
     return process.argv[runtimeIndex + 1]
   }
@@ -65,22 +77,28 @@ function readRuntimeArg() {
 function ensureNodeRuntime() {
   const initial = runNodeCheck()
   const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
+
   if (initial.ok && !patchedNodePtyRebuildReason) {
     return
   }
 
   if (patchedNodePtyRebuildReason) {
     console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+
     if (!initial.ok) {
       printCheckError(initial)
     }
+
     const failedModules = initial.failures.map((failure) => failure.moduleName)
+
     const rebuildModules = [
       'node-pty',
       ...failedModules.filter((moduleName) => moduleName !== 'node-pty')
     ]
+
     rebuildNodeRuntimeModules(rebuildModules)
     verifyNodeRuntimeAfterRebuild()
+
     return
   }
 
@@ -95,6 +113,7 @@ function ensureNodeRuntime() {
 
 function verifyNodeRuntimeAfterRebuild() {
   const final = runNodeCheck()
+
   if (!final.ok) {
     console.error(
       `[native-runtime] Native modules still do not load for ${formatRuntimeLabel('node')}.`
@@ -107,12 +126,14 @@ function verifyNodeRuntimeAfterRebuild() {
 function ensureElectronRuntime() {
   const initial = runElectronCheck()
   const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
+
   if (initial.ok && !patchedNodePtyRebuildReason) {
     return
   }
 
   if (patchedNodePtyRebuildReason) {
     console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+
     if (!initial.ok) {
       printCheckError(initial)
     }
@@ -122,9 +143,11 @@ function ensureElectronRuntime() {
     )
     printCheckError(initial)
   }
+
   runNodeScript(['config/scripts/rebuild-native-deps.mjs'])
 
   const final = runElectronCheck()
+
   if (!final.ok) {
     console.error(
       `[native-runtime] Native modules still do not load for ${formatRuntimeLabel('electron')}.`
@@ -148,6 +171,7 @@ function runNodeCheck() {
 
 function runElectronCheck() {
   const electronExecutable = resolveInstalledElectronExecutable()
+
   if (!electronExecutable.ok) {
     return { ok: false, error: electronExecutable.error }
   }
@@ -167,14 +191,18 @@ function runElectronCheck() {
 
 function resolveInstalledElectronExecutable() {
   const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+
   try {
     const electronVersion = JSON.parse(
       readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
     ).version
+
     const platformPath = getElectronPlatformPath()
+
     const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
       .trim()
       .replace(/^v/, '')
+
     if (installedVersion !== electronVersion) {
       return {
         ok: false,
@@ -183,7 +211,9 @@ function resolveInstalledElectronExecutable() {
         )
       }
     }
+
     const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+
     if (installedPlatformPath !== platformPath) {
       return {
         ok: false,
@@ -192,12 +222,15 @@ function resolveInstalledElectronExecutable() {
         )
       }
     }
+
     const electronPath = process.env.ELECTRON_OVERRIDE_DIST_PATH
       ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
       : resolve(electronPackageDir, 'dist', platformPath)
+
     if (!existsSync(electronPath)) {
       return { ok: false, error: new Error(`Electron executable is missing at ${electronPath}.`) }
     }
+
     return { ok: true, path: electronPath }
   } catch (error) {
     return { ok: false, error }
@@ -207,6 +240,7 @@ function resolveInstalledElectronExecutable() {
 function getElectronPlatformPath() {
   const targetPlatform =
     process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform
+
   switch (targetPlatform) {
     case 'mas':
     case 'darwin':
@@ -237,17 +271,21 @@ function parseChildCheckResult(result) {
 
 function parseCheckFailures(stderr) {
   const failures = []
+
   for (const line of (stderr ?? '').split(/\r?\n/)) {
     const match = /^([^:]+):\s*(.*)$/.exec(line)
+
     if (match && NATIVE_MODULES.includes(match[1])) {
       failures.push({ moduleName: match[1], message: match[2] })
     }
   }
+
   return failures
 }
 
 function collectNativeModuleFailures() {
   const failures = []
+
   for (const moduleName of NATIVE_MODULES) {
     try {
       loadNativeModule(moduleName)
@@ -255,6 +293,7 @@ function collectNativeModuleFailures() {
       failures.push({ moduleName, message: formatError(cause), cause })
     }
   }
+
   return failures
 }
 
@@ -267,22 +306,28 @@ function loadNativeModule(moduleName) {
     // line out of its address space, and ignores the CreationTime flag. Check
     // the binary on both counts, not the load.
     assertWindowsProcessTreeCreationTime({ module: require(moduleName) })
+
     if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
       throw new Error(
         'the loaded addon still calls ReadProcessMemory, so it was not built from the patched ' +
           'source. Rebuild it (pnpm run rebuild:electron) rather than using the published prebuild.'
       )
     }
+
     return
   }
+
   if (moduleName === '@orca/windows-registry') {
     const registry = require(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
     registry.getRegistryKey(registry.HK.CU, 'Environment')
+
     return
   }
+
   if (moduleName === 'node-pty') {
     loadNodePtyNativeModule()
+
     return
   }
 
@@ -299,6 +344,7 @@ function loadNodePtyNativeModule() {
   const native = loadNativeModule(nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir)
   assertNodePtyJobOwnership({ nativeName, native })
+
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
@@ -310,10 +356,13 @@ function assertNodePtyWindowsConptyRuntime(nativeDir) {
   if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
     return
   }
+
   const runtimeDir = resolve(projectDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty')
+
   const missingFile = NODE_PTY_CONPTY_RUNTIME_FILES.find(
     (filename) => !existsSync(resolve(runtimeDir, filename))
   )
+
   if (missingFile) {
     throw new Error(`node-pty ConPTY runtime file is missing: ${resolve(runtimeDir, missingFile)}`)
   }
@@ -348,6 +397,7 @@ function getPatchedNodePtyRebuildReason() {
 function patchedNodePtyArtifactPaths(nodePtyDir) {
   if (process.platform === 'win32') {
     const releaseDir = resolve(nodePtyDir, 'build', 'Release')
+
     return [
       resolve(releaseDir, 'conpty.node'),
       ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) => resolve(releaseDir, 'conpty', filename))
@@ -355,15 +405,18 @@ function patchedNodePtyArtifactPaths(nodePtyDir) {
   }
 
   const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+
   // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
   if (process.platform === 'darwin') {
     artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
   }
+
   return artifactPaths
 }
 
 function requiresPatchedNodePtySourceBuild() {
   const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
+
   if (!existsSync(nodePtyPatchPath)) {
     return false
   }
@@ -377,12 +430,14 @@ function isNodePtyReleaseBuildDir(nativeDir) {
 
 function getWindowsBuildNumber() {
   const match = /(\d+)\.(\d+)\.(\d+)/g.exec(release())
+
   return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
 }
 
 function rebuildNodeRuntimeModules(moduleNames) {
   for (const moduleName of moduleNames) {
     let moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
+
     if (moduleName === '@vscode/windows-process-tree') {
       // Why before node-gyp: this module is rebuilt precisely because the
       // binary was the unpatched one, and pnpm materializes it unpatched often
@@ -395,8 +450,10 @@ function rebuildNodeRuntimeModules(moduleNames) {
       stageWindowsProcessTreeNodeAddonApiHeaders(moduleDir)
       moduleDir = realpathSync(moduleDir)
     }
+
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
     runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+
     if (moduleName === 'node-pty' && process.platform === 'win32') {
       runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
     }
@@ -406,10 +463,12 @@ function rebuildNodeRuntimeModules(moduleNames) {
 function runPnpm(args, { cwd = projectDir } = {}) {
   // cmd.exe resolves both Corepack's pnpm.cmd and pnpm 12's native pnpm.exe.
   const command = 'pnpm'
+
   const env =
     process.platform === 'linux' && args.includes('node-gyp')
       ? { ...process.env, CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim() }
       : process.env
+
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
@@ -419,9 +478,11 @@ function runPnpm(args, { cwd = projectDir } = {}) {
 
   if (result.error || result.status !== 0) {
     console.error(`[native-runtime] ${command} ${args.join(' ')} failed in ${cwd}.`)
+
     if (result.error) {
       console.error(formatError(result.error))
     }
+
     process.exit(result.status ?? 1)
   }
 }
@@ -434,9 +495,11 @@ function runNodeScript(args) {
 
   if (result.error || result.status !== 0) {
     console.error(`[native-runtime] ${basename(process.execPath)} ${args.join(' ')} failed.`)
+
     if (result.error) {
       console.error(formatError(result.error))
     }
+
     process.exit(result.status ?? 1)
   }
 }
@@ -445,15 +508,19 @@ function printCheckError(result) {
   for (const failure of result.failures ?? []) {
     console.warn(`[native-runtime] ${failure.moduleName}: ${failure.message}`)
   }
+
   if (result.error) {
     console.warn(`[native-runtime] ${formatError(result.error)}`)
   }
+
   if (result.stderr?.trim()) {
     console.warn(result.stderr.trim())
   }
+
   if (result.stdout?.trim()) {
     console.warn(result.stdout.trim())
   }
+
   if (
     result.status != null &&
     !result.error &&
@@ -473,5 +540,6 @@ function formatRuntimeLabel(value) {
   if (value === 'electron') {
     return `Electron ${process.env.npm_package_devDependencies_electron ?? ''}`.trim()
   }
+
   return `Node ${process.versions.node}`
 }

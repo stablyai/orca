@@ -11,6 +11,7 @@ export default function HistoryRedirect() {
     name?: string | string[]
     origin?: string | string[]
   }>()
+
   return (
     <Redirect
       href={{

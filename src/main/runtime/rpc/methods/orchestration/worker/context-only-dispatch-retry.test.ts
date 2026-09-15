@@ -12,12 +12,15 @@ describe('worker-start --retry-of a context-only Dispatch', () => {
     spec: string
   ): Promise<{ taskId: string; dispatchId: string }> {
     const task = harness.db.createTask({ spec, runId: harness.activeRunId })
+
     const result = (await harness.call('orchestration.dispatch', {
       task: task.id,
       from: 'term_coord',
       to: 'term_worker'
     })) as { dispatch: { id: string } }
+
     expect(harness.db.getWorkerDispatch(result.dispatch.id)).toBeUndefined()
+
     return { taskId: task.id, dispatchId: result.dispatch.id }
   }
 

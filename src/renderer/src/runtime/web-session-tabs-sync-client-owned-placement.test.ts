@@ -33,11 +33,17 @@ vi.mock('../store', () => ({
 }))
 
 const HOST_GROUP = 'host-group-1'
+
 const PREVIEW_GROUP = 'client-preview-group'
+
 const BROWSER_HOST_TAB = 'host-browser-tab'
+
 const BROWSER_PAGE = 'host-browser-page'
+
 const T1 = toWebTerminalSurfaceTabId('host-tab-1')
+
 const T2 = toWebTerminalSurfaceTabId('host-tab-2')
+
 const T3 = toWebTerminalSurfaceTabId('host-tab-3')
 
 const SPLIT_LAYOUT: TabGroupLayoutNode = {
@@ -261,6 +267,7 @@ describe('client-owned tab placement for paired worktrees', () => {
     })
 
     let state = splitClientState()
+
     for (const tick of [0, 1]) {
       state = {
         ...state,
@@ -429,6 +436,7 @@ describe('client-owned tab placement for paired worktrees', () => {
         [WT]: [terminalUnifiedTab(T1, HOST_GROUP, 0), terminalUnifiedTab(T2, PREVIEW_GROUP, 1)]
       }
     })
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       makeSnapshot(
@@ -464,6 +472,7 @@ describe('client-owned tab placement for paired worktrees', () => {
   // closeUnifiedTab — must collapse the pane the vanished tab leaves behind.
   it('collapses a split pane whose only tab vanished from the snapshot', () => {
     const state = splitClientState()
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       makeSnapshot(
@@ -504,6 +513,7 @@ describe('client-owned tab placement for paired worktrees', () => {
       groupId: PREVIEW_GROUP
     })
     const state = splitClientState()
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       makeSnapshot(
@@ -557,6 +567,7 @@ describe('client-owned tab placement for paired worktrees', () => {
       currentLayout: SPLIT_LAYOUT,
       isGroupReserved: () => false
     })
+
     expect(result.groups?.map((group) => group.id)).toEqual([PREVIEW_GROUP])
     expect(result.layout && layoutLeafGroupIds(result.layout)).toEqual([PREVIEW_GROUP])
   })

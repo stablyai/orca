@@ -71,9 +71,11 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
 
     // Replicate the adapter's post-fix decision: alt-screen falls back to snapshotAnsi when scrollbackAnsi is empty, so the pane isn't blank.
     const isAltScreen = info!.modes.alternateScreen
+
     const adapterScrollback = isAltScreen
       ? info!.scrollbackAnsi || info!.snapshotAnsi || null
       : info!.rehydrateSequences + info!.snapshotAnsi
+
     expect(adapterScrollback).not.toBeNull() // → adapter sends a coldRestore payload
     expect(adapterScrollback).toContain('Claude Code')
   })
@@ -90,9 +92,11 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     em.dispose()
 
     const info = await reader.detectColdRestore(sessionId)
+
     const adapterScrollback = info!.modes.alternateScreen
       ? info!.scrollbackAnsi || info!.snapshotAnsi || null
       : info!.rehydrateSequences + info!.snapshotAnsi
+
     expect(adapterScrollback).not.toBeNull()
 
     // Must end in the normal buffer (no alt-screen re-entry) so it won't fight the agent's own repaint when resume relaunches it.
@@ -123,9 +127,11 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
 
     const fresh = new HeadlessEmulator({ cols: 80, rows: 24 })
     fresh.writeSync('\x1b[2J\x1b[3J\x1b[H')
+
     if (adapterScrollback) {
       fresh.writeSync(adapterScrollback)
     }
+
     expect(fresh.isAlternateScreen).toBe(false)
     fresh.dispose()
   })

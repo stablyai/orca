@@ -21,5 +21,6 @@ export function appendBufferedDictation(current: string, transcript: string): st
   if (!current.trim()) {
     return transcript
   }
+
   return `${current.trimEnd()} ${transcript}`
 }

@@ -14,6 +14,7 @@ import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cache-entry-selection'
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
+
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
 /**
@@ -25,9 +26,11 @@ export function useSourceControlWorktreeContext() {
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktreeInstanceId = activeWorktree?.instanceId
+
   const activeGroupId = useAppStore((s) =>
     activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
   )
+
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
@@ -37,45 +40,57 @@ export function useSourceControlWorktreeContext() {
   const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
+
   const entries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
       : EMPTY_GIT_STATUS_ENTRIES
   )
+
   const activeGitStatusHead = useAppStore((s) =>
     activeWorktreeId ? (s.gitStatusHeadByWorktree?.[activeWorktreeId] ?? null) : null
   )
+
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
+
   const branchEntries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
       : EMPTY_BRANCH_CHANGE_ENTRIES
   )
+
   const branchSummary = useAppStore((s) =>
     activeWorktreeId ? (s.gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null) : null
   )
+
   const publishedBranchLineTotal = useAppStore((s) =>
     activeWorktreeId ? (s.gitBranchLineTotalByWorktree?.[activeWorktreeId] ?? null) : null
   )
+
   // Why: status and branch compare refresh on different cadences, so a total can
   // outlive the fork point it measured. Drop it rather than render a stale number.
   const branchLineTotal =
     publishedBranchLineTotal && publishedBranchLineTotal.mergeBase === branchSummary?.mergeBase
       ? publishedBranchLineTotal
       : null
+
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
+
   const conflictOperationsByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+
   // Why: leave undefined until fetchUpstreamStatus resolves; a synthetic "no upstream" flashes "Publish Branch" on worktree switch.
   const remoteStatus = useAppStore((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
+
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
+
   const hostedReviewCacheKey =
     activeRepo && branchName
       ? getHostedReviewCacheKey(
@@ -88,6 +103,7 @@ export function useSourceControlWorktreeContext() {
           true
         )
       : null
+
   const activePrCacheKey =
     activeRepo && branchName
       ? getGitHubPRCacheKey(
@@ -100,12 +116,15 @@ export function useSourceControlWorktreeContext() {
           true
         )
       : null
+
   // Why: background review refreshes replace both cache maps; this panel only needs its active repo/branch entries.
   const hostedReviewEntry = useAppStore((s) =>
     selectReviewCacheEntry(s.hostedReviewCache, hostedReviewCacheKey)
   )
+
   const hostedReviewEntryData = hostedReviewEntry?.data ?? null
   const activePrFromQueue = useAppStore((s) => selectReviewCacheData(s.prCache, activePrCacheKey))
+
   // Why: git/file mutations and repo metadata belong to the repo OWNER host, not the currently focused sidebar host.
   const activeRepoSettings = useMemo(
     () =>
@@ -121,14 +140,17 @@ export function useSourceControlWorktreeContext() {
       ),
     [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]
   )
+
   const activeRepoRuntimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId ?? null
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
+
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
+
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
     worktreePath,
@@ -136,6 +158,7 @@ export function useSourceControlWorktreeContext() {
       ? undefined
       : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
   })
+
   // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
   const hasUncommittedEntries = entries.length > 0

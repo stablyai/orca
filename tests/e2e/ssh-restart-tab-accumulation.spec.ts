@@ -12,7 +12,9 @@ import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connecti
 import { createRestartSession } from './helpers/orca-restart'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const RESTART_CYCLES = 3
+
 /** Consecutive agreeing samples that count as "the strip stopped changing". */
 const SETTLED_SAMPLES = 3
 
@@ -36,9 +38,11 @@ async function readWorkspaceTabSnapshot(
   const store = await page.evaluate(
     ({ worktreeId, repoId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Store unavailable')
       }
+
       return {
         worktreeTabIds: (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id),
         totalTabCount: Object.values(state.tabsByWorktree).reduce(
@@ -50,11 +54,13 @@ async function readWorkspaceTabSnapshot(
     },
     { worktreeId, repoId }
   )
+
   const stripTabIds = await page
     .locator('.terminal-tab-strip [data-tab-id]')
     .evaluateAll((elements) =>
       elements.map((element) => (element as HTMLElement).dataset.tabId ?? '')
     )
+
   return { ...store, stripTabIds }
 }
 
@@ -76,6 +82,7 @@ async function waitForSettledWorkspaceTabs(
     totalTabCount: 0,
     remoteWorktreeCount: 0
   }
+
   let previousKey = ''
   let agreements = 0
   await expect
@@ -85,6 +92,7 @@ async function waitForSettledWorkspaceTabs(
         const key = JSON.stringify(latest)
         agreements = key === previousKey ? agreements + 1 : 0
         previousKey = key
+
         return agreements
       },
       {
@@ -94,6 +102,7 @@ async function waitForSettledWorkspaceTabs(
       }
     )
     .toBeGreaterThanOrEqual(SETTLED_SAMPLES)
+
   return latest
 }
 
@@ -132,9 +141,11 @@ async function flushSessionBeforeQuit(
         page.evaluate(
           async ({ targetId, worktreeId, tabIds }) => {
             const persisted = await window.api.session.get()
+
             const persistedIds = new Set(
               (persisted.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
             )
+
             return (
               persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
               tabIds.every((tabId) => persistedIds.has(tabId))
@@ -149,11 +160,14 @@ async function flushSessionBeforeQuit(
 
 function describeGrowth(baseline: WorkspaceTabSnapshot, cycles: WorkspaceTabSnapshot[]): string {
   const baselineTabIds = new Set(baseline.worktreeTabIds)
+
   const perCycle = cycles.map((cycle, index) => {
     const added = cycle.worktreeTabIds.filter((tabId) => !baselineTabIds.has(tabId))
     const suffix = added.length > 0 ? ` (+${added.length}: ${added.join(', ')})` : ''
+
     return `restart${index + 1}=${cycle.worktreeTabIds.length}${suffix}/strip${cycle.stripTabIds.length}/all${cycle.totalTabCount}/worktrees${cycle.remoteWorktreeCount}`
   })
+
   return `baseline=${baseline.worktreeTabIds.length}/strip${baseline.stripTabIds.length}/all${baseline.totalTabCount}/worktrees${baseline.remoteWorktreeCount} ${perCycle.join(' ')}`
 }
 
@@ -161,6 +175,7 @@ async function runRestartCycles(testInfo: TestInfo, initialTabCount: number): Pr
   const restart = createRestartSession(testInfo)
   let target: DockerSshRelayTarget | null = null
   let app: ElectronApplication | null = null
+
   try {
     target = startDockerSshRelayTarget(testInfo)
     const firstLaunch = await restart.launch()
@@ -180,6 +195,7 @@ async function runRestartCycles(testInfo: TestInfo, initialTabCount: number): Pr
     ) {
       await createRemoteTerminalTab(page, remote.worktreeId)
     }
+
     const baseline = await waitForSettledWorkspaceTabs(page, remote.worktreeId, remote.repoId)
     expect(baseline.worktreeTabIds).toHaveLength(initialTabCount)
     expect(baseline.stripTabIds.slice().sort()).toEqual(baseline.worktreeTabIds.slice().sort())
@@ -187,6 +203,7 @@ async function runRestartCycles(testInfo: TestInfo, initialTabCount: number): Pr
     // Why: every cycle runs before anything is asserted, so a failure reports whether the strip
     // grows by one per restart or duplicates wholesale — those have different causes.
     const cycles: WorkspaceTabSnapshot[] = []
+
     for (let cycle = 0; cycle < RESTART_CYCLES; cycle += 1) {
       await flushSessionBeforeQuit(
         page,
@@ -217,6 +234,7 @@ async function runRestartCycles(testInfo: TestInfo, initialTabCount: number): Pr
       `the remote repo gained worktree rows across restarts: ${growth}`
     ).toEqual(cycles.map(() => baseline.remoteWorktreeCount))
     const expectedTabIds = baseline.worktreeTabIds.slice().sort()
+
     for (const [index, cycle] of cycles.entries()) {
       expect(cycle.worktreeTabIds.slice().sort(), `restart ${index + 1}: ${growth}`).toEqual(
         expectedTabIds
@@ -230,6 +248,7 @@ async function runRestartCycles(testInfo: TestInfo, initialTabCount: number): Pr
     if (app) {
       await restart.close(app)
     }
+
     await restart.dispose()
     cleanupDockerSshRelayTarget(target)
   }

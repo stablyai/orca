@@ -13,9 +13,11 @@ export function resolveOxcCliInvocation(packageName, binName, root = process.cwd
   const manifestPath = requireFromRoot.resolve(`${packageName}/package.json`)
   const binField = requireFromRoot(`${packageName}/package.json`).bin
   const binEntry = typeof binField === 'string' ? binField : binField?.[binName]
+
   if (!binEntry) {
     throw new Error(`${packageName} package.json declares no "${binName}" bin entry.`)
   }
+
   return {
     command: process.execPath,
     prefixArgs: [path.resolve(path.dirname(manifestPath), binEntry)]

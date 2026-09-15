@@ -23,10 +23,13 @@ export default function WorktreeBaseFallbackDialog(): React.JSX.Element {
     getWorktreeBaseFallbackNotice,
     getWorktreeBaseFallbackNotice
   )
+
   const activeModal = useAppStore((state) => state.activeModal)
+
   const setContextualToursBlockingSurfaceVisible = useAppStore(
     (state) => state.setContextualToursBlockingSurfaceVisible
   )
+
   const lastNoticeRef = useRef(notice)
   const displayedNotice = notice ?? lastNoticeRef.current
   const open = notice !== null && activeModal === 'none'
@@ -39,6 +42,7 @@ export default function WorktreeBaseFallbackDialog(): React.JSX.Element {
 
   useEffect(() => {
     setContextualToursBlockingSurfaceVisible(open)
+
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [open, setContextualToursBlockingSurfaceVisible])
 

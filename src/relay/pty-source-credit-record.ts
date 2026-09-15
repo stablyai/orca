@@ -20,12 +20,19 @@ import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-mem
 import { PtySourceSentBoundaries } from './pty-source-sent-boundaries'
 
 export const DEFAULT_RETAINED_SOURCE_SU = 512 * 1024
+
 export const DEFAULT_AGGREGATE_RETAINED_SOURCE_SU = 48 * 1024 * 1024
+
 export const DEFAULT_RETAINED_DATA_BYTES = 2 * 1024 * 1024
+
 export const DEFAULT_AGGREGATE_RETAINED_DATA_BYTES = 64 * 1024 * 1024
+
 export const DEFAULT_RETAINED_SPANS = 1_024
+
 export const DEFAULT_AGGREGATE_RETAINED_SPANS = 64 * 1_024
+
 export const MAX_SOURCE_SPAN_DATA_BYTES = 1024 * 1024
+
 export const CLOSED_DELIVERY_TOMBSTONE_LIMIT = 256
 
 export type PtySourceSendReservation = Readonly<{
@@ -101,7 +108,9 @@ export function createAppendedSourceSpan(
     sourceStartSu: record.receivedEndSu,
     sourceEndSu: record.receivedEndSu + input.transform.rawLengthSu
   })
+
   assertPtySourceSpan(span)
+
   return span
 }
 
@@ -109,10 +118,13 @@ export function sliceAtSourceStart(span: PtySourceSpan, sourceStartSu: number): 
   if (sourceStartSu === span.sourceStartSu) {
     return span
   }
+
   if (!ptySourceSpanIsSplittable(span) || span.transform.transformed) {
     throw new Error('Indivisible PTY source span cannot be split for recovery')
   }
+
   const offset = sourceStartSu - span.sourceStartSu
+
   return Object.freeze({
     ...span,
     spanId: `${span.spanId}:suffix:${sourceStartSu}`,
@@ -133,15 +145,19 @@ export function sliceForSend(
 ): PtySourceSpan {
   const remaining = sliceAtSourceStart(span, sourceStartSu)
   const sourceLengthSu = remaining.sourceEndSu - remaining.sourceStartSu
+
   if (sourceLengthSu <= maxSourceSu) {
     return remaining
   }
+
   if (!ptySourceSpanIsSplittable(remaining) || remaining.transform.transformed) {
     throw new Error('Indivisible PTY source span does not fit the available source window')
   }
+
   let endOffset = maxSourceSu
   const trailing = remaining.data.charCodeAt(endOffset - 1)
   const following = remaining.data.charCodeAt(endOffset)
+
   if (
     endOffset > 0 &&
     trailing >= 0xd800 &&
@@ -151,9 +167,11 @@ export function sliceForSend(
   ) {
     endOffset--
   }
+
   if (endOffset <= 0) {
     throw new Error('Available source window would split a surrogate pair')
   }
+
   return Object.freeze({
     ...remaining,
     spanId: `${remaining.spanId}:slice:${remaining.sourceStartSu + endOffset}`,
@@ -166,10 +184,12 @@ export function sliceForSend(
 
 export function findPtySourceSpanForSend(record: DeliveryRecord): PtySourceSpan | undefined {
   let span = record.spans[record.sendSpanIndex]
+
   while (span && span.sourceEndSu <= record.sentEndSu) {
     record.sendSpanIndex += 1
     span = record.spans[record.sendSpanIndex]
   }
+
   return span
 }
 
@@ -194,10 +214,13 @@ export function matchingDeliverySnapshot(
 ): PtySourceDeliverySnapshot | null {
   const key = ptySourceDeliveryKey(identity)
   const active = deliveries.get(key)
+
   if (active && samePtySourceDelivery(active.identity, identity)) {
     return snapshotDeliveryRecord(active)
   }
+
   const closed = closedSnapshots.get(key)
+
   return closed && samePtySourceDelivery(closed, identity) ? closed : null
 }
 
@@ -210,9 +233,12 @@ export function createReplacementDeliveryRecord(
   assertPtySourceIdentity(newIdentity)
   assertPositiveSafeInteger(windowSu, 'windowSu')
   assertNonNegativeSafeInteger(acceptedSourceEndSu, 'acceptedSourceEndSu')
+
   const committedCheckpoint =
     acceptedSourceEndSu <= old.sentEndSu && old.sentBoundaries.has(acceptedSourceEndSu)
+
   const attemptedCheckpoint = acceptedSourceEndSu === old.attemptedEndSu
+
   if (
     acceptedSourceEndSu < old.creditedEndSu ||
     (!committedCheckpoint && !attemptedCheckpoint) ||
@@ -223,10 +249,12 @@ export function createReplacementDeliveryRecord(
   ) {
     throw new Error('PTY source recovery checkpoint does not exactly cover the retained delivery')
   }
+
   if (acceptedSourceEndSu > old.sentEndSu) {
     old.sentEndSu = acceptedSourceEndSu
     old.sentBoundaries.add(acceptedSourceEndSu)
   }
+
   old.attemptedEndSu = null
   const replacement = createDeliveryRecord(newIdentity, windowSu, acceptedSourceEndSu)
   replacement.state = old.state === 'sealed-unsettled' ? 'sealed-unsettled' : 'active'
@@ -240,6 +268,7 @@ export function createReplacementDeliveryRecord(
     (bytes, span) => bytes + chargedPtyRetainedStringBytes(span.data),
     0
   )
+
   return replacement
 }
 
@@ -265,13 +294,16 @@ export function closeDeliveryGeneration(
   close: (record: DeliveryRecord) => void
 ): number {
   let closed = 0
+
   for (const record of Array.from(records)) {
     if (record.identity.providerGeneration !== providerGeneration || record.state === 'closed') {
       continue
     }
+
     record.generationClosed = true
     close(record)
     closed++
   }
+
   return closed
 }

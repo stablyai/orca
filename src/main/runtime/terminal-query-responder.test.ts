@@ -61,6 +61,7 @@ function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = 
   runtime.setPtyController({
     write: (ptyId, data) => {
       replies.push({ ptyId, data })
+
       return true
     },
     kill: () => true,
@@ -74,6 +75,7 @@ function createResponderRuntime(opts: { rendererBuffer?: RendererBufferStub } = 
         }
       : {})
   })
+
   return { runtime, replies }
 }
 
@@ -90,7 +92,9 @@ function viewAttributes(overrides: Partial<TerminalViewAttributes> = {}): Termin
     { length: 256 },
     (_, i) => [i, (i * 2) % 256, (i * 3) % 256] as TerminalViewRgb
   )
+
   ansi[1] = [0xcc, 0x00, 0x00]
+
   return {
     foreground: [0xd0, 0xd0, 0xd0],
     background: [0x1e, 0x1e, 0x2e],
@@ -302,6 +306,7 @@ describe('main-side replay guard', () => {
     const { runtime, replies } = createResponderRuntime({
       rendererBuffer: { data: `restored screen${DA1}`, cols: 80, rows: 24 }
     })
+
     markHiddenRendererPty('pty-hyd')
 
     // First live byte triggers maybeHydrateHeadlessFromRenderer; the hydration
@@ -469,6 +474,7 @@ describe('HeadlessEmulator forwarding window', () => {
   it('forwards replies only for writes flagged forwardQueryReplies', async () => {
     const onQueryReply = vi.fn()
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
+
     try {
       await emulator.write('\x1b[c')
       expect(onQueryReply).not.toHaveBeenCalled()
@@ -488,6 +494,7 @@ describe('HeadlessEmulator forwarding window', () => {
     // must stay structurally safe without writeChain serialization).
     const internals = emulator as unknown as { terminal: { _core: { writeSync?: unknown } } }
     internals.terminal._core.writeSync = undefined
+
     try {
       // Enqueue an unflagged seed carrying a query, then a flagged live
       // chunk, WITHOUT awaiting between them: both sit in xterm's write
@@ -506,6 +513,7 @@ describe('HeadlessEmulator forwarding window', () => {
     const onQueryReply = vi.fn()
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
     emulator.installConptyPrimaryDeviceAttributesOverride()
+
     try {
       // Unflagged (replayed/seeded) DA1 must answer no one even with the
       // override installed.
@@ -777,6 +785,7 @@ describe('view-attribute replay guard and suppression', () => {
     const { runtime, replies } = createResponderRuntime({
       rendererBuffer: { data: 'restored\x1b]11;?\x07\x1b[?996n', cols: 80, rows: 24 }
     })
+
     markHiddenRendererPty('pty-vhyd')
     setTerminalViewAttributes(viewAttributes())
 

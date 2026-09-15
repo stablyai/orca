@@ -87,12 +87,15 @@ function harness(options: {
   const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let journal = options.journal
   const markAsDelivered = vi.fn()
+
   const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
     kind: 'sent' as const,
     state: options.dispatchState ?? ('accepted' as const)
   }))
+
   const sendMock = vi.mocked(send)
   const stored = new Map<string, unknown>()
+
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     hasOutstandingMailboxDelivery: (handle: string) =>
@@ -105,6 +108,7 @@ function harness(options: {
       stored.set(row.mailbox_handle, row),
     deleteStructuredPointerOperation: (key: string) => stored.delete(key)
   }
+
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
     getDb: () => db as never,
     getMessageWaiters: () => undefined,
@@ -122,6 +126,7 @@ function harness(options: {
       send
     }
   })
+
   return {
     delivery,
     markAsDelivered,
@@ -157,6 +162,7 @@ describe('structured mailbox pointer delivery', () => {
       mailbox: IDENTITY.handle,
       dispatchId: null
     })
+
     expect(delivery.deliverForHandle(IDENTITY.handle)).toBe(true)
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
@@ -175,6 +181,7 @@ describe('structured mailbox pointer delivery', () => {
       journal: idleJournal(),
       dispatchState: 'unknown'
     })
+
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(markAsDelivered).not.toHaveBeenCalled()
@@ -254,6 +261,7 @@ describe('structured mailbox pointer delivery', () => {
       journal: idleJournal(),
       outstandingRunDelivery: true
     })
+
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
@@ -276,6 +284,7 @@ describe('structured mailbox pointer delivery', () => {
       journal: idleJournal(),
       dispatchState: 'rejected'
     })
+
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
@@ -292,6 +301,7 @@ describe('structured mailbox pointer delivery', () => {
       journal: idleJournal(),
       dispatchState: 'unknown'
     })
+
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     const first = send.mock.calls[0]![0].operationId
@@ -320,6 +330,7 @@ describe('an adopted pane is redirected through its native owner', () => {
       journal: idleJournal(),
       refusal: settled
     })
+
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
@@ -333,6 +344,7 @@ describe('an adopted pane is redirected through its native owner', () => {
       journal: idleJournal(),
       refusal: { ...settled, handoffStage: 'preparing' }
     })
+
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).not.toHaveBeenCalled()
@@ -345,14 +357,17 @@ describe('forgetting one settled worker', () => {
   function twoWorkerHarness() {
     let resolves = true
     let journal = runningJournal()
+
     const sessionByMailbox: Record<string, string> = {
       'dispatch:d1': 'session-1',
       'dispatch:d2': 'session-2'
     }
+
     const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
       kind: 'sent' as const,
       state: 'accepted' as const
     }))
+
     const db = {
       getDispatchContextById: () => ({ run_id: 'run_1' }),
       hasOutstandingMailboxDelivery: () => false,
@@ -362,11 +377,13 @@ describe('forgetting one settled worker', () => {
       putStructuredPointerOperation: () => {},
       deleteStructuredPointerOperation: () => {}
     }
+
     const delivery = new OrchestrationStructuredMailboxPointerDelivery({
       getDb: () => db as never,
       getMessageWaiters: () => undefined,
       resolveStructuredTarget: (mailboxHandle) => {
         const sessionId = sessionByMailbox[mailboxHandle]
+
         return resolves && sessionId
           ? { sessionId, dispatchId: mailboxHandle.slice('dispatch:'.length) }
           : null
@@ -377,6 +394,7 @@ describe('forgetting one settled worker', () => {
         send
       }
     })
+
     return {
       delivery,
       send: vi.mocked(send),

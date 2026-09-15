@@ -44,6 +44,7 @@ export function useFloatingTerminalPanelGeometry({
       ) {
         return
       }
+
       lastPersistedBoundsRef.current = nextBounds
       persistFloatingTerminalPanelBounds(nextBounds)
     },
@@ -64,13 +65,16 @@ export function useFloatingTerminalPanelGeometry({
       if (!nextBounds) {
         return
       }
+
       const clampedBounds = clampFloatingTerminalBounds(nextBounds)
       stagedBoundsRef.current = null
       setBounds(clampedBounds)
       const anchoredBounds = anchorFloatingTerminalPanelBounds(clampedBounds)
+
       if (!anchoredBounds) {
         return
       }
+
       committedBoundsRef.current = anchoredBounds
       boundsSourceRef.current = 'user'
       persistUserBounds(anchoredBounds)
@@ -81,13 +85,17 @@ export function useFloatingTerminalPanelGeometry({
   const reconcileBounds = useCallback((): void => {
     if (maximized) {
       setBounds(getMaximizedFloatingTerminalBounds())
+
       return
     }
+
     setBounds((currentBounds) => {
       const source = boundsSourceRef.current
+
       if (!shouldReconcileFloatingTerminalPanelBounds(source)) {
         return currentBounds
       }
+
       return resolveFloatingTerminalPanelBounds(committedBoundsRef.current, source)
     })
   }, [boundsSourceRef, committedBoundsRef, maximized, setBounds])
@@ -99,6 +107,7 @@ export function useFloatingTerminalPanelGeometry({
   useEffect(() => {
     const handleResize = (): void => reconcileBounds()
     window.addEventListener('resize', handleResize)
+
     return () => window.removeEventListener('resize', handleResize)
   }, [reconcileBounds])
 
@@ -109,6 +118,7 @@ export function useFloatingTerminalPanelGeometry({
         setCwd(nextCwd)
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -121,6 +131,7 @@ export function useFloatingTerminalPanelGeometry({
         setMarkdownCwd(nextMarkdownCwd)
       }
     })
+
     return () => {
       cancelled = true
     }

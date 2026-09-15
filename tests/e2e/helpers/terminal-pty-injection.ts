@@ -17,6 +17,7 @@ export async function waitForTerminalPtyDataInjector(
       () =>
         page.evaluate((targetPaneKey) => {
           const injector = (window as TerminalPtyDataInjectionWindow).__terminalPtyDataInjection
+
           return injector?.keys().includes(targetPaneKey) ?? false
         }, paneKey),
       {

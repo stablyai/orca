@@ -79,19 +79,23 @@ export function encodeImeCommitForKitty(
   if (!press) {
     return { report: null, release: null }
   }
+
   const keyboardEvent = {
     ...press,
     altKey: false,
     ctrlKey: false,
     metaKey: false
   }
+
   const primaryCodePoint = resolveTerminalKittyPrimaryCodePoint(keyboardEvent, {
     layoutCharacterForCode: context.layoutCharacterForCode,
     primaryCharacterFallback: press.key
   })
+
   const reportsNumpadPress =
     kittyFunctionalNumpadCodePointForEvent(press) !== undefined &&
     (kittyKeyboardFlags & (KITTY_DISAMBIGUATE_ESCAPE_CODES | KITTY_REPORT_EVENT_TYPES)) !== 0
+
   const report =
     !kittyReportsAllKeysAsEscapeCodes(kittyKeyboardFlags) && !reportsNumpadPress
       ? null
@@ -103,6 +107,7 @@ export function encodeImeCommitForKitty(
           primaryCharacterFallback: press.key,
           primaryCodePoint
         })
+
   return {
     report,
     release:
@@ -136,6 +141,7 @@ export function encodeImeReleaseForKitty(
   if ((context.currentKittyKeyboardFlags & KITTY_REPORT_EVENT_TYPES) === 0) {
     return null
   }
+
   // Why the key fallback: an input source can rewrite the keyup's `key`
   // ('Process' after a source switch mid-hold) while `code` still matches the
   // press; xterm's evaluate finds no encodable key there and would silently
@@ -145,6 +151,7 @@ export function encodeImeReleaseForKitty(
     release.key.length === 1 || context.press === undefined
       ? release
       : { ...release, key: context.press.key, code: context.press.code ?? release.code }
+
   return encodeTerminalOptionKittyEvent(
     {
       ...releaseKey,

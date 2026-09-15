@@ -14,6 +14,7 @@ function addCost(left: number | null, right: number | null): number | null {
   if (left === null && right === null) {
     return null
   }
+
   return (left ?? 0) + (right ?? 0)
 }
 
@@ -72,6 +73,7 @@ export function buildOpenCodeUsageDailyPoints(
   filteredDaily: OpenCodeUsageDailyAggregate[]
 ): OpenCodeUsageDailyPoint[] {
   const byDay = new Map<string, OpenCodeUsageDailyPoint>()
+
   for (const row of filteredDaily) {
     const existing = byDay.get(row.day) ?? {
       day: row.day,
@@ -81,6 +83,7 @@ export function buildOpenCodeUsageDailyPoints(
       reasoningOutputTokens: 0,
       totalTokens: 0
     }
+
     existing.inputTokens += row.inputTokens
     existing.cachedInputTokens += row.cachedInputTokens
     existing.outputTokens += row.outputTokens
@@ -88,6 +91,7 @@ export function buildOpenCodeUsageDailyPoints(
     existing.totalTokens += row.totalTokens
     byDay.set(row.day, existing)
   }
+
   return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
 }
 
@@ -101,6 +105,7 @@ export function buildOpenCodeUsageBreakdownRows(
   for (const daily of filteredDaily) {
     const key = kind === 'model' ? (daily.model ?? 'unknown') : daily.projectKey
     const label = kind === 'model' ? (daily.model ?? 'Unknown model') : daily.projectLabel
+
     const existing = rows.get(key) ?? {
       key,
       label,
@@ -113,6 +118,7 @@ export function buildOpenCodeUsageBreakdownRows(
       totalTokens: 0,
       estimatedCostUsd: null
     }
+
     existing.events += daily.eventCount
     existing.inputTokens += daily.inputTokens
     existing.cachedInputTokens += daily.cachedInputTokens
@@ -127,6 +133,7 @@ export function buildOpenCodeUsageBreakdownRows(
     for (const session of filteredSessions) {
       for (const entry of session.modelBreakdown) {
         const row = rows.get(entry.modelKey)
+
         if (row) {
           row.sessions++
         }
@@ -136,6 +143,7 @@ export function buildOpenCodeUsageBreakdownRows(
     for (const session of filteredSessions) {
       for (const entry of session.locationBreakdown) {
         const row = rows.get(entry.locationKey)
+
         if (row) {
           row.sessions++
         }

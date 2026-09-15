@@ -29,17 +29,22 @@ export async function requestGuestOpenCodeOverlayDir(
     const res = (await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, deps.pluginSources())) as {
       overlayDirs?: { opencode?: unknown }
     }
+
     const dir = res?.overlayDirs?.opencode
+
     return typeof dir === 'string' && dir.length > 0 ? { kind: 'dir', dir } : { kind: 'none' }
   } catch (err) {
     // Why: -32601 = older guest bundle without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
     const code = (err as { code?: unknown })?.code
+
     if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED' || mux.isDisposed()) {
       return { kind: 'unavailable' }
     }
+
     deps.warn(
       `[agent-hooks] WSL installPlugins for '${distro}' failed: ${err instanceof Error ? err.message : String(err)}`
     )
+
     return { kind: 'unavailable' }
   }
 }

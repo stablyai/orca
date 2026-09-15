@@ -21,6 +21,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     'gitlab:closeMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return closeMR(
         repo.path,
         args.iid,
@@ -36,6 +37,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     'gitlab:reopenMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return reopenMR(
         repo.path,
         args.iid,
@@ -54,6 +56,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
       args: GitLabRepoSelectorArgs & { iid: number; method?: 'merge' | 'squash' | 'rebase' }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return mergeMR(
         repo.path,
         args.iid,
@@ -70,6 +73,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     'gitlab:updateMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; updates: GitLabMRUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return updateMR(
         repo.path,
         args.iid,
@@ -96,6 +100,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return updateMRReviewers(
         repo.path,
         args.iid,
@@ -112,6 +117,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     'gitlab:addMRComment',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return addMRComment(
         repo.path,
         args.iid,
@@ -138,6 +144,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return addMRInlineComment(
         repo.path,
         args.iid,
@@ -157,6 +164,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
       args: GitLabRepoSelectorArgs & { iid: number; discussionId: string; resolved: boolean }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return resolveMRDiscussion(
         repo.path,
         args.iid,

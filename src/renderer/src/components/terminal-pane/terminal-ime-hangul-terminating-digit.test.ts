@@ -43,6 +43,7 @@ function installImeHarness(): ImeHarness {
   const element = document.createElement('div')
   document.body.appendChild(element)
   const tracker = installTerminalImeCompositionTracker(element, { now: () => time })
+
   return {
     tracker,
     element,

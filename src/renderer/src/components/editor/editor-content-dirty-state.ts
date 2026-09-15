@@ -5,9 +5,11 @@ const TRAILING_WHITESPACE_CHAR_RE = /\s/
 // without allocating a trimmed copy.
 function getTrimEndLength(value: string): number {
   let end = value.length
+
   while (end > 0 && TRAILING_WHITESPACE_CHAR_RE.test(value[end - 1])) {
     end -= 1
   }
+
   return end
 }
 
@@ -29,10 +31,13 @@ export function isEditorContentUnchanged(
   if (!ignoreTrailingWhitespace) {
     return content === original
   }
+
   const originalEnd = getTrimEndLength(original)
+
   if (getTrimEndLength(content) !== originalEnd) {
     return false
   }
+
   return content.startsWith(
     originalEnd === original.length ? original : original.slice(0, originalEnd)
   )

@@ -39,6 +39,7 @@ vi.mock('../../shared/child-process/run-process', () => ({
 vi.mock('./system-ssh-operation-lifecycle', async (importActual) => {
   const actual = (await importActual()) as typeof SystemSshOperationLifecycle
   waitForChannelCloseSpy.mockImplementation(actual.waitForChannelClose)
+
   return { ...actual, waitForChannelClose: waitForChannelCloseSpy }
 })
 
@@ -72,12 +73,15 @@ const target = {
   username: 'dev',
   port: 22
 } as unknown as SshTarget
+
 const hostPlatform = getRemoteHostPlatform('win32-x64')
+
 const remoteRoot = 'C:/Users/dev/.orca-remote'
 
 /** Recover the script from `powershell.exe ... -EncodedCommand <base64 utf-16le>`. */
 function decodePowerShellCommand(command: string): string {
   const encoded = /-EncodedCommand (\S+)/.exec(command)?.[1]
+
   return encoded === undefined ? command : Buffer.from(encoded, 'base64').toString('utf16le')
 }
 
@@ -96,27 +100,37 @@ function createFakeChannel(onEnd: (channel: FakeChannel) => void): FakeChannel {
     }
   })
   channel.close = () => channel.emit('close', null, 'SIGTERM')
+
   return channel
 }
 
 type RecordedCommand = { script: string; executable: string; stdin: Buffer }
+
 type RecordedSftpBatch = { args: string[]; script: string }
 
 const sftpBatches: RecordedSftpBatch[] = []
+
 const commands: RecordedCommand[] = []
+
 /** Index of the exec that should report a non-zero exit, to model a chunk failing mid-file. */
 let failAtSpawn = -1
+
 let localDir: string
 
 const fileWrites = (): RecordedCommand[] =>
   commands.filter((command) => command.script.includes('OpenStandardInput'))
+
 const writtenPath = (command: RecordedCommand): string =>
   /\$path = '((?:[^']|'')*)'/.exec(command.script)?.[1]?.replace(/''/g, "'") ?? ''
+
 const fileMode = (command: RecordedCommand): string | undefined =>
   /FileMode\]::(\w+)/.exec(command.script)?.[1]
+
 const putLines = (): string[] =>
   sftpBatches.flatMap((batch) => batch.script.split('\n').filter((line) => line.startsWith('put ')))
+
 const putDestination = (line: string): string => /put "(?:[^"]*)" "([^"]*)"/.exec(line)?.[1] ?? ''
+
 const putSource = (line: string): string => /put "([^"]*)"/.exec(line)?.[1] ?? ''
 
 /** Makes every sftp batch succeed, recording what it was asked to do. */
@@ -125,10 +139,12 @@ function acceptSftp(): void {
     async (spec: { args: string[]; input: string; program: string }) => {
       const script = spec.input
       sftpBatches.push({ args: spec.args, script })
+
       // Model the real client: `put` copies the local file, so read it while it still exists.
       for (const line of script.split('\n').filter((entry) => entry.startsWith('put '))) {
         await readFile(putSource(line))
       }
+
       return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
     }
   )
@@ -138,6 +154,7 @@ function acceptSftp(): void {
 function refuseSftp(): void {
   runProcessMock.mockImplementation(async (spec: { args: string[]; input: string }) => {
     sftpBatches.push({ args: spec.args, script: spec.input })
+
     return {
       code: 255,
       signal: null,
@@ -153,6 +170,7 @@ function refusePwsh(): void {
   spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
     const spawnIndex = spawnSystemSshCommandMock.mock.calls.length - 1
     const executable = command.split(' ')[0] ?? ''
+
     return createFakeChannel((channel) => {
       commands.push({
         script: decodePowerShellCommand(command),
@@ -165,8 +183,10 @@ function refusePwsh(): void {
             "'pwsh.exe' is not recognized as an internal or external command,\noperable program or batch file."
           )
           channel.emit('close', 9009, null)
+
           return
         }
+
         channel.emit('close', spawnIndex === failAtSpawn ? 1 : 0, null)
       })
     })
@@ -186,6 +206,7 @@ beforeEach(() => {
   spawnSystemSshCommandMock.mockReset()
   spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
     const spawnIndex = spawnSystemSshCommandMock.mock.calls.length - 1
+
     return createFakeChannel((channel) => {
       commands.push({
         script: decodePowerShellCommand(command),
@@ -346,6 +367,7 @@ describe('Windows upload over sftp', () => {
     const seen: { path: string; contents: Buffer; mode: number }[] = []
     runProcessMock.mockImplementation(async (spec: { args: string[]; input: string }) => {
       sftpBatches.push({ args: spec.args, script: spec.input })
+
       for (const line of spec.input.split('\n').filter((entry) => entry.startsWith('put '))) {
         const path = putSource(line)
         seen.push({
@@ -354,6 +376,7 @@ describe('Windows upload over sftp', () => {
           mode: (await stat(path)).mode & 0o777
         })
       }
+
       return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
     })
 
@@ -390,6 +413,7 @@ describe('Windows upload over sftp', () => {
     // rename that would have given it a name refuses.
     spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
       const script = decodePowerShellCommand(command)
+
       return createFakeChannel((channel) => {
         commands.push({ script, executable: command.split(' ')[0] ?? '', stdin: channel.written })
         const failed = script.includes('::Move($staging, $path)')
@@ -419,10 +443,12 @@ describe('Windows upload over sftp', () => {
     runProcessMock.mockImplementation(async (spec: { args: string[]; input: string }) => {
       sftpBatches.push({ args: spec.args, script: spec.input })
       controller.abort()
+
       return { code: 255, signal: 'SIGTERM', stdout: '', stderr: '', timedOut: false }
     })
 
     let error: Error | undefined
+
     try {
       await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/relay.js`, {
         hostPlatform,
@@ -648,6 +674,7 @@ describe('last-resort Windows PowerShell failure reporting', () => {
 describe('waitForChannelClose bounding', () => {
   it('fails a remote that accepts stdin and never closes, instead of waiting forever', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createFakeChannel(() => {})
       const settled = vi.fn()
@@ -666,6 +693,7 @@ describe('waitForChannelClose bounding', () => {
 
   it('leaves an unbounded wait unbounded when no timeout is asked for', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createFakeChannel(() => {})
       const settled = vi.fn()

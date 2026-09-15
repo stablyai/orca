@@ -44,10 +44,12 @@ export function createStartingWorkerDispatch(
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     if (params.mutationReceipt) {
       const receipt = params.mutationReceipt
       const existing = this.getMutationReceipt(receipt.callerFingerprint, receipt.requestId)
+
       if (existing) {
         if (existing.method !== receipt.method || existing.payload_hash !== receipt.payloadHash) {
           throw new OrchestrationError(
@@ -55,11 +57,13 @@ export function createStartingWorkerDispatch(
             `Mutation request ${receipt.requestId} was already used with different input.`
           )
         }
+
         throw new OrchestrationError(
           'operation_unknown',
           `Mutation ${receipt.requestId} already has a durable acceptance record.`
         )
       }
+
       ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
@@ -69,6 +73,7 @@ export function createStartingWorkerDispatch(
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
     }
+
     const task = params.taskId
       ? this.getTask(params.taskId)
       : params.taskSpec
@@ -84,19 +89,23 @@ export function createStartingWorkerDispatch(
             runId: params.taskRunId
           })
         : undefined
+
     if (!task) {
       // Why: `--spec` creates the Task inline, so a missing row here always names an explicit id.
       const taskId = params.taskId ?? ''
       throw taskNotFoundError(`Task ${taskId} was not found.`, { taskId })
     }
+
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
       const priorWorker = this.getWorkerDispatch(params.retryOf)
       const latest = this.getDispatchContext(task.id)
+
       // Why: a context-only Dispatch has no worker row, so its settled state lives on the Dispatch row.
       const priorSettled = priorWorker
         ? ['failed', 'stopped', 'abandoned'].includes(priorWorker.state)
         : prior?.status === 'failed'
+
       if (
         !prior ||
         prior.task_id !== task.id ||
@@ -121,6 +130,7 @@ export function createStartingWorkerDispatch(
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
+
     if (params.mutationReceipt) {
       this.db
         .prepare(
@@ -134,6 +144,7 @@ export function createStartingWorkerDispatch(
           params.mutationReceipt.requestId
         )
     }
+
     insertStartingDispatchContextRow(this.db, {
       id,
       runId: task.run_id,
@@ -152,6 +163,7 @@ export function createStartingWorkerDispatch(
          ) VALUES (?, ?, 'starting', 'accepted', ?)`
       )
       .run(id, params.runtimeEpoch ?? null, JSON.stringify(params.startOptions))
+
     if (params.federation) {
       this.db
         .prepare(
@@ -167,6 +179,7 @@ export function createStartingWorkerDispatch(
           params.federation.protocolVersion
         )
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'task',
       id: task.id,
@@ -176,6 +189,7 @@ export function createStartingWorkerDispatch(
     })
     this.db.exec('COMMIT')
     this.hasAnyDispatchContextsCache = true
+
     return {
       dispatch: this.getDispatchContextById(id) as DispatchContextRow,
       worker: this.getWorkerDispatch(id) as WorkerDispatchRow,

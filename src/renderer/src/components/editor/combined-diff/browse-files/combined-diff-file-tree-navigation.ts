@@ -34,6 +34,7 @@ export function handleCombinedDiffFileTreeNavigation({
   scrollToIndex: (index: number) => void
 }): number | null {
   const index = getCombinedDiffFileTreeNavigationIndex({ mode, entry, sectionIndexByKey })
+
   if (index === null || !sections[index]) {
     return null
   }
@@ -41,7 +42,9 @@ export function handleCombinedDiffFileTreeNavigation({
   if (sections[index].collapsed) {
     toggleSection(index)
   }
+
   loadSection?.(index)
   scrollToIndex(index)
+
   return index
 }

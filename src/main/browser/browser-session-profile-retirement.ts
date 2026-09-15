@@ -8,12 +8,14 @@ export async function retireFailedBrowserSessionProfile(
   sess: Session
 ): Promise<void> {
   const retirement = retireProxySessionApplication(sess)
+
   try {
     clearBrowserSessionUserAgentMode(sess)
     clearBrowserSessionPartitionPolicies(partition, sess)
   } catch {
     // Best-effort policy cleanup must not skip retirement.
   }
+
   try {
     await retirement
   } catch {

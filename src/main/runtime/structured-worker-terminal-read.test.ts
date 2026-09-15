@@ -9,7 +9,9 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
+
 const { OrcaRuntimeWithResolveTerminalPane } = await import('./orca-runtime-resolve-terminal-pane')
+
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -50,6 +52,7 @@ function installHost(options: {
       if (options.items === 'unreadable') {
         throw new Error('agent_session_ownership_unknown')
       }
+
       return { page: { items: options.items ?? [], hasOlder: options.hasOlder ?? false } }
     }
   }
@@ -66,6 +69,7 @@ function registerWorker(): string {
     worktreeId: 'wt_1',
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   return handle
 }
 
@@ -107,14 +111,17 @@ describe('reading a structured worker through the terminal-read path', () => {
     // duplicated lines with `truncated:false`.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'a')] })
+
     const refusal = (() => {
       try {
         readStructuredWorkerTerminal({ handle, db: null, cursor: 0 })
+
         return ''
       } catch (error) {
         return (error as Error).message
       }
     })()
+
     expect(refusal).toMatch(/not line-addressable/)
     // Tells the caller what DOES work here. Polling a bounded newest-last tail and diffing fails
     // safe — a harmless re-read — where a broken cursor fails unsafe, as a silent hole.
@@ -161,12 +168,14 @@ describe('reading a structured worker through the terminal-read path', () => {
     // could be perfect and a peer would still get `terminal_handle_stale` if nothing called it.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'hello')] })
+
     const runtime = Object.assign(Object.create(OrcaRuntimeWithResolveTerminalPane.prototype), {
       getOrchestrationDbIfAvailable: () => null,
       getLivePtyForHandle: () => {
         throw new Error('the PTY lookup must never be reached for a structured worker')
       }
     }) as { readTerminal: (handle: string, opts?: object) => Promise<{ tail: string[] }> }
+
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
       tail: ['[assistant] hello'],
       source: 'stream'

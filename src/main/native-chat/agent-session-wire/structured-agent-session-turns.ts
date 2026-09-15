@@ -22,7 +22,9 @@ import type {
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
+
 export { performSetOption } from './structured-agent-session-turns-options'
+
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
 export type AgentSessionTurnContext = {
@@ -99,26 +101,32 @@ export async function performSend(
   const existing = ctx.journal
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
+
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
   }
+
   if (existing) {
     return {
       ok: true,
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
+
   try {
     await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
   } catch {
     return invalid('The message could not be recorded and was not sent.')
   }
+
   ctx.publish()
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
     ctx.publish()
+
     return {
       ok: true,
       value: {
@@ -127,6 +135,7 @@ export async function performSend(
       }
     }
   }
+
   try {
     await ctx.journal.resolveDispatch(
       outcome.state === 'accepted'
@@ -156,10 +165,13 @@ export async function performSend(
     } catch {
       // Nothing further to record; the pending row is settled on the next attach.
     }
+
     ctx.publish()
     throw error
   }
+
   ctx.publish()
+
   return {
     ok: true,
     value: {
@@ -176,9 +188,11 @@ function requireSubmission(
   const submission = ctx.journal
     .submissions()
     .find((entry) => entry.clientMessageId === clientMessageId)
+
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
+
   return submission
 }
 
@@ -194,12 +208,15 @@ export async function performCancel(
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   if (input.prompt) {
     const validated = validatePendingPrompt(ctx, input.prompt)
+
     if (!validated.ok) {
       return validated
     }
   }
+
   let cancelled = false
   let note = 'Cancellation requested.'
+
   try {
     cancelled = input.scope
       ? (
@@ -217,6 +234,7 @@ export async function performCancel(
             ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
           })
         ).cancelled
+
     if (!cancelled) {
       note = 'The provider had already finished this turn.'
     }
@@ -224,17 +242,22 @@ export async function performCancel(
     if (input.prompt) {
       throw error
     }
+
     note = `Cancellation was not confirmed: ${
       error instanceof Error ? error.message : String(error)
     }`
   }
+
   if (cancelled && input.prompt) {
     await ctx.flushStreamedEvents()
   }
+
   if (input.scope) {
     return { ok: true, value: { turnId: input.turnId, cancelled } }
   }
+
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
   await appendStatus(ctx, input.clientOperationId, note)
+
   return { ok: true, value: { turnId: input.turnId, cancelled } }
 }

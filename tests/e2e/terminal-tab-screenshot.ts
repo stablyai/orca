@@ -9,13 +9,17 @@ export async function captureStableTabScreenshot(page: Page, tabId: string): Pro
   const screen = tabScreenLocator(page, tabId)
   await expect(screen).toBeVisible()
   let previous = await screen.screenshot({ animations: 'disabled' })
+
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await page.waitForTimeout(250)
     const next = await screen.screenshot({ animations: 'disabled' })
+
     if (next.equals(previous)) {
       return next
     }
+
     previous = next
   }
+
   throw new Error(`Terminal surface for tab ${tabId} did not stabilize for screenshot`)
 }

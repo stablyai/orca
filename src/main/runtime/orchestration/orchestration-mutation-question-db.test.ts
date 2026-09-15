@@ -11,18 +11,21 @@ describe('OrchestrationDb mutation and question state', () => {
 
   function createDb(): OrchestrationDb {
     db = new OrchestrationDb(':memory:')
+
     return db
   }
 
   describe('durable mutation receipts', () => {
     it('replays completed input and rejects request ID reuse with changed input', () => {
       const d = createDb()
+
       const started = d.beginMutationReceipt({
         callerFingerprint: 'caller_a',
         requestId: 'request_1',
         method: 'orchestration.send',
         payloadHash: 'hash_a'
       })
+
       expect(started.disposition).toBe('started')
 
       d.completeMutationReceipt({
@@ -56,6 +59,7 @@ describe('OrchestrationDb mutation and question state', () => {
 
     it('keeps caller namespaces separate and can discard only pending work', () => {
       const d = createDb()
+
       for (const callerFingerprint of ['caller_a', 'caller_b']) {
         d.beginMutationReceipt({
           callerFingerprint,
@@ -64,6 +68,7 @@ describe('OrchestrationDb mutation and question state', () => {
           payloadHash: 'same_hash'
         })
       }
+
       expect(d.getMutationReceipt('caller_a', 'same_request')?.state).toBe('pending')
       expect(d.getMutationReceipt('caller_b', 'same_request')?.state).toBe('pending')
 
@@ -76,6 +81,7 @@ describe('OrchestrationDb mutation and question state', () => {
   describe('question threads', () => {
     it('accepts a question message in the fresh canonical schema', () => {
       const d = createDb()
+
       const message = d.insertMessage({
         runId: 'run_legacy_local',
         from: 'worker',
@@ -89,13 +95,16 @@ describe('OrchestrationDb mutation and question state', () => {
 
     it('uses the original message ID and records one durable answer', () => {
       const d = createDb()
+
       const run = d.createRun({
         objective: 'Questions',
         coordinatorHandle: 'term_coord',
         coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
       })
+
       const task = d.createTask({ spec: 'ask', runId: run.id })
       const dispatch = createRootDispatch(d, task.id, 'term_worker')
+
       const created = d.createQuestion({
         runId: run.id,
         dispatchId: dispatch.id,
@@ -111,12 +120,14 @@ describe('OrchestrationDb mutation and question state', () => {
         type: 'question',
         thread_id: created.message.id
       })
+
       const answer = d.answerQuestion({
         messageId: created.message.id,
         runId: run.id,
         consumerGeneration: run.consumer_generation,
         body: 'old'
       })
+
       const replay = d.answerQuestion({
         messageId: created.message.id,
         runId: run.id,
@@ -140,13 +151,16 @@ describe('OrchestrationDb mutation and question state', () => {
 
     it('closes pending questions with their Dispatch', () => {
       const d = createDb()
+
       const run = d.createRun({
         objective: 'Close questions',
         coordinatorHandle: 'term_coord',
         coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
       })
+
       const task = d.createTask({ spec: 'ask', runId: run.id })
       const dispatch = createRootDispatch(d, task.id, 'term_worker')
+
       const created = d.createQuestion({
         runId: run.id,
         dispatchId: dispatch.id,

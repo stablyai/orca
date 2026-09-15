@@ -39,9 +39,11 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     'worktrees:create',
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
+
       // Why span here: parent the child git spans for the trace tree; don't attach branch name/remote URL (user content) — repo ID is the safer correlator.
       return withWorktreeSpan({ stage: 'create' }, async (span) => {
         const repo = store.getRepo(args.repoId)
+
         if (!repo) {
           throw new Error(`Repo not found: ${args.repoId}`)
         }
@@ -55,12 +57,14 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           repo,
           request: args.automationProvenanceRequest
         })
+
         const createArgs: CreateWorktreeArgsWithSystemProvenance = {
           ...args,
           automationProvenance
         }
 
         let result: CreateWorktreeResult
+
         try {
           // Why: wrap only the helpers; the pre-validation throws above are IPC-shape bugs, not the git/filesystem failures the funnel tracks.
           if (isFolderRepo(repo)) {
@@ -85,7 +89,9 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           })
           throw error
         }
+
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
+
         if (result.timing) {
           addWorktreeCreatePhaseAttributes(span, result.timing)
         }
@@ -120,20 +126,26 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     'worktrees:adoptProvisionedRoot',
     async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
+
       return withWorktreeSpan({ stage: 'create' }, async () => {
         const repo = findExactRepoOwner(store, args.repoId, args.executionHostId)
+
         if (!repo || isFolderRepo(repo)) {
           throw new Error('Provisioned-root repository ownership is missing or ambiguous.')
         }
+
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
+
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
           repoSelector: args.repoId,
           repo,
           request: args.automationProvenanceRequest
         })
+
         let result: CreateWorktreeResult
+
         try {
           result = await adoptProvisionedRootSshCheckout({
             userDataPath: app.getPath('userData'),
@@ -151,6 +163,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           })
           throw error
         }
+
         finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
         track('workspace_created', {
           source,
@@ -164,6 +177,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           path: result.worktree.path,
           branch: result.worktree.branch
         })
+
         return result
       })
     }

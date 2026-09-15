@@ -20,7 +20,9 @@ export function resolveLegacyWorkerTerminalRecoveryAction(
   if (event.resolution !== 'rolled_back') {
     return { kind: 'clear-sleeping', paneKey: event.paneKey }
   }
+
   const pane = parsePaneKey(event.paneKey)
+
   return pane && event.ptyId
     ? {
         kind: 'rollback-surface',
@@ -52,21 +54,28 @@ export function rollbackLegacyWorkerTerminalSurfaceInStore(
   const tabExists = Object.values(store.tabsByWorktree).some((tabs) =>
     tabs.some((tab) => tab.id === detail.tabId)
   )
+
   if (!tabExists) {
     return 'already-removed'
   }
+
   if (!detail.leafId || !detail.expectedPtyId) {
     return 'identity-mismatch'
   }
+
   const layout = store.terminalLayoutsByTabId[detail.tabId]
   const boundPtyId = layout?.ptyIdsByLeafId?.[detail.leafId]
+
   if (!boundPtyId) {
     return 'already-removed'
   }
+
   if (boundPtyId !== detail.expectedPtyId) {
     return 'identity-mismatch'
   }
+
   const detached = detachTerminalLayoutLeaf(layout, detail.leafId)
+
   if (detached) {
     store.retireAgentPaneAuthority(makePaneKey(detail.tabId, detail.leafId), {
       preserveSleepingAgentSession: true
@@ -79,5 +88,6 @@ export function rollbackLegacyWorkerTerminalSurfaceInStore(
       captureRecentlyClosed: false
     })
   }
+
   return 'removed'
 }

@@ -103,6 +103,7 @@ describe('Linear issue context relations', () => {
         type: 'blocks',
         relatedIssue: rawIssue(`issue-${offset + index + 10}`, `ENG-${offset + index + 10}`)
       }))
+
     rawRequest
       .mockResolvedValueOnce({
         data: {

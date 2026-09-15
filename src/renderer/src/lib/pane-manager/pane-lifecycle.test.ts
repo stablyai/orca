@@ -39,6 +39,7 @@ vi.mock('@xterm/addon-webgl', () => ({
 
 function createPane(): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
+
   return {
     id: 1,
     leafId,
@@ -213,6 +214,7 @@ describe('attachWebgl', () => {
     })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
   })
@@ -334,6 +336,7 @@ describe('attachWebgl', () => {
         if (tagName !== 'canvas') {
           return {}
         }
+
         return {
           getContext: vi.fn((contextName: string) =>
             contextName === 'webgl2'
@@ -468,6 +471,7 @@ describe('openTerminal — addon and provider wiring', () => {
     const fitAddon = {
       fit: vi.fn()
     } as unknown as ManagedPaneInternal['fitAddon']
+
     const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
     const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
     const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
@@ -488,12 +492,15 @@ describe('openTerminal — addon and provider wiring', () => {
       appendChild: vi.fn(),
       addEventListener: vi.fn()
     } as unknown as HTMLDivElement
+
     const fakeXtermContainer = {
       appendChild: vi.fn(),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     } as unknown as HTMLDivElement
+
     const fakeTooltip = {} as unknown as HTMLDivElement
+
     const fakeTerminalElement = {
       appendChild: vi.fn(),
       addEventListener: vi.fn(),
@@ -501,6 +508,7 @@ describe('openTerminal — addon and provider wiring', () => {
       querySelector: vi.fn(() => null),
       classList: { contains: vi.fn(() => false) }
     } as unknown as HTMLElement
+
     vi.stubGlobal(
       'MutationObserver',
       vi.fn(function MutationObserver() {
@@ -538,6 +546,7 @@ describe('openTerminal — addon and provider wiring', () => {
       registerCharacterJoiner: vi.fn((handler: (text: string) => [number, number][]) => {
         events.push('registerCharacterJoiner')
         registeredJoinHandler = handler
+
         return 3
       }),
       deregisterCharacterJoiner: vi.fn((joinerId: number) => {
@@ -554,6 +563,7 @@ describe('openTerminal — addon and provider wiring', () => {
     } as unknown as ManagedPaneInternal['terminal']
 
     const leafId = '22222222-2222-4222-8222-222222222222' as never
+
     const pane: ManagedPaneInternal = {
       id: 1,
       leafId,
@@ -627,6 +637,7 @@ describe('openTerminal — addon and provider wiring', () => {
 
     const unicodeIdx = events.indexOf('activeVersion=11')
     const writeIdx = events.indexOf('write')
+
     if (writeIdx !== -1) {
       expect(unicodeIdx).toBeLessThan(writeIdx)
     }
@@ -683,19 +694,23 @@ describe('openTerminal — addon and provider wiring', () => {
     const { pane } = createOpenTerminalHarness()
     const addEventListener = vi.fn()
     const removeEventListener = vi.fn()
+
     const screen = {
       addEventListener,
       removeEventListener
     } as unknown as HTMLElement
+
     vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
 
     openTerminal(pane)
     const disposable = pane.linkifierMouseLeaveResetDisposable
     expect(disposable?.dispose).toBeTypeOf('function')
     expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
+
     const mouseLeaveHandler = addEventListener.mock.calls.find(
       ([eventName]) => eventName === 'mouseleave'
     )?.[1]
+
     expect(mouseLeaveHandler).toBeTypeOf('function')
 
     disposePane(pane, new Map([[pane.id, pane]]))

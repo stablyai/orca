@@ -11,9 +11,13 @@ import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
 
 const COORDINATOR_HANDLE = 'term_invariant_coordinator'
+
 const COORDINATOR_PANE = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
 const WORKER_HANDLE = 'term_invariant_worker'
+
 const WORKER_PANE = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 const WORKER_PROCESS = 'pty-worker:incarnation-1'
 
 type Harness = {
@@ -24,13 +28,16 @@ type Harness = {
 }
 
 const harnesses: Harness[] = []
+
 const tempDirs: string[] = []
+
 let requestSequence = 0
 
 afterEach(() => {
   for (const harness of harnesses.splice(0)) {
     harness.db.close()
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -42,6 +49,7 @@ describe('Task/Dispatch state invariant', () => {
     async (dispatchStatus) => {
       const harness = createHarness()
       const task = harness.db.createTask({ spec: 'retain assignment', runId: harness.runId })
+
       const dispatch =
         dispatchStatus === 'pending'
           ? harness.db.createStartingWorkerDispatch({
@@ -198,6 +206,7 @@ describe('Task/Dispatch state invariant', () => {
       const harness = createHarness()
       const task = harness.db.createTask({ spec: 'racing assignment', runId: harness.runId })
       const responses: RpcResponse[] = []
+
       for (const operation of order) {
         responses.push(
           await (operation === 'dispatch'
@@ -205,6 +214,7 @@ describe('Task/Dispatch state invariant', () => {
             : updateTask(harness, task.id, 'ready', 'race result'))
         )
       }
+
       const dispatchResponse = responses[order.indexOf('dispatch')]
       const readyResponse = responses[order.indexOf('ready')]
 
@@ -213,11 +223,13 @@ describe('Task/Dispatch state invariant', () => {
         result: { dispatch: { status: 'dispatched' } }
       })
       expect(readyResponse.ok).toBe(readySucceeds)
+
       if (!readySucceeds) {
         expect(readyResponse).toMatchObject({
           error: { code: 'task_not_startable' }
         })
       }
+
       expect(readPersistedActiveState(harness.dbPath, task.id)).toEqual({
         taskStatus: 'dispatched',
         activeDispatches: 1
@@ -237,23 +249,29 @@ function createHarness(): Harness {
     if (handle === COORDINATOR_HANDLE) {
       return COORDINATOR_PANE
     }
+
     if (handle === WORKER_HANDLE) {
       return WORKER_PANE
     }
+
     return null
   })
+
   const runId = db.createRun({
     objective: 'Enforce Task/Dispatch state',
     coordinatorHandle: COORDINATOR_HANDLE,
     coordinatorPaneKey: COORDINATOR_PANE
   }).id
+
   const harness = {
     db,
     dbPath,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }),
     runId
   }
+
   harnesses.push(harness)
+
   return harness
 }
 
@@ -263,9 +281,11 @@ async function dispatchTask(
   terminalHandle: string
 ): Promise<{ id: string; status: string }> {
   const response = await dispatchTaskResponse(harness, taskId, terminalHandle)
+
   if (!response.ok) {
     throw new Error(`${response.error.code}: ${response.error.message}`)
   }
+
   return (response.result as { dispatch: { id: string; status: string } }).dispatch
 }
 
@@ -296,6 +316,7 @@ async function createCapableDispatch(
       taskId,
       startOptions: {}
     }).dispatch
+
     const capability = harness.db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle: WORKER_HANDLE,
@@ -306,14 +327,18 @@ async function createCapableDispatch(
       effects: [],
       terminalOwnership: 'external'
     })
+
     return { dispatch, capability }
   }
+
   const dispatch = await dispatchTask(harness, taskId, WORKER_HANDLE)
+
   const capability = harness.db.mintDispatchCapability({
     dispatchId: dispatch.id,
     paneKey: WORKER_PANE,
     processIncarnation: WORKER_PROCESS
   })
+
   return { dispatch, capability }
 }
 
@@ -328,6 +353,7 @@ function createSupervisedDispatch(
     taskId,
     startOptions: {}
   }).dispatch
+
   const capability = harness.db.prepareStartingWorkerAuthority({
     dispatchId: dispatch.id,
     handle: WORKER_HANDLE,
@@ -338,9 +364,11 @@ function createSupervisedDispatch(
     effects: [],
     terminalOwnership: 'created'
   })
+
   if (status === 'dispatched') {
     harness.db.markWorkerDispatchReady(dispatch.id)
   }
+
   return { dispatch, capability }
 }
 
@@ -363,6 +391,7 @@ function updateTask(
 
 function request(method: string, params: Record<string, unknown>): RpcRequest {
   requestSequence += 1
+
   return {
     id: `rpc_task_dispatch_invariant_${requestSequence}`,
     authToken: 'test-token',
@@ -375,10 +404,12 @@ function request(method: string, params: Record<string, unknown>): RpcRequest {
 
 function readPersistedPair(dbPath: string, taskId: string, dispatchId: string) {
   const sqlite = new Database(dbPath, { readonly: true })
+
   try {
     const task = sqlite
       .prepare('SELECT status, result, completed_at FROM tasks WHERE id = ?')
       .get(taskId) as { status: string; result: string | null; completed_at: string | null }
+
     const dispatch = sqlite
       .prepare(
         'SELECT status, completed_at, capability_revoked_at FROM dispatch_contexts WHERE id = ?'
@@ -388,6 +419,7 @@ function readPersistedPair(dbPath: string, taskId: string, dispatchId: string) {
       completed_at: string | null
       capability_revoked_at: string | null
     }
+
     return {
       taskStatus: task.status,
       taskResult: task.result,
@@ -403,16 +435,19 @@ function readPersistedPair(dbPath: string, taskId: string, dispatchId: string) {
 
 function readPersistedActiveState(dbPath: string, taskId: string) {
   const sqlite = new Database(dbPath, { readonly: true })
+
   try {
     const task = sqlite.prepare('SELECT status FROM tasks WHERE id = ?').get(taskId) as {
       status: string
     }
+
     const active = sqlite
       .prepare(
         `SELECT COUNT(*) AS count FROM dispatch_contexts
          WHERE task_id = ? AND status IN ('pending', 'dispatched')`
       )
       .get(taskId) as { count: number }
+
     return { taskStatus: task.status, activeDispatches: active.count }
   } finally {
     sqlite.close()
@@ -421,6 +456,7 @@ function readPersistedActiveState(dbPath: string, taskId: string) {
 
 function readPersistedWorkerState(dbPath: string, dispatchId: string) {
   const sqlite = new Database(dbPath, { readonly: true })
+
   try {
     const row = sqlite
       .prepare(
@@ -434,6 +470,7 @@ function readPersistedWorkerState(dbPath: string, dispatchId: string) {
       ownership_state: string
       release_state: string
     }
+
     return {
       workerState: row.worker_state,
       ownershipState: row.ownership_state,

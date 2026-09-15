@@ -29,6 +29,7 @@ export function selectWorktreeActivityStatuses(
   worktreeIds: readonly string[]
 ): Map<string, WorktreeStatus> {
   const statuses = new Map<string, WorktreeStatus>()
+
   for (const worktreeId of worktreeIds) {
     const {
       hasPermission,
@@ -40,6 +41,7 @@ export function selectWorktreeActivityStatuses(
       agentStatusPaneIdsByTabId,
       stalePaneIdsByTabId
     } = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
+
     statuses.set(
       worktreeId,
       resolveWorktreeStatus({
@@ -59,6 +61,7 @@ export function selectWorktreeActivityStatuses(
       })
     )
   }
+
   return statuses
 }
 
@@ -71,5 +74,6 @@ export function useWorktreeActivityStatuses(
     (state: WorktreeActivityStatusState) => selectWorktreeActivityStatuses(state, worktreeIds),
     [worktreeIds]
   )
+
   return useAppStore(useShallow(selectStatuses))
 }

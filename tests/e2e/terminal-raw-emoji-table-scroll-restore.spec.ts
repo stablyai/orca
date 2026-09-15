@@ -55,7 +55,9 @@ const EMOJI_TABLE_FIXTURE = readFileSync(
   path.join(__dirname, 'fixtures', 'terminal-emoji-table.md'),
   'utf8'
 )
+
 const RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS = [5, 17, 10, 25, 23, 12, 10, 10] as const
+
 const RAW_EMOJI_BOX_TABLE_WIDTH =
   RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS.reduce((sum, width) => sum + width, 0) +
   RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS.length * 3 +
@@ -64,6 +66,7 @@ const RAW_EMOJI_BOX_TABLE_WIDTH =
 function rawEmojiFixtureBoxTableScript(table: string, runId: string): string {
   const marker = `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
   const frameTailMarker = rawEmojiFixtureFrameTailMarker(runId)
+
   return `
 const table = ${JSON.stringify(table)}
 const widths = ${JSON.stringify(RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS)}
@@ -187,6 +190,7 @@ async function setWideRenderedTableViewport(page: Page): Promise<void> {
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
+
     if (store?.getState().rightSidebarOpen) {
       store.getState().setRightSidebarOpen(false)
     }
@@ -204,11 +208,13 @@ async function waitForActiveTerminalColumns(
       () =>
         page.evaluate(() => {
           let pane: ReturnType<NonNullable<RawTableDebugWindow['getActiveTestPane']>> = null
+
           try {
             pane = (window as RawTableDebugWindow).getActiveTestPane?.() ?? null
           } catch {
             return 0
           }
+
           return pane?.terminal.cols ?? 0
         }),
       {
@@ -230,28 +236,37 @@ async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
 }> {
   return page.evaluate(() => {
     const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const buffer = pane.terminal.buffer.active
     const lineCount = buffer.baseY + buffer.length
+
     const lines = Array.from({ length: lineCount }, (_, index) => {
       const line = buffer.getLine(index)
+
       return {
         index,
         isWrapped: line?.isWrapped === true,
         text: line?.translateToString(true) ?? ''
       }
     })
+
     const wrappedBoxLines = lines
       .filter((line) => line.isWrapped && /[┌┬┐├┼┤└┴┘│─]/.test(line.text))
       .slice(0, 20)
+
     const wrappedSingerContinuationLines = lines
       .filter((line) => line.isWrapped && /U\\+1F3A4|A stage performer|Talented/.test(line.text))
       .slice(0, 20)
+
     const singerIndex = lines.findIndex((line) => line.text.includes('Singer'))
+
     const nearSinger =
       singerIndex === -1 ? [] : lines.slice(Math.max(0, singerIndex - 4), singerIndex + 7)
+
     return {
       cols: pane.terminal.cols,
       rows: pane.terminal.rows,
@@ -271,16 +286,20 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
 }> {
   return page.evaluate(() => {
     const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane.container.querySelector<HTMLElement>('.xterm-rows')
+
     if (!screen) {
       throw new Error('Active terminal DOM unavailable')
     }
 
     const screenRect = screen.getBoundingClientRect()
+
     if (!rows) {
       // Why: WebGL renders rows into a canvas, so DOM-span overpaint checks only
       // apply when the DOM renderer is active. Buffer wrap checks still run below.
@@ -293,9 +312,11 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
 
     const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
     const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
+
     const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
       .map((span) => {
         const rect = span.getBoundingClientRect()
+
         return {
           text: span.textContent ?? '',
           right: rect.right,
@@ -321,48 +342,62 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
 }> {
   return page.evaluate(() => {
     const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane.container.querySelector<HTMLElement>('.xterm-rows')
+
     if (!screen) {
       throw new Error('Active terminal DOM unavailable')
     }
+
     const screenRect = screen.getBoundingClientRect()
     const buffer = pane.terminal.buffer.active
+
     const visibleLine = Array.from(
       { length: pane.terminal.rows },
       (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
     ).find((text) => text.includes('Singer'))
+
     const scrollbackLine =
       visibleLine ??
       Array.from(
         { length: buffer.baseY + buffer.length },
         (_, index) => buffer.getLine(index)?.translateToString(true) ?? ''
       ).find((text) => text.includes('Singer'))
+
     if (!scrollbackLine) {
       throw new Error('Singer row buffer line unavailable')
     }
+
     const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+
     const bufferGeometry = {
       cols: pane.terminal.cols,
       screenRight: screenRect.right,
       rowRight: screenRect.left + pane.terminal.cols * cellWidth,
       rowText: scrollbackLine
     }
+
     if (!rows) {
       return bufferGeometry
     }
+
     const row = Array.from(rows.children).find((element) =>
       (element.textContent ?? '').includes('Singer')
     ) as HTMLElement | undefined
+
     if (!row) {
       // Why: xterm can repaint DOM rows between scroll and measurement; the
       // terminal buffer still gives a stable right-edge bound for the golden.
       return bufferGeometry
     }
+
     const rowRect = row.getBoundingClientRect()
+
     return {
       cols: pane.terminal.cols,
       screenRight: screenRect.right,
@@ -386,24 +421,30 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<{
 }> {
   return page.evaluate(() => {
     const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const terminalCore = pane.terminal._core
     const canvas = document.createElement('canvas')
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
+
     const renderingDiagnostics = manager
       ?.getRenderingDiagnostics()
       .find((diagnostic) => diagnostic.paneId === pane.id)
+
     return {
       hasWebgl: renderingDiagnostics?.hasWebgl ?? false,
       hasComplexScriptOutput: renderingDiagnostics?.hasComplexScriptOutput ?? false,
@@ -423,6 +464,7 @@ async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
     store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -433,18 +475,24 @@ async function expectAutoWebgl(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const canvas = document.createElement('canvas')
     const gl = canvas.getContext('webgl2')
+
     if (!gl) {
       return false
     }
+
     if (!navigator.platform.includes('Linux') && !navigator.userAgent.includes('Linux')) {
       return true
     }
+
     const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+
     if (!debugInfo) {
       return false
     }
+
     const renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? '')
     const vendor = String(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? '')
+
     return !/\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|virgl|svga3d)\b/i.test(
       `${vendor} ${renderer}`
     )
@@ -458,17 +506,21 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         const store = window.__store
         const state = store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         if (!pane) {
           throw new Error('Active terminal pane unavailable')
         }
+
         return pane as BrowserTerminalPane
       }
     })
@@ -501,6 +553,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       .poll(
         async () => {
           diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+
           return diagnostics.hasWebgl === expectedWebgl && diagnostics.cursorHidden === false
         },
         {
@@ -523,10 +576,13 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     await waitForSessionReady(orcaPage)
     await closeFeatureTips(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'raw emoji table repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -590,6 +646,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         .poll(
           async () => {
             diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+
             return diagnostics.hasWebgl === expectedWebgl && diagnostics.cursorHidden === false
           },
           {

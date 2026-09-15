@@ -10,5 +10,6 @@ export function resolveRepoForExecutionHost(
 ): Repo | undefined {
   // Why: host-qualified operations must never guess between repo owners; legacy unscoped calls work only for one unique owner.
   const owner = resolveWorktreeRemovalRepoOwner(store, repoId, hostId)
+
   return owner.kind === 'resolved' ? owner.repo : undefined
 }

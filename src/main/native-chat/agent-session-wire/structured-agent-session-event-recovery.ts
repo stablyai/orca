@@ -35,21 +35,27 @@ export class StructuredAgentSessionEventRecovery {
     if (this.sinkFailures.has(sessionId)) {
       return
     }
+
     this.sinkFailures.add(sessionId)
     void this.context
       .serialize(sessionId, async () => {
         const session = this.context.sessions.get(sessionId)
+
         const stop =
           this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
+
         if (!session?.hasProviderChild || !stop) {
           return null
         }
+
         const fence = session.fence
         const acquisitionGeneration = session.acquisitionGeneration
         const stopped = await stop(sessionId)
+
         if (!stopped || !acquisitionGeneration) {
           return null
         }
+
         return {
           type: 'ended',
           sessionId,
@@ -66,9 +72,11 @@ export class StructuredAgentSessionEventRecovery {
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
     const ticket = await settleUnexpectedStructuredAgentSessionExit(this.context, event)
+
     if (!ticket) {
       return
     }
+
     try {
       await resumeHeldStructuredAgentSession({
         sessionId: ticket.sessionId,

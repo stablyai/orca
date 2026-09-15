@@ -8,10 +8,13 @@ import { isCurrentDesiredRemoteWatcher } from './filesystem-watcher-remote-desir
 
 function flushRemoteWatcherResync(key: string): void {
   const state = watcherLifecycleState.remoteWatcherResyncStates.get(key)
+
   if (!state) {
     return
   }
+
   state.timer = undefined
+
   if (
     watcherLifecycleState.remoteWatchersClosed ||
     watcherLifecycleState.suspendedRemoteWatcherListeners.has(key) ||
@@ -20,13 +23,17 @@ function flushRemoteWatcherResync(key: string): void {
     if (!watcherLifecycleState.desiredRemoteWatchers.has(key)) {
       watcherLifecycleState.remoteWatcherResyncStates.delete(key)
     }
+
     return
   }
+
   let sent = false
+
   for (const listener of state.listeners.values()) {
     if (listener.isDestroyed() || !isCurrentDesiredRemoteWatcher(key, listener)) {
       continue
     }
+
     try {
       listener.send('fs:changed', {
         worktreePath: state.worktreePath,
@@ -37,7 +44,9 @@ function flushRemoteWatcherResync(key: string): void {
       console.warn(`[filesystem-watcher] failed to send SSH watcher resync for ${key}:`, error)
     }
   }
+
   state.listeners.clear()
+
   if (sent) {
     state.lastSentAt = Date.now()
   } else {
@@ -55,21 +64,28 @@ export function requestRemoteWatcherResync(
     listeners: new Map<number, WebContents>(),
     worktreePath
   }
+
   state.worktreePath = worktreePath
+
   for (const listener of listeners) {
     if (!listener.isDestroyed() && isCurrentDesiredRemoteWatcher(key, listener)) {
       state.listeners.set(listener.id, listener)
     }
   }
+
   if (state.listeners.size === 0) {
     return
   }
+
   watcherLifecycleState.remoteWatcherResyncStates.set(key, state)
   const delayMs = Math.max(0, state.lastSentAt + REMOTE_WATCH_RESYNC_COALESCE_MS - Date.now())
+
   if (delayMs === 0) {
     flushRemoteWatcherResync(key)
+
     return
   }
+
   if (!state.timer) {
     state.timer = setTimeout(() => flushRemoteWatcherResync(key), delayMs)
     state.timer.unref?.()

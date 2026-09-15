@@ -25,6 +25,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
   it('rejects malformed current-contract input before compatibility attestation', async () => {
     const harness = createHarness()
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.send',
@@ -49,6 +50,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
     async (transport, valid) => {
       const harness = createHarness()
       const before = counts(harness.db)
+
       const response = await invoke(
         harness.dispatcher,
         request(
@@ -70,6 +72,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         })
         expect(counts(harness.db)).toEqual(before)
         expect(harness.notify).not.toHaveBeenCalled()
+
         return
       }
 
@@ -80,8 +83,10 @@ describe('legacy compatibility through RpcDispatcher', () => {
           legacyCompatibility: { replayed: false }
         }
       })
+
       const message = (response as { result: { message: { id: string; payload: string } } }).result
         .message
+
       expect(JSON.parse(message.payload)).toMatchObject({
         taskId: harness.taskId,
         dispatchId: harness.dispatchId
@@ -101,6 +106,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('validates, infers, settles, and replays legacy worker completion exactly once', async () => {
     const harness = createHarness()
+
     const baseParams = {
       from: WORKER_HANDLE,
       to: COORDINATOR_HANDLE,
@@ -108,7 +114,9 @@ describe('legacy compatibility through RpcDispatcher', () => {
       body: 'legacy result',
       payload: JSON.stringify({ taskId: harness.taskId, dispatchId: harness.dispatchId })
     }
+
     const before = counts(harness.db)
+
     const invalid = await harness.dispatcher.dispatch(
       request(
         'orchestration.send',
@@ -127,8 +135,10 @@ describe('legacy compatibility through RpcDispatcher', () => {
       evidence('worker'),
       'completion'
     )
+
     const first = await harness.dispatcher.dispatch(firstRequest)
     const replay = await harness.dispatcher.dispatch({ ...firstRequest, id: 'rpc_replay' })
+
     const mismatch = await harness.dispatcher.dispatch({
       ...firstRequest,
       id: 'rpc_mismatch',
@@ -160,10 +170,12 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('replays an A-era completion without touching a newer current attempt', async () => {
     const harness = createHarness()
+
     const payload = JSON.stringify({
       taskId: harness.taskId,
       dispatchId: harness.dispatchId
     })
+
     const completion = harness.db.insertMessage({
       runId: harness.adoptedRunId,
       from: WORKER_HANDLE,
@@ -175,6 +187,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       senderPaneKey: WORKER_PANE,
       deliveryContract: 'legacy_direct'
     })
+
     harness.db.settleWorkerReport({
       taskId: harness.taskId,
       dispatchId: harness.dispatchId,
@@ -194,6 +207,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
     // Recreate the pre-boundary state where A settled before a current attempt was persisted.
     const sqlite = (harness.db as unknown as { db: Database.Database }).db
     sqlite.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(harness.taskId)
+
     const currentDispatch = createRootDispatch(
       harness.db,
       harness.taskId,
@@ -201,6 +215,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       'tab_current_worker:77777777-7777-4777-8777-777777777777',
       'current-launch-hash'
     )
+
     const currentTaskBefore = harness.db.getTask(harness.taskId)
     const currentDispatchBefore = harness.db.getDispatchContextById(currentDispatch.id)
     const before = counts(harness.db)
@@ -240,6 +255,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
   it('rejects a legacy lifecycle recipient outside the adopted Run with zero effects', async () => {
     const harness = createHarness()
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.send',
@@ -281,6 +297,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
   it('rejects a legacy question recipient outside the adopted Run with zero effects', async () => {
     const harness = createHarness()
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.ask',
@@ -306,6 +323,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('keeps distinct compatibility ask invocations on distinct questions', async () => {
     const harness = createHarness()
+
     const ask = {
       from: WORKER_HANDLE,
       to: COORDINATOR_HANDLE,
@@ -313,12 +331,15 @@ describe('legacy compatibility through RpcDispatcher', () => {
       options: ['yes', 'no'],
       timeoutMs: 1
     }
+
     const first = await harness.dispatcher.dispatch(
       request('orchestration.ask', ask, evidence('worker'), 'ask-one')
     )
+
     const replay = await harness.dispatcher.dispatch(
       request('orchestration.ask', ask, evidence('worker'), 'ask-one')
     )
+
     const second = await harness.dispatcher.dispatch(
       request('orchestration.ask', ask, evidence('worker'), 'ask-two')
     )
@@ -345,6 +366,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'coordinator-check-decision-gates'
       )
     )
+
     expect(coordinatorCheck).toMatchObject({
       ok: true,
       result: {
@@ -362,12 +384,16 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('keeps the normal wait budget when legacy check omits timeout', async () => {
     const harness = createHarness()
+
     const waitForMessage = vi
       .spyOn(harness.runtime, 'waitForMessage')
       .mockResolvedValue('timed_out')
+
     let clockReads = 0
+
     const now = vi.spyOn(Date, 'now').mockImplementation(() => {
       clockReads += 1
+
       return clockReads === 1 ? 0 : clockReads === 2 ? 1 : 120_001
     })
 
@@ -393,12 +419,15 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('does not infer an outcome for a current Dispatch when legacy adoption exists', async () => {
     const harness = createHarness()
+
     const run = harness.db.createRun({
       objective: 'current work',
       coordinatorHandle: 'term_current_coord',
       coordinatorPaneKey: 'tab_current_coord:55555555-5555-4555-8555-555555555555'
     })
+
     const task = harness.db.createTask({ spec: 'current assignment', runId: run.id })
+
     const dispatch = createRootDispatch(
       harness.db,
       task.id,
@@ -406,7 +435,9 @@ describe('legacy compatibility through RpcDispatcher', () => {
       'tab_current_worker:66666666-6666-4666-8666-666666666666',
       'current-launch-hash'
     )
+
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.send',
@@ -447,6 +478,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'settle-for-mail'
       )
     )
+
     const status = harness.db.insertMessage({
       runId: harness.adoptedRunId,
       from: COORDINATOR_HANDLE,
@@ -455,6 +487,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       type: 'status',
       deliveryContract: 'legacy_direct'
     })
+
     const question = harness.db.insertMessage({
       runId: harness.adoptedRunId,
       from: COORDINATOR_HANDLE,
@@ -463,6 +496,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       type: 'question',
       deliveryContract: 'legacy_direct'
     })
+
     const check = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -471,6 +505,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'question-check'
       )
     )
+
     expect(check).toMatchObject({
       ok: true,
       result: {
@@ -493,6 +528,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'invalid-ack'
       )
     )
+
     expect(invalid).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(harness.db.getMessageById(status.id)?.read).toBe(0)
     expect(harness.db.getMessageById(question.id)?.read).toBe(0)
@@ -511,6 +547,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'valid-ack'
       )
     )
+
     expect(acknowledged).toMatchObject({
       ok: true,
       result: { acknowledged: [question.id], legacyCompatibility: { acknowledged: true } }
@@ -521,6 +558,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('rejects invalid legacy check types before attestation or mail consumption', async () => {
     const harness = createHarness()
+
     const message = harness.db.insertMessage({
       runId: harness.adoptedRunId,
       from: COORDINATOR_HANDLE,
@@ -529,7 +567,9 @@ describe('legacy compatibility through RpcDispatcher', () => {
       type: 'status',
       deliveryContract: 'legacy_direct'
     })
+
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -558,6 +598,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       subject: 'worker-only current mail',
       deliveryContract: 'current_delivery'
     })
+
     const workerOnly = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -566,6 +607,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'worker-current-mail'
       )
     )
+
     expect(workerOnly).toMatchObject({
       ok: true,
       result: { legacyCompatibility: { currentDelivery: undefined } }
@@ -578,6 +620,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       subject: 'Run current mail',
       deliveryContract: 'current_delivery'
     })
+
     const runMail = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -586,6 +629,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
         'run-current-mail'
       )
     )
+
     expect(runMail).toMatchObject({
       ok: true,
       result: {
@@ -601,11 +645,13 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('rejects a legacy coordinator reply outside the adopted Run with zero effects', async () => {
     const harness = createHarness()
+
     const unrelatedRun = harness.db.createRun({
       objective: 'unrelated current work',
       coordinatorHandle: 'term_unrelated_coord',
       coordinatorPaneKey: 'tab_unrelated_coord:55555555-5555-4555-8555-555555555555'
     })
+
     const unrelated = harness.db.insertMessage({
       runId: unrelatedRun.id,
       from: 'term_unrelated_worker',
@@ -613,6 +659,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       subject: 'Unrelated current status',
       deliveryContract: 'current_delivery'
     })
+
     const before = counts(harness.db)
 
     const response = await harness.dispatcher.dispatch(
@@ -644,6 +691,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
   it('keeps explicit adopted Run task inspection available to unrelated callers', async () => {
     const harness = createHarness()
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.taskList',
@@ -673,6 +721,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
     async (transport) => {
       const invalidHarness = createHarness()
       const invalidBefore = counts(invalidHarness.db)
+
       const rejected = await invoke(
         invalidHarness.dispatcher,
         request(
@@ -683,23 +732,28 @@ describe('legacy compatibility through RpcDispatcher', () => {
         ),
         transport
       )
+
       expect(rejected).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
       expect(invalidHarness.db.getRun(invalidHarness.adoptedRunId)?.consumer_generation).toBe(0)
       expect(counts(invalidHarness.db)).toEqual(invalidBefore)
 
       const harness = createHarness()
+
       const runUse = request(
         'orchestration.runUse',
         { id: harness.adoptedRunId, from: COORDINATOR_HANDLE },
         evidence('coordinator'),
         `run-use-${transport}`
       )
+
       const first = await invoke(harness.dispatcher, runUse, transport)
+
       const replay = await invoke(
         harness.dispatcher,
         { ...runUse, id: 'rpc_run-use-replay' },
         transport
       )
+
       expect(first).toMatchObject({
         ok: true,
         result: { run: { consumer_generation: 1 }, mutation: { replayed: false } }
@@ -715,6 +769,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
   it('passes trusted coordinator scope to a failing handler without binding or receipts', async () => {
     const harness = createHarness()
     const before = counts(harness.db)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.taskUpdate',
@@ -735,6 +790,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
 
   it('rejects stale legacy coordinator proof after current takeover', async () => {
     const harness = createHarness()
+
     const principal = harness.db.commitLegacyCompatibilityPrincipal({
       runId: harness.adoptedRunId,
       role: 'coordinator',
@@ -744,6 +800,7 @@ describe('legacy compatibility through RpcDispatcher', () => {
       launchTokenHash: createHash('sha256').update('coordinator-token').digest('hex'),
       processIncarnation: 'process-1'
     }).principal
+
     harness.db.settleWorkerReport({
       taskId: harness.taskId,
       dispatchId: harness.dispatchId,

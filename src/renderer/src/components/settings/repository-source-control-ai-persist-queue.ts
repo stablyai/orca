@@ -27,45 +27,58 @@ export function createRepoAiPersistQueue(options: PersistQueueOptions) {
     // Why: pin the target at schedule time — if the settings pane switches repos before this
     // transform runs, applying it against the new repo's base would corrupt that repo's overrides.
     const repoIdForWrite = options.getRepoId()
+
     const run = chain
       .catch(() => undefined)
       .then(async (): Promise<boolean> => {
         if (options.getRepoId() !== repoIdForWrite) {
           return true
         }
+
         // Why: keep transform()/toSourceControlAiRepoUpdate() inside the try so a throw there
         // still routes through onError instead of becoming an unhandled rejection for fire-and-forget callers.
         try {
           const next = transform(options.getPersisted())
+
           if (JSON.stringify(next) === JSON.stringify(options.getPersisted())) {
             return true
           }
+
           const repoUpdate = toSourceControlAiRepoUpdate(next)
           const result = await options.updateRepo(repoIdForWrite, repoUpdate)
+
           // Why: even a successful write for the previous repo must not update local persisted state
           // once the UI is showing a different repo (would seed the wrong base for later edits).
           if (!options.isMounted() || options.getRepoId() !== repoIdForWrite) {
             return true
           }
+
           if (result === false) {
             options.onError('Failed to save Source Control AI settings.')
+
             return false
           }
+
           const savedValue =
             repoUpdate.sourceControlAi === null
               ? {}
               : (normalizeRepoSourceControlAiOverrides(repoUpdate.sourceControlAi) ?? {})
+
           options.setPersisted(savedValue)
+
           return true
         } catch {
           if (options.isMounted() && options.getRepoId() === repoIdForWrite) {
             options.onError('Failed to save Source Control AI settings.')
           }
+
           return false
         }
       })
+
     // Keep the shared chain a never-rejecting Promise<void> so one write's failure can't block the next.
     chain = run.then(() => undefined)
+
     return run
   }
 

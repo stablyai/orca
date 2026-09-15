@@ -18,31 +18,42 @@ export function useWorkbenchTerminalCursor(
 
   useLayoutEffect(() => {
     const panel = panelRef.current
+
     if (!panel) {
       return
     }
+
     if (target.kind === 'hidden') {
       setPosition((current) => ({ ...current, visible: false }))
+
       return
     }
+
     const panelRect = panel.getBoundingClientRect()
+
     if (target.kind === 'pane') {
       const pane = leftPaneRef.current
+
       if (!pane) {
         return
       }
+
       const rect = pane.getBoundingClientRect()
       setPosition({
         x: rect.left - panelRect.left + 90,
         y: rect.top - panelRect.top + 110,
         visible: true
       })
+
       return
     }
+
     const row = splitRowRef.current
+
     if (!row) {
       return
     }
+
     const rect = row.getBoundingClientRect()
     setPosition({
       x: rect.left - panelRect.left + 12,

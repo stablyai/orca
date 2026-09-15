@@ -16,13 +16,18 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 // through, so each one is proved to consult the lease and to leave unbound PTYs untouched.
 
 const WORKTREE_ID = 'repo-1::/tmp/lease-worktree'
+
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const RUN_ID = 'run-1'
+
 const PTY_ID = 'pty-agent-session'
+
 const SESSION_ID = 'session-alpha-1'
 
 function makeStore() {
   const session: WorkspaceSessionState = getDefaultWorkspaceSession()
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
@@ -52,15 +57,19 @@ function publish(lease: AgentSessionLease): void {
 
 async function makeRuntime(options: { onWrite?: (ptyId: string, data: string) => void } = {}) {
   const runtime = new OrcaRuntimeService(makeStore() as never)
+
   const write = vi.fn((ptyId: string, data: string) => {
     options.onWrite?.(ptyId, data)
+
     // A real agent starts working when it receives the submit, and the prompt path now waits for
     // that transition before it reports success. Without it every happy path here reads as stalled.
     if (data === AGENT_PROMPT_SUBMIT) {
       runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', Date.now())
     }
+
     return true
   })
+
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
     write,
@@ -94,6 +103,7 @@ async function makeRuntime(options: { onWrite?: (ptyId: string, data: string) =>
     ]
   })
   const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
   return { runtime, handle: terminals[0].handle, write }
 }
 
@@ -253,6 +263,7 @@ describe('agent prompt path', () => {
     const { runtime, handle, write } = await makeRuntime({
       onWrite: () => publish(agentSessionLeaseFixture({ runtimeFence: 8 }))
     })
+
     enforce(agentSessionLeaseFixture({ runtimeFence: 7 }))
 
     await expect(
@@ -268,15 +279,18 @@ describe('lease transition against an in-flight write', () => {
 
   it('stops a paste mid-flight once the fence advances under it', async () => {
     let written = 0
+
     const { runtime, handle, write } = await makeRuntime({
       onWrite: () => {
         written += 1
+
         if (written === 1) {
           // A handoff completed between the first and second chunk.
           publish(agentSessionLeaseFixture({ runtimeFence: 8 }))
         }
       }
     })
+
     enforce(agentSessionLeaseFixture({ runtimeFence: 7 }))
 
     await expect(runtime.sendTerminal(handle, { text: CHUNKED_TEXT })).rejects.toThrow(
@@ -299,14 +313,17 @@ describe('lease transition against an in-flight write', () => {
 
   it('fences preview paste chunks to the lease admitted before the first chunk', async () => {
     let written = 0
+
     const { runtime, write } = await makeRuntime({
       onWrite: () => {
         written += 1
+
         if (written === 1) {
           publish(agentSessionLeaseFixture({ runtimeFence: 8 }))
         }
       }
     })
+
     enforce(agentSessionLeaseFixture({ runtimeFence: 7 }))
 
     await expect(runtime.writeTerminalPreviewInput(PTY_ID, CHUNKED_TEXT)).resolves.toBe(false)
@@ -322,6 +339,7 @@ describe('lease transition against an in-flight write', () => {
         }
       }
     })
+
     enforce(agentSessionLeaseFixture({ runtimeFence: 7 }))
 
     await expect(runtime.sendTerminal(handle, { text: 'ls', enter: true })).rejects.toThrow(
@@ -334,6 +352,7 @@ describe('lease transition against an in-flight write', () => {
 
   it('withholds orchestration Enter after the pointer lease fence moves', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, handle, write } = await makeRuntime({
         onWrite: (_ptyId, data) => {
@@ -342,6 +361,7 @@ describe('lease transition against an in-flight write', () => {
           }
         }
       })
+
       let messages: { id: string; sequence: number; type: string }[] = []
       const getPendingMailboxPointerMessages = vi.fn(() => [])
       // Pointer delivery reads pending reservations before staging unread mail; omitting

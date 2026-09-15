@@ -17,6 +17,7 @@ import {
  *  because reopening marks every lease unreconciled and refuses the next two steps. */
 async function seedLiveSession(sessionId: string): Promise<number> {
   const store = await openStore()
+
   const reserved = await store.reserveOwner({
     sessionId,
     location: {
@@ -36,6 +37,7 @@ async function seedLiveSession(sessionId: string): Promise<number> {
     operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'seed-live' },
     now: NOW
   })
+
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId,
@@ -60,10 +62,12 @@ async function seedLiveSession(sessionId: string): Promise<number> {
     },
     now: NOW
   })
+
   return fence
 }
 
 let root: string
+
 let storePath: string
 
 const NOW = 1_800_000_000_000
@@ -86,11 +90,13 @@ let operations = 0
 
 function operationId(): string {
   operations += 1
+
   return `${NOW}-${operations.toString(16).padStart(32, '0')}`
 }
 
 async function seedSession(sessionId: string): Promise<number> {
   const store = await openStore()
+
   const reserved = await store.reserveOwner({
     sessionId,
     location: {
@@ -110,6 +116,7 @@ async function seedSession(sessionId: string): Promise<number> {
     operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'seed' },
     now: NOW
   })
+
   return reserved.record.lease.runtimeFence
 }
 
@@ -183,6 +190,7 @@ describe('recovery from the committed backup', () => {
       handoffOperationId: null,
       probe: { outcome: 'reservation-unused' }
     })
+
     expect(granted.decision).toBe('granted')
     expect(granted.decision === 'granted' && granted.nextFence).toBeGreaterThan(fence + 1)
   })
@@ -192,9 +200,11 @@ describe('recovery from the committed backup', () => {
     await seedSession('session-b')
     const loaded = await loadAgentSessionStore(storePath, 'local')
     const record = loaded.state.records.get('session-a')
+
     if (!record) {
       throw new Error('seeded session missing')
     }
+
     loaded.state.records.set('session-a', {
       ...record,
       lease: {
@@ -208,6 +218,7 @@ describe('recovery from the committed backup', () => {
     // Two commits put the prepared generation in the backup, just as normal rotation would.
     await saveAgentSessionStore(storePath, loaded.state, { primaryStatus: 'validated' })
     await saveAgentSessionStore(storePath, loaded.state, { primaryStatus: 'validated' })
+
     const identity = {
       location: record.location,
       provider: record.provider,
@@ -228,6 +239,7 @@ describe('recovery from the committed backup', () => {
       minimumNextFence: 9,
       unreconciled: false
     })
+
     const firstGrant = await first.reserveOwner({
       ...identity,
       sessionId: 'session-a',
@@ -238,10 +250,13 @@ describe('recovery from the committed backup', () => {
       operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'first-recovery' },
       now: NOW
     })
+
     const firstFence = firstGrant.record.lease.runtimeFence
+
     const rotated = (await loadAgentSessionStore(`${storePath}.bak`, 'local')).state.records.get(
       'session-a'
     )
+
     expect(rotated?.lease).toMatchObject({ runtimeFence: 7, minimumNextFence: 9 })
 
     // The primary's grant is lost, but its owner may still hold that exact fence.
@@ -252,6 +267,7 @@ describe('recovery from the committed backup', () => {
       probe: async () => ({ outcome: 'reservation-unused' }),
       now: NOW
     })
+
     const secondGrant = await second.reserveOwner({
       ...identity,
       sessionId: 'session-a',
@@ -262,6 +278,7 @@ describe('recovery from the committed backup', () => {
       operation: { callerKey: 'test', operationId: operationId(), fingerprint: 'second-recovery' },
       now: NOW
     })
+
     expect(secondGrant.record.lease.runtimeFence).toBeGreaterThan(firstFence)
     expect((await openStore()).getRecord('session-a')?.lease.runtimeFence).toBe(
       secondGrant.record.lease.runtimeFence
@@ -281,14 +298,17 @@ describe('recovery from the committed backup', () => {
     await rm(storePath, { force: true })
 
     const recovered = await openStore()
+
     if (expectedFloor === null) {
       await expect(recovered.retireClaimKey(`retire-${operationId()}`, NOW)).rejects.toThrow(
         'agent_session_fence_exhausted'
       )
       await expect(stat(storePath)).rejects.toMatchObject({ code: 'ENOENT' })
+
       const preserved = (await loadAgentSessionStore(backupPath, 'local')).state.records.get(
         'session-a'
       )?.lease
+
       expect(preserved?.runtimeFence).toBe(runtimeFence)
       expect(preserved?.minimumNextFence).toBeUndefined()
     } else {
@@ -319,9 +339,11 @@ describe('recovery from the committed backup', () => {
   it('carries ownership evidence forward verbatim', async () => {
     await seedSession('session-a')
     await seedSession('session-b')
+
     const before = (await loadAgentSessionStore(`${storePath}.bak`, 'local')).state.records.get(
       'session-a'
     )!
+
     await rm(storePath, { force: true })
 
     const store = await openStore()
@@ -347,10 +369,12 @@ describe('recovery from the committed backup', () => {
     const after = (await loadAgentSessionStore(storePath, 'local')).state
     expect([...after.records.keys()].sort()).toEqual([...before.records.keys()].sort())
     expect(after.operations.size).toBe(before.operations.size)
+
     // Everything the backup held is still there; the transaction that drove recovery adds its own.
     for (const key of before.retiredClaimKeys) {
       expect(after.retiredClaimKeys).toContainEqual(key)
     }
+
     expect([...after.unreadableRecords.keys()]).toEqual([...before.unreadableRecords.keys()])
   })
 })
@@ -390,6 +414,7 @@ describe('the fence-step bound the +2 floor rests on', () => {
       handoffOperationId: null,
       probe: { outcome: 'reservation-unused' }
     })
+
     // If a grant could ever advance by more than one, the +2 recovery floor would stop dominating
     // the highest fence a single lost commit can have handed out.
     expect(granted.decision === 'granted' && granted.nextFence).toBe(8)
@@ -408,6 +433,7 @@ describe('the fence-step bound the +2 floor rests on', () => {
       handoffOperationId: null,
       probe: { outcome: 'reservation-unused' }
     })
+
     expect(granted.decision === 'granted' && granted.nextFence).toBe(9)
   })
 })

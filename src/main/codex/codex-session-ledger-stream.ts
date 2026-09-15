@@ -17,9 +17,11 @@ export async function* streamCodexSessionLedgerRecords(
     input: createReadStream(filePath, { encoding: 'utf-8' }),
     crlfDelay: Infinity
   })
+
   try {
     for await (const raw of lines) {
       const record = parseLedgerRecord(raw)
+
       if (record) {
         yield record
       }
@@ -39,8 +41,10 @@ function parseLedgerRecord(raw: string): Record<string, unknown> | null {
   if (!raw.trim()) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(raw)
+
     // Torn tails are quarantined by the writer's leading newline; skip them.
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)

@@ -40,6 +40,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
   it('stages every shutdown mutation before queueing persistence', () => {
     const callOrder: string[] = []
+
     const store = {
       stageWorkspaceSessionBeforeUnload: vi.fn((_state, hostId?: string) => {
         callOrder.push(`session:${hostId ?? 'local'}`)
@@ -47,9 +48,11 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       updateUI: vi.fn(() => callOrder.push('ui')),
       flushPendingOrThrowAsync: vi.fn(() => {
         callOrder.push('persist')
+
         return Promise.resolve()
       })
     }
+
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
@@ -90,6 +93,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       }),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
+
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
@@ -105,6 +109,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       updateUI: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
+
     registerRendererShutdownCheckpointHandler(store as never)
 
     store.updateUI.mockImplementation(() => {
@@ -125,6 +130,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       updateUI: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => new Promise<void>(() => {}))
     }
+
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
@@ -136,6 +142,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
   it('holds the checkpoint open until the durable write settles', async () => {
     let resolveFlush!: () => void
+
     const store = {
       stageWorkspaceSessionBeforeUnload: vi.fn(),
       updateUI: vi.fn(),
@@ -146,6 +153,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
           })
       )
     }
+
     registerRendererShutdownCheckpointHandler(store as never)
 
     syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
@@ -168,6 +176,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       updateUI: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => Promise.reject(new Error('disk full')))
     }
+
     vi.spyOn(console, 'error').mockImplementation(() => {})
     registerRendererShutdownCheckpointHandler(store as never)
 
@@ -186,8 +195,10 @@ describe('registerRendererShutdownCheckpointHandler', () => {
         (_options: { signal: AbortSignal }) => new Promise<void>(() => {})
       )
     }
+
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.useFakeTimers()
+
     try {
       registerRendererShutdownCheckpointHandler(store as never)
       syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
@@ -208,6 +219,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       updateUI: vi.fn(),
       flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
     }
+
     registerRendererShutdownCheckpointHandler(store as never)
 
     await expect(invokeHandlers.get(AWAIT_CHANNEL)?.()).resolves.toEqual({ ok: true })

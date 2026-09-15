@@ -5,6 +5,7 @@ import {
 } from './image-paste-following-text'
 
 const IMAGE_A = '\x1b[200~/tmp/orca-paste-a.png\x1b[201~'
+
 const IMAGE_B = '\x1b[200~/tmp/orca-paste-b.png\x1b[201~'
 
 describe('imagePasteWritesFollowedByText', () => {

@@ -33,6 +33,7 @@ async function postClaudeHook(
   payload: Record<string, unknown>
 ): Promise<Response> {
   const env = server.buildPtyEnv()
+
   return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
     method: 'POST',
     headers: {
@@ -47,8 +48,10 @@ describe('AgentHookServer listener replay', () => {
   it('accepts raw JSON hook bodies with base64 metadata headers', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -80,35 +83,42 @@ describe('AgentHookServer listener replay', () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     const order: string[] = []
+
     const internal = server as unknown as {
       scheduleAssistantMessageRetry: (...args: unknown[]) => void
       scheduleCodexSubagentPoll: (...args: unknown[]) => void
     }
+
     const originalAssistantRetry = internal.scheduleAssistantMessageRetry.bind(server)
     const originalCodexRetry = internal.scheduleCodexSubagentPoll.bind(server)
+
     const assistantRetry = vi
       .spyOn(internal, 'scheduleAssistantMessageRetry')
       .mockImplementation((...args) => {
         order.push('assistant-retry')
         originalAssistantRetry(...args)
       })
+
     const codexRetry = vi
       .spyOn(internal, 'scheduleCodexSubagentPoll')
       .mockImplementation((...args) => {
         order.push('codex-retry')
         originalCodexRetry(...args)
       })
+
     const unsubscribeStatus = server.subscribeStatusChanges(() => order.push('status-change'))
     server.setListener(() => {
       expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
       order.push('main-listener')
     })
     const unsubscribePlugin = server.subscribeEnrichedStatus(() => order.push('plugin-listener'))
+
     try {
       const response = await postClaudeHook(server, {
         hook_event_name: 'UserPromptSubmit',
         prompt: 'ordered'
       })
+
       order.push('response')
       expect(response.status).toBe(204)
       expect(order).toEqual([
@@ -131,20 +141,24 @@ describe('AgentHookServer listener replay', () => {
   it('fails open after a throwing callback with cache retained and retries skipped', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     const internal = server as unknown as {
       scheduleAssistantMessageRetry: (...args: unknown[]) => void
       scheduleCodexSubagentPoll: (...args: unknown[]) => void
     }
+
     const assistantRetry = vi.spyOn(internal, 'scheduleAssistantMessageRetry')
     const codexRetry = vi.spyOn(internal, 'scheduleCodexSubagentPoll')
     server.setListener(() => {
       throw new Error('listener failed')
     })
+
     try {
       const response = await postClaudeHook(server, {
         hook_event_name: 'UserPromptSubmit',
         prompt: 'cached before callback'
       })
+
       expect(response.status).toBe(204)
       expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
       expect(assistantRetry).not.toHaveBeenCalled()
@@ -158,10 +172,12 @@ describe('AgentHookServer listener replay', () => {
   it('ignores local nested Claude Stop while a parent Codex hook status is active', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
       server.setListener(listener)
+
       const postHook = async (
         source: 'codex' | 'claude',
         payload: Record<string, unknown>
@@ -177,6 +193,7 @@ describe('AgentHookServer listener replay', () => {
             body: JSON.stringify(buildBody(payload))
           }
         )
+
         expect(response.status).toBe(204)
       }
 
@@ -217,8 +234,10 @@ describe('AgentHookServer listener replay', () => {
   it('does not apply Claude background evidence from a rejected local status', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const postClaudeHook = async (payload: Record<string, unknown>): Promise<void> => {
         const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
@@ -228,6 +247,7 @@ describe('AgentHookServer listener replay', () => {
           },
           body: JSON.stringify(buildBody(payload))
         })
+
         expect(response.status).toBe(204)
       }
 
@@ -259,9 +279,11 @@ describe('AgentHookServer listener replay', () => {
   it('maps registered legacy numeric HTTP pane keys to stable pane keys', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       server.registerPaneKeyAlias('tab-1:0', PANE)
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -278,6 +300,7 @@ describe('AgentHookServer listener replay', () => {
           )
         )
       })
+
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
@@ -303,8 +326,10 @@ describe('AgentHookServer listener replay', () => {
   it('tracks hook posts with an empty paneKey before dropping them', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -321,6 +346,7 @@ describe('AgentHookServer listener replay', () => {
           )
         )
       })
+
       const listener = vi.fn()
       server.setListener(listener)
 
@@ -338,6 +364,7 @@ describe('AgentHookServer listener replay', () => {
   it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const listener = vi.fn()
@@ -402,6 +429,7 @@ describe('AgentHookServer listener replay', () => {
   it('treats remote env as normal relay traffic and normalizes payload at the trust boundary', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const listener = vi.fn()
@@ -448,8 +476,10 @@ describe('AgentHookServer listener replay', () => {
   it('accepts form-encoded hook posts from Unix managed scripts', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const params = new URLSearchParams({
         paneKey: PANE,
         tabId: 'tab-1',
@@ -470,6 +500,7 @@ describe('AgentHookServer listener replay', () => {
         },
         body: params
       })
+
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
@@ -498,10 +529,12 @@ describe('AgentHookServer listener replay', () => {
   it('tracks Codex agent statuses from form-encoded managed hook posts', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
       server.setListener(listener)
+
       const postCodexHook = async (payload: Record<string, unknown>): Promise<void> => {
         const params = new URLSearchParams({
           paneKey: PANE,
@@ -511,6 +544,7 @@ describe('AgentHookServer listener replay', () => {
           version: env.ORCA_AGENT_HOOK_VERSION ?? '',
           payload: JSON.stringify(payload)
         })
+
         const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
           method: 'POST',
           headers: {
@@ -519,6 +553,7 @@ describe('AgentHookServer listener replay', () => {
           },
           body: params
         })
+
         expect(response.status).toBe(204)
       }
 
@@ -602,8 +637,10 @@ describe('AgentHookServer listener replay', () => {
   it('accepts Hermes plugin hook posts on /hook/hermes', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/hermes`, {
         method: 'POST',
         headers: {
@@ -617,6 +654,7 @@ describe('AgentHookServer listener replay', () => {
           })
         )
       })
+
       expect(response.status).toBe(204)
 
       const listener = vi.fn()
@@ -643,6 +681,7 @@ describe('AgentHookServer listener replay', () => {
   it('accepts Amp plugin hook posts on /hook/amp', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
@@ -661,6 +700,7 @@ describe('AgentHookServer listener replay', () => {
           })
         )
       })
+
       expect(response.status).toBe(204)
 
       expect(listener).toHaveBeenCalledWith(

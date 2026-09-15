@@ -50,6 +50,7 @@ function worktreeLineagePath(parent: AgentMapWorktreeRing, child: AgentMapWorktr
   const startY = parent.y + parent.radius
   const endY = child.y - child.radius
   const branchY = (startY + endY) / 2
+
   return `M ${parent.x} ${startY} C ${parent.x} ${branchY} ${child.x} ${branchY} ${child.x} ${endY}`
 }
 
@@ -86,24 +87,29 @@ export const AgentMapScene = memo(function AgentMapScene({
   const [hoveredWorktreeId, setHoveredWorktreeId] = useState<string | null>(null)
   const [focusedWorktreeId, setFocusedWorktreeId] = useState<string | null>(null)
   const activeWorktreeId = heldWorktreeId ?? hoveredWorktreeId ?? focusedWorktreeId
+
   const handleLabelHoverChange = useCallback((worktreeId: string, active: boolean): void => {
     setHoveredWorktreeId((current) =>
       active ? worktreeId : current === worktreeId ? null : current
     )
   }, [])
+
   const handleLabelFocusChange = useCallback((worktreeId: string, active: boolean): void => {
     setFocusedWorktreeId((current) =>
       active ? worktreeId : current === worktreeId ? null : current
     )
   }, [])
+
   const visibleLabels = useMemo(
     () => selectVisibleAgentMapLabels(layout, labelScale, mapScale),
     [labelScale, layout, mapScale]
   )
+
   const activeWorktree = useMemo(() => {
     if (!activeWorktreeId) {
       return null
     }
+
     for (const project of layout.projects) {
       for (const worktree of project.worktrees) {
         if (worktree.id === activeWorktreeId) {
@@ -111,40 +117,51 @@ export const AgentMapScene = memo(function AgentMapScene({
         }
       }
     }
+
     return null
   }, [activeWorktreeId, layout])
+
   const visibleAgentsByPaneKey = useMemo(() => {
     const agents = new Map<string, VisibleAgentLocation>()
+
     for (const project of layout.projects) {
       for (const worktree of project.worktrees) {
         const selected = worktree.agents.some((agent) => agent.card.paneKey === selectedPaneKey)
+
         if (!selected && shouldAggregateAgentMapWorktree(worktree, zoom, allowAggregation)) {
           continue
         }
+
         for (const agent of worktree.agents) {
           agents.set(agent.card.paneKey, { agent, worktreeId: worktree.id })
         }
       }
     }
+
     return agents
   }, [allowAggregation, layout, selectedPaneKey, zoom])
+
   return (
     <>
       {layout.projects.map((project) => {
         const worktreesById = new Map(project.worktrees.map((worktree) => [worktree.id, worktree]))
         const projectLabelHalfWidth = project.radius * mapScale
         const projectHostsById = new Map<string, AgentMapWorktreeRing>()
+
         for (const worktree of project.worktrees) {
           if (worktree.hostKind === 'ssh' || worktree.hostKind === 'remote') {
             projectHostsById.set(`${worktree.hostKind}:${worktree.executionHostId ?? ''}`, worktree)
           }
         }
+
         const projectHosts = [...projectHostsById.values()]
+
         const projectCountText = translate(
           'dashboardPopout.map.projectCount',
           '{{agents}} agents · {{workspaces}} workspaces',
           { agents: project.agentCount, workspaces: project.worktrees.length }
         ).toUpperCase()
+
         const crossWorktreeLineage = !showOrchestrationLinks
           ? []
           : project.worktrees.flatMap((worktree) =>
@@ -152,12 +169,15 @@ export const AgentMapScene = memo(function AgentMapScene({
                 const parent = child.card.parentPaneKey
                   ? visibleAgentsByPaneKey.get(child.card.parentPaneKey)
                   : undefined
+
                 const childLocation = visibleAgentsByPaneKey.get(child.card.paneKey)
+
                 return parent && childLocation && parent.worktreeId !== childLocation.worktreeId
                   ? [{ parent: parent.agent, child }]
                   : []
               })
             )
+
         return (
           <g
             key={project.id}
@@ -184,6 +204,7 @@ export const AgentMapScene = memo(function AgentMapScene({
             <g className="agent-map-worktree-lineage-links" aria-hidden>
               {project.worktrees.map((child) => {
                 const parent = child.parentId ? worktreesById.get(child.parentId) : undefined
+
                 return !parent || child.y <= parent.y ? null : (
                   <path
                     key={child.id}

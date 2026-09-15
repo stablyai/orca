@@ -25,8 +25,10 @@ export async function closeStructuredTerminalSessionWithRetry(
     if (delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
+
     try {
       await closeStructuredAgentSession(target, sessionId)
+
       return true
     } catch (error) {
       if (attempt === STRUCTURED_SESSION_CLOSE_RETRY_DELAYS_MS.length - 1) {
@@ -37,6 +39,7 @@ export async function closeStructuredTerminalSessionWithRetry(
       }
     }
   }
+
   return false
 }
 
@@ -54,10 +57,13 @@ export function disposeStructuredTerminalSession({
   if (reason === 'pty-exit') {
     return
   }
+
   const structuredSessionId = structuredTerminalSessionId(unifiedTabs, terminalTabId)
+
   if (!structuredSessionId) {
     return
   }
+
   // Closing is idempotent; a short retry window covers a dropped renderer/host request after the
   // terminal surface has already been removed.
   void closeStructuredTerminalSessionWithRetry(target, structuredSessionId)

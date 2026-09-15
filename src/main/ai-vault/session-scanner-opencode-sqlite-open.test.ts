@@ -17,15 +17,18 @@ import {
 // driver string "database is locked", and one failed DB emptied both scopes.
 
 let tempDirs: string[] = []
+
 let lockHolders: Worker[] = []
 
 afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(lockHolders.splice(0).map((worker) => worker.terminate()))
   lockHolders = []
+
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   tempDirs = []
 })
 
@@ -41,6 +44,7 @@ const SCHEMA = `
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-open-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -55,6 +59,7 @@ function seededDatabase(name: string, sessionId: string): string {
     1_700_000_001_000
   )
   db.close()
+
   return path
 }
 
@@ -84,11 +89,13 @@ async function holdWriteLock(path: string, releaseDelayMs: number): Promise<Work
     eval: true,
     workerData: { path, releaseDelayMs }
   })
+
   lockHolders.push(worker)
   await new Promise<void>((resolve, reject) => {
     worker.once('message', () => resolve())
     worker.once('error', reject)
   })
+
   return worker
 }
 
@@ -148,6 +155,7 @@ describe('readOpenCodeDatabase', () => {
       dbPath: path,
       read: (db) => {
         captured = db
+
         return db.prepare('SELECT id FROM session').all()
       }
     })
@@ -160,9 +168,11 @@ describe('readOpenCodeDatabase', () => {
     const path = seededDatabase('opencode.db', 'session-a')
     const setupError = new Error('query_only setup failed')
     const originalClose = Database.prototype.close
+
     const pragmaSpy = vi.spyOn(Database.prototype, 'pragma').mockImplementationOnce(() => {
       throw setupError
     })
+
     const closeSpy = vi.spyOn(Database.prototype, 'close')
     const read = vi.fn()
 
@@ -276,6 +286,7 @@ describe('openCodeDatabaseScanIssue', () => {
   // to local disk — so no busy timeout and no journal mode changes the outcome.
   it('does not blame a live writer for a lock-family error over a WSL share', () => {
     const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
+
     const issue = openCodeDatabaseScanIssue(
       '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\opencode\\opencode.db',
       busy

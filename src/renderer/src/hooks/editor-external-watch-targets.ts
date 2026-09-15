@@ -40,17 +40,29 @@ type WatchedTargetsSnapshot = {
 }
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
+
 let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
+
 let cachedRepos: AppState['repos'] | null = null
+
 let cachedActiveWorktreeId: string | null = null
+
 let cachedRuntimeEnvironmentId: string | undefined
+
 let cachedRightSidebarOpen: boolean | null = null
+
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
+
 let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
+
 let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = null
+
 let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
+
 let cachedFolderWorkspaces: AppState['folderWorkspaces'] | null = null
+
 let cachedProjectGroups: AppState['projectGroups'] | null = null
+
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getEditorExternalWatchTargetKey(target: EditorExternalWatchTarget): string {
@@ -92,6 +104,7 @@ function canWatchLocalWindowsWslAliases(args: {
   ) {
     return false
   }
+
   if (args.worktree) {
     return (
       !!args.repo &&
@@ -100,6 +113,7 @@ function canWatchLocalWindowsWslAliases(args: {
       isLocalHostStamp(args.repo.executionHostId)
     )
   }
+
   return (
     !!args.folderWorkspace &&
     isLocalHostStamp(args.folderWorkspace.executionHostId) &&
@@ -111,6 +125,7 @@ export function selectEditorExternalWatchTargets(
   state: EditorExternalWatchTargetState
 ): WatchedTargetsSnapshot {
   const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || undefined
+
   if (
     cachedOpenFiles === state.openFiles &&
     cachedWorktreesByRepo === state.worktreesByRepo &&
@@ -129,21 +144,28 @@ export function selectEditorExternalWatchTargets(
   }
 
   const targetOwnersByWorktreeId = new Map<string, Set<string | null>>()
+
   // Why: watcher ownership is scoped by worktree + runtime owner — the same path can be open locally and in a runtime workspace, and reads/saves already route per owner.
   for (const file of state.openFiles) {
     let owners = targetOwnersByWorktreeId.get(file.worktreeId)
+
     if (!owners) {
       owners = new Set()
       targetOwnersByWorktreeId.set(file.worktreeId, owners)
     }
+
     // Why: persisted/restored tabs may have runtimeEnvironmentId undefined; new openFile calls resolve inheritance before storing, so an ownerless tab stays local.
     owners.add(getOpenFileRuntimeOwner(file))
   }
+
   const activeWorktreeId = state.activeWorktreeId
+
   const activeWorktree = activeWorktreeId
     ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
     : undefined
+
   const activeWorktreeHost = parseExecutionHostId(activeWorktree?.hostId)
+
   const activeRepo = activeWorktree
     ? activeWorktreeHost?.kind === 'local'
       ? (findRepoForHost(state.repos, activeWorktree.repoId, {
@@ -151,6 +173,7 @@ export function selectEditorExternalWatchTargets(
         }) ?? undefined)
       : state.repos.find((repo) => repo.id === activeWorktree.repoId)
     : undefined
+
   const sourceControlCanConsumeWatch =
     !!activeWorktreeId &&
     !!activeRepo &&
@@ -158,18 +181,22 @@ export function selectEditorExternalWatchTargets(
     !state.gitStatusHugeByWorktree[activeWorktreeId] &&
     (!activeRepo.connectionId ||
       state.sshConnectionStates.get(activeRepo.connectionId)?.status === 'connected')
+
   const activeWorktreeNeedsSidebarWatch =
     activeWorktreeId !== null &&
     state.rightSidebarOpen &&
     ((state.rightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
       (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
+
   if (activeWorktreeNeedsSidebarWatch) {
     // Why: this app-level watcher owns Explorer/Source-Control subscriptions so downstream consumers don't fight over watch/unwatch IPC.
     let owners = targetOwnersByWorktreeId.get(activeWorktreeId)
+
     if (!owners) {
       owners = new Set()
       targetOwnersByWorktreeId.set(activeWorktreeId, owners)
     }
+
     // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
     owners.add(getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId))
   }
@@ -177,25 +204,32 @@ export function selectEditorExternalWatchTargets(
   const nextTargets: EditorExternalWatchTarget[] = []
   const parts: string[] = []
   const sortedWorktreeIds = Array.from(targetOwnersByWorktreeId.keys()).sort()
+
   for (const id of sortedWorktreeIds) {
     const worktree = findWorktreeById(state.worktreesByRepo, id)
     const workspaceScope = parseWorkspaceKey(id)
+
     const folderWorkspace =
       workspaceScope?.type === 'folder'
         ? state.folderWorkspaces.find(
             (workspace) => workspace.id === workspaceScope.folderWorkspaceId
           )
         : undefined
+
     if (!worktree && !folderWorkspace) {
       continue
     }
+
     const worktreeHost = parseExecutionHostId(worktree?.hostId)
+
     const repo = worktree
       ? worktreeHost?.kind === 'local'
         ? (findRepoForHost(state.repos, worktree.repoId, { hostId: worktreeHost.id }) ?? undefined)
         : state.repos.find((candidate) => candidate.id === worktree.repoId)
       : undefined
+
     const folderHostId = parseExecutionHostId(folderWorkspace?.executionHostId)?.id
+
     const projectGroup = folderWorkspace
       ? state.projectGroups.find(
           (group) =>
@@ -203,17 +237,21 @@ export function selectEditorExternalWatchTargets(
             parseExecutionHostId(group.executionHostId)?.id === folderHostId
         )
       : undefined
+
     const connectionId = folderWorkspace
       ? getFolderWorkspaceConnectionId(state, folderWorkspace.id)
       : repo
         ? (repo.connectionId ?? null)
         : undefined
+
     if (connectionId === undefined && folderWorkspace) {
       continue
     }
+
     const owners = Array.from(targetOwnersByWorktreeId.get(id) ?? []).sort((left, right) =>
       (left ?? '').localeCompare(right ?? '')
     )
+
     for (const owner of owners) {
       const target = {
         worktreeId: id,
@@ -232,6 +270,7 @@ export function selectEditorExternalWatchTargets(
           ? { allowLocalWindowsWslAliases: true as const }
           : {})
       }
+
       nextTargets.push(target)
       parts.push(getEditorExternalWatchTargetKey(target))
     }
@@ -256,5 +295,6 @@ export function selectEditorExternalWatchTargets(
   }
 
   cachedWatchedTargetsSnapshot = { targets: nextTargets, targetsKey }
+
   return cachedWatchedTargetsSnapshot
 }

@@ -26,6 +26,7 @@ export function PluginRemoveDialog({
   onConfirm
 }: PluginRemoveDialogProps): React.JSX.Element {
   const cancelRef = useRef<HTMLButtonElement>(null)
+
   return (
     <Dialog open={Boolean(plugin)} onOpenChange={(open) => !open && !busy && onCancel()}>
       <DialogContent

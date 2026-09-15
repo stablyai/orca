@@ -26,23 +26,30 @@ export function useWorktreePointerDragWindowEvents(args: {
     onWorkspaceBoardDragPreviewCommit,
     onDropWorktreesOnWorkspaceBoard
   } = args
+
   const { worktreePointerDragRef, clearWorktreeDrag } = args.runtime
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent): void => {
       const drag = worktreePointerDragRef.current
+
       if (!drag || event.pointerId !== drag.pointerId) {
         return
       }
+
       drag.currentX = event.clientX
       drag.currentY = event.clientY
+
       if (!drag.active) {
         const distance = Math.hypot(drag.currentX - drag.startX, drag.currentY - drag.startY)
+
         if (distance < SIDEBAR_POINTER_DRAG_THRESHOLD_PX) {
           return
         }
+
         beginWorktreePointerDrag(drag)
       }
+
       event.preventDefault()
       event.stopPropagation()
       scheduleWorktreePointerDragFrame(drag)
@@ -50,15 +57,20 @@ export function useWorktreePointerDragWindowEvents(args: {
 
     const handlePointerUp = (event: PointerEvent): void => {
       const drag = worktreePointerDragRef.current
+
       if (!drag || event.pointerId !== drag.pointerId) {
         return
       }
+
       drag.currentX = event.clientX
       drag.currentY = event.clientY
+
       if (!drag.active) {
         worktreePointerDragRef.current = null
+
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       commitWorktreePointerDrop({
@@ -72,9 +84,11 @@ export function useWorktreePointerDragWindowEvents(args: {
 
     const handlePointerCancel = (event: PointerEvent): void => {
       const drag = worktreePointerDragRef.current
+
       if (!drag || event.pointerId !== drag.pointerId) {
         return
       }
+
       clearWorktreeDrag()
     }
 
@@ -82,6 +96,7 @@ export function useWorktreePointerDragWindowEvents(args: {
       if (event.key !== 'Escape' || !worktreePointerDragRef.current) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       clearWorktreeDrag()
@@ -91,6 +106,7 @@ export function useWorktreePointerDragWindowEvents(args: {
     window.addEventListener('pointermove', handlePointerMove, { capture: true })
     window.addEventListener('pointerup', handlePointerUp, { capture: true })
     window.addEventListener('pointercancel', handlePointerCancel, { capture: true })
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true })
       window.removeEventListener('pointermove', handlePointerMove, { capture: true })

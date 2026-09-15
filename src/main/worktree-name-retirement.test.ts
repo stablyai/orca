@@ -13,6 +13,7 @@ import {
 } from './worktree-name-retirement'
 
 const FIRST = MARINE_CREATURES[0].toLowerCase()
+
 const SECOND = MARINE_CREATURES[1].toLowerCase()
 
 const makeRepo = (id: string, path: string): Repo =>
@@ -48,13 +49,16 @@ describe('normalizeRetirableGeneratedName', () => {
 describe('getRetiredNameRegistryForRepo', () => {
   const settingsFor = (nestWorkspaces: boolean): GlobalSettings =>
     ({ workspaceDir: '/workspaces', nestWorkspaces }) as GlobalSettings
+
   const storeOf = (byRepo: Record<string, string[]>) => {
     const calls: string[] = []
+
     return {
       calls,
       mergeRetiredWorktreeNames: () => false,
       getRetiredWorktreeNameRegistry: (repoId: string) => {
         calls.push(repoId)
+
         return { exhaustedTiers: 0, names: byRepo[repoId] ?? [] }
       }
     }
@@ -83,16 +87,21 @@ describe('getRetiredNameRegistryForRepo', () => {
 
   it('never probes a path for peers that hold no retirements', async () => {
     const pathReads: string[] = []
+
     const spyRepo = (id: string, path: string): Repo => {
       const repo = makeRepo(id, path)
+
       return Object.defineProperty(repo, 'path', {
         get: () => {
           pathReads.push(id)
+
           return path
         }
       }) as Repo
     }
+
     const store = storeOf({ 'repo-a': [FIRST] })
+
     const repos = [
       spyRepo('repo-a', '/repos/a'),
       ...Array.from({ length: 20 }, (_unused, index) => spyRepo(`peer-${index}`, `/repos/${index}`))
@@ -124,12 +133,15 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
     const workspaceRoot = join(root, 'workspaces')
     await mkdir(join(workspaceRoot, FIRST), { recursive: true })
     const merged: { repoId: string; names: string[] }[] = []
+
     const store = {
       mergeRetiredWorktreeNames: (repoId: string, names: Iterable<string>) => {
         merged.push({ repoId, names: [...names] })
+
         return true
       }
     }
+
     const settings = { workspaceDir: workspaceRoot, nestWorkspaces: false }
 
     try {
@@ -150,12 +162,15 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
 
   it('skips repos whose agent state lives on another host', async () => {
     const merged: string[] = []
+
     const store = {
       mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
         merged.push(...names)
+
         return true
       }
     }
+
     const sshRepo = { ...makeRepo('repo-ssh', '/remote/repo'), connectionId: 'ssh-1' }
 
     await ensureRetiredWorktreeNamesBackfilled(store, sshRepo, {
@@ -174,12 +189,15 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
     const workspaceRoot = join(root, 'workspaces')
     await mkdir(join(workspaceRoot, FIRST), { recursive: true })
     const merged: string[] = []
+
     const store = {
       mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
         merged.push(...names)
+
         return true
       }
     }
+
     const runtimeRepo = {
       ...makeRepo('repo-runtime', '/repos/runtime'),
       executionHostId: 'runtime:env-1'
@@ -203,9 +221,11 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
     const workspaceRoot = join(root, 'workspaces')
     await mkdir(join(workspaceRoot, FIRST), { recursive: true })
     const merged: string[] = []
+
     const store = {
       mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
         merged.push(...names)
+
         return true
       }
     }

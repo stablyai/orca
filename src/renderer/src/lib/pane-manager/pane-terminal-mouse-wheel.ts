@@ -15,10 +15,13 @@ export {
   normalizeTerminalTuiMouseWheelMultiplier,
   resolveTerminalTuiMouseWheelReportCount
 } from './pane-terminal-tui-wheel-reports'
+
 export type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
 
 const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
+
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
+
 const DOM_DELTA_LINE = 1
 
 type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
@@ -87,7 +90,9 @@ function cloneWheelReportEvent(event: WheelEvent): WheelEvent {
     deltaZ: 0,
     deltaMode: DOM_DELTA_LINE
   })
+
   markReplayedWheelEvent(clone)
+
   return clone
 }
 
@@ -95,11 +100,14 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
   if (typeof terminal.element?.querySelector !== 'function') {
     return undefined
   }
+
   const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
   const rect = screen?.getBoundingClientRect()
+
   if (!rect || rect.height <= 0 || terminal.rows <= 0) {
     return undefined
   }
+
   return rect.height / terminal.rows
 }
 
@@ -125,8 +133,10 @@ function drainTerminalTuiWheelReports(
 ): void {
   const target = state.pendingTarget
   const event = state.pendingEvent
+
   if (!target || !event || state.pendingReports <= 0) {
     state.drainScheduled = false
+
     return
   }
 
@@ -136,13 +146,16 @@ function drainTerminalTuiWheelReports(
     state.pendingDirection = 0
     state.pendingEvent = null
     state.pendingTarget = null
+
     return
   }
 
   const reportsToDispatch = state.pendingReports
+
   for (let i = 0; i < reportsToDispatch; i += 1) {
     target.dispatchEvent(cloneWheelReportEvent(event))
   }
+
   state.pendingReports = 0
   state.drainScheduled = false
   state.pendingDirection = 0
@@ -162,6 +175,7 @@ function queueTerminalTuiWheelReports(
   }
 
   const direction = resolveTerminalWheelDirection(event)
+
   if (state.pendingDirection !== 0 && state.pendingDirection !== direction) {
     state.pendingReports = 0
   }
@@ -198,6 +212,7 @@ export function attachTerminalMouseWheelMultiplier(
 
     const target =
       event.currentTarget instanceof EventTarget ? event.currentTarget : terminal.element
+
     if (!target) {
       return true
     }
@@ -213,6 +228,7 @@ export function attachTerminalMouseWheelMultiplier(
         rows: terminal.rows
       }
     )
+
     queueTerminalTuiWheelReports(replayState, terminal, target, event, reportCount)
 
     return false

@@ -9,8 +9,10 @@ import { parseTimingLog } from './ci-shard-timing-import.mjs'
 import TimingSequencer from './ci-unit-sequencer.mjs'
 
 const directories = []
+
 afterEach(() => {
   vi.unstubAllEnvs()
+
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -41,20 +43,25 @@ describe('timing-weighted shard selection', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-unit-shards-'))
     directories.push(directory)
     vi.stubEnv('ORCA_SHARD_MANIFEST', join(directory, 'assignment.json'))
+
     const specs = Array.from({ length: 37 }, (_, i) => ({
       moduleId: resolve(`src/fixture-${i}.test.ts`)
     }))
+
     const selected = []
+
     for (let index = 1; index <= 8; index++) {
       const sequencer = new TimingSequencer({
         config: { root: process.cwd(), shard: { index, count: 8 } }
       })
+
       expect(sequencer.sort).toBe(BaseSequencer.prototype.sort)
       selected.push(...(await sequencer.shard(specs)))
       const manifest = JSON.parse(readFileSync(join(directory, 'assignment.json'), 'utf8'))
       expect(manifest.selectedShard).toBe(index)
       expect(manifest.baselineSha256).toMatch(/^[a-f0-9]{64}$/)
     }
+
     expect(new Set(selected).size).toBe(specs.length)
     expect(selected).toHaveLength(specs.length)
     expect(new Set(selected)).toEqual(new Set(specs))
@@ -68,6 +75,7 @@ describe('timing-weighted shard selection', () => {
 
   it('keeps nested/serial E2E files atomic and fails closed on discovery errors', () => {
     const spec = (id, file) => ({ id, file, tests: [{ projectName: 'electron-headless' }] })
+
     const report = {
       suites: [
         {
@@ -76,6 +84,7 @@ describe('timing-weighted shard selection', () => {
         }
       ]
     }
+
     const plan = planE2e(report, 14, { timings: { 'tests/e2e/one.spec.ts': 4000 } })
     expect(plan.shards.flatMap((shard) => shard.files).sort()).toEqual([
       'one.spec.ts',
@@ -104,6 +113,7 @@ describe('timing-weighted shard selection', () => {
         '✓ 3 [electron-headful] › tests/e2e/a.spec.ts:3:1 › benchmark (9s)'
       ].join('\n')
     )
+
     expect(parsed).toEqual({
       unit: { 'src/a.test.ts': 35 },
       e2e: { 'tests/e2e/a.spec.ts': 74000 },
@@ -115,6 +125,7 @@ describe('timing-weighted shard selection', () => {
     const parsed = parseTimingLog(
       'Duration 5.14s (transform 952ms, setup 449ms, import 1.18s, tests 9.41s, environment 1ms)'
     )
+
     expect(parsed.overheadMs).toBe(2582)
   })
 

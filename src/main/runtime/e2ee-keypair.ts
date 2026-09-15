@@ -12,7 +12,9 @@ import {
 import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
 const KEYPAIR_FILENAME = E2EE_KEYPAIR_FILENAME
+
 const KEYPAIR_VERSION = 1
+
 const MAX_KEYPAIR_FILE_BYTES = 8 * 1024
 
 type KeypairFile = {
@@ -33,15 +35,19 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
   if (existsSync(filePath)) {
     try {
       hardenExistingSecureFile(filePath)
+
       // Why: this startup path reads synchronously; valid keypair files are
       // tiny, so oversized/corrupt files should be replaced without loading.
       if (statSync(filePath).size > MAX_KEYPAIR_FILE_BYTES) {
         throw new Error('E2EE keypair file is too large')
       }
+
       const raw: KeypairFile = JSON.parse(readFileSync(filePath, 'utf-8'))
+
       if (raw.v === KEYPAIR_VERSION && raw.publicKeyB64 && raw.secretKeyB64) {
         const publicKey = Uint8Array.from(Buffer.from(raw.publicKeyB64, 'base64'))
         const secretKey = Uint8Array.from(Buffer.from(raw.secretKeyB64, 'base64'))
+
         if (publicKey.length === 32 && secretKey.length === 32) {
           return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
         }

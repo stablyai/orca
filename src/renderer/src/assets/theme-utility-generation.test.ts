@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const mainCss = fs.readFileSync(new URL('./main.css', import.meta.url), 'utf8')
+
 const themeBlock = /@theme inline\s*{([\s\S]*?)\n}/.exec(mainCss)?.[1] ?? ''
 
 // Why: a token that never reaches `@theme inline`, and a Tailwind-shaped name that is only a

@@ -21,6 +21,7 @@ vi.mock('@/store', () => {
     lookupJiraIssueSummary: mocks.lookupJiraIssueSummary,
     readJiraStatus: mocks.readJiraStatus
   }
+
   return {
     useAppStore: (selector: (value: typeof state) => unknown): unknown => selector(state)
   }
@@ -79,9 +80,11 @@ function issue(key: string, siteId = 'site-a'): JiraIssue {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -108,6 +111,7 @@ describe('useJiraUrlSource', () => {
     const context = sourceContext()
     mocks.readJiraStatus.mockResolvedValue(status([siteA, siteB], 'all'))
     mocks.lookupJiraIssueSummary.mockResolvedValue(issue('ORCA-123', 'site-b'))
+
     const { result } = renderHook(() =>
       useJiraUrlSource({
         value: 'https://company.atlassian.net/browse/ORCA-123',
@@ -155,6 +159,7 @@ describe('useJiraUrlSource', () => {
     mocks.lookupJiraIssueSummary.mockResolvedValue(issue('ORCA-1'))
     // Explicit: clearAllMocks keeps prior implementations, so the retry read must be this test's.
     mocks.readJiraStatus.mockResolvedValue(status([site('site-a')], 'site-a'))
+
     const { result } = renderHook(() =>
       useJiraUrlSource({
         value: 'https://company.atlassian.net/browse/ORCA-1',
@@ -181,6 +186,7 @@ describe('useJiraUrlSource', () => {
     const context = sourceContext()
     mocks.readJiraStatus.mockResolvedValue(status([site('site-a')], 'site-a'))
     mocks.lookupJiraIssueSummary.mockResolvedValue(issue('ORCA-1'))
+
     const { result } = renderHook(() =>
       useJiraUrlSource({
         value: 'https://company.atlassian.net/browse/ORCA-1',
@@ -210,11 +216,14 @@ describe('useJiraUrlSource', () => {
       ) => {
         if (key === 'ORCA-1') {
           oldSignal = options.signal
+
           return oldIssue.promise
         }
+
         return Promise.resolve(issue('ORCA-2'))
       }
     )
+
     const { result, rerender } = renderHook(
       ({ value }) =>
         useJiraUrlSource({
@@ -224,6 +233,7 @@ describe('useJiraUrlSource', () => {
         }),
       { initialProps: { value: 'https://company.atlassian.net/browse/ORCA-1' } }
     )
+
     await advanceLookup()
 
     rerender({ value: 'https://company.atlassian.net/browse/ORCA-2' })
@@ -242,6 +252,7 @@ describe('useJiraUrlSource', () => {
     const context = sourceContext()
     mocks.readJiraStatus.mockResolvedValue(status([site('site-a')], 'site-a'))
     mocks.lookupJiraIssueSummary.mockResolvedValueOnce(null).mockResolvedValueOnce(issue('ORCA-1'))
+
     const { result } = renderHook(() =>
       useJiraUrlSource({
         value: 'https://company.atlassian.net/browse/ORCA-1',
@@ -267,6 +278,7 @@ describe('useJiraUrlSource', () => {
     const lateStatus = deferred<JiraConnectionStatus>()
     const context = sourceContext()
     mocks.readJiraStatus.mockReturnValue(lateStatus.promise)
+
     const { unmount } = renderHook(() =>
       useJiraUrlSource({
         value: 'https://company.atlassian.net/browse/ORCA-1',
@@ -274,6 +286,7 @@ describe('useJiraUrlSource', () => {
         sourceContext: context
       })
     )
+
     await advanceLookup()
     unmount()
 
@@ -288,6 +301,7 @@ describe('useJiraUrlSource', () => {
   it('surfaces a missing paired-runtime capability without reading Jira state', async () => {
     const context = sourceContext('runtime:env-1')
     mocks.assertRuntimeEnvironmentCapability.mockRejectedValueOnce(new Error('update-runtime'))
+
     const { result } = renderHook(() =>
       useJiraUrlSource({
         value: 'https://company.atlassian.net/browse/ORCA-1',

@@ -18,14 +18,19 @@ export function isDaemonGoneError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false
   }
+
   if (err instanceof DaemonConnectionLostError) {
     return true
   }
+
   const errno = err as NodeJS.ErrnoException
+
   if ((errno.code === 'ENOENT' || errno.code === 'ECONNREFUSED') && errno.syscall === 'connect') {
     return true
   }
+
   const msg = err.message
+
   return (
     msg === 'Connection lost' ||
     msg === 'Not connected' ||
@@ -39,6 +44,8 @@ export function isMissingWindowsNamedPipeError(err: unknown): boolean {
   if (process.platform !== 'win32' || !(err instanceof Error)) {
     return false
   }
+
   const errno = err as NodeJS.ErrnoException
+
   return errno.code === 'ENOENT' && errno.syscall === 'connect'
 }

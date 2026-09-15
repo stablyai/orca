@@ -27,12 +27,15 @@ export function isWorktreeConnectionResolved(worktreeId: string | null): boolean
   if (!worktreeId) {
     return true
   }
+
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+
   if (parsedWorkspaceKey?.type === 'folder') {
     // Folder workspaces resolve per-file; treat them as resolved here and let
     // getConnectionIdForFile decide ownership for the concrete path.
     return true
   }
+
   // Why: getConnectionId returns undefined only when the backing repo is absent;
   // any found repo yields a string or null, so this mirrors "repo has hydrated".
   return getConnectionId(worktreeId) !== undefined

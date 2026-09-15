@@ -17,9 +17,11 @@ import {
 function ok(result: unknown): RpcSuccess {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
 }
+
 function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
+
 function malformedFailure(error: { code?: string; message?: string }): RpcResponse {
   return { id: 'r', ok: false, error, _meta: { runtimeId: 'rt' } } as unknown as RpcResponse
 }
@@ -28,10 +30,12 @@ function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & 
   calls: Array<{ method: string; params: unknown }>
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
+
       return responses.shift() ?? fail('unexpected')
     })
   }
@@ -70,6 +74,7 @@ describe('rpc wrappers', () => {
 
   it('retries the idempotent setup read once after logical-client cutover', async () => {
     const setup: MobileSpeechSetup = { enabled: false, selectedModelId: '', models: [] }
+
     const sendRequest = vi
       .fn()
       .mockRejectedValueOnce(new LogicalClientCutoverError())

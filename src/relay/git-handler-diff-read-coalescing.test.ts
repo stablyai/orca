@@ -22,9 +22,11 @@ function deferredRelayBuffer(content: string): {
   resolve: () => void
 } {
   let resolve!: (value: Buffer) => void
+
   const promise = new Promise<Buffer>((innerResolve) => {
     resolve = innerResolve
   })
+
   return {
     promise,
     resolve: () => resolve(Buffer.from(content))
@@ -36,6 +38,7 @@ async function waitForSpyCalls(mock: ReturnType<typeof vi.fn>, calls: number): P
     if (mock.mock.calls.length >= calls) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
   }
 }
@@ -59,6 +62,7 @@ describe('GitHandler', () => {
       const leftBlob = deferredRelayBuffer('left\n')
       const rightBlob = deferredRelayBuffer('right\n')
       const pendingBuffers = [leftBlob, rightBlob]
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
@@ -97,9 +101,11 @@ describe('GitHandler', () => {
       const firstBlob = deferredRelayBuffer('left\n')
       const secondBlob = deferredRelayBuffer('fresh-left\n')
       const pendingBuffers = [firstBlob, secondBlob]
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
+
       const gitSpy = vi
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockResolvedValue({ stdout: '', stderr: '' })
@@ -109,6 +115,7 @@ describe('GitHandler', () => {
         filePath: 'src/file.ts',
         staged: false
       })
+
       await waitForSpyCalls(gitBufferSpy, 1)
 
       await dispatcher.callRequest('git.status', { worktreePath: tmpDir })
@@ -118,6 +125,7 @@ describe('GitHandler', () => {
         filePath: 'src/file.ts',
         staged: false
       })
+
       await waitForSpyCalls(gitBufferSpy, 2)
 
       firstBlob.resolve()
@@ -132,9 +140,11 @@ describe('GitHandler', () => {
       const firstBlob = deferredRelayBuffer('left\n')
       const secondBlob = deferredRelayBuffer('fresh-left\n')
       const pendingBuffers = [firstBlob, secondBlob]
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
+
       const gitSpy = vi
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockResolvedValue({ stdout: '', stderr: '' })
@@ -144,6 +154,7 @@ describe('GitHandler', () => {
         filePath: 'src/file.ts',
         staged: false
       })
+
       await waitForSpyCalls(gitBufferSpy, 1)
 
       await dispatcher.callRequest('git.stage', { worktreePath: tmpDir, filePath: 'src/file.ts' })
@@ -153,6 +164,7 @@ describe('GitHandler', () => {
         filePath: 'src/file.ts',
         staged: false
       })
+
       await waitForSpyCalls(gitBufferSpy, 2)
 
       firstBlob.resolve()
@@ -161,9 +173,11 @@ describe('GitHandler', () => {
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
       expect(gitSpy).toHaveBeenCalledWith(['add', '--', ':(literal)src/file.ts'], tmpDir)
+
       const submodulePathReads = gitSpy.mock.calls.filter(
         ([args]) => args[0] === 'config' && args.includes('.gitmodules')
       )
+
       expect(submodulePathReads).toHaveLength(2)
     })
 
@@ -171,15 +185,18 @@ describe('GitHandler', () => {
       const firstBlob = deferredRelayBuffer('left\n')
       const secondBlob = deferredRelayBuffer('fresh-left\n')
       const pendingBuffers = [firstBlob, secondBlob]
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
+
       const gitSpy = vi
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockImplementation(async (args: string[]) => {
           if (args[0] === 'remote') {
             return { stdout: 'origin\n', stderr: '' }
           }
+
           return { stdout: '', stderr: '' }
         })
 
@@ -188,6 +205,7 @@ describe('GitHandler', () => {
         filePath: 'src/file.ts',
         staged: false
       })
+
       await waitForSpyCalls(gitBufferSpy, 1)
 
       await dispatcher.callRequest('git.fetchRemoteTrackingRef', {
@@ -203,6 +221,7 @@ describe('GitHandler', () => {
         filePath: 'src/file.ts',
         staged: false
       })
+
       await waitForSpyCalls(gitBufferSpy, 2)
 
       firstBlob.resolve()
@@ -234,20 +253,26 @@ describe('GitHandler', () => {
           if (args[0] === 'rev-parse' && args.includes('HEAD')) {
             return { stdout: `${'c'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args[0] === 'rev-parse') {
             return { stdout: `${'b'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args[0] === 'merge-base') {
             return { stdout: `${'a'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args.includes('--name-status')) {
             return { stdout: 'M\tsrc/file.ts\n', stderr: '' }
           }
+
           throw new Error(`unexpected git args: ${args.join(' ')}`)
         })
+
       const leftBlob = deferredRelayBuffer('left\n')
       const rightBlob = deferredRelayBuffer('right\n')
       const pendingBuffers = [leftBlob, rightBlob]
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
@@ -276,6 +301,7 @@ describe('GitHandler', () => {
       const leftBlob = deferredRelayBuffer('left\n')
       const rightBlob = deferredRelayBuffer('right\n')
       const pendingBuffers = [leftBlob, rightBlob]
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => pendingBuffers.shift()!.promise)
@@ -301,6 +327,7 @@ describe('GitHandler', () => {
 
     it('coalesces parentless root git.commitDiff reads without a left-side blob', async () => {
       const rightBlob = deferredRelayBuffer('right\n')
+
       const gitBufferSpy = vi
         .spyOn(handler as unknown as GitBufferSpyTarget, 'gitBuffer')
         .mockImplementation(async () => rightBlob.promise)
@@ -343,27 +370,34 @@ describe('GitHandler', () => {
       expect(gitBufferSpy).toHaveBeenCalledTimes(3)
 
       gitBufferSpy.mockClear()
+
       const gitSpy = vi
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockImplementation(async (args: string[]) => {
           if (args[0] === 'rev-parse' && args.includes('HEAD')) {
             return { stdout: `${'c'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args[0] === 'rev-parse' && args.includes('develop')) {
             return { stdout: `${'d'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args[0] === 'rev-parse') {
             return { stdout: `${'b'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args[0] === 'merge-base' && args.includes('d'.repeat(40))) {
             return { stdout: `${'e'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args[0] === 'merge-base') {
             return { stdout: `${'a'.repeat(40)}\n`, stderr: '' }
           }
+
           if (args.includes('--name-status')) {
             return { stdout: 'M\tsrc/file.ts\n', stderr: '' }
           }
+
           throw new Error(`unexpected git args: ${args.join(' ')}`)
         })
 
@@ -432,7 +466,9 @@ describe('GitHandler', () => {
         parentOid: 'b'.repeat(40),
         filePath: 'src/file.ts'
       }
+
       const first = dispatcher.callRequest('git.commitDiff', invalidRequest)
+
       const firstBurst = [
         first,
         ...Array.from({ length: 7 }, () => dispatcher.callRequest('git.commitDiff', invalidRequest))

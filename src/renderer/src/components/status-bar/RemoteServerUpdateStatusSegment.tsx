@@ -15,6 +15,7 @@ export function RemoteServerUpdateStatusSegment({
   const entries = [...entryMap.values()]
   const failed = entries.filter((entry) => entry.phase === 'failed').length
   const updated = entries.filter((entry) => entry.phase === 'updated').length
+
   const updateCohort = entries.filter((entry) =>
     ['queued', 'checking-update', 'downloading', 'restarting', 'updated', 'failed'].includes(
       entry.phase

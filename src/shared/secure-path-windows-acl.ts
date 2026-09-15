@@ -14,6 +14,7 @@ const ACL_TIMEOUT_MS = 5000
 
 /** SYSTEM and the local Administrators group: they can take ownership regardless, so denying them buys nothing. */
 const LOCAL_SYSTEM_SID = 'S-1-5-18'
+
 const BUILTIN_ADMINISTRATORS_SID = 'S-1-5-32-544'
 
 const WINDOWS_SID_PATTERN = /^S-1-\d+(?:-\d+)+$/
@@ -35,6 +36,7 @@ function buildAclPlan(targetPath: string, currentUserSid: string, isDirectory: b
   // Directories propagate to children (artifact-intent files rely on inheritance); files take no flags.
   const rights = isDirectory ? '(OI)(CI)(F)' : '(F)'
   const allowedSids = [...new Set([currentUserSid, LOCAL_SYSTEM_SID, BUILTIN_ADMINISTRATORS_SID])]
+
   return {
     program: windowsSystem32Binary('icacls.exe'),
     icaclsPath,
@@ -74,37 +76,47 @@ function evaluateSavedAcl(
   if (result.code !== 0) {
     return result.stderr.trim() || `icacls exited ${result.code}`
   }
+
   let sddl: string
+
   try {
     // icacls writes the descriptor as UTF-16LE, which sidesteps the OEM codepage its stdout uses.
     sddl = readFileSync(savePath, 'utf16le')
   } catch {
     return 'icacls saved no security descriptor'
   }
+
   return validateHardenedDacl(sddl, plan)
 }
 
 function validateHardenedDacl(sddl: string, plan: AclPlan): string | null {
   const dacl = parseSddlDacl(sddl, plan.localDomainSid ?? undefined)
+
   if (!dacl) {
     return 'no DACL in the saved security descriptor'
   }
+
   if (!dacl.isProtected) {
     return 'DACL is not protected; the parent still propagates into it'
   }
+
   // Exactly these, in any order: a directory's rules must be inheritable and nothing else.
   const expectedFlags = plan.isDirectory ? ['OI', 'CI'] : []
   const observed = new Set<string>()
+
   for (const ace of dacl.aces) {
     if (ace.type !== 'A') {
       return `unexpected ${ace.type} rule for ${ace.sid}`
     }
+
     if (ace.flags.includes('ID')) {
       return `inherited rule survived for ${ace.sid}`
     }
+
     if (ace.rights !== 'FA') {
       return `rule for ${ace.sid} grants ${ace.rights || 'nothing'}, not full control`
     }
+
     // The whole set, not just OI. (OI) without (CI) leaves subdirectories unprotected, and
     // adding (IO) makes every rule inherit-only, so the directory object itself grants nobody
     // anything and Orca cannot even write into it. Both used to be repaired blindly on every
@@ -115,8 +127,10 @@ function validateHardenedDacl(sddl: string, plan: AclPlan): string | null {
     ) {
       return `wrong inheritance flags (${ace.flags.join('') || 'none'}) for ${ace.sid}`
     }
+
     observed.add(ace.sid)
   }
+
   // Identity, not just shape: a count check alone accepts a granted SID swapped for another.
   // Unexpected principals are reported before missing ones — "Everyone has full control" is the
   // headline, and a substitution always produces both.
@@ -125,11 +139,13 @@ function validateHardenedDacl(sddl: string, plan: AclPlan): string | null {
       return `unexpected rule for ${sid}`
     }
   }
+
   for (const sid of plan.allowedSids) {
     if (!observed.has(sid)) {
       return `missing rule for ${sid}`
     }
   }
+
   return null
 }
 
@@ -141,13 +157,17 @@ function toIcaclsPath(targetPath: string): string {
   if (targetPath.length < 260 || targetPath.startsWith('\\\\?\\')) {
     return targetPath
   }
+
   const normalized = pathWin32.normalize(targetPath)
+
   if (/^[A-Za-z]:\\/.test(normalized)) {
     return `\\\\?\\${normalized}`
   }
+
   if (normalized.startsWith('\\\\')) {
     return `\\\\?\\UNC\\${normalized.slice(2)}`
   }
+
   return targetPath
 }
 
@@ -169,10 +189,13 @@ export function bestEffortRestrictWindowsPath(
   onSettled?: (restricted: boolean) => void
 ): void {
   const plan = planFor(targetPath, isDirectory)
+
   if (!plan) {
     onSettled?.(false)
+
     return
   }
+
   // Why async: hardening runs on the read path, and blocking it on a spawn stormed the main thread (#4901).
   // Why both arms and a terminal catch: a bare `void p.then(fn)` makes a rejected `restrictAsync`
   // *and* a throw from `onSettled` itself an unhandled rejection, which Node's default turns into
@@ -201,37 +224,47 @@ async function restrictAsync(targetPath: string, plan: AclPlan): Promise<boolean
   if ((await verifyAsync(plan)) === null) {
     return true
   }
+
   for (const [stage, args] of [
     ['reset', plan.resetArgs],
     ['grant', plan.grantArgs]
   ] as const) {
     try {
       const result = await runProcess({ program: plan.program, args, timeoutMs: ACL_TIMEOUT_MS })
+
       if (result.code !== 0) {
         report(targetPath, stage, result.stderr || `icacls exited ${result.code}`)
+
         return false
       }
     } catch (error) {
       report(targetPath, stage, String(error))
+
       return false
     }
   }
+
   const invalid = await verifyAsync(plan)
+
   if (invalid) {
     report(targetPath, 'verify', invalid)
+
     return false
   }
+
   return true
 }
 
 async function verifyAsync(plan: AclPlan): Promise<string | null> {
   const savePath = sddlSavePath()
+
   try {
     const result = await runProcess({
       program: plan.program,
       args: verifyArgs(plan, savePath),
       timeoutMs: ACL_TIMEOUT_MS
     })
+
     return evaluateSavedAcl(plan, result, savePath)
   } catch (error) {
     return String(error)
@@ -242,45 +275,57 @@ async function verifyAsync(plan: AclPlan): Promise<string | null> {
 
 export function restrictWindowsPathSync(targetPath: string, isDirectory: boolean): boolean {
   const plan = planFor(targetPath, isDirectory)
+
   if (!plan) {
     return false
   }
+
   // Why sync: the file must not be published until its ACL is actually restricted (read path stays async, #4901).
   if (verifySync(plan) === null) {
     return true
   }
+
   for (const [stage, args] of [
     ['reset', plan.resetArgs],
     ['grant', plan.grantArgs]
   ] as const) {
     try {
       const result = runProcessSync({ program: plan.program, args, timeoutMs: ACL_TIMEOUT_MS })
+
       if (result.code !== 0) {
         report(targetPath, stage, result.stderr || `icacls exited ${result.code}`)
+
         return false
       }
     } catch (error) {
       // Why not fatal: a failed ACL apply must not crash the write; false leaves the path uncached to retry later.
       report(targetPath, stage, String(error))
+
       return false
     }
   }
+
   const invalid = verifySync(plan)
+
   if (invalid) {
     report(targetPath, 'verify', invalid)
+
     return false
   }
+
   return true
 }
 
 function verifySync(plan: AclPlan): string | null {
   const savePath = sddlSavePath()
+
   try {
     const result = runProcessSync({
       program: plan.program,
       args: verifyArgs(plan, savePath),
       timeoutMs: ACL_TIMEOUT_MS
     })
+
     return evaluateSavedAcl(plan, result, savePath)
   } catch (error) {
     return String(error)
@@ -299,15 +344,20 @@ function discard(savePath: string): void {
 
 function planFor(targetPath: string, isDirectory: boolean): AclPlan | null {
   const currentUserSid = getCurrentWindowsUserSid()
+
   if (!currentUserSid) {
     report(targetPath, 'sid-lookup', 'could not resolve the current user SID')
+
     return null
   }
+
   return buildAclPlan(targetPath, currentUserSid, isDirectory)
 }
 
 let cachedWindowsUserSid: string | null = null
+
 let sidLookupFailedAt: number | null = null
+
 const SID_LOOKUP_RETRY_MS = 60_000
 
 /**
@@ -326,25 +376,32 @@ function getCurrentWindowsUserSid(): string | null {
   if (cachedWindowsUserSid) {
     return cachedWindowsUserSid
   }
+
   if (sidLookupFailedAt !== null && monotonicNowMs() - sidLookupFailedAt < SID_LOOKUP_RETRY_MS) {
     return null
   }
+
   try {
     const result = runProcessSync({
       program: windowsSystem32Binary('whoami.exe'),
       args: ['/user', '/fo', 'csv', '/nh'],
       timeoutMs: ACL_TIMEOUT_MS
     })
+
     const candidate = result.code === 0 ? parseCsvLine(result.stdout.trim())[1] : undefined
+
     if (candidate && WINDOWS_SID_PATTERN.test(candidate)) {
       cachedWindowsUserSid = candidate
       sidLookupFailedAt = null
+
       return candidate
     }
   } catch {
     // Fall through to the failure record below.
   }
+
   sidLookupFailedAt = monotonicNowMs()
+
   return null
 }
 

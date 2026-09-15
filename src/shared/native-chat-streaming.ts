@@ -15,6 +15,7 @@ function assistantText(message: NativeChatMessage | undefined): string {
   if (!message || message.role !== 'assistant') {
     return ''
   }
+
   return message.blocks
     .filter((b) => b.type === 'text')
     .map((b) => (b.type === 'text' ? b.text : ''))
@@ -43,17 +44,23 @@ export function deriveNativeChatStreamingText(args: {
   previewIsToolOutput?: boolean
 }): string | null {
   const { messages, previewText, working, previewIsToolOutput } = args
+
   if (!working || previewIsToolOutput) {
     return null
   }
+
   const text = previewText?.trim()
+
   if (!text) {
     return null
   }
+
   const lastText = assistantText(messages.at(-1))
+
   if (lastText.includes(text) || text.length <= lastText.length) {
     return null
   }
+
   return text
 }
 

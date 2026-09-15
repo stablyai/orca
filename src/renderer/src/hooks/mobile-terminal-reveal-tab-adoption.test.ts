@@ -44,6 +44,7 @@ describe('mobile terminal reveal tab adoption', () => {
         'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' } }
       }
     })
+
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
@@ -66,6 +67,7 @@ describe('mobile terminal reveal tab adoption', () => {
       ptyIdsByTabId: { 'tab-split': ['pty-a'] },
       terminalLayoutsByTabId: {}
     })
+
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
@@ -96,6 +98,7 @@ describe('mobile terminal reveal tab adoption', () => {
         'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a' } }
       }
     })
+
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
@@ -118,6 +121,7 @@ describe('mobile terminal reveal tab adoption', () => {
         'tab-split': { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' } }
       }
     })
+
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
@@ -150,6 +154,7 @@ describe('mobile terminal reveal tab adoption', () => {
       ptyIdsByTabId: { 'tab-live': ['pty-b'] },
       terminalLayoutsByTabId: { 'tab-stale': { ptyIdsByLeafId: { 'leaf-x': 'pty-b' } } }
     })
+
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
@@ -224,6 +229,7 @@ describe('mobile terminal reveal tab adoption', () => {
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: { 'tab-stale-b': { ptyIdsByLeafId: { 'leaf-y': 'pty-b' } } }
     })
+
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 

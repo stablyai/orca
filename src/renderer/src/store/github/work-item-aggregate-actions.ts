@@ -43,11 +43,13 @@ export const createWorkItemAggregateActions = (
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { items: [], failedCount: 0, githubUnavailable: false }
     }
+
     const state = get()
     let failedCount = 0
     let requestFailureCount = 0
     let unavailableFailureCount = 0
     let skippedSourceCount = 0
+
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
@@ -63,13 +65,18 @@ export const createWorkItemAggregateActions = (
               requestFailureCount += 1
               failedCount += 1
             }
+
             skippedSourceCount += 1
+
             return [] as GitHubWorkItem[]
           }
+
           requestFailureCount += 1
+
           if (isGitHubUnavailableWorkItemsError(err)) {
             unavailableFailureCount += 1
           }
+
           const key =
             r.sourceContext?.provider === 'github'
               ? workItemsCacheKey(
@@ -79,23 +86,31 @@ export const createWorkItemAggregateActions = (
                   getTaskSourceCacheScope(r.sourceContext)
                 )
               : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
+
           const cached = get().workItemsCache[key]?.data
+
           if (cached && options?.allowStaleFallback !== false) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
+
             return cached
           }
+
           console.warn(`[workItems] ${r.repoId} failed:`, err)
           failedCount += 1
+
           return [] as GitHubWorkItem[]
         }
       })
     )
+
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
+
     // Why: only claim global unavailability when every eligible source failed for a reachability reason; skipped SSH repos aren't GitHub sources here.
     const githubUnavailable =
       requestFailureCount > 0 &&
       requestFailureCount === repos.length - skippedSourceCount &&
       unavailableFailureCount === requestFailureCount
+
     return {
       items: merged,
       failedCount,
@@ -108,17 +123,21 @@ export const createWorkItemAggregateActions = (
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { items: [], failedCount: 0, errorTypes: [] }
     }
+
     let failedCount = 0
     const errorTypes: ClassifiedError['type'][] = []
+
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         const requestState = get()
         const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+
         const requestSettings = getGitHubWorkItemSourceSettings(
           requestState.settings,
           repo,
           r.sourceContext
         )
+
         const requestContext = getGitHubWorkItemRequestContext(
           requestState,
           requestSettings,
@@ -126,7 +145,9 @@ export const createWorkItemAggregateActions = (
           r.path,
           r.sourceContext
         )
+
         await acquireWorkItemSlot()
+
         try {
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
@@ -134,6 +155,7 @@ export const createWorkItemAggregateActions = (
             page,
             ...(options?.noCache ? { noCache: true } : {})
           })
+
           // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
           if (envelope.errors?.issues) {
             const { type, message } = envelope.errors.issues
@@ -150,6 +172,7 @@ export const createWorkItemAggregateActions = (
               envelope.errors.issues
             )
           }
+
           if (envelope.errors?.prs) {
             // Why: the window 422 is issue-side only — a PR-side validation
             // error must never join the unreachable signal.
@@ -160,27 +183,35 @@ export const createWorkItemAggregateActions = (
               envelope.errors.prs
             )
           }
+
           if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
             failedCount += 1
+
             return [] as GitHubWorkItem[]
           }
+
           return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
             if (options?.requireComplete) {
               failedCount += 1
             }
+
             return [] as GitHubWorkItem[]
           }
+
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)
           failedCount += 1
+
           return [] as GitHubWorkItem[]
         } finally {
           releaseWorkItemSlot()
         }
       })
     )
+
     const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
+
     return { items: merged, failedCount, errorTypes }
   },
 
@@ -188,21 +219,26 @@ export const createWorkItemAggregateActions = (
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { totalCount: 0, totalPages: 0 }
     }
+
     const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
     // Why: GitHub 422s pages that start past its 1000-result search window.
     const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
+
     const counts = await Promise.all(
       repos.map(async (r) => {
         // Why: same stampede cap as item-fetch — without a slot a 90-repo selection fires 90 concurrent count IPCs before the main-side rate-limit guard sees the first 403.
         await acquireWorkItemSlot()
+
         try {
           const requestState = get()
           const repo = findRepoForGitHubOwner(requestState, r.repoId, r.path)
+
           const requestSettings = getGitHubWorkItemSourceSettings(
             requestState.settings,
             repo,
             r.sourceContext
           )
+
           const requestContext = getGitHubWorkItemRequestContext(
             requestState,
             requestSettings,
@@ -210,6 +246,7 @@ export const createWorkItemAggregateActions = (
             r.path,
             r.sourceContext
           )
+
           return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
         } catch {
           return 0
@@ -218,6 +255,7 @@ export const createWorkItemAggregateActions = (
         }
       })
     )
+
     return {
       totalCount: counts.reduce((sum, count) => sum + count, 0),
       // Why: repos advance independently by page, so take the max across repos — a sum/page-width undercounts when one repo owns most results.
@@ -233,18 +271,23 @@ export const createWorkItemAggregateActions = (
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return
     }
+
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
+
     const key =
       options?.sourceContext?.provider === 'github'
         ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(options.sourceContext))
         : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
+
     const cached = get().workItemsCache[key]
+
     const requestSettings = getGitHubWorkItemSourceSettings(
       requestState.settings,
       repo,
       options?.sourceContext
     )
+
     const requestContext = getGitHubWorkItemRequestContext(
       requestState,
       requestSettings,
@@ -252,10 +295,13 @@ export const createWorkItemAggregateActions = (
       repoPath,
       options?.sourceContext
     )
+
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
+
     if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(inflightKey)) {
       return
     }
+
     void get()
       .fetchWorkItems(repoId, repoPath, limit, query, { sourceContext: options?.sourceContext })
       .catch(() => {})

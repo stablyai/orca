@@ -31,6 +31,7 @@ vi.mock('node:fs', () => ({
     if (!fsFixture.executables.has(target)) {
       throw new Error(`ENOENT: ${target}`)
     }
+
     return { isFile: () => true }
   },
   accessSync: (target: string) => {
@@ -135,6 +136,7 @@ describe('agent CLI install-dir fallback', () => {
   // a different binary than the packaged PATH scan for the same install.
   it('ranks system install dirs in the same order as the PATH seed', () => {
     const home = '/home/tester'
+
     const dirs = [
       '/usr/local/bin',
       '/snap/bin',
@@ -144,7 +146,9 @@ describe('agent CLI install-dir fallback', () => {
       join(home, '.opencode', 'bin'),
       join(home, '.vite-plus', 'bin')
     ]
+
     stage(...dirs.map((dir) => join(dir, 'opencode')))
+
     for (const expected of dirs) {
       expect(resolveAll(['opencode'], { platform: 'linux', homePath: home })).toEqual({
         opencode: join(expected, 'opencode')
@@ -197,6 +201,7 @@ describe('agent CLI install-dir fallback', () => {
     for (const platform of ['darwin', 'linux'] as const) {
       const home = platform === 'darwin' ? '/Users/tester' : '/home/tester'
       const seeded = getVersionManagerBinPaths({ platform, homePath: home })
+
       // Spelled out, not derived from the list under test: a guard that iterates
       // getSystemCliInstallDirectories passes vacuously if that list is emptied
       // into getBaseVersionManagerDirectories, which is the leak it guards.
@@ -237,6 +242,7 @@ describe('agent CLI install-dir fallback', () => {
 
   it('carries the system install dirs into the POSIX guest fallback prelude', () => {
     const prelude = buildPosixFallbackPathPrelude()
+
     const systemDirs = [
       '"/usr/local/bin"',
       '"/snap/bin"',
@@ -246,6 +252,7 @@ describe('agent CLI install-dir fallback', () => {
       '"$HOME/.opencode/bin"',
       '"$HOME/.vite-plus/bin"'
     ]
+
     const offsets = systemDirs.map((dir) => prelude.indexOf(dir))
     expect(offsets.every((offset) => offset >= 0)).toBe(true)
     expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
@@ -264,11 +271,13 @@ describe('agent CLI install-dir fallback', () => {
     const systemDirs = getSystemCliInstallDirectories('linux', '$HOME').map(asGuest)
     const firstSystemOffset = prelude.indexOf(systemDirs[0])
     expect(firstSystemOffset).toBeGreaterThan(0)
+
     for (const dir of getVersionManagerBinPaths({ platform: 'linux', homePath: '$HOME' })) {
       const offset = prelude.indexOf(asGuest(dir))
       expect(offset, dir).toBeGreaterThanOrEqual(0)
       expect(offset, dir).toBeLessThan(firstSystemOffset)
     }
+
     const systemOffsets = systemDirs.map((dir) => prelude.indexOf(dir))
     expect(systemOffsets.every((offset) => offset >= firstSystemOffset)).toBe(true)
     expect([...systemOffsets].sort((a, b) => a - b)).toEqual(systemOffsets)

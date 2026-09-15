@@ -27,6 +27,7 @@ import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
+
 type HeadlessTerminal = InstanceType<typeof HeadlessEmulator>
 
 function syncSinglePty(
@@ -60,19 +61,23 @@ function syncSinglePty(
 
 function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
 function makeStatusFrame(index: number, first: boolean): string {
   const pad = '·'.repeat(60)
+
   const rows = [
     `✻ 执行任务中… (esc to interrupt) [${index}] ${pad}`,
     `  ⎿ 正在分析代码库结构与依赖关系，请稍候… ${pad}`,
     `  ⎿ tokens: ${1000 + index * 137} · elapsed: ${index}s ${pad}`
   ]
+
   return `${first ? '' : '\x1b[2A'}\r${rows.map((row) => `\x1b[K${row}`).join('\r\n')}\r`
 }
 
@@ -89,10 +94,12 @@ async function parseHeadlessSnapshotLines(
   display: { cols: number; rows: number }
 ): Promise<string[]> {
   const restored = new HeadlessEmulator({ cols: display.cols, rows: display.rows })
+
   try {
     restored.resize(snapshot.cols, snapshot.rows)
     await writeHeadless(restored, `\x1b[2J\x1b[3J\x1b[H${snapshot.data}`)
     restored.resize(display.cols, display.rows)
+
     return visibleNonEmptyLines(restored)
   } finally {
     restored.dispose()
@@ -104,12 +111,15 @@ async function referenceStatusFrameLines(
   resized: { cols: number; rows: number }
 ): Promise<string[]> {
   const truth = new HeadlessEmulator({ cols: spawn.cols, rows: spawn.rows })
+
   try {
     await writeHeadless(truth, 'user@host % claude\r\n')
     truth.resize(resized.cols, resized.rows)
+
     for (let index = 0; index < 5; index += 1) {
       await writeHeadless(truth, makeStatusFrame(index, index === 0))
     }
+
     return visibleNonEmptyLines(truth)
   } finally {
     truth.dispose()
@@ -117,13 +127,19 @@ async function referenceStatusFrameLines(
 }
 
 const TEST_WINDOW_ID = 1
+
 // The inventory refresh forwards its own budget so a relay cannot outlive it (STA-517).
 // These assertions are about which provider scope was asked, so the deadline stays loose.
 const LIST_PROVIDER_DEADLINE = expect.objectContaining({ deadlineMs: expect.any(Number) })
+
 const TEST_REPO_ID = 'repo-1'
+
 const TEST_REPO_PATH = '/tmp/repo'
+
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
+
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+
 /** The render gate's hard cap bounds the wait *after* the paste lands, so it carries the
  *  payload's ingest bound on top of the flat 8 s settlement budget. */
 function renderGateCapMs(prompt: string): number {
@@ -135,15 +151,25 @@ function renderGateCapMs(prompt: string): number {
     )
   )
 }
+
 const TEST_FOLDER_PROJECT_GROUP_ID = 'folder-project-group-1'
+
 const TEST_FOLDER_WORKSPACE_ID = 'folder-workspace-1'
+
 const TEST_FOLDER_WORKSPACE_KEY = `folder:${TEST_FOLDER_WORKSPACE_ID}`
+
 const TEST_FOLDER_WORKSPACE_PATH = '/tmp/platform'
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
 const HEADLESS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const HEADLESS_SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const HEADLESS_THIRD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const RESTORED_AUTHORITY_TOKEN = 'restored-authority-secret'
+
 const RESTORED_AUTHORITY_TOKEN_HASH = createHash('sha256')
   .update(RESTORED_AUTHORITY_TOKEN)
   .digest('hex')
@@ -222,6 +248,7 @@ function pendingMailPointerRepoints(runtime: RuntimeService): number {
   const internals = runtime as unknown as {
     mailPointerRepointScheduler: { pendingCount: number }
   }
+
   return internals.mailPointerRepointScheduler.pendingCount
 }
 
@@ -231,6 +258,7 @@ function bindSinglePtyRun(db: InMemoryOrchestrationMessages, terminalHandle: str
     coordinator_handle: terminalHandle,
     coordinator_pane_key: 'tab-1:pane:1'
   })
+
   return 'run:run_test'
 }
 
@@ -239,6 +267,7 @@ function expectStablePaneKeyEnv(env: Record<string, string>): string {
   const leafId = env.ORCA_PANE_KEY?.slice(`${env.ORCA_TAB_ID}:`.length)
   expect(leafId).toMatch(UUID_RE)
   expect(env.ORCA_PANE_KEY).toBe(`${env.ORCA_TAB_ID}:${leafId}`)
+
   return env.ORCA_PANE_KEY
 }
 
@@ -252,6 +281,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
     configurable: true,
     value: platform
   })
+
   try {
     return await run()
   } finally {
@@ -349,10 +379,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -363,19 +395,23 @@ function createStaleRuntimeWorktreeStore(
   const metaById: Record<string, WorktreeMeta> = {
     [worktreeId]: makeWorktreeMeta(metaOverrides)
   }
+
   const removeWorktreeMeta = vi.fn((id: string) => {
     delete metaById[id]
   })
+
   const runtimeStore = {
     ...store,
     getAllWorktreeMeta: () => metaById,
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
+
       return metaById[id]
     },
     removeWorktreeMeta
   }
+
   return { runtimeStore, removeWorktreeMeta }
 }
 
@@ -444,6 +480,7 @@ function createRuntimeWithSshLease(
   marks: { supersededBy?: string; relayIdRecycled?: true } = {}
 ): RuntimeService {
   const now = Date.now()
+
   return new OrcaRuntimeService({
     ...store,
     getSshRemotePtyLeases: () => [
@@ -474,6 +511,7 @@ async function createExplicitAgentStatusHarness(options: {
 }> {
   const leafId = '11111111-1111-4111-8111-111111111111'
   const paneKey = makePaneKey('tab-1', leafId)
+
   const runtime = new OrcaRuntimeService(store, undefined, {
     getAgentStatusSnapshot: () => [
       {
@@ -489,6 +527,7 @@ async function createExplicitAgentStatusHarness(options: {
       }
     ]
   })
+
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
     write: () => true,
@@ -498,6 +537,7 @@ async function createExplicitAgentStatusHarness(options: {
     confirmForegroundProcess: options.confirmForegroundProcess
   })
   runtime.attachWindow(1)
+
   const syncPty = (ptyId: string | null): void => {
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -520,8 +560,10 @@ async function createExplicitAgentStatusHarness(options: {
       ]
     })
   }
+
   syncPty('pty-1')
   const [terminal] = (await runtime.listTerminals()).terminals
+
   return { runtime, handle: terminal.handle, syncPty }
 }
 
@@ -530,6 +572,7 @@ function makeHeadlessTerminalLayout(
 ): TerminalLayoutSnapshot {
   const leafIds = Object.keys(ptyIdsByLeafId)
   const firstLeafId = leafIds[0] ?? HEADLESS_LEAF_ID
+
   return {
     root:
       leafIds.length > 1
@@ -566,9 +609,11 @@ function makeRuntimeStoreWithWorkspaceSession(
   setSession: (next: WorkspaceSessionState) => void
 } {
   let session = initialSession
+
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
+
   const runtimeStore = {
     ...store,
     getWorkspaceSession: (hostId?: string) =>
@@ -603,10 +648,12 @@ function makeRuntimeStoreWithWorkspaceSession(
             }
           }
         }
+
         return true
       }
     )
   }
+
   return { runtimeStore, getSession: () => session, setSession }
 }
 
@@ -614,6 +661,7 @@ function makeWorkspaceSessionWithHeadlessTerminal(
   overrides: Partial<WorkspaceSessionState> = {}
 ): WorkspaceSessionState {
   const layout = makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: 'persisted-pty' })
+
   return {
     ...getDefaultWorkspaceSession(),
     activeRepoId: TEST_REPO_ID,
@@ -651,25 +699,42 @@ computeWorktreePathMock.mockImplementation(
           .split(/[\\/]/)
           .at(-1)
           ?.replace(/\.git$/, '') ?? 'repo'
+
       return `${settings.workspaceDir}/${repoName}/${sanitizedName}`
     }
+
     return `${settings.workspaceDir}/${sanitizedName}`
   }
 )
+
 ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
 
 export { HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, HEADLESS_THIRD_LEAF_ID }
+
 export { InMemoryOrchestrationMessages, LIST_PROVIDER_DEADLINE, RESTORED_AUTHORITY_TOKEN }
+
 export { RESTORED_AUTHORITY_TOKEN_HASH, TEST_FOLDER_PROJECT_GROUP_ID, TEST_FOLDER_WORKSPACE_ID }
+
 export { TEST_FOLDER_WORKSPACE_KEY, TEST_FOLDER_WORKSPACE_PATH, TEST_REPO_ID, TEST_REPO_PATH }
+
 export { TEST_WINDOW_ID, TEST_WORKTREE_ID, TEST_WORKTREE_PATH, UUID_RE }
+
 export { antigravityPromptBeforeModelReadyScreen, antigravityReadyScreen, bindSinglePtyRun }
+
 export { createExplicitAgentStatusHarness, createFolderWorkspaceRuntimeStore, createRuntime }
+
 export { createRuntimeWithSshLease, createStaleRuntimeWorktreeStore, cursorBusyScreen }
+
 export { cursorReadyScreen, deferred, expectStablePaneKeyEnv, isOriginMainBaseRefProbe }
+
 export { makeDeferred, makeFolderProjectGroup, makeFolderWorkspace, makeHeadlessTerminalLayout }
+
 export { makeRpcRequest, makeRuntimeStoreWithWorkspaceSession, makeStatusFrame }
+
 export { makeWorkspaceSessionWithHeadlessTerminal, makeWorktreeInfo, makeWorktreeMeta }
+
 export { parseHeadlessSnapshotLines, pendingMailPointerRepoints, referenceStatusFrameLines }
+
 export { renderGateCapMs, setInMemoryOrchestrationMessages, store, syncSinglePty }
+
 export { visibleNonEmptyLines, withPlatform, writeHeadless }

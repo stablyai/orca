@@ -24,6 +24,7 @@ export function useWorktreeLineageDropCommit(args: {
   const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups } = args
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+
   const cyclicLineageIds = useMemo(
     () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap),
     [worktreeLineageById, worktreeMap]
@@ -35,15 +36,20 @@ export function useWorktreeLineageDropCommit(args: {
       draggedIds: readonly string[]
     ): WorktreeSidebarLineageDropTarget => {
       const parentId = target.lineageParentId
+
       if (!parentId) {
         return target
       }
+
       const canAssignAll = draggedIds.every((draggedId) => {
         const child = worktreeMap.get(draggedId)
+
         if (!child) {
           return false
         }
+
         const candidateParent = worktreeMap.get(parentId)
+
         return Boolean(
           candidateParent &&
           isEligibleWorktreeParent({
@@ -56,6 +62,7 @@ export function useWorktreeLineageDropCommit(args: {
           })
         )
       })
+
       return canAssignAll ? target : { ...target, lineageParentId: null }
     },
     [cyclicLineageIds, repoMap, worktreeLineageById, worktreeMap]
@@ -67,9 +74,11 @@ export function useWorktreeLineageDropCommit(args: {
         { status: null, isPinDrop: false, lineageParentId: parentId },
         draggedIds
       )
+
       if (!target.lineageParentId) {
         return false
       }
+
       void Promise.all(
         draggedIds.map((id) => assignWorktreeParent(id, { parentWorktreeId: parentId }))
       ).catch((err) => {
@@ -81,6 +90,7 @@ export function useWorktreeLineageDropCommit(args: {
           )
         )
       })
+
       return true
     },
     [assignWorktreeParent, getEligibleLineageDropTarget]
@@ -91,9 +101,11 @@ export function useWorktreeLineageDropCommit(args: {
       const sourceGroup = worktreeDragGroups.find(
         (group) => group.key === unnestArgs.sourceGroupKey
       )
+
       if (!sourceGroup) {
         return
       }
+
       const ids = getReorderedWorktreeIdsToUnnest({
         draggedIds: unnestArgs.draggedIds,
         sourceGroupIds: sourceGroup.worktreeIds,
@@ -101,9 +113,11 @@ export function useWorktreeLineageDropCommit(args: {
         worktreeMap,
         cyclicLineageIds
       })
+
       if (ids.length === 0) {
         return
       }
+
       // Why: dropping a nested card on a reorder line is the un-nest escape hatch; clear only the dragged children.
       void unnestWorktrees(ids, updateWorktreeLineage)
     },

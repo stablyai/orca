@@ -76,10 +76,12 @@ export function classifyTerminalProcessInspectionFailure(
   error: unknown
 ): ClientOnlyUnverifiableReason | null {
   const message = error instanceof Error ? error.message : String(error)
+
   const code =
     error && typeof error === 'object' && 'code' in error
       ? String((error as { code?: unknown }).code)
       : ''
+
   if (
     code === 'terminal_handle_stale' ||
     code === 'terminal_exited' ||
@@ -93,6 +95,7 @@ export function classifyTerminalProcessInspectionFailure(
   ) {
     return 'terminal_gone'
   }
+
   if (
     code === 'SSH_MUX_REQUEST_TIMEOUT' ||
     code === 'request_timeout' ||
@@ -102,6 +105,7 @@ export function classifyTerminalProcessInspectionFailure(
   ) {
     return 'timeout'
   }
+
   if (
     code === 'method_not_found' ||
     code === 'rpc_method_not_found' ||
@@ -110,6 +114,7 @@ export function classifyTerminalProcessInspectionFailure(
   ) {
     return 'old_host'
   }
+
   if (
     code === 'CONNECTION_LOST' ||
     code === 'DISPOSED' ||
@@ -124,5 +129,6 @@ export function classifyTerminalProcessInspectionFailure(
   ) {
     return 'transport_loss'
   }
+
   return null
 }

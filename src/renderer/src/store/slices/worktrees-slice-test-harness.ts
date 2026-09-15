@@ -39,9 +39,11 @@ function stubMock<TArgs extends unknown[] = never[]>(): StubMock<TArgs> {
 
 export const runtimeEnvironmentCall: Mock<(args: RuntimeEnvironmentCallRequest) => unknown> =
   vi.fn()
+
 export const runtimeEnvironmentTransportCall: Mock<
   (args: RuntimeEnvironmentCallRequest) => unknown
 > = vi.fn()
+
 export const worktreeListMock: Mock<(args: { repoId: string }) => Promise<Worktree[]>> = vi
   .fn()
   .mockResolvedValue([])
@@ -52,6 +54,7 @@ export const listDetectedMock = vi.fn<
   ) => Promise<DetectedWorktreeListResult | HostQualifiedDetectedWorktreeResult>
 >(async (args) => {
   const result = makeDetectedResult(args.repoId, await worktreeListMock({ repoId: args.repoId }))
+
   return qualifyDetectedResult(args, result)
 })
 
@@ -213,6 +216,7 @@ export function createLocalLineageTestStore(lineage: WorktreeLineage) {
       ]
     }
   } as Partial<AppState>)
+
   return store
 }
 

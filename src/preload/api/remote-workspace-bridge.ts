@@ -13,7 +13,9 @@ export const remoteWorkspaceApi = {
   onChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, data: RemoteWorkspaceChangedEvent) =>
       callback(data)
+
     ipcRenderer.on('remoteWorkspace:changed', listener)
+
     return () => ipcRenderer.removeListener('remoteWorkspace:changed', listener)
   }
 } satisfies PreloadApi['remoteWorkspace']

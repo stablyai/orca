@@ -19,7 +19,9 @@ function bufferLine(text: string, onTranslateWithColumns: () => void): IBufferLi
       if (outColumns) {
         onTranslateWithColumns()
       }
+
       outColumns?.push(...Array.from({ length: text.length + 1 }, (_value, index) => index))
+
       return text.slice(startColumn, endColumn)
     }
   } as IBufferLine
@@ -28,11 +30,14 @@ function bufferLine(text: string, onTranslateWithColumns: () => void): IBufferLi
 function bufferLineWithCellColumns(text: string): IBufferLine {
   const columns: number[] = []
   let column = 0
+
   for (const character of text) {
     columns.push(column)
     column += character === '你' ? 2 : 1
   }
+
   columns.push(column)
+
   return {
     isWrapped: false,
     length: column,
@@ -43,6 +48,7 @@ function bufferLineWithCellColumns(text: string): IBufferLine {
       outColumns?: number[]
     ) => {
       outColumns?.push(...columns)
+
       return text.slice(startColumn, endColumn)
     }
   } as IBufferLine
@@ -51,6 +57,7 @@ function bufferLineWithCellColumns(text: string): IBufferLine {
 describe('hard-wrapped terminal HTTP candidate bounds', () => {
   it('builds each required column map once and rejects an overlength candidate early', () => {
     const onTranslateWithColumns = vi.fn()
+
     const rows = Array.from({ length: TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS }, (_value, index) =>
       bufferLine(`| ${index === 0 ? 'http://x' : 'aaaaaaaa'} |`, onTranslateWithColumns)
     )
@@ -68,6 +75,7 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
 
   it('does not build column maps while rejecting rows without an HTTP scheme', () => {
     const onTranslateWithColumns = vi.fn()
+
     const rows = Array.from({ length: TERMINAL_HTTP_URL_MAX_HARD_WRAPPED_ROWS }, () =>
       bufferLine(`| ${'a'.repeat(500)} |`, onTranslateWithColumns)
     )
@@ -96,6 +104,7 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
   it('reconstructs a maximum-length wide-character URL beyond the ASCII row bound', () => {
     const scheme = 'http://'
     const continuation = '你'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH - scheme.length)
+
     const rows = [
       bufferLineWithCellColumns(`|${scheme}|`),
       ...continuation
@@ -114,10 +123,12 @@ describe('hard-wrapped terminal HTTP candidate bounds', () => {
   it('reconstructs a maximum-length URL with one-character continuation rows', () => {
     const firstFragment = 'http://a'
     const continuation = '/'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH - firstFragment.length)
+
     const rows = [
       bufferLineWithCellColumns(`|${firstFragment}|`),
       ...continuation.split('').map((fragment) => bufferLineWithCellColumns(`|${fragment}       |`))
     ]
+
     const fullUrl = firstFragment + continuation
 
     expect(() => new URL(fullUrl)).not.toThrow()

@@ -61,6 +61,7 @@ export function FeatureWallTourPanel(props: {
   // visuals can adapt inside the stage, but the page anchor must stay fixed.
   const contentStageClassName = 'mx-auto w-full max-w-[940px]'
   const previewTitle = props.activeStepCopy?.title ?? props.selected.title
+
   const panel = (
     <div
       className={cn(

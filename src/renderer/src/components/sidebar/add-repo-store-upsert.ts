@@ -15,11 +15,14 @@ type AddedRepoOwner = {
 
 function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
   const sshConnectionId = owner.sshConnectionId?.trim()
+
   if (sshConnectionId) {
     return { ...repo, executionHostId: toSshExecutionHostId(sshConnectionId) }
   }
+
   if (owner.runtimeEnvironmentId !== undefined) {
     const runtimeEnvironmentId = owner.runtimeEnvironmentId?.trim()
+
     return {
       ...repo,
       executionHostId: runtimeEnvironmentId
@@ -27,6 +30,7 @@ function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
         : LOCAL_EXECUTION_HOST_ID
     }
   }
+
   return repo
 }
 
@@ -38,9 +42,11 @@ export function upsertAddedRepoWithProjectHostSetup(
   const ownedRepo = repoWithCapturedOwner(repo, owner)
   const repoIdentity = getRepoHostIdentity(ownedRepo)
   const alreadyPresent = state.repos.some((entry) => getRepoHostIdentity(entry) === repoIdentity)
+
   const repos = alreadyPresent
     ? state.repos.map((entry) => (getRepoHostIdentity(entry) === repoIdentity ? ownedRepo : entry))
     : [...state.repos, ownedRepo]
+
   const projection = projectHostSetupProjectionFromRepos(repos)
 
   // Why: these Add Project flows call IPC directly, bypassing the repo slice
@@ -50,5 +56,6 @@ export function upsertAddedRepoWithProjectHostSetup(
     projects: projection.projects,
     projectHostSetups: projection.setups
   })
+
   return { alreadyPresent, repo: ownedRepo }
 }

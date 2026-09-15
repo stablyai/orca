@@ -9,6 +9,7 @@ import type {
   JiraPrioritiesBySite
 } from './jira-issue-sorter'
 import { jiraListPriorities } from '@/runtime/runtime-jira-client'
+
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const { settings, jiraConnected, selectedJiraSiteId, taskSource, jiraTaskSourceContext } = model
   // Jira tab state
@@ -20,28 +21,36 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [activeJiraPreset, setActiveJiraPreset] = useState<JiraPresetId>('assigned')
   const [jiraRefreshNonce, setJiraRefreshNonce] = useState(0)
+
   const [jiraProjectStatusOrder, setJiraProjectStatusOrder] = useState<{
     order: JiraProjectStatusOrder
     scopeKey: string
   } | null>(null)
+
   const [jiraOrderBy, setJiraOrderBy] = useState<JiraIssueSortColumn>('updated')
   const [jiraOrderDirection, setJiraOrderDirection] = useState<JiraIssueSortDirection>('desc')
+
   const [jiraPrioritiesBySite, setJiraPrioritiesBySite] = useState<JiraPrioritiesBySite>(
     () => new Map()
   )
+
   const jiraPrioritySiteIdsKey = useMemo(() => {
     const siteIds =
       selectedJiraSiteId && selectedJiraSiteId !== 'all'
         ? [selectedJiraSiteId]
         : jiraIssues.flatMap((issue) => (issue.siteId ? [issue.siteId] : []))
+
     // Why: result refreshes replace the issue array; depend on the represented sites, not identity.
     return JSON.stringify([...new Set(siteIds)].sort())
   }, [jiraIssues, selectedJiraSiteId])
+
   useEffect(() => {
     if (taskSource !== 'jira' || !jiraConnected || jiraOrderBy !== 'priority') {
       setJiraPrioritiesBySite((current) => (current.size === 0 ? current : new Map()))
+
       return
     }
+
     let cancelled = false
     const jiraPrioritySiteIds = JSON.parse(jiraPrioritySiteIdsKey) as string[]
     void Promise.all(
@@ -60,6 +69,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
         setJiraPrioritiesBySite(new Map(prioritiesBySite))
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -71,6 +81,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     settings,
     taskSource
   ])
+
   const handleJiraSort = useCallback(
     (column: JiraIssueSortColumn) => {
       if (jiraOrderBy === column) {
@@ -82,6 +93,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     },
     [jiraOrderBy]
   )
+
   const nextModel = model as typeof model & {
     jiraIssues: typeof jiraIssues
     setJiraIssues: typeof setJiraIssues
@@ -110,6 +122,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
     jiraPrioritySiteIdsKey: typeof jiraPrioritySiteIdsKey
     handleJiraSort: typeof handleJiraSort
   }
+
   nextModel.jiraIssues = jiraIssues
   nextModel.setJiraIssues = setJiraIssues
   nextModel.jiraLoading = jiraLoading
@@ -136,6 +149,8 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   nextModel.setJiraPrioritiesBySite = setJiraPrioritiesBySite
   nextModel.jiraPrioritySiteIdsKey = jiraPrioritySiteIdsKey
   nextModel.handleJiraSort = handleJiraSort
+
   return nextModel
 }
+
 export type TaskPageJiraListStateModel = ReturnType<typeof useTaskPageJiraListState>

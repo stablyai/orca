@@ -9,6 +9,7 @@ import type { Repo } from '../../shared/repo-types'
 
 function comparableLocalPath(value: string): string {
   const normalized = resolve(value)
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -26,13 +27,17 @@ function collectRepoIdsWithRegisteredWorktreeMeta(
 ): Set<string> {
   const worktreeMeta =
     typeof store.getAllWorktreeMeta === 'function' ? store.getAllWorktreeMeta() : {}
+
   const repoIds = new Set<string>()
+
   for (const worktreeId of Object.keys(worktreeMeta)) {
     const parsed = splitWorktreeId(worktreeId)
+
     if (parsed && candidatePaths.has(comparableLocalPath(parsed.worktreePath))) {
       repoIds.add(parsed.repoId)
     }
   }
+
   return repoIds
 }
 
@@ -49,6 +54,7 @@ export function getLocalRepoForRegisteredWorktree(
   // Built at most once, and only when a repo actually needs it, so the meta table is never
   // rescanned per repo — 59 IPC call sites hit this, some per keystroke.
   let repoIdsWithMeta: Set<string> | undefined
+
   return store
     .getRepos()
     .find(
@@ -70,6 +76,7 @@ export function getLocalGitOptionsForRepo(
   if (!repo || typeof store.getProjects !== 'function' || typeof store.getSettings !== 'function') {
     return {}
   }
+
   // Why: file discovery must use the same resolved runtime as project git,
   // terminals, and agents even when the worktree path is a Windows path.
   return getLocalProjectWorktreeGitOptions(store, repo)

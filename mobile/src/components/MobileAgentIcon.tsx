@@ -89,18 +89,23 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   if (agentId === 'claude' || agentId === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
+
   if (agentId === 'codex') {
     return <OpenAIIcon size={size} />
   }
+
   if (agentId === 'pi') {
     return <PiIcon size={size} />
   }
+
   if (agentId === 'omp') {
     return <OmpIcon size={size} />
   }
+
   if (agentId === 'aider') {
     return <AiderIcon size={size} />
   }
+
   if (agentId === '__blank__' || agentId === 'blank') {
     return <Terminal size={size} color={colors.textMuted} />
   }
@@ -108,14 +113,19 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   // Why: prefer the favicon bundled into the app over Google's favicon service,
   // which is unreachable in some regions and offline (#8451).
   const bundledIcon = MOBILE_AGENT_ICON_ASSETS[agentId as TuiAgent]
+
   if (bundledIcon) {
     return <BundledIcon source={bundledIcon} size={size} />
   }
+
   const agent = MOBILE_AGENT_CATALOG.find((entry) => entry.id === agentId)
+
   if (agent?.faviconDomain) {
     return <FaviconIcon domain={agent.faviconDomain} size={size} />
   }
+
   const label = agent?.label ?? agentId
+
   return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
 }
 

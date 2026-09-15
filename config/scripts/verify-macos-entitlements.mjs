@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const __dirname = import.meta.dirname
+
 const repoRoot = resolve(__dirname, '../..')
 
 const defaultPlists = [
@@ -12,6 +13,7 @@ const defaultPlists = [
 ]
 
 const plistPaths = process.argv.slice(2)
+
 const pathsToCheck = plistPaths.length > 0 ? plistPaths : defaultPlists
 
 let failed = false
@@ -28,6 +30,7 @@ for (const plistPath of pathsToCheck) {
 
   failed = true
   console.error(`${plistPath}: duplicate plist dict keys found`)
+
   for (const problem of problems) {
     console.error(
       `- ${problem.key} first appears on line ${problem.firstLine}, duplicated on line ${problem.duplicateLine}`
@@ -43,6 +46,7 @@ function findDuplicateDictKeys(xml) {
   const problems = []
   const lineStarts = buildLineStarts(xml)
   const dictStack = []
+
   // Why: `plutil -lint` accepts duplicate keys, but `codesign` rejects
   // duplicate entitlements during release signing.
   const tokenPattern =
@@ -55,6 +59,7 @@ function findDuplicateDictKeys(xml) {
 
     if (match[0].startsWith('<key')) {
       const currentDict = dictStack.at(-1)
+
       if (!currentDict) {
         continue
       }
@@ -68,6 +73,7 @@ function findDuplicateDictKeys(xml) {
       } else {
         currentDict.keys.set(key, duplicateLine)
       }
+
       continue
     }
 
@@ -83,11 +89,13 @@ function findDuplicateDictKeys(xml) {
 
 function buildLineStarts(text) {
   const starts = [0]
+
   for (let index = 0; index < text.length; index += 1) {
     if (text[index] === '\n') {
       starts.push(index + 1)
     }
   }
+
   return starts
 }
 
@@ -97,6 +105,7 @@ function lineNumberForIndex(lineStarts, targetIndex) {
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2)
+
     if (lineStarts[mid] <= targetIndex) {
       low = mid + 1
     } else {
@@ -112,24 +121,31 @@ function decodeXmlEntities(value) {
     if (body === 'amp') {
       return '&'
     }
+
     if (body === 'lt') {
       return '<'
     }
+
     if (body === 'gt') {
       return '>'
     }
+
     if (body === 'apos') {
       return "'"
     }
+
     if (body === 'quot') {
       return '"'
     }
+
     if (body.startsWith('#x')) {
       return String.fromCodePoint(Number.parseInt(body.slice(2), 16))
     }
+
     if (body.startsWith('#')) {
       return String.fromCodePoint(Number.parseInt(body.slice(1), 10))
     }
+
     return entity
   })
 }

@@ -16,11 +16,14 @@ import type { SessionSidecarObservation } from './session-sidecar-stat'
 // Bump when the persisted entry layout or cached session semantics change; a
 // mismatched file is discarded whole.
 const SCHEMA_VERSION = 2
+
 // Debounce so back-to-back scans (desktop IPC + runtime RPC) collapse into one write.
 const SAVE_DEBOUNCE_MS = 1_500
+
 // The payload contains transcript-derived preview text; keep it user-only
 // (mode bits are inert on Windows — the userData ACL grant is the boundary there).
 const PRIVATE_DIRECTORY_MODE = 0o700
+
 const PRIVATE_FILE_MODE = 0o600
 
 export type SessionParseCachePersistenceOptions = {
@@ -29,8 +32,11 @@ export type SessionParseCachePersistenceOptions = {
 }
 
 let options: SessionParseCachePersistenceOptions | null = null
+
 let loadPromise: Promise<void> | null = null
+
 let saveTimer: NodeJS.Timeout | null = null
+
 let lastSave: Promise<void> = Promise.resolve()
 
 /** Enable persistence. Called only from the composition root; every export is a no-op until then. */
@@ -45,10 +51,12 @@ export function getSessionParseCachePersistenceOptions(): SessionParseCachePersi
 export function resetSessionParseCachePersistenceForTests(): void {
   options = null
   loadPromise = null
+
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
   }
+
   lastSave = Promise.resolve()
 }
 
@@ -60,7 +68,9 @@ export function ensureSessionParseCacheLoaded(): Promise<void> {
   if (options === null) {
     return Promise.resolve()
   }
+
   loadPromise ??= loadPersistedEntries(options)
+
   return loadPromise
 }
 
@@ -74,16 +84,20 @@ export function scheduleSessionParseCachePersist(stats: SessionParseStats): void
   if (options === null || stats.incremental + stats.fullParses + stats.earlyStopped <= 0) {
     return
   }
+
   const current = options
+
   if (saveTimer) {
     clearTimeout(saveTimer)
   }
+
   saveTimer = setTimeout(() => {
     saveTimer = null
     // Chained so a slow write and a rescheduled save can't rename out of order
     // (an older snapshot landing last); persistSnapshot never rejects.
     lastSave = lastSave.then(() => persistSnapshot(current))
   }, SAVE_DEBOUNCE_MS)
+
   // Why: a pending cache save must not keep a quitting process alive.
   if (typeof saveTimer.unref === 'function') {
     saveTimer.unref()
@@ -95,11 +109,13 @@ export async function flushSessionParseCachePersist(): Promise<void> {
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
+
     if (options !== null) {
       const current = options
       lastSave = lastSave.then(() => persistSnapshot(current))
     }
   }
+
   await lastSave
 }
 
@@ -107,9 +123,11 @@ export const flushSessionParseCachePersistForTests = flushSessionParseCachePersi
 
 async function loadPersistedEntries(current: SessionParseCachePersistenceOptions): Promise<void> {
   await sweepOrphanedTempFiles(current.filePath)
+
   try {
     const raw = await readFile(current.filePath, 'utf-8')
     const entries = parsePersistedFile(JSON.parse(raw))
+
     if (entries) {
       seedSessionParseCache(entries)
     }
@@ -124,6 +142,7 @@ async function loadPersistedEntries(current: SessionParseCachePersistenceOptions
 // in-flight save at worst loses that save — the already-accepted rename trade.
 async function sweepOrphanedTempFiles(filePath: string): Promise<void> {
   const directory = dirname(filePath)
+
   try {
     const names = await readdir(directory)
     await Promise.all(
@@ -140,24 +159,32 @@ function parsePersistedFile(parsed: unknown): [string, PersistedSessionParseCach
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
+
   const file = parsed as Record<string, unknown>
+
   // Why: application releases that keep this schema promise compatible cached
   // session semantics, so an update does not force a multi-gigabyte cold scan.
   if (file.schemaVersion !== SCHEMA_VERSION || typeof file.appVersion !== 'string') {
     return null
   }
+
   if (!Array.isArray(file.entries)) {
     return null
   }
+
   const entries: [string, PersistedSessionParseCacheEntry][] = []
+
   for (const item of file.entries) {
     const entry = parsePersistedEntry(item)
+
     if (entry === null) {
       // One malformed entry means the file can't be trusted; discard it whole.
       return null
     }
+
     entries.push(entry)
   }
+
   return entries
 }
 
@@ -165,24 +192,33 @@ function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCache
   if (!Array.isArray(item) || item.length !== 2) {
     return null
   }
+
   const [path, value] = item as [unknown, unknown]
+
   if (typeof path !== 'string' || typeof value !== 'object' || value === null) {
     return null
   }
+
   const entry = value as Record<string, unknown>
+
   if (typeof entry.mtimeMs !== 'number') {
     return null
   }
+
   if (entry.sizeBytes !== null && typeof entry.sizeBytes !== 'number') {
     return null
   }
+
   if (typeof entry.platform !== 'string') {
     return null
   }
+
   if (entry.session !== null && typeof entry.session !== 'object') {
     return null
   }
+
   const sidecar = parsePersistedSidecar(entry.sidecar)
+
   return [
     path,
     {
@@ -202,10 +238,13 @@ function parsePersistedSidecar(value: unknown): SessionSidecarObservation | unde
   if (value === 'none' || value === 'unknown') {
     return value
   }
+
   if (typeof value !== 'object' || value === null) {
     return undefined
   }
+
   const record = value as Record<string, unknown>
+
   return typeof record.path === 'string' &&
     typeof record.mtimeMs === 'number' &&
     typeof record.sizeBytes === 'number'
@@ -216,12 +255,14 @@ function parsePersistedSidecar(value: unknown): SessionSidecarObservation | unde
 async function persistSnapshot(current: SessionParseCachePersistenceOptions): Promise<void> {
   const directory = dirname(current.filePath)
   const tempPath = join(directory, `session-parse-cache-${process.pid}-${Date.now()}.tmp`)
+
   try {
     const payload = JSON.stringify({
       schemaVersion: SCHEMA_VERSION,
       appVersion: current.appVersion,
       entries: snapshotSessionParseCacheForPersistence()
     })
+
     await mkdir(directory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE })
     await writeFile(tempPath, payload, { mode: PRIVATE_FILE_MODE })
     // Atomic on POSIX; on Windows a rename racing an open handle fails and is

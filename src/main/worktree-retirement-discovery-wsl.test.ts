@@ -23,10 +23,13 @@ vi.mock('./wsl', async (importOriginal) => ({
 }))
 
 const { discoverRetiredWorktreeNames } = await import('./worktree-retirement-discovery')
+
 const { ensureRetiredWorktreeNamesBackfilled } = await import('./worktree-name-retirement')
+
 const { WslTranscriptFsError } = await import('./native-chat/wsl-transcript-fs-gate')
 
 const FIRST = MARINE_CREATURES[0].toLowerCase()
+
 const DISTRO_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'
 
 describe('retirement discovery on WSL', () => {
@@ -86,6 +89,7 @@ describe('retirement discovery on WSL', () => {
       new WslTranscriptFsError('timeout', 'filesystem access is taking too long')
     )
     const hostHome = await mkdtemp(join(tmpdir(), 'orca-wsl-host-home-'))
+
     try {
       await mkdir(
         join(
@@ -117,6 +121,7 @@ describe('retirement discovery on WSL', () => {
     // one-time seed into a 60s rescan loop for the life of the process.
     const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     const distroHome = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
+
     // A distro where Claude never ran has no `~/.claude` at all, and a repo with no workspaces yet
     // has neither the workspace root nor its parent — so the whole chain up to the home is absent.
     // Only the home itself lists, which is what proves the route is up.
@@ -126,6 +131,7 @@ describe('retirement discovery on WSL', () => {
       join(distroHome, '.claude', 'projects'),
       join(distroHome, '.claude')
     ])
+
     runWslTranscriptFsTaskMock.mockImplementation((options: { path: string }) =>
       missing.has(options.path) ? Promise.reject(enoent) : Promise.resolve([])
     )
@@ -176,6 +182,7 @@ describe('retirement discovery on WSL', () => {
     // bucket survives there. That bucket is the only remaining evidence the cwd is unsafe.
     const distroHome = await mkdtemp(join(tmpdir(), 'orca-wsl-distro-home-'))
     const workspaceRoot = await mkdtemp(join(tmpdir(), 'orca-wsl-workspaces-'))
+
     try {
       await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
         recursive: true
@@ -204,6 +211,7 @@ describe('retirement discovery on WSL', () => {
     // if `ensureRetiredWorktreeNamesBackfilled` keeps scanning the Windows home alone. That is the
     // shape STA-4472 shipped in, so the only caller production has is asserted here.
     const distroHome = await mkdtemp(join(tmpdir(), 'orca-wsl-backfill-home-'))
+
     try {
       await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
         recursive: true
@@ -214,6 +222,7 @@ describe('retirement discovery on WSL', () => {
         (options: { path: string }, task: (signal: AbortSignal) => Promise<unknown>) => {
           // Stands in for the distro's bucket directory, which only exists behind the UNC root.
           const claudeRoot = join('\\\\wsl.localhost\\Ubuntu\\home\\ada', '.claude', 'projects')
+
           return options.path === claudeRoot
             ? readdir(join(distroHome, '.claude', 'projects'), { withFileTypes: true })
             : task(new AbortController().signal)
@@ -225,6 +234,7 @@ describe('retirement discovery on WSL', () => {
         {
           mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
             merged.push(...names)
+
             return true
           }
         } as never,

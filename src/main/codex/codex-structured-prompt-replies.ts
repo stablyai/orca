@@ -6,6 +6,7 @@ import {
   type CodexPromptClaim,
   type CodexPromptRegistry
 } from './codex-prompt-registry'
+
 export {
   codexJournalPromptIdPart,
   MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
@@ -13,6 +14,7 @@ export {
   MAX_CODEX_PROMPT_REGISTRY_BYTES,
   encodeCodexJournalQuestionOptionId
 } from './codex-prompt-registry-bounds'
+
 export {
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
@@ -26,6 +28,7 @@ export {
 /** The decisions Codex accepts for both approval requests. Anything else is a
  *  client-supplied option id that never came from a Codex prompt. */
 export const CODEX_APPROVAL_DECISIONS = ['accept', 'acceptForSession', 'decline', 'cancel'] as const
+
 export type CodexApprovalDecision = (typeof CODEX_APPROVAL_DECISIONS)[number]
 
 function isCodexApprovalDecision(optionId: string): optionId is CodexApprovalDecision {
@@ -42,9 +45,11 @@ export function decodeCodexQuestionOptionId(
   optionId: string
 ): { questionId: string; answer: string } | null {
   const separator = optionId.indexOf(':')
+
   if (separator <= 0) {
     return null
   }
+
   try {
     return {
       questionId: decodeURIComponent(optionId.slice(0, separator)),
@@ -68,33 +73,46 @@ export function applyCodexPromptAnswer(
     if (!isCodexApprovalDecision(optionId)) {
       throw new Error(`${optionId} is not a Codex approval decision`)
     }
+
     return { decision: optionId }
   }
+
   const mapped = prompt.optionAnswers.get(optionId)
   const decoded = mapped ?? decodeCodexQuestionOptionId(optionId)
+
   const questionId =
     (decoded?.questionId
       ? (prompt.questionIdAliases.get(decoded.questionId) ?? decoded.questionId)
       : null) ?? (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
+
   const answer = decoded?.answer ?? optionId
+
   if (!questionId || !prompt.questionIds.includes(questionId)) {
     throw new Error(`${optionId} does not name a question on Codex item ${prompt.codexItemId}`)
   }
+
   if (Buffer.byteLength(answer, 'utf8') > CODEX_PROMPT_MAX_ANSWER_BYTES) {
     throw new Error('codex prompt answer exceeds bounded registry state')
   }
+
   prompt.answers.set(questionId, answer)
+
   if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {
     return null
   }
+
   const answers: Record<string, { answers: string[] }> = {}
+
   for (const id of prompt.questionIds) {
     const answer = prompt.answers.get(id)
+
     if (answer === undefined) {
       return null
     }
+
     answers[id] = { answers: [answer] }
   }
+
   return { answers }
 }
 
@@ -109,12 +127,16 @@ export function answerCodexPrompt(
   if (!registry.ownsClaim(claim)) {
     throw new Error(`codex app-server is no longer waiting on ${claim.itemId}`)
   }
+
   const prompt = claim.prompt
   const reply = applyCodexPromptAnswer(prompt, optionId)
+
   if (reply === null) {
     registry.releaseClaim(claim)
+
     return
   }
+
   // Forget first: a second answer must find nothing rather than reply twice.
   registry.forget(prompt)
   connection.respond(prompt.requestId, reply)

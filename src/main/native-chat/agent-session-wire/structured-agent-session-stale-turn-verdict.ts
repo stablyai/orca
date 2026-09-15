@@ -41,21 +41,27 @@ export function runningTurnLifecycleRevisions(
   verdict: StructuredAgentSessionTurnVerdict
 ): JournalLifecycleMutationInput[] {
   const revisions: JournalLifecycleMutationInput[] = []
+
   for (const item of items) {
     const turn = readAgentJournalTurn(item.body)
+
     if (turn?.state !== 'running') {
       continue
     }
+
     const identity = parseAgentJournalItemKey(item.itemId)
+
     if (!identity) {
       continue
     }
+
     revisions.push({
       kind: 'item',
       identity,
       body: agentJournalTurnBody(settledLifecycle(turn, verdict))
     })
   }
+
   return revisions
 }
 
@@ -63,21 +69,27 @@ function staleSessionLifecycleRevisions(
   items: readonly AgentJournalRenderItem[]
 ): JournalLifecycleMutationInput[] {
   const revisions: JournalLifecycleMutationInput[] = []
+
   for (const item of items) {
     const identity = parseAgentJournalItemKey(item.itemId)
+
     if (!identity) {
       continue
     }
+
     const cancelled =
       (item.body.kind === 'approval' || item.body.kind === 'question') &&
       item.body.resolution.state === 'pending'
         ? cancelledJournalPromptBody(item.body)
         : null
+
     if (cancelled) {
       revisions.push({ kind: 'item', identity, body: cancelled })
     }
   }
+
   revisions.push(...runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT))
+
   return revisions
 }
 
@@ -86,15 +98,19 @@ function settledLifecycle(
   verdict: StructuredAgentSessionTurnVerdict
 ): AgentJournalTurnLifecycle {
   const settled: AgentJournalTurnLifecycle = { turnId: lifecycle.turnId, state: verdict.state }
+
   if (lifecycle.userItemId !== undefined) {
     settled.userItemId = lifecycle.userItemId
   }
+
   if (lifecycle.startedAt !== undefined) {
     settled.startedAt = lifecycle.startedAt
   }
+
   if (verdict.state === 'interrupted') {
     settled.completedAt = verdict.completedAt
   }
+
   return settled
 }
 
@@ -110,6 +126,7 @@ export async function settleStaleSessionStateOnAcquire(input: {
   const revisions = staleSessionLifecycleRevisions(journal.snapshot().items)
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `stale-session:${input.sessionId}:${input.fence}:${generation}`
+
   for (const chunk of partitionJournalLifecycleMutations(settlementId, revisions)) {
     await journal.appendLifecycleBatch({
       settlementId: chunk.settlementId,
@@ -118,5 +135,6 @@ export async function settleStaleSessionStateOnAcquire(input: {
       mutations: chunk.mutations
     })
   }
+
   return revisions.length
 }

@@ -14,13 +14,16 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   // a hidden PTY probe that can only time out (15s) on every refresh.
   /chatgpt authentication required/i
 ]
+
 const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g')
 
 export function isCodexAuthError(error: string | null | undefined): boolean {
   const message = error?.trim()
+
   if (!message) {
     return false
   }
+
   return CODEX_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(message))
 }
 
@@ -30,14 +33,18 @@ export function extractCodexAuthError(output: string | null | undefined): string
   }
 
   let cleanPrefix = ''
+
   for (const rawLine of iterateCodexOutputLines(output)) {
     const line = rawLine.replace(ANSI_ESCAPE_RE, '').trim()
+
     if (!line) {
       continue
     }
+
     if (isCodexAuthError(line)) {
       return line.slice(0, 4_000)
     }
+
     if (cleanPrefix.length < 4_000) {
       cleanPrefix = cleanPrefix ? `${cleanPrefix}\n${line}` : line
       cleanPrefix = cleanPrefix.slice(0, 4_000)
@@ -52,14 +59,17 @@ function* iterateCodexOutputLines(output: string): Generator<string> {
 
   for (let index = 0; index < output.length; index++) {
     const code = output.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       continue
     }
 
     yield output.slice(lineStart, index)
+
     if (code === 13 && output.charCodeAt(index + 1) === 10) {
       index++
     }
+
     lineStart = index + 1
   }
 

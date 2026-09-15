@@ -33,19 +33,24 @@ async function gitPullRebaseFromBaseUnlocked(
       terminationBarrier: true,
       captureWslLoginShellOutput: true
     }
+
     let rebaseRef: string | null = null
+
     try {
       const source = await resolveGitRemoteRebaseSource(
         (args) => gitExecFileAsync(args, operationOptions),
         baseRef
       )
+
       let forkPoint: string | null = null
       let hasHead = true
+
       try {
         const { stdout } = await gitExecFileAsync(
           ['merge-base', '--fork-point', `refs/remotes/${source.displayName}`, 'HEAD'],
           operationOptions
         )
+
         forkPoint = stdout.trim() || null
       } catch {
         // A first fetch or an unhelpful reflog falls back to Git's merge-base behavior.
@@ -55,13 +60,16 @@ async function gitPullRebaseFromBaseUnlocked(
           hasHead = false
         }
       }
+
       // Why: concurrent fetches can replace FETCH_HEAD and remote-tracking refs between fetch and rebase.
       rebaseRef = `refs/orca/rebase/${randomUUID()}`
+
       const fetchArgs = [
         source.remoteName,
         `+refs/heads/${source.branchName}:${rebaseRef}`,
         `+refs/heads/${source.branchName}:refs/remotes/${source.displayName}`
       ]
+
       await withLocalGitCapabilityCacheForExecution(
         { cwd: worktreePath, ...options },
         (capabilities) =>
@@ -97,6 +105,7 @@ async function gitPullRebaseFromBaseUnlocked(
             worktreePath,
             options
           )
+
           await gitExecFileAsync(['update-ref', '-d', rebaseRef], cleanupOptions)
         } catch {
           // Cleanup must not hide the fetch or rebase result.

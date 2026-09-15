@@ -5,6 +5,7 @@ import { handoffStructuredSessionToNative } from './structured-agent-session-han
 import type { StructuredAgentSessionHandoffFlowContext } from './structured-agent-session-handoff-types'
 
 const OPERATION_ID = 'operation-1'
+
 const SESSION_ID = 'session-1'
 
 vi.mock('../../runtime/agent-session-handoff-record-transitions', () => ({
@@ -62,9 +63,11 @@ describe('handoffStructuredSessionToNative', () => {
   it('marks the session native before revealing it', async () => {
     const statuses: AgentSessionHandoffStatus[] = []
     const order: string[] = []
+
     const context = contextWith(async () => {
       order.push('reveal')
     }, statuses)
+
     const setStatus = context.setStatus
     context.setStatus = (sessionId, status) => {
       order.push('status')
@@ -83,6 +86,7 @@ describe('handoffStructuredSessionToNative', () => {
 
   it('still leaves the session marked native when the reveal rejects', async () => {
     const statuses: AgentSessionHandoffStatus[] = []
+
     const context = contextWith(async () => {
       throw new Error('publish failed')
     }, statuses)

@@ -17,6 +17,7 @@ export function publishRuntimeEnvironmentDiagnostics(
     if (window.isDestroyed()) {
       continue
     }
+
     try {
       window.webContents.send(RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL, event)
     } catch {

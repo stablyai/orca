@@ -32,19 +32,25 @@ export type UndeliveredSshPtyKill = {
  *    promise `.catch` handlers where that would surface as an unhandled rejection. */
 export function recordUndeliveredSshPtyKill(args: UndeliveredSshPtyKill): void {
   const { store, ptyId, connectionId } = args
+
   if (!store || !connectionId || args.reversible) {
     return
   }
+
   const incarnationId = args.incarnationId ?? ptyIncarnationById.get(ptyId)
+
   if (!incarnationId) {
     return
   }
+
   let relayPtyId: string
+
   try {
     relayPtyId = getRelayPtyId(connectionId, ptyId)
   } catch {
     return
   }
+
   store.recordSshRemotePtyKillIntent(connectionId, relayPtyId, {
     requestedAt: args.now ?? Date.now(),
     incarnationId,

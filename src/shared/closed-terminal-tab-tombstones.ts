@@ -28,6 +28,7 @@ export const closedTerminalTabTombstoneSchema = z.object({
 /** Backstops only — host acknowledgement is the normal exit. These cover a target the user never
  *  reconnects to, whose tombstones would otherwise never be retired. */
 export const CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
 export const MAX_CLOSED_TERMINAL_TAB_TOMBSTONES = 500
 
 export function pruneClosedTerminalTabTombstones(
@@ -37,7 +38,9 @@ export function pruneClosedTerminalTabTombstones(
   const entries = Object.entries(map ?? {}).filter(
     ([, tombstone]) => now - tombstone.closedAt <= CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS
   )
+
   entries.sort(([, a], [, b]) => b.closedAt - a.closedAt)
+
   return Object.fromEntries(entries.slice(0, MAX_CLOSED_TERMINAL_TAB_TOMBSTONES))
 }
 
@@ -54,6 +57,7 @@ function maxAckRevision(a: number | undefined, b: number | undefined): number | 
   if (a === undefined) {
     return b
   }
+
   return b === undefined ? a : Math.max(a, b)
 }
 
@@ -85,20 +89,27 @@ export function reconcileClosedTerminalTabTombstones({
   now
 }: ClosedTerminalTabTombstoneAck): ClosedTerminalTabTombstonesByTabId {
   const pruned = pruneClosedTerminalTabTombstones(tombstones, now)
+
   if (hostRevision === undefined) {
     return pruned
   }
+
   const kept: ClosedTerminalTabTombstonesByTabId = {}
+
   for (const [tabId, tombstone] of Object.entries(pruned)) {
     if (!acknowledgedWorktreeIds.has(tombstone.worktreeId)) {
       kept[tabId] = tombstone
       continue
     }
+
     const observed = tombstone.ackRevision
+
     if (!hostKnownTabIds.has(tabId) && observed !== undefined && hostRevision > observed) {
       continue
     }
+
     kept[tabId] = { ...tombstone, ackRevision: maxAckRevision(observed, hostRevision) }
   }
+
   return kept
 }

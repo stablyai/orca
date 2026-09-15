@@ -56,6 +56,7 @@ export function resolveStructuredPointerOperation(args: {
   const payloadFingerprint = structuredPointerPayloadFingerprint(args.sessionId, args.body)
   const batchFingerprint = structuredPointerBatchFingerprint(args.sessionId, args.messageIds)
   const stored = args.db.getStructuredPointerOperation(args.mailboxHandle)
+
   if (
     stored &&
     stored.session_id === args.sessionId &&
@@ -63,6 +64,7 @@ export function resolveStructuredPointerOperation(args: {
   ) {
     return { operationId: stored.operation_id, payloadFingerprint }
   }
+
   const operationId = mintAgentSessionOperationId(now)
   args.db.putStructuredPointerOperation({
     mailbox_handle: args.mailboxHandle,
@@ -71,5 +73,6 @@ export function resolveStructuredPointerOperation(args: {
     batch_fingerprint: batchFingerprint,
     minted_at_ms: now
   })
+
   return { operationId, payloadFingerprint }
 }

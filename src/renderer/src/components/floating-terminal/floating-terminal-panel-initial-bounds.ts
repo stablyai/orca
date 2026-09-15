@@ -23,6 +23,7 @@ export function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
   const defaultCommittedBounds = getDefaultFloatingTerminalCommittedBounds()
   const defaultRenderedBounds = getDefaultFloatingTerminalBounds()
   const persistedBounds = readPersistedFloatingTerminalPanelBounds()
+
   if (shouldRestoreMaximizedPanelBounds(readPersistedFloatingTerminalPanelViewState())) {
     // Keep committed bounds as the restore target while maximizing the first paint.
     return {
@@ -31,6 +32,7 @@ export function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
       source: persistedBounds ? 'user' : 'default'
     }
   }
+
   return persistedBounds
     ? {
         committedBounds: persistedBounds,

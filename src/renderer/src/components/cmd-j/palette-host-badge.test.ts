@@ -153,6 +153,7 @@ it.each(['connecting', 'blocked', 'disconnected', 'error'] as const)(
       sshTargetLabels: new Map(),
       settings: { activeRuntimeEnvironmentId: null }
     }).map((host) => (host.kind === 'runtime' ? { ...host, health } : host))
+
     expect(getPaletteHostBadge({ connectionId: null }, hosts)).toBeNull()
     expect(getPaletteHostBadge({ executionHostId: 'runtime:env-1' }, hosts, true)).toEqual({
       hostId: 'runtime:env-1',

@@ -57,6 +57,7 @@ type FakeTerminal = {
 
 function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTerminal } {
   const pendingCallbacks: (() => void)[] = []
+
   const terminal: FakeTerminal = {
     lastData: [],
     pendingCallbacks,
@@ -73,6 +74,7 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
     refresh() {},
     write(data: string, cb?: () => void) {
       terminal.lastData.push(data)
+
       if (cb) {
         pendingCallbacks.push(cb)
       }
@@ -83,8 +85,10 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
       }
     }
   }
+
   // Only `id` and `terminal` are exercised by replayIntoTerminal.
   const pane = { id: paneId, terminal } as unknown as ManagedPane
+
   return { pane, terminal }
 }
 
@@ -98,21 +102,27 @@ describe('replay-guard', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
     const events: string[] = []
+
     const joinerTerminal = terminal as FakeTerminal & {
       registerCharacterJoiner: (handler: (text: string) => [number, number][]) => number
       deregisterCharacterJoiner: (joinerId: number) => void
     }
+
     joinerTerminal.registerCharacterJoiner = () => {
       events.push('register')
+
       return 5
     }
+
     joinerTerminal.deregisterCharacterJoiner = () => undefined
     terminal.write = (data: string, callback?: () => void) => {
       events.push(`write:${data}`)
+
       if (callback) {
         terminal.pendingCallbacks.push(callback)
       }
     }
+
     const cleanup = configureLazyArabicShapingJoiner(joinerTerminal as never, () => true)
 
     replayIntoTerminal(pane, ref, 'مرحبا')
@@ -124,13 +134,16 @@ describe('replay-guard', () => {
   it('still replays RTL bytes when joiner registration fails', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
+
     const joinerTerminal = terminal as FakeTerminal & {
       registerCharacterJoiner: () => number
       deregisterCharacterJoiner: () => void
     }
+
     joinerTerminal.registerCharacterJoiner = () => {
       throw new Error('terminal disposed')
     }
+
     joinerTerminal.deregisterCharacterJoiner = () => undefined
     configureLazyArabicShapingJoiner(joinerTerminal as never, () => true)
 
@@ -223,6 +236,7 @@ describe('replay-guard', () => {
     // stuck true drops EVERY keystroke. The probe-certified stall path (probe
     // never parses either => wedged release) must free the guard.
     vi.useFakeTimers()
+
     try {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
@@ -244,6 +258,7 @@ describe('replay-guard', () => {
 
   it('a wedged release hands the terminal to pane recovery', () => {
     vi.useFakeTimers()
+
     try {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
@@ -290,6 +305,7 @@ describe('replay-guard', () => {
 
   it('a healthy parse completion never notifies pane recovery', () => {
     vi.useFakeTimers()
+
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
@@ -309,6 +325,7 @@ describe('replay-guard', () => {
 
   it('parse completion cancels the stall probe without over-releasing', () => {
     vi.useFakeTimers()
+
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
@@ -329,13 +346,16 @@ describe('replay-guard', () => {
 
   it('async replay resolves even when the parse callback never fires', async () => {
     vi.useFakeTimers()
+
     try {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
       let resolved = false
+
       const promise = replayIntoTerminalAsync(pane, ref, 'x', { stallCheckMs: 400 }).then(() => {
         resolved = true
       })
+
       expect(isPaneReplaying(ref, 1)).toBe(true)
 
       await vi.advanceTimersByTimeAsync(1000)
@@ -354,6 +374,7 @@ describe('replay-guard', () => {
     const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     }) as typeof requestAnimationFrame
     globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
@@ -387,6 +408,7 @@ describe('replay-guard', () => {
     const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     }) as typeof requestAnimationFrame
     globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
@@ -474,6 +496,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   it('releases when the probe parses but the replay completion was lost, and reports it', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
@@ -498,6 +521,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   it('records correlatable replay identity without exposing worktree or PTY paths', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
@@ -535,6 +559,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   it('releases after the probe itself never parses (wedged pipeline) and reports it', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
@@ -566,9 +591,11 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
     const recoveryReasons: string[] = []
+
     const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
       recoveryReasons.push(reason)
     })
+
     try {
       replayIntoTerminal(pane, ref, 'chunk-A', { stallCheckMs: 1_000 })
       vi.advanceTimersByTime(500)
@@ -605,9 +632,11 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     const ref = makeRef()
     const { pane, terminal } = makeFakePane(1)
     const recoveryReasons: string[] = []
+
     const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
       recoveryReasons.push(reason)
     })
+
     try {
       replayIntoTerminal(pane, ref, 'chunk-A', { stallCheckMs: 1_000 })
       replayIntoTerminal(pane, ref, 'chunk-B', { stallCheckMs: 1_000 })
@@ -642,12 +671,15 @@ describe('replay-guard stall handling (probe-certified release)', () => {
     const { pane, terminal } = makeFakePane(1)
     const recoveryReasons: string[] = []
     const generation = captureTerminalParseProgressGeneration(terminal)
+
     const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
       recoveryReasons.push(reason)
     })
+
     terminal.write = () => {
       throw new Error('terminal disposed')
     }
+
     try {
       replayIntoTerminal(pane, ref, 'rejected replay')
 
@@ -668,6 +700,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   it('releases immediately when the probe write throws (terminal disposed mid-replay)', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
@@ -676,6 +709,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       terminal.write = () => {
         throw new Error('terminal disposed')
       }
+
       vi.advanceTimersByTime(1_000)
       expect(isPaneReplaying(ref, 1)).toBe(false)
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
@@ -690,6 +724,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   it('keeps overlapping engagements independent through a lost completion', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const ref = makeRef()
       const { pane, terminal } = makeFakePane(1)
@@ -727,6 +762,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
   it('resolves replayIntoTerminalAsync via the wedged path so restore chains cannot hang', async () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const ref = makeRef()
       const { pane } = makeFakePane(1)
@@ -734,6 +770,7 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       const replayDone = replayIntoTerminalAsync(pane, ref, 'restored bytes', {
         stallCheckMs: 1_000
       })
+
       let resolved = false
       void replayDone.then(() => {
         resolved = true

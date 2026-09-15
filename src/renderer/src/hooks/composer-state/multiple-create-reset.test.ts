@@ -44,6 +44,7 @@ function useSelectedSourceReset(
   const lastAutoNameRef = useRef(name)
   const branchAutoNameRef = useRef('fix-checkout')
   const lastAutoNoteRef = useRef('Generated note')
+
   const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
     initialItem?.provider === 'github' && initialItem.type === 'pr'
       ? {
@@ -61,6 +62,7 @@ function useSelectedSourceReset(
         }
       : null
   )
+
   const source = useIssueSourceActions({
     baseBranch,
     branchAutoNameRef,
@@ -89,6 +91,7 @@ function useSelectedSourceReset(
     setStartFromResetHint: vi.fn(),
     smartGitHubPrStartPointSelectionRef
   })
+
   const reset = useMultipleCreateReset({
     handleClearSmartNameSelection: source.handleClearSmartNameSelection,
     lastAutoNameRef,
@@ -99,6 +102,7 @@ function useSelectedSourceReset(
     setName,
     setNote
   })
+
   return {
     ...reset,
     selection: source.smartNameSelection,
@@ -145,6 +149,7 @@ describe('create more source reset', () => {
           ? 'https://linear.app/acme/issue/APP-45'
           : 'https://acme.atlassian.net/browse/APP-45'
     }
+
     const { result } = renderHook(() => useSelectedSourceReset(item, true))
     expect(result.current.selection?.kind).toBe(provider)
 

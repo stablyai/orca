@@ -31,12 +31,17 @@ import {
 import { cancelHistoryGc, runHistoryGc, scheduleHistoryGc } from './terminal-history-gc'
 
 const GC_MIN_AGE_MS = 5 * 60 * 1000
+
 const PENDING_DELETE_DIR_NAME = '.pending-delete'
+
 const LIVE_WORKTREE_ID = 'repo-1::/path/live-wt'
+
 const DEAD_WORKTREE_ID = 'repo-1::/path/dead-wt'
 
 let userDataDir: string
+
 let historyRoot: string
+
 let originalXdgDataHome: string | undefined
 
 /**
@@ -48,20 +53,27 @@ let originalXdgDataHome: string | undefined
  */
 function referenceSyncPruneDecisions(root: string, liveWorktreeIds: Set<string>): string[] {
   const decisions: string[] = []
+
   if (!existsSync(root)) {
     return decisions
   }
+
   const now = Date.now()
+
   for (const entry of readdirSync(root)) {
     if (entry === PENDING_DELETE_DIR_NAME) {
       continue
     }
+
     const entryPath = join(root, entry)
+
     try {
       const stats = statSync(entryPath)
+
       if (!stats.isDirectory()) {
         continue
       }
+
       try {
         for (const file of readdirSync(entryPath)) {
           statSync(join(entryPath, file))
@@ -69,32 +81,40 @@ function referenceSyncPruneDecisions(root: string, liveWorktreeIds: Set<string>)
       } catch {
         // Skip size estimation on error.
       }
+
       if (!existsSync(join(entryPath, 'meta.json'))) {
         continue
       }
+
       const meta = readHistoryMeta(entryPath)
+
       if (!meta?.worktreeId) {
         continue
       }
+
       if (!liveWorktreeIds.has(meta.worktreeId)) {
         if (meta.createdAt && now - new Date(meta.createdAt).getTime() < GC_MIN_AGE_MS) {
           continue
         }
+
         decisions.push(entry)
       }
     } catch {
       // Skip individual entries that fail.
     }
   }
+
   return decisions
 }
 
 function seedDir(name: string, files: Record<string, string>): string {
   const dir = join(historyRoot, name)
   mkdirSync(dir, { recursive: true })
+
   for (const [file, contents] of Object.entries(files)) {
     writeFileSync(join(dir, file), contents)
   }
+
   return dir
 }
 
@@ -187,11 +207,13 @@ afterEach(async () => {
   vi.useRealTimers()
   await flushPendingWorktreeHistoryDeletions()
   cancelPendingHistoryTreeRemovalRetries()
+
   if (originalXdgDataHome === undefined) {
     delete process.env.XDG_DATA_HOME
   } else {
     process.env.XDG_DATA_HOME = originalXdgDataHome
   }
+
   rmSync(userDataDir, { recursive: true, force: true })
 })
 
@@ -219,6 +241,7 @@ describe('history GC prune decisions', () => {
     await runHistoryGc(new Set([LIVE_WORKTREE_ID]))
 
     const after = survivingDirs()
+
     for (const kept of [
       'live-old',
       'live-young',
@@ -236,6 +259,7 @@ describe('history GC prune decisions', () => {
     ]) {
       expect(after.has(kept)).toBe(true)
     }
+
     expect(after.has('orphan-old')).toBe(false)
     expect(after.has('orphan-no-createdat')).toBe(false)
     expect(after.has('orphan-unparseable-createdat')).toBe(false)
@@ -265,6 +289,7 @@ describe('history GC prune decisions', () => {
     for (const [dir] of removeHostTreeMock.mock.calls) {
       expect(dir).toContain(PENDING_DELETE_DIR_NAME)
     }
+
     expect(tombstonedNames().has('orphan-old')).toBe(true)
   })
 
@@ -301,10 +326,12 @@ describe('history GC concurrency behaviour', () => {
     expect(second).toBe(first)
 
     await first
+
     // Each rename produces its own tombstone, so a second overlapping walk would condemn twice.
     const orphanRemovals = removeHostTreeMock.mock.calls.filter(([dir]) =>
       basename(dir).startsWith('orphan-old.')
     )
+
     expect(orphanRemovals).toHaveLength(1)
   })
 
@@ -333,6 +360,7 @@ describe('history GC concurrency behaviour', () => {
     seedDecisionMatrix()
     vi.useFakeTimers()
     let resolveLiveIds: (ids: Set<string>) => void = () => {}
+
     scheduleHistoryGc(
       () =>
         new Promise<Set<string>>((resolve) => {
@@ -368,14 +396,17 @@ describe('history GC races an async walk introduces', () => {
     const vanishing = ['bulk-11', 'bulk-77', 'bulk-201']
 
     const pass = runHistoryGc(live)
+
     for (const name of vanishing) {
       rmSync(join(historyRoot, name), { recursive: true, force: true })
     }
+
     await expect(pass).resolves.toBeUndefined()
 
     // Every live directory the racer did not touch is still there.
     expect(survivingDirs().has('live-old')).toBe(true)
     expect(survivingDirs().has('bulk-1')).toBe(true)
+
     for (const name of vanishing) {
       expect(existsSync(join(historyRoot, name))).toBe(false)
     }
@@ -421,16 +452,19 @@ describe('history GC main-thread occupancy', () => {
     const syncTimer = setInterval(() => {
       ticks.sync += 1
     }, 4)
+
     referenceSyncPruneDecisions(historyRoot, live)
     clearInterval(syncTimer)
 
     let last = performance.now()
+
     const asyncTimer = setInterval(() => {
       const now = performance.now()
       maxAsyncGapMs = Math.max(maxAsyncGapMs, now - last - 4)
       last = now
       ticks.async += 1
     }, 4)
+
     await runHistoryGc(live)
     clearInterval(asyncTimer)
 

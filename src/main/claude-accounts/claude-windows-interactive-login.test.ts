@@ -21,20 +21,25 @@ describe('Claude Windows host interactive login', () => {
   it('resolves a Windows auth login whose child has no piped streams', async () => {
     setPlatform('win32')
     vi.resetModules()
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: null
       stderr: null
       kill: ReturnType<typeof vi.fn>
       pid: number
     }
+
     child.stdout = null
     child.stderr = null
     child.kill = vi.fn()
     child.pid = 4242
+
     const spawnMock = vi.fn(() => {
       queueMicrotask(() => child.emit('exit', 0))
+
       return child
     })
+
     const buildInteractiveLoginSpawn = vi.fn(() => ({
       command: getCmdExePath(),
       args: [
@@ -51,6 +56,7 @@ describe('Claude Windows host interactive login', () => {
       stdio: 'ignore' as const,
       windowsHide: true
     }))
+
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({
       buildWindowsHostInteractiveLoginSpawn: buildInteractiveLoginSpawn
@@ -58,11 +64,13 @@ describe('Claude Windows host interactive login', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       const service = new ClaudeAccountService(
         createService() as never,
         createService() as never,
         createService() as never
       )
+
       await (
         service as unknown as {
           runClaudeCommand(
@@ -101,12 +109,14 @@ describe('Claude Windows host interactive login', () => {
     setPlatform('win32')
     vi.resetModules()
     vi.useFakeTimers()
+
     const child = new EventEmitter() as EventEmitter & {
       stdout: null
       stderr: null
       kill: ReturnType<typeof vi.fn>
       pid: number
     }
+
     child.stdout = null
     child.stderr = null
     child.kill = vi.fn()
@@ -116,11 +126,13 @@ describe('Claude Windows host interactive login', () => {
 
     try {
       const { ClaudeAccountService } = await import('./service')
+
       const service = new ClaudeAccountService(
         createService() as never,
         createService() as never,
         createService() as never
       )
+
       const login = (
         service as unknown as {
           runClaudeCommand(
@@ -134,6 +146,7 @@ describe('Claude Windows host interactive login', () => {
         { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
         1000
       )
+
       const rejection = expect(login).rejects.toThrow('Claude sign-in took too long to finish.')
 
       await vi.advanceTimersByTimeAsync(3_000)

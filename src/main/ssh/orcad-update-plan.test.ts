@@ -32,6 +32,7 @@ describe('planOrcadUpdate', () => {
       candidateVersion: '0.2.0+bb01',
       census: { liveSessions: 0, startedSinceActivation: 0 }
     })
+
     expect(plan).toMatchObject({ action: 'noop' })
   })
 
@@ -41,6 +42,7 @@ describe('planOrcadUpdate', () => {
       candidateVersion: '0.3.0+cc01',
       census: { liveSessions: 3, startedSinceActivation: 1 }
     })
+
     expect(plan).toMatchObject({ action: 'defer', code: 'orcad_update_terminals_running' })
     expect(plan.action === 'defer' && plan.reason).toContain('would not kill them')
   })
@@ -51,6 +53,7 @@ describe('planOrcadUpdate', () => {
       candidateVersion: '0.3.0+cc01',
       census: { liveSessions: null, startedSinceActivation: null }
     })
+
     expect(plan).toMatchObject({
       action: 'defer',
       code: 'orcad_update_terminal_census_unavailable'
@@ -64,6 +67,7 @@ describe('planOrcadUpdate', () => {
       census: { liveSessions: null, startedSinceActivation: null },
       force: true
     })
+
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
   })
 
@@ -74,6 +78,7 @@ describe('planOrcadUpdate', () => {
       census: { liveSessions: 2, startedSinceActivation: 0 },
       force: true
     })
+
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
   })
 
@@ -83,6 +88,7 @@ describe('planOrcadUpdate', () => {
       candidateVersion: '0.3.0+cc01',
       census: { liveSessions: 0, startedSinceActivation: 0 }
     })
+
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: false })
   })
 })
@@ -95,6 +101,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 0, startedSinceActivation: 0 },
       stateWritesSinceActivation: false
     })
+
     expect(safety).toMatchObject({ safety: 'clean', target: '0.1.0+aa01' })
   })
 
@@ -105,6 +112,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 1, startedSinceActivation: 0 },
       stateWritesSinceActivation: true
     })
+
     expect(safety).toMatchObject({ safety: 'lossy', target: '0.1.0+aa01' })
     expect(safety.safety === 'lossy' && safety.discards[0]).toContain('2026-01-01T00:00:01.000Z')
   })
@@ -116,6 +124,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 0, startedSinceActivation: 0 },
       stateWritesSinceActivation: null
     })
+
     expect(safety).toMatchObject({ safety: 'lossy' })
   })
 
@@ -127,6 +136,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 4, startedSinceActivation: 1 },
       stateWritesSinceActivation: true
     })
+
     expect(safety).toMatchObject({
       safety: 'unsafe',
       code: 'orcad_rollback_orphans_live_terminals'
@@ -141,6 +151,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 0, startedSinceActivation: 0 },
       stateWritesSinceActivation: false
     })
+
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_snapshot_missing' })
     expect(safety.safety === 'unsafe' && safety.reason).toContain('no schema version')
   })
@@ -152,6 +163,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 0, startedSinceActivation: 0 },
       stateWritesSinceActivation: false
     })
+
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_snapshot_missing' })
   })
 
@@ -162,6 +174,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 2, startedSinceActivation: null },
       stateWritesSinceActivation: false
     })
+
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_census_unavailable' })
   })
 
@@ -172,6 +185,7 @@ describe('assessOrcadRollback', () => {
       census: { liveSessions: 0, startedSinceActivation: 0 },
       stateWritesSinceActivation: false
     })
+
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_no_target' })
   })
 })

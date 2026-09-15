@@ -2,10 +2,15 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 
 const LEGACY_DATA_FILE_NAME = 'orca-data.json'
+
 const LEGACY_BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
+
 const PROFILE_INDEX_FILE_NAME = 'orca-profile-index.json'
+
 const PROFILE_DATA_FILE_NAME = 'orca-data.json'
+
 const PROFILE_BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
+
 const PROFILE_DIRECTORY_NAME = 'profiles'
 
 export const LEGACY_BACKUP_COUNT = 5
@@ -20,6 +25,7 @@ export function getProfileUserDataPath(): string {
   if (!profileUserDataPath) {
     profileUserDataPath = getAppEnvironment().getPath('userData')
   }
+
   return profileUserDataPath
 }
 

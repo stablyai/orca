@@ -26,11 +26,14 @@ export function getSuggestedCreatureName(
   retired: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
 ): string {
   const used = new Set<string>()
+
   for (const path of existingPaths) {
     used.add(normalizeSuggestedName(suggestionPathBasename(path)))
   }
+
   for (const retiredName of retired.names) {
     used.add(normalizeSuggestedName(retiredName))
   }
+
   return selectSuggestedCreatureName(used, random, retired.exhaustedTiers)
 }

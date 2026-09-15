@@ -44,6 +44,7 @@ describe('orchestration mailbox PTY write gate', () => {
   afterEach(() => {
     vi.useRealTimers()
     agentSessionPtyWriteGate.detachRecordLookup()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }

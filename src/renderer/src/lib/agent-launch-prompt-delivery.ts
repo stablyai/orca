@@ -17,6 +17,7 @@ export function seedNativeChatLaunchDraftForAgentTab(args: {
   if (!canMirrorLaunchDraftToNativeChat(args.text) || !isNativeChatSupportedAgent(args.agent)) {
     return
   }
+
   useAppStore.getState().seedNativeChatLaunchDraft({
     tabId: args.tabId,
     agent: args.agent,
@@ -35,6 +36,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   onTimeout?: () => void
 }): Promise<boolean> {
   const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout } = args
+
   const shouldSeed =
     submit === true && content.trim().length > 0 && isNativeChatSupportedAgent(agent)
 
@@ -69,12 +71,14 @@ export function deliverLaunchPromptToAgentTab(args: {
       if (shouldSeed && !delivered && !deliversViaNativePrefill) {
         useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
       }
+
       return delivered || deliversViaNativePrefill
     },
     (error) => {
       if (shouldSeed && !deliversViaNativePrefill) {
         useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
       }
+
       throw error
     }
   )

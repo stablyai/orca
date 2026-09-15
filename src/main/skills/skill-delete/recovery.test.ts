@@ -27,6 +27,7 @@ async function fixture(): Promise<{ home: string; stateDirectory: string; root: 
   roots.push(home)
   const root = join(home, '.agents', 'skills')
   await mkdir(root, { recursive: true })
+
   return { home, stateDirectory: join(home, 'state'), root }
 }
 
@@ -162,6 +163,7 @@ describe('recoverSkillDeleteTransaction', () => {
       ...nativeSkillInstallFilesystem,
       rename: () => Promise.reject(new Error('EPERM'))
     }
+
     await recoverSkillDeleteTransaction(stateDirectory, canonicalPath, filesystem)
 
     // Journal retained: the staged path is still parked, and dropping the record
@@ -197,6 +199,7 @@ describe('recoverSkillDeleteTransaction', () => {
     const canonicalPath = join(root, 'demo')
     const aliasRoot = join(home, '.claude', 'skills', 'demo')
     await mkdir(aliasRoot, { recursive: true })
+
     const entry = journal(root, canonicalPath, {
       phase: 'staging',
       movedCount: 2,
@@ -214,6 +217,7 @@ describe('recoverSkillDeleteTransaction', () => {
         }
       ]
     })
+
     // The canonical move came back in an interrupted earlier pass; only the
     // alias-file is still parked at its staged path.
     await mkdir(canonicalPath, { recursive: true })
@@ -231,6 +235,7 @@ describe('recoverSkillDeleteTransaction', () => {
     const canonicalPath = join(root, 'demo')
     const aliasRoot = join(home, '.claude', 'skills', 'demo')
     await mkdir(aliasRoot, { recursive: true })
+
     const entry = journal(root, canonicalPath, {
       phase: 'staging',
       movedCount: 2,
@@ -250,6 +255,7 @@ describe('recoverSkillDeleteTransaction', () => {
         }
       ]
     })
+
     await mkdir(entry.moves[1].stagedPath, { recursive: true })
     await writeFile(entry.moves[0].stagedPath, 'link-stand-in')
     await writeSkillDeleteJournal(stateDirectory, entry)

@@ -10,6 +10,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -71,9 +72,11 @@ describe('TabsSlice', () => {
 
       const layout = store.getState().layoutByWorktree[WT]
       expect(layout.type).toBe('split')
+
       if (layout.type !== 'split' || layout.second.type !== 'split') {
         throw new Error('expected nested split layout')
       }
+
       expect(layout.ratio).toBe(0.5)
       expect(layout.second.ratio).toBe(0.7)
     })
@@ -116,6 +119,7 @@ describe('TabsSlice', () => {
         id: 'file-a.ts',
         label: 'file-a.ts'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
       const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
       expect(targetGroupId).toBeTruthy()
@@ -137,6 +141,7 @@ describe('TabsSlice', () => {
         executionHostId: 'runtime:host-b',
         label: 'file-a.ts'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
       const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
       expect(targetGroupId).toBeTruthy()
@@ -158,10 +163,12 @@ describe('TabsSlice', () => {
 
     it('merges a group into its sibling', () => {
       const setMock = vi.mocked(window.api.ui.set)
+
       const t1 = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',
         label: 'file-a.ts'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
       const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
       expect(targetGroupId).toBeTruthy()
@@ -193,6 +200,7 @@ describe('TabsSlice', () => {
         id: 'file-a.ts',
         label: 'file-a.ts'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
       const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
       expect(targetGroupId).toBeTruthy()
@@ -213,10 +221,12 @@ describe('TabsSlice', () => {
         id: 'file-a.ts',
         label: 'file-a.ts'
       })
+
       const second = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-b.ts',
         label: 'file-b.ts'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
 
       const moved = store.getState().dropUnifiedTab(second.id, {
@@ -241,9 +251,11 @@ describe('TabsSlice', () => {
 
       const layout = state.layoutByWorktree[WT]
       expect(layout.type).toBe('split')
+
       if (layout.type !== 'split') {
         throw new Error('expected split layout after edge drop')
       }
+
       expect(layout.direction).toBe('horizontal')
       expect(layout.first).toEqual({ type: 'leaf', groupId: sourceGroupId })
       expect(layout.second).toEqual({ type: 'leaf', groupId: newGroupId })
@@ -254,9 +266,11 @@ describe('TabsSlice', () => {
         id: 'terminal-1',
         label: 'Terminal 1'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
       store.setState({ activeWorktreeId: WT })
       const publishedSimulatorGroupIds: (string | null)[] = []
+
       const unsubscribe = store.subscribe((state) => {
         publishedSimulatorGroupIds.push(
           state.unifiedTabsByWorktree[WT]?.find((tab) => tab.contentType === 'simulator')
@@ -276,6 +290,7 @@ describe('TabsSlice', () => {
           label: 'Mobile Emulator'
         }
       )
+
       unsubscribe()
 
       expect(simulator).not.toBeNull()
@@ -293,9 +308,11 @@ describe('TabsSlice', () => {
       ).toEqual([simulator!.id])
       const layout = state.layoutByWorktree[WT]
       expect(layout.type).toBe('split')
+
       if (layout.type !== 'split') {
         throw new Error('expected split layout after split tab creation')
       }
+
       expect(layout.direction).toBe('horizontal')
       expect(layout.first).toEqual({ type: 'leaf', groupId: sourceGroupId })
       expect(layout.second).toEqual({ type: 'leaf', groupId: simulatorGroupId })
@@ -337,6 +354,7 @@ describe('TabsSlice', () => {
         id: 'file-a.ts',
         label: 'file-a.ts'
       })
+
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
 
       const moved = store.getState().dropUnifiedTab(onlyTab.id, {
@@ -356,10 +374,12 @@ describe('TabsSlice', () => {
         id: 'file-a.ts',
         label: 'file-a.ts'
       })
+
       const right = store.getState().createUnifiedTab(WT, 'terminal', {
         id: 'terminal-1',
         label: 'Terminal 1'
       })
+
       const leftGroupId = store.getState().groupsByWorktree[WT][0].id
 
       expect(
@@ -372,6 +392,7 @@ describe('TabsSlice', () => {
       const rightGroupId = store
         .getState()
         .unifiedTabsByWorktree[WT].find((tab) => tab.id === right.id)?.groupId
+
       expect(rightGroupId).toBeTruthy()
 
       const moved = store.getState().dropUnifiedTab(right.id, {

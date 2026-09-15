@@ -2,12 +2,14 @@
 // little before the deadline (and retry shortly if a forced rotation didn't land)
 // so the session never lapses. Owns the single lease/rotation timer slot.
 const LEASE_ROTATION_MARGIN_MS = 30_000
+
 // Why: both ends must be clamped. The floor bounds any bad deadline to one
 // forced rotation per minute instead of a sub-second loop; the ceiling keeps
 // the delay far below setTimeout's 32-bit limit (a 30-day resume TTL minus the
 // margin overflows int32 and fires at 1ms), at the cost of a harmless
 // re-resume every few hours on long-lived sessions.
 const LEASE_ROTATION_MIN_DELAY_MS = 60_000
+
 const LEASE_ROTATION_MAX_DELAY_MS = 6 * 60 * 60 * 1000
 
 export type RelayLeaseRotationDependencies = {
@@ -27,9 +29,11 @@ export class RelayLeaseRotationTimer {
   // Arm rotation a margin before the lease deadline. No-op with no deadline.
   scheduleFromLease(leaseExpiresAt: number | null): void {
     this.clear()
+
     if (!leaseExpiresAt) {
       return
     }
+
     const delay = Math.min(
       LEASE_ROTATION_MAX_DELAY_MS,
       Math.max(
@@ -37,6 +41,7 @@ export class RelayLeaseRotationTimer {
         leaseExpiresAt - this.dependencies.now() - LEASE_ROTATION_MARGIN_MS
       )
     )
+
     this.arm(delay)
   }
 
@@ -46,6 +51,7 @@ export class RelayLeaseRotationTimer {
     if (delayMs == null || this.timer) {
       return
     }
+
     this.arm(delayMs)
   }
 

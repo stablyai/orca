@@ -18,6 +18,7 @@ export const systemSessionSearchClock: SessionSearchClock = {
     // Nothing here should hold the process open: the index is a cache, and a
     // pending reconcile is never a reason to keep a CLI or a child alive.
     timer.unref?.()
+
     return timer
   },
   clearTimeout: (handle) => clearTimeout(handle as NodeJS.Timeout)

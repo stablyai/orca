@@ -11,6 +11,7 @@ const temporaryDirectories: string[] = []
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-skill-package-test-'))
   temporaryDirectories.push(directory)
+
   return directory
 }
 
@@ -23,6 +24,7 @@ async function createSkill(root: string): Promise<string> {
   )
   await writeFile(join(skill, 'scripts', 'run.sh'), '#!/bin/sh\necho test\n')
   await chmod(join(skill, 'scripts', 'run.sh'), 0o755)
+
   return skill
 }
 
@@ -47,6 +49,7 @@ describe('skill package creation and extraction', () => {
     const root = await temporaryDirectory()
     const sourceDirectory = await createSkill(root)
     const archivePath = join(root, 'package.tar.gz')
+
     const created = await createSkillPackageArchive({
       sourceDirectory,
       archivePath,
@@ -70,6 +73,7 @@ describe('skill package creation and extraction', () => {
     expect(await readFile(join(extracted.skillDirectory, 'scripts', 'run.sh'), 'utf8')).toContain(
       'echo test'
     )
+
     if (process.platform !== 'win32') {
       expect((await stat(created.archivePath)).mode & 0o777).toBe(0o600)
       expect((await stat(join(root, 'extracted'))).mode & 0o777).toBe(0o700)
@@ -84,16 +88,19 @@ describe('skill package creation and extraction', () => {
   it('creates deterministic archives for fixed publication metadata', async () => {
     const root = await temporaryDirectory()
     const sourceDirectory = await createSkill(root)
+
     const input = {
       sourceDirectory,
       packageId: 'package_1',
       versionId: 'version_1',
       createdAt: '2026-08-11T12:00:00.000Z'
     }
+
     const first = await createSkillPackageArchive({
       ...input,
       archivePath: join(root, 'one.tar.gz')
     })
+
     const second = await createSkillPackageArchive({
       ...input,
       archivePath: join(root, 'two.tar.gz')
@@ -133,6 +140,7 @@ describe('skill package creation and extraction', () => {
   it('rejects archive and package identity mismatches before publishing extraction', async () => {
     const root = await temporaryDirectory()
     const sourceDirectory = await createSkill(root)
+
     const created = await createSkillPackageArchive({
       sourceDirectory,
       archivePath: join(root, 'package.tar.gz'),
@@ -187,6 +195,7 @@ describe('skill package creation and extraction', () => {
     const markdown = '---\nname: line-skill\ndescription: Lines\n---\n\n# Lines\n'
     await writeFile(join(lf, 'SKILL.md'), markdown)
     await writeFile(join(crlf, 'SKILL.md'), markdown.replaceAll('\n', '\r\n'))
+
     const publication = {
       packageId: 'package_1',
       versionId: 'version_1',
@@ -198,6 +207,7 @@ describe('skill package creation and extraction', () => {
       sourceDirectory: lf,
       archivePath: join(root, 'lf.tar.gz')
     })
+
     const crlfPackage = await createSkillPackageArchive({
       ...publication,
       sourceDirectory: crlf,
@@ -219,6 +229,7 @@ describe('skill package creation and extraction', () => {
     await Promise.all([mkdir(missing), mkdir(malformed)])
     await writeFile(join(missing, 'README.md'), 'no skill')
     await writeFile(join(malformed, 'SKILL.md'), '# No frontmatter identity')
+
     const input = (sourceDirectory: string, name: string) => ({
       sourceDirectory,
       archivePath: join(root, `${name}.tar.gz`),
@@ -236,12 +247,14 @@ describe('skill package creation and extraction', () => {
 
   it('rejects truncated tar data and invalid tar checksums before publishing extraction', async () => {
     const root = await temporaryDirectory()
+
     const created = await createSkillPackageArchive({
       sourceDirectory: await createSkill(root),
       archivePath: join(root, 'package.tar.gz'),
       packageId: 'package_1',
       versionId: 'version_1'
     })
+
     const invalidChecksum = join(root, 'invalid-checksum.tar.gz')
     const truncated = join(root, 'truncated.tar.gz')
     await mutateArchive(created.archivePath, invalidChecksum, (tar) => {
@@ -278,19 +291,24 @@ describe('skill package creation and extraction', () => {
 
   it('cancels during streamed extraction and removes partial bytes', async () => {
     const root = await temporaryDirectory()
+
     const created = await createSkillPackageArchive({
       sourceDirectory: await createSkill(root),
       archivePath: join(root, 'package.tar.gz'),
       packageId: 'package_1',
       versionId: 'version_1'
     })
+
     let checks = 0
+
     const signal = {
       get aborted() {
         checks += 1
+
         return checks >= 3
       }
     } as AbortSignal
+
     const destinationDirectory = join(root, 'cancelled-extraction')
 
     await expect(
@@ -305,12 +323,14 @@ describe('skill package creation and extraction', () => {
 
   it('rejects content checksum and SKILL identity mismatches', async () => {
     const root = await temporaryDirectory()
+
     const created = await createSkillPackageArchive({
       sourceDirectory: await createSkill(root),
       archivePath: join(root, 'package.tar.gz'),
       packageId: 'package_1',
       versionId: 'version_1'
     })
+
     const invalidContent = join(root, 'invalid-content.tar.gz')
     const invalidIdentity = join(root, 'invalid-identity.tar.gz')
     await mutateArchive(created.archivePath, invalidContent, (tar) => {

@@ -2,14 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 
 const writeFileAtomically = vi.fn()
+
 const readTallyFile = vi.fn()
+
 const watchStart = vi.fn()
+
 const watchStop = vi.fn()
+
 const watchOptions: { onPrompt: () => void }[] = []
+
 vi.mock('./codex-accounts/fs-utils', () => ({
   writeFileAtomically: (...args: unknown[]) => writeFileAtomically(...args)
 }))
+
 vi.mock('./persistence', () => ({ getCanonicalUserDataPath: () => '/tmp/orca-tcc-notice-test' }))
+
 vi.mock('./macos-tcc-prompt-watch', () => ({
   MacosTccPromptWatch: class {
     constructor(options: { onPrompt: () => void }) {
@@ -23,6 +30,7 @@ vi.mock('./macos-tcc-prompt-watch', () => ({
     }
   }
 }))
+
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFs>()),
   readFileSync: (...args: unknown[]) => readTallyFile(...args)
@@ -77,6 +85,7 @@ describe('tcc prompt notice threshold', () => {
 
   it('never fires again once dismissed, even past the threshold', () => {
     dismissTccPromptNotice()
+
     for (let i = 0; i < TCC_PROMPT_NOTICE_THRESHOLD + 2; i += 1) {
       expect(handleTccPromptForTests()).toBeNull()
     }
@@ -86,6 +95,7 @@ describe('tcc prompt notice threshold', () => {
     for (let i = 0; i < TCC_PROMPT_NOTICE_THRESHOLD; i += 1) {
       handleTccPromptForTests()
     }
+
     writeFileAtomically.mockClear()
 
     expect(handleTccPromptForTests()).toBeNull()
@@ -96,6 +106,7 @@ describe('tcc prompt notice threshold', () => {
     for (let i = 0; i < TCC_PROMPT_NOTICE_THRESHOLD; i += 1) {
       handleTccPromptForTests()
     }
+
     writeFileAtomically.mockClear()
 
     const claim = consumePendingTccPromptNotice(1)
@@ -141,6 +152,7 @@ describe('tcc prompt notice threshold', () => {
     for (let i = 0; i < TCC_PROMPT_NOTICE_THRESHOLD; i += 1) {
       handleTccPromptForTests()
     }
+
     const claim = consumePendingTccPromptNotice(1)
 
     dismissTccPromptNotice()
@@ -160,12 +172,15 @@ describe('tcc prompt notice threshold', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const oldWindow = createWindowStub()
     const newWindow = createWindowStub()
+
     try {
       initTccPromptNotice(oldWindow as never)
       initTccPromptNotice(newWindow as never)
+
       for (let i = 0; i < TCC_PROMPT_NOTICE_THRESHOLD; i += 1) {
         watchOptions[0].onPrompt()
       }
+
       expect(oldWindow.webContents.send).not.toHaveBeenCalled()
       expect(newWindow.webContents.send).toHaveBeenCalledTimes(1)
       expect(watchStop).toHaveBeenCalledTimes(1)
@@ -178,6 +193,7 @@ describe('tcc prompt notice threshold', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const mainWindow = createWindowStub()
+
     try {
       initTccPromptNotice(mainWindow as never, { deferWatchUntilReadyToShow: true })
       expect(watchStart).not.toHaveBeenCalled()
@@ -185,6 +201,7 @@ describe('tcc prompt notice threshold', () => {
       const readyToShow = mainWindow.once.mock.calls.find(
         ([event]) => event === 'ready-to-show'
       )?.[1]
+
       readyToShow?.()
       await new Promise((resolve) => {
         setImmediate(resolve)
@@ -199,6 +216,7 @@ describe('tcc prompt notice threshold', () => {
   it('starts immediately when startup deferral is not requested', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+
     try {
       initTccPromptNotice(createWindowStub() as never)
       expect(watchStart).toHaveBeenCalledOnce()
@@ -212,15 +230,18 @@ describe('tcc prompt notice threshold', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     vi.useFakeTimers()
     const mainWindow = createWindowStub()
+
     try {
       initTccPromptNotice(mainWindow as never, { deferWatchUntilReadyToShow: true })
       await vi.advanceTimersByTimeAsync(TCC_PROMPT_WATCH_START_FALLBACK_MS)
       await vi.runAllTimersAsync()
 
       expect(watchStart).toHaveBeenCalledOnce()
+
       const readyToShow = mainWindow.once.mock.calls.find(
         ([event]) => event === 'ready-to-show'
       )?.[1]
+
       readyToShow?.()
       await vi.runAllTimersAsync()
       expect(watchStart).toHaveBeenCalledOnce()
@@ -235,6 +256,7 @@ describe('tcc prompt notice threshold', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const oldWindow = createWindowStub()
     const newWindow = createWindowStub()
+
     try {
       initTccPromptNotice(oldWindow as never, { deferWatchUntilReadyToShow: true })
       const oldReady = oldWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1]
@@ -264,6 +286,7 @@ describe('tcc prompt notice threshold', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const mainWindow = createWindowStub()
     mainWindow.isDestroyed.mockReturnValue(true)
+
     try {
       initTccPromptNotice(mainWindow as never)
       expect(() => {
@@ -289,6 +312,7 @@ describe('tcc prompt notice threshold', () => {
     mainWindow.webContents.send.mockImplementation(() => {
       throw new Error('renderer unavailable')
     })
+
     try {
       initTccPromptNotice(mainWindow as never)
       expect(() => {
@@ -314,6 +338,7 @@ describe('tcc prompt notice threshold', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     readTallyFile.mockReturnValue(JSON.stringify({ ...persisted, dismissed: false }))
+
     try {
       const mainWindow = createWindowStub()
       initTccPromptNotice(mainWindow as never)
@@ -345,6 +370,7 @@ describe('tcc prompt notice threshold', () => {
         acknowledgedAfterClose: true
       })
     )
+
     try {
       const mainWindow = createWindowStub()
       initTccPromptNotice(mainWindow as never)
@@ -369,6 +395,7 @@ describe('tcc prompt notice threshold', () => {
         acknowledgedAfterClose: false
       })
     )
+
     try {
       const mainWindow = createWindowStub()
       initTccPromptNotice(mainWindow as never)
@@ -395,6 +422,7 @@ describe('tcc prompt notice threshold', () => {
         acknowledgedAfterClose: true
       })
     )
+
     try {
       const mainWindow = createWindowStub()
       initTccPromptNotice(mainWindow as never)
@@ -412,11 +440,13 @@ describe('tcc prompt notice threshold', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const oldWindow = createWindowStub()
     const newWindow = createWindowStub()
+
     try {
       initTccPromptNotice(oldWindow as never)
       const oldClosed = oldWindow.once.mock.calls.find(([event]) => event === 'closed')?.[1]
       initTccPromptNotice(newWindow as never)
       oldClosed?.()
+
       for (let i = 0; i < TCC_PROMPT_NOTICE_THRESHOLD; i += 1) {
         watchOptions[0].onPrompt()
       }

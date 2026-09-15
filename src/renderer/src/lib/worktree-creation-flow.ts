@@ -27,11 +27,14 @@ function startWorktreeCreation(creationId: string, request: WorktreeCreationRequ
   executeWorktreeCreation(creationId, request).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
+
     if (!store.pendingWorktreeCreations[creationId]) {
       return
     }
+
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
+
     // Why: the panel renders this error inline while its surface is visible;
     // only announce it separately after the user has navigated away.
     if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
@@ -72,21 +75,26 @@ function revealPendingCreation(
  */
 export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
   const store = useAppStore.getState()
+
   const existingCreationId = findPendingLinkedWorkItemCreationId(
     store.pendingWorktreeCreations,
     request
   )
+
   if (existingCreationId) {
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
+
     return existingCreationId
   }
+
   // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
   // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
   startWorktreeCreation(creationId, request)
+
   return creationId
 }
 
@@ -94,6 +102,7 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
 export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequest): string {
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, 'preparing')
+
   return creationId
 }
 
@@ -104,9 +113,11 @@ export function continueBackgroundWorktreeCreation(
   options: ContinueBackgroundWorktreeCreationOptions = {}
 ): boolean {
   const store = useAppStore.getState()
+
   if (!store.pendingWorktreeCreations[creationId]) {
     return false
   }
+
   // Why: the remote/runtime create path emits no progress events, so the stepped
   // checklist would freeze on step 1. Use the request's captured repo owner so
   // Retry does not change shape when focus moves to another runtime.
@@ -118,6 +129,7 @@ export function continueBackgroundWorktreeCreation(
     provisioningLog: undefined,
     request
   })
+
   // Why: background work-item preflight can finish after the user moved on; keep
   // the pending row alive without reselecting the creation panel in that case.
   if (options.revealCreationSurface !== false) {
@@ -125,7 +137,9 @@ export function continueBackgroundWorktreeCreation(
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
   }
+
   startWorktreeCreation(creationId, request)
+
   return true
 }
 
@@ -133,9 +147,11 @@ export function continueBackgroundWorktreeCreation(
 export function retryBackgroundWorktreeCreation(creationId: string): void {
   const store = useAppStore.getState()
   const entry = store.pendingWorktreeCreations[creationId]
+
   if (!entry) {
     return
   }
+
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
     startedAt: Date.now(),
@@ -149,13 +165,16 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
+
   if (entry.structuredLaunchRecoveryWorktreeId) {
     void retryStructuredWorktreeLaunch(
       creationId,
       entry.request,
       entry.structuredLaunchRecoveryWorktreeId
     )
+
     return
   }
+
   startWorktreeCreation(creationId, entry.request)
 }

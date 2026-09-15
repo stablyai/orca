@@ -13,6 +13,7 @@ import type * as QueryModule from './workspace-cleanup-query'
 import { makeFacetCandidate } from './workspace-cleanup-facet.test.fixture'
 
 const holders = vi.hoisted(() => ({ state: null as AppState | null }))
+
 const counts = vi.hoisted(() => ({ facetCounts: 0, measured: 0, queries: 0 }))
 
 vi.mock('@/store', () => ({
@@ -20,18 +21,21 @@ vi.mock('@/store', () => ({
     if (!holders.state) {
       throw new Error('Missing test state')
     }
+
     return selector(holders.state)
   }
 }))
 
 vi.mock('./workspace-cleanup-facets', async (importOriginal) => {
   const actual = await importOriginal<typeof FacetModule>()
+
   return {
     ...actual,
     countWorkspaceCleanupMeasuredRows: (
       ...args: Parameters<typeof actual.countWorkspaceCleanupMeasuredRows>
     ) => {
       counts.measured += 1
+
       return actual.countWorkspaceCleanupMeasuredRows(...args)
     }
   }
@@ -39,16 +43,19 @@ vi.mock('./workspace-cleanup-facets', async (importOriginal) => {
 
 vi.mock('./workspace-cleanup-query', async (importOriginal) => {
   const actual = await importOriginal<typeof QueryModule>()
+
   return {
     ...actual,
     countWorkspaceCleanupFacetMatches: (
       ...args: Parameters<typeof actual.countWorkspaceCleanupFacetMatches>
     ) => {
       counts.facetCounts += 1
+
       return actual.countWorkspaceCleanupFacetMatches(...args)
     },
     runWorkspaceCleanupQuery: (...args: Parameters<typeof actual.runWorkspaceCleanupQuery>) => {
       counts.queries += 1
+
       return actual.runWorkspaceCleanupQuery(...args)
     }
   }
@@ -83,6 +90,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
   it('does only the query work when the user types', () => {
     const candidates = [makeFacetCandidate()]
     const filters = createDefaultWorkspaceCleanupFilterState()
+
     const view = renderHook(
       ({ currentFilters }) =>
         useWorkspaceCleanupFacetRows({
@@ -93,6 +101,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         }),
       { initialProps: { currentFilters: filters } }
     )
+
     const initialCounts = { ...counts }
     const reviewIndex = view.result.current.reviewInfoByWorktreeId
 
@@ -107,6 +116,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
   it('keeps review joins stable during unrelated agent-status churn', () => {
     const candidates = [makeFacetCandidate()]
     const filters = createDefaultWorkspaceCleanupFilterState()
+
     const view = renderHook(() =>
       useWorkspaceCleanupFacetRows({
         candidates,
@@ -115,6 +125,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         now: 1_700_000_000_000
       })
     )
+
     const reviewIndex = view.result.current.reviewInfoByWorktreeId
 
     holders.state = { ...holders.state!, agentStatusByPaneKey: {} }
@@ -126,6 +137,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
   it('does not rebuild facets for count-only size progress', () => {
     const candidates = [makeFacetCandidate()]
     const filters = createDefaultWorkspaceCleanupFilterState()
+
     const view = renderHook(() =>
       useWorkspaceCleanupFacetRows({
         candidates,
@@ -134,6 +146,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         now: 1_700_000_000_000
       })
     )
+
     const initialCounts = { ...counts }
 
     holders.state = {
@@ -159,6 +172,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
   it('projects streamed size measurements before the full scan completes', () => {
     const candidates = [makeFacetCandidate()]
     const filters = createDefaultWorkspaceCleanupFilterState()
+
     const view = renderHook(() =>
       useWorkspaceCleanupFacetRows({
         candidates,
@@ -167,6 +181,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         now: 1_700_000_000_000
       })
     )
+
     expect(view.result.current.rows[0]?.sizeBytes).toBeNull()
 
     holders.state = {
@@ -183,6 +198,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
 
   it('includes folder repositories discovered from cleanup candidates', () => {
     const candidate = makeFacetCandidate({ repoId: 'folder-1', repoName: 'Loose files' })
+
     const view = renderHook(() =>
       useWorkspaceCleanupFacetRows({
         candidates: [candidate],
@@ -198,6 +214,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
   it('skips every downstream pass when a streaming tick changes no candidate', () => {
     const candidates = [makeFacetCandidate(), makeFacetCandidate({ worktreeId: 'repo-1::/b' })]
     const filters = createDefaultWorkspaceCleanupFilterState()
+
     const view = renderHook(
       ({ current }) =>
         useWorkspaceCleanupFacetRows({
@@ -208,6 +225,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         }),
       { initialProps: { current: candidates } }
     )
+
     const initialCounts = { ...counts }
     const matched = view.result.current.facetMatchedIdentities
     const rows = view.result.current.rows
@@ -224,6 +242,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
     const stable = makeFacetCandidate()
     const replaced = makeFacetCandidate({ worktreeId: 'repo-1::/b' })
     const filters = createDefaultWorkspaceCleanupFilterState()
+
     const view = renderHook(
       ({ current }) =>
         useWorkspaceCleanupFacetRows({
@@ -234,6 +253,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         }),
       { initialProps: { current: [stable, replaced] } }
     )
+
     const stableFacet = view.result.current.rows.find((row) => row.worktreeId === stable.worktreeId)
 
     view.rerender({
@@ -265,6 +285,7 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
 
   it('projects same-id streamed sizes only onto their owning hosts', () => {
     const worktreeId = 'repo-1::/repo/alpha'
+
     const candidates = [
       makeFacetCandidate({ worktreeId, displayName: 'local', executionHostId: 'local' }),
       makeFacetCandidate({
@@ -274,12 +295,14 @@ describe('useWorkspaceCleanupFacetRows hot paths', () => {
         executionHostId: 'ssh:builder'
       })
     ]
+
     holders.state = {
       ...holders.state!,
       workspaceSpaceMeasurements: [
         { worktreeId, executionHostId: 'ssh:builder', status: 'ok', sizeBytes: 4_096 }
       ]
     }
+
     const view = renderHook(() =>
       useWorkspaceCleanupFacetRows({
         candidates,

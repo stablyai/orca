@@ -11,14 +11,23 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
+
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
+
 vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+
 vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
+
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
+
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
+
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
+
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
@@ -55,6 +64,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('hello', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -87,6 +97,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -119,6 +130,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2), { timeout: 10000 })
 
@@ -152,6 +164,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
@@ -198,11 +211,13 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
         agent="codex"
       />
     )
+
     const { rerender } = render(makeView())
 
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
@@ -252,10 +267,13 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
         agent="codex"
       />
     )
+
     const { rerender } = render(makeView({ kind: 'local' }))
+
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -291,6 +309,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -330,6 +349,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
@@ -345,6 +365,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     mocks.mode = 'outbox'
     mocks.call.mockRejectedValue(new Error('socket closed'))
     vi.useFakeTimers({ shouldAdvanceTime: true })
+
     try {
       render(
         <NativeChatStructuredSession
@@ -360,6 +381,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
       const send = mocks.composerProps?.structuredTransport?.send as
         | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
         | undefined
+
       expect(send?.('first', [])).toBe(true)
 
       // Backoff is 1+2+4+8+16 = 31s for five probes, which was the old hard budget.
@@ -369,6 +391,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
           await vi.advanceTimersByTimeAsync(8_000)
         })
       }
+
       expect(mocks.call.mock.calls.length).toBeGreaterThanOrEqual(7)
     } finally {
       vi.useRealTimers()

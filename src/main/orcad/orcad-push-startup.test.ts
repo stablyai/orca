@@ -15,24 +15,32 @@ const state = vi.hoisted(() => ({
   register: vi.fn(async () => ({ ok: true, registrationId: 'headless-registration' })),
   send: vi.fn(async () => ({ ok: true, results: [] }))
 }))
+
 vi.mock('./orcad-app-paths', () => ({
   resolveOrcadInstallRoot: () => state.root,
   resolveOrcadPath: () => state.root,
   resolveUserDataPath: () => state.root
 }))
+
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: async () => null }))
+
 vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
+
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: async () => {},
   stopOrcadDaemon: async () => {}
 }))
+
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
+
 vi.mock('../daemon/daemon-init', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
+
 vi.mock('../ipc/pty', () => ({
   registerHeadlessPtyRuntime: async () => {},
   getLocalPtyProvider: () => null,
   getSshPtyProvider: () => null
 }))
+
 vi.mock('../persistence/loading-store/store', () => ({
   Store: class {
     getSettings() {
@@ -40,16 +48,20 @@ vi.mock('../persistence/loading-store/store', () => ({
     }
   }
 }))
+
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},
   ensureActiveOrcaProfile: () => ({ dataFile: join(state.root, 'profile.json') })
 }))
+
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile() {} }))
+
 vi.mock('../server/serve-readiness', () => ({
   ServeReadinessPublisher: class {
     async publish() {}
   }
 }))
+
 vi.mock('../runtime/orca-runtime', () => ({
   OrcaRuntimeService: class {
     getRuntimeId() {
@@ -70,6 +82,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     }
   }
 }))
+
 vi.mock('../runtime/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
     async start() {
@@ -83,6 +96,7 @@ vi.mock('../runtime/runtime-rpc', () => ({
     }
     getE2EEKeypair() {
       expect(state.rpcStarted).toBe(true)
+
       return createPushHostKeypair()
     }
     getDeviceRegistry() {
@@ -94,6 +108,7 @@ vi.mock('../runtime/runtime-rpc', () => ({
     setOnPushUnregisterQueued() {}
   }
 }))
+
 vi.mock('../runtime/push/push-gateway-client', () => ({
   PushGatewayClient: class {
     registerDevice = state.register
@@ -116,6 +131,7 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   const phone = state.registry.addDevice('headless-phone', 'mobile')
   const { startOrcad } = await import('./orcad-entry')
   const host = await startOrcad({ noPairing: true, json: true })
+
   try {
     const result = await state.controller.registerPushDevice({
       deviceId: phone.deviceId,
@@ -125,6 +141,7 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
         onlyWhenDesktopAway: true
       }
     })
+
     expect(result).toMatchObject({ registered: true })
     expect(state.registry.getDevice(phone.deviceId)?.pushRegistration?.expiresAt).toBeGreaterThan(
       Date.now()
@@ -140,6 +157,7 @@ it('starts push after RPC identity is available and stops dispatch on shutdown',
   } finally {
     await host.stop()
   }
+
   expect(state.controller.getListenerCount()).toBe(0)
   expect(await state.controller.registerPushDevice({} as never)).toMatchObject({
     registered: false

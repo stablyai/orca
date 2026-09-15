@@ -16,6 +16,7 @@ import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
 import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
 
 type Composer = ReturnType<typeof useMobileComposerSource>
+
 type Selection = { label: string; detail?: string }
 
 export function NewWorktreeFormSheet(props: {

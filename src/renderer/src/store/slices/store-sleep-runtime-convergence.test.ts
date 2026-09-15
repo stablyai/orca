@@ -20,6 +20,7 @@ import {
 } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -35,6 +36,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -169,9 +171,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const wt = 'repo1::/path/wt1'
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       return args.method === 'terminal.sleep'
         ? Promise.reject(new Error('runtime graph unavailable'))
         : Promise.resolve({
@@ -282,12 +286,15 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const ptyId = 'remote:runtime-1@@pty-1'
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.sleep') {
         expect(store.getState().pendingPtyShutdownIds[ptyId]).toBe(1)
         store.getState().clearTabPtyId('tab-1', ptyId)
+
         return Promise.resolve({
           id: 'rpc-sleep',
           ok: true,
@@ -302,6 +309,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-default',
         ok: true,
@@ -331,19 +339,25 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const wt = 'repo1::/path/wt1'
     const ptyId = 'remote:runtime-1@@pty-1'
     let rejectSleep = (_error: Error): void => {}
+
     const pendingSleep = new Promise<never>((_resolve, reject) => {
       rejectSleep = reject
     })
+
     let sleepCallCount = 0
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.sleep') {
         sleepCallCount += 1
+
         return sleepCallCount === 1 ? Promise.reject(new Error('first owner failed')) : pendingSleep
       }
+
       return Promise.resolve({
         id: 'rpc-default',
         ok: true,
@@ -381,9 +395,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const wt = 'repo1::/path/wt1'
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.sleep') {
         return Promise.reject(
           new RuntimeRpcCallError({
@@ -394,6 +410,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           })
         )
       }
+
       if (args.method === 'terminal.list') {
         return Promise.resolve({
           id: 'rpc-list',
@@ -406,6 +423,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'old-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-stop',
         ok: true,
@@ -445,9 +463,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     let stopCount = 0
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method === 'terminal.sleep') {
         return Promise.reject(
           new RuntimeRpcCallError({
@@ -458,8 +478,10 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           })
         )
       }
+
       if (args.method === 'terminal.list') {
         listCount += 1
+
         return Promise.resolve({
           id: `rpc-list-${listCount}`,
           ok: true,
@@ -474,9 +496,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           _meta: { runtimeId: 'old-runtime' }
         })
       }
+
       if (args.method === 'terminal.stop') {
         stopCount += 1
       }
+
       return Promise.resolve({
         id: 'rpc-stop',
         ok: true,
@@ -505,14 +529,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     let now = 1_000
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
     const observedTimeouts: { method: string; timeoutMs?: number }[] = []
+
     try {
       mockApi.runtimeEnvironments.call.mockImplementation(
         (args: { method: string; timeoutMs?: number }) => {
           const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
           if (compatible) {
             return Promise.resolve(compatible)
           }
+
           observedTimeouts.push({ method: args.method, timeoutMs: args.timeoutMs })
+
           if (args.method === 'terminal.sleep') {
             return Promise.reject(
               new RuntimeRpcCallError({
@@ -523,7 +551,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
               })
             )
           }
+
           now += 6_000
+
           if (args.method === 'terminal.list') {
             return Promise.resolve({
               id: 'rpc-list',
@@ -536,6 +566,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
               _meta: { runtimeId: 'old-runtime' }
             })
           }
+
           return Promise.resolve({
             id: 'rpc-stop',
             ok: true,
@@ -571,15 +602,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
   it('keeps legacy sleep retryable when fresh listing is truncated or malformed', async () => {
     vi.useFakeTimers()
+
     try {
       const store = createTestStore()
       const wt = 'repo1::/path/wt1'
       let listCount = 0
       mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
         const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
         if (compatible) {
           return Promise.resolve(compatible)
         }
+
         if (args.method === 'terminal.sleep') {
           return Promise.reject(
             new RuntimeRpcCallError({
@@ -590,8 +624,10 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
             })
           )
         }
+
         if (args.method === 'terminal.list') {
           listCount += 1
+
           return Promise.resolve({
             id: `rpc-list-${listCount}`,
             ok: true,
@@ -606,6 +642,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
             _meta: { runtimeId: 'old-runtime' }
           })
         }
+
         return Promise.resolve({
           id: 'rpc-stop',
           ok: true,
@@ -639,9 +676,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const wt = 'repo1::/path/wt1'
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       return Promise.reject(
         new RuntimeRpcCallError({
           id: 'rpc-sleep',
@@ -701,13 +740,16 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
     let resolveSlowKill = (): void => {}
+
     const slowKill = new Promise<void>((resolve) => {
       resolveSlowKill = resolve
     })
+
     const handlerSnapshots = [
       { ptyId: 'pty-fails', dataHandler: vi.fn() },
       { ptyId: 'pty-slow', dataHandler: vi.fn() }
     ]
+
     mockUnregisterPtyDataHandlers.mockReturnValueOnce(handlerSnapshots)
     mockApi.pty.kill.mockImplementation((ptyId: string) =>
       ptyId === 'pty-fails' ? Promise.reject(new Error('physical stop failed')) : slowKill

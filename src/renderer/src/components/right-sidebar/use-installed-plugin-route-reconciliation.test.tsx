@@ -26,6 +26,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
     roots.push(root)
     const setStoredTab = vi.fn()
     const storedTab = 'plugin:orca-samples.removed/dashboard' as const
+
     const Harness = ({ fetchStatus }: { fetchStatus: PluginPanelsFetchStatus }) => {
       useInstalledPluginRouteReconciliation({
         pluginSystemEnabled: true,
@@ -34,6 +35,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
         normalizedTab: 'explorer',
         setStoredTab
       })
+
       return null
     }
 
@@ -52,6 +54,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
     roots.push(root)
     const setStoredTab = vi.fn()
     const storedTab = 'plugin:orca-samples.present/dashboard' as const
+
     const Harness = () => {
       useInstalledPluginRouteReconciliation({
         pluginSystemEnabled: true,
@@ -60,6 +63,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
         normalizedTab: storedTab,
         setStoredTab
       })
+
       return null
     }
 
@@ -74,6 +78,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
     roots.push(root)
     const setStoredTab = vi.fn()
     const storedTab = 'plugin:orca-samples.present/dashboard' as const
+
     const Harness = () => {
       useInstalledPluginRouteReconciliation({
         pluginSystemEnabled: false,
@@ -82,6 +87,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
         normalizedTab: 'explorer',
         setStoredTab
       })
+
       return null
     }
 

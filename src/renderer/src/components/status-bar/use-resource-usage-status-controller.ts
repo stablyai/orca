@@ -47,6 +47,7 @@ export function useResourceUsageStatusController() {
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(new Set())
   const [collapsedWorktrees, setCollapsedWorktrees] = useState<Set<string>>(new Set())
   const [appCollapsed, setAppCollapsed] = useState(true)
+
   const {
     sessionInventory,
     sessionsError,
@@ -55,9 +56,11 @@ export function useResourceUsageStatusController() {
     removeSession,
     removeSessions
   } = useResourceSessionInventory(workspaceSessionReady)
+
   const sessions = sessionInventory.sessions
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
+
   const [spaceScanSnapshot, setSpaceScanSnapshot] = useState<ResourceUsageSpaceScanSnapshot>(
     () => ({
       ready: false,
@@ -65,28 +68,35 @@ export function useResourceUsageStatusController() {
       lastSeenScannedAt: workspaceSpaceScannedAt
     })
   )
+
   // Why: tab titles churn on every keystroke; subscribe to those maps only while open so closed badges don't rerender.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
     getResourceUsageRuntimePaneTitlesByTabId(s, open)
   )
+
   const repos = useAppStore((s) => getResourceUsageRepos(s, open))
   const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
   const folders = useAppStore((s) => getResourceUsageFolderWorkspaces(s, open))
   const projectGroups = useAppStore((s) => getResourceUsageProjectGroups(s, open))
+
   const allWorktrees = useMemo(
     () => [...gitWorktrees, ...folders.map(folderWorkspaceToWorktree)],
     [gitWorktrees, folders]
   )
+
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
   const browserTabsByWorktree = useAppStore((s) => getResourceUsageBrowserTabsByWorktree(s, open))
   // Why: full binding maps stay behind open sentinels so unchanged counts don't rerender the closed segment.
   const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
   const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
+
   // Why: sessions awaiting SSH reattach are live on the remote host with no other binding.
   const deferredSshSessionIdsByTabId = useAppStore((s) =>
     getResourceUsageDeferredSshSessionIdsByTabId(s, open)
   )
+
   const resourceSnapshot = snapshot
+
   // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
     () => ({
@@ -114,6 +124,7 @@ export function useResourceUsageStatusController() {
     if (popoverBodyFocusFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(popoverBodyFocusFrameRef.current)
     popoverBodyFocusFrameRef.current = null
   }, [])
@@ -124,6 +135,7 @@ export function useResourceUsageStatusController() {
       if (!node) {
         cancelPopoverBodyFocusFrame()
       }
+
       popoverBodyRef.current = node
     },
     [cancelPopoverBodyFocusFrame]
@@ -145,6 +157,7 @@ export function useResourceUsageStatusController() {
     scannedAt: workspaceSpaceScannedAt,
     scanning: workspaceSpaceScanning
   })
+
   if (
     nextSpaceScanSnapshot.ready !== spaceScanSnapshot.ready ||
     nextSpaceScanSnapshot.previousScanning !== spaceScanSnapshot.previousScanning ||
@@ -153,6 +166,7 @@ export function useResourceUsageStatusController() {
     // Why: guarded render-time state update (no ref mutation during render); React can safely retry it before commit.
     setSpaceScanSnapshot(nextSpaceScanSnapshot)
   }
+
   const spaceScanReady = nextSpaceScanSnapshot.ready
 
   // Why: seed RAM after session restore so the closed chip does not require a
@@ -170,12 +184,15 @@ export function useResourceUsageStatusController() {
     if (!open) {
       return
     }
+
     void fetchSnapshot()
     void refreshSessions()
+
     // Why: only memory polls on an interval; session inventory is explicit on open/action since it's expensive with many terminals.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
+
     return () => {
       window.clearInterval(memTimer)
     }
@@ -204,6 +221,7 @@ export function useResourceUsageStatusController() {
     snapshot,
     spaceScanReady
   })
+
   const actions = useResourceUsageActions({
     setCollapsedRepos,
     setCollapsedWorktrees,

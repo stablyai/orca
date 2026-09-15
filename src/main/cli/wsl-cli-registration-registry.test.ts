@@ -32,9 +32,11 @@ describe('WSL CLI registration registry', () => {
     await expect(
       getWslCliRegistrationCandidates(userDataPath, ['ubuntu', 'Debian', 'Fedora'])
     ).resolves.toEqual(['Debian', 'Fedora'])
+
     const state = JSON.parse(
       await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8')
     ) as Record<string, unknown>
+
     expect(state).toMatchObject({
       schemaVersion: 2,
       registeredDistros: ['Debian'],
@@ -89,9 +91,11 @@ describe('WSL CLI registration registry', () => {
       [{ distro: 'Ubuntu', inspected: true, managed: null, reconciled: null }],
       { now: 1_000 }
     )
+
     const state = JSON.parse(
       await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8')
     ) as { registeredDistros: string[] }
+
     expect(state.registeredDistros).toEqual(['Ubuntu'])
 
     await recordWslCliRegistrationObservations(
@@ -129,9 +133,11 @@ describe('WSL CLI registration registry', () => {
       getWslCliRegistrationCandidates(userDataPath, ['Ubuntu', 'Debian'])
     ).resolves.toEqual(['Ubuntu', 'Debian'])
     await updates
+
     const state = JSON.parse(
       await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8')
     ) as { registeredDistros: string[] }
+
     expect(state.registeredDistros).toEqual(['Ubuntu', 'Debian'])
   })
 
@@ -214,9 +220,11 @@ describe('WSL CLI registration registry', () => {
       inspected: true,
       managed: false as const
     }))
+
     for (const [index, observation] of observations.entries()) {
       await recordWslCliRegistrationObservations(userDataPath, [observation], { now: index })
     }
+
     await recordWslCliRegistrationObservations(
       userDataPath,
       [{ distro: 'Managed Oldest', inspected: true, managed: true }],
@@ -226,6 +234,7 @@ describe('WSL CLI registration registry', () => {
     const state = JSON.parse(
       await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8')
     ) as { registeredDistros: string[]; inspectionTimes: Record<string, number> }
+
     expect(state.registeredDistros).toEqual(['Managed Oldest'])
     expect(Object.keys(state.inspectionTimes).length).toBeLessThanOrEqual(65)
     expect(state.inspectionTimes['managed oldest']).toBe(0)

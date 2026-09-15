@@ -29,6 +29,7 @@ export function focusDiscardDialogConfirmButton(
   if (!confirmButton) {
     return
   }
+
   // Why: Radix otherwise focuses Cancel first, making Enter dismiss this destructive confirm.
   event.preventDefault()
   confirmButton.focus()
@@ -44,15 +45,19 @@ export function SourceControlDiscardDialog({
   onConfirm: () => void
 }): React.JSX.Element {
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+
   const pendingDiscardCopy = useMemo(() => {
     if (!pendingDiscard) {
       return null
     }
+
     if (pendingDiscard.kind === 'entry') {
       return getDiscardEntryConfirmationCopy(pendingDiscard.entry)
     }
+
     return getDiscardAreaConfirmationCopy(pendingDiscard.area, pendingDiscard.paths.length)
   }, [pendingDiscard])
+
   const PendingDiscardIcon = pendingDiscardCopy?.confirmLabel.startsWith('Delete') ? Trash : Undo2
 
   return (

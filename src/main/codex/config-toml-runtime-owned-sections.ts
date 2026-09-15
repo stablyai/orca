@@ -25,6 +25,7 @@ export function stripRuntimeOwnedTomlSections(
   const sections = deduplicateProjectTomlSections(sourceSections)
   const firstSectionIndex = sourceSections[0]?.start ?? -1
   const preamble = firstSectionIndex === -1 ? config : lines.slice(0, firstSectionIndex).join('\n')
+
   return joinTomlBlocks([
     preamble,
     ...sections
@@ -48,6 +49,7 @@ export function getTomlSections(config: string): TomlSection[] {
 
   for (let index = 0; index < lines.length; index += 1) {
     const header = isTomlStructuralLine(scanState) ? getTomlTableHeader(lines[index] ?? '') : null
+
     if (!header) {
       scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
       continue
@@ -60,6 +62,7 @@ export function getTomlSections(config: string): TomlSection[] {
         start: sectionStart
       })
     }
+
     sectionStart = index
     sectionHeader = header
     scanState = updateTomlLineScanState(scanState, lines[index] ?? '')
@@ -72,6 +75,7 @@ export function getTomlSections(config: string): TomlSection[] {
       start: sectionStart
     })
   }
+
   return sections
 }
 
@@ -81,6 +85,7 @@ export function isRuntimePreservedTomlSection(header: string): boolean {
 
 export function isRuntimeHookTrustTomlSection(header: string): boolean {
   const trimmed = header.trim()
+
   // Why: Codex's config writer materializes the parent table on Windows. It is
   // part of runtime-owned trust and must survive the next config mirror too.
   return trimmed === '[hooks.state]' || trimmed.startsWith('[hooks.state.')
@@ -92,6 +97,7 @@ export function isRuntimeProjectTomlSection(header: string): boolean {
 
 export function getTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
+
   return projectPath === null
     ? header.trim()
     : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
@@ -101,6 +107,7 @@ export function getTomlSectionHeaderKey(header: string): string {
 // revocation under drifted casing; match it loosely so trust is not resurrected.
 export function getRevocationTomlSectionHeaderKey(header: string): string {
   const projectPath = parseCodexProjectHeaderPath(header)
+
   return projectPath === null
     ? header.trim()
     : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
@@ -111,19 +118,24 @@ export function getRevocationTomlSectionHeaderKey(header: string): string {
 export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSection[] {
   const deduplicated: TomlSection[] = []
   const projectIndexes = new Map<string, number>()
+
   for (const section of sections) {
     if (!isRuntimeProjectTomlSection(section.header)) {
       deduplicated.push(section)
       continue
     }
+
     const key = getTomlSectionHeaderKey(section.header)
     const existingIndex = projectIndexes.get(key)
+
     if (existingIndex === undefined) {
       projectIndexes.set(key, deduplicated.length)
       deduplicated.push(section)
       continue
     }
+
     const existing = deduplicated[existingIndex]
+
     if (
       existing &&
       getProjectTrustLevel(existing.block) !== 'untrusted' &&
@@ -133,6 +145,7 @@ export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSec
       deduplicated[existingIndex] = section
     }
   }
+
   return deduplicated
 }
 
@@ -141,12 +154,15 @@ export function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | n
     /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(trusted|untrusted)"|'(trusted|untrusted)')[ \t\r]*(?:#.*)?$/m.exec(
       block
     )
+
   const trustLevel = match?.[1] ?? match?.[2] ?? null
+
   return trustLevel === 'trusted' || trustLevel === 'untrusted' ? trustLevel : null
 }
 
 export function joinTomlBlocks(blocks: string[]): string {
   const normalizedBlocks = blocks.map((block) => block.trim()).filter((block) => block.length > 0)
+
   return normalizedBlocks.length === 0 ? '' : `${normalizedBlocks.join('\n\n')}\n`
 }
 
@@ -155,10 +171,12 @@ export function joinTomlBlocks(blocks: string[]): string {
 // mirror re-appends it, so drop every project and hook-trust table here.
 export function extractOrdinaryCodexSettings(config: string): string {
   const sections = deduplicateProjectTomlSections(getTomlSections(config))
+
   const projectHeaders = new Set(
     sections
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+
   return stripRuntimeOwnedTomlSections(config, projectHeaders).trimEnd()
 }

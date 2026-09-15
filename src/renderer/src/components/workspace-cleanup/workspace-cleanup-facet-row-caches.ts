@@ -50,12 +50,15 @@ export function computeWorkspaceCleanupReviewInfoIndex(args: {
 }): Map<string, WorkspaceCleanupReviewInfo> {
   const { candidates, candidateIdCounts, reviewSources, reviewLookup, cache } = args
   const infos = new Map<string, WorkspaceCleanupReviewInfo>()
+
   for (const candidate of candidates) {
     let info = cache.get(candidate)
+
     if (info === undefined) {
       info = getWorkspaceCleanupReviewInfo(candidate, reviewSources, reviewLookup)
       cache.set(candidate, info)
     }
+
     infos.set(
       getWorkspaceCleanupHostIdentity(
         getWorkspaceCleanupCandidateHostId(candidate),
@@ -63,10 +66,12 @@ export function computeWorkspaceCleanupReviewInfoIndex(args: {
       ),
       info
     )
+
     if (candidateIdCounts.get(candidate.worktreeId) === 1) {
       infos.set(candidate.worktreeId, info)
     }
   }
+
   return infos
 }
 
@@ -96,28 +101,36 @@ export function computeWorkspaceCleanupFacetList(args: {
   cache: WorkspaceCleanupFacetListCache
 }): WorkspaceCleanupFacets[] {
   const { candidates, sources, cache } = args
+
   const list = candidates.map((candidate) => {
     const hostIdentity = getWorkspaceCleanupHostIdentity(
       getWorkspaceCleanupCandidateHostId(candidate),
       candidate.worktreeId
     )
+
     // Per-id projections mirror buildWorkspaceCleanupFacets' lookups; the
     // cached facet is valid only while every projected input is unchanged.
     const sizeBytes =
       sources.sizeBytesByWorktreeId.get(hostIdentity) ??
       sources.sizeBytesByWorktreeId.get(candidate.worktreeId)
+
     const lastVisitedAt = getWorktreeVisitTimestamp(sources.lastVisitedAtByWorktreeId, {
       id: candidate.worktreeId,
       hostId: getWorkspaceCleanupCandidateHostId(candidate)
     })
+
     const agentState = sources.liveAgentStatusByWorktreeId.get(candidate.worktreeId)
+
     const review =
       sources.reviewInfoByWorktreeId.get(hostIdentity) ??
       sources.reviewInfoByWorktreeId.get(candidate.worktreeId)
+
     const isDismissed = sources.dismissedIdentities.has(
       getWorkspaceCleanupCandidateIdentity(candidate)
     )
+
     const cached = cache.byCandidate.get(candidate)
+
     if (
       cached &&
       cached.sizeBytes === sizeBytes &&
@@ -128,6 +141,7 @@ export function computeWorkspaceCleanupFacetList(args: {
     ) {
       return cached.facet
     }
+
     const facet = buildWorkspaceCleanupFacets(candidate, sources)
     cache.byCandidate.set(candidate, {
       facet,
@@ -137,14 +151,19 @@ export function computeWorkspaceCleanupFacetList(args: {
       review,
       isDismissed
     })
+
     return facet
   })
+
   // Why: reusing the previous array identity when no row changed lets every
   // downstream memo skip its O(N) pass on no-op streaming ticks.
   const previous = cache.lastList
+
   if (previous.length === list.length && list.every((facet, index) => facet === previous[index])) {
     return previous
   }
+
   cache.lastList = list
+
   return list
 }

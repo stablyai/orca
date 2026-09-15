@@ -31,6 +31,7 @@ afterEach(() => {
 function makeDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -91,6 +92,7 @@ describe('ephemeral VM runtime service', () => {
         '})'
       ].join('\n')
     )
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
@@ -112,9 +114,11 @@ describe('ephemeral VM runtime service', () => {
     })
 
     expect(provisioned.ok).toBe(true)
+
     if (!provisioned.ok) {
       throw new Error(provisioned.start.error)
     }
+
     expect(provisioned.runtime).toMatchObject({
       id: provisioned.start.context.instanceId,
       recipeId: 'cloud-sandbox',
@@ -136,6 +140,7 @@ describe('ephemeral VM runtime service', () => {
       runtimeId: provisioned.runtime.id,
       now: 2_000
     }
+
     const [cleanup] = await Promise.all([
       cleanupEphemeralVmRuntime(cleanupArgs),
       cleanupEphemeralVmRuntime(cleanupArgs)
@@ -169,12 +174,14 @@ describe('ephemeral VM runtime service', () => {
       cleanupPath,
       `require('fs').appendFileSync(${JSON.stringify(countPath)}, 'x'); setInterval(() => {}, 1000)`
     )
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
       create: 'unused',
       destroy: nodeCommand(cleanupPath)
     }
+
     upsertEphemeralVmRuntime(userDataPath, {
       id: 'runtime-1',
       recipeId: recipe.id,
@@ -192,6 +199,7 @@ describe('ephemeral VM runtime service', () => {
         }
       }
     })
+
     const cleanupArgs = {
       userDataPath,
       repoPath,
@@ -443,6 +451,7 @@ describe('ephemeral VM runtime service', () => {
       )})`
     )
     writeFileSync(cleanupPath, 'process.exit(1)')
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
@@ -529,6 +538,7 @@ describe('ephemeral VM runtime service', () => {
         '}))'
       ].join('\n')
     )
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
@@ -537,6 +547,7 @@ describe('ephemeral VM runtime service', () => {
       resume: nodeCommand(resumePath),
       destroyDisabled: true
     }
+
     upsertEphemeralVmRuntime(userDataPath, {
       id: 'runtime-1',
       recipeId: recipe.id,
@@ -593,6 +604,7 @@ describe('ephemeral VM runtime service', () => {
         })
       )})`
     )
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
@@ -601,6 +613,7 @@ describe('ephemeral VM runtime service', () => {
       resume: nodeCommand(resumePath),
       destroyDisabled: true
     }
+
     upsertEphemeralVmRuntime(userDataPath, {
       id: 'runtime-1',
       recipeId: recipe.id,

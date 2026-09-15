@@ -46,12 +46,16 @@ export function useMobileSessionNativeChatDictation(
     showToast,
     resetLiveInputFocus
   } = scope
+
   const nativeChatScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
+
   const nativeChatSendError = useMobileNativeChatSendError({
     scopeKey: nativeChatScopeKey,
     showToast
   })
+
   const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
@@ -62,6 +66,7 @@ export function useMobileSessionNativeChatDictation(
     activeHandle,
     connected: connState === 'connected'
   })
+
   const nativeChatController = useMobileNativeChatController({
     client,
     hostId,
@@ -77,15 +82,19 @@ export function useMobileSessionNativeChatDictation(
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })
+
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
+
   const nativeChatOverlayInputLockReason =
     activeSessionTab?.type === 'agent-session'
       ? connState === 'connected'
         ? null
         : 'disconnected'
       : nativeChatInputLockReason
+
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
+
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
     onBlur: resetLiveInputFocus,
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
@@ -101,42 +110,56 @@ export function useMobileSessionNativeChatDictation(
           appendBufferedDictation(current, text)
         )
         showToast('Dictation inserted')
+
         return
       }
+
       // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
       const routeContext = dictationRouteContextRef.current
       dictationRouteContextRef.current = null
+
       const route = routeDictationTranscript(
         text,
         routeContext?.liveInputEnabled ?? liveInputEnabled
       )
+
       if (route.kind === 'live-insert') {
         const insertHandle = routeContext?.handle ?? activeHandleRef.current
+
         if (!insertHandle) {
           return
         }
+
         void (async () => {
           const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
+
           if (!flushedPendingInput) {
             return
           }
+
           const sent = await sendLiveTerminalInput(insertHandle, route.text)
+
           if (sent) {
             showToast('Dictation inserted')
           }
         })()
+
         return
       }
+
       setInput((current) => appendBufferedDictation(current, route.text))
       showToast('Dictation inserted')
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
+
       // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
       if (isDictationSetupRequiredError(err.message)) {
         setShowDictationSetup(true)
+
         return
       }
+
       triggerError()
       showToast(err.message)
     }
@@ -146,11 +169,13 @@ export function useMobileSessionNativeChatDictation(
     const routeContext = activeHandle
       ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
       : null
+
     dictationRouteContextRef.current = routeContext
     void dictation.start().catch((err) => {
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
+
       triggerError()
       showToast(err instanceof Error ? err.message : String(err))
     })
@@ -194,6 +219,7 @@ export function useMobileSessionNativeChatDictation(
     if (!client) {
       return
     }
+
     try {
       const setup = await fetchDictationSetup(client)
       setDictationMode(setup.dictationMode)
@@ -212,6 +238,7 @@ export function useMobileSessionNativeChatDictation(
   useEffect(() => {
     diffCommentsRef.current = diffComments
   }, [diffComments])
+
   return {
     nativeChatScopeKey,
     nativeChatSendError,

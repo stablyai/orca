@@ -16,6 +16,7 @@ const SNAPSHOT: OrcadStateSnapshot = {
   readableByVersion: '0.1.0+aa01',
   takenAt: '2026-01-01T00:00:00.000Z'
 }
+
 const NOW = new Date('2026-01-02T00:00:00.000Z')
 
 describe('orcad activation record', () => {
@@ -26,6 +27,7 @@ describe('orcad activation record', () => {
       SNAPSHOT,
       NOW
     )
+
     const parsed = parseOrcadActivationRecord(serializeOrcadActivationRecord(record))
     expect(parsed).toEqual({ state: 'ok', record })
   })
@@ -51,6 +53,7 @@ describe('orcad activation record', () => {
       SNAPSHOT,
       NOW
     )
+
     expect(record).toMatchObject({ active: '0.2.0+bb01', previous: '0.1.0+aa01' })
   })
 
@@ -61,6 +64,7 @@ describe('orcad activation record', () => {
       previous: '0.1.0+aa01',
       snapshot: SNAPSHOT
     }
+
     const after = withActivatedVersion(before, '0.2.0+bb01', null, NOW)
     expect(after).toMatchObject({ active: '0.2.0+bb01', previous: '0.1.0+aa01' })
     expect(after.snapshot).toEqual(SNAPSHOT)
@@ -73,6 +77,7 @@ describe('orcad activation record', () => {
       previous: '0.1.0+aa01',
       snapshot: SNAPSHOT
     }
+
     expect(withRolledBackVersion(before, NOW)).toMatchObject({
       active: '0.1.0+aa01',
       previous: null,
@@ -89,6 +94,7 @@ describe('orcad activation record', () => {
       },
       '0.1.0+aa01'
     )
+
     expect(pinned).toEqual(['orcad-0.3.0+cc01', 'orcad-0.2.0+bb01', 'orcad-0.1.0+aa01'])
   })
 
@@ -97,6 +103,7 @@ describe('orcad activation record', () => {
       { ...emptyOrcadActivationRecord(), active: '0.3.0+cc01', previous: null },
       '0.3.0+cc01'
     )
+
     expect(pinned).toEqual(['orcad-0.3.0+cc01'])
   })
 })

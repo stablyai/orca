@@ -8,6 +8,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { HostSettingOverrides } from '../../../../shared/host-setting-overrides'
 
 type OverridesSlice = Pick<GlobalSettings, 'hostSettingOverrides'>
+
 type OverridesMap = Partial<Record<ExecutionHostId, HostSettingOverrides>>
 
 /** The current user-chosen display-label override for a host, or undefined when
@@ -47,11 +48,14 @@ export type HostRemovalTarget =
  *  their removal needs active-environment/error context that lives there. */
 export function resolveHostRemoval(hostId: ExecutionHostId): HostRemovalTarget {
   const parsed = parseExecutionHostId(hostId)
+
   if (parsed?.kind === 'ssh') {
     return { kind: 'ssh', targetId: parsed.targetId }
   }
+
   if (parsed?.kind === 'runtime') {
     return { kind: 'runtime', environmentId: parsed.environmentId }
   }
+
   return null
 }

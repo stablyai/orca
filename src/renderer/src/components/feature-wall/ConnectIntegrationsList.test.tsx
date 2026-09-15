@@ -40,6 +40,7 @@ vi.mock('@/store', () => ({
     if (!storeState.current) {
       throw new Error('Store state was not installed')
     }
+
     return selector(storeState.current)
   }
 }))
@@ -77,6 +78,7 @@ function makePreflightStatus(overrides: Partial<PreflightStatus> = {}): Prefligh
       tokenConfigured: false
     }
   }
+
   return { ...status, ...overrides }
 }
 
@@ -142,6 +144,7 @@ describe('ConnectIntegrationsList', () => {
     for (const provider of ['GitHub', 'GitLab', 'Bitbucket', 'Azure DevOps', 'Gitea']) {
       expect(markup).toContain(provider)
     }
+
     expect(markup).toContain('gh auth login')
     expect(markup).toContain('glab auth login')
     expect(markup).not.toContain('Run in terminal')
@@ -161,9 +164,11 @@ describe('ConnectIntegrationsList', () => {
 
   it('collapses the task step to its summary when a tracker connects first', async () => {
     installStore(makePreflightStatus())
+
     if (!storeState.current) {
       throw new Error('Store state was not installed')
     }
+
     storeState.current.linearStatus = { connected: true, workspaces: [] }
 
     const { markup } = await renderConnectIntegrationsList()
@@ -207,9 +212,11 @@ describe('ConnectIntegrationsList', () => {
 
   it('lists the code host alongside a connected tracker in the task summary', async () => {
     installStore(makePreflightStatus({ gh: { installed: true, authenticated: true } }))
+
     if (!storeState.current) {
       throw new Error('Store state was not installed')
     }
+
     storeState.current.linearStatus = { connected: true, workspaces: [] }
 
     const { markup } = await renderConnectIntegrationsList()

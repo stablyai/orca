@@ -39,6 +39,7 @@ export function mergeWorktreeMetaForWrite(
     ...normalizeGitHubPRSuppressionUpdate(updates),
     ...identity
   }
+
   updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)
   const sourceContext = normalizeStoredTaskSourceContext(updated.linkedTaskSourceContext)
   updated.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
@@ -48,5 +49,6 @@ export function mergeWorktreeMetaForWrite(
     ? sourceContext
     : null
   updated.instanceId ||= randomUUID()
+
   return updated
 }

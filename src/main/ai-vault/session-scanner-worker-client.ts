@@ -12,7 +12,9 @@ import type {
 } from './session-scanner-worker-protocol'
 
 const SCAN_TIMEOUT_MS = 130_000
+
 const TITLE_TIMEOUT_MS = 15_000
+
 const MAX_QUEUED_CALLS = 16
 
 export type AiVaultWorkerFactory = () => Worker
@@ -68,9 +70,11 @@ export class AiVaultScannerWorkerClient {
     this.destroyWorker()
     const pending = this.queue
     this.queue = []
+
     for (const call of pending) {
       this.rejectCall(call, new Error('AI Vault scanner worker was disposed.'))
     }
+
     if (this.active) {
       this.rejectCall(this.active, new Error('AI Vault scanner worker was disposed.'))
       this.active = null
@@ -81,9 +85,11 @@ export class AiVaultScannerWorkerClient {
     if (signal?.aborted) {
       return Promise.reject(createAiVaultScanCancelledError())
     }
+
     if (this.queue.length >= MAX_QUEUED_CALLS) {
       return Promise.reject(new Error('AI Vault scanner worker queue is full.'))
     }
+
     return new Promise((resolve, reject) => {
       const call: PendingCall = {
         request: { ...body, id: this.nextId++ } as AiVaultWorkerRequest,
@@ -95,10 +101,12 @@ export class AiVaultScannerWorkerClient {
         onAbort: null,
         cancelled: false
       }
+
       if (signal) {
         call.onAbort = () => this.cancel(call)
         signal.addEventListener('abort', call.onAbort, { once: true })
       }
+
       this.queue.push(call)
       this.pump()
     })
@@ -108,15 +116,21 @@ export class AiVaultScannerWorkerClient {
     if (this.active || this.queue.length === 0) {
       return
     }
+
     const worker = this.ensureWorker()
+
     if (!worker) {
       this.failQueue(new Error('AI Vault background scanner could not start.'))
+
       return
     }
+
     const call = this.queue.shift()
+
     if (!call) {
       return
     }
+
     this.active = call
     call.timer = setTimeout(() => {
       this.onWorkerFault(new Error(`AI Vault scanner worker timed out after ${call.timeoutMs}ms.`))
@@ -129,6 +143,7 @@ export class AiVaultScannerWorkerClient {
     if (this.worker) {
       return this.worker
     }
+
     try {
       const worker = this.workerFactory()
       worker.on('message', (response: AiVaultWorkerResponse) => this.onMessage(response))
@@ -142,6 +157,7 @@ export class AiVaultScannerWorkerClient {
       })
       worker.unref?.()
       this.worker = worker
+
       return worker
     } catch {
       return null
@@ -150,11 +166,14 @@ export class AiVaultScannerWorkerClient {
 
   private onMessage(response: AiVaultWorkerResponse): void {
     const call = this.active
+
     if (!call || call.request.id !== response.id) {
       return
     }
+
     this.active = null
     this.clearCall(call)
+
     if (!call.cancelled) {
       if (response.ok) {
         call.resolve(response.value)
@@ -162,6 +181,7 @@ export class AiVaultScannerWorkerClient {
         call.reject(new Error(response.error))
       }
     }
+
     this.afterSettle()
   }
 
@@ -169,13 +189,18 @@ export class AiVaultScannerWorkerClient {
     if (call.cancelled) {
       return
     }
+
     call.cancelled = true
     call.reject(createAiVaultScanCancelledError())
+
     if (this.active === call) {
       this.worker?.postMessage({ id: call.request.id, kind: 'cancel' })
+
       return
     }
+
     const index = this.queue.indexOf(call)
+
     if (index !== -1) {
       this.queue.splice(index, 1)
       this.clearCall(call)
@@ -186,9 +211,11 @@ export class AiVaultScannerWorkerClient {
     const active = this.active
     this.active = null
     this.destroyWorker()
+
     if (active) {
       this.rejectCall(active, error)
     }
+
     if (this.queue.length > 0) {
       this.pump()
     }
@@ -196,6 +223,7 @@ export class AiVaultScannerWorkerClient {
 
   private rejectCall(call: PendingCall, error: Error): void {
     this.clearCall(call)
+
     if (!call.cancelled) {
       call.reject(error)
     }
@@ -204,6 +232,7 @@ export class AiVaultScannerWorkerClient {
   private failQueue(error: Error): void {
     const pending = this.queue
     this.queue = []
+
     for (const call of pending) {
       this.rejectCall(call, error)
     }
@@ -214,6 +243,7 @@ export class AiVaultScannerWorkerClient {
       clearTimeout(call.timer)
       call.timer = null
     }
+
     if (call.signal && call.onAbort) {
       call.signal.removeEventListener('abort', call.onAbort)
       call.onAbort = null
@@ -229,9 +259,11 @@ export class AiVaultScannerWorkerClient {
   private destroyWorker(): void {
     const worker = this.worker
     this.worker = null
+
     if (!worker) {
       return
     }
+
     worker.removeAllListeners()
     void worker.terminate().catch(() => undefined)
   }

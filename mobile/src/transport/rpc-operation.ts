@@ -103,6 +103,7 @@ async function request(
   // and an always-settled send would make Promise.all wait for a peer where today the group
   // fails immediately, letting a later policy surface a different error.
   const response = await client.sendRequest(operation.method, params, options)
+
   return classifyRpcReply(operation, response)
 }
 
@@ -113,35 +114,44 @@ function interpretRpcOutcome(
   settled: RpcRequestOutcome<string, unknown>
 ): unknown {
   const acceptance: RpcAcceptanceName = operation.acceptance
+
   switch (acceptance) {
     case 'success-result-or-skip': {
       const accepted = rpcSuccessResultOrSkip(settled.raw)
+
       if (!accepted.accepted) {
         return accepted
       }
+
       if (settled.kind === 'incompatible') {
         throw new RpcIncompatibleReplyError(operation.name, operation.method, settled.issues)
       }
+
       return settled.kind === 'decoded'
         ? { accepted: true, value: settled.value }
         : { accepted: false }
     }
+
     case 'require-result-or-throw-message':
       if (settled.kind === 'outer-refused') {
         return requireRpcResultOrThrowMessage(settled.raw)
       }
+
       if (settled.kind === 'incompatible') {
         throw new RpcIncompatibleReplyError(operation.name, operation.method, settled.issues)
       }
+
       return settled.value
     case 'require-result-or-throw':
       if (settled.kind === 'outer-refused') {
         // Reuses the policy so the thrown `code: message` text cannot drift from main's.
         return requireRpcResultOrThrowCodedError(settled.raw)
       }
+
       if (settled.kind === 'incompatible') {
         throw new RpcIncompatibleReplyError(operation.name, operation.method, settled.issues)
       }
+
       return settled.value
     case 'object-result-or-null':
       return settled.kind === 'decoded' ? settled.value : null
@@ -161,6 +171,7 @@ function interpretSettlement(
     // isLogicalClientCutoverError matches class or exact message; a wrapper loses both.
     throw settlement.error
   }
+
   return interpretRpcOutcome(operation, settlement.outcome)
 }
 
@@ -177,6 +188,7 @@ export async function runRpcOperation<
   options?: SendRequestOptions
 ): Promise<RpcVerdict<Acceptance, Value>> {
   const outcome = await request(client, operation, params, options)
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return interpretRpcOutcome(operation, outcome) as RpcVerdict<Acceptance, Value>
 }
@@ -197,6 +209,7 @@ export async function captureRpcOperationSettlement<
 ): Promise<RpcOperationSettlement<Variant, Value>> {
   try {
     const outcome = await request(client, operation, params, options)
+
     return { status: 'fulfilled', outcome: outcome as RpcRequestOutcome<Variant, Value> }
   } catch (error) {
     return { status: 'rejected', error }
@@ -242,6 +255,7 @@ export async function interpretAtRpcBarrier<
   // error the user sees and how long the screen spins. Declared order makes that a property
   // of the definition instead of a race.
   const settlements = await Promise.all(pending.map((entry) => entry.settlement))
+
   return pending.map((entry, index) =>
     interpretSettlement(entry.operation, settlements[index])
   ) as RpcBarrierVerdicts<Pending>
@@ -269,6 +283,7 @@ export function bindDeferredRpcOperation<
   Value
 >(operation: RpcOperation<Method, Acceptance, Variant, Value, 'after-caller-barrier'>) {
   type Verdict = RpcVerdict<Acceptance, Value>
+
   return Object.freeze({
     operation,
     request(client: UnvalidatedRpcRequestPort, ...args: RpcSendArguments<Method>) {

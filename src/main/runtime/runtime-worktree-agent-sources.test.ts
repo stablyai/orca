@@ -3,7 +3,9 @@ import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sou
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
 const paneKey = 'worktree:tab:0'
+
 const now = Date.now()
+
 const hookRow: AgentStatusIpcPayload = {
   paneKey,
   tabId: 'tab',
@@ -16,6 +18,7 @@ const hookRow: AgentStatusIpcPayload = {
   stateStartedAt: now,
   receivedAt: now
 }
+
 const base = {
   hookSnapshots: [hookRow],
   mirroredWorktreeIdByTabId: new Map<string, string>(),
@@ -25,6 +28,7 @@ const base = {
     ptyIdByTerminalHandle: new Map<string, string>()
   }
 }
+
 const connected = {
   ...base,
   connectedPtyEvidence: {
@@ -43,15 +47,18 @@ describe('worktree agent source admission', () => {
   it('keeps remote evidence and resolves mirrored workspace ownership', () => {
     const remote = { ...hookRow, connectionId: 'ssh-connection' }
     expect(collectRuntimeWorktreeAgentSources({ ...base, hookSnapshots: [remote] }).size).toBe(1)
+
     const sources = collectRuntimeWorktreeAgentSources({
       ...base,
       mirroredWorktreeIdByTabId: new Map([['tab', 'remote-worktree']])
     })
+
     expect(sources.get(paneKey)?.worktreeId).toBe('remote-worktree')
   })
 
   it('rejoins the row to the connected PTY behind its terminal handle', () => {
     expect(collectRuntimeWorktreeAgentSources(connected).get(paneKey)?.ptyId).toBe('pty')
+
     // The handle is the last rescue once a controller incarnation nulls the pane binding.
     const bindingCleared = collectRuntimeWorktreeAgentSources({
       ...base,
@@ -60,6 +67,7 @@ describe('worktree agent source admission', () => {
         ptyIdByTerminalHandle: new Map([['term_row', 'pty']])
       }
     })
+
     expect(bindingCleared.get(paneKey)?.ptyId).toBe('pty')
     // No connected PTY answers to the handle and no pane evidence: the row is not admitted.
     expect(collectRuntimeWorktreeAgentSources(base).size).toBe(0)
@@ -70,18 +78,21 @@ describe('worktree agent source admission', () => {
       ...connected,
       hookSnapshots: [{ ...hookRow, workingMode: 'monitoring' as const }]
     })
+
     expect(monitoring.get(paneKey)).toMatchObject({ updatedAt: now, workingMode: 'monitoring' })
 
     const restored = collectRuntimeWorktreeAgentSources({
       ...connected,
       hookSnapshots: [{ ...hookRow, restoredUnconfirmed: true as const }]
     })
+
     expect(restored.size).toBe(0)
 
     const providerSessionOnly = collectRuntimeWorktreeAgentSources({
       ...connected,
       hookSnapshots: [{ ...hookRow, providerSessionOnly: true }]
     })
+
     expect(providerSessionOnly.size).toBe(0)
   })
 })

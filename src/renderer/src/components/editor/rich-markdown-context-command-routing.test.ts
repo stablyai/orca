@@ -20,13 +20,17 @@ function textPosition(editor: Editor, text: string): number {
   editor.state.doc.descendants((node, nodePosition) => {
     if (node.isText && node.text === text) {
       position = nodePosition
+
       return false
     }
+
     return true
   })
+
   if (position === null) {
     throw new Error(`Missing text: ${text}`)
   }
+
   return position
 }
 
@@ -43,6 +47,7 @@ describe('rich markdown context command routing', () => {
       content: TABLE,
       contentType: 'markdown'
     })
+
     try {
       editor.commands.setTextSelection(textPosition(editor, 'a1'))
       vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({

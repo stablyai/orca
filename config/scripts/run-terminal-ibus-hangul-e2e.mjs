@@ -19,12 +19,19 @@ import {
 } from './terminal-ime-engagement-receipt.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
+
 const scriptPath = import.meta.filename
+
 const insideSessionFlag = '--inside-session'
+
 const nestedWaylandFlag = '--nested-wayland'
+
 const nestedWayland = process.argv.includes(nestedWaylandFlag)
+
 const waylandTitle = 'a digit typed right after a Hangul syllable reaches the pty'
+
 const processStopTimeoutMs = 5_000
+
 const processKillTimeoutMs = 1_000
 
 function delay(milliseconds) {
@@ -42,9 +49,11 @@ function processGroupMembers(processGroupId) {
   const result = spawnSync('ps', ['-o', 'pid=,ppid=,pgid=,comm=', '-g', String(processGroupId)], {
     encoding: 'utf8'
   })
+
   if (result.status !== 0) {
     return []
   }
+
   return result.stdout
     .split('\n')
     .map((line) => line.trim())
@@ -53,12 +62,15 @@ function processGroupMembers(processGroupId) {
 
 async function stopOwnedProcessGroup(processGroupId) {
   let members = processGroupMembers(processGroupId)
+
   if (members.length === 0) {
     return []
   }
+
   console.error(
     `[terminal-ime] stopping owned process group ${processGroupId}: ${members.join('; ')}`
   )
+
   try {
     process.kill(-processGroupId, 'SIGTERM')
   } catch (error) {
@@ -68,11 +80,14 @@ async function stopOwnedProcessGroup(processGroupId) {
   }
 
   const deadline = Date.now() + processStopTimeoutMs
+
   while (Date.now() < deadline) {
     members = processGroupMembers(processGroupId)
+
     if (members.length === 0) {
       return []
     }
+
     await delay(100)
   }
 
@@ -83,19 +98,25 @@ async function stopOwnedProcessGroup(processGroupId) {
       throw error
     }
   }
+
   const killDeadline = Date.now() + processKillTimeoutMs
+
   do {
     members = processGroupMembers(processGroupId)
+
     if (members.length === 0) {
       return []
     }
+
     await delay(100)
   } while (Date.now() < killDeadline)
+
   return members
 }
 
 function commandOutput(command, args) {
   const result = spawnSync(command, args, { encoding: 'utf8' })
+
   return result.status === 0 ? result.stdout.trim() : result.stderr.trim()
 }
 
@@ -109,6 +130,7 @@ function configureHangulEngine() {
       ['set', 'org.freedesktop.ibus.engine.hangul', key, value],
       { encoding: 'utf8' }
     )
+
     if (result.status !== 0) {
       throw new Error(`Failed to configure IBus Hangul ${key}: ${result.stderr.trim()}`)
     }
@@ -118,10 +140,12 @@ function configureHangulEngine() {
 async function waitForHangulEngine(sessionProcess) {
   let lastError = ''
   const deadline = Date.now() + 15_000
+
   while (Date.now() < deadline) {
     if (sessionProcess.exitCode !== null) {
       throw new Error(`IME session process exited early with code ${sessionProcess.exitCode}`)
     }
+
     if (
       nestedWayland &&
       !existsSync(path.join(process.env.XDG_RUNTIME_DIR, process.env.WAYLAND_DISPLAY))
@@ -129,13 +153,17 @@ async function waitForHangulEngine(sessionProcess) {
       await delay(100)
       continue
     }
+
     const result = spawnSync('ibus', ['engine', 'hangul'], { encoding: 'utf8' })
     lastError = result.stderr?.trim() || String(result.error ?? result.status)
+
     if (result.status === 0) {
       return
     }
+
     await delay(100)
   }
+
   throw new Error(`Timed out while selecting the IBus Hangul engine: ${lastError}`)
 }
 
@@ -143,11 +171,14 @@ async function runInsideSession(evidenceDir) {
   const receiptPath = path.join(evidenceDir, 'ime-engagement-receipt.jsonl')
   const ibusLogPath = path.join(evidenceDir, 'ibus-daemon.log')
   const ibusLogFd = openSync(ibusLogPath, 'w')
+
   const windowManagerLogPath = path.join(
     evidenceDir,
     nestedWayland ? 'gnome-shell.log' : 'xfwm4.log'
   )
+
   const windowManagerLogFd = openSync(windowManagerLogPath, 'w')
+
   const evidence = {
     display: process.env.DISPLAY ?? null,
     ibusDaemonPid: null,
@@ -157,22 +188,26 @@ async function runInsideSession(evidenceDir) {
     windowManagerPid: null,
     windowManagerGroupAfterCleanup: []
   }
+
   let ibusProcess
   let windowManagerProcess
   let testExitCode = 1
 
   try {
     configureHangulEngine()
+
     if (nestedWayland) {
       for (const [schema, key, value] of [
         ['org.gnome.desktop.interface', 'enable-animations', 'false'],
         ['org.gnome.desktop.input-sources', 'sources', "[('ibus', 'hangul')]"]
       ]) {
         const result = spawnSync('gsettings', ['set', schema, key, value], { encoding: 'utf8' })
+
         if (result.status !== 0) {
           throw new Error(`Failed to configure GNOME: ${result.stderr}`)
         }
       }
+
       windowManagerProcess = spawn(
         'gnome-shell',
         ['--nested', '--wayland', `--wayland-display=${process.env.WAYLAND_DISPLAY}`],
@@ -189,9 +224,11 @@ async function runInsideSession(evidenceDir) {
         stdio: ['ignore', windowManagerLogFd, windowManagerLogFd]
       })
     }
+
     if (!windowManagerProcess.pid) {
       throw new Error('Window manager did not return a PID')
     }
+
     evidence.windowManagerPid = windowManagerProcess.pid
     console.error(`[terminal-ime] started window manager PID ${windowManagerProcess.pid}`)
 
@@ -208,13 +245,16 @@ async function runInsideSession(evidenceDir) {
           stdio: ['ignore', ibusLogFd, ibusLogFd]
         }
       )
+
       if (!ibusProcess.pid) {
         throw new Error('ibus-daemon did not return a PID')
       }
+
       evidence.ibusDaemonPid = ibusProcess.pid
       console.error(`[terminal-ime] started ibus-daemon PID ${ibusProcess.pid}`)
       await waitForHangulEngine(ibusProcess)
     }
+
     console.error(`[terminal-ime] IBus version: ${commandOutput('ibus', ['version'])}`)
     console.error(`[terminal-ime] IBus engine: ${commandOutput('ibus', ['engine'])}`)
     console.error(
@@ -284,9 +324,11 @@ async function runInsideSession(evidenceDir) {
         stdio: 'inherit'
       }
     )
+
     if (!testProcess.pid) {
       throw new Error('Playwright did not return a PID')
     }
+
     evidence.playwrightPid = testProcess.pid
     console.error(`[terminal-ime] started Playwright PID ${testProcess.pid}`)
     testExitCode = await waitForExit(testProcess)
@@ -295,11 +337,13 @@ async function runInsideSession(evidenceDir) {
       evidence.ibusGroupBeforeCleanup = processGroupMembers(ibusProcess.pid)
       evidence.ibusGroupAfterCleanup = await stopOwnedProcessGroup(ibusProcess.pid)
     }
+
     if (windowManagerProcess?.pid) {
       evidence.windowManagerGroupAfterCleanup = await stopOwnedProcessGroup(
         windowManagerProcess.pid
       )
     }
+
     if (nestedWayland && existsSync(path.join(evidenceDir, 'playwright.json'))) {
       mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
       copyFileSync(
@@ -307,6 +351,7 @@ async function runInsideSession(evidenceDir) {
         path.join(projectDir, 'test-results', 'terminal-wayland-playwright.json')
       )
     }
+
     closeSync(ibusLogFd)
     closeSync(windowManagerLogFd)
     mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
@@ -326,6 +371,7 @@ async function runInsideSession(evidenceDir) {
       path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-processes.json'),
       `${JSON.stringify(evidence, null, 2)}\n`
     )
+
     if (existsSync(receiptPath)) {
       copyFileSync(
         receiptPath,
@@ -339,6 +385,7 @@ async function runInsideSession(evidenceDir) {
       `Owned IBus processes survived cleanup: ${evidence.ibusGroupAfterCleanup.join('; ')}`
     )
   }
+
   if (evidence.windowManagerGroupAfterCleanup.length > 0) {
     throw new Error(
       `Owned window-manager processes survived cleanup: ${evidence.windowManagerGroupAfterCleanup.join('; ')}`
@@ -348,37 +395,48 @@ async function runInsideSession(evidenceDir) {
   // Why unconditionally, and not only when Playwright failed: a skipped test reports as a pass,
   // so exit code 0 is exactly the state this check exists to distrust.
   const receiptText = existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : ''
+
   if (nestedWayland) {
     verifyPlaywrightParticipation(
       JSON.parse(readFileSync(path.join(evidenceDir, 'playwright.json'), 'utf8')),
       { titles: [waylandTitle], label: 'Native Wayland Hangul', repetitions: 3 }
     )
     const receipts = receiptText.trim().split('\n')
+
     if (receipts.length !== 3) {
       throw new Error('Expected three native Wayland engagement receipts')
     }
+
     for (const receipt of receipts) {
       const problems = verifyImeEngagementReceipts(receipt, [waylandTitle])
+
       if (problems.length) {
         throw new Error(problems.join('\n'))
       }
     }
+
     return testExitCode
   }
+
   const engagementProblems = verifyImeEngagementReceipts(receiptText, EXPECTED_NATIVE_IME_TESTS)
+
   if (engagementProblems.length > 0) {
     for (const problem of engagementProblems) {
       console.error(`::error title=Native IME never engaged::${problem}`)
     }
+
     console.error(
       '[terminal-ime] the run produced no proof an input method engaged; treating it as a failure' +
         ` even though Playwright exited ${testExitCode}`
     )
+
     return 1
   }
+
   console.error(
     `[terminal-ime] engagement receipts verified for ${EXPECTED_NATIVE_IME_TESTS.length} tests`
   )
+
   return testExitCode
 }
 
@@ -434,26 +492,33 @@ async function runOuter() {
       stdio: 'inherit'
     }
   )
+
   if (!sessionProcess.pid) {
     throw new Error('xvfb-run did not return a PID')
   }
+
   console.error(`[terminal-ime] started isolated display session PID ${sessionProcess.pid}`)
   const exitCode = await waitForExit(sessionProcess)
   const remaining = await stopOwnedProcessGroup(sessionProcess.pid)
+
   if (remaining.length > 0) {
     throw new Error(`Owned display session processes survived cleanup: ${remaining.join('; ')}`)
   }
+
   return exitCode
 }
 
 const insideSession = process.argv[2] === insideSessionFlag
+
 try {
   if (nestedWayland && process.env.GITHUB_ACTIONS !== 'true') {
     throw new Error('Nested Wayland native input validation runs only in GitHub Actions')
   }
+
   if (insideSession && !process.argv[3]) {
     throw new Error(`${insideSessionFlag} requires an evidence directory argument`)
   }
+
   process.exitCode = insideSession ? await runInsideSession(process.argv[3]) : await runOuter()
 } catch (error) {
   console.error(`[terminal-ime] ${error instanceof Error ? error.message : String(error)}`)

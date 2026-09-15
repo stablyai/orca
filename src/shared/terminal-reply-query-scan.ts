@@ -2,9 +2,12 @@ import { findCsiFinalByteIndex } from './terminal-reply-query-extraction'
 import { parseTerminalOscColorQuery } from './terminal-osc-color-reply'
 
 const ESC = '\x1b'
+
 const MAX_PENDING_QUERY_CHARS = 4096
+
 /* oxlint-disable no-control-regex -- terminal query grammars contain ESC by definition */
 const DEVICE_ATTRIBUTES_QUERY_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c$')
+
 const MODE_QUERY_RE = new RegExp('^\\u001b\\[\\??[0-9;]+\\$p$')
 /* oxlint-enable no-control-regex */
 
@@ -39,9 +42,11 @@ function isReplayableCsi(sequence: string): boolean {
   if (DEVICE_ATTRIBUTES_QUERY_RE.test(sequence)) {
     return true
   }
+
   if (MODE_QUERY_RE.test(sequence)) {
     return true
   }
+
   return (
     sequence === '\x1b[5n' ||
     sequence === '\x1b[6n' ||
@@ -71,6 +76,7 @@ export function scanTerminalReplyQuerySequences(
   const continuesPending =
     previous.pendingStartSeq !== null &&
     previous.pendingStartSeq + previous.pending.length === chunkStartSeq
+
   const pending = continuesPending ? previous.pending : ''
   const input = pending + data
   const inputStartSeq = chunkStartSeq - pending.length
@@ -79,11 +85,14 @@ export function scanTerminalReplyQuerySequences(
 
   while (offset < input.length) {
     const candidateIndex = input.indexOf(ESC, offset)
+
     if (candidateIndex === -1) {
       break
     }
+
     if (candidateIndex + 1 >= input.length) {
       const nextPending = boundedPending(input, candidateIndex)
+
       return {
         queries,
         state: { pending: nextPending, pendingStartSeq: inputStartSeq + candidateIndex }
@@ -92,13 +101,16 @@ export function scanTerminalReplyQuerySequences(
 
     let endIndex = -1
     let matches = false
+
     if (input.startsWith(`${ESC}[`, candidateIndex)) {
       endIndex = findCsiFinalByteIndex(input, candidateIndex + 2)
+
       if (endIndex !== -1) {
         matches = isReplayableCsi(input.slice(candidateIndex, endIndex + 1))
       }
     } else if (input.startsWith(`${ESC}]`, candidateIndex)) {
       const osc = parseTerminalOscColorQuery(input, candidateIndex)
+
       if (osc.kind === 'partial') {
         endIndex = -1
       } else if (osc.kind === 'match') {
@@ -109,6 +121,7 @@ export function scanTerminalReplyQuerySequences(
       }
     } else if (input.startsWith(`${ESC}P`, candidateIndex)) {
       const terminatorIndex = input.indexOf(`${ESC}\\`, candidateIndex + 2)
+
       if (terminatorIndex !== -1) {
         endIndex = terminatorIndex + 1
         const body = input.slice(candidateIndex + 2, terminatorIndex)
@@ -120,11 +133,13 @@ export function scanTerminalReplyQuerySequences(
 
     if (endIndex === -1) {
       const nextPending = boundedPending(input, candidateIndex)
+
       return {
         queries,
         state: { pending: nextPending, pendingStartSeq: inputStartSeq + candidateIndex }
       }
     }
+
     if (matches) {
       queries.push({
         data: input.slice(candidateIndex, endIndex + 1),
@@ -132,6 +147,7 @@ export function scanTerminalReplyQuerySequences(
         endSeq: inputStartSeq + endIndex + 1
       })
     }
+
     offset = endIndex + 1
   }
 

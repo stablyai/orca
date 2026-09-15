@@ -25,6 +25,7 @@ export async function getTerminalContentForPtyId(
   return page.evaluate(
     ({ ptyId, charLimit }) => {
       const paneManagers = (window as TerminalPtyReadinessWindow).__paneManagers
+
       for (const manager of paneManagers?.values() ?? []) {
         for (const pane of manager.getPanes?.() ?? []) {
           if (pane.container?.dataset?.ptyId === ptyId) {
@@ -32,6 +33,7 @@ export async function getTerminalContentForPtyId(
           }
         }
       }
+
       return ''
     },
     { ptyId, charLimit }
@@ -48,6 +50,7 @@ export async function waitForPtyPaneMounted(
       () =>
         page.evaluate((ptyId) => {
           const paneManagers = (window as TerminalPtyReadinessWindow).__paneManagers
+
           for (const manager of paneManagers?.values() ?? []) {
             if (
               manager
@@ -57,6 +60,7 @@ export async function waitForPtyPaneMounted(
               return true
             }
           }
+
           return false
         }, ptyId),
       {
@@ -69,6 +73,7 @@ export async function waitForPtyPaneMounted(
 
 function encodedMarkerCommand(marker: string): string {
   const encoded = Buffer.from(marker, 'utf8').toString('base64')
+
   return `${nodeTerminalCommand([
     '-e',
     `console.log(Buffer.from('${encoded}', 'base64').toString('utf8'))`
@@ -83,6 +88,7 @@ export async function waitForPtyShellEcho(
   const marker = `ORCA_PTY_READY_${randomUUID()}`
   const deadline = Date.now() + timeoutMs
   await waitForPtyPaneMounted(page, ptyId, Math.min(10_000, timeoutMs))
+
   while (Date.now() < deadline) {
     // Why: terminal scrollback includes command echo. Encode the marker inside
     // the node snippet so seeing the plain marker proves the shell executed it.
@@ -91,12 +97,15 @@ export async function waitForPtyShellEcho(
     }
 
     const probeDeadline = Date.now() + Math.min(3_000, Math.max(0, deadline - Date.now()))
+
     while (Date.now() < probeDeadline) {
       if ((await getTerminalContentForPtyId(page, ptyId, 30_000)).includes(marker)) {
         return
       }
+
       await page.waitForTimeout(100)
     }
   }
+
   throw new Error(`PTY shell for ${ptyId} never echoed readiness marker within ${timeoutMs}ms`)
 }

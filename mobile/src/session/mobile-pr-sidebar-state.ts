@@ -87,22 +87,28 @@ export async function loadPrSidebarData(
       deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
       deps.fetchWorktreeLinkedPR(args.worktreeId)
     ])
+
     const branchHint =
       hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
+
     const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
 
     const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
       branch: args.branch,
       linkedPRNumber
     })
+
     if (!prOutcome.ok) {
       return failureState(prOutcome.error)
     }
+
     if (!prOutcome.result) {
       // GitHub repo, but this branch has no open/linked PR — surfaced as an empty state.
       return { kind: 'none' }
     }
+
     const pr = prOutcome.result
+
     const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
       prNumber: pr.number,
       // Why: mobile create can commit before opening the review; the fetched PR
@@ -112,9 +118,11 @@ export async function loadPrSidebarData(
       // checks correctly; fall back to an explicit override then null.
       prRepo: pr.prRepo ?? args.prRepo ?? null
     })
+
     if (!checksOutcome.ok) {
       return failureState(checksOutcome.error)
     }
+
     // details: null = comments still loading (phase 2). The header/reviewers degrade to
     // the PRInfo fields until it arrives.
     return { kind: 'ready', data: { pr, details: null, checks: checksOutcome.result } }
@@ -134,6 +142,7 @@ export async function loadPrSidebarDetails(
 ): Promise<GitHubWorkItemDetails | null> {
   try {
     const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
+
     return outcome.ok ? outcome.result : null
   } catch {
     // Why: phase 2 is non-fatal — a rejection leaves the PR shown without comments
@@ -152,9 +161,11 @@ export function resolvePrSidebarDetailsAfterPhase2(args: {
   if (args.fetched != null) {
     return args.fetched
   }
+
   if (args.prior != null) {
     return args.prior
   }
+
   return emptyPrSidebarDetails(args.pr)
 }
 

@@ -27,12 +27,14 @@ function durablyBoundPtyIdsForPane(
     Object.values(session?.terminalLayoutsByTabId ?? {})
       .map((layout) => layout?.ptyIdsByLeafId?.[leafId])
       .filter((ptyId): ptyId is string => Boolean(ptyId))
+
   const ordered = [
     ...findLeafBindings(
       operations.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
     ),
     ...findLeafBindings(operations.state.workspaceSession)
   ]
+
   return [...new Set(ordered.map((ptyId) => operations.toComparablePtyId(targetId, ptyId)))]
 }
 
@@ -59,9 +61,11 @@ export function supersedeSiblingLeasesForPane(
   if (!winner.worktreeId || !winner.leafId) {
     return false
   }
+
   if (winner.state === 'terminated' || winner.state === 'expired') {
     return false
   }
+
   // At upsert time the arriving lease may not be the one the pane is bound to yet. Expiring the
   // bound predecessor would detach a live pane, so leave both live and let reattach arbitrate
   // with the binding in hand. `supersedeSshRemotePtyLeasesForBoundPane` re-runs this once the
@@ -69,11 +73,14 @@ export function supersedeSiblingLeasesForPane(
   // Membership rather than equality: during a reconnect the two partitions name different PTYs for
   // the same leaf, and requiring the winner to match the FIRST one read is what made this bail.
   const boundPtyIds = durablyBoundPtyIdsForPane(operations, winner.targetId, winner.leafId)
+
   if (boundPtyIds.length > 0 && !boundPtyIds.includes(winner.ptyId)) {
     return false
   }
+
   let marked = false
   const superseded: SshRemotePtyLease[] = []
+
   for (const lease of operations.state.sshRemotePtyLeases ?? []) {
     if (
       lease.ptyId === winner.ptyId ||
@@ -90,6 +97,7 @@ export function supersedeSiblingLeasesForPane(
     ) {
       continue
     }
+
     if (lease.state === 'expired') {
       // An already-expired predecessor is superseded by the same evidence, and marking it is what
       // bounds the reattach set: without this, every past orphan for this pane stays reattachable
@@ -99,17 +107,20 @@ export function supersedeSiblingLeasesForPane(
       lease.supersededBy = winner.ptyId
       continue
     }
+
     lease.state = 'expired'
     lease.supersededBy = winner.ptyId
     lease.updatedAt = now
     marked = true
     superseded.push(lease)
   }
+
   if (superseded.length > 0) {
     // Why: matching on lease ptyId first means this scrubs only the predecessor's stale binding —
     // the winner's own binding cannot match and is left intact.
     operations.clearBindingsForLeases(winner.targetId, superseded)
   }
+
   return marked
 }
 
@@ -127,18 +138,23 @@ function supersedeFromBoundPane(
   if (!isTerminalLeafId(leafId)) {
     return false
   }
+
   const boundPtyIds = durablyBoundPtyIdsForPane(operations, targetId, leafId)
+
   if (boundPtyIds.length === 0) {
     // No binding names this pane, so nothing here is evidence about which shell owns it. Leaving
     // every lease reattachable is the deliberate direction: an orphan must stay askable.
     return false
   }
+
   const candidates = (operations.state.sshRemotePtyLeases ?? []).filter(
     (lease) =>
       lease.targetId === targetId && lease.leafId === leafId && boundPtyIds.includes(lease.ptyId)
   )
+
   const winner = candidates.find((lease) => isLiveLeaseState(lease.state))
   const marked = winner ? supersedeSiblingLeasesForPane(operations, winner, now) : false
+
   return marked
 }
 
@@ -185,16 +201,20 @@ export function reconcileSshRemotePtyLeasesForTarget(
   targetId: string
 ): void {
   const leafIds = new Set<string>()
+
   for (const lease of operations.state.sshRemotePtyLeases ?? []) {
     if (lease.targetId === targetId && lease.leafId) {
       leafIds.add(lease.leafId)
     }
   }
+
   const now = Date.now()
   let changed = false
+
   for (const leafId of leafIds) {
     changed = supersedeFromBoundPane(operations, targetId, leafId, now) || changed
   }
+
   if (changed) {
     operations.flush()
   }

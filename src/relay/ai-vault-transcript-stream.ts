@@ -10,19 +10,25 @@ export async function* readRelayTranscriptBytes(
 ): AsyncGenerator<Buffer> {
   throwIfAiVaultScanCancelled(signal)
   const handle = await open(path, 'r')
+
   try {
     const probe = Buffer.alloc(BINARY_PROBE_BYTES)
     const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
+
     if (isBinaryBuffer(probe.subarray(0, bytesRead))) {
       throw new BinarySessionTranscriptError()
     }
+
     const input = handle.createReadStream({ start: 0, autoClose: false, signal })
+
     try {
       for await (const chunk of input) {
         throwIfAiVaultScanCancelled(signal)
+
         if (!Buffer.isBuffer(chunk)) {
           throw new TypeError('Expected transcript byte buffer')
         }
+
         yield chunk
       }
     } finally {

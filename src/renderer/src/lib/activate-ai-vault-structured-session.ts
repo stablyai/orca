@@ -91,18 +91,23 @@ export async function activateAiVaultStructuredSession(
   deps: StructuredSessionActivationDeps = defaultDeps
 ): Promise<boolean> {
   const structured = session.structuredSession
+
   if (!structured) {
     return false
   }
+
   // Why: the click can chain a refresh, a capability probe, a reveal and a second refresh, each
   // with its own timeout, and nothing on the row says it is working. Without this, an impatient
   // second click runs the whole sequence again and lands its own toast.
   const inFlight = activationsInFlight.get(structured.sessionId)
+
   if (inFlight) {
     return inFlight
   }
+
   const activation = activateStructuredSession(structured, deps)
   activationsInFlight.set(structured.sessionId, activation)
+
   try {
     return await activation
   } finally {
@@ -117,15 +122,18 @@ async function activateStructuredSession(
   deps: StructuredSessionActivationDeps
 ): Promise<boolean> {
   const target = { worktreeId: structured.workspaceId, sessionId: structured.sessionId }
+
   if (!deps.activate(target)) {
     // A refresh alone can answer, and costs one call instead of two. It is only ever an
     // optimization, so a refresh that fails must fall through to the reveal rather than end the
     // click: the host republishing the tab is the repair, and it does not need this to have worked.
     const refreshed = await refreshedWithoutThrowing(deps, structured.workspaceId)
+
     if (!refreshed || !deps.activate(target)) {
       // The inventory genuinely does not carry this chat: it was closed, or this process never
       // published it. Ask the host to republish the tab from the record it still holds on disk.
       const revealed = await deps.reveal(target)
+
       if (revealed !== 'revealed') {
         if (revealed === 'gone') {
           deps.gone()
@@ -135,18 +143,24 @@ async function activateStructuredSession(
           // Unreachable: we never got an answer, so this is the one case waiting can still fix.
           deps.unavailable()
         }
+
         return true
       }
+
       await refreshedWithoutThrowing(deps, structured.workspaceId)
+
       if (!deps.activate(target)) {
         deps.unavailable()
+
         return true
       }
     }
   }
+
   if (useAppStore.getState().activeWorktreeId !== structured.workspaceId) {
     activateAndRevealWorktree(structured.workspaceId)
   }
+
   return true
 }
 
@@ -158,6 +172,7 @@ async function refreshedWithoutThrowing(
 ): Promise<boolean> {
   try {
     await deps.refresh(worktreeId)
+
     return true
   } catch {
     return false
@@ -178,12 +193,15 @@ export async function revealStructuredSession(target: {
     useAppStore.getState(),
     target.worktreeId
   )
+
   const host = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId })
+
   // Negotiated against the host that will answer this call, not the local one: a paired host runs
   // its own build, and its method-not-found is indistinguishable from a refusal we should surface.
   // A local host is this build, so it always has the method and needs no round trip to prove it.
   if (host.kind === 'environment') {
     let supported: boolean
+
     try {
       // Raced, not merely given a timeout argument: on a cache hit this awaits a promise created
       // by an earlier probe that may carry no deadline of its own, and one that never settles
@@ -201,11 +219,14 @@ export async function revealStructuredSession(target: {
       // splits the same probe's failures the same way.
       return isRuntimeCompatBlockError(error) ? 'host-cannot-open' : 'unreachable'
     }
+
     if (!supported) {
       return 'host-cannot-open'
     }
   }
+
   let result: AgentSessionRevealReply | undefined
+
   try {
     result = await withStructuredSessionRestoreTimeout(
       callRuntimeRpc<AgentSessionRevealReply>(
@@ -220,9 +241,11 @@ export async function revealStructuredSession(target: {
   } catch {
     return 'unreachable'
   }
+
   if (result?.ok === true) {
     return 'revealed'
   }
+
   // The host raises two different refusals here and they mean opposite things to a user: it holds
   // no such record, or it holds one it cannot open. Only the first is the chat being gone.
   return result?.refusal?.code === 'agent_session_identity_required' ? 'gone' : 'host-cannot-open'
@@ -237,6 +260,7 @@ async function refreshStructuredSessionTabs(worktreeId: string): Promise<void> {
   // can be switched off while this call is in flight, which wipes the mirror; without this the
   // answer would land afterwards and re-seed a chat row into a renderer that just discarded them.
   const generation = localStructuredSessionGeneration()
+
   const snapshot = await withStructuredSessionRestoreTimeout(
     callRuntimeRpc<RuntimeMobileSessionTabsResult>(
       getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
@@ -245,9 +269,11 @@ async function refreshStructuredSessionTabs(worktreeId: string): Promise<void> {
       { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
     )
   )
+
   if (!isCurrentLocalStructuredSessionGeneration(generation)) {
     return
   }
+
   // No owner scope: the apply discards any worktree whose execution host is not local before it
   // reads one, so a paired workspace is carried by the subscription, not by this call.
   applyStructuredSessionTabSnapshots([snapshot])
@@ -255,6 +281,7 @@ async function refreshStructuredSessionTabs(worktreeId: string): Promise<void> {
 
 async function withStructuredSessionRestoreTimeout<T>(promise: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       promise,

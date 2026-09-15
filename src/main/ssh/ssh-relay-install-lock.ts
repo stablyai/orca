@@ -18,17 +18,22 @@ import { removeRemoteTreeCommand } from './ssh-remote-commands'
 export const RELAY_INSTALL_LOCK_NAME = '.install-lock'
 
 const INSTALL_LOCK_POLL_MS = 1_000
+
 // Why: a fresh lock can cross the stale threshold during our bounded wait.
 // Recheck infrequently so it becomes recoverable without adding an exec per poll.
 const INSTALL_LOCK_STALE_RECHECK_MS = 60_000
+
 // Why: the lock holder can legitimately use the full deploy bound for upload,
 // native install/rebuild, probes, and finalization. A concurrent first install
 // must not fail earlier; completed-relay repair uses a separate one-shot path.
 const INSTALL_LOCK_TIMEOUT_MS = RELAY_DEPLOY_TIMEOUT_MS
+
 // Why: native-deps repair can keep running after the deploy backstop wins its
 // Promise.race, so stale takeover must leave room for that bounded work.
 export const INSTALL_LOCK_STALE_MS = 20 * 60_000
+
 export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
+
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 function execHostCommand(
@@ -53,6 +58,7 @@ export async function isRelayInstallLockStale(
     // repair lock look old enough for GC or another installer to recover.
     const out = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir))
     const ageSec = Number.parseInt(out.trim(), 10)
+
     return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
   } catch {
     return false
@@ -75,6 +81,7 @@ export async function acquireInstallLock(
   const start = Date.now()
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
   let lastWaitLogAt = Number.NEGATIVE_INFINITY
+
   while (true) {
     // Why: a crashed GC can leave the stable sibling claim behind. The shared
     // waiter recovers stale claims instead of polling that orphan forever.
@@ -83,10 +90,12 @@ export async function acquireInstallLock(
     await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir), {
       signal: options?.signal
     })
+
     try {
       const result = await execHostCommand(conn, host, tryCreateInstallLockCommand(host, lockDir), {
         signal: options?.signal
       })
+
       if (result.trim().endsWith('OK')) {
         // Why: GC may claim the sibling path between our first probe and lock
         // creation. Recheck while holding the in-tree lock; one side backs off.
@@ -96,9 +105,11 @@ export async function acquireInstallLock(
           host,
           options?.signal
         ).catch(() => true)
+
         if (!claimedAfterAcquire && !options?.signal?.aborted) {
           return
         }
+
         await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
         options?.signal?.throwIfAborted()
       }
@@ -106,12 +117,15 @@ export async function acquireInstallLock(
       if (isUnconfirmedSshCommandTermination(err)) {
         throw err
       }
+
       options?.signal?.throwIfAborted()
       // A failed mkdir is lock contention; keep the connection-specific error
       // out of the user path until the bounded wait expires.
     }
+
     if (Date.now() - lastStaleCheckAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
       lastStaleCheckAt = Date.now()
+
       // Why: recover an already-stale lock immediately, then keep checking in
       // case a fresh holder crosses the stale threshold while we are waiting.
       const steal = await execHostCommand(
@@ -120,27 +134,34 @@ export async function acquireInstallLock(
         tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS),
         { signal: options?.signal }
       ).catch(() => 'BUSY')
+
       options?.signal?.throwIfAborted()
+
       if (steal.trim().endsWith('OK')) {
         const reason = steal.trim().endsWith('REBOOT_OK') ? 'previous-boot' : 'stale'
         console.warn(`[ssh-relay] Stealing ${reason} install lock at ${lockDir}`)
+
         const claimedAfterSteal = await isRelayGcClaimed(
           conn,
           remoteRelayDir,
           host,
           options?.signal
         ).catch(() => true)
+
         if (!claimedAfterSteal && !options?.signal?.aborted) {
           return
         }
+
         await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
         options?.signal?.throwIfAborted()
       }
     }
+
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
       lastWaitLogAt = Date.now()
       console.info(`[ssh-relay] Waiting for install lock at ${lockDir}`)
     }
+
     if (Date.now() - start >= INSTALL_LOCK_TIMEOUT_MS) {
       throw new Error(
         `Could not acquire relay install lock at ${lockDir} after ${
@@ -148,6 +169,7 @@ export async function acquireInstallLock(
         }s; another install is still in progress.`
       )
     }
+
     await waitForInstallLockPoll(options?.signal)
   }
 }
@@ -159,11 +181,14 @@ function waitForInstallLockPoll(signal?: AbortSignal): Promise<void> {
       signal?.removeEventListener('abort', handleAbort)
       reject(signal?.reason)
     }
+
     const timeout = setTimeout(() => {
       signal?.removeEventListener('abort', handleAbort)
       resolve()
     }, INSTALL_LOCK_POLL_MS)
+
     signal?.addEventListener('abort', handleAbort, { once: true })
+
     if (signal?.aborted) {
       handleAbort()
     }

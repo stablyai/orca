@@ -18,8 +18,11 @@ import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+
 export { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
+
 export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
 export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
@@ -62,10 +65,13 @@ function getDefaultTabCommandPreview(yamlHooks: OrcaHooks | null): string {
   return (yamlHooks?.defaultTabs ?? [])
     .map((tab, index) => {
       const command = tab.command?.trim()
+
       if (!command) {
         return null
       }
+
       const label = tab.title ? ` ${tab.title}` : ''
+
       return `# defaultTabs[${index + 1}]${label}\n${command}`
     })
     .filter((entry): entry is string => entry !== null)
@@ -79,9 +85,11 @@ function getSetupConfigKind(
   if (hasSetup && hasDefaultTabCommands) {
     return 'setup-and-default-tabs'
   }
+
   if (hasDefaultTabCommands) {
     return 'default-tabs'
   }
+
   return 'setup'
 }
 
@@ -96,12 +104,15 @@ export function renderIssueCommandTemplate(
 ): string {
   const { issueNumber, artifactUrl } = vars
   let rendered = template
+
   if (artifactUrl !== null) {
     rendered = rendered.replace(/\{\{artifact_url\}\}/g, artifactUrl)
   }
+
   if (issueNumber !== null) {
     rendered = rendered.replace(/\{\{issue\}\}/g, String(issueNumber))
   }
+
   return rendered
 }
 
@@ -112,33 +123,40 @@ export function buildAgentPromptWithContext(
   linkedContextBlocks: string[] = []
 ): string {
   const trimmedPrompt = prompt.trim()
+
   if (attachments.length === 0 && linkedUrls.length === 0 && linkedContextBlocks.length === 0) {
     return trimmedPrompt
   }
 
   const sections: string[] = []
+
   if (attachments.length > 0) {
     const attachmentBlock = attachments.map((pathValue) => `- ${pathValue}`).join('\n')
     sections.push(`Attachments:\n${attachmentBlock}`)
   }
+
   if (linkedUrls.length > 0) {
     const linkBlock = linkedUrls.map((url) => `- ${url}`).join('\n')
     sections.push(`Linked work items:\n${linkBlock}`)
   }
+
   if (linkedContextBlocks.length > 0) {
     sections.push(linkedContextBlocks.join('\n\n'))
   }
+
   // Why: the new-workspace flow launches each agent with a single plain-text
   // startup prompt. Appending attachments and bounded linked context keeps
   // extra data visible to Claude/Codex/OpenCode without cluttering the textarea.
   if (!trimmedPrompt) {
     return sections.join('\n\n')
   }
+
   return `${trimmedPrompt}\n\n${sections.join('\n\n')}`
 }
 
 export function getAttachmentLabel(pathValue: string): string {
   const segments = pathValue.split(/[/\\]/)
+
   return segments.at(-1) || pathValue
 }
 
@@ -156,6 +174,7 @@ export function getSetupConfig(
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
   const yamlDefaultTabCommands = getDefaultTabCommandPreview(yamlHooks)
   const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
+
   const sourcePolicy = resolveHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy, {
     hasLocalScript: Boolean(localSetup)
   })
@@ -165,6 +184,7 @@ export function getSetupConfig(
   }
 
   const yamlCommand = [yamlSetup, yamlDefaultTabCommands].filter(Boolean).join('\n\n')
+
   if (sourcePolicy === 'run-both' && yamlCommand && localSetup) {
     return {
       source: 'both',
@@ -180,6 +200,7 @@ export function getSetupConfig(
       kind: getSetupConfigKind(Boolean(yamlSetup), Boolean(yamlDefaultTabCommands))
     }
   }
+
   return null
 }
 
@@ -195,15 +216,19 @@ export function getWorkspaceSeedName(args: {
   fallbackName?: string
 }): string {
   const { explicitName, prompt, linkedIssueNumber, linkedPR, fallbackName } = args
+
   if (explicitName.trim()) {
     return explicitName.trim()
   }
+
   if (linkedPR !== null) {
     return `pr-${linkedPR}`
   }
+
   if (linkedIssueNumber !== null) {
     return `issue-${linkedIssueNumber}`
   }
+
   // Why: the prompt is free-form user text — it can easily exceed a sane
   // branch-name length or be composed entirely of characters that
   // sanitizeWorktreeName strips (emoji, CJK, punctuation). Slugify + truncate
@@ -211,13 +236,16 @@ export function getWorkspaceSeedName(args: {
   // and fall back to the stable default when the prompt collapses to empty.
   if (prompt.trim()) {
     const slug = slugifyForWorkspaceName(prompt)
+
     if (slug) {
       return slug
     }
   }
+
   if (fallbackName && fallbackName.trim()) {
     return fallbackName.trim()
   }
+
   // Why: the prompt is optional in this flow. Fall back to a stable default
   // branch/workspace seed so users can launch an empty draft without first
   // writing a brief or naming the workspace manually.
@@ -231,9 +259,11 @@ export async function ensureAgentStartupInTerminal(args: {
 }): Promise<void> {
   const { worktreeId, primaryTabId, startup } = args
   const draftPrompt = startup.draftPrompt ?? null
+
   if (startup.followupPrompt === null && draftPrompt === null) {
     return
   }
+
   const launchToken = ensureStartupLaunchToken(startup)
 
   // Why: poll until a terminal tab + PTY exists for the worktree before we
@@ -241,20 +271,26 @@ export async function ensureAgentStartupInTerminal(args: {
   // PTY spawn is async, so a brief wait is normal.
   let tabId: string | null = null
   let ptyId: string | null = null
+
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (attempt > 0) {
       await new Promise((resolve) => globalThis.setTimeout(resolve, 150))
     }
+
     const state = useAppStore.getState()
     tabId = resolveAgentStartupTabId(state, worktreeId, primaryTabId)
+
     if (!tabId) {
       continue
     }
+
     ptyId = getAgentStartupTabPtyId(state, tabId, launchToken)
+
     if (ptyId) {
       break
     }
   }
+
   if (!tabId || !ptyId) {
     if (tabId) {
       // Why: background-created workspaces can remain unmounted longer than a
@@ -268,6 +304,7 @@ export async function ensureAgentStartupInTerminal(args: {
         deliver: deliverAgentStartupToTerminal
       })
     }
+
     return
   }
 
@@ -283,6 +320,7 @@ async function deliverAgentStartupToTerminal(
 ): Promise<void> {
   const draftPrompt = startup.draftPrompt ?? null
   const runtimeSettings = getSettingsForAgentTabRuntimeOwner(tabId)
+
   // Why: followupPrompt is the legacy path for stdin-after-start agents
   // (aider, goose, etc.) that need their initial prompt typed into the live
   // session and submitted. Wait until the agent owns the PTY before writing.
@@ -293,6 +331,7 @@ async function deliverAgentStartupToTerminal(
       prompt: startup.followupPrompt,
       settings: runtimeSettings
     })
+
     // Why: a dropped follow-up is otherwise silent — surface the same toast the
     // draft path uses so the user knows to open the workspace and paste it.
     if (!delivered) {
@@ -324,5 +363,6 @@ function ensureStartupLaunchToken(startup: AgentStartupPlan): string {
     // so they match the pane launch registration for this agent.
     startup.launchToken = createBrowserUuid()
   }
+
   return startup.launchToken
 }

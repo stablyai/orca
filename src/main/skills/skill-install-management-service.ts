@@ -63,7 +63,9 @@ async function preparePreviewContext(
     destinationRequest,
     dependencies.authority
   )
+
   const providerRootOverrides = await dependencies.resolveProviderRootOverrides?.(destination)
+
   return {
     destination,
     filesystem: destination.wslDistro
@@ -88,6 +90,7 @@ async function previewWithContext(
 ): Promise<SkillInstallPreview> {
   const path = canonicalPath(context.destination, request.name)
   const receipt = await readSkillInstallReceipt(context.installStateDirectory, path)
+
   const current = await inspectSkillCanonicalState({
     canonicalPath: path,
     receipt,
@@ -103,6 +106,7 @@ async function previewWithContext(
     },
     filesystem: context.filesystem
   })
+
   const providers = resolveSkillProviderDestinations({
     scope: context.destination.scope,
     homeDirectory: context.destination.homeDirectory,
@@ -110,6 +114,7 @@ async function previewWithContext(
     detectedProviders: context.detectedProviders,
     providerRootOverrides: context.providerRootOverrides
   })
+
   return {
     name: request.name,
     packageDigest: request.package.packageDigest,
@@ -119,6 +124,7 @@ async function previewWithContext(
       providers.map(async (provider) => {
         const placementPath = join(provider.rootPath, request.name)
         const stat = await lstat(placementPath).catch(() => null)
+
         return {
           provider: provider.provider,
           topology: provider.readsCanonicalRoot
@@ -144,6 +150,7 @@ export async function previewSharedSkillBundleInstall(
 ): Promise<SkillBundleInstallPreview> {
   const context = await preparePreviewContext(request.destination, dependencies)
   const previews: SkillInstallPreview[] = []
+
   for (
     let offset = 0;
     offset < request.selectedSkills.length;
@@ -171,6 +178,7 @@ export async function previewSharedSkillBundleInstall(
       ))
     )
   }
+
   return SkillBundleInstallPreviewSchema.parse({
     packageId: request.package.packageId,
     versionId: request.package.versionId,
@@ -191,7 +199,9 @@ export async function removeSharedSkillInstall(
     request.destination,
     dependencies.authority
   )
+
   const providerRootOverrides = await dependencies.resolveProviderRootOverrides?.(destination)
+
   const filesystem = destination.wslDistro
     ? createWslSkillInstallFilesystem({
         distro: destination.wslDistro,
@@ -200,6 +210,7 @@ export async function removeSharedSkillInstall(
         providerRootOverrides
       })
     : undefined
+
   const providerRoots = resolveSkillProviderDestinations({
     scope: destination.scope,
     homeDirectory: destination.homeDirectory,
@@ -207,6 +218,7 @@ export async function removeSharedSkillInstall(
     detectedProviders: SKILL_INSTALL_PROVIDERS.map((provider) => provider.id),
     providerRootOverrides
   }).map((provider) => provider.rootPath)
+
   return removeLocalSharedSkill({
     operationId: request.operationId,
     canonicalPath: canonicalPath(destination, request.name),

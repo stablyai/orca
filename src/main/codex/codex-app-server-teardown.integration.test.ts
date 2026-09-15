@@ -33,6 +33,7 @@ const FORCE_KILL_APP_SERVER = String.raw`
 function processExists(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -52,6 +53,7 @@ async function openServer(
 ): Promise<RunningServer> {
   const descendant = Promise.withResolvers<number>()
   const exit = Promise.withResolvers<Error>()
+
   const connection = await openCodexAppServerConnection(
     {
       command: process.execPath,
@@ -70,6 +72,7 @@ async function openServer(
       }
     }
   )
+
   return {
     connection,
     descendantPid: await descendant.promise,
@@ -80,6 +83,7 @@ async function openServer(
 
 async function cleanupServer(server: RunningServer): Promise<void> {
   await server.connection.close().catch(() => false)
+
   for (const pid of [server.descendantPid, server.supervisorPid]) {
     if (pid > 0 && processExists(pid)) {
       process.kill(pid, 'SIGKILL')
@@ -90,10 +94,12 @@ async function cleanupServer(server: RunningServer): Promise<void> {
 describe.runIf(process.platform !== 'win32')('Codex app-server process teardown', () => {
   it('reaps the forced-close descendant in 40 consecutive launches', async () => {
     const running: RunningServer[] = []
+
     try {
       for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
         running.push(await openServer(iteration))
       }
+
       expect(running.every(({ descendantPid }) => processExists(descendantPid))).toBe(true)
 
       const closed = await Promise.all(running.map(({ connection }) => connection.close()))
@@ -112,6 +118,7 @@ describe.runIf(process.platform !== 'win32')('Codex app-server process teardown'
     async (exitMode) => {
       for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
         const server = await openServer(iteration, exitMode)
+
         try {
           await server.exit
           expect(processExists(server.supervisorPid)).toBe(false)
@@ -128,6 +135,7 @@ describe.runIf(process.platform !== 'win32')('Codex app-server process teardown'
   it('does not settle a stdin-close/root-exit race before the descendant is reaped', async () => {
     for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
       const server = await openServer(iteration, 'stdin-race')
+
       try {
         await expect(server.connection.close()).resolves.toBe(true)
         expect(processExists(server.supervisorPid)).toBe(false)

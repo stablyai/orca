@@ -8,10 +8,15 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { createNotificationsApi } from '../web/preload-api/web-notifications-api'
 
 const leaf = '11111111-1111-4111-8111-111111111111'
+
 const pane = makePaneKey('away-tab', leaf)
+
 const readAway = vi.fn<() => Promise<boolean | undefined>>()
+
 const dismiss = vi.fn()
+
 const previousApi = window.api
+
 beforeEach(() => {
   readAway.mockReset().mockResolvedValue(true)
   dismiss.mockReset()
@@ -41,6 +46,7 @@ beforeEach(() => {
     .setAgentStatus(pane, { state: 'done', prompt: 'away test', agentType: 'codex' })
   useAppStore.getState().markAgentCompletionPaneUnread(pane, 'agent-completion')
 })
+
 afterEach(() => {
   cleanup()
   Object.assign(window, { api: previousApi })
@@ -128,11 +134,13 @@ it('ignores unrelated writes while away but queries for a new completion', async
   renderHook(() => useAutoAckViewedAgent(false))
   await act(async () => {})
   expect(readAway).toHaveBeenCalledTimes(1)
+
   for (let i = 0; i < 20; i++) {
     await act(async () => {
       useAppStore.setState({ settings: useAppStore.getState().settings })
     })
   }
+
   expect(readAway).toHaveBeenCalledTimes(1)
   await act(async () => {
     useAppStore.setState({ unreadAgentCompletionPanes: { [pane]: true } })

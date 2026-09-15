@@ -13,10 +13,15 @@ import type { StructuredAgentSessionHandoffTransport } from './structured-agent-
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-proven-dead-retry'
+
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
+
 const CREATE_OPERATION = `${NOW}-00000000000000000000000000000000`
+
 const OPERATION = `${NOW}-00000000000000000000000000000001`
+
 const roots: string[] = []
 
 afterEach(async () => {
@@ -27,10 +32,12 @@ describe('structured session proven-dead TUI retry', () => {
   it('acquires native ownership without trying to close the dead TUI again', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-handoff-dead-retry-'))
     roots.push(root)
+
     const store = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     const reserved = await store.reserveOwner({
       sessionId: SESSION,
       location: {
@@ -50,6 +57,7 @@ describe('structured session proven-dead TUI retry', () => {
       operation: { callerKey: 'test', operationId: CREATE_OPERATION, fingerprint: 'create' },
       now: NOW
     })
+
     const tuiFence = reserved.record.lease.runtimeFence
     await store.commitProcessIdentity({
       sessionId: SESSION,
@@ -81,6 +89,7 @@ describe('structured session proven-dead TUI retry', () => {
       probe: { outcome: 'pid-absent' },
       now: NOW
     })
+
     const journal = await openAgentSessionJournal({
       identity: {
         sessionId: SESSION,
@@ -91,6 +100,7 @@ describe('structured session proven-dead TUI retry', () => {
       },
       journalDir: join(root, 'journal')
     })
+
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'running-turn' },
       {
@@ -100,8 +110,10 @@ describe('structured session proven-dead TUI retry', () => {
       },
       { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? tuiFence }
     )
+
     const closeTuiOwner =
       vi.fn<NonNullable<StructuredAgentSessionHandoffTransport['closeTuiOwner']>>()
+
     const coordinator = new StructuredAgentSessionHandoffCoordinator({
       store,
       claimKeyId: 'key-1',
@@ -130,6 +142,7 @@ describe('structured session proven-dead TUI retry', () => {
           },
           now: NOW
         })
+
         return store.proveOwner({
           sessionId: SESSION,
           fence,
@@ -160,11 +173,13 @@ describe('structured session proven-dead TUI retry', () => {
       schedule: async (_sessionId, task) => task(),
       now: () => NOW
     })
+
     const fields = {
       direction: 'to-native' as const,
       mode: 'now' as const,
       action: 'retry' as const
     }
+
     const request: AgentSessionHandoffRequest = {
       envelope: {
         sessionId: SESSION,

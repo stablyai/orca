@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -33,6 +37,7 @@ describe('createMainWindow', () => {
 
   it('ignores traffic light sync IPC on non-macOS', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -43,6 +48,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -57,6 +63,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -73,6 +80,7 @@ describe('createMainWindow', () => {
 
     if (process.platform === 'darwin') {
       expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({ x: 16, y: 16 })
+
       return
     }
 
@@ -81,6 +89,7 @@ describe('createMainWindow', () => {
 
   it('intercepts Cmd+B for sidebar when the markdown editor is not focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -94,6 +103,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -107,6 +117,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -134,6 +145,7 @@ describe('createMainWindow', () => {
 
   it('skips Cmd+B interception when the markdown editor is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -147,6 +159,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -160,6 +173,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -169,6 +183,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setMarkdownEditorFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -193,6 +208,7 @@ describe('createMainWindow', () => {
 
   it('lets the shortcut recorder capture app shortcuts before main interception', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -206,6 +222,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -219,6 +236,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -228,6 +246,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setShortcutRecorderFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -252,6 +271,7 @@ describe('createMainWindow', () => {
 
   it('skips Cmd+B interception when floating terminal input is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -265,6 +285,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -278,6 +299,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -287,6 +309,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setFloatingFocus')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.(
       { sender: webContents } as never,
@@ -332,6 +355,7 @@ describe('createMainWindow', () => {
 
   it('still intercepts Cmd+Shift+B and Cmd+Alt+B when the markdown editor is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -345,6 +369,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -358,6 +383,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -367,6 +393,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setMarkdownEditorFocused')?.[1]
+
     setFocusedListener?.({ sender: webContents } as never, true)
 
     const isDarwin = process.platform === 'darwin'
@@ -409,6 +436,7 @@ describe('createMainWindow', () => {
 
   it('coerces non-boolean setMarkdownEditorFocused payloads to false', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -422,6 +450,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -435,6 +464,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -471,6 +501,7 @@ describe('createMainWindow', () => {
 
   it('opens a table-aware context menu synchronously without a renderer query', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -486,6 +517,7 @@ describe('createMainWindow', () => {
       replaceMisspelling: vi.fn(),
       session: { addWordToSpellCheckerDictionary: vi.fn() }
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -499,6 +531,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -508,6 +541,7 @@ describe('createMainWindow', () => {
     const tableTargetListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'rich-markdown:context-target')?.[1]
+
     tableTargetListener?.({ sender: webContents } as never, {
       cellType: 'body',
       targetId: 'table-target',

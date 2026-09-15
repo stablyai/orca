@@ -23,6 +23,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children, open }: { children: ReactNode; open?: boolean }) => {
     mocks.activeTooltipOpen = open === true
+
     return <>{children}</>
   },
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -60,6 +61,7 @@ async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
       )
     })
   }
+
   await render()
 
   return { container, rerender: render, onWorkspaceBoardToggle }
@@ -96,6 +98,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
         }
       }
     })
+
     const { container, rerender } = await renderToolbar(onWorkspaceBoardToggle)
 
     expect(container.textContent).not.toContain('Workspace board moved to the bottom bar')
@@ -103,6 +106,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
     const boardButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Workspace board"]'
     )
+
     expect(boardButton).not.toBeNull()
     await act(async () => {
       boardButton?.click()

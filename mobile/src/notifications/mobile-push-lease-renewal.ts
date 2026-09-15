@@ -6,12 +6,15 @@ export function startMobilePushLeaseRenewal(renew: () => Promise<void>): () => v
       void renew().catch(() => {})
     }
   }
+
   const subscription = AppState.addEventListener('change', (state) => {
     if (state === 'active') {
       refresh()
     }
   })
+
   const timer = setInterval(refresh, 15 * 60_000)
+
   return () => {
     subscription.remove()
     clearInterval(timer)

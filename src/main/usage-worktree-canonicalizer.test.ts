@@ -24,6 +24,7 @@ describe('canonicalizeUsageWorktreePaths', () => {
       seenPaths.push(path)
       await new Promise((resolve) => setTimeout(resolve, 0))
       active--
+
       return path.endsWith('/10') ? `${path}/nested/longer` : path
     })
 

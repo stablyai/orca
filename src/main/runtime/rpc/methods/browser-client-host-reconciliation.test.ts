@@ -9,11 +9,14 @@ describe('browser.clientHost reconciliation negotiation', () => {
   it('echoes and retains reconciliation only for an explicit authenticated request', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(
       {
         id: 'browser-host:host-a',
@@ -55,30 +58,38 @@ describe('browser.clientHost reconciliation negotiation', () => {
   it('requires exact reconciliation authority on command results', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(
       attachRequest(),
       (reply) => replies.push(reply),
       caller()
     )
+
     await vi.waitFor(() => expect(replies).toHaveLength(1))
     const registry = getBrowserHostLeaseRegistry(hostRuntime)
     const lease = registry.select('host-a')
     const placement = registry.placeClientPage('page-a', 'host-a')
+
     if (placement.kind !== 'client') {
       throw new Error('expected client placement')
     }
+
     const identity = {
       authorityEpoch: lease.authorityEpoch,
       browserHostClientId: lease.browserHostClientId,
       browserHostGeneration: lease.browserHostGeneration,
       pairedDeviceId: lease.pairedDeviceId
     }
+
     registry.grantExecutionHost(identity, 'host-key-a')
+
     const issued = registry.issueClientPageCommand(
       {
         authorityRuntimeId: lease.authorityRuntimeId,
@@ -94,6 +105,7 @@ describe('browser.clientHost reconciliation negotiation', () => {
         executionHostKey: 'host-key-a'
       }
     )
+
     await vi.waitFor(() => expect(replies).toHaveLength(2))
     expect(issued.event).toMatchObject({ pageReconciliationProtocolVersion: 1 })
     const { pageReconciliationProtocolVersion: _omitted, ...legacyAuthority } = issued.event
@@ -152,6 +164,7 @@ async function commandResult(dispatcher: RpcDispatcher, params: Record<string, u
     (reply) => replies.push(reply),
     caller()
   )
+
   return JSON.parse(replies[0]!)
 }
 

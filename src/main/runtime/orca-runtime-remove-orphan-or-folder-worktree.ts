@@ -25,15 +25,19 @@ export async function removeOrphanOrFolderWorktree({
 }): Promise<{ warning?: string } | undefined> {
   if (!repo) {
     const orphanHost = parseExecutionHostId(store.getWorktreeMeta(removalTarget.id)?.hostId)
+
     if (cleanupHostId && orphanHost?.id !== cleanupHostId) {
       throw new Error(
         `Workspace identity for ${removalTarget.id} no longer belongs to ${cleanupHostId}. Refresh projects and try again.`
       )
     }
+
     const sshPtyProvider =
       orphanHost?.kind === 'ssh' ? runtime.getSshProviderFn?.(orphanHost.targetId) : undefined
+
     const ptyProvider = sshPtyProvider ?? runtime.getLocalProvider()
     const externalOrphanHost = orphanHost?.kind === 'ssh' || orphanHost?.kind === 'runtime'
+
     if (ptyProvider) {
       await killAllProcessesForWorktree(removalTarget.id, {
         runtime,
@@ -57,11 +61,14 @@ export async function removeOrphanOrFolderWorktree({
         console.warn(`[worktree-teardown] orphan cleanup failed for ${removalTarget.id}:`, error)
       })
     }
+
     const orphanFullPath = splitWorktreeId(removalTarget.id)?.worktreePath
+
     const orphanWatcherPath =
       splitWorktreeIdForFilesystem(removalTarget.id)?.worktreePath === orphanFullPath
         ? orphanFullPath
         : undefined
+
     if (orphanWatcherPath) {
       await runtime
         .acquireFileWatcherRemoval(
@@ -71,6 +78,7 @@ export async function removeOrphanOrFolderWorktree({
         .then((gate) => gate.finish(false))
         .catch(() => {})
     }
+
     await deleteRemoteWorktreeHistory(sshPtyProvider, removalTarget.id)
     runtime.clearOptimisticReconcileToken(removalTarget.id)
     runtime.removeWorktreeMetadataAndHistory(
@@ -83,6 +91,7 @@ export async function removeOrphanOrFolderWorktree({
     runtime.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
     invalidateAuthorizedRootsCache()
     runtime.notifyWorktreesChanged(removalTarget.repoId)
+
     return {
       warning: `Project ${removalTarget.repoId} is no longer tracked, so ${removalTarget.path} was forgotten without deleting the directory or its Git worktree registration.`
     }
@@ -91,17 +100,21 @@ export async function removeOrphanOrFolderWorktree({
   if (!isFolderRepo(repo)) {
     return undefined
   }
+
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
+
   // Resolved, not raw: a folder repo naming its owner only as `executionHostId: 'ssh:*'` used to
   // tear down its PTYs and history on the client. A `runtime:` host answers null — its nested
   // target is addressable only inside that environment, never from this client's SSH table.
   const folderHost = parseExecutionHostId(removalHostId)
   const folderConnectionId = folderHost?.kind === 'ssh' ? folderHost.targetId : null
+
   const folderSshPtyProvider = folderConnectionId
     ? runtime.getSshProviderFn?.(folderConnectionId)
     : undefined
+
   await teardownFolderWorkspacePtys(
     {
       runtime,
@@ -117,5 +130,6 @@ export async function removeOrphanOrFolderWorktree({
   runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
   runtime.invalidateResolvedWorktreeCache()
   runtime.notifyWorktreesChanged(repo.id)
+
   return {}
 }

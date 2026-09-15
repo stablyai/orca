@@ -62,6 +62,7 @@ describe('fetchWorktrees', () => {
 
   it('retains catalog and row references for a cloned unchanged runtime payload', async () => {
     const store = createTestStore()
+
     const first = makeWorktree({
       id: 'repo1::/path/first',
       repoId: 'repo1',
@@ -80,11 +81,13 @@ describe('fetchWorktrees', () => {
         startupAgent: 'codex'
       }
     })
+
     const second = makeWorktree({
       id: 'repo1::/path/second',
       repoId: 'repo1',
       path: '/path/second'
     })
+
     const detected = makeDetectedResult('repo1', [first, second])
     store.setState({
       worktreesByRepo: { repo1: [first, second] },
@@ -112,17 +115,20 @@ describe('fetchWorktrees', () => {
 
   it('reuses unaffected catalog rows while publishing a previously untracked field change', async () => {
     const store = createTestStore()
+
     const changed = makeWorktree({
       id: 'repo1::/path/changed',
       repoId: 'repo1',
       path: '/path/changed',
       pushTarget: { remoteName: 'origin', branchName: 'feature', remoteCreated: false }
     })
+
     const stable = makeWorktree({
       id: 'repo1::/path/stable',
       repoId: 'repo1',
       path: '/path/stable'
     })
+
     const detected = makeDetectedResult('repo1', [changed, stable])
     store.setState({
       worktreesByRepo: { repo1: [changed, stable] },
@@ -148,6 +154,7 @@ describe('fetchWorktrees', () => {
 
   it('updates the repo entry and bumps sortEpoch when git reports a branch change', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -155,6 +162,7 @@ describe('fetchWorktrees', () => {
       branch: 'refs/heads/feature-one',
       displayName: 'feature-one'
     })
+
     const refreshed = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -175,6 +183,7 @@ describe('fetchWorktrees', () => {
 
   it('clears branch-scoped linked reviews when the listing observes a branch switch', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -183,6 +192,7 @@ describe('fetchWorktrees', () => {
       linkedPR: 101,
       pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
     })
+
     // Persisted metadata still carries the stale link when the listing refresh first observes the terminal branch switch.
     const refreshed = makeWorktree({
       id: 'repo1::/path/wt1',
@@ -216,6 +226,7 @@ describe('fetchWorktrees', () => {
   it('does not merge a stale listing row over a newer branch and review link', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+
     const requestStarted = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
@@ -224,27 +235,33 @@ describe('fetchWorktrees', () => {
       head: 'first-head',
       linkedPR: 101
     })
+
     const staleResponse = makeWorktree({
       ...requestStarted,
       branch: 'refs/heads/feature-two',
       head: 'stale-head',
       linkedPR: 202
     })
+
     let resolveListing!: (worktrees: Worktree[]) => void
+
     const listing = new Promise<Worktree[]>((resolve) => {
       resolveListing = resolve
     })
+
     worktreeListMock.mockReturnValueOnce(listing)
     store.setState({ worktreesByRepo: { repo1: [requestStarted] } } as Partial<AppState>)
 
     const refresh = store.getState().fetchWorktrees('repo1')
     await vi.waitFor(() => expect(worktreeListMock).toHaveBeenCalledTimes(1))
+
     const latest = makeWorktree({
       ...requestStarted,
       branch: 'refs/heads/feature-three',
       head: 'latest-head',
       linkedPR: 303
     })
+
     store.setState({ worktreesByRepo: { repo1: [latest] } } as Partial<AppState>)
     resolveListing([staleResponse])
 
@@ -256,24 +273,29 @@ describe('fetchWorktrees', () => {
 
   it('does not merge stale manual order over a reorder completed during refresh', async () => {
     const store = createTestStore()
+
     const daily = makeWorktree({
       id: 'repo1::/path/daily',
       repoId: 'repo1',
       path: '/path/daily',
       manualOrder: 20
     })
+
     const relay = makeWorktree({
       id: 'repo1::/path/relay',
       repoId: 'repo1',
       path: '/path/relay',
       manualOrder: 10
     })
+
     const refreshedDaily = { ...daily, head: 'def456' }
     const detected = makeDetectedResult('repo1', [daily, relay])
     let resolveListing!: (worktrees: Worktree[]) => void
+
     const listing = new Promise<Worktree[]>((resolve) => {
       resolveListing = resolve
     })
+
     worktreeListMock.mockReturnValueOnce(listing)
     store.setState({
       worktreesByRepo: { repo1: [daily, relay] },
@@ -304,6 +326,7 @@ describe('fetchWorktrees', () => {
   it('does not merge a stale display name over a rename completed during refresh', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+
     const requestStarted = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
@@ -311,14 +334,18 @@ describe('fetchWorktrees', () => {
       displayName: 'old label',
       displayNameMode: 'fixed'
     })
+
     const staleResponse = makeWorktree({
       ...requestStarted,
       head: 'stale-head'
     })
+
     let resolveListing!: (worktrees: Worktree[]) => void
+
     const listing = new Promise<Worktree[]>((resolve) => {
       resolveListing = resolve
     })
+
     worktreeListMock.mockReturnValueOnce(listing)
     store.setState({ worktreesByRepo: { repo1: [requestStarted] } } as Partial<AppState>)
 
@@ -339,6 +366,7 @@ describe('fetchWorktrees', () => {
   it('keeps a rename when an older host omits display-name mode', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+
     const requestStarted = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
@@ -346,6 +374,7 @@ describe('fetchWorktrees', () => {
       displayName: 'old label',
       displayNameMode: 'automatic'
     })
+
     const staleResponse = { ...requestStarted, displayNameMode: undefined }
     let resolveListing!: (worktrees: Worktree[]) => void
     worktreeListMock.mockReturnValueOnce(
@@ -371,6 +400,7 @@ describe('fetchWorktrees', () => {
   it('keeps a rename when an old-host refresh is projected with a newer mode', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+
     const requestStarted = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
@@ -378,6 +408,7 @@ describe('fetchWorktrees', () => {
       displayName: 'old label',
       displayNameMode: undefined
     })
+
     const staleResponse = { ...requestStarted, displayNameMode: 'fixed' as const }
     let resolveListing!: (worktrees: Worktree[]) => void
     worktreeListMock.mockReturnValueOnce(
@@ -402,6 +433,7 @@ describe('fetchWorktrees', () => {
 
   it('retains an existing pinned mode when an older host omits it', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -410,6 +442,7 @@ describe('fetchWorktrees', () => {
       displayName: 'feature',
       displayNameMode: 'fixed'
     })
+
     const staleResponse = { ...existing, displayNameMode: undefined }
 
     mockApi.worktrees.list.mockResolvedValueOnce([staleResponse])
@@ -426,6 +459,7 @@ describe('fetchWorktrees', () => {
 
   it('accepts a peer rename from an older host over a pinned label', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -434,6 +468,7 @@ describe('fetchWorktrees', () => {
       displayName: 'my label',
       displayNameMode: 'fixed'
     })
+
     // A changed non-branch label from a mode-less host is explicit meta a peer wrote there.
     const peerRenamed = { ...existing, displayName: 'peer label', displayNameMode: undefined }
 
@@ -447,6 +482,7 @@ describe('fetchWorktrees', () => {
 
   it('suppresses an older host branch-derived relabel of a pinned name', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -455,6 +491,7 @@ describe('fetchWorktrees', () => {
       displayName: 'my label',
       displayNameMode: 'fixed'
     })
+
     const rederived = {
       ...existing,
       branch: 'refs/heads/next',
@@ -476,6 +513,7 @@ describe('fetchWorktrees', () => {
 
   it('suppresses an older host detached-HEAD path relabel of a pinned name', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -484,6 +522,7 @@ describe('fetchWorktrees', () => {
       displayName: 'my label',
       displayNameMode: 'fixed'
     })
+
     const rederived = { ...existing, branch: '', displayName: 'wt1', displayNameMode: undefined }
 
     mockApi.worktrees.list.mockResolvedValueOnce([rederived])
@@ -500,6 +539,7 @@ describe('fetchWorktrees', () => {
 
   it('does not merge a host response captured before an optimistic rename settles', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -507,6 +547,7 @@ describe('fetchWorktrees', () => {
       displayName: 'old label',
       displayNameMode: 'automatic'
     })
+
     const staleResponse = { ...existing }
     let resolvePersist!: () => void
     mockApi.worktrees.updateMeta.mockReturnValueOnce(
@@ -533,12 +574,14 @@ describe('fetchWorktrees', () => {
 
   it('updates the repo entry when only the persisted base ref changes', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       baseRef: 'origin/main'
     })
+
     const refreshed = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -557,11 +600,13 @@ describe('fetchWorktrees', () => {
 
   it('updates the repo entry when only prior worktree id aliases change', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/current-name',
       repoId: 'repo1',
       path: '/path/current-name'
     })
+
     const refreshed = makeWorktree({
       id: 'repo1::/path/current-name',
       repoId: 'repo1',
@@ -618,11 +663,13 @@ describe('fetchWorktrees', () => {
 
   it('does not publish non-authoritative rows when an authoritative refresh is required', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/existing',
       repoId: 'repo1',
       path: '/path/existing'
     })
+
     const fallback = makeWorktree({
       id: 'repo1::/path/fallback',
       repoId: 'repo1',

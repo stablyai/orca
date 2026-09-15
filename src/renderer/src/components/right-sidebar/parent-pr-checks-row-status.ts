@@ -23,24 +23,31 @@ export function classifyParentPrChecksRowStatus({
   if (isUnavailable) {
     return 'unsupported'
   }
+
   if (outcome?.kind === 'loading') {
     return review ? classifyKnownReviewStatus(review) : 'loading'
   }
+
   if (review) {
     return classifyKnownReviewStatus(review)
   }
+
   if (outcome?.kind === 'error') {
     return 'refreshError'
   }
+
   if (hasFallbackReview) {
     return 'linkedDetailsUnavailable'
   }
+
   if (outcome?.kind === 'unavailable') {
     return 'unavailable'
   }
+
   if (outcome?.kind === 'no-review') {
     return 'noReview'
   }
+
   return hasCacheEntry ? 'notFetched' : 'notFetched'
 }
 
@@ -48,27 +55,35 @@ export function classifyKnownReviewStatus(review: HostedReviewInfo): ParentPrChe
   if (review.provider === 'unsupported') {
     return 'unsupported'
   }
+
   if (review.mergeable === 'CONFLICTING') {
     return 'conflict'
   }
+
   if (review.state === 'merged') {
     return 'merged'
   }
+
   if (review.state === 'closed') {
     return 'closed'
   }
+
   if (review.state === 'draft') {
     return 'draft'
   }
+
   if (review.status === 'failure') {
     return 'failing'
   }
+
   if (review.status === 'pending') {
     return 'pending'
   }
+
   if (review.status === 'success') {
     return 'success'
   }
+
   return 'neutral'
 }
 
@@ -108,12 +123,15 @@ export function getRowCheckTone(
   ) {
     return 'failure'
   }
+
   if (status === 'pending' || status === 'loading') {
     return 'pending'
   }
+
   if (status === 'success' || status === 'merged') {
     return 'success'
   }
+
   return review?.status ?? 'neutral'
 }
 
@@ -135,6 +153,7 @@ export function getRowSummary(
           { value0: detailNames.length }
         )
   }
+
   switch (status) {
     case 'failing':
       return translate(

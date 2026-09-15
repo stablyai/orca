@@ -35,15 +35,19 @@ export function useTabGroupActivationCommands({
       const item = groupTabs.find(
         (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
       )
+
       if (!item) {
         return
       }
+
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
+
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         useAppStore.getState(),
         worktreeId
       )
+
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
           worktreeId,
@@ -51,6 +55,7 @@ export function useTabGroupActivationCommands({
           environmentId: runtimeEnvironmentId
         })
       }
+
       setActiveTab(terminalId)
       setActiveTabType('terminal')
       const activeLeafId = worktreeState.terminalLayoutsByTabId[terminalId]?.activeLeafId ?? null
@@ -74,9 +79,11 @@ export function useTabGroupActivationCommands({
       const item = groupTabs.find(
         (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
       )
+
       if (!item) {
         return
       }
+
       // Why: the collapse icon stops pointer propagation, so activate here since the normal tab handler won't have run.
       activateTerminal(terminalId)
       requestAnimationFrame(() => {
@@ -93,11 +100,14 @@ export function useTabGroupActivationCommands({
   const activateEditor = useCallback(
     (tabId: string) => {
       const item = groupTabs.find((candidate) => candidate.id === tabId)
+
       if (!item) {
         return
       }
+
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
+
       if (item.contentType === 'simulator') {
         setActiveTabType('simulator')
         // simulator has no editor file entity
@@ -114,15 +124,19 @@ export function useTabGroupActivationCommands({
       const item = groupTabs.find(
         (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
       )
+
       if (!item) {
         return
       }
+
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
+
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         useAppStore.getState(),
         worktreeId
       )
+
       if (
         isWebRuntimeSessionActive(runtimeEnvironmentId) &&
         browserWorkspaceHasRemoteOwner(useAppStore.getState(), browserTabId, runtimeEnvironmentId)
@@ -133,6 +147,7 @@ export function useTabGroupActivationCommands({
           environmentId: runtimeEnvironmentId
         })
       }
+
       setActiveBrowserTab(browserTabId)
       setActiveTabType('browser')
     },

@@ -54,6 +54,7 @@ function reconciliationPlan() {
     pageHostGeneration: 12,
     pairedDeviceId: 'device-a'
   }
+
   return planBrowserHostPageReconciliation(
     [
       intent('page-1'),
@@ -77,6 +78,7 @@ function actionSpies(): BrowserHostPageReconciliationActions & {
 } {
   const order: string[] = []
   let settled = 0
+
   return {
     order,
     phaseOneSettled: () => settled,
@@ -117,6 +119,7 @@ describe('browser host page reconciliation executor', () => {
     const actions = actionSpies()
     actions.closePage = vi.fn(async (target) => {
       actions.order.push(`close:${target.browserPageId}`)
+
       if (target.browserPageId === 'page-3') {
         throw new Error('close outcome unknown')
       }
@@ -140,12 +143,15 @@ describe('browser host page reconciliation executor', () => {
       [],
       inventorySource
     )
+
     let active = 0
     let peak = 0
     let release = (): void => {}
+
     const released = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const actions: BrowserHostPageReconciliationActions = {
       reclaimPage: vi.fn(async () => {}),
       closePage: vi.fn(async () => {}),
@@ -228,6 +234,7 @@ describe('browser host page reconciliation executor', () => {
     let actionSignal: AbortSignal | undefined
     actions.reclaimPage = vi.fn((_pair, signal) => {
       actionSignal = signal
+
       return new Promise<void>(() => {})
     })
 
@@ -235,6 +242,7 @@ describe('browser host page reconciliation executor', () => {
       maxConcurrency: 1,
       actionTimeoutMs: 25
     })
+
     const rejected = executing.catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(25)
 
@@ -288,16 +296,20 @@ describe('browser host page reconciliation executor', () => {
   it('handles a late action rejection after timeout', async () => {
     vi.useFakeTimers()
     let rejectAction = (_error: Error): void => {}
+
     const lateAction = new Promise<void>((_resolve, reject) => {
       rejectAction = reject
     })
+
     const actions = actionSpies()
     actions.restorePage = vi.fn(() => lateAction)
+
     const executing = executeBrowserHostPageReconciliation(
       planBrowserHostPageReconciliation([intent('page-31')], [], inventorySource),
       actions,
       { actionTimeoutMs: 25 }
     )
+
     const rejected = executing.catch((error: unknown) => error)
     await vi.advanceTimersByTimeAsync(25)
     await rejected
@@ -329,6 +341,7 @@ describe('browser host page reconciliation executor', () => {
       [],
       inventorySource
     )
+
     const actions = actionSpies()
     actions.restorePage = vi.fn(async (target) => {
       if (target.browserPageId === 'page-20') {

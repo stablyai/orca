@@ -9,6 +9,7 @@ import {
 
 export function setPinnedFixtureState(): void {
   const repo = makeRepo()
+
   const pinned = makeWorktree({
     id: 'pinned',
     instanceId: 'pinned-instance',
@@ -16,7 +17,9 @@ export function setPinnedFixtureState(): void {
     branch: 'pinned-branch',
     sortOrder: 20
   })
+
   pinned.isPinned = true
+
   const normal = makeWorktree({
     id: 'normal',
     instanceId: 'normal-instance',

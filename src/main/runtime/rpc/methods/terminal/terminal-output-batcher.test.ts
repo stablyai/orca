@@ -25,13 +25,16 @@ it('keeps delivered ranges frozen and isolated from reentrant flushes and dispos
   const secondRange = range(1)
   const sourceRanges = [firstRange]
   const delivered: (readonly TerminalOutputSourceRange[])[] = []
+
   const batcher = createTerminalOutputBatcher((_data, meta) => {
     delivered.push(meta!.sourceRanges!)
+
     if (delivered.length === 1) {
       batcher.push('b', { sourceRanges: [secondRange] })
       batcher.flush()
     }
   })
+
   try {
     batcher.push('a', { sourceRanges })
     batcher.flush()

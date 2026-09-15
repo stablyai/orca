@@ -11,9 +11,13 @@ type GhExecOptions = Parameters<typeof ghExecFileAsync>[1]
 // GitHub yet, network) get a short TTL so a future push can flip the answer
 // without the checks-panel poll re-probing every cycle.
 const MEMBERSHIP_CACHE_MAX_ENTRIES = 200
+
 const MEMBERSHIP_DEFINITIVE_TTL_MS = 6 * 60 * 60 * 1000
+
 const MEMBERSHIP_ERROR_TTL_MS = 5 * 60 * 1000
+
 const COMMIT_PULLS_PAGE_SIZE = 100
+
 // Why: a worktree HEAD is associated with ~1 PR, so page 1 is short in practice
 // and this cap is never reached; it only bounds the pathological case of a commit
 // linked to hundreds of PRs, where staying 'unknown' is the safe answer.
@@ -29,11 +33,14 @@ function pruneMergedPRCommitMembershipCache(now = Date.now()): void {
       membershipCache.delete(cacheKey)
     }
   }
+
   while (membershipCache.size > MEMBERSHIP_CACHE_MAX_ENTRIES) {
     const oldestKey = membershipCache.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     membershipCache.delete(oldestKey)
   }
 }
@@ -56,9 +63,11 @@ export async function isCommitPartOfMergedPR(args: {
   ghOptions: GhExecOptions
 }): Promise<MergedPRCommitMembership> {
   const oid = args.commitOid.trim().toLowerCase()
+
   if (!/^[0-9a-f]{4,64}$/.test(oid) || !Number.isInteger(args.prNumber)) {
     return 'unknown'
   }
+
   const owner = args.ownerRepo.owner
   const repo = args.ownerRepo.repo
   const cacheKey = `${githubRepoIdentityKey(args.ownerRepo)}#${args.prNumber}@${oid}`
@@ -66,14 +75,17 @@ export async function isCommitPartOfMergedPR(args: {
   const now = Date.now()
   pruneMergedPRCommitMembershipCache(now)
   const cached = membershipCache.get(cacheKey)
+
   if (cached && cached.expiresAt > now) {
     return cached.value
   }
+
   // Why blocked stays unknown: hiding a transient branch match is safe, but
   // callers must not clear a durable linked PR when the probe never ran.
   if (repositoryRateLimitGuard(args.ownerRepo, 'core', ghOptions).blocked) {
     return 'unknown'
   }
+
   try {
     // Why paginate: a full page that omits the target PR may just be truncated (a
     // commit can belong to many PRs). Reading only page 1 and calling it
@@ -87,9 +99,12 @@ export async function isCommitPartOfMergedPR(args: {
           value: 'unknown',
           expiresAt: now + MEMBERSHIP_ERROR_TTL_MS
         })
+
         return 'unknown'
       }
+
       noteRepositoryRateLimitSpend(args.ownerRepo, 'core', 1, ghOptions)
+
       const { stdout } = await ghExecFileAsync(
         [
           'api',
@@ -97,7 +112,9 @@ export async function isCommitPartOfMergedPR(args: {
         ],
         ghOptions
       )
+
       const parsed = JSON.parse(stdout) as unknown
+
       // Why: a non-array success payload is a shape mismatch, not an empty page;
       // caching it as definitive not-contained could wrongly clear a durable link.
       if (!Array.isArray(parsed)) {
@@ -105,34 +122,43 @@ export async function isCommitPartOfMergedPR(args: {
           value: 'unknown',
           expiresAt: now + MEMBERSHIP_ERROR_TTL_MS
         })
+
         return 'unknown'
       }
+
       const entries = parsed
+
       const contained = entries.some(
         (entry) =>
           typeof entry === 'object' &&
           entry !== null &&
           (entry as { number?: unknown }).number === args.prNumber
       )
+
       if (contained) {
         membershipCache.set(cacheKey, {
           value: 'contained',
           expiresAt: now + MEMBERSHIP_DEFINITIVE_TTL_MS
         })
+
         return 'contained'
       }
+
       if (entries.length < COMMIT_PULLS_PAGE_SIZE) {
         membershipCache.set(cacheKey, {
           value: 'not-contained',
           expiresAt: now + MEMBERSHIP_DEFINITIVE_TTL_MS
         })
+
         return 'not-contained'
       }
     }
+
     membershipCache.set(cacheKey, {
       value: 'unknown',
       expiresAt: now + MEMBERSHIP_ERROR_TTL_MS
     })
+
     return 'unknown'
   } catch {
     // Why: 422 often means "new local work" today, but a later push can make
@@ -141,6 +167,7 @@ export async function isCommitPartOfMergedPR(args: {
       value: 'unknown',
       expiresAt: now + MEMBERSHIP_ERROR_TTL_MS
     })
+
     return 'unknown'
   }
 }

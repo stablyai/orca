@@ -22,6 +22,7 @@ function canForward(started: boolean, state: ConnectionState, suspended: boolean
   if (suspended) {
     return true
   }
+
   return started ? state !== 'connected' : state === 'disconnected'
 }
 
@@ -32,17 +33,22 @@ export function forwardMigrationDialState(args: {
 }): MigrationDialStateForwarder {
   let started = false
   let stopped = false
+
   const unsubscribe = args.session.onStateChange((next) => {
     if (stopped || !DIAL_PHASES.includes(next)) {
       return
     }
+
     const { state, suspended } = args.snapshot()
+
     if (!canForward(started, state, suspended)) {
       return
     }
+
     started = true
     args.publish(next)
   })
+
   return {
     forwarded: () => started,
     stop: () => {

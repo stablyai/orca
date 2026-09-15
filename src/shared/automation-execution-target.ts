@@ -49,6 +49,7 @@ function selectionForRepo(
   workspaceSshPin: AutomationWorkspaceSshPin | undefined
 ): AutomationExecutionTargetSelection {
   const connectionId = repo.connectionId?.trim()
+
   if (!connectionId) {
     // A pinned workspace is the record's real host, so the local target captures its generation.
     return withGeneration(
@@ -56,6 +57,7 @@ function selectionForRepo(
       workspaceSshPin?.generation
     )
   }
+
   return withGeneration(
     { executionTargetType: 'ssh', executionTargetId: connectionId },
     sshTargetGeneration
@@ -77,9 +79,11 @@ export function applyAutomationExecutionTarget<T extends AutomationStoredExecuti
   retainedWorkspaceSshPin?: AutomationWorkspaceSshPin
 ): T {
   const next = { ...record, ...selection }
+
   if (selection.executionTargetGeneration === undefined && !retainedWorkspaceSshPin) {
     delete next.executionTargetGeneration
   }
+
   return next
 }
 
@@ -92,6 +96,7 @@ export function deriveAutomationExecutionTargetForCreate(input: {
   if (!input.repo) {
     throw new Error(MISSING_AUTOMATION_PROJECT_ERROR)
   }
+
   return selectionForRepo(input.repo, input.sshTargetGeneration, input.workspaceSshPin)
 }
 
@@ -121,6 +126,7 @@ export function deriveAutomationExecutionTargetForUpdate(input: {
       input.current.executionTargetType === 'local' && input.workspaceSshPinMoved
         ? input.workspaceSshPin?.generation
         : input.current.executionTargetGeneration
+
     return withGeneration(
       {
         executionTargetType: input.current.executionTargetType,
@@ -129,8 +135,10 @@ export function deriveAutomationExecutionTargetForUpdate(input: {
       generation
     )
   }
+
   if (!input.repo) {
     throw new Error(MISSING_AUTOMATION_PROJECT_ERROR)
   }
+
   return selectionForRepo(input.repo, input.sshTargetGeneration, input.workspaceSshPin)
 }

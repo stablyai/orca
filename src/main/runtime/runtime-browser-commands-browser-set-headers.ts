@@ -7,6 +7,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     params: { headers: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setHeaders(
       params.headers,
       target.worktreeId,
@@ -21,6 +22,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setCredentials(
       params.user,
       params.pass,
@@ -36,6 +38,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setMedia(
       params.colorScheme,
       params.reducedMotion,
@@ -48,6 +51,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
 
   async browserClipboardRead(params: BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().clipboardRead(target.worktreeId, target.browserPageId)
   }
 
@@ -55,6 +59,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     params: { text: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().clipboardWrite(
       params.text,
       target.worktreeId,
@@ -68,6 +73,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     params: { text?: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().dialogAccept(
       params.text,
       target.worktreeId,
@@ -77,6 +83,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
 
   async browserDialogDismiss(params: BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().dialogDismiss(target.worktreeId, target.browserPageId)
   }
 
@@ -86,6 +93,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     params: { key: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().storageLocalGet(
       params.key,
       target.worktreeId,
@@ -100,6 +108,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().storageLocalSet(
       params.key,
       params.value,
@@ -110,6 +119,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
 
   async browserStorageLocalClear(params: BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().storageLocalClear(
       target.worktreeId,
       target.browserPageId
@@ -120,6 +130,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     params: { key: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().storageSessionGet(
       params.key,
       target.worktreeId,
@@ -134,6 +145,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().storageSessionSet(
       params.key,
       params.value,
@@ -144,6 +156,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
 
   async browserStorageSessionClear(params: BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().storageSessionClear(
       target.worktreeId,
       target.browserPageId
@@ -159,6 +172,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().download(
       params.selector,
       params.path,
@@ -173,6 +187,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
     params: { selector: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().highlight(
       params.selector,
       target.worktreeId,
@@ -184,6 +199,7 @@ export class RuntimeBrowserCommandsWithBrowserSetHeaders extends RuntimeBrowserC
 
   async browserExec(params: { command: string } & BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().exec(
       params.command,
       target.worktreeId,

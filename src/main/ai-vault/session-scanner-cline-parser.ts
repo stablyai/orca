@@ -30,6 +30,7 @@ export function isClineSessionMetadataPath(filePath: string): boolean {
   const segments = filePath.replace(/\\/g, '/').split('/').filter(Boolean)
   const fileName = segments.pop()
   const sessionId = segments.pop()
+
   return Boolean(fileName && sessionId && fileName === `${sessionId}.json`)
 }
 
@@ -44,6 +45,7 @@ export async function parseClineSessionFile(
 ): Promise<AiVaultSession | null> {
   const metadataContent = await wslGatedReadFile(file.path, 'utf-8', 'scan')
   let messagesContent: string | null = null
+
   try {
     messagesContent = await wslGatedReadFile(
       clineMessagesPathForMetadata(file.path),
@@ -57,6 +59,7 @@ export async function parseClineSessionFile(
       throw error
     }
   }
+
   return parseClineSessionContent(file, metadataContent, messagesContent, platform, {}, messageSink)
 }
 
@@ -65,6 +68,7 @@ function isMissingSessionPathError(error: unknown): boolean {
     error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
       ? error.code
       : null
+
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
@@ -77,28 +81,35 @@ export function parseClineSessionContent(
   messageSink?: TranscriptMessageSink
 ): AiVaultSession | null {
   const metadata = parseJsonRecord(metadataContent)
+
   if (!metadata) {
     return null
   }
+
   const pathSegments = file.path.replace(/\\/g, '/').split('/').filter(Boolean)
   const sessionId = extractString(metadata.session_id) ?? pathSegments.at(-2) ?? ''
+
   const accumulator = createAccumulator({
     agent: 'cline',
     file,
     sessionId,
     messages: messageSink
   })
+
   accumulator.cwd = extractString(metadata.cwd) ?? extractString(metadata.workspace_root)
   accumulator.model = extractString(metadata.model)
   updateTimeline(accumulator, metadata.started_at)
 
   const messages = messagesContent ? parseJsonRecord(messagesContent) : null
+
   if (messages) {
     updateTimeline(accumulator, messages.updated_at)
+
     for (const value of arrayValue(messages.messages)) {
       consumeClineSessionMessage(accumulator, value)
     }
   }
+
   accumulator.fallbackTitle ??= normalizeTitleText(extractString(metadata.prompt) ?? '')
 
   return finalizeSession(accumulator, platform, options)
@@ -115,18 +126,23 @@ function parseJsonRecord(content: string): Record<string, unknown> | null {
 function consumeClineSessionMessage(accumulator: SessionAccumulator, value: unknown): void {
   const message = asRecord(value)
   const role = message?.role
+
   if (!message || (role !== 'user' && role !== 'assistant')) {
     return
   }
+
   accumulator.messageCount++
   updateTimeline(accumulator, message.ts)
   const content = message.content
+
   if (role === 'user' && !accumulator.fallbackTitle) {
     accumulator.fallbackTitle = normalizeTitleText(extractContentText(content) ?? '')
   }
+
   if (role === 'assistant' && !accumulator.model) {
     accumulator.model = extractString(asRecord(message.modelInfo)?.id)
   }
+
   addPreviewContent(accumulator, role, content, message.ts)
 }
 
@@ -139,6 +155,7 @@ export async function parseClineSessionDocuments(
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   let metadata: Record<string, unknown>
+
   try {
     const parsed = await readStreamedSessionDocument({
       bytes: metadataBytes,
@@ -148,29 +165,38 @@ export async function parseClineSessionDocuments(
       consume: () => {},
       signal
     })
+
     if (!parsed) {
       return null
     }
+
     metadata = parsed.record
   } catch (error) {
     if (error instanceof SyntaxError) {
       return null
     }
+
     throw error
   }
+
   const create = (): SessionAccumulator => {
     const pathSegments = file.path.replace(/\\/g, '/').split('/').filter(Boolean)
+
     const accumulator = createAccumulator({
       agent: 'cline',
       file,
       sessionId: extractString(metadata.session_id) ?? pathSegments.at(-2) ?? ''
     })
+
     accumulator.cwd = extractString(metadata.cwd) ?? extractString(metadata.workspace_root)
     accumulator.model = extractString(metadata.model)
     updateTimeline(accumulator, metadata.started_at)
+
     return accumulator
   }
+
   let accumulator = create()
+
   try {
     const parsed = await readStreamedSessionDocument({
       bytes: readMessages(),
@@ -180,6 +206,7 @@ export async function parseClineSessionDocuments(
       consume: consumeClineSessionMessage,
       signal
     })
+
     if (parsed) {
       accumulator = parsed.state
       updateTimeline(accumulator, parsed.record.updated_at)
@@ -193,6 +220,8 @@ export async function parseClineSessionDocuments(
       throw error
     }
   }
+
   accumulator.fallbackTitle ??= normalizeTitleText(extractString(metadata.prompt) ?? '')
+
   return finalizeSession(accumulator, platform, options)
 }

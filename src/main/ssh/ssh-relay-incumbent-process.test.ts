@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '../../shared/child-process/run-process'
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: () => false
 }))
+
 import {
   relayEndpointIncumbentProbeCommand,
   parseRelayEndpointIncumbentProbe,
@@ -20,15 +22,19 @@ async function probe(script: string, listening = false) {
   const socket = join(dir, 'socket with spaces.sock')
   const server = createServer((s) => s.end())
   const pidFile = join(dir, 'probe.pid')
+
   try {
     writeFileSync(join(dir, 'lsof'), `#!/bin/sh\n${script}`, { mode: 0o755 })
+
     if (listening) {
       await new Promise<void>((resolve, reject) => {
         server.once('error', reject)
         server.listen(socket, resolve)
       })
     }
+
     const start = performance.now()
+
     const result = await runProcess({
       program: '/bin/sh',
       args: ['-c', relayEndpointIncumbentProbeCommand(process.execPath, socket)],
@@ -37,34 +43,43 @@ async function probe(script: string, listening = false) {
       detached: true,
       terminationBarrier: true
     })
+
     const verdict = parseRelayEndpointIncumbentProbe(socket, result.stdout)
     let pidAlive: boolean | null = null
+
     try {
       const pid = Number(readFileSync(pidFile, 'utf8'))
+
       const state = await runProcess({
         program: 'ps',
         args: ['-o', 'state=', '-p', String(pid)],
         timeoutMs: 2000
       })
+
       pidAlive = !(
         (state.code === 1 && !state.stdout.trim()) ||
         (state.code === 0 && state.stdout.trim().startsWith('Z'))
       )
     } catch {}
+
     return { result, verdict, elapsedMs: performance.now() - start, pidAlive }
   } finally {
     if (listening) {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
+
     try {
       const pid = Number(readFileSync(pidFile, 'utf8'))
+
       if (Number.isInteger(pid) && pid > 0) {
         process.kill(pid, 'SIGKILL')
       }
     } catch {}
+
     rmSync(dir, { recursive: true, force: true })
   }
 }
+
 describe.skipIf(process.platform === 'win32')('real generated incumbent probe', () => {
   it('bounds hung lsof and preserves live connect evidence', async () => {
     const p = await probe('echo $$ > "$FIXTURE_PID"\nexec sleep 60\n', true)

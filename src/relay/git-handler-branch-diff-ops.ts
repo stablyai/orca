@@ -17,13 +17,16 @@ export function parseOptionalBranchDiffHeadOid(
   params: Record<string, unknown>
 ): string | undefined {
   const { headOid } = params
+
   // Why: GitBranchCompareSummary.headOid is `string | null`, so a mixed-version
   // client can put an explicit null on the wire. Treat it as unpinned rather
   // than rejecting a request the legacy path would have served.
   if (headOid == null) {
     return undefined
   }
+
   assertFullGitObjectId(headOid, 'headOid')
+
   return headOid
 }
 
@@ -37,11 +40,13 @@ export async function branchDiffEntryAtPinnedOids(
 ) {
   assertFullGitObjectId(baseOid, 'baseRef')
   assertFullGitObjectId(headOid, 'headOid')
+
   try {
     const [left, right] = await Promise.all([
       readBlobAtOid(gitBuffer, worktreePath, baseOid, oldPath ?? filePath),
       readBlobAtOid(gitBuffer, worktreePath, headOid, filePath)
     ])
+
     return [buildDiffResult(left.content, right.content, left.isBinary, right.isBinary, filePath)]
   } catch {
     return [

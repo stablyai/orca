@@ -44,6 +44,7 @@ describe('shared agent-hook-listener', () => {
 
     it('stamps turnCompletedAt on a gated lead Stop and repeats it on the all-clear', () => {
       vi.useFakeTimers()
+
       try {
         vi.setSystemTime(1_700_000_005_000)
         claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
@@ -52,6 +53,7 @@ describe('shared agent-hook-listener', () => {
           agent_id: 'a1',
           agent_type: 'general-purpose'
         })
+
         const stop = claudeEvent({
           hook_event_name: 'Stop',
           last_assistant_message: 'Which cells need hand-verification?',
@@ -65,6 +67,7 @@ describe('shared agent-hook-listener', () => {
             }
           ]
         })
+
         expect(stop?.payload.state).toBe('working')
         expect(stop?.payload.turnCompletedAt).toBe(1_700_000_005_000)
         expect(stop?.payload.lastAssistantMessage).toBe('Which cells need hand-verification?')
@@ -90,11 +93,13 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
+
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         is_interrupt: true,
         background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
       })
+
       expect(stop?.payload.state).toBe('working')
       expect(stop?.payload.turnCompletedAt).toBeUndefined()
     })
@@ -127,6 +132,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
+
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [
@@ -139,6 +145,7 @@ describe('shared agent-hook-listener', () => {
           }
         ]
       })
+
       expect(stop?.payload.state).toBe('working')
       expect(stop?.payload.subagents).toEqual([
         {
@@ -167,6 +174,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'r1',
         agent_type: 'code-reviewer'
       })
+
       // Why: lead already stopped, but a live child means the pane is working.
       expect(spawned?.payload.state).toBe('working')
       expect(spawned?.payload.prompt).toBe('kick off reviewers')
@@ -211,6 +219,7 @@ describe('shared agent-hook-listener', () => {
         tool_name: 'Bash',
         tool_input: { command: 'pnpm test' }
       })
+
       expect(childTool?.payload.state).toBe('working')
       expect(childTool?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'a9', state: 'working' })
@@ -234,16 +243,19 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'aprobe1-6d3cb5b52120b7bf',
         agent_type: 'probe1'
       })
+
       const teammateTask = {
         id: 'tlkjjs0jv',
         type: 'teammate',
         status: 'running',
         description: 'Run the shell command: sleep 25.'
       }
+
       const spawnStop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [teammateTask]
       })
+
       expect(spawnStop?.payload.state).toBe('working')
       expect(spawnStop?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'working' })
@@ -256,6 +268,7 @@ describe('shared agent-hook-listener', () => {
         agent_type: 'probe1',
         background_tasks: [teammateTask]
       })
+
       expect(stopped?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
       ])
@@ -272,6 +285,7 @@ describe('shared agent-hook-listener', () => {
         hook_event_name: 'Stop',
         background_tasks: [teammateTask]
       })
+
       expect(wakeStop?.payload.state).toBe('done')
       expect(wakeStop?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
@@ -285,11 +299,13 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'areviewer-6d3cb5b52120b7bf',
         agent_type: 'security-reviewer'
       })
+
       // Lead turn ends while the teammate works; pane stays working.
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [{ id: 'trev', type: 'teammate', status: 'running' }]
       })
+
       expect(stop?.payload.state).toBe('working')
 
       // Why: teammate name and agent type are separate Agent-tool inputs; the
@@ -302,6 +318,7 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'reviewer',
         team_name: 'session-x'
       })
+
       expect(idled?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
       ])
@@ -338,6 +355,7 @@ describe('shared agent-hook-listener', () => {
         tool_name: 'AskUserQuestion',
         tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
       })
+
       expect(question?.payload.state).toBe('waiting')
 
       const spawned = claudeEvent({
@@ -345,6 +363,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
+
       expect(spawned?.payload.state).toBe('waiting')
       expect(spawned?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
 
@@ -357,6 +376,7 @@ describe('shared agent-hook-listener', () => {
         tool_name: 'Bash',
         tool_input: { command: 'sleep 5' }
       })
+
       expect(childTool?.payload.state).toBe('waiting')
       expect(childTool?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
       expect(childTool?.payload.toolName).toBe('AskUserQuestion')
@@ -406,6 +426,7 @@ describe('shared agent-hook-listener', () => {
 
     it('releases a child-owned wait when the blocked child stops without another tool event', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
+
       const blocked = claudeEvent({
         hook_event_name: 'PermissionRequest',
         agent_id: 'a-blocked',
@@ -413,6 +434,7 @@ describe('shared agent-hook-listener', () => {
         tool_name: 'Bash',
         tool_input: { command: 'rm -rf build' }
       })
+
       expect(blocked?.payload.state).toBe('waiting')
 
       // Why: the blocked child dying (killed, errored) must not pin the
@@ -439,6 +461,7 @@ describe('shared agent-hook-listener', () => {
         tool_name: 'Bash',
         tool_input: { command: 'rm -rf build' }
       })
+
       expect(blocked?.payload.state).toBe('waiting')
 
       const approved = claudeEvent({
@@ -447,6 +470,7 @@ describe('shared agent-hook-listener', () => {
         tool_name: 'Bash',
         tool_input: { command: 'rm -rf build' }
       })
+
       expect(approved?.payload.state).toBe('working')
 
       // Why: the lead already stopped before the wait; draining the child
@@ -482,6 +506,7 @@ describe('shared agent-hook-listener', () => {
         { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+
       // Why: teams sessions never send an EMPTY list — the alive teammate
       // entry must not keep a phantom pre-restart child gating the pane.
       const stop = claudeEvent({
@@ -490,6 +515,7 @@ describe('shared agent-hook-listener', () => {
           { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive' }
         ]
       })
+
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toBeUndefined()
     })
@@ -499,10 +525,12 @@ describe('shared agent-hook-listener', () => {
         { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [{ id: 'a77', type: 'subagent', status: 'running' }]
       })
+
       expect(stop?.payload.state).toBe('working')
       expect(stop?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'a77', state: 'working' })
@@ -515,6 +543,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'alive-after-cap',
         agent_type: 'general-purpose'
       })
+
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
@@ -558,6 +587,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'alane-hooks-6d3cb5b5',
         agent_type: 'lane-hooks'
       })
+
       // Why: teammate "lane" must not idle "lane-hooks"'s rows via the
       // `a<name>-` prefix — the id suffix after the name is hyphen-free hex.
       const idledOther = claudeEvent({
@@ -565,6 +595,7 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'lane',
         team_name: 'session-x'
       })
+
       expect(idledOther?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'working' })
       ])
@@ -574,6 +605,7 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'lane-hooks',
         team_name: 'session-x'
       })
+
       // Why: the exact-name match parks the row idle (turn over, still alive).
       expect(idled?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'idle' })
@@ -595,6 +627,7 @@ describe('shared agent-hook-listener', () => {
         teammate_name: 'probe',
         team_name: 'session-x'
       })
+
       expect(idled?.payload.state).toBe('done')
       expect(idled?.payload.interrupted).toBe(true)
     })
@@ -613,12 +646,14 @@ describe('shared agent-hook-listener', () => {
         }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [
           { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive teammate' }
         ]
       })
+
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toBeUndefined()
     })
@@ -628,6 +663,7 @@ describe('shared agent-hook-listener', () => {
       // reports a running non-teammate task must resurrect the child row and
       // keep the pane working rather than declaring done.
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'resume' })
+
       const stop = claudeEvent({
         hook_event_name: 'Stop',
         background_tasks: [
@@ -640,6 +676,7 @@ describe('shared agent-hook-listener', () => {
           }
         ]
       })
+
       expect(stop?.payload.state).toBe('working')
       expect(stop?.payload.subagents).toEqual([
         expect.objectContaining({ id: 'a77', state: 'working', description: 'long build' })
@@ -655,11 +692,13 @@ describe('shared agent-hook-listener', () => {
 
     it('restores working for an answered lead question and drops the card', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'pick a color' })
+
       const wait = claudeEvent({
         hook_event_name: 'PreToolUse',
         tool_name: 'AskUserQuestion',
         tool_input: { questions: [{ question: 'Red or Blue?' }] }
       })
+
       expect(wait?.payload.state).toBe('waiting')
       expect(wait?.payload.interactivePrompt).toBeDefined()
 
@@ -672,6 +711,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'probe'
       })
+
       expect(childDriven?.payload.state).toBe('working')
       expect(childDriven?.payload.toolName).toBeUndefined()
       expect(childDriven?.payload.interactivePrompt).toBeUndefined()
@@ -702,12 +742,14 @@ describe('shared agent-hook-listener', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
       claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'probe' })
       claudeEvent({ hook_event_name: 'Stop' })
+
       const wait = claudeEvent({
         hook_event_name: 'PreToolUse',
         tool_name: 'AskUserQuestion',
         agent_id: 'a1',
         tool_input: { questions: [{ question: 'Continue?' }] }
       })
+
       expect(wait?.payload.state).toBe('waiting')
 
       // Why: the lead already finished; the answer resumes the child, so the

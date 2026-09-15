@@ -22,6 +22,7 @@ export function useTerminalArtifactTempFiles(): {
     tempDirs.push(dir)
     const filePath = join(dir, name)
     await writeFile(filePath, content)
+
     return filePath
   }
 
@@ -38,6 +39,7 @@ export function absoluteFileTarget(result: {
   ) {
     throw new Error('Expected an absolute terminal artifact target')
   }
+
   return result.openTarget as { absolutePath: string; grantId: string }
 }
 

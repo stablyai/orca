@@ -129,7 +129,9 @@ import { clearBrowserPageDeferredNavigation } from '../navigate/browser-page-def
 import BrowserPane from './browser-workspace-pane'
 
 const ENVIRONMENT_ID = 'environment-a'
+
 const WORKSPACE_ID = 'workspace-a'
+
 const PAGE_ID = 'page-a'
 
 const CLIENT_PLACEMENT = {
@@ -145,6 +147,7 @@ function flushFrames(cycles = 8): void {
   for (let index = 0; index < cycles; index += 1) {
     const pending = frameCallbacks
     frameCallbacks = []
+
     for (const callback of pending) {
       callback(0)
     }
@@ -155,6 +158,7 @@ function createWebview(): Electron.WebviewTag & { loadURL: ReturnType<typeof vi.
   const webview = document.createElement('webview') as Electron.WebviewTag & {
     loadURL: ReturnType<typeof vi.fn>
   }
+
   // Why a real focus target and not a spy: the pane focuses its guest on attach, and the whole
   // point of routing the resume through the focus grab is that this call must not win. A spy would
   // let the grab's latch be deleted with the focus assertions still green.
@@ -179,6 +183,7 @@ function createWebview(): Electron.WebviewTag & { loadURL: ReturnType<typeof vi.
     stopFindInPage: vi.fn(),
     loadURL: vi.fn(async () => {})
   })
+
   return webview
 }
 
@@ -285,6 +290,7 @@ function renderWorkspacePane(): void {
       <BrowserPane browserTab={browserWorkspace()} isActive chromeShortcutScope="focused" />
     </TooltipProvider>
   )
+
   render(strictMode ? <StrictMode>{pane}</StrictMode> : pane)
   act(() => flushFrames())
 }
@@ -307,6 +313,7 @@ function startEditing(text: string): HTMLInputElement {
   act(() => {
     fireEvent.change(input, { target: { value: text } })
   })
+
   return input
 }
 
@@ -322,6 +329,7 @@ describe.each([
     frameCallbacks = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', () => {})
@@ -334,7 +342,9 @@ describe.each([
       if (liveAttachment?.detached === false) {
         throw new Error('browser_client_page_renderer_visible_page_claimed')
       }
+
       viewport.appendChild(webview)
+
       const attachment = {
         webview,
         detached: false,
@@ -344,7 +354,9 @@ describe.each([
         }),
         nextMetadataRevision: vi.fn(() => 1)
       }
+
       liveAttachment = attachment
+
       return attachment
     })
     mocks.ensureRemotePage.mockClear()

@@ -44,9 +44,12 @@ async function mountHook(options: IpcEventsHarnessOptions = {}): Promise<{
     createHarnessStoreState({ tabsByWorktree: {} }),
     options
   )
+
   const { getClientHostedBrowserRows } =
     await import('@/lib/pane-manager/client-hosted-browser-row-state')
+
   harness.useIpcEvents()
+
   return { harness, readRows: getClientHostedBrowserRows }
 }
 

@@ -20,9 +20,11 @@ export async function activateWebRuntimeSessionWorktree(args: {
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
+
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
@@ -37,6 +39,7 @@ export async function activateWebRuntimeSessionWorktree(args: {
       },
       timeoutMs: 15_000
     })
+
     unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
     // Why: a restarted HUB can recover its SSH pane after this client's subscription replayed an empty startup snapshot.
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
@@ -49,12 +52,14 @@ export async function activateWebRuntimeSessionWorktree(args: {
       args.worktreeId,
       intentOwner.pairingRevision
     )
+
     return true
   } catch (error) {
     console.warn(
       '[web-runtime-session] failed to activate worktree:',
       error instanceof Error ? error.message : String(error)
     )
+
     return false
   }
 }

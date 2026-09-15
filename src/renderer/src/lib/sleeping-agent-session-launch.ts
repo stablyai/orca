@@ -32,6 +32,7 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+
   // The resume tab is created without a shell override, so the global Windows shell wins.
   return resolveAgentResumeLaunchTarget({
     projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
@@ -45,16 +46,20 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   const state = useAppStore.getState()
   const termIds = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+
   const editorIds = state.openFiles
     .filter((file) => file.worktreeId === worktreeId)
     .map((f) => f.id)
+
   const browserIds = (state.browserTabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
+
   const base = reconcileTabOrder(
     state.tabBarOrderByWorktree[worktreeId],
     termIds,
     editorIds,
     browserIds
   )
+
   const order = base.filter((id) => id !== tabId)
   order.push(tabId)
   state.setTabBarOrder(worktreeId, order)
@@ -69,6 +74,7 @@ export function launchSleepingAgentSession(
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
+
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -88,6 +94,7 @@ export function launchSleepingAgentSession(
     platform: resumeTarget.platform,
     shell: resumeTarget.shell
   })
+
   if (!startupPlan) {
     toast.error(
       translate(
@@ -95,6 +102,7 @@ export function launchSleepingAgentSession(
         'This agent session cannot be resumed.'
       )
     )
+
     return false
   }
 
@@ -124,11 +132,15 @@ export function launchSleepingAgentSession(
     },
     ...(options?.suppressNavigation ? { activate: false, recordInteraction: false } : {})
   })
+
   state.clearSleepingAgentSession(record.paneKey)
+
   if (!options?.suppressNavigation) {
     state.setActiveTabType('terminal')
   }
+
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   options?.onSessionLaunched?.(tab.id)
+
   return true
 }

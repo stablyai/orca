@@ -75,6 +75,7 @@ export function withAiVaultCurrentWorktreeStatus(
   if (!worktreeInfo?.worktreeId || worktreeInfo.worktreeId !== activeWorktreeId) {
     return worktreeInfo
   }
+
   return worktreeInfo.status === 'current' ? worktreeInfo : { ...worktreeInfo, status: 'current' }
 }
 
@@ -88,12 +89,14 @@ function resolveWorktreeInfoFromCandidates(
 
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const normalizedCwd = normalizeRuntimePathForComparison(session.cwd)
+
   const matched = candidates
     .filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
     .filter((candidate) => !sessionHostId || candidate.hostId === sessionHostId)
     .sort(compareWorktreeCandidates)
 
   const best = matched[0]
+
   if (!best) {
     return {
       status: 'unavailable',
@@ -112,16 +115,19 @@ function resolveWorktreeInfoFromCandidates(
 
 export function extractWorktreePathFromSessionTitle(title: string): string | null {
   const trimmed = title.trim()
+
   if (!trimmed) {
     return null
   }
 
   const suffixMatch = trimmed.match(/\s-\s*Worktree:\s*(.+)$/i)
+
   if (suffixMatch?.[1]) {
     return suffixMatch[1].trim()
   }
 
   const inlineMatch = trimmed.match(/\bWorktree:\s*(.+)$/i)
+
   return inlineMatch?.[1]?.trim() ?? null
 }
 
@@ -145,21 +151,25 @@ function resolveWorktreeDisplayFromCandidates(
   candidates: readonly WorktreeCandidate[]
 ): AiVaultSessionWorktreeInfo | null {
   const resolved = resolveWorktreeInfoFromCandidates(session, candidates)
+
   if (resolved) {
     return resolved
   }
 
   const cwd = session.cwd?.trim()
+
   if (cwd) {
     return unavailableWorktreeInfo(cwd)
   }
 
   const titlePath = extractWorktreePathFromSessionTitle(session.title)
+
   if (titlePath) {
     return unavailableWorktreeInfo(titlePath)
   }
 
   const branch = session.branch?.trim()
+
   if (branch) {
     return {
       status: 'unavailable',
@@ -189,9 +199,11 @@ export function useAiVaultSessionWorktreeMap({
     // Hoisted out of the per-session loop: candidates and their normalized
     // roots are session-independent.
     const candidates = buildWorktreeCandidates(worktrees, repos)
+
     return new Map(
       sessions.flatMap((session) => {
         const worktreeInfo = resolveWorktreeDisplayFromCandidates(session, candidates)
+
         return worktreeInfo ? [[session.id, worktreeInfo] as const] : []
       })
     )
@@ -204,22 +216,29 @@ function buildWorktreeCandidates(
 ): WorktreeCandidate[] {
   const candidates: WorktreeCandidate[] = []
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
   for (const worktree of worktrees) {
     const repo = repoById.get(worktree.repoId)
+
     const hostId =
       normalizeExecutionHostId(worktree.hostId) ??
       (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
+
     if (hasUsablePath(worktree.path)) {
       candidates.push(makeWorktreeCandidate(worktree, worktree.path, hostId, 'current-path'))
     }
+
     for (const priorWorktreeId of worktree.priorWorktreeIds ?? []) {
       const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
+
       if (!parsed || parsed.repoId !== worktree.repoId || !hasUsablePath(parsed.worktreePath)) {
         continue
       }
+
       candidates.push(makeWorktreeCandidate(worktree, parsed.worktreePath, hostId, 'prior-path'))
     }
   }
+
   return candidates
 }
 
@@ -232,9 +251,11 @@ function makeWorktreeCandidate(
   const ownsCwd = createNormalizedPathInsideOrEqualMatcher(path)
   // A WSL UNC root also owns sessions recorded under its Linux-native cwd.
   const wslPath = parseWslUncPath(path)
+
   const ownsCwdViaWslAlias = wslPath
     ? createNormalizedPathInsideOrEqualMatcher(wslPath.linuxPath)
     : null
+
   return {
     worktree,
     path,
@@ -249,17 +270,21 @@ function makeWorktreeCandidate(
 
 function hasUsablePath(pathValue: string): boolean {
   const trimmed = pathValue.trim()
+
   return Boolean(trimmed && isRuntimePathAbsolute(trimmed))
 }
 
 function compareWorktreeCandidates(left: WorktreeCandidate, right: WorktreeCandidate): number {
   const lengthDifference = right.normalizedPathLength - left.normalizedPathLength
+
   if (lengthDifference !== 0) {
     return lengthDifference
   }
+
   if (left.source === right.source) {
     return 0
   }
+
   return left.source === 'current-path' ? -1 : 1
 }
 

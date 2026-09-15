@@ -25,7 +25,9 @@ export type RemoteBrowserStreamStatus =
   | { kind: 'stopped'; notice: string }
 
 export const REMOTE_BROWSER_STREAM_IDLE: RemoteBrowserStreamStatus = { kind: 'idle' }
+
 export const REMOTE_BROWSER_STREAM_OPENING: RemoteBrowserStreamStatus = { kind: 'opening' }
+
 export const REMOTE_BROWSER_STREAM_LIVE: RemoteBrowserStreamStatus = { kind: 'live' }
 
 export function remoteBrowserStreamRetrying(notice: string | null): RemoteBrowserStreamStatus {
@@ -46,6 +48,7 @@ export function remoteBrowserStreamNotice(status: RemoteBrowserStreamStatus): st
   if (status.kind === 'stopped') {
     return status.notice
   }
+
   return status.kind === 'retrying' ? status.notice : null
 }
 

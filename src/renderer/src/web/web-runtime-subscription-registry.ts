@@ -16,9 +16,11 @@ export class WebRuntimeSubscriptionRegistry {
   close(notifySubscriptions: boolean): void {
     const subscriptions = Array.from(this.subscriptions.values())
     this.subscriptions.clear()
+
     if (!notifySubscriptions) {
       return
     }
+
     for (const subscription of subscriptions) {
       subscription.callbacks.onClose?.()
     }
@@ -31,7 +33,9 @@ export class WebRuntimeSubscriptionRegistry {
         subscription.callbacks.onClose?.()
         continue
       }
+
       subscription.callbacks.onTransportInterrupted?.()
+
       if (this.subscriptions.get(subscription.id) === subscription) {
         subscription.needsReplay = true
       }
@@ -43,10 +47,12 @@ export class WebRuntimeSubscriptionRegistry {
       if (!subscription.needsReplay) {
         continue
       }
+
       this.subscriptions.delete(subscription.id)
       subscription.id = this.options.nextId()
       subscription.needsReplay = false
       this.subscriptions.set(subscription.id, subscription)
+
       if (
         this.options.sendEncrypted({
           id: subscription.id,
@@ -65,6 +71,7 @@ export class WebRuntimeSubscriptionRegistry {
   notifyError(code: string, message: string): void {
     const subscriptions = Array.from(this.subscriptions.values())
     this.subscriptions.clear()
+
     for (const subscription of subscriptions) {
       subscription.callbacks.onError?.({ code, message })
     }

@@ -25,12 +25,15 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectLabelsLoading,
     tasksSupported
   } = model
+
   useEffect(() => {
     const slug = splitRepositorySlug(projectMetadataRepository)
+
     if (!tasksSupported || !client || !slug) {
       setProjectAvailableLabels([])
       setProjectLabelsLoading(false)
       setProjectLabelsError('')
+
       return
     }
 
@@ -48,15 +51,19 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as
           | { ok: true; labels?: string[] }
           | { ok: false; error?: { message?: string } }
+
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load labels')
         }
+
         setProjectAvailableLabels(result.labels ?? [])
       })
       .catch((err) => {
@@ -77,10 +84,12 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectMetadataRepository)
+
     if (!tasksSupported || !client || !slug) {
       setProjectAssignableUsers([])
       setProjectAssignableUsersLoading(false)
       setProjectAssignableUsersError('')
+
       return
     }
 
@@ -103,15 +112,19 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as
           | { ok: true; users?: GitHubAssignableUser[] }
           | { ok: false; error?: { message?: string } }
+
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load assignees')
         }
+
         setProjectAssignableUsers(result.users ?? [])
       })
       .catch((err) => {
@@ -140,10 +153,12 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectIssueTypeRepository)
+
     if (!tasksSupported || !client || !slug) {
       setProjectIssueTypes([])
       setProjectIssueTypesLoading(false)
       setProjectIssueTypesError('')
+
       return
     }
 
@@ -161,15 +176,19 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as
           | { ok: true; types?: GitHubIssueType[] }
           | { ok: false; error?: { message?: string } }
+
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load issue types')
         }
+
         setProjectIssueTypes(result.types ?? [])
       })
       .catch((err) => {
@@ -189,6 +208,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
       stale = true
     }
   }, [activeGitHubProjectHost, client, projectIssueTypeRepository, tasksSupported])
+
   return model
 }
 

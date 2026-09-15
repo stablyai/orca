@@ -39,6 +39,7 @@ async function seedVisit(page: Page, worktreeId: string): Promise<void> {
         recordWorktreeVisit: (worktreeId: string) => void
       }
     }
+
     const store = window.__store as unknown as StoreLike
     const state = store.getState()
     state.setActiveWorktree(id)
@@ -54,8 +55,10 @@ async function getNavHistorySnapshot(page: Page): Promise<{ history: string[]; i
         worktreeNavHistoryIndex: number
       }
     }
+
     const store = window.__store as unknown as StoreLike
     const state = store.getState()
+
     return {
       history: [...state.worktreeNavHistory],
       index: state.worktreeNavHistoryIndex
@@ -68,6 +71,7 @@ async function resetNavHistory(page: Page): Promise<void> {
     type StoreLike = {
       setState: (partial: { worktreeNavHistory: string[]; worktreeNavHistoryIndex: number }) => void
     }
+
     const store = window.__store as unknown as StoreLike
     store.setState({ worktreeNavHistory: [], worktreeNavHistoryIndex: -1 })
   })
@@ -82,6 +86,7 @@ async function getForwardButton(page: Page) {
 }
 
 const isMac = process.platform === 'darwin'
+
 const mod = isMac ? 'Meta' : 'Control'
 
 test.describe('Workspace Back/Forward Navigation', () => {

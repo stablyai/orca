@@ -22,6 +22,7 @@ describe('getBaseRefDefault async subprocess bounds', () => {
     await expect(getBaseRefDefault('/repo')).resolves.toBeNull()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalled()
+
     for (const [, options] of gitExecFileAsyncMock.mock.calls) {
       expect(options).toEqual({ cwd: '/repo', timeout: 15_000 })
     }
@@ -35,6 +36,7 @@ describe('getBaseRefDefault async subprocess bounds', () => {
     ).resolves.toBeNull()
 
     expect(gitExecFileAsyncMock).toHaveBeenCalled()
+
     for (const [, options] of gitExecFileAsyncMock.mock.calls) {
       expect(options).toEqual({
         cwd: '\\\\wsl.localhost\\Ubuntu\\repo',

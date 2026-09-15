@@ -34,10 +34,12 @@ function deferred<T>(): {
 } {
   let resolve!: (v: T) => void
   let reject!: (e: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -45,9 +47,11 @@ describe('process-table-snapshot reader', () => {
   it('collapses concurrent calls into a single ps scan', async () => {
     let scans = 0
     const gate = deferred<string>()
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => {
         scans += 1
+
         return gate.promise
       },
       now: () => 0
@@ -69,9 +73,11 @@ describe('process-table-snapshot reader', () => {
   it('reuses the cached snapshot within the TTL window', async () => {
     let scans = 0
     let clock = 0
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => {
         scans += 1
+
         return Promise.resolve(`scan-${scans}`)
       },
       now: () => clock,
@@ -87,9 +93,11 @@ describe('process-table-snapshot reader', () => {
   it('rescans once the TTL expires', async () => {
     let scans = 0
     let clock = 0
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => {
         scans += 1
+
         return Promise.resolve(`scan-${scans}`)
       },
       now: () => clock,
@@ -106,9 +114,11 @@ describe('process-table-snapshot reader', () => {
     let scans = 0
     let clock = 0
     const gate = deferred<string>()
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => {
         scans += 1
+
         return scans === 1 ? gate.promise : Promise.resolve(`scan-${scans}`)
       },
       now: () => clock,
@@ -130,6 +140,7 @@ describe('process-table-snapshot reader', () => {
   it('reports the age of the capture instant, not of the moment ps finished', async () => {
     let clock = 0
     const gate = deferred<string>()
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => gate.promise,
       now: () => clock,
@@ -149,12 +160,15 @@ describe('process-table-snapshot reader', () => {
 
   it('does not cache failures and retries on the next call', async () => {
     let scans = 0
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => {
         scans += 1
+
         if (scans === 1) {
           return Promise.reject(new Error('ps timed out'))
         }
+
         return Promise.resolve('recovered')
       },
       now: () => 0
@@ -169,6 +183,7 @@ describe('process-table-snapshot reader', () => {
 
   it('forces a post-request scan even when a same-tick cache exists', async () => {
     let scans = 0
+
     const reader = createProcessTableSnapshotReader({
       runPs: async () => `scan-${++scans}`,
       now: () => 0
@@ -183,9 +198,11 @@ describe('process-table-snapshot reader', () => {
     let scans = 0
     const first = deferred<string>()
     const second = deferred<string>()
+
     const reader = createProcessTableSnapshotReader({
       runPs: () => {
         scans += 1
+
         return scans === 1 ? first.promise : second.promise
       },
       now: () => 0
@@ -207,6 +224,7 @@ describe('process-table-snapshot reader', () => {
 
   it('does not let an ordinary same-turn miss race a queued fresh scan', async () => {
     let scans = 0
+
     const reader = createProcessTableSnapshotReader({
       runPs: async () => `scan-${++scans}`,
       now: () => 0
@@ -225,9 +243,11 @@ describe('process-table-snapshot reader', () => {
     // instead of re-tokenizing identical stdout per pane.
     let parses = 0
     const gate = deferred<ReturnType<typeof parseProcessTableRows>>()
+
     const reader = createProcessTableSnapshotReader<ReturnType<typeof parseProcessTableRows>>({
       runPs: () => {
         parses += 1
+
         return gate.promise
       },
       now: () => 0
@@ -263,6 +283,7 @@ describe('shared process-table capture', () => {
         })
       }
     )
+
     return () => forks
   }
 
@@ -326,6 +347,7 @@ describe('parseProcessTableRows', () => {
     const rows = parseProcessTableRows(
       ['501 1 S /bin/zsh', '600 501 S+ node /path/bin/codex --flag'].join('\n')
     )
+
     expect(rows).toEqual([
       { pid: 501, ppid: 1, stat: 'S', command: '/bin/zsh' },
       {
@@ -349,6 +371,7 @@ describe('parseStrictProcessTableRows', () => {
       join(__dirname, '__fixtures__', 'linux-process-table-kernel-rows.txt'),
       'utf8'
     )
+
     expect(parseStrictProcessTableRows(capture)).toEqual([
       { pid: 1, ppid: 0, pgid: 1, tpgid: 0, stat: 'Ss', command: '/sbin/init' },
       { pid: 2, ppid: 0, pgid: 0, tpgid: -1, stat: 'S', command: '[kthreadd]' },
@@ -512,6 +535,7 @@ describe('getProcessTableIndex', () => {
 
   it('keeps the memo out of measured builds so a cache hit cannot satisfy a perf gate', () => {
     const rows = parseProcessTableRows('100 1 Ss bash')
+
     const stats: ProcessTableIndexStats = {
       indexBuilds: 0,
       rowVisits: 0,
@@ -546,15 +570,20 @@ describe('process-table capture completeness', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], options: unknown, callback: unknown) => {
         const done = callback as (err: unknown, result: { stdout: string; stderr: string }) => void
+
         const maxBuffer =
           (options as { maxBuffer?: number })?.maxBuffer ?? NODE_DEFAULT_MAX_BUFFER_BYTES
+
         if (Buffer.byteLength(stdout, 'utf-8') > maxBuffer) {
           const error = Object.assign(new Error('stdout maxBuffer length exceeded'), {
             code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
           })
+
           done(error, { stdout: stdout.slice(0, maxBuffer), stderr: '' })
+
           return
         }
+
         done(null, { stdout, stderr: '' })
       }
     )
@@ -563,6 +592,7 @@ describe('process-table capture completeness', () => {
   function busyHostTable(processCount: number): string {
     // ~285 bytes/row, so 4k processes clears 1MB the way a real busy host does.
     const argv = `/usr/bin/node ${'--inspect-brk-and-a-long-flag '.repeat(8)}server.js`
+
     return `${Array.from(
       { length: processCount },
       (_, index) => `${1000 + index} 1 ${1000 + index} ${1000 + index} S+ ${argv}`
@@ -633,14 +663,18 @@ describe('process-table capture completeness', () => {
       (command: string, args: string[], options: unknown, callback: unknown) => {
         const done = callback as (err: unknown, result: { stdout: string; stderr: string }) => void
         const timeout = (options as { timeout?: number })?.timeout
+
         if (timeout !== undefined && durationMs > timeout) {
           const error = Object.assign(
             new Error(`Command failed: ${[command, ...args].join(' ')}\n`),
             { code: null, killed: true, signal: 'SIGTERM' }
           )
+
           done(error, { stdout: '', stderr: '' })
+
           return
         }
+
         done(null, { stdout, stderr: '' })
       }
     )
@@ -705,6 +739,7 @@ describe('evidence-publishing capture budget', () => {
   it('gives up on a capture one tick past the budget instead of waiting out PS_TIMEOUT_MS', async () => {
     mockPsTaking(PROCESS_TABLE_EVIDENCE_BUDGET_MS + 1)
     const pending = getStrictProcessTableSnapshotWithAge()
+
     const settled = pending.then(
       () => 'resolved',
       (error: Error) => error.message

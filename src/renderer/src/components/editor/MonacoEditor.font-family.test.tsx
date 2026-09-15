@@ -3,6 +3,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
+
 const storeState = vi.hoisted(() => ({
   current: {
     theme: 'dark',
@@ -15,10 +16,12 @@ const storeState = vi.hoisted(() => ({
 vi.mock('@monaco-editor/react', () => ({
   default: (props: Record<string, unknown>) => {
     editorProps.current = props
+
     return null
   },
   loader: { config: vi.fn() }
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -34,9 +37,11 @@ vi.mock('@/store', () => ({
       worktreeDiffComments: {}
     })
 }))
+
 vi.mock('../diff-comments/useDiffCommentDecorator', () => ({
   useDiffCommentDecorator: vi.fn()
 }))
+
 vi.mock('./useContextualCopySetup', () => ({
   useContextualCopySetup: () => ({ setupCopy: vi.fn(), toastNode: null })
 }))

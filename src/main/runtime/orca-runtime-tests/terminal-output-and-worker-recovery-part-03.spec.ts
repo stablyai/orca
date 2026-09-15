@@ -20,6 +20,7 @@ describe('OrcaRuntimeService', () => {
   it('retries renderer reveal before clearing an adopted legacy worker sleeping record', async () => {
     const workerPaneKey = `legacy-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '44444444-4444-4444-8444-444444444444'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
@@ -38,12 +39,15 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+
     const runtime = new OrcaRuntimeService(
       { ...runtimeStore, flushOrThrow: vi.fn() } as never,
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       getActiveDispatchForTerminal: () => undefined,
       listLegacyWorkerTerminalRecoveryRows: () => [
@@ -78,6 +82,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const revealTerminalSession = vi
       .fn()
       .mockRejectedValueOnce(new Error('renderer unavailable'))
@@ -89,6 +94,7 @@ describe('OrcaRuntimeService', () => {
           ptyId: 'pty-reveal-retry'
         })
       )
+
     const resolveLegacyWorkerTerminalRecovery = vi.fn()
     runtime.setNotifier({
       revealTerminalSession,
@@ -108,14 +114,17 @@ describe('OrcaRuntimeService', () => {
 
   it('defers a revealed worker until its exact renderer graph is published', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = makePostRevealWorkerRecoveryHarness(() => true)
+
       const identity = {
         worktreeId: TEST_WORKTREE_ID,
         tabId: 'legacy-post-reveal',
         leafId: HEADLESS_LEAF_ID,
         ptyId: harness.ptyId
       }
+
       harness.revealTerminalSession.mockResolvedValue({
         tabId: identity.tabId,
         identity
@@ -194,11 +203,13 @@ describe('OrcaRuntimeService', () => {
       worktreeId: TEST_WORKTREE_ID,
       wslDistro: null
     } as const
+
     const listProcesses = vi
       .fn()
       .mockResolvedValueOnce([liveProcess])
       .mockResolvedValueOnce([liveProcess])
       .mockResolvedValueOnce([])
+
     const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
     harness.revealTerminalSession.mockImplementation(() =>
       publishLegacyWorkerReveal(harness.runtime, {
@@ -238,6 +249,7 @@ describe('OrcaRuntimeService', () => {
 
   it('re-reveals a recovered worker after the renderer graph epoch changes', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = makePostRevealWorkerRecoveryHarness(() => false)
       harness.runtime.attachWindow(TEST_WINDOW_ID)
@@ -317,15 +329,18 @@ describe('OrcaRuntimeService', () => {
       worktreeId: TEST_WORKTREE_ID,
       wslDistro: null
     } as const
+
     const replacement = {
       ...exactProcess,
       incarnationId: '56565656-5656-4656-8656-565656565656',
       terminalHandle: 'term_replacement'
     }
+
     const listProcesses = vi
       .fn()
       .mockResolvedValueOnce([exactProcess])
       .mockResolvedValueOnce([replacement])
+
     const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
 
     await expect(harness.runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
@@ -359,16 +374,19 @@ describe('OrcaRuntimeService', () => {
       worktreeId: TEST_WORKTREE_ID,
       wslDistro: null
     } as const
+
     const replacement = {
       ...exactProcess,
       incarnationId: '67676767-6767-4767-8767-676767676767',
       terminalHandle: 'term_replacement'
     }
+
     const listProcesses = vi
       .fn()
       .mockResolvedValueOnce([exactProcess])
       .mockResolvedValueOnce([exactProcess])
       .mockResolvedValueOnce([replacement])
+
     const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
     harness.revealTerminalSession.mockImplementation(() =>
       publishLegacyWorkerReveal(harness.runtime, {
@@ -392,11 +410,13 @@ describe('OrcaRuntimeService', () => {
     ).toBeUndefined()
     expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(harness.getSession().terminalLayoutsByTabId['legacy-post-reveal']).toBeUndefined()
+
     const runtimeState = harness.runtime as unknown as {
       tabs: Map<string, unknown>
       leaves: Map<string, unknown>
       ptysById: Map<string, { connected: boolean; incarnationId: string | null }>
     }
+
     expect(runtimeState.tabs.has('legacy-post-reveal')).toBe(false)
     expect([...runtimeState.leaves.keys()].some((key) => key.includes('legacy-post-reveal'))).toBe(
       false
@@ -420,6 +440,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps the legacy worker sleeping record in memory when persistence fails', async () => {
     const workerPaneKey = `legacy-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '99999999-9999-4999-8999-999999999999'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
@@ -438,23 +459,30 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const durableWrite = deferred<void>()
     const durableWriteStarted = deferred<void>()
     let flushCount = 0
+
     const flushPendingOrThrowAsync = vi.fn(() => {
       flushCount += 1
+
       if (flushCount === 1) {
         return Promise.resolve()
       }
+
       durableWriteStarted.resolve()
+
       return durableWrite.promise
     })
+
     const runtime = new OrcaRuntimeService(
       { ...runtimeStore, flushPendingOrThrowAsync } as never,
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
@@ -488,6 +516,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
         worktreeId: TEST_WORKTREE_ID,
@@ -496,6 +525,7 @@ describe('OrcaRuntimeService', () => {
         ptyId: 'pty-persistence-failure'
       })
     )
+
     const resolveLegacyWorkerTerminalRecovery = vi.fn()
     runtime.setNotifier({
       revealTerminalSession,

@@ -9,6 +9,7 @@ describe('useThrottledLatestValue', () => {
 
   function Harness({ value }: { value: string | undefined }): null {
     latest = useThrottledLatestValue(value, 50)
+
     return null
   }
 

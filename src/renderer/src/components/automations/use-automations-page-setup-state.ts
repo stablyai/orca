@@ -23,6 +23,7 @@ export function useAutomationsPageSetupState({
   list: AutomationsPageListState
 }) {
   const { repos, settings, projectHostSetups, worktreesByRepo } = store
+
   const {
     createTarget,
     automationYamlHooksByRepoKey,
@@ -34,6 +35,7 @@ export function useAutomationsPageSetupState({
     automationHostTargetKey,
     selectedAutomationRunPageId
   } = local
+
   const {
     selected,
     selectedRow,
@@ -51,11 +53,14 @@ export function useAutomationsPageSetupState({
         local.editingAutomationId !== null && local.editingHostStableKey
           ? list.hostCatalog.entries.find((entry) => entry.stableKey === local.editingHostStableKey)
           : null
+
       const selectedEditAuthority = selectedEditEntry?.stableRef.authority
+
       const setupHostId =
         selectedEditAuthority?.kind === 'runtime'
           ? toRuntimeExecutionHostId(selectedEditAuthority.environmentId)
           : undefined
+
       const setupRepos =
         selectedEditAuthority?.kind === 'runtime'
           ? getAutomationCreateRepos(repos, {
@@ -63,11 +68,13 @@ export function useAutomationsPageSetupState({
               environmentId: selectedEditAuthority.environmentId
             })
           : repos
+
       const setupProjectHostSetups = setupHostId
         ? projectHostSetups.filter(
             (setup) => setup.repoId !== candidate.projectId || setup.hostId === setupHostId
           )
         : projectHostSetups
+
       const settingsForRepo = setupHostId
         ? {
             ...settings,
@@ -75,7 +82,9 @@ export function useAutomationsPageSetupState({
               selectedEditAuthority?.kind === 'runtime' ? selectedEditAuthority.environmentId : null
           }
         : getSettingsForRepoRuntimeOwner({ repos, settings }, candidate.projectId)
+
       const hookKey = `${setupHostId ?? settingsForRepo.activeRuntimeEnvironmentId ?? 'local'}:${candidate.projectId}`
+
       return getVisibleAutomationSetupDecision({
         createTarget,
         workspaceMode: candidate.workspaceMode,
@@ -96,42 +105,55 @@ export function useAutomationsPageSetupState({
       settings
     ]
   )
+
   const getAutomationHooksCacheKey = useCallback(
     (repoId: string, hostId?: string): string => {
       if (hostId) {
         return `${hostId}:${repoId}`
       }
+
       const settingsForRepo = getSettingsForRepoRuntimeOwner({ repos, settings }, repoId)
+
       return `${settingsForRepo.activeRuntimeEnvironmentId ?? 'local'}:${repoId}`
     },
     [repos, settings]
   )
+
   const loadAutomationYamlHooksForRepo = useCallback(
     async (repoId: string, hostId?: ExecutionHostId): Promise<OrcaHooks | null> => {
       const key = getAutomationHooksCacheKey(repoId, hostId)
+
       if (Object.hasOwn(automationYamlHooksByRepoKey, key)) {
         return automationYamlHooksByRepoKey[key] ?? null
       }
+
       const existingPromise = automationHookCheckPromisesRef.current.get(key)
+
       if (existingPromise) {
         return (await existingPromise).hooks
       }
+
       const settingsForRepo = getSettingsForRepoRuntimeOwner({ repos, settings }, repoId)
+
       const promise = checkRuntimeHooks(settingsForRepo, repoId, hostId)
         .then((result) => ({
           hooks: result.status === 'error' ? null : ((result.hooks as OrcaHooks | null) ?? null),
           ok: result.status !== 'error'
         }))
         .catch(() => ({ hooks: null, ok: false }))
+
       automationHookCheckPromisesRef.current.set(key, promise)
       const { hooks, ok } = await promise
       automationHookCheckPromisesRef.current.delete(key)
+
       if (!ok) {
         return hooks
       }
+
       setAutomationYamlHooksByRepoKey((current) =>
         Object.hasOwn(current, key) ? current : { ...current, [key]: hooks }
       )
+
       return hooks
     },
     [
@@ -143,6 +165,7 @@ export function useAutomationsPageSetupState({
       settings
     ]
   )
+
   const getDraftSetupDecisionDefaultSignature = useCallback(
     (candidate: Pick<AutomationDraft, 'projectId' | 'workspaceMode'>): string =>
       [
@@ -153,6 +176,7 @@ export function useAutomationsPageSetupState({
       ].join(':'),
     [createTarget, getDraftSetupDecisionDefault]
   )
+
   const markSetupDecisionTouched = useCallback((): void => {
     setupDecisionTouchedRef.current = true
   }, [setupDecisionTouchedRef])
@@ -162,7 +186,9 @@ export function useAutomationsPageSetupState({
     selectedAutomationRuns.rowKey === selectedRow.key &&
     selectedAutomationRuns.ownerKey ===
       capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
+
   const selectedRunsNotice = selectedRunsMatchSelection ? selectedAutomationRuns.notice : null
+
   const selectedRuns = useMemo(
     () =>
       selected && selectedRunsMatchSelection
@@ -170,13 +196,16 @@ export function useAutomationsPageSetupState({
         : [],
     [selected, selectedRunsMatchSelection, selectedAutomationRunsWithWorkspaceNames]
   )
+
   const selectedAutomationRunPage = selectedAutomationRunPageId
     ? (selectedRuns.find((run) => run.id === selectedAutomationRunPageId) ?? null)
     : null
+
   const worktrees = useMemo(
     () => worktreesByRepo[draft.projectId] ?? [],
     [draft.projectId, worktreesByRepo]
   )
+
   const automationHostTarget: AutomationHostTarget | null = useMemo(
     () => getAutomationHostTargetFromKey(automationHostTargetKey),
     [automationHostTargetKey]

@@ -13,6 +13,7 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
   'retries retained file-watch cleanup after %s failure',
   async (failureTiming) => {
     let resolvePhysicalExit: () => void = () => {}
+
     const physicalExit =
       failureTiming === 'already-resolved'
         ? Promise.resolve()
@@ -21,6 +22,7 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
               resolvePhysicalExit = resolve
             })
           : undefined
+
     const cleanupError = physicalExit
       ? new WatcherProcessFailure(
           'file watcher process did not exit after termination deadline',
@@ -29,14 +31,17 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
           physicalExit
         )
       : new Error('transient unwatch failure')
+
     const unwatch = vi.fn().mockRejectedValueOnce(cleanupError).mockResolvedValue(undefined)
     let cleanup: (() => Promise<void>) | undefined
     let subscriptionId = ''
     let inFlight: Promise<void> | null = null
+
     const cleanupSubscriptionAndWait = vi.fn(() => {
       if (inFlight) {
         return inFlight
       }
+
       let tracked: Promise<void>
       tracked = Promise.resolve(cleanup?.()).finally(() => {
         if (inFlight === tracked) {
@@ -44,11 +49,14 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
         }
       })
       inFlight = tracked
+
       return tracked
     })
+
     const cleanupSubscription = vi.fn(() => {
       void cleanupSubscriptionAndWait().catch(() => {})
     })
+
     const retrySubscriptionCleanupAfter = vi.fn(
       (_id: string, _owner: () => void | Promise<void>, gate: Promise<void>) => {
         void gate.then(async () => {
@@ -57,6 +65,7 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
         })
       }
     )
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer: vi.fn().mockResolvedValue(unwatch),
@@ -68,6 +77,7 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
       cleanupSubscriptionAndWait,
       retrySubscriptionCleanupAfter
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const responses: { result?: { type?: string } }[] = []
 
@@ -75,6 +85,7 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
       makeRequest('files.watch', { worktree: 'id:wt-1' }),
       (response) => responses.push(JSON.parse(response))
     )
+
     await vi.waitFor(() => expect(cleanup).toBeDefined())
 
     await expect(cleanupSubscriptionAndWait()).rejects.toBe(cleanupError)
@@ -86,8 +97,10 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
     } else if (failureTiming === 'transient') {
       await expect(cleanupSubscriptionAndWait()).resolves.toBeUndefined()
     }
+
     await vi.waitFor(() => expect(unwatch).toHaveBeenCalledTimes(2))
     expect(cleanupSubscriptionAndWait).toHaveBeenCalledTimes(2)
+
     if (physicalExit) {
       await vi.waitFor(() => expect(cleanupSubscription).toHaveBeenCalledTimes(1))
       expect(retrySubscriptionCleanupAfter).toHaveBeenCalledWith(
@@ -99,6 +112,7 @@ it.each(['late', 'already-resolved', 'transient'] as const)(
       expect(cleanupSubscription).not.toHaveBeenCalled()
       expect(retrySubscriptionCleanupAfter).not.toHaveBeenCalled()
     }
+
     expect(responses.filter((response) => response.result?.type === 'end')).toHaveLength(1)
   }
 )

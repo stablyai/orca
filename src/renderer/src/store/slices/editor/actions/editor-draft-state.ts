@@ -36,9 +36,11 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
       set((s) => {
         // Why: read-only tabs must never accrue a draft — it seeds dirty/autosave/hot-exit restore that could overwrite an agent transcript.
         const file = s.openFiles.find((f) => f.id === fileId)
+
         if (file?.readOnly === true) {
           return s
         }
+
         return { editorDrafts: { ...s.editorDrafts, [fileId]: content } }
       }),
     clearEditorDraft: (fileId) =>
@@ -46,8 +48,10 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         if (!(fileId in s.editorDrafts)) {
           return s
         }
+
         const next = { ...s.editorDrafts }
         delete next[fileId]
+
         return { editorDrafts: next }
       }),
     clearEditorDrafts: (fileIds) =>
@@ -55,14 +59,17 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         if (fileIds.length === 0) {
           return s
         }
+
         const next = { ...s.editorDrafts }
         let changed = false
+
         for (const fileId of fileIds) {
           if (fileId in next) {
             delete next[fileId]
             changed = true
           }
         }
+
         return changed ? { editorDrafts: next } : s
       }),
 
@@ -82,10 +89,13 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
           if (!(fileId in s.markdownRichModeSizeOverride)) {
             return s
           }
+
           const next = { ...s.markdownRichModeSizeOverride }
           delete next[fileId]
+
           return { markdownRichModeSizeOverride: next }
         }
+
         return {
           markdownRichModeSizeOverride: { ...s.markdownRichModeSizeOverride, [fileId]: true }
         }
@@ -100,10 +110,13 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
           if (!(fileId in s.editorViewMode)) {
             return s
           }
+
           const next = { ...s.editorViewMode }
           delete next[fileId]
+
           return { editorViewMode: next }
         }
+
         return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
       }),
 
@@ -116,10 +129,13 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
           if (!(fileId in s.markdownFrontmatterVisible)) {
             return s
           }
+
           const next = { ...s.markdownFrontmatterVisible }
           delete next[fileId]
+
           return { markdownFrontmatterVisible: next }
         }
+
         return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
       }),
 
@@ -131,10 +147,13 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
           if (!(fileId in s.markdownTableOfContentsVisible)) {
             return s
           }
+
           const next = { ...s.markdownTableOfContentsVisible }
           delete next[fileId]
+
           return { markdownTableOfContentsVisible: next }
         }
+
         return {
           markdownTableOfContentsVisible: {
             ...s.markdownTableOfContentsVisible,

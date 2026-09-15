@@ -11,6 +11,7 @@ import {
   deriveWorkItemCheckSummary,
   type MainWorkItem
 } from './work-item-field-coercion'
+
 export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
   return {
     id: `issue:${String(item.number)}`,
@@ -40,20 +41,25 @@ export function mapPullRequestWorkItem(
 ): MainWorkItem {
   // Why: fork PRs are disabled in the Start-from picker; compare head owner to the selected repo's owner.
   const headOwnerLogin = extractHeadOwnerLogin(item)
+
   // Why: leave isCrossRepository undefined when the head owner is unknown, rather than falsely claiming "not a fork".
   const isCrossRepository =
     headOwnerLogin !== null && baseOwnerRepo !== null
       ? headOwnerLogin !== baseOwnerRepo.owner
       : null
+
   const state = String(item.state ?? '').toLowerCase()
   const additions = numberFromUnknown(item.additions)
   const deletions = numberFromUnknown(item.deletions)
+
   const changedFiles = numberFromUnknown(
     item.changedFiles ??
       item.changed_files ??
       (item.files as { totalCount?: unknown } | undefined)?.totalCount
   )
+
   const mergeable = normalizePRMergeable(item.mergeable)
+
   const headSha =
     typeof item.headRefOid === 'string'
       ? item.headRefOid
@@ -62,6 +68,7 @@ export function mapPullRequestWorkItem(
           ? (item.head as { sha: string }).sha
           : undefined
         : undefined
+
   return {
     id: `pr:${String(item.number)}`,
     type: 'pr',

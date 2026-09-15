@@ -12,6 +12,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
   ): void {
     for (const ptyId of this.pairedRendererSessionOwnedPtyIds) {
       const pty = this.ptysById.get(ptyId)
+
       if (
         !pty?.connected ||
         !pty.tabId ||
@@ -19,15 +20,20 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
       ) {
         continue
       }
+
       const targetWorktreeId = worktreeId ?? pty.worktreeId
       const pane = parsePaneKey(pty.paneKey ?? '')
+
       if (!pane || pane.tabId !== pty.tabId) {
         continue
       }
+
       const existing = this.mobileSessionTabsByWorktree.get(targetWorktreeId)
+
       if (existing && options.missingSnapshotOnly) {
         continue
       }
+
       if (
         existing?.tabs.some(
           (tab) =>
@@ -38,6 +44,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
       ) {
         continue
       }
+
       if (!existing) {
         this.storeMobileSessionSnapshot(targetWorktreeId, {
           worktree: targetWorktreeId,
@@ -50,6 +57,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
           tabs: []
         })
       }
+
       this.publishPtyBackedMobileSessionTerminal(targetWorktreeId, pty, {
         tabId: pty.tabId,
         leafId: pane.leafId,
@@ -83,6 +91,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
         return pty
       }
     }
+
     return null
   }
 
@@ -93,6 +102,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
         return true
       }
     }
+
     return false
   }
 
@@ -116,13 +126,17 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
   protected deliverPendingStartupCommandToBareRendererPty(worktreeId: string, tabId: string): void {
     const pending = this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)
     const command = pending?.startupCommand
+
     if (!command) {
       return
     }
+
     const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
+
     if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
+
     if (this.ptyController?.write(pty.ptyId, command)) {
       // Why: Enter rides its own write so a long command cannot swallow it.
       this.ptyController.write(pty.ptyId, '\r')
@@ -132,6 +146,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
 
   protected waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
     const existing = this.resolveHandleForTab(tabId)
+
     if (existing) {
       return Promise.resolve(existing)
     }
@@ -139,23 +154,29 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         const idx = this.graphSyncCallbacks.indexOf(check)
+
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
+
         reject(new Error('Timed out waiting for terminal handle after creation'))
       }, timeoutMs)
 
       const check = (): void => {
         const handle = this.resolveHandleForTab(tabId)
+
         if (handle) {
           clearTimeout(timer)
           const idx = this.graphSyncCallbacks.indexOf(check)
+
           if (idx !== -1) {
             this.graphSyncCallbacks.splice(idx, 1)
           }
+
           resolve(handle)
         }
       }
+
       this.graphSyncCallbacks.push(check)
       // Why: graph sync may have fired between the initial check and registration; re-check to avoid a missed wake-up.
       check()

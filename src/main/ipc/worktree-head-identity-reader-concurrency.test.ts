@@ -32,9 +32,11 @@ describe('readGitCommonHeadIdentities concurrency', () => {
       concurrency.max = Math.max(concurrency.max, concurrency.active)
       await new Promise((resolve) => setTimeout(resolve, 5))
       concurrency.active -= 1
+
       if (filePath.endsWith('/gitdir')) {
         return `/workspace/${filePath.match(/wt-\d+/)?.[0] ?? 'wt'}/.git\n`
       }
+
       return `${'a'.repeat(40)}\n`
     })
   })

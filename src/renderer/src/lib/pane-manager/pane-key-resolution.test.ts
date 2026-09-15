@@ -4,7 +4,9 @@ import type { ManagedPane } from './pane-manager-types'
 import { resolveLeafIdForManager, resolvePaneKeyForManager } from './pane-key-resolution'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 function makeManager(args: {

@@ -24,6 +24,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 beforeEach(async () => {
@@ -41,6 +42,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -51,9 +53,11 @@ function click(matcher: string): void {
   const button = Array.from(container?.querySelectorAll('button') ?? []).find(
     (el) => el.textContent?.trim() === matcher || el.getAttribute('aria-label') === matcher
   )
+
   if (!button) {
     throw new Error(`button not found: ${matcher}`)
   }
+
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })

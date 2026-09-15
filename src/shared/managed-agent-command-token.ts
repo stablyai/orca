@@ -9,15 +9,19 @@ export function extractExecutableToken(
   options: ExtractExecutableTokenOptions = {}
 ): string | null {
   const input = command?.trim()
+
   if (!input) {
     return null
   }
+
   const backslashEscapes = (options.platform ?? process.platform) !== 'win32'
   let index = 0
   let quote: string | null = null
   let token = ''
+
   while (index < input.length) {
     const char = input[index]
+
     if (quote) {
       if (char === quote) {
         quote = null
@@ -37,8 +41,10 @@ export function extractExecutableToken(
     } else {
       token += char
     }
+
     index += 1
   }
+
   return token.length > 0 ? token : null
 }
 
@@ -54,9 +60,11 @@ export function isSafeOverrideExecutableToken(token: string): boolean {
   if (token.includes('\0')) {
     return false
   }
+
   if (!hasPathSeparatorToken(token)) {
     return isSafeExecutableBasename(token)
   }
+
   return (
     !token.includes('..') &&
     !/[|&;<>(){}[\]$`"'*!?]/.test(token) &&

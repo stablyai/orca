@@ -19,11 +19,13 @@ vi.mock('./session-scanner-worker-spawn', () => ({
   scanAiVaultSessionsInWorker,
   resetAiVaultScannerWorkerForTests: vi.fn()
 }))
+
 vi.mock('../wsl', () => ({
   getCachedWslDistros,
   hasCachedWslDistros,
   listRunningWslHomeDirsAsync
 }))
+
 vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
 
 import {
@@ -43,11 +45,13 @@ function scanResult(scannedAt: string): AiVaultListResult {
 // mid-flight.
 function deferredScan(): { resolve: (value: AiVaultListResult) => void } {
   let resolveFn: (value: AiVaultListResult) => void = () => {}
+
   scanAiVaultSessionsInWorker.mockReturnValueOnce(
     new Promise<AiVaultListResult>((resolve) => {
       resolveFn = resolve
     })
   )
+
   return { resolve: resolveFn }
 }
 

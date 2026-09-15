@@ -8,6 +8,7 @@ describe('worktree-cache write-through', () => {
   it('returns the most-recently written snapshot, not a stale one', () => {
     const hostId = 'host-write-through'
     const stale = [{ worktreeId: 'a', name: 'stale' }]
+
     const fresh = [
       { worktreeId: 'a', name: 'fresh' },
       { worktreeId: 'b', name: 'added' }
@@ -35,6 +36,7 @@ describe('worktree-cache write-through', () => {
       { worktreeId: 'old', name: 'post-reconnect' },
       { worktreeId: 'new', name: 'now-visible' }
     ]
+
     setCachedWorktrees(hostId, reconnected)
 
     // A fresh screen mount reads the cache — must see the connected set.

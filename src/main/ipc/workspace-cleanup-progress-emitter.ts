@@ -32,14 +32,17 @@ export function createWorkspaceCleanupProgressEmitter(
   let dirty = false
   let emittedInitialDiscovery = false
   let timer: NodeJS.Timeout | null = null
+
   const flush = (): void => {
     if (!scanId || !dirty) {
       return
     }
+
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+
     dirty = false
     const candidates = pendingCandidates
     pendingCandidates = []
@@ -53,17 +56,21 @@ export function createWorkspaceCleanupProgressEmitter(
       candidateMode: 'append'
     })
   }
+
   const schedule = (): void => {
     if (!scanId) {
       return
     }
+
     dirty = true
     timer ??= setTimeout(flush, WORKSPACE_CLEANUP_PROGRESS_EMIT_INTERVAL_MS)
   }
+
   return {
     addDiscovered: (count) => {
       totalWorktreeCount += count
       schedule()
+
       if (!emittedInitialDiscovery) {
         emittedInitialDiscovery = true
         flush()

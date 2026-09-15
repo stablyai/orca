@@ -9,7 +9,9 @@ import {
 } from './TerminalTccAttributionNotice'
 
 const openSettingsTarget = vi.fn()
+
 const openSettingsPage = vi.fn()
+
 const setSettingsSearchQuery = vi.fn()
 
 vi.mock('../../store', () => ({
@@ -23,6 +25,7 @@ vi.mock('../../store', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 function stubAttributionHealth(health: 'intact' | 'severed' | 'unknown'): void {

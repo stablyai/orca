@@ -1,9 +1,11 @@
 function extname(filePath: string): string {
   const lastDot = filePath.lastIndexOf('.')
   const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+
   if (lastDot <= lastSlash) {
     return ''
   }
+
   return filePath.slice(lastDot)
 }
 
@@ -78,6 +80,7 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
 
 export function detectMobileFileLanguage(filePath: string, preferredLanguage?: string): string {
   const normalizedPreferred = preferredLanguage?.trim().toLowerCase()
+
   if (normalizedPreferred && normalizedPreferred !== 'plaintext') {
     return normalizedPreferred
   }
@@ -85,6 +88,7 @@ export function detectMobileFileLanguage(filePath: string, preferredLanguage?: s
   const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1) ?? filePath
   const exact = FILENAME_TO_LANGUAGE[filename]
+
   if (exact) {
     return exact
   }

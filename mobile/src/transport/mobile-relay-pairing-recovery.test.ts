@@ -9,11 +9,15 @@ import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import type { PairingOffer, RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED' }))
+
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
 
 const now = Date.UTC(2026, 6, 13)
+
 const offer = {
   v: 2,
   endpoint: 'ws://192.168.1.10:6768',
@@ -74,6 +78,7 @@ function journal(mode: 'authenticated-direct' | 'relay-basis' = 'authenticated-d
     now,
     randomBytes: (length) => new Uint8Array(length).fill(length)
   })
+
   return {
     ...value,
     metadata: {
@@ -120,14 +125,17 @@ describe('mobile relay pairing recovery', () => {
   it('recovers a lost direct-install response with the pending credential first', async () => {
     const saved = journal()
     const committed = installed(saved, 'authenticated-direct')
+
     const pending = client(async (method, params) => {
       expect(method).toBe('pairing.getEndpoints')
       expect(params).toEqual({
         installReqId: saved.metadata.installReqId,
         resumeConfirmReqId: saved.metadata.resumeConfirmReqId
       })
+
       return response(endpoints(saved, { state: 'committed', result: committed }))
     })
+
     const connectRelay = vi.fn(() => pending)
     const deps = dependencies({ journal: saved, connectRelay })
 
@@ -146,6 +154,7 @@ describe('mobile relay pairing recovery', () => {
   it('tries pending then current before an unexpired invite and transitions after not-found', async () => {
     const saved = journal()
     const currentToken = 'C'.repeat(43)
+
     const bundle: MobileRelayCredentialBundle = {
       v: 1,
       hostId: 'host-1',
@@ -157,29 +166,39 @@ describe('mobile relay pairing recovery', () => {
         expiresAt: now + 60_000
       }
     }
+
     const failed = () =>
       client(async () => {
         throw new Error('resume rejected')
       })
+
     const relayInstalled = installed(saved, 'relay-basis')
     let statusCalls = 0
+
     const invite = client(async (method) => {
       if (method === 'pairing.getEndpoints') {
         statusCalls += 1
+
         return response(
           statusCalls === 1
             ? endpoints(saved, { state: 'not-found' })
             : endpoints(saved, { state: 'committed', result: relayInstalled })
         )
       }
+
       expect(saved.metadata.authorizationMode).toBe('relay-basis')
+
       return response(relayInstalled)
     })
+
     const seenCredentials: (string | undefined)[] = []
+
     const connectRelay = vi.fn((args) => {
       seenCredentials.push(args.credential)
+
       return args.credential ? failed() : invite
     })
+
     const deps = dependencies({ journal: saved, connectRelay, bundle })
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('recovered')
@@ -194,21 +213,27 @@ describe('mobile relay pairing recovery', () => {
   it('accepts the one late direct result after invite fallback observed not-found', async () => {
     const saved = journal()
     const directInstalled = installed(saved, 'authenticated-direct')
+
     const failedPending = client(async () => {
       throw new Error('pending unavailable')
     })
+
     let statusCalls = 0
+
     const invite = client(async (method) => {
       if (method === 'pairing.getEndpoints') {
         statusCalls += 1
+
         return response(
           statusCalls === 1
             ? endpoints(saved, { state: 'not-found' })
             : endpoints(saved, { state: 'committed', result: directInstalled })
         )
       }
+
       return response(directInstalled)
     })
+
     const deps = dependencies({
       journal: saved,
       connectRelay: vi.fn((args) => (args.credential ? failedPending : invite))
@@ -224,9 +249,11 @@ describe('mobile relay pairing recovery', () => {
   // with "recovery pending" forever, because recovery only ever deferred.
   it('abandons a journal once its invite expired and no credential can reconcile', async () => {
     const saved = journal()
+
     const unreachable = client(async () => {
       throw new Error('relay unreachable')
     })
+
     const deps = {
       ...dependencies({ journal: saved, connectRelay: vi.fn(() => unreachable) }),
       now: () => saved.metadata.relay.inviteExpiresAt + 10 * 60 * 1000 + 1
@@ -238,9 +265,11 @@ describe('mobile relay pairing recovery', () => {
 
   it('keeps a just-expired journal so a brief outage cannot discard it', async () => {
     const saved = journal()
+
     const unreachable = client(async () => {
       throw new Error('relay unreachable')
     })
+
     const deps = {
       ...dependencies({ journal: saved, connectRelay: vi.fn(() => unreachable) }),
       now: () => saved.metadata.relay.inviteExpiresAt + 1
@@ -255,9 +284,11 @@ describe('mobile relay pairing recovery', () => {
   it('keeps a journal when the server committed but the local write failed', async () => {
     const saved = journal()
     const directInstalled = installed(saved, 'authenticated-direct')
+
     const committed = client(async () =>
       response(endpoints(saved, { state: 'committed', result: directInstalled }))
     )
+
     const deps = {
       ...dependencies({ journal: saved, connectRelay: vi.fn(() => committed) }),
       now: () => saved.metadata.relay.inviteExpiresAt + 10 * 60 * 1000 + 1,

@@ -35,6 +35,7 @@ describe('EventTime shared-clock refresh', () => {
     // Why: memo'd rows no longer re-render on unrelated store writes, so the label
     // must follow the injected clock or "2m" would freeze at whatever render saw.
     const timestamp = clock.now - 2 * 60_000
+
     const render = (): void => {
       act(() => {
         root.render(
@@ -44,6 +45,7 @@ describe('EventTime shared-clock refresh', () => {
         )
       })
     }
+
     render()
     expect(container.textContent).toContain('2m')
 

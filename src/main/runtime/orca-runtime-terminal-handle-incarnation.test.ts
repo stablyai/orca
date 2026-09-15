@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const PTY_ID = 'ssh:target@@relay-pty'
+
 const WORKTREE_ID = 'repo::/worktree'
+
 const TAB_ID = 'tab-terminal'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
@@ -12,11 +15,13 @@ function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
   runtime.setPtyController({
     write: (_ptyId, data) => {
       writes.push(data)
+
       return true
     },
     kill: vi.fn(() => true),
     getForegroundProcess: async () => null
   })
+
   return { runtime, writes }
 }
 
@@ -185,6 +190,7 @@ describe('runtime terminal handle incarnation fencing', () => {
       handles: Map<string, unknown>
       handleByLeafKey: Map<string, string>
     }
+
     expect(internals.handles.has(replacementHandle)).toBe(true)
     expect(internals.handleByLeafKey.get(`${TAB_ID}::${LEAF_ID}`)).toBe(replacementHandle)
 

@@ -64,8 +64,10 @@ function createMockChildProcess(): EventEmitter & { kill: ReturnType<typeof vi.f
   const childProcess = new EventEmitter() as EventEmitter & { kill: ReturnType<typeof vi.fn> }
   childProcess.kill = vi.fn(() => {
     childProcess.emit('exit')
+
     return true
   })
+
   return childProcess
 }
 
@@ -100,11 +102,13 @@ describe('app icon selection', () => {
     applyAppIcon('watercolor')
 
     expect(createFromPathMock).toHaveBeenCalledWith('watercolor-icon')
+
     if (process.platform === 'darwin') {
       expect(dockSetIconMock).toHaveBeenCalledWith(image)
     } else {
       expect(dockSetIconMock).not.toHaveBeenCalled()
     }
+
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
   })
 
@@ -120,6 +124,7 @@ describe('app icon selection', () => {
           typeof optionsOrCallback === 'function'
             ? (optionsOrCallback as (error: Error | null) => void)
             : callback
+
         onComplete?.(null)
       }
     )
@@ -157,6 +162,7 @@ describe('app icon selection', () => {
           typeof optionsOrCallback === 'function'
             ? (optionsOrCallback as (error: Error | null) => void)
             : callback
+
         onComplete?.(null)
       }
     )
@@ -204,6 +210,7 @@ describe('app icon selection', () => {
 
   it('warns for non-benign failures when clearing Finder custom icon metadata', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const execFile = vi.fn(
       (
         file: string,
@@ -215,10 +222,13 @@ describe('app icon selection', () => {
           typeof optionsOrCallback === 'function'
             ? (optionsOrCallback as (error: Error | null) => void)
             : callback
+
         if (file !== '/usr/bin/xattr') {
           onComplete?.(null)
+
           return
         }
+
         onComplete?.(new Error(args[1] === 'com.apple.FinderInfo' ? 'No such xattr' : 'EACCES'))
       }
     )
@@ -242,6 +252,7 @@ describe('app icon selection', () => {
 
   it('warns when the AppKit classic icon reset fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const execFile = vi.fn(
       (
         file: string,
@@ -253,6 +264,7 @@ describe('app icon selection', () => {
           typeof optionsOrCallback === 'function'
             ? (optionsOrCallback as (error: Error | null) => void)
             : callback
+
         onComplete?.(file === '/usr/bin/osascript' ? new Error('reset denied') : null)
       }
     )
@@ -275,6 +287,7 @@ describe('app icon selection', () => {
 
   it('serializes rapid macOS dock icon persistence so the last icon request wins', async () => {
     const pendingCallbacks: (() => void)[] = []
+
     const execFile = vi.fn(
       (
         _file: string,
@@ -286,6 +299,7 @@ describe('app icon selection', () => {
           typeof optionsOrCallback === 'function'
             ? (optionsOrCallback as (error: Error | null) => void)
             : callback
+
         pendingCallbacks.push(() => onComplete?.(null))
       }
     )
@@ -378,6 +392,7 @@ describe('app icon selection', () => {
     for (const completeCommand of pendingCallbacks) {
       completeCommand()
     }
+
     await waitForQueuedPersistence()
   })
 
@@ -385,6 +400,7 @@ describe('app icon selection', () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const hungChildProcess = createMockChildProcess()
+
     const execFile = vi.fn(
       (
         _file: string,
@@ -395,11 +411,14 @@ describe('app icon selection', () => {
         if (execFile.mock.calls.length === 1) {
           return hungChildProcess
         }
+
         const onComplete =
           typeof optionsOrCallback === 'function'
             ? (optionsOrCallback as (error: Error | null) => void)
             : callback
+
         onComplete?.(null)
+
         return undefined
       }
     )

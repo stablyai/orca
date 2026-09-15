@@ -11,6 +11,7 @@ import { githubProjectHost } from '../../../shared/github/project-identity'
 import { useMetadataListRequest, type MetadataListState } from './useMetadataListRequest'
 
 const slugLabelStore = createMetadataRequestStore<string[]>()
+
 const slugAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function clearGitHubSlugMetadataCache(): void {
@@ -29,6 +30,7 @@ export function useRepoLabelsBySlug(
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
   const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+
   const cacheKey =
     repositoryKey && target.kind === 'environment'
       ? `runtime:${target.environmentId}:${repositoryKey}`
@@ -55,6 +57,7 @@ export function useRepoLabelsBySlug(
         if (!res.ok) {
           throw new Error(res.error.message)
         }
+
         return res.labels
       })
   })
@@ -73,11 +76,13 @@ export function useRepoAssigneesBySlug(
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
   const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+
   const cacheKey = repositoryKey
     ? target.kind === 'environment'
       ? `runtime:${target.environmentId}:${repositoryKey}#${seedKey}`
       : `${repositoryKey}#${seedKey}`
     : null
+
   const args = {
     owner: selectedOwner,
     repo: selectedRepo,
@@ -102,6 +107,7 @@ export function useRepoAssigneesBySlug(
         if (!res.ok) {
           throw new Error(res.error.message)
         }
+
         return res.users
       })
   })

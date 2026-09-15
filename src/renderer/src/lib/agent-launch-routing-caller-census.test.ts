@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { glob } from 'tinyglobby'
 
 const REPO_ROOT = join(import.meta.dirname, '../../../..')
+
 const CENSUS_FILE = 'src/renderer/src/lib/agent-launch-routing-caller-census.test.ts'
 
 const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
@@ -23,8 +24,11 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
 // Why: the planner is the one production module that decides a route. A second resolver call
 // site is how the seven launch sites drifted apart before it existed.
 const ROUTE_RESOLVER_DEFINITION = 'src/renderer/src/lib/agent-launch-routing.ts'
+
 const ROUTE_PLANNER = 'src/renderer/src/lib/agent-session-launch-plan.ts'
+
 const DIRECT_ROUTE_RESOLVER_CALL = /\b(?:resolveAgentLaunchRoute|structuredAgentLaunchSupported)\(/
+
 // Why: adopting a verdict bypasses the resolver by design (a persisted quick-create request, a
 // resume whose gate already planned), so each adopter is pinned rather than trusted by convention.
 const VERDICT_ADOPTERS = [
@@ -47,6 +51,7 @@ describe('agent launch routing caller census', () => {
         readFileSync(join(REPO_ROOT, file), 'utf8').includes('launchAgentInNewTab(')
       )
       .sort()
+
     expect(callers).toEqual([...LAUNCH_AGENT_IN_NEW_TAB_CALLERS].sort())
   })
 
@@ -57,6 +62,7 @@ describe('agent launch routing caller census', () => {
         DIRECT_ROUTE_RESOLVER_CALL.test(readFileSync(join(REPO_ROOT, file), 'utf8'))
       )
       .sort()
+
     expect(directCallers).toEqual([ROUTE_PLANNER])
   })
 
@@ -67,6 +73,7 @@ describe('agent launch routing caller census', () => {
         readFileSync(join(REPO_ROOT, file), 'utf8').includes('adoptAgentSessionLaunchVerdict(')
       )
       .sort()
+
     expect(adopters).toEqual([...VERDICT_ADOPTERS].sort())
   })
 

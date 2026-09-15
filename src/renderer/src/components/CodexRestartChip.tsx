@@ -29,6 +29,7 @@ export default function CodexRestartChip({
   // Why: one O(1) selector per mounted pane stays idle when unrelated PTY maps
   // churn and prevents a worktree-wide scan for every split pane.
   const restartNotice = useAppStore((state) => state.codexRestartNoticeByPtyId[ptyId])
+
   if (!restartNotice || !awaitsCodexRestartAnswer(restartNotice)) {
     return null
   }
@@ -86,11 +87,15 @@ function LoudRestartOverlay({
     if (!isVisible || !shouldFocus) {
       return
     }
+
     const root = rootRef.current
+
     if (!root || isInsideHiddenTree(root)) {
       return
     }
+
     const paneScope = root.parentElement
+
     if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
       root.focus()
     }

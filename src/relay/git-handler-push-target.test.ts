@@ -15,58 +15,75 @@ function gitForConfig(config: {
 }) {
   const branch = config.branch ?? 'feature/fix'
   const merge = config.merge ?? `refs/heads/${branch}`
+
   return vi.fn(async (args: GitArgs) => {
     if (args[0] === 'symbolic-ref') {
       return { stdout: `${branch}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[2] === `branch.${branch}.pushRemote`) {
       if (config.pushRemote instanceof Error) {
         throw config.pushRemote
       }
+
       return { stdout: `${config.pushRemote ?? ''}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[2] === 'remote.pushDefault') {
       if (config.pushDefault instanceof Error) {
         throw config.pushDefault
       }
+
       return { stdout: `${config.pushDefault ?? ''}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[2] === `branch.${branch}.remote`) {
       if (config.branchRemote instanceof Error) {
         throw config.branchRemote
       }
+
       return { stdout: `${config.branchRemote ?? ''}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[2] === `branch.${branch}.merge`) {
       return { stdout: `${merge}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[2] === `branch.${branch}.base`) {
       if (config.base instanceof Error) {
         throw config.base
       }
+
       return { stdout: `${config.base ?? ''}\n`, stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === '-v') {
       return {
         stdout: (config.remotes ?? [])
           .flatMap((name) => {
             const url = config.remoteUrls?.[name] ?? ''
+
             return [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`]
           })
           .join('\n'),
         stderr: ''
       }
     }
+
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: `${config.remotes?.join('\n') ?? ''}\n`, stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const remoteUrl = config.remoteUrls?.[args[2] ?? '']
+
       if (!remoteUrl) {
         throw new Error('missing remote URL')
       }
+
       return { stdout: `${remoteUrl}\n`, stderr: '' }
     }
+
     throw new Error(`unexpected git args: ${args.join(' ')}`)
   })
 }
@@ -128,6 +145,7 @@ describe('resolveRelayPushTarget', () => {
 
   it('normalizes a URL-valued branch remote to a matching named remote', async () => {
     const forkUrl = 'https://github.com/contributor/orca.git'
+
     const git = gitForConfig({
       pushRemote: new Error('missing pushRemote'),
       pushDefault: new Error('missing pushDefault'),
@@ -147,6 +165,7 @@ describe('resolveRelayPushTarget', () => {
 
   it('keeps a URL-valued pushRemote when no named remote matches it', async () => {
     const forkUrl = 'git@github.com:contributor/orca.git'
+
     const git = gitForConfig({
       pushRemote: forkUrl,
       branchRemote: forkUrl,

@@ -52,18 +52,28 @@ const attachParams = (
 const ensureParams = (fence: number): AgentSessionAttachParams => hostTestAttachParams(fence)
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
+
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+
 let cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']>
+
 let answerPrompt: Mock<StructuredAgentSessionAdapter['answerPrompt']>
+
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
+
 let ordinal = 0
 
 function accepted(): AgentSessionDispatchOutcome {
   ordinal += 1
+
   return {
     state: 'accepted',
     providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal }
@@ -84,6 +94,7 @@ function adapter(): StructuredAgentSessionAdapter {
 async function attach(): Promise<AgentSessionRecord | null> {
   const result = await host.attach(CALLER, attachParams())
   expect(result.ok).toBe(true)
+
   return store.getRecord(SESSION)
 }
 
@@ -91,9 +102,11 @@ async function attach(): Promise<AgentSessionRecord | null> {
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
   const events = acquire.mock.calls.at(-1)?.[0].events
+
   if (!events) {
     throw new Error('seedApproval requires an acquired session')
   }
+
   events.appendItem(identity, {
     kind: 'approval',
     title: 'Run the command?',
@@ -105,9 +118,11 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
   const itemId = agentJournalItemKey(identity)
   const page = host.history({ sessionId: SESSION, direction: 'tail' })
   const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
+
   if (!appended) {
     throw new Error('provider approval was not written to the journal')
   }
+
   return { itemId, revision: appended.revision }
 }
 

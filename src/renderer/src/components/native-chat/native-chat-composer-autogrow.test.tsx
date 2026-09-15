@@ -44,6 +44,7 @@ function TestField({
   imageAttachments?: { id: string; path: string }[]
 }): React.JSX.Element {
   const imeEnterGesture = useImeEnterGestureOwnership()
+
   return (
     <NativeChatComposerField
       composerScopeKey="pane-test"
@@ -86,6 +87,7 @@ function TestField({
 
 function renderField(draft: string): HTMLTextAreaElement {
   render(<TestField draft={draft} />)
+
   return screen.getByRole('textbox') as HTMLTextAreaElement
 }
 

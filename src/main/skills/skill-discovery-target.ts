@@ -17,11 +17,13 @@ import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-co
 // the whole result is what must be shared. The native path shares at root level
 // instead, and only needs concurrent callers collapsed into one walk.
 const WSL_RESULT_TTL_MS = 10_000
+
 const MAX_CACHED_SKILL_TARGETS = 32
 
 type TargetScanObservation =
   | { kind: 'native'; result: SkillDiscoveryResult }
   | { kind: 'wsl'; observation: WslSkillDiscoveryObservation }
+
 const targetScans = new SkillScanCoalescer<TargetScanObservation>(MAX_CACHED_SKILL_TARGETS)
 
 /** Drop every shared scan; used when a skill update run has rewritten disk. */
@@ -50,6 +52,7 @@ export function resolveSkillDiscoveryTarget(
   target: SkillDiscoveryTarget | undefined
 ): ResolvedSkillDiscoveryTarget {
   const projectRuntime = target?.projectRuntime
+
   if (projectRuntime?.status === 'repair-required') {
     throw new Error(
       `Project runtime requires repair before skill discovery: ${projectRuntime.repair.reason}`
@@ -59,15 +62,18 @@ export function resolveSkillDiscoveryTarget(
   const wslRequested =
     (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') ||
     (!projectRuntime && target?.runtime === 'wsl')
+
   const wslDistro =
     projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
       ? projectRuntime.runtime.distro
       : !projectRuntime && target?.runtime === 'wsl'
         ? target.wslDistro?.trim() || getDefaultWslDistro()
         : null
+
   if (wslRequested && !wslDistro) {
     throw new Error('No WSL distribution is available for skill discovery.')
   }
+
   if (!wslDistro) {
     return {
       kind: 'native-host',
@@ -76,23 +82,29 @@ export function resolveSkillDiscoveryTarget(
       ...(target?.sourceKinds ? { sourceKinds: target.sourceKinds } : {})
     }
   }
+
   if (process.platform !== 'win32') {
     throw new Error('WSL skill discovery is only available on Windows.')
   }
+
   const homeDir = getWslHome(wslDistro)
+
   if (!homeDir) {
     throw new Error(`Could not resolve the WSL home directory for ${wslDistro}.`)
   }
 
   const requestedCwd = target?.cwd?.trim()
   const parsedCwd = requestedCwd ? parseWslPath(requestedCwd) : null
+
   if (parsedCwd && parsedCwd.distro.toLowerCase() !== wslDistro.toLowerCase()) {
     throw new Error(
       `The workspace belongs to WSL distribution ${parsedCwd.distro}, not ${wslDistro}.`
     )
   }
+
   const linuxHomeDir = toLinuxPath(homeDir)
   const cwd = parsedCwd?.linuxPath ?? (requestedCwd ? toLinuxPath(requestedCwd) : undefined)
+
   return {
     kind: 'wsl',
     distro: wslDistro,
@@ -128,8 +140,10 @@ function scanKey(
   const providerRoots = Object.entries(providerRootOverrides ?? {}).sort(([left], [right]) =>
     left.localeCompare(right)
   )
+
   const names = target.names?.slice().sort() ?? null
   const sourceKinds = target.sourceKinds?.slice().sort() ?? null
+
   return target.kind === 'wsl'
     ? JSON.stringify([
         'wsl',
@@ -155,6 +169,7 @@ export async function discoverSkillsOnTarget(
   options: { refresh?: boolean; providerRootOverrides?: SkillProviderRootOverrides } = {}
 ): Promise<SkillDiscoveryResult> {
   const refresh = options.refresh === true
+
   try {
     const outcome = await targetScans.run(
       scanKey(target, repos, options.providerRootOverrides),
@@ -172,6 +187,7 @@ export async function discoverSkillsOnTarget(
             })
           }
         }
+
         const result = await (target.cwd
           ? discoverSkills({
               repos: [],
@@ -188,9 +204,11 @@ export async function discoverSkillsOnTarget(
               ...(target.sourceKinds ? { sourceKinds: target.sourceKinds } : {}),
               providerRootOverrides: options.providerRootOverrides
             }))
+
         return { kind: 'native', result }
       }
     )
+
     return outcome.value.kind === 'wsl'
       ? projectWslSkillDiscovery(outcome.value.observation, target.sourceKinds, target.names)
       : outcome.value.result
@@ -198,6 +216,7 @@ export async function discoverSkillsOnTarget(
     if (!isSkillRootUnavailableError(error)) {
       throw error
     }
+
     // Why not an empty result: this layer scans whole targets, so it has no
     // partial answer to degrade to, and returning zero skills would read as
     // "nothing is installed" and re-offer installs for skills that are present.

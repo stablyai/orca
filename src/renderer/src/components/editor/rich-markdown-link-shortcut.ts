@@ -27,21 +27,29 @@ export function handleRichMarkdownLinkShortcut({
   setLinkBubble: (bubble: LinkBubbleState | null) => void
 }): boolean {
   const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+
   if (!modifier || event.key.toLowerCase() !== 'k') {
     return false
   }
+
   event.preventDefault()
+
   if (!editor) {
     return true
   }
+
   if (isEditing) {
     setEditing(false)
+
     if (!editor.isActive('link')) {
       setLinkBubble(null)
     }
+
     editor.commands.focus()
+
     return true
   }
+
   // Why: NodeSelection on an HTML citation still has a bubble position, but
   // markdown setLink/unsetLink cannot edit that atom — open the citation
   // action bubble instead of the markdown edit field.
@@ -50,15 +58,20 @@ export function handleRichMarkdownLinkShortcut({
     root,
     htmlSuperscriptLinkContext
   )
+
   if (selectionBubble) {
     setLinkBubble(selectionBubble)
     setEditing(selectionBubble.kind === 'markdown')
+
     return true
   }
+
   const position = getLinkBubblePosition(editor, root)
+
   if (position) {
     setLinkBubble(createEditableMarkdownLinkBubble('', position))
     setEditing(true)
   }
+
   return true
 }

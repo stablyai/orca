@@ -8,6 +8,7 @@ import type { SourceControlPanelReadyProps } from './panel-props'
 /** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
+
   const {
     activeGroupId,
     activeWorktreeId,

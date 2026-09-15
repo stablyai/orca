@@ -65,8 +65,10 @@ function resumableStateFactoryFor(
     case 'omp':
     case 'prime-agent': {
       const agent = candidate.agent
+
       return (messages) => createMessageGraphSessionResumeState(agent, candidate.file, messages)
     }
+
     case 'gemini':
       return candidate.file.path.endsWith('.jsonl')
         ? (messages) => createGeminiJsonlSessionResumeState(candidate.file, messages)
@@ -142,6 +144,7 @@ function sessionParseCacheCoversTranscript(
 ): boolean {
   const { file } = candidate
   const entry = getSessionParseCacheEntry(file.path)
+
   return (
     entry !== undefined &&
     entry.platform === platform &&
@@ -157,18 +160,21 @@ async function parseCachedInLane(
   requireRead?: SessionParseReadRequirement
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
+
   if (
     requireRead === 'whole' ||
     (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, platform))
   ) {
     requestWholeTranscriptRead(file.path)
   }
+
   const entry = getSessionParseCacheEntry(file.path)
 
   if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
       return reuseCachedSession(candidate, entry, stats)
     }
+
     // Only the sibling moved. For an agent whose sibling just adds metadata,
     // re-merge it onto the stored fold result; the transcript is not re-read.
     if (sidecarEnrichesWithoutReparse(candidate) && entry.foldSession !== undefined) {
@@ -176,14 +182,17 @@ async function parseCachedInLane(
       entry.session = enriched.session
       entry.sidecar = enriched.refused ? 'unknown' : file.sidecar
       storeSessionParseCacheEntry(file.path, entry)
+
       if (stats) {
         stats.reused++
       }
+
       return entry.session
     }
   }
 
   const stateFactory = resumableStateFactoryFor(candidate)
+
   if (stateFactory) {
     const read = await readResumableTranscript({
       candidate,
@@ -192,6 +201,7 @@ async function parseCachedInLane(
       stateFactory,
       stats
     })
+
     const enriched = await enrichSessionFromSidecar(candidate, read.session, platform)
     storeSessionParseCacheEntry(file.path, {
       mtimeMs: file.mtimeMs,
@@ -205,6 +215,7 @@ async function parseCachedInLane(
       foldSession: read.session,
       resume: read.resume
     })
+
     return enriched.session
   }
 
@@ -219,6 +230,7 @@ async function parseCachedInLane(
     foldSession: session,
     resume: null
   })
+
   return session
 }
 
@@ -230,6 +242,7 @@ async function reuseCachedSession(
   if (stats) {
     stats.reused++
   }
+
   // A zero-turn transcript usually never changes again, but its sibling
   // subagent dir (Claude `<session>/subagents/`, OMP's same-named artifact
   // dir) can gain files after the parent's last write (a still-running
@@ -242,6 +255,7 @@ async function reuseCachedSession(
         : candidate.agent === 'omp'
           ? await countOmpSubagentTranscripts(candidate.file.path)
           : null
+
     if (
       subagentTranscriptCount !== null &&
       subagentTranscriptCount !== entry.session.subagentTranscriptCount
@@ -249,11 +263,14 @@ async function reuseCachedSession(
       entry.session = { ...entry.session, subagentTranscriptCount }
     }
   }
+
   // Codex titles come from session_index.jsonl, which mtime+size can't see.
   // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
   if (entry.session && candidate.agent === 'codex') {
     entry.session = await refreshCachedCodexTitle(candidate, entry.session)
   }
+
   storeSessionParseCacheEntry(candidate.file.path, entry)
+
   return entry.session
 }

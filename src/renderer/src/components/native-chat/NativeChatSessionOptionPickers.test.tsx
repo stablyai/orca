@@ -10,6 +10,7 @@ vi.mock('@/i18n/i18n', () => ({
     if (!values) {
       return fallback
     }
+
     return Object.entries(values).reduce(
       (text, [name, value]) => text.replaceAll(`{{${name}}}`, String(value)),
       fallback
@@ -31,6 +32,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 vi.mock('@/components/ui/dropdown-menu', () => {
   const React = require('react') as typeof ReactModule
+
   return {
     DropdownMenu: ({
       children,
@@ -110,12 +112,15 @@ vi.mock('@/components/ui/dropdown-menu', () => {
           if (!React.isValidElement(child)) {
             return child
           }
+
           const props = child.props as {
             value?: string
             disabled?: boolean
             children?: React.ReactNode
           }
+
           const selected = props.value !== undefined && props.value === value
+
           return (
             <button
               key={props.value}
@@ -275,6 +280,7 @@ describe('NativeChatSessionOptionPickers', () => {
 
     const menus = screen.getAllByTestId('session-option-menu')
     expect(menus).toHaveLength(2)
+
     for (const menu of menus) {
       expect(menu.getAttribute('data-side')).toBe('top')
       expect(menu.getAttribute('data-collision-padding')).toBe('8')
@@ -289,6 +295,7 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
+
     expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).toContain('Opus 4.8')
     expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).not.toContain(
       'Model:'
@@ -351,6 +358,7 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
+
     expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Model')
     expect(screen.getByRole('button', { name: 'Model' }).textContent).not.toContain('Model: Model')
     expect(screen.getByRole('button', { name: 'Effort' }).textContent).not.toContain(
@@ -471,6 +479,7 @@ describe('NativeChatSessionOptionPickers', () => {
   it('uses one switch row for a boolean option without inventing a selection', async () => {
     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, setOption }
+
     const { rerender } = render(
       <NativeChatSessionOptionPickers
         surface={liveSurface}
@@ -486,6 +495,7 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
+
     expect(screen.queryByText('Toggle fast mode')).toBeNull()
     // One control, not an On/Off pair, and the row carries the label itself.
     expect(screen.queryByRole('radio', { name: 'On' })).toBeNull()

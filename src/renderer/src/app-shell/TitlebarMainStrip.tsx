@@ -11,6 +11,7 @@ import type { AppChromeLayout } from './use-app-chrome-layout'
 export function RightSidebarToggle(): React.JSX.Element {
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -37,6 +38,7 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
     if (!layout.effectiveActiveTabId) {
       return
     }
+
     window.dispatchEvent(
       new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
         detail: { tabId: layout.effectiveActiveTabId }

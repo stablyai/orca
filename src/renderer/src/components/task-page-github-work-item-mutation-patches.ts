@@ -57,9 +57,11 @@ export function applyTaskPageGitHubListOps(
   ops: readonly PendingListOp[]
 ): GitHubAssignableUser[] {
   let list = freezeUsers(snapshot)
+
   for (const op of ops) {
     for (let i = 0; i < op.logins.length; i++) {
       const login = op.logins[i]
+
       if (op.kind === 'add') {
         if (!list.some((user) => user.login.toLowerCase() === login)) {
           const candidate = op.users?.[i]
@@ -74,16 +76,19 @@ export function applyTaskPageGitHubListOps(
       }
     }
   }
+
   return list
 }
 
 export function loginSetOfUsers(users: readonly GitHubAssignableUser[] | undefined): Set<string> {
   const set = new Set<string>()
+
   for (const user of users ?? []) {
     if (user.login) {
       set.add(user.login.toLowerCase())
     }
   }
+
   return set
 }
 
@@ -91,11 +96,13 @@ export function loginSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): 
   if (a.size !== b.size) {
     return false
   }
+
   for (const login of a) {
     if (!b.has(login)) {
       return false
     }
   }
+
   return true
 }
 
@@ -123,6 +130,7 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
         families: ['state']
       }
     }
+
     case 'merge': {
       return {
         kind: 'whole',
@@ -138,6 +146,7 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
         families: ['state', 'merge', 'autoMerge']
       }
     }
+
     case 'setAutoMerge': {
       return {
         kind: 'whole',
@@ -147,10 +156,12 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
         families: ['autoMerge']
       }
     }
+
     case 'toggleAssignee': {
       const login = normalizeLogin(intent.user.login)
       const current = freezeUsers(baseItem.assignees ?? [])
       const isOn = current.some((user) => user.login.toLowerCase() === login)
+
       const listOp: PendingListOp = isOn
         ? { family: 'assignees', kind: 'remove', logins: [login] }
         : {
@@ -165,7 +176,9 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
               }
             ]
           }
+
       const nextAssignees = applyTaskPageGitHubListOps(current, [listOp])
+
       return {
         kind: 'list',
         opKey: taskPageGitHubListOpKey('assignees', [login]),
@@ -176,12 +189,15 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
         families: ['assignees']
       }
     }
+
     case 'addReviewers': {
       const logins = intent.logins.map(normalizeLogin).filter(Boolean)
       const unique = [...new Set(logins)]
+
       const users = unique.map((login) => {
         const fromCandidates = findUser(intent.candidates, login)
         const fromCurrent = findUser(baseItem.reviewRequests ?? [], login)
+
         return (
           fromCandidates ??
           fromCurrent ?? {
@@ -191,13 +207,16 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
           }
         )
       })
+
       const listOp: PendingListOp = {
         family: 'reviewRequests',
         kind: 'add',
         logins: unique,
         users: freezeUsers(users)
       }
+
       const current = freezeUsers(baseItem.reviewRequests ?? [])
+
       return {
         kind: 'list',
         opKey: taskPageGitHubListOpKey('reviewRequests', unique),
@@ -208,15 +227,19 @@ export function buildTaskPageGitHubWorkItemMutationPatch(
         families: ['reviewRequests']
       }
     }
+
     case 'removeReviewers': {
       const logins = intent.logins.map(normalizeLogin).filter(Boolean)
       const unique = [...new Set(logins)]
+
       const listOp: PendingListOp = {
         family: 'reviewRequests',
         kind: 'remove',
         logins: unique
       }
+
       const current = freezeUsers(baseItem.reviewRequests ?? [])
+
       return {
         kind: 'list',
         opKey: taskPageGitHubListOpKey('reviewRequests', unique),

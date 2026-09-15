@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {
@@ -92,10 +93,12 @@ describe('ProjectAddedDialog', () => {
     const cleanupFns: (() => void)[] = []
     vi.doMock('react', async (importOriginal) => {
       const actual = await importOriginal<typeof ReactModule>()
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
           const cleanup = effect()
+
           if (cleanup) {
             cleanupFns.push(cleanup)
           }

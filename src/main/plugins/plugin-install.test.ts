@@ -28,11 +28,13 @@ import { installStagedPluginTree } from './plugin-install-staging'
 import * as manifestFile from './plugin-manifest-file'
 
 const roots: string[] = []
+
 const execFileAsync = promisify(execFile)
 
 async function tempRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), prefix))
   roots.push(root)
+
   return root
 }
 
@@ -59,6 +61,7 @@ async function writePluginSource(
       capabilities: []
     })
   )
+
   if (options.includePanel !== false) {
     await writeFile(join(root, panelEntry), '<h1>Panel</h1>')
   }
@@ -91,15 +94,19 @@ describe('installPluginFromLocalPath', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     await expect(
       readFile(join(pluginsDir, result.pluginKey, result.contentHash, 'panel.html'), 'utf8')
     ).resolves.toBe('<h1>Panel</h1>')
+
     const lock = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
       plugins: Record<string, Record<string, unknown>>
     }
+
     expect(lock.plugins[result.pluginKey]).toMatchObject({
       capabilityHash: result.consentFingerprint
     })
@@ -111,12 +118,15 @@ describe('installPluginFromLocalPath', () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(sourcePath)
     const firstManifest = await readFile(join(sourcePath, 'orca-plugin.json'), 'utf8')
+
     const changedManifest = {
       ...(JSON.parse(firstManifest) as Record<string, unknown>),
       name: 'Changed During Staging',
       version: '2.0.0'
     }
+
     await writeFile(join(sourcePath, 'orca-plugin.json'), JSON.stringify(changedManifest))
+
     const manifestRead = vi
       .spyOn(manifestFile, 'readPluginManifestText')
       .mockResolvedValueOnce(firstManifest)
@@ -131,6 +141,7 @@ describe('installPluginFromLocalPath', () => {
 
     expect(manifestRead).toHaveBeenCalledTimes(2)
     expect(result).toMatchObject({ ok: true, version: '2.0.0' })
+
     if (result.ok) {
       const lock = await readPluginLockfile(pluginsDir)
       expect(lock.plugins[result.pluginKey]?.version).toBe('2.0.0')
@@ -153,6 +164,7 @@ describe('installPluginFromLocalPath', () => {
     })
 
     expect(result).toMatchObject({ ok: true })
+
     if (result.ok) {
       await expect(
         readFile(join(pluginsDir, result.pluginKey, result.contentHash, '.git', 'large.pack'))
@@ -166,9 +178,11 @@ describe('installPluginFromLocalPath', () => {
     await writePluginSource(sourcePath)
     const first = await installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
     expect(first.ok).toBe(true)
+
     if (!first.ok) {
       return
     }
+
     await writeFile(join(sourcePath, 'panel.html'), '<h1>Updated</h1>')
     await rm(join(pluginsDir, 'plugins.lock.json'))
     await mkdir(join(pluginsDir, 'plugins.lock.json'))
@@ -191,15 +205,19 @@ describe('installPluginFromLocalPath', () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(firstSource)
     await writePluginSource(secondSource)
+
     const first = await installPluginFromLocalPath({
       pluginsDir,
       sourcePath: firstSource,
       hostVersion: '1.4.0'
     })
+
     expect(first.ok).toBe(true)
+
     if (!first.ok) {
       return
     }
+
     const acceptedLock = await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
     await rm(join(pluginsDir, 'plugins.lock.json'))
     await mkdir(join(pluginsDir, 'plugins.lock.json'))
@@ -209,6 +227,7 @@ describe('installPluginFromLocalPath', () => {
       sourcePath: secondSource,
       hostVersion: '1.4.0'
     })
+
     expect(failed).toMatchObject({ ok: false })
 
     await rm(join(pluginsDir, 'plugins.lock.json'), { recursive: true })
@@ -226,21 +245,27 @@ describe('installPluginFromLocalPath', () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(firstSource)
     await writePluginSource(secondSource)
+
     const first = await installPluginFromLocalPath({
       pluginsDir,
       sourcePath: firstSource,
       hostVersion: '1.4.0'
     })
+
     expect(first.ok).toBe(true)
+
     if (!first.ok) {
       return
     }
+
     await rm(join(pluginsDir, first.pluginKey, '.install-provenance', `${first.contentHash}.json`))
+
     const reinstalled = await installPluginFromLocalPath({
       pluginsDir,
       sourcePath: secondSource,
       hostVersion: '1.4.0'
     })
+
     expect(reinstalled).toMatchObject({ ok: true })
 
     // Recovery from the newly backfilled provenance must retain the accepted
@@ -258,14 +283,18 @@ describe('installPluginFromLocalPath', () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(sourcePath)
     const hashes: string[] = []
+
     for (const content of ['one', 'two', 'three']) {
       await writeFile(join(sourcePath, 'panel.html'), `<h1>${content}</h1>`)
+
       const result = await installPluginFromLocalPath({
         pluginsDir,
         sourcePath,
         hostVersion: '1.4.0'
       })
+
       expect(result.ok).toBe(true)
+
       if (result.ok) {
         hashes.push(result.contentHash)
       }
@@ -279,6 +308,7 @@ describe('installPluginFromLocalPath', () => {
       .filter((entry) => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
       .map((entry) => entry.name)
       .sort()
+
     expect(versionDirs).toEqual(hashes.slice(-2).sort())
   })
 
@@ -287,14 +317,18 @@ describe('installPluginFromLocalPath', () => {
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(sourcePath)
     const hashes: string[] = []
+
     for (const content of ['one', 'two', 'two']) {
       await writeFile(join(sourcePath, 'panel.html'), `<h1>${content}</h1>`)
+
       const result = await installPluginFromLocalPath({
         pluginsDir,
         sourcePath,
         hostVersion: '1.4.0'
       })
+
       expect(result.ok).toBe(true)
+
       if (result.ok) {
         hashes.push(result.contentHash)
       }
@@ -306,6 +340,7 @@ describe('installPluginFromLocalPath', () => {
       .filter((entry) => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
       .map((entry) => entry.name)
       .sort()
+
     expect(versionDirs).toEqual([...new Set(hashes)].sort())
   })
 
@@ -317,12 +352,15 @@ describe('installPluginFromLocalPath', () => {
     expect(first.ok).toBe(true)
     const oldLock = await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
     await writeFile(join(sourcePath, 'panel.html'), '<h1>new current</h1>')
+
     const second = await installPluginFromLocalPath({
       pluginsDir,
       sourcePath,
       hostVersion: '1.4.0'
     })
+
     expect(second.ok).toBe(true)
+
     if (!first.ok || !second.ok) {
       return
     }
@@ -331,9 +369,11 @@ describe('installPluginFromLocalPath', () => {
     const repaired = await readPluginLockfile(pluginsDir)
 
     expect(repaired.plugins[second.pluginKey]?.contentHash).toBe(second.contentHash)
+
     const persisted = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
       plugins: Record<string, { contentHash?: string }>
     }
+
     expect(persisted.plugins[second.pluginKey]?.contentHash).toBe(second.contentHash)
   })
 
@@ -378,10 +418,13 @@ describe('installPluginFromLocalPath', () => {
       installPluginFromLocalPath({ pluginsDir, sourcePath: firstSource, hostVersion: '1.4.0' }),
       installPluginFromLocalPath({ pluginsDir, sourcePath: secondSource, hostVersion: '1.4.0' })
     ])
+
     expect(results.every((result) => result.ok)).toBe(true)
+
     const lock = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
       plugins: Record<string, unknown>
     }
+
     expect(Object.keys(lock.plugins).sort()).toEqual(['orca-samples.first', 'orca-samples.second'])
   })
 
@@ -403,15 +446,19 @@ describe('installPluginFromLocalPath', () => {
     const sourcePath = await tempRoot('orca-plugin-source-')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
     await writePluginSource(sourcePath)
+
     const first = await installPluginFromLocalPath({
       pluginsDir,
       sourcePath,
       hostVersion: '1.4.0'
     })
+
     expect(first.ok).toBe(true)
+
     if (!first.ok) {
       return
     }
+
     await writeFile(
       join(pluginsDir, first.pluginKey, first.contentHash, 'panel.html'),
       '<h1>Tampered</h1>'
@@ -443,6 +490,7 @@ describe('installPluginFromGit', () => {
     await execFileAsync('git', ['add', '.'], { cwd: sourcePath })
     await execFileAsync('git', ['commit', '--quiet', '-m', 'fixture'], { cwd: sourcePath })
     await execFileAsync('git', ['tag', 'v1.0.0'], { cwd: sourcePath })
+
     const { stdout: commitStdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
       cwd: sourcePath
     })
@@ -452,6 +500,7 @@ describe('installPluginFromGit', () => {
     process.env.GIT_CONFIG_COUNT = '1'
     process.env.GIT_CONFIG_KEY_0 = `url.${pathToFileURL(sourcePath).href}.insteadOf`
     process.env.GIT_CONFIG_VALUE_0 = 'https://plugin.test/demo.git'
+
     try {
       const result = await installPluginFromGit({
         pluginsDir,
@@ -461,6 +510,7 @@ describe('installPluginFromGit', () => {
       })
 
       expect(result).toMatchObject({ ok: true, resolvedCommit: commitStdout.trim() })
+
       if (result.ok) {
         await expect(
           readFile(join(pluginsDir, result.pluginKey, result.contentHash, 'panel.html'), 'utf8')
@@ -469,6 +519,7 @@ describe('installPluginFromGit', () => {
     } finally {
       for (const key of configKeys) {
         const value = previous[key]
+
         if (value === undefined) {
           delete process.env[key]
         } else {

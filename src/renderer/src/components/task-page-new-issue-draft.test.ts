@@ -115,6 +115,7 @@ describe('store-retention P1 guard (restore of an in-selection non-fallback repo
       assignees: [assignee],
       repoId: 'repo-b'
     })
+
     const selectedRepoIds = ['repo-a', 'repo-b']
 
     const seed = resolveNewIssueOpenSeed({ draft: original, selectedRepoIds })

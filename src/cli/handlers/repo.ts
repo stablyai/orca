@@ -11,15 +11,18 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   },
   'repo add': async ({ flags, client, cwd, json }) => {
     const repoPath = getRequiredStringFlag(flags, 'path')
+
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.add', {
       path: resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add')
     })
+
     printResult(result, json, formatRepoShow)
   },
   'repo show': async ({ flags, client, json }) => {
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.show', {
       repo: getRequiredStringFlag(flags, 'repo')
     })
+
     printResult(result, json, formatRepoShow)
   },
   'repo set-base-ref': async ({ flags, client, json }) => {
@@ -27,6 +30,7 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       repo: getRequiredStringFlag(flags, 'repo'),
       ref: getRequiredStringFlag(flags, 'ref')
     })
+
     printResult(result, json, formatRepoShow)
   },
   'repo search-refs': async ({ flags, client, json }) => {
@@ -35,6 +39,7 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       query: getRequiredStringFlag(flags, 'query'),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
+
     printResult(result, json, formatRepoRefs)
   }
 }

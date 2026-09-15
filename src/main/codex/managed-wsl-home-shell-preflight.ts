@@ -28,6 +28,7 @@ export function resolveManagedWslCodexShellPreflightTarget(
   const codexHome = env.CODEX_HOME?.trim()
   const orcaCodexHome = env.ORCA_CODEX_HOME?.trim()
   const wslDistro = env.WSL_DISTRO_NAME?.trim()
+
   if (
     !codexHome ||
     codexHome !== orcaCodexHome ||
@@ -37,7 +38,9 @@ export function resolveManagedWslCodexShellPreflightTarget(
   ) {
     return null
   }
+
   const runtimeHomePath = resolveManagedWslCodexHome(wslDistro, codexHome)
+
   return runtimeHomePath ? { runtimeHomePath, wslDistro } : null
 }
 
@@ -52,22 +55,28 @@ export async function prepareManagedWslCodexHomeBeforeShellLaunch(args: {
   if (!args.hooksEnabled) {
     return null
   }
+
   const target = resolveManagedWslCodexShellPreflightTarget(args.env)
+
   if (!target) {
     return null
   }
+
   const realHome = await withTimeout(
     realpath(target.runtimeHomePath),
     WSL_MANAGED_HOME_REALPATH_TIMEOUT_MS,
     null
   )
+
   if (!realHome || !wslRuntimeHomePathsEqual(realHome, target.runtimeHomePath)) {
     return null
   }
+
   const install =
     args.install ??
     ((home: string, hookTarget: CodexWslRuntimeHookTarget) =>
       codexHookService.installForRuntimeHomeSerialized(home, hookTarget))
+
   return await install(target.runtimeHomePath, {
     runtime: 'wsl',
     wslDistro: target.wslDistro

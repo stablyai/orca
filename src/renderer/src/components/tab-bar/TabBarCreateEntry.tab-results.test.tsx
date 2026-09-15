@@ -16,11 +16,13 @@ import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 // Why: the real entry-action module pulls in runtime IPC + the app store; these
 // tests only need a controllable option list beneath the tab rows.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
+
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
   createTabEntryAllowAbsolutePathsSelector: () => () => true,
   isTabEntryAbsolutePathLike: () => false
 }))
+
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({
     files: [],
@@ -29,6 +31,7 @@ vi.mock('../quick-open-file-list', () => ({
     truncated: false
   })
 }))
+
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
   AgentIcon: () => null
@@ -44,6 +47,7 @@ const tabSearchMock = vi.hoisted(() => {
     hostId: 'local',
     displayName: 'Aurora Workspace'
   }
+
   return {
     hold: null as string | null,
     resultsByQuery: {} as Record<string, OpenTabSearchResult[]>,
@@ -51,6 +55,7 @@ const tabSearchMock = vi.hoisted(() => {
     // so every registered row needs the searchable entry it came from.
     entries(): OpenTabSearchEntries {
       const rows = Object.values(tabSearchMock.resultsByQuery).flat()
+
       return {
         browserPages: [],
         simulatorTabs: [],
@@ -93,9 +98,11 @@ const tabSearchMock = vi.hoisted(() => {
     }
   }
 })
+
 vi.mock('./use-open-tab-search', () => ({
   useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) => {
     const resolved = tabSearchMock.hold ?? query
+
     return {
       query: enabled ? resolved : query,
       entries: enabled ? tabSearchMock.entries() : null,
@@ -113,18 +120,23 @@ const activationMocks = vi.hoisted(() => ({
   focusTerminalTabSurface: vi.fn(),
   requestBrowserFocus: vi.fn()
 }))
+
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: activationMocks.workspace
 }))
+
 vi.mock('@/lib/browser-page-palette-activation', () => ({
   activateBrowserPagePaletteResult: activationMocks.browser
 }))
+
 vi.mock('@/lib/simulator-tab-palette-activation', () => ({
   activateSimulatorTabPaletteResult: activationMocks.simulator
 }))
+
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: activationMocks.focusTerminalTabSurface
 }))
+
 vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
   requestBrowserFocus: activationMocks.requestBrowserFocus
 }))
@@ -166,6 +178,7 @@ const existingFileOption = (relativePath: string): TabEntryOption => ({
 })
 
 let container: HTMLDivElement
+
 let root: Root
 
 function mount(node: React.JSX.Element): void {
@@ -183,20 +196,24 @@ function pressKey(target: Element, key: string): void {
 
 function queryInput(): HTMLInputElement {
   const input = container.querySelector('input')
+
   if (!input) {
     throw new Error('input not found')
   }
+
   return input
 }
 
 function setQuery(value: string): void {
   const input = queryInput()
+
   // Why: React patches the input value setter to track changes; bypass it with
   // the native setter so the synthetic onChange actually fires.
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
   )?.set
+
   act(() => {
     nativeSetter?.call(input, value)
     input.dispatchEvent(new window.Event('input', { bubbles: true }))
@@ -205,9 +222,11 @@ function setQuery(value: string): void {
 
 function submitForm(): void {
   const form = container.querySelector('form')
+
   if (!form) {
     throw new Error('form not found')
   }
+
   act(() => {
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
   })
@@ -287,12 +306,15 @@ describe('TabBarCreateEntry tab results', () => {
   it('orders tab rows above menu actions, agents and file entries', () => {
     entryOptionsMock.options = [existingFileOption('src/gem.ts')]
     tabSearchMock.resultsByQuery['gem'] = [terminalResult({ title: 'gem tab' })]
+
     const menuOptions: TabCreateMenuOption[] = [
       { id: 'new-browser', kind: 'new-browser', keywords: ['gem'], label: 'New Browser Tab' }
     ]
+
     const agentOptions: TabAgentLaunchOption[] = [
       { agent: 'gemini', aliases: ['gemini'], label: 'Gemini' }
     ]
+
     renderEntry({ agentOptions, menuOptions })
 
     setQuery('gem')

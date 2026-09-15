@@ -28,11 +28,14 @@ export class DesktopScriptRequestQueue {
 
   enqueue<T>(run: () => Promise<T>): Promise<T> {
     const queued = this.tail
+
     if (!queued) {
       return this.track(run())
     }
+
     let expiry: RuntimeClientError | null = null
     let waitTimer: NodeJS.Timeout | undefined
+
     const waited = new Promise<never>((_resolve, reject) => {
       waitTimer = setTimeout(() => {
         expiry = new RuntimeClientError(
@@ -43,12 +46,15 @@ export class DesktopScriptRequestQueue {
       }, this.waitTimeoutMs)
       waitTimer.unref?.()
     })
+
     // An abandoned request is never handed to a helper. The caller has already
     // been told it failed, and a click delivered after that is worse than none.
     const turn = (): Promise<T> => {
       clearTimeout(waitTimer)
+
       return expiry ? Promise.reject(expiry) : run()
     }
+
     // The tail chains on the turn, not on the race: a caller giving up early
     // must not release the next request while this one's predecessor is still
     // in flight.
@@ -60,14 +66,17 @@ export class DesktopScriptRequestQueue {
       () => undefined,
       () => undefined
     )
+
     this.tail = tail
     void tail.finally(() => {
       if (this.tail !== tail) {
         return
       }
+
       this.tail = null
       this.onDrained()
     })
+
     return result
   }
 }

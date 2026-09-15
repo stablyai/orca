@@ -24,6 +24,7 @@ async function openPaneTitleContextMenu(page: Page, title: string): Promise<void
   ))
     ? ['Control']
     : []
+
   const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
   const titleBar = page.locator('.pane-title-bar', { hasText: title }).first()
   await expect(titleBar).toBeVisible()
@@ -43,9 +44,11 @@ async function getTabCustomTitle(
   return page.evaluate(
     ({ targetWorktreeId, targetTabId }) => {
       const state = window.__store!.getState()
+
       const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find(
         (entry) => entry.id === targetTabId
       )
+
       return tab?.customTitle ?? null
     },
     { targetWorktreeId: worktreeId, targetTabId: tabId }
@@ -74,6 +77,7 @@ async function expectSavedLayoutNotToContainTitle(
         page.evaluate(
           ({ targetTabId, title }) => {
             const layout = window.__store!.getState().terminalLayoutsByTabId[targetTabId]
+
             return Object.values(layout?.titlesByLeafId ?? {}).includes(title)
           },
           { targetTabId: tabId, title }
@@ -86,6 +90,7 @@ async function expectSavedLayoutNotToContainTitle(
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 

@@ -22,6 +22,7 @@ function createWorktreeWithStagedChange(repoPath: string): {
     '# AI Commit Message E2E\n\nGenerated flow.\n'
   )
   execFileSync('git', ['add', 'README.md'], { cwd: worktreePath, stdio: 'pipe' })
+
   return { branchName, worktreePath }
 }
 
@@ -34,6 +35,7 @@ function cleanupWorktree(repoPath: string, worktreePath: string, branchName: str
   } catch {
     rmSync(worktreePath, { recursive: true, force: true })
   }
+
   try {
     execFileSync('git', ['branch', '-D', branchName], { cwd: repoPath, stdio: 'pipe' })
   } catch {
@@ -65,13 +67,17 @@ test.describe('Source Control AI commit messages', () => {
         await orcaPage.evaluate(
           async ({ generatorPath, linkedIssue }) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             const worktreeId = store.getState().activeWorktreeId
+
             if (!worktreeId) {
               throw new Error('No worktree was active after opening Source Control')
             }
+
             await window.api.worktrees.updateMeta({ worktreeId, updates: { linkedIssue } })
             const customAgentCommand = `node ${JSON.stringify(generatorPath)}`
             await store.getState().updateSettings({
@@ -115,6 +121,7 @@ test.describe('Source Control AI commit messages', () => {
     testRepoPath
   }) => {
     const { branchName, worktreePath } = createWorktreeWithStagedChange(testRepoPath)
+
     const agentCommand =
       'node -e "setTimeout(() => process.stdout.write(\'Add generated E2E message\'), 250)"'
 

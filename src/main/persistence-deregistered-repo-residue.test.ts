@@ -28,12 +28,17 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
 
 const LIVE_REPO = 'live-repo'
+
 const GONE_REPO = 'gone-repo'
+
 const LIVE_WORKTREE = `${LIVE_REPO}::/workspace/live`
+
 const GONE_WORKTREE = `${GONE_REPO}::/workspace/orphan`
+
 const RUNTIME_HOST = 'runtime:env-a'
 
 const sleepingAgentFor = (worktreeId: string, tabId = 'tab-1') => ({

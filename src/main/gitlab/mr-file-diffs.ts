@@ -26,23 +26,29 @@ export function countDiffLines(diff: string): { additions: number; deletions: nu
   // be counted once inside a hunk, not skipped.
   let inHunk = false
   let cursor = 0
+
   while (cursor < diff.length) {
     if (diff.startsWith('@@', cursor)) {
       inHunk = true
     } else if (inHunk) {
       const prefix = diff.charCodeAt(cursor)
+
       if (prefix === 43) {
         additions += 1
       } else if (prefix === 45) {
         deletions += 1
       }
     }
+
     const newline = diff.indexOf('\n', cursor)
+
     if (newline === -1) {
       break
     }
+
     cursor = newline + 1
   }
+
   return { additions, deletions }
 }
 
@@ -58,6 +64,7 @@ function mapMRFile(raw: {
 }): GitLabMRFile {
   const diff = raw.diff ?? ''
   const counts = countDiffLines(diff)
+
   const status = raw.new_file
     ? 'added'
     : raw.deleted_file
@@ -65,6 +72,7 @@ function mapMRFile(raw: {
       : raw.renamed_file
         ? 'renamed'
         : 'modified'
+
   return {
     path: raw.new_path ?? raw.old_path ?? '',
     ...(raw.old_path && raw.old_path !== raw.new_path ? { oldPath: raw.old_path } : {}),
@@ -93,6 +101,8 @@ export async function fetchMRFiles(
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
+
   const data = JSON.parse(stdout) as Parameters<typeof mapMRFile>[0][]
+
   return data.map(mapMRFile).filter((file) => file.path)
 }

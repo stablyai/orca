@@ -37,6 +37,7 @@ export function deriveMobileAiVaultScopePaths(
       if (paths.length >= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         break
       }
+
       if (worktree.repoId === activeWorktree.repoId) {
         addScopePath(paths, comparisonPaths, worktree.path)
       }
@@ -52,13 +53,17 @@ function addScopePath(
   pathValue: string | undefined
 ): void {
   const trimmedPath = pathValue?.trim()
+
   if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
     return
   }
+
   const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
+
   if (comparisonPaths.has(comparisonPath)) {
     return
   }
+
   comparisonPaths.add(comparisonPath)
   paths.push(trimmedPath)
 }

@@ -163,6 +163,7 @@ describe('client-hosted browser page persistence', () => {
     // silent. A rejected one would log on every start for every page the registry already had.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let warnings = -1
+
     try {
       rehydrateClientHostedBrowserPages(live, {
         listWorkspaceSessions: () => [store.session],
@@ -182,12 +183,14 @@ describe('client-hosted browser page persistence', () => {
   it('ignores a row whose worktree key disagrees with its own workspace', () => {
     const store = sessionStore()
     persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
+
     const misfiled: WorkspaceSessionState = {
       ...store.session,
       clientHostedBrowserPagesByWorktree: {
         'repo-1::wt-b': store.session.clientHostedBrowserPagesByWorktree!['repo-1::wt-a']!
       }
     }
+
     const restored = new RuntimeBrowserPageRegistry()
 
     rehydrateClientHostedBrowserPages(restored, {
@@ -275,6 +278,7 @@ function sessionStore() {
     getWorkspaceSession: (_worktreeId: string) => state.session,
     now: () => NOW as number
   }
+
   return state
 }
 
@@ -292,5 +296,6 @@ function registryWith(placement: typeof livePlacement): RuntimeBrowserPageRegist
     loading: true,
     active: true
   })
+
   return pages
 }

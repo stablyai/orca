@@ -14,9 +14,11 @@ function mergeTerminalTopologyRevisions(
   incoming: Record<string, number> | undefined
 ): Record<string, number> {
   const merged = { ...base }
+
   for (const [worktreeId, revision] of Object.entries(incoming ?? {})) {
     merged[worktreeId] = Math.max(merged[worktreeId] ?? 0, revision)
   }
+
   return merged
 }
 
@@ -25,15 +27,18 @@ export function mergeHostWorkspaceSessions(
   incoming: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
 ): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
   const next: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = { ...existing }
+
   for (const [hostId, session] of Object.entries(incoming)) {
     if (!session) {
       continue
     }
+
     next[hostId as ExecutionHostId] = mergeWorkspaceSessions(
       next[hostId as ExecutionHostId],
       session
     )
   }
+
   return next
 }
 
@@ -42,6 +47,7 @@ export function mergeWorkspaceSessions(
   incoming: WorkspaceSessionState
 ): WorkspaceSessionState {
   const base = existing ?? getDefaultWorkspaceSession()
+
   return {
     ...base,
     tabsByWorktree: { ...base.tabsByWorktree, ...incoming.tabsByWorktree },
@@ -113,9 +119,11 @@ export function removeRepoFromHostWorkspaceSessions(
   repoId: string
 ): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
   const next: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
+
   for (const [hostId, session] of Object.entries(sessions ?? {})) {
     next[hostId as ExecutionHostId] = removeRepoFromWorkspaceSession(session, repoId)
   }
+
   return next
 }
 
@@ -125,34 +133,44 @@ export function removeRepoFromWorkspaceSession(
 ): WorkspaceSessionState {
   const next = structuredClone(session ?? getDefaultWorkspaceSession())
   const removedTerminalTabIds = new Set<string>()
+
   for (const [ownerKey, tabs] of Object.entries(next.tabsByWorktree)) {
     if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
       continue
     }
+
     tabs.forEach((tab) => removedTerminalTabIds.add(tab.id))
     delete next.tabsByWorktree[ownerKey]
   }
+
   for (const tabId of removedTerminalTabIds) {
     delete next.terminalLayoutsByTabId[tabId]
   }
+
   const removedBrowserWorkspaceIds = new Set<string>()
+
   for (const [ownerKey, workspaces] of Object.entries(next.browserTabsByWorktree ?? {})) {
     if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
       continue
     }
+
     workspaces.forEach((workspace) => removedBrowserWorkspaceIds.add(workspace.id))
     delete next.browserTabsByWorktree![ownerKey]
   }
+
   if (next.browserPagesByWorkspace) {
     for (const workspaceId of removedBrowserWorkspaceIds) {
       delete next.browserPagesByWorkspace[workspaceId]
     }
   }
+
   // Driven by the census so a field cannot be added to the session type and forgotten here.
   for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
     const record = next[field] as Record<string, unknown> | undefined
+
     ;(next as Record<string, unknown>)[field] = removeRepoWorktreeRecord(record, repoId)
   }
+
   if (next.terminalSurfaceTombstonesByPaneKey) {
     next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
       Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
@@ -160,23 +178,30 @@ export function removeRepoFromWorkspaceSession(
       )
     )
   }
+
   if (next.terminalPtyIncarnationsByPaneKey) {
     next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
       Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
         const separator = paneKey.lastIndexOf(':')
+
         return separator < 1 || !removedTerminalTabIds.has(paneKey.slice(0, separator))
       })
     )
   }
+
   if (next.activeWorktreeId && isRepoWorktreeId(repoId, next.activeWorktreeId)) {
     next.activeWorktreeId = null
   }
+
   const activeScope = next.activeWorkspaceKey ? parseWorkspaceKey(next.activeWorkspaceKey) : null
+
   if (activeScope?.type === 'worktree' && isRepoWorktreeId(repoId, activeScope.worktreeId)) {
     next.activeWorkspaceKey = null
   }
+
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
     (worktreeId) => !isRepoWorktreeId(repoId, worktreeId)
   )
+
   return next
 }

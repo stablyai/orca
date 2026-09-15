@@ -15,6 +15,7 @@ afterEach(async () => {
 describe('FsHandler document previews', () => {
   it('registers an execution-host read that rejects canonical symlink escapes', async () => {
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+
     const dispatcher = {
       onRequest: vi.fn(
         (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
@@ -26,6 +27,7 @@ describe('FsHandler document previews', () => {
       notify: vi.fn(),
       notifyClient: vi.fn()
     }
+
     new FsHandler(dispatcher as never, {} as never)
     const readDocPreview = requestHandlers.get('fs.readDocPreview')
     expect(readDocPreview).toBeTypeOf('function')
@@ -41,6 +43,7 @@ describe('FsHandler document previews', () => {
     await writeFile(join(outside, 'secret.txt'), 'secret')
     const linkedOutside = join(docs, 'linked')
     await symlink(outside, linkedOutside, process.platform === 'win32' ? 'junction' : 'dir')
+
     const request = {
       boundaryPath: workspace,
       entryPath,

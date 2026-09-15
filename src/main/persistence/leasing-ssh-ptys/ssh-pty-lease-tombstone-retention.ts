@@ -27,14 +27,17 @@ function boundRelayPtyIds(
   targetId: string
 ): Set<string> {
   const bound = new Set<string>()
+
   const sessions = [
     operations.state.workspaceSession,
     ...Object.values(operations.state.workspaceSessionsByHostId ?? {})
   ]
+
   for (const session of sessions) {
     if (!session) {
       continue
     }
+
     for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
       for (const tab of tabs) {
         if (tab.ptyId) {
@@ -42,12 +45,14 @@ function boundRelayPtyIds(
         }
       }
     }
+
     for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
       for (const ptyId of Object.values(layout?.ptyIdsByLeafId ?? {})) {
         bound.add(operations.toComparablePtyId(targetId, ptyId))
       }
     }
   }
+
   return bound
 }
 
@@ -74,16 +79,22 @@ export function pruneRetiredSshRemotePtyLeaseTombstones(
   targetId: string
 ): boolean {
   const leases = operations.state.sshRemotePtyLeases ?? []
+
   if (!leases.some((lease) => isRetiredRoutingTombstone(lease, targetId))) {
     return false
   }
+
   const bound = boundRelayPtyIds(operations, targetId)
+
   const retained = leases.filter(
     (lease) => !isRetiredRoutingTombstone(lease, targetId) || bound.has(lease.ptyId)
   )
+
   if (retained.length === leases.length) {
     return false
   }
+
   operations.state.sshRemotePtyLeases = retained
+
   return true
 }

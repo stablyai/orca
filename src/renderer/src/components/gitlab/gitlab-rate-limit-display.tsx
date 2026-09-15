@@ -19,11 +19,15 @@ export function formatGitLabRateLimitReset(resetAt: number | null): string {
   if (resetAt === null) {
     return 'unknown'
   }
+
   const deltaSec = Math.max(0, resetAt - Math.floor(Date.now() / 1000))
+
   if (deltaSec < 60) {
     return `${deltaSec}s`
   }
+
   const mins = Math.round(deltaSec / 60)
+
   return `${mins}m`
 }
 
@@ -31,13 +35,17 @@ export function toneForGitLabBucket(remaining: number, limit: number): 'ok' | 'w
   if (limit <= 0) {
     return 'ok'
   }
+
   const pct = remaining / limit
+
   if (pct < 0.1) {
     return 'crit'
   }
+
   if (pct < 0.25) {
     return 'warn'
   }
+
   return 'ok'
 }
 
@@ -58,9 +66,11 @@ export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }):
     async (force = false): Promise<void> => {
       const token = ++latestToken.current
       setIsFetching(true)
+
       try {
         const target = getActiveRuntimeTarget(settings)
         const params = force ? { force: true } : undefined
+
         const res =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetGitLabRateLimitResult>(
@@ -70,9 +80,11 @@ export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }):
                 { timeoutMs: 30_000 }
               )
             : ((await window.api.gl.rateLimit(params)) as GetGitLabRateLimitResult | undefined)
+
         if (token !== latestToken.current) {
           return
         }
+
         if (res?.ok) {
           setSnapshot(res.snapshot)
           setHasError(false)
@@ -96,6 +108,7 @@ export function useGitLabRateLimitSnapshot(options?: { autoRefresh?: boolean }):
     if (!autoRefresh) {
       return
     }
+
     return installWindowVisibilityInterval({
       run: () => void refresh(false),
       intervalMs: REFRESH_INTERVAL_MS
@@ -111,6 +124,7 @@ function GitLabRateLimitRows({
   snapshot: GitLabRateLimitSnapshot
 }): React.JSX.Element {
   const rest = snapshot.rest
+
   if (!rest) {
     return (
       <div className="text-xs text-muted-foreground">
@@ -121,7 +135,9 @@ function GitLabRateLimitRows({
       </div>
     )
   }
+
   const tone = toneForGitLabBucket(rest.remaining, rest.limit)
+
   return (
     <div className="flex flex-col gap-1 text-xs">
       <div className="flex items-center justify-between gap-3">

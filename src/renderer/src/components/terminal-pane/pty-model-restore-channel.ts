@@ -13,6 +13,7 @@
 import type { PtyModelRestoreNeededEvent } from '../../../../shared/pty-model-restore-marker'
 
 const ptyModelRestoreNeededHandlers = new Map<string, (event: PtyModelRestoreNeededEvent) => void>()
+
 let modelRestoreNeededChannelAttached = false
 
 function dispatchPtyModelRestoreNeeded(event: PtyModelRestoreNeededEvent): void {
@@ -23,13 +24,16 @@ function ensureModelRestoreNeededChannel(): void {
   if (modelRestoreNeededChannelAttached) {
     return
   }
+
   // Why optional-chained: unit tests and the web remote client expose a
   // partial pty API; missing channel means "no markers", never a throw.
   const onModelRestoreNeeded = (globalThis as { window?: Window }).window?.api?.pty
     ?.onModelRestoreNeeded
+
   if (typeof onModelRestoreNeeded !== 'function') {
     return
   }
+
   modelRestoreNeededChannelAttached = true
   onModelRestoreNeeded(dispatchPtyModelRestoreNeeded)
 }
@@ -42,6 +46,7 @@ export function registerPtyModelRestoreNeededHandler(
 ): () => void {
   ensureModelRestoreNeededChannel()
   ptyModelRestoreNeededHandlers.set(ptyId, handler)
+
   return () => {
     if (ptyModelRestoreNeededHandlers.get(ptyId) === handler) {
       ptyModelRestoreNeededHandlers.delete(ptyId)

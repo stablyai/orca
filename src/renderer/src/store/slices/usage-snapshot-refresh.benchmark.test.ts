@@ -16,9 +16,11 @@ type Deferred<T> = {
 
 function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 
@@ -89,10 +91,12 @@ describe('Codex usage cached snapshot benchmark', () => {
 
   it('renders cached usage before a slow refresh completes', async () => {
     const slowRefresh = createDeferred<CodexUsageScanState>()
+
     const getSnapshot = vi
       .fn()
       .mockResolvedValueOnce(createSnapshot(100))
       .mockResolvedValueOnce(createSnapshot(200, createScanState({ lastScanCompletedAt: 300 })))
+
     const refresh = vi.fn(() => slowRefresh.promise)
 
     vi.stubGlobal('window', {

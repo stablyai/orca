@@ -40,6 +40,7 @@ export function installMainWindowShortcutRouting(args: {
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
+
     if (
       focus.isFloatingTerminalInputFocused() &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
@@ -48,10 +49,12 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
+
     if (isIndexJump && isAutoRepeat) {
       // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
       // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
       event.preventDefault()
+
       return true
     }
 
@@ -71,24 +74,33 @@ export function installMainWindowShortcutRouting(args: {
     // Why: hold-mode dictation needs renderer keyup events, so main only consumes single-keydown dictation toggles.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
+
       if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
         return false
       }
+
       const dictationMode = voiceSettings.dictationMode ?? 'toggle'
+
       if (dictationMode === 'hold') {
         return false
       }
+
       if (isAutoRepeat) {
         event.preventDefault()
+
         return true
       }
+
       event.preventDefault()
+
       if (capturedTerminalActionId) {
         mainWindow.webContents.send('ui:terminalShortcutCaptured', {
           actionId: capturedTerminalActionId
         })
       }
+
       mainWindow.webContents.send('ui:dictationKeyDown')
+
       return true
     }
 
@@ -97,10 +109,12 @@ export function installMainWindowShortcutRouting(args: {
       isAutoRepeat
     ) {
       event.preventDefault()
+
       return true
     }
 
     event.preventDefault()
+
     if (capturedTerminalActionId) {
       mainWindow.webContents.send('ui:terminalShortcutCaptured', {
         actionId: capturedTerminalActionId
@@ -108,6 +122,7 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     sendResolvedWindowShortcutAction(mainWindow, action, opts?.onBeforeReload)
+
     return true
   }
 
@@ -118,11 +133,13 @@ export function installMainWindowShortcutRouting(args: {
 
     if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
+
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+
       return
     }
 
@@ -130,10 +147,12 @@ export function installMainWindowShortcutRouting(args: {
       // Why: chat/terminal panes hold focus without native editable controls, so route Cmd+V through Orca's paste ownership.
       event.preventDefault()
       mainWindow.webContents.send('ui:appMenuPaste')
+
       return
     }
 
     const keybindings = opts?.getKeybindings?.()
+
     const terminalShortcutContext: KeybindingMatchOptions = {
       context:
         focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
@@ -143,6 +162,7 @@ export function installMainWindowShortcutRouting(args: {
         store?.getSettings().terminalShortcutPolicy
       )
     }
+
     const appShortcutContext: KeybindingMatchOptions = {
       context: 'app',
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
@@ -163,6 +183,7 @@ export function installMainWindowShortcutRouting(args: {
         }),
         Date.now()
       )
+
       if (detected) {
         const doubleTapAction = resolveWindowShortcutAction(
           { type: 'keyDown', doubleTapModifier: detected.modifier },
@@ -170,6 +191,7 @@ export function installMainWindowShortcutRouting(args: {
           keybindings,
           appShortcutContext
         )
+
         if (
           doubleTapAction &&
           dispatchResolvedWindowShortcutAction(event, doubleTapAction, {
@@ -195,6 +217,7 @@ export function installMainWindowShortcutRouting(args: {
     // Why: TipTap owns bare Cmd/Ctrl+B for bold in the markdown editor; skip interception for the bare chord only.
     // See docs/markdown-cmd-b-bold-design.md.
     const modForBold = process.platform === 'darwin' ? input.meta : input.control
+
     if (
       focus.isMarkdownEditorFocused() &&
       input.code === 'KeyB' &&
@@ -212,6 +235,7 @@ export function installMainWindowShortcutRouting(args: {
       keybindings,
       terminalShortcutContext
     )
+
     if (!action) {
       return
     }
@@ -234,6 +258,7 @@ export function installMainWindowShortcutRouting(args: {
     if (zoomDirection !== 'in' && zoomDirection !== 'out') {
       return
     }
+
     if (
       !nativeZoomCommandMatchesKeybindings(
         zoomDirection,
@@ -252,6 +277,7 @@ export function installMainWindowShortcutRouting(args: {
     ) {
       return
     }
+
     event.preventDefault()
     mainWindow.webContents.send('terminal:zoom', zoomDirection)
   })

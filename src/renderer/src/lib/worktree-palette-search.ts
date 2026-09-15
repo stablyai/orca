@@ -93,6 +93,7 @@ export function makeEmptyPaletteSearchResult(
   lastActivityAt?: number | null
 ): PaletteSearchResult {
   const activity = preparePaletteActivity(lastActivityAt, context)
+
   return {
     worktreeId,
     ...(worktreeHostId ? { worktreeHostId } : {}),
@@ -118,12 +119,16 @@ const VISIBLE_FIELD_LABELS: ReadonlyMap<string, PaletteMatchedField> = new Map([
 
 function toSupportingText(match: PaletteDocumentMatch): PaletteSupportingText | null {
   const evidence = match.supportingEvidence[0]
+
   if (!evidence) {
     return null
   }
+
   const kind = evidence.kind as PaletteSupportingKind
+
   if (kind === 'comment') {
     const snippet = applyWorktreeCommentSnippet(evidence.text, evidence.ranges)
+
     return {
       labelKind: kind,
       text: snippet.text,
@@ -131,6 +136,7 @@ function toSupportingText(match: PaletteDocumentMatch): PaletteSupportingText | 
       accessibilityLabel: evidence.accessibilityLabel
     }
   }
+
   return {
     labelKind: kind,
     text: evidence.text,
@@ -149,12 +155,15 @@ export function toWorktreePaletteSearchResult(
   const activity = preparePaletteActivity(lastActivityAt, context)
   const supportingText = toSupportingText(match)
   const matchedFields: PaletteMatchedField[] = []
+
   for (const fieldId of match.rangesByField.keys()) {
     const label = VISIBLE_FIELD_LABELS.get(fieldId)
+
     if (label && !matchedFields.includes(label)) {
       matchedFields.push(label)
     }
   }
+
   if (supportingText) {
     matchedFields.push(supportingText.labelKind)
   }
@@ -189,9 +198,11 @@ export type WorktreePaletteSearchArgs = {
 export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): PaletteSearchResult[] {
   const context = args.context ?? createPaletteSearchContext(Date.now())
   const prepared = preparePaletteQuery(args.query)
+
   if (prepared.state === 'invalid') {
     return []
   }
+
   if (prepared.state === 'empty') {
     return args.worktrees.map((worktree) =>
       makeEmptyPaletteSearchResult(
@@ -205,6 +216,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
 
   const taskSourceUrl = parseCmdJTaskSourceUrl(args.query.trim())
   const results: PaletteSearchResult[] = []
+
   for (const worktree of args.worktrees) {
     if (taskSourceUrl) {
       const match = matchWorktreePaletteTaskUrl({
@@ -213,6 +225,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
         repo: resolvePaletteRepoForWorktree(worktree, args.repoMap, args.repoMapByHostIdentity),
         review: args.checksReviewByWorktree?.get(worktree)
       })
+
       if (match) {
         const activity = preparePaletteActivity(worktree.lastActivityAt, context)
         results.push({
@@ -221,19 +234,23 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
           activity
         })
       }
+
       continue
     }
 
     const document = args.documents.get(getPaletteWorktreeIdentity(worktree))
+
     if (!document) {
       continue
     }
+
     const match = matchPaletteDocument({
       document,
       tokens: prepared.tokens,
       normalizedQuery: prepared.normalized,
       tokenCountBeforeDeduplication: prepared.tokenCountBeforeDeduplication
     })
+
     if (match) {
       results.push(
         toWorktreePaletteSearchResult(
@@ -246,6 +263,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
       )
     }
   }
+
   return results
 }
 
@@ -257,6 +275,7 @@ export function searchWorktrees(
   sources: Omit<WorktreePaletteDocumentSources, 'repoMap'> = {}
 ): PaletteSearchResult[] {
   const documentSources: WorktreePaletteDocumentSources = { ...sources, repoMap }
+
   return searchWorktreeDocuments({
     worktrees,
     query,

@@ -12,6 +12,7 @@ function captureClient(
   })
 ) {
   const sendRequest = vi.fn(() => result)
+
   return { client: { sendRequest } as unknown as Pick<RpcClient, 'sendRequest'>, sendRequest }
 }
 
@@ -71,6 +72,7 @@ describe('terminal live accessory raw send', () => {
       error: { code: 'terminal_error', message: 'failed' },
       _meta: { runtimeId: 'test-runtime' }
     }
+
     const { client } = captureClient(Promise.resolve(response))
 
     await expect(sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client })).resolves.toBe(false)

@@ -28,32 +28,41 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
   ): Promise<void> {
     if (this.activeUpdateSource === 'local') {
       this.sendLocalBuildErrorAndRestore(message, userInitiated)
+
       return
     }
+
     if (this.isPinnedBuildActive) {
       // Why: a failed pinned jump must hand the feed back before surfacing the error, or the pin blocks background checks for the process lifetime.
       this.clearAvailableUpdateContext()
       this.restoreReleaseUpdateSource()
       this.sendSettledCheckStatus({ state: 'error', message, userInitiated })
+
       return
     }
+
     const failureKey = this.getCheckFailureKey(message, userInitiated)
+
     if (
       source === 'promise' &&
       this.pendingPrereleaseFallback?.suppressedPrimaryPromiseFailureKey === failureKey
     ) {
       this.pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey = null
       this.clearPrereleaseFallbackContextIfSettled()
+
       return
     }
+
     if (
       source === 'fallback-promise' &&
       this.pendingPrereleaseFallback?.suppressedFallbackPromiseFailureKey === failureKey
     ) {
       this.pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey = null
       this.clearPrereleaseFallbackContextIfSettled()
+
       return
     }
+
     if (
       this.retryPrereleaseFallbackAfterMissingManifest(
         message,
@@ -65,6 +74,7 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
     ) {
       return
     }
+
     if (this.pendingCheckFailureKey === failureKey && this.pendingCheckFailurePromise) {
       return this.pendingCheckFailurePromise
     }
@@ -78,6 +88,7 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
         console.warn('[updater] benign check failure:', message)
         this.clearAvailableUpdateContext()
         this.scheduleAutomaticUpdateCheck(this.getAutomaticRetryInterval())
+
         if (userInitiated) {
           // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
           this.sendSettledCheckStatus({
@@ -92,15 +103,20 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
             // Why: release probes can fail transiently; keep the campaign pending so the short retry can still show it.
             this.deferPendingUpdateNudgeUntilRetry()
           }
+
           this.sendSettledCheckStatus({ state: 'idle' })
         }
+
         return
       }
+
       this.clearAvailableUpdateContext()
       this.persistLastUpdateCheckAt?.(Date.now())
+
       if (!userInitiated) {
         this.scheduleAutomaticUpdateCheck(this.getAutomaticRetryInterval())
       }
+
       this.sendSettledCheckStatus({ state: 'error', message, userInitiated })
     }
 
@@ -111,6 +127,7 @@ export abstract class UpdaterCheckFailure extends UpdaterReleaseFeed {
         this.pendingCheckFailurePromise = null
       }
     })
+
     return this.pendingCheckFailurePromise
   }
 

@@ -5,7 +5,9 @@ import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contra
 import type { TerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 const FRAME_HEIGHT = 800
+
 const ROWS = 40
+
 const KEYBOARD_LIFT = 300
 
 function metrics(
@@ -68,12 +70,15 @@ describe('computeActiveTerminalKeyboardLift', () => {
       metrics: metrics({ cursorY: 30, contentBottomRow: 34 }),
       terminalFrameHeight: FRAME_HEIGHT
     })
+
     const oldPayload = parseTerminalKeyboardAvoidanceMetrics({ cursorY: 30, rows: ROWS })
+
     const cursorOnly = computeActiveTerminalKeyboardLift({
       keyboardLift: KEYBOARD_LIFT,
       metrics: oldPayload,
       terminalFrameHeight: FRAME_HEIGHT
     })
+
     expect({ candidate, cursorOnly }).toEqual({ candidate: 220, cursorOnly: 140 })
   })
 
@@ -93,6 +98,7 @@ describe('computeActiveTerminalKeyboardLift', () => {
       metrics: metrics({ cursorY: 38, contentBottomRow: 38 }),
       terminalFrameHeight: FRAME_HEIGHT
     })
+
     expect(lift).toBe(KEYBOARD_LIFT)
   })
 
@@ -102,21 +108,25 @@ describe('computeActiveTerminalKeyboardLift', () => {
       metrics: metrics({ cursorY: 39, contentBottomRow: 39 }),
       terminalFrameHeight: FRAME_HEIGHT
     })
+
     expect(lift).toBeLessThanOrEqual(KEYBOARD_LIFT)
   })
 
   it('uses the platform-adjusted lift proportionally on iOS and Android', () => {
     const tuiMetrics = metrics({ cursorY: 30, contentBottomRow: 34 })
+
     const android = computeActiveTerminalKeyboardLift({
       keyboardLift: 300,
       metrics: tuiMetrics,
       terminalFrameHeight: FRAME_HEIGHT
     })
+
     const ios = computeActiveTerminalKeyboardLift({
       keyboardLift: 266,
       metrics: tuiMetrics,
       terminalFrameHeight: FRAME_HEIGHT
     })
+
     expect({ android, ios }).toEqual({ android: 220, ios: 186 })
   })
 })

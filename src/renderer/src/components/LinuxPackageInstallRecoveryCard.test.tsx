@@ -5,24 +5,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinuxPackageInstallRecovery } from '../../../shared/update-status-types'
 
 const { toastSuccess } = vi.hoisted(() => ({ toastSuccess: vi.fn() }))
+
 vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
 
 import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 
 const RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/v1.4.200'
+
 const DIAGNOSTIC = 'pkexec: no polkit authentication agent found'
+
 const INSTALL_COMMAND = 'sudo apt-get install -y /tmp/orca-updates/orca_1.4.200_amd64.deb'
+
 const PACKAGE_FILE_NAME = 'orca_1.4.200_amd64.deb'
+
 const SUMMARY =
   'Orca downloaded the system package. Quit Orca before finishing the update from a terminal.'
+
 const COPIED_NOTE =
   `Command copied. Quit Orca, run it in a system terminal to install ${PACKAGE_FILE_NAME}, ` +
   'then reopen Orca.'
+
 const INSTRUCTIONS = {
   ok: true as const,
   command: INSTALL_COMMAND,
   packageFileName: PACKAGE_FILE_NAME
 }
+
 const NO_PACKAGE_MANAGER = {
   ok: false as const,
   reason: 'no-package-manager' as const,
@@ -30,10 +38,15 @@ const NO_PACKAGE_MANAGER = {
 }
 
 const getInstructions = vi.fn()
+
 const showLinuxPackage = vi.fn()
+
 const writeClipboardText = vi.fn()
+
 const openUrl = vi.fn()
+
 const onClose = vi.fn()
+
 const allMocks = [
   getInstructions,
   showLinuxPackage,
@@ -88,10 +101,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -111,6 +126,7 @@ function isAriaDisabled(element: HTMLElement): boolean {
 function footnoteElement(): HTMLElement | null {
   const cardRoot = document.body.firstElementChild?.firstElementChild
   const last = cardRoot?.lastElementChild?.lastElementChild
+
   return last?.tagName === 'P' ? (last as HTMLElement) : null
 }
 
@@ -459,6 +475,7 @@ describe('LinuxPackageInstallRecoveryCard details', () => {
 
   it('scrolls long diagnostics instead of widening the card', () => {
     const long = `${DIAGNOSTIC} ${'diagnostic-overflow '.repeat(400)}`
+
     const { container } = renderCard({
       diagnostic: long,
       recovery: makeRecovery({ reason: 'authentication-denied' })
@@ -586,6 +603,7 @@ describe('LinuxPackageInstallRecoveryCard keyboard', () => {
       'Show Package',
       'Download Manually'
     ]
+
     for (const name of order) {
       await user.tab()
       expect(document.activeElement).toBe(button(name))

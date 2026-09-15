@@ -33,6 +33,7 @@ type PrimaryStateWriteOperationsRuntime = Pick<
 >
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
+
 type PrimaryStateWriteOperationsContext = {
   runtime: PrimaryStateWriteOperationsRuntime
   serialization: StateSerializationSecretHandlingOperations
@@ -54,15 +55,20 @@ export class PrimaryStateWriteOperations {
     if (this[primaryStateWriteOperationsContext].runtime.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
+
     if (this[primaryStateWriteOperationsContext].runtime.writeTimer) {
       clearTimeout(this[primaryStateWriteOperationsContext].runtime.writeTimer)
       this[primaryStateWriteOperationsContext].runtime.writeTimer = null
     }
+
     this[primaryStateWriteOperationsContext].runtime.firstPendingSaveAt = null
+
     const asyncWriteWasInFlight =
       this[primaryStateWriteOperationsContext].runtime.pendingWrite !== null
+
     // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
     this[primaryStateWriteOperationsContext].runtime.writeGeneration++
+
     if (this[primaryStateWriteOperationsContext].runtime.inFlightAsyncTmpFile) {
       try {
         unlinkSync(this[primaryStateWriteOperationsContext].runtime.inFlightAsyncTmpFile)
@@ -74,6 +80,7 @@ export class PrimaryStateWriteOperations {
         }
       }
     }
+
     // Why: later async flushes must remain serialized behind the invalidated writer.
     writeToDiskSync(this, {
       force: asyncWriteWasInFlight,
@@ -95,14 +102,18 @@ export class PrimaryStateWriteOperations {
     if (this[primaryStateWriteOperationsContext].runtime.writesFrozen) {
       throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')
     }
+
     const next = parseCodexResetCreditAttemptLedger(ledger)
+
     const previous = this[primaryStateWriteOperationsContext].runtime.state
       .codexResetCreditAttemptLedger
       ? structuredClone(
           this[primaryStateWriteOperationsContext].runtime.state.codexResetCreditAttemptLedger
         )
       : undefined
+
     this[primaryStateWriteOperationsContext].runtime.state.codexResetCreditAttemptLedger = next
+
     try {
       this[primaryStateWriteOperationsContext].runtime.flushOrThrow()
     } catch (error) {
@@ -121,7 +132,9 @@ export function enqueueWrite(owner: PrimaryStateWriteOperations): Promise<void> 
       owner[primaryStateWriteOperationsContext].runtime.staleTempCleanup,
     owner[primaryStateWriteOperationsContext].runtime.pendingSnapshotFileWork ?? Promise.resolve()
   ]).then(() => {})
+
   const write = previousWrite.then(() => writeToDiskAsync(owner))
+
   const trackedWrite = write
     .catch((err) => {
       console.error('[persistence] Failed to write state:', err)
@@ -131,7 +144,9 @@ export function enqueueWrite(owner: PrimaryStateWriteOperations): Promise<void> 
         owner[primaryStateWriteOperationsContext].runtime.pendingWrite = null
       }
     })
+
   owner[primaryStateWriteOperationsContext].runtime.pendingWrite = trackedWrite
+
   return write
 }
 
@@ -139,17 +154,22 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
   if (owner[primaryStateWriteOperationsContext].runtime.writesFrozen) {
     return
   }
+
   const gen = owner[primaryStateWriteOperationsContext].runtime.writeGeneration
+
   const { payload, stateHash, protectedSecretUpdates } =
     owner[primaryStateWriteOperationsContext].serialization.buildStateToSave()
+
   // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
   if (stateHash === owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash) {
     owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration = Math.max(
       owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration,
       gen
     )
+
     return
   }
+
   const dataFile = owner[primaryStateWriteOperationsContext].runtime.dataFile
   const dir = dirname(dataFile)
   await mkdir(dir, { recursive: true }).catch(() => {})
@@ -157,9 +177,11 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
 
   // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
   let renamed = false
+
   try {
     // Why: fsync before rename, then fsync the directory; see writeFileDurable.
     const handle = await open(tmpFile, 'w')
+
     try {
       // Already UTF-8 bytes: passing the string here would re-encode the whole state on the main thread.
       await handle.writeFile(payload)
@@ -167,11 +189,14 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     } finally {
       await handle.close()
     }
+
     // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
     if (owner[primaryStateWriteOperationsContext].runtime.writeGeneration !== gen) {
       return
     }
+
     owner[primaryStateWriteOperationsContext].runtime.inFlightAsyncTmpFile = tmpFile
+
     try {
       await renameDurable(tmpFile, dataFile)
       renamed = true
@@ -187,6 +212,7 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
         owner[primaryStateWriteOperationsContext].runtime.inFlightAsyncTmpFile = null
       }
     }
+
     // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
     if (renamed && owner[primaryStateWriteOperationsContext].runtime.writeGeneration === gen) {
       owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash = stateHash
@@ -196,6 +222,7 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     } else if (renamed) {
       owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash = null
     }
+
     if (renamed) {
       owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration = Math.max(
         owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration,
@@ -207,13 +234,16 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
       await rm(tmpFile).catch(() => {})
     }
   }
+
   if (!renamed) {
     return
   }
+
   // Why (#1158): rotate only after the primary rename while this write still owns its generation.
   if (owner[primaryStateWriteOperationsContext].runtime.writeGeneration !== gen) {
     return
   }
+
   await owner[primaryStateWriteOperationsContext].backups.rotateBackupsAsync(dataFile)
 }
 
@@ -224,8 +254,10 @@ export function writeToDiskSync(
   if (owner[primaryStateWriteOperationsContext].runtime.writesFrozen) {
     return
   }
+
   const { payload, stateHash, protectedSecretUpdates } =
     owner[primaryStateWriteOperationsContext].serialization.buildStateToSave()
+
   // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
   if (
     !opts.force &&
@@ -237,17 +269,22 @@ export function writeToDiskSync(
       owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration,
       owner[primaryStateWriteOperationsContext].runtime.writeGeneration
     )
+
     return
   }
+
   const dataFile = owner[primaryStateWriteOperationsContext].runtime.dataFile
   const dir = dirname(dataFile)
+
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
+
   const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
   // Why: on any write/rename failure, remove the tmp file so shutdown crashes don't leak orphans.
   let renamed = false
+
   try {
     // Why: fsync the temp file and the directory; a bare rename can survive as stale or empty
     // content after power loss, losing projects/tabs back to the newest usable .bak slot.
@@ -270,7 +307,9 @@ export function writeToDiskSync(
       }
     }
   }
+
   const now = Date.now()
+
   if (
     !opts.skipBackupRotation &&
     owner[primaryStateWriteOperationsContext].backups.shouldRotateBackups(now, dataFile)

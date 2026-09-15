@@ -23,10 +23,12 @@ describe('BrowserClientHostCommandDispatcher', () => {
   it('executes one FIFO command per page and replays duplicates exactly', async () => {
     const create = deferred<BrowserClientHostCommandResult>()
     const navigate = deferred<BrowserClientHostCommandResult>()
+
     const handler = vi
       .fn()
       .mockReturnValueOnce(create.promise)
       .mockReturnValueOnce(navigate.promise)
+
     const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
     const createCommand = command(1, 'create-a')
     const navigateCommand = command(2, 'navigate-a', 'navigate')
@@ -70,6 +72,7 @@ describe('BrowserClientHostCommandDispatcher', () => {
       authority,
       handler: vi.fn().mockResolvedValue({ status: 'completed' })
     })
+
     expect(() =>
       dispatcher.dispatch({ ...command(1, 'create-a'), authorityEpoch: 'epoch-b' })
     ).toThrow('browser_host_command_authority_stale')
@@ -90,10 +93,12 @@ describe('BrowserClientHostCommandDispatcher', () => {
 
   it('snapshots lease authority instead of following caller mutation', async () => {
     const mutableAuthority = { ...authority }
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority: mutableAuthority,
       handler: vi.fn().mockResolvedValue({ status: 'completed' })
     })
+
     mutableAuthority.authorityEpoch = 'epoch-b'
 
     await expect(dispatcher.dispatch(command(1, 'create-a'))).resolves.toEqual({
@@ -108,6 +113,7 @@ describe('BrowserClientHostCommandDispatcher', () => {
     const first = deferred<BrowserClientHostCommandResult>()
     const second = deferred<BrowserClientHostCommandResult>()
     const handler = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
@@ -115,6 +121,7 @@ describe('BrowserClientHostCommandDispatcher', () => {
       maxActiveCommands: 2,
       maxConcurrentHandlers: 1
     })
+
     const pageA = dispatcher.dispatch(command(1, 'create-a'))
     const pageB = dispatcher.dispatch(command(1, 'create-b', 'createPage', 'page-b'))
 
@@ -141,6 +148,7 @@ describe('BrowserClientHostCommandDispatcher', () => {
         })
       })
       .mockResolvedValue({ status: 'completed' })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
     const running = dispatcher.dispatch(command(1, 'create-a'))
     const retirement = dispatcher.retirePage('page-a', 1)
@@ -159,9 +167,11 @@ describe('BrowserClientHostCommandDispatcher', () => {
 
   it('does not consume page authority when admission fails', async () => {
     const first = deferred<BrowserClientHostCommandResult>()
+
     const handler = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue({
       status: 'completed'
     })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
@@ -187,6 +197,7 @@ describe('BrowserClientHostCommandDispatcher', () => {
     const handler = vi.fn().mockImplementationOnce(() => {
       throw new Error('create failed')
     })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
     const create = dispatcher.dispatch(command(1, 'create-a'))
     const navigate = dispatcher.dispatch(command(2, 'navigate-a', 'navigate'))
@@ -209,11 +220,13 @@ describe('BrowserClientHostCommandDispatcher', () => {
     vi.useFakeTimers()
     const stuck = deferred<BrowserClientHostCommandResult>()
     const handler = vi.fn().mockReturnValue(stuck.promise)
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
       joinTimeoutMs: 50
     })
+
     const running = dispatcher.dispatch(command(1, 'create-a'))
     const retirement = dispatcher.retirePage('page-a', 1)
     const duplicateRetirement = dispatcher.retirePage('page-a', 1)
@@ -236,10 +249,13 @@ describe('BrowserClientHostCommandDispatcher', () => {
     const stuck = deferred<BrowserClientHostCommandResult>()
     let retirement: Promise<boolean> | undefined
     let dispatcher: BrowserClientHostCommandDispatcher
+
     const handler = vi.fn(() => {
       retirement = dispatcher.retirePage('page-a', 1)
+
       return stuck.promise
     })
+
     dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
@@ -262,6 +278,7 @@ describe('BrowserClientHostCommandDispatcher', () => {
     const stuck = deferred<BrowserClientHostCommandResult>()
     let reentrantRetirement: Promise<boolean> | undefined
     let dispatcher: BrowserClientHostCommandDispatcher
+
     const handler = vi.fn((_event: BrowserClientHostCommandEvent, signal: AbortSignal) => {
       signal.addEventListener(
         'abort',
@@ -270,8 +287,10 @@ describe('BrowserClientHostCommandDispatcher', () => {
         },
         { once: true }
       )
+
       return stuck.promise
     })
+
     dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
@@ -292,14 +311,17 @@ describe('BrowserClientHostCommandDispatcher', () => {
 
   it('removes a retired queued generation before scheduling its replacement', async () => {
     const first = deferred<BrowserClientHostCommandResult>()
+
     const handler = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue({
       status: 'completed'
     })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
       maxConcurrentHandlers: 1
     })
+
     const pageA = dispatcher.dispatch(command(1, 'create-a'))
     const oldPageB = dispatcher.dispatch(command(1, 'create-b', 'createPage', 'page-b'))
 
@@ -331,11 +353,13 @@ describe('BrowserClientHostCommandDispatcher', () => {
 
   it('expires old cached results instead of replaying unknown side effects', async () => {
     const handler = vi.fn().mockResolvedValue({ status: 'completed' })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
       maxCachedResultsPerPage: 1
     })
+
     const create = command(1, 'create-a')
     const firstNavigation = command(2, 'navigate-a', 'navigate')
     const secondNavigation = command(3, 'navigate-b', 'navigate')
@@ -352,12 +376,14 @@ describe('BrowserClientHostCommandDispatcher', () => {
 
   it('bounds cached results across pages, not only within each page', async () => {
     const handler = vi.fn().mockResolvedValue({ status: 'completed' })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
       maxCachedResultsPerPage: 2,
       maxCachedCommandResults: 2
     })
+
     const createA = command(1, 'create-a')
     const navigateA = command(2, 'navigate-a', 'navigate')
     await dispatcher.dispatch(createA)
@@ -371,11 +397,13 @@ describe('BrowserClientHostCommandDispatcher', () => {
 
   it('releases a retired generation cache before charging its replacement', async () => {
     const handler = vi.fn().mockResolvedValue({ status: 'completed' })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
       maxCachedCommandResults: 2
     })
+
     const pageB = command(1, 'create-b', 'createPage', 'page-b')
     await dispatcher.dispatch(pageB)
     await dispatcher.dispatch(command(1, 'create-a'))
@@ -390,12 +418,14 @@ describe('BrowserClientHostCommandDispatcher', () => {
     vi.useFakeTimers()
     const stuck = deferred<BrowserClientHostCommandResult>()
     const handler = vi.fn().mockReturnValue(stuck.promise)
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
       handler,
       maxConcurrentHandlers: 1,
       joinTimeoutMs: 50
     })
+
     const running = dispatcher.dispatch(command(1, 'create-a'))
     const queued = dispatcher.dispatch(command(1, 'create-b', 'createPage', 'page-b'))
     const closing = dispatcher.close()
@@ -446,8 +476,10 @@ function deferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve = (_value: T): void => {}
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }

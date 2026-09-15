@@ -40,19 +40,25 @@ export class RuntimeNativeChatDraftResolutions {
 
   notify(handle: string, resolution: { text: string; createdAt: number }): void {
     const owner = this.deps.resolveOwner(handle)
+
     if (!owner) {
       return
     }
+
     const tombstone = { ...owner, ...resolution }
     this.byTabId.delete(owner.tabId)
     this.byTabId.set(owner.tabId, tombstone)
+
     while (this.byTabId.size > MAX_TOMBSTONES) {
       const oldestTabId = this.byTabId.keys().next().value
+
       if (typeof oldestTabId !== 'string') {
         break
       }
+
       this.byTabId.delete(oldestTabId)
     }
+
     this.retireFromMobileSnapshot(tombstone)
     this.deps.notifyResolved(owner.tabId, resolution, {
       type: 'nativeChatLaunchDraftResolved',
@@ -63,11 +69,14 @@ export class RuntimeNativeChatDraftResolutions {
 
   applyFence(snapshot: RuntimeMobileSessionTabsSnapshot): RuntimeMobileSessionTabsSnapshot {
     let changed = false
+
     const tabs = snapshot.tabs.map((tab) => {
       if (tab.type !== 'terminal') {
         return tab
       }
+
       const resolution = this.byTabId.get(tab.parentTabId)
+
       if (
         !resolution ||
         !runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId) ||
@@ -76,12 +85,15 @@ export class RuntimeNativeChatDraftResolutions {
       ) {
         return tab
       }
+
       changed = true
       const next = { ...tab }
       delete next.launchDraft
       delete next.launchDraftCreatedAt
+
       return next
     })
+
     return changed ? { ...snapshot, tabs } : snapshot
   }
 
@@ -90,10 +102,12 @@ export class RuntimeNativeChatDraftResolutions {
       if (!runtimeWorktreeIdsEqual(snapshot.worktree, resolution.worktreeId)) {
         continue
       }
+
       const surfaces = snapshot.tabs.filter(
         (tab): tab is RuntimeMobileSessionTerminalTab =>
           tab.type === 'terminal' && tab.parentTabId === tabId
       )
+
       if (
         surfaces.length === 0 ||
         !surfaces.some(
@@ -111,15 +125,19 @@ export class RuntimeNativeChatDraftResolutions {
       if (!runtimeWorktreeIdsEqual(worktreeId, resolution.worktreeId)) {
         continue
       }
+
       const next = this.applyFence(snapshot)
+
       if (next === snapshot) {
         return
       }
+
       this.deps.setMobileSnapshot(worktreeId, {
         ...next,
         snapshotVersion: snapshot.snapshotVersion + 1
       })
       this.deps.scheduleMobileSnapshot(worktreeId)
+
       return
     }
   }

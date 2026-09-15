@@ -66,6 +66,7 @@ describe('TabStripScrollIndicator', () => {
     const { getByTestId } = render(
       <TabStripScrollIndicator metrics={OVERFLOW_METRICS} disabled={true} />
     )
+
     const indicator = getByTestId('tab-strip-scroll-indicator')
     expect(indicator.className).toContain('pointer-events-none')
     expect(indicator.className).not.toContain('group-hover/tab-strip:pointer-events-auto')
@@ -75,6 +76,7 @@ describe('TabStripScrollIndicator', () => {
     const { getByTestId } = render(
       <TabStripScrollIndicator metrics={OVERFLOW_METRICS} disabled={true} />
     )
+
     const indicator = getByTestId('tab-strip-scroll-indicator')
     fireEvent.pointerEnter(indicator)
     expect(indicator.className).toContain('opacity-0')
@@ -85,7 +87,9 @@ describe('TabStripScrollIndicator', () => {
   it('does not forward wheel events when disabled', () => {
     const scrollContainer = document.createElement('div')
     scrollContainer.scrollLeft = 0
+
     const scrollContainerRef = createRef<HTMLElement>()
+
     ;(scrollContainerRef as React.MutableRefObject<HTMLElement>).current = scrollContainer
 
     const { getByTestId } = render(
@@ -95,6 +99,7 @@ describe('TabStripScrollIndicator', () => {
         disabled={true}
       />
     )
+
     fireEvent.wheel(getByTestId('tab-strip-scroll-indicator'), { deltaX: 40, deltaY: 0 })
 
     expect(scrollContainer.scrollLeft).toBe(0)
@@ -103,12 +108,15 @@ describe('TabStripScrollIndicator', () => {
   it('forwards wheel events to scrollContainer', () => {
     const scrollContainer = document.createElement('div')
     scrollContainer.scrollLeft = 0
+
     const scrollContainerRef = createRef<HTMLElement>()
+
     ;(scrollContainerRef as React.MutableRefObject<HTMLElement>).current = scrollContainer
 
     const { getByTestId } = render(
       <TabStripScrollIndicator metrics={OVERFLOW_METRICS} scrollContainerRef={scrollContainerRef} />
     )
+
     const indicator = getByTestId('tab-strip-scroll-indicator')
     fireEvent.wheel(indicator, { deltaX: 40, deltaY: 0 })
 
@@ -124,11 +132,13 @@ describe('TabStripScrollIndicator', () => {
     scrollContainer.scrollTo = scrollToMock
 
     const scrollContainerRef = createRef<HTMLElement>()
+
     ;(scrollContainerRef as React.MutableRefObject<HTMLElement>).current = scrollContainer
 
     const { getByTestId } = render(
       <TabStripScrollIndicator metrics={OVERFLOW_METRICS} scrollContainerRef={scrollContainerRef} />
     )
+
     const indicator = getByTestId('tab-strip-scroll-indicator')
     Object.defineProperty(indicator, 'clientWidth', { value: 400, configurable: true })
     vi.spyOn(indicator, 'getBoundingClientRect').mockReturnValue({
@@ -160,6 +170,7 @@ describe('TabStripScrollIndicator', () => {
     scrollContainer.scrollLeft = 0
 
     const scrollContainerRef = createRef<HTMLElement>()
+
     ;(scrollContainerRef as React.MutableRefObject<HTMLElement>).current = scrollContainer
 
     const { getByTestId } = render(
@@ -171,6 +182,7 @@ describe('TabStripScrollIndicator', () => {
         scrollContainerRef={scrollContainerRef}
       />
     )
+
     const indicator = getByTestId('tab-strip-scroll-indicator')
     Object.defineProperty(indicator, 'clientWidth', { value: 400, configurable: true })
     const thumb = getByTestId('tab-strip-scroll-thumb')
@@ -195,11 +207,13 @@ describe('TabStripScrollIndicator', () => {
     scrollContainer.scrollLeft = 0
 
     const scrollContainerRef = createRef<HTMLElement>()
+
     ;(scrollContainerRef as React.MutableRefObject<HTMLElement>).current = scrollContainer
 
     const { getByTestId, rerender } = render(
       <TabStripScrollIndicator metrics={OVERFLOW_METRICS} scrollContainerRef={scrollContainerRef} />
     )
+
     const indicator = getByTestId('tab-strip-scroll-indicator')
     Object.defineProperty(indicator, 'clientWidth', { value: 400, configurable: true })
 

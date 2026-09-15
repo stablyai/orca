@@ -9,6 +9,7 @@ import { makeAutomation } from './automations-page-fixtures'
 import type { AutomationPaneTab } from './automation-page-state'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -37,6 +38,7 @@ function renderDetailPane(options: {
           name: 'Nightly Sync',
           prompt: 'Run sync'
         })
+
   const onActivePaneTabChange = options.onActivePaneTabChange ?? vi.fn()
   const activePaneTab = options.activePaneTab ?? 'overview'
 
@@ -90,6 +92,7 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(rightArrow)
 
     expect(rightArrow.defaultPrevented).toBe(true)
@@ -105,6 +108,7 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(leftArrow)
 
     expect(leftArrow.defaultPrevented).toBe(true)
@@ -120,6 +124,7 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(leftArrow)
 
     expect(leftArrow.defaultPrevented).toBe(false)
@@ -135,6 +140,7 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(rightArrow)
 
     expect(rightArrow.defaultPrevented).toBe(false)
@@ -154,6 +160,7 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     input.dispatchEvent(rightArrow)
 
     expect(onActivePaneTabChange).not.toHaveBeenCalled()
@@ -205,6 +212,7 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(escapeEvent)
 
     expect(escapeEvent.defaultPrevented).toBe(true)

@@ -9,6 +9,7 @@ function makePane(id: number, cols = 120, rows = 40): ManagedPane {
 describe('getOverrideAffectedPanes', () => {
   it('returns only panes bound to the event PTY in this tab', () => {
     const panes = [makePane(1), makePane(2), makePane(3)]
+
     const bindings = new Map<number, string>([
       [1, 'pty-a'],
       [2, 'pty-b'],
@@ -22,6 +23,7 @@ describe('getOverrideAffectedPanes', () => {
 
   it('returns nothing for a watcher whose panes are bound to other PTYs', () => {
     const panes = [makePane(10), makePane(11)]
+
     const bindings = new Map<number, string>([
       [10, 'pty-x'],
       [11, 'pty-y']

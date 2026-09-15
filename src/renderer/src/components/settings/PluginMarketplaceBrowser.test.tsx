@@ -16,11 +16,14 @@ function deferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   return { promise: new Promise<T>((done) => (resolve = done)), resolve }
 }
 
 const SOURCE_ID = 'a'.repeat(32)
+
 const MARKETPLACE_COMMIT = 'b'.repeat(40)
+
 const PLUGIN_COMMIT = 'c'.repeat(40)
 
 const source: PluginMarketplaceHostSourceState = {
@@ -150,6 +153,7 @@ async function renderBrowser(
       />
     )
   })
+
   return { root, container, onInstalled }
 }
 
@@ -157,9 +161,11 @@ function button(label: string): HTMLButtonElement {
   const match = Array.from(document.querySelectorAll('button')).find(
     (candidate) => candidate.textContent?.trim() === label
   )
+
   if (!match) {
     throw new Error(`missing ${label} button`)
   }
+
   return match
 }
 
@@ -245,10 +251,12 @@ describe('PluginMarketplaceBrowser', () => {
 
   it('uses one catalog surface for available and installed plugins', async () => {
     const { root, container } = await renderBrowser([installedPlugin()])
+
     const installedFilter = Array.from(container.querySelectorAll('button')).find(
       (candidate) =>
         candidate.getAttribute('role') === 'tab' && candidate.textContent?.startsWith('Installed')
     )
+
     if (!installedFilter) {
       throw new Error('missing installed filter')
     }
@@ -267,15 +275,18 @@ describe('PluginMarketplaceBrowser', () => {
   it('does not let an older preview response replace the latest selection', async () => {
     const first = deferred<PluginMarketplaceHostInstallPreview>()
     const second = deferred<PluginMarketplaceHostInstallPreview>()
+
     const otherListing: PluginMarketplaceHostListing = {
       ...listing,
       pluginKey: 'example.tasks',
       description: 'Tasks for active worktrees.'
     }
+
     const previewRequest = vi
       .fn()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
+
     installApi({
       listMarketplacePlugins: vi.fn().mockResolvedValue([listing, otherListing]),
       previewMarketplacePlugin: previewRequest
@@ -286,6 +297,7 @@ describe('PluginMarketplaceBrowser', () => {
       const reviews = Array.from(document.querySelectorAll('button')).filter(
         (candidate) => candidate.textContent?.trim() === 'Install'
       )
+
       reviews[0]?.click()
       reviews[1]?.click()
     })

@@ -71,6 +71,7 @@ function queries(
     getAllWorktreeLineage: () => ({}),
     getSettings: () => settings
   } as unknown as RuntimeStore
+
   return new RuntimeManagedWorktreeQueries({
     getStore: () => store,
     listResolved: async () => resolved,

@@ -54,6 +54,7 @@ describe('pane terminal output scheduler', () => {
     const parseCallbacks: (() => void)[] = []
     terminal.write = function write(data: string, callback?: () => void): void {
       writes.push(data)
+
       if (callback) {
         parseCallbacks.push(callback)
       }
@@ -87,6 +88,7 @@ describe('pane terminal output scheduler', () => {
     const parseCallbacks: (() => void)[] = []
     terminal.write = function write(data: string, callback?: () => void): void {
       writes.push(data)
+
       if (callback) {
         parseCallbacks.push(callback)
       }
@@ -172,6 +174,7 @@ describe('pane terminal output scheduler', () => {
     vi.useFakeTimers()
     const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
+
     const beforeWrite = vi.fn((chunk: string) => {
       expect(terminal.write).not.toHaveBeenCalledWith(chunk)
     })
@@ -272,6 +275,7 @@ describe('pane terminal output scheduler', () => {
     const { writeTerminalOutput } = await loadScheduler()
     const terminalA = createTerminal()
     const terminalB = createTerminal()
+
     const debug = (
       window as unknown as {
         __terminalOutputSchedulerDebug?: {
@@ -339,6 +343,7 @@ describe('pane terminal output scheduler', () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
+
     const debug = (
       window as unknown as {
         __terminalOutputSchedulerDebug?: {
@@ -346,6 +351,7 @@ describe('pane terminal output scheduler', () => {
         }
       }
     ).__terminalOutputSchedulerDebug
+
     const chunk = 'x'.repeat(16 * 1024)
 
     for (let i = 0; i < 64; i++) {
@@ -476,6 +482,7 @@ describe('pane terminal output scheduler', () => {
       { length: 64 },
       (_, i) => `${String(i).padStart(2, '0')}:${chunk}`
     ).join('')}visible`
+
     expect(terminal.write.mock.calls.map(([data]) => data).join('')).toBe(expected)
     expect(terminal.write).toHaveBeenLastCalledWith('visible', expect.any(Function))
   })

@@ -6,7 +6,9 @@ import {
 } from './ipc-events-test-harness'
 
 const SESSION_WORKSPACE_ID = 'repo-1::/session-workspace'
+
 const OTHER_WORKSPACE_ID = 'repo-1::/other-workspace'
+
 const TAB_ID = 'structured-agent-session-session-1'
 
 function createStoreState(activeWorktreeId: string): HarnessStoreState {

@@ -8,7 +8,9 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 
 const WT = 'repo-1::/tmp/worktree-a'
+
 const DEVICE_A = 'device-a'
+
 const DEVICE_B = 'device-b'
 
 const storeBase = {
@@ -47,6 +49,7 @@ function createRuntime(): OrcaRuntimeService {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {}
   }
+
   return new OrcaRuntimeService({
     ...storeBase,
     getWorkspaceSession: () => session,

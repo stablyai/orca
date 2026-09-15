@@ -100,6 +100,7 @@ async function stageThenPublish(
   nothingStaged: (error: unknown) => boolean = () => false
 ): Promise<void> {
   const stagingPath = makeWindowsStagingPath(remotePath)
+
   try {
     await stage(stagingPath)
     await publishStagedWrite(target, stagingPath, remotePath, options)
@@ -109,6 +110,7 @@ async function stageThenPublish(
     if (!nothingStaged(error)) {
       await discardStagedWrite(target, stagingPath, options)
     }
+
     throw error
   }
 }
@@ -132,6 +134,7 @@ async function writeViaSftp(
     if (!isSftpPathUnsupportedError(error)) {
       throw error
     }
+
     await writeViaRemoteStdin(target, remotePath, source, options)
   }
 }
@@ -145,6 +148,7 @@ function attemptSftpWrite(
   const mkdirs = windowsRemoteAncestorDirectories(remotePath).map(
     (directory) => `-mkdir ${quoteSftpBatchArgument(toSftpRemotePath(directory))}`
   )
+
   return stageThenPublish(
     target,
     remotePath,
@@ -172,6 +176,7 @@ function writeViaRemoteStdin(
   options: WindowsWriteOptions
 ): Promise<void> {
   const capabilities = getWindowsRemoteWriteCapabilities(target)
+
   return stageThenPublish(target, remotePath, options, (stagingPath) =>
     capabilities.runWithFallback(
       'pwsh',
@@ -195,13 +200,17 @@ async function writeStdinChunks(
 ): Promise<void> {
   const chunkBytes =
     executable === 'pwsh.exe' ? Math.max(source.totalBytes, 1) : WINDOWS_STDIN_WRITE_CHUNK_BYTES
+
   let offset = 0
+
   // An empty write still has to run: it is what creates the staged file.
   do {
     const chunk = await source.readChunk(offset, chunkBytes)
+
     if (chunk.length === 0 && offset < source.totalBytes) {
       throw new Error(`Source ran short during upload of ${stagingPath}`)
     }
+
     await writeOneStdinChunk(
       target,
       stagingPath,
@@ -223,6 +232,7 @@ async function writeOneStdinChunk(
   executable: 'powershell.exe' | 'pwsh.exe'
 ): Promise<void> {
   throwIfAborted(options.signal)
+
   const channel = spawnSystemSshCommand(
     target,
     makeWindowsWriteFileCommand(stagingPath, {
@@ -232,6 +242,7 @@ async function writeOneStdinChunk(
     }),
     { wrapCommand: false, ...getSystemSshBuildArgsFromOperationOptions(options) }
   )
+
   const closePromise = awaitWithSystemSshAbort(
     options.signal,
     () => channel.close(),
@@ -243,9 +254,11 @@ async function writeOneStdinChunk(
   ).catch((error: unknown) => {
     throw executable === 'powershell.exe' ? explainWindowsPowerShellStdinFailure(error) : error
   })
+
   if (!options.signal?.aborted) {
     channel.stdin.end(chunk)
   }
+
   await closePromise
 }
 
@@ -257,9 +270,11 @@ async function writeOneStdinChunk(
  */
 export function explainWindowsPowerShellStdinFailure(error: unknown): unknown {
   const message = error instanceof Error ? error.message : String(error)
+
   if (!/timed out/i.test(message)) {
     return error
   }
+
   return new Error(
     `${message}\nWindows PowerShell 5.1 can lose a redirected stdin permanently when a read finds it momentarily empty, so this write cannot be made reliable from the client. Enable the sftp subsystem on the host (sshd_config: "Subsystem sftp sftp-server.exe"), or install PowerShell 7, and Orca will use it automatically.`,
     { cause: error instanceof Error ? error : undefined }
@@ -268,6 +283,7 @@ export function explainWindowsPowerShellStdinFailure(error: unknown): unknown {
 
 function isPwshUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
+
   // cmd.exe's "not recognized" and sshd's exit 9009 both mean "no pwsh here". A timeout does not:
   // that is the stdin defect, and PowerShell 7 does not have it, so it must not be cached as absent.
   return /is not recognized as an internal or external command|9009|CommandNotFoundException/i.test(
@@ -317,13 +333,16 @@ function runWindowsCommandWithoutStdin(
     wrapCommand: false,
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
+
   const closePromise = awaitWithSystemSshAbort(
     options.signal,
     () => channel.close(),
     waitForChannelClose(channel, label, WINDOWS_STDIN_WRITE_TIMEOUT_MS)
   )
+
   if (!options.signal?.aborted) {
     channel.stdin.end()
   }
+
   return closePromise
 }

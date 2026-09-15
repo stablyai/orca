@@ -62,6 +62,7 @@ export class DaemonServer {
     this.attachments = new DaemonSessionAttachments(this.host)
     this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
       const clientId = this.attachments.clientIdForSession(sessionId)
+
       if (clientId) {
         this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
           type: 'event',
@@ -80,7 +81,9 @@ export class DaemonServer {
           if (!dropped.includes('\x1b')) {
             return ''
           }
+
           const extracted = extractHiddenStartupRendererQueryData(dropped, '')
+
           return (
             extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
           )
@@ -92,14 +95,17 @@ export class DaemonServer {
     )
 
     const protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION
+
     const launchNonce =
       options.launchNonce ??
       (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION ? randomUUID() : null)
+
     const startedAtMs =
       options.startedAtMs ??
       (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION
         ? Date.now() - process.uptime() * 1000
         : null)
+
     const token = randomUUID()
 
     this.connections = new DaemonClientConnections({
@@ -152,15 +158,18 @@ export class DaemonServer {
       isServing: () => this.lifecycle.isAcceptingWork(),
       onOwnershipLost: () => this.lifecycle.onEndpointOwnershipLost()
     })
+
     const lifecycleClock = options.initialAdoptionTestConfig?.clock ?? {
       setTimeout: (callback: () => void, delayMs: number) => {
         const timer = setTimeout(callback, delayMs)
         timer.unref()
+
         return timer
       },
       clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       now: () => Date.now()
     }
+
     this.lifecycle = new DaemonServerLifecycle({
       protocolVersion,
       initialAdoptionTimeoutMs:
@@ -227,9 +236,11 @@ export class DaemonServer {
     if (this.admission.inFlight > 0 || this.host.listSessions().length > 0) {
       return false
     }
+
     if (this.endpoint.lost) {
       return true
     }
+
     return this.connections.transportCount === 0 && this.connections.size === 0
   }
 
@@ -238,6 +249,7 @@ export class DaemonServer {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
+
     try {
       await this.host.dispose()
     } catch (error) {
@@ -245,6 +257,7 @@ export class DaemonServer {
         error: error instanceof Error ? error.message : String(error)
       })
     }
+
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
     // Let canceled in-flight RPCs enqueue their protocol errors before transport destruction.
@@ -258,8 +271,10 @@ export class DaemonServer {
     request: DaemonRequest
   ): Promise<void> {
     const isNotify = request.id.startsWith(NOTIFY_PREFIX)
+
     try {
       const result = await this.requestRouter.route(clientId, request)
+
       if (!isNotify) {
         socket.write(encodeNdjson({ id: request.id, ok: true, payload: result }), () => {
           this.lifecycle.startPendingShutdownReply(clientId, request.id)

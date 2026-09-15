@@ -3,15 +3,18 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { installSshReplayReplyProbe, readSshReplayReplies } from './ssh-codex-replay-reply-probe'
 
 beforeEach(() => vi.stubGlobal('__orcaSshCodexReplayReplies', undefined))
+
 afterEach(() => vi.unstubAllGlobals())
 
 function harness(result: unknown) {
   const original = vi.fn().mockResolvedValue(result)
   const handlers = new Map([['pty:spawn', original]])
+
   const app = {
     evaluate: (fn: (electron: unknown, arg: unknown) => unknown, arg: unknown) =>
       fn({ ipcMain: { _invokeHandlers: handlers } }, arg)
   } as unknown as ElectronApplication
+
   return { app, original, handlers }
 }
 

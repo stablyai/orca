@@ -6,6 +6,7 @@ import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agen
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 
 export * from './agent-session-wire-refusals'
+
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
 // The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
@@ -30,7 +31,9 @@ import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
+
 export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
+
 export type AgentSessionHandoffAction = 'start' | 'cancel-queued' | 'retry' | 'recover'
 
 export type AgentSessionHandoffStatus = {
@@ -68,6 +71,7 @@ export type {
   AgentSessionBackgroundTaskRunState,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
+
 export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
 export type AgentSessionTurnActivity = {
@@ -80,9 +84,11 @@ export const AGENT_SESSION_ID_MAX_LENGTH = 512
 /** Backward paging is the client's normal read; 40 matches the page size the
  *  mobile list renders without a visible fill-in. */
 export const AGENT_SESSION_HISTORY_DEFAULT_LIMIT = 40
+
 export const AGENT_SESSION_HISTORY_MAX_LIMIT = 200
 
 export const AGENT_SESSION_HISTORY_DIRECTIONS = ['tail', 'before', 'after'] as const
+
 /** `tail` is the newest page, `before` pages backward, `after` catches a live
  *  reader up. Only `after` needs replayable rows; the other two read the
  *  reduced timeline and so survive compaction. */

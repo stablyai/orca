@@ -52,6 +52,7 @@ describe('Markdown document listing limits', () => {
       maxPathBytes: 4,
       maxDepth: 1
     })
+
     visitMarkdownDocumentListingEntry(visited, 'a', 1)
     expect(() => visitMarkdownDocumentListingEntry(visited, 'b', 1)).toThrow(
       MarkdownDocumentListingCapacityError
@@ -72,6 +73,7 @@ describe('Markdown document listing limits', () => {
     const structured = Object.assign(new Error('remote listing rejected'), {
       code: MARKDOWN_DOCUMENT_LISTING_ERROR_CODE
     })
+
     const electronWrapped = new Error(
       `Error invoking remote method 'fs:listMarkdownDocuments': Error: ${MARKDOWN_DOCUMENT_LISTING_ERROR_MESSAGE}`
     )

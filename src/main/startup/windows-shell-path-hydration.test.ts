@@ -9,9 +9,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -27,6 +29,7 @@ describe('Windows shell PATH hydration coordination', () => {
     hydrate.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     const merge = vi.fn<(segments: string[]) => string[]>(() => [])
     const configure = vi.fn()
+
     const coordinator = createWindowsShellPathHydration({
       configure,
       hydrate,
@@ -81,6 +84,7 @@ describe('Windows shell PATH hydration coordination', () => {
     void coordinator.hydrate('powershell.exe', 'powershell.exe')
     await vi.waitFor(() => expect(hydrate).toHaveBeenCalledOnce())
     let startupReady = false
+
     const startupBarrier = coordinator.whenReady().then(() => {
       startupReady = true
     })
@@ -97,6 +101,7 @@ describe('Windows shell PATH hydration coordination', () => {
 
   it('uses the terminal safety chain for a custom PowerShell path', () => {
     const configure = vi.fn()
+
     const coordinator = createWindowsShellPathHydration({
       configure,
       resolvePowerShellChain: () => [
@@ -118,6 +123,7 @@ describe('Windows shell PATH hydration coordination', () => {
   it('configures refresh callers without spawning in development', () => {
     const configure = vi.fn()
     const hydrate = vi.fn<() => Promise<HydrationResult>>()
+
     const coordinator = createWindowsShellPathHydration({
       configure,
       hydrate,
@@ -150,6 +156,7 @@ describe('Windows shell PATH hydration coordination', () => {
     'configures $implementation to hydrate the effective PowerShell profile',
     ({ implementation, expectedShell, expectedFallback }) => {
       const configure = vi.fn()
+
       const coordinator = createWindowsShellPathHydration({
         configure,
         resolvePowerShellChain: (family) =>
@@ -166,6 +173,7 @@ describe('Windows shell PATH hydration coordination', () => {
 
   it('reconfigures when the PowerShell implementation changes', () => {
     const configure = vi.fn()
+
     const coordinator = createWindowsShellPathHydration({
       configure,
       resolvePowerShellChain: (family) =>
@@ -183,6 +191,7 @@ describe('Windows shell PATH hydration coordination', () => {
 
   it('uses inbox PowerShell when pwsh has no safe executable behind its Store alias', () => {
     const configure = vi.fn()
+
     const coordinator = createWindowsShellPathHydration({
       configure,
       resolvePowerShellChain: () => [
@@ -202,6 +211,7 @@ describe('Windows shell PATH hydration coordination', () => {
 
   it('skips hydration when no PowerShell executable resolves safely', () => {
     const configure = vi.fn()
+
     const coordinator = createWindowsShellPathHydration({
       configure,
       resolvePowerShellChain: () => ['C:\\Windows\\System32\\cmd.exe']

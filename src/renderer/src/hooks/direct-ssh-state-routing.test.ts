@@ -72,14 +72,17 @@ describe('routeDirectSshConnectedState', () => {
     deps.coordinator.replaceAuthority.mockImplementation(() => order.push('replace'))
     deps.invalidateStaleTerminalBindings.mockImplementation(() => {
       order.push('invalidate')
+
       return 1
     })
     deps.retryTargetPanes.mockImplementation(() => {
       order.push('retry')
+
       return 1
     })
     deps.prepareAndSync.mockImplementation(() => {
       order.push('prepare')
+
       return new Promise(() => {})
     })
     const previous = authority('epoch-old')
@@ -123,6 +126,7 @@ describe('registerDirectSshWakeRouting', () => {
     const wakeAuthority = vi.fn()
     let resume: (() => void) | undefined
     const unsubscribeSystemResumed = vi.fn()
+
     const stop = registerDirectSshWakeRouting({
       getConnectionStates: () =>
         new Map([
@@ -159,6 +163,7 @@ describe('registerDirectSshWakeRouting', () => {
       wakeAuthority,
       onSystemResumed: (callback) => {
         resume = callback
+
         return unsubscribeSystemResumed
       }
     })

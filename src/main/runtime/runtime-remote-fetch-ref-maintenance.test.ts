@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // hands the sweep.
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+
 const armMock = vi.hoisted(() => vi.fn())
+
 const busyProbeMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../git/runner', async (importOriginal) => ({
@@ -112,9 +114,11 @@ describe('fetch-armed ref maintenance', () => {
       if (argv[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       await new Promise<void>((resolve) => {
         releaseFetch = resolve
       })
+
       return { stdout: '', stderr: '' }
     })
     const second = controller.getOrStartRemoteFetch('/repo', 'second')
@@ -132,6 +136,7 @@ describe('fetch-armed ref maintenance', () => {
       if (argv[0] === 'rev-parse') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
+
       throw new Error('network is unreachable')
     })
     vi.spyOn(console, 'warn').mockImplementation(() => {})

@@ -28,6 +28,7 @@ export function ResourceUsageStatusSegment({
   iconOnly: boolean
 }): React.JSX.Element {
   const controller = useResourceUsageStatusController()
+
   const {
     open,
     setOpen,
@@ -79,6 +80,7 @@ export function ResourceUsageStatusSegment({
         if (nextOpen) {
           recordFeatureInteraction('resource-manager')
         }
+
         setOpen(nextOpen)
       }}
     >

@@ -8,12 +8,14 @@ import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { sendRequest } from './transport'
 
 const servers = new Set<ReturnType<typeof createServer>>()
+
 const sockets = new Set<Socket>()
 
 afterEach(async () => {
   for (const socket of sockets) {
     socket.destroy()
   }
+
   sockets.clear()
   await Promise.all(
     [...servers].map(
@@ -53,11 +55,13 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
   it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     const endpoint = join(userDataPath, 'runtime.sock')
+
     const server = createServer((socket) => {
       sockets.add(socket)
       let keepalive: ReturnType<typeof setInterval> | null = null
       socket.once('close', () => {
         sockets.delete(socket)
+
         if (keepalive) {
           clearInterval(keepalive)
         }
@@ -74,6 +78,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
             clearInterval(keepalive)
             keepalive = null
           }
+
           socket.write(
             `${JSON.stringify({
               id: request.id,
@@ -85,6 +90,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
         }, 500)
       })
     })
+
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
 
@@ -95,6 +101,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       authToken: 'token',
       startedAt: 1
     }
+
     const response = await sendRequest<{ satisfied: boolean }>(
       metadata,
       'terminal.wait',
@@ -111,12 +118,14 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
   it('rejects promptly when the runtime closes the socket before responding', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     const endpoint = join(userDataPath, 'runtime.sock')
+
     const server = createServer((socket) => {
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
       // Read the request, then close cleanly without writing a terminal frame.
       socket.once('data', () => socket.end())
     })
+
     servers.add(server)
     await new Promise<void>((resolve) => server.listen(endpoint, resolve))
 

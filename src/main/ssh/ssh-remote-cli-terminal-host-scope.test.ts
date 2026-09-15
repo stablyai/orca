@@ -6,6 +6,7 @@ vi.mock('electron', () => ({
     getAppPath: () => '/host/app'
   }
 }))
+
 vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
@@ -56,12 +57,14 @@ describe('remote CLI bridge terminal list', () => {
     )
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       result: {
         terminals: { executionHostId?: string }[]
         hostScope?: { hostIds: string[]; omittedHostIds: string[] }
       }
     }
+
     expect(payload.result.terminals[0]?.executionHostId).toBe('ssh:box-1')
     expect(payload.result.hostScope).toEqual({
       hostIds: ['ssh:box-1'],

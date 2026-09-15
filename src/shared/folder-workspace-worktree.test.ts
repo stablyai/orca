@@ -36,6 +36,7 @@ describe('folderWorkspaceToWorktree', () => {
         }
       })
     )
+
     const gitlabIssue = folderWorkspaceToWorktree(
       makeFolderWorkspace({
         linkedTask: {
@@ -94,6 +95,7 @@ describe('folderWorkspaceToWorktree', () => {
         projectKey: 'ORCA'
       }
     }
+
     const worktree = folderWorkspaceToWorktree(
       makeFolderWorkspace({
         linkedTask: {
@@ -155,6 +157,7 @@ describe('folderWorkspaceToWorktree', () => {
         }
       })
     )
+
     const gitlabMr = folderWorkspaceToWorktree(
       makeFolderWorkspace({
         linkedTask: {

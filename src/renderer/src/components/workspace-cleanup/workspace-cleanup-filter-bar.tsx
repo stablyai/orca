@@ -44,6 +44,7 @@ export function WorkspaceCleanupFilterBar({
 }): React.JSX.Element {
   const { filters, totalCount } = facetProps
   const applied = useAppliedWorkspaceCleanupFilters(filters)
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/15 px-3 py-2">
       <div className="relative min-w-[180px] flex-1">

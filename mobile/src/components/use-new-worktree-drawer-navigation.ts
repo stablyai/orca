@@ -31,10 +31,12 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
     if (modalVisible) {
       return
     }
+
     if (drawerTransitionTimerRef.current) {
       clearTimeout(drawerTransitionTimerRef.current)
       drawerTransitionTimerRef.current = null
     }
+
     setDrawerView('form')
   }, [modalVisible])
 
@@ -50,6 +52,7 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
     if (drawerTransitionTimerRef.current) {
       clearTimeout(drawerTransitionTimerRef.current)
     }
+
     setDrawerView('transition')
     drawerTransitionTimerRef.current = setTimeout(() => {
       drawerTransitionTimerRef.current = null
@@ -63,6 +66,7 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
     if (drawerTransitionTimerRef.current) {
       clearTimeout(drawerTransitionTimerRef.current)
     }
+
     drawerTransitionTimerRef.current = null
     setDrawerView('source')
   }

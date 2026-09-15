@@ -8,6 +8,7 @@ import { posix, win32 } from 'node:path'
 export type SkillPathSemantics = { caseSensitive: boolean; sep: '/' | '\\' }
 
 export const POSIX_SKILL_PATH_SEMANTICS: SkillPathSemantics = { caseSensitive: true, sep: '/' }
+
 export const WINDOWS_SKILL_PATH_SEMANTICS: SkillPathSemantics = { caseSensitive: false, sep: '\\' }
 
 /** Semantics of the process's own filesystem. */
@@ -23,6 +24,7 @@ function pathApi(semantics: SkillPathSemantics): typeof posix {
 
 function comparable(path: string, semantics: SkillPathSemantics): string {
   const resolved = pathApi(semantics).resolve(path)
+
   return semantics.caseSensitive ? resolved : resolved.toLocaleLowerCase('en-US')
 }
 
@@ -54,12 +56,14 @@ export function skillPathDepthBelow(
   semantics: SkillPathSemantics
 ): number | null {
   const child = relativeInside(root, path, semantics)
+
   return child === null ? null : child.split(semantics.sep).length
 }
 
 function relativeInside(root: string, path: string, semantics: SkillPathSemantics): string | null {
   const api = pathApi(semantics)
   const child = api.relative(comparable(root, semantics), comparable(path, semantics))
+
   if (
     child === '' ||
     child === '..' ||
@@ -68,5 +72,6 @@ function relativeInside(root: string, path: string, semantics: SkillPathSemantic
   ) {
     return null
   }
+
   return child
 }

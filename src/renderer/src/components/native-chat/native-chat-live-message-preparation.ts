@@ -11,9 +11,11 @@ export function prepareNativeChatLiveMessages(
   const commandNames = new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
   const surfaced = surfaceSkillInvocationUserTurns(messages, commandNames)
   const normalized = normalizeImageTranscriptMessages(surfaced)
+
   if (!hasMixedSources(normalized)) {
     return normalized
   }
+
   // A second pass preserves legacy cross-source winners after sorting or presentation transforms.
   return assembleNativeChatSession({
     sources: { transcript: surfaced },
@@ -24,5 +26,6 @@ export function prepareNativeChatLiveMessages(
 
 function hasMixedSources(messages: readonly NativeChatMessage[]): boolean {
   const source = messages[0]?.source
+
   return messages.some((message) => message.source !== source)
 }

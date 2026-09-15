@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
  * `runtime-file-command-target.ts`, which is deliberately not `@ts-nocheck`.
  */
 const RUNTIME_DIR = __dirname
+
 const TARGET_MODULE = 'runtime-file-command-target.ts'
 
 // Matches `target.connectionId`, `tempTarget.connectionId`, `knownWorkspaceTarget?.connectionId`.

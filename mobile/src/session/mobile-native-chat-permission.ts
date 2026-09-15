@@ -31,24 +31,33 @@ export function parseApprovalFromStatus(
   if (!interactivePrompt) {
     return null
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(interactivePrompt)
   } catch {
     return null
   }
+
   if (!parsed || typeof parsed !== 'object') {
     return null
   }
+
   const approval = (parsed as { approval?: unknown }).approval
+
   if (!approval || typeof approval !== 'object') {
     return null
   }
+
   const tool = (approval as { tool?: unknown }).tool
+
   if (typeof tool !== 'string' || tool.length === 0) {
     return null
   }
+
   const summary = (approval as { summary?: unknown }).summary
+
   return {
     title: `Allow ${tool}?`,
     detail: typeof summary === 'string' && summary.length > 0 ? summary : undefined,
@@ -102,13 +111,16 @@ type NumberedOption = { num: string; text: string }
 
 function parseNumberedOptions(text: string): NumberedOption[] {
   const out: NumberedOption[] = []
+
   for (const match of text.matchAll(NUMBERED_OPTION_RE)) {
     const num = match[1]
     const body = match[2]?.trim()
+
     if (num && body) {
       out.push({ num, text: body })
     }
   }
+
   return out
 }
 
@@ -119,6 +131,7 @@ function isAlwaysLabel(text: string): boolean {
 
 function shortLabel(text: string, max = 40): string {
   const trimmed = text.replace(/\s+/g, ' ').trim()
+
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed
 }
 
@@ -149,6 +162,7 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
   }
 
   const text = typeof input.lastAssistantMessage === 'string' ? input.lastAssistantMessage : ''
+
   if (!text.trim()) {
     return null
   }
@@ -162,6 +176,7 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
   // Prefer an explicit numbered menu ("1. Yes  2. No, and tell…") — its labels
   // and send-digits come straight from the agent, so no guessing.
   const numbered = parseNumberedOptions(text)
+
   if (numbered.length >= 2) {
     return buildNumberedPermission(numbered, detail)
   }
@@ -173,6 +188,7 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
     { label: 'Allow', send: 'y' },
     { label: 'Deny', send: 'n' }
   ]
+
   if (isAlwaysLabel(text)) {
     options.splice(1, 0, { label: 'Allow always', send: 'a' })
   }

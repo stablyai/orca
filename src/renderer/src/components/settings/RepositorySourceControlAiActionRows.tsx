@@ -86,13 +86,17 @@ export function RepositorySourceControlAiActionRows({
         const override = repoAi.actionOverrides?.[actionId]
         const inheritedTemplate = readInheritedCommandTemplate(source, actionId)
         const inheritedAgentArgs = readInheritedAgentArgs(source, actionId)
+
         const templateValue =
           hasOverride && typeof override?.commandInputTemplate === 'string'
             ? override.commandInputTemplate
             : ''
+
         const agentArgsValue =
           hasOverride && typeof override?.agentArgs === 'string' ? override.agentArgs : ''
+
         const effectiveAgent = hasOverride ? override?.agentId : source.actions?.[actionId]?.agentId
+
         const agentArgsPlaceholder =
           hasOverride && agentArgsValue
             ? ''
@@ -100,11 +104,13 @@ export function RepositorySourceControlAiActionRows({
               getSourceControlAgentArgsPlaceholder(
                 resolveAgentArgsPlaceholderAgent(effectiveAgent, source, actionId, defaultTuiAgent)
               )
+
         const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
         const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
         const agentSupportText = getSourceControlActionAgentSupportText(actionId)
         const actionDirty = actionDirtyById[actionId]
         const isSavingAction = savingActionIds[actionId] === true
+
         return (
           <div
             key={actionId}

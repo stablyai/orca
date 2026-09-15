@@ -70,6 +70,7 @@ export function requestTerminalBacklogRecovery(terminal: TerminalOutputTarget): 
 
 export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Promise<void> {
   flushTerminalOutput(terminal)
+
   if (isTerminalWritePipelineCertifiedDead(terminal)) {
     // Why: a dead pipeline cannot settle; recovery owns it and serializers must not enqueue probe writes during a pending remount retry.
     return Promise.resolve()
@@ -78,22 +79,29 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
   return new Promise((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
+
     const finish = (): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timer !== null) {
         clearTimeout(timer)
       }
+
       resolve()
     }
+
     const finishParsed = (): void => {
       // Why: serializer/startup probes share xterm's FIFO with replay guards; their completion is real parser progress despite carrying no bytes.
       recordTerminalParseProgress(terminal)
       finish()
     }
+
     timer = setTimeout(finish, PARSE_SETTLE_TIMEOUT_MS)
+
     try {
       terminal.write('', finishParsed)
     } catch {

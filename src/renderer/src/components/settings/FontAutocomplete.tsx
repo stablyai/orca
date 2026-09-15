@@ -44,6 +44,7 @@ export function FontAutocomplete({
 
   const setRootNode = useCallback((element: HTMLDivElement | null): void => {
     rootRef.current = element
+
     if (!element) {
       // Why: settings search can unmount this control while a hover preview is
       // active; the consumer must not keep rendering that transient font.
@@ -54,6 +55,7 @@ export function FontAutocomplete({
   if (value !== prevValue) {
     setPrevValue(value)
     setQuery(value)
+
     if (value !== query) {
       setIsFilteringQuery(false)
     }
@@ -65,9 +67,11 @@ export function FontAutocomplete({
 
   const handleOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen)
+
     if (nextOpen) {
       requestSuggestions()
     }
+
     if (!nextOpen) {
       setIsFilteringQuery(false)
     }
@@ -75,14 +79,17 @@ export function FontAutocomplete({
 
   const normalizedQuery = query.trim().toLowerCase()
   const normalizedValue = value.trim().toLowerCase()
+
   const filteredSuggestions = useMemo(
     () => filterFontSuggestions(suggestions, query),
     [suggestions, query]
   )
+
   // Why: the committed font fills the input, but opening the chooser should
   // still reveal every installed font instead of only fonts sharing that name.
   const visibleSuggestions =
     !isFilteringQuery && normalizedQuery === normalizedValue ? suggestions : filteredSuggestions
+
   const renderedSuggestions = useMemo(
     () => getRenderedFontSuggestions(visibleSuggestions, highlightedIndex),
     [visibleSuggestions, highlightedIndex]
@@ -94,6 +101,7 @@ export function FontAutocomplete({
   const [prevVisibleSuggestions, setPrevVisibleSuggestions] = useState(visibleSuggestions)
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevHighlightedValue, setPrevHighlightedValue] = useState(value)
+
   if (
     visibleSuggestions !== prevVisibleSuggestions ||
     open !== prevOpen ||
@@ -102,6 +110,7 @@ export function FontAutocomplete({
     setPrevVisibleSuggestions(visibleSuggestions)
     setPrevOpen(open)
     setPrevHighlightedValue(value)
+
     if (!open || visibleSuggestions.length === 0) {
       setHighlightedIndex(-1)
     } else {
@@ -117,10 +126,13 @@ export function FontAutocomplete({
     if (!onPreviewFontFamily) {
       return
     }
+
     if (!open || highlightedIndex < 0) {
       onPreviewFontFamily(null)
+
       return
     }
+
     onPreviewFontFamily(visibleSuggestions[highlightedIndex] ?? null)
   }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
@@ -134,6 +146,7 @@ export function FontAutocomplete({
   const focusInput = (): void => {
     inputRef.current?.focus()
   }
+
   const popoverAvailableHeightStyle = {
     // Why: tailwind-merge rewrites this arbitrary max-height class on the
     // ScrollArea root, so keep the Radix available-height clamp as inline style.
@@ -168,33 +181,39 @@ export function FontAutocomplete({
                     setOpen(false)
                     setIsFilteringQuery(false)
                   }
+
                   return
                 }
 
                 if (e.key === 'ArrowDown') {
                   e.preventDefault()
                   setOpen(true)
+
                   if (visibleSuggestions.length > 0) {
                     setHighlightedIndex((current) =>
                       current < 0 ? 0 : Math.min(current + 1, visibleSuggestions.length - 1)
                     )
                   }
+
                   return
                 }
 
                 if (e.key === 'ArrowUp') {
                   e.preventDefault()
                   setOpen(true)
+
                   if (visibleSuggestions.length > 0) {
                     setHighlightedIndex((current) =>
                       current < 0 ? visibleSuggestions.length - 1 : Math.max(current - 1, 0)
                     )
                   }
+
                   return
                 }
 
                 if (e.key === 'Enter' && open && highlightedIndex >= 0) {
                   const highlightedFont = visibleSuggestions[highlightedIndex]
+
                   if (highlightedFont) {
                     e.preventDefault()
                     commitValue(highlightedFont)
@@ -244,9 +263,11 @@ export function FontAutocomplete({
                 onClick={() => {
                   const nextOpen = !open
                   setOpen(nextOpen)
+
                   if (!nextOpen) {
                     setIsFilteringQuery(false)
                   }
+
                   if (nextOpen) {
                     requestSuggestions()
                     focusInput()

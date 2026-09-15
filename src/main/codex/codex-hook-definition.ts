@@ -87,6 +87,7 @@ export type CodexManagedHookInstallMaterial = {
 // command, and script, or trust signatures diverge between the two homes.
 export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMaterial {
   const scriptPath = getManagedScriptPath()
+
   return {
     events: CODEX_EVENTS,
     eventLabel: CODEX_EVENT_LABEL,
@@ -98,6 +99,7 @@ export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMat
 
 export function wrapReadablePosixHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+
   // Why: WSL hooks are written from Windows over UNC where the exec bit is unreliable; a missing script must still own stdin.
   return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }

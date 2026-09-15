@@ -73,13 +73,17 @@ export function useRepositorySourceControlAiGlobalUx({
   const [baselineRepoAi, setBaselineRepoAi] = useState(persistedRepoAi)
   const setBaselineRepoAiRef = useRef(setBaselineRepoAi)
   setBaselineRepoAiRef.current = setBaselineRepoAi
+
   const [actionTextDrafts, setActionTextDrafts] = useState<
     Partial<Record<SourceControlActionId, ActionRecipeTextDraft>>
   >({})
+
   const [customCommandDraft, setCustomCommandDraft] = useState<string | null>(null)
+
   const [savingActionIds, setSavingActionIds] = useState<
     Partial<Record<SourceControlActionId, boolean>>
   >({})
+
   const lastSyncedRepoIdRef = useRef(repoId)
   const pendingWritesRef = useRef(0)
 
@@ -89,6 +93,7 @@ export function useRepositorySourceControlAiGlobalUx({
     getPersisted: () => persistedRef.current,
     setPersisted: (value) => {
       persistedRef.current = value
+
       if (mountedRef.current) {
         setBaselineRepoAiRef.current(value)
       }
@@ -107,6 +112,7 @@ export function useRepositorySourceControlAiGlobalUx({
     lastSyncedRepoIdRef.current = repoId
     persistedRef.current = persistedRepoAi
     setBaselineRepoAi(persistedRepoAi)
+
     if (repoChanged) {
       pendingWritesRef.current = 0
       setImmediateRepoAi(persistedRepoAi)
@@ -114,11 +120,14 @@ export function useRepositorySourceControlAiGlobalUx({
       setCustomCommandDraft(null)
       setSavingActionIds({})
       setSaveError(null)
+
       return
     }
+
     if (pendingWritesRef.current === 0) {
       setImmediateRepoAi(persistedRepoAi)
     }
+
     setCustomCommandDraft((current) =>
       retainCustomCommandDraft(current, persistedRepoAi.customAgentCommand)
     )
@@ -133,11 +142,13 @@ export function useRepositorySourceControlAiGlobalUx({
   const beginWrite = (): string => {
     setSaveError(null)
     pendingWritesRef.current += 1
+
     return repoIdRef.current
   }
 
   const endWrite = (repoIdForWrite: string): boolean => {
     pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1)
+
     return repoIdRef.current === repoIdForWrite && mountedRef.current
   }
 
@@ -149,6 +160,7 @@ export function useRepositorySourceControlAiGlobalUx({
       if (!endWrite(repoIdForWrite)) {
         return
       }
+
       // Only snap when no sibling write is in flight — a failed field must not wipe another.
       if (!ok && pendingWritesRef.current === 0) {
         commitImmediate(persistedRef.current)
@@ -169,10 +181,13 @@ export function useRepositorySourceControlAiGlobalUx({
     setCustomCommandDraft(value ?? '')
     // Blur fires even when unchanged — skip the queue for true no-ops.
     const next = withRepoAiCustomCommand(persistedRef.current, value)
+
     if (JSON.stringify(next) === JSON.stringify(persistedRef.current)) {
       setCustomCommandDraft((latest) => (latest === (value ?? '') ? null : latest))
+
       return
     }
+
     const repoIdForWrite = beginWrite()
     void queueRef.current
       .persistTransform((base) => withRepoAiCustomCommand(base, value))
@@ -180,9 +195,11 @@ export function useRepositorySourceControlAiGlobalUx({
         if (!endWrite(repoIdForWrite)) {
           return
         }
+
         if (!ok) {
           return
         }
+
         commitImmediate(withRepoAiCustomCommand(immediateRepoAiRef.current, value))
         setCustomCommandDraft((latest) => (latest === (value ?? '') ? null : latest))
       })
@@ -196,12 +213,15 @@ export function useRepositorySourceControlAiGlobalUx({
 
   const updateActionMode = (actionId: SourceControlActionId, mode: string): void => {
     const nextMode = mode === ACTION_MODE_INHERIT ? 'inherit' : 'override'
+
     if (nextMode === 'inherit') {
       setActionTextDrafts((current) => {
         const { [actionId]: _removed, ...rest } = current
+
         return rest
       })
     }
+
     commitImmediate(withRepoAiActionMode(immediateRepoAiRef.current, settings, actionId, nextMode))
     persist((base) => withRepoAiActionMode(base, settings, actionId, nextMode))
   }
@@ -213,6 +233,7 @@ export function useRepositorySourceControlAiGlobalUx({
         : value === CUSTOM_AGENT_ID
           ? CUSTOM_AGENT_ID
           : (value as TuiAgent)
+
     commitImmediate(withRepoAiActionAgent(immediateRepoAiRef.current, settings, actionId, agentId))
     persist((base) => withRepoAiActionAgent(base, settings, actionId, agentId))
   }
@@ -235,11 +256,14 @@ export function useRepositorySourceControlAiGlobalUx({
     setActionTextDrafts((current) => {
       const draft =
         current[actionId] ?? readActionRecipeTextDraft(immediateRepoAiRef.current, actionId)
+
       const currentTemplate =
         draft.commandInputTemplate.length > 0
           ? draft.commandInputTemplate
           : readInheritedCommandTemplate(source, actionId)
+
       const separator = currentTemplate.endsWith('\n') || currentTemplate.length === 0 ? '' : ' '
+
       return patchActionTextDraft(current, immediateRepoAiRef.current, actionId, {
         commandInputTemplate: `${currentTemplate}${separator}{${variable}}`
       })
@@ -255,29 +279,38 @@ export function useRepositorySourceControlAiGlobalUx({
     if (!actionDirtyById[actionId] || savingActionIds[actionId]) {
       return
     }
+
     const draft =
       actionTextDrafts[actionId] ?? readActionRecipeTextDraft(immediateRepoAiRef.current, actionId)
+
     setSavingActionIds((current) => ({ ...current, [actionId]: true }))
     const repoIdForWrite = beginWrite()
+
     try {
       const ok = await queueRef.current.persistTransform((base) => {
         let next = base
+
         if (!hasOwnActionOverride(next.actionOverrides, actionId)) {
           next = withRepoAiActionMode(next, settings, actionId, 'override')
         }
+
         return withRepoAiActionRecipeText(next, settings, actionId, draft)
       })
+
       if (repoIdRef.current !== repoIdForWrite || !mountedRef.current || !ok) {
         return
       }
+
       setImmediateRepoAi((current) => {
         const next = withRepoAiActionRecipeText(current, settings, actionId, draft)
         immediateRepoAiRef.current = next
+
         return next
       })
       setActionTextDrafts((current) => clearActionTextDraftIfUnchanged(current, actionId, draft))
     } finally {
       pendingWritesRef.current = Math.max(0, pendingWritesRef.current - 1)
+
       if (mountedRef.current && repoIdRef.current === repoIdForWrite) {
         setSavingActionIds((current) => ({ ...current, [actionId]: false }))
       }
@@ -287,6 +320,7 @@ export function useRepositorySourceControlAiGlobalUx({
   const discardActionRecipeText = (actionId: SourceControlActionId): void => {
     setActionTextDrafts((current) => {
       const { [actionId]: _removed, ...rest } = current
+
       return rest
     })
   }

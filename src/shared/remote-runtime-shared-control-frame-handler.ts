@@ -31,35 +31,45 @@ export function handleSharedControlTextFrame(args: {
 }): void {
   if (args.state === 'awaiting_ready') {
     const error = parseReadyFrame(args.frame)
+
     if (error) {
       args.handleSocketClosed(error)
+
       return
     }
+
     args.setState('awaiting_authenticated')
     args.sendEncrypted({
       type: 'e2ee_auth',
       deviceToken: args.deviceToken,
       clientCapabilities: args.clientCapabilities
     })
+
     return
   }
 
   const parsed = parseSharedControlFrame(args.frame, args.sharedKey, args.state)
+
   if (parsed.type === 'auth') {
     const error = parseAuthenticatedFrame(parsed.plaintext)
+
     if (error) {
       args.handleSocketClosed(error)
+
       return
     }
+
     args.setState('ready')
     args.markReady()
     resolveSharedControlReadyWaiters(args.readyWaiters)
     args.replaySubscriptions()
+
     return
   }
 
   if (parsed.type === 'error') {
     args.handleSocketClosed(parsed.error)
+
     return
   }
 

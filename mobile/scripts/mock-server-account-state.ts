@@ -11,6 +11,7 @@ type MockCodexUsage = {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 const CODEX_ACCOUNTS = [
   {
     id: 'codex-personal',
@@ -35,10 +36,15 @@ const CODEX_ACCOUNTS = [
 ] as const
 
 let fixtureStartedAt = Date.now()
+
 let activeClaudeAccountId: string | null = 'claude-team'
+
 let activeCodexAccountId: string | null = 'codex-personal'
+
 let codexUsageByAccount = new Map<string, MockCodexUsage>()
+
 let resetOperations = new Map<string, { scopeKey: string; outcome: 'reset' | 'noCredit' }>()
+
 let resetOfferOwners = new Map<string, string>()
 
 function createInitialCodexUsage(accountOffset: number): MockCodexUsage {
@@ -67,30 +73,37 @@ resetMockAccountState(fixtureStartedAt)
 export function selectMockClaudeAccount(accountId: unknown): void {
   if (accountId === null) {
     activeClaudeAccountId = null
+
     return
   }
+
   if (accountId !== 'claude-team' && accountId !== 'claude-personal') {
     throw new Error('Unknown Claude account')
   }
+
   activeClaudeAccountId = accountId
 }
 
 export function selectMockCodexAccount(accountId: unknown): void {
   if (accountId === null) {
     activeCodexAccountId = null
+
     return
   }
+
   if (
     typeof accountId !== 'string' ||
     !CODEX_ACCOUNTS.some((account) => account.id === accountId)
   ) {
     throw new Error('Unknown Codex account')
   }
+
   activeCodexAccountId = accountId
 }
 
 function codexLimitsFor(accountId: string | null) {
   const usage = accountId ? codexUsageByAccount.get(accountId) : null
+
   if (!usage) {
     return {
       provider: 'codex' as const,
@@ -102,6 +115,7 @@ function codexLimitsFor(accountId: string | null) {
       status: 'unavailable' as const
     }
   }
+
   return {
     provider: 'codex' as const,
     session: {
@@ -129,6 +143,7 @@ function codexLimitsFor(accountId: string | null) {
 
 export function getMockCodexResetScope(): CodexResetCreditExpectedScope | null {
   const account = CODEX_ACCOUNTS.find((candidate) => candidate.id === activeCodexAccountId) ?? null
+
   return buildCodexResetCreditExpectedScope({
     target: { runtime: 'host', wslDistro: null },
     account,
@@ -150,15 +165,19 @@ export function consumeMockCodexResetCredit(
   if (typeof idempotencyKey !== 'string' || !UUID_PATTERN.test(idempotencyKey)) {
     throw new Error('Invalid idempotencyKey')
   }
+
   if (!expectedScope || typeof expectedScope !== 'object') {
     throw new Error('Missing expectedScope')
   }
+
   const suppliedScopeKey = JSON.stringify(expectedScope)
   const previous = resetOperations.get(idempotencyKey)
+
   if (previous) {
     if (previous.scopeKey !== suppliedScopeKey) {
       throw new Error('The reset operation belongs to a different account scope')
     }
+
     return {
       outcome: previous.outcome,
       scope: expectedScope as CodexResetCreditExpectedScope
@@ -166,6 +185,7 @@ export function consumeMockCodexResetCredit(
   }
 
   const currentScope = getMockCodexResetScope()
+
   if (!currentScope || JSON.stringify(currentScope) !== suppliedScopeKey) {
     return {
       status: 'rejectedBeforeProvider',
@@ -174,26 +194,32 @@ export function consumeMockCodexResetCredit(
       scope: expectedScope as CodexResetCreditExpectedScope
     }
   }
+
   const offerKey = suppliedScopeKey
   const owner = resetOfferOwners.get(offerKey)
+
   if (owner && owner !== idempotencyKey) {
     throw new Error('That reset offer is already being redeemed')
   }
+
   resetOfferOwners.set(offerKey, idempotencyKey)
 
   const usage = codexUsageByAccount.get(currentScope.accountId)
   const outcome = usage && usage.availableResetCredits > 0 ? 'reset' : 'noCredit'
   resetOperations.set(idempotencyKey, { scopeKey: suppliedScopeKey, outcome })
+
   if (usage && outcome === 'reset') {
     usage.availableResetCredits = 0
     usage.sessionUsedPercent = 0
     usage.updatedAt += 1
   }
+
   return { outcome, scope: currentScope }
 }
 
 export function createMockAccountsSnapshot() {
   const codexLimits = codexLimitsFor(activeCodexAccountId)
+
   return {
     claude: {
       accounts: [

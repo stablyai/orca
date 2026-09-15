@@ -20,7 +20,9 @@ import {
 } from './mobile-structured-send-operation-journal'
 
 const NOW = 1_900_000_000_000
+
 const OPERATION_KEY = 'a'.repeat(64)
+
 const CALLER_IDENTITY = 'mobile-device-a'
 
 function getOrCreateMobileStructuredSendOperation(
@@ -30,6 +32,7 @@ function getOrCreateMobileStructuredSendOperation(
   > & { payloadFingerprint?: string; attachmentPaths?: readonly string[] }
 ) {
   const { payloadFingerprint = 'b'.repeat(64), attachmentPaths = [], ...operation } = input
+
   return getOrCreatePersistedOperation({
     ...operation,
     callerIdentity: CALLER_IDENTITY,
@@ -112,10 +115,12 @@ describe('mobile structured send operation journal', () => {
   it('clears an ack-lost id only when its journal submission settles', async () => {
     const sessionKey = 'host-a:session-a'
     const payloadFingerprint = 'c'.repeat(64)
+
     const operationKey = mobileStructuredSendOperationKey({
       sessionKey,
       intentFingerprint: payloadFingerprint
     })
+
     const operationId = operationIdAt(NOW, 'd')
     await getOrCreateMobileStructuredSendOperation({
       operationKey,
@@ -123,6 +128,7 @@ describe('mobile structured send operation journal', () => {
       createOperationId: () => operationId,
       now: NOW
     })
+
     const submission = {
       clientMessageId: operationId,
       fence: 1,
@@ -146,10 +152,12 @@ describe('mobile structured send operation journal', () => {
   it('does not clear a newer id for an older matching-payload submission', async () => {
     const sessionKey = 'host-a:session-a'
     const payloadFingerprint = 'e'.repeat(64)
+
     const operationKey = mobileStructuredSendOperationKey({
       sessionKey,
       intentFingerprint: payloadFingerprint
     })
+
     const operationId = operationIdAt(NOW, 'f')
     await getOrCreateMobileStructuredSendOperation({
       operationKey,
@@ -314,6 +322,7 @@ describe('mobile structured send operation journal', () => {
       sessionKey: 'host-a:session-a',
       intentFingerprint: 'message-body-fingerprint'
     })
+
     const second = mobileStructuredSendOperationKey({
       sessionKey: 'host-b:session-a',
       intentFingerprint: 'message-body-fingerprint'

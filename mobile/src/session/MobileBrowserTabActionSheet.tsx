@@ -4,6 +4,7 @@ import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSh
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
+
 export type MobileBrowserNavigationMethod = 'browser.back' | 'browser.forward' | 'browser.reload'
 
 /** Keeps browser-tab navigation actions out of the session route while preserving
@@ -18,6 +19,7 @@ export function MobileBrowserTabActionSheet(props: {
   bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): React.JSX.Element {
   const { target, onClose, onNavigate, onCloseTab, bulkCloseActions } = props
+
   return (
     <ActionSheetModal
       visible={target != null}
@@ -31,6 +33,7 @@ export function MobileBrowserTabActionSheet(props: {
                 onPress: () => {
                   const current = target
                   onClose()
+
                   if (current) {
                     onNavigate(current, 'browser.back')
                   }
@@ -46,6 +49,7 @@ export function MobileBrowserTabActionSheet(props: {
                 onPress: () => {
                   const current = target
                   onClose()
+
                   if (current) {
                     onNavigate(current, 'browser.forward')
                   }
@@ -59,6 +63,7 @@ export function MobileBrowserTabActionSheet(props: {
           onPress: () => {
             const current = target
             onClose()
+
             if (current) {
               onNavigate(current, 'browser.reload')
             }
@@ -70,6 +75,7 @@ export function MobileBrowserTabActionSheet(props: {
           onPress: () => {
             const current = target
             onClose()
+
             if (current) {
               onCloseTab(current)
             }

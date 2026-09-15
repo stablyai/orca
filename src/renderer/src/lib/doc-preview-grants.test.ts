@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
 }))
@@ -112,6 +113,7 @@ describe('doc preview grant lifetime', () => {
       root: '/d',
       entryRelativePath: 'a.html'
     }
+
     await ensureDocPreviewGrant('preview-2', request)
 
     releaseDocPreviewGrant('preview-2')
@@ -136,7 +138,9 @@ describe('doc preview grant lifetime', () => {
       root: '/d',
       entryRelativePath: 'a.html'
     }
+
     let failStaleMint: (error: Error) => void = () => {}
+
     mocks.mintGrant.mockReturnValueOnce(
       new Promise((_resolve, reject) => {
         failStaleMint = reject
@@ -159,6 +163,7 @@ describe('doc preview grant lifetime', () => {
 
   it('does not cache a failed mint', async () => {
     mocks.mintGrant.mockRejectedValueOnce(new Error('runtime offline'))
+
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
       requestBase: '/d',

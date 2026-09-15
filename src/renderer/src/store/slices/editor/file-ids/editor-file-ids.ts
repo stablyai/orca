@@ -43,6 +43,7 @@ export function buildOwnedEditorFileId(
   runtimeEnvironmentId: string | null | undefined
 ): string {
   const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
+
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
@@ -54,6 +55,7 @@ export function buildDiffEditorFileId(
 ): string {
   const legacyId = `${worktreeId}::diff::${diffSource}::${relativePath}`
   const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId)
+
   return runtimeKey
     ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
     : legacyId
@@ -91,6 +93,7 @@ export function isEditorFileIdOccupiedByOtherOwner(
   if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)) {
     return false
   }
+
   return file.id === filePath || file.markdownPreviewSourceFileId === filePath
 }
 
@@ -119,9 +122,11 @@ export function resolveEditorFileIdForOwner(
       matchesEditorMode(file, modes) &&
       isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)
   )
+
   if (existing) {
     return existing.id
   }
+
   // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>
     isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
@@ -136,6 +141,7 @@ export function getOpenedEditFileIdAfterOpen(
   worktreeId: string
 ): string {
   const activeFileId = state.activeFileIdByWorktree[worktreeId]
+
   const activeFile = state.openFiles.find(
     (file) =>
       file.id === activeFileId &&
@@ -143,9 +149,11 @@ export function getOpenedEditFileIdAfterOpen(
       file.worktreeId === worktreeId &&
       file.mode === 'edit'
   )
+
   if (activeFile) {
     return activeFile.id
   }
+
   return (
     state.openFiles.find(
       (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'

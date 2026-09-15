@@ -139,6 +139,7 @@ describe('SshGitProvider', () => {
       ahead: 0,
       behind: 2
     }
+
     mux.request.mockResolvedValue(syncResult)
 
     const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
@@ -189,6 +190,7 @@ describe('SshGitProvider', () => {
       new Error('Method not found: git.fetchGitLabMergeRequestHeadRef'),
       { code: -32601 }
     )
+
     mux.request.mockRejectedValueOnce(methodNotFound)
 
     await expect(
@@ -233,6 +235,7 @@ describe('SshGitProvider', () => {
       new Error('Method not found: git.fetchGitHubPullRequestHead'),
       { code: -32601 }
     )
+
     mux.request.mockRejectedValueOnce(methodNotFound)
 
     await expect(

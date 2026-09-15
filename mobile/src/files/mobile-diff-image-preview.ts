@@ -21,12 +21,16 @@ export function mobileDiffImageDataUri(result: MobileBinaryDiffResult): string |
   if (result.isImage !== true) {
     return null
   }
+
   const modified = result.modifiedContent || ''
+
   if (modified) {
     return buildImageDataUri(result.mimeType, modified)
   }
+
   if (result.modifiedDeleted === true) {
     return buildImageDataUri(result.mimeType, result.originalContent || '')
   }
+
   return null
 }

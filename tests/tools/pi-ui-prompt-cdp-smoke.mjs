@@ -6,10 +6,15 @@ import { join, resolve } from 'node:path'
 import { chromium, expect } from '@stablyai/playwright-test'
 
 const [endpoint, outputDirectory] = process.argv.slice(2)
+
 assert.ok(endpoint && outputDirectory, 'Pass the CDP endpoint and screenshot directory')
+
 const output = resolve(outputDirectory)
+
 await mkdir(output, { recursive: true })
+
 const browser = await chromium.connectOverCDP(endpoint)
+
 try {
   const page = browser.contexts().flatMap((context) => context.pages())[0]
   assert.ok(page, 'Orca renderer must be open')
@@ -21,6 +26,7 @@ try {
   const terminal = terminals.first()
   const input = page.getByRole('textbox', { name: 'Terminal input' })
   const attention = page.getByLabel('Needs attention', { exact: true })
+
   const waitForState = (state) =>
     expect
       .poll(() =>
@@ -43,9 +49,11 @@ try {
       await (kind === 'custom'
         ? page.evaluate(() => {
             const id = document.querySelector('[data-pty-id]')?.getAttribute('data-pty-id')
+
             if (!id) {
               throw new Error('Terminal lost its PTY')
             }
+
             window.api.pty.write(id, '\u001b')
           })
         : input.press(ending === 'answer' ? 'Enter' : 'Escape'))

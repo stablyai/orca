@@ -16,6 +16,7 @@ export {
   getWslSelectionKey,
   normalizeCodexAccountSelectionTarget
 } from '../../shared/codex-selection-lane'
+
 export type {
   CodexAccountSelectionTarget,
   NormalizedCodexAccountSelectionTarget
@@ -45,13 +46,17 @@ export function getSelectedCodexAccountIdForTarget(
 ): string | null {
   const selection = normalizeCodexRuntimeSelection(settings)
   const normalizedTarget = normalizeCodexAccountSelectionTarget(target)
+
   if (normalizedTarget.runtime === 'host') {
     return selection.host
   }
+
   if (normalizedTarget.wslDistro) {
     return selection.wsl[getWslSelectionKey(normalizedTarget.wslDistro)] ?? null
   }
+
   const selectedIds = Array.from(new Set(Object.values(selection.wsl).filter(Boolean)))
+
   return (
     selection.wsl[getWslSelectionKey(null)] ?? (selectedIds.length === 1 ? selectedIds[0] : null)
   )
@@ -63,15 +68,18 @@ export function setSelectedCodexAccountIdForTarget(
   target?: CodexAccountSelectionTarget | null
 ): CodexManagedAccountRuntimeSelection {
   const normalizedTarget = normalizeCodexAccountSelectionTarget(target)
+
   if (normalizedTarget.runtime === 'host') {
     return { host: accountId, wsl: { ...selection.wsl } }
   }
+
   if (accountId === null && normalizedTarget.wslDistro === null) {
     return {
       host: selection.host,
       wsl: Object.fromEntries(Object.keys(selection.wsl).map((key) => [key, null]))
     }
   }
+
   return {
     host: selection.host,
     wsl: {
@@ -86,9 +94,11 @@ export function removeCodexAccountIdFromSelection(
   accountId: string
 ): CodexManagedAccountRuntimeSelection {
   const nextWsl: Record<string, string | null> = {}
+
   for (const [distro, selectedId] of Object.entries(selection.wsl)) {
     nextWsl[distro] = selectedId === accountId ? null : selectedId
   }
+
   return {
     host: selection.host === accountId ? null : selection.host,
     wsl: nextWsl
@@ -102,12 +112,15 @@ export function pruneInvalidCodexRuntimeSelection(
   const hostAccount = selection.host
     ? accounts.find((account) => account.id === selection.host)
     : null
+
   const nextWsl: Record<string, string | null> = {}
+
   for (const [distroKey, accountId] of Object.entries(selection.wsl)) {
     if (!accountId) {
       nextWsl[distroKey] = null
       continue
     }
+
     const account = accounts.find((entry) => entry.id === accountId)
     nextWsl[distroKey] =
       account &&
@@ -116,6 +129,7 @@ export function pruneInvalidCodexRuntimeSelection(
         ? accountId
         : null
   }
+
   return {
     host: hostAccount && hostAccount.managedHomeRuntime !== 'wsl' ? selection.host : null,
     wsl: nextWsl
@@ -128,5 +142,6 @@ export function getCodexSelectionTargetForAccount(
   if (account.managedHomeRuntime === 'wsl') {
     return { runtime: 'wsl', wslDistro: account.wslDistro ?? null }
   }
+
   return { runtime: 'host' }
 }

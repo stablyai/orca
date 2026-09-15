@@ -3,10 +3,13 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 
 export function hookMount(render: () => void) {
   let renderer: ReactTestRenderer | undefined
+
   function Harness() {
     render()
+
     return null
   }
+
   return {
     mount() {
       act(() => {
@@ -32,5 +35,6 @@ export function performHookAction<T>(action: () => T): T {
   act(() => {
     result = action()
   })
+
   return result
 }

@@ -50,12 +50,15 @@ async function cancelStaleStart(
   const { client, dictationId, keepAwakeOwner } = options
   options.clearActiveId(dictationId)
   setIdleIfGenerationCurrent(options)
+
   const cleanups: Promise<unknown>[] = [
     client.sendRequest('speech.dictation.cancel', { dictationId })
   ]
+
   if (releaseKeepAwake) {
     cleanups.push(keepAwakeOwner.release(dictationId))
   }
+
   await Promise.allSettled(cleanups)
 }
 
@@ -66,6 +69,7 @@ export async function startMobileDictationDesktopSession(
 
   try {
     const response = await client.sendRequest('speech.dictation.start', { dictationId })
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
@@ -77,14 +81,17 @@ export async function startMobileDictationDesktopSession(
     // report over the replacement session.
     const shouldReport = wasCurrent && canReportStartFailure(options)
     setIdleIfGenerationCurrent(options)
+
     if (!shouldReport) {
       return false
     }
+
     throw err
   }
 
   if (!isCurrentStart(options)) {
     await cancelStaleStart(options, { releaseKeepAwake: false })
+
     return false
   }
 
@@ -108,6 +115,7 @@ export async function startMobileDictationDesktopSession(
 
   if (!isCurrentStart(options)) {
     await cancelStaleStart(options, { releaseKeepAwake: true })
+
     return false
   }
 
@@ -119,6 +127,7 @@ export async function startMobileDictationDesktopSession(
     }
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
+
     // Native recording can partially start before throwing, so stop audio before
     // releasing the wake tag and remote session.
     try {
@@ -126,6 +135,7 @@ export async function startMobileDictationDesktopSession(
     } catch {
       // Continue releasing independently owned resources after native audio failure.
     }
+
     options.clearActiveId(dictationId)
     await Promise.allSettled([
       keepAwakeOwner.release(dictationId),
@@ -133,10 +143,13 @@ export async function startMobileDictationDesktopSession(
     ])
     const shouldReport = wasCurrent && canReportStartFailure(options)
     setIdleIfGenerationCurrent(options)
+
     if (!shouldReport) {
       return false
     }
+
     throw err
   }
+
   return true
 }

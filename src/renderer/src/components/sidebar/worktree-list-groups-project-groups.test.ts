@@ -59,6 +59,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const groupedRepo: Repo = { ...repo, projectGroupId: group.id }
 
     const rows = buildRows(
@@ -102,6 +103,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const groupedRepo: Repo = { ...repo, projectGroupId: group.id }
 
     const rows = buildRows(
@@ -141,18 +143,21 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const sleepingRepo: Repo = {
       ...repo,
       id: 'repo-sleeping',
       displayName: 'sleeping-project',
       projectGroupId: group.id
     }
+
     const awakeRepo: Repo = {
       ...repo,
       id: 'repo-awake',
       displayName: 'awake-project',
       projectGroupId: group.id
     }
+
     const awakeWorktree: Worktree = {
       ...worktree,
       id: 'wt-awake',
@@ -242,6 +247,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const repoWithMissingGroup: Repo = { ...repo, projectGroupId: 'missing-group' }
 
     const rows = buildRows(
@@ -282,6 +288,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const childGroup: ProjectGroup = {
       ...parentGroup,
       id: 'child-group',
@@ -289,6 +296,7 @@ describe('project groups', () => {
       parentPath: '/platform/services',
       parentGroupId: parentGroup.id
     }
+
     const repoInChildGroup: Repo = { ...repo, projectGroupId: childGroup.id }
 
     const rows = buildRows(
@@ -325,29 +333,34 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const paymentsApi: Repo = {
       ...repo,
       id: 'repo-payments-api',
       path: '/workspace/platform/payments/api',
       displayName: 'api'
     }
+
     const billingApi: Repo = {
       ...repo,
       id: 'repo-billing-api',
       path: '/workspace/platform/billing/api',
       displayName: 'api'
     }
+
     const webRepo: Repo = {
       ...repo,
       id: 'repo-web',
       path: '/workspace/platform/web',
       displayName: 'web'
     }
+
     const repos = new Map([
       [paymentsApi.id, paymentsApi],
       [billingApi.id, billingApi],
       [webRepo.id, webRepo]
     ])
+
     const worktrees = [
       { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
       { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
@@ -397,6 +410,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const paymentsApi: Repo = {
       ...repo,
       id: 'repo-payments-api',
@@ -405,6 +419,7 @@ describe('project groups', () => {
       projectGroupId: group.id,
       projectGroupOrder: 0
     }
+
     const billingApi: Repo = {
       ...repo,
       id: 'repo-billing-api',
@@ -413,6 +428,7 @@ describe('project groups', () => {
       projectGroupId: group.id,
       projectGroupOrder: 1
     }
+
     const webRepo: Repo = {
       ...repo,
       id: 'repo-web',
@@ -421,11 +437,13 @@ describe('project groups', () => {
       projectGroupId: group.id,
       projectGroupOrder: 2
     }
+
     const repos = new Map([
       [paymentsApi.id, paymentsApi],
       [billingApi.id, billingApi],
       [webRepo.id, webRepo]
     ])
+
     const worktrees = [
       { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
       { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },

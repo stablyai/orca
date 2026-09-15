@@ -1,21 +1,29 @@
 import { toolExecutionMetadata } from '../../shared/native-chat-tool-identity'
 
 export const MAX_CODEX_ITEM_STREAM_STATES = 256
+
 export const MAX_CODEX_ITEM_STREAM_PENDING_PATCHES = 128
+
 export const MAX_CODEX_ITEM_STREAM_RETAINED_BYTES = 32 * 1024 * 1024
+
 export const MAX_CODEX_ITEM_STREAM_PENDING_PATCH_BYTES = 8 * 1024 * 1024
+
 export const MAX_CODEX_ITEM_STREAM_ITEM_BYTES = 64 * 1024
 
 export function codexStructuredItemKey(threadId: string, itemId: string): string {
   const key = `${encodeURIComponent(threadId)}:${encodeURIComponent(itemId)}`
+
   if (Buffer.byteLength(key, 'utf8') <= 1024) {
     return key
   }
+
   let hash = 2166136261
+
   for (const byte of Buffer.from(key, 'utf8')) {
     hash ^= byte
     hash = Math.imul(hash, 16777619)
   }
+
   return `${key.slice(0, 960)}:${(hash >>> 0).toString(16)}`
 }
 
@@ -27,6 +35,7 @@ export function boundStreamItem(item: Record<string, unknown>): Record<string, u
   if (Buffer.byteLength(JSON.stringify(item), 'utf8') <= MAX_CODEX_ITEM_STREAM_ITEM_BYTES) {
     return item
   }
+
   return {
     type: item.type,
     id: item.id,

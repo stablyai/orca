@@ -42,6 +42,7 @@ type SpecialColorSlot = 'foreground' | 'background' | 'cursor'
 // OSC 10/11/12 stack extra params onto consecutive slots (xterm's
 // _setOrReportSpecialColor): `OSC 10;?;?` reports foreground then background.
 const SPECIAL_COLOR_SLOTS: SpecialColorSlot[] = ['foreground', 'background', 'cursor']
+
 const SPECIAL_COLOR_IDENTS: Record<SpecialColorSlot, string> = {
   foreground: '10',
   background: '11',
@@ -57,8 +58,10 @@ function isValidColorIndex(value: number): boolean {
 function relativeLuminance([r, g, b]: TerminalViewRgb): number {
   const linear = (channel: number): number => {
     const c = channel / 255
+
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
   }
+
   return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722
 }
 
@@ -83,23 +86,29 @@ export function installTerminalViewAttributeResponder(
 
   const handleSpecialColor = (data: string, offset: number): boolean => {
     const slots = data.split(';')
+
     for (let i = 0; i < slots.length; ++i, ++offset) {
       if (offset >= SPECIAL_COLOR_SLOTS.length) {
         break
       }
+
       const slot = SPECIAL_COLOR_SLOTS[offset]
+
       if (slots[i] === '?') {
         const base = deps.getBaseAttributes()
+
         if (base) {
           reportColor(SPECIAL_COLOR_IDENTS[slot], specialOverrides.get(slot) ?? base[slot])
         }
       } else {
         const rgb = parseXColorSpec(slots[i])
+
         if (rgb) {
           specialOverrides.set(slot, rgb)
         }
       }
     }
+
     // True consumes the sequence; the headless core's own OSC 10/11/12
     // handler only fires an onColor event nothing consumes.
     return true
@@ -107,28 +116,36 @@ export function installTerminalViewAttributeResponder(
 
   deps.parser.registerOscHandler(4, (data) => {
     const slots = data.split(';')
+
     while (slots.length > 1) {
       const idx = slots.shift() as string
       const spec = slots.shift() as string
+
       if (!/^\d+$/.test(idx)) {
         continue
       }
+
       const index = Number.parseInt(idx, 10)
+
       if (!isValidColorIndex(index)) {
         continue
       }
+
       if (spec === '?') {
         const base = deps.getBaseAttributes()
+
         if (base) {
           reportColor(`4;${index}`, ansiOverrides.get(index) ?? base.ansi[index])
         }
       } else {
         const rgb = parseXColorSpec(spec)
+
         if (rgb) {
           ansiOverrides.set(index, rgb)
         }
       }
     }
+
     return true
   })
   deps.parser.registerOscHandler(10, (data) => handleSpecialColor(data, 0))
@@ -140,25 +157,31 @@ export function installTerminalViewAttributeResponder(
   deps.parser.registerOscHandler(104, (data) => {
     if (!data) {
       ansiOverrides.clear()
+
       return true
     }
+
     for (const slot of data.split(';')) {
       if (/^\d+$/.test(slot)) {
         ansiOverrides.delete(Number.parseInt(slot, 10))
       }
     }
+
     return true
   })
   deps.parser.registerOscHandler(110, () => {
     specialOverrides.delete('foreground')
+
     return true
   })
   deps.parser.registerOscHandler(111, () => {
     specialOverrides.delete('background')
+
     return true
   })
   deps.parser.registerOscHandler(112, () => {
     specialOverrides.delete('cursor')
+
     return true
   })
 
@@ -167,7 +190,9 @@ export function installTerminalViewAttributeResponder(
       // Fall through to the core for every other private DSR (?6n CPR etc.).
       return false
     }
+
     const base = deps.getBaseAttributes()
+
     if (base) {
       // Why luminance and not base.colorSchemeMode: a visible xterm answers
       // ?996n from the relative luminance of the CURRENT (OSC-SET-mutated)
@@ -179,6 +204,7 @@ export function installTerminalViewAttributeResponder(
       const dark = relativeLuminance(background) < relativeLuminance(foreground)
       deps.emitReply(`\x1b[?997;${dark ? 1 : 2}n`)
     }
+
     return true
   })
 

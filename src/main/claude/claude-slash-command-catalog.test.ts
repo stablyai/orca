@@ -61,6 +61,7 @@ describe('claude slash command catalog', () => {
     const catalog = new ClaudeSlashCommandCatalog(
       init({ slash_commands: ['review'], skills: [], terminal_slash_commands: [] })
     )
+
     expect(
       catalog.observe({
         type: 'system',
@@ -75,6 +76,7 @@ describe('claude slash command catalog', () => {
 
 it('accepts descriptor reloads, removing old skills while retaining terminal filtering', () => {
   const catalog = new ClaudeSlashCommandCatalog(init())
+
   const reload = {
     type: 'system',
     subtype: 'commands_changed',
@@ -84,6 +86,7 @@ it('accepts descriptor reloads, removing old skills while retaining terminal fil
       { name: 'doctor', description: 'Terminal', argumentHint: '' }
     ]
   }
+
   expect(catalog.observe(reload)).toBe(true)
   expect(catalog.commands).toEqual([
     { name: 'clear', kind: 'command', description: 'Clear' },
@@ -117,6 +120,7 @@ it('distinguishes missing or malformed control catalogs from authoritative empty
   for (const initialization of [undefined, null, {}, { commands: null }, { commands: 'bad' }]) {
     expect(new ClaudeSlashCommandCatalog(undefined, initialization).commands).toBeUndefined()
   }
+
   expect(new ClaudeSlashCommandCatalog(undefined, { commands: [] }).commands).toEqual([])
   expect(
     new ClaudeSlashCommandCatalog(undefined, {
@@ -138,6 +142,7 @@ it('keeps the description and argument hint a descriptor report authored', () =>
       { name: 'quiet', description: '', argumentHint: '' }
     ]
   })
+
   expect(catalog.commands).toEqual([
     {
       name: 'goal',
@@ -160,6 +165,7 @@ it('bounds the row text a provider can put in the picker', () => {
       { name: 'wrapped', description: 'first line\n  second   line' }
     ]
   })
+
   expect(catalog.commands).toEqual([
     { name: 'long', kind: 'command', kindUnspecified: true },
     { name: 'wrong-type', kind: 'command', kindUnspecified: true },
@@ -184,6 +190,7 @@ it('does not let malformed descriptor names consume the command detail budget', 
       { name: 'goal', description: 'Set or view the goal', argumentHint: '<goal>' }
     ]
   })
+
   expect(catalog.commands).toEqual([
     {
       name: 'goal',
@@ -202,6 +209,7 @@ it('combines non-empty fields from duplicate descriptors without discarding earl
       { name: 'goal', argumentHint: '<goal>' }
     ]
   })
+
   expect(catalog.commands).toEqual([
     {
       name: 'goal',
@@ -220,6 +228,7 @@ it('carries descriptor text across the name-only stream init that classifies it'
       { name: 'ref-oss', description: 'A skill' }
     ]
   })
+
   expect(catalog.observe(init({ slash_commands: ['clear', 'ref-oss'], skills: ['ref-oss'] }))).toBe(
     true
   )
@@ -232,11 +241,13 @@ it('carries descriptor text across the name-only stream init that classifies it'
 it('reports a description-only change and lets a later report drop the text', () => {
   const catalog = new ClaudeSlashCommandCatalog(init({ slash_commands: ['clear'], skills: [] }))
   expect(catalog.commands).toEqual([{ name: 'clear', kind: 'command' }])
+
   const changed = {
     type: 'system',
     subtype: 'commands_changed',
     commands: [{ name: 'clear', description: 'Clear conversation history' }]
   }
+
   expect(catalog.observe(changed)).toBe(true)
   expect(catalog.commands).toEqual([
     { name: 'clear', kind: 'command', description: 'Clear conversation history' }

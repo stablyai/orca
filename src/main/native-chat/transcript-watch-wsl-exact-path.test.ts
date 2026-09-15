@@ -4,8 +4,10 @@ import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
+
 const ROLLOUT_LINUX =
   '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/24/rollout-wsl.jsonl'
+
 const ROLLOUT_UNC =
   '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl.jsonl'
 
@@ -20,21 +22,26 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./session-file-resolver', () => ({
   resolveSessionFilePath: mocks.resolve
 }))
+
 vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install
 }))
+
 vi.mock('../wsl', () => ({
   getWslHomeAsync: mocks.getWslHomeAsync,
   listRunningWslDistrosAsync: mocks.listRunningWslDistrosAsync,
   listRunningWslHomeDirsAsync: vi.fn(async () => [UBUNTU_HOME])
 }))
+
 vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
   ...(await importOriginal<typeof WslRunningPathFilterModule>()),
   filterPathsToRunningWslDistrosAsync: mocks.filterPathsToRunningWslDistrosAsync
 }))
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromisesModule>()
+
   return {
     ...actual,
     access: async (path: string) => {
@@ -66,8 +73,10 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
         const running = new Set(
           (await mocks.listRunningWslDistrosAsync()).map((distro) => distro.toLowerCase())
         )
+
         return paths.filter((path) => {
           const parsed = parseWslUncPath(path)
+
           return !parsed || running.has(parsed.distro.toLowerCase())
         })
       })
@@ -85,6 +94,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
   it('installs the watcher on the WSL UNC twin of the guest transcript path', async () => {
     setPlatform('win32')
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -106,6 +116,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
   it('passes the raw path through untouched off Windows', async () => {
     setPlatform('darwin')
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -126,6 +137,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
   it('validates an exact UNC path without probing distro homes', async () => {
     setPlatform('win32')
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -148,6 +160,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
   it('does not install an already-UNC path after its distro stops', async () => {
     setPlatform('win32')
     mocks.listRunningWslDistrosAsync.mockResolvedValue([])
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -165,6 +178,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
   it('does not run broad id fallback for an unresolved exact WSL path', async () => {
     setPlatform('win32')
     mocks.listRunningWslDistrosAsync.mockResolvedValue([])
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -186,6 +200,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
   it('revalidates an absent UNC transcript before retrying after the distro stops', async () => {
     setPlatform('win32')
     mocks.listRunningWslDistrosAsync.mockResolvedValueOnce(['Ubuntu']).mockResolvedValue([])
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -206,6 +221,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     setPlatform('win32')
     mocks.listRunningWslDistrosAsync.mockResolvedValueOnce(['Ubuntu']).mockResolvedValue([])
     mocks.install.mockRejectedValueOnce(new WslTranscriptFsError('timeout', 'stalled'))
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
       sessionId: 'wsl-sess',
@@ -224,6 +240,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
   it('shares one probe and skips history scans across staggered unresolved paths', async () => {
     setPlatform('win32')
+
     const subscriptions = await Promise.all(
       [0, 1].map((index) =>
         subscribeNativeChatTranscript({
@@ -234,6 +251,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
         })
       )
     )
+
     await vi.advanceTimersByTimeAsync(1_000)
     subscriptions.push(
       ...(await Promise.all(
@@ -254,6 +272,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(1)
     expect(mocks.resolve).not.toHaveBeenCalled()
     expect(mocks.install).toHaveBeenCalledTimes(4)
+
     for (const subscription of subscriptions) {
       subscription.unsubscribe()
     }

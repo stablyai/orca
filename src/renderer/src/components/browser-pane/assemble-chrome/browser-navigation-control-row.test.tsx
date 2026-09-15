@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./BrowserAddressBar', () => ({
   default: (props: { value: string; onSubmit: () => void; onNavigate: (url: string) => void }) => {
     mocks.addressBar.current = props
+
     return <input aria-label="Address" value={props.value} readOnly />
   }
 }))
@@ -37,8 +38,10 @@ function renderRow(overrides: Partial<BrowserNavigationControls> = {}): BrowserN
     navigate: vi.fn(),
     ...overrides
   }
+
   function Host(): React.JSX.Element {
     const inputRef = useRef<HTMLInputElement | null>(null)
+
     return (
       <BrowserNavigationControlRow
         controls={controls}
@@ -54,7 +57,9 @@ function renderRow(overrides: Partial<BrowserNavigationControls> = {}): BrowserN
       />
     )
   }
+
   render(<Host />)
+
   return controls
 }
 

@@ -139,6 +139,7 @@ describe('createUISlice settings navigation', () => {
 
   it('rejects malformed settings targets before storing them', () => {
     const store = createUIStore()
+
     const openSettingsTarget = store.getState().openSettingsTarget as unknown as (
       target: unknown
     ) => void
@@ -192,6 +193,7 @@ describe('createUISlice settings navigation', () => {
     const store = createUIStore()
     const prefetchWorkItems = vi.fn()
     const workItem = makeGitHubWorkItem()
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'github',
@@ -241,6 +243,7 @@ describe('createUISlice settings navigation', () => {
     const store = createUIStore()
     const prefetchLinearIssues = vi.fn()
     const linearIssue = makeLinearIssue()
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'linear',
@@ -385,6 +388,7 @@ describe('createUISlice page navigation history', () => {
   it('preserves GitHub task detail source context in navigation history', () => {
     const store = createUIStore()
     const workItem = makeGitHubWorkItem({ repoId: 'repo-remote' })
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'github',
@@ -413,6 +417,7 @@ describe('createUISlice page navigation history', () => {
   it('preserves Linear task detail source context in navigation history', () => {
     const store = createUIStore()
     const linearIssue = makeLinearIssue()
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'linear',
@@ -438,6 +443,7 @@ describe('createUISlice page navigation history', () => {
   it('preserves GitLab task detail source context in navigation history', () => {
     const store = createUIStore()
     const workItem = makeGitLabWorkItem({ repoId: 'repo-remote' })
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'gitlab',
@@ -465,6 +471,7 @@ describe('createUISlice page navigation history', () => {
   it('preserves Jira task detail source context in navigation history', () => {
     const store = createUIStore()
     const issue = makeJiraIssue()
+
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'jira',
@@ -626,6 +633,7 @@ describe('createUISlice space navigation', () => {
       const expected: FeatureInteractionState = {
         'workspace-cleanup': { firstInteractedAt: now, interactionCount: 1 }
       }
+
       expect(store.getState().featureInteractions).toEqual(expected)
       expect(setMock).toHaveBeenCalledWith({ featureInteractions: expected })
     } finally {

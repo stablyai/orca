@@ -58,7 +58,9 @@ vi.mock('@/store', () => {
   ) => unknown) & {
     getState: () => Record<string, unknown>
   }
+
   useAppStore.getState = () => mockStore.state
+
   return { useAppStore }
 })
 
@@ -219,6 +221,7 @@ function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
 // "in-progress" lane; an unrelated bystander sits in "todo".
 function setStatusLaneState(): void {
   const repo = makeRepo()
+
   const parent = makeWorktree({
     id: 'parent',
     instanceId: 'parent-instance',
@@ -227,6 +230,7 @@ function setStatusLaneState(): void {
     sortOrder: 30,
     workspaceStatus: 'in-progress'
   })
+
   const child = makeWorktree({
     id: 'child',
     instanceId: 'child-instance',
@@ -235,6 +239,7 @@ function setStatusLaneState(): void {
     sortOrder: 20,
     workspaceStatus: 'in-progress'
   })
+
   const bystander = makeWorktree({
     id: 'bystander',
     instanceId: 'bystander-instance',
@@ -243,6 +248,7 @@ function setStatusLaneState(): void {
     sortOrder: 10,
     workspaceStatus: 'todo'
   })
+
   mockStore.state = {
     ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
@@ -329,6 +335,7 @@ async function renderWorktreeList(): Promise<HTMLDivElement> {
       <WorktreeList scrollOffsetRef={{ current: 0 }} scrollAnchorRef={{ current: null }} />
     )
   })
+
   return container
 }
 
@@ -336,11 +343,13 @@ async function renderWorktreeList(): Promise<HTMLDivElement> {
 // worktree-id payloads and the type list off it.
 function makeWorktreeIdDataTransfer(worktreeIds: readonly string[]): DataTransfer {
   const [firstId] = worktreeIds
+
   const data: Record<string, string> = {
     [WORKSPACE_STATUS_DRAG_TYPE]: firstId ?? '',
     [WORKSPACE_STATUS_DRAG_IDS_TYPE]: JSON.stringify(worktreeIds),
     'text/plain': firstId ?? ''
   }
+
   return {
     effectAllowed: 'move',
     types: Object.keys(data),
@@ -353,9 +362,11 @@ function findStatusLaneHeader(container: HTMLElement, status: WorkspaceStatus): 
   const header = container.querySelector<HTMLElement>(
     `[data-workspace-status-drop-target][data-workspace-status="${status}"]`
   )
+
   if (!header) {
     throw new Error(`No status lane header rendered for "${status}"`)
   }
+
   return header
 }
 
@@ -374,12 +385,15 @@ async function dropWorktreesOnStatusLane(
 
 function committedStatusUpdates(): Map<string, Partial<WorktreeMeta>> {
   expect(mockStore.updateWorktreesMeta).toHaveBeenCalledTimes(1)
+
   const input = mockStore.updateWorktreesMeta.mock.calls[0]![0] as
     | readonly WorktreeMetaBatchUpdate[]
     | ReadonlyMap<string, Partial<WorktreeMeta>>
+
   if ('get' in input) {
     return new Map(input)
   }
+
   return new Map(input.map((entry) => [entry.worktreeId, entry.updates]))
 }
 

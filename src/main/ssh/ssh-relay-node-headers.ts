@@ -50,6 +50,7 @@ export const LOCAL_NODE_HEADERS_MARKER_PREFIX = 'ORCA-NODE-HEADERS:'
  */
 export function exportLocalNodeHeadersPrefix(nodePath: string): string {
   const probe = `${shellEscape(nodePath)} -e ${shellEscape(LOCAL_NODE_HEADERS_PROBE_JS)} 2>/dev/null`
+
   // Why the unset: a remote profile can already export a nodedir (a stale distro header dir), in
   // either case npm accepts. Left alone it would bypass the version check above and compile
   // against those headers. Deliberately env only: a `nodedir=` in ~/.npmrc is not reachable from here
@@ -76,16 +77,21 @@ export function localNodeHeadersFromOutput(output: string): string | null | unde
   // none}"...` as a "dir". Only what follows the head is the host's answer.
   const head = output.match(EXEC_FAILURE_HEAD_RE)
   const hostOutput = head ? output.slice(head[0].length) : output
+
   // First match, not last: the host's own line comes first, and later lines are npm/gyp output
   // that must not be able to spoof it.
   for (const line of hostOutput.split(/\r?\n/)) {
     const at = line.indexOf(LOCAL_NODE_HEADERS_MARKER_PREFIX)
+
     if (at === -1) {
       continue
     }
+
     const dir = line.slice(at + LOCAL_NODE_HEADERS_MARKER_PREFIX.length).trim()
+
     return dir === 'none' || dir === '' ? null : dir
   }
+
   return undefined
 }
 

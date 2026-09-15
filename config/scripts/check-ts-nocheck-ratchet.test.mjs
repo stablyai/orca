@@ -26,6 +26,7 @@ describe('hasTsNoCheck', () => {
   it('allows blank lines and other leading comments before the directive', () => {
     const src =
       '\n// Copyright notice.\n\n/* another leading comment */\n// @ts-nocheck\nexport const a = 1\n'
+
     expect(hasTsNoCheck(src)).toBe(true)
   })
 
@@ -57,6 +58,7 @@ describe('diffBaseline', () => {
       ['src/b.ts', 'src/c.ts'],
       new Set(['src/a.ts', 'src/b.ts'])
     )
+
     expect(added).toEqual(['src/c.ts']) // new suppression
     expect(stale).toEqual(['src/a.ts']) // suppression removed
   })

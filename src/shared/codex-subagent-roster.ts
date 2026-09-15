@@ -31,23 +31,29 @@ export function upsertCodexSubagent(
   now: number
 ): void {
   const normalizedId = id.trim()
+
   if (normalizedId.length === 0 || normalizedId.length > CODEX_SUBAGENT_ID_MAX_LENGTH) {
     return
   }
+
   const agentType = normalizeOptionalField(fields.agentType, AGENT_TYPE_MAX_LENGTH)
   const description = normalizeOptionalField(fields.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   const model = normalizeOptionalField(fields.model, AGENT_MODEL_MAX_LENGTH)
   const existing = roster.get(normalizedId)
+
   if (existing) {
     existing.agentType = agentType ?? existing.agentType
     existing.description = description ?? existing.description
     existing.model = model ?? existing.model
     existing.state = fields.state
+
     return
   }
+
   if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
     return
   }
+
   roster.set(normalizedId, {
     agentType,
     description,
@@ -73,13 +79,17 @@ export function setCodexSubagentModel(
   model: string | undefined
 ): void {
   const normalizedModel = normalizeOptionalField(model, AGENT_MODEL_MAX_LENGTH)
+
   if (!normalizedModel) {
     return
   }
+
   const existing = roster.get(id.trim())
+
   if (!existing) {
     return
   }
+
   existing.model = normalizedModel
 }
 
@@ -91,6 +101,7 @@ export function seedCodexSubagentRoster(
     if (snapshot.state !== 'working' && snapshot.state !== 'waiting') {
       continue
     }
+
     upsertCodexSubagent(
       roster,
       snapshot.id,
@@ -111,6 +122,7 @@ export function codexRosterToSnapshots(
   if (!roster || roster.size === 0) {
     return undefined
   }
+
   const snapshots = Array.from(roster, ([id, tracked]) => ({
     id,
     agentType: tracked.agentType,
@@ -119,7 +131,9 @@ export function codexRosterToSnapshots(
     state: tracked.state,
     startedAt: tracked.startedAt
   }))
+
   snapshots.sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id))
+
   return snapshots
 }
 
@@ -130,10 +144,12 @@ export function codexRosterEffectiveState(
   if (!roster || roster.size === 0) {
     return leadState
   }
+
   for (const tracked of roster.values()) {
     if (tracked.state === 'waiting') {
       return 'waiting'
     }
   }
+
   return leadState === 'done' ? 'working' : leadState
 }

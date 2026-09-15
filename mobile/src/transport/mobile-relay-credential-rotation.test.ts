@@ -10,7 +10,9 @@ import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import type { RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 const relay = {
@@ -66,6 +68,7 @@ function fakeClient(responses: RpcResponse[]): RpcClient {
 describe('mobile relay credential rotation', () => {
   it('persists pending material before install and promotes only committed status', async () => {
     const installed = install('rotate-CAgICAgICAgICAgICAgICA')
+
     const client = fakeClient([
       success({ v: 1, relay, installStatus: { v: 1, reqId: installed.reqId, state: 'not-found' } }),
       success(installed),
@@ -75,6 +78,7 @@ describe('mobile relay credential rotation', () => {
         installStatus: { v: 1, reqId: installed.reqId, state: 'committed', result: installed }
       })
     ])
+
     const writes: MobileRelayCredentialBundle[] = []
 
     const result = await rotateMobileRelayCredential({
@@ -103,6 +107,7 @@ describe('mobile relay credential rotation', () => {
 
   it('repairs legacy decoded-byte hashes before the normal rotation window', () => {
     const now = 1_000
+
     const valid = {
       ...bundle,
       current: {
@@ -127,7 +132,9 @@ describe('mobile relay credential rotation', () => {
       ...bundle,
       pending: { token: 'C'.repeat(43), hash: 'D'.repeat(43), reqId: 'rotate-existing' }
     }
+
     const installed = install('rotate-existing')
+
     const client = fakeClient([
       success({
         v: 1,
@@ -135,6 +142,7 @@ describe('mobile relay credential rotation', () => {
         installStatus: { v: 1, reqId: installed.reqId, state: 'committed', result: installed }
       })
     ])
+
     const writeBundle = vi.fn(async () => {})
 
     await rotateMobileRelayCredential({ client, bundle: pendingBundle, writeBundle })
@@ -151,6 +159,7 @@ describe('mobile relay credential rotation', () => {
       ...bundle,
       grace: { token: 'C'.repeat(43), hash: 'D'.repeat(43), version: 1, expiresAt: 40_000 }
     }
+
     const renewed = applyResumeConfirmation(withGrace, 2, {
       v: 1,
       reqId: 'confirm-current',
@@ -160,6 +169,7 @@ describe('mobile relay credential rotation', () => {
       resumeExpiresAt: 120_000,
       graceExpiresAt: 40_000
     })
+
     const grace = applyResumeConfirmation(renewed, 1, {
       v: 1,
       reqId: 'confirm-grace',

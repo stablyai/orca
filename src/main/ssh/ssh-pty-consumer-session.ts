@@ -5,6 +5,7 @@ import {
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 
 export const SSH_PTY_OPEN_CLIENT_METHOD = 'pty.openClient'
+
 export const SSH_PTY_OPEN_CLIENT_TIMEOUT_MS = 10_000
 
 export type SshPtyConsumerOwnerState = {
@@ -51,10 +52,13 @@ function validateGrant(
   if (typeof value !== 'object' || value === null) {
     throw new Error('Remote relay returned an invalid pty.openClient grant')
   }
+
   if (!options.expectedServerBuildId) {
     throw new Error('Local relay build identity is unavailable')
   }
+
   const grant = value as Partial<PtyConsumerSessionGrant>
+
   if (
     grant.protocolVersion !== PTY_CONSUMER_SESSION_PROTOCOL_VERSION ||
     grant.serverBuildId !== options.expectedServerBuildId
@@ -63,6 +67,7 @@ function validateGrant(
       `Remote relay session contract mismatch — expected build ${options.expectedServerBuildId}, got ${grant.serverBuildId ?? 'unknown'}`
     )
   }
+
   if (
     !Number.isSafeInteger(grant.clientGeneration) ||
     grant.clientGeneration! <= 0 ||
@@ -75,13 +80,16 @@ function validateGrant(
   ) {
     throw new Error('Remote relay did not grant an authenticated PTY session owner')
   }
+
   // Why not treated as a legacy relay: client and relay ship in one build, and the build id was already
   // matched above — a missing `resumed` here is corruption, not an older peer.
   if (typeof grant.resumed !== 'boolean') {
     throw new Error('Remote relay owner grant did not state whether the claim was resumed')
   }
+
   const requestedFlow = options.outputFlowControl
   const grantedFlow = grant.capabilities?.outputFlowControl
+
   if (requestedFlow) {
     if (
       grantedFlow?.version !== 1 ||
@@ -94,6 +102,7 @@ function validateGrant(
   } else if (grantedFlow) {
     throw new Error('Remote relay granted an unoffered PTY output-flow-control capability')
   }
+
   return grant as PtyConsumerSessionGrant
 }
 
@@ -102,6 +111,7 @@ export async function openSshPtyConsumerSession(
   options: OpenSshPtyConsumerSessionOptions
 ): Promise<SshPtyConsumerAdmission> {
   let result: unknown
+
   try {
     result = await mux.request(
       SSH_PTY_OPEN_CLIENT_METHOD,
@@ -125,6 +135,7 @@ export async function openSshPtyConsumerSession(
     )
   } catch (error) {
     const code = (error as { code?: unknown })?.code
+
     if (
       code === -32601 &&
       options.allowSameBuildLegacyFallback === true &&
@@ -140,9 +151,12 @@ export async function openSshPtyConsumerSession(
         resumed: false
       }
     }
+
     throw error
   }
+
   const grant = validateGrant(result, options)
+
   return {
     state: {
       mode: 'negotiated',

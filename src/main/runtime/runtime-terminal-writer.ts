@@ -33,11 +33,14 @@ export class RuntimeTerminalWriter {
     // clients; chunk text before PTY/ConPTY while preserving suffix separation.
     const text = typeof action.text === 'string' ? action.text : ''
     const hasSuffix = action.enter || action.interrupt
+
     if (text) {
       await this.writeChunks(ptyId, text, options, admitted)
     }
+
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+
       if (text) {
         // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
         // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
@@ -49,34 +52,45 @@ export class RuntimeTerminalWriter {
           options.signal
         )
       }
+
       // Why: the 500ms text/suffix pause is long enough for a handoff to complete, so the submit
       // is re-checked against the fence the text was admitted under.
       agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+
       try {
         await options.beforeWrite?.(ptyId)
       } catch (error) {
         if (options.suffixFailureError) {
           throw new Error(options.suffixFailureError)
         }
+
         throw error
       }
+
       agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       options.reserveWrite?.(ptyId)
+
       if (!this.write(ptyId, suffix)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
+
       await options.afterWrite?.(ptyId)
+
       return
     }
+
     if (text) {
       return
     }
+
     await options.beforeWrite?.(ptyId)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     options.reserveWrite?.(ptyId)
+
     if (!this.write(ptyId, payload)) {
       throw new Error('terminal_not_writable')
     }
+
     await options.afterWrite?.(ptyId)
   }
 
@@ -89,19 +103,24 @@ export class RuntimeTerminalWriter {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
     let firstChunk = true
+
     while (!chunk.done) {
       if (!firstChunk) {
         agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       }
+
       firstChunk = false
       await options.beforeWrite?.(ptyId)
       agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       options.reserveWrite?.(ptyId)
+
       if (!this.write(ptyId, chunk.value)) {
         throw new Error('terminal_not_writable')
       }
+
       await options.afterWrite?.(ptyId)
       chunk = chunks.next()
+
       if (!chunk.done) {
         await yieldBetweenTerminalInputChunks()
       }
@@ -116,21 +135,27 @@ function yieldBetweenTerminalInputChunks(): Promise<void> {
 async function waitForTerminalWriteDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
   if (!signal) {
     await new Promise((resolve) => setTimeout(resolve, delayMs))
+
     return
   }
+
   if (signal.aborted) {
     throw new Error('request_aborted')
   }
+
   await new Promise<void>((resolve, reject) => {
     const onAbort = (): void => {
       clearTimeout(timer)
       reject(new Error('request_aborted'))
     }
+
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort)
       resolve()
     }, delayMs)
+
     signal.addEventListener('abort', onAbort, { once: true })
+
     if (signal.aborted) {
       onAbort()
     }

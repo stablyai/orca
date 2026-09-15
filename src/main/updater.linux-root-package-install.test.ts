@@ -19,17 +19,29 @@ const {
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 const packageSha512 = Buffer.alloc(64).toString('base64')
@@ -37,6 +49,7 @@ const packageSha512 = Buffer.alloc(64).toString('base64')
 function downloadedEvent(packageType: LinuxRootPackageType): Record<string, unknown> {
   const fileName =
     packageType === 'deb' ? 'orca-ide_1.0.61_amd64.deb' : 'orca-ide-1.0.61.x86_64.rpm'
+
   return {
     version: '1.0.61',
     downloadedFile: join(tmpdir(), 'orca-updater', 'pending', fileName),
@@ -61,6 +74,7 @@ describe('updater Linux root packages', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
       return Promise.resolve(undefined)
     })
     const send = vi.fn()
@@ -69,6 +83,7 @@ describe('updater Linux root packages', () => {
       getLastUpdateCheckAt: () => Date.now(),
       installMode
     })
+
     return { send, updater }
   }
 
@@ -80,9 +95,11 @@ describe('updater Linux root packages', () => {
     if (process.platform !== 'darwin') {
       return
     }
+
     const handler = nativeUpdaterMock.on.mock.calls.find(
       ([eventName]) => eventName === 'update-downloaded'
     )?.[1] as (() => void) | undefined
+
     handler?.()
   }
 
@@ -96,9 +113,11 @@ describe('updater Linux root packages', () => {
     autoUpdaterMock.downloadUpdate.mockResolvedValue([])
     updater.downloadUpdate()
     autoUpdaterMock.emit('update-downloaded', event)
+
     if (markInstallerReady) {
       markMacInstallerReady()
     }
+
     await vi.advanceTimersByTimeAsync(0)
   }
 

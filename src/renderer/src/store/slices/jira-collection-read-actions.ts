@@ -57,9 +57,11 @@ function handleJiraCollectionReadError(
   ) {
     markJiraConnectionLost(set, scope)
   }
+
   if (isIntegrationCredentialDecryptionError(error) || looksLikeJiraAuthError(error)) {
     return []
   }
+
   throw error
 }
 
@@ -70,16 +72,21 @@ export function createJiraCollectionReadActions(
   return {
     searchJiraIssues: async (jql, limit = 30, options) => {
       const scope = getJiraReadScope(get().settings, options?.sourceContext)
+
       const siteId =
         options && 'siteId' in options ? options.siteId : getSelectedJiraSiteId(get().jiraStatus)
+
       const cacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'default'}::${jql}::${limit}`)
       const cached = get().jiraSearchCache[cacheKey]
+
       if (isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
       }
+
       const inflight = inflightSearchRequests.get(cacheKey)
       const abortable = options?.signal !== undefined
       const requestMutationGeneration = currentJiraMutationGeneration()
+
       if (
         !abortable &&
         inflight &&
@@ -88,12 +95,15 @@ export function createJiraCollectionReadActions(
       ) {
         return inflight.promise
       }
+
       let entry: InflightJiraReadRequest<JiraIssue[]>
+
       const promise = jiraSearchIssues(scope.settings, jql, limit, siteId, options?.signal)
         .then((issues) => {
           if (options?.signal?.aborted) {
             throw createJiraAbortError('search')
           }
+
           if (
             (abortable || inflightSearchRequests.get(cacheKey) === entry) &&
             canWriteCollectionResult(scope, requestMutationGeneration, get)
@@ -105,13 +115,16 @@ export function createJiraCollectionReadActions(
               })
             }))
           }
+
           return issues
         })
         .catch((error) => {
           if (options?.signal?.aborted) {
             throw error
           }
+
           console.warn('[jira] searchJiraIssues failed:', error)
+
           return handleJiraCollectionReadError(
             error,
             scope,
@@ -126,6 +139,7 @@ export function createJiraCollectionReadActions(
           if (inflightSearchRequests.get(cacheKey) === entry) {
             inflightSearchRequests.delete(cacheKey)
           }
+
           if (
             !options?.signal?.aborted &&
             shouldRefreshJiraStatusAfterRead(siteId, get().jiraStatus, { abortable }) &&
@@ -134,30 +148,38 @@ export function createJiraCollectionReadActions(
             void get().checkJiraConnection()
           }
         })
+
       entry = {
         promise,
         contextKey: scope.contextKey,
         mutationGeneration: requestMutationGeneration
       }
+
       if (!abortable) {
         inflightSearchRequests.set(cacheKey, entry)
       }
+
       return promise
     },
 
     listJiraIssues: async (filter = 'assigned', limit = 30, options) => {
       const scope = getJiraReadScope(get().settings, options?.sourceContext)
       const siteId = getSelectedJiraSiteId(get().jiraStatus)
+
       const cacheKey = scopedJiraCacheKey(
         scope,
         `${siteId ?? 'default'}::list::${filter}::${limit}`
       )
+
       const cached = get().jiraSearchCache[cacheKey]
+
       if (isFreshJiraCacheEntry(cached)) {
         return cached.data ?? []
       }
+
       const inflight = inflightListRequests.get(cacheKey)
       const requestMutationGeneration = currentJiraMutationGeneration()
+
       if (
         inflight &&
         inflight.contextKey === scope.contextKey &&
@@ -165,7 +187,9 @@ export function createJiraCollectionReadActions(
       ) {
         return inflight.promise
       }
+
       let entry: InflightJiraReadRequest<JiraIssue[]>
+
       const promise = jiraListIssues(scope.settings, filter, limit, siteId)
         .then((issues) => {
           if (
@@ -179,10 +203,12 @@ export function createJiraCollectionReadActions(
               })
             }))
           }
+
           return issues
         })
         .catch((error) => {
           console.warn('[jira] listJiraIssues failed:', error)
+
           return handleJiraCollectionReadError(
             error,
             scope,
@@ -196,6 +222,7 @@ export function createJiraCollectionReadActions(
           if (inflightListRequests.get(cacheKey) === entry) {
             inflightListRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshJiraStatusAfterRead(siteId, get().jiraStatus) &&
             canWriteCollectionResult(scope, requestMutationGeneration, get)
@@ -203,12 +230,14 @@ export function createJiraCollectionReadActions(
             void get().checkJiraConnection()
           }
         })
+
       entry = {
         promise,
         contextKey: scope.contextKey,
         mutationGeneration: requestMutationGeneration
       }
       inflightListRequests.set(cacheKey, entry)
+
       return promise
     }
   }

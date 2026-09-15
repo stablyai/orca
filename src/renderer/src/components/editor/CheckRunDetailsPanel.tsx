@@ -16,10 +16,13 @@ function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {
     return null
   }
+
   const parsed = new Date(value)
+
   if (Number.isNaN(parsed.getTime())) {
     return value
   }
+
   return parsed.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -35,6 +38,7 @@ type CheckStatusLike = {
 
 function getCheckStatusLabel(check: CheckStatusLike): string {
   const conclusion = check.conclusion ?? 'pending'
+
   switch (conclusion) {
     case 'success':
       return translate('auto.components.editor.CheckRunDetailsPanel.8f2d0f5a91', 'Passed')
@@ -110,18 +114,23 @@ export function CheckRunDetailsPanel({
     check,
     details
   })
+
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
+
   const detailsStatusCheck: CheckStatusLike = {
     ...check,
     status: details?.status ?? check.status,
     conclusion: details?.conclusion ?? check.conclusion
   }
+
   const failedJobs =
     details?.jobs.filter((job) => {
       const state = job.conclusion ?? job.status
+
       return isFailureState(state)
     }) ?? []
+
   const jobs = failedJobs.length > 0 ? failedJobs : (details?.jobs ?? [])
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
   const hasAnnotations = (details?.annotations.length ?? 0) > 0

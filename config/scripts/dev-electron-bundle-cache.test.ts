@@ -6,9 +6,13 @@ import {
 } from './dev-electron-bundle-cache.mjs'
 
 const NOW = 1_800_000_000_000
+
 const ROOT = '/repo/out/electron-dev'
+
 const A = `${ROOT}/aaaaaaaaaaaa`
+
 const B = `${ROOT}/bbbbbbbbbbbb`
+
 const C = `${ROOT}/cccccccccccc`
 
 /** A finished bundle: marker present, copied long ago. */

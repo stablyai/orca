@@ -60,6 +60,7 @@ function buildRepoHostIndex(
   defaultHostId: ExecutionHostId
 ): Map<string, Set<ExecutionHostId>> {
   const hostIdsByRepoId = new Map<string, Set<ExecutionHostId>>()
+
   for (const repo of repos) {
     const hostIds = hostIdsByRepoId.get(repo.id) ?? new Set<ExecutionHostId>()
     hostIds.add(
@@ -67,6 +68,7 @@ function buildRepoHostIndex(
     )
     hostIdsByRepoId.set(repo.id, hostIds)
   }
+
   return hostIdsByRepoId
 }
 
@@ -84,18 +86,23 @@ function buildRepoIdsByProjectKey(
   grouping: ProjectGroupingModel
 ): Map<string, string[]> {
   const repoIdsByProjectKey = new Map<string, string[]>()
+
   for (const repo of repos) {
     const target = getProjectHeaderRevealTarget(repo.id, repoById, grouping)
+
     if (!target.repo) {
       continue
     }
+
     const repoIds = repoIdsByProjectKey.get(target.key)
+
     if (repoIds) {
       repoIds.push(repo.id)
     } else {
       repoIdsByProjectKey.set(target.key, [repo.id])
     }
   }
+
   return repoIdsByProjectKey
 }
 
@@ -116,6 +123,7 @@ export function buildPaletteFilterModel({
 }): PaletteFilterModel {
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const hostIdsByRepoId = buildRepoHostIndex(repos, defaultHostId)
+
   const repoIdsByProjectKey = buildRepoIdsByProjectKey([...repoById.values()], repoById, {
     projects,
     projectHostSetups
@@ -123,10 +131,12 @@ export function buildPaletteFilterModel({
 
   const worktreeCountByHostId = new Map<string, number>()
   const worktreeCountByRepoId = new Map<string, number>()
+
   for (const worktree of worktrees) {
     if (worktree.isArchived) {
       continue
     }
+
     const hostId = resolveWorktreeFilterHostId(worktree, repoById, defaultHostId)
     worktreeCountByHostId.set(hostId, (worktreeCountByHostId.get(hostId) ?? 0) + 1)
     worktreeCountByRepoId.set(
@@ -147,6 +157,7 @@ export function buildPaletteFilterModel({
 
   // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
   const repositoryLabels = getRepoDisplayLabelsByPath([...repoById.values()])
+
   const repositories = [...repoById.values()]
     .map((repo) =>
       toFilterOption({

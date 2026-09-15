@@ -30,6 +30,7 @@ export function SkillShareDialogHeader({
   skillCount: number
 }): React.JSX.Element {
   const bundle = skillCount > 1
+
   return (
     <DialogHeader>
       <DialogTitle>
@@ -128,12 +129,14 @@ function publishingPhaseLabel(progress: SkillShareProgress | null): string {
       'Publishing link…'
     )
   }
+
   if (progress?.phase === 'finalizing') {
     return translate(
       'auto.components.skills.SkillShareReviewContent.verifyingPackage',
       'Verifying package…'
     )
   }
+
   return translate('auto.components.skills.SkillShareReviewContent.0142581727', 'Uploading…')
 }
 
@@ -148,6 +151,7 @@ export function SkillSharePublishProgress({
 }): React.JSX.Element {
   const settled = progress?.phase === 'finalizing' || progress?.phase === 'publishing'
   const value = settled ? 100 : progressPercent
+
   return (
     <section className="space-y-2" aria-live="polite">
       <div className="flex justify-between text-xs text-muted-foreground">

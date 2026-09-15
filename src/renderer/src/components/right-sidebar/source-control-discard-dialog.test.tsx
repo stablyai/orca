@@ -24,6 +24,7 @@ vi.mock('@/components/ui/dialog', () => ({
     onOpenAutoFocus?: (event: Event) => void
   }) => {
     mocks.dialogContentProps.push(props)
+
     return <div>{children}</div>
   },
   DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
@@ -34,12 +35,14 @@ vi.mock('@/components/ui/dialog', () => ({
 
 vi.mock('@/components/ui/button', async () => {
   const ReactModule = await import('react')
+
   return {
     Button: ReactModule.forwardRef<HTMLButtonElement, CapturedButtonProps>(function Button(
       { children, variant: _variant, ...props },
       ref
     ) {
       mocks.buttons.push({ ...props, variant: _variant, children })
+
       return (
         <button {...props} ref={ref}>
           {children}
@@ -61,15 +64,19 @@ function textContent(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(textContent).join('')
   }
+
   if (typeof node === 'object' && 'props' in node) {
     return textContent((node as { props?: { children?: ReactNode } }).props?.children)
   }
+
   return ''
 }
 
@@ -94,6 +101,7 @@ describe('SourceControlDiscardDialog', () => {
     )
 
     const cancelButton = mocks.buttons.find((button) => textContent(button.children) === 'Cancel')
+
     const discardButton = mocks.buttons.find((button) =>
       textContent(button.children).includes('Discard')
     )
@@ -109,6 +117,7 @@ describe('focusDiscardDialogConfirmButton', () => {
   it('prevents Radix from focusing the first tabbable button', async () => {
     const { focusDiscardDialogConfirmButton } =
       await import('./source-control/commit/discard-dialog')
+
     const event = { preventDefault: vi.fn() } as unknown as Event
     const confirmButton = { focus: vi.fn() } as unknown as HTMLButtonElement
 

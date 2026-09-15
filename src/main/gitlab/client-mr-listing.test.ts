@@ -29,6 +29,7 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./gl-utils', async () => {
   const actual = await vi.importActual<typeof GlUtils>('./gl-utils')
+
   return {
     ...actual,
     glabExecFileAsync: glabExecFileAsyncMock,
@@ -290,6 +291,7 @@ describe('gitlab client — MR operations', () => {
         source: null,
         fellBack: false
       })
+
       const result = await listMergeRequests(
         '/remote/repo',
         'opened',
@@ -299,6 +301,7 @@ describe('gitlab client — MR operations', () => {
         undefined,
         'conn-1'
       )
+
       expect(result.error?.type).toBe('not_found')
       expect(result.items).toEqual([])
       expect(glabExecFileAsyncMock).not.toHaveBeenCalled()

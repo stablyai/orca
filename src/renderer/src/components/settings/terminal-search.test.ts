@@ -105,6 +105,7 @@ describe('getTerminalPaneSearchEntries', () => {
     const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
     const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
     const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+
     const hasEntry = (entries: typeof entriesWindows): boolean =>
       entries.some(
         (entry) =>
@@ -227,6 +228,7 @@ describe('getTerminalPaneSearchEntries', () => {
     'finds the OSC 52 clipboard setting by searching %s',
     (query) => {
       const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+
       const osc52 = entries.filter((entry) =>
         entry.title.includes('Allow TUI Clipboard Writes (OSC 52)')
       )

@@ -56,6 +56,7 @@ export default function NewWorkspaceComposerCard(
   props: NewWorkspaceComposerCardProps
 ): React.JSX.Element {
   useTranslation()
+
   const {
     contextualTourSource,
     containerClassName,
@@ -78,6 +79,7 @@ export default function NewWorkspaceComposerCard(
     onAddProjectOverride,
     onNestedDialogOpenChange
   } = props
+
   const projectOptions = props.projectOptions ?? EMPTY_PROJECT_OPTIONS
   const projectHostSetupOptions = props.projectHostSetupOptions ?? EMPTY_PROJECT_HOST_SETUP_OPTIONS
   const ephemeralVmRecipes = props.ephemeralVmRecipes ?? EMPTY_EPHEMERAL_VM_RECIPES
@@ -85,9 +87,11 @@ export default function NewWorkspaceComposerCard(
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
+
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+
   const updateSettings = useAppStore((state) => state.updateSettings)
   const projects = useAppStore((state) => state.projects)
   const repos = useAppStore((state) => state.repos)
@@ -95,75 +99,94 @@ export default function NewWorkspaceComposerCard(
   const branchNameInputId = React.useId()
   const projectDescriptionId = React.useId()
   const [addRemoteHostMode, setAddRemoteHostMode] = React.useState<AddRemoteHostMode | null>(null)
+
   const [setLocationOption, setSetLocationOption] = React.useState<NeedsProjectHostOption | null>(
     null
   )
+
   // Why sticky: the dialog animates itself closed off its own `option` prop, so unmounting it
   // when the option clears would cut that animation short.
   const [setLocationDialogMounted, setSetLocationDialogMounted] = React.useState(false)
 
   const selectedRepo = eligibleRepos.find((candidate) => candidate.id === repoId)
   const selectedRepoName = selectedRepo?.displayName ?? selectedRepo?.path ?? 'This project'
+
   const selectedProjectName =
     projectOptions.find((candidate) => candidate.id === selectedProjectId)?.displayName ??
     selectedRepoName
+
   const defaultCloneUrl = resolveProjectCloneUrlPrefill(projects, repos, selectedProjectId)
+
   const readyProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'ready'
   )
+
   const needsSetupProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'needs-setup'
   )
+
   // Warm on the precursor: the "Set location" row only renders for a needs-setup host that can
   // still take one, so the chunk resolves while the picker is being read rather than on the click.
   const hasSetLocationOption = needsSetupProjectHostSetupOptions.some(
     (option) => option.canSetLocation
   )
+
   React.useEffect(() => {
     if (hasSetLocationOption) {
       void loadSetProjectLocationDialog().catch(() => {})
     }
   }, [hasSetLocationOption])
+
   const shouldShowRunTargetPicker =
     readyProjectHostSetupOptions.length > 0 ||
     ephemeralVmRecipes.length > 0 ||
     needsSetupProjectHostSetupOptions.length > 0
+
   const sshStatusLabel = selectedRepoSshStatus
     ? getSshStatusLabel(selectedRepoSshStatus)
     : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
+
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? 'Connect'
       : 'Reconnect'
+
   const setupConfigLabel =
     setupConfig?.kind === 'default-tabs'
       ? 'Default tab commands'
       : setupConfig?.kind === 'setup-and-default-tabs'
         ? 'Setup and default tab commands'
         : 'Setup script'
+
   const setupRunLabel =
     setupConfig?.kind === 'default-tabs'
       ? 'Run default tab commands'
       : setupConfig?.kind === 'setup-and-default-tabs'
         ? 'Run setup and default tab commands'
         : 'Run setup command'
+
   const setupAskLabel =
     setupConfig?.kind === 'default-tabs'
       ? 'Run default tab commands now?'
       : setupConfig?.kind === 'setup-and-default-tabs'
         ? 'Run setup and default tab commands now?'
         : 'Run setup now?'
+
   const setupRunButtonLabel = setupConfig?.kind === 'setup' ? 'Run setup now' : 'Run commands now'
   const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
+
   const agentCatalog = getAgentCatalog()
+
   const enabledAgentIds = new Set(
     filterEnabledTuiAgents(
       agentCatalog.map((candidate) => candidate.id),
       disabledTuiAgents
     )
   )
+
   const visibleQuickAgents = agentCatalog.filter((agent) => {
     return (
       enabledAgentIds.has(agent.id) &&
@@ -177,18 +200,22 @@ export default function NewWorkspaceComposerCard(
       nameInputFocusFrameRef.current = null
     }
   }, [])
+
   const setComposerNode = React.useCallback(
     (node: HTMLDivElement | null): void => {
       if (!node) {
         cancelNameInputFocusFrame()
       }
+
       if (composerRef) {
         composerRef.current = node
       }
+
       onComposerNodeChange?.(node)
     },
     [cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
   )
+
   const focusNameInput = React.useCallback((): void => {
     cancelNameInputFocusFrame()
     nameInputFocusFrameRef.current = requestAnimationFrame(() => {
@@ -196,13 +223,17 @@ export default function NewWorkspaceComposerCard(
       nameInputRef?.current?.focus()
     })
   }, [cancelNameInputFocusFrame, nameInputRef])
+
   const handleAddProject = React.useCallback((): void => {
     if (onAddProjectOverride) {
       onAddProjectOverride()
+
       return
     }
+
     openModal('add-repo')
   }, [onAddProjectOverride, openModal])
+
   const handleSetLocation = React.useCallback(
     (option: NeedsProjectHostOption): void => {
       setSetLocationDialogMounted(true)
@@ -211,10 +242,12 @@ export default function NewWorkspaceComposerCard(
     },
     [onNestedDialogOpenChange]
   )
+
   const handleSetLocationClose = React.useCallback((): void => {
     setSetLocationOption(null)
     onNestedDialogOpenChange?.(false)
   }, [onNestedDialogOpenChange])
+
   const handleSetLocationReady = React.useCallback(
     (setupId: string): void => {
       handleSetLocationClose()
@@ -222,32 +255,40 @@ export default function NewWorkspaceComposerCard(
     },
     [handleSetLocationClose, onProjectHostSetupChange]
   )
+
   const handleConnectRunTargetHost = React.useCallback(
     async (option: NeedsProjectHostOption): Promise<void> => {
       const action = option.connectAction
+
       if (!action) {
         return
       }
+
       try {
         if (action.kind === 'ssh') {
           if (isSshConnectInFlight(action.targetId)) {
             return
           }
+
           await withUiConnectTimeout(
             trackSshConnect(action.targetId, window.api.ssh.connect({ targetId: action.targetId }))
           )
+
           return
         }
+
         const response = await window.api.runtimeEnvironments.getStatus({
           selector: action.environmentId,
           timeoutMs: 15_000
         })
+
         unwrapRuntimeRpcResult<RuntimeStatus>(response)
         await useAppStore.getState().readRuntimeHostStatusSnapshots()
       } catch (error) {
         if (action.kind === 'runtime') {
           await useAppStore.getState().readRuntimeHostStatusSnapshots()
         }
+
         toast.error(
           error instanceof Error
             ? error.message
@@ -260,16 +301,19 @@ export default function NewWorkspaceComposerCard(
     },
     []
   )
+
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null): void => {
       void updateSettings({ defaultTuiAgent: next })
     },
     [updateSettings]
   )
+
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
       '[data-agent-combobox-root="true"][role="combobox"]'
     )
+
     agentTrigger?.focus()
   }, [composerRef])
 

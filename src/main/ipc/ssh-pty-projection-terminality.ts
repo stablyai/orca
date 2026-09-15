@@ -12,6 +12,7 @@ function matchesProjection(
   ptyIncarnation: string
 ): boolean {
   const identity = record?.semantics.identity
+
   return (
     identity?.providerGeneration === providerGeneration &&
     identity.ptyIncarnation === ptyIncarnation
@@ -26,6 +27,7 @@ export function unpublishedProjectionIds(
 ): string[] {
   return ids.filter((id) => {
     const record = records.get(id)
+
     return (
       record?.state === 'committed' && matchesProjection(record, providerGeneration, ptyIncarnation)
     )
@@ -64,6 +66,7 @@ export class SshPtyProjectionTerminality {
     if (!hasOpen(providerGeneration, ptyIncarnation)) {
       return Promise.resolve()
     }
+
     return new Promise((resolve) => {
       const waiters = this.waitersByPty.get(ptyId) ?? []
       waiters.push({ providerGeneration, ptyIncarnation, resolve })
@@ -76,17 +79,21 @@ export class SshPtyProjectionTerminality {
     hasOpen: (providerGeneration: number, ptyIncarnation: string) => boolean
   ): void {
     const waiters = this.waitersByPty.get(ptyId)
+
     if (!waiters) {
       return
     }
+
     const pending = waiters.filter((waiter) =>
       hasOpen(waiter.providerGeneration, waiter.ptyIncarnation)
     )
+
     for (const waiter of waiters) {
       if (!pending.includes(waiter)) {
         waiter.resolve()
       }
     }
+
     if (pending.length > 0) {
       this.waitersByPty.set(ptyId, pending)
     } else {
@@ -97,11 +104,13 @@ export class SshPtyProjectionTerminality {
   closeGeneration(providerGeneration: number): void {
     for (const [ptyId, waiters] of this.waitersByPty) {
       const pending = waiters.filter((waiter) => waiter.providerGeneration !== providerGeneration)
+
       for (const waiter of waiters) {
         if (waiter.providerGeneration === providerGeneration) {
           waiter.resolve()
         }
       }
+
       if (pending.length > 0) {
         this.waitersByPty.set(ptyId, pending)
       } else {

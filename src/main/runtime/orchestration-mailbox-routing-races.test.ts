@@ -39,17 +39,21 @@ describe('orchestration mailbox routing races', () => {
     const db = createDatabase('orca-mailbox-run-routing-fence-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Run routing fence')
+
     for (let index = 0; index < 51; index += 1) {
       insertDirectRunMessage(db, run.id, `Before rebind ${index}`)
     }
+
     const route = db.routeUnreadDirectMessagesToRunMailbox.bind(db)
     let scheduled = false
     vi.spyOn(db, 'routeUnreadDirectMessagesToRunMailbox').mockImplementation((...args) => {
       const page = route(...args)
+
       if (page.hasMore && !scheduled) {
         scheduled = true
         setImmediate(() => createBoundRun(db, 'Replacement Run'))
       }
+
       return page
     })
 
@@ -64,30 +68,38 @@ describe('orchestration mailbox routing races', () => {
     const db = createDatabase('orca-mailbox-dispatch-routing-fence-')
     const harness = createRuntime(db)
     registerSecondPane(harness.runtime)
+
     const run = db.createRun({
       objective: 'Dispatch routing fence',
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
       coordinatorPaneKey: SECOND_PANE_KEY
     })
+
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
+
     for (let index = 0; index < 151; index += 1) {
       insertDirectRunMessage(db, run.id, `Before completion ${index}`)
     }
+
     const route = db.routeUnreadDirectMessagesToDispatchMailbox.bind(db)
     let scheduled = false
     vi.spyOn(db, 'routeUnreadDirectMessagesToDispatchMailbox').mockImplementation((...args) => {
       const page = route(...args)
+
       if (page.hasMore && !scheduled) {
         scheduled = true
         setImmediate(() => db.completeDispatch(dispatch.id))
       }
+
       return page
     })
     const migrate = db.routeUnreadDispatchMailboxToRunMailbox.bind(db)
+
     const migrationSpy = vi
       .spyOn(db, 'routeUnreadDispatchMailboxToRunMailbox')
       .mockImplementation((...args) => migrate(...args))
+
     const arrivalSpy = vi.spyOn(harness.runtime, 'notifyMessageArrived')
 
     const response = await dispatchMailboxCheck(harness.runtime)
@@ -97,6 +109,7 @@ describe('orchestration mailbox routing races', () => {
     expect(migrationSpy).toHaveBeenCalledTimes(4)
     expect(arrivalSpy).toHaveBeenCalledOnce()
     expect(arrivalSpy).toHaveBeenCalledWith(`run:${run.id}`, 'status')
+
     const plan = sqliteFor(db)
       .prepare(
         `EXPLAIN QUERY PLAN SELECT id, type FROM messages
@@ -105,36 +118,43 @@ describe('orchestration mailbox routing races', () => {
          ORDER BY sequence LIMIT ?`
       )
       .all(`dispatch:${dispatch.id}`, 51) as { detail: string }[]
+
     expect(plan.map((row) => row.detail).join(' ')).toContain('idx_messages_unread_current_inbox')
+
     const first = await checkBoundMailbox(harness.runtime, {
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     const second = await checkBoundMailbox(harness.runtime, {
       ack: first.deliveryId!,
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     const third = await checkBoundMailbox(harness.runtime, {
       ack: second.deliveryId!,
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     const fourth = await checkBoundMailbox(harness.runtime, {
       ack: third.deliveryId!,
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     const acknowledged = await checkBoundMailbox(harness.runtime, {
       ack: fourth.deliveryId!,
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     expect(first.count).toBe(50)
     expect(second.count).toBe(50)
     expect(third.count).toBe(50)
@@ -147,23 +167,28 @@ describe('orchestration mailbox routing races', () => {
     const db = createDatabase('orca-mailbox-dispatch-wait-fence-')
     const harness = createRuntime(db)
     registerSecondPane(harness.runtime)
+
     const run = db.createRun({
       objective: 'Dispatch wait fence',
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
       coordinatorPaneKey: SECOND_PANE_KEY
     })
+
     const task = db.createTask({ spec: 'Waiting worker', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     const status = insertDirectRunMessage(db, run.id, 'Filtered-out status')
     const controller = new AbortController()
+
     const waiting = dispatchMailboxCheck(harness.runtime, {
       wait: true,
       types: 'question',
       signal: controller.signal
     })
+
     const internals = harness.runtime as unknown as {
       messageWaitersByHandle: Map<string, Set<unknown>>
     }
+
     await vi.waitFor(() => {
       expect(internals.messageWaitersByHandle.has(`dispatch:${dispatch.id}`)).toBe(true)
     })
@@ -176,18 +201,22 @@ describe('orchestration mailbox routing races', () => {
     await vi.waitFor(() => {
       expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toHaveLength(0)
     })
+
     const checked = await checkBoundMailbox(harness.runtime, {
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     expect(checked.messages).toEqual([expect.objectContaining({ id: status.id })])
+
     const acknowledged = await checkBoundMailbox(harness.runtime, {
       ack: checked.deliveryId!,
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     expect(acknowledged).toMatchObject({ count: 0, acknowledged: checked.deliveryId })
     db.close()
   })
@@ -196,34 +225,42 @@ describe('orchestration mailbox routing races', () => {
     const db = createDatabase('orca-mailbox-dispatch-migration-cancel-')
     const harness = createRuntime(db)
     registerSecondPane(harness.runtime)
+
     const run = db.createRun({
       objective: 'Dispatch migration cancellation',
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
       coordinatorPaneKey: SECOND_PANE_KEY
     })
+
     const task = db.createTask({ spec: 'Cancelled worker check', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
+
     for (let index = 0; index < 151; index += 1) {
       insertDirectRunMessage(db, run.id, `Before cancelled migration ${index}`)
     }
+
     const route = db.routeUnreadDirectMessagesToDispatchMailbox.bind(db)
     let completed = false
     vi.spyOn(db, 'routeUnreadDirectMessagesToDispatchMailbox').mockImplementation((...args) => {
       const page = route(...args)
+
       if (page.hasMore && !completed) {
         completed = true
         setImmediate(() => db.completeDispatch(dispatch.id))
       }
+
       return page
     })
     const controller = new AbortController()
     const migrate = db.routeUnreadDispatchMailboxToRunMailbox.bind(db)
     let cancelled = false
     let postSnapshot: ReturnType<typeof db.insertMessage> | undefined
+
     const migrationSpy = vi
       .spyOn(db, 'routeUnreadDispatchMailboxToRunMailbox')
       .mockImplementation((...args) => {
         const page = migrate(...args)
+
         if (page.hasMore && !cancelled) {
           cancelled = true
           postSnapshot = db.insertMessage({
@@ -235,8 +272,10 @@ describe('orchestration mailbox routing races', () => {
           })
           setImmediate(() => controller.abort())
         }
+
         return page
       })
+
     const arrivalSpy = vi.spyOn(harness.runtime, 'notifyMessageArrived')
 
     const response = await dispatchMailboxCheck(harness.runtime, { signal: controller.signal })
@@ -262,12 +301,15 @@ describe('orchestration mailbox routing races', () => {
   it('drains current and stored Run handles in one check', async () => {
     const db = createDatabase('orca-mailbox-split-run-handles-')
     const harness = createRuntime(db)
+
     const run = db.createRun({
       objective: 'Split Run handles',
       coordinatorHandle: 'term_previous_coordinator',
       coordinatorPaneKey: PANE_KEY
     })
+
     const current = insertDirectRunMessage(db, run.id, 'Current handle')
+
     const previous = db.insertMessage({
       from: 'term_worker',
       to: 'term_previous_coordinator',
@@ -290,15 +332,18 @@ describe('orchestration mailbox routing races', () => {
   it('drains current and stored Dispatch handles in one check', async () => {
     const db = createDatabase('orca-mailbox-split-dispatch-handles-')
     const harness = createRuntime(db)
+
     const run = db.createRun({
       objective: 'Split Dispatch handles',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
     createRootDispatch(db, task.id, 'term_previous_worker', PANE_KEY)
     const current = insertDirectRunMessage(db, run.id, 'Current worker handle')
+
     const previous = db.insertMessage({
       from: 'term_coordinator',
       to: 'term_previous_worker',
@@ -322,21 +367,27 @@ describe('orchestration mailbox routing races', () => {
     const db = createDatabase('orca-mailbox-routing-snapshot-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Routing snapshot')
+
     for (let index = 0; index < 51; index += 1) {
       insertDirectRunMessage(db, run.id, `Initial ${index}`)
     }
+
     const route = db.routeUnreadDirectMessagesToRunMailbox.bind(db)
     let inserted = false
+
     const routeSpy = vi
       .spyOn(db, 'routeUnreadDirectMessagesToRunMailbox')
       .mockImplementation((...args) => {
         const page = route(...args)
+
         if (page.hasMore && !inserted) {
           inserted = true
+
           for (let index = 0; index < 60; index += 1) {
             insertDirectRunMessage(db, run.id, `Concurrent ${index}`)
           }
         }
+
         return page
       })
 
@@ -351,20 +402,25 @@ describe('orchestration mailbox routing races', () => {
     const db = createDatabase('orca-mailbox-routing-cancel-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Routing cancellation')
+
     for (let index = 0; index < 101; index += 1) {
       insertDirectRunMessage(db, run.id, `Before cancellation ${index}`)
     }
+
     const controller = new AbortController()
     const route = db.routeUnreadDirectMessagesToRunMailbox.bind(db)
     let scheduled = false
+
     const routeSpy = vi
       .spyOn(db, 'routeUnreadDirectMessagesToRunMailbox')
       .mockImplementation((...args) => {
         const page = route(...args)
+
         if (!scheduled) {
           scheduled = true
           setImmediate(() => controller.abort())
         }
+
         return page
       })
 
@@ -415,18 +471,21 @@ describe('orchestration mailbox routing races', () => {
 
   it('uses a bounded indexed pane lookup for reminted Dispatch identity', () => {
     const db = createDatabase('orca-mailbox-dispatch-pane-index-')
+
     const run = db.createRun({
       objective: 'Dispatch pane index',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const task = db.createTask({ spec: 'Valid worker', runId: run.id })
     const valid = createRootDispatch(db, task.id, 'term_old', PANE_KEY)
     const collisionTask = db.createTask({ spec: 'Malformed collision', runId: run.id })
     createRootDispatch(db, collisionTask.id, 'term_collision', `:${LEAF_ID}`)
 
     expect(db.getActiveDispatchForIdentity('term_reminted', PANE_KEY)?.id).toBe(valid.id)
+
     const plan = sqliteFor(db)
       .prepare(
         `EXPLAIN QUERY PLAN SELECT * FROM dispatch_contexts
@@ -436,7 +495,9 @@ describe('orchestration mailbox routing races', () => {
          ORDER BY rowid DESC LIMIT 1`
       )
       .all(LEAF_ID) as { detail: string }[]
+
     expect(plan.map((row) => row.detail).join(' ')).toContain('idx_dispatch_assignee_pane_leaf')
+
     const snapshotPlan = sqliteFor(db)
       .prepare(
         `EXPLAIN QUERY PLAN SELECT sequence FROM messages
@@ -445,6 +506,7 @@ describe('orchestration mailbox routing races', () => {
          ORDER BY sequence DESC LIMIT 1`
       )
       .all(run.id, TERMINAL_HANDLE) as { detail: string }[]
+
     expect(snapshotPlan.map((row) => row.detail).join(' ')).toContain(
       'idx_messages_delivery_contract'
     )

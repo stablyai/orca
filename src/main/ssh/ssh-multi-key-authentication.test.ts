@@ -14,6 +14,7 @@ vi.mock('os', () => ({
 }))
 
 const mockExistsSync = vi.fn().mockReturnValue(false)
+
 const mockReadFileSync = vi.fn()
 
 vi.mock('fs', () => ({
@@ -74,6 +75,7 @@ function nextAuth(
       result = attempt
     }
   )
+
   return result ?? false
 }
 
@@ -86,6 +88,7 @@ function partialSuccessAuth(
   handler(authsLeft, true, (attempt) => {
     result = attempt
   })
+
   return result ?? false
 }
 
@@ -143,6 +146,7 @@ describe('ordered SSH private-key authentication', () => {
       makeResolved(),
       { includeAgent: false, includePrivateKey: true }
     )
+
     const unresolvedImport = buildConnectConfig(makeTarget(), null, {
       includeAgent: false,
       includePrivateKey: true
@@ -165,6 +169,7 @@ describe('ordered SSH private-key authentication', () => {
       includeAgent: false,
       includePrivateKey: true
     })
+
     config.password = 'stage-one'
 
     expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
@@ -192,9 +197,11 @@ describe('ordered SSH private-key authentication', () => {
     })
 
     expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
+
     for (let stage = 0; stage < 4; stage += 1) {
       expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe('keyboard-interactive')
     }
+
     expect(partialSuccessAuth(config, ['keyboard-interactive'])).toBe(false)
   })
 
@@ -226,6 +233,7 @@ describe('ordered SSH private-key authentication', () => {
       includeAgent: false,
       includePrivateKey: true
     })
+
     const readsAfterResolution = mockReadFileSync.mock.calls.length
 
     expect(nextAuth(config, true)).toMatchObject({ type: 'none' })
@@ -251,8 +259,10 @@ describe('ordered SSH private-key authentication', () => {
       ) {
         return new Error('Encrypted private OpenSSH key detected, but no passphrase given')
       }
+
       return { isPrivateKey: () => true } as ParsedKey
     })
+
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/keys/first', '/keys/encrypted-second'] }),

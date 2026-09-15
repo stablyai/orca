@@ -30,11 +30,14 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 let clock = 1_000
+
 const journals = createTrackedJournalOpener()
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -57,6 +60,7 @@ function open(): Promise<AgentSessionJournal> {
 
 async function withDatabase(run: (db: Database.Database) => void): Promise<void> {
   const opened = openJournalDatabase(journalDatabaseFile(root))
+
   try {
     run(opened.db)
   } finally {
@@ -168,6 +172,7 @@ describe('axis 2: the row body shape', () => {
       const stored = db.prepare('SELECT row_json FROM journal_rows WHERE seq = ?').get(nextSeq) as {
         row_json: string
       }
+
       expect(stored.row_json).toContain('"v":99')
     })
   })

@@ -71,9 +71,11 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'idle' } }
       }
+
       if (method === 'terminal.wait') {
         return {
           wait: {
@@ -85,6 +87,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       if (method === 'terminal.send') {
         return {
           send: {
@@ -94,6 +97,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -154,9 +158,11 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'idle' } }
       }
+
       if (method === 'terminal.wait') {
         return {
           wait: {
@@ -168,11 +174,13 @@ describe('active agent note send', () => {
           }
         }
       }
+
       if (method === 'terminal.send') {
         expect(params).toMatchObject({
           terminal: 'term-1',
           requireAgentStatus: 'sendable'
         })
+
         return {
           send: {
             handle: 'term-1',
@@ -182,6 +190,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -194,6 +203,7 @@ describe('active agent note send', () => {
     const methods: string[] = []
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
       methods.push(method)
+
       if (method === 'terminal.list') {
         return {
           terminals: [
@@ -215,14 +225,17 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         throw new testState.RuntimeRpcCallError({
           error: { code: 'method_not_found', message: 'Unknown method: terminal.agentStatus' }
         })
       }
+
       if (method === 'terminal.isRunningAgent') {
         return { isRunningAgent: true }
       }
+
       if (method === 'terminal.wait') {
         return {
           wait: {
@@ -234,9 +247,11 @@ describe('active agent note send', () => {
           }
         }
       }
+
       if (method === 'terminal.send') {
         return { send: { handle: 'term-1', accepted: true, bytesWritten: params.text.length } }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -278,9 +293,11 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-1', isRunningAgent: false, status: null } }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -319,12 +336,15 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'working' } }
       }
+
       if (method === 'terminal.wait') {
         throw new Error('timeout')
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -363,9 +383,11 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'working' } }
       }
+
       if (method === 'terminal.wait') {
         return {
           wait: {
@@ -377,6 +399,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -415,9 +438,11 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'working' } }
       }
+
       if (method === 'terminal.wait') {
         return {
           wait: {
@@ -430,6 +455,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -469,8 +495,10 @@ describe('active agent note send', () => {
           truncated: false
         }
       }
+
       if (method === 'terminal.agentStatus') {
         statusChecks += 1
+
         return {
           agentStatus: {
             handle: 'term-1',
@@ -479,6 +507,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       if (method === 'terminal.wait') {
         return {
           wait: {
@@ -490,6 +519,7 @@ describe('active agent note send', () => {
           }
         }
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 

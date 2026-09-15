@@ -16,6 +16,7 @@ import { isShellProcess } from '../../shared/shell-process-detection'
 import { selectForegroundProcessCandidate } from '../../shared/foreground-process-selection'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
+
 export {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex,
@@ -48,10 +49,13 @@ type ShellForegroundConfirmationOptions = {
 
 function commandExecutable(command: string): string {
   const trimmed = command.trim().replace(/^[-]/, '')
+
   if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
     const closingQuote = trimmed.indexOf(trimmed[0], 1)
+
     return closingQuote === -1 ? trimmed.slice(1) : trimmed.slice(1, closingQuote)
   }
+
   return trimmed.split(/\s+/, 1)[0] ?? ''
 }
 
@@ -67,23 +71,29 @@ export async function confirmShellForegroundProcess(
   if (!shellPid || !spawnedShellProcess || !isShellProcess(spawnedShellProcess)) {
     return false
   }
+
   if (process.platform === 'win32') {
     try {
       const processIds = await options.readWindowsPtyJobProcessIds?.()
+
       return processIds?.size === 1 && processIds.has(shellPid)
     } catch {
       // Unavailable job inspection is missing proof, never a thrown confirmation.
       return false
     }
   }
+
   try {
     const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
+
     if (!root) {
       return false
     }
+
     const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, shellPid)]
     const spawnedShellBasename = executableBasename(spawnedShellProcess)
+
     const foregroundShell = tree
       .filter(
         (row) =>
@@ -91,10 +101,13 @@ export async function confirmShellForegroundProcess(
           isShellProcess(commandExecutable(row.command))
       )
       .sort((left, right) => left.depth - right.depth)[0]
+
     if (tree.some((row) => row.depth > 0 && row.stat.includes('T'))) {
       return false
     }
+
     const confirmed = foregroundShell?.stat.includes('+') === true
+
     return confirmed
   } catch {
     return false
@@ -126,11 +139,13 @@ export async function resolveAgentForegroundProcessWithAvailability(
     ) {
       return { available: true, processName: fallbackProcess }
     }
+
     const resolution = await resolveWindowsAgentForegroundProcessWithAvailability(
       shellPid,
       fallbackProcess,
       options
     )
+
     return {
       available: resolution.available,
       // Why: a forced confirmation scan that no longer sees the recognized
@@ -152,9 +167,11 @@ export async function resolveAgentForegroundProcessWithAvailability(
     const rows = options.fresh
       ? await getFreshProcessTableSnapshot()
       : await getProcessTableSnapshot()
+
     if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
       return { available: false, processName: fallbackProcess }
     }
+
     return {
       available: true,
       processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
@@ -173,24 +190,29 @@ export function resolveAgentForegroundProcessFromPs(
   const index = getProcessTableIndex(rows)
   const shellRow = index.byPid.get(shellPid)
   const candidates = collectDescendantsFromIndex(index, shellPid)
+
   // Why: `+` in `ps stat` marks the process holding the terminal foreground.
   // The root shell can hold it after Ctrl-Z, so use the whole PTY tree as the
   // foreground gate; otherwise a stopped agent child still masquerades as live.
   const foregroundIsKnown =
     shellRow?.stat.includes('+') === true ||
     candidates.some((candidate) => candidate.stat.includes('+'))
+
   const foregroundCandidates = foregroundIsKnown
     ? candidates.filter((candidate) => candidate.stat.includes('+'))
     : candidates
+
   // Keep the complete process tree for ancestry checks. A recognized agent can
   // sit above a non-foreground helper before another recognized process; the
   // helper is filtered from selection but must remain traversable.
   const ancestryCandidates = shellRow ? [{ ...shellRow, depth: 0 }, ...candidates] : candidates
   const selected = selectForegroundProcessCandidate(foregroundCandidates, ancestryCandidates)
+
   if (selected) {
     // Why: return the outer wrapper (omp) rather than the deeper wrapped child
     // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
     return resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
   }
+
   return null
 }

@@ -133,6 +133,7 @@ export function movePaneScopedMapEntries<T>(
     if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
       continue
     }
+
     map.delete(key)
     map.set(`${toPaneKey}${key.slice(fromPaneKey.length)}`, value)
   }
@@ -147,6 +148,7 @@ export function movePaneScopedSetEntries(
     if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
       continue
     }
+
     set.delete(key)
     set.add(`${toPaneKey}${key.slice(fromPaneKey.length)}`)
   }
@@ -160,6 +162,7 @@ export function movePaneCacheState(
   if (fromPaneKey === toPaneKey) {
     return
   }
+
   movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
@@ -189,6 +192,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
 export function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string): void {
   map.delete(paneKey)
   const scopedPrefix = `${paneKey}\0`
+
   for (const key of map.keys()) {
     if (key.startsWith(scopedPrefix)) {
       map.delete(key)
@@ -199,6 +203,7 @@ export function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: s
 export function deletePaneScopedSetEntry(set: Set<string>, paneKey: string): void {
   set.delete(paneKey)
   const scopedPrefix = `${paneKey}\0`
+
   for (const key of set) {
     if (key.startsWith(scopedPrefix)) {
       set.delete(key)

@@ -9,6 +9,7 @@ export async function scheduleOrphanedMobileRelayCleanup(args: {
 }): Promise<void> {
   const scheduleCleanup = args.scheduleCleanup ?? scheduleHostCredentialCleanup
   const removeOverlay = args.removeOverlay ?? removeMobileRelayHostOverlay
+
   for (const hostId of new Set(args.hostIds)) {
     try {
       // Why: an older build may remove the legacy host while retaining the v2

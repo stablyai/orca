@@ -17,9 +17,11 @@ export {
 export type { CrashReportDiagnosticBundle } from './crash-reporting-diagnostic-bundle'
 
 export type CrashReportStatus = 'pending' | 'sent' | 'dismissed'
+
 export type CrashReportSource = 'renderer' | 'child'
 
 export type CrashReportDetailValue = string | number | boolean | null
+
 export type CrashReportBreadcrumbData = Record<string, CrashReportDetailValue>
 
 export type CrashReportBreadcrumb = {
@@ -50,6 +52,7 @@ export type CrashReportRecord = {
   details: Record<string, CrashReportDetailValue>
   breadcrumbs?: CrashReportBreadcrumb[]
 }
+
 export type UncapturedCrashReportContext = {
   createdAt: string
   appVersion: string
@@ -59,6 +62,7 @@ export type UncapturedCrashReportContext = {
   electronVersion: string
   chromeVersion: string
 }
+
 export type CrashReportCreateInput = Omit<
   CrashReportRecord,
   'id' | 'createdAt' | 'status' | 'details' | 'breadcrumbs'
@@ -66,6 +70,7 @@ export type CrashReportCreateInput = Omit<
   details: Record<string, unknown>
   breadcrumbs?: CrashReportBreadcrumbInput[]
 }
+
 export type ReactErrorBoundarySurface =
   | 'app-root'
   | 'web-root'
@@ -133,12 +138,17 @@ export type CrashReportCopyDiagnosticsArgs = {
 
 // User notes need a prose budget, separate from 240-character telemetry values.
 export const MAX_USER_NOTES_LENGTH = 8_000
+
 // Bound redaction work while allowing redacted input to contract into the output budget.
 const MAX_USER_NOTES_SANITIZE_LENGTH = MAX_USER_NOTES_LENGTH * 2
+
 const USER_NOTES_TRUNCATION_SUFFIX = '...'
+
 const MAX_FORMATTED_REPORT_LENGTH = 64_000
+
 const FORMATTED_REPORT_TRUNCATION_SUFFIX =
   '\n\n[Crash report truncated to fit feedback endpoint limits.]'
+
 export function isCrashReportReason(reason: string): boolean {
   return [
     'abnormal-exit',
@@ -161,24 +171,30 @@ export function isReactErrorBoundaryReport(report: CrashReportRecord): boolean {
 
 // Notes lead so endpoint truncation removes reproducible machine data first.
 const USER_NOTES_BEGIN = '--- begin user notes ---'
+
 const USER_NOTES_END = '--- end user notes ---'
 
 function appendUserNotesLines(lines: string[], notes: string | undefined): void {
   if (!notes) {
     return
   }
+
   const inputWasClamped = notes.length > MAX_USER_NOTES_SANITIZE_LENGTH
   const boundedNotes = notes.slice(0, MAX_USER_NOTES_SANITIZE_LENGTH).trim()
+
   if (!boundedNotes) {
     return
   }
+
   const sanitized = sanitizeCrashReportString(boundedNotes, MAX_USER_NOTES_SANITIZE_LENGTH)
   const wasTruncated = inputWasClamped || sanitized.length > MAX_USER_NOTES_LENGTH
+
   const formattedNotes = wasTruncated
     ? `${sanitized
         .slice(0, MAX_USER_NOTES_LENGTH - USER_NOTES_TRUNCATION_SUFFIX.length)
         .trimEnd()}${USER_NOTES_TRUNCATION_SUFFIX}`
     : sanitized
+
   // Indentation prevents user text from impersonating line-oriented machine sections.
   lines.push(
     '',
@@ -216,8 +232,10 @@ export function formatCrashReportText(
   appendDiagnosticBundleLines(lines, diagnosticBundle, sanitizeCrashReportString)
 
   const details = Object.entries(report.details)
+
   if (details.length > 0) {
     lines.push('', 'Details:')
+
     for (const [key, value] of details) {
       lines.push(`- ${key}: ${String(value)}`)
     }
@@ -225,12 +243,15 @@ export function formatCrashReportText(
 
   if (report.breadcrumbs && report.breadcrumbs.length > 0) {
     lines.push('', 'Recent activity:')
+
     for (const breadcrumb of report.breadcrumbs) {
       const data = breadcrumb.data ? Object.entries(breadcrumb.data) : []
+
       const suffix =
         data.length > 0
           ? ` (${data.map(([key, value]) => `${key}=${String(value)}`).join(', ')})`
           : ''
+
       lines.push(`- ${breadcrumb.createdAt}: ${breadcrumb.name}${suffix}`)
     }
   }
@@ -270,7 +291,9 @@ function truncateFormattedCrashReport(text: string): string {
   if (text.length <= MAX_FORMATTED_REPORT_LENGTH) {
     return text
   }
+
   // The report cap leaves Slack-specific attachment handling to the feedback service.
   const budget = MAX_FORMATTED_REPORT_LENGTH - FORMATTED_REPORT_TRUNCATION_SUFFIX.length
+
   return `${text.slice(0, Math.max(0, budget)).trimEnd()}${FORMATTED_REPORT_TRUNCATION_SUFFIX}`
 }

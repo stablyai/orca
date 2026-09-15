@@ -25,6 +25,7 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
     tasksSupported,
     tasksUnsupported
   } = model
+
   return !tasksSupported ? (
     tasksUnsupported ? (
       <View style={styles.centered}>
@@ -52,6 +53,7 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
           if (!taskUiReady) {
             return
           }
+
           setLinearApiKeyDraft('')
           setLinearConnectState('idle')
           setLinearConnectError('')
@@ -70,6 +72,7 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
 
 export function renderMobileTasksNonProjectLists(model: ConnectionPresentationModel) {
   const { provider } = model
+
   return provider === 'linear'
     ? renderMobileTasksLinearList(model)
     : renderMobileTasksProviderItemList(model)

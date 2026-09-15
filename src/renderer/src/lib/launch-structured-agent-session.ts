@@ -75,11 +75,13 @@ function definitiveStructuredAgentSessionCreateErrorCode(error: unknown): string
       ? error.code
       : null
   }
+
   for (const code of DEFINITIVE_CREATE_FAILURE_CODES) {
     if (hasRuntimeRpcErrorCode(error, code)) {
       return code
     }
   }
+
   return null
 }
 
@@ -101,6 +103,7 @@ export function createStructuredAgentSessionLaunchIntent(
     undefined,
     resolveWebSessionVisibleTabId(state, worktreeId)
   )
+
   return {
     sessionId,
     worktreeId,
@@ -156,9 +159,11 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
         'agentSession.createSupport',
         { worktree: intent.params.worktree, agent: intent.agent }
       )
+
       return support.supported === true
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
+
       if (
         retryDelayMs === undefined ||
         !hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)
@@ -166,6 +171,7 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
         // An unanswered probe is still not a yes.
         return false
       }
+
       await delay(retryDelayMs)
     }
   }
@@ -192,6 +198,7 @@ export async function launchStructuredAgentSession(
 ): Promise<Pick<AgentSessionAttachResult, 'sessionId' | 'fence'>> {
   await requireHostCreateSupport(intent)
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
+
   try {
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       { kind: 'local' },
@@ -200,6 +207,7 @@ export async function launchStructuredAgentSession(
     )
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)
+
     if (code) {
       abandonStructuredAgentSessionLaunchIntent(intent)
       throw new StructuredAgentSessionCreateRefusalError(
@@ -207,16 +215,21 @@ export async function launchStructuredAgentSession(
         code
       )
     }
+
     throw error
   }
+
   if (!result.ok) {
     const { code, message } = result.refusal
+
     if (!isDefinitiveAgentSessionCreateRefusal(code)) {
       // Keep the focus intent: the session may exist, and recovery still has to adopt it.
       throw new StructuredAgentSessionCreateUnknownOutcomeError(message, code)
     }
+
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(message, code)
   }
+
   return { sessionId: result.value.sessionId, fence: result.value.fence }
 }

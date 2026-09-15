@@ -53,12 +53,14 @@ export function useFileExplorerImport({
       }
 
       const wtId = activeWorktreeIdRef.current
+
       if (!wtId || !worktreePathRef.current) {
         // Why: the preload stops propagation of the native drop event, so
         // React onDrop handlers never fire. We must clear the drag highlight
         // ourselves even when we bail out, otherwise the explorer stays stuck
         // in its drag-over visual state.
         clearNativeDragStateRef.current()
+
         return
       }
 
@@ -68,6 +70,7 @@ export function useFileExplorerImport({
         try {
           const operationGuard = captureFileExplorerOperationGuard(wtId, operationOwnerRef.current)
           operationGuard.assertCurrent()
+
           const { results } = await importExternalPathsToRuntime(
             {
               settings: operationGuard.route.settings,

@@ -25,6 +25,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
     workspaceSparseDraftParsed,
     workspaceSparseSaving
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null && workspaceSparseDraft != null}
@@ -109,6 +110,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
 
 export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationModel) {
   const { createWorkspace, creatingKey, setSetupPrompt, setupPrompt, taskUiReady } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && setupPrompt != null}
@@ -192,6 +194,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     setOrcaYamlTrustPrompt,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && orcaYamlTrustPrompt != null}

@@ -23,8 +23,11 @@ import {
 import { makeTreeReadOnly } from './space-sharing-copy.mjs'
 
 const VERSION = '43.4.1'
+
 const PLATFORM_PATH = path.join('Electron.app', 'Contents', 'MacOS', 'Electron')
+
 const identity = { version: VERSION, platformPath: PLATFORM_PATH }
+
 const roots: string[] = []
 
 afterEach(() => {
@@ -36,6 +39,7 @@ afterEach(() => {
 function makeRoot(): string {
   const root = mkdtempSync(path.join(tmpdir(), 'orca-shared-electron-'))
   roots.push(root)
+
   return root
 }
 
@@ -43,11 +47,13 @@ function writeDist(distPath: string, version = VERSION): string {
   mkdirSync(path.join(distPath, path.dirname(PLATFORM_PATH)), { recursive: true })
   writeFileSync(path.join(distPath, 'version'), `v${version}\n`)
   writeFileSync(path.join(distPath, PLATFORM_PATH), 'electron')
+
   return distPath
 }
 
 function makeEntry(root: string, entryName = `${VERSION}-darwin-arm64`) {
   const cacheRoot = path.join(root, 'cache')
+
   return {
     cacheRoot,
     entryPath: path.join(cacheRoot, entryName),
@@ -92,6 +98,7 @@ describe('resolveSharedElectronDistEntry', () => {
     const execFile = (() => {
       throw new Error('not a git repository')
     }) as unknown as typeof execFileSync
+
     expect(resolveSharedElectronDistEntry({ ...baseOptions, execFile })).toBeNull()
   })
 
@@ -135,11 +142,13 @@ describe('publishSharedElectronDist', () => {
     const root = makeRoot()
     const entry = makeEntry(root)
     const dist = writeDist(path.join(root, 'dist'))
+
     const share = vi.fn((source: string, destination: string) => {
       expect(path.basename(destination)).toMatch(/^43\.4\.1-darwin-arm64\.staging-/)
       writeDist(destination)
       expect(source).toBe(dist)
     })
+
     expect(publishSharedElectronDist(dist, entry, { share, ...identity })).toBe(true)
     expect(isUsableElectronDist(entry.entryPath, VERSION, PLATFORM_PATH)).toBe(true)
     expect(readdirSync(entry.cacheRoot)).toEqual([path.basename(entry.entryPath)])
@@ -150,16 +159,19 @@ describe('publishSharedElectronDist', () => {
     const entry = makeEntry(root)
     const dist = writeDist(path.join(root, 'dist'))
     const protectedPaths: string[] = []
+
     const share = (source: string, destination: string) => {
       writeDist(destination)
       expect(source).toBe(dist)
     }
+
     const protect = (target: string) => {
       // Why order matters: a reader can clone the entry the instant the rename lands.
       expect(existsSync(entry.entryPath)).toBe(false)
       protectedPaths.push(target)
       makeTreeReadOnly(target)
     }
+
     expect(publishSharedElectronDist(dist, entry, { share, protect, ...identity })).toBe(true)
     expect(protectedPaths).toHaveLength(1)
     expect(statSync(path.join(entry.entryPath, 'version')).mode & 0o222).toBe(0)
@@ -184,12 +196,14 @@ describe('publishSharedElectronDist', () => {
   it('loses a publish race without clobbering the winner or leaking staging', () => {
     const root = makeRoot()
     const entry = makeEntry(root)
+
     const share = (_source: string, destination: string) => {
       writeDist(destination)
       // The winner lands between our existence check and our rename.
       writeDist(entry.entryPath)
       writeFileSync(path.join(entry.entryPath, 'marker'), 'winner')
     }
+
     expect(publishSharedElectronDist(writeDist(path.join(root, 'dist')), entry, { share })).toBe(
       false
     )
@@ -202,6 +216,7 @@ describe('publishSharedElectronDist', () => {
     const entry = makeEntry(root)
     mkdirSync(entry.cacheRoot, { recursive: true })
     writeDist(entry.entryPath, '40.0.0') // Unusable, so this worktree intends to replace it.
+
     const share = (_source: string, destination: string) => {
       writeDist(destination)
       // A sibling replaces the bad entry with a good one while this share is still running.
@@ -209,6 +224,7 @@ describe('publishSharedElectronDist', () => {
       writeDist(entry.entryPath)
       writeFileSync(path.join(entry.entryPath, 'marker'), 'sibling')
     }
+
     expect(
       publishSharedElectronDist(writeDist(path.join(root, 'dist')), entry, { share, ...identity })
     ).toBe(false)
@@ -223,10 +239,12 @@ describe('publishSharedElectronDist', () => {
     writeDist(entry.entryPath, '40.0.0')
     writeFileSync(path.join(entry.entryPath, 'marker'), 'stale')
     const share = (_source: string, destination: string) => writeDist(destination)
+
     // The swap itself fails; a bad entry still beats no entry, since the next publisher replaces it.
     const failingRename = () => {
       throw new Error('rename failed')
     }
+
     expect(
       publishSharedElectronDist(writeDist(path.join(root, 'dist')), entry, {
         share,
@@ -267,10 +285,12 @@ describe('publishSharedElectronDist', () => {
   it('leaves no entry and no staging tree when sharing fails', () => {
     const root = makeRoot()
     const entry = makeEntry(root)
+
     const share = (_source: string, destination: string) => {
       writeDist(destination)
       throw new Error('no shareable storage')
     }
+
     expect(publishSharedElectronDist(writeDist(path.join(root, 'dist')), entry, { share })).toBe(
       false
     )
@@ -318,9 +338,11 @@ describe('shareElectronDistFromCache', () => {
     // Injected rather than provoked: what counts as an unshareable destination differs per
     // mechanism, and a byte-copy fallback here would defeat the point of the cache.
     const stagePath = path.join(root, 'stage')
+
     const share = () => {
       throw new Error('no shareable storage')
     }
+
     expect(
       shareElectronDistFromCache(entry, stagePath, {
         version: VERSION,

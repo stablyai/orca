@@ -47,6 +47,7 @@ vi.mock('../store', () => ({
     subscribe: mocks.subscribe
   }
 }))
+
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
@@ -54,27 +55,34 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
+
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
+
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
+
 vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
 const CREATE_GROUP_ID = 'client-group-create'
+
 const SPLIT_GROUP_ID = 'client-group-split'
+
 const STAGED_WORKSPACE_ID = 'staged-workspace-1'
 
 const CLIENT_HOSTING_CAPABILITIES = [
@@ -136,10 +144,13 @@ async function stageHandleFor(
   const runtimeCall = vi.fn().mockImplementation(async (request: { method: string }) => {
     if (request.method === 'browser.tabCreate') {
       options.onCreateCall?.(state)
+
       return { id: 'create', ok: true, result: { browserPageId: 'remote-browser-page-1' } }
     }
+
     return { id: 'list', ok: true, result: makeSnapshot() }
   })
+
   vi.stubGlobal('window', {
     api: {
       runtimeEnvironments: {

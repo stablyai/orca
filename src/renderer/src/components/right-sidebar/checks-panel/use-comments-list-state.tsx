@@ -33,7 +33,9 @@ import { PRCommentGroupView } from './comment-group'
 import { useNow } from '@/hooks/use-now'
 
 export type PRCommentsListDisplayMode = 'triage' | 'timeline'
+
 export const PR_COMMENT_LIST_DISPLAY_MODES: PRCommentsListDisplayMode[] = ['triage', 'timeline']
+
 export function getPRCommentsListDisplayModeLabel(mode: PRCommentsListDisplayMode): string {
   return mode === 'triage'
     ? translate('auto.components.right.sidebar.checks.panel.content.8a621a2c4f', 'Grouped')
@@ -79,21 +81,27 @@ export function useCommentsListState({
 }: PRCommentsListProps) {
   function findVerticalScrollParent(element: HTMLElement): HTMLElement | null {
     let parent = element.parentElement
+
     while (parent) {
       const style = window.getComputedStyle(parent)
       const canScroll = style.overflowY === 'auto' || style.overflowY === 'scroll'
+
       if (canScroll && parent.scrollHeight > parent.clientHeight) {
         return parent
       }
+
       parent = parent.parentElement
     }
+
     return null
   }
 
   function scrollElementBottomIntoView(element: HTMLElement): void {
     const scrollParent = findVerticalScrollParent(element)
+
     if (!scrollParent) {
       element.scrollIntoView({ block: 'end', behavior: 'smooth' })
+
       return
     }
 
@@ -101,15 +109,18 @@ export function useCommentsListState({
     const parentRect = scrollParent.getBoundingClientRect()
     const elementRect = element.getBoundingClientRect()
     const bottomOverflow = elementRect.bottom - parentRect.bottom + padding
+
     if (bottomOverflow > 0) {
       scrollParent.scrollTo({
         top: scrollParent.scrollTop + bottomOverflow,
         behavior: 'smooth'
       })
+
       return
     }
 
     const topOverflow = elementRect.top - parentRect.top - padding
+
     if (topOverflow < 0) {
       scrollParent.scrollTo({
         top: Math.max(0, scrollParent.scrollTop + topOverflow),
@@ -127,10 +138,12 @@ export function useCommentsListState({
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
   const botAuthorOverrides = usePRBotAuthorOverrides()
+
   const commentCounts = React.useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
     [botAuthorOverrides, comments]
   )
+
   const {
     isSelectingForAI,
     selectedGroupIds,
@@ -141,46 +154,60 @@ export function useCommentsListState({
     clearSelection,
     toggleGroupSelection
   } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
+
   const visibleComments = React.useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
     [botAuthorOverrides, commentFilter, comments]
   )
+
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
+
   const triageGroups = React.useMemo(
     // Why: grouped sections read newest-first so recent discussion surfaces at the top.
     () => partitionPRCommentGroupsForTriage(sortPRCommentGroupsByRecency(groups, 'newest-first')),
     [groups]
   )
+
   // Why: timeline reads oldest-first so the discussion history unfolds in order.
   const timelineGroups = React.useMemo(() => sortPRCommentGroupsByRecency(groups), [groups])
+
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
   )
+
   const selectedCommentQueueCount = selectedGroups.length
 
   useEffect(() => {
     if (!isAddingComment || !shouldScrollAddCommentRef.current) {
       return
     }
+
     shouldScrollAddCommentRef.current = false
     let secondFrame: number | null = null
+
     const scrollComposerIntoView = (): void => {
       const surface = addCommentSurfaceRef.current
+
       if (surface) {
         scrollElementBottomIntoView(surface)
       }
     }
+
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(scrollComposerIntoView)
     })
+
     // Why: the composer expands and focuses in separate layout passes; the
     // timeout catches the final height so the footer is visible in short panels.
     const settledTimer = window.setTimeout(scrollComposerIntoView, 120)
+
     return () => {
       window.cancelAnimationFrame(firstFrame)
+
       if (secondFrame !== null) {
         window.cancelAnimationFrame(secondFrame)
       }
+
       window.clearTimeout(settledTimer)
     }
   }, [isAddingComment])
@@ -199,8 +226,10 @@ export function useCommentsListState({
     if (!isSelectingForAI || !selectableGroupsById.has(getPRCommentGroupId(group))) {
       return null
     }
+
     const groupId = getPRCommentGroupId(group)
     const checked = selectedGroupIds.has(groupId)
+
     return (
       <Checkbox
         aria-label={translate(
@@ -218,12 +247,14 @@ export function useCommentsListState({
     const groupId = getPRCommentGroupId(group)
     const actionState = getPRCommentGroupActionState(group)
     const isQueued = selectedGroupIds.has(groupId)
+
     const canQueue =
       canShowResolveWithAI &&
       !isQueued &&
       isPRCommentGroupQueueableForAI(group) &&
       selectableGroupsById.has(groupId) &&
       !isSelectingForAI
+
     return (
       <PRCommentGroupView
         key={groupId}
@@ -250,6 +281,7 @@ export function useCommentsListState({
       />
     )
   }
+
   const renderAddCommentComposer = (empty: boolean): React.JSX.Element => (
     <div
       ref={addCommentSurfaceRef}

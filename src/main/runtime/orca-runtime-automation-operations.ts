@@ -33,8 +33,10 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
       if (expectedOwner) {
         throw new Error('runtime_unavailable')
       }
+
       return
     }
+
     this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
   }
 
@@ -45,10 +47,12 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     if (expectedOwner && !automationId) {
       throw new Error('An expected owner requires an automation id.')
     }
+
     return this.automation.withExternalProbePriority(() => {
       if (automationId) {
         this.fenceAutomationOwner(automationId, expectedOwner, 'read')
       }
+
       return this.automation.listRuns(automationId)
     })
   }
@@ -62,10 +66,12 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     if (expectedOwner && !automationId) {
       throw new Error('An expected owner requires an automation id.')
     }
+
     return this.automation.withExternalProbePriority(() => {
       if (automationId) {
         this.fenceAutomationOwner(automationId, expectedOwner, 'read')
       }
+
       return this.automation.listRunsPage(automationId, limit, cursor)
     })
   }
@@ -73,6 +79,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
     const automation = this.automation.show(id)
     this.fenceAutomationOwner(id, expectedOwner, 'read')
+
     return automation
   }
 
@@ -98,6 +105,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
       this.automation.create(input, destination).then((automation) => {
         const selector = this.automationChangeSelector(automation.id)
         this.publishAutomationDefinitionChange(selector, selector)
+
         return automation
       })
     )
@@ -110,8 +118,10 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() => {
       const source = this.automationChangeSelector(id)
+
       return this.automation.update(id, updates, options as never).then((automation) => {
         this.publishAutomationDefinitionChange(source, this.automationChangeSelector(automation.id))
+
         return automation
       })
     })
@@ -125,6 +135,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
       const selector = this.automationChangeSelector(id)
       const result = this.automation.delete(id, expectedOwner as never)
       this.publishAutomationDefinitionChange(selector, selector)
+
       return result
     })
   }
@@ -156,6 +167,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
+
     return this._orchestrationDb
   }
 
@@ -169,14 +181,19 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
 
   protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
     const store = this.store
+
     if (store?.flushPendingOrThrowAsync) {
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+
       return
     }
+
     if (store?.flushOrThrow) {
       store.flushOrThrow()
+
       return
     }
+
     throw new Error('workspace_session_persistence_unavailable')
   }
 
@@ -198,12 +215,14 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     if (connectionId === null && !this.canRecoverPersistentLocalPtysFn()) {
       return
     }
+
     const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
       [...(await this.getResolvedWorktreeMap()).values()],
       null,
       undefined,
       connectionId
     )
+
     if (!inventory) {
       throw new Error('terminal_liveness_unavailable')
     }
@@ -220,7 +239,9 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     if (this.graphStatus !== 'ready') {
       return false
     }
+
     const pty = this.ptysById.get(expected.ptyId)
+
     if (
       !pty?.connected ||
       pty.incarnationId !== expected.incarnationId ||
@@ -231,9 +252,11 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     ) {
       return false
     }
+
     const tab = this.tabs.get(expected.tabId)
     const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
     const ptyLeaves = this.getLeavesForPty(expected.ptyId)
+
     return (
       Boolean(tab && runtimeWorktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
       Boolean(

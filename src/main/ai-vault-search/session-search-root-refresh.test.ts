@@ -11,12 +11,15 @@ import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-pars
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 
 let harness: SessionSearchIndexerHarness
+
 let indexer: SessionSearchIndexer | undefined
+
 beforeEach(async () => {
   resetSessionParseCacheForTests()
   resetTranscriptConsumersForTests()
   harness = await openSessionSearchIndexerHarness('search-root-refresh')
 })
+
 afterEach(async () => {
   indexer?.close()
   indexer = undefined
@@ -79,10 +82,12 @@ it('does not access a closed store when pending discovery completes', async () =
 
 it('retries discovery after failure without silently sweeping stale roots', async () => {
   const errors = vi.fn()
+
   const resolveRoots = vi
     .fn()
     .mockRejectedValueOnce(new Error('unavailable'))
     .mockResolvedValue(harness.roots)
+
   indexer = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,

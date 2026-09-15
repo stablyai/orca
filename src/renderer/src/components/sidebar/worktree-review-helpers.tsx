@@ -13,15 +13,19 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
   if (review.provider === 'gitlab') {
     return 'GitLab'
   }
+
   if (review.provider === 'bitbucket') {
     return 'Bitbucket'
   }
+
   if (review.provider === 'azure-devops') {
     return 'Azure DevOps'
   }
+
   if (review.provider === 'gitea') {
     return 'Gitea'
   }
+
   return 'GitHub'
 }
 
@@ -34,15 +38,19 @@ function getCheckTone(review: WorktreeCardPrDisplay): string | null {
   if (review.state && review.state !== 'open') {
     return null
   }
+
   if (review.status === 'failure') {
     return 'text-rose-500/85'
   }
+
   if (review.status === 'pending') {
     return 'text-amber-500/85'
   }
+
   if (review.state === 'open' && review.status === 'success') {
     return 'text-emerald-500/80'
   }
+
   return null
 }
 
@@ -50,15 +58,19 @@ function getStateTone(state: WorktreeCardPrDisplay['state']): string {
   if (state === 'merged') {
     return 'text-purple-600/70 dark:text-purple-400/70'
   }
+
   if (state === 'open') {
     return 'text-emerald-500/80'
   }
+
   if (state === 'closed') {
     return 'text-muted-foreground/60'
   }
+
   if (state === 'draft') {
     return 'text-muted-foreground/50'
   }
+
   return 'text-muted-foreground opacity-70'
 }
 
@@ -73,7 +85,9 @@ export function ReviewIcon({
 }): React.JSX.Element {
   const providerIcon =
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
+
   return createElement(Icon, {
     className: cn(className, getCheckTone(review) ?? getStateTone(review.state))
   })

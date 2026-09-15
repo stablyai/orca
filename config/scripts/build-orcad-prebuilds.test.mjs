@@ -13,17 +13,21 @@ import {
 
 const PATCHED_BINDING_GYP =
   "'ldflags': ['-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed']"
+
 const PATCHED_PTY_CC = '__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);'
 
 const dirs = []
+
 const stage = (bindingGyp, ptyCc) => {
   const dir = mkdtempSync(join(tmpdir(), 'orcad-prebuild-src-'))
   dirs.push(dir)
   mkdirSync(join(dir, 'src', 'unix'), { recursive: true })
   writeFileSync(join(dir, 'binding.gyp'), bindingGyp)
   writeFileSync(join(dir, 'src', 'unix', 'pty.cc'), ptyCc)
+
   return dir
 }
+
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
@@ -96,6 +100,7 @@ describe('mergeManifest', () => {
     // Overwriting would erase every other container's record, and the release gate would
     // then reject a matrix that is actually complete.
     const first = mergeManifest(null, { slot: 'linux-x64-glibc', version: '1.1.0', nodeAbi: '127' })
+
     const second = mergeManifest(first, {
       slot: 'linux-arm64-musl',
       version: '1.1.0',

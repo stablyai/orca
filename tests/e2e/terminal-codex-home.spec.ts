@@ -16,9 +16,11 @@ type CodexHomeProbe = {
 
 function readCodexHomeProbe(pageContent: string, marker: string): CodexHomeProbe | null {
   const match = new RegExp(`${marker}:(\\{[^\\r\\n]+\\})`).exec(pageContent)
+
   if (!match) {
     return null
   }
+
   return JSON.parse(match[1] ?? 'null') as CodexHomeProbe | null
 }
 
@@ -68,6 +70,7 @@ test.describe('Terminal Codex runtime home', () => {
     await waitForActiveTerminalManager(orcaPage)
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const marker = `__ORCA_CODEX_HOME_E2E_${Date.now()}__`
+
     const command = [
       'node -e',
       `"console.log('${marker}:' + JSON.stringify({codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.ORCA_CODEX_HOME || null}))"`
@@ -80,6 +83,7 @@ test.describe('Terminal Codex runtime home', () => {
       .poll(
         async () => {
           probe = readCodexHomeProbe(await getTerminalContent(orcaPage), marker)
+
           return probe
         },
         { timeout: 15_000, message: 'Terminal did not expose the selected Codex account home' }

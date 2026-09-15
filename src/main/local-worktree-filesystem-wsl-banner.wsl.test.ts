@@ -5,7 +5,9 @@ import { buildWslLoginShellCommand, buildWslExecArgs } from '../shared/wsl-login
 import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
 
 const execFileAsync = promisify(execFile)
+
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
+
 const runRealWsl = process.platform === 'win32' && process.env.ORCA_REAL_WSL_BANNER_TEST === '1'
 
 const FILE_CONTENTS = 'line one\nline two\n'
@@ -20,6 +22,7 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
     ['-d', DISTRO, '--exec', 'sh', '-c', command, 'orca-wsl-test', ...args],
     { encoding: 'utf-8', timeout: 30000 }
   )
+
   return stdout.trim()
 }
 
@@ -30,6 +33,7 @@ async function readThroughRawLoginShell(linuxPath: string): Promise<string> {
     buildWslExecArgs(DISTRO, ['sh', '-lc', buildWslLoginShellCommand(`cat -- '${linuxPath}'`)]),
     { encoding: 'utf-8', timeout: 30000 }
   )
+
   return stdout
 }
 

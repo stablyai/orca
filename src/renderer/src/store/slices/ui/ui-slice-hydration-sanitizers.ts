@@ -19,6 +19,7 @@ import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
+
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export function preserveStringArrayIdentity<T extends string>(
@@ -28,6 +29,7 @@ export function preserveStringArrayIdentity<T extends string>(
   if (!current || !next) {
     return next
   }
+
   return current.length === next.length && current.every((value, index) => value === next[index])
     ? (current as T[])
     : next
@@ -45,6 +47,7 @@ export function sanitizePersistedRepoIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.filter((repoId): repoId is string => typeof repoId === 'string')
 }
 
@@ -52,13 +55,17 @@ export function sanitizeTrustedOrcaHooks(trust: unknown): PersistedTrustedOrcaHo
   if (!isPlainPersistedRecord(trust)) {
     return {}
   }
+
   const next: PersistedTrustedOrcaHooks = {}
+
   for (const [repoId, entry] of Object.entries(trust)) {
     if (!isSafePersistedRecordKey(repoId) || !isPlainPersistedRecord(entry)) {
       continue
     }
+
     next[repoId] = entry as PersistedTrustedOrcaHooks[string]
   }
+
   return next
 }
 
@@ -67,15 +74,19 @@ export function hydrateTrustedOrcaHooks(
   validRepoIds: Set<string>
 ): PersistedTrustedOrcaHooks {
   const sanitized = sanitizeTrustedOrcaHooks(trust)
+
   if (validRepoIds.size === 0) {
     return sanitized
   }
+
   const next: PersistedTrustedOrcaHooks = {}
+
   for (const [repoId, entry] of Object.entries(sanitized)) {
     if (validRepoIds.has(repoId)) {
       next[repoId] = entry
     }
   }
+
   return next
 }
 
@@ -83,13 +94,17 @@ export function sanitizeShowDotfilesByWorktree(value: unknown): Record<string, b
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
+
   const out: Record<string, boolean> = {}
+
   for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
     if (!worktreeId || !isSafePersistedRecordKey(worktreeId) || typeof showDotfiles !== 'boolean') {
       continue
     }
+
     out[worktreeId] = showDotfiles
   }
+
   return out
 }
 
@@ -101,6 +116,7 @@ export function sanitizePersistedSidebarWidth(
   if (typeof width !== 'number' || !Number.isFinite(width)) {
     return fallback
   }
+
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
@@ -111,17 +127,22 @@ export function sanitizePaneKeyTimestampRecord(
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
+
   const cutoff = Date.now() - maxAgeMs
   const out: Record<string, number> = {}
+
   for (const [key, ackAt] of Object.entries(value as Record<string, unknown>)) {
     if (!isSafePersistedRecordKey(key)) {
       continue
     }
+
     if (typeof ackAt !== 'number' || !Number.isFinite(ackAt) || ackAt <= 0 || ackAt < cutoff) {
       continue
     }
+
     out[key] = ackAt
   }
+
   return out
 }
 
@@ -141,7 +162,9 @@ export function sanitizeWorkspaceCleanupDismissals(
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
+
   const out: Record<string, WorkspaceCleanupDismissal> = {}
+
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
     if (
       !isSafePersistedRecordKey(key) ||
@@ -151,7 +174,9 @@ export function sanitizeWorkspaceCleanupDismissals(
     ) {
       continue
     }
+
     const input = raw as Record<string, unknown>
+
     if (
       typeof input.worktreeId !== 'string' ||
       typeof input.dismissedAt !== 'number' ||
@@ -161,6 +186,7 @@ export function sanitizeWorkspaceCleanupDismissals(
     ) {
       continue
     }
+
     out[key] = {
       worktreeId: input.worktreeId,
       dismissedAt: input.dismissedAt,
@@ -168,6 +194,7 @@ export function sanitizeWorkspaceCleanupDismissals(
       classifierVersion: input.classifierVersion
     }
   }
+
   return out
 }
 
@@ -176,6 +203,7 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
   if (!isTopLevelView(value)) {
     return 'terminal'
   }
+
   return value
 }
 
@@ -192,10 +220,13 @@ export function normalizeHydratedVisibleWorkspaceHostIds(
   ui: PersistedUIState
 ): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
+
   if (visibleHostIds) {
     return visibleHostIds
   }
+
   const legacyScope = normalizeExecutionHostScope(ui.workspaceHostScope)
+
   return legacyScope === 'all' ? null : [legacyScope]
 }
 
@@ -206,6 +237,7 @@ export function clampPetSize(
   if (!Number.isFinite(size)) {
     return defaults.fallback
   }
+
   return Math.max(defaults.min, Math.min(defaults.max, Math.round(size)))
 }
 
@@ -230,12 +262,15 @@ export function presetToQuery(presetId: TaskViewPresetId | null): string {
 export function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
   const source = items ?? DEFAULT_STATUS_BAR_ITEMS
   const out: string[] = []
+
   for (const id of source) {
     const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
+
     if (!out.includes(mapped)) {
       out.push(mapped)
     }
   }
+
   return out as StatusBarItem[]
 }
 
@@ -244,6 +279,7 @@ export function hydrateUnexpectedSignoutDismissal(
   version: string | null | undefined
 ): Pick<UISlice, 'dismissedUnexpectedSignoutVersion' | 'unexpectedSignoutDismissedVersions'> {
   const observed = state.unexpectedSignoutDismissedVersions
+
   return {
     dismissedUnexpectedSignoutVersion: version ?? null,
     // A later sync must never undo any dismissal observed in this session.

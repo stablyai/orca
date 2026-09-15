@@ -17,6 +17,7 @@ export async function parseUnmergedEntry(
   const modeStage3 = parts[5]
   const modeWorktree = parts[6]
   const filePath = decodeGitCQuotedPath(parts.slice(10).join(' '))
+
   if (!filePath) {
     return null
   }
@@ -27,6 +28,7 @@ export async function parseUnmergedEntry(
   }
 
   const conflictKind = parseConflictKind(xy)
+
   if (!conflictKind) {
     return null
   }
@@ -93,11 +95,13 @@ async function getConflictCompatibilityStatus(
   // Why: only reachable on output no real Git emits (truncated/malformed `u` record).
   try {
     await access(path.join(worktreePath, filePath))
+
     return 'modified'
   } catch (error) {
     // Why: only a definite "not there" reads as deleted; any other fs failure keeps the row visible
     // rather than falsely showing 'deleted'.
     const code = (error as NodeJS.ErrnoException).code
+
     return code === 'ENOENT' || code === 'ENOTDIR' ? 'deleted' : 'modified'
   }
 }

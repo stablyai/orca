@@ -14,21 +14,27 @@ export async function verifyHashAddressedPluginContent(
   if (plugin.contentHash === null) {
     return { ok: true }
   }
+
   const actual = await hashPluginTree(plugin.rootDir)
+
   if (!actual.ok) {
     return { ok: false, error: actual.error }
   }
+
   const matchesCurrentHash = actual.hash === plugin.contentHash
+
   // Early P0 installs used a 128-bit SHA-256 prefix as the directory name.
   // Honor that existing address while all new installs use the full digest.
   const matchesLegacyPrefix =
     plugin.contentHash.length === 32 && actual.hash.startsWith(plugin.contentHash)
+
   if (!matchesCurrentHash && !matchesLegacyPrefix) {
     return {
       ok: false,
       error: `content hash mismatch (expected ${plugin.contentHash}, got ${actual.hash})`
     }
   }
+
   return { ok: true }
 }
 
@@ -45,11 +51,14 @@ export class PluginContentVerifier {
     // still being verified. Cache by immutable content identity, never key.
     const identity = JSON.stringify([plugin.pluginKey, plugin.rootDir, plugin.contentHash])
     let verification = this.verifications.get(identity)
+
     if (!verification) {
       verification = verifyHashAddressedPluginContent(plugin)
       this.verifications.set(identity, verification)
     }
+
     const result = await verification
+
     if (!result.ok) {
       this.verifications.delete(identity)
       throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)

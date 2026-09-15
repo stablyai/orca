@@ -7,6 +7,7 @@ import { XTERM_HTML } from './terminal-webview-html'
 // update these values only when that change is deliberate, and only after checking the
 // document still runs. Refactors that merely move slice boundaries must leave them alone.
 const EXPECTED_SHA256 = '25b800f342c972f0b8eaba54367bd8b02b7518e9ea6a25e04ab89b3a2ad7d21b'
+
 const EXPECTED_LENGTH = 730472
 
 describe('terminal WebView payload', () => {

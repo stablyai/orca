@@ -29,10 +29,12 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.osOpenedMarkdownFiles.capture(argv, publishOsOpenedMarkdownFiles)
+
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
   }
+
   state.desktopActivationGate?.requestActivation()
 }
 
@@ -44,21 +46,27 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
  */
 function publishOsOpenedMarkdownFiles(): void {
   const targetWindow = state.mainWindow
+
   if (!state.markdownFileOpenListenerReady || !targetWindow || targetWindow.isDestroyed()) {
     return
   }
+
   // Why consumed before the await: a renderer pull racing this resolve must not take the same
   // batch again. The restore() calls hand it back if delivery turns out to be impossible.
   const filePaths = state.osOpenedMarkdownFiles.consume()
+
   if (filePaths.length === 0) {
     return
   }
+
   void resolveOpenedMarkdownDocuments(filePaths)
     .then((documents) => {
       if (targetWindow.isDestroyed() || targetWindow.webContents.isDestroyed()) {
         state.osOpenedMarkdownFiles.restore(filePaths)
+
         return
       }
+
       if (documents.length > 0) {
         targetWindow.webContents.send('ui:openMarkdownFiles', documents)
       }
@@ -85,6 +93,7 @@ if (preflightReady) {
     if (!parseSkillShareId(url)) {
       return
     }
+
     event.preventDefault()
     requestDesktopActivation([url])
   })
@@ -94,7 +103,9 @@ if (preflightReady) {
     if (!state.osOpenedMarkdownFiles.captureFilePaths([filePath], publishOsOpenedMarkdownFiles)) {
       return
     }
+
     event.preventDefault()
+
     // Why gated on isReady: pre-ready the cold-start window is already on its way, and
     // activating the gate here would try to open one before Electron can.
     if (app.isReady()) {

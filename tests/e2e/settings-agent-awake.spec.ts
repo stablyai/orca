@@ -21,6 +21,7 @@ async function setKeepAwake(page: Page, enabled: boolean): Promise<void> {
     const nextSettings = await window.api.settings.set({
       keepComputerAwakeWhileAgentsRun: enabled
     })
+
     window.__store?.setState({ settings: nextSettings as GlobalSettings })
   }, enabled)
 }
@@ -36,11 +37,13 @@ async function dismissTransientAnnouncement(page: Page): Promise<void> {
   // Why: first-run announcements are independent of this setting and can cover
   // the settings pane on fresh CI profiles before the search input is used.
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+
   const visible = await maybeLaterButton
     .isVisible({
       timeout: 1_000
     })
     .catch(() => false)
+
   if (visible) {
     await maybeLaterButton.click()
   }
@@ -56,9 +59,11 @@ async function installPowerSaveBlockerProbe(electronApp: ElectronApplication): P
         originalStop: typeof powerSaveBlocker.stop
       }
     }
+
     if (root.__orcaAwakePowerProbe) {
       root.__orcaAwakePowerProbe.starts = []
       root.__orcaAwakePowerProbe.stops = []
+
       return
     }
 
@@ -74,6 +79,7 @@ async function installPowerSaveBlockerProbe(electronApp: ElectronApplication): P
     powerSaveBlocker.start = ((type) => {
       const id = originalStart(type)
       root.__orcaAwakePowerProbe?.starts.push({ type, id })
+
       return id
     }) as typeof powerSaveBlocker.start
 
@@ -96,7 +102,9 @@ async function readPowerSaveBlockerProbe(
         }
       }
     ).__orcaAwakePowerProbe
+
     const starts = probe?.starts ?? []
+
     return {
       starts: starts.map((start) => ({ ...start })),
       stops: (probe?.stops ?? []).map((stop) => ({ ...stop })),
@@ -111,10 +119,13 @@ async function readMacosSleepAssertionPids(electronApp: ElectronApplication): Pr
     args: ['-P', String(electronApp.process().pid), '-f', '^/usr/bin/caffeinate -i -s$'],
     maxOutputBytes: 4_096
   })
+
   if (result.code === 1) {
     return []
   }
+
   expect(result.code, result.stderr).toBe(0)
+
   return result.stdout.trim().split(/\s+/).filter(Boolean).map(Number)
 }
 
@@ -127,6 +138,7 @@ async function postCodexHookEvent(
   }
 ): Promise<void> {
   const endpoint = await readHookEndpoint(electronApp)
+
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',
     headers: {
@@ -145,6 +157,7 @@ async function postCodexHookEvent(
       }
     })
   })
+
   expect(response.status).toBe(204)
 }
 
@@ -163,6 +176,7 @@ test.describe('Agent awake setting', () => {
     const keepAwakeModes = orcaPage.getByRole('radiogroup', {
       name: 'Keep computer awake'
     })
+
     const offMode = keepAwakeModes.getByRole('radio', { name: 'Off' })
     const agentMode = keepAwakeModes.getByRole('radio', { name: 'Agent' })
 
@@ -193,6 +207,7 @@ test.describe('Agent awake setting', () => {
     if (process.platform !== 'darwin') {
       await installPowerSaveBlockerProbe(electronApp)
     }
+
     await setKeepAwake(orcaPage, true)
 
     const tabId = 'e2e-awake-tab'
@@ -207,6 +222,7 @@ test.describe('Agent awake setting', () => {
       orcaPage.getByRole('button', { name: 'Keep computer awake, Agent · Active' })
     ).toBeVisible()
     let startedIds: number[] = []
+
     if (process.platform === 'darwin') {
       // macOS uses an app-owned caffeinate assertion instead of Electron's display blocker.
       await expect
@@ -240,12 +256,15 @@ test.describe('Agent awake setting', () => {
     await expect(
       orcaPage.getByRole('button', { name: 'Keep computer awake, Agent · Inactive' })
     ).toBeVisible()
+
     if (process.platform === 'darwin') {
       await expect
         .poll(() => readMacosSleepAssertionPids(electronApp), { timeout: 5_000 })
         .toEqual([])
+
       return
     }
+
     await expect
       .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
         timeout: 5_000,

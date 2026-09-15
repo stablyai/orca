@@ -22,13 +22,16 @@ export function reportUnpublishedBrowserClientPageMetadata(
 ): void {
   const key = detail.reason === 'failed' ? `failed:${detail.errorCode}` : detail.reason
   let warned = warnedByPageId.get(browserPageId)
+
   if (!warned) {
     warned = new Set()
     warnedByPageId.set(browserPageId, warned)
   }
+
   if (warned.has(key)) {
     return
   }
+
   warned.add(key)
   console.warn('[browser-client-page] metadata publish did not land:', { browserPageId, ...detail })
 }

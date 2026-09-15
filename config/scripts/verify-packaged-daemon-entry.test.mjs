@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   assertPackagedDaemonEntryExists,
   verifyPackagedDaemonEntryBoots

@@ -11,8 +11,11 @@ import {
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const TAB_ID = 'tab-readiness-decay'
+
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_A}`
 
 let root: Root
@@ -31,11 +34,13 @@ function installControllers(): { flushFrame: () => Promise<void>; notify: () => 
   const observers = new Map<MutationObserver, MutationCallback>()
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frame = callback
+
     return 1
   })
   vi.stubGlobal('cancelAnimationFrame', () => {
     frame = null
   })
+
   class ControlledMutationObserver implements MutationObserver {
     constructor(callback: MutationCallback) {
       observers.set(this, callback)
@@ -48,7 +53,9 @@ function installControllers(): { flushFrame: () => Promise<void>; notify: () => 
       return []
     }
   }
+
   vi.stubGlobal('MutationObserver', ControlledMutationObserver)
+
   return {
     async flushFrame() {
       const callback = frame
@@ -66,6 +73,7 @@ function installControllers(): { flushFrame: () => Promise<void>; notify: () => 
 function renderPortalDom(target: HTMLElement, loading: boolean): void {
   const tabRoot = document.createElement('div')
   tabRoot.dataset.terminalTabId = TAB_ID
+
   for (const leafId of loading ? [LEAF_A, LEAF_B] : [LEAF_B]) {
     const pane = document.createElement('div')
     pane.dataset.leafId = leafId
@@ -74,6 +82,7 @@ function renderPortalDom(target: HTMLElement, loading: boolean): void {
     Object.defineProperty(pane, 'getClientRects', { value: () => [{}] })
     tabRoot.appendChild(pane)
   }
+
   target.replaceChildren(tabRoot)
 }
 
@@ -87,6 +96,7 @@ describe('Activity portal readiness latch decay', () => {
 
     function PortalStatus(): null {
       status = useActivityTerminalPortalStatus(target, PANE_KEY)
+
       return null
     }
 
@@ -99,6 +109,7 @@ describe('Activity portal readiness latch decay', () => {
       controls.notify()
       await controls.flushFrame()
     }
+
     renderPortalDom(target, true)
     controls.notify()
     await controls.flushFrame()

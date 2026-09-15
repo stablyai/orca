@@ -5,9 +5,11 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 
 export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: string) {
   const pane = parsePaneKey(paneKey)
+
   if (!pane) {
     return undefined
   }
+
   return tabs.find((tab) =>
     tab.type === 'terminal'
       ? (tab.parentTabId ?? tab.id) === pane.tabId && tab.leafId === pane.leafId
@@ -30,9 +32,11 @@ export function useNotificationPaneNavigation({
     if (!terminalsLoaded || typeof paneKey !== 'string' || !paneKey) {
       return
     }
+
     const tab = notificationPaneTab(sessionTabs, paneKey)
     // Consume the tap even if the pane was closed; later snapshots must not steal selection.
     router.setParams({ paneKey: '' })
+
     if (tab) {
       switchSessionTab(tab)
     }

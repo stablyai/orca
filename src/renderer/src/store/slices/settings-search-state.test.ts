@@ -10,10 +10,13 @@ function createTestSearchState(): {
   setState: (state: Partial<SettingsSearchState>) => void
 } {
   let state = {} as SettingsSearchState
+
   const setState = (updates: Partial<SettingsSearchState>): void => {
     state = { ...state, ...updates }
   }
+
   state = createSettingsSearchState(setState)
+
   return { getState: () => state, setState }
 }
 

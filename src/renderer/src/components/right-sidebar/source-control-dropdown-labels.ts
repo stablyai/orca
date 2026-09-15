@@ -25,6 +25,7 @@ export function formatSyncLabel(base: string, ahead: number, behind: number): st
   if (ahead === 0 && behind === 0) {
     return base
   }
+
   return `${base} (↓${behind} ↑${ahead})`
 }
 
@@ -36,6 +37,7 @@ export function formatForcePushTitle(
     branchCommitsAhead && branchCommitsAhead > 0
       ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
       : 'this branch'
+
   return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
@@ -45,9 +47,11 @@ export function formatManualForcePushTitle(
   upstreamName?: string
 ): string {
   const commitText = ahead === 1 ? '1 local commit' : `${ahead} local commits`
+
   if (behind > 0) {
     return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'} and replace remote-only commits.`
   }
+
   return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
@@ -56,6 +60,7 @@ export function formatUnpublishedForcePushTitle(branchCommitsAhead: number | und
     branchCommitsAhead && branchCommitsAhead > 0
       ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
       : 'this branch'
+
   return `Force push ${countText} with lease and set an upstream if needed.`
 }
 

@@ -10,8 +10,10 @@ export async function requireWorkerDoneSettlement(
   if (type !== 'worker_done' || hasLifecycleVerdict(result)) {
     return
   }
+
   const target = parseWorkerDoneTarget(payload)
   const receipt = parseWorkerDoneReceipt(result)
+
   if (target && receipt) {
     const [dispatchVerification, taskVerification] = await Promise.all([
       client.call<{ dispatch: { id: string; status: string } | null }>(
@@ -24,7 +26,9 @@ export async function requireWorkerDoneSettlement(
     ]).catch(() => {
       throw workerDoneSettlementUnknown(result)
     })
+
     const task = taskVerification.result.tasks.find((candidate) => candidate.id === target.taskId)
+
     if (
       dispatchVerification.result.dispatch?.id === target.dispatchId &&
       dispatchVerification.result.dispatch.status === target.expectedStatus &&
@@ -34,11 +38,13 @@ export async function requireWorkerDoneSettlement(
       return
     }
   }
+
   throw workerDoneSettlementUnknown(result)
 }
 
 function workerDoneSettlementUnknown(result: unknown): RuntimeClientError {
   const requestId = parseMutationRequestId(result)
+
   return new RuntimeClientError(
     'operation_unknown',
     requestId
@@ -52,11 +58,15 @@ function parseMutationRequestId(result: unknown): string | undefined {
   if (!result || typeof result !== 'object' || !('mutation' in result)) {
     return undefined
   }
+
   const mutation = (result as { mutation?: unknown }).mutation
+
   if (!mutation || typeof mutation !== 'object') {
     return undefined
   }
+
   const requestId = (mutation as { requestId?: unknown }).requestId
+
   return typeof requestId === 'string' && requestId.length > 0 ? requestId : undefined
 }
 
@@ -66,10 +76,13 @@ function parseWorkerDoneReceipt(
   if (!result || typeof result !== 'object' || !('message' in result)) {
     return undefined
   }
+
   const message = (result as { message?: unknown }).message
+
   if (!message || typeof message !== 'object') {
     return undefined
   }
+
   const {
     id,
     run_id: runId,
@@ -79,6 +92,7 @@ function parseWorkerDoneReceipt(
     run_id?: unknown
     from_handle?: unknown
   }
+
   return typeof id === 'string' && typeof runId === 'string'
     ? {
         messageId: id,
@@ -96,8 +110,10 @@ function isExactWorkerReport(
   if (!result) {
     return false
   }
+
   try {
     const parsed = JSON.parse(result) as Record<string, unknown>
+
     return (
       parsed.provenance === 'worker_report' &&
       parsed.outcome === outcome &&
@@ -113,22 +129,30 @@ function hasLifecycleVerdict(result: unknown): boolean {
   if (!result || typeof result !== 'object' || !('lifecycle' in result)) {
     return false
   }
+
   const lifecycle = (result as { lifecycle?: unknown }).lifecycle
+
   if (!lifecycle || typeof lifecycle !== 'object') {
     return false
   }
+
   const action = (lifecycle as { action?: unknown }).action
+
   if ('relay' in result) {
     const authority = (lifecycle as { authority?: unknown }).authority
+
     return (
       (authority === 'run_home' || authority === 'worker_server_legacy') &&
       (action === 'completed' || action === 'failed' || action === 'rejected')
     )
   }
+
   if (action === 'settled') {
     const outcome = (lifecycle as { outcome?: unknown }).outcome
+
     return outcome === 'succeeded' || outcome === 'failed'
   }
+
   return action === 'completed' || action === 'failed' || action === 'rejected'
 }
 
@@ -143,8 +167,10 @@ function parseWorkerDoneTarget(payload: string | undefined):
   if (!payload) {
     return undefined
   }
+
   try {
     const parsed = JSON.parse(payload) as Record<string, unknown>
+
     if (
       typeof parsed.taskId !== 'string' ||
       typeof parsed.dispatchId !== 'string' ||
@@ -152,6 +178,7 @@ function parseWorkerDoneTarget(payload: string | undefined):
     ) {
       return undefined
     }
+
     return {
       taskId: parsed.taskId,
       dispatchId: parsed.dispatchId,

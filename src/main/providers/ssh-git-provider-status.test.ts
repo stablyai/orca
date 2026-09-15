@@ -22,6 +22,7 @@ describe('SshGitProvider', () => {
       didHitLimit: true,
       statusLength: 1_001
     }
+
     mux.request.mockResolvedValue(statusResult)
 
     const result = await provider.getStatus('/home/user/repo')
@@ -141,6 +142,7 @@ describe('SshGitProvider', () => {
     const methodNotFound = new Error('Method not found: git.submoduleStatus') as Error & {
       code?: number
     }
+
     methodNotFound.code = -32601
     mux.request.mockRejectedValueOnce(methodNotFound)
 
@@ -177,6 +179,7 @@ describe('SshGitProvider', () => {
       hasMore: false,
       limit: 50
     }
+
     mux.request.mockResolvedValue(historyResult)
 
     const result = await provider.getHistory('/home/user/repo', {
@@ -208,6 +211,7 @@ describe('SshGitProvider', () => {
     const result = await provider.getBranchCompare('/home/user/repo', 'main', {
       admissionTier: 'background'
     })
+
     expect(mux.request).toHaveBeenCalledWith('git.branchCompare', {
       worktreePath: '/home/user/repo',
       baseRef: 'main',

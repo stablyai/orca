@@ -35,6 +35,7 @@ export function createTerminalPaneManagerOptions(
   context: TerminalPaneManagerOptionsContext
 ): PaneManagerOptions {
   const { deps, ptyDeps } = context
+
   const {
     tabId,
     worktreeId,
@@ -47,37 +48,48 @@ export function createTerminalPaneManagerOptions(
     resolveExternalPaneDropTarget,
     onExternalPaneDrop
   } = deps
+
   return {
     onPaneCreated: createTerminalPaneCreatedHandler(context),
     onPaneClosed: createTerminalPaneClosedHandler(context),
     onActivePaneChange: (pane) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
+
       if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
         const fallbackLeafId = resolveTerminalLayoutActiveLeafId({
           root: layout?.root,
           activeLeafId: pane.leafId,
           ptyIdsByLeafId
         })
+
         const fallbackPaneId = fallbackLeafId
           ? (managerRef.current?.getNumericIdForLeaf(fallbackLeafId) ?? null)
           : null
+
         if (fallbackPaneId != null && fallbackPaneId !== pane.id) {
           managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
+
           return
         }
       }
+
       scheduleRuntimeGraphSync()
       context.syncPaneLayoutRevision()
+
       if (context.shouldPersistLayout()) {
         context.deps.persistLayoutSnapshot()
       }
+
       reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+
       const focusedBinding = panePtyBindingsRef.current.get(pane.id) as
         | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
         | undefined
+
       focusedBinding?.sampleForegroundAgentOnFocus?.()
       const paneTitle = useAppStore.getState().runtimePaneTitlesByTabId[tabId]?.[pane.id]
+
       if (paneTitle) {
         context.deps.updateTabTitle(tabId, paneTitle)
       }
@@ -89,6 +101,7 @@ export function createTerminalPaneManagerOptions(
       context.syncPaneCount()
       context.syncPaneLayoutRevision()
       context.queueResizeAll(false)
+
       if (context.shouldPersistLayout()) {
         context.deps.persistLayoutSnapshot()
       }
@@ -97,8 +110,10 @@ export function createTerminalPaneManagerOptions(
       if (active) {
         context.releaseWebviewDragPassthrough.current?.()
         context.releaseWebviewDragPassthrough.current = acquireWebviewsDragPassthrough()
+
         return
       }
+
       context.releaseWebviewDragPassthrough.current?.()
       context.releaseWebviewDragPassthrough.current = null
     },
@@ -111,20 +126,26 @@ export function createTerminalPaneManagerOptions(
       ),
     terminalOptions: () => {
       const currentSettings = settingsRef.current
+
       const terminalFontWeights = resolveTerminalFontWeights(
         currentSettings?.terminalFontWeight,
         currentSettings?.terminalFontWeightBold
       )
+
       const cursorStyle = currentSettings?.terminalCursorStyle ?? 'block'
       const storeState = useAppStore.getState()
+
       const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
         (candidate) => candidate.id === tabId
       )
+
       const platformInfo = window.api.platform?.get?.()
+
       const knownTuiAgent = resolvePaneKeyboardProtocolAgent(
         ptyDeps.startup,
         currentTab?.launchAgent
       )
+
       const ptyBackendContext = {
         userAgent: navigator.userAgent,
         osRelease: platformInfo?.osRelease,
@@ -134,6 +155,7 @@ export function createTerminalPaneManagerOptions(
         executionHostId: getExecutionHostIdForWorktree(storeState, worktreeId),
         tuiAgent: knownTuiAgent
       }
+
       return {
         ...buildWindowsPtyCompatibilityOptions(ptyBackendContext),
         ...buildTerminalKeyboardProtocolOptions(ptyBackendContext),

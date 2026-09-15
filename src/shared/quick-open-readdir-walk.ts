@@ -66,11 +66,13 @@ function rebaseExcludePrefixesForSubtree(
 ): string[] {
   const base = `${subtreeRelPath}/`
   const rebased: string[] = []
+
   for (const prefix of excludePathPrefixes) {
     if (prefix.startsWith(base)) {
       rebased.push(prefix.slice(base.length))
     }
   }
+
   return rebased
 }
 
@@ -116,15 +118,18 @@ async function listQuickOpenFilesFromRoots(
   knownFiles?: ReadonlySet<string>
 ): Promise<string[]> {
   const files: string[] = []
+
   if (maxResults !== undefined && maxResults <= 0) {
     return files
   }
+
   let pendingDirectories: {
     root: QuickOpenReaddirRoot
     absPath: string
     depth: number
     isRoot: boolean
   }[] = []
+
   for (const root of roots) {
     assertQuickOpenReaddirDepth(budget, 0)
     consumeQuickOpenReaddirDirectoryBudget(budget)
@@ -134,6 +139,7 @@ async function listQuickOpenFilesFromRoots(
 
   while (pendingDirectories.length > 0) {
     const nextDirectories: typeof pendingDirectories = []
+
     for (
       let offset = 0;
       offset < pendingDirectories.length;
@@ -145,6 +151,7 @@ async function listQuickOpenFilesFromRoots(
       throwIfFileListingCancelled(signal)
       assertQuickOpenReaddirDeadline(budget)
       const batch = pendingDirectories.slice(offset, offset + QUICK_OPEN_READDIR_CONCURRENCY)
+
       const readResults = await Promise.allSettled(
         batch.map(async (pending) => {
           const entries = await readQuickOpenDirectoryEntries({
@@ -153,19 +160,24 @@ async function listQuickOpenFilesFromRoots(
             budget,
             signal
           })
+
           return { pending, entries }
         })
       )
+
       const entryGroups: {
         pending: (typeof pendingDirectories)[number]
         entries: Awaited<ReturnType<typeof readQuickOpenDirectoryEntries>>
       }[] = []
+
       for (const result of readResults) {
         if (result.status === 'rejected') {
           throw result.reason
         }
+
         entryGroups.push(result.value)
       }
+
       // Why: an empty directory has no per-entry checkpoint below. Cancellation
       // or timeout that lands during opendir must still reject, never resolve [].
       throwIfFileListingCancelled(signal)
@@ -179,12 +191,15 @@ async function listQuickOpenFilesFromRoots(
           const name = entry.name
           const absPath = join(pending.absPath, name)
           const relPath = toRelPath(pending.root.rootPath, absPath)
+
           const workspaceRelPath = pending.root.workspaceRelPathPrefix
             ? `${pending.root.workspaceRelPathPrefix}/${relPath}`
             : relPath
+
           if (shouldExcludeQuickOpenRelPath(relPath, pending.root.excludePathPrefixes)) {
             continue
           }
+
           if (entry.kind === 'directory') {
             if (shouldDescend(name) && shouldIncludeQuickOpenPath(workspaceRelPath)) {
               const depth = pending.depth + 1
@@ -193,8 +208,10 @@ async function listQuickOpenFilesFromRoots(
               consumeQuickOpenReaddirPathBudget(budget, absPath)
               nextDirectories.push({ root: pending.root, absPath, depth, isRoot: false })
             }
+
             continue
           }
+
           if (
             (entry.kind === 'file' || (pending.root.includeSymlinks && entry.kind === 'symlink')) &&
             shouldIncludeQuickOpenPath(workspaceRelPath)
@@ -202,12 +219,15 @@ async function listQuickOpenFilesFromRoots(
             const outputPath = pending.root.outputPathPrefix
               ? `${pending.root.outputPathPrefix}/${relPath}`
               : relPath
+
             if (knownFiles?.has(outputPath)) {
               continue
             }
+
             consumeQuickOpenReaddirFileBudget(budget)
             consumeQuickOpenReaddirPathBudget(budget, outputPath)
             files.push(outputPath)
+
             // Why: a caller result limit is a successful bounded prefix, while
             // the separate traversal budget still rejects incomplete scans.
             if (maxResults !== undefined && files.length >= maxResults) {
@@ -217,6 +237,7 @@ async function listQuickOpenFilesFromRoots(
         }
       }
     }
+
     pendingDirectories = nextDirectories
   }
 
@@ -235,6 +256,7 @@ export async function expandQuickOpenGitFileListing(opts: {
   if (opts.maxResults !== undefined && opts.maxResults <= 0) {
     return []
   }
+
   const files = new Set<string>()
   const excludePathPrefixes = opts.excludePathPrefixes ?? []
   const budget = opts.budget ?? createQuickOpenReaddirBudget()
@@ -244,9 +266,11 @@ export async function expandQuickOpenGitFileListing(opts: {
     if (!relPath) {
       return
     }
+
     if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
       return
     }
+
     if (shouldIncludeQuickOpenPath(relPath)) {
       files.add(relPath)
     }
@@ -257,10 +281,12 @@ export async function expandQuickOpenGitFileListing(opts: {
     assertQuickOpenReaddirDeadline(budget)
 
     const { kind, relPath } = await classifyQuickOpenGitEntry(opts.rootPath, rawPath)
+
     if (kind === 'keep') {
       addFinalPath(relPath)
       continue
     }
+
     if (kind === 'drop-placeholder') {
       continue
     }
@@ -275,6 +301,7 @@ export async function expandQuickOpenGitFileListing(opts: {
     assertQuickOpenReaddirDeadline(budget)
 
     const relPath = normalizeGitEntry(rawPath)
+
     // Why: Git intentionally leaves collapsed directories unexpanded; reject
     // blocked and nested-worktree placeholders before any filesystem IO.
     if (
@@ -309,6 +336,7 @@ export async function expandQuickOpenGitFileListing(opts: {
     opts.maxResults === undefined ? undefined : Math.max(0, opts.maxResults - files.size),
     files
   )
+
   for (const expandedFile of expandedFiles) {
     addFinalPath(expandedFile)
   }

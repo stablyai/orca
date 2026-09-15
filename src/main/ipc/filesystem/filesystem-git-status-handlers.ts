@@ -56,6 +56,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       }
     ): Promise<GitStatusResult> => {
       const controller = gitStatusCancellations.begin(event, args.requestToken)
+
       const options = {
         includeIgnored: args.includeIgnored ?? false,
         admissionTier: args.admissionTier ?? ('status' as const),
@@ -69,21 +70,26 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
           : {}),
         ...(controller ? { signal: controller.signal } : {})
       }
+
       try {
         if (args.connectionId) {
           const provider = getSshGitProvider(args.connectionId)
+
           if (!provider) {
             throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
           }
+
           // Why: await keeps the cancellation token registered until the remote request settles (an early finally would free it).
           return await provider.getStatus(args.worktreePath, options)
         }
+
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
         // Why: one registered-worktree lookup feeds both — status polls this
         // handler, and the scan walks every repo's worktree meta.
         const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
         const gitOptions = getLocalGitOptionsForRepo(store, repo)
         const sharedLinkPaths = repo ? getWorktreeSharedLinkPaths(repo) : []
+
         return await getStatus(worktreePath, {
           ...options,
           ...gitOptions,
@@ -119,17 +125,22 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     ): Promise<GitStatusResult> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getSubmoduleStatus(args.worktreePath, args.submodulePath, args.area)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return getSubmoduleStatus(worktreePath, args.submodulePath, {
         ...gitOptions,
         ...(args.area === 'staged' ? { staged: true } : {})
@@ -146,18 +157,23 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       if (args.connectionId) {
         const paths = args.paths.map((p) => validateGitRelativeFilePath(args.worktreePath, p))
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.checkIgnoredPaths(args.worktreePath, paths)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return checkIgnoredPaths(worktreePath, paths, gitOptions)
     }
   )
@@ -167,11 +183,13 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     'git:findHugeFoldersToIgnore',
     async (_event, args: { worktreePath: string }): Promise<string[]> => {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return findKnownHugeFolderPathsToIgnore(worktreePath, gitOptions)
     }
   )
@@ -180,6 +198,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     'git:appendGitignore',
     async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       return appendFolderToGitignore(worktreePath, args.folderName)
     }
   )
@@ -191,19 +210,25 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
       const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getHistory(args.worktreePath, options)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return getHistory(worktreePath, { ...options, ...gitOptions })
     }
   )
@@ -217,17 +242,22 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     ): Promise<GitConflictOperation> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.detectConflictOperation(args.worktreePath)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return detectConflictOperation(worktreePath, gitOptions)
     }
   )
@@ -237,17 +267,22 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
+
         return provider.abortMerge(args.worktreePath)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       await abortMerge(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
@@ -257,17 +292,22 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
+
         return provider.abortRebase(args.worktreePath)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       await abortRebase(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
     }
   )
@@ -286,9 +326,11 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     ): Promise<GitDiffResult> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getDiff(
           args.worktreePath,
           args.filePath,
@@ -296,13 +338,16 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
           args.compareAgainstHead
         )
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, {
         ...gitOptions,
         admissionTier: 'interactive'

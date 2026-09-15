@@ -1,12 +1,21 @@
 export const DEFAULT_PANEL_WIDTH = 920
+
 export const DEFAULT_PANEL_HEIGHT = 560
+
 export const MIN_PANEL_WIDTH = 420
+
 export const MIN_PANEL_HEIGHT = 280
+
 export const MAXIMIZED_MARGIN = 12
+
 export const MAXIMIZED_BOTTOM_GAP = 36
+
 export const TITLEBAR_SAFE_TOP = 36
+
 const DEFAULT_RIGHT_GAP = 24
+
 const DEFAULT_BOTTOM_GAP = 84
+
 const PANEL_EDGE_MARGIN = 8
 
 export const FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY = 'orca-floating-terminal-panel-bounds-v1'
@@ -19,6 +28,7 @@ export type FloatingTerminalPanelBounds = {
 }
 
 export type FloatingTerminalPanelAnchorX = 'left' | 'right'
+
 export type FloatingTerminalPanelAnchorY = 'top' | 'bottom'
 
 export type FloatingTerminalAnchoredPanelBounds = {
@@ -89,6 +99,7 @@ export function getDefaultFloatingTerminalBounds(): FloatingTerminalPanelBounds 
   const safeTop = TITLEBAR_SAFE_TOP
   const width = Math.min(DEFAULT_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, viewport.width - 48))
   const height = Math.min(DEFAULT_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, viewport.height - 96))
+
   return {
     left: Math.max(16, viewport.width - width - DEFAULT_RIGHT_GAP),
     top: Math.max(safeTop, viewport.height - height - DEFAULT_BOTTOM_GAP),
@@ -102,10 +113,12 @@ export function clampFloatingTerminalBounds(
 ): FloatingTerminalPanelBounds {
   const viewport = getViewport()
   const safeTop = TITLEBAR_SAFE_TOP
+
   const width = Math.max(
     MIN_PANEL_WIDTH,
     Math.min(bounds.width, Math.max(MIN_PANEL_WIDTH, viewport.width - PANEL_EDGE_MARGIN * 2))
   )
+
   const height = Math.max(
     MIN_PANEL_HEIGHT,
     Math.min(
@@ -113,8 +126,10 @@ export function clampFloatingTerminalBounds(
       Math.max(MIN_PANEL_HEIGHT, viewport.height - safeTop - PANEL_EDGE_MARGIN)
     )
   )
+
   const maxLeft = Math.max(PANEL_EDGE_MARGIN, viewport.width - width - PANEL_EDGE_MARGIN)
   const maxTop = Math.max(safeTop, viewport.height - height - PANEL_EDGE_MARGIN)
+
   return {
     left: clampValue(bounds.left, PANEL_EDGE_MARGIN, maxLeft),
     top: clampValue(bounds.top, safeTop, maxTop),
@@ -126,6 +141,7 @@ export function clampFloatingTerminalBounds(
 export function getMaximizedFloatingTerminalBounds(): FloatingTerminalPanelBounds {
   const viewport = getViewport()
   const top = TITLEBAR_SAFE_TOP
+
   return {
     left: MAXIMIZED_MARGIN,
     top,
@@ -136,6 +152,7 @@ export function getMaximizedFloatingTerminalBounds(): FloatingTerminalPanelBound
 
 export function hasUsableFloatingTerminalPanelViewport(): boolean {
   const viewport = getViewport()
+
   return (
     viewport.width > PANEL_EDGE_MARGIN * 2 &&
     viewport.height > TITLEBAR_SAFE_TOP + PANEL_EDGE_MARGIN
@@ -144,6 +161,7 @@ export function hasUsableFloatingTerminalPanelViewport(): boolean {
 
 export function canAnchorFloatingTerminalPanelBounds(): boolean {
   const viewport = getViewport()
+
   return (
     viewport.width >= MIN_PANEL_WIDTH + PANEL_EDGE_MARGIN * 2 &&
     viewport.height >= MIN_PANEL_HEIGHT + TITLEBAR_SAFE_TOP + PANEL_EDGE_MARGIN
@@ -156,7 +174,9 @@ export function resolveFloatingTerminalPanelCommittedBounds(
   if (!isAnchoredPanelBounds(bounds)) {
     return bounds
   }
+
   const viewport = getViewport()
+
   return {
     left:
       bounds.anchorX === 'left' ? bounds.offsetX : viewport.width - bounds.width - bounds.offsetX,
@@ -173,11 +193,15 @@ export function anchorFloatingTerminalPanelBounds(
   if (!canAnchorFloatingTerminalPanelBounds()) {
     return null
   }
+
   const viewport = getViewport()
+
   const anchorX: FloatingTerminalPanelAnchorX =
     bounds.left + bounds.width / 2 <= viewport.width / 2 ? 'left' : 'right'
+
   const anchorY: FloatingTerminalPanelAnchorY =
     bounds.top + bounds.height / 2 <= viewport.height / 2 ? 'top' : 'bottom'
+
   return {
     anchorX,
     anchorY,
@@ -201,6 +225,7 @@ export function resolveFloatingTerminalPanelBounds(
   if (source === 'default') {
     return getDefaultFloatingTerminalBounds()
   }
+
   return clampFloatingTerminalBounds(resolveFloatingTerminalPanelCommittedBounds(bounds))
 }
 
@@ -210,12 +235,16 @@ export function parseFloatingTerminalPanelBounds(
   if (!serialized) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(serialized)
+
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
+
     const record = parsed as Record<string, unknown>
+
     if (isFiniteCoordinate(record.width) && isFiniteCoordinate(record.height)) {
       if (
         isAnchorX(record.anchorX) &&
@@ -232,6 +261,7 @@ export function parseFloatingTerminalPanelBounds(
           height: record.height
         }
       }
+
       if (isFiniteCoordinate(record.left) && isFiniteCoordinate(record.top)) {
         return {
           left: record.left,
@@ -241,6 +271,7 @@ export function parseFloatingTerminalPanelBounds(
         }
       }
     }
+
     return null
   } catch {
     return null

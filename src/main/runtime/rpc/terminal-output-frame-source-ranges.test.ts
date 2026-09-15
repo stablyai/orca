@@ -25,6 +25,7 @@ function range(overrides: Partial<TerminalOutputSourceRange>): TerminalOutputSou
 describe('terminal output frame source ranges', () => {
   it('maps encoded chunk boundaries to exact ordered source subranges', () => {
     const data = 'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES + 2)
+
     const frames = Array.from(
       iterateTerminalOutputFrameChunks(data, {
         seq: data.length,
@@ -84,6 +85,7 @@ describe('terminal output frame source ranges', () => {
       splittable: false,
       transform: { transformed: true, rawLengthSu: 9, scalarSafe: false }
     })
+
     const [frame] = iterateTerminalOutputFrameChunks('xyz', {
       seq: 9,
       rawLength: 9,

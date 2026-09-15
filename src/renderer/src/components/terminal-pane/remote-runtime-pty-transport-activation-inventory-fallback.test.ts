@@ -13,6 +13,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -42,11 +43,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('falls back to inventory when activation fails for a non-missing reason', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const onPtyExit = vi.fn()
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -83,14 +86,17 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         ]
       }
+
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'session.tabs.activate') {
           // Why: an older host has no activation method at all, which is not evidence the surface is gone.
           return { ok: false, error: { code: 'method_not_found', message: 'Unknown method' } }
         }
+
         if (args.method === 'session.tabs.list') {
           return { ok: true, result: replacementSnapshot }
         }
+
         return { ok: true, result: {} }
       })
 
@@ -126,11 +132,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('retries activation when inventory disproves a transient missing-surface response', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const onPtyExit = vi.fn()
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -148,6 +156,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
 
       let activateCalls = 0
+
       const pendingSnapshot = {
         worktree: 'wt-1',
         publicationEpoch: 'epoch-2',
@@ -168,12 +177,15 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         ]
       }
+
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'session.tabs.activate') {
           activateCalls += 1
+
           if (activateCalls === 1) {
             return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
           }
+
           return {
             ok: true,
             result: {
@@ -189,9 +201,11 @@ describe('createRemoteRuntimePtyTransport', () => {
             }
           }
         }
+
         if (args.method === 'session.tabs.list') {
           return { ok: true, result: pendingSnapshot }
         }
+
         return { ok: true, result: {} }
       })
 
@@ -231,6 +245,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onPtySpawn = vi.fn()
     const onPtyRebind = vi.fn()
     const onExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -311,9 +326,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeDefined()
     )
     const requestFrame = latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)
+
     const request = requestFrame
       ? decodeTerminalStreamJson<{ requestId?: number }>(requestFrame.payload)
       : null
+
     emitSnapshotFrame(
       latestSubscribePayload().streamId,
       TerminalStreamOpcode.SnapshotStart,
@@ -343,10 +360,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('retries inventory and reattaches the same HUB handle after a stream ends', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onPtyExit = vi.fn()
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('hub-env', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -373,10 +392,13 @@ describe('createRemoteRuntimePtyTransport', () => {
         if (args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
+
         hostListCalls += 1
+
         if (!inventoryAvailable) {
           throw new Error('runtime reconnect in progress')
         }
+
         return readyHostSessionInventoryResponse('terminal-stable')
       })
 
@@ -390,6 +412,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         subscriptionSendBinary.mock.calls
           .map((call) => decodeTerminalStreamFrame(call[0]))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe).length
+
       expect(subscribeCount()).toBe(1)
       expect(hostListCalls).toBeGreaterThan(1)
       expect(hostListCalls).toBeLessThan(25)

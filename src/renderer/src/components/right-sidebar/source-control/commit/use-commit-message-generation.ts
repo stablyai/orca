@@ -70,13 +70,16 @@ export function useSourceControlCommitMessageGeneration({
     activeWorktreeId,
     worktreePath
   )
+
   const activeCommitMessageGenerationRecord: CommitMessageGenerationRecord | null =
     activeCommitMessageGenerationKey
       ? (commitMessageGenerationRecords[activeCommitMessageGenerationKey] ?? null)
       : null
+
   const isGenerating =
     activeCommitMessageGenerationRecord?.status === 'running' ||
     (generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false)
+
   const generateError =
     activeCommitMessageGenerationRecord?.error ?? generateErrors[activeWorktreeId ?? ''] ?? null
 
@@ -85,9 +88,11 @@ export function useSourceControlCommitMessageGeneration({
       if (!activeWorktreeId || !worktreePath || !activeCommitMessageGenerationKey) {
         return
       }
+
       if (generateInFlightRef.current[activeWorktreeId]) {
         return
       }
+
       if (!overrides?.sourceControlAiResolvedParams && resolvedCommitMessageAi?.ok !== true) {
         return
       }
@@ -98,12 +103,14 @@ export function useSourceControlCommitMessageGeneration({
         isCustomAgentId(resolvedCommitMessageAi.value.params.agentId)
       ) {
         const command = resolvedCommitMessageAi.value.params.customAgentCommand?.trim() ?? ''
+
         if (!command) {
           setGenerateErrors((prev) => ({
             ...prev,
             [activeWorktreeId]:
               'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
           }))
+
           return
         }
       }
@@ -123,6 +130,7 @@ export function useSourceControlCommitMessageGeneration({
       )
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
       setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+
       try {
         const result = await generateRuntimeCommitMessage(
           {
@@ -147,8 +155,10 @@ export function useSourceControlCommitMessageGeneration({
                 error: null
               })
             )
+
             return
           }
+
           setGenerateErrors((prev) => ({
             ...prev,
             [activeWorktreeId]: result.error
@@ -160,6 +170,7 @@ export function useSourceControlCommitMessageGeneration({
               error: result.error
             })
           )
+
           return
         }
 
@@ -173,9 +184,11 @@ export function useSourceControlCommitMessageGeneration({
         // Why: race protection — drop the generated message if the user typed into the textarea while the agent ran, rather than overwrite their edits.
         updateCommitDrafts((prev) => {
           const current = prev[activeWorktreeId]
+
           if (current && current.length > 0) {
             return prev
           }
+
           return writeCommitDraftForWorktree(prev, activeWorktreeId, result.message)
         })
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
@@ -218,13 +231,16 @@ export function useSourceControlCommitMessageGeneration({
     if (!sourceControlAiActionsVisible) {
       return
     }
+
     if (
       hasConfiguredCommitMessageGenerationDefaults({ settings, repo: activeRepo ?? null }) &&
       resolvedCommitMessageAi?.ok
     ) {
       void handleGenerate({ sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params })
+
       return
     }
+
     openCommitGenerationDialog()
   }, [
     activeRepo,
@@ -239,9 +255,11 @@ export function useSourceControlCommitMessageGeneration({
     if (!activeWorktreeId || !worktreePath || !activeCommitMessageGenerationKey) {
       return
     }
+
     if (!generateInFlightRef.current[activeWorktreeId]) {
       return
     }
+
     updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
       resolveCommitMessageGenerationCancel(record)
     )
@@ -275,8 +293,10 @@ export function useSourceControlCommitMessageGeneration({
     ) {
       return
     }
+
     updateCommitDrafts((prev) => {
       const current = prev[activeWorktreeId]
+
       return current && current.length > 0
         ? prev
         : writeCommitDraftForWorktree(

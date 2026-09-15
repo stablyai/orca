@@ -83,6 +83,7 @@ export function WorktreeCardDetailsHover({
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
+
   const {
     hoverOpen,
     issueMenuOpen,
@@ -92,12 +93,15 @@ export function WorktreeCardDetailsHover({
     handleReviewMenuOpenChange,
     closeHover
   } = hoverControl ?? internalHoverControl
+
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
+
   const handleWorkspaceTitleEditingChange = React.useCallback(
     (editing: boolean): void => {
       setWorkspaceTitleEditing(editing)
       onWorkspaceTitleEditingChange?.(editing)
+
       if (!editing && pendingWorkspaceTitleCloseRef.current) {
         pendingWorkspaceTitleCloseRef.current = false
         handleHoverOpenChange(false)
@@ -105,17 +109,21 @@ export function WorktreeCardDetailsHover({
     },
     [handleHoverOpenChange, onWorkspaceTitleEditingChange]
   )
+
   const handleEffectiveHoverOpenChange = React.useCallback(
     (next: boolean): void => {
       if (!next && workspaceTitleEditing) {
         pendingWorkspaceTitleCloseRef.current = true
+
         return
       }
+
       pendingWorkspaceTitleCloseRef.current = false
       handleHoverOpenChange(next)
     },
     [handleHoverOpenChange, workspaceTitleEditing]
   )
+
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
       closeHover()
@@ -123,6 +131,7 @@ export function WorktreeCardDetailsHover({
     },
     [closeHover]
   )
+
   const copyLinkedWorkItemLink = React.useCallback(async (url: string, label: string) => {
     try {
       // Why: Electron clipboard IPC remains reliable from nested hover/dropdown
@@ -139,20 +148,24 @@ export function WorktreeCardDetailsHover({
       )
     }
   }, [])
+
   const handleCopyIssueLink = React.useCallback((): void => {
     if (!issue?.url) {
       return
     }
+
     closeHover()
     void copyLinkedWorkItemLink(
       issue.url,
       translate('auto.components.sidebar.WorktreeCardMeta.issueLinkLabel', 'Issue link')
     )
   }, [closeHover, copyLinkedWorkItemLink, issue?.url])
+
   const handleCopyReviewLink = React.useCallback((): void => {
     if (!review?.url) {
       return
     }
+
     void copyLinkedWorkItemLink(
       review.url,
       translate('auto.components.sidebar.WorktreeCardMeta.reviewLinkLabel', '{{value0}} link', {

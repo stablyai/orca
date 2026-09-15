@@ -12,7 +12,9 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
   if (!args.hostAuthority) {
     return await args.legacy({ skipCompatibilityCheck: false })
   }
+
   let supported: boolean
+
   try {
     supported = await runtimeEnvironmentSupportsCapability(
       args.environmentId,
@@ -22,15 +24,18 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
     if (isRuntimeCompatBlockError(error)) {
       throw error
     }
+
     // Why: a failed read-only probe has not launched anything, so preserving
     // the legacy path cannot duplicate an agent and keeps transient upgrades neutral.
     return await args.legacy({ skipCompatibilityCheck: true })
   }
+
   // Why: choose before invoking either path; an ambiguous structured outcome
   // must never trigger a legacy retry that could spawn a duplicate.
   if (!supported) {
     return await args.legacy({ skipCompatibilityCheck: true })
   }
+
   try {
     return await args.hostAuthority()
   } catch (error) {
@@ -42,6 +47,7 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
       // lower owner before dispatch, or an old host never recognized the method.
       return await args.legacy({ skipCompatibilityCheck: true })
     }
+
     throw error
   }
 }

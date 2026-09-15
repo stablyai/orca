@@ -30,6 +30,7 @@ import {
 // Deliberately not `term_`: `issueHandle` revalidates the renderer graph epoch against the
 // renderer-driven leaves map, so a main-minted `term_` leaf evaporates on the next window reload.
 const STRUCTURED_WORKER_HANDLE_PREFIX = 'structworker_'
+
 const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {
@@ -73,6 +74,7 @@ export function structuredWorkerPaneKeyBelongsToSession(
   sessionId: string
 ): boolean {
   const parsed = paneKey ? parsePaneKey(paneKey) : null
+
   return Boolean(
     parsed &&
     parsed.tabId === structuredAgentSessionTabId(sessionId) &&
@@ -98,7 +100,9 @@ export function sessionIdFromStructuredWorkerIncarnation(
   if (!processIncarnation?.startsWith(STRUCTURED_WORKER_INCARNATION_PREFIX)) {
     return null
   }
+
   const sessionId = processIncarnation.slice(STRUCTURED_WORKER_INCARNATION_PREFIX.length)
+
   return sessionId.length > 0 ? sessionId : null
 }
 
@@ -130,6 +134,7 @@ export class StructuredWorkerIdentityRegistry {
   register(identity: StructuredWorkerIdentity): StructuredWorkerIdentity {
     this.byHandle.set(identity.handle, identity)
     this.bySessionId.set(identity.sessionId, identity)
+
     return identity
   }
 
@@ -148,10 +153,13 @@ export class StructuredWorkerIdentityRegistry {
 
   forget(handle: string): void {
     const identity = this.byHandle.get(handle)
+
     if (!identity) {
       return
     }
+
     this.byHandle.delete(handle)
+
     if (this.bySessionId.get(identity.sessionId) === identity) {
       this.bySessionId.delete(identity.sessionId)
     }
@@ -171,6 +179,7 @@ export class StructuredWorkerIdentityRegistry {
   }): StructuredWorkerIdentity | null {
     const sessionId = sessionIdFromStructuredWorkerIncarnation(row.process_incarnation)
     const hostScope = parseWorkerTerminalHostScope(row.host_scope)
+
     if (
       !sessionId ||
       !hostScope ||
@@ -182,6 +191,7 @@ export class StructuredWorkerIdentityRegistry {
     ) {
       return null
     }
+
     return this.register({
       handle: row.terminal_handle,
       sessionId,

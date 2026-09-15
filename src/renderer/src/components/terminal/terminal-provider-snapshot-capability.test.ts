@@ -74,14 +74,17 @@ describe('terminal provider snapshot capabilities', () => {
 
   it('does not rescan an unchanged fully resolved PTY collection on later renders', async () => {
     let indexedReads = 0
+
     const ids = new Proxy(['pty-1', 'pty-2'], {
       get(target, property, receiver) {
         if (typeof property === 'string' && /^\d+$/.test(property)) {
           indexedReads += 1
         }
+
         return Reflect.get(target, property, receiver)
       }
     })
+
     const resolve = vi.fn(async (batch: string[]) =>
       batch.map((id) => ({ id, authoritative: true as boolean | null }))
     )
@@ -96,6 +99,7 @@ describe('terminal provider snapshot capabilities', () => {
 
   it('bounds initial capability IPC to batches of 512 PTYs', async () => {
     const ids = Array.from({ length: 1_025 }, (_, index) => `pty-${index}`)
+
     const resolve = vi.fn(async (batch: string[]) =>
       batch.map((id) => ({ id, authoritative: true as boolean | null }))
     )
@@ -123,6 +127,7 @@ describe('terminal provider snapshot capabilities', () => {
 
   it('bounds an unresponsive capability resolver and keeps the result unknown', async () => {
     vi.useFakeTimers()
+
     const synchronization = synchronizeTerminalProviderSnapshotCapabilities(
       ['pty-1'],
       () => new Promise(() => {}),
@@ -138,6 +143,7 @@ describe('terminal provider snapshot capabilities', () => {
   it('retries immediately when a timeout consumes the retry delay', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     const synchronization = synchronizeTerminalProviderSnapshotCapabilities(
       ['pty-1'],
       () => new Promise(() => {})
@@ -150,9 +156,11 @@ describe('terminal provider snapshot capabilities', () => {
 
   it('ignores a stale capability response after the live PTY set changes', async () => {
     let resolveStale!: (value: { id: string; authoritative: boolean | null }[]) => void
+
     const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((resolve) => {
       resolveStale = resolve
     })
+
     const first = synchronizeTerminalProviderSnapshotCapabilities(['old-pty'], () => stale)
     await synchronizeTerminalProviderSnapshotCapabilities(['current-pty'], async () => [
       { id: 'current-pty', authoritative: true }
@@ -170,9 +178,11 @@ describe('terminal provider snapshot capabilities', () => {
   // behind, the cancelled chain is the only re-ask scheduler left alive.
   it('asks a superseded pass to re-check instead of ending its timer chain', async () => {
     let resolveStale!: (value: { id: string; authoritative: boolean | null }[]) => void
+
     const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((resolve) => {
       resolveStale = resolve
     })
+
     const first = synchronizeTerminalProviderSnapshotCapabilities(['pty-1'], () => stale, 1_000)
     await synchronizeTerminalProviderSnapshotCapabilities(['pty-1', 'pty-2'], async () => [], 1_000)
 
@@ -183,9 +193,11 @@ describe('terminal provider snapshot capabilities', () => {
 
   it('asks a superseded pass whose resolver rejected to re-check as well', async () => {
     let rejectStale!: (reason: Error) => void
+
     const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((_, reject) => {
       rejectStale = reject
     })
+
     const first = synchronizeTerminalProviderSnapshotCapabilities(['pty-1'], () => stale, 1_000)
     await synchronizeTerminalProviderSnapshotCapabilities(['pty-1', 'pty-2'], async () => [], 1_000)
 
@@ -202,6 +214,7 @@ describe('terminal provider snapshot capabilities', () => {
 
     let nowMs = 1_000
     await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, nowMs)
+
     for (const delayMs of backoffSchedule) {
       // Just before the deadline: no extra consult.
       await synchronizeTerminalProviderSnapshotCapabilities(
@@ -212,6 +225,7 @@ describe('terminal provider snapshot capabilities', () => {
       nowMs += delayMs
       await synchronizeTerminalProviderSnapshotCapabilities(['gone-pty'], resolve, nowMs)
     }
+
     const ladderCallCount = resolve.mock.calls.length
     expect(ladderCallCount).toBe(backoffSchedule.length + 1)
 
@@ -227,6 +241,7 @@ describe('terminal provider snapshot capabilities', () => {
         nowMs + index * 5 * 60_000
       )
     }
+
     expect(resolve.mock.calls.length).toBe(ladderCallCount + 12)
     expect(terminalProviderHasAuthoritativeSnapshot('gone-pty')).toBe(false)
   })
@@ -236,6 +251,7 @@ describe('terminal provider snapshot capabilities', () => {
 
     let nowMs = 1_000
     let retryDelayMs: number | null = null
+
     for (const delayMs of [0, 1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]) {
       nowMs += delayMs
       retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(
@@ -255,12 +271,14 @@ describe('terminal provider snapshot capabilities', () => {
   // an unconditional same-identity bail would kill the chain after one backoff.
   it('re-consults a due unknown on an identical live-set identity', async () => {
     const livePtyIds = ['pty-1']
+
     const resolve = vi
       .fn()
       .mockResolvedValueOnce([{ id: 'pty-1', authoritative: null }])
       .mockResolvedValueOnce([{ id: 'pty-1', authoritative: true }])
 
     await synchronizeTerminalProviderSnapshotCapabilities(livePtyIds, resolve, 1_000)
+
     const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(
       livePtyIds,
       resolve,

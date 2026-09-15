@@ -15,11 +15,13 @@ export async function resolveRelayPushTarget(
   if (pushTarget === undefined) {
     return resolveConfiguredGitPushTarget((args) => git(args, worktreePath))
   }
+
   assertGitPushTargetShape(pushTarget)
   const explicitTarget: GitPushTarget = pushTarget
   // Why here and not in the shared resolver: an explicit target arrives over the wire,
   // so the host re-validates its shape and asks Git to vet the branch name itself.
   await git(['check-ref-format', '--branch', explicitTarget.branchName], worktreePath)
+
   return {
     remote: explicitTarget.remoteName,
     refspec: `HEAD:${explicitTarget.branchName}`

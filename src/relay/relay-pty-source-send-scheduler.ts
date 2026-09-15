@@ -50,10 +50,12 @@ export function onceSinkSettlement(
   callback: (result: SinkWriteSettlement) => void
 ): (result: SinkWriteSettlement) => void {
   let settled = false
+
   return (result) => {
     if (settled) {
       return
     }
+
     settled = true
     callback(result)
   }
@@ -78,19 +80,24 @@ export class RelayPtySourceSendScheduler {
 
   async waitForPendingSend(id: string, timeoutMs = 5_000): Promise<boolean> {
     const record = this.deliveries.get(id)
+
     if (!record) {
       return true
     }
+
     record.rotationPending = true
+
     if (!record.sending) {
       return true
     }
+
     return new Promise<boolean>((resolve) => {
       const settle = (settled: boolean): void => {
         clearTimeout(timer)
         record.sendWaiters.delete(onSettled)
         resolve(settled)
       }
+
       const onSettled = (): void => settle(true)
       const timer = setTimeout(() => settle(false), timeoutMs)
       timer.unref?.()
@@ -100,16 +107,20 @@ export class RelayPtySourceSendScheduler {
 
   onCreditAvailable(id: string): void {
     const record = this.deliveries.get(id)
+
     if (!record || record.restoreRequired) {
       return
     }
+
     if (record.sourceExitState === 'pending') {
       // Why: the credit-mode exit frame is in flight; pruning now diverts publishPendingExit
       // into a duplicate legacy pty.exit, and pumping a closed delivery throws. The exit
       // settlement (which fires onCapacity) resumes progress.
       return
     }
+
     const snapshot = this.session.sourceDeliverySnapshotIfKnown(record.identity)
+
     if (
       record.sourceExitState === 'idle' &&
       record.legacyExitAccepted &&
@@ -117,12 +128,16 @@ export class RelayPtySourceSendScheduler {
     ) {
       // Why: preserve partial exit progress so the retry targets only the source owner.
       this.onCapacity(id)
+
       return
     }
+
     if (this.pruneClosed(id, record, snapshot)) {
       this.onCapacity(id)
+
       return
     }
+
     this.pump(record)
     this.onCapacity(id)
   }
@@ -132,12 +147,16 @@ export class RelayPtySourceSendScheduler {
     let activating = 0
     let sealedUnsettled = 0
     let outstandingSourceUnits = 0
+
     for (const record of this.deliveries.values()) {
       const snapshot = this.session.sourceDeliverySnapshotIfKnown(record.identity)
+
       if (!snapshot) {
         continue
       }
+
       outstandingSourceUnits += snapshot.sentEndSu - snapshot.creditedEndSu
+
       if (record.activating) {
         activating++
       } else if (record.sealed && snapshot.state !== 'closed') {
@@ -146,6 +165,7 @@ export class RelayPtySourceSendScheduler {
         active++
       }
     }
+
     return Object.freeze({
       active,
       activating,
@@ -157,10 +177,12 @@ export class RelayPtySourceSendScheduler {
 
   dispose(): void {
     this.removeCompletionCapacityListener()
+
     for (const record of this.deliveries.values()) {
       this.session.cancelDelivery(record.identity, 'source-publication-disposed')
       this.wakeSendWaiters(record)
     }
+
     this.deliveries.clear()
   }
 
@@ -175,13 +197,16 @@ export class RelayPtySourceSendScheduler {
     ) {
       return
     }
+
     if (
       record.recoveryEndSu !== null &&
       this.session.sourceDeliverySnapshot(record.identity).sentEndSu >= record.recoveryEndSu
     ) {
       this.completeRecoveryIfReady(record)
+
       return
     }
+
     if (
       record.turnFrames >= PTY_SOURCE_SCHEDULER_MAX_FRAMES ||
       record.turnSourceSu >= PTY_SOURCE_SCHEDULER_MAX_SU
@@ -191,15 +216,20 @@ export class RelayPtySourceSendScheduler {
         record.turnScheduled = false
         record.turnFrames = 0
         record.turnSourceSu = 0
+
         if (this.deliveries.get(record.identity.id) !== record || record.restoreRequired) {
           return
         }
+
         this.pump(record)
         this.onCapacity(record.identity.id)
       })
+
       return
     }
+
     const snapshot = this.session.sourceDeliverySnapshot(record.identity)
+
     const encodedDataBudget = this.dispatcher.producerDataBudget(
       'pty.data',
       {
@@ -215,23 +245,31 @@ export class RelayPtySourceSendScheduler {
       },
       record.clientId
     )
+
     const maxSourceSu = Math.min(
       PTY_SOURCE_FRAME_MAX_SU,
       Math.max(1, Math.floor(Math.max(0, encodedDataBudget - 32) / 6))
     )
+
     const reservation = this.session.reserveSourceSend(record.identity, maxSourceSu)
+
     if (!reservation) {
       return
     }
+
     record.sending = true
     const sourceLengthSu = reservation.span.sourceEndSu - reservation.span.sourceStartSu
+
     const settle = onceSinkSettlement((result) => {
       record.sending = false
       this.wakeSendWaiters(record)
+
       if (this.deliveries.get(record.identity.id) !== record || record.restoreRequired) {
         this.onCapacity(record.identity.id)
+
         return
       }
+
       if (result.ok) {
         this.session.commitSourceSend(reservation)
         record.turnFrames++
@@ -242,12 +280,15 @@ export class RelayPtySourceSendScheduler {
         this.session.rollbackSourceSend(reservation)
         this.counters.sendRolledBack++
       }
+
       this.pruneClosed(record.identity.id, record)
       this.onCapacity(record.identity.id)
+
       if (result.ok && this.deliveries.get(record.identity.id) === record) {
         this.pump(record)
       }
     })
+
     const accepted = this.dispatcher.tryNotifyPtyDataToClient(
       record.clientId,
       {
@@ -264,6 +305,7 @@ export class RelayPtySourceSendScheduler {
       },
       settle
     )
+
     if (!accepted) {
       settle({ ok: false, error: new Error('PTY source publication was not admitted') })
     }
@@ -277,6 +319,7 @@ export class RelayPtySourceSendScheduler {
       session: this.session,
       onCompleted: (id) => {
         this.onCapacity(id)
+
         if (this.deliveries.get(id) === record) {
           this.pump(record)
         }
@@ -296,10 +339,12 @@ export class RelayPtySourceSendScheduler {
     if (snapshot && snapshot.state !== 'closed') {
       return false
     }
+
     if (this.deliveries.get(id) === record) {
       this.wakeSendWaiters(record)
       this.deliveries.delete(id)
     }
+
     return true
   }
 
@@ -307,6 +352,7 @@ export class RelayPtySourceSendScheduler {
     for (const resolve of record.sendWaiters) {
       resolve()
     }
+
     record.sendWaiters.clear()
   }
 
@@ -314,6 +360,7 @@ export class RelayPtySourceSendScheduler {
     if (!record?.rotationPending) {
       return
     }
+
     record.rotationPending = false
     this.pump(record)
     this.onCapacity(record.identity.id)

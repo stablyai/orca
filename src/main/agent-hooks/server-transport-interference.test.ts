@@ -16,6 +16,7 @@ async function postTruncatedHook(
     sentBytes = 'paneKey=tab',
     announcedLength = 100_000
   } = options
+
   await new Promise<void>((resolve, reject) => {
     const socket = connect({ port, host: '127.0.0.1' }, () => {
       socket.write(
@@ -27,6 +28,7 @@ async function postTruncatedHook(
         resolve()
       }, 20)
     })
+
     socket.on('error', () => {
       resolve()
     })
@@ -55,6 +57,7 @@ async function postStalledHook(port: number, token: string): Promise<void> {
 
 async function postCompleteHook(port: number, token: string): Promise<void> {
   const body = 'paneKey=tab%3Aleaf&payload=%7B%7D'
+
   const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
     method: 'POST',
     headers: {
@@ -63,6 +66,7 @@ async function postCompleteHook(port: number, token: string): Promise<void> {
     },
     body
   })
+
   expect(response.status).toBe(204)
 }
 
@@ -74,6 +78,7 @@ describe('AgentHookServer transport interference', () => {
     for (const server of servers) {
       server.stop()
     }
+
     servers.length = 0
     warn.mockClear()
   })
@@ -92,6 +97,7 @@ describe('AgentHookServer transport interference', () => {
     })
     await server.start()
     const env = server.buildPtyEnv()
+
     return {
       server,
       port: Number(env.ORCA_AGENT_HOOK_PORT),

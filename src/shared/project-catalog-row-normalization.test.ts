@@ -13,6 +13,7 @@ function corrupt<T extends object>(row: T, overrides: Record<string, unknown>): 
   for (const [key, value] of Object.entries(overrides)) {
     Reflect.set(row, key, value)
   }
+
   return row
 }
 
@@ -29,6 +30,7 @@ function makeSetup(overrides: Record<string, unknown> = {}): ProjectHostSetup {
     createdAt: 1,
     updatedAt: 2
   }
+
   return corrupt(setup, overrides)
 }
 
@@ -41,6 +43,7 @@ function makeProject(overrides: Record<string, unknown> = {}): Project {
     createdAt: 1,
     updatedAt: 2
   }
+
   return corrupt(project, overrides)
 }
 
@@ -72,6 +75,7 @@ describe('normalizeProjectHostSetupRow', () => {
     const normalized = normalizeProjectHostSetupRow(
       makeSetup({ id: null, projectId: null, displayName: null })
     )
+
     expect(normalized.id).toBe('')
     expect(normalized.projectId).toBe('')
     expect(normalized.displayName).toBe('')
@@ -91,6 +95,7 @@ describe('normalizeProjectHostSetupRow', () => {
     const normalized = normalizeProjectHostSetupRow(
       makeSetup({ createdAt: value, updatedAt: value })
     )
+
     expect(normalized.createdAt).toBe(0)
     expect(normalized.updatedAt).toBe(0)
   })
@@ -101,6 +106,7 @@ describe('normalizeProjectHostSetupRow', () => {
     const normalized = normalizeProjectHostSetupRow(
       makeSetup({ repoId: null, setupState: 'bogus', setupMethod: null })
     )
+
     expect(normalized.setupState).toBe('bogus')
     expect(normalized.setupMethod).toBeNull()
   })
@@ -111,9 +117,11 @@ describe('normalizeProjectHostSetupRow', () => {
     const withoutOptionals = normalizeProjectHostSetupRow(makeSetup({ repoId: null }))
     expect('connectionId' in withoutOptionals).toBe(false)
     expect('worktreeBasePath' in withoutOptionals).toBe(false)
+
     const withOptionals = normalizeProjectHostSetupRow(
       makeSetup({ repoId: null, connectionId: null, worktreeBasePath: '/base' })
     )
+
     expect('connectionId' in withOptionals).toBe(true)
     expect(withOptionals.worktreeBasePath).toBe('/base')
   })
@@ -138,6 +146,7 @@ describe('normalizeProjectRow', () => {
     const normalized = normalizeProjectRow(
       makeProject({ id: null, displayName: null, badgeColor: 42 })
     )
+
     expect(normalized.id).toBe('')
     expect(normalized.displayName).toBe('')
     expect(normalized.badgeColor).toBe('')
@@ -180,6 +189,7 @@ describe('row array normalization', () => {
       makeSetup({ id: 'setup-2', repoId: null }),
       makeSetup({ id: 's3' })
     ]
+
     const normalized = normalizeProjectHostSetupRows(setups)
     expect(normalized).not.toBe(setups)
     expect(normalized[0]).toBe(setups[0])

@@ -29,11 +29,14 @@ export function buildWorkspaceTerminalLayoutPlan({
       .filter(([tabId]) => validTabIds.has(tabId))
       .map(([tabId, persisted]) => {
         const releasedPtyIds = releasedPtyIdsByTabId.get(tabId)
+
         const layout = releasedPtyIds
           ? releaseTerminalLayoutPtyIds(persisted, releasedPtyIds)
           : persisted
+
         const normalization = normalizeTerminalLayoutSnapshot(layout)
         const normalized = normalization.snapshot
+
         if (
           normalization.changed &&
           (!ownershipTransferTabIds || ownershipTransferTabIds.has(tabId))
@@ -43,8 +46,10 @@ export function buildWorkspaceTerminalLayoutPlan({
             resolveTerminalLayoutPtyOwnershipTransfers(layout, normalized)
           )
         }
+
         const tab = tabById.get(tabId)
         const sanitized = tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized
+
         const activeLeafId = sanitized.root
           ? resolvePtyBoundActiveLeafId({
               root: sanitized.root,
@@ -52,6 +57,7 @@ export function buildWorkspaceTerminalLayoutPlan({
               ptyIdsByLeafId: sanitized.ptyIdsByLeafId
             })
           : sanitized.activeLeafId
+
         return [tabId, { ...sanitized, activeLeafId }]
       })
   )

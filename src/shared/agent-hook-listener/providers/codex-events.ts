@@ -36,6 +36,7 @@ export function buildCodexStatusPayload(
         resetOnNewTurn: isNewTurnEvent('codex', eventName)
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
+
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
 
   return normalizeAgentStatusPayload({
@@ -61,10 +62,12 @@ export function buildCodexChildDrivenStatusPayload(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const leadState = state.codexLeadStateByPaneKey.get(paneKey)?.state ?? 'working'
+
   const stateName = codexRosterEffectiveState(
     state.codexSubagentRosterByPaneKey.get(paneKey),
     leadState
   )
+
   return buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, {
     stateName,
     updateLead: false
@@ -78,10 +81,13 @@ export function normalizeCodexSubagentLifecycleEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const agentId = readString(hookPayload, 'agent_id')
+
   if (!agentId) {
     return null
   }
+
   const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+
   if (eventName === 'SubagentStart') {
     upsertCodexSubagent(
       roster,
@@ -96,6 +102,7 @@ export function normalizeCodexSubagentLifecycleEvent(
   } else {
     finishCodexSubagent(roster, agentId)
   }
+
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
 
@@ -114,6 +121,7 @@ export function normalizeCodexEvent(
   const isUserInputPreTool =
     eventName === 'PreToolUse' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
+
   const stateName =
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
@@ -125,11 +133,13 @@ export function normalizeCodexEvent(
         : eventName === 'Stop'
           ? 'done'
           : null
+
   if (!stateName) {
     return null
   }
 
   const agentId = readString(hookPayload, 'agent_id')
+
   if (agentId) {
     upsertCodexSubagent(
       getOrCreateCodexSubagentRoster(state, paneKey),
@@ -141,6 +151,7 @@ export function normalizeCodexEvent(
       },
       Date.now()
     )
+
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
@@ -149,7 +160,9 @@ export function normalizeCodexEvent(
     state.codexSubagentRosterByPaneKey.delete(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   }
+
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
+
   if (transcriptPath) {
     reconcileCodexSubagentTranscript(
       getOrCreateCodexSubagentTranscriptState(state, paneKey),
@@ -157,10 +170,12 @@ export function normalizeCodexEvent(
       transcriptPath
     )
   }
+
   if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
   }
+
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
   state.codexLeadStateByPaneKey.set(paneKey, {
     state: stateName,
@@ -168,10 +183,12 @@ export function normalizeCodexEvent(
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model)
   })
+
   const effectiveState = codexRosterEffectiveState(
     state.codexSubagentRosterByPaneKey.get(paneKey),
     stateName
   )
+
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
     updateLead: true

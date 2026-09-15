@@ -96,6 +96,7 @@ describe('floating terminal trigger position', () => {
       offsetX: 48,
       offsetY: 80
     }
+
     stubViewport(260, 220)
     expect(resolveFloatingTerminalTriggerPosition(committed, 'user')).toEqual({
       left: 176,
@@ -202,6 +203,7 @@ describe('floating terminal trigger position', () => {
         throw new Error('blocked')
       })
     }
+
     stubViewport(1200, 800, localStorage)
 
     expect(readPersistedFloatingTerminalTriggerPosition()).toBeNull()
@@ -220,6 +222,7 @@ describe('floating terminal trigger position', () => {
       getItem: vi.fn(() => null),
       setItem: vi.fn()
     }
+
     stubViewport(1200, 800, localStorage)
 
     persistFloatingTerminalTriggerPosition({

@@ -14,10 +14,12 @@ const { toDetectedWorktreeSpy } = vi.hoisted(() => ({ toDetectedWorktreeSpy: vi.
 
 vi.mock('../../../../shared/worktree/ownership', async (importOriginal) => {
   const actual = await importOriginal<typeof OwnershipModule>()
+
   return {
     ...actual,
     toDetectedWorktree: (args: Parameters<typeof actual.toDetectedWorktree>[0]) => {
       toDetectedWorktreeSpy(args)
+
       return actual.toDetectedWorktree(args)
     }
   }
@@ -29,21 +31,32 @@ vi.mock('node:crypto', async (importOriginal) => ({
 }))
 
 const { buildDetectedGitWorktrees } = await import('./ssh-worktree-fallback')
+
 const { getProjectHostSetupWorktreeMeta } =
   await import('../../../../shared/project-host-setup-lookup')
+
 const { mergeWorktree } = await import('../../worktree-logic')
+
 const { resolveWorktreeMetaWithDiscoveryBackfill } = await import('./worktree-discovery-metadata')
+
 const ownership = await import('../../../../shared/worktree/ownership')
+
 const { projectResolvedWorktreeLineage } =
   await import('../../../../shared/resolved-worktree-lineage')
+
 const { createWorktreeVisibilitySourceMatcher, resolveCustomWorktreeVisibilitySources } =
   await import('../../../../shared/worktree/visibility-sources')
+
 const { resolveConfiguredWorktreeBasePaths } =
   await import('../../../../shared/worktree/configured-worktree-base-path')
+
 const { dedupeWorktreesByPath } = await import('../../worktree-path-comparison')
+
 const { readWorktreeMetaForHost } =
   await import('../../../persistence/host-qualified-worktree-meta')
+
 const { getRepoOwnedWorktreeMeta } = await import('../../../worktree-metadata-ownership')
+
 const { getRepoExecutionHostId } = await import('../../../../shared/execution-host')
 
 const repo: Repo = {
@@ -79,6 +92,7 @@ function settledMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 
 function createStore(meta: Record<string, WorktreeMeta>, repos: Repo[] = [repo]) {
   const rows = { ...meta }
+
   return {
     getRepos: () => repos,
     getSettings: () => ({ workspaceDir: '/workspace', nestWorkspaces: true }),
@@ -91,10 +105,12 @@ function createStore(meta: Record<string, WorktreeMeta>, repos: Repo[] = [repo])
     getAllWorktreeMetaForHost: () => rows,
     setWorktreeMeta: (id: string, patch: Partial<WorktreeMeta>) => {
       rows[id] = { ...rows[id], ...patch } as WorktreeMeta
+
       return rows[id]
     },
     setWorktreeMetaForHost: (id: string, hostId: string, patch: Partial<WorktreeMeta>) => {
       rows[id] = { ...rows[id], ...patch, hostId } as WorktreeMeta
+
       return rows[id]
     }
   } as unknown as Store
@@ -111,21 +127,27 @@ function buildDetectedGitWorktreesTwoPass(
   const knownOrcaLayouts = ownership.buildKnownOrcaWorkspaceLayouts(settings, target)
   const isLegacyRepoForVisibility = ownership.isLegacyRepoForExternalWorktreeVisibility(target)
   const liveWorktrees = dedupeWorktreesByPath(gitWorktrees.filter((info) => !info.prunable))
+
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [target.path, ...liveWorktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(target, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(target)
   )
+
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === target.id).length
+
   const detectedRows = liveWorktrees.map((info) => {
     const worktreeId = `${target.id}::${info.path}`
     const legacyMeta = store.getWorktreeMeta?.(worktreeId)
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
+
     let meta =
       readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(target)) ??
       getRepoOwnedWorktreeMeta(target, worktreeId, metaById, repoOwnerCount)
+
     const worktree = mergeWorktree(target.id, info, meta, target.displayName)
+
     const detected = ownership.toDetectedWorktree({
       repo: target,
       worktree,
@@ -135,9 +157,11 @@ function buildDetectedGitWorktreesTwoPass(
       isLegacyRepoForVisibility,
       worktreeVisibilitySourceMatcher
     })
+
     if (!detected.visible) {
       return detected
     }
+
     meta = resolveWorktreeMetaWithDiscoveryBackfill(
       store,
       target,
@@ -145,6 +169,7 @@ function buildDetectedGitWorktreesTwoPass(
       allMeta,
       repoOwnerCount
     )
+
     return ownership.toDetectedWorktree({
       repo: target,
       worktree: mergeWorktree(target.id, info, meta, target.displayName),
@@ -155,6 +180,7 @@ function buildDetectedGitWorktreesTwoPass(
       worktreeVisibilitySourceMatcher
     })
   })
+
   return projectResolvedWorktreeLineage(detectedRows, store.getAllWorktreeLineage?.() ?? {})
 }
 
@@ -167,9 +193,11 @@ describe('buildDetectedGitWorktrees classification passes', () => {
 
   it('classifies each visible worktree once per catalog pass, not twice', () => {
     const paths = ['/workspace/one', '/workspace/two', '/workspace/three']
+
     const meta = Object.fromEntries(
       paths.map((path) => [`${repo.id}::${path}`, settledMeta({ displayName: path })])
     )
+
     const store = createStore(meta)
 
     const detected = buildDetectedGitWorktrees(store, repo, paths.map(gitWorktree), meta)
@@ -201,6 +229,7 @@ describe('buildDetectedGitWorktrees classification passes', () => {
       [gitWorktree('/workspace/one')],
       undefined
     )
+
     expect(partialLegacyReads).toHaveBeenCalledWith(worktreeId)
     expect(rows[0]).toMatchObject({ id: worktreeId, lastActivityAt: 5 })
   })
@@ -212,6 +241,7 @@ describe('buildDetectedGitWorktrees classification passes', () => {
   ])('emits a catalog deep-equal to the two-pass build for %s', (_label, makeMeta) => {
     const worktreeId = `${repo.id}::/workspace/one`
     const seed = makeMeta()
+
     const build = (fn: typeof buildDetectedGitWorktrees) =>
       fn(
         createStore(seed ? { [worktreeId]: seed } : {}),
@@ -226,6 +256,7 @@ describe('buildDetectedGitWorktrees classification passes', () => {
   it('emits a catalog deep-equal to the two-pass build for a folder-style listing with no host snapshot', () => {
     const worktreeId = `${repo.id}::/workspace/one`
     const seed = settledMeta()
+
     const build = (fn: typeof buildDetectedGitWorktrees) =>
       fn(createStore({ [worktreeId]: seed }), repo, [gitWorktree('/workspace/one')], undefined)
 

@@ -7,6 +7,7 @@ import {
 import type { PtyPreconnectInputEntry, PtyPreconnectInputKind } from './pty-preconnect-input-buffer'
 
 export type DeferredSplitPaneInputKind = PtyPreconnectInputKind
+
 export type DeferredSplitPaneInput = PtyPreconnectInputEntry
 
 declare const deferredSplitPaneHandoffHandleBrand: unique symbol
@@ -22,6 +23,7 @@ export type ClaimedDeferredSplitPaneHandoff = {
 }
 
 export const DEFERRED_SPLIT_PANE_HANDOFF_TTL_MS = 15_000
+
 export const DEFERRED_SPLIT_PANE_HANDOFF_MAX_RECORDS = 64
 
 type DeferredSplitPaneHandoffRecord = {
@@ -34,11 +36,13 @@ type DeferredSplitPaneHandoffRecord = {
 }
 
 const handoffs = new Map<PaneKey, DeferredSplitPaneHandoffRecord>()
+
 let keyByHandle = new WeakMap<DeferredSplitPaneHandoffHandle, PaneKey>()
 
 function createHandle(key: PaneKey): DeferredSplitPaneHandoffHandle {
   const handle = {} as DeferredSplitPaneHandoffHandle
   keyByHandle.set(handle, key)
+
   return handle
 }
 
@@ -47,21 +51,27 @@ function getOwnedRecord(
 ): { key: PaneKey; record: DeferredSplitPaneHandoffRecord } | null {
   const key = keyByHandle.get(handle)
   const record = key ? handoffs.get(key) : undefined
+
   if (!key || !record || record.owner !== handle) {
     return null
   }
+
   if (record.expiresAtMs <= Date.now()) {
     deleteHandoff(key, record)
+
     return null
   }
+
   return { key, record }
 }
 
 function deleteHandoff(key: PaneKey, expected?: DeferredSplitPaneHandoffRecord): void {
   const record = handoffs.get(key)
+
   if (!record || (expected && record !== expected)) {
     return
   }
+
   clearTimeout(record.expiryTimer)
   handoffs.delete(key)
 }
@@ -81,13 +91,17 @@ export function beginDeferredSplitPaneHandoff(
   const nowMs = Date.now()
   pruneExpiredHandoffs(nowMs)
   deleteHandoff(key)
+
   if (handoffs.size >= DEFERRED_SPLIT_PANE_HANDOFF_MAX_RECORDS) {
     const oldestKey = handoffs.keys().next().value
+
     if (oldestKey) {
       deleteHandoff(oldestKey)
     }
   }
+
   const owner = createHandle(key)
+
   const record: DeferredSplitPaneHandoffRecord = {
     cwdPromise,
     expiresAtMs: nowMs + DEFERRED_SPLIT_PANE_HANDOFF_TTL_MS,
@@ -98,8 +112,10 @@ export function beginDeferredSplitPaneHandoff(
     owner,
     preconnectInput: []
   }
+
   record.expiryTimer.unref?.()
   handoffs.set(key, record)
+
   return owner
 }
 
@@ -107,15 +123,20 @@ export function claimDeferredSplitPaneHandoff(
   key: PaneKey
 ): ClaimedDeferredSplitPaneHandoff | null {
   const record = handoffs.get(key)
+
   if (!record) {
     return null
   }
+
   if (record.expiresAtMs <= Date.now()) {
     deleteHandoff(key, record)
+
     return null
   }
+
   const owner = createHandle(key)
   record.owner = owner
+
   return {
     handle: owner,
     cwdPromise: record.cwdPromise,
@@ -128,6 +149,7 @@ export function appendDeferredSplitPaneInput(
   input: DeferredSplitPaneInput
 ): void {
   const owned = getOwnedRecord(handle)
+
   if (
     !owned ||
     owned.record.preconnectInput.length >= PTY_PRECONNECT_INPUT_MAX_ENTRIES ||
@@ -135,12 +157,14 @@ export function appendDeferredSplitPaneInput(
   ) {
     return
   }
+
   owned.record.preconnectInput.push({ data: input.data, kind: input.kind })
   owned.record.inputCodeUnits += input.data.length
 }
 
 export function releaseDeferredSplitPaneHandoff(handle: DeferredSplitPaneHandoffHandle): void {
   const owned = getOwnedRecord(handle)
+
   if (owned) {
     owned.record.owner = createHandle(owned.key)
   }
@@ -148,6 +172,7 @@ export function releaseDeferredSplitPaneHandoff(handle: DeferredSplitPaneHandoff
 
 export function clearDeferredSplitPaneHandoff(handle: DeferredSplitPaneHandoffHandle): void {
   const owned = getOwnedRecord(handle)
+
   if (owned) {
     deleteHandoff(owned.key, owned.record)
   }
@@ -170,10 +195,12 @@ export function resetDeferredSplitPaneHandoffsForTests(): void {
   for (const [key, record] of handoffs) {
     deleteHandoff(key, record)
   }
+
   keyByHandle = new WeakMap()
 }
 
 export function getDeferredSplitPaneHandoffCountForTests(): number {
   pruneExpiredHandoffs(Date.now())
+
   return handoffs.size
 }

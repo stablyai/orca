@@ -32,6 +32,7 @@ type RightPanelCommentComposerProps = {
 
 function applyMarkdownAction(value: string, start: number, end: number, action: MarkdownAction) {
   const selected = value.slice(start, end)
+
   switch (action) {
     case 'bold':
       return {
@@ -53,14 +54,17 @@ function applyMarkdownAction(value: string, start: number, end: number, action: 
       }
     case 'quote': {
       const prefix = start === 0 || value[start - 1] === '\n' ? '> ' : '\n> '
+
       return {
         value: `${value.slice(0, start)}${prefix}${selected || 'quote'}${value.slice(end)}`,
         selectionStart: start + prefix.length,
         selectionEnd: start + prefix.length + (selected || 'quote').length
       }
     }
+
     case 'list': {
       const prefix = start === 0 || value[start - 1] === '\n' ? '- ' : '\n- '
+
       return {
         value: `${value.slice(0, start)}${prefix}${selected || 'item'}${value.slice(end)}`,
         selectionStart: start + prefix.length,
@@ -90,9 +94,11 @@ export function RightPanelCommentComposer({
 
   useEffect(() => {
     const textarea = textareaRef.current
+
     if (!textarea) {
       return
     }
+
     textarea.style.height = '0px'
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`
   }, [body])
@@ -100,14 +106,18 @@ export function RightPanelCommentComposer({
   useEffect(() => {
     if (!autoFocus) {
       clearRightPanelCommentFocusTimer(autoFocusTimerRef)
+
       return
     }
+
     scheduleRightPanelCommentFocusTimer(autoFocusTimerRef, () => textareaRef.current?.focus())
+
     return () => clearRightPanelCommentFocusTimer(autoFocusTimerRef)
   }, [autoFocus])
 
   const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
     textareaRef.current = node
+
     if (node === null) {
       // Why: markdown toolbar selection restoration is scoped to this textarea;
       // clearing here prevents stale focus after the composer unmounts.
@@ -122,15 +132,18 @@ export function RightPanelCommentComposer({
   const applyAction = useCallback(
     (action: MarkdownAction) => {
       const textarea = textareaRef.current
+
       if (!textarea) {
         return
       }
+
       const next = applyMarkdownAction(body, textarea.selectionStart, textarea.selectionEnd, action)
       setBody(next.value)
       scheduleRightPanelCommentFocusTimer(selectionTimerRef, () => {
         if (!textarea.isConnected) {
           return
         }
+
         textarea.focus()
         textarea.setSelectionRange(next.selectionStart, next.selectionEnd)
       })
@@ -140,9 +153,11 @@ export function RightPanelCommentComposer({
 
   const submit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
+
     if (bodyState.status === 'empty' || submitting || disabled) {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       setError(
         translate(
@@ -150,12 +165,16 @@ export function RightPanelCommentComposer({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setSubmitting(true)
     setError(null)
+
     try {
       const result = await onSubmit(bodyState.body)
+
       if (result.ok) {
         setBody('')
         onCancel?.()
@@ -168,6 +187,7 @@ export function RightPanelCommentComposer({
       setSubmitting(false)
     }
   }, [body, disabled, onCancel, onSubmit, submitting])
+
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
@@ -177,7 +197,9 @@ export function RightPanelCommentComposer({
       if (isImeCompositionKeyDown(event)) {
         return
       }
+
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
+
       if (event.key === 'Enter' && modifierPressed) {
         event.preventDefault()
         void submit()

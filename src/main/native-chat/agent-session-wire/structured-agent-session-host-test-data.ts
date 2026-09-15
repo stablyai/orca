@@ -5,7 +5,9 @@ import { attachFingerprintFields } from './structured-agent-session-attach'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
 export const HOST_TEST_NOW = 1_800_000_000_000
+
 export const HOST_TEST_SESSION = 'session-alpha'
+
 export const HOST_TEST_THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 export const HOST_TEST_LOCATION: AgentSessionExecutionLocation = {
@@ -23,6 +25,7 @@ export function resetHostTestOperationIds(): void {
 
 export function hostTestOperationId(): string {
   operations += 1
+
   return `${HOST_TEST_NOW}-${operations.toString(16).padStart(32, '0')}`
 }
 
@@ -49,6 +52,7 @@ export function hostTestAttachParams(
     providerHandle: { kind: 'codex', threadId: HOST_TEST_THREAD },
     ...overrides
   }
+
   return {
     ...params,
     envelope: {

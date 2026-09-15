@@ -7,11 +7,13 @@ export function persistedUIValuesEqual(left: unknown, right: unknown): boolean {
     if (!(left instanceof Set) || !(right instanceof Set) || left.size !== right.size) {
       return false
     }
+
     for (const value of left) {
       if (!right.has(value)) {
         return false
       }
     }
+
     return true
   }
 
@@ -19,6 +21,7 @@ export function persistedUIValuesEqual(left: unknown, right: unknown): boolean {
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
       return false
     }
+
     return left.every((value, index) => persistedUIValuesEqual(value, right[index]))
   }
 
@@ -30,6 +33,7 @@ export function persistedUIValuesEqual(left: unknown, right: unknown): boolean {
   const rightRecord = right as Record<string, unknown>
   const leftKeys = Object.keys(leftRecord)
   const rightKeys = Object.keys(rightRecord)
+
   if (leftKeys.length !== rightKeys.length) {
     return false
   }
@@ -42,5 +46,6 @@ export function persistedUIValuesEqual(left: unknown, right: unknown): boolean {
       return false
     }
   }
+
   return true
 }

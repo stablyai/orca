@@ -28,6 +28,7 @@ type LiveShell = { name: string; path: string }
 /** Every Unix shell on this machine a queued Orca command line could land in. */
 function discoverShells(): LiveShell[] {
   const shells: LiveShell[] = []
+
   for (const path of [
     '/bin/sh',
     '/bin/bash',
@@ -40,13 +41,16 @@ function discoverShells(): LiveShell[] {
       shells.push({ name: basename(path), path })
     }
   }
+
   if (FISH.available) {
     // Why absolute: runInShell scrubs PATH, so a bare `fish` would not resolve.
     const path = FISH.path.includes('/')
       ? FISH.path
       : execFileSync('command', ['-v', FISH.path], { encoding: 'utf8', shell: true }).trim()
+
     shells.push({ name: 'fish', path })
   }
+
   return shells
 }
 
@@ -152,6 +156,7 @@ describe.skipIf(process.platform === 'win32')(
           `sh -c 'printf "LAUNCHED:%s" "\${CODEX_HOME-unset}"'`,
           'posix'
         )
+
         const probe =
           shell.name === 'fish'
             ? `set -gx CODEX_HOME /bad; ${launch}`
@@ -162,19 +167,23 @@ describe.skipIf(process.platform === 'win32')(
 
       it('clears an exported variable with no wrapper installed', () => {
         const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+
         const probe =
           shell.name === 'fish'
             ? `set -gx ORCA_PI_PREFILL draft; ${clear}; set -q ORCA_PI_PREFILL; and echo STILL; or echo CLEARED`
             : `ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL; ${clear}; echo "\${ORCA_PI_PREFILL:+STILL}\${ORCA_PI_PREFILL:-CLEARED}"`
+
         expect(runInShell(shell, probe).trim()).toBe('CLEARED')
       })
 
       it('clears several variables in one statement', () => {
         const clear = clearEnvCommand(['ORCA_A', 'ORCA_B'], 'posix')
+
         const probe =
           shell.name === 'fish'
             ? `set -gx ORCA_A 1; set -gx ORCA_B 2; ${clear}; set -q ORCA_A; or set -q ORCA_B; and echo STILL; or echo CLEARED`
             : `ORCA_A=1 ORCA_B=2; export ORCA_A ORCA_B; ${clear}; echo "\${ORCA_A:+STILL}\${ORCA_B:+STILL}\${ORCA_A:-CLEARED}"`
+
         expect(runInShell(shell, probe).trim()).toBe('CLEARED')
       })
 
@@ -186,16 +195,19 @@ describe.skipIf(process.platform === 'win32')(
         ['already unset', false]
       ])('exits 0 and writes nothing to stderr when the variable is %s', (_label, preset) => {
         const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+
         const setUp = preset
           ? shell.name === 'fish'
             ? 'set -gx ORCA_PI_PREFILL draft; '
             : 'ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL; '
           : ''
+
         const stderr = execFileSync(shell.path, ['-c', `${setUp}${clear} 2>&1 1>/dev/null`], {
           encoding: 'utf8',
           timeout: 20_000,
           env: sandboxEnv()
         })
+
         expect(stderr).toBe('')
       })
 
@@ -207,12 +219,14 @@ describe.skipIf(process.platform === 'win32')(
         'clears even when `test` is aliased away in an interactive shell',
         () => {
           const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+
           const script = [
             'alias test=false',
             'ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL',
             clear,
             'echo "RESULT=${ORCA_PI_PREFILL:+STILL}${ORCA_PI_PREFILL:-CLEARED}"'
           ].join('\n')
+
           const out = execFileSync(shell.path, ['-i'], {
             input: `${script}\n`,
             encoding: 'utf8',
@@ -220,6 +234,7 @@ describe.skipIf(process.platform === 'win32')(
             env: sandboxEnv(),
             stdio: ['pipe', 'pipe', 'ignore']
           })
+
           expect(out).toContain('RESULT=CLEARED')
         }
       )

@@ -31,6 +31,7 @@ type SkillSshTransferInput = {
 
 function allowedOrigins(requireHttps: boolean): string[] {
   const origins = ['https://storage.googleapis.com']
+
   if (!requireHttps && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
     origins.push(
       ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
@@ -38,6 +39,7 @@ function allowedOrigins(requireHttps: boolean): string[] {
         .filter(Boolean)
     )
   }
+
   return [...new Set(origins)]
 }
 
@@ -48,6 +50,7 @@ async function transferSkillPackageToSshHostUnobserved(
   if (input.request.ingress.kind !== 'download-grant') {
     throw new Error('skill-install-ssh-ingress-invalid')
   }
+
   const downloaded = await downloadSkillPackageGrant({
     url: input.request.ingress.url,
     expiresAt: input.request.ingress.expiresAt,
@@ -59,7 +62,9 @@ async function transferSkillPackageToSshHostUnobserved(
     signal: input.signal,
     fetcher: input.fetcher
   })
+
   let uploadId: string | null = null
+
   try {
     const begun = SkillUploadBeginResultSchema.parse(
       await retrySkillTransferRpc({
@@ -74,9 +79,11 @@ async function transferSkillPackageToSshHostUnobserved(
           )
       })
     )
+
     uploadId = begun.uploadId
     throwIfSkillTransferCancelled(input.signal)
     const chunkBytes = Math.min(begun.chunkBytes, SKILL_UPLOAD_CHUNK_MAX_BYTES)
+
     if (
       begun.acknowledgedOffset > input.request.package.compressedBytes ||
       !Number.isInteger(chunkBytes) ||
@@ -84,17 +91,23 @@ async function transferSkillPackageToSshHostUnobserved(
     ) {
       throw new Error('skill-transfer-ssh-begin-invalid')
     }
+
     const handle = await open(downloaded.archivePath, 'r')
+
     try {
       let offset = begun.acknowledgedOffset
+
       while (offset < input.request.package.compressedBytes) {
         const bytes = Buffer.alloc(
           Math.min(chunkBytes, input.request.package.compressedBytes - offset)
         )
+
         const read = await handle.read(bytes, 0, bytes.length, offset)
+
         if (read.bytesRead !== bytes.length) {
           throw new Error('skill-transfer-source-changed')
         }
+
         const acknowledged = (await retrySkillTransferRpc({
           signal: input.signal,
           retryable: retryableSkillSshTransportError,
@@ -105,14 +118,17 @@ async function transferSkillPackageToSshHostUnobserved(
               { timeoutMs: SKILL_SSH_REQUEST_TIMEOUT_MS, signal: input.signal }
             )
         })) as { acknowledgedOffset: number }
+
         if (acknowledged.acknowledgedOffset !== offset + bytes.length) {
           throw new Error('skill-transfer-ack-invalid')
         }
+
         offset = acknowledged.acknowledgedOffset
       }
     } finally {
       await handle.close()
     }
+
     await retrySkillTransferRpc({
       signal: input.signal,
       retryable: retryableSkillSshTransportError,
@@ -125,9 +141,11 @@ async function transferSkillPackageToSshHostUnobserved(
     })
     const committedId = uploadId
     uploadId = null
+
     return committedId
   } finally {
     await downloaded.cleanup()
+
     if (uploadId) {
       await client(SKILL_SSH_RELAY_CANCEL_UPLOAD_METHOD, { uploadId }).catch(() => undefined)
     }
@@ -144,12 +162,14 @@ export async function transferSkillPackageToSshHost(
     destination: 'global-ssh',
     compressedBytes: input.request.package.compressedBytes
   })
+
   try {
     const uploadId = await transferSkillPackageToSshHostUnobserved(client, input)
     operation.complete({
       status: 'complete',
       compressedBytes: input.request.package.compressedBytes
     })
+
     return uploadId
   } catch (error) {
     operation.fail(error)

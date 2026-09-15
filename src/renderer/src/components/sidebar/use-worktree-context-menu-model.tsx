@@ -63,9 +63,11 @@ export function useWorktreeContextMenuModel({
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const repo = useRepoById(worktree.repoId)
+
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
+
   const [menuOpen, setMenuOpen] = useState(false)
   // Why: the Developer submenu is a power-user affordance, so it is revealed by
   // holding Option/Alt at right-click — captured at open time (like the Help
@@ -73,20 +75,26 @@ export function useWorktreeContextMenuModel({
   // shift the rows under the pointer.
   const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+
   const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
     effectiveSelectedWorktrees
   )
+
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const createGroupDialogActiveRef = useRef(false)
+
   const [parentPicker, setParentPicker] = useState<{
     childWorktreeId: string
     anchorElement: HTMLElement
   } | null>(null)
+
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
+
   const pendingParentPickerRef = useRef<{
     childWorktreeId: string
     anchorElement: HTMLElement
   } | null>(null)
+
   const parentPickerFallbackTimerRef = useRef<number | null>(null)
   const parentPickerUnmountTimerRef = useRef<number | null>(null)
   const lifecycleStartedRef = useRef(false)
@@ -94,6 +102,7 @@ export function useWorktreeContextMenuModel({
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const allWorktrees = useAllWorktrees()
+
   // Why: these maps feed only items rendered inside the OPEN dropdown, yet delete
   // teardown replaces them on every set(). Gate them behind menuOpen via stable
   // empty sentinels so the (common) closed wrapper stays inert to that churn. The
@@ -103,6 +112,7 @@ export function useWorktreeContextMenuModel({
   const worktreeLineageById = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.worktreeLineageById, EMPTY_WORKTREE_LINEAGE_BY_ID)
   )
+
   const workspaceLineageByChildKey = useAppStore((s) =>
     selectMenuScopedMap(
       menuOpen,
@@ -110,26 +120,34 @@ export function useWorktreeContextMenuModel({
       EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY
     )
   )
+
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+
   const tabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
   )
+
   const ptyIdsByTabId = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
   )
+
   const browserTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.browserTabsByWorktree, EMPTY_BROWSER_TABS_BY_WORKTREE)
   )
+
   const deleteStateByWorktreeId = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
   )
+
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
   const workspaceScope = parseWorkspaceKey(worktree.id)
+
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) =>
@@ -141,6 +159,7 @@ export function useWorktreeContextMenuModel({
       ),
     [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
   )
+
   const lineageMenuActions = useWorkspaceLineageMenuActions({
     enabled: !isMultiContext,
     parent: worktree,
@@ -148,8 +167,10 @@ export function useWorktreeContextMenuModel({
     lineageById: worktreeLineageById,
     activity: { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }
   })
+
   const lineageDescendantCount = lineageMenuActions.descendants.length
   const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets
+
   const deletingContext = useMemo(
     () =>
       activeContextWorktrees.some(
@@ -157,42 +178,55 @@ export function useWorktreeContextMenuModel({
       ),
     [activeContextWorktrees, deleteStateByWorktreeId]
   )
+
   const deletingSubtree = lineageMenuActions.targets.some(
     (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
   )
+
   const contextDeletePending = isMultiContext ? deletingContext : deletingSubtree
+
   const contextWorkspaceStatus = useMemo(() => {
     const [first, ...rest] = activeContextWorktrees
+
     if (!first) {
       return ''
     }
+
     const status = getWorkspaceStatus(first, workspaceStatuses)
+
     return rest.every((item) => getWorkspaceStatus(item, workspaceStatuses) === status)
       ? status
       : ''
   }, [activeContextWorktrees, workspaceStatuses])
+
   const batchDeleteWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) => {
         const itemRepo = repoMap.get(item.repoId)
+
         return isContextWorktreeDeletable(item, itemRepo)
       }),
     [activeContextWorktrees, repoMap]
   )
+
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
+
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
       : 'Sleep'
+
   const deleteLabel =
     isMultiContext && batchDeleteWorktrees.length > 0
       ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
       : 'Delete Selected'
+
   const hasParentLink = hasWorktreeParentLink(
     worktree,
     worktreeLineageById,
     workspaceLineageByChildKey
   )
+
   const cyclicLineageIds = useMemo(
     () =>
       menuOpen
@@ -200,16 +234,20 @@ export function useWorktreeContextMenuModel({
         : EMPTY_CYCLIC_LINEAGE_IDS,
     [menuOpen, worktreeLineageById, worktreeMap]
   )
+
   // Why: path-derived worktree IDs can be reused. The menu must honor the same
   // instance check as grouped rows before offering navigation to a parent.
   const lineageInfo = useMemo(
     () => getLineageRenderInfo(worktree, worktreeLineageById, worktreeMap, cyclicLineageIds),
     [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
   )
+
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
+
   const hasAnyContextLineage = activeContextWorktrees.some((item) =>
     hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
   )
+
   const eligibleParentCount = useMemo(
     () =>
       menuOpen
@@ -228,10 +266,12 @@ export function useWorktreeContextMenuModel({
   const setMenuOpenState = useCallback(
     (open: boolean) => {
       setMenuOpen(open)
+
       if (!open) {
         // Why: the reveal is per-open, so a later plain right-click can't inherit it.
         setDeveloperMenuRevealed(false)
       }
+
       onOpenChange?.(open)
     },
     [onOpenChange]
@@ -241,9 +281,11 @@ export function useWorktreeContextMenuModel({
     if (!onLifecycleComplete) {
       return
     }
+
     if (menuOpen) {
       lifecycleStartedRef.current = true
     }
+
     if (
       !lifecycleStartedRef.current ||
       menuOpen ||
@@ -254,19 +296,23 @@ export function useWorktreeContextMenuModel({
     ) {
       return
     }
+
     const timer = window.setTimeout(() => {
       if (createGroupDialogActiveRef.current || pendingParentPickerRef.current !== null) {
         return
       }
+
       lifecycleStartedRef.current = false
       onLifecycleComplete?.()
     }, 0)
+
     return () => window.clearTimeout(timer)
   }, [createGroupDialogOpen, menuOpen, onLifecycleComplete, parentPicker])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpenState(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [setMenuOpenState])
 
@@ -275,6 +321,7 @@ export function useWorktreeContextMenuModel({
       if (parentPickerFallbackTimerRef.current != null) {
         window.clearTimeout(parentPickerFallbackTimerRef.current)
       }
+
       if (parentPickerUnmountTimerRef.current != null) {
         window.clearTimeout(parentPickerUnmountTimerRef.current)
       }
@@ -319,6 +366,7 @@ export function useWorktreeContextMenuModel({
     worktree,
     workspaceStatuses
   })
+
   const { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker } =
     useWorktreeParentPickerTransition({
       fallbackTimerRef: parentPickerFallbackTimerRef,
@@ -330,6 +378,7 @@ export function useWorktreeContextMenuModel({
       unmountTimerRef: parentPickerUnmountTimerRef,
       worktreeId: worktree.id
     })
+
   const { handleRemoveParentLink, suppressOpeningPointerEvent } =
     useWorktreeContextMenuSecondaryActions({
       activeContextWorktrees,
@@ -344,11 +393,15 @@ export function useWorktreeContextMenuModel({
       // that focus restore can scroll the virtual list away from the row the
       // user just acted on.
       event.preventDefault()
+
       if (pendingParentPickerRef.current) {
         window.setTimeout(openPendingParentPicker, 0)
+
         return
       }
+
       const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
+
       if (sidebar instanceof HTMLElement) {
         sidebar.focus({ preventScroll: true })
       }

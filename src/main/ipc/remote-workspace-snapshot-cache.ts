@@ -40,12 +40,16 @@ function rememberRemoteWorkspaceSnapshotEntry(
   if (latestSnapshotByTargetId.has(targetId)) {
     latestSnapshotByTargetId.delete(targetId)
   }
+
   latestSnapshotByTargetId.set(targetId, entry)
+
   while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldest = latestSnapshotByTargetId.keys().next()
+
     if (oldest.done) {
       break
     }
+
     latestSnapshotByTargetId.delete(oldest.value)
   }
 }
@@ -59,6 +63,7 @@ export function rememberRemoteWorkspaceSnapshot(
   // observations do not revoke an in-flight upload authority.
   const normalizedSnapshot = normalizeSnapshot(snapshot, snapshot.namespace)
   const current = latestSnapshotByTargetId.get(targetId)
+
   if (current && snapshotsAreIdentical(current.snapshot, normalizedSnapshot)) {
     // Re-reading an unchanged revision is not a new host observation. Keep the
     // token (and the contiguous local-patch authorization window) stable so a
@@ -67,18 +72,22 @@ export function rememberRemoteWorkspaceSnapshot(
       ...normalizedSnapshot,
       hostObservationToken: current.snapshot.hostObservationToken
     }
+
     rememberRemoteWorkspaceSnapshotEntry(targetId, {
       ...current,
       snapshot: observedSnapshot
     })
+
     return observedSnapshot
   }
+
   const observedSnapshot = { ...normalizedSnapshot, hostObservationToken: randomUUID() }
   rememberRemoteWorkspaceSnapshotEntry(targetId, {
     snapshot: observedSnapshot,
     minimumAuthorizedRevision: normalizedSnapshot.revision,
     maximumAuthorizedRevision: normalizedSnapshot.revision
   })
+
   return observedSnapshot
 }
 
@@ -88,17 +97,22 @@ export function rememberLocallyPatchedRemoteWorkspaceSnapshot(
 ): RemoteWorkspaceObservedSnapshot {
   const normalizedSnapshot = normalizeSnapshot(snapshot, snapshot.namespace)
   const current = latestSnapshotByTargetId.get(targetId)
+
   if (!current || normalizedSnapshot.revision > current.maximumAuthorizedRevision + 1) {
     return rememberRemoteWorkspaceSnapshot(targetId, normalizedSnapshot)
   }
+
   if (normalizedSnapshot.revision < current.snapshot.revision) {
     rememberRemoteWorkspaceSnapshotEntry(targetId, current)
+
     return current.snapshot
   }
+
   const observedSnapshot = {
     ...normalizedSnapshot,
     hostObservationToken: current.snapshot.hostObservationToken
   }
+
   rememberRemoteWorkspaceSnapshotEntry(targetId, {
     snapshot: observedSnapshot,
     minimumAuthorizedRevision: current.minimumAuthorizedRevision,
@@ -107,6 +121,7 @@ export function rememberLocallyPatchedRemoteWorkspaceSnapshot(
       normalizedSnapshot.revision
     )
   })
+
   return observedSnapshot
 }
 
@@ -114,12 +129,15 @@ export function getCachedRemoteWorkspaceSnapshot(
   targetId: string
 ): RemoteWorkspaceObservedSnapshot | undefined {
   const entry = latestSnapshotByTargetId.get(targetId)
+
   if (!entry) {
     return undefined
   }
+
   // Why: remote workspace snapshots can contain the whole tab/layout session
   // for a target. Touch cache hits so deleted or rarely used targets age out.
   rememberRemoteWorkspaceSnapshotEntry(targetId, entry)
+
   return entry.snapshot
 }
 
@@ -128,6 +146,7 @@ export function cachedRemoteWorkspaceSnapshotAuthorizesRevision(
   revision: number
 ): boolean {
   const entry = latestSnapshotByTargetId.get(targetId)
+
   return (
     entry !== undefined &&
     revision >= entry.minimumAuthorizedRevision &&

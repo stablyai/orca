@@ -23,6 +23,7 @@ function readPersistedHiddenDeliveryGateFlagSync(): boolean | null {
       persistedGateFlagCache = null
     }
   }
+
   return persistedGateFlagCache
 }
 
@@ -32,6 +33,7 @@ export function isRendererHiddenPtyDeliveryGateEnabled(
   if (settings !== null) {
     return settings.terminalHiddenDeliveryGate !== false
   }
+
   // Why: settings hydrate asynchronously; a pane/watcher bound before
   // hydration must honor the persisted kill switch — the responder-mode
   // decision made here is never revisited (same rationale as the

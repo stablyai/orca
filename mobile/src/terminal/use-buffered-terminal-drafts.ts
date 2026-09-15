@@ -45,18 +45,22 @@ export function useBufferedTerminalDrafts({
   activeHandleRef
 }: UseBufferedTerminalDraftsOptions) {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+
   const pendingRestorationsRef = useRef<Map<string, BufferedTerminalDraftRestorationToken>>(
     new Map()
   )
+
   const handlesBySurfaceRef = useRef<Map<string, string>>(new Map())
   const input = activeHandle ? (drafts[activeHandle] ?? '') : ''
 
   const setInput = useCallback(
     (value: BufferedTerminalDraftValue) => {
       const handle = activeHandleRef.current
+
       if (!handle) {
         return
       }
+
       invalidateBufferedTerminalDraftRestoration(pendingRestorationsRef.current, handle)
       setDrafts((current) => updateBufferedTerminalDraft(current, handle, value))
     },
@@ -67,6 +71,7 @@ export function useBufferedTerminalDrafts({
     (handle: string, draft: string): BufferedTerminalDraftSend => {
       const token = beginBufferedTerminalDraftRestoration(pendingRestorationsRef.current, handle)
       setDrafts((current) => updateBufferedTerminalDraft(current, handle, ''))
+
       return { draft, handle, token }
     },
     []
@@ -82,6 +87,7 @@ export function useBufferedTerminalDrafts({
     ) {
       return
     }
+
     setDrafts((current) =>
       restoreRejectedBufferedTerminalDraft(current, send.token.handle, send.draft)
     )
@@ -99,9 +105,11 @@ export function useBufferedTerminalDrafts({
 
   const pruneDrafts = useCallback((retainedHandles: ReadonlySet<string>): void => {
     const retainedMappedHandles = new Set(retainedHandles)
+
     for (const handle of handlesBySurfaceRef.current.values()) {
       retainedMappedHandles.add(handle)
     }
+
     setDrafts((current) => pruneBufferedTerminalDrafts(current, retainedMappedHandles))
     pruneBufferedTerminalDraftRestorations(pendingRestorationsRef.current, retainedMappedHandles)
   }, [])
@@ -113,12 +121,15 @@ export function useBufferedTerminalDrafts({
       { retainMissingSurfaces = false }: ReconcileBufferedTerminalDraftTabsOptions = {}
     ): void => {
       const handlesBySurface = handlesBySurfaceRef.current
+
       for (const tab of previousTabs) {
         if (tab.type && tab.type !== 'terminal') {
           continue
         }
+
         if (typeof tab.terminal === 'string') {
           const surfaceKey = getBufferedTerminalDraftSurfaceKey(tab)
+
           if (!handlesBySurface.has(surfaceKey)) {
             handlesBySurface.set(surfaceKey, tab.terminal)
           }
@@ -128,25 +139,32 @@ export function useBufferedTerminalDrafts({
       const retainedHandles = new Set<string>(
         retainMissingSurfaces ? handlesBySurface.values() : []
       )
+
       const retainedSurfaces = new Set<string>(retainMissingSurfaces ? handlesBySurface.keys() : [])
       const remaps: Array<{ previousHandle: string; nextHandle: string }> = []
+
       for (const tab of nextTabs) {
         if (tab.type && tab.type !== 'terminal') {
           continue
         }
+
         const surfaceKey = getBufferedTerminalDraftSurfaceKey(tab)
         retainedSurfaces.add(surfaceKey)
         const previousHandle = handlesBySurface.get(surfaceKey)
+
         if (typeof tab.terminal === 'string') {
           retainedHandles.add(tab.terminal)
+
           if (previousHandle && previousHandle !== tab.terminal) {
             remaps.push({ previousHandle, nextHandle: tab.terminal })
           }
+
           handlesBySurface.set(surfaceKey, tab.terminal)
         } else if (previousHandle) {
           retainedHandles.add(previousHandle)
         }
       }
+
       for (const surfaceKey of handlesBySurface.keys()) {
         if (!retainedSurfaces.has(surfaceKey)) {
           handlesBySurface.delete(surfaceKey)
@@ -160,12 +178,15 @@ export function useBufferedTerminalDrafts({
           nextHandle
         )
       }
+
       pruneBufferedTerminalDraftRestorations(pendingRestorationsRef.current, retainedHandles)
       setDrafts((current) => {
         let next = current
+
         for (const { previousHandle, nextHandle } of remaps) {
           next = remapBufferedTerminalDraft(next, previousHandle, nextHandle)
         }
+
         return pruneBufferedTerminalDrafts(next, retainedHandles)
       })
     },

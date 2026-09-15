@@ -19,6 +19,7 @@ export function normalizePiCompatibleEvent(
   if (agentType !== 'omp' && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
+
     // Why: a custom modal can switch sessions before its promise resolves.
     if (agentType !== 'pi' || hookPayload.ui_prompt_active !== true) {
       return null
@@ -27,14 +28,18 @@ export function normalizePiCompatibleEvent(
 
   // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
   const toolName = readString(hookPayload, 'tool_name')
+
   const isPiCompatibleAsk =
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
       (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
+
   const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
   const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
+
   const isPiUiPrompt =
     agentType === 'pi' && (eventName === 'ui_prompt_start' || hookPayload.ui_prompt_active === true)
+
   const isPiUiPromptEnd = agentType === 'pi' && eventName === 'ui_prompt_end'
 
   let stateName =

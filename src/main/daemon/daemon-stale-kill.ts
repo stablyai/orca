@@ -14,22 +14,27 @@ import { inspectDaemonProcessIdentity, isNoSuchProcessError } from './daemon-pid
 import { PROTOCOL_VERSION } from './types'
 
 const KILL_WAIT_MS = 3_000
+
 const KILL_POLL_MS = 100
+
 // Why: SIGKILL is delivered on return from an uninterruptible syscall, so confirm the exit
 // rather than assume it — but keep the wait short, it only guards the rare wedged case.
 const SIGKILL_CONFIRM_WAIT_MS = 1_000
 
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   for (;;) {
     try {
       process.kill(pid, 0)
     } catch {
       return true
     }
+
     if (Date.now() >= deadline) {
       return false
     }
+
     await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
   }
 }
@@ -69,9 +74,11 @@ export async function killStaleDaemon(
   // cleanup can be fenced to this exact incarnation rather than to whatever occupies the path
   // by the time we get there.
   let recordedOwner: ParsedDaemonPid | null = null
+
   try {
     const parsedPid = parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
     recordedOwner = parsedPid
+
     const identity = parsedPid
       ? await inspectDaemonProcessIdentity(
           parsedPid.pid,
@@ -80,6 +87,7 @@ export async function killStaleDaemon(
           parsedPid.startedAtMs
         )
       : 'mismatch'
+
     if (
       parsedPid &&
       identity === 'unknown' &&
@@ -92,10 +100,13 @@ export async function killStaleDaemon(
       console.warn(
         '[daemon] Preserving daemon that could not be inspected: reason=identity_probe_failed'
       )
+
       return { killed: false, liveOwnerSurvived: true }
     }
+
     if (parsedPid && identity === 'match') {
       const { pid, startedAtMs } = parsedPid
+
       try {
         process.kill(pid, 'SIGTERM')
       } catch (error) {
@@ -106,8 +117,10 @@ export async function killStaleDaemon(
           return { killed: false, liveOwnerSurvived: true }
         }
       }
+
       const deadline = Date.now() + KILL_WAIT_MS
       let exited = false
+
       while (Date.now() < deadline) {
         try {
           process.kill(pid, 0)
@@ -115,14 +128,17 @@ export async function killStaleDaemon(
           exited = true
           break
         }
+
         await new Promise((resolve) => setTimeout(resolve, KILL_POLL_MS))
       }
+
       if (!exited) {
         // Why: re-check process identity before SIGKILL. The SIGTERM-then-wait
         // window is long enough for the pid to be recycled if the original
         // daemon died during the wait. Without this, we'd SIGKILL an unrelated
         // process that happens to now own the same pid.
         const recheck = await inspectDaemonProcessIdentity(pid, socketPath, tokenPath, startedAtMs)
+
         if (recheck === 'mismatch') {
           // Why: the pid provably no longer belongs to our daemon, so it is gone regardless
           // of what the endpoint says.
@@ -147,16 +163,19 @@ export async function killStaleDaemon(
             // Already dead
             exited = true
           }
+
           // Why: issuing SIGKILL is not proof of death — a process blocked in an
           // uninterruptible syscall only dies once it returns. Claiming the kill without
           // confirming it is what let the endpoint be reclaimed out from under a daemon
           // that was still alive and still serving.
           exited = exited || (await waitForProcessExit(pid, SIGKILL_CONFIRM_WAIT_MS))
+
           if (!exited) {
             console.warn('[daemon] Daemon survived SIGKILL: reason=unconfirmed_exit')
           }
         }
       }
+
       killedDaemon = exited
       // Why: SIGTERM and SIGKILL both failed to produce an exit, so the daemon is still out
       // there holding the endpoint. Treat it as the owner rather than racing it.
@@ -196,5 +215,6 @@ export async function killStaleDaemon(
   if ((await probeEndpoint(socketPath)) === 'connected') {
     return { killed: killedDaemon, liveOwnerSurvived: true }
   }
+
   return { killed: killedDaemon, liveOwnerSurvived }
 }

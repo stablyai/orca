@@ -24,11 +24,13 @@ function mapEntriesMatch<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>
   if (left.size !== right.size) {
     return false
   }
+
   for (const [key, value] of left) {
     if (right.get(key) !== value) {
       return false
     }
   }
+
   return true
 }
 
@@ -94,6 +96,7 @@ export class AgentSessionStoreTransactionQueue {
         if (this.readOnly) {
           throw new Error('agent_session_legacy_required')
         }
+
         await this.refreshExternallyChangedState()
         const records = new Map(this.state.records)
         const operations = new Map(this.state.operations)
@@ -101,15 +104,19 @@ export class AgentSessionStoreTransactionQueue {
         const unreadableRecords = new Map(this.state.unreadableRecords)
         const visibleSessionIds = new Set(this.state.visibleSessionIds)
         const visibleSessionIdsIndexPresent = this.state.visibleSessionIdsIndexPresent
+
         try {
           // The lost commit may have granted a higher fence than the backup records show. Rather
           // than refuse forever, raise every recovered fence clear of anything that commit could
           // have minted, then continue in the same transaction.
           const recovering = this.diskRecoveredFromBackup
+
           if (recovering) {
             raiseAgentSessionFencesAfterBackupRecovery(this.state)
           }
+
           const result = apply()
+
           if (
             !recovering &&
             !this.needsRewrite &&
@@ -125,6 +132,7 @@ export class AgentSessionStoreTransactionQueue {
           ) {
             return result
           }
+
           await saveAgentSessionStore(this.filePath, this.state, {
             primaryStatus: this.diskStoreFound && !recovering ? 'validated' : 'unusable-or-absent'
           })
@@ -133,6 +141,7 @@ export class AgentSessionStoreTransactionQueue {
           this.diskRecoveredFromBackup = false
           this.diskStoreFound = true
           this.needsRewrite = false
+
           return result
         } catch (error) {
           this.state.records = records
@@ -145,7 +154,9 @@ export class AgentSessionStoreTransactionQueue {
         }
       })
     )
+
     this.queue = run.catch(() => {})
+
     return run
   }
 
@@ -155,19 +166,25 @@ export class AgentSessionStoreTransactionQueue {
 
   private async refreshExternallyChangedState(): Promise<void> {
     const loaded = await loadAgentSessionStore(this.filePath, this.hostId)
+
     if (this.diskStoreFound && !loaded.storeFound) {
       throw new Error('agent_session_store_corrupt')
     }
+
     this.diskStoreFound ||= loaded.storeFound
     const diskRevision = agentSessionStoreRevision(loaded.state)
     this.diskRecoveredFromBackup = loaded.recoveredFromBackup
+
     if (diskRevision === this.diskRevision) {
       this.needsRewrite ||= loaded.needsRewrite
+
       return
     }
+
     if (loaded.readOnly) {
       throw new Error('agent_session_legacy_required')
     }
+
     markLoadedLeasesUnreconciled(loaded.state)
     this.state = loaded.state
     this.diskRevision = diskRevision

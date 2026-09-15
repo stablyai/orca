@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export const RUNTIME_REPO_ID = 'repo-2'
+
 export const RUNTIME_WORKSPACE_ID = 'workspace-2'
 
 /** Builds the host-scoped response used by the page harness. */
@@ -35,6 +36,7 @@ export function addRuntimeProject(mocks: RuntimeFixtureMocks, runtimeId: string)
     worktreeBaseRef: 'main',
     executionHostId: `runtime:${runtimeId}`
   } as Repo
+
   const worktree = {
     id: RUNTIME_WORKSPACE_ID,
     repoId: RUNTIME_REPO_ID,
@@ -42,6 +44,7 @@ export function addRuntimeProject(mocks: RuntimeFixtureMocks, runtimeId: string)
     path: '/repos/gpu-orca',
     branch: 'main'
   } as Worktree
+
   const setup: ProjectHostSetup = {
     id: 'setup-2',
     projectId: 'project-2',
@@ -54,6 +57,7 @@ export function addRuntimeProject(mocks: RuntimeFixtureMocks, runtimeId: string)
     createdAt: 1,
     updatedAt: 1
   }
+
   const repos = mocks.state.repos as Repo[]
   const setups = mocks.state.projectHostSetups as ProjectHostSetup[]
   const worktreesByRepo = mocks.state.worktreesByRepo as Record<string, Worktree[]>

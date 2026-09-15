@@ -31,19 +31,23 @@ export function resolveTerminalCloseTarget(
   if (precomputed) {
     return { worktreeId: precomputed.owningWorktreeId, terminalTabId: tabId }
   }
+
   for (const [worktreeId, worktreeTabs] of Object.entries(state.tabsByWorktree)) {
     if (worktreeTabs.some((tab) => tab.id === tabId)) {
       return { worktreeId, terminalTabId: tabId }
     }
   }
+
   for (const [worktreeId, unifiedTabs] of Object.entries(state.unifiedTabsByWorktree ?? {})) {
     const unified = unifiedTabs.find(
       (tab) => tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)
     )
+
     if (unified) {
       return { worktreeId, terminalTabId: unified.entityId }
     }
   }
+
   return null
 }
 
@@ -54,13 +58,16 @@ export function getWorktreeTerminalTabIds(
   worktreeId: string
 ): string[] {
   const ids = new Set<string>()
+
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
     ids.add(tab.id)
   }
+
   for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
     if (tab.contentType === 'terminal') {
       ids.add(tab.entityId)
     }
   }
+
   return [...ids]
 }

@@ -10,11 +10,17 @@ import {
 import { clampNumber } from '@/lib/terminal-theme'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
+
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
+
 export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
+
 export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
+
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
+
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'
+
 export const ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT = 'orca:editor-request-file-close'
 
 export type EditorPathMutationTarget = {
@@ -85,6 +91,7 @@ export function canAutoSaveOpenFile(file: OpenFile): boolean {
   if (file.readOnly === true) {
     return false
   }
+
   // Why: single-file editors and one-file unstaged diffs have an unambiguous
   // write target. Combined diff and conflict-review tabs can represent multiple
   // paths, so autosave must stay out of those surfaces until they have their
@@ -119,10 +126,12 @@ export function normalizeAutoSaveDelayMs(value: unknown): number {
   // effectively immediate save loop or an unexpectedly huge wait.
   const numericValue =
     typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : null
+
   const normalizedValue =
     numericValue !== null && Number.isFinite(numericValue)
       ? numericValue
       : DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS
+
   return clampNumber(normalizedValue, MIN_EDITOR_AUTO_SAVE_DELAY_MS, MAX_EDITOR_AUTO_SAVE_DELAY_MS)
 }
 
@@ -133,19 +142,23 @@ export function getOpenFilesForExternalFileChange(
   if (target.indexedOpenFiles) {
     return target.indexedOpenFiles.matches(openFiles)
   }
+
   const absolutePath = joinPath(target.worktreePath, target.relativePath)
   const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
+
   return openFiles.filter((file) => {
     if (file.worktreeId !== target.worktreeId) {
       return false
     }
+
     if (
       hasRuntimeOwnerFilter &&
       (file.runtimeEnvironmentId?.trim() || null) !== targetRuntimeOwner
     ) {
       return false
     }
+
     if (file.mode === 'edit' || file.mode === 'markdown-preview') {
       return (
         file.filePath === absolutePath ||
@@ -154,12 +167,14 @@ export function getOpenFilesForExternalFileChange(
           areLocalWindowsWslPathAliases(file.filePath, absolutePath))
       )
     }
+
     if (file.mode === 'diff') {
       return (
         (file.diffSource === 'unstaged' || file.diffSource === 'staged') &&
         file.relativePath === target.relativePath
       )
     }
+
     return false
   })
 }
@@ -178,6 +193,7 @@ export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget):
         }
       })
     )
+
     // Why: discard/delete flows also run when no editor tab is mounted. Let
     // those external mutations proceed immediately instead of hanging forever
     // waiting on a quiesce listener that does not exist in that UI state.
@@ -202,6 +218,7 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
         }
       })
     )
+
     // Why: a direct save request should never report success unless some
     // controller actually accepted responsibility for writing the file. Unlike
     // quiesce, silently no-oping here would make Cmd/Ctrl+S look successful

@@ -28,12 +28,14 @@ export function useAppChromeLayout() {
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+
   // Why: the creation surface owns the tab strip from the first pending frame; gating on the delayed loader flag swapped the tab bar mid-create.
   const activePendingCreationExists = useAppStore(
     (s) =>
       s.activePendingCreationId !== null &&
       s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
   )
+
   const {
     activeWorktreeId,
     tabCount,
@@ -41,6 +43,7 @@ export function useAppChromeLayout() {
     activeTabCanExpand,
     effectiveActiveTabExpanded
   } = useAppStore(useShallow(selectActiveTerminalChromeState))
+
   const backgroundTerminalMountRequested = useSyncExternalStore(
     subscribeBackgroundTerminalWorktreeMountRequests,
     hasRequestedBackgroundTerminalWorktreeMount,
@@ -48,6 +51,7 @@ export function useAppChromeLayout() {
   )
 
   const systemPrefersDark = useSystemPrefersDark()
+
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
@@ -58,26 +62,34 @@ export function useAppChromeLayout() {
   // render-phase ref write would also survive a render React discards. Setting state during
   // render is the supported way to derive it, and the `||` below keeps this render correct.
   const [hasMountedTerminalWorkbench, setHasMountedTerminalWorkbench] = useState(false)
+
   if (canMountTerminalWorkbenchNow && !hasMountedTerminalWorkbench) {
     setHasMountedTerminalWorkbench(true)
   }
+
   // Why: skip the terminal bundle on the landing path, but once mounted keep hidden panes alive through sleep/shutdown when activeWorktreeId briefly goes null.
   const shouldMountTerminalWorkbench = canMountTerminalWorkbenchNow || hasMountedTerminalWorkbench
+
   // Why: visible worktree creation owns its faux tab strip start to finish; keep the previous workspace mounted for retention without real chrome.
   const creationLayoutActive = shouldShowWorktreeCreationSurface({
     activeView,
     activePendingCreationId,
     hasActivePendingCreation: activePendingCreationExists
   })
+
   const workspaceChromeActive =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
+
   const hasTabBar = tabCount >= 2
+
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
+
   // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
   const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
+
   // Visible creation keeps only the top-left window chrome; tabs and right-sidebar chrome stay gated by workspaceChromeActive.
   const leftTitlebarChromeLayout = resolveLeftTitlebarChromeLayout({
     workspaceChromeActive,
@@ -95,6 +107,7 @@ export function useAppChromeLayout() {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current
+
     if (!controls) {
       return
     }
@@ -104,10 +117,13 @@ export function useAppChromeLayout() {
     }
 
     updateWidth()
+
     const observer = new ResizeObserver(() => {
       updateWidth()
     })
+
     observer.observe(controls)
+
     return () => observer.disconnect()
   }, [
     isFullScreen,

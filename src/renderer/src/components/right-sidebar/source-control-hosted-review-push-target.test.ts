@@ -293,11 +293,13 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
       ahead: 7,
       behind: 2
     }
+
     const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
       hasResolvableHostedReviewPushTargetLink: true,
       branchName: 'mobile-resume-suspected-fixes',
       upstreamStatus: realUpstream
     })
+
     expect(canUseHostedReviewPushTarget).toBe(true)
     expect(
       resolveHostedReviewActionUpstreamStatus({
@@ -322,17 +324,21 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
       ahead: 1,
       behind: 0
     }
+
     const hasResolvable = hasResolvableHostedReviewPushTargetLink({
       linkedGitHubPR: null,
       fallbackGitHubPR: 8333,
       linkedGitLabMR: null
     })
+
     expect(hasResolvable).toBe(true)
+
     const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
       hasResolvableHostedReviewPushTargetLink: hasResolvable,
       branchName: 'fix-f1-codex-wsl-path-trust',
       upstreamStatus: realUpstream
     })
+
     expect(canUseHostedReviewPushTarget).toBe(true)
     expect(
       resolveHostedReviewActionUpstreamStatus({

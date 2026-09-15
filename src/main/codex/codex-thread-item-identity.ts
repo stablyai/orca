@@ -32,7 +32,9 @@ export function readCodexThreadItem(value: unknown): CodexThreadItem | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
+
   const record = value as Record<string, unknown>
+
   return typeof record.type === 'string' && typeof record.id === 'string'
     ? (record as CodexThreadItem)
     : null
@@ -53,6 +55,7 @@ export function codexItemIdentity(input: {
   ordinals: CodexTurnOrdinals
 }): AgentJournalItemIdentity {
   const { item, turnId } = input
+
   if (turnId && isCodexMessageItemType(item.type)) {
     return {
       provider: 'codex',
@@ -61,5 +64,6 @@ export function codexItemIdentity(input: {
       ordinal: input.ordinals.ordinalFor(input.threadId, turnId, item.id)
     }
   }
+
   return { provider: 'orca', clientMessageId: `codex-item:${input.threadId}:${item.id}` }
 }

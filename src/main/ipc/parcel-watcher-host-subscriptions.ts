@@ -31,42 +31,57 @@ export function handleWatcherHostMessage(
     const settle = pendingUnsubscribes.get(message.id)
     pendingUnsubscribes.delete(message.id)
     settle?.()
+
     return
   }
+
   const record = records.get(message.id)
+
   if (!record) {
     return
   }
+
   if (message.op === 'subscribed') {
     resetPendingSubscribeAttempt(record)
     takePendingSubscribe(record)?.resolve()
+
     if (record.interrupted) {
       record.interrupted = false
       record.hooks.onInterruption?.()
     }
+
     return
   }
+
   if (message.op === 'subscribe-failed') {
     records.delete(message.id)
     resetPendingSubscribeAttempt(record)
     const pending = takePendingSubscribe(record)
     const error = new WatcherProcessFailure(message.message, 'subscription', 'subscribe_failed')
+
     if (pending) {
       pending.reject(error)
     } else {
       reportTerminalError(record, error)
     }
+
     killWatcherChildIfIdle()
+
     return
   }
+
   if (message.op === 'events') {
     record.callback(null, message.events)
+
     return
   }
+
   if (message.op === 'overflow') {
     record.hooks.onOverflow?.()
+
     return
   }
+
   record.callback(new Error(message.message), [])
 }
 
@@ -76,17 +91,22 @@ export function reportWatcherTerminalError(
 ): void {
   if (isWatcherProcessFailure(error) && error.physicalExit) {
     terminalTeardownFailures.set(record, error)
+
     const clearFailure = (): void => {
       if (terminalTeardownFailures.get(record) === error) {
         terminalTeardownFailures.delete(record)
       }
     }
+
     void error.physicalExit.then(clearFailure, clearFailure)
   }
+
   if (record.hooks.onTerminalError) {
     record.hooks.onTerminalError(error)
+
     return
   }
+
   record.callback(error, [])
 }
 
@@ -98,12 +118,14 @@ export function failAllWatcherSubscriptions(
   for (const record of Array.from(records.values())) {
     resetPendingSubscribeAttempt(record)
     const pending = takePendingSubscribe(record)
+
     if (pending) {
       pending.reject(error)
     } else {
       reportWatcherTerminalError(record, error)
     }
   }
+
   records.clear()
 }
 
@@ -114,6 +136,7 @@ export function resolvePendingWatcherUnsubscribes(
   for (const settle of pendingUnsubscribes.values()) {
     settle(error)
   }
+
   pendingUnsubscribes.clear()
 }
 
@@ -141,43 +164,57 @@ export function createHostWatcherSubscription({
   return {
     unsubscribe: (): Promise<void> => {
       const terminalFailure = terminalTeardownFailures.get(record)
+
       if (terminalFailure) {
         return Promise.reject(terminalFailure)
       }
+
       const termination = getTerminationPromise()
+
       if (!records.delete(record.id)) {
         return termination ?? Promise.resolve()
       }
+
       resetPendingSubscribeAttempt(record)
+
       if (termination) {
         return termination
       }
+
       if (records.size === 0) {
         return killWatcherChildIfIdle()
       }
+
       const child = getChild()
+
       if (!child?.connected) {
         return terminateUnavailableChild(child)
       }
+
       return new Promise((resolve, reject) => {
         const onTimeout = (): void => {
           if (pendingUnsubscribes.get(record.id) !== settle) {
             return
           }
+
           // Why: canary setup itself can fail, so native teardown needs an
           // independent host deadline that exits the child and releases handles.
           void terminateUnavailableChild(child).catch(() => undefined)
         }
+
         const timer = setTimeout(onTimeout, WATCHER_PROCESS_UNSUBSCRIBE_TIMEOUT_MS)
         timer.unref?.()
+
         const settle: PendingWatcherUnsubscribe = (error) => {
           clearTimeout(timer)
+
           if (error) {
             reject(error)
           } else {
             resolve()
           }
         }
+
         pendingUnsubscribes.set(record.id, settle)
         sendToChild(child, { op: 'unsubscribe', id: record.id })
       })

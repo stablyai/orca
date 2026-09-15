@@ -15,6 +15,7 @@ import {
 } from './helpers/terminal'
 
 const SIGWINCH_PROBE_PAGE = 100
+
 const SIGWINCH_PROBE_ROWS = 12
 
 type HiddenOutputDebugSnapshot = {
@@ -57,6 +58,7 @@ function buildSigwinchResetProbeCommand(): string {
     "process.on('SIGWINCH',()=>{if(armed===false)return;page=0;paint(topLabel)})",
     'setInterval(()=>{},1000)'
   ].join(';')
+
   // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
   return stageNodeScriptForTerminal(script, { prefix: 'orca-sigwinch-probe' }).command
 }
@@ -71,16 +73,21 @@ async function createAgentMarkedTerminalTab(
   command: string
 ): Promise<string> {
   const worktreeId = (await getActiveWorktreeId(page))!
+
   return page.evaluate(
     ({ worktreeId, agent, command }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const state = store.getState()
+
       const tab = state.createTab(worktreeId, undefined, undefined, {
         launchAgent: agent
       })
+
       state.queueTabStartupCommand(tab.id, {
         command,
         launchAgent: agent,
@@ -92,6 +99,7 @@ async function createAgentMarkedTerminalTab(
       })
       state.setActiveTab(tab.id)
       state.setActiveTabType('terminal')
+
       return tab.id
     },
     { worktreeId, agent, command }
@@ -101,9 +109,11 @@ async function createAgentMarkedTerminalTab(
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     store.getState().setActiveTab(id)
     store.getState().setActiveTabType('terminal')
   }, tabId)
@@ -127,6 +137,7 @@ async function waitForPanePtyIdOnTab(page: Page, tabId: string): Promise<void> {
         page.evaluate((id) => {
           const manager = window.__paneManagers?.get(id)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return pane?.container?.dataset?.ptyId ?? null
         }, tabId),
       { timeout: 15_000, message: `Pane for tab ${tabId} did not receive a PTY binding` }
@@ -141,9 +152,11 @@ async function readPaneIdentityOnTab(
   const identity = await page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       return null
     }
+
     return {
       leafId: pane.container.dataset.leafId ?? null,
       ptyId: pane.container.dataset.ptyId ?? null,
@@ -151,9 +164,11 @@ async function readPaneIdentityOnTab(
       rows: pane.terminal.rows
     }
   }, tabId)
+
   if (!identity?.leafId || !identity.ptyId) {
     throw new Error(`Pane identity for tab ${tabId} is incomplete`)
   }
+
   return {
     leafId: identity.leafId,
     ptyId: identity.ptyId,
@@ -189,6 +204,7 @@ async function injectPaneData(
       ) ?? false,
     { paneKey, data, meta }
   )
+
   if (!injected) {
     throw new Error(`No terminal PTY data injector registered for ${paneKey}`)
   }
@@ -202,9 +218,11 @@ async function setHiddenSnapshotOverride(
   await page.evaluate(
     ({ ptyId, snapshot }) => {
       const api = (window as HiddenOutputRecoveryWindow).__terminalHiddenSnapshotOverride
+
       if (!api) {
         throw new Error('Hidden snapshot override API unavailable')
       }
+
       api.setPending(ptyId, snapshot)
       api.resolve(ptyId)
     },
@@ -222,11 +240,13 @@ test.describe('Terminal tab switch SIGWINCH restore', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const shellTabId = (await getActiveTabId(orcaPage))!
+
     const agentTabId = await createAgentMarkedTerminalTab(
       orcaPage,
       'codex',
       buildSigwinchResetProbeCommand()
     )
+
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await waitForPanePtyIdOnTab(orcaPage, agentTabId)
     await expect
@@ -275,9 +295,11 @@ test.describe('Terminal tab switch SIGWINCH restore', () => {
       .poll(
         async () => {
           const content = await getTerminalContent(orcaPage, 8_000)
+
           if (content.includes('TOP_AFTER_SIGWINCH page=0')) {
             return 'top'
           }
+
           return content.includes(`RESTORED_SNAPSHOT page=${SIGWINCH_PROBE_PAGE}`)
             ? 'snapshot'
             : 'pending'

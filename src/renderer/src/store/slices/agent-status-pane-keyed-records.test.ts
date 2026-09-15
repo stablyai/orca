@@ -9,9 +9,11 @@ import {
 
 function keyRecord(keys: readonly string[]): Record<string, true> {
   const record: Record<string, true> = {}
+
   for (const key of keys) {
     record[key] = true
   }
+
   return record
 }
 
@@ -112,18 +114,22 @@ describe('boundRecentlyClosedAgentStatusTabIds', () => {
 
 it('does not enumerate unrelated pane records when removing absent keys', () => {
   let enumerations = 0
+
   const record = new Proxy(
     Object.fromEntries(Array.from({ length: 1000 }, (_, index) => [`tab-${index}:leaf`, index])),
     {
       ownKeys(target) {
         enumerations += 1
+
         return Reflect.ownKeys(target)
       }
     }
   )
+
   for (let index = 0; index < 200; index += 1) {
     expect(removePaneKeys(record, new Set(['absent:leaf']))).toBe(record)
   }
+
   expect(enumerations).toBe(0)
 })
 

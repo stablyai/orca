@@ -16,19 +16,24 @@ export async function importPetBundle(
 ): Promise<CustomPet | null> {
   const senderWindow =
     BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
+
   // Why: the bundle is a folder, but Finder may let users pick `pet.json` inside it — post-pick logic walks up to the parent.
   const options: Electron.OpenDialogOptions = {
     title: 'Pick a .codex-pet bundle',
     properties: ['openFile', 'openDirectory', 'treatPackageAsDirectory']
   }
+
   const result = senderWindow
     ? await dialog.showOpenDialog(senderWindow, options)
     : await dialog.showOpenDialog(options)
+
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
+
   const picked = result.filePaths[0]
   let bundleDir: string
+
   try {
     const pickedStat = await stat(picked)
     bundleDir = pickedStat.isDirectory() ? picked : dirname(picked)
@@ -38,25 +43,31 @@ export async function importPetBundle(
 
   const manifestPath = join(bundleDir, 'pet.json')
   let manifestStat: Awaited<ReturnType<typeof stat>>
+
   try {
     manifestStat = await stat(manifestPath)
   } catch {
     throw new Error('Bundle is missing pet.json.')
   }
+
   if (!manifestStat.isFile() || manifestStat.size > MAX_MANIFEST_BYTES) {
     throw new Error('pet.json is invalid.')
   }
+
   if (await isSymlink(manifestPath)) {
     throw new Error('pet.json must not be a symlink.')
   }
 
   let manifest: ResolvedPetManifest<PetManifest>
+
   try {
     const raw = await readFile(manifestPath, 'utf8')
+
     // Why: defend against TOCTOU — the file may have grown between the stat check and this read.
     if (Buffer.byteLength(raw, 'utf8') > MAX_MANIFEST_BYTES) {
       throw new Error('pet.json exceeded the manifest size limit.')
     }
+
     manifest = applyCodexPetDefaults(PetManifestSchema.parse(JSON.parse(raw)))
   } catch (error) {
     throw new Error(`Invalid pet.json: ${error instanceof Error ? error.message : 'parse error'}`)
@@ -75,6 +86,7 @@ export async function importPetBundle(
   const sheetFileName = `spritesheet${sheetExt}`
   // Why: stage into a sibling .tmp then atomically rename, so a mid-copy failure can't leave a half-imported bundle.
   const tmpDir = `${destDir}.tmp`
+
   try {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
     await mkdir(tmpDir, { recursive: true })
@@ -88,6 +100,7 @@ export async function importPetBundle(
 
   const rawLabel = (manifest.displayName ?? manifest.id ?? basename(bundleDir)).trim()
   const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Pet bundle'
+
   return {
     id,
     label,

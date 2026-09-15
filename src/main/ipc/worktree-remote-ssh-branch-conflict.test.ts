@@ -13,24 +13,31 @@ function providerAnswering(answers: {
     if (args[0] === 'remote') {
       return { stdout: `${answers.remotes.join('\n')}\n`, stderr: '' }
     }
+
     if (args[0] === 'rev-parse') {
       if (!answers.localBranchHead) {
         throw new Error('missing ref')
       }
+
       return { stdout: `${answers.localBranchHead}\n`, stderr: '' }
     }
+
     if (args[0] === 'show-ref') {
       const matches = answers.remoteRefs.filter((ref) => args.includes(ref))
+
       if (matches.length > 0) {
         return {
           stdout: `${matches.map((ref) => `abc ${ref}`).join('\n')}\n`,
           stderr: ''
         }
       }
+
       throw Object.assign(new Error('missing remote ref'), { code: 1 })
     }
+
     throw new Error(`unexpected git ${args.join(' ')}`)
   })
+
   return { exec }
 }
 

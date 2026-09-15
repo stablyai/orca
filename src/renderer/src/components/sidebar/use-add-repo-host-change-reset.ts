@@ -24,6 +24,7 @@ export function useAddRepoHostChangeReset({
     if (!isOpen || previousSelectedHostIdRef.current === selectedHostId) {
       return
     }
+
     // Why: Add Project form fields are host-path scoped, so switching hosts must
     // clear typed paths and pending defaults before they can be submitted.
     previousSelectedHostIdRef.current = selectedHostId

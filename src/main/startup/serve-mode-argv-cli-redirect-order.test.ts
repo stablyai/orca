@@ -5,6 +5,7 @@ import { getCliLaunchArgs } from './cli-launch-redirect'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
 
 const CLI_ENTRY_PATH = '/opt/orca/resources/app.asar.unpacked/out/cli/index.js'
+
 const REDIRECT_OPTIONS = {
   platform: 'linux' as const,
   isPackaged: true,
@@ -56,6 +57,7 @@ describe('serve argv rewrite vs CLI launch redirect ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
       'utf8'
     )
+
     const cliRedirect = source.indexOf('maybeRedirectCliLaunch({')
     const rewrite = source.indexOf('process.argv = normalizeServeModeArgv(process.argv)')
     const serveModeCheck = source.indexOf("state.isServeMode = process.argv.includes('--serve')")

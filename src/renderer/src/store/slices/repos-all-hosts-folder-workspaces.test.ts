@@ -85,13 +85,21 @@ const remoteFolderWorkspace: FolderWorkspace = {
 }
 
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
+
 const projectGroupsList = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const runtimeEnvironmentsList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const dispatchEventMock = vi.fn()
 
 beforeEach(() => {
@@ -121,6 +129,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     if (args.method === 'projectGroup.list') {
       return {
         id: 'rpc-project-group-list',
@@ -129,6 +138,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     if (args.method === 'folderWorkspace.list') {
       return {
         id: 'rpc-folder-workspace-list',
@@ -137,6 +147,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     return {
       id: 'rpc-other',
       ok: true,
@@ -209,11 +220,13 @@ describe('all-host folder workspace startup catalogs', () => {
       id: 'remote-group-2',
       executionHostId: 'runtime:env-2'
     }
+
     const secondRemoteFolder: FolderWorkspace = {
       ...remoteFolderWorkspace,
       id: 'remote-folder-2',
       projectGroupId: secondRemoteGroup.id
     }
+
     runtimeEnvironmentsList.mockResolvedValue([
       { id: 'env-1', name: 'lobster' },
       { id: 'env-2', name: 'shrimp' }
@@ -223,6 +236,7 @@ describe('all-host folder workspace startup catalogs', () => {
         if (args.method === 'folderWorkspace.list') {
           const folderWorkspaces =
             args.selector === 'env-2' ? [secondRemoteFolder] : [remoteFolderWorkspace]
+
           return {
             id: `rpc-folder-workspace-list-${args.selector}`,
             ok: true,
@@ -230,6 +244,7 @@ describe('all-host folder workspace startup catalogs', () => {
             _meta: { runtimeId: `runtime-${args.selector}` }
           }
         }
+
         return {
           id: `rpc-other-${args.selector}`,
           ok: true,
@@ -262,6 +277,7 @@ describe('all-host folder workspace startup catalogs', () => {
       if (args.method === 'projectGroup.list' || args.method === 'folderWorkspace.list') {
         throw new Error('runtime_unreachable')
       }
+
       return {
         id: 'rpc-other',
         ok: true,

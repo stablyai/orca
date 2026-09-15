@@ -13,6 +13,7 @@ import { TooltipProvider } from '../ui/tooltip'
 afterEach(() => cleanup())
 
 const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
+
 const TAILNET: MobileNetworkInterface = { name: 'tailscale0', address: '100.64.1.20' }
 
 function renderSection(
@@ -23,6 +24,7 @@ function renderSection(
   const onCustomAddressRemove = vi.fn()
   const onRefreshNetworkInterfaces = vi.fn()
   const onGenerateQr = vi.fn()
+
   const props: React.ComponentProps<typeof MobilePairingSetupSection> = {
     connectionMode: 'local-only',
     connectionPathControl: <div data-testid="path-control">path</div>,
@@ -40,12 +42,15 @@ function renderSection(
     onGenerateQr,
     ...overrides
   }
+
   const user = userEvent.setup()
+
   const rendered = render(
     <TooltipProvider>
       <MobilePairingSetupSection {...props} />
     </TooltipProvider>
   )
+
   return {
     ...rendered,
     user,
@@ -83,6 +88,7 @@ describe('MobilePairingSetupSection', () => {
       connectionMode: 'automatic',
       selectedAddress: undefined
     })
+
     expect(screen.queryByText('This computer’s address')).toBeNull()
     expect(screen.queryByRole('combobox')).toBeNull()
     expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeEnabled()
@@ -145,6 +151,7 @@ describe('MobilePairingSetupSection', () => {
   it('lists and removes saved custom addresses without selecting them', async () => {
     const first = 'first.example:6768'
     const second = 'second.example:6768'
+
     const { user, onSelectedAddressChange, onCustomAddressSelect, onCustomAddressRemove } =
       renderSection({ customAddresses: [first, second] })
 
@@ -171,6 +178,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('restores list focus after removing a custom address with the keyboard', async () => {
     const address = 'first.example:6768'
+
     const { user, props, rerender, onCustomAddressSelect } = renderSection({
       customAddresses: [address]
     })
@@ -191,6 +199,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('selects a saved custom address through the custom path', async () => {
     const address = '100.64.1.20'
+
     const { user, onSelectedAddressChange, onCustomAddressSelect } = renderSection({
       customAddresses: [address],
       selectedAddressIsCustom: true
@@ -223,6 +232,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('supports prefix typeahead across custom addresses', async () => {
     const address = 'zebra.example:6768'
+
     const { user, onCustomAddressSelect } = renderSection({
       customAddresses: ['alpha.example:6768', address]
     })
@@ -239,6 +249,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('selects the highlighted custom address with Space', async () => {
     const address = 'first.example:6768'
+
     const { user, onCustomAddressSelect, onCustomAddressRemove } = renderSection({
       customAddresses: [address]
     })

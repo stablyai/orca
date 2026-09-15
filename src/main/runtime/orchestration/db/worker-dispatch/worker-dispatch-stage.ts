@@ -18,13 +18,16 @@ export function recordWorkerStage(
   }
 ): WorkerDispatchRow {
   const current = this.getWorkerDispatch(params.dispatchId)
+
   if (!current) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Dispatch ${params.dispatchId} was not found.`
     )
   }
+
   this.db.exec('SAVEPOINT worker_stage_transition')
+
   try {
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
@@ -50,6 +53,7 @@ export function recordWorkerStage(
     this.db.exec('RELEASE worker_stage_transition')
     throw error
   }
+
   return this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow
 }
 
@@ -62,17 +66,22 @@ export function updateWorkerSetupEvidence(
   }
 ): { worker: WorkerDispatchRow; changed: boolean } {
   const current = this.getWorkerDispatch(params.dispatchId)
+
   if (!current) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Dispatch ${params.dispatchId} was not found.`
     )
   }
+
   const effects = JSON.stringify(params.effects)
+
   if (current.setup_state === params.setupState && current.effects === effects) {
     return { worker: current, changed: false }
   }
+
   this.db.exec('SAVEPOINT worker_setup_transition')
+
   try {
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
@@ -91,6 +100,7 @@ export function updateWorkerSetupEvidence(
     this.db.exec('RELEASE worker_setup_transition')
     throw error
   }
+
   return {
     worker: this.getWorkerDispatch(params.dispatchId) as WorkerDispatchRow,
     changed: true

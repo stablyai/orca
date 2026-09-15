@@ -104,6 +104,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     toggleGitHubStatus,
     toggleGitLabStatus
   } = model
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {renderMobileTasksChrome(model)}
@@ -131,6 +132,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
       {!error && provider === 'github' && githubMode === 'items'
         ? githubSourceErrors.map((sourceError) => {
             const isRetrying = retryingGithubSourceRepoPaths.has(sourceError.repoPath)
+
             return (
               <View
                 key={`github-source-error:${sourceError.repoId}:${sourceError.source.owner}/${sourceError.source.repo}`}
@@ -308,6 +310,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           if (!taskUiReady || !pendingHostedMerge) {
             return
           }
+
           void mergeHostedReview(pendingHostedMerge.item, pendingHostedMerge.method)
         }}
         onCancel={() => setPendingHostedMerge(null)}
@@ -329,6 +332,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           if (!taskUiReady || !pendingProjectGitHubMerge) {
             return
           }
+
           void mergeProjectGitHubPullRequest(
             pendingProjectGitHubMerge.row,
             pendingProjectGitHubMerge.method
@@ -358,14 +362,19 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           if (!taskUiReady || !pendingHostedStateChange) {
             return
           }
+
           if (pendingHostedStateChange.source === 'task') {
             if (pendingHostedStateChange.item.provider === 'gitlab') {
               void toggleGitLabStatus(pendingHostedStateChange.item)
+
               return
             }
+
             void toggleGitHubStatus(pendingHostedStateChange.item)
+
             return
           }
+
           void mutateProjectRowIssueOrPr(pendingHostedStateChange.row, {
             state: pendingHostedStateChange.nextState
           })

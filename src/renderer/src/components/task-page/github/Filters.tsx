@@ -13,6 +13,7 @@ import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../../task-
 import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+
 export function TaskPageGitHubFilters({
   model
 }: {
@@ -51,6 +52,7 @@ export function TaskPageGitHubFilters({
     handleTaskSearchKeyDown,
     githubTasksBusy
   } = model
+
   return (
     // Why: top of the joined GitHub list card — pairs with the
     // table shell below (rounded-t-none border-t-0) as one surface.
@@ -61,6 +63,7 @@ export function TaskPageGitHubFilters({
       <div className="flex flex-wrap gap-1.5">
         {getGitHubTaskKindPresets(activeGithubTaskKind).map((option) => {
           const active = activeTaskPreset === option.id
+
           return (
             <button
               key={option.id}
@@ -142,6 +145,7 @@ export function TaskPageGitHubFilters({
                     draft: useAppStore.getState().newIssueDraft,
                     selectedRepoIds: selectedRepos.map((r) => r.id)
                   })
+
                   setNewIssueTitle(seed.title)
                   setNewIssueBody(seed.body)
                   setNewIssueLabels(seed.labels)
@@ -196,15 +200,18 @@ export function TaskPageGitHubFilters({
         const rows = perRepoSourceState.filter(
           (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
         )
+
         if (rows.length === 0) {
           return null
         }
+
         return (
           <div className="flex flex-wrap items-center gap-2">
             {rows.map((s) => {
               const repo = selectedRepos.find((r) => r.id === s.repoId)
               const showRepoBadgeLabel = selectedRepos.length > 1 && repo
               const selectorRenderable = hasUpstreamCandidateDivergence(s)
+
               // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.
               if (!selectorRenderable && hasDivergentSources(s)) {
                 return (
@@ -223,9 +230,11 @@ export function TaskPageGitHubFilters({
                   />
                 )
               }
+
               if (!selectorRenderable || !repo) {
                 return null
               }
+
               // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
               return (
                 <div key={s.repoId} className={issueSourceChipClass}>

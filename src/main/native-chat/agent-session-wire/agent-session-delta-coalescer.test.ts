@@ -7,12 +7,15 @@ import {
 /** Drives the window by hand so the test asserts scheduling, not wall time. */
 function manualClock() {
   const pending: { run: () => void; ms: number }[] = []
+
   return {
     schedule: (run: () => void, ms: number) => {
       const entry = { run, ms }
       pending.push(entry)
+
       return () => {
         const index = pending.indexOf(entry)
+
         if (index !== -1) {
           pending.splice(index, 1)
         }
@@ -20,6 +23,7 @@ function manualClock() {
     },
     fire: () => {
       const due = pending.splice(0)
+
       for (const entry of due) {
         entry.run()
       }
@@ -31,11 +35,13 @@ function manualClock() {
 
 function coalescer(clock: ReturnType<typeof manualClock>, windowMs?: number) {
   const emitted: [string, string][] = []
+
   const instance = createAgentSessionDeltaCoalescer({
     emit: (key, text) => emitted.push([key, text]),
     schedule: clock.schedule,
     ...(windowMs === undefined ? {} : { windowMs })
   })
+
   return { instance, emitted }
 }
 
@@ -80,6 +86,7 @@ describe('agent-session delta coalescer', () => {
     for (let index = 0; index < 10_000; index += 1) {
       instance.append('item-1', 'x')
     }
+
     clock.fire()
 
     expect(emitted).toEqual([['item-1', 'x'.repeat(10_000)]])
@@ -111,13 +118,16 @@ describe('agent-session delta coalescer', () => {
     const clock = manualClock()
     let reject = true
     const emitted: string[] = []
+
     const instance = createAgentSessionDeltaCoalescer({
       schedule: clock.schedule,
       emit: (_key, text) => {
         if (reject) {
           return false
         }
+
         emitted.push(text)
+
         return true
       }
     })
@@ -134,6 +144,7 @@ describe('agent-session delta coalescer', () => {
     const clock = manualClock()
     let reject = true
     const emitted: [string, string][] = []
+
     const instance = createAgentSessionDeltaCoalescer({
       maxStreams: 1,
       schedule: clock.schedule,
@@ -141,7 +152,9 @@ describe('agent-session delta coalescer', () => {
         if (reject) {
           return false
         }
+
         emitted.push([key, text])
+
         return true
       }
     })
@@ -190,6 +203,7 @@ describe('agent-session delta coalescer', () => {
   it('bounds retained UTF-8 text while continuing to count observed bytes', () => {
     const clock = manualClock()
     const emitted: { text: string; observedBytes: number; truncated: boolean }[] = []
+
     const instance = createAgentSessionDeltaCoalescer({
       maxRetainedBytes: 40,
       schedule: clock.schedule,
@@ -219,6 +233,7 @@ describe('agent-session delta coalescer', () => {
   it('bounds aggregate retained stream text across independent items', () => {
     const clock = manualClock()
     const emitted = new Map<string, { text: string; observedBytes: number; truncated: boolean }>()
+
     const instance = createAgentSessionDeltaCoalescer({
       maxRetainedBytes: 80,
       maxTotalRetainedBytes: 120,
@@ -234,10 +249,12 @@ describe('agent-session delta coalescer', () => {
     clock.fire()
 
     const snapshots = ['item-1', 'item-2', 'item-3'].map((key) => instance.snapshot(key))
+
     const retainedBytes = snapshots.reduce(
       (total, snapshot) => total + Buffer.byteLength(snapshot?.text ?? '', 'utf8'),
       0
     )
+
     expect(retainedBytes).toBeLessThanOrEqual(120)
     expect(snapshots.map((snapshot) => snapshot?.observedBytes)).toEqual([80, 80, 160])
     expect(snapshots.map((snapshot) => snapshot?.truncated)).toEqual([false, true, true])

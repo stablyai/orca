@@ -19,10 +19,12 @@ describe('Claude structured dispatch image limits', () => {
     async (flag) => {
       const session = sessionFor()
       const settled = vi.fn()
+
       const dispatched = dispatchClaudeTurn(session, {
         clientMessageId: 'client-1',
         body: userMessage([{ type: 'text', text: '/example' }])
       })
+
       await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
       const sentUuid = session.dispatchWaiters[0]!.sentUuid
       const replay = userReplayFrame(sentUuid, '/example')
@@ -40,10 +42,12 @@ describe('Claude structured dispatch image limits', () => {
 
   it('takes the active turn identity from a replay that lands after dispatch returned', async () => {
     const session = sessionFor()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'one' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(dispatched).resolves.toEqual({ state: 'admitted' })
@@ -56,10 +60,12 @@ describe('Claude structured dispatch image limits', () => {
 
   it('recovers the active identity when a replay lands after the child died', async () => {
     const session = sessionFor()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'one' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(dispatched).resolves.toEqual({ state: 'admitted' })
@@ -75,10 +81,12 @@ describe('Claude structured dispatch image limits', () => {
   it('settles the send the replay proves was delivered, whenever it arrives', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'one' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(dispatched).resolves.toEqual({ state: 'admitted' })
@@ -93,10 +101,12 @@ describe('Claude structured dispatch image limits', () => {
   it('settles a superseded dispatch even though it no longer owns the turn identity', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'one' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const firstUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(first).resolves.toEqual({ state: 'admitted' })
@@ -106,6 +116,7 @@ describe('Claude structured dispatch image limits', () => {
       clientMessageId: 'client-2',
       body: userMessage([{ type: 'text', text: 'two' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const secondUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
 
@@ -132,10 +143,12 @@ describe('Claude structured dispatch image limits', () => {
   it('never lets a late replay for dispatch A resolve dispatch B', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'one' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const firstUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(first).resolves.toEqual({ state: 'admitted' })
@@ -163,10 +176,12 @@ describe('Claude structured dispatch image limits', () => {
   it('does not let an identical late replay for dispatch A resolve active dispatch B', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'same prompt' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     await expect(first).resolves.toEqual({ state: 'admitted' })
     childExited(session)
@@ -175,6 +190,7 @@ describe('Claude structured dispatch image limits', () => {
       clientMessageId: 'client-2',
       body: userMessage([{ type: 'text', text: 'same prompt' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const secondUuid = session.dispatchWaiters[0]!.sentUuid
 
@@ -193,10 +209,12 @@ describe('Claude structured dispatch image limits', () => {
 
   it('does not let a fresh-UUID replay for an evicted dispatch resolve active dispatch B', async () => {
     const session = sessionFor()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'same prompt' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     await expect(first).resolves.toEqual({ state: 'admitted' })
     childExited(session)
@@ -210,6 +228,7 @@ describe('Claude structured dispatch image limits', () => {
         })
       )
     )
+
     expect(fillerDispatches.every((outcome) => outcome.state === 'admitted')).toBe(true)
     childExited(session)
     expect(session.retiredDispatchWaiters).toHaveLength(64)
@@ -222,12 +241,14 @@ describe('Claude structured dispatch image limits', () => {
       const sentUuid = session.retiredDispatchWaiters[0]!.sentUuid
       resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid, 'same prompt'))
     }
+
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 
     const second = dispatchClaudeTurn(session, {
       clientMessageId: 'client-2',
       body: userMessage([{ type: 'text', text: 'same prompt' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const secondUuid = session.dispatchWaiters[0]!.sentUuid
     const settled = vi.fn()
@@ -247,10 +268,12 @@ describe('Claude structured dispatch image limits', () => {
 
   it('does not let a fresh-UUID result for an evicted slash dispatch resolve active dispatch B', async () => {
     const session = sessionFor()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     await expect(first).resolves.toEqual({ state: 'admitted' })
     childExited(session)
@@ -264,6 +287,7 @@ describe('Claude structured dispatch image limits', () => {
         })
       )
     )
+
     expect(fillerDispatches.every((outcome) => outcome.state === 'admitted')).toBe(true)
     childExited(session)
     expect(session.retiredDispatchWaiters).toHaveLength(64)
@@ -284,12 +308,14 @@ describe('Claude structured dispatch image limits', () => {
         })
       ).toBe(false)
     }
+
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 
     const second = dispatchClaudeTurn(session, {
       clientMessageId: 'client-2',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const secondUuid = session.dispatchWaiters[0]!.sentUuid
     const settled = vi.fn()
@@ -327,10 +353,12 @@ describe('Claude structured dispatch image limits', () => {
   it('does not let a legacy result for timed-out ordinary dispatch A resolve slash dispatch B', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'ordinary' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     await expect(first).resolves.toEqual({ state: 'admitted' })
     childExited(session)
@@ -339,6 +367,7 @@ describe('Claude structured dispatch image limits', () => {
       clientMessageId: 'client-2',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
 
     expect(
@@ -362,10 +391,12 @@ describe('Claude structured dispatch image limits', () => {
   it('removes only its own waiter when a later send fails', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'one' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const firstWaiter = session.dispatchWaiters[0]
     session.connection.send = vi
@@ -395,6 +426,7 @@ describe('Claude structured dispatch image limits', () => {
       .fn()
       .mockRejectedValueOnce(claudeUnwrittenUserMessageError(new Error('broken pipe')))
       .mockResolvedValue(undefined)
+
     const session = sessionFor(send)
     const body = userMessage([{ type: 'text', text: 'retry me' }])
 
@@ -429,10 +461,12 @@ describe('Claude structured dispatch image limits', () => {
 
   it('keeps a replay accepted before its send reports failure', async () => {
     let session!: ClaudeSession
+
     const send = vi.fn(async (message: Record<string, unknown>) => {
       resolveClaudeReplayWaiter(session, { ...message, uuid: 'turn-race' })
       throw new Error('write raced provider acknowledgement')
     })
+
     session = sessionFor(send)
 
     await expect(
@@ -447,10 +481,12 @@ describe('Claude structured dispatch image limits', () => {
   it('accepts a slash command from its result receipt when Claude omits the user replay', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
 
     expect(
@@ -480,6 +516,7 @@ describe('Claude structured dispatch image limits', () => {
   it('accepts a slash command sent with an attachment from its result receipt', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([
@@ -487,6 +524,7 @@ describe('Claude structured dispatch image limits', () => {
         { type: 'image-ref', url: 'https://example.test/a.png' }
       ])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     // The mapper moves the image ahead of the prompt, so Claude runs the command and replies
     // with a result receipt instead of a user replay.
@@ -529,10 +567,12 @@ describe('Claude structured dispatch image limits', () => {
   it('does not take a result receipt for leading whitespace Claude never reads as a command', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: '  /permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
 
     expect(
@@ -556,10 +596,12 @@ describe('Claude structured dispatch image limits', () => {
   it('correlates a later slash-command result by user_message_uuid despite a retired slash waiter', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const first = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     await expect(first).resolves.toEqual({ state: 'admitted' })
     childExited(session)
@@ -568,6 +610,7 @@ describe('Claude structured dispatch image limits', () => {
       clientMessageId: 'client-2',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const secondUuid = session.dispatchWaiters[0]!.sentUuid
 
@@ -594,10 +637,12 @@ describe('Claude structured dispatch image limits', () => {
   it('does not mistake a normal turn result for its missing user replay', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: 'hello' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
 
     expect(
@@ -639,10 +684,12 @@ describe('Claude structured dispatch image limits', () => {
   it('ignores a top-level tool-result user frame while waiting for a slash command replay', async () => {
     const session = sessionFor()
     const settled = vi.fn()
+
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
       body: userMessage([{ type: 'text', text: '/permissions' }])
     })
+
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
 
     resolveClaudeReplayWaiter(session, {
@@ -685,6 +732,7 @@ describe('Claude structured dispatch image limits', () => {
 
   it('rejects more than twenty URL images before sending', async () => {
     const session = sessionFor()
+
     const body = userMessage(
       Array.from({ length: 21 }, (_, index) => ({
         type: 'image-ref' as const,
@@ -700,14 +748,17 @@ describe('Claude structured dispatch image limits', () => {
 
   it('rejects local images whose aggregate size exceeds twenty MiB', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-images-'))
+
     try {
       const paths = await Promise.all(
         Array.from({ length: 5 }, async (_, index) => {
           const path = join(directory, `${index}.png`)
           await writeFile(path, Buffer.alloc(5 * 1024 * 1024))
+
           return path
         })
       )
+
       const session = sessionFor()
       const body = userMessage(paths.map((path) => ({ type: 'image-ref' as const, path })))
 
@@ -725,6 +776,7 @@ describe('Claude structured dispatch image limits', () => {
 
   it('rejects a local image by actual bytes read beyond the per-image cap', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
+
     try {
       const path = join(directory, 'oversized.png')
       await writeFile(path, Buffer.alloc(5 * 1024 * 1024 + 1))
@@ -746,14 +798,17 @@ describe('Claude structured dispatch image limits', () => {
   it('allocates local image reads from the file size, not the maximum cap', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
     const allocUnsafe = vi.spyOn(Buffer, 'allocUnsafe')
+
     try {
       const path = join(directory, 'small.png')
       await writeFile(path, Buffer.alloc(64))
       const session = sessionFor()
+
       const dispatched = dispatchClaudeTurn(session, {
         clientMessageId: 'client-1',
         body: userMessage([{ type: 'image-ref', path }])
       })
+
       await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
       const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
       resolveClaudeReplayWaiter(session, {
@@ -777,6 +832,7 @@ describe('Claude structured dispatch image limits', () => {
 
   it('bounds retained waiter identity bytes when image dispatches are retired', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
+
     try {
       const path = join(directory, 'large.png')
       await writeFile(path, Buffer.alloc(64 * 1024))
@@ -790,10 +846,12 @@ describe('Claude structured dispatch image limits', () => {
       childExited(session)
 
       expect(session.retiredDispatchWaiters).toHaveLength(64)
+
       const retainedKeyBytes = session.retiredDispatchWaiters.reduce(
         (total, waiter) => total + waiter.replayContentKey.length,
         0
       )
+
       expect(retainedKeyBytes).toBeLessThan(64 * 512)
       expect(
         session.retiredDispatchWaiters.every((waiter) => waiter.replayContentKey.length < 512)
@@ -808,18 +866,23 @@ describe('Claude structured dispatch image limits', () => {
       .fn()
       .mockResolvedValueOnce({ isFile: () => true, size: 64 })
       .mockResolvedValueOnce({ isFile: () => true, size: 128 })
+
     const read = vi.fn(async (buffer: Buffer, offset: number) => {
       if (read.mock.calls.length === 1) {
         buffer.fill(1, offset, offset + 64)
+
         return { bytesRead: 64, buffer }
       }
+
       return { bytesRead: 0, buffer }
     })
+
     const open = vi.fn().mockResolvedValue({
       stat,
       read,
       close: vi.fn().mockResolvedValue(undefined)
     } as never)
+
     await expect(readClaudeImage('/controlled/growing.png', open)).rejects.toThrow(
       `Claude image must be a non-empty file no larger than ${5 * 1024 * 1024} bytes`
     )

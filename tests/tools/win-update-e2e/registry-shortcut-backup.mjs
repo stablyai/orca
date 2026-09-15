@@ -17,6 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { runCommandSync } from './powershell-runner.mjs'
 
 const UNINSTALL_ROOT = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
+
 const APP_ROOT = 'HKCU\\Software'
 
 /**
@@ -46,13 +47,16 @@ export function discoverInstallRegistryState() {
     `}`,
     `ConvertTo-Json -Compress -InputObject @{ uninstallName = $uninstallName; appName = $appName; installLocation = $installLocation; displayName = $displayName; displayVersion = $displayVersion }`
   ].join('\n')
+
   const { stdout } = runCommandSync(ps)
   let parsed = {}
+
   try {
     parsed = JSON.parse(stdout.trim() || '{}')
   } catch {
     parsed = {}
   }
+
   return {
     uninstallKey: parsed.uninstallName ? `${UNINSTALL_ROOT}\\${parsed.uninstallName}` : null,
     appKey: parsed.appName ? `${APP_ROOT}\\${parsed.appName}` : null,
@@ -66,7 +70,9 @@ export function discoverInstallRegistryState() {
 export function shortcutDirs() {
   const appData =
     process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming')
+
   const startMenu = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+
   return [startMenu, resolveDesktopDir()]
 }
 
@@ -75,18 +81,22 @@ function resolveDesktopDir() {
   // rather than assuming %USERPROFILE%\Desktop.
   const { stdout } = runCommandSync(`[Environment]::GetFolderPath('Desktop')`)
   const line = stdout.trim()
+
   if (line && existsSync(line)) {
     return line
   }
+
   return path.join(process.env.USERPROFILE ?? '', 'Desktop')
 }
 
 /** Read-only: list Orca *.lnk shortcuts under the given dirs (recursive). */
 export function discoverOrcaShortcuts(dirs = shortcutDirs()) {
   const found = []
+
   for (const dir of dirs) {
     collectOrcaLnks(dir, found)
   }
+
   return found
 }
 
@@ -94,14 +104,18 @@ function collectOrcaLnks(dir, out) {
   if (!existsSync(dir)) {
     return
   }
+
   let entries = []
+
   try {
     entries = readdirSync(dir, { withFileTypes: true })
   } catch {
     return
   }
+
   for (const entry of entries) {
     const full = path.join(dir, entry.name)
+
     if (entry.isDirectory()) {
       collectOrcaLnks(full, out)
     } else if (entry.isFile() && /\.lnk$/i.test(entry.name) && /orca/i.test(entry.name)) {
@@ -121,6 +135,7 @@ export function backupInstallState(runDir) {
   mkdirSync(backupDir, { recursive: true })
   const state = discoverInstallRegistryState()
   const dirs = shortcutDirs()
+
   const manifest = {
     backupDir,
     shortcutDirs: dirs,
@@ -129,30 +144,40 @@ export function backupInstallState(runDir) {
     app: null,
     shortcuts: []
   }
+
   if (state.uninstallKey) {
     const regFile = path.join(backupDir, 'uninstall.reg')
+
     if (regExport(state.uninstallKey, regFile)) {
       manifest.uninstall = { path: state.uninstallKey, regFile }
     }
   }
+
   if (state.appKey) {
     const regFile = path.join(backupDir, 'app.reg')
+
     if (regExport(state.appKey, regFile)) {
       manifest.app = { path: state.appKey, regFile }
     }
   }
+
   let i = 0
+
   for (const lnk of discoverOrcaShortcuts(dirs)) {
     const backup = path.join(backupDir, `shortcut-${i}-${path.basename(lnk)}`)
+
     try {
       copyFileSync(lnk, backup)
       manifest.shortcuts.push({ path: lnk, backup })
     } catch {
       manifest.shortcuts.push({ path: lnk, backup: null })
     }
+
     i += 1
   }
+
   writeFileSync(path.join(backupDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+
   return manifest
 }
 
@@ -173,6 +198,7 @@ export function restoreInstallState(manifest) {
     shortcutsDeleted: [],
     verified: false
   }
+
   const current = discoverInstallRegistryState()
 
   if (manifest.uninstall) {
@@ -211,14 +237,17 @@ export function restoreInstallState(manifest) {
   result.verified =
     result.failures.length === 0 &&
     normLoc(manifest.installLocation) === normLoc(after.installLocation)
+
   if (!result.verified) {
     printMismatchWarning(manifest, manifest.installLocation, after.installLocation)
   }
+
   return result
 }
 
 function restoreShortcuts(manifest, result) {
   const preExisting = new Set(manifest.shortcuts.map((s) => s.path.toLowerCase()))
+
   for (const s of manifest.shortcuts) {
     if (s.backup && existsSync(s.backup)) {
       try {
@@ -229,6 +258,7 @@ function restoreShortcuts(manifest, result) {
       }
     }
   }
+
   for (const lnk of discoverOrcaShortcuts(manifest.shortcutDirs)) {
     if (!preExisting.has(lnk.toLowerCase())) {
       try {
@@ -244,14 +274,18 @@ function restoreShortcuts(manifest, result) {
 function printMismatchWarning(manifest, expected, actual) {
   const bar = '!'.repeat(72)
   const importCmds = []
+
   if (manifest.app) {
     importCmds.push(`reg import "${manifest.app.regFile}"`)
   }
+
   if (manifest.uninstall) {
     importCmds.push(`reg import "${manifest.uninstall.regFile}"`)
   }
+
   const recovery =
     importCmds.length > 0 ? importCmds : ['(no backup was captured — no manual import available)']
+
   console.error(`\n${bar}`)
   console.error('!! WIN-UPDATE-E2E: REGISTRY RESTORE VERIFICATION FAILED')
   console.error(`!! Expected InstallLocation: ${expected ?? '(none / no pre-existing install)'}`)
@@ -259,9 +293,11 @@ function printMismatchWarning(manifest, expected, actual) {
   console.error('!! Your REAL Orca install pointer may be hijacked to the test directory.')
   console.error('!! The next real Orca update could install into the test location.')
   console.error('!! Recover manually by running these command(s) in an elevated-free shell:')
+
   for (const cmd of recovery) {
     console.error(`!!   ${cmd}`)
   }
+
   console.error(`${bar}\n`)
 }
 
@@ -269,12 +305,14 @@ function normLoc(value) {
   if (!value) {
     return ''
   }
+
   return value.replace(/[\\/]+$/, '').toLowerCase()
 }
 
 function regExport(keyPath, file) {
   try {
     execFileSync('reg', ['export', keyPath, file, '/y'], { stdio: 'ignore' })
+
     return existsSync(file)
   } catch {
     return false
@@ -285,8 +323,10 @@ function regImport(file) {
   if (!file || !existsSync(file)) {
     return false
   }
+
   try {
     execFileSync('reg', ['import', file], { stdio: 'ignore' })
+
     return true
   } catch {
     return false
@@ -296,6 +336,7 @@ function regImport(file) {
 function regDelete(keyPath) {
   try {
     execFileSync('reg', ['delete', keyPath, '/f'], { stdio: 'ignore' })
+
     return true
   } catch {
     return false

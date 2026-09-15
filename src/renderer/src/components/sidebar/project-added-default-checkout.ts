@@ -24,22 +24,28 @@ function getProjectWorktreesForHost<T extends Worktree>(
   if (!executionHostId) {
     return [...worktrees]
   }
+
   const parsedHost = parseExecutionHostId(executionHostId)
+
   return worktrees.filter((worktree) => {
     if (parsedHost?.kind === 'runtime') {
       if (worktree.runtimeOwnerEnvironmentId) {
         return worktree.runtimeOwnerEnvironmentId === parsedHost.environmentId
       }
+
       // Reachable: a colliding repo id can carry a runtime-qualified hostId with
       // no runtimeOwnerEnvironmentId, so match it against the execution host.
       return worktree.hostId === executionHostId
     }
+
     if (worktree.runtimeOwnerEnvironmentId) {
       return false
     }
+
     if (worktree.hostId) {
       return worktree.hostId === executionHostId
     }
+
     return executionHostId === 'local'
   })
 }
@@ -58,6 +64,7 @@ function getDetectedProjectDefaultCheckout(
   if (detected?.authoritative !== true) {
     return null
   }
+
   return (
     getProjectWorktreesForHost(detected.worktrees, executionHostId).find(
       (worktree) => worktree.isMainWorktree
@@ -72,6 +79,7 @@ function hasDetectedHiddenLinkedExternalWorktrees(
   if (detected?.authoritative !== true) {
     return false
   }
+
   return getProjectWorktreesForHost(detected.worktrees, executionHostId).some(
     (worktree) =>
       !worktree.isMainWorktree &&
@@ -89,6 +97,7 @@ async function revealDetectedHiddenLinkedExternalWorktrees(
   executionHostId?: ExecutionHostId
 ): Promise<DefaultCheckoutHandoffReason | null> {
   const state = useAppStore.getState()
+
   if (
     !hasDetectedHiddenLinkedExternalWorktrees(
       state.detectedWorktreesByRepo[repoId],
@@ -107,12 +116,15 @@ async function revealDetectedHiddenLinkedExternalWorktrees(
         { hostId: executionHostId }
       )
     : await state.updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+
   if (!updated) {
     return 'show_detected_linked_failed'
   }
+
   const refreshed = await useAppStore
     .getState()
     .fetchWorktrees(repoId, ownerRefreshOptions(executionHostId))
+
   return refreshed ? null : 'linked_external_refresh_failed'
 }
 
@@ -126,6 +138,7 @@ async function findDetectedDefaultCheckout(
   const state = useAppStore.getState()
   const detected = state.detectedWorktreesByRepo[repoId]
   const detectedDefaultCheckout = getDetectedProjectDefaultCheckout(detected, executionHostId)
+
   if (!detectedDefaultCheckout) {
     return {
       worktree: null,
@@ -133,6 +146,7 @@ async function findDetectedDefaultCheckout(
         detected?.authoritative === true ? 'no_default_checkout' : 'no_authoritative_detection'
     }
   }
+
   if (!detectedDefaultCheckout.visible) {
     // Why: a freshly cloned primary checkout can be detected as a hidden
     // external worktree; adding a project should make that checkout usable.
@@ -143,22 +157,27 @@ async function findDetectedDefaultCheckout(
           { hostId: executionHostId }
         )
       : await state.updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+
     if (!updated) {
       return { worktree: null, reason: 'show_detected_default_failed' }
     }
   }
+
   const refreshed = await useAppStore
     .getState()
     .fetchWorktrees(repoId, ownerRefreshOptions(executionHostId))
+
   if (!refreshed) {
     return { worktree: null, reason: 'authoritative_refresh_failed' }
   }
+
   const worktree = getProjectDefaultCheckout(
     getProjectWorktreesForHost(
       useAppStore.getState().worktreesByRepo[repoId] ?? [],
       executionHostId
     )
   )
+
   return {
     worktree,
     reason: worktree ? 'detected_default_checkout' : 'refreshed_default_missing'
@@ -172,7 +191,9 @@ function resolveInitialCwdForDefaultCheckout(
   if (!selectedPath) {
     return undefined
   }
+
   const relativePath = relativePathInsideRoot(defaultCheckout.path, selectedPath)
+
   return relativePath && relativePath.length > 0 ? selectedPath : undefined
 }
 
@@ -195,7 +216,9 @@ export async function openProjectDefaultCheckout({
       executionHostId
     )
   )
+
   let reason: DefaultCheckoutHandoffReason = 'loaded_default_checkout'
+
   if (!defaultCheckout) {
     const detectedDefaultCheckout = await findDetectedDefaultCheckout(repoId, executionHostId)
     defaultCheckout = detectedDefaultCheckout.worktree
@@ -207,6 +230,7 @@ export async function openProjectDefaultCheckout({
       repoId,
       executionHostId
     )
+
     if (revealLinkedFailureReason) {
       track('add_repo_default_checkout_handoff', {
         source,
@@ -214,20 +238,25 @@ export async function openProjectDefaultCheckout({
         reason: revealLinkedFailureReason
       })
       finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+
       return
     }
+
     // Why: the onboarding handoff should land on the default checkout even
     // when the user normally hides default-branch workspaces in the sidebar.
     const state = useAppStore.getState()
+
     if (state.hideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)
     }
+
     track('add_repo_default_checkout_handoff', {
       source,
       result: 'opened_default_checkout',
       reason
     })
     const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
+
     if (initialCwd || executionHostId) {
       activateAndRevealWorktree(defaultCheckout.id, {
         ...(initialCwd ? { initialCwd } : {}),
@@ -236,6 +265,7 @@ export async function openProjectDefaultCheckout({
     } else {
       activateAndRevealWorktree(defaultCheckout.id)
     }
+
     return
   }
 

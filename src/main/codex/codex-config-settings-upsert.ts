@@ -35,6 +35,7 @@ export function upsertPromotedSettingsInContent(
 ): string {
   const topLevelUpdates = new Map<string, string>()
   const tuiUpdates = new Map<string, string>()
+
   for (const [key, raw] of updates) {
     if (isTuiStructuredKey(key)) {
       tuiUpdates.set(tuiKeyFromStructuredKey(key), raw)
@@ -42,13 +43,17 @@ export function upsertPromotedSettingsInContent(
       topLevelUpdates.set(key, raw)
     }
   }
+
   let result = content
+
   if (topLevelUpdates.size > 0) {
     result = upsertTopLevelSettingsInContent(result, topLevelUpdates)
   }
+
   if (tuiUpdates.size > 0) {
     result = upsertTuiSettingsInContent(result, tuiUpdates)
   }
+
   return result
 }
 
@@ -60,19 +65,24 @@ export function upsertTopLevelSettingsInContent(
   let state = createTomlLineScanState()
   let preambleEnd = lines.length
   const keyLineIndexes = new Map<string, number>()
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? ''
+
     if (isTomlStructuralLine(state)) {
       if (getTomlTableHeader(line)) {
         preambleEnd = index
         break
       }
+
       const parsed = parseTomlKeyPath(line)
       const key = parsed?.segments.length === 1 ? parsed.segments[0] : null
+
       if (parsed && line[parsed.end] === '=' && key && updates.has(key)) {
         keyLineIndexes.set(key, index)
       }
     }
+
     state = updateTomlLineScanState(state, line)
   }
 
@@ -80,25 +90,32 @@ export function upsertTopLevelSettingsInContent(
   // the file's existing endings or a Windows-owned config becomes mixed-EOL.
   const usesCrlf = content.includes('\r\n')
   const insertions: string[] = []
+
   for (const [key, raw] of updates) {
     const existingIndex = keyLineIndexes.get(key)
     const rendered = `${key} = ${raw}`
+
     if (existingIndex !== undefined) {
       lines[existingIndex] = lines[existingIndex]?.endsWith('\r') ? `${rendered}\r` : rendered
     } else {
       insertions.push(usesCrlf ? `${rendered}\r` : rendered)
     }
   }
+
   if (insertions.length > 0) {
     let insertAt = preambleEnd
+
     while (insertAt > 0 && (lines[insertAt - 1] ?? '').trim() === '') {
       insertAt -= 1
     }
+
     if (insertAt === preambleEnd && preambleEnd < lines.length) {
       insertions.push(usesCrlf ? '\r' : '')
     }
+
     lines.splice(insertAt, 0, ...insertions)
   }
+
   return joinPreservingTrailingNewline(lines, usesCrlf)
 }
 
@@ -132,19 +149,24 @@ export function upsertTuiSettingsInContent(content: string, updates: Map<string,
 
   for (const [key, raw] of updates) {
     const dottedIndex = scan.dottedKeyIndexes.get(key)
+
     if (dottedIndex !== undefined) {
       lines[dottedIndex] = withTrailingCr(lines[dottedIndex]!, `${tuiStructuredKey(key)} = ${raw}`)
       continue
     }
+
     const bareIndex = scan.bareKeyIndexes.get(key)
+
     if (bareIndex !== undefined) {
       lines[bareIndex] = withTrailingCr(lines[bareIndex]!, `${key} = ${raw}`)
       continue
     }
+
     // Why: adding a scalar beside an existing tui.<key> descendant would turn valid TOML invalid.
     if (scan.blockedAbsentKeys.has(key)) {
       continue
     }
+
     if (scan.hasBareTuiTable) {
       bareBodyInserts.push(`${key} = ${raw}`)
     } else if (scan.hasDottedTuiKey) {
@@ -162,6 +184,7 @@ export function upsertTuiSettingsInContent(content: string, updates: Map<string,
   if (newTableKeys.length > 0) {
     appendNewTuiTable(lines, newTableKeys, usesCrlf)
   }
+
   if (bareBodyInserts.length > 0) {
     lines.splice(
       scan.bareBodyInsertIndex,
@@ -169,6 +192,7 @@ export function upsertTuiSettingsInContent(content: string, updates: Map<string,
       ...bareBodyInserts.map((line) => withCrLine(line, usesCrlf))
     )
   }
+
   if (dottedPreambleInserts.length > 0) {
     lines.splice(
       scan.lastDottedTuiIndex + 1,
@@ -176,6 +200,7 @@ export function upsertTuiSettingsInContent(content: string, updates: Map<string,
       ...dottedPreambleInserts.map((line) => withCrLine(line, usesCrlf))
     )
   }
+
   return joinPreservingTrailingNewline(lines, usesCrlf)
 }
 
@@ -195,14 +220,18 @@ function scanTuiPlacement(lines: string[], updates: Map<string, string>): TuiPla
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? ''
+
     if (isTomlStructuralLine(state)) {
       const header = getTomlTableHeader(line)
+
       if (header) {
         if (tuiBodyActive) {
           tuiBodyEndIndex = index
           tuiBodyActive = false
         }
+
         const table = parseTomlTableHeaderPath(header)
+
         if (
           table &&
           !table.isArray &&
@@ -214,33 +243,42 @@ function scanTuiPlacement(lines: string[], updates: Map<string, string>): TuiPla
           tuiBodyActive = true
           tuiBodyHeaderIndex = index
         }
+
         // Why: a root [[tui]] is already an array, so appending [tui] would
         // redefine it and make an otherwise valid config unparseable.
         if (table?.isArray && table.segments.length === 1 && table.segments[0] === 'tui') {
           blocksNewTuiTable = true
         }
+
         const descendantKey =
           table?.segments[0] === 'tui' && table.segments.length > 1 ? table.segments[1] : null
+
         if (descendantKey && updates.has(descendantKey)) {
           blockedAbsentKeys.add(descendantKey)
         }
+
         inPreamble = false
         state = updateTomlLineScanState(state, line)
         continue
       }
+
       if (inPreamble) {
         // Why: any dotted `tui.*` key (allowlisted or not) already defines the
         // implicit tui table, so a new `[tui]` table at EOF would duplicate it.
         const parsed = parseTomlKeyPath(line)
         const isAssignment = parsed && line[parsed.end] === '='
+
         if (isAssignment && parsed.segments[0] === 'tui' && parsed.segments.length > 1) {
           hasDottedTuiKey = true
           lastDottedTuiIndex = index
           const promotedKey = parsed.segments.length === 2 ? parsed.segments[1] : null
+
           if (promotedKey && updates.has(promotedKey)) {
             dottedKeyIndexes.set(promotedKey, index)
           }
+
           const descendantKey = parsed.segments.length > 2 ? parsed.segments[1] : null
+
           if (descendantKey && updates.has(descendantKey)) {
             blockedAbsentKeys.add(descendantKey)
           }
@@ -250,17 +288,22 @@ function scanTuiPlacement(lines: string[], updates: Map<string, string>): TuiPla
       } else if (tuiBodyActive) {
         const parsed = parseTomlKeyPath(line)
         const key = parsed?.segments.length === 1 ? parsed.segments[0] : null
+
         if (parsed && line[parsed.end] === '=' && key && updates.has(key)) {
           bareKeyIndexes.set(key, index)
         }
+
         const descendantKey = parsed && parsed.segments.length > 1 ? parsed.segments[0] : null
+
         if (descendantKey && updates.has(descendantKey)) {
           blockedAbsentKeys.add(descendantKey)
         }
       }
     }
+
     state = updateTomlLineScanState(state, line)
   }
+
   if (tuiBodyActive) {
     tuiBodyEndIndex = lines.length
   }
@@ -288,18 +331,23 @@ function computeBareBodyInsertIndex(
   if (headerIndex === -1) {
     return -1
   }
+
   let insertAt = endIndex
+
   while (insertAt > headerIndex + 1 && (lines[insertAt - 1] ?? '').trim() === '') {
     insertAt -= 1
   }
+
   return insertAt
 }
 
 function appendNewTuiTable(lines: string[], keyRenders: string[], usesCrlf: boolean): void {
   let appendAt = lines.length
+
   while (appendAt > 0 && (lines[appendAt - 1] ?? '').trim() === '') {
     appendAt -= 1
   }
+
   // Why: separate the new table from prior content with a blank line, unless the
   // file was empty/blank, where a leading blank would be spurious.
   const block = appendAt > 0 ? ['', '[tui]', ...keyRenders] : ['[tui]', ...keyRenders]

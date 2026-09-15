@@ -30,6 +30,7 @@ export function isDefaultPrimarySelectionMiddleClickPasteUserAgent(
 
 function captureCurrentSelection(): void {
   const text = readCurrentPrimarySelectionText()
+
   if (text) {
     setPrimarySelectionText(text)
   }
@@ -48,6 +49,7 @@ function isTerminalNativePasteTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
     return false
   }
+
   return target.classList.contains('xterm-helper-textarea') || target.closest('.xterm') !== null
 }
 
@@ -55,6 +57,7 @@ function isPrimarySelectionPasteTargetCurrent(
   target: EditablePrimarySelectionPasteTarget
 ): boolean {
   const activeElement = target.ownerDocument.activeElement
+
   return (
     target.isConnected &&
     activeElement instanceof Node &&
@@ -72,6 +75,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       if (!pendingMiddleTarget || !(target instanceof Node)) {
         return false
       }
+
       return target === pendingMiddleTarget || pendingMiddleTarget.contains(target)
     }
 
@@ -79,14 +83,18 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       if (event.button !== 1) {
         return false
       }
+
       const target = findEditablePrimarySelectionPasteTarget(event.target)
+
       if (!target) {
         return false
       }
+
       pendingMiddleTarget = target
       // Why: native Linux middle-click paste emits follow-up input shortly
       // after mousedown; keep ownership only for the same gesture.
       pendingMiddleUntil = Date.now() + PRIMARY_SELECTION_PENDING_TARGET_TTL_MS
+
       return true
     }
 
@@ -95,17 +103,21 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         typeof InputEvent !== 'function' ||
         !(event instanceof InputEvent) ||
         event.inputType === 'insertFromPaste'
+
       if (!isPasteInputEvent) {
         return
       }
+
       if (
         pendingMiddleTarget &&
         Date.now() <= pendingMiddleUntil &&
         targetMatchesPending(event.target)
       ) {
         suppressEvent(event)
+
         return
       }
+
       // Why: the integrated terminal owns its middle-click paste and cannot mark
       // a pending DOM target, so honor its armed window to swallow the follow-up
       // native paste event that xterm would otherwise forward to the PTY — but
@@ -127,14 +139,17 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       const onMouseDown = (event: MouseEvent): void => {
         rememberPendingTarget(event)
       }
+
       const onMouseUp = (event: MouseEvent): void => {
         if (event.button === 1) {
           // Why: prevent Chromium's native Linux primary paste when disabled
           // without blocking terminal apps from receiving middle-click events.
           event.preventDefault()
         }
+
         pendingMiddleTarget = null
       }
+
       const onAuxClick = (event: MouseEvent): void => {
         if (event.button === 1) {
           // Why: match the mouseup preventer for browsers that surface auxclick.
@@ -166,6 +181,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       if (captureTimer !== null) {
         window.clearTimeout(captureTimer)
       }
+
       captureTimer = window.setTimeout(() => {
         captureTimer = null
         captureCurrentSelection()
@@ -179,22 +195,26 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     const onMouseUp = (event: MouseEvent): void => {
       if (event.button !== 1 || !pendingMiddleTarget || Date.now() > pendingMiddleUntil) {
         pendingMiddleTarget = null
+
         return
       }
 
       const target = pendingMiddleTarget
       pendingMiddleTarget = null
       suppressEvent(event)
+
       const point = {
         clientX: event.clientX,
         clientY: event.clientY
       }
+
       void readPrimarySelectionText().then((text) => {
         // Why: async primary-selection reads can resolve after focus moved;
         // do not refocus and mutate a stale middle-click target.
         if (!text || !isPrimarySelectionPasteTargetCurrent(target)) {
           return
         }
+
         void pastePrimarySelectionTextIntoTarget(target, text, point).catch(() => {})
       })
     }
@@ -203,10 +223,13 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       if (event.button !== 1) {
         return
       }
+
       const target = findEditablePrimarySelectionPasteTarget(event.target)
+
       if (!target) {
         return
       }
+
       suppressEvent(event)
     }
 
@@ -221,9 +244,11 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
 
     return () => {
       setPrimarySelectionEnabled(false)
+
       if (captureTimer !== null) {
         window.clearTimeout(captureTimer)
       }
+
       document.removeEventListener('selectionchange', scheduleCapture)
       document.removeEventListener('mouseup', scheduleCapture, true)
       document.removeEventListener('keyup', scheduleCapture, true)

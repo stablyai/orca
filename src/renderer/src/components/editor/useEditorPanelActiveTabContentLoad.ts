@@ -34,6 +34,7 @@ function hasLiveRead(
   id: string
 ): boolean {
   const generation = generationsById[id]
+
   return generation !== undefined && outstandingById[id] === generation
 }
 
@@ -54,13 +55,16 @@ export function useEditorPanelActiveTabContentLoad({
 }: UseEditorPanelActiveTabContentLoadParams): void {
   const needsFileRead = (fileId: string): boolean => {
     const cached = fileContents[fileId]
+
     return (
       (!cached || cached.isStale === true) &&
       !hasLiveRead(fileReadGenerationRef.current, outstandingFileReadsRef.current, fileId)
     )
   }
+
   const needsDiffRead = (fileId: string): boolean => {
     const cached = diffContents[fileId]
+
     return (
       (!cached || cached.isStale === true) &&
       !hasLiveRead(diffReadGenerationRef.current, outstandingDiffReadsRef.current, fileId)
@@ -71,14 +75,17 @@ export function useEditorPanelActiveTabContentLoad({
     if (!isVisible) {
       return
     }
+
     if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {
       const snapshotEntries = activeFile.conflictReview?.entries ?? []
+
       if (snapshotEntries.length === 0) {
         return
       }
 
       const snapshotPaths = new Set(snapshotEntries.map((entry) => entry.path))
       const liveEntries = gitStatusEntries ?? []
+
       for (const entry of liveEntries) {
         if (
           !snapshotPaths.has(entry.path) ||
@@ -90,21 +97,26 @@ export function useEditorPanelActiveTabContentLoad({
         }
 
         const absolutePath = joinPath(activeFile.filePath, entry.path)
+
         if (needsFileRead(absolutePath)) {
           void loadFileContent(absolutePath, absolutePath, activeFile.worktreeId, entry.path)
         }
       }
+
       return
     }
 
     const fileToLoad = selectedConflictReviewFile ?? activeFile
+
     if (!fileToLoad || (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile)) {
       return
     }
+
     if (fileToLoad.mode === 'edit' || fileToLoad.mode === 'markdown-preview') {
       if (fileToLoad.conflict?.kind === 'conflict-placeholder') {
         return
       }
+
       if (needsFileRead(fileToLoad.id)) {
         void loadFileContent(
           fileToLoad.filePath,
@@ -113,6 +125,7 @@ export function useEditorPanelActiveTabContentLoad({
           fileToLoad.relativePath
         )
       }
+
       if (isChangesMode && needsDiffRead(fileToLoad.id)) {
         void loadDiffContent(fileToLoad)
       }

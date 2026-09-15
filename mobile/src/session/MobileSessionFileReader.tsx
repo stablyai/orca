@@ -48,10 +48,12 @@ export function FileReader({
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
   )
+
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
+
   const plainDiffLines = useMemo(
     () =>
       doc?.status === 'ready' && doc.kind === 'diff'
@@ -59,6 +61,7 @@ export function FileReader({
         : [],
     [doc]
   )
+
   const diffCommentsForFile = useMemo(
     () =>
       diffCommentActions?.comments.filter(
@@ -66,16 +69,20 @@ export function FileReader({
       ) ?? [],
     [diffCommentActions?.comments, relativePath]
   )
+
   const diffCommentsByLine = useMemo(() => {
     const map = new Map<number, DiffComment[]>()
+
     for (const comment of diffCommentsForFile) {
       const list = map.get(comment.lineNumber) ?? []
       list.push(comment)
       map.set(comment.lineNumber, list)
     }
+
     for (const list of map.values()) {
       list.sort((a, b) => a.createdAt - b.createdAt)
     }
+
     return map
   }, [diffCommentsForFile])
 
@@ -94,6 +101,7 @@ export function FileReader({
       if (!diffCommentActions) {
         return
       }
+
       void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
         if (added) {
           setActiveCommentLine(null)
@@ -153,8 +161,10 @@ export function FileReader({
           language: syntaxLanguage,
           segments: highlightMobileCode(doc.content, syntaxLanguage).segments
         })
+
         return
       }
+
       if (doc.kind === 'diff') {
         setDiffSyntax({
           doc,
@@ -175,6 +185,7 @@ export function FileReader({
       </View>
     )
   }
+
   if (doc.status === 'error') {
     return (
       <View style={styles.markdownState}>
@@ -186,12 +197,16 @@ export function FileReader({
   if (doc.kind === 'diff') {
     const activeDiffSyntax =
       diffSyntax?.doc === doc && diffSyntax.language === syntaxLanguage ? diffSyntax.lines : null
+
     const commentCount = diffCommentActions?.comments.length ?? 0
+
     const unsentCommentCount =
       diffCommentActions?.comments.filter((comment) => !comment.sentAt).length ?? 0
+
     const commentsBusy = diffCommentActions?.busy === true
     const canCopyNotes = commentCount > 0 && !commentsBusy
     const canSendNotes = unsentCommentCount > 0 && !commentsBusy
+
     return (
       <View style={styles.markdownEditor}>
         {diffCommentActions ? (

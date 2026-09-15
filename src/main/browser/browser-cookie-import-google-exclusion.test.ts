@@ -24,12 +24,15 @@ vi.mock('./browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -89,6 +92,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
       if (!targetSession.cookies.set) {
         return
       }
+
       for (const identity of identities.toReversed()) {
         await targetSession.cookies.set({
           url: identity.url,
@@ -149,6 +153,7 @@ describe('file import excludes the Google cookie family', () => {
   function writeCookies(cookies: unknown[]): string {
     const filePath = join(tmpDir, 'cookies.json')
     writeFileSync(filePath, JSON.stringify(cookies))
+
     return filePath
   }
 
@@ -235,6 +240,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
   function seedSource(rows: { domain: string; name: string; value: string }[]): string {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, rows).close()
+
     return sourceCookiesPath
   }
 
@@ -248,6 +254,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
       { domain: '.google.com', name: 'SID', value: 'transplanted-sid' },
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
+
     seedTarget([{ domain: '.google.com', name: 'SID', value: 'live-sid' }])
     cookiesGetMock.mockResolvedValue([
       existingCookie('.google.com', 'SID'),
@@ -326,6 +333,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
       { domain: '.google.com', name: 'SID', value: 'transplanted-sid' },
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
+
     seedTarget([
       { domain: '.google.com', name: 'SID', value: 'live-sid' },
       { domain: '.example.com', name: 'stale', value: 'stale' }
@@ -351,7 +359,9 @@ describe('native Chromium import excludes the Google cookie family', () => {
     const sourceCookiesPath = seedSource([
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
+
     seedTarget([{ domain: '.example.com', name: 'stale', value: 'stale' }])
+
     // Why (STA-4797): the rejecting cookie has to sit on a domain this import actually replaces.
     // Parked on an unrelated site it is out of the import scope, never enters the removal plan,
     // and the rejection the case exists to exercise never happens.
@@ -360,11 +370,13 @@ describe('native Chromium import excludes the Google cookie family', () => {
       existingCookie('.example.com', 'removed-first'),
       existingCookie('.example.com', 'stale')
     ]
+
     cookiesGetMock.mockImplementation(async () => [...jar])
     cookiesRemoveMock.mockImplementation(async (_url: string, name: string) => {
       if (name === 'stale') {
         throw new Error('cookie store unavailable')
       }
+
       jar = jar.filter((entry) => entry.name !== name)
     })
     cookiesSetMock.mockImplementation(async (details: { domain?: string; name: string }) => {
@@ -390,10 +402,13 @@ describe('native Chromium import excludes the Google cookie family', () => {
 // Why: freshly imported rows store the decrypted value as a BLOB; read both forms as text.
 function readStagedRows(stagedPath: string): { host_key: string; name: string; value: string }[] {
   const stagedDb = new DatabaseSync(stagedPath, { readOnly: true })
+
   const rows = stagedDb
     .prepare('SELECT host_key, name, value FROM cookies ORDER BY host_key, name')
     .all() as { host_key: string; name: string; value: string | Uint8Array }[]
+
   stagedDb.close()
+
   return rows.map((row) => ({
     ...row,
     value: typeof row.value === 'string' ? row.value : Buffer.from(row.value).toString('latin1')

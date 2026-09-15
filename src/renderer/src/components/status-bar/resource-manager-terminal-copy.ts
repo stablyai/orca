@@ -42,6 +42,7 @@ export function getResourceManagerTooltipLines(args: {
   spaceScanReady: boolean
 }): ResourceManagerTooltipLine[] {
   const rawMemoryLabel = args.memoryLabel.trim()
+
   const memoryLabel =
     rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
       ? translate(
@@ -49,6 +50,7 @@ export function getResourceManagerTooltipLines(args: {
           'memory unavailable'
         )
       : rawMemoryLabel
+
   // Why: whole lines are single keys — locales reorder the summary and repunctuate
   // its separators, so it can't be concatenated from translated fragments here.
   const lines: ResourceManagerTooltipLine[] = [

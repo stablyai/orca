@@ -8,10 +8,12 @@ export function findTabAndWorktree(
 ): { tab: Tab; worktreeId: string } | null {
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const tab = tabs.find((t) => t.id === tabId)
+
     if (tab) {
       return { tab, worktreeId }
     }
   }
+
   return null
 }
 
@@ -21,6 +23,7 @@ export function findGroupForTab(
   groupId: string
 ): TabGroup | null {
   const groups = groupsByWorktree[worktreeId] ?? []
+
   return groups.find((g) => g.id === groupId) ?? null
 }
 
@@ -30,10 +33,12 @@ export function findGroupAndWorktree(
 ): { group: TabGroup; worktreeId: string } | null {
   for (const [worktreeId, groups] of Object.entries(groupsByWorktree)) {
     const group = groups.find((candidate) => candidate.id === groupId)
+
     if (group) {
       return { group, worktreeId }
     }
   }
+
   return null
 }
 
@@ -45,6 +50,7 @@ export function findTabByEntityInGroup(
   contentType?: Tab['contentType']
 ): Tab | null {
   const tabs = tabsByWorktree[worktreeId] ?? []
+
   return (
     tabs.find(
       (tab) =>
@@ -68,11 +74,14 @@ export function ensureGroup(
   const existing =
     groupsByWorktree[worktreeId]?.find((group) => group.id === preferredGroupId) ??
     groupsByWorktree[worktreeId]?.[0]
+
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
   }
+
   const groupId = createBrowserUuid()
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
+
   return {
     group,
     groupsByWorktree: { ...groupsByWorktree, [worktreeId]: [group] },
@@ -83,15 +92,19 @@ export function ensureGroup(
 /** Pick the nearest neighbor in visual order (right first, then left). */
 export function pickNeighbor(tabOrder: string[], closingTabId: string): string | null {
   const idx = tabOrder.indexOf(closingTabId)
+
   if (idx === -1) {
     return null
   }
+
   if (idx + 1 < tabOrder.length) {
     return tabOrder[idx + 1]
   }
+
   if (idx - 1 >= 0) {
     return tabOrder[idx - 1]
   }
+
   return null
 }
 
@@ -101,19 +114,24 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
   if (!recent || recent.length === 0) {
     return []
   }
+
   const valid = new Set(tabOrder)
   // Walk right-to-left so we keep only the latest occurrence of each id, then
   // reverse back to oldest-→-newest order.
   const seen = new Set<string>()
   const reversed: string[] = []
+
   for (let i = recent.length - 1; i >= 0; i--) {
     const id = recent[i]
+
     if (!valid.has(id) || seen.has(id)) {
       continue
     }
+
     seen.add(id)
     reversed.push(id)
   }
+
   return reversed.toReversed()
 }
 
@@ -121,11 +139,14 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
  *  removing any prior occurrence. Returns a new array. */
 export function pushRecentTabId(recent: string[] | undefined, tabId: string): string[] {
   const base = recent ?? []
+
   if (base.length > 0 && base.at(-1) === tabId) {
     return base
   }
+
   const filtered = base.filter((id) => id !== tabId)
   filtered.push(tabId)
+
   return filtered
 }
 
@@ -139,6 +160,7 @@ export function pickNextActiveTab(
   closingTabId: string
 ): string | null {
   const sanitized = sanitizeRecentTabIds(recentTabIds, tabOrder)
+
   // The closing tab is typically at the tail (it's the active tab). Walk back
   // from the tail looking for the most-recent *other* tab still present.
   for (let i = sanitized.length - 1; i >= 0; i--) {
@@ -146,6 +168,7 @@ export function pickNextActiveTab(
       return sanitized[i]
     }
   }
+
   // No prior tab has been visited in this group — fall back to neighbor
   // selection so the user still lands somewhere sensible.
   return pickNeighbor(tabOrder, closingTabId)
@@ -178,9 +201,11 @@ export function selectHydratedActiveGroupId(
 ): string | undefined {
   const preferredGroups = groups.filter((group) => group.tabOrder.length > 0)
   const candidates = preferredGroups.length > 0 ? preferredGroups : groups
+
   if (persistedActiveGroupId && candidates.some((group) => group.id === persistedActiveGroupId)) {
     return persistedActiveGroupId
   }
+
   return candidates[0]?.id
 }
 
@@ -192,11 +217,14 @@ export function selectHydratedActiveGroupId(
  */
 export function dedupeTabsById<T extends { id: string }>(tabs: T[]): T[] {
   const seen = new Set<string>()
+
   return tabs.filter((tab) => {
     if (seen.has(tab.id)) {
       return false
     }
+
     seen.add(tab.id)
+
     return true
   })
 }
@@ -207,36 +235,47 @@ export function dedupeEditorTabsWithinGroups(tabs: Tab[]): {
 } {
   const tabIdAliasesByGroup = new Map<string, Map<string, string>>()
   const editorTabIdByGroupAndEntity = new Map<string, Map<string, string>>()
+
   const dedupedTabs = dedupeTabsById(tabs).filter((tab) => {
     if (tab.contentType !== 'editor') {
       return true
     }
+
     const editorTabIdByEntity =
       editorTabIdByGroupAndEntity.get(tab.groupId) ?? new Map<string, string>()
+
     editorTabIdByGroupAndEntity.set(tab.groupId, editorTabIdByEntity)
     const existingTabId = editorTabIdByEntity.get(tab.entityId)
+
     if (existingTabId !== undefined) {
       const tabIdAliases = tabIdAliasesByGroup.get(tab.groupId) ?? new Map<string, string>()
       tabIdAliasesByGroup.set(tab.groupId, tabIdAliases)
       tabIdAliases.set(tab.id, existingTabId)
+
       return false
     }
+
     editorTabIdByEntity.set(tab.entityId, tab.id)
+
     return true
   })
+
   return { tabs: dedupedTabs, tabIdAliasesByGroup }
 }
 
 export function dedupeTabOrder(tabIds: string[]): string[] {
   const seen = new Set<string>()
   const deduped: string[] = []
+
   for (const tabId of tabIds) {
     if (seen.has(tabId)) {
       continue
     }
+
     seen.add(tabId)
     deduped.push(tabId)
   }
+
   return deduped
 }
 
@@ -251,17 +290,22 @@ export function patchTab(
   patch: Partial<Tab>
 ): { unifiedTabsByWorktree: Record<string, Tab[]> } | null {
   const found = findTabAndWorktree(tabsByWorktree, tabId)
+
   if (!found) {
     return null
   }
+
   const patchChangesTab = (Object.keys(patch) as (keyof Tab)[]).some(
     (key) => found.tab[key] !== patch[key]
   )
+
   if (!patchChangesTab) {
     return null
   }
+
   const { worktreeId } = found
   const tabs = tabsByWorktree[worktreeId] ?? []
+
   return {
     unifiedTabsByWorktree: {
       ...tabsByWorktree,

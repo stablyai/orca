@@ -29,6 +29,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [testingWorkspaceId, setTestingWorkspaceId] = useState<string | null>(null)
+
   const [testResultByWorkspace, setTestResultByWorkspace] = useState<
     Record<string, VerificationResult>
   >({})
@@ -42,6 +43,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
 
   const handleDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
+
     if (mountedRef.current) {
       setTestResultByWorkspace({})
     }
@@ -54,12 +56,15 @@ export function LinearIntegrationCard(): React.JSX.Element {
     setTestResultByWorkspace((prev) => {
       const next = { ...prev }
       delete next[workspaceId]
+
       return next
     })
     const result = await testLinearConnection(workspaceId)
+
     if (!mountedRef.current) {
       return
     }
+
     setTestResultByWorkspace((prev) => ({
       ...prev,
       [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
@@ -129,6 +134,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
             {workspaces.map((workspace) => {
               const testResult = testResultByWorkspace[workspace.id]
               const testing = testingWorkspaceId === workspace.id
+
               return (
                 <div key={workspace.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">

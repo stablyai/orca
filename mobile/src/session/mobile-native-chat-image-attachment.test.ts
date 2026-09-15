@@ -24,14 +24,17 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
   calls: { method: string; params: unknown }[]
 } {
   const calls: { method: string; params: unknown }[] = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
       const response = responses.shift()
+
       if (!response) {
         throw new Error(`unexpected request: ${method}`)
       }
+
       return response
     })
   }
@@ -74,6 +77,7 @@ describe('uploadMobileNativeChatImages', () => {
     ])
 
     const order: string[] = []
+
     async function* pickImages() {
       for (const image of [
         { base64: 'AAAA', uri: 'file:///a.jpg' },
@@ -84,6 +88,7 @@ describe('uploadMobileNativeChatImages', () => {
         yield image
       }
     }
+
     const result = await uploadMobileNativeChatImages('library', {
       client,
       getConnectionId: async () => 'conn-7',
@@ -138,6 +143,7 @@ describe('uploadMobileNativeChatImages', () => {
       methodNotFound('start-b'),
       failed('save-b', 'upload failed')
     ])
+
     const onImageUploaded = vi.fn()
 
     await expect(

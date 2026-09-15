@@ -19,6 +19,7 @@ const WORKSPACE_PORT_PLATFORMS = new Set<NodeJS.Platform | 'unknown'>([
   'unknown',
   'win32'
 ])
+
 const WORKSPACE_PORT_PROTOCOLS = new Set<WorkspacePort['protocol']>(['http', 'https', 'unknown'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -37,6 +38,7 @@ function isWorkspacePortOwner(value: unknown): boolean {
   if (!isRecord(value)) {
     return false
   }
+
   return (
     typeof value.worktreeId === 'string' &&
     typeof value.repoId === 'string' &&
@@ -60,9 +62,11 @@ function isWorkspacePort(value: unknown): value is WorkspacePort {
   ) {
     return false
   }
+
   if (value.kind === 'workspace') {
     return isWorkspacePortOwner(value.owner) && isOptionalString(value.advertisedUrl)
   }
+
   return value.kind === 'container' || value.kind === 'external'
 }
 
@@ -80,6 +84,7 @@ function requireWorkspacePortScanResult(value: unknown): WorkspacePortScanResult
   ) {
     throw new Error('Workspace port scan returned an invalid response.')
   }
+
   return value as unknown as WorkspacePortScanResult
 }
 
@@ -88,9 +93,11 @@ export async function runWorkspacePortScanForTarget(
   repoId?: string
 ): Promise<WorkspacePortScanResult> {
   const params = repoId ? { repoId } : {}
+
   if (target.kind === 'local') {
     return requireWorkspacePortScanResult(await window.api.workspacePorts.scan(params))
   }
+
   try {
     const result = await callRuntimeRpc<WorkspacePortScanResult>(
       target,
@@ -100,6 +107,7 @@ export async function runWorkspacePortScanForTarget(
         timeoutMs: 15_000
       }
     )
+
     return requireWorkspacePortScanResult(result)
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
@@ -110,6 +118,7 @@ export async function runWorkspacePortScanForTarget(
         unavailableReason: 'The connected runtime does not support workspace port management yet.'
       }
     }
+
     throw error
   }
 }

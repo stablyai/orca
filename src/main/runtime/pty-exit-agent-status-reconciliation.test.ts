@@ -9,7 +9,9 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = makePaneKey('tab-1', LEAF)
+
 const PTY = 'wt-1__pty-1'
 
 type RuntimeInternals = {
@@ -23,6 +25,7 @@ function runtimeWithBoundPane(
   const runtime = new OrcaRuntimeService(null, undefined, {
     reconcileAgentStatusForEndedProcess: reconcile
   })
+
   const ptys = (runtime as unknown as RuntimeInternals).ptysById
   ptys.set(PTY, {
     ptyId: PTY,
@@ -31,6 +34,7 @@ function runtimeWithBoundPane(
     tabId: 'tab-1',
     ...(options.connectionId ? { connectionId: options.connectionId } : {})
   } as never)
+
   return runtime
 }
 

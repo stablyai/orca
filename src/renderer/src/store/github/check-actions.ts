@@ -30,12 +30,15 @@ export const createCheckActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -46,6 +49,7 @@ export const createCheckActions = (
       options?.sourceContext,
       repo !== undefined
     )
+
     const legacyCacheKey = headSha
       ? sourceScopedRepoCacheKey(
           repoPath,
@@ -58,8 +62,10 @@ export const createCheckActions = (
           repo !== undefined
         )
       : cacheKey
+
     const inflightKey = cacheKey
     const cached = get().checksCache[cacheKey] ?? get().checksCache[legacyCacheKey]
+
     if (
       !options?.force &&
       !options?.noCache &&
@@ -67,6 +73,7 @@ export const createCheckActions = (
       (!headSha || cached.headSha === headSha)
     ) {
       const cachedChecks = cached.data ?? []
+
       const prStatusUpdate = syncPRChecksStatus(
         get(),
         repoPath,
@@ -80,14 +87,17 @@ export const createCheckActions = (
         repo?.executionHostId,
         repo !== undefined
       )
+
       if (prStatusUpdate) {
         set(prStatusUpdate)
         debouncedSaveCache(get())
       }
+
       return cachedChecks
     }
 
     const inflightRequest = inflightChecksRequests.get(inflightKey)
+
     if (inflightRequest) {
       if (
         (options?.force && !inflightRequest.force) ||
@@ -108,6 +118,7 @@ export const createCheckActions = (
           repoPath,
           options?.sourceContext
         )
+
         const checks =
           requestContext.target.kind === 'environment'
             ? await callRuntimeRpc<PRCheckDetail[]>(
@@ -131,6 +142,7 @@ export const createCheckActions = (
                 noCache: Boolean(options?.force || options?.noCache),
                 sourceContext: options?.sourceContext
               })) as PRCheckDetail[])
+
         set((s) => {
           const nextState: Partial<AppState> = {
             checksCache: withBoundedCacheEntry(s.checksCache, cacheKey, {
@@ -153,6 +165,7 @@ export const createCheckActions = (
             repo?.executionHostId,
             repo !== undefined
           )
+
           if (prStatusUpdate?.prCache) {
             nextState.prCache = prStatusUpdate.prCache
           }
@@ -160,13 +173,16 @@ export const createCheckActions = (
           return nextState
         })
         debouncedSaveCache(get())
+
         return checks
       } catch (err) {
         console.error('Failed to fetch PR checks:', err)
         const latestCached = get().checksCache[cacheKey] ?? get().checksCache[legacyCacheKey]
+
         if (latestCached?.data && (!headSha || latestCached.headSha === headSha)) {
           return latestCached.data
         }
+
         return []
       } finally {
         inflightChecksRequests.delete(inflightKey)
@@ -178,6 +194,7 @@ export const createCheckActions = (
       force: Boolean(options?.force),
       noCache: Boolean(options?.force || options?.noCache)
     })
+
     return request
   },
 
@@ -185,12 +202,15 @@ export const createCheckActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const requestContext = getGitHubWorkItemRequestContext(
       get(),
       requestSettings,
@@ -198,7 +218,9 @@ export const createCheckActions = (
       repoPath,
       options?.sourceContext
     )
+
     const requestTarget = requestContext.target
+
     return requestTarget.kind === 'environment'
       ? await withGitHubCheckDetailsTimeout((signal) =>
           callRuntimeRpc<PRCheckRunDetails | null>(

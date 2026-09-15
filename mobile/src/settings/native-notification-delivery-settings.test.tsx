@@ -9,21 +9,26 @@ const mocks = vi.hoisted(() => ({
   support: { resolved: true, supported: false },
   appState: null as null | ((state: string) => void)
 }))
+
 vi.mock('react-native', () => ({
   Text: 'Text',
   AppState: {
     addEventListener: (_event: string, callback: (state: string) => void) => {
       mocks.appState = callback
+
       return { remove() {} }
     }
   }
 }))
+
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
+
 vi.mock('../notifications/NotificationDeliverySection', () => ({
   NotificationDeliverySection: 'Delivery'
 }))
+
 vi.mock('../notifications/notification-delivery-preferences', () => ({
   DEFAULT_NOTIFICATION_DELIVERY: {
     onlyWhenDesktopAway: true,
@@ -32,23 +37,31 @@ vi.mock('../notifications/notification-delivery-preferences', () => ({
   },
   loadNotificationDeliveryPreferences: mocks.load
 }))
+
 vi.mock('../notifications/push-registration', () => ({
   setNotificationDeliveryPreferences: mocks.save
 }))
+
 vi.mock('../notifications/use-remote-push-capable-hosts', () => ({
   useRemotePushCapableHosts: () => mocks.support
 }))
+
 let renderer: ReactTestRenderer
+
 const preferences = { onlyWhenDesktopAway: false, sound: false, suppressWhileViewing: true }
+
 beforeEach(() => {
   mocks.load.mockReset().mockResolvedValue(preferences)
   mocks.save.mockReset().mockResolvedValue(undefined)
   mocks.support = { resolved: true, supported: false }
 })
+
 afterEach(() => {
   act(() => renderer?.unmount())
 })
+
 const section = () => renderer.root.findByType('Delivery').props
+
 it('keeps stored controls visible but disabled without consent and explains an old host', async () => {
   await act(async () => {
     renderer = create(createElement(NativeNotificationDeliverySettings, { enabled: false }))
@@ -61,6 +74,7 @@ it('keeps stored controls visible but disabled without consent and explains an o
   })
   expect(section().disabled).toBe(false)
 })
+
 it('disables edits until preferences load, then waits for save and retains the prior value on failure', async () => {
   let load!: (value: typeof preferences) => void
   mocks.load.mockReturnValue(
@@ -92,6 +106,7 @@ it('disables edits until preferences load, then waits for save and retains the p
   expect(section().disabled).toBe(false)
   expect(JSON.stringify(renderer.toJSON())).toContain('Could not save delivery settings')
 })
+
 it('does not claim an upgrade is needed while probing or when a host supports push', async () => {
   mocks.support = { resolved: false, supported: false }
   await act(async () => {

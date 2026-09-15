@@ -131,6 +131,7 @@ describe('orchestration.dispatch --to the caller', () => {
             }
           : null) as never
     )
+
     const task = harness.db.createTask({
       spec: `self inject ${target}`,
       runId: harness.activeRunId
@@ -149,11 +150,13 @@ describe('orchestration.dispatch --to the caller', () => {
 
   it('still dispatches to a different pane', async () => {
     const task = harness.db.createTask({ spec: 'peer dispatch', runId: harness.activeRunId })
+
     const result = (await harness.call('orchestration.dispatch', {
       task: task.id,
       from: 'term_coord',
       to: 'term_worker'
     })) as { dispatch: { assignee_pane_key: string } }
+
     expect(result.dispatch.assignee_pane_key).toBe(harness.workerPaneKey)
   })
 })

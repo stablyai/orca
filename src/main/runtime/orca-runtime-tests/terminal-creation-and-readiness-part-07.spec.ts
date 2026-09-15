@@ -396,6 +396,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not classify unrelated press-enter prompts as Codex blocked prompts', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       runtime.setPtyController({
@@ -411,6 +412,7 @@ describe('OrcaRuntimeService', () => {
         condition: 'tui-idle',
         timeoutMs: 1_000
       })
+
       const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
 
       await vi.advanceTimersByTimeAsync(2_000)
@@ -423,6 +425,7 @@ describe('OrcaRuntimeService', () => {
 
   it('resolves tui-idle for quiet background PTY agents without OSC titles', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       runtime.setPtyController({
@@ -438,6 +441,7 @@ describe('OrcaRuntimeService', () => {
         condition: 'tui-idle',
         timeoutMs: 10_000
       })
+
       const waitAssertion = expect(waitPromise).resolves.toMatchObject({
         handle,
         condition: 'tui-idle',
@@ -459,6 +463,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -473,6 +478,7 @@ describe('OrcaRuntimeService', () => {
 
   it('sends agent prompts as bracketed paste before submit', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -481,6 +487,7 @@ describe('OrcaRuntimeService', () => {
         write: (_ptyId, data) => {
           writes.push(data)
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
@@ -498,6 +505,7 @@ describe('OrcaRuntimeService', () => {
         'line one\nline two<ESC>[201~',
         AGENT_PROMPT_BRACKETED_PASTE_END
       ].join('')
+
       expect(result).toMatchObject({
         handle,
         accepted: true,
@@ -513,6 +521,7 @@ describe('OrcaRuntimeService', () => {
     'waits for %s composer output frames to settle before one submit',
     async (agent) => {
       vi.useFakeTimers()
+
       try {
         const writes: string[] = []
         let composerReady = false
@@ -523,6 +532,7 @@ describe('OrcaRuntimeService', () => {
           spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
           write: (_ptyId, data) => {
             writes.push(data)
+
             if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
               setTimeout(() => {
                 runtime.onPtyData('pty-bg', 'partial redraw without cursor', Date.now())
@@ -541,27 +551,33 @@ describe('OrcaRuntimeService', () => {
                 runtime.onPtyData('pty-bg', 'final composer frame', Date.now())
               }, 1_000)
             }
+
             if (data === '\r') {
               if (composerReady) {
                 submissions += 1
               } else {
                 prematureEnters += 1
               }
+
               acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
             }
+
             return true
           },
           kill: () => true,
           getForegroundProcess: async () => null
         })
+
         const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
           launchAgent: agent
         })
+
         const assertAuthority = vi.fn()
 
         const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
           beforeWrite: assertAuthority
         })
+
         await vi.advanceTimersByTimeAsync(500)
 
         expect(writes).not.toContain('\r')
@@ -589,6 +605,7 @@ describe('OrcaRuntimeService', () => {
     )
   )('holds Enter for the full open-loop submit delay for %s', async (agent) => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -597,11 +614,13 @@ describe('OrcaRuntimeService', () => {
         write: (_ptyId, data) => {
           writes.push(data)
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
         getForegroundProcess: async () => null
       })
+
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: agent
       })
@@ -610,6 +629,7 @@ describe('OrcaRuntimeService', () => {
         process.platform,
         Buffer.byteLength(buildAgentPromptPasteBytes('review this change'), 'utf8')
       )
+
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(submitDelayMs - 1)
       expect(writes).not.toContain('\r')

@@ -39,8 +39,10 @@ function findNodeTextPosition(
   editor.state.doc.descendants((node, pos) => {
     if (node.type.name === nodeName && node.textContent.includes(textNeedle)) {
       result = { from: pos + 1, to: pos + node.nodeSize - 1 }
+
       return false
     }
+
     return true
   })
 
@@ -58,6 +60,7 @@ function countHardBreaks(editor: Editor): number {
       count += 1
     }
   })
+
   return count
 }
 
@@ -78,6 +81,7 @@ function expectNoHardBreaks(editor: Editor): void {
 describe('rich markdown empty paragraph deletion', () => {
   it('Backspace in an inserted empty paragraph preserves soft-wrapped prose', () => {
     const editor = createEditor()
+
     try {
       const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(paragraph.to)
@@ -93,6 +97,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Backspace at the next block start removes a previous empty paragraph without joining', () => {
     const editor = createEditor()
+
     try {
       const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(paragraph.to)
@@ -111,6 +116,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Delete at a soft-wrapped paragraph end removes the following empty paragraph', () => {
     const editor = createEditor()
+
     try {
       const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(paragraph.to)
@@ -127,6 +133,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Delete in an empty paragraph before soft-wrapped prose preserves soft newlines', () => {
     const editor = createEditor(`\n\n${hardWrappedMarkdown}`)
+
     try {
       editor.commands.setTextSelection(1)
 
@@ -144,6 +151,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Backspace after deleting slash text in an empty command paragraph preserves soft newlines', () => {
     const editor = createEditor()
+
     try {
       const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(paragraph.to)
@@ -162,6 +170,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Backspace joining two non-empty paragraphs preserves source soft newlines', () => {
     const editor = createEditor(hardWrappedTwoParagraphs)
+
     try {
       const secondParagraph = findNodeTextPosition(editor, 'paragraph', 'Second paragraph')
       editor.commands.setTextSelection(secondParagraph.from)
@@ -181,6 +190,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Delete joining two non-empty paragraphs preserves source soft newlines', () => {
     const editor = createEditor(hardWrappedTwoParagraphs)
+
     try {
       const firstParagraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(firstParagraph.to)
@@ -200,6 +210,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Backspace joining a following heading preserves source soft newlines', () => {
     const editor = createEditor()
+
     try {
       const heading = findNodeTextPosition(editor, 'heading', 'Next section')
       editor.commands.setTextSelection(heading.from)
@@ -220,6 +231,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Delete joining a following heading preserves source soft newlines', () => {
     const editor = createEditor()
+
     try {
       const firstParagraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(firstParagraph.to)
@@ -240,6 +252,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Backspace joining from a previous heading preserves source soft newlines', () => {
     const editor = createEditor(headingBeforeHardWrappedParagraph)
+
     try {
       const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
       editor.commands.setTextSelection(paragraph.from)
@@ -264,6 +277,7 @@ describe('rich markdown empty paragraph deletion', () => {
 
   it('Delete joining from a previous heading preserves source soft newlines', () => {
     const editor = createEditor(headingBeforeHardWrappedParagraph)
+
     try {
       const heading = findNodeTextPosition(editor, 'heading', 'Existing section')
       editor.commands.setTextSelection(heading.to)
@@ -293,6 +307,7 @@ describe('rich markdown empty paragraph deletion', () => {
         '>\n' +
         '> Second paragraph starts here.'
     )
+
     try {
       const secondParagraph = findNodeTextPosition(editor, 'paragraph', 'Second paragraph')
       editor.commands.setTextSelection(secondParagraph.from)

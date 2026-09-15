@@ -37,14 +37,18 @@ export function ConfirmationDialogProvider({
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
+
   const setContextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.setContextualToursBlockingSurfaceVisible
   )
+
   const lastDisplayedRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
   activeRequestRef.current = activeRequest
+
   if (activeRequest) {
     lastDisplayedRequestRef.current = activeRequest
   }
+
   // Why: Radix keeps dialog content mounted while closing; keep labels stable without a post-render Effect.
   const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
   const Icon = displayedRequest?.options.icon
@@ -53,6 +57,7 @@ export function ConfirmationDialogProvider({
     // Why: this provider's dialog is not represented by activeModal. Block
     // contextual tours so they cannot appear behind confirmation prompts.
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
+
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
@@ -63,6 +68,7 @@ export function ConfirmationDialogProvider({
         options,
         resolve
       }
+
       nextIdRef.current += 1
       setQueue((currentQueue) => [...currentQueue, request])
     })
@@ -71,13 +77,16 @@ export function ConfirmationDialogProvider({
   const settleActiveRequest = useCallback(
     (confirmed: boolean) => {
       const request = activeRequestRef.current
+
       if (!request) {
         return
       }
+
       // Why: cancelling must not persist a preference the user backed out of.
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
+
       // Why: queued prompts must not inherit this request's preference.
       setDontAskAgain(false)
       request.resolve(confirmed)
@@ -85,6 +94,7 @@ export function ConfirmationDialogProvider({
         if (currentQueue[0]?.id === request.id) {
           return currentQueue.slice(1)
         }
+
         return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
       })
     },

@@ -27,6 +27,7 @@ describe('restart journal restoration', () => {
       peak = Math.max(peak, active)
       await gate.promise
       active -= 1
+
       return {
         journal: {},
         params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
@@ -35,6 +36,7 @@ describe('restart journal restoration', () => {
         sessionId
       }
     })
+
     const records = Array.from(
       { length: 12 },
       (_, index) => ({ sessionId: `session-${index}` }) as AgentSessionRecord
@@ -64,6 +66,7 @@ describe('restart journal restoration', () => {
 
   it('runs pending settlement retry after recovery resolution and before handoff', async () => {
     const calls: string[] = []
+
     const params: AgentSessionAttachParams = {
       envelope: {
         sessionId: 'session-1',
@@ -82,6 +85,7 @@ describe('restart journal restoration', () => {
       accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex' },
       runtimeKind: 'native'
     }
+
     restoreRead.mockResolvedValue({
       journal: {},
       params,
@@ -107,6 +111,7 @@ describe('restart journal restoration', () => {
           calls.push(
             restoredParams === params ? 'retrySettlement:restored-params' : 'retrySettlement'
           )
+
           return true
         },
         restoreHandoff: async () => {

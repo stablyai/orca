@@ -10,7 +10,9 @@ export function useWindowWidth(): number | null {
     function update(): void {
       setWindowWidth(getWindowWidth())
     }
+
     window.addEventListener('resize', update)
+
     return () => window.removeEventListener('resize', update)
   }, [])
 
@@ -21,5 +23,6 @@ function getWindowWidth(): number | null {
   if (typeof window === 'undefined' || !Number.isFinite(window.innerWidth)) {
     return null
   }
+
   return window.innerWidth
 }

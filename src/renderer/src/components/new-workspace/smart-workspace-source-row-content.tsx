@@ -31,9 +31,11 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'use-name') {
     return <CaseSensitive className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (row.kind === 'create-branch') {
     return <GitBranchPlus className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (row.kind === 'github') {
     return row.item.type === 'pr' ? (
       <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
@@ -41,6 +43,7 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
     )
   }
+
   if (row.kind === 'gitlab') {
     // Why: GitMerge keeps merge requests visually distinct from PRs and branches.
     return row.item.type === 'mr' ? (
@@ -49,12 +52,15 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
     )
   }
+
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (row.kind === 'jira' || row.kind === 'jira-account') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
@@ -66,18 +72,23 @@ export function SelectionIcon({
   if (kind === 'github-pr') {
     return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (kind === 'gitlab-mr') {
     return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
     return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   if (kind === 'jira') {
     return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
@@ -106,6 +117,7 @@ export function RowLabel({
       </span>
     )
   }
+
   if (row.kind === 'create-branch') {
     return (
       <span className="min-w-0 truncate">
@@ -117,6 +129,7 @@ export function RowLabel({
       </span>
     )
   }
+
   if (row.kind === 'github') {
     return (
       <span className="min-w-0 truncate">
@@ -124,8 +137,10 @@ export function RowLabel({
       </span>
     )
   }
+
   if (row.kind === 'gitlab') {
     const prefix = row.item.type === 'mr' ? '!' : '#'
+
     return (
       <span className="min-w-0 truncate">
         <span className="font-medium text-foreground">
@@ -136,13 +151,16 @@ export function RowLabel({
       </span>
     )
   }
+
   if (row.kind === 'branch') {
     return <span className="min-w-0 truncate font-mono text-[11px]">{row.refName}</span>
   }
+
   if (row.kind === 'jira') {
     const siteLabel = jiraSite
       ? `${jiraSite.displayName} — ${jiraSite.email || jiraSite.siteUrl}`
       : row.issue.siteName
+
     return (
       <span className="min-w-0 truncate">
         <span className="font-medium text-foreground">{row.issue.key}</span> {row.issue.title}
@@ -152,6 +170,7 @@ export function RowLabel({
       </span>
     )
   }
+
   if (row.kind === 'jira-account') {
     return (
       <span className="min-w-0 truncate">
@@ -160,6 +179,7 @@ export function RowLabel({
       </span>
     )
   }
+
   return (
     <span className="min-w-0 truncate">
       <span className="font-medium text-foreground">{row.issue.identifier}</span> {row.issue.title}

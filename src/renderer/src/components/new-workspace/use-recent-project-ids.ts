@@ -11,18 +11,23 @@ import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-p
  */
 export function orderProjectIdsByRecency(worktrees: readonly Worktree[]): string[] {
   const newestByProject = new Map<string, number>()
+
   for (const worktree of worktrees) {
     const projectId = worktree.projectId
+
     // Legacy repo-only workspaces have no projectId and can't be attributed.
     if (projectId === undefined || projectId === '') {
       continue
     }
+
     const createdAt = worktree.createdAt ?? 0
     const seen = newestByProject.get(projectId)
+
     if (seen === undefined || createdAt > seen) {
       newestByProject.set(projectId, createdAt)
     }
   }
+
   return [...newestByProject.entries()]
     .sort((a, b) => b[1] - a[1])
     .flatMap(([projectId]) => [
@@ -34,5 +39,6 @@ export function orderProjectIdsByRecency(worktrees: readonly Worktree[]): string
 
 export function useRecentProjectIds(): string[] {
   const worktrees = useAllWorktrees()
+
   return useMemo(() => orderProjectIdsByRecency(worktrees), [worktrees])
 }

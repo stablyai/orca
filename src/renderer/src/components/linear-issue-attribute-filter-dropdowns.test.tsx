@@ -32,11 +32,13 @@ const defaultStates = (teamIds: readonly string[]): unknown => ({
   loading: false,
   error: null
 })
+
 const defaultLabels = (teamIds: readonly string[]): unknown => ({
   data: teamIds.length > 0 ? [{ id: 'label-1', name: 'Bug' }] : [],
   loading: false,
   error: null
 })
+
 const defaultMembers = (teamIds: readonly string[]): unknown => ({
   data: teamIds.length > 0 ? [{ id: 'member-1', displayName: 'Ada Lovelace' }] : [],
   loading: false,
@@ -92,6 +94,7 @@ describe('linear-issue-attribute-filter helpers', () => {
       statusTruncated: false,
       labelsTruncated: false
     })
+
     expect(pills[0]?.value).toBe('Todo')
   })
 
@@ -109,6 +112,7 @@ describe('linear-issue-attribute-filter helpers', () => {
       statusTruncated: false,
       labelsTruncated: false
     })
+
     expect(pills.map((p) => p.key)).toEqual(['status', 'priority', 'assignee', 'labels'])
     expect(pills[0]?.value).toContain('Todo')
     expect(pills[2]?.value).toMatch(/Unassigned/i)
@@ -155,6 +159,7 @@ describe('LinearIssueAttributeFilterDropdowns', () => {
       assignee: { kind: 'user', id: 'member-1' },
       labelIds: ['label-1']
     }
+
     const team: LinearTeam = { id: 'team-1', name: 'Engineering', key: 'ENG' }
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -268,6 +273,7 @@ const multiTeamStates = [
 ]
 
 const teamBe: LinearTeam = { id: 'team-be', name: 'Backend', key: 'BE' }
+
 const teamFe: LinearTeam = { id: 'team-fe', name: 'Frontend', key: 'FE' }
 
 function renderDropdowns(value: LinearIssueAttributeFilter): {
@@ -304,6 +310,7 @@ function renderDropdowns(value: LinearIssueAttributeFilter): {
   act(() => {
     trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
+
   return { rerender, onChange }
 }
 
@@ -312,6 +319,7 @@ function openSectionNamed(label: string): void {
   const sectionButton = [...document.body.querySelectorAll('button')].find((button) =>
     button.textContent?.trim().startsWith(label)
   )
+
   act(() => {
     sectionButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -484,11 +492,13 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
     // The marker sits outside the truncating summary span, so it is its own text node.
     expect(document.body.textContent).toContain('1 selected')
     expect(document.body.textContent).toContain('· partial')
+
     // Why: the marker has to be reachable by keyboard and named for a screen reader,
     // which a bare title attribute never was (#17342).
     const pillMarkers = [...document.body.querySelectorAll('button')].filter(
       (button) => button.textContent === 'partial'
     )
+
     expect(pillMarkers).toHaveLength(1)
     expect(pillMarkers[0]?.getAttribute('data-slot')).toBe('tooltip-trigger')
   })
@@ -530,10 +540,12 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
   // all — the picker used to check nothing and still report full coverage (#17342).
   it('says the status filter is full instead of claiming coverage it cannot have', () => {
     const cap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
+
     const states = Array.from({ length: cap + 1 }, (_unused, index) => ({
       id: `s-${String(index).padStart(3, '0')}`,
       name: `Status ${String(index).padStart(3, '0')}`
     }))
+
     metadataMocks.useTeamsStates.mockImplementation(() => ({
       data: states,
       loading: false,
@@ -544,6 +556,7 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
       ...emptyFilter,
       stateIds: states.slice(0, cap).map((state) => state.id)
     })
+
     openSectionNamed('Status')
     act(() => {
       pickerRowsNamed(`Status ${String(cap).padStart(3, '0')}`)[0]?.dispatchEvent(
@@ -592,6 +605,7 @@ describe('LinearIssueAttributeFilterDropdowns transport-cap coverage notice', ()
 describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport id cap', () => {
   const cap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
   const statusNames = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']
+
   const capFillingStates = statusNames.flatMap((name, nameIndex) =>
     Array.from({ length: cap / statusNames.length }, (_unused, teamIndex) => ({
       id: `t${teamIndex}-${nameIndex}`,
@@ -636,6 +650,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       id: `s-${String(index).padStart(3, '0')}`,
       name: rowNamed(index)
     }))
+
     metadataMocks.useTeamsStates.mockImplementation(() => ({
       data: states,
       loading: false,
@@ -646,6 +661,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       ...emptyFilter,
       stateIds: states.slice(0, cap).map((state) => state.id)
     })
+
     openSectionNamed('Status')
     clickRow(rowNamed(cap))
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
@@ -673,6 +689,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       id: `s-${String(index).padStart(3, '0')}`,
       name: rowNamed(index)
     }))
+
     metadataMocks.useTeamsStates.mockImplementation(() => ({
       data: states,
       loading: false,
@@ -683,6 +700,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       ...emptyFilter,
       stateIds: states.slice(0, cap).map((state) => state.id)
     })
+
     openSectionNamed('Status')
     clickRow(rowNamed(cap))
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
@@ -704,10 +722,12 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
 
   it('keeps the labels truncation when an unrelated facet is picked', () => {
     const labelCap = LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS
+
     const labels = Array.from({ length: labelCap + 1 }, (_unused, index) => ({
       id: `l-${String(index).padStart(3, '0')}`,
       name: rowNamed(index)
     }))
+
     metadataMocks.useTeamsLabels.mockImplementation(() => ({
       data: labels,
       loading: false,
@@ -718,6 +738,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       ...emptyFilter,
       labelIds: labels.slice(0, labelCap).map((label) => label.id)
     })
+
     openSectionNamed('Labels')
     clickRow(rowNamed(labelCap))
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)
@@ -742,6 +763,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       id: `s-${String(index).padStart(3, '0')}`,
       name: rowNamed(index)
     }))
+
     metadataMocks.useTeamsStates.mockImplementation(() => ({
       data: states,
       loading: false,
@@ -752,6 +774,7 @@ describe('LinearIssueAttributeFilterDropdowns coverage at exactly the transport 
       ...emptyFilter,
       stateIds: states.slice(0, cap).map((state) => state.id)
     })
+
     openSectionNamed('Status')
     clickRow(rowNamed(cap))
     rerender(onChange.mock.calls[0]?.[0] as LinearIssueAttributeFilter)

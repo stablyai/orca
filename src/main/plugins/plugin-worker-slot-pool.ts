@@ -30,15 +30,20 @@ export class PluginWorkerSlotPool {
     if (this.disposed) {
       return Promise.reject(new Error('plugin worker slots are shut down'))
     }
+
     if (signal.aborted) {
       return Promise.reject(cancellationError())
     }
+
     if (this.leased < this.capacity && this.waiters.length === 0) {
       this.leased += 1
+
       return Promise.resolve(this.createLease())
     }
+
     return new Promise<PluginWorkerSlotLease>((resolve, reject) => {
       let cancelled = false
+
       const waiter: SlotWaiter = {
         signal,
         resolve,
@@ -47,16 +52,20 @@ export class PluginWorkerSlotPool {
           if (cancelled) {
             return
           }
+
           cancelled = true
           const index = this.waiters.indexOf(waiter)
+
           if (index !== -1) {
             this.waiters.splice(index, 1)
           }
+
           signal.removeEventListener('abort', waiter.onAbort)
           reject(cancellationError())
           this.drain()
         }
       }
+
       this.waiters.push(waiter)
       signal.addEventListener('abort', waiter.onAbort, { once: true })
     })
@@ -66,7 +75,9 @@ export class PluginWorkerSlotPool {
     if (this.disposed) {
       return
     }
+
     this.disposed = true
+
     for (const waiter of this.waiters.splice(0)) {
       waiter.signal.removeEventListener('abort', waiter.onAbort)
       waiter.reject(new Error('plugin worker slots are shut down'))
@@ -75,11 +86,13 @@ export class PluginWorkerSlotPool {
 
   private createLease(): PluginWorkerSlotLease {
     let released = false
+
     return {
       release: () => {
         if (released) {
           return
         }
+
         released = true
         this.leased -= 1
         this.drain()
@@ -91,10 +104,12 @@ export class PluginWorkerSlotPool {
     while (!this.disposed && this.leased < this.capacity && this.waiters.length > 0) {
       const waiter = this.waiters.shift()!
       waiter.signal.removeEventListener('abort', waiter.onAbort)
+
       if (waiter.signal.aborted) {
         waiter.reject(cancellationError())
         continue
       }
+
       this.leased += 1
       waiter.resolve(this.createLease())
     }

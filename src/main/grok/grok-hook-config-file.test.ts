@@ -22,6 +22,7 @@ describe('guarded Grok hook config mutation', () => {
   function makeConfigPath(): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-grok-guard-'))
     dirs.push(dir)
+
     return join(dir, 'orca-status.json')
   }
 
@@ -34,8 +35,10 @@ describe('guarded Grok hook config mutation', () => {
   it('does not delete a newer user edit', async () => {
     const configPath = makeConfigPath()
     const installed = '{"hooks":{"SessionStart":[]}}\n'
+
     const userEdit =
       '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"user"}]}]}}\n'
+
     writeFileSync(configPath, installed)
     writeFileSync(configPath, userEdit)
 
@@ -75,6 +78,7 @@ describe('guarded Grok hook config mutation', () => {
       writeGrokHookConfigIfUnchanged(configPath, installed, '{"hooks":{}}\n', {
         shouldCommit: async () => {
           writeFileSync(configPath, userEdit)
+
           return true
         }
       })
@@ -92,6 +96,7 @@ describe('guarded Grok hook config mutation', () => {
       removeGrokHookConfigIfUnchanged(configPath, installed, {
         shouldCommit: async () => {
           writeFileSync(configPath, userEdit)
+
           return true
         }
       })
@@ -118,10 +123,13 @@ describe('guarded Grok hook config mutation', () => {
     const installed = '{"hooks":{"SessionStart":[]}}\n'
     writeFileSync(configPath, installed)
     let finishProbe!: (allowed: boolean) => void
+
     const probe = new Promise<boolean>((resolve) => {
       finishProbe = resolve
     })
+
     let probeStarted!: () => void
+
     const started = new Promise<void>((resolve) => {
       probeStarted = resolve
     })
@@ -129,9 +137,11 @@ describe('guarded Grok hook config mutation', () => {
     const cleanup = removeGrokHookConfigIfUnchanged(configPath, installed, {
       beforeHold: async () => {
         probeStarted()
+
         return await probe
       }
     })
+
     await started
 
     expect(readFileSync(configPath, 'utf8')).toBe(installed)
@@ -161,6 +171,7 @@ describe('guarded Grok hook config mutation', () => {
     writeFileSync(configPath, installed)
 
     const linkCounts: number[] = []
+
     const sampler = setInterval(() => {
       try {
         linkCounts.push(statSync(configPath).nlink)
@@ -168,6 +179,7 @@ describe('guarded Grok hook config mutation', () => {
         /* absent mid-swap is fine; only a second link is not */
       }
     }, 0)
+
     try {
       for (let i = 0; i < 40; i += 1) {
         const next = `{"hooks":{"SessionStart":[],"n":${i}}}\n`

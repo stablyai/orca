@@ -15,9 +15,11 @@ export async function sendRequest(
     socket.on('data', (chunk: string) => {
       buffer += chunk
       const newlineIndex = buffer.indexOf('\n')
+
       if (newlineIndex === -1) {
         return
       }
+
       const message = buffer.slice(0, newlineIndex)
       socket.end()
       resolve(JSON.parse(message) as Record<string, unknown>)
@@ -46,26 +48,32 @@ export function openFramedSession(
   const socket = createConnection(endpoint)
   let buffer = ''
   socket.setEncoding('utf8')
+
   const done = new Promise<void>((resolve, reject) => {
     socket.once('error', (err) => {
       // Why: ECONNRESET is expected when we deliberately destroy the socket
       // mid-wait to probe the counter decrement; surface other errors.
       if ((err as NodeJS.ErrnoException).code === 'ECONNRESET') {
         resolve()
+
         return
       }
+
       reject(err)
     })
     socket.on('close', () => resolve())
     socket.on('data', (chunk: string) => {
       buffer += chunk
       let newlineIndex = buffer.indexOf('\n')
+
       while (newlineIndex !== -1) {
         const raw = buffer.slice(0, newlineIndex).trim()
         buffer = buffer.slice(newlineIndex + 1)
+
         if (raw) {
           const frame = JSON.parse(raw) as Record<string, unknown>
           frames.push(frame)
+
           // Why: the server leaves the socket open after writing the terminal
           // frame (short RPCs expect the client to close); close the client
           // side so `done` resolves once we've captured the response.
@@ -73,6 +81,7 @@ export function openFramedSession(
             socket.end()
           }
         }
+
         newlineIndex = buffer.indexOf('\n')
       }
     })
@@ -80,6 +89,7 @@ export function openFramedSession(
       socket.write(`${JSON.stringify(withCurrentOrchestrationContract(request))}\n`)
     })
   })
+
   return { socket, frames, done }
 }
 
@@ -97,10 +107,12 @@ export function sleep(ms: number): Promise<void> {
 
 export async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('timed out waiting for condition')
     }
+
     await sleep(20)
   }
 }
@@ -111,6 +123,7 @@ export function seedSupervisedAskWorkers(db: OrchestrationDb, workerHandles: str
     coordinatorHandle: 'term_coord',
     coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   })
+
   for (const workerHandle of workerHandles) {
     const task = db.createTask({ spec: 'Wait for coordinator input', runId: run.id })
     createRootDispatch(db, task.id, workerHandle)

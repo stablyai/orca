@@ -54,6 +54,7 @@ function snapshotEvent(fence = 3): AgentSessionSubscribeEvent {
 
 function snapshotWithMessage(): AgentSessionSubscribeEvent {
   const event = snapshotEvent()
+
   return {
     ...event,
     page: {
@@ -164,6 +165,7 @@ async function defaultSendRequest(method: string, params?: Record<string, unknow
   if (method === 'agentSession.send') {
     return sendResult('accepted')
   }
+
   if (method === 'agentSession.options') {
     return ok({
       models: [
@@ -194,6 +196,7 @@ async function defaultSendRequest(method: string, params?: Record<string, unknow
       }
     })
   }
+
   if (method === 'agentSession.setOption') {
     return ok({
       ok: true,
@@ -207,6 +210,7 @@ async function defaultSendRequest(method: string, params?: Record<string, unknow
       }
     })
   }
+
   if (method === 'agentSession.respondToApproval' || method === 'agentSession.respondToQuestion') {
     return ok({
       ok: true,
@@ -225,6 +229,7 @@ async function defaultSendRequest(method: string, params?: Record<string, unknow
       }
     })
   }
+
   return ok({})
 }
 
@@ -235,14 +240,18 @@ describe('useMobileStructuredAgentSession', () => {
   const onSendError = vi.fn()
   const unsubscribe = vi.fn()
   const sendRequest = vi.fn(defaultSendRequest)
+
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
     listener = onData
+
     return unsubscribe
   })
+
   const client = {
     sendRequest,
     subscribe
   } as unknown as RpcClient
+
   let storedOperations: Map<string, string>
 
   function Harness({
@@ -265,6 +274,7 @@ describe('useMobileStructuredAgentSession', () => {
       agent,
       onSendError
     } as never)
+
     return null
   }
 
@@ -344,17 +354,21 @@ describe('useMobileStructuredAgentSession', () => {
       ).toHaveLength(2)
     )
     await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2))
+
     const holdOrders = sendRequest.mock.calls
       .map((call, index) =>
         call[0] === 'agentSession.hold' ? sendRequest.mock.invocationCallOrder[index] : null
       )
       .filter((order): order is number => order !== null)
+
     const subscribeOrders = subscribe.mock.invocationCallOrder
     const secondHoldOrder = holdOrders[1]
     const secondSubscribeOrder = subscribeOrders[1]
+
     if (secondHoldOrder === undefined || secondSubscribeOrder === undefined) {
       throw new Error('reconnect calls were not recorded')
     }
+
     expect(secondHoldOrder).toBeLessThan(secondSubscribeOrder)
   })
 
@@ -640,6 +654,7 @@ describe('useMobileStructuredAgentSession', () => {
       if (method === 'agentSession.respondToApproval') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return defaultSendRequest(method, params)
     })
     onSendError.mockClear()
@@ -653,6 +668,7 @@ describe('useMobileStructuredAgentSession', () => {
       if (method === 'agentSession.respondToQuestion') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return defaultSendRequest(method, params)
     })
     onSendError.mockClear()
@@ -679,6 +695,7 @@ describe('useMobileStructuredAgentSession', () => {
       if (method === 'agentSession.respondToApproval' && attempts++ === 0) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return defaultSendRequest(method, params)
     })
 
@@ -691,11 +708,15 @@ describe('useMobileStructuredAgentSession', () => {
     const calls = sendRequest.mock.calls.filter(
       ([method]) => method === 'agentSession.respondToApproval'
     )
+
     expect(calls).toHaveLength(2)
+
     const firstId = (calls[0]![1] as { envelope: { clientOperationId: string } }).envelope
       .clientOperationId
+
     const retryId = (calls[1]![1] as { envelope: { clientOperationId: string } }).envelope
       .clientOperationId
+
     expect(firstId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
     expect(retryId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
     expect(retryId).not.toBe(firstId)
@@ -712,6 +733,7 @@ describe('useMobileStructuredAgentSession', () => {
       if (method === 'agentSession.setOption') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return defaultSendRequest(method, params)
     })
     onSendError.mockClear()
@@ -746,6 +768,7 @@ describe('useMobileStructuredAgentSession', () => {
       if (method === 'agentSession.cancel') {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return defaultSendRequest(method, params)
     })
     onSendError.mockClear()
@@ -769,6 +792,7 @@ describe('useMobileStructuredAgentSession', () => {
         expect.any(Object)
       )
     )
+
     const held = sendRequest.mock.calls.find((call) => call[0] === 'agentSession.hold')?.[1] as {
       holderId: string
     }

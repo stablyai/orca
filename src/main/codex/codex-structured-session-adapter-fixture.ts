@@ -50,6 +50,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -62,6 +63,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       request: async (method, params) => {
         connection.calls.push({ method, params })
         const route = routes[method]
+
         return route ? route(params) : {}
       },
       notify: () => {},
@@ -70,12 +72,16 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       close: async () => {
         connection.closeCount += 1
         connection.closed = true
+
         return true
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   routes['thread/start'] ??= () => ({
     thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
     model: 'gpt-live',
@@ -86,6 +92,7 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
     model: 'gpt-live',
     reasoningEffort: 'medium'
   })
+
   return { connections, openConnection, routes }
 }
 
@@ -98,6 +105,7 @@ export function adapterFor(
   > = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
+
   return new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -125,5 +133,6 @@ export async function acquired(
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = adapterFor(codex, launch, events)
   await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+
   return adapter
 }

@@ -3,6 +3,7 @@ import type { Button } from '../ui/button'
 import type { LocalAgentRuntime } from './CliSkillRuntimeSetup'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
+
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
 
 export type AgentSkillSetupPanelProps = {

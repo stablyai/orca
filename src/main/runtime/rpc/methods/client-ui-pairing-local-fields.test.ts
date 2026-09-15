@@ -18,6 +18,7 @@ describe('client UI RPC pairing-local field seams', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     // A paired web client restamps every repo onto its own runtime:web-* pseudo-host, so its
@@ -63,6 +64,7 @@ describe('client UI RPC pairing-local field seams', () => {
         getRuntimeId: () => 'test-runtime',
         updateUIState: vi.fn(() => getDefaultUIState())
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const response = await dispatcher.dispatch(
@@ -86,6 +88,7 @@ describe('client UI RPC pairing-local field seams', () => {
         getRuntimeId: () => 'test-runtime',
         getUIState: vi.fn(() => ({ ...getDefaultUIState(), [field]: pairingLocalSamples[field] }))
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const response = await dispatcher.dispatch(makeRequest('ui.get'))
@@ -100,14 +103,17 @@ describe('client UI RPC pairing-local field seams', () => {
     'the ui.set and ui.recordFeatureInteraction responses omit the pairing-local field %s',
     async (field) => {
       const stored = { ...getDefaultUIState(), [field]: pairingLocalSamples[field] }
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         updateUIState: vi.fn(() => stored),
         recordFeatureInteraction: vi.fn(() => stored)
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const setResponse = await dispatcher.dispatch(makeRequest('ui.set', { sidebarWidth: 280 }))
+
       const interactionResponse = await dispatcher.dispatch(
         makeRequest('ui.recordFeatureInteraction', 'tasks')
       )

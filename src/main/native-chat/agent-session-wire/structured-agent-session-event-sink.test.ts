@@ -37,10 +37,13 @@ function target(
   const journal = {
     appendItem: vi.fn(async (id: AgentJournalItemIdentity, _body: AgentJournalItemBody) => {
       const ordinal = id.provider === 'codex' ? id.ordinal : -1
+
       if (ordinal === failOn) {
         throw new Error(`refused ${ordinal}`)
       }
+
       log.push({ call: 'appendItem', fence, ordinal })
+
       return { cursor: { epoch: 'e', sequence: ordinal } }
     }),
     appendTombstone: vi.fn(async (id: AgentJournalItemIdentity) => {
@@ -49,14 +52,17 @@ function target(
         fence,
         ordinal: id.provider === 'codex' ? id.ordinal : -1
       })
+
       return { epoch: 'e', sequence: 0 }
     }),
     appendLifecycleBatch: vi.fn(async (input: { settlementId: string }) => {
       log.push({ call: 'appendLifecycleBatch', fence, settlementId: input.settlementId })
+
       return { epoch: 'e', sequence: 0 }
     }),
     latestItemMatching: vi.fn(() => null)
   } as unknown as AgentSessionJournal
+
   return {
     journal,
     fence,
@@ -152,10 +158,12 @@ describe('deferred structured agent-session event sink', () => {
     const log: Recorded[] = []
     const errors: unknown[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+
     const deferred = createDeferredStructuredAgentSessionEventSink({
       onError: (error) => errors.push(error),
       readingControl
     })
+
     deferred.bind(target(4, log, 0))
 
     deferred.sink.appendItem(identity(0), BODY)
@@ -196,6 +204,7 @@ describe('deferred structured agent-session event sink', () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+
     const deferred = createDeferredStructuredAgentSessionEventSink({
       watermarks: {
         maxQueuedBytes: 1_000_000,
@@ -228,6 +237,7 @@ describe('deferred structured agent-session event sink', () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+
     const deferred = createDeferredStructuredAgentSessionEventSink({
       watermarks: {
         pauseQueuedBytes: 1,
@@ -256,6 +266,7 @@ describe('deferred structured agent-session event sink', () => {
   it('backpressures lifecycle publication at the hard operation watermark', async () => {
     const log: Recorded[] = []
     const errors: unknown[] = []
+
     const deferred = createDeferredStructuredAgentSessionEventSink({
       onError: (error) => errors.push(error),
       watermarks: {
@@ -291,6 +302,7 @@ describe('deferred structured agent-session event sink', () => {
     const log: Recorded[] = []
     const firstControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
     const secondControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+
     const deferred = createDeferredStructuredAgentSessionEventSink({
       watermarks: {
         pauseQueuedBytes: 1,
@@ -301,6 +313,7 @@ describe('deferred structured agent-session event sink', () => {
         lowQueuedOperations: 0
       }
     })
+
     const releaseFirst = deferred.sink.bindReadingControl?.(firstControl)
 
     expect(deferred.sink.tryAppendItem?.(identity(0), BODY)).toEqual({ accepted: true })

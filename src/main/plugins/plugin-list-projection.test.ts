@@ -94,6 +94,7 @@ describe('buildPluginList consent identity', () => {
       contentHash: null,
       isDev: true
     }
+
     const lock = {
       version: 1 as const,
       plugins: {
@@ -118,6 +119,7 @@ describe('buildPluginList consent identity', () => {
       error: 'missing orca-plugin.json',
       isDev: true
     }
+
     const service = {
       options: { getPluginConsents: () => ({}), getDisabledPlugins: () => [] },
       getDiscovered: () => [invalid]
@@ -134,6 +136,7 @@ describe('buildPluginList consent identity', () => {
       ...manifest,
       contributes: { vmRecipes: [{ path: 'recipes/cloud.json' }] }
     })
+
     const plugin: ValidDiscoveredPlugin = {
       pluginKey: 'orca-samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
@@ -183,6 +186,7 @@ describe('buildPluginList consent identity', () => {
         keybindings: [{ command: 'tasks', key: 'mod+alt+t' }]
       }
     })
+
     const plugin: ValidDiscoveredPlugin = {
       pluginKey: 'orca-samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),

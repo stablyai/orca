@@ -13,6 +13,7 @@ describe('Markdown source compatibility without a DOM', () => {
         content,
         contentType: 'markdown'
       })
+
       try {
         expect(editor.getJSON()).toMatchObject({ type: 'doc', content: [{ type: 'paragraph' }] })
         expect(editor.getMarkdown().trim()).toBe('')
@@ -40,14 +41,17 @@ describe('Markdown source compatibility without a DOM', () => {
       content: '',
       contentType: 'markdown'
     })
+
     try {
       editor.commands.insertContentAt(1, { type: 'text', text })
+
       const reopened = new Editor({
         element: null,
         extensions: [StarterKit, createIsolatedMarkdownExtensionForTests()],
         content: editor.getMarkdown(),
         contentType: 'markdown'
       })
+
       try {
         expect(reopened.getText()).toBe(text)
         expect(reopened.getJSON()).toEqual(editor.getJSON())

@@ -64,56 +64,72 @@ export function dispatchTerminalShortcutAction(
 
   if (action.type === 'selectAll') {
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     if (!event.repeat) {
       armNativeOnlyShortcut(event)
       pane.terminal.selectAll()
     }
+
     event.preventDefault()
     event.stopImmediatePropagation()
+
     return
   }
+
   if (event.repeat) {
     return
   }
 
   if (action.type === 'copySelection') {
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane || !pane.terminal.getSelection()) {
       return
     }
+
     event.preventDefault()
     event.stopImmediatePropagation()
     void copyTerminalSelection({
       terminal: pane.terminal,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
     }).catch(() => {})
+
     return
   }
+
   if (action.type === 'toggleSearch') {
     event.preventDefault()
     event.stopImmediatePropagation()
     setSearchOpen((prev) => !prev)
+
     return
   }
+
   if (action.type === 'clearActivePane') {
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (pane) {
       onClearPaneScrollback(pane)
     }
+
     return
   }
+
   if (action.type === 'scrollViewport') {
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     if (action.position === 'top') {
       markTerminalPinnedViewport(pane.terminal)
       pane.terminal.scrollToLine(0)
@@ -121,93 +137,125 @@ export function dispatchTerminalShortcutAction(
       markTerminalFollowOutput(pane.terminal)
       pane.terminal.scrollToBottom()
     }
+
     syncTerminalScrollIntentFromViewport(pane.terminal)
+
     return
   }
+
   if (action.type === 'focusPane') {
     const panes = manager.getPanes()
+
     if (panes.length < 2) {
       return
     }
+
     event.preventDefault()
     event.stopImmediatePropagation()
+
     if (expandedPaneIdRef.current !== null) {
       setExpandedPane(null)
       restoreExpandedLayout()
       refreshPaneSizes(true)
       persistLayoutSnapshot()
     }
+
     const activeId = manager.getActivePane()?.id ?? panes[0].id
     const currentIdx = panes.findIndex((pane) => pane.id === activeId)
+
     if (currentIdx === -1) {
       return
     }
+
     const dir = action.direction === 'next' ? 1 : -1
     manager.setActivePane(panes[(currentIdx + dir + panes.length) % panes.length].id, {
       focus: true
     })
+
     return
   }
+
   if (action.type === 'equalizePaneSizes') {
     event.preventDefault()
     event.stopImmediatePropagation()
+
     if (expandedPaneIdRef.current !== null) {
       return
     }
+
     manager.equalizePaneSizes()
     ;(manager.getActivePane() ?? manager.getPanes()[0])?.terminal.focus()
+
     return
   }
+
   if (action.type === 'toggleExpandActivePane') {
     const panes = manager.getPanes()
+
     if (panes.length < 2) {
       return
     }
+
     event.preventDefault()
     event.stopImmediatePropagation()
     toggleExpandPane((manager.getActivePane() ?? panes[0]).id)
+
     return
   }
+
   if (action.type === 'setTitle') {
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (pane) {
       onSetTitle(pane.id)
     }
+
     return
   }
+
   if (action.type === 'clearPaneTitle') {
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (pane) {
       onClearPaneTitle(pane.id)
     }
+
     return
   }
+
   if (action.type === 'closeActivePane') {
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (pane) {
       onRequestClosePane(pane.id)
     }
+
     return
   }
+
   if (action.type === 'splitActivePane') {
     event.preventDefault()
     event.stopImmediatePropagation()
+
     if (expandedPaneIdRef.current !== null) {
       setExpandedPane(null)
       restoreExpandedLayout()
       refreshPaneSizes(true)
       persistLayoutSnapshot()
     }
+
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     splitTerminalPaneWithInheritedCwd({
       worktreeId,
       tabId,

@@ -32,6 +32,7 @@ describe('delete selection', () => {
       skill({ id: 'a', rootPath: '/home/.agents/skills' }),
       skill({ id: 'b', rootPath: '/repo/.claude/skills' })
     ]
+
     expect(eligibleDeleteSkillCount(skills)).toBe(2)
     expect([...addDeletableSkillResults(new Set(), skills, skills)]).toEqual(['a', 'b'])
   })
@@ -43,6 +44,7 @@ describe('delete selection', () => {
       skill({ id: 'c', sourceKind: 'plugin' }),
       skill({ id: 'd', sourceKind: 'repo' })
     ]
+
     expect(eligibleDeleteSkillCount(skills)).toBe(2)
     expect([...addDeletableSkillResults(new Set(), skills, skills)]).toEqual(['a', 'd'])
   })
@@ -61,9 +63,11 @@ describe('delete selection', () => {
 
   it('drops a row that became ineligible between scans', () => {
     const current = new Set(['a'])
+
     const retained = retainedDeletableSkillSelection(current, [
       skill({ id: 'a', sourceKind: 'plugin' })
     ])
+
     expect([...retained]).toEqual([])
   })
 

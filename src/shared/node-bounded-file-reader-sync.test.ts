@@ -11,6 +11,7 @@ function createTempFile(content: string): string {
   tempDirectories.push(directory)
   const path = join(directory, 'input')
   writeFileSync(path, content)
+
   return path
 }
 

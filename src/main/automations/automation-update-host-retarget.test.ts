@@ -25,7 +25,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 function automation(overrides: Partial<Automation>): Automation {
@@ -123,6 +125,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 

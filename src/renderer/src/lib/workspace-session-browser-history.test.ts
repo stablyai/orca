@@ -47,10 +47,12 @@ describe('workspace session browser history payloads', () => {
       lastVisitedAt: 1_700_000_000_000 - index,
       visitCount: 1
     }))
+
     const uncappedPayload = {
       ...buildWorkspaceSessionPayload(createSnapshot([])),
       browserUrlHistory: oversizedHistory
     }
+
     const payload = buildWorkspaceSessionPayload(createSnapshot(oversizedHistory))
 
     expect(payload.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)

@@ -24,6 +24,7 @@ export function fileExplorerEntriesToTreeNodes(
 ): TreeNode[] {
   return entries.filter(shouldIncludeFileExplorerEntry).map((entry) => {
     const path = joinPath(dirPath, entry.name)
+
     return {
       name: entry.name,
       path,
@@ -45,9 +46,11 @@ export async function readFileExplorerDirectory(
 ): Promise<FileExplorerDirectoryListing> {
   const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
   const route = getFileExplorerOperationRoute(operationOwner)
+
   if (!route) {
     throw new Error(getFileExplorerOwnerUnresolvedMessage())
   }
+
   const entries = await readRuntimeDirectory(
     {
       settings: route.settings,
@@ -57,6 +60,7 @@ export async function readFileExplorerDirectory(
     },
     dirPath
   )
+
   // Why: remote-runtime and paired-web routes return the host's order verbatim,
   // and an older host may still sort lexicographically; re-sorting an already
   // sorted local listing is near-free (adaptive sort).

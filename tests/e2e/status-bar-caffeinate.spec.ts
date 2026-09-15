@@ -10,6 +10,7 @@ async function postCodexHookEvent(
   eventName: 'UserPromptSubmit' | 'Stop'
 ): Promise<void> {
   const endpoint = await readHookEndpoint(electronApp)
+
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',
     headers: {
@@ -25,6 +26,7 @@ async function postCodexHookEvent(
       payload: { hook_event_name: eventName, prompt: 'e2e caffeinate prompt' }
     })
   })
+
   expect(response.status).toBe(204)
 }
 
@@ -37,6 +39,7 @@ test('shows keep-awake mode and Agent activity in the status bar', async ({
   const offStatus = orcaPage.getByRole('button', {
     name: 'Keep computer awake, Off · Inactive'
   })
+
   await expect(offStatus).toBeVisible()
   await expect(offStatus).toHaveText('Off')
   await offStatus.click()
@@ -44,25 +47,31 @@ test('shows keep-awake mode and Agent activity in the status bar', async ({
   await expect(orcaPage.getByRole('menuitemradio', { name: /^Agent/ })).toBeVisible()
   await expect(orcaPage.getByRole('menuitemradio', { name: /^Off/ })).toBeVisible()
   const menuProofPath = process.env.ORCA_CAFFEINATE_MENU_PROOF_PATH
+
   if (menuProofPath) {
     await orcaPage.screenshot({ path: menuProofPath })
   }
+
   await orcaPage.getByRole('menuitemradio', { name: /^Agent/ }).click()
 
   const agentInactiveStatus = orcaPage.getByRole('button', {
     name: 'Keep computer awake, Agent · Inactive'
   })
+
   await expect(agentInactiveStatus).toBeVisible()
 
   const paneKey = `e2e-caffeinate-tab:${randomUUID()}`
   await postCodexHookEvent(electronApp, paneKey, 'UserPromptSubmit')
+
   const agentActiveStatus = orcaPage.getByRole('button', {
     name: 'Keep computer awake, Agent · Active'
   })
+
   await expect(agentActiveStatus).toBeVisible()
   await expect(agentActiveStatus).toHaveText('Agent')
 
   const proofPath = process.env.ORCA_CAFFEINATE_PROOF_PATH
+
   if (proofPath) {
     await orcaPage.screenshot({ path: proofPath })
   }

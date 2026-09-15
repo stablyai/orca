@@ -61,6 +61,7 @@ function state(
   linkedReviewHintKey: string
 ): DashboardCardContextState {
   const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', null, repo.id, null, null, true)
+
   return {
     settings: null,
     hostedReviewCache: {
@@ -95,6 +96,7 @@ describe('resolveDashboardCardContext', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
       mergeable: 'UNKNOWN'
     }
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', null, null, null, true)
 
     expect(
@@ -120,6 +122,7 @@ describe('resolveDashboardCardContext', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
       mergeable: 'MERGEABLE'
     }
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', null, null, null, true)
 
     expect(
@@ -145,6 +148,7 @@ describe('resolveDashboardCardContext', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
       mergeable: 'MERGEABLE'
     }
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', null, null, null, true)
 
     expect(

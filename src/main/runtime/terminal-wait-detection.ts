@@ -12,15 +12,20 @@ import {
 } from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
+
 const CLAUDE_IDLE_PREFIX = '\u2733'
+
 const GEMINI_IDLE_PREFIX = '\u25c7'
+
 const PI_IDLE_PREFIX = '\u03c0 - '
 
 function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   const status = detectAgentStatusFromTitle(title)
+
   if (status !== 'idle') {
     return null
   }
+
   // Why: launch titles like "Codex YOLO" contain an agent name but aren't readiness signals; terminal.wait needs explicit idle evidence.
   if (
     EXPLICIT_IDLE_TITLE_RE.test(title) ||
@@ -33,6 +38,7 @@ function computeExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   ) {
     return 'idle'
   }
+
   return null
 }
 
@@ -47,13 +53,17 @@ export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus |
 export function isKnownReadyPromptPreview(preview: string): boolean {
   const normalized = preview.toLowerCase()
   const readyIndex = findKnownReadyPromptIndex(normalized)
+
   if (readyIndex === null) {
     return false
   }
+
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+
   if (blockedSignal !== null && blockedSignal.index > readyIndex) {
     return false
   }
+
   return true
 }
 
@@ -61,6 +71,7 @@ export function detectTerminalWaitBlockedReason(
   preview: string
 ): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
+
   return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
 }
 
@@ -68,10 +79,13 @@ export function findActionableTerminalWaitBlockedSignal(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+
   if (blockedSignal === null) {
     return null
   }
+
   const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
+
   // Why: a live prompt after the modal means it was dismissed → signal no longer actionable, even mid-run (Cursor never reports idle via OSC title).
   return dismissedModalIndex !== null && dismissedModalIndex > blockedSignal.index
     ? null
@@ -85,6 +99,7 @@ function findDismissedStartupModalIndex(normalized: string): number | null {
     findAntigravityReadyPromptIndex(normalized),
     findCursorActivePromptIndex(normalized)
   ].filter((index): index is number => index !== null)
+
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
 
@@ -94,15 +109,18 @@ function findKnownReadyPromptIndex(normalized: string): number | null {
     findAntigravityReadyPromptIndex(normalized),
     findCursorReadyPromptIndex(normalized)
   ].filter((index): index is number => index !== null)
+
   return indexes.length > 0 ? Math.max(...indexes) : null
 }
 
 // Why: match the banner's last occurrence to skip the trust dialog's own "Cursor Agent" text; "→" is cursor-agent's persistent input prompt.
 function findCursorActivePromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('cursor agent')
+
   if (headerIndex === -1) {
     return null
   }
+
   return normalized.includes('→', headerIndex) ? headerIndex : null
 }
 
@@ -111,27 +129,34 @@ const CURSOR_BUSY_SPINNER_RE = /[⠁-⣿]/
 
 function findCursorReadyPromptIndex(normalized: string): number | null {
   const activeIndex = findCursorActivePromptIndex(normalized)
+
   if (activeIndex === null) {
     return null
   }
+
   return CURSOR_BUSY_SPINNER_RE.test(normalized.slice(activeIndex)) ? null : activeIndex
 }
 
 function findCodexReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('openai codex')
+
   if (headerIndex === -1) {
     return null
   }
+
   const readySegment = normalized.slice(headerIndex)
+
   // Why: Codex prints permissions only in YOLO mode; the stable ready header is OpenAI Codex + model + directory.
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
 }
 
 function findAntigravityReadyPromptIndex(normalized: string): number | null {
   const headerIndex = normalized.lastIndexOf('antigravity cli')
+
   if (headerIndex === -1) {
     return null
   }
+
   let lineStart = headerIndex
   let modelIndex: number | null = null
   let promptIndex: number | null = null
@@ -141,18 +166,23 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
     if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
       continue
     }
+
     let trimmedStart = lineStart
     let trimmedEnd = cursor
+
     while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
       trimmedStart += 1
     }
+
     while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
       trimmedEnd -= 1
     }
+
     if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
       if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
         modelIndex = trimmedStart
       }
+
       if (
         promptIndex === null &&
         trimmedEnd - trimmedStart === 1 &&
@@ -161,6 +191,7 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
         promptIndex = trimmedStart
       }
     }
+
     lineStart = cursor + 1
   }
 
@@ -177,28 +208,36 @@ const CURSOR_APPROVAL_CHOICE_MARKERS = [
   'run everything',
   'skip & tell the agent'
 ]
+
 // Why bounded: an answered menu remains in scrollback; only a dialog owning the screen bottom is live.
 const CURSOR_APPROVAL_TAIL_LINES = 8
 
 function findCursorApprovalPromptIndex(normalized: string): number | null {
   const windowStart = startOfLastLines(normalized, CURSOR_APPROVAL_TAIL_LINES)
   const tail = normalized.slice(windowStart)
+
   if (!tail.includes('run this command?')) {
     return null
   }
+
   const lines = tail.split('\n')
+
   while (lines.length > 0 && lines.at(-1)?.trim() === '') {
     lines.pop()
   }
+
   let matchedLines = 0
   let lastChoiceLine = -1
+
   for (let index = 0; index < lines.length; index += 1) {
     if (!isCursorApprovalChoiceLine(lines[index])) {
       continue
     }
+
     matchedLines += 1
     lastChoiceLine = index
   }
+
   return matchedLines >= 2 && lastChoiceLine === lines.length - 1
     ? windowStart + tail.lastIndexOf('run this command?')
     : null
@@ -225,11 +264,14 @@ function findTerminalWaitBlockedSignal(
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
+
   // Why: one combined negative scan avoids a dozen searches when no prompt can match.
   if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
     return null
   }
+
   const signal = findBlockedSignalInLiveWindow(normalized)
+
   // Why: callers compare this index against ready-header indexes found over the full tail.
   return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
 }
@@ -239,31 +281,41 @@ function findBlockedSignalInLiveWindow(
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
+
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
     candidates.push({ reason: 'agent-update-prompt', index: updateIndex })
   }
+
   const cwdIndex = normalized.lastIndexOf('choose working directory to')
+
   if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
     candidates.push({ reason: 'agent-cwd-prompt', index: cwdIndex })
   }
+
   const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
+
   if (
     modelMigrationIndex !== -1 &&
     normalized.includes('press enter to continue', modelMigrationIndex)
   ) {
     candidates.push({ reason: 'codex-model-migration-prompt', index: modelMigrationIndex })
   }
+
   const hooksIndex = normalized.lastIndexOf('hooks need review')
+
   if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
     // Why neutral: this matcher never inspects the agent -- 'hooks need review' is not Codex-only wording.
     candidates.push({ reason: 'agent-hooks-review-prompt', index: hooksIndex })
   }
+
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
     normalized.lastIndexOf('trust this'),
     normalized.lastIndexOf('trusted workspace')
   )
+
   const trustSegment = trustIndex === -1 ? '' : normalized.slice(trustIndex)
+
   if (
     trustIndex !== -1 &&
     (trustSegment.includes('workspace') ||
@@ -274,6 +326,7 @@ function findBlockedSignalInLiveWindow(
     // Why neutral: this matcher never inspects the agent -- every TUI agent ships a workspace-trust dialog.
     candidates.push({ reason: 'agent-trust-workspace', index: trustIndex })
   }
+
   const interactivePromptIndex = Math.max(
     normalized.lastIndexOf('press enter to confirm'),
     normalized.lastIndexOf('press enter to continue'),
@@ -281,10 +334,12 @@ function findBlockedSignalInLiveWindow(
     normalized.lastIndexOf('press enter to insert'),
     normalized.lastIndexOf('press t to trust')
   )
+
   const interactivePromptContext =
     interactivePromptIndex === -1
       ? ''
       : normalized.slice(Math.max(0, interactivePromptIndex - 600), interactivePromptIndex + 200)
+
   // Why 'codex' only widens detection and never names the reason: the sole Codex evidence here is
   // that word somewhere in 600 chars of scrollback, which an agent narrating about Codex satisfies
   // on any pane -- enough to suspect a dialog, not enough to label a non-Codex user's pane.
@@ -294,28 +349,37 @@ function findBlockedSignalInLiveWindow(
     interactivePromptContext.includes('sandbox') ||
     interactivePromptContext.includes('trust') ||
     interactivePromptContext.includes('hook')
+
   if (interactivePromptIndex !== -1 && hasInteractiveDialogContext) {
     const contextStart = Math.max(0, interactivePromptIndex - 600)
+
     const hasSpecificPromptInContext = candidates.some(
       (candidate) => candidate.index >= contextStart && candidate.index <= interactivePromptIndex
     )
+
     if (!hasSpecificPromptInContext) {
       candidates.push({ reason: 'agent-interactive-prompt', index: interactivePromptIndex })
     }
   }
+
   const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
+
   if (cursorApprovalIndex !== null) {
     candidates.push({ reason: 'agent-approval-prompt', index: cursorApprovalIndex })
   }
+
   const permissionPromptIndex = Math.max(
     normalized.lastIndexOf('permission required'),
     normalized.lastIndexOf('requires permission')
   )
+
   if (permissionPromptIndex !== -1) {
     const permissionSegment = normalized.slice(permissionPromptIndex, permissionPromptIndex + 1_500)
+
     const decisionCount = ['allow once', 'allow always', 'reject', 'deny'].filter((choice) =>
       permissionSegment.includes(choice)
     ).length
+
     if (decisionCount >= 2) {
       // Why neutral: an approval dialog with named choices identifies no agent; older hosts publish
       // 'codex-interactive-prompt' here and clients alias the two. Rule 1 additive member --
@@ -326,6 +390,7 @@ function findBlockedSignalInLiveWindow(
       candidates.push({ reason: 'agent-interactive-prompt', index: permissionPromptIndex })
     }
   }
+
   return candidates.length > 0
     ? candidates.reduce((latest, candidate) =>
         candidate.index > latest.index ? candidate : latest

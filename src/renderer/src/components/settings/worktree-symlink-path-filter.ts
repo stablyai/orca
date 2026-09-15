@@ -13,6 +13,7 @@ export type WorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathSuggesti
 }
 
 export const WORKTREE_SYMLINK_PATH_QUERY_MAX_BYTES = 2 * 1024
+
 export const WORKTREE_SYMLINK_PATH_MAX_SUGGESTIONS = 50
 
 export function isWorktreeSymlinkPathQueryTooLarge(
@@ -34,6 +35,7 @@ export function getWorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathS
   maxSuggestions?: number
 }): WorktreeSymlinkPathFilterState<T> {
   const queryTrimmed = query.trim().replace(/^\/+/, '')
+
   if (queryTrimmed && isWorktreeSymlinkPathQueryTooLarge(queryTrimmed)) {
     return {
       queryTrimmed: '',
@@ -44,11 +46,13 @@ export function getWorktreeSymlinkPathFilterState<T extends WorktreeSymlinkPathS
   }
 
   const normalizedQuery = queryTrimmed.toLowerCase()
+
   const filtered = (
     normalizedQuery
       ? suggestions.filter((entry) => entry.name.toLowerCase().includes(normalizedQuery))
       : suggestions
   ).slice(0, maxSuggestions)
+
   const hasExactMatch = filtered.some((entry) => entry.name === queryTrimmed)
 
   return {

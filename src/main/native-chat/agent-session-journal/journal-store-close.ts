@@ -45,12 +45,14 @@ export class JournalWriteQueue {
         )
       )
     }
+
     return this.serializePastGate(run)
   }
 
   serializePastGate<T>(run: () => Promise<T>): Promise<T> {
     const started = this.writes.then(run)
     this.writes = started.catch(() => undefined)
+
     return started
   }
 }
@@ -75,9 +77,11 @@ export class JournalConnectionCloser {
     if (this.released) {
       return Promise.resolve()
     }
+
     if (this.inFlight) {
       return this.inFlight
     }
+
     const attempt = this.deps
       .enqueue(() => this.release())
       .then(
@@ -90,15 +94,19 @@ export class JournalConnectionCloser {
           throw error
         }
       )
+
     this.inFlight = attempt
+
     return attempt
   }
 
   private async release(): Promise<void> {
     const db = this.deps.connection()
+
     if (!db) {
       return
     }
+
     // SQLite checkpoints and removes the WAL itself when the last connection to
     // the database closes.
     db.close()

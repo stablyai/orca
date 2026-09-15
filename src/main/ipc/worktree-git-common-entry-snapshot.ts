@@ -2,7 +2,9 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const STRUCTURAL_METADATA_FILES = ['HEAD', 'gitdir', 'locked', 'config.worktree']
+
 const INDEX_FILE = 'index'
+
 const HEAD_LOG_FILE = join('logs', 'HEAD')
 
 function statSignature(value: { mtimeMs: number; ctimeMs: number; ino: number }): string {
@@ -12,6 +14,7 @@ function statSignature(value: { mtimeMs: number; ctimeMs: number; ino: number })
 export async function gitCommonDirectorySignature(path: string): Promise<string> {
   try {
     const value = await stat(path)
+
     return `${statSignature(value)}:${value.size}`
   } catch {
     return 'missing'
@@ -21,6 +24,7 @@ export async function gitCommonDirectorySignature(path: string): Promise<string>
 export async function gitCommonFileSignature(path: string): Promise<string | null> {
   try {
     const value = await stat(path)
+
     return value.isFile() ? `${statSignature(value)}:${value.size}` : null
   } catch {
     return null
@@ -48,6 +52,7 @@ export async function snapshotGitCommonEntry(
   // gate. Gating all of these leaves on the entry-dir signature turns an unchanged
   // entry into a single stat per tick instead of stat-ing every leaf every tick.
   const nextDirSignature = await gitCommonDirectorySignature(entryPath)
+
   if (nextDirSignature === 'missing') {
     return (
       previous ?? {
@@ -58,23 +63,29 @@ export async function snapshotGitCommonEntry(
       }
     )
   }
+
   const shouldRescan = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
+
   if (!shouldRescan) {
     return previous
   }
+
   const structuralSignatures = new Map<string, string>()
+
   const [headLogSignature, indexSignature] = await Promise.all([
     gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE)),
     gitCommonFileSignature(join(entryPath, INDEX_FILE)),
     Promise.all(
       STRUCTURAL_METADATA_FILES.map(async (name) => {
         const signature = await gitCommonFileSignature(join(entryPath, name))
+
         if (signature !== null) {
           structuralSignatures.set(name, signature)
         }
       })
     )
   ])
+
   return {
     dirSignature: nextDirSignature,
     structuralSignatures,

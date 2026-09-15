@@ -29,44 +29,52 @@ describe('orderEmptyQueryWorktrees', () => {
     // a locally noisy worktree even when the latter has a newer lastActivityAt.
     const ssh = wt({ id: 'ssh', displayName: 'ssh', lastActivityAt: 1_000 })
     const local = wt({ id: 'local', displayName: 'local', lastActivityAt: 9_999 })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [local, ssh],
       activeWorktreeId: null,
       lastVisitedAtByWorktreeId: { ssh: 500 }
     })
+
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['ssh', 'local'])
   })
 
   it('sorts visited worktrees by lastVisitedAt descending', () => {
     const a = wt({ id: 'a', displayName: 'a' })
     const b = wt({ id: 'b', displayName: 'b' })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [a, b],
       activeWorktreeId: null,
       lastVisitedAtByWorktreeId: { a: 100, b: 200 }
     })
+
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['b', 'a'])
   })
 
   it('falls back to lastActivityAt for never-visited worktrees', () => {
     const a = wt({ id: 'a', displayName: 'a', lastActivityAt: 100 })
     const b = wt({ id: 'b', displayName: 'b', lastActivityAt: 200 })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [a, b],
       activeWorktreeId: null,
       lastVisitedAtByWorktreeId: {}
     })
+
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['b', 'a'])
   })
 
   it('uses displayName as final tie-breaker', () => {
     const a = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
     const b = wt({ id: 'b', displayName: 'banana', lastActivityAt: 100 })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [b, a],
       activeWorktreeId: null,
       lastVisitedAtByWorktreeId: {}
     })
+
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['a', 'b'])
   })
 
@@ -74,11 +82,13 @@ describe('orderEmptyQueryWorktrees', () => {
     // displayName is typed `string` but arrives undefined for persisted/discovered
     // worktrees; the bare localeCompare tie-break used to throw and take down Cmd+J.
     const named = wt({ id: 'a', displayName: 'apple', lastActivityAt: 100 })
+
     const unnamed = wt({
       id: 'b',
       displayName: undefined as unknown as string,
       lastActivityAt: 100
     })
+
     expect(() =>
       orderEmptyQueryWorktrees({
         visibleWorktrees: [named, unnamed],
@@ -91,11 +101,13 @@ describe('orderEmptyQueryWorktrees', () => {
   it('excludes current worktree from rows but includes it in state list', () => {
     const cur = wt({ id: 'cur', displayName: 'cur' })
     const other = wt({ id: 'other', displayName: 'other' })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [cur, other],
       activeWorktreeId: 'cur',
       lastVisitedAtByWorktreeId: {}
     })
+
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['other'])
     expect(result.visibleWorktreesForState.map((w) => w.id)).toEqual(['cur', 'other'])
   })
@@ -105,22 +117,26 @@ describe('orderEmptyQueryWorktrees', () => {
   it('keeps the same-id worktree on the other host switchable', () => {
     const local = wt({ id: 'shared', displayName: 'local', hostId: 'local' })
     const ssh = wt({ id: 'shared', displayName: 'ssh', hostId: 'ssh:box' })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [local, ssh],
       activeWorktreeId: 'shared',
       activeWorkspaceExecutionHostId: 'local',
       lastVisitedAtByWorktreeId: {}
     })
+
     expect(result.switchableWorktreesForRows.map((w) => w.displayName)).toEqual(['ssh'])
   })
 
   it('returns empty rows but non-empty state when only the current worktree is visible', () => {
     const cur = wt({ id: 'cur', displayName: 'cur' })
+
     const result = orderEmptyQueryWorktrees({
       visibleWorktrees: [cur],
       activeWorktreeId: 'cur',
       lastVisitedAtByWorktreeId: {}
     })
+
     expect(result.switchableWorktreesForRows).toEqual([])
     expect(result.visibleWorktreesForState).toHaveLength(1)
   })

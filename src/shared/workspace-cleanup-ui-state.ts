@@ -8,6 +8,7 @@ export function mergeWorkspaceCleanupUIState(
   if (!incoming) {
     return current
   }
+
   return {
     ...current,
     ...incoming

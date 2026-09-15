@@ -59,6 +59,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     settings,
     commentResolutionLaunchAcceptedRef
   } = model
+
   const clearSentCommentSelection = useCallback(
     (reviewContextKey: string): void => {
       clearPRCommentsListSelection(reviewContextKey)
@@ -75,8 +76,10 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     async (provider: ChecksPanelReview['provider']): Promise<void> => {
       if (provider === 'gitlab') {
         await fetchGitLabDetails({ commitAsCurrent: true })
+
         return
       }
+
       await fetchComments({ force: true })
     },
     [fetchComments, fetchGitLabDetails]
@@ -87,12 +90,15 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       clearSentCommentSelection(resolution.reviewContextKey)
       // Why: ignore headSha churn; only abort resolve/UI refresh if the user left this PR/panel.
       const launchStableKey = checksPanelReviewStableKey(resolution.reviewContextKey)
+
       // Why: the host calls keep the snapshotted target, but every UI mutation must belong
       // to the review the panel is showing now — otherwise replies land in another PR's list.
       const isPanelStillOnLaunchReview = (): boolean =>
         checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
+
       const githubTarget = resolution.githubTarget
       const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
+
       // Why: only GitHub posts fixing replies today; a GitLab MR reaching replied=0 is expected,
       // and a missing reply target only matters when something in the selection needs a reply.
       let lastHostError =
@@ -104,6 +110,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
               'Could not resolve the GitHub PR to reply on.'
             )
           : undefined
+
       const resolveSnapshottedThread = buildSnapshottedThreadResolver({
         provider: resolution.provider,
         githubResolveTarget: resolution.githubResolveTarget,
@@ -125,6 +132,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
           console.warn('Post-launch thread resolve failed:', threadId, error)
         }
       })
+
       const counts = await acknowledgePRCommentsAfterAiLaunch({
         groups: resolution.selectedGroups,
         deps: {
@@ -134,12 +142,14 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
             if (!githubTarget || !canPostPRReviewThreadReply(comment)) {
               return false
             }
+
             try {
               const parentThreadId =
                 resolvePRReviewReplyThreadId({
                   parent: comment,
                   existingComments: commentsRef.current
                 }) ?? comment.threadId
+
               const result = await addPRReviewCommentReply(
                 githubTarget.repoPath,
                 githubTarget.prNumber,
@@ -153,6 +163,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                   line: comment.line
                 }
               )
+
               if (result.ok) {
                 // Why: force threadId/path onto the optimistic row so the sidebar groups it
                 // under the parent immediately (API payload may omit them).
@@ -167,14 +178,18 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                     )
                   )
                 }
+
                 return true
               }
+
               lastHostError = result.error
               console.warn('In-thread fixing reply failed:', result.error)
+
               return false
             } catch (err) {
               lastHostError = err instanceof Error ? err.message : String(err)
               console.warn('Failed to post in-thread fixing reply for review comment:', err)
+
               return false
             }
           },
@@ -184,6 +199,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
             if (!githubTarget) {
               return false
             }
+
             try {
               const result = await addPRConversationComment(
                 githubTarget.repoPath,
@@ -194,18 +210,23 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
                   prRepo: githubTarget.prRepo
                 }
               )
+
               if (result.ok) {
                 if (isPanelStillOnLaunchReview()) {
                   setComments((prev) => mergePRCommentIntoList(prev, result.comment))
                 }
+
                 return true
               }
+
               lastHostError = result.error
               console.warn('Conversation fixing reply failed:', result.error)
+
               return false
             } catch (err) {
               lastHostError = err instanceof Error ? err.message : String(err)
               console.warn('Failed to post conversation fixing reply for review comment:', err)
+
               return false
             }
           }
@@ -222,6 +243,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
         canReplyOnHost &&
         counts.replied === 0 &&
         hasPRCommentGroupNeedingReply(resolution.selectedGroups)
+
       if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastHostError) {
         toast.error(
           translate(
@@ -236,8 +258,10 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
             }
           )
         )
+
         return
       }
+
       toast.success(
         translate(
           'auto.components.right.sidebar.ChecksPanel.aa95b81a3a',
@@ -271,9 +295,11 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
   const claimPendingCommentResolutionForLaunch = useCallback((): void => {
     const pendingResolution = takePendingPRCommentAiAck() ?? pendingCommentResolutionRef.current
     pendingCommentResolutionRef.current = null
+
     if (!pendingResolution) {
       return
     }
+
     claimedCommentResolutionRef.current = pendingResolution
     commentResolutionLaunchAcceptedRef.current = true
     setCommentResolutionAckBusyNow(true)
@@ -289,10 +315,12 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     const claimed = claimedCommentResolutionRef.current
     claimedCommentResolutionRef.current = null
     commentResolutionLaunchAcceptedRef.current = false
+
     if (claimed) {
       pendingCommentResolutionRef.current = claimed
       setPendingPRCommentAiAck(claimed)
     }
+
     setCommentResolutionAckBusyNow(false)
   }, [
     setCommentResolutionAckBusyNow,
@@ -307,13 +335,17 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
       claimedCommentResolutionRef.current ??
       takePendingPRCommentAiAck() ??
       pendingCommentResolutionRef.current
+
     claimedCommentResolutionRef.current = null
     pendingCommentResolutionRef.current = null
     commentResolutionLaunchAcceptedRef.current = false
+
     if (!resolution) {
       setCommentResolutionAckBusyNow(false)
+
       return
     }
+
     setCommentResolutionAckBusyNow(true)
     void resolveSelectedThreadsAfterLaunch(resolution)
       .catch((err) => {
@@ -333,14 +365,18 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     pendingCommentResolutionRef,
     commentResolutionLaunchAcceptedRef
   ])
+
   // Why: auto-start can capture a stale callback; always call the latest consumer.
   const consumeClaimedCommentResolutionAfterDeliveryRef = useRef(
     consumeClaimedCommentResolutionAfterDelivery
   )
+
   const claimPendingCommentResolutionForLaunchRef = useRef(claimPendingCommentResolutionForLaunch)
+
   const releaseClaimedCommentResolutionAfterFailedLaunchRef = useRef(
     releaseClaimedCommentResolutionAfterFailedLaunch
   )
+
   useEffect(() => {
     consumeClaimedCommentResolutionAfterDeliveryRef.current =
       consumeClaimedCommentResolutionAfterDelivery
@@ -352,12 +388,15 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
     claimPendingCommentResolutionForLaunch,
     releaseClaimedCommentResolutionAfterFailedLaunch
   ])
+
   const handleLaunchAccepted = useCallback((): void => {
     claimPendingCommentResolutionForLaunchRef.current()
   }, [])
+
   const handleLaunchAborted = useCallback((): void => {
     releaseClaimedCommentResolutionAfterFailedLaunchRef.current()
   }, [])
+
   return {
     clearSentCommentSelection,
     refreshCommentsAfterBulkResolve,

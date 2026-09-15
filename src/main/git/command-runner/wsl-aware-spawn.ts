@@ -12,15 +12,20 @@ export function wslAwareSpawn(
   options: SpawnOptions & { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean }
 ): ChildProcess {
   const { wslDistro, useWslLoginShell, ...spawnOptions } = options
+
   const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
     useWslLoginShell
   })
+
   const spawnStartedAt = performance.now()
+
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     windowsHide: true,
     cwd: resolved.cwd
   })
+
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
+
   return child
 }

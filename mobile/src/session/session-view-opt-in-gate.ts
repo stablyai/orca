@@ -6,5 +6,6 @@ import { readDefaultSessionViewPreference } from '../storage/session-view-prefer
  *  and a transient storage failure doesn't trap startup behind the screen. */
 export async function shouldPresentSessionViewOptIn(): Promise<boolean> {
   const preference = await readDefaultSessionViewPreference()
+
   return preference.loaded && !preference.hasStoredValue
 }

@@ -23,21 +23,28 @@ export function notifyHostOfMirroredEditorClose(
   if (!worktreeId) {
     return false
   }
+
   const file = state.openFiles.find((candidate) => candidate.id === fileId)
+
   if (!file?.mirroredFromRuntimeSession) {
     return false
   }
+
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   if (!runtimeEnvironmentId?.trim()) {
     return false
   }
+
   // A mirrored unified tab carries the host's tab id as `id` and the local file id as `entityId`; the host close RPC resolves by id.
   const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
     (tab) => tab.contentType === 'editor' && tab.entityId === fileId
   )
+
   if (!unifiedTab) {
     return false
   }
+
   // Record the close intent SYNCHRONOUSLY so a host snapshot landing before the dynamic import below resolves can't
   // flash the old-path tab back. closeWebRuntimeSessionTab re-records it idempotently.
   recordWebSessionCloseIntent(
@@ -56,5 +63,6 @@ export function notifyHostOfMirroredEditorClose(
       reason: 'user'
     })
   )
+
   return true
 }

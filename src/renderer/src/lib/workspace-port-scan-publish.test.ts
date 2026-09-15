@@ -22,6 +22,7 @@ vi.mock('./workspace-port-scan-client', () => ({
 
 const { publishWorkspacePortScanForHost, WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY } =
   await import('./workspace-port-actions')
+
 type WorkspacePortScanPublisher = Parameters<typeof publishWorkspacePortScanForHost>[0]
 
 function scanWithPort(port: number, scannedAt: number): WorkspacePortScanResult {
@@ -51,6 +52,7 @@ function makeStoreHarness(initial: Record<string, WorkspacePortScanResult> = {})
 } {
   let scansByKey: Record<string, WorkspacePortScanResult> = { ...initial }
   const projections: { key: string; result: WorkspacePortScanResult }[] = []
+
   return {
     get scansByKey() {
       return scansByKey
@@ -62,6 +64,7 @@ function makeStoreHarness(initial: Record<string, WorkspacePortScanResult> = {})
         projection: { key: string; result: WorkspacePortScanResult } | null
       ) => {
         scansByKey = nextScansByKey
+
         if (projection) {
           projections.push(projection)
         }

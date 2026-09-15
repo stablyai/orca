@@ -13,9 +13,11 @@ export type TerminalFileLinkTapConformanceCase = {
 
 export function columnForTerminalFileLinkTap(testCase: TerminalFileLinkTapConformanceCase): number {
   const column = testCase.lineText.indexOf(testCase.tapText)
+
   if (column === -1) {
     throw new Error(`Tap text "${testCase.tapText}" not found in "${testCase.lineText}"`)
   }
+
   return column
 }
 

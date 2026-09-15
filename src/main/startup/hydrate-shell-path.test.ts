@@ -28,6 +28,7 @@ function createMockShellProcess(): ChildProcessWithoutNullStreams {
     stdin: new EventEmitter(),
     kill: vi.fn()
   })
+
   return proc
 }
 
@@ -41,6 +42,7 @@ describe('hydrateShellPath', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+
     if (originalPath === undefined) {
       delete process.env.PATH
     } else {
@@ -50,10 +52,12 @@ describe('hydrateShellPath', () => {
 
   it('invokes the provided shell with a custom spawner and returns its segments', async () => {
     let capturedShell = ''
+
     const result = await hydrateShellPath({
       shellOverride: '/bin/zsh',
       spawner: async (shell) => {
         capturedShell = shell
+
         return {
           segments: ['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'],
           ok: true,
@@ -70,8 +74,10 @@ describe('hydrateShellPath', () => {
 
   it('caches the hydration result so repeated calls do not re-spawn', async () => {
     let spawnCount = 0
+
     const spawner: HydrationSpawner = async () => {
       spawnCount += 1
+
       return { segments: ['/a'], ok: true, failureReason: 'none' }
     }
 
@@ -84,8 +90,10 @@ describe('hydrateShellPath', () => {
 
   it('re-spawns when force:true is passed — matches the Refresh button contract', async () => {
     let spawnCount = 0
+
     const spawner: HydrationSpawner = async () => {
       spawnCount += 1
+
       return { segments: ['/a'], ok: true, failureReason: 'none' }
     }
 
@@ -99,6 +107,7 @@ describe('hydrateShellPath', () => {
     const rejectedSpawner = vi.fn<HydrationSpawner>(async () => {
       throw new Error('profile failed')
     })
+
     const successfulSpawner = vi.fn<HydrationSpawner>(async () => ({
       segments: ['/current'],
       ok: true,
@@ -136,6 +145,7 @@ describe('hydrateShellPath', () => {
       shellOverride: '/bin/zsh',
       spawner: async () => ({ segments: [], ok: false, failureReason: 'timeout' })
     })
+
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'timeout' })
   })
 
@@ -144,6 +154,7 @@ describe('hydrateShellPath', () => {
       shellOverride: '/bin/zsh',
       spawner: async () => ({ segments: [], ok: false, failureReason: 'spawn_error' })
     })
+
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'spawn_error' })
   })
 
@@ -152,6 +163,7 @@ describe('hydrateShellPath', () => {
       shellOverride: '/bin/zsh',
       spawner: async () => ({ segments: [], ok: false, failureReason: 'empty_path' })
     })
+
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
   })
 
@@ -162,6 +174,7 @@ describe('hydrateShellPath', () => {
 
     try {
       const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+
       const assertion = expect(resultPromise).resolves.toEqual({
         segments: [],
         ok: false,
@@ -187,6 +200,7 @@ describe('hydrateShellPath', () => {
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
     proc.emit('close', 0)
     await resultPromise
+
     return spawnMock.mock.calls[0][2].env
   }
 

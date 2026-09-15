@@ -16,15 +16,18 @@ const LOCALE_CACHE_FILES = {
 
 function parseLocaleArg(argv) {
   const localeFlagIndex = argv.indexOf('--locale')
+
   if (localeFlagIndex !== -1 && argv[localeFlagIndex + 1]) {
     return argv[localeFlagIndex + 1]
   }
+
   return undefined
 }
 
 async function loadCache(cachePath) {
   try {
     const raw = JSON.parse(await fs.readFile(cachePath, 'utf8'))
+
     return new Map(Object.entries(raw))
   } catch {
     return new Map()
@@ -53,14 +56,17 @@ export async function repairLocale(root, locale) {
 
   console.log(`Repaired ${locale}.json (${catalogRepairs} leaf updates)`)
   console.log(`Repaired ${LOCALE_CACHE_FILES[locale]} (${cacheRepairs} cache updates)`)
+
   return { catalogRepairs, cacheRepairs }
 }
 
 export async function main(root = process.cwd(), locale = parseLocaleArg(process.argv)) {
   const locales = locale ? [locale] : ['ko', 'zh', 'ja', 'es']
   const unsupported = locales.filter((code) => !LOCALE_CACHE_FILES[code])
+
   if (unsupported.length > 0) {
     console.error(`Unsupported locale(s): ${unsupported.join(', ')}`)
+
     return 1
   }
 

@@ -4,11 +4,13 @@ export function createAutoAckPresenceCheck(
 ): { request: () => void; dispose: () => void } {
   let disposed = false
   let pending = false
+
   return {
     request() {
       if (disposed || pending) {
         return
       }
+
       pending = true
       void readAway()
         .then((away) => {
@@ -37,15 +39,19 @@ export function subscribeAutoAckPresenceSignals(
       onInput()
     }
   }
+
   document.addEventListener('visibilitychange', onRescan)
   window.addEventListener('focus', onRescan)
   const events = ['pointerdown', 'keydown', 'pointermove'] as const
+
   for (const event of events) {
     window.addEventListener(event, input)
   }
+
   return () => {
     document.removeEventListener('visibilitychange', onRescan)
     window.removeEventListener('focus', onRescan)
+
     for (const event of events) {
       window.removeEventListener(event, input)
     }

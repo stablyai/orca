@@ -34,9 +34,11 @@ const makeRequest = (method: string, params?: unknown): RpcRequest => ({
 describe('terminal subscribe buffering', () => {
   it('settles mobile subscribe waits when the stream signal aborts before PTY spawn', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const controller = new AbortController()
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
         waitForLeafPtyId: vi.fn(
@@ -49,6 +51,7 @@ describe('terminal subscribe buffering', () => {
         ),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false })
       })
+
       const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
@@ -68,10 +71,12 @@ describe('terminal subscribe buffering', () => {
 
       expect(runtime.waitForLeafPtyId).toHaveBeenCalled()
       controller.abort()
+
       const outcomePromise = Promise.race([
         dispatchPromise.then(() => 'settled'),
         new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
       ])
+
       await vi.advanceTimersByTimeAsync(0)
 
       expect(await outcomePromise).toBe('settled')
@@ -85,11 +90,15 @@ describe('terminal subscribe buffering', () => {
   it('captures live queries before awaiting mobile fit and delivers them after the snapshot', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const registry = createSubscriptionRegistryDouble()
+
     let dataListener:
       | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
       | undefined
+
     let resolveMobileSubscribe: () => void = () => {}
+
     const registerRemoteTerminalViewSubscriber = vi.fn(() => vi.fn())
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       handleMobileSubscribe: vi.fn(
@@ -101,6 +110,7 @@ describe('terminal subscribe buffering', () => {
       handleMobileUnsubscribe: vi.fn(),
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         dataListener = listener
+
         return vi.fn()
       }),
       registerRemoteTerminalViewSubscriber,
@@ -119,6 +129,7 @@ describe('terminal subscribe buffering', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -147,6 +158,7 @@ describe('terminal subscribe buffering', () => {
       expect(
         binaryFrames.some((bytes) => {
           const frame = decodeTerminalStreamFrame(bytes)
+
           return (
             frame?.opcode === TerminalStreamOpcode.Output &&
             decodeTerminalStreamText(frame.payload) === '\x1b[6n'
@@ -154,13 +166,16 @@ describe('terminal subscribe buffering', () => {
         })
       ).toBe(true)
     )
+
     const queryOutputFrames = binaryFrames.filter((bytes) => {
       const frame = decodeTerminalStreamFrame(bytes)
+
       return (
         frame?.opcode === TerminalStreamOpcode.Output &&
         decodeTerminalStreamText(frame.payload) === '\x1b[6n'
       )
     })
+
     expect(queryOutputFrames).toHaveLength(1)
 
     runtime.cleanupSubscription('terminal-1:phone-1')
@@ -169,6 +184,7 @@ describe('terminal subscribe buffering', () => {
 
   it('marks scrollback-only subscribed previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -177,6 +193,7 @@ describe('terminal subscribe buffering', () => {
         limited: true
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -198,6 +215,7 @@ describe('terminal subscribe buffering', () => {
   it('marks legacy scrollback previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -216,6 +234,7 @@ describe('terminal subscribe buffering', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -232,9 +251,11 @@ describe('terminal subscribe buffering', () => {
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'scrollback')).toBe(true)
     )
+
     const scrollback = messages
       .map((msg) => JSON.parse(msg).result)
       .find((result) => result?.type === 'scrollback')
+
     expect(scrollback).toMatchObject({
       type: 'scrollback',
       lines: ['line 120'],
@@ -247,11 +268,13 @@ describe('terminal subscribe buffering', () => {
 
   it('does not register legacy JSON listeners after the stream signal aborts during snapshot', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const controller = new AbortController()
       const registry = createSubscriptionRegistryDouble()
       let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -271,6 +294,7 @@ describe('terminal subscribe buffering', () => {
         cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
+
       const dispatcher = new RpcDispatcher({
         runtime,
         methods: TERMINAL_METHODS
@@ -288,10 +312,12 @@ describe('terminal subscribe buffering', () => {
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
       controller.abort()
       resolveSnapshot({ data: '', cols: 80, rows: 24 })
+
       const outcomePromise = Promise.race([
         dispatchPromise.then(() => 'settled'),
         new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
       ])
+
       await vi.advanceTimersByTimeAsync(0)
 
       expect(await outcomePromise).toBe('settled')
@@ -317,6 +343,7 @@ describe('terminal subscribe buffering', () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -338,6 +365,7 @@ describe('terminal subscribe buffering', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -361,17 +389,21 @@ describe('terminal subscribe buffering', () => {
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
     )
+
     const subscribed = messages
       .map((msg) => JSON.parse(msg).result)
       .find((result) => result?.type === 'subscribed')
+
     expect(subscribed).toMatchObject({
       type: 'subscribed',
       lines: ['line 120'],
       truncated: false
     })
+
     const snapshotStart = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+
     expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
       truncated: false
     })
@@ -384,6 +416,7 @@ describe('terminal subscribe buffering', () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -409,6 +442,7 @@ describe('terminal subscribe buffering', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -432,9 +466,11 @@ describe('terminal subscribe buffering', () => {
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
     )
+
     const snapshotStart = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+
     expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
       cols: 100,
       rows: 30,
@@ -448,13 +484,16 @@ describe('terminal subscribe buffering', () => {
 
   it('recovers binary output overflow queued while the initial snapshot is serializing', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const registry = createSubscriptionRegistryDouble()
+
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
+
       const snapshotResolvers: ((value: {
         data: string
         cols: number
@@ -462,6 +501,7 @@ describe('terminal subscribe buffering', () => {
         seq?: number
         source?: 'headless' | 'renderer'
       }) => void)[] = []
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -482,6 +522,7 @@ describe('terminal subscribe buffering', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
@@ -493,6 +534,7 @@ describe('terminal subscribe buffering', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
+
       const dispatcher = new RpcDispatcher({
         runtime,
         methods: TERMINAL_METHODS
@@ -516,11 +558,13 @@ describe('terminal subscribe buffering', () => {
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
       const shiftSpy = vi.spyOn(Array.prototype, 'shift')
       let seq = 0
+
       for (let index = 0; index < 400; index += 1) {
         const data = `${String(index).padStart(3, '0')}${'x'.repeat(1021)}`
         seq += data.length
         dataListenerRef.current?.(data, { seq, rawLength: data.length })
       }
+
       const shiftCallCount = shiftSpy.mock.calls.length
       shiftSpy.mockRestore()
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
@@ -541,9 +585,11 @@ describe('terminal subscribe buffering', () => {
       const decodedFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
+
       const snapshotStarts = decodedFrames.filter(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
+
       const decodedStarts = snapshotStarts.map((frame) => decodeTerminalStreamJson(frame.payload))
       // Why one snapshot: overflow during the initial serialize is recovered
       // INLINE (drop pending, re-read, re-serialize) before anything is sent,
@@ -551,14 +597,17 @@ describe('terminal subscribe buffering', () => {
       // 'resized'/pending-output-overflow follow-up path remains only for
       // overflow that begins after the initial snapshot went out.
       expect(decodedStarts).toEqual([expect.objectContaining({ kind: 'scrollback', seq })])
+
       const snapshotText = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
+
       const output = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
+
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
       expect(output).not.toContain('000')
       expect(output).not.toContain('399')
@@ -576,6 +625,7 @@ describe('terminal subscribe buffering', () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const registry = createSubscriptionRegistryDouble()
+
     let resizeListener:
       | ((event: {
           cols: number
@@ -585,6 +635,7 @@ describe('terminal subscribe buffering', () => {
           seq: number
         }) => void)
       | undefined
+
     const restreamResolves: ((value: {
       data: string
       cols: number
@@ -597,6 +648,7 @@ describe('terminal subscribe buffering', () => {
       }[]
       terminalOwner?: 'shell'
     }) => void)[] = []
+
     const serializeTerminalBuffer = vi
       .fn()
       .mockResolvedValueOnce({ data: 'initial', cols: 80, rows: 24 })
@@ -617,6 +669,7 @@ describe('terminal subscribe buffering', () => {
             restreamResolves.push(resolve)
           })
       )
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -630,6 +683,7 @@ describe('terminal subscribe buffering', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn((_, listener) => {
         resizeListener = listener as typeof resizeListener
+
         return vi.fn()
       }),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
@@ -640,6 +694,7 @@ describe('terminal subscribe buffering', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -691,6 +746,7 @@ describe('terminal subscribe buffering', () => {
       expect(
         binaryFrames.some((frame) => {
           const decoded = decodeTerminalStreamFrame(frame)
+
           return (
             decoded?.opcode === TerminalStreamOpcode.SnapshotChunk &&
             decodeTerminalStreamText(decoded.payload) === 'newer'
@@ -706,10 +762,13 @@ describe('terminal subscribe buffering', () => {
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+
     expect(snapshotData).toEqual(['newer'])
+
     const snapshotStart = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+
     expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
       kind: 'resized',
       oscLinks: newerOscLinks
@@ -724,13 +783,16 @@ describe('terminal subscribe buffering', () => {
 
   it('applies inline overflow recovery when the snapshot has no output seq', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const registry = createSubscriptionRegistryDouble()
+
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
+
       const snapshotResolvers: ((value: {
         data: string
         cols: number
@@ -738,6 +800,7 @@ describe('terminal subscribe buffering', () => {
         seq?: number
         source?: 'headless' | 'renderer'
       }) => void)[] = []
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -758,6 +821,7 @@ describe('terminal subscribe buffering', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
@@ -769,6 +833,7 @@ describe('terminal subscribe buffering', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
       })
+
       const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
@@ -788,11 +853,13 @@ describe('terminal subscribe buffering', () => {
 
       await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
       let seq = 0
+
       for (let index = 0; index < 400; index += 1) {
         const data = `${String(index).padStart(3, '0')}${'x'.repeat(1021)}`
         seq += data.length
         dataListenerRef.current?.(data, { seq, rawLength: data.length })
       }
+
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
       snapshotResolvers[0]?.({ data: '', cols: 120, rows: 40, seq: 0, source: 'headless' })
       await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
@@ -813,22 +880,28 @@ describe('terminal subscribe buffering', () => {
       const decodedFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
+
       const snapshotStart = decodedFrames.find(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
+
       // Why: layout versions and output offsets are different sequence domains.
       const snapshotInfo = decodeTerminalStreamJson(snapshotStart!.payload)
       expect(snapshotInfo).toMatchObject({ kind: 'scrollback' })
       expect(snapshotInfo).not.toHaveProperty('seq')
+
       const snapshotText = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
+
       expect(snapshotText).toContain('renderer fallback snapshot')
+
       const output = decodedFrames
         .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame.payload))
         .join('')
+
       // Why empty: the overflowed pending queue was dropped before the
       // covering snapshot was serialized; nothing needs replay.
       expect(output).toBe('')

@@ -11,6 +11,7 @@ function operationIdAt(timestamp: number, entropy: string): string {
 describe('structured session operation retention', () => {
   it('keeps every unconfirmed operation id past the old 128-entry cap', () => {
     const operationIds = new Map<string, string>()
+
     for (let index = 0; index < 400; index += 1) {
       retainStructuredSessionOperationId(
         operationIds,
@@ -28,6 +29,7 @@ describe('structured session operation retention', () => {
   it('releases only ids the host would already refuse as expired', () => {
     const expired = operationIdAt(NOW - AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS - 1, 'b')
     const admissible = operationIdAt(NOW - AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS, 'c')
+
     const operationIds = new Map([
       ['stale', expired],
       ['live', admissible]
@@ -42,6 +44,7 @@ describe('structured session operation retention', () => {
 
   it('drops ids the host could never admit and re-keys a repeated mutation', () => {
     const operationIds = new Map([['unparseable', 'not-an-operation-id']])
+
     const reused = retainStructuredSessionOperationId(
       operationIds,
       'mutation',

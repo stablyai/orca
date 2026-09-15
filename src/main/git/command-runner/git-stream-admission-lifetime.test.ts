@@ -8,6 +8,7 @@ const { gitSpawnMock, killSpawnedCommandTreeMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./git-spawn', () => ({ gitSpawn: gitSpawnMock }))
+
 vi.mock('./spawned-command-tree-kill', () => ({
   killSpawnedCommandTree: killSpawnedCommandTreeMock
 }))
@@ -26,6 +27,7 @@ function mockChild(): ChildProcess {
   child.stdin = null
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -41,11 +43,13 @@ describe('git stream admission lifetime', () => {
   it('retains the permit after maxBuffer settlement until close', async () => {
     const child = mockChild()
     gitSpawnMock.mockReturnValue(child)
+
     const pending = gitStreamStdout(['status'], {
       cwd: '/repo',
       maxBuffer: 1,
       onStdout: () => {}
     })
+
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
 
     child.stdout?.emit('data', Buffer.from('xx'))
@@ -61,11 +65,13 @@ describe('git stream admission lifetime', () => {
     const child = mockChild()
     const controller = new AbortController()
     gitSpawnMock.mockReturnValue(child)
+
     const pending = gitStreamStdout(['status'], {
       cwd: '/repo',
       signal: controller.signal,
       onStdout: () => {}
     })
+
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
 
     controller.abort()

@@ -6,18 +6,24 @@ describe('browser navigation updates', () => {
   it('commits CDP navigation URLs to the render-time cache before updating the store', async () => {
     let liveUrlDuringStoreWrite: string | null = null
     let readLiveUrl = (_browserPageId: string): string | null => null
+
     const setBrowserPageUrl = vi.fn((browserPageId: string) => {
       liveUrlDuringStoreWrite = readLiveUrl(browserPageId)
     })
+
     const updateBrowserPageState = vi.fn()
+
     const storeState = createHarnessStoreState({
       tabsByWorktree: {},
       setBrowserPageUrl,
       updateBrowserPageState
     })
+
     const harness = await loadIpcEventsHarness(storeState)
+
     const { clearLiveBrowserUrl, getLiveBrowserUrl } =
       await import('@/components/browser-pane/describe-page/live-browser-url-registry')
+
     readLiveUrl = getLiveBrowserUrl
     harness.useIpcEvents()
 

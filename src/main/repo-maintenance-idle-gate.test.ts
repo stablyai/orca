@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const isOnBatteryPowerMock = vi.hoisted(() => vi.fn(() => false))
+
 const hasPendingPreparationsMock = vi.hoisted(() => vi.fn(() => false))
+
 const hasRemovalsInFlightMock = vi.hoisted(() => vi.fn(() => false))
+
 const setProbeMock = vi.hoisted(() => vi.fn())
+
 const disposeMock = vi.hoisted(() => vi.fn(async () => {}))
+
 const postponeMock = vi.hoisted(() => vi.fn())
+
 const powerListeners = vi.hoisted(() => new Map<string, () => void>())
+
 const appListeners = vi.hoisted(() => new Map<string, () => void>())
 
 vi.mock('electron', () => ({
@@ -45,6 +52,7 @@ function installProbe(
     getWorkingAgentCount: () => 0,
     ...overrides
   })
+
   return { probe: setProbeMock.mock.calls.at(-1)?.[0] as () => boolean, uninstall }
 }
 

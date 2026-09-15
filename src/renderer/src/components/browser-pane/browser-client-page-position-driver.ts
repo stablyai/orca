@@ -23,12 +23,15 @@
 export type BrowserClientPagePositionSync = () => void
 
 const syncs = new Set<BrowserClientPagePositionSync>()
+
 /** Already-reported syncs, so a host failing every frame is one log line, not sixty a second. */
 const reportedFailures = new WeakSet<BrowserClientPagePositionSync>()
+
 let frame: number | null = null
 
 function runFrame(): void {
   frame = null
+
   try {
     // Copied: a host may register or drop out while being synced.
     for (const sync of Array.from(syncs)) {
@@ -50,6 +53,7 @@ function startFrame(): void {
   if (frame !== null || syncs.size === 0 || typeof requestAnimationFrame !== 'function') {
     return
   }
+
   frame = requestAnimationFrame(runFrame)
 }
 
@@ -57,9 +61,11 @@ function stopFrame(): void {
   if (frame === null) {
     return
   }
+
   if (typeof cancelAnimationFrame === 'function') {
     cancelAnimationFrame(frame)
   }
+
   frame = null
 }
 
@@ -70,12 +76,15 @@ export function registerBrowserClientPagePositionSync(
   syncs.add(sync)
   startFrame()
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     syncs.delete(sync)
+
     if (syncs.size === 0) {
       stopFrame()
     }

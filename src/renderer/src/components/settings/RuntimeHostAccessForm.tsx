@@ -42,11 +42,15 @@ export function RuntimeHostAccessForm({
 }: RuntimeHostAccessFormProps): React.JSX.Element {
   const [allowLoopback, setAllowLoopback] = useState(false)
   const parsed = useMemo(() => parseHostAccessLink(accessLink), [accessLink])
+
   const tunnelOverrideEnabled =
     allowLoopback && parsed.ok && parsed.value.endpointKind === 'loopback'
+
   const loopbackBlocked =
     parsed.ok && parsed.value.endpointKind === 'loopback' && !tunnelOverrideEnabled
+
   const inputError = accessLink.trim() !== '' && !parsed.ok
+
   const describedBy = failure
     ? 'runtime-server-verification-error'
     : inputError
@@ -54,6 +58,7 @@ export function RuntimeHostAccessForm({
       : loopbackBlocked
         ? 'runtime-server-loopback-error'
         : 'runtime-server-access-link-help'
+
   const canSubmit = name.trim() !== '' && parsed.ok && !loopbackBlocked && !busy
 
   return (
@@ -61,6 +66,7 @@ export function RuntimeHostAccessForm({
       className="space-y-4 rounded-lg border border-border/50 bg-muted/20 p-4"
       onSubmit={(event) => {
         event.preventDefault()
+
         if (canSubmit) {
           onSubmit(tunnelOverrideEnabled)
         }

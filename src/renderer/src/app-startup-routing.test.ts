@@ -7,15 +7,25 @@ function readSource(relativePath: string): string {
 }
 
 const APP_PATH = 'src/renderer/src/App.tsx'
+
 const STARTUP_HYDRATION_PATH = 'src/renderer/src/app-shell/use-app-startup-hydration.ts'
+
 const DEGRADED_RECOVERY_PATH = 'src/renderer/src/startup/startup-degraded-recovery.ts'
+
 const CHROME_LAYOUT_PATH = 'src/renderer/src/app-shell/use-app-chrome-layout.ts'
+
 const SHELL_SERVICES_PATH = 'src/renderer/src/app-shell/use-app-shell-services.ts'
+
 const BACKGROUND_SERVICES_PATH = 'src/renderer/src/app-shell/AppBackgroundServices.tsx'
+
 const WORKSPACE_SHELL_PATH = 'src/renderer/src/app-shell/AppWorkspaceShell.tsx'
+
 const ROOT_SURFACES_PATH = 'src/renderer/src/app-shell/AppRootSurfaces.tsx'
+
 const LAZY_MODAL_MOUNTS_PATH = 'src/renderer/src/app-shell/use-lazy-modal-mounts.ts'
+
 const SESSION_PERSISTENCE_PATH = 'src/renderer/src/app-shell/use-app-session-persistence.ts'
+
 const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-writer.ts'
 
 describe('renderer startup runtime routing', () => {
@@ -24,6 +34,7 @@ describe('renderer startup runtime routing', () => {
       join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
       'utf8'
     )
+
     const gateStart = source.indexOf('const startupActivationGateWorktreeIdsRef')
     const gateEnd = source.indexOf('const startupResumeWorktreeIdsRef', gateStart)
     const gateEffect = source.slice(gateStart, gateEnd)
@@ -42,32 +53,43 @@ describe('renderer startup runtime routing', () => {
 
     const indexInStartupBlock = (needle: string): number => {
       const relativeIndex = startupBlock.indexOf(needle)
+
       return relativeIndex === -1 ? -1 : startupBlockStart + relativeIndex
     }
+
     const settingsIndex = indexInStartupBlock(
       'actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })'
     )
+
     const uiGetIndex = indexInStartupBlock("timeRendererStartupStep('ui-get'")
     const hydrateUiIndex = indexInStartupBlock("timeRendererStartupSyncStep('hydrate-persisted-ui'")
+
     const localReposIndex = indexInStartupBlock(
       "actions.fetchReposForAllHosts({ remoteHosts: 'skip' })"
     )
+
     const repoCatalogSettlementIndex = indexInStartupBlock(
       "timeRendererStartupStep('repo-catalog-settlement'"
     )
+
     const finalRepoCatalogSettlementIndex = indexInStartupBlock(
       "timeRendererStartupStep('repo-catalog-final-settlement'"
     )
+
     const localGroupsIndex = indexInStartupBlock(
       "actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })"
     )
+
     const localFoldersIndex = indexInStartupBlock(
       "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
     )
+
     const sessionIndex = indexInStartupBlock("timeRendererStartupStep('session-get'")
+
     const hydrationWorktreesIndex = source.indexOf(
       "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
+
     // Why this barrier: worktree hydration can spawn host Git, so it must sit behind the
     // shell-PATH + managed-WSL fence. On packaged Windows the window opens before
     // shellPathReady resolves, so this really is the fence, not a formality.
@@ -75,6 +97,7 @@ describe('renderer startup runtime routing', () => {
       "timeRendererStartupStep('git-environment-barrier-await'",
       sessionIndex
     )
+
     const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
     const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
 
@@ -97,20 +120,24 @@ describe('renderer startup runtime routing', () => {
     expect(source.slice(gitEnvironmentBarrierIndex, hydrationWorktreesIndex)).toContain(
       'window.api.app.awaitGitEnvironmentStartupBarrier()'
     )
+
     const hydrationWorktreeBlock = source.slice(
       hydrationWorktreesIndex,
       source.indexOf('await keybindingsPromise')
     )
+
     expect(hydrationWorktreeBlock).toContain(
       'mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY'
     )
     expect(hydrationWorktreeBlock).toContain('executionHostId: getRepoExecutionHostId(repo)')
+
     // Why: the pre-hydration fetch must include SSH repos (only runtime-owned repos are
     // excluded); gating on local-only drops SSH tab/editor/browser chrome at hydration.
     const hydrationFilterBlock = source.slice(
       source.indexOf('const hydrationRepos'),
       hydrationWorktreesIndex
     )
+
     expect(hydrationFilterBlock).toContain(
       "parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'"
     )
@@ -118,9 +145,11 @@ describe('renderer startup runtime routing', () => {
     expect(fullWorktreesIndex).toBeGreaterThan(
       source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
     )
+
     const ownerDefaultsIndex = source.indexOf(
       'actions.awaitOwnerWorktreeVisibilityDefaultsHydration()'
     )
+
     const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
     expect(ownerDefaultsIndex).toBeGreaterThan(
       source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
@@ -146,14 +175,18 @@ describe('renderer startup runtime routing', () => {
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
+
     const hydrationDoneIndex = source.indexOf(
       "logRendererStartupDiagnostic('startup-hydration-done'"
     )
+
     const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
     const remoteWorktreeIndex = source.indexOf("timeRendererStartupStep('remote-worktree-refresh'")
+
     const remoteCatalogFailureIndex = source.indexOf(
       "console.warn('Remote startup catalog refresh failed:'"
     )
+
     const lineageIndex = source.indexOf('actions.fetchWorktreeLineage()')
     const startupRefreshCompletedIndex = source.indexOf('startupWorktreeRefreshCompleted: true')
 
@@ -169,9 +202,11 @@ describe('renderer startup runtime routing', () => {
     )
 
     const degradedSource = readSource(DEGRADED_RECOVERY_PATH)
+
     const startupFailureIndex = degradedSource.indexOf(
       '[startup] Workspace session hydration failed; leaving disk state untouched:'
     )
+
     expect(startupFailureIndex).toBeGreaterThanOrEqual(0)
     expect(
       degradedSource.indexOf('startupWorktreeRefreshCompleted: true', startupFailureIndex)
@@ -186,6 +221,7 @@ describe('renderer startup runtime routing', () => {
 
   it('waits for first-window startup services before terminal reconnect', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
+
     // Why this step: `app:prepareTerminalStartupRestoration` awaits
     // firstWindowStartupServicesReady + managedWslCliStartupBarrierReady in main before it
     // does anything else, so it is the renderer-side position of that fence.
@@ -193,13 +229,17 @@ describe('renderer startup runtime routing', () => {
     const servicesIndex = source.indexOf(
       "timeRendererStartupStep('prepare-terminal-startup-restoration'"
     )
+
     const preReconnectRecoveryIndex = source.indexOf(
       "timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect'"
     )
+
     const capabilityRefreshIndex = source.indexOf(
       "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
     )
+
     const reconnectIndex = source.indexOf("timeRendererStartupStep('reconnect-terminals'")
+
     const postReconnectRecoveryIndex = source.indexOf(
       "timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect'"
     )
@@ -216,21 +256,26 @@ describe('renderer startup runtime routing', () => {
 
   it('refreshes terminal snapshot capability before degraded reconnect', () => {
     const source = readSource(DEGRADED_RECOVERY_PATH)
+
     const degradedStart = source.indexOf(
       '[startup] Workspace session hydration failed; leaving disk state untouched:'
     )
+
     const servicesIndex = source.indexOf(
       'await window.api.app.awaitFirstWindowStartupServices()',
       degradedStart
     )
+
     const recoveryIndex = source.indexOf(
       'window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()',
       servicesIndex
     )
+
     const capabilityRefreshIndex = source.indexOf(
       'refreshTerminalProviderSnapshotCapabilities(',
       recoveryIndex
     )
+
     const reconnectIndex = source.indexOf('reconnectPersistedTerminals(abortSignal)', recoveryIndex)
 
     expect(degradedStart).toBeGreaterThanOrEqual(0)
@@ -244,7 +289,9 @@ describe('renderer startup runtime routing', () => {
     const source = readSource(
       'src/renderer/src/components/automations/use-automations-page-refresh.ts'
     )
+
     const fullRefreshStart = source.indexOf('const mountedBeforeStartupWorktreeRefreshRef')
+
     const fullRefreshEffect = source.slice(
       fullRefreshStart,
       source.indexOf('void refresh()', fullRefreshStart)
@@ -265,6 +312,7 @@ describe('renderer startup runtime routing', () => {
     expect(surfacesSource).toContain(
       "import('../components/floating-terminal/FloatingTerminalPanel').then"
     )
+
     for (const source of [shellSource, surfacesSource]) {
       expect(source).not.toContain("from '../components/floating-terminal/FloatingTerminalPanel'")
     }
@@ -348,9 +396,11 @@ describe('renderer startup runtime routing', () => {
 
   it('prefetches terminal snapshot capabilities before reconnect unlocks cold activation', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
+
     const capabilityIndex = source.indexOf(
       "timeRendererStartupStep('terminal-provider-snapshot-capabilities'"
     )
+
     const reconnectIndex = source.indexOf("timeRendererStartupStep('reconnect-terminals'")
 
     expect(capabilityIndex).toBeGreaterThanOrEqual(0)
@@ -392,23 +442,30 @@ describe('renderer startup runtime routing', () => {
       join(process.cwd(), 'src/renderer/src/app-shell/use-app-startup-hydration.ts'),
       'utf8'
     )
+
     const terminalSource = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
       'utf8'
     )
+
     const hydrateIndex = appSource.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
+
     const prepareIndex = appSource.indexOf(
       "timeRendererStartupStep('prepare-terminal-startup-restoration'"
     )
+
     const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
+
     const projectIndex = appSource.indexOf(
       "timeRendererStartupStep('project-structured-session-tabs'"
     )
+
     const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
     const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
     const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)
     const gateBlock = terminalSource.slice(gateStart, gateEnd)
     const gateIndex = gateBlock.indexOf('gateWorktreeAgentActivation(activeWorktreeId)')
+
     const createIndex = gateBlock.indexOf(
       'createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })'
     )
@@ -563,9 +620,11 @@ describe('renderer startup runtime routing', () => {
       'void window.api.ui.set({ activeView })',
       '}, [activeView, persistedUIReady])'
     ]
+
     for (const marker of preferenceEffect) {
       expect(source).toContain(marker)
     }
+
     expect(source).not.toContain('createActiveViewIdleFlush')
     expect(source).not.toContain("window.addEventListener('blur', handleBlur)")
   })
@@ -587,13 +646,16 @@ describe('renderer startup runtime routing', () => {
 
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readSource(SESSION_PERSISTENCE_PATH)
+
     const checkpointStart = source.indexOf(
       'const shutdownCheckpointPersist = createShutdownCheckpointPersist({'
     )
+
     const checkpointEnd = source.indexOf(
       'const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)',
       checkpointStart
     )
+
     expect(checkpointStart).toBeGreaterThanOrEqual(0)
     expect(checkpointEnd).toBeGreaterThan(checkpointStart)
     const checkpointBlock = source.slice(checkpointStart, checkpointEnd)

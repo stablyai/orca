@@ -17,6 +17,7 @@ const temporaryDirectories: string[] = []
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-skill-install-test-'))
   temporaryDirectories.push(directory)
+
   return directory
 }
 
@@ -27,6 +28,7 @@ async function packageVersion(root: string, version: string, body: string) {
     join(source, 'SKILL.md'),
     `---\nname: test-skill\ndescription: Test skill\n---\n\n${body}\n`
   )
+
   return createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, `${version}.tar.gz`),
@@ -115,6 +117,7 @@ describe('skill install transaction', () => {
     const replaced = await installLocalSkillPackage(
       installInput(root, archive, { conflictResolution: 'replace-and-discard-local' })
     )
+
     expect(replaced.status).toBe('installed')
     expect(await readFile(join(destination, 'SKILL.md'), 'utf8')).toContain('# Cloud')
   })
@@ -150,11 +153,13 @@ describe('skill install transaction', () => {
     async () => {
       const root = await temporaryDirectory()
       const archive = await packageVersion(root, 'version_1', '# Long path')
+
       const destinationRoot = join(
         root,
         ...Array.from({ length: 6 }, (_, index) => `segment-${index}-${'x'.repeat(32)}`),
         'skills'
       )
+
       await mkdir(destinationRoot, { recursive: true })
       const canonicalPath = join(destinationRoot, 'test-skill')
       expect(canonicalPath.length).toBeGreaterThan(260)
@@ -174,13 +179,16 @@ describe('skill install transaction', () => {
     const second = await packageVersion(root, 'version_2', '# Second')
     await installLocalSkillPackage(installInput(root, first))
     let renameCount = 0
+
     const interruptedFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         renameCount += 1
+
         if (renameCount === 3) {
           throw new Error('injected-commit-interruption')
         }
+
         await nativeSkillInstallFilesystem.rename(source, target)
       }
     }
@@ -204,12 +212,14 @@ describe('skill install transaction', () => {
     const first = await packageVersion(root, 'version_1', '# First')
     const second = await packageVersion(root, 'version_2', '# Second')
     await installLocalSkillPackage(installInput(root, first))
+
     const busyFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         if (target.includes('.orca-backup-')) {
           throw Object.assign(new Error('locked by scanner'), { code: 'EBUSY' })
         }
+
         await nativeSkillInstallFilesystem.rename(source, target)
       }
     }
@@ -238,12 +248,14 @@ describe('skill install transaction', () => {
       const first = await packageVersion(root, 'version_1', '# First')
       const second = await packageVersion(root, 'version_2', '# Second')
       await installLocalSkillPackage(installInput(root, first))
+
       const failingFilesystem = {
         ...nativeSkillInstallFilesystem,
         rename: async (source: string, target: string): Promise<void> => {
           if (target.includes('.orca-backup-')) {
             throw Object.assign(new Error(`injected ${code}`), { code })
           }
+
           await nativeSkillInstallFilesystem.rename(source, target)
         }
       }
@@ -268,10 +280,12 @@ describe('skill install transaction', () => {
     const canonicalPath = join(root, 'skills', 'test-skill')
     const lockPath = join(root, 'state', 'locks', `${skillInstallStateKey(canonicalPath)}.lock`)
     const release = await acquireSkillInstallLock({ path: lockPath })
+
     try {
       const result = await installLocalSkillPackage(
         installInput(root, archive, { lockTimeoutMs: 1 })
       )
+
       expect(result).toMatchObject({
         status: 'failed',
         errorCategory: 'skill-install-busy',
@@ -309,10 +323,12 @@ describe('skill install transaction', () => {
     const archive = await packageVersion(root, 'version_1', '# Cloud')
     const canonicalPath = join(root, 'skills', 'test-skill')
     let injected = false
+
     const changingFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         await nativeSkillInstallFilesystem.rename(source, target)
+
         if (!injected && target.includes('.orca-staging-')) {
           injected = true
           await mkdir(canonicalPath)
@@ -341,10 +357,12 @@ describe('skill install transaction', () => {
     const second = await packageVersion(root, 'version_2', '# Second')
     await installLocalSkillPackage(installInput(root, first))
     const controller = new AbortController()
+
     const cancellingFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         await nativeSkillInstallFilesystem.rename(source, target)
+
         if (target.includes('.orca-backup-')) {
           controller.abort()
         }
@@ -370,10 +388,12 @@ describe('skill install transaction', () => {
     const root = await temporaryDirectory()
     const archive = await packageVersion(root, 'version_1', '# First')
     const controller = new AbortController()
+
     const cancellingFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         await nativeSkillInstallFilesystem.rename(source, target)
+
         if (target.includes('.orca-staging-')) {
           controller.abort()
         }

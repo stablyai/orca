@@ -13,7 +13,9 @@ export function isAgentTaskCompleteTrackingEnabled(): boolean {
 }
 
 const agentTaskCompleteTrackingEnabledListeners = new Set<() => void>()
+
 let agentTaskCompleteTrackingSettingsUnsubscribe: (() => void) | null = null
+
 let agentTaskCompleteTrackingSettingsSnapshot: string | null = null
 
 function getAgentTaskCompleteTrackingSettingsSnapshot(
@@ -29,10 +31,13 @@ export function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void):
     )
     agentTaskCompleteTrackingSettingsUnsubscribe = useAppStore.subscribe((state) => {
       const snapshot = getAgentTaskCompleteTrackingSettingsSnapshot(state)
+
       if (snapshot === agentTaskCompleteTrackingSettingsSnapshot) {
         return
       }
+
       agentTaskCompleteTrackingSettingsSnapshot = snapshot
+
       for (const subscriber of Array.from(agentTaskCompleteTrackingEnabledListeners)) {
         subscriber()
       }
@@ -40,8 +45,10 @@ export function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void):
   }
 
   agentTaskCompleteTrackingEnabledListeners.add(listener)
+
   return () => {
     agentTaskCompleteTrackingEnabledListeners.delete(listener)
+
     if (
       agentTaskCompleteTrackingEnabledListeners.size === 0 &&
       agentTaskCompleteTrackingSettingsUnsubscribe !== null

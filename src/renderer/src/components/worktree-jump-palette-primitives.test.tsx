@@ -47,6 +47,7 @@ it('renders no badge when every secondary match is already shown', () => {
 it('elides a deep path from the head so the matched tail stays visible', () => {
   const path = '/Users/me/projects/orca/new-create-button-design/proposals/create-button.html'
   const start = path.indexOf('create-butt')
+
   const { container } = render(
     <TooltipProvider>
       <PaletteOpenTabPrimaryLine
@@ -70,7 +71,9 @@ it('elides a deep path from the head so the matched tail stays visible', () => {
 it('keeps slash-separated agent snippets intact', () => {
   const snippet =
     'Ran pnpm test src/renderer/src/components/worktree-jump-palette-primitives.test.tsx'
+
   const start = snippet.indexOf('worktree-jump')
+
   const { container } = render(
     <TooltipProvider>
       <PaletteOpenTabPrimaryLine
@@ -99,6 +102,7 @@ it('folds the worktree into the repo chip and drops it when it repeats the repo 
       />
     </TooltipProvider>
   )
+
   expect(container.querySelector('[data-slot="palette-location-chip"]')?.textContent).toBe(
     'orca·new-create-button-design'
   )

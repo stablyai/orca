@@ -42,6 +42,7 @@ type MainPressureSchedulerSnapshot = {
 // Why: peak queued chars is noisy at the byte level on CI, but a coarse cap
 // still catches renderer queue growth that dropped-backlog/latency checks miss.
 const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
+
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
 
 type MainPressureDeps<
@@ -131,6 +132,7 @@ export async function runMainPressureScenario<
     orcaPage,
     loadPanes.map((pane) => pane.ptyId)
   )
+
   try {
     await startPressureCommands({
       loadPanes,
@@ -148,12 +150,14 @@ export async function runMainPressureScenario<
       panes,
       testInfo
     })
+
     const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
       typingScriptPath,
       typingPane.ptyId,
       runId
     )
+
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
     const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
     const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
@@ -245,9 +249,11 @@ async function measureAndAnnotateScroll<
     ackGateAfterScroll
   )
   const responsivePath = getResponsiveScrollPath(scrollMeasurement)
+
   if (responsivePath) {
     expect(responsivePath.latencyMs).toBeLessThan(maxScrollLatencyMs)
   }
+
   expect(scrollMeasurement.maxTimerDriftMs).toBeLessThan(maxTimerDriftMs)
   await scrollActiveTerminalToBottom(orcaPage)
 }

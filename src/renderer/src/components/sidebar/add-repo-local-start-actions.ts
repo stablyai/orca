@@ -78,6 +78,7 @@ export function getAddRepoLocalStartActions({
     ),
     onClick: onOpenRemoteStep
   }
+
   const clone = {
     kind: 'clone' as const,
     icon: Globe,
@@ -91,6 +92,7 @@ export function getAddRepoLocalStartActions({
     ),
     onClick: onOpenCloneStep
   }
+
   const create = {
     kind: 'create' as const,
     icon: Plus,

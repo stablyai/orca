@@ -73,9 +73,11 @@ export function matchesRecentTabSwitcherChord(
   const control = Boolean(input.control ?? input.ctrlKey)
   const meta = Boolean(input.meta ?? input.metaKey)
   const alt = Boolean(input.alt ?? input.altKey)
+
   if (input.code !== 'Tab' || !control || meta || alt) {
     return false
   }
+
   // Why: the Ctrl+Tab switcher is a held-key interaction where Shift reverses
   // direction. Gate the whole family on the configurable unshifted binding.
   return keybindingMatchesAction(
@@ -115,10 +117,13 @@ export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): bo
   if (input.type !== 'keyUp' && input.type !== 'keyup') {
     return false
   }
+
   if (isControlKey(input)) {
     return true
   }
+
   const control = input.control ?? input.ctrlKey
+
   // Why: some Electron surfaces report the final Ctrl+Tab release as Tab
   // keyup after Control is already up, so commit instead of stranding the UI.
   return isTabKey(input) && control === false
@@ -142,7 +147,9 @@ export function nativeZoomCommandMatchesKeybindings(
 ): boolean {
   const primary =
     platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+
   const actionId = direction === 'in' ? 'zoom.in' : 'zoom.out'
+
   const candidates =
     direction === 'in'
       ? [
@@ -271,6 +278,7 @@ export function resolveWindowShortcutAction(
     keybindings,
     options
   )
+
   if (worktreeIndex !== null) {
     return { type: 'jumpToWorktreeIndex', index: worktreeIndex }
   }
@@ -282,6 +290,7 @@ export function resolveWindowShortcutAction(
     keybindings,
     options
   )
+
   if (tabIndex !== null) {
     return { type: 'jumpToTabIndex', index: tabIndex }
   }
@@ -346,12 +355,16 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
 
 export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
   const actionId = getWindowShortcutActionId(action)
+
   if (!actionId) {
     return false
   }
+
   const definition = getKeybindingDefinition(actionId)
+
   if (!definition || isKeybindingAllowedInTerminal(definition)) {
     return false
   }
+
   return isKeybindingPotentialTerminalConflict(definition)
 }

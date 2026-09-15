@@ -1,5 +1,7 @@
 const { createHash } = require('node:crypto')
+
 const { readFileSync, renameSync, rmSync, writeFileSync } = require('node:fs')
+
 const { join, resolve } = require('node:path')
 
 /**
@@ -138,18 +140,22 @@ const PATCH_TARGETS = [
 function inspectTarget(relayDir, target) {
   const nodePtyDir = resolve(relayDir, 'node_modules', 'node-pty')
   const packageJson = JSON.parse(readFileSync(join(nodePtyDir, 'package.json'), 'utf8'))
+
   if (packageJson.version !== EXPECTED_NODE_PTY_VERSION) {
     throw new Error(
       `Refusing to patch node-pty ${packageJson.version}; expected ${EXPECTED_NODE_PTY_VERSION}`
     )
   }
+
   const filePath = join(nodePtyDir, ...target.relativePath)
+
   return { filePath, source: readFileSync(filePath, 'utf8') }
 }
 
 function assertPatchedNodePtyWindowsTeardown(relayDir = process.cwd()) {
   for (const target of PATCH_TARGETS) {
     const inspected = inspectTarget(relayDir, target)
+
     if (sourceSha256(inspected.source) !== target.patchedSha256) {
       throw new Error(
         `node-pty ConPTY teardown release is not installed in ${target.relativePath.join('/')}`
@@ -162,24 +168,31 @@ function patchNodePtyWindowsTeardown(relayDir = process.cwd()) {
   for (const target of PATCH_TARGETS) {
     const inspected = inspectTarget(relayDir, target)
     const sourceHash = sourceSha256(inspected.source)
+
     if (sourceHash === target.patchedSha256) {
       continue
     }
+
     if (sourceHash !== target.originalSha256) {
       throw new Error(
         `Refusing to patch unexpected node-pty source in ${target.relativePath.join('/')}`
       )
     }
+
     let patchedSource = inspected.source
+
     for (const [from, to] of target.replacements) {
       // Why the count check: an anchor that matched twice would patch the wrong site silently, and
       // the hash below would then reject a tree this script had already rewritten.
       if (patchedSource.split(from).length - 1 !== 1) {
         throw new Error(`Refusing to patch ${target.relativePath.join('/')}; anchor is not unique`)
       }
+
       patchedSource = patchedSource.replace(from, to)
     }
+
     const temporaryPath = `${inspected.filePath}.orca-patch-${process.pid}`
+
     // Why: a terminated remote install must leave either known source version recoverable on reconnect.
     try {
       writeFileSync(temporaryPath, patchedSource)
@@ -188,6 +201,7 @@ function patchNodePtyWindowsTeardown(relayDir = process.cwd()) {
       rmSync(temporaryPath, { force: true })
     }
   }
+
   assertPatchedNodePtyWindowsTeardown(relayDir)
 }
 

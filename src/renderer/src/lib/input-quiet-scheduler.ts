@@ -15,6 +15,7 @@ const INPUT_QUIET_EVENTS: readonly (keyof WindowEventMap)[] = [
 ]
 
 let listenersInstalled = false
+
 let lastInputAt = Number.NEGATIVE_INFINITY
 
 function now(): number {
@@ -37,6 +38,7 @@ export function hasInputBeenQuietFor(quietMs: number): boolean {
   if (typeof window !== 'undefined') {
     ensureInputQuietListeners(window)
   }
+
   return now() - lastInputAt >= quietMs
 }
 
@@ -44,8 +46,10 @@ function ensureInputQuietListeners(targetWindow: Window): void {
   if (listenersInstalled) {
     return
   }
+
   listenersInstalled = true
   const options: AddEventListenerOptions = { capture: true, passive: true }
+
   for (const eventName of INPUT_QUIET_EVENTS) {
     targetWindow.addEventListener(eventName, recordInput, options)
   }
@@ -55,9 +59,11 @@ function scheduleIdleCallback(targetWindow: Window, callback: () => void, timeou
   const schedulerWindow = targetWindow as Window & {
     requestIdleCallback?: Window['requestIdleCallback']
   }
+
   if (typeof schedulerWindow.requestIdleCallback === 'function') {
     return schedulerWindow.requestIdleCallback(callback, { timeout })
   }
+
   return targetWindow.setTimeout(callback, 0)
 }
 
@@ -65,10 +71,13 @@ function cancelIdleCallback(targetWindow: Window, idleId: number): void {
   const schedulerWindow = targetWindow as Window & {
     cancelIdleCallback?: Window['cancelIdleCallback']
   }
+
   if (typeof schedulerWindow.cancelIdleCallback === 'function') {
     schedulerWindow.cancelIdleCallback(idleId)
+
     return
   }
+
   targetWindow.clearTimeout(idleId)
 }
 
@@ -78,6 +87,7 @@ export function scheduleAfterInputQuiet(
 ): () => void {
   if (typeof window === 'undefined') {
     const fallbackTimer = setTimeout(callback, delayMs)
+
     return () => clearTimeout(fallbackTimer)
   }
 
@@ -95,14 +105,17 @@ export function scheduleAfterInputQuiet(
       targetWindow.clearTimeout(delayTimer)
       delayTimer = null
     }
+
     if (quietTimer !== null) {
       targetWindow.clearTimeout(quietTimer)
       quietTimer = null
     }
+
     if (idleId !== null) {
       cancelIdleCallback(targetWindow, idleId)
       idleId = null
     }
+
     if (maxWaitTimer !== null) {
       targetWindow.clearTimeout(maxWaitTimer)
       maxWaitTimer = null
@@ -113,6 +126,7 @@ export function scheduleAfterInputQuiet(
     if (cancelled) {
       return
     }
+
     clearScheduledWork()
     cancelled = true
     callback()
@@ -120,15 +134,20 @@ export function scheduleAfterInputQuiet(
 
   const checkQuietWindow = (): void => {
     quietTimer = null
+
     if (cancelled) {
       return
     }
+
     const inputQuietForMs = now() - lastInputAt
     const remainingQuietMs = quietMs - inputQuietForMs
+
     if (remainingQuietMs > 0) {
       quietTimer = targetWindow.setTimeout(checkQuietWindow, remainingQuietMs)
+
       return
     }
+
     idleId = scheduleIdleCallback(targetWindow, run, idleTimeoutMs)
   }
 
@@ -139,6 +158,7 @@ export function scheduleAfterInputQuiet(
     delayTimer = null
     checkQuietWindow()
   }, delayMs)
+
   if (maxWaitMs !== undefined) {
     maxWaitTimer = targetWindow.setTimeout(run, Math.max(0, maxWaitMs))
   }

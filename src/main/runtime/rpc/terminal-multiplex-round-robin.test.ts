@@ -7,6 +7,7 @@ describe('terminal multiplex round-robin drain', () => {
       streamId: index + 1,
       pendingChunks: index === 7 ? 1 : 8
     }))
+
     const order: number[] = []
     let remainingSlots = 8
 
@@ -18,9 +19,11 @@ describe('terminal multiplex round-robin drain', () => {
         if (stream.pendingChunks === 0) {
           return false
         }
+
         stream.pendingChunks -= 1
         remainingSlots -= 1
         order.push(stream.streamId)
+
         return true
       }
     })
@@ -33,6 +36,7 @@ describe('terminal multiplex round-robin drain', () => {
     const streams = [1, 2, 3].map((streamId) => ({ streamId, pendingChunks: 2 }))
     let slots = 2
     const firstOrder: number[] = []
+
     const cursor = drainTerminalMultiplexRoundRobin({
       streams,
       cursorStreamId: null,
@@ -41,9 +45,11 @@ describe('terminal multiplex round-robin drain', () => {
         stream.pendingChunks -= 1
         slots -= 1
         firstOrder.push(stream.streamId)
+
         return true
       }
     })
+
     slots = 2
     const secondOrder: number[] = []
     drainTerminalMultiplexRoundRobin({
@@ -54,9 +60,11 @@ describe('terminal multiplex round-robin drain', () => {
         if (stream.pendingChunks === 0) {
           return false
         }
+
         stream.pendingChunks -= 1
         slots -= 1
         secondOrder.push(stream.streamId)
+
         return true
       }
     })

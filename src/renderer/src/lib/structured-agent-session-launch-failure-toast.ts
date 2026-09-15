@@ -18,7 +18,9 @@ export function trackStructuredLaunchFailureToast(
     if (error instanceof StructuredAgentSessionLaunchCancelledError) {
       return
     }
+
     const agentLabel = structuredAgentLabel(agent)
+
     if (
       error instanceof StructuredAgentSessionCreateRefusalError &&
       (await refusalSettlement.catch(() => false))
@@ -37,8 +39,10 @@ export function trackStructuredLaunchFailureToast(
           )
         }
       )
+
       return
     }
+
     // Why: the raw error carries errnos and absolute paths; it belongs in the log, not the toast.
     console.warn('[native-chat] structured launch failed', error)
     toast.error(

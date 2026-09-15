@@ -10,14 +10,19 @@ const { appMock, hasTrustedPackageManagerForMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: appMock }))
+
 vi.mock('./linux-package-install-command', () => ({
   hasTrustedPackageManagerFor: hasTrustedPackageManagerForMock
 }))
 
 const originalPlatform = process.platform
+
 const originalResourcesPath = process.resourcesPath as string | undefined
+
 const originalExecPath = process.execPath
+
 const originalAppImage = process.env.APPIMAGE
+
 const originalAppDir = process.env.APPDIR
 
 let resourcesDir: string
@@ -71,16 +76,19 @@ afterEach(async () => {
   setPlatform(originalPlatform)
   setResourcesPath(originalResourcesPath)
   setExecPath(originalExecPath)
+
   if (originalAppImage === undefined) {
     delete process.env.APPIMAGE
   } else {
     process.env.APPIMAGE = originalAppImage
   }
+
   if (originalAppDir === undefined) {
     delete process.env.APPDIR
   } else {
     process.env.APPDIR = originalAppDir
   }
+
   await fsp.rm(resourcesDir, { recursive: true, force: true })
 })
 
@@ -177,6 +185,7 @@ describe('getLinuxRootPackageType', () => {
 
   it('rejects NULs in every legacy AppImage identity path', async () => {
     const { isLegacyAppImageRuntimeIdentity } = await loadPackageType()
+
     const identity = {
       appImagePath: '/opt/orca/orca.AppImage',
       appDirPath: '/tmp/.mount_orca',
@@ -193,6 +202,7 @@ describe('getLinuxRootPackageType', () => {
 
   it('requires every legacy AppImage identity path to be absolute', async () => {
     const { isLegacyAppImageRuntimeIdentity } = await loadPackageType()
+
     const identity = {
       appImagePath: '/opt/orca/orca.AppImage',
       appDirPath: '/tmp/.mount_orca',

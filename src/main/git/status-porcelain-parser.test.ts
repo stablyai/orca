@@ -4,6 +4,7 @@ import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
 describe('StatusPorcelainParser', () => {
   it('parses branch headers and changed/untracked/ignored records', () => {
     const parser = new StatusPorcelainParser()
+
     const stopped = parser.update(
       '# branch.oid abc123\n' +
         '# branch.head feature/x\n' +
@@ -15,6 +16,7 @@ describe('StatusPorcelainParser', () => {
         '! dist/\n',
       0
     )
+
     parser.finish()
 
     expect(stopped).toBe(false)

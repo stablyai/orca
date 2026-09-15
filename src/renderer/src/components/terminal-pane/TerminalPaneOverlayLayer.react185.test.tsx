@@ -6,12 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let terminalPaneRenderCount = 0
+
 let terminalPaneProps: { onPtyExit?: (ptyId: string, exitCode?: number) => void } | null = null
+
 const markUnverifiedPtyLoss = vi.fn()
+
 vi.mock('./TerminalPane', () => ({
   default: (props: { onPtyExit?: (ptyId: string, exitCode?: number) => void }) => {
     terminalPaneProps = props
     terminalPaneRenderCount += 1
+
     return null
   }
 }))
@@ -25,6 +29,7 @@ vi.mock('../../store', () => ({
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 
 const GROUP_ID = 'group-react185'
+
 const TAB_ID = 'tab-react185'
 
 function createRect({
@@ -49,9 +54,13 @@ function createRect({
 const PARENT_RECT = createRect()
 
 let capturedResizeCallback: (() => void) | null = null
+
 let container: HTMLDivElement
+
 let bodyEl: HTMLDivElement
+
 let bodyRect: DOMRect
+
 let root: Root
 
 class CapturingResizeObserver {
@@ -131,6 +140,7 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
     expect(capturedResizeCallback).toBeTypeOf('function')
 
     const rendersAfterMount = terminalPaneRenderCount
+
     for (let i = 0; i < 50; i += 1) {
       act(() => {
         capturedResizeCallback?.()
@@ -148,6 +158,7 @@ describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', ()
     expect(overlay?.style.width).toBe('799.1px')
 
     const rendersAfterMount = terminalPaneRenderCount
+
     for (let i = 0; i < 50; i += 1) {
       bodyRect = createRect({ top: 32.9, left: 0.9, width: 799.9, height: 567.9 })
       act(() => {

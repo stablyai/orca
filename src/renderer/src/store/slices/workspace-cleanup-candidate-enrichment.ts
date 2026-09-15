@@ -39,6 +39,7 @@ type WorkspaceCleanupEnrichmentProjection = {
 }
 
 export const WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY = 8
+
 const RECENT_VISIBLE_CONTEXT_MS = 24 * 60 * 60 * 1000
 
 export async function enrichWorkspaceCleanupCandidates(
@@ -47,6 +48,7 @@ export async function enrichWorkspaceCleanupCandidates(
   options: WorkspaceCleanupEnrichOptions = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
   const projection = buildWorkspaceCleanupEnrichmentProjection(candidates, state)
+
   return mapWithConcurrency(candidates, WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY, (candidate) =>
     enrichWorkspaceCleanupCandidate(candidate, state, projection, options)
   )
@@ -59,24 +61,30 @@ export async function enrichWorkspaceCleanupCandidatesWithCache(
   options: WorkspaceCleanupEnrichOptions & { localStateUnchanged?: boolean } = {}
 ): Promise<WorkspaceCleanupCandidate[]> {
   const projection = buildWorkspaceCleanupEnrichmentProjection(candidates, state)
+
   return mapWithConcurrency(
     candidates,
     WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY,
     async (candidate) => {
       const identity = getWorkspaceCleanupCandidateIdentity(candidate)
       const cached = cache.get(identity)
+
       if (options.localStateUnchanged === true && cached?.candidateRef === candidate) {
         return cached.candidate
       }
+
       const inputSignature = getWorkspaceCleanupCandidateInputSignature(candidate)
+
       const localSignature = getWorkspaceCleanupLocalStateSignature(
         candidate,
         state,
         projection,
         options
       )
+
       if (cached?.inputSignature === inputSignature && cached.localSignature === localSignature) {
         cached.candidateRef = candidate
+
         return cached.candidate
       }
 
@@ -87,6 +95,7 @@ export async function enrichWorkspaceCleanupCandidatesWithCache(
         localSignature,
         candidate: enriched
       })
+
       return enriched
     }
   )
@@ -98,6 +107,7 @@ function buildWorkspaceCleanupEnrichmentProjection(
 ): WorkspaceCleanupEnrichmentProjection {
   const worktreeIds = new Set(candidates.map((candidate) => candidate.worktreeId))
   const tabIds = new Set<string>()
+
   for (const worktreeId of worktreeIds) {
     for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
       tabIds.add(tab.id)
@@ -105,20 +115,24 @@ function buildWorkspaceCleanupEnrichmentProjection(
   }
 
   const openFilesByWorktreeId = new Map<string, AppState['openFiles']>()
+
   for (const file of state.openFiles) {
     if (!worktreeIds.has(file.worktreeId)) {
       continue
     }
+
     const files = openFilesByWorktreeId.get(file.worktreeId) ?? []
     files.push(file)
     openFilesByWorktreeId.set(file.worktreeId, files)
   }
 
   const retainedDoneAgentPaneKeysByWorktreeId = new Map<string, string[]>()
+
   for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
     if (!worktreeIds.has(retained.worktreeId) || retained.entry.state !== 'done') {
       continue
     }
+
     const paneKeys = retainedDoneAgentPaneKeysByWorktreeId.get(retained.worktreeId) ?? []
     paneKeys.push(paneKey)
     retainedDoneAgentPaneKeysByWorktreeId.set(retained.worktreeId, paneKeys)
@@ -156,14 +170,17 @@ function getWorkspaceCleanupLocalStateSignature(
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   const tabIds = tabs.map((tab) => tab.id)
   const tabIdSet = new Set(tabIds)
+
   const openFiles = (projection.openFilesByWorktreeId.get(worktreeId) ?? []).map((file) => ({
     id: file.id,
     isDirty: file.isDirty,
     hasDraft: state.editorDrafts[file.id] !== undefined
   }))
+
   const retainedDoneAgentPaneKeys = [
     ...(projection.retainedDoneAgentPaneKeysByWorktreeId.get(worktreeId) ?? [])
   ].sort()
+
   const agentStatuses = [...tabIdSet]
     .flatMap((tabId) => projection.agentStatusesByTabId.get(tabId) ?? [])
     .map((entry) => ({
@@ -172,15 +189,19 @@ function getWorkspaceCleanupLocalStateSignature(
       updatedAt: entry.updatedAt
     }))
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
+
   const ptyIdsByTabId = Object.fromEntries(
     tabIds.map((tabId) => [tabId, state.ptyIdsByTabId[tabId] ?? []])
   )
+
   const runtimePaneTitlesByTabId = Object.fromEntries(
     tabIds.map((tabId) => [tabId, state.runtimePaneTitlesByTabId[tabId] ?? {}])
   )
+
   const terminalLayoutsByTabId = Object.fromEntries(
     tabIds.map((tabId) => [tabId, state.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {}])
   )
+
   const dismissal =
     options.applyDismissals === false
       ? null
@@ -215,30 +236,38 @@ async function enrichWorkspaceCleanupCandidate(
   const tabs = state.tabsByWorktree[candidate.worktreeId] ?? []
   const tabIds = new Set(tabs.map((tab) => tab.id))
   const openFiles = projection.openFilesByWorktreeId.get(candidate.worktreeId) ?? []
+
   const dirtyEditorBuffers = openFiles.filter(
     (file) => file.isDirty || state.editorDrafts[file.id] !== undefined
   )
+
   const cleanEditorTabCount = openFiles.length - dirtyEditorBuffers.length
   const browserTabCount = (state.browserTabsByWorktree[candidate.worktreeId] ?? []).length
+
   const retainedDoneAgentCount =
     projection.retainedDoneAgentPaneKeysByWorktreeId.get(candidate.worktreeId)?.length ?? 0
+
   const blockers = candidate.blockers.filter((blocker) => blocker !== 'dismissed')
   const preserveCleanupInspection = shouldPreserveCleanupInspection(candidate, state)
 
   if (state.activeWorktreeId === candidate.worktreeId) {
     blockers.push('active-workspace')
   }
+
   if (dirtyEditorBuffers.length > 0) {
     blockers.push('dirty-editor-buffer')
   }
+
   if (hasFreshIndexedLiveAgent(projection.agentStatusesByTabId, tabIds)) {
     blockers.push('live-agent')
   }
+
   if (hasWorkingTitleAgent(state, tabs)) {
     blockers.push('live-agent')
   }
 
   const terminalProbe = await probeTerminalLiveness(state, tabs)
+
   if (terminalProbe === 'running') {
     blockers.push('running-terminal')
   } else if (terminalProbe === 'unknown') {
@@ -250,7 +279,9 @@ async function enrichWorkspaceCleanupCandidate(
       id: candidate.worktreeId,
       hostId: getWorkspaceCleanupCandidateHostId(candidate)
     }) ?? 0
+
   const hasVisibleContext = cleanEditorTabCount > 0 || browserTabCount > 0
+
   if (
     hasVisibleContext &&
     !preserveCleanupInspection &&
@@ -289,6 +320,7 @@ export function applyWorkspaceCleanupDismissal(
   ) {
     return candidate
   }
+
   return applyWorkspaceCleanupPolicy({
     ...candidate,
     blockers: [...new Set<WorkspaceCleanupBlocker>([...candidate.blockers, 'dismissed'])]

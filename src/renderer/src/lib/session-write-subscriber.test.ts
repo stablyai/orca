@@ -250,9 +250,11 @@ describe('createSessionWriteSubscriber', () => {
   })
   it('schedules no session timer for one display-title bucket in a 300-worktree fleet', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+
     const tabsByWorktree = Object.fromEntries(
       Array.from({ length: 300 }, (_, index) => {
         const worktreeId = `wt-${index}`
+
         return [
           worktreeId,
           [
@@ -270,6 +272,7 @@ describe('createSessionWriteSubscriber', () => {
         ]
       })
     )
+
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
     useAppStore.setState({
       workspaceSessionReady: true,
@@ -614,6 +617,7 @@ describe('createSessionWriteSubscriber', () => {
   it('defers rather than drops a change made while shouldSchedulePersist returns false', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = false
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -637,6 +641,7 @@ describe('createSessionWriteSubscriber', () => {
   it('holds a write whose change arrived while shouldSchedulePersist returned false', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,
@@ -663,6 +668,7 @@ describe('createSessionWriteSubscriber', () => {
   it('re-checks shouldSchedulePersist when a pending debounce fires', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     let shouldSchedule = true
+
     const cleanup = createSessionWriteSubscriber({
       store: useAppStore,
       persist,

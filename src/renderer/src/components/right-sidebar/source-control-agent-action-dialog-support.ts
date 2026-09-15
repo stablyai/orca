@@ -28,6 +28,7 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
       )
     }
   ]
+
   if (repoId) {
     targets.push({
       value: 'repo',
@@ -37,6 +38,7 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
       )
     })
   }
+
   targets.push({
     value: 'global',
     label: translate(
@@ -44,6 +46,7 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
       'All repositories'
     )
   })
+
   return targets
 }
 
@@ -68,9 +71,11 @@ export function resolveSourceControlAgentSaveTarget(
   if (saveTargetValue === 'repo' && repoId) {
     return { type: 'repo', repoId }
   }
+
   if (saveTargetValue === 'global') {
     return { type: 'global' }
   }
+
   return null
 }
 
@@ -88,14 +93,18 @@ export function buildSourceControlAgentStatusCopy(args: {
     hasEnabledAgents,
     detecting
   } = args
+
   if (selectedAgentUnavailable) {
     return `${getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent} is not enabled or was not detected on this workspace host.`
   }
+
   if (connectionUnavailable) {
     return 'Unable to resolve the workspace connection.'
   }
+
   if (!hasEnabledAgents && !detecting) {
     return 'No enabled agents were detected on this workspace host.'
   }
+
   return null
 }

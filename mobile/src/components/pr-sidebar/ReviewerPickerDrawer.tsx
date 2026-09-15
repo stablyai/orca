@@ -46,6 +46,7 @@ export function ReviewerPickerDrawer({
     if (!visible || !client) {
       return
     }
+
     let cancelled = false
     setLoad({ status: 'loading' })
     void fetchAssignableUsers(client, worktreeId)
@@ -53,6 +54,7 @@ export function ReviewerPickerDrawer({
         if (cancelled) {
           return
         }
+
         setLoad(
           outcome.ok
             ? { status: 'loaded', users: outcome.result }
@@ -64,6 +66,7 @@ export function ReviewerPickerDrawer({
           setLoad({ status: 'error', message: 'Failed to load people' })
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -73,17 +76,23 @@ export function ReviewerPickerDrawer({
     if (load.status !== 'loaded') {
       return []
     }
+
     const seed = new Set(seededLogins.map((l) => l.toLowerCase()))
+
     // Seeded reviewers sort first so the user can quickly un-request them.
     const sorted = [...load.users].sort((a, b) => {
       const aSeed = seed.has(a.login.toLowerCase()) ? 0 : 1
       const bSeed = seed.has(b.login.toLowerCase()) ? 0 : 1
+
       return aSeed - bSeed || a.login.localeCompare(b.login)
     })
+
     const q = query.trim().toLowerCase()
+
     if (!q) {
       return sorted
     }
+
     return sorted.filter(
       (u) => u.login.toLowerCase().includes(q) || (u.name ?? '').toLowerCase().includes(q)
     )
@@ -117,6 +126,7 @@ export function ReviewerPickerDrawer({
         <View style={styles.pickerList}>
           {ordered.map((item) => {
             const requested = isRequested(item.login)
+
             return (
               <Pressable
                 key={item.login}

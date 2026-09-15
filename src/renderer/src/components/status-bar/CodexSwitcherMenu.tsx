@@ -212,12 +212,14 @@ export function CodexSwitcherMenu({
                   const inactiveUsage = target.id
                     ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
                     : null
+
                   // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
                   const showSignInAction =
                     !hasActiveRuntimeEnvironment &&
                     !target.active &&
                     target.id !== null &&
                     isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+
                   const isSigningIn = reauthenticatingAccountId === target.id
                   const isBusy = isSwitching || reauthenticatingAccountId !== null
 
@@ -227,10 +229,13 @@ export function CodexSwitcherMenu({
                       onSelect={(event) => {
                         // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
                         event.preventDefault()
+
                         if (suppressNextAccountSelectRef.current) {
                           suppressNextAccountSelectRef.current = false
+
                           return
                         }
+
                         if (!target.active) {
                           void handleSelectAccount(target.id, target.runtimeTarget)
                         }
@@ -261,6 +266,7 @@ export function CodexSwitcherMenu({
                             onSignInPointerDown={suppressNextAccountSelect}
                             onSignIn={() => {
                               suppressNextAccountSelect()
+
                               if (target.id !== null) {
                                 void handleSignInAccount(target.id, target.runtimeTarget)
                               }

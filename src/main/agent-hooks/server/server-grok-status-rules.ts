@@ -15,13 +15,16 @@ export function isStaleGrokTurnEnd(
   ) {
     return false
   }
+
   if (!previous.providerPromptId) {
     return previous.grokPromptBoundary === true
   }
+
   const differentSession = Boolean(
     previous.providerSession?.id &&
     incoming.providerSession?.id &&
     previous.providerSession.id !== incoming.providerSession.id
   )
+
   return differentSession || previous.providerPromptId !== incoming.providerPromptId
 }

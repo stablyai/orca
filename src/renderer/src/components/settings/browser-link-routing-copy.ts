@@ -26,6 +26,7 @@ export function getBrowserLinkRoutingDescription(
       "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor."
     )
   }
+
   return translate(
     'auto.components.settings.BrowserLinkRoutingSetting.description',
     "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
@@ -61,6 +62,7 @@ export function getLinkRoutingModifierDescription({
   isMac: boolean
 }): string {
   const chord = isMac ? '⇧⌘' : 'Shift+Ctrl'
+
   return openLinksInApp
     ? translate(
         'auto.components.settings.BrowserLinkRoutingModifierSetting.descriptionSystem',

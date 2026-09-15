@@ -46,6 +46,7 @@ export async function releaseFederatedWorker(args: {
   requestId: string
 }): Promise<WorkerReleaseReceipt & { remoteOutput?: unknown }> {
   const cache = getOrchestrationPeerCapabilityCache(args.runtime)
+
   // This capability states that the host writes a durable archive before it closes anything;
   // `method_not_found` cannot express that, so release still asks the advertisement.
   const capability = await cache.resolve({
@@ -62,13 +63,17 @@ export async function releaseFederatedWorker(args: {
         { expectedEnvironmentPairingRevision: args.server.pairingRevision }
       ) as Promise<RuntimeStatus>
   })
+
   args.runtime
     .getOrchestrationDb()
     .updateFederatedDispatchRuntimeEpoch(args.dispatchId, capability.runtimeEpoch)
+
   if (!capability.supported) {
     return unsupported(args.dispatchId)
   }
+
   let remote: RemoteReleaseReceipt
+
   try {
     remote = parseRemoteReleaseReceipt(
       await args.runtime.callOrchestrationWorkerServer(
@@ -89,8 +94,10 @@ export async function releaseFederatedWorker(args: {
         ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
         false
       )
+
       return unsupported(args.dispatchId)
     }
+
     return {
       dispatchId: args.dispatchId,
       state: 'release_unknown',
@@ -100,6 +107,7 @@ export async function releaseFederatedWorker(args: {
       recovery: `The execution host did not acknowledge release; reconnect before continuing. ${releaseUnknownRecovery(args.dispatchId)} Do not infer process exit.`
     }
   }
+
   const receipt = {
     dispatchId: args.dispatchId,
     state: remote.state,
@@ -110,16 +118,20 @@ export async function releaseFederatedWorker(args: {
     lastError: remote.lastError,
     ...(remote.output ? { remoteOutput: remote.output } : {})
   }
+
   if (remote.state !== 'released' && remote.state !== 'already_released') {
     return receipt
   }
+
   try {
     // Keep this idempotent so a fresh request converges the home projection without
     // issuing another terminal close after the execution host confirmed release.
     applyConfirmedFederatedReleaseHomeProjection(args.runtime, args.dispatchId)
+
     return receipt
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
+
     return {
       ...receipt,
       lastError: `The execution host acknowledged ${remote.state}, but Orca could not apply the confirmed release to the home projection: ${detail}`,
@@ -133,12 +145,14 @@ export function parseRemoteReleaseReceipt(
   expectedDispatchId: string
 ): RemoteReleaseReceipt {
   const parsed = RemoteReleaseReceiptSchema.safeParse(value)
+
   if (!parsed.success || parsed.data.dispatchId !== expectedDispatchId) {
     throw new OrchestrationError(
       'invalid_runtime_response',
       `The execution host returned an invalid release receipt for Dispatch ${expectedDispatchId}.`
     )
   }
+
   return parsed.data as RemoteReleaseReceipt
 }
 
@@ -152,8 +166,10 @@ function applyConfirmedFederatedReleaseHomeProjection(
 ): void {
   const db = runtime.getOrchestrationDb()
   db.db.exec('SAVEPOINT federated_release_home_projection')
+
   try {
     const worker = db.getWorkerDispatch(dispatchId)
+
     if (worker && (worker.agent_terminal_handle !== null || worker.stage !== 'released')) {
       // Keep the worker lifecycle state (ready/succeeded/failed) intact; release
       // is terminal cleanup, not a worker outcome.
@@ -169,6 +185,7 @@ function applyConfirmedFederatedReleaseHomeProjection(
         }
       })
     }
+
     // The remote handle is an execution-host fact; clear it after confirmation
     // so a subsequent home read cannot route another close to a stale handle.
     db.db

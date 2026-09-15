@@ -22,6 +22,7 @@ export type McpConfigDirectoryEntry = {
 }
 
 export type McpServerTransport = 'stdio' | 'http' | 'unknown'
+
 export type McpServerStatus = 'enabled' | 'disabled' | 'invalid'
 
 export type McpServerSummary = {
@@ -98,6 +99,7 @@ export function selectExistingMcpConfigCandidates(
     const parentDir = getRelativeParentDir(candidate.relativePath)
     const basename = getRelativeBasename(candidate.relativePath)
     const entries = entriesByRelativeDir.get(parentDir) ?? []
+
     return entries.some((entry) => entry.name === basename && !entry.isDirectory)
   })
 }
@@ -106,6 +108,7 @@ export function canInspectLocalMcpConfigRoot(rootPath: string, isWindowsHost: bo
   if (isWindowsHost) {
     return true
   }
+
   return !/^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/.test(rootPath)
 }
 
@@ -116,6 +119,7 @@ export function inspectMcpConfigContent(
   if (content === null) {
     return { candidate, exists: false, status: 'missing', servers: [] }
   }
+
   if (!isMcpConfigInspectionTextWithinLimit(content)) {
     return {
       candidate,
@@ -127,6 +131,7 @@ export function inspectMcpConfigContent(
   }
 
   let parsed: unknown
+
   try {
     parsed = JSON.parse(content)
   } catch (error) {
@@ -140,10 +145,13 @@ export function inspectMcpConfigContent(
   }
 
   const rawServers = extractObjectAtPath(parsed, candidate.serversPath)
+
   if (!rawServers) {
     return { candidate, exists: true, status: 'valid', servers: [] }
   }
+
   const serverEntries = collectMcpServerEntries(rawServers)
+
   if (!serverEntries) {
     return {
       candidate,
@@ -164,30 +172,36 @@ export function inspectMcpConfigContent(
 
 function collectMcpServerEntries(rawServers: Record<string, unknown>): [string, unknown][] | null {
   const entries: [string, unknown][] = []
+
   for (const name in rawServers) {
     if (!Object.hasOwn(rawServers, name)) {
       continue
     }
+
     if (
       entries.length >= MCP_CONFIG_INSPECTION_MAX_SERVERS ||
       !isMcpConfigInspectionNameWithinLimit(name)
     ) {
       return null
     }
+
     entries.push([name, rawServers[name]])
   }
+
   return entries
 }
 
 function getRelativeParentDir(relativePath: string): string {
   const normalizedPath = relativePath.replace(/\\/g, '/')
   const separatorIndex = normalizedPath.lastIndexOf('/')
+
   return separatorIndex === -1 ? '' : normalizedPath.slice(0, separatorIndex)
 }
 
 function getRelativeBasename(relativePath: string): string {
   const normalizedPath = relativePath.replace(/\\/g, '/')
   const separatorIndex = normalizedPath.lastIndexOf('/')
+
   return separatorIndex === -1 ? normalizedPath : normalizedPath.slice(separatorIndex + 1)
 }
 
@@ -196,12 +210,15 @@ function extractObjectAtPath(
   pathSegments: string[]
 ): Record<string, unknown> | null {
   let current = value
+
   for (const segment of pathSegments) {
     if (!current || typeof current !== 'object' || Array.isArray(current)) {
       return null
     }
+
     current = (current as Record<string, unknown>)[segment]
   }
+
   return current && typeof current === 'object' && !Array.isArray(current)
     ? (current as Record<string, unknown>)
     : null

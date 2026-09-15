@@ -36,13 +36,16 @@ test.describe('startup exec readiness over live SSH', () => {
     const ledgerPath = `/tmp/sta4067-${runId}.ledger`
     let target: DockerSshRelayTarget | null = null
     let terminal: string | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         relayGracePeriodSeconds: 15
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       writeDockerSshRelayTargetFile(
@@ -50,6 +53,7 @@ test.describe('startup exec readiness over live SSH', () => {
         '/root/.bash_profile',
         bashExecProfileContents(runId, { releasePath, startedPath })
       )
+
       const created = await createStartupExecTerminal(
         orcaPage,
         remote.worktreeId,
@@ -57,6 +61,7 @@ test.describe('startup exec readiness over live SSH', () => {
         ledgerPath,
         'owning-client'
       )
+
       terminal = created.terminal
       await expect
         .poll(
@@ -94,6 +99,7 @@ test.describe('startup exec readiness over live SSH', () => {
         target,
         `cat '${ledgerPath}'`
       ).split('|')
+
       const pid = Number(pidText)
       expect(pid).toBeGreaterThan(1)
       expect(tty).toMatch(/^\/dev\/pts\/[0-9]+$/)

@@ -43,22 +43,28 @@ async function loadTestWorktreeIds(
   return hostPage.evaluate(
     async ({ branchA, branchB }) => {
       const store = window.__store
+
       if (!store) {
         return null
       }
+
       const repo = store.getState().repos[0]
+
       if (!repo) {
         return null
       }
+
       await store.getState().fetchWorktrees(repo.id)
       const worktrees = store.getState().worktreesByRepo[repo.id] ?? []
       const host = worktrees.find((worktree) => worktree.branch === 'refs/heads/e2e-secondary')
       const clientA = worktrees.find((worktree) => worktree.branch === `refs/heads/${branchA}`)
       const clientB = worktrees.find((worktree) => worktree.branch === `refs/heads/${branchB}`)
       const clientA2 = worktrees.find((worktree) => worktree.isMainWorktree)
+
       if (!host || !clientA || !clientB || !clientA2) {
         return null
       }
+
       return {
         host: host.id,
         clientA: clientA.id,
@@ -76,10 +82,12 @@ async function createPairingOffer(hostPage: Page): Promise<RuntimePairingOffer> 
       address: '127.0.0.1',
       rotate: true
     })
+
     if (!offer.available || !offer.webClientUrl) {
       const reason = offer.available ? 'web client URL is missing' : 'runtime server is unavailable'
       throw new Error(`Runtime web client pairing failed: ${reason}`)
     }
+
     return { deviceId: offer.deviceId, webClientUrl: offer.webClientUrl }
   })
 }
@@ -103,6 +111,7 @@ async function openPairedClient(
           sandbox: true
         }
       })
+
       await clientWindow.loadURL(url)
     },
     {
@@ -113,6 +122,7 @@ async function openPairedClient(
   const page = await pagePromise
   await expect(page.locator('[data-worktree-sidebar]')).toBeVisible({ timeout: 30_000 })
   await expect(worktreeRow(page, visibleWorktreeId)).toBeVisible({ timeout: 30_000 })
+
   return page
 }
 
@@ -148,6 +158,7 @@ test('keeps two paired browser clients and the host on independent worktrees', a
 
   // Playwright's matcher does not narrow the polled value for TypeScript.
   const ids = await loadTestWorktreeIds(orcaPage, branchA, branchB)
+
   if (!ids) {
     throw new Error('Test worktrees disappeared after discovery')
   }
@@ -156,6 +167,7 @@ test('keeps two paired browser clients and the host on independent worktrees', a
 
   let clientA: Page | null = null
   let clientB: Page | null = null
+
   try {
     const offerA = await createPairingOffer(orcaPage)
     clientA = await openPairedClient(electronApp, offerA, ids.clientA)
@@ -198,6 +210,7 @@ test('keeps a paired client workspace create-with-agent off the other client and
     })
     .not.toBeNull()
   const ids = await loadTestWorktreeIds(orcaPage, branchA, branchB)
+
   if (!ids) {
     throw new Error('Test worktrees disappeared after discovery')
   }
@@ -206,6 +219,7 @@ test('keeps a paired client workspace create-with-agent off the other client and
 
   let clientA: Page | null = null
   let clientB: Page | null = null
+
   try {
     const offerA = await createPairingOffer(orcaPage)
     clientA = await openPairedClient(electronApp, offerA, ids.clientA)
@@ -219,16 +233,21 @@ test('keeps a paired client workspace create-with-agent off the other client and
     // create shape the renderer sends `activate: true` for (STA-2802's field trigger).
     const createdWorktreeId = await clientA.evaluate(async (name) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('paired client store unavailable')
       }
+
       const state = store.getState()
+
       const repoId = state
         .allWorktrees()
         .find((worktree) => worktree.id === state.activeWorktreeId)?.repoId
+
       if (!repoId) {
         throw new Error('active worktree has no repo')
       }
+
       const result = await state.createWorktree(
         repoId,
         name,
@@ -248,6 +267,7 @@ test('keeps a paired client workspace create-with-agent off the other client and
         undefined,
         { command: 'echo sta-2802-startup' }
       )
+
       return result.worktree.id
     }, `e2e-created-${suffix}`)
 
@@ -282,22 +302,27 @@ test('shows only provider-backed creation actions in paired web', async ({
   const visibleWorktreeId = await orcaPage.evaluate(
     () => window.__store?.getState().activeWorktreeId
   )
+
   if (!visibleWorktreeId) {
     throw new Error('Host worktree was not active before paired web validation')
   }
 
   const offer = await createPairingOffer(orcaPage)
   const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
+
   try {
     await selectWorktree(client, visibleWorktreeId)
     await expect
       .poll(() =>
         client.evaluate(() => {
           const state = window.__store?.getState()
+
           const worktree = state
             ?.allWorktrees()
             .find((candidate) => candidate.id === state.activeWorktreeId)
+
           const environmentId = worktree?.runtimeOwnerEnvironmentId
+
           return environmentId
             ? state.runtimeStatusByEnvironmentId
                 .get(environmentId)
@@ -334,15 +359,18 @@ test('routes Add Project folder browsing through the paired host', async ({
   registerPostElectronShutdownCleanup(async () => {
     rmSync(hostFolder, { recursive: true, force: true })
   })
+
   const visibleWorktreeId = await orcaPage.evaluate(
     () => window.__store?.getState().activeWorktreeId
   )
+
   if (!visibleWorktreeId) {
     throw new Error('Host worktree was not active before paired web validation')
   }
 
   const offer = await createPairingOffer(orcaPage)
   const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
+
   try {
     await openSidebarProjectDialog(client)
     const addDialog = client.getByRole('dialog', { name: /Add a project/i })

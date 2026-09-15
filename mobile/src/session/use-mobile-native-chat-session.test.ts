@@ -40,6 +40,7 @@ describe('useMobileNativeChatSession', () => {
       sessionId: 'session',
       transcriptPath: null
     })
+
     return null
   }
 
@@ -51,9 +52,11 @@ describe('useMobileNativeChatSession', () => {
 
   it('drops an older-page response captured before transcript replacement', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
+
     const sendRequest = vi.fn(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     ) as unknown as RpcClient['sendRequest']
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({
@@ -62,8 +65,10 @@ describe('useMobileNativeChatSession', () => {
         hasMore: true,
         beforeOffset: 100
       })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     act(() => state?.loadEarlier())
 
@@ -89,9 +94,11 @@ describe('useMobileNativeChatSession', () => {
 
   it('drops an older-page response after the client source disappears', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
+
     const sendRequest = vi.fn(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     ) as unknown as RpcClient['sendRequest']
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({
         type: 'snapshot',
@@ -99,8 +106,10 @@ describe('useMobileNativeChatSession', () => {
         hasMore: true,
         beforeOffset: 100
       })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     act(() => state?.loadEarlier())
     await act(async () => renderer?.update(createElement(Harness, { client: null })))
@@ -124,6 +133,7 @@ describe('useMobileNativeChatSession', () => {
         ok: true,
         result: { messages: [message('older')], hasMore: true, beforeOffset: 50 }
       })
+
       const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
         emit = onData
         onData({
@@ -132,15 +142,19 @@ describe('useMobileNativeChatSession', () => {
           hasMore: true,
           beforeOffset: 100
         })
+
         return () => {}
       })
+
       await mount({ sendRequest, subscribe } as unknown as RpcClient)
+
       for (let page = 0; page < 33; page += 1) {
         await act(async () => {
           state?.loadEarlier()
           await Promise.resolve()
         })
       }
+
       const requestsAtCap = sendRequest.mock.calls.length
 
       await act(async () =>
@@ -178,12 +192,16 @@ describe('useMobileNativeChatSession', () => {
         beforeOffset: 40
       }
     })
+
     const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     await act(async () => {
       state?.loadEarlier()
@@ -217,11 +235,14 @@ describe('useMobileNativeChatSession', () => {
     // Never settles: this asserts the request the replay's cursor produces.
     const sendRequest = vi.fn(() => new Promise<never>(() => {}))
     const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({ type: 'snapshot', messages: window, hasMore: false, beforeOffset: 0 })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
 
     await act(async () =>
@@ -252,12 +273,16 @@ describe('useMobileNativeChatSession', () => {
         beforeOffset: 40
       }
     })
+
     const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     await act(async () => {
       state?.loadEarlier()
@@ -276,6 +301,7 @@ describe('useMobileNativeChatSession', () => {
   it('clears a stale cursor when a replacement omits paging metadata', async () => {
     // Never settles: this asserts the request the cleared cursor produces.
     const sendRequest = vi.fn(() => new Promise<never>(() => {}))
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({
@@ -284,8 +310,10 @@ describe('useMobileNativeChatSession', () => {
         hasMore: true,
         beforeOffset: 100
       })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
 
     await act(async () =>
@@ -307,6 +335,7 @@ describe('useMobileNativeChatSession', () => {
     // A replaced window without paging metadata is judged by its own length:
     // shorter than a full page means the whole transcript is on screen.
     const sendRequest = vi.fn()
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({
@@ -315,8 +344,10 @@ describe('useMobileNativeChatSession', () => {
         hasMore: true,
         beforeOffset: 100
       })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     expect(state?.hasMore).toBe(true)
 
@@ -327,15 +358,20 @@ describe('useMobileNativeChatSession', () => {
 
   it('fences an in-flight older page when a merging replay re-cuts the byte cursor', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
+
     const sendRequest = vi.fn(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     ) as unknown as RpcClient['sendRequest']
+
     const retained = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({ type: 'snapshot', messages: retained, hasMore: true, beforeOffset: 100 })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     act(() => state?.loadEarlier())
 
@@ -359,10 +395,13 @@ describe('useMobileNativeChatSession', () => {
 
   it('keeps the base snapshot authoritative when a live append arrives first', async () => {
     const sendRequest = vi.fn()
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     // Only a snapshot marks the base as delivered, so an append landing first
     // must not demote the real base snapshot to a reconnect replay.
@@ -383,6 +422,7 @@ describe('useMobileNativeChatSession', () => {
 
   it('rejects a cursor page invalidated by live trim and retries with a growing tail', async () => {
     let resolveCursorPage: (response: unknown) => void = () => {}
+
     const sendRequest = vi
       .fn()
       .mockImplementationOnce(() => new Promise((resolve) => (resolveCursorPage = resolve)))
@@ -390,6 +430,7 @@ describe('useMobileNativeChatSession', () => {
         ok: true,
         result: { messages: [message('fresh-growing-tail')], hasMore: false }
       })
+
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       emit = onData
       onData({
@@ -398,8 +439,10 @@ describe('useMobileNativeChatSession', () => {
         hasMore: true,
         beforeOffset: 100
       })
+
       return () => {}
     })
+
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     act(() => state?.loadEarlier())
     await act(async () => emit({ type: 'appended', messages: [message('live-trim')] }))
@@ -428,6 +471,7 @@ describe('useMobileNativeChatSession', () => {
 
 describe('useMobileNativeChatSession transcriptLoading', () => {
   let renderer: ReactTestRenderer | null = null
+
   const renders: {
     sessionId: string | null
     transcriptLoading: boolean
@@ -462,12 +506,14 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       sessionId,
       transcriptPath: null
     })
+
     renders.push({
       sessionId,
       transcriptLoading: session.transcriptLoading,
       status: session.status,
       ids: session.messages.map((entry) => entry.id)
     })
+
     return null
   }
 
@@ -493,8 +539,10 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     // this identity keeps rendering while the re-read is in flight.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+
       return () => {}
     })
+
     const client = { subscribe } as unknown as RpcClient
     await mountAt(client, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready', transcriptLoading: false })
@@ -521,19 +569,24 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     // transcript keeps rendering instead of collapsing to a full-screen spinner.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+
       return () => {}
     })
+
     const client = { subscribe } as unknown as RpcClient
     await mountAt(client, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready' })
 
     let emitFresh: (frame: unknown) => void = () => {}
+
     const reconnected = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         emitFresh = onData
+
         return () => {}
       })
     } as unknown as RpcClient
+
     renders.length = 0
     await act(async () =>
       renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
@@ -564,13 +617,16 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     // A transient read failure must not blank a conversation the user is looking
     // at; the last settled list for this identity stays until a read supersedes it.
     let emitFrame: (frame: unknown) => void = () => {}
+
     const client = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         emitFrame = onData
         onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+
         return () => {}
       })
     } as unknown as RpcClient
+
     await mountAt(client, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready', ids: ['a-1'] })
 
@@ -588,9 +644,11 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     const firstClient = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         onData({ type: 'snapshot', messages: [message('source-a')], hasMore: false })
+
         return () => {}
       })
     } as unknown as RpcClient
+
     await mountAt(firstClient, 'session-a')
 
     const secondClient = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
@@ -613,8 +671,10 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       if ((params as { sessionId: string }).sessionId === 'session-a') {
         onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
       }
+
       return () => {}
     })
+
     const client = { subscribe } as unknown as RpcClient
     await mountAt(client, 'session-a')
     await act(async () =>
@@ -627,6 +687,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     const leaked = renders.find(
       (entry) => entry.sessionId === 'session-b' && entry.ids.includes('a-1')
     )
+
     expect(leaked).toBeUndefined()
     expect(renders.find((entry) => entry.sessionId === 'session-b')).toMatchObject({
       transcriptLoading: true,
@@ -641,8 +702,10 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     // 'loading' is the bare forever-spinner this frame exists to end.
     const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
       onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+
       return () => {}
     })
+
     await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
 
     expect(subscribe).toHaveBeenCalledWith(
@@ -659,13 +722,16 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
 
   it('takes the real snapshot after a pending one as this subscription’s base', async () => {
     let emitFrame: (frame: unknown) => void = () => {}
+
     const client = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         emitFrame = onData
         onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+
         return () => {}
       })
     } as unknown as RpcClient
+
     await mountAt(client, 'session-a')
 
     await act(async () =>
@@ -683,9 +749,11 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     const client = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
+
         return () => {}
       })
     } as unknown as RpcClient
+
     await mountAt(client, 'session-a')
 
     // Same identity, fresh client: this read finds no transcript file behind the
@@ -693,9 +761,11 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     const reconnected = {
       subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
         onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+
         return () => {}
       })
     } as unknown as RpcClient
+
     await act(async () =>
       renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
     )

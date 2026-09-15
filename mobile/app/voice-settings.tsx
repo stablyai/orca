@@ -15,10 +15,12 @@ export default function NativeVoiceSettingsRoute() {
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const { clients, focused } = useFocusedSettingsHostClients(hostIds)
   const client = clients.find((entry) => entry.state === 'connected')?.client ?? null
+
   const operations = useMemo(
     () => (client ? nativeVoiceSettingsOperations(client) : null),
     [client]
   )
+
   return (
     <VoiceSettingsScreen operations={operations} focused={focused} onBack={() => router.back()} />
   )

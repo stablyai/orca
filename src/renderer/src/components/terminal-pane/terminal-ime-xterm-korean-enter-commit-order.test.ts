@@ -42,11 +42,14 @@ function openTerminal(): {
   const terminal = new Terminal()
   terminal.open(container)
   const textarea = terminal.textarea
+
   if (!textarea) {
     throw new Error('xterm helper textarea was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, textarea }
 }
 
@@ -72,6 +75,7 @@ function dispatchKeydown(
     bubbles: true,
     cancelable: true
   })
+
   Object.defineProperty(keydown, 'keyCode', { value: init.keyCode })
   textarea.dispatchEvent(keydown)
 }
@@ -82,6 +86,7 @@ function dispatchComposedInput(textarea: HTMLTextAreaElement, data: string): voi
     inputType: 'insertCompositionText',
     bubbles: true
   })
+
   Object.defineProperty(input, 'composed', { value: true })
   textarea.dispatchEvent(input)
 }
@@ -159,6 +164,7 @@ describe('STA-3132 — Korean commit reaches the PTY before the physical Enter',
 
   it('leaves ordinary non-IME typing followed by Enter unchanged', async () => {
     const { emitted, textarea } = openTerminal()
+
     for (const key of ['a', 'b', 'c']) {
       dispatchKeydown(textarea, {
         key,
@@ -168,6 +174,7 @@ describe('STA-3132 — Korean commit reaches the PTY before the physical Enter',
       })
       await nextEventLoop()
     }
+
     dispatchKeydown(textarea, { key: 'Enter', code: 'Enter', keyCode: 13, isComposing: false })
     await nextEventLoop()
 

@@ -19,11 +19,13 @@ type AckStoreState = {
 const useAckStore = create<AckStoreState>(() => ({ acknowledgedAgentsByPaneKey: {} }))
 
 let renderCount = 0
+
 let selectedTimes: readonly number[] | undefined
 
 function SelectionProbe({ agents }: { agents: readonly Pick<DashboardAgentRow, 'paneKey'>[] }) {
   selectedTimes = useAckStore(useShallow((state) => selectAcknowledgedAgentTimes(state, agents)))
   renderCount += 1
+
   return null
 }
 
@@ -60,6 +62,7 @@ describe('selectAcknowledgedAgentTimes', () => {
       { acknowledgedAgentsByPaneKey: { 'tab-a:leaf-a': 10, 'tab-a:leaf-b': 20 } },
       AGENTS
     )
+
     const after = selectAcknowledgedAgentTimes(
       {
         acknowledgedAgentsByPaneKey: {
@@ -88,6 +91,7 @@ describe('selectAcknowledgedAgentTimes', () => {
       { acknowledgedAgentsByPaneKey: { 'tab-a:leaf-a': 10 } },
       AGENTS
     )
+
     const after = selectAcknowledgedAgentTimes(
       { acknowledgedAgentsByPaneKey: { 'tab-a:leaf-a': 11 } },
       AGENTS

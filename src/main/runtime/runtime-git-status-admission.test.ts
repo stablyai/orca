@@ -17,28 +17,35 @@ vi.mock('../git/status', async () => ({
 describe('runtime git status admission', () => {
   it('admits RPC reads at the caller tier and defaults future tiers to status', async () => {
     const events: GitAdmissionEvent[] = []
+
     const scheduler = new GitAdmissionScheduler({
       onAdmissionEvent: (event) => events.push(event)
     })
+
     getStatusMock.mockImplementation(async (worktreePath, options) => {
       const grant = await scheduler.acquire({
         args: ['status'],
         cwd: worktreePath,
         tier: options.admissionTier
       })
+
       grant.release()
+
       return { entries: [], conflictOperation: 'none' }
     })
+
     const commands = new RuntimeGitStatusCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: { path: '/workspace/feature' },
         executionHostId: 'local'
       })
     } as never)
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getRuntimeGitStatus: commands.getRuntimeGitStatus.bind(commands)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
 
     for (const admissionTier of ['background', 'interactive', 'future-tier']) {
@@ -48,6 +55,7 @@ describe('runtime git status admission', () => {
         method: 'git.status',
         params: { worktree: 'id:wt-1', admissionTier }
       })
+
       expect(response.ok).toBe(true)
     }
 

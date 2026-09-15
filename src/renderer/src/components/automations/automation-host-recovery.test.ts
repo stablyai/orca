@@ -35,7 +35,9 @@ const DESKTOP_SSH = entry({
   stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId: 't1' } },
   kind: 'ssh'
 })
+
 const RUNTIME_ENVIRONMENT_ID = 'gpu'
+
 const RUNTIME_SSH = entry({
   stableRef: {
     authority: { kind: 'runtime', environmentId: RUNTIME_ENVIRONMENT_ID },
@@ -72,9 +74,11 @@ describe('automation host recovery', () => {
 
   it('re-asks a desktop Self host, which has no transport to dial', () => {
     const target = deps()
+
     const desktopSelf = entry({
       stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
     })
+
     runAutomationHostRecovery('reconnect', desktopSelf, target)
     expect(target.retry).toHaveBeenCalledWith(desktopSelf)
   })

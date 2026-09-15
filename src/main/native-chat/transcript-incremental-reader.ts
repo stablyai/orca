@@ -44,37 +44,48 @@ export async function readIncrementalTranscriptMessages(
   signal?: AbortSignal
 ): Promise<NativeChatMessage[]> {
   const end = (await wslGatedStat(filePath, 'exact', signal)).size
+
   if (end <= state.offset) {
     return []
   }
+
   const messages: NativeChatMessage[] = []
+
   const stream = openTranscriptReadStream(
     filePath,
     { start: state.offset, end: end - 1 },
     'exact',
     signal
   )
+
   try {
     let absoluteOffset = state.offset
+
     for await (const rawChunk of stream) {
       const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
       let segmentStart = 0
       let newline = chunk.indexOf(0x0a)
+
       while (newline >= 0) {
         retainPart(chunk.subarray(segmentStart, newline))
+
         if (!state.droppingOversizedRecord) {
           decodeLine()
         }
+
         resetPendingLine(absoluteOffset + newline + 1)
         segmentStart = newline + 1
         newline = chunk.indexOf(0x0a, segmentStart)
       }
+
       if (segmentStart < chunk.length) {
         retainPart(chunk.subarray(segmentStart))
       }
+
       absoluteOffset += chunk.length
       state.offset = absoluteOffset
     }
+
     return messages
   } finally {
     // Early exits (throw/oversized-record bail) must not leak the fd or, on
@@ -86,12 +97,16 @@ export async function readIncrementalTranscriptMessages(
     if (state.droppingOversizedRecord) {
       return
     }
+
     state.pendingBytes += part.length
+
     if (state.pendingBytes > MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES) {
       state.pendingChunks.length = 0
       state.droppingOversizedRecord = true
+
       return
     }
+
     state.pendingChunks.push(part)
   }
 
@@ -104,22 +119,30 @@ export async function readIncrementalTranscriptMessages(
 
   function decodeLine(): void {
     let line = Buffer.concat(state.pendingChunks).toString('utf8')
+
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
     }
+
     if (!line) {
       return
     }
+
     const fallbackId = transcriptFallbackId(filePath, state.pendingStart)
     const lifecycle = decodeLifecycle?.(line, fallbackId)
+
     if (lifecycle) {
       onLifecycle?.(lifecycle)
     }
+
     const message = decode(line, fallbackId)
+
     if (!message) {
       return
     }
+
     messages.push(message)
+
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))
     }

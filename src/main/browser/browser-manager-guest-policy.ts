@@ -15,17 +15,22 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     if (this.policyAttachedGuestIds.has(guest.id)) {
       return
     }
+
     this.policyAttachedGuestIds.add(guest.id)
+
     // Why one door with a profile rather than a second installer beside it: whether a guest was
     // policy-attached at all is what registration and teardown both key on, so a guest that took
     // another path into the app is invisible to both.
     if (policy.profile === 'workspace-doc') {
       this.attachWorkspaceDocGuestPolicies(guest, policy.host)
+
       return
     }
+
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
+
     const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
@@ -50,12 +55,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+
     const handleDestroyed = (): void => {
       this.cleanupGuestPolicyAttachment(guest.id)
     }
+
     guest.on('destroyed', handleDestroyed)
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeDocPolicy()
+
       try {
         guest.off('destroyed', handleDestroyed)
       } catch {

@@ -21,6 +21,7 @@ afterEach(async () => {
 async function makeWorkspaceDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-omp-subagents-'))
   tempRoots.push(root)
+
   return root
 }
 
@@ -30,6 +31,7 @@ describe('OMP_SESSION_ARTIFACT_DIR_PATTERN', () => {
     // Task children are label-named.
     expect(OMP_SESSION_ARTIFACT_DIR_PATTERN.test('AuthAndPreflight')).toBe(false)
     expect(OMP_SESSION_ARTIFACT_DIR_PATTERN.test('local')).toBe(false)
+
     // Workspace dir names OMP encodes from a cwd (relative to home, relative to
     // tmp, absolute, or slug-hashed) never collide with a session stem. The
     // local prune doesn't depend on this — it skips depth 0 — but the remote
@@ -75,6 +77,7 @@ describe('partitionOmpSubagentTranscriptPaths', () => {
     const workspace = `/home/user/.omp/agent/sessions/home-app-85dfa2f0`
     const parent = `${workspace}/${SESSION_STEM}.jsonl`
     const sibling = `${workspace}/2026-05-02T09-00-00-000Z_dddddddd-eeee-4fff-8aaa-111111111111.jsonl`
+
     const partition = partitionOmpSubagentTranscriptPaths([
       parent,
       `${workspace}/${SESSION_STEM}/AuthAndPreflight.jsonl`,
@@ -93,6 +96,7 @@ describe('partitionOmpSubagentTranscriptPaths', () => {
   it('attributes a child to its nearest stamped ancestor, not the outermost one', () => {
     const workspace = '/home/user/.omp/agent/sessions/home-app-85dfa2f0'
     const nested = '2026-05-02T09-00-00-000Z_dddddddd-eeee-4fff-8aaa-111111111111'
+
     const partition = partitionOmpSubagentTranscriptPaths([
       `${workspace}/${SESSION_STEM}/${nested}/Grandchild.jsonl`
     ])
@@ -106,6 +110,7 @@ describe('partitionOmpSubagentTranscriptPaths', () => {
   it('handles Windows separators', () => {
     const workspace = `C:\\Users\\u\\.omp\\agent\\sessions\\home-app-85dfa2f0`
     const parent = `${workspace}\\${SESSION_STEM}.jsonl`
+
     const partition = partitionOmpSubagentTranscriptPaths([
       parent,
       `${workspace}\\${SESSION_STEM}\\AuthAndPreflight.jsonl`
@@ -137,6 +142,7 @@ describe('withOmpSubagentTranscriptCount host gating', () => {
     const remote = await parseMessageGraphSessionContent('omp', file, content, 'linux', {
       executionHostId: 'ssh:host'
     })
+
     const local = await parseMessageGraphSessionContent('omp', file, content, 'darwin')
 
     expect(remote?.subagentTranscriptCount).toBe(0)

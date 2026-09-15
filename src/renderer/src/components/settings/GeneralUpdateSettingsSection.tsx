@@ -16,6 +16,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
   // Why: older hosts omit `version` from errors, so retain the last target for correct copy.
   const updateVersionRef = useRef<string | null>(null)
+
   if ('version' in updateStatus && updateStatus.version) {
     updateVersionRef.current = updateStatus.version
   } else if (
@@ -43,6 +44,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
         setAppVersion(version)
       }
     })
+
     return () => {
       cancelled = true
     }

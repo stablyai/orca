@@ -47,6 +47,7 @@ async function createRepo(): Promise<{ repoPath: string; root: string }> {
   await writeFile(join(repoPath, 'version.txt'), 'one\n')
   git(repoPath, ['add', 'version.txt'])
   git(repoPath, ['commit', '--quiet', '-m', 'initial'])
+
   return { repoPath, root }
 }
 
@@ -64,20 +65,25 @@ describe('prepared worktree creation with real Git', () => {
     const lockReason = createWorktreePreparationLockReason('removal-failure')
     await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
     const original = gitRunner.gitExecFileAsync
+
     const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
       if (args.includes('remove') && args.includes(preparedPath)) {
         return Promise.reject(new Error('injected removal launch failure'))
       }
+
       return original(args, options)
     })
+
     try {
       await expect(discardPreparedWorktree(repoPath, preparedPath)).rejects.toThrow(
         'injected removal launch failure'
       )
       const remaining = await listWorktrees(repoPath, { includeCreatePreparations: true })
+
       const prepared = remaining.find((worktree) =>
         areWorktreePathsEqual(worktree.path, preparedPath)
       )
+
       expect(prepared).toBeDefined()
       expect(prepared?.lockReason).toBe(lockReason)
       expect(await readFile(join(preparedPath, 'version.txt'), 'utf8')).toBe('one\n')
@@ -85,6 +91,7 @@ describe('prepared worktree creation with real Git', () => {
       spy.mockRestore()
       await discardPreparedWorktree(repoPath, preparedPath)
     }
+
     expect(existsSync(preparedPath)).toBe(false)
   })
 
@@ -102,14 +109,19 @@ describe('prepared worktree creation with real Git', () => {
       'orca-create-preparation:v1:999999999:stale'
     )
     let releaseRemoval!: () => void
+
     const removalGate = new Promise<void>((resolve) => {
       releaseRemoval = resolve
     })
+
     let markRemovalStarted!: () => void
+
     const removalStarted = new Promise<void>((resolve) => {
       markRemovalStarted = resolve
     })
+
     const original = gitRunner.gitExecFileAsync
+
     const spy = vi
       .spyOn(gitRunner, 'gitExecFileAsync')
       .mockImplementation(async (args, options) => {
@@ -117,8 +129,10 @@ describe('prepared worktree creation with real Git', () => {
           markRemovalStarted()
           await removalGate
         }
+
         return original(args, options)
       })
+
     try {
       const preparing = startPreparation({
         repoPath,
@@ -127,6 +141,7 @@ describe('prepared worktree creation with real Git', () => {
         canonicalBase: 'refs/heads/main',
         options: {}
       })
+
       await removalStarted
       expect(hasPendingStalePreparationCleanup()).toBe(true)
       await preparing
@@ -174,8 +189,10 @@ describe('prepared worktree creation with real Git', () => {
     let watcher: FSWatcher | undefined
     let observedMaterialization = false
     const calls: string[][] = []
+
     const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
       calls.push([...args])
+
       if (args.includes('reset')) {
         watcher = watch(preparedPath, (_event, filename) => {
           // Only the reset writes here, so an event without a filename is still materialization.
@@ -186,8 +203,10 @@ describe('prepared worktree creation with real Git', () => {
           }
         })
       }
+
       return original(args, options)
     })
+
     try {
       await expect(
         prepareWorktreeCreateCheckout(
@@ -293,6 +312,7 @@ describe('prepared worktree creation with real Git', () => {
       git(repoPath, ['update-ref', 'refs/remotes/origin/main', original])
       const exec = gitRunner.gitExecFileAsync
       let moved = false
+
       const spy = vi
         .spyOn(gitRunner, 'gitExecFileAsync')
         .mockImplementation(async (args, options) => {
@@ -300,13 +320,17 @@ describe('prepared worktree creation with real Git', () => {
             git(repoPath, ['update-ref', 'refs/remotes/origin/main', refreshed])
             moved = true
           }
+
           const result = await exec(args, options)
+
           if (!moved && args.includes('reset') && when === 'after reset') {
             git(repoPath, ['update-ref', 'refs/remotes/origin/main', refreshed])
             moved = true
           }
+
           return result
         })
+
       try {
         await prepareWorktreeCreateCheckout(
           repoPath,

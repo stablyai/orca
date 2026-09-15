@@ -29,6 +29,7 @@ export function openSharedControlSocket(
   }
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
   let noteActivity: () => void = () => {}
+
   const opened = openRemoteRuntimeWebSocket(pairing, {
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
@@ -60,12 +61,14 @@ export function openSharedControlSocket(
       }
     }
   })
+
   if (!opened.ok || !callbacks.liveness) {
     return opened
   }
 
   const { ws, sharedKey, cleanup } = opened.socket
   const liveness = callbacks.liveness
+
   const monitor = startRemoteRuntimeSocketLiveness({
     ping: () => {
       if (ws.readyState === 1) {
@@ -76,12 +79,14 @@ export function openSharedControlSocket(
       if (callbacks.getCurrentSocket() !== ws) {
         return
       }
+
       try {
         // Why: close() on a half-open socket can hang for the OS TCP timeout.
         ws.terminate()
       } catch {
         // Best-effort terminate; the dead callback resets connection state.
       }
+
       liveness.onDead(
         remoteRuntimeUnavailableError(
           'Remote Orca runtime stopped responding; resetting the control connection.'
@@ -90,6 +95,7 @@ export function openSharedControlSocket(
     },
     options: liveness.options
   })
+
   noteActivity = monitor.noteActivity
 
   return {

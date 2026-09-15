@@ -21,6 +21,7 @@ describe('orchestration contract fence', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(database)
     const effect = vi.fn(() => ({ accepted: true }))
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -31,6 +32,7 @@ describe('orchestration contract fence', () => {
         })
       ]
     })
+
     return { database, dispatcher, effect }
   }
 
@@ -53,6 +55,7 @@ describe('orchestration contract fence', () => {
     'rejects contract version %s before parsing, receipts, or effects',
     async (version, reason) => {
       const { database, dispatcher, effect } = createHarness()
+
       const response = await dispatcher.dispatch(
         request({
           params: { malformed: true },
@@ -79,6 +82,7 @@ describe('orchestration contract fence', () => {
 
   it('allows the current contract to reach the mutation executor', async () => {
     const { dispatcher, effect } = createHarness()
+
     const response = await dispatcher.dispatch(
       request({ orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION })
     )
@@ -89,6 +93,7 @@ describe('orchestration contract fence', () => {
 
   it('keeps read-only orchestration inspection available without a contract', async () => {
     const { dispatcher, effect } = createHarness('orchestration.taskList')
+
     const response = await dispatcher.dispatch(
       request({
         method: 'orchestration.taskList',
@@ -105,6 +110,7 @@ describe('orchestration contract fence', () => {
     'retires %s even when the caller sends the current contract',
     async (method) => {
       const { dispatcher, effect } = createHarness(method)
+
       const response = await dispatcher.dispatch(
         request({
           method,

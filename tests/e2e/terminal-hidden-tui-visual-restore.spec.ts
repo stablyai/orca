@@ -43,6 +43,7 @@ const HIDDEN_FRAME_SCRIPT_DELAY_MS = 750
 
 function tuiFrame(runId: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
+
   const rows = [
     '╭────────────────────────────────────────────────────────────────────╮',
     `│ OpenCode visual restore Frame ${String(frame).padStart(3, '0')} ${frame % 2 === 0 ? '🟢' : '🟡'} ${progress} │`,
@@ -53,6 +54,7 @@ function tuiFrame(runId: string, frame: number): string {
     '╰──────────────┴──────────────────────┴──────────────────────────────╯',
     `VISUAL_RESTORE_FINAL_${runId}_${frame}`
   ]
+
   return [
     '\x1b[?2026h',
     '\x1b[?1049h',
@@ -71,6 +73,7 @@ function lowRiskRestoreFrame(runId: string, frame: number): string {
     `progress=${String(frame).padStart(3, '0')}`,
     `VISUAL_RESTORE_FINAL_${runId}_${frame}`
   ]
+
   return `${rows.join('\r\n')}\r\n`
 }
 
@@ -111,6 +114,7 @@ async function writeHiddenFrames(page: Page, ptyId: string, scriptPath: string):
 async function readMainHiddenDeliveryDroppedChars(page: Page): Promise<number> {
   return page.evaluate(async () => {
     const snapshot = await window.api.pty.getRendererDeliveryDebugSnapshot()
+
     return snapshot.hiddenDeliveryDroppedChars
   })
 }
@@ -120,22 +124,27 @@ async function readTuiCursorState(page: Page): Promise<TuiCursorState> {
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane is unavailable')
     }
+
     const terminalCore = (
       pane.terminal as unknown as {
         _core?: { coreService?: { isCursorHidden?: boolean; isCursorInitialized?: boolean } }
       }
     )._core
+
     return {
       hidden: terminalCore?.coreService?.isCursorHidden ?? null,
       initialized: terminalCore?.coreService?.isCursorInitialized ?? null
@@ -155,6 +164,7 @@ async function injectPaneData(
     },
     { paneKey, data, meta }
   )
+
   if (!injected) {
     throw new Error(`No terminal PTY data injector registered for ${paneKey}`)
   }
@@ -168,6 +178,7 @@ async function readMainSnapshotSource(
     const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, {
       scrollbackRows: 200
     })
+
     return snapshot?.source ?? null
   }, ptyId)
 }
@@ -175,9 +186,11 @@ async function readMainSnapshotSource(
 async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
+
     return Object.keys(store.getState().unreadTerminalTabs)
   })
 }
@@ -190,9 +203,11 @@ async function getRuntimePaneTitle(
   return page.evaluate(
     ({ tabId, numericPaneId }) => {
       const store = window.__store
+
       if (!store) {
         return null
       }
+
       return store.getState().runtimePaneTitlesByTabId[tabId]?.[numericPaneId] ?? null
     },
     { tabId, numericPaneId }
@@ -218,10 +233,13 @@ test.describe('Hidden terminal TUI visual restore', () => {
   }, testInfo: TestInfo) => {
     await waitForSessionReady(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'hidden TUI restore needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -231,9 +249,11 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const hiddenPane = hiddenSnapshot.panes[0]
+
     if (!hiddenPane?.ptyId) {
       throw new Error('hidden visual restore pane did not bind a PTY')
     }
+
     await switchToWorktree(orcaPage, firstWorktreeId)
     await expect
       .poll(() => getActiveWorktreeId(orcaPage), {
@@ -247,6 +267,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
     const scriptPath = path.join(testRepoPath, `.orca-hidden-tui-visual-${runId}.mjs`)
     writeHiddenFrameScript(scriptPath, runId)
     await resetHiddenDebug(orcaPage)
+
     try {
       await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
       await resetHiddenDebug(orcaPage)
@@ -312,10 +333,13 @@ test.describe('Hidden terminal TUI visual restore', () => {
   }, testInfo: TestInfo) => {
     await waitForSessionReady(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'hidden TUI restore needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -325,9 +349,11 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const hiddenPane = hiddenSnapshot.panes[0]
+
     if (!hiddenPane?.ptyId) {
       throw new Error('hidden visual restore pane did not bind a PTY')
     }
+
     const paneKey = `${hiddenSnapshot.tabId}:${hiddenPane.leafId}`
 
     await switchToWorktree(orcaPage, firstWorktreeId)
@@ -403,10 +429,13 @@ test.describe('Hidden terminal TUI visual restore', () => {
   }, testInfo: TestInfo) => {
     await waitForSessionReady(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'hidden TUI restore needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -416,9 +445,11 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const hiddenPane = hiddenSnapshot.panes[0]
+
     if (!hiddenPane?.ptyId) {
       throw new Error('hidden rich model pane did not bind a PTY')
     }
+
     await switchToWorktree(orcaPage, firstWorktreeId)
     await expect
       .poll(() => getActiveWorktreeId(orcaPage), {
@@ -432,6 +463,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
     const scriptPath = path.join(testRepoPath, `.orca-hidden-rich-model-${runId}.mjs`)
     writeHiddenFrameScript(scriptPath, runId)
     await resetHiddenDebug(orcaPage)
+
     try {
       await writeHiddenFrames(orcaPage, hiddenPane.ptyId, scriptPath)
       await resetHiddenDebug(orcaPage)
@@ -495,10 +527,13 @@ test.describe('Hidden terminal TUI visual restore', () => {
   }) => {
     await waitForSessionReady(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'hidden side-effect guard needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -508,6 +543,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const hiddenPane = hiddenSnapshot.panes[0]
+
     if (!hiddenPane?.ptyId) {
       throw new Error('hidden side-effect pane did not bind a PTY')
     }

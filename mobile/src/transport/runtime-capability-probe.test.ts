@@ -8,13 +8,16 @@ type ProbeOutcome = RpcResponse | Error
 
 function makeClient(outcomes: ProbeOutcome[]): { client: RpcClient; calls: () => number } {
   let calls = 0
+
   const client = {
     sendRequest: () => {
       const outcome = outcomes[Math.min(calls, outcomes.length - 1)]
       calls += 1
+
       return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome)
     }
   } as unknown as RpcClient
+
   return { client, calls: () => calls }
 }
 
@@ -55,6 +58,7 @@ describe('startRuntimeCapabilityProbe', () => {
       result: { capabilities: 'a.v1' },
       _meta: { runtimeId: 'r1' }
     }
+
     const { client, calls } = makeClient([response])
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
@@ -71,6 +75,7 @@ describe('startRuntimeCapabilityProbe', () => {
       result: { capabilities: ['a.v1', 42] },
       _meta: { runtimeId: 'r1' }
     }
+
     const { client, calls } = makeClient([response])
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
@@ -87,6 +92,7 @@ describe('startRuntimeCapabilityProbe', () => {
       result: null,
       _meta: { runtimeId: 'r1' }
     }
+
     const { client, calls } = makeClient([response])
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
@@ -114,6 +120,7 @@ describe('startRuntimeCapabilityProbe', () => {
       new Error('Request timed out: status.get'),
       ok(['a.v1'])
     ])
+
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
     await flushMicrotasks()
@@ -132,6 +139,7 @@ describe('startRuntimeCapabilityProbe', () => {
       error: { code: 'internal', message: 'nope' },
       _meta: { runtimeId: 'r1' }
     }
+
     const { client } = makeClient([failure, ok(['a.v1'])])
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
@@ -169,12 +177,14 @@ describe('startRuntimeCapabilityProbe', () => {
 
   it('ignores a success that resolves after cancellation', async () => {
     let resolveRequest: ((response: RpcResponse) => void) | null = null
+
     const client = {
       sendRequest: () =>
         new Promise<RpcResponse>((resolve) => {
           resolveRequest = resolve
         })
     } as unknown as RpcClient
+
     const seen: (readonly string[])[] = []
     const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
     cancel()

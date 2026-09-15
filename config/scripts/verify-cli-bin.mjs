@@ -27,30 +27,37 @@ export function verifyPackageCliBin({
   const packageJsonPath = path.join(projectDir, 'package.json')
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
   const binTarget = packageJson.bin?.orca
+
   if (typeof binTarget !== 'string' || binTarget.length === 0) {
     throw new Error('package.json must declare bin.orca')
   }
 
   const binPath = path.resolve(projectDir, binTarget)
   const stats = statSync(binPath)
+
   if (!stats.isFile()) {
     throw new Error(`bin.orca target is not a file: ${binTarget}`)
   }
+
   if (stats.size === 0) {
     throw new Error(`bin.orca target is empty: ${binTarget}`)
   }
 
   const content = readFileSync(binPath, 'utf8')
+
   if (!content.startsWith('#!/usr/bin/env node\n')) {
     throw new Error(`bin.orca target must start with a Node shebang: ${binTarget}`)
   }
 
   const outPackageJsonPath = path.join(projectDir, 'out', 'package.json')
+
   if (fixPackageJson) {
     mkdirSync(path.dirname(outPackageJsonPath), { recursive: true })
     writeFileSync(outPackageJsonPath, buildOutPackageJson(packageJson.version), 'utf8')
   }
+
   let outPackageJson
+
   try {
     outPackageJson = JSON.parse(readFileSync(outPackageJsonPath, 'utf8'))
   } catch (error) {
@@ -59,8 +66,10 @@ export function verifyPackageCliBin({
         `compiled CLI package boundary is missing: ${path.relative(projectDir, outPackageJsonPath)}`
       )
     }
+
     throw error
   }
+
   if (outPackageJson.type !== 'commonjs') {
     throw new Error(
       `compiled CLI package boundary must declare type=commonjs: ${path.relative(
@@ -74,6 +83,7 @@ export function verifyPackageCliBin({
     if (!fixExecutable) {
       throw new Error(`bin.orca target is not executable: ${binTarget}`)
     }
+
     chmodSync(binPath, stats.mode | 0o755)
   }
 
@@ -90,11 +100,13 @@ export function verifyPackageCliBin({
 /** Runs CLI verification from npm scripts and local release checks. */
 function main() {
   const args = new Set(process.argv.slice(2))
+
   const result = verifyPackageCliBin({
     fixExecutable: args.has('--fix-executable'),
     fixPackageJson: args.has('--fix-package-json'),
     runHelp: args.has('--run-help')
   })
+
   console.log(
     `[cli-bin] verified ${path.relative(process.cwd(), result.binPath)} (${result.size} bytes)`
   )

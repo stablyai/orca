@@ -23,17 +23,22 @@ export function routeWorkspaceDocAddressSubmission(params: {
     params.worktreeId,
     params.value
   )
+
   if (docTarget.status === 'workspace-doc') {
     convertBrowserPageToWorkspaceDoc(params.pageId, docTarget.docLocation)
+
     return true
   }
+
   if (docTarget.status === 'unsupported') {
     params.onLoadError({
       code: 0,
       description: docTarget.message,
       validatedUrl: params.value.trim() || 'about:blank'
     })
+
     return true
   }
+
   return false
 }

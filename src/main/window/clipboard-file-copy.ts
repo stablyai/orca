@@ -28,10 +28,13 @@ export async function writeFileToClipboard(
   if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
     return { ok: false, reason: 'invalid-path' }
   }
+
   const resolvedFile = await deps.resolveFilePath(filePath)
+
   if (!resolvedFile.ok) {
     return { ok: false, reason: resolvedFile.reason }
   }
+
   const clipboardPath = resolvedFile.path
 
   if (deps.platform === 'darwin') {
@@ -39,6 +42,7 @@ export async function writeFileToClipboard(
     // needs, so a single buffer is enough.
     try {
       deps.writeBuffer('public.file-url', Buffer.from(pathToFileURL(clipboardPath).href, 'utf8'))
+
       return { ok: true }
     } catch {
       return { ok: false, reason: 'clipboard-write-failed' }
@@ -50,6 +54,7 @@ export async function writeFileToClipboard(
     // file. Single-quote escaping for the PowerShell string literal. Guard the
     // spawn so a missing/erroring PowerShell surfaces as a result, not a throw.
     const escaped = clipboardPath.replace(/'/g, "''")
+
     try {
       await deps.runCommand('powershell.exe', [
         '-NoProfile',
@@ -57,6 +62,7 @@ export async function writeFileToClipboard(
         '-Command',
         `Set-Clipboard -LiteralPath '${escaped}'`
       ])
+
       return { ok: true }
     } catch {
       return { ok: false, reason: 'clipboard-command-failed' }
@@ -67,19 +73,23 @@ export async function writeFileToClipboard(
   // (Nautilus/Nemo/Caja) read the "copied-files" payload that carries the
   // explicit copy verb; KDE/Qt managers (Dolphin) read text/uri-list instead.
   const fileUrl = pathToFileURL(clipboardPath).href
+
   const [mime, payload] = /kde/i.test(deps.desktop ?? '')
     ? ['text/uri-list', `${fileUrl}\r\n`]
     : ['x-special/gnome-copied-files', `copy\n${fileUrl}`]
+
   for (const [command, args] of [
     ['wl-copy', ['--type', mime]],
     ['xclip', ['-selection', 'clipboard', '-t', mime]]
   ] as const) {
     try {
       await deps.runCommand(command, [...args], payload)
+
       return { ok: true }
     } catch {
       // try the next tool
     }
   }
+
   return { ok: false, reason: 'unsupported-platform' }
 }

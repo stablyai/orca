@@ -12,6 +12,7 @@ import {
 function appendPane(): HTMLDivElement {
   const pane = document.createElement('div')
   document.body.appendChild(pane)
+
   return pane
 }
 
@@ -19,6 +20,7 @@ function appendHelper(pane: HTMLElement): HTMLTextAreaElement {
   const helper = document.createElement('textarea')
   helper.className = 'xterm-helper-textarea'
   pane.appendChild(helper)
+
   return helper
 }
 
@@ -138,6 +140,7 @@ describe('regular terminal focus ownership', () => {
       activeElement: helper,
       syncFocused
     })
+
     expect(releasedHelper).toBe(helper)
     syncFocused.mockClear()
     document.body.focus()
@@ -157,9 +160,11 @@ describe('regular terminal focus ownership', () => {
     expect(syncFocused).not.toHaveBeenCalled()
     // Why: reclaim is deferred so a newer focus owner during reactivation wins.
     expect(focus).not.toHaveBeenCalled()
+
     for (const run of scheduled) {
       run()
     }
+
     expect(syncFocused).toHaveBeenCalledWith(true)
     expect(focus).toHaveBeenCalledOnce()
     expect(document.activeElement).toBe(helper)
@@ -181,6 +186,7 @@ describe('regular terminal focus ownership', () => {
       activeElement: secondHelper,
       syncFocused
     })
+
     expect(releasedHelper).toBe(secondHelper)
     document.body.focus()
     firstFocus.mockClear()
@@ -195,6 +201,7 @@ describe('regular terminal focus ownership', () => {
       isMac: false,
       scheduleRefocus: (callback) => scheduled.push(callback)
     })
+
     for (const run of scheduled) {
       run()
     }
@@ -215,6 +222,7 @@ describe('regular terminal focus ownership', () => {
       activeElement: helper,
       syncFocused
     })
+
     document.body.focus()
     syncFocused.mockClear()
     vi.spyOn(helper, 'focus').mockImplementation(() => undefined)
@@ -228,6 +236,7 @@ describe('regular terminal focus ownership', () => {
       isMac: false,
       scheduleRefocus: (callback) => scheduled.push(callback)
     })
+
     for (const run of scheduled) {
       run()
     }
@@ -253,6 +262,7 @@ describe('regular terminal focus ownership', () => {
       activeElement: helper,
       syncFocused
     })
+
     document.body.focus()
     syncFocused.mockClear()
     focus.mockClear()
@@ -268,6 +278,7 @@ describe('regular terminal focus ownership', () => {
     })
     // User clicks into another field before the deferred reclaim runs.
     outside.focus()
+
     for (const run of scheduled) {
       run()
     }
@@ -290,6 +301,7 @@ describe('regular terminal focus ownership', () => {
       activeElement: helper,
       syncFocused
     })
+
     document.body.focus()
     syncFocused.mockClear()
     const scheduled: (() => void)[] = []
@@ -303,6 +315,7 @@ describe('regular terminal focus ownership', () => {
       scheduleRefocus: (callback) => scheduled.push(callback)
     })
     newerHelper.focus()
+
     for (const run of scheduled) {
       run()
     }
@@ -322,6 +335,7 @@ describe('regular terminal focus ownership', () => {
       activeElement: helper,
       syncFocused
     })
+
     // The split that owned focus was closed during the blur.
     helper.remove()
     document.body.focus()
@@ -398,6 +412,7 @@ describe('regular terminal focus ownership', () => {
     for (const run of scheduled) {
       run()
     }
+
     expect(focus).toHaveBeenCalledOnce()
   })
 
@@ -421,9 +436,11 @@ describe('regular terminal focus ownership', () => {
     })
 
     outside.focus()
+
     for (const run of scheduled) {
       run()
     }
+
     expect(focus).not.toHaveBeenCalled()
     expect(syncFocused).toHaveBeenLastCalledWith(false)
     expect(document.activeElement).toBe(outside)
@@ -446,6 +463,7 @@ describe('regular terminal focus ownership', () => {
     })
     syncFocused.mockClear()
     newerHelper.focus()
+
     for (const run of scheduled) {
       run()
     }

@@ -60,12 +60,14 @@ function resolveDirectSshAuthority(
   targetId: string
 ): WorkspaceTerminalHostAuthority {
   const phase = state.remoteWorkspaceSyncStatusByTargetId?.[targetId]?.phase
+
   if (state.remoteWorkspaceHydratedTargetIds?.has(targetId)) {
     // Why: the same pair use-app-session-persistence.ts gates uploads on. A conflicting snapshot
     // means the client's picture is not the host's, so it is no basis for deciding the host holds
     // nothing.
     return phase === 'conflict' ? 'unverifiable' : 'none'
   }
+
   if (phase !== undefined && TERMINATED_WITHOUT_ANSWER_PHASES.has(phase)) {
     // The bounded floor. Without it a single failed sync leaves every git worktree on this target
     // terminal-less and its sleeping agents unresumable for the rest of the app session — strictly
@@ -73,6 +75,7 @@ function resolveDirectSshAuthority(
     // seed is meant to be a wait, not a permanent refusal.
     return 'none'
   }
+
   // Not connected, still pulling, or not yet attempted — "we could not ask", never "nothing there".
   return 'unverifiable'
 }
@@ -92,20 +95,25 @@ export function resolveWorkspaceTerminalHostAuthority(
   if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'none'
   }
+
   if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(state, worktreeId))) {
     return 'live'
   }
+
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
+
   if (host?.kind === 'runtime') {
     // A runtime host we could not name (rival detected publications, unhydrated catalog) is unasked.
     return 'unverifiable'
   }
+
   if (host?.kind === 'ssh' && parseWorkspaceKey(worktreeId)?.type !== 'folder') {
     // Why the git-worktree narrowing: the snapshot replaces exactly DirectSshTargetScope.gitWorktreeIds
     // (remote-workspace-snapshot-apply.ts). A folder workspace's rows are never replaced by the host,
     // so waiting on an answer that will never name them would leave it terminal-less for good.
     return resolveDirectSshAuthority(state, host.targetId)
   }
+
   // Local, or outside the host's replace scope: this client is the execution host and its own rows are
   // the whole truth. Absence of a catalog row is not evidence of a remote owner, and refusing to act
   // on it would strand every workspace whose repo has not landed yet.
@@ -143,10 +151,12 @@ type MissingAuthorityInputKey = Exclude<
   keyof WorkspaceTerminalHostAuthorityState,
   (typeof AUTHORITY_INPUT_KEYS)[number]
 >
+
 /** Errors with the missing key names when the union is not empty. Deliberately NOT
  *  `const x: MissingAuthorityInputKey[] = []` — an empty array literal is assignable to every array
  *  type, so that spelling passes no matter what is missing. */
 type AssertNoMissingAuthorityInputKey<T extends never> = T
+
 export type AuthorityInputKeysAreComplete =
   AssertNoMissingAuthorityInputKey<MissingAuthorityInputKey>
 
@@ -161,13 +171,17 @@ export function createWorkspaceTerminalHostAuthoritySelector(
 ): (state: WorkspaceTerminalHostAuthorityState) => WorkspaceTerminalHostAuthority {
   let previousInputs: AuthorityInputs | null = null
   let previousResult: WorkspaceTerminalHostAuthority = 'none'
+
   return (state) => {
     const inputs = captureAuthorityInputs(state)
+
     if (previousInputs?.every((value, index) => value === inputs[index]) === true) {
       return previousResult
     }
+
     previousInputs = inputs
     previousResult = resolveWorkspaceTerminalHostAuthority(state, worktreeId)
+
     return previousResult
   }
 }

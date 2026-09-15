@@ -41,9 +41,11 @@ describe('parseWarpThemeYaml', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(result.theme).toMatchObject({
       id: 'warp:tokyo-night',
       selectionValue: 'custom:warp:tokyo-night',
@@ -74,6 +76,7 @@ describe('parseWarpThemeYaml', () => {
     )
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.theme.name).toBe('bright-theme')
       expect(result.theme.mode).toBe('light')
@@ -87,6 +90,7 @@ describe('parseWarpThemeYaml', () => {
     )
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.theme.unsupportedFeatures).toEqual([
         'background image not supported',
@@ -105,6 +109,7 @@ describe('parseWarpThemeYaml', () => {
     )
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.theme.terminal.background).toBe('#002633')
       expect(result.theme.unsupportedFeatures).toEqual([
@@ -119,10 +124,12 @@ describe('parseWarpThemeYaml', () => {
       ok: false,
       reason: 'Theme file must contain a YAML object.'
     })
+
     const partial = parseWarpThemeYaml(
       'background: "#000000"\nforeground: "#ffffff"',
       'partial.yaml'
     )
+
     expect(partial.ok).toBe(false)
   })
 

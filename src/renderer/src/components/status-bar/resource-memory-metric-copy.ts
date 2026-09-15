@@ -19,6 +19,7 @@ export function getResourceMemoryMetricCopy(metric: ProcessMemoryMetric): Resour
       )
     }
   }
+
   return {
     columnLabel: 'RSS',
     summaryLabel: 'Σ RSS',
@@ -54,13 +55,17 @@ export function getCommitPressureToneClass(args: {
   hostTotalMemory: number
 }): string | null {
   const { privateMemory, hostTotalMemory } = args
+
   if (typeof privateMemory !== 'number' || !Number.isFinite(privateMemory)) {
     return null
   }
+
   if (!Number.isFinite(hostTotalMemory) || hostTotalMemory <= 0) {
     return null
   }
+
   // Uncapped on purpose: commit past 100% of RAM is the loudest case, not an error.
   const tone = usageTextColorClass((privateMemory / hostTotalMemory) * 100)
+
   return tone === 'text-foreground' ? null : tone
 }

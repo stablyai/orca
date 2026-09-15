@@ -65,6 +65,7 @@ function makeWorkspaceTab({
 }): SearchableWorkspaceTab {
   const aliases =
     typeSearchAliases ?? (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined)
+
   return {
     tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -112,6 +113,7 @@ function makeBrowserPage({
   workspaceLabel?: string
 }): SearchableBrowserPage {
   const url = 'https://example.com/one'
+
   const page: BrowserPage = {
     id,
     workspaceId: `${id}-ws`,
@@ -125,6 +127,7 @@ function makeBrowserPage({
     loadError: null,
     createdAt: 0
   }
+
   const workspace: BrowserWorkspace = {
     id: `${id}-ws`,
     worktreeId: worktree.id,
@@ -140,6 +143,7 @@ function makeBrowserPage({
     loadError: null,
     createdAt: 0
   }
+
   return {
     page,
     workspace,
@@ -172,12 +176,14 @@ function retain({
   query: string
 }): { titles: string[]; sameList: boolean } {
   const results = searchOpenTabs({ ...entries, query: deferredQuery })
+
   const retained = retainOpenTabResultsForQuery({
     entries,
     query,
     results,
     resultsQuery: deferredQuery
   })
+
   return { titles: retained.map((result) => result.title), sameList: retained === results }
 }
 
@@ -224,6 +230,7 @@ describe('retainOpenTabResultsForQuery', () => {
     const aliased = makeEntries({
       workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'zsh' })]
     })
+
     expect(retain({ entries: aliased, deferredQuery: 'term', query: 'termin' }).titles).toEqual([
       'zsh'
     ])
@@ -235,6 +242,7 @@ describe('retainOpenTabResultsForQuery', () => {
         makeBrowserPage({ id: 'page-1', title: 'Untitled', workspaceLabel: 'Release checklist' })
       ]
     })
+
     expect(retain({ entries: labelled, deferredQuery: 'rele', query: 'release c' }).titles).toEqual(
       ['Untitled']
     )
@@ -251,6 +259,7 @@ describe('retainOpenTabResultsForQuery', () => {
         })
       ]
     })
+
     expect(
       retain({ entries: editor, deferredQuery: 'zeb', query: '/tmp/wt-1/src' }).titles
     ).toEqual(['zebra.ts'])
@@ -266,6 +275,7 @@ describe('retainOpenTabResultsForQuery', () => {
         })
       ]
     })
+
     expect(
       retain({ entries: withAgent, deferredQuery: 'defer', query: 'deferred ret' }).titles
     ).toEqual(['zsh'])
@@ -275,6 +285,7 @@ describe('retainOpenTabResultsForQuery', () => {
     const named = makeEntries({
       workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'zsh' })]
     })
+
     expect(retain({ entries: named, deferredQuery: 'zsh', query: 'aurora' }).titles).toEqual([])
   })
 

@@ -9,13 +9,16 @@ const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
 /** Cadence for re-probing a pane that already satisfied tui-idle at dispatch. */
 const AGENT_START_POLL_INTERVAL_MS = 250
+
 /** Kept under the runtime's 2s tui-idle fallback poll so a probe waiter is torn
  *  down before it can start a foreground-process poll of its own. */
 const AGENT_START_PROBE_TIMEOUT_MS = 250
+
 /** How long a pane may stay in its pre-dispatch state before we stop believing
  *  the prompt reached an agent. Covers the deliberate pre-Enter delay plus agent
  *  spin-up over SSH; past that, silence is not evidence of work. */
 const AGENT_START_DEADLINE_MS = 2 * 60 * 1000
+
 /** Total observation budget. Each tui-idle wait expires on the runtime's own
  *  5-minute schedule and a live agent legitimately outlives many of them, so the
  *  bound is wall-clock and generous; it exists so a pane whose agent is never
@@ -42,16 +45,20 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
       reject(new Error('request_aborted'))
+
       return
     }
+
     const onAbort = (): void => {
       clearTimeout(timer)
       reject(new Error('request_aborted'))
     }
+
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort)
       resolve()
     }, ms)
+
     signal.addEventListener('abort', onAbort, { once: true })
   })
 }
@@ -72,12 +79,14 @@ async function isTuiIdleSatisfiedNow(
       timeoutMs: AGENT_START_PROBE_TIMEOUT_MS,
       signal
     })
+
     // A blocked pane is not "already finished"; let the real wait report it.
     return wait.satisfied
   } catch (error) {
     if (isTerminalWaitTimeout(error)) {
       return false
     }
+
     throw error
   }
 }
@@ -92,10 +101,12 @@ async function waitForAgentStart(
 ): Promise<boolean> {
   while (Date.now() < deadlineAt) {
     await sleep(AGENT_START_POLL_INTERVAL_MS, signal)
+
     if (!(await isTuiIdleSatisfiedNow(runtime, handle, signal))) {
       return true
     }
   }
+
   return false
 }
 
@@ -104,6 +115,7 @@ async function readTerminalSnapshot(
   handle: string
 ): Promise<AutomationRunOutputSnapshot | null> {
   const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+
   try {
     const read = await runtime.readTerminal(handle, { limit: TERMINAL_SNAPSHOT_LIMIT })
     snapshotBuffer.append(read.tail.join('\n'))
@@ -111,6 +123,7 @@ async function readTerminalSnapshot(
     // Why: the terminal can exit between the wait resolving and the tail read;
     // a missing snapshot must not turn a satisfied wait into a failure.
   }
+
   return snapshotBuffer.snapshot()
 }
 
@@ -120,9 +133,11 @@ async function buildObservation(
   wait: { satisfied: boolean; blockedReason?: string }
 ): Promise<AutomationRunCompletionObservation> {
   const outputSnapshot = await readTerminalSnapshot(runtime, handle)
+
   if (wait.satisfied) {
     return { status: 'completed', outputSnapshot, error: null }
   }
+
   return {
     status: 'dispatch_failed',
     outputSnapshot,
@@ -153,6 +168,7 @@ export function createRuntimeAutomationRunTerminalObserver(
       run.terminalPaneKey ? runtime.getTerminalHandleForPaneKey(run.terminalPaneKey) : null,
     observeCompletion: async (handle, { signal }) => {
       const startedAt = Date.now()
+
       // Why: tui-idle is level-triggered, so a reused pane still idle from the
       // PREVIOUS run satisfies it before this run's agent has typed a character.
       // Evidence that predates dispatch proves nothing about this run, so require
@@ -165,6 +181,7 @@ export function createRuntimeAutomationRunTerminalObserver(
           signal,
           startedAt + AGENT_START_DEADLINE_MS
         )
+
         if (!started) {
           return await buildUnobservedObservation(
             runtime,
@@ -173,10 +190,13 @@ export function createRuntimeAutomationRunTerminalObserver(
           )
         }
       }
+
       const deadlineAt = startedAt + OBSERVE_DEADLINE_MS
+
       for (;;) {
         try {
           const wait = await runtime.waitForTerminal(handle, { condition: 'tui-idle', signal })
+
           return await buildObservation(runtime, handle, wait)
         } catch (error) {
           // Why: tui-idle waits expire on their own schedule; an agent still
@@ -184,6 +204,7 @@ export function createRuntimeAutomationRunTerminalObserver(
           if (signal.aborted || !isTerminalWaitTimeout(error)) {
             throw error
           }
+
           if (Date.now() >= deadlineAt) {
             return await buildUnobservedObservation(
               runtime,

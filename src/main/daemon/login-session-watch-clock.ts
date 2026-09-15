@@ -9,6 +9,7 @@ export function createLoginSessionWatchClock(): LoginSessionWatchClock {
     setTimeout: (callback, delayMs) => {
       const timer = setTimeout(callback, delayMs)
       timer.unref()
+
       return timer
     },
     clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),

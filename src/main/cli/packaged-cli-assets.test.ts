@@ -7,9 +7,13 @@ import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const execFileAsync = promisify(execFile)
+
 const itRunsUnixShell = process.platform === 'win32' ? it.skip : it
+
 const unixTerminationSignals = ['SIGINT', 'SIGTERM'] as const
+
 const builderConfig = require('../../../config/electron-builder.config.cjs') as {
   files?: string[]
   asarUnpack?: string[]
@@ -17,8 +21,11 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
   linux?: { extraResources?: { from?: string; to?: string }[] }
   win?: { extraResources?: { from?: string; to?: string }[] }
 }
+
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
+
 const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
+
 const unixLauncherFixtures = [
   {
     name: 'Linux',
@@ -91,6 +98,7 @@ describe('packaged CLI assets', () => {
     const statePath = join(root, 'listener-state.json')
     const expectedState = { pid: 1234, port: 5678 }
     await writeFile(statePath, '{"pid":', 'utf8')
+
     const completedWrite = new Promise<void>((resolve, reject) => {
       setTimeout(() => {
         writeFile(statePath, JSON.stringify(expectedState), 'utf8').then(resolve, reject)
@@ -113,6 +121,7 @@ describe('packaged CLI assets', () => {
   ])('rejects $reason in listener state', async ({ state }) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
     const statePath = join(root, 'listener-state.json')
+
     try {
       await writeFile(statePath, JSON.stringify(state), 'utf8')
       await expect(waitForListenerState(statePath)).rejects.toThrow(
@@ -135,6 +144,7 @@ describe('packaged CLI assets', () => {
         const statePath = join(root, `${signal}-listener-state.json`)
         let executablePid: number | null = null
         let launcher: ReturnType<typeof spawn> | null = null
+
         try {
           await mkdir(dirname(launcherPath), { recursive: true })
           await mkdir(dirname(electronPath), { recursive: true })
@@ -182,9 +192,11 @@ server.listen(0, '127.0.0.1', () => {
           if (launcher?.pid) {
             await terminateSyntheticProcess(launcher.pid)
           }
+
           if (executablePid && executablePid !== launcher?.pid) {
             await terminateSyntheticProcess(executablePid)
           }
+
           await rm(root, { recursive: true, force: true })
         }
       }
@@ -195,6 +207,7 @@ server.listen(0, '127.0.0.1', () => {
     'runs the Linux launcher from its packaged path and installed symlink',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-'))
+
       try {
         const appDir = join(root, 'Orca')
         const resourcesDir = join(appDir, 'resources')
@@ -235,6 +248,7 @@ printf 'arg=%s\\n' "$@"
         const symlinked = await execFileAsync(commandPath, ['--help'], {
           env: { ...process.env, HOME: homeDir }
         })
+
         expect(symlinked.stdout).toContain(`electron=${electronPath}`)
         expect(symlinked.stdout).toContain('run_as_node=1')
         expect(symlinked.stdout).toContain(`arg=${cliPath}`)
@@ -250,6 +264,7 @@ printf 'arg=%s\\n' "$@"
   // AppImage, deb, and extracted-tree commands all depend on.
   itRunsUnixShell('sanitizes node env and forwards argv verbatim', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-env-'))
+
     try {
       const appDir = join(root, 'Orca')
       const resourcesDir = join(appDir, 'resources')
@@ -284,6 +299,7 @@ node -e 'console.log(JSON.stringify({
           NODE_REPL_EXTERNAL_MODULE: 'external-loader'
         }
       })
+
       const payload = JSON.parse(result.stdout) as {
         argv: string[]
         runAsNode: string
@@ -308,6 +324,7 @@ node -e 'console.log(JSON.stringify({
 
   itRunsUnixShell('keeps Linux serve on the CLI entrypoint in node mode', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-serve-'))
+
     try {
       const appDir = join(root, 'Orca')
       const resourcesDir = join(appDir, 'resources')
@@ -346,10 +363,12 @@ require('node:fs').writeFileSync(process.env.ORCA_TEST_LAUNCH_STATE, JSON.string
       await execFileAsync(launcherPath, ['serve', '--recipe-json', '--project-root', '/tmp/repo'], {
         env: { ...process.env, ORCA_TEST_LAUNCH_STATE: statePath }
       })
+
       const payload = JSON.parse(await readFile(statePath, 'utf8')) as {
         argv: string[]
         runAsNode: string | null
       }
+
       expect(payload.argv).toEqual([
         cliPath,
         'serve',
@@ -366,9 +385,11 @@ require('node:fs').writeFileSync(process.env.ORCA_TEST_LAUNCH_STATE, JSON.string
 
 async function waitForListenerState(path: string): Promise<{ pid: number; port: number }> {
   const deadline = Date.now() + 5_000
+
   while (Date.now() < deadline) {
     try {
       const state: unknown = JSON.parse(await readFile(path, 'utf8'))
+
       if (
         typeof state !== 'object' ||
         state === null ||
@@ -384,20 +405,24 @@ async function waitForListenerState(path: string): Promise<{ pid: number; port: 
       ) {
         throw new Error('Invalid launcher listener state')
       }
+
       return { pid: state.pid, port: state.port }
     } catch (error) {
       if (!(error instanceof SyntaxError) && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error
       }
+
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
   }
+
   throw new Error('Timed out waiting for launcher listener state')
 }
 
 async function waitForPortRelease(port: number): Promise<boolean> {
   const { createConnection } = await import('node:net')
   const deadline = Date.now() + 2_000
+
   while (Date.now() < deadline) {
     const connected = await new Promise<boolean>((resolve) => {
       const socket = createConnection({ host: '127.0.0.1', port })
@@ -407,17 +432,21 @@ async function waitForPortRelease(port: number): Promise<boolean> {
       })
       socket.once('error', () => resolve(false))
     })
+
     if (!connected) {
       return true
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+
   return false
 }
 
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -431,16 +460,20 @@ function waitForChildExit(
   return new Promise((resolve) => {
     if (child.exitCode !== null || child.signalCode !== null) {
       resolve([child.exitCode, child.signalCode])
+
       return
     }
+
     const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       clearTimeout(timeout)
       resolve([code, signal])
     }
+
     const timeout = setTimeout(() => {
       child.off('exit', onExit)
       resolve(null)
     }, timeoutMs)
+
     child.once('exit', onExit)
   })
 }
@@ -449,19 +482,23 @@ async function terminateSyntheticProcess(pid: number): Promise<void> {
   if (!isProcessAlive(pid)) {
     return
   }
+
   try {
     process.kill(pid, 'SIGTERM')
   } catch {
     return
   }
+
   if (await waitForProcessExit(pid, 1_000)) {
     return
   }
+
   try {
     process.kill(pid, 'SIGKILL')
   } catch {
     return
   }
+
   if (!(await waitForProcessExit(pid, 1_000))) {
     throw new Error(`Failed to terminate synthetic launcher process ${pid}`)
   }
@@ -469,11 +506,14 @@ async function terminateSyntheticProcess(pid: number): Promise<void> {
 
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (!isProcessAlive(pid)) {
       return true
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
+
   return !isProcessAlive(pid)
 }

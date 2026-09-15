@@ -71,6 +71,7 @@ import {
 
 export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
+
 /** Retired claim keys stay verifiable this long so a rotation cannot strand a running agent. */
 export const AGENT_SESSION_CLAIM_KEY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -84,15 +85,18 @@ export class AgentSessionRecordStore {
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
+
     const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
       filePath,
       args.hostId,
       loaded,
       diskRevision
     )
+
     if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
       await transactions.persistLoadedRewrite()
     }
+
     return new AgentSessionRecordStore(transactions)
   }
 
@@ -132,6 +136,7 @@ export class AgentSessionRecordStore {
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
+
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
 
@@ -161,12 +166,14 @@ export class AgentSessionRecordStore {
 
   isClaimKeyVerifiable(keyId: string, now: number): boolean {
     const retired = this.state.retiredClaimKeys.find((entry) => entry.keyId === keyId)
+
     return !retired || now - retired.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
   }
 
   /** Spawn tokens observed on the host with no matching lease. Stop them; never adopt them. */
   listOrphanSpawnTokens(observedTokens: readonly string[]): string[] {
     const leases = this.listRecords().map((record) => record.lease)
+
     return observedTokens.filter(
       (spawnToken) => classifyObservedAgentSessionSpawnToken({ spawnToken, leases }) === 'orphan'
     )
@@ -209,6 +216,7 @@ export class AgentSessionRecordStore {
         now: args.now,
         leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
       })
+
       return args.options
         ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
         : proved
@@ -225,6 +233,7 @@ export class AgentSessionRecordStore {
 
   async renewLease(args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> {
     const [renewed] = await this.renewLeases([args])
+
     return renewed
   }
 
@@ -269,6 +278,7 @@ export class AgentSessionRecordStore {
   ): Promise<Map<string, AgentSessionRecord>> {
     const pending = this.listRecords().filter((record) => record.lease.unreconciled)
     const probes = await collectAgentSessionRestartProbes(pending, args)
+
     return this.transact(() => applyAgentSessionRestartProbes(this.state, probes, args.now))
   }
 
@@ -279,6 +289,7 @@ export class AgentSessionRecordStore {
     return this.transact(() => {
       const admitted = admitAgentSessionOperationRow(this.state.operations, args)
       this.state.operations = admitted.rows
+
       return admitted.decision
     })
   }
@@ -290,6 +301,7 @@ export class AgentSessionRecordStore {
     return this.transact(() => {
       const admitted = admitAgentSessionGlobalOperationRow(this.state.operations, args)
       this.state.operations = admitted.rows
+
       return admitted.decision
     })
   }
@@ -325,6 +337,7 @@ export class AgentSessionRecordStore {
       if (!this.state.retiredClaimKeys.some((entry) => entry.keyId === keyId)) {
         this.state.retiredClaimKeys.push({ keyId, retiredAt: now })
       }
+
       this.state.retiredClaimKeys = this.state.retiredClaimKeys.filter(
         (entry) => now - entry.retiredAt <= AGENT_SESSION_CLAIM_KEY_RETENTION_MS
       )
@@ -337,6 +350,7 @@ export class AgentSessionRecordStore {
   ): Promise<AgentSessionRecord> {
     return this.transact(() => {
       const record = this.state.records.get(sessionId)
+
       if (!record) {
         throw new Error(
           this.isSessionUnreadable(sessionId)
@@ -344,8 +358,10 @@ export class AgentSessionRecordStore {
             : 'agent_session_identity_required'
         )
       }
+
       const next = apply(record)
       this.state.records.set(sessionId, next)
+
       return next
     })
   }

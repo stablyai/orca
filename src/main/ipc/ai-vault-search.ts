@@ -33,6 +33,7 @@ export type AiVaultSearchHandlerOptions = {
 
 // One wording with the session list, which refuses the same unroutable scope.
 const UNROUTABLE_HOST_MESSAGE = 'Agent Session History is not available for this execution host.'
+
 const scopeSchema = z.string().min(1).optional()
 
 let handlerOptions: AiVaultSearchHandlerOptions = {}
@@ -42,10 +43,12 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
   // Async so a refused scope reaches the renderer as a rejection, like every other parse failure.
   ipcMain.handle('aiVault:searchSessions', async (_event, raw: unknown, rawScope?: unknown) => {
     const scope = requestedSearchScope(rawScope)
+
     return searchByExecutionHostScope(AiVaultSearchRequestSchema.parse(raw), scope)
   })
   ipcMain.handle('aiVault:searchStatus', async (_event, rawScope?: unknown) => {
     const scope = requestedSearchScope(rawScope)
+
     return statusByExecutionHost(scope)
   })
 }
@@ -57,13 +60,17 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
  */
 function requestedSearchScope(raw: unknown): ParsedExecutionHost {
   const value = scopeSchema.parse(raw)
+
   if (value === undefined) {
     return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
   }
+
   const parsed = parseExecutionHostId(value)
+
   if (!parsed) {
     throw new Error(UNROUTABLE_HOST_MESSAGE)
   }
+
   return parsed
 }
 
@@ -74,11 +81,15 @@ async function searchByExecutionHostScope(
   if (scope.kind === 'local') {
     return searchSessionService(request, 'ipc')
   }
+
   const client = remoteSearchClient(scope, handlerOptions.callRuntimeSearch)
+
   if (!client) {
     return { kind: 'unavailable', reason: 'no-service' }
   }
+
   const response = await client.searchSessions(request)
+
   // This desktop owns which remote host was addressed.
   return response.kind === 'results'
     ? { ...response, hits: response.hits.map((hit) => ({ ...hit, executionHostId: scope.id })) }
@@ -89,7 +100,9 @@ function statusByExecutionHost(scope: ParsedExecutionHost): Promise<AiVaultSearc
   if (scope.kind === 'local') {
     return sessionSearchServiceStatus({}, 'ipc')
   }
+
   const client = remoteSearchClient(scope, handlerOptions.callRuntimeSearch)
+
   return client ? client.searchStatus() : Promise.resolve(unavailableSessionSearchStatus())
 }
 
@@ -100,17 +113,21 @@ function remoteSearchClient(
 ): ReturnType<typeof createSessionSearchClient> | null {
   if (host.kind === 'ssh') {
     const { targetId } = host
+
     return createSessionSearchClient(
       (method, params) => requestActiveSshSessionSearch(targetId, method, params),
       'relay'
     )
   }
+
   if (host.kind === 'runtime' && call) {
     const { environmentId } = host
+
     return createSessionSearchClient(
       (method, params) => call(environmentId, method, params),
       'relay'
     )
   }
+
   return null
 }

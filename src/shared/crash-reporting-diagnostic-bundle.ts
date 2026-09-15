@@ -28,7 +28,9 @@ export function appendDiagnosticBundleLines(
   if (!diagnosticBundle) {
     return
   }
+
   lines.push('', 'Diagnostic log:')
+
   if (diagnosticBundle.status === 'attached') {
     lines.push(
       '- Status: attached',
@@ -36,8 +38,10 @@ export function appendDiagnosticBundleLines(
       `- Spans: ${diagnosticBundle.spanCount}`,
       `- Bytes: ${diagnosticBundle.bytes}`
     )
+
     return
   }
+
   if (diagnosticBundle.status === 'uploaded') {
     lines.push(
       '- Status: uploaded',
@@ -46,15 +50,20 @@ export function appendDiagnosticBundleLines(
       `- Spans: ${diagnosticBundle.spanCount}`,
       `- Bytes: ${diagnosticBundle.bytes}`
     )
+
     return
   }
+
   lines.push('- Status: not uploaded', `- Reason: ${sanitizeString(diagnosticBundle.reason)}`)
+
   if (diagnosticBundle.bundleSubmissionId) {
     lines.push(`- Bundle submission ID: ${sanitizeString(diagnosticBundle.bundleSubmissionId)}`)
   }
+
   if (typeof diagnosticBundle.spanCount === 'number') {
     lines.push(`- Spans: ${diagnosticBundle.spanCount}`)
   }
+
   if (typeof diagnosticBundle.bytes === 'number') {
     lines.push(`- Bytes: ${diagnosticBundle.bytes}`)
   }

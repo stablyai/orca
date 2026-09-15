@@ -27,6 +27,7 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
       reportability: 'none'
     }
   }
+
   const failure = findCurrentDiagnosticFailure(args.entries)
   const evidence = failure ? `${failure.code ?? ''} ${failure.message} ${failure.detail ?? ''}` : ''
 
@@ -40,6 +41,7 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
 
   if (/relay director resolve failed \(503\)/i.test(evidence)) {
     const retryMs = parseRetryDelayMs(evidence)
+
     return {
       likelyCause: `Relay service was temporarily unavailable${retryMs == null ? '.' : ` and asked Orca to retry in ${formatDelay(retryMs)}.`}`,
       nextStep: 'Keep Orca open; recovery should retry automatically.',
@@ -49,13 +51,16 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
 
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
     const relayLiveness = failure?.code === 'liveness-timeout' && failure.path === 'relay'
+
     const structuredDirectLiveness =
       failure?.code === 'liveness-timeout' &&
       (failure.path === 'lan' || failure.path === 'tailscale')
+
     const path =
       relayLiveness || (!structuredDirectLiveness && args.activePath === 'relay')
         ? 'Relay'
         : 'The connected host'
+
     return {
       likelyCause: `${path} stopped answering authenticated health checks.`,
       nextStep: 'Orca closed the stale session and started recovery.',
@@ -120,6 +125,7 @@ export function getReportableConnectionIncidentId(args: DiagnoseConnectionArgs):
   if (diagnoseConnection(args).reportability !== 'orca-relay') {
     return null
   }
+
   return findCurrentDiagnosticFailure(args.entries)?.id ?? null
 }
 
@@ -127,6 +133,7 @@ function findCurrentDiagnosticFailure(
   entries: readonly ConnectionLogEntry[]
 ): ConnectionLogEntry | undefined {
   const boundaryIndex = entries.findLastIndex(isDiagnosticBoundary)
+
   return entries
     .slice(boundaryIndex + 1)
     .toReversed()
@@ -146,6 +153,7 @@ function isDiagnosticBoundary(entry: ConnectionLogEntry): boolean {
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
   const evidence = `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
+
   return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
     evidence
   )
@@ -153,6 +161,7 @@ function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
 
 function parseRetryDelayMs(evidence: string): number | null {
   const match = /retry(?:-|\s)?after(?:=|\s)(\d+)ms/i.exec(evidence)
+
   return match ? Number(match[1]) : null
 }
 
@@ -164,5 +173,6 @@ function formatPath(path: MobileConnectionDiagnosticPath): string {
   if (path === 'relay') {
     return 'Relay'
   }
+
   return path === 'tailscale' ? 'Tailscale/direct' : 'LAN/direct'
 }

@@ -9,6 +9,7 @@ function createTarget(): RendererPublicationThrottleTarget & {
   destroyed: boolean
 } {
   const calls: boolean[] = []
+
   return {
     calls,
     destroyed: false,

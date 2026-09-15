@@ -22,13 +22,17 @@ export const ADHOC_LABEL_MAX_LENGTH = 32
  */
 export function createAdhocBuildVersion(baseVersion, date) {
   const match = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(baseVersion)
+
   if (!match) {
     throw new Error(`Package version is not valid semver: ${baseVersion}`)
   }
+
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new Error('Adhoc build timestamp is invalid.')
   }
+
   const pad = (value, width = 2) => String(value).padStart(width, '0')
+
   const stamp = [
     pad(date.getUTCFullYear(), 4),
     pad(date.getUTCMonth() + 1),
@@ -37,6 +41,7 @@ export function createAdhocBuildVersion(baseVersion, date) {
     pad(date.getUTCMinutes()),
     pad(date.getUTCSeconds())
   ].join('')
+
   // Why: drop any -rc.N tail, same as hourly. Keeping it would make every adhoc
   // build semver-NEWER than the RC it was cut from, letting an ordinary
   // RC-channel check offer an unreviewed branch build to RC users. Stripping to
@@ -64,9 +69,11 @@ export function normalizeAdhocLabel(label) {
     .slice(0, ADHOC_LABEL_MAX_LENGTH)
     // Truncation can land mid-separator, leaving a title ending in `-` or `/`.
     .replace(/[-._/]+$/, '')
+
   if (!cleaned) {
     throw new Error(`Adhoc label has no usable characters: ${JSON.stringify(label)}`)
   }
+
   return cleaned
 }
 
@@ -89,11 +96,14 @@ export function formatAdhocReleaseName(version, label, commit, date) {
 
 export function getAdhocBuildIdentity(now = new Date(), label = '', publishedVersions = []) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
+
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'
   }).trim()
+
   const base = resolveDevChannelBaseVersion(packageJson.version, publishedVersions)
   const version = createAdhocBuildVersion(base, now)
+
   return {
     commit,
     version,
@@ -108,6 +118,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     process.env.ORCA_ADHOC_LABEL ?? '',
     readPublishedVersionsFromEnv()
   )
+
   // Consumed by the workflow via $GITHUB_OUTPUT.
   process.stdout.write(
     `version=${identity.version}\ncommit=${identity.commit}\nlabel=${identity.label}\nname=${identity.name}\n`

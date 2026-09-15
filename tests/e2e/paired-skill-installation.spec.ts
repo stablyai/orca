@@ -45,6 +45,7 @@ test('installs on a headed desktop runtime without a local fallback', async ({
   const requestStart = fixture.requests.length
   const folderRoot = mkdtempSync(join(tmpdir(), 'orca-paired-skill-folder-'))
   let client: PairedElectronClient | null = null
+
   try {
     const hostHome = await electronApp.evaluate(({ app }) => app.getPath('home'))
     const worktreeId = await activeWorktreeId(orcaPage)
@@ -90,6 +91,7 @@ test('installs on a headless serve runtime through the same contract', async ({
   const requestStart = fixture.requests.length
   const host = await launchHeadlessPairedRuntimeHost()
   let client: PairedElectronClient | null = null
+
   try {
     client = await launchPairedElectronClient(host.offer, testInfo, 'Headless skill client', {
       extraEnv: cloudClientEnvironment()
@@ -119,6 +121,7 @@ test('installs on a headless serve runtime through the same contract', async ({
 
 function cloudClientEnvironment(): Record<string, string> {
   const { origin } = requireCloudFixture()
+
   return {
     ORCA_ARTIFACTS_API_URL: origin,
     ORCA_CLOUD_API_URL: origin,
@@ -138,6 +141,7 @@ function requireCloudFixture(): RemoteSkillCloudFixture {
   if (!cloud) {
     throw new Error('skill Cloud fixture unavailable')
   }
+
   return cloud
 }
 
@@ -147,9 +151,11 @@ function skillPath(root: string): string {
 
 async function activeWorktreeId(page: Page): Promise<string> {
   const worktreeId = await page.evaluate(() => window.__store?.getState().activeWorktreeId ?? null)
+
   if (!worktreeId) {
     throw new Error('headed host worktree unavailable')
   }
+
   return worktreeId
 }
 
@@ -159,11 +165,13 @@ async function createHostFolderWorkspace(page: Page, folderPath: string): Promis
       name: 'Paired skill folder E2E',
       parentPath: path
     })
+
     const workspace = await window.api.folderWorkspaces.create({
       projectGroupId: group.id,
       name: 'Paired skill folder E2E',
       folderPath: path
     })
+
     return workspace.id
   }, folderPath)
 }
@@ -176,16 +184,20 @@ async function addHeadlessHostWorktree(
     path: repoPath,
     kind: 'git'
   })
+
   let worktreeId = ''
   await expect
     .poll(async () => {
       const listed = await host.client.call<{ worktrees: { id: string }[] }>('worktree.list', {
         repo: `id:${added.result.repo.id}`
       })
+
       worktreeId = listed.result.worktrees[0]?.id ?? ''
+
       return worktreeId
     })
     .not.toBe('')
+
   return worktreeId
 }
 
@@ -210,6 +222,7 @@ async function installPreviewRemove(
       versionId: REMOTE_SKILL_VERSION_ID
     }
   )
+
   expect(operation, JSON.stringify(operation, null, 2)).toMatchObject({
     status: 'ok',
     value: { status: 'installed', name: REMOTE_SKILL_NAME }
@@ -217,6 +230,7 @@ async function installPreviewRemove(
   expect(readFileSync(join(skillPath(root), 'SKILL.md'), 'utf8')).toContain('# Remote E2E')
 
   const fixture = requireCloudFixture()
+
   const preview = await page.evaluate(
     ({ destination, environmentId, name, packageIdentity }) =>
       window.api.skills.previewInstall({
@@ -238,6 +252,7 @@ async function installPreviewRemove(
       }
     }
   )
+
   expect(preview).toMatchObject({ status: 'ok', value: { currentState: 'unchanged' } })
 
   const removed = await page.evaluate(
@@ -245,6 +260,7 @@ async function installPreviewRemove(
       window.api.skills.removeInstall({ environmentId, name, destination }),
     { destination, environmentId, name: REMOTE_SKILL_NAME }
   )
+
   expect(removed).toMatchObject({ status: 'ok', value: { status: 'removed' } })
   expect(existsSync(skillPath(root))).toBe(false)
 }
@@ -258,6 +274,7 @@ async function expectManagedInstalls(
     (id) => window.api.skills.listManagedInstalls(id),
     environmentId
   )
+
   expect(installs).toMatchObject({ status: 'ok', value: expected })
 }
 

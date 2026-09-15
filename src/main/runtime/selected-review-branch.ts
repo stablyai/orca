@@ -23,18 +23,23 @@ export function getSelectedReviewBranch(
   if (typeof args.linkedPR === 'number') {
     return { provider: 'github', number: args.linkedPR }
   }
+
   if (typeof args.linkedGitLabMR === 'number') {
     return { provider: 'gitlab', number: args.linkedGitLabMR }
   }
+
   if (typeof args.linkedBitbucketPR === 'number') {
     return { provider: 'bitbucket', number: args.linkedBitbucketPR }
   }
+
   if (typeof args.linkedAzureDevOpsPR === 'number') {
     return { provider: 'azure-devops', number: args.linkedAzureDevOpsPR }
   }
+
   if (typeof args.linkedGiteaPR === 'number') {
     return { provider: 'gitea', number: args.linkedGiteaPR }
   }
+
   return null
 }
 

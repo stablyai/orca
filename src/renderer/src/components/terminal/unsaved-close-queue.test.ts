@@ -8,6 +8,7 @@ describe('appendUniqueOpenFileIds', () => {
       ['a', 'b', 'missing', 'c', 'b'],
       new Set(['a', 'b', 'c'])
     )
+
     expect(result).toEqual(['a', 'b', 'c'])
   })
 

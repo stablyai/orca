@@ -41,6 +41,7 @@ export function usePetUrl(): ResolvedPet {
   const [customUrl, setCustomUrl] = useState<string | null>(() =>
     customMeta ? peekCustomPetBlobUrl(customMeta.id) : null
   )
+
   // Why: track the last id we started loading so a rapid switch between
   // custom pets doesn't let a slower earlier response clobber the newer
   // state.
@@ -53,6 +54,7 @@ export function usePetUrl(): ResolvedPet {
   // Why: prefer manifest fps captured at import time; sprite-with-frame entries
   // store fps on `sprite`, frame-less bundles carry it on `spriteFps`.
   const customSpriteFps = customMeta?.sprite?.fps ?? customMeta?.spriteFps
+
   // Why: when the manifest already declares a valid sprite layout, the
   // overlay reads the `sprite` branch and never touches detectedSpriteCache,
   // so we skip auto-detection in the cache loader to avoid leaking ImageBitmaps.
@@ -61,10 +63,12 @@ export function usePetUrl(): ResolvedPet {
     customMeta.sprite.frameWidth > 0 &&
     customMeta.sprite.frameHeight > 0 &&
     customMeta.sprite.fps > 0
+
   useLayoutEffect(() => {
     if (!customId) {
       return
     }
+
     // Why: cancelled older loads may finish after the active pet. Pin the
     // committed URL/bitmaps so their cache insertion cannot evict active media.
     return retainCustomPetBlobCacheEntry(customId)
@@ -72,13 +76,18 @@ export function usePetUrl(): ResolvedPet {
   useEffect(() => {
     if (!customId || !customFileName) {
       setCustomUrl(null)
+
       return
     }
+
     const cached = readCustomPetBlobUrl(customId)
+
     if (cached) {
       setCustomUrl(cached)
+
       return
     }
+
     // Why: clear the previous custom blob URL before awaiting the new one so
     // the hook's fallback-to-bundled branch kicks in during the load window.
     setCustomUrl(null)
@@ -95,8 +104,10 @@ export function usePetUrl(): ResolvedPet {
       if (cancelled || pendingRef.current !== customId) {
         return
       }
+
       setCustomUrl(url)
     })
+
     return () => {
       cancelled = true
     }
@@ -104,8 +115,10 @@ export function usePetUrl(): ResolvedPet {
 
   if (bundled) {
     const pet = findBundledPet(petId) ?? BUNDLED_PET
+
     return { url: pet.url, ready: true, sprite: null, detected: null }
   }
+
   if (customMeta && customUrl) {
     // Why: guard against manifest entries with zero/negative dims or fps —
     // those would break the overlay's frame math, so fall through to detection.
@@ -124,11 +137,15 @@ export function usePetUrl(): ResolvedPet {
         detected: null
       }
     }
+
     const detected = detectedSpriteCache.get(customMeta.id)
+
     if (detected) {
       return { url: customUrl, ready: true, sprite: null, detected }
     }
+
     return { url: customUrl, ready: true, sprite: null, detected: null }
   }
+
   return { url: BUNDLED_PET.url, ready: false, sprite: null, detected: null }
 }

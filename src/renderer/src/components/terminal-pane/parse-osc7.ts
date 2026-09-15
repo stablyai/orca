@@ -20,20 +20,26 @@ type ParseOsc7Options = {
  */
 export function parseOsc7(data: string, options: ParseOsc7Options = {}): string | null {
   const match = OSC7_URI.exec(data)
+
   if (!match) {
     return null
   }
+
   const host = match[1]
   let path: string
+
   try {
     path = decodeURIComponent(match[2])
   } catch {
     return null
   }
+
   if (!path) {
     return null
   }
+
   const isWindowsDrivePath = /^\/[A-Za-z]:/.test(path)
+
   if (options.uncHost && !isWindowsDrivePath) {
     // Why: only the launch UNC server is known to be a Windows file host.
     // Other OSC-7 hosts can come from SSH/Linux shells and must stay POSIX.
@@ -41,6 +47,7 @@ export function parseOsc7(data: string, options: ParseOsc7Options = {}): string 
       return `\\\\${host}${path.replace(/\//g, '\\')}`
     }
   }
+
   // Why: on Windows the URI looks like file:///C:/Users/... — the path is
   // `/C:/Users/...`, which `spawn`'s cwd option does not accept. Strip the
   // leading slash before the drive letter so we hand back `C:/Users/...`.
@@ -49,5 +56,6 @@ export function parseOsc7(data: string, options: ParseOsc7Options = {}): string 
   if (isWindowsDrivePath) {
     path = path.slice(1)
   }
+
   return path
 }

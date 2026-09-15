@@ -96,13 +96,16 @@ export function resolveWorkspaceCleanupRemovalTargets(
   options: { approvedCandidates?: readonly WorkspaceCleanupCandidate[] } = {}
 ): WorkspaceCleanupRemovalTargetResolution[] {
   const requestedCountByWorktreeId = new Map<string, number>()
+
   for (const worktreeId of worktreeIds) {
     requestedCountByWorktreeId.set(
       worktreeId,
       (requestedCountByWorktreeId.get(worktreeId) ?? 0) + 1
     )
   }
+
   const approvedByWorktreeId = new Map<string, WorkspaceCleanupCandidate[]>()
+
   for (const candidate of options.approvedCandidates ?? []) {
     const approved = approvedByWorktreeId.get(candidate.worktreeId) ?? []
     approved.push(candidate)
@@ -110,6 +113,7 @@ export function resolveWorkspaceCleanupRemovalTargets(
   }
 
   const approvedCursorByWorktreeId = new Map<string, number>()
+
   return worktreeIds.map((worktreeId) => {
     const approved = approvedByWorktreeId.get(worktreeId) ?? []
     const cursor = approvedCursorByWorktreeId.get(worktreeId) ?? 0
@@ -117,6 +121,7 @@ export function resolveWorkspaceCleanupRemovalTargets(
     const requestedEveryApprovedRow = requestedCountByWorktreeId.get(worktreeId) === approved.length
     const confirmedCandidate = approved.length > 1 ? approved[cursor] : approved[0]
     const displayName = confirmedCandidate?.displayName ?? approved[0]?.displayName ?? worktreeId
+
     // Why: one id with two confirmed hosts is ambiguous unless the caller also
     // supplies two id occurrences, one for each explicitly approved row.
     //
@@ -134,9 +139,11 @@ export function resolveWorkspaceCleanupRemovalTargets(
     ) {
       return ambiguousHostFailure(worktreeId, displayName)
     }
+
     const confirmedHostId = confirmedCandidate
       ? resolveWorkspaceCleanupRemovalHostId(confirmedCandidate)
       : null
+
     if (confirmedCandidate && confirmedHostId) {
       return {
         kind: 'target',
@@ -146,18 +153,22 @@ export function resolveWorkspaceCleanupRemovalTargets(
         approvedCandidate: confirmedCandidate
       }
     }
+
     // A displayed row without host evidence cannot prove where the user
     // intended to delete, even if the current catalog happens to list one owner.
     if (confirmedCandidate) {
       return ambiguousHostFailure(worktreeId, displayName)
     }
+
     // No host evidence on the row: accept it only while the store itself knows
     // a single owner. This compatibility path is reachable only by internal
     // callers that did not provide a confirmed candidate.
     const ownerHostIds = getWorktreeOperationOwnerHostIds(state, worktreeId)
+
     if (ownerHostIds.length > 1) {
       return ambiguousHostFailure(worktreeId, displayName)
     }
+
     return {
       kind: 'target',
       worktreeId,
@@ -186,15 +197,19 @@ export async function preflightWorkspaceCleanupCandidates(
   const identitiesByWorktreeId = new Map<string, Set<string>>()
   const scanErrors: WorkspaceCleanupScanError[] = []
   const worktreeIds = targets.map((target) => target.worktreeId)
+
   for (let start = 0; start < worktreeIds.length; start += WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT) {
     const chunk = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
+
     const scan = await window.api.workspaceCleanup.scan({
       worktreeIds: [...chunk],
       scanId: crypto.randomUUID(),
       refreshActivity: true
     })
+
     const enriched = await enrich(scan.candidates, getState())
     scanErrors.push(...scan.errors)
+
     for (const candidate of enriched) {
       const identity = getWorkspaceCleanupCandidateIdentity(candidate)
       candidatesByIdentity.set(identity, candidate)
@@ -203,6 +218,7 @@ export async function preflightWorkspaceCleanupCandidates(
       identitiesByWorktreeId.set(candidate.worktreeId, identities)
     }
   }
+
   return targets.map((target) =>
     evaluateWorkspaceCleanupPreflight(
       target,
@@ -220,6 +236,7 @@ function resolvePreflightCandidate(
   identitiesByWorktreeId: ReadonlyMap<string, ReadonlySet<string>>
 ): { ok: true; candidate: WorkspaceCleanupCandidate | undefined } | { ok: false } {
   const identities = identitiesByWorktreeId.get(target.worktreeId)
+
   if (target.executionHostId) {
     // Why: the refreshed row must be the SAME host's row. Another host's
     // evidence would decide force/blockers for a workspace it does not own.
@@ -230,11 +247,14 @@ function resolvePreflightCandidate(
       )
     }
   }
+
   // An unqualified target can only proceed while the rescan agrees there is one owner.
   if ((identities?.size ?? 0) > 1) {
     return { ok: false }
   }
+
   const identity = identities?.values().next().value
+
   return {
     ok: true,
     candidate: identity ? candidatesByIdentity.get(identity) : undefined
@@ -252,28 +272,35 @@ export function evaluateWorkspaceCleanupPreflight(
   } = {}
 ): WorkspaceCleanupPreflightResult {
   const resolved = resolvePreflightCandidate(target, candidatesByIdentity, identitiesByWorktreeId)
+
   if (!resolved.ok) {
     return {
       ok: false,
       failure: ambiguousHostFailure(target.worktreeId, target.displayName).failure
     }
   }
+
   const repoScanFailure = getWorkspaceCleanupRepoScanFailure(target, scanErrors)
   const consentReference = resolved.candidate ?? target.approvedCandidate
+
   const hasUnverifiedRemovalConsent = hasValidWorkspaceCleanupUnverifiedConsent(
     consentReference ? getWorkspaceCleanupCandidateIdentity(consentReference) : '',
     options.unverifiedRemovalConsent,
     options.getConsentAttemptId
   )
+
   if (repoScanFailure && !hasUnverifiedRemovalConsent) {
     return { ok: false, failure: repoScanFailure }
   }
+
   const candidate =
     resolved.candidate ??
     (repoScanFailure && hasUnverifiedRemovalConsent ? target.approvedCandidate : undefined)
+
   if (!candidate) {
     return { ok: false, failure: getWorkspaceCleanupMissingFailure(target) }
   }
+
   const failure = (message: string): WorkspaceCleanupPreflightResult => ({
     ok: false,
     failure: {
@@ -283,6 +310,7 @@ export function evaluateWorkspaceCleanupPreflight(
       message
     }
   })
+
   if (!canQueueWorkspaceCleanupCandidate(candidate)) {
     return failure(
       candidate.blockers.length
@@ -290,19 +318,23 @@ export function evaluateWorkspaceCleanupPreflight(
         : 'Workspace needs another look before removal.'
     )
   }
+
   const candidateIdentity = getWorkspaceCleanupCandidateIdentity(candidate)
+
   if (
     target.approvedCandidate &&
     candidateIdentity !== getWorkspaceCleanupCandidateIdentity(target.approvedCandidate)
   ) {
     return { ok: false, failure: getWorkspaceCleanupMissingFailure(target) }
   }
+
   if (candidate.blockers.includes('git-status-error') && !hasUnverifiedRemovalConsent) {
     return {
       ok: false,
       failure: getWorkspaceCleanupGitUnavailableFailure(target, candidate)
     }
   }
+
   if (!target.approvedCandidate && shouldForceWorkspaceCleanupRemoval(candidate)) {
     return failure(
       translate(
@@ -311,7 +343,9 @@ export function evaluateWorkspaceCleanupPreflight(
       )
     )
   }
+
   const approvedCandidate = target.approvedCandidate
+
   if (approvedCandidate) {
     if (hasWorkspaceCleanupRiskEscalated(candidate, approvedCandidate)) {
       return failure(
@@ -322,6 +356,7 @@ export function evaluateWorkspaceCleanupPreflight(
       )
     }
   }
+
   const sameIdSurvivingHostId = [...(identitiesByWorktreeId.get(target.worktreeId) ?? [])]
     .filter((identity) => identity !== candidateIdentity)
     .map((identity) => candidatesByIdentity.get(identity))
@@ -329,6 +364,7 @@ export function evaluateWorkspaceCleanupPreflight(
       otherCandidate ? resolveWorkspaceCleanupRemovalHostId(otherCandidate) : null
     )
     .find((hostId) => hostId !== null)
+
   return {
     ok: true,
     target,

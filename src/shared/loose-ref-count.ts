@@ -43,12 +43,16 @@ export async function countLooseRefs(
   const pending = [refsDirectory]
   let count = 0
   let visited = 0
+
   while (pending.length > 0) {
     const directory = pending.pop()
+
     if (directory === undefined) {
       break
     }
+
     visited += 1
+
     // A cancelled walk reports what it saw as a floor rather than throwing; callers
     // already have to treat a saturated result as "not known to be clean".
     if (
@@ -58,23 +62,29 @@ export async function countLooseRefs(
     ) {
       return { count, saturated: true }
     }
+
     let entries: { name: string; isDirectory: () => boolean }[]
+
     try {
       entries = await readdir(directory, { withFileTypes: true })
     } catch {
       // A missing or unreadable namespace contributes nothing to the count.
       continue
     }
+
     for (const entry of entries) {
       if (entry.isDirectory()) {
         pending.push(join(directory, entry.name))
         continue
       }
+
       count += 1
+
       if (count >= budget) {
         return { count, saturated: true }
       }
     }
   }
+
   return { count, saturated: false }
 }

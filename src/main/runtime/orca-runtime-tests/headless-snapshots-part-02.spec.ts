@@ -30,6 +30,7 @@ describe('OrcaRuntimeService', () => {
       headlessTerminals: Map<string, { writeChain: Promise<void> }>
       terminalCwdByPtyId: Map<string, string>
     }
+
     await internals.headlessTerminals.get(ptyId)?.writeChain
     expect(internals.terminalCwdByPtyId.get(ptyId)).toBe('\\\\desktop\\home\\me\\repo')
 
@@ -43,6 +44,7 @@ describe('OrcaRuntimeService', () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
     const ptyId = 'pty-late-wsl-context-race'
+
     type ProviderSnapshot = {
       data: string
       cols: number
@@ -51,6 +53,7 @@ describe('OrcaRuntimeService', () => {
       seq: number
       source: 'headless'
     }
+
     let resolveProviderSnapshot: ((snapshot: ProviderSnapshot) => void) | undefined
     runtime.setPtyController({
       write: () => true,
@@ -66,10 +69,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.registerPty(ptyId, TEST_WORKTREE_ID)
     runtime.seedHeadlessTerminal(ptyId, '\x1b]7;file://DESKTOP/home/me/old\x07')
+
     const internals = runtime as unknown as {
       headlessTerminals: Map<string, { writeChain: Promise<void> }>
       terminalCwdByPtyId: Map<string, string>
     }
+
     await internals.headlessTerminals.get(ptyId)?.writeChain
 
     runtime.preparePtyExecutionContext(ptyId, 'Ubuntu')
@@ -103,6 +108,7 @@ describe('OrcaRuntimeService', () => {
     const cwd = (
       runtime as unknown as { terminalCwdByPtyId: Map<string, string> }
     ).terminalCwdByPtyId.get('pty-reconstructed')
+
     expect(cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\src')
   })
 
@@ -117,6 +123,7 @@ describe('OrcaRuntimeService', () => {
       terminalCwdByPtyId: Map<string, string>
       terminalFileUriHostnameByPtyId: Map<string, string>
     }
+
     expect(internals.terminalCwdByPtyId.get('pty-ssh')).toBe('/home/me/repo/src')
     expect(internals.terminalFileUriHostnameByPtyId.has('pty-ssh')).toBe(false)
   })
@@ -163,6 +170,7 @@ describe('OrcaRuntimeService', () => {
     const internals = runtime as unknown as {
       terminalCwdByPtyId: Map<string, string>
     }
+
     expect(internals.terminalCwdByPtyId.get('pty-ssh-win')).toBe('C:/Users/me/repo/src')
   })
 
@@ -187,9 +195,11 @@ describe('OrcaRuntimeService', () => {
 
   it('infers restored SSH connection identity from app-scoped PTY ids', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
+
     const ptyId = 'ssh:ssh-restored@@relay-pty'
     const leafId = '11111111-1111-4111-8111-111111111111'
     runtime.attachWindow(1)

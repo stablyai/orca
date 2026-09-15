@@ -19,6 +19,7 @@ export const AGENT_HOOK_TARGETS = [
   'devin',
   'kimi'
 ] as const
+
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 
 export type AgentHookInstallState = 'installed' | 'not_installed' | 'partial' | 'error' | 'skipped'

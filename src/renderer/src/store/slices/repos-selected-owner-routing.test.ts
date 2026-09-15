@@ -31,12 +31,19 @@ const baseRepo: Repo = {
 }
 
 const reposList = vi.fn()
+
 const projectGroupsList = vi.fn()
+
 const projectGroupsImportNested = vi.fn()
+
 const projectGroupsScanNested = vi.fn()
+
 const projectGroupsCancelNestedScan = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
@@ -70,12 +77,14 @@ describe('selected Add Project owner routing', () => {
       parentPath: '/local/platform',
       executionHostId: 'local' as const
     }
+
     const runtimeGroup = {
       ...projectGroup,
       id: localGroup.id,
       name: 'Runtime group',
       parentPath: '/runtime/platform'
     }
+
     const localFolder: FolderWorkspace = {
       id: 'shared-folder',
       projectGroupId: localGroup.id,
@@ -91,11 +100,13 @@ describe('selected Add Project owner routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const runtimeFolder = {
       ...localFolder,
       name: 'Runtime folder',
       folderPath: '/runtime/platform'
     }
+
     runtimeEnvironmentCall.mockImplementation(async ({ method }) => ({
       id: `rpc-${method}`,
       ok: true,
@@ -127,6 +138,7 @@ describe('selected Add Project owner routing', () => {
   it('merges explicit runtime groups and folders without erasing local siblings', async () => {
     const localGroup = { ...projectGroup, id: 'group-local', executionHostId: 'local' as const }
     const runtimeGroup = { ...projectGroup, name: 'Runtime' }
+
     const localFolder: FolderWorkspace = {
       id: 'folder-local',
       projectGroupId: localGroup.id,
@@ -142,6 +154,7 @@ describe('selected Add Project owner routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const runtimeFolder = {
       ...localFolder,
       id: 'folder-runtime',
@@ -149,6 +162,7 @@ describe('selected Add Project owner routing', () => {
       name: 'Runtime folder',
       folderPath: '/runtime/folder'
     }
+
     runtimeEnvironmentCall.mockImplementation(async ({ method }) =>
       method === 'projectGroup.list'
         ? {
@@ -201,12 +215,14 @@ describe('selected Add Project owner routing', () => {
 
   it('keeps a selected-runtime import refresh across an overlapping local refresh', async () => {
     const localRepo = { ...baseRepo, id: 'local-repo', path: '/local/repo' }
+
     const runtimeRepo = {
       ...baseRepo,
       id: 'runtime-repo',
       path: '/runtime/platform/api',
       projectGroupId: projectGroup.id
     }
+
     const result = {
       group: projectGroup,
       repos: [{ path: runtimeRepo.path, projectId: runtimeRepo.id, status: 'imported' as const }],
@@ -214,10 +230,13 @@ describe('selected Add Project owner routing', () => {
       alreadyKnownCount: 0,
       failedCount: 0
     }
+
     let resolveRuntimeRepos!: (value: unknown) => void
+
     const runtimeRepos = new Promise((resolve) => {
       resolveRuntimeRepos = resolve
     })
+
     runtimeEnvironmentCall.mockImplementation(({ method }) => {
       const responses: Record<string, unknown> = {
         'projectGroup.importNested': result,
@@ -226,9 +245,11 @@ describe('selected Add Project owner routing', () => {
         'project.list': { projects: [] },
         'projectHostSetup.list': { setups: [] }
       }
+
       if (method === 'repo.list') {
         return runtimeRepos
       }
+
       return Promise.resolve({
         id: `rpc-${method}`,
         ok: true,
@@ -246,6 +267,7 @@ describe('selected Add Project owner routing', () => {
       runtimeEnvironmentId: 'env-1',
       mode: 'group'
     })
+
     await vi.waitFor(() =>
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
         expect.objectContaining({ method: 'repo.list', selector: 'env-1' })
@@ -273,6 +295,7 @@ describe('selected Add Project owner routing', () => {
     let resolveNewGroup!: (value: unknown) => void
     let resolveOldFolder!: (value: unknown) => void
     let resolveNewFolder!: (value: unknown) => void
+
     const groupResponses = [
       new Promise((resolve) => {
         resolveOldGroup = resolve
@@ -281,6 +304,7 @@ describe('selected Add Project owner routing', () => {
         resolveNewGroup = resolve
       })
     ]
+
     const folderResponses = [
       new Promise((resolve) => {
         resolveOldFolder = resolve
@@ -289,18 +313,22 @@ describe('selected Add Project owner routing', () => {
         resolveNewFolder = resolve
       })
     ]
+
     runtimeEnvironmentCall.mockImplementation(({ method }) => {
       if (method === 'projectGroup.list') {
         return groupResponses.shift()
       }
+
       if (method === 'folderWorkspace.list') {
         return folderResponses.shift()
       }
+
       throw new Error(`Unexpected method: ${method}`)
     })
     const store = createTestStore()
     const oldGroup = { ...projectGroup, id: 'group-old', parentPath: '/runtime/old' }
     const newGroup = { ...projectGroup, id: 'group-new', parentPath: '/runtime/new' }
+
     const oldFolder: FolderWorkspace = {
       id: 'old-folder',
       projectGroupId: oldGroup.id,
@@ -316,6 +344,7 @@ describe('selected Add Project owner routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const newFolder = {
       ...oldFolder,
       id: 'new-folder',
@@ -344,12 +373,15 @@ describe('selected Add Project owner routing', () => {
     store.setState({
       projectGroups: [{ ...newGroup, executionHostId: 'runtime:env-1' }]
     })
+
     const oldFoldersRequest = store
       .getState()
       .fetchFolderWorkspaces({ runtimeEnvironmentId: 'env-1' })
+
     const newFoldersRequest = store
       .getState()
       .fetchFolderWorkspaces({ runtimeEnvironmentId: 'env-1' })
+
     resolveNewFolder({
       id: 'rpc-new-folder',
       ok: true,
@@ -382,11 +414,13 @@ describe('selected Add Project owner routing', () => {
           resolveOldGroup = resolve
         })
       }
+
       if (method === 'folderWorkspace.list') {
         return new Promise((resolve) => {
           resolveOldFolder = resolve
         })
       }
+
       throw new Error(`Unexpected method: ${method}`)
     })
     const store = createTestStore()
@@ -400,11 +434,13 @@ describe('selected Add Project owner routing', () => {
     store
       .getState()
       .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
+
     const newGroup = {
       ...projectGroup,
       id: 'group-after-reconnect',
       executionHostId: 'runtime:env-1'
     }
+
     const newFolder: FolderWorkspace = {
       id: 'folder-after-reconnect',
       projectGroupId: newGroup.id,
@@ -421,6 +457,7 @@ describe('selected Add Project owner routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     store.setState({ projectGroups: [newGroup], folderWorkspaces: [newFolder] })
     resolveOldGroup({
       id: 'rpc-before-reconnect',
@@ -456,11 +493,13 @@ describe('selected Add Project owner routing', () => {
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1'
     }
+
     const runtimeGroup = {
       ...projectGroup,
       id: sshGroup.id,
       executionHostId: 'runtime:env-1'
     }
+
     const sshFolder: FolderWorkspace = {
       id: 'ssh-folder',
       projectGroupId: sshGroup.id,
@@ -477,6 +516,7 @@ describe('selected Add Project owner routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const runtimeFolder = {
       ...sshFolder,
       id: sshFolder.id,
@@ -484,6 +524,7 @@ describe('selected Add Project owner routing', () => {
       connectionId: null,
       executionHostId: 'runtime:env-1' as const
     }
+
     projectGroupsList.mockResolvedValue([])
     folderWorkspacesList.mockResolvedValue([])
     const store = createTestStore()
@@ -512,6 +553,7 @@ describe('selected Add Project owner routing', () => {
       maxRepos: 100,
       timeoutMs: null
     }
+
     projectGroupsScanNested.mockResolvedValue(scan)
     projectGroupsCancelNestedScan.mockResolvedValue(true)
     const store = createTestStore()

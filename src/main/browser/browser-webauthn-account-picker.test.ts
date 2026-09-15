@@ -29,6 +29,7 @@ function mockWebContents(id: number): Electron.WebContents & EventEmitter {
     isDestroyed: vi.fn(() => false),
     send: vi.fn()
   })
+
   return contents
 }
 

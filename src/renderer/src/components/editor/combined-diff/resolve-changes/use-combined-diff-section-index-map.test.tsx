@@ -19,6 +19,7 @@ describe('useCombinedDiffSectionIndexMap', () => {
         useCombinedDiffSectionIndexMap({ entrySignature: 'pr-1', sections }),
       { initialProps: { sections: sectionsFor(keys) } }
     )
+
     const first = result.current
 
     // An on-demand load replaces the array and one section object; keys are untouched.
@@ -38,6 +39,7 @@ describe('useCombinedDiffSectionIndexMap', () => {
         useCombinedDiffSectionIndexMap({ entrySignature: 'pr-1', sections }),
       { initialProps: { sections: sectionsFor(keys) } }
     )
+
     const first = result.current
 
     rerender({ sections: sectionsFor(['combined-commit:a.ts', 'combined-commit:renamed.ts']) })
@@ -53,6 +55,7 @@ describe('useCombinedDiffSectionIndexMap', () => {
         useCombinedDiffSectionIndexMap({ entrySignature, sections: sectionsFor(keys) }),
       { initialProps: { entrySignature: 'pr-1' } }
     )
+
     const first = result.current
 
     rerender({ entrySignature: 'pr-2' })

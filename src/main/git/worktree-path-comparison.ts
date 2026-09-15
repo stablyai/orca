@@ -17,6 +17,7 @@ export function areWorktreePathsEqual(
   if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
     return canonicalWorktreePath(leftPath, 'win32') === canonicalWorktreePath(rightPath, 'win32')
   }
+
   return canonicalWorktreePath(leftPath, platform) === canonicalWorktreePath(rightPath, platform)
 }
 
@@ -28,6 +29,7 @@ export function resolveRevParsePath(repoPath: string, value: string): string {
   if (posix.isAbsolute(value) || win32.isAbsolute(value)) {
     return value
   }
+
   // Old git ignores `--path-format=absolute`, so resolve a relative toplevel/git-dir against the scanned repo path.
   return looksLikeWindowsPath(repoPath)
     ? win32.resolve(repoPath, value)
@@ -41,5 +43,6 @@ export function translateWorktreePath(
 ): string {
   const prefix = 'worktree '
   const translated = translateWslOutputPaths(`${prefix}${worktreePath}`, repoPath, options)
+
   return translated.startsWith(prefix) ? translated.slice(prefix.length) : worktreePath
 }

@@ -8,6 +8,7 @@ const ALLOCATING_METHODS = new Set([
   'toSpliced',
   'with'
 ])
+
 const ALLOCATING_OBJECT_STATICS = new Set([
   'assign',
   'create',
@@ -16,6 +17,7 @@ const ALLOCATING_OBJECT_STATICS = new Set([
   'keys',
   'values'
 ])
+
 const FUNCTION_NODES = new Set([
   'ArrowFunctionExpression',
   'FunctionDeclaration',
@@ -30,9 +32,11 @@ function propertyName(node) {
   if (node?.type !== 'MemberExpression') {
     return null
   }
+
   if (!node.computed) {
     return identifierName(node.property)
   }
+
   return node.property?.type === 'Literal' && typeof node.property.value === 'string'
     ? node.property.value
     : null
@@ -46,27 +50,35 @@ function returnedExpressions(selector) {
   if (!functionNode(selector)) {
     return []
   }
+
   if (selector.body.type !== 'BlockStatement') {
     return [selector.body]
   }
+
   const expressions = []
+
   const visit = (node) => {
     if (!node || typeof node !== 'object') {
       return
     }
+
     if (node !== selector.body && FUNCTION_NODES.has(node.type)) {
       return
     }
+
     if (node.type === 'ReturnStatement') {
       if (node.argument) {
         expressions.push(node.argument)
       }
+
       return
     }
+
     for (const [key, child] of Object.entries(node)) {
       if (key === 'parent') {
         continue
       }
+
       if (Array.isArray(child)) {
         child.forEach(visit)
       } else {
@@ -74,7 +86,9 @@ function returnedExpressions(selector) {
       }
     }
   }
+
   visit(selector.body)
+
   return expressions
 }
 
@@ -86,14 +100,17 @@ function unwrapShallowSelector(selector, shallowHooks) {
   ) {
     return { selector: selector.arguments[0], shallow: true }
   }
+
   return { selector, shallow: false }
 }
 
 function isIdentitySelector(selector) {
   const parameter = functionNode(selector)?.params[0]
+
   if (parameter?.type !== 'Identifier') {
     return false
   }
+
   return returnedExpressions(selector).some(
     (expression) => expression.type === 'Identifier' && expression.name === parameter.name
   )
@@ -112,11 +129,13 @@ function allocates(expression, everyBranch) {
       : expression?.type === 'LogicalExpression'
         ? [expression.left, expression.right]
         : null
+
   if (branches) {
     return everyBranch
       ? branches.every((branch) => allocates(branch, true))
       : branches.some((branch) => allocates(branch, false))
   }
+
   if (
     expression?.type === 'ArrayExpression' ||
     expression?.type === 'ObjectExpression' ||
@@ -124,11 +143,14 @@ function allocates(expression, everyBranch) {
   ) {
     return true
   }
+
   if (expression?.type !== 'CallExpression') {
     return false
   }
+
   const callee = expression.callee
   const method = propertyName(callee)
+
   return (
     ALLOCATING_METHODS.has(method) ||
     (identifierName(callee.object) === 'Object' && ALLOCATING_OBJECT_STATICS.has(method))
@@ -142,6 +164,7 @@ function isAllocatingExpression(expression) {
 // Project-local zustand hooks follow the use<Name>Store convention; React's
 // useSyncExternalStore matches that shape but is not a store subscription.
 const STORE_HOOK_NAME = /^use[A-Z][A-Za-z0-9]*Store$/
+
 const NON_STORE_HOOKS = new Set(['useSyncExternalStore'])
 
 function isLocalModuleSource(source) {
@@ -151,6 +174,7 @@ function isLocalModuleSource(source) {
 /** Module scope only: a component-local helper must not shadow a same-named import. */
 function isModuleScope(node) {
   const parent = node.parent
+
   return (
     parent?.type === 'Program' ||
     (parent?.type === 'ExportNamedDeclaration' && parent.parent?.type === 'Program')
@@ -162,12 +186,15 @@ function recordNamedSelector(node, state) {
   if (!isModuleScope(node)) {
     return
   }
+
   const declared =
     node.type === 'FunctionDeclaration'
       ? [[node.id, node]]
       : node.declarations.map((declarator) => [declarator.id, declarator.init])
+
   for (const [id, initializer] of declared) {
     const name = identifierName(id)
+
     if (name && functionNode(initializer)) {
       state.namedSelectors.set(name, initializer)
     }
@@ -189,7 +216,9 @@ function expandThroughNamedHelper(expression, state) {
     expression?.type === 'CallExpression'
       ? state.namedSelectors.get(identifierName(expression.callee))
       : undefined
+
   const returned = helper ? returnedExpressions(helper) : []
+
   return returned.length > 0 && returned.every((entry) => allocates(entry, true))
     ? returned
     : [expression]
@@ -206,18 +235,23 @@ function createRuleState() {
 
 function recordImports(node, state) {
   const source = node.source?.value
+
   for (const specifier of node.specifiers) {
     if (specifier.type !== 'ImportSpecifier') {
       continue
     }
+
     const imported = identifierName(specifier.imported)
     const localName = identifierName(specifier.local)
+
     if (!imported || !localName) {
       continue
     }
+
     if (source === 'zustand/react/shallow' && imported === 'useShallow') {
       state.shallowHooks.add(localName)
     }
+
     // useAppStore is the app store wherever it is re-exported from; sibling
     // stores are trusted by naming convention only when they come from this codebase.
     if (
@@ -240,6 +274,7 @@ function isAppStoreCall(node, state) {
 
 function requireSelectorRule() {
   const state = createRuleState()
+
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
@@ -262,6 +297,7 @@ function requireSelectorRule() {
  */
 function deferredSelectorRule(inspect) {
   const state = createRuleState()
+
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
@@ -283,11 +319,13 @@ function deferredSelectorRule(inspect) {
           node.arguments[0],
           state.shallowHooks
         )
+
         const report = inspect({
           selector: resolveSelector(argument, state),
           shallow,
           state
         })
+
         if (report) {
           this.report(report)
         }
@@ -313,9 +351,11 @@ function noFreshSelectorResultRule() {
     if (shallow || !selector) {
       return null
     }
+
     const freshResult = returnedExpressions(selector)
       .flatMap((expression) => expandThroughNamedHelper(expression, state))
       .find(isAllocatingExpression)
+
     return freshResult
       ? {
           node: freshResult,
@@ -333,9 +373,11 @@ function nestedFreshValues(expression) {
       .map((property) => (property.type === 'Property' ? property.value : null))
       .filter(Boolean)
   }
+
   if (expression?.type === 'ArrayExpression') {
     return expression.elements.filter(Boolean)
   }
+
   return []
 }
 
@@ -344,11 +386,13 @@ function noNestedFreshUnderShallowRule() {
     if (!shallow || !selector) {
       return null
     }
+
     const nestedFresh = returnedExpressions(selector)
       .flatMap((expression) => expandThroughNamedHelper(expression, state))
       .flatMap(nestedFreshValues)
       .flatMap((expression) => expandThroughNamedHelper(expression, state))
       .find(isAllocatingExpression)
+
     return nestedFresh
       ? {
           node: nestedFresh,
@@ -362,9 +406,11 @@ function noNestedFreshUnderShallowRule() {
 function bindContext(createVisitors) {
   return (context) => {
     const visitors = createVisitors()
+
     for (const [nodeType, visit] of Object.entries(visitors)) {
       visitors[nodeType] = visit.bind(context)
     }
+
     return visitors
   }
 }

@@ -70,14 +70,19 @@ export function classifyAgentSessionTransition(
   if (event.providerSessionOnly) {
     return 'none'
   }
+
   const next = event.payload.state
+
   if (previous && previous.state === next) {
     return 'none'
   }
+
   if (next === 'working') {
     const live = event.isReplay !== true && event.restoredUnconfirmed !== true
+
     return live ? 'start' : 'none'
   }
+
   return previous?.open ? 'stop' : 'none'
 }
 
@@ -97,16 +102,20 @@ export class AgentSessionTransitionRecorder {
     if (event.providerSessionOnly) {
       return
     }
+
     const previous = this.sessions.get(event.paneKey)
     const transition = classifyAgentSessionTransition(previous, event)
+
     if (transition === 'none' && previous?.state === event.payload.state) {
       // Refresh recency without touching session state so a long-running pane
       // isn't evicted ahead of an idle one.
       this.touch(event.paneKey, previous)
+
       return
     }
 
     let open = previous?.open ?? false
+
     if (transition === 'start') {
       this.sink.onAgentStart(event.paneKey, event.stateStartedAt, undefined, event.worktreeId)
       open = true
@@ -127,8 +136,10 @@ export class AgentSessionTransitionRecorder {
   onCleared(clear: AgentSessionClearEvent): void {
     if ('paneKey' in clear) {
       this.closeAndForget(clear.paneKey, Date.now())
+
       return
     }
+
     for (const [paneKey, session] of Array.from(this.sessions)) {
       if (session.connectionId === clear.connectionId) {
         this.closeAndForget(paneKey, clear.clearedAt)
@@ -142,12 +153,15 @@ export class AgentSessionTransitionRecorder {
 
   private closeAndForget(paneKey: string, at: number): void {
     const session = this.sessions.get(paneKey)
+
     if (!session) {
       return
     }
+
     if (session.open) {
       this.sink.onAgentStop(paneKey, at)
     }
+
     this.sessions.delete(paneKey)
   }
 
@@ -160,9 +174,11 @@ export class AgentSessionTransitionRecorder {
   private evictOldest(): void {
     while (this.sessions.size > AGENT_SESSION_MIRROR_LIMIT) {
       const oldest = this.sessions.keys().next()
+
       if (oldest.done) {
         return
       }
+
       this.closeAndForget(oldest.value, Date.now())
     }
   }

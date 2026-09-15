@@ -40,6 +40,7 @@ function slotPaths(
   if (!/^slot-[0-7]$/u.test(slotName)) {
     throw new Error('Invalid relay upload stage slot')
   }
+
   return {
     poolDir,
     slotName,
@@ -55,6 +56,7 @@ export function reserveRelayUploadStageCommand(
   owner: string
 ): string {
   assertOwner(owner)
+
   return isWindowsRemoteHost(host)
     ? reserveWindowsRelayUploadStageCommand(poolDir, owner)
     : reservePosixStageCommand(poolDir, owner)
@@ -68,13 +70,16 @@ export function parseReservedRelayUploadStage(
 ): RelayUploadStageSlot {
   assertOwner(owner)
   const authenticatedPrefix = `${SLOT_RESULT_PREFIX}${owner}:`
+
   const line = output
     .split(/\r?\n/u)
     .map((entry) => entry.trim())
     .find((entry) => entry.startsWith(authenticatedPrefix))
+
   if (!line) {
     throw new Error('Remote relay upload stage reservation returned no authenticated slot')
   }
+
   return slotPaths(host, poolDir, line.slice(authenticatedPrefix.length))
 }
 
@@ -85,6 +90,7 @@ export function promoteOwnedRelayUploadStageCommand(
   destinationDir: string
 ): string {
   assertOwner(owner)
+
   return isWindowsRemoteHost(host)
     ? promoteWindowsRelayUploadStageCommand(stage, owner, destinationDir)
     : promotePosixStageCommand(stage, owner, destinationDir)
@@ -92,6 +98,7 @@ export function promoteOwnedRelayUploadStageCommand(
 
 export function relayUploadStagePromotionConfirmed(owner: string, output: string): boolean {
   assertOwner(owner)
+
   return output
     .split(/\r?\n/u)
     .some((line) => line.trim() === `${PROMOTION_RESULT_PREFIX}${owner}:PROMOTED`)
@@ -103,6 +110,7 @@ export function cleanupOwnedRelayUploadStageCommand(
   owner: string
 ): string {
   assertOwner(owner)
+
   return isWindowsRemoteHost(host)
     ? cleanupWindowsRelayUploadStageCommand(stage, owner)
     : cleanupPosixStageCommand(stage, owner)
@@ -114,6 +122,7 @@ export function recoverOneStaleRelayUploadStageCommand(
   staleSeconds = RELAY_UPLOAD_STAGE_STALE_SECONDS
 ): string {
   const cutoffSeconds = Math.max(1, Math.ceil(staleSeconds))
+
   return isWindowsRemoteHost(host)
     ? recoverWindowsRelayUploadStageCommand(poolDir, cutoffSeconds)
     : recoverPosixStageCommand(poolDir, Math.ceil(cutoffSeconds / 60))
@@ -122,6 +131,7 @@ export function recoverOneStaleRelayUploadStageCommand(
 function reservePosixStageCommand(poolDir: string, owner: string): string {
   const pool = shellEscape(poolDir)
   const slots = Array.from({ length: RELAY_UPLOAD_STAGE_SLOT_COUNT }, (_, index) => index).join(' ')
+
   return [
     'umask 077;',
     `pool=${pool};`,
@@ -160,6 +170,7 @@ function posixOwnedDirectoryCheck(
   requirePayload: boolean
 ): string {
   const path = `$${pathVariable}`
+
   const checks = [
     `owner_file="${path}/${OWNER_FILE_NAME}";`,
     `identity_file="${path}/${IDENTITY_FILE_NAME}";`,
@@ -168,6 +179,7 @@ function posixOwnedDirectoryCheck(
     `identity=$(ls -id "${path}" 2>/dev/null | awk '{print $1}') || identity=;`,
     `[ -n "$identity" ] && [ "$identity" = "$expected_identity" ] && [ -d "${path}" ] && [ ! -L "${path}" ] && [ -f "$owner_file" ] && [ ! -L "$owner_file" ] && [ -f "$identity_file" ] && [ ! -L "$identity_file" ] && [ "$actual" = ${shellEscape(owner)} ]`
   ]
+
   if (requirePayload) {
     checks.push(
       `&& payload="${path}/payload" && [ -d "$payload" ] && [ ! -L "$payload" ]`,
@@ -175,6 +187,7 @@ function posixOwnedDirectoryCheck(
       '&& links=$(find "$payload" -type l -print -quit 2>/dev/null) && [ -z "$links" ]'
     )
   }
+
   return checks.join(' ')
 }
 
@@ -196,6 +209,7 @@ function promotePosixStageCommand(
   destinationDir: string
 ): string {
   const expected = shellEscape(owner)
+
   return [
     posixClaimPrelude(stage),
     `if ! { ${posixOwnedDirectoryCheck('claim', owner, true)}; }; then`,
@@ -227,6 +241,7 @@ function cleanupPosixStageCommand(stage: RelayUploadStageSlot, owner: string): s
 function recoverPosixStageCommand(poolDir: string, staleMinutes: number): string {
   const pool = shellEscape(poolDir)
   const slots = Array.from({ length: RELAY_UPLOAD_STAGE_SLOT_COUNT }, (_, index) => index).join(' ')
+
   return [
     `pool=${pool}; [ -d "$pool" ] && [ ! -L "$pool" ] || exit 0;`,
     `for n in ${slots}; do`,

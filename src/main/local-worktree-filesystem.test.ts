@@ -43,6 +43,7 @@ function failExecFile(exitCode: number): void {
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await fn()
   } finally {

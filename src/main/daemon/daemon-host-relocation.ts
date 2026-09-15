@@ -36,6 +36,7 @@ export type RelocatedDaemonHost = {
 }
 
 const HOST_SUBDIR = 'daemon-host'
+
 const MARKER_NAME = '.materialized.json'
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
@@ -91,9 +92,11 @@ function destPath(root: string, destRel: string): string {
 function resolveEntrySourcePath(resourcesPath: string): string {
   const unpackedRoot = join(resourcesPath, 'app.asar.unpacked')
   const direct = join(unpackedRoot, 'daemon-entry.js')
+
   if (existsSync(direct)) {
     return direct
   }
+
   return join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
 }
 
@@ -108,6 +111,7 @@ function resolveEntrySourcePath(resourcesPath: string): string {
  */
 function isPackagedElectronWin32(): boolean {
   const environment = getAppEnvironment()
+
   return (
     process.platform === 'win32' &&
     environment.isPackaged() &&
@@ -120,13 +124,17 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   if (!isPackagedElectronWin32()) {
     return null
   }
+
   const resourcesPath = process.resourcesPath
+
   if (typeof resourcesPath !== 'string' || resourcesPath.length === 0) {
     return null
   }
+
   const execPath = process.execPath
   const appDir = winPath.dirname(execPath)
   const entrySourcePath = resolveEntrySourcePath(resourcesPath)
+
   return {
     appDir,
     execPath,
@@ -138,13 +146,17 @@ function collectDaemonHostSources(): DaemonHostSources | null {
 
 // Drop node-pty's .pdb symbols and non-host-arch prebuilds (its bulk); keyed on host arch so a future win32-arm64 build keeps the prebuild it needs.
 const HOST_WIN_PREBUILD_DIR = `win32-${process.arch}`.toLowerCase()
+
 function isRuntimeNodePtyPath(sourcePath: string): boolean {
   const p = sourcePath.toLowerCase()
+
   if (p.endsWith('.pdb')) {
     return false
   }
+
   // Keep only the host arch's win32 prebuild; drop any other win32-<arch> dir.
   const prebuild = p.match(/prebuilds[\\/](win32-[^\\/]+)/)
+
   return !prebuild || prebuild[1] === HOST_WIN_PREBUILD_DIR
 }
 
@@ -158,6 +170,7 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
 
   // Host exe (verbatim name) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
   ops.push({ sourcePath: execPath, destRel: daemonHostExeName(execPath), kind: 'file' })
+
   for (const name of RUNTIME_DATA_FILES) {
     ops.push({ sourcePath: join(appDir, name), destRel: name, kind: 'file', optional: true })
   }
@@ -197,8 +210,10 @@ function executeManifest(ops: CopyOp[], stagingRoot: string): void {
       if (op.optional) {
         continue
       }
+
       throw new Error(`daemon-host relocation: missing required input ${op.sourcePath}`)
     }
+
     const dest = destPath(stagingRoot, op.destRel)
     mkdirSync(dirname(dest), { recursive: true })
     const { filter } = op
@@ -217,6 +232,7 @@ function readMarker(dir: string): MaterializeMarker | null {
     const parsed = JSON.parse(
       readFileSync(join(dir, MARKER_NAME), 'utf8')
     ) as Partial<MaterializeMarker>
+
     if (typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
       return {
         version: parsed.version,
@@ -227,16 +243,19 @@ function readMarker(dir: string): MaterializeMarker | null {
   } catch {
     // Missing/corrupt marker — treat as not materialized.
   }
+
   return null
 }
 
 function hostRootDir(): string {
   // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
+
   const base =
     typeof localAppData === 'string' && localAppData.length > 0
       ? join(localAppData, LOCAL_HOST_ROOT_NAME)
       : getAppEnvironment().getPath('userData')
+
   return join(base, HOST_SUBDIR)
 }
 
@@ -246,20 +265,26 @@ function hostRootDir(): string {
  */
 export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const sources = collectDaemonHostSources()
+
   if (!sources) {
     return null
   }
+
   const version = getAppEnvironment().getVersion()
   const dest = join(hostRootDir(), version)
   const marker = readMarker(dest)
+
   if (!marker || marker.version !== version) {
     return null
   }
+
   const execPath = join(dest, daemonHostExeName(sources.execPath))
   const entryPath = destPath(dest, marker.entryRelPath)
+
   if (!existsSync(execPath) || !existsSync(entryPath)) {
     return null
   }
+
   return { execPath, entryPath }
 }
 
@@ -269,27 +294,34 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
  */
 export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const existing = getRelocatedDaemonHost()
+
   if (existing) {
     return existing
   }
+
   const sources = collectDaemonHostSources()
+
   if (!sources) {
     return null
   }
+
   const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
   const dest = join(root, version)
   const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
+
   try {
     mkdirSync(root, { recursive: true })
     rmSync(staging, { recursive: true, force: true })
     executeManifest(buildDaemonHostManifest(sources), staging)
+
     // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
     const marker: MaterializeMarker = {
       version,
       completedAt: new Date().toISOString(),
       entryRelPath: sources.entryRelPath
     }
+
     writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
     // Replace any stale/partial dest, then publish atomically. Windows refuses to delete a running
     // image, so a live daemon already hosted in THIS version's dir (same-version reinstall, or a dev
@@ -302,8 +334,10 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     } catch {
       // Best-effort staging cleanup.
     }
+
     return null
   }
+
   return getRelocatedDaemonHost()
 }
 
@@ -318,16 +352,20 @@ export type PinnedDaemonVersionsEvidence =
 export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVersionsEvidence {
   const versionLiveness = new Map<string, ProcessLivenessVerdict>()
   let entries
+
   try {
     entries = readdirSync(runtimeDir, { withFileTypes: true })
   } catch {
     return { status: 'unverifiable', reason: 'the daemon runtime directory could not be read' }
   }
+
   for (const entry of entries) {
     if (!entry.isFile() || !/^daemon-v\d+\.pid$/.test(entry.name)) {
       continue
     }
+
     let contents
+
     try {
       contents = readFileSync(join(runtimeDir, entry.name), 'utf8')
     } catch {
@@ -337,7 +375,9 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
         reason: `the daemon pid file could not be read: ${entry.name}`
       }
     }
+
     const parsed = parseDaemonPidFile(contents)
+
     // Why not just `!parsed`: the parser's legacy bare-integer fallback coerces an empty or
     // whitespace-only record to pid 0 (Number('') === 0), which is the exact shape a concurrent
     // read sees while a live daemon publishes its record — writeFileSync 'wx' creates the file
@@ -352,16 +392,19 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
         reason: quarantineCorruptDaemonPidRecord(runtimeDir, entry.name, contents)
       }
     }
+
     // appVersion null => pre-relocation daemon forked from the install dir; pins no host dir here.
     if (parsed.appVersion === null) {
       continue
     }
+
     const verdict = inspectProcessLiveness(parsed.pid)
     versionLiveness.set(
       parsed.appVersion,
       mergeProcessLivenessVerdict(versionLiveness.get(parsed.appVersion), verdict)
     )
   }
+
   return { status: 'complete', versionLiveness }
 }
 
@@ -375,6 +418,7 @@ export function reclaimUnownedDaemonHostDir(
   if (verdict.status !== 'exited') {
     return
   }
+
   try {
     rmSync(hostDir, { recursive: true, force: true })
   } catch {
@@ -390,22 +434,28 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
   if (!isPackagedElectronWin32()) {
     return
   }
+
   if (evidence.status === 'unverifiable') {
     console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
+
     return
   }
+
   const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
   let entries
+
   try {
     entries = readdirSync(root, { withFileTypes: true })
   } catch {
     return
   }
+
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name === version) {
       continue
     }
+
     // A complete runtime-dir listing with no pid record for this version proves it is unowned.
     const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
     reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))

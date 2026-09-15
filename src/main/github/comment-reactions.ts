@@ -59,15 +59,19 @@ export function mapGraphQLReactionGroups(
   groups?: GitHubGraphQLReactionGroup[] | null
 ): GitHubReaction[] | undefined {
   const reactionsByContent = new Map<GitHubReactionContent, GitHubReaction>()
+
   for (const group of groups ?? []) {
     const content =
       group.content && group.content in GRAPHQL_REACTION_CONTENT
         ? GRAPHQL_REACTION_CONTENT[group.content as GitHubGraphQLReactionContent]
         : null
+
     const count = group.reactors?.totalCount ?? 0
+
     if (!content || count <= 0) {
       continue
     }
+
     const existing = reactionsByContent.get(content)
     const viewerHasReacted = Boolean(existing?.viewerHasReacted || group.viewerHasReacted)
     reactionsByContent.set(content, {
@@ -81,7 +85,9 @@ export function mapGraphQLReactionGroups(
 
   const reactions = REACTION_ORDER.flatMap((content) => {
     const reaction = reactionsByContent.get(content)
+
     return reaction ? [reaction] : []
   })
+
   return reactions.length > 0 ? reactions : undefined
 }

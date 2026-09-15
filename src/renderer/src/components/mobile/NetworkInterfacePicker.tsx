@@ -47,6 +47,7 @@ export function NetworkInterfacePicker({
       })),
     [networkInterfaces]
   )
+
   const customOptions = useMemo<AddressOption[]>(
     () =>
       customAddresses.map((address) => ({
@@ -55,6 +56,7 @@ export function NetworkInterfacePicker({
       })),
     [customAddresses]
   )
+
   // Why: a host whose only interfaces are container bridges advertises no address by default, but the
   // bridges are still listed here — "No interfaces found" would contradict the options right below it.
   const placeholder =
@@ -105,6 +107,7 @@ export function NetworkInterfacePicker({
       customInputId="custom-network-address-input"
       validateCustom={(input) => {
         const parsed = parseManualNetworkAddress(input)
+
         return parsed.ok ? { ok: true, value: parsed.address } : { ok: false }
       }}
       customDialogCopy={{

@@ -6,7 +6,9 @@ import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emi
 
 // Orca's own synthetic agent spinner: one frame per pane every 80ms while an agent works.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
 const SPINNER_INTERVAL_MS = 80
+
 const EPOCH = 1_700_000_000_000
 
 type TitleFact = { kind: 'title'; normalizedTitle: string; rawTitle: string }
@@ -32,6 +34,7 @@ describe('decorative title fact throttle', () => {
     syncSinglePty(runtime)
 
     const ticks = 125 // 10s of Orca's 80ms synthetic spinner timer
+
     for (let tick = 0; tick < ticks; tick += 1) {
       vi.setSystemTime(new Date(EPOCH + tick * SPINNER_INTERVAL_MS))
       runtime.ingestSyntheticTitleFrame(
@@ -51,6 +54,7 @@ describe('decorative title fact throttle', () => {
     // The heartbeat must not thin out below what the renderer's 1500ms hook-done quiet window
     // needs to cancel a milestone `done` — three working frames per window.
     expect(facts.length).toBeGreaterThanOrEqual(Math.floor(elapsedMs / 1_500) * 3)
+
     for (const fact of facts) {
       expect(fact.normalizedTitle.endsWith('Claude Code')).toBe(true)
     }

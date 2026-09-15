@@ -31,6 +31,7 @@ function activateAndExpectNoRelaunch(
 
   expect(tabId).toBeDefined()
   expect(useAppStore.getState().pendingStartupByTabId[tabId!]).toBeUndefined()
+
   return tabId!
 }
 
@@ -45,6 +46,7 @@ afterEach(() => {
 describe('activateAndRevealWorktree', () => {
   it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
     const worktree = makeWorktree()
+
     const { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar } =
       seedAlreadyActiveWorktree(worktree)
 
@@ -58,6 +60,7 @@ describe('activateAndRevealWorktree', () => {
 
   it('records a visit when activating the same worktree changes the current view', () => {
     const worktree = makeWorktree()
+
     const { markWorktreeVisited, recordWorktreeVisit } = seedAlreadyActiveWorktree(worktree, {
       activeView: 'tasks'
     })
@@ -125,6 +128,7 @@ describe('activateAndRevealWorktree', () => {
     const result = activateAndRevealWorktree(worktree.id, {
       startup: { command: 'codex' }
     })
+
     const state = useAppStore.getState()
     const tabId = result === false ? undefined : (result.primaryTabId ?? undefined)
 
@@ -264,10 +268,12 @@ describe('activateAndRevealWorktree', () => {
 
   it('asks the host runtime to activate the worktree in the paired web client', async () => {
     const worktree = makeWebRuntimeWorktree()
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: true,
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -332,10 +338,12 @@ describe('activateAndRevealWorktree', () => {
 
   it('activates the explicit owner runtime when another runtime is focused', async () => {
     const worktree = makeWorktree()
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: true,
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -402,10 +410,12 @@ describe('activateAndRevealWorktree', () => {
 
   it('does not echo host-originated runtime activation events back to the host', async () => {
     const worktree = makeWebRuntimeWorktree()
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: true,
       result: { repoId: worktree.repoId, worktreeId: worktree.id, activated: true }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -462,7 +472,9 @@ describe('activateAndRevealWorktree', () => {
 
   it('does not respawn when the host snapshot still has terminal tabs', async () => {
     const worktree = makeWorktree()
+
     const callRuntimeEnvironment = vi.fn()
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
 
     useAppStore.setState({
@@ -534,6 +546,7 @@ describe('activateAndRevealWorktree', () => {
 
   it('respawns a host terminal when waking a slept web workspace with dead local PTYs', async () => {
     const worktree = makeWebRuntimeWorktree()
+
     const callRuntimeEnvironment = vi
       .fn()
       .mockResolvedValueOnce({
@@ -544,6 +557,7 @@ describe('activateAndRevealWorktree', () => {
         ok: true,
         result: { tabId: 'host-tab-1', terminal: 'term_host' }
       })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -622,10 +636,12 @@ describe('activateAndRevealWorktree', () => {
 
   it('respawns wake terminals on the explicit owner runtime when focus changed', async () => {
     const worktree = makeWorktree()
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: true,
       result: { tabId: 'host-tab-1', terminal: 'term_host' }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {

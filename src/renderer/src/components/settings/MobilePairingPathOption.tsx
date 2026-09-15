@@ -41,6 +41,7 @@ export function MobilePairingPathOption({
         if (disabled) {
           return
         }
+
         if (event.key === ' ' || event.key === 'Enter') {
           event.preventDefault()
           onSelect()

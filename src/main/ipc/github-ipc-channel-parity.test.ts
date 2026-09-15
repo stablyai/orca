@@ -3,15 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createGitHubIpcMocks } = await import('./github-ipc-module-mocks')
+
   return createGitHubIpcMocks()
 })
 
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('../github/client', () => mocks.client)
+
 vi.mock('../github/work-item-details', () => mocks.workItemDetails)
+
 vi.mock('../github/pr-refresh-coordinator', () => mocks.prRefresh)
+
 vi.mock('../telemetry/client', () => mocks.telemetry)
+
 vi.mock('../telemetry/cohort-classifier', () => mocks.cohort)
+
 vi.mock('./ui', () => mocks.ui)
 
 import * as github from './github'
@@ -93,9 +100,11 @@ describe('GitHub IPC channel parity', () => {
     ]
       .map((relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8'))
       .join('\n')
+
     const exposedChannels = [...preloadSource.matchAll(/ipcRenderer\.invoke\('(gh:[^']+)'/g)].map(
       (match) => match[1]
     )
+
     const registeredChannels = mocks.electron.ipcMain.handle.mock.calls.map(
       ([channel]) => channel as string
     )

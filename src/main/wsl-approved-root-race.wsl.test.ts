@@ -5,7 +5,9 @@ import { containedDeleteCommand } from './wsl-contained-delete'
 import { parseWslPath } from './wsl'
 
 const execFileAsync = promisify(execFile)
+
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
+
 const runRealWsl = process.platform === 'win32' && process.env.ORCA_REAL_WSL_DELETE_TEST === '1'
 
 function unc(linuxPath: string): string {
@@ -18,6 +20,7 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
     ['-d', DISTRO, '--exec', 'sh', '-c', command, 'orca-wsl-test', ...args],
     { encoding: 'utf-8', timeout: 30000 }
   )
+
   return result.stdout.trim()
 }
 
@@ -26,6 +29,7 @@ describe.skipIf(!runRealWsl)('WSL approved-root traversal race', () => {
 
   beforeAll(async () => {
     fixtureRoot = await wsl("mktemp -d -p /tmp 'orca-wsl-root-race.XXXXXX'")
+
     const statHook = String.raw`#!/bin/sh
 for argument do last=$argument; done
 if [ "$PWD" = "$ORCA_RACE_PARENT" ] && [ "$(/usr/bin/basename "$last")" = vault ]; then
@@ -37,6 +41,7 @@ if [ "$PWD" = "$ORCA_RACE_PARENT" ] && [ "$(/usr/bin/basename "$last")" = vault 
 fi
 exec /usr/bin/stat "$@"
 `
+
     await wsl(
       'mkdir -p "$1/race/vault" "$1/execute-only/vault" "$1/outside/root-target" ' +
         '"$1/hook-bin" && ' +
@@ -60,9 +65,11 @@ exec /usr/bin/stat "$@"
   it('fails closed when an approved-root component is replaced after inspection', async () => {
     const approvedRoot = `${fixtureRoot}/race/vault`
     const target = parseWslPath(unc(`${approvedRoot}/session.json`))
+
     const command = target
       ? containedDeleteCommand(target, [unc(approvedRoot)], parseWslPath, false)
       : null
+
     expect(command).not.toBeNull()
 
     await expect(
@@ -94,9 +101,11 @@ exec /usr/bin/stat "$@"
   it('allows an approved root beneath an execute-only ancestor', async () => {
     const approvedRoot = `${fixtureRoot}/execute-only/vault`
     const target = parseWslPath(unc(`${approvedRoot}/session.json`))
+
     const command = target
       ? containedDeleteCommand(target, [unc(approvedRoot)], parseWslPath, false)
       : null
+
     expect(command).not.toBeNull()
 
     try {

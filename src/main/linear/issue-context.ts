@@ -37,6 +37,7 @@ export async function readLinearIssueContext(
   }
 
   const parsed = request.input ? parseLinearIssueInput(request.input) : null
+
   if (request.input && !parsed) {
     throw linearError('linear_issue_required', 'Pass a Linear issue identifier or issue URL.', {
       nextSteps: ['Use a Linear identifier like ENG-123 or a https://linear.app/... issue URL.']
@@ -48,7 +49,9 @@ export async function readLinearIssueContext(
     : request.current
       ? await resolveCurrent(request.context)
       : await missingIssueInput()
+
   const identifier = parsed?.identifier ?? currentLink?.identifier
+
   if (!identifier) {
     throw linearError('linear_issue_required', 'Pass an issue id or use --current.')
   }
@@ -57,6 +60,7 @@ export async function readLinearIssueContext(
     workspaceId: request.workspaceId ?? currentLink?.workspaceId ?? undefined,
     organizationUrlKey: parsed?.organizationUrlKey ?? currentLink?.organizationUrlKey
   })
+
   return buildIssueContextResult(resolved, request, currentLink)
 }
 
@@ -73,6 +77,7 @@ async function buildIssueContextResult(
 ): Promise<LinearIssueContextResult> {
   const includeErrors: LinearIssueContextResult['meta']['includeErrors'] = []
   const sections: LinearIssueContextResult['meta']['sections'] = {}
+
   const result: LinearIssueContextResult = {
     issue: resolved.issue,
     meta: {
@@ -100,6 +105,7 @@ async function buildIssueContextResult(
   await readOptionalIncludes(resolved, request, result, includeErrors, sections)
   result.inlineMedia = collectInlineMedia(result)
   result.meta.partial = includeErrors.length > 0
+
   return result
 }
 
@@ -116,6 +122,7 @@ export function collectInlineMedia(
     ),
     ...(result.children ?? []).flatMap((child) => collectChildInlineMedia(child))
   ]
+
   return media.length > 0 ? media : undefined
 }
 

@@ -270,16 +270,19 @@ export function createPtyIpcSession(args: {
   session.pendingData = new PtyPendingDataDrainQueue(
     (id) => {
       const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
+
       // Why first: hidden bytes are dropped from main's pending queue even when renderer credit is exhausted.
       if (shouldDropHiddenRendererPtyData(id, session.getSettings?.())) {
         return runnableLane
       }
+
       if (
         !session.rendererPtyDispatcherReady ||
         !session.canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })
       ) {
         return 'blocked'
       }
+
       return runnableLane
     },
     () => isHiddenPtyDeliveryGateEnabled(session.getSettings?.())

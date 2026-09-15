@@ -13,10 +13,12 @@ import { AGENT_MAP_TIME_MAX_INDEX, type AgentMapTimeRange } from './agent-map-ti
  *  when `updateAgentMapLayout` misses its topology cache and runs the full
  *  `deriveAgentMapLayout` again; `updates` counts every layout evaluation. */
 const layoutCalls = vi.hoisted(() => ({ updates: 0, repacks: 0 }))
+
 const packCalls = vi.hoisted(() => ({ count: 0 }))
 
 vi.mock('./agent-map-layout', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentMapLayoutModule>()
+
   return {
     ...actual,
     updateAgentMapLayout: (
@@ -24,10 +26,12 @@ vi.mock('./agent-map-layout', async (importOriginal) => {
     ): ReturnType<typeof actual.updateAgentMapLayout> => {
       layoutCalls.updates += 1
       const result = actual.updateAgentMapLayout(...args)
+
       // A fresh cache object is returned only on the deriveAgentMapLayout path.
       if (result.cache !== args[0]) {
         layoutCalls.repacks += 1
       }
+
       return result
     }
   }
@@ -36,12 +40,14 @@ vi.mock('./agent-map-layout', async (importOriginal) => {
 // Second, independent counter: the packer runs once per non-empty repack.
 vi.mock('./agent-map-project-placement', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentMapProjectPlacementModule>()
+
   return {
     ...actual,
     placeAgentMapProjects: (
       ...args: Parameters<typeof actual.placeAgentMapProjects>
     ): ReturnType<typeof actual.placeAgentMapProjects> => {
       packCalls.count += 1
+
       return actual.placeAgentMapProjects(...args)
     }
   }
@@ -51,11 +57,15 @@ import { AgentDashboardMapView } from './AgentDashboardMapView'
 import { AgentMapTimeRangeField } from './AgentMapTimeRangeField'
 
 const NOW = 2_000_000_000
+
 const MINUTE = 60_000
+
 const HOUR = 60 * MINUTE
+
 const DAY = 24 * HOUR
 
 const SLIDER_WIDTH = 280
+
 /** Radix maps pointer x linearly onto [0, AGENT_MAP_TIME_MAX_INDEX]. */
 const clientXForStop = (stop: number): number => (stop / AGENT_MAP_TIME_MAX_INDEX) * SLIDER_WIDTH
 
@@ -108,7 +118,9 @@ const SNAPSHOT: DashboardSnapshot = {
 
 /** Stops the max thumb passes through on one drag: ∞ → 12h. */
 const DRAG_STOPS = [13, 12, 11, 10, 9, 8]
+
 const EXPECTED_DRAG_REPACKS = 1
+
 const DRAFT_CANCELLATIONS = [
   { name: 'pointer cancellation', finish: (thumb: HTMLElement) => fireEvent.pointerCancel(thumb) },
   {
@@ -143,6 +155,7 @@ async function openTimeSection(): Promise<HTMLElement> {
   fireEvent.click(screen.getByRole('button', { name: /^Filter/ }))
   fireEvent.click(await screen.findByRole('button', { name: /^Time/ }))
   const slider = await screen.findByRole('slider', { name: 'Session lifespan maximum' })
+
   return slider
 }
 
@@ -158,6 +171,7 @@ function ControlledField({
   onChange: (range: AgentMapTimeRange) => void
 }): React.JSX.Element {
   const [range, setRange] = useState(initial)
+
   return (
     <AgentMapTimeRangeField
       label={label}
@@ -173,19 +187,23 @@ function ControlledField({
 /** Radix reads geometry off the root and gates moves on pointer capture. */
 function stubSliderGeometry(): () => void {
   const captured = new Set<number>()
+
   const element = Element.prototype as unknown as {
     setPointerCapture: (id: number) => void
     hasPointerCapture: (id: number) => boolean
     releasePointerCapture: (id: number) => void
   }
+
   const original = {
     setPointerCapture: element.setPointerCapture,
     hasPointerCapture: element.hasPointerCapture,
     releasePointerCapture: element.releasePointerCapture
   }
+
   element.setPointerCapture = (id) => void captured.add(id)
   element.hasPointerCapture = (id) => captured.has(id)
   element.releasePointerCapture = (id) => void captured.delete(id)
+
   const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
     x: 0,
     y: 0,
@@ -197,6 +215,7 @@ function stubSliderGeometry(): () => void {
     height: 24,
     toJSON: () => ({})
   })
+
   return () => {
     element.setPointerCapture = original.setPointerCapture
     element.hasPointerCapture = original.hasPointerCapture
@@ -209,12 +228,14 @@ function dragThumb(thumb: HTMLElement, stops: readonly number[], onStep?: () => 
   act(() => {
     fireEvent.pointerDown(thumb, { pointerId: 1, button: 0, clientX: SLIDER_WIDTH })
   })
+
   for (const stop of stops) {
     act(() => {
       fireEvent.pointerMove(thumb, { pointerId: 1, clientX: clientXForStop(stop) })
     })
     onStep?.()
   }
+
   act(() => {
     fireEvent.pointerUp(thumb, { pointerId: 1, clientX: clientXForStop(stops.at(-1) ?? 0) })
   })
@@ -319,9 +340,11 @@ describe('AgentMapTimeRangeField', () => {
 
   it('follows an external range change while a draft is active', () => {
     const onChange = vi.fn()
+
     const field = (range: AgentMapTimeRange): React.JSX.Element => (
       <AgentMapTimeRangeField label="Session lifespan" range={range} onChange={onChange} />
     )
+
     const view = render(field({ min: 0, max: AGENT_MAP_TIME_MAX_INDEX }))
     expect(screen.getByText('any')).toBeInTheDocument()
 
@@ -355,9 +378,11 @@ describe('AgentMapTimeRangeField', () => {
 
   it('does not commit an interaction invalidated by an external range change', () => {
     const onChange = vi.fn()
+
     const field = (range: AgentMapTimeRange): React.JSX.Element => (
       <AgentMapTimeRangeField label="Session lifespan" range={range} onChange={onChange} />
     )
+
     const view = render(field({ min: 0, max: AGENT_MAP_TIME_MAX_INDEX }))
     const thumb = screen.getByRole('slider', { name: 'Session lifespan maximum' })
 

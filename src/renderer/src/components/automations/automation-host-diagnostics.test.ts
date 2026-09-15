@@ -36,6 +36,7 @@ import {
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 
 const callRuntimeRpc = vi.fn()
+
 const getRuntimeEnvironmentStatus = vi.fn()
 
 // Only the capability-probe suite reaches the real list client; every other test
@@ -51,11 +52,13 @@ const RUNTIME_AUTHORITY: AutomationAuthorityRef = {
   environmentId: 'env-1',
   pairingRevision: 4
 }
+
 const OTHER_AUTHORITY: AutomationAuthorityRef = {
   kind: 'runtime',
   environmentId: 'env-2',
   pairingRevision: 1
 }
+
 const LEGACY = { querySupport: 'legacy-unscoped' as const }
 
 function stableAuthority(authority: AutomationAuthorityRef): StableAutomationAuthorityRef {
@@ -91,6 +94,7 @@ function target(
   } = {}
 ): AutomationHostFetchTarget {
   const authority = options.authority ?? RUNTIME_AUTHORITY
+
   return {
     ref,
     authority,
@@ -138,10 +142,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -155,10 +161,12 @@ function harness(): {
   ) => ReturnType<typeof createAutomationHostScheduler>
 } {
   const diagnostics = createAutomationHostDiagnostics()
+
   const cache = createAutomationHostCache({
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
   })
+
   return {
     cache,
     diagnostics,
@@ -179,6 +187,7 @@ function harness(): {
 describe('automation host request counters', () => {
   it('attributes each scoped call to both its authority and its stable key', async () => {
     const { diagnostics, schedule } = harness()
+
     const scheduler = schedule({
       transport: { listScoped: vi.fn(() => Promise.resolve(scopedResult(['a', 'b']))) }
     })
@@ -209,11 +218,13 @@ describe('automation host request counters', () => {
       sshRef(RUNTIME_AUTHORITY, 'target-1'),
       orphanRef(RUNTIME_AUTHORITY)
     ]
+
     await scheduler.refresh(refs.map((ref) => target(ref, LEGACY)))
 
     const snapshot = diagnostics.snapshot()
     expect(listLegacy).toHaveBeenCalledTimes(1)
     expect(snapshot.byAuthority[authorityKeyOf(RUNTIME_AUTHORITY)].legacyRequests).toBe(1)
+
     // A legacy answer belongs to no single entry, so no key may claim the call
     // even though each key is credited with the rows it took from that answer.
     for (const ref of refs) {
@@ -256,6 +267,7 @@ describe('automation host request counters', () => {
       target(selfRef(RUNTIME_AUTHORITY), LEGACY),
       target(sshRef(RUNTIME_AUTHORITY, 'target-1'), LEGACY)
     ])
+
     await Promise.resolve()
     const second = scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY), LEGACY)])
     gate.resolve([automation('a')])
@@ -312,6 +324,7 @@ describe('automation host request counters', () => {
       target(selfRef(RUNTIME_AUTHORITY)),
       target(sshRef(RUNTIME_AUTHORITY, 'target-1'))
     ])
+
     await Promise.resolve()
     scheduler.cancelQueued()
     gate.resolve(scopedResult(['a']))
@@ -363,12 +376,14 @@ describe('unpooled capability probes', () => {
     })
     callRuntimeRpc.mockImplementation((_target: unknown, _method: unknown, params: unknown) => {
       const selector = (params as { selector: AutomationListScopeSelector }).selector
+
       return Promise.resolve({
         automations: [{ id: 'a' }],
         items: [{ automationId: 'a', selector }],
         orphanCount: 0
       })
     })
+
     // No injected transport: this is the one suite that drives the real client.
     const scheduler = createAutomationHostScheduler({
       cache,
@@ -383,6 +398,7 @@ describe('unpooled capability probes', () => {
 
     const authority =
       automationHostDiagnostics.snapshot().byAuthority[authorityKeyOf(RUNTIME_AUTHORITY)]
+
     expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
     // Two pooled list calls, and the one shared round trip the pool never sees.
     expect(authority).toMatchObject({ requests: 2, capabilityProbes: 1 })
@@ -443,6 +459,7 @@ describe('automation host stale-response counters', () => {
       sshRef(RUNTIME_AUTHORITY, 'target-1'),
       orphanRef(RUNTIME_AUTHORITY)
     ]
+
     const pending = scheduler.refresh(refs.map((ref) => target(ref, LEGACY)))
     await Promise.resolve()
     // The whole authority re-paired while its one answer was in flight.
@@ -465,10 +482,12 @@ describe('automation host stale-response counters', () => {
     const scheduler = schedule({ transport: { listLegacy: vi.fn(() => gate.promise) } })
 
     const stale = sshRef(RUNTIME_AUTHORITY, 'target-1')
+
     const pending = scheduler.refresh([
       target(selfRef(RUNTIME_AUTHORITY), LEGACY),
       target(stale, LEGACY)
     ])
+
     await Promise.resolve()
     cache.invalidate(stale)
     gate.resolve([automation('a')])
@@ -486,6 +505,7 @@ describe('automation host response measurements', () => {
     const { diagnostics, schedule } = harness()
     const ticks = [100, 145, 200, 320]
     let tick = 0
+
     const scheduler = schedule({
       elapsed: () => ticks[Math.min(tick++, ticks.length - 1)],
       concurrency: 1,
@@ -510,6 +530,7 @@ describe('automation host response measurements', () => {
     const { diagnostics, schedule } = harness()
     const ticks = [100, 175]
     let tick = 0
+
     const scheduler = schedule({
       elapsed: () => ticks[Math.min(tick++, ticks.length - 1)],
       concurrency: 1,
@@ -530,6 +551,7 @@ describe('automation host response measurements', () => {
   // would otherwise be lost — precisely where the payload is largest.
   it('attributes legacy rows to each host, not only to the authority', async () => {
     const { diagnostics, schedule } = harness()
+
     const scheduler = schedule({
       transport: {
         listLegacy: vi.fn(() =>
@@ -555,6 +577,7 @@ describe('automation host response measurements', () => {
   // reading as a real one.
   it('leaves response size unmeasured until measurement is turned on', async () => {
     const { diagnostics, schedule } = harness()
+
     const scheduler = schedule({
       transport: { listScoped: vi.fn(() => Promise.resolve(scopedResult(['a']))) }
     })
@@ -576,6 +599,7 @@ describe('automation host response measurements', () => {
 describe('automation host diagnostics bookkeeping', () => {
   it('bounds tracked keys so a long session cannot grow without limit', () => {
     const diagnostics = createAutomationHostDiagnostics(2)
+
     for (const key of ['k1', 'k2', 'k3']) {
       diagnostics.recordRequest({
         authorityKey: 'a',
@@ -583,6 +607,7 @@ describe('automation host diagnostics bookkeeping', () => {
         transport: 'scoped'
       })
     }
+
     const snapshot = diagnostics.snapshot()
     expect(Object.keys(snapshot.byStableKey)).toEqual(['k2', 'k3'])
     // Evicting a key must not rewrite history: the totals still saw three calls.

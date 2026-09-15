@@ -43,23 +43,30 @@ export class PromiseSettlementWaiters<T> {
   wait(options: PromiseSettlementWaitOptions<T> = {}): Promise<T> {
     if (options.signal?.aborted) {
       options.onAbandon?.('abort')
+
       return Promise.reject(options.createAbortError?.() ?? createDefaultAbortError())
     }
+
     if (this.settlement) {
       return settleWaiterImmediately(this.settlement, options.onFulfilled)
     }
+
     return new Promise<T>((resolve, reject) => {
       let waiter!: PromiseSettlementWaiter<T>
+
       const abandon = (reason: 'abort' | 'timeout', error: Error): void => {
         if (!this.waiters.delete(waiter)) {
           return
         }
+
         cleanupWaiter(waiter)
         options.onAbandon?.(reason)
         reject(error)
       }
+
       const onAbort = (): void =>
         abandon('abort', options.createAbortError?.() ?? createDefaultAbortError())
+
       waiter = {
         resolve,
         reject,
@@ -67,6 +74,7 @@ export class PromiseSettlementWaiters<T> {
         signal: options.signal,
         onAbort
       }
+
       if (options.timeoutMs !== undefined) {
         waiter.timer = setTimeout(
           () =>
@@ -78,8 +86,10 @@ export class PromiseSettlementWaiters<T> {
         )
         waiter.timer.unref?.()
       }
+
       this.waiters.add(waiter)
       options.signal?.addEventListener('abort', onAbort, { once: true })
+
       if (options.signal?.aborted) {
         onAbort()
       }
@@ -90,12 +100,15 @@ export class PromiseSettlementWaiters<T> {
     if (this.settlement) {
       return
     }
+
     this.settlement = settlement
+
     for (const waiter of this.waiters) {
       this.waiters.delete(waiter)
       cleanupWaiter(waiter)
       settleWaiter(settlement, waiter)
     }
+
     onSettled?.()
   }
 }
@@ -104,6 +117,7 @@ function cleanupWaiter<T>(waiter: PromiseSettlementWaiter<T>): void {
   if (waiter.timer) {
     clearTimeout(waiter.timer)
   }
+
   waiter.signal?.removeEventListener('abort', waiter.onAbort)
 }
 
@@ -113,8 +127,10 @@ function settleWaiter<T>(
 ): void {
   if (settlement.status === 'rejected') {
     waiter.reject(settlement.error)
+
     return
   }
+
   try {
     waiter.onFulfilled?.(settlement.value)
     waiter.resolve(settlement.value)
@@ -135,5 +151,6 @@ function settleWaiterImmediately<T>(
 function createDefaultAbortError(): Error {
   const error = new Error('Promise settlement wait aborted')
   error.name = 'AbortError'
+
   return error
 }

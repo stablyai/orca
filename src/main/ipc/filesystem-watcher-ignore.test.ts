@@ -27,9 +27,11 @@ describe('buildParcelWatcherIgnoreOptions', () => {
     expect(plainPaths.length).toBeLessThanOrEqual(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
     expect(option).toEqual(WATCHER_IGNORE_DIRS.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT))
     const fallbackRegex = new RegExp(options.ignoreGlobs?.[0] ?? '(?!)')
+
     for (const dir of WATCHER_IGNORE_DIRS.slice(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)) {
       expect(fallbackRegex.test(`packages/app/${dir}/file.ts`)).toBe(true)
     }
+
     expect(options.ignoreGlobs?.[0]).not.toContain('?!')
   })
 
@@ -42,11 +44,13 @@ describe('buildParcelWatcherIgnoreOptions', () => {
       const source = options.ignoreGlobs![0]
       expect(source).not.toContain('?!')
       const regex = new RegExp(source)
+
       for (const dir of WATCHER_IGNORE_DIRS) {
         expect(regex.test(dir)).toBe(true)
         expect(regex.test(`packages/app/${dir}`)).toBe(true)
         expect(regex.test(`packages\\app\\${dir}\\nested\\file.ts`)).toBe(platform === 'win32')
       }
+
       expect(regex.test('packages/app/.github/workflows')).toBe(false)
       expect(regex.test('packages/app/node_modules-cache/file.ts')).toBe(false)
       expect(regex.test('project\\node_modules/file.ts')).toBe(platform === 'win32')

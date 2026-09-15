@@ -17,14 +17,17 @@ export function getRuntimeClientEventEnvironmentIds(
 ): string[] {
   const ids = new Set<string>()
   const activeEnvironmentId = getActiveRuntimeEnvironmentId(state)
+
   if (activeEnvironmentId) {
     ids.add(activeEnvironmentId)
   }
+
   for (const environment of state.runtimeEnvironments ?? []) {
     if (state.runtimeStatusByEnvironmentId?.get(environment.id)?.status) {
       ids.add(environment.id)
     }
   }
+
   return [...ids]
 }
 
@@ -32,11 +35,13 @@ export function getReachableRuntimeEnvironmentIds(
   state: RuntimeEnvironmentStoreSyncState
 ): string[] {
   const ids: string[] = []
+
   for (const [environmentId, status] of state.runtimeStatusByEnvironmentId ?? []) {
     if (status?.status) {
       ids.push(environmentId)
     }
   }
+
   return ids
 }
 
@@ -68,6 +73,7 @@ export function getNewlyConnectedRuntimeEnvironmentIds(
   next: readonly string[]
 ): string[] {
   const known = new Set(previous)
+
   return [...new Set(next)].filter((environmentId) => !known.has(environmentId))
 }
 
@@ -133,15 +139,18 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
     }
 
     handlingStoreWrite = true
+
     try {
       const nextDesiredEnvironmentIds = deps.getDesiredEnvironmentIds(state)
       const nextReachableEnvironmentIds = deps.getReachableEnvironmentIds(state)
+
       const refreshEnvironmentIds = getRuntimeProjectRefreshEnvironmentIds({
         previousDesired: desiredEnvironmentIds,
         nextDesired: nextDesiredEnvironmentIds,
         previousReachable: reachableEnvironmentIds,
         nextReachable: nextReachableEnvironmentIds
       })
+
       const disconnectedEnvironmentIds = getNewlyDisconnectedRuntimeEnvironmentIds(
         reachableEnvironmentIds,
         nextReachableEnvironmentIds
@@ -149,9 +158,11 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
 
       desiredEnvironmentIds = nextDesiredEnvironmentIds
       reachableEnvironmentIds = nextReachableEnvironmentIds
+
       for (const environmentId of refreshEnvironmentIds) {
         deps.requestProjectRefresh(environmentId)
       }
+
       for (const environmentId of disconnectedEnvironmentIds) {
         deps.markEnvironmentSshStateStale(environmentId)
       }
@@ -161,12 +172,14 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
       // that final generation in this same (single) sync.
       const nextDesiredEnvironmentKey = deps.buildEnvironmentKey(desiredEnvironmentIds)
       const nextReachableEnvironmentKey = deps.buildEnvironmentKey(reachableEnvironmentIds)
+
       if (
         nextDesiredEnvironmentKey === desiredEnvironmentKey &&
         nextReachableEnvironmentKey === reachableEnvironmentKey
       ) {
         return
       }
+
       desiredEnvironmentKey = nextDesiredEnvironmentKey
       reachableEnvironmentKey = nextReachableEnvironmentKey
       deps.sync()
@@ -201,8 +214,10 @@ export function invalidateRuntimeClientEventReplay(
   deps.requestProjectRefresh()
   const previousSshStateReference = deps.getSshStateReference()
   deps.markEnvironmentSshStateStale()
+
   if (deps.getSshStateReference() === previousSshStateReference) {
     deps.sync()
   }
+
   void deps.hydrateEnvironmentSshState().catch(() => {})
 }

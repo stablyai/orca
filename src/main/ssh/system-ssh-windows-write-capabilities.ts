@@ -27,7 +27,9 @@ export function getWindowsRemoteWriteExecutionHostKey(target: SshTarget): string
   if (target.configHost) {
     return `config:${target.configHost}`
   }
+
   const port = target.port ?? 22
+
   return target.username
     ? `host:${target.username}@${target.host}:${port}`
     : `host:${target.host}:${port}`
@@ -38,12 +40,14 @@ export function getWindowsRemoteWriteCapabilities(
 ): CapabilityProbeCache<WindowsRemoteWriteCapability> {
   const key = getWindowsRemoteWriteExecutionHostKey(target)
   let cache = capabilitiesByExecutionHost.get(key)
+
   if (!cache) {
     cache = new CapabilityProbeCache<WindowsRemoteWriteCapability>(
       WINDOWS_WRITE_CAPABILITY_RETRY_INTERVAL_MS
     )
     capabilitiesByExecutionHost.set(key, cache)
   }
+
   return cache
 }
 

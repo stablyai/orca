@@ -15,7 +15,9 @@ import { toWebTerminalSurfaceTabId } from '../web-terminal-surface-id'
  * forward (`>`) rather than `!==`. See terminal-tab-recovery-ledger.ts.
  */
 const WORKTREE = 'repo-1::worktree-1'
+
 const ENVIRONMENT = 'env-1'
+
 const HOST_TAB = 'host-tab-1'
 
 const LEDGER: TerminalTabRecoveryLedger = {
@@ -52,10 +54,13 @@ function snapshot(): RuntimeMobileSessionTabsResult {
 
 function rebuild(existing?: Partial<TerminalTab>): TerminalTab {
   const localTabId = toWebTerminalSurfaceTabId(HOST_TAB)
+
   const existingById = new Map<string, TerminalTab>(
     existing ? [[localTabId, { id: localTabId, ...existing } as TerminalTab]] : []
   )
+
   const [mirrored] = buildMirroredTerminalTabs(snapshot(), ENVIRONMENT, existingById, {}, 0, 1_000)
+
   return mirrored!.tab
 }
 

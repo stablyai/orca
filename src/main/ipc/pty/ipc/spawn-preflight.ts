@@ -43,15 +43,19 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined
       ? ctx.effectiveSessionAppId
       : null
+
   if (ctx.preSpawnHiddenMarkId !== null) {
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, true)
   }
+
   if (!ctx.earlyStablePaneOwner) {
     const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
+
     if (pathUsable) {
       await pathUsable
     }
   }
+
   ctx.spawnTiming.mark('stable_adoption_setup')
   ctx.preAdoptedStablePane =
     ctx.earlyStablePaneOwner && ctx.earlyWorktreeId
@@ -67,23 +71,30 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
         })
       : null
   ctx.spawnTiming.mark('stable_adoption')
+
   if (ctx.earlyStablePaneOwner && !ctx.preAdoptedStablePane) {
     const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
+
     if (pathUsable) {
       await pathUsable
     }
   }
+
   if (!ctx.preAdoptedStablePane) {
     // Why: reattach needs exact cwd, SSH cannot probe locally, and successful stable-pane adoption needs no launch preflight.
     const requestedMissingCwdFallback =
       !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
+
     const isPosixStartupCwd = args.cwd?.startsWith('/') === true
+
     const startupWorkspaceCwd =
       requestedMissingCwdFallback && isPosixStartupCwd
         ? ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, '.')
         : undefined
+
     const initiallyResolvedStartupCwd =
       requestedMissingCwdFallback && isPosixStartupCwd ? ctx.cwd : undefined
+
     const startupTerminalRuntimeOptions =
       requestedMissingCwdFallback && process.platform === 'win32'
         ? resolveLocalWindowsTerminalRuntimeOptions({
@@ -93,11 +104,13 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
             fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
           })
         : undefined
+
     const wslRuntimeOwnsStartupCwd =
       requestedMissingCwdFallback &&
       isPosixStartupCwd &&
       (isWslShellName(startupTerminalRuntimeOptions?.shellOverride) ||
         isWslUncPath(startupWorkspaceCwd ?? ''))
+
     const startupWslContext = wslRuntimeOwnsStartupCwd
       ? resolveWslSessionContext({
           cwd: startupWorkspaceCwd,
@@ -105,29 +118,36 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
           terminalWindowsWslDistro: startupTerminalRuntimeOptions?.terminalWindowsWslDistro
         })
       : undefined
+
     let wslStartupCwdExists: boolean | null = null
     let wslWorkspaceCwdExists: boolean | null = null
+
     if (startupWslContext && initiallyResolvedStartupCwd) {
       const validationCwd = toWindowsWslPath(initiallyResolvedStartupCwd, startupWslContext.distro)
       wslStartupCwdExists = isWslUncPath(validationCwd)
         ? await wslUncDirectoryExistsAsync(validationCwd)
         : ctx.deps.localStartupCwdDirectoryExists(validationCwd)
+
       if (wslStartupCwdExists === true) {
         ctx.prevalidatedCwd = validationCwd
       }
+
       if (wslStartupCwdExists === false && startupWorkspaceCwd) {
         wslWorkspaceCwdExists = isWslUncPath(startupWorkspaceCwd)
           ? await wslUncDirectoryExistsAsync(startupWorkspaceCwd)
           : ctx.deps.localStartupCwdDirectoryExists(startupWorkspaceCwd)
+
         if (wslWorkspaceCwdExists === true) {
           ctx.prevalidatedCwd = startupWorkspaceCwd
         }
       }
     }
+
     const allowMissingCwdFallback =
       requestedMissingCwdFallback &&
       (!wslRuntimeOwnsStartupCwd ||
         (wslStartupCwdExists === false && wslWorkspaceCwdExists === true))
+
     let didFallbackToWorkspaceRootCwd = false
     ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(
       args.worktreeId,
@@ -150,16 +170,21 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
           }
         : undefined
     )
+
     if (didFallbackToWorkspaceRootCwd && wslWorkspaceCwdExists === true && ctx.cwd) {
       ctx.prevalidatedCwd = ctx.cwd
     }
+
     ctx.startupCwdFallback =
       didFallbackToWorkspaceRootCwd && ctx.cwd ? { kind: 'worktree', cwd: ctx.cwd } : undefined
   }
+
   ctx.spawnTiming.mark('preflight')
+
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(ctx.provider, args.connectionId, args.sessionId)
+
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
     const previousHiddenMarkId = ctx.preSpawnHiddenMarkId
@@ -182,20 +207,25 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined
         ? ctx.effectiveSessionAppId
         : null
+
     if (previousHiddenMarkId !== ctx.preSpawnHiddenMarkId) {
       if (previousHiddenMarkId !== null) {
         ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(previousHiddenMarkId, false)
       }
+
       if (ctx.preSpawnHiddenMarkId !== null) {
         ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, true)
       }
     }
   }
+
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
+
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
+
   ctx.terminalRuntimeOptions =
     process.platform === 'win32' && !args.connectionId
       ? resolveLocalWindowsTerminalRuntimeOptions({
@@ -217,11 +247,13 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
         terminalWindowsWslDistro: ctx.terminalRuntimeOptions.terminalWindowsWslDistro
       })?.distro ?? null)
     : null
+
   const initialSelectionTarget = getCodexSelectionTargetForPty(
     initialShellOverride,
     ctx.cwd,
     ctx.expectedWslDistro
   )
+
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(initialSelectionTarget)

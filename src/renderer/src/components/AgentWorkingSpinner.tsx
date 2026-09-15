@@ -18,6 +18,7 @@ function syncSpinnerPhase(el: HTMLSpanElement | null): void {
       (candidate) =>
         'animationName' in candidate && candidate.animationName === SPINNER_ANIMATION_NAME
     )
+
   if (animation !== undefined) {
     animation.startTime = 0
   }

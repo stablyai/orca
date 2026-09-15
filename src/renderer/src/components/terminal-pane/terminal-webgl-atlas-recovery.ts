@@ -5,8 +5,10 @@ const ATLAS_RECOVERY_DELAYS_MS = [120, 500]
 function scheduleNextFrame(callback: () => void): void {
   if (typeof globalThis.requestAnimationFrame === 'function') {
     globalThis.requestAnimationFrame(callback)
+
     return
   }
+
   globalThis.setTimeout(callback, 0)
 }
 
@@ -22,6 +24,7 @@ function resetAtlasesAndRefreshPanes(reason: string): void {
 
 function scheduleAtlasRecoveryBurst(reason: string): void {
   scheduleNextFrame(() => resetAtlasesAndRefreshPanes(reason))
+
   for (const delayMs of ATLAS_RECOVERY_DELAYS_MS) {
     globalThis.setTimeout(() => resetAtlasesAndRefreshPanes(reason), delayMs)
   }

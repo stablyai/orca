@@ -25,6 +25,7 @@ import {
 afterEach(cleanup)
 
 const VIEWPORT_PX = 600
+
 const TRANSCRIPT_LENGTH = 200
 
 /** Everything the document holds below the last row: the transcript column's
@@ -33,6 +34,7 @@ const TRANSCRIPT_LENGTH = 200
  *  a pin computed from the virtualizer's totals and one computed from the
  *  document disagree. */
 const BELOW_TRANSCRIPT_PX = 24
+
 let belowTranscriptPx = BELOW_TRANSCRIPT_PX
 
 /** Everything the document holds above the spacer: the scroll root's top gutter,
@@ -61,12 +63,14 @@ const ROW_PX = estimateNativeChatRowHeight(nativeChatRowContentMetrics(marker(0)
   hasStatus: false,
   hasTurnDiff: false
 })
+
 const ROW_PITCH_PX = ROW_PX + NATIVE_CHAT_ROW_GAP_PX
 
 /** Replace a layout property on every element, and hand back the undo. */
 function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): () => void {
   const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)
   Object.defineProperty(HTMLElement.prototype, name, { configurable: true, ...descriptor })
+
   return () => {
     if (original) {
       Object.defineProperty(HTMLElement.prototype, name, original)
@@ -81,6 +85,7 @@ function overrideLayoutProperty(name: string, descriptor: PropertyDescriptor): (
  *  reaches the document only through the height the window reserves for it. */
 function reservedTranscriptHeight(root: ParentNode): number {
   const spacer = root.querySelector<HTMLElement>('[data-native-chat-window]')
+
   return spacer ? Number.parseFloat(spacer.style.height) || 0 : 0
 }
 
@@ -107,19 +112,24 @@ function stubLayout({
   viewportHeight?: () => number
 } = {}): () => void {
   const scrollTops = new WeakMap<HTMLElement, number>()
+
   const restores = [
     overrideLayoutProperty('offsetHeight', {
       get(this: HTMLElement): number {
         if (this.hasAttribute('data-native-chat-scroll')) {
           return viewportHeight()
         }
+
         if (this.hasAttribute('data-native-chat-window')) {
           return reservedTranscriptHeight(this.parentElement ?? this)
         }
+
         const index = this.dataset.index
+
         if (index !== undefined) {
           return measuredRowHeights[Number(index)] ?? ROW_PX
         }
+
         // The transcript column: as tall as the window it wraps, plus what sits
         // under it. This is the element the list observes for streamed growth.
         return this.classList.contains('max-w-4xl')
@@ -128,6 +138,7 @@ function stubLayout({
       }
     })
   ]
+
   if (scrollGeometry) {
     restores.push(
       overrideLayoutProperty('clientHeight', {
@@ -155,6 +166,7 @@ function stubLayout({
       })
     )
   }
+
   if (offsetChain) {
     restores.push(
       overrideLayoutProperty('offsetTop', {
@@ -171,6 +183,7 @@ function stubLayout({
       })
     )
   }
+
   return () => {
     for (const restore of restores.toReversed()) {
       restore()
@@ -194,6 +207,7 @@ const resizeObservations = new Set<FakeResizeObservation>()
  *  falls back to `offsetHeight`, which is the path being modelled. */
 function stubResizeObserver(): () => void {
   const original = window.ResizeObserver
+
   class TestResizeObserver {
     private readonly observation: FakeResizeObservation
     constructor(callback: ResizeObserverCallback) {
@@ -211,7 +225,9 @@ function stubResizeObserver(): () => void {
       resizeObservations.delete(this.observation)
     }
   }
+
   window.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver
+
   return () => {
     resizeObservations.clear()
     window.ResizeObserver = original
@@ -221,21 +237,26 @@ function stubResizeObserver(): () => void {
 /** Deliver one round of resize callbacks; true when anything was delivered. */
 function deliverResizes(): boolean {
   let delivered = false
+
   // A copy: a callback may disconnect its own observer mid-delivery.
   for (const observation of Array.from(resizeObservations)) {
     const entries: ResizeObserverEntry[] = []
+
     for (const [target, lastHeight] of observation.observed) {
       const height = (target as HTMLElement).offsetHeight
+
       if (height !== lastHeight) {
         observation.observed.set(target, height)
         entries.push({ target } as unknown as ResizeObserverEntry)
       }
     }
+
     if (entries.length > 0) {
       delivered = true
       observation.callback(entries, undefined as unknown as ResizeObserver)
     }
   }
+
   return delivered
 }
 
@@ -270,13 +291,17 @@ function list(messages: NativeChatMessage[]): React.JSX.Element {
  *  false but every other assertion still holds. */
 function windowState(container: HTMLElement): { totalSize: number; indexes: number[] } {
   const spacer = container.querySelector<HTMLElement>('[data-native-chat-window]')
+
   if (!spacer) {
     throw new Error('transcript is not windowed: no spacer, every row is mounted')
   }
+
   const totalSize = Number.parseFloat(spacer.style.height)
+
   if (!(totalSize > 0)) {
     throw new Error(`transcript reserved no height (${spacer.style.height})`)
   }
+
   return {
     totalSize,
     indexes: Array.from(container.querySelectorAll<HTMLElement>('[data-index]'))
@@ -288,15 +313,18 @@ function windowState(container: HTMLElement): { totalSize: number; indexes: numb
 /** happy-dom fires no scroll event for an assignment to `scrollTop`. */
 function scrollTranscript(container: HTMLElement, top: number): void {
   const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')
+
   if (!scroller) {
     throw new Error('no transcript scroll root')
   }
+
   scroller.scrollTop = top
   fireEvent.scroll(scroller)
 }
 
 describe('windowed transcript', () => {
   let restoreLayout = (): void => {}
+
   beforeEach(() => {
     restoreLayout = stubLayout()
   })
@@ -357,6 +385,7 @@ describe('windowed transcript', () => {
         ? { ...marker(index), blocks: [{ type: 'text' as const, text: '' }] }
         : marker(index)
     )
+
     const drawn = TRANSCRIPT_LENGTH - TRANSCRIPT_LENGTH / 4
     const { container } = render(list(withBlanks))
     const { totalSize, indexes } = windowState(container)
@@ -396,6 +425,7 @@ describe('windowed transcript', () => {
 // and the row is pinned into the window until the card can answer for itself.
 describe('revealing a diff from a turn rollup', () => {
   let restoreLayout = (): void => {}
+
   beforeEach(() => {
     restoreLayout = stubLayout()
   })
@@ -409,6 +439,7 @@ describe('revealing a diff from a turn rollup', () => {
   }
 
   const patch = '@@ -1 +1 @@\n-before\n+after'
+
   const items: AgentJournalRenderItem[] = [
     journalItem(
       'user',
@@ -436,6 +467,7 @@ describe('revealing a diff from a turn rollup', () => {
   it('mounts the row a reveal names even when the window has left it behind', () => {
     const scrollTo = vi.fn()
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+
     const { container } = render(
       <NativeChatMessageList
         session={session(projectStructuredItemsToNativeChat(items))}
@@ -445,6 +477,7 @@ describe('revealing a diff from a turn rollup', () => {
         fontScale={1}
       />
     )
+
     // The rollup rides the turn's last row, which is pinned; the diff it points
     // at is near the top and long gone from the window.
     scrollTranscript(container, 4000)
@@ -477,8 +510,10 @@ describe('revealing a diff from a turn rollup', () => {
       ),
       ...items.slice(2)
     ].map((item, index) => ({ ...item, sequence: index + 1 }))
+
     const scrollTo = vi.fn()
     vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(scrollTo)
+
     const { container } = render(
       <NativeChatMessageList
         session={session(projectStructuredItemsToNativeChat(withPrompts))}
@@ -488,6 +523,7 @@ describe('revealing a diff from a turn rollup', () => {
         fontScale={1}
       />
     )
+
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
     scrollTranscript(container, 6000)
@@ -512,6 +548,7 @@ describe('revealing a diff from a turn rollup', () => {
 // merely watched it would re-scroll forever.
 describe('jumping to a message from the rail', () => {
   let restoreLayout = (): void => {}
+
   beforeEach(() => {
     restoreLayout = stubLayout()
   })
@@ -589,6 +626,7 @@ describe('transcript with a hidden scroll root', () => {
     let viewportHeight = 0
     const restoreLayout = stubLayout({ viewportHeight: () => viewportHeight })
     const restoreResizeObserver = stubResizeObserver()
+
     try {
       const { container } = render(list(transcript))
 
@@ -625,6 +663,7 @@ describe('transcript follow ownership across growth and appends', () => {
   /** One wrapped prose line. Content and measured height grow from this one
    *  number, so a step that adds lines is a step that adds pixels. */
   const STREAM_LINE_PX = 22
+
   /** Every row but the growing one measures at its estimate, so the reserved
    *  total is arithmetic rather than a snapshot. */
   const BASE_TOTAL_PX =
@@ -651,11 +690,13 @@ describe('transcript follow ownership across growth and appends', () => {
       { length: step * LINES_PER_STEP },
       (_, index) => `streamed line ${index}`
     )
+
     const next = [...transcript]
     next[TAIL_INDEX] = {
       ...marker(TAIL_INDEX),
       blocks: [{ type: 'text', text: [`marker-${TAIL_INDEX}`, ...lines].join('\n') }]
     }
+
     return next
   }
 
@@ -673,9 +714,11 @@ describe('transcript follow ownership across growth and appends', () => {
 
   function scrollRoot(container: HTMLElement): HTMLElement {
     const scroller = container.querySelector<HTMLElement>('[data-native-chat-scroll]')
+
     if (!scroller) {
       throw new Error('no transcript scroll root')
     }
+
     return scroller
   }
 
@@ -686,25 +729,30 @@ describe('transcript follow ownership across growth and appends', () => {
   function paint(container: HTMLElement): void {
     const scroller = scrollRoot(container)
     let lastScrollTop = scroller.scrollTop
+
     for (let pass = 0; pass < 12; pass += 1) {
       let changed = false
       act(() => {
         changed = deliverResizes()
       })
+
       if (scroller.scrollTop !== lastScrollTop) {
         lastScrollTop = scroller.scrollTop
         fireEvent.scroll(scroller)
         changed = true
       }
+
       if (!changed) {
         return
       }
     }
+
     throw new Error('the transcript never settled: resize and scroll kept moving it')
   }
 
   function distanceFromBottom(container: HTMLElement): number {
     const scroller = scrollRoot(container)
+
     return scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop
   }
 
@@ -715,7 +763,9 @@ describe('transcript follow ownership across growth and appends', () => {
   }
 
   let restoreLayout = (): void => {}
+
   let restoreResizeObserver = (): void => {}
+
   beforeEach(() => {
     restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
     restoreResizeObserver = stubResizeObserver()
@@ -741,6 +791,7 @@ describe('transcript follow ownership across growth and appends', () => {
     expect(windowState(container).totalSize).toBe(BASE_TOTAL_PX + tailHeightAt(0))
 
     const frames: { step: number; tail: number; total: number; distance: number }[] = []
+
     for (let step = 1; step <= GROWTH_STEPS; step += 1) {
       setMeasuredTail(step)
       rerender(streamingList(step))
@@ -821,6 +872,7 @@ describe('transcript follow ownership across growth and appends', () => {
       expect(scroller.scrollTop).toBe(parkedAt)
 
       let previousDistance = distanceFromBottom(container)
+
       for (let step = 6; step <= GROWTH_STEPS; step += 1) {
         setMeasuredTail(step)
         rerender(streamingList(step))
@@ -852,6 +904,7 @@ describe('transcript follow ownership across growth and appends', () => {
       expect(scroller.scrollTop).toBe(parkedAt)
       expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
     }
+
     expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
   })
 
@@ -859,6 +912,7 @@ describe('transcript follow ownership across growth and appends', () => {
     const { container, rerender } = render(list(transcript))
     paint(container)
     const scroller = scrollRoot(container)
+
     for (let count = 1; count <= 8; count += 1) {
       rerender(list(appendedTranscript(count)))
       paint(container)
@@ -908,8 +962,10 @@ describe('transcript follow ownership across growth and appends', () => {
     } else {
       fireEvent.click(screen.getByRole('button', { name: /jump to latest/i }))
     }
+
     paint(container)
     expect(screen.queryByRole('button', { name: /jump to latest/i })).toBeNull()
+
     for (let step = 6; step <= 8; step += 1) {
       setMeasuredTail(step)
       rerender(streamingList(step))
@@ -917,6 +973,7 @@ describe('transcript follow ownership across growth and appends', () => {
       expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
       expect(windowState(container).indexes.length).toBeLessThan(TRANSCRIPT_LENGTH / 4)
     }
+
     rerender(list([...transcriptAt(8), marker(TRANSCRIPT_LENGTH)]))
     paint(container)
     expect(distanceFromBottom(container)).toBeLessThanOrEqual(NATIVE_CHAT_FOLLOW_REARM_PX)
@@ -951,6 +1008,7 @@ describe('transcript follow ownership across growth and appends', () => {
     paint(container)
     const aboveIndex = windowState(container).indexes[0]!
     expect((aboveIndex + 1) * ROW_PITCH_PX).toBeLessThan(readingAt)
+
     for (const growth of [100, 200]) {
       measuredRowHeights = Array.from({ length: TRANSCRIPT_LENGTH }, (_, index) =>
         index === aboveIndex ? ROW_PX + growth : ROW_PX
@@ -958,6 +1016,7 @@ describe('transcript follow ownership across growth and appends', () => {
       paint(container)
       expect(scroller.scrollTop).toBe(readingAt + growth)
     }
+
     rerender(list(appendedTranscript(1)))
     paint(container)
     expect(scroller.scrollTop).toBe(readingAt + 200)

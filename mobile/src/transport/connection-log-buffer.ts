@@ -32,10 +32,12 @@ export function createConnectionLogStore(
   const hydrationFailedHosts = new Set<string>()
   const hydrationByHost = new Map<string, Promise<void>>()
   const saveByHost = new Map<string, Promise<void>>()
+
   const persistenceRevisionByHost = new Map<
     string,
     { snapshot: readonly ConnectionLogEntry[]; saved: boolean }
   >()
+
   // Why: useSyncExternalStore compares snapshots by reference — getSnapshot
   // must return the SAME array until the data actually changes, or React
   // loops re-rendering. Cache per host; invalidate on append.
@@ -52,6 +54,7 @@ export function createConnectionLogStore(
     snapshotByHost.delete(hostId)
     persistenceRevisionByHost.delete(hostId)
     const listeners = listenersByHost.get(hostId)
+
     if (listeners) {
       for (const listener of listeners) {
         listener()
@@ -63,16 +66,22 @@ export function createConnectionLogStore(
     if (!persistence || !hydratedHosts.has(hostId)) {
       return
     }
+
     let revision = persistenceRevisionByHost.get(hostId)
+
     if (!revision) {
       revision = { snapshot: [...(entriesByHost.get(hostId) ?? [])], saved: false }
       persistenceRevisionByHost.set(hostId, revision)
     }
+
     const currentRevision = revision
+
     if (currentRevision.saved) {
       return
     }
+
     const previous = saveByHost.get(hostId) ?? Promise.resolve()
+
     const pending = previous
       .catch(() => {})
       .then(async () => {
@@ -80,14 +89,17 @@ export function createConnectionLogStore(
         if (currentRevision.saved) {
           return
         }
+
         try {
           await persistence.save(hostId, currentRevision.snapshot)
         } catch {
           await persistence.save(hostId, currentRevision.snapshot)
         }
+
         currentRevision.saved = true
       })
       .catch(() => {})
+
     saveByHost.set(hostId, pending)
   }
 
@@ -95,27 +107,34 @@ export function createConnectionLogStore(
     if (!persistence || hydratedHosts.has(hostId)) {
       return
     }
+
     const existing = hydrationByHost.get(hostId)
+
     if (existing) {
       return existing
     }
+
     if (!retryAfterFailure && hydrationFailedHosts.has(hostId)) {
       return
     }
+
     const pending = persistence
       .load(hostId)
       .then((stored) => {
         const live = entriesByHost.get(hostId) ?? []
         const seen = new Set<string>()
         const merged: ConnectionLogEntry[] = []
+
         for (const entry of [...stored, ...live]) {
           const redacted = redactConnectionLogEntry(entry)
           const fingerprint = JSON.stringify(redacted)
+
           if (!seen.has(fingerprint)) {
             seen.add(fingerprint)
             merged.push(redacted)
           }
         }
+
         merged.sort((a, b) => a.ts - b.ts)
         trim(merged)
         entriesByHost.set(hostId, merged)
@@ -129,17 +148,21 @@ export function createConnectionLogStore(
         throw error
       })
       .finally(() => hydrationByHost.delete(hostId))
+
     hydrationByHost.set(hostId, pending)
+
     return pending
   }
 
   return {
     append(hostId, entry) {
       let entries = entriesByHost.get(hostId)
+
       if (!entries) {
         entries = []
         entriesByHost.set(hostId, entries)
       }
+
       entries.push(redactConnectionLogEntry(entry))
       trim(entries)
       notify(hostId)
@@ -150,15 +173,20 @@ export function createConnectionLogStore(
 
     get(hostId) {
       const cached = snapshotByHost.get(hostId)
+
       if (cached) {
         return cached
       }
+
       const entries = entriesByHost.get(hostId)
+
       if (!entries || entries.length === 0) {
         return EMPTY
       }
+
       const snapshot = Object.freeze([...entries])
       snapshotByHost.set(hostId, snapshot)
+
       return snapshot
     },
 
@@ -166,17 +194,23 @@ export function createConnectionLogStore(
 
     subscribe(hostId, listener) {
       let listeners = listenersByHost.get(hostId)
+
       if (!listeners) {
         listeners = new Set()
         listenersByHost.set(hostId, listeners)
       }
+
       listeners.add(listener)
+
       return () => {
         const set = listenersByHost.get(hostId)
+
         if (!set) {
           return
         }
+
         set.delete(listener)
+
         if (set.size === 0) {
           listenersByHost.delete(hostId)
         }

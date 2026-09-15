@@ -25,9 +25,11 @@ import {
 // separate composition-root service — inject via module setter the way the
 // desktop entry wires it, instead of widening the shared RPC context type.
 let pluginServiceForRpc: PluginService | null = null
+
 // Consent/enablement need the settings Store too, so the entry injects bound
 // closures instead of the store itself.
 let pluginConsentForRpc: ((request: PluginConsentRequest) => Promise<void>) | null = null
+
 let pluginEnablementForRpc: ((pluginKey: string, enabled: boolean) => Promise<void>) | null = null
 
 export function setPluginServiceForRpc(
@@ -46,6 +48,7 @@ function requirePluginService(): PluginService {
   if (!pluginServiceForRpc) {
     throw new Error('Plugin service is not available on this runtime')
   }
+
   return pluginServiceForRpc
 }
 
@@ -62,6 +65,7 @@ function rpcPanelOwner(context: RpcContext): string {
 function bindRpcPanelOwner(service: PluginService, context: RpcContext): string {
   const ownerKey = rpcPanelOwner(context)
   service.panels.bindOwnerSignal(ownerKey, context.signal)
+
   return ownerKey
 }
 
@@ -79,10 +83,13 @@ export const PLUGIN_METHODS = [
     handler: async (params) => {
       const service = requirePluginService()
       await service.whenReady()
+
       if (!pluginConsentForRpc) {
         throw new Error('Plugin consent is not available on this runtime')
       }
+
       await pluginConsentForRpc(params)
+
       return listForRpc()
     }
   }),
@@ -92,10 +99,13 @@ export const PLUGIN_METHODS = [
     handler: async (params) => {
       const service = requirePluginService()
       await service.whenReady()
+
       if (!pluginEnablementForRpc) {
         throw new Error('Plugin enablement is not available on this runtime')
       }
+
       await pluginEnablementForRpc(params.pluginKey, params.enabled)
+
       return listForRpc()
     }
   }),
@@ -110,6 +120,7 @@ export const PLUGIN_METHODS = [
     handler: async (params, context) => {
       const service = requirePluginService()
       await service.whenReady()
+
       return {
         outcome: await service.panels.execute(bindRpcPanelOwner(service, context), params)
       }
@@ -123,10 +134,13 @@ export const PLUGIN_METHODS = [
       await service.whenReady()
       const ownerKey = bindRpcPanelOwner(service, context)
       const entry = await service.panels.open(ownerKey, params.pluginKey, params.panelId)
+
       if (context.signal?.aborted) {
         service.panels.revokeOwner(ownerKey)
+
         return null
       }
+
       return entry
     }
   }),
@@ -136,6 +150,7 @@ export const PLUGIN_METHODS = [
     handler: async (params) => {
       const service = requirePluginService()
       await service.whenReady()
+
       return service.invokeCommand(params.pluginKey, params.commandId, params.args)
     }
   })

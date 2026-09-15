@@ -45,12 +45,14 @@ export function useRemoteBrowserPageLifecycle({
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(null)
   const setFrameUrlRef = useRef(setFrameUrl)
   const setFrameMetadataRef = useRef(setFrameMetadata)
+
   // The single source for what the stream is doing. busy, the notice, and whether the reconnect
   // control renders are all derived below, so they cannot disagree — see
   // remote-browser-stream-status.ts for the four ways they used to.
   const [streamStatus, setStreamStatus] = useState<RemoteBrowserStreamStatus>(
     REMOTE_BROWSER_STREAM_IDLE
   )
+
   const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteCssViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteViewportTimerRef = useRef<number | null>(null)
@@ -123,6 +125,7 @@ export function useRemoteBrowserPageLifecycle({
       syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId)
     })
   }
+
   const lifecycle = lifecycleRef.current
 
   const runtimeTarget = useCallback(() => {
@@ -142,6 +145,7 @@ export function useRemoteBrowserPageLifecycle({
     lifecycle.forgetStreamViewportSize()
     setFrameMetadataRef.current(null)
     setFrameUrlRef.current(null)
+
     if (prevUrl) {
       URL.revokeObjectURL(prevUrl)
     }
@@ -150,24 +154,31 @@ export function useRemoteBrowserPageLifecycle({
   const closeMissingRemotePage = useCallback(
     (remotePageId: string | null = lifecycle.tokens.remotePage): void => {
       const state = useAppStore.getState()
+
       if (remotePageId) {
         state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       }
+
       lifecycle.abandonRemotePage()
+
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
+
       resetRemoteInputQueue()
       clearStreamFrame()
       setPaneNotice(null)
       setPaneBusy(false)
       // Why: a runtime-side tab close mirrors closing the visible tab; don't leave a dead pane behind.
       const workspacePageCount = state.browserPagesByWorkspace[browserTab.workspaceId]?.length ?? 0
+
       if (workspacePageCount <= 1) {
         closeBrowserTab(browserTab.workspaceId)
+
         return
       }
+
       closeBrowserPage(browserTab.id)
     },
     [
@@ -197,15 +208,19 @@ export function useRemoteBrowserPageLifecycle({
   useEffect(() => {
     // Why: StrictMode's mount→cleanup→mount leaves mountedRef false; re-arm or operation tokens read stale and the pane wedges.
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
       pendingFrameDecodeRef.current += 1
       lifecycle.dispose()
+
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
+
       clearPendingRemoteWheel()
+
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
@@ -230,22 +245,29 @@ export function useRemoteBrowserPageLifecycle({
     if (!activeRuntimeEnvironmentId) {
       return
     }
+
     return () => {
       const remotePageId = lifecycle.tokens.remotePage
+
       if (!remotePageId) {
         return
       }
+
       const state = useAppStore.getState()
       const currentEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       const pageStillExists = browserPageExists(browserTab.id)
+
       if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
         return
       }
+
       const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
       lifecycle.tokens.setRemotePage(null)
+
       if (!removedHandle) {
         return
       }
+
       // Why: remote tabs outlive React components on the daemon; close only when the local page or its runtime environment is gone.
       void callRuntimeRpc(
         { kind: 'environment', environmentId: removedHandle.environmentId },

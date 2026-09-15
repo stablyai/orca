@@ -251,6 +251,7 @@ describe('openWorkspaceBrowserTab', () => {
       defaultBrowserSessionProfileId: 'client-profile',
       defaultBrowserSessionProfileIdByHostId: {}
     }
+
     const policySpy = vi
       .spyOn(clientCreationActionPolicy, 'getClientCreationActionPolicy')
       .mockReturnValue({
@@ -552,11 +553,13 @@ describe('openWorkspaceBrowserTab', () => {
 
   it('fails closed for invalid targets and unresolved owners, then falls back locally', async () => {
     const secretUrl = 'https://example.com/?q=secret-value'
+
     const request = {
       workspaceId: WORKSPACE_ID,
       url: secretUrl,
       intent: { kind: 'search' as const, engine: 'kagi' as const }
     }
+
     mocks.state = {}
     await expect(
       openWorkspaceBrowserTab({
@@ -581,6 +584,7 @@ describe('openWorkspaceBrowserTab', () => {
       mocks.state = state
       await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
     }
+
     expect(mocks.createRemote).not.toHaveBeenCalled()
 
     mocks.state = {

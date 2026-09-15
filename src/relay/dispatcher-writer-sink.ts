@@ -31,11 +31,13 @@ export class DispatcherWriterSink {
 
   get writableLength(): number {
     const value = this.options.writableLength?.()
+
     return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
   }
 
   get highWaterMark(): number {
     const value = this.options.writableHighWaterMark?.()
+
     return typeof value === 'number' && Number.isFinite(value) && value > 0
       ? value
       : Number.POSITIVE_INFINITY
@@ -45,6 +47,7 @@ export class DispatcherWriterSink {
     if (!Number.isFinite(this.highWaterMark)) {
       return Number.MAX_SAFE_INTEGER
     }
+
     return Math.max(0, this.highWaterMark - relayWriterControlReserve(this.highWaterMark))
   }
 
@@ -52,6 +55,7 @@ export class DispatcherWriterSink {
     if (lane === 'fixed-bulk') {
       return !producerBlocked && this.writableLength === 0 ? Number.MAX_SAFE_INTEGER : 0
     }
+
     return this.producerFrameCapacity
   }
 
@@ -59,7 +63,9 @@ export class DispatcherWriterSink {
     if (!this.options.waitWriteDrain) {
       return { registered: false, remove: () => {} }
     }
+
     const remove = this.options.waitWriteDrain(callback)
+
     return {
       registered: true,
       remove: typeof remove === 'function' ? remove : () => {}

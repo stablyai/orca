@@ -57,6 +57,7 @@ export function reconcileSerializedMarkdown({
 
   // Branch 2: source == edited except for EOL/trailing newlines → carry the source's EOL onto the edit and skip the re-parse; guards avoid a spurious `&nbsp;` paragraph and dropping a real trailing block.
   const originalTrailingNewlines = originalSourceLf.match(/\n+$/)?.[0] ?? ''
+
   if (
     originalTrailingNewlines.length <= 1 &&
     !editedLf.endsWith('\n') &&
@@ -78,25 +79,31 @@ export function reconcileSerializedMarkdown({
   if (hasRepeatedHalfMatchSeed(baseLf, editedLf)) {
     return restoreEol(editedLf, eol)
   }
+
   let diffs = makeDiff(baseLf, editedLf, {
     checkLines: true,
     timeout: RECONCILE_DIFF_TIMEOUT_SECONDS
   })
+
   // Match makePatches's cleanup while supplying our own bounded diff, avoiding the library's 1s timeout.
   if (diffs.length > 2) {
     diffs = cleanupSemantic(diffs)
     diffs = cleanupEfficiency(diffs)
   }
+
   const patches = makePatches(baseLf, diffs)
+
   // Why: applyPatches decodes starts as UTF-8 offsets even though makePatches returns UTF-16 indices; encode against the divergent text being patched so decoding preserves the fuzzy-match seed.
   const utf8Offsets = getUtf8OffsetsAtCodeUnitIndices(
     originalSourceLf,
     patches.flatMap((patch) => [patch.start1, patch.start2])
   )
+
   for (const patch of patches) {
     patch.start1 = utf8Offsets.get(patch.start1) ?? 0
     patch.start2 = utf8Offsets.get(patch.start2) ?? 0
   }
+
   const [reconciledLf, results] = applyPatches(patches, originalSourceLf)
 
   // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to canonical.
@@ -106,6 +113,7 @@ export function reconcileSerializedMarkdown({
 
   // Branch 6: prove reconciled bytes render-equal the editor's document — any fuzzy misplacement changes canonical output and is caught here → canonical fallback.
   const reparsed = roundTrip(reconciledLf)
+
   if (reparsed === null || normalizeForSafety(reparsed) !== normalizeForSafety(editedLf)) {
     return restoreEol(editedLf, eol)
   }
@@ -122,6 +130,7 @@ function detectDominantEol(text: string): '\n' | '\r\n' {
   const totalLf = (text.match(/\n/g) ?? []).length
   const crlf = (text.match(/\r\n/g) ?? []).length
   const lfOnly = totalLf - crlf
+
   return crlf > 0 && crlf >= lfOnly ? '\r\n' : '\n'
 }
 
@@ -147,15 +156,19 @@ function getUtf8OffsetsAtCodeUnitIndices(
   const offsets = new Map<number, number>()
   let codeUnitIndex = 0
   let byteOffset = 0
+
   for (const target of targets) {
     const boundedTarget = Math.max(0, Math.min(target, text.length))
+
     while (codeUnitIndex < boundedTarget) {
       const codePoint = readUtf8CodePointAt(text, codeUnitIndex)
       byteOffset += getUtf8ByteLengthForCodePoint(codePoint)
       codeUnitIndex += codePoint > 0xffff ? 2 : 1
     }
+
     offsets.set(target, byteOffset)
   }
+
   return offsets
 }
 
@@ -163,13 +176,16 @@ function hasRepeatedHalfMatchSeed(textA: string, textB: string): boolean {
   // Match diff-match-patch's prefix/suffix trimming so a small edit isn't mistaken for a repetitive replacement.
   const minimumLength = Math.min(textA.length, textB.length)
   let prefixLength = 0
+
   while (
     prefixLength < minimumLength &&
     textA.charCodeAt(prefixLength) === textB.charCodeAt(prefixLength)
   ) {
     prefixLength += 1
   }
+
   let suffixLength = 0
+
   while (
     suffixLength < minimumLength - prefixLength &&
     textA.charCodeAt(textA.length - suffixLength - 1) ===
@@ -177,21 +193,26 @@ function hasRepeatedHalfMatchSeed(textA: string, textB: string): boolean {
   ) {
     suffixLength += 1
   }
+
   const middleA = textA.slice(prefixLength, textA.length - suffixLength)
   const middleB = textB.slice(prefixLength, textB.length - suffixLength)
   const longText = middleA.length > middleB.length ? middleA : middleB
   const shortText = middleA.length > middleB.length ? middleB : middleA
+
   if (longText.length < 4 || shortText.length * 2 < longText.length) {
     return false
   }
 
   const seedLength = Math.floor(longText.length / 4)
+
   for (const start of [Math.ceil(longText.length / 4), Math.ceil(longText.length / 2)]) {
     const seed = longText.slice(start, start + seedLength)
     const firstMatch = shortText.indexOf(seed)
+
     if (firstMatch !== -1 && shortText.includes(seed, firstMatch + 1)) {
       return true
     }
   }
+
   return false
 }

@@ -120,6 +120,7 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
       focusedCompletedHookAgent: 'omp',
       launchAgent: undefined
     })
+
     const afterHookCleared = resolveTabAgentFromSignals({
       hasObservedAgentSignal: true,
       isRemote: true,
@@ -128,6 +129,7 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
       focusedCompletedHookAgent: 'omp',
       launchAgent: undefined
     })
+
     expect(withLiveHook).toBe('omp')
     expect(afterHookCleared).toBe('omp')
   })
@@ -146,6 +148,7 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
       processAgent: 'pi',
       launchAgent: 'omp'
     })
+
     const readsOmp = resolveTabAgentFromSignals({
       hasObservedAgentSignal: true,
       isRemote: false,
@@ -154,6 +157,7 @@ describe('resolveTabAgentFromSignals — Pi/OMP identity', () => {
       processAgent: 'omp',
       launchAgent: 'omp'
     })
+
     expect(readsPi).toBe('omp')
     expect(readsOmp).toBe('omp')
   })
@@ -349,6 +353,7 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
       focusedCompletedHookAgent: 'claude',
       launchAgent: undefined
     })
+
     const afterObserved = resolveTabAgentFromSignals({
       hasObservedAgentSignal: true,
       isRemote: false,
@@ -357,6 +362,7 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
       focusedCompletedHookAgent: 'claude',
       launchAgent: undefined
     })
+
     expect(onMount).toBe('codex')
     expect(afterObserved).toBe('codex')
   })

@@ -54,6 +54,7 @@ export function createInstallPluginsHandler(
       primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     let opencodeDir: string | undefined
+
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
@@ -61,6 +62,7 @@ export function createInstallPluginsHandler(
       // keying the cache on it is defensive; the rc scan behind it is memoized.
       const sourceDir = resolveOpenCodeSourceConfigDir(env as Record<string, string>, env.SHELL)
       const cached = materialized
+
       if (
         cached &&
         (incoming === null || incoming === cached.source) &&
@@ -72,6 +74,7 @@ export function createInstallPluginsHandler(
       } else {
         const overlayId =
           sanitizeWslHookInstanceKey(env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? 'wsl-opencode'
+
         // Why: null on write failure — caller falls back to the guest's own config (no status), never crossing a Windows overlay into WSL.
         opencodeDir = pluginOverlay.materializeOpenCode(overlayId, sourceDir) ?? undefined
         materialized =
@@ -80,6 +83,7 @@ export function createInstallPluginsHandler(
             : null
       }
     }
+
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),

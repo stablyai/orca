@@ -16,9 +16,11 @@ export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerm
   if (leaf.connected) {
     return 'running'
   }
+
   if (leaf.lastExitCode !== null) {
     return 'exited'
   }
+
   return 'unknown'
 }
 

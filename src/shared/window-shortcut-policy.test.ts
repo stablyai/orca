@@ -109,6 +109,7 @@ describe('resolveWindowShortcutAction', () => {
       alt: false,
       shift: true
     }
+
     const overrides: KeybindingOverrides = {
       'tab.openQuickCommandsMenu': ['Mod+Shift+Q']
     }
@@ -154,6 +155,7 @@ describe('resolveWindowShortcutAction', () => {
       'tab.selectByIndex': ['Mod+1'],
       'workspace.selectByIndex': ['Ctrl+1']
     }
+
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
@@ -192,6 +194,7 @@ describe('resolveWindowShortcutAction', () => {
       'workspace.selectByIndex': [],
       'tab.selectByIndex': []
     }
+
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
@@ -217,6 +220,7 @@ describe('resolveWindowShortcutAction', () => {
       alt: false,
       shift: false
     }
+
     expect(
       resolveWindowShortcutAction(macWorktreePalette, 'darwin', undefined, {
         context: 'terminal',
@@ -415,6 +419,7 @@ describe('resolveWindowShortcutAction', () => {
 
   it('gates the held Ctrl+Tab switcher on the configurable binding', () => {
     const input = { code: 'Tab', key: 'Tab', meta: false, control: true, alt: false, shift: true }
+
     const domInput = {
       code: 'Tab',
       key: 'Tab',
@@ -495,6 +500,7 @@ describe('resolveWindowShortcutAction', () => {
       { key: '+', meta: true, control: false, alt: false, shift: true },
       { code: 'NumpadAdd', key: '', meta: true, control: false, alt: false, shift: false }
     ]
+
     for (const input of zoomInCases) {
       expect(resolveWindowShortcutAction(input, 'darwin')).toEqual({
         type: 'zoom',
@@ -508,6 +514,7 @@ describe('resolveWindowShortcutAction', () => {
       { key: 'Subtract', meta: false, control: true, alt: false, shift: false },
       { code: 'NumpadSubtract', key: '', meta: false, control: true, alt: false, shift: false }
     ]
+
     for (const input of zoomOutCases) {
       expect(resolveWindowShortcutAction(input, 'linux')).toEqual({
         type: 'zoom',
@@ -825,6 +832,7 @@ describe('resolveWindowShortcutAction', () => {
         { type: 'toggleWorktreePalette' }
       ]
     ]
+
     for (const [input, expected] of dvorak) {
       expect(resolveWindowShortcutAction(input, 'darwin')).toEqual(expected)
     }
@@ -852,6 +860,7 @@ describe('resolveWindowShortcutAction', () => {
       ],
       [{ code: 'KeyP', meta: true, alt: false, shift: false }, { type: 'openQuickOpen' }]
     ]
+
     for (const [input, expected] of fallbacks) {
       expect(resolveWindowShortcutAction(input, 'darwin')).toEqual(expected)
     }

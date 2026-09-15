@@ -86,15 +86,19 @@ describe('submodule diff routing', () => {
           stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path flutter_mine\n' : ''
         })
       }
+
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` })
       }
+
       if (args[0] === 'ls-tree') {
         return Promise.resolve({ stdout: `160000 commit ${OLD_OID}\tflutter_mine\n` })
       }
+
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: `${NEW_OID}\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
   })
@@ -110,12 +114,15 @@ describe('submodule diff routing', () => {
   it('diffs inner files across the two commits when the gitlink moved', async () => {
     gitExecFileAsyncBufferMock.mockImplementation((args: string[]) => {
       const spec = String(args.at(-1))
+
       if (spec.startsWith(`${OLD_OID}:`)) {
         return Promise.resolve({ stdout: Buffer.from('v1\n') })
       }
+
       if (spec.startsWith(`${NEW_OID}:`)) {
         return Promise.resolve({ stdout: Buffer.from('v2\n') })
       }
+
       return Promise.resolve({ stdout: Buffer.from('') })
     })
 
@@ -141,25 +148,32 @@ describe('submodule diff routing', () => {
           stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path flutter_mine\n' : ''
         })
       }
+
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${NEW_OID} 0\tflutter_mine\n` })
       }
+
       if (args[0] === 'ls-tree') {
         return Promise.resolve({ stdout: `160000 commit ${OLD_OID}\tflutter_mine\n` })
       }
+
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: `${NEW_OID}\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
     gitExecFileAsyncBufferMock.mockImplementation((args: string[]) => {
       const spec = String(args.at(-1))
+
       if (spec.startsWith(`${OLD_OID}:`)) {
         return Promise.resolve({ stdout: Buffer.from('v1\n') })
       }
+
       if (spec.startsWith(`${NEW_OID}:`)) {
         return Promise.resolve({ stdout: Buffer.from('v2\n') })
       }
+
       return Promise.resolve({ stdout: Buffer.from('') })
     })
 
@@ -187,12 +201,15 @@ describe('submodule diff routing', () => {
           stdout: options?.cwd === PARENT ? 'submodule.flutter_mine.path flutter_mine\n' : ''
         })
       }
+
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` })
       }
+
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: `${OLD_OID}\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
     gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('old\n') })
@@ -220,6 +237,7 @@ describe('submodule diff routing', () => {
           stdout: options?.cwd === PARENT ? 'submodule.evil.path ../evil\n' : ''
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -233,6 +251,7 @@ describe('submodule diff routing', () => {
           stdout: options?.cwd === PARENT ? 'submodule.evil.path ../evil\n' : ''
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -322,12 +341,15 @@ describe('getSubmoduleStatus', () => {
       if (args.includes('--name-status')) {
         return Promise.resolve({ stdout: 'M\tlib/main.dart\n' })
       }
+
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` })
       }
+
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: `${NEW_OID}\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -349,15 +371,19 @@ describe('getSubmoduleStatus', () => {
       if (args.includes('--name-status')) {
         return Promise.resolve({ stdout: 'M\tlib/main.dart\n' })
       }
+
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${NEW_OID} 0\tflutter_mine\n` })
       }
+
       if (args[0] === 'ls-tree') {
         return Promise.resolve({ stdout: `160000 commit ${OLD_OID}\tflutter_mine\n` })
       }
+
       if (args[0] === 'rev-parse') {
         return Promise.resolve({ stdout: `${NEW_OID}\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -377,12 +403,15 @@ describe('getSubmoduleStatus', () => {
       if (args.includes('--name-status')) {
         return Promise.resolve({ stdout: 'M\tlib/a.dart\nM\tlib/b.dart\n' })
       }
+
       if (args[0] === 'ls-files') {
         return Promise.resolve({ stdout: `160000 ${NEW_OID} 0\tflutter_mine\n` })
       }
+
       if (args[0] === 'ls-tree') {
         return Promise.resolve({ stdout: `160000 commit ${OLD_OID}\tflutter_mine\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -406,17 +435,22 @@ describe('getSubmoduleStatus', () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const name = args.includes('status') ? 'status' : args[0]
       events.push(`start:${name}`)
+
       if (name === 'status') {
         // Hold the inner status open so a serialized caller could not have started the oid reads.
         await new Promise((resolve) => setTimeout(resolve, 5))
       }
+
       events.push(`end:${name}`)
+
       if (name === 'ls-files') {
         return { stdout: `160000 ${OLD_OID} 0\tflutter_mine\n` }
       }
+
       if (name === 'rev-parse') {
         return { stdout: `${NEW_OID}\n` }
       }
+
       return { stdout: '' }
     })
 

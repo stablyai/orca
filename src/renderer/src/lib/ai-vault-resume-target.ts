@@ -24,6 +24,7 @@ export function getAiVaultResumeRepoTargetStatus(
   if (!repo) {
     return 'unknown'
   }
+
   // Why: SSH and WSL targets use the normal PTY startup path. Runtime-owned
   // repos intentionally keep connectionId null, so check the execution host.
   return getAiVaultResumeExecutionHostTargetStatus(getRepoExecutionHostId(repo))
@@ -51,6 +52,7 @@ export function canResumeAiVaultSessionOnTarget(args: {
 }): boolean {
   const sessionExecutionHostId = normalizeExecutionHostId(args.sessionExecutionHostId)
   const targetExecutionHostId = normalizeExecutionHostId(args.targetExecutionHostId)
+
   if (args.targetStatus === 'runtime') {
     // Runtime session stores live on one paired server; only queue resumes back
     // onto that exact server host.
@@ -60,14 +62,17 @@ export function canResumeAiVaultSessionOnTarget(args: {
       sessionExecutionHostId === targetExecutionHostId
     )
   }
+
   if (!isSupportedAiVaultResumeTargetStatus(args.targetStatus)) {
     return false
   }
+
   if (sessionExecutionHostId) {
     if (targetExecutionHostId) {
       if (sessionExecutionHostId === targetExecutionHostId) {
         return true
       }
+
       // Why: SSH-to-local-WSL setups (#6270) tag the session 'local' but the
       // file lives under a WSL UNC path reachable from any SSH shell into this
       // machine, so we bypass the exact host-id match for that case.
@@ -77,10 +82,12 @@ export function canResumeAiVaultSessionOnTarget(args: {
         isWslStoredAiVaultSessionFile(args.sessionFilePath)
       )
     }
+
     if (sessionExecutionHostId !== LOCAL_EXECUTION_HOST_ID) {
       return false
     }
   }
+
   // Why: vault sessions are scanned from this machine's disk (host home dirs
   // plus local WSL homes). An SSH shell can only reach the WSL-stored ones
   // (SSH-to-local-WSL setups, #6270); host-stored session files do not exist
@@ -88,6 +95,7 @@ export function canResumeAiVaultSessionOnTarget(args: {
   if (args.targetStatus === 'ssh') {
     return isWslStoredAiVaultSessionFile(args.sessionFilePath)
   }
+
   return true
 }
 
@@ -95,6 +103,7 @@ export function isUnsupportedAiVaultResumeRepo(
   repo: AiVaultResumeRepoOwner | null | undefined
 ): boolean {
   const status = getAiVaultResumeRepoTargetStatus(repo)
+
   return status !== 'unknown' && !isSupportedAiVaultResumeTargetStatus(status)
 }
 
@@ -106,14 +115,19 @@ export function getAiVaultResumeWorktreeTargetStatus(args: {
   if (!args.worktreeId) {
     return 'unknown'
   }
+
   const worktree = args.worktrees.find((candidate) => candidate.id === args.worktreeId)
+
   if (!worktree) {
     return 'unknown'
   }
+
   const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree.hostId)
+
   if (worktreeHost !== 'unknown') {
     return worktreeHost
   }
+
   return getAiVaultResumeRepoTargetStatus(
     args.repos.find((candidate) => candidate.id === worktree.repoId)
   )
@@ -128,6 +142,7 @@ export function getAiVaultResumeWorkspaceExecutionHostId(
   }
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
+
   if (workspaceKey?.type === 'folder') {
     return getAiVaultResumeFolderExecutionHostId(state, workspaceKey.folderWorkspaceId)
   }
@@ -135,11 +150,14 @@ export function getAiVaultResumeWorkspaceExecutionHostId(
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
   const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
   const worktreeHostId = normalizeExecutionHostId(worktree?.hostId)
+
   if (worktreeHostId) {
     return worktreeHostId
   }
+
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   const repo = state.repos.find((candidate) => candidate.id === repoId)
+
   return repo ? getRepoExecutionHostId(repo) : null
 }
 
@@ -152,6 +170,7 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   }
 
   const workspaceKey = parseWorkspaceKey(workspaceId)
+
   if (workspaceKey?.type === 'folder') {
     return getAiVaultResumeFolderTargetStatus(state, workspaceKey.folderWorkspaceId)
   }
@@ -159,10 +178,13 @@ export function getAiVaultResumeWorkspaceTargetStatus(
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
   const worktree = getIndexedWorktreeMap(state.worktreesByRepo ?? {}).get(worktreeId)
   const worktreeHost = getAiVaultResumeExecutionHostTargetStatus(worktree?.hostId)
+
   if (worktreeHost !== 'unknown') {
     return worktreeHost
   }
+
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+
   return getAiVaultResumeRepoTargetStatus(state.repos.find((repo) => repo.id === repoId))
 }
 
@@ -173,16 +195,20 @@ function getAiVaultResumeFolderTargetStatus(
   folderWorkspaceId: string
 ): AiVaultResumeTargetStatus {
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+
   if (!workspace) {
     return 'unknown'
   }
 
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
   const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
+
   if (groupHostId) {
     return getAiVaultResumeExecutionHostTargetStatus(groupHostId)
   }
+
   const explicitConnectionId = (workspace.connectionId ?? group?.connectionId ?? '').trim()
+
   if (explicitConnectionId) {
     return getAiVaultResumeExecutionHostTargetStatus(toSshExecutionHostId(explicitConnectionId))
   }
@@ -197,19 +223,24 @@ function getAiVaultResumeFolderExecutionHostId(
   folderWorkspaceId: string
 ): ExecutionHostId | null {
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+
   if (!workspace) {
     return null
   }
 
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
   const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
+
   if (groupHostId) {
     return groupHostId
   }
+
   const explicitConnectionId = (workspace.connectionId ?? group?.connectionId ?? '').trim()
+
   if (explicitConnectionId) {
     return toSshExecutionHostId(explicitConnectionId)
   }
+
   return mergeAiVaultResumeExecutionHostIds(
     getFolderWorkspaceCandidateRepos(state, folderWorkspaceId).map(getRepoExecutionHostId)
   )
@@ -219,12 +250,15 @@ function getAiVaultResumeExecutionHostTargetStatus(
   hostId: ExecutionHostId | null | undefined
 ): AiVaultResumeTargetStatus {
   const parsed = parseExecutionHostId(hostId)
+
   if (!parsed) {
     return 'unknown'
   }
+
   if (parsed.kind === 'local') {
     return 'local'
   }
+
   return parsed.kind
 }
 
@@ -234,11 +268,14 @@ function mergeAiVaultResumeExecutionHostTargetStatuses(
   if (hostIds.length === 0) {
     return 'local'
   }
+
   const statuses = hostIds.map(getAiVaultResumeExecutionHostTargetStatus)
   const uniqueStatuses = new Set(statuses)
+
   if (uniqueStatuses.has('runtime')) {
     return 'runtime'
   }
+
   return new Set(hostIds).size === 1 ? (statuses[0] ?? 'unknown') : 'unknown'
 }
 
@@ -248,6 +285,8 @@ function mergeAiVaultResumeExecutionHostIds(
   if (hostIds.length === 0) {
     return LOCAL_EXECUTION_HOST_ID
   }
+
   const uniqueHostIds = new Set(hostIds)
+
   return uniqueHostIds.size === 1 ? (hostIds[0] ?? null) : null
 }

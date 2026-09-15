@@ -11,7 +11,9 @@ import type { PluginWorkerFactory } from './plugin-worker-manager'
 import { hashPluginTree } from './plugin-content-hash'
 
 const roots: string[] = []
+
 const services: PluginService[] = []
+
 const pluginKey = 'orca-samples.demo'
 
 function manifest(options: { main?: string; capabilities?: PluginManifest['capabilities'] } = {}) {
@@ -40,6 +42,7 @@ async function pluginRoot(pluginManifest = manifest()): Promise<string> {
   await writeFile(join(root, 'worker.js'), 'export default async function () {}')
   await writeFile(join(root, 'worker-v2.js'), 'export default async function () {}')
   await writeFile(join(root, 'panel.html'), '<h1>Panel</h1>')
+
   return root
 }
 
@@ -63,11 +66,14 @@ function createHarness(root: string) {
   let killed = false
   const consent = fingerprintPluginConsent(manifest())
   const workers: ReturnType<typeof testWorker>[] = []
+
   const factory = vi.fn<PluginWorkerFactory>(async () => {
     const handle = testWorker()
     workers.push(handle)
+
     return handle
   })
+
   const service = new PluginService({
     userDataPath: root,
     hostVersion: '1.4.0',
@@ -81,7 +87,9 @@ function createHarness(root: string) {
         : null,
     workerFactory: factory
   })
+
   services.push(service)
+
   return {
     service,
     factory,
@@ -132,17 +140,21 @@ describe('PluginService worker reconciliation', () => {
         },
         capabilities: [{ kind: 'events:subscribe' }]
       })
+
     const firstManifest = conflictingManifest('first')
     const secondManifest = conflictingManifest('second')
     const firstRoot = await pluginRoot(firstManifest)
     const secondRoot = await pluginRoot(secondManifest)
     const firstHash = await hashPluginTree(firstRoot)
     const secondHash = await hashPluginTree(secondRoot)
+
     if (!firstHash.ok || !secondHash.ok) {
       throw new Error('could not hash conflict fixtures')
     }
+
     let keybindings: KeybindingOverrides = {}
     const factory = vi.fn<PluginWorkerFactory>(async () => testWorker())
+
     const service = new PluginService({
       userDataPath: firstRoot,
       hostVersion: '1.4.0',
@@ -156,6 +168,7 @@ describe('PluginService worker reconciliation', () => {
       getKeybindings: () => keybindings,
       workerFactory: factory
     })
+
     services.push(service)
 
     await service.initialize()
@@ -197,8 +210,10 @@ describe('PluginService worker reconciliation', () => {
       },
       capabilities: []
     })
+
     const root = await pluginRoot(aliasManifest)
     const factory = vi.fn<PluginWorkerFactory>()
+
     const service = new PluginService({
       userDataPath: root,
       hostVersion: '1.4.0',
@@ -208,6 +223,7 @@ describe('PluginService worker reconciliation', () => {
       getDevPluginPaths: () => [root],
       workerFactory: factory
     })
+
     services.push(service)
 
     await service.initialize()
@@ -321,19 +337,27 @@ describe('PluginService worker reconciliation', () => {
   it('cannot reactivate the old revision while refresh awaits worker shutdown', async () => {
     const root = await pluginRoot()
     let finishOldDispose!: () => void
+
     const oldDispose = new Promise<void>((resolve) => {
       finishOldDispose = resolve
     })
+
     const workers: ReturnType<typeof testWorker>[] = []
+
     const factory = vi.fn<PluginWorkerFactory>(async () => {
       const handle = testWorker()
+
       if (workers.length === 0) {
         handle.dispose.mockImplementation(() => oldDispose)
       }
+
       workers.push(handle)
+
       return handle
     })
+
     const consent = fingerprintPluginConsent(manifest())
+
     const service = new PluginService({
       userDataPath: root,
       hostVersion: '1.4.0',
@@ -343,6 +367,7 @@ describe('PluginService worker reconciliation', () => {
       getDevPluginPaths: () => [root],
       workerFactory: factory
     })
+
     services.push(service)
     await activate(service)
     await writeFile(
@@ -405,17 +430,23 @@ describe('PluginService worker reconciliation', () => {
     const originalReconcile = harness.service.contentPacks.reconcile.bind(
       harness.service.contentPacks
     )
+
     let releaseFirst!: () => void
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     let firstStarted!: () => void
+
     const firstStartedPromise = new Promise<void>((resolve) => {
       firstStarted = resolve
     })
+
     let activeReconciliations = 0
     let maximumConcurrentReconciliations = 0
     let callCount = 0
+
     const reconcile = vi
       .spyOn(harness.service.contentPacks, 'reconcile')
       .mockImplementation(async (...args) => {
@@ -425,11 +456,13 @@ describe('PluginService worker reconciliation', () => {
           maximumConcurrentReconciliations,
           activeReconciliations
         )
+
         try {
           if (callCount === 1) {
             firstStarted()
             await firstGate
           }
+
           await originalReconcile(...args)
         } finally {
           activeReconciliations -= 1
@@ -441,6 +474,7 @@ describe('PluginService worker reconciliation', () => {
     harness.setDisabled([pluginKey])
     const second = harness.service.reconcileActivationState()
     let clientsReleased = false
+
     const clientsReady = harness.service.whenReady().then(() => {
       clientsReleased = true
     })

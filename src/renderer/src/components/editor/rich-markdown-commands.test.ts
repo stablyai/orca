@@ -15,9 +15,11 @@ function createEditor(content = '/'): Editor {
 
 function getCommand(id: SlashCommandId) {
   const command = slashCommands.find((candidate) => candidate.id === id)
+
   if (!command) {
     throw new Error(`Missing slash command ${id}`)
   }
+
   return command
 }
 
@@ -25,6 +27,7 @@ function runCommand(id: SlashCommandId, content = '/'): Editor {
   const editor = createEditor(content)
   editor.commands.setTextSelection(content.length + 1)
   runSlashCommand(editor, { from: 1, to: content.length + 1 }, getCommand(id))
+
   return editor
 }
 

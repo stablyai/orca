@@ -15,9 +15,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
+
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
+
 vi.mock('@/lib/workspace-browser-tab-open', () => ({
   canOpenWorkspaceBrowserTabOnRuntime: mocks.canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh: mocks.canOpenWorkspaceBrowserTabOnSsh

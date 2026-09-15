@@ -23,6 +23,7 @@ describe('pre-gone crash sampling startup wiring', () => {
   const readySource = readSource('main-process-ready.ts')
 
   const READY_ENTRY = 'export async function initializeReadyRuntimeServices('
+
   // Why the entry's body and not the file: the call satisfies a whole-file grep
   // just as well from a sibling export nothing calls, which arms nothing.
   const readyRuntimeEntryBody = readyRuntimeSource

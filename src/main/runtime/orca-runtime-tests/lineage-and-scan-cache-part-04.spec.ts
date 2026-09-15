@@ -21,6 +21,7 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/worktree-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -31,6 +32,7 @@ describe('OrcaRuntimeService', () => {
         displayName: 'child'
       })
     }
+
     const lineageById: Record<string, WorktreeLineage> = {
       [childId]: {
         worktreeId: childId,
@@ -42,16 +44,19 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
         return metaById[worktreeId]
       },
       getAllWorktreeLineage: () => lineageById
     }
+
     vi.mocked(listWorktrees).mockResolvedValue([
       {
         path: parentPath,
@@ -97,16 +102,20 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/workspaces/worker-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
         displayName: 'coordinator'
       })
     }
+
     const setWorktreeLineage = vi.fn((worktreeId: string, lineage) => {
       metaById[worktreeId] = metaById[worktreeId] ?? makeWorktreeMeta()
+
       return lineage
     })
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
@@ -114,11 +123,13 @@ describe('OrcaRuntimeService', () => {
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta({ instanceId: 'child-instance' })
         metaById[worktreeId] = { ...existing, ...meta }
+
         return metaById[worktreeId]
       },
       getWorktreeLineage: () => undefined,
       setWorktreeLineage
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     computeWorktreePathMock.mockReturnValue(childPath)
     ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
@@ -175,6 +186,7 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/workspaces/worker-child'
     const childId = `${TEST_REPO_ID}::${childPath}`
     const workerId = `${TEST_REPO_ID}::${workerPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -185,7 +197,9 @@ describe('OrcaRuntimeService', () => {
         displayName: 'worker'
       })
     }
+
     const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
@@ -193,11 +207,13 @@ describe('OrcaRuntimeService', () => {
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
+
         return metaById[worktreeId]
       },
       getWorktreeLineage: () => undefined,
       setWorktreeLineage
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
     const coordinatorHandle = runtime.preAllocateHandleForPty('pty-coordinator')
@@ -403,10 +419,12 @@ describe('OrcaRuntimeService', () => {
     const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
     const coordinatorHandle = runtime.preAllocateHandleForPty('pty-coordinator')
+
     const getActiveCoordinatorRun = vi.fn(() => ({
       id: 'run-legacy-unrelated',
       coordinator_handle: coordinatorHandle
     }))
+
     runtime.setOrchestrationDb({
       getActiveDispatchForTerminal: vi.fn((handle: string) =>
         handle === workerHandle

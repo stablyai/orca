@@ -97,6 +97,7 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
 
   afterEach(() => {
     handler.dispose()
+
     if (repoPath) {
       rmSync(repoPath, { recursive: true, force: true })
     }
@@ -125,11 +126,13 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
     expect(compare.entries.length).toBeGreaterThanOrEqual(14)
 
     const divergences: string[] = []
+
     for (const entry of compare.entries) {
       // Exactly what the renderer sends: paths from the compare entry list,
       // OIDs from the compare summary that produced that same list.
       const callerShape = { filePath: entry.path, oldPath: entry.oldPath }
       const legacy = await branchDiff(callerShape)
+
       const pinned = await branchDiff({
         ...callerShape,
         baseRef: compare.summary.mergeBase,
@@ -155,12 +158,14 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
     // would satisfy the equivalence test above while rendering nothing.
     const rename = byPath.get('renamed-and-edited-to.txt')
     expect(rename?.oldPath).toBe('renamed-and-edited-from.txt')
+
     const [renamePinned] = await branchDiff({
       baseRef: compare.summary.mergeBase,
       headOid: compare.summary.headOid,
       filePath: rename!.path,
       oldPath: rename!.oldPath
     })
+
     expect(renamePinned).toMatchObject({
       originalContent: 'rename plus edit, line one\nline two\nline three\n',
       modifiedContent: 'rename plus edit, line one\nline two CHANGED\nline three\n'
@@ -171,6 +176,7 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
       headOid: compare.summary.headOid,
       filePath: 'added.txt'
     })
+
     expect(addedPinned).toMatchObject({ originalContent: '', modifiedContent: 'brand new\n' })
 
     const [deletedPinned] = await branchDiff({
@@ -178,6 +184,7 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
       headOid: compare.summary.headOid,
       filePath: 'deleted.txt'
     })
+
     expect(deletedPinned).toMatchObject({ originalContent: 'doomed\n', modifiedContent: '' })
 
     const [binaryPinned] = await branchDiff({
@@ -185,6 +192,7 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
       headOid: compare.summary.headOid,
       filePath: 'binary-modified.bin'
     })
+
     expect(binaryPinned).toMatchObject({ kind: 'binary' })
   })
 
@@ -198,6 +206,7 @@ describe('pinned and legacy branch diff equivalence against real Git', () => {
       headOid: compare.summary.headOid,
       filePath: 'modified.txt'
     })
+
     const legacy = await branchDiff({ filePath: 'modified.txt' })
 
     expect(pinned[0]).toMatchObject({ modifiedContent: 'after\n' })

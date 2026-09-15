@@ -32,6 +32,7 @@ export function useHostWorktreeCatalog(args: {
     state,
     syncViewSettingsFromDesktop
   } = args
+
   const {
     clientRef,
     fetchWorktreesInFlightRef,
@@ -51,37 +52,47 @@ export function useHostWorktreeCatalog(args: {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
+
       if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
         return
       }
+
       // Why: prevent slow remote hosts from stacking overlapping worktree.ps requests during polling.
       if (fetchWorktreesInFlightRef.current) {
         return
       }
+
       fetchWorktreesInFlightRef.current = true
       const requestClient = client
       const requestHostId = hostId
 
       try {
         const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
+
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
+
         // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
         // surface it so a broken remote host is diagnosable instead of looking empty.
         if (fetched.kind === 'request_failed') {
           setCatalogError(fetched.code)
+
           return
         }
+
         if (fetched.pending.admission.kind === 'invalid') {
           setCatalogError('invalid_response')
         }
+
         // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
         // host truth over optimistic local edits regardless of payload size.
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
+
         if (confirmed) {
           setCatalogError(null)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
@@ -92,10 +103,12 @@ export function useHostWorktreeCatalog(args: {
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
           )
           setWorktreesLoaded(true)
+
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
             setCachedWorktrees(hostId, confirmed, { proven: true })
           }
+
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
           setOptimisticActiveWorktreeIdentity((pending) =>
             clearConfirmedActiveWorktreeIdentity(pending, confirmed)
@@ -110,9 +123,11 @@ export function useHostWorktreeCatalog(args: {
             if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
               return prev
             }
+
             if (hostId) {
               void savePinnedIds(hostId, serverPinned)
             }
+
             return serverPinned
           })
         }
@@ -140,7 +155,9 @@ export function useHostWorktreeCatalog(args: {
     if (!client || connState !== 'connected') {
       return
     }
+
     void syncViewSettingsFromDesktop()
+
     return startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
   }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
 

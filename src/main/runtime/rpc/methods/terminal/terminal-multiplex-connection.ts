@@ -14,7 +14,9 @@ import type { TerminalSourceRangeRegistry } from '../../terminal-source-range-re
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal-stream-end-verdict'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
+
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
+
 export type MultiplexEmit = (result: unknown) => void
 
 export type TerminalMultiplexConnectionBase = {

@@ -20,6 +20,7 @@ import {
   lookupBestAdvertisedUrl,
   shouldEvictAdvertisedUrlAfterScan
 } from './advertised-url-reconciliation'
+
 export type HostKind = 'custom' | 'loopback' | 'private-ip' | 'public-ip'
 
 export type AdvertisedUrl = {
@@ -67,6 +68,7 @@ export class AdvertisedUrlWatcher {
 
   onDidChange(listener: (event: AdvertisedUrlChangeEvent) => void): () => void {
     this.listeners.add(listener)
+
     return () => {
       this.listeners.delete(listener)
     }
@@ -74,10 +76,13 @@ export class AdvertisedUrlWatcher {
 
   bindPty(ptyId: string, worktreeId: string): void {
     const pending = this.pending.get(ptyId)
+
     if (this.ptyToWorktree.get(ptyId) === worktreeId && pending === undefined) {
       return
     }
+
     this.ptyToWorktree.set(ptyId, worktreeId)
+
     if (pending !== undefined) {
       this.pending.delete(ptyId)
       this.ingest(ptyId, pending)
@@ -89,10 +94,12 @@ export class AdvertisedUrlWatcher {
     this.buffers.delete(ptyId)
     this.pending.delete(ptyId)
     const removedEvents: AdvertisedUrlChangeEvent[] = []
+
     for (const [key, entry] of this.cache) {
       if (entry.ptyId !== ptyId) {
         continue
       }
+
       // Why: SSH forward enrichment has no listener PID, so PTY teardown is the only reliable expiry signal.
       this.cache.delete(key)
       this.validationBaselines.delete(key)
@@ -100,6 +107,7 @@ export class AdvertisedUrlWatcher {
       const worktreeId = worktreeIdFromCacheKey(key, entry.port)
       removedEvents.push({ worktreeId, port: entry.port })
     }
+
     for (const event of removedEvents) {
       this.emitChange(event)
     }
@@ -111,22 +119,27 @@ export class AdvertisedUrlWatcher {
       if (boundWorktreeId !== worktreeId) {
         continue
       }
+
       this.ptyToWorktree.delete(ptyId)
       this.buffers.delete(ptyId)
     }
 
     this.scanSnapshots.delete(worktreeId)
     const removedEvents: AdvertisedUrlChangeEvent[] = []
+
     for (const [key, entry] of this.cache) {
       const entryWorktreeId = worktreeIdFromCacheKey(key, entry.port)
+
       if (entryWorktreeId !== worktreeId) {
         continue
       }
+
       this.cache.delete(key)
       this.validationBaselines.delete(key)
       this.startupAbsentAllowances.delete(key)
       removedEvents.push({ worktreeId, port: entry.port })
     }
+
     for (const event of dedupeChangeEvents(removedEvents)) {
       this.emitChange(event)
     }
@@ -136,7 +149,9 @@ export class AdvertisedUrlWatcher {
     if (!chunk) {
       return
     }
+
     const worktreeId = this.ptyToWorktree.get(ptyId)
+
     if (!worktreeId) {
       // Why: daemon PTY data can arrive before the spawn handler resolves the worktreeId (src/main/ipc/pty.ts:1318-1323); buffer until bindPty replays.
       const prior = this.pending.get(ptyId) ?? ''
@@ -144,25 +159,35 @@ export class AdvertisedUrlWatcher {
       // Why: drop+reinsert refreshes Map insertion order (LRU) so the eviction below drops the oldest unbound PTY.
       this.pending.delete(ptyId)
       this.pending.set(ptyId, merged)
+
       while (this.pending.size > MAX_PENDING_ENTRIES) {
         const oldest = this.pending.keys().next().value
+
         if (oldest === undefined) {
           break
         }
+
         this.pending.delete(oldest)
       }
+
       return
     }
+
     let buffer = this.buffers.get(ptyId)
+
     if (!buffer) {
       buffer = new PtyBuffer()
       this.buffers.set(ptyId, buffer)
     }
+
     const finalized = buffer.ingest(chunk)
+
     if (!finalized) {
       return
     }
+
     const timestamp = now ?? this.now()
+
     for (const url of extractUrlCandidates(finalized)) {
       const events = considerAdvertisedUrl({
         url,
@@ -178,6 +203,7 @@ export class AdvertisedUrlWatcher {
         ),
         maxCacheEntries: this.maxCacheEntries
       })
+
       for (const event of events) {
         this.emitChange(event)
       }
@@ -197,9 +223,11 @@ export class AdvertisedUrlWatcher {
   lookup(worktreeId: string, port: number, currentListenerPid?: number): AdvertisedUrl | undefined {
     const key = cacheKey(worktreeId, port)
     const entry = this.cache.get(key)
+
     if (!entry) {
       return undefined
     }
+
     if (currentListenerPid !== undefined) {
       if (entry.validatedListenerPid === undefined) {
         entry.validatedListenerPid = currentListenerPid
@@ -209,9 +237,11 @@ export class AdvertisedUrlWatcher {
         this.validationBaselines.delete(key)
         this.startupAbsentAllowances.delete(key)
         this.emitChange({ worktreeId, port })
+
         return undefined
       }
     }
+
     return entry
   }
 
@@ -220,6 +250,7 @@ export class AdvertisedUrlWatcher {
     const key = cacheKey(worktreeId, port)
     this.validationBaselines.delete(key)
     this.startupAbsentAllowances.delete(key)
+
     if (this.cache.delete(key)) {
       this.emitChange({ worktreeId, port })
     }
@@ -237,9 +268,11 @@ export class AdvertisedUrlWatcher {
 
     for (const [key, entry] of this.cache) {
       const worktreeId = worktreeIdFromCacheKey(key, entry.port)
+
       if (!worktreeSet.has(worktreeId)) {
         continue
       }
+
       const current = observedByPort.has(entry.port)
         ? ({ kind: 'present', pid: observedByPort.get(entry.port) } as const)
         : ({ kind: 'absent' } as const)
@@ -265,6 +298,7 @@ export class AdvertisedUrlWatcher {
     for (const worktreeId of worktreeSet) {
       this.scanSnapshots.set(worktreeId, new Map(observedByPort))
     }
+
     for (const event of removedEvents) {
       this.emitChange(event)
     }
@@ -302,9 +336,11 @@ export class AdvertisedUrlWatcher {
 
   private currentScanStateFor(worktreeId: string, port: number): ListenerScanState | undefined {
     const snapshot = this.scanSnapshots.get(worktreeId)
+
     if (!snapshot) {
       return undefined
     }
+
     return snapshot.has(port) ? { kind: 'present', pid: snapshot.get(port) } : { kind: 'absent' }
   }
 }

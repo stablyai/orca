@@ -484,6 +484,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     const repoPath = '/repo'
     const branch = 'feature/runtime'
     const worktreeId = 'wt-runtime'
+
     const hostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,

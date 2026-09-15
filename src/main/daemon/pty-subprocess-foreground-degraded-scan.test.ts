@@ -23,11 +23,15 @@ const {
 }))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
+
 vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
 
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -77,6 +81,7 @@ async function readForegroundAt(
   vi.setSystemTime(BASE_TIME_MS + atMs)
   const foreground = handle.getForegroundProcess()
   await flushAsyncTicks()
+
   return foreground
 }
 
@@ -104,14 +109,17 @@ describe('daemon pty foreground degraded-scan handling', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
+
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -120,6 +128,7 @@ describe('daemon pty foreground degraded-scan handling', () => {
     const proc = mockPtyProcess('powershell.exe')
     spawnMock.mockReturnValue(proc)
     const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
     return { proc, handle }
   }
 

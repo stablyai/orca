@@ -20,6 +20,7 @@ function isPushRecoveryOperation(error: SourceControlActionError): boolean {
   if (error.kind === 'sync') {
     return error.syncPushStage === true
   }
+
   return error.kind === 'push' || error.kind === 'force_push' || error.kind === 'publish'
 }
 
@@ -61,12 +62,14 @@ export function deriveSourceControlPushRecovery({
   }
 
   const rawError = actionError.rawError || actionError.message
+
   if (!isPushHookFailure(rawError)) {
     return null
   }
 
   const summary = summarizePushFailure(rawError)
   const detailText = sanitizePushFailureDetails(rawError)
+
   return {
     rawDetailText: rawError,
     detailText,

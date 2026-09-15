@@ -19,10 +19,13 @@ function parseWslenvEntries(value: string | undefined): string[] {
 function upsertWslenvEntry(entries: string[], entry: string): void {
   const variableName = entry.split('/')[0]
   const existingIndex = entries.findIndex((value) => value.split('/')[0] === variableName)
+
   if (existingIndex === -1) {
     entries.push(entry)
+
     return
   }
+
   entries[existingIndex] = entry
 }
 
@@ -31,12 +34,15 @@ function applyWslenvPassthrough(
   passthroughEntries: string[]
 ): void {
   const entries = parseWslenvEntries(env.WSLENV)
+
   for (const entry of passthroughEntries) {
     const variableName = entry.split('/')[0]
+
     if (env[variableName]) {
       upsertWslenvEntry(entries, entry)
     }
   }
+
   env.WSLENV = entries.join(WSLENV_ENTRY_SEPARATOR)
 }
 
@@ -62,6 +68,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // via /mnt/c) until the WSL hook relay reports the guest home — then it is
   // already a guest-side POSIX path and must cross untranslated.
   const endpointFlag = env.ORCA_AGENT_HOOK_ENDPOINT?.startsWith('/') ? 'u' : 'p'
+
   // Why: ONLY a guest-side POSIX overlay may cross. /p would path-translate a
   // Windows value into /mnt/c and let in-guest OpenCode adopt it as its config
   // root — reachable via the relay spawn's process.env (wsl-hook-relay-launch)
@@ -69,6 +76,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   const opencodeOverlayEntries = (['OPENCODE_CONFIG_DIR', 'ORCA_OPENCODE_CONFIG_DIR'] as const)
     .filter((name) => env[name]?.startsWith('/'))
     .map((name) => `${name}/u`)
+
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
@@ -100,6 +108,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_OMP_STATUS_EXTENSION/p',
     ...worktreeSetupWslenvEntries(env)
   ]
+
   applyWslenvPassthrough(env, passthroughEntries)
 }
 
@@ -114,9 +123,11 @@ export function stampWslOrchestrationCompatibilityHost(
   delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
   const normalizedHostId = hostId?.trim()
   const normalizedDistro = distro?.trim()
+
   if (!normalizedHostId || !normalizedDistro) {
     return
   }
+
   env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'wsl'
   env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = normalizedHostId
   env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] = normalizedDistro

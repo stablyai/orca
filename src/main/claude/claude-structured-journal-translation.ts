@@ -91,16 +91,20 @@ export function createClaudeJournalTranslator(
    *  failed: nothing would ever close the turn it opened, and the row would read
    *  working for the life of the session. Only an accepted send lifts it. */
   let reopenSuppressed = false
+
   const groupKeyOf = (turn: ClaudeCurrentTurn | null): string | null =>
     turn ? `${turn.sessionId}:${turn.turnId}` : null
+
   const providerFallback = createClaudeProviderFrameFallback(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
   )
+
   const subagents = new ClaudeSubagentRoster({
     sink: deps.sink,
     currentGroupKey: () => groupKeyOf(currentTurn)
   })
+
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
@@ -125,6 +129,7 @@ export function createClaudeJournalTranslator(
       subagents.settleTurn(groupKeyOf(currentTurn))
       publishLifecycle(currentTurn, { state: 'interrupted', completedAt: observedAt })
     }
+
     currentTurn = turn
     publishLifecycle(turn)
     deps.sink.setActivity?.(null)
@@ -143,7 +148,9 @@ export function createClaudeJournalTranslator(
     if (!currentTurn) {
       return
     }
+
     const text = claudeProviderFrameActivity(kind, payload)
+
     if (text !== undefined) {
       deps.sink.setActivity?.(text ? { turnId: currentTurn.turnId, text } : null)
     }
@@ -155,10 +162,13 @@ export function createClaudeJournalTranslator(
     // delta as a compatibility fallback for streams that omit it.
     const source = delta ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
     ensureTurnOpen(message, source, observedAt)
+
     if (!delta) {
       return false
     }
+
     streamedText.append(delta.identity, delta.text)
+
     return true
   }
 
@@ -168,27 +178,36 @@ export function createClaudeJournalTranslator(
     observedAt: number
   ): boolean => {
     const envelope = readClaudeMessageEnvelope(message)
+
     if (!envelope) {
       return false
     }
+
     let changed = false
+
     if (envelope.parentToolUseId) {
       subagents.observeChildActivity(envelope.parentToolUseId)
     }
+
     const outputEnvelope = claudeOutputEnvelope(envelope)
     const body = claudeMessageBody(outputEnvelope)
+
     // The final frame of a streamed block lands on the block's identity, not its own uuid.
     const identity =
       (body && envelope.role === 'assistant' ? streamedBlocks.reconcile(envelope) : null) ??
       claudeMessageIdentity(envelope)
+
     streamedText.forget(agentJournalItemKey(identity))
     const thinking = claudeThinkingText(outputEnvelope)
+
     const source: ClaudeTurnSource = {
       sessionId: envelope.sessionId,
       uuid: envelope.uuid,
       assistant: envelope.role === 'assistant'
     }
+
     const openOutputTurn = (): void => ensureTurnOpen(message, source, observedAt)
+
     if (body) {
       // Opening before the append is what brackets a turn around its own first
       // output; a reader that scans back to the turn record and stops would
@@ -197,6 +216,7 @@ export function createClaudeJournalTranslator(
       deps.sink.appendItem(identity, body)
       changed = true
     }
+
     for (const tool of claudeToolUses(outputEnvelope)) {
       ensureTurnOpen(message, source, observedAt)
       tools.set(tool.id, tool)
@@ -206,12 +226,14 @@ export function createClaudeJournalTranslator(
       )
       changed = true
     }
+
     for (const result of claudeToolResults(envelope)) {
       const tool = tools.get(result.toolUseId) ?? {
         id: result.toolUseId,
         name: 'tool',
         input: null
       }
+
       deps.sink.appendItem(
         claudeToolIdentity(envelope.sessionId, result.toolUseId),
         claudeToolBody({ tool, result })
@@ -222,6 +244,7 @@ export function createClaudeJournalTranslator(
       tools.delete(result.toolUseId)
       changed = true
     }
+
     if (thinking) {
       ensureTurnOpen(message, source, observedAt)
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
@@ -233,8 +256,10 @@ export function createClaudeJournalTranslator(
       })
       changed = true
     }
+
     changed =
       appendUnmodeledContent(providerFallback, outputEnvelope, message, openOutputTurn) || changed
+
     // The send's turn is anchored to the user row journaled just above it.
     const sendEchoTurn = claudeTurnOpenedBySendEcho({
       envelope,
@@ -243,13 +268,16 @@ export function createClaudeJournalTranslator(
       observedAt,
       userItemId: agentJournalItemKey(identity)
     })
+
     if (sendEchoTurn) {
       reopenSuppressed = false
       openTurn(sendEchoTurn, observedAt)
     }
+
     if (changed) {
       deps.sink.publish()
     }
+
     return true
   }
 
@@ -260,6 +288,7 @@ export function createClaudeJournalTranslator(
         streamedText.flush()
         // No event will ever settle a child once the provider is gone.
         subagents.settleSession()
+
         if (currentTurn) {
           // The host saw the child end, so the turn's end is observed, not lost.
           publishLifecycle(currentTurn, {
@@ -268,16 +297,21 @@ export function createClaudeJournalTranslator(
           })
           currentTurn = null
         }
+
         // A frame that arrives after the child is gone must not open a turn no
         // event can close.
         reopenSuppressed = true
         deps.sink.setActivity?.(null)
+
         return
       }
+
       if (event.type === 'message' && handleStream(event.message, event.observedAt ?? Date.now())) {
         return
       }
+
       streamedText.flush()
+
       if (event.type === 'prompt') {
         prompts.handle(event)
       } else if (event.type === 'prompt-cancelled') {
@@ -289,6 +323,7 @@ export function createClaudeJournalTranslator(
         // diagnostic below still runs: a child's failure is reportable even when
         // it ends no turn.
         const settlesTurn = isRootClaudeFrame(event.message)
+
         if (settlesTurn) {
           prompts.retryPendingCancellations()
           // The turn is over however it ended, so a foreground child still
@@ -298,6 +333,7 @@ export function createClaudeJournalTranslator(
           // The latch only ever sets here; an accepted send is what lifts it.
           reopenSuppressed ||= event.message.is_error === true
           subagents.settleTurn(groupKeyOf(currentTurn))
+
           if (currentTurn) {
             publishLifecycle(
               currentTurn,
@@ -305,6 +341,7 @@ export function createClaudeJournalTranslator(
             )
             currentTurn = null
           }
+
           deps.sink.setActivity?.(null)
           // The turn is over. A block still awaiting its final keeps the text the
           // flush above journaled, but its live state goes: an interrupted turn
@@ -312,9 +349,11 @@ export function createClaudeJournalTranslator(
           streamedBlocks.clear()
           streamedText.settle()
         }
+
         const kind = claudeProviderFrameKind(event.message)
         // Ordinary turn bookkeeping stays suppressed; a reported failure never does.
         const failure = claudeResultFailure(event.message)
+
         if (failure || !isSettledClaudeResultKind(kind)) {
           providerFallback.append(kind, event.message, failure?.text)
         }
@@ -323,11 +362,13 @@ export function createClaudeJournalTranslator(
         // fallback below still drops the raw frame instead of printing an opcode.
         subagents.observeSystemFrame(event.message)
         const kind = claudeProviderFrameKind(event.message)
+
         if (
           !handleMessage(event.message, event.startsTurn === true, event.observedAt ?? Date.now())
         ) {
           providerFallback.append(kind, event.message)
         }
+
         publishActivity(kind, event.message)
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)

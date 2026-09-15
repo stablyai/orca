@@ -29,6 +29,7 @@ const park = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     pendingStartupByTabId: {} as Record<string, unknown>,
     ptyIdsByTabId: {} as Record<string, string[]>,
@@ -38,6 +39,7 @@ vi.mock('../../store', async () => {
     runtimePaneTitlesByTabId: {} as Record<string, unknown>,
     tabsByWorktree: {} as Record<string, TerminalTab[]>
   }))
+
   return { useAppStore }
 })
 
@@ -61,13 +63,18 @@ import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 /** The most recently hidden tab holds the last-active retain exemption. */
 const EXEMPT_TAB_ID = 'tab-a'
+
 const PARKABLE_TAB_ID = 'tab-b'
+
 /** Stops an unfixed loop from hanging the run if React ever raises its bail. */
 const RENDER_HARD_STOP = 500
+
 /** +1: the pin lands in the passive effect observing the burst flip, so the
  *  verdict settles one flip after damping engages. */
 const SETTLED_FLIP_BUDGET = TERMINAL_TAB_PARK_FLIP_BURST_LIMIT + 1
+
 const EMPTY_ASSIGNMENTS = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
+
 const EMPTY_PORTALS: never[] = []
 
 type ParkingStoreState = { tabsByWorktree: Record<string, TerminalTab[]> }
@@ -99,6 +106,7 @@ function rewriteTabModel(tabId: string): void {
 
 /** Store writes a single park transition costs; each lands in its own commit. */
 let storeCommitsPerParkTransition = 1
+
 let paneMountCount = 0
 
 /** The pane whose mount/unmount the park verdict authorizes. */
@@ -106,6 +114,7 @@ function TerminalPaneStandIn(): null {
   useEffect(() => {
     paneMountCount += 1
   }, [])
+
   return null
 }
 
@@ -126,29 +135,38 @@ function ParkTransitionStoreWrites({ parked }: { parked: boolean }): null {
       lastParkedRef.current = parked
       pendingWritesRef.current = storeCommitsPerParkTransition
     }
+
     if (pendingWritesRef.current <= 0) {
       return
     }
+
     pendingWritesRef.current -= 1
+
     if (pendingWritesRef.current === 0) {
       // A mounted pane grants byte-watcher coverage; a parked one withdraws it.
       park.coverage = !parked
     }
+
     rewriteTabModel(PARKABLE_TAB_ID)
     setWriteTick((tick) => tick + 1)
   }, [parked, writeTick])
+
   return null
 }
 
 let hostRenderCount = 0
+
 let parkVerdictFlipCount = 0
+
 let lastParkVerdict = false
 
 function OverlayHost(): React.JSX.Element | null {
   hostRenderCount += 1
+
   const terminalTabs = useAppStore(
     (state) => (state as ParkingStoreState).tabsByWorktree[park.worktreeId]
   ) as TerminalTab[]
+
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId: park.worktreeId,
     terminalTabs,
@@ -160,14 +178,19 @@ function OverlayHost(): React.JSX.Element | null {
     activityTerminalPortals: EMPTY_PORTALS,
     activationDeferredMountTabIds: null
   })
+
   const parked = parkedTerminalTabIds.has(PARKABLE_TAB_ID)
+
   if (parked !== lastParkVerdict) {
     parkVerdictFlipCount += 1
   }
+
   lastParkVerdict = parked
+
   if (hostRenderCount > RENDER_HARD_STOP) {
     return null
   }
+
   return (
     <>
       {parked ? null : <TerminalPaneStandIn />}
@@ -179,6 +202,7 @@ function OverlayHost(): React.JSX.Element | null {
 function renderOverlayHost(root: Root): unknown {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   let thrown: unknown = null
+
   try {
     act(() => {
       root.render(<OverlayHost />)
@@ -186,7 +210,9 @@ function renderOverlayHost(root: Root): unknown {
   } catch (error) {
     thrown = error
   }
+
   consoleError.mockRestore()
+
   return thrown
 }
 

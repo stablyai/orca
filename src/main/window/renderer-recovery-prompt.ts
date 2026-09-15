@@ -20,14 +20,18 @@ export async function presentRendererRecoveryPrompt(
   deps: RendererRecoveryPromptDeps
 ): Promise<void> {
   const stalled = deps.failure === 'reload-stalled'
+
   // Copying must preserve the only available recovery surface.
   while (!deps.isQuitting()) {
     const diagnosis = deps.diagnose()
     const buttons = [translateMain('rendererRecovery.reload', 'Reload')]
+
     if (diagnosis) {
       buttons.push(translateMain('rendererRecovery.copyCommands', 'Copy Commands'))
     }
+
     buttons.push(translateMain('rendererRecovery.quit', 'Quit'))
+
     const recoveryDetail = stalled
       ? translateMain(
           'rendererRecovery.stalledDetail',
@@ -38,6 +42,7 @@ export async function presentRendererRecoveryPrompt(
           'Orca tried to recover {{recoveryCount}} times in a row without success.',
           { recoveryCount: deps.recentRecoveryCount }
         )
+
     const causeDetail = diagnosis
       ? `${diagnosis.detail}\n\n${translateMain(
           'rendererRecovery.driverFallback',
@@ -47,6 +52,7 @@ export async function presentRendererRecoveryPrompt(
           'rendererRecovery.genericDetail',
           'This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.'
         )
+
     const { response } = await deps.showMessageBox({
       type: 'error',
       buttons,
@@ -65,15 +71,18 @@ export async function presentRendererRecoveryPrompt(
           ),
       detail: `${recoveryDetail}\n\n${causeDetail}`
     })
+
     if (response === 1 && diagnosis) {
       deps.copyToClipboard(diagnosis.commands.join('\r\n'))
       continue
     }
+
     if (response === 0) {
       deps.reload()
     } else if (response === buttons.length - 1) {
       deps.quit()
     }
+
     return
   }
 }

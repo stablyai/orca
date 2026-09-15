@@ -40,6 +40,7 @@ let mockState: MockState
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: MockState) => unknown) => selector(mockState)
   useAppStore.getState = () => mockState
+
   return { useAppStore }
 })
 
@@ -86,18 +87,22 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverArrow: () => <div data-testid="popover-arrow" />,
   PopoverContent: ({ children, ...props }: { children: React.ReactNode }) => {
     mocks.popoverContentProps.current = props
+
     return <>{children}</>
   }
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 function headerButton(label: string): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
+
   if (!button) {
     throw new Error(`Header button not rendered: ${label}`)
   }
+
   return button
 }
 
@@ -184,6 +189,7 @@ describe('SidebarHeader', () => {
     const labels = [...container.querySelectorAll<HTMLElement>('[aria-label]')]
       .map((node) => node.getAttribute('aria-label'))
       .filter((label): label is string => label === 'Add project' || label === 'New workspace')
+
     expect(labels).toEqual(['Add project', 'New workspace'])
   })
 
@@ -208,6 +214,7 @@ describe('SidebarHeader', () => {
     const activityButton = container.querySelector<HTMLButtonElement>(
       '[aria-label="View activity"]'
     )
+
     expect(activityButton).toBeTruthy()
 
     act(() => {
@@ -243,6 +250,7 @@ describe('SidebarHeader', () => {
     const activityButton = container.querySelector<HTMLButtonElement>(
       '[aria-label="Turn off activity view"]'
     )
+
     expect(activityButton?.getAttribute('aria-pressed')).toBe('true')
 
     act(() => {

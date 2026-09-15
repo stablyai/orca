@@ -28,10 +28,12 @@ const IDENTITY: AgentSessionJournalIdentity = {
 const GROUP_ID = 'thread-1:turn-1'
 
 let root: string
+
 let clock = 1_000
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -57,6 +59,7 @@ function rosterRow(agents: NativeChatSubagentEntry[]) {
 
 function renderItem(agents: NativeChatSubagentEntry[]): AgentJournalRenderItem {
   const row = rosterRow(agents)
+
   return {
     itemId: agentJournalItemKey(row.identity),
     revision: 1,
@@ -150,10 +153,12 @@ describe('staleSubagentRosterRevisions', () => {
 describe('journal reopen after the writing host is gone', () => {
   it('settles a persisted working roster to unverifiable, while the live row still reads working', async () => {
     const live = await open()
+
     const row = rosterRow([
       { id: 'a', label: 'read_readme', state: 'working', startedAt: 10 },
       { id: 'b', label: 'read_package', state: 'working', startedAt: 10 }
     ])
+
     await live.appendItem(row.identity, row.body, { fence: 0 })
 
     // Still the writing host: it can see the children, so the row says so.

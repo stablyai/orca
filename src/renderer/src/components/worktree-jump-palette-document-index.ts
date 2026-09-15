@@ -35,13 +35,16 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   checksReviewByWorktree: ReadonlyMap<Worktree, HostedReviewInfo | null>
 }): Map<string, PaletteDocument> {
   const hostLabelByWorktreeId = new Map<string, string>()
+
   for (const worktree of worktrees) {
     const repo = resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity)
     const badge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
+
     if (badge) {
       hostLabelByWorktreeId.set(getPaletteWorktreeIdentity(worktree), badge.label)
     }
   }
+
   return buildWorktreePaletteDocuments(
     worktrees.filter((worktree) => !worktree.isArchived),
     {

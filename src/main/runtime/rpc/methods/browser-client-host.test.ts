@@ -54,10 +54,12 @@ describe('browser.clientHost.attach RPC', () => {
 
   it('requires an authenticated negotiated paired-runtime connection', async () => {
     const hostRuntime = runtime()
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
 
     await dispatcher.dispatchStreaming(request(), (reply) => replies.push(reply), {
@@ -80,11 +82,14 @@ describe('browser.clientHost.attach RPC', () => {
   it('publishes server-owned epoch and generation then releases on cleanup', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(request(), (reply) => replies.push(reply), {
       connectionId: 'connection-a',
       clientKind: 'runtime',
@@ -120,11 +125,14 @@ describe('browser.clientHost.attach RPC', () => {
   it('echoes page-command negotiation only to an explicit v1 client', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(
       request('host-a', 1),
       (reply) => replies.push(reply),
@@ -149,11 +157,14 @@ describe('browser.clientHost.attach RPC', () => {
   it('echoes and retains only an explicitly negotiated complete page inventory', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(
       request('host-a', undefined, 1),
       (reply) => replies.push(reply),
@@ -179,11 +190,14 @@ describe('browser.clientHost.attach RPC', () => {
   it('publishes one server-owned command and fences result authority', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const replies: string[] = []
+
     const dispatch = dispatcher.dispatchStreaming(
       request('host-a', 1),
       (reply) => replies.push(reply),
@@ -194,13 +208,16 @@ describe('browser.clientHost.attach RPC', () => {
         clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
       }
     )
+
     await vi.waitFor(() => expect(replies).toHaveLength(1))
     const registry = getBrowserHostLeaseRegistry(hostRuntime)
     const lease = registry.select('host-a')
     const placement = registry.placeClientPage('page-a', 'host-a')
+
     if (placement.kind !== 'client') {
       throw new Error('expected client placement')
     }
+
     registry.grantExecutionHost(
       {
         authorityEpoch: lease.authorityEpoch,
@@ -210,6 +227,7 @@ describe('browser.clientHost.attach RPC', () => {
       },
       'host-key-a'
     )
+
     const issued = registry.issueClientPageCommand(
       {
         authorityRuntimeId: lease.authorityRuntimeId,
@@ -225,6 +243,7 @@ describe('browser.clientHost.attach RPC', () => {
         executionHostKey: 'host-key-a'
       }
     )
+
     await vi.waitFor(() => expect(replies).toHaveLength(2))
     expect(JSON.parse(replies[1]!).result).toEqual(issued.event)
 
@@ -290,28 +309,35 @@ describe('browser.clientHost.attach RPC', () => {
   it('publishes ready before replaying an unsettled command on exact reattach', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const options = {
       clientKind: 'runtime' as const,
       pairedDeviceId: 'device-a',
       clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
     }
+
     const firstReplies: string[] = []
+
     const first = dispatcher.dispatchStreaming(
       request('host-a', 1, 1, 1),
       (reply) => firstReplies.push(reply),
       { ...options, connectionId: 'connection-a' }
     )
+
     await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
     const registry = getBrowserHostLeaseRegistry(hostRuntime)
     const lease = registry.select('host-a')
     const placement = registry.placeClientPage('page-a', 'host-a')
+
     if (placement.kind !== 'client') {
       throw new Error('expected client placement')
     }
+
     registry.grantExecutionHost(
       {
         authorityEpoch: lease.authorityEpoch,
@@ -321,6 +347,7 @@ describe('browser.clientHost.attach RPC', () => {
       },
       'host-key-a'
     )
+
     const issued = registry.issueClientPageCommand(
       {
         authorityRuntimeId: lease.authorityRuntimeId,
@@ -336,17 +363,20 @@ describe('browser.clientHost.attach RPC', () => {
         executionHostKey: 'host-key-a'
       }
     )
+
     await vi.waitFor(() => expect(firstReplies).toHaveLength(2))
     const disconnectFirst = cleanups.get('browser-client-host:host-a')
     disconnectFirst?.()
     await first
 
     const replacementReplies: string[] = []
+
     const replacement = dispatcher.dispatchStreaming(
       request('host-a', 1, 1, 1),
       (reply) => replacementReplies.push(reply),
       { ...options, connectionId: 'connection-b' }
     )
+
     await vi.waitFor(() => expect(replacementReplies).toHaveLength(2))
 
     expect(JSON.parse(replacementReplies[0]!).result).toMatchObject({
@@ -372,21 +402,26 @@ describe('browser.clientHost.attach RPC', () => {
   it('restores exact authority when reattach reaches the host before old cleanup', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const options = {
       clientKind: 'runtime' as const,
       pairedDeviceId: 'device-a',
       clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
     }
+
     const firstReplies: string[] = []
+
     const first = dispatcher.dispatchStreaming(
       request('host-a', 1, 1, 1),
       (reply) => firstReplies.push(reply),
       { ...options, connectionId: 'connection-a' }
     )
+
     await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
     const firstReady = JSON.parse(firstReplies[0]!).result
     const replacementReplies: string[] = []
@@ -396,6 +431,7 @@ describe('browser.clientHost.attach RPC', () => {
       (reply) => replacementReplies.push(reply),
       { ...options, connectionId: 'connection-b' }
     )
+
     await vi.waitFor(() => expect(replacementReplies).toHaveLength(1))
     await first
 
@@ -462,22 +498,28 @@ describe('browser.clientHost.attach RPC', () => {
 
   it('fences a replaced subscription and increments its host generation', async () => {
     const hostRuntime = runtime()
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const firstReplies: string[] = []
     const secondReplies: string[] = []
+
     const options = {
       clientKind: 'runtime' as const,
       pairedDeviceId: 'device-a',
       clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
     }
+
     const first = dispatcher.dispatchStreaming(request(), (reply) => firstReplies.push(reply), {
       ...options,
       connectionId: 'connection-a'
     })
+
     await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
+
     const second = dispatcher.dispatchStreaming(request(), (reply) => secondReplies.push(reply), {
       ...options,
       connectionId: 'connection-b'
@@ -506,23 +548,28 @@ describe('browser.clientHost.attach RPC', () => {
   it('rejects a second browser-host identity on one authenticated connection', async () => {
     const cleanups = new Map<string, () => void>()
     const hostRuntime = runtime(cleanups)
+
     const dispatcher = new RpcDispatcher({
       runtime: hostRuntime,
       methods: BROWSER_CLIENT_HOST_METHODS
     })
+
     const firstReplies: string[] = []
     const rejectedReplies: string[] = []
+
     const options = {
       connectionId: 'connection-a',
       clientKind: 'runtime' as const,
       pairedDeviceId: 'device-a',
       clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
     }
+
     const first = dispatcher.dispatchStreaming(
       request('host-a'),
       (reply) => firstReplies.push(reply),
       options
     )
+
     await vi.waitFor(() => expect(firstReplies).toHaveLength(1))
 
     await dispatcher.dispatchStreaming(
@@ -567,6 +614,7 @@ async function dispatchCommandResult(
       ...overrides
     }
   )
+
   return JSON.parse(replies[0]!)
 }
 

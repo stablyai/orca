@@ -11,9 +11,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   useEffect(() => {
     if (visible) {
       setLingering(true)
+
       return
     }
+
     const timer = window.setTimeout(() => setLingering(false), PALETTE_CLOSE_LINGER_MS)
+
     return () => window.clearTimeout(timer)
   }, [visible])
   // Reopening must invalidate a pending create lookup from the previous content mount.
@@ -22,6 +25,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   if (!visible && !lingering) {
     return null
   }
+
   return (
     <WorktreeJumpPaletteContent
       visible={visible}
@@ -45,5 +49,6 @@ function WorktreeJumpPaletteContent({
     lingering,
     createLookupGuard
   })
+
   return <WorktreeJumpPaletteSurface controller={controller} />
 }

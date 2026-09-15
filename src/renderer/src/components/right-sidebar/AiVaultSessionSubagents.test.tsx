@@ -82,6 +82,7 @@ describe('SessionSubagentsSection', () => {
     // Second fetch stays pending: the previous rows must remain visible
     // instead of flickering back to the hidden loading state.
     let resolveSecond: (result: AiVaultSubagentListResult) => void = () => {}
+
     listSubagentSessions.mockImplementationOnce(
       () => new Promise((resolve) => (resolveSecond = resolve))
     )
@@ -121,6 +122,7 @@ describe('SessionSubagentsSection', () => {
         session={makeSession({ executionHostId: 'ssh:dev-box', subagentTranscriptCount: 2 })}
       />
     )
+
     await act(async () => {})
     expect(listSubagentSessions).not.toHaveBeenCalled()
     expect(container.firstChild).toBeNull()
@@ -135,8 +137,10 @@ describe('independent child resume', () => {
     subagent: { parentSessionId: 'parent-session', agentType: 'worker', status: 'completed' },
     subagentTranscriptCount: 0
   })
+
   it('passes the complete child and its resolved folder target to resume', async () => {
     listSubagentSessions.mockResolvedValue({ sessions: [child], issues: [] })
+
     const resume = {
       getState: vi.fn(() => ({
         blocked: false,
@@ -145,9 +149,11 @@ describe('independent child resume', () => {
       })),
       onResume: vi.fn()
     }
+
     const { getByRole } = render(
       <SessionSubagentsSection session={makeSession({ agent: 'omp' })} resume={resume} />
     )
+
     await act(async () => {})
     fireEvent.click(getByRole('button', { name: 'Resume in Worktree' }))
     expect(resume.getState).toHaveBeenCalledWith(child)
@@ -162,22 +168,27 @@ describe('independent child resume', () => {
   ])('withholds resume for a non-independent or empty child %j', async (overrides) => {
     listSubagentSessions.mockResolvedValue({ sessions: [{ ...child, ...overrides }], issues: [] })
     const resume = { getState: vi.fn(), onResume: vi.fn() }
+
     const { queryByRole } = render(
       <SessionSubagentsSection session={makeSession()} resume={resume} />
     )
+
     await act(async () => {})
     expect(queryByRole('button', { name: /Resume/ })).toBeNull()
     expect(resume.getState).not.toHaveBeenCalled()
   })
   it('disables resume when the existing target resolver blocks the child host', async () => {
     listSubagentSessions.mockResolvedValue({ sessions: [child], issues: [] })
+
     const resume = {
       getState: vi.fn(() => ({ blocked: true, worktreeId: null, usesSessionWorktree: false })),
       onResume: vi.fn()
     }
+
     const { getByRole } = render(
       <SessionSubagentsSection session={makeSession()} resume={resume} />
     )
+
     await act(async () => {})
     const button = getByRole('button', { name: 'Resume in New Tab' })
     expect(button.hasAttribute('disabled')).toBe(true)
@@ -188,18 +199,21 @@ describe('independent child resume', () => {
 
 describe('nested OMP history', () => {
   const parent = makeSession({ agent: 'omp' })
+
   const child = {
     ...makeSubagent('Worker'),
     agent: 'omp' as const,
     sessionId: 'worker',
     subagentTranscriptCount: 1
   }
+
   const grandchild = { ...makeSubagent('Research'), agent: 'omp' as const, sessionId: 'research' }
 
   it('loads only opened branches and targets the grandchild when resuming', async () => {
     listSubagentSessions
       .mockResolvedValueOnce({ sessions: [child, makeSubagent('Sibling')], issues: [] })
       .mockResolvedValueOnce({ sessions: [grandchild], issues: [] })
+
     const resume = {
       getState: vi.fn(() => ({
         blocked: false,
@@ -208,6 +222,7 @@ describe('nested OMP history', () => {
       })),
       onResume: vi.fn()
     }
+
     const view = render(<SessionSubagentsSection session={parent} resume={resume} />)
     await act(async () => {})
     expect(listSubagentSessions).toHaveBeenCalledTimes(1)
@@ -238,6 +253,7 @@ describe('nested OMP history', () => {
 
   it('ignores late nested results after collapse and refetches on reopen', async () => {
     let resolveChild: (value: AiVaultSubagentListResult) => void = () => {}
+
     listSubagentSessions
       .mockResolvedValueOnce({ sessions: [child], issues: [] })
       .mockImplementationOnce(
@@ -300,11 +316,13 @@ describe('nested OMP history', () => {
           : [grandchild],
       issues: []
     }))
+
     const fixture = (visible: boolean, modifiedAt = parent.modifiedAt) => (
       <SubagentExpansionProvider>
         {visible ? <SessionSubagentsSection session={{ ...parent, modifiedAt }} /> : null}
       </SubagentExpansionProvider>
     )
+
     const view = render(fixture(true))
     await act(async () => {})
     fireEvent.click(view.getByRole('button', { name: 'Subagents (1)' }))
@@ -337,6 +355,7 @@ describe('nested OMP history', () => {
 
   it('never accepts a late response from a replaced parent', async () => {
     let finish: (value: AiVaultSubagentListResult) => void = () => {}
+
     listSubagentSessions
       .mockImplementationOnce(
         () =>

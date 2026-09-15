@@ -222,6 +222,7 @@ export function getSpeechModelDownloadMetadata(modelId: DownloadableSpeechModelI
   sizeBytes: number
 } {
   const downloadFiles = MODEL_DOWNLOAD_FILES[modelId]
+
   return {
     downloadFiles,
     files: downloadFiles.map(({ name }) => name),

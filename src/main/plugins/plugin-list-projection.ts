@@ -90,6 +90,7 @@ export async function buildPluginList(
     pluginConsents: service.options.getPluginConsents(),
     disabledPlugins: service.options.getDisabledPlugins()
   }
+
   return mapWithConcurrency(
     service.getDiscovered(),
     PLUGIN_LIST_PROJECTION_CONCURRENCY,
@@ -98,6 +99,7 @@ export async function buildPluginList(
         // Why: invalid dev paths can contain private absolute desktop paths;
         // never project those as identity over desktop/serve transports.
         const fallbackKey = plugin.pluginKey ?? `invalid-development-plugin-${index + 1}`
+
         return {
           pluginKey: fallbackKey,
           consentFingerprint: null,
@@ -118,11 +120,13 @@ export async function buildPluginList(
           restarts: 0
         }
       }
+
       const activation = service.activationState(plugin)
       const worker = service.workerState(plugin.pluginKey)
       const activationError = service.activationError(plugin.pluginKey)
       const killListEntry = service.options.getPluginKillListEntry?.(plugin.pluginKey) ?? null
       let status: PluginListStatus
+
       if (activation === 'disabled') {
         status = 'disabled'
       } else if (activation === 'pending') {
@@ -134,7 +138,9 @@ export async function buildPluginList(
       } else {
         status = worker.state === 'running' ? 'running' : 'idle'
       }
+
       const candidateLockEntry = lock.plugins[plugin.pluginKey]
+
       // Why: never show provenance for bytes other than the current executable
       // identity. Dev overrides execute outside the immutable installed tree and
       // must never inherit the shadowed install's pinned-source attribution.
@@ -145,13 +151,16 @@ export async function buildPluginList(
         candidateLockEntry.contentHash === plugin.contentHash
           ? candidateLockEntry
           : undefined
+
       const bundled = lockEntry?.source.kind === 'bundled'
+
       const official =
         bundled ||
         (lockEntry?.source.kind === 'marketplace' &&
           isOfficialPluginIdentity(plugin.pluginKey) &&
           isOfficialMarketplaceGitSource(lockEntry.source.marketplace.url) &&
           isOfficialOrganizationGitSource(lockEntry.source.plugin.url))
+
       return {
         pluginKey: plugin.pluginKey,
         consentFingerprint: plugin.consentFingerprint,

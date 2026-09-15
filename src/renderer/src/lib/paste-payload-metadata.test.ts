@@ -55,6 +55,7 @@ describe('paste payload metadata', () => {
 
   it('yields while measuring accepted large paste metadata', async () => {
     const yieldToEventLoop = vi.fn(async () => {})
+
     const metadata = await measurePastePayloadMetadataWithYield(
       `${'x'.repeat(32)}\r\nnext\x1b[31m`,
       {

@@ -40,11 +40,13 @@ export class RuntimePreservedBranchCleanup {
   ): void {
     if (result?.preservedBranch) {
       const head = result.preservedBranch.head ?? fallbackHead
+
       if (!head) {
         throw new Error(
           `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
         )
       }
+
       this.targets.set(preservedBranchCleanupScopeKey({ worktreeId, hostId }), {
         worktreeId,
         ...(hostId ? { hostId } : {}),
@@ -52,8 +54,10 @@ export class RuntimePreservedBranchCleanup {
         head,
         ...(pushTarget ? { pushTarget } : {})
       })
+
       return
     }
+
     this.delete(worktreeId, hostId)
   }
 
@@ -68,6 +72,7 @@ export class RuntimePreservedBranchCleanup {
     if (!result?.preservedBranch || result.preservedBranch.head || !fallbackHead) {
       return result ?? {}
     }
+
     return {
       ...result,
       preservedBranch: { ...result.preservedBranch, head: fallbackHead }
@@ -81,16 +86,20 @@ export class RuntimePreservedBranchCleanup {
     hostId?: string
   ): Promise<ForceDeleteWorktreeBranchResult> {
     const store = this.getStore()
+
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+
     const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
     const normalizedHostId = parseExecutionHostId(hostId)?.id
+
     const exactTarget = removalTarget
       ? this.targets.get(
           preservedBranchCleanupScopeKey({ worktreeId: removalTarget.id, hostId: normalizedHostId })
         )
       : undefined
+
     const legacyMatches =
       removalTarget && !hostId
         ? [...this.targets.values()].filter(
@@ -100,7 +109,9 @@ export class RuntimePreservedBranchCleanup {
               target.head === expectedHead
           )
         : []
+
     const target = exactTarget ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined)
+
     if (
       !removalTarget ||
       !target ||
@@ -109,16 +120,21 @@ export class RuntimePreservedBranchCleanup {
     ) {
       throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
     }
+
     const repoOwner = resolveWorktreeRemovalRepoOwner(store, removalTarget.repoId, target.hostId)
+
     if (repoOwner.kind === 'ambiguous') {
       throw new Error(
         `Workspace identity is ambiguous across hosts: ${removalTarget.id}. Retry with an explicit host.`
       )
     }
+
     const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
+
     if (!repo) {
       throw new Error('repo_not_found')
     }
+
     if (isFolderRepo(repo)) {
       throw new Error('Folder workspaces do not have local Git branches.')
     }
@@ -148,7 +164,9 @@ export class RuntimePreservedBranchCleanup {
         options
       )
     }
+
     this.delete(removalTarget.id, target.hostId)
+
     return { deleted: true }
   }
 }

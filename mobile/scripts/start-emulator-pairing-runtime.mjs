@@ -29,6 +29,7 @@ export async function startHeadlessPairingRuntime({
   const homeDir = path.join(runDir, 'home')
   mkdirSync(homeDir, { recursive: true, mode: 0o700 })
   const pairingAddress = primaryLanIp(lanIpCandidates)
+
   const child = spawn(
     orcaCli,
     ['serve', '--mobile-pairing', '--pairing-address', pairingAddress, '--json'],
@@ -52,6 +53,7 @@ export async function registerWorktreeForPairingRuntime(runtime, worktree, tools
   if (!runtime) {
     return
   }
+
   tools.logStep('0.1', 'Registering current worktree in temporary runtime...')
   await tools.orca(['repo', 'add', '--path', worktree, '--json'], {
     cwd: worktree,
@@ -73,6 +75,7 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
     if (!exited) {
       child.kill('SIGTERM')
     }
+
     rl?.close()
     rlErr?.close()
     child.stdout?.destroy()
@@ -107,6 +110,7 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
       if (resolved) {
         return
       }
+
       resolved = true
       clearTimeout(timeout)
       logSuccess(`Temporary desktop runtime ready (${pairingAddress})`)
@@ -117,6 +121,7 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
       if (resolved) {
         return
       }
+
       resolved = true
       clearTimeout(timeout)
       stop()
@@ -140,6 +145,7 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
 
     child.on('exit', (code) => {
       exited = true
+
       if (!resolved) {
         const detail = stderr.trim() || output.trim() || `exit code ${code}`
         finishReject(new Error(`Temporary desktop runtime exited before pairing: ${detail}`))
@@ -150,12 +156,15 @@ async function waitForPairingRuntime({ child, userData, pairingAddress, logSucce
 
 function handleRuntimeLine(line, finishResolve) {
   const trimmed = line.trim()
+
   if (!trimmed.startsWith('{')) {
     return
   }
+
   try {
     const result = JSON.parse(trimmed)
     const pairingUrl = result?.pairing?.url
+
     if (typeof pairingUrl === 'string' && pairingUrl.length > 0) {
       finishResolve(pairingUrl)
     }

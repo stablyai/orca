@@ -30,8 +30,10 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   // visible on the same paint as the new request arriving — useEffect would
   // leave one render showing the previous passphrase value.
   const [prevRequestId, setPrevRequestId] = useState(requestId)
+
   if (requestId !== prevRequestId) {
     setPrevRequestId(requestId)
+
     if (requestId) {
       setValue('')
       setSubmitting(false)
@@ -43,15 +45,19 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   const setInputRef = useCallback(
     (input: HTMLInputElement | null): void => {
       inputRef.current = input
+
       if (focusFrameRef.current !== null) {
         cancelAnimationFrame(focusFrameRef.current)
         focusFrameRef.current = null
       }
+
       if (!input || !requestId) {
         return
       }
+
       focusFrameRef.current = requestAnimationFrame(() => {
         focusFrameRef.current = null
+
         if (inputRef.current === input) {
           input.focus()
         }
@@ -64,7 +70,9 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
     if (!request || !value) {
       return
     }
+
     setSubmitting(true)
+
     try {
       await window.api.ssh.submitCredential({ requestId: request.requestId, value })
       removeRequest(request.requestId)
@@ -84,6 +92,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   const handleCancel = useCallback(async () => {
     if (request) {
       setSubmitting(true)
+
       try {
         await window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
         removeRequest(request.requestId)

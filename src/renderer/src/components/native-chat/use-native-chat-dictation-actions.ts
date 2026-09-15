@@ -12,18 +12,22 @@ export function useNativeChatDictationActions(args: {
 } {
   const { setDictationPressed, textareaRef } = args
   const focusForDictation = useCallback(() => textareaRef.current?.focus(), [textareaRef])
+
   const toggleDictation = useCallback(() => {
     focusForDictation()
     dispatchDictationControl('toggle')
   }, [focusForDictation])
+
   const startHoldDictation = useCallback(() => {
     setDictationPressed(true)
     focusForDictation()
     dispatchDictationControl('start')
   }, [focusForDictation, setDictationPressed])
+
   const stopHoldDictation = useCallback(() => {
     setDictationPressed(false)
     dispatchDictationControl('stop')
   }, [setDictationPressed])
+
   return { toggleDictation, startHoldDictation, stopHoldDictation }
 }

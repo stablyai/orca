@@ -59,6 +59,7 @@ describe('AccountsPane', () => {
       value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       configurable: true
     })
+
     try {
       const markup = renderPane(
         {
@@ -137,6 +138,7 @@ describe('AccountsPane', () => {
     const webGlobal = globalThis as { window?: { __ORCA_WEB_CLIENT__?: boolean } }
     const hadWindow = 'window' in webGlobal
     webGlobal.window = { ...webGlobal.window, __ORCA_WEB_CLIENT__: true }
+
     try {
       const markup = renderPane({
         ...getDefaultSettings('/tmp'),

@@ -8,16 +8,20 @@ import {
 
 function navigationHarness(initialState: MobileHostEditNavigationState) {
   let stateListener = () => {}
+
   let state = initialState
   const unsubscribeState = vi.fn()
+
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
       stateListener = listener
+
       return unsubscribeState
     }),
     dispatch: vi.fn(),
     getState: () => state
   }
+
   return {
     navigation,
     setState(nextState: MobileHostEditNavigationState) {
@@ -97,6 +101,7 @@ describe('mobile host edit navigation', () => {
 
   it('cancels a pending replacement when navigation leaves the host flow', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+
     const controller = navigateToMobileHostEdit(
       harness.navigation,
       { push: vi.fn(), replace: vi.fn() },

@@ -9,6 +9,7 @@ describe('cleanup inspection grace survives upgrades', () => {
   // silently voids the grace period for existing users after they update.
   it('honours a viewed mark persisted without any newer fields', () => {
     const candidate = makeCandidate({ fingerprint: 'fingerprint-1' })
+
     const state = makeState({
       workspaceCleanupViewedCandidates: {
         [WORKTREE_ID]: { viewedAt: Date.now(), fingerprint: 'fingerprint-1' }
@@ -20,6 +21,7 @@ describe('cleanup inspection grace survives upgrades', () => {
 
   it('still drops the grace once the row fingerprint changes', () => {
     const candidate = makeCandidate({ fingerprint: 'fingerprint-2' })
+
     const state = makeState({
       workspaceCleanupViewedCandidates: {
         [WORKTREE_ID]: { viewedAt: Date.now(), fingerprint: 'fingerprint-1' }
@@ -31,6 +33,7 @@ describe('cleanup inspection grace survives upgrades', () => {
 
   it('still expires the grace after the window', () => {
     const candidate = makeCandidate({ fingerprint: 'fingerprint-1' })
+
     const state = makeState({
       workspaceCleanupViewedCandidates: {
         [WORKTREE_ID]: {

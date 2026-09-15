@@ -27,13 +27,17 @@ export function createMarkdownPreviewActions(
     openNewMarkdownInActiveWorkspace: async (groupId) => {
       const state = get()
       const worktreeId = state.activeWorktreeId
+
       if (!worktreeId) {
         return
       }
+
       const worktree = state.getKnownWorktreeById(worktreeId)
+
       if (!worktree) {
         return
       }
+
       try {
         const operationProvenance = captureEditorFileOperationProvenance(
           state,
@@ -41,11 +45,13 @@ export function createMarkdownPreviewActions(
           undefined,
           false
         )
+
         const operationContext = getEditorFileOperationContext(
           state,
           { worktreeId, operationProvenance },
           worktree.path
         )
+
         const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
           worktree.path,
           worktreeId,
@@ -57,9 +63,11 @@ export function createMarkdownPreviewActions(
           operationContext.expectedExecutionHostId,
           () => assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
         )
+
         if (!fileInfo) {
           return
         }
+
         get().openFile(fileInfo, {
           preview: false,
           targetGroupId: groupId,
@@ -73,12 +81,14 @@ export function createMarkdownPreviewActions(
 
     openMarkdownPreview: (file, options) => {
       const initialState = get()
+
       const resolvedRuntimeEnvironmentId =
         file.runtimeEnvironmentId === null
           ? null
           : (file.runtimeEnvironmentId ??
             initialState.settings?.activeRuntimeEnvironmentId?.trim() ??
             undefined)
+
       const sourceFileId =
         options?.sourceFileId ??
         resolveEditorFileIdForOwner(
@@ -88,10 +98,13 @@ export function createMarkdownPreviewActions(
           resolvedRuntimeEnvironmentId,
           ['edit']
         )
+
       const id = `markdown-preview::${sourceFileId}`
+
       const externalSshTargetId =
         file.externalSshTargetId ??
         initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
+
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
@@ -108,6 +121,7 @@ export function createMarkdownPreviewActions(
             existing.markdownPreviewSourceFileId !== sourceFileId ||
             existing.markdownPreviewAnchor !== anchor ||
             existing.mode !== 'markdown-preview'
+
           return needsUpdate
             ? {
                 openFiles: s.openFiles.map((openFile) =>
@@ -164,23 +178,31 @@ export function createMarkdownPreviewActions(
     makePreviewFilePermanent: (fileId, tabId) => {
       set((s) => {
         let changed = false
+
         const openFiles = s.openFiles.map((file) => {
           if (file.id !== fileId || !file.isPreview) {
             return file
           }
+
           changed = true
+
           return { ...file, isPreview: undefined }
         })
+
         const unifiedTabsByWorktree: typeof s.unifiedTabsByWorktree = {}
+
         for (const [worktreeId, tabs] of Object.entries(s.unifiedTabsByWorktree ?? {})) {
           unifiedTabsByWorktree[worktreeId] = tabs.map((tab) => {
             if (tab.entityId !== fileId || (tabId && tab.id !== tabId) || !tab.isPreview) {
               return tab
             }
+
             changed = true
+
             return { ...tab, isPreview: false }
           })
         }
+
         return changed ? { openFiles, unifiedTabsByWorktree } : s
       })
     },
@@ -188,6 +210,7 @@ export function createMarkdownPreviewActions(
     pinFile: (fileId, tabId) => {
       get().makePreviewFilePermanent(fileId, tabId)
       const state = get()
+
       for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
         for (const item of tabs) {
           if (item.entityId === fileId && (!tabId || item.id === tabId)) {

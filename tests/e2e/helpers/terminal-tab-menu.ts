@@ -10,19 +10,24 @@ async function activeTabBarRoot(page: Page): Promise<Locator> {
   const groupId = await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     if (!worktreeId) {
       return null
     }
+
     return (
       state?.activeGroupIdByWorktree?.[worktreeId] ??
       state?.groupsByWorktree?.[worktreeId]?.[0]?.id ??
       null
     )
   })
+
   if (!groupId) {
     return page.locator('body')
   }
+
   const strip = page.locator(`[data-tab-group-strip-id="${groupId}"]`)
+
   return (await strip.count()) > 0 ? strip : page.locator('body')
 }
 
@@ -48,6 +53,7 @@ export async function createTerminalTabFromMenu(page: Page): Promise<string> {
     .poll(
       async () => {
         const current = await getActiveTabId(page)
+
         return Boolean(current && current !== activeBefore)
       },
       { timeout: 10_000, message: 'New Terminal did not become the active tab' }
@@ -55,8 +61,10 @@ export async function createTerminalTabFromMenu(page: Page): Promise<string> {
     .toBe(true)
 
   const tabId = await getActiveTabId(page)
+
   if (!tabId) {
     throw new Error('New Terminal tab id was unavailable after creation')
   }
+
   return tabId
 }

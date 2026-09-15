@@ -17,8 +17,11 @@ type WindowsUserPathRegistryReaderOptions = {
 }
 
 const DEFAULT_CACHE_TTL_MS = 1_000
+
 const USER_ENVIRONMENT_KEY = 'Environment'
+
 const USER_PATH_VALUE = 'Path'
+
 export class WindowsUserPathRegistryReader {
   private readonly platform: NodeJS.Platform
   private readonly registryLoader: () => Promise<WindowsNativeRegistryModule>
@@ -45,21 +48,27 @@ export class WindowsUserPathRegistryReader {
 
     const now = this.now()
     const cacheAge = this.cached ? now - this.cached.readAt : null
+
     if (this.cached && cacheAge !== null && cacheAge >= 0 && cacheAge < this.cacheTtlMs) {
       return this.cached.result
     }
+
     if (this.inFlight) {
       return this.inFlight
     }
 
     const generation = this.generation
+
     const inFlight = this.readUncached().then((result) => {
       if (result.state === 'success' && generation === this.generation) {
         this.cached = { readAt: this.now(), result }
       }
+
       return result
     })
+
     this.inFlight = inFlight
+
     try {
       return await inFlight
     } finally {
@@ -73,9 +82,11 @@ export class WindowsUserPathRegistryReader {
     this.invalidate()
     const generation = this.generation
     const result = await this.readUncached()
+
     if (result.state === 'success' && generation === this.generation) {
       this.cached = { readAt: this.now(), result }
     }
+
     return result
   }
 
@@ -90,6 +101,7 @@ export class WindowsUserPathRegistryReader {
     try {
       const registry = await this.registryLoader()
       const key = registry.getRegistryKey(registry.HK.CU, USER_ENVIRONMENT_KEY)
+
       if (!key || typeof key !== 'object') {
         return {
           state: 'unknown',
@@ -100,9 +112,11 @@ export class WindowsUserPathRegistryReader {
       const pathEntry = Object.entries(key).find(
         ([name]) => name.toLowerCase() === USER_PATH_VALUE.toLowerCase()
       )?.[1]
+
       if (!pathEntry) {
         return { state: 'success', value: null, expandable: false }
       }
+
       if (
         (pathEntry.type !== WINDOWS_REG_SZ && pathEntry.type !== WINDOWS_REG_EXPAND_SZ) ||
         typeof pathEntry.value !== 'string'
@@ -112,6 +126,7 @@ export class WindowsUserPathRegistryReader {
           detail: 'The Windows user PATH registry value has an unsupported format.'
         }
       }
+
       return {
         state: 'success',
         value: pathEntry.value || null,

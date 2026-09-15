@@ -12,7 +12,9 @@ function worktree(overrides: Partial<Worktree>): Pick<Worktree, 'worktreeId' | '
 }
 
 const active = worktree({ worktreeId: 'w1', path: '/Users/ada/repo/app', repoId: 'repo-1' })
+
 const sibling = worktree({ worktreeId: 'w2', path: '/Users/ada/repo/app-2', repoId: 'repo-1' })
+
 const otherRepo = worktree({ worktreeId: 'w3', path: '/Users/ada/other/ui', repoId: 'repo-2' })
 
 describe('deriveMobileAiVaultScopePaths', () => {
@@ -45,6 +47,7 @@ describe('deriveMobileAiVaultScopePaths', () => {
         repoId: 'repo-1'
       })
     )
+
     const result = deriveMobileAiVaultScopePaths('project', active, [active, ...siblings])
     expect(result.length).toBe(64)
     // Active worktree is seeded first, so it survives truncation.
@@ -78,6 +81,7 @@ describe('deriveMobileAiVaultScopePaths', () => {
       'relative/path',
       ' '
     ]
+
     const rows = paths.map((path, index) => worktree({ path, worktreeId: `w-${index}` }))
     expect(deriveMobileAiVaultScopePaths('project', rows[0], rows)).toEqual([
       '/repo/café/',
@@ -96,7 +100,9 @@ describe('deriveMobileAiVaultScopePaths', () => {
     const rows = Array.from({ length: 1000 }, (_, index) =>
       worktree({ path: `/repo/app-${index % 32}`, worktreeId: `w-${index}` })
     )
+
     const normalize = vi.spyOn(runtimePaths, 'normalizeRuntimePathForComparison')
+
     try {
       const result = deriveMobileAiVaultScopePaths('project', rows[0], rows)
       expect(result).toEqual(Array.from({ length: 32 }, (_, index) => `/repo/app-${index}`))

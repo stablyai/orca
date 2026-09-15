@@ -41,11 +41,15 @@ export async function startCheckRunDetailsFixWithAI(args: {
   details: PRCheckRunDetails | null
 }): Promise<boolean> {
   const disabledReason = getCheckRunDetailsFixDisabledReason(args.worktreeId)
+
   if (disabledReason) {
     toast.message(disabledReason)
+
     return false
   }
+
   const resolvedCheck = resolveCheckRunDetailsFixCheck(args.check, args.details)
+
   if (!isCheckRunDetailsFixCandidate(resolvedCheck)) {
     toast.message(
       translate(
@@ -53,9 +57,12 @@ export async function startCheckRunDetailsFixWithAI(args: {
         'This check is not failing.'
       )
     )
+
     return false
   }
+
   const review = resolveHostedReviewForCheckRunDetailsFix(args.worktreeId)
+
   if (!review) {
     toast.message(
       translate(
@@ -63,21 +70,27 @@ export async function startCheckRunDetailsFixWithAI(args: {
         'Open a PR or MR before launching an AI fix.'
       )
     )
+
     return false
   }
+
   const repoId = resolveCheckRunDetailsFixRepo(args.worktreeId)?.id
+
   if (!repoId) {
     return false
   }
+
   const basePrompt =
     buildCheckRunDetailsFixBasePrompt({
       worktreeId: args.worktreeId,
       check: args.check,
       details: args.details
     }) ?? ''
+
   if (!basePrompt) {
     return false
   }
+
   const started = await startFixChecksAgent({
     repoId,
     basePrompt,
@@ -85,6 +98,7 @@ export async function startCheckRunDetailsFixWithAI(args: {
     groupId: args.worktreeId,
     launchSource: 'task_page'
   })
+
   if (started) {
     toast.success(
       translate(
@@ -93,6 +107,7 @@ export async function startCheckRunDetailsFixWithAI(args: {
       )
     )
   }
+
   return started
 }
 
@@ -126,31 +141,39 @@ export function useCheckRunDetailsFixWithAI(args: {
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const repo = useMemo(() => resolveCheckRunDetailsFixRepo(args.worktreeId), [args.worktreeId])
+
   const worktree = useMemo(() => {
     if (!args.worktreeId) {
       return null
     }
+
     return findWorktreeById(useAppStore.getState().worktreesByRepo, args.worktreeId)
   }, [args.worktreeId])
+
   const canFixWithAI = isCheckRunDetailsFixCandidate(args.check, args.details)
   const disabledReason = getCheckRunDetailsFixDisabledReason(args.worktreeId)
+
   const fixPrompt = useMemo(() => {
     if (!args.worktreeId || !canFixWithAI) {
       return null
     }
+
     return buildCheckRunDetailsFixBasePrompt({
       worktreeId: args.worktreeId,
       check: args.check,
       details: args.details
     })
   }, [args.check, args.details, args.worktreeId, canFixWithAI])
+
   const connectionId = args.worktreeId
     ? (getConnectionId(args.worktreeId) ?? repo?.connectionId ?? null)
     : null
+
   const launchPlatform = resolveSourceControlLaunchPlatform({
     connectionId,
     worktreePath: worktree?.path ?? null
   })
+
   const fixChecksRecipe = useMemo(
     () =>
       resolveSourceControlActionRecipe({
@@ -160,6 +183,7 @@ export function useCheckRunDetailsFixWithAI(args: {
       }),
     [repo, settings]
   )
+
   const saveLaunchActionDefault = useCallback(
     async (
       target: SourceControlAiWriteTarget,
@@ -168,13 +192,16 @@ export function useCheckRunDetailsFixWithAI(args: {
     ): Promise<void> => {
       const state = useAppStore.getState()
       const latestSettings = state.settings
+
       if (!latestSettings) {
         throw new Error('Settings are not loaded.')
       }
+
       const latestRepo =
         target.type === 'repo'
           ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
           : null
+
       const result = saveSourceControlActionRecipe({
         target,
         settings: latestSettings,
@@ -182,14 +209,18 @@ export function useCheckRunDetailsFixWithAI(args: {
         actionId,
         recipe
       })
+
       if ('sourceControlAi' in result) {
         await updateSettings({ sourceControlAi: result.sourceControlAi })
+
         return
       }
+
       await updateRepo(result.target.repoId, result.update)
     },
     [updateRepo, updateSettings]
   )
+
   const openSourceControlAiSettings = useCallback((): void => {
     openSourceControlAiSettingsTarget({
       activeRepo: repo,
@@ -202,7 +233,9 @@ export function useCheckRunDetailsFixWithAI(args: {
     if (!args.worktreeId || isFixing || disabledReason) {
       return false
     }
+
     setIsFixing(true)
+
     try {
       return await startCheckRunDetailsFixWithAI({
         worktreeId: args.worktreeId,

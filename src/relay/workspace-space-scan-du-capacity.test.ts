@@ -15,6 +15,7 @@ vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 vi.mock('node:process', async () => {
   const actual = await vi.importActual<typeof NodeProcess>('node:process')
+
   return { ...actual, platform: 'linux' }
 })
 
@@ -22,12 +23,14 @@ vi.mock('../shared/workspace-space-scan-budget', async () => {
   const actual = await vi.importActual<typeof WorkspaceSpaceScanBudgetModule>(
     '../shared/workspace-space-scan-budget'
   )
+
   return {
     ...actual,
     // Why: only the du path's top-level listing is capped, so a swallowed
     // capacity error would let the portable retry succeed and fail this test.
     createWorkspaceSpaceScanBudget: () => {
       budgetState.created += 1
+
       return actual.createWorkspaceSpaceScanBudget(
         budgetState.created === 1 ? { maxEntries: 2 } : undefined
       )
@@ -48,6 +51,7 @@ describe('relay workspace space scan du path', () => {
 
   afterEach(async () => {
     execFileMock.mockReset()
+
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true })
       tempDir = null
@@ -67,6 +71,7 @@ describe('relay workspace space scan du path', () => {
         callback: (error: Error | null, output: { stdout: string; stderr: string }) => void
       ) => {
         callback(null, { stdout: `1\t${args.at(-1)}\n`, stderr: '' })
+
         return { kill: vi.fn() }
       }
     )

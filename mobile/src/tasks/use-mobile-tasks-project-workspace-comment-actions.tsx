@@ -31,17 +31,22 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
     setProjectRowItem,
     tasksSupported
   } = model
+
   const createWorkspaceFromProjectRow = useCallback(
     async (row: GitHubProjectRow): Promise<void> => {
       if (!tasksSupported) {
         return
       }
+
       const kind = projectRowType(row)
       const repo = findProjectRowRepo(row)
+
       if (!kind || !row.content.number || !row.content.url) {
         setError('Add the project item repository to Orca before creating a workspace.')
+
         return
       }
+
       if (!repo) {
         const slug = splitRepositorySlug(row.content.repository)
         setProjectRepoNotInOrca({
@@ -49,8 +54,10 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           repo: slug?.repo ?? row.content.repository ?? 'repository',
           url: row.content.url ?? null
         })
+
         return
       }
+
       const state: GitHubWorkItem['state'] =
         row.content.state === 'MERGED'
           ? 'merged'
@@ -59,6 +66,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
             : row.content.isDraft
               ? 'draft'
               : 'open'
+
       const source: GitHubWorkItem = {
         id: row.id,
         type: kind,
@@ -72,6 +80,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         repoId: repo.id,
         repoName: repo.displayName
       }
+
       openWorkspaceCreate({
         key: `github-project:${row.id}`,
         provider: 'github',
@@ -93,13 +102,18 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       if (!client || projectMutating) {
         return
       }
+
       const type = projectRowType(row)
       const slug = splitRepositorySlug(row.content.repository)
+
       if (!type || !slug || !row.content.number) {
         setProjectRowDetailError('This project item cannot be edited from mobile.')
+
         return
       }
+
       setProjectMutating(true)
+
       try {
         const response = await client.sendRequest(
           type === 'issue'
@@ -114,17 +128,22 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as { ok?: boolean; error?: { message?: string } }
+
         if (result.ok === false) {
           throw new Error(result.error?.message ?? 'Failed to update GitHub item')
         }
+
         setProjectRowItem((current) => {
           if (!current || current.id !== row.id) {
             return current
           }
+
           return {
             ...current,
             content: {
@@ -159,6 +178,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
               }
             : table
         )
+
         if (updates.body !== undefined) {
           setProjectRowDetail((current) =>
             current?.provider === 'github' ? { ...current, body: updates.body ?? '' } : current
@@ -178,12 +198,16 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       if (!client || projectMutating) {
         return
       }
+
       const slug = splitRepositorySlug(row.content.repository)
       const body = projectCommentDraft.trim()
+
       if (!slug || !row.content.number || !body) {
         return
       }
+
       setProjectMutating(true)
+
       try {
         const response = await client.sendRequest(
           'github.project.addIssueCommentBySlug',
@@ -196,16 +220,21 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as
           | { ok: true; comment?: DetailComment }
           | { ok: false; error?: { message?: string } }
+
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to add comment')
         }
+
         setProjectCommentDraft('')
+
         if (result.comment) {
           setProjectRowDetail((current) =>
             current?.provider === 'github'
@@ -227,15 +256,20 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
       if (!client || projectMutating) {
         return
       }
+
       const slug = splitRepositorySlug(row.content.repository)
       const commentId = Number(comment.id)
       const body = projectEditingCommentDraft.trim()
+
       if (!slug || !Number.isInteger(commentId) || commentId <= 0 || !body) {
         setProjectRowDetailError('This project comment cannot be edited from mobile.')
+
         return
       }
+
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.project.updateIssueCommentBySlug',
@@ -248,13 +282,16 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as {
           ok?: boolean
           error?: string | { message?: string }
         }
+
         if (result.ok === false) {
           throw new Error(
             typeof result.error === 'string'
@@ -262,6 +299,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
               : (result.error?.message ?? 'Failed to edit comment')
           )
         }
+
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -282,6 +320,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
     },
     [activeGitHubProjectHost, client, projectEditingCommentDraft, projectMutating]
   )
+
   return Object.assign(model, {
     createWorkspaceFromProjectRow,
     mutateProjectRowIssueOrPr,

@@ -54,9 +54,11 @@ export function createCodexAccountActionRunner(
     setCodexAccountsLoaded,
     setCodexAction
   } = context
+
   const syncCodexAccounts = async (next: CodexRateLimitAccountsState): Promise<void> => {
     setCodexAccounts(next)
     setCodexAccountsLoaded(true)
+
     // Why: remote mutations never change local GlobalSettings account fields.
     if (!isRemoteAccountScope) {
       await fetchSettings()
@@ -68,11 +70,13 @@ export function createCodexAccountActionRunner(
   return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
     const previousActiveAccountId = getProviderAccountActiveIdForView(codexAccounts, actionRuntime)
     setCodexAction(action)
+
     try {
       const next = await operation()
       await syncCodexAccounts(next)
       recordFeatureInteraction('codex-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
+
       const shouldPromptRestart =
         action === 'adding' ||
         (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
@@ -80,6 +84,7 @@ export function createCodexAccountActionRunner(
           nextActiveAccountId !== null &&
           action === `reauth:${nextActiveAccountId}`) ||
         (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
+
       if (shouldPromptRestart) {
         // Why: `add` creates the managed home against the machine's own distro,
         // so the slot it wrote is the created account's — not this row's, which
@@ -92,6 +97,7 @@ export function createCodexAccountActionRunner(
                 (account) => !codexAccounts.accounts.some((prior) => prior.id === account.id)
               )
             : []
+
         // Why exactly one: an unloaded prior roster makes every account look new,
         // and picking one of those would aim the notice at an unrelated lane.
         // Falling back to the row is the pre-existing behaviour, not a new risk.
@@ -155,8 +161,10 @@ export function createClaudeAccountActionRunner(
     setClaudeAccounts,
     setClaudeAction
   } = context
+
   const syncClaudeAccounts = async (next: ClaudeRateLimitAccountsState): Promise<void> => {
     setClaudeAccounts(next)
+
     if (!isRemoteAccountScope) {
       await fetchSettings()
     }
@@ -165,17 +173,20 @@ export function createClaudeAccountActionRunner(
   return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
     const previousActiveAccountId = getProviderAccountActiveIdForView(claudeAccounts, actionRuntime)
     setClaudeAction(action)
+
     try {
       const next = await operation()
       await syncClaudeAccounts(next)
       recordFeatureInteraction('claude-account-switching')
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
+
       const shouldPromptRestart =
         action === 'adding' ||
         previousActiveAccountId !== nextActiveAccountId ||
         (action.startsWith('reauth:') &&
           nextActiveAccountId !== null &&
           action === `reauth:${nextActiveAccountId}`)
+
       if (shouldPromptRestart) {
         toast.info(
           translate('auto.components.settings.AccountsPane.f921d32606', 'Claude account updated.'),
@@ -195,6 +206,7 @@ export function createClaudeAccountActionRunner(
       if (isClaudeAccountCancellation(error)) {
         return
       }
+
       toast.error(
         translate(
           'auto.components.settings.AccountsPane.2743cdc0af',

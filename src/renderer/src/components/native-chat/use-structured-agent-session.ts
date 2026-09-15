@@ -62,18 +62,23 @@ export function useStructuredAgentSession(args: {
   const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead(args)
   const stateRef = useRef(state)
   const { mutate, writeError } = useStructuredAgentSessionMutate({ sessionId, target, stateRef })
+
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
   } | null>(null)
+
   const commandPending = useRef(false)
+
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent)
   )
+
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
   const pendingOptionRef = useRef<string | null>(null)
   const optionMutationGeneration = useRef(0)
+
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -82,7 +87,9 @@ export function useStructuredAgentSession(args: {
     },
     []
   )
+
   const optionCatalog = useMemo(() => getAgentSessionOptionCatalog(agent), [agent])
+
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,
     target,
@@ -105,14 +112,17 @@ export function useStructuredAgentSession(args: {
 
   // Refresh options each turn to confirm which model the provider actually selected.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+
   // A dispatch the provider has not answered is already work; Claude's running row trails the
   // send by seconds, and only a provider-minted turn is cancellable, so the two stay separate.
   const isWorking =
     turnId !== null || hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence)
+
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
     [state.activity, state.items, turnId]
   )
+
   const turnTiming = useStructuredAgentTurnTiming(state, turnId)
   const backgroundTasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
 
@@ -120,6 +130,7 @@ export function useStructuredAgentSession(args: {
     if (!isVisible || !optionCatalog) {
       return
     }
+
     let stale = false
     const readGeneration = optionMutationGeneration.current
     void callStructuredAgentSession<AgentSessionOptionsResult>(target, 'agentSession.options', {
@@ -136,6 +147,7 @@ export function useStructuredAgentSession(args: {
         }
       })
       .catch(() => {})
+
     return () => {
       stale = true
     }
@@ -145,10 +157,12 @@ export function useStructuredAgentSession(args: {
     () => structuredAgentSessionOptionSnapshot(optionState),
     [optionState]
   )
+
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
       const currentState = optionStateRef.current
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+
       if (
         pendingOptionRef.current !== null ||
         !optionCatalog ||
@@ -157,16 +171,19 @@ export function useStructuredAgentSession(args: {
       ) {
         return false
       }
+
       const targetRecord = currentState.record
       const mutationGeneration = ++optionMutationGeneration.current
       pendingOptionRef.current = id
       updateOptionState((current) => ({ ...current, pendingId: id }))
+
       try {
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
           'agentSession.setOption',
           { key: id, value: encoded }
         )
+
         if (
           result &&
           activeOptionRecordRef.current === targetRecord &&
@@ -179,6 +196,7 @@ export function useStructuredAgentSession(args: {
               : current
           )
           const picks = structuredAgentSessionOptionPicks(currentState, committed)
+
           if (picks.length > 0) {
             void enqueueSessionOptionSettingsWrite(target, {
               type: 'apply-picks',
@@ -186,6 +204,7 @@ export function useStructuredAgentSession(args: {
               picks
             })
           }
+
           void callStructuredAgentSession<AgentSessionOptionsResult>(
             target,
             'agentSession.options',
@@ -205,6 +224,7 @@ export function useStructuredAgentSession(args: {
             })
             .catch(() => {})
         }
+
         return Boolean(result)
       } finally {
         if (
@@ -222,13 +242,16 @@ export function useStructuredAgentSession(args: {
     },
     [agent, mutate, optionCatalog, sessionId, target, updateOptionState]
   )
+
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
       await setStructuredOption(id, value)
+
       return { snapshot: structuredAgentSessionOptionSnapshot(optionStateRef.current) }
     },
     [setStructuredOption]
   )
+
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
@@ -242,6 +265,7 @@ export function useStructuredAgentSession(args: {
   const prompts = pendingStructuredSessionPrompts(state.items)
   const { outbox } = outboxController
   const messages = useStructuredAgentSessionMessages(state.items, outbox, state.submissions)
+
   return {
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
@@ -281,6 +305,7 @@ export function useStructuredAgentSession(args: {
       // fingerprint and operation id: older hosts reject the strict prompt field.
       const promptSupported =
         prompt !== undefined && (await supportsStructuredAgentSessionPromptCancel(target))
+
       return mutate('agentSession.cancel', 'agentSession.cancel', {
         turnId,
         ...(promptSupported ? { prompt } : {})

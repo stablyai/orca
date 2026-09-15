@@ -24,6 +24,7 @@ async function createFixtureRepo(): Promise<string> {
   git(repo, ['config', 'user.email', 'test@example.com'])
   git(repo, ['config', 'user.name', 'Test User'])
   git(repo, ['config', 'commit.gpgSign', 'false'])
+
   return repo
 }
 
@@ -37,6 +38,7 @@ async function write(repo: string, relativePath: string, contents: string | Buff
 function commitAll(repo: string, message: string): string {
   git(repo, ['add', '-A'])
   git(repo, ['commit', '-q', '-m', message])
+
   return git(repo, ['rev-parse', 'HEAD'])
 }
 
@@ -47,14 +49,17 @@ const NO_LINES = { added: 0, removed: 0 }
 function rangedDiffTotal(repo: string, mergeBase: string): { added: number; removed: number } {
   let added = 0
   let removed = 0
+
   for (const line of git(repo, ['diff', '--numstat', '-M', mergeBase, '--']).split(/\r?\n/)) {
     if (!line) {
       continue
     }
+
     const [rawAdded, rawRemoved] = line.split('\t')
     added += rawAdded === '-' ? 0 : Number.parseInt(rawAdded ?? '0', 10)
     removed += rawRemoved === '-' ? 0 : Number.parseInt(rawRemoved ?? '0', 10)
   }
+
   return { added, removed }
 }
 

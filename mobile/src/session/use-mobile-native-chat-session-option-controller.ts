@@ -48,6 +48,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     toggleTabChatView,
     worktreeId
   } = args
+
   const {
     invokeAction: invokeStructuredAction,
     pendingId: structuredPendingId,
@@ -68,6 +69,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     dispatchCommand,
     onAgentPicker: handleAgentPicker
   })
+
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(
     () =>
       activeChatStructured && structuredSnapshot.length > 0
@@ -91,6 +93,7 @@ export function useMobileNativeChatSessionOptionController(args: {
       structured.optionPickerRequest
     ]
   )
+
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(
     () =>
       activeChatStructured

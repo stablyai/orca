@@ -6,6 +6,7 @@ import { webviewRegistry } from './webview-registry'
 
 vi.mock('./webview-registry', () => {
   const webviewRegistry = new Map()
+
   return {
     webviewRegistry,
     registerPersistentWebview: vi.fn((id, guest) => webviewRegistry.set(id, guest)),
@@ -22,6 +23,7 @@ afterEach(() => {
 function createGuest(): Electron.WebviewTag {
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   return ensureBrowserPageWebview({
     browserTabId: 'surface-test',
     container,
@@ -64,6 +66,7 @@ describe('browser page surface ownership', () => {
     const guest = createGuest()
     commit(guest, 'https://example.test')
     const container = guest.parentElement as HTMLDivElement
+
     const reused = ensureBrowserPageWebview({
       browserTabId: 'surface-test',
       container,
@@ -71,6 +74,7 @@ describe('browser page surface ownership', () => {
       webviewPartition: 'persist:browser-test',
       resolveContainer: () => container
     })!
+
     expect(reused.created).toBe(false)
     expect(reused.webview).toBe(guest)
     expect(reused.webview.style.visibility).toBe('visible')

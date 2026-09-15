@@ -31,6 +31,7 @@ export function sendTerminalQuickCommandToPane({
   if (isTerminalAgentQuickCommand(command)) {
     return false
   }
+
   if (!transport) {
     return false
   }
@@ -38,9 +39,11 @@ export function sendTerminalQuickCommandToPane({
   const sent = transport.sendInput(
     buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command))
   )
+
   if (sent) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)
     pane.terminal.focus()
   }
+
   return sent
 }

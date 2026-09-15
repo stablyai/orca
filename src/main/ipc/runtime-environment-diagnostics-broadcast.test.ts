@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getAllWindows = vi.hoisted(() => vi.fn())
+
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows } }))
 
 import {
@@ -15,6 +16,7 @@ describe('runtime environment diagnostics broadcast', () => {
     const live = { isDestroyed: () => false, webContents: { send: vi.fn() } }
     const destroyed = { isDestroyed: () => true, webContents: { send: vi.fn() } }
     getAllWindows.mockReturnValue([live, destroyed])
+
     const event = {
       environmentId: 'env-a',
       transportGeneration: 2,

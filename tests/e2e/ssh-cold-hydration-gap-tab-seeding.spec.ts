@@ -15,7 +15,9 @@ import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connecti
 import { createRestartSession } from './helpers/orca-restart'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const BASELINE_TAB_COUNT = 3
+
 /** Where the relay persists a target's workspace snapshot inside the fixture container. */
 const REMOTE_SNAPSHOT_DIR = '/root/.orca/sessions'
 
@@ -54,11 +56,13 @@ async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<str
         const key = latest.join()
         agreements = key === previousKey ? agreements + 1 : 0
         previousKey = key
+
         return agreements
       },
       { timeout: 60_000, intervals: [1_000], message: 'the tab set never stopped changing' }
     )
     .toBeGreaterThanOrEqual(3)
+
   return latest
 }
 
@@ -67,6 +71,7 @@ function findRemoteSnapshotPath(target: DockerSshRelayTarget): string | null {
     target,
     `ls -1 ${REMOTE_SNAPSHOT_DIR}/*.json 2>/dev/null || true`
   ).trim()
+
   return listing.split('\n').find((line) => line.endsWith('.json')) ?? null
 }
 
@@ -76,11 +81,13 @@ async function waitForUploadedRemoteSnapshot(target: DockerSshRelayTarget): Prom
     .poll(
       () => {
         snapshotPath = findRemoteSnapshotPath(target)
+
         return snapshotPath
       },
       { timeout: 60_000, message: 'the relay never persisted a workspace snapshot' }
     )
     .not.toBeNull()
+
   return snapshotPath!
 }
 
@@ -98,6 +105,7 @@ function blockRemoteWorkspaceGet(target: DockerSshRelayTarget, snapshotPath: str
     target,
     `rm -f ${snapshotPath} && mkfifo -m 600 ${snapshotPath}`
   )
+
   return saved
 }
 
@@ -114,6 +122,7 @@ function capturedSnapshotTabIds(saved: string): string[] | null {
     const parsed = JSON.parse(saved) as {
       session?: { tabsByWorktreePath?: Record<string, { id?: unknown }[]> }
     }
+
     return Object.values(parsed.session?.tabsByWorktreePath ?? {})
       .flat()
       .map((tab) => tab?.id)
@@ -129,6 +138,7 @@ function unblockRemoteWorkspaceGet(
   saved: string
 ): void {
   const replacementPath = `${snapshotPath}.release`
+
   const releaseScript = [
     `printf '%s' ${shellQuote(saved)} > ${shellQuote(replacementPath)}`,
     `exec 3> ${shellQuote(snapshotPath)}`,
@@ -137,6 +147,7 @@ function unblockRemoteWorkspaceGet(
     `printf '%s' ${shellQuote(saved)} >&3`,
     'exec 3>&-'
   ].join(' && ')
+
   const release = spawnSync('docker', [
     'exec',
     '-d',
@@ -147,6 +158,7 @@ function unblockRemoteWorkspaceGet(
     '-c',
     releaseScript
   ])
+
   expect(release.error, 'failed to launch the snapshot release writer').toBeUndefined()
   expect(release.status, release.stderr?.toString()).toBe(0)
 }
@@ -159,9 +171,11 @@ async function connectAndSeedTabs(
   await expect.poll(() => waitForActiveWorktree(page), { timeout: 30_000 }).toBe(remote.worktreeId)
   await waitForActiveTerminalManager(page, 60_000)
   await waitForActivePanePtyId(page, 60_000)
+
   while ((await readWorktreeTabIds(page, remote.worktreeId)).length < BASELINE_TAB_COUNT) {
     await createRemoteTerminalTab(page, remote.worktreeId)
   }
+
   return { ...remote, tabIds: await waitForSettledTabIds(page, remote.worktreeId) }
 }
 
@@ -172,6 +186,7 @@ async function flushSessionBeforeQuit(page: Page, targetId: string): Promise<voi
       () =>
         page.evaluate(async (id) => {
           const persisted = await window.api.session.get()
+
           return persisted.activeConnectionIdsAtShutdown?.includes(id) === true
         }, targetId),
       { timeout: 15_000, message: 'the active SSH target was not persisted before quit' }
@@ -193,6 +208,7 @@ test.describe('SSH cold hydration gap tab seeding', () => {
     const restart = createRestartSession(testInfo)
     let target: DockerSshRelayTarget | null = null
     let app: ElectronApplication | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const firstLaunch = await restart.launch()
@@ -260,6 +276,7 @@ test.describe('SSH cold hydration gap tab seeding', () => {
       if (app) {
         await restart.close(app)
       }
+
       await restart.dispose()
       cleanupDockerSshRelayTarget(target)
     }
@@ -278,6 +295,7 @@ test.describe('SSH cold hydration gap tab seeding', () => {
     let target: DockerSshRelayTarget | null = null
     let seedingApp: ElectronApplication | null = null
     let freshApp: ElectronApplication | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const firstLaunch = await seeding.launch()
@@ -293,11 +311,13 @@ test.describe('SSH cold hydration gap tab seeding', () => {
       const freshLaunch = await fresh.launch()
       freshApp = freshLaunch.app
       await waitForSessionReady(freshLaunch.page, 60_000)
+
       // seedInitialTab: false so every tab counted below is one the product produced — the helper's
       // own convenience tab would otherwise be indistinguishable from a spurious seed.
       const rejoined = await connectDockerSshRelayTarget(freshLaunch.page, target, {
         seedInitialTab: false
       })
+
       await expect
         .poll(() => waitForActiveWorktree(freshLaunch.page), { timeout: 60_000 })
         .toBe(rejoined.worktreeId)
@@ -322,9 +342,11 @@ test.describe('SSH cold hydration gap tab seeding', () => {
       if (freshApp) {
         await fresh.close(freshApp)
       }
+
       if (seedingApp) {
         await seeding.close(seedingApp)
       }
+
       await fresh.dispose()
       await seeding.dispose()
       cleanupDockerSshRelayTarget(target)

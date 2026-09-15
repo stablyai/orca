@@ -73,6 +73,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
 
   it('advertises reconciliation only when the composed host enables it', async () => {
     const { callbacks } = subscribeHost()
+
     const host = createHost(
       () => ({ status: 'completed' }),
       undefined,
@@ -80,6 +81,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
       () => [],
       1
     )
+
     const starting = host.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
 
@@ -102,9 +104,11 @@ describe('PairedRuntimeBrowserClientHost', () => {
 
   it('constructs command authority before the first command can arrive', async () => {
     const { callbacks, sendRequest } = subscribeHost()
+
     const handler = vi.fn((_command: BrowserClientHostCommandEvent, _signal: AbortSignal) => ({
       status: 'completed' as const
     }))
+
     const host = createHost(handler)
     const starting = host.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
@@ -134,6 +138,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
       order.push('transport-close')
     })
     const observed: { signal: AbortSignal | null } = { signal: null }
+
     const handler = vi.fn(
       (_command: BrowserClientHostCommandEvent, signal: AbortSignal) =>
         new Promise<BrowserClientHostCommandResult>((resolve) => {
@@ -148,6 +153,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
           )
         })
     )
+
     const host = createHost(handler)
     const starting = host.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
@@ -166,6 +172,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
   it('aborts owned handlers even when lease cleanup rejects', async () => {
     const { callbacks } = subscribeHost()
     let aborted = false
+
     const host = createHost(
       (_command, signal) =>
         new Promise<BrowserClientHostCommandResult>((resolve) => {
@@ -179,6 +186,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
           )
         })
     )
+
     const starting = host.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse())
@@ -205,6 +213,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
     const { callbacks } = subscribeHost()
     const onError = vi.fn()
     let aborted = false
+
     const host = createHost(
       (_command, signal) =>
         new Promise<BrowserClientHostCommandResult>((resolve) => {
@@ -219,6 +228,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
         }),
       onError
     )
+
     const starting = host.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse())
@@ -236,6 +246,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
 
   it('retires and forgets only the exact page generation', async () => {
     const { callbacks } = subscribeHost()
+
     const handler = vi.fn(
       (_command: BrowserClientHostCommandEvent, signal: AbortSignal) =>
         new Promise<BrowserClientHostCommandResult>((resolve) => {
@@ -246,6 +257,7 @@ describe('PairedRuntimeBrowserClientHost', () => {
           )
         })
     )
+
     const host = createHost(handler)
     const starting = host.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
@@ -309,15 +321,18 @@ function subscribeHost(): {
 } {
   const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
   const close = vi.fn()
+
   const sendRequest = vi.fn().mockResolvedValue({
     id: 'command-result',
     ok: true,
     result: { accepted: true },
     _meta: { runtimeId: 'runtime-a' }
   })
+
   subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
       return {
         requestId: 'browser-host',
         close,
@@ -326,6 +341,7 @@ function subscribeHost(): {
       }
     }
   )
+
   return { callbacks, close, sendRequest }
 }
 
@@ -357,9 +373,11 @@ function deferredCommandResult(): {
   resolve: (result: BrowserClientHostCommandResult) => void
 } {
   let resolve = (_result: BrowserClientHostCommandResult): void => {}
+
   const promise = new Promise<BrowserClientHostCommandResult>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 

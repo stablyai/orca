@@ -8,7 +8,9 @@ import { ensureTerminalVisible, getActiveWorktreeId, waitForSessionReady } from 
 import { TEST_REPO_PATH_FILE } from './global-setup'
 
 const FIRST_SURVIVOR_TITLE = 'STA-3604 survivor one'
+
 const SECOND_SURVIVOR_TITLE = 'STA-3604 survivor two'
+
 const CORRUPT_TAB_ID = 'sta-3604-corrupt-tab'
 
 type PersistedData = {
@@ -26,9 +28,11 @@ function injectTruncatedTab(userDataDir: string, worktreeId: string, startupCwd:
   const dataPath = persistedDataPath(userDataDir)
   const data = JSON.parse(readFileSync(dataPath, 'utf8')) as PersistedData
   const tabs = data.workspaceSession?.tabsByWorktree?.[worktreeId]
+
   if (!tabs) {
     throw new Error('Persisted terminal tabs were unavailable for corruption seeding')
   }
+
   tabs.push({
     id: CORRUPT_TAB_ID,
     ptyId: null,
@@ -48,6 +52,7 @@ function persistedSessionEvidence(
   const data = JSON.parse(readFileSync(persistedDataPath(userDataDir), 'utf8')) as PersistedData
   const legacyTabs = data.workspaceSession?.tabsByWorktree?.[worktreeId] ?? []
   const unifiedTabs = data.workspaceSession?.unifiedTabs?.[worktreeId] ?? []
+
   return {
     corruptLegacyTabPresent: legacyTabs.some((tab) => tab.id === CORRUPT_TAB_ID),
     unifiedTabIds: unifiedTabs
@@ -67,9 +72,11 @@ async function expectSurvivingTabsVisible(page: Page): Promise<void> {
 test('keeps valid terminal tabs visible after a corrupt sibling record on restart', async (// oxlint-disable-next-line no-empty-pattern -- this restart test owns its Electron launches.
 {}, testInfo) => {
   test.setTimeout(300_000)
+
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Seeded E2E repository is unavailable')
 
   const session = createRestartSession(testInfo)
@@ -86,21 +93,27 @@ test('keeps valid terminal tabs visible after a corrupt sibling record on restar
     const survivorIds = await first.page.evaluate(
       ({ worktreeId, firstTitle, secondTitle }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         const state = store.getState()
         const firstTab = state.tabsByWorktree[worktreeId]?.[0]
+
         if (!firstTab) {
           throw new Error('Initial terminal tab unavailable')
         }
+
         state.setTabCustomTitle(firstTab.id, firstTitle)
         const secondTab = state.createTab(worktreeId, undefined, undefined, { activate: false })
         state.setTabCustomTitle(secondTab.id, secondTitle)
+
         return [firstTab.id, secondTab.id]
       },
       { worktreeId, firstTitle: FIRST_SURVIVOR_TITLE, secondTitle: SECOND_SURVIVOR_TITLE }
     )
+
     await expectSurvivingTabsVisible(first.page)
 
     await session.close(firstApp)
@@ -132,6 +145,7 @@ test('keeps valid terminal tabs visible after a corrupt sibling record on restar
         await session.close(app).catch(() => {})
       }
     }
+
     await session.dispose()
   }
 })

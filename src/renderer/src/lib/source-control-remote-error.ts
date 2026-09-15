@@ -8,8 +8,11 @@ import {
 } from '../../../shared/source-control-push-failure'
 
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
+
 const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
+
 const SYNC_PUSH_STAGE_ERROR = Symbol('source-control-sync-push-stage-error')
+
 type SyncPushStageMarkedError = Error & { [SYNC_PUSH_STAGE_ERROR]?: true }
 
 // Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
@@ -20,6 +23,7 @@ function truncateDetail(detail: string): string {
   if (detail.length <= REMOTE_OPERATION_DETAIL_MAX_LENGTH) {
     return detail
   }
+
   return `${detail.slice(0, REMOTE_OPERATION_DETAIL_MAX_LENGTH).trimEnd()}...`
 }
 
@@ -28,12 +32,15 @@ function extractPublishFailureDetail(message: string): string | null {
 
   for (const rawLine of iterateRemoteErrorLines(message)) {
     const line = rawLine.trim()
+
     if (!line) {
       continue
     }
+
     if (line.startsWith('fatal:')) {
       return truncateDetail(stripCredentialsFromMessage(line.slice('fatal:'.length).trim()))
     }
+
     if (remoteDetail === null && line.startsWith('remote:')) {
       remoteDetail = truncateDetail(
         stripCredentialsFromMessage(line.slice('remote:'.length).trim())
@@ -49,14 +56,17 @@ function* iterateRemoteErrorLines(message: string): Generator<string> {
 
   for (let index = 0; index < message.length; index++) {
     const code = message.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       continue
     }
 
     yield message.slice(lineStart, index)
+
     if (code === 13 && message.charCodeAt(index + 1) === 10) {
       index++
     }
+
     lineStart = index + 1
   }
 
@@ -70,6 +80,7 @@ function resolveSubmodulePushFailureMessage(
   operationLabel: string
 ): string | null {
   const detail = formatSubmodulePushFailureDetail(message)
+
   return detail ? `${operationLabel} failed. ${truncateDetail(detail)}` : null
 }
 
@@ -77,6 +88,7 @@ function isNonFastForwardRemoteError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   return (
     /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message) ||
     formatSubmodulePushFailureDetail(error.message)?.includes('has remote changes') === true
@@ -101,6 +113,7 @@ export function markSyncPushStageError<T>(error: T): T {
       value: true
     })
   }
+
   return error
 }
 
@@ -114,6 +127,7 @@ export function isSyncPushStageError(error: unknown): boolean {
 // drift between the two branches below.
 const UNCONCLUDED_MERGE_ERROR_PATTERN =
   /unmerged files|needs merge|you have not concluded your merge/i
+
 const FRESH_MERGE_CONFLICT_ERROR_PATTERN = /automatic merge failed|CONFLICT \(|fix conflicts/i
 
 export function resolveRemoteOperationErrorMessage(
@@ -128,6 +142,7 @@ export function resolveRemoteOperationErrorMessage(
     if (options?.isRebase) {
       return 'Rebase blocked — resolve existing conflicts first.'
     }
+
     return options?.isSync
       ? 'Sync blocked — resolve existing merge conflicts first.'
       : 'Pull blocked — resolve existing merge conflicts first.'
@@ -137,6 +152,7 @@ export function resolveRemoteOperationErrorMessage(
     if (options?.isRebase) {
       return 'Rebase stopped with conflicts. Resolve them in Source Control, then continue the rebase.'
     }
+
     return options?.isSync
       ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
       : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
@@ -144,6 +160,7 @@ export function resolveRemoteOperationErrorMessage(
 
   if (options?.publish) {
     const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Publish Branch')
+
     if (submoduleMessage) {
       return submoduleMessage
     }
@@ -151,6 +168,7 @@ export function resolveRemoteOperationErrorMessage(
 
   if (options?.isSync) {
     const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Sync')
+
     if (submoduleMessage) {
       return submoduleMessage
     }
@@ -158,6 +176,7 @@ export function resolveRemoteOperationErrorMessage(
 
   if (options?.isForcePush) {
     const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Force Push')
+
     if (submoduleMessage) {
       return submoduleMessage
     }
@@ -165,6 +184,7 @@ export function resolveRemoteOperationErrorMessage(
 
   if (options?.isPush) {
     const submoduleMessage = resolveSubmodulePushFailureMessage(error.message, 'Push')
+
     if (submoduleMessage) {
       return submoduleMessage
     }
@@ -172,8 +192,10 @@ export function resolveRemoteOperationErrorMessage(
 
   const isPushLikeOperation =
     options?.isPush || options?.isForcePush || options?.publish || options?.isSyncPushStage
+
   if (isPushLikeOperation && isPushHookFailure(error.message)) {
     const summary = summarizePushFailure(error.message)
+
     const operationLabel = options?.publish
       ? 'Publish Branch'
       : options?.isSyncPushStage
@@ -181,6 +203,7 @@ export function resolveRemoteOperationErrorMessage(
         : options?.isForcePush
           ? 'Force Push'
           : 'Push'
+
     return `${operationLabel} blocked — ${summary.charAt(0).toLowerCase()}${summary.slice(1)}`
   }
 
@@ -223,9 +246,11 @@ export function resolveRemoteOperationErrorMessage(
     if (options?.isRebase) {
       return 'Rebase blocked — commit or stash your local changes first.'
     }
+
     if (options?.isFastForward) {
       return 'Fast-forward blocked — commit or stash your local changes first.'
     }
+
     return 'Pull blocked — commit or stash your local changes first.'
   }
 
@@ -233,9 +258,11 @@ export function resolveRemoteOperationErrorMessage(
     if (options?.isRebase) {
       return 'Rebase blocked — commit or stash your local changes first.'
     }
+
     if (options?.isFastForward) {
       return 'Fast-forward blocked — commit or stash your local changes first.'
     }
+
     return 'Pull blocked — commit or stash your local changes first.'
   }
 
@@ -243,9 +270,11 @@ export function resolveRemoteOperationErrorMessage(
     if (options?.isRebase) {
       return 'Rebase blocked — move, remove, or add untracked files first.'
     }
+
     if (options?.isFastForward) {
       return 'Fast-forward blocked — move, remove, or add untracked files first.'
     }
+
     return 'Pull blocked — move, remove, or add untracked files first.'
   }
 
@@ -253,6 +282,7 @@ export function resolveRemoteOperationErrorMessage(
     // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
     // keeps the toast human-readable while preserving the actionable fatal reason.
     const detail = extractPublishFailureDetail(error.message)
+
     if (detail) {
       return `Publish Branch failed. ${detail}. Check your remote access and try again.`
     }
@@ -265,17 +295,21 @@ export function resolveRemoteOperationErrorMessage(
     // the inner-step name ("Push failed"). Detail extraction matches push so
     // auth / protected-branch reasons stay actionable.
     const detail = extractPublishFailureDetail(error.message)
+
     if (detail) {
       return `Sync failed. ${detail}. Check your remote access and try again.`
     }
+
     return 'Sync failed. Check your connection and try again.'
   }
 
   if (options?.isForcePush) {
     const detail = extractPublishFailureDetail(error.message)
+
     if (detail) {
       return `Force Push failed. ${detail}. Check your remote access and try again.`
     }
+
     return 'Force Push failed. Check your connection and try again.'
   }
 
@@ -283,9 +317,11 @@ export function resolveRemoteOperationErrorMessage(
     // Why: surfacing fatal/remote lines from git is more actionable than a generic
     // connection message for auth errors, protected branches, etc.
     const detail = extractPublishFailureDetail(error.message)
+
     if (detail) {
       return `Push failed. ${detail}. Check your remote access and try again.`
     }
+
     return 'Push failed. Check your connection and try again.'
   }
 
@@ -293,6 +329,7 @@ export function resolveRemoteOperationErrorMessage(
     const detail =
       extractPublishFailureDetail(error.message) ??
       truncateDetail(stripCredentialsFromMessage(error.message))
+
     return `Fetch failed. ${detail}`
   }
 
@@ -300,6 +337,7 @@ export function resolveRemoteOperationErrorMessage(
     const detail =
       extractPublishFailureDetail(error.message) ??
       truncateDetail(stripCredentialsFromMessage(error.message))
+
     return `Fast-forward failed. ${detail}`
   }
 
@@ -307,6 +345,7 @@ export function resolveRemoteOperationErrorMessage(
     const detail =
       extractPublishFailureDetail(error.message) ??
       truncateDetail(stripCredentialsFromMessage(error.message))
+
     return `Rebase failed. ${detail}`
   }
 

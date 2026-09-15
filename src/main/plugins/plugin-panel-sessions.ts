@@ -32,30 +32,38 @@ export class PluginPanelSessions {
   issue(ownerKey: string, binding: PluginPanelSessionBinding): string {
     const key = bindingKey(ownerKey, binding)
     const existing = this.tokensByBinding.get(key)
+
     if (existing) {
       return existing
     }
+
     while (this.sessions.size >= MAX_PANEL_SESSIONS) {
       const oldest = this.sessions.entries().next().value as
         | [string, PluginPanelSession]
         | undefined
+
       if (!oldest) {
         break
       }
+
       this.delete(oldest[0], oldest[1])
     }
+
     const token = randomBytes(32).toString('base64url')
     const session = { ownerKey, ...binding }
     this.sessions.set(token, session)
     this.tokensByBinding.set(key, token)
+
     return token
   }
 
   resolve(ownerKey: string, token: string): PluginPanelSessionBinding | null {
     const session = this.sessions.get(token)
+
     if (!session || session.ownerKey !== ownerKey) {
       return null
     }
+
     return {
       pluginKey: session.pluginKey,
       panelId: session.panelId,

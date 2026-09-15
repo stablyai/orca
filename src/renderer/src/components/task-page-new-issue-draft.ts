@@ -20,6 +20,7 @@ export function isNewIssueDraftContentful(
   if (!draft) {
     return false
   }
+
   return (
     draft.title.trim().length > 0 ||
     draft.body.trim().length > 0 ||
@@ -44,9 +45,11 @@ export function resolveNewIssueOpenSeed(params: {
 }): NewIssueOpenSeed {
   const { draft, selectedRepoIds } = params
   const fallbackRepoId = selectedRepoIds[0] ?? null
+
   if (!draft || !isNewIssueDraftContentful(draft)) {
     return { title: '', body: '', labels: [], assignees: [], repoId: fallbackRepoId }
   }
+
   if (draft.repoId !== null && selectedRepoIds.includes(draft.repoId)) {
     return {
       title: draft.title,
@@ -56,6 +59,7 @@ export function resolveNewIssueOpenSeed(params: {
       repoId: draft.repoId
     }
   }
+
   return {
     title: draft.title,
     body: draft.body,
@@ -89,5 +93,6 @@ export function resolveVanishedNewIssueRepoReset(
   if (newIssueRepoId === null || selectedRepoIds.includes(newIssueRepoId)) {
     return null
   }
+
   return { repoId: selectedRepoIds[0] ?? null }
 }

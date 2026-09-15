@@ -79,28 +79,34 @@ export function CommitArea({
 }: CommitAreaProps): React.JSX.Element {
   // Why: cap at 12 rows so a pasted multi-page message doesn't push the Commit button off-screen (textarea scrolls internally past that).
   const rows = getCommitMessageTextareaRows(commitMessage)
+
   // Why: only spin the primary when its label matches the running op; mismatched background ops (Fetch) keep it off. Commit spins via isCommitting instead.
   const primaryHostsRemoteOperation =
     primaryAction.kind === inFlightRemoteOpKind ||
     (primaryAction.kind === 'push' && inFlightRemoteOpKind === 'force_push')
+
   const showSpinner =
     primaryAction.kind === 'create_pr' || primaryAction.kind === 'create_pr_intent'
       ? isCreatingPr
       : primaryAction.kind === 'commit'
         ? isCommitting
         : isRemoteOperationActive && primaryHostsRemoteOperation
+
   // Why: spin the chevron when the primary doesn't host the in-flight op (e.g. Fetch), since the click is otherwise silent — no toast until failure, no count change on a no-op fetch.
   const showChevronSpinner =
     (isCommitting || isCreatingPr || isRemoteOperationActive) && !showSpinner
+
   const commitFailureSummary = useMemo(
     () => (commitError ? summarizeCommitFailure(commitError) : null),
     [commitError]
   )
+
   const commitFailureKindLabel = useMemo(
     () =>
       commitFailureSummary ? getSourceControlRecoveryFailureKindLabel(commitFailureSummary) : null,
     [commitFailureSummary]
   )
+
   const hasCommitFailureDetails = useMemo(
     () =>
       commitError && commitFailureSummary
@@ -108,8 +114,10 @@ export function CommitArea({
         : false,
     [commitError, commitFailureSummary]
   )
+
   const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
   const hasMessage = commitMessage.trim().length > 0
+
   const isCommitMessageDisabled = isCommitMessageFieldDisabled({
     stagedCount,
     hasPartiallyStagedChanges,
@@ -119,6 +127,7 @@ export function CommitArea({
     isRemoteOperationActive,
     isPullRequestOperationActive: isCreatingPr
   })
+
   const describedBy = [
     commitError ? 'commit-area-error' : null,
     pushRecovery ? 'commit-area-push-error' : null,
@@ -133,6 +142,7 @@ export function CommitArea({
   // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
   let generateTooltip: string | undefined
+
   if (isGenerating) {
     generateTooltip = translate(
       'auto.components.right.sidebar.source.control.commit.area.cc5739bd1d',
@@ -159,16 +169,20 @@ export function CommitArea({
       'Pick an agent in Settings -> Git -> Source Control AI.'
     )
   }
+
   const isGenerateDisabled =
     isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
+
   const moreCommitAndRemoteActionsLabel = translate(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
   )
+
   const moreActionsLabel = translate(
     'auto.components.right.sidebar.SourceControl.4d6e1fd7f3',
     'More actions'
   )
+
   const dropdownMenuContent = (
     <DropdownMenuContent align="end" className="min-w-[14rem]">
       {dropdownItems.map((entry) =>
@@ -186,8 +200,10 @@ export function CommitArea({
                   onSelect={(event) => {
                     if (entry.disabled) {
                       event.preventDefault()
+
                       return
                     }
+
                     onDropdownAction(entry.kind)
                   }}
                 >

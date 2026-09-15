@@ -10,7 +10,9 @@ import {
 } from './native-chat-autoscroll'
 
 const atBottom = { scrollTop: 952, scrollHeight: 1000, clientHeight: 48 }
+
 const scrolledUp = { scrollTop: 0, scrollHeight: 1000, clientHeight: 48 }
+
 const noOverflow = { scrollTop: 0, scrollHeight: 48, clientHeight: 48 }
 
 /** A view parked exactly `distance` px above the end of the same document. */
@@ -115,6 +117,7 @@ describe('nextFollowingEnd', () => {
 // ask this question. So "near the top" alone can no longer be the answer.
 describe('shouldLoadEarlier', () => {
   const nearTop = { scrollTop: 10, scrollHeight: 4000, clientHeight: 600 }
+
   const base = {
     geometry: nearTop,
     previousScrollTop: 400,

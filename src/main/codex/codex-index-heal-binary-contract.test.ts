@@ -22,8 +22,11 @@ import { findNewestCodexStateDbPath } from './codex-state-db'
 // release does not redden it into being disabled.
 
 const execFileAsync = promisify(execFile)
+
 const binary = process.env.ORCA_CODEX_CONTRACT_BINARY
+
 const expectedVersion = process.env.ORCA_CODEX_CONTRACT_VERSION
+
 const describeCodexContract = binary ? describe : describe.skip
 
 // Why this guard: skipping is the right local-dev default, but a CI job whose whole
@@ -43,6 +46,7 @@ describe.runIf(process.env.ORCA_CODEX_CONTRACT_REQUIRED === '1' && !binary)(
 // Why fixed: `thread/read` never reaches the network, and a whole session is
 // spawn + initialize + one RPC. A generous ceiling still fails fast on a wedged child.
 const SESSION_TIMEOUT_MS = 60_000
+
 // Why: each contract case can use three bounded app-server sessions; keep Vitest's
 // watchdog longer than both child deadlines so cleanup cannot race a test timeout.
 const CONTRACT_TEST_TIMEOUT_MS = SESSION_TIMEOUT_MS * 3 + 10_000
@@ -62,6 +66,7 @@ describeCodexContract(
       const { stdout } = await execFileAsync(binary!, ['--version'], {
         timeout: SESSION_TIMEOUT_MS
       })
+
       expect(stdout.trim()).toBe(`codex-cli ${expectedVersion}`)
     })
 
@@ -84,12 +89,14 @@ describeCodexContract(
       // An app-server session over an empty sessions tree is what stamps the backfill complete.
       await runAppServerSession(home, async () => undefined)
       expect(readThreadRows(home)).toEqual([])
+
       return home
     }
 
     function writeRollout(home: string, threadId: string, stamp: string): void {
       const dayDir = join(home, 'sessions', '2026', '08', '29')
       mkdirSync(dayDir, { recursive: true })
+
       const meta = {
         timestamp: '2026-08-29T21:17:33.760Z',
         ordinal: 0,
@@ -106,12 +113,14 @@ describeCodexContract(
           model_provider: 'openai'
         }
       }
+
       const userMessage = {
         timestamp: '2026-08-29T21:17:40.000Z',
         ordinal: 1,
         type: 'event_msg',
         payload: { type: 'user_message', message: 'index-heal contract fixture' }
       }
+
       writeFileSync(
         join(dayDir, `rollout-${stamp}-${threadId}.jsonl`),
         `${JSON.stringify(meta)}\n${JSON.stringify(userMessage)}\n`
@@ -139,10 +148,13 @@ describeCodexContract(
 
     function readThreadRows(home: string): ThreadRow[] {
       const stateDbPath = findNewestCodexStateDbPath(home)
+
       if (!stateDbPath) {
         return []
       }
+
       const db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true })
+
       try {
         return db
           .prepare('SELECT id, archived FROM threads ORDER BY id')

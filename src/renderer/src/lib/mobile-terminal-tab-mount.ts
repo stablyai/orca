@@ -23,9 +23,11 @@ export function planMobileTerminalTabMount(
   if (!request.worktreeId) {
     return null
   }
+
   const requestedTabExists = request.tabId
     ? (state.tabsByWorktree[request.worktreeId] ?? []).some((tab) => tab.id === request.tabId)
     : false
+
   // Why: stale real-tab handles must fail closed like stale synthetic handles;
   // otherwise they mount and measure a hidden worktree with no pane to recover.
   const tabId = request.tabId
@@ -35,6 +37,7 @@ export function planMobileTerminalTabMount(
     : request.ptyId
       ? resolveTerminalTabIdForPtyId(state, request.worktreeId, request.ptyId)
       : null
+
   // Why: replaying the background-mount event for a live pane restarts its
   // three-second hidden measurement window on every mobile reconnect.
   return tabId && !options.isTabMounted?.(tabId, request.worktreeId)

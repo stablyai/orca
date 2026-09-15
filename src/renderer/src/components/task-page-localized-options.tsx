@@ -19,6 +19,7 @@ import type { TaskProvider } from '../../../shared/task-providers'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
+
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
 
 export type TaskQueryPreset = {
@@ -37,11 +38,13 @@ export type SourceOption = {
 }
 
 export type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
+
 export type JiraPreset = { id: JiraPresetId; label: string }
 
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
 export type LinearMode = 'issues' | 'projects' | 'views' | 'in-orca'
+
 export type {
   LinearDisplayProperty,
   LinearGroupBy,
@@ -169,6 +172,7 @@ export const getLinearViewOptions = createLocalizedCatalog(
       list: { label: translate('auto.components.TaskPage.a6f7e93d7f', 'List'), Icon: List },
       board: { label: translate('auto.components.TaskPage.d747aed72f', 'Board'), Icon: LayoutGrid }
     }
+
     return LINEAR_VIEW_MODES.map((id) => ({ id, ...entries[id] }))
   }
 )
@@ -182,6 +186,7 @@ export const getLinearGroupOptions = createLocalizedCatalog(
       priority: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority'),
       team: translate('auto.components.TaskPage.a98cbe7664', 'Team')
     }
+
     return LINEAR_GROUP_BY_OPTIONS.map((id) => ({ id, label: labels[id] }))
   }
 )
@@ -193,6 +198,7 @@ export const getLinearOrderOptions = createLocalizedCatalog(
       updated: translate('auto.components.TaskPage.f362667d55', 'Updated'),
       identifier: translate('auto.components.TaskPage.d8a517ad89', 'Identifier')
     }
+
     return LINEAR_ORDER_BY_OPTIONS.map((id) => ({ id, label: labels[id] }))
   }
 )
@@ -207,6 +213,7 @@ export const getLinearDisplayProperties = createLocalizedCatalog(
       labels: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels'),
       updated: translate('auto.components.TaskPage.f362667d55', 'Updated')
     }
+
     return LINEAR_DISPLAY_PROPERTIES.map((id) => ({ id, label: labels[id] }))
   }
 )

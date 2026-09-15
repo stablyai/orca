@@ -11,14 +11,18 @@ function exitedAppFixture() {
     signalCode: null,
     stdio: [new PassThrough(), new PassThrough(), new PassThrough()]
   })
+
   const pipesClosed = Promise.all(
     proc.stdio.map((stream) => new Promise<void>((resolve) => stream.once('close', resolve)))
   )
+
   const close = vi.fn(() => pipesClosed)
+
   const app = {
     process: () => proc as unknown as ChildProcess,
     close
   } as unknown as ElectronApplication
+
   return { proc, app, close }
 }
 
@@ -52,6 +56,7 @@ describe('Electron shutdown with inherited pipes', () => {
     await closing
     expect(proc.stdio.every((stream) => !stream.destroyed)).toBe(true)
     expect(proc.listenerCount('exit')).toBe(0)
+
     for (const stream of proc.stdio) {
       stream.destroy()
     }

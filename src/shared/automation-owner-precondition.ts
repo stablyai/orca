@@ -71,9 +71,11 @@ function conflict(code: keyof typeof AUTOMATION_OWNER_CONFLICT_CODES): never {
 export function assertAutomationOwnerFence(input: AutomationOwnerFenceInput): void {
   const stored = projectAutomationSelector(input.automation, input.context)
   const expected = input.expectedOwner?.selector
+
   if (stored.kind === 'orphan' && input.operation === 'execute') {
     conflict('targetRemoved')
   }
+
   if (!expected) {
     // Optional on the wire is not unenforced: a record fenced to an SSH registration
     // may not be mutated or executed by a caller that names no host at all. Only
@@ -85,11 +87,14 @@ export function assertAutomationOwnerFence(input: AutomationOwnerFenceInput): vo
     ) {
       conflict('fencingRequired')
     }
+
     return
   }
+
   if (expected.kind !== stored.kind) {
     conflict('ownerChanged')
   }
+
   if (
     expected.kind === 'ssh' &&
     stored.kind === 'ssh' &&
@@ -105,12 +110,15 @@ export function assertAutomationDestination(
   context: Pick<AutomationProjectionContext, 'sshTargetGeneration'>
 ): void {
   const selector = destination.selector
+
   if (selector.kind === 'self') {
     return
   }
+
   if (selector.kind !== 'ssh' || !selector.targetId) {
     conflict('invalidDestination')
   }
+
   if (context.sshTargetGeneration(selector.targetId) !== selector.targetGeneration) {
     conflict('invalidDestination')
   }
@@ -132,6 +140,7 @@ function landingSelector(
       targetGeneration: selection.executionTargetGeneration
     }
   }
+
   if (selection.executionTargetType === 'local' && workspaceSshPin) {
     return {
       kind: 'ssh',
@@ -139,6 +148,7 @@ function landingSelector(
       targetGeneration: selection.executionTargetGeneration ?? workspaceSshPin.generation
     }
   }
+
   return { kind: 'self' }
 }
 
@@ -151,12 +161,15 @@ export function assertExecutionTargetMatchesDestination(
 ): void {
   const landing = landingSelector(selection, workspaceSshPin)
   const selector = destination.selector
+
   if (selector.kind === 'self') {
     if (landing.kind !== 'self') {
       conflict('invalidDestination')
     }
+
     return
   }
+
   if (
     landing.kind !== 'ssh' ||
     landing.targetId !== selector.targetId ||

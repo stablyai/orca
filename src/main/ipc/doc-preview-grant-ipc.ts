@@ -34,12 +34,15 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
   if (!request.requestBase.trim() || !request.root.trim() || !request.entryRelativePath.trim()) {
     return false
   }
+
   if (typeof request.browserPageId !== 'string' || !request.browserPageId.trim()) {
     return false
   }
+
   if (request.owner.kind === 'ssh') {
     return Boolean(request.owner.connectionId.trim())
   }
+
   return Boolean(
     request.owner.environmentId.trim() &&
     request.owner.worktreeSelector.trim() &&
@@ -62,15 +65,18 @@ export function registerDocPreviewGrantHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         throw new Error('Untrusted document preview grant request')
       }
+
       if (!isValidGrantRequest(request)) {
         throw new Error('Invalid document preview grant request')
       }
+
       // Why the other half of the registry is consulted here: this is where a page first becomes a
       // document page, and the two halves must stay disjoint. Naming a page that already hosts a
       // browsing guest would make one id resolve in both.
       if (browserManager.getGuestWebContentsId(request.browserPageId) !== null) {
         throw new Error('Document preview grant names a browsing page')
       }
+
       const grant = mintDocPreviewGrant({
         owner: request.owner,
         requestBase: request.requestBase,
@@ -78,6 +84,7 @@ export function registerDocPreviewGrantHandlers(): void {
         entryRelativePath: request.entryRelativePath,
         browserPageId: request.browserPageId
       })
+
       return {
         grantId: grant.id,
         url: buildDocPreviewUrl(grant.id, grant.entryRelativePath)

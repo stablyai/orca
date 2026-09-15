@@ -44,6 +44,7 @@ export function resolveOrcaManagedCodexHomePath(): string {
 export function getOrcaManagedCodexHomePath(): string {
   const managedHomePath = resolveOrcaManagedCodexHomePath()
   mkdirSync(managedHomePath, { recursive: true })
+
   return managedHomePath
 }
 
@@ -55,14 +56,17 @@ export function getOrcaUserDataPath(): string {
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }
+
   // Why: CLI hook commands import this module outside Electron. Mirror the CLI
   // runtime metadata path so offline hook status/on/off uses the same userData.
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support', 'orca')
   }
+
   if (process.platform === 'win32') {
     return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'orca')
   }
+
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
@@ -73,6 +77,7 @@ export function getOrcaUserDataPath(): string {
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
+
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
@@ -109,53 +114,67 @@ function linkSystemCodexResource(
   // read on ~/.codex/AGENTS.md removed the managed copy on the next launch.
   // One resolved stat now answers reachability and regular-file-ness together.
   const sourceObservation = observeResolvedPathEntry(sourcePath)
+
   if (sourceObservation.kind === 'indeterminate') {
     return
   }
+
   if (sourceObservation.kind === 'absent') {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
+
     return
   }
+
   if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY && !sourceObservation.value.isFile()) {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
     console.warn('[codex-home] Ignoring non-file system Codex resource:', entryName)
+
     return
   }
 
   if (targetAlreadyPointsToSource(targetPath, sourcePath)) {
     clearCopiedResourceMarker(managedHomePath, entryName)
+
     if (!preferCopy || !removeSymlinkEntry(targetPath)) {
       return
     }
   }
+
   // Why: an unreadable target is not a missing target; do not let the fallback
   // copier remove it merely because existsSync/lstatSync collapsed the error.
   const targetObservation = observe(() => lstatSync(targetPath))
+
   if (targetObservation.kind === 'indeterminate') {
     return
   }
+
   const shouldRefreshFallbackCopy =
     targetObservation.kind === 'present' &&
     targetIsOwnedFallbackCopy(targetPath, managedHomePath, entryName, sourcePath)
+
   if (targetObservation.kind === 'present' && !shouldRefreshFallbackCopy) {
     return
   }
+
   if (shouldRefreshFallbackCopy) {
     // Why: WSL launch preparation runs before every Codex start. Avoid
     // rewriting an unchanged file across the UNC boundary on every launch.
     if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY) {
       const contentsMatch = copiedFileContentsMatch(sourcePath, targetPath)
+
       if (contentsMatch === 'match' || contentsMatch === 'indeterminate') {
         // Why: a failed comparison is not permission to remove the only
         // readable copy; leave it in place for the next launch.
         return
       }
     }
+
     rmSync(targetPath, { recursive: true, force: true })
   }
 
   if (preferCopy) {
     copySystemCodexResourceAsOwnedFallback(sourcePath, targetPath, managedHomePath, entryName)
+
     return
   }
 
@@ -211,6 +230,7 @@ function copySystemCodexResourceAsOwnedFallback(
         cleanupError
       )
     }
+
     console.warn(
       '[codex-home] Failed to mirror system Codex resource:',
       entryName,
@@ -229,6 +249,7 @@ function copiedFileContentsMatch(
     if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
       return 'different'
     }
+
     return readFileSync(sourcePath).equals(readFileSync(targetPath)) ? 'match' : 'different'
   } catch {
     return 'indeterminate'
@@ -250,6 +271,7 @@ function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean
   if (process.platform !== 'win32') {
     return actualTarget === expectedTarget
   }
+
   return normalizeWindowsLinkTarget(actualTarget) === normalizeWindowsLinkTarget(expectedTarget)
 }
 
@@ -265,11 +287,14 @@ function removeCopiedResourceIfOwned(
 ): void {
   if (removeSymlinkedResourceIfOwned(targetPath, sourcePath)) {
     clearCopiedResourceMarker(managedHomePath, entryName)
+
     return
   }
+
   if (!targetIsOwnedFallbackCopy(targetPath, managedHomePath, entryName, sourcePath)) {
     return
   }
+
   rmSync(targetPath, { recursive: true, force: true })
   clearCopiedResourceMarker(managedHomePath, entryName)
 }
@@ -279,9 +304,11 @@ function removeSymlinkedResourceIfOwned(targetPath: string, sourcePath: string):
     if (!lstatSync(targetPath).isSymbolicLink()) {
       return false
     }
+
     if (!linkTargetsMatch(readlinkSync(targetPath), sourcePath)) {
       return false
     }
+
     return removeSymlinkEntry(targetPath)
   } catch {
     return false
@@ -293,6 +320,7 @@ function removeSymlinkEntry(targetPath: string): boolean {
     // Why: recursive rm can leave a broken directory symlink behind; unlink the
     // link entry itself so deleted system resources do not linger in runtime home.
     unlinkSync(targetPath)
+
     return true
   } catch {
     if (process.platform !== 'win32') {
@@ -302,6 +330,7 @@ function removeSymlinkEntry(targetPath: string): boolean {
 
   try {
     rmdirSync(targetPath)
+
     return true
   } catch {
     return false

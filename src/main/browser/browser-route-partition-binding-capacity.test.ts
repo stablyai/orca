@@ -57,6 +57,7 @@ describe('browser route partition binding capacity', () => {
       maxBindings: 2,
       isPartitionRetained: () => false
     })
+
     vi.setSystemTime(1_000)
     store.set(partitionAt(1), 'a'.repeat(64), storageScope)
     vi.setSystemTime(2_000)
@@ -78,6 +79,7 @@ describe('browser route partition binding capacity', () => {
       [partitionAt(1)]: { fingerprint: 'a'.repeat(64), storageScope },
       [partitionAt(2)]: { fingerprint: 'b'.repeat(64), storageScope, lastUsedAt: 5_000 }
     })
+
     const store = new BrowserRoutePartitionBindingStore({
       filePath,
       maxBindings: 2,

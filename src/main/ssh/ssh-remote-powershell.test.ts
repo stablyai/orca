@@ -5,9 +5,11 @@ import { powerShellCommand } from './ssh-remote-powershell'
 
 function decodePayload(command: string): string {
   const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
+
   if (!encoded) {
     throw new Error(`no -EncodedCommand payload in: ${command}`)
   }
+
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 
@@ -155,6 +157,7 @@ describe('remote PowerShell payload invariant', () => {
       for (const sample of catches) {
         expect(pattern.test(sample), `should catch: ${sample}`).toBe(true)
       }
+
       for (const sample of ignores) {
         expect(pattern.test(sample), `should ignore: ${sample}`).toBe(false)
       }

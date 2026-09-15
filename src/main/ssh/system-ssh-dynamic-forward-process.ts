@@ -5,6 +5,7 @@ import { buildSshArgs, findSystemSsh, type SystemSshBuildArgsOptions } from './s
 import { waitForSystemSshForwardStop } from './system-ssh-forward-process'
 
 const STARTUP_TIMEOUT_MS = 10_000
+
 const PROBE_INTERVAL_MS = 50
 
 export type SystemSshDynamicForwardProcess = {
@@ -21,30 +22,39 @@ export async function startSystemSshDynamicForwardProcess(
   signal?: AbortSignal
 ): Promise<SystemSshDynamicForwardProcess> {
   const sshPath = findSystemSsh()
+
   if (!sshPath) {
     throw new Error('No system ssh binary found. Install OpenSSH to use browser tunneling.')
   }
+
   const localPort = await allocateLoopbackPort()
+
   if (signal?.aborted) {
     throw new Error('system_ssh_dynamic_forward_aborted')
   }
+
   const args = buildSshArgs(target, {
     ...options,
     suppressOrcaControlMaster: true,
     disableControlMaster: true,
     nonInteractive: true
   })
+
   const destinationIndex = args.lastIndexOf('--')
   const dynamicArgs = ['-N', '-o', 'ExitOnForwardFailure=yes', '-D', `127.0.0.1:${localPort}`]
   args.splice(destinationIndex === -1 ? 0 : destinationIndex, 0, ...dynamicArgs)
+
   const process = spawn(sshPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true
   })
+
   let stderr = ''
+
   const onStderr = (chunk: Buffer): void => {
     stderr = `${stderr}${chunk.toString('utf-8')}`.slice(-64 * 1024)
   }
+
   const onAbort = (): void => {
     try {
       process.kill('SIGTERM')
@@ -52,8 +62,10 @@ export async function startSystemSshDynamicForwardProcess(
       /* best-effort cancellation */
     }
   }
+
   process.stderr?.on('data', onStderr)
   signal?.addEventListener('abort', onAbort, { once: true })
+
   try {
     await waitForDynamicForward(process, localPort, () => stderr, signal)
   } catch (error) {
@@ -62,6 +74,7 @@ export async function startSystemSshDynamicForwardProcess(
     await waitForSystemSshForwardStop(process)
     throw error
   }
+
   return {
     localPort,
     process,
@@ -90,11 +103,14 @@ function allocateLoopbackPort(): Promise<number> {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
       const address = server.address() as AddressInfo | null
+
       if (!address) {
         server.close()
         reject(new Error('system_ssh_dynamic_forward_port_unavailable'))
+
         return
       }
+
       server.close((error) => (error ? reject(error) : resolve(address.port)))
     })
   })
@@ -110,10 +126,12 @@ function waitForDynamicForward(
     let settled = false
     let probeTimer: ReturnType<typeof setTimeout> | undefined
     let probeSocket: Socket | undefined
+
     const timeout = setTimeout(
       () => finish(() => reject(dynamicForwardError(null, stderr(), 'startup timeout'))),
       STARTUP_TIMEOUT_MS
     )
+
     const cleanup = (): void => {
       clearTimeout(timeout)
       clearTimeout(probeTimer)
@@ -124,47 +142,61 @@ function waitForDynamicForward(
       process.off('exit', onExit)
       signal?.removeEventListener('abort', onAbort)
     }
+
     const finish = (settle: () => void): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       settle()
     }
+
     const onError = (error: Error): void => finish(() => reject(error))
+
     const onAbort = (): void =>
       finish(() => reject(new Error('system_ssh_dynamic_forward_aborted')))
+
     const onExit = (code: number | null): void =>
       finish(() => reject(dynamicForwardError(code, stderr())))
+
     const probe = (): void => {
       const socket = connect({ host: '127.0.0.1', port: localPort })
       probeSocket = socket
+
       const closeProbe = (): void => {
         if (probeSocket === socket) {
           probeSocket = undefined
         }
+
         socket.removeAllListeners()
         socket.destroy()
       }
+
       socket.once('connect', () => {
         closeProbe()
         finish(resolve)
       })
       socket.once('error', () => {
         closeProbe()
+
         if (!settled) {
           probeTimer = setTimeout(probe, PROBE_INTERVAL_MS)
         }
       })
     }
+
     process.once('error', onError)
     process.once('exit', onExit)
     signal?.addEventListener('abort', onAbort, { once: true })
+
     if (signal?.aborted) {
       onAbort()
+
       return
     }
+
     probe()
   })
 }
@@ -175,6 +207,7 @@ function dynamicForwardError(code: number | null, stderr: string, fallback = '')
       .split(/\r?\n/)
       .map((line) => line.trim())
       .findLast(Boolean) ?? fallback
+
   return new Error(
     `System SSH dynamic forward failed${code === null ? '' : ` (exit ${code})`}${
       detail ? `: ${detail}` : ''

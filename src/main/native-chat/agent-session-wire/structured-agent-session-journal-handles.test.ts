@@ -27,6 +27,7 @@ const legacyImport = vi.hoisted(() => ({ throws: false }))
 
 vi.mock('../agent-session-journal/journal-legacy-import', async (importOriginal) => {
   const actual = await importOriginal<typeof JournalLegacyImport>()
+
   return {
     ...actual,
     importLegacyTranscriptIntoJournal: async (
@@ -35,6 +36,7 @@ vi.mock('../agent-session-journal/journal-legacy-import', async (importOriginal)
       if (legacyImport.throws) {
         throw new Error('legacy import threw instead of reporting a failure')
       }
+
       return actual.importLegacyTranscriptIntoJournal(input)
     }
   }
@@ -51,7 +53,9 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 let journalDir: string
+
 const journals = createTrackedJournalOpener()
 
 async function exists(path: string): Promise<boolean> {
@@ -112,6 +116,7 @@ afterEach(async () => {
 describe('site 6: recovery rehydration', () => {
   it('closes the journal it opened when the legacy import throws', async () => {
     const seeded = await journals.open({ identity: IDENTITY, journalDir })
+
     for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
       await seeded.appendItem(
         { provider: 'codex', threadId: SESSION, turnId: 'turn-1', ordinal },
@@ -119,6 +124,7 @@ describe('site 6: recovery rehydration', () => {
         { fence: 1 }
       )
     }
+
     await seeded.close()
     // Punch a hole in the middle so recovery takes the `journal_corrupt` branch.
     const { openJournalDatabase } = await import('../agent-session-journal/journal-database')
@@ -185,10 +191,12 @@ describe('sites 9 and 10: the delete and overwrite callbacks', () => {
 describe('site 11: host teardown is failure-complete', () => {
   async function twoSessions(): Promise<Map<string, StructuredAgentSessionHostSession>> {
     const first = await journals.open({ identity: IDENTITY, journalDir })
+
     const second = await journals.open({
       identity: { ...IDENTITY, sessionId: `${SESSION}-b` },
       journalDir: join(root, 'journal-b')
     })
+
     return new Map([
       [SESSION, hostSession(first)],
       [`${SESSION}-b`, hostSession(second)]
@@ -240,6 +248,7 @@ describe('site 11: host teardown is failure-complete', () => {
     const acknowledgeSessionRelease = vi.fn()
     const failing = sessions.get(SESSION)
     const closeError = new Error('close rejected')
+
     if (failing) {
       failing.journal = {
         close: () => Promise.reject(closeError)

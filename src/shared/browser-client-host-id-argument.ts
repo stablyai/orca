@@ -21,5 +21,6 @@ export function readBrowserClientHostIdArgument(argv: readonly string[]): string
       return argument.slice(PREFIX.length) || null
     }
   }
+
   return null
 }

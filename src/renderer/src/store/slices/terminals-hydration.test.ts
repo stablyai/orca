@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/pty-transport', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
@@ -152,6 +154,7 @@ describe('hydrateWorkspaceSession', () => {
   it('hydrates runtime-owned tabs from host partitions before remote catalogs load', () => {
     const store = createTestStore()
     const worktreeId = 'remote-repo::/srv/remote-wt'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeRepoId: 'remote-repo',
@@ -201,6 +204,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     const workspaceUuid = '123e4567-e89b-12d3-a456-426614174000'
     const worktreeId = `folder-repo::/home/user::workspace:${workspaceUuid}`
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeRepoId: 'folder-repo',
@@ -244,6 +248,7 @@ describe('hydrateWorkspaceSession', () => {
       ],
       worktreesByRepo: {}
     })
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeRepoId: 'same-repo',
@@ -281,6 +286,7 @@ describe('hydrateWorkspaceSession', () => {
   it('hydrates runtime folder workspace tabs before remote folder catalogs load', () => {
     const store = createTestStore()
     const folderKey = folderWorkspaceKey('folder-1')
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeWorkspaceKey: folderKey,
@@ -371,6 +377,7 @@ describe('hydrateWorkspaceSession', () => {
 
   it('hydrates floating terminal tabs even though they are not repo worktrees', () => {
     const store = createTestStore()
+
     const session: WorkspaceSessionState = {
       activeRepoId: null,
       activeWorktreeId: null,
@@ -410,6 +417,7 @@ describe('hydrateWorkspaceSession', () => {
         repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
       }
     })
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'repo1',
       activeWorktreeId: worktreeId,
@@ -432,9 +440,11 @@ describe('hydrateWorkspaceSession', () => {
     store.getState().hydrateWorkspaceSession(session)
 
     let updateCount = 0
+
     const unsubscribe = store.subscribe(() => {
       updateCount += 1
     })
+
     await store.getState().reconnectPersistedTerminals()
     unsubscribe()
 
@@ -722,40 +732,49 @@ describe('hydrateWorkspaceSession', () => {
     const folderWorktreeId = folderWorkspaceKey('folder-1')
     const targetTab = makeTab({ id: 'tab-target', worktreeId: targetWorktreeId, ptyId: null })
     const deletedTargetTab = makeTab({ id: 'tab-target-deleted', worktreeId: targetWorktreeId })
+
     const siblingTab = makeTab({
       id: 'tab-sibling',
       worktreeId: siblingWorktreeId,
       ptyId: 'ssh:target-b@@pty-b'
     })
+
     const runtimeTab = makeTab({
       id: 'tab-runtime',
       worktreeId: runtimeWorktreeId,
       ptyId: 'runtime:env@@pty-runtime'
     })
+
     const localTab = makeTab({ id: 'tab-local', worktreeId: localWorktreeId, ptyId: null })
     const folderTab = makeTab({ id: 'tab-folder', worktreeId: folderWorktreeId, ptyId: null })
     const siblingTabs = [siblingTab]
     const runtimeTabs = [runtimeTab]
     const [localTabs, folderTabs] = [[localTab], [folderTab]]
     const runtimeOwners = { [runtimeWorktreeId]: 'runtime:env' as const }
+
     const authority = {
       targetId: 'target-a',
       providerEpoch: 'epoch-a' as SshProviderEpoch,
       connectionGeneration: 7
     }
+
     const ledgerTabs = [targetTab, deletedTargetTab, siblingTab]
+
     const retry = {
       attemptId: 'attempt' as DirectSshPaneRetryAttemptId,
       authority,
       tabGeneration: 0,
       startedAt: 0
     }
+
     const retryByTabId = Object.fromEntries(ledgerTabs.map((tab) => [tab.id, retry]))
     const liveBinding = { ...retry, ptyId: 'ssh:target-a@@pty-ledger' }
     const liveByTabId = Object.fromEntries(ledgerTabs.map((tab) => [tab.id, liveBinding]))
+
     const historyByTabId = Object.fromEntries(
       ledgerTabs.map((tab) => [tab.id, { authority, attemptedAt: [0] }])
     )
+
     seedStore(store, {
       workspaceSessionReady: true,
       repos: [
@@ -799,6 +818,7 @@ describe('hydrateWorkspaceSession', () => {
         ]
       ])
     })
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeRepoId: 'repo-a',
@@ -836,10 +856,12 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
       [targetTab.id]: 'ssh:target-a@@pty-a'
     })
+
     const retainedLedgerTabIds = ledgerTabs
       .filter((tab) => tab.id !== deletedTargetTab.id)
       .map((tab) => tab.id)
       .sort()
+
     expect(Object.keys(store.getState().directSshPaneRetryByTabId).sort()).toEqual(
       retainedLedgerTabIds
     )

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PtyPendingDataDrainQueue, type PendingPtyData } from './pty-pending-data-drain-queue'
 
 const CHUNK_CHARS = 4
+
 const MAX_WRITES = 2
 
 type Policy = {
@@ -45,6 +46,7 @@ function classify(policy: Policy, id: string) {
   if (!isDroppable(policy, id) && policy.credit <= 0) {
     return 'blocked' as const
   }
+
   return policy.active.has(id) ? ('active' as const) : ('background' as const)
 }
 
@@ -54,12 +56,15 @@ function clonePending(value: PendingPtyData): PendingPtyData {
 
 function remainderFor(pending: PendingPtyData, chunk: string, remaining: string): PendingPtyData {
   const next: PendingPtyData = { data: remaining }
+
   if (typeof pending.startSeq === 'number') {
     next.startSeq = pending.startSeq + chunk.length
   }
+
   if (pending.containsBackgroundOutput === true) {
     next.containsBackgroundOutput = true
   }
+
   return next
 }
 
@@ -84,6 +89,7 @@ function recordExit(timeline: unknown[], id: string, pending: PendingPtyData | u
     )
     timeline.push({ kind: 'flow', id, pendingChars: 0 })
   }
+
   timeline.push({ kind: 'exit', id, hadPending: pending !== undefined })
 }
 
@@ -91,6 +97,7 @@ function timerDecision(size: number, writes: number): DrainResult['timer'] {
   if (size === 0) {
     return 'idle'
   }
+
   return writes > 0 ? 'continue' : 'blocked'
 }
 
@@ -101,6 +108,7 @@ function recordDrop(
   pending: PendingPtyData
 ): void {
   events.push({ kind: 'drop', id, data: pending.data })
+
   if (!markedDrops.has(id)) {
     markedDrops.add(id)
     events.push({ kind: 'marker', id })
@@ -113,41 +121,52 @@ function drainLegacy(
   markedDrops: Set<string>
 ): DrainResult {
   const entries = [...pendingById.entries()]
+
   const ordered = [
     ...entries.filter(([id]) => policy.active.has(id)),
     ...entries.filter(([id]) => !policy.active.has(id))
   ]
+
   const events: DrainEvent[] = []
   const flow: DrainResult['flow'] = []
   let writes = 0
+
   for (const [id, pending] of ordered) {
     if (writes >= MAX_WRITES) {
       break
     }
+
     if (isDroppable(policy, id)) {
       pendingById.delete(id)
       recordDrop(events, markedDrops, id, pending)
       flow.push({ id, pendingChars: 0 })
       continue
     }
+
     if (policy.credit <= 0) {
       continue
     }
+
     pendingById.delete(id)
+
     if (pending.droppedOutput === true) {
       events.push({ kind: 'sentinel', id, data: pending.data })
     } else {
       const chunk = pending.transformed === true ? pending.data : pending.data.slice(0, CHUNK_CHARS)
       const remaining = pending.transformed === true ? '' : pending.data.slice(CHUNK_CHARS)
+
       if (remaining) {
         pendingById.set(id, remainderFor(pending, chunk, remaining))
       }
+
       events.push(dataEvent(id, pending, chunk))
     }
+
     flow.push({ id, pendingChars: pendingById.get(id)?.data.length ?? 0 })
     policy.credit -= 1
     writes += 1
   }
+
   return { events, flow, timer: timerDecision(pendingById.size, writes), writes }
 }
 
@@ -160,37 +179,47 @@ function drainQueue(
   const flow: DrainResult['flow'] = []
   let writes = 0
   const round = queue.beginRound()
+
   try {
     while (writes < MAX_WRITES) {
       const selection = queue.takeNext(round)
+
       if (!selection) {
         break
       }
+
       const { id, pending } = selection
+
       if (isDroppable(policy, id)) {
         queue.remove(selection)
         recordDrop(events, markedDrops, id, pending)
         flow.push({ id, pendingChars: 0 })
         continue
       }
+
       if (policy.credit <= 0) {
         queue.block(selection)
         continue
       }
+
       if (pending.droppedOutput === true) {
         queue.remove(selection)
         events.push({ kind: 'sentinel', id, data: pending.data })
       } else {
         const chunk =
           pending.transformed === true ? pending.data : pending.data.slice(0, CHUNK_CHARS)
+
         const remaining = pending.transformed === true ? '' : pending.data.slice(CHUNK_CHARS)
+
         if (remaining) {
           queue.replaceWithRemainder(selection, remainderFor(pending, chunk, remaining))
         } else {
           queue.remove(selection)
         }
+
         events.push(dataEvent(id, pending, chunk))
       }
+
       flow.push({ id, pendingChars: queue.get(id)?.data.length ?? 0 })
       policy.credit -= 1
       writes += 1
@@ -198,6 +227,7 @@ function drainQueue(
   } finally {
     queue.endRound(round)
   }
+
   return { events, flow, timer: timerDecision(queue.size, writes), writes }
 }
 
@@ -207,6 +237,7 @@ function nextRandom(state: { value: number }): number {
   value ^= value >>> 17
   value ^= value << 5
   state.value = value >>> 0
+
   return state.value
 }
 
@@ -214,8 +245,10 @@ function setMembership(set: Set<string>, id: string, present: boolean): boolean 
   if (present) {
     const changed = !set.has(id)
     set.add(id)
+
     return changed
   }
+
   return set.delete(id)
 }
 
@@ -251,11 +284,14 @@ function runSeed(seed: number): void {
   for (let step = 0; step < 800; step++) {
     const choice = nextRandom(random) % 13
     const id = ids[nextRandom(random) % ids.length]!
+
     if (choice <= 2) {
       const suffix = String.fromCharCode(97 + (nextRandom(random) % 26)).repeat(
         1 + (nextRandom(random) % 6)
       )
+
       const current = legacy.get(id)
+
       const next: PendingPtyData = current
         ? { ...current, data: current.data + suffix }
         : {
@@ -263,12 +299,14 @@ function runSeed(seed: number): void {
             startSeq: nextRandom(random) % 40,
             ...(nextRandom(random) % 3 === 0 ? { containsBackgroundOutput: true } : {})
           }
+
       legacy.set(id, clonePending(next))
       queue.set(id, clonePending(next))
     } else if (choice === 3) {
       const active = nextRandom(random) % 2 === 0
       const changed = setMembership(legacyPolicy.active, id, active)
       setMembership(queuePolicy.active, id, active)
+
       if (changed) {
         queue.invalidateAll()
       }
@@ -278,10 +316,12 @@ function runSeed(seed: number): void {
       const present = nextRandom(random) % 2 === 0
       setMembership(legacyPolicy[setName], id, present)
       setMembership(queuePolicy[setName], id, present)
+
       if (!present && setName === 'hidden') {
         legacyMarkedDrops.delete(id)
         queueMarkedDrops.delete(id)
       }
+
       if (before !== isDroppable(queuePolicy, id)) {
         queue.invalidateAll()
       }
@@ -312,6 +352,7 @@ function runSeed(seed: number): void {
       legacyTimeline.push(legacyRound)
       queueTimeline.push(queueRound)
     }
+
     expectEquivalent(legacy, queue, legacyPolicy, queuePolicy, legacyTimeline, queueTimeline)
   }
 }
@@ -341,14 +382,18 @@ describe('PtyPendingDataDrainQueue shared-domain differential', () => {
 
     const next = queue.beginRound()
     const ids: string[] = []
+
     for (;;) {
       const selection = queue.takeNext(next)
+
       if (!selection) {
         break
       }
+
       ids.push(selection.id)
       queue.remove(selection)
     }
+
     queue.endRound(next)
     expect(ids).toEqual(['unvisited', 'partial', 'new'])
   })

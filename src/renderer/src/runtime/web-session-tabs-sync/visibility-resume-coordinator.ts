@@ -46,9 +46,11 @@ export class VisibilityResumeCoordinator {
     if (runtimeId && this.isSupersededRuntimeId(environmentId, runtimeId)) {
       return
     }
+
     const omission = this.options.omissions.get(
       sessionTabsFreshnessKey(environmentId, snapshot.worktree)
     )
+
     if (
       omission &&
       receivedFrame > omission.inventoryReceivedFrame &&
@@ -56,6 +58,7 @@ export class VisibilityResumeCoordinator {
         advancesSessionTabsFreshness(snapshot, omission.baseline))
     ) {
       omission.superseded = true
+
       if (this.batch?.pendingMissingByWorktree.has(snapshot.worktree)) {
         this.reconcileWorktrees([snapshot.worktree])
       }
@@ -71,15 +74,19 @@ export class VisibilityResumeCoordinator {
     if (runtimeId && this.isSupersededRuntimeId(environmentId, runtimeId)) {
       return false
     }
+
     const omission = this.options.omissions.get(
       sessionTabsFreshnessKey(environmentId, snapshot.worktree)
     )
+
     if (!omission) {
       return true
     }
+
     if (receivedFrame < omission.inventoryReceivedFrame) {
       return false
     }
+
     return (
       (snapshot as { removed?: unknown }).removed === true ||
       advancesSessionTabsFreshness(snapshot, omission.baseline)
@@ -98,6 +105,7 @@ export class VisibilityResumeCoordinator {
     const omission = this.options.omissions.get(
       sessionTabsFreshnessKey(missing.environmentId, missing.snapshot.worktree)
     )
+
     return (
       omission?.inventoryReceivedFrame === missing.inventoryReceivedFrame && !omission.superseded
     )
@@ -115,6 +123,7 @@ export class VisibilityResumeCoordinator {
     const key = sessionTabsFreshnessKey(environmentId, worktreeId)
     const entry = batch.reapplyableSnapshotsByKey.get(key)
     const freshness = entry ? latestSessionTabsSnapshotByWorktree.get(key) : undefined
+
     if (
       !entry ||
       !freshness ||
@@ -129,6 +138,7 @@ export class VisibilityResumeCoordinator {
     ) {
       return null
     }
+
     return entry
   }
 
@@ -152,54 +162,70 @@ export class VisibilityResumeCoordinator {
 
   private reconcileWorktrees(worktreeIds: Iterable<string>): void {
     const batch = this.batch
+
     if (!batch) {
       return
     }
+
     const operations: WebSessionTabsSnapshotOperation[] = []
+
     for (const worktreeId of new Set(worktreeIds)) {
       const pendingMissing = batch.pendingMissingByWorktree.get(worktreeId)
+
       if (!pendingMissing) {
         batch.deferredRepairWorktrees.delete(worktreeId)
         continue
       }
+
       for (const [environmentId, missing] of pendingMissing) {
         if (this.missingCurrent(missing)) {
           continue
         }
+
         pendingMissing.delete(environmentId)
         batch.environments.get(environmentId)?.pendingMissingWorktrees.delete(worktreeId)
       }
+
       if (pendingMissing.size === 0) {
         batch.pendingMissingByWorktree.delete(worktreeId)
         batch.deferredRepairWorktrees.delete(worktreeId)
         continue
       }
+
       const missingEnvironmentIds = new Set(pendingMissing.keys())
+
       const survivingSnapshots: {
         environmentId: string
         snapshot: RuntimeMobileSessionTabsResult
         runtimeId?: string
       }[] = []
+
       let canRepair = true
+
       for (const environmentId of sessionTabsEnvironmentsByWorktree.get(worktreeId) ?? []) {
         if (missingEnvironmentIds.has(environmentId)) {
           continue
         }
+
         const entry = this.replayableEntry(batch, environmentId, worktreeId)
+
         if (!entry) {
           canRepair = false
           break
         }
+
         survivingSnapshots.push({
           environmentId,
           snapshot: entry.snapshot,
           ...(entry.runtimeId ? { runtimeId: entry.runtimeId } : {})
         })
       }
+
       if (!canRepair) {
         batch.deferredRepairWorktrees.add(worktreeId)
         continue
       }
+
       for (const missing of pendingMissing.values()) {
         operations.push({
           environmentId: missing.environmentId,
@@ -207,16 +233,20 @@ export class VisibilityResumeCoordinator {
           ...(missing.runtimeId ? { runtimeId: missing.runtimeId } : {})
         })
       }
+
       for (const { environmentId, snapshot, runtimeId } of survivingSnapshots) {
         acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
         operations.push({ environmentId, snapshot, ...(runtimeId ? { runtimeId } : {}) })
       }
+
       for (const environmentId of pendingMissing.keys()) {
         batch.environments.get(environmentId)?.pendingMissingWorktrees.delete(worktreeId)
       }
+
       batch.pendingMissingByWorktree.delete(worktreeId)
       batch.deferredRepairWorktrees.delete(worktreeId)
     }
+
     applyVisibilityResumeRepairs(batch, operations)
     this.finishIfIdle(batch)
   }
@@ -230,16 +260,21 @@ export class VisibilityResumeCoordinator {
     if (runtimeId && this.isSupersededRuntimeId(environmentId, runtimeId)) {
       return
     }
+
     const batch = this.batch
+
     if (!batch || !batch.trackedWorktreeIds.has(snapshot.worktree)) {
       return
     }
+
     const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
     const existing = this.replayableSnapshot(batch, environmentId, snapshot.worktree)
     const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+
     const crossHost =
       (sessionTabsEnvironmentsByWorktree.get(snapshot.worktree)?.size ?? 0) > 1 ||
       batch.deferredRepairWorktrees.has(snapshot.worktree)
+
     if (
       (snapshot as { removed?: unknown }).removed === true ||
       snapshot.tabs.length === 0 ||
@@ -254,6 +289,7 @@ export class VisibilityResumeCoordinator {
     } else {
       batch.reapplyableSnapshotsByKey.set(key, { snapshot, receivedFrame, runtimeId })
     }
+
     if (batch.pendingMissingByWorktree.has(snapshot.worktree)) {
       this.reconcileWorktrees([snapshot.worktree])
     }

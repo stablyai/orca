@@ -25,6 +25,7 @@ function stubPersistedResumeCommand(userDataDir: string): void {
     DEFAULT_LOCAL_ORCA_PROFILE_ID,
     'orca-data.json'
   )
+
   const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
     workspaceSession?: {
       sleepingAgentSessionsByPaneKey?: Record<
@@ -40,12 +41,15 @@ function stubPersistedResumeCommand(userDataDir: string): void {
       >
     }
   }
+
   const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
     (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
   )
+
   if (!record) {
     throw new Error('Expected a persisted resumable agent session')
   }
+
   record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
   writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
 }
@@ -55,10 +59,13 @@ function readDaemonPid(userDataDir: string): number {
     path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
     'utf8'
   )
+
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -67,10 +74,13 @@ test.describe.configure({ mode: 'serial' })
 test('resumes an agent session after quit when its daemon PTY died while the app was closed', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
+
   test.skip(process.platform === 'win32', 'Uses POSIX SIGKILL to simulate daemon death')
 
   const session = createRestartSession(testInfo)
@@ -157,14 +167,17 @@ test('resumes an agent session after quit when its daemon PTY died while the app
       (wtId) => (window.__store?.getState().tabsByWorktree[wtId] ?? []).length,
       worktreeId
     )
+
     expect(terminalTabCount).toBe(1)
   } finally {
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

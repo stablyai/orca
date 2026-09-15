@@ -72,6 +72,7 @@ describe('selectActiveToolCall', () => {
       call('Bash', { command: 'x' }, 'running'),
       call('Grep', { pattern: 'y' }, 'running')
     ]
+
     expect(selectActiveToolCall(blocks, { activeTurnIsWorking: true })?.name).toBe('Grep')
   })
 
@@ -96,6 +97,7 @@ describe('selectActiveToolCall', () => {
       { type: 'text', text: 'hello' },
       call('Bash', { command: 'x' }, 'running')
     ]
+
     expect(selectActiveToolCall(blocks, { activeTurnIsWorking: true })?.name).toBe('Bash')
   })
 })

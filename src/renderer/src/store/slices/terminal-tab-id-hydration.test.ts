@@ -3,9 +3,11 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { buildHydratedTabState } from './tabs-hydration'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/pty-transport', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()
@@ -23,7 +25,9 @@ globalThis.window = { api: apiProxy() }
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 const BAD_TAB_ID = 'host-tab::11111111-1111-4111-8111-111111111111'
+
 const GOOD_TAB_ID = 'terminal-good'
+
 const WORKTREE_ID = 'repo1::/wt-1'
 
 function makeBaseSession(): WorkspaceSessionState {

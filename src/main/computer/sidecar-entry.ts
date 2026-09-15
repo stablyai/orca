@@ -14,14 +14,17 @@ type SidecarRequest = {
 // helper wedged inside a UI Automation call can still outlive that and deliver
 // input after teardown; only a real signal would preempt it.
 process.once('disconnect', shutdownProviders)
+
 process.once('SIGTERM', () => {
   shutdownProviders()
   process.exit(0)
 })
+
 process.once('SIGINT', () => {
   shutdownProviders()
   process.exit(130)
 })
+
 process.once('beforeExit', shutdownProviders)
 
 process.on('message', (message: unknown) => {
@@ -44,6 +47,7 @@ async function handleMessage(message: unknown): Promise<void> {
 
 async function dispatch(method: string, params: Record<string, unknown>): Promise<unknown> {
   const provider = currentComputerProvider()
+
   if (!provider) {
     throw new RuntimeClientError(
       'unsupported_capability',
@@ -55,42 +59,55 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
     case 'capabilities': {
       return await provider.capabilities()
     }
+
     case 'listApps': {
       return await provider.listApps()
     }
+
     case 'listWindows': {
       return await provider.listWindows(params)
     }
+
     case 'getAppState': {
       return await provider.snapshot(params)
     }
+
     case 'click': {
       return await provider.action('click', params)
     }
+
     case 'performSecondaryAction': {
       return await provider.action('performSecondaryAction', params)
     }
+
     case 'scroll': {
       return await provider.action('scroll', params)
     }
+
     case 'drag': {
       return await provider.action('drag', params)
     }
+
     case 'typeText': {
       return await provider.action('typeText', params)
     }
+
     case 'pressKey': {
       return await provider.action('pressKey', params)
     }
+
     case 'hotkey': {
       return await provider.action('hotkey', params)
     }
+
     case 'pasteText': {
       return await provider.action('pasteText', params)
     }
+
     case 'setValue': {
       return await provider.action('setValue', params)
     }
+
     default:
       throw new RuntimeClientError(
         'invalid_argument',
@@ -103,7 +120,9 @@ function isRequest(message: unknown): message is SidecarRequest {
   if (!message || typeof message !== 'object') {
     return false
   }
+
   const record = message as Record<string, unknown>
+
   return (
     typeof record.id === 'number' &&
     typeof record.method === 'string' &&
@@ -119,6 +138,7 @@ function errorToResponse(error: unknown): { code: string; message: string } {
   ) {
     return { code: (error as { code: string }).code, message: error.message }
   }
+
   return {
     code: 'accessibility_error',
     message: error instanceof Error ? error.message : String(error)

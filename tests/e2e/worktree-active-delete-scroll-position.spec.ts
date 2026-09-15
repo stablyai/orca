@@ -3,9 +3,13 @@ import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
 const TARGET_INDEX = 24
+
 const SYNTHETIC_COUNT = 40
+
 const VISUAL_PROOF_PAUSE_MS = 1_200
+
 const POST_REMOVAL_SAMPLE_FRAMES = 20
+
 const MAX_REMOVAL_WAIT_FRAMES = 300
 
 test.use({ minimumSeededWorktreeCount: 1 })
@@ -31,21 +35,27 @@ async function seedActiveDeletionRows(page: Page): Promise<{
   return page.evaluate(
     ({ count, targetIndex }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const repo = state.repos[0]
+
       const source = repo
         ? state.worktreesByRepo[repo.id]?.find((worktree) => worktree.isMainWorktree)
         : null
+
       if (!repo || !source || !state.settings) {
         throw new Error('Expected a seeded e2e worktree and hydrated settings')
       }
 
       const now = Date.now()
+
       const worktrees = Array.from({ length: count }, (_, index) => {
         const suffix = String(index).padStart(2, '0')
+
         return {
           ...source,
           id: `${repo.id}::active-delete-${suffix}`,
@@ -64,12 +74,15 @@ async function seedActiveDeletionRows(page: Page): Promise<{
           lineage: null
         }
       })
+
       const target = worktrees[targetIndex]
       const below = worktrees[targetIndex + 1]
       const successor = worktrees[0]
+
       if (!target || !below || !successor) {
         throw new Error('Synthetic worktree fixture is too small')
       }
+
       const targetId = target.id
       const belowId = below.id
       const successorId = successor.id
@@ -119,9 +132,11 @@ async function seedActiveDeletionRows(page: Page): Promise<{
               )
             }
           }))
+
           return { ok: true }
         }
       })
+
       return { belowId, successorId, targetId }
     },
     { count: SYNTHETIC_COUNT, targetIndex: TARGET_INDEX }
@@ -132,12 +147,14 @@ async function prepareScrolledActiveRow(page: Page, targetId: string): Promise<v
   const target = page.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
   )
+
   const scroller = page.locator('[data-worktree-sidebar]')
   await expect
     .poll(async () => {
       if ((await target.count()) > 0) {
         return true
       }
+
       await scroller.evaluate((element) => {
         element.scrollTop = Math.min(
           element.scrollHeight,
@@ -145,15 +162,18 @@ async function prepareScrolledActiveRow(page: Page, targetId: string): Promise<v
         )
         element.dispatchEvent(new Event('scroll', { bubbles: true }))
       })
+
       return false
     })
     .toBe(true)
   await target.evaluate((element) => element.scrollIntoView({ block: 'center' }))
   await target.evaluate((element) => {
     const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')
+
     if (!scroller) {
       throw new Error('Worktree sidebar is unavailable')
     }
+
     const targetOffset = element.getBoundingClientRect().top - scroller.getBoundingClientRect().top
     scroller.scrollTop += targetOffset - 160
     scroller.dispatchEvent(new Event('scroll', { bubbles: true }))
@@ -172,14 +192,17 @@ async function startRowRemovalSampling(
       const sample = async (): Promise<RowRemovalFrame[]> => {
         const readFrame = (): RowRemovalFrame => {
           const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+
           const below = document.querySelector<HTMLElement>(
             `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(belowId)}]`
           )
+
           const targetExists = Boolean(
             document.querySelector(
               `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
             )
           )
+
           return {
             animationCount:
               below?.closest('[data-worktree-virtual-row]')?.firstElementChild?.getAnimations()
@@ -189,19 +212,24 @@ async function startRowRemovalSampling(
             targetExists
           }
         }
+
         const frames: RowRemovalFrame[] = [readFrame()]
         let framesAfterRemoval = 0
+
         for (let index = 0; index < maxRemovalWaitFrames + postRemovalSampleFrames; index += 1) {
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           const frame = readFrame()
           frames.push(frame)
           framesAfterRemoval = frame.targetExists ? 0 : framesAfterRemoval + 1
+
           if (framesAfterRemoval >= postRemovalSampleFrames) {
             break
           }
         }
+
         return frames
       }
+
       Reflect.set(window, '__activeDeleteRowRemovalFrames', sample())
     },
     {
@@ -216,9 +244,11 @@ async function startRowRemovalSampling(
 async function finishRowRemovalSampling(page: Page): Promise<RowRemovalFrame[]> {
   return page.evaluate(async () => {
     const pending = Reflect.get(window, '__activeDeleteRowRemovalFrames')
+
     if (!(pending instanceof Promise)) {
       throw new Error('Row removal sampling was not started')
     }
+
     return pending
   })
 }
@@ -230,12 +260,15 @@ test('deleting the active scrolled worktree preserves position and closes the ro
   await orcaPage.setViewportSize({ width: 1_200, height: 800 })
   const { belowId, successorId, targetId } = await seedActiveDeletionRows(orcaPage)
   await prepareScrolledActiveRow(orcaPage, targetId)
+
   const target = orcaPage.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
   )
+
   const below = orcaPage.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(belowId)}]`
   )
+
   await pauseForVisualProof(orcaPage)
   const contextMenuScope = target.locator('[data-worktree-context-menu-scope="worktree"]')
   await expect(contextMenuScope).toBeVisible()
@@ -257,6 +290,7 @@ test('deleting the active scrolled worktree preserves position and closes the ro
   const mountedTops = frames.flatMap((frame) => (frame.belowTop === null ? [] : [frame.belowTop]))
   const firstRemovedFrame = frames.findIndex((frame) => !frame.targetExists)
   const scrollTopBeforeDelete = frames[0]?.scrollTop
+
   if (scrollTopBeforeDelete === undefined) {
     throw new Error('Row removal sampler recorded no pre-delete frame')
   }
@@ -287,19 +321,25 @@ test('reduced motion removes the active row without animating its neighbor', asy
   const animationCount = await orcaPage.evaluate(
     async ({ belowId, targetId }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const repo = state.repos[0]
+
       if (!repo) {
         throw new Error('Expected a seeded e2e repo')
       }
+
       const repoId = repo.id
       const worktrees = state.worktreesByRepo[repoId]
+
       if (!worktrees) {
         throw new Error('Expected seeded e2e worktrees')
       }
+
       store.setState({
         activeWorktreeId: null,
         activeWorkspaceKey: null,
@@ -309,9 +349,11 @@ test('reduced motion removes the active row without animating its neighbor', asy
         }
       })
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
       const below = document.querySelector<HTMLElement>(
         `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(belowId)}]`
       )
+
       return (
         below?.closest('[data-worktree-virtual-row]')?.firstElementChild?.getAnimations().length ??
         0

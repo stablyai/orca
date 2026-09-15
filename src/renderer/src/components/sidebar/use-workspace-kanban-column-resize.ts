@@ -19,6 +19,7 @@ export function useWorkspaceKanbanColumnResize(
   const [columnWidth, setColumnWidth] = useState(() =>
     clampWorkspaceBoardColumnWidth(committedWidth)
   )
+
   const [isResizingColumn, setIsResizingColumn] = useState(false)
   const nextCommittedWidth = clampWorkspaceBoardColumnWidth(committedWidth)
   const committedWidthRef = useRef(nextCommittedWidth)
@@ -30,10 +31,13 @@ export function useWorkspaceKanbanColumnResize(
   const frameRef = useRef<number | null>(null)
 
   commitWidthRef.current = onCommitWidth
+
   if (committedWidthRef.current !== nextCommittedWidth) {
     committedWidthRef.current = nextCommittedWidth
+
     if (!resizingRef.current) {
       draftWidthRef.current = nextCommittedWidth
+
       if (columnWidth !== nextCommittedWidth) {
         // Why: external width changes should be reflected before children
         // render; during active drag the local draft remains authoritative.
@@ -49,13 +53,17 @@ export function useWorkspaceKanbanColumnResize(
 
   const publishDraftWidth = useCallback((width: number) => {
     const nextWidth = clampWorkspaceBoardColumnWidth(width)
+
     if (nextWidth === draftWidthRef.current) {
       return
     }
+
     draftWidthRef.current = nextWidth
+
     if (frameRef.current !== null) {
       return
     }
+
     frameRef.current = window.requestAnimationFrame(() => {
       frameRef.current = null
       setColumnWidth(draftWidthRef.current)
@@ -65,6 +73,7 @@ export function useWorkspaceKanbanColumnResize(
   const commitDraftWidth = useCallback(() => {
     const nextWidth = clampWorkspaceBoardColumnWidth(draftWidthRef.current)
     setColumnWidth(nextWidth)
+
     if (nextWidth !== committedWidthRef.current) {
       committedWidthRef.current = nextWidth
       commitWidthRef.current(nextWidth)
@@ -75,12 +84,15 @@ export function useWorkspaceKanbanColumnResize(
     if (!resizingRef.current) {
       return
     }
+
     resizingRef.current = false
     setIsResizingColumn(false)
+
     if (frameRef.current !== null) {
       cancelAnimationFrame(frameRef.current)
       frameRef.current = null
     }
+
     resetDocumentStyles()
     commitDraftWidth()
   }, [commitDraftWidth, resetDocumentStyles])
@@ -90,6 +102,7 @@ export function useWorkspaceKanbanColumnResize(
       if (!resizingRef.current) {
         return
       }
+
       publishDraftWidth(startWidthRef.current + event.clientX - startXRef.current)
     },
     [publishDraftWidth]
@@ -106,10 +119,12 @@ export function useWorkspaceKanbanColumnResize(
       window.removeEventListener('pointerup', stopResize)
       window.removeEventListener('pointercancel', stopResize)
       window.removeEventListener('blur', stopResize)
+
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current)
         frameRef.current = null
       }
+
       resizingRef.current = false
       resetDocumentStyles()
     }
@@ -119,6 +134,7 @@ export function useWorkspaceKanbanColumnResize(
     if (event.button !== 0) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     resizingRef.current = true
@@ -134,15 +150,18 @@ export function useWorkspaceKanbanColumnResize(
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       const direction = event.key === 'ArrowRight' ? 1 : -1
       const step = WORKSPACE_BOARD_COLUMN_WIDTH_STEP * (event.shiftKey ? 2 : 1)
       publishDraftWidth(draftWidthRef.current + direction * step)
+
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current)
         frameRef.current = null
       }
+
       commitDraftWidth()
     },
     [commitDraftWidth, publishDraftWidth]

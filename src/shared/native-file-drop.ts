@@ -3,6 +3,7 @@ import { measureClipboardTextByteLength } from './clipboard-text'
 export const ORCA_INTERNAL_FILE_DRAG_TYPE = 'text/x-orca-file-path'
 
 export const NATIVE_FILE_DROP_MAX_PATHS = 256
+
 export const NATIVE_FILE_DROP_MAX_PATH_BYTES = 256 * 1024
 
 export const NATIVE_FILE_DROP_TARGET = {
@@ -103,6 +104,7 @@ export function hasNativeFileDragTypes(
   types: Iterable<string> | ArrayLike<string> | null | undefined
 ): boolean {
   const values = getDataTransferTypes(types)
+
   return values.includes('Files') && !values.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)
 }
 
@@ -118,20 +120,25 @@ export function resolveNativeFileDropPath(
     terminalPaneLeafId ??= entry.terminalPaneLeafId
     composerScopeKey ??= entry.composerScopeKey
     const target = entry.nativeFileDropTarget
+
     if (target === NATIVE_FILE_DROP_TARGET.terminal) {
       return { target, tabId: entry.terminalTabId, paneLeafId: terminalPaneLeafId }
     }
+
     if (target === NATIVE_FILE_DROP_TARGET.composer) {
       // Composer drops fan out window-wide, so carry the receiving composer's
       // scope key the way a terminal drop carries its pane leaf id.
       return { target, ...(composerScopeKey ? { scopeKey: composerScopeKey } : {}) }
     }
+
     if (target === NATIVE_FILE_DROP_TARGET.editor) {
       return { target }
     }
+
     if (target === NATIVE_FILE_DROP_TARGET.projectSidebar) {
       return { target }
     }
+
     if (target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
       foundExplorer = true
     }
@@ -146,6 +153,7 @@ export function resolveNativeFileDropPath(
     if (!destinationDir) {
       return { target: 'rejected' }
     }
+
     return { target: NATIVE_FILE_DROP_TARGET.fileExplorer, destinationDir }
   }
 
@@ -161,6 +169,7 @@ export function validateNativeFileDropPaths(
 ): NativeFileDropPathValidation {
   const pathCount = paths.length
   const maxPaths = options.maxPaths ?? NATIVE_FILE_DROP_MAX_PATHS
+
   if (pathCount > maxPaths) {
     return {
       byteLength: 0,
@@ -172,11 +181,14 @@ export function validateNativeFileDropPaths(
 
   const maxPathBytes = options.maxPathBytes ?? NATIVE_FILE_DROP_MAX_PATH_BYTES
   let byteLength = 0
+
   for (const path of paths) {
     const measurement = measureClipboardTextByteLength(path, {
       stopAfterBytes: maxPathBytes - byteLength
     })
+
     byteLength += measurement.byteLength
+
     if (byteLength > maxPathBytes) {
       return {
         byteLength,
@@ -206,6 +218,7 @@ export function createNativeFileDropPayload(
   paths: readonly string[]
 ): NativeFileDropPayload | null {
   const validation = validateNativeFileDropPaths(paths)
+
   if (validation.status === 'rejected') {
     return createRejectedNativeFileDropPayload(validation)
   }
@@ -231,6 +244,7 @@ export function createNativeFileDropPayload(
   }
 
   const target = resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor
+
   if (resolution?.target === NATIVE_FILE_DROP_TARGET.terminal) {
     return {
       paths: [...paths],
@@ -247,8 +261,10 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const payload = value as Record<string, unknown>
   const { target } = payload
+
   if (!isNativeFileDropTarget(target)) {
     return false
   }
@@ -264,6 +280,7 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
   if (!isNativeFileDropPathList(payload.paths)) {
     return false
   }
+
   if (validateNativeFileDropPaths(payload.paths).status !== 'accepted') {
     return false
   }
@@ -274,9 +291,11 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
       isOptionalNativeFileDropString(payload.paneLeafId)
     )
   }
+
   if (target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
     return typeof payload.destinationDir === 'string'
   }
+
   if (target === NATIVE_FILE_DROP_TARGET.composer) {
     return isOptionalNativeFileDropString(payload.scopeKey)
   }

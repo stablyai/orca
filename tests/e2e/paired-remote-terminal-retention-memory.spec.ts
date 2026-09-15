@@ -10,19 +10,25 @@ test('ordinary-parks paired terminals and restores authoritative host scrollback
   orcaPage
 }) => {
   test.setTimeout(240_000)
+
   const seed = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
     const worktrees = state?.allWorktrees() ?? []
     const active = worktrees.find((worktree) => worktree.id === state?.activeWorktreeId)
+
     if (!active) {
       throw new Error('Paired retention host has no active seeded worktree')
     }
+
     return { activeWorktreeId: active.id, repoId: active.repoId }
   })
+
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+
   const client = await launchPairedWebClient(electronApp, offer, {
     terminalParkingDelayMs: 100
   })
+
   try {
     await runPairedTerminalParkingOracle(
       client.page,

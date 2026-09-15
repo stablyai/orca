@@ -25,6 +25,7 @@ async function createGitRepo(): Promise<string> {
   writeFileSync(path.join(repoPath, 'README.md'), '# golden-fresh-project\n')
   execFileSync('git', ['add', 'README.md'], { cwd: repoPath })
   execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath })
+
   return repoPath
 }
 
@@ -43,9 +44,11 @@ async function stubFolderPicker(
 
 async function selectCodexAndSkipToProject(page: Page): Promise<void> {
   const codexButton = page.getByRole('button', { name: /^Codex\s/ }).first()
+
   if (!(await codexButton.isVisible())) {
     await page.getByText(/Show \d+ more agents/).click()
   }
+
   await codexButton.click()
   const footer = page.locator('footer').filter({ has: page.getByRole('button', { name: /Skip/i }) })
   await footer.getByRole('button', { name: /^Skip to project setup$/i }).click()

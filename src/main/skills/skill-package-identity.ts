@@ -31,6 +31,7 @@ export function observedSkillPackagesMatch(
     left.files.length === right.files.length &&
     left.files.every((file, index) => {
       const other = right.files[index]
+
       return (
         file.path === other.path &&
         file.size === other.size &&
@@ -59,6 +60,7 @@ const OS_METADATA_FILE_NAMES = new Set(['.ds_store', 'thumbs.db', 'ehthumbs.db',
 
 export function isOsMetadataSkillEntryName(name: string): boolean {
   const folded = name.toLocaleLowerCase('en-US')
+
   // AppleDouble sidecars ('._SKILL.md') appear whenever a skill is copied through a
   // filesystem that cannot hold macOS metadata inline.
   return OS_METADATA_FILE_NAMES.has(folded) || folded.startsWith('._')
@@ -87,29 +89,39 @@ async function readBoundedSkillFile(
   signal?: AbortSignal
 ): Promise<Buffer> {
   const handle = await open(path, 'r')
+
   try {
     const before = await handle.stat()
+
     if (before.size > maximumSingleFileBytes) {
       throw new Error('skill-package-file-size-limit')
     }
+
     if (before.size > remainingTotalBytes) {
       throw new Error('skill-package-total-size-limit')
     }
+
     const bytes = Buffer.alloc(before.size)
     let offset = 0
+
     while (offset < bytes.length) {
       if (signal?.aborted) {
         throw new Error('skill-install-cancelled')
       }
+
       const result = await handle.read(bytes, offset, bytes.length - offset, offset)
+
       if (result.bytesRead === 0) {
         throw new Error('skill-package-changed-during-read')
       }
+
       offset += result.bytesRead
     }
+
     if ((await handle.stat()).size !== before.size) {
       throw new Error('skill-package-changed-during-read')
     }
+
     return bytes
   } finally {
     await handle.close()
@@ -126,6 +138,7 @@ function compareCodeUnits(left: string, right: string): number {
 
 function normalizedText(bytes: Buffer): Buffer {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+
   return Buffer.from(text.replace(/\r\n/g, '\n').replace(/\r/g, '\n'), 'utf8')
 }
 
@@ -135,6 +148,7 @@ export function describeObservedSkillFile(
   executable: boolean
 ): ObservedSkillFile {
   let normalized: Buffer | null = null
+
   if (!bytes.includes(0)) {
     try {
       normalized = normalizedText(bytes)
@@ -142,9 +156,12 @@ export function describeObservedSkillFile(
       normalized = null
     }
   }
+
   const exactSha256 = sha256(bytes)
+
   const textNormalizedSha256 =
     normalized && (normalized.equals(bytes) ? exactSha256 : sha256(normalized))
+
   return {
     path,
     size: bytes.length,
@@ -183,6 +200,7 @@ function matchesFileIdentity(
   ) {
     return false
   }
+
   return expected.classification === 'text' && !expected.executable
     ? actual.textNormalizedSha256 === expected.textNormalizedSha256
     : actual.exactSha256 === expected.exactSha256
@@ -199,10 +217,12 @@ export async function observeSkillPackage(
   const files: ObservedSkillFile[] = []
   const treeEntries: SkillGitTreeFileEntry[] = []
   const caseFoldedPaths = new Map<string, string>()
+
   const normalizedExecutablePaths =
     platform === 'win32' && executablePaths
       ? new Set([...executablePaths].map((path) => path.toLocaleLowerCase('en-US')))
       : executablePaths
+
   let entryCount = 0
   let totalBytes = 0
 
@@ -210,31 +230,41 @@ export async function observeSkillPackage(
     if (signal?.aborted) {
       throw new Error('skill-install-cancelled')
     }
+
     const directoryHandle = await opendir(directory)
     const entries: Dirent[] = []
+
     try {
       for (;;) {
         const entry = await directoryHandle.read()
+
         if (!entry) {
           break
         }
+
         entryCount += 1
+
         if (entryCount > limits.maximumEntries) {
           throw new Error('skill-package-entry-limit')
         }
+
         entries.push(entry)
       }
     } finally {
       await directoryHandle.close().catch(() => undefined)
     }
+
     // Why: runtime Electron and the build's Node may carry different ICU data;
     // identity order must match the generator without locale-sensitive collation.
     entries.sort((left, right) => compareCodeUnits(left.name, right.name))
+
     for (const entry of entries) {
       if (signal?.aborted) {
         throw new Error('skill-install-cancelled')
       }
+
       const absolutePath = join(directory, entry.name)
+
       // Only a plain file is OS-authored, so the type decides and not the name alone: a
       // directory or link wearing the name would otherwise hide a subtree from identity and
       // slip past the link and special-file guards below. Decided before the case-fold map
@@ -242,11 +272,14 @@ export async function observeSkillPackage(
       // an unreadable sidecar cannot fail the whole package.
       if (isOsMetadataSkillEntryName(entry.name)) {
         const sidecarStat = await lstat(absolutePath).catch(() => null)
+
         if (!sidecarStat || sidecarStat.isFile()) {
           continue
         }
       }
+
       const relativePath = relative(packageRoot, absolutePath)
+
       if (
         isAbsolute(relativePath) ||
         relativePath === '..' ||
@@ -254,41 +287,52 @@ export async function observeSkillPackage(
       ) {
         throw new Error('skill-path-escape')
       }
+
       const manifestPath = relativePath.split(sep).join('/')
       const folded = manifestPath.toLocaleLowerCase('en-US')
       const collision = caseFoldedPaths.get(folded)
+
       if (collision && collision !== manifestPath) {
         throw new Error('skill-case-collision')
       }
+
       caseFoldedPaths.set(folded, manifestPath)
       const fileStat = await lstat(absolutePath)
+
       if (fileStat.isSymbolicLink()) {
         throw new Error('skill-package-link')
       }
+
       if (fileStat.isDirectory()) {
         if (depth >= limits.maximumDepth) {
           throw new Error('skill-package-depth-limit')
         }
+
         await visit(absolutePath, depth + 1)
       } else if (fileStat.isFile()) {
         if (fileStat.nlink !== 1) {
           throw new Error('skill-package-link')
         }
+
         if (files.length >= limits.maximumFiles) {
           throw new Error('skill-package-file-count-limit')
         }
+
         const bytes = await readBoundedSkillFile(
           absolutePath,
           limits.maximumTotalBytes - totalBytes,
           limits.maximumSingleFileBytes,
           signal
         )
+
         totalBytes += bytes.length
+
         const executable = normalizedExecutablePaths
           ? normalizedExecutablePaths.has(platform === 'win32' ? folded : manifestPath)
           : platform === 'win32' && inferShebangExecutables
             ? bytes.subarray(0, 2).equals(Buffer.from('#!'))
             : (fileStat.mode & 0o111) !== 0
+
         files.push(describeObservedSkillFile(manifestPath, bytes, executable))
         treeEntries.push({ path: manifestPath, executable, blobSha: gitBlobSha(bytes) })
       } else {
@@ -298,6 +342,7 @@ export async function observeSkillPackage(
   }
 
   await visit(packageRoot, 0)
+
   return {
     files,
     observedDigest: skillPackageDigest(files),
@@ -326,25 +371,32 @@ export function matchingKnownSnapshot(
   officialPaths: ReadonlySet<string>
 ): SkillKnownSnapshot | null {
   const observedByPath = new Map(observed.files.map((file) => [file.path, file]))
+
   for (let index = snapshots.length - 1; index >= 0; index -= 1) {
     const snapshot = snapshots[index]
+
     if (!snapshot) {
       continue
     }
+
     const listed = new Set(snapshot.files.map((file) => file.path))
+
     const launders = observed.files.some(
       (file) => !listed.has(file.path) && officialPaths.has(file.path)
     )
+
     if (
       !launders &&
       snapshot.files.every((expected) => {
         const actual = observedByPath.get(expected.path)
+
         return Boolean(actual && matchesFileIdentity(actual, expected))
       })
     ) {
       return snapshot
     }
   }
+
   return null
 }
 
@@ -372,6 +424,7 @@ export function officialPathsGitTreeSha(
   officialPaths: ReadonlySet<string>
 ): string {
   const scoped = observed.treeEntries.filter((entry) => officialPaths.has(entry.path))
+
   return scoped.length === 0 || scoped.length === observed.treeEntries.length
     ? observed.observedGitTreeSha
     : skillPackageGitTreeSha(scoped)

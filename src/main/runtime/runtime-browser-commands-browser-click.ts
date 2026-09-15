@@ -30,9 +30,11 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     const result = await bridge.click(params.element, target.worktreeId, target.browserPageId)
     // Why: clicks can trigger navigation, so push the tab's live URL/title to the renderer even when automation targeted a non-active page.
     const page = bridge.getPageInfo(target.worktreeId, target.browserPageId)
+
     if (page) {
       this.notifyRendererNavigation(page.browserPageId, page.url, page.title)
     }
+
     return result
   }
 
@@ -43,12 +45,15 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     const bridge = this.requireAgentBrowserBridge()
     const result = await bridge.goto(params.url, target.worktreeId, target.browserPageId)
     const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
+
     if (pageId) {
       this.notifyRendererNavigation(pageId, result.url, result.title)
     }
+
     if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
       this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
     }
+
     return result
   }
 
@@ -59,6 +64,7 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserFillResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().fill(
       params.element,
       params.value,
@@ -71,6 +77,7 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     params: { input: string } & BrowserCommandTargetParams
   ): Promise<BrowserTypeResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().type(
       params.input,
       target.worktreeId,
@@ -85,6 +92,7 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserSelectResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().select(
       params.element,
       params.value,
@@ -97,6 +105,7 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     params: { direction: 'up' | 'down'; amount?: number } & BrowserCommandTargetParams
   ): Promise<BrowserScrollResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().scroll(
       params.direction,
       params.amount,
@@ -110,9 +119,11 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     const bridge = this.requireAgentBrowserBridge()
     const result = await bridge.back(target.worktreeId, target.browserPageId)
     const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
+
     if (pageId) {
       this.notifyRendererNavigation(pageId, result.url, result.title)
     }
+
     return result
   }
 
@@ -121,9 +132,11 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     const bridge = this.requireAgentBrowserBridge()
     const result = await bridge.reload(target.worktreeId, target.browserPageId)
     const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
+
     if (pageId) {
       this.notifyRendererNavigation(pageId, result.url, result.title)
     }
+
     return result
   }
 
@@ -133,6 +146,7 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserScreenshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().screenshot(
       params.format,
       target.worktreeId,
@@ -148,25 +162,33 @@ export class RuntimeBrowserCommandsWithBrowserClick extends RuntimeBrowserComman
     session: BrowserScreencastSession
   ): void {
     const subscriber = active.subscribers.get(subscriptionId)
+
     if (!subscriber) {
       return
     }
+
     active.subscribers.delete(subscriptionId)
     subscriber.resolveDone()
+
     if (active.viewportOwnerSubscriptionId === subscriptionId) {
       const fallback = Array.from(active.subscribers.entries()).findLast(([, candidate]) =>
         hasScreencastViewportSize(candidate.viewport)
       )
+
       active.viewportOwnerSubscriptionId = fallback?.[0] ?? null
+
       if (fallback) {
         void session.updateViewport(fallback[1].viewport).catch(() => {})
       }
     }
+
     if (active.subscribers.size === 0) {
       active.stopping = true
       session.stop()
+
       return
     }
+
     // Why: a departed subscriber's caps would otherwise pin the shared stream for
     // the rest of its life, long after the client that asked for them is gone.
     void applySharedScreencastFrameBudget(active, session).catch(() => {})

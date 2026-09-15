@@ -40,9 +40,12 @@ export function useTerminalContextMenuTrigger({
       if (Date.now() - menuOpenedAtRef.current < 100) {
         return
       }
+
       setOpen(false)
     }
+
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
@@ -54,23 +57,29 @@ export function useTerminalContextMenuTrigger({
     event.preventDefault()
     window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
     const manager = managerRef.current
+
     if (!manager) {
       contextPaneIdRef.current = null
+
       return
     }
+
     const clickedPane =
       clickedPaneId !== null
         ? (manager.getPanes().find((pane) => pane.id === clickedPaneId) ?? null)
         : null
+
     contextPaneIdRef.current = clickedPane?.id ?? null
 
     // Why: when users opt into terminal-style right-click, a selection copies
     // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
+
       if (!clickedPane) {
         return
       }
+
       if (clickedPane.terminal.getSelection()) {
         void copyTerminalSelection({
           terminal: clickedPane.terminal,
@@ -82,6 +91,7 @@ export function useTerminalContextMenuTrigger({
       } else {
         void pasteResolvedPane('right-click')
       }
+
       return
     }
 
@@ -93,27 +103,36 @@ export function useTerminalContextMenuTrigger({
 
   const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     const manager = managerRef.current
+
     if (!manager) {
       event.preventDefault()
       contextPaneIdRef.current = null
+
       return
     }
+
     const target = event.target
+
     if (!(target instanceof Node)) {
       event.preventDefault()
       contextPaneIdRef.current = null
+
       return
     }
+
     const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
     openContextMenu(event, clickedPane?.id ?? null, event.currentTarget)
   }
 
   const onPaneTitleContextMenu = (event: React.MouseEvent<HTMLElement>, paneId: number): void => {
     const boundsElement = containerRef.current
+
     if (!boundsElement) {
       event.preventDefault()
+
       return
     }
+
     openContextMenu(event, paneId, boundsElement)
   }
 

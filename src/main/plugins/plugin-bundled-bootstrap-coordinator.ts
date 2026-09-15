@@ -25,6 +25,7 @@ export class PluginBundledBootstrapCoordinator {
       () => undefined,
       () => undefined
     )
+
     return run
   }
 
@@ -32,6 +33,7 @@ export class PluginBundledBootstrapCoordinator {
     if (!this.options.isEnabled()) {
       return null
     }
+
     const result = await (this.options.bootstrap ?? bootstrapBundledPlugins)({
       root: this.options.root,
       userDataPath: this.options.userDataPath,
@@ -40,9 +42,11 @@ export class PluginBundledBootstrapCoordinator {
         ? { blockedPluginReason: this.options.blockedPluginReason }
         : {})
     })
+
     if (result.installed.length > 0) {
       await this.options.refreshPlugins()
     }
+
     return result
   }
 }

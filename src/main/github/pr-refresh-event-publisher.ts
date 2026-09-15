@@ -30,6 +30,7 @@ export class PRRefreshEventPublisher {
 
   nextSequence(): number {
     this.sequence += 1
+
     return this.sequence
   }
 
@@ -38,6 +39,7 @@ export class PRRefreshEventPublisher {
       ...event,
       sequence: sequenceOverride ?? this.nextSequence()
     } as GitHubPRRefreshEvent
+
     sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
   }
 
@@ -51,6 +53,7 @@ export class PRRefreshEventPublisher {
     } else {
       this.counters[event] += 1
     }
+
     recordCoalescedCrashBreadcrumb({
       name: 'pr_refresh_queue',
       coalesceKey: `pr-refresh-queue:${event}:${reason}:${skippedReason ?? ''}`,

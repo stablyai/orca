@@ -37,6 +37,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
     const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
     const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
+
     try {
       assertAgentPromptRequestActive(options.signal)
       this.assertAgentPromptGeneration(ptyId, generation)
@@ -51,6 +52,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
+
       if (!this.ptyController?.write(ptyId, pastePayload)) {
         throw new Error('terminal_not_writable')
       }
@@ -71,27 +73,34 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         options.signal
       )
     }
+
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+
     try {
       await options.beforeWrite?.(ptyId)
     } catch (error) {
       if (options.suffixFailureError) {
         throw new Error(options.suffixFailureError)
       }
+
       throw error
     }
+
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const waitTextCache: AgentPromptWaitTextCache = {}
     const baseline = this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
+
     if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
     }
+
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
+
     if (!options.acceptQueued || !options.requestId) {
       await verifyAgentPromptSubmission({
         baseline,
@@ -99,16 +108,20 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         timeoutMs: effectTimeoutMs,
         signal: options.signal
       })
+
       return { submits: 1 }
     }
+
     const binding = this.getTerminalPromptRequestBinding(handle)
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
     const launchAgent = this.ptysById.get(ptyId)?.launchAgent
+
     const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
       ? foregroundAgent
       : isTerminalSendSettlementAgent(launchAgent)
         ? launchAgent
         : null
+
     const inputAccepted: RuntimeTerminalPromptDelivery = {
       requestId: options.requestId,
       stages: ['input_accepted'],
@@ -120,19 +133,23 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
       baselinePermissionSequence: baseline.permissionSequence
     }
+
     const checkpoint: RuntimeTerminalSend = {
       handle,
       accepted: true,
       bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
       prompt: inputAccepted
     }
+
     options.onInputAccepted?.(checkpoint)
+
     // Providers without a lifecycle verifier still get an honest accepted
     // receipt; they must not fail a Dispatch merely because Orca cannot prove
     // submission through hooks.
     if (!settlementAgent) {
       return { submits: 1, prompt: inputAccepted }
     }
+
     this.registerAgentPromptRequest(
       ptyId,
       generation,
@@ -140,6 +157,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       baseline.workingSequence,
       baseline.explicitWorkingStartedAt
     )
+
     try {
       await verifyAgentPromptSubmission({
         baseline,
@@ -158,6 +176,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
       })
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
+
       return {
         submits: 1,
         prompt: {
@@ -169,13 +188,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
         return { submits: 1, prompt: inputAccepted }
       }
+
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
+
         return {
           submits: 1,
           prompt: { ...inputAccepted, observation: 'permission' }
         }
       }
+
       throw error
     }
   }

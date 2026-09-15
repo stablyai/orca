@@ -19,6 +19,7 @@ export {
   isClaudeManagementTitle,
   getAgentLabel
 } from '../../../shared/agent-detection'
+
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { classifyTitleActivity, resolveTitleActivityLabel } from './pane-agent-evidence'
 
@@ -55,6 +56,7 @@ export function getWorkingAgentsPerWorktree({
     if (!validIds.has(worktreeId)) {
       continue
     }
+
     const agents: WorkingAgentEntry[] = []
 
     for (const tab of tabs) {
@@ -62,11 +64,14 @@ export function getWorkingAgentsPerWorktree({
       if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
         continue
       }
+
       const paneTitles = runtimePaneTitlesByTabId[tab.id]
+
       if (paneTitles && Object.keys(paneTitles).length > 0) {
         for (const [paneIdStr, title] of Object.entries(paneTitles)) {
           if (classifyTitleActivity(title) === 'working') {
             const label = resolveTitleActivityLabel(title)
+
             if (label) {
               agents.push({
                 label,
@@ -79,6 +84,7 @@ export function getWorkingAgentsPerWorktree({
         }
       } else if (classifyTitleActivity(tab.title) === 'working') {
         const label = resolveTitleActivityLabel(tab.title)
+
         if (label) {
           agents.push({ label, status: 'working', tabId: tab.id, paneId: null })
         }
@@ -141,12 +147,14 @@ export function agentTypeToIconAgent(agentType: AgentType | null | undefined): T
   if (!agentType || agentType === 'unknown') {
     return null
   }
+
   return Object.hasOwn(ICONABLE_AGENT_TYPES, agentType) ? (agentType as TuiAgent) : null
 }
 
 // Why: shared resolver so all send paths stamp identical agent_kind on agent_prompt_sent telemetry.
 export function agentKindForAgentType(agentType: AgentType | null | undefined): AgentKind {
   const tuiAgent = agentTypeToIconAgent(agentType)
+
   return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
 }
 
@@ -189,6 +197,7 @@ export function countWorkingAgents({
     if (!validIds.has(worktreeId)) {
       continue
     }
+
     for (const tab of tabs) {
       count += countWorkingAgentsForTab(tab, runtimePaneTitlesByTabId, ptyIdsByTabId)
     }
@@ -199,11 +208,13 @@ export function countWorkingAgents({
 
 function collectWorktreeIds(worktreesByRepo: Record<string, Worktree[]>): Set<string> {
   const ids = new Set<string>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const wt of worktrees) {
       ids.add(wt.id)
     }
   }
+
   return ids
 }
 
@@ -216,8 +227,10 @@ function countWorkingAgentsForTab(
   if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
     return 0
   }
+
   let count = 0
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
+
   // Why: split-pane tabs host multiple agents; the tab title only shows the last pane update, so prefer pane titles when mounted.
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     for (const title of Object.values(paneTitles)) {
@@ -225,10 +238,13 @@ function countWorkingAgentsForTab(
         count += 1
       }
     }
+
     return count
   }
+
   if (classifyTitleActivity(tab.title) === 'working') {
     count += 1
   }
+
   return count
 }

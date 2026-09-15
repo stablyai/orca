@@ -111,6 +111,7 @@ describe('workspace source policy', () => {
       title: 'Self hosted',
       url: 'https://gitlab.example.com/g/p/-/work_items/7'
     }
+
     expect(getWorkspaceSourceProvider(legacyGitLab)).toBe('gitlab')
     expect(buildWorkspaceSourceSelection({ linkedWorkItem: legacyGitLab })).toMatchObject({
       kind: 'gitlab-issue',

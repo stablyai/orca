@@ -17,16 +17,20 @@ export function deliverPluginEvent(options: {
   logWarning: (pluginKey: string, line: string) => void
 }): void {
   const projected = options.eventBus.projectPayload(options.event, options.payload)
+
   if (!projected.ok) {
     return
   }
+
   for (const plugin of options.plugins) {
     if (isInvalidDiscoveredPlugin(plugin) || !options.isRuntimeApproved(plugin)) {
       continue
     }
+
     const manifestSubscribed = plugin.manifest.contributes.events.some(
       (subscription) => subscription.on === options.event
     )
+
     if (manifestSubscribed && plugin.manifest.main) {
       void options.workerController
         .ensure(plugin)

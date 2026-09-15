@@ -5,6 +5,7 @@ export function useMountedRef(): MutableRefObject<boolean> {
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }

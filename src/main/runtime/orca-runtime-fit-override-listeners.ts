@@ -199,11 +199,14 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
       ) {
         return false
       }
+
       const pty = this.ptysById.get(ptyId)
+
       return pty !== undefined && pty.connectionId === null && pty.connected
     },
     attachProvider: (ptyId) => {
       const attach = this.ptyController?.attach
+
       return attach ? (async () => attach(ptyId))() : null
     }
   })

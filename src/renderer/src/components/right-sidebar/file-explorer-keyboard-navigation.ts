@@ -34,6 +34,7 @@ export function resolveFileExplorerNavigationTarget(args: {
   isExpanded: (path: string) => boolean
 }): ResolvedNavigation {
   const { key, currentIndex, rowProjection, total, isExpanded } = args
+
   if (total === 0) {
     return { type: 'no-op' }
   }
@@ -42,9 +43,11 @@ export function resolveFileExplorerNavigationTarget(args: {
     if (key === 'ArrowDown' || key === 'End' || key === 'PageDown') {
       return { type: 'move', targetIndex: 0 }
     }
+
     if (key === 'ArrowUp' || key === 'Home' || key === 'PageUp') {
       return { type: 'move', targetIndex: total - 1 }
     }
+
     return { type: 'unhandled' }
   }
 
@@ -59,35 +62,49 @@ export function resolveFileExplorerNavigationTarget(args: {
       return { type: 'move', targetIndex: total - 1 }
     case 'PageDown': {
       const pageSize = Math.max(1, Math.floor(total / 10))
+
       return { type: 'move', targetIndex: Math.min(total - 1, currentIndex + pageSize) }
     }
+
     case 'PageUp': {
       const pageSize = Math.max(1, Math.floor(total / 10))
+
       return { type: 'move', targetIndex: Math.max(0, currentIndex - pageSize) }
     }
+
     case 'ArrowRight': {
       const node = rowProjection.getRowAtIndex(currentIndex)
+
       if (!node || !node.isDirectory) {
         return { type: 'move', targetIndex: currentIndex }
       }
+
       if (!isExpanded(node.path)) {
         return { type: 'toggle-expand', currentIndex, dirPath: node.path }
       }
+
       const firstChild = rowProjection.getFirstChildIndex(currentIndex)
+
       return { type: 'move', targetIndex: firstChild ?? currentIndex }
     }
+
     case 'ArrowLeft': {
       const node = rowProjection.getRowAtIndex(currentIndex)
+
       if (!node) {
         return { type: 'no-op' }
       }
+
       if (node.isDirectory && isExpanded(node.path)) {
         return { type: 'toggle-collapse', currentIndex, dirPath: node.path }
       }
+
       const parent = rowProjection.getParentIndex(currentIndex)
+
       if (parent === null) {
         return { type: 'no-op' }
       }
+
       return { type: 'move', targetIndex: parent }
     }
   }
@@ -134,9 +151,11 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
   if (e.altKey || e.metaKey || e.ctrlKey) {
     return false
   }
+
   if (!isNavigationKey(e.key)) {
     return false
   }
+
   const total = ctx.rowProjection.getVisibleCount()
   const focusedIndex = ctx.findFocusedIndex()
   const activePath = ctx.selectedNode?.path ?? null
@@ -158,15 +177,18 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
   if (resolved.type === 'toggle-expand' || resolved.type === 'toggle-collapse') {
     e.preventDefault()
     e.stopPropagation()
+
     // Why: callers can disable directory toggles for projected or transient trees
     // where mutating persisted expansion state would be misleading.
     if (ctx.activeWorktreeId && ctx.canToggleDirectories !== false) {
       ctx.handlers.toggleDir(ctx.activeWorktreeId, resolved.dirPath)
     }
+
     return true
   }
 
   const targetNode = ctx.rowProjection.getRowAtIndex(resolved.targetIndex)
+
   if (!targetNode) {
     return false
   }
@@ -187,5 +209,6 @@ export function applyFileExplorerNavigation(ctx: NavigationContext, e: KeyboardE
     ctx.handlers.focusRowAtIndex(resolved.targetIndex)
     ctx.handlers.scrollToIndex(resolved.targetIndex)
   })
+
   return true
 }

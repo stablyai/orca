@@ -31,12 +31,16 @@ import {
 // the old 5MB search cap would block common JSON/log files before Monaco's
 // large-file optimizations can handle them.
 export const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
+
 // Why: matches the local cap (src/main/ipc/filesystem.ts MAX_PREVIEWABLE_BINARY_SIZE).
 // Reads above the legacy 16MB single-frame budget go through fs.readFileStream,
 // which chunks at STREAM_CHUNK_SIZE; see docs/relay-file-stream-design.md.
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
+
 export const BINARY_PROBE_BYTES = 8192
+
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
+
 export const DEFAULT_MAX_RESULTS = 2000
 
 export const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -48,19 +52,23 @@ export const IMAGE_MIME_TYPES: Record<string, string> = {
 
 export function isBinaryBuffer(buffer: Buffer): boolean {
   const len = Math.min(buffer.length, 8192)
+
   for (let i = 0; i < len; i++) {
     if (buffer[i] === 0) {
       return true
     }
   }
+
   return false
 }
 
 export async function isBinaryFilePrefix(filePath: string): Promise<boolean> {
   const handle = await open(filePath, 'r')
+
   try {
     const probe = Buffer.alloc(BINARY_PROBE_BYTES)
     const { bytesRead } = await handle.read(probe, 0, probe.length, 0)
+
     return isBinaryBuffer(probe.subarray(0, bytesRead))
   } finally {
     await handle.close()
@@ -111,6 +119,7 @@ export function searchWithRg(
     // promise forever pending. Treat a synchronous throw as a clean
     // "no results" fallback, the same way an async 'error' event is handled.
     let child: ReturnType<typeof spawn>
+
     try {
       child = spawn('rg', rgArgs, {
         cwd: rootPath,
@@ -118,6 +127,7 @@ export function searchWithRg(
       })
     } catch {
       resolve(finalize(acc))
+
       return
     }
 
@@ -127,6 +137,7 @@ export function searchWithRg(
       if (resolved) {
         return
       }
+
       resolved = true
       lines.clear()
       clearTimeout(killTimeout)
@@ -147,6 +158,7 @@ export function searchWithRg(
       if (resolved) {
         return
       }
+
       resolved = true
       lines.clear()
       clearTimeout(killTimeout)
@@ -165,6 +177,7 @@ export function searchWithRg(
       if (launchFailureCheck) {
         return
       }
+
       launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then((unavailable) => {
         if (unavailable) {
           rejectUnavailable()
@@ -176,6 +189,7 @@ export function searchWithRg(
 
     function processLine(line: string): void {
       const verdict = ingestRgJsonLine(line, rootPath, acc, opts.maxResults)
+
       if (verdict === 'stop') {
         killSpawnedRipgrepProcess(child)
       }
@@ -191,10 +205,13 @@ export function searchWithRg(
 
     function handleError(): void {
       processErrorObserved = true
+
       if (isRipgrepUnavailableExit(child, null, null)) {
         settleLaunchFailure()
+
         return
       }
+
       resolveOnce()
     }
 
@@ -206,12 +223,16 @@ export function searchWithRg(
       ) {
         unavailableExitObserved = true
         settleLaunchFailure()
+
         return
       }
+
       const tail = lines.finish()
+
       if (tail !== null) {
         processLine(tail)
       }
+
       resolveOnce()
     }
 

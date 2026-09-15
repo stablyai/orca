@@ -79,13 +79,16 @@ export async function resolveRuntimeWorktreeCreateLineage(
     'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
     'Retry with --no-parent to create without lineage.'
   ]
+
   const notFoundMessage = (error: unknown): string =>
     error instanceof WorktreeIdRequiresFullPathError
       ? error.message
       : 'Parent selector was not found.'
+
   if (!input) {
     return { kind: 'none', warnings: [] }
   }
+
   if (
     (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) ||
     (input.parentWorkspace && input.parentWorktree)
@@ -95,13 +98,16 @@ export async function resolveRuntimeWorktreeCreateLineage(
       'Choose either one parent selector or --no-parent.'
     )
   }
+
   if (input.noParent === true) {
     return { kind: 'none', warnings: [] }
   }
+
   if (input.parentWorkspace) {
     try {
       const parent = await deps.resolveParent(input.parentWorkspace)
       const manuallySelected = input.parentWorkspaceOrigin === 'manual'
+
       return {
         kind: 'lineage',
         parent,
@@ -119,6 +125,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
       })
     }
   }
+
   if (input.parentWorktree) {
     try {
       return {
@@ -133,10 +140,12 @@ export async function resolveRuntimeWorktreeCreateLineage(
       })
     }
   }
+
   const warnings: WorktreeLineageWarning[] = []
   const candidates: WorktreeLineageCandidate[] = []
   let cwdCandidate: WorktreeLineageCandidate | null = null
   let terminalContextResolved = false
+
   if (input.envParentWorkspace) {
     try {
       candidates.push({
@@ -151,6 +160,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
       })
     }
   }
+
   if (input.orchestrationContext?.parentWorktreeId) {
     try {
       candidates.push({
@@ -161,13 +171,17 @@ export async function resolveRuntimeWorktreeCreateLineage(
       })
     } catch {}
   }
+
   const taskId = input.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
+
   if (taskId) {
     const candidate = await deps.resolveTaskCandidate(taskId)
+
     if (candidate) {
       candidates.push(candidate)
     }
   }
+
   if (input.callerTerminalHandle) {
     try {
       const caller = await deps.resolveCaller(input.callerTerminalHandle)
@@ -196,6 +210,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
       })
     }
   }
+
   if (input.cwdParentWorktree) {
     try {
       cwdCandidate = {
@@ -211,13 +226,17 @@ export async function resolveRuntimeWorktreeCreateLineage(
       })
     }
   }
+
   if (candidates.length === 0 && cwdCandidate) {
     candidates.push(cwdCandidate)
   }
+
   if (candidates.length === 0) {
     return { kind: 'none', warnings }
   }
+
   const [first] = candidates
+
   if (candidates.some((candidate) => candidate.parent.workspaceKey !== first.parent.workspaceKey)) {
     return {
       kind: 'none',
@@ -238,10 +257,12 @@ export async function resolveRuntimeWorktreeCreateLineage(
       ]
     }
   }
+
   const preferred =
     candidates.find((candidate) => candidate.source === 'env-workspace') ??
     candidates.find((candidate) => candidate.source === 'orchestration-context') ??
     first
+
   return {
     kind: 'lineage',
     parent: preferred.parent,

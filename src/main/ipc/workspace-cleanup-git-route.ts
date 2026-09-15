@@ -49,6 +49,7 @@ export function resolveWorkspaceCleanupRepoGitRoute(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): WorkspaceCleanupGitRoute {
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+
   switch (route.kind) {
     case 'local':
       return { kind: 'local', hostId: route.hostId }
@@ -70,6 +71,7 @@ export function resolveWorkspaceCleanupWorktreeGitRoute(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>
 ): WorkspaceCleanupWorktreeGitRoute {
   const hostId = getWorktreeExecutionHostId(worktree, repo)
+
   return hostId === repoRoute.hostId
     ? repoRoute
     : { kind: 'host-mismatch', hostId, listedHostId: repoRoute.hostId }

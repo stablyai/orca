@@ -33,6 +33,7 @@ vi.stubGlobal('window', {
     }
   }
 })
+
 vi.stubGlobal('URL', {
   createObjectURL: () => 'blob:clipboard-image',
   revokeObjectURL: () => {}
@@ -55,6 +56,7 @@ function createChipStore(): {
   const chips: FakeChip[] = []
   const connectionIds: (string | null | undefined)[] = []
   let counter = 0
+
   return {
     chips,
     connectionIds,
@@ -62,18 +64,22 @@ function createChipStore(): {
       counter += 1
       const id = `chip-${counter}`
       chips.push({ id, path: '', previewUrl, pending: true })
+
       return id
     },
     resolve: (id, path, connectionId) => {
       const chip = chips.find((candidate) => candidate.id === id)
+
       if (chip) {
         chip.path = path
         chip.pending = false
       }
+
       connectionIds.push(connectionId)
     },
     drop: (id) => {
       const index = chips.findIndex((candidate) => candidate.id === id)
+
       if (index !== -1) {
         chips.splice(index, 1)
       }
@@ -95,6 +101,7 @@ type ProbeArgs = {
 
 function Probe({ onReady, ...args }: ProbeArgs): null {
   onReady(useNativeChatComposerPaste({ agent: 'claude', caret: 0, setCaret: () => {}, ...args }))
+
   return null
 }
 
@@ -113,6 +120,7 @@ async function renderProbe(args: {
   const store = args.store ?? createChipStore()
   let api: HookApi | null = null
   root = createRoot(container)
+
   const render = async (disabled: boolean): Promise<void> => {
     await act(async () => {
       root?.render(
@@ -132,12 +140,15 @@ async function renderProbe(args: {
       )
     })
   }
+
   await render(args.disabled ?? false)
+
   return {
     latest: () => {
       if (!api) {
         throw new Error('Probe did not render')
       }
+
       return api
     },
     setDisabled: render
@@ -177,6 +188,7 @@ describe('useNativeChatComposerPaste', () => {
   it('does not save a clipboard image locally for a remote runtime', async () => {
     const setNotice = vi.fn()
     const store = createChipStore()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'runtime' }),
       store,
@@ -199,11 +211,13 @@ describe('useNativeChatComposerPaste', () => {
     )
     const store = createChipStore()
     const setNotice = vi.fn()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => sshOwner,
       store,
       setNotice
     })
+
     await act(async () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
@@ -218,11 +232,13 @@ describe('useNativeChatComposerPaste', () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/orca-paste-1.png')
     const store = createChipStore()
     const attachResolvedPaths = vi.fn()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => sshOwner,
       store,
       attachResolvedPaths
     })
+
     await act(async () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
@@ -242,16 +258,19 @@ describe('useNativeChatComposerPaste', () => {
 
   it('shows a pending chip before the save resolves', async () => {
     let resolveSave: (path: string) => void = () => {}
+
     mocks.saveClipboardImageAsTempFile.mockReturnValue(
       new Promise<string>((resolve) => {
         resolveSave = resolve
       })
     )
     const store = createChipStore()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'local' }),
       store
     })
+
     await act(async () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
@@ -266,6 +285,7 @@ describe('useNativeChatComposerPaste', () => {
 
   it('does not settle a local path after the attachment owner changes', async () => {
     let resolveSave: (path: string) => void = () => {}
+
     let owner: NativeChatAttachmentOwner = { kind: 'local' }
     mocks.saveClipboardImageAsTempFile.mockReturnValue(
       new Promise<string>((resolve) => {
@@ -274,6 +294,7 @@ describe('useNativeChatComposerPaste', () => {
     )
     const store = createChipStore()
     const setNotice = vi.fn()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => owner,
       store,
@@ -301,16 +322,19 @@ describe('useNativeChatComposerPaste', () => {
       height: 800
     })
     let resolveSave: (path: string) => void = () => {}
+
     mocks.saveClipboardImageAsTempFile.mockReturnValue(
       new Promise<string>((resolve) => {
         resolveSave = resolve
       })
     )
     const store = createChipStore()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'local' }),
       store
     })
+
     await act(async () => {
       probe.latest().pasteFromClipboard()
     })
@@ -328,11 +352,13 @@ describe('useNativeChatComposerPaste', () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue('C:\\Temp\\orca-paste-3.png')
     const store = createChipStore()
     const attachResolvedPaths = vi.fn()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'local' }),
       store,
       attachResolvedPaths
     })
+
     await act(async () => {
       probe.latest().pasteFromClipboard()
     })
@@ -345,11 +371,13 @@ describe('useNativeChatComposerPaste', () => {
     mocks.saveClipboardImageAsTempFile.mockRejectedValue(new Error('sftp down'))
     const insertTypedText = vi.fn()
     const setNotice = vi.fn()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => sshOwner,
       insertTypedText,
       setNotice
     })
+
     await act(async () => {
       probe.latest().pasteFromClipboard()
     })
@@ -364,11 +392,13 @@ describe('useNativeChatComposerPaste', () => {
     mocks.readClipboardText.mockResolvedValue('hello')
     const insertTypedText = vi.fn()
     const store = createChipStore()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'local' }),
       store,
       insertTypedText
     })
+
     await act(async () => {
       probe.latest().pasteFromClipboard()
     })
@@ -385,10 +415,12 @@ describe('useNativeChatComposerPaste', () => {
     mocks.saveClipboardImageAsTempFile.mockResolvedValue(null)
     mocks.readClipboardText.mockResolvedValue('hello')
     const store = createChipStore()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'local' }),
       store
     })
+
     await act(async () => {
       probe.latest().pasteFromClipboard()
     })
@@ -397,16 +429,19 @@ describe('useNativeChatComposerPaste', () => {
 
   it('suppresses the failure notice when the composer became disabled mid-save', async () => {
     let rejectSave: (error: Error) => void = () => {}
+
     mocks.saveClipboardImageAsTempFile.mockReturnValue(
       new Promise((_resolve, reject) => {
         rejectSave = reject
       })
     )
     const setNotice = vi.fn()
+
     const probe = await renderProbe({
       resolveAttachmentOwner: () => sshOwner,
       setNotice
     })
+
     await act(async () => {
       probe.latest().handlePaste(imagePasteEvent())
     })

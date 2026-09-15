@@ -8,33 +8,40 @@ import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-code
 import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
+
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
+
 const CHALLENGE_DOMAIN = 'orca-relay-host-challenge/v1'
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const output = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0))
   let offset = 0
+
   for (const part of parts) {
     output.set(part, offset)
     offset += part.byteLength
   }
+
   return output
 }
 
 function uint32(value: number): Uint8Array {
   const bytes = new Uint8Array(4)
   new DataView(bytes.buffer).setUint32(0, value, false)
+
   return bytes
 }
 
 function uint64(value: number): Uint8Array {
   const bytes = new Uint8Array(8)
   new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
+
   return bytes
 }
 
 function field(name: string, value: Uint8Array): Uint8Array {
   const encodedName = encoder.encode(name)
+
   return concat([uint32(encodedName.byteLength), encodedName, uint32(value.byteLength), value])
 }
 
@@ -86,6 +93,7 @@ describe('RelayControlClient', () => {
     for (const client of clients.splice(0)) {
       client.closeNow()
     }
+
     await Promise.all(
       servers.splice(0).map(
         (server) =>
@@ -93,6 +101,7 @@ describe('RelayControlClient', () => {
             for (const socket of server.clients) {
               socket.terminate()
             }
+
             server.close(() => resolve())
           })
       )
@@ -105,10 +114,13 @@ describe('RelayControlClient', () => {
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('expected TCP relay test server')
     }
+
     const keypair = nacl.box.keyPair()
+
     const client = new RelayControlClient({
       cellUrl: `http://127.0.0.1:${address.port}`,
       relayJwt: 'scoped-token',
@@ -125,6 +137,7 @@ describe('RelayControlClient', () => {
       onClose: vi.fn(),
       connectDeadlineMs: 20
     })
+
     clients.push(client)
 
     await expect(client.connect()).rejects.toThrow('relay_control_connect_timeout')
@@ -135,10 +148,13 @@ describe('RelayControlClient', () => {
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('expected TCP relay test server')
     }
+
     const keypair = nacl.box.keyPair()
+
     const client = new RelayControlClient({
       cellUrl: `http://127.0.0.1:${address.port}`,
       relayJwt: 'scoped-token',
@@ -154,10 +170,13 @@ describe('RelayControlClient', () => {
       onDrain: vi.fn(),
       onClose: vi.fn()
     })
+
     clients.push(client)
+
     const accepted = new Promise<void>((resolve) => {
       server.once('connection', () => resolve())
     })
+
     const connecting = client.connect()
 
     await accepted
@@ -171,20 +190,25 @@ describe('RelayControlClient', () => {
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('expected TCP relay test server')
     }
+
     const origin = `http://127.0.0.1:${address.port}`
     const hostKeys = nacl.box.keyPair()
+
     const keypair: E2EEKeypair = {
       publicKey: hostKeys.publicKey,
       secretKey: hostKeys.secretKey,
       publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
     }
+
     const relayHostId = createHash('sha256')
       .update(hostKeys.publicKey)
       .digest('base64url')
       .slice(0, 16)
+
     const accepted = new Promise<{
       socket: WebSocket
       authorization: string
@@ -200,9 +224,11 @@ describe('RelayControlClient', () => {
         })
       )
     })
+
     const onConnectionOpen = vi.fn()
     const onDrain = vi.fn()
     const onClose = vi.fn()
+
     const client = new RelayControlClient({
       cellUrl: origin,
       relayJwt: 'scoped-token',
@@ -215,6 +241,7 @@ describe('RelayControlClient', () => {
       onDrain,
       onClose
     })
+
     clients.push(client)
     const connecting = client.connect()
     const { socket, authorization, capabilities, path } = await accepted
@@ -236,6 +263,7 @@ describe('RelayControlClient', () => {
     const secret = randomBytes(32)
     const issuedAt = Date.now()
     const expiresAt = issuedAt + 10_000
+
     const transcript = buildTranscript({
       origin,
       relayKey: relayKeys.publicKey,
@@ -246,12 +274,14 @@ describe('RelayControlClient', () => {
       relayHostId,
       hostKey: hostKeys.publicKey
     })
+
     const plaintext = concat([
       text(`${CHALLENGE_DOMAIN}\0`),
       uint32(transcript.byteLength),
       transcript,
       secret
     ])
+
     const proofMessage = nextJson(socket)
     socket.send(
       JSON.stringify({
@@ -267,10 +297,12 @@ describe('RelayControlClient', () => {
     )
     const proof = await proofMessage
     expect(proof).toMatchObject({ type: 'host-challenge-ack', challengeId: 'challenge-1' })
+
     const expectedProof = createHmac('sha256', secret)
       .update(text(`${HOST_PROOF_DOMAIN}\0ack\0`))
       .update(transcript)
       .digest('base64')
+
     expect(proof.proofB64).toBe(expectedProof)
 
     socket.send(
@@ -319,12 +351,14 @@ describe('RelayControlClient', () => {
     await expect(invitePromise).resolves.toMatchObject({ reqId: 'invite-req' })
 
     const installRequest = nextJson(socket)
+
     const installPromise = client.installCredential({
       reqId: 'install-req',
       relayDeviceId: 'device-1',
       newResumeTokenHash: 'A'.repeat(43),
       authorization: { mode: 'relay-basis', basisConnId: 'conn-1' }
     })
+
     await expect(installRequest).resolves.toEqual({
       type: 'device-credential-install',
       v: 1,
@@ -402,6 +436,7 @@ class FakeControlSocket extends EventEmitter {
     if (this.readyState !== 1) {
       return
     }
+
     this.readyState = 3
     this.emit('close', code)
   }
@@ -422,16 +457,20 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
   onClose: ReturnType<typeof vi.fn>
 } {
   const hostKeys = nacl.box.keyPair()
+
   const keypair: E2EEKeypair = {
     publicKey: hostKeys.publicKey,
     secretKey: hostKeys.secretKey,
     publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
   }
+
   const origin = 'http://relay.test'
+
   const relayHostId = createHash('sha256')
     .update(hostKeys.publicKey)
     .digest('base64url')
     .slice(0, 16)
+
   const socket = new FakeControlSocket()
   socket.script = (message, ws) => {
     if (message.type === 'host-hello') {
@@ -440,6 +479,7 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
       const secret = randomBytes(32)
       const issuedAt = Date.now() + (options.issuedAtOffsetMs ?? 0)
       const expiresAt = issuedAt + 10_000
+
       const transcript = buildTranscript({
         origin,
         relayKey: relayKeys.publicKey,
@@ -450,12 +490,14 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
         relayHostId,
         hostKey: hostKeys.publicKey
       })
+
       const plaintext = concat([
         text(`${CHALLENGE_DOMAIN}\0`),
         uint32(transcript.byteLength),
         transcript,
         secret
       ])
+
       ws.deliver({
         type: 'host-challenge',
         challengeId: 'challenge-1',
@@ -466,8 +508,10 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
         ).toString('base64'),
         expiresAt
       })
+
       return
     }
+
     if (message.type === 'host-challenge-ack') {
       ws.deliver({
         type: 'host-hello-ack',
@@ -478,6 +522,7 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
         activeConnIds: [],
         pendingConns: []
       })
+
       // Same ws parser turn: the close event fires before any awaiting caller
       // of connect() gets to run.
       if (options.closeWithAck) {
@@ -485,8 +530,10 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
       }
     }
   }
+
   const onClose = vi.fn()
   const onConnectionOpen = vi.fn()
+
   const client = new RelayControlClient({
     cellUrl: origin,
     relayJwt: 'scoped-token',
@@ -500,7 +547,9 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
     onClose,
     createSocket: () => socket as unknown as WebSocket
   })
+
   queueMicrotask(() => socket.emit('open'))
+
   return { client, socket, onConnectionOpen, onClose }
 }
 
@@ -555,6 +604,7 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
       vi.advanceTimersByTime(60_000)
       socket.deliver({ type: 'ping', t: Date.now() })
     }
+
     expect(client.isLive()).toBe(true)
 
     vi.advanceTimersByTime(91_000)

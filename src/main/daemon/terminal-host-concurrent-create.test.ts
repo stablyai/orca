@@ -14,6 +14,7 @@ function mockSubprocess(
 ): MockSubprocess {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 4242,
     getForegroundProcess: vi.fn(() => null),
@@ -52,13 +53,17 @@ describe('concurrent createOrAttach across the async spawn', () => {
   it('spawns one shell when two callers race the same session id', async () => {
     // Both callers reach the async spawn before either can publish the session.
     let releaseSpawn: () => void = () => {}
+
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
+
     const spawnSubprocess = vi.fn(async () => {
       await spawnGate
+
       return mockSubprocess()
     })
+
     const host = new TerminalHost({ spawnSubprocess })
 
     const first = host.createOrAttach(createOptions('race-1'))
@@ -79,10 +84,12 @@ describe('concurrent createOrAttach across the async spawn', () => {
     const first = mockSubprocess({
       confirmShellForeground: vi.fn(() => new Promise<boolean>(() => {}))
     })
+
     const spawnSubprocess = vi
       .fn<() => Promise<SubprocessHandle>>()
       .mockResolvedValueOnce(first)
       .mockImplementation(async () => mockSubprocess())
+
     const host = new TerminalHost({ spawnSubprocess })
     await host.createOrAttach(createOptions('settle-free'))
     first.emitData('\x1b[?1049hTUI\x1b]133;D;137\x07')
@@ -100,6 +107,7 @@ describe('concurrent createOrAttach across the async spawn', () => {
       .fn<() => Promise<SubprocessHandle>>()
       .mockRejectedValueOnce(new Error('Working directory "X" does not exist.'))
       .mockImplementation(async () => mockSubprocess())
+
     const host = new TerminalHost({ spawnSubprocess })
 
     await expect(host.createOrAttach(createOptions('race-2'))).rejects.toThrow('does not exist')
@@ -116,13 +124,16 @@ describe('concurrent createOrAttach across the async spawn', () => {
   it('keeps distinct session ids spawning in parallel', async () => {
     let pendingSpawns = 0
     let maxConcurrent = 0
+
     const spawnSubprocess = vi.fn(async () => {
       pendingSpawns += 1
       maxConcurrent = Math.max(maxConcurrent, pendingSpawns)
       await new Promise((resolve) => setTimeout(resolve, 5))
       pendingSpawns -= 1
+
       return mockSubprocess()
     })
+
     const host = new TerminalHost({ spawnSubprocess })
 
     await Promise.all([
@@ -138,22 +149,27 @@ describe('concurrent createOrAttach across the async spawn', () => {
 
   it('lets a canceled caller stop waiting on a create stuck on a dead share', async () => {
     let releaseSpawn: () => void = () => {}
+
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
+
     const host = new TerminalHost({
       spawnSubprocess: async () => {
         await spawnGate
+
         return mockSubprocess()
       }
     })
 
     const stuck = host.createOrAttach(createOptions('dead-share-session'))
     const abort = new AbortController()
+
     const queued = host.createOrAttach({
       ...createOptions('dead-share-session'),
       cancelSignal: abort.signal
     })
+
     abort.abort()
 
     // Without this the queued caller waits out the hung probe, holding a create
@@ -167,13 +183,17 @@ describe('concurrent createOrAttach across the async spawn', () => {
 
   it('waits for an in-flight spawn before disposing its session', async () => {
     let releaseSpawn: () => void = () => {}
+
     const spawnGate = new Promise<void>((resolve) => {
       releaseSpawn = resolve
     })
+
     const subprocess = mockSubprocess()
+
     const host = new TerminalHost({
       spawnSubprocess: async () => {
         await spawnGate
+
         return subprocess
       }
     })
@@ -198,16 +218,20 @@ describe('concurrent createOrAttach across the async spawn', () => {
 
   it('fences a queued retry when shutdown overlaps a failed spawn', async () => {
     let rejectSpawn: () => void = () => {}
+
     const spawnGate = new Promise<void>((_resolve, reject) => {
       rejectSpawn = () => reject(new Error('spawn failed'))
     })
+
     const spawnSubprocess = vi
       .fn<() => Promise<SubprocessHandle>>()
       .mockImplementationOnce(async () => {
         await spawnGate
+
         return mockSubprocess()
       })
       .mockImplementation(async () => mockSubprocess())
+
     const host = new TerminalHost({ spawnSubprocess })
 
     const first = host.createOrAttach(createOptions('shutdown-retry'))

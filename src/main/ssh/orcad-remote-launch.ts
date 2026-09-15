@@ -23,8 +23,10 @@ import type { ServeReadiness } from '../server/serve-readiness'
 
 /** Stdout of the launched candidate: exactly one `orca_server_ready` line, then nothing. */
 export const ORCAD_READINESS_FILENAME = '.orcad-readiness'
+
 /** Stderr, including the bind-exposure line and every supervision message. */
 export const ORCAD_LOG_FILENAME = 'orcad.log'
+
 export { ORCAD_PID_FILENAME, OrcadRemoteLaunchUnsupportedError } from './orcad-remote-host-support'
 
 export type OrcadLaunchSpec = {
@@ -48,12 +50,15 @@ export type OrcadLaunchSpec = {
 export function orcadLaunchCommand(host: RemoteHostPlatform, spec: OrcadLaunchSpec): string {
   assertPosixHost(host)
   const dir = shellEscape(spec.remoteInstallDir)
+
   const readiness = shellEscape(
     joinRemotePath(host, spec.remoteInstallDir, ORCAD_READINESS_FILENAME)
   )
+
   const log = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_LOG_FILENAME))
   const pidFile = shellEscape(joinRemotePath(host, spec.remoteInstallDir, ORCAD_PID_FILENAME))
   const entry = shellEscape(joinRemotePath(host, spec.remoteInstallDir, 'orcad.js'))
+
   return [
     `cd ${dir} &&`,
     // Why truncate: a re-launch into a dir that already holds a previous readiness line would
@@ -75,6 +80,7 @@ export function readOrcadReadinessCommand(
 ): string {
   assertPosixHost(host)
   const readiness = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_READINESS_FILENAME))
+
   return `cat ${readiness} 2>/dev/null || true`
 }
 
@@ -91,6 +97,7 @@ export function orcadLivenessProbeCommand(
 ): string {
   assertPosixHost(host)
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
+
   return [
     posixProcessAliveShellFunction(),
     `pid=$(cat ${pidFile} 2>/dev/null);`,
@@ -110,6 +117,7 @@ export type OrcadLiveness = 'LIVE' | 'DEAD' | 'UNKNOWN'
 
 export function parseOrcadLiveness(output: string): OrcadLiveness {
   const value = output.trim().split('\n').pop()?.trim()
+
   return value === 'LIVE' || value === 'DEAD' ? value : 'UNKNOWN'
 }
 
@@ -133,30 +141,39 @@ export type OrcadReadinessParse =
 export function parseOrcadReadinessOutput(raw: string): OrcadReadinessParse {
   const lines = raw.split('\n')
   let sawCandidate = false
+
   for (const line of lines) {
     const trimmed = line.trim()
+
     if (!trimmed.startsWith('{')) {
       continue
     }
+
     sawCandidate = true
     let parsed: unknown
+
     try {
       parsed = JSON.parse(trimmed)
     } catch {
       continue
     }
+
     if (typeof parsed !== 'object' || parsed === null) {
       continue
     }
+
     const payload = parsed as { type?: unknown }
+
     if (payload.type !== 'orca_server_ready') {
       return {
         state: 'malformed',
         reason: `expected an orca_server_ready line, got type=${JSON.stringify(payload.type)}`
       }
     }
+
     return { state: 'ready', readiness: toServeReadiness(payload as Record<string, unknown>) }
   }
+
   return sawCandidate ? { state: 'pending' } : { state: 'pending' }
 }
 

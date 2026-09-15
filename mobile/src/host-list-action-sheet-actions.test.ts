@@ -27,12 +27,14 @@ function build(overrides: { state?: ConnectionState; hasEverConnected?: boolean 
     onEdit: vi.fn(),
     onRemove: vi.fn()
   }
+
   const actions = getHostListActionSheetActions({
     host: HOST,
     state: overrides.state ?? 'connected',
     hasEverConnected: overrides.hasEverConnected ?? true,
     ...spies
   })
+
   return { actions, spies }
 }
 

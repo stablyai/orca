@@ -27,6 +27,7 @@ function errResponse(message: string): RpcResponse {
 
 function mockClient(response: RpcResponse) {
   const sendRequest = vi.fn(async (_method: string, _params?: unknown) => response)
+
   return { client: { sendRequest }, sendRequest }
 }
 
@@ -44,6 +45,7 @@ describe('readForBranch', () => {
       updatedAt: '2026-01-01',
       mergeable: 'MERGEABLE'
     })
+
     expect(parsed?.provider).toBe('github')
     expect(parsed?.number).toBe(7)
     expect(parsed?.state).toBe('open')
@@ -77,6 +79,7 @@ describe('readPRForBranch', () => {
       updatedAt: 'now',
       mergeable: 'MERGEABLE'
     })
+
     expect(parsed?.number).toBe(12)
     expect(parsed?.state).toBe('open')
     expect(parsed?.checksStatus).toBe('success')
@@ -109,6 +112,7 @@ describe('readPRForBranch', () => {
         allowedMethods: { merge: false, squash: true, rebase: true }
       }
     })
+
     expect(parsed?.prRepo).toEqual({
       owner: 'forkOwner',
       repo: 'forkRepo',
@@ -127,6 +131,7 @@ describe('readPRForBranch', () => {
       prRepo: { owner: 'onlyOwner' },
       mergeMethodSettings: { allowedMethods: {} }
     })
+
     expect(parsed?.prRepo).toBeUndefined()
     expect(parsed?.mergeMethodSettings).toBeUndefined()
   })
@@ -152,6 +157,7 @@ describe('readWorkItemDetails', () => {
       headSha: 'abc',
       baseSha: 'def'
     })
+
     expect(parsed?.item.author).toBe('octo')
     expect(parsed?.item.baseRefName).toBe('main')
     expect(parsed?.item.reviewRequests).toEqual([
@@ -173,6 +179,7 @@ describe('readWorkItemDetails', () => {
         latestReviews: [{ login: 'ok' }, 42, {}]
       }
     })
+
     expect(parsed?.item.latestReviews).toEqual([{ login: 'ok', state: null, avatarUrl: null }])
   })
 
@@ -188,6 +195,7 @@ describe('readWorkItemDetails', () => {
         ]
       }
     })
+
     expect(parsed?.item.latestReviews).toEqual([
       { login: 'coderabbitai', state: 'COMMENTED', avatarUrl: 'https://a' }
     ])
@@ -205,6 +213,7 @@ describe('readPRChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: 'u1' },
       { name: 'test', status: 'in_progress', conclusion: null, url: null }
     ])
+
     expect(parsed).toHaveLength(2)
     expect(parsed[0]).toMatchObject({ name: 'build', status: 'completed', conclusion: 'success' })
     expect(parsed[1]).toMatchObject({ name: 'test', status: 'in_progress', conclusion: null })
@@ -221,6 +230,7 @@ describe('readPRChecks', () => {
       7,
       {}
     ])
+
     expect(parsed).toHaveLength(1)
     expect(parsed[0]?.name).toBe('ok')
   })
@@ -229,6 +239,7 @@ describe('readPRChecks', () => {
     const parsed = readPRChecks([
       { name: 'c', status: 'in_progress', conclusion: 'weird', url: null }
     ])
+
     expect(parsed[0]?.conclusion).toBeNull()
   })
 })
@@ -242,6 +253,7 @@ describe('readPRCheckDetails', () => {
       annotations: [{ message: 'boom', path: 'a.ts', startLine: 1, endLine: 2 }, 'bad'],
       jobs: [{ name: 'job1', steps: [{ name: 'step1' }, 99] }]
     })
+
     expect(parsed?.name).toBe('CI')
     expect(parsed?.annotations).toHaveLength(1)
     expect(parsed?.jobs[0]?.steps).toHaveLength(1)
@@ -260,6 +272,7 @@ describe('readAssignableUsers', () => {
       { name: 'no login' },
       'bad'
     ])
+
     expect(parsed).toEqual([{ login: 'a', name: 'A', avatarUrl: 'av' }])
   })
 
@@ -318,6 +331,7 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
         headSha: 'sha123'
       }
     )
+
     expect(checks.headSha).toBe('sha123')
 
     const details = buildGithubPrParams(
@@ -328,6 +342,7 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
         headSha: 'sha123'
       }
     )
+
     expect('headSha' in details).toBe(false)
   })
 
@@ -341,10 +356,12 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
 describe('fetch wrappers', () => {
   it('fetchHostedReviewForBranch sends linkedGitHubPR + reuses repo selector', async () => {
     const { client, sendRequest } = mockClient(okResponse({ provider: 'github', number: 4 }))
+
     const out = await fetchHostedReviewForBranch(client, WORKTREE_ID, {
       branch: 'feat',
       linkedGitHubPR: 4
     })
+
     expect(out.ok).toBe(true)
     expect(out.ok && out.result).toMatchObject({ provider: 'github', number: 4 })
     const [method, params] = sendRequest.mock.calls[0]!
@@ -360,6 +377,7 @@ describe('fetch wrappers', () => {
         fetchedAt: 1
       })
     )
+
     const out = await fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat', linkedPRNumber: 4 })
     expect(out.ok).toBe(true)
     expect(out.ok && out.result).toMatchObject({ number: 4, state: 'merged' })
@@ -392,6 +410,7 @@ describe('fetch wrappers', () => {
         fetchedAt: 1
       })
     )
+
     await expect(fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })).resolves.toEqual({
       ok: false,
       error: 'network unavailable'
@@ -430,6 +449,7 @@ describe('fetch wrappers', () => {
       mockClient(okResponse({ owner: 'o', repo: 'r', host: 'github.acme.test' })).client,
       WORKTREE_ID
     )
+
     expect(found).toEqual({
       ok: true,
       result: { owner: 'o', repo: 'r', host: 'github.acme.test' }
@@ -459,6 +479,7 @@ describe('fetch wrappers', () => {
         throw new Error('transport closed')
       })
     }
+
     const out = await fetchPRChecks(client, WORKTREE_ID, { prNumber: 1 })
     expect(out).toEqual({ ok: false, error: 'transport closed' })
   })

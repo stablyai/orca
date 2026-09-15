@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StarNagCard } from './StarNagCard'
 
 type ShowPayload = { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }
+
 type ShowCallback = (payload?: ShowPayload) => void
 
 type StarNagApi = {
@@ -32,6 +33,7 @@ function renderCard(): { root: Root; container: HTMLDivElement } {
   act(() => {
     root.render(<StarNagCard />)
   })
+
   return { root, container }
 }
 
@@ -47,6 +49,7 @@ describe('StarNagCard', () => {
     starNag = {
       onShow: vi.fn((callback: ShowCallback) => {
         showCallback = callback
+
         return vi.fn()
       }),
       onHide: vi.fn(() => vi.fn()),
@@ -65,6 +68,7 @@ describe('StarNagCard', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -76,9 +80,11 @@ describe('StarNagCard', () => {
 
     act(() => showCallback?.({ mode: 'gh', surface: 'card' }))
     expect(container.textContent).toContain('Star on GitHub')
+
     const initialButton = Array.from(container.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Star on GitHub')
     )
+
     expect(initialButton?.className).toContain('bg-amber-400/15')
     expect(initialButton?.parentElement?.className).toContain('flex gap-2')
 
@@ -90,9 +96,11 @@ describe('StarNagCard', () => {
     expect(shell.openUrl).not.toHaveBeenCalled()
     expect(starNag.openWeb).not.toHaveBeenCalled()
     expect(container.textContent).toContain('Open GitHub')
+
     const fallbackButton = Array.from(container.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Open GitHub')
     )
+
     expect(fallbackButton?.className).toContain('bg-amber-400/15')
     expect(fallbackButton?.parentElement?.textContent).toContain('Later')
   })

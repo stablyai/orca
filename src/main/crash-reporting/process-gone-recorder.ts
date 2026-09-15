@@ -109,7 +109,9 @@ function decodedExitCodeAttribute(event: ProcessGoneCrashEvent): Record<string, 
   if (process.platform === 'win32' || event.reason === 'launch-failed' || event.exitCode === null) {
     return {}
   }
+
   const decoded = decodePosixWaitStatus(event.exitCode)
+
   return decoded ? { 'crash.exit_code_decoded': describePosixWaitStatus(decoded) } : {}
 }
 
@@ -118,6 +120,7 @@ function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
     typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
       ? error.code
       : undefined
+
   return {
     ...buildSuppressedProcessGoneBreadcrumbData(event),
     errorName: error instanceof Error ? error.name : typeof error,
@@ -141,10 +144,13 @@ async function attachMinidumpSignature(
   capture: MinidumpCapture
 ): Promise<void> {
   const captured = expectedProcessType ? await capture(crashedAtMs, expectedProcessType) : null
+
   if (!captured) {
     await store.attachDetails(reportId, { minidumpStatus: 'absent' })
+
     return
   }
+
   const signatureDetails = sanitizeCrashReportDetails(minidumpSignatureDetails(captured.signature))
   await store.attachDetails(reportId, {
     ...signatureDetails,
@@ -152,6 +158,7 @@ async function attachMinidumpSignature(
     minidumpPath: captured.filePath,
     minidumpBytes: captured.sizeBytes
   })
+
   // Why: the crash-report record is capped at 5 entries and is user-facing;
   // the span is what makes the signature countable in the diagnostics bundle.
   const span = startSpan('electron.minidump_signature', {
@@ -161,6 +168,7 @@ async function attachMinidumpSignature(
       ...signatureDetails
     }
   })
+
   span.end()
   flushActiveSink()
 }
@@ -174,9 +182,12 @@ export function recordProcessGoneCrash(
   if (!isCrashReportReason(event.reason)) {
     return
   }
+
   const goneAt = Date.now()
+
   const serviceName =
     typeof event.details.serviceName === 'string' ? event.details.serviceName : undefined
+
   if (event.source === 'child') {
     correlateChildProcessDeath({
       at: goneAt,
@@ -186,9 +197,11 @@ export function recordProcessGoneCrash(
       exitCode: event.exitCode
     })
   }
+
   // Crashpad captures suppressed service crashes too; keep a crash loop from
   // filling the disk even when no user-facing report is created.
   scheduleCrashpadDumpPrune()
+
   if (
     !shouldRecordProcessGoneCrash({
       platform: process.platform,
@@ -214,8 +227,10 @@ export function recordProcessGoneCrash(
       minIntervalMs: SUPPRESSED_PROCESS_GONE_COALESCE_MS,
       ...(origin ? { origin } : {})
     })
+
     return
   }
+
   if (!store) {
     recordDurableCrashBreadcrumb(
       'crash_report_store_unavailable',
@@ -223,6 +238,7 @@ export function recordProcessGoneCrash(
       'Crash report store unavailable',
       processGoneRendererOrigin(event)
     )
+
     return
   }
 
@@ -233,17 +249,23 @@ export function recordProcessGoneCrash(
     event.exitCode,
     event.webContentsId
   )
+
   const claim = dedupe.tryClaim(key)
+
   if (!claim) {
     return
   }
+
   const mainProcessLifecycle = getMainProcessLifecycleIdentity()
+
   const siblingDeaths =
     event.source === 'renderer'
       ? findSiblingChildDeaths({ reason: event.reason, exitCode: event.exitCode, at: goneAt })
       : []
+
   const siblingDetails =
     siblingDeaths.length > 0 ? siblingProcessDeathDetails(siblingDeaths, goneAt) : {}
+
   const crashDetails = buildProcessGoneCrashDetails(
     {
       ...event.details,
@@ -255,8 +277,10 @@ export function recordProcessGoneCrash(
     },
     event.processType
   )
+
   const breadcrumbs = getCrashBreadcrumbSnapshot(processGoneRendererOrigin(event))
   const reportBreadcrumbs = breadcrumbs?.map(({ origin: _origin, ...breadcrumb }) => breadcrumb)
+
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': event.source,
@@ -277,6 +301,7 @@ export function recordProcessGoneCrash(
       breadcrumbs: reportBreadcrumbs
     }
   })
+
   // Why: a renderer crash can be followed by another process exit before the
   // trace batch window closes, so make the primary signal durable immediately.
   span.fail(
@@ -286,6 +311,7 @@ export function recordProcessGoneCrash(
 
   const crashedAtMs = Date.now()
   const expectedProcessType = expectedCrashpadProcessType(event)
+
   const recorded = store.record({
     source: event.source,
     processType: event.processType,
@@ -300,6 +326,7 @@ export function recordProcessGoneCrash(
     details: crashDetails,
     breadcrumbs: reportBreadcrumbs
   })
+
   trackRendererSiblingAttribution(
     event,
     goneAt,

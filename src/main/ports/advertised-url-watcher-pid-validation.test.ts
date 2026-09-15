@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { AdvertisedUrlWatcher } from './advertised-url-watcher'
 
 const WORKTREE = 'repo::/repo'
+
 const PTY = 'pty-1'
 
 function bindFresh(now = 1_000): AdvertisedUrlWatcher {
   const watcher = new AdvertisedUrlWatcher({ now: () => now })
   watcher.bindPty(PTY, WORKTREE)
+
   return watcher
 }
 

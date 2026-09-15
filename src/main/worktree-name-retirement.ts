@@ -39,19 +39,23 @@ type RetirementRuntimeStore = {
   getProjects?: ProjectRuntimeResolutionStore['getProjects']
   getSettings?: ProjectRuntimeResolutionStore['getSettings']
 }
+
 type RetirementReadStore = RetirementRuntimeStore & {
   getRetiredWorktreeNameRegistry(repoId: string): RetiredNameRegistry
   getRetiredWorktreeNameRegistryForNamespace?(namespaceKey: string): RetiredNameRegistry
   getSshTarget?: SshTargetLookup
 }
+
 type RetirementBackfillStore = RetirementRuntimeStore & {
   mergeRetiredWorktreeNames(repoId: string, names: Iterable<string>): boolean
 }
+
 type RetirementWriteStore = RetirementRuntimeStore & {
   addRetiredWorktreeName(repoId: string, name: string): void
   mergeRetiredWorktreeNamesForNamespace?(namespaceKey: string, names: Iterable<string>): boolean
   getSshTarget?: SshTargetLookup
 }
+
 type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   wslMirrorDistro?: string
 }
@@ -62,6 +66,7 @@ function withMirrorDistro(
   settings: RetirementPathSettings
 ): RetirementPathSettings {
   const distro = getWorktreeMirrorDistro(store, repo)
+
   return distro ? { ...settings, wslMirrorDistro: distro } : settings
 }
 
@@ -69,6 +74,7 @@ function withMirrorDistro(
  *  repeat-suffixed path can never be generated again and needs no permanent registry entry. */
 export function normalizeRetirableGeneratedName(name: string): string | null {
   const normalized = name.trim().toLowerCase()
+
   return normalized.length <= 256 && creatureNameTier(normalized) !== null ? normalized : null
 }
 
@@ -83,6 +89,7 @@ async function getRetirementProbePath(
   settings: RetirementPathSettings
 ): Promise<string> {
   const pathSettings = getWorktreePathSettings(repo, settings)
+
   return repo.connectionId
     ? computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
         useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
@@ -98,15 +105,19 @@ export function getRemoteRetirementNamespaceKey(
   if (!repo.connectionId) {
     return null
   }
+
   const pathSettings = getWorktreePathSettings(repo, settings)
+
   const probePath = computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
     useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
   })
+
   return retirementNamespaceKey(retirementHostIdentity(repo, lookupSshTarget), probePath)
 }
 
 // Why: the create path and every suggestion refresh ask for the same namespace identity.
 const COLLISION_KEY_CACHE_MAX = 512
+
 const collisionKeyCache = new Map<string, string>()
 
 export function resetRetirementCollisionKeyCacheForTests(): void {
@@ -121,6 +132,7 @@ async function getRetirementCollisionKey(
   lookupSshTarget?: SshTargetLookup
 ): Promise<string> {
   const hostIdentity = retirementHostIdentity(repo, lookupSshTarget)
+
   const cacheKey = [
     hostIdentity,
     repo.path,
@@ -129,21 +141,28 @@ async function getRetirementCollisionKey(
     settings.nestWorkspaces ? 'nested' : 'flat',
     settings.wslMirrorDistro ?? ''
   ].join('\u0000')
+
   const cached = collisionKeyCache.get(cacheKey)
+
   if (cached !== undefined) {
     return cached
   }
+
   const key = retirementNamespaceKey(hostIdentity, await getRetirementProbePath(repo, settings))
   // Why not always cache: only the WSL home *success* path is cached upstream, so a stopped distro
   // yields a fallback namespace. Memoizing that would strand the repo there for the whole session.
   const wsl = parseWslPath(repo.path)
+
   if (wsl && !hasCachedWslHome(wsl.distro)) {
     return key
   }
+
   if (collisionKeyCache.size >= COLLISION_KEY_CACHE_MAX) {
     collisionKeyCache.clear()
   }
+
   collisionKeyCache.set(cacheKey, key)
+
   return key
 }
 
@@ -151,6 +170,7 @@ async function getRetirementCollisionKey(
  *  filesystem are both replaced on every provision. */
 function isRuntimeOwnedRetirementHost(repo: Repo): boolean {
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
@@ -168,10 +188,12 @@ function readNamespaceRegistry(
   lookup: SshTargetLookup
 ): RetiredNameRegistry {
   let registry = EMPTY_RETIRED_NAME_REGISTRY
+
   for (const key of retirementNamespaceKeysToRead(repo, namespaceKey, lookup)) {
     const stored = store.getRetiredWorktreeNameRegistryForNamespace?.(key)
     registry = stored ? mergeRetiredNameRegistries(registry, stored) : registry
   }
+
   return registry
 }
 
@@ -189,15 +211,19 @@ export async function getRetiredNameRegistryForRepo(
   if (isFolderRepo(repo)) {
     return EMPTY_RETIRED_NAME_REGISTRY
   }
+
   const lookup = sshTargetLookup(store)
   const pathSettings = withMirrorDistro(store, repo, settings)
   let collisionKey: string | null = null
+
   try {
     collisionKey = await ensureRetiredWorktreeNamesBackfilled(store, repo, pathSettings)
   } catch (error) {
     console.warn(`[worktrees] retirement backfill failed for repo ${repo.id}:`, error)
   }
+
   let registry = store.getRetiredWorktreeNameRegistry(repo.id)
+
   if (store.getRetiredWorktreeNameRegistryForNamespace) {
     collisionKey ??= await getRetirementCollisionKey(repo, pathSettings, lookup)
     registry = mergeRetiredNameRegistries(
@@ -205,15 +231,20 @@ export async function getRetiredNameRegistryForRepo(
       readNamespaceRegistry(store, repo, collisionKey, lookup)
     )
   }
+
   for (const candidate of repos) {
     if (candidate.id === repo.id || isFolderRepo(candidate)) {
       continue
     }
+
     const candidateRegistry = store.getRetiredWorktreeNameRegistry(candidate.id)
+
     if (isEmptyRetiredNameRegistry(candidateRegistry)) {
       continue
     }
+
     collisionKey ??= await getRetirementCollisionKey(repo, pathSettings, lookup)
+
     if (
       (await getRetirementCollisionKey(
         candidate,
@@ -223,8 +254,10 @@ export async function getRetiredNameRegistryForRepo(
     ) {
       continue
     }
+
     registry = mergeRetiredNameRegistries(registry, candidateRegistry)
   }
+
   return registry
 }
 
@@ -235,6 +268,7 @@ export async function retireGeneratedWorktreeName(
   name: string
 ): Promise<void> {
   store.addRetiredWorktreeName(repo.id, name)
+
   // Why local too: the repo-id row dies with the project, and the on-disk backfill cannot recover a
   // name whose only surviving history is a Codex rollout file rather than a directory.
   //
@@ -250,12 +284,14 @@ export async function retireGeneratedWorktreeName(
   ) {
     return
   }
+
   try {
     const namespaceKey = await getRetirementCollisionKey(
       repo,
       withMirrorDistro(store, repo, settings),
       sshTargetLookup(store)
     )
+
     store.mergeRetiredWorktreeNamesForNamespace(namespaceKey, [name])
   } catch (error) {
     console.warn(`[worktrees] failed to persist retirement namespace for ${repo.id}:`, error)
@@ -265,6 +301,7 @@ export async function retireGeneratedWorktreeName(
 function parentPath(path: string): string {
   const trimmed = path.replace(/[/\\]+$/, '')
   const separatorIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
+
   return separatorIndex < 0 ? '' : trimmed.slice(0, separatorIndex)
 }
 
@@ -286,17 +323,22 @@ export async function ensureRetiredWorktreeNamesBackfilled(
   if (isFolderRepo(repo) || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     return null
   }
+
   const probePath = await computeWorktreePathAsync(
     RETIREMENT_PROBE_NAME,
     repo.path,
     getWorktreePathSettings(repo, settings, settings.wslMirrorDistro)
   )
+
   const scanKey = `${getRepoExecutionHostId(repo)}:${worktreePathComparisonKey(probePath)}`
+
   const names = await runRetirementBackfillScan(store, scanKey, () =>
     discoverRetiredWorktreeNames({ workspaceRoots: [parentPath(probePath)] })
   )
+
   // Why the merge sits outside the cached scan: the scan is per cwd namespace but the registry is
   // per repo, so every repo that asks must receive it — not only the one that triggered it.
   store.mergeRetiredWorktreeNames(repo.id, names)
+
   return scanKey
 }

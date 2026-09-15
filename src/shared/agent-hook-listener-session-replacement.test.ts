@@ -7,7 +7,9 @@ import {
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '44444444-4444-4444-8444-444444444444'
+
 const SESSION_A = 'session-a'
+
 const SESSION_B = 'session-b'
 
 function claudeEvent(

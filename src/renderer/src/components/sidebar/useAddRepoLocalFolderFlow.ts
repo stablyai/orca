@@ -98,14 +98,18 @@ export function useAddRepoLocalFolderFlow({
           )
         )
         closeModal()
+
         return { status: 'paused' }
       }
+
       setAddProjectBusyLabel('Scanning for repositories...')
+
       try {
         const attemptId = createNestedRepoTelemetryAttemptId()
         const scanId = createNestedRepoScanId()
         setActiveNestedScanId(scanId, activeRuntimeEnvironmentId ?? null)
         setNestedScanInProgress(true)
+
         const scan = await scanNestedRepos(path, undefined, {
           scanId,
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null,
@@ -118,6 +122,7 @@ export function useAddRepoLocalFolderFlow({
             ) {
               return
             }
+
             showNestedRepoReview({
               scan: progressScan,
               selectedPath: path,
@@ -130,9 +135,11 @@ export function useAddRepoLocalFolderFlow({
             })
           }
         })
+
         if (gen !== localAddGenRef.current) {
           return { status: 'cancelled' }
         }
+
         clearNestedScanState()
         track(
           'add_repo_nested_scan_result',
@@ -143,9 +150,11 @@ export function useAddRepoLocalFolderFlow({
             scan
           })
         )
+
         if (scan?.selectedPathKind === 'non_git_folder' && mode === 'batch') {
           return { status: 'skipped' }
         }
+
         if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
           // Why: a single-folder decision point cannot queue competing batch review states.
           showNestedRepoReview({
@@ -158,34 +167,44 @@ export function useAddRepoLocalFolderFlow({
             scanId,
             runtimeEnvironmentId: activeRuntimeEnvironmentId
           })
+
           return { status: 'paused' }
         }
+
         setAddProjectBusyLabel('Opening project...')
+
         const repo = await addRepoPath(path, undefined, {
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
         })
+
         if (gen !== localAddGenRef.current) {
           return { status: 'cancelled' }
         }
+
         if (!repo) {
           return { status: 'paused' }
         }
+
         if (isGitRepoKind(repo)) {
           // Why: a transient non-authoritative refresh must not strand a persisted repo.
           const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
           await fetchWorktrees(repo.id, ownerOptions)
+
           if (gen !== localAddGenRef.current) {
             return { status: 'cancelled' }
           }
+
           if (mode === 'batch') {
             return { status: 'completed', repo }
           }
+
           await onGitRepoReady(repo.id, source, ownerOptions.executionHostId)
         } else {
           // Why: folder repos skip the Git default-checkout handoff and activate
           // their synthetic root workspace in the folder add flow.
           closeModal()
         }
+
         return { status: 'completed', repo }
       } finally {
         if (gen === localAddGenRef.current) {
@@ -216,6 +235,7 @@ export function useAddRepoLocalFolderFlow({
     ): Promise<LocalPathAddResult> => {
       const gen = ++localAddGenRef.current
       setIsAdding(true)
+
       try {
         return await addLocalPathForGeneration(path, source, gen, mode)
       } finally {
@@ -234,6 +254,7 @@ export function useAddRepoLocalFolderFlow({
       const gitRepoIds: string[] = []
       const shouldDeferGitRepoReady = paths.length > 1
       let skippedCount = 0
+
       for (const path of paths) {
         const result = await addLocalPathForGeneration(
           path,
@@ -241,20 +262,25 @@ export function useAddRepoLocalFolderFlow({
           gen,
           shouldDeferGitRepoReady ? 'batch' : 'single'
         )
+
         if (result.status === 'skipped') {
           skippedCount++
           continue
         }
+
         if (result.status !== 'completed') {
           return
         }
+
         if (isGitRepoKind(result.repo)) {
           gitRepoIds.push(result.repo.id)
         }
       }
+
       if (gen !== localAddGenRef.current) {
         return
       }
+
       if (skippedCount > 0) {
         toast.info(
           translate(
@@ -269,6 +295,7 @@ export function useAddRepoLocalFolderFlow({
           }
         )
       }
+
       if (shouldDeferGitRepoReady && gitRepoIds.length > 0) {
         await onGitRepoReady(
           gitRepoIds[0],
@@ -284,9 +311,11 @@ export function useAddRepoLocalFolderFlow({
     if (!isOpen || !droppedLocalPath) {
       return
     }
+
     if (droppedLocalPathHandledRef.current === droppedLocalPath) {
       return
     }
+
     droppedLocalPathHandledRef.current = droppedLocalPath
     void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
   }, [droppedLocalPath, handleAddLocalPath, isOpen])
@@ -295,11 +324,14 @@ export function useAddRepoLocalFolderFlow({
     const gen = ++localAddGenRef.current
     setIsAdding(true)
     setAddProjectBusyLabel('Choose a folder...')
+
     try {
       const paths = await window.api.repos.pickFolders()
+
       if (paths.length === 0 || gen !== localAddGenRef.current) {
         return
       }
+
       await handleAddLocalPaths(paths, 'local_folder_picker', gen)
     } finally {
       if (gen === localAddGenRef.current) {

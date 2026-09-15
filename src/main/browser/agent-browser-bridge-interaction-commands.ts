@@ -68,29 +68,38 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
   ): Promise<BrowserWaitResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['wait']
+
       const hasCondition =
         !!options?.selector || !!options?.text || !!options?.url || !!options?.load || !!options?.fn
+
       if (options?.selector) {
         args.push(options.selector)
       } else if (options?.timeout != null && !hasCondition) {
         args.push(String(options.timeout))
       }
+
       if (options?.text) {
         args.push('--text', options.text)
       }
+
       if (options?.url) {
         args.push('--url', options.url)
       }
+
       if (options?.load) {
         args.push('--load', options.load)
       }
+
       if (options?.fn) {
         args.push('--fn', options.fn)
       }
+
       const normalizedState = options?.state === 'visible' ? undefined : options?.state
+
       if (normalizedState) {
         args.push('--state', normalizedState)
       }
+
       // Why: agent-browser's selector wait lacks a per-command timeout — enforce it here so a missing selector fails as browser_timeout, not a hang.
       return (await this.execAgentBrowser(sessionName, args, {
         timeoutMs:
@@ -116,6 +125,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
   ): Promise<BrowserCheckResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = checked ? ['check', element] : ['uncheck', element]
+
       return (await this.execAgentBrowser(sessionName, args)) as BrowserCheckResult
     })
   }
@@ -142,10 +152,12 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
         if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
           // Why: agent-browser resolves the ref directly, preserving iframe/shadow-root/unfocusable semantics for ordinary fields.
           await this.execAgentBrowser(sessionName, ['fill', element, ''])
+
           return { cleared: element }
         }
 
         await this.fillExplicitContentEditable(sessionName, element, '')
+
         return { cleared: element }
       },
       { requireScopedTarget: true }
@@ -160,6 +172,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       // Why: agent-browser has no select-all command — implement as focus + Ctrl+A
       await this.execAgentBrowser(sessionName, ['focus', element])
+
       return (await this.execAgentBrowser(sessionName, [
         'press',
         'Control+a'
@@ -177,20 +190,25 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       browserPageId,
       async (sessionName, target) => {
         const parsed = parseCdpKeyEvent(key) ?? imeFallbackKeyEvent(key)
+
         if (!parsed) {
           // Why: a key name the table cannot express must not dispatch keyCode 0 and
           // report success — route it to the helper, creating its session only now so
           // the direct path never pays for it.
           await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+
           return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
         }
+
         const wc = this.getWebContents(target.webContentsId)
+
         if (!wc || wc.isDestroyed()) {
           throw new BrowserError(
             'browser_tab_not_found',
             `Browser page ${target.browserPageId} is no longer available`
           )
         }
+
         const event = {
           windowsVirtualKeyCode: parsed.keyCode,
           nativeVirtualKeyCode: parsed.keyCode,
@@ -199,7 +217,9 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           modifiers: parsed.modifiers,
           location: parsed.location
         }
+
         let releaseDebugger = (): void => {}
+
         try {
           releaseDebugger = acquireElectronDebugger(wc).release
           await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
@@ -215,6 +235,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
             // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
             modifiers: parsed.modifiers & ~parsed.selfModifier
           })
+
           return { pressed: key }
         } catch (error) {
           // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
@@ -223,9 +244,11 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           if (error instanceof BrowserError) {
             throw error
           }
+
           if (!this.getWebContents(target.webContentsId)) {
             throw this.createPageUnavailableError(sessionName)
           }
+
           throw new BrowserError(
             'browser_error',
             `Failed to press ${key} in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
@@ -242,13 +265,16 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     // Why: agent-browser's CDP printToPDF hangs in Electron webviews — use the native webContents.printToPDF().
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
+
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
+
       const buffer = await wc.printToPDF({
         printBackground: true,
         preferCSSPageSize: true
       })
+
       return { data: buffer.toString('base64') }
     })
   }

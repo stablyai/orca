@@ -19,7 +19,9 @@ import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unico
 import { isWideGlyph } from './__fixtures__/terminal-wide-cell-grid'
 
 const ORCA_UNICODE_VERSION = 'orca-11-zwj'
+
 const HANGUL_SYLLABLES_FIRST = 0xac00
+
 const HANGUL_SYLLABLES_LAST = 0xd7a3
 
 /** Jamo, Compatibility Jamo, Jamo Extended-A, Syllables + Extended-B, halfwidth jamo. */
@@ -60,11 +62,13 @@ function openWithUnicode11AddonLoaded(): {
   const terminal = new Terminal({ cols: 40, rows: 10, allowProposedApi: true })
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal as never)
+
   const unicode = (
     terminal as unknown as {
       _core: { unicodeService: UnicodeServiceInternals }
     }
   )._core.unicodeService
+
   return { terminal, unicode }
 }
 
@@ -80,15 +84,20 @@ function propertyWidth(properties: number): number {
  */
 function summarize(entries: { codepoint: number; detail: string }[]): string[] {
   const runs: { start: number; end: number; detail: string }[] = []
+
   for (const { codepoint, detail } of entries) {
     const last = runs.at(-1)
+
     if (last && last.end === codepoint - 1 && last.detail === detail) {
       last.end = codepoint
       continue
     }
+
     runs.push({ start: codepoint, end: codepoint, detail })
   }
+
   const hex = (value: number): string => `U+${value.toString(16).toUpperCase().padStart(4, '0')}`
+
   return runs.map(
     ({ start, end, detail }) =>
       `${start === end ? hex(start) : `${hex(start)}..${hex(end)}`} ${detail}`
@@ -106,11 +115,14 @@ describe('Hangul cell width agreement (#15192)', () => {
   it('budgets every precomposed syllable at two cells under v6, v11 and Orca', () => {
     const { terminal, unicode } = openWithUnicode11AddonLoaded()
     const disagreeing: { codepoint: number; detail: string }[] = []
+
     for (const version of ['6', '11', ORCA_UNICODE_VERSION]) {
       unicode.activeVersion = version
+
       for (let cp = HANGUL_SYLLABLES_FIRST; cp <= HANGUL_SYLLABLES_LAST; cp += 1) {
         const wcwidth = unicode.wcwidth(cp)
         const packed = propertyWidth(unicode.charProperties(cp, 0))
+
         if (wcwidth !== 2 || packed !== 2) {
           disagreeing.push({
             codepoint: cp,
@@ -119,6 +131,7 @@ describe('Hangul cell width agreement (#15192)', () => {
         }
       }
     }
+
     expect(summarize(disagreeing)).toEqual([])
     terminal.dispose()
   })
@@ -126,13 +139,16 @@ describe('Hangul cell width agreement (#15192)', () => {
   it('records where the wide-cell oracle diverges from xterm on conjoining jamo', () => {
     const { terminal, unicode } = openWithUnicode11AddonLoaded()
     const divergent: { codepoint: number; detail: string }[] = []
+
     for (const cp of hangulCodePoints()) {
       const oracle = isWideGlyph(String.fromCodePoint(cp)) ? 2 : 1
       const xterm = unicode.wcwidth(cp)
+
       if (xterm !== oracle) {
         divergent.push({ codepoint: cp, detail: `oracle=${oracle} xterm=${xterm}` })
       }
     }
+
     // Why pinned rather than fixed: xterm treats medial/final jamo as zero-width
     // combining marks, the oracle as one cell — and `isWideGlyph` returns a boolean,
     // so it cannot express zero-width without changing shape. Only decomposed (NFD)

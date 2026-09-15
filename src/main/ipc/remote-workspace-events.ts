@@ -10,6 +10,7 @@ export function registerRemoteWorkspaceNotificationHandler(
   handler: RemoteWorkspaceNotificationHandler
 ): () => void {
   handlers.add(handler)
+
   return () => handlers.delete(handler)
 }
 

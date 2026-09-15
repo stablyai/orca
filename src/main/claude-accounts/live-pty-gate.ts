@@ -1,10 +1,13 @@
 const liveClaudePtyIds = new Set<string>()
+
 // Why: ids restored from persistence at startup, not yet confirmed against the
 // daemon. They keep the OAuth refresh gate closed so an early managed refresh
 // cannot rotate the single-use refresh token out from under a Claude CLI that
 // survived the app restart inside the daemon.
 const seededUnconfirmedPtyIds = new Set<string>()
+
 let switchInProgress = false
+
 // Woken by endClaudeAuthSwitch so a caller past the point of no return can wait the
 // swap out instead of refusing. See whenClaudeAuthSwitchSettles.
 const switchSettledListeners = new Set<() => void>()
@@ -28,10 +31,12 @@ export function attachClaudeLivePtyPersistence(target: ClaudeLivePtyPersistence 
 // session"); consumers need the 1 -> 0 transition to recover promptly instead
 // of waiting out the usage-fetch failure backoff.
 type LiveClaudePtyDrainListener = () => void
+
 const drainListeners = new Set<LiveClaudePtyDrainListener>()
 
 export function onLiveClaudePtysDrained(listener: LiveClaudePtyDrainListener): () => void {
   drainListeners.add(listener)
+
   return () => drainListeners.delete(listener)
 }
 
@@ -39,6 +44,7 @@ function notifyDrainedOnTransition(hadLivePtys: boolean): void {
   if (!hadLivePtys || liveClaudePtyIds.size > 0) {
     return
   }
+
   for (const listener of drainListeners) {
     listener()
   }
@@ -64,12 +70,14 @@ export function hasSeededUnconfirmedClaudePtys(): boolean {
 export function confirmSeededClaudeLivePtys(aliveSessionIds: readonly string[]): void {
   const hadLivePtys = liveClaudePtyIds.size > 0
   const alive = new Set(aliveSessionIds)
+
   for (const sessionId of seededUnconfirmedPtyIds) {
     if (!alive.has(sessionId)) {
       liveClaudePtyIds.delete(sessionId)
       persistence?.removeClaudeLivePtySessionId(sessionId)
     }
   }
+
   seededUnconfirmedPtyIds.clear()
   notifyDrainedOnTransition(hadLivePtys)
 }
@@ -125,15 +133,18 @@ export function beginClaudeAuthSwitch(): void {
   if (switchInProgress) {
     throw new Error('A Claude account switch is already in progress.')
   }
+
   switchInProgress = true
 }
 
 export function endClaudeAuthSwitch(): void {
   const wasInProgress = switchInProgress
   switchInProgress = false
+
   if (!wasInProgress) {
     return
   }
+
   // Each listener removes itself as it settles; Set iteration is defined over that.
   for (const listener of switchSettledListeners) {
     listener()
@@ -156,12 +167,14 @@ export function whenClaudeAuthSwitchSettles(
   if (!switchInProgress) {
     return Promise.resolve(true)
   }
+
   return new Promise<boolean>((resolve) => {
     const settle = (settled: boolean): void => {
       switchSettledListeners.delete(listener)
       clearTimeout(timer)
       resolve(settled)
     }
+
     const listener = (): void => settle(true)
     switchSettledListeners.add(listener)
     const timer = setTimeout(() => settle(false), timeoutMs)

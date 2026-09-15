@@ -71,6 +71,7 @@ export default function WorkspaceKanbanSettingsMenu({
         className="max-h-[min(80vh,720px)] w-80 overflow-y-auto p-2 scrollbar-sleek"
         onInteractOutside={(event) => {
           const target = event.target
+
           if (
             target instanceof Element &&
             target.closest('[data-workspace-status-appearance-popover]')
@@ -113,6 +114,7 @@ export default function WorkspaceKanbanSettingsMenu({
         <div className="space-y-2 px-1 pb-1">
           {workspaceStatuses.map((status, index) => {
             const meta = getWorkspaceStatusVisualMeta(status)
+
             return (
               <div
                 key={status.id}
@@ -125,6 +127,7 @@ export default function WorkspaceKanbanSettingsMenu({
                     onBlur={(event) => onRenameStatus(status.id, event.target.value)}
                     onKeyDown={(event) => {
                       event.stopPropagation()
+
                       if (event.key === 'Enter') {
                         event.currentTarget.blur()
                       }

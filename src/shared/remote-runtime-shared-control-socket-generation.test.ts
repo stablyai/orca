@@ -9,9 +9,11 @@ describe('SharedControlSocketGeneration', () => {
     const current = generations.begin()
     const closeSocket = vi.fn()
     const onError = vi.fn()
+
     const throwingOnError = vi.fn(() => {
       throw new Error('consumer failed')
     })
+
     const subscriptions = new Map([
       [
         'subscription-1',
@@ -42,6 +44,7 @@ describe('SharedControlSocketGeneration', () => {
         }
       ]
     ])
+
     const args = {
       error: remoteRuntimeUnavailableError(),
       everReady: true,

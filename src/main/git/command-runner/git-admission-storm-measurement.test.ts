@@ -34,6 +34,7 @@ type InteractiveQueueSnapshot = {
 }
 
 const tempRoots: string[] = []
+
 const originalAdmissionDisabled = process.env.ORCA_GIT_ADMISSION_DISABLED
 
 afterEach(async () => {
@@ -42,6 +43,7 @@ afterEach(async () => {
   } else {
     process.env.ORCA_GIT_ADMISSION_DISABLED = originalAdmissionDisabled
   }
+
   _resetGitAdmissionForTests()
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -50,7 +52,9 @@ function percentile(values: readonly number[], percentileValue: number): number 
   if (values.length === 0) {
     return 0
   }
+
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * percentileValue) - 1)]
 }
 
@@ -74,6 +78,7 @@ printf 'stub:%s\\n' "$*"
 `
   )
   await chmod(stubPath, 0o755)
+
   return binDir
 }
 
@@ -100,23 +105,29 @@ async function measureStorm(mode: StormMeasurement['mode']): Promise<StormMeasur
   const stateDir = path.join(root, 'state')
   await mkdir(stateDir)
   const binDir = await createStubGit(root)
+
   const repoDirs = await Promise.all(
     Array.from({ length: 6 }, async (_, index) => {
       const repoDir = path.join(root, `repo-${index}`)
       await mkdir(repoDir)
+
       return repoDir
     })
   )
+
   const baseEnv = { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}` }
   const startedAt = performance.now()
   const drifts: number[] = []
   let nextJankSample = performance.now() + 50
+
   const jankTimer = setInterval(() => {
     const now = performance.now()
     drifts.push(Math.max(0, now - nextJankSample))
     nextJankSample = now + 50
   }, 50)
+
   let maxConcurrentChildren = 0
+
   const censusTimer = setInterval(() => {
     void liveChildCount(stateDir).then((count) => {
       maxConcurrentChildren = Math.max(maxConcurrentChildren, count)
@@ -135,7 +146,9 @@ async function measureStorm(mode: StormMeasurement['mode']): Promise<StormMeasur
       admissionTier: 'background'
     })
   )
+
   const interactiveQueueSnapshots: InteractiveQueueSnapshot[] = []
+
   const interactiveLatencies = await Promise.all(
     Array.from(
       { length: 10 },
@@ -171,11 +184,13 @@ async function measureStorm(mode: StormMeasurement['mode']): Promise<StormMeasur
         })
     )
   )
+
   await Promise.all(background)
   clearInterval(censusTimer)
   clearInterval(jankTimer)
   maxConcurrentChildren = Math.max(maxConcurrentChildren, await liveChildCount(stateDir))
   const totalWallMs = performance.now() - startedAt
+
   return {
     mode,
     maxConcurrentChildren,
@@ -199,6 +214,7 @@ function formatMeasurementTable(rows: readonly StormMeasurement[]): string {
     interactiveP95Ms: row.interactiveP95Ms.toFixed(1),
     totalWallMs: row.totalWallMs.toFixed(1)
   }))
+
   return JSON.stringify(rounded)
 }
 
@@ -209,17 +225,21 @@ function assertAdmissionLedger(measurement: StormMeasurement): void {
 
   measurement.admissionEvents.forEach((event, index) => {
     expect(event.sequence).toBe(index)
+
     if (event.phase === 'grant') {
       activeWaiters.add(event.waiterId)
       grantSequenceByWaiter.set(event.waiterId, event.sequence)
       const label = event.args.find((arg) => arg.startsWith('interactive-'))
+
       if (label) {
         grantByLabel.set(label, event)
       }
     } else {
       expect(activeWaiters.delete(event.waiterId)).toBe(true)
     }
+
     expect(activeWaiters.size).toBeLessThanOrEqual(MAX_GIT_CHILDREN)
+
     for (const budget of event.budgets) {
       expect(budget.baseUsed).toBeLessThanOrEqual(budget.baseCapacity)
       expect(budget.headroomUsed).toBeLessThanOrEqual(budget.headroomCapacity)
@@ -230,9 +250,11 @@ function assertAdmissionLedger(measurement: StormMeasurement): void {
   for (const snapshot of measurement.interactiveQueueSnapshots) {
     const interactiveGrant = grantByLabel.get(snapshot.commandLabel)
     expect(interactiveGrant).toBeDefined()
+
     const preceded = snapshot.backgroundWaiterIds.filter(
       (waiterId) => interactiveGrant!.sequence < (grantSequenceByWaiter.get(waiterId) ?? Infinity)
     ).length
+
     expect(preceded).toBeGreaterThanOrEqual(Math.ceil(snapshot.backgroundWaiterIds.length * 0.9))
   }
 }

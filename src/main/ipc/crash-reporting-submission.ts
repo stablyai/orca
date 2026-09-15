@@ -45,10 +45,12 @@ export async function submitCrashReport(
   args: CrashReportSubmitArgs
 ): Promise<CrashReportSubmitResult> {
   const report = await getRequestedCrashReport(store, args)
+
   if (!report) {
     const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
+
     const result = await submitFeedback({
       feedback: buildUncapturedCrashReportText(args.notes, diagnosticBundle),
       submissionType: 'crash',
@@ -65,7 +67,9 @@ export async function submitCrashReport(
           }
         : {})
     })
+
     const submittedDiagnosticBundle = resolveSubmittedDiagnosticBundle(diagnosticUpload, result)
+
     return result.ok
       ? { ok: true, report: null, diagnosticBundle: submittedDiagnosticBundle }
       : {
@@ -78,7 +82,9 @@ export async function submitCrashReport(
           diagnosticBundle: submittedDiagnosticBundle
         }
   }
+
   const canSubmitDismissedReport = Boolean(args.reportId && report.status === 'dismissed')
+
   if (
     (!canSubmitDismissedReport && report.status !== 'pending') ||
     submittedReportIds.has(report.id)
@@ -88,6 +94,7 @@ export async function submitCrashReport(
       report: submittedReportIds.has(report.id) ? { ...report, status: 'sent' } : report
     }
   }
+
   if (inFlightSubmissions.has(report.id)) {
     return {
       ok: false,
@@ -98,10 +105,12 @@ export async function submitCrashReport(
   }
 
   inFlightSubmissions.add(report.id)
+
   try {
     const diagnosticUpload = prepareCrashDiagnosticBundle(args.includeDiagnosticLogs !== false)
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)
+
     const result = await submitFeedback({
       feedback: formatCrashReportText(report, args.notes, diagnosticBundle),
       submissionType: 'crash',
@@ -119,7 +128,9 @@ export async function submitCrashReport(
           }
         : {})
     })
+
     const submittedDiagnosticBundle = resolveSubmittedDiagnosticBundle(diagnosticUpload, result)
+
     if (!result.ok) {
       return {
         // Why: keep the renderer contract allow-listed instead of leaking
@@ -131,12 +142,15 @@ export async function submitCrashReport(
         diagnosticBundle: submittedDiagnosticBundle
       }
     }
+
     rememberSubmittedReportId(report.id)
+
     if (report.status === 'dismissed') {
       try {
         // Why: startup prompts are dismissed before the user can send from
         // the still-open dialog, so successful uploads must update storage.
         const sent = await store.markDismissedSent(report.id)
+
         return {
           ok: true,
           report: sent ?? { ...report, status: 'sent' },
@@ -144,6 +158,7 @@ export async function submitCrashReport(
         }
       } catch (error) {
         console.error('[crash-reporting] Failed to mark dismissed crash report sent:', error)
+
         return {
           ok: true,
           report: { ...report, status: 'sent' },
@@ -151,8 +166,10 @@ export async function submitCrashReport(
         }
       }
     }
+
     try {
       const sent = await store.markSent(report.id)
+
       return {
         ok: true,
         report: sent ?? { ...report, status: 'sent' },
@@ -163,6 +180,7 @@ export async function submitCrashReport(
       // failure must not present as upload failure or invite duplicate sends
       // during this app session.
       console.error('[crash-reporting] Failed to mark crash report sent:', error)
+
       return {
         ok: true,
         report: { ...report, status: 'sent' },

@@ -98,6 +98,7 @@ describe('mobile-file-preview-request', () => {
       }),
       ok({ content: '{"ok":true}', truncated: false, byteLength: 11 })
     ])
+
     const onTerminalArtifactSourceRefreshed = vi.fn()
 
     await expect(
@@ -352,6 +353,7 @@ describe('mobile-file-preview-request', () => {
       ok({ content: '{"ok":true}', truncated: false, byteLength: 11 }),
       ok({ ok: true })
     ])
+
     const onTerminalArtifactSourceRefreshed = vi.fn()
 
     await expect(
@@ -421,6 +423,7 @@ describe('mobile-file-preview-request', () => {
       }),
       ok({ content: '{"ok":"changed"}', truncated: false, byteLength: 16 })
     ])
+
     const onTerminalArtifactSourceRefreshed = vi.fn()
 
     await expect(
@@ -560,6 +563,7 @@ describe('mobile-file-preview-request', () => {
         }
       })
     ])
+
     const onTerminalArtifactSourceRefreshed = vi.fn()
 
     await expect(

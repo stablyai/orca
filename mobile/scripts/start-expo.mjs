@@ -6,6 +6,7 @@ import process from 'node:process'
 import { ensureMobileExpoCli } from './mobile-expo-cli.mjs'
 
 const scriptDir = import.meta.dirname
+
 const mobileDir = path.resolve(scriptDir, '..')
 
 function pnpmCommand(args) {
@@ -18,6 +19,7 @@ function pnpmCommand(args) {
 
 function runPnpm(args) {
   const pnpm = pnpmCommand(args)
+
   return new Promise((resolve, reject) => {
     const child = spawn(pnpm.command, pnpm.args, {
       cwd: mobileDir,
@@ -25,6 +27,7 @@ function runPnpm(args) {
       shell: pnpm.shell,
       stdio: 'inherit'
     })
+
     child.on('error', reject)
     child.on('exit', (code, signal) => {
       if (signal) {

@@ -22,6 +22,7 @@ describe('SshPtyOutputIntake', () => {
         pressureMaxBytes: 1024
       }
     )
+
     const first = harness.intake.acceptData(event())
     const second = harness.intake.acceptData(event({ data: 'bbbb' }))
     const third = harness.intake.acceptData(event({ data: 'cccc' }))
@@ -61,6 +62,7 @@ describe('SshPtyOutputIntake', () => {
         pressureMaxBytes: 4096
       }
     )
+
     const receipts = [
       harness.intake.acceptData(event({ data: 'a', rawLength: 1 })),
       harness.intake.acceptData(event({ data: 'bbb', rawLength: 3 })),
@@ -99,6 +101,7 @@ describe('SshPtyOutputIntake', () => {
         globalHighBytes: 4096
       }
     )
+
     const first = harness.intake.acceptData(event({ data: 'aaaa' }))
     const second = harness.intake.acceptData(event({ data: 'bbbb' }))
     const third = harness.intake.acceptData(event({ data: 'cccc' }))
@@ -123,14 +126,17 @@ describe('SshPtyOutputIntake', () => {
 
   it('transfers a committed projection when desktop admission throws', async () => {
     const projections: LegacySshProjectionSemantics[] = []
+
     const harness = createHarness({
       project: (_event, projection) => {
         projections.push(projection)
+
         if (projections.length === 1) {
           throw new Error('send failed')
         }
       }
     })
+
     const receipt = harness.intake.acceptData(event({ data: '\x1b[?20', rawLength: 5 }))
     harness.completions[0]!.resolve()
 
@@ -149,9 +155,11 @@ describe('SshPtyOutputIntake', () => {
 
   it('commits an immutable desktop source identity through projection admission', async () => {
     const projections: LegacySshProjectionSemantics[] = []
+
     const harness = createHarness({
       project: (_event, projection) => projections.push(projection)
     })
+
     const receipt = harness.intake.acceptData(
       event({
         source: {
@@ -164,6 +172,7 @@ describe('SshPtyOutputIntake', () => {
         }
       })
     )
+
     harness.completions[0]!.resolve()
 
     await receipt
@@ -186,6 +195,7 @@ describe('SshPtyOutputIntake', () => {
 
   it('exports only the model-settled source boundary before generation close', async () => {
     const harness = createHarness()
+
     const receipt = harness.intake.acceptData(
       event({
         source: {
@@ -217,6 +227,7 @@ describe('SshPtyOutputIntake', () => {
 
   it('rolls back projection staging when model capture throws synchronously', async () => {
     const project = vi.fn()
+
     const harness = createHarness({
       acceptModel: () => {
         throw new Error('model reservation failed')
@@ -235,6 +246,7 @@ describe('SshPtyOutputIntake', () => {
 
   it('rolls back projection staging when source reservation validation fails', async () => {
     const harness = createHarness()
+
     const source = {
       spanId: 'duplicate',
       clientGeneration: 2,
@@ -243,6 +255,7 @@ describe('SshPtyOutputIntake', () => {
       sourceStartSu: 0,
       sourceEndSu: 4
     }
+
     const first = harness.intake.acceptData(event({ source }))
     harness.completions[0]!.resolve()
     await first
@@ -261,18 +274,22 @@ describe('SshPtyOutputIntake', () => {
 
   it('rolls back committed source and scanner facts when model capture throws', async () => {
     let attempts = 0
+
     const harness = createHarness({
       acceptModel: (accepted) => {
         attempts++
+
         if (attempts === 1) {
           throw new Error('model reservation failed')
         }
+
         return {
           sequence: accepted.rawLength,
           completion: Promise.resolve()
         }
       }
     })
+
     const source = {
       spanId: 'span-1',
       clientGeneration: 2,
@@ -281,6 +298,7 @@ describe('SshPtyOutputIntake', () => {
       sourceStartSu: 0,
       sourceEndSu: 5
     }
+
     await expect(
       harness.intake.acceptData(event({ data: '\x1b[?20', rawLength: 5, source }))
     ).rejects.toThrow('model reservation failed')
@@ -288,6 +306,7 @@ describe('SshPtyOutputIntake', () => {
     const retry = await harness.intake.acceptData(
       event({ data: '\x1b[?20', rawLength: 5, source: { ...source, spanId: 'span-2' } })
     )
+
     expect(retry.projection.identity.displayStart).toBe(0)
     expect(retry.projection.beforeScanner).toEqual({ tail: '', pendingSubscribe: false })
   })
@@ -307,12 +326,14 @@ describe('SshPtyOutputIntake', () => {
   it('keeps exit behind accepted model and projection work', async () => {
     const harness = createHarness({}, { exitBarrierMs: 1000 })
     const dataReceipt = harness.intake.acceptData(event())
+
     const exitReceipt = harness.intake.acceptExit({
       id: 'pty-1',
       code: 0,
       providerGeneration: 1,
       ptyIncarnation: 'incarnation-1'
     })
+
     await Promise.resolve()
     expect(harness.order).toEqual(['model:aaaa', 'project:aaaa'])
 
@@ -323,6 +344,7 @@ describe('SshPtyOutputIntake', () => {
 
   it('admits queued pre-exit source spans before sealing the token', async () => {
     const harness = createHarness({}, { exitBarrierMs: 1000 })
+
     const first = harness.intake.acceptData(
       event({
         source: {
@@ -335,6 +357,7 @@ describe('SshPtyOutputIntake', () => {
         }
       })
     )
+
     const second = harness.intake.acceptData(
       event({
         data: 'bbbb',
@@ -348,6 +371,7 @@ describe('SshPtyOutputIntake', () => {
         }
       })
     )
+
     const exit = harness.intake.acceptExit({
       id: 'pty-1',
       code: 0,
@@ -392,6 +416,7 @@ describe('SshPtyOutputIntake', () => {
     )
 
     let exited = false
+
     const exitReceipt = harness.intake
       .acceptExit({
         id: 'pty-1',
@@ -402,6 +427,7 @@ describe('SshPtyOutputIntake', () => {
       .then(() => {
         exited = true
       })
+
     await Promise.resolve()
 
     expect(exited).toBe(false)
@@ -414,9 +440,11 @@ describe('SshPtyOutputIntake', () => {
 
   it('owns renderer exit preparation through finalization and duplicate rejection', async () => {
     const releaseRendererExit = vi.fn()
+
     const harness = createHarness({
       prepareExit: vi.fn(() => releaseRendererExit)
     })
+
     const dataReceipt = harness.intake.acceptData(event())
     harness.completions[0]!.resolve()
     const receipt = await dataReceipt
@@ -425,12 +453,14 @@ describe('SshPtyOutputIntake', () => {
       4,
       4
     )
+
     const exitEvent = {
       id: 'pty-1',
       code: 0,
       providerGeneration: 1,
       ptyIncarnation: 'incarnation-1'
     }
+
     const exit = harness.intake.acceptExit(exitEvent)
     await Promise.resolve()
 
@@ -445,9 +475,11 @@ describe('SshPtyOutputIntake', () => {
 
   it('releases renderer exit preparation when generation close aborts finalization', async () => {
     const releaseRendererExit = vi.fn()
+
     const harness = createHarness({
       prepareExit: vi.fn(() => releaseRendererExit)
     })
+
     const dataReceipt = harness.intake.acceptData(event())
     harness.completions[0]!.resolve()
     const receipt = await dataReceipt
@@ -456,12 +488,14 @@ describe('SshPtyOutputIntake', () => {
       4,
       4
     )
+
     const exit = harness.intake.acceptExit({
       id: 'pty-1',
       code: 0,
       providerGeneration: 1,
       ptyIncarnation: 'incarnation-1'
     })
+
     await Promise.resolve()
 
     harness.intake.closeGeneration(1, 'provider-replaced')
@@ -474,12 +508,15 @@ describe('SshPtyOutputIntake', () => {
   it('retains exit until a required remote source consumer settles', async () => {
     const harness = createHarness({}, { exitBarrierMs: 1000 })
     const remote = harness.intake.getRemoteSourceRangeConsumerHooks()
+
     const stream = {
       ptyId: 'pty-1',
       consumerId: 'remote-1',
       streamGeneration: 'stream-1'
     }
+
     expect(remote.attach(stream)).toBe(true)
+
     const dataReceipt = harness.intake.acceptData(
       event({
         source: {
@@ -492,10 +529,12 @@ describe('SshPtyOutputIntake', () => {
         }
       })
     )
+
     harness.completions[0]!.resolve()
     const receipt = await dataReceipt
 
     let exited = false
+
     const exitReceipt = harness.intake
       .acceptExit({
         id: 'pty-1',
@@ -506,6 +545,7 @@ describe('SshPtyOutputIntake', () => {
       .then(() => {
         exited = true
       })
+
     await Promise.resolve()
     expect(exited).toBe(false)
 
@@ -522,6 +562,7 @@ describe('SshPtyOutputIntake', () => {
       },
       { exitBarrierMs: 1, exitCancellationProofMs: 10 }
     )
+
     const dataReceipt = harness.intake.acceptData(event())
     harness.completions[0]!.resolve()
     const receipt = await dataReceipt
@@ -551,17 +592,22 @@ describe('SshPtyOutputIntake', () => {
 
   it('cancels only the timed-out source delivery and keeps the provider usable', async () => {
     const cancelSourceDelivery = vi.fn(async () => ({ sentEndSu: 4, creditedEndSu: 0 }))
+
     const harness = createHarness(
       { cancelSourceDelivery },
       { exitBarrierMs: 1, exitCancellationProofMs: 100 }
     )
+
     const remote = harness.intake.getRemoteSourceRangeConsumerHooks()
+
     const stream = {
       ptyId: 'pty-1',
       consumerId: 'remote-1',
       streamGeneration: 'stream-1'
     }
+
     remote.attach(stream)
+
     const dataReceipt = harness.intake.acceptData(
       event({
         source: {
@@ -574,6 +620,7 @@ describe('SshPtyOutputIntake', () => {
         }
       })
     )
+
     harness.completions[0]!.resolve()
     await dataReceipt
 
@@ -595,6 +642,7 @@ describe('SshPtyOutputIntake', () => {
     const sibling = harness.intake.acceptData(
       event({ id: 'pty-2', ptyIncarnation: 'incarnation-2' })
     )
+
     harness.completions[1]!.resolve()
     await expect(sibling).resolves.toMatchObject({ ptyId: 'pty-2' })
   })
@@ -621,6 +669,7 @@ describe('SshPtyOutputIntake', () => {
 
   it('reclaims a partially admitted recovery prefix from authoritative proof', async () => {
     const harness = createHarness()
+
     const receipt = harness.intake.acceptData(
       event({
         source: {
@@ -633,6 +682,7 @@ describe('SshPtyOutputIntake', () => {
         }
       })
     )
+
     harness.completions[0]!.resolve()
     await receipt
 
@@ -677,6 +727,7 @@ describe('SshPtyOutputIntake', () => {
     const next = harness.intake.acceptData(
       event({ providerGeneration: 2, ptyIncarnation: 'incarnation-2' })
     )
+
     harness.completions[1]!.resolve()
     await expect(next).resolves.toMatchObject({
       projection: { identity: { ptyIncarnation: 'incarnation-2', displayStart: 0 } }
@@ -685,6 +736,7 @@ describe('SshPtyOutputIntake', () => {
 
   it('closes the provider when exit finalization fails', async () => {
     const releaseRendererExit = vi.fn()
+
     const harness = createHarness({
       prepareExit: () => releaseRendererExit,
       finalizeExit: () => {
@@ -714,14 +766,17 @@ describe('SshPtyOutputIntake', () => {
         globalHighBytes: 2048
       }
     )
+
     const running = harness.intake.acceptData(event())
     const queued = harness.intake.acceptData(event({ data: 'bbbb' }))
+
     const exit = harness.intake.acceptExit({
       id: 'pty-1',
       code: 0,
       providerGeneration: 1,
       ptyIncarnation: 'incarnation-1'
     })
+
     harness.intake.closeGeneration(1, 'provider-closed')
 
     await expect(queued).rejects.toThrow('provider-closed')
@@ -746,6 +801,7 @@ describe('SshPtyOutputIntake', () => {
         pressureMaxBytes: 1024
       }
     )
+
     const running = harness.intake.acceptData(event())
     const pressured = harness.intake.acceptData(event({ data: 'bbbb' }))
 

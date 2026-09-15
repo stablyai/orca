@@ -54,6 +54,7 @@ type UseFileExplorerHandlersReturn = {
 }
 
 type OpenFileParams = Parameters<UseFileExplorerHandlersParams['openFile']>[0]
+
 type OpenFileOptions = Parameters<UseFileExplorerHandlersParams['openFile']>[1]
 
 export async function activateFileExplorerNode(args: {
@@ -81,21 +82,28 @@ export async function activateFileExplorerNode(args: {
     markPathAsDirectory,
     setSelectedPath
   } = args
+
   if (!activeWorktreeId) {
     return
   }
+
   setSelectedPath(node.path)
+
   if (node.isDirectory) {
     if (!canToggleDirectories) {
       return
     }
+
     toggleDir(activeWorktreeId, node.path)
+
     return
   }
+
   if (node.isSymlink) {
     // Why: symlink targets may live in macOS TCC-protected app data. Resolve
     // them only after the user explicitly activates the row.
     let targetIsDirectory = false
+
     try {
       // Why: activation is explicit intent to follow the link, so grant its target the
       // access a terminal-link click already grants. Remote owners skip it — the
@@ -103,18 +111,22 @@ export async function activateFileExplorerNode(args: {
       if (node.operationOwner?.kind === 'local') {
         await authorizeExternalPath({ targetPath: node.path })
       }
+
       targetIsDirectory = (await statPath(node.path)).isDirectory
     } catch {
       // Why: an unresolvable target can't be proven to be a directory; fall through so
       // the editor reports the real error instead of the click dead-ending here.
     }
+
     if (targetIsDirectory) {
       const loadedAsDirectory = await loadDir(node.path, node.depth, {
         force: true,
         failOnError: true
       })
+
       if (loadedAsDirectory) {
         markPathAsDirectory(node.path)
+
         if (canToggleDirectories) {
           toggleDir(activeWorktreeId, node.path)
         }
@@ -126,17 +138,22 @@ export async function activateFileExplorerNode(args: {
           )
         )
       }
+
       return
     }
   }
+
   let fileRuntimeEnvironmentId: string | null
+
   try {
     const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
     fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
   } catch {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
+
     return
   }
+
   openFile(
     {
       filePath: node.path,
@@ -182,6 +199,7 @@ export function useFileExplorerHandlers({
     if (pendingDirToggle.current === null) {
       return
     }
+
     clearTimeout(pendingDirToggle.current.timer)
     pendingDirToggle.current = null
   }, [])
@@ -191,11 +209,14 @@ export function useFileExplorerHandlers({
   // standing, so run it now instead of dropping the folder the user opened.
   const settlePendingDirToggle = useCallback((retractingDirPath: string | null): void => {
     const pending = pendingDirToggle.current
+
     if (pending === null) {
       return
     }
+
     clearTimeout(pending.timer)
     pendingDirToggle.current = null
+
     if (pending.dirPath !== retractingDirPath) {
       pending.run()
     }
@@ -206,11 +227,14 @@ export function useFileExplorerHandlers({
   const handleClick = useCallback(
     (node: TreeNode, dirToggle: DirToggleTiming = 'immediate') => {
       settlePendingDirToggle(node.path)
+
       if (dirToggle === 'skip' && node.isDirectory) {
         // Why: the rename about to start owns this gesture; selection still applies.
         setSelectedPath(node.path)
+
         return
       }
+
       void activateFileExplorerNode({
         node,
         activeWorktreeId,
@@ -258,6 +282,7 @@ export function useFileExplorerHandlers({
       if (!activeWorktreeId || node.isDirectory) {
         return
       }
+
       makePreviewFilePermanent(node.path)
     },
     [activeWorktreeId, makePreviewFilePermanent]
@@ -266,16 +291,21 @@ export function useFileExplorerHandlers({
   const handleWheelCapture = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
       const container = scrollRef.current
+
       if (!container || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
         return
       }
+
       const target = e.target
+
       if (!(target instanceof Element) || !target.closest(FILE_EXPLORER_DRAGGABLE_SELECTOR)) {
         return
       }
+
       if (container.scrollHeight <= container.clientHeight) {
         return
       }
+
       e.preventDefault()
       container.scrollTop += e.deltaY
     },

@@ -3,6 +3,7 @@ import { createUsageEventAggregation } from './usage-event-aggregation'
 import type { UsageAttributedEventFields } from './usage-rollup-records'
 
 type Event = UsageAttributedEventFields & { cost: number }
+
 const aggregation = createUsageEventAggregation<Event, { cost: number }>({
   metric: {
     empty: () => ({ cost: 0 }),
@@ -40,6 +41,7 @@ it('folds events without rescanning accumulated location breakdowns', () => {
     Object.defineProperty(event, 'projectKey', {
       get() {
         reads += 1
+
         return `path-${index}`
       }
     })
@@ -59,15 +61,18 @@ it('merges rollups using first-match indexes without mutating source breakdowns'
   const source = aggregation.aggregate(events(1000)).sessions[0]
   const existing = structuredClone(source)
   let reads = 0
+
   for (const entry of [...existing.locationBreakdown, ...existing.locationModelBreakdown]) {
     const key = entry.locationKey
     Object.defineProperty(entry, 'locationKey', {
       get() {
         reads += 1
+
         return key
       }
     })
   }
+
   const target = new Map([['session', existing]])
   aggregation.mergeSessions(target, [source, source])
   expect(reads).toBeLessThan(10000)
@@ -123,8 +128,10 @@ it('folds later sources into rows the merge itself appended', () => {
   expect(rows.map((entry) => entry.eventCount)).toEqual([2])
   const models = existing.modelBreakdown.filter((entry) => entry.modelKey === 'new-model')
   expect(models.map((entry) => entry.eventCount)).toEqual([2])
+
   const tuples = existing.locationModelBreakdown.filter(
     (entry) => entry.locationKey === 'new-location' && entry.modelKey === 'new-model'
   )
+
   expect(tuples.map((entry) => entry.eventCount)).toEqual([2])
 })

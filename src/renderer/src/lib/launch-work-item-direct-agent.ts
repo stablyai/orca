@@ -52,7 +52,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     args.agentArgs === undefined
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
+
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
+
   const sessionOptions = resolveInitialNativeChatSessionOptions(args.settings, {
     agent: args.agent,
     ...(args.promptDelivery === 'draft'
@@ -60,6 +62,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       : {}),
     nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable
   })
+
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
@@ -106,9 +109,11 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     sessionOptions,
     allowEmptyPromptLaunch: true
   })
+
   if (startupPlan && args.promptDelivery === 'draft') {
     startupPlan.draftPrompt = args.draftContent
   }
+
   return {
     startupPlan,
     draftLaunchedNatively: false,
@@ -139,10 +144,12 @@ export function buildDirectWorkItemStartupOpts(
   if (!plan) {
     return {}
   }
+
   const telemetry: AgentStartedTelemetry | null =
     agent === null
       ? null
       : { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
+
   return {
     startup: {
       command: plan.launchCommand,

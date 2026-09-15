@@ -5,6 +5,7 @@ import { localPreflightContextKey, getLocalPreflightContext } from '@/lib/local-
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useRef } from 'react'
 import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
+
 export function useTaskPageStoreBindings() {
   useTranslation()
   const settings = useAppStore((s) => s.settings)
@@ -59,9 +60,11 @@ export function useTaskPageStoreBindings() {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
+
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
@@ -82,6 +85,7 @@ export function useTaskPageStoreBindings() {
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
+
   return {
     settings,
     persistedUIReady,
@@ -154,4 +158,5 @@ export function useTaskPageStoreBindings() {
     submitShortcutLabel
   }
 }
+
 export type TaskPageStoreBindingsModel = ReturnType<typeof useTaskPageStoreBindings>

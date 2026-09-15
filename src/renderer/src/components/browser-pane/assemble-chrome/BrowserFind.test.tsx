@@ -17,6 +17,7 @@ function createWebviewRef(): {
   // what happened to the node it swapped out.
   const addEventListener = vi.fn()
   const removeEventListener = vi.fn()
+
   const ref = {
     current: {
       findInPage,
@@ -25,6 +26,7 @@ function createWebviewRef(): {
       removeEventListener
     } as unknown as Electron.WebviewTag
   }
+
   return { ref, findInPage, stopFindInPage, addEventListener, removeEventListener }
 }
 
@@ -36,6 +38,7 @@ function openFindWithQuery(query: string): ReturnType<typeof createWebviewRef> {
   act(() => {
     vi.advanceTimersByTime(250)
   })
+
   return webview
 }
 
@@ -115,12 +118,15 @@ describe('BrowserFind session flags', () => {
 describe('BrowserFind listener rebinding', () => {
   it('moves the found-in-page listener onto a guest swapped in under the same mount', () => {
     const first = createWebviewRef()
+
     const { rerender } = render(
       <BrowserFind isOpen onClose={vi.fn()} webviewRef={first.ref} guestGeneration={1} />
     )
+
     const staleListener = first.addEventListener.mock.calls.find(
       (call) => call[0] === 'found-in-page'
     )?.[1]
+
     expect(staleListener).toBeTypeOf('function')
 
     const second = createWebviewRef()

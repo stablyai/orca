@@ -52,6 +52,7 @@ export function requestTerminalLinkAction(
   if (!context.claimPtyMouse()) {
     return false
   }
+
   event.preventDefault()
   context.request({
     ...details,
@@ -60,5 +61,6 @@ export function requestTerminalLinkAction(
     anchorY: event.clientY,
     restoreFocus: context.focusTerminal
   })
+
   return true
 }

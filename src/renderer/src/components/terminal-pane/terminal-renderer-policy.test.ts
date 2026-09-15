@@ -12,6 +12,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: undefined,
         userGpuMode: 'off'
       })
+
       // Why: the mode gate downstream forces DOM; the gate stays open so a later
       // switch to auto/on can re-attach without waiting for a new title frame.
       expect(decision).toEqual({
@@ -27,6 +28,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'gemini',
         userGpuMode: 'off'
       })
+
       expect(decision.gpuEnabled).toBe(false)
       expect(decision.reason).toBe('user-setting')
     })
@@ -37,6 +39,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'gemini',
         userGpuMode: 'on'
       })
+
       // Why: agent compatibility exclusions must not override an explicit on.
       expect(decision).toEqual({
         gpuEnabled: true,
@@ -51,6 +54,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: undefined,
         userGpuMode: 'auto'
       })
+
       expect(decision).toEqual({
         gpuEnabled: true,
         reason: 'capability',
@@ -67,6 +71,7 @@ describe('resolvePaneRendererPolicy', () => {
         userGpuMode: 'on',
         webglUnavailable: true
       })
+
       expect(decision).toEqual({
         gpuEnabled: false,
         reason: 'capability',
@@ -81,6 +86,7 @@ describe('resolvePaneRendererPolicy', () => {
         userGpuMode: 'on',
         inContextLossContainment: true
       })
+
       expect(decision).toEqual({
         gpuEnabled: false,
         reason: 'context-loss',
@@ -95,6 +101,7 @@ describe('resolvePaneRendererPolicy', () => {
         userGpuMode: 'auto',
         inContextLossContainment: true
       })
+
       expect(decision.gpuEnabled).toBe(false)
       expect(decision.reason).toBe('context-loss')
     })
@@ -107,6 +114,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: undefined,
         userGpuMode: 'auto'
       })
+
       expect(decision).toEqual({
         gpuEnabled: false,
         reason: 'agent-compatibility',
@@ -120,6 +128,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'gemini',
         userGpuMode: 'auto'
       })
+
       expect(decision).toEqual({
         gpuEnabled: false,
         reason: 'agent-compatibility',
@@ -133,6 +142,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'omp',
         userGpuMode: 'auto'
       })
+
       // Why: OMP ownership is authoritative and outranks raw title text (#7428).
       expect(decision.gpuEnabled).toBe(true)
       expect(decision.reason).toBe('capability')
@@ -144,6 +154,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'unknown',
         userGpuMode: 'auto'
       })
+
       expect(decision.gpuEnabled).toBe(false)
       expect(decision.reason).toBe('agent-compatibility')
     })
@@ -155,11 +166,13 @@ describe('resolvePaneRendererPolicy', () => {
     for (const token of AGENT_TOKENS) {
       it(`keeps GPU on when a title mentions "${token}" but owner is another agent`, () => {
         const ownerAgentType: AgentType = token === 'claude' ? 'codex' : 'claude'
+
         const decision = resolvePaneRendererPolicy({
           rawTitle: token,
           ownerAgentType,
           userGpuMode: 'auto'
         })
+
         expect(decision.gpuEnabled).toBe(true)
       })
     }
@@ -170,6 +183,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'omp',
         userGpuMode: 'auto'
       })
+
       expect(decision.gpuEnabled).toBe(true)
     })
 
@@ -179,6 +193,7 @@ describe('resolvePaneRendererPolicy', () => {
         ownerAgentType: 'pi',
         userGpuMode: 'auto'
       })
+
       expect(decision.gpuEnabled).toBe(true)
     })
   })

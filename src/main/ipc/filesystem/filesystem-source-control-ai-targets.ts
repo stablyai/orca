@@ -12,6 +12,7 @@ import { splitWorktreeId } from '../../../shared/worktree/id'
 
 function comparableLocalPath(value: string): string {
   const normalized = resolve(value)
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -29,10 +30,12 @@ function hasRegisteredWorktreeMetaForRepo(
 ): boolean {
   for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
     const parsed = splitWorktreeId(worktreeId)
+
     if (parsed?.repoId === repoId && candidatePaths.has(comparableLocalPath(parsed.worktreePath))) {
       return true
     }
   }
+
   return false
 }
 
@@ -46,8 +49,10 @@ function hasRegisteredRemoteWorktreeMetaForRepo(
   worktreePath: string
 ): boolean {
   const comparableWorktreePath = comparableRemotePath(worktreePath)
+
   for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
     const parsed = splitWorktreeId(worktreeId)
+
     if (
       parsed?.repoId === repoId &&
       comparableRemotePath(parsed.worktreePath) === comparableWorktreePath
@@ -55,6 +60,7 @@ function hasRegisteredRemoteWorktreeMetaForRepo(
       return true
     }
   }
+
   return false
 }
 
@@ -64,20 +70,26 @@ async function localRepoOwnsWorktree(
   worktreePath: string
 ): Promise<boolean> {
   let resolvedWorktreePath: string
+
   try {
     resolvedWorktreePath = await resolveRegisteredWorktreePath(worktreePath, store)
   } catch {
     return false
   }
+
   const candidatePaths = getCandidateLocalWorktreePaths(worktreePath, resolvedWorktreePath)
+
   if (candidatePaths.has(comparableLocalPath(repo.path))) {
     return true
   }
+
   if (hasRegisteredWorktreeMetaForRepo(store, repo.id, candidatePaths)) {
     return true
   }
+
   try {
     const worktrees = await listRepoWorktreeGraph(repo)
+
     return worktrees.some((worktree) => candidatePaths.has(comparableLocalPath(worktree.path)))
   } catch {
     return false
@@ -91,15 +103,20 @@ async function remoteRepoOwnsWorktree(
   connectionId: string
 ): Promise<boolean> {
   const comparableWorktreePath = comparableRemotePath(worktreePath)
+
   if (comparableRemotePath(repo.path) === comparableWorktreePath) {
     return true
   }
+
   const provider = getSshGitProvider(connectionId)
+
   if (!provider) {
     return hasRegisteredRemoteWorktreeMetaForRepo(store, repo.id, worktreePath)
   }
+
   try {
     const worktrees = await provider.listWorktrees(repo.path)
+
     return worktrees.some(
       (worktree) => comparableRemotePath(worktree.path) === comparableWorktreePath
     )
@@ -115,22 +132,28 @@ export async function getRepoForSourceControlAi(
   if (!args.repoId) {
     return null
   }
+
   const repo = store.getRepo(args.repoId)
+
   if (!repo) {
     return null
   }
+
   if (args.connectionId) {
     if (repo.connectionId !== args.connectionId) {
       return null
     }
+
     // Why: one SSH connection can host several repos; repo-scoped AI overrides apply only when the worktree belongs to that repo.
     return (await remoteRepoOwnsWorktree(store, repo, args.worktreePath, args.connectionId))
       ? repo
       : null
   }
+
   if (repo.connectionId) {
     return null
   }
+
   // Why: renderer-supplied repoId is advisory; apply repo overrides only when the local worktree belongs to that repo.
   return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null
 }
@@ -152,13 +175,16 @@ export async function resolveModelDiscoveryLocalPath(
   } catch (error) {
     const folderWorkspaces =
       typeof store.getFolderWorkspaces === 'function' ? store.getFolderWorkspaces() : []
+
     const isFolderWorkspaceRoot = folderWorkspaces.some(
       (workspace) =>
         comparableLocalPath(workspace.folderPath) === comparableLocalPath(requestedPath)
     )
+
     if (!isFolderWorkspaceRoot) {
       throw error
     }
+
     return resolveAuthorizedPath(requestedPath, store)
   }
 }

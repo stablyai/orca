@@ -19,15 +19,19 @@ function getAutomationSetupSource(
   const setup = projectHostSetups.find(
     (candidate) => candidate.repoId === repoId && candidate.setupState === 'ready'
   )
+
   const repo = repos.find((candidate) => candidate.id === repoId)
   const hookSettings = setup?.hookSettings ?? repo?.hookSettings
+
   const setupConfig = getSetupConfig(
     hookSettings ? { hookSettings } : repo,
     yamlHooks === undefined ? null : yamlHooks
   )
+
   if (!setupConfig) {
     return null
   }
+
   return {
     setupScript: setupConfig.command,
     setupRunPolicy: hookSettings?.setupRunPolicy ?? 'run-by-default'
@@ -40,6 +44,7 @@ export function getAutomationSetupDefaultDecision(
   if (!source) {
     return undefined
   }
+
   return source.setupRunPolicy === 'run-by-default' ? 'run' : 'skip'
 }
 
@@ -54,6 +59,7 @@ export function getVisibleAutomationSetupDecision(args: {
   if (args.createTarget !== 'orca' || args.workspaceMode !== 'new_per_run') {
     return undefined
   }
+
   return getAutomationSetupDefaultDecision(
     getAutomationSetupSource(args.repoId, args.repos, args.projectHostSetups, args.yamlHooks)
   )
@@ -73,6 +79,7 @@ export function resolveAutomationSetupDecisionForSave(args: {
   }
 
   const visibleDefault = getVisibleAutomationSetupDecision(args)
+
   if (visibleDefault) {
     return args.draftSetupDecision ?? visibleDefault
   }
@@ -93,6 +100,7 @@ export function getAutomationSetupDecisionDraftValue(args: {
   if (args.persistedSetupDecision === 'run' || args.persistedSetupDecision === 'skip') {
     return args.persistedSetupDecision
   }
+
   // Why: legacy new-run automations had no saved choice and now dispatch as
   // skip for compatibility; editing them must not silently opt into setup.
   return args.workspaceMode === 'new_per_run' ? 'skip' : undefined

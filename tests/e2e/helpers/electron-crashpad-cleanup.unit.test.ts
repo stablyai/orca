@@ -6,7 +6,9 @@ import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }))
 
 const profile = '/tmp/test profile'
+
 const database = path.join(profile, 'Crashpad')
+
 const reporter = `/Electron Framework/Helpers/chrome_crashpad_handler --database=${database} --annotation=prod=Electron`
 
 afterEach(() => vi.restoreAllMocks())

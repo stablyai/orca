@@ -68,6 +68,7 @@ describe('browser session profile IPC', () => {
     args: { environmentId: string }
   ) => unknown {
     registerBrowserHandlers()
+
     return handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:session:detectBrowsersForClientHost'
     )?.[1]
@@ -120,14 +121,17 @@ describe('browser session profile IPC', () => {
       source: null,
       userAgentMode: 'native'
     }
+
     createProfileMock.mockReturnValue(profile)
     registerBrowserHandlers()
+
     const createHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:session:createProfile'
     )?.[1] as (
       event: { sender: Electron.WebContents },
       args: { scope: 'isolated'; label: string; userAgentMode: 'native' }
     ) => unknown
+
     const sender = {
       id: 91,
       isDestroyed: () => false,

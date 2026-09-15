@@ -21,6 +21,7 @@ export function getDefaultBindings(
       allowBareKeybindings: definition.allowBareKeybindings === true,
       allowShiftOnlyKeybindings: definition.allowShiftOnlyKeybindings === true
     })
+
     return normalized.ok ? normalized.value : binding
   })
 }
@@ -32,26 +33,33 @@ export function getEffectiveKeybindingsForAction(
 ): string[] {
   const definition = DEFINITIONS_BY_ID.get(actionId)
   const override = overrides?.[actionId]
+
   if (Array.isArray(override)) {
     // Why: canonicalize digit-index overrides to <mods>+1 so display/conflict stay consistent even if a hand-edited file stored a different digit.
     if (isDigitIndexActionId(actionId)) {
       const canonical: string[] = []
+
       for (const binding of override) {
         const normalized = canonicalizeDigitIndexBinding(binding)
+
         if (normalized.ok && !canonical.includes(normalized.value)) {
           canonical.push(normalized.value)
         }
       }
+
       return canonical
     }
+
     return override.flatMap((binding) => {
       const normalized = normalizeKeybindingWithOptions(
         binding,
         normalizeOptionsForAction(actionId)
       )
+
       return normalized.ok ? [normalized.value] : []
     })
   }
+
   return definition ? getDefaultBindings(definition, platform) : []
 }
 
@@ -61,9 +69,11 @@ export function getEffectiveKeybindingsForDefinition(
   overrides?: KeybindingOverrides
 ): string[] {
   const override = overrides?.[definition.id]
+
   if (Array.isArray(override)) {
     return getEffectiveKeybindingsForAction(definition.id, platform, overrides)
   }
+
   return getDefaultBindings(definition, platform)
 }
 
@@ -88,9 +98,11 @@ export function keybindingIsActiveInContext(
   if (options.context !== 'terminal') {
     return true
   }
+
   // Why: Orca-first keeps app shortcuts inside terminals; terminal-first is the escape hatch for shells and TUIs.
   if (normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first') {
     return true
   }
+
   return isKeybindingAllowedInTerminal(definition)
 }

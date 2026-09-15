@@ -7,16 +7,20 @@ import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import { RUNTIME_FILE_WATCH_EXIT_DEADLINE_MS } from '../../shared/runtime-file-watch-limits'
 
 export const WATCHER_PROCESS_HARD_KILL_DELAY_MS = 5_000
+
 export const WATCHER_PROCESS_EXIT_DEADLINE_MS = RUNTIME_FILE_WATCH_EXIT_DEADLINE_MS
 
 const physicalExitPromises = new WeakMap<ChildProcess, Promise<void>>()
 
 export function registerWatcherChildPhysicalExit(child: ChildProcess): () => void {
   let resolveExit: () => void = () => undefined
+
   const promise = new Promise<void>((resolve) => {
     resolveExit = resolve
   })
+
   physicalExitPromises.set(child, promise)
+
   return resolveExit
 }
 
@@ -43,8 +47,10 @@ export class WatcherTerminationQueue {
         this.current = null
       }
     })
+
     this.current = tracked
     ignoreWatcherTermination(tracked)
+
     return tracked
   }
 
@@ -57,12 +63,15 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve(true)
   }
+
   return new Promise((resolve) => {
     let settled = false
+
     const finish = (exited: boolean): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(hardKillTimer)
       clearTimeout(exitDeadlineTimer)
@@ -70,12 +79,14 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
       child.removeListener('close', onClose)
       resolve(exited)
     }
+
     const onExit = (): void => finish(true)
     // Why: an asynchronous spawn failure can close without emitting exit; the
     // close event is still definitive proof that the child owns no OS handles.
     const onClose = (): void => finish(true)
     child.once('exit', onExit)
     child.once('close', onClose)
+
     const hardKillTimer = setTimeout(() => {
       try {
         child.kill('SIGKILL')
@@ -83,9 +94,11 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
         // The finite deadline below reports termination failure.
       }
     }, WATCHER_PROCESS_HARD_KILL_DELAY_MS)
+
     hardKillTimer.unref?.()
     const exitDeadlineTimer = setTimeout(() => finish(false), WATCHER_PROCESS_EXIT_DEADLINE_MS)
     exitDeadlineTimer.unref?.()
+
     try {
       child.kill()
     } catch {
@@ -105,9 +118,11 @@ export function createWatcherChildTerminationFailure(child: ChildProcess): Watch
             child.removeListener('close', finish)
             resolve()
           }
+
           child.once('exit', finish)
           child.once('close', finish)
         }))
+
   return new WatcherProcessFailure(
     'file watcher process did not exit after termination deadline',
     'supervisor',
@@ -138,5 +153,6 @@ export async function terminateIdleWatcherChild(
     )
     throw error
   }
+
   resolvePendingWatcherUnsubscribes(pendingUnsubscribes)
 }

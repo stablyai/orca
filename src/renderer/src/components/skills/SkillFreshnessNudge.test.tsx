@@ -61,6 +61,7 @@ function eligibleInventory(): SkillFreshnessInventory {
 vi.mock('@/hooks/useSkillFreshness', () => ({
   useSkillFreshness: (enabled = true) => {
     mocks.freshnessEnabled = enabled
+
     return {
       inventory: mocks.inventory,
       loading: false,
@@ -89,12 +90,15 @@ vi.mock('@/store', () => {
     settings: mocks.settingsLoaded ? { dismissedSkillFreshnessNudges: mocks.dismissed } : null,
     updateSettings: mocks.updateSettings
   })
+
   const useAppStore = (selector: (value: ReturnType<typeof state>) => unknown) => selector(state())
   useAppStore.getState = state
+
   return { useAppStore }
 })
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderNudge(): Promise<void> {
@@ -134,6 +138,7 @@ describe('SkillFreshnessNudge', () => {
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null

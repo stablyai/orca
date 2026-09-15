@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
   recordSelfInitiatedTreeKillMock: vi.fn()
 }))
+
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
 }))
@@ -67,6 +68,7 @@ describe('POSIX PTY process-group termination', () => {
   it('ignores groups that exited after the snapshot but preserves real signal errors', () => {
     const gone = Object.assign(new Error('gone'), { code: 'ESRCH' })
     const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
+
     const signalProcessGroup = vi
       .fn<(pgid: number) => void>()
       .mockImplementationOnce(() => {

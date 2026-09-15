@@ -6,6 +6,7 @@ import type { DetectedPort } from '../../shared/ssh-types'
 // old 3s while keeping new-port detection well under the 30s workspace-scanner
 // cadence users already accept.
 export const SSH_PORT_SCAN_BASE_INTERVAL_MS = 12_000
+
 // Why: idle backoff cap — an unchanged port set doubles the interval up to
 // this bound, so a quiet remote costs two scans per minute instead of twenty
 // without exceeding the existing workspace-port scanner's visible cadence.
@@ -56,19 +57,23 @@ export class PortScanner {
       previousPorts: new Map(),
       initialPorts: null
     }
+
     const isCurrent = (): boolean => this.handles.get(targetId) === handle
 
     // Why: guard against overlapping scans. The timer chain only reschedules
     // after a poll completes, but the visibility-resume path can race a poll
     // still in flight on a slow remote.
     let polling = false
+
     const poll = async (): Promise<void> => {
       if (polling) {
         return
       }
+
       polling = true
       const requestAbortController = new AbortController()
       handle.requestAbortController = requestAbortController
+
       try {
         const result = (await mux.request('ports.detect', undefined, {
           signal: requestAbortController.signal
@@ -82,6 +87,7 @@ export class PortScanner {
         }
 
         const currentPorts = new Map<string, DetectedPort>()
+
         for (const p of result.ports) {
           currentPorts.set(`${p.host}:${p.port}`, p)
         }
@@ -103,23 +109,30 @@ export class PortScanner {
         if (handle.requestAbortController === requestAbortController) {
           handle.requestAbortController = null
         }
+
         polling = false
       }
     }
 
     const tick = async (): Promise<void> => {
       handle.timer = null
+
       if (!isCurrent()) {
         return
       }
+
       if (!this.visibility.isWindowVisible()) {
         handle.parkedWhileHidden = true
+
         return
       }
+
       await poll()
+
       if (!isCurrent()) {
         return
       }
+
       handle.timer = setTimeout(() => void tick(), handle.intervalMs)
     }
 
@@ -127,6 +140,7 @@ export class PortScanner {
       if (!isCurrent() || !handle.parkedWhileHidden) {
         return
       }
+
       handle.parkedWhileHidden = false
       void tick()
     })
@@ -137,20 +151,25 @@ export class PortScanner {
 
   getDetectedPorts(targetId: string): DetectedPort[] {
     const handle = this.handles.get(targetId)
+
     if (!handle) {
       return []
     }
+
     return Array.from(handle.previousPorts.values())
   }
 
   stopScanning(targetId: string): void {
     const handle = this.handles.get(targetId)
+
     if (!handle) {
       return
     }
+
     if (handle.timer) {
       clearTimeout(handle.timer)
     }
+
     handle.requestAbortController?.abort()
     handle.requestAbortController = null
     handle.unsubscribeVisibility()
@@ -168,14 +187,18 @@ function portsEqual(a: Map<string, DetectedPort>, b: Map<string, DetectedPort>):
   if (a.size !== b.size) {
     return false
   }
+
   for (const [key, entryA] of a) {
     const entryB = b.get(key)
+
     if (!entryB) {
       return false
     }
+
     if (entryA.pid !== entryB.pid || entryA.processName !== entryB.processName) {
       return false
     }
   }
+
   return true
 }

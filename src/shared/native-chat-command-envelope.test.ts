@@ -46,6 +46,7 @@ describe('surfaceSkillInvocationUserTurns', () => {
         '<command-message>ce-brainstorm</command-message>\n<command-name>/ce-brainstorm</command-name>\n<command-args>improve the picker</command-args>'
       )
     ]
+
     const out = surfaceSkillInvocationUserTurns(messages, CATALOG)
     expect(out[0].blocks).toEqual([{ type: 'text', text: '/ce-brainstorm improve the picker' }])
     expect(out[0].id).toBe('user-1')
@@ -57,6 +58,7 @@ describe('surfaceSkillInvocationUserTurns', () => {
         '<command-message>compound-engineering:ce-brainstorm</command-message>\n<command-name>/compound-engineering:ce-brainstorm</command-name>\n<command-args>hi</command-args>'
       )
     ]
+
     const out = surfaceSkillInvocationUserTurns(messages, CATALOG)
     expect(out[0].blocks).toEqual([{ type: 'text', text: '/ce-brainstorm hi' }])
   })
@@ -65,6 +67,7 @@ describe('surfaceSkillInvocationUserTurns', () => {
     const messages = [
       userTurn('<command-name>/some-plugin:clear</command-name>\n<command-args></command-args>')
     ]
+
     const out = surfaceSkillInvocationUserTurns(messages, CATALOG)
     expect(out[0].blocks).toEqual([{ type: 'text', text: '/clear' }])
   })
@@ -73,6 +76,7 @@ describe('surfaceSkillInvocationUserTurns', () => {
     const messages = [
       userTurn('<command-name>/model</command-name>\n<command-args></command-args>')
     ]
+
     expect(surfaceSkillInvocationUserTurns(messages, CATALOG)).toBe(messages)
   })
 
@@ -91,6 +95,7 @@ describe('surfaceSkillInvocationUserTurns', () => {
         ]
       })
     ]
+
     expect(surfaceSkillInvocationUserTurns(messages, CATALOG)).toBe(messages)
   })
 })

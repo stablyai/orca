@@ -43,6 +43,7 @@ const CASES: ConfigCase[] = [
     name: 'no ZDOTDIR at all',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=plain\n')
+
       return home
     }
   },
@@ -52,6 +53,7 @@ const CASES: ConfigCase[] = [
       const dir = join(home, '.config', 'zsh')
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(home, '.zshenv'), `export ORCA_TEST_MARK=xdg\nexport ZDOTDIR="${dir}"\n`)
+
       return dir
     }
   },
@@ -64,6 +66,7 @@ const CASES: ConfigCase[] = [
       mkdirSync(dirname(common), { recursive: true })
       writeFileSync(common, `export ZDOTDIR="${dir}"\n`)
       writeFileSync(join(home, '.zshenv'), `export ORCA_TEST_MARK=sourced\nsource "${common}"\n`)
+
       return dir
     }
   },
@@ -76,6 +79,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         `export ORCA_TEST_MARK=spaces\nexport ZDOTDIR="${dir}"\n`
       )
+
       return dir
     }
   },
@@ -90,6 +94,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         `export ORCA_TEST_MARK=twice\nexport ZDOTDIR="${first}"\nexport ZDOTDIR="${dir}"\n`
       )
+
       return dir
     }
   },
@@ -102,6 +107,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         `export ORCA_TEST_MARK=trailing\nexport ZDOTDIR="${dir}/"\n`
       )
+
       return dir
     }
   },
@@ -112,6 +118,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         `export ORCA_TEST_MARK=missing\nexport ZDOTDIR="${join(home, 'nope')}"\n`
       )
+
       return home
     }
   },
@@ -119,6 +126,7 @@ const CASES: ConfigCase[] = [
     name: 'ZDOTDIR set to the empty string',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=empty\nexport ZDOTDIR=""\n')
+
       return home
     }
   },
@@ -126,6 +134,7 @@ const CASES: ConfigCase[] = [
     name: 'ZDOTDIR explicitly set to $HOME',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=home\nexport ZDOTDIR="$HOME"\n')
+
       return home
     }
   },
@@ -133,6 +142,7 @@ const CASES: ConfigCase[] = [
     name: 'a .zshenv with a syntax error',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=broken\nif [ ; then\n')
+
       return home
     }
   },
@@ -140,6 +150,7 @@ const CASES: ConfigCase[] = [
     name: 'a .zshenv running set -u before anything else',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'set -u\nexport ORCA_TEST_MARK=nounset\n')
+
       return home
     }
   },
@@ -147,6 +158,7 @@ const CASES: ConfigCase[] = [
     name: 'a .zshenv running set -e with a failing command',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'set -e\nexport ORCA_TEST_MARK=errexit\nfalse\n')
+
       return home
     }
   },
@@ -157,6 +169,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         'setopt extendedglob nullglob\nexport ORCA_TEST_MARK=globs\n'
       )
+
       return home
     }
   },
@@ -164,6 +177,7 @@ const CASES: ConfigCase[] = [
     name: 'a .zshenv that unsets HOME',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=nohome\nunset HOME\n')
+
       return home
     }
   },
@@ -171,6 +185,7 @@ const CASES: ConfigCase[] = [
     name: 'ZDOTDIR containing only slashes',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=slashes\nexport ZDOTDIR="///"\n')
+
       return home
     }
   },
@@ -181,6 +196,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         'export ORCA_TEST_MARK=blank\nexport ZDOTDIR="$(printf \'\\t\\n\')"\n'
       )
+
       return home
     }
   },
@@ -193,6 +209,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         `export ORCA_TEST_MARK=quote\nexport ZDOTDIR=${JSON.stringify(dir)}\n`
       )
+
       return dir
     }
   },
@@ -203,6 +220,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         'export ORCA_TEST_MARK=conditional\nexport ZDOTDIR="$HOME/x"\nunset ZDOTDIR\n'
       )
+
       return home
     }
   },
@@ -216,6 +234,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         'typeset -U path\npath=(/usr/bin /bin /usr/bin)\nexport ORCA_TEST_MARK=uniqpath\n'
       )
+
       return home
     }
   },
@@ -228,6 +247,7 @@ const CASES: ConfigCase[] = [
         join(home, '.zshenv'),
         `fpath=(${JSON.stringify(fns)} $fpath)\norca_test_fn() { : }\nexport ORCA_TEST_MARK=fnscope\n`
       )
+
       return home
     }
   },
@@ -235,6 +255,7 @@ const CASES: ConfigCase[] = [
     name: 'a .zshenv that calls exit',
     setup: (home) => {
       writeFileSync(join(home, '.zshenv'), 'export ORCA_TEST_MARK=exiting\nexit 0\n')
+
       return home
     }
   }
@@ -248,6 +269,7 @@ function wrappedEnv(home: string): Record<string, string> {
     waitsForShellReady: false,
     emitsStartupIdentity: false
   })
+
   const launch = getShellLaunchConfig(ZSH_PATH, features)
   // Why ORCA_ORIG_ZDOTDIR is dropped rather than pinned to the sandbox home:
   // these cases are about a user who has no inherited ZDOTDIR, so the pane must
@@ -255,6 +277,7 @@ function wrappedEnv(home: string): Record<string, string> {
   // launch config computes this one from the real process env, which would
   // otherwise leak the developer's own ZDOTDIR into the run.
   const { ORCA_ORIG_ZDOTDIR: _dropped, ...env } = launch.env
+
   return {
     PATH: '/usr/bin:/bin',
     HOME: home,
@@ -272,19 +295,23 @@ describe.skipIf(process.platform === 'win32')(
         if (!hasZsh) {
           return
         }
+
         const home = makeZshHome({})
+
         try {
           const zshrcDir = testCase.setup(home)
           mkdirSync(zshrcDir, { recursive: true })
           writeFileSync(join(zshrcDir, '.zshrc'), 'export ORCA_TEST_FROM_ZSHRC=1\n')
 
           const wrapped = await runZshPty({ env: wrappedEnv(home), report: REPORTED })
+
           const unwrapped = await runZshPty({
             env: { PATH: '/usr/bin:/bin', HOME: home },
             report: REPORTED
           })
 
           expect(wrapped.exitedBeforePrompt).toBe(unwrapped.exitedBeforePrompt)
+
           for (const key of REPORTED) {
             expect(
               wrapped.values[key],
@@ -321,6 +348,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -339,6 +367,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
       env.ZDOTDIR
     )
     renameSync(userDataPath, movedRoot)
+
     try {
       return await runZshPty({
         env: { ...env, ZDOTDIR: relocated },
@@ -360,6 +389,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
       // to re-derive the real one from `%x` to avoid using it; this one bakes no
       // path, so the split cannot arise. Renaming the root reproduces it.
       const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
+
       try {
         const { values } = await runFromRelocatedRoot(home, `${userDataPath}-wsl-view`)
 
@@ -381,6 +411,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
     // a bare prompt with none of the user's config. Nothing is baked now, and a
     // value this wrapper cannot use degrades to $HOME, where zsh itself looks.
     const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
+
     try {
       // Unique per run: a fixed name here shares one path with every other run in
       // the system temp dir, so a killed run leaves a stale directory behind and
@@ -409,6 +440,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
     writeFileSync(join(home, '.zshenv'), `export ZDOTDIR=${JSON.stringify(xdg)}\n`)
     writeFileSync(join(xdg, '.zshrc'), 'export ORCA_TEST_IN_ZSHRC="$ZDOTDIR"\n')
     writeFileSync(join(xdg, '.zprofile'), 'export ORCA_TEST_IN_ZPROFILE="$ZDOTDIR"\n')
+
     try {
       const report = ['ORCA_TEST_IN_ZSHRC', 'ORCA_TEST_IN_ZPROFILE']
       const wrapped = await runZshPty({ env: wrappedEnv(home), report })
@@ -435,6 +467,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
     mkdirSync(foreign, { recursive: true })
     writeFileSync(join(foreign, '.zshrc'), 'export ORCA_TEST_FROM_WRAPPER_DIR=1\n')
     writeFileSync(join(foreign, ZSH_WRAPPER_DIR_MARKER_FILE), '')
+
     try {
       const { values } = await runZshPty({
         env: { ...wrappedEnv(home), ORCA_ORIG_ZDOTDIR: foreign },
@@ -456,6 +489,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
     // inside the wrapper dir. A pane can no longer hand any child a ZDOTDIR that
     // is Orca's, because it does not have one itself past the first few lines.
     const home = makeZshHome({ '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n' })
+
     try {
       const { values } = await runZshPty({
         env: wrappedEnv(home),
@@ -481,6 +515,7 @@ describe.skipIf(process.platform === 'win32')('the fixes the old wrapper was bui
       '.zshenv': 'export ORCA_TEST_MARK=early\nreturn 0\nexport ORCA_TEST_MARK=late\n',
       '.zshrc': 'export ORCA_TEST_FROM_ZSHRC=1\n'
     })
+
     try {
       const report = ['ORCA_TEST_MARK', 'ORCA_TEST_FROM_ZSHRC', 'ZDOTDIR']
       const wrapped = await runZshPty({ env: wrappedEnv(home), report })

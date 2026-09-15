@@ -28,13 +28,17 @@ export function createBrowserPageStateActions(
     updateBrowserPageState: (pageId, updates) => {
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
+
         if (!page) {
           return s
         }
+
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
+
         if (!workspace) {
           return s
         }
+
         const nextPage = {
           ...page,
           title:
@@ -47,15 +51,19 @@ export function createBrowserPageStateActions(
           canGoForward: updates.canGoForward ?? page.canGoForward,
           loadError: updates.loadError === undefined ? page.loadError : updates.loadError
         }
+
         const unifiedTabs = s.unifiedTabsByWorktree[workspace.worktreeId] ?? []
+
         const unifiedIndex =
           workspace.activePageId === pageId && updates.title !== undefined
             ? unifiedTabs.findIndex(
                 (entry) => entry.contentType === 'browser' && entry.entityId === workspace.id
               )
             : -1
+
         const unifiedLabelNeedsRepair =
           unifiedIndex !== -1 && unifiedTabs[unifiedIndex]?.label !== nextPage.title
+
         const pageStateUnchanged =
           nextPage.title === page.title &&
           nextPage.loading === page.loading &&
@@ -63,18 +71,24 @@ export function createBrowserPageStateActions(
           nextPage.canGoBack === page.canGoBack &&
           nextPage.canGoForward === page.canGoForward &&
           nextPage.loadError === page.loadError
+
         const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
+
         const mirroredWorkspace = pageStateUnchanged
           ? mirrorWorkspaceFromActivePage(workspace, currentPages)
           : null
+
         const workspaceNeedsRepair =
           mirroredWorkspace !== null &&
           !browserWorkspaceMirrorFieldsEqual(workspace, mirroredWorkspace)
+
         if (pageStateUnchanged && !unifiedLabelNeedsRepair && !workspaceNeedsRepair) {
           return s
         }
+
         if (pageStateUnchanged) {
           const nextState: Partial<AppState> = {}
+
           if (workspaceNeedsRepair && mirroredWorkspace) {
             nextState.browserTabsByWorktree = {
               ...s.browserTabsByWorktree,
@@ -83,6 +97,7 @@ export function createBrowserPageStateActions(
               )
             }
           }
+
           if (unifiedLabelNeedsRepair) {
             nextState.unifiedTabsByWorktree = {
               ...s.unifiedTabsByWorktree,
@@ -91,27 +106,34 @@ export function createBrowserPageStateActions(
               )
             }
           }
+
           return nextState
         }
+
         const nextPages = currentPages.map((entry) => (entry.id === pageId ? nextPage : entry))
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
+
         const nextState: Partial<AppState> = {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
             [workspace.id]: nextPages
           }
         }
+
         if (updates.faviconUrl !== undefined && updates.faviconUrl !== page.faviconUrl) {
           const historyIndex = s.browserUrlHistory.findIndex(
             (entry) => entry.normalizedUrl === normalizeBrowserHistoryUrl(page.url)
           )
+
           const historyEntry = s.browserUrlHistory[historyIndex]
+
           if (historyEntry && historyEntry.faviconUrl !== updates.faviconUrl) {
             nextState.browserUrlHistory = s.browserUrlHistory.map((entry, index) =>
               index === historyIndex ? { ...entry, faviconUrl: updates.faviconUrl } : entry
             )
           }
         }
+
         if (!browserWorkspaceMirrorFieldsEqual(workspace, nextWorkspace)) {
           nextState.browserTabsByWorktree = {
             ...s.browserTabsByWorktree,
@@ -120,6 +142,7 @@ export function createBrowserPageStateActions(
             )
           }
         }
+
         if (
           workspace.activePageId === pageId &&
           updates.title !== undefined &&
@@ -134,8 +157,10 @@ export function createBrowserPageStateActions(
             }
           }
         }
+
         return nextState
       })
+
       if (updates.loadError === null) {
         get().setBrowserPageCertificateFailure(pageId, null)
       }
@@ -144,17 +169,22 @@ export function createBrowserPageStateActions(
     setBrowserPageCertificateFailure: (pageId, failure) => {
       set((s) => {
         const current = s.browserCertificateFailuresByPageId[pageId]
+
         if (failure === null) {
           if (!current) {
             return s
           }
+
           const nextFailures = { ...s.browserCertificateFailuresByPageId }
           delete nextFailures[pageId]
+
           return { browserCertificateFailuresByPageId: nextFailures }
         }
+
         if (!findPage(s.browserPagesByWorkspace, pageId) || current === failure) {
           return s
         }
+
         return {
           browserCertificateFailuresByPageId: {
             ...s.browserCertificateFailuresByPageId,
@@ -168,27 +198,35 @@ export function createBrowserPageStateActions(
 
     setBrowserPageUrl: (pageId, url, options) => {
       const nextUrl = normalizeUrl(url)
+
       if (nextUrl !== 'about:blank' && nextUrl !== ORCA_BROWSER_BLANK_URL) {
         const currentPage = findPage(get().browserPagesByWorkspace, pageId)
+
         if (currentPage) {
           get().recordFeatureInteraction?.('browser')
         }
       }
+
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
+
         if (!page) {
           return s
         }
+
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
+
         if (!workspace) {
           return s
         }
+
         // Why a document page keeps its blank url here too: this is the third door onto a page's url,
         // and a document's url is blank by construction. A grant committed here would reach
         // persistence, the publish boundary and the address bar, exactly as at the other two doors.
         const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
         // Why: annotations point at DOM coords of the loaded document; a real URL change invalidates those markers.
         const shouldClearAnnotations = normalizeUrl(page.url) !== nextPageUrl
+
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId
             ? {
@@ -202,13 +240,17 @@ export function createBrowserPageStateActions(
               }
             : entry
         )
+
         const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
+
         const nextBrowserAnnotationsByPageId = shouldClearAnnotations
           ? { ...s.browserAnnotationsByPageId }
           : s.browserAnnotationsByPageId
+
         if (shouldClearAnnotations) {
           delete nextBrowserAnnotationsByPageId[pageId]
         }
+
         return {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,

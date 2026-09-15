@@ -2,15 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createGitHubIpcMocks } = await import('./github-ipc-module-mocks')
+
   return createGitHubIpcMocks()
 })
 
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('../github/client', () => mocks.client)
+
 vi.mock('../github/work-item-details', () => mocks.workItemDetails)
+
 vi.mock('../github/pr-refresh-coordinator', () => mocks.prRefresh)
+
 vi.mock('../telemetry/client', () => mocks.telemetry)
+
 vi.mock('../telemetry/cohort-classifier', () => mocks.cohort)
+
 vi.mock('./ui', () => mocks.ui)
 
 import { registerGitHubHandlers } from './github'
@@ -30,6 +37,7 @@ describe('registerGitHubHandlers', () => {
 
   it('returns typed automatic PR refresh validation skips without enqueueing', async () => {
     registerGitHubHandlers(store as never, stats as never)
+
     const candidate = {
       cacheKey: 'missing::feature/test',
       repoPath: '/workspace/missing',
@@ -43,6 +51,7 @@ describe('registerGitHubHandlers', () => {
       reason: 'active',
       priority: 80
     })
+
     const second = await handlers['gh:enqueuePRRefresh'](null, {
       candidate,
       reason: 'active',

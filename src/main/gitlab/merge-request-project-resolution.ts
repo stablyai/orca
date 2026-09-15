@@ -26,8 +26,10 @@ export async function withProjectRef<T>(
         localGitOptions
       )
     ).source
+
   if (!projectRef) {
     return fallback
   }
+
   return fn(projectRef, projectRef.path)
 }

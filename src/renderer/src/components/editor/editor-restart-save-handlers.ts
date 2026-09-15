@@ -30,6 +30,7 @@ export function createEditorRestartSaveHandlers({
 
   const handleSaveDirtyFiles = async (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<EditorSaveDirtyFilesDetail>).detail
+
     if (!detail) {
       return
     }
@@ -39,8 +40,10 @@ export function createEditorRestartSaveHandlers({
 
       const dirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
+
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
+
         return
       }
 
@@ -49,20 +52,24 @@ export function createEditorRestartSaveHandlers({
       }
 
       const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
+
       if (duplicateDirtySavePaths.length > 0) {
         // Why: edit and diff tabs can share a path with different drafts; refuse rather than race an implicit winner.
         detail.reject(
           'Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.'
         )
+
         return
       }
 
       await Promise.all(
         dirtyFiles.map(async (file) => {
           const content = getLatestWritableContent(file)
+
           if (content === null) {
             throw new Error(`Missing editor buffer for ${file.relativePath}`)
           }
+
           await queueSave(file, content)
         })
       )
@@ -74,6 +81,7 @@ export function createEditorRestartSaveHandlers({
 
   const handlePrepareHotExit = async (event: Event): Promise<void> => {
     const detail = (event as CustomEvent<EditorPrepareHotExitDetail>).detail
+
     if (!detail) {
       return
     }
@@ -87,8 +95,10 @@ export function createEditorRestartSaveHandlers({
       const state = store.getState()
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => file.mode !== 'edit')
+
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be backed up before restart.')
+
         return
       }
 
@@ -102,6 +112,7 @@ export function createEditorRestartSaveHandlers({
         detail.reject(
           'Unsaved editor changes cannot be backed up until workspace restore finishes.'
         )
+
         return
       }
 

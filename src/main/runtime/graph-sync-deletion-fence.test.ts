@@ -83,6 +83,7 @@ describe('graph-sync deletion fence', () => {
 
   function createFencedRuntime() {
     let meta: { instanceId: string; hostId?: string } | undefined = { instanceId: 'old-instance' }
+
     const store = {
       ...storeBase,
       getWorktreeMeta: () => meta,
@@ -90,10 +91,12 @@ describe('graph-sync deletion fence', () => {
         meta = undefined
       }
     }
+
     const runtime = new OrcaRuntimeService(store as never)
     const internals = runtime as unknown as FenceInternals
     const events: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
     const sync = (
       mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
       extra: { rendererGeneration?: string; unchanged?: string[] } = {}
@@ -105,10 +108,13 @@ describe('graph-sync deletion fence', () => {
         mobileSessionTabs,
         ...(extra.unchanged ? { unchangedMobileSessionWorktrees: extra.unchanged } : {})
       } as never)
+
     const recreate = (instanceId: string): void => {
       meta = { instanceId }
     }
+
     const remove = (): void => internals.removeWorktreeMetadataAndHistory(store, WT)
+
     return { runtime, internals, events, sync, recreate, remove }
   }
 
@@ -192,6 +198,7 @@ describe('graph-sync deletion fence', () => {
     const first = sync([
       { ...makeRendererSnapshot({ version: 2 }), worktreeInstanceId: 'old-instance' }
     ])
+
     const second = sync([], { unchanged: [WT] })
 
     expect(first.mobileSessionResyncWorktrees ?? []).toEqual([])

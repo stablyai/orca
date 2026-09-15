@@ -7,6 +7,7 @@ export function isClaudeLaunchCommand(command: string | undefined): boolean {
   if (!command) {
     return false
   }
+
   return /(^|[\s;&|('"`])(?:[^\s;&|('"`]*[\\/])?claude(?:\.cmd|\.exe)?($|[\s;&|)'"`])/i.test(
     command
   )
@@ -25,6 +26,7 @@ export function recoverFreshSpawnProviderRouting(
   if (connectionId || (!isNewSession && sessionId) || !routesFreshSpawnsToLocalProvider(provider)) {
     return
   }
+
   return provider.recoverFreshSpawnRouting?.()
 }
 
@@ -36,13 +38,17 @@ export function beginPtySpawnForWorktree(
   const worktreePath = worktreeId
     ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
     : undefined
+
   const installPaths = new Map<string, string>()
+
   for (const candidate of [worktreePath, cwd]) {
     if (candidate) {
       installPaths.set(normalizeRuntimePathForComparison(candidate), candidate)
     }
   }
+
   const finishes: (() => void)[] = []
+
   try {
     for (const candidate of installPaths.values()) {
       finishes.push(beginTerminalInstall(candidate, connectionId ?? undefined))
@@ -52,5 +58,6 @@ export function beginPtySpawnForWorktree(
     finishes.toReversed().forEach((finish) => finish())
     throw error
   }
+
   return () => finishes.toReversed().forEach((finish) => finish())
 }

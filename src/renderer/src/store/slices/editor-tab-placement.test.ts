@@ -15,6 +15,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -153,21 +154,27 @@ describe('createEditorSlice split-group editor routing', () => {
       entityId: 'terminal-tab',
       label: 'Agent'
     })
+
     const terminalGroup = store.getState().groupsByWorktree['wt-1']?.[0]
+
     if (!terminalGroup) {
       throw new Error('Expected terminal group')
     }
+
     const terminalGroupId = terminalGroup.id
     const editorGroupId = store.getState().createEmptySplitGroup('wt-1', terminalGroupId, 'right')
+
     if (!editorGroupId) {
       throw new Error('Expected split editor group')
     }
+
     openSourceFile(store, '/repo/seed.ts', { targetGroupId: editorGroupId })
     store.setState({
       activeGroupIdByWorktree: { 'wt-1': terminalGroupId },
       activeTabType: 'terminal',
       activeTabTypeByWorktree: { 'wt-1': 'terminal' }
     } as Partial<AppState>)
+
     return { terminalTabId: terminalTab.id, terminalGroupId, editorGroupId }
   }
 
@@ -182,12 +189,15 @@ describe('createEditorSlice split-group editor routing', () => {
     openSourceFile(store, '/repo/next.ts')
 
     const openedTab = findUnifiedTabByEntity(store, '/repo/next.ts')
+
     const terminalGroup = store
       .getState()
       .groupsByWorktree['wt-1'].find((group) => group.id === terminalGroupId)
+
     const editorGroup = store
       .getState()
       .groupsByWorktree['wt-1'].find((group) => group.id === editorGroupId)
+
     expect(openedTab?.groupId).toBe(editorGroupId)
     expect(editorGroup?.activeTabId).toBe(openedTab?.id)
     expect(terminalGroup?.activeTabId).toBe(terminalTabId)
@@ -226,9 +236,11 @@ describe('createEditorSlice split-group editor routing', () => {
     // was treated like a focused agent terminal, so the open was stolen into an
     // existing editor pane instead of the focused group.
     const browserGroupId = store.getState().createEmptySplitGroup('wt-1', editorGroupId, 'right')
+
     if (!browserGroupId) {
       throw new Error('Expected split browser group')
     }
+
     store.getState().createUnifiedTab('wt-1', 'browser', {
       id: 'browser-tab',
       entityId: 'browser-tab',

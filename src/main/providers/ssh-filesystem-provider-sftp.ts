@@ -13,23 +13,29 @@ function waitForSftpCallback<T>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const signal = options?.signal
+
     if (signal?.aborted) {
       reject(abortReason(signal))
+
       return
     }
 
     let settled = false
     let abortTimer: ReturnType<typeof setTimeout> | undefined
+
     const cleanup = (): void => {
       clearTimeout(abortTimer)
       signal?.removeEventListener('abort', onAbort)
     }
+
     const settle = (error?: Error | null, value?: T): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
+
       if (signal?.aborted) {
         reject(abortReason(signal))
       } else if (error) {
@@ -38,15 +44,19 @@ function waitForSftpCallback<T>(
         resolve(value as T)
       }
     }
+
     const onAbort = (): void => {
       if (!signal || settled) {
         return
       }
+
       // Why: the folder owner closes SFTP on abort; wait for its callback so
       // Windows local handles quiesce before the temporary tree is removed.
       abortTimer = setTimeout(() => settle(abortReason(signal)), ABORTED_SFTP_OPERATION_GRACE_MS)
     }
+
     signal?.addEventListener('abort', onAbort, { once: true })
+
     try {
       register((error, value) => settle(error, value))
     } catch (error) {
@@ -57,12 +67,15 @@ function waitForSftpCallback<T>(
 
 export function fileStatFromSftpStats(stats: Stats): FileStat {
   let type: FileStat['type'] = 'file'
+
   if (stats.isDirectory()) {
     type = 'directory'
   } else if (stats.isSymbolicLink()) {
     type = 'symlink'
   }
+
   const maybeNlink = (stats as Stats & { nlink?: unknown }).nlink
+
   return {
     size: stats.size,
     type,
@@ -76,8 +89,10 @@ export function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileS
     sftp.lstat(filePath, (err, stats) => {
       if (err) {
         reject(err)
+
         return
       }
+
       resolve(fileStatFromSftpStats(stats))
     })
   })

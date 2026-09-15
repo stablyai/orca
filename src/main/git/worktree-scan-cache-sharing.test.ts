@@ -116,6 +116,7 @@ describe('listWorktrees in-flight sharing', () => {
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
     }
+
     await Promise.all([graphScan, annotatedScan])
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
@@ -137,6 +138,7 @@ describe('listWorktrees in-flight sharing', () => {
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
     }
+
     await Promise.all([annotatedScan, graphScan])
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
@@ -171,6 +173,7 @@ describe('listWorktrees in-flight sharing', () => {
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
     }
+
     await Promise.all([defaultScan, preparationScan, shorterScan])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
@@ -267,9 +270,11 @@ describe('listWorktrees in-flight sharing', () => {
 
     const first = listWorktreesStrict('/repo')
     const second = listWorktreesStrict('/repo')
+
     for (const resolve of resolvers) {
       resolve()
     }
+
     await Promise.all([first, second])
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
@@ -302,6 +307,7 @@ describe('listWorktrees in-flight sharing', () => {
 
   it('runs a fresh scan after a timed-out shared scan settles', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     try {
       gitExecFileAsyncMock
         .mockRejectedValueOnce(new Error('git timed out.'))
@@ -323,6 +329,7 @@ describe('listWorktrees in-flight sharing', () => {
 
   it('distinguishes fail-soft empty results from strict scan failures', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     try {
       const failure = new Error('git spawn timed out')
       gitExecFileAsyncMock.mockRejectedValue(failure)
@@ -364,10 +371,12 @@ describe('listWorktrees in-flight sharing', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCalls += 1
+
         return new Promise((resolve) => {
           scanResolvers.push((stdout) => resolve({ stdout }))
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -406,10 +415,12 @@ describe('listWorktrees in-flight sharing', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCalls += 1
+
         return new Promise((resolve) => {
           scanResolvers.push(() => resolve({ stdout: '' }))
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -444,6 +455,7 @@ describe('listWorktrees in-flight sharing', () => {
           scanResolvers.push(() => resolve({ stdout: '' }))
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -462,6 +474,7 @@ describe('listWorktrees in-flight sharing', () => {
     for (const resolve of scanResolvers) {
       resolve()
     }
+
     await Promise.all([staleUbuntu, staleDebian, freshUbuntu, freshDebian])
 
     expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 0, generations: 0 })

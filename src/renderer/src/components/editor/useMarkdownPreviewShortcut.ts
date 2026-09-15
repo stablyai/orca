@@ -38,18 +38,22 @@ export function useMarkdownPreviewShortcut({
     if (!activeFilePath || !activeFileRelativePath || !activeFileWorktreeId || !activeFileMode) {
       return
     }
+
     const shortcutLanguage =
       activeFileMode === 'diff'
         ? detectLanguage(activeFileRelativePath)
         : detectLanguage(activeFilePath)
+
     const canShowMarkdownPreview = canOpenMarkdownPreview({
       language: shortcutLanguage,
       mode: activeFileMode,
       diffSource: activeFileDiffSource
     })
+
     if (!canShowMarkdownPreview) {
       return
     }
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (
         event.defaultPrevented ||
@@ -57,11 +61,14 @@ export function useMarkdownPreviewShortcut({
       ) {
         return
       }
+
       const root = panelRef.current
       const target = event.target
+
       if (!root || !(target instanceof Node) || !root.contains(target)) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       openMarkdownPreview(
@@ -75,7 +82,9 @@ export function useMarkdownPreviewShortcut({
         { sourceFileId: activeFileId ?? undefined }
       )
     }
+
     window.addEventListener('keydown', handleKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [
     activeFileDiffSource,

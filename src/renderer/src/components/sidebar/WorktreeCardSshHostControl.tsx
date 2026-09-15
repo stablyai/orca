@@ -38,8 +38,10 @@ type WorktreeCardSshHostControlProps = {
 // (WorktreeCard.tsx). States differ only by color token, so the pill never changes height.
 const PILL_BASE =
   'h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none has-[>svg]:!px-0.5'
+
 const PILL_QUIET =
   'text-muted-foreground border border-worktree-sidebar-border bg-worktree-sidebar shadow-none hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:border-worktree-sidebar-border focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
+
 const PILL_FAILED =
   'text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive focus-visible:border-destructive/40 focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
 
@@ -87,6 +89,7 @@ export function WorktreeCardSshHostControl({
     if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
       return
     }
+
     try {
       if (sshOwnerEnvironmentId) {
         // Bucket state is written inside the helper, mirroring the local path.
@@ -102,6 +105,7 @@ export function WorktreeCardSshHostControl({
           trackSshConnect(targetId, window.api.ssh.connect({ targetId })),
           SSH_RECONNECT_UI_TIMEOUT_MS
         )
+
         if (connectState) {
           // Why: ssh.connect can resolve before the global state-change IPC lands;
           // the waiting deferred PTY reattach path keys off this renderer store.
@@ -117,6 +121,7 @@ export function WorktreeCardSshHostControl({
               'SSH connection failed'
             )
       )
+
       // Why: a failed connect usually means the renderer's target metadata is stale
       // (target removed, or re-added under a new id). Resync so the control converges to
       // the removed state instead of offering the same failing Connect forever (STA-1468).
@@ -178,6 +183,7 @@ export function WorktreeCardSshHostControl({
 
   const connecting = inFlight || isConnectingSshStatus(status)
   const canConnect = canConnectSshStatus(status)
+
   if (!connecting && !canConnect) {
     // Defensive: every remaining member is either connecting or recoverable, but never
     // render a dead button if the union grows.
@@ -186,6 +192,7 @@ export function WorktreeCardSshHostControl({
 
   const failed = status === 'error' || status === 'reconnection-failed' || status === 'auth-failed'
   const label = connecting ? sshConnectingLabel() : sshConnectVerb(status)
+
   const accessibleName = connecting
     ? translate(
         'auto.components.sidebar.WorktreeCardSshHostControl.connectingName',
@@ -209,6 +216,7 @@ export function WorktreeCardSshHostControl({
             'Connect to SSH host {{value0}}',
             { value0: targetLabel }
           )
+
   const tooltip = connecting
     ? accessibleName
     : status === 'auth-failed'
@@ -259,9 +267,11 @@ export function WorktreeCardSshHostControl({
             // Reconnecting a host and navigating to a workspace are separate intents.
             event.stopPropagation()
             event.preventDefault()
+
             if (connecting) {
               return
             }
+
             void handleConnect()
           }}
         >

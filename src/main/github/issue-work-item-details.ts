@@ -77,14 +77,18 @@ export async function getIssueDetailsViaGraphQL(
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   if (!repository) {
     return null
   }
+
   if (repositoryRateLimitGuard(repository, 'graphql', ghOptions).blocked) {
     return null
   }
+
   try {
     noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
+
     const { stdout } = await ghExecFileAsync(
       [
         'api',
@@ -100,14 +104,19 @@ export async function getIssueDetailsViaGraphQL(
       ],
       ghOptions
     )
+
     const parsed = JSON.parse(stdout) as GraphQLIssueDetailsResponse
+
     if (parsed.errors && parsed.errors.length > 0) {
       return null
     }
+
     const issue = parsed.data?.repository?.issue
+
     if (!issue) {
       return null
     }
+
     const comments: PRComment[] = (issue.comments?.nodes ?? [])
       .filter((comment) => typeof comment.databaseId === 'number')
       .map((comment) => ({
@@ -119,6 +128,7 @@ export async function getIssueDetailsViaGraphQL(
         url: comment.url ?? '',
         isBot: comment.author?.__typename === 'Bot'
       }))
+
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
         Boolean(assignee.login)
@@ -128,6 +138,7 @@ export async function getIssueDetailsViaGraphQL(
         name: assignee.name ?? null,
         avatarUrl: assignee.avatarUrl ?? ''
       }))
+
     const participants: GitHubAssignableUser[] = (issue.participants?.nodes ?? [])
       .filter((user) => Boolean(user.login))
       .map((user) => ({
@@ -135,6 +146,7 @@ export async function getIssueDetailsViaGraphQL(
         name: user.name ?? null,
         avatarUrl: user.avatarUrl ?? ''
       }))
+
     return {
       body: issue.body ?? '',
       comments,
@@ -164,12 +176,15 @@ export async function getIssueBodyAndComments(
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   try {
     if (repository) {
       if (repositoryRateLimitGuard(repository, 'core', ghOptions).blocked) {
         return { body: '', comments: [], assignees: [], timelineItems: [] }
       }
+
       noteRepositoryRateLimitSpend(repository, 'core', 2, ghOptions)
+
       const [issueResult, commentsResult, timelineItems] = await Promise.all([
         ghExecFileAsync(
           [
@@ -191,10 +206,12 @@ export async function getIssueBodyAndComments(
         ),
         getIssueTimelineItems(repository, issueNumber, ghOptions)
       ])
+
       const issue = JSON.parse(issueResult.stdout) as {
         body?: string | null
         assignees?: { login: string }[]
       }
+
       type RESTComment = {
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
@@ -202,6 +219,7 @@ export async function getIssueBodyAndComments(
         created_at: string
         html_url: string
       }
+
       const comments = (JSON.parse(commentsResult.stdout) as RESTComment[]).map(
         (comment): PRComment => ({
           id: comment.id,
@@ -213,6 +231,7 @@ export async function getIssueBodyAndComments(
           isBot: comment.user?.type === 'Bot'
         })
       )
+
       return {
         body: issue.body ?? '',
         comments,
@@ -220,14 +239,17 @@ export async function getIssueBodyAndComments(
         timelineItems
       }
     }
+
     if (connectionId) {
       // A connection-backed lookup must not use ambient local GH_REPO/GH_HOST.
       return { body: '', comments: [], assignees: [], timelineItems: [] }
     }
+
     const { stdout } = await ghExecFileAsync(
       ['issue', 'view', String(issueNumber), '--json', 'body,comments,assignees'],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as {
       body?: string
       comments?: {
@@ -238,6 +260,7 @@ export async function getIssueBodyAndComments(
       }[]
       assignees?: { login: string }[]
     }
+
     const comments = (data.comments ?? []).map((comment, index): PRComment => ({
       id: index,
       author: comment.author?.login ?? 'ghost',
@@ -246,6 +269,7 @@ export async function getIssueBodyAndComments(
       createdAt: comment.createdAt,
       url: comment.url ?? ''
     }))
+
     return {
       body: data.body ?? '',
       comments,

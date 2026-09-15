@@ -11,7 +11,9 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const SHELL_HOME = '/var/services/homes/alice'
+
 const RELAY_DIR = '.orca-remote/relay-0.1.0+hash'
+
 const MARKER = '.install-lock/.sftp-namespace-deadbeef'
 
 const mapping: SftpNamespacePathMapping = {
@@ -42,25 +44,33 @@ function makeSftp(options: { startPath?: unknown; lstat?: (path: string) => Lsta
 } {
   const realpathCalls: string[] = []
   const lstatCalls: string[] = []
+
   const sftp = {
     realpath: vi.fn((path: string, cb: (err: Error | null, resolved?: unknown) => void) => {
       realpathCalls.push(path)
+
       if (options.startPath instanceof Error) {
         cb(options.startPath)
+
         return
       }
+
       cb(null, options.startPath)
     }),
     lstat: vi.fn((path: string, cb: (err: Error | null, stats?: unknown) => void) => {
       lstatCalls.push(path)
       const outcome = options.lstat?.(path) ?? { code: 2 }
+
       if (outcome === 'present') {
         cb(null, MARKER_STATS)
+
         return
       }
+
       cb('code' in outcome ? statusError(outcome.code) : new Error(outcome.message))
     })
   }
+
   return { sftp: sftp as unknown as SFTPWrapper, realpathCalls, lstatCalls }
 }
 
@@ -127,6 +137,7 @@ describe('resolveSftpTransferPath', () => {
       ...mapping,
       homeRelativePath: `${RELAY_DIR}/package.json`
     }
+
     const { sftp } = makeSftp({
       startPath: '/homes/alice',
       lstat: divergentLstat('/homes/alice')
@@ -279,12 +290,14 @@ describe('resolveSftpTransferPath', () => {
   it('redacts marker tokens from discovery diagnostics', async () => {
     const token = 'a'.repeat(32)
     const secretMarker = `.install-lock/.sftp-namespace-${token}`
+
     const secretMapping: SftpNamespacePathMapping = {
       homeRelativeNamespaceRoot: RELAY_DIR,
       homeRelativePath: RELAY_DIR,
       shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/${secretMarker}`,
       homeRelativeProbePath: `${RELAY_DIR}/${secretMarker}`
     }
+
     const { sftp } = makeSftp({
       startPath: '/homes/alice',
       lstat: () => ({ message: `failure at ${secretMapping.shellProbePath}` })
@@ -332,6 +345,7 @@ describe('resolveSftpTransferPathIfMapped', () => {
       startPath: '/homes/alice',
       lstat: divergentLstat('/homes/alice')
     })
+
     const windowsPath = 'C:\\Users\\alice\\relay\\.version'
 
     const resolved = await resolveSftpTransferPathIfMapped(sftp, windowsPath, {
@@ -345,6 +359,7 @@ describe('resolveSftpTransferPathIfMapped', () => {
 
   it('resolves on a POSIX host with a mapping', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
+
     const { sftp } = makeSftp({
       startPath: '/homes/alice',
       lstat: divergentLstat('/homes/alice')

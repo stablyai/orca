@@ -22,9 +22,11 @@ type RawElement = { tag: string; attributes: Record<string, string>; children: R
 // or null when the format doesn't match. Coordinates may be negative (off-screen).
 export function parseAndroidBounds(value: string): AndroidAxBounds | null {
   const match = value.trim().match(/^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/)
+
   if (!match) {
     return null
   }
+
   return {
     left: Number(match[1]),
     top: Number(match[2]),
@@ -40,30 +42,37 @@ export function parseUiAutomatorXml(xml: string): AndroidAxNode {
   if (xml.trim() === '') {
     throw new EmulatorError('emulator_error', 'Cannot parse empty uiautomator XML')
   }
+
   let root: RawElement
+
   try {
     root = parseDocument(xml)
   } catch (error) {
     if (error instanceof EmulatorError) {
       throw error
     }
+
     throw new EmulatorError(
       'emulator_error',
       `Failed to parse uiautomator XML: ${(error as Error).message}`
     )
   }
+
   // A bare <node> root is treated as the single top-level node; otherwise take
   // the <node> children of <hierarchy>.
   const topLevel =
     root.tag === 'node' ? [root] : root.children.filter((child) => child.tag === 'node')
+
   return { children: topLevel.map(mapNode) }
 }
 
 function mapNode(raw: RawElement): AndroidAxNode {
   const attrs = raw.attributes
+
   const node: AndroidAxNode = {
     children: raw.children.filter((child) => child.tag === 'node').map(mapNode)
   }
+
   // Omit string fields whose attribute is absent or empty (no empty-string fields).
   setString(node, 'className', attrs['class'])
   setString(node, 'text', attrs['text'])
@@ -74,9 +83,11 @@ function mapNode(raw: RawElement): AndroidAxNode {
   setBool(node, 'enabled', attrs['enabled'])
   setBool(node, 'focused', attrs['focused'])
   const bounds = attrs['bounds'] === undefined ? null : parseAndroidBounds(attrs['bounds'])
+
   if (bounds) {
     node.bounds = bounds
   }
+
   return node
 }
 
@@ -111,29 +122,40 @@ function parseDocument(xml: string): RawElement {
   const fail = (message: string): never => {
     throw new EmulatorError('emulator_error', `${message} at offset ${i}`)
   }
+
   const isWs = (c: string): boolean => c === ' ' || c === '\t' || c === '\n' || c === '\r'
+
   const skipWs = (): void => {
     while (i < n && isWs(xml[i])) {
       i++
     }
   }
+
   const startsWith = (token: string): boolean => xml.startsWith(token, i)
+
   const skipDelimited = (open: string, close: string, label: string): void => {
     const end = xml.indexOf(close, i + open.length)
+
     if (end === -1) {
       fail(`Unterminated ${label}`)
     }
+
     i = end + close.length
   }
+
   const readName = (): string => {
     const start = i
+
     while (i < n) {
       const c = xml[i]
+
       if (isWs(c) || c === '=' || c === '/' || c === '>' || c === '<' || c === '"' || c === "'") {
         break
       }
+
       i++
     }
+
     return xml.slice(start, i)
   }
 
@@ -141,9 +163,11 @@ function parseDocument(xml: string): RawElement {
   const skipProlog = (): void => {
     for (;;) {
       skipWs()
+
       if (i >= n) {
         return
       }
+
       if (startsWith('<?')) {
         skipDelimited('<?', '?>', 'processing instruction')
       } else if (startsWith('<!--')) {
@@ -160,82 +184,111 @@ function parseDocument(xml: string): RawElement {
     if (xml[i] !== '<') {
       fail('Expected element start')
     }
+
     i++
     const tag = readName()
+
     if (tag === '') {
       fail('Expected tag name')
     }
+
     const attributes: Record<string, string> = {}
+
     for (;;) {
       skipWs()
+
       if (i >= n) {
         fail('Unterminated start tag')
       }
+
       if (xml[i] === '/') {
         if (xml[i + 1] !== '>') {
           fail('Malformed self-closing tag')
         }
+
         i += 2
+
         return { tag, attributes, children: [] }
       }
+
       if (xml[i] === '>') {
         i++
         break
       }
+
       const name = readName()
+
       if (name === '') {
         fail('Expected attribute name')
       }
+
       skipWs()
+
       if (xml[i] !== '=') {
         fail("Expected '=' after attribute name")
       }
+
       i++
       skipWs()
       const quote = xml[i]
+
       if (quote !== '"' && quote !== "'") {
         fail('Expected quoted attribute value')
       }
+
       i++
       const start = i
+
       while (i < n && xml[i] !== quote) {
         i++
       }
+
       if (i >= n) {
         fail('Unterminated attribute value')
       }
+
       attributes[name] = decodeEntities(xml.slice(start, i))
       i++
     }
+
     return parseChildren(tag, attributes)
   }
 
   const parseChildren = (tag: string, attributes: Record<string, string>): RawElement => {
     const children: RawElement[] = []
+
     for (;;) {
       if (i >= n) {
         fail(`Unterminated element <${tag}>`)
       }
+
       if (xml[i] !== '<') {
         // Text content between elements carries no node data; skip to next tag.
         while (i < n && xml[i] !== '<') {
           i++
         }
+
         continue
       }
+
       if (startsWith('</')) {
         i += 2
         const closeName = readName()
         skipWs()
+
         if (xml[i] !== '>') {
           fail('Malformed end tag')
         }
+
         i++
+
         if (closeName !== tag) {
           fail(`Mismatched end tag </${closeName}> for <${tag}>`)
         }
+
         return { tag, attributes, children }
       }
+
       if (startsWith('<!--')) {
         skipDelimited('<!--', '-->', 'comment')
       } else if (startsWith('<![CDATA[')) {
@@ -249,9 +302,11 @@ function parseDocument(xml: string): RawElement {
   }
 
   skipProlog()
+
   if (i >= n || xml[i] !== '<') {
     fail('No root element found')
   }
+
   return parseElement()
 }
 
@@ -260,6 +315,7 @@ function decodeEntities(value: string): string {
   if (!value.includes('&')) {
     return value
   }
+
   return value.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, (match, body: string) => {
     switch (body) {
       case 'amp':
@@ -275,6 +331,7 @@ function decodeEntities(value: string): string {
       default: {
         const code =
           body[1] === 'x' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10)
+
         return Number.isNaN(code) ? match : String.fromCodePoint(code)
       }
     }

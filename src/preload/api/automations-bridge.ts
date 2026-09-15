@@ -47,13 +47,17 @@ export const automationsApi = {
   onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>
       callback(request)
+
     ipcRenderer.on('automations:dispatchRequested', listener)
+
     return () => ipcRenderer.removeListener('automations:dispatchRequested', listener)
   },
   onChanged: (callback: (payload: AutomationsChangedPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: AutomationsChangedPayload) =>
       callback(payload)
+
     ipcRenderer.on('automations:changed', listener)
+
     return () => ipcRenderer.removeListener('automations:changed', listener)
   }
 } satisfies PreloadApi['automations']

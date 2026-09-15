@@ -18,6 +18,7 @@ function buildAllModeEntrySet(
   renderableBranchEntries: GitBranchChangeEntry[]
 ): CombinedDiffEntrySet {
   const entries = [...uncommittedEntries, ...renderableBranchEntries]
+
   return {
     allEntries: entries,
     branchCompare: null,
@@ -40,6 +41,7 @@ function restoreSections(entrySet: CombinedDiffEntrySet, viewStateKey: string): 
   let sections: DiffSection[] = []
   renderHook(() => {
     const registry = useCombinedDiffSectionLoadRegistry([])
+
     return useCombinedDiffViewRestore({
       entrySet,
       gitStatusEntries: [],
@@ -53,6 +55,7 @@ function restoreSections(entrySet: CombinedDiffEntrySet, viewStateKey: string): 
       viewStateKey
     })
   })
+
   return sections
 }
 
@@ -75,6 +78,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
       ),
       'mixed-pass-view'
     )
+
     expect(sections.map((section) => section.loadOnDemand)).toEqual([true, true, false])
   })
 
@@ -87,7 +91,9 @@ describe('useCombinedDiffViewRestore deferral', () => {
       [{ path: 'src/app.ts', status: 'modified', area: 'unstaged', added: 5 }],
       []
     )
+
     const viewStateKey = 'wt-1::all-diffs::uncommitted'
+
     const loadedSections: DiffSection[] = [
       {
         key: 'unstaged:src/app.ts',
@@ -104,6 +110,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
         largeDiffRenderLimit: null
       }
     ]
+
     combinedDiffViewStateCache.set(viewStateKey, {
       entrySignature: entrySet.entrySignature,
       gitStatusSignature: '',
@@ -122,6 +129,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
       filePath: '/repo',
       worktreeId: 'wt-1'
     } as unknown as OpenFile
+
     disposeClosedEditorTabs(
       {
         editor: { getModel: () => null, getModels: () => [] },
@@ -144,6 +152,7 @@ describe('useCombinedDiffViewRestore deferral', () => {
       ),
       'counted-pass-view'
     )
+
     expect(sections.map((section) => section.loadOnDemand)).toEqual([false, false])
   })
 })

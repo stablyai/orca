@@ -28,6 +28,7 @@ const harness = (given: NodePtyPreconditionVerdict) => {
   const warn = vi.fn()
   const fail = vi.fn()
   const exit = vi.fn(() => undefined as never)
+
   const continued = runOrcadNativePreflight({
     check: () => given,
     toolchainHints: () => ['  sudo apt-get install -y build-essential python3'],
@@ -35,6 +36,7 @@ const harness = (given: NodePtyPreconditionVerdict) => {
     fail,
     exit
   })
+
   return { warn, fail, exit, continued }
 }
 

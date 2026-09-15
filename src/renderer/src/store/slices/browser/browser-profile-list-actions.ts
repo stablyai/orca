@@ -25,6 +25,7 @@ export function createBrowserProfileListActions(
     fetchBrowserSessionProfiles: async () => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileListResult>(
@@ -33,23 +34,28 @@ export function createBrowserProfileListActions(
             undefined,
             { timeoutMs: 15_000 }
           )
+
           // Why: client-hosted imports never touch the server, so the server's
           // records can't carry the "imported from Chrome" badge — this desktop
           // remembers what it imported into each environment's jar and overlays it.
           const clientImportSources = await window.api.browser
             .sessionClientRouteImportSources?.({ environmentId: runtimeEnvironmentId })
             .catch(() => ({}))
+
           const profiles = result.profiles.map((profile) =>
             !profile.source && clientImportSources?.[profile.id]
               ? { ...profile, source: clientImportSources[profile.id] }
               : profile
           )
+
           set((s) => profileListByHostUpdate(s, profiles, hostId))
         } catch {
           set((s) => profileListByHostUpdate(s, [], hostId))
         }
+
         return
       }
+
       try {
         const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
         set((s) => profileListByHostUpdate(s, profiles, hostId))
@@ -61,6 +67,7 @@ export function createBrowserProfileListActions(
     createBrowserSessionProfile: async (scope, label, options) => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileCreateResult>(
@@ -69,7 +76,9 @@ export function createBrowserProfileListActions(
             { scope, label, ...options },
             { timeoutMs: 15_000 }
           )
+
           const profile = result.profile
+
           if (profile) {
             set((s) => ({
               ...profileListByHostUpdate(
@@ -79,17 +88,20 @@ export function createBrowserProfileListActions(
               )
             }))
           }
+
           return profile
         } catch {
           return null
         }
       }
+
       try {
         const profile = (await window.api.browser.sessionCreateProfile({
           scope,
           label,
           ...options
         })) as BrowserSessionProfile | null
+
         if (profile) {
           set((s) => ({
             ...profileListByHostUpdate(
@@ -99,6 +111,7 @@ export function createBrowserProfileListActions(
             )
           }))
         }
+
         return profile
       } catch {
         return null
@@ -108,6 +121,7 @@ export function createBrowserProfileListActions(
     deleteBrowserSessionProfile: async (profileId) => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileDeleteResult>(
@@ -116,6 +130,7 @@ export function createBrowserProfileListActions(
             { profileId },
             { timeoutMs: 15_000 }
           )
+
           if (result.deleted) {
             set((s) => ({
               ...profileListByHostUpdate(
@@ -136,13 +151,16 @@ export function createBrowserProfileListActions(
                 : {})
             }))
           }
+
           return result.deleted
         } catch {
           return false
         }
       }
+
       try {
         const ok = await window.api.browser.sessionDeleteProfile({ profileId })
+
         if (ok) {
           set((s) => ({
             ...profileListByHostUpdate(
@@ -163,6 +181,7 @@ export function createBrowserProfileListActions(
               : {})
           }))
         }
+
         return ok
       } catch {
         return false

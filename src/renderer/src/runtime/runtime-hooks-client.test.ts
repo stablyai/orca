@@ -12,10 +12,15 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const hooksCheck = vi.fn()
+
 const hooksInspectSetupScriptImports = vi.fn()
+
 const hooksReadIssueCommand = vi.fn()
+
 const hooksWriteIssueCommand = vi.fn()
 
 beforeEach(() => {

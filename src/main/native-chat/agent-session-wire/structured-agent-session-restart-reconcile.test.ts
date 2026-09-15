@@ -6,15 +6,19 @@ import { createRestartReconciler } from './structured-agent-session-restart-reco
 describe('createRestartReconciler', () => {
   it('reruns after an external store refresh introduces unreconciled leases', async () => {
     let record = { sessionId: 'session-1', lease: { unreconciled: true } } as AgentSessionRecord
+
     const reconcileOnRestart = vi.fn(async () => {
       record = { ...record, lease: { ...record.lease, unreconciled: false } }
+
       return new Map()
     })
+
     const store = {
       listRecords: () => [record],
       getRecord: () => record,
       reconcileOnRestart
     } as unknown as AgentSessionRecordStore
+
     const reconcile = createRestartReconciler({
       store,
       probe: async () => ({ outcome: 'pid-absent' }),
@@ -32,12 +36,15 @@ describe('createRestartReconciler', () => {
       { sessionId: 'session-1', lease: { unreconciled: true } },
       { sessionId: 'session-2', lease: { unreconciled: true } }
     ] as AgentSessionRecord[]
+
     const probe = vi.fn(async () => ({ outcome: 'pid-absent' as const }))
+
     const probeMany = vi.fn(async (pending: readonly AgentSessionRecord[]) => {
       return new Map(
         pending.map((record) => [record.sessionId, { outcome: 'pid-absent' as const }])
       )
     })
+
     const reconcileOnRestart = vi.fn(
       async (args: {
         probeMany?: (
@@ -49,9 +56,11 @@ describe('createRestartReconciler', () => {
           ...record,
           lease: { ...record.lease, unreconciled: false }
         }))
+
         return new Map()
       }
     )
+
     const store = {
       listRecords: () => records,
       getRecord: (sessionId: string) =>

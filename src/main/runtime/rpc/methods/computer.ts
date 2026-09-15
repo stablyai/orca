@@ -52,6 +52,7 @@ export const COMPUTER_METHODS = [
     handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../computer/macos-computer-use-permissions')
+
       return openComputerUsePermissions(params.id)
     }
   }),
@@ -61,6 +62,7 @@ export const COMPUTER_METHODS = [
     handler: async () => {
       const { getComputerUsePermissionStatus } =
         await import('../../../computer/macos-computer-use-permissions')
+
       return getComputerUsePermissionStatus()
     }
   }),

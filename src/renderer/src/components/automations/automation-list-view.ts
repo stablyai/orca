@@ -9,8 +9,11 @@ import {
 } from './automation-list-last-run'
 
 export type AutomationListStatusFilter = 'all' | 'enabled' | 'paused'
+
 export type AutomationListLastRunFilter = 'all' | 'failed' | 'succeeded' | 'never'
+
 export type AutomationListSortField = 'name' | 'lastRun'
+
 export type AutomationListSortDirection = 'asc' | 'desc'
 
 export type AutomationListSort = {
@@ -97,6 +100,7 @@ export function nextAutomationListSort(
   if (current?.field !== field) {
     return { field, direction: defaultAutomationListSortDirection(field) }
   }
+
   return {
     field,
     direction: current.direction === 'asc' ? 'desc' : 'asc'
@@ -107,6 +111,7 @@ function matchesStatusFilter(enabled: boolean, filter: AutomationListStatusFilte
   if (filter === 'all') {
     return true
   }
+
   return filter === 'enabled' ? enabled : !enabled
 }
 
@@ -117,6 +122,7 @@ function matchesLastRunFilter(
   if (filter === 'all') {
     return true
   }
+
   return snapshot.tone === filter
 }
 
@@ -131,6 +137,7 @@ export function buildAutomationListViewItems({
   const locals: AutomationListViewItem[] = rows.map((row) => {
     // Why: the same snapshot the row cell renders, so the sort matches the column.
     const lastRun = getAutomationRowLastRunSnapshot(row)
+
     return {
       kind: 'local',
       id: row.key,
@@ -142,8 +149,10 @@ export function buildAutomationListViewItems({
       row
     }
   })
+
   const externals: AutomationListViewItem[] = externalEntries.map((entry) => {
     const lastRun = getExternalAutomationLastRunSnapshot(entry.job)
+
     return {
       kind: 'external',
       id: entry.key,
@@ -155,6 +164,7 @@ export function buildAutomationListViewItems({
       entry
     }
   })
+
   return [...locals, ...externals]
 }
 
@@ -166,6 +176,7 @@ function matchesHostFilter(hostKey: string | null, keys: readonly string[]): boo
 /** External jobs live on their listing scope's host, mirrored into the same stable-key space. */
 function externalEntryHostStableKey(entry: ExternalAutomationListEntry): string {
   const owner = entry.scope.owner
+
   return hostStableKey({
     authority:
       owner.authority.kind === 'runtime'
@@ -186,7 +197,9 @@ export function filterAutomationListRows(
   if (!isAutomationListFilterActive(filter)) {
     return rows
   }
+
   const hostKeys = selectedHostKeys(filter)
+
   return rows.filter(
     (row) =>
       matchesHostFilter(row.catalogRef ? hostStableKey(row.catalogRef) : null, hostKeys) &&
@@ -204,10 +217,13 @@ export function filterExternalAutomationListEntries(
   if (!isAutomationListFilterActive(filter)) {
     return entries
   }
+
   if (filter.agentIds.length > 0) {
     return []
   }
+
   const hostKeys = selectedHostKeys(filter)
+
   return entries.filter(
     (entry) =>
       matchesHostFilter(externalEntryHostStableKey(entry), hostKeys) &&
@@ -228,18 +244,24 @@ export function sortAutomationListViewItems(
   if (!sort || items.length < 2) {
     return [...items]
   }
+
   const next = [...items]
+
   const compareNames =
     sort.field === 'name' ? new Intl.Collator(locale, { sensitivity: 'base' }).compare : null
+
   next.sort((left, right) => {
     const compared = compareNames
       ? compareNames(left.name, right.name)
       : (left.lastRunAt ?? 0) - (right.lastRunAt ?? 0)
+
     if (compared !== 0) {
       return sort.direction === 'asc' ? compared : -compared
     }
+
     return left.id.localeCompare(right.id)
   })
+
   return next
 }
 

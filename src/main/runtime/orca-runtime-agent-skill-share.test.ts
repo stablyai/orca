@@ -30,6 +30,7 @@ async function createSkill(id: string, name: string): Promise<DiscoveredSkill> {
     'utf8'
   )
   await writeFile(join(directoryPath, 'notes.txt'), name, 'utf8')
+
   return {
     id,
     name,
@@ -64,32 +65,40 @@ function runtimeWithCloud(options: {
 }) {
   const manifests: string[][] = []
   let notifyStarted: (() => void) | null = null
+
   const started = new Promise<void>((resolve) => {
     notifyStarted = resolve
   })
+
   const publishVersion = vi.fn(async (input) => {
     const extractionRoot = join(testRoot, 'extracted')
     await mkdir(extractionRoot, { recursive: true })
+
     const extracted = await extractSkillBundleArchive({
       archivePath: input.archivePath,
       destinationDirectory: join(extractionRoot, randomUUID()),
       expectedArchiveSha256: input.archiveSha256,
       expectedPackageId: input.packageId
     })
+
     manifests.push(extracted.manifest.skills.map((skill) => skill.name))
+
     if (options.failPublish) {
       throw new Error('publish-failed')
     }
+
     if (options.waitForAbort) {
       notifyStarted?.()
       await new Promise<never>((_resolve, reject) => {
         const rejectAbort = (): void => reject(new Error('upload-aborted'))
         input.signal?.addEventListener('abort', rejectAbort, { once: true })
+
         if (input.signal?.aborted) {
           rejectAbort()
         }
       })
     }
+
     return {
       status: 'ok' as const,
       value: {
@@ -106,17 +115,21 @@ function runtimeWithCloud(options: {
       }
     }
   })
+
   const createShare = vi.fn(async () => ({
     status: 'ok' as const,
     value: { id: 'share-id', url: 'https://share.onorca.dev/skills/share/share-id' }
   }))
+
   const runtime = new OrcaRuntimeService({
     getSettings: () => ({
       ...getDefaultSettings(testRoot),
       agentSkillSharingEnabled: options.isEnabled()
     })
   } as never)
+
   runtime.setSkillCloudService({ publishVersion, createShare } as never)
+
   return { runtime, publishVersion, createShare, manifests, started }
 }
 
@@ -161,6 +174,7 @@ describe('agent skill sharing runtime', () => {
   it('denies before reading a discovered directory and blocks later publishes when disabled', async () => {
     let enabled = false
     const { runtime, publishVersion } = runtimeWithCloud({ isEnabled: () => enabled })
+
     const missing = {
       ...(await createSkill('alpha-id', 'alpha')),
       directoryPath: join(testRoot, 'does-not-exist')
@@ -206,15 +220,18 @@ describe('agent skill sharing runtime', () => {
   it('cancels an upload and cleans preparation files', async () => {
     const alpha = await createSkill('alpha-id', 'alpha')
     const controller = new AbortController()
+
     const { runtime, started } = runtimeWithCloud({
       isEnabled: () => true,
       waitForAbort: true
     })
+
     const publishing = runtime.publishDiscoveredSkillsFromAgent(
       request(['alpha-id']),
       [alpha],
       controller.signal
     )
+
     await started
     await expect(
       runtime.publishDiscoveredSkillsFromAgent(request(['alpha-id']), [alpha])
@@ -229,9 +246,11 @@ describe('agent skill sharing runtime', () => {
     const alpha = await createSkill('alpha-id', 'alpha')
     const { runtime, publishVersion } = runtimeWithCloud({ isEnabled: () => true })
     let abortedReads = 0
+
     const signal = {
       get aborted() {
         abortedReads += 1
+
         return abortedReads > 1
       },
       reason: new Error('skill-share-cancelled'),

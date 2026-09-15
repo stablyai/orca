@@ -45,6 +45,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 const { browserWindowMock, checkOrcaStarredMock, trackMock } = mocks
+
 const getIpcHandler = createIpcHandlerLookup(mocks.ipcMainHandleMock)
 
 describe('StarNagService', () => {
@@ -90,6 +91,7 @@ describe('StarNagService', () => {
   it('consumes agent value moment for cooldown suppression without showing later in the same version', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
+
     const { service, ui } = createHarness({
       starNagDeferredUntil: Date.now() + 3 * 24 * 60 * 60 * 1000
     })

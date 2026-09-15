@@ -39,6 +39,7 @@ export function useWorkbenchTerminalStoryboard(
     if (reducedMotion || isTwoAgentsChecklist) {
       return
     }
+
     // Why: nobody watches an animation in a hidden window. `runOnVisible` is a
     // no-op so revealing the window resumes the queue instead of skipping an entry.
     return installWindowVisibilityInterval({
@@ -52,8 +53,10 @@ export function useWorkbenchTerminalStoryboard(
     if (reducedMotion) {
       return
     }
+
     let cancelled = false
     const timeouts: number[] = []
+
     const wait = (ms: number): Promise<void> =>
       new Promise((resolve) => {
         const id = window.setTimeout(resolve, ms)

@@ -53,13 +53,16 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
 
   protected allocateStreamId(): number {
     const start = this.nextStreamId
+
     do {
       const candidate = this.nextStreamId
       this.nextStreamId = this.nextStreamId >= 0x7fffffff ? 1 : this.nextStreamId + 1
+
       if (!this.streams.has(candidate)) {
         return candidate
       }
     } while (this.nextStreamId !== start)
+
     throw new Error('No remote terminal stream ids available.')
   }
 
@@ -67,6 +70,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     const id = this.nextSnapshotRequestId
     this.nextSnapshotRequestId =
       this.nextSnapshotRequestId >= 0x7fffffff ? 1 : this.nextSnapshotRequestId + 1
+
     return id
   }
 
@@ -74,9 +78,11 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     if (this.ready && this.subscription) {
       return Promise.resolve()
     }
+
     if (this.connectPromise) {
       return this.connectPromise
     }
+
     const connectPromise = new Promise<void>((resolve, reject) => {
       this.readyResolver = resolve
       this.readyRejecter = reject
@@ -109,8 +115,10 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
             // preload listens before ipcMain.handle() returns. The multiplexer
             // may already be released; do not retain the late handle.
             unsubscribeRuntimeEnvironmentForE2e(subscription)
+
             return
           }
+
           this.subscription = subscription
           this.resolveReadyIfConnected()
         })
@@ -120,10 +128,13 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
             this.readyResolver = null
             this.readyRejecter = null
           }
+
           reject(error instanceof Error ? error : new Error(String(error)))
         })
     })
+
     this.connectPromise = connectPromise
+
     return this.connectPromise
   }
 
@@ -135,14 +146,17 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     if (!this.matchesCurrentEnvironmentRevision() || !this.ready || !this.subscription) {
       return false
     }
+
     try {
       this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: 0, payload }))
       recordE2eRemoteStreamFrame(opcode)
+
       return true
     } catch (error) {
       this.handleClose(
         error instanceof Error ? error.message : 'Remote terminal transport write failed.'
       )
+
       return false
     }
   }
@@ -151,6 +165,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     if (!this.ready || !this.subscription) {
       return
     }
+
     this.readyResolver?.()
     this.readyResolver = null
     this.readyRejecter = null
@@ -160,12 +175,14 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     this.readyRejecter?.(error)
     this.readyResolver = null
     this.readyRejecter = null
+
     for (const stream of this.streams.values()) {
       // Why: a stream still awaiting ensureConnected receives this failure through its rejected promise.
       if (stream.subscriptionRequested) {
         stream.callbacks.onError?.(error.message)
       }
     }
+
     this.handleClose(undefined, false)
   }
 
@@ -178,12 +195,15 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     this.readyResolver = null
     this.readyRejecter = null
     this.subscription = null
+
     if (closingSubscription) {
       unsubscribeRuntimeEnvironmentForE2e(closingSubscription)
     }
+
     this.streams.clear()
     // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
     this.releaseIfCurrent(this.environmentId, this)
+
     for (const stream of streams) {
       discardOutputAcknowledgements(stream)
       stream.watchdog.dispose()
@@ -192,6 +212,7 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
       rejectPendingSnapshotRequest(stream, message ?? 'Remote runtime connection closed.')
       const canHandleClose = Boolean(stream.callbacks.onTransportClose)
       stream.callbacks.onTransportClose?.({ recoverable })
+
       if (message && !canHandleClose) {
         stream.callbacks.onError?.(message)
       }
@@ -202,9 +223,11 @@ export abstract class RemoteRuntimeTerminalMultiplexerBase {
     if (this.streams.size > 0) {
       return
     }
+
     if (this.subscription) {
       unsubscribeRuntimeEnvironmentForE2e(this.subscription)
     }
+
     this.subscription = null
     this.connectPromise = null
     this.ready = false

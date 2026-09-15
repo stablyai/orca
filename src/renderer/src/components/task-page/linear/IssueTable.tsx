@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../../task-page-source-context'
 import { Button } from '@/components/ui/button'
+
 export function TaskPageLinearIssueTable({
   model
 }: {
@@ -25,6 +26,7 @@ export function TaskPageLinearIssueTable({
     linearIssueListRows,
     handleOpenOrUseLinearItem
   } = model
+
   return (
     <div className="divide-y divide-border/50">
       {linearIssueListRows.map((row) => {
@@ -39,20 +41,25 @@ export function TaskPageLinearIssueTable({
             </div>
           )
         }
+
         const issue = row.issue
         const selected = issue.id === selectedLinearIssueId
         const labels = issue.labels.slice(0, 3)
+
         const teamLabel =
           selectedLinearWorkspaceId === 'all' && issue.workspaceName
             ? `${issue.workspaceName} / ${issue.team.name}`
             : issue.team.name
+
         const attachedWorkspace = findLinearIssueWorkspaceAttachmentInIndex(
           linearIssueAttachmentIndex,
           issue
         )
+
         const attachedWorkspaceLabel = attachedWorkspace
           ? getWorktreeAttachmentLabel(attachedWorkspace)
           : null
+
         return (
           <div
             key={issue.id}
@@ -67,6 +74,7 @@ export function TaskPageLinearIssueTable({
               if (e.target !== e.currentTarget) {
                 return
               }
+
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
                 openLinearDetailPage(issue)

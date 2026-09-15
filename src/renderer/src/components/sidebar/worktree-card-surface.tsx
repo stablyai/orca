@@ -10,6 +10,7 @@ import type { WorktreeCardController } from './use-worktree-card-controller'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const presentation = buildWorktreeCardPresentation(card)
+
   const {
     worktree,
     selectedWorktrees,
@@ -39,6 +40,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     showRenameErrorDialog,
     setShowRenameErrorDialog
   } = card
+
   const { titleOnlyCard, cardStyle } = presentation
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />

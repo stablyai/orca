@@ -14,12 +14,14 @@ const HOST_PREFIX = `e2e-ssh-modal-${Date.now().toString(36)}-${Math.random().to
 
 async function dismissTransientAnnouncement(page: Page): Promise<void> {
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+
   // Why: isVisible() is one-shot (its timeout is ignored); the retrying assertion
   // gives a late-rendering announcement a chance to appear before we move on.
   const visible = await expect(maybeLaterButton)
     .toBeVisible({ timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (visible) {
     await maybeLaterButton.click()
   }
@@ -33,8 +35,10 @@ async function seedSshTargets(
     async ({ count, prefix }) => {
       const ids: string[] = []
       const labels: string[] = []
+
       for (let index = 0; index < count; index += 1) {
         const label = `${prefix}-seed-${index}`
+
         const result = await window.api.ssh.addTarget({
           target: {
             label,
@@ -45,10 +49,12 @@ async function seedSshTargets(
             relayGracePeriodSeconds: 60
           }
         })
+
         ids.push(result.target.id)
         labels.push(label)
         window.__store?.getState().recordSshRepoReadoptions(result.repoReadoptions)
       }
+
       return { ids, labels }
     },
     { count, prefix: HOST_PREFIX }
@@ -70,9 +76,11 @@ async function removeSshTargets(page: Page, ids: string[]): Promise<void> {
 async function openSshHostSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     state.openSettingsTarget({ pane: 'ssh', repoId: null })
     state.openSettingsPage()
   })
@@ -90,6 +98,7 @@ async function openSshHostSettings(page: Page): Promise<void> {
 async function listTargetIdsByLabelPrefix(page: Page, prefix: string): Promise<string[]> {
   return page.evaluate(async (labelPrefix) => {
     const targets = (await window.api.ssh.listTargets()) as { id: string; label: string }[]
+
     return targets
       .filter((target) => target.label.startsWith(labelPrefix))
       .map((target) => target.id)
@@ -103,6 +112,7 @@ test.describe('SSH host add/edit modal', () => {
 
   test.afterEach(async ({ orcaPage }) => {
     const ids = await listTargetIdsByLabelPrefix(orcaPage, HOST_PREFIX)
+
     if (ids.length > 0) {
       await removeSshTargets(orcaPage, ids)
     }
@@ -115,6 +125,7 @@ test.describe('SSH host add/edit modal', () => {
     await openSshHostSettings(orcaPage)
 
     const sshSection = orcaPage.locator('[data-settings-section="ssh"]')
+
     // Why: seed first, then open settings so SshPane's listTargets load includes them.
     for (const label of seeded.labels.slice(0, 3)) {
       await expect(sshSection.getByText(label, { exact: true })).toBeVisible()
@@ -159,6 +170,7 @@ test.describe('SSH host add/edit modal', () => {
     const createdCard = sshSection.locator(
       `[data-ssh-target-card][data-ssh-target-label="${createdLabel}"]`
     )
+
     await createdCard.getByRole('button', { name: 'Edit target' }).click()
 
     const editDialog = orcaPage.getByRole('dialog', { name: 'Edit SSH host' })
@@ -211,9 +223,11 @@ test.describe('SSH host add/edit modal', () => {
   test('add-ssh-host settings intent opens the same modal dialog', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('store unavailable')
       }
+
       state.openSettingsTarget({ pane: 'ssh', repoId: null, intent: 'add-ssh-host' })
       state.openSettingsPage()
     })

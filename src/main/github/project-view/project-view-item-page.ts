@@ -52,12 +52,15 @@ export async function fetchItemsPageWithRaw(args: {
     }
 > {
   const authError = await projectHostAuthenticationError(args.host)
+
   if (authError) {
     return { ok: false, error: authError, rawErrors: [], stderr: '' }
   }
+
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
+
   const query = `
     query(${afterVar}$owner:String!, $num:Int!, $q:String!, $first:Int!) {
       ${root}(login:$owner) {
@@ -78,11 +81,13 @@ export async function fetchItemsPageWithRaw(args: {
     }
     ${FIELD_CONFIG_FRAGMENT}
   `
+
   const argsArr: string[] = ['api', 'graphql', '-f', `query=${query}`]
   argsArr.push('-f', `owner=${args.owner}`)
   argsArr.push('-F', `num=${args.projectNumber}`)
   argsArr.push('-f', `q=${args.query}`)
   argsArr.push('-F', `first=${args.first}`)
+
   if (args.after) {
     argsArr.push('-f', `after=${args.after}`)
   }
@@ -90,6 +95,7 @@ export async function fetchItemsPageWithRaw(args: {
   // Why: GHES traffic runs against its own quota — only github.com requests
   // consult/debit the shared snapshot.
   const guard = repositoryRateLimitGuard(args, 'graphql')
+
   if (guard.blocked) {
     return {
       ok: false,
@@ -98,17 +104,21 @@ export async function fetchItemsPageWithRaw(args: {
       stderr: ''
     }
   }
+
   await acquire()
   noteRepositoryRateLimitSpend(args, 'graphql')
+
   try {
     let stdout = ''
     let stderr = ''
     let execFailed = false
+
     try {
       const r = await ghExecFileAsync(argsArr, {
         encoding: 'utf-8',
         ...projectGhExecOptions(args.host)
       })
+
       stdout = r.stdout
       stderr = r.stderr
     } catch (err) {
@@ -117,7 +127,9 @@ export async function fetchItemsPageWithRaw(args: {
       stdout = extracted.stdout
       execFailed = true
     }
+
     let parsed: { data?: Record<string, unknown>; errors?: GhGraphqlErrorShape[] } = {}
+
     try {
       parsed = JSON.parse(stdout)
     } catch {
@@ -130,6 +142,7 @@ export async function fetchItemsPageWithRaw(args: {
           stderr
         }
       }
+
       return {
         ok: false,
         error: driftError('failed to parse items response'),
@@ -137,6 +150,7 @@ export async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
+
     // Why: gh rejected but stdout parsed; fall through to parsed.errors below, else surface the stderr classification rather than not_found.
     if (execFailed && (!parsed.errors || parsed.errors.length === 0) && !parsed.data) {
       return {
@@ -146,6 +160,7 @@ export async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
+
     if (parsed.errors && parsed.errors.length > 0) {
       return {
         ok: false,
@@ -154,8 +169,10 @@ export async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
+
     const top = parsed.data?.[root] as { projectV2?: { items?: RawItemsPage } | null } | undefined
     const page = top?.projectV2?.items
+
     if (!page) {
       return {
         ok: false,
@@ -164,6 +181,7 @@ export async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
+
     return { ok: true, page }
   } finally {
     release()

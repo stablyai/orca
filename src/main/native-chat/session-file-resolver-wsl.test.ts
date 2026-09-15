@@ -2,11 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
+
 const WSL_MANAGED_SESSIONS_DIR = `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`
+
 const ROLLOUT_LINUX =
   '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/24/rollout-wsl-sess.jsonl'
+
 const ROLLOUT_UNC =
   '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl-sess.jsonl'
+
 const DEBIAN_ROLLOUT_UNC = ROLLOUT_UNC.replace('Ubuntu', 'Debian')
 
 vi.mock('../wsl', () => ({
@@ -27,13 +31,16 @@ const READABLE_WSL_UNC_PATHS = new Set([ROLLOUT_UNC])
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromisesModule>()
+
   return {
     ...actual,
     access: async (path: string) => {
       if (!path.startsWith('\\\\wsl.localhost\\')) {
         await actual.access(path)
+
         return
       }
+
       if (!READABLE_WSL_UNC_PATHS.has(path)) {
         throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
       }
@@ -42,11 +49,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const HOST_ROLLOUT = 'C:\\host\\sessions\\rollout-wsl-sess.jsonl'
+
 const scanned = vi.hoisted(() => ({ dirs: [] as string[], hostRootHasRollout: false }))
+
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: async (dir: string) => {
     scanned.dirs.push(dir)
     const isWslRoot = dir.startsWith('\\\\wsl.localhost\\')
+
     return scanned.hostRootHasRollout && !isWslRoot
       ? ['C:\\host\\sessions\\rollout-wsl-sess.jsonl']
       : []
@@ -84,6 +94,7 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
       transcriptPath: ROLLOUT_LINUX,
       codexSessionsDirs: []
     })
+
     expect(resolved).toBe(ROLLOUT_UNC)
   })
 
@@ -119,6 +130,7 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
       transcriptPath: '/home/ada/.codex/sessions/2026/07/24/rollout-gone.jsonl',
       codexSessionsDirs: []
     })
+
     expect(resolved).toBeNull()
   })
 
@@ -167,10 +179,12 @@ describe('resolveSessionFilePath on a Windows host with WSL', () => {
 
   it('leaves the guest path alone on non-Windows hosts', async () => {
     setPlatform('darwin')
+
     const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
       transcriptPath: ROLLOUT_LINUX,
       codexSessionsDirs: []
     })
+
     expect(resolved).toBeNull()
   })
 })

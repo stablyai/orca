@@ -3,6 +3,7 @@
 // Why: an absolute forward-slash path avoids PATH hijacking and survives cmd.exe and Git Bash.
 export function getWindowsSystem32Path(relativePath: string): string {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+
   return `${systemRoot.replaceAll('\\', '/')}/System32/${relativePath}`
 }
 

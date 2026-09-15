@@ -30,8 +30,10 @@ export function createGitCommandMocker(
       const key = `git ${args.join(' ')}`
       const callCount = (callCounts.get(key) ?? 0) + 1
       callCounts.set(key, callCount)
+
       const lineListKey =
         key === 'git worktree list --porcelain -z' ? 'git worktree list --porcelain' : ''
+
       const result =
         results[`${key}#${callCount}`] ??
         results[key] ??
@@ -68,14 +70,17 @@ export function expectGitCallOrder(calls: string[], beforeCall: string, afterCal
 export function mockSparseCheckoutEnabledConfig(readFileMock: Mock): void {
   readFileMock.mockImplementation(async (filePath: string) => {
     const normalized = String(filePath).replaceAll('\\', '/')
+
     // Why: linked worktrees may point at a common dir; treat missing commondir as
     // "this gitdir is the common dir" so the shared config read still runs.
     if (normalized.endsWith('/commondir')) {
       throw enoent()
     }
+
     if (normalized.endsWith('/config') || normalized.endsWith('/config.worktree')) {
       return ENABLED_SPARSE_CHECKOUT_CONFIG
     }
+
     throw enoent()
   })
 }
@@ -118,10 +123,12 @@ export function resetWorktreeGitMocks(mocks: WorktreeGitMocks): void {
   // Default: no worktree has a sparse-checkout config file. Tests that need
   // sparse detection override this.
   mocks.statMock.mockRejectedValue(enoent())
+
   if (mocks.readFileMock) {
     mocks.readFileMock.mockReset()
     mockSparseCheckoutEnabledConfig(mocks.readFileMock)
   }
+
   mocks.resolveGitDirMock.mockReset()
   mocks.resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
 }

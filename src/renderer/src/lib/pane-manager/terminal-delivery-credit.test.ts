@@ -8,6 +8,7 @@ describe('terminal delivery credit', () => {
   it('restores an outer delivery after a nested delivery returns', async () => {
     const { deliverTerminalDataWithDeferredCredit, takeCurrentTerminalDeliveryCredit } =
       await import('./terminal-delivery-credit')
+
     const completeOuter = vi.fn()
     const completeInner = vi.fn()
     let outerCredit: (() => void) | null = null
@@ -31,6 +32,7 @@ describe('terminal delivery credit', () => {
   it('auto-settles before a deferred consumer can claim the delivery', async () => {
     const { deliverTerminalDataWithDeferredCredit, takeCurrentTerminalDeliveryCredit } =
       await import('./terminal-delivery-credit')
+
     const complete = vi.fn()
     let claimLater: (() => (() => void) | null) | null = null
 
@@ -44,6 +46,7 @@ describe('terminal delivery credit', () => {
   it('settles only after every scheduler write claimed by one delivery completes', async () => {
     const { deliverTerminalDataWithDeferredCredit, takeCurrentTerminalDeliveryCredit } =
       await import('./terminal-delivery-credit')
+
     const complete = vi.fn()
     let first: (() => void) | null = null
     let second: (() => void) | null = null

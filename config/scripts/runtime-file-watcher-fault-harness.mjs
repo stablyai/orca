@@ -6,8 +6,11 @@ import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
+
 const SUPERVISOR_SOURCE = resolve('src/main/ipc/parcel-watcher-process-supervisor.ts')
+
 const WAIT_TIMEOUT_MS = 15_000
+
 const require = createRequire(import.meta.url)
 
 function withTimeout(promise, label) {
@@ -16,6 +19,7 @@ function withTimeout(promise, label) {
       () => rejectPromise(new Error(`Timed out waiting for ${label}`)),
       WAIT_TIMEOUT_MS
     )
+
     promise.then(
       (value) => {
         clearTimeout(timer)
@@ -53,14 +57,17 @@ async function loadSupervisor(bundleDir) {
     external: ['@parcel/watcher', 'electron'],
     logLevel: 'silent'
   })
+
   return require(outfile).WatcherProcessSupervisor
 }
 
 async function main() {
   if (process.platform === 'win32') {
     console.log('[runtime-file-watcher-fault] SKIP: SIGSEGV oracle is macOS/Linux only')
+
     return
   }
+
   if (!existsSync(ENTRY_PATH)) {
     throw new Error(`Missing ${ENTRY_PATH}; run pnpm run build:electron-vite first`)
   }
@@ -76,9 +83,11 @@ async function main() {
   let watcherCanaryDir
   let eventListener = () => undefined
   let rejectWatcherError
+
   const watcherError = new Promise((_, reject) => {
     rejectWatcherError = reject
   })
+
   // Attach early so a callback rejection before the race cannot become unhandled.
   watcherError.catch(() => undefined)
 
@@ -92,12 +101,14 @@ async function main() {
     supervisor = new WatcherProcessSupervisor()
 
     let resolveInterruption
+
     const interrupted = withTimeout(
       new Promise((resolveWait) => {
         resolveInterruption = resolveWait
       }),
       'automatic watcher resubscription'
     )
+
     subscription = await supervisor.subscribe(
       rootPath,
       (error, events) => {
@@ -105,8 +116,10 @@ async function main() {
           // Why: throws from the async watcher callback escape main()'s try/finally
           // and skip teardown. Surface failures through a harness promise instead.
           rejectWatcherError(error)
+
           return
         }
+
         eventListener(events)
       },
       { ignore: ['.git', 'node_modules'] },
@@ -124,20 +137,25 @@ async function main() {
       (event) => event.path === join(rootPath, 'before.txt'),
       'pre-crash watch event'
     )
+
     await writeFile(join(rootPath, 'before.txt'), 'before')
     await Promise.race([beforeEvent, watcherError])
 
     const firstChildPid = supervisor.child?.pid
+
     if (!firstChildPid) {
       throw new Error('Watcher supervisor did not expose a live child')
     }
+
     process.kill(firstChildPid, 'SIGSEGV')
     await Promise.race([interrupted, watcherError])
 
     const replacementChildPid = supervisor.child?.pid
+
     if (!replacementChildPid || replacementChildPid === firstChildPid) {
       throw new Error('Watcher supervisor did not replace the faulted child')
     }
+
     const afterEvent = nextMatchingEvent(
       (listener) => {
         eventListener = listener
@@ -145,6 +163,7 @@ async function main() {
       (event) => event.path === join(rootPath, 'after.txt'),
       'post-crash watch event'
     )
+
     await writeFile(join(rootPath, 'after.txt'), 'after')
     await Promise.race([afterEvent, watcherError])
 
@@ -172,6 +191,7 @@ async function main() {
       ])
     }
   }
+
   if (watcherCanaryDir && existsSync(watcherCanaryDir)) {
     throw new Error(`Watcher supervisor leaked its canary directory: ${watcherCanaryDir}`)
   }

@@ -32,6 +32,7 @@ function sessionWith(
       connection: {
         supportedModels: async () => {
           calls.push('list_models')
+
           return [...(listed?.catalog ?? [])]
         },
         setModel: async (model: string) => {
@@ -43,6 +44,7 @@ function sessionWith(
         },
         getSettings: async () => {
           calls.push('get_settings')
+
           return reported === null
             ? { applied: {}, effective: {}, sources: {} }
             : { applied: { effort: reported }, effective: { effortLevel: reported }, sources: {} }
@@ -92,6 +94,7 @@ describe('Claude effort reporting', () => {
   it('keeps the init fixture free of an effort the real frame never sends', async () => {
     const events: ClaudeStructuredSessionEvent[] = []
     await acquired(fakeClaude(), {}, events)
+
     const init = events.flatMap((event) =>
       event.type === 'message' && event.message.subtype === 'init' ? [event.message] : []
     )
@@ -140,6 +143,7 @@ describe('Claude effort readback', () => {
 
 describe('Claude effort against the model that must run it', () => {
   const HAIKU = { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' }
+
   const SONNET = {
     value: 'sonnet',
     resolvedModel: 'claude-sonnet-5',

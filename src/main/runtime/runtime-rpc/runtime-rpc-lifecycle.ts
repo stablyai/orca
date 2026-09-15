@@ -53,14 +53,17 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           const message = error instanceof Error ? error.message : String(error)
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
+
           try {
             const parsed = JSON.parse(msg) as { id?: unknown }
+
             if (typeof parsed.id === 'string' && parsed.id.length > 0) {
               id = parsed.id
             }
           } catch {
             // ignore — fall through with id='unknown'
           }
+
           reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
         })
     })
@@ -75,6 +78,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       // Why: land any deferred lastSeen write before a replacement registry reads the same file.
       this.deviceRegistry?.flushPendingLastSeen()
       const pairingIdentity = this.initializePairingIdentity()
+
       if (!pairingIdentity.ok) {
         this.deviceRegistry = null
         this.e2eeKeypair = null
@@ -83,8 +87,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
+
         try {
           const host = this.resolveInitialWebSocketBindHost()
+
           const { transport, endpoint } = await this.startWebSocketTransport({
             host,
             port: this.wsPort,
@@ -92,9 +98,11 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
+
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
           }
+
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
@@ -129,6 +137,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (this.activeTransports.length === 0) {
           return
         }
+
         this.writeMetadata()
       },
       onReclaim: (previous) => {
@@ -147,13 +156,16 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     if (this.pinnedBindHost) {
       return this.pinnedBindHost
     }
+
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
+
     const hasConnectedNetworkDevice =
       this.deviceRegistry
         ?.listDevices()
         .some((device) => device.lastSeenAt > 0 && device.pairingReach !== 'this-computer') ?? false
+
     return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
   }
 
@@ -167,9 +179,11 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
     const deviceRegistry = this.deviceRegistry
     const e2eeKeypair = this.e2eeKeypair
+
     if (!deviceRegistry || !e2eeKeypair) {
       throw new Error('WebSocket transport requires an initialized pairing identity')
     }
+
     const wsTransport = new WebSocketTransport({
       host: options.host,
       port: options.port,
@@ -177,6 +191,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
       ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
     })
+
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
 
@@ -189,7 +204,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       this.detachWebSocketWiring = null
       throw error
     }
+
     this.wsBoundHost = options.host
+
     return {
       transport: wsTransport,
       endpoint: formatWsEndpoint(options.host, wsTransport.resolvedPort)
@@ -207,10 +224,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     if (this.mobileSocketWiring) {
       return this.mobileSocketWiring
     }
+
     // Why: session-scoped so each desktop launch may notify once (a mid-session rebind must not reset it).
     this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
       onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
     })
+
     const mobileSocketWiring = new MobileSocketWiring({
       deviceRegistry,
       e2eeKeypair,
@@ -239,11 +258,13 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (!socket) {
           return
         }
+
         this.abortWebSocketDispatches(socket.ws)
         // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
         this.binaryMessageRouter.deleteConnection(socket.connectionId)
+
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.deviceToken)
         }
@@ -255,7 +276,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         }
       }
     })
+
     this.mobileSocketWiring = mobileSocketWiring
+
     return mobileSocketWiring
   }
 }

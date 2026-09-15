@@ -6,8 +6,10 @@ type DisplayNameKind = CreateWorktreeArgs['displayNameKind']
 export function sanitizeWorktreeDisplayName(input: string): string | undefined {
   const withoutControls = Array.from(input, (char) => {
     const code = char.charCodeAt(0)
+
     return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
   }).join('')
+
   const sanitized = withoutControls
     // Why: titles come from external systems; bidi overrides could visually reorder sidebar text.
     .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
@@ -26,16 +28,20 @@ export function resolveWorktreeCreateDisplayName(
   if (!input) {
     return undefined
   }
+
   if (kind !== 'user') {
     return sanitizeWorktreeDisplayName(input)
   }
+
   const safe = Array.from(input, (char) => {
     const code = char.charCodeAt(0)
+
     return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
   })
     .join('')
     .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
     .trim()
+
   return safe || undefined
 }
 
@@ -54,7 +60,9 @@ export function resolveWorktreeCreateDisplayNameRequest(
   const effectiveKind = cliCreated
     ? 'user'
     : (kind ?? (input !== undefined || nameWasGenerated ? 'generated' : 'user'))
+
   const effectiveInput = input ?? (effectiveKind === 'user' ? fallbackName : undefined)
+
   return {
     value: resolveWorktreeCreateDisplayName(effectiveInput, effectiveKind),
     kind: effectiveKind
@@ -72,15 +80,19 @@ export function resolveWorktreeCreateDisplayNameMeta(
     if (kind !== 'user' && requestedDisplayName === branchName) {
       return {}
     }
+
     return { displayName: requestedDisplayName, displayNameIsPinned: true }
   }
+
   // A user label that sanitizes away is an empty label, so keep the generated fallback automatic.
   if (kind === 'user') {
     return { displayNameIsPinned: false }
   }
+
   if (fallback.requestedName === branchName) {
     return { displayName: fallback.requestedName, displayNameIsPinned: false }
   }
+
   return shouldSetDisplayName(fallback.requestedName, branchName, fallback.sanitizedName)
     ? { displayName: fallback.requestedName, displayNameIsPinned: true }
     : {}

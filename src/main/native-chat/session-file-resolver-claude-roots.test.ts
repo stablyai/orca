@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const scanned = vi.hoisted(() => ({ dirs: [] as string[], hits: {} as Record<string, string> }))
+
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: async (dir: string) => {
     scanned.dirs.push(dir)
     const hit = scanned.hits[dir]
+
     return hit ? [hit] : []
   }
 }))
@@ -14,7 +16,9 @@ import { join } from 'node:path'
 import { resolveSessionFilePath } from './session-file-resolver'
 
 const DEFAULT_ROOT = join(homedir(), '.claude', 'projects')
+
 const CONFIG_DIR = '/opt/claude-home'
+
 const CONFIG_ROOT = join(CONFIG_DIR, 'projects')
 
 let previousConfigDir: string | undefined

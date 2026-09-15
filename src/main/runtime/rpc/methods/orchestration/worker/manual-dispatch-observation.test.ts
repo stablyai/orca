@@ -46,15 +46,19 @@ describe('manual Dispatch observation', () => {
       ptyIds: ['runtime_test:term_worker:1']
     })
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+
     const run = db.createRun({
       objective: 'STA-3848 repro',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey
     })
+
     const task = db.createTask({ spec: 'injected lane', runId: run.id })
+
     const dispatchMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.dispatch'
     )
+
     if (!dispatchMethod) {
       throw new Error('Missing method orchestration.dispatch')
     }
@@ -81,9 +85,11 @@ describe('manual Dispatch observation', () => {
     const workerShowMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.workerShow'
     )
+
     if (!workerShowMethod) {
       throw new Error('Missing method orchestration.workerShow')
     }
+
     await expect(
       workerShowMethod.handler(workerShowMethod.params?.parse({ dispatch: result.dispatch.id }), {
         runtime
@@ -112,12 +118,15 @@ describe('manual Dispatch observation', () => {
       truncated: false,
       nextCursor: null
     })
+
     const run = db.createRun({
       objective: 'STA-3848 repro',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'injected lane', runId: run.id })
+
     const dispatch = createRootDispatch(
       db,
       task.id,
@@ -126,19 +135,23 @@ describe('manual Dispatch observation', () => {
       'launch-hash',
       'runtime_test:term_worker:1'
     )
+
     db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: 'tab_worker:leaf_worker',
       processIncarnation: 'runtime_test:term_worker:1'
     })
     const context = { runtime }
+
     const call = async (name: string, params: Record<string, unknown>) => {
       const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
         (candidate) => candidate.name === name
       )
+
       if (!method) {
         throw new Error(`Missing method ${name}`)
       }
+
       return method.handler(method.params?.parse(params), context)
     }
 
@@ -150,6 +163,7 @@ describe('manual Dispatch observation', () => {
         process_incarnation: string
       }
     }
+
     expect(dispatchShow.dispatch).toMatchObject({
       id: dispatch.id,
       assignee_handle: 'term_worker',
@@ -167,6 +181,7 @@ describe('manual Dispatch observation', () => {
         projection: { liveness: { verdict: string } }
       }[]
     }
+
     expect(workerList.workers).toEqual([
       expect.objectContaining({
         dispatchId: dispatch.id,
@@ -179,6 +194,7 @@ describe('manual Dispatch observation', () => {
     const workerShow = (await call('orchestration.workerShow', {
       dispatch: dispatch.id
     })) as { projection: { liveness: { verdict: string } } | null }
+
     expect(workerShow).toMatchObject({
       worker: { state: 'unsupervised', stage: 'injected', agentTerminalHandle: 'term_worker' },
       observation: { status: 'live', exactWorker: true }
@@ -228,20 +244,24 @@ describe('manual Dispatch observation', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+
     const run = db.createRun({
       objective: 'context-only listing',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'operator lane', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
 
     const workerListMethod = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === 'orchestration.workerList'
     )
+
     if (!workerListMethod) {
       throw new Error('Missing method orchestration.workerList')
     }
+
     const result = (await workerListMethod.handler(
       workerListMethod.params?.parse({ run: run.id }),
       { runtime }
@@ -271,10 +291,12 @@ describe('manual Dispatch observation', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     const closeTerminal = vi.spyOn(runtime, 'closeTerminal')
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'operator-owned lane'
     })
+
     const dispatch = createRootDispatch(
       db,
       task.id,
@@ -283,6 +305,7 @@ describe('manual Dispatch observation', () => {
       'launch-hash',
       'runtime_test:term_worker:1'
     )
+
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
@@ -290,6 +313,7 @@ describe('manual Dispatch observation', () => {
     if (!method) {
       throw new Error(`Missing method ${name}`)
     }
+
     const result = await method.handler(method.params?.parse({ dispatch: dispatch.id }), {
       runtime
     })

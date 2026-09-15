@@ -16,6 +16,7 @@ import {
 describe('paired runtime browser client host runtime', () => {
   it('returns a rejected promise when pairing resolution fails', async () => {
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
+
     const environment = {
       id: 'environment-a',
       name: 'Environment A',

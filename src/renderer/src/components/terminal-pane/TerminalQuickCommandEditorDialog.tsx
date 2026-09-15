@@ -15,6 +15,7 @@ export function TerminalQuickCommandEditorDialog({
   onSave: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   const repos = useAppStore((store) => store.repos)
+
   const hostRepos = hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
     : repos

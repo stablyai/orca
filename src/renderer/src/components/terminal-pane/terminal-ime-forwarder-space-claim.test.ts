@@ -28,16 +28,19 @@ function open() {
   const terminal = new Terminal()
   terminal.open(container)
   const textarea = terminal.textarea!
+
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement: terminal.element,
     isComposing: () => false,
     sendInput: (data) => terminal.input(data),
     getKittyKeyboardFlags: () => 0
   })
+
   // Wired the way the pane lifecycle wires it: a claimed key must not also reach xterm's encoder.
   terminal.attachCustomKeyEventHandler((event) => !forwarder.claimKeyEvent(event))
   const emitted: string[] = []
   terminal.onData((d) => emitted.push(d))
+
   return { emitted, terminal, textarea, forwarder, container }
 }
 
@@ -56,6 +59,7 @@ function keydown(
 ) {
   const event = makeKeydown(init)
   textarea.dispatchEvent(event)
+
   return event
 }
 
@@ -81,6 +85,7 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
       pane.terminal.dispose()
       pane.container.remove()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
@@ -88,6 +93,7 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
   function pane() {
     const created = open()
     panes.push(created)
+
     return created
   }
 

@@ -4,11 +4,15 @@ import type { AgentProviderSessionKey } from './agent-session-resume'
 export const AGENT_STATUS_PROVIDER_SESSION_CHAIN_MAX = 256
 
 const MAX_RUN_ID_LENGTH = 128
+
 const MAX_EXECUTION_ID_LENGTH = 128
+
 const MAX_PANE_KEY_LENGTH = 512
+
 const MAX_PROVIDER_ID_LENGTH = 512
 
 export type AgentStatusRunId = string
+
 export type AgentStatusExecutionId = string
 
 /** Public handle for one host-observed process incarnation; process evidence stays host-private. */
@@ -29,7 +33,9 @@ export type AgentStatusProviderSession = AgentStatusProviderAlias & {
 }
 
 export type AgentStatusRunAttribution = 'token' | 'pane'
+
 export type AgentStatusRunRole = 'root' | 'child' | 'unresolved'
+
 export type AgentStatusRunVerdict = 'live' | 'unverifiable' | 'exited'
 
 /** Identity and lifecycle fields carried by a canonical `pty-run` status row. */
@@ -54,6 +60,7 @@ function hasExactKeys(
   optional: readonly string[] = []
 ): boolean {
   const keys = Object.keys(record)
+
   return (
     required.every((key) => Object.hasOwn(record, key)) &&
     keys.every((key) => required.includes(key) || optional.includes(key))
@@ -69,12 +76,15 @@ function isBoundedIdentity(value: unknown, maxLength: number): value is string {
   ) {
     return false
   }
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code <= 0x1f || code === 0x7f) {
       return false
     }
   }
+
   return true
 }
 
@@ -94,6 +104,7 @@ function parseExecutionAttachment(value: unknown): AgentStatusExecutionAttachmen
   ) {
     return null
   }
+
   return { executionId: value.executionId }
 }
 
@@ -108,6 +119,7 @@ export function parseAgentStatusProviderAlias(value: unknown): AgentStatusProvid
   ) {
     return null
   }
+
   return {
     provider: value.provider,
     sessionKeyKind: value.sessionKeyKind,
@@ -117,6 +129,7 @@ export function parseAgentStatusProviderAlias(value: unknown): AgentStatusProvid
 
 function parseProviderSession(value: unknown): AgentStatusProviderSession | null {
   const hasResetBoundary = isRecord(value) && Object.hasOwn(value, 'resetBoundary')
+
   if (
     !isRecord(value) ||
     !hasExactKeys(value, ['provider', 'sessionKeyKind', 'providerId'], ['resetBoundary']) ||
@@ -124,14 +137,17 @@ function parseProviderSession(value: unknown): AgentStatusProviderSession | null
   ) {
     return null
   }
+
   const alias = parseAgentStatusProviderAlias({
     provider: value.provider,
     sessionKeyKind: value.sessionKeyKind,
     providerId: value.providerId
   })
+
   if (!alias) {
     return null
   }
+
   return hasResetBoundary ? { ...alias, resetBoundary: true } : alias
 }
 
@@ -139,18 +155,25 @@ function parseProviderSessions(value: unknown): AgentStatusProviderSession[] | n
   if (!Array.isArray(value) || value.length > AGENT_STATUS_PROVIDER_SESSION_CHAIN_MAX) {
     return null
   }
+
   const sessions: AgentStatusProviderSession[] = []
+
   for (const candidate of value) {
     const session = parseProviderSession(candidate)
+
     if (!session) {
       return null
     }
+
     sessions.push(session)
   }
+
   const provider = sessions[0]?.provider
+
   if (provider && sessions.some((session) => session.provider !== provider)) {
     return null
   }
+
   return sessions
 }
 
@@ -170,9 +193,11 @@ export function parseAgentStatusPtyRunRecord(value: unknown): AgentStatusPtyRunR
   ) {
     return null
   }
+
   const attachment = parseExecutionAttachment(value.attachment)
   const providerSessions = parseProviderSessions(value.providerSessions)
   const hasContinuity = Object.hasOwn(value, 'continuityOf')
+
   if (
     !attachment ||
     !providerSessions ||
@@ -181,6 +206,7 @@ export function parseAgentStatusPtyRunRecord(value: unknown): AgentStatusPtyRunR
   ) {
     return null
   }
+
   return {
     runId: value.runId,
     paneKey: value.paneKey,
@@ -197,9 +223,11 @@ export function parseAgentStatusPtyRunRecord(value: unknown): AgentStatusPtyRunR
 
 export function serializeAgentStatusPtyRunRecord(record: AgentStatusPtyRunRecord): string {
   const parsed = parseAgentStatusPtyRunRecord(record)
+
   if (!parsed) {
     throw new Error('Invalid PTY run status record')
   }
+
   return JSON.stringify(parsed)
 }
 

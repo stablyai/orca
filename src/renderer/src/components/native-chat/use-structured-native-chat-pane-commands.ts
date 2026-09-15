@@ -29,6 +29,7 @@ export function useStructuredNativeChatPaneCommands({
 }) {
   const keybindings = useAppStore((state) => state.keybindings)
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
+
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     actions: {
@@ -54,22 +55,28 @@ export function useStructuredNativeChatPaneCommands({
           }
         : undefined
   })
+
   const onKeyDownCapture = useCallback<KeyboardEventHandler<HTMLDivElement>>(
     (event) => {
       if (event.repeat) {
         return
       }
+
       const direction = matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+
       if (!direction) {
         return
       }
+
       let handled = false
+
       if (terminalPaneActions) {
         if (direction === 'right') {
           terminalPaneActions.onSplitRight()
         } else {
           terminalPaneActions.onSplitDown()
         }
+
         handled = true
       } else if (groupId) {
         handled = runNativeChatSplitTarget(
@@ -77,9 +84,11 @@ export function useStructuredNativeChatPaneCommands({
           direction
         )
       }
+
       if (!handled) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
     },

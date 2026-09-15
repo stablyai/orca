@@ -11,6 +11,7 @@ import type { AutomationHostCatalogEntry } from './automation-host-catalog-types
 import type { AutomationHostFilterResolution } from './automation-host-filter-resolution'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {

@@ -92,9 +92,11 @@ describe('refusal matrix', () => {
       const lease = agentSessionLeaseFixture(testCase.lease)
       const admission = evaluateAgentSessionPtyWriteAdmission(bindingFor(lease))
       expect(admission.admitted).toBe(false)
+
       if (admission.admitted) {
         return
       }
+
       expect(admission.refusal.code).toBe(testCase.code)
       expect(admission.refusal.sessionId).toBe(lease.sessionId)
       expect(admission.refusal.ownerRuntimeKind).toBe(lease.runtimeKind)
@@ -108,14 +110,18 @@ describe('refusal matrix', () => {
     const reconciling = evaluateAgentSessionPtyWriteAdmission(
       bindingFor(agentSessionLeaseFixture({ unreconciled: true }))
     )
+
     const owned = evaluateAgentSessionPtyWriteAdmission(
       bindingFor(agentSessionLeaseFixture({ runtimeKind: 'native' }))
     )
+
     expect(reconciling.admitted).toBe(false)
     expect(owned.admitted).toBe(false)
+
     if (reconciling.admitted || owned.admitted) {
       return
     }
+
     expect(reconciling.refusal.code).not.toBe(owned.refusal.code)
   })
 
@@ -124,10 +130,13 @@ describe('refusal matrix', () => {
       sessionId: 'session-alpha-1',
       record: null
     })
+
     expect(admission.admitted).toBe(false)
+
     if (admission.admitted) {
       return
     }
+
     expect(admission.refusal.code).toBe('execution_owner_reconciling')
     expect(admission.refusal.ownerRuntimeKind).toBeNull()
   })
@@ -137,10 +146,13 @@ describe('refusal matrix', () => {
       sessionId: 'session-beta-2',
       record: agentSessionRecordFixture()
     })
+
     expect(admission.admitted).toBe(false)
+
     if (admission.admitted) {
       return
     }
+
     expect(admission.refusal.code).toBe('agent_session_ownership_unknown')
     expect(admission.refusal.sessionId).toBe('session-beta-2')
   })
@@ -151,9 +163,11 @@ describe('refusal matrix', () => {
         const admission = evaluateAgentSessionPtyWriteAdmission(
           bindingFor(agentSessionLeaseFixture(testCase.lease))
         )
+
         return admission.admitted ? 'admitted' : admission.refusal.code
       })
     )
+
     for (const code of emitted) {
       expect(AGENT_SESSION_RPC_ERROR_CODES).toContain(code)
     }
@@ -169,6 +183,7 @@ describe('in-flight fence race', () => {
       admitted,
       binding: bindingFor(admittedLease)
     })
+
     expect(next.admitted).toBe(true)
   })
 
@@ -177,9 +192,11 @@ describe('in-flight fence race', () => {
     const moved = agentSessionLeaseFixture({ runtimeFence: admittedLease.runtimeFence + 1 })
     const next = reevaluateAgentSessionPtyWriteAdmission({ admitted, binding: bindingFor(moved) })
     expect(next.admitted).toBe(false)
+
     if (next.admitted) {
       return
     }
+
     expect(next.refusal.code).toBe('agent_session_checkpoint_stale')
     expect(next.refusal.runtimeFence).toBe(moved.runtimeFence)
   })
@@ -200,10 +217,13 @@ describe('in-flight fence race', () => {
       admitted,
       binding: bindingFor(agentSessionLeaseFixture({ handoffStage: 'preparing' }))
     })
+
     expect(next.admitted).toBe(false)
+
     if (next.admitted) {
       return
     }
+
     expect(next.refusal.code).toBe('agent_session_conflict')
   })
 
@@ -212,6 +232,7 @@ describe('in-flight fence race', () => {
       admitted: { sessionId: null, runtimeFence: null },
       binding: bindingFor(agentSessionLeaseFixture({ runtimeKind: 'native' }))
     })
+
     expect(next.admitted).toBe(false)
   })
 })
@@ -221,9 +242,11 @@ describe('typed error', () => {
     const admission = evaluateAgentSessionPtyWriteAdmission(
       bindingFor(agentSessionLeaseFixture({ runtimeKind: 'native' }))
     )
+
     if (admission.admitted) {
       throw new Error('expected a refusal')
     }
+
     const error = new AgentSessionPtyWriteRefusedError(admission.refusal)
     expect(isAgentSessionPtyWriteRefusedError(error)).toBe(true)
     expect(isAgentSessionPtyWriteRefusedError(new Error('agent_session_conflict'))).toBe(false)
@@ -235,9 +258,11 @@ describe('typed error', () => {
     const admission = evaluateAgentSessionPtyWriteAdmission(
       bindingFor(agentSessionLeaseFixture({ runtimeKind: 'native', handoffStage: 'preparing' }))
     )
+
     if (admission.admitted) {
       throw new Error('expected a refusal')
     }
+
     const described = describeAgentSessionPtyWriteRefusal(admission.refusal)
     expect(described).toContain('session-alpha-1')
     expect(described).toContain('native chat')

@@ -29,11 +29,14 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           background: `__orca_clicked_link_background_${randomUUID()}`
         }
       : null
+
     let clickedLinkRoutingActive = routeClickedLinks
+
     const installClickedLinkRouting = (): void => {
       if (!clickedLinkRoutingActive || !clickedLinkFrameNames || guest.isDestroyed()) {
         return
       }
+
       // Why: an isolated-world listener labels real anchor clicks without exposing the frame name to page scripts.
       void guest
         .executeJavaScriptInIsolatedWorld(
@@ -52,30 +55,40 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         )
         .catch(() => {})
     }
+
     if (clickedLinkFrameNames) {
       guest.on('dom-ready', installClickedLinkRouting)
     }
+
     const pendingIframeRoutingInstalls = new Map<Electron.WebFrameMain, () => void>()
     const iframeFrameNamesByFrame = new Map<Electron.WebFrameMain, BrowserClickedLinkFrameNames>()
+
     const iframeRoutingByFrameName = new Map<
       string,
       { frame: Electron.WebFrameMain; activate: boolean }
     >()
+
     const clearIframeFrameName = (frame: Electron.WebFrameMain): void => {
       const names = iframeFrameNamesByFrame.get(frame)
+
       if (!names) {
         return
       }
+
       iframeFrameNamesByFrame.delete(frame)
+
       for (const name of [names.foreground, names.background]) {
         iframeRoutingByFrameName.delete(name)
       }
     }
+
     const installIframeClickedLinkRouting = (frame: Electron.WebFrameMain): void => {
       clearIframeFrameName(frame)
+
       if (!clickedLinkRoutingActive || frame.isDestroyed()) {
         return
       }
+
       const foregroundName = `__orca_clicked_link_iframe_foreground_${randomUUID()}`
       const backgroundName = `__orca_clicked_link_iframe_background_${randomUUID()}`
       iframeFrameNamesByFrame.set(frame, {
@@ -100,6 +113,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           }
         })
     }
+
     const handleFrameCreated = (
       _event: Electron.Event,
       { frame }: Electron.FrameCreatedDetails
@@ -107,25 +121,31 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       if (!clickedLinkFrameNames || !frame || frame.parent === null) {
         return
       }
+
       for (const knownFrame of iframeFrameNamesByFrame.keys()) {
         if (knownFrame.isDestroyed()) {
           clearIframeFrameName(knownFrame)
         }
       }
+
       const installAfterDomReady = (): void => {
         pendingIframeRoutingInstalls.delete(frame)
         installIframeClickedLinkRouting(frame)
       }
+
       pendingIframeRoutingInstalls.set(frame, installAfterDomReady)
       frame.once('dom-ready', installAfterDomReady)
     }
+
     if (clickedLinkFrameNames) {
       guest.on('frame-created', handleFrameCreated)
     }
+
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Why: popup descendants inherit the opener's owner context but must not replace its primary registration.
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
+
     guest.on('did-create-window', handleDidCreateWindow)
     guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
       const ownerContext = this.resolvePopupOwnerContext(guest.id)
@@ -135,6 +155,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const expectedClickedLinkFrameNames = clickedLinkRoutingActive ? clickedLinkFrameNames : null
       const iframeRouting = frameName ? iframeRoutingByFrameName.get(frameName) : undefined
       let clickedLinkActivate: boolean | null = null
+
       if (expectedClickedLinkFrameNames && frameName === expectedClickedLinkFrameNames.foreground) {
         clickedLinkActivate = true
       } else if (
@@ -159,6 +180,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             action: 'opened-in-orca'
           })
         }
+
         // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
         return { action: 'deny' }
       }
@@ -178,8 +200,10 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             origin: safeOrigin(externalUrl),
             action: 'blocked'
           })
+
           return { action: 'deny' }
         }
+
         if (
           this.openLinkInOrcaTab(
             ownerContext.browserTabId,
@@ -192,12 +216,14 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             action: 'opened-in-orca'
           })
         }
+
         // Why: a recognized new-tab intent must never fall through to a native popup if its renderer vanished mid-open.
         return { action: 'deny' }
       }
 
       // Why: file URLs are fine for in-pane previews, but must not spawn native child windows targeting local paths.
       const canOpenAsChild = Boolean(externalUrl || browserUrl === ORCA_BROWSER_BLANK_URL)
+
       if (browserTabId && canOpenAsChild) {
         // Why: OAuth may request size/position, but content must not create deceptive or inescapable native chrome.
         return {
@@ -221,21 +247,26 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           action: 'blocked'
         })
       }
+
       return { action: 'deny' }
     })
 
     return () => {
       clickedLinkRoutingActive = false
+
       try {
         guest.off('did-create-window', handleDidCreateWindow)
+
         if (clickedLinkFrameNames) {
           guest.off('dom-ready', installClickedLinkRouting)
           guest.off('frame-created', handleFrameCreated)
+
           for (const [frame, install] of pendingIframeRoutingInstalls) {
             if (!frame.isDestroyed()) {
               frame.off('dom-ready', install)
             }
           }
+
           pendingIframeRoutingInstalls.clear()
           iframeFrameNamesByFrame.clear()
           iframeRoutingByFrameName.clear()

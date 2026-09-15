@@ -23,6 +23,7 @@ function createTerminal(args: {
     baseY: args.baseY,
     cursorY: args.cursorY ?? 5
   }
+
   return {
     buffer: { active },
     // Why: restoreScrollStateNow guards on terminal.element to avoid calling
@@ -71,11 +72,13 @@ function findBufferLineContaining(terminal: HeadlessTerminal, text: string): num
       return lineY
     }
   }
+
   return -1
 }
 
 function makeHeadlessRestorable(terminal: HeadlessTerminal): Terminal {
   Object.defineProperty(terminal, 'element', { configurable: true, value: {} })
+
   return terminal as unknown as Terminal
 }
 
@@ -111,6 +114,7 @@ describe('scroll state', () => {
 
   it('restores the captured viewport line', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -126,7 +130,9 @@ describe('scroll state', () => {
 
   it('skips restore when the terminal element is gone (post WebGL teardown)', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+
     ;(terminal as unknown as { element: HTMLElement | undefined }).element = undefined
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: true,
@@ -142,9 +148,11 @@ describe('scroll state', () => {
 
   it('swallows xterm dimensions errors thrown after a mid-flight WebGL suspend', () => {
     const terminal = createTerminal({ viewportY: 50, baseY: 100 })
+
     ;(terminal.scrollToBottom as ReturnType<typeof vi.fn>).mockImplementation(() => {
       throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
     })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: true,
@@ -158,9 +166,11 @@ describe('scroll state', () => {
 
   it('swallows xterm dimensions errors from scrollToLine on the not-at-bottom branch', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+
     ;(terminal.scrollToLine as ReturnType<typeof vi.fn>).mockImplementation(() => {
       throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
     })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -175,6 +185,7 @@ describe('scroll state', () => {
   it('uses the visible line marker when resize reflow changes numeric line positions', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 300 })
     const marker = createMarker(160)
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -197,11 +208,13 @@ describe('scroll state', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         rafCallbacks.push(callback)
+
         return rafCallbacks.length
       })
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -227,12 +240,14 @@ describe('scroll state', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         rafCallbacks.push(callback)
+
         return rafCallbacks.length
       })
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const terminal = createTerminal({ viewportY: 10, baseY: 300 })
     const marker = createMarker(160)
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -268,11 +283,13 @@ describe('scroll state', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         rafCallbacks.push(callback)
+
         return rafCallbacks.length
       })
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -293,6 +310,7 @@ describe('scroll state', () => {
 
   it('clamps the restored viewport line to the current buffer bottom', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 30 })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -312,6 +330,7 @@ describe('scroll state', () => {
     vi.mocked(terminal.scrollToLine).mockImplementation(() => {
       throw new Error('unexpected renderer failure')
     })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
@@ -333,6 +352,7 @@ describe('scroll state', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
@@ -363,6 +383,7 @@ describe('scroll state', () => {
 
   it('scrolls to the current bottom when the pane was previously at bottom', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 250 })
+
     const state: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: true,
@@ -379,6 +400,7 @@ describe('scroll state', () => {
 
   it('does not restore across normal and alternate buffers', () => {
     const terminal = createTerminal({ viewportY: 10, baseY: 100 })
+
     const state: ScrollState = {
       bufferType: 'alternate',
       wasAtBottom: false,
@@ -409,12 +431,15 @@ describe('scroll state', () => {
         scrollback: 1000,
         allowProposedApi: true
       })
+
       try {
         await writeHeadless(headless, 'prefix\r\n')
         await writeHeadless(headless, 'ABCDEFGHIJabcdefghijKLMNOPQRSTuvwxyz\r\n')
+
         for (let index = 0; index < 10; index += 1) {
           await writeHeadless(headless, `tail-${index}\r\n`)
         }
+
         const pinnedLine = findBufferLineContaining(headless, pinnedText)
         expect(pinnedLine).toBeGreaterThan(0)
         headless.scrollToLine(pinnedLine)
@@ -442,12 +467,15 @@ describe('scroll state', () => {
       allowProposedApi: true,
       windowsPty: { backend: 'conpty' }
     })
+
     try {
       await writeHeadless(headless, 'prefix\r\n')
       await writeHeadless(headless, 'ABCDEFGHIJabcdefghijKLMNOPQRSTuvwxyz\r\n')
+
       for (let index = 0; index < 10; index += 1) {
         await writeHeadless(headless, `tail-${index}\r\n`)
       }
+
       const pinnedLine = findBufferLineContaining(headless, 'abcdefghij')
       headless.scrollToLine(pinnedLine)
       const terminal = makeHeadlessRestorable(headless)
@@ -471,6 +499,7 @@ describe('scroll state', () => {
       scrollback: 100,
       allowProposedApi: true
     })
+
     try {
       await writeHeadless(headless, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
       const terminal = makeHeadlessRestorable(headless)
@@ -495,12 +524,14 @@ describe('scroll state', () => {
         allowProposedApi: true,
         windowsPty: { backend: 'conpty', buildNumber }
       })
+
       await writeHeadless(headless, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\r\n')
       await writeHeadless(headless, 'tail-1\r\ntail-2\r\ntail-3\r\n')
       const pinnedLine = findBufferLineContaining(headless, 'KLMNOPQRST')
       headless.scrollToLine(pinnedLine)
       const state = captureScrollState(makeHeadlessRestorable(headless))
       headless.dispose()
+
       return state
     }
 
@@ -518,6 +549,7 @@ describe('scroll state', () => {
       scrollback: 100,
       allowProposedApi: true
     })
+
     try {
       await writeHeadless(headless, '123456789界abcdefghij\r\ntail-1\r\ntail-2\r\ntail-3\r\n')
       const pinnedLine = findBufferLineContaining(headless, '界')

@@ -48,6 +48,7 @@ async function runProbe(options: { signal?: string; census?: string; censusKillD
   const dir = mkdtempSync(join(tmpdir(), 'orca-lsof-lifecycle-'))
   const pidFile = join(dir, 'lsof.pid')
   const psPidFile = join(dir, 'ps.pid')
+
   try {
     writeFileSync(join(dir, 'preload.cjs'), PRELOAD)
     writeFileSync(
@@ -55,10 +56,13 @@ async function runProbe(options: { signal?: string; census?: string; censusKillD
       `#!/bin/sh\necho 123\n${options.signal ? 'exec sleep 60\n' : 'exit 2\n'}`,
       { mode: 0o755 }
     )
+
     if (options.census !== undefined) {
       writeFileSync(join(dir, 'ps'), `#!/bin/sh\n${options.census}`, { mode: 0o755 })
     }
+
     const started = performance.now()
+
     const result = await runProcess({
       program: process.execPath,
       args: ['--require', join(dir, 'preload.cjs'), '-e', RELAY_LSOF_PROBE_JS, '/unused.sock'],
@@ -76,36 +80,44 @@ async function runProbe(options: { signal?: string; census?: string; censusKillD
       detached: true,
       terminationBarrier: true
     })
+
     for (const file of [pidFile, psPidFile]) {
       let pid: string
+
       try {
         pid = readFileSync(file, 'utf8')
       } catch {
         continue
       }
+
       const state = await runProcess({
         program: 'ps',
         args: ['-o', 'state=', '-p', pid],
         timeoutMs: 2000
       })
+
       expect(
         (state.code === 1 && !state.stdout.trim()) ||
           (state.code === 0 && state.stdout.trim().startsWith('Z'))
       ).toBe(true)
     }
+
     if (options.censusKillDenied) {
       expect(process.kill(-Number(readFileSync(psPidFile, 'utf8')), 0)).toBe(true)
     }
+
     return { ...result, elapsedMs: performance.now() - started }
   } finally {
     for (const file of [pidFile, psPidFile]) {
       try {
         const pid = Number(readFileSync(file, 'utf8'))
+
         if (Number.isSafeInteger(pid) && pid > 0) {
           process.kill(-pid, 'SIGKILL')
         }
       } catch {}
     }
+
     rmSync(dir, { recursive: true, force: true })
   }
 }
@@ -131,6 +143,7 @@ describe.skipIf(process.platform === 'win32')('lsof supervisor lifecycle', () =>
       census: 'sleep 60 </dev/null >/dev/null 2>&1 &\nexit 0\n',
       censusKillDenied: true
     })
+
     expect(result.stdout).toBe('cleanup-unconfirmed\n123\n')
     expect(result).toMatchObject({ code: 0, signal: null, timedOut: false })
   })

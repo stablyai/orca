@@ -34,9 +34,11 @@ export async function waitForMaterializedRemoteBrowserPane(
     })
     .not.toBeNull()
   const located = await page.evaluate(locateMaterializedPane, target)
+
   if (!located) {
     throw new Error('materialized remote browser tab disappeared before it could be used')
   }
+
   return located
 }
 
@@ -49,14 +51,17 @@ export async function focusMaterializedRemoteBrowserPane(
   await page.evaluate(
     ({ tabId, worktreeId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('client store unavailable')
       }
+
       state.setActiveWorktree(worktreeId)
       state.focusBrowserTabInWorktree(worktreeId, tabId, { surfacePane: true })
     },
     { tabId: located.tabId, worktreeId: target.worktreeId }
   )
+
   return located
 }
 
@@ -65,12 +70,15 @@ function locateMaterializedPane(
   target: RemoteBrowserPaneTarget
 ): MaterializedRemoteBrowserPane | null {
   const state = window.__store?.getState()
+
   if (!state) {
     return null
   }
+
   for (const workspace of state.browserTabsByWorktree[target.worktreeId] ?? []) {
     for (const pageId of workspace.pageIds ?? []) {
       const handle = state.remoteBrowserPageHandlesByPageId[pageId]
+
       if (
         handle?.environmentId === target.environmentId &&
         handle.remotePageId === target.remotePageId
@@ -79,5 +87,6 @@ function locateMaterializedPane(
       }
     }
   }
+
   return null
 }

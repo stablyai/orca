@@ -22,18 +22,23 @@ export function selectExecutionHostDisplayLabel(
   options: { sshEnvironmentId?: string | null } = {}
 ): string {
   const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
+
   if (override) {
     return override
   }
+
   const parsed = parseExecutionHostId(hostId)
+
   if (parsed?.kind === 'runtime') {
     const name = state.runtimeEnvironments
       ?.find((environment) => environment.id === parsed.environmentId)
       ?.name.trim()
+
     if (name) {
       return name
     }
   }
+
   if (parsed?.kind === 'ssh') {
     return selectRuntimeAwareSshTargetLabel(
       state,
@@ -41,6 +46,7 @@ export function selectExecutionHostDisplayLabel(
       parsed.targetId
     )
   }
+
   return getExecutionHostLabel(hostId)
 }
 
@@ -51,9 +57,11 @@ export function selectExecutionHostDisplayLabel(
 export function selectWorktreeHostDisplayLabel(state: AppState, worktreeId: string): string | null {
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   const parsed = parseExecutionHostId(hostId)
+
   if (parsed?.kind === 'runtime' && parsed.environmentId === 'unresolved-owner') {
     return null
   }
+
   return selectExecutionHostDisplayLabel(state, hostId, {
     sshEnvironmentId:
       parsed?.kind === 'ssh' ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) : null

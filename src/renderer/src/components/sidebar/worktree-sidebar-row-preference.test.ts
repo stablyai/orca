@@ -84,6 +84,7 @@ describe('getRenderedWorktreesInSidebarOrder', () => {
   it('keeps folder workspaces in visual order while preferring natural pinned rows', () => {
     const pinned = worktree('pinned', true)
     const afterFolder = worktree('after-folder')
+
     const rows: HostSectionRow[] = [
       item(pinned, 'pinned'),
       {

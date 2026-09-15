@@ -19,6 +19,7 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
     options.onCommandFinished,
     options.onCommandStarted
   )
+
   const disposables: IDisposable[] = []
 
   return {
@@ -28,10 +29,12 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
       // rendering hygiene that applies regardless of side-effect authority.
       const disposable = terminal.parser.registerOscHandler(133, () => true)
       disposables.push(disposable)
+
       return disposable
     },
     dispose() {
       scanner.reset()
+
       for (const disposable of disposables.splice(0)) {
         disposable.dispose()
       }

@@ -36,6 +36,7 @@ vi.mock('@xterm/addon-web-links', () => ({
   WebLinksAddon: vi.fn().mockImplementation(function WebLinksAddon(handler, options) {
     webLinksAddonMock.handler = handler
     webLinksAddonMock.options = options
+
     return {}
   })
 }))
@@ -53,6 +54,7 @@ vi.mock('@xterm/xterm', () => ({
 describe('createPaneDOM link tooltips', () => {
   it('anchors WebLinks hover text to the unpadded terminal window corner', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+
     const pane = createPaneDOM(
       1,
       leafId,
@@ -76,6 +78,7 @@ describe('createPaneDOM link tooltips', () => {
   it('re-resolves the caller hint on every hover so setting changes apply live', () => {
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
     let hint = 'first hint'
+
     const pane = createPaneDOM(
       1,
       leafId,
@@ -97,6 +100,7 @@ describe('createPaneDOM link tooltips', () => {
   it('lets callers replace WebLinks hover text for display-only labels', async () => {
     const labeledText = 'http://main.orca.localhost:60016/ (localhost:5180; click to open)'
     const leafId = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+
     const pane = createPaneDOM(
       1,
       leafId,

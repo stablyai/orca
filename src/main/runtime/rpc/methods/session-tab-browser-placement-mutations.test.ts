@@ -14,11 +14,13 @@ const caller: RpcDispatchStreamingOptions = {
 describe('session tab browser placement mutations', () => {
   it('projects an old-client activation response and refuses hidden activation', async () => {
     const snapshot = mixedPlacementSnapshot()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
       activateMobileSessionTab: vi.fn().mockResolvedValue(snapshot)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const visible = await dispatch(dispatcher, 'session.tabs.activate', {
@@ -26,15 +28,18 @@ describe('session tab browser placement mutations', () => {
       tabId: 'tab-1',
       notifyClients: false
     })
+
     expect(visible.result.tabs.map((tab: { id: string }) => tab.id)).toEqual([
       'tab-1::leaf-1',
       'tab-2::leaf-1'
     ])
+
     const hidden = await dispatch(dispatcher, 'session.tabs.activate', {
       worktree: 'id:wt-1',
       tabId: 'hidden-page',
       notifyClients: false
     })
+
     expect(hidden.ok).toBe(false)
     expect(runtime.activateMobileSessionTab).toHaveBeenCalledOnce()
   })
@@ -45,6 +50,7 @@ describe('session tab browser placement mutations', () => {
       listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
       moveMobileSessionTab: vi.fn().mockResolvedValue({ moved: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatch(dispatcher, 'session.tabs.move', {
@@ -70,6 +76,7 @@ describe('session tab browser placement mutations', () => {
       listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
       closeMobileSessionTab: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatch(dispatcher, 'session.tabs.close', {
@@ -88,6 +95,7 @@ describe('session tab browser placement mutations', () => {
       listMobileSessionTabs: vi.fn().mockResolvedValue(mixedPlacementSnapshot()),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatch(
@@ -119,6 +127,7 @@ async function dispatch(
     (response) => replies.push(response),
     context
   )
+
   return JSON.parse(replies[0]!)
 }
 
@@ -133,6 +142,7 @@ function mixedPlacementSnapshot() {
     terminal: `pty-${tabId}`,
     isActive: false
   })
+
   return {
     worktree: 'wt-1',
     publicationEpoch: 'epoch-1',

@@ -14,9 +14,11 @@ function enablementValue(value: boolean | undefined): 'inherit' | 'on' | 'off' {
   if (value === true) {
     return 'on'
   }
+
   if (value === false) {
     return 'off'
   }
+
   return 'inherit'
 }
 

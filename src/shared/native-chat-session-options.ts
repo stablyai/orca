@@ -82,6 +82,7 @@ export function sessionOptionValueMarker(
   if (descriptor.valueSource === 'default') {
     return 'default'
   }
+
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 

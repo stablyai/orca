@@ -18,12 +18,14 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
     const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
+
     const environment = redactRuntimeEnvironment(
       addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,
         pairingCode
       })
     )
+
     printResult(
       localSuccess({ environment }),
       json,
@@ -40,12 +42,14 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca host list`. It answers from this machine\u2019s own pairing store, so a routed answer would name servers paired with a different machine.',
       'Run `orca host list` on that machine to see the SSH targets registered there.'
     )
+
     const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
       kind: 'environment' as const,
       name: environment.name,
       id: environment.id,
       selector: `--environment ${environment.name}`
     }))
+
     const sshTargets = (await listSshTargets(client)).map((target) => ({
       kind: 'ssh' as const,
       name: target.label,
@@ -55,6 +59,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
       ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
     }))
+
     const hosts = [
       {
         kind: 'local' as const,
@@ -66,6 +71,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...sshTargets,
       ...environments
     ]
+
     printResult(localSuccess({ hosts }), json, formatHostList)
   },
   'environment list': async ({ flags, json }) => {
@@ -79,9 +85,11 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   },
   'environment show': async ({ flags, json }) => {
     const selector = getRequiredStringFlag(flags, 'environment')
+
     const environment = redactRuntimeEnvironment(
       resolveEnvironment(getDefaultUserDataPath(), selector)
     )
+
     printResult(localSuccess({ environment }), json, ({ environment: value }) =>
       formatEnvironment(value)
     )
@@ -117,9 +125,11 @@ function rejectLocalPairingStoreRetargeting(
 
 function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)
+
   if (typeof value !== 'string' || value.length === 0) {
     throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
   }
+
   return value
 }
 

@@ -51,19 +51,24 @@ const lstatFaults = vi.hoisted(() => {
       if (typeof target !== 'string') {
         return
       }
+
       const remaining = state.pending.get(target) ?? 0
       const isHeld = state.held.has(target)
+
       if (remaining <= 0 && !isHeld) {
         return
       }
+
       if (isHeld) {
         state.consumedHeld.set(target, (state.consumedHeld.get(target) ?? 0) + 1)
       } else {
         state.pending.set(target, remaining - 1)
       }
+
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, lstat '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = 'lstat'
@@ -71,19 +76,23 @@ const lstatFaults = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const original = actual.lstatSync as (...args: unknown[]) => unknown
+
   const patched: Record<string, unknown> = {
     ...actual,
     lstatSync: Object.assign((...args: unknown[]): unknown => {
       lstatFaults.consume(args[0])
+
       return original(...args)
     }, original)
   }
+
   return { ...patched, default: patched }
 })
 
@@ -95,6 +104,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -114,11 +124,13 @@ describe('STA-4422 Codex sessions keep logging out', () => {
 
   it('keeps the selection and SKIPS the poll while the ownership marker is locked', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
     )
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -129,6 +141,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -184,13 +197,16 @@ describe('STA-4422 Codex sessions keep logging out', () => {
 
   it('still clears the selection when the home is genuinely untrusted', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
     )
+
     // A proven trust failure: the marker names a different account.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), 'someone-else\n', 'utf-8')
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -201,6 +217,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 

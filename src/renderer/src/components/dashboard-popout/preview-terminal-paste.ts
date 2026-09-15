@@ -25,26 +25,33 @@ export function createPreviewClipboardPaster(deps: {
 }): (activeElementAtDispatch: Element | null, source: PreviewTerminalPasteSource) => Promise<void> {
   return async (activeElementAtDispatch, source) => {
     let text: string
+
     try {
       text = await window.api.ui.readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
     } catch {
       return
     }
+
     const pasteTerminal = deps.getTerminal()
+
     if (!pasteTerminal || !text) {
       return
     }
+
     const targetIsCurrent = (): boolean =>
       !deps.isDisposed() &&
       deps.getTerminal() === pasteTerminal &&
       activeElementAtDispatch !== null &&
       document.activeElement === activeElementAtDispatch &&
       deps.container.contains(activeElementAtDispatch)
+
     if (!targetIsCurrent()) {
       return
     }
+
     const terminalInput = deps.getTerminalInput()
     const platform = terminalInput?.hostPlatform ?? getShortcutPlatform()
+
     const plan = await planTerminalPasteWithYield({
       text,
       source,
@@ -59,6 +66,7 @@ export function createPreviewClipboardPaster(deps: {
       windowsInputRecordNewline: terminalInput?.windowsInputRecordPasteNewline,
       terminalBracketedPasteMode: pasteTerminal.modes.bracketedPasteMode
     })
+
     await executeTerminalPastePlan(plan, {
       // Why: stream large pastes so the renderer never emits one huge IPC payload.
       pasteText: (text, options) => pasteTerminalText(pasteTerminal, text, options),

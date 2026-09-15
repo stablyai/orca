@@ -55,11 +55,14 @@ export function useSourceControlCreatePrIntentProbes({
   const refreshBranchCompareForCreatePrIntent = useCallback(
     async (token: CreatePrIntentRunToken): Promise<number | undefined> => {
       const baseRef = token.baseRef?.trim()
+
       if (!baseRef) {
         return undefined
       }
+
       const requestKey = `${token.worktreeId}:${baseRef}:${Date.now()}:create-pr-intent`
       beginGitBranchCompareRequest(token.worktreeId, requestKey, baseRef)
+
       const result = await getRuntimeGitBranchCompare(
         {
           // Why: intent may continue after a worktree switch; use the token's original host target, not whatever is focused later.
@@ -70,7 +73,9 @@ export function useSourceControlCreatePrIntentProbes({
         },
         baseRef
       )
+
       setGitBranchCompareResult(token.worktreeId, requestKey, result)
+
       return result.summary.status === 'ready' ? (result.summary.commitsAhead ?? 0) : undefined
     },
     [activeRepoSettings, beginGitBranchCompareRequest, setGitBranchCompareResult]
@@ -89,7 +94,9 @@ export function useSourceControlCreatePrIntentProbes({
       if (!activeRepo || !token.branch) {
         return null
       }
+
       let result: HostedReviewCreationEligibility
+
       try {
         result = await getHostedReviewCreationEligibility({
           repoPath: activeRepo.path,
@@ -110,6 +117,7 @@ export function useSourceControlCreatePrIntentProbes({
         })
       } catch (error) {
         console.warn('[SourceControl] Create PR intent eligibility failed', error)
+
         // Why: when local status still yields a prep step (dirty/push/sync), keep the intent
         // moving. If nothing actionable can be synthesized, rethrow so the outer intent
         // catch surfaces a retry notice instead of leaving "Preparing…" stuck forever.
@@ -121,17 +129,21 @@ export function useSourceControlCreatePrIntentProbes({
           ahead: upstreamStatus?.ahead,
           behind: upstreamStatus?.behind
         })
+
         if (!fallback) {
           throw error
         }
+
         result = fallback
       }
+
       setHostedReviewCreationState({
         repoId: activeRepo.id,
         worktreeId: token.worktreeId,
         branch: token.branch,
         data: result
       })
+
       return result
     },
     [
@@ -152,7 +164,9 @@ export function useSourceControlCreatePrIntentProbes({
       if (isFolder) {
         return null
       }
+
       const target = getCreatePrIntentOperationTarget(token)
+
       return await refreshGitStatusForWorktreeStrict({
         // Why: intent can finish in the background after navigation; branch-safety checks must inspect the worktree that started it.
         settings: target.settings,

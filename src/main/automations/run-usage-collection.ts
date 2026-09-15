@@ -36,9 +36,11 @@ function getAutomationUsageProvider(
   if (automation?.agentId === 'codex') {
     return 'codex'
   }
+
   if (automation?.agentId === 'claude') {
     return 'claude'
   }
+
   return null
 }
 
@@ -54,6 +56,7 @@ export async function collectAutomationRunUsage({
   codexUsage: CodexUsageStore | null
 }): Promise<AutomationRunUsage> {
   const collectedAt = Date.now()
+
   const unavailable = (
     provider: AutomationRunUsage['provider'],
     unavailableReason: AutomationRunUsage['unavailableReason'],
@@ -68,6 +71,7 @@ export async function collectAutomationRunUsage({
       'Usage is only collected for completed automation runs.'
     )
   }
+
   if (automation.executionTargetType === 'ssh') {
     return unavailable(
       getAutomationUsageProvider(automation),
@@ -75,10 +79,12 @@ export async function collectAutomationRunUsage({
       'Remote automation usage is not available from local usage logs.'
     )
   }
+
   if (automation.agentId === 'claude') {
     if (!claudeUsage) {
       return unavailable('claude', 'scan_failed', 'Claude usage store is unavailable.')
     }
+
     return claudeUsage.getAutomationRunUsage({
       worktreeId: run.workspaceId,
       terminalSessionId: run.terminalSessionId,
@@ -86,10 +92,12 @@ export async function collectAutomationRunUsage({
       completedAt: collectedAt
     })
   }
+
   if (automation.agentId === 'codex') {
     if (!codexUsage) {
       return unavailable('codex', 'scan_failed', 'Codex usage store is unavailable.')
     }
+
     return codexUsage.getAutomationRunUsage({
       worktreeId: run.workspaceId,
       terminalSessionId: run.terminalSessionId,
@@ -97,6 +105,7 @@ export async function collectAutomationRunUsage({
       completedAt: collectedAt
     })
   }
+
   return unavailable(null, 'provider_unsupported', 'This agent does not report usage to Orca yet.')
 }
 
@@ -109,17 +118,20 @@ export async function writeAutomationRunUsage(input: {
   codexUsage: CodexUsageStore | null
 }): Promise<AutomationRun> {
   const { store, run } = input
+
   const usage = await collectAutomationRunUsage({
     automation: store.listAutomations().find((entry) => entry.id === run.automationId),
     run,
     claudeUsage: input.claudeUsage,
     codexUsage: input.codexUsage
   })
+
   // Why: the run is final during the await above, so a concurrent create-time
   // retention prune may have evicted it — the usage write must not throw then.
   if (!store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
     return run
   }
+
   return input.runs.updateRun({
     runId: run.id,
     status: run.status,

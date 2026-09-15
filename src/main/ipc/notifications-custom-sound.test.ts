@@ -45,6 +45,7 @@ describe('registerNotificationHandlers', () => {
   it('uses the macOS default notification sound when no custom sound is configured', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+
     try {
       registerNotificationHandlers({
         getSettings: () => ({
@@ -73,6 +74,7 @@ describe('registerNotificationHandlers', () => {
   it('does not request a native macOS sound when a custom sound is configured', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+
     try {
       registerNotificationHandlers({
         getSettings: () => ({

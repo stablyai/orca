@@ -15,14 +15,18 @@ import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
   ingestStructuredStatus(summary: AgentSessionStatusSummary): void {
     const paneKey = structuredStatusPaneKey(summary.sessionId)
+
     // No persisted turn yet: the chat shows nothing, so neither does any status reader.
     if (!summary.status) {
       this.dropStructuredStatus(summary.sessionId)
+
       return
     }
+
     if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }
+
     const payload: ParsedAgentStatusPayload = {
       state: structuredAgentSessionStatusState(summary.status),
       prompt: summary.latestPrompt,
@@ -34,6 +38,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
         ? { lastAssistantMessage: summary.lastAssistantMessage }
         : {})
     }
+
     // The journal clock stamps the evidence so a restart's republish does not read as fresh work.
     this.applyNormalizedStatus(
       {

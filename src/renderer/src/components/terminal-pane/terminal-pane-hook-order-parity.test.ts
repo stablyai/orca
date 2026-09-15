@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
   /^(?:TerminalPane\.tsx|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|process-exit-actions|projection|reconciliation|startup-actions|store-actions|store-bindings|title-effects|title-state)\.ts)$/
+
 // Rebased onto main after the workbench surface-per-workspace and deferred
 // split-cwd changes; the pane session-ID projection added one render hook (230 hooks).
 // Then 27 stable-action `useAppStore` subscriptions folded into four
@@ -27,8 +28,10 @@ const sourceFiles = readdirSync(__dirname)
 
 function readFunctionDefinitions(): Map<string, ts.FunctionDeclaration> {
   const definitions = new Map<string, ts.FunctionDeclaration>()
+
   for (const relativePath of sourceFiles) {
     const filePath = join(__dirname, relativePath)
+
     const sourceFile = ts.createSourceFile(
       filePath,
       readFileSync(filePath, 'utf8'),
@@ -36,6 +39,7 @@ function readFunctionDefinitions(): Map<string, ts.FunctionDeclaration> {
       true,
       relativePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
     )
+
     const visit = (node: ts.Node): void => {
       if (
         ts.isFunctionDeclaration(node) &&
@@ -44,25 +48,33 @@ function readFunctionDefinitions(): Map<string, ts.FunctionDeclaration> {
       ) {
         definitions.set(node.name.text, node)
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(sourceFile)
   }
+
   return definitions
 }
 
 function readFlattenedHookOrder(): string[] {
   const definitions = readFunctionDefinitions()
+
   const flatten = (name: string, active: ReadonlySet<string>): string[] => {
     const definition = definitions.get(name)
+
     if (!definition?.body) {
       throw new Error(`Missing terminal pane hook stage: ${name}`)
     }
+
     if (active.has(name)) {
       throw new Error(`Recursive terminal pane hook stage: ${name}`)
     }
+
     const nextActive = new Set([...active, name])
     const hooks: string[] = []
+
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
@@ -72,9 +84,12 @@ function readFlattenedHookOrder(): string[] {
         const hookName = node.expression.text
         hooks.push(...(definitions.has(hookName) ? flatten(hookName, nextActive) : [hookName]))
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(definition.body)
+
     return hooks
   }
 
@@ -102,6 +117,7 @@ describe('TerminalPane refactor hook parity', () => {
       join(__dirname, 'use-terminal-pane-startup-actions.ts'),
       'utf8'
     )
+
     const contextSource = readFileSync(
       join(__dirname, 'use-terminal-pane-context-actions.ts'),
       'utf8'

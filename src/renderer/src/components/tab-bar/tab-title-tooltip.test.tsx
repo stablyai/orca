@@ -50,6 +50,7 @@ vi.mock('@/components/ui/tooltip', () => ({
         'data-tooltip-trigger': 'true'
       })
     }
+
     return <span data-tooltip-trigger>{children}</span>
   }
 }))
@@ -157,17 +158,21 @@ function makeDragData(tabType: TabDragItemData['tabType'], visibleTabId: string)
 
 function openingTag(markup: string, attr: string, value: string): string {
   const match = markup.match(new RegExp(`<div(?=[^>]*${attr}="${value}")[^>]*>`))
+
   if (!match) {
     throw new Error(`opening div with ${attr}="${value}" not found in ${markup}`)
   }
+
   return match[0]
 }
 
 function firstOpeningTag(markup: string): string {
   const match = markup.match(/^<div[^>]*>/)
+
   if (!match) {
     throw new Error(`first opening div not found in ${markup}`)
   }
+
   return match[0]
 }
 
@@ -290,6 +295,7 @@ describe('tab title tooltips', () => {
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {
     mockTabAgent = 'claude'
+
     const markup = renderToStaticMarkup(
       <SortableTab
         tab={makeTerminalTab({ title: '✳ Claude Code' })}

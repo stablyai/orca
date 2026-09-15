@@ -48,8 +48,10 @@ test.describe('Resource Usage warm-reattach', () => {
   test('warm-reattached local PTY is included in snapshot with non-null pid and is not flagged remote', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
     if (!repoPath || !existsSync(repoPath)) {
       test.skip(true, 'Global setup did not produce a seeded test repo')
+
       return
     }
 
@@ -69,6 +71,7 @@ test.describe('Resource Usage warm-reattach', () => {
       const hasPaneManager = await waitForActiveTerminalManager(firstLaunch.page, 30_000)
         .then(() => true)
         .catch(() => false)
+
       test.skip(
         !hasPaneManager,
         'Electron automation in this environment never mounts the TerminalPane manager.'
@@ -82,6 +85,7 @@ test.describe('Resource Usage warm-reattach', () => {
       const firstLaunchSessions = await firstLaunch.page.evaluate(async () => {
         return window.api.pty.listSessions()
       })
+
       expect(firstLaunchSessions.some((s) => s.id === ptyId)).toBe(true)
 
       // Why: app.close triggers the renderer's beforeunload but the daemon
@@ -102,14 +106,17 @@ test.describe('Resource Usage warm-reattach', () => {
       // round-trip. The hydrator runs once at boot via attachMainWindowServices;
       // the assertion just needs to converge before the timeout.
       type WarmRow = { worktreeId: string; sessionId: string; pid: number | null }
+
       const warmRow: WarmRow | null = await expect
         .poll(
           async () =>
             secondLaunch.page.evaluate(async (expectedPtyId: string) => {
               const snap = await window.api.memory.getSnapshot()
+
               if (!snap) {
                 return null
               }
+
               for (const wt of snap.worktrees) {
                 for (const s of wt.sessions) {
                   if (s.sessionId === expectedPtyId) {
@@ -117,6 +124,7 @@ test.describe('Resource Usage warm-reattach', () => {
                   }
                 }
               }
+
               return null
             }, ptyId),
           {
@@ -129,9 +137,11 @@ test.describe('Resource Usage warm-reattach', () => {
         .then(async () =>
           secondLaunch.page.evaluate(async (expectedPtyId: string) => {
             const snap = await window.api.memory.getSnapshot()
+
             if (!snap) {
               return null
             }
+
             for (const wt of snap.worktrees) {
               for (const s of wt.sessions) {
                 if (s.sessionId === expectedPtyId) {
@@ -139,6 +149,7 @@ test.describe('Resource Usage warm-reattach', () => {
                 }
               }
             }
+
             return null
           }, ptyId)
         )
@@ -162,22 +173,28 @@ test.describe('Resource Usage warm-reattach', () => {
       // here we just confirm the inputs resolve correctly.
       const isLocalRepo = await secondLaunch.page.evaluate((wid: string) => {
         const store = window.__store
+
         if (!store) {
           return null
         }
+
         const state = store.getState()
         const repoId = wid.split('::')[0]
         const repo = state.repos.find((r) => r.id === repoId)
+
         return repo ? (repo.connectionId ?? null) === null : null
       }, worktreeId)
+
       expect(isLocalRepo).toBe(true)
     } finally {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })

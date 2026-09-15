@@ -15,6 +15,7 @@ import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/pub
 import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
+
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
 
 export async function refreshWebRuntimeSessionTabsSnapshot(
@@ -33,16 +34,21 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
   } = {}
 ): Promise<void> {
   const webSessionTabsSync = await import('./web-session-tabs-sync')
+
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
+
   const expectedEnvironmentConnectionGeneration =
     getRuntimeEnvironmentConnectionGeneration(environmentId)
+
   const expectedTrackingGeneration =
     webSessionTabsSync.getWebSessionTabsTrackingGeneration(environmentId)
+
   const callEnvironment = captureRuntimeEnvironmentCall(
     environmentId,
     expectedEnvironmentPairingRevision
   )
+
   try {
     if (options.acceptCurrentSnapshot) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
@@ -50,15 +56,19 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       // re-accept its current version after the exact provisional handoff is known.
       acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
+
     const listSessionTabs =
       options.confirmAgentSessionHandoff || options.afterCurrentInFlight
         ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
         : listRemoteRuntimeSessionTabsDeduped
+
     if (options.afterCurrentInFlight) {
       throwIfE2eWebRuntimeBrowserReconciliationFails()
     }
+
     // Why: a joined in-flight list leaves this undefined, and recovery then fences on the adoption response instead.
     let runtimeId: string | undefined
+
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,
@@ -70,15 +80,19 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           },
           timeoutMs: 15_000
         })
+
         runtimeId = getSessionTabsRuntimeIdFromResponse(response)
+
         return unwrapRuntimeRpcResult(
           response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
         )
       }
     })
+
     if (options.confirmAgentSessionHandoff) {
       const { confirmWebAgentSessionHandoffAfterCreate } =
         await import('./web-agent-session-handoff')
+
       // Why: this list completed after structured creation, so absence now proves the exact host tab already retired.
       confirmWebAgentSessionHandoffAfterCreate({
         environmentId,
@@ -86,14 +100,17 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         ...options.confirmAgentSessionHandoff
       })
     }
+
     const {
       applyWebSessionTabsSnapshot,
       applyWebSessionTabsStorePatch,
       decideWebSessionTabsSnapshot
     } = webSessionTabsSync
+
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
+
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
       useAppStore.getState(),
       snapshot,
@@ -104,22 +121,26 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         getCurrentState: () => useAppStore.getState()
       }
     )
+
     if (
       !recovered ||
       getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
     ) {
       return
     }
+
     // Why: this list is the host answering, but only the frame's own decision
     // says whether that answer is evidence — a workspace the mirror never
     // writes is discarded with nothing accepted behind it.
     const decision = decideWebSessionTabsSnapshot(recovered, environmentId)
+
     const settleMirror = applyWebSessionTabsStorePatch(
       (state) => {
         // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
         const patch = decision.apply
           ? applyWebSessionTabsSnapshot(state, recovered, environmentId)
           : state
+
         return patch === state ? state : patch
       },
       {
@@ -136,11 +157,13 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       },
       recovered
     )
+
     settleMirror()
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error
     }
+
     // Why: host creation already succeeded; the long-lived session.tabs subscription catches up if this eager refresh fails.
     console.warn(
       '[web-runtime-session] failed to refresh session-tabs snapshot:',
@@ -155,12 +178,15 @@ export function scheduleRuntimeWorktreeRecoveryRefresh(
   expectedEnvironmentPairingRevision = getRuntimeEnvironmentRevision(environmentId)
 ): void {
   const initialState = useAppStore.getState()
+
   if (!('tabsByWorktree' in initialState)) {
     return
   }
+
   if ((initialState.tabsByWorktree[worktreeId] ?? []).length > 0) {
     return
   }
+
   const key = `${environmentId}\0${expectedEnvironmentPairingRevision ?? ''}\0${worktreeId}`
   const token = Symbol(key)
   pendingRuntimeWorktreeRecoveryRefreshes.set(key, token)
@@ -168,15 +194,19 @@ export function scheduleRuntimeWorktreeRecoveryRefresh(
     try {
       for (const delayMs of RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS) {
         await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+
         if (pendingRuntimeWorktreeRecoveryRefreshes.get(key) !== token) {
           return
         }
+
         if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
           return
         }
+
         await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, {
           expectedEnvironmentPairingRevision
         })
+
         if ((useAppStore.getState().tabsByWorktree[worktreeId] ?? []).length > 0) {
           return
         }

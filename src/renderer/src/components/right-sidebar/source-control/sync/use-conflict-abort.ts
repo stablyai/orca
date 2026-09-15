@@ -53,15 +53,18 @@ export function useSourceControlConflictAbort({
       const isRebase = requestedOperation === 'rebase'
       const label = isRebase ? 'rebase' : 'merge'
       const title = isRebase ? 'Abort rebase?' : 'Abort merge?'
+
       const description = isRebase
         ? 'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
         : 'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+
       const confirmed = await confirmAction({
         title,
         description,
         confirmLabel: `Abort ${label}`,
         confirmVariant: 'destructive'
       })
+
       if (!confirmed) {
         return
       }
@@ -69,6 +72,7 @@ export function useSourceControlConflictAbort({
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
       setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+
       try {
         const context = {
           // Why: route the abort by the repo OWNER host, not the focused runtime.
@@ -77,6 +81,7 @@ export function useSourceControlConflictAbort({
           worktreePath,
           connectionId
         }
+
         const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
         await abortGitOperation(context)
       } catch (error) {
@@ -133,8 +138,10 @@ export function useSourceControlConflictAbort({
     (operation: GitConflictOperation): void => {
       if (operation === 'merge') {
         void handleAbortMerge()
+
         return
       }
+
       if (operation === 'rebase') {
         void handleAbortRebase()
       }

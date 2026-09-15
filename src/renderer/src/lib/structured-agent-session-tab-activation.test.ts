@@ -38,6 +38,7 @@ import {
 describe('activateStructuredAgentSessionTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+
     const tab = {
       id: 'structured-tab-1',
       worktreeId: 'wt-1',
@@ -52,6 +53,7 @@ describe('activateStructuredAgentSessionTab', () => {
       isPinned: false,
       agentSessionAgent: 'codex'
     } satisfies Tab
+
     mocks.state = {
       unifiedTabsByWorktree: { 'wt-1': [tab] },
       focusGroup: mocks.focusGroup,

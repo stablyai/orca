@@ -7,9 +7,11 @@ import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 
 function createEditor(): { editor: Editor; emitUpdate: () => void } {
   const updateListeners = new Set<() => void>()
+
   const transaction = {
     setMeta: vi.fn().mockReturnThis()
   }
+
   const editor = {
     commands: { focus: vi.fn() },
     off: vi.fn((event: string, listener: () => void) => {
@@ -27,6 +29,7 @@ function createEditor(): { editor: Editor; emitUpdate: () => void } {
     unregisterPlugin: vi.fn(),
     view: { dispatch: vi.fn() }
   } as unknown as Editor
+
   return {
     editor,
     emitUpdate: () => updateListeners.forEach((listener) => listener())
@@ -40,12 +43,15 @@ describe('useRichMarkdownSearch', () => {
     const rootRef = { current: document.createElement('div') }
     const scrollContainerRef = { current: document.createElement('div') }
     let renderCount = 0
+
     const hook = renderHook(() => {
       renderCount += 1
+
       return useRichMarkdownSearch({ editor, rootRef, scrollContainerRef })
     })
 
     const closedRenderCount = renderCount
+
     for (let index = 0; index < closedUpdateCount; index += 1) {
       act(emitUpdate)
     }
@@ -63,9 +69,11 @@ describe('useRichMarkdownSearch', () => {
     act(() => hook.result.current.searchActions.closeSearch())
 
     const reclosedRenderCount = renderCount
+
     for (let index = 0; index < closedUpdateCount; index += 1) {
       act(emitUpdate)
     }
+
     expect(renderCount - reclosedRenderCount).toBe(0)
     expect(editor.off).toHaveBeenCalledWith('update', expect.any(Function))
   })

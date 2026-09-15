@@ -19,6 +19,7 @@ function lookupEnglishCatalog(key: string): string | undefined {
         node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined,
       en
     )
+
   return typeof value === 'string' ? value : undefined
 }
 
@@ -35,6 +36,7 @@ describe('browser settings search copy', () => {
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
       (entry) => entry.title === 'Link Routing'
     )
+
     expect(linkRoutingEntry?.description).toBe(getBrowserLinkRoutingDescription({ isMac: true }))
     expect(linkRoutingEntry?.keywords).toContain('cmd')
     expect(linkRoutingEntry?.keywords).not.toContain('ctrl')
@@ -42,6 +44,7 @@ describe('browser settings search copy', () => {
     const defaultZoomEntry = getBrowserPaneSearchEntries({ isMac: true }).find(
       (entry) => entry.title === 'Default Zoom'
     )
+
     expect(defaultZoomEntry?.keywords).toContain('zoom')
   })
 
@@ -56,6 +59,7 @@ describe('browser settings search copy', () => {
     const linkRoutingEntry = getBrowserPaneSearchEntries({ isMac: false }).find(
       (entry) => entry.title === 'Link Routing'
     )
+
     expect(linkRoutingEntry?.description).toBe(getBrowserLinkRoutingDescription({ isMac: false }))
     expect(linkRoutingEntry?.keywords).toContain('ctrl')
     expect(linkRoutingEntry?.keywords).not.toContain('cmd')
@@ -63,6 +67,7 @@ describe('browser settings search copy', () => {
     const terminalActionsEntry = getBrowserPaneSearchEntries({ isMac: false }).find(
       (entry) => entry.title === 'Show link actions'
     )
+
     expect(terminalActionsEntry?.description).toContain('Ctrl-click')
     expect(terminalActionsEntry?.description).not.toContain('Cmd/Ctrl')
     expect(terminalActionsEntry?.keywords).toEqual(
@@ -164,6 +169,7 @@ describe('Link Routing description localization', () => {
     const koCopy = (
       ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
     )['description']
+
     expect(koCopy).toBeTruthy()
     expect(koCopy).toContain('{{shortcut}}')
 
@@ -180,6 +186,7 @@ describe('Link Routing description localization', () => {
     const entry = getBrowserPaneSearchEntries({ isMac: true }).find(
       (item) => item.description === description
     )
+
     expect(entry).toBeDefined()
 
     await i18n.changeLanguage('en')
@@ -190,6 +197,7 @@ describe('Link Routing description localization', () => {
     const koBase = (
       ko.auto.components.settings.BrowserLinkRoutingSetting as unknown as Record<string, string>
     )['descriptionBase']
+
     expect(koBase).toBeTruthy()
 
     i18n.addResourceBundle('ko', 'translation', ko, true, true)

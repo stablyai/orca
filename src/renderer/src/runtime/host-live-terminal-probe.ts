@@ -39,11 +39,14 @@ function isTerminalListResult(value: unknown): value is ValidTerminalListResult 
   ) {
     return false
   }
+
   const hostScope = (value as { hostScope?: unknown }).hostScope
+
   if (hostScope === undefined) {
     // Older hosts do not publish scope; preserve their best-effort list result.
     return true
   }
+
   return (
     Boolean(hostScope) &&
     typeof hostScope === 'object' &&
@@ -72,18 +75,23 @@ async function probeHost(
     timeoutMs: 15_000,
     expectedEnvironmentPairingRevision
   })
+
   if (response.ok === false || !isTerminalListResult(response.result)) {
     return 'unverifiable'
   }
+
   // A host this listing owed coverage for and did not deliver leaves an incomplete census — a
   // relay can list its local PTYs while an SSH child host is still starting up. A peer runtime
   // is not such a host: it answers `--environment` for itself, and reading its disclosure entry
   // as a gap latched this probe forever (#18595).
   const hostScope = response.result.hostScope
+
   if (hostScope && !hostScopeCensusIsComplete(hostScope)) {
     return 'unverifiable'
   }
+
   const { terminals, totalCount } = response.result
+
   return terminals.length > 0 || (typeof totalCount === 'number' && totalCount > 0)
     ? 'live'
     : 'none'
@@ -97,9 +105,11 @@ export function probeHostLiveTerminals(
 ): Promise<HostLiveTerminalProbeVerdict> {
   const key = `${environmentId}\0${connectionGeneration}\0${expectedEnvironmentPairingRevision ?? 'unknown'}`
   const existing = inFlightProbeByEnvironment.get(key)
+
   if (existing) {
     return existing
   }
+
   const probe = probeHost(environmentId, call, expectedEnvironmentPairingRevision)
     .catch((): HostLiveTerminalProbeVerdict => 'unverifiable')
     .finally(() => {
@@ -107,7 +117,9 @@ export function probeHostLiveTerminals(
         inFlightProbeByEnvironment.delete(key)
       }
     })
+
   inFlightProbeByEnvironment.set(key, probe)
+
   return probe
 }
 

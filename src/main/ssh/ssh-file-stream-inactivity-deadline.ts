@@ -17,23 +17,29 @@ export function createSshFileStreamInactivityDeadline(
   let timer: ReturnType<typeof setTimeout> | null = null
   let unsubscribePowerLifecycle: (() => void) | null = null
   let suspended = false
+
   const clearTimer = (): void => {
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
   }
+
   const arm = (): void => {
     if (suspended) {
       return
     }
+
     if (timer) {
       timer.refresh()
+
       return
     }
+
     timer = setTimeout(onTimeout, SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS)
     timer.unref?.()
   }
+
   const reset = (): void => {
     if (!unsubscribePowerLifecycle) {
       unsubscribePowerLifecycle = subscribePowerLifecycle({
@@ -47,12 +53,15 @@ export function createSshFileStreamInactivityDeadline(
         }
       })
     }
+
     arm()
   }
+
   const clear = (): void => {
     clearTimer()
     unsubscribePowerLifecycle?.()
     unsubscribePowerLifecycle = null
   }
+
   return { reset, clear }
 }

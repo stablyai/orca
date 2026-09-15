@@ -22,6 +22,7 @@ class PairedSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
 
   write(_bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
     callback?.()
+
     return true
   }
 
@@ -31,6 +32,7 @@ class PairedSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
 
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -51,28 +53,34 @@ function createPairedTunnel(
   const closures: Error[] = []
   const onSessionClose = vi.fn()
   let client: BrowserNetworkTunnelClient | undefined
+
   const session = new BrowserNetworkTunnelSession({
     tunnelGeneration: 7,
     connect: () => {
       const socket = new PairedSocket()
       sockets.push(socket)
+
       return socket
     },
     sendBinary: (bytes) => {
       client?.handleBinary(bytes)
+
       return true
     },
     onClose: onSessionClose,
     claimAggregateRetainedBytes
   })
+
   client = new BrowserNetworkTunnelClient({
     tunnelGeneration: 7,
     sendBinary: (bytes) => {
       session.handleBinary(bytes)
+
       return true
     },
     onClosed: (error) => closures.push(error)
   })
+
   return { session, client, sockets, closures, onSessionClose }
 }
 
@@ -82,6 +90,7 @@ async function openConnectedStream(
 ): Promise<BrowserNetworkTunnelDuplex> {
   const opening = tunnel.client.open({ host, port: 443 })
   tunnel.sockets.at(-1)!.emit('connect')
+
   return opening
 }
 

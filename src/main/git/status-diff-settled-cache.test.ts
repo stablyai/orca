@@ -34,19 +34,24 @@ const { files } = vi.hoisted(() => ({ files: new Map<string, FakeFile>() }))
 const { readFileMock, statMock, accessMock } = vi.hoisted(() => {
   const missing = (target: string): NodeJS.ErrnoException =>
     Object.assign(new Error(`ENOENT: ${target}`), { code: 'ENOENT' })
+
   return {
     readFileMock: vi.fn(async (target: string, encoding?: BufferEncoding) => {
       const file = files.get(target)
+
       if (!file) {
         throw missing(target)
       }
+
       return encoding ? file.content.toString(encoding) : file.content
     }),
     statMock: vi.fn(async (target: string) => {
       const file = files.get(target)
+
       if (!file) {
         throw missing(target)
       }
+
       return {
         isFile: () => true,
         size: file.content.byteLength,
@@ -92,16 +97,23 @@ import { getDiff, getStatus, invalidateGitReadCaches, stageFile } from './status
 import { settledDiffCache } from './source-control/git-read-cache-invalidation'
 
 const REPO = '/repo'
+
 const FILE = 'src/file.ts'
+
 const WORKING_TREE_PATH = `${REPO}/${FILE}`
+
 const HEAD_PATH = `${REPO}/.git/HEAD`
+
 const REF_PATH = `${REPO}/.git/refs/heads/main`
+
 const INDEX_PATH = `${REPO}/.git/index`
+
 const GITMODULES_PATH = `${REPO}/.gitmodules`
 
 // Old enough that a further write is guaranteed to move the mtime, which is what
 // lets the cache store at all.
 const SETTLED_MTIME_MS = Date.now() - 60_000
+
 let nextInode = 100
 
 function writeFile(target: string, content: string, mtimeMs = SETTLED_MTIME_MS): void {
@@ -267,9 +279,11 @@ describe('settled diff cache', () => {
   // result after the mutation would pin a diff that was already wrong.
   it('refuses to store a result for a read that a mutation overtook', async () => {
     let releaseBlob = (): void => {}
+
     const blocked = new Promise<{ stdout: Buffer }>((resolve) => {
       releaseBlob = () => resolve({ stdout: Buffer.from('pre-mutation\n') })
     })
+
     gitExecFileAsyncBufferMock.mockReturnValue(blocked)
 
     const inFlight = getDiff(REPO, FILE, false)
@@ -293,17 +307,21 @@ describe('settled diff cache', () => {
   // inside it — leaving a stamp torn across the mutation that no later stamp can match.
   it('refuses to store a result for a mutation that landed inside the stamp read', async () => {
     const baseStat = statMock.getMockImplementation()
+
     if (!baseStat) {
       throw new Error('the fake filesystem lost its stat implementation')
     }
+
     let invalidated = false
     statMock.mockImplementation(async (target: string) => {
       if (!invalidated && target === INDEX_PATH) {
         invalidated = true
         invalidateGitReadCaches()
       }
+
       return baseStat(target)
     })
+
     try {
       await getDiff(REPO, FILE, false)
     } finally {
@@ -392,9 +410,11 @@ describe('settled diff cache', () => {
 
   it('does not let a status poll drop the in-flight diff read', async () => {
     let releaseBlob = (): void => {}
+
     const blocked = new Promise<{ stdout: Buffer }>((resolve) => {
       releaseBlob = () => resolve({ stdout: Buffer.from('index-content\n') })
     })
+
     gitExecFileAsyncBufferMock.mockReturnValue(blocked)
 
     const first = getDiff(REPO, FILE, false)

@@ -5,9 +5,11 @@ import { describeQuoteStrippedJsonFlag } from './quote-stripped-json-flag'
 export function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)
   rejectValuelessFlag(value, name)
+
   if (typeof value === 'string' && value.length > 0) {
     return value
   }
+
   throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
 }
 
@@ -17,9 +19,11 @@ export function getRequiredStringFlagAllowingEmpty(
 ): string {
   const value = flags.get(name)
   rejectValuelessFlag(value, name)
+
   if (typeof value === 'string') {
     return value
   }
+
   throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
 }
 
@@ -29,6 +33,7 @@ export function getOptionalStringFlag(
 ): string | undefined {
   const value = flags.get(name)
   rejectValuelessFlag(value, name)
+
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
@@ -56,13 +61,17 @@ export function getOptionalJsonFlag(
   name: string
 ): string | undefined {
   const value = getOptionalStringFlag(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   const mangled = describeQuoteStrippedJsonFlag(name, value)
+
   if (mangled) {
     throw new RuntimeClientError('invalid_argument', mangled)
   }
+
   return value
 }
 
@@ -71,6 +80,7 @@ export function getRepeatedStringFlag(
   name: string
 ): string[] {
   const value = getOptionalStringFlag(flags, name)
+
   return value === undefined
     ? []
     : value.split(REPEATED_FLAG_SEPARATOR).filter((entry) => entry.length > 0)
@@ -82,13 +92,17 @@ export function getOptionalNumberFlag(
 ): number | undefined {
   const value = flags.get(name)
   rejectValuelessFlag(value, name)
+
   if (typeof value !== 'string' || value.length === 0) {
     return undefined
   }
+
   const parsed = Number(value)
+
   if (!Number.isFinite(parsed)) {
     throw new RuntimeClientError('invalid_argument', `Invalid numeric value for --${name}`)
   }
+
   return parsed
 }
 
@@ -97,12 +111,15 @@ export function getOptionalPositiveIntegerFlag(
   name: string
 ): number | undefined {
   const value = getOptionalNumberFlag(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   if (!Number.isInteger(value) || value <= 0) {
     throw new RuntimeClientError('invalid_argument', `Invalid positive integer for --${name}`)
   }
+
   return value
 }
 
@@ -111,12 +128,15 @@ export function getOptionalNonNegativeIntegerFlag(
   name: string
 ): number | undefined {
   const value = getOptionalNumberFlag(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   if (!Number.isInteger(value) || value < 0) {
     throw new RuntimeClientError('invalid_argument', `Invalid non-negative integer for --${name}`)
   }
+
   return value
 }
 
@@ -126,9 +146,11 @@ export function getRequiredPositiveNumber(
 ): number {
   const raw = getRequiredStringFlag(flags, name)
   const value = Number(raw)
+
   if (!Number.isFinite(value) || value <= 0) {
     throw new RuntimeClientError('invalid_argument', `--${name} must be a positive number`)
   }
+
   return value
 }
 
@@ -138,9 +160,11 @@ export function getRequiredFiniteNumber(
 ): number {
   const raw = getRequiredStringFlag(flags, name)
   const value = Number(raw)
+
   if (!Number.isFinite(value)) {
     throw new RuntimeClientError('invalid_argument', `--${name} must be a valid number`)
   }
+
   return value
 }
 
@@ -150,8 +174,10 @@ export function getOptionalNullableNumberFlag(
 ): number | null | undefined {
   const value = flags.get(name)
   rejectValuelessFlag(value, name)
+
   if (value === 'null') {
     return null
   }
+
   return getOptionalNumberFlag(flags, name)
 }

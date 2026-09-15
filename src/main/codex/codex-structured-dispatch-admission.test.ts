@@ -30,6 +30,7 @@ describe('codex dispatch admission', () => {
     const codex = fakeCodexAppServer({
       'turn/start': () => ({ turn: { id: 'turn-1', status: 'inProgress' } })
     })
+
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -118,11 +119,13 @@ describe('codex dispatch admission', () => {
 
   it('rejects only when Codex answered and declined, and arms nothing for it', async () => {
     const { CodexAppServerRequestError } = await import('./codex-app-server-connection')
+
     const codex = fakeCodexAppServer({
       'turn/start': () => {
         throw new CodexAppServerRequestError('turn/start', -32602, 'thread not found')
       }
     })
+
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -144,6 +147,7 @@ describe('codex dispatch admission', () => {
         throw new Error('request timed out after write')
       }
     })
+
     const settlements: LateSettlement[] = []
     const adapter = await acquiredCodexAdapter({ codex, settlements })
     const connection = codex.connections[0]!
@@ -176,6 +180,7 @@ describe('codex dispatch admission', () => {
     for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
       expect(await send(adapter, `client-${index}`)).toEqual({ state: 'admitted' })
     }
+
     expect(await send(adapter, 'client-overflow')).toEqual({
       state: 'rejected',
       reason: 'codex structured dispatch queue is full'

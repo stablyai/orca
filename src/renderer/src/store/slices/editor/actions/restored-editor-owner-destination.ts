@@ -26,6 +26,7 @@ export function resolveRestoredEditorOwnerDestination(
   args: RestoredEditorOwnerMigration
 ): RestoredEditorOwnerFail | RestoredEditorOwnerReady {
   const source = s.openFiles.find((file) => file.id === args.fileId)
+
   if (!source) {
     return { ok: false, reason: 'stale', patch: { openFiles: s.openFiles } }
   }
@@ -36,6 +37,7 @@ export function resolveRestoredEditorOwnerDestination(
       args.targetWorktreeId,
       args.targetOperationProvenance
     )
+
     if (
       currentRoute.executionHostId !== args.targetExecutionHostId ||
       currentRoute.runtimeEnvironmentId !== args.targetRuntimeEnvironmentId
@@ -53,6 +55,7 @@ export function resolveRestoredEditorOwnerDestination(
       }
     }
   }
+
   const operationProvenance = args.targetOperationProvenance
 
   const destinationCollision = s.openFiles.some(
@@ -62,18 +65,23 @@ export function resolveRestoredEditorOwnerDestination(
       file.worktreeId === args.targetWorktreeId &&
       (file.runtimeEnvironmentId?.trim() || null) === args.targetRuntimeEnvironmentId
   )
+
   const newFileId = buildOwnedEditorFileId(
     source.filePath,
     args.targetWorktreeId,
     args.targetRuntimeEnvironmentId
   )
+
   const dependentPreviews = s.openFiles.filter(
     (file) => file.markdownPreviewSourceFileId === source.id
   )
+
   const previewIdMigrations = new Map(
     dependentPreviews.map((preview) => [preview.id, `markdown-preview::${newFileId}`])
   )
+
   const destinationIds = new Set([newFileId, ...previewIdMigrations.values()])
+
   if (
     destinationCollision ||
     s.openFiles.some(

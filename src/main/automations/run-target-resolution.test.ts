@@ -92,9 +92,11 @@ function makeStore(
     sshTargetGeneration: () => 7,
     repoConnectionId: (repoId) => {
       const repo = repos.find((entry) => entry.id === repoId)
+
       return repo ? repo.connectionId?.trim() || null : undefined
     }
   }
+
   return {
     getProjectHostSetups: () => setups,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
@@ -122,10 +124,12 @@ describe('resolveAutomationRunTarget owner projection', () => {
 
   it('keeps a generation-less legacy SSH selector runnable when its host is current', () => {
     const repo = makeRepo({ connectionId: 'ssh-1' })
+
     const automation = makeAutomation(null, {
       executionTargetType: 'ssh',
       executionTargetId: 'ssh-1'
     })
+
     const store = makeStore([], [repo], automation)
 
     expect(resolveAutomationRunTarget(store, automation)).toMatchObject({

@@ -50,9 +50,11 @@ export function useAddRepoCloneFlow({
   const [cloneDestination, setCloneDestination] = useState('')
   const [isCloning, setIsCloning] = useState(false)
   const [cloneError, setCloneError] = useState<string | null>(null)
+
   const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
     null
   )
+
   const hostToken = `${activeRuntimeEnvironmentId?.trim() ?? ''}:${sshTargetId?.trim() ?? ''}`
   const hostTokenRef = useRef(hostToken)
   hostTokenRef.current = hostToken
@@ -66,6 +68,7 @@ export function useAddRepoCloneFlow({
     if (!isCloning) {
       return
     }
+
     return window.api.repos.onCloneProgress(setCloneProgress)
   }, [isCloning])
 
@@ -77,6 +80,7 @@ export function useAddRepoCloneFlow({
     workspaceDir,
     cloneStepAutoFilled: cloneStepAutoFilledRef.current
   })
+
   if (step !== 'clone') {
     cloneStepAutoFilledRef.current = false
   } else if (cloneDestinationAutoFill) {
@@ -105,10 +109,13 @@ export function useAddRepoCloneFlow({
           'Enter a host path for the clone destination.'
         )
       )
+
       return
     }
+
     const gen = cloneGenRef.current
     const dir = await window.api.repos.pickDirectory()
+
     if (dir && gen === cloneGenRef.current) {
       setCloneDestination(dir)
       setCloneError(null)
@@ -117,14 +124,17 @@ export function useAddRepoCloneFlow({
 
   const handleClone = useCallback(async (): Promise<void> => {
     const trimmedUrl = cloneUrl.trim()
+
     if (!trimmedUrl || !cloneDestination.trim()) {
       return
     }
+
     const requestHostToken = hostTokenRef.current
     const gen = ++cloneGenRef.current
     setIsCloning(true)
     setCloneError(null)
     setCloneProgress(null)
+
     try {
       const target = activeRuntimeEnvironmentId?.trim()
         ? { kind: 'environment' as const, environmentId: activeRuntimeEnvironmentId.trim() }
@@ -132,6 +142,7 @@ export function useAddRepoCloneFlow({
             ...useAppStore.getState().settings,
             activeRuntimeEnvironmentId: null
           })
+
       const repo = sshTargetId?.trim()
         ? await window.api.repos.cloneRemote({
             connectionId: sshTargetId.trim(),
@@ -154,13 +165,16 @@ export function useAddRepoCloneFlow({
               url: trimmedUrl,
               destination: cloneDestination.trim()
             })) as Repo)
+
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
+
       const { repo: ownedRepo } = upsertAddedRepoWithProjectHostSetup(repo, {
         runtimeEnvironmentId: activeRuntimeEnvironmentId,
         sshConnectionId: sshTargetId
       })
+
       toast.success(
         translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
         { description: ownedRepo.displayName }
@@ -169,14 +183,17 @@ export function useAddRepoCloneFlow({
       // should fall through to project reveal instead of leaving the add flow open.
       const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId, sshTargetId)
       await fetchWorktrees(ownedRepo.id, ownerOptions)
+
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
+
       await onGitRepoReady(ownedRepo.id, 'clone_url', ownerOptions.executionHostId)
     } catch (err) {
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
+
       const message = extractIpcErrorMessage(err, String(err))
       setCloneError(message)
     } finally {

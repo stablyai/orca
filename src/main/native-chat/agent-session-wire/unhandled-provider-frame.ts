@@ -17,6 +17,7 @@ export type UnhandledProviderFrameJournalItem = {
 function serializeProviderPayload(payload: unknown): string {
   try {
     const serialized = JSON.stringify(payload)
+
     return serialized === undefined ? String(payload) : serialized
   } catch (error) {
     return `[unserializable payload: ${error instanceof Error ? error.message : String(error)}]`
@@ -42,32 +43,42 @@ function directReadableMessage(payload: unknown): string | null {
   if (typeof payload === 'string') {
     return payload.trim() || null
   }
+
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     return null
   }
+
   const record = payload as Record<string, unknown>
+
   for (const key of MESSAGE_KEYS) {
     const value = record[key]
+
     if (typeof value === 'string' && value.trim().length > 0) {
       return value.trim()
     }
   }
+
   return null
 }
 
 /** The provider's own sentence for a frame, when it carries one. */
 export function readableProviderFrameText(payload: unknown): string | null {
   const direct = directReadableMessage(payload)
+
   if (direct || typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     return direct
   }
+
   const record = payload as Record<string, unknown>
+
   for (const key of MESSAGE_KEYS) {
     const nested = directReadableMessage(record[key])
+
     if (nested) {
       return nested
     }
   }
+
   return null
 }
 
@@ -79,6 +90,7 @@ export function unhandledProviderFrameJournalItem(
   limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS
 ): UnhandledProviderFrameJournalItem | null {
   const classification = classifyProviderFrame(provider, kind, payload)
+
   if (
     classification === 'stream-into-item' ||
     classification === 'status-chrome' ||
@@ -86,14 +98,17 @@ export function unhandledProviderFrameJournalItem(
   ) {
     return null
   }
+
   const serialized = serializeProviderPayload(payload)
   const bounded = boundPayload(serialized, limits)
   // Why: the opcode alone ("codex · notification:warning") tells the user nothing
   // and reads as protocol noise. Lead with the provider's own sentence when it has
   // one; the raw frame stays behind the row's disclosure either way.
   const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
+
   const compaction =
     provider === 'codex' && (method === 'thread/compacted' || method === 'item:contextCompaction')
+
   const noticeTone =
     provider === 'codex'
       ? method === 'deprecationNotice'
@@ -102,8 +117,10 @@ export function unhandledProviderFrameJournalItem(
           ? 'warning'
           : undefined
       : undefined
+
   const tone = noticeTone ?? (classification === 'error-surface' ? 'error' : undefined)
   let message = readableProviderFrameText(payload)
+
   if (
     provider === 'codex' &&
     (method === 'configWarning' || method === 'deprecationNotice') &&
@@ -116,9 +133,11 @@ export function unhandledProviderFrameJournalItem(
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
         .join('\n\n') || message
   }
+
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
   const display = message ? boundInlineText(message, limits) : null
   const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
+
   return {
     body: {
       kind: 'status',

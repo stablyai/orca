@@ -7,11 +7,13 @@ import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qu
 describe('workspace cleanup deletion phases', () => {
   it('marks only the qualified row during a same-id cleanup removal', () => {
     const local = makeCandidate({ executionHostId: 'local' })
+
     const remote = makeCandidate({
       worktreeId: local.worktreeId,
       executionHostId: 'ssh:ssh-1',
       connectionId: 'ssh-1'
     })
+
     const localIdentity = getWorkspaceCleanupCandidateIdentity(local)
     const remoteIdentity = getWorkspaceCleanupCandidateIdentity(remote)
 
@@ -27,6 +29,7 @@ describe('workspace cleanup deletion phases', () => {
 
   it('applies a non-cleanup deletion only to its host-qualified row', () => {
     const local = makeCandidate({ executionHostId: 'local' })
+
     const remote = makeCandidate({
       worktreeId: local.worktreeId,
       executionHostId: 'runtime:env-1'

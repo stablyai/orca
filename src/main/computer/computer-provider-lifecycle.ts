@@ -32,8 +32,10 @@ export class ComputerProviderLifecycle {
       if (this.nativeMacOSProvider) {
         return this.nativeMacOSProvider
       }
+
       if (this.deps.shouldUseMacOSNativeProvider()) {
         this.nativeMacOSProvider = this.deps.createMacOSNativeProvider()
+
         return this.nativeMacOSProvider
       }
     }
@@ -41,10 +43,13 @@ export class ComputerProviderLifecycle {
     if (this.desktopScriptProvider) {
       return this.desktopScriptProvider
     }
+
     if (this.deps.shouldUseDesktopScriptProvider()) {
       this.desktopScriptProvider = this.deps.createDesktopScriptProvider()
+
       return this.desktopScriptProvider
     }
+
     return null
   }
 

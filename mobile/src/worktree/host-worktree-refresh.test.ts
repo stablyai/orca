@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
     },
     addEventListener: (_event: string, listener: (state: string) => void) => {
       appState.listener = listener
+
       return { remove: appState.remove }
     }
   }
@@ -44,10 +45,12 @@ describe('startHostWorktreeRefresh', () => {
       subscribe: vi.fn(
         (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
           eventListener = listener
+
           return unsubscribe
         }
       )
     } as unknown as RpcClient
+
     stop = startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
   }
 

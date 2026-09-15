@@ -108,6 +108,7 @@ export function decideWorkerStartMode(args: {
   settings: WorkerStartModeSettings | null | undefined
 }): WorkerStartModeReceipt {
   const { params, settings } = args
+
   if (!prefersStructuredNativeChatByDefault(settings)) {
     return {
       mode: 'terminal',
@@ -116,7 +117,9 @@ export function decideWorkerStartMode(args: {
       detail: 'Started a terminal agent worker, the default for new agent tabs in your settings.'
     }
   }
+
   const agent = params.agent as TuiAgent
+
   const support = resolveStructuredNativeChatSupport({
     agent,
     executionHostId: params.on ? `runtime:${params.on}` : 'local',
@@ -127,9 +130,11 @@ export function decideWorkerStartMode(args: {
     // reads the resolved workspace rather than guessing from a client-side project runtime.
     requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, agent)
   })
+
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker])
   }
+
   return {
     mode: 'structured',
     preferred: 'structured',
@@ -153,6 +158,7 @@ export async function resolveWorkerStartModeOnHost(
   if (mode.mode !== 'structured' || !worktreeId) {
     return mode
   }
+
   return downgradeWorkerStartModeForHost(
     mode,
     await readStructuredCreateSupport(runtime, worktreeId, agent)
@@ -168,6 +174,7 @@ async function readStructuredCreateSupport(
   if (agent !== 'claude' && agent !== 'codex') {
     return { supported: false, reason: 'agent' }
   }
+
   try {
     return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent)
   } catch {
@@ -186,9 +193,11 @@ export function downgradeWorkerStartModeForHost(
   if (receipt.mode !== 'structured' || support?.supported) {
     return receipt
   }
+
   if (support === null) {
     return downgraded(BLOCKER_REASON['runtime-capability-unknown'])
   }
+
   return downgraded(
     support.reason ? HOST_SUPPORT_REASON[support.reason] : 'structured_unsupported_on_host'
   )

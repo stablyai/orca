@@ -30,6 +30,7 @@ function canMergeImmediately(item: GitHubPRAutoMergeAvailabilityInput): boolean 
   if (item.mergeStateStatus === 'BLOCKED' || item.mergeStateStatus === 'BEHIND') {
     return false
   }
+
   return item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN'
 }
 
@@ -39,9 +40,11 @@ function canRequestWhenReady(item: GitHubPRAutoMergeAvailabilityInput): boolean 
   if (!isOpenPR(item) || isConflicting(item) || isUnstable(item)) {
     return false
   }
+
   if (item.mergeQueueRequired === true) {
     return true
   }
+
   return (
     item.autoMergeAllowed !== false && (hasReviewRequirement(item) || !canMergeImmediately(item))
   )

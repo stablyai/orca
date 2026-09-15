@@ -14,15 +14,19 @@ import { getWslHomeAsync } from './wsl'
  *  agent history is still on disk. So this matches generously and never tries to be exact. */
 export function collectRetiredNamesFromLeafNames(leafNames: Iterable<string>): Set<string> {
   const retired = new Set<string>()
+
   for (const leafName of leafNames) {
     if (typeof leafName !== 'string' || leafName.length === 0) {
       continue
     }
+
     const normalized = normalizeRetirableGeneratedName(leafName)
+
     if (normalized) {
       retired.add(normalized)
     }
   }
+
   return retired
 }
 
@@ -35,17 +39,23 @@ export function extractBucketLeafCandidates(
   encodedParents: readonly string[]
 ): string[] {
   const bucket = bucketName.toLowerCase()
+
   for (const parent of encodedParents) {
     if (!parent || bucket === parent || !isClaudeProjectDirInScope(bucket, [parent])) {
       continue
     }
+
     const remainder = bucket.slice(parent.length + 1)
+
     if (!remainder) {
       continue
     }
+
     const firstSegment = remainder.split('-')[0]
+
     return remainder === firstSegment ? [remainder] : [remainder, firstSegment]
   }
+
   return []
 }
 
@@ -68,6 +78,7 @@ export function extractBucketLeafCandidates(
 async function readDirectoryNames(path: string): Promise<{ names: string[]; refused: boolean }> {
   try {
     const entries = await wslGatedReaddir(path, 'scan')
+
     return {
       names: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
       refused: false
@@ -77,9 +88,11 @@ async function readDirectoryNames(path: string): Promise<{ names: string[]; refu
     // machine. Anything else — a gate refusal, an EIO on a redirected or network home — leaves
     // names unread, and memoizing that as "nothing is retired" is the under-retiring direction.
     const code = (error as NodeJS.ErrnoException | null)?.code
+
     if (code !== 'ENOENT' && code !== 'ENOTDIR') {
       return { names: [], refused: true }
     }
+
     return { names: [], refused: isWslUncPath(path) && !(await uncRouteIsReachable(path)) }
   }
 }
@@ -95,26 +108,33 @@ async function readDirectoryNames(path: string): Promise<{ names: string[]; refu
  *  cases unreachable, which is the 60s rescan loop this exists to avoid. */
 async function uncRouteIsReachable(path: string): Promise<boolean> {
   let current = path
+
   // `stat`, not a listing: this only asks whether an ancestor is there, and enumerating a WSL home
   // over 9P to answer that would spend the single scan permit on the composer-open path.
   // Bounded so a pathological path cannot hold that permit; the distro root is only a few levels
   // above anything discovery lists.
   for (let depth = 0; depth < 8; depth += 1) {
     const parent = current.replace(/[/\\]+[^/\\]+[/\\]*$/, '')
+
     if (!parent || parent === current || !isWslUncPath(parent)) {
       return false
     }
+
     try {
       await wslGatedStat(parent, 'scan')
+
       return true
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | null)?.code
+
       if (code !== 'ENOENT' && code !== 'ENOTDIR') {
         return false
       }
+
       current = parent
     }
   }
+
   return false
 }
 
@@ -129,6 +149,7 @@ async function uncRouteIsReachable(path: string): Promise<boolean> {
  *  stay issuable; every name spent after it is recorded at create time regardless of agent. */
 function getClaudeProjectsDir(home: string, env: NodeJS.ProcessEnv): string {
   const override = env.CLAUDE_CONFIG_DIR?.trim()
+
   return override ? join(override, 'projects') : join(home, '.claude', 'projects')
 }
 
@@ -165,15 +186,19 @@ async function claudeProjectsSources(args: {
   const sources: ClaudeProjectsSource[] = []
   let complete = true
   const hostParents = encodeParents(args.workspaceRoots)
+
   if (hostParents.length > 0) {
     sources.push({
       projectsDir: getClaudeProjectsDir(args.home ?? homedir(), args.env ?? process.env),
       encodedParents: hostParents
     })
   }
+
   const linuxRootsByDistro = new Map<string, string[]>()
+
   for (const root of args.workspaceRoots) {
     const wsl = parseWslUncPath(root)
+
     if (wsl) {
       linuxRootsByDistro.set(wsl.distro, [
         ...(linuxRootsByDistro.get(wsl.distro) ?? []),
@@ -181,9 +206,12 @@ async function claudeProjectsSources(args: {
       ])
     }
   }
+
   const resolveWslHome = args.resolveWslHome ?? getWslHomeAsync
+
   for (const [distro, linuxRoots] of linuxRootsByDistro) {
     const distroHome = await resolveWslHome(distro)
+
     if (distroHome) {
       sources.push({
         projectsDir: join(distroHome, '.claude', 'projects'),
@@ -191,11 +219,13 @@ async function claudeProjectsSources(args: {
       })
       continue
     }
+
     // Resolving the home shells out to `wsl.exe`, which returns nothing for a stopped or slow
     // distro. Treating that as "no buckets" would memoize the STA-4472 hole itself: the distro
     // is exactly where a WSL workspace's history lives, so an unread one must stay retryable.
     complete = false
   }
+
   return { sources, complete }
 }
 
@@ -211,6 +241,7 @@ export async function discoverRetiredWorktreeNames(args: {
 }): Promise<RetirementScanResult> {
   const leafNames: string[] = []
   let refused = false
+
   for (const root of args.workspaceRoots) {
     const listing = await readDirectoryNames(root)
     refused ||= listing.refused
@@ -219,9 +250,11 @@ export async function discoverRetiredWorktreeNames(args: {
 
   const bucketSources = await claudeProjectsSources(args)
   refused ||= !bucketSources.complete
+
   for (const source of bucketSources.sources) {
     const listing = await readDirectoryNames(source.projectsDir)
     refused ||= listing.refused
+
     for (const bucket of listing.names) {
       leafNames.push(...extractBucketLeafCandidates(bucket, source.encodedParents))
     }

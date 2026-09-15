@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const forkMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', () => ({ existsSync: () => true }))
 
 const { spawnAiVaultServiceProcess } = await import('./session-scanner-service-spawn')

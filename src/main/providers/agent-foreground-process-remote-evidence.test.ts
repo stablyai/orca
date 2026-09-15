@@ -6,6 +6,7 @@ function rowsFor(commands: string[], options: { tty?: string; candidateStart?: s
   const tty = options.tty ?? '/dev/pts/2'
   const root = 100
   const pgid = 101
+
   return [
     {
       pid: root,
@@ -46,6 +47,7 @@ describe('host-stamped remote foreground resolver', () => {
       metadata,
       rowsFor(['node /opt/codex'])
     )
+
     expect(evidence).toMatchObject({
       verdict: 'live',
       processName: 'codex',
@@ -72,6 +74,7 @@ describe('host-stamped remote foreground resolver', () => {
       metadata,
       rows
     )
+
     expect(evidence).toMatchObject({ verdict: 'unverifiable', reason })
   })
 

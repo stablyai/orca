@@ -25,6 +25,7 @@ export function addSessionRestoredBannerPaneId(
   if (paneReasons.get(paneId) === reason) {
     return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
   }
+
   return new Map(paneReasons).set(paneId, reason)
 }
 
@@ -35,8 +36,10 @@ export function removeSessionRestoredBannerPaneId(
   if (!paneReasons.has(paneId)) {
     return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
   }
+
   const next = new Map(paneReasons)
   next.delete(paneId)
+
   return next
 }
 
@@ -45,9 +48,11 @@ export function pruneSessionRestoredBannerPaneIds(
   panes: readonly SessionRestoredBannerPane[]
 ): Map<number, SessionRestoredBannerReason> {
   const livePaneIds = new Set(panes.map((pane) => pane.id))
+
   if ([...paneReasons.keys()].every((paneId) => livePaneIds.has(paneId))) {
     return paneReasons instanceof Map ? paneReasons : new Map(paneReasons)
   }
+
   return new Map([...paneReasons].filter(([paneId]) => livePaneIds.has(paneId)))
 }
 
@@ -61,10 +66,13 @@ export function getSessionRestoredBannerDismissPaneId(
       : event.target instanceof Node
         ? event.target.parentElement
         : null
+
   const paneElement = targetElement?.closest('.pane[data-leaf-id]')
+
   if (!paneElement) {
     return null
   }
+
   return panes.find((pane) => pane.container === paneElement)?.id ?? null
 }
 
@@ -74,9 +82,11 @@ export function dismissSessionRestoredBannerPaneIds(
   panes: readonly SessionRestoredBannerPane[]
 ): Map<number, SessionRestoredBannerReason> {
   const paneId = getSessionRestoredBannerDismissPaneId(event, panes)
+
   if (paneId === null) {
     return new Map()
   }
+
   return removeSessionRestoredBannerPaneId(paneReasons, paneId)
 }
 
@@ -97,12 +107,15 @@ export function syncSessionRestoredBannerTitleSpace(args: {
   sessionRestoredBannerPaneIds: SessionRestoredBannerPaneReasons
 }): boolean {
   let needsFit = false
+
   for (const pane of args.panes) {
     const shouldShow =
       !!args.paneTitles[pane.id] ||
       args.renamingPaneId === pane.id ||
       args.sessionRestoredBannerPaneIds.has(pane.id)
+
     const hadTitle = pane.container.hasAttribute('data-has-title')
+
     if (shouldShow && !hadTitle) {
       pane.container.setAttribute('data-has-title', '')
       needsFit = true
@@ -111,5 +124,6 @@ export function syncSessionRestoredBannerTitleSpace(args: {
       needsFit = true
     }
   }
+
   return needsFit
 }

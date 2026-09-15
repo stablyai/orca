@@ -12,6 +12,7 @@ import { FileRangeReadRequestError, MAX_FILE_RANGE_READ_BYTES } from '../shared/
  *  The full harness lives in fs-handler.test.ts, which is at its line budget. */
 function createHandlerUnderTest() {
   const requests = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+
   const dispatcher = {
     onRequest: (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
       requests.set(method, handler)
@@ -21,19 +22,26 @@ function createHandlerUnderTest() {
     notifyClient: vi.fn(),
     onClientDetached: vi.fn(() => () => {})
   }
+
   const handler = new FsHandler(dispatcher as unknown as RelayDispatcher, new RelayContext())
+
   const call = (method: string, params: Record<string, unknown>): Promise<unknown> => {
     const registered = requests.get(method)
+
     if (!registered) {
       throw new Error(`No handler for ${method}`)
     }
+
     return registered(params)
   }
+
   return { handler, call }
 }
 
 let root: string
+
 let filePath: string
+
 let underTest: ReturnType<typeof createHandlerUnderTest>
 
 beforeEach(async () => {
@@ -55,6 +63,7 @@ describe('fs.readFileRange dispatch', () => {
       position: 2,
       length: 3
     })) as { base64: string; bytesRead: number }
+
     expect(Buffer.from(result.base64, 'base64').toString('utf8')).toBe('234')
     expect(result.bytesRead).toBe(3)
   })
@@ -85,22 +94,27 @@ describe('fs.readFileRange dispatch', () => {
 describe('fs.readFileRange over the real dispatcher', () => {
   function decodePayload(frame: Buffer): Record<string, unknown> {
     const length = frame.readUInt32BE(9)
+
     return JSON.parse(frame.subarray(13, 13 + length).toString('utf-8'))
   }
 
   it('delivers a full-cap window as a result, not a capacity error', async () => {
     const contents = Buffer.allocUnsafe(MAX_FILE_RANGE_READ_BYTES)
+
     for (let i = 0; i < contents.length; i++) {
       contents[i] = (i * 37) % 256
     }
+
     const capPath = join(root, 'full-cap.bin')
     await writeFile(capPath, contents)
 
     const frames: Buffer[] = []
     let closes = 0
+
     const dispatcher = new RelayDispatcher(
       (data: Buffer) => {
         frames.push(Buffer.from(data))
+
         return true
       },
       {
@@ -111,7 +125,9 @@ describe('fs.readFileRange over the real dispatcher', () => {
         }
       }
     )
+
     const handler = new FsHandler(dispatcher, new RelayContext())
+
     try {
       dispatcher.feed(
         encodeJsonRpcFrame(
@@ -126,11 +142,13 @@ describe('fs.readFileRange over the real dispatcher', () => {
         )
       )
       await vi.waitFor(() => expect(frames).toHaveLength(1), { timeout: 4_000 })
+
       const response = decodePayload(frames[0]) as {
         id: number
         error?: { code: number }
         result?: { base64: string; bytesRead: number }
       }
+
       expect(response.id).toBe(91)
       expect(response.error?.code).not.toBe(RelayErrorCode.ResponseOverCapacity)
       expect(response.error).toBeUndefined()

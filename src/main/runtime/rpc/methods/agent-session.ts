@@ -15,6 +15,7 @@ import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from '../../../../shared/rpc-contract/agent-session-params'
+
 export { CreateAgentSessionParams, EnsureAgentSessionParams }
 
 type AgentSessionRuntime = OrcaRuntimeService & {
@@ -52,6 +53,7 @@ function withExecutionHostAgentPresentation<T extends { presentation?: 'backgrou
 
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {
   const timestamp = parseAgentSessionOperationTimestamp(clientOperationId)
+
   if (timestamp === null || timestamp > Date.now() + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) {
     // Why: a future-dated ID could look new again after its idempotency tombstone is collected.
     throw new Error('agent_session_operation_invalid')
@@ -73,6 +75,7 @@ export const AGENT_SESSION_METHODS = [
     params: CreateAgentSessionParams,
     handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
+
       return (runtime as AgentSessionRuntime).createAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)

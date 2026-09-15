@@ -840,6 +840,7 @@ describe('useIpcEvents updater integration', () => {
         'leaf-split': 'pty-split'
       }
     }
+
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg', 'pty-split'] }
     storeState.terminalLayoutsByTabId = { 'tab-existing': splitLayout }
     updateTabPtyId.mockClear()

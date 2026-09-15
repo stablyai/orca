@@ -26,6 +26,7 @@ export function useMobileInstallActions(
   const copyInstallUrl = useCallback(async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(getInstallCopy(platform, iosChannel).url)
+
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')
@@ -33,6 +34,7 @@ export function useMobileInstallActions(
       }
     } catch (error) {
       console.error('writeClipboardText failed', error)
+
       if (mountedRef.current) {
         toast.error(
           translate('auto.components.mobile.MobilePage.baea63c445', 'Failed to copy link')

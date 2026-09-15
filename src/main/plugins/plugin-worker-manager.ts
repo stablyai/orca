@@ -76,30 +76,38 @@ export class PluginWorkerManager {
     if (this.disposed) {
       throw new Error('plugin workers are shut down')
     }
+
     if (this.supervisor.getState(spec.pluginKey) === 'errored') {
       throw new Error(`plugin ${spec.pluginKey} is errored after repeated failures`)
     }
+
     for (;;) {
       const existing = this.workers.get(spec.pluginKey)
       const pending = this.activations.get(spec.pluginKey)
       const activeSpec = existing?.spec ?? pending?.spec
+
       if (!activeSpec) {
         break
       }
+
       if (pluginWorkerSpawnSpecsEqual(activeSpec, spec)) {
         return existing?.handle ?? pending!.task
       }
+
       // Why: refresh/trigger races can present a new dev manifest while the
       // old revision is still starting. Cancel and re-check atomically enough
       // that callers never join a stale activation by key alone.
       await this.deactivate(spec.pluginKey)
+
       if (this.disposed) {
         throw new Error('plugin workers are shut down')
       }
     }
+
     const generation = this.nextGeneration(spec.pluginKey)
     this.knownSpecs.set(spec.pluginKey, spec)
     this.supervisor.markRunning(spec.pluginKey, { resetRestarts: true })
+
     return this.beginActivation(spec, generation)
   }
 
@@ -116,6 +124,7 @@ export class PluginWorkerManager {
       () => this.finishActivation(spec.pluginKey, record),
       () => this.finishActivation(spec.pluginKey, record)
     )
+
     return task
   }
 
@@ -149,14 +158,18 @@ export class PluginWorkerManager {
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
           onExit: (record, code) => this.handleUnexpectedExit(spec.pluginKey, record, code)
         })
+
         this.workers.set(spec.pluginKey, worker)
         const earlyExit = worker.completeStart()
+
         if (earlyExit.exited) {
           this.detachWorker(spec.pluginKey, worker)
           throw new Error(`worker exited immediately after ready (code ${earlyExit.code})`)
         }
+
         this.supervisor.markRunning(spec.pluginKey)
         this.options.onWorkerStateChange(spec.pluginKey)
+
         return worker.handle
       },
       recordFailure: (error) => this.recordFailure(spec.pluginKey, 'worker failed to start', error),
@@ -175,10 +188,13 @@ export class PluginWorkerManager {
     if (!this.detachWorker(pluginKey, record)) {
       return
     }
+
     if (this.isCancelled(pluginKey, record.generation)) {
       return
     }
+
     const decision = this.recordFailure(pluginKey, `worker exited unexpectedly (code ${code})`)
+
     if (decision.restart) {
       this.beginActivation(record.spec, record.generation, decision)
     }
@@ -192,6 +208,7 @@ export class PluginWorkerManager {
     this.options.onWorkerGone(pluginKey)
     const decision = this.supervisor.markExited(pluginKey, { crashed: true })
     this.options.onWorkerStateChange(pluginKey)
+
     if (decision.restart) {
       this.options.log(
         pluginKey,
@@ -201,6 +218,7 @@ export class PluginWorkerManager {
     } else if (decision.state === 'errored') {
       this.options.log(pluginKey, 'error', `${context}; marked errored after repeated failures`)
     }
+
     return decision
   }
 
@@ -208,8 +226,10 @@ export class PluginWorkerManager {
     if (this.workers.get(pluginKey) !== record) {
       return false
     }
+
     this.workers.delete(pluginKey)
     record.lease.release()
+
     return true
   }
 
@@ -222,9 +242,11 @@ export class PluginWorkerManager {
     const activation = this.activations.get(pluginKey)
     activation?.controller.abort()
     const record = this.workers.get(pluginKey)
+
     if (record) {
       this.workers.delete(pluginKey)
     }
+
     this.options.onWorkerGone(pluginKey)
     this.supervisor.reset(pluginKey)
     this.knownSpecs.delete(pluginKey)
@@ -243,6 +265,7 @@ export class PluginWorkerManager {
       ) {
         continue
       }
+
       this.nextGeneration(pluginKey)
       this.knownSpecs.delete(pluginKey)
       this.workers.delete(pluginKey)
@@ -250,10 +273,12 @@ export class PluginWorkerManager {
       this.supervisor.markExited(pluginKey, { crashed: false })
       this.options.log(pluginKey, 'info', 'worker reaped after idle period')
       this.options.onWorkerStateChange(pluginKey)
+
       const stopping = record.handle
         .dispose()
         .catch(() => undefined)
         .finally(() => record.lease.release())
+
       this.stoppingWorkers.add(stopping)
       void stopping.then(() => this.stoppingWorkers.delete(stopping))
     }
@@ -262,14 +287,18 @@ export class PluginWorkerManager {
   async disposeAll(): Promise<void> {
     this.disposed = true
     const pluginKeys = new Set([...this.activations.keys(), ...this.workers.keys()])
+
     for (const key of pluginKeys) {
       this.nextGeneration(key)
       this.options.onWorkerGone(key)
     }
+
     const activations = [...this.activations.values()]
+
     for (const activation of activations) {
       activation.controller.abort()
     }
+
     this.slots.dispose()
     const workers = [...this.workers.values()]
     this.workers.clear()
@@ -288,6 +317,7 @@ export class PluginWorkerManager {
   private nextGeneration(pluginKey: string): number {
     const generation = (this.generations.get(pluginKey) ?? 0) + 1
     this.generations.set(pluginKey, generation)
+
     return generation
   }
 

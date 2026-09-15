@@ -39,24 +39,31 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
   ): Promise<BrowserCookieSetResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['cookies', 'set', cookie.name ?? '', cookie.value ?? '']
+
       if (cookie.domain) {
         args.push('--domain', cookie.domain)
       }
+
       if (cookie.path) {
         args.push('--path', cookie.path)
       }
+
       if (cookie.secure) {
         args.push('--secure')
       }
+
       if (cookie.httpOnly) {
         args.push('--httpOnly')
       }
+
       if (cookie.sameSite) {
         args.push('--sameSite', cookie.sameSite)
       }
+
       if (cookie.expires != null) {
         args.push('--expires', String(cookie.expires))
       }
+
       return (await this.execAgentBrowser(sessionName, args)) as BrowserCookieSetResult
     })
   }
@@ -70,12 +77,15 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
   ): Promise<BrowserCookieDeleteResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['cookies', 'clear']
+
       if (name) {
         args.push('--name', name)
       }
+
       if (domain) {
         args.push('--domain', domain)
       }
+
       return (await this.execAgentBrowser(sessionName, args)) as BrowserCookieDeleteResult
     })
   }
@@ -92,10 +102,13 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
   ): Promise<BrowserViewportResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
+
       if (!wc) {
         throw new BrowserError('browser_tab_not_found', 'Tab is no longer available')
       }
+
       const dbg = wc.debugger
+
       if (!dbg.isAttached()) {
         throw new BrowserError('browser_error', 'Debugger not attached')
       }
@@ -149,15 +162,19 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
       // Why: agent-browser uses "network route <url>" to intercept. Route each pattern individually.
       const urlPattern = patterns?.[0] ?? '**/*'
       const args = ['network', 'route', urlPattern]
+
       const result = (await this.execAgentBrowser(
         sessionName,
         args
       )) as BrowserInterceptEnableResult
+
       const session = this.sessions.get(sessionName)
+
       if (session) {
         this.pendingInterceptRestore.delete(sessionName)
         session.activeInterceptPatterns = patterns ?? ['*']
       }
+
       return result
     })
   }
@@ -171,11 +188,14 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         'network',
         'unroute'
       ])) as BrowserInterceptDisableResult
+
       const session = this.sessions.get(sessionName)
+
       if (session) {
         this.pendingInterceptRestore.delete(sessionName)
         session.activeInterceptPatterns = []
       }
+
       return result
     })
   }
@@ -205,10 +225,13 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         'har',
         'start'
       ])) as BrowserCaptureStartResult
+
       const session = this.sessions.get(sessionName)
+
       if (session) {
         session.activeCapture = true
       }
+
       return result
     })
   }
@@ -223,10 +246,13 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
         'har',
         'stop'
       ])) as BrowserCaptureStopResult
+
       const session = this.sessions.get(sessionName)
+
       if (session) {
         session.activeCapture = false
       }
+
       return result
     })
   }
@@ -260,6 +286,7 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       // Why: strip target/session flags from passthrough so a caller can't override Orca's selected page or CDP proxy.
       const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
+
       return await this.execAgentBrowser(sessionName, args)
     })
   }

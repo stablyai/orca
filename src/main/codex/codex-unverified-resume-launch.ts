@@ -20,16 +20,20 @@ export function dropUnverifiedCodexResumeArgv(args: {
   if (!args.command || !args.providerSession) {
     return { command: args.command, droppedResumeArgv: false }
   }
+
   const drop = dropAgentResumeArgvFromCommand({
     command: args.command,
     agent: 'codex',
     providerSession: args.providerSession
   })
+
   if (drop.status === 'dropped') {
     return { command: drop.command, droppedResumeArgv: true }
   }
+
   if (drop.status === 'unrecognized' && args.claimedCodexProvenance) {
     throw new Error(UNVERIFIED_CODEX_RESUME_ERROR)
   }
+
   return { command: args.command, droppedResumeArgv: false }
 }

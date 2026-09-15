@@ -40,11 +40,14 @@ describe('WebRuntimeClient timeout budget', () => {
       deviceToken: 'token',
       publicKeyB64: Buffer.alloc(32).toString('base64')
     })
+
     client.close()
     let resolveConnection!: () => void
+
     const connection = new Promise<void>((resolve) => {
       resolveConnection = resolve
     })
+
     // Test seam: isolate call's connection and request phases from socket handshaking.
     // Both phases live on the transport the client delegates call() to.
     const internals = client as unknown as {
@@ -53,6 +56,7 @@ describe('WebRuntimeClient timeout budget', () => {
         sendEncrypted: (message: unknown) => boolean
       }
     }
+
     const waitForConnected = vi.fn(() => connection)
     internals.transport.connectionWaiters.wait = waitForConnected
     internals.transport.sendEncrypted = vi.fn(() => true)

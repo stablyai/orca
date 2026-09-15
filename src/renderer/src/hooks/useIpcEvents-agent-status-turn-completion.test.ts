@@ -20,9 +20,11 @@ describe('useIpcEvents agent status turn completion', () => {
   it('forwards turnCompletedAt through the agent-status IPC whitelist', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -51,6 +53,7 @@ describe('useIpcEvents agent status turn completion', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -63,6 +66,7 @@ describe('useIpcEvents agent status turn completion', () => {
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
+
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       tabId: 'tab-future',

@@ -19,8 +19,11 @@ type BuildReportArgsInput = {
 }
 
 const reportedRendererErrorKeys: string[] = []
+
 const reportedRendererErrorKeySet = new Set<string>()
+
 const MAX_REPORTED_RENDERER_ERROR_KEYS = 50
+
 let pendingReactErrorBoundaryReport: CrashReportRecord | null = null
 
 export const REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT =
@@ -45,6 +48,7 @@ async function collectRendererErrorContext(): Promise<RendererErrorContext> {
   try {
     const { useAppStore } = await import('@/store')
     const state = useAppStore.getState()
+
     return {
       activeView: state.activeView,
       activeModal: state.activeModal,
@@ -68,6 +72,7 @@ export function buildReactErrorBoundaryReportArgs({
   const componentStack = errorInfo?.componentStack?.trim()
   // Derived here, not per boundary: React #185 lands on a bystander, so every boundary needs the caveat.
   const attribution = getReactErrorBoundaryAttribution(error)
+
   return {
     boundaryId,
     surface,
@@ -92,14 +97,18 @@ function rememberRendererErrorKey(key: string): boolean {
   if (reportedRendererErrorKeySet.has(key)) {
     return false
   }
+
   reportedRendererErrorKeySet.add(key)
   reportedRendererErrorKeys.push(key)
+
   if (reportedRendererErrorKeys.length > MAX_REPORTED_RENDERER_ERROR_KEYS) {
     const expiredKey = reportedRendererErrorKeys.shift()
+
     if (expiredKey) {
       reportedRendererErrorKeySet.delete(expiredKey)
     }
   }
+
   return true
 }
 
@@ -116,6 +125,7 @@ function getRendererErrorKey(args: ReactErrorBoundaryReportArgs): string {
 export function takePendingReactErrorBoundaryReport(): CrashReportRecord | null {
   const report = pendingReactErrorBoundaryReport
   pendingReactErrorBoundaryReport = null
+
   return report
 }
 
@@ -129,16 +139,20 @@ export async function reportReactErrorBoundaryCrash(
 ): Promise<void> {
   const context = await collectRendererErrorContext()
   const args = buildReactErrorBoundaryReportArgs({ ...input, context })
+
   if (!rememberRendererErrorKey(getRendererErrorKey(args))) {
     return
   }
 
   try {
     const result = await window.api?.crashReports?.recordRendererError?.(args)
+
     if (result && !result.ok) {
       console.warn('[react-error-boundary] Failed to record renderer crash:', result.error)
+
       return
     }
+
     if (result?.ok && result.report && !result.deduped) {
       notifyReactErrorBoundaryReportAvailable(result.report)
     }

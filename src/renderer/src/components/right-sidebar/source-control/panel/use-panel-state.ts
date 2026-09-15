@@ -13,6 +13,7 @@ import { useSourceControlWorktreeOperationState } from './use-worktree-operation
 export function useSourceControlPanelState() {
   const context = useSourceControlWorktreeContext()
   const storeActions = useSourceControlStoreActions()
+
   const {
     activeConnectionId,
     activeRepoSettings,
@@ -34,22 +35,26 @@ export function useSourceControlPanelState() {
     clearDiffComments: storeActions.clearDiffComments,
     clearDiffCommentsForFile: storeActions.clearDiffCommentsForFile
   })
+
   const viewState = useSourceControlPanelViewState({
     activeWorktreeId,
     settings,
     updateSettings: storeActions.updateSettings
   })
+
   const operationState = useSourceControlWorktreeOperationState({
     activeWorktreeId,
     conflictOperationsByWorktree,
     worktreeMap
   })
+
   useSourceControlBranchLineTotalGate({
     activeWorktreeId,
     branchSummary,
     isBranchVisible,
     isFolder
   })
+
   const statusRefresh = useSourceControlStatusRefresh({
     activeRepoSettings,
     activeWorktreeId,

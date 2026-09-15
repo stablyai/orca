@@ -25,6 +25,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
         reason: 'unpackaged-build'
       }
     }
+
     if (!this.autoUpdaterInitialized) {
       return {
         installMode: this.updateInstallMode,
@@ -32,7 +33,9 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
         reason: 'updater-unavailable'
       }
     }
+
     const linuxPackageType = getLinuxPackageType()
+
     if (
       this.updateInstallMode === 'unsupported-headless-serve' ||
       linuxPackageType === 'deb' ||
@@ -45,6 +48,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
         reason: 'manual-service-update-required'
       }
     }
+
     return { installMode: this.updateInstallMode, automatic: true, reason: 'available' }
   }
 
@@ -69,31 +73,40 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   ): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
     this.checkForUpdatesFromMenu(options)
+
     return this.getRemoteServerUpdaterSnapshot(runtimeId)
   }
 
   protected downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
+
     if (this.currentStatus.state !== 'available') {
       throw new Error('remote_update_not_available')
     }
+
     this.downloadUpdate()
+
     return this.getRemoteServerUpdaterSnapshot(runtimeId)
   }
 
   protected installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
     this.assertRemoteServerUpdateAvailable()
+
     if (this.currentStatus.state !== 'downloaded') {
       throw new Error('remote_update_not_downloaded')
     }
+
     const targetVersion = this.currentStatus.version
+
     const result: RemoteServerUpdateInstallResult = {
       accepted: true,
       fromVersion: app.getVersion(),
       targetVersion,
       runtimeId
     }
+
     this.quitAndInstall()
+
     return result
   }
 
@@ -101,6 +114,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
     if (!isServeMode) {
       return 'interactive'
     }
+
     return hasServeUpdateSupervisor() ? 'supervised-headless-serve' : 'unsupported-headless-serve'
   }
 

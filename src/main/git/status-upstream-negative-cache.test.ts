@@ -14,6 +14,7 @@ vi.mock('./runner', () => ({
   ) => {
     const { stdout } = await gitExecFileAsyncMock(args)
     const stoppedEarly = options.onStdout(stdout ?? '') === true
+
     return { stoppedEarly }
   },
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
@@ -64,24 +65,31 @@ describe('local upstream negative cache', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
         }
+
         throw new Error('missing remote branch')
       }
+
       if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
         return { stdout: '0\t1\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -107,30 +115,38 @@ describe('local upstream negative cache', () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
         statusCommandCalls += 1
+
         return {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
         }
+
         return await new Promise<{ stdout: string }>((_, reject) => {
           deferredOriginReject = reject
         })
       }
+
       if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
         return { stdout: '0\t1\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -140,9 +156,11 @@ describe('local upstream negative cache', () => {
     originBranchExists = true
     const strict = await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
     expect(statusCommandCalls).toBe(2)
+
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
+
     ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
     const staleAutomatic = await automatic
     const nextAutomatic = await getStatus('/repo')
@@ -160,40 +178,50 @@ describe('local upstream negative cache', () => {
   it('does not trim generation for an unresolved automatic probe', async () => {
     let originBranchExists = false
     let deferredOriginReject: ((error: Error) => void) | null = null
+
     const branchQueue = [
       'feature',
       'feature',
       ...Array.from({ length: 512 }, (_, index) => `other-${index}`),
       'feature'
     ]
+
     let currentBranch = 'feature'
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
         currentBranch = branchQueue.shift() ?? currentBranch
+
         return {
           stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentBranch}\n`
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: `${currentBranch}\n` }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
         }
+
         return await new Promise<{ stdout: string }>((_, reject) => {
           deferredOriginReject = reject
         })
       }
+
       if (args[0] === 'rev-list' && args.some((arg) => arg.startsWith('HEAD...origin/'))) {
         return { stdout: '0\t1\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -202,12 +230,15 @@ describe('local upstream negative cache', () => {
 
     originBranchExists = true
     const strict = await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
+
     for (let index = 0; index < 512; index += 1) {
       await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
     }
+
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
+
     ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
     await automatic
     const nextAutomatic = await getStatus('/repo')
@@ -225,39 +256,49 @@ describe('local upstream negative cache', () => {
   it('does not trim generation for a cleared automatic probe before it settles', async () => {
     let originBranchExists = false
     let deferredOriginReject: ((error: Error) => void) | null = null
+
     const branchQueue = [
       'feature',
       ...Array.from({ length: 512 }, (_, index) => `other-${index}`),
       'feature'
     ]
+
     let currentBranch = 'feature'
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
         currentBranch = branchQueue.shift() ?? currentBranch
+
         return {
           stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentBranch}\n`
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: `${currentBranch}\n` }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
         }
+
         return await new Promise<{ stdout: string }>((_, reject) => {
           deferredOriginReject = reject
         })
       }
+
       if (args[0] === 'rev-list' && args.some((arg) => arg.startsWith('HEAD...origin/'))) {
         return { stdout: '0\t1\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -266,12 +307,15 @@ describe('local upstream negative cache', () => {
 
     originBranchExists = true
     clearEffectiveUpstreamNegativeStatusCache({ worktreePath: '/repo', branchName: 'feature' })
+
     for (let index = 0; index < 512; index += 1) {
       await getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true })
     }
+
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
+
     ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
     await automatic
     const nextAutomatic = await getStatus('/repo')
@@ -292,22 +336,28 @@ describe('local upstream negative cache', () => {
       if (args.includes('status')) {
         currentBranch = `feature-${branchIndex}`
         branchIndex += 1
+
         return {
           stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentBranch}\n`
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: `${currentBranch}\n` }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -326,25 +376,32 @@ describe('local upstream negative cache', () => {
       if (args.includes('status')) {
         currentBranch = `feature-${branchIndex}`
         branchIndex += 1
+
         return {
           stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentBranch}\n`
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: `${currentBranch}\n` }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${currentBranch}`)
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${currentBranch}`)) {
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'rev-list' && args.includes(`HEAD...origin/${currentBranch}`)) {
         return { stdout: '0\t1\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 

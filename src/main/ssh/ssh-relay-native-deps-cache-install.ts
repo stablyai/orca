@@ -74,20 +74,25 @@ export function readRelayNativeDepsPatchSources(
   localRelayDir: string
 ): RelayNativeDepsCachePatchSource[] | null {
   const sources: RelayNativeDepsCachePatchSource[] = []
+
   for (const artifact of RELAY_ARTIFACTS) {
     if (!RELAY_NATIVE_DEPS_PATCH_ARTIFACT_PATTERN.test(artifact.filename)) {
       continue
     }
+
     const path = join(localRelayDir, artifact.filename)
+
     try {
       if (!existsSync(path)) {
         continue
       }
+
       sources.push({ filename: artifact.filename, contents: readFileSync(path, 'utf-8') })
     } catch {
       return null
     }
   }
+
   return sources
 }
 
@@ -98,9 +103,11 @@ export function resolveRelayNativeDepsCacheKey(context: {
   deps: Readonly<Record<string, string>>
 }): string | null {
   const patchSources = readRelayNativeDepsPatchSources(context.localRelayDir)
+
   if (!patchSources) {
     return null
   }
+
   try {
     return computeRelayNativeDepsCacheKey({
       platform: context.platform,
@@ -113,6 +120,7 @@ export function resolveRelayNativeDepsCacheKey(context: {
         err instanceof Error ? err.message : String(err)
       }`
     )
+
     return null
   }
 }
@@ -130,11 +138,15 @@ export async function attachRelayNativeDepsCache(
   if (!supportsRelayNativeDepsCache(context.hostPlatform)) {
     return null
   }
+
   const key = resolveRelayNativeDepsCacheKey(context)
+
   if (!key) {
     return null
   }
+
   const paths = cachePathsFor(context, key)
+
   try {
     const output = await execHostCommand(
       conn,
@@ -142,13 +154,17 @@ export async function attachRelayNativeDepsCache(
       ensureRelayNativeDepsCacheCommand(paths, context.deps),
       context.signal
     )
+
     if (output.includes(RELAY_NATIVE_CACHE_LINKED)) {
       console.log(`[ssh-relay] Native deps linked from shared cache entry ${key}`)
+
       return { mode: 'linked', key }
     }
+
     if (output.includes(RELAY_NATIVE_CACHE_SEEDED)) {
       console.log(`[ssh-relay] Seeded native deps for ${key} from an existing install on this host`)
     }
+
     return { mode: 'private', key }
   } catch (err) {
     context.signal?.throwIfAborted()
@@ -159,6 +175,7 @@ export async function attachRelayNativeDepsCache(
         err instanceof Error ? err.message : String(err)
       }`
     )
+
     return { mode: 'private', key }
   }
 }
@@ -181,6 +198,7 @@ export async function promoteRelayNativeDepsCache(
       promoteRelayNativeDepsCacheCommand(cachePathsFor(context, key)),
       context.signal
     )
+
     console.log(
       output.includes(RELAY_NATIVE_CACHE_PROMOTED)
         ? `[ssh-relay] Published native deps as shared cache entry ${key}`

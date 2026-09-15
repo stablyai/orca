@@ -48,6 +48,7 @@ function getUsableForkBase(
   worktreeId: string
 ): string | null {
   const branch = worktree?.branch?.trim()
+
   if (
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     !branch ||
@@ -58,6 +59,7 @@ function getUsableForkBase(
   ) {
     return null
   }
+
   return branch
 }
 
@@ -71,6 +73,7 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
       )
     )
     pane.terminal.focus()
+
     return true
   } catch (error) {
     toast.error(
@@ -82,6 +85,7 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
           )
     )
     pane.terminal.focus()
+
     return false
   }
 }
@@ -94,10 +98,13 @@ export function prepareAgentSessionForkFromPane({
   const paneKey = makePaneKey(tabId, pane.leafId)
   const state = useAppStore.getState()
   const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey[paneKey]?.agentType)
+
   const tabAgent = resolveTuiAgent(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
   )
+
   const agent = sourceAgent ?? tabAgent
+
   // Why: v1 is a context fork, not a process clone. Capturing scrollback keeps
   // SSH and local panes on the same path because both expose xterm state here.
   const prompt = buildAgentSessionForkPrompt({
@@ -114,6 +121,7 @@ export function prepareAgentSessionForkFromPane({
       )
     )
     pane.terminal.focus()
+
     return null
   }
 
@@ -138,6 +146,7 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
   const transcript = buildBoundedSessionTranscript(
     pane.serializeAddon.serialize({ scrollback: 800 })
   )
+
   if (!transcript) {
     toast.error(
       translate(
@@ -146,8 +155,10 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
       )
     )
     pane.terminal.focus()
+
     return false
   }
+
   try {
     await window.api.ui.writeTerminalClipboardText(transcript)
     toast.message(
@@ -157,6 +168,7 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
       )
     )
     pane.terminal.focus()
+
     return true
   } catch (error) {
     toast.error(
@@ -168,6 +180,7 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
           )
     )
     pane.terminal.focus()
+
     return false
   }
 }
@@ -175,6 +188,7 @@ export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promis
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
   const store = useAppStore.getState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
+
   if (!sourceWorktree) {
     toast.error(
       translate(
@@ -182,11 +196,14 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
         'Could not find the source workspace for this fork.'
       )
     )
+
     return false
   }
+
   const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
   const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
   const sourceBranch = getUsableForkBase(sourceWorktree, sourceRepo, fork.worktreeId)
+
   if (!sourceBranch) {
     toast.error(
       translate(
@@ -194,10 +211,13 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
         'This workspace cannot be forked into a git worktree.'
       )
     )
+
     return false
   }
+
   const forkName = buildForkWorkspaceName(sourceWorktree.displayName || sourceBranch)
   let created: Awaited<ReturnType<typeof store.createWorktree>>
+
   try {
     created = await store.createWorktree(
       sourceWorktree.repoId,
@@ -221,24 +241,30 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
             'Failed to create fork workspace.'
           )
     )
+
     return false
   }
+
   const forkWorktreeId = created.worktree.id
 
   if (!fork.agent) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+
     return copyAgentSessionForkContext(fork)
   }
+
   await preflightAgentTrust({
     agent: fork.agent,
     workspacePath: created.worktree.path,
     connectionId: sourceRepo?.connectionId
   })
+
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
     worktreePath: created.worktree.path,
     projectRuntime: sourceProjectRuntime
   })
+
   const result = launchAgentInNewTab({
     agent: fork.agent,
     worktreeId: forkWorktreeId,
@@ -247,14 +273,19 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     launchSource: 'terminal_context_menu',
     ...(launchPlatform ? { launchPlatform } : {})
   })
+
   if (!result?.structuredSettlement) {
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+
     if (!result) {
       return copyAgentSessionForkContext(fork)
     }
+
     notifyForkOpened()
+
     return true
   }
+
   // Why: the fresh worktree has no tabs yet; without the opt-out activation seeds a shell beside
   // the structured tab that is still on its way.
   activateAndRevealWorktree(forkWorktreeId, {
@@ -262,20 +293,25 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     providesInitialSurface: true
   })
   const settlement = await result.structuredSettlement
+
   // Why: a refusal whose terminal fallback opened nothing is the structured twin of a null launch.
   if (settlement.kind === 'refused-then-legacy' && settlement.primaryTabId === null) {
     return copyAgentSessionForkContext(fork)
   }
+
   // Why: the worktree already exists, so a false return would keep the dialog open and a second
   // click would create another one. Unknown already shows the launch badge; failed hands the
   // user the context the way a null launch does.
   if (settlement.kind === 'visibility-unknown') {
     return true
   }
+
   if (settlement.kind === 'failed' || settlement.kind === 'cancelled') {
     return copyAgentSessionForkContext(fork)
   }
+
   notifyForkOpened()
+
   return true
 }
 
@@ -290,6 +326,7 @@ function notifyForkOpened(): void {
 
 export async function forkAgentSessionFromPane(args: ForkAgentSessionFromPaneArgs): Promise<void> {
   const fork = prepareAgentSessionForkFromPane(args)
+
   if (fork) {
     await startAgentSessionFork(fork)
   }

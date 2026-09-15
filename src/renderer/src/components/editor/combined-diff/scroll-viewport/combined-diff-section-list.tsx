@@ -73,11 +73,14 @@ export function CombinedDiffSectionList({
   // Why: per-row filter() rescanned all worktree comments per visible row per render — index once, same order preserved.
   const commentCountByFilePath = useMemo(() => {
     const counts = new Map<string, number>()
+
     for (const comment of diffCommentsForWorktree) {
       counts.set(comment.filePath, (counts.get(comment.filePath) ?? 0) + 1)
     }
+
     return counts
   }, [diffCommentsForWorktree])
+
   return (
     <div className="relative min-w-0 flex-1">
       <div
@@ -90,6 +93,7 @@ export function CombinedDiffSectionList({
         <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const section = sections[virtualItem.index]
+
             if (!section) {
               return null
             }
@@ -140,6 +144,7 @@ export function CombinedDiffSectionList({
                   handleSectionSaveRef={handleSectionSaveRef}
                   renderHeaderTrailingContent={(section) => {
                     const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0
+
                     return fileNoteCount > 0 ? (
                       <DiffNotesSendMenu
                         worktreeId={file.worktreeId}

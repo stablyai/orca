@@ -33,6 +33,7 @@ export class StructuredAgentSessionReadableRestorer {
       this.restorePromise = null
       throw error
     })
+
     return this.restorePromise
   }
 
@@ -49,10 +50,13 @@ export class StructuredAgentSessionReadableRestorer {
    */
   async restoreOne(sessionId: string): Promise<boolean> {
     const record = this.input.store.getRecord(sessionId)
+
     if (!record || !this.input.supportsRecord(record)) {
       return false
     }
+
     await restoreOneStructuredAgentSessionRead(this.input, sessionId)
+
     return this.input.hasSession(sessionId)
   }
 
@@ -60,17 +64,20 @@ export class StructuredAgentSessionReadableRestorer {
     const targetOrder = sessionIds
       ? new Map(sessionIds.map((sessionId, index) => [sessionId, index]))
       : null
+
     const records = this.input.store
       .listRecords()
       .filter(
         (record) =>
           this.input.supportsRecord(record) && (!targetOrder || targetOrder.has(record.sessionId))
       )
+
     if (targetOrder) {
       records.sort(
         (left, right) => targetOrder.get(left.sessionId)! - targetOrder.get(right.sessionId)!
       )
     }
+
     await restoreStructuredAgentSessionsOnRestart({
       ...this.input,
       records

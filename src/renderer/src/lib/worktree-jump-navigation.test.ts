@@ -9,15 +9,19 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
+
 vi.mock('@/components/sidebar/visible-worktrees', () => ({
   getVisibleWorktreeShortcutTargets: mocks.getVisibleWorktreeShortcutTargets
 }))
+
 vi.mock('@/components/sidebar/worktree-filter-visibility', () => ({
   worktreePassesSidebarFilters: mocks.worktreePassesSidebarFilters
 }))
+
 vi.mock('sonner', () => ({ toast: { warning: mocks.warning } }))
 
 import { jumpToWorktreeFromSidebar } from './worktree-jump-navigation'

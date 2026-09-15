@@ -3,7 +3,9 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
+
 const NODE_PTY_PATCH = readFileSync(
   new URL('../patches/node-pty@1.1.0.patch', import.meta.url),
   'utf8'
@@ -17,6 +19,7 @@ const PATCHED = {
     assignCurrentProcessToJob: () => true
   }
 }
+
 const PREBUILD = {
   dir: 'prebuilds/win32-x64/',
   module: {

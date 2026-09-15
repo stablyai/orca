@@ -6,12 +6,17 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
+
 const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
 
 const require = createRequire(import.meta.url)
+
 const electronBuilderConfig = require('../electron-builder.config.cjs')
+
 const { FileMatcher } = require('app-builder-lib/out/fileMatcher')
+
 const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
+
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder config', () => {
@@ -59,6 +64,7 @@ describe('electron-builder config', () => {
     ]) {
       expect(packs(toolingPath)).toBe(false)
     }
+
     expect(packs('out/main/index.js')).toBe(true)
   })
 
@@ -81,6 +87,7 @@ describe('electron-builder config', () => {
     ]) {
       expect(packs(authoringOnly)).toBe(false)
     }
+
     // The negation stays anchored at the app root, so nested `examples` segments still ship.
     expect(packs('out/main/examples/index.js')).toBe(true)
   })
@@ -99,6 +106,7 @@ describe('electron-builder config', () => {
     ]) {
       expect(packs(devBundlePath)).toBe(false)
     }
+
     // The real build outputs sit beside it under out/ and must still ship.
     expect(packs('out/main/index.js')).toBe(true)
     expect(packs('out/renderer/index.html')).toBe(true)
@@ -109,6 +117,7 @@ describe('electron-builder config', () => {
       from: 'resources/plugins/launch',
       to: 'plugins/launch'
     })
+
     for (const platform of ['mac', 'linux', 'win']) {
       expect(electronBuilderConfig[platform].extraResources).toContainEqual({
         from: 'resources/skills',
@@ -118,6 +127,7 @@ describe('electron-builder config', () => {
         expect.arrayContaining([bundledPluginResources])
       )
     }
+
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -244,6 +254,7 @@ describe('electron-builder config', () => {
       join(SRC_MAIN_DIR, 'ai-vault', 'session-scanner-opencode-sqlite-worker-spawn.ts'),
       'utf8'
     )
+
     const entryFilename = spawnSource.match(/WORKER_ENTRY_FILENAME = '([^']+)'/)?.[1]
 
     expect(entryFilename).toBeDefined()
@@ -295,6 +306,7 @@ describe('electron-builder config', () => {
 
   it('validates each AppImage before electron-builder publishes it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-appimage-'))
+
     try {
       const appImage = join(root, 'orca-linux.AppImage')
       await writeFile(appImage, 'not an ELF')
@@ -313,6 +325,7 @@ describe('electron-builder config', () => {
   it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
     const original = process.env.ORCA_LINUX_ARM64_RELEASE
+
     try {
       delete require.cache[configPath]
       process.env.ORCA_LINUX_ARM64_RELEASE = '1'
@@ -325,6 +338,7 @@ describe('electron-builder config', () => {
       } else {
         process.env.ORCA_LINUX_ARM64_RELEASE = original
       }
+
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
     }
@@ -334,6 +348,7 @@ describe('electron-builder config', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
     const original = process.env.ORCA_LOCAL_BUILD_VERSION
     const originalMacRelease = process.env.ORCA_MAC_RELEASE
+
     try {
       delete require.cache[configPath]
       delete process.env.ORCA_MAC_RELEASE
@@ -347,11 +362,13 @@ describe('electron-builder config', () => {
       } else {
         process.env.ORCA_MAC_RELEASE = originalMacRelease
       }
+
       if (original === undefined) {
         delete process.env.ORCA_LOCAL_BUILD_VERSION
       } else {
         process.env.ORCA_LOCAL_BUILD_VERSION = original
       }
+
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
     }
@@ -361,6 +378,7 @@ describe('electron-builder config', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
     const originalLocalVersion = process.env.ORCA_LOCAL_BUILD_VERSION
     const originalMacRelease = process.env.ORCA_MAC_RELEASE
+
     try {
       delete require.cache[configPath]
       process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
@@ -372,11 +390,13 @@ describe('electron-builder config', () => {
       } else {
         process.env.ORCA_LOCAL_BUILD_VERSION = originalLocalVersion
       }
+
       if (originalMacRelease === undefined) {
         delete process.env.ORCA_MAC_RELEASE
       } else {
         process.env.ORCA_MAC_RELEASE = originalMacRelease
       }
+
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
     }
@@ -395,6 +415,7 @@ describe('electron-builder config', () => {
     // FpmTarget writes resources/package-type only for targets it supports auto-update for.
     const MARKER_TARGETS = new Set(['deb', 'rpm', 'pacman'])
     const RECOVERABLE_TARGETS = new Set(['deb', 'rpm'])
+
     const linuxTargets = electronBuilderConfig.linux.target.map((entry) =>
       typeof entry === 'string' ? entry : entry.target
     )
@@ -408,6 +429,7 @@ describe('electron-builder config', () => {
       const unrecoverable = linuxTargets.filter(
         (target) => MARKER_TARGETS.has(target) && !RECOVERABLE_TARGETS.has(target)
       )
+
       expect(unrecoverable).toEqual([])
     })
 
@@ -416,6 +438,7 @@ describe('electron-builder config', () => {
         new URL('../../src/main/linux-update-package-type.ts', import.meta.url),
         'utf8'
       )
+
       for (const target of linuxTargets.filter((entry) => RECOVERABLE_TARGETS.has(entry))) {
         expect(source).toContain(`value === '${target}'`)
       }
@@ -428,6 +451,7 @@ describe('electron-builder config', () => {
       )
 
       expect(source).toContain('path.join(resourceDir, "package-type"), target')
+
       for (const target of RECOVERABLE_TARGETS) {
         expect(electronBuilderConfig[target]).toBeDefined()
       }
@@ -442,6 +466,7 @@ describe('arch-aware packaging guard', () => {
   const OTHER_ARCH_NAME = process.arch === 'arm64' ? 'x64' : 'arm64'
   const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
   const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
+
   const packHost = (arch) =>
     electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch })
 
@@ -453,10 +478,12 @@ describe('arch-aware packaging guard', () => {
     const otherSherpaInstalled = existsSync(
       join(REPO_ROOT, 'node_modules', otherSherpa, 'package.json')
     )
+
     const otherSherpaExpected = Object.hasOwn(
       require('../../package.json').optionalDependencies,
       otherSherpa
     )
+
     if (otherSherpaExpected && !otherSherpaInstalled) {
       expect(() => packHost(OTHER_ARCH)).toThrow(otherSherpa)
       expect(() => packHost(OTHER_ARCH)).toThrow('pnpm install:release')
@@ -470,8 +497,10 @@ describe('arch-aware packaging guard', () => {
     const windowsAddon = electronBuilderConfig.win.extraResources.some(
       (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')
     )
+
     const packWindows = () =>
       electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 })
+
     if (process.platform === 'win32' || windowsAddon) {
       expect(packWindows).not.toThrow()
     } else {

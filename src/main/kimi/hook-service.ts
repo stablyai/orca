@@ -62,6 +62,7 @@ function getManagedScriptPath(): string {
 function getManagedCommand(scriptPath: string): string {
   // Forward slashes so Kimi's Git Bash shell accepts the path on Windows.
   const posixPath = process.platform === 'win32' ? scriptPath.replaceAll('\\', '/') : scriptPath
+
   return wrapPosixHookCommand(posixPath)
 }
 
@@ -70,6 +71,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   // Windows process that can abandon the pipe, so the missing-env guard must run before
   // the capture owns stdin. POSIX callers close stdin (#8110), so posix keeps capture-first.
   const windowsLocal = target === 'local' && process.platform === 'win32'
+
   const endpointRefreshAndGuard = [
     // Why: refresh PORT/TOKEN/ENV/VERSION from the current Orca install so a PTY
     // that survived an Orca restart still reaches the live listener. See
@@ -84,6 +86,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  exit 0',
     'fi'
   ]
+
   return [
     '#!/bin/sh',
     ...(windowsLocal
@@ -125,6 +128,7 @@ function readConfigToml(configPath: string): string | null {
   if (!existsSync(configPath)) {
     return ''
   }
+
   try {
     return readFileSync(configPath, 'utf-8')
   } catch {
@@ -137,6 +141,7 @@ function readConfigToml(configPath: string): string | null {
 function writeConfigToml(configPath: string, text: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
+
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === text) {
@@ -146,12 +151,16 @@ function writeConfigToml(configPath: string, text: string): void {
       // Fall through to the atomic write path.
     }
   }
+
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
+
   try {
     writeFileSync(tmpPath, text, 'utf-8')
+
     if (existsSync(configPath)) {
       copyFileSync(configPath, `${configPath}.bak`)
     }
+
     renameSync(tmpPath, configPath)
   } finally {
     if (existsSync(tmpPath)) {
@@ -168,6 +177,7 @@ function buildStatus(present: Set<string>, configPath: string): AgentHookInstall
   const missing = KIMI_HOOK_EVENTS.filter((event) => !present.has(event))
   let state: AgentHookInstallState
   let detail: string | null
+
   if (missing.length === 0) {
     state = 'installed'
     detail = null
@@ -178,6 +188,7 @@ function buildStatus(present: Set<string>, configPath: string): AgentHookInstall
     state = 'partial'
     detail = `Managed hook missing for events: ${missing.join(', ')}`
   }
+
   return { agent: 'kimi', state, configPath, managedHooksPresent: present.size > 0, detail }
 }
 
@@ -189,6 +200,7 @@ export class KimiHookService {
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const text = readConfigToml(configPath)
+
     if (text === null) {
       return {
         agent: 'kimi',
@@ -198,12 +210,14 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
+
     return buildStatus(readManagedKimiHookEvents(text, isManagedKimiCommand), configPath)
   }
 
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const text = readConfigToml(configPath)
+
     if (text === null) {
       return {
         agent: 'kimi',
@@ -213,11 +227,13 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
+
     const scriptPath = getManagedScriptPath()
     const command = getManagedCommand(scriptPath)
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
     writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
+
     return this.getStatus()
   }
 
@@ -226,12 +242,14 @@ export class KimiHookService {
   // managed script body is already platform-independent.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
+
     const remoteScriptPath = pathPosix.join(
       remoteHome,
       '.orca',
       'agent-hooks',
       MANAGED_SCRIPT_FILE_NAME
     )
+
     try {
       // null (file absent) → start from an empty config; Kimi creates it lazily.
       const text = (await readTextFileRemote(sftp, remoteConfigPath)) ?? ''
@@ -243,6 +261,7 @@ export class KimiHookService {
         remoteConfigPath,
         applyManagedKimiHooks(text, command, isManagedKimiCommand)
       )
+
       return {
         agent: 'kimi',
         state: 'installed',
@@ -264,6 +283,7 @@ export class KimiHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const text = readConfigToml(configPath)
+
     if (text === null) {
       return {
         agent: 'kimi',
@@ -273,10 +293,13 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
+
     const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
+
     if (changed) {
       writeConfigToml(configPath, nextText)
     }
+
     return this.getStatus()
   }
 }

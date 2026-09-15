@@ -159,6 +159,7 @@ describe('floating terminal panel bounds', () => {
       getItem: vi.fn(() => '{"left":"bad","top":36,"width":700,"height":400}'),
       setItem: vi.fn()
     }
+
     stubViewport(1200, 800, 'Macintosh', localStorage)
 
     expect(readPersistedFloatingTerminalPanelBounds()).toBeNull()
@@ -181,6 +182,7 @@ describe('floating terminal panel bounds', () => {
       getItem: vi.fn(() => null),
       setItem: vi.fn()
     }
+
     stubViewport(1200, 800, 'Macintosh', localStorage)
 
     persistFloatingTerminalPanelBounds({

@@ -42,16 +42,22 @@ import type {
 } from '@/lib/pending-worktree-creation'
 import type { AppState } from '../types'
 import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
+
 export type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+
 import type { WorktreePurgeTargets } from './worktree-purge-target'
+
 export type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
+
 import type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
+
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 export {
   applyWorktreeUpdates,
   withoutErasedRequiredWorktreeFields
 } from './worktree-meta-update-application'
+
 import type { RendererRemoveWorktreeResult } from './renderer-remove-worktree-result'
 
 export type WorktreeFetchOptions = {
@@ -76,6 +82,7 @@ export type WorktreeMetaUpdateOptions = {
   /** Skip the automatic review refetch when the caller owns an equivalent refresh. */
   suppressHostedReviewRefresh?: boolean
 }
+
 export type WorktreeMetaBatchUpdate = {
   worktreeId: string
   updates: Partial<WorktreeMeta>
@@ -376,6 +383,7 @@ export function findWorktreeById(
 ): Worktree | undefined {
   for (const worktrees of Object.values(worktreesByRepo)) {
     const match = worktrees.find((worktree) => worktree.id === worktreeId)
+
     if (match) {
       return match
     }

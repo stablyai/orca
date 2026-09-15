@@ -14,6 +14,7 @@ export function commitProjectGroupHeaderDragDrop(args: {
     sidebarDropIndex: args.sidebarDropIndex,
     projectGroupById: args.projectGroupById
   })
+
   for (const update of updates) {
     args.onCommitProjectGroupTabOrder(update.groupId, update.tabOrder)
   }

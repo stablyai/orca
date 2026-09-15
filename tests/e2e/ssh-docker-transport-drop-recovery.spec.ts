@@ -66,9 +66,11 @@ function readSshLeases(userDataDir: string, targetId: string): SshRemotePtyLease
     DEFAULT_LOCAL_ORCA_PROFILE_ID,
     'orca-data.json'
   )
+
   const parsed = JSON.parse(readFileSync(dataPath, 'utf8')) as {
     sshRemotePtyLeases?: SshRemotePtyLease[]
   }
+
   return (parsed.sshRemotePtyLeases ?? []).filter((lease) => lease.targetId === targetId)
 }
 
@@ -116,14 +118,17 @@ test.describe('SSH transport drop recovery', () => {
   test('recovers a live pane after the transport dies under it', async ({ orcaPage }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         relayGracePeriodSeconds: 0
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -177,14 +182,17 @@ test.describe('SSH transport drop recovery', () => {
     // rather than carried. This pins that, because the failure it guards against is an OOM on
     // someone's remote host rather than a wrong pixel.
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         relayGracePeriodSeconds: 0
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 240_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 240_000)
@@ -194,8 +202,10 @@ test.describe('SSH transport drop recovery', () => {
           target!,
           "ps -eo rss,args | grep -F 'relay.js' | grep -v grep | awk '{s+=$1} END {print s+0}'"
         )
+
         return Number(out.trim().split('\n').at(-1))
       }
+
       const baselineRssKb = readRelayRssKb()
       expect(baselineRssKb, 'relay process not found').toBeGreaterThan(0)
 
@@ -254,14 +264,17 @@ test.describe('SSH transport drop recovery', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         relayGracePeriodSeconds: 0
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -322,14 +335,17 @@ test.describe('SSH transport drop recovery', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         relayGracePeriodSeconds: 0
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       await waitForActivePanePtyId(orcaPage, 60_000)
@@ -372,6 +388,7 @@ test.describe('SSH transport drop recovery', () => {
             { cause: error }
           )
         }
+
         generations.push(readReattachablePtyIds(userDataDir, remote.targetId))
       }
 
@@ -399,6 +416,7 @@ test.describe('SSH transport drop recovery', () => {
   test('keeps the session while a frozen host goes silent', async ({ orcaPage }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
@@ -437,14 +455,17 @@ test.describe('SSH transport drop recovery', () => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
     let observationTarget: { targetId: string; ptyId: string } | undefined
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         relayGracePeriodSeconds: 0
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -489,6 +510,7 @@ test.describe('SSH transport drop recovery', () => {
           'failure-before-cleanup'
         ).catch(() => undefined)
       }
+
       throw error
     } finally {
       if (target) {

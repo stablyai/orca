@@ -11,6 +11,7 @@ const { existsSyncMock, forkMock, mkdtempSyncMock, rmSyncMock } = vi.hoisted(() 
 }))
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', () => ({
   existsSync: existsSyncMock,
   mkdtempSync: mkdtempSyncMock,
@@ -38,6 +39,7 @@ class FakeChild extends EventEmitter {
   })
   send = vi.fn((message: SentMessage) => {
     this.sent.push(message)
+
     return true
   })
 }
@@ -59,6 +61,7 @@ async function subscribePair(): Promise<{ child: FakeChild; unsubscribe: () => P
   const siblingPromise = subscribeViaWatcherProcess('/sibling', vi.fn(), {})
   ackSubscribe(child)
   await siblingPromise
+
   return { child, unsubscribe: first.unsubscribe }
 }
 
@@ -79,9 +82,11 @@ describe('watcher disconnect termination', () => {
   it('keeps unsubscribe pending until physical exit', async () => {
     const { child, unsubscribe } = await subscribePair()
     let settled = false
+
     const pending = unsubscribe().then(() => {
       settled = true
     })
+
     child.connected = false
     child.emit('disconnect')
     await Promise.resolve()
@@ -97,6 +102,7 @@ describe('watcher disconnect termination', () => {
     const { child, unsubscribe } = await subscribePair()
     child.connected = false
     let settled = false
+
     const pending = unsubscribe().then(() => {
       settled = true
     })
@@ -116,6 +122,7 @@ describe('watcher disconnect termination', () => {
     ackSubscribe(child)
     await siblingPromise
     const controller = new AbortController()
+
     const subscribing = subscribeViaWatcherProcess(
       '/pending',
       vi.fn(),
@@ -124,6 +131,7 @@ describe('watcher disconnect termination', () => {
         signal: controller.signal
       }
     )
+
     child.connected = false
     controller.abort()
     let settled = false
@@ -147,12 +155,14 @@ describe('watcher disconnect termination', () => {
 
   it('joins a cancellation deadline to active disconnect termination', async () => {
     vi.useFakeTimers()
+
     try {
       const siblingPromise = subscribeViaWatcherProcess('/sibling', vi.fn(), {})
       const child = currentChild()
       ackSubscribe(child)
       await siblingPromise
       const controller = new AbortController()
+
       const pending = subscribeViaWatcherProcess(
         '/pending',
         vi.fn(),
@@ -161,6 +171,7 @@ describe('watcher disconnect termination', () => {
           signal: controller.signal
         }
       )
+
       const pendingId = child.sent.at(-1)?.id
       child.emit('message', { op: 'subscribe-started', id: pendingId })
       controller.abort()
@@ -188,13 +199,16 @@ describe('watcher disconnect termination', () => {
 
   it('reports physical-exit failure when a timed-out recovery child cannot terminate', async () => {
     vi.useFakeTimers()
+
     try {
       const supervisor = createWatcherProcessSupervisor()
       let subscription: WatcherProcessSubscription
       let terminalUnsubscribeResult: Promise<unknown> | undefined
+
       const onTerminalError = vi.fn(() => {
         terminalUnsubscribeResult = subscription.unsubscribe().catch((error: unknown) => error)
       })
+
       const initial = supervisor.subscribe(
         '/stuck-recovery',
         vi.fn(),
@@ -204,6 +218,7 @@ describe('watcher disconnect termination', () => {
           subscribeTimeoutMs: 100
         }
       )
+
       const first = currentChild()
       ackSubscribe(first)
       subscription = await initial
@@ -244,9 +259,11 @@ describe('watcher disconnect termination', () => {
 
   it('reports a recovery timeout only after its replacement child physically exits', async () => {
     vi.useFakeTimers()
+
     try {
       const supervisor = createWatcherProcessSupervisor()
       const onTerminalError = vi.fn()
+
       const initial = supervisor.subscribe(
         '/slow-recovery',
         vi.fn(),
@@ -256,6 +273,7 @@ describe('watcher disconnect termination', () => {
           subscribeTimeoutMs: 100
         }
       )
+
       const first = currentChild()
       ackSubscribe(first)
       const subscription = await initial
@@ -274,9 +292,11 @@ describe('watcher disconnect termination', () => {
       expect(replacement.kill).toHaveBeenCalledTimes(1)
       expect(forkMock).toHaveBeenCalledTimes(2)
       let unsubscribeSettled = false
+
       const unsubscribe = subscription.unsubscribe().then(() => {
         unsubscribeSettled = true
       })
+
       await Promise.resolve()
       expect(unsubscribeSettled).toBe(false)
 
@@ -298,6 +318,7 @@ describe('watcher disconnect termination', () => {
 
   it('keeps pending-crawl cancellation joined to disconnected child exit', async () => {
     const controller = new AbortController()
+
     const subscribing = subscribeViaWatcherProcess(
       '/pending',
       vi.fn(),
@@ -306,6 +327,7 @@ describe('watcher disconnect termination', () => {
         signal: controller.signal
       }
     )
+
     const child = currentChild()
     child.connected = false
     child.emit('disconnect')
@@ -329,8 +351,10 @@ describe('watcher disconnect termination', () => {
 
   it('reports physical-exit failure instead of early pending-crawl cancellation', async () => {
     vi.useFakeTimers()
+
     try {
       const controller = new AbortController()
+
       const subscribing = subscribeViaWatcherProcess(
         '/pending',
         vi.fn(),
@@ -339,10 +363,12 @@ describe('watcher disconnect termination', () => {
           signal: controller.signal
         }
       )
+
       const child = currentChild()
       child.connected = false
       child.emit('disconnect')
       controller.abort()
+
       const failure = expect(subscribing).rejects.toMatchObject({
         code: 'process_unavailable',
         physicalExit: expect.any(Promise)
@@ -358,11 +384,14 @@ describe('watcher disconnect termination', () => {
 
   it('rejects unsubscribe at the physical-exit deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const { child, unsubscribe } = await subscribePair()
+
       const failure = expect(unsubscribe()).rejects.toThrow(
         'file watcher process did not exit after termination deadline'
       )
+
       child.connected = false
       child.emit('disconnect')
       await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_EXIT_DEADLINE_MS)
@@ -381,6 +410,7 @@ describe('watcher disconnect termination', () => {
     ackSubscribe(child)
     const first = await firstPromise
     const siblingInterruption = vi.fn()
+
     const siblingPromise = subscribeViaWatcherProcess(
       '/sibling',
       vi.fn(),
@@ -389,13 +419,16 @@ describe('watcher disconnect termination', () => {
         onInterruption: siblingInterruption
       }
     )
+
     ackSubscribe(child)
     await siblingPromise
 
     let settled = false
+
     const unsubscribe = first.unsubscribe().then(() => {
       settled = true
     })
+
     child.emit('message', { op: 'unsubscribe-failed', id: 1, message: 'native handle active' })
     await Promise.resolve()
 

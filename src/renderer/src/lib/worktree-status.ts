@@ -57,16 +57,20 @@ export function getWorktreeStatus(
   if (options.liveAgentStatus === 'permission' || hasStatus('permission')) {
     return 'permission'
   }
+
   if (options.liveAgentStatus === 'working' || hasStatus('working')) {
     return 'working'
   }
+
   if (options.liveAgentStatus === 'monitoring') {
     return 'monitoring'
   }
+
   if (liveTabs.length > 0 || browserTabs.length > 0) {
     // Why: browser-only worktrees (no PTY) are still active from the user's point of view.
     return 'active'
   }
+
   return 'inactive'
 }
 
@@ -79,19 +83,25 @@ function tabHasStatus(
   const freshPaneIds = options.agentStatusPaneIdsByTabId?.[tab.id]
   const permissionPaneIds = suppressingPaneIds(tab.id, status, options)
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
+
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     const tabLayoutRoot =
       options.terminalLayoutRootsByTabId?.[tab.id] ?? options.terminalLayoutsByTabId?.[tab.id]?.root
+
     const paneTitleEntries = Object.entries(paneTitles)
+
     for (const [runtimePaneId, title] of paneTitleEntries) {
       const agentStatusPaneIds =
         status === 'permission' && isSyntheticAgentPermissionTitle(title)
           ? permissionPaneIds
           : freshPaneIds
+
       const leafId = resolveRuntimePaneTitleLeafIdFromRoot(tabLayoutRoot, runtimePaneId)
+
       // Why: runtime titles can precede layout hydration (SSH/replay); with one title and one agent row, prefer that row over a stale spinner.
       const hasSingleUnmappedAgentStatusPane =
         leafId === null && agentStatusPaneIds?.size === 1 && paneTitleEntries.length === 1
+
       if (
         agentStatusPaneIds?.has(runtimePaneId) ||
         (leafId !== null && agentStatusPaneIds?.has(leafId)) ||
@@ -99,6 +109,7 @@ function tabHasStatus(
       ) {
         continue
       }
+
       if (
         classifyTitleActivity(title) === status &&
         titleStatusIsAgentAttributable(title, tab.launchAgent)
@@ -106,16 +117,20 @@ function tabHasStatus(
         return true
       }
     }
+
     return false
   }
+
   // Why: a tab title can't identify its pane; once an agent row owns one, prefer the row over a completed pane's stale "working" title.
   const agentStatusPaneIds =
     status === 'permission' && isSyntheticAgentPermissionTitle(tab.title)
       ? permissionPaneIds
       : freshPaneIds
+
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
+
   return (
     classifyTitleActivity(tab.title) === status &&
     titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
@@ -133,16 +148,21 @@ function suppressingPaneIds(
   options: WorktreeStatusHeuristicOptions
 ): ReadonlySet<string> | undefined {
   const fresh = options.agentStatusPaneIdsByTabId?.[tabId]
+
   if (status !== 'permission') {
     return fresh
   }
+
   const stale = options.stalePaneIdsByTabId?.[tabId]
+
   if (!stale || stale.size === 0) {
     return fresh
   }
+
   if (!fresh || fresh.size === 0) {
     return stale
   }
+
   return new Set([...fresh, ...stale])
 }
 
@@ -151,6 +171,7 @@ function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | 
   if (resolveAgentTypeFromTerminalTitle(title) !== null) {
     return true
   }
+
   // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
   // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
   // fallback (#9647) so the dot and the sidebar row agree.
@@ -197,26 +218,33 @@ export function resolveWorktreeStatus(args: {
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
+
   if (args.hasPermission) {
     return 'permission'
   }
+
   // Why: heuristic 'permission' outranks heuristic 'working' — the user-actionable signal wins when panes in one tab disagree.
   if (heuristic === 'permission') {
     return 'permission'
   }
+
   // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
   }
+
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
   }
+
   // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
   if (args.hasInterrupted) {
     return 'interrupted'
   }
+
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'
   }
+
   return heuristic
 }

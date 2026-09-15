@@ -60,30 +60,37 @@ function installHost(options: HostOptions = {}) {
   const entry = record(SESSION)
   const held = new Set([SESSION])
   const visible = new Set(options.visible ?? [SESSION])
+
   const setSessionTabVisibility = vi.fn(async (sessionId: string, isVisible: boolean) => {
     if (options.visibilityThrows) {
       throw options.visibilityThrows
     }
+
     if (isVisible) {
       visible.add(sessionId)
     } else {
       visible.delete(sessionId)
     }
   })
+
   const close = vi.fn(async (sessionId: string) => {
     if (options.closeThrows) {
       throw options.closeThrows
     }
+
     if (options.stuck) {
       return
     }
+
     held.delete(sessionId)
     entry.lease.claimStatus = 'released'
     entry.lease.deathEvidence = { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+
     if (options.settledThenThrows) {
       throw new Error('the event sink could not be flushed')
     }
   })
+
   hostRef.current = {
     deps: { store: { getRecord: (id: string) => (id === SESSION ? entry : null) } },
     hasSession: (sessionId: string) => held.has(sessionId),
@@ -91,11 +98,13 @@ function installHost(options: HostOptions = {}) {
       if (options.indexThrows) {
         throw new Error('visible tab index unreadable')
       }
+
       return { present: true, sessionIds: [...visible] }
     },
     setSessionTabVisibility,
     close
   }
+
   return { close, setSessionTabVisibility, visible }
 }
 

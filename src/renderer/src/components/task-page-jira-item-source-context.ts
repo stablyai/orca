@@ -12,10 +12,13 @@ export function bindTaskPageJiraItemSourceContext(args: {
   if (args.sourceContext?.provider !== 'jira' || !args.issue.siteId) {
     return null
   }
+
   const site = args.sites.find((candidate) => candidate.id === args.issue.siteId)
+
   if (!site) {
     return null
   }
+
   return normalizeTaskSourceContext({
     ...args.sourceContext,
     providerIdentity: {

@@ -16,7 +16,9 @@ import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
 // Grace between the shutdown message and SIGKILL: long enough for plugin
 // cleanup, short enough that disable/quit never feels stuck.
 const PLUGIN_WORKER_SHUTDOWN_GRACE_MS = 2_000
+
 const PLUGIN_WORKER_EVENT_TIMEOUT_MS = 5 * 60_000
+
 const PLUGIN_WORKER_MAX_PENDING_EVENTS = 64
 
 export type PluginWorkerLogSink = (level: 'info' | 'warn' | 'error', line: string) => void
@@ -64,9 +66,11 @@ export type StartPluginWorkerOptions = {
 export function resolvePluginHostEntryPath(appPath: string, isPackaged: boolean): string {
   const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
   const directEntryPath = join(basePath, 'plugin-host-entry.js')
+
   if (existsSync(directEntryPath)) {
     return directEntryPath
   }
+
   return join(basePath, 'out', 'main', 'plugin-host-entry.js')
 }
 
@@ -98,6 +102,7 @@ export async function startPluginWorker(
     serialization: 'advanced',
     stdio: ['ignore', 'pipe', 'pipe', 'ipc']
   })
+
   pipePluginWorkerOutput(child.stdout, 'info', log)
   pipePluginWorkerOutput(child.stderr, 'error', log)
 
@@ -123,9 +128,11 @@ export async function startPluginWorker(
       pendingCommands.delete(callId)
       entry.reject(new Error(reason))
     }
+
     for (const timer of pendingEvents.values()) {
       clearTimeout(timer)
     }
+
     pendingEvents.clear()
   }
 
@@ -133,6 +140,7 @@ export async function startPluginWorker(
     exited = true
     exitCode = code
     rejectAllPending(`${tag} worker exited before responding`)
+
     for (const callback of exitCallbacks) {
       callback(code)
     }
@@ -141,6 +149,7 @@ export async function startPluginWorker(
     // Why: a worker can drop fork IPC while its event loop stays alive. Kill
     // it so the ensuing exit enters the normal supervision/backoff path.
     rejectAllPending(`${tag} worker disconnected before responding`)
+
     if (!exited) {
       child.kill('SIGKILL')
     }
@@ -148,10 +157,12 @@ export async function startPluginWorker(
 
   const commands = await new Promise<string[]>((resolve, reject) => {
     let settled = false
+
     const timer = setTimeout(() => {
       fail(new Error(`${tag} worker did not become ready within ${readyTimeoutMs}ms`))
       child.kill('SIGKILL')
     }, readyTimeoutMs)
+
     function fail(error: Error): void {
       if (!settled) {
         settled = true
@@ -160,10 +171,12 @@ export async function startPluginWorker(
         reject(error)
       }
     }
+
     const onAbort = (): void => {
       fail(new Error(`${tag} worker startup was cancelled`))
       child.kill('SIGKILL')
     }
+
     options.signal?.addEventListener('abort', onAbort, { once: true })
     child.on('error', (error) => {
       const failure = new Error(`${tag} worker process error: ${error.message}`)
@@ -176,11 +189,15 @@ export async function startPluginWorker(
     child.on('exit', (code) => fail(new Error(`${tag} worker exited before ready (code ${code})`)))
     child.on('message', (raw) => {
       const parsed = pluginWorkerChildMessageSchema.safeParse(raw)
+
       if (!parsed.success) {
         log('warn', 'ignoring malformed worker message')
+
         return
       }
+
       const message = parsed.data
+
       switch (message.type) {
         case 'ready': {
           if (!settled) {
@@ -189,32 +206,43 @@ export async function startPluginWorker(
             options.signal?.removeEventListener('abort', onAbort)
             resolve(message.commands)
           }
+
           return
         }
+
         case 'commandResult': {
           const entry = pendingCommands.get(message.callId)
+
           if (!entry) {
             return
           }
+
           clearTimeout(entry.timer)
           pendingCommands.delete(message.callId)
           lastActivityAt = Date.now()
+
           if (message.ok) {
             entry.resolve(message.value)
           } else {
             entry.reject(new Error(message.error ?? 'plugin command failed'))
           }
+
           return
         }
+
         case 'eventAck': {
           const timer = pendingEvents.get(message.eventId)
+
           if (timer) {
             clearTimeout(timer)
             pendingEvents.delete(message.eventId)
           }
+
           lastActivityAt = Date.now()
+
           return
         }
+
         case 'hostCall': {
           lastActivityAt = Date.now()
           // Host API calls from the worker: gate + execute in main, then
@@ -233,12 +261,16 @@ export async function startPluginWorker(
                   }
             )
           })
+
           return
         }
+
         case 'log': {
           log(message.level, message.message)
+
           return
         }
+
         case 'fatal': {
           fail(new Error(`${tag} worker crashed: ${message.error}`))
           rejectAllPending(`${tag} worker crashed: ${message.error}`)
@@ -253,6 +285,7 @@ export async function startPluginWorker(
       mainEntry,
       grantedCapabilities: [...options.grantedCapabilities]
     })
+
     if (options.signal?.aborted) {
       onAbort()
     }
@@ -264,12 +297,15 @@ export async function startPluginWorker(
       if (exited || disposed) {
         return Promise.reject(new Error(`${tag} worker is not running`))
       }
+
       const callId = nextCallId++
+
       return new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => {
           pendingCommands.delete(callId)
           reject(new Error(`${tag} ${commandId} timed out after ${invokeTimeoutMs}ms`))
         }, invokeTimeoutMs)
+
         pendingCommands.set(callId, { resolve, reject, timer })
         sendToChild({ type: 'invokeCommand', callId, commandId, args })
       })
@@ -278,18 +314,23 @@ export async function startPluginWorker(
       if (exited || disposed) {
         return
       }
+
       if (pendingEvents.size >= PLUGIN_WORKER_MAX_PENDING_EVENTS) {
         log('error', `${tag} exceeded the pending event limit`)
         child.kill('SIGKILL')
+
         return
       }
+
       lastActivityAt = Date.now()
       const eventId = nextEventId++
+
       const timer = setTimeout(() => {
         pendingEvents.delete(eventId)
         log('error', `${tag} ${event} did not finish within ${eventTimeoutMs}ms`)
         child.kill('SIGKILL')
       }, eventTimeoutMs)
+
       pendingEvents.set(eventId, timer)
       sendToChild({ type: 'deliverEvent', eventId, event, payload })
     },
@@ -299,19 +340,24 @@ export async function startPluginWorker(
       if (disposed) {
         return
       }
+
       disposed = true
+
       if (exited) {
         return
       }
+
       sendToChild({ type: 'shutdown' })
       await new Promise<void>((resolve) => {
         const killTimer = setTimeout(() => {
           child.kill('SIGKILL')
         }, PLUGIN_WORKER_SHUTDOWN_GRACE_MS)
+
         child.once('exit', () => {
           clearTimeout(killTimer)
           resolve()
         })
+
         if (exited) {
           clearTimeout(killTimer)
           resolve()

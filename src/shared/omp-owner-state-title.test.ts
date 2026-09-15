@@ -10,6 +10,7 @@ const transcript = readFileSync(
   join(__dirname, '..', 'main', 'runtime', '__fixtures__', 'omp-native-title-win32.txt'),
   'utf8'
 )
+
 // oxlint-disable-next-line no-control-regex -- The fixture retains actual OSC control bytes.
 const titles = [...transcript.matchAll(/\x1b\]0;([^\x07]+)\x07/g)].map((match) => match[1])
 
@@ -33,6 +34,7 @@ describe('owner-rewritten OMP titles from captured upstream output', () => {
       expect(normalizeCompatibleAgentTitleForOwner(owned, 'pi')).toBe(
         prefix + title.replace('π', 'Pi')
       )
+
       if (state === 'working') {
         expect(detectAgentStatusFromTitle(clearPiStateWorkingMarker(owned) ?? '')).toBe('idle')
       }

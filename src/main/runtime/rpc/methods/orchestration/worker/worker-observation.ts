@@ -29,12 +29,16 @@ export async function inspectWorkerTerminal(
   agentWait?: RuntimeTerminalInteractiveWait | null
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
+
   const terminalHandle =
     worker?.agent_terminal_handle ?? db.getDispatchContextById(dispatchId)?.assignee_handle
+
   if (!terminalHandle) {
     return { terminal: null, exact: false, status: 'unattached' }
   }
+
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
+
   if (structured) {
     // Exactness is the recorded pane and lineage, which the runtime getters answer from the
     // structured registry; there is no terminal to show.
@@ -48,7 +52,9 @@ export async function inspectWorkerTerminal(
       paneKey: structured.paneKey,
       processIncarnation: structured.processIncarnation
     })
+
     const observation = observeStructuredWorker(structured)
+
     return {
       terminal: null,
       exact,
@@ -56,18 +62,23 @@ export async function inspectWorkerTerminal(
       ...(exact && observation.reason ? { reason: observation.reason } : {})
     }
   }
+
   const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
+
   if (!terminal) {
     return { terminal: null, exact: false, status: 'missing' }
   }
+
   const exact = db.isDispatchProcessCurrent({
     dispatchId,
     paneKey: runtime.getTerminalPaneKey(terminalHandle),
     processIncarnation: runtime.getTerminalProcessIncarnation(terminalHandle)
   })
+
   if (!exact) {
     return { terminal, exact, status: 'identity_changed' }
   }
+
   // Why: the aggregate inventory only iterates registered providers, so a dropped
   // relay clears `connected` for every remote PTY at once. Lost contact is not a
   // death certificate, and the verdict is the only field that can tell them apart.
@@ -77,16 +88,20 @@ export async function inspectWorkerTerminal(
   // lane's blocker to this worker.
   const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(terminalHandle) ?? null
+
   if (verdict?.status === 'unverifiable') {
     return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
+
   if (verdict?.status === 'live') {
     return { terminal, exact, status: 'live', agentWait }
   }
+
   if (!verdict) {
     const dispatch = db.getDispatchContextById?.(dispatchId)
     const persistedHostScope = parseWorkerTerminalHostScope(dispatch?.host_scope ?? null)
     const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(terminalHandle)?.hostScope
+
     if (persistedHostScope?.kind === 'ssh' || currentHostScope?.kind === 'ssh') {
       return {
         terminal,
@@ -96,6 +111,7 @@ export async function inspectWorkerTerminal(
         agentWait
       }
     }
+
     return {
       terminal,
       exact,
@@ -103,6 +119,7 @@ export async function inspectWorkerTerminal(
       agentWait
     }
   }
+
   return {
     terminal,
     exact,
@@ -178,6 +195,7 @@ export async function showContextOnlyWorker(
   dispatch: DispatchContextRow
 ) {
   const observation = await inspectWorkerTerminal(runtime, db, dispatch.id)
+
   return {
     dispatch: exposeDispatchContext(dispatch),
     worker: exposeContextOnlyWorker(dispatch),
@@ -222,10 +240,13 @@ export function projectFleetWorkerPage(
   dispatchId: string
 ): ReturnType<typeof projectWorkerFleet> | null {
   const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
+
   if (rows.length === 0) {
     return null
   }
+
   const now = Date.now()
+
   return projectWorkerFleet({
     rows,
     attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
@@ -250,6 +271,7 @@ export function exposeFederatedWorkerObservation(
   if (!projected) {
     return { status: 'unverifiable' as const, exactWorker: false, reason: 'observation_superseded' }
   }
+
   // Legacy `running` maps to live; an absent peer verdict remains unverifiable.
   return {
     ...observation,
@@ -262,12 +284,14 @@ export function resolvePinnedFederatedServer(
   federated: FederatedDispatchRow
 ) {
   const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
+
   if (server.peerFingerprint !== federated.peer_fingerprint) {
     throw new OrchestrationError(
       'peer_changed',
       `Saved environment ${federated.environment_name} now identifies a different Orca server.`
     )
   }
+
   return server
 }
 
@@ -296,6 +320,7 @@ export async function callFederatedWorkerShow(
   }
 }> {
   const server = resolvePinnedFederatedServer(runtime, federated)
+
   return (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'orchestration.federationShow',

@@ -36,30 +36,36 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   const ptyIdToTabId = useMemo(() => {
     const map = new Map<string, string>()
+
     for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
       for (const ptyId of ptyIds) {
         map.set(ptyId, tabId)
       }
     }
+
     return map
   }, [ptyIdsByTabId])
 
   const tabIdToWorktreeId = useMemo(() => {
     const map = new Map<string, string>()
+
     for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
       for (const tab of tabs) {
         map.set(tab.id, worktreeId)
       }
     }
+
     return map
   }, [tabsByWorktree])
 
   const handleNavigate = useCallback(
     (tabId: string) => {
       const worktreeId = tabIdToWorktreeId.get(tabId)
+
       if (worktreeId) {
         activateAndRevealWorktree(worktreeId)
       }
+
       setActiveView('terminal')
       activateTabAndFocusPane(tabId, null)
       closeSettingsPage()
@@ -69,6 +75,7 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   useEffect(() => {
     isMounted.current = true
+
     return () => {
       isMounted.current = false
     }
@@ -76,15 +83,20 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   const refresh = useCallback(async (): Promise<PtyManagementSession[]> => {
     setIsRefreshing(true)
+
     try {
       const result = await window.api.pty.management.listSessions()
+
       if (!isMounted.current || mutationInFlight.current) {
         return result.sessions
       }
+
       setSessions(result.sessions)
+
       return result.sessions
     } catch (err) {
       console.error('[manage-sessions] listSessions failed', err)
+
       if (isMounted.current && !mutationInFlight.current) {
         toast.error(
           translate(
@@ -96,6 +108,7 @@ export function ManageSessionsSection(): React.JSX.Element {
           }
         )
       }
+
       return []
     } finally {
       if (isMounted.current) {
@@ -138,10 +151,12 @@ export function ManageSessionsSection(): React.JSX.Element {
     async (session: PtyManagementSession) => {
       setBusyKind('killOne')
       mutationInFlight.current = true
+
       try {
         const { success } = await window.api.pty.management.killOne({
           sessionId: session.sessionId
         })
+
         if (success) {
           toast.success(
             translate(
@@ -157,6 +172,7 @@ export function ManageSessionsSection(): React.JSX.Element {
             )
           )
         }
+
         mutationInFlight.current = false
         notifyDaemonSessionInventoryInvalidated()
         await refresh()
@@ -172,6 +188,7 @@ export function ManageSessionsSection(): React.JSX.Element {
         )
       } finally {
         mutationInFlight.current = false
+
         if (isMounted.current) {
           setBusyKind(null)
           setPendingKillSession(null)
@@ -185,6 +202,7 @@ export function ManageSessionsSection(): React.JSX.Element {
     if (!pendingKillSession) {
       return
     }
+
     void handleKillOne(pendingKillSession)
   }, [pendingKillSession, handleKillOne])
 

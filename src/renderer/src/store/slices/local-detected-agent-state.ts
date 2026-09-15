@@ -31,44 +31,59 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const contextKey = localPreflightContextKey(context)
       const existing = get().localDetectedAgentIdsByContext[contextKey]
       const inflightRefresh = refreshPromises.get(contextKey)
+
       if (inflightRefresh) {
         if (!isFloating) {
           legacyRefreshContextKey = contextKey
         }
+
         return inflightRefresh
       }
+
       if (existing != null && !failedDetectContextKeys.has(contextKey)) {
         if (!isFloating) {
           detectedContextKey = contextKey
           const state = get()
+
           if (state.detectedAgentIds !== existing || state.isDetectingAgents) {
             set({ detectedAgentIds: existing, isDetectingAgents: false })
           }
         }
+
         return Promise.resolve(existing)
       }
+
       const requestGeneration = localDetectionGeneration
+
       const exposeInflightToLegacy = (): void => {
         if (!isFloating) {
           legacyDetectContextKey = contextKey
         }
+
         if (isFloating) {
           return
         }
+
         const state = get()
         const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect')
+
         if (patch) {
           set(patch)
         }
       }
+
       const inflight = detectPromises.get(contextKey)
+
       if (inflight) {
         exposeInflightToLegacy()
+
         return inflight
       }
+
       if (!isFloating) {
         legacyDetectContextKey = contextKey
       }
+
       set((state) => ({
         ...(isFloating
           ? {}
@@ -82,20 +97,24 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           [contextKey]: true
         }
       }))
+
       const pending = window.api.preflight
         .detectAgents(context)
         .then((ids) => {
           const typed = ids as TuiAgent[]
+
           if (
             requestGeneration === localDetectionGeneration &&
             detectPromises.get(contextKey) === pending
           ) {
             failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = legacyDetectContextKey === contextKey
+
             if (exposeToLegacy) {
               legacyDetectContextKey = null
               detectedContextKey = contextKey
             }
+
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: typed, isDetectingAgents: false } : {}),
               localDetectedAgentIdsByContext: {
@@ -108,6 +127,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
+
           return typed
         })
         .catch(() => {
@@ -117,9 +137,11 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           ) {
             failedDetectContextKeys.add(contextKey)
             const exposeToLegacy = legacyDetectContextKey === contextKey
+
             if (exposeToLegacy) {
               legacyDetectContextKey = null
             }
+
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: [], isDetectingAgents: false } : {}),
               localDetectedAgentIdsByContext: {
@@ -132,6 +154,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
+
           return [] as TuiAgent[]
         })
         .finally(() => {
@@ -139,7 +162,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             detectPromises.delete(contextKey)
           }
         })
+
       detectPromises.set(contextKey, pending)
+
       return pending
     },
 
@@ -150,32 +175,43 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const cached = get().localDetectedAgentIdsByContext[contextKey]
       const hadUsableCache = cached != null && !failedDetectContextKeys.has(contextKey)
       const requestGeneration = localDetectionGeneration
+
       const exposeInflightToLegacy = (): void => {
         if (!isFloating) {
           legacyRefreshContextKey = contextKey
         }
+
         if (isFloating) {
           return
         }
+
         const state = get()
         const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh')
+
         if (patch) {
           set(patch)
         }
       }
+
       const inflight = refreshPromises.get(contextKey)
+
       if (inflight) {
         exposeInflightToLegacy()
+
         return inflight
       }
+
       if (!isFloating) {
         legacyRefreshContextKey = contextKey
       }
+
       const supersedesDetect = detectPromises.delete(contextKey)
       const clearsLegacyDetect = legacyDetectContextKey === contextKey
+
       if (clearsLegacyDetect) {
         legacyDetectContextKey = null
       }
+
       set((state) => ({
         ...(isFloating
           ? {}
@@ -186,20 +222,24 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           [contextKey]: true
         }
       }))
+
       const pending = window.api.preflight
         .refreshAgents(context)
         .then((result) => {
           const typed = result.agents as TuiAgent[]
+
           if (
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
           ) {
             failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = legacyRefreshContextKey === contextKey
+
             if (exposeToLegacy) {
               legacyRefreshContextKey = null
               detectedContextKey = contextKey
             }
+
             set((state) => ({
               ...(exposeToLegacy
                 ? {
@@ -219,6 +259,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
+
           return typed
         })
         .catch(() => {
@@ -227,6 +268,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             : detectedContextKey !== contextKey
               ? []
               : (get().detectedAgentIds ?? [])
+
           if (
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
@@ -234,10 +276,13 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             if (!hadUsableCache) {
               failedDetectContextKeys.add(contextKey)
             }
+
             const exposeToLegacy = legacyRefreshContextKey === contextKey
+
             if (exposeToLegacy) {
               legacyRefreshContextKey = null
             }
+
             set((state) => ({
               ...(exposeToLegacy ? { detectedAgentIds: fallback, isRefreshingAgents: false } : {}),
               localDetectedAgentIdsByContext: {
@@ -250,6 +295,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
               )
             }))
           }
+
           return fallback
         })
         .finally(() => {
@@ -257,7 +303,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             refreshPromises.delete(contextKey)
           }
         })
+
       refreshPromises.set(contextKey, pending)
+
       return pending
     },
 
@@ -274,14 +322,17 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         legacyDetectContextKey,
         legacyRefreshContextKey
       })
+
       if (!eviction) {
         return
       }
+
       for (const contextKey of eviction.removedContextKeys) {
         detectPromises.delete(contextKey)
         refreshPromises.delete(contextKey)
         failedDetectContextKeys.delete(contextKey)
       }
+
       detectedContextKey = eviction.detectedContextKey
       legacyDetectContextKey = eviction.legacyDetectContextKey
       legacyRefreshContextKey = eviction.legacyRefreshContextKey

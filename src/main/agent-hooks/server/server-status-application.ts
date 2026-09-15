@@ -27,6 +27,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     const commandCodeNewTurn =
       previous !== undefined &&
       isCommandCodeNewTurnWhileWorking({
@@ -39,10 +40,12 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         previousPromptInteractionKey: previous.promptInteractionKey,
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
+
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
         : (observedAt ?? now)
+
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
@@ -66,16 +69,21 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
   ): number {
     const remembered =
       previous?.evidenceObservedAt ?? this.evidenceObservedAtByPaneKey.get(payload.paneKey)
+
     const observedAt = payload.isReplay === true && remembered !== undefined ? remembered : now
     this.evidenceObservedAtByPaneKey.delete(payload.paneKey)
     this.evidenceObservedAtByPaneKey.set(payload.paneKey, observedAt)
+
     while (this.evidenceObservedAtByPaneKey.size > MAX_REMEMBERED_EVIDENCE_OBSERVATIONS) {
       const oldest = this.evidenceObservedAtByPaneKey.keys().next().value
+
       if (typeof oldest !== 'string') {
         break
       }
+
       this.evidenceObservedAtByPaneKey.delete(oldest)
     }
+
     return observedAt
   }
 
@@ -94,20 +102,27 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     if (payload.isReplay === true || payload.hasExplicitPrompt !== true) {
       return
     }
+
     const prompt = payload.payload.prompt?.trim() ?? ''
+
     if (prompt.length === 0) {
       return
     }
+
     const agentKind = agentTypeToPromptSentAgentKind(payload.payload.agentType)
     const promptHash = this.hashPromptForTelemetryDedupe(prompt)
+
     const promptInteractionKey =
       typeof payload.promptInteractionKey === 'string' &&
       payload.promptInteractionKey.trim().length > 0
         ? payload.promptInteractionKey.trim()
         : undefined
+
     const previousDedupe = this.promptSentDedupeByPaneKey.get(payload.paneKey)
+
     const isCompletedTurnBoundary =
       previousStatus?.payload.state === 'done' && payload.payload.state === 'working'
+
     if (
       previousDedupe?.agentKind === agentKind &&
       previousDedupe.promptInteractionKey !== undefined &&
@@ -116,6 +131,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     ) {
       return
     }
+
     if (
       previousDedupe?.agentKind === agentKind &&
       previousDedupe.promptHash === promptHash &&
@@ -130,11 +146,13 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     ) {
       return
     }
+
     this.promptSentDedupeByPaneKey.set(payload.paneKey, {
       agentKind,
       promptHash,
       promptInteractionKey
     })
+
     try {
       // Why: hooks prove a turn was submitted but not which UI launched the terminal; keep attribution low-cardinality.
       track('agent_prompt_sent', {

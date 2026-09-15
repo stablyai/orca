@@ -16,6 +16,7 @@ export function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
     unsupportedReason: 'launch_mode_unavailable',
     detail: 'CLI registration is managed on the Orca server, not in the web browser.'
   } as const
+
   return {
     getInstallStatus: () => Promise.resolve(status),
     install: () => Promise.resolve(status),

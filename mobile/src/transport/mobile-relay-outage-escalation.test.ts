@@ -11,7 +11,9 @@ import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 describe('continuous Relay outage escalation', () => {
@@ -29,17 +31,22 @@ describe('continuous Relay outage escalation', () => {
     const logical = createStableLogicalRpcClient(new FakeSession('disconnected'), 'tailscale')
     const publishedAttempts: number[] = []
     logical.onConnectionPathChange(() => publishedAttempts.push(logical.getReconnectAttempt()))
+
     const openRelay = vi.fn(() => {
       const session = new FakeRelaySession('connecting', failure)
       setTimeout(() => session.publishState('disconnected'), 0)
+
       return session
     })
+
     openRelay.mockReturnValueOnce(activeRelay)
+
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay,
       randomBytes: () => new Uint8Array([0, 0])
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()

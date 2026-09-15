@@ -20,22 +20,39 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
+
 const ORIGINAL_TAB_ID = '1c897bc8-973b-47b4-9449-ac5fc6b726c3'
+
 const ORIGINAL_LEAF_ID = '0526f763-6729-49af-adf8-85ddbcf2b4e7'
+
 const ORIGINAL_PANE_KEY = makePaneKey(ORIGINAL_TAB_ID, ORIGINAL_LEAF_ID)
+
 const ORIGINAL_PTY_ID = 'pty-background-worker'
+
 const REPO_ID = '32a0226d-9f33-42e8-8b7b-24867dea06d4'
+
 const WORKTREE_PATH = path.join(path.sep, 'workspace', 'factory-pr-4626-git-crypt')
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
+
 const CANARY_WORKTREE_PATH = path.join(path.sep, 'workspace', 'canary')
+
 const CANARY_WORKTREE_ID = `${REPO_ID}::${CANARY_WORKTREE_PATH}`
+
 const CANARY_TAB_ID = 'canary-tab'
+
 const CANARY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const CANARY_PTY_ID = 'pty-unrelated-canary'
+
 const HELPER_TAB_ID = 'worker-child-terminal'
+
 const HELPER_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const HELPER_PANE_KEY = makePaneKey(HELPER_TAB_ID, HELPER_LEAF_ID)
+
 const TERMINAL_HANDLE = 'terminal-background-worker'
+
 const initialAppStoreState = useAppStore.getState()
 
 function makeWorktree(id: string, workspacePath: string): Worktree {
@@ -89,12 +106,14 @@ function seedWorkspace(options: { helper?: boolean } = {}): void {
   useAppStore.setState(initialAppStoreState, true)
   const target = makeWorktree(WORKTREE_ID, WORKTREE_PATH)
   const canary = makeWorktree(CANARY_WORKTREE_ID, CANARY_WORKTREE_PATH)
+
   const original = makeTab(
     ORIGINAL_TAB_ID,
     WORKTREE_ID,
     ORIGINAL_PTY_ID,
     'PR 4626 unified correction r3'
   )
+
   const unrelated = makeTab(CANARY_TAB_ID, CANARY_WORKTREE_ID, CANARY_PTY_ID, 'Unrelated')
   const helper = makeTab(HELPER_TAB_ID, WORKTREE_ID, 'pty-worker-child', 'Worker child')
   useAppStore.setState({
@@ -179,6 +198,7 @@ function recordWorkingWorker() {
       { tabId: ORIGINAL_TAB_ID, worktreeId: WORKTREE_ID, terminalHandle: TERMINAL_HANDLE },
       { providerSession }
     )
+
   return providerSession
 }
 
@@ -209,6 +229,7 @@ function completeRecordedWorker(
     state: 'done',
     origin: 'live'
   })
+
   return record!
 }
 
@@ -228,9 +249,11 @@ function expectCanaryUnchanged(): void {
 
 function orchestrationMethod(name: string) {
   const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+
   if (!method) {
     throw new Error(`Missing orchestration method: ${name}`)
   }
+
   return method
 }
 
@@ -239,15 +262,19 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
   const coordinatorPaneKey = 'coordinator-tab:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
   const run = db.createRun({
     objective: 'Completed worker retirement reproduction',
     coordinatorHandle: 'terminal-coordinator',
     coordinatorPaneKey
   })
+
   const ctx: RpcContext = { runtime }
+
   const call = async (name: string, params: Record<string, unknown>) => {
     const method = orchestrationMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
+
     return method.handler(parsed, ctx)
   }
 
@@ -301,23 +328,28 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     truncated: false,
     nextCursor: terminalState === 'exited' ? null : '1'
   })
+
   const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockImplementation(async () => {
     closeTerminalTab(ORIGINAL_TAB_ID, {
       force: true,
       skipRunningProcessConfirm: true,
       localPtyTeardownOwnedExternally: true
     })
+
     return { handle: TERMINAL_HANDLE, tabId: ORIGINAL_TAB_ID, ptyKilled: true }
   })
+
   vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
 
   try {
     const task = db.createTask({ spec: 'release completed worker', runId: run.id })
+
     const started = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'terminal-coordinator',
       agent: 'codex'
     })) as { dispatchId: string; state: string }
+
     expect(started.state).toBe('ready')
     expect(db.getWorkerDispatch(started.dispatchId)?.state).toBe('ready')
     expect(
@@ -354,9 +386,11 @@ function persistAndParseCurrentSession() {
   const payload = buildWorkspaceSessionPayload(useAppStore.getState())
   const parsed = parseWorkspaceSession(JSON.parse(JSON.stringify(payload)))
   expect(parsed.ok).toBe(true)
+
   if (!parsed.ok) {
     throw new Error(parsed.error)
   }
+
   return parsed.value
 }
 
@@ -439,17 +473,21 @@ describe('completed background-worker retirement resume matrix', () => {
     // resolution clears it too. No fence: a finished worker follows the same rule as any agent pane.
     seedWorkspace()
     recordCompletedWorker()
+
     const legacyAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'rolled_back',
       ptyId: ORIGINAL_PTY_ID
     })
+
     expect(legacyAction.kind).toBe('rollback-surface')
+
     if (legacyAction.kind === 'rollback-surface') {
       expect(
         rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), legacyAction.detail)
       ).toBe('removed')
     }
+
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
       state: 'done'
     })
@@ -458,10 +496,12 @@ describe('completed background-worker retirement resume matrix', () => {
     ).not.toHaveProperty('automaticResumeBlockedBy')
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
+
     const exitedAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'exited'
     })
+
     expect(exitedAction).toEqual({ kind: 'clear-sleeping', paneKey: ORIGINAL_PANE_KEY })
 
     // Case 5: coordinator manual close is the same safe exact-tab retirement boundary.
@@ -562,9 +602,11 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expect(Object.keys(beforeActivation.pendingStartupByTabId)).toEqual([])
     expect(beforeActivation.tabsByWorktree[WORKTREE_ID]).toEqual([])
+
     const activationResult = activateAndRevealWorktree(WORKTREE_ID, {
       notifyHostRuntime: false
     })
+
     expect(activationResult).not.toBe(false)
     const activated = useAppStore.getState()
 

@@ -21,6 +21,7 @@ describe('terminal stream extraction characterization', () => {
       opcode: TerminalStreamOpcode
       payload?: Uint8Array<ArrayBufferLike>
     }[] = []
+
     const stats = sendSnapshotFrames(
       (opcode, payload) => {
         frames.push({ opcode, payload })
@@ -53,9 +54,11 @@ describe('terminal stream extraction characterization', () => {
 
   it('stops publication immediately when SnapshotStart is rejected', () => {
     const opcodes: TerminalStreamOpcode[] = []
+
     const stats = sendSnapshotFrames(
       (opcode) => {
         opcodes.push(opcode)
+
         return false
       },
       {
@@ -72,12 +75,14 @@ describe('terminal stream extraction characterization', () => {
 
   it('keeps the permanent v1 header bytes and opcode assignments', () => {
     const seq = 2 ** 32 + 0x89abcdef
+
     const bytes = encodeTerminalStreamFrame({
       opcode: TerminalStreamOpcode.WriteUnavailable,
       streamId: 0x78563412,
       seq,
       payload: new Uint8Array([0xaa])
     })
+
     const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 
     expect(Array.from(bytes.slice(0, 4))).toEqual([0x74, 1, 17, 0])
@@ -110,6 +115,7 @@ describe('terminal stream extraction characterization', () => {
     const frames: { opcode: TerminalStreamOpcode; payload: Uint8Array<ArrayBufferLike> }[] = []
     const emit = vi.fn()
     let readCount = 0
+
     const stream = {
       streamId: 7,
       terminal: 'terminal',
@@ -122,12 +128,15 @@ describe('terminal stream extraction characterization', () => {
       pendingOutputOverflowed: true,
       outputBatcher: { push: vi.fn(), flush: vi.fn() }
     } as unknown as TerminalMultiplexStream
+
     const runtime = {
       readTerminal: vi.fn(async () => {
         readCount += 1
+
         if (readCount === 2) {
           stream.pendingOutputOverflowed = true
         }
+
         return { tail: ['fallback'] }
       }),
       serializeTerminalBuffer: vi.fn(async () => ({
@@ -142,6 +151,7 @@ describe('terminal stream extraction characterization', () => {
       getMobileDisplayMode: vi.fn(() => 'fit'),
       getLayout: vi.fn(() => null)
     } as unknown as OrcaRuntimeService
+
     const state = {
       runtime,
       streams: new Map([[stream.streamId, stream]]),
@@ -150,6 +160,7 @@ describe('terminal stream extraction characterization', () => {
       sendFrame: vi.fn((streamId, opcode, payload = new Uint8Array()) => {
         expect(streamId).toBe(stream.streamId)
         frames.push({ opcode, payload })
+
         return true
       })
     } as unknown as TerminalMultiplexConnection
@@ -178,9 +189,11 @@ describe('terminal stream extraction characterization', () => {
 
   it('lets a slot-handler registration throw escape before per-stream catch ownership begins', async () => {
     const streams = new Map()
+
     const runtime = {
       attachRemoteTerminalSourceRangeConsumer: vi.fn(() => false)
     } as unknown as OrcaRuntimeService
+
     const state = {
       runtime,
       connectionId: 'connection',
@@ -192,6 +205,7 @@ describe('terminal stream extraction characterization', () => {
       sendFrame: vi.fn(),
       queueOrSendOutput: vi.fn()
     } as unknown as TerminalMultiplexConnection
+
     const installed = vi.fn()
 
     await expect(

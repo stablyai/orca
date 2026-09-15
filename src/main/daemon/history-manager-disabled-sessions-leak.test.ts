@@ -82,6 +82,7 @@ describe('HistoryManager disabledSessions stays bounded (leak regression)', () =
       for (let i = 0; i < 50; i++) {
         await poisonThenCloseNormally(`sess-${i}`)
       }
+
       expect(mgr.disabledSessionCount()).toBe(0)
     }
   )

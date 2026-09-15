@@ -14,6 +14,7 @@ export function shouldSeedCacheTimerOnInitialTitle(args: {
   }
 
   const status = classifyTitleActivity(rawTitle)
+
   if (status === null || status === 'working') {
     return false
   }

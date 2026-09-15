@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const AI_VAULT_DIR = join(import.meta.dirname, '.')
+
 const NATIVE_CHAT_DIR = join(import.meta.dirname, '..', 'native-chat')
 
 // Transcript I/O in these modules must go through the WSL admission gate, so a
@@ -45,6 +46,7 @@ async function guardedFiles(): Promise<{ name: string; path: string }[]> {
     .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
     .filter((name) => !ALLOWLIST.has(name))
     .map((name) => ({ name, path: join(AI_VAULT_DIR, name) }))
+
   return [
     ...aiVault,
     ...NATIVE_CHAT_MODULES.map((name) => ({ name, path: join(NATIVE_CHAT_DIR, name) }))
@@ -55,11 +57,13 @@ describe('WSL transcript gate import guard', () => {
   it('leaves no raw node:fs value import in a gated transcript module', async () => {
     const files = await guardedFiles()
     const offenders: string[] = []
+
     for (const file of files) {
       for (const clause of valueImportsOfNodeFs(await readFile(file.path, 'utf-8'))) {
         offenders.push(`${file.name}: import ${clause} from 'node:fs…'`)
       }
     }
+
     expect(offenders).toEqual([])
   })
 

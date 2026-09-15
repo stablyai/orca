@@ -9,6 +9,7 @@ export type MobileMarkdownBlock =
   | { type: 'rule' }
 
 const HEADING = /^(#{1,6})\s+(.+)$/
+
 const CODE_FENCE = /^```([A-Za-z0-9_-]+)?\s*$/
 
 function splitTableRow(line: string): string[] {
@@ -22,6 +23,7 @@ function splitTableRow(line: string): string[] {
 
 function isTableSeparator(line: string): boolean {
   const cells = splitTableRow(line)
+
   return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
 }
 
@@ -32,24 +34,30 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
 
   while (index < lines.length) {
     const line = lines[index] ?? ''
+
     if (!line.trim()) {
       index += 1
       continue
     }
 
     const fence = line.match(CODE_FENCE)
+
     if (fence) {
       index += 1
       const code: string[] = []
+
       while (index < lines.length && !/^```\s*$/.test(lines[index] ?? '')) {
         code.push(lines[index] ?? '')
         index += 1
       }
+
       // closed=false means the fence is still streaming in (no terminator yet).
       const closed = index < lines.length
+
       if (closed) {
         index += 1
       }
+
       blocks.push({ type: 'code', text: code.join('\n'), language: fence[1], closed })
       continue
     }
@@ -61,6 +69,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
     }
 
     const standaloneImage = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)\s*$/i)
+
     if (standaloneImage) {
       blocks.push({ type: 'image', alt: standaloneImage[1] ?? '', url: standaloneImage[2]! })
       index += 1
@@ -75,15 +84,18 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       const headers = splitTableRow(line)
       index += 2
       const rows: string[][] = []
+
       while (index < lines.length && (lines[index] ?? '').includes('|') && lines[index]?.trim()) {
         rows.push(splitTableRow(lines[index] ?? ''))
         index += 1
       }
+
       blocks.push({ type: 'table', headers, rows })
       continue
     }
 
     const heading = line.match(HEADING)
+
     if (heading) {
       blocks.push({ type: 'heading', level: heading[1]!.length, text: heading[2]!.trim() })
       index += 1
@@ -92,10 +104,12 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
 
     if (/^>\s?/.test(line)) {
       const quote: string[] = []
+
       while (index < lines.length && /^>\s?/.test(lines[index] ?? '')) {
         quote.push((lines[index] ?? '').replace(/^>\s?/, ''))
         index += 1
       }
+
       blocks.push({ type: 'quote', text: quote.join('\n').trim() })
       continue
     }
@@ -103,6 +117,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
       const items: Array<{ text: string; checked?: boolean }> = []
       let ordered = false
+
       while (index < lines.length && /^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[index] ?? '')) {
         const current = lines[index] ?? ''
         const orderedMatch = current.match(/^\s*\d+[.)]\s+(.+)$/)
@@ -116,11 +131,13 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
         })
         index += 1
       }
+
       blocks.push({ type: 'list', ordered, items })
       continue
     }
 
     const paragraph: string[] = []
+
     while (
       index < lines.length &&
       lines[index]?.trim() &&
@@ -133,6 +150,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       paragraph.push(lines[index] ?? '')
       index += 1
     }
+
     blocks.push({ type: 'paragraph', text: paragraph.join('\n').trim() })
   }
 

@@ -22,6 +22,7 @@ vi.mock('./child-process/run-process', () => ({
 }))
 
 const OK = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+
 const USER_SID = 'S-1-5-21-1000'
 
 type FakeSpec = { program: string; args?: readonly string[] }
@@ -41,30 +42,41 @@ function fakeIcacls(spec: FakeSpec): typeof OK {
   const args = spec.args ?? []
   const path = args[0] ?? ''
   const grantIndex = args.indexOf('/grant:r')
+
   if (grantIndex !== -1) {
     const grant = args[grantIndex + 1]!
     hardenedByFake.set(path, grant.includes('(OI)(CI)') ? 'OICI' : '')
+
     return OK
   }
+
   const saveIndex = args.indexOf('/save')
+
   if (saveIndex === -1) {
     return OK // /reset
   }
+
   writeFileSync(args[saveIndex + 1]!, fakeSddl(path), 'utf16le')
+
   return OK
 }
 
 function fakeSddl(path: string): string {
   const forced = forcedBadSddl.get(path)
+
   if (forced) {
     return `name\r\n${forced}\r\n`
   }
+
   const aceFlags = hardenedByFake.get(path)
+
   if (aceFlags === undefined) {
     // Never hardened: the inherited DACL a fresh file carries, so the first verify must fail.
     return `name\r\nD:(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;${USER_SID})\r\n`
   }
+
   const ace = (sid: string): string => `(A;${aceFlags};FA;;;${sid})`
+
   return `name\r\nD:PAI${ace('BA')}${ace('SY')}${ace(USER_SID)}\r\n`
 }
 
@@ -89,6 +101,7 @@ describe('hardenSecurePath', () => {
       if (spec.program === 'C:\\Windows\\System32\\whoami.exe') {
         return { ...OK, stdout: `"USER","${USER_SID}"` }
       }
+
       return fakeIcacls(spec)
     })
     vi.mocked(runProcess).mockImplementation((spec) => Promise.resolve(fakeIcacls(spec)))
@@ -100,16 +113,20 @@ describe('hardenSecurePath', () => {
     } else {
       process.env.SystemRoot = originalSystemRoot
     }
+
     if (originalWindir === undefined) {
       delete process.env.WINDIR
     } else {
       process.env.WINDIR = originalWindir
     }
+
     __resetSecureFileWindowsUserSidForTests()
     __resetSecureFileHardenedPathsForTests()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -256,6 +273,7 @@ describe('hardenSecurePath', () => {
       hardenExistingSecureFile(targetPath)
       await flushAsyncAcl()
     }
+
     expect(throttleReports(warn, targetPath)).toHaveLength(1)
 
     // The transient condition clears; the next re-probe must notice.
@@ -292,6 +310,7 @@ describe('hardenSecurePath', () => {
       hardenExistingSecureFile(targetPath)
       await flushAsyncAcl()
     }
+
     expect(mayAttemptHardening(targetPath)).toBe(false)
 
     // The host recovers and a credential is written. The synchronous apply succeeds (runProcessSync
@@ -329,6 +348,7 @@ describe('hardenSecurePath', () => {
       if (spec.program === 'C:\\Windows\\System32\\whoami.exe') {
         return sidLookupFails ? { ...OK, code: 1 } : { ...OK, stdout: `"USER","${USER_SID}"` }
       }
+
       return fakeIcacls(spec)
     })
 
@@ -350,6 +370,7 @@ describe('hardenSecurePath', () => {
   function throttleReports(warn: ReturnType<typeof vi.spyOn>, targetPath: string): unknown[] {
     return warn.mock.calls.filter((call) => {
       const entry = call[1] as { stage?: string; targetPath?: string } | undefined
+
       return entry?.stage === 'throttled' && entry.targetPath === targetPath
     })
   }
@@ -360,6 +381,7 @@ describe('hardenSecurePath', () => {
     const targetPath = join(userDataPath, 'secret.json')
     writeFileSync(targetPath, '{}')
     vi.mocked(runProcess).mockResolvedValue({ ...OK, code: 5, stderr: 'Access is denied.' })
+
     return targetPath
   }
 
@@ -384,7 +406,9 @@ describe('hardenSecurePath', () => {
       ...vi.mocked(runProcess).mock.calls.map(([spec]) => spec),
       ...vi.mocked(runProcessSync).mock.calls.map(([spec]) => spec)
     ]
+
     expect(specs.length).toBeGreaterThan(4)
+
     for (const spec of specs) {
       expect(spec.args).not.toContain('/c')
     }
@@ -398,6 +422,7 @@ describe('hardenSecurePath', () => {
       .mocked(runProcess)
       .mock.calls.map(([spec]) => spec.args as string[])
       .find((args) => args.includes('/grant:r'))!
+
     expect(grantArgs).toContain(`*${USER_SID}:(OI)(CI)(F)`)
     expect(grantArgs).toContain('*S-1-5-18:(OI)(CI)(F)')
   })
@@ -444,6 +469,7 @@ describe('hardenSecurePath', () => {
       if (spec.program === 'C:\\Windows\\System32\\whoami.exe') {
         return { ...OK, stdout: '"USER","S-1-5-21-1000"' }
       }
+
       return { ...OK, code: 5, stderr: 'Access is denied.' }
     })
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
@@ -493,9 +519,11 @@ describe('hardenSecurePath', () => {
     })
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
     tempDirs.push(userDataPath)
+
     const paths = ['first.json', 'second.json', 'third.json'].map((name) =>
       join(userDataPath, name)
     )
+
     for (const path of paths) {
       writeFileSync(path, '{}')
       hardenExistingSecureFile(path)
@@ -506,6 +534,7 @@ describe('hardenSecurePath', () => {
     const fileTargets = getHardenAclCalls()
       .map(getAclTarget)
       .filter((path) => paths.includes(path))
+
     expect(fileTargets).toEqual([...paths, paths[0]])
     expect(__getSecureFileHardeningCacheStateForTests().paths).toMatchObject({
       entries: 2
@@ -522,12 +551,15 @@ describe('hardenSecurePath', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
     tempDirs.push(root)
     const directories = ['first', 'second', 'third'].map((name) => join(root, name))
+
     const files = directories.map((dir) => {
       mkdirSync(dir)
       const file = join(dir, 'secret.json')
       writeFileSync(file, '{}')
+
       return file
     })
+
     for (const file of files) {
       hardenExistingSecureFile(file)
     }
@@ -537,6 +569,7 @@ describe('hardenSecurePath', () => {
     const directoryTargets = getHardenAclCalls()
       .map(getAclTarget)
       .filter((path) => directories.includes(path))
+
     expect(directoryTargets).toEqual([...directories, directories[0]])
     expect(__getSecureFileHardeningCacheStateForTests().directories).toMatchObject({
       entries: 2
@@ -668,12 +701,15 @@ describe('hardenSecurePath', () => {
       if (spec.program === 'C:\\Windows\\System32\\whoami.exe') {
         return { ...OK, stdout: '"USER","S-1-5-21-1000"' }
       }
+
       throw new Error('access denied')
     })
     expect(() => writeSecureFile(targetPath, 'first')).not.toThrow()
+
     const firstWriteTargetCalls = getSyncHardenAclCalls()
       .map(getAclTarget)
       .filter((entry) => entry === targetPath)
+
     expect(firstWriteTargetCalls).toHaveLength(1)
 
     // Second write: ACL apply now succeeds. Because the failed apply was NOT cached, the
@@ -682,12 +718,15 @@ describe('hardenSecurePath', () => {
       if (spec.program === 'C:\\Windows\\System32\\whoami.exe') {
         return { ...OK, stdout: '"USER","S-1-5-21-1000"' }
       }
+
       return OK
     })
     writeSecureFile(targetPath, 'second')
+
     const allTargetCalls = getSyncHardenAclCalls()
       .map(getAclTarget)
       .filter((entry) => entry === targetPath)
+
     expect(allTargetCalls).toHaveLength(2)
   })
 
@@ -776,11 +815,14 @@ describe('hardenSecurePath', () => {
 function hardenInitiations(specs: FakeSpec[]): { args?: readonly string[] }[] {
   const initiations: { args?: readonly string[] }[] = []
   const awaitingClosingVerify = new Set<string>()
+
   for (const spec of specs) {
     if (!spec.program.endsWith('icacls.exe')) {
       continue
     }
+
     const path = spec.args?.[0] ?? ''
+
     if (spec.args?.includes('/grant:r')) {
       awaitingClosingVerify.add(path)
     } else if (spec.args?.includes('/save')) {
@@ -791,6 +833,7 @@ function hardenInitiations(specs: FakeSpec[]): { args?: readonly string[] }[] {
       }
     }
   }
+
   return initiations
 }
 

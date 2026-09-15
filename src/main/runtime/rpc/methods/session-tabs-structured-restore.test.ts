@@ -54,6 +54,7 @@ describe('structured session tab restoration follows one rule for every caller',
 
   it('restores for an in-process caller on the same setting that admits remote clients', async () => {
     const restoreCallsBySetting = new Map<boolean, number>()
+
     for (const enabled of [false, true]) {
       const runtime = makeRuntime(enabled)
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })

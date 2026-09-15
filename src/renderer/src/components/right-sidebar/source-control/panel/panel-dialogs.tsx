@@ -69,6 +69,7 @@ export function SourceControlPanelDialogs({
         } else {
           void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
         }
+
         setBaseRefDialogOpen(false)
         window.setTimeout(() => void refreshBranchCompare(), 0)
       }}
@@ -78,6 +79,7 @@ export function SourceControlPanelDialogs({
         } else {
           void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
         }
+
         setBaseRefDialogOpen(false)
         window.setTimeout(() => void refreshBranchCompare(), 0)
       }}

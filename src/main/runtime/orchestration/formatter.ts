@@ -3,6 +3,7 @@ import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-c
 import type { OrchestrationCliCommand } from './cli-command'
 
 const BANNER_WIDTH = 60
+
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
 
 export type MessageFormattingAuthority =
@@ -23,6 +24,7 @@ function resolveAuthority(
   if (authority) {
     return authority
   }
+
   return msg.run_id === ORCHESTRATION_LEGACY_RUN_ID ||
     msg.delivery_contract === 'legacy_direct' ||
     msg.delivery_contract === 'audit_only'
@@ -37,8 +39,10 @@ function appendLegacyGuidance(
 ): void {
   if (authority === 'legacy_read_only') {
     lines.push('[Inspection only: reply and acknowledgment are unavailable.]')
+
     return
   }
+
   if (authority === 'legacy_compatibility') {
     lines.push('[Use only the supported legacy action shown below.]')
   } else if (authority === 'legacy_recovery_replay') {
@@ -46,6 +50,7 @@ function appendLegacyGuidance(
       '[This bounded recovery replay may already have been seen. Use only the action shown below.]'
     )
   }
+
   for (const hint of supportedActionHints) {
     lines.push(`[Supported action: ${hint}]`)
   }
@@ -59,7 +64,9 @@ export function formatMessageBanner(
 ): string {
   const priorityTag =
     msg.priority === 'urgent' ? ' [URGENT]' : msg.priority === 'high' ? ' [HIGH]' : ''
+
   const authority = resolveAuthority(msg, options.authority)
+
   const authorityTag =
     authority === 'legacy_compatibility'
       ? ' [LEGACY COMPATIBILITY]'
@@ -68,12 +75,14 @@ export function formatMessageBanner(
         : authority === 'legacy_read_only'
           ? ' [LEGACY READ-ONLY]'
           : ''
+
   const senderName = msg.from_handle.toUpperCase()
 
   const header = `──── From: ${senderName} (${msg.from_handle})${priorityTag}${authorityTag} (${msg.type}) ────`
 
   const lines: string[] = [header]
   lines.push(`Subject: ${msg.subject}`)
+
   if (authority !== 'current') {
     appendLegacyGuidance(lines, authority, options.supportedActionHints ?? [])
   }
@@ -91,8 +100,10 @@ export function formatMessageBanner(
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''
         : ` --from ${msg.to_handle}`
+
     lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
   }
+
   lines.push(SEPARATOR)
 
   return lines.join('\n')
@@ -106,6 +117,7 @@ export function formatMessagesForInjection(messages: MessageRow[]): string {
   }
 
   const banners = messages.map(formatMessageBanner).join('\n\n')
+
   return `\n--- Orchestration Messages (${messages.length}) ---\n${banners}\n---\n`
 }
 
@@ -115,8 +127,10 @@ export function formatMessagePointer(
   cliCommand: OrchestrationCliCommand = 'orca'
 ): string {
   const noun = count === 1 ? 'message' : 'messages'
+
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
+
   return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
 }

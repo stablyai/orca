@@ -184,6 +184,7 @@ describe('findTextMatchRanges', () => {
 
   it('rejects oversized pasted queries before indexing preview text', () => {
     const oversizedQuery = 'secret-preview-search'.repeat(MARKDOWN_PREVIEW_SEARCH_QUERY_MAX_BYTES)
+
     const throwingText = {
       [Symbol.iterator](): IterableIterator<string> {
         throw new Error('oversized markdown preview searches must not scan text')

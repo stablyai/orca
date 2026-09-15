@@ -20,6 +20,7 @@ export async function readSshTerminalArtifact(
         'Remote terminal artifact access is unavailable. Reconnect the SSH target before retrying.'
       )
     }
+
     throw err
   }
 }
@@ -31,6 +32,7 @@ export async function writeSshTerminalArtifact(
   options: TerminalArtifactAccessOptions
 ): Promise<FileStat> {
   let result: { stat?: FileStat }
+
   try {
     result = (await mux.request('fs.writeTerminalArtifact', {
       filePath,
@@ -45,10 +47,13 @@ export async function writeSshTerminalArtifact(
         'Remote terminal artifact access is unavailable. Reconnect the SSH target before retrying.'
       )
     }
+
     throw err
   }
+
   if (!result.stat) {
     throw new Error('terminal_file_grant_stale')
   }
+
   return result.stat
 }

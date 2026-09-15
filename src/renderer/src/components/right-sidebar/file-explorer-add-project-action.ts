@@ -19,9 +19,11 @@ export function buildAddProjectFromFolderModalData(
 ): AddProjectFromFolderModalData {
   // Why: subfolder paths must stay on their owning repo host, not the mutable global selection.
   const host = parseExecutionHostId(getRepoExecutionHostId(activeRepo))
+
   if (host?.kind === 'ssh') {
     return { folderPath: node.path, connectionId: host.targetId }
   }
+
   return {
     folderPath: node.path,
     runtimeEnvironmentId: host?.kind === 'runtime' ? host.environmentId : null

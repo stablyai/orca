@@ -9,8 +9,10 @@ it('sums omitted sizes without constructing a replacement object per omitted ite
     kind: 'file',
     sizeBytes: index
   }))
+
   const original = Array.prototype.reduce
   let objectAccumulators = 0
+
   const spy = vi.spyOn(Array.prototype, 'reduce').mockImplementation(function (
     this: unknown[],
     callback,
@@ -19,14 +21,18 @@ it('sums omitted sizes without constructing a replacement object per omitted ite
     if (initial && typeof initial === 'object' && 'name' in initial && initial.name === 'Other') {
       objectAccumulators += this.length
     }
+
     return Reflect.apply(original, this, [callback, initial])
   })
+
   let result: ReturnType<typeof compactWorkspaceSpaceItems>
+
   try {
     result = compactWorkspaceSpaceItems(items)
   } finally {
     spy.mockRestore()
   }
+
   expect(objectAccumulators).toBe(0)
   expect(result!.topLevelItems).toHaveLength(48)
   expect(result!.omittedTopLevelItemCount).toBe(9953)
@@ -37,12 +43,14 @@ it('sums omitted sizes without constructing a replacement object per omitted ite
 
 it('preserves small-list size ties and empty results', () => {
   expect(compactWorkspaceSpaceItems([]).topLevelItems).toEqual([])
+
   const items: WorkspaceSpaceItem[] = ['b', 'a'].map((name) => ({
     name,
     path: name,
     kind: 'file',
     sizeBytes: 1
   }))
+
   expect(compactWorkspaceSpaceItems(items).topLevelItems.map((item) => item.name)).toEqual([
     'a',
     'b'

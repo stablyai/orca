@@ -15,6 +15,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
 
     const run = vi.fn(async () => {
       attempts += 1
+
       return attempts <= FAILURES_BEFORE_SUCCESS
     })
 
@@ -67,6 +68,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     vi.useFakeTimers()
     const onExhausted = vi.fn()
     const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20, 40], onExhausted)
+
     const run = vi.fn(async () => {
       throw new Error('start failed')
     })
@@ -84,6 +86,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler()
     let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
+
     const run = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
@@ -109,6 +112,7 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler()
     let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
+
     const run = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
@@ -130,12 +134,14 @@ describe('RemoteBrowserStreamRestartScheduler', () => {
     vi.useFakeTimers()
     const scheduler = new RemoteBrowserStreamRestartScheduler([10, 20])
     let resolveAttempt: ((shouldRetry: boolean) => void) | undefined
+
     const firstRun = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveAttempt = resolve
         })
     )
+
     const replacementRun = vi.fn(async () => false)
 
     scheduler.schedule(firstRun)

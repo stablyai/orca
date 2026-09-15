@@ -7,6 +7,7 @@ export {
   applyWebSessionTabsSnapshotOperations,
   decideWebSessionTabsSnapshotOperations
 } from './web-session-tabs-sync/snapshot-api'
+
 export type {
   DecidedWebSessionTabsSnapshotOperation,
   WebSessionTabsSnapshotOperation
@@ -22,7 +23,9 @@ export {
   _getWebSessionTabsRecoveryTrackingCountsForTest,
   _getWebSessionTabsTrackingCountsForTest
 } from './web-session-tabs-sync/tracking-lifecycle'
+
 export { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+
 export {
   decideWebSessionTabsSnapshot,
   shouldApplyWebSessionTabsSnapshot,
@@ -32,20 +35,24 @@ export {
   shouldSyncRuntimeSessionTabs,
   WEB_SESSION_TABS_FRAME_OUTRANKED
 } from './web-session-tabs-sync/tracking-decisions'
+
 export type { WebSessionTabsSnapshotDecision } from './web-session-tabs-sync/tracking-decisions'
 
 export { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
+
 export type {
   HostSessionMirrorPatchFrame,
   HostSessionMirrorPatchVerdict,
   HostSessionMirrorSettle
 } from './web-session-tabs-sync/mirror-settle'
+
 export {
   hostSessionMirrorSettleForPatchlessFrame,
   createHostSessionMirrorSettle
 } from './web-session-tabs-sync/mirror-settle'
 
 export { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
+
 export type {
   WebSessionTabsSnapshotApplyOptions,
   WebSessionTabsSyncState,

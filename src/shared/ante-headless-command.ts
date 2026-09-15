@@ -4,6 +4,7 @@ const ANTE_HEADLESS_PROMPT_FLAGS = new Set(['--prompt', '-p'])
 
 function isAnteHeadlessPromptFlag(token: string): boolean {
   const name = optionName(token)
+
   return ANTE_HEADLESS_PROMPT_FLAGS.has(name) || /^-p[^-]/.test(name)
 }
 
@@ -13,5 +14,6 @@ export function isAnteHeadlessOneShotCommand(tokens: readonly string[]): boolean
       return true
     }
   }
+
   return false
 }

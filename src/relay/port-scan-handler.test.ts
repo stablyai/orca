@@ -23,9 +23,11 @@ const MAX_FIXTURE_PIDS = 1_000
 
 const PID_BASE = (() => {
   let base = 1_000
+
   while ([process.pid, process.ppid].some((pid) => pid >= base && pid < base + MAX_FIXTURE_PIDS)) {
     base += MAX_FIXTURE_PIDS
   }
+
   return base
 })()
 
@@ -50,9 +52,11 @@ function capturePortDetectHandler(): MethodHandler {
       handler = nextHandler
     }
   })
+
   if (!handler) {
     throw new Error('ports.detect handler was not registered')
   }
+
   return handler
 }
 
@@ -64,9 +68,11 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
   let resolve = (_value: T): void => {
     throw new Error('deferred promise was not initialized')
   }
+
   const promise = new Promise<T>((nextResolve) => {
     resolve = nextResolve
   })
+
   return { promise, resolve }
 }
 
@@ -76,6 +82,7 @@ const DEFAULT_LISTENER: FixtureListener = { port: 3000, inode: 11_111 }
 
 function tcpRow(index: number, { port, inode }: FixtureListener): string {
   const hexPort = port.toString(16).toUpperCase().padStart(4, '0')
+
   return `${index}: 0100007F:${hexPort} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 ${inode}`
 }
 
@@ -100,19 +107,24 @@ function mockLinuxProcScan({
 }): void {
   const tcpHeader =
     'sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode'
+
   readFileMock.mockImplementation(async (path: string) => {
     if (path === '/proc/net/tcp') {
       return `${tcpHeader}\n${listeners.map((listener, index) => tcpRow(index, listener)).join('\n')}\n`
     }
+
     if (path === '/proc/net/tcp6') {
       return `${tcpHeader}\n`
     }
+
     const cmdlineMatch = path.match(/^\/proc\/(\d+)\/cmdline$/)
+
     if (cmdlineMatch) {
       return (
         cmdlineByPidOffset?.get(Number(cmdlineMatch[1]) - PID_BASE) ?? '/usr/bin/node\0server.js'
       )
     }
+
     throw new Error(`unexpected readFile: ${path}`)
   })
 
@@ -122,9 +134,11 @@ function mockLinuxProcScan({
     if (path === '/proc') {
       return pids
     }
+
     if (path.endsWith('/fd')) {
       return fds
     }
+
     throw new Error(`unexpected readdir: ${path}`)
   })
 
@@ -132,17 +146,24 @@ function mockLinuxProcScan({
   readlinkMock.mockImplementation((path: string) => {
     if (first && firstReadlink) {
       first = false
+
       return firstReadlink
     }
+
     first = false
+
     if (!inodesByPidOffset) {
       return Promise.resolve(`socket:[${DEFAULT_LISTENER.inode}]`)
     }
+
     const match = path.match(/^\/proc\/(\d+)\/fd\/(\d+)$/)
+
     if (!match) {
       throw new Error(`unexpected readlink: ${path}`)
     }
+
     const inode = inodesByPidOffset.get(Number(match[1]) - PID_BASE)?.[Number(match[2])]
+
     return Promise.resolve(inode === undefined ? '/dev/null' : `socket:[${inode}]`)
   })
 }
@@ -432,6 +453,7 @@ describe('parseWindowsNetstatOutput', () => {
     const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
       ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
     )
+
     splitSpy.mockRestore()
     expect(usedWhitespaceFieldSplit).toBe(false)
   })

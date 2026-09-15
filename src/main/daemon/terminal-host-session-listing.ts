@@ -7,10 +7,12 @@ export function listLiveTerminalHostSessions(
   agentSessionOwners: ClaimedAgentPtyOwnerRegistry
 ): SessionInfo[] {
   const result: SessionInfo[] = []
+
   for (const session of sessions.values()) {
     if (!session.isAlive) {
       continue
     }
+
     const size = session.getAppliedSize()
     result.push({
       sessionId: session.sessionId,
@@ -28,5 +30,6 @@ export function listLiveTerminalHostSessions(
       agentSessionOwners: agentSessionOwners.listForPty(session.sessionId)
     })
   }
+
   return result
 }

@@ -13,6 +13,7 @@ export async function setPaneTitleFromTerminalMenu(page: Page, title: string): P
   await expect(titleInput).toBeVisible()
   await titleInput.fill(title)
   await titleInput.press('Enter')
+
   // Why: CI can dispatch Enter before React has committed the filled value;
   // blurring exercises the same submit path and makes the helper deterministic.
   try {
@@ -20,6 +21,7 @@ export async function setPaneTitleFromTerminalMenu(page: Page, title: string): P
   } catch {
     await titleInput.evaluateAll(([input]) => (input as HTMLElement | undefined)?.blur())
   }
+
   await expect(titleInput).toHaveCount(0)
 }
 
@@ -29,6 +31,7 @@ export async function openTerminalContextMenu(page: Page): Promise<void> {
   ))
     ? ['Control']
     : []
+
   const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
   await page
     .locator('.xterm:visible')

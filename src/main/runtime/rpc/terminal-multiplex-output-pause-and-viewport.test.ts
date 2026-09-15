@@ -23,9 +23,11 @@ import {
 describe('terminal multiplex RPC', () => {
   it('withholds sustained output from multiple paused desktop streams', async () => {
     const listeners: ((data: string, meta?: RuntimeTerminalDataMeta) => void)[] = []
+
     const harness = startDesktopMultiplexSubscribe({
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         listeners.push(listener)
+
         return vi.fn()
       }),
       serializeAuthoritativeTerminalBuffer: vi.fn().mockResolvedValue({
@@ -36,6 +38,7 @@ describe('terminal multiplex RPC', () => {
         source: 'headless'
       })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
 
     for (const streamId of [1, 2, 3]) {
@@ -55,15 +58,18 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
+
     await vi.waitFor(() =>
       expect(
         harness.messages.filter((message) => JSON.parse(message).result?.type === 'subscribed')
       ).toHaveLength(3)
     )
+
     const pauseCapable = harness.messages
       .map((message) => JSON.parse(message).result)
       .filter((event) => event?.type === 'subscribed')
       .every((event) => event.capabilities?.outputPause === 1)
+
     if (pauseCapable) {
       for (const streamId of [1, 2, 3]) {
         harness.handlers.get(streamId)?.(
@@ -78,13 +84,16 @@ describe('terminal multiplex RPC', () => {
         )
       }
     }
+
     harness.binaryFrames.splice(0)
     const chunk = 'x'.repeat(64 * 1024)
+
     for (let turn = 0; turn < 8; turn += 1) {
       for (const listener of listeners) {
         listener(chunk, { seq: (turn + 1) * chunk.length, rawLength: chunk.length })
       }
     }
+
     expect(
       harness.binaryFrames.some(
         (bytes) => decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Output
@@ -122,12 +131,15 @@ describe('terminal multiplex RPC', () => {
 
   it('keeps output flowing when an older client does not negotiate pause', async () => {
     const listeners: ((data: string, meta?: RuntimeTerminalDataMeta) => void)[] = []
+
     const harness = startDesktopMultiplexSubscribe({
       subscribeToTerminalData: vi.fn((_ptyId, nextListener) => {
         listeners.push(nextListener)
+
         return vi.fn()
       })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
 
     harness.handlers.get(0)?.(
@@ -152,9 +164,11 @@ describe('terminal multiplex RPC', () => {
           .find((event) => event?.type === 'subscribed' && event.streamId === 1)
       ).toMatchObject({ type: 'subscribed', streamId: 1 })
     )
+
     const subscribed = harness.messages
       .map((message) => JSON.parse(message).result)
       .find((event) => event?.type === 'subscribed' && event.streamId === 1)
+
     expect(subscribed.capabilities?.outputPause).toBeUndefined()
 
     harness.handlers.get(1)?.(
@@ -188,11 +202,14 @@ describe('terminal multiplex RPC', () => {
   it('drops stale mobile resize re-stream completions for multiplex streams', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const registry = createSubscriptionRegistryDouble()
+
     let resizeListener:
       | ((event: {
           cols: number
@@ -202,10 +219,12 @@ describe('terminal multiplex RPC', () => {
           seq: number
         }) => void)
       | undefined
+
     const restreamResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
     const write = vi.fn()
     const commit = vi.fn().mockResolvedValue(undefined)
     const beginMobileInputFloor = vi.fn(() => ({ commit, rollback: vi.fn() }))
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -227,6 +246,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn((_, listener) => {
         resizeListener = listener as typeof resizeListener
+
         return vi.fn()
       }),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
@@ -240,11 +260,13 @@ describe('terminal multiplex RPC', () => {
         options.reserveWrite('pty-1')
         write()
         await options.afterWrite('pty-1')
+
         return { accepted: true }
       }),
       beginMobileInputFloor,
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: false, applied: false })
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -260,6 +282,7 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -339,6 +362,7 @@ describe('terminal multiplex RPC', () => {
       expect(
         binaryFrames.some((frame) => {
           const decoded = decodeTerminalStreamFrame(frame)
+
           return (
             decoded?.opcode === TerminalStreamOpcode.SnapshotChunk &&
             decodeTerminalStreamText(decoded.payload) === 'newer'
@@ -354,6 +378,7 @@ describe('terminal multiplex RPC', () => {
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+
     expect(snapshotData).toEqual(['newer'])
 
     registry.cleanupSubscription('terminal-multiplex:conn-stale-multiplex-resize')
@@ -363,6 +388,7 @@ describe('terminal multiplex RPC', () => {
   it('owns and releases a viewport floor for legacy JSON desktop streams', async () => {
     const messages: string[] = []
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -377,6 +403,7 @@ describe('terminal multiplex RPC', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -411,26 +438,31 @@ describe('terminal multiplex RPC', () => {
     const trace: string[] = []
     let fitListener: ((event: { mode: string; cols: number; rows: number }) => void) | undefined
     let driverListener: ((driver: unknown) => void) | undefined
+
     const harness = startDesktopMultiplexSubscribe(
       {
         readTerminal: vi.fn(async () => {
           fitListener?.({ mode: 'desktop-fit', cols: 100, rows: 30 })
           driverListener?.({ kind: 'transition-during-snapshot' })
+
           return { tail: [], truncated: false } as unknown as Awaited<
             ReturnType<OrcaRuntimeService['readTerminal']>
           >
         }),
         subscribeToFitOverrideChanges: vi.fn((_ptyId, listener) => {
           fitListener = listener
+
           return vi.fn()
         }),
         subscribeToDriverChanges: vi.fn((_ptyId, listener) => {
           driverListener = listener
+
           return vi.fn()
         })
       },
       trace
     )
+
     await vi.waitFor(() =>
       expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
     )

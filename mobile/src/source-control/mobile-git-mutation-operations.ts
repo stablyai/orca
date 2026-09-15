@@ -71,14 +71,18 @@ const generatedCommitMessageReader: RpcCompatibleReader<
   if (!raw || typeof raw !== 'object') {
     return rpcReadUnchecked('generated-commit-message', { success: false, error: GENERATE_FAILED })
   }
+
   const result: { success?: unknown; message?: unknown; error?: unknown; canceled?: unknown } = raw
+
   if (result.success === true && typeof result.message === 'string' && result.message.length > 0) {
     return rpcReadUnchecked('generated-commit-message', { success: true, message: result.message })
   }
+
   const hostError =
     result.success === false && typeof result.error === 'string' && result.error.length > 0
       ? result.error
       : 'No commit message generated'
+
   return rpcReadUnchecked('generated-commit-message', {
     success: false,
     error: hostError,

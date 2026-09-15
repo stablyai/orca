@@ -31,6 +31,7 @@ describe('seedDevActivityFixture', () => {
 
     const updates = mocks.setAgentStatuses.mock.calls[0]?.[0] ?? []
     expect(updates).toHaveLength(3)
+
     for (const update of updates) {
       expect(parsePaneKey(update.paneKey)).not.toBeNull()
       expect(update.routing.connectionId).toBeNull()

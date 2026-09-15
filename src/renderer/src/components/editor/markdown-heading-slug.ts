@@ -21,6 +21,7 @@ export class MarkdownHeadingSlugger {
     }
 
     this.occurrences.set(nextSlug, 0)
+
     return nextSlug
   }
 }

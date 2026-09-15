@@ -21,10 +21,12 @@ describe('legacy takeover by current runtime authority', () => {
   it('accepts a fresh current agent before its first hook observation', async () => {
     const harness = createHarness()
     const hookServer = new AgentHookServer()
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       attestAgentHookCompatibilityAuthority: (candidate) =>
         hookServer.attestCompatibilityAuthority(candidate)
     })
+
     const proof = currentEvidence('coordinator')
     const launchTokenHash = createHash('sha256').update(proof.launchToken!).digest('hex')
     runtime.setOrchestrationDb(harness.db)
@@ -43,6 +45,7 @@ describe('legacy takeover by current runtime authority', () => {
 
     // Legacy compatibility mutations still require a hook observation.
     expect(runtime.verifyOrchestrationCompatibilityCaller(proof)).toBeNull()
+
     for (const [invocationId, forgedProof] of [
       ['forged-token', { ...proof, launchToken: 'forged-token' }],
       ['forged-pane', { ...proof, paneKey: 'tab_forged:66666666-6666-4666-8666-666666666666' }]
@@ -59,6 +62,7 @@ describe('legacy takeover by current runtime authority', () => {
           invocationId
         )
       )
+
       expect(rejected).toMatchObject({
         ok: false,
         error: { code: 'legacy_read_only', data: { effectsApplied: false } }
@@ -94,10 +98,12 @@ describe('legacy takeover by current runtime authority', () => {
     const runtime = new OrcaRuntimeService()
     const proof = currentEvidence('coordinator')
     const launchTokenHash = createHash('sha256').update(proof.launchToken!).digest('hex')
+
     const host = runtime.registerOrchestrationCompatibilitySshAttachment(
       'saved-target',
       'connection-current'
     )
+
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
       runtimeId: 'runtime-current',
       terminalHandle: CURRENT_COORDINATOR_HANDLE,
@@ -117,6 +123,7 @@ describe('legacy takeover by current runtime authority', () => {
       from: CURRENT_COORDINATOR_HANDLE,
       takeoverLegacy: true
     }
+
     const rejected = await dispatcher.dispatch(
       request(
         'orchestration.runUse',
@@ -125,6 +132,7 @@ describe('legacy takeover by current runtime authority', () => {
         'forged-ssh-attachment'
       )
     )
+
     expect(rejected).toMatchObject({
       ok: false,
       error: { code: 'legacy_read_only', data: { effectsApplied: false } }
@@ -133,6 +141,7 @@ describe('legacy takeover by current runtime authority', () => {
     const response = await dispatcher.dispatch(
       request('orchestration.runUse', params, { ...proof, host }, 'valid-ssh-attachment')
     )
+
     expect(response).toMatchObject({ ok: true })
   })
 })

@@ -31,6 +31,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
     // so a hidden event must not keep the badge lit; treat the cutoff like an ack floor.
     const clearedAt = source.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0
     const mutedAt = Math.max(ackAt, clearedAt)
+
     // Why: Activity feed surfaces historical done/blocked/waiting events
     // from stateHistory, so the titlebar badge must mirror that event count.
     for (const history of entry.stateHistory) {
@@ -38,6 +39,7 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
         count += 1
       }
     }
+
     // Why: a session-boundary done is an idle connect (STA-3386), not an event to read.
     // Why 'working' only: a monitoring turn surfaces through the live snapshot, never as an
     // unread event, so counting it here would light the badge with no unread row to clear.
@@ -55,16 +57,20 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
     seenPaneKeys.add(paneKey)
     countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0, true)
   }
+
   for (const [paneKey, retained] of Object.entries(source.retainedAgentsByPaneKey)) {
     // Live status is the primary source; retained is a handoff cache and may briefly overlap it.
     if (seenPaneKeys.has(paneKey)) {
       continue
     }
+
     seenPaneKeys.add(paneKey)
     countEntry(retained.entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
   }
+
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
     const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+
     if (entry && !seenPaneKeys.has(entry.paneKey)) {
       seenPaneKeys.add(entry.paneKey)
       countEntry(entry, source.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
@@ -96,6 +102,7 @@ export function useActivityUnreadCount(): number {
 
   return useMemo(() => {
     void agentStatusEpoch
+
     return countActivityUnread({
       agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
       migrationUnsupportedByPtyId,

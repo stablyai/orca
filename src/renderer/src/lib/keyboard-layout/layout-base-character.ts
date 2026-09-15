@@ -29,11 +29,17 @@ let cachedLayoutCharacters: LayoutCharacterCache = {
   layoutMap: null,
   nativeKeyCharacters: null
 }
+
 let focusListenerAttached = false
+
 let attachedWindow: Window | null = null
+
 let unsubscribeLayoutChange: (() => void) | null = null
+
 let refreshGeneration = 0
+
 let layoutChangeGeneration = 0
+
 let layoutRefreshBlocked = false
 
 type KeyboardLayoutAppApi = {
@@ -53,20 +59,26 @@ async function refreshLayoutMap(): Promise<void> {
   if (layoutRefreshBlocked) {
     return
   }
+
   const generation = ++refreshGeneration
   const keyboard = (window.navigator as NavigatorWithKeyboard).keyboard
   const snapshotReader = getKeyboardLayoutAppApi()?.getKeyboardLayoutSnapshot
+
   const [layoutResult, snapshotResult] = await Promise.allSettled([
     keyboard?.getLayoutMap?.() ?? Promise.resolve(null),
     snapshotReader?.() ?? Promise.resolve(null)
   ])
+
   if (generation !== refreshGeneration) {
     return
   }
+
   const layoutMap = layoutResult.status === 'fulfilled' ? layoutResult.value : null
   const snapshot = snapshotResult.status === 'fulfilled' ? snapshotResult.value : null
+
   const nativeKeyCharacters =
     snapshot && Object.keys(snapshot.keyCharacters).length > 0 ? snapshot.keyCharacters : null
+
   if (layoutMap || nativeKeyCharacters) {
     cachedLayoutCharacters = { layoutMap, nativeKeyCharacters }
   }
@@ -76,14 +88,18 @@ function refreshAfterKeyboardLayoutChange(event: KeyboardLayoutChangeEvent): voi
   if (event.generation < layoutChangeGeneration) {
     return
   }
+
   layoutChangeGeneration = event.generation
+
   if (event.phase === 'invalidated') {
     layoutRefreshBlocked = true
     cachedLayoutCharacters = { layoutMap: null, nativeKeyCharacters: null }
   } else {
     layoutRefreshBlocked = false
   }
+
   ++refreshGeneration
+
   if (event.phase === 'refresh') {
     void refreshLayoutMap()
   }
@@ -96,6 +112,7 @@ export function prefetchLayoutCharacters(): void {
   if (focusListenerAttached || typeof window === 'undefined') {
     return
   }
+
   focusListenerAttached = true
   attachedWindow = window
   window.addEventListener('focus', refreshOnFocus)
@@ -119,11 +136,15 @@ function normalizeLayoutCharacter(value: string | null | undefined): string | un
   if (!value) {
     return undefined
   }
+
   const codePoints = [...value]
+
   if (codePoints.length !== 1) {
     return undefined
   }
+
   const codePoint = value.codePointAt(0) as number
+
   return codePoint < 0x20 ? undefined : value
 }
 
@@ -132,6 +153,7 @@ function normalizeLayoutCharacter(value: string | null | undefined): string | un
  *  base character (callers fall back to the US table). */
 export function getLayoutBaseCharacterForCode(code: string): string | undefined {
   const nativeCharacters = cachedLayoutCharacters.nativeKeyCharacters
+
   return normalizeLayoutBaseCharacter(
     nativeCharacters
       ? (nativeCharacters[code]?.unmodified ?? undefined)
@@ -144,16 +166,21 @@ export function getLayoutCharacterForCode(code: string, shifted: boolean): strin
   if (!shifted) {
     return getLayoutBaseCharacterForCode(code)
   }
+
   const nativeShifted = normalizeLayoutCharacter(
     cachedLayoutCharacters.nativeKeyCharacters?.[code]?.shifted
   )
+
   if (nativeShifted) {
     return nativeShifted
   }
+
   const base = getLayoutBaseCharacterForCode(code)
+
   if (!code.startsWith('Key') || !base) {
     return undefined
   }
+
   return normalizeLayoutCharacter(base.toUpperCase())
 }
 

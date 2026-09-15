@@ -14,6 +14,7 @@ import type { CrashReportDetailValue } from '../../shared/crash-reporting'
 // so look back across the widest same-incident spread in the 1.4.184 batch (600ms,
 // whole-tree kills) with headroom.
 export const SIBLING_DEATH_LOOKBACK_MS = 1_000
+
 // Why: the forward direction is not the mirror of the backward one. A child dying
 // after the renderer is at least as likely to be an effect of it — Chromium tearing
 // down the dead renderer's service channels, or our own renderer_recovery_reload at
@@ -35,6 +36,7 @@ const CONCURRENT_PROCESS_DEATHS = 'concurrent-process-deaths'
 // Why: one incident produces a handful of events; a deeper ring would only let
 // a pre-existing child crash loop outlive the window.
 const MAX_TRACKED_CHILD_DEATHS = 16
+
 // Per-renderer dedupe allows concurrent reports from many webContents.
 const MAX_PENDING_RENDERER_REPORTS = 16
 
@@ -77,10 +79,12 @@ export type LateSiblingAttribution = {
 }
 
 let childDeaths: ChildProcessDeath[] = []
+
 let pendingRendererReports: TrackedRendererCrashReport[] = []
 
 function isSiblingOfRendererDeath(childAt: number, rendererAt: number): boolean {
   const offsetMs = childAt - rendererAt
+
   return offsetMs >= -SIBLING_DEATH_LOOKBACK_MS && offsetMs <= SIBLING_DEATH_LOOKAHEAD_MS
 }
 
@@ -100,11 +104,13 @@ function hasMatchingFailureSignature(
   if (crashReasonClass(death.reason) !== crashReasonClass(reason)) {
     return false
   }
+
   return process.platform !== 'win32' || death.exitCode === exitCode
 }
 
 export function observeChildProcessDeath(death: ChildProcessDeath): void {
   childDeaths.push(death)
+
   if (childDeaths.length > MAX_TRACKED_CHILD_DEATHS) {
     childDeaths = childDeaths.slice(-MAX_TRACKED_CHILD_DEATHS)
   }
@@ -133,6 +139,7 @@ export function trackRendererCrashReport(
   const liveReports = pendingRendererReports
     .filter((report) => pending.at - report.at <= SIBLING_DEATH_LOOKAHEAD_MS)
     .slice(-(MAX_PENDING_RENDERER_REPORTS - 1))
+
   pendingRendererReports = [
     ...liveReports,
     { ...pending, siblingDeaths: [...siblingDeaths], lateAttaches: 0 }
@@ -148,6 +155,7 @@ function childIdentity(death: ChildProcessDeath): string {
 
 function describeChildDeath(death: ChildProcessDeath, rendererAt: number): string {
   const offsetMs = death.at - rendererAt
+
   return `${childIdentity(death)} ${offsetMs >= 0 ? '+' : ''}${offsetMs}ms`
 }
 
@@ -157,14 +165,19 @@ function describeSiblingDeaths(siblings: ChildProcessDeath[], rendererAt: number
   const described = [...siblings]
     .sort((a, b) => Math.abs(a.at - rendererAt) - Math.abs(b.at - rendererAt))
     .map((death) => describeChildDeath(death, rendererAt))
+
   const kept: string[] = []
+
   for (const entry of described) {
     if (kept.length > 0 && [...kept, entry].join(', ').length > MAX_SIBLING_DEATHS_DETAIL_LENGTH) {
       break
     }
+
     kept.push(entry)
   }
+
   const dropped = described.length - kept.length
+
   return dropped > 0 ? `${kept.join(', ')} (+${dropped} more)` : kept.join(', ')
 }
 
@@ -176,6 +189,7 @@ function isOneIncident(siblings: ChildProcessDeath[], rendererAt: number): boole
   if (siblings.length === 0 || repeatedIdentityCount(siblings) > 0) {
     return false
   }
+
   return siblings.some(
     (death) => Math.abs(death.at - rendererAt) <= SIBLING_ATTRIBUTION_PROXIMITY_MS
   )
@@ -186,6 +200,7 @@ export function siblingProcessDeathDetails(
   rendererAt: number
 ): Record<string, CrashReportDetailValue> {
   const repeats = repeatedIdentityCount(siblings)
+
   return {
     ...(isOneIncident(siblings, rendererAt) ? { crashAttribution: CONCURRENT_PROCESS_DEATHS } : {}),
     siblingProcessDeathCount: siblings.length,
@@ -203,6 +218,7 @@ export function collectLateSiblingAttributions(death: ChildProcessDeath): LateSi
     isSiblingOfRendererDeath(death.at, report.at)
   )
   const attributions: LateSiblingAttribution[] = []
+
   for (const pending of pendingRendererReports) {
     if (
       pending.lateAttaches >= MAX_LATE_SIBLING_ATTACHES ||
@@ -210,6 +226,7 @@ export function collectLateSiblingAttributions(death: ChildProcessDeath): LateSi
     ) {
       continue
     }
+
     pending.siblingDeaths.push(death)
     pending.lateAttaches += 1
     attributions.push({
@@ -217,6 +234,7 @@ export function collectLateSiblingAttributions(death: ChildProcessDeath): LateSi
       attribution: siblingProcessDeathDetails(pending.siblingDeaths, pending.at)
     })
   }
+
   return attributions
 }
 

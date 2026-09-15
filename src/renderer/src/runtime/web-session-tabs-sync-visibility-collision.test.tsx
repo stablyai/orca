@@ -22,6 +22,7 @@ vi.mock('./use-runtime-session-mirror-environment-key', () => ({
 
 vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
+
   return {
     ...actual,
     getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
@@ -34,6 +35,7 @@ vi.mock('./web-session-terminal-orphan-recovery', () => ({
 
 vi.mock('./web-runtime-session', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeSessionModule>()
+
   return { ...actual, createWebRuntimeSessionTerminal: mocks.createTerminal }
 })
 
@@ -53,16 +55,25 @@ import {
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
 
 const ENV_A = 'env-a'
+
 const ENV_B = 'env-b'
+
 const WORKTREE = 'repo-a::worktree-a'
+
 const REVISION_A = 101
+
 const REVISION_B = 201
+
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
 const MIRROR_KEY = `${ENV_A}\u0001runtime-a\u00011\u0001${REVISION_A}\u0000${ENV_B}\u0001runtime-b\u00012\u0001${REVISION_B}`
+
 const initialState = useAppStore.getInitialState()
 
 type RuntimeSubscribe = typeof window.api.runtimeEnvironments.subscribe
+
 type RuntimeSubscription = {
   request: Parameters<RuntimeSubscribe>[0]
   callbacks: Parameters<RuntimeSubscribe>[1]
@@ -75,23 +86,28 @@ type Deferred<T> = {
 }
 
 const subscriptions: RuntimeSubscription[] = []
+
 const runtimeCall = vi.fn(async () => ({
   id: 'list-all',
   ok: true as const,
   result: { snapshots: [] },
   _meta: { runtimeId: 'runtime-test' }
 }))
+
 const runtimeSubscribe = vi.fn<RuntimeSubscribe>(async (request, callbacks) => {
   const unsubscribe = vi.fn()
   subscriptions.push({ request, callbacks, unsubscribe })
+
   return { unsubscribe, sendBinary: vi.fn() }
 })
 
 function createDeferred<T>(): Deferred<T> {
   let resolve = (_value: T): void => {}
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -101,6 +117,7 @@ function makeTerminalSnapshot(
 ): RuntimeMobileSessionTabsResult {
   const parentTabId = `host-tab${idSuffix}`
   const leafId = idSuffix === '-a' ? LEAF_A : LEAF_B
+
   return {
     worktree: WORKTREE,
     publicationEpoch: 'epoch-1',
@@ -136,6 +153,7 @@ function makeTerminalSnapshot(
 
 function makeEditorSnapshot(idSuffix: string): RuntimeMobileSessionTabsResult {
   const filePath = `/repo${idSuffix}/README.md`
+
   return {
     worktree: WORKTREE,
     publicationEpoch: 'epoch-1',
@@ -187,10 +205,13 @@ function findGlobalSubscription(environmentId: string, occurrence = 0): RuntimeS
     ({ request }) =>
       request.method === 'session.tabs.subscribeAll' && request.selector === environmentId
   )
+
   const subscription = matches[occurrence]
+
   if (!subscription) {
     throw new Error(`Missing global subscription ${occurrence} for ${environmentId}`)
   }
+
   return subscription
 }
 
@@ -199,10 +220,13 @@ function findActiveSubscription(environmentId: string, occurrence = 0): RuntimeS
     ({ request }) =>
       request.method === 'session.tabs.subscribe' && request.selector === environmentId
   )
+
   const subscription = matches[occurrence]
+
   if (!subscription) {
     throw new Error(`Missing active subscription ${occurrence} for ${environmentId}`)
   }
+
   return subscription
 }
 
@@ -223,6 +247,7 @@ function seedRemoteMirrorState(): void {
     { id: ENV_A, createdAt: 100, pairingRevision: REVISION_A },
     { id: ENV_B, createdAt: 200, pairingRevision: REVISION_B }
   ] as PublicKnownRuntimeEnvironment[]
+
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
   useAppStore.setState(
     {
@@ -279,11 +304,13 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       setDocumentVisibility('visible')
     })
     await act(settle)
+
     const globalSubscriptionCount = (environmentId: string): number =>
       subscriptions.filter(
         ({ request }) =>
           request.method === 'session.tabs.subscribeAll' && request.selector === environmentId
       ).length
+
     expect(globalSubscriptionCount(ENV_B)).toBe(2)
     expect(globalSubscriptionCount(ENV_A)).toBe(1)
 
@@ -343,10 +370,12 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     })
     const tabsByWorktree = useAppStore.getState().tabsByWorktree
     const listener = vi.fn()
+
     const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
       { environmentId: ENV_A, worktreeId: WORKTREE, hostTabId: 'host-tab-a', leafId: LEAF_A },
       listener
     )
+
     mocks.recoverSnapshot.mockClear()
 
     act(() => {
@@ -477,10 +506,12 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       type: 'updated',
       ...makeTerminalSnapshot('-a', 2)
     })
+
     const unrelatedSnapshot = {
       ...makeTerminalSnapshot('-a'),
       worktree: 'repo-a::other-worktree'
     }
+
     await publish(findGlobalSubscription(ENV_A, 1), {
       type: 'snapshots',
       snapshots: [unrelatedSnapshot],
@@ -682,23 +713,28 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
       createDeferred<RuntimeMobileSessionTabsResult>(),
       createDeferred<RuntimeMobileSessionTabsResult>()
     ]
+
     for (const recovery of recoveries) {
       mocks.recoverSnapshot.mockImplementationOnce(() => recovery.promise)
     }
+
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
     const activeSubscription = findActiveSubscription(ENV_A)
+
     for (const [index] of recoveries.entries()) {
       await publish(activeSubscription, {
         type: 'updated',
         ...makeTerminalSnapshot(index === 0 ? '-a' : '-b', index + 1)
       })
     }
+
     expect(_getWebSessionTabsRecoveryTrackingCountsForTest().pendingRecoveries).toBe(1)
 
     for (const [index, recovery] of recoveries.entries()) {
       recovery.resolve(makeTerminalSnapshot(index === 0 ? '-a' : '-b', index + 1))
     }
+
     await act(settle)
     expect(_getWebSessionTabsRecoveryTrackingCountsForTest().pendingRecoveries).toBe(0)
     hook.unmount()

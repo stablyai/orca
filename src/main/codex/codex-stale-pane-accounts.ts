@@ -24,22 +24,28 @@ export function listStaleCodexPanes(args: {
 }): StaleCodexPane[] {
   const stalePanes: StaleCodexPane[] = []
   const records = listRecordedCodexPaneAccounts(args.ptyIds)
+
   for (const ptyId of args.ptyIds) {
     const record = records.get(ptyId)
+
     if (!record) {
       continue
     }
+
     const activeAccountId = getSelectedCodexAccountIdForTarget(
       args.settings,
       parseSelectionLaneKey(record.selectionKey)
     )
+
     const homeRouteChanged =
       record.selectionKey === 'host' &&
       record.homeRoute !== undefined &&
       record.homeRoute !== 'custom-home' &&
       args.activeHostHomeRoute !== undefined &&
       record.homeRoute !== args.activeHostHomeRoute
+
     const accountChanged = record.accountId !== activeAccountId
+
     if (accountChanged || homeRouteChanged) {
       stalePanes.push({
         ptyId,
@@ -49,6 +55,7 @@ export function listStaleCodexPanes(args: {
       })
     }
   }
+
   return stalePanes
 }
 
@@ -72,7 +79,9 @@ function parseSelectionLaneKey(selectionKey: string): {
   if (!selectionKey.startsWith('wsl:')) {
     return { runtime: 'host', wslDistro: null }
   }
+
   const distro = selectionKey.slice('wsl:'.length)
+
   // Why: the lane key round-trips through getCodexSelectionLaneKey, whose
   // default-distro sentinel must resolve back to "no specific distro".
   return { runtime: 'wsl', wslDistro: distro === '__default__' ? null : distro }

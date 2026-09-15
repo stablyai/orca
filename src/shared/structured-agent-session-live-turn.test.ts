@@ -16,6 +16,7 @@ describe('isStructuredAgentSessionThinking', () => {
     text: 'Working',
     turnLifecycle: { turnId: 'turn-1', state: 'running' }
   })
+
   const reasoning = (sequence: number): AgentJournalRenderItem =>
     item(`reasoning-${sequence}`, sequence, {
       kind: 'message',
@@ -30,6 +31,7 @@ describe('isStructuredAgentSessionThinking', () => {
   it('is false once a tool call, a message or a diff lands after the reasoning', () => {
     const after = (body: AgentJournalRenderItem['body']): boolean =>
       isStructuredAgentSessionThinking([turnStart, reasoning(2), item('after', 3, body)])
+
     expect(after({ kind: 'tool-call', name: 'shell', input: null, state: 'running' })).toBe(false)
     expect(
       after({ kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Here you go' }] })
@@ -56,6 +58,7 @@ describe('isStructuredAgentSessionThinking', () => {
       text: 'Working',
       turnLifecycle: { turnId: 'turn-2', state: 'running' }
     })
+
     expect(isStructuredAgentSessionThinking([reasoning(1), newTurn])).toBe(false)
   })
 
@@ -65,12 +68,14 @@ describe('isStructuredAgentSessionThinking', () => {
       turnId: 'turn-1',
       state: 'completed'
     })
+
     expect(isStructuredAgentSessionThinking([completedTurn, reasoning(2)])).toBe(false)
   })
 
   it('stops at a typed turn item, the carrier this host writes', () => {
     const typedTurn = (sequence: number, turnId: string): AgentJournalRenderItem =>
       item(`turn-${turnId}`, sequence, { kind: 'turn', turnId, state: 'running' })
+
     expect(isStructuredAgentSessionThinking([typedTurn(1, 'turn-1'), reasoning(2)])).toBe(true)
     expect(isStructuredAgentSessionThinking([reasoning(1), typedTurn(2, 'turn-2')])).toBe(false)
   })

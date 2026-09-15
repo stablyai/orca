@@ -54,6 +54,7 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
       env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV },
       timeoutMs: 30_000
     })
+
     expect(result.code).toBe(0)
     expect(decode(result.stdout)).toEqual([value])
   })
@@ -63,12 +64,14 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
     // fine while leaving cmd mid-quote, and only the NEXT argument's `&` shows
     // it — as a truncation plus command execution.
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
+
     const result = await runProcess({
       program: shim,
       args: values,
       env: { ...process.env, ...WINDOWS_ARGUMENT_CORPUS_ENV },
       timeoutMs: 30_000
     })
+
     expect(result.code).toBe(0)
     expect(decode(result.stdout)).toEqual(values)
   })
@@ -76,11 +79,13 @@ describeOnWindows('Windows .cmd argument round-trip', () => {
   it('does not execute the tail of an argument containing an ampersand', async () => {
     // Before the fix this argument arrived as "a" and `echo PWNED` ran.
     const marker = join(dir, 'pwned.txt')
+
     const result = await runProcess({
       program: shim,
       args: [`a& echo PWNED> "${marker}" &b`],
       timeoutMs: 30_000
     })
+
     expect(decode(result.stdout)).toEqual([`a& echo PWNED> "${marker}" &b`])
     expect(() => rmSync(marker)).toThrow()
   })

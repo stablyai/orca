@@ -16,6 +16,7 @@ export default function CommentMermaidBlock({
   className?: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)

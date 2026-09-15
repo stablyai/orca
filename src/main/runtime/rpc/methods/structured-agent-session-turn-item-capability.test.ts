@@ -21,6 +21,7 @@ import {
 } from './structured-agent-session-turn-item-capability'
 
 beforeEach(installStructuredHostStub)
+
 afterEach(clearStructuredHostStub)
 
 const TURN = {
@@ -31,6 +32,7 @@ const TURN = {
   completedAt: 42,
   durationMs: 30
 }
+
 const USER_ITEM: AgentJournalRenderItem = {
   itemId: 'user-1',
   revision: 1,
@@ -38,6 +40,7 @@ const USER_ITEM: AgentJournalRenderItem = {
   observedAt: 1,
   body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }
 }
+
 const TURN_ITEM: AgentJournalRenderItem = {
   itemId: 'legacy:claude:session:turn-1',
   revision: 2,
@@ -45,10 +48,12 @@ const TURN_ITEM: AgentJournalRenderItem = {
   observedAt: 2,
   body: { kind: 'turn', ...TURN }
 }
+
 const LEGACY_STATUS_ITEM: AgentJournalRenderItem = {
   ...TURN_ITEM,
   body: { kind: 'status', text: 'Claude turn completed', turnLifecycle: TURN }
 }
+
 const CURRENT_CLIENT = {
   ...STRUCTURED_CLIENT,
   clientCapabilities: [...STRUCTURED_CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
@@ -86,6 +91,7 @@ describe('turn item capability at the RPC boundary', () => {
       hostCalls.hold = vi.fn(async () => undefined)
       hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
         const base = { sessionId: SESSION, fence: 1 }
+
         if (type === 'batch') {
           input.emit({
             ...base,
@@ -104,16 +110,20 @@ describe('turn item capability at the RPC boundary', () => {
               : { ...base, type, page: page([USER_ITEM, TURN_ITEM]), reset: 'epoch_changed' }
           )
         }
+
         return () => {}
       })
+
       for (const [client, expected] of [
         [STRUCTURED_CLIENT, LEGACY_STATUS_ITEM],
         [CURRENT_CLIENT, TURN_ITEM]
       ] as const) {
         const reply = await call('agentSession.subscribe', { sessionId: SESSION }, client)
         const event = (reply.ok ? reply.result : null) as AgentSessionSubscribeEvent
+
         const items =
           event.type === 'batch' ? event.batch.items : 'page' in event ? event.page.items : []
+
         expect(items).toEqual([USER_ITEM, expected])
       }
     }
@@ -122,6 +132,7 @@ describe('turn item capability at the RPC boundary', () => {
 
 describe('turn item projection', () => {
   const history: AgentSessionHistoryResult = { ok: true, page: page([USER_ITEM, TURN_ITEM]) }
+
   const snapshot: AgentSessionSubscribeEvent = {
     type: 'snapshot',
     sessionId: SESSION,

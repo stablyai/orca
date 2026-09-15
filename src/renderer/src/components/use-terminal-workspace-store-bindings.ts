@@ -17,23 +17,29 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const expandedPaneByTabId = useAppStore((state) => state.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
   const hydrationSucceeded = useAppStore((state) => state.hydrationSucceeded)
+
   const terminalStartupRestorationReady = useAppStore(
     (state) => state.terminalStartupRestorationReady
   )
+
   const startupWorktreeRefreshCompleted = useAppStore(
     (state) => state.startupWorktreeRefreshCompleted
   )
+
   const openFiles = useAppStore((state) => state.openFiles)
   const activeFileId = useAppStore((state) => state.activeFileId)
   const activeBrowserTabId = useAppStore((state) => state.activeBrowserTabId)
   const activeTabType = useAppStore((state) => state.activeTabType)
   const keybindings = useAppStore((state) => state.keybindings)
+
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
+
   const mobileEmulatorEnabled = useAppStore(
     (state) => state.settings?.mobileEmulatorEnabled !== false
   )
+
   const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const setActiveFile = useAppStore((state) => state.setActiveFile)
   const closeFile = useAppStore((state) => state.closeFile)
@@ -41,15 +47,19 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const pinFile = useAppStore((state) => state.pinFile)
   const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
+
   const openNewBrowserTabInActiveWorkspace = useAppStore(
     (state) => state.openNewBrowserTabInActiveWorkspace
   )
+
   const openNewMarkdownInActiveWorkspace = useAppStore(
     (state) => state.openNewMarkdownInActiveWorkspace
   )
+
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
+
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
@@ -60,9 +70,11 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const markFileDirty = useAppStore((state) => state.markFileDirty)
   const setTabBarOrder = useAppStore((state) => state.setTabBarOrder)
   const tabBarOrderByWorktree = useAppStore((state) => state.tabBarOrderByWorktree)
+
   const tabBarOrder = renderedActiveWorktreeId
     ? tabBarOrderByWorktree[renderedActiveWorktreeId]
     : undefined
+
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )

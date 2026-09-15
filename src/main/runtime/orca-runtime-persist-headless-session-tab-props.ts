@@ -18,12 +18,15 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+
     const tabs = session.tabsByWorktree[worktreeId]
     const nextSession: WorkspaceSessionState = { ...session }
     let changed = false
+
     if (tabs?.some((tab) => tab.id === tabId)) {
       changed = true
       nextSession.tabsByWorktree = {
@@ -42,6 +45,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     }
 
     const unifiedTabs = session.unifiedTabs?.[worktreeId]
+
     if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
       changed = true
       nextSession.unifiedTabs = {
@@ -61,6 +65,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     if (!changed) {
       return
     }
+
     this.setWorkspaceSessionForWorktree(worktreeId, nextSession)
   }
 
@@ -70,15 +75,20 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       return
     }
+
     let changed = false
+
     const tabs = snapshot.tabs.map((tab) => {
       if (this.getMobileSessionTopLevelTabId(tab) !== tabId) {
         return tab
       }
+
       changed = true
+
       return {
         ...tab,
         ...(props.color !== undefined ? { color: props.color } : {}),
@@ -86,15 +96,18 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
       }
     })
+
     if (!changed) {
       return
     }
+
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
+
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
@@ -116,13 +129,17 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     }
   ): TerminalLayoutSnapshot | undefined {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession) {
       return undefined
     }
+
     const existing = session.terminalLayoutsByTabId?.[args.tabId]
+
     if (!existing) {
       return undefined
     }
+
     const candidate = {
       ...session,
       terminalLayoutsByTabId: {
@@ -135,7 +152,9 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
         }
       }
     }
+
     this.setWorkspaceSessionForWorktree(worktreeId, candidate)
+
     // Why: persistence may reject stale membership while accepting its metadata; publish only that rebased layout.
     return (
       this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId[args.tabId] ??
@@ -153,15 +172,20 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
     }
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       return
     }
+
     let changed = false
+
     const tabs = snapshot.tabs.map((tab) => {
       if (tab.type !== 'terminal' || tab.parentTabId !== args.tabId || !tab.parentLayout) {
         return tab
       }
+
       changed = true
+
       return {
         ...tab,
         parentLayout: {
@@ -172,15 +196,18 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
         }
       }
     })
+
     if (!changed) {
       return
     }
+
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
+
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }

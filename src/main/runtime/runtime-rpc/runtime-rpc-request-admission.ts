@@ -18,17 +18,21 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     }
 
     const parsed = this.parseAndAuth(rawMessage)
+
     if ('error' in parsed) {
       return parsed.error
     }
+
     const request = parsed.request
 
     // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
     const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll)
+
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
+
     if (longPoll) {
       // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
@@ -53,9 +57,11 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     if (!longPoll) {
       return null
     }
+
     if (this.activeLongPolls >= this.longPollCap) {
       return 'long-poll capacity reached; retry with backoff'
     }
+
     if (
       (longPoll === 'ask' || longPoll === 'browser-host') &&
       this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
@@ -64,9 +70,11 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
         ? 'orchestration.ask capacity reached; retry with backoff'
         : 'browser-host capacity reached; retry with backoff'
     }
+
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
     }
+
     if (
       longPoll === 'browser-host' &&
       (this.activeBrowserHostLongPolls >= this.browserHostLongPollCap ||
@@ -76,11 +84,14 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     ) {
       return 'browser-host capacity reached; retry with backoff'
     }
+
     this.activeLongPolls += 1
+
     if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls += 1
+
       if (pairedDeviceId !== undefined) {
         this.activeBrowserHostLongPollsByDevice.set(
           pairedDeviceId,
@@ -88,6 +99,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
         )
       }
     }
+
     return null
   }
 
@@ -95,13 +107,17 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     if (!longPoll) {
       return
     }
+
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+
     if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
     } else if (longPoll === 'browser-host') {
       this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
+
       if (pairedDeviceId !== undefined) {
         const remaining = (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 1) - 1
+
         if (remaining > 0) {
           this.activeBrowserHostLongPollsByDevice.set(pairedDeviceId, remaining)
         } else {
@@ -113,6 +129,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
 
   protected parseAndAuth(rawMessage: string): { request: RpcRequest } | { error: RpcResponse } {
     let request: RpcRequest
+
     try {
       request = JSON.parse(rawMessage) as RpcRequest
     } catch {
@@ -122,12 +139,15 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
     if (typeof request.id !== 'string' || request.id.length === 0) {
       return { error: this.buildError('unknown', 'bad_request', 'Missing request id') }
     }
+
     if (typeof request.method !== 'string' || request.method.length === 0) {
       return { error: this.buildError(request.id, 'bad_request', 'Missing RPC method') }
     }
+
     if (typeof request.authToken !== 'string' || request.authToken.length === 0) {
       return { error: this.buildError(request.id, 'unauthorized', 'Missing auth token') }
     }
+
     if (request.authToken !== this.authToken) {
       return { error: this.buildError(request.id, 'unauthorized', 'Invalid auth token') }
     }
@@ -147,6 +167,7 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
       authToken: this.authToken,
       startedAt: this.runtime.getStartedAt()
     }
+
     writeRuntimeMetadata(this.userDataPath, metadata)
   }
 }

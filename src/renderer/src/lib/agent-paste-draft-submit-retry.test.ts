@@ -52,10 +52,15 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 }))
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+
 const RENDER_QUIET_MS = 1500
+
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
+
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
+
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
 
 describe('post-paste submit retry Enter', () => {
@@ -76,6 +81,7 @@ describe('post-paste submit retry Enter', () => {
     testState.subscribeToPtyData.mockImplementation(
       (_ptyId: string, observer: (data: string) => void) => {
         testState.ptyObserver = observer
+
         return testState.unsubscribe
       }
     )
@@ -116,6 +122,7 @@ describe('post-paste submit retry Enter', () => {
       agent: 'gemini',
       submit: true
     })
+
     await flushMicrotasks()
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await vi.advanceTimersByTimeAsync(RENDER_QUIET_MS)
@@ -132,6 +139,7 @@ describe('post-paste submit retry Enter', () => {
     testState.sendRuntimePtyInputVerified.mockImplementation(
       async (_settings: unknown, _ptyId: string, data: string) => {
         writes.push(data)
+
         return true
       }
     )
@@ -139,12 +147,14 @@ describe('post-paste submit retry Enter', () => {
     const promise = startCodexSubmit()
     await signalCodexComposerReady()
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
+
     // Competing paste on the same PTY: it must not open a frame the retry can land in.
     const competing = sendAgentDraftPasteContent(
       {},
       'pty-1',
       'y'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 1)
     )
+
     await flushMicrotasks(10)
     expect(writes).toEqual([PASTED_ISSUE_URL, '\r'])
 

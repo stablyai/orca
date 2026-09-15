@@ -23,9 +23,12 @@ import {
 } from './session-search-transcript-fixtures'
 
 let tempRoots: string[] = []
+
 let store: SessionSearchStore
+
 // The store keeps its connection private, so row assertions need a second one.
 let reader: SyncDatabase
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -49,6 +52,7 @@ afterEach(async () => {
 async function makeTempDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-session-search-live-'))
   tempRoots.push(root)
+
   return root
 }
 
@@ -131,6 +135,7 @@ function recordIdentityPerMessage(): (TranscriptSessionIdentity | null)[] {
       finish: () => undefined
     })
   })
+
   return seen
 }
 

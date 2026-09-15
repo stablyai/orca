@@ -33,9 +33,11 @@ describe('openGitHubPRLinkModal', () => {
         focus: 'pr'
       })
     )
+
     const data = openModal.mock.calls[0]?.[1] as {
       afterSave: (result: { updates?: { linkedPR?: unknown } }) => void
     }
+
     void data.afterSave({ updates: { linkedPR: 42 } })
     expect(afterLinked).toHaveBeenCalledWith(42)
   })

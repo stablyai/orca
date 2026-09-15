@@ -19,8 +19,11 @@ type TerminalOverlayAssignment = {
 }
 
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
+
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+
 const EMPTY_GROUPS: readonly TabGroup[] = []
+
 const EMPTY_ACTIVITY_PORTALS: ActivityTerminalPortalTarget[] = []
 
 const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
@@ -55,6 +58,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       activeGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
+
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
@@ -64,10 +68,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   const leaveWorktreeIfEmpty = useCallback(() => {
     const state = useAppStore.getState()
+
     if (state.activeWorktreeId !== worktreeId) {
       return
     }
+
     const { renderableTabCount } = reconcileWorktreeTabModel(worktreeId)
+
     if (renderableTabCount === 0) {
       setActiveWorktree(null)
     }
@@ -80,24 +87,29 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
 
   const groupActiveTabById = useMemo(() => {
     const lookup: Record<string, string | null | undefined> = {}
+
     for (const group of groups) {
       lookup[group.id] = group.activeTabId
     }
+
     return lookup
   }, [groups])
 
   const assignments = useMemo(() => {
     const entries = new Map<string, TerminalOverlayAssignment>()
+
     for (const tab of unifiedTabs) {
       if (tab.contentType !== 'terminal') {
         continue
       }
+
       entries.set(tab.entityId, {
         unifiedTabId: tab.id,
         groupId: tab.groupId,
         isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
       })
     }
+
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
@@ -105,11 +117,13 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     if (!activeGroupId) {
       return null
     }
+
     for (const [terminalTabId, assignment] of assignments) {
       if (assignment.groupId === activeGroupId && assignment.isActiveInGroup) {
         return terminalTabId
       }
     }
+
     return null
   }, [activeGroupId, assignments])
 
@@ -140,13 +154,16 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           const assignment = assignments.get(terminalTab.id)
           const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
           const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+
           const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
             worktreeId,
             tabId: terminalTab.id
           })
+
           if (parkedTerminalTabIds.has(terminalTab.id)) {
             return null
           }
+
           return (
             <TerminalOverlaySlot
               key={terminalTab.id}

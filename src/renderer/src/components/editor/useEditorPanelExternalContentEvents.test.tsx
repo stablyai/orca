@@ -48,6 +48,7 @@ function ExternalContentProbe({ activeFileId, calls, isVisible, openFiles }: Pro
     setDiffContents,
     setFileContents
   } as Parameters<typeof useEditorPanelExternalContentEvents>[0])
+
   return null
 }
 
@@ -134,6 +135,7 @@ describe('useEditorPanelExternalContentEvents', () => {
 
     expect(ownerCalls.loadFile).toHaveBeenCalledOnce()
     expect(retainedCalls.flatMap((calls) => calls.loadFile.mock.calls)).toHaveLength(0)
+
     for (const calls of retainedCalls) {
       expect(calls.invalidate).toHaveBeenCalledExactlyOnceWith([changedFile.id])
     }
@@ -205,12 +207,14 @@ describe('useEditorPanelExternalContentEvents', () => {
       filePath: '/remote/repo/shared.md',
       relativePath: 'shared.md'
     })
+
     const preview = makeFile('preview', {
       filePath: '/remote/repo/shared.md',
       relativePath: 'shared.md',
       mode: 'markdown-preview',
       markdownPreviewSourceFileId: source.id
     })
+
     const sourceCalls = makeCalls()
     const previewCalls = makeCalls()
 

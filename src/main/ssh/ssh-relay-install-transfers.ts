@@ -49,13 +49,16 @@ async function uploadRelayDirectoryTransfer(
       signal: options?.signal,
       sftpNamespace: options?.sftpNamespace
     })
+
     return
   }
+
   await runSftpFallbackTransfer(conn, options, async (sftp) => {
     const targetDir = await resolveSftpTransferPathIfMapped(sftp, shellRemoteDir, {
       hostPlatform,
       sftpNamespace: options?.sftpNamespace
     })
+
     options?.signal?.throwIfAborted()
     await uploadDirectory(sftp, localRelayDir, targetDir, localRelayDir, {
       signal: options?.signal
@@ -88,13 +91,16 @@ async function writeRelayFileTransfer(
       signal: options?.signal,
       sftpNamespace: options?.sftpNamespace
     })
+
     return
   }
+
   await runSftpFallbackTransfer(conn, options, async (sftp) => {
     const targetPath = await resolveSftpTransferPathIfMapped(sftp, shellRemotePath, {
       hostPlatform,
       sftpNamespace: options?.sftpNamespace
     })
+
     options?.signal?.throwIfAborted()
     await writeStringViaSftp(sftp, targetPath, contents)
   })
@@ -107,13 +113,16 @@ async function runSftpFallbackTransfer(
 ): Promise<void> {
   const sftp = await conn.sftp(options?.signal)
   let sftpEndRequested = false
+
   const endSftp = (): void => {
     if (!sftpEndRequested) {
       sftpEndRequested = true
       sftp.end()
     }
   }
+
   latchLateSftpSessionErrors(sftp)
+
   try {
     await raceSftpFileTransferWithAbort(
       transfer(sftp),
@@ -121,6 +130,7 @@ async function runSftpFallbackTransfer(
       (onClose) => {
         sftp.once('close', onClose)
         endSftp()
+
         return () => sftp.removeListener('close', onClose)
       }
     )
@@ -145,6 +155,7 @@ async function withSandboxedSftpDiagnosis<T>(
     if (isSandboxedSftpNamespaceError(error)) {
       throw describeSandboxedSftpFailure(error, remotePath)
     }
+
     throw error
   }
 }

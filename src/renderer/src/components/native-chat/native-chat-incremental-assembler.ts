@@ -42,10 +42,13 @@ export function reset(
 ): NativeChatMessage[] {
   assembler.byId = new Map()
   assembler.byTurn = new Map()
+
   for (const message of base) {
     mergeOne(assembler.byId, assembler.byTurn, message)
   }
+
   assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
+
   return assembler.messages
 }
 
@@ -63,6 +66,7 @@ export function applyAppends(
   }
 
   const sizeBefore = assembler.byId.size
+
   for (const message of incoming) {
     mergeOne(assembler.byId, assembler.byTurn, message)
   }
@@ -71,15 +75,18 @@ export function applyAppends(
   // size — some incoming id/turn collided with or superseded an existing entry,
   // which can change an existing entry's sort position. Fall back to re-sort.
   const grewByBatch = assembler.byId.size === sizeBefore + incoming.length
+
   if (grewByBatch && isTailAppend(assembler.messages, incoming)) {
     // Every incoming message is new and sorts at/after the tail: splice the
     // batch in its own sorted order without touching the existing prefix.
     const tail = [...sortForImageNormalization(incoming)]
     assembler.messages = [...assembler.messages, ...tail]
+
     return assembler.messages
   }
 
   assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
+
   return assembler.messages
 }
 
@@ -92,9 +99,11 @@ function isTailAppend(
   incoming: readonly NativeChatMessage[]
 ): boolean {
   const last = current.at(-1)
+
   if (!last) {
     return true
   }
+
   if (
     hasImagePromptMarker(last) &&
     incoming[0]?.source === last.source &&
@@ -103,14 +112,17 @@ function isTailAppend(
   ) {
     return false
   }
+
   for (const message of incoming) {
     // Null timestamp (sorts to the front) can never be a tail append.
     if (message.timestamp === null) {
       return false
     }
+
     if (compareMessages(message, last) < 0) {
       return false
     }
   }
+
   return true
 }

@@ -31,6 +31,7 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
         const sanitizedUpdates = { ...updates }
         const runtimeEnvironment = requireActiveEnvironmentOrNull()
         delete sanitizedUpdates.activeRuntimeEnvironmentId
+
         if (
           'worktreeVisibilityDefaults' in sanitizedUpdates &&
           runtimeEnvironment &&
@@ -38,12 +39,14 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
         ) {
           delete sanitizedUpdates.worktreeVisibilityDefaults
         }
+
         if ('worktreeVisibilityDefaults' in sanitizedUpdates) {
           sanitizedUpdates.worktreeVisibilityDefaults = {
             ...settingsForActiveVisibilityOwner(getStoredSettings()).worktreeVisibilityDefaults,
             ...sanitizedUpdates.worktreeVisibilityDefaults
           }
         }
+
         if ('computerAwakeMode' in sanitizedUpdates) {
           Object.assign(
             sanitizedUpdates,
@@ -62,9 +65,11 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
             )
           )
         }
+
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
+
         if ('terminalCursorStyle' in sanitizedUpdates) {
           Object.assign(
             sanitizedUpdates,
@@ -74,27 +79,36 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
             )
           )
         }
+
         const localUpdates = { ...sanitizedUpdates }
+
         if (runtimeEnvironment) {
           delete localUpdates.worktreeVisibilityDefaults
         }
+
         const next = mergeSettings(getStoredSettings(), localUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
+
         writeStoredSettings(next)
+
         return settingsForActiveVisibilityOwner(
           await syncRuntimeBackedSettings(sanitizedUpdates, next)
         )
       },
       setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {
         const requestedEnvironmentId = environmentId?.trim() || null
+
         const activeRuntimeEnvironmentId = requestedEnvironmentId
           ? resolveEnvironment(requestedEnvironmentId).id
           : null
+
         const next = mergeSettings(getStoredSettings(), {
           activeRuntimeEnvironmentId
         })
+
         writeStoredSettings(next, activeRuntimeEnvironmentId)
+
         return next
       },
       updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
@@ -104,6 +118,7 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
     agentAwake: {
       getStatus: async () => {
         const settings = getStoredSettings()
+
         return {
           mode: normalizeComputerAwakeMode(
             settings.computerAwakeMode,

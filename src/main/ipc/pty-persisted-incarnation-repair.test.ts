@@ -6,45 +6,61 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, clearProviderPtyState, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -58,12 +74,14 @@ describe('registerPtyHandlers', () => {
     const paneKey = makePaneKey(tabId, leafId)
     const worktreeId = 'repo-1::/tmp/persisted-owner'
     let attachAttempt = 0
+
     const providerSpawn = vi.fn(async (options: { attachOnly?: boolean; sessionId?: string }) => ({
       id: options.sessionId ?? 'unexpected-fresh-id',
       incarnationId: attachAttempt++ === 1 ? 'inc-wrong-owner' : 'inc-live-owner',
       isReattach: options.attachOnly === true,
       snapshot: 'persisted-owner-output'
     }))
+
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
@@ -87,6 +105,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
@@ -102,6 +121,7 @@ describe('registerPtyHandlers', () => {
       seedHeadlessTerminal: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     const store = {
       getWorkspaceSession: vi.fn(() => ({
         tabsByWorktree: {
@@ -125,6 +145,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       store as never
     )
+
     const spawnArgs = {
       cols: 80,
       rows: 24,
@@ -227,14 +248,17 @@ describe('registerPtyHandlers', () => {
       const tabId = 'tab-dead-persisted-owner'
       const leafId = '12121212-1212-4212-8212-121212121212'
       const paneKey = makePaneKey(tabId, leafId)
+
       const providerSpawn = vi.fn(
         async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
           if (options.attachOnly) {
             throw new SessionNotFoundError('pty-dead-persisted-owner')
           }
+
           return { id: 'pty-fresh-recovery', incarnationId: 'inc-fresh-recovery' }
         }
       )
+
       setLocalPtyProvider({
         spawn: providerSpawn,
         write: vi.fn(),
@@ -258,6 +282,7 @@ describe('registerPtyHandlers', () => {
         getDefaultShell: vi.fn(),
         getProfiles: vi.fn()
       } as never)
+
       let session = {
         tabsByWorktree: {
           [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-dead-persisted-owner' }]
@@ -272,6 +297,7 @@ describe('registerPtyHandlers', () => {
         },
         terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-dead-persisted-owner' }
       }
+
       const store = {
         getWorkspaceSession: vi.fn(() => session),
         setWorkspaceSession: vi.fn((next) => {
@@ -294,6 +320,7 @@ describe('registerPtyHandlers', () => {
         getProjectGroups: vi.fn(() => []),
         getRepos: vi.fn(() => [])
       }
+
       const runtime = {
         setPtyController: vi.fn(),
         resolveTerminalPane: vi.fn(() => {
@@ -321,11 +348,13 @@ describe('registerPtyHandlers', () => {
         undefined,
         store as never
       )
+
       if (folderMissing) {
         statSyncMock.mockImplementation(() => {
           throw Object.assign(new Error('missing folder'), { code: 'ENOENT' })
         })
       }
+
       const mountedPromise = handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -356,8 +385,10 @@ describe('registerPtyHandlers', () => {
           'inc-dead-persisted-owner',
           { hostExitConfirmed: true }
         )
+
         return
       }
+
       const mounted = await mountedPromise
 
       expect(mounted).toMatchObject({
@@ -389,14 +420,17 @@ describe('registerPtyHandlers', () => {
     const tabId = 'tab-unproven-owner'
     const leafId = '56565656-5656-4656-8656-565656565656'
     const paneKey = makePaneKey(tabId, leafId)
+
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
           throw new TerminalSessionOwnerUnverifiedError('pty-unproven-owner')
         }
+
         return { id: 'pty-fresh-unproven', incarnationId: 'inc-fresh-unproven' }
       }
     )
+
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
@@ -420,6 +454,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     let session = {
       tabsByWorktree: {
         [worktreeId]: [{ id: tabId, worktreeId, ptyId: 'pty-unproven-owner' }]
@@ -434,6 +469,7 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-unproven-owner' }
     }
+
     const store = {
       getWorkspaceSession: vi.fn(() => session),
       setWorkspaceSession: vi.fn((next) => {
@@ -446,6 +482,7 @@ describe('registerPtyHandlers', () => {
       getProjectGroups: vi.fn(() => []),
       getRepos: vi.fn(() => [])
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {

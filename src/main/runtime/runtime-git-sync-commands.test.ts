@@ -45,10 +45,12 @@ const worktree = {
   id: 'wt-1',
   path: '/workspace/repo'
 } as ResolvedRuntimeGitWorktree
+
 const pushTarget = {
   remoteName: 'origin',
   branchName: 'main'
 } satisfies GitPushTarget
+
 const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
 
 describe('RuntimeGitSyncCommands admission', () => {
@@ -65,6 +67,7 @@ describe('RuntimeGitSyncCommands admission', () => {
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
+
     mocks.commitChanges.mockResolvedValue({ success: true })
     mocks.gitSyncForkDefaultBranch.mockResolvedValue({ status: 'up-to-date' })
 
@@ -104,7 +107,9 @@ describe('RuntimeGitSyncCommands admission', () => {
       syncForkDefaultBranch: vi.fn().mockResolvedValue({ status: 'up-to-date' }),
       pullBranch: vi.fn()
     }
+
     mocks.getSshGitProvider.mockReturnValue(provider)
+
     const commands = new RuntimeGitSyncCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree,

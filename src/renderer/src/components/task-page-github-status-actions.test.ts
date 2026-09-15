@@ -44,6 +44,7 @@ describe('TaskPage GitHub status actions', () => {
     const validation = validateTaskPageGitHubDuplicateTarget('same', 12)
 
     expect(validation.ok).toBe(false)
+
     if (!validation.ok) {
       expect(getTaskPageGitHubDuplicateTargetErrorMessage(validation, t)).toBe(
         'Use a whole issue number.'

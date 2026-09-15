@@ -15,6 +15,7 @@ function createStore(
   const removed: string[] = []
   const committed: { tempRelativePath: string; finalRelativePath: string }[] = []
   const existing = new Set<string>()
+
   const dependencies: BrowserClientDownloadTransferDependencies = {
     writeChunk: async ({ relativePath, contentBase64, append }) => {
       written.push({ relativePath, contentBase64, append })
@@ -29,6 +30,7 @@ function createStore(
     exists: async ({ relativePath }) => existing.has(relativePath),
     ...overrides
   }
+
   return {
     store: new BrowserClientDownloadTransferStore(dependencies, maxActiveTransfers),
     written,
@@ -63,6 +65,7 @@ describe('BrowserClientDownloadTransferStore', () => {
         final: false
       })
     ).toBeNull()
+
     const commit = await store.accept({
       ...base,
       contentBase64: Buffer.from('two').toString('base64'),
@@ -92,9 +95,11 @@ describe('BrowserClientDownloadTransferStore', () => {
 
   it('takes the next candidate when a concurrent transfer wins the destination name', async () => {
     const attempted: string[] = []
+
     const { store, removed } = createStore({
       commit: async ({ finalRelativePath }) => {
         attempted.push(finalRelativePath)
+
         if (attempted.length === 1) {
           throw Object.assign(new Error('EEXIST: file already exists, copyfile'), {
             code: 'EEXIST'
@@ -118,9 +123,11 @@ describe('BrowserClientDownloadTransferStore', () => {
 
   it('retries the relay collision rejection, which carries no errno code', async () => {
     const attempted: string[] = []
+
     const { store } = createStore({
       commit: async ({ finalRelativePath }) => {
         attempted.push(finalRelativePath)
+
         if (attempted.length === 1) {
           throw new Error('EEXIST: destination already exists')
         }
@@ -176,6 +183,7 @@ describe('BrowserClientDownloadTransferStore', () => {
 
   it('drops the partial file when the remote write fails', async () => {
     const removed: string[] = []
+
     const { store } = createStore({
       writeChunk: async () => {
         throw new Error('remote disk full')
@@ -240,6 +248,7 @@ describe('BrowserClientDownloadTransferStore', () => {
       ensureDirectory: vi.fn().mockResolvedValue(undefined),
       exists: vi.fn().mockResolvedValue(false)
     }
+
     const store = new BrowserClientDownloadTransferStore(dependencies, 1)
     await store.accept({ ...base, contentBase64: 'AAA=', offset: 0, final: false })
 
@@ -256,12 +265,15 @@ describe('BrowserClientDownloadTransferStore', () => {
 
   it('does not recreate the partial file when an abort lands mid-write', async () => {
     let releaseWrite = (): void => {}
+
     const pendingWrite = new Promise<void>((resolve) => {
       releaseWrite = resolve
     })
+
     const written: string[] = []
     const removed: string[] = []
     const committed: string[] = []
+
     const { store } = createStore({
       writeChunk: async ({ relativePath }) => {
         written.push(relativePath)
@@ -343,18 +355,23 @@ describe('BrowserClientDownloadTransferStore', () => {
   it('never expires a transfer whose chunk is still in flight', async () => {
     vi.useFakeTimers()
     let releaseWrite = (): void => {}
+
     const stalledWrite = new Promise<void>((resolve) => {
       releaseWrite = resolve
     })
+
     let writes = 0
+
     const { store, removed } = createStore({
       writeChunk: async () => {
         writes += 1
+
         if (writes > 1) {
           await stalledWrite
         }
       }
     })
+
     await store.accept({ ...base, contentBase64: 'AAA=', offset: 0, final: false })
 
     const accepting = store.accept({ ...base, contentBase64: 'AAA=', offset: 2, final: false })

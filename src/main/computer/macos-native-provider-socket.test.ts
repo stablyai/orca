@@ -20,6 +20,7 @@ class FakeSocket extends EventEmitter {
 describe('connectMacOSProviderSocket', () => {
   it('removes socket listeners after a connection error', async () => {
     vi.useFakeTimers()
+
     try {
       const socket = new FakeSocket()
       createConnectionMock.mockReturnValueOnce(socket)
@@ -33,6 +34,7 @@ describe('connectMacOSProviderSocket', () => {
       const rejection = expect(promise).rejects.toThrow(
         'native macOS helper app did not open its socket'
       )
+
       socket.emit('error', new Error('ECONNREFUSED'))
       await vi.advanceTimersByTimeAsync(100)
 

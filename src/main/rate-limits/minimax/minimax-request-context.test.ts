@@ -5,11 +5,13 @@ const { clearStorageDataMock, cookiesSetMock, netFetchMock, sessionFromPartition
     const netFetchMock = vi.fn()
     const cookiesSetMock = vi.fn(() => Promise.resolve())
     const clearStorageDataMock = vi.fn(() => Promise.resolve())
+
     const sessionFromPartitionMock = vi.fn(() => ({
       clearStorageData: clearStorageDataMock,
       cookies: { set: cookiesSetMock },
       fetch: netFetchMock
     }))
+
     return { clearStorageDataMock, cookiesSetMock, netFetchMock, sessionFromPartitionMock }
   }
 )
@@ -42,6 +44,7 @@ describe('normalizeMiniMaxCookieHeader', () => {
     const normalized = normalizeMiniMaxCookieHeader(
       '_token=tok; session=other; ak_bmsc=ak; minimax_group_id_v2=42; random=xyz'
     )
+
     expect(normalized).toBe(
       '_token=tok; session=other; ak_bmsc=ak; minimax_group_id_v2=42; random=xyz'
     )
@@ -89,6 +92,7 @@ describe('getUniqueMiniMaxCookieNames', () => {
     const names = getUniqueMiniMaxCookieNames(
       '_token=a; _token=b; minimax_group_id_v2=42; minimax_group_id_v2=99'
     )
+
     expect(names).toEqual(['_token', 'minimax_group_id_v2'])
   })
 
@@ -96,6 +100,7 @@ describe('getUniqueMiniMaxCookieNames', () => {
     const names = getUniqueMiniMaxCookieNames(
       '_token:"jwt" minimax_group_id_v2:"42" platform_cookie_consent:"3"'
     )
+
     expect(names).toEqual(
       expect.arrayContaining(['_token', 'minimax_group_id_v2', 'platform_cookie_consent'])
     )
@@ -278,12 +283,15 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       endpointMode: 'overseas'
     })
     expect(cookiesSetMock).toHaveBeenCalledTimes(3)
+
     const setDetails = cookiesSetMock.mock.calls.map((call) => {
       const [details] = call as unknown as [
         { name: string; value: string; secure: boolean; path: string }
       ]
+
       return details
     })
+
     expect(setDetails).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: '_token', value: 'tok', secure: true, path: '/' }),
@@ -305,6 +313,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
     })
     const controller = new AbortController()
+
     const result = await fetchMiniMaxWithSessionCookieJar({
       cookie: FULL_COOKIE,
       endpoint: MINIMAX_USAGE_ENDPOINT,
@@ -312,6 +321,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       signal: controller.signal,
       endpointMode: 'overseas'
     })
+
     expect(result.transport).toBe('session-cookie-jar')
     expect(result.cookieNames).toEqual([
       '_token',
@@ -347,6 +357,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
     })
     const controller = new AbortController()
+
     const result = await fetchMiniMaxWithManualCookieHeader({
       cookie: FULL_COOKIE,
       endpoint: MINIMAX_USAGE_ENDPOINT,
@@ -354,6 +365,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       signal: controller.signal,
       endpointMode: 'overseas'
     })
+
     expect(result.transport).toBe('manual-cookie-header')
     expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
@@ -465,11 +477,13 @@ describe('fetchMiniMaxWithApiKey', () => {
       json: async () => ({ base_resp: { status_code: 0 }, model_remains: [] })
     })
     const controller = new AbortController()
+
     const result = await fetchMiniMaxWithApiKey({
       apiKey: 'sk-test-1234567890',
       endpoint: 'https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains',
       signal: controller.signal
     })
+
     expect(result.transport).toBe('api-key')
     expect(result.cookieNames).toEqual([])
     expect(result.requestHeaderNames).toEqual(['Authorization', 'Accept'])
@@ -572,16 +586,22 @@ describe('logMiniMaxFetchFailure', () => {
       signal: new AbortController().signal,
       endpointMode: 'cn'
     })
+
     // The cookies must be stored under the CN origin, not overseas.
     const cnWrites = cookiesSetMock.mock.calls.filter((call) => {
       const [details] = call as unknown as [{ url: string }]
+
       return details.url === 'https://www.minimaxi.com'
     })
+
     expect(cnWrites.length).toBeGreaterThan(0)
+
     const overseasWrites = cookiesSetMock.mock.calls.filter((call) => {
       const [details] = call as unknown as [{ url: string }]
+
       return details.url === 'https://platform.minimax.io'
     })
+
     expect(overseasWrites.length).toBe(0)
   })
 })

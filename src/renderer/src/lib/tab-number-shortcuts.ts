@@ -31,10 +31,12 @@ export function resolveTabNumberShortcutTarget(
 
   const worktreeId = state.activeWorktreeId
   const groupId = state.activeGroupIdByWorktree[worktreeId]
+
   const group =
     state.groupsByWorktree[worktreeId]?.find((candidate) => candidate.id === groupId) ??
     state.groupsByWorktree[worktreeId]?.[0] ??
     null
+
   if (!group) {
     return null
   }
@@ -42,7 +44,9 @@ export function resolveTabNumberShortcutTarget(
   const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
     (tab) => tab.groupId === group.id
   )
+
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
+
   // Why: mirror TabBar's reconcile behavior. Stored group tabOrder is the
   // visible left-to-right source, but stale/missing entries can happen during
   // hydration and drag races, so append currently mounted group tabs.
@@ -57,6 +61,7 @@ export function resolveTabNumberShortcutTarget(
 export function activateTabNumberShortcut(index: number): boolean {
   const store = useAppStore.getState()
   const target = resolveTabNumberShortcutTarget(store, index)
+
   if (!target) {
     return false
   }
@@ -74,9 +79,11 @@ export function activateTabNumberShortcut(index: number): boolean {
         environmentId: runtimeEnvironmentId
       })
     }
+
     store.setActiveTab(target.entityId)
     store.setActiveTabType('terminal')
     focusTerminalTabSurface(target.entityId)
+
     return true
   }
 
@@ -88,18 +95,22 @@ export function activateTabNumberShortcut(index: number): boolean {
         environmentId: runtimeEnvironmentId
       })
     }
+
     store.setActiveBrowserTab(target.entityId)
     store.setActiveTabType('browser')
+
     return true
   }
 
   if (target.contentType === 'simulator') {
     store.setActiveTab(target.id)
     store.setActiveTabType('simulator')
+
     return true
   }
 
   store.setActiveFile(target.entityId)
   store.setActiveTabType('editor')
+
   return true
 }

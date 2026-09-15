@@ -82,12 +82,14 @@ export const WORKTREE_METHODS = [
       context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
         const { runtime } = context
         const repo = await runtime.showRepo(params.repo)
+
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
           repoSelector: params.repo,
           repo,
           request: params.automationProvenanceRequest
         })
+
         // Why: provenance tokens are reserved before creation so retries can recover,
         // but failed create attempts must release the reservation for a safe retry.
         try {
@@ -105,7 +107,9 @@ export const WORKTREE_METHODS = [
               context.clientKind ? { clientKind: context.clientKind } : {}
             )
           )
+
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+
           // Why: agent callers need a stable dispatch target without traversing
           // terminal-list layout duplicates after creating the worktree.
           return params.startupAgent && result.startupTerminal?.handle
@@ -125,6 +129,7 @@ export const WORKTREE_METHODS = [
         repoSelector: params.repo,
         baseBranch: params.baseBranch
       })
+
       return null
     }
   }),
@@ -216,12 +221,14 @@ export const WORKTREE_METHODS = [
         params.worktree,
         params.hostId
       )
+
       // Older mobile clients omit hostId, so resolve through the ambiguity gate
       // before pinning removal. An ambiguous selector still fails closed: two
       // hosts own the id and an unqualified client cannot say which it meant.
       if (!resolvedHostId) {
         try {
           resolvedHostId = (await runtime.showManagedWorktree(params.worktree)).hostId
+
           if (!resolvedHostId) {
             throw new Error('worktree.rm could not resolve the workspace host')
           }
@@ -235,13 +242,16 @@ export const WORKTREE_METHODS = [
           }
         }
       }
+
       const removalArgs = [
         params.worktree,
         params.force === true,
         params.runHooks === true,
         params.allowUnverifiedPtyStop === true
       ] as const
+
       const result = await runtime.removeManagedWorktree(...removalArgs, resolvedHostId)
+
       return { removed: true, ...result }
     }
   }),
@@ -254,6 +264,7 @@ export const WORKTREE_METHODS = [
         params.worktree,
         params.hostId
       )
+
       return hostId
         ? runtime.forceDeletePreservedBranch(
             params.worktree,

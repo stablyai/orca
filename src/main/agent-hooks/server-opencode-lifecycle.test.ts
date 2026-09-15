@@ -3,6 +3,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE = makePaneKey('tab-opencode', '11111111-1111-4111-8111-111111111111')
+
 const TARGET_PANE = makePaneKey('tab-opencode', '22222222-2222-4222-8222-222222222222')
 
 describe('AgentHookServer OpenCode lifecycle', () => {
@@ -12,6 +13,7 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     for (const server of servers) {
       server.stop()
     }
+
     servers.length = 0
   })
 
@@ -28,6 +30,7 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     servers.push(server)
     await server.start({ env: 'production' })
     const env = server.buildPtyEnv()
+
     return {
       server,
       post: (payload, launchToken, paneKey = PANE, source = 'opencode') =>

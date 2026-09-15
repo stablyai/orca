@@ -32,6 +32,7 @@ async function getProcessedFileStat(
   filePath: string
 ): Promise<Omit<ClaudeUsageProcessedFile, 'lineCount'>> {
   const fileStat = await stat(filePath)
+
   return {
     path: filePath,
     mtimeMs: fileStat.mtimeMs,
@@ -52,6 +53,7 @@ export async function scanClaudeUsageFiles(
   const worktreeLookup = await buildWorktreeLookup(worktrees)
 
   const currentPaths = new Set(files)
+
   // Why: when a file that owned dedupe keys is deleted, remaining forks still
   // contain those turns but their caches record them as unowned. Only files
   // that previously deferred claims can reclaim, so invalidate those — not the
@@ -65,8 +67,10 @@ export async function scanClaudeUsageFiles(
 
   const reusedByPath = new Map<string, ClaudeUsagePersistedFile>()
   const pathsToParse: string[] = []
+
   for (let index = 0; index < files.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = files.slice(index, index + FILE_SCAN_BATCH_SIZE)
+
     const reusable = await Promise.all(
       batch.map(async (filePath) => {
         const fileInfo = await getProcessedFileStat(filePath)
@@ -75,6 +79,7 @@ export async function scanClaudeUsageFiles(
         // only stat cost on refresh while preserving exactly the old projection.
         // When an owner disappears, only deferred-claim files need reparse.
         const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
+
         const canReuse =
           !mustReclaimDeferred &&
           previous &&
@@ -84,9 +89,11 @@ export async function scanClaudeUsageFiles(
           Array.isArray(previous.dailyAggregates) &&
           Array.isArray(previous.ownedDedupeKeys) &&
           typeof previous.hasDeferredClaims === 'boolean'
+
         return canReuse ? previous : null
       })
     )
+
     for (const [batchIndex, previous] of reusable.entries()) {
       if (previous) {
         reusedByPath.set(batch[batchIndex], previous)
@@ -94,6 +101,7 @@ export async function scanClaudeUsageFiles(
         pathsToParse.push(batch[batchIndex])
       }
     }
+
     if (index + batch.length < files.length) {
       await yieldToEventLoop()
     }
@@ -105,6 +113,7 @@ export async function scanClaudeUsageFiles(
   // get re-counted on every fork (issue #8006). Cross-file ownership counts each
   // turn for exactly one file; cached files keep the claims they persisted.
   const turnOwnerByDedupeKey = new Map<string, string>()
+
   for (const [filePath, previous] of reusedByPath) {
     for (const dedupeKey of previous.ownedDedupeKeys) {
       // First cached claim wins so conflicting projections stay deterministic.
@@ -115,11 +124,13 @@ export async function scanClaudeUsageFiles(
   }
 
   const parsedByPath = new Map<string, ClaudeUsagePersistedFile>()
+
   for (let index = 0; index < pathsToParse.length; index += FILE_SCAN_BATCH_SIZE) {
     const batch = pathsToParse.slice(index, index + FILE_SCAN_BATCH_SIZE)
     // Why: transcript scans run in Electron's main process. Small parallel
     // batches cut independent file I/O without letting Settings stay blocked.
     const reads = await Promise.all(batch.map((filePath) => readClaudeUsageScanFile(filePath)))
+
     for (const [batchIndex, filePath] of batch.entries()) {
       const { processedFile, turns } = reads[batchIndex]
       // Why: ownership claims must be sequential in sorted-path order so
@@ -127,18 +138,23 @@ export async function scanClaudeUsageFiles(
       const ownedTurns: ClaudeUsageParsedTurn[] = []
       const ownedDedupeKeys: string[] = []
       let hasDeferredClaims = false
+
       for (const turn of turns) {
         if (turn.dedupeKey) {
           const owner = turnOwnerByDedupeKey.get(turn.dedupeKey)
+
           if (owner !== undefined && owner !== filePath) {
             hasDeferredClaims = true
             continue
           }
+
           turnOwnerByDedupeKey.set(turn.dedupeKey, filePath)
           ownedDedupeKeys.push(turn.dedupeKey)
         }
+
         ownedTurns.push(stripClaudeSourceMetadata(turn))
       }
+
       const attributed = await attributeClaudeUsageTurns(ownedTurns, worktreeLookup)
       parsedByPath.set(filePath, {
         ...processedFile,
@@ -147,6 +163,7 @@ export async function scanClaudeUsageFiles(
         hasDeferredClaims
       })
     }
+
     if (index + batch.length < pathsToParse.length) {
       await yieldToEventLoop()
     }
@@ -155,11 +172,14 @@ export async function scanClaudeUsageFiles(
   const processedFiles: ClaudeUsagePersistedFile[] = []
   const sessionsById = new Map<string, ClaudeUsageSession>()
   const dailyByKey = new Map<string, ClaudeUsageDailyAggregate>()
+
   for (const filePath of files) {
     const processed = reusedByPath.get(filePath) ?? parsedByPath.get(filePath)
+
     if (!processed) {
       continue
     }
+
     processedFiles.push(processed)
     mergeClaudeSessions(sessionsById, processed.sessions)
     mergeClaudeDailyAggregates(dailyByKey, processed.dailyAggregates)

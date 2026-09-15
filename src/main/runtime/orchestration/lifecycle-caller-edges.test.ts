@@ -6,13 +6,16 @@ import { OrchestrationDb } from './db'
 import { transitionLifecycleWithDb } from './db/lifecycle-transition'
 
 let db: OrchestrationDb | undefined
+
 let directory: string | undefined
 
 afterEach(() => {
   db?.close()
+
   if (directory) {
     rmSync(directory, { recursive: true, force: true })
   }
+
   db = undefined
   directory = undefined
 })
@@ -20,6 +23,7 @@ afterEach(() => {
 function createDatabase(): OrchestrationDb {
   directory = mkdtempSync(join(tmpdir(), 'orca-lifecycle-edges-'))
   db = new OrchestrationDb(join(directory, 'orchestration.db'))
+
   return db
 }
 
@@ -30,6 +34,7 @@ function startWorker(database: OrchestrationDb, taskId: string, name: string): s
     taskId,
     startOptions: {}
   })
+
   database.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
     handle: `term_${name}`,
@@ -41,6 +46,7 @@ function startWorker(database: OrchestrationDb, taskId: string, name: string): s
     terminalOwnership: 'created'
   })
   database.markWorkerDispatchReady(started.dispatch.id)
+
   return started.dispatch.id
 }
 
@@ -85,18 +91,22 @@ describe('lifecycle graph against its callers', () => {
        INSERT INTO dispatch_contexts (id, task_id, status, depth) VALUES ('c1', 't1', 'pending', 1);
        INSERT INTO worker_dispatches (dispatch_id, state, stage) VALUES ('c1', 'starting', 's');`
     )
+
     const entities: Record<string, { table: string; id: string; state: string }> = {
       task: { table: 'tasks', id: 'id', state: 'status' },
       dispatch: { table: 'dispatch_contexts', id: 'id', state: 'status' },
       worker: { table: 'worker_dispatches', id: 'dispatch_id', state: 'state' }
     }
+
     const rejected: string[] = []
+
     for (const [entity, from, to, site] of CALLER_EDGES) {
       const target = entities[entity]!
       const key = entity === 'task' ? 't1' : 'c1'
       sqlite
         .prepare(`UPDATE ${target.table} SET ${target.state} = ? WHERE ${target.id} = ?`)
         .run(from, key)
+
       try {
         transitionLifecycleWithDb(sqlite, { entity: entity as never, id: key, from, to })
       } catch (error) {
@@ -109,10 +119,12 @@ describe('lifecycle graph against its callers', () => {
 
   it('settles a stopping worker whose PTY exits during the stop', () => {
     const database = createDatabase()
+
     const task = database.createTask({
       runId: 'run_legacy_local',
       spec: 'stopping exited worker'
     })
+
     const dispatchId = startWorker(database, task.id, 'stopping_exited')
 
     expect(database.beginWorkerStop(dispatchId, 'runtime_test').disposition).toBe('stopping')
@@ -130,18 +142,22 @@ describe('lifecycle graph against its callers', () => {
 
   it('still lets a coordinator reopen or overturn a settled Task', () => {
     const database = createDatabase()
+
     const reopened = database.createTask({
       runId: 'run_legacy_local',
       spec: 'reopen me'
     })
+
     const overturned = database.createTask({
       runId: 'run_legacy_local',
       spec: 'overturn me'
     })
+
     const retried = database.createTask({
       runId: 'run_legacy_local',
       spec: 'retry me'
     })
+
     database.updateTaskStatus(reopened.id, 'completed', 'first result')
     database.updateTaskStatus(overturned.id, 'completed', 'wrong result')
     database.updateTaskStatus(retried.id, 'failed', 'boom')

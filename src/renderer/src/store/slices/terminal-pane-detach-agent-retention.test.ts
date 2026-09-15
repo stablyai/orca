@@ -11,13 +11,21 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 
 const WORKTREE_ID = 'repo::/repo/worktree'
+
 const SOURCE_TAB = 'tab-source'
+
 const TARGET_TAB = 'tab-target'
+
 const FINAL_TAB = 'tab-final'
+
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const SIBLING_LEAF = '22222222-2222-4222-8222-222222222222'
+
 const SOURCE_PANE_KEY = makePaneKey(SOURCE_TAB, LEAF)
+
 const TARGET_PANE_KEY = makePaneKey(TARGET_TAB, LEAF)
+
 const FINAL_PANE_KEY = makePaneKey(FINAL_TAB, LEAF)
 
 beforeEach(() => {
@@ -63,6 +71,7 @@ function makeRow(
   }
 ): DashboardAgentRow {
   const agentType = overrides?.agentType ?? 'claude'
+
   return {
     paneKey,
     entry: makeDoneEntry({
@@ -99,6 +108,7 @@ function createDetachStore() {
       [FINAL_TAB]: []
     }
   })
+
   return store
 }
 
@@ -233,6 +243,7 @@ describe('detach completed split pane → sidebar retention', () => {
     for (const formerKey of [SOURCE_PANE_KEY, TARGET_PANE_KEY, FINAL_PANE_KEY]) {
       expect(resolveAgentPaneAuthorityKey(formerKey)).toBe(extraPaneKey)
     }
+
     store.getState().setAgentStatus(TARGET_PANE_KEY, { state: 'done', prompt: 'late post' })
     expect(store.getState().agentStatusByPaneKey[extraPaneKey]?.prompt).toBe('late post')
   })
@@ -246,6 +257,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
+
     const result = collect({
       currentPaneKey: TARGET_PANE_KEY,
       currentTabId: TARGET_TAB,
@@ -265,6 +277,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
+
     // Why: terminalHandle is pty-scoped, so a fresh codex run carries the same handle.
     const result = collect({
       currentPaneKey: TARGET_PANE_KEY,
@@ -287,6 +300,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
+
     // Why: identical startedAt/agentType can collide, so a differing handle is the
     // only signal that these are separate terminals.
     const result = collectRetainedAgentsOnDisappear({
@@ -326,6 +340,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
+
     // Why: recordAgentProviderSession is its own IPC event, so the destination can be
     // stamped while the pre-move snapshot is not. A one-sided session is not evidence
     // of a different run.
@@ -347,6 +362,7 @@ describe('detach completed split pane → sidebar retention', () => {
     })
 
     detach(store, SOURCE_TAB, TARGET_TAB)
+
     const result = collect({
       currentPaneKey: TARGET_PANE_KEY,
       currentTabId: TARGET_TAB,
@@ -410,9 +426,11 @@ describe('detach completed split pane → sidebar retention', () => {
       title: 'Destination',
       launchAgent: 'codex'
     })
+
     const retained = collect({
       tabIndex: new Map([[TARGET_TAB, { tab: destinationTab }]])
     }).toRetain
+
     expect(retained).toHaveLength(1)
     expect(retained[0]?.entry.paneKey).toBe(TARGET_PANE_KEY)
     expect(retained[0]?.entry.tabId).toBe(TARGET_TAB)

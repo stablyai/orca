@@ -13,7 +13,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { claudeConfigDirKeychainAliases } from './keychain'
 
 let directory: string
+
 let canonical: string
+
 let linked: string
 
 beforeEach(() => {

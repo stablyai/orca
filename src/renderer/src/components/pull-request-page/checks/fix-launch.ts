@@ -26,13 +26,16 @@ export async function saveFixChecksActionDefault(
 ): Promise<void> {
   const state = useAppStore.getState()
   const latestSettings = state.settings
+
   if (!latestSettings) {
     throw new Error('Settings are not loaded.')
   }
+
   const latestRepo =
     target.type === 'repo'
       ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
       : null
+
   const result = saveSourceControlActionRecipe({
     target,
     settings: latestSettings,
@@ -40,10 +43,13 @@ export async function saveFixChecksActionDefault(
     actionId,
     recipe
   })
+
   if ('sourceControlAi' in result) {
     await updateSettings({ sourceControlAi: result.sourceControlAi })
+
     return
   }
+
   await updateRepo(result.target.repoId, result.update)
 }
 
@@ -57,6 +63,7 @@ export async function startFixChecksFromDialog(args: {
   if (!args.targetRepoId) {
     return false
   }
+
   return await launchWorkItemDirect({
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
@@ -88,10 +95,12 @@ export async function fixBrokenPullRequestChecks(args: {
   if (!args.targetRepoId || args.fixingChecks) {
     return
   }
+
   if (args.failedChecks.length === 0) {
     toast.message(
       translate('auto.components.PullRequestPage.51c65c0265', 'No broken checks to fix.')
     )
+
     return
   }
 
@@ -102,7 +111,9 @@ export async function fixBrokenPullRequestChecks(args: {
     reviewUrl: args.item.url,
     checks: args.list
   })
+
   args.setFixingChecks(true)
+
   try {
     const started = await startFixChecksAgent({
       item: args.item,
@@ -114,6 +125,7 @@ export async function fixBrokenPullRequestChecks(args: {
         args.setFixChecksComposerPrompt(basePrompt)
       }
     })
+
     if (started) {
       toast.success(
         translate(

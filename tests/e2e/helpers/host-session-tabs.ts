@@ -13,6 +13,7 @@ export async function readHostTabs(
   const response = await hostClient.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
     worktree: `path:${repoPath}`
   })
+
   return response.result
 }
 
@@ -37,6 +38,7 @@ async function readHostBrowserPages(
     { worktree: worktreeSelector },
     { timeoutMs }
   )
+
   return response.result.tabs
 }
 
@@ -46,6 +48,7 @@ export async function readHostBrowserPageIds(
   repoPath: string
 ): Promise<string[]> {
   const tabs = await readHostBrowserPages(hostClient, `path:${repoPath}`)
+
   return tabs.map((tab) => tab.browserPageId).sort()
 }
 
@@ -62,6 +65,7 @@ export async function readHostBrowserPageUrl(
   browserPageId: string
 ): Promise<string | null> {
   const tabs = await readHostBrowserPages(hostClient, `path:${repoPath}`)
+
   return tabs.find((tab) => tab.browserPageId === browserPageId)?.url ?? null
 }
 
@@ -77,5 +81,6 @@ export async function readHostBrowserPageUrls(
   worktreeSelector: string
 ): Promise<string[]> {
   const tabs = await readHostBrowserPages(hostClient, worktreeSelector, 15_000)
+
   return tabs.map((tab) => tab.url)
 }

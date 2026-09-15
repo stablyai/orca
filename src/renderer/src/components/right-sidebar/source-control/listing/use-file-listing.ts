@@ -73,6 +73,7 @@ export function useSourceControlFileListing({
       activeRepoSettings,
       entries
     })
+
   const {
     grouped,
     fileFilterState,
@@ -100,6 +101,7 @@ export function useSourceControlFileListing({
     sourceControlViewMode,
     collapsedSections
   })
+
   const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({
     activeRepoSettings,
     activeWorktreeId,
@@ -126,6 +128,7 @@ export function useSourceControlFileListing({
     (event: SourceControlRowOpenEvent) => isSourceControlSplitOpenModifier(event, isMac),
     [isMac]
   )
+
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
     useSourceControlSelection({
       flatEntries: visibleSelectionEntries,
@@ -148,6 +151,7 @@ export function useSourceControlFileListing({
     () => new Map(visibleSelectionEntries.map((entry) => [entry.key, entry])),
     [visibleSelectionEntries]
   )
+
   const {
     isExecutingBulk,
     setIsExecutingBulk,
@@ -169,10 +173,12 @@ export function useSourceControlFileListing({
     clearSelection,
     refreshActiveGitStatusAfterMutation
   })
+
   const unresolvedConflicts = useMemo(
     () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
     [entries]
   )
+
   const unresolvedConflictReviewEntries = useMemo(
     () =>
       unresolvedConflicts.map((entry) => ({
@@ -181,6 +187,7 @@ export function useSourceControlFileListing({
       })),
     [unresolvedConflicts]
   )
+
   const pushRecovery = useMemo(
     () =>
       deriveSourceControlPushRecovery({

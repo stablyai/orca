@@ -17,8 +17,10 @@ describe('app root surface settings selectors', () => {
   it('does not rerender for an unrelated settings replacement', () => {
     const store = createStore<SurfaceState>(() => ({ settings: getDefaultSettings('/tmp') }))
     let renderCount = 0
+
     const view = renderHook(() => {
       renderCount += 1
+
       return {
         voiceEnabled: useStore(store, selectAppRootSurfaceVoiceEnabled),
         petEnabled: useStore(store, selectAppRootSurfacePetEnabled),
@@ -42,8 +44,10 @@ describe('app root surface settings selectors', () => {
   it('still rerenders when a setting used by a surface changes', () => {
     const store = createStore<SurfaceState>(() => ({ settings: getDefaultSettings('/tmp') }))
     let renderCount = 0
+
     const view = renderHook(() => {
       renderCount += 1
+
       return useStore(store, selectAppRootSurfaceVoiceEnabled)
     })
 

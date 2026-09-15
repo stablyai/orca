@@ -10,12 +10,15 @@ type WindowsPtyInternals = IPty & {
 function waitForOutput(terminal: IPty, marker: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let output = ''
+
     const timeout = setTimeout(
       () => reject(new Error(`Timed out waiting for ${marker}; got ${output}`)),
       10_000
     )
+
     terminal.onData((chunk) => {
       output += chunk
+
       if (output.includes(marker)) {
         clearTimeout(timeout)
         resolve()
@@ -30,6 +33,7 @@ function waitForExit(terminal: IPty): Promise<void> {
       () => reject(new Error('Timed out waiting for the failed PTY to exit')),
       10_000
     )
+
     terminal.onExit(() => {
       clearTimeout(timeout)
       resolve()
@@ -40,9 +44,11 @@ function waitForExit(terminal: IPty): Promise<void> {
 describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', () => {
   it('retires only the failed PTY and keeps a witness writable after ConPTY EAGAIN', async () => {
     const uncaught: unknown[] = []
+
     const uncaughtListener = (error: unknown): void => {
       uncaught.push(error)
     }
+
     process.on('uncaughtException', uncaughtListener)
 
     let terminal: IPty | undefined
@@ -54,6 +60,7 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
         env: process.env,
         useConptyDll: false
       }
+
       terminal = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/q'], options)
       witness = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/q'], options)
       const input = (terminal as WindowsPtyInternals)._agent.inSocket
@@ -70,9 +77,11 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
       try {
         terminal?.kill()
       } catch {}
+
       try {
         witness?.kill()
       } catch {}
+
       // ConPTY's worker drains asynchronously; keep the guard installed through
       // the delayed close so cleanup cannot reintroduce an unhandled error.
       await new Promise((resolve) => setTimeout(resolve, 1_500))
@@ -82,13 +91,16 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
 
   it('ignores a late output EPIPE after the PTY has closed', async () => {
     const uncaught: unknown[] = []
+
     const uncaughtListener = (error: unknown): void => {
       uncaught.push(error)
     }
+
     process.on('uncaughtException', uncaughtListener)
 
     let terminal: IPty | undefined
     let exited = false
+
     try {
       terminal = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/q'], {
         cwd: process.cwd(),
@@ -96,9 +108,11 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
         useConptyDll: false
       })
       const output = (terminal as WindowsPtyInternals)._socket
+
       const exit = waitForExit(terminal).then(() => {
         exited = true
       })
+
       terminal.kill()
       await exit
 
@@ -117,6 +131,7 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
           terminal?.kill()
         } catch {}
       }
+
       await new Promise((resolve) => setTimeout(resolve, 1_500))
       process.off('uncaughtException', uncaughtListener)
     }
@@ -124,12 +139,15 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
 
   it('contains an output EPIPE that races with PTY shutdown', async () => {
     const uncaught: unknown[] = []
+
     const uncaughtListener = (error: unknown): void => {
       uncaught.push(error)
     }
+
     process.on('uncaughtException', uncaughtListener)
 
     let terminal: IPty | undefined
+
     try {
       terminal = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/q'], {
         cwd: process.cwd(),
@@ -148,6 +166,7 @@ describe.skipIf(process.platform !== 'win32')('node-pty Windows input errors', (
       try {
         terminal?.kill()
       } catch {}
+
       await new Promise((resolve) => setTimeout(resolve, 1_500))
       process.off('uncaughtException', uncaughtListener)
     }

@@ -26,7 +26,9 @@ export class BrowserRoutePreparedPageLedger {
     if (!isValidBrowserRoutePageOwnerIdentity(input) || input.partition !== this.partition) {
       return null
     }
+
     const page = this.active.get(pageKey(input))
+
     return page?.rendererWebContentsId === input.rendererWebContentsId ? page.pageAuthority : null
   }
 
@@ -36,16 +38,21 @@ export class BrowserRoutePreparedPageLedger {
     rendererWebContentsId: number
   ): BrowserRoutePageAuthority {
     const key = browserRouteLogicalPageKey(browserPageId, pageHostGeneration)
+
     if (this.retiring.has(key)) {
       throw new Error('browser_route_partition_page_retiring')
     }
+
     if (!this.active.has(key) && this.active.size + this.retiring.size >= this.maxPages) {
       throw new Error('browser_route_partition_page_capacity')
     }
+
     const existing = this.active.get(key)
+
     if (existing && existing.rendererWebContentsId !== rendererWebContentsId) {
       throw new Error('browser_route_partition_page_owner_conflict')
     }
+
     const page = {
       partition: this.partition,
       browserPageId,
@@ -53,7 +60,9 @@ export class BrowserRoutePreparedPageLedger {
       rendererWebContentsId,
       pageAuthority: Symbol(key)
     }
+
     this.active.set(key, page)
+
     return page
   }
 
@@ -71,14 +80,18 @@ export class BrowserRoutePreparedPageLedger {
     ) {
       return null
     }
+
     const previousKey = pageKey(previous)
     const nextKey = pageKey(next)
+
     if (this.active.has(nextKey) || this.retiring.has(nextKey)) {
       return null
     }
+
     const rekeyed = { ...next, pageAuthority: previous.pageAuthority }
     this.active.delete(previousKey)
     this.active.set(nextKey, rekeyed)
+
     return rekeyed
   }
 
@@ -86,9 +99,11 @@ export class BrowserRoutePreparedPageLedger {
     if (!this.isExactActivePage(page)) {
       return false
     }
+
     const key = pageKey(page)
     this.active.delete(key)
     this.retiring.set(key, page.pageAuthority)
+
     return true
   }
 
@@ -96,14 +111,17 @@ export class BrowserRoutePreparedPageLedger {
     if (!Number.isInteger(rendererWebContentsId) || rendererWebContentsId <= 0) {
       return []
     }
+
     const owned = [...this.active.values()].filter(
       (page) => page.rendererWebContentsId === rendererWebContentsId
     )
+
     return owned.filter((page) => this.beginRetirement(page))
   }
 
   completeRetirement(page: BrowserRoutePageAuthority): void {
     const key = pageKey(page)
+
     if (this.retiring.get(key) === page.pageAuthority) {
       this.retiring.delete(key)
     }
@@ -117,7 +135,9 @@ export class BrowserRoutePreparedPageLedger {
     ) {
       return false
     }
+
     const active = this.active.get(pageKey(page))
+
     return (
       active?.pageAuthority === page.pageAuthority &&
       active.rendererWebContentsId === page.rendererWebContentsId

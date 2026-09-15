@@ -5,6 +5,7 @@ import { waitForActiveTerminalManager, waitForPaneIdentitySnapshot } from './ter
 
 function resolveParkWaitTimeoutMs(parkDelayMs?: number): number {
   const delay = parkDelayMs ?? (Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500)
+
   return Math.max(20_000, delay * 10)
 }
 
@@ -22,19 +23,23 @@ export async function waitForTabParked(
       message: `terminal tab ${tabId} did not park (pane manager still mounted)`
     })
     .toBe(false)
+
   return Date.now() - parkWaitStartedAt
 }
 
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('createActiveTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
 
@@ -46,6 +51,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     .toBe(tabId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
+
   return tabId
 }
 
@@ -63,6 +69,8 @@ export async function parkHiddenTabBehindDecoy(
   if ((await getActiveTabId(page)) === targetTabId) {
     await createActiveTerminalTab(page, worktreeId)
   }
+
   await createActiveTerminalTab(page, worktreeId)
+
   return waitForTabParked(page, targetTabId, options)
 }

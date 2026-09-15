@@ -40,20 +40,25 @@ function makeRpcChild() {
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   // Why: like the real app-server, the fake dies on stdin EOF or a signal —
   // the graceful shutdown path resolves only once the child reports exit.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
   }
+
   child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
   child.exitCode = null
   child.kill = vi.fn(() => {
     exitNow()
+
     return true
   })
+
   return child
 }
 
@@ -63,6 +68,7 @@ function respondToRpcRateLimitRead(
 ): void {
   rpcChild.stdin.write.mockImplementation((line: string) => {
     const msg = JSON.parse(line) as { id?: number; method?: string }
+
     if (msg.method === 'initialize') {
       setTimeout(() => {
         rpcChild.stdout.emit(
@@ -71,6 +77,7 @@ function respondToRpcRateLimitRead(
         )
       }, 0)
     }
+
     if (msg.method === 'account/rateLimits/read') {
       setTimeout(() => {
         rpcChild.stdout.emit(
@@ -101,6 +108,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         // Why: cold starts (auth refresh included) are documented at 10-25s;
         // the old 10s deadline killed them mid-auth.
@@ -111,6 +119,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
           )
         }, 20_000)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -152,11 +161,13 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         rpcChild.exitCode = 0
         rpcChild.emit('exit', 0, null)
       }
+
       return true
     })
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -203,11 +214,14 @@ describe('fetchCodexRateLimits probe shutdown', () => {
       allowPtyFallback: false,
       codexHomePath: '/managed/home-a'
     })
+
     await vi.advanceTimersByTimeAsync(0)
+
     const second = fetchCodexRateLimits({
       allowPtyFallback: false,
       codexHomePath: '/managed/home-a'
     })
+
     await vi.advanceTimersByTimeAsync(0)
     expect(childSpawnMock).toHaveBeenCalledTimes(1)
 
@@ -230,6 +244,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         firstChild.exitCode = 1
         firstChild.emit('exit', 1, 'SIGKILL')
       }
+
       return true
     })
     const secondChild = makeRpcChild()
@@ -244,12 +259,15 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         allowPtyFallback: false,
         codexHomePath: '/managed/home-error'
       })
+
       await vi.advanceTimersByTimeAsync(0)
       firstChild.emit('error', new Error('stdio failed'))
+
       const second = fetchCodexRateLimits({
         allowPtyFallback: false,
         codexHomePath: '/managed/home-error'
       })
+
       await vi.advanceTimersByTimeAsync(0)
 
       expect(firstChild.kill).toHaveBeenCalledWith('SIGTERM')
@@ -277,10 +295,13 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     let writeCount = 0
     firstChild.stdin.write.mockImplementation((line: string) => {
       writeCount += 1
+
       if (writeCount === failAt) {
         throw new Error(`${phase} stdin failed`)
       }
+
       const message = JSON.parse(line) as { id?: number; method?: string }
+
       if (message.method === 'initialize') {
         setTimeout(() => {
           firstChild.stdout.emit(
@@ -296,6 +317,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         firstChild.exitCode = 1
         firstChild.emit('exit', 1, 'SIGKILL')
       }
+
       return true
     })
     const secondChild = makeRpcChild()
@@ -311,6 +333,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         allowPtyFallback: false,
         codexHomePath: home
       })
+
       await vi.advanceTimersByTimeAsync(0)
       expect(firstChild.kill).toHaveBeenCalledWith('SIGTERM')
 
@@ -318,6 +341,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         allowPtyFallback: false,
         codexHomePath: home
       })
+
       await vi.advanceTimersByTimeAsync(4_999)
       expect(childSpawnMock).toHaveBeenCalledTimes(1)
 
@@ -346,6 +370,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         firstChild.exitCode = 1
         firstChild.emit('exit', 1, 'SIGKILL')
       }
+
       return true
     })
     const secondChild = makeRpcChild()
@@ -360,8 +385,10 @@ describe('fetchCodexRateLimits probe shutdown', () => {
         allowPtyFallback: false,
         codexHomePath: '/managed/home-async-stdin-error'
       })
+
       await vi.advanceTimersByTimeAsync(0)
       firstChild.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+
       const second = fetchCodexRateLimits({
         allowPtyFallback: false,
         codexHomePath: '/managed/home-async-stdin-error'

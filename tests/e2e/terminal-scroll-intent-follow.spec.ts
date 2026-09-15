@@ -15,6 +15,7 @@ const STREAMING_FIXTURE_PATH = path.join(
   process.cwd(),
   'tests/e2e/fixtures/streaming-scrollback-fixture.cjs'
 )
+
 // Past the scroll-intent settle window (80ms) so a phantom pin has had every
 // chance to latch before phase-2 output arrives.
 const INTENT_SETTLE_WAIT_MS = 250
@@ -29,26 +30,33 @@ async function probeActiveViewport(page: Page, marker: string): Promise<Viewport
   return page.evaluate((markerText) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane?.terminal) {
       return null
     }
+
     const buffer = pane.terminal.buffer.active
     let containsMarker = false
+
     for (let line = buffer.baseY + pane.terminal.rows - 1; line >= 0; line -= 1) {
       const text = buffer.getLine(line)?.translateToString(true) ?? ''
+
       if (text.includes(markerText)) {
         containsMarker = true
         break
       }
     }
+
     return {
       baseY: buffer.baseY,
       viewportY: buffer.viewportY,
@@ -62,6 +70,7 @@ async function waitForMarkerAtBottom(page: Page, marker: string): Promise<void> 
     .poll(
       async () => {
         const probe = await probeActiveViewport(page, marker)
+
         return Boolean(probe && probe.containsMarker && probe.viewportY === probe.baseY)
       },
       {
@@ -76,17 +85,21 @@ async function dispatchSubRowWheelUp(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane?.terminal.element) {
       throw new Error('Active terminal pane unavailable')
     }
+
     pane.terminal.element.dispatchEvent(
       new WheelEvent('wheel', {
         bubbles: true,
@@ -102,27 +115,35 @@ async function dispatchRealWheel(page: Page, deltaY: number): Promise<void> {
   const point = await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane?.terminal.element) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const screen = pane.terminal.element.querySelector<HTMLElement>('.xterm-screen')
+
     if (!screen) {
       throw new Error('Active terminal screen unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
+
     return {
       x: rect.left + rect.width / 2,
       y: rect.top + Math.min(rect.height - 1, 40)
     }
   })
+
   await page.mouse.move(point.x, point.y)
   await page.mouse.wheel(0, deltaY)
 }
@@ -131,23 +152,30 @@ async function dispatchPlainHomeKeydown(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane?.terminal.element) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const textarea =
       pane.terminal.element.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!textarea) {
       throw new Error('xterm helper textarea unavailable')
     }
+
     textarea.focus()
+
     // Plain Home is delivered to the PTY app (readline start-of-line); it
     // never scrolls the xterm viewport.
     const event = new KeyboardEvent('keydown', {
@@ -156,6 +184,7 @@ async function dispatchPlainHomeKeydown(page: Page): Promise<void> {
       key: 'Home',
       code: 'Home'
     })
+
     // Why: xterm's key evaluator reads the legacy keyCode, which KeyboardEvent
     // constructors do not populate; without it no escape bytes reach the PTY.
     Object.defineProperty(event, 'keyCode', { configurable: true, value: 36 })
@@ -170,19 +199,24 @@ async function injectQueuedWriteThenType(page: Page, paneKey: string): Promise<v
       __terminalPtyDataInjection?: { inject: (paneKey: string, data: string) => boolean }
       __releaseScrollIntentTestWrite?: () => void
     }
+
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const terminal = pane.terminal
     const originalWrite = terminal.write
     const heldWrites: { data: string; callback?: () => void }[] = []
@@ -192,28 +226,36 @@ async function injectQueuedWriteThenType(page: Page, paneKey: string): Promise<v
     injectionTarget.__releaseScrollIntentTestWrite = () => {
       terminal.write = originalWrite
       delete injectionTarget.__releaseScrollIntentTestWrite
+
       for (const held of heldWrites) {
         originalWrite.call(terminal, held.data, held.callback)
       }
     }
+
     try {
       const payload = '\x1b[?2026h\r\x1b[2KWorking in-flight\x1b[?2026l'
+
       if (!injectionTarget.__terminalPtyDataInjection?.inject(targetPaneKey, payload)) {
         throw new Error('PTY injector unavailable')
       }
+
       if (heldWrites.length === 0) {
         throw new Error('Foreground terminal write was not captured')
       }
+
       const textarea = pane.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
       if (!textarea) {
         throw new Error('xterm helper textarea unavailable')
       }
+
       textarea.focus()
     } catch (error) {
       injectionTarget.__releaseScrollIntentTestWrite()
       throw error
     }
   }, paneKey)
+
   try {
     await page.keyboard.press('x')
   } finally {
@@ -233,6 +275,7 @@ async function startStreamingFixturePhase1(page: Page): Promise<string> {
   const ptyId = await waitForActivePanePtyId(page)
   await execInTerminal(page, ptyId, `node "${STREAMING_FIXTURE_PATH}"`)
   await waitForMarkerAtBottom(page, 'STREAM_PHASE1_DONE')
+
   return ptyId
 }
 
@@ -270,10 +313,12 @@ test.describe('terminal scroll intent keeps following output', () => {
     await expect
       .poll(async () => {
         const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+
         return probe ? probe.baseY - probe.viewportY : 0
       })
       .toBeGreaterThan(1)
     const pinned = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+
     if (!pinned) {
       throw new Error('terminal viewport unavailable after wheel pin')
     }
@@ -283,6 +328,7 @@ test.describe('terminal scroll intent keeps following output', () => {
       .poll(
         async () => {
           const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE2_DONE')
+
           return Boolean(probe && probe.containsMarker && probe.viewportY === pinned.viewportY)
         },
         { timeout: 30_000, message: 'visible streaming output moved the wheel-pinned viewport' }
@@ -299,6 +345,7 @@ test.describe('terminal scroll intent keeps following output', () => {
     await expect
       .poll(async () => {
         const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+
         return probe ? probe.baseY - probe.viewportY : 0
       })
       .toBeGreaterThan(2)
@@ -310,6 +357,7 @@ test.describe('terminal scroll intent keeps following output', () => {
       .poll(
         async () => {
           const probe = await probeActiveViewport(orcaPage, 'STREAM_PHASE1_DONE')
+
           return probe ? probe.baseY - probe.viewportY : Number.NaN
         },
         { timeout: 5_000, intervals: [25] }

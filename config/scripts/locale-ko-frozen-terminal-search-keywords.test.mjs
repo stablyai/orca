@@ -41,6 +41,7 @@ describe('Korean frozen-terminal settings search keywords', () => {
 
   it('ships the pair in the Korean catalog', () => {
     const catalog = readCatalog('ko')
+
     for (const { key, ko } of PAIR) {
       expect(getValue(catalog, key), key).toBe(ko)
     }
@@ -49,6 +50,7 @@ describe('Korean frozen-terminal settings search keywords', () => {
   it('survives the canonical catalog repair policy', () => {
     const english = readCatalog('en')
     const catalog = readCatalog('ko')
+
     for (const { key, enValue } of PAIR) {
       expect(getValue(english, key), key).toBe(enValue)
       const localeValue = getValue(catalog, key)

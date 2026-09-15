@@ -73,14 +73,18 @@ export async function getWorkItemDetails(
         localGitOptions
       )
     ).source
+
   if (!projectRef) {
     return null
   }
+
   await acquire()
+
   try {
     if (type === 'issue') {
       return await fetchIssueDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
     }
+
     return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
   } catch {
     return null
@@ -109,15 +113,19 @@ async function fetchIssueDetails(
     ),
     fetchDiscussions(repoPath, projectRef, 'issue', iid, connectionId, localGitOptions)
   ])
+
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
+
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
     const full = mapIssueToWorkItem(issueRaw, projectRef.path, projectRef)
     // Why: omit repoId from the returned shape — the renderer stamps
     // it from the dialog's caller (TaskPage / picker) so the main
     // process doesn't need to know Orca's Repo.id.
     const { repoId: _repoId, ...rest } = full
+
     return rest
   })()
+
   return {
     item,
     body: issueRaw.description ?? '',
@@ -149,13 +157,18 @@ async function fetchMRDetails(
     ),
     fetchDiscussions(repoPath, projectRef, 'mr', iid, connectionId, localGitOptions)
   ])
+
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR
+
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
     const full = mapMRToWorkItem(mrRaw, projectRef.path, projectRef)
     const { repoId: _repoId, ...rest } = full
+
     return rest
   })()
+
   const pipelineId = mrRaw.head_pipeline?.id
+
   const pipelineJobs =
     typeof pipelineId === 'number'
       ? await fetchPipelineJobs(
@@ -166,6 +179,7 @@ async function fetchMRDetails(
           localGitOptions
         ).catch(() => [])
       : undefined
+
   const [reviewers, approvalState, files] = await Promise.all([
     fetchMRReviewers(repoPath, projectRef, iid, connectionId, localGitOptions).catch(() =>
       (mrRaw.reviewers ?? []).map(mapGitLabUser).filter((u): u is GitLabAssignableUser => !!u)
@@ -175,6 +189,7 @@ async function fetchMRDetails(
     ),
     fetchMRFiles(repoPath, projectRef, iid, connectionId, localGitOptions).catch(() => [])
   ])
+
   return {
     item,
     body: mrRaw.description ?? '',

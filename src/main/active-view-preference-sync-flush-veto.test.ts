@@ -22,29 +22,38 @@ const gate = vi.hoisted(() => ({
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof Fs>('node:fs')
+
   const unlinkSync = ((...args: Parameters<typeof actual.unlinkSync>) => {
     if (gate.failUnlink) {
       throw Object.assign(new Error('busy'), { code: 'EBUSY' })
     }
+
     return actual.unlinkSync(...args)
   }) as typeof actual.unlinkSync
+
   return { ...actual, unlinkSync }
 })
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+
   const rename = (async (...args: Parameters<typeof actual.rename>) => {
     gate.renameCalls += 1
+
     if (gate.blockRename) {
       await new Promise<void>((resolve) => gate.waiters.push(resolve))
     }
+
     const result = await actual.rename(...args)
     gate.renameCompleted.splice(0).forEach((resolve) => resolve())
+
     if (gate.blockAfterRename) {
       await new Promise<void>((resolve) => gate.afterRenameWaiters.push(resolve))
     }
+
     return result
   }) as typeof actual.rename
+
   return { ...actual, rename }
 })
 

@@ -11,19 +11,25 @@ function findEndpointEnvFile(root: string): string | null {
   if (!existsSync(root)) {
     return null
   }
+
   const entries = readdirSync(root, { withFileTypes: true })
+
   for (const entry of entries) {
     const fullPath = path.join(root, entry.name)
+
     if (entry.isFile() && isAgentHookEndpointFileName(entry.name)) {
       return fullPath
     }
+
     if (entry.isDirectory()) {
       const nested = findEndpointEnvFile(fullPath)
+
       if (nested) {
         return nested
       }
     }
   }
+
   return null
 }
 
@@ -35,6 +41,7 @@ export async function readHookEndpoint(app: ElectronApplication): Promise<AgentH
     .poll(
       () => {
         endpointPath = findEndpointEnvFile(hookRoot)
+
         return endpointPath
       },
       {
@@ -43,9 +50,11 @@ export async function readHookEndpoint(app: ElectronApplication): Promise<AgentH
       }
     )
     .not.toBeNull()
+
   if (!endpointPath) {
     throw new Error(`Agent hook endpoint file not found under ${hookRoot}`)
   }
+
   return parseAgentHookEndpointFile(readFileSync(endpointPath, 'utf8'))
 }
 
@@ -60,6 +69,7 @@ export async function emitCodexHookStatus(
   }
 ): Promise<void> {
   const [tabId] = status.paneKey.split(':')
+
   const payload =
     status.state === 'working'
       ? {
@@ -70,6 +80,7 @@ export async function emitCodexHookStatus(
           hook_event_name: 'Stop',
           last_assistant_message: status.lastAssistantMessage
         }
+
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',
     headers: {
@@ -85,6 +96,7 @@ export async function emitCodexHookStatus(
       payload
     })
   })
+
   if (response.status !== 204) {
     throw new Error(`Codex hook POST returned ${response.status}`)
   }
@@ -99,6 +111,7 @@ export async function emitGrokHookPayload(
   }
 ): Promise<void> {
   const [tabId] = event.paneKey.split(':')
+
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/grok`, {
     method: 'POST',
     headers: {
@@ -114,6 +127,7 @@ export async function emitGrokHookPayload(
       payload: event.payload
     })
   })
+
   if (response.status !== 204) {
     throw new Error(`Grok hook POST returned ${response.status}`)
   }

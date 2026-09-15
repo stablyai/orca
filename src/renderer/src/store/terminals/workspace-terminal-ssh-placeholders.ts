@@ -15,17 +15,22 @@ export function addHydratedSshWorktreePlaceholders(
   // Why copy-on-write: hydration writes this map straight to the store; an unconditional copy
   // rerendered every whole-map selector on every hydration with no data change.
   let worktreesByRepo = sourceWorktreesByRepo
+
   for (const worktreeId of Object.keys(tabsByWorktree)) {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
+
     if (!sshRepoIds.has(repoId)) {
       continue
     }
+
     if ((worktreesByRepo[repoId] ?? []).some((worktree) => worktree.id === worktreeId)) {
       continue
     }
+
     // Strip synthetic folder suffixes so the placeholder path remains a valid cwd.
     const path = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? ''
     const displayName = path.split(/[/\\]/).pop() || path
+
     const placeholder: Worktree = {
       id: worktreeId,
       repoId,
@@ -47,10 +52,13 @@ export function addHydratedSshWorktreePlaceholders(
       isBare: false,
       isMainWorktree: false
     }
+
     if (worktreesByRepo === sourceWorktreesByRepo) {
       worktreesByRepo = { ...sourceWorktreesByRepo }
     }
+
     worktreesByRepo[repoId] = [...(worktreesByRepo[repoId] ?? []), placeholder]
   }
+
   return worktreesByRepo
 }

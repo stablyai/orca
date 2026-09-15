@@ -76,6 +76,7 @@ export function createAgentStatusExtensionHarness(args: {
   )
 
   const spawnedChildren: FakeCurlChild[] = []
+
   const spawnMock = vi.fn(() => {
     const child: FakeCurlChild = {
       on: vi.fn(),
@@ -84,7 +85,9 @@ export function createAgentStatusExtensionHarness(args: {
         end: vi.fn()
       }
     }
+
     spawnedChildren.push(child)
+
     return child
   })
 
@@ -107,17 +110,21 @@ export function createAgentStatusExtensionHarness(args: {
   const module = {
     exports: {} as { default?: (pi: { on: (name: string, handler: HookHandler) => void }) => void }
   }
+
   const requireMock = vi.fn((specifier: string) => {
     if (specifier === 'fs') {
       return fsMock
     }
+
     if (specifier === 'child_process') {
       return { spawn: spawnMock }
     }
+
     throw new Error(`unexpected require(${specifier})`)
   })
 
   const killMock = vi.fn(args.killImpl ?? (() => undefined))
+
   const processMock = {
     kill: killMock,
     env: {
@@ -148,23 +155,28 @@ export function createAgentStatusExtensionHarness(args: {
     setTimeout,
     clearTimeout
   } as Record<string, unknown>
+
   context.globalThis = context
 
   const source = getPiAgentStatusExtensionSource(args.kind)
+
   const output = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2020
     }
   }).outputText
+
   runInNewContext(output, context)
 
   const register = module.exports.default
+
   if (!register) {
     throw new Error('expected default export from generated source')
   }
 
   const handlers: Record<string, HookHandler> = {}
+
   const registerInto = (target: Record<string, HookHandler>): void => {
     register({
       on(name: string, handler: HookHandler) {
@@ -172,6 +184,7 @@ export function createAgentStatusExtensionHarness(args: {
       }
     })
   }
+
   registerInto(handlers)
 
   return {
@@ -189,6 +202,7 @@ export function createAgentStatusExtensionHarness(args: {
       for (const key of Object.keys(handlers)) {
         delete handlers[key]
       }
+
       registerInto(handlers)
     }
   }

@@ -10,16 +10,21 @@ function createServiceWithLeader(): {
   splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[]
 } {
   const service = new ClaudeAgentTeamsService()
+
   const launch = service.createLaunchEnv({
     leaderHandle: 'leader-handle',
     baseEnv: { PATH: '/usr/bin' },
     shimDir: '/tmp/orca-shim',
     shimBin: '/usr/bin/orca'
   })
+
   expect(launch.env.ORCA_AGENT_TEAMS_SHIM_DIR).toBe('/tmp/orca-shim')
+
   const splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[] =
     []
+
   let splitCount = 0
+
   const api: AgentTeamsTerminalApi = {
     splitTerminal: vi.fn(async (handle, opts) => {
       splitCount += 1
@@ -29,6 +34,7 @@ function createServiceWithLeader(): {
         command: opts.command,
         envPane: opts.env?.TMUX_PANE
       })
+
       return { handle: `teammate-${splitCount}`, tabId: 'tab-1', paneRuntimeId: -1 }
     }),
     readTerminal: vi.fn(async (handle) => ({
@@ -62,6 +68,7 @@ function createServiceWithLeader(): {
       rendererGraphEpoch: 1
     }))
   }
+
   return {
     service,
     teamId: launch.teamId,
@@ -75,6 +82,7 @@ function createServiceWithLeader(): {
 describe('ClaudeAgentTeamsService', () => {
   it('supports Claude core tmux teammate sequence with native splits', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+
     const request = (argv: string[]) =>
       service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
 
@@ -101,6 +109,7 @@ describe('ClaudeAgentTeamsService', () => {
 
   it('puts the first teammate on the right, then stacks repeated main-vertical teammates downward', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+
     const request = (argv: string[]) =>
       service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
 
@@ -118,6 +127,7 @@ describe('ClaudeAgentTeamsService', () => {
 
   it('does not recycle fake pane ids after a teammate closes', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
@@ -143,6 +153,7 @@ describe('ClaudeAgentTeamsService', () => {
 
   it('relaunches a teammate via respawn-pane after a cat holding split', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
@@ -191,6 +202,7 @@ describe('ClaudeAgentTeamsService', () => {
 
   it('removes the pane when replacement split fails after a confirmed placeholder stop', async () => {
     const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
@@ -220,6 +232,7 @@ describe('ClaudeAgentTeamsService', () => {
 
   it('keeps a pane registered when its process stop is unconfirmed', async () => {
     const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
@@ -241,6 +254,7 @@ describe('ClaudeAgentTeamsService', () => {
 
   it('does not launch a replacement when the placeholder stop is unconfirmed', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
+
     const request = (argv: string[], envPane = leaderPane) =>
       service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
 
@@ -301,6 +315,7 @@ describe('ClaudeAgentTeamsService', () => {
   it('keeps the inherited Windows `Path` instead of minting a truncated `PATH`', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const launch = new ClaudeAgentTeamsService().createLaunchEnv({
         leaderHandle: 'leader-handle',

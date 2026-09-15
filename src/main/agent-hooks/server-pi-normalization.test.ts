@@ -33,6 +33,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'before_agent_start', prompt: 'rename this fn' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('pi')
     expect(result?.payload.prompt).toBe('rename this fn')
@@ -44,6 +45,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'before_agent_start', prompt: 'status for omp' }),
       'production'
     )
+
     expect(started?.payload).toMatchObject({
       state: 'working',
       prompt: 'status for omp',
@@ -55,6 +57,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'agent_end' }),
       'production'
     )
+
     expect(done?.payload).toMatchObject({
       state: 'done',
       prompt: 'status for omp',
@@ -68,11 +71,13 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'before_agent_start', prompt: 'first prompt' }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'agent_start' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('first prompt')
   })
@@ -87,11 +92,13 @@ describe('Pi hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'before_agent_start', prompt: 'next' }),
       'production'
     )
+
     expect(result?.payload.toolName).toBeUndefined()
     expect(result?.payload.toolInput).toBeUndefined()
   })
@@ -106,6 +113,7 @@ describe('Pi hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('bash')
     expect(result?.payload.toolInput).toBe('pnpm test')
@@ -121,6 +129,7 @@ describe('Pi hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('read')
     expect(result?.payload.toolInput).toBe('src/main/index.ts')
@@ -136,6 +145,7 @@ describe('Pi hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.lastAssistantMessage).toBe('Done — I refactored the helper.')
   })
@@ -146,6 +156,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'message_end', role: 'user', text: 'hi' }),
       'production'
     )
+
     // Why: pi captures the user prompt via before_agent_start, so a user-role message_end must not flip lastAssistantMessage.
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
@@ -156,6 +167,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'agent_end' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.agentType).toBe('pi')
   })
@@ -166,6 +178,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
+
     // Why: Pi emits shutdown on reload/replace while the PTY stays alive; only agent_end proves turn completion.
     expect(result).toBeNull()
   })
@@ -180,11 +193,13 @@ describe('Pi hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'agent_end' }),
       'production'
     )
+
     expect(result?.payload.lastAssistantMessage).toBe('final reply')
   })
 
@@ -194,6 +209,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'never_heard_of_it' }),
       'production'
     )
+
     expect(result).toBeNull()
   })
 })

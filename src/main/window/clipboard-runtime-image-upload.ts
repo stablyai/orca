@@ -2,7 +2,9 @@ import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboar
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 
 const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+
 const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 async function callRuntimeClipboardMethod<TResult>(
@@ -18,9 +20,11 @@ async function callRuntimeClipboardMethod<TResult>(
     params,
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
+
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   return response.result as TResult
 }
 
@@ -37,6 +41,7 @@ async function saveClipboardImageBase64InRuntime(
     { expectedBase64Length: contentBase64.length, connectionId },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
+
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
@@ -49,9 +54,12 @@ async function saveClipboardImageBase64InRuntime(
         { contentBase64, connectionId }
       )
     }
+
     throw new Error(startResponse.error.message)
   }
+
   const result = startResponse.result
+
   if (
     !result ||
     typeof result !== 'object' ||
@@ -59,7 +67,9 @@ async function saveClipboardImageBase64InRuntime(
   ) {
     throw new Error('Remote clipboard image upload returned an invalid id')
   }
+
   const { uploadId } = result as { uploadId: string }
+
   try {
     for (
       let offset = 0;
@@ -80,15 +90,18 @@ async function saveClipboardImageBase64InRuntime(
         }
       )
     }
+
     const remotePath = await callRuntimeClipboardMethod<string>(
       userDataPath,
       runtimeEnvironmentId,
       'clipboard.commitImageUpload',
       { uploadId }
     )
+
     if (typeof remotePath !== 'string') {
       throw new Error('Remote clipboard image save returned an invalid path')
     }
+
     return remotePath
   } catch (error) {
     // Why: failed chunked pastes should release the remote upload slot
@@ -114,6 +127,7 @@ export function saveClipboardImageBufferInRuntime(
   connectionId: string | null = null
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
+
   return saveClipboardImageBase64InRuntime(
     userDataPath,
     runtimeEnvironmentId,

@@ -14,12 +14,17 @@ import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
+
 const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
+
 const CURRENT_COORDINATOR_PANE = 'tab_current:55555555-5555-4555-8555-555555555555'
+
 const WORKER_HANDLE = 'term_legacy_worker'
+
 const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 afterEach(() => {
@@ -39,12 +44,15 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
+
   const cutoverQuestion = options?.seedCutoverQuestion
     ? before.insertMessage({
         runId: 'run_legacy_local',
@@ -59,6 +67,7 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
         })
       })
     : undefined
+
   const cutoverAnswer =
     cutoverQuestion && options?.seedCutoverAnswer
       ? before.insertMessage({
@@ -70,6 +79,7 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
           threadId: cutoverQuestion.id
         })
       : undefined
+
   before.close()
 
   const raw = new Database(dbPath)
@@ -100,15 +110,18 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
       evidence?.terminalHandle === WORKER_HANDLE &&
       evidence.paneKey === WORKER_PANE &&
       evidence.launchToken === 'worker-token'
+
     const coordinator =
       evidence?.terminalHandle === CURRENT_COORDINATOR_HANDLE &&
       evidence.paneKey === CURRENT_COORDINATOR_PANE &&
       evidence.launchToken === 'current-coordinator-token'
+
     const launchToken = worker
       ? 'worker-token'
       : coordinator
         ? 'current-coordinator-token'
         : undefined
+
     return launchToken
       ? {
           hostScope: { kind: 'local', hostId: 'local' },
@@ -119,6 +132,7 @@ function createHarness(options?: { seedCutoverQuestion?: boolean; seedCutoverAns
         }
       : null
   })
+
   return {
     db,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }),
@@ -239,6 +253,7 @@ describe('legacy question takeover compatibility', () => {
 
   it('resumes and idempotently acknowledges the exact current Run answer', async () => {
     const harness = createHarness()
+
     const asked = await harness.dispatcher.dispatch(
       request(
         'orchestration.ask',
@@ -252,6 +267,7 @@ describe('legacy question takeover compatibility', () => {
         workerEvidence
       )
     )
+
     const questionId = (asked as { result: { messageId: string } }).result.messageId
 
     await expect(
@@ -295,6 +311,7 @@ describe('legacy question takeover compatibility', () => {
         workerEvidence
       )
     )
+
     expect(resumed).toMatchObject({
       ok: true,
       result: {
@@ -307,6 +324,7 @@ describe('legacy question takeover compatibility', () => {
         }
       }
     })
+
     const acknowledgement = (
       resumed as {
         result: {
@@ -319,6 +337,7 @@ describe('legacy question takeover compatibility', () => {
         }
       }
     ).result.legacyCompatibility.answerAcknowledgement
+
     expect(harness.db.getMessageById(acknowledgement.answerMessageId)).toMatchObject({
       run_id: harness.adoptedRunId,
       from_handle: `run:${harness.adoptedRunId}`,
@@ -339,6 +358,7 @@ describe('legacy question takeover compatibility', () => {
           workerEvidence
         )
       )
+
     const sqlite = (harness.db as unknown as { db: Database.Database }).db
     sqlite
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')

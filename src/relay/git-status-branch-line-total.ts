@@ -20,6 +20,7 @@ export function buildBranchLineTotalInput(
   if (!mergeBase) {
     return undefined
   }
+
   return {
     mergeBase,
     compute: () =>

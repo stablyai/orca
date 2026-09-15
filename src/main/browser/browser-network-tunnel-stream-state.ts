@@ -1,7 +1,11 @@
 export const BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES = 256 * 1024
+
 export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
+
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES = 256 * 1024
+
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS = 256
+
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
 
 export function validateBrowserNetworkTunnelGeneration(generation: number): void {
@@ -17,10 +21,13 @@ export function reserveBrowserNetworkTunnelStreamId(
   if (openedStreamIds.has(streamId)) {
     return 'stream_id_reused'
   }
+
   if (openedStreamIds.size >= BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS) {
     return 'stream_id_budget_exhausted'
   }
+
   openedStreamIds.add(streamId)
+
   return null
 }
 
@@ -67,4 +74,5 @@ export type BrowserNetworkTunnelSessionOptions = {
   now?: () => number
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
 }
+
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'

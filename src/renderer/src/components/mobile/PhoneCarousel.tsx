@@ -6,6 +6,7 @@ import { TerminalSlide } from './slides/TerminalSlide'
 import { translate } from '@/i18n/i18n'
 
 const DWELL_MS = 4500
+
 const TAP_BEFORE_PUSH_MS = 240
 
 type Phase = 'normal' | 'reset'
@@ -20,7 +21,9 @@ export function PhoneCarousel(): React.JSX.Element {
     if (typeof window === 'undefined') {
       return
     }
+
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     if (reduce) {
       return
     }
@@ -36,6 +39,7 @@ export function PhoneCarousel(): React.JSX.Element {
         if (cancelled) {
           return
         }
+
         // Pulse the tap target on the current slide, then advance.
         if (idx < 2) {
           setTappingSlide(idx)
@@ -43,12 +47,14 @@ export function PhoneCarousel(): React.JSX.Element {
             if (cancelled) {
               return
             }
+
             setTappingSlide(null)
           }, 320)
           advanceTimer = setTimeout(() => {
             if (cancelled) {
               return
             }
+
             const next = idx + 1
             setActiveIdx(next)
             schedule(next)
@@ -61,6 +67,7 @@ export function PhoneCarousel(): React.JSX.Element {
             if (cancelled) {
               return
             }
+
             setPhase('normal')
             schedule(0)
           }, 30)
@@ -73,15 +80,19 @@ export function PhoneCarousel(): React.JSX.Element {
 
     return () => {
       cancelled = true
+
       if (dwellTimer) {
         clearTimeout(dwellTimer)
       }
+
       if (tapTimer) {
         clearTimeout(tapTimer)
       }
+
       if (advanceTimer) {
         clearTimeout(advanceTimer)
       }
+
       if (resetTimer) {
         clearTimeout(resetTimer)
       }
@@ -95,11 +106,13 @@ export function PhoneCarousel(): React.JSX.Element {
     if (phase !== 'reset') {
       return
     }
+
     const id = requestAnimationFrame(() => {
       // force layout so the no-transition state takes effect before
       // transitions are re-enabled
       void containerRef.current?.offsetHeight
     })
+
     return () => cancelAnimationFrame(id)
   }, [phase])
 

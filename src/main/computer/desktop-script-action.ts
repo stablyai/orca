@@ -39,6 +39,7 @@ export function actionCapabilityKey(
     pasteText: 'pasteText',
     setValue: 'setValue'
   } satisfies Record<NativeActionMethod, keyof ComputerProviderCapabilities['supports']['actions']>
+
   return keys[method]
 }
 
@@ -53,6 +54,7 @@ function desktopActionMetadata(
       : method === 'setValue' || method === 'performSecondaryAction'
         ? ('accessibility' as const)
         : ('synthetic' as const)
+
   return {
     path,
     actionName:
@@ -91,15 +93,19 @@ export function desktopActionWindowTarget(
   if (explicitWindowId !== undefined) {
     return { windowId: explicitWindowId }
   }
+
   if (explicitWindowIndex !== undefined) {
     return { windowIndex: explicitWindowIndex }
   }
+
   if (current?.windowId !== null && current?.windowId !== undefined) {
     return { windowId: current.windowId }
   }
+
   if (current?.windowIndex !== null && current?.windowIndex !== undefined) {
     return { windowIndex: current.windowIndex }
   }
+
   return {}
 }
 
@@ -129,33 +135,41 @@ export function verifyDesktopAction(
   if (rawAction?.verification) {
     return action
   }
+
   if (method === 'typeText' || method === 'pressKey' || method === 'hotkey') {
     return {
       ...action,
       verification: { state: 'unverified', reason: 'synthetic_input' }
     }
   }
+
   if (method === 'pasteText') {
     return {
       ...action,
       verification: { state: 'unverified', reason: 'clipboard_paste' }
     }
   }
+
   if (method !== 'setValue') {
     return action
   }
+
   const expected = optionalStringParam(params, 'value')
   const elementIndex = optionalNumberParam(params, 'elementIndex')
+
   if (expected === undefined || elementIndex === undefined) {
     return action
   }
+
   const actual = refreshedElementValue(snapshot, targetElement, elementIndex)
+
   if (actual === expected) {
     return {
       ...action,
       verification: { state: 'verified', property: 'value', expected, actualPreview: actual }
     }
   }
+
   return {
     ...action,
     verification: {
@@ -173,11 +187,13 @@ function refreshedElementValue(
   fallbackIndex: number
 ): string | undefined {
   const elements = snapshot?.elements ?? []
+
   // Why: app re-renders can reassign sparse element indexes after the action;
   // verification should follow the provider identity of the acted-on element.
   const identityMatch = targetElement
     ? elements.find((element) => sameElementIdentity(element, targetElement))
     : undefined
+
   return (identityMatch ?? elements.find((element) => element.index === fallbackIndex))?.value
 }
 
@@ -185,9 +201,11 @@ function sameElementIdentity(left: BridgeElement, right: BridgeElement): boolean
   if (left.runtimeId !== undefined && right.runtimeId !== undefined) {
     return stableIdentityKey(left.runtimeId) === stableIdentityKey(right.runtimeId)
   }
+
   if (left.automationId && right.automationId) {
     return left.automationId === right.automationId
   }
+
   return false
 }
 
@@ -202,7 +220,9 @@ export function cacheParamsForActionResult(
   if (!isWindowChangedAction(action)) {
     return params
   }
+
   const { windowId: _windowId, windowIndex: _windowIndex, ...withoutStaleWindowTarget } = params
+
   return withoutStaleWindowTarget
 }
 
@@ -219,13 +239,16 @@ export function elementParam(
   if (index === undefined) {
     return undefined
   }
+
   const element = snapshot?.elements?.find((candidate) => candidate.index === index)
+
   if (!element) {
     throw new RuntimeClientError(
       'element_not_found',
       `element ${index} is not in the current cached snapshot; run get-app-state again and use a fresh element index`
     )
   }
+
   return element
 }
 

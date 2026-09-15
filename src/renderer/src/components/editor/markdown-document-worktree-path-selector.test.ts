@@ -4,8 +4,11 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 
 const PANEL_COUNT = 200
+
 const UPDATE_COUNT = 200
+
 const WORKTREE_COUNT = 100
+
 const ACTIVE_ID = `worktree-${WORKTREE_COUNT - 1}`
 
 type CountedFixture = {
@@ -17,25 +20,31 @@ type CountedFixture = {
 
 function createCountedFixture(): CountedFixture {
   let reads = 0
+
   const makeWorktree = (index: number): Worktree => {
     const worktree = {
       path: `/worktrees/${index}`
     } as Worktree
+
     Object.defineProperty(worktree, 'id', {
       enumerable: true,
       get: () => {
         reads += 1
+
         return `worktree-${index}`
       }
     })
+
     return worktree
   }
+
   return {
     readCount: () => reads,
     replaceBackgroundWorktree: (worktrees, update) => {
       const next = [...worktrees]
       const index = update % (WORKTREE_COUNT - 1)
       next[index] = makeWorktree(index)
+
       return next
     },
     resetReadCount: () => {
@@ -57,6 +66,7 @@ describe('Markdown document worktree path selector', () => {
       wholeMap = {
         repo: wholeMapFixture.replaceBackgroundWorktree(wholeMap.repo, update)
       }
+
       for (let panel = 0; panel < PANEL_COUNT; panel += 1) {
         wholeMapInvalidations += Number(previousMap !== wholeMap)
         expect(findWorktreeById(wholeMap, ACTIVE_ID)?.path).toBe(`/worktrees/${WORKTREE_COUNT - 1}`)
@@ -65,9 +75,11 @@ describe('Markdown document worktree path selector', () => {
 
     const scopedFixture = createCountedFixture()
     let scopedMap = { repo: scopedFixture.worktrees }
+
     const selectedPaths = Array.from({ length: PANEL_COUNT }, () =>
       selectMarkdownDocumentWorktreePath({ worktreesByRepo: scopedMap }, ACTIVE_ID)
     )
+
     let scopedInvalidations = 0
     scopedFixture.resetReadCount()
 
@@ -75,11 +87,13 @@ describe('Markdown document worktree path selector', () => {
       scopedMap = {
         repo: scopedFixture.replaceBackgroundWorktree(scopedMap.repo, update)
       }
+
       for (let panel = 0; panel < PANEL_COUNT; panel += 1) {
         const nextPath = selectMarkdownDocumentWorktreePath(
           { worktreesByRepo: scopedMap },
           ACTIVE_ID
         )
+
         scopedInvalidations += Number(selectedPaths[panel] !== nextPath)
         selectedPaths[panel] = nextPath
       }

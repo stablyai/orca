@@ -40,27 +40,33 @@ describe('detectInstalledBrowsers — Helium', () => {
   it('detects Helium under its bundle-id data dir via the legacy Cookies path', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           const normalizedPath = slashPath(p)
+
           // Why: Helium stores cookies at the legacy <Profile>/Cookies path, so the
           // newer Network/Cookies probe must miss and the legacy fallback must fire.
           if (normalizedPath.includes('net.imput.helium/Default/Network/Cookies')) {
             return false
           }
+
           if (normalizedPath.endsWith('net.imput.helium/Default/Cookies')) {
             return true
           }
+
           if (normalizedPath.includes('net.imput.helium/Local State')) {
             return true
           }
+
           return false
         },
         readFileSync: (p: string, enc?: string) => {
           if (typeof p === 'string' && slashPath(p).includes('net.imput.helium/Local State')) {
             return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
           }
+
           return actual.readFileSync(p as never, enc as never)
         }
       }
@@ -80,6 +86,7 @@ describe('detectInstalledBrowsers — Helium', () => {
   it('does not list Helium when its data directory is absent', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: () => false
@@ -94,16 +101,20 @@ describe('detectInstalledBrowsers — Helium', () => {
   it('enumerates all Helium profiles from Local State info_cache', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => {
           const normalizedPath = slashPath(p)
+
           if (normalizedPath.endsWith('net.imput.helium/Default/Cookies')) {
             return true
           }
+
           if (normalizedPath.includes('net.imput.helium/Local State')) {
             return true
           }
+
           return false
         },
         readFileSync: (p: string, enc?: string) => {
@@ -117,6 +128,7 @@ describe('detectInstalledBrowsers — Helium', () => {
               }
             })
           }
+
           return actual.readFileSync(p as never, enc as never)
         }
       }
@@ -133,6 +145,7 @@ describe('detectInstalledBrowsers — Helium', () => {
   it('rejects explicit Helium profile selections that escape the browser root', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')
+
       return {
         ...actual,
         existsSync: (p: string) => slashPath(p).includes('Application Support/Outside/Cookies')
@@ -140,6 +153,7 @@ describe('detectInstalledBrowsers — Helium', () => {
     })
 
     const { selectBrowserProfile } = await import('./browser-cookie-import')
+
     const selected = selectBrowserProfile(
       {
         family: 'helium',

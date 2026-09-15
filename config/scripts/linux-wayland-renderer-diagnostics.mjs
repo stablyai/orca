@@ -7,15 +7,18 @@ function delay(ms) {
 async function pollRendererDiagnostics(read) {
   const readPromise = Promise.resolve().then(read)
   readPromise.catch(() => undefined)
+
   // Why: the Wayland GPU stall can freeze renderer protocol calls, so
   // diagnostics need a short deadline too.
   const result = await Promise.race([
     readPromise.then((value) => ({ timedOut: false, value })),
     delay(pollTimeoutMs).then(() => ({ timedOut: true, value: null }))
   ])
+
   if (result.timedOut) {
     throw new Error(`Timed out polling renderer diagnostics after ${pollTimeoutMs}ms.`)
   }
+
   return result.value
 }
 
@@ -23,6 +26,7 @@ export async function collectRendererDiagnostics(page) {
   if (!page) {
     return null
   }
+
   try {
     return await pollRendererDiagnostics(() =>
       page.evaluate(async () => {
@@ -38,11 +42,14 @@ export async function collectRendererDiagnostics(page) {
               setTimeout(() => resolve({ error: `Timed out collecting ${label}` }), 1_000)
             )
           ])
+
         const rectFor = (element) => {
           if (!(element instanceof Element)) {
             return null
           }
+
           const rect = element.getBoundingClientRect()
+
           return {
             x: rect.x,
             y: rect.y,
@@ -50,17 +57,21 @@ export async function collectRendererDiagnostics(page) {
             height: rect.height
           }
         }
+
         const styleFor = (element) => {
           if (!(element instanceof Element)) {
             return null
           }
+
           const style = getComputedStyle(element)
+
           return {
             display: style.display,
             visibility: style.visibility,
             opacity: style.opacity
           }
         }
+
         const store = window.__store
         const state = store?.getState?.()
         const worktreeId = state?.activeWorktreeId ?? null
@@ -71,10 +82,12 @@ export async function collectRendererDiagnostics(page) {
         const tabCount = worktreeId ? (state?.tabsByWorktree?.[worktreeId]?.length ?? 0) : null
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const activePane = manager?.getActivePane?.() ?? null
+
         const paneDiagnostics = (manager?.getPanes?.() ?? []).map((pane) => {
           const xtermElement = pane.container?.querySelector?.('.xterm') ?? pane.terminal?.element
           const viewport = pane.container?.querySelector?.('.xterm-viewport') ?? null
           const buffer = pane.terminal?.buffer?.active ?? null
+
           return {
             paneId: pane.id ?? null,
             leafId: pane.leafId ?? null,
@@ -104,6 +117,7 @@ export async function collectRendererDiagnostics(page) {
               : null
           }
         })
+
         return {
           hasStore: Boolean(store),
           workspaceSessionReady: state?.workspaceSessionReady ?? null,

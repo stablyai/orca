@@ -166,6 +166,7 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
   const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
+
   const rebase: DropdownItem = {
     kind: 'rebase_base',
     label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
@@ -173,9 +174,11 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
       if (!rebaseBaseLabel || !hasRemoteBaseRef) {
         return 'Choose a remote base branch to rebase from'
       }
+
       if (hasDirtyLocalChanges) {
         return 'Try rebasing; git may require committing or stashing local changes first'
       }
+
       return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
     })(),
     disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef

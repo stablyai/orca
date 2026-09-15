@@ -8,6 +8,7 @@ import {
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
+
   let onExit:
     | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
     | null = null
@@ -51,6 +52,7 @@ describe('createIpcPtyTransport', () => {
     spawn.mockResolvedValueOnce({ id: 'adopted-pty', isReattach: true })
     const order: string[] = []
     const transport = createIpcPtyTransport({})
+
     const connecting = transport.connect({
       url: '',
       callbacks: {
@@ -58,6 +60,7 @@ describe('createIpcPtyTransport', () => {
         onData: () => order.push('data')
       }
     })
+
     onData?.({ id: 'adopted-pty', data: 'buffered' })
     await connecting
 
@@ -119,12 +122,14 @@ describe('createIpcPtyTransport', () => {
     const staleData = vi.fn()
     const staleExit = vi.fn()
     const stalePane = createIpcPtyTransport({})
+
     const staleConnect = stalePane.connect({
       url: '',
       sessionId: 'pty-1',
       admitPtyId: () => false,
       callbacks: { onData: staleData, onExit: staleExit }
     })
+
     const currentData = vi.fn()
     const currentExit = vi.fn()
     const currentPane = createIpcPtyTransport({})
@@ -161,6 +166,7 @@ describe('createIpcPtyTransport', () => {
       admitPtyId: () => false,
       callbacks: { onData: onDataCallback, onExit: onExitCallback }
     })
+
     onData?.({ id: 'pty-fresh-fallback', data: 'orphaned output' })
     onExit?.({ id: 'pty-fresh-fallback', code: 0 })
 
@@ -213,6 +219,7 @@ describe('createIpcPtyTransport', () => {
   it('mints a fresh id instead of reopening a discarded same-id session', async () => {
     const { discardPreHandlerPtyState, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')
+
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const discardedId = 'removed-worktree@@discarded-session'
@@ -232,6 +239,7 @@ describe('createIpcPtyTransport', () => {
   it('delivers a buffered dead-session exit without respawning the same session id', async () => {
     const { bufferPreHandlerPtyData, bufferPreHandlerPtyExit } =
       await import('./pty-pre-handler-buffer')
+
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const onDataCallback = vi.fn()
@@ -243,6 +251,7 @@ describe('createIpcPtyTransport', () => {
     bufferPreHandlerPtyExit(sessionId, 17)
 
     const transport = createIpcPtyTransport({ onPtyExit })
+
     const result = await transport.connect({
       url: '',
       sessionId,
@@ -261,6 +270,7 @@ describe('createIpcPtyTransport', () => {
   it('respawns a sole-newborn preserved exit at reveal instead of replaying it', async () => {
     const { bufferPreHandlerPtyExit, consumePreHandlerPtyState, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')
+
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     spawn.mockResolvedValueOnce({ id: 'reveal-pty' })
@@ -288,6 +298,7 @@ describe('createIpcPtyTransport', () => {
   it('rejects a buffered dead-session exit before publishing its final frame', async () => {
     const { bufferPreHandlerPtyData, bufferPreHandlerPtyExit, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')
+
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const onDataCallback = vi.fn()
@@ -299,6 +310,7 @@ describe('createIpcPtyTransport', () => {
     bufferPreHandlerPtyExit(sessionId, 17)
 
     const transport = createIpcPtyTransport({ onPtyExit })
+
     const result = await transport.connect({
       url: '',
       sessionId,
@@ -319,6 +331,7 @@ describe('createIpcPtyTransport', () => {
 
   it('preserves snapshot dimensions and split alt-frame strings when reattaching', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi.fn().mockResolvedValue({
       id: 'pty-reattach',
       isReattach: true,
@@ -343,11 +356,13 @@ describe('createIpcPtyTransport', () => {
           kill: vi.fn(),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
+
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
+
             return () => {}
           })
         }
@@ -355,6 +370,7 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const transport = createIpcPtyTransport()
+
     const result = await transport.connect({
       url: '',
       sessionId: 'pty-reattach',
@@ -406,6 +422,7 @@ describe('createIpcPtyTransport', () => {
   it('threads the daemon pendingEscapeTailAnsi through the reattach connect result (#7329)', async () => {
     // Why: dropping the daemon's mid-escape tail from the reattach result silently regressed the local half of #7329.
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi.fn().mockResolvedValue({
       id: 'pty-reattach-tail',
       isReattach: true,
@@ -433,6 +450,7 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const transport = createIpcPtyTransport()
+
     const result = await transport.connect({
       url: '',
       sessionId: 'pty-reattach-tail',
@@ -447,13 +465,17 @@ describe('createIpcPtyTransport', () => {
 
   it('does not kill a pre-existing session when a reattach resolves after destroy', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnControls: {
       resolve: ((value: { id: string; isReattach: true }) => void) | null
     } = { resolve: null }
+
     const spawnPromise = new Promise<{ id: string; isReattach: true }>((resolve) => {
       spawnControls.resolve = resolve
     })
+
     const spawnMock = vi.fn().mockReturnValue(spawnPromise)
+
     const killMock = vi.fn()
 
     ;(globalThis as { window: typeof window }).window = {
@@ -474,6 +496,7 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const transport = createIpcPtyTransport({})
+
     const connectPromise = transport.connect({
       url: '',
       callbacks: {},
@@ -482,9 +505,11 @@ describe('createIpcPtyTransport', () => {
     })
 
     transport.destroy?.()
+
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
+
     spawnControls.resolve({ id: 'pty-preexisting', isReattach: true })
     await connectPromise
 
@@ -493,16 +518,20 @@ describe('createIpcPtyTransport', () => {
 
   it('kills a fresh session fallback that resolves after the transport was destroyed', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnControls: {
       resolve: ((value: { id: string; sessionExpired: true }) => void) | null
     } = { resolve: null }
+
     const spawnPromise = new Promise<{ id: string; sessionExpired: true }>((resolve) => {
       spawnControls.resolve = resolve
     })
+
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
     spawn.mockReturnValueOnce(spawnPromise)
     const transport = createIpcPtyTransport({})
+
     const connectPromise = transport.connect({
       url: '',
       sessionId: 'pty-missing',
@@ -510,9 +539,11 @@ describe('createIpcPtyTransport', () => {
     })
 
     transport.destroy?.()
+
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
+
     spawnControls.resolve({ id: 'pty-fresh-fallback', sessionExpired: true })
     await connectPromise
 
@@ -523,11 +554,14 @@ describe('createIpcPtyTransport', () => {
   it('kills a PTY that finishes spawning after the transport was destroyed', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
+
     const spawnPromise = new Promise<{ id: string }>((resolve) => {
       spawnControls.resolve = resolve
     })
+
     const spawnMock = vi.fn().mockReturnValue(spawnPromise)
     const killMock = vi.fn()
+
     const onPtySpawn = vi.fn()
 
     ;(globalThis as { window: typeof window }).window = {
@@ -542,11 +576,13 @@ describe('createIpcPtyTransport', () => {
           kill: killMock,
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
+
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
+
             return () => {}
           })
         }
@@ -554,15 +590,18 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const transport = createIpcPtyTransport({ onPtySpawn })
+
     const connectPromise = transport.connect({
       url: '',
       callbacks: {}
     })
 
     transport.destroy?.()
+
     if (!spawnControls.resolve) {
       throw new Error('Expected spawn resolver to be captured')
     }
+
     spawnControls.resolve({ id: 'pty-late' })
     await connectPromise
 

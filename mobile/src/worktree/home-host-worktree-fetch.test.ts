@@ -17,6 +17,7 @@ type FakeSession = {
 
 function fakeSession(): FakeSession {
   const pending: Array<(response: RpcResponse | Error) => void> = []
+
   const fake: FakeSession = {
     calls: 0,
     settle(response: RpcResponse | Error) {
@@ -26,6 +27,7 @@ function fakeSession(): FakeSession {
     client: {
       sendRequest: () => {
         fake.calls += 1
+
         return new Promise<RpcResponse>((resolve, reject) => {
           pending.push((response) =>
             response instanceof Error ? reject(response) : resolve(response)
@@ -46,6 +48,7 @@ function fakeSession(): FakeSession {
       }
     }
   }
+
   return fake
 }
 
@@ -61,11 +64,13 @@ function catalogResponse(count: number, active: number): RpcResponse {
     liveTerminalCount: 0,
     status: index < active ? ('working' as const) : ('done' as const)
   }))
+
   return { ok: true, result: { worktrees } } as RpcResponse
 }
 
 function infoStore() {
   let state: Record<string, HostWorktreeInfo> = {}
+
   return {
     get current() {
       return state
@@ -141,6 +146,7 @@ describe('fetchHomeHostWorktreeInfo', () => {
       if (!gate.observe('connected')) {
         return
       }
+
       const done = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
       host.settle(response)
       await done
@@ -216,10 +222,12 @@ describe('fetchHomeHostWorktreeInfo', () => {
       store.setInfo,
       notDisposed
     )
+
     for (let attempt = 0; attempt < 6; attempt += 1) {
       host.settle(new LogicalClientCutoverError())
       await flush()
     }
+
     await cutoverStorm
 
     // 1 original + CUTOVER_RETRY_LIMIT retries, then the failure is surfaced.

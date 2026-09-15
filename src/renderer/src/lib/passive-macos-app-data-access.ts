@@ -10,6 +10,7 @@ function getUserAgent(userAgent?: string): string {
   if (userAgent !== undefined) {
     return userAgent
   }
+
   return typeof navigator === 'undefined' ? '' : navigator.userAgent
 }
 
@@ -17,6 +18,7 @@ export function isMacAppDataPath(path: string | null | undefined, userAgent?: st
   if (!path || !getUserAgent(userAgent).includes('Mac')) {
     return false
   }
+
   return MAC_APP_DATA_SEGMENT_RE.test(path.replace(/\\/g, '/'))
 }
 
@@ -34,6 +36,7 @@ export function hasInteractiveActiveGitStatusConsumer(args: ActiveGitStatusPolli
   if (!args.activeWorktreeId || !args.worktreePath) {
     return false
   }
+
   return (
     (args.rightSidebarOpen &&
       (args.rightSidebarTab === 'source-control' ||
@@ -47,9 +50,11 @@ export function shouldPollActiveGitStatus(args: ActiveGitStatusPollingArgs): boo
   if (!args.activeWorktreeId || !args.worktreePath) {
     return false
   }
+
   if (hasInteractiveActiveGitStatusConsumer(args)) {
     return true
   }
+
   // Why: macOS app-container paths can trigger the "data from other apps"
   // prompt. Keep terminal-only workspace switching from passively probing them.
   return !isMacAppDataPath(args.worktreePath, args.userAgent)

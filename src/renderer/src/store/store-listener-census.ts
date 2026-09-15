@@ -26,9 +26,11 @@ export function readStoreListenerCount(): number | null {
 export function installStoreListenerCensus<T>(api: StoreListenerCensusApi<T>): void {
   try {
     const originalSubscribe = api.subscribe
+
     if (typeof originalSubscribe !== 'function') {
       return
     }
+
     let live = 0
     liveListenerCount = 0
     api.subscribe = (listener) => {
@@ -36,6 +38,7 @@ export function installStoreListenerCensus<T>(api: StoreListenerCensusApi<T>): v
       liveListenerCount = live
       const unsubscribe = originalSubscribe(listener)
       let released = false
+
       return () => {
         // Why: React can call the same cleanup twice; only the first release counts.
         if (!released) {
@@ -43,6 +46,7 @@ export function installStoreListenerCensus<T>(api: StoreListenerCensusApi<T>): v
           live -= 1
           liveListenerCount = live
         }
+
         unsubscribe()
       }
     }

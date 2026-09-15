@@ -20,9 +20,11 @@ export function settleSpawnThatLeftPaneUnbound(session: ConnectPanePtySession): 
   // Read before settling: the settle clears the lease this branch tests.
   const directSshRetryOwnsRecovery = Boolean(session.directSshRetryAttempt)
   session.settlePaneAttachAttempt(session.directSshRetryAttempt, 'failed')
+
   if (directSshRetryOwnsRecovery) {
     return
   }
+
   warnTerminalLifecycleAnomaly('fresh spawn left the pane unbound', {
     tabId: session.deps.tabId,
     worktreeId: session.deps.worktreeId,

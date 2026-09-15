@@ -52,10 +52,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -250,6 +252,7 @@ describe('discoverInstalledAgentSkills', () => {
 
     const backgroundRefresh =
       _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
+
     const forcedRefresh =
       _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(true)
 
@@ -270,6 +273,7 @@ describe('discoverInstalledAgentSkills', () => {
     const discover = vi
       .fn<() => Promise<SkillDiscoveryResult>>()
       .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+
     vi.stubGlobal('window', {
       api: { skills: { discover } },
       dispatchEvent: vi.fn(),
@@ -278,22 +282,26 @@ describe('discoverInstalledAgentSkills', () => {
 
     await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(true)
     notifyInstalledAgentSkillsRefreshed()
+
     const fromSubscribers = [1, 2, 3].map(() =>
       _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
     )
 
     expect(discover).toHaveBeenCalledTimes(1)
+
     for (const pending of fromSubscribers) {
       await expect(pending).resolves.toMatchObject({
         skills: [expect.objectContaining({ name: 'orca-linear' })]
       })
     }
+
     expect(discover).toHaveBeenCalledTimes(1)
   })
 
   it('caches host and WSL discovery results separately', async () => {
     const hostResult = discoveryResult([skill({ name: 'host-skill' })])
     const wslResult = discoveryResult([skill({ name: 'wsl-skill' })])
+
     const discover = vi
       .fn<
         (target?: {
@@ -303,6 +311,7 @@ describe('discoverInstalledAgentSkills', () => {
       >()
       .mockResolvedValueOnce(hostResult)
       .mockResolvedValueOnce(wslResult)
+
     vi.stubGlobal('window', {
       api: { skills: { discover } }
     })
@@ -327,10 +336,12 @@ describe('discoverInstalledAgentSkills', () => {
   it('forwards filters and isolates filtered discovery caches', async () => {
     const orchestrationResult = discoveryResult([skill({ name: 'orchestration' })])
     const computerUseResult = discoveryResult([skill({ name: 'computer-use' })])
+
     const discover = vi
       .fn()
       .mockResolvedValueOnce(orchestrationResult)
       .mockResolvedValueOnce(computerUseResult)
+
     vi.stubGlobal('window', { api: { skills: { discover } } })
 
     await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(
@@ -385,10 +396,12 @@ describe('discoverInstalledAgentSkills', () => {
   it('caches project host runtime separately from generic host discovery', async () => {
     const genericHostResult = discoveryResult([skill({ name: 'generic-host-skill' })])
     const projectHostResult = discoveryResult([skill({ name: 'project-host-skill' })])
+
     const discover = vi
       .fn()
       .mockResolvedValueOnce(genericHostResult)
       .mockResolvedValueOnce(projectHostResult)
+
     vi.stubGlobal('window', {
       api: { skills: { discover } }
     })

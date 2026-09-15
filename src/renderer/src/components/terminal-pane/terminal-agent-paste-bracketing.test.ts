@@ -13,8 +13,11 @@ import {
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 
 const TAB_ID = 'tab-1'
+
 const AGENT_LEAF = '11111111-1111-4111-8111-111111111111'
+
 const SHELL_LEAF = '22222222-2222-4222-8222-222222222222'
+
 const AGENT_PANE_KEY = `${TAB_ID}:${AGENT_LEAF}`
 
 function agentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -185,6 +188,7 @@ describe('leading-newline paste into a remote agent pane', () => {
       input: vi.fn(),
       paste: vi.fn()
     }
+
     const plan = planTerminalPaste({
       text: PASTED,
       source: 'keyboard',
@@ -192,6 +196,7 @@ describe('leading-newline paste into a remote agent pane', () => {
       terminalBracketedPasteMode: false,
       ...decide({ hostPlatform: 'win32' })
     })
+
     await executeTerminalPastePlan(plan, {
       pasteText: (text, options) => pasteTerminalText(terminal, text, options)
     })

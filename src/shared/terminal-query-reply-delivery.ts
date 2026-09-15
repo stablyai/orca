@@ -22,12 +22,16 @@ export function deliverTerminalQueryReplyPayload(
   delivery: Pick<PtyStartupReplyDelivery, 'answer'>
 ): boolean {
   const replies = extractOnlyTerminalQueryReplies(data)
+
   if (!replies || !replies.every(needsCookedEchoSafeQueryReply)) {
     return false
   }
+
   let accepted = false
+
   for (const reply of replies) {
     accepted = delivery.answer(reply) || accepted
   }
+
   return accepted
 }

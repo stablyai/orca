@@ -20,6 +20,7 @@ export function pluginCommandKeybindingDefinition(
   command: ActivePluginCommand
 ): KeybindingDefinition {
   const defaults = command.keybindings.map((keybinding) => keybinding.key)
+
   return {
     id: pluginCommandKeybindingActionId(command),
     title: `${command.title} — ${command.pluginName}`,
@@ -64,12 +65,15 @@ export function findPluginCommandForKeybinding(
     if (command.context === 'worktree' && !hasActiveWorktree) {
       continue
     }
+
     const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(
       (binding) => keybindingMatchesInput(binding, input, platform)
     )
+
     if (matches) {
       return command
     }
   }
+
   return null
 }

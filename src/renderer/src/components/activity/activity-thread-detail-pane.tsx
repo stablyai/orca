@@ -79,6 +79,7 @@ export function ActivityThreadDetailPane({
                 </div>
               )
             }
+
             return (
               <div className="relative min-h-0 flex-1 overflow-hidden bg-editor-surface">
                 <div

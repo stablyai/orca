@@ -72,7 +72,9 @@ export class ExecutionHostNotDispatchableError extends Error {
 }
 
 type LocalRoute = { kind: 'local'; hostId: typeof LOCAL_EXECUTION_HOST_ID }
+
 type RuntimeRoute = { kind: 'runtime'; hostId: `runtime:${string}`; environmentId: string }
+
 type SshRoute<TProvider> = {
   kind: 'ssh'
   hostId: `ssh:${string}`
@@ -84,20 +86,24 @@ type SshRoute<TProvider> = {
 // The SSH table stores `SshGitProvider`; narrowing the route to `IGitProvider` would drop the
 // remote-only methods (commit-message plans, push-target materialization) that callers need.
 export type ExecutionHostGitRoute = LocalRoute | RuntimeRoute | SshRoute<SshGitProvider>
+
 export type ExecutionHostFilesystemRoute = LocalRoute | RuntimeRoute | SshRoute<IFilesystemProvider>
 
 // Takes an unvalidated string rather than `ExecutionHostId`: validating is the point, and host
 // ids also arrive from persistence and IPC where the compiler cannot vouch for them.
 function parseRoutableHost(hostId: string | null | undefined): ParsedExecutionHost {
   const parsed = parseExecutionHostId(hostId)
+
   if (!parsed) {
     throw new UnresolvableExecutionHostError(hostId)
   }
+
   return parsed
 }
 
 export function resolveGitRouteForHost(hostId: string | null | undefined): ExecutionHostGitRoute {
   const parsed = parseRoutableHost(hostId)
+
   switch (parsed.kind) {
     case 'local':
       return { kind: 'local', hostId: parsed.id }
@@ -117,6 +123,7 @@ export function resolveFilesystemRouteForHost(
   hostId: string | null | undefined
 ): ExecutionHostFilesystemRoute {
   const parsed = parseRoutableHost(hostId)
+
   switch (parsed.kind) {
     case 'local':
       return { kind: 'local', hostId: parsed.id }
@@ -135,12 +142,15 @@ export function resolveFilesystemRouteForHost(
 /** For call sites that are structurally remote-only: local and runtime are both routing errors. */
 export function requireGitProviderForHost(hostId: string | null | undefined): IGitProvider {
   const route = resolveGitRouteForHost(hostId)
+
   if (route.kind !== 'ssh') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
+
   if (!route.provider) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return route.provider
 }
 
@@ -148,11 +158,14 @@ export function requireFilesystemProviderForHost(
   hostId: string | null | undefined
 ): IFilesystemProvider {
   const route = resolveFilesystemRouteForHost(hostId)
+
   if (route.kind !== 'ssh') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
+
   if (!route.provider) {
     throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return route.provider
 }

@@ -4,6 +4,7 @@ import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'
 
 export type AutomationRunsScope = 'local' | 'remote'
+
 export type AutomationRunsStatusFilter = 'all' | 'successful' | 'failed' | 'active' | 'skipped'
 
 export type AutomationRunsDashboardEntry = {
@@ -24,27 +25,34 @@ export type AutomationRunsDashboardFailure = {
 export function getAutomationRunsHostKey(row: AutomationListRow): string {
   const authority = row.catalogRef?.authority
   const selector = row.catalogRef?.selector
+
   const authorityKey =
     authority?.kind === 'runtime' ? `runtime:${authority.environmentId}` : 'desktop'
+
   const selectorKey =
     selector?.kind === 'ssh'
       ? `ssh:${selector.targetId}`
       : selector?.kind === 'orphan'
         ? 'orphan'
         : 'self'
+
   return `${authorityKey}:${selectorKey}`
 }
 
 export function getAutomationRunsScope(row: AutomationListRow): AutomationRunsScope {
   const authority = row.catalogRef?.authority
   const selector = row.catalogRef?.selector
+
   if (authority?.kind === 'runtime' || selector?.kind === 'ssh') {
     return 'remote'
   }
+
   if (selector?.kind === 'self') {
     return 'local'
   }
+
   const runHost = parseExecutionHostId(row.automation.runContext?.hostId)
+
   return row.automation.executionTargetType === 'ssh' || runHost?.kind === 'runtime'
     ? 'remote'
     : 'local'
@@ -72,15 +80,19 @@ function matchesStatus(status: AutomationRunStatus, filter: AutomationRunsStatus
   if (filter === 'all') {
     return true
   }
+
   if (filter === 'successful') {
     return status === 'completed'
   }
+
   if (filter === 'failed') {
     return status === 'dispatch_failed'
   }
+
   if (filter === 'skipped') {
     return status.startsWith('skipped')
   }
+
   return status === 'pending' || status === 'dispatching' || status === 'dispatched'
 }
 
@@ -97,6 +109,7 @@ export function filterAutomationRunsDashboardEntries({
 }): AutomationRunsDashboardEntry[] {
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const selectedHosts = new Set(hostKeys)
+
   return entries.filter((entry) => {
     if (
       !matchesStatus(entry.run.status, status) ||
@@ -104,9 +117,11 @@ export function filterAutomationRunsDashboardEntries({
     ) {
       return false
     }
+
     if (!normalizedQuery) {
       return true
     }
+
     return entry.searchText.includes(normalizedQuery)
   })
 }
@@ -118,21 +133,26 @@ export function countAutomationRunOutcomes(
   const dayAgo = now - 24 * 60 * 60 * 1000
   const weekAgo = now - 7 * 24 * 60 * 60 * 1000
   const counts = { successful24h: 0, failed24h: 0, successful7d: 0, failed7d: 0 }
+
   for (const entry of entries) {
     // A clock-skewed or future-dated run has not happened inside either window yet.
     if (entry.run.scheduledFor > now) {
       continue
     }
+
     const successful = entry.run.status === 'completed'
     const failed = entry.run.status === 'dispatch_failed'
+
     if (entry.run.scheduledFor >= weekAgo) {
       counts.successful7d += successful ? 1 : 0
       counts.failed7d += failed ? 1 : 0
     }
+
     if (entry.run.scheduledFor >= dayAgo) {
       counts.successful24h += successful ? 1 : 0
       counts.failed24h += failed ? 1 : 0
     }
   }
+
   return counts
 }

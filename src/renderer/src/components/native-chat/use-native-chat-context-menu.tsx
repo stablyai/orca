@@ -111,15 +111,18 @@ export function useNativeChatContextMenu({
 } {
   const menuOpenedAtRef = useRef(0)
   const lastSelectedTextRef = useRef('')
+
   const [state, setState] = useState<NativeChatContextMenuState>({
     open: false,
     point: { x: 0, y: 0 },
     selectedText: ''
   })
+
   const shortcutLabel = nativeChatToggleShortcutLabel(isMacPlatform())
 
   const rememberCurrentSelection = useCallback(() => {
     const selectedText = getNativeChatSelectedText(rootRef.current)
+
     if (selectedText.trim().length > 0) {
       lastSelectedTextRef.current = selectedText
     }
@@ -129,7 +132,9 @@ export function useNativeChatContextMenu({
     if (!enabled) {
       return
     }
+
     document.addEventListener('selectionchange', rememberCurrentSelection)
+
     return () => document.removeEventListener('selectionchange', rememberCurrentSelection)
   }, [enabled, rememberCurrentSelection])
 
@@ -158,6 +163,7 @@ export function useNativeChatContextMenu({
     if (!open && Date.now() - menuOpenedAtRef.current < 100) {
       return
     }
+
     setState((prev) => ({ ...prev, open }))
   }, [])
 
@@ -329,14 +335,18 @@ export function useNativeChatContextMenu({
 
 function getNativeChatSelectedText(root: HTMLElement | null): string {
   const selection = window.getSelection()
+
   if (!root || !selection || selection.isCollapsed) {
     return ''
   }
+
   const anchor = selection.anchorNode
   const focus = selection.focusNode
+
   if (!nodeBelongsToRoot(anchor, root) || !nodeBelongsToRoot(focus, root)) {
     return ''
   }
+
   return selection.toString()
 }
 
@@ -344,5 +354,6 @@ function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {
   if (!node) {
     return false
   }
+
   return root.contains(node)
 }

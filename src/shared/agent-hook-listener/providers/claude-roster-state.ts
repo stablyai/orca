@@ -49,6 +49,7 @@ export function voidClaimsOfReplacedClaudeSession(
   ) {
     return
   }
+
   // Compact/unknown SessionStart events are intentionally ignored by the status fold; do not let
   // them advance the owner anchor or the next real lead event will miss the replacement.
   if (
@@ -59,15 +60,20 @@ export function voidClaimsOfReplacedClaudeSession(
   ) {
     return
   }
+
   const sessionId = readString(hookPayload, 'session_id')
+
   if (!sessionId) {
     return
   }
+
   const previousOwner = state.claudeSessionOwnerByPaneKey.get(paneKey)
   state.claudeSessionOwnerByPaneKey.set(paneKey, sessionId)
+
   if (previousOwner === undefined || previousOwner === sessionId) {
     return
   }
+
   // Why: a compact restart mints a SessionStart mid-turn under the same conversation; the existing
   // handler already fails closed on non-idle sources, and this must not undercut it. No other
   // allow-listed event carries a compact `trigger`, so SessionStart is the whole guard — if a
@@ -75,16 +81,20 @@ export function voidClaimsOfReplacedClaudeSession(
   if (eventName === 'SessionStart') {
     return
   }
+
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+
   if (!roster) {
     return
   }
+
   for (const [id, tracked] of roster) {
     if (tracked.confirmedTeammate !== true) {
       roster.delete(id)
     }
   }
+
   if (roster.size === 0) {
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
   }
@@ -95,10 +105,12 @@ export function getOrCreateClaudeSubagentRoster(
   paneKey: string
 ): ClaudeSubagentRoster {
   let roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+
   if (!roster) {
     roster = new Map()
     state.claudeSubagentRosterByPaneKey.set(paneKey, roster)
   }
+
   return roster
 }
 
@@ -131,10 +143,13 @@ export function resolveClaudePaneStatus(
   if (lead.state !== 'done') {
     return { stateName: lead.state }
   }
+
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+
   if (claudeRosterHasWorkingSubagent(roster)) {
     return { stateName: 'working' }
   }
+
   if (
     !lead.interrupted &&
     (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
@@ -142,8 +157,10 @@ export function resolveClaudePaneStatus(
   ) {
     return { stateName: 'working', workingMode: 'monitoring' }
   }
+
   return { stateName: 'done' }
 }
+
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
@@ -160,12 +177,15 @@ export function seedClaudeSubagentRosterFromSnapshots(
   if (snapshots.length === 0 || state.claudeSubagentRosterByPaneKey.has(paneKey)) {
     return
   }
+
   const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+
   for (const snapshot of snapshots) {
     // Why: idle-teammate liveness can't be proven across a restart (its TeammateIdle confirmation is gone); only working seeds restore, and a live teammate re-earns its row via SubagentStart.
     if (snapshot.state !== 'working') {
       continue
     }
+
     roster.set(snapshot.id, {
       state: 'working',
       startedAt: snapshot.startedAt,
@@ -193,9 +213,11 @@ export function seedClaudeLeadTurnFromPersistedStatus(
         ? { turnCompletedAt: status.payload.turnCompletedAt }
         : {})
     })
+
     if (status.payload.prompt) {
       state.lastPromptByPaneKey.set(paneKey, status.payload.prompt)
     }
+
     if (status.payload.lastAssistantMessage) {
       state.lastToolByPaneKey.set(paneKey, {
         lastAssistantMessage: status.payload.lastAssistantMessage,
@@ -215,12 +237,15 @@ export function reapRestoredClaudeSubagentsForDeadPane(
   paneKey: string
 ): boolean {
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+
   if (!roster || !reapUnconfirmedRestoredClaudeSubagents(roster)) {
     return false
   }
+
   if (roster.size === 0) {
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
   }
+
   return true
 }
 
@@ -231,9 +256,11 @@ export function clearClaudePendingWaitForAgent(
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return
   }
+
   state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
   const previousTool = state.lastToolByPaneKey.get(paneKey)
   state.lastToolByPaneKey.set(
@@ -255,10 +282,12 @@ export function clearClaudeAnsweredQuestionWait(
   workingMode?: AgentWorkingMode
 } {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+
   const restored =
     lead?.state === 'waiting'
       ? (lead.stateBeforeWait ?? { state: 'working' as const })
       : { state: 'working' as const }
+
   state.claudeLeadStateByPaneKey.set(paneKey, { ...restored })
   const previousTool = state.lastToolByPaneKey.get(paneKey)
   state.lastToolByPaneKey.set(
@@ -271,6 +300,7 @@ export function clearClaudeAnsweredQuestionWait(
       : {}
   )
   const resolved = resolveClaudePaneStatus(state, paneKey, restored)
+
   return resolved.stateName === restored.state && resolved.workingMode === undefined
     ? restored
     : {

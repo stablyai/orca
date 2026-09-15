@@ -59,12 +59,16 @@ export function clearTrackedSessionOption(
   if (!modelId) {
     return
   }
+
   const current = record.valuesByModel[modelId]
+
   if (!current || !(optionId in current)) {
     return
   }
+
   const next = { ...current }
   delete next[optionId]
+
   if (Object.keys(next).length === 0) {
     delete record.valuesByModel[modelId]
   } else {
@@ -75,6 +79,7 @@ export function clearTrackedSessionOption(
 export function clearNativeChatSessionModel(record: NativeChatSessionOptionRecord): void {
   const modelId = typeof record.model?.value === 'string' ? record.model.value : null
   record.model = undefined
+
   if (modelId) {
     delete record.valuesByModel[modelId]
   }
@@ -91,17 +96,22 @@ export function setTrackedSessionOption(
 ): string | null {
   if (optionId === 'model') {
     record.model = { value, source }
+
     return typeof value === 'string' ? value : null
   }
+
   const modelId =
     (typeof record.model?.value === 'string' ? record.model.value : null) ?? fallbackModelId
+
   if (!modelId) {
     return null
   }
+
   record.valuesByModel[modelId] = {
     ...record.valuesByModel[modelId],
     [optionId]: { value, source }
   }
+
   return modelId
 }
 
@@ -129,25 +139,34 @@ export function applyNativeChatReportedSessionOptions(
 ): boolean {
   const sourceFor = (id: string): TrackedNativeChatSessionOption['source'] =>
     confirmed === undefined || confirmed.includes(id) ? 'reported' : 'dispatched'
+
   const modelId = typeof values.model === 'string' ? values.model : null
+
   if (!modelId) {
     return false
   }
+
   const modelChanged = record.model?.value !== modelId
   let changed = modelChanged || record.model?.source !== sourceFor('model')
   record.model = { value: modelId, source: sourceFor('model') }
   const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
+
   for (const [id, value] of Object.entries(values)) {
     if (id === 'model') {
       continue
     }
+
     const current = modelValues[id]
+
     if (current?.value !== value || current.source !== sourceFor(id)) {
       changed = true
     }
+
     modelValues[id] = { value, source: sourceFor(id) }
   }
+
   record.valuesByModel[modelId] = modelValues
+
   return changed
 }
 
@@ -156,18 +175,25 @@ export function matchNativeChatCatalogModelId(
   reported: string
 ): string | null {
   const normalized = reported.trim().toLowerCase()
+
   if (!normalized) {
     return null
   }
+
   const exact = catalog.models.find((model) => model.id.toLowerCase() === normalized)
+
   if (exact) {
     return exact.id
   }
+
   const byLabel = catalog.models.find((model) => model.label.toLowerCase() === normalized)
+
   if (byLabel) {
     return byLabel.id
   }
+
   let containingId: string | null = null
+
   for (const model of catalog.models) {
     if (
       (containingId === null || model.id.length > containingId.length) &&
@@ -176,5 +202,6 @@ export function matchNativeChatCatalogModelId(
       containingId = model.id
     }
   }
+
   return containingId
 }

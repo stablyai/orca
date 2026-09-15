@@ -60,6 +60,7 @@ describe('useMobileNativeChatDrafts launch draft', () => {
       transcriptLoading,
       transcriptSettled
     })
+
     return null
   }
 

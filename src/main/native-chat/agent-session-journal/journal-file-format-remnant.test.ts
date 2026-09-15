@@ -32,7 +32,9 @@ const IDENTITY: AgentSessionJournalIdentity = {
 const DISCLOSURE_ITEM_ID = agentJournalItemKey(JOURNAL_FILE_FORMAT_REMNANT_DISCLOSURE_IDENTITY)
 
 let root: string
+
 let clock = 1_000
+
 const journals = createTrackedJournalOpener()
 
 function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
@@ -51,6 +53,7 @@ function writeRemnant(name = 'log.jsonl'): Promise<void> {
 
 function disclosure(journal: AgentSessionJournal): string | null {
   const row = journal.snapshot().items.find((entry) => entry.itemId === DISCLOSURE_ITEM_ID)
+
   return row?.body.kind === 'status' ? row.body.text : null
 }
 
@@ -107,9 +110,11 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
   it('does not re-append the row on a later open', async () => {
     await writeRemnant()
     const first = await open()
+
     const firstRevision = first
       .snapshot()
       .items.find((e) => e.itemId === DISCLOSURE_ITEM_ID)?.revision
+
     await first.close()
 
     const reopened = await open()
@@ -150,11 +155,13 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     // no malformed row — appends no disclosure of its own. That is the one state
     // where this branch and a repair meet.
     const opened = openJournalDatabase(journalDatabaseFile(root))
+
     try {
       opened.db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(1)
     } finally {
       opened.db.close()
     }
+
     await writeRemnant()
 
     const repaired = await open()
@@ -170,11 +177,13 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     const founded = await open()
     await founded.close()
     const db = new Database(journalDatabaseFile(root))
+
     try {
       db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`)
     } finally {
       db.close()
     }
+
     await writeRemnant()
 
     const latched = await open()

@@ -51,6 +51,7 @@ exec /bin/sh -c "$cmd"
 `
   )
   chmodSync(path, 0o755)
+
   return path
 }
 
@@ -62,6 +63,7 @@ function writeFakeRelay(dir: string): void {
       writeFileSync(join(dir, filename), '')
     }
   }
+
   writeFileSync(
     join(dir, 'relay.js'),
     `
@@ -132,6 +134,7 @@ function createRelayTree(root: string, remoteHome: string): void {
     'win32-x64',
     'win32-arm64'
   ]
+
   for (const platform of platforms) {
     const localDir = join(root, platform)
     mkdirSync(localDir, { recursive: true })
@@ -163,6 +166,7 @@ describe('system SSH transport integration', () => {
     if (process.platform === 'win32') {
       return
     }
+
     tempDir = mkdtempSync(join('/tmp', 'orca-ssh-'))
     oldHome = process.env.HOME
     oldRelayPath = process.env.ORCA_RELAY_PATH
@@ -182,26 +186,31 @@ describe('system SSH transport integration', () => {
     if (process.platform === 'win32') {
       return
     }
+
     if (oldHome === undefined) {
       delete process.env.HOME
     } else {
       process.env.HOME = oldHome
     }
+
     if (oldRelayPath === undefined) {
       delete process.env.ORCA_RELAY_PATH
     } else {
       process.env.ORCA_RELAY_PATH = oldRelayPath
     }
+
     if (oldSystemSshPath === undefined) {
       delete process.env.ORCA_SYSTEM_SSH_PATH
     } else {
       process.env.ORCA_SYSTEM_SSH_PATH = oldSystemSshPath
     }
+
     if (oldForceSystemTransport === undefined) {
       delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
     } else {
       process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT = oldForceSystemTransport
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -220,6 +229,7 @@ describe('system SSH transport integration', () => {
       expect(onProgress).not.toHaveBeenCalledWith('Uploading relay...')
       expect(onProgress).not.toHaveBeenCalledWith('Installing native dependencies...')
       const mux = new SshChannelMultiplexer(result.transport)
+
       try {
         await expect(mux.request('session.resolveHome', { path: '~' })).resolves.toBe(
           join(tempDir, 'remote-home')
@@ -236,11 +246,14 @@ describe('system SSH transport integration', () => {
     'connects GSSAPI-flagged targets through system ssh without the force override',
     async () => {
       delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
+
       const conn = new SshConnection(
         { ...makeTarget(), source: 'manual', gssapiAuthentication: true },
         { onStateChange: vi.fn() }
       )
+
       await conn.connect()
+
       try {
         expect(conn.usesSystemSshTransport()).toBe(true)
         expect(conn.getState().status).toBe('connected')

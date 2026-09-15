@@ -18,6 +18,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [initialCache] = useState(() =>
     hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
   )
+
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
   // Why: useRef, not useMemo — React may discard memoized values, which would silently
@@ -33,10 +34,12 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
   // path renders as a failure instead of an empty host. Cleared on the next success.
   const [catalogError, setCatalogError] = useState<string | null>(null)
+
   // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
   const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
     string | null
   >(null)
+
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
   const [repoIconsByName, setRepoIconsByName] = useState<Map<string, RepoIcon>>(new Map())
   const [hostName, setHostName] = useState('')
@@ -45,22 +48,28 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [sortMode, setSortMode] = useState<MobileSortMode>('recent')
+
   const [filters, setFilters] = useState<FilterState>({
     filterRepoIds: new Set(),
     hideSleeping: false,
     hideDefaultBranch: false,
     alwaysShowDefaultBranch: true
   })
+
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
+
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
     DEFAULT_MOBILE_WORKSPACE_STATUSES
   )
+
   // displayName → repo id: filters key on repo id, but section headers/rows key on displayName, so bridge the two.
   const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
+
   // Host-label inputs for rows: repo → host, SSH/override labels, and the host's own platform.
   const [repoHostIdByRepoId, setRepoHostIdByRepoId] = useState<Map<string, ExecutionHostId>>(
     new Map()
   )
+
   const [hostLabelById, setHostLabelById] = useState<Map<ExecutionHostId, string>>(new Map())
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
   const [showSortPicker, setShowSortPicker] = useState(false)
@@ -69,12 +78,15 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
+
   const [routeActionState, setRouteActionState] = useState(() =>
     createInitialHostRouteActionState(action)
   )
+
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
   // Why: ref so the ui.get merge and ui.set writes read the latest values without re-creating callbacks on every state change.
   const viewStateRef = useRef<MobileViewState>({
     groupMode: 'repo',

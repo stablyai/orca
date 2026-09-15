@@ -7,7 +7,9 @@ import { SKILL_PACKAGE_CONTENT_TYPE } from '../../shared/skill-package-manifest'
 import { downloadSkillPackageGrant } from './skill-package-download'
 
 const roots: string[] = []
+
 const bytes = Buffer.from('private skill package')
+
 const digest = createHash('sha256').update(bytes).digest('hex')
 
 afterEach(async () => {
@@ -17,11 +19,13 @@ afterEach(async () => {
 async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-download-test-'))
   roots.push(root)
+
   return root
 }
 
 async function remainingDownloadFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true })
+
   const nested = await Promise.all(
     entries.map(async (entry) =>
       entry.isDirectory()
@@ -29,14 +33,17 @@ async function remainingDownloadFiles(root: string): Promise<string[]> {
         : [entry.name]
     )
   )
+
   return nested.flat()
 }
 
 function response(body: BodyInit | null, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers)
+
   if (body && !headers.has('content-type')) {
     headers.set('content-type', SKILL_PACKAGE_CONTENT_TYPE)
   }
+
   return new Response(body, { ...init, headers })
 }
 
@@ -61,10 +68,12 @@ async function input(overrides: Record<string, unknown> = {}) {
 describe('downloadSkillPackageGrant', () => {
   it('removes download bytes abandoned by a previous process', async () => {
     const downloadInput = await input()
+
     const abandoned = join(
       downloadInput.temporaryRoot,
       '.orca-skill-download-process-2147483647-abandoned'
     )
+
     await mkdir(abandoned)
     await writeFile(join(abandoned, 'package.tar.gz'), 'private bytes')
 
@@ -78,18 +87,22 @@ describe('downloadSkillPackageGrant', () => {
 
   it('streams a verified package into an owner-private temporary file', async () => {
     const downloadInput = await input()
+
     if (process.platform !== 'win32') {
       await chmod(downloadInput.temporaryRoot, 0o755)
     }
+
     const result = await downloadSkillPackageGrant(downloadInput)
     expect(await readFile(result.archivePath)).toEqual(bytes)
     expect(result.archiveSha256).toBe(digest)
     expect(result.compressedBytes).toBe(bytes.length)
+
     if (process.platform !== 'win32') {
       expect((await stat(downloadInput.temporaryRoot)).mode & 0o777).toBe(0o700)
       expect((await stat(dirname(result.archivePath))).mode & 0o777).toBe(0o700)
       expect((await stat(result.archivePath)).mode & 0o777).toBe(0o600)
     }
+
     await result.cleanup()
     await expect(readFile(result.archivePath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -105,6 +118,7 @@ describe('downloadSkillPackageGrant', () => {
       url: 'http://storage.test/package.tar.gz',
       allowedOrigins: ['http://storage.test']
     })
+
     await expect(downloadSkillPackageGrant(insecure)).rejects.toThrow('skill-download-url-rejected')
   })
 
@@ -125,12 +139,14 @@ describe('downloadSkillPackageGrant', () => {
         ? response(null, { status: 307, headers: { location: '/second' } })
         : response(bytes)
     )
+
     const result = await downloadSkillPackageGrant(
       await input({
         url: 'https://storage.test/first?signature=private',
         fetcher: sameOriginFetch
       })
     )
+
     expect(sameOriginFetch).toHaveBeenCalledTimes(2)
     await result.cleanup()
 
@@ -140,6 +156,7 @@ describe('downloadSkillPackageGrant', () => {
         headers: { location: 'https://other.test/package.tar.gz' }
       })
     )
+
     await expect(
       downloadSkillPackageGrant(
         await input({
@@ -167,6 +184,7 @@ describe('downloadSkillPackageGrant', () => {
       expectedCompressedBytes: bytes.length - 1,
       fetcher: fetcher(async () => response(bytes))
     })
+
     await expect(downloadSkillPackageGrant(sizeInput)).rejects.toThrow('skill-download-size-limit')
     expect(await remainingDownloadFiles(sizeInput.temporaryRoot)).toEqual([])
 
@@ -185,6 +203,7 @@ describe('downloadSkillPackageGrant', () => {
 
   it('physically aborts a fetch stalled past grant expiry', async () => {
     vi.useFakeTimers()
+
     const stalled = await input({
       expiresAt: new Date(Date.now() + 100).toISOString(),
       fetcher: vi.fn(
@@ -208,6 +227,7 @@ describe('downloadSkillPackageGrant', () => {
   it('does not expire a far-future stalled fetch immediately when the timer delay overflows Node limits', async () => {
     vi.useFakeTimers()
     const caller = new AbortController()
+
     const stalled = await input({
       signal: caller.signal,
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000 * 50).toISOString(),
@@ -234,6 +254,7 @@ describe('downloadSkillPackageGrant', () => {
   it('deletes partial bytes when a streaming download is cancelled', async () => {
     const controller = new AbortController()
     let sent = false
+
     const cancelled = await input({
       signal: controller.signal,
       fetcher: fetcher(async () =>
@@ -243,6 +264,7 @@ describe('downloadSkillPackageGrant', () => {
               if (sent) {
                 return
               }
+
               sent = true
               stream.enqueue(bytes.subarray(0, 4))
               queueMicrotask(() => controller.abort())
@@ -258,6 +280,7 @@ describe('downloadSkillPackageGrant', () => {
 
   it('physically aborts a body read stalled past grant expiry and deletes partial bytes', async () => {
     vi.useFakeTimers()
+
     const stalled = await input({
       expiresAt: new Date(Date.now() + 100).toISOString(),
       fetcher: vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
@@ -267,6 +290,7 @@ describe('downloadSkillPackageGrant', () => {
           () => controller.error(init.signal?.reason ?? new Error('aborted')),
           { once: true }
         )
+
         return response(
           new ReadableStream({
             start(streamController) {

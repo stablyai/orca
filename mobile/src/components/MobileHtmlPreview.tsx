@@ -50,7 +50,9 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
             if (request.url === 'about:blank' || request.url.startsWith('data:')) {
               return true
             }
+
             void Linking.openURL(request.url).catch(() => {})
+
             return false
           }}
         />

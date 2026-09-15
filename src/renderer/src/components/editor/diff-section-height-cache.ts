@@ -5,7 +5,9 @@ export function removeDiffSectionMeasuredHeight(
   if (!(index in heights)) {
     return heights
   }
+
   const { [index]: _removed, ...rest } = heights
   void _removed
+
   return rest
 }

@@ -6,7 +6,9 @@ const { spawnMock, resolveForegroundMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
+
 vi.mock('../../src/main/pwsh', () => ({ isPwshAvailable: vi.fn(() => false) }))
+
 vi.mock('../../src/main/providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: () =>
     'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
@@ -15,9 +17,11 @@ vi.mock('../../src/main/providers/windows-powershell-executable', () => ({
   ],
   getWindowsCmdPath: () => 'C:\\Windows\\System32\\cmd.exe'
 }))
+
 vi.mock('../../src/main/providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveForegroundMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -29,6 +33,7 @@ import { createPaneForegroundAgentTracker } from '../../src/renderer/src/compone
 
 function mockWindowsPty() {
   const exitListeners: ((event: { exitCode: number }) => void)[] = []
+
   return {
     pid: 12345,
     process: 'powershell.exe',
@@ -38,6 +43,7 @@ function mockWindowsPty() {
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onExit: vi.fn((callback: (event: { exitCode: number }) => void) => {
       exitListeners.push(callback)
+
       return { dispose: vi.fn() }
     })
   }
@@ -56,6 +62,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -63,6 +70,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
 
   async function createComposedTracker(publish: ReturnType<typeof vi.fn>) {
     const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
     const tracker = createPaneForegroundAgentTracker({
       getPtyId: () => 'pty-1',
       isTrackablePtyId: () => true,
@@ -70,6 +78,7 @@ describe('daemon foreground confirmation composes with pane tracking', () => {
       publish,
       hasKnownAgentIdentity: () => true
     })
+
     return { handle, tracker }
   }
 

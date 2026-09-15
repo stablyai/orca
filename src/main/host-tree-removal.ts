@@ -34,11 +34,15 @@ function isTransientWindowsRemovalError(error: unknown): boolean {
   if (process.platform !== 'win32' || typeof error !== 'object' || error === null) {
     return false
   }
+
   const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
+
   if (code && ['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code)) {
     return true
   }
+
   const message = 'message' in error && typeof error.message === 'string' ? error.message : ''
+
   return /directory not empty|resource busy|operation not permitted/i.test(message)
 }
 
@@ -54,11 +58,13 @@ export async function removeHostTree(targetPath: string): Promise<void> {
   while (true) {
     try {
       await rm(removalPath, rmOptions)
+
       return
     } catch (error) {
       if (attempt >= retryDelays.length || !isTransientWindowsRemovalError(error)) {
         throw error
       }
+
       // Why: Git/Node recursive deletes on Windows can observe a just-emptied
       // directory before antivirus/indexers/handles release it.
       await delay(retryDelays[attempt])

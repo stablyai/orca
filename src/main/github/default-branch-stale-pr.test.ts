@@ -86,16 +86,20 @@ vi.mock('./gh-utils', () => ({
   githubRepoContext: githubRepoContextMock,
   classifyGhError: (stderr: string) => {
     const lower = stderr.toLowerCase()
+
     if (lower.includes('not found') || stderr.includes('HTTP 404')) {
       return { type: 'not_found', message: stderr }
     }
+
     if (lower.includes('rate limit')) {
       return { type: 'rate_limited', message: stderr }
     }
+
     return { type: 'unknown', message: stderr }
   },
   parseGitHubOwnerRepo: (remoteUrl: string) => {
     const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
+
     return match ? { owner: match[1], repo: match[2] } : null
   },
   acquire: acquireMock,
@@ -148,18 +152,23 @@ function primeGitExecForDefaultBranch({
     if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
       return { stdout: `${defaultRef}\n`, stderr: '' }
     }
+
     if (args[0] === 'rev-parse' && args[1] === '--verify') {
       if (args.includes(defaultRef)) {
         return { stdout: 'default-branch-oid\n', stderr: '' }
       }
+
       throw new Error(`fatal: Needed a single revision: ${args.join(' ')}`)
     }
+
     if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
       return { stdout: `${headOid}\n`, stderr: '' }
     }
+
     if (args[0] === 'for-each-ref') {
       return { stdout: '', stderr: '' }
     }
+
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
 }
@@ -200,6 +209,7 @@ function primeGhExecWithBranchList(list: Record<string, unknown>[]): void {
     if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
       return { stdout: JSON.stringify(list) }
     }
+
     throw new Error(`gh unavailable: ${args.join(' ')}`)
   })
 }
@@ -220,6 +230,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     resolvePRRepositoryCandidatesMock.mockReset()
     resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
       const origin = await getOwnerRepoMock(repoPath, connectionId)
+
       return { candidates: origin ? [origin] : [], headRepo: origin }
     })
     getRemoteUrlForRepoMock.mockReset()
@@ -324,6 +335,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
         return { stdout: '[]' }
       }
+
       if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
         return {
           stdout: JSON.stringify({
@@ -342,6 +354,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
           })
         }
       }
+
       throw new Error(`gh unavailable: ${args.join(' ')}`)
     })
 
@@ -356,6 +369,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
       if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
         return { stdout: '[]' }
       }
+
       if (args[0] === 'pr' && args[1] === 'view' && args[2] === '7') {
         return {
           stdout: JSON.stringify({
@@ -374,6 +388,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
           })
         }
       }
+
       throw new Error(`gh unavailable: ${args.join(' ')}`)
     })
 
@@ -390,6 +405,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
       if (args[0] === 'for-each-ref') {
         return { stdout: '', stderr: '' }
       }
+
       throw new Error(`fatal: git unavailable: ${args.join(' ')}`)
     })
     primeGhExecWithBranchList([restPR({ number: 7, state: 'closed' })])

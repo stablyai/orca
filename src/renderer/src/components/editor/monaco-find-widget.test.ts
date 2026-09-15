@@ -13,16 +13,21 @@ function appendFindWidget(
 ): { closeButton: HTMLButtonElement | null; widget: HTMLDivElement } {
   const widget = document.createElement('div')
   widget.className = 'find-widget visible'
+
   if (args.hidden) {
     widget.setAttribute('aria-hidden', 'true')
   }
+
   let closeButton: HTMLButtonElement | null = null
+
   if (args.withCloseButton) {
     closeButton = document.createElement('button')
     closeButton.className = 'button codicon-widget-close'
     widget.append(closeButton)
   }
+
   root.append(widget)
+
   return { closeButton, widget }
 }
 

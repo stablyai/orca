@@ -6,11 +6,13 @@ describe('createFloatingWorkspaceTourInteractionSnapshot', () => {
   it('captures first-open state before recording the floating workspace interaction', () => {
     const featureInteractions: FeatureInteractionState = {}
     const persisted = Promise.resolve()
+
     const recordFeatureInteraction = vi.fn(() => {
       featureInteractions['floating-workspace'] = {
         firstInteractedAt: 100,
         interactionCount: 1
       }
+
       return persisted
     })
 

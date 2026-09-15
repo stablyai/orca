@@ -50,10 +50,12 @@ describe('client UI RPC methods', () => {
         activeProject: null
       }
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getClientSettings: vi.fn(() => settings)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('settings.get'))
@@ -67,6 +69,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -106,10 +109,12 @@ describe('client UI RPC methods', () => {
         }
       }
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn(() => settings)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -185,6 +190,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn(() => ({}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     await dispatcher.dispatch(
@@ -209,14 +215,17 @@ describe('client UI RPC methods', () => {
         scope: { type: 'global' as const }
       }
     ]
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getClientTerminalQuickCommands: vi.fn(() => commands),
       updateClientTerminalQuickCommands: vi.fn(() => commands)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const getResponse = await dispatcher.dispatch(makeRequest('settings.getTerminalQuickCommands'))
+
     const updateResponse = await dispatcher.dispatch(
       makeRequest('settings.updateTerminalQuickCommands', {
         mutation: {
@@ -259,6 +268,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateClientTerminalQuickCommands: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     for (const mutation of [
@@ -339,6 +349,7 @@ describe('client UI RPC methods', () => {
         error: { code: 'invalid_argument' }
       })
     }
+
     expect(runtime.updateClientTerminalQuickCommands).not.toHaveBeenCalled()
   })
 
@@ -347,6 +358,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn(() => ({}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     await dispatcher.dispatch(
@@ -364,10 +376,12 @@ describe('client UI RPC methods', () => {
 
   it('routes bot-author deltas to the runtime-owned atomic update', async () => {
     const settings = { prBotAuthorOverrides: ['alice', 'bob'] }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientPRBotAuthorOverride: vi.fn(() => settings)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -389,10 +403,12 @@ describe('client UI RPC methods', () => {
       showActiveOnly: true,
       filterRepoIds: ['repo-1']
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getUIState: vi.fn(() => ui)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('ui.get'))
@@ -411,10 +427,12 @@ describe('client UI RPC methods', () => {
       hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => updated)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -449,10 +467,12 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       osc52ClipboardDefaultOnNoticePending: false
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => updated)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -470,6 +490,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -530,10 +551,12 @@ describe('client UI RPC methods', () => {
       browserDefaultZoomLevel: 1.5,
       manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => updated)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const payload = {
@@ -581,6 +604,7 @@ describe('client UI RPC methods', () => {
       browserDefaultZoomLevel: 1.5,
       manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
+
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 
     const { manualRepoOrder: _desktopOwnedOrder, ...forwarded } = payload
@@ -626,6 +650,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
@@ -639,7 +664,9 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
     // Mirrors App.tsx's 150ms writer: one unlisted key here dropped every other
     // preference in the same call for paired web/SSH/relay clients.
     const payload = {
@@ -676,10 +703,12 @@ describe('client UI RPC methods', () => {
         tasks: { firstInteractedAt: 100, interactionCount: 1 }
       }
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       recordFeatureInteraction: vi.fn(() => updated)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('ui.recordFeatureInteraction', 'tasks'))
@@ -693,6 +722,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -716,6 +746,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -734,10 +765,12 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'unread', 'jira-issue']
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => updated)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -755,6 +788,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     // 'cli' was missing from the schema, so Settings → Default card mode sent a
@@ -776,6 +810,7 @@ describe('client UI RPC methods', () => {
         getRuntimeId: () => 'test-runtime',
         updateUIState: vi.fn(() => getDefaultUIState())
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const response = await dispatcher.dispatch(
@@ -792,6 +827,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -814,10 +850,12 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'issue']
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => updated)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -835,7 +873,9 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
     const forbiddenPayloads = [
       { starNagBaselineAgents: 10 },
       { starNagAppVersion: '1.2.3' },
@@ -849,6 +889,7 @@ describe('client UI RPC methods', () => {
       const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
       expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     }
+
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 
@@ -857,6 +898,7 @@ describe('client UI RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       recordFeatureInteraction: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(

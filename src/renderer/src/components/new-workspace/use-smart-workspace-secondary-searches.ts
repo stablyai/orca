@@ -54,16 +54,19 @@ export function useSmartWorkspaceSecondarySearches({
     setJiraIssues,
     setJiraLoading
   } = foundation
+
   // Read the latest metadata for URL resolution without making the search effect depend on object identity.
   const linearStatusRef = useRef(linearStatus)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   linearStatusRef.current = linearStatus
+
   // Store action references can change with wiring; reads should only rerun for query/scope changes.
   const linearReadMethodsRef = useRef({
     fetchLinearIssue,
     listLinearIssues,
     searchLinearIssues
   })
+
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   linearReadMethodsRef.current = {
     fetchLinearIssue,
@@ -72,6 +75,7 @@ export function useSmartWorkspaceSecondarySearches({
   }
   const linearConnected = linearStatus.connected === true
   const linearScopeSignature = linearWorkspaceScopeSignature(linearStatus)
+
   const branchSearchRequest = useMemo(
     () =>
       getBranchSearchRequest({
@@ -101,8 +105,10 @@ export function useSmartWorkspaceSecondarySearches({
       setBranches([])
       setBranchResultsSource(null)
       setBranchesLoading(false)
+
       return
     }
+
     let stale = false
     // Why: visibility retains prior rows while typing ahead of the debounced query.
     setBranchesLoading(true)
@@ -132,6 +138,7 @@ export function useSmartWorkspaceSecondarySearches({
           setBranchesLoading(false)
         }
       })
+
     return () => {
       stale = true
     }
@@ -148,16 +155,20 @@ export function useSmartWorkspaceSecondarySearches({
       setLinearIssues([])
       setLinearLoading(false)
       setSettledLinearUrlQuery(null)
+
       return
     }
+
     let stale = false
     setLinearLoading(true)
     const trimmed = linearQuery.trim()
     setSettledLinearUrlQuery(null)
+
     // Why: empty-query list must not briefly paint the previous non-empty result set.
     if (trimmed === '') {
       setLinearIssues([])
     }
+
     const request = linearUrlIntent
       ? lookupLinearIssueUrl({
           intent: linearUrlIntent,
@@ -179,6 +190,7 @@ export function useSmartWorkspaceSecondarySearches({
               { sourceContext: linearSourceContext }
             )
             .then((result) => result.items)
+
     void request
       .then((issues) => {
         if (!stale) {
@@ -196,6 +208,7 @@ export function useSmartWorkspaceSecondarySearches({
           setSettledLinearUrlQuery(linearUrlIntent ? trimmed : null)
         }
       })
+
     return () => {
       stale = true
     }
@@ -216,14 +229,18 @@ export function useSmartWorkspaceSecondarySearches({
     if (!shouldQueryJira || !jiraSourceContext || !jiraSearchJql) {
       setJiraIssues([])
       setJiraLoading(false)
+
       return
     }
+
     let stale = false
     // Why: a superseded query must immediately release its shared Jira request slot.
     const controller = new AbortController()
     setJiraLoading(true)
+
     const siteId =
       jiraConnectionStatus?.selectedSiteId ?? jiraConnectionStatus?.activeSiteId ?? null
+
     void searchJiraIssues(jiraSearchJql, RESULT_LIMIT, {
       sourceContext: jiraSourceContext,
       siteId,
@@ -244,6 +261,7 @@ export function useSmartWorkspaceSecondarySearches({
           setJiraLoading(false)
         }
       })
+
     return () => {
       stale = true
       controller.abort()

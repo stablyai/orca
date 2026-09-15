@@ -41,13 +41,16 @@ const systemZshrcClobbersHistfile = (() => {
   if (!hasZsh) {
     return false
   }
+
   const home = mkdtempSync(join(tmpdir(), 'orca-histfile-probe-'))
+
   try {
     const output = execFileSync(ZSH_PATH, ['-l', '-i', '-c', 'echo "RESULT=$HISTFILE"'], {
       encoding: 'utf8',
       timeout: 20_000,
       env: { PATH: '/usr/bin:/bin', HOME: home, HISTFILE: join(home, 'injected-history') }
     })
+
     return !output.includes(join(home, 'injected-history'))
   } catch {
     return false
@@ -68,6 +71,7 @@ function launchPane(
     HOME: home,
     ...(scopedHistfile ? { HISTFILE: scopedHistfile, ORCA_HISTFILE: scopedHistfile } : {})
   }
+
   const features = selectShellStartupFeatures({
     shellPath: ZSH_PATH,
     env,
@@ -76,7 +80,9 @@ function launchPane(
     emitsStartupIdentity: false,
     ...overrides
   })
+
   const launch = getShellLaunchConfig(ZSH_PATH, features)
+
   return {
     features,
     launch,
@@ -96,6 +102,7 @@ const USER_FILES = {
 function withHome(files: Record<string, string>, run: (home: string) => Promise<void>) {
   return async () => {
     const home = makeZshHome(files)
+
     try {
       await run(home)
     } finally {
@@ -195,6 +202,7 @@ describe.skipIf(process.platform === 'win32')(
         // HISTFILE, so it is always set there; a stock Ubuntu zsh leaves it EMPTY.
         // The contract is that Orca's wrapper does not change it either way.
         const overlayEnv = { ORCA_CODEX_HOME: join(home, 'codex') }
+
         const features = selectShellStartupFeatures({
           shellPath: ZSH_PATH,
           env: { HOME: home, ...overlayEnv },
@@ -202,6 +210,7 @@ describe.skipIf(process.platform === 'win32')(
           waitsForShellReady: false,
           emitsStartupIdentity: false
         })
+
         const launch = getShellLaunchConfig(ZSH_PATH, features)
 
         const wrapped = await runZshPty({
@@ -214,6 +223,7 @@ describe.skipIf(process.platform === 'win32')(
           },
           report: ['HISTFILE']
         })
+
         const unwrapped = await runZshPty({
           env: { PATH: '/usr/bin:/bin', HOME: home },
           report: ['HISTFILE']
@@ -230,11 +240,13 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
     'emits the identity, readiness and OSC 133 markers a startup command waits on',
     withHome(USER_FILES, async (home) => {
       const scoped = join(home, 'orca-history', 'zsh_history')
+
       const { env, features } = launchPane(home, scoped, {
         hasStartupCommand: true,
         waitsForShellReady: true,
         emitsStartupIdentity: true
       })
+
       expect(features).toEqual(expect.arrayContaining(['markers', 'ready', 'identity']))
 
       const { output, values } = await runZshPty({
@@ -264,6 +276,7 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
           ORCA_CODEX_HOME: '/orca/codex',
           ORCA_AGENT_TEAMS_SHIM_DIR: '/orca/shim'
         }
+
         const features = selectShellStartupFeatures({
           shellPath: ZSH_PATH,
           env: { HOME: home, ...overlayEnv },
@@ -271,6 +284,7 @@ describe.skipIf(process.platform === 'win32')('the deferred hook delivers every 
           waitsForShellReady: false,
           emitsStartupIdentity: false
         })
+
         const launch = getShellLaunchConfig(ZSH_PATH, features)
 
         const { values } = await runZshPty({
@@ -315,10 +329,12 @@ describe.skipIf(process.platform === 'win32')(
       if (!hasZsh) {
         return
       }
+
       const home = makeZshHome({
         ...USER_FILES,
         [file]: `${USER_FILES[file as keyof typeof USER_FILES]}${statement}\n`
       })
+
       try {
         const scoped = join(home, 'orca-history', 'zsh_history')
         const { env } = launchPane(home, scoped)
@@ -340,6 +356,7 @@ describe.skipIf(process.platform === 'win32')(
 
         const report = ['HISTFILE', 'ORCA_HISTFILE', 'ZDOTDIR']
         const { values } = await runZshPty({ env, report })
+
         // Why compared against an unwrapped run rather than asserted to differ
         // from the scoped path: whether the scoped value survives at all is the
         // host's call, not Orca's. macOS /etc/zshrc overwrites HISTFILE, so it
@@ -394,6 +411,7 @@ describe.skipIf(process.platform === 'win32')('the relay variant of the hook', (
     'scopes history and restores the remote CLI path without emitting OSC 133',
     withHome(USER_FILES, async (home) => {
       const relayRoot = mkdtempSync(join(tmpdir(), 'orca-relay-wrapper-'))
+
       try {
         expect(ensureOverlayRestoreWrappers(relayRoot)).toBe(true)
         const scoped = join(home, 'orca-history', 'zsh_history')

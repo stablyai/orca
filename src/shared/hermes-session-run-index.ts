@@ -13,12 +13,15 @@ export class HermesSessionRunIndex {
   ) {
     keys.forEach((key, index) => {
       let group = this.exact.get(key)
+
       if (!group) {
         group = { indices: [], cursor: 0 }
         this.exact.set(key, group)
       }
+
       group.indices.push(index)
       const time = parseTime(key)
+
       if (Number.isFinite(time)) {
         this.timed.push({ time, index })
       }
@@ -32,39 +35,51 @@ export class HermesSessionRunIndex {
 
   find(key: string | null): number | null {
     const group = this.exact.get(key)
+
     if (group) {
       while (group.cursor < group.indices.length && this.used.has(group.indices[group.cursor])) {
         group.cursor++
       }
+
       if (group.cursor < group.indices.length) {
         return group.indices[group.cursor]
       }
     }
+
     const time = this.parseTime(key)
+
     if (!Number.isFinite(time)) {
       return null
     }
+
     let low = 0
     let high = this.timed.length
+
     while (low < high) {
       const mid = low + Math.floor((high - low) / 2)
+
       if (this.timed[mid].time <= time) {
         low = mid + 1
       } else {
         high = mid
       }
     }
+
     const position = this.findPredecessor(low)
+
     if (position === 0) {
       return null
     }
+
     const candidate = this.timed[position - 1]
+
     return time - candidate.time <= this.maxGapMs ? candidate.index : null
   }
 
   use(index: number): void {
     this.used.add(index)
     const position = this.positionByIndex.get(index)
+
     if (position !== undefined) {
       this.predecessors[position] = this.findPredecessor(position - 1)
     }
@@ -72,14 +87,17 @@ export class HermesSessionRunIndex {
 
   private findPredecessor(position: number): number {
     let root = position
+
     while (this.predecessors[root] !== root) {
       root = this.predecessors[root]
     }
+
     while (this.predecessors[position] !== position) {
       const next = this.predecessors[position]
       this.predecessors[position] = root
       position = next
     }
+
     return root
   }
 }

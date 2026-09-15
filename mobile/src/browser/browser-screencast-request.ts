@@ -21,16 +21,25 @@ export type MobileBrowserScreencastRequest = {
 export type MobileBrowserViewMode = 'web' | 'mobile'
 
 const BROWSER_FRAME_FORMAT: BrowserScreencastFormat = 'jpeg'
+
 const BROWSER_FRAME_QUALITY = 72
+
 // Why: menus/popovers can be a single compositor update. Skipping CDP frames
 // can miss that final static state; time throttling below still caps throughput.
 const BROWSER_FRAME_EVERY_NTH_FRAME = 1
+
 export const MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS = 100
+
 const BROWSER_MIN_FRAME_WIDTH = 320
+
 const BROWSER_MIN_FRAME_HEIGHT = 240
+
 const BROWSER_MAX_FRAME_WIDTH = 2400
+
 const BROWSER_MAX_FRAME_HEIGHT = 2160
+
 const BROWSER_MAX_STREAM_SCALE = 2.5
+
 const MOBILE_VIEW_DEVICE_SCALE_FACTOR = 2
 
 export function buildMobileBrowserScreencastRequest(
@@ -41,6 +50,7 @@ export function buildMobileBrowserScreencastRequest(
   if (!layout || layout.width <= 0 || layout.height <= 0) {
     return null
   }
+
   // Why: mobile should improve image density without changing the desktop
   // browser viewport. Sending viewport params puts Chromium in phone emulation.
   const streamScale = clamp(
@@ -48,6 +58,7 @@ export function buildMobileBrowserScreencastRequest(
     1,
     BROWSER_MAX_STREAM_SCALE
   )
+
   return {
     format: BROWSER_FRAME_FORMAT,
     quality: BROWSER_FRAME_QUALITY,

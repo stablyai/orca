@@ -65,8 +65,10 @@ function moveOwnedByJournal(journal: Partial<SkillRemovalJournalV1>, move: Remov
   if (!journal.receipt || !Array.isArray(journal.allowedProviderRoots)) {
     return false
   }
+
   const canonical = normalizedPath(journal.canonicalPath!)
   const source = normalizedPath(move.sourcePath)
+
   if (source === canonical) {
     return (
       move.placement.topology === 'canonical-copy' &&
@@ -74,9 +76,11 @@ function moveOwnedByJournal(journal: Partial<SkillRemovalJournalV1>, move: Remov
       /^[a-f0-9]{64}$/.test(move.expectedDigest)
     )
   }
+
   const receiptPlacement = journal.receipt.placements.find(
     (placement) => normalizedPath(placement.path) === source
   )
+
   return Boolean(
     receiptPlacement &&
     receiptPlacement.topology === move.placement.topology &&
@@ -96,7 +100,9 @@ function isRemovalJournal(value: unknown, canonicalPath: string): value is Skill
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const journal = value as Partial<SkillRemovalJournalV1>
+
   return (
     journal.schemaVersion === 1 &&
     journal.operation === 'remove' &&
@@ -126,19 +132,24 @@ async function movedBackupMatches(
     if (filesystem.aliasTargets) {
       return filesystem.aliasTargets(move.expectedAliasTarget, move.backupPath)
     }
+
     const target = await readlink(move.backupPath).catch(() => null)
+
     return Boolean(
       target &&
       normalizedPath(resolve(dirname(move.backupPath), target)) ===
         normalizedPath(move.expectedAliasTarget)
     )
   }
+
   if (!move.expectedDigest) {
     return false
   }
+
   const observed = await filesystem
     .observeSkill(move.backupPath, receipt.fileModes)
     .catch(() => null)
+
   return observed?.observedDigest === move.expectedDigest
 }
 
@@ -155,14 +166,17 @@ export async function readSkillRemovalRecoveryJournal(
         )
       ).buffer.toString('utf8')
     )
+
     if (!isRemovalJournal(value, canonicalPath)) {
       throw new Error('skill-removal-journal-invalid')
     }
+
     return value
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
 }
@@ -177,25 +191,34 @@ export async function recoverSkillRemovalTransaction(
   filesystem: SkillInstallFilesystem = nativeSkillInstallFilesystem
 ): Promise<void> {
   const journal = await readSkillRemovalRecoveryJournal(stateDirectory, canonicalPath)
+
   if (!journal) {
     return
   }
+
   if (journal.phase === 'receipt-removed') {
     for (const move of journal.moves.slice(0, journal.movedCount)) {
       if (!(await movedBackupMatches(move, journal.receipt, filesystem))) {
         throw new Error('skill-removal-recovery-conflict')
       }
+
       await filesystem.remove(move.backupPath)
     }
+
     await rm(skillRemovalJournalPath(stateDirectory, canonicalPath), { force: true })
+
     return
   }
+
   const moved = journal.moves.slice(0, journal.movedCount)
+
   for (let index = moved.length - 1; index >= 0; index -= 1) {
     const move = moved[index]
+
     if (!move) {
       continue
     }
+
     if (
       (await skillRemovalPathExists(move.backupPath)) &&
       !(await skillRemovalPathExists(move.sourcePath))
@@ -203,9 +226,11 @@ export async function recoverSkillRemovalTransaction(
       if (!(await movedBackupMatches(move, journal.receipt, filesystem))) {
         throw new Error('skill-removal-recovery-conflict')
       }
+
       await filesystem.rename(move.backupPath, move.sourcePath)
     }
   }
+
   await writeSkillInstallReceipt(stateDirectory, journal.receipt)
   await rm(skillRemovalJournalPath(stateDirectory, canonicalPath), { force: true })
 }

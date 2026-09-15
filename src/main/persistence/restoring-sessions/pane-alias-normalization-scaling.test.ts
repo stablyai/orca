@@ -13,6 +13,7 @@ it('retains only the ambiguity verdict when many legacy rows name the same tab',
     source: 'local',
     updatedAt: 1
   }
+
   const rows = Array.from({ length: 2000 }, () => row)
   const iterator = Array.prototype[Symbol.iterator]
   let copied = 0
@@ -20,14 +21,18 @@ it('retains only the ambiguity verdict when many legacy rows name the same tab',
     if (this[0] === row) {
       copied += this.length
     }
+
     return iterator.call(this)
   }
+
   let aliases: ReturnType<typeof legacyMigrationUnsupportedRowsToAliasEntries>
+
   try {
     aliases = legacyMigrationUnsupportedRowsToAliasEntries(rows)
   } finally {
     Array.prototype[Symbol.iterator] = iterator
   }
+
   expect(copied).toBeLessThan(10_000)
   expect(aliases).toEqual([])
   const unique = legacyMigrationUnsupportedRowsToAliasEntries([row])
@@ -60,6 +65,7 @@ it.each([
       paneKey: `tab:1111111${i}-1111-4111-8111-111111111111`
     })
   )
+
   expect(legacyMigrationUnsupportedRowsToAliasEntries(rows)).toEqual([])
 })
 
@@ -87,21 +93,25 @@ it('keeps unambiguous tabs in first-seen order while dropping ambiguous neighbou
     ptyId: 'pty-solo',
     paneKey: 'solo:11111111-1111-4111-8111-111111111111'
   })
+
   const dupA = legacyRow({
     tabId: 'dup',
     ptyId: 'pty-a',
     paneKey: 'dup:22222222-2222-4222-8222-222222222222'
   })
+
   const dupB = legacyRow({
     tabId: 'dup',
     ptyId: 'pty-b',
     paneKey: 'dup:33333333-3333-4333-8333-333333333333'
   })
+
   const late = legacyRow({
     tabId: 'late',
     ptyId: 'pty-late',
     paneKey: 'late:44444444-4444-4444-8444-444444444444'
   })
+
   // A third row for 'dup' must not resurrect it: ambiguity is sticky, not a parity toggle.
   const aliases = legacyMigrationUnsupportedRowsToAliasEntries([solo, dupA, dupB, late, dupA])
   expect(aliases.map((entry) => entry.legacyPaneKey)).toEqual([

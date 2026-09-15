@@ -137,7 +137,9 @@ function restoreGitEnv(
 ): void {
   if (value === undefined) {
     delete process.env[name]
+
     return
   }
+
   process.env[name] = value
 }

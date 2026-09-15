@@ -43,11 +43,13 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
   const applyLinkedWorkItem = useCallback(
     (item: GitHubWorkItem, options: { preserveBranchNameOverride?: boolean } = {}): void => {
       const identity = resolveGitHubWorkItemIdentity(item)
+
       const normalizedItem: GitHubWorkItem = {
         ...item,
         type: identity.type,
         number: identity.number
       }
+
       if (identity.type === 'issue') {
         setLinkedIssue(String(identity.number))
         setLinkedPR(null)
@@ -55,6 +57,7 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
         setLinkedIssue('')
         setLinkedPR(identity.number)
       }
+
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedWorkItem({
@@ -65,9 +68,11 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
         url: item.url
       })
       setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
+
       const suggestedName =
         getLinkedWorkItemWorkspaceName(normalizedItem)?.seedName ??
         getLinkedWorkItemSuggestedName(normalizedItem)
+
       // Why: a pasted URL/#123 is the lookup query, not a chosen name — replace with the title-derived name or it becomes a slugified-URL workspace name.
       if (
         suggestedName &&
@@ -79,6 +84,7 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+
       if (!options.preserveBranchNameOverride) {
         setBranchNameOverride(undefined)
         setBranchNameOverridePreservesNameEdits(false)

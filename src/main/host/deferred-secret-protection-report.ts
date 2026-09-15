@@ -50,6 +50,7 @@ export function scheduleSecretProtectionGapReport({
 
   if (!deferUntilFirstWindow) {
     reportSecretProtectionGap(options)
+
     return
   }
 

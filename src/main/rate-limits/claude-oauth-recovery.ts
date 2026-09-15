@@ -46,17 +46,22 @@ export async function retryClaudeOAuthWithLegacyKeychain(input: {
   options?: ClaudeRateLimitFetchOptions
 }): Promise<ProviderRateLimits | null> {
   const legacy = await readClaudeCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
+
   if (!legacy.token || legacy.token === input.failedToken) {
     return null
   }
+
   if (input.options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   try {
     const limits = await fetchClaudeOAuthUsage(legacy.token, input.options?.signal)
+
     if (input.options?.signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
+
     return await completeClaudeOAuthUsageSuccess({
       oauthLimits: limits,
       oauthCredentials: legacy,
@@ -65,6 +70,7 @@ export async function retryClaudeOAuthWithLegacyKeychain(input: {
     })
   } catch (error) {
     warnClaudeUsageFetchFailure(input.options?.authPreparation, legacy, error)
+
     return null
   }
 }
@@ -106,7 +112,9 @@ export function makeClaudeUsageClassificationError(input: {
 }): ProviderRateLimits {
   const message =
     input.error instanceof Error ? input.error.message : String(input.error || 'Unknown error')
+
   const retryAfterMs = input.error instanceof OAuthUsageError ? input.error.retryAfterMs : null
+
   return makeClaudeUsageResult('error', withMacTailscaleDnsHint(message), {
     ...metadataForClaudeUsageAttempt({
       attemptedSources: input.attempts.attemptedSources,
@@ -126,7 +134,9 @@ export async function repairClaudeCredentialsThenRetryOAuth(input: {
   if (input.options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   let cliResult: ProviderRateLimits | null = null
+
   try {
     cliResult = await fetchClaudeUsageViaCli({
       authPreparation: input.options?.authPreparation,
@@ -142,19 +152,25 @@ export async function repairClaudeCredentialsThenRetryOAuth(input: {
   if (input.options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   const refreshed = await readClaudeOAuthCredentials(
     resolveClaudeOAuthCredentialReadOptions(input.options?.authPreparation)
   )
+
   if (input.options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   if (refreshed.token) {
     recordClaudeUsageAttempt(input.attempts, 'oauth')
+
     try {
       const retry = await fetchClaudeOAuthUsage(refreshed.token, input.options?.signal)
+
       if (input.options?.signal?.aborted) {
         return abortedClaudeRateLimitResult()
       }
+
       return withClaudeUsageMetadata(
         mergeClaudeUsageWindows(retry, cliResult),
         metadataForClaudeUsageAttempt({
@@ -168,5 +184,6 @@ export async function repairClaudeCredentialsThenRetryOAuth(input: {
       warnClaudeUsageFetchFailure(input.options?.authPreparation, refreshed, error)
     }
   }
+
   return cliResult
 }

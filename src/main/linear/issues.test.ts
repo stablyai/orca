@@ -3,8 +3,11 @@ import type { LinearClientForWorkspace } from './client'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const rawRequest = vi.fn()
+
 const getClients = vi.fn()
+
 const clearToken = vi.fn()
+
 const isAuthError = vi.fn()
 
 vi.mock('./linear-request-concurrency', () => ({
@@ -645,6 +648,7 @@ describe('Linear issue queries', () => {
         new Error('Entity not found: Attachment - Could not find referenced Attachment.')
       )
     getClients.mockReturnValue([{ ...makeEntry(), client: { client: { rawRequest } } }])
+
     const { getIssueByUuidForAgent, getCommentByUuidForAgent, getAttachmentByUuidForAgent } =
       await import('./linear-issue-lookups')
 
@@ -661,6 +665,7 @@ describe('Linear issue queries', () => {
       success: true,
       comment: Promise.resolve({ id: 'comment-1', url: 'https://linear.app/comment-1' })
     })
+
     getClients.mockReturnValue([
       {
         ...makeEntry(),
@@ -689,6 +694,7 @@ describe('Linear issue queries', () => {
       success: true,
       attachment: Promise.resolve({ id: 'attachment-1' })
     })
+
     rawRequest.mockResolvedValueOnce({
       data: {
         attachment: {
@@ -732,6 +738,7 @@ describe('Linear issue queries', () => {
       success: true,
       attachment: Promise.resolve({ id: 'attachment-1' })
     })
+
     rawRequest.mockResolvedValueOnce({ data: { attachment: null } })
     getClients.mockReturnValue([
       {
@@ -759,6 +766,7 @@ describe('Linear issue queries', () => {
       success: true,
       issue: Promise.resolve({ id: 'issue-created' })
     })
+
     rawRequest.mockResolvedValueOnce({
       data: {
         issue: {
@@ -808,6 +816,7 @@ describe('Linear issue queries', () => {
       success: true,
       issue: Promise.resolve({ id: 'issue-created' })
     })
+
     rawRequest.mockResolvedValueOnce({ data: { issue: null } })
     getClients.mockReturnValue([
       {
@@ -827,10 +836,12 @@ describe('Linear issue queries', () => {
   it('treats post-create readback auth-like errors as unconfirmed', async () => {
     const authError = new Error('Auth expired during confirmation')
     isAuthError.mockImplementation((error) => error === authError)
+
     const createIssue = vi.fn().mockResolvedValue({
       success: true,
       issue: Promise.resolve({ id: 'issue-created' })
     })
+
     rawRequest.mockRejectedValueOnce(authError)
     getClients.mockReturnValue([
       {

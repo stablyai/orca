@@ -34,6 +34,7 @@ export function findRichMarkdownSelectedTextRanges({
   to?: number
 }): RichMarkdownAnnotationHighlightRange[] {
   const needle = normalizeSelectedText(selectedText)
+
   if (!needle) {
     return []
   }
@@ -46,6 +47,7 @@ export function findRichMarkdownSelectedTextRanges({
     matchLength: 0,
     positions: null
   }
+
   const normalizationState: NormalizationState = {
     previousWasWhitespace: false
   }
@@ -70,6 +72,7 @@ export function findRichMarkdownSelectedTextRanges({
           matchState
         )
       }
+
       return !matchState.positions
     }
   )
@@ -80,18 +83,23 @@ export function findRichMarkdownSelectedTextRanges({
 function normalizeSelectedText(value: string): string {
   let normalized = ''
   let previousWasWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isRichMarkdownWhitespace(code)) {
       if (normalized.length > 0 && !previousWasWhitespace) {
         normalized += ' '
       }
+
       previousWasWhitespace = true
       continue
     }
+
     normalized += value.charAt(index)
     previousWasWhitespace = false
   }
+
   return normalized
 }
 
@@ -101,11 +109,14 @@ function processRawTextChar(
   matchState: MatchState
 ): void {
   const code = char.value.charCodeAt(0)
+
   if (isRichMarkdownWhitespace(code)) {
     if (!normalizationState.previousWasWhitespace) {
       processNormalizedTextChar({ value: ' ', pos: char.pos }, matchState)
     }
+
     normalizationState.previousWasWhitespace = true
+
     return
   }
 
@@ -115,6 +126,7 @@ function processRawTextChar(
 
 function processNormalizedTextChar(char: NormalizedTextChar, matchState: MatchState): void {
   recordRecentPosition(char.pos, matchState)
+
   while (matchState.matchLength > 0 && char.value !== matchState.needle[matchState.matchLength]) {
     matchState.matchLength = matchState.prefixTable[matchState.matchLength - 1] ?? 0
   }
@@ -124,6 +136,7 @@ function processNormalizedTextChar(char: NormalizedTextChar, matchState: MatchSt
   }
 
   matchState.matchLength += 1
+
   if (matchState.matchLength === matchState.needle.length) {
     matchState.positions = readRecentPositions(matchState)
   }
@@ -134,6 +147,7 @@ function recordRecentPosition(pos: TextPosition, matchState: MatchState): void {
     matchState.recentPositions.push(pos)
     matchState.recentPositionWriteIndex =
       matchState.recentPositions.length % matchState.needle.length
+
     return
   }
 
@@ -144,28 +158,35 @@ function recordRecentPosition(pos: TextPosition, matchState: MatchState): void {
 
 function readRecentPositions(matchState: MatchState): TextPosition[] {
   const positions: TextPosition[] = []
+
   for (let index = 0; index < matchState.needle.length; index += 1) {
     const bufferIndex = (matchState.recentPositionWriteIndex + index) % matchState.needle.length
     positions.push(matchState.recentPositions[bufferIndex] ?? null)
   }
+
   return positions
 }
 
 function buildPrefixTable(value: string): number[] {
   const table: number[] = []
+
   for (let index = 0; index < value.length; index += 1) {
     table.push(0)
   }
+
   let prefixLength = 0
+
   for (let index = 1; index < value.length; index += 1) {
     while (prefixLength > 0 && value[index] !== value[prefixLength]) {
       prefixLength = table[prefixLength - 1] ?? 0
     }
+
     if (value[index] === value[prefixLength]) {
       prefixLength += 1
       table[index] = prefixLength
     }
   }
+
   return table
 }
 
@@ -173,26 +194,32 @@ function positionsToRanges(positions: TextPosition[]): RichMarkdownAnnotationHig
   const ranges: RichMarkdownAnnotationHighlightRange[] = []
   let rangeFrom: number | null = null
   let rangeTo: number | null = null
+
   for (const position of positions) {
     if (position === null) {
       continue
     }
+
     if (rangeFrom === null || rangeTo === null) {
       rangeFrom = position.from
       rangeTo = position.to
       continue
     }
+
     if (position.from <= rangeTo) {
       rangeTo = Math.max(rangeTo, position.to)
       continue
     }
+
     ranges.push({ from: rangeFrom, to: rangeTo })
     rangeFrom = position.from
     rangeTo = position.to
   }
+
   if (rangeFrom !== null && rangeTo !== null) {
     ranges.push({ from: rangeFrom, to: rangeTo })
   }
+
   return ranges
 }
 

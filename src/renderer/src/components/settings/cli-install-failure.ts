@@ -24,6 +24,7 @@ export function readCliInstallFailure(
   if (status.state === 'installed') {
     return null
   }
+
   return {
     reason: status.detail?.trim() || fallbackReason,
     conflictCommandPath: status.state === 'conflict' ? status.commandPath : null
@@ -33,6 +34,7 @@ export function readCliInstallFailure(
 /** A registration call that threw: unwrap the transport prefix off the installer's message. */
 export function readCliInstallRejection(error: unknown, fallbackReason: string): CliInstallFailure {
   const message = error instanceof Error ? error.message : String(error)
+
   return {
     reason: message.replace(IPC_INVOKE_PREFIX, '').trim() || fallbackReason,
     conflictCommandPath: null

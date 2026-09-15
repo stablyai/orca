@@ -18,6 +18,7 @@ const writeFailure = vi.hoisted(() => ({ failNextAuthWrite: false }))
 
 vi.mock('./fs-utils', async () => {
   const actual = await vi.importActual<typeof CodexAccountFs>('./fs-utils')
+
   return {
     ...actual,
     writeFileAtomically: (targetPath: string, contents: string, options?: { mode?: number }) => {
@@ -25,6 +26,7 @@ vi.mock('./fs-utils', async () => {
         writeFailure.failNextAuthWrite = false
         throw new Error('injected auth write failure')
       }
+
       actual.writeFileAtomically(targetPath, contents, options)
     }
   }
@@ -60,9 +62,11 @@ describe('legacy shared Codex auth migration', () => {
 
     const accountAuthPath = join(account.managedHomePath, 'auth.json')
     expect(readFileSync(accountAuthPath, 'utf-8')).toBe(fresh)
+
     if (process.platform !== 'win32') {
       expect(statSync(accountAuthPath).mode & 0o777).toBe(0o600)
     }
+
     expect(readFileSync(fixture.systemAuthPath, 'utf-8')).toBe(fixture.systemSentinel)
     expect(fixture.marker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
 
@@ -101,11 +105,13 @@ describe('legacy shared Codex auth migration', () => {
       'acct-duplicate',
       createAuth('same@example.com', 'acct-duplicate', 'one', 1_000)
     )
+
     const account2 = fixture.createAccount(
       'account-2',
       'acct-duplicate',
       createAuth('same@example.com', 'acct-duplicate', 'two', 1_000)
     )
+
     fixture.writeSharedAuth(createAuth('same@example.com', 'acct-duplicate', 'shared', 2_000))
 
     fixture.migrate([account1, account2], account1.id)
@@ -132,11 +138,13 @@ describe('legacy shared Codex auth migration', () => {
     const stale = createAuth('one@example.com', 'acct-1', 'stale', 1_000)
     const fresh = createAuth('one@example.com', 'acct-1', 'fresh', 2_000)
     const account = fixture.createAccount('account-1', 'acct-1', stale)
+
     const broken = fixture.createAccount(
       'account-2',
       'acct-2',
       createAuth('one@example.com', 'acct-2', 'other', 1_000)
     )
+
     rmSync(broken.managedHomePath, { recursive: true, force: true })
     fixture.writeSharedAuth(fresh)
 
@@ -152,11 +160,13 @@ describe('legacy shared Codex auth migration', () => {
       'acct-duplicate',
       createAuth('same@example.com', 'acct-duplicate', 'one', 1_000)
     )
+
     const account2 = fixture.createAccount(
       'account-2',
       'acct-duplicate',
       createAuth('same@example.com', 'acct-duplicate', 'two', 1_000)
     )
+
     rmSync(account2.managedHomePath, { recursive: true, force: true })
     fixture.writeSharedAuth(createAuth('same@example.com', 'acct-duplicate', 'shared', 2_000))
 
@@ -197,9 +207,11 @@ describe('legacy shared Codex MCP credentials migration (#8440)', () => {
 
     const credentialsPath = fixture.accountCredentialsPath(account)
     expect(readFileSync(credentialsPath, 'utf-8')).toBe(mcpStore)
+
     if (process.platform !== 'win32') {
       expect(statSync(credentialsPath).mode & 0o777).toBe(0o600)
     }
+
     expect(fixture.marker()).toMatchObject({ outcome: 'migrated', accountId: account.id })
   })
 
@@ -236,9 +248,11 @@ describe('legacy shared Codex MCP credentials migration (#8440)', () => {
     fixture.writeSharedCredentials(
       JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'shared-stale' } } })
     )
+
     const perAccountStore = JSON.stringify({
       MCP_OAUTH: { 'server-a': { access_token: 'per-account-fresh' } }
     })
+
     writeFileSync(fixture.accountCredentialsPath(account), perAccountStore, 'utf-8')
 
     fixture.migrate([account], account.id)
@@ -301,11 +315,13 @@ describe('legacy shared Codex MCP credentials migration (#8440)', () => {
       'acct-duplicate',
       createAuth('same@example.com', 'acct-duplicate', 'one', 1_000)
     )
+
     const account2 = fixture.createAccount(
       'account-2',
       'acct-duplicate',
       createAuth('same@example.com', 'acct-duplicate', 'two', 1_000)
     )
+
     fixture.writeSharedAuth(createAuth('same@example.com', 'acct-duplicate', 'shared', 2_000))
     fixture.writeSharedCredentials(
       JSON.stringify({ MCP_OAUTH: { 'server-a': { access_token: 'tok-a' } } })
@@ -350,6 +366,7 @@ function createFixture() {
       mkdirSync(managedHomePath, { recursive: true })
       writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
       writeFileSync(join(managedHomePath, 'auth.json'), auth, 'utf-8')
+
       return createAccount(accountId, providerAccountId, managedHomePath)
     },
     writeSharedAuth(auth: string) {
@@ -411,6 +428,7 @@ function createAuth(
   expiresAt: number
 ): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url')
+
   const payload = Buffer.from(
     JSON.stringify({
       email,
@@ -421,6 +439,7 @@ function createAuth(
       }
     })
   ).toString('base64url')
+
   return `${JSON.stringify({
     tokens: {
       id_token: `${header}.${payload}.`,

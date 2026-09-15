@@ -21,12 +21,16 @@ export async function removeFolderWorkspace(
   removalHostId: ExecutionHostId
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
+
   if (args.worktreeId === getFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
+
   const ownerHost = parseExecutionHostId(removalHostId)
+
   const sshPtyProvider =
     ownerHost?.kind === 'ssh' ? getSshPtyProvider(ownerHost.targetId) : undefined
+
   // Why: folder workspaces share one root, so there's no Git remove step to close shells; sweep PTYs before dropping metadata.
   await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
     // Folder projects can be SSH-backed, so fence the sweep to the owning host exactly
@@ -69,5 +73,6 @@ export async function removeFolderWorkspace(
     preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: removalHostId })
   )
   notifyWorktreesChanged(mainWindow, repoId)
+
   return {}
 }

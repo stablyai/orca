@@ -23,10 +23,12 @@ import {
  *  the collapsed run header are both derived from. */
 function toolCallInput(item: CodexThreadItem): unknown {
   const body = codexItemBody(item)
+
   return body !== null && body.kind === 'tool-call' ? body.input : null
 }
 
 const THREAD_ID = 'thread-abc'
+
 const TURN_ID = 'turn-1'
 
 /**
@@ -60,6 +62,7 @@ const RESUMED_TURN: CodexThreadItem[] = [
 
 function keysFor(items: CodexThreadItem[]): string[] {
   const ordinals = new CodexTurnOrdinals()
+
   return items
     .filter((item) => isCodexMessageItemType(item.type))
     .map((item) =>
@@ -73,6 +76,7 @@ describe('codex turn ordinals', () => {
   it('bounds forgotten turn tombstones while retaining the recent window', () => {
     const ordinals = new CodexTurnOrdinals()
     const total = MAX_CODEX_TURN_ORDINAL_ENTRIES + 12
+
     for (let index = 0; index < total; index += 1) {
       const turnId = `turn-${index}`
       expect(ordinals.ordinalFor('thread-many', turnId, 'item-0')).toBe(0)
@@ -103,6 +107,7 @@ describe('codex turn ordinals', () => {
 
   it('bounds aggregate provider identifier bytes retained by one active turn', () => {
     const ordinals = new CodexTurnOrdinals()
+
     for (let index = 0; index < 3_000; index += 1) {
       ordinals.ordinalFor('thread', 'turn', `${index}:${'x'.repeat(512)}`)
     }
@@ -118,6 +123,7 @@ describe('codex item identity', () => {
 
   it('numbers messages 0,1,2 on both sides — the projection skips the dropped command', () => {
     const ordinals = new CodexTurnOrdinals()
+
     const live = LIVE_TURN.map((item) =>
       codexItemIdentity({ threadId: THREAD_ID, turnId: TURN_ID, item, ordinals })
     )
@@ -152,12 +158,14 @@ describe('codex item identity', () => {
 
   it('keys a non-message item and a turnless message in the orca namespace', () => {
     const ordinals = new CodexTurnOrdinals()
+
     const command = codexItemIdentity({
       threadId: THREAD_ID,
       turnId: TURN_ID,
       item: LIVE_TURN[2] as CodexThreadItem,
       ordinals
     })
+
     const orphan = codexItemIdentity({
       threadId: THREAD_ID,
       turnId: null,
@@ -465,6 +473,7 @@ describe('codex item bodies', () => {
       exitCode: 0,
       state: 'completed'
     }
+
     const base = {
       type: 'commandExecution',
       id: 'item-fallback',
@@ -500,6 +509,7 @@ describe('codex item bodies', () => {
 
   it('accepts snake-case command completion output and preserves blob evidence', () => {
     const output = 'x'.repeat(1_100_000)
+
     const translated = codexJournalItem({
       type: 'commandExecution',
       id: 'item-large',
@@ -508,6 +518,7 @@ describe('codex item bodies', () => {
       exitCode: 0,
       aggregated_output: output
     })
+
     const body = translated.body
 
     expect(body).toMatchObject({
@@ -519,9 +530,11 @@ describe('codex item bodies', () => {
         digest: expect.any(String)
       }
     })
+
     if (body?.kind !== 'tool-call' || !body.output) {
       throw new Error('expected bounded command output')
     }
+
     expect(body.output.head.length).toBeLessThan(20_000)
   })
 
@@ -546,6 +559,7 @@ describe('codex item bodies', () => {
       id: 'assistant-parts',
       content: Array.from({ length: 200 }, () => ({ type: 'text', text: 'a'.repeat(10_000) }))
     })
+
     const text =
       body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
 
@@ -718,6 +732,7 @@ describe('codex item bodies', () => {
       tool: 'list_tools',
       arguments: {}
     })
+
     expect(describeToolInput(input)).toBe('')
     expect(briefToolArg(input)).toBe('')
   })
@@ -787,6 +802,7 @@ describe('codex item bodies', () => {
       state: 'completed',
       output: { head: JSON.stringify(results), truncated: false }
     })
+
     // Nothing to show is no output block at all, not an empty one.
     for (const empty of [undefined, null, []]) {
       expect(
@@ -806,6 +822,7 @@ describe('codex item bodies', () => {
     // Both the row label and the run header read top-level input keys only, so a
     // shape whose detail sits inside `action` renders as the input's raw JSON.
     const url = 'https://example.com/docs/page'
+
     const shapes: [string, unknown, string, string][] = [
       ['started', null, '', ''],
       [
@@ -823,6 +840,7 @@ describe('codex item bodies', () => {
       ],
       ['other', { type: 'other' }, 'other', '']
     ]
+
     for (const [name, action, label, brief] of shapes) {
       // Codex leaves the item's own `query` empty on most completed searches.
       const query = name === 'search' || name === 'findInPage' ? 'a sample query' : ''

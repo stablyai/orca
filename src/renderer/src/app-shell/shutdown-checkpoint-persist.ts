@@ -39,10 +39,13 @@ export function createShutdownCheckpointPersist(
   deps: ShutdownCheckpointPersistDeps
 ): ShutdownCheckpointPersist {
   let fullStagingFailedOnPriorAttempt = false
+
   const run = (): void => {
     const shouldCaptureSession = deps.shouldCaptureSession()
+
     if (shouldCaptureSession) {
       deps.captureTerminalBuffers()
+
       try {
         deps.captureSleepingAgentSessions()
       } catch (error) {
@@ -56,21 +59,26 @@ export function createShutdownCheckpointPersist(
         })
       }
     }
+
     // Why: dirty drafts exist only in the full session snapshot, so their loss is the
     // one thing this checkpoint may never trade away for an update.
     const canDegradeToDurableSession = (): boolean =>
       deps.isDegradableShutdownInProgress() && !deps.hasDirtyOpenFiles()
+
     let sessionSnapshots: WorkspaceSessionHostSnapshot[] = []
     let degraded = false
+
     try {
       sessionSnapshots = shouldCaptureSession ? deps.buildSessionSnapshots() : []
     } catch (error) {
       if (!canDegradeToDurableSession()) {
         throw error
       }
+
       console.error('[app] Full renderer session snapshot failed; using durable session', error)
       degraded = true
     }
+
     try {
       deps.stageBeforeUnloadSync({
         sessions: degraded ? [] : sessionSnapshots,
@@ -81,26 +89,32 @@ export function createShutdownCheckpointPersist(
       if (degraded) {
         throw error
       }
+
       // Why retry-then-degrade: the first staging failure stays a visible,
       // retryable error — degrading immediately would silently drop just-captured
       // scrollback that a retry may well save. Only a repeat failure trades the
       // full snapshot for an unblocked shutdown. Non-degradable failures never
       // arm the flag, so an unrelated unload can't burn a later restart's retry.
       const keepBlocking = !fullStagingFailedOnPriorAttempt || !canDegradeToDurableSession()
+
       if (canDegradeToDurableSession()) {
         fullStagingFailedOnPriorAttempt = true
       }
+
       if (keepBlocking) {
         throw error
       }
+
       console.error(
         '[app] Staging the full renderer session failed again; using durable session',
         error
       )
       deps.stageBeforeUnloadSync({ sessions: [], ui: deps.buildUiPatch() })
     }
+
     fullStagingFailedOnPriorAttempt = false
   }
+
   return {
     run,
     abandonAttempt: () => {

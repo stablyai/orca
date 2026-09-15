@@ -60,6 +60,7 @@ describe('hasPendingTerminalHandleRecoveryNeed', () => {
       isActive: false,
       documentVersion: '1'
     }
+
     expect(hasPendingTerminalHandleRecoveryNeed([terminalTab(null), other], 'md-1')).toBe(false)
   })
 
@@ -81,21 +82,25 @@ describe('hasPendingTerminalHandleRecoveryNeed', () => {
 describe('PendingTerminalHandleRecoveryBudget', () => {
   it('parks after the bounded attempt window and resets for a new terminal', () => {
     const budget = new PendingTerminalHandleRecoveryBudget()
+
     for (let attempt = 1; attempt <= PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
       expect(budget.take('terminal-a')).toEqual({
         allowed: true,
         parked: false
       })
     }
+
     expect(budget.take('terminal-a')).toEqual({ allowed: false, parked: true })
     expect(budget.take('terminal-b')).toEqual({ allowed: true, parked: false })
   })
 
   it('resets the current terminal budget explicitly', () => {
     const budget = new PendingTerminalHandleRecoveryBudget()
+
     for (let attempt = 0; attempt < PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
       budget.take('terminal-a')
     }
+
     budget.reset()
     expect(budget.take('terminal-a')).toEqual({ allowed: true, parked: false })
   })
@@ -110,22 +115,26 @@ describe('PendingTerminalHandleRecoveryBudget', () => {
 describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => {
   function makeHarness() {
     const pending: Array<(response: RpcResponse) => void> = []
+
     const sendRequest = vi.fn(
       () =>
         new Promise<RpcResponse>((resolve) => {
           pending.push(resolve)
         })
     )
+
     const client = { sendRequest, getGeneration: () => 1 } as unknown as RpcClient
     let tabs: MobileSessionTab[] = []
     let activeTabId: string | null = null
     const recoveryBudget = new PendingTerminalHandleRecoveryBudget()
+
     const controller = new MobileSessionTabsStreamHealth<SessionTabsResult, MobileSessionTab>({
       client,
       scope: 'id:repo::worktree',
       apply: (result): SessionTabsApplyOutcome<MobileSessionTab> => {
         tabs = result.tabs
         activeTabId = result.activeTabId
+
         return { accepted: true, effectiveTabs: result.tabs }
       },
       consumeAccepted: () => {},
@@ -133,6 +142,7 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
       allowRecoveryPoll: () =>
         recoveryBudget.take(getPendingTerminalHandleRecoveryContextKey(tabs, activeTabId)).allowed
     })
+
     return {
       controller,
       sendRequest,
@@ -204,9 +214,11 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
     for (let attempt = 0; attempt < PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
       const request = harness.controller.poll()
       expect(request).not.toBeNull()
+
       for (let joinedTick = 0; joinedTick < 5; joinedTick += 1) {
         expect(harness.controller.poll()).toBe(request)
       }
+
       expect(harness.sendRequest).toHaveBeenCalledTimes(attempt + 1)
       harness.resolveNext(snapshot(null))
       await request
@@ -222,6 +234,7 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
       const harness = makeHarness()
       harness.controller.setReconciliationActive(true)
       const subscription = harness.controller.beginSubscription()
+
       if (health === 'degraded') {
         subscription.listener({ ...snapshot(null), type: 'end' })
       }

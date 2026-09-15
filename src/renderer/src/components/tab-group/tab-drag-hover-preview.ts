@@ -43,11 +43,13 @@ export function useTabDragHoverPreview({
   const updateDragPreviewActivation = useCallback(
     (event: DragMoveEvent | DragOverEvent, activeData: TabDragItemData) => {
       const snapshot = preDragActivationSnapshotRef.current
+
       if (!snapshot) {
         return
       }
 
       const overData = event.over?.data.current
+
       if (isTabDragData(overData) && overData.unifiedTabId !== activeData.unifiedTabId) {
         lastHoveredTabPreviewRef.current = {
           groupId: overData.groupId,
@@ -61,10 +63,13 @@ export function useTabDragHoverPreview({
         preDragActiveTabIdByGroup: snapshot.activeTabIdByGroup,
         lastHoveredTabPreview: lastHoveredTabPreviewRef.current
       })
+
       const lastPreview = lastPreviewRef.current
+
       if (lastPreview?.groupId === preview.groupId && lastPreview.tabId === preview.tabId) {
         return
       }
+
       lastPreviewRef.current = preview
       applyDragPreviewTab({
         worktreeId,
@@ -80,12 +85,15 @@ export function useTabDragHoverPreview({
     (splitTarget: ActivePaneColumnSplitTarget | null) => {
       if (!splitTarget) {
         setHoveredDropTarget((prev) => (prev === null ? prev : null))
+
         return
       }
+
       setHoveredDropTarget((prev) => {
         if (prev?.groupId === splitTarget.groupId && prev?.zone === splitTarget.zone) {
           return prev
         }
+
         return {
           groupId: splitTarget.groupId,
           zone: splitTarget.zone,
@@ -99,11 +107,13 @@ export function useTabDragHoverPreview({
   const handleDragUpdate = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
       const activeData = event.active.data.current
+
       if (isTabDragData(activeData) && activeData.worktreeId === worktreeId) {
         updateDragPreviewActivation(event, activeData)
       }
 
       const state = useAppStore.getState()
+
       const splitTarget = resolveActivePaneColumnSplitTarget({
         event,
         groupsByWorktree: state.groupsByWorktree,
@@ -112,7 +122,9 @@ export function useTabDragHoverPreview({
         getDragPointer,
         geometry: dragGeometryRef.current
       })
+
       updateHoveredDropTargetFromSplit(splitTarget)
+
       if (splitTarget) {
         tabInsertion.clear()
       } else {

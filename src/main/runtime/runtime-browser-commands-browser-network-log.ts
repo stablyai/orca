@@ -9,6 +9,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { limit?: number } & BrowserCommandTargetParams
   ): Promise<BrowserNetworkLogResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().networkLog(
       params.limit,
       target.worktreeId,
@@ -22,6 +23,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().dblclick(
       params.element,
       target.worktreeId,
@@ -31,6 +33,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
 
   async browserForward(params: BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().forward(target.worktreeId, target.browserPageId)
   }
 
@@ -38,6 +41,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().scrollIntoView(
       params.element,
       target.worktreeId,
@@ -52,6 +56,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().get(
       params.what,
       params.selector,
@@ -64,6 +69,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { what: string; selector: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().is(
       params.what,
       params.selector,
@@ -78,6 +84,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { text: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().keyboardInsertText(
       params.text,
       target.worktreeId,
@@ -91,6 +98,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { x: number; y: number } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().mouseMove(
       params.x,
       params.y,
@@ -103,6 +111,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { button?: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().mouseDown(
       params.button,
       target.worktreeId,
@@ -120,6 +129,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().mouseClick(
       params.x,
       params.y,
@@ -133,6 +143,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
 
   async browserMouseUp(params: { button?: string } & BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().mouseUp(
       params.button,
       target.worktreeId,
@@ -147,6 +158,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().mouseWheel(
       params.dy,
       params.dx,
@@ -166,6 +178,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().find(
       params.locator,
       params.value,
@@ -180,6 +193,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
 
   async browserSetDevice(params: { name: string } & BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setDevice(
       params.name,
       target.worktreeId,
@@ -191,6 +205,7 @@ export class RuntimeBrowserCommandsWithBrowserNetworkLog extends RuntimeBrowserC
     params: { state?: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setOffline(
       params.state,
       target.worktreeId,

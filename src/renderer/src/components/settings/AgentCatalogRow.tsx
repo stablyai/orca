@@ -27,6 +27,7 @@ export function AgentAvailabilityControl({
   onSetEnabled: (enabled: boolean) => void
 }): React.JSX.Element {
   const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
+
   return (
     <SettingsSegmentedControl<AgentAvailability>
       value={value}
@@ -98,6 +99,7 @@ export function AgentCatalogRow({
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
+
   const [cmdOpen, setCmdOpen] = useState(
     Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
   )

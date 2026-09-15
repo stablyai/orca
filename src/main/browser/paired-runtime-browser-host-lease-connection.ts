@@ -57,10 +57,13 @@ export class PairedRuntimeBrowserHostLeaseConnection {
       this.resolveReady = resolve
       this.rejectReady = reject
     })
+
     void ready.catch(() => undefined)
     const request = createBrowserClientHostAttachRequest(this.options.lease)
+
     try {
       let subscription: RemoteRuntimeSubscription
+
       try {
         subscription = await subscribeRemoteRuntimeRequest(
           this.options.lease.pairing,
@@ -82,13 +85,17 @@ export class PairedRuntimeBrowserHostLeaseConnection {
         )
       } catch (error) {
         this.fail(asError(error))
+
         return await ready
       }
+
       if (this.closed || this.failed) {
         subscription.close()
         this.rejectReady(new Error('Browser host lease closed during startup'))
+
         return await ready
       }
+
       this.subscription = subscription
       this.readyTimeout = setTimeout(
         () =>
@@ -97,6 +104,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
           ),
         this.options.timeoutMs
       )
+
       return await ready
     } finally {
       this.clearReadyTimeout()
@@ -107,10 +115,13 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     if (this.closed) {
       return
     }
+
     this.closed = true
+
     if (this.subscription) {
       this.rejectReady(error)
     }
+
     this.clearReadyTimeout()
     this.subscription?.close()
     this.subscription = null
@@ -120,14 +131,17 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     if (!this.active) {
       return
     }
+
     this.failed = true
     this.rejectReady(error)
     this.clearReadyTimeout()
+
     try {
       this.subscription?.close()
     } catch (error) {
       this.options.onCleanupError(asError(error))
     }
+
     this.subscription = null
     this.options.onFailure(this, error)
   }
@@ -144,6 +158,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
           )
         )
     }
+
     return callbacks
   }
 
@@ -154,27 +169,39 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     if (!this.active) {
       return
     }
+
     if (!response.ok) {
       this.fail(new RemoteRuntimeClientError(response.error.code, response.error.message))
+
       return
     }
+
     const parsed = BrowserClientHostEvent.safeParse(response.result)
+
     if (!parsed.success || response._meta.runtimeId !== this.options.lease.authorityRuntimeId) {
       this.fail(new Error('Invalid browser host lease response'))
+
       return
     }
+
     if (parsed.data.type === 'command') {
       if (!this.ready) {
         this.fail(new Error('Browser host page command received before readiness'))
+
         return
       }
+
       this.options.onCommand(parsed.data, this.rejectReady)
+
       return
     }
+
     if (parsed.data.type === 'revoked') {
       this.handleRevocation(parsed.data)
+
       return
     }
+
     this.acceptReady(parsed.data, request)
   }
 
@@ -185,6 +212,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     if (this.ready) {
       return
     }
+
     if (
       !matchesOptionalProtocol(
         ready.pageCommandProtocolVersion,
@@ -213,26 +241,35 @@ export class PairedRuntimeBrowserHostLeaseConnection {
       (this.options.reconnect && ready.leaseReconnectProtocolVersion !== 1)
     ) {
       this.fail(new Error('Invalid browser host lease response'))
+
       return
     }
+
     if (ready.pageCommandProtocolVersion && !this.subscription?.sendRequest) {
       this.fail(new Error('Browser host command result transport unavailable'))
+
       return
     }
+
     const authority = browserHostLeaseAuthority(this.options.lease, ready)
+
     if (
       this.options.expectedAuthority &&
       !sameBrowserClientHostLeaseAuthority(this.options.expectedAuthority, authority)
     ) {
       this.fail(new Error('Browser host lease authority changed in place'))
+
       return
     }
+
     try {
       this.options.onReady(authority)
     } catch (error) {
       this.fail(asError(error))
+
       return
     }
+
     this.authority = authority
     this.ready = true
     this.clearReadyTimeout()
@@ -243,14 +280,17 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     revoked: Extract<ReturnType<typeof BrowserClientHostEvent.parse>, { type: 'revoked' }>
   ): void {
     const authority = this.authority ?? this.options.expectedAuthority
+
     if (
       !authority ||
       authority.authorityEpoch !== revoked.authorityEpoch ||
       authority.browserHostGeneration !== revoked.browserHostGeneration
     ) {
       this.fail(new Error('Invalid browser host lease revocation'))
+
       return
     }
+
     this.fail(new Error(`Browser host lease revoked: ${revoked.reason}`))
   }
 

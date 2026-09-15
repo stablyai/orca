@@ -32,10 +32,12 @@ describe('windows-process-tree node-gyp rebuild', () => {
       // against the rebuild cwd. Rebuilding from pnpm's node_modules link sends
       // the hop outside the store and configure fails (run 32999886072).
       const { cwd } = nodeGypRebuildInvocation('x64')
+
       const targets = execFileSync(process.execPath, ['-p', "require('node-addon-api').targets"], {
         cwd: realpathSync(WINDOWS_PROCESS_TREE_PACKAGE_DIR),
         encoding: 'utf8'
       }).trim()
+
       expect(existsSync(resolve(cwd, targets))).toBe(true)
     }
   )
@@ -48,17 +50,20 @@ describe('windows-process-tree node-gyp rebuild', () => {
 
   it('copies node-addon-api headers into the patched include dir', () => {
     const packageDir = mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-headers-'))
+
     try {
       const nodeAddonApiDir = join(packageDir, 'node_modules', 'node-addon-api')
       mkdirSync(nodeAddonApiDir, { recursive: true })
       writeFileSync(join(packageDir, 'package.json'), '{"dependencies":{"node-addon-api":"*"}}\n')
       writeFileSync(join(nodeAddonApiDir, 'package.json'), '{"name":"node-addon-api"}\n')
+
       for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
         writeFileSync(join(nodeAddonApiDir, header), `// ${header}\n`)
       }
 
       const stagedDir = stageWindowsProcessTreeNodeAddonApiHeaders(packageDir)
       expect(stagedDir).toBe(join(packageDir, 'deps', 'node-addon-api'))
+
       for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
         expect(readFileSync(join(stagedDir, header), 'utf8')).toBe(`// ${header}\n`)
       }

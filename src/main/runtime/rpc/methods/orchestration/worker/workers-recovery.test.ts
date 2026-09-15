@@ -6,9 +6,11 @@ import { eraseRpcMethods } from '../../../core'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((promiseResolve) => {
     resolve = promiseResolve
   })
+
   return { promise, resolve }
 }
 
@@ -50,9 +52,11 @@ describe('orchestration worker recovery', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method.handler(method.params!.parse(params), { runtime })
   }
 
@@ -62,7 +66,9 @@ describe('orchestration worker recovery', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const task = db.createTask({ spec: 'recover worker', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -70,6 +76,7 @@ describe('orchestration worker recovery', () => {
       startOptions: {},
       runtimeEpoch
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -80,11 +87,13 @@ describe('orchestration worker recovery', () => {
       effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }],
       terminalOwnership: 'created'
     })
+
     if (ready) {
       db.markWorkerDispatchReady(started.dispatch.id)
     } else {
       db.markWorkerStartUnknown(started.dispatch.id, 'dispatch_input', 'connection lost')
     }
+
     return { run, task, dispatch: started.dispatch }
   }
 
@@ -212,7 +221,9 @@ describe('orchestration worker recovery', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const task = db.createTask({ spec: 'interrupted', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -220,6 +231,7 @@ describe('orchestration worker recovery', () => {
       startOptions: {},
       runtimeEpoch: 'previous_runtime'
     })
+
     db.recordWorkerStage({
       dispatchId: started.dispatch.id,
       stage: 'worktree_creating'
@@ -252,7 +264,9 @@ describe('orchestration worker recovery', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const task = db.createTask({ spec: 'stop remote worker', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -266,6 +280,7 @@ describe('orchestration worker recovery', () => {
         protocolVersion: 1
       }
     })
+
     db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', 'response lost')
     db.beginWorkerStop(started.dispatch.id, runtime.getRuntimeId())
     db.markWorkerStopUnknown(started.dispatch.id, 'stop response lost')
@@ -305,7 +320,9 @@ describe('orchestration worker recovery', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const task = db.createTask({ spec: 'release remote worker', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -318,6 +335,7 @@ describe('orchestration worker recovery', () => {
         protocolVersion: 1
       }
     })
+
     db.reconcileFederatedWorkerStart({
       dispatchId: started.dispatch.id,
       state: 'ready',

@@ -50,6 +50,7 @@ export function ReviewerPicker({
   const reviewerListId = useId()
   const reviewerRowId = (index: number): string => `${reviewerListId}-${index}`
   const activeReviewerRow = actionableReviewerRows[activeReviewerIndex] ?? null
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
@@ -98,21 +99,27 @@ export function ReviewerPicker({
               if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
                 event.preventDefault()
                 onActiveIndexChange((current) => (current + 1) % actionableReviewerRows.length)
+
                 return
               }
+
               if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
                 event.preventDefault()
                 onActiveIndexChange(
                   (current) =>
                     (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
                 )
+
                 return
               }
+
               if (event.key === 'Enter') {
                 event.preventDefault()
                 onEnter()
+
                 return
               }
+
               if (event.key === 'Escape') {
                 event.preventDefault()
                 onOpenChange(false)

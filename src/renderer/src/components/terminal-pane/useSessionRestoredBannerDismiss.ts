@@ -10,12 +10,16 @@ export function useSessionRestoredBannerDismiss(
     if (!visible) {
       return
     }
+
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     container.addEventListener('keydown', dismiss, { capture: true })
     container.addEventListener('pointerdown', dismiss, { capture: true })
+
     return () => {
       container.removeEventListener('keydown', dismiss, { capture: true })
       container.removeEventListener('pointerdown', dismiss, { capture: true })

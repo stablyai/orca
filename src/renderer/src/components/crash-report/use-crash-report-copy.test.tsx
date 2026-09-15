@@ -58,9 +58,11 @@ describe('useCrashReportCopy', () => {
       error: 'report request timed out',
       diagnosticContext: { status: 'not_uploaded', reason: 'logs timed out' }
     }
+
     const { result, rerender } = renderHook(({ notes }) => useCrashReportCopy(report(), notes), {
       initialProps: { notes: 'notes at submit' }
     })
+
     const failureToastCopyAction = result.current
 
     rerender({ notes: 'notes edited while waiting' })
@@ -83,6 +85,7 @@ describe('useCrashReportCopy', () => {
         }
       }
     )
+
     const reportACopyAction = result.current
 
     rerender({ currentReport: report('crash-b'), notes: 'private notes for B' })

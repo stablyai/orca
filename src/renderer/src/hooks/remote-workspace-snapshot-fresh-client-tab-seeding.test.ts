@@ -22,13 +22,17 @@ import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapsh
 import type { DirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator-types'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const TARGET_ID = 'ssh-target-1'
+
 const PATH = '/srv/proj/bug-cats'
+
 const WORKTREE_ID = `repoA::${PATH}`
 
 const authority: DirectSshAuthority = {

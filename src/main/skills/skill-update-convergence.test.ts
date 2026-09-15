@@ -43,6 +43,7 @@ function revision(releaseRevision: number, gitTreeSha: string): SkillKnownSnapsh
 }
 
 const PRE_STUB = revision(1, 'f3727995')
+
 const STUB = revision(2, '091d9bcc')
 
 describe('convergableSkillNames', () => {
@@ -55,6 +56,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-linear', '091d9bcc']]),
       { 'orca-linear': [PRE_STUB, STUB] }
     )
+
     expect([...result]).toEqual([])
   })
 
@@ -66,6 +68,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-cli', 'aaaa1111']]),
       { 'orca-cli': [revision(1, 'aaaa1111')] }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
 
@@ -75,6 +78,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-cli', 'aaaa1111']]),
       { 'orca-cli': [revision(1, 'bbbb2222')] }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
 
@@ -84,6 +88,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-cli', 'aaaa1111']]),
       { 'orca-cli': [revision(1, 'aaaa1111')] }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
 
@@ -97,6 +102,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-linear', '091d9bcc']]),
       { 'orca-linear': [PRE_STUB, STUB] }
     )
+
     expect([...result]).toEqual([])
   })
 
@@ -107,6 +113,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-cli', 'aaaa1111']]),
       { 'orca-cli': [revision(1, 'aaaa1111'), revision(2, 'f3727995')] }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
 
@@ -117,6 +124,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-cli', 'not-a-known-tree']]),
       { 'orca-cli': [revision(1, 'f3727995')] }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
 
@@ -129,6 +137,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-cli', '091d9bcc']]),
       { 'orca-cli': [PRE_STUB, STUB] }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
 
@@ -141,6 +150,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-linear', '091d9bcc']]),
       { 'orca-linear': [PRE_STUB, STUB] }
     )
+
     expect([...result]).toEqual([])
   })
 
@@ -152,6 +162,7 @@ describe('convergableSkillNames', () => {
       new Map([['orca-linear', '091d9bcc']]),
       { 'orca-linear': [PRE_STUB, STUB] }
     )
+
     expect([...result]).toEqual([])
   })
 
@@ -167,6 +178,7 @@ describe('convergableSkillNames', () => {
         'orca-cli': [revision(1, 'aaaa1111')]
       }
     )
+
     expect([...result]).toEqual(['orca-cli'])
   })
   // A skill directory can legitimately be named `constructor`, and lock names come
@@ -181,13 +193,16 @@ describe('convergableSkillNames', () => {
 
   it('indexes placements once across many independent locked skills', () => {
     let nameReads = 0
+
     const installations = Array.from({ length: 1000 }, (_, index) => ({
       ...placement(`skill-${index}`, index % 2 ? 2 : 1),
       get name() {
         nameReads++
+
         return `skill-${index}`
       }
     }))
+
     const locks = new Map(installations.map((entry) => [entry.name, STUB.gitTreeSha!]))
     const snapshots = Object.fromEntries([...locks.keys()].map((name) => [name, [PRE_STUB, STUB]]))
     nameReads = 0

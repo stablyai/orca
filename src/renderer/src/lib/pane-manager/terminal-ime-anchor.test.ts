@@ -16,13 +16,16 @@ function makeCell(cell: FakeCell): IBufferCell {
 
 function makeLine(text: string, cols = 80): IBufferLine {
   const cells: FakeCell[] = []
+
   for (const char of Array.from(text)) {
     const width = char === '你' ? 2 : 1
     cells.push({ chars: char, width })
+
     if (width === 2) {
       cells.push({ chars: '', width: 0 })
     }
   }
+
   while (cells.length < cols) {
     cells.push({ chars: '', width: 1 })
   }
@@ -32,17 +35,22 @@ function makeLine(text: string, cols = 80): IBufferLine {
     length: cells.length,
     getCell: (column: number) => {
       const cell = cells[column]
+
       return cell ? makeCell(cell) : undefined
     },
     translateToString: (trimRight = false, startColumn = 0, endColumn = cells.length) => {
       let result = ''
+
       for (let column = startColumn; column < endColumn; column++) {
         const cell = cells[column]
+
         if (!cell || cell.width === 0) {
           continue
         }
+
         result += cell.chars || ' '
       }
+
       return trimRight ? result.replace(/\s+$/, '') : result
     }
   } as IBufferLine
@@ -50,6 +58,7 @@ function makeLine(text: string, cols = 80): IBufferLine {
 
 function makeBuffer(lines: string[], cols = 80): IBuffer {
   const bufferLines = lines.map((line) => makeLine(line, cols))
+
   return {
     baseY: 0,
     cursorX: 0,

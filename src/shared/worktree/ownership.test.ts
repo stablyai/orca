@@ -154,6 +154,7 @@ describe('worktree ownership classification', () => {
   it('does not treat metadata-free nested workspace paths as Orca-managed for new repos', () => {
     const repo = makeRepo({ externalWorktreeVisibility: 'hide' })
     const settings = makeSettings()
+
     const detected = toDetectedWorktree({
       repo,
       settings,
@@ -171,6 +172,7 @@ describe('worktree ownership classification', () => {
   it('does not treat generic discovery metadata on nested workspace paths as Orca-managed', () => {
     const repo = makeRepo({ externalWorktreeVisibility: 'hide' })
     const settings = makeSettings()
+
     const detected = toDetectedWorktree({
       repo,
       settings,
@@ -189,6 +191,7 @@ describe('worktree ownership classification', () => {
   it('keeps nested workspace paths visible for legacy repos without explicit visibility', () => {
     const repo = makeRepo()
     const settings = makeSettings()
+
     const detected = toDetectedWorktree({
       repo,
       settings,
@@ -208,7 +211,9 @@ describe('worktree ownership classification', () => {
       externalWorktreeVisibility: 'hide',
       externalWorktreeVisibilityLegacy: true
     })
+
     const settings = makeSettings()
+
     const detected = toDetectedWorktree({
       repo,
       settings,
@@ -238,10 +243,12 @@ describe('worktree ownership classification', () => {
 
   it('keeps flat-layout history weak after switching the same root to nested mode', () => {
     const repo = makeRepo()
+
     const settings = makeSettings({
       nestWorkspaces: true,
       workspaceDirHistory: [{ path: '/orca/workspaces', nestWorkspaces: false }]
     })
+
     expect(
       classifyWorktreeOwnership({
         repo,
@@ -254,10 +261,12 @@ describe('worktree ownership classification', () => {
 
   it('uses each historical layout nest mode when matching old roots', () => {
     const repo = makeRepo()
+
     const settings = makeSettings({
       workspaceDir: '/new/workspaces',
       workspaceDirHistory: [{ path: '/old/workspaces', nestWorkspaces: true }]
     })
+
     expect(
       classifyWorktreeOwnership({
         repo,
@@ -270,6 +279,7 @@ describe('worktree ownership classification', () => {
 
   it('builds known layouts from large workspace history lists', () => {
     const repo = makeRepo()
+
     const workspaceDirHistory = Array.from(
       { length: LARGE_WORKSPACE_HISTORY_COUNT },
       (_, index) => ({
@@ -277,6 +287,7 @@ describe('worktree ownership classification', () => {
         nestWorkspaces: index % 2 === 0
       })
     )
+
     const settings = makeSettings({
       workspaceDir: '/new/workspaces',
       workspaceDirHistory
@@ -313,6 +324,7 @@ describe('worktree ownership classification', () => {
   it('keeps selected linked checkouts visible without trusting Git main-worktree', () => {
     const repo = makeRepo({ path: '/repos/app-linked', externalWorktreeVisibility: 'hide' })
     const settings = makeSettings()
+
     const selected = toDetectedWorktree({
       repo,
       settings,
@@ -322,6 +334,7 @@ describe('worktree ownership classification', () => {
       }),
       knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
     })
+
     const gitMain = toDetectedWorktree({
       repo,
       settings,
@@ -439,6 +452,7 @@ describe('external worktree visibility policy', () => {
       externalWorktreeVisibility: 'hide',
       importedExternalWorktreePaths: ['/scratch/imported']
     })
+
     expect(
       shouldShowWorktree({
         repo,
@@ -466,6 +480,7 @@ describe('external worktree visibility policy', () => {
       addedAt: EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT - 1,
       externalWorktreeVisibility: 'hide'
     })
+
     expect(
       shouldShowWorktree({
         repo,
@@ -535,12 +550,14 @@ describe('agent scratch worktrees', () => {
       makeRepo({ addedAt: EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT - 1 })
     ]) {
       const settings = makeSettings()
+
       const detected = toDetectedWorktree({
         repo,
         settings,
         worktree: makeWorktree({ path: scratchPath, isMainWorktree: false }),
         knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
       })
+
       expect(detected.ownership).toBe('agent-scratch')
       expect(detected.visible).toBe(false)
     }
@@ -551,6 +568,7 @@ describe('agent scratch worktrees', () => {
       externalWorktreeVisibility: 'hide',
       agentWorktreeVisibility: 'show'
     })
+
     const settings = makeSettings()
 
     for (const path of [scratchPath, '/repos/app/.gsd-workspaces/phase-1']) {
@@ -572,6 +590,7 @@ describe('agent scratch worktrees', () => {
         builtIn: { claude: 'hide', gsd: 'show' }
       }
     })
+
     const settings = makeSettings()
 
     expect(
@@ -597,12 +616,15 @@ describe('agent scratch worktrees', () => {
 
   it('lets a custom source override ordinary external visibility', () => {
     const customPath = '/srv/team-worktrees/feature'
+
     const repo = makeRepo({
       externalWorktreeVisibility: 'show',
       customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
       worktreeVisibilitySourcePreferences: { custom: { team: 'hide' } }
     })
+
     const settings = makeSettings()
+
     const detected = toDetectedWorktree({
       repo,
       settings,
@@ -620,6 +642,7 @@ describe('agent scratch worktrees', () => {
       externalWorktreeVisibility: 'hide',
       importedExternalWorktreePaths: [scratchPath]
     })
+
     expect(
       shouldShowWorktree({
         repo,
@@ -645,12 +668,14 @@ describe('agent scratch worktrees', () => {
     const repo = makeRepo()
     const settings = makeSettings()
     const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+
     const scratch = toDetectedWorktree({
       repo,
       settings,
       worktree: makeWorktree({ path: scratchPath, isMainWorktree: false }),
       knownOrcaLayouts: layouts
     })
+
     const external = toDetectedWorktree({
       repo,
       settings,
@@ -673,7 +698,9 @@ describe('agent scratch worktrees', () => {
       externalWorktreeVisibility: 'hide',
       importedExternalWorktreePaths: [scratchPath]
     })
+
     const settings = makeSettings()
+
     const scratch = toDetectedWorktree({
       repo,
       settings,

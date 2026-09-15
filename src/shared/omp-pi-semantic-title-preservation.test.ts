@@ -31,7 +31,9 @@ import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-t
 
 // Verbatim from src/main/pi/titlebar-extension-source.ts:44 and oh-my-pi:530-544.
 const ORCA_EXTENSION_WORKING = (frame: string): string => `${frame} π - fixing the sidebar - orca`
+
 const OMP_NATIVE_WORKING = (frame: string): string => `π ${frame} fixing the sidebar`
+
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
 describe('normalizeTerminalTitle keeps the OMP/Pi session label', () => {
@@ -204,18 +206,23 @@ describe('one real OMP turn', () => {
       { length: 30 },
       (_, index) => `${FRAMES[index % FRAMES.length]} π - fixing the sidebar - orca`
     )
+
     frames.push('π - fixing the sidebar - orca')
 
     const committed: string[] = []
     let previous: string | null = null
+
     for (const frame of frames) {
       const normalized = normalizeTerminalTitle(frame)
+
       if (previous !== null && isDecorativeAgentTitleFrameChange(previous, normalized)) {
         continue
       }
+
       if (normalized === previous) {
         continue
       }
+
       committed.push(normalized)
       previous = normalized
     }

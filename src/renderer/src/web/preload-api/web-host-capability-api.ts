@@ -36,6 +36,7 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
       tokenConfigured: false
     }
   }
+
   const fallbackRefreshAgents: RefreshAgentsResult = {
     agents: [],
     addedPathSegments: [],
@@ -43,6 +44,7 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+
   type WindowsTerminalCapabilityBridgeResult = {
     wslAvailable: boolean
     wslDistros: string[]
@@ -50,6 +52,7 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
   }
+
   const fallbackWindowsTerminalCapabilities = {
     wslAvailable: false,
     wslDistros: [],
@@ -57,17 +60,20 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     gitBashAvailable: false,
     hostPlatform: null
   }
+
   return {
     check: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
         return fallbackStatus
       }
+
       return callRuntimeResult<PreflightStatus>('preflight.check', args)
     },
     detectAgents: async () => {
       if (!requireActiveEnvironmentOrNull()) {
         return []
       }
+
       return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
     },
     refreshAgents: () =>
@@ -181,6 +187,7 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     // Disable deletion when the paired host predates the capability.
     deleteSupported: async () => {
       const status = await getRemoteRuntimeStatus().catch(() => null)
+
       return status?.capabilities?.includes(SKILL_DELETE_CAPABILITY) === true
     },
     previewDelete: (request) =>

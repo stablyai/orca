@@ -43,9 +43,11 @@ describe('durable orchestration mutation ledger', () => {
     const db = new OrchestrationDb(dbPath)
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+
     const effect = vi.fn((subject: string) =>
       db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
     )
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -56,14 +58,17 @@ describe('durable orchestration mutation ledger', () => {
         })
       ]
     })
+
     return { db, runtime, dispatcher, effect }
   }
 
   it('replays one completed receipt without repeating the effect', async () => {
     const { db, dispatcher, effect } = createHarness()
+
     const first = await dispatcher.dispatch(
       request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
     )
+
     const replay = await dispatcher.dispatch(
       request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'hello' })
     )
@@ -86,6 +91,7 @@ describe('durable orchestration mutation ledger', () => {
     await dispatcher.dispatch(
       request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
     )
+
     const mismatch = await dispatcher.dispatch(
       request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'changed' })
     )
@@ -97,21 +103,25 @@ describe('durable orchestration mutation ledger', () => {
   it('keys WebSocket replay to the authenticated device across reconnects', async () => {
     const { db, dispatcher, effect } = createHarness()
     const replies: string[] = []
+
     const firstRequest = request({
       rpcId: 'rpc_1',
       mutationId: 'mutation_remote',
       subject: 'remote'
     }) as RpcRequest & { deviceToken?: string }
+
     firstRequest.authToken = ''
     firstRequest.deviceToken = 'untrusted-request-value-a'
     await dispatcher.dispatchStreaming(firstRequest, (reply) => replies.push(reply), {
       authenticatedCallerFingerprint: 'paired-device-a'
     })
+
     const replayRequest = {
       ...firstRequest,
       id: 'rpc_2',
       deviceToken: 'untrusted-request-value-b'
     }
+
     await dispatcher.dispatchStreaming(replayRequest, (reply) => replies.push(reply), {
       authenticatedCallerFingerprint: 'paired-device-a'
     })
@@ -143,13 +153,17 @@ describe('durable orchestration mutation ledger', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     let release: (() => void) | undefined
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const effect = vi.fn(async () => {
       await gate
+
       return { accepted: true }
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -160,13 +174,17 @@ describe('durable orchestration mutation ledger', () => {
         })
       ]
     })
+
     const first = dispatcher.dispatch(
       request({ rpcId: 'rpc_1', mutationId: 'mutation_join', subject: 'same' })
     )
+
     await Promise.resolve()
+
     const second = dispatcher.dispatch(
       request({ rpcId: 'rpc_2', mutationId: 'mutation_join', subject: 'same' })
     )
+
     release?.()
 
     expect(await first).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
@@ -186,9 +204,11 @@ describe('durable orchestration mutation ledger', () => {
     first.db.close()
 
     const second = createHarness(dbPath)
+
     const replay = await second.dispatcher.dispatch(
       request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'durable' })
     )
+
     expect(replay).toMatchObject({
       ok: true,
       result: { message: { subject: 'durable' }, mutation: { replayed: true } }
@@ -202,6 +222,7 @@ describe('durable orchestration mutation ledger', () => {
     paths.push(dir)
     const dbPath = join(dir, 'orchestration.db')
     const firstRuntime = createHarness(dbPath)
+
     const first = await firstRuntime.dispatcher.dispatch(
       request({
         rpcId: 'rpc_1',
@@ -210,9 +231,11 @@ describe('durable orchestration mutation ledger', () => {
         authToken: 'before-restart'
       })
     )
+
     firstRuntime.db.close()
 
     const restartedRuntime = createHarness(dbPath)
+
     const replay = await restartedRuntime.dispatcher.dispatch(
       request({
         rpcId: 'rpc_2',
@@ -243,6 +266,7 @@ describe('durable orchestration mutation ledger', () => {
     const result = await dispatcher.dispatch(
       request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
     )
+
     expect(result).toMatchObject({ ok: false, error: { code: 'operation_unknown' } })
     db.close()
   })
@@ -253,9 +277,11 @@ describe('durable orchestration mutation ledger', () => {
     runtime.setOrchestrationDb(db)
     const params = { dispatch: 'ctx_release' }
     const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
+
     const payloadHash = createHash('sha256')
       .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
       .digest('hex')
+
     db.beginMutationReceipt({
       callerFingerprint,
       requestId: 'mutation_release',
@@ -263,6 +289,7 @@ describe('durable orchestration mutation ledger', () => {
       payloadHash
     })
     const effect = vi.fn().mockReturnValue({ state: 'release_pending' })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -299,14 +326,18 @@ describe('durable orchestration mutation ledger', () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+
     const params = {
       from: 'term_coord',
       task: db.createTask({ runId: 'run_legacy_local', spec: 'restart' }).id
     }
+
     const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
+
     const payloadHash = createHash('sha256')
       .update(JSON.stringify({ method: 'orchestration.workerStart', params }))
       .digest('hex')
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -319,7 +350,9 @@ describe('durable orchestration mutation ledger', () => {
         payloadHash
       }
     })
+
     const effect = vi.fn()
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -371,18 +404,22 @@ describe('durable orchestration mutation ledger', () => {
           options?.signal?.addEventListener('abort', () => resolve('cancelled'), { once: true })
         })
     )
+
     const run = db.createRun({
       objective: 'Ask recovery',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'ask', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+
     const capability = db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: 'tab_worker:leaf_worker',
       processIncarnation: 'runtime:pty:1'
     })
+
     const askRequest: RpcRequest = {
       id: 'rpc_ask_1',
       authToken: 'caller-token',
@@ -392,6 +429,7 @@ describe('durable orchestration mutation ledger', () => {
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'mutation_ask'
     }
+
     const controller = new AbortController()
     const firstDispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const first = firstDispatcher.dispatch(askRequest, { signal: controller.signal })
@@ -403,10 +441,12 @@ describe('durable orchestration mutation ledger', () => {
     vi.spyOn(restartedRuntime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
     vi.spyOn(restartedRuntime, 'getTerminalProcessIncarnation').mockReturnValue('runtime:pty:1')
     vi.spyOn(restartedRuntime, 'notifyMessageArrived').mockImplementation(() => {})
+
     const restartedDispatcher = new RpcDispatcher({
       runtime: restartedRuntime,
       methods: ORCHESTRATION_METHODS
     })
+
     const recovered = await restartedDispatcher.dispatch({ ...askRequest, id: 'rpc_ask_2' })
     expect(recovered).toMatchObject({
       ok: true,

@@ -5,13 +5,16 @@ import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 
 const ANNOUNCE_DEBOUNCE_MS = 400
+
 // Why: the counter overlays the input, so its width has to be reserved rather
 // than guessed — a fixed reserve overlaps typed text once counts reach 3 digits.
 // `ch` keeps that reserve font-relative across platforms: it measures the input's
 // own 12px font while the counter renders at 10px tabular-nums, so digits always
 // over-reserve and '/' and ' ' are narrower still.
 const CLEAR_BUTTON_RESERVE_PX = 32
+
 const OVERLAY_GAP_PX = 4
+
 // Why: a wide counter in a narrow drawer could otherwise reserve the whole
 // field and squeeze the typed text to nothing. Overlapping the counter is the
 // better failure at that size.
@@ -36,6 +39,7 @@ export function overlayReserve(overlayText: string | null): string {
   if (!overlayText) {
     return `${CLEAR_BUTTON_RESERVE_PX}px`
   }
+
   return `min(calc(${CLEAR_BUTTON_RESERVE_PX + OVERLAY_GAP_PX}px + ${overlayText.length}ch), ${MAX_OVERLAY_RESERVE})`
 }
 
@@ -73,9 +77,11 @@ export default function WorkspaceKanbanSearchField({
         'Search text is too long — the board is unfiltered'
       )
     : null
+
   const tooLargeLabel = isTooLarge
     ? translate('auto.components.sidebar.WorkspaceKanbanSearchField.9a4d0f6b21', 'Too long')
     : null
+
   const badgeText = tooLargeLabel ?? counterText
 
   // Why: the filter itself is undebounced, but a polite live region that changes
@@ -83,16 +89,21 @@ export default function WorkspaceKanbanSearchField({
   useEffect(() => {
     if (tooLargeMessage) {
       setAnnouncement(tooLargeMessage)
+
       return
     }
+
     if (!isFiltering) {
       setAnnouncement('')
+
       return
     }
+
     const timer = window.setTimeout(
       () => setAnnouncement(formatAnnouncement(matchCount, totalCount)),
       ANNOUNCE_DEBOUNCE_MS
     )
+
     return () => window.clearTimeout(timer)
   }, [isFiltering, matchCount, totalCount, tooLargeMessage])
 
@@ -122,11 +133,15 @@ export default function WorkspaceKanbanSearchField({
           if (event.key !== 'Escape' || event.nativeEvent.isComposing) {
             return
           }
+
           event.preventDefault()
+
           if (hasText) {
             onClear()
+
             return
           }
+
           onClose()
         }}
       />

@@ -6,9 +6,11 @@ import { formatCommandHelp } from '../help'
 
 function spec(path: string): (typeof ACCOUNT_COMMAND_SPECS)[number] {
   const found = ACCOUNT_COMMAND_SPECS.find((entry) => entry.path.join(' ') === path)
+
   if (!found) {
     throw new Error(`Missing account spec: ${path}`)
   }
+
   return found
 }
 
@@ -41,11 +43,14 @@ describe('account command specs', () => {
     const descriptionColumn = (help: string, flag: string): number => {
       const line = help.split('\n').find((entry) => entry.startsWith(`  --${flag}`))
       const match = line?.match(/^(\s*--\S+(?: <[^>]+>)?)(\s+)\S/)
+
       if (!match) {
         throw new Error(`No description found for --${flag}`)
       }
+
       return match[1].length + match[2].length
     }
+
     const help = formatCommandHelp(spec('account add'))
 
     expect(descriptionColumn(help, 'agent')).toBe(descriptionColumn(help, 'json'))

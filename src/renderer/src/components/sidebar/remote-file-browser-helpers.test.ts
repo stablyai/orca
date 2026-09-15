@@ -36,6 +36,7 @@ describe('filterEntries', () => {
 
   it('rejects oversized pasted filters before reading remote entry names', () => {
     const oversizedFilter = 'secret-remote-entry'.repeat(REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES)
+
     const throwingEntries = [
       {
         get name(): string {
@@ -220,6 +221,7 @@ describe('parsePathInput', () => {
   it('reports repeated separators as invalid', () => {
     const parsed = parsePathInput('foo//bar')
     expect(parsed.mode).toBe('path')
+
     if (parsed.mode === 'path') {
       expect(parsed.invalid).toMatch(/repeated separators/)
     }
@@ -272,6 +274,7 @@ describe('resolveSegmentStep', () => {
   it('ambiguous prefix errors', () => {
     const r = resolveSegmentStep('Do', '/home/neil', listing)
     expect(r.type).toBe('error')
+
     if (r.type === 'error') {
       expect(r.message).toMatch(/multiple directories/)
     }
@@ -287,6 +290,7 @@ describe('resolveSegmentStep', () => {
     // prefix-match heuristic that picks the first folder starting with "n".
     const r = resolveSegmentStep('notes.txt', '/home/neil', listing)
     expect(r.type).toBe('error')
+
     if (r.type === 'error') {
       expect(r.message).toMatch(/isn't a directory/)
     }
@@ -319,6 +323,7 @@ describe('resolveSegmentStep', () => {
       { name: 'Documents', isDirectory: true },
       { name: 'documents', isDirectory: true }
     ]
+
     expect(resolveSegmentStep('documents', '/home/neil', mixed)).toEqual({
       type: 'descend',
       name: 'documents'
@@ -332,6 +337,7 @@ describe('resolveSegmentStep', () => {
   it('case-insensitive ambiguous prefix errors', () => {
     const r = resolveSegmentStep('do', '/home/neil', listing)
     expect(r.type).toBe('error')
+
     if (r.type === 'error') {
       expect(r.message).toMatch(/multiple directories/)
     }
@@ -383,6 +389,7 @@ describe('Windows drive paths', () => {
     for (const raw of ['M:\\dev\\\\x', 'M:/dev//x', 'M:\\dev\\/x']) {
       const parsed = parsePathInput(raw, 'win32')
       expect(parsed.mode).toBe('path')
+
       if (parsed.mode === 'path') {
         expect(parsed.invalid).toMatch(/repeated separators/)
       }

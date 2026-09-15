@@ -8,45 +8,61 @@ import { createRequire } from 'node:module'
 const nacl = createRequire(import.meta.url)('tweetnacl')
 
 const TRANSCRIPT_DOMAIN = 'orca-mobile-e2ee/v2/transcript'
+
 const SALT_LABEL = utf8('orca-mobile-e2ee/v2/salt\0')
+
 const INFO_LABEL = utf8('orca-mobile-e2ee/v2/session\0')
+
 const NONCE_LENGTH = 24
+
 const SESSION_ID_LENGTH = 32
+
 const HEADER_LENGTH = SESSION_ID_LENGTH + 1 + 1 + 8
 
 // ---------- byte helpers ----------
 export function utf8(value) {
   return new TextEncoder().encode(value)
 }
+
 function uint32(value) {
   const bytes = new Uint8Array(4)
   new DataView(bytes.buffer).setUint32(0, value)
+
   return bytes
 }
+
 function concat(parts) {
   const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
   let offset = 0
+
   for (const part of parts) {
     out.set(part, offset)
     offset += part.length
   }
+
   return out
 }
+
 export function sha256(bytes) {
   return new Uint8Array(createHash('sha256').update(bytes).digest())
 }
+
 function b64(bytes) {
   return Buffer.from(bytes).toString('base64')
 }
+
 function unb64(value) {
   return new Uint8Array(Buffer.from(value, 'base64'))
 }
+
 export function b64url(bytes) {
   return Buffer.from(bytes).toString('base64url')
 }
+
 function writeU64(target, offset, value) {
   new DataView(target.buffer, target.byteOffset).setBigUint64(offset, value)
 }
+
 // Transcript list encodings must stay byte-identical to encodeMobileE2EEV2Transcript in
 // src/shared/mobile-e2ee-v2-contract.ts, or the derived key schedule diverges silently.
 function encodeStringList(items) {
@@ -55,6 +71,7 @@ function encodeStringList(items) {
     ...items.map((value) => concat([uint32(value.length), value]))
   ])
 }
+
 function encodeNumberList(items) {
   return concat([uint32(items.length), ...items.map(uint32)])
 }
@@ -87,12 +104,16 @@ export class PhoneE2EE {
     if (ready?.type !== 'e2ee_ready' || ready.v !== 2) {
       throw new Error('bad e2ee_ready')
     }
+
     const desktopPublicKey = unb64(ready.desktopPublicKeyB64)
+
     if (!nacl.verify(desktopPublicKey, this.desktopPublicKey)) {
       throw new Error('desktop key mismatch')
     }
+
     const desktopNonce = unb64(ready.desktopNonceB64)
     const hello = this.hello
+
     const fields = [
       ['domain', utf8(TRANSCRIPT_DOMAIN)],
       ['mobile-to-desktop.type', utf8(hello.type)],
@@ -125,11 +146,13 @@ export class PhoneE2EE {
       ['desktop-to-mobile.context.transport', utf8(ready.context.transport)],
       ['desktop-to-mobile.context.relay-host-id', utf8(ready.context.relayHostId ?? '')]
     ]
+
     const transcript = concat(
       fields.map(([name, value]) =>
         concat([uint32(utf8(name).length), utf8(name), uint32(value.length), value])
       )
     )
+
     const shared = nacl.box.before(this.desktopPublicKey, this.keys.secretKey)
     const transcriptHash = sha256(transcript)
     const salt = sha256(concat([SALT_LABEL, this.clientNonce, desktopNonce]))
@@ -149,6 +172,7 @@ export class PhoneE2EE {
     nonce[14] = kind
     nonce[15] = 0
     writeU64(nonce, 16, counter)
+
     return nonce
   }
 
@@ -158,6 +182,7 @@ export class PhoneE2EE {
     header[SESSION_ID_LENGTH] = direction
     header[SESSION_ID_LENGTH + 1] = kind
     writeU64(header, SESSION_ID_LENGTH + 2, counter)
+
     return header
   }
 
@@ -165,6 +190,7 @@ export class PhoneE2EE {
     const counter = this.outbound++
     const nonce = this.frameNonce(0, 0, counter)
     const body = concat([this.frameHeader(0, 0, counter), utf8(plaintext)])
+
     return b64(concat([nonce, nacl.secretbox(body, nonce, this.m2d)]))
   }
 
@@ -173,16 +199,21 @@ export class PhoneE2EE {
   open(frame, kind) {
     const counter = this.inbound++
     const nonce = this.frameNonce(1, kind, counter)
+
     if (!nacl.verify(frame.subarray(0, NONCE_LENGTH), nonce)) {
       throw new Error('nonce mismatch')
     }
+
     const plain = nacl.secretbox.open(frame.subarray(NONCE_LENGTH), nonce, this.d2m)
+
     if (!plain) {
       throw new Error('open failed')
     }
+
     if (!nacl.verify(plain.subarray(0, HEADER_LENGTH), this.frameHeader(1, kind, counter))) {
       throw new Error('header mismatch')
     }
+
     return plain.slice(HEADER_LENGTH)
   }
 

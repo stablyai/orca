@@ -115,16 +115,19 @@ describe('requestEditorSaveQuiesce', () => {
 
   it('waits for a claiming listener to finish quiescing', async () => {
     let resolved = false
+
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent).detail as {
         claim: () => void
         resolve: () => void
       }
+
       detail.claim()
       window.setTimeout(() => detail.resolve(), 0)
     }
 
     window.addEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handler as EventListener)
+
     try {
       const promise = requestEditorSaveQuiesce({ fileId: 'file-1' }).then(() => {
         resolved = true
@@ -151,6 +154,7 @@ describe('requestEditorFileClose', () => {
   it('dispatches a close request event with the file id', () => {
     const listener = vi.fn()
     window.addEventListener(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, listener as EventListener)
+
     try {
       requestEditorFileClose('file-1')
       expect(listener).toHaveBeenCalledTimes(1)
@@ -191,22 +195,26 @@ describe('isExternalReloadableEditorTab', () => {
 describe('getOpenFilesForExternalFileChange', () => {
   it('matches edit tabs and unstaged diff tabs for the same worktree file', () => {
     const matchingEdit = makeOpenFile()
+
     const matchingPreview = makeOpenFile({
       id: 'markdown-preview::/repo/file.ts',
       mode: 'markdown-preview',
       language: 'markdown',
       markdownPreviewSourceFileId: '/repo/file.ts'
     })
+
     const matchingUnstagedDiff = makeOpenFile({
       id: 'wt-1::diff::unstaged::file.ts',
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     const stagedDiff = makeOpenFile({
       id: 'wt-1::diff::staged::file.ts',
       mode: 'diff',
       diffSource: 'staged'
     })
+
     const otherWorktree = makeOpenFile({
       id: '/other/file.ts',
       filePath: '/other/file.ts',
@@ -233,6 +241,7 @@ describe('getOpenFilesForExternalFileChange', () => {
   it('filters same-path matches by runtime owner when the watcher supplies one', () => {
     const localEdit = makeOpenFile({ id: 'local-edit', runtimeEnvironmentId: null })
     const runtimeEdit = makeOpenFile({ id: 'runtime-edit', runtimeEnvironmentId: 'env-1' })
+
     const runtimeDiff = makeOpenFile({
       id: 'runtime-diff',
       mode: 'diff',
@@ -260,6 +269,7 @@ describe('getOpenFilesForExternalFileChange', () => {
   })
   it('matches restored WSL aliases only for a proven local Windows watcher', () => {
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
+
     const terminalLinkTab = makeOpenFile({
       id: '//wsl.localhost/Ubuntu/workspace/repo/file.ts',
       filePath: '//wsl.localhost/Ubuntu/workspace/repo/file.ts',

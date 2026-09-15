@@ -37,9 +37,12 @@ export function PRCommentComposer({
     if (!canSubmit || inFlightRef.current) {
       return
     }
+
     inFlightRef.current = true
+
     try {
       const ok = await onSubmit(body.trim())
+
       if (ok) {
         setBody('')
       }

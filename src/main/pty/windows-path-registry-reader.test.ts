@@ -12,6 +12,7 @@ describe('readWindowsPathRegistry', () => {
       .fn()
       .mockReturnValueOnce({ PATH: { type: 2, value: '%SystemRoot%\\System32' } })
       .mockReturnValueOnce({ Path: { type: 1, value: 'C:\\Users\\me\\bin' } })
+
     __setWindowsPathRegistryLoaderForTests(() => ({
       HK: { LM: 1, CU: 2 },
       getRegistryKey
@@ -34,6 +35,7 @@ describe('readWindowsPathRegistry', () => {
       .fn()
       .mockReturnValueOnce({ Path: { type: 1, value: '' } })
       .mockReturnValueOnce({ Path: { type: 4, value: 1 } })
+
     __setWindowsPathRegistryLoaderForTests(() => ({
       HK: { LM: 1, CU: 2 },
       getRegistryKey

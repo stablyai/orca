@@ -19,6 +19,7 @@ export function syntheticCandidate(
   overrides: Partial<SessionFileCandidate['file']> = {}
 ): SessionFileCandidate {
   const at = new Date(1740000000000)
+
   return {
     agent: 'claude',
     codexHome: null,
@@ -34,6 +35,7 @@ export function syntheticCandidate(
 
 export function syntheticSession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   const at = new Date(1740000000000).toISOString()
+
   return {
     id: 'fixture',
     executionHostId: 'local',
@@ -86,9 +88,11 @@ export function replayTranscriptRead(args: {
     mode,
     previousByteOffset: args.previousByteOffset ?? 0
   })
+
   for (const message of args.messages) {
     channel.push(message)
   }
+
   channel.finishRead({
     session: syntheticSession(),
     byteOffset: 4096,
@@ -110,6 +114,7 @@ export async function openSessionSearchIndexFile(name: string): Promise<SessionS
   const path = join(root, 'index.sqlite')
   const db = openSessionSearchDatabase(path)
   let open = true
+
   return {
     path,
     db,
@@ -118,6 +123,7 @@ export async function openSessionSearchIndexFile(name: string): Promise<SessionS
         open = false
         db.close()
       }
+
       await removeTree(root)
     }
   }

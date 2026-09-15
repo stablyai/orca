@@ -2,7 +2,9 @@ import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { admitProcessTreeKill } from './process-tree-kill-gate'
 
 const PROBE_INTERVAL_MS = 25
+
 const SUBPROCESS_TIMEOUT_MS = 2_000
+
 const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
 
 /**
@@ -28,8 +30,10 @@ const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
 export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
   if (!child.pid) {
     killRoot(child, signal)
+
     return Promise.resolve(true)
   }
+
   if (process.platform === 'win32') {
     // Why the exit check: once the child is reaped its pid is Windows' to
     // reissue, and `taskkill /t /f` walks whatever tree owns it *now* — a
@@ -44,10 +48,13 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
     // inherited the pipes still holds the repo.
     if (hasExited(child)) {
       killRoot(child, signal)
+
       return Promise.resolve(false)
     }
+
     return taskkillTree(child, child.pid, signal)
   }
+
   if (
     !admitProcessTreeKill({
       pid: child.pid,
@@ -58,10 +65,13 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
     // Same shape as the reaped-pid skip above: refuse the group, still kill the
     // root by handle, and report unverified.
     killRoot(child, signal)
+
     return Promise.resolve(false)
   }
+
   try {
     process.kill(-child.pid, signal)
+
     return Promise.resolve(true)
   } catch {
     return Promise.resolve(!processGroupExists(child.pid))
@@ -70,12 +80,15 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
 
 export async function forceTerminateProcessTree(child: ChildProcess): Promise<boolean> {
   const signaled = await signalProcessTree(child, 'SIGKILL')
+
   if (!signaled) {
     return false
   }
+
   if (process.platform !== 'win32' && child.pid) {
     return waitForPosixProcessGroupQuiescence(child.pid)
   }
+
   return true
 }
 
@@ -94,10 +107,13 @@ function taskkillTree(
     !admitProcessTreeKill({ pid: rootPid, site: 'run-process-tree', scope: 'win-taskkill-tree' })
   ) {
     killRoot(child, signal)
+
     return Promise.resolve(false)
   }
+
   return new Promise((resolve) => {
     let killer: ChildProcess
+
     try {
       killer = nodeSpawn('taskkill', ['/pid', String(rootPid), '/t', '/f'], {
         stdio: 'ignore',
@@ -107,42 +123,55 @@ function taskkillTree(
     } catch {
       killRoot(child, signal)
       resolve(false)
+
       return
     }
+
     let settled = false
+
     const finish = (fallback: boolean): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
+
       if (fallback) {
         killRoot(child, signal)
       }
+
       resolve(!fallback)
     }
+
     killer.once('error', () => finish(true))
     killer.once('close', (code) => finish(code !== 0))
+
     const timer = setTimeout(() => {
       killer.kill()
       finish(true)
     }, SUBPROCESS_TIMEOUT_MS)
+
     timer.unref?.()
   })
 }
 
 async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promise<boolean> {
   const deadline = Date.now() + SUBPROCESS_TIMEOUT_MS
+
   while (true) {
     const states = await readPosixProcessGroupStates(processGroupId)
+
     if (
       states ? states.every((state) => state.startsWith('Z')) : !processGroupExists(processGroupId)
     ) {
       return true
     }
+
     if (Date.now() >= deadline) {
       return false
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, PROBE_INTERVAL_MS))
   }
 }
@@ -150,6 +179,7 @@ async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promi
 function readPosixProcessGroupStates(processGroupId: number): Promise<string[] | null> {
   return new Promise((resolve) => {
     let probe: ChildProcess
+
     try {
       probe = nodeSpawn('ps', ['-axo', 'pgid=,state='], {
         stdio: ['ignore', 'pipe', 'ignore'],
@@ -158,25 +188,33 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
       })
     } catch {
       resolve(null)
+
       return
     }
+
     let output = ''
     let truncated = false
     let settled = false
+
     const finish = (states: string[] | null): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       resolve(states)
     }
+
     probe.stdout?.on('data', (chunk: Buffer | string) => {
       const text = chunk.toString()
+
       if (output.length + text.length > MAX_PS_OUTPUT_BYTES) {
         truncated = true
+
         return
       }
+
       output += text
     })
     probe.stdout?.on('error', () => {})
@@ -184,18 +222,24 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
     probe.once('close', (code) => {
       if (code !== 0 || truncated) {
         finish(null)
+
         return
       }
+
       const states = output.split('\n').flatMap((line) => {
         const match = line.trim().match(/^(\d+)\s+(\S+)/)
+
         return match && Number(match[1]) === processGroupId ? [match[2]] : []
       })
+
       finish(states)
     })
+
     const timer = setTimeout(() => {
       probe.kill()
       finish(null)
     }, SUBPROCESS_TIMEOUT_MS)
+
     timer.unref?.()
   })
 }
@@ -203,6 +247,7 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
 function processGroupExists(processGroupId: number): boolean {
   try {
     process.kill(-processGroupId, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'

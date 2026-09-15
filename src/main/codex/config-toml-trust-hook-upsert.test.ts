@@ -14,6 +14,7 @@ import {
 } from './config-toml-trust-test-fixtures'
 
 let tmpDir: string
+
 let configPath: string
 
 beforeEach(() => {
@@ -35,6 +36,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: '/bin/echo hi'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -52,6 +54,7 @@ describe('upsertHookTrustEntries', () => {
       'hooks = true',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -71,6 +74,7 @@ describe('upsertHookTrustEntries', () => {
 
   it('replaces an existing block keyed at the same path without touching unrelated blocks', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       '[features]',
       'hooks = true',
@@ -83,6 +87,7 @@ describe('upsertHookTrustEntries', () => {
       'value = 42',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -111,6 +116,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo'
     }
+
     upsertHookTrustEntries(configPath, [entry])
     upsertHookTrustEntries(configPath, [entry])
     upsertHookTrustEntries(configPath, [entry])
@@ -123,9 +129,12 @@ describe('upsertHookTrustEntries', () => {
   it('collapses duplicate blocks for the same hook key while preserving unrelated hook state', () => {
     const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
     const key = `${sourcePath}:session_start:0:0`
+
     const unrelatedSourcePath =
       'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
+
     const unrelatedKey = `${unrelatedSourcePath}:stop:0:0`
+
     const original = [
       `[hooks.state."${escapeTomlString(key)}"]`,
       'enabled = true',
@@ -140,6 +149,7 @@ describe('upsertHookTrustEntries', () => {
       'trusted_hash = "sha256:STALE2"',
       ''
     ].join('\r\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const entry: CodexTrustEntry = {
@@ -149,12 +159,15 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo session'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
+
     const duplicateKeyOccurrences = written.match(
       new RegExp(`\\[hooks\\.state\\.'${escapeRegex(key)}'\\]`, 'g')
     )
+
     expect(duplicateKeyOccurrences).toHaveLength(1)
     // The unrelated key was not upserted and stays in its original escaped form.
     expect(written).toContain(`[hooks.state."${escapeTomlString(unrelatedKey)}"]`)
@@ -168,12 +181,14 @@ describe('upsertHookTrustEntries', () => {
   it('collapses a literal-string hook table before writing the canonical Codex literal table', () => {
     const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
     const key = `${sourcePath}:session_start:0:0`
+
     const original = [
       `[hooks.state.'${key}']`,
       'enabled = false',
       'trusted_hash = "sha256:LITERAL"',
       ''
     ].join('\r\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const entry: CodexTrustEntry = {
@@ -183,6 +198,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo session'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -240,6 +256,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo'
     }
+
     upsertHookTrustEntries(configPath, [entry])
     const firstWrite = readFileSync(configPath, 'utf-8')
     // Why: a no-op upsert must not roll .bak forward, or repeated calls destroy the last recoverable copy.
@@ -252,6 +269,7 @@ describe('upsertHookTrustEntries', () => {
   it('replaces a stale block written with CRLF line endings without duplicating', () => {
     // Why: regression — \r\n in the existing config made the header pattern miss and append a duplicate.
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       '[features]',
       'hooks = true',
@@ -261,6 +279,7 @@ describe('upsertHookTrustEntries', () => {
       'trusted_hash = "sha256:STALE"',
       ''
     ].join('\r\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const entry: CodexTrustEntry = {
@@ -270,6 +289,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo new'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -282,6 +302,7 @@ describe('upsertHookTrustEntries', () => {
   it('preserves an immediately-adjacent unrelated hooks.state block', () => {
     const targetKey = '/x/hooks.json:pre_tool_use:0:0'
     const neighborKey = '/y/hooks.json:post_tool_use:0:0'
+
     const original = [
       `[hooks.state."${targetKey}"]`,
       'enabled = true',
@@ -291,6 +312,7 @@ describe('upsertHookTrustEntries', () => {
       'trusted_hash = "sha256:NEIGHBOR"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -334,6 +356,7 @@ describe('upsertHookTrustEntries', () => {
   // Why: TOML allows literal-string quoted keys, so header detection must respect `]` inside `'...'`.
   it('preserves an unrelated table whose literal-string key contains a `]`', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = true',
@@ -342,6 +365,7 @@ describe('upsertHookTrustEntries', () => {
       'foo = 1',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -370,6 +394,7 @@ describe('upsertHookTrustEntries', () => {
       '"""',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -392,6 +417,7 @@ describe('upsertHookTrustEntries', () => {
 
   it('does not treat the target hook header inside a multi-line basic string as a duplicate', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = true',
@@ -404,6 +430,7 @@ describe('upsertHookTrustEntries', () => {
       '"""',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -426,6 +453,7 @@ describe('upsertHookTrustEntries', () => {
 
   it('does not let triple quotes in comments hide an existing trust block', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       '# user note mentions triple quote: """',
       `[hooks.state."${key}"]`,
@@ -433,6 +461,7 @@ describe('upsertHookTrustEntries', () => {
       'trusted_hash = "sha256:STALE"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -453,6 +482,7 @@ describe('upsertHookTrustEntries', () => {
 
   it('does not let triple quotes in single-line strings hide an existing trust block', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       'note = "\\"\\"\\""',
       'literal_note = \'"""\'',
@@ -461,6 +491,7 @@ describe('upsertHookTrustEntries', () => {
       'trusted_hash = "sha256:STALE"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -491,6 +522,7 @@ describe('upsertHookTrustEntries', () => {
       'x = 1',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
@@ -518,6 +550,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -617,12 +650,14 @@ describe('upsertHookTrustEntries', () => {
     // Why: Codex 0.140 exposes Windows keys with either separator depending on cwd, so replace both.
     const backslashPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const legacyKey = `${backslashPath.replace(/\\/g, '/')}:session_start:0:0`
+
     const original = [
       `[hooks.state."${legacyKey}"]`,
       'enabled = true',
       'trusted_hash = "sha256:CODEX-WRITTEN"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const entry: CodexTrustEntry = {
@@ -632,6 +667,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo session'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -651,6 +687,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo session'
     }
+
     upsertHookTrustEntries(configPath, [entry])
     upsertHookTrustEntries(configPath, [entry])
 
@@ -668,6 +705,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo session'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -686,12 +724,14 @@ describe('upsertHookTrustEntries', () => {
     const lowercasePath = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json'
     const mixedCasePath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
     const literalKey = `${lowercasePath}:session_start:0:0`
+
     const original = [
       `[hooks.state.'${literalKey}']`,
       'enabled = true',
       'trusted_hash = "sha256:LOWERCASE"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const entry: CodexTrustEntry = {
@@ -701,6 +741,7 @@ describe('upsertHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo session'
     }
+
     upsertHookTrustEntries(configPath, [entry])
 
     const written = readFileSync(configPath, 'utf-8')
@@ -709,10 +750,12 @@ describe('upsertHookTrustEntries', () => {
     expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
   })
 })
+
 describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
   // Why: [[array.of.tables]] must count as a block boundary, else upsert/remove eats past array entries.
   it('stops the replacement at a following [[array.of.tables]] header', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = true',
@@ -722,6 +765,7 @@ describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
       'name = "thing"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [

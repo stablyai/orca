@@ -9,11 +9,15 @@ const { spawnMock, connectMock, createServerMock, waitForStopMock } = vi.hoisted
 }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+
 vi.mock('node:net', () => ({ connect: connectMock, createServer: createServerMock }))
+
 vi.mock('./ssh-system-fallback', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, findSystemSsh: () => '/usr/bin/ssh' }
 })
+
 vi.mock('./system-ssh-forward-process', () => ({
   waitForSystemSshForwardStop: waitForStopMock
 }))
@@ -26,12 +30,15 @@ function fakeServer() {
     address: ReturnType<typeof vi.fn>
     close: ReturnType<typeof vi.fn>
   }
+
   server.listen = vi.fn((_port, _host, callback: () => void) => {
     queueMicrotask(callback)
+
     return server
   })
   server.address = vi.fn(() => ({ address: '127.0.0.1', family: 'IPv4', port: 45678 }))
   server.close = vi.fn((callback?: (error?: Error) => void) => callback?.())
+
   return server
 }
 
@@ -42,10 +49,12 @@ function fakeProcess() {
     signalCode: NodeJS.Signals | null
     kill: ReturnType<typeof vi.fn>
   }
+
   process.stderr = new EventEmitter()
   process.exitCode = null
   process.signalCode = null
   process.kill = vi.fn(() => true)
+
   return process
 }
 
@@ -54,10 +63,13 @@ function fakeProbe(connects: boolean) {
     destroy: ReturnType<typeof vi.fn>
     removeAllListeners: EventEmitter['removeAllListeners']
   }
+
   socket.destroy = vi.fn()
+
   if (connects) {
     queueMicrotask(() => socket.emit('connect'))
   }
+
   return socket
 }
 

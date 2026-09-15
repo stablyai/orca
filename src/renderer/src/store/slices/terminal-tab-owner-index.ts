@@ -25,10 +25,13 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   const removeBucketMembership = (worktreeId: string, tabIds: ReadonlySet<string>): void => {
     for (const tabId of tabIds) {
       const worktreeIds = worktreeIdsByTabId.get(tabId)
+
       if (!worktreeIds) {
         continue
       }
+
       worktreeIds.delete(worktreeId)
+
       if (worktreeIds.size === 0) {
         worktreeIdsByTabId.delete(tabId)
       }
@@ -38,6 +41,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   const addBucketMembership = (worktreeId: string, tabIds: ReadonlySet<string>): void => {
     for (const tabId of tabIds) {
       const worktreeIds = worktreeIdsByTabId.get(tabId)
+
       if (worktreeIds) {
         worktreeIds.add(worktreeId)
       } else {
@@ -52,9 +56,11 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     }
 
     const nextOrderedKeys = Object.keys(tabsByWorktree)
+
     const orderChanged =
       orderedKeys.length !== nextOrderedKeys.length ||
       orderedKeys.some((key, index) => key !== nextOrderedKeys[index])
+
     const nextKeySet = new Set(nextOrderedKeys)
     const affectedTabIds = new Set<string>()
 
@@ -62,9 +68,11 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       if (nextKeySet.has(worktreeId)) {
         continue
       }
+
       for (const tabId of indexed.tabIds) {
         affectedTabIds.add(tabId)
       }
+
       removeBucketMembership(worktreeId, indexed.tabIds)
       bucketByWorktreeId.delete(worktreeId)
     }
@@ -72,6 +80,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     for (const worktreeId of nextOrderedKeys) {
       const tabs = tabsByWorktree[worktreeId] ?? []
       const indexed = bucketByWorktreeId.get(worktreeId)
+
       if (indexed?.source === tabs) {
         continue
       }
@@ -80,15 +89,18 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
         for (const tabId of indexed.tabIds) {
           affectedTabIds.add(tabId)
         }
+
         removeBucketMembership(worktreeId, indexed.tabIds)
       }
 
       // Why: tab arrays are the immutable topology buckets. Reading ids only for a
       // replaced bucket keeps a one-worktree title update independent of fleet size.
       const tabIds = new Set(tabs.map((tab) => tab.id))
+
       for (const tabId of tabIds) {
         affectedTabIds.add(tabId)
       }
+
       bucketByWorktreeId.set(worktreeId, { source: tabs, tabIds })
       addBucketMembership(worktreeId, tabIds)
     }
@@ -96,24 +108,30 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     const orderByWorktreeId = new Map(
       nextOrderedKeys.map((worktreeId, index) => [worktreeId, index] as const)
     )
+
     const tabIdsToResolve = orderChanged ? worktreeIdsByTabId.keys() : affectedTabIds
+
     for (const tabId of tabIdsToResolve) {
       const worktreeIds = worktreeIdsByTabId.get(tabId)
       let owner: string | null = null
       let ownerOrder = -1
+
       for (const worktreeId of worktreeIds ?? []) {
         const order = orderByWorktreeId.get(worktreeId)
+
         if (order !== undefined && order > ownerOrder) {
           owner = worktreeId
           ownerOrder = order
         }
       }
+
       if (owner === null) {
         ownerByTabId.delete(tabId)
       } else {
         ownerByTabId.set(tabId, owner)
       }
     }
+
     for (const tabId of affectedTabIds) {
       if (!worktreeIdsByTabId.has(tabId)) {
         ownerByTabId.delete(tabId)
@@ -122,6 +140,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
 
     source = tabsByWorktree
     orderedKeys = nextOrderedKeys
+
     return ownerByTabId
   }
 
@@ -133,18 +152,23 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     if (source !== previousTabsByWorktree) {
       return
     }
+
     for (const worktreeId of replacedWorktreeIds) {
       const indexed = bucketByWorktreeId.get(worktreeId)
       const previousTabs = previousTabsByWorktree[worktreeId]
       const nextTabs = nextTabsByWorktree[worktreeId]
+
       if (!indexed || indexed.source !== previousTabs || !nextTabs) {
         // Why: this fast path is valid only for title-only bucket replacements.
         // Falling back to the normal diff keeps an unexpected caller mismatch correct.
         source = null
+
         return
       }
+
       indexed.source = nextTabs
     }
+
     // Why: title writes preserve ids and outer key order, so ownership is unchanged.
     // Adopting the exact produced map keeps the next hot lookup O(1).
     source = nextTabsByWorktree

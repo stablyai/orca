@@ -59,17 +59,23 @@ export function getWorkspaceBoardTaskStatusSyncRequest(args: {
   if (!args.enabled || args.worktreeIds.length === 0) {
     return null
   }
+
   const targetStatus = args.workspaceStatuses.find((item) => item.id === args.status)
+
   if (!targetStatus) {
     return null
   }
+
   const changedWorktreeIds = [...new Set(args.worktreeIds)].filter((worktreeId) => {
     const worktree = args.worktreesById.get(worktreeId)
+
     return worktree ? getWorkspaceStatus(worktree, args.workspaceStatuses) !== args.status : false
   })
+
   if (changedWorktreeIds.length === 0) {
     return null
   }
+
   return { worktreeIds: changedWorktreeIds, targetStatus }
 }
 
@@ -90,6 +96,7 @@ function matchingWorkflowStates(
   targetStatus: WorkspaceStatusDefinition
 ): LinearWorkflowState[] {
   const targetName = normalizeStateName(targetStatus.label)
+
   return states.filter((state) => normalizeStateName(state.name) === targetName)
 }
 
@@ -102,6 +109,7 @@ function addMessage(
   message: WorkspaceBoardTaskStatusSyncMessage
 ): void {
   const key = getMessageKey(message)
+
   if (!result.messages.some((item) => getMessageKey(item) === key)) {
     result.messages.push(message)
   }
@@ -112,9 +120,11 @@ function skipped(
   message?: WorkspaceBoardTaskStatusSyncMessage
 ): WorkspaceBoardTaskStatusSyncResult {
   result.skipped += 1
+
   if (message) {
     addMessage(result, message)
   }
+
   return result
 }
 
@@ -124,6 +134,7 @@ function failed(
 ): WorkspaceBoardTaskStatusSyncResult {
   result.failed += 1
   addMessage(result, message)
+
   return result
 }
 
@@ -141,6 +152,7 @@ function mergeResult(
   aggregate.updated += item.updated
   aggregate.skipped += item.skipped
   aggregate.failed += item.failed
+
   for (const message of item.messages) {
     addMessage(aggregate, message)
   }
@@ -152,12 +164,15 @@ async function enqueueWorktreeSync(
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
   const previous = worktreeSyncQueues.get(worktreeId) ?? Promise.resolve()
   const next = previous.catch(() => undefined).then(task)
+
   const cleanup = next.finally(() => {
     if (worktreeSyncQueues.get(worktreeId) === cleanup) {
       worktreeSyncQueues.delete(worktreeId)
     }
   })
+
   worktreeSyncQueues.set(worktreeId, cleanup)
+
   return next
 }
 
@@ -172,7 +187,9 @@ async function syncLinearWorktreeStatus(
     failed: 0,
     messages: []
   }
+
   const worktree = args.worktreesById.get(worktreeId)
+
   if (!worktree?.linkedLinearIssue) {
     return skipped(result)
   }
@@ -180,10 +197,12 @@ async function syncLinearWorktreeStatus(
   const settings = args.getSettingsForWorktree
     ? args.getSettingsForWorktree(worktreeId)
     : args.settings
+
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 
   try {
     const issue = await deps.getIssue(settings, worktree.linkedLinearIssue, linkedWorkspaceId)
+
     if (!issue?.team?.id) {
       return skipped(result, {
         kind: 'issue-read-failed',
@@ -194,12 +213,14 @@ async function syncLinearWorktreeStatus(
     const workspaceId = linkedWorkspaceId ?? issue.workspaceId
     const states = await deps.teamStates(settings, issue.team.id, workspaceId)
     const matches = matchingWorkflowStates(states, args.targetStatus)
+
     if (matches.length === 0) {
       return skipped(result, {
         kind: 'missing-workflow-state',
         statusLabel: args.targetStatus.label
       })
     }
+
     if (matches.length > 1) {
       return skipped(result, {
         kind: 'ambiguous-workflow-state',
@@ -208,6 +229,7 @@ async function syncLinearWorktreeStatus(
     }
 
     const [workflowState] = matches
+
     if (isAlreadyInState(issue, workflowState)) {
       return skipped(result)
     }
@@ -224,6 +246,7 @@ async function syncLinearWorktreeStatus(
       { stateId: workflowState.id },
       workspaceId
     )
+
     if (updateResult.ok === false) {
       return failed(result, {
         kind: 'update-failed',
@@ -231,7 +254,9 @@ async function syncLinearWorktreeStatus(
         detail: updateResult.error
       })
     }
+
     result.updated += 1
+
     return result
   } catch (error) {
     return failed(result, {
@@ -246,6 +271,7 @@ export async function syncWorkspaceBoardTaskStatuses(
   args: SyncWorkspaceBoardTaskStatusesArgs
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
   const deps = { ...defaultDeps, ...args.deps }
+
   const aggregate: WorkspaceBoardTaskStatusSyncResult = {
     updated: 0,
     skipped: 0,
@@ -259,6 +285,7 @@ export async function syncWorkspaceBoardTaskStatuses(
       const item = await enqueueWorktreeSync(worktreeId, () =>
         syncLinearWorktreeStatus(args, worktreeId, deps)
       )
+
       mergeResult(aggregate, item)
     })
   )

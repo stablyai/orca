@@ -5,4 +5,5 @@
 // the seed covers a meaningful amount of agent context while keeping the
 // round-trip bounded. See docs/mobile-prefer-renderer-scrollback.md.
 export const MOBILE_SUBSCRIBE_SCROLLBACK_ROWS = 1000
+
 export const MOBILE_SNAPSHOT_BYTE_BUDGET = 512 * 1024

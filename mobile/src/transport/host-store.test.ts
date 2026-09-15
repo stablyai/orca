@@ -14,8 +14,11 @@ const secureStoreMock = vi.hoisted(() => ({
 }))
 
 const scheduleCleanupMock = vi.hoisted(() => vi.fn())
+
 const cancelCleanupMock = vi.hoisted(() => vi.fn())
+
 const recordCleanupIntentMock = vi.hoisted(() => vi.fn())
+
 const platformMock = vi.hoisted(() => ({ OS: 'ios' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -54,7 +57,9 @@ import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-ov
 import { writeMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 
 const HOSTS_STORAGE_KEY = 'orca:hosts'
+
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
+
 const HOST_ONE = {
   id: 'host-1',
   name: 'Host 1',
@@ -62,6 +67,7 @@ const HOST_ONE = {
   publicKeyB64: 'key',
   lastConnected: 0
 }
+
 const HOST_TWO = {
   id: 'host-2',
   name: 'Host 2',
@@ -69,6 +75,7 @@ const HOST_TWO = {
   publicKeyB64: 'key-2',
   lastConnected: 0
 }
+
 const HOST_ONE_RELAY_BUNDLE = {
   v: 1 as const,
   hostId: HOST_ONE.id,
@@ -84,6 +91,7 @@ const HOST_ONE_RELAY_BUNDLE = {
 function scheduledCleanup(hostId: string): (id: string) => Promise<void> {
   const cleanup = scheduleCleanupMock.mock.calls.find(([id]) => id === hostId)?.[1]
   expect(cleanup).toBeTypeOf('function')
+
   return cleanup as (id: string) => Promise<void>
 }
 
@@ -108,9 +116,11 @@ describe('host-store list mutations', () => {
       if (key === HOSTS_STORAGE_KEY) {
         return storedHostsRaw
       }
+
       if (key === OVERLAY_STORAGE_KEY) {
         return storedOverlayRaw
       }
+
       return null
     })
     asyncStorageMock.setItem.mockImplementation(async (key: string, raw: string) => {
@@ -147,6 +157,7 @@ describe('host-store list mutations', () => {
       if (key.endsWith(HOST_ONE.id)) {
         throw new Error('keychain locked')
       }
+
       return key.endsWith(HOST_TWO.id) ? 'token-2' : null
     })
 
@@ -223,6 +234,7 @@ describe('host-store list mutations', () => {
       id: 'host-duplicate',
       publicKeyB64: HOST_ONE.publicKeyB64
     }
+
     storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
     secureStoreMock.setItemAsync.mockRejectedValue(new Error('keychain write failed'))
 
@@ -241,6 +253,7 @@ describe('host-store list mutations', () => {
       id: 'host-duplicate',
       publicKeyB64: HOST_ONE.publicKeyB64
     }
+
     storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
     await loadHosts()
     asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
@@ -262,6 +275,7 @@ describe('host-store list mutations', () => {
       publicKeyB64: HOST_ONE.publicKeyB64,
       deviceToken: 'replacement-token'
     }
+
     asyncStorageMock.setItem.mockRejectedValueOnce(new Error('metadata write failed'))
 
     await expect(saveHost(replacement)).rejects.toThrow('metadata write failed')
@@ -280,6 +294,7 @@ describe('host-store list mutations', () => {
       id: 'host-duplicate',
       publicKeyB64: HOST_ONE.publicKeyB64
     }
+
     storedHostsRaw = JSON.stringify([HOST_ONE, duplicate])
     await saveHost({ ...HOST_ONE, deviceToken: 'token-a' })
     const staleCleanup = scheduledCleanup(duplicate.id)
@@ -318,6 +333,7 @@ describe('host-store list mutations', () => {
     await removeHost(HOST_ONE.id)
     const staleCleanup = scheduledCleanup(HOST_ONE.id)
     let releaseTokenDelete: () => void = () => {}
+
     secureStoreMock.deleteItemAsync.mockReturnValueOnce(
       new Promise<void>((resolve) => {
         releaseTokenDelete = resolve
@@ -346,21 +362,27 @@ describe('host-store list mutations', () => {
     await removeHost(HOST_ONE.id)
     const staleCleanup = scheduledCleanup(HOST_ONE.id)
     let resolveCleanupRead: (raw: string) => void = () => {}
+
     const cleanupRead = new Promise<string>((resolve) => {
       resolveCleanupRead = resolve
     })
+
     let cleanupReadStarted = false
     asyncStorageMock.getItem.mockImplementation(async (key: string) => {
       if (key === HOSTS_STORAGE_KEY && !cleanupReadStarted) {
         cleanupReadStarted = true
+
         return cleanupRead
       }
+
       if (key === HOSTS_STORAGE_KEY) {
         return storedHostsRaw
       }
+
       if (key === OVERLAY_STORAGE_KEY) {
         return storedOverlayRaw
       }
+
       return null
     })
 
@@ -400,6 +422,7 @@ describe('host-store list mutations', () => {
         e2eeFraming: 2
       }
     }
+
     storedOverlayRaw = JSON.stringify([overlay])
 
     await saveHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
@@ -461,6 +484,7 @@ describe('host-store list mutations', () => {
 
   it('does not cancel cleanup from a removal committed during a stalled save', async () => {
     let releaseTokenWrite: () => void = () => {}
+
     secureStoreMock.setItemAsync.mockReturnValueOnce(
       new Promise<void>((resolve) => {
         releaseTokenWrite = resolve
@@ -486,6 +510,7 @@ describe('host-store list mutations', () => {
       publicKeyB64: HOST_ONE.publicKeyB64,
       deviceToken: 'replacement-token'
     }
+
     recordCleanupIntentMock.mockRejectedValueOnce(new Error('intent storage unavailable'))
 
     await expect(saveHost(replacement)).rejects.toThrow('intent storage unavailable')
@@ -528,8 +553,10 @@ describe('host-store list mutations', () => {
         e2eeFraming: 2
       }
     }
+
     storedOverlayRaw = JSON.stringify([overlay, { ...overlay, hostId: 'removed-by-old-build' }])
     let releaseCleanup: () => void = () => {}
+
     scheduleCleanupMock.mockReturnValueOnce(
       new Promise<void>((resolve) => {
         releaseCleanup = resolve
@@ -582,9 +609,11 @@ describe('host-store list mutations', () => {
     )
 
     let settled = false
+
     const removal = removeHost(HOST_ONE.id).then(() => {
       settled = true
     })
+
     await vi.waitFor(() => {
       expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
     })
@@ -600,18 +629,23 @@ describe('host-store list mutations', () => {
 
   it('applies concurrent rename and remove without clobbering either', async () => {
     let releaseReads: (() => void) | null = null
+
     const readsReleased = new Promise<void>((resolve) => {
       releaseReads = resolve
     })
+
     let pendingReads = 0
     asyncStorageMock.getItem.mockImplementation(async (key: string) => {
       if (key !== HOSTS_STORAGE_KEY) {
         return null
       }
+
       pendingReads += 1
+
       if (pendingReads <= 2) {
         await readsReleased
       }
+
       return storedHostsRaw
     })
 
@@ -665,13 +699,17 @@ describe('host-store list mutations', () => {
   // parked mid-flight while a write commits underneath it.
   function gateKeychainReads(): () => void {
     let release: () => void = () => {}
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     secureStoreMock.getItemAsync.mockImplementation(async (key: string) => {
       await gate
+
       return key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
     })
+
     return release
   }
 
@@ -717,25 +755,32 @@ describe('host-store list mutations', () => {
       deviceToken: 'token-new',
       lastConnected: 0
     }
+
     let releaseTokenWrite: () => void = () => {}
+
     secureStoreMock.setItemAsync.mockReturnValue(
       new Promise<void>((resolve) => {
         releaseTokenWrite = resolve
       })
     )
     let resolveParkedTokenRead: (token: string | null) => void = () => {}
+
     const parkedTokenRead = new Promise<string | null>((resolve) => {
       resolveParkedTokenRead = resolve
     })
+
     let shouldParkHostOneRead = true
     secureStoreMock.getItemAsync.mockImplementation(async (key: string) => {
       if (key.endsWith(HOST_ONE.id) && shouldParkHostOneRead) {
         shouldParkHostOneRead = false
+
         return parkedTokenRead
       }
+
       if (key.endsWith(newHost.id)) {
         return newHost.deviceToken
       }
+
       return key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
     })
 
@@ -775,8 +820,10 @@ describe('host-store list mutations', () => {
       deviceToken: 'token-new',
       lastConnected: 0
     }
+
     storedHostsRaw = JSON.stringify([{ ...newHost, deviceToken: undefined }])
     let resolvePrewriteTokenRead: (token: string) => void = () => {}
+
     secureStoreMock.getItemAsync.mockReturnValue(
       new Promise<string>((resolve) => {
         resolvePrewriteTokenRead = resolve
@@ -828,10 +875,12 @@ describe('host-store pairing save after an Android encryption rejection', () => 
     lastConnected: 0,
     deviceToken: 'device-token'
   }
+
   // Why: the verbatim Android rejection from #6600 — expo maps a null-message GeneralSecurityException to this.
   const ENCRYPT_REJECTION = new Error(
     "Could not encrypt the value for key 'orca.host-token.host-1782629088232' under keychain 'key_v1'. Caused by: unknown"
   )
+
   const GENERATION_KEY = 'orca:pairing-keychain-generation'
   let storedHostsRaw: string
   let storedGenerationRaw: string | null
@@ -853,6 +902,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
       if (key === HOSTS_STORAGE_KEY) {
         return storedHostsRaw
       }
+
       // Why: the generation record is durable on device; a forgetful mock would fake a broken read path.
       return key === GENERATION_KEY ? storedGenerationRaw : null
     })
@@ -875,6 +925,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
         if (options?.keychainService === undefined) {
           throw ENCRYPT_REJECTION
         }
+
         written.set(options.keychainService, value)
       }
     )
@@ -906,6 +957,7 @@ describe('host-store pairing save after an Android encryption rejection', () => 
         if (options?.keychainService === undefined) {
           throw ENCRYPT_REJECTION
         }
+
         written.set(options.keychainService, value)
       }
     )

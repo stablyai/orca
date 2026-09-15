@@ -39,6 +39,7 @@ describe('useLinkBubble owner hydration', () => {
 
       function Harness(): React.JSX.Element {
         const rootRef = useRef<HTMLElement>(null)
+
         const [bubble, setBubble] = useState<LinkBubbleState | null>({
           kind: 'markdown',
           href: 'https://example.com',
@@ -47,12 +48,14 @@ describe('useLinkBubble owner hydration', () => {
           left: 0,
           top: 0
         })
+
         const { handleLinkOpen } = useLinkBubble(null, rootRef, bubble, setBubble, () => {}, {
           sourceFilePath: '/repo/README.md',
           worktreeId: 'worktree-1',
           worktreeRoot: '/repo',
           htmlSuperscriptLinkContext: context
         })
+
         return (
           <button data-enabled={String(bubble?.openEnabled)} onClick={handleLinkOpen}>
             {bubble?.href}
@@ -65,9 +68,11 @@ describe('useLinkBubble owner hydration', () => {
       root = createRoot(container)
       act(() => root.render(<Harness />))
       const button = container.querySelector('button')
+
       if (!button) {
         throw new Error('Expected link action')
       }
+
       expect(button.dataset.enabled).toBe('false')
       act(() => button.click())
       expect(activateMarkdownLinkMock).not.toHaveBeenCalled()

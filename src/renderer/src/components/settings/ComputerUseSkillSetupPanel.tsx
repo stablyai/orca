@@ -24,18 +24,21 @@ import { translate } from '@/i18n/i18n'
 
 export function ComputerUseSkillSetupPanel(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const installCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         COMPUTER_USE_SKILL_INSTALL_COMMAND,
         activeSkillRuntime.agentRuntime
       )
     : COMPUTER_USE_SKILL_INSTALL_COMMAND
+
   const updateCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         COMPUTER_USE_SKILL_UPDATE_COMMAND,
         activeSkillRuntime.agentRuntime
       )
     : COMPUTER_USE_SKILL_UPDATE_COMMAND
+
   const {
     installed: computerUseSkillDetected,
     loading: computerUseSkillLoading,

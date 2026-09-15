@@ -28,7 +28,9 @@ export function getEditorCmdSaveFileId(
       ? state.activeFileId
       : null
   }
+
   const activeTab = state.getActiveTab(FLOATING_TERMINAL_WORKTREE_ID)
+
   return activeTab && EDITOR_TAB_CONTENT_TYPES.has(activeTab.contentType)
     ? activeTab.entityId
     : null

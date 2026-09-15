@@ -12,8 +12,10 @@ export function headlessBrowserTabsUnchanged(
   if (live.length !== existing.length) {
     return false
   }
+
   return live.every((tab, index) => {
     const prev = existing[index]
+
     return (
       tab.id === prev.id &&
       tab.title === prev.title &&
@@ -42,12 +44,15 @@ export function browserLoadErrorsEqual(
 ): boolean {
   const left = a ?? null
   const right = b ?? null
+
   if (left === right) {
     return true
   }
+
   if (!left || !right) {
     return false
   }
+
   return (
     left.code === right.code &&
     left.description === right.description &&
@@ -61,12 +66,15 @@ export function browserCertificateFailuresEqual(
 ): boolean {
   const left = a ?? null
   const right = b ?? null
+
   if (left === right) {
     return true
   }
+
   if (!left || !right) {
     return false
   }
+
   return (
     left.challengeId === right.challengeId &&
     left.browserPageId === right.browserPageId &&

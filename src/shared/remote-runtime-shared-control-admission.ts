@@ -19,7 +19,9 @@ export function admitSharedControlSubscription(args: {
       'Remote runtime subscription limit reached; close a subscription and retry.'
     )
   }
+
   const retainedParamsBytes = measureRemoteRuntimeSubscriptionParams(args.params)
+
   if (
     retainedSubscriptionBytes(args.subscriptions) + retainedParamsBytes >
     REMOTE_RUNTIME_MAX_RETAINED_SUBSCRIPTION_BYTES
@@ -29,7 +31,9 @@ export function admitSharedControlSubscription(args: {
       'Remote runtime subscription memory limit reached; close a subscription and retry.'
     )
   }
+
   serializeRequest(args)
+
   return retainedParamsBytes
 }
 
@@ -46,8 +50,10 @@ function retainedSubscriptionBytes(
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
 ): number {
   let bytes = 0
+
   for (const subscription of subscriptions.values()) {
     bytes += subscription.retainedParamsBytes
   }
+
   return bytes
 }

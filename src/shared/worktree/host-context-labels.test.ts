@@ -8,10 +8,12 @@ function argsFor(counters: { hostIdReads: number; identityReads: number }) {
   return {
     getHostId: (item: Item): ExecutionHostId => {
       counters.hostIdReads += 1
+
       return item.hostId
     },
     getIdentity: (item: Item): string => {
       counters.identityReads += 1
+
       return item.id
     }
   }
@@ -23,6 +25,7 @@ describe('getMixedHostContextLabels', () => {
       id: `wt-${index}`,
       hostId: 'local' as ExecutionHostId
     }))
+
     const counters = { hostIdReads: 0, identityReads: 0 }
 
     expect(getMixedHostContextLabels(items, argsFor(counters))).toBeUndefined()
@@ -36,6 +39,7 @@ describe('getMixedHostContextLabels', () => {
         id: `wt-${index}`,
         hostId: (index === lateIndex ? 'ssh:other' : 'local') as ExecutionHostId
       }))
+
       const counters = { hostIdReads: 0, identityReads: 0 }
 
       const labels = getMixedHostContextLabels(items, argsFor(counters))

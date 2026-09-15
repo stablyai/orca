@@ -51,6 +51,7 @@ describe('useWorkspaceCleanupGitEvidence', () => {
 
   it('bounds restarted passes and isolates them from stale settlements', async () => {
     const candidates = ['a', 'b', 'c', 'd', 'e', 'f'].map(deferredCandidate)
+
     const view = renderHook(
       ({ enabled }: { enabled: boolean }) =>
         useWorkspaceCleanupGitEvidence({ enabled, candidates, scannedAt: 1 }),
@@ -105,6 +106,7 @@ describe('useWorkspaceCleanupGitEvidence', () => {
   it('chunks dispatches at the shared target batch limit so no queued id is dropped', async () => {
     const first = Array.from({ length: 300 }, (_, i) => deferredCandidate(`a${i}`))
     const grown = [...first, ...Array.from({ length: 600 }, (_, i) => deferredCandidate(`b${i}`))]
+
     const view = renderHook(
       ({ candidates }: { candidates: ReturnType<typeof deferredCandidate>[] }) =>
         useWorkspaceCleanupGitEvidence({ enabled: true, candidates, scannedAt: 1 }),
@@ -137,9 +139,11 @@ describe('useWorkspaceCleanupGitEvidence', () => {
 
   it('keeps state identity stable when a progress frame changes nothing', async () => {
     const candidates = [deferredCandidate('a')]
+
     const view = renderHook(() =>
       useWorkspaceCleanupGitEvidence({ enabled: true, candidates, scannedAt: 1 })
     )
+
     await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(1))
     const before = view.result.current
 
@@ -159,6 +163,7 @@ describe('useWorkspaceCleanupGitEvidence', () => {
 
   it('restarts evidence collection when the settled scan snapshot changes', async () => {
     const candidates = [deferredCandidate('a')]
+
     const view = renderHook(
       ({ scannedAt }: { scannedAt: number }) =>
         useWorkspaceCleanupGitEvidence({ enabled: true, candidates, scannedAt }),

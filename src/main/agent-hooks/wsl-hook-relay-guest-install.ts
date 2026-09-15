@@ -49,6 +49,7 @@ export async function runWslRelayGuestInstall(
   // Why: ship OpenCode's status plugin and record the guest overlay dir the
   // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
   const overlay = await requestGuestOpenCodeOverlayDir(mux, deps, state.distro)
+
   if (state.mux === mux && overlay.kind !== 'unavailable') {
     // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
     // present but plugin-less, and advertising it would hide the user's own config.
@@ -63,6 +64,7 @@ export async function maybeRerunWslRelayGuestInstall(
 ): Promise<void> {
   const mux = state.mux
   const guestHome = state.guestHome
+
   if (
     !mux ||
     !guestHome ||
@@ -71,6 +73,7 @@ export async function maybeRerunWslRelayGuestInstall(
   ) {
     return
   }
+
   try {
     // Why: the pass also re-ships the plugin source, so a mid-session Orca upgrade refreshes it.
     await runWslRelayGuestInstall(deps, state, mux, guestHome)

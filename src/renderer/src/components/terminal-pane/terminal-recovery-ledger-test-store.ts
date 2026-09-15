@@ -51,18 +51,23 @@ const storeSet = (updater: unknown): void => {
     typeof updater === 'function'
       ? (updater as (state: unknown) => object)(recoveryLedgerMocks.state)
       : (updater as object)
+
   Object.assign(recoveryLedgerMocks.state, patch)
 }
+
 const storeGet = (): unknown => recoveryLedgerMocks.state
 
 const realRemount = createRemountTerminalTabForRecovery(storeSet as never, storeGet as never)
+
 const realSettle = createSettleTerminalTabRecovery(storeSet as never, storeGet as never)
 
 const recordingRemount: typeof realRemount = (tabId, request) => {
   const result = realRemount(tabId, request)
+
   if (result.remounted) {
     recoveryLedgerMocks.remountTerminalTabForRecovery(tabId)
   }
+
   return result
 }
 

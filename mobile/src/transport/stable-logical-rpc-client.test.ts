@@ -27,6 +27,7 @@ class FakeSession implements RpcClient {
     this.state = state
     this.subscribe.mockImplementation((_method, _params, listener) => {
       this.streamListeners.add(listener)
+
       return () => this.streamListeners.delete(listener)
     })
   }
@@ -36,11 +37,13 @@ class FakeSession implements RpcClient {
   getLastConnectedAt = (): number | null => null
   onStateChange = (listener: (state: ConnectionState) => void): (() => void) => {
     this.stateListeners.add(listener)
+
     return () => this.stateListeners.delete(listener)
   }
 
   setState(state: ConnectionState): void {
     this.state = state
+
     for (const listener of this.stateListeners) {
       listener(state)
     }
@@ -60,10 +63,12 @@ function success(value: unknown): RpcResponse {
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -417,8 +422,10 @@ describe('stable logical RPC client', () => {
   // Pins the shipping wiring: migrateTo's bound honors the replacement's dial stages.
   it('outlives the flat bound when the relay cell holds the dial', async () => {
     vi.useFakeTimers()
+
     try {
       const oldSession = new FakeSession('connected')
+
       const replacement = Object.assign(new FakeSession('connecting'), {
         dialStage: new RelayDialStageTracker(),
         getDialStage(): RelayDialStage {
@@ -428,6 +435,7 @@ describe('stable logical RPC client', () => {
           return this.dialStage.onDialStageChange(listener)
         }
       })
+
       const client = createStableLogicalRpcClient(oldSession, 'lan')
       const migrating = client.migrateTo(replacement, 'relay', 12_000)
       await vi.advanceTimersByTimeAsync(1_000)

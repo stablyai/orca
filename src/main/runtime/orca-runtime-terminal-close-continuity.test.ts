@@ -97,11 +97,13 @@ describe('terminal close and handle incarnation continuity', () => {
     const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
     harness.syncSplitFixtureGraph()
     const before = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+
     const terminalsByLeafId = new Map(
       before.tabs.flatMap((tab) =>
         tab.type === 'terminal' && tab.terminal ? [[tab.leafId, tab.terminal] as const] : []
       )
     )
+
     expect(terminalsByLeafId.size).toBe(2)
     harness.syncEmptyGraph()
 
@@ -184,6 +186,7 @@ describe('terminal close and handle incarnation continuity', () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     let settled = false
+
     const closing = harness.runtime.closeTerminal(handle).finally(() => {
       settled = true
     })
@@ -210,6 +213,7 @@ describe('terminal close and handle incarnation continuity', () => {
       publishMobileSurface: true,
       registerPtyBacked: true
     })
+
     harness.syncFixtureTabWithoutLeaf()
     const closeMobileSessionTab = vi.spyOn(harness.runtime, 'closeMobileSessionTab')
     const order: string[] = []
@@ -291,9 +295,11 @@ describe('terminal close and handle incarnation continuity', () => {
   it('requests a stop for every live tab PTY after retirement when the renderer graph is stale', async () => {
     const harness = createHarness()
     harness.syncSplitFixtureGraph()
+
     const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
       (candidate) => candidate.ptyId === PTY_ID
     )!
+
     harness.syncFixtureGraph()
 
     const closing = harness.runtime.closeTerminal(terminal.handle)
@@ -458,6 +464,7 @@ describe('terminal close and handle incarnation continuity', () => {
     const harness = createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
+
     const waiting = harness.runtime.waitForTerminal(before.handle, {
       condition: 'tui-idle',
       timeoutMs: 1_000
@@ -485,6 +492,7 @@ describe('terminal close and handle incarnation continuity', () => {
     const harness = createHarness()
     const [before] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
+
     const waiting = harness.runtime.waitForTerminal(before.handle, {
       condition: 'tui-idle',
       timeoutMs: 1_000
@@ -578,6 +586,7 @@ describe('terminal close and handle incarnation continuity', () => {
     harness.runtime.registerPreAllocatedHandleForPty(PTY_ID, preallocated)
     harness.syncFixtureGraph()
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;\u280b Working on task\x07output\n', 100)
+
     const waiting = harness.runtime.waitForTerminal(preallocated, {
       condition: 'tui-idle',
       timeoutMs: 100

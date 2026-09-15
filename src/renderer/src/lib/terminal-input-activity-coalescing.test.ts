@@ -10,12 +10,14 @@ import {
 } from './terminal-input-activity-coalescing'
 
 const PANE = 'tab-1:leaf-1'
+
 const OTHER_PANE = 'tab-2:leaf-2'
 
 // Minimal stand-in for the store slot the real commit writes into.
 function createStore(initial: Record<string, number> = {}) {
   const stored: Record<string, number | undefined> = { ...initial }
   const writes: string[] = []
+
   return {
     stored,
     writes,
@@ -26,11 +28,14 @@ function createStore(initial: Record<string, number> = {}) {
       },
       refreshExisting: (entries: readonly (readonly [string, number])[]) => {
         writes.push('flush')
+
         for (const [paneKey, timestamp] of entries) {
           const current = stored[paneKey]
+
           if (current === undefined || current >= timestamp) {
             continue
           }
+
           stored[paneKey] = timestamp
         }
       }

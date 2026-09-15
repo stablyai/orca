@@ -41,6 +41,7 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('Codex working')
     expect(pty?.lastAgentStatus).toBe('working')
 
@@ -62,6 +63,7 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('Codex working')
     expect(pty?.lastAgentStatus).toBe('working')
   })
@@ -78,6 +80,7 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('Codex done')
     expect(pty?.lastAgentStatus).toBe('idle')
   })
@@ -87,11 +90,13 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', '\x1b]0;⠋ - Waiting for response… - grok\x07', 100)
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('⠋ Grok')
     expect(pty?.lastAgentStatus).toBe('working')
 
@@ -215,12 +220,14 @@ describe('OrcaRuntimeService', () => {
       tabId: 'omp-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     // Restored/mirrored pane: no launchAgent, only the pi foreground read remains.
     const pty = (
       runtime as unknown as {
         ptysById: Map<string, { launchAgent: string | null; foregroundAgent: string | null }>
       }
     ).ptysById.get('omp-flicker-pty')!
+
     pty.launchAgent = null
     pty.foregroundAgent = 'pi'
     events.length = 0
@@ -322,11 +329,13 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', '\x1b]0;π - my-project\x07', 100)
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('π - my-project')
     expect(pty?.lastAgentStatus).toBe('idle')
     // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the raw OSC frame; the preserved π title must still classify as idle after normalize.
@@ -342,11 +351,13 @@ describe('OrcaRuntimeService', () => {
         applySeededAgentStatus: (ptyId: string, title: string) => void
       }
     ).applySeededAgentStatus('pty-1', '⠴ - Thinking - grok')
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('⠋ Grok')
     // Seed writes leaf status only; re-detect from the stored title must still report working so later live frames compare equal and don't thrash.
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('working')
@@ -365,11 +376,13 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', '\x1b]0;⠋ wire up grok\x07', 100)
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('⠋ wire up grok')
 
     // Claude/Codex braille + task ending " - grok" is not a Grok frame shape.
@@ -402,6 +415,7 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', `${'line\r\n'.repeat(10_000)}tail`, 100)
     const read = await runtime.readTerminal(terminal.handle, { limit: 5 })
+
     const usedCrlfReplace = replaceSpy.mock.calls.some(
       ([pattern], index) =>
         pattern instanceof RegExp &&
@@ -409,8 +423,10 @@ describe('OrcaRuntimeService', () => {
         typeof replaceSpy.mock.contexts[index] === 'string' &&
         replaceSpy.mock.contexts[index].length > 10_000
     )
+
     const usedLineSplit = splitSpy.mock.calls.some(([separator], index) => {
       const splitSeparator = separator as unknown
+
       return (
         (splitSeparator === '\n' ||
           (splitSeparator instanceof RegExp && splitSeparator.source === '\\r?\\n')) &&
@@ -456,17 +472,21 @@ describe('OrcaRuntimeService', () => {
       99
     )
     runtime.onPtyData('pty-1', `${'x'.repeat(40_000)}tail-marker-0`, 100)
+
     type RetainedTailState = {
       tailBuffer: string[]
       tailPartialLine: string
       tailTruncated: boolean
     }
+
     const cappedPartialState = (
       runtime as unknown as {
         ptysById: Map<string, RetainedTailState>
       }
     ).ptysById.get('pty-1')
+
     const retainedLineBuffer = cappedPartialState?.tailBuffer
+
     for (let index = 1; index < 5; index += 1) {
       runtime.onPtyData('pty-1', `${'x'.repeat(40_000)}tail-marker-${index}`, 100 + index)
     }
@@ -476,6 +496,7 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, RetainedTailState>
       }
     ).ptysById.get('pty-1')
+
     expect(retained?.tailBuffer).toBe(retainedLineBuffer)
     expect(retained?.tailPartialLine).toHaveLength(4000)
     expect(retained?.tailPartialLine.endsWith('tail-marker-4')).toBe(true)
@@ -491,6 +512,7 @@ describe('OrcaRuntimeService', () => {
 
   it('delivers pending orchestration messages to an already-idle agent', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -532,6 +554,7 @@ describe('OrcaRuntimeService', () => {
 
   it('submits the mail pointer in an active coordinator pane', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -563,9 +586,11 @@ describe('OrcaRuntimeService', () => {
         expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(500)
+
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
+
       expect(submitWrites).toHaveLength(1)
 
       const unread = db.getUnreadMessages(mailbox)
@@ -580,6 +605,7 @@ describe('OrcaRuntimeService', () => {
 
   it('injects pending orchestration messages into Cursor Agent without auto-submitting', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -606,9 +632,11 @@ describe('OrcaRuntimeService', () => {
         expect.stringContaining('You have 1 orchestration message')
       )
       await vi.advanceTimersByTimeAsync(500)
+
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
+
       expect(submitWrites).toHaveLength(0)
 
       const unread = db.getUnreadMessages(mailbox)
@@ -623,6 +651,7 @@ describe('OrcaRuntimeService', () => {
 
   it('still auto-submits to a non-Cursor agent when its idle title mentions Cursor Agent', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -658,6 +687,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not replay an already-delivered message on a later idle transition', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
@@ -683,6 +713,7 @@ describe('OrcaRuntimeService', () => {
       const firstInjections = write.mock.calls.filter(
         (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
       ).length
+
       expect(firstInjections).toBe(1)
 
       // The row remains pending, so the in-memory sequence watermark prevents replay.
@@ -692,6 +723,7 @@ describe('OrcaRuntimeService', () => {
       const totalInjections = write.mock.calls.filter(
         (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
       ).length
+
       expect(totalInjections).toBe(1)
       db.close()
     } finally {

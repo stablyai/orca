@@ -47,6 +47,7 @@ export type StatusLoadInFlight = {
 }
 
 export type GitRequestError = Error & { code?: string }
+
 export type GitCommitResult = { success: boolean; error?: string }
 
 export type MobileGitStatusEntryView = MobileGitStatusEntry & {
@@ -117,6 +118,7 @@ export const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, 
 }
 
 export const SELECTOR_RETRY_COUNT = 3
+
 export const SELECTOR_RETRY_DELAY_MS = 250
 
 export function firstParam(value: string | string[] | undefined): string {
@@ -131,6 +133,7 @@ export function formatBranchLabel(branch: string | undefined, head: string | und
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
   }
+
   return branch || head?.slice(0, 7) || 'No branch'
 }
 

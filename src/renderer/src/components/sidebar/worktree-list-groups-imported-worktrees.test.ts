@@ -11,6 +11,7 @@ describe('buildRows with pinned worktrees', () => {
       makeDetectedWorktree({ id: 'hidden-2', displayName: 'auth-cache-debug' }),
       makeDetectedWorktree({ id: 'hidden-3', displayName: 'legacy-oauth-fix' })
     ]
+
     const rows = buildRows(
       'repo',
       [worktree],
@@ -168,6 +169,7 @@ describe('buildRows with pinned worktrees', () => {
   it('places non-repo imported fallbacks after each repo last pinned row when expanded', () => {
     const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
     const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
+
     const pinnedTwo = {
       ...worktree,
       id: 'repo-2-pinned',
@@ -175,6 +177,7 @@ describe('buildRows with pinned worktrees', () => {
       isPinned: true,
       displayName: 'auth-main'
     }
+
     const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
 
     const rows = buildRows(
@@ -232,6 +235,7 @@ describe('buildRows with pinned worktrees', () => {
   it('places collapsed non-repo imported fallbacks after Pinned in pinned repo order', () => {
     const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
     const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
+
     const pinnedTwo = {
       ...worktree,
       id: 'repo-2-pinned',
@@ -239,6 +243,7 @@ describe('buildRows with pinned worktrees', () => {
       isPinned: true,
       displayName: 'auth-main'
     }
+
     const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
 
     const rows = buildRows(
@@ -287,6 +292,7 @@ describe('buildRows with pinned worktrees', () => {
       makeDetectedWorktree({ id: 'inbox-1', displayName: 'payments-refactor' }),
       makeDetectedWorktree({ id: 'inbox-2', displayName: 'auth-cache-debug' })
     ]
+
     const rows = buildRows(
       'repo',
       [worktree],
@@ -372,6 +378,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('keeps the inbox group when the repo only has a pinned worktree', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+
     const rows = buildRows(
       'repo',
       [pinnedWorktree],
@@ -441,6 +448,7 @@ describe('buildRows with pinned worktrees', () => {
   it('emits imported worktree cards in repo groups when visible rows are pinned', () => {
     const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
     const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
+
     const pinnedTwo = {
       ...worktree,
       id: 'repo-2-pinned',
@@ -448,7 +456,9 @@ describe('buildRows with pinned worktrees', () => {
       isPinned: true,
       displayName: 'auth-main'
     }
+
     const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
+
     const rows = buildRows(
       'repo',
       [pinnedOneA, pinnedTwo, pinnedOneB],
@@ -519,6 +529,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('duplicates pinned worktrees into repo groups when the policy allows it', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+
     const rows = buildRows(
       'repo',
       [pinnedWorktree],
@@ -556,6 +567,7 @@ describe('buildRows with pinned worktrees', () => {
   it('suppresses duplicate-mode imported fallback only when a natural anchor renders', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
     const imported = new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+
     const expanded = buildRows(
       'none',
       [pinnedWorktree],
@@ -573,6 +585,7 @@ describe('buildRows with pinned worktrees', () => {
       new Set(),
       imported
     )
+
     const collapsedAll = buildRows(
       'none',
       [pinnedWorktree],
@@ -601,6 +614,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('suppresses pinned imported worktree fallback when the repo has visible unpinned rows', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+
     const rows = buildRows(
       'repo',
       [pinnedWorktree, worktree],
@@ -629,6 +643,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('keeps repo imported worktree cards visible when Pinned is collapsed', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+
     const rows = buildRows(
       'repo',
       [pinnedWorktree],

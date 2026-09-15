@@ -7,6 +7,7 @@ vi.mock('sonner', () => ({
 }))
 
 const WORKTREE = 'local-repo::/tmp/app'
+
 const STRUCTURED_TAB_ID = 'structured-agent-session-codex-1'
 
 function structuredTab(): Tab {
@@ -26,6 +27,7 @@ function structuredTab(): Tab {
 }
 
 const TERMINAL_TAB_ID = 'terminal-1'
+
 const TERMINAL_UNIFIED_ID = 'unified-terminal-1'
 
 function terminalTab(): Tab {
@@ -52,6 +54,7 @@ function storeWithStructuredTab(): ReturnType<typeof createTestStore> {
     },
     unifiedTabsByWorktree: { [WORKTREE]: [structuredTab()] }
   })
+
   return store
 }
 

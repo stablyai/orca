@@ -21,24 +21,30 @@ const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
 
 export function parseRelayedMessage(payload: string): RelayedMessage {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(payload)
   } catch {
     throw new OrchestrationError('invalid_argument', 'Federated relay payload is invalid JSON.')
   }
+
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new OrchestrationError('invalid_argument', 'Federated relay payload is not a message.')
   }
+
   const message = parsed as Partial<RelayedMessage>
+
   if (typeof message.subject !== 'string' || typeof message.body !== 'string') {
     throw new OrchestrationError('invalid_argument', 'Federated relay message is incomplete.')
   }
+
   if (typeof message.type !== 'string' || !MESSAGE_TYPE_SET.has(message.type as MessageType)) {
     throw new OrchestrationError(
       'invalid_argument',
       `Federated relay message type ${String(message.type)} is not supported.`
     )
   }
+
   return {
     from: typeof message.from === 'string' ? message.from : 'remote-worker',
     subject: message.subject,
@@ -64,10 +70,13 @@ export function parseFederatedLifecycle(
   if (message.type === 'heartbeat') {
     return { kind: 'heartbeat', at: new Date().toISOString() }
   }
+
   if (message.type !== 'worker_done') {
     return { kind: 'none' }
   }
+
   let payload
+
   try {
     payload = parseFederatedWorkerReportPayload(message.payload)
   } catch (error) {
@@ -77,6 +86,7 @@ export function parseFederatedLifecycle(
       reason: error instanceof Error ? error.message : String(error)
     }
   }
+
   if (payload.dispatchId !== dispatchId || payload.taskId !== taskId) {
     return {
       kind: 'rejected',
@@ -84,6 +94,7 @@ export function parseFederatedLifecycle(
       reason: `Federated report does not match Dispatch ${dispatchId}.`
     }
   }
+
   return {
     kind: 'worker_report',
     taskId: payload.taskId,

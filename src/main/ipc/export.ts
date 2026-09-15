@@ -17,6 +17,7 @@ export function registerExportHandlers(): void {
     'export:html-to-pdf',
     async (event, args: ExportHtmlToPdfArgs): Promise<ExportHtmlToPdfResult> => {
       const { html, title } = args
+
       if (!html.trim()) {
         return { success: false, error: 'No content to export' }
       }
@@ -31,10 +32,12 @@ export function registerExportHandlers(): void {
         const defaultFilename = `${sanitizedTitle}.pdf`
 
         const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+
         const dialogOptions = {
           defaultPath: defaultFilename,
           filters: [{ name: 'PDF', extensions: ['pdf'] }]
         }
+
         const { canceled, filePath } = parent
           ? await dialog.showSaveDialog(parent, dialogOptions)
           : await dialog.showSaveDialog(dialogOptions)
@@ -44,11 +47,13 @@ export function registerExportHandlers(): void {
         }
 
         await writeFile(filePath, pdfBuffer)
+
         return { success: true, filePath }
       } catch (error) {
         if (error instanceof ExportTimeoutError) {
           return { success: false, error: 'Export timed out' }
         }
+
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to export PDF'

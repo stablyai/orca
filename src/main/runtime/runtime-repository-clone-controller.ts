@@ -40,25 +40,33 @@ export class RuntimeRepositoryCloneController {
     if (!this.deps.getStore()) {
       throw new Error('runtime_unavailable')
     }
+
     const trimmedUrl = url.trim()
     const trimmedDestination = destination.trim()
+
     if (!trimmedDestination) {
       throw new Error('Clone destination is required')
     }
+
     const clonePath = deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
     const clonePathKey = getClonePathComparisonKey(clonePath)
     const previous = this.inFlightByPath.get(clonePathKey) ?? Promise.resolve()
     let release!: () => void
+
     const current = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const tail = previous.then(
       () => current,
       () => current
     )
+
     this.inFlightByPath.set(clonePathKey, tail)
+
     try {
       await previous
+
       return await runWithGitReadCacheInvalidation(() =>
         this.cloneAfterPathLock(
           trimmedUrl,
@@ -70,6 +78,7 @@ export class RuntimeRepositoryCloneController {
       )
     } finally {
       release()
+
       if (this.inFlightByPath.get(clonePathKey) === tail) {
         this.inFlightByPath.delete(clonePathKey)
       }
@@ -84,15 +93,18 @@ export class RuntimeRepositoryCloneController {
     executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
     const store = this.deps.getStore()
+
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+
     const existingBeforeClone = store.getRepos().find((repo) => {
       return (
         getClonePathComparisonKey(repo.path) === clonePathKey &&
         runtimeRepoMatchesExecutionHost(repo, executionHostId)
       )
     })
+
     if (existingBeforeClone && !isFolderRepo(existingBeforeClone)) {
       return existingBeforeClone
     }
@@ -100,6 +112,7 @@ export class RuntimeRepositoryCloneController {
     await mkdir(trimmedDestination, { recursive: true })
     const claimedTarget = await claimCloneTarget(clonePath)
     let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
+
     try {
       proc = await gitSpawnAfterWindowsEnvironmentReady(
         ['clone', '--progress', '--', trimmedUrl, clonePath],
@@ -115,20 +128,25 @@ export class RuntimeRepositoryCloneController {
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`Clone failed: ${message}`)
     }
+
     await new Promise<void>((resolve, reject) => {
       let stderrTail = ''
       let settled = false
       proc.stderr?.on('data', (chunk: Buffer) => {
         stderrTail = (stderrTail + chunk.toString()).slice(-4096)
       })
+
       const finish = async (code: number | null, signal: NodeJS.Signals | null, error?: Error) => {
         if (settled) {
           return
         }
+
         settled = true
+
         if (error || code !== 0 || signal) {
           await cleanupClaimedCloneTarget(clonePath, claimedTarget)
         }
+
         if (error) {
           reject(new Error(`Clone failed: ${error.message}`))
         } else if (signal === 'SIGTERM') {
@@ -139,6 +157,7 @@ export class RuntimeRepositoryCloneController {
           reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderrTail, { clonePath })}`))
         }
       }
+
       proc.on('error', (error) => void finish(null, null, error))
       proc.on('close', (code, signal) => void finish(code, signal))
     })
@@ -149,18 +168,23 @@ export class RuntimeRepositoryCloneController {
         runtimeRepoMatchesExecutionHost(repo, executionHostId)
       )
     })
+
     if (existing) {
       if (isFolderRepo(existing)) {
         const updated = store.updateRepo(existing.id, { kind: 'git' })
+
         if (updated) {
           await prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
           this.invalidate(updated.id)
+
           return updated
         }
       }
+
       return existing
     }
+
     // `cloneRepo` ran `git clone` in this process (see `assertCloneHostIsSupported`), so the
     // checkout is here regardless of the host id stamped on the row.
     const detected = await detectRepoIconAndUpstream({
@@ -168,6 +192,7 @@ export class RuntimeRepositoryCloneController {
       kind: 'git',
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
+
     const repo: Repo = {
       id: randomUUID(),
       path: clonePath,
@@ -179,10 +204,12 @@ export class RuntimeRepositoryCloneController {
       kind: 'git',
       externalWorktreeVisibilityLegacy: false
     }
+
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidate(repo.id)
+
     return store.getRepo(repo.id) ?? repo
   }
 

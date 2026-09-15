@@ -10,7 +10,9 @@ import {
 } from './github-slice-test-harness'
 
 const repoPath = '/repo'
+
 const repoId = 'repo-id'
+
 const threadId = 'thread-1'
 
 function makeComments(isResolved = false): PRComment[] {
@@ -34,6 +36,7 @@ function installLocalComments(store: ReturnType<typeof createTestStore>): string
     repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
     commentsCache: { [cacheKey]: { data: makeComments(), fetchedAt: 1 } }
   } as unknown as Partial<AppState>)
+
   return cacheKey
 }
 
@@ -46,6 +49,7 @@ describe('createGitHubSlice.resolveReviewThread', () => {
   it('optimistically resolves and routes through the repository runtime', async () => {
     const store = createTestStore()
     const settings = { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -56,6 +60,7 @@ describe('createGitHubSlice.resolveReviewThread', () => {
       undefined,
       true
     )
+
     store.setState({
       settings,
       repos: [
@@ -69,17 +74,20 @@ describe('createGitHubSlice.resolveReviewThread', () => {
       ],
       commentsCache: { [cacheKey]: { data: makeComments(), fetchedAt: 1 } }
     } as unknown as Partial<AppState>)
+
     const runtimeResult = Promise.withResolvers<{
       id: string
       ok: true
       result: boolean
       _meta: { runtimeId: string }
     }>()
+
     runtimeEnvironmentCall.mockReturnValueOnce(runtimeResult.promise)
 
     const pending = store.getState().resolveReviewThread(repoPath, 12, threadId, true, {
       repoId
     })
+
     expect(store.getState().commentsCache[cacheKey]?.data?.[0].isResolved).toBe(true)
     runtimeResult.resolve({
       id: 'rpc-thread',

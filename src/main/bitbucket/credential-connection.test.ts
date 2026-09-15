@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
+
 let tempHome = ''
 
 async function loadModule() {
@@ -19,13 +21,16 @@ async function loadModule() {
   })
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')
+
     return { ...actual, homedir: () => tempHome }
   })
+
   return import('./credential-connection')
 }
 
 beforeEach(() => {
   process.env = { ...OLD_ENV }
+
   for (const key of [
     'ORCA_BITBUCKET_ACCESS_TOKEN',
     'ORCA_BITBUCKET_EMAIL',
@@ -34,6 +39,7 @@ beforeEach(() => {
   ]) {
     delete process.env[key]
   }
+
   tempHome = mkdtempSync(join(tmpdir(), 'orca-bitbucket-conn-'))
 })
 
@@ -91,6 +97,7 @@ describe('Bitbucket credential connection', () => {
       authMode: 'token',
       accessToken: 'bad'
     })
+
     expect(result.ok).toBe(false)
     expect(conn.getBitbucketConnectionStatus().source).toBe('none')
   })
@@ -116,6 +123,7 @@ describe('Bitbucket credential connection', () => {
       const unreachable = await conn.connectBitbucket({ authMode: 'token', accessToken: 'good' })
       expect(!unreachable.ok && unreachable.error).toMatch(/could not reach bitbucket/i)
     }
+
     expect(conn.getBitbucketConnectionStatus().source).toBe('none')
   })
 
@@ -128,6 +136,7 @@ describe('Bitbucket credential connection', () => {
       authMode: 'basic',
       email: 'ada@example.com'
     })
+
     expect(result.ok).toBe(false)
     expect(fetchSpy).not.toHaveBeenCalled()
   })

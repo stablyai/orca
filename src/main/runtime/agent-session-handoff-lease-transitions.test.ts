@@ -9,6 +9,7 @@ import { applyAgentSessionRestartAdjudication } from './agent-session-restart-le
 describe('agent session handoff restart transitions', () => {
   it('turns a proven dead TUI owner into one durable retry owner', () => {
     const operationId = '1800000000000-00000000000000000000000000000001'
+
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({ runtimeKind: 'tui', runtimeFence: 3 })
     )
@@ -34,6 +35,7 @@ describe('agent session handoff restart transitions', () => {
 
   it('preserves the stopped owner and operation for durable retry', () => {
     const handoffOperationId = '1800000000000-00000000000000000000000000000001'
+
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({
         runtimeKind: 'native',

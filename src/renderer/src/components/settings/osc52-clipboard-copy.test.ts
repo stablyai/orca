@@ -14,6 +14,7 @@ describe('OSC 52 setting copy', () => {
   for (const [name, locale] of Object.entries(locales)) {
     it(`names Zellij and Grok in both ${name} OSC 52 setting descriptions`, () => {
       const pane = locale.auto.components.settings.TerminalPane
+
       for (const copy of [pane['69c64a479c'], pane['6e6480a7df']]) {
         expect(copy).toContain('Zellij')
         expect(copy).toContain('Grok')

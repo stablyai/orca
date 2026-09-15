@@ -43,12 +43,15 @@ export type MobileNativeChatSession = {
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
+
 const PAGE = 60
+
 const MAX_MESSAGES = 2000
 
 type ReadSessionResult =
   | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
   | { error: string }
+
 /** Subscribe to an agent's native-chat transcript over the paired connection.
  *  Reads a small recent window for a fast first paint, tails it for live turns,
  *  and pages in older history on demand. Read results replace the list (they are
@@ -63,16 +66,19 @@ export function useMobileNativeChatSession(args: {
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
+
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
     agent,
     sessionId,
     transcriptPath
   ])
+
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
   const initialStatus: MobileNativeChatStatus =
     !client || !agent ? 'idle' : !sessionId ? 'waiting-session' : 'loading'
+
   // Only the settled outcome is genuinely async, and it is tagged with the
   // identity it describes so a just-switched tab is never judged by the
   // previous tab's transcript — the effect that clears `messages` is passive
@@ -82,15 +88,18 @@ export function useMobileNativeChatSession(args: {
     identity: string
     status: MobileNativeChatStatus
   } | null>(null)
+
   // Drop it the moment its subscription stops being the live one — identity and
   // client are the effect's only inputs, so together they catch every re-run.
   // Without this a toggle out of chat view and back (agent null, then the same
   // identity again) would resurface a settled 'ready' over an emptied list.
   let current = read
+
   if (current !== null && (current.identity !== identity || current.client !== client)) {
     current = null
     setRead(null)
   }
+
   // A settled read only counts while the props still call for one: losing the
   // client/agent/session means idle or waiting-session outranks it outright.
   const settled = initialStatus === 'loading' ? current : null
@@ -140,9 +149,11 @@ export function useMobileNativeChatSession(args: {
     setError(undefined)
     setHasMore(false)
     beforeOffsetRef.current = null
+
     if (!client || !agent) {
       return
     }
+
     if (!sessionId) {
       return
     }
@@ -161,26 +172,33 @@ export function useMobileNativeChatSession(args: {
         if (cancelled) {
           return
         }
+
         const frame = raw as MobileNativeChatStreamFrame
+
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
           limit: limitRef.current,
           replaceSnapshot: !snapshotSeenRef.current
         })
+
         if (applied.kind === 'ignored') {
           return
         }
+
         if (applied.kind === 'error') {
           setRead({ client, identity, status: 'error' })
           setError(applied.error)
+
           return
         }
+
         if (frame.type === 'snapshot' && !applied.pending) {
           // A pending window has no transcript behind it, so the snapshot that
           // follows is still this subscription's base, not a reconnect replay.
           snapshotSeenRef.current = true
         }
+
         if (applied.windowReplaced || frame.type === 'snapshot') {
           // Why: any authoritative window (and any replay merge) invalidates an
           // in-flight older-page request; stale results must not land on it.
@@ -188,6 +206,7 @@ export function useMobileNativeChatSession(args: {
           loadingEarlierRef.current = false
           setLoadingEarlier(false)
         }
+
         if (applied.windowReplaced) {
           // Only a genuinely fresh window resets the grown read window — an
           // overlapping reconnect replay keeps the paged-in history and limit.
@@ -195,13 +214,17 @@ export function useMobileNativeChatSession(args: {
           beforeOffsetRef.current = applied.beforeOffset ?? null
           setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
         }
+
         setMessages(applied.messages)
+
         if (!applied.windowReplaced && applied.hasMore != null) {
           setHasMore(applied.hasMore)
         }
+
         if (!applied.windowReplaced && applied.beforeOffset != null) {
           beforeOffsetRef.current = applied.beforeOffset
         }
+
         if (applied.cursorInvalidated) {
           // Fall back to a growing-tail read so history trimmed by live appends
           // cannot leave a gap between the retained window and the old cursor.
@@ -210,6 +233,7 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
           beforeOffsetRef.current = null
         }
+
         setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
       }
     )
@@ -224,16 +248,20 @@ export function useMobileNativeChatSession(args: {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
       return
     }
+
     // Capture the session this page belongs to; a swap underneath us must not
     // apply this read's result onto the new session (mirrors desktop's guard).
     const requestSessionId = sessionId
     const requestGeneration = streamGenerationRef.current
     const nextLimit = Math.min(limitRef.current + PAGE, MAX_MESSAGES)
     const pageLimit = nextLimit - limitRef.current
+
     if (pageLimit <= 0) {
       setHasMore(false)
+
       return
     }
+
     const beforeOffset = beforeOffsetRef.current
     loadingEarlierRef.current = true
     setLoadingEarlier(true)
@@ -246,13 +274,17 @@ export function useMobileNativeChatSession(args: {
           ...(beforeOffset === null ? {} : { beforeOffset }),
           ...(transcriptPath ? { transcriptPath } : {})
         })
+
         if (!response.ok) {
           return
         }
+
         const result = response.result as ReadSessionResult
+
         if ('error' in result) {
           return
         }
+
         // Drop a stale resolve from a session that swapped underneath us.
         if (
           sessionIdRef.current !== requestSessionId ||
@@ -260,7 +292,9 @@ export function useMobileNativeChatSession(args: {
         ) {
           return
         }
+
         limitRef.current = nextLimit
+
         if (beforeOffset !== null && result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
           setList([...result.messages, ...mergerRef.current.list])

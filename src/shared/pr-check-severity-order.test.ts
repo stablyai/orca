@@ -93,6 +93,7 @@ describe('PR check severity order', () => {
       check('failure', 'failure'),
       check('success', 'success')
     ])
+
     expect(sorted.map((c) => c.name)).toEqual(['failure', 'success', 'inherited'])
   })
 

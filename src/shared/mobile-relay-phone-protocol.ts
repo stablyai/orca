@@ -41,6 +41,7 @@ export const RelayMovedSchema = z
     cellUrl: z.string().refine((value) => {
       try {
         const parsed = new URL(value)
+
         return parsed.protocol === 'https:' && parsed.origin === value
       } catch {
         return false

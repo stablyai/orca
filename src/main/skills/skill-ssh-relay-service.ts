@@ -58,6 +58,7 @@ export async function installSkillOnSshHost(input: {
   fetcher?: typeof fetch
 }): Promise<SkillInstallResult> {
   const request = input.request
+
   try {
     return SkillInstallResultSchema.parse(
       await retrySkillTransferRpc({
@@ -68,12 +69,14 @@ export async function installSkillOnSshHost(input: {
         call: async () => {
           const client = requireSkillSshRelayClient(input.provider)
           const supported = await skillSshRelayCapabilities(client)
+
           if (
             request.providers !== undefined &&
             !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)
           ) {
             throw new Error('skill-install-ssh-update-required')
           }
+
           if (!supported.includes(SKILL_INSTALL_CAPABILITY)) {
             recordSkillCapabilityAbsence({
               capability: SKILL_INSTALL_CAPABILITY,
@@ -81,6 +84,7 @@ export async function installSkillOnSshHost(input: {
             })
             throw new Error('skill-install-ssh-update-required')
           }
+
           return client(
             SKILL_SSH_RELAY_INSTALL_METHOD,
             { request, workspace: input.workspace },
@@ -97,6 +101,7 @@ export async function installSkillOnSshHost(input: {
       throw error
     }
   }
+
   return retrySkillTransferRpc({
     signal: input.signal,
     retryable: (error) =>
@@ -105,12 +110,14 @@ export async function installSkillOnSshHost(input: {
     call: async () => {
       const client = requireSkillSshRelayClient(input.provider)
       const supported = await skillSshRelayCapabilities(client)
+
       if (
         !supported.includes(SKILL_INSTALL_CAPABILITY) ||
         (request.providers !== undefined && !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY))
       ) {
         throw new Error('skill-install-ssh-update-required')
       }
+
       if (!supported.includes(SKILL_UPLOAD_CAPABILITY)) {
         recordSkillCapabilityAbsence({
           capability: SKILL_UPLOAD_CAPABILITY,
@@ -118,7 +125,9 @@ export async function installSkillOnSshHost(input: {
         })
         throw new Error('skill-install-ssh-download-unavailable')
       }
+
       const uploadId = await transferSkillPackageToSshHost(client, input)
+
       try {
         return SkillInstallResultSchema.parse(
           await client(
@@ -146,9 +155,11 @@ export async function previewSkillInstallOnSshHost(input: {
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillInstallPreview> {
   const client = requireSkillSshRelayClient(input.provider)
+
   if (!(await skillSshRelayCapabilities(client)).includes(SKILL_MANAGEMENT_CAPABILITY)) {
     throw new Error('skill-install-ssh-update-required')
   }
+
   return SkillInstallPreviewSchema.parse(
     await client(
       SKILL_SSH_RELAY_PREVIEW_METHOD,
@@ -164,9 +175,11 @@ export async function removeSkillInstallOnSshHost(input: {
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillInstallResult> {
   const client = requireSkillSshRelayClient(input.provider)
+
   if (!(await skillSshRelayCapabilities(client)).includes(SKILL_MANAGEMENT_CAPABILITY)) {
     throw new Error('skill-install-ssh-update-required')
   }
+
   return SkillInstallResultSchema.parse(
     await client(
       SKILL_SSH_RELAY_REMOVE_METHOD,
@@ -182,9 +195,11 @@ export async function listSkillInstallsOnSshHost(input: {
   workspaces: SkillSshWorkspaceAuthority[]
 }): Promise<ManagedSkillInstall[]> {
   const client = requireSkillSshRelayClient(input.provider)
+
   if (!(await skillSshRelayCapabilities(client)).includes(SKILL_MANAGEMENT_CAPABILITY)) {
     throw new Error('skill-install-ssh-update-required')
   }
+
   return ManagedSkillInstallListSchema.parse(
     await client(
       SKILL_SSH_RELAY_LIST_METHOD,

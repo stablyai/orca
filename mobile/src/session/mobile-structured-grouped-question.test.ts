@@ -74,20 +74,24 @@ describe('mobile structured grouped questions', () => {
       kind: 'advance',
       draft: { promptKey: PROMPT_KEY, answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] }
     })
+
     const second = projectGroupedQuestion(
       questions,
       advance!.kind === 'advance' ? advance.draft : null,
       PROMPT_KEY
     )
+
     expect(second).toMatchObject({ question: 'Which regions? (2 of 2)', multiSelect: true })
   })
 
   it('submits the whole group as one encoded answer on the last step', () => {
     const questions = [question(), SECOND]
+
     const draft: GroupedQuestionDraft = {
       promptKey: PROMPT_KEY,
       answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }]
     }
+
     const second = projectGroupedQuestion(questions, draft, PROMPT_KEY)!
 
     const result = advanceGroupedQuestion({
@@ -148,7 +152,9 @@ describe('mobile structured grouped questions', () => {
       question({ id: 'q1', question: 'Approve?' }),
       question({ id: 'q2', question: 'Approve?' })
     ]
+
     const first = projectGroupedQuestion(questions, null, PROMPT_KEY)!
+
     const second = projectGroupedQuestion(
       questions,
       { promptKey: PROMPT_KEY, answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }] },
@@ -162,6 +168,7 @@ describe('mobile structured grouped questions', () => {
 
   it('discards a draft collected against a superseded prompt revision', () => {
     const questions = [question(), SECOND]
+
     const stale: GroupedQuestionDraft = {
       promptKey: groupedQuestionPromptKey('item-1', 2),
       answers: [{ questionId: 'q1', optionIds: ['q1:choice-1'] }]

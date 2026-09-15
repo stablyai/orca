@@ -50,6 +50,7 @@ export const WorktreeCreate = z
       .unknown()
       .transform((value) => {
         const parsed = workspaceSourceSchema.safeParse(value)
+
         return parsed.success ? parsed.data : undefined
       })
       .optional(),
@@ -125,18 +126,21 @@ export const WorktreeCreate = z
   })
   .superRefine((params, ctx) => {
     assertLinkedWorkItemSourceContextMatch(params, ctx)
+
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
       })
     }
+
     if (params.parentWorkspace && params.parentWorktree) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
       })
     }
+
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

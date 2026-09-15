@@ -41,6 +41,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -134,6 +135,7 @@ describe('moveWebRuntimeSessionTab', () => {
             ? 'host-terminal'
             : null
     )
+
     const runtimeCall = vi.fn().mockResolvedValueOnce({
       id: 'move',
       ok: true,
@@ -196,6 +198,7 @@ describe('moveWebRuntimeSessionTab', () => {
             ? 'host-terminal'
             : null
     )
+
     const runtimeCall = vi.fn().mockResolvedValueOnce({
       id: 'move',
       ok: true,
@@ -239,6 +242,7 @@ describe('moveWebRuntimeSessionTab', () => {
       (_state, args: { tabId: string }) =>
         args.tabId === 'local-terminal-unified' ? 'host-terminal' : null
     )
+
     const runtimeCall = vi.fn().mockResolvedValueOnce({
       id: 'move',
       ok: true,

@@ -27,6 +27,7 @@ export function WorkspaceCleanupAppliedFilterChips({
   if (applied.length === 0) {
     return null
   }
+
   return (
     <div
       className="flex w-full flex-wrap items-center gap-1"
@@ -64,6 +65,7 @@ export function WorkspaceCleanupAppliedFilterChips({
 
 function buildAppliedFilterFormatters(): Parameters<typeof listAppliedWorkspaceCleanupFilters>[1] {
   const mb = (bytes: number): number => toMegabytes(bytes) ?? 0
+
   return {
     idleDays: (days) =>
       translate('components.workspace.cleanup.browse.chip.idleDays', 'Idle {{value0}}d+', {

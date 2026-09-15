@@ -8,12 +8,16 @@ import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-sc
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 
 const loadDiff = vi.hoisted(() => vi.fn())
+
 vi.mock('./mobile-diff-review-loaders', () => ({ loadMobileDiffReviewDiff: loadDiff }))
 
 const client = { sendRequest: vi.fn() } as unknown as RpcClient
+
 // Stable identity, like the controller's useState setter: it is an effect dependency.
 const setActiveHunkIndex = () => {}
+
 const currentItem = { key: 'item-1', filePath: 'src/app.ts' } as MobileDiffReviewQueueItem
+
 const readyScreen = { kind: 'ready', branchCompare: null } as unknown as ReviewScreenState
 
 function readyDiff(firstLine: string): ReviewDiffState {
@@ -39,6 +43,7 @@ describe('useMobileDiffReviewDiffLoading', () => {
       screenState: readyScreen,
       setActiveHunkIndex
     })
+
     return null
   }
 

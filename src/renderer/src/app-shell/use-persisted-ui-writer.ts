@@ -34,23 +34,32 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     if (disposed) {
       return
     }
+
     if (trailingTimer !== null) {
       window.clearTimeout(trailingTimer)
     }
+
     trailingTimer = window.setTimeout(() => {
       trailingTimer = null
+
       if (disposed) {
         return
       }
+
       const state = useAppStore.getState()
+
       if (Object.keys(state.persistedUIWriteInFlightCounts).length > 0) {
         return
       }
+
       const baseline = state.persistedUIWriteBaseline
+
       if (!baseline) {
         return
       }
+
       const trailing = diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
+
       if (Object.keys(trailing).length > 0) {
         controller.send(trailing)
       }
@@ -61,11 +70,13 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     if (disposed) {
       return
     }
+
     const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
     const state = useAppStore.getState()
     const sentAtGeneration = state.persistedUIWriteBaselineGeneration
     state.notePersistedUIWriteStarted(fields)
     let request: Promise<void>
+
     try {
       // setWithAck rejects when the host did not apply the patch (web's plain set
       // swallows transport failures); older preloads without it fall back to set.
@@ -75,8 +86,10 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
       // A synchronous throw (e.g. a non-cloneable value) must still settle the
       // in-flight marker, or the field stays pinned against hydration forever.
       useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+
       return
     }
+
     // Two-arg then: the rejection handler must not catch throws from the ack
     // handler, which would double-settle these fields and leak the trailing ones.
     request.then(
@@ -90,18 +103,23 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
         // rejected patch itself: a terminal transport failure must not loop.
         const state = useAppStore.getState()
         const baseline = state.persistedUIWriteBaseline
+
         const dirty = baseline
           ? diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
           : {}
+
         const current = capturePersistedUIWriteBaseline(state)
+
         const changedDuringFlight = fields.some(
           (field) => !Object.is(current[field], changed[field])
         )
+
         const shouldRetry =
           changedDuringFlight ||
           Object.keys(dirty).some(
             (field) => !fields.includes(field as keyof PersistedUIWriteBaseline)
           )
+
         if (shouldRetry) {
           scheduleTrailing()
         }
@@ -117,12 +135,14 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     scheduleTrailing,
     dispose: () => {
       disposed = true
+
       if (trailingTimer !== null) {
         window.clearTimeout(trailingTimer)
         trailingTimer = null
       }
     }
   }
+
   return controller
 }
 
@@ -142,6 +162,7 @@ export function usePersistedUIWriter(): void {
   const controller = useMemo(() => createPersistedUIWriteController(), [])
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const activeView = useAppStore((s) => s.activeView)
+
   const ui = useAppStore(
     useShallow((s): PersistedUIWriteBaseline => ({
       sidebarWidth: s.sidebarWidth,
@@ -174,8 +195,10 @@ export function usePersistedUIWriter(): void {
       manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey
     }))
   )
+
   useEffect(() => {
     controller.activate()
+
     return () => controller.dispose()
   }, [controller])
   useEffect(() => {
@@ -186,25 +209,32 @@ export function usePersistedUIWriter(): void {
     // broadcast, and subscribing would re-render and re-arm the debounce on
     // remote traffic that changed nothing this writer owns.
     const armBaseline = useAppStore.getState().persistedUIWriteBaseline
+
     if (!persistedUIReady || !armBaseline) {
       return
     }
+
     if (Object.keys(diffPersistedUIWriteFields(ui, armBaseline)).length === 0) {
       return
     }
+
     const timer = window.setTimeout(() => {
       // Re-diff against the store at fire time: a broadcast landing inside the
       // debounce window may have refreshed the baseline (its identity is
       // deliberately NOT an effect dep, so remote traffic can't starve the timer).
       const state = useAppStore.getState()
       const baseline = state.persistedUIWriteBaseline
+
       if (!baseline) {
         return
       }
+
       const changed = diffPersistedUIWriteFields(ui, baseline)
+
       if (Object.keys(changed).length === 0) {
         return
       }
+
       controller.send(changed)
     }, 150)
 
@@ -217,6 +247,7 @@ export function usePersistedUIWriter(): void {
     if (!persistedUIReady) {
       return
     }
+
     void window.api.ui.set({ activeView })
   }, [activeView, persistedUIReady])
 }

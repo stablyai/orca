@@ -16,18 +16,22 @@ function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>):
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+
   const experimentalNewWorktreeCardStyle =
     useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle) === true
+
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
+
   const [collapsedLineageWorktreeIds, setCollapsedLineageWorktreeIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
 
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
   const { folderWorkspace, childWorktrees, lineageChildrenByParentId, rootChildWorktrees } =
     getAttachedWorktreesForFolderWorkspace({
       activeWorkspaceKey,
@@ -41,11 +45,13 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const toggleLineage = (worktreeId: string): void => {
     setCollapsedLineageWorktreeIds((current) => {
       const next = new Set(current)
+
       if (next.has(worktreeId)) {
         next.delete(worktreeId)
       } else {
         next.add(worktreeId)
       }
+
       return next
     })
   }
@@ -59,11 +65,13 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
     const nextAncestorIds = new Set([...ancestorIds, worktree.id])
     const safeLineageChildren = lineageChildren.filter((child) => !nextAncestorIds.has(child.id))
     const hasSafeLineageChildren = safeLineageChildren.length > 0
+
     const lineageGeometry = getLineageNestedRowGeometry({
       experimentalNewWorktreeCardStyle,
       inheritedCardContentIndent: 0,
       lineageDepth: ancestorIds.size
     })
+
     return (
       <WorktreeCard
         key={worktree.id}

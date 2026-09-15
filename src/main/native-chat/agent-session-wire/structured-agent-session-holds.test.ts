@@ -29,7 +29,9 @@ function clock(deps: {
     ...(deps.onError ? { onError: deps.onError } : {}),
     graceMs: 1
   })
+
   clocks.push(created)
+
   return created
 }
 
@@ -111,6 +113,7 @@ describe('the release clock', () => {
 
   it('reports a failed eviction rather than swallowing it', async () => {
     const onError = vi.fn()
+
     const releasing = clock({
       evict: async () => {
         throw new Error('child would not stop')
@@ -132,9 +135,11 @@ describe('the release clock', () => {
 describe('holds', () => {
   it('resumes a session on its first hold and not on a retained one', async () => {
     let child = false
+
     const resume = vi.fn(async () => {
       child = true
     })
+
     const holds = new StructuredAgentSessionHolds({
       resume,
       hasProviderChild: () => child,
@@ -157,6 +162,7 @@ describe('holds', () => {
 
   it('never arms the clock for a session with nothing to stop', async () => {
     const evict = vi.fn(async () => {})
+
     const holds = new StructuredAgentSessionHolds({
       resume: async () => {},
       hasProviderChild: () => false,
@@ -231,6 +237,7 @@ describe('the teardown deadline', () => {
 
   it('does not delay a step that finishes', async () => {
     const ran: string[] = []
+
     const steps = withStructuredAgentSessionEvictionDeadline(
       [{ name: 'fast-step', run: () => void ran.push('fast-step') }],
       5_000

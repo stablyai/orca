@@ -4,7 +4,9 @@ import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discrimi
 import { translate } from '@/i18n/i18n'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>
+
 type CookieImportWarningCode = CookieImportWarning['code']
+
 type UndecryptableReason = Extract<CookieImportWarning, { code: 'cookies-undecryptable' }>['reason']
 
 // Why: the summary is cast, not decoded, on the way off the runtime RPC wire, so a newer host can
@@ -23,12 +25,14 @@ const HANDLED_UNDECRYPTABLE_REASONS: Record<UndecryptableReason, true> = {
 
 function formatCookieImportWarning(warning: CookieImportWarning): string {
   const code: unknown = warning.code
+
   if (!isHandledWireDiscriminant(code, HANDLED_WARNING_CODES)) {
     return translate(
       'auto.lib.browser.cookie.import.toast.unrecognizedWarning',
       'The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.'
     )
   }
+
   switch (warning.code) {
     case 'restart-fallback-unavailable':
       return warning.loadedCookies === 0
@@ -47,6 +51,7 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
           )
     case 'cookies-undecryptable': {
       const reason: unknown = warning.reason
+
       if (!isHandledWireDiscriminant(reason, HANDLED_UNDECRYPTABLE_REASONS)) {
         return translate(
           'auto.lib.browser.cookie.import.toast.undecryptableUnrecognizedReason',
@@ -54,6 +59,7 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
           { value0: warning.failedCookies }
         )
       }
+
       switch (warning.reason) {
         case 'app-bound-encryption':
           return warning.otherFailedCookies
@@ -104,6 +110,7 @@ function cookieImportLocationDescription(execution: BrowserCookieImportExecution
   if (!execution.executionRemoteEnvironment) {
     return null
   }
+
   return execution.executionMachine === 'client'
     ? translate(
         'auto.lib.browser.cookie.import.toast.locationClientHosted',
@@ -124,6 +131,7 @@ function emitGoogleCookieImportWarning(
   if (!summary.googleCookiesSkipped) {
     return
   }
+
   // Why: the sign-in must happen in the jar the import populated — the named workspace for a
   // remote environment, any Orca browser locally. Client-hosted pages render on this desktop, so
   // say that or the instruction reads as "go to the other machine".
@@ -145,6 +153,7 @@ function emitGoogleCookieImportWarning(
           'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google.',
           { value0: execution.executionHostLabel }
         )
+
   toast.warning(message, { duration: 12000 })
 }
 
@@ -154,6 +163,7 @@ function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary):
   if (!summary.partitionSkippedCookies) {
     return
   }
+
   toast.warning(
     translate(
       'auto.lib.browser.cookie.import.toast.partitionSkipped',
@@ -172,16 +182,19 @@ export function emitBrowserCookieImportToast(
   execution: BrowserCookieImportExecution
 ): void {
   const warning = summary.warning
+
   if (warning) {
     toast.warning(formatCookieImportWarning(warning))
   } else {
     const description = cookieImportLocationDescription(execution)
+
     if (description) {
       toast.success(successMessage, { description })
     } else {
       toast.success(successMessage)
     }
   }
+
   emitGoogleCookieImportWarning(summary, execution)
   emitPartitionSkippedImportWarning(summary)
 }

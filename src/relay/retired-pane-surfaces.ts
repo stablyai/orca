@@ -21,14 +21,18 @@ export class RetiredPaneSurfaceRegistry {
     if (!paneKey) {
       return
     }
+
     // Delete-then-add makes iteration order = recency of retirement for the cap below.
     this.retired.delete(paneKey)
     this.retired.add(paneKey)
+
     while (this.retired.size > RETIRED_PANE_SURFACE_LIMIT) {
       const oldest = this.retired.values().next().value
+
       if (oldest === undefined) {
         break
       }
+
       this.retired.delete(oldest)
     }
   }

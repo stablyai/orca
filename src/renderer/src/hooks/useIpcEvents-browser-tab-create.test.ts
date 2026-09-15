@@ -12,6 +12,7 @@ describe('useIpcEvents browser tab create routing', () => {
     const releaseBrowserAutomationVisibility = vi.fn()
     const replyTabCreate = vi.fn()
     const dispatchEvent = vi.fn()
+
     const requestTabCreateListenerRef: {
       current:
         | ((data: {
@@ -23,11 +24,13 @@ describe('useIpcEvents browser tab create routing', () => {
           }) => void)
         | null
     } = { current: null }
+
     const activateViewListenerRef: {
       current:
         | ((data: { worktreeId?: string | null; browserPageId?: string | null }) => void)
         | null
     } = { current: null }
+
     const state = {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
@@ -89,6 +92,7 @@ describe('useIpcEvents browser tab create routing', () => {
           state.browserTabsByWorktree['wt-1'].push(workspace)
           state.browserPagesByWorkspace['workspace-new'] = [{ id: pageId, worktreeId: 'wt-1' }]
           expect(options.activate).toBe(false)
+
           return workspace
         }
       )
@@ -96,6 +100,7 @@ describe('useIpcEvents browser tab create routing', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -184,6 +189,7 @@ describe('useIpcEvents browser tab create routing', () => {
             listener: NonNullable<typeof requestTabCreateListenerRef.current>
           ) => {
             requestTabCreateListenerRef.current = listener
+
             return () => {}
           },
           replyTabCreate,
@@ -217,6 +223,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onNavigationUpdate: () => () => {},
           onActivateView: (listener: NonNullable<typeof activateViewListenerRef.current>) => {
             activateViewListenerRef.current = listener
+
             return () => {}
           },
           onPaneFocus: () => () => {}

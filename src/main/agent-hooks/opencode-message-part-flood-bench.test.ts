@@ -40,10 +40,13 @@ const PANE = makePaneKey('tab-bench', '99999999-9999-4999-8999-999999999999')
 // A realistic long streaming reply: ~120 KB final text arriving in 400
 // part updates (OpenCode re-publishes the whole part per append).
 const FINAL_REPLY_CHARS = 120_000
+
 const LEGACY_PART_UPDATES = 400
+
 // Throttled plugin posts at most one MessagePart per 250ms. A ~30s turn
 // yields ~120 posts; we use that worst-case count with the 4000-char cap.
 const THROTTLED_POSTS = 120
+
 const THROTTLED_TEXT_CAP = 4_000
 
 describe('OpenCode MessagePart flood benchmark', () => {
@@ -88,6 +91,7 @@ describe('OpenCode MessagePart flood benchmark', () => {
         }
       })
     })
+
     expect(response.status).toBe(204)
   }
 
@@ -98,11 +102,13 @@ describe('OpenCode MessagePart flood benchmark', () => {
     // Legacy: full accumulated text per part update.
     let legacyBytes = 0
     const legacyStart = performance.now()
+
     for (let i = 1; i <= LEGACY_PART_UPDATES; i++) {
       const text = 'x'.repeat(Math.floor((FINAL_REPLY_CHARS * i) / LEGACY_PART_UPDATES))
       legacyBytes += text.length
       await postMessagePart(env, text)
     }
+
     const legacyMs = performance.now() - legacyStart
     const legacyEvents = listenerEvents
 
@@ -111,11 +117,13 @@ describe('OpenCode MessagePart flood benchmark', () => {
     // Throttled: bounded post count, bounded text.
     let throttledBytes = 0
     const throttledStart = performance.now()
+
     for (let i = 1; i <= THROTTLED_POSTS; i++) {
       const text = 'x'.repeat(THROTTLED_TEXT_CAP)
       throttledBytes += text.length
       await postMessagePart(env, text)
     }
+
     const throttledMs = performance.now() - throttledStart
     const throttledEvents = listenerEvents
 

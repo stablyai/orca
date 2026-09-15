@@ -21,22 +21,28 @@ import { fishRequirementViolation, resolveFishBinary } from '../shared/fish-bina
 import { fishHistorySessionName, resolveFishHistoryDir } from './fish-history-session'
 
 const FISH = resolveFishBinary(4)
+
 const itWithFish = FISH.available ? it : it.skip
 
 const PROMPT_MARK = 'ORCAHIST> '
+
 const WORKTREE_HASH = 'deadbeefdeadbeef'
+
 const MARKER = 'echo orca-worktree-scoped-history'
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (predicate()) {
       return true
     }
+
     await sleep(20)
   }
+
   return false
 }
 
@@ -74,6 +80,7 @@ describe('fish keeps per-worktree history under the session Orca names', () => {
       )
 
       const session = fishHistorySessionName(WORKTREE_HASH)
+
       const term = nodePty.spawn(FISH.path as string, ['-l', '-i'], {
         name: 'xterm-256color',
         cols: 120,
@@ -98,12 +105,15 @@ describe('fish keeps per-worktree history under the session Orca names', () => {
       let rendered = ''
       term.onData((chunk) => {
         rendered += chunk
+
         if (chunk.includes('\x1b[0c') || chunk.includes('\x1b[c')) {
           term.write('\x1b[?62;4;6;22c')
         }
+
         if (chunk.includes('\x1b[6n')) {
           term.write('\x1b[1;1R')
         }
+
         if (chunk.includes('\x1b]10;?') || chunk.includes('\x1b]11;?')) {
           term.write('\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\')
         }
@@ -121,6 +131,7 @@ describe('fish keeps per-worktree history under the session Orca names', () => {
       // fish flushes history on exit, so the read must wait for the process to go.
       term.write('exit\r')
       expect(await waitUntil(() => exited, 10_000)).toBe(true)
+
       try {
         term.kill()
       } catch {
@@ -131,6 +142,7 @@ describe('fish keeps per-worktree history under the session Orca names', () => {
         resolveFishHistoryDir({ XDG_DATA_HOME: dataHome }),
         `${session}_history`
       )
+
       expect(scopedPath).toBe(path.join(dataHome, 'fish', `${session}_history`))
       const scoped = readFileSync(scopedPath as string, 'utf8')
       // YAML-ish records, not one line per command — any reader must handle this shape.

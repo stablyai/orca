@@ -11,6 +11,7 @@ export function backgroundTaskStatesEqual(
   if (left === right) {
     return true
   }
+
   if (
     !left ||
     !right ||
@@ -20,6 +21,7 @@ export function backgroundTaskStatesEqual(
   ) {
     return false
   }
+
   return (
     agentSessionBackgroundTasksEqual(left.tasks, right.tasks) &&
     agentSessionBackgroundTasksEqual(left.settledTasks, right.settledTasks)

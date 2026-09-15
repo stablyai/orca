@@ -44,15 +44,18 @@ test.describe('Source Control AI pull request linkedIssue', () => {
         os.tmpdir(),
         `e2e-pr-linked-issue-${Date.now()}-${Math.random().toString(16).slice(2)}.cjs`
       )
+
       writeLinkedIssuePrEchoGenerator(generatorPath, primaryBranch)
 
       try {
         await orcaPage.evaluate(
           async ({ generatorPath, linkedIssue, worktreeId }) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             await window.api.worktrees.updateMeta({ worktreeId, updates: { linkedIssue } })
             const customAgentCommand = `node ${JSON.stringify(generatorPath)}`
             await store.getState().updateSettings({
@@ -84,6 +87,7 @@ test.describe('Source Control AI pull request linkedIssue', () => {
         const generate = orcaPage.getByRole('button', {
           name: 'Generate pull request details with AI'
         })
+
         await expect(generate).toBeEnabled()
         await generate.click()
 

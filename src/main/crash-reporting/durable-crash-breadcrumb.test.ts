@@ -8,6 +8,7 @@ type CapturingSink = TracerSink & { records: unknown[]; flushMock: ReturnType<ty
 function capturingSink(): CapturingSink {
   const records: unknown[] = []
   const flushMock = vi.fn()
+
   return {
     records,
     flushMock,

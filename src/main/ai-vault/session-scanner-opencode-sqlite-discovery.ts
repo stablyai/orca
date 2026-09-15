@@ -59,6 +59,7 @@ export async function discoverOpenCodeSessions(args: {
   ])
 
   const sqliteFiles = sqliteCandidates.map((c) => c.file)
+
   // Why: on mixed installs the same OpenCode session may appear once via the
   // SQLite DB and once via a stale legacy JSON file. SQLite is the source of
   // truth on 1.17.x, so drop file-based duplicates when a SQLite entry with
@@ -71,14 +72,19 @@ export async function discoverOpenCodeSessions(args: {
       files: fileDiscovery.files
     }
   }
+
   const sqliteSessionIds = new Set<string>()
+
   for (const file of sqliteFiles) {
     const parsed = splitOpenCodeSqliteCandidate(file.path)
+
     if (parsed) {
       sqliteSessionIds.add(parsed.sessionId)
     }
   }
+
   const dedupedFileDiscovery: FileWithMtime[] = []
+
   for (const file of fileDiscovery.files) {
     if (!sqliteSessionIds.has(sessionIdFromLegacyFilePath(file.path))) {
       dedupedFileDiscovery.push(file)

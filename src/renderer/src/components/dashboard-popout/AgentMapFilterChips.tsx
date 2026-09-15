@@ -50,6 +50,7 @@ export function AgentMapFilterChips({
       onRemove: () => onFiltersChange({ ...filters, projects: drop(filters.projects, id) })
     })
   }
+
   for (const id of filters.workspaceStatuses) {
     chips.push({
       id: `status:${id}`,
@@ -58,6 +59,7 @@ export function AgentMapFilterChips({
         onFiltersChange({ ...filters, workspaceStatuses: drop(filters.workspaceStatuses, id) })
     })
   }
+
   for (const id of filters.reviewStates) {
     chips.push({
       id: `review:${id}`,
@@ -67,6 +69,7 @@ export function AgentMapFilterChips({
       onRemove: () => onFiltersChange({ ...filters, reviewStates: drop(filters.reviewStates, id) })
     })
   }
+
   if (map.states.size < 4) {
     chips.push({
       id: 'states',
@@ -76,6 +79,7 @@ export function AgentMapFilterChips({
       onRemove: map.resetStates
     })
   }
+
   for (const field of activeAgentMapTimeFields(map.timeRanges)) {
     const range = map.timeRanges[field]
     chips.push({
@@ -84,6 +88,7 @@ export function AgentMapFilterChips({
       onRemove: () => map.setTimeRange(field, { ...FULL_AGENT_MAP_TIME_RANGE })
     })
   }
+
   if (map.unreadOnly) {
     chips.push({
       id: 'unread',
@@ -91,6 +96,7 @@ export function AgentMapFilterChips({
       onRemove: () => map.setUnreadOnly(false)
     })
   }
+
   if (map.orchestrationOnly) {
     chips.push({
       id: 'orchestration',
@@ -98,6 +104,7 @@ export function AgentMapFilterChips({
       onRemove: () => map.setOrchestrationOnly(false)
     })
   }
+
   if (showAgentlessWorkspaces) {
     chips.push({
       id: 'agentless',
@@ -108,6 +115,7 @@ export function AgentMapFilterChips({
       onRemove: () => onShowAgentlessWorkspacesChange(false)
     })
   }
+
   if (!showOrchestrationLinks) {
     chips.push({
       id: 'orchestration-links',
@@ -124,6 +132,7 @@ export function AgentMapFilterChips({
   if (chips.length === 0) {
     return null
   }
+
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-3 py-1.5">
       {chips.map((chip) => (

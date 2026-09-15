@@ -14,10 +14,14 @@ import { resolveGitHubPrStartPoint } from './pr-start-point'
 import { reviewHeadRemoteRefComponent } from '../../shared/review-head-tracking-ref'
 
 const ORIGIN_URL = 'git@github.com:acme/orca.git'
+
 const ORIGIN_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_URL)
+
 const durablePrLocalRef = (prNumber: number): string =>
   `refs/orca/pull/${ORIGIN_COMPONENT}/${prNumber}`
+
 const durablePrRev = (prNumber: number): string => `${durablePrLocalRef(prNumber)}^{commit}`
+
 const remoteGetUrl = (args: string[]): { stdout: string; stderr: string } | null =>
   args[0] === 'remote' && args[1] === 'get-url' ? { stdout: `${ORIGIN_URL}\n`, stderr: '' } : null
 
@@ -42,19 +46,24 @@ describe('resolveGitHubPrStartPoint', () => {
         remoteUrl: 'git@github.com:contributor/orca.git'
       }
     })
+
     const fetchRemoteTrackingRef = vi.fn(async (_remote: string, branch: string) => {
       if (branch === 'fix-issue-6933') {
         throw new Error('fatal: could not find remote ref')
       }
     })
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'def456\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -87,17 +96,22 @@ describe('resolveGitHubPrStartPoint', () => {
 
   it('keeps the PR head ref fallback when push-target discovery also fails', async () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
+
     const fetchRemoteTrackingRef = vi.fn(async () => {
       throw new Error('fatal: could not find remote ref')
     })
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'def456\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -128,14 +142,18 @@ describe('resolveGitHubPrStartPoint', () => {
   it('resolves an inaccessible fork PR even when push-target discovery fails', async () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -171,6 +189,7 @@ describe('resolveGitHubPrStartPoint', () => {
     const fetchRemoteTrackingRef = vi.fn(async () => {
       throw new Error('fatal: could not find remote ref refs/heads/feature/fix')
     })
+
     fetchPullRequestHeadRefMock.mockRejectedValue(
       new Error(
         'This SSH host is running an older Orca relay that cannot fetch pull request heads.'
@@ -197,19 +216,24 @@ describe('resolveGitHubPrStartPoint', () => {
   it('captures the fork PR head from a dedicated ref, not the shared FETCH_HEAD', async () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     // Why: simulate a concurrent `git fetch origin` clobbering FETCH_HEAD with the
     // default-branch tip. The resolved start-point must come from the durable Orca ref.
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
         const ref = args.at(-1)
+
         if (ref === 'FETCH_HEAD') {
           return { stdout: 'mainbranchtip000\n', stderr: '' }
         }
+
         if (ref === durablePrRev(1849)) {
           return { stdout: 'prheadsha111\n', stderr: '' }
         }
+
         throw new Error(`unexpected rev-parse ref: ${ref}`)
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -243,19 +267,25 @@ describe('resolveGitHubPrStartPoint', () => {
       new Error('fatal: unable to access repo: Could not resolve host: github.com')
     )
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse' && args[2] === durablePrRev(1849)) {
         return { stdout: 'pinnedheadsha\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
         return { stdout: 'base-commit-sha\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
@@ -295,14 +325,18 @@ describe('resolveGitHubPrStartPoint', () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     fetchPullRequestHeadRefMock.mockRejectedValue(new Error(message))
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse' && args[2] === durablePrRev(1849)) {
         return { stdout: 'pinnedheadsha\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -326,22 +360,29 @@ describe('resolveGitHubPrStartPoint', () => {
 
   it('soft-keeps the durable PR head on an exec-timeout kill', async () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
+
     const timeoutError = Object.assign(new Error('Command failed: git fetch --no-tags origin'), {
       killed: true,
       signal: 'SIGTERM'
     })
+
     fetchPullRequestHeadRefMock.mockRejectedValue(timeoutError)
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse' && args[2] === durablePrRev(1849)) {
         return { stdout: 'pinnedheadsha\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
@@ -381,14 +422,18 @@ describe('resolveGitHubPrStartPoint', () => {
       }
     })
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -433,14 +478,18 @@ describe('resolveGitHubPrStartPoint', () => {
       maintainerCanModify: false
     })
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -470,14 +519,18 @@ describe('resolveGitHubPrStartPoint', () => {
 
   it('returns the verified head SHA, branch override, and push target when same-repo branch fetch succeeds', async () => {
     const fetchRemoteTrackingRef = vi.fn(async () => {})
+
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)
+
       if (url) {
         return url
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 

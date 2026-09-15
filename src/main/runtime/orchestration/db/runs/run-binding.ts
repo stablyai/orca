@@ -21,22 +21,29 @@ export function bindRun(
   }
 ): RunRow | undefined {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const run = this.getRunRaw(params.runId)
+
     if (!run || run.legacy === 1) {
       this.db.exec('ROLLBACK')
+
       return undefined
     }
+
     const sameBinding =
       run.coordinator_pane_key !== null &&
       isEquivalentPaneKey(run.coordinator_pane_key, params.coordinatorPaneKey)
+
     const adoption = this.getLegacyAdoption()
     const adoptedRun = adoption?.adopted_run_id === params.runId
     const legacyAuthority = params.legacyCoordinatorAuthority
     const legacyPrincipalId = legacyAuthority?.principalId
+
     const legacyPrincipal = legacyPrincipalId
       ? this.getLegacyCompatibilityPrincipal(legacyPrincipalId)
       : undefined
+
     const provenLegacyBinding = Boolean(
       adoptedRun &&
       legacyAuthority &&
@@ -51,6 +58,7 @@ export function bindRun(
       params.coordinatorHandle === legacyAuthority.terminalHandle &&
       isEquivalentPaneKey(params.coordinatorPaneKey, legacyAuthority.paneKey)
     )
+
     if (legacyAuthority && !provenLegacyBinding) {
       throw new OrchestrationError(
         'legacy_read_only',
@@ -58,6 +66,7 @@ export function bindRun(
         { effectsApplied: false }
       )
     }
+
     const activeLegacyAssignment =
       adoptedRun &&
       Boolean(
@@ -70,19 +79,23 @@ export function bindRun(
           )
           .get(params.runId, LEGACY_CONTRACT_VERSION)
       )
+
     const coordinatorPrincipal = adoptedRun
       ? this.getLegacyCoordinatorPrincipal(params.runId)
       : undefined
+
     const retainedCoordinatorHandle =
       coordinatorPrincipal?.terminal_handle ??
       run.coordinator_handle ??
       this.getUniqueLegacyCoordinatorHandle(params.runId)
+
     const takeoverAlreadyApplied = Boolean(
       params.takeoverLegacy &&
       sameBinding &&
       run.coordinator_handle === params.coordinatorHandle &&
       coordinatorPrincipal?.status !== 'committed'
     )
+
     const replacesLegacyCoordinator = Boolean(
       adoptedRun &&
       !provenLegacyBinding &&
@@ -91,12 +104,14 @@ export function bindRun(
         retainedCoordinatorHandle !== params.coordinatorHandle ||
         !sameBinding)
     )
+
     if (params.takeoverLegacy && !adoptedRun) {
       throw new OrchestrationError(
         'invalid_argument',
         'Legacy takeover is only available for the automatically adopted Run.'
       )
     }
+
     // Why: only LIVE legacy work needs the flag — settled work has no competing authority left, and
     // fencing it would strand the recovered graph behind an attestation the caller may not have.
     if (activeLegacyAssignment && !sameBinding && !provenLegacyBinding && !params.takeoverLegacy) {
@@ -109,7 +124,9 @@ export function bindRun(
         }
       )
     }
+
     this.unbindOtherRunsForPane(params.coordinatorPaneKey, params.runId)
+
     for (const handle of new Set(
       [run.coordinator_handle, params.coordinatorHandle].filter((value): value is string =>
         Boolean(value)
@@ -118,6 +135,7 @@ export function bindRun(
       this.rememberRunCoordinatorHandle(params.runId, handle)
       this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, handle)
     }
+
     if (
       (params.takeoverLegacy && !takeoverAlreadyApplied) ||
       !sameBinding ||
@@ -133,6 +151,7 @@ export function bindRun(
           this.setLegacyCompatibilityPrincipalStatus(coordinatorPrincipal.id, 'revoked')
         }
       }
+
       this.db
         .prepare(
           `UPDATE runs
@@ -143,15 +162,18 @@ export function bindRun(
         )
         .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
       this.fenceUnacknowledgedMailboxDeliveries(`run:${params.runId}`)
+
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
       }
     }
+
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
   }
+
   return this.getRun(params.runId)
 }
 

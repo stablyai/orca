@@ -8,6 +8,7 @@ import {
 } from './new-external-worktrees-inbox-actions'
 
 const projectId = 'repo-1'
+
 const repo: Pick<Repo, 'externalWorktreeInboxBaselinePaths' | 'importedExternalWorktreePaths'> = {
   externalWorktreeInboxBaselinePaths: ['/scratch/old'],
   importedExternalWorktreePaths: []

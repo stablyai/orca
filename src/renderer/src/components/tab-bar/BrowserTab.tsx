@@ -44,8 +44,10 @@ export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
     return 'New Tab'
   }
+
   try {
     const parsed = new URL(url)
+
     return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}${parsed.hash}`
   } catch {
     return url
@@ -61,6 +63,7 @@ export function getBrowserTabLabel(tab: BrowserTabState): string {
   ) {
     return formatBrowserTabUrlLabel(tab.url)
   }
+
   return tab.title || tab.url
 }
 
@@ -109,6 +112,7 @@ export default function BrowserTab({
     id: tab.id,
     data: dragData
   })
+
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
@@ -117,17 +121,20 @@ export default function BrowserTab({
   // calling shell.openUrl with an unsupported URL.
   const openInBrowserUrl = redactKagiSessionToken(getLiveBrowserUrl(tab.id) ?? tab.url)
   let isHttpUrl = false
+
   try {
     const parsed = new URL(openInBrowserUrl)
     isHttpUrl = parsed.protocol === 'http:' || parsed.protocol === 'https:'
   } catch {
     // invalid URL — leave disabled
   }
+
   const tabLabel = getBrowserTabLabel(tab)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
@@ -140,8 +147,10 @@ export default function BrowserTab({
     if (!menuOpen) {
       return
     }
+
     const dismiss = (): void => setMenuOpen(false)
     window.addEventListener('blur', dismiss)
+
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
@@ -174,9 +183,11 @@ export default function BrowserTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+
           if (isPinned) {
             return
           }
+
           onClose()
         }
       }}

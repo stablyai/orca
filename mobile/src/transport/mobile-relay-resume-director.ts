@@ -40,8 +40,10 @@ export async function resolveMobileRelayEndpoint(args: {
 }): Promise<MobileRelayEndpoint> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), args.timeoutMs ?? 5000)
+
   try {
     const url = new URL('/v1/resolve', args.relay.directorUrl)
+
     const response = await (args.fetchImpl ?? fetch)(url.toString(), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -52,21 +54,28 @@ export async function resolveMobileRelayEndpoint(args: {
       }),
       signal: controller.signal
     })
+
     if (!response.ok) {
       throw new RelayDirectorHttpError(
         response.status,
         parseRelayRetryAfterMs(response.headers.get('retry-after'), MOBILE_RELAY_RETRY_AFTER_MAX_MS)
       )
     }
+
     const declaredLength = Number(response.headers.get('content-length') ?? 0)
+
     if (declaredLength > MAX_RESPONSE_BYTES) {
       throw new Error('relay director resolve response too large')
     }
+
     const raw = await response.text()
+
     if (new TextEncoder().encode(raw).byteLength > MAX_RESPONSE_BYTES) {
       throw new Error('relay director resolve response too large')
     }
+
     const resolved = ResolveResponseSchema.parse(JSON.parse(raw) as unknown)
+
     return {
       ...args.relay,
       cellUrl: resolved.cellUrl,
@@ -80,6 +89,7 @@ export async function resolveMobileRelayEndpoint(args: {
 function isCanonicalHttpsOrigin(value: string): boolean {
   try {
     const parsed = new URL(value)
+
     return parsed.protocol === 'https:' && parsed.origin === value
   } catch {
     return false

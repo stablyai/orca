@@ -32,6 +32,7 @@ export function createCodexBackendRequestSignal(
   timeoutMs = BACKEND_TIMEOUT_MS
 ): AbortSignal {
   const timeoutSignal = AbortSignal.timeout(timeoutMs)
+
   return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal
 }
 
@@ -39,9 +40,11 @@ function getBackendAuthRead(
   authPath: string
 ): SharedAuthFilesystemOperation<BackendAuthReadResult> {
   const existing = backendAuthReadByPath.get(authPath)
+
   if (existing) {
     return existing
   }
+
   // Why: dedupe UNC reads because Node cannot cancel an in-flight read.
   const read = createAuthFilesystemOperation(authPath, () =>
     readFile(authPath, 'utf8').then(
@@ -49,21 +52,27 @@ function getBackendAuthRead(
       (error: unknown) => ({ error })
     )
   )
+
   backendAuthReadByPath.set(authPath, read)
+
   const clearRead = (): void => {
     if (backendAuthReadByPath.get(authPath) === read) {
       backendAuthReadByPath.delete(authPath)
     }
   }
+
   void read.result.then(clearRead, clearRead)
+
   return read
 }
 
 async function readBackendAuth(authPath: string, signal: AbortSignal): Promise<string> {
   const result = await getBackendAuthRead(authPath).wait(signal)
+
   if ('error' in result) {
     throw result.error
   }
+
   return result.content
 }
 
@@ -78,9 +87,11 @@ export async function getCodexBackendAuthHeaders(
   if (signal.aborted) {
     return null
   }
+
   const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
   const auth = JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile
   const accessToken = auth.tokens?.access_token
+
   if (!accessToken) {
     return null
   }
@@ -91,8 +102,10 @@ export async function getCodexBackendAuthHeaders(
     'OpenAI-Beta': 'codex-1',
     originator: 'Codex Desktop'
   }
+
   if (auth.tokens?.account_id) {
     headers['ChatGPT-Account-Id'] = auth.tokens.account_id
   }
+
   return headers
 }

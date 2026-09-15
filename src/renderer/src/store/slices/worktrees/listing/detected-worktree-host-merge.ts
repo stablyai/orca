@@ -16,7 +16,9 @@ export function mergeDetectedWorktreesForHost(
     refreshed.worktrees,
     current?.worktrees
   ).map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
+
   const worktrees = mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
+
   if (
     current &&
     current.repoId === refreshed.repoId &&
@@ -27,6 +29,7 @@ export function mergeDetectedWorktreesForHost(
   ) {
     return current
   }
+
   return {
     ...refreshed,
     worktrees

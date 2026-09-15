@@ -75,13 +75,16 @@ export function RichMarkdownSearchBar({
   }
 
   const noMatches = matchCount === 0
+
   const readOnlyReplaceExplanation = translate(
     'auto.components.editor.RichMarkdownSearchBar.preservedRichContentReadOnly',
     'Preserved rich content is read-only in rich mode.'
   )
+
   const toggleReplaceLabel = isReplaceMode
     ? translate('auto.components.editor.RichMarkdownSearchBar.e8c147435f', 'Hide replace')
     : translate('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')
+
   const toggleReplaceTitle = replaceShortcut
     ? `${toggleReplaceLabel} (${replaceShortcut})`
     : toggleReplaceLabel
@@ -118,16 +121,21 @@ export function RichMarkdownSearchBar({
                 if (isImeCompositionKeyDown(event)) {
                   return
                 }
+
                 if (event.key === 'Enter' && event.shiftKey) {
                   event.preventDefault()
                   onMoveToMatch(-1)
+
                   return
                 }
+
                 if (event.key === 'Enter') {
                   event.preventDefault()
                   onMoveToMatch(1)
+
                   return
                 }
+
                 if (event.key === 'Escape') {
                   event.preventDefault()
                   onClose()
@@ -260,11 +268,14 @@ export function RichMarkdownSearchBar({
                   if (isImeCompositionKeyDown(event)) {
                     return
                   }
+
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     onReplaceCurrent()
+
                     return
                   }
+
                   if (event.key === 'Escape') {
                     event.preventDefault()
                     onClose()

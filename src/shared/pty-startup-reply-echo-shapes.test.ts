@@ -12,9 +12,13 @@ import { describe, expect, it } from 'vitest'
 import { locateEcho, replyEchoProjections } from './pty-startup-reply-echo-shapes'
 
 const OSC11_BEL = '\x1b]11;rgb:2e2e/3434/3434\x07'
+
 const OSC11_ST = '\x1b]11;rgb:2e2e/3434/3434\x1b\\'
+
 const OSC10_BEL = '\x1b]10;rgb:c6c6/c6c6/c6c6\x07'
+
 const DSR_997 = '\x1b[?997;1n'
+
 const DSR_996 = '\x1b[?996n'
 
 /** `readline` = tty raw at a bash prompt; `cooked` = kernel ECHOCTL under `read`. */
@@ -80,6 +84,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
       const needles = replyEchoProjections(reply, 'posix-pty').map(
         (projection) => projection.needle
       )
+
       expect(needles.some((needle) => needle.startsWith('\x07'))).toBe(false)
     }
   )
@@ -93,6 +98,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
       const needles = replyEchoProjections(reply, 'posix-pty').map(
         (projection) => projection.needle
       )
+
       expect(needles.some((needle) => needle.startsWith('\x07'))).toBe(false)
     }
   )
@@ -101,6 +107,7 @@ describe('replyEchoProjections on a POSIX pty', () => {
     const needles = replyEchoProjections(DSR_997, 'posix-pty').map(
       (projection) => projection.needle
     )
+
     expect(needles).toContain('\x07997;1n')
   })
 

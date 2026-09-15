@@ -36,6 +36,7 @@ export function createRemoteRuntimePtyTextBatcher(
     options.maxPendingBytes,
     TERMINAL_INPUT_CHUNK_MAX_BYTES
   )
+
   const maxBytes = getPositiveByteLimit(options.maxBytes, TERMINAL_INPUT_MAX_BYTES)
   let pending = ''
   let pendingBytes = 0
@@ -60,6 +61,7 @@ export function createRemoteRuntimePtyTextBatcher(
 
   const flush = (): void => {
     const text = takePending()
+
     if (text) {
       onFlush(text)
     }
@@ -70,12 +72,14 @@ export function createRemoteRuntimePtyTextBatcher(
     pending = ''
     pendingBytes = 0
     clearTimer()
+
     return text
   }
 
   const queuePending = (chunk: string, chunkBytes: number): void => {
     pending += chunk
     pendingBytes += chunkBytes
+
     if (!timer) {
       timer = setTimeout(flush, delayMs)
     }
@@ -84,15 +88,18 @@ export function createRemoteRuntimePtyTextBatcher(
   const pushValidatedInput = (data: string): void => {
     for (const chunk of iterateTerminalInputChunks(data, maxPendingBytes)) {
       const chunkBytes = getTerminalInputByteLength(chunk)
+
       if (pending && pendingBytes + chunkBytes > maxPendingBytes) {
         flush()
       }
+
       if (!pending && chunkBytes >= maxPendingBytes) {
         // Why: remote paste chunks must not be coalesced back into one large
         // binary frame or terminal.send payload by the short input debounce.
         onFlush(chunk)
         continue
       }
+
       queuePending(chunk, chunkBytes)
     }
   }
@@ -100,17 +107,21 @@ export function createRemoteRuntimePtyTextBatcher(
   const enqueueValidatedInput = (data: string, tooLarge: false | Promise<boolean>): void => {
     const queuedVersion = validationVersion
     const previousTail = validationTail ?? Promise.resolve()
+
     const guardedTail = previousTail.then(async () => {
       if (validationVersion !== queuedVersion) {
         return
       }
+
       if (tooLarge !== false && (await tooLarge.catch(() => true))) {
         return
       }
+
       if (validationVersion === queuedVersion) {
         pushValidatedInput(data)
       }
     })
+
     const nextTail = guardedTail
       .catch(() => {})
       .finally(() => {
@@ -118,11 +129,13 @@ export function createRemoteRuntimePtyTextBatcher(
           validationTail = null
         }
       })
+
     validationTail = nextTail
   }
 
   const drain = async (): Promise<void> => {
     const tail = validationTail
+
     if (tail) {
       await tail
     }
@@ -131,11 +144,13 @@ export function createRemoteRuntimePtyTextBatcher(
   const enqueueAfterValidation = (action: () => void): void => {
     const queuedVersion = validationVersion
     const previousTail = validationTail ?? Promise.resolve()
+
     const guardedTail = previousTail.then(() => {
       if (validationVersion === queuedVersion) {
         action()
       }
     })
+
     const nextTail = guardedTail
       .catch(() => {})
       .finally(() => {
@@ -143,6 +158,7 @@ export function createRemoteRuntimePtyTextBatcher(
           validationTail = null
         }
       })
+
     validationTail = nextTail
   }
 
@@ -153,16 +169,19 @@ export function createRemoteRuntimePtyTextBatcher(
       }
 
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data, maxBytes)
+
       if (tooLarge === true) {
         return false
       }
 
       if (tooLarge === false && validationTail === null) {
         pushValidatedInput(data)
+
         return true
       }
 
       enqueueValidatedInput(data, tooLarge)
+
       return true
     },
     // Why: earlier input can be mid async byte-length validation and not yet in
@@ -193,6 +212,7 @@ export function createRemoteRuntimeViewportBatcher(
       clearTimeout(timer)
       timer = null
     }
+
     // Why: also drop the queued viewport so a later flush()/reuse can't emit a
     // stale resize after the batcher was cleared on teardown/resubscribe.
     pending = null
@@ -202,6 +222,7 @@ export function createRemoteRuntimeViewportBatcher(
     const viewport = pending
     pending = null
     clear()
+
     if (viewport) {
       onFlush(viewport.cols, viewport.rows)
     }
@@ -210,6 +231,7 @@ export function createRemoteRuntimeViewportBatcher(
   return {
     queue(cols: number, rows: number): void {
       pending = { cols, rows }
+
       if (!timer) {
         timer = setTimeout(flush, delayMs)
       }

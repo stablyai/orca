@@ -20,6 +20,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (this.deferHeadlessServeInstall('install', this.getPendingInstallVersion())) {
       return
     }
+
     if (
       deferMacQuitUntilInstallerReady(
         this.currentStatus,
@@ -45,18 +46,23 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     ) {
       return
     }
+
     // Why: allow retry from 'error' (availableVersion stays cached) so the error card's Retry Download button works.
     const canStart =
       this.currentStatus.state === 'available' ||
       (this.currentStatus.state === 'error' && this.hasInstallableDownloadedVersion())
+
     if (!canStart) {
       return
     }
+
     const version =
       this.currentStatus.state === 'available' ? this.currentStatus.version : this.availableVersion
+
     if (!version) {
       return
     }
+
     // Why: main owns this verdict, not the card — an older renderer or a direct IPC call must not be
     // able to spend a package download that this host could never install.
     if (isExternallyManagedLinuxInstall()) {
@@ -74,11 +80,14 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
         version,
         retryable: false
       })
+
       return
     }
+
     if (this.deferHeadlessServeInstall('download', version)) {
       return
     }
+
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()
@@ -89,6 +98,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       .catch((err) => {
         this.downloadInFlight = false
         const message = String(err?.message ?? err)
+
         if (localBuildDownload) {
           this.sendLocalBuildErrorAndRestore(message)
         } else {

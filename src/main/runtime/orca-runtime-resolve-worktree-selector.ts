@@ -19,15 +19,18 @@ import { areWorktreePathsEqual, mergeWorktree } from '../ipc/worktree-logic'
 export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree {
   protected async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+
     // Why only `id:`: every other selector kind is matched across the whole fleet, and their
     // `selector_ambiguous` contract is defined over all repos. Scoping those would silently pick a
     // winner where today they correctly refuse. An `id:` selector already names its repo.
     if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
       const scoped = await this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
+
       if (scoped) {
         return scoped
       }
     }
+
     const worktrees = await this.listResolvedWorktrees()
     let candidates: ResolvedWorktree[]
 
@@ -41,19 +44,23 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
     } else if (selector.startsWith('id:')) {
       const worktreeId = explicitWorktreeId ?? selector.slice(3)
       candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
+
       if (candidates.length === 0) {
         const comparisonKey = worktreeIdComparisonKey(worktreeId)
         candidates = comparisonKey
           ? worktrees.filter((worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey)
           : candidates
       }
+
       if (candidates.length === 0) {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
         const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
+
         const fallback =
           repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
             ? this.buildResolvedWorktreeFromId(worktreeId)
             : null
+
         if (fallback !== null) {
           candidates = [fallback]
         }
@@ -62,13 +69,16 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
       )
+
       if (candidates.length > 1) {
         const hostIds = new Set(
           candidates.map((worktree) => {
             const repo = this.store?.getRepo(worktree.repoId)
+
             return getWorktreeExecutionHostId(worktree, repo)
           })
         )
+
         // Why: duplicate registrations on one host describe one path; identical paths on different hosts do not.
         if (hostIds.size === 1) {
           candidates = [candidates[0]]
@@ -99,9 +109,11 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
     if (candidates.length === 1) {
       return candidates[0]
     }
+
     if (candidates.length > 1) {
       throw new Error('selector_ambiguous')
     }
+
     throw new Error('selector_not_found')
   }
 
@@ -139,15 +151,19 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
   // candidate set instead of reimplementing (and diverging from) the matching rules.
   protected selectReposBySelector(selector: string): Repo[] {
     const repos = this.store?.getRepos() ?? []
+
     if (selector.startsWith('id:')) {
       return repos.filter((repo) => repo.id === selector.slice(3))
     }
+
     if (selector.startsWith('path:')) {
       return repos.filter((repo) => runtimePathsEqual(repo.path, selector.slice(5)))
     }
+
     if (selector.startsWith('name:')) {
       return repos.filter((repo) => repo.displayName === selector.slice(5))
     }
+
     return repos.filter(
       (repo) =>
         repo.id === selector ||
@@ -160,14 +176,17 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
     if (!this.store) {
       throw new Error('repo_not_found')
     }
+
     const candidates = this.selectReposBySelector(selector)
 
     if (candidates.length === 1) {
       return candidates[0]
     }
+
     if (candidates.length > 1) {
       throw new Error('selector_ambiguous')
     }
+
     throw new Error('repo_not_found')
   }
 
@@ -175,15 +194,19 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store as unknown as Store
   }
 
   protected buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null {
     const parsed = splitWorktreeIdForFilesystem(worktreeId)
+
     if (!parsed?.repoId || !parsed.worktreePath) {
       return null
     }
+
     const repo = this.store?.getRepos?.()?.find((entry) => entry.id === parsed.repoId)
+
     const git = {
       path: parsed.worktreePath,
       head: '',
@@ -191,11 +214,14 @@ export class OrcaRuntimeWithResolveWorktreeSelector extends OrcaRuntimeWithResol
       isBare: false,
       isMainWorktree: repo ? areWorktreePathsEqual(parsed.worktreePath, repo.path) : false
     }
+
     const meta = this.store?.getWorktreeMeta(worktreeId)
+
     const merged = {
       ...mergeWorktree(parsed.repoId, git, meta, repo?.displayName),
       ...(repo ? { hostId: meta?.hostId ?? getRepoExecutionHostId(repo) } : {})
     }
+
     return {
       ...merged,
       id: worktreeId,

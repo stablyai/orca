@@ -9,6 +9,7 @@ import {
 } from './browser-slice-test-harness'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
@@ -122,6 +123,7 @@ describe('createBrowserSlice annotations', () => {
 
   it('keeps a requested canonical page identity distinct from its workspace', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
       browserPageId: 'page-canonical'
     })
@@ -168,6 +170,7 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
@@ -184,9 +187,11 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     const recoveryError = {
       code: -720,
       description: 'Recovery is still pending',
@@ -209,9 +214,11 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://localhost:3443/')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     const failure = {
       challengeId: 'challenge-1',
       browserPageId: pageId,
@@ -258,6 +265,7 @@ describe('createBrowserSlice annotations', () => {
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       activate: false
     })
+
     store.getState().createBrowserPage(tab.id, 'https://example.com/second', { activate: false })
 
     // Why: only a live guest reports loading; a background page has none until first shown.
@@ -281,6 +289,7 @@ describe('createBrowserSlice annotations', () => {
     const localFallback = store.getState().createBrowserTab('wt-1', 'about:blank', {
       browserRuntimeEnvironmentId: null
     })
+
     const remoteTab = store.getState().createBrowserTab('wt-1', 'about:blank', {
       browserRuntimeEnvironmentId: 'env-1'
     })
@@ -291,17 +300,23 @@ describe('createBrowserSlice annotations', () => {
 
   it('preserves browser map references when a page-state update is unchanged', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
+
     if (!page) {
       throw new Error('Expected page state')
     }
+
     const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
     const browserTabsByWorktree = store.getState().browserTabsByWorktree
 
@@ -320,13 +335,17 @@ describe('createBrowserSlice annotations', () => {
 
   it('persists a captured favicon with history and refreshes it with the page state', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     const initialFavicon = 'https://example.com/favicon.ico'
     const refreshedFavicon = 'https://cdn.example.com/favicon.png'
 
@@ -339,13 +358,17 @@ describe('createBrowserSlice annotations', () => {
 
   it('clears a stale history favicon when a page reports none, and keeps it when none is reported', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     const favicon = 'https://example.com/favicon.ico'
 
     store.getState().addBrowserHistoryEntry('https://example.com', 'Example', favicon)
@@ -367,13 +390,17 @@ describe('createBrowserSlice annotations', () => {
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     seedUnifiedBrowserTab(store, tab.id, 'Stale label')
     const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
     const browserTabsByWorktree = store.getState().browserTabsByWorktree
@@ -387,13 +414,17 @@ describe('createBrowserSlice annotations', () => {
 
   it('repairs stale active browser workspace metadata on an otherwise unchanged page update', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     store.setState((state) => ({
       browserTabsByWorktree: {
         ...state.browserTabsByWorktree,
@@ -418,6 +449,7 @@ describe('createBrowserSlice annotations', () => {
     const repaired = store
       .getState()
       .browserTabsByWorktree['wt-1']?.find((entry) => entry.id === tab.id)
+
     expect(repaired).toMatchObject({
       title: 'Example',
       url: 'https://example.com',
@@ -430,13 +462,17 @@ describe('createBrowserSlice annotations', () => {
 
   it('updates the active browser unified-tab label without a second tab-label write', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     seedUnifiedBrowserTab(store, tab.id, 'Example')
 
     store.getState().updateBrowserPageState(pageId, { title: 'Next', loading: false })
@@ -447,22 +483,28 @@ describe('createBrowserSlice annotations', () => {
 
   it('updates inactive browser pages without relabeling or rebuilding the workspace map', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       title: 'Example'
     })
+
     const activePageId = tab.activePageId
+
     if (!activePageId) {
       throw new Error('Expected a new browser page')
     }
+
     const inactivePage = store
       .getState()
       .createBrowserPage(tab.id, 'https://example.com/inactive', {
         title: 'Inactive',
         activate: false
       })
+
     if (!inactivePage) {
       throw new Error('Expected inactive browser page')
     }
+
     seedUnifiedBrowserTab(store, tab.id, 'Example')
     const browserPagesByWorkspace = store.getState().browserPagesByWorkspace
     const browserTabsByWorktree = store.getState().browserTabsByWorktree
@@ -489,6 +531,7 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
@@ -506,9 +549,11 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     const annotation = makeAnnotation(pageId)
     const oversizedComment = 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10)
 
@@ -535,9 +580,11 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
 
     store
@@ -553,9 +600,11 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
     const oversizedComment = 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10)
 
@@ -572,9 +621,11 @@ describe('createBrowserSlice annotations', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
+
     if (!pageId) {
       throw new Error('Expected a new browser page')
     }
+
     store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
     const stateBefore = store.getState()
 
@@ -611,21 +662,26 @@ describe('createBrowserSlice floating tabs', () => {
 describe('createBrowserSlice closed browser workspaces', () => {
   it('reopens duplicate-URL browser pages on the originally active page', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com/dashboard', {
       title: 'First copy'
     })
+
     const secondPage = store.getState().createBrowserPage(tab.id, 'https://example.com/dashboard', {
       title: 'Second copy'
     })
+
     if (!secondPage) {
       throw new Error('Expected a second browser page')
     }
 
     store.getState().closeBrowserTab(tab.id)
     const restored = store.getState().reopenClosedBrowserTab('wt-1')
+
     if (!restored) {
       throw new Error('Expected a reopened browser workspace')
     }
+
     const restoredPages = store.getState().browserPagesByWorkspace[restored.id] ?? []
     const activePage = restoredPages.find((page) => page.id === restored.activePageId)
 

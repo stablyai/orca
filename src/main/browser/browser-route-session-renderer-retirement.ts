@@ -11,17 +11,23 @@ export function retireBrowserRouteSessionRendererPages(input: {
   if (!Number.isInteger(input.rendererWebContentsId) || input.rendererWebContentsId <= 0) {
     return 0
   }
+
   input.rendererPrepareFences.retire(input.rendererWebContentsId)
+
   const retirements = [...input.live.values()].map((state) => ({
     state,
     pages: state.pages.beginRendererRetirements(input.rendererWebContentsId)
   }))
+
   let retiredCount = 0
+
   for (const { state, pages } of retirements) {
     retiredCount += pages.length
+
     for (const page of pages) {
       input.settle(state, page)
     }
   }
+
   return retiredCount
 }

@@ -17,12 +17,14 @@ export type ProjectedWorktreeRoute = {
 }
 
 export { assertNestedFilesystemRoute } from './nested-runtime-ssh-filesystem-route'
+
 export { assertPairedTerminalCreation } from './nested-runtime-ssh-terminal-creation'
 
 export function terminalMarkerCommand(marker: string): string {
   const encoded = [...marker]
     .map((character) => `\\${character.charCodeAt(0).toString(8).padStart(3, '0')}`)
     .join('')
+
   return `printf '${encoded}\\n'`
 }
 
@@ -45,9 +47,11 @@ async function captureNestedTerminalRouteDiagnostic(
   return client.page.evaluate(
     async ({ environmentId, repoId }) => {
       const state = window.__store?.getState()
+
       const matches = Object.values(state?.worktreesByRepo ?? {})
         .flat()
         .filter((worktree) => worktree.repoId === repoId)
+
       const worktreeId = state?.activeWorktreeId ?? null
       const tabs = worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []) : []
       const tabId = state?.activeTabId ?? tabs[0]?.id ?? null
@@ -55,6 +59,7 @@ async function captureNestedTerminalRouteDiagnostic(
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
       const leafId = pane?.leafId ?? null
       const paneKey = tabId && leafId ? `${tabId}:${leafId}` : null
+
       const resolvePane =
         paneKey && worktreeId
           ? await window.api.runtimeEnvironments.call({
@@ -63,6 +68,7 @@ async function captureNestedTerminalRouteDiagnostic(
               params: { paneKey, worktreeId }
             })
           : null
+
       const runtimeTabs = worktreeId
         ? await window.api.runtimeEnvironments.call({
             selector: environmentId,
@@ -70,6 +76,7 @@ async function captureNestedTerminalRouteDiagnostic(
             params: { worktree: `id:${worktreeId}` }
           })
         : null
+
       return {
         activeRuntimeEnvironmentId: state?.settings.activeRuntimeEnvironmentId ?? null,
         environmentId,
@@ -133,16 +140,20 @@ async function activateRepoTerminal(
 ): Promise<ProjectedWorktreeRoute> {
   const route = await client.page.evaluate(async (repoId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Paired desktop store is unavailable')
     }
+
     await store.getState().fetchWorktrees(repoId)
     const state = store.getState()
     const repo = state.repos.find((candidate) => candidate.id === repoId)
     const worktree = state.worktreesByRepo[repoId]?.find((candidate) => candidate.isMainWorktree)
+
     if (!repo || !worktree) {
       throw new Error(`Paired desktop did not project repo/worktree ${repoId}`)
     }
+
     return {
       worktreeId: worktree.id,
       worktreePath: worktree.path,
@@ -157,7 +168,9 @@ async function activateRepoTerminal(
           ?.connectionStates.get(repo.connectionId ?? '')?.status ?? null
     }
   }, repoId)
+
   await worktreeRowSurface(client.page, route.worktreeId).click()
+
   return route
 }
 
@@ -168,22 +181,28 @@ export async function assertInteractiveTerminal(
   options: { waitForReconnectReady?: boolean } = {}
 ): Promise<ProjectedWorktreeRoute & { ptyId: string }> {
   const route = await activateRepoTerminal(client, repoId)
+
   const ensureWorktreeActive = async () => {
     const state = await client.page.evaluate((worktreeId) => {
       const state = window.__store?.getState()
+
       const hasBoundTerminal = (state?.tabsByWorktree[worktreeId] ?? []).some(
         (tab) => typeof tab.ptyId === 'string' && tab.ptyId.length > 0
       )
+
       return {
         active: state?.activeWorktreeId === worktreeId,
         hasBoundTerminal
       }
     }, route.worktreeId)
+
     if (!state.active) {
       await worktreeRowSurface(client.page, route.worktreeId).click()
     }
+
     return state.active && state.hasBoundTerminal
   }
+
   try {
     await expect
       .poll(
@@ -191,9 +210,11 @@ export async function assertInteractiveTerminal(
           const renderedWorktreeId = await client.page
             .locator('[data-rendered-active-worktree-id]')
             .getAttribute('data-rendered-active-worktree-id')
+
           if (renderedWorktreeId !== route.worktreeId) {
             await ensureWorktreeActive()
           }
+
           return renderedWorktreeId
         },
         { timeout: 30_000, intervals: [100, 250, 500] }
@@ -205,7 +226,9 @@ export async function assertInteractiveTerminal(
       `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
     )
   }
+
   let ptyId: string
+
   try {
     ptyId = await waitForActivePanePtyId(client.page, 30_000)
   } catch (error) {
@@ -214,6 +237,7 @@ export async function assertInteractiveTerminal(
       `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
     )
   }
+
   if (options.waitForReconnectReady) {
     try {
       await expect
@@ -223,6 +247,7 @@ export async function assertInteractiveTerminal(
               if (!(await ensureWorktreeActive())) {
                 return ''
               }
+
               await focusActiveTerminalInput(client.page)
               await client.page.keyboard.press('Control+C')
               await client.page.keyboard.insertText(terminalMarkerCommand(marker))
@@ -230,6 +255,7 @@ export async function assertInteractiveTerminal(
             } catch {
               return ''
             }
+
             return getTerminalContent(client.page)
           },
           {
@@ -245,9 +271,12 @@ export async function assertInteractiveTerminal(
         `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
       )
     }
+
     ptyId = await waitForActivePanePtyId(client.page, 30_000)
+
     return { ...route, ptyId }
   }
+
   await expect
     .poll(
       async () => {
@@ -255,6 +284,7 @@ export async function assertInteractiveTerminal(
           if (!(await ensureWorktreeActive())) {
             return ''
           }
+
           await focusActiveTerminalInput(client.page)
           await client.page.keyboard.press('Control+C')
           await client.page.keyboard.insertText(terminalMarkerCommand(marker))
@@ -262,6 +292,7 @@ export async function assertInteractiveTerminal(
         } catch {
           return ''
         }
+
         return getTerminalContent(client.page)
       },
       {
@@ -271,6 +302,7 @@ export async function assertInteractiveTerminal(
       }
     )
     .toContain(marker)
+
   return { ...route, ptyId }
 }
 
@@ -282,20 +314,26 @@ export async function addPairedRuntimeEnvironment(
   return client.page.evaluate(
     async ({ name, pairingUrl }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Paired desktop store is unavailable')
       }
+
       const result = await window.api.runtimeEnvironments.addFromPairingCode({
         name,
         pairingCode: pairingUrl
       })
+
       store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+
       if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
         throw new Error(`Paired desktop could not reach ${name}`)
       }
+
       if (!(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))) {
         throw new Error(`Paired desktop could not select ${name}`)
       }
+
       return result.environment.id
     },
     { name, pairingUrl: offer.pairingUrl }

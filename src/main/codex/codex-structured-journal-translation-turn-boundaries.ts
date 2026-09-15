@@ -44,13 +44,17 @@ export class CodexJournalTurnBoundaries {
 
   start(event: TurnBoundaryEvent): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params)
+
     if (!turnId) {
       return CODEX_JOURNAL_ADMITTED
     }
+
     if (!this.deps.activeTurns.canRemember(event.threadId, turnId)) {
       return { accepted: false, reason: 'backpressure' }
     }
+
     const startedAt = this.receiptTime(event)
+
     const admission = publishCodexTurnLifecycle({
       sink: this.deps.sink,
       primaryThreadId: this.deps.primaryThreadId(),
@@ -60,22 +64,28 @@ export class CodexJournalTurnBoundaries {
       state: 'running',
       startedAt
     })
+
     if (admission.accepted) {
       this.deps.activeTurns.remember(event.threadId, turnId, startedAt)
       this.deps.resetActivity(event.threadId)
     }
+
     return admission
   }
 
   complete(event: TurnBoundaryEvent): CodexJournalTranslationAdmission {
     const suppressionAdmission = this.deps.flushSuppression()
+
     if (!suppressionAdmission.accepted) {
       return suppressionAdmission
     }
+
     const turnId = readCodexTurnId(event.params) ?? this.deps.activeTurns.current(event.threadId)
+
     if (!turnId) {
       return CODEX_JOURNAL_ADMITTED
     }
+
     // The roster is deliberately NOT swept here. `spawn_agent` children outlive
     // the turn that spawned them and go on reporting into the same group, so a
     // turn boundary is no evidence contact was lost. Only `settleSession` may
@@ -100,11 +110,13 @@ export class CodexJournalTurnBoundaries {
       pendingPrompts: this.deps.pendingPrompts,
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {})
     })
+
     if (admission.accepted) {
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
       this.deps.activeTurns.forget(event.threadId, turnId)
       this.deps.resetActivity(event.threadId)
     }
+
     return admission
   }
 
@@ -117,6 +129,7 @@ export class CodexJournalTurnBoundaries {
     durationMs: number | null = null
   ): AgentJournalTurnLifecycle {
     const startedAt = this.deps.activeTurns.startedAt(threadId, turnId)
+
     return {
       turnId,
       state,

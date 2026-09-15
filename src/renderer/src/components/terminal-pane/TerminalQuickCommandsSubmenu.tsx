@@ -41,8 +41,10 @@ export function TerminalQuickCommandsSubmenu({
   const nonEmptyHosts = hosts.filter(
     (host) => host.repoCommands.length > 0 || host.globalCommands.length > 0
   )
+
   const showHostOwnership = shouldShowTerminalQuickCommandHostOwnership(hosts)
   const singleHost = hosts[0]
+
   const renderCommand = (hostId: ExecutionHostId, command: TerminalQuickCommand) => (
     <DropdownMenuItem
       key={`${hostId}:${command.id}`}

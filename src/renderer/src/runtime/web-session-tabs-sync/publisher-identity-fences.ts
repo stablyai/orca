@@ -9,6 +9,7 @@ import {
 } from './state'
 
 const SESSION_TABS_RETIRED_EPOCH_LIMIT = 8
+
 const SESSION_TABS_RETIRED_RUNTIME_ID_LIMIT = 8
 
 export function hasRetiredValue(history: RetiredValueHistory | undefined, value: string): boolean {
@@ -23,16 +24,21 @@ export function noteRetiredValue(
   if (!history) {
     return { current: value, retired: [] }
   }
+
   if (history.current === value) {
     return history
   }
+
   if (history.current && !history.retired.includes(history.current)) {
     history.retired.push(history.current)
+
     if (history.retired.length > retiredLimit) {
       history.retired.splice(0, history.retired.length - retiredLimit)
     }
   }
+
   history.current = value
+
   return history
 }
 
@@ -44,6 +50,7 @@ export function noteRetiredValue(
  */
 export function reviveRetiredValue(history: RetiredValueHistory | undefined, value: string): void {
   const index = history?.retired.indexOf(value) ?? -1
+
   if (history && index >= 0) {
     history.retired.splice(index, 1)
   }
@@ -53,7 +60,9 @@ function normalizeSessionTabsRuntimeId(runtimeId: unknown): string | undefined {
   if (typeof runtimeId !== 'string') {
     return undefined
   }
+
   const trimmed = runtimeId.trim()
+
   return trimmed.length > 0 ? trimmed : undefined
 }
 
@@ -68,6 +77,7 @@ export function recordReceivedWebSessionTabsEnvironmentFrame(
   receivedFrame: number
 ): void {
   const current = latestReceivedSessionTabsFrameByEnvironment.get(environmentId) ?? 0
+
   if (receivedFrame > current) {
     latestReceivedSessionTabsFrameByEnvironment.set(environmentId, receivedFrame)
   }
@@ -86,12 +96,15 @@ function noteSessionTabsRuntimeId(
     runtimeId,
     SESSION_TABS_RETIRED_RUNTIME_ID_LIMIT
   )
+
   sessionTabsRuntimeHistoryByEnvironment.set(environmentId, history)
+
   return history
 }
 
 export function isCurrentSessionTabsRuntimeId(environmentId: string, runtimeId: string): boolean {
   const history = sessionTabsRuntimeHistoryByEnvironment.get(environmentId)
+
   return history === undefined || history.current === runtimeId
 }
 
@@ -114,6 +127,7 @@ export function acceptSessionTabsRuntimeId(
 ): boolean {
   const history = sessionTabsRuntimeHistoryByEnvironment.get(environmentId)
   const latestReceivedFrame = latestReceivedSessionTabsFrameByEnvironment.get(environmentId) ?? 0
+
   // A late bootstrap response may carry the predecessor process id. Do not
   // let that older frame retire the runtime that already published newer data.
   if (
@@ -124,10 +138,13 @@ export function acceptSessionTabsRuntimeId(
   ) {
     return false
   }
+
   if (isRetiredSessionTabsRuntimeId(environmentId, runtimeId)) {
     return false
   }
+
   noteSessionTabsRuntimeId(environmentId, runtimeId)
+
   return true
 }
 
@@ -163,6 +180,8 @@ export function noteSessionTabsPublicationEpoch(
     publicationEpoch,
     SESSION_TABS_RETIRED_EPOCH_LIMIT
   )
+
   sessionTabsPublicationEpochHistoryByWorktree.set(key, history)
+
   return history
 }

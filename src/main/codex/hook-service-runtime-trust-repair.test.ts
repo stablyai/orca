@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -65,11 +66,14 @@ describe('CodexHookService', () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+
     const hooksConfig = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     const command = hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command
     expect(command).toBeDefined()
+
     const legacyHash = computeTrustedHash({
       sourcePath: managedHooksPath,
       eventLabel: 'permission_request',
@@ -77,6 +81,7 @@ describe('CodexHookService', () => {
       handlerIndex: 0,
       command: command!
     })
+
     writeFileSync(
       runtimeTomlPath,
       [
@@ -135,12 +140,15 @@ describe('CodexHookService', () => {
       const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
       const managedHooksPath = join(managedCodexHome, 'hooks.json')
       const runtimeTomlPath = join(managedCodexHome, 'config.toml')
+
       const canonicalPermissionHeader = hookTrustHeader(
         `${managedHooksPath}:permission_request:0:0`
       )
+
       const legacyPermissionHeader = `[hooks.state."${escapeTomlBasicString(
         `${getCodexExplicitHomeHookSourcePath(managedHooksPath).replace(/\\/g, '/')}:permission_request:0:0`
       )}"]`
+
       const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
       expect(installedToml).toContain(canonicalPermissionHeader)
 
@@ -178,23 +186,28 @@ describe('CodexHookService', () => {
     const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
     const permissionRequestIndex = installedToml.indexOf(permissionRequestHeader)
     expect(permissionRequestIndex).not.toBe(-1)
+
     const nextHeaderIndex = installedToml.indexOf(
       '\n[',
       permissionRequestIndex + permissionRequestHeader.length
     )
+
     const permissionRequestBlock = installedToml
       .slice(
         permissionRequestIndex,
         nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex
       )
       .trimEnd()
+
     const staleDisabledBlock = permissionRequestBlock
       .replace('enabled = true', 'enabled = false')
       .replace(/trusted_hash = "[^"]+"/, 'trusted_hash = "sha256:STALE_DISABLED"')
+
     const staleEnabledBlock = permissionRequestBlock.replace(
       /trusted_hash = "[^"]+"/,
       'trusted_hash = "sha256:STALE_ENABLED"'
     )
+
     writeFileSync(
       runtimeTomlPath,
       `${installedToml.slice(

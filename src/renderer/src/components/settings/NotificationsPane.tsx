@@ -16,7 +16,9 @@ import {
   sendNotificationSettingsTestNotification
 } from './notification-settings-copy'
 import { translate } from '@/i18n/i18n'
+
 export { getNotificationsPaneSearchEntries } from './notifications-search'
+
 export {
   createNotificationVolumeDraftState,
   resolveNotificationVolumeDraftState,
@@ -34,6 +36,7 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
     notificationSettings.enabled
   )
@@ -45,6 +48,7 @@ export function NotificationsPane({
       ...notificationSettingsRef.current,
       ...updates
     }
+
     notificationSettingsRef.current = nextNotifications
     await updateSettings({
       notifications: {
@@ -60,14 +64,18 @@ export function NotificationsPane({
   const [volumeDraftState, setVolumeDraftState] = useState(() =>
     createNotificationVolumeDraftState(notificationSettings.customSoundVolume)
   )
+
   const resolvedVolumeDraftState = resolveNotificationVolumeDraftState(
     volumeDraftState,
     notificationSettings.customSoundVolume
   )
+
   if (resolvedVolumeDraftState !== volumeDraftState) {
     setVolumeDraftState(resolvedVolumeDraftState)
   }
+
   const volumeDraft = resolvedVolumeDraftState.draft
+
   const setVolumeDraft = (value: number): void => {
     setVolumeDraftState((current) => ({
       ...resolveNotificationVolumeDraftState(current, notificationSettings.customSoundVolume),
@@ -84,6 +92,7 @@ export function NotificationsPane({
   const handleSendTestNotification = async (): Promise<void> => {
     useAppStore.getState().recordFeatureInteraction('notifications')
     const showsMacPermissionCard = macPermissionState !== null
+
     const outcome = await sendNotificationSettingsTestNotification(
       notificationSettings,
       volumeDraft,
@@ -91,9 +100,11 @@ export function NotificationsPane({
       // "check if a banner appeared" toasts would contradict it.
       showsMacPermissionCard ? { suppressSystemPermissionToasts: true } : undefined
     )
+
     if (!showsMacPermissionCard) {
       return
     }
+
     if (outcome === 'delivered') {
       setMacPermissionState('enabled')
     } else if (outcome === 'not-displayed') {
@@ -122,6 +133,7 @@ export function NotificationsPane({
           if (!notificationSettings.enabled) {
             useAppStore.getState().recordFeatureInteraction('notifications')
           }
+
           void updateNotificationSettings({ enabled: !notificationSettings.enabled })
         }}
       />

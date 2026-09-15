@@ -22,8 +22,10 @@ export function resolveAgentRowPaneLiveTitle(
   if (layout?.root?.type !== 'split') {
     return undefined
   }
+
   if (!leafId) {
     return null
   }
+
   return resolveRuntimePaneTitleForLeaf(layout, paneTitles, leafId)
 }

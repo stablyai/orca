@@ -71,6 +71,7 @@ export function BitbucketCredentialsDialog({
     if (!open) {
       return
     }
+
     setAuthMode(initialAuthMode ?? 'basic')
     setEmail(initialEmail ?? '')
     setBaseUrl(initialBaseUrl ?? '')
@@ -88,9 +89,11 @@ export function BitbucketCredentialsDialog({
   const locked = environmentManaged
   const connecting = connectState === 'connecting'
   const isTokenMode = authMode === 'token'
+
   const hasRequiredFields = isTokenMode
     ? Boolean(accessToken.trim())
     : Boolean(email.trim()) && Boolean(apiToken.trim())
+
   const canSubmit = !locked && !connecting && hasRequiredFields
 
   const clearErrorOnEdit = (): void => {
@@ -110,8 +113,10 @@ export function BitbucketCredentialsDialog({
     if (!canSubmit) {
       return
     }
+
     setConnectState('connecting')
     setConnectError(null)
+
     try {
       const result = await window.api.bitbucket.connect({
         authMode,
@@ -120,17 +125,21 @@ export function BitbucketCredentialsDialog({
         apiToken: isTokenMode ? null : apiToken.trim(),
         baseUrl: baseUrl.trim() || null
       })
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         setApiToken('')
         setAccessToken('')
         setConnectState('idle')
         onOpenChange(false)
         onConnected?.()
+
         return
       }
+
       setConnectState('error')
       setConnectError(result.error)
     } catch (error) {
@@ -159,6 +168,7 @@ export function BitbucketCredentialsDialog({
           if (!(event.target instanceof HTMLInputElement)) {
             return
           }
+
           if (event.key === 'Enter' && canSubmit) {
             event.preventDefault()
             void handleConnect()
@@ -197,6 +207,7 @@ export function BitbucketCredentialsDialog({
                 if (!value || connecting) {
                   return
                 }
+
                 setAuthMode(value as BitbucketAuthMode)
                 // An API token and an access token are different secrets; drop
                 // the typed one so it can't be submitted as the other.

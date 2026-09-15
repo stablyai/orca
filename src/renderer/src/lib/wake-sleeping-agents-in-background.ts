@@ -28,10 +28,13 @@ export function createBackgroundSleepingAgentWakeDispatcher(
   options: BackgroundSleepingAgentWakeDispatcherOptions = {}
 ): { request: (worktreeId: string) => void; dispose: () => void } {
   const pendingWorktreeIds = new Set<string>()
+
   const isWorkspaceSessionReady =
     options.isWorkspaceSessionReady ?? (() => useAppStore.getState().workspaceSessionReady)
+
   const subscribeToStore =
     options.subscribeToStore ?? ((listener) => useAppStore.subscribe(listener))
+
   const wake = options.wake ?? wakeSleepingAgentsForWorktreeInBackground
   let unsubscribeReadiness: (() => void) | null = null
   let disposed = false
@@ -40,10 +43,12 @@ export function createBackgroundSleepingAgentWakeDispatcher(
     if (disposed || !isWorkspaceSessionReady()) {
       return
     }
+
     const worktreeIds = [...pendingWorktreeIds]
     pendingWorktreeIds.clear()
     unsubscribeReadiness?.()
     unsubscribeReadiness = null
+
     for (const worktreeId of worktreeIds) {
       wake(worktreeId)
     }
@@ -54,10 +59,13 @@ export function createBackgroundSleepingAgentWakeDispatcher(
       if (disposed || !worktreeId) {
         return
       }
+
       if (isWorkspaceSessionReady()) {
         wake(worktreeId)
+
         return
       }
+
       pendingWorktreeIds.add(worktreeId)
       unsubscribeReadiness ??= subscribeToStore(flushWhenReady)
     },
@@ -92,15 +100,20 @@ function getCanonicalPassiveWakeRecords(
       .filter((record) => !isPassiveCompletedHibernationEvidence(record))
       .map(getProviderSessionClaimKey)
   )
+
   const recordsByClaim = new Map<string, SleepingAgentSessionRecord[]>()
+
   for (const record of records) {
     if (!isPassiveCompletedHibernationEvidence(record)) {
       continue
     }
+
     const claimKey = getProviderSessionClaimKey(record)
+
     if (alreadyClaimed.has(claimKey) || activeClaimKeys.has(claimKey)) {
       continue
     }
+
     const grouped = recordsByClaim.get(claimKey) ?? []
     grouped.push(record)
     recordsByClaim.set(claimKey, grouped)
@@ -109,25 +122,32 @@ function getCanonicalPassiveWakeRecords(
   const canonicalRecords: SleepingAgentSessionRecord[] = []
   const duplicatePaneKeys: string[] = []
   const state = useAppStore.getState()
+
   for (const grouped of recordsByClaim.values()) {
     const ordered = grouped
       .slice()
       .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
+
     const liveTabIds = new Set(
       (state.tabsByWorktree[grouped[0]?.worktreeId ?? ''] ?? []).map((tab) => tab.id)
     )
+
     const canonical =
       ordered.find((record) => recordPaneIsOwnedByPreservedPane(record, state)) ??
       ordered.find((record) => {
         const tabId = getSleepingRecordTabId(record)
+
         return tabId !== null && liveTabIds.has(tabId)
       }) ??
       ordered.find((record) => getSleepingRecordTabId(record) !== null) ??
       ordered[0]
+
     if (!canonical) {
       continue
     }
+
     canonicalRecords.push(canonical)
+
     for (const duplicate of grouped) {
       if (duplicate !== canonical) {
         // Why: two cold panes mount after the event-scoped claim collector is
@@ -136,7 +156,9 @@ function getCanonicalPassiveWakeRecords(
       }
     }
   }
+
   state.clearSleepingAgentSessionsByPaneKey(duplicatePaneKeys)
+
   return canonicalRecords
 }
 
@@ -168,6 +190,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   const worktreeRecords = Object.values(
     useAppStore.getState().sleepingAgentSessionsByPaneKey
   ).filter((record) => record.worktreeId === worktreeId)
+
   // Why: nothing is slept here, so there is no wake work. Skipping is what keeps
   // a phone browsing many worktrees from permanently background-mounting each one
   // (and reattaching its PTYs) on the desktop host it is paired to.
@@ -186,6 +209,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   // recovered by step (c) into a fresh tab, mounted in step (d).
   const passiveTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
+
   // Why: a workspace the user explicitly slept must not respawn every finished agent because a
   // phone opened it. Those panes cold-restore `--resume` when their own tab is opened, which is
   // also what the desktop does (#11598). Filtering before canonicalization keeps a lazy record
@@ -193,14 +217,17 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   const backgroundWakeRecords = worktreeRecords.filter(
     (record) => record.restoreOnTabOpenOnly !== true
   )
+
   for (const record of getCanonicalPassiveWakeRecords(backgroundWakeRecords, wokenClaimKeys)) {
     const tabId = getSleepingRecordTabId(record)
+
     if (tabId) {
       passiveTabIds.add(tabId)
     } else {
       hasUntargetablePassiveRecord = true
     }
   }
+
   if (passiveTabIds.size > 0 || hasUntargetablePassiveRecord) {
     // Why: a record whose tab cannot be resolved falls back to the untargeted
     // whole-worktree mount rather than silently never waking.
@@ -209,6 +236,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
+
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     suppressNavigation: true,
     skipClaimKeys: wokenClaimKeys,

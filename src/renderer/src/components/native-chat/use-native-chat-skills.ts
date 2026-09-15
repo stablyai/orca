@@ -19,6 +19,7 @@ export {
 
 // The host scan budget honored by runtime targets that respect timeoutMs.
 const DISCOVERY_TIMEOUT_MS = 10_000
+
 // Renderer wall-clock backstop for the local branch (which ignores timeoutMs).
 // It must exceed the host's summed worst case — a WSL scan runs a metadata read
 // (5s) then the tree walk (10s) in sequence — so the host's own precise timeout
@@ -43,6 +44,7 @@ const IDLE_STATE: StoredDiscoveryState = {
   error: null,
   contextKey: null
 }
+
 const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
   status: 'error',
   skills: [],
@@ -50,6 +52,7 @@ const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
   errorKind: 'unknown',
   contextKey: null
 }
+
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
 export function isNativeChatSkillForAgent(
@@ -58,21 +61,26 @@ export function isNativeChatSkillForAgent(
   result?: Pick<SkillDiscoveryResult, 'sources'>
 ): boolean {
   const profile = getNativeChatAgentProfile(agent)
+
   if (!profile) {
     return false
   }
+
   if (!result) {
     return (
       agent === 'codex' &&
       (skill.providers.includes('codex') || skill.providers.includes('agent-skills'))
     )
   }
+
   // Why: canonical-path dedup keeps one row per file, but a symlinked skill can
   // be reachable through several roots; any shared or agent-owned root grants
   // visibility regardless of which root the scanner happened to list first.
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
+
   return rootPaths.some((rootPath) => {
     const source = result.sources.find((entry) => entry.path === rootPath)
+
     return source?.owner === null || source?.owner === profile.skillSourceOwner
   })
 }
@@ -83,10 +91,12 @@ export function useNativeChatSkills(
   enabled = false
 ): NativeChatSkillDiscovery {
   const inputs = useAppStore(useShallow(selectNativeChatSkillStateInputs))
+
   const context = useMemo(
     () => resolveNativeChatSkillDiscoveryContext(inputs, terminalTabId),
     [inputs, terminalTabId]
   )
+
   const [state, setState] = useState<StoredDiscoveryState>(IDLE_STATE)
   const [retryGeneration, setRetryGeneration] = useState(0)
   const paneDiscoveryCache = useRef(new Map<string, SkillDiscoveryResult>())
@@ -97,13 +107,16 @@ export function useNativeChatSkills(
 
   useEffect(() => {
     let cancelled = false
+
     if (!profile || !enabled || !context) {
       // Why: there is no pane to retry into, so a pending retry intent must not
       // survive to force an unrelated pane's first scan.
       forceNextDiscovery.current = false
       setState(IDLE_STATE)
+
       return
     }
+
     if (context.executionHostKind === 'ssh') {
       emitNativeChatSkillDiscovery({
         agent,
@@ -117,11 +130,13 @@ export function useNativeChatSkills(
         errorKind: 'unavailable',
         contextKey: context.key
       })
+
       return
     }
 
     const paneCacheKey = context.key
     const cached = paneDiscoveryCache.current.get(paneCacheKey)
+
     if (cached) {
       emitNativeChatSkillDiscovery({
         agent,
@@ -129,8 +144,10 @@ export function useNativeChatSkills(
         executionHostKind: context.executionHostKind
       })
       setState({ status: 'ready', skills: cached.skills, error: null, contextKey: context.key })
+
       return
     }
+
     setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
     // Why: Retry is an explicit "I changed something, look again", so it has to
     // reach the host's disk rather than its shared scans. The first attempt for a
@@ -141,9 +158,11 @@ export function useNativeChatSkills(
     void request.then(
       (result) => {
         paneDiscoveryCache.current.set(paneCacheKey, result)
+
         if (cancelled) {
           return
         }
+
         emitNativeChatSkillDiscovery({
           agent,
           outcome: 'ready',
@@ -155,6 +174,7 @@ export function useNativeChatSkills(
         if (cancelled) {
           return
         }
+
         const error = reason instanceof Error ? reason : new Error(String(reason))
         const timedOut = /timed?\s*out|timeout/i.test(error.message)
         emitNativeChatSkillDiscovery({
@@ -175,6 +195,7 @@ export function useNativeChatSkills(
         })
       }
     )
+
     return () => {
       cancelled = true
     }
@@ -191,11 +212,14 @@ export function useNativeChatSkills(
             : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
     [context, enabled, profile, state]
   )
+
   const visibleSkills = useMemo(() => {
     if (!profile || effectiveState.status !== 'ready') {
       return []
     }
+
     const result = context ? paneDiscoveryCache.current.get(context.key) : undefined
+
     return result
       ? effectiveState.skills.filter((skill) => isNativeChatSkillForAgent(agent, skill, result))
       : []
@@ -203,12 +227,15 @@ export function useNativeChatSkills(
 
   const retry = useCallback(() => {
     forceNextDiscovery.current = true
+
     if (context) {
       paneDiscoveryCache.current.delete(context.key)
       setState({ status: 'loading', skills: [], error: null, contextKey: context.key })
     }
+
     setRetryGeneration((generation) => generation + 1)
   }, [context])
+
   return useMemo(
     () => ({
       status: effectiveState.status,
@@ -226,9 +253,11 @@ function getOrStartDiscovery(
   refresh = false
 ): Promise<SkillDiscoveryResult> {
   const existing = inFlightDiscovery.get(context.key)
+
   if (existing && !refresh) {
     return existing
   }
+
   // Why: the local runtime.call branch ignores timeoutMs, so the renderer must
   // enforce the design's scan timeout itself or a stalled local scan loads forever.
   const request = withDiscoveryTimeout(
@@ -246,7 +275,9 @@ function getOrStartDiscovery(
       inFlightDiscovery.delete(context.key)
     }
   })
+
   inFlightDiscovery.set(context.key, request)
+
   return request
 }
 

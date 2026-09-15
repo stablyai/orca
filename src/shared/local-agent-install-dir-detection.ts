@@ -6,8 +6,10 @@ export function detectCommandsInInstallDirs(commands: readonly string[]): Set<st
   if (commands.length === 0) {
     return new Set()
   }
+
   try {
     const resolvedCommands = resolveCliCommands(commands)
+
     return new Set(
       commands.filter((command) => path.isAbsolute(resolvedCommands.get(command) ?? command))
     )

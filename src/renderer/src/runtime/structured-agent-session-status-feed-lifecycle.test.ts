@@ -5,9 +5,11 @@ import type {
 } from '../../../shared/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
+
 vi.mock('./structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
+
 vi.mock('./runtime-rpc-client', () => ({ runtimeEnvironmentSupportsCapability: vi.fn() }))
 
 import {
@@ -19,7 +21,9 @@ type Subscription = {
   emit: (event: AgentSessionStatusEvent) => void
   unsubscribe: ReturnType<typeof vi.fn>
 }
+
 const subscriptions: Subscription[] = []
+
 const owned: AgentSessionStatusSummary = {
   sessionId: 'running',
   workspaceId: 'workspace',
@@ -29,6 +33,7 @@ const owned: AgentSessionStatusSummary = {
   updatedAt: 1,
   hostExecutionOwned: true
 }
+
 const done: AgentSessionStatusSummary = {
   ...owned,
   sessionId: 'completed',
@@ -38,9 +43,11 @@ const done: AgentSessionStatusSummary = {
 
 function subscription(index = 0): Subscription {
   const value = subscriptions[index]
+
   if (!value) {
     throw new Error('missing subscription')
   }
+
   return value
 }
 
@@ -53,6 +60,7 @@ describe('structured status feed execution authority lifecycle', () => {
     mocks.subscribe.mockImplementation((_target, emit: Subscription['emit']) => {
       const unsubscribe = vi.fn(() => emit({ type: 'end' }))
       subscriptions.push({ emit, unsubscribe })
+
       return Promise.resolve({ unsubscribe })
     })
   })

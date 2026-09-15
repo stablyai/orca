@@ -12,6 +12,7 @@ export function ContextualTourProgressDots({
   if (total <= 1) {
     return <span aria-hidden="true" className="h-1.5 w-4" />
   }
+
   return (
     <div
       className="flex items-center gap-2"
@@ -29,6 +30,7 @@ export function ContextualTourProgressDots({
         {Array.from({ length: total }).map((_, index) => {
           const isActive = index + 1 === current
           const isComplete = index + 1 < current
+
           return (
             <span
               key={index}

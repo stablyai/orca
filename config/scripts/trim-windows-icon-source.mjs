@@ -11,20 +11,24 @@ import { PNG } from 'pngjs'
 // must fill nearly the whole canvas (~96%) to match native apps. A small uniform
 // margin keeps anti-aliased edges and the soft shadow from clipping at the border.
 export const ICON_CANVAS_MARGIN_RATIO = 0.02
+
 // Why: alpha below this is treated as background; the macOS render fades the
 // safe-area shadow to a few percent opacity, which must not count as glyph.
 const ALPHA_BACKGROUND_THRESHOLD = 16
+
 // Standard Windows ICO sizes, largest first (matches the prior ImageMagick set).
 export const ICO_FRAME_SIZES = [256, 128, 64, 48, 32, 16]
 
 export function decodePng(buffer) {
   const png = PNG.sync.read(buffer)
+
   return { width: png.width, height: png.height, data: png.data }
 }
 
 export function encodePng({ width, height, data }) {
   const png = new PNG({ width, height })
   data.copy(png.data)
+
   return PNG.sync.write(png)
 }
 
@@ -35,28 +39,35 @@ export function findOpaqueBounds({ width, height, data }, threshold = ALPHA_BACK
   let minY = height
   let maxX = -1
   let maxY = -1
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const alpha = data[(y * width + x) * 4 + 3]
+
       if (alpha > threshold) {
         if (x < minX) {
           minX = x
         }
+
         if (x > maxX) {
           maxX = x
         }
+
         if (y < minY) {
           minY = y
         }
+
         if (y > maxY) {
           maxY = y
         }
       }
     }
   }
+
   if (maxX < 0) {
     return null
   }
+
   return { minX, minY, maxX, maxY, width: maxX - minX + 1, height: maxY - minY + 1 }
 }
 
@@ -65,11 +76,13 @@ export function cropImage({ width, data }, bounds) {
   const cropWidth = bounds.width
   const cropHeight = bounds.height
   const out = Buffer.alloc(cropWidth * cropHeight * 4)
+
   for (let y = 0; y < cropHeight; y++) {
     const srcRow = (bounds.minY + y) * width + bounds.minX
     const srcStart = srcRow * 4
     out.set(data.subarray(srcStart, srcStart + cropWidth * 4), y * cropWidth * 4)
   }
+
   return { width: cropWidth, height: cropHeight, data: out }
 }
 
@@ -82,11 +95,13 @@ export function squareWithMargin(image, marginRatio = ICON_CANVAS_MARGIN_RATIO) 
   const data = Buffer.alloc(side * side * 4)
   const offsetX = Math.floor((side - image.width) / 2)
   const offsetY = Math.floor((side - image.height) / 2)
+
   for (let y = 0; y < image.height; y++) {
     const srcStart = y * image.width * 4
     const dstStart = ((offsetY + y) * side + offsetX) * 4
     data.set(image.data.subarray(srcStart, srcStart + image.width * 4), dstStart)
   }
+
   return { width: side, height: side, data }
 }
 
@@ -97,11 +112,13 @@ export function resizeImage(image, targetWidth, targetHeight) {
   const out = Buffer.alloc(targetWidth * targetHeight * 4)
   const scaleX = srcW / targetWidth
   const scaleY = srcH / targetHeight
+
   for (let ty = 0; ty < targetHeight; ty++) {
     const sy0 = ty * scaleY
     const sy1 = (ty + 1) * scaleY
     const y0 = Math.floor(sy0)
     const y1 = Math.min(srcH, Math.ceil(sy1))
+
     for (let tx = 0; tx < targetWidth; tx++) {
       const sx0 = tx * scaleX
       const sx1 = (tx + 1) * scaleX
@@ -112,14 +129,18 @@ export function resizeImage(image, targetWidth, targetHeight) {
       let bSum = 0
       let aSum = 0
       let weightSum = 0
+
       for (let sy = y0; sy < y1; sy++) {
         const wy = Math.min(sy1, sy + 1) - Math.max(sy0, sy)
+
         for (let sx = x0; sx < x1; sx++) {
           const wx = Math.min(sx1, sx + 1) - Math.max(sx0, sx)
           const weight = wx * wy
+
           if (weight <= 0) {
             continue
           }
+
           const idx = (sy * srcW + sx) * 4
           const alpha = src[idx + 3]
           const premul = (alpha / 255) * weight
@@ -130,7 +151,9 @@ export function resizeImage(image, targetWidth, targetHeight) {
           weightSum += weight
         }
       }
+
       const dst = (ty * targetWidth + tx) * 4
+
       if (weightSum === 0 || aSum === 0) {
         out[dst] = 0
         out[dst + 1] = 0
@@ -138,6 +161,7 @@ export function resizeImage(image, targetWidth, targetHeight) {
         out[dst + 3] = 0
         continue
       }
+
       const alphaAvg = aSum / weightSum
       const colorDivisor = alphaAvg / 255
       out[dst] = Math.round(rSum / weightSum / colorDivisor)
@@ -146,6 +170,7 @@ export function resizeImage(image, targetWidth, targetHeight) {
       out[dst + 3] = Math.round(alphaAvg)
     }
   }
+
   return { width: targetWidth, height: targetHeight, data: out }
 }
 
@@ -184,18 +209,22 @@ export function encodeIco(frames) {
 export function buildWindowsIcoFromPng(sourcePngBuffer, sizes = ICO_FRAME_SIZES) {
   const source = decodePng(sourcePngBuffer)
   const bounds = findOpaqueBounds(source)
+
   if (!bounds) {
     throw new Error('Source icon is fully transparent; cannot trim safe-area inset.')
   }
+
   const trimmed = cropImage(source, bounds)
   const filled = squareWithMargin(trimmed)
   const frames = sizes.map((size) => resizeImage(filled, size, size))
+
   return encodeIco(frames)
 }
 
 function resolveDefaultPaths() {
   const scriptDir = import.meta.dirname
   const projectDir = dirname(dirname(scriptDir))
+
   return {
     sourcePng: join(projectDir, 'resources', 'build', 'icon.png'),
     outputIco: join(projectDir, 'resources', 'build', 'icon.ico')
@@ -204,10 +233,12 @@ function resolveDefaultPaths() {
 
 function main() {
   const { sourcePng, outputIco } = resolveDefaultPaths()
+
   if (!existsSync(sourcePng)) {
     console.error(`Error: source PNG not found at ${sourcePng}`)
     process.exit(1)
   }
+
   const ico = buildWindowsIcoFromPng(readFileSync(sourcePng))
   writeFileSync(outputIco, ico)
   console.log(`  -> ${outputIco} (filled multi-size ICO, safe-area inset trimmed)`)

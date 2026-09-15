@@ -15,6 +15,7 @@ import { useAutomationListSearch } from './use-automation-list-search'
 // counts index builds instead of timing them (a wall clock would flake in CI).
 vi.mock('./automation-list-search-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof searchRows>()
+
   return {
     ...actual,
     buildAutomationListSearchRows: vi.fn(actual.buildAutomationListSearchRows),
@@ -23,6 +24,7 @@ vi.mock('./automation-list-search-rows', async (importOriginal) => {
 })
 
 const buildRowsSpy = vi.mocked(searchRows.buildAutomationListSearchRows)
+
 const matchRowsSpy = vi.mocked(searchRows.matchAutomationListSearchRowKeys)
 
 const repoMap = new Map([
@@ -32,7 +34,9 @@ const repoMap = new Map([
 type SearchResult = ReturnType<typeof useAutomationListSearch>
 
 let container: HTMLDivElement
+
 let root: Root
+
 let latest: SearchResult | null = null
 
 function Harness({ query, rows }: { query: string; rows: readonly AutomationListRow[] }): null {
@@ -46,6 +50,7 @@ function Harness({ query, rows }: { query: string; rows: readonly AutomationList
     selectAutomationRow: () => undefined,
     selectExternalKey: () => undefined
   })
+
   return null
 }
 
@@ -119,6 +124,7 @@ describe('useAutomationListSearch index shape', () => {
     const renamed = automations.map((row, index) =>
       index === 0 ? { ...row, automation: { ...row.automation, name: 'Renamed sweep' } } : row
     )
+
     render('', renamed)
 
     expect(buildRowsSpy.mock.calls.length).toBe(buildsAfterMount + 1)
@@ -152,6 +158,7 @@ describe('useAutomationListSearch cross-host identity', () => {
         hostLabel: 'web-01'
       })
     ]
+
     render('nightly', collided)
 
     expect(latest?.filteredRows.map((row) => row.automation.name)).toEqual([
@@ -186,8 +193,10 @@ describe('useAutomationListSearch counts', () => {
       status: 'all',
       announceFallback: false
     }
+
     render('no-such-automation', makeRows(3))
     const counts = latest?.searchCounts
+
     if (!counts) {
       throw new Error('hook produced no counts')
     }

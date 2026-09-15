@@ -5,6 +5,7 @@ import path from 'node:path'
 import { makeTreeReadOnly, shareTree } from './space-sharing-copy.mjs'
 
 const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
 // Sibling of path.txt, never inside dist: an install replaces dist wholesale.
 const MARKER_FILENAME = '.orca-shared-dist'
 
@@ -16,20 +17,26 @@ const MARKER_FILENAME = '.orca-shared-dist'
 export function resolveSharedElectronDistEntry(options) {
   const { repoRoot, version, targetPlatform, targetArch } = options
   const env = options.env ?? process.env
+
   // Packaging jobs get a fresh checkout per run, so a cache only adds a failure mode.
   if (env.CI === '1' || env.CI === 'true') {
     return null
   }
+
   if (![version, targetPlatform, targetArch].every((part) => IDENTITY_PATTERN.test(part ?? ''))) {
     return null
   }
+
   let gitCommonDir
+
   try {
     gitCommonDir = resolveGitCommonDir(repoRoot, options.execFile ?? execFileSync)
   } catch {
     return null // Folder workspace, or no Git on PATH.
   }
+
   const cacheRoot = path.join(gitCommonDir, 'orca-cache', 'electron')
+
   return {
     cacheRoot,
     entryPath: path.join(cacheRoot, `${version}-${targetPlatform}-${targetArch}`),
@@ -42,9 +49,11 @@ export function resolveGitCommonDir(repoRoot, execFile = execFileSync) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore']
   }).trim()
+
   if (!rawPath) {
     throw new Error('Git returned an empty common directory')
   }
+
   return path.resolve(repoRoot, rawPath)
 }
 
@@ -72,14 +81,17 @@ export function recordAdoptedSharedElectronDist(entry, write) {
  */
 export function shareElectronDistFromCache(entry, stagePath, options) {
   const { version, platformPath } = options
+
   if (!isUsableElectronDist(entry.entryPath, version, platformPath)) {
     return false
   }
+
   try {
     ;(options.share ?? shareTree)(entry.entryPath, stagePath)
   } catch {
     return false
   }
+
   return isUsableElectronDist(stagePath, version, platformPath)
 }
 
@@ -94,12 +106,14 @@ export function publishSharedElectronDist(distPath, entry, options = {}) {
   const { version, platformPath } = options
   const uuid = options.uuid ?? randomUUID
   const canValidate = Boolean(version) && Boolean(platformPath)
+
   // Without an identity to check against, "unusable" is unknowable -- never discard on a guess.
   if (existsSync(entry.entryPath) && (!canValidate || isUsable(entry, version, platformPath))) {
     return false
   }
 
   const stagePath = `${entry.entryPath}.staging-${process.pid}-${uuid()}`
+
   try {
     mkdirSync(entry.cacheRoot, { recursive: true })
     ;(options.share ?? shareTree)(distPath, stagePath)
@@ -108,6 +122,7 @@ export function publishSharedElectronDist(distPath, entry, options = {}) {
     ;(options.protect ?? makeTreeReadOnly)(stagePath)
   } catch {
     rmSync(stagePath, { recursive: true, force: true })
+
     return false
   }
 
@@ -131,18 +146,23 @@ export function publishSharedElectronDist(distPath, entry, options = {}) {
 function swapInElectronDistEntry(entry, stagePath, options) {
   const { canValidate, version, platformPath, uuid, rename } = options
   let quarantinePath = null
+
   if (existsSync(entry.entryPath)) {
     // Same rule as before staging: an entry we cannot judge, or one that is good, is never
     // displaced. Both mean another worktree got there first, so keep theirs.
     if (!canValidate || isUsable(entry, version, platformPath)) {
       rmSync(stagePath, { recursive: true, force: true })
+
       return false
     }
+
     quarantinePath = `${entry.entryPath}.unusable-${process.pid}-${uuid()}`
+
     try {
       renameSync(entry.entryPath, quarantinePath)
     } catch {
       rmSync(stagePath, { recursive: true, force: true })
+
       return false // Another worktree is already replacing it.
     }
   }
@@ -151,22 +171,26 @@ function swapInElectronDistEntry(entry, stagePath, options) {
     rename(stagePath, entry.entryPath)
   } catch {
     rmSync(stagePath, { recursive: true, force: true })
+
     if (quarantinePath !== null) {
       // Put it back rather than leave no entry at all; a bad entry still beats an empty cache,
       // because the next publisher re-validates and replaces it.
       try {
         renameSync(quarantinePath, entry.entryPath)
+
         return false
       } catch {
         rmSync(quarantinePath, { recursive: true, force: true })
       }
     }
+
     return false
   }
 
   if (quarantinePath !== null) {
     rmSync(quarantinePath, { recursive: true, force: true })
   }
+
   return true
 }
 
@@ -179,9 +203,11 @@ export function isUsableElectronDist(distPath, version, platformPath) {
     if (!lstatSync(distPath).isDirectory()) {
       return false
     }
+
     const installedVersion = readFileSync(path.join(distPath, 'version'), 'utf8')
       .trim()
       .replace(/^v/, '')
+
     return installedVersion === version && existsSync(path.join(distPath, platformPath))
   } catch {
     return false

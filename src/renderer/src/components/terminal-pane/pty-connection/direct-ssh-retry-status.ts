@@ -49,14 +49,19 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     if (!attempt || session.disposed || session.directSshPaneRetryTimedPromises.has(promise)) {
       return
     }
+
     session.directSshPaneRetryTimedPromises.add(promise)
+
     const timer = setTimeout(() => {
       session.directSshPaneRetrySettlementTimers.delete(timer)
+
       if (session.directSshPaneRetrySettlementCancelled) {
         return
       }
+
       session.settlePaneAttachAttempt(attempt, 'timed-out')
     }, DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS)
+
     session.directSshPaneRetrySettlementTimers.add(timer)
     void promise
       .finally(() => {
@@ -65,6 +70,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       })
       .catch(() => {})
   }
+
   session.shellOverride = session.tab?.shellOverride
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
@@ -87,18 +93,22 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     ),
     executionHostId: session.executionHostId
   })
+
   if (session.isNativeWindowsConpty) {
     // Why: Windows ConPTY agent turns can leave renderer keyboard modes armed
     // after completion, corrupting plain input with encoded bytes.
     session.idleAgentTerminalModeReset = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
   }
+
   session.shouldApplyNativeWindowsRewriteRefresh = session.isNativeWindowsConpty
   session.shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   session.shouldProtectNativeWindowsSynchronizedOutput = session.isNativeWindowsConpty
   session.unsubscribeWindowsDoneTerminalModeReset = null
+
   if (session.isNativeWindowsConpty) {
     const initialAgentStatus = session.state.agentStatusByPaneKey[session.cacheKey]
     let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
+
     if (
       !initialAgentStatus &&
       session.paneStartup?.telemetry?.launch_source === 'sidebar' &&
@@ -110,18 +120,23 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       // row, so arm the same Windows stale-focus guard until work starts again.
       session.suppressNativeWindowsIdleCodexFocusReports = true
     }
+
     if (initialAgentStatus?.state === 'done') {
       session.setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
     }
+
     session.unsubscribeWindowsDoneTerminalModeReset = useAppStore.subscribe((nextState) => {
       const nextAgentStatus = nextState.agentStatusByPaneKey[session.cacheKey]
       const nextAgentStatusState = nextAgentStatus?.state
+
       if (nextAgentStatusState === 'done') {
         session.setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
       } else if (nextAgentStatusState) {
         session.suppressNativeWindowsIdleCodexFocusReports = false
       }
+
       const nextAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(nextAgentStatus)
+
       // Why: a NEW completed turn — same-state `done` pings keep stateStartedAt, so they no-op.
       if (
         nextAgentDoneStartedAt !== undefined &&
@@ -129,6 +144,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
       ) {
         session.queueAgentIdleTerminalModeReset()
       }
+
       lastAgentDoneStartedAt = nextAgentDoneStartedAt
     })
   }
@@ -162,15 +178,19 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     ) {
       return
     }
+
     const currentState = useAppStore.getState()
     const routing = session.resolveCurrentAgentStatusRouting()
+
     if (!routing) {
       return
     }
+
     const title = currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const authoritativePaneAgent = session.getAuthoritativePaneAgent()
     const agentType = resolveCompatibleAgentTypeForOwner(payload.agentType, authoritativePaneAgent)
     const statusPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
+
     const observedStatusPayload = {
       ...statusPayload,
       observation: rendererAgentStatusObservations.observe(session.cacheKey, {
@@ -179,16 +199,20 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
         kind: 'snapshot'
       })
     }
+
     const resolvedStatusTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
+
     const statusTitle = resolvedStatusTitle
       ? normalizeCompatibleAgentTitleForOwner(
           resolvedStatusTitle,
           agentType ?? authoritativePaneAgent
         )
       : resolvedStatusTitle
+
     // Why: proves the claim — only a pane that really produced byte-derived
     // status may fence the host mirror out of its store key.
     markRendererOwnedAgentStatusWrite(session.cacheKey)
+
     if (session.launchToken) {
       currentState.setAgentStatus(
         session.cacheKey,
@@ -209,20 +233,26 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
         routing
       )
     }
+
     if (payload.state === 'working' && session.syncAgentTaskCompleteTrackingEnabled()) {
       session.requiresFreshWorkingForAgentTaskCompleteNotification = false
     }
+
     const storedStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
     const notificationPayload =
       typeof storedStatus?.stateStartedAt === 'number'
         ? { ...statusPayload, stateStartedAt: storedStatus.stateStartedAt }
         : statusPayload
+
     // Why: hook lifecycle owns deferred side effects even when alerts are disabled.
     session.agentCompletionCoordinator.observeHookStatus(notificationPayload)
+
     if (payload.state === 'working' && session.pendingTerminalBellNotification) {
       session.scheduleTerminalBellNotification()
     }
   }
+
   // Why: when main holds side-effect authority for this PTY's bytes, the
   // transport must NOT register title/bell/agent byte parsers — the
   // pty:sideEffect fact consumer below is the single policy consumer.
@@ -274,14 +304,17 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     session.lastTerminalInputAt = performance.now()
     session.markInteractiveRedrawInput()
   }
+
   session.markInteractiveRedrawInput = (): void => {
     session.lastInteractiveRedrawInputAt = performance.now()
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(session.pane.terminal)
   }
+
   session.recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(session.cacheKey)
   }
+
   // Why: onData mixes real user input with xterm's parser auto-replies (focus
   // reports, DA/DSR/CPR responses). Recording those replies as activity makes
   // the hibernation planner treat a pane hidden after its agent finished as
@@ -293,6 +326,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     // Takeover must never fire from the onData fallback below: it mixes in auto-replies.
     reportWorkerTerminalUserInput(session.cacheKey, session.runtimeEnvironmentId)
   }
+
   session.userInputActivityDisposable = subscribeToTerminalUserInput(
     session.pane.terminal,
     session.recordRealUserTerminalInput

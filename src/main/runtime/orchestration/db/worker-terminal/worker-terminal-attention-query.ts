@@ -33,10 +33,13 @@ export function getWorkerAttentionFactsForDispatches(
   authorityNow: number
 ): Map<string, WorkerAttentionFacts> {
   const ids = [...new Set(dispatchIds)]
+
   if (ids.length === 0) {
     return new Map()
   }
+
   const serializedIds = JSON.stringify(ids)
+
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id, d.task_id, d.status AS dispatch_status,
@@ -79,6 +82,7 @@ export function getWorkerAttentionFactsForDispatches(
     pending_guidance: number
     active_sibling: number
   }[]
+
   const observationRows = this.db
     .prepare(
       `SELECT ${ATTEMPT_OBSERVATION_FACT_COLUMN_LIST} FROM attempt_observation_facts
@@ -86,12 +90,15 @@ export function getWorkerAttentionFactsForDispatches(
         ORDER BY dispatch_id, sequence, rowid`
     )
     .all(serializedIds) as AttemptObservationStorageRow[]
+
   const factsByDispatch = new Map<string, ReturnType<typeof exposeAttemptObservationFact>[]>()
+
   for (const observationRow of observationRows) {
     const facts = factsByDispatch.get(observationRow.dispatch_id) ?? []
     facts.push(exposeAttemptObservationFact(observationRow))
     factsByDispatch.set(observationRow.dispatch_id, facts)
   }
+
   return new Map(
     rows.map((row) => {
       const projected = projectAttemptOutcome({
@@ -101,6 +108,7 @@ export function getWorkerAttentionFactsForDispatches(
         activeSibling: row.active_sibling === 1,
         authorityNow: { home: authorityNow }
       }).taskOutcome
+
       return [
         row.dispatch_id,
         {
@@ -130,8 +138,10 @@ export function getWorkerAttentionFacts(
   const facts = this.getWorkerAttentionFactsForDispatches([dispatchId], authorityNow).get(
     dispatchId
   )
+
   if (!facts) {
     throw new Error(`Dispatch ${dispatchId} was not found.`)
   }
+
   return facts
 }

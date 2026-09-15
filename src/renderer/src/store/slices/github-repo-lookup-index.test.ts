@@ -28,17 +28,21 @@ describe('getGitHubRepoLookupIndex', () => {
 
   it('scans each repo once across repeated misses', () => {
     let idReads = 0
+
     const repos = Array.from({ length: 32 }, (_, index) => {
       const repo = makeRepo(`repo-${index}`, `/repo-${index}`)
+
       return Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           idReads += 1
+
           return `repo-${index}`
         }
       })
     })
+
     const lookup = getGitHubRepoLookupIndex(repos)
 
     expect(lookup.findById('missing-first')).toBeUndefined()
@@ -48,13 +52,16 @@ describe('getGitHubRepoLookupIndex', () => {
 
   it('stops after a sparse first-row match', () => {
     let idReads = 0
+
     const repos = Array.from({ length: 32 }, (_, index) => {
       const repo = makeRepo(`repo-${index}`, `/repo-${index}`)
+
       return Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           idReads += 1
+
           return `repo-${index}`
         }
       })

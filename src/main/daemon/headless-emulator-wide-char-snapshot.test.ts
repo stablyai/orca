@@ -17,9 +17,11 @@ const KO =
 function textOf(t: Terminal): string {
   const b = t.buffer.active
   const out: string[] = []
+
   for (let y = 0; y < b.length; y++) {
     out.push(b.getLine(y)?.translateToString(true) ?? '')
   }
+
   return out.join('').replace(/\s+/g, '')
 }
 
@@ -33,12 +35,14 @@ function replay(
   activateOrcaTerminalUnicodeProvider(t as never)
   const core = (t as unknown as { _core: { writeSync(d: string): void } })._core
   core.writeSync(`${snapshot.scrollbackAnsi ?? ''}${snapshot.snapshotAnsi}`)
+
   return textOf(t)
 }
 
 describe('headless emulator wide-character snapshot fidelity', () => {
   it('does not duplicate Hangul across widths', () => {
     const bad: string[] = []
+
     for (let cols = 12; cols <= 80; cols++) {
       const emu = new HeadlessEmulator({ cols, rows: 14 })
       emu.write(`${KO}\r\n${KO}\r\n`)
@@ -47,11 +51,14 @@ describe('headless emulator wide-character snapshot fidelity', () => {
       const rt = replay(snap, cols, 14)
       // Why: an empty read would satisfy src === rt and assert nothing.
       expect(src.length).toBeGreaterThan(0)
+
       if (src !== rt) {
         bad.push(`cols=${cols}\n  src: ${src}\n  rt : ${rt}`)
       }
+
       emu.dispose()
     }
+
     expect(bad).toEqual([])
   })
 })

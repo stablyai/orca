@@ -19,6 +19,7 @@ const folder: FolderWorkspace = {
   createdAt: 0,
   updatedAt: 0
 }
+
 const group = { id: 'documentation', name: 'Documentation' } as ProjectGroup
 
 function makeStore(): MemorySnapshotStore {

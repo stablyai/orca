@@ -18,10 +18,13 @@ vi.mock('./worktree-creation-structured-session', () => ({
     primaryTabId: args.primaryTabId
   }))
 }))
+
 vi.mock('./worktree-creation-completion', () => ({ completeWorktreeCreation: vi.fn() }))
 
 const initialState = useAppStore.getState()
+
 registerWorktreeActivationReset()
+
 afterEach(() => {
   vi.restoreAllMocks()
   useAppStore.setState(initialState, true)
@@ -33,6 +36,7 @@ describe('native chat creation completed in the background', () => {
     async (agent) => {
       const worktree = makeCreatedAgentWorktree()
       seedEmptyActivatableWorktree(worktree)
+
       const request: WorktreeCreationRequest = {
         repoId: worktree.repoId,
         name: 'feature',
@@ -45,6 +49,7 @@ describe('native chat creation completed in the background', () => {
         quickPrompt: '',
         quickTelemetry: null
       }
+
       const setup = { runnerScriptPath: '/tmp/setup-runner.sh', envVars: {} }
       useAppStore.setState({
         activeView: 'tasks',

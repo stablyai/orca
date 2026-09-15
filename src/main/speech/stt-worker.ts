@@ -25,17 +25,24 @@ type WorkerMessage =
 // filesystem access. The main thread resolves the correct absolute path
 // (dev vs packaged) and passes it via workerData.
 let sherpa: any = null
+
 let recognizer: any = null
+
 let stream: any = null
+
 let isStreaming = false
+
 let offlineChunker: OfflineAudioChunker | null = null
+
 let offlineSampleRate = 16000
 
 function loadSherpa(): any {
   const modulePath = workerData?.sherpaModulePath
+
   if (!modulePath) {
     throw new Error('workerData.sherpaModulePath is required')
   }
+
   return require(modulePath)
 }
 
@@ -71,6 +78,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
         rule2MinTrailingSilence: 1.2,
         rule3MinUtteranceLength: 20
       }
+
       recognizer = sherpa.createOnlineRecognizer(config)
       stream = sherpa.createOnlineStream(recognizer)
     } else if (streaming && modelType === 'paraformer') {
@@ -92,6 +100,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
         rule2MinTrailingSilence: 1.2,
         rule3MinUtteranceLength: 20
       }
+
       recognizer = sherpa.createOnlineRecognizer(config)
       stream = sherpa.createOnlineStream(recognizer)
     } else if (modelType === 'whisper') {
@@ -109,6 +118,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
         },
         decodingMethod: 'greedy_search'
       }
+
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     } else if (modelType === 'nemo-ctc') {
@@ -125,6 +135,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
         },
         decodingMethod: 'greedy_search'
       }
+
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     } else if (modelType === 'senseVoice') {
@@ -144,6 +155,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
         },
         decodingMethod: 'greedy_search'
       }
+
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     } else {
@@ -162,6 +174,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
         },
         ...hotwords
       }
+
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     }
@@ -180,6 +193,7 @@ function decodeOfflineChunk(samples: Float32Array): string {
     sherpa.decodeOfflineStream(recognizer, stream)
     const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
     const result = JSON.parse(resultJson)
+
     return result?.text?.trim() ?? ''
   } finally {
     if (sherpa && recognizer) {
@@ -193,6 +207,7 @@ function decodeOfflineChunk(samples: Float32Array): string {
 function resetOfflineSessionState(): void {
   try {
     offlineChunker = new OfflineAudioChunker(offlineSampleRate)
+
     if (sherpa && recognizer) {
       stream = sherpa.createOfflineStream(recognizer)
     }
@@ -212,6 +227,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
     // different input rates across chunks. Normalize before crossing the
     // native boundary so device/context changes become recoverable JS state.
     const samples = resampleToRate(msg.samples, inputRate, offlineSampleRate)
+
     if (isStreaming) {
       sherpa.acceptWaveformOnline(stream, { sampleRate: offlineSampleRate, samples })
 
@@ -222,15 +238,18 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       const resultJson = sherpa.getOnlineStreamResultAsJson(recognizer, stream)
       const result = JSON.parse(resultJson)
       const text = result?.text?.trim()
+
       if (text) {
         parentPort?.postMessage({ type: 'partial', text })
       }
 
       if (sherpa.isEndpoint(recognizer, stream)) {
         const finalText = result?.text?.trim()
+
         if (finalText) {
           parentPort?.postMessage({ type: 'final', text: finalText })
         }
+
         sherpa.reset(recognizer, stream)
       }
     } else {
@@ -243,9 +262,11 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
       // already removed them from the chunker, and decodeOfflineChunk refreshes
       // the stream in finally so a spent stream cannot poison the next attempt.
       let firstError: unknown = null
+
       for (const chunk of readyChunks) {
         try {
           const text = decodeOfflineChunk(chunk)
+
           if (text) {
             parentPort?.postMessage({ type: 'final', text })
           }
@@ -253,6 +274,7 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
           firstError ??= err
         }
       }
+
       if (firstError) {
         throw firstError
       }
@@ -265,38 +287,47 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
 function handleStop(): void {
   if (!recognizer || !stream) {
     parentPort?.postMessage({ type: 'stopped' })
+
     return
   }
 
   try {
     if (isStreaming) {
       sherpa.inputFinished(stream)
+
       while (sherpa.isOnlineStreamReady(recognizer, stream)) {
         sherpa.decodeOnlineStream(recognizer, stream)
       }
+
       const resultJson = sherpa.getOnlineStreamResultAsJson(recognizer, stream)
       const result = JSON.parse(resultJson)
       const text = result?.text?.trim()
+
       if (text) {
         parentPort?.postMessage({ type: 'final', text })
       }
+
       stream = sherpa.createOnlineStream(recognizer)
     } else {
       // Why: the remainder is below the chunk limit by construction, so this
       // last decode is bounded too.
       const remaining = offlineChunker?.flush()
+
       if (remaining && remaining.length > 0) {
         const text = decodeOfflineChunk(remaining)
+
         if (text) {
           parentPort?.postMessage({ type: 'final', text })
         }
       }
+
       resetOfflineSessionState()
     }
   } catch (err) {
     if (!isStreaming) {
       resetOfflineSessionState()
     }
+
     parentPort?.postMessage({ type: 'error', error: String(err) })
   } finally {
     // Why: stopDictation waits on this signal; recovery must never prevent it.

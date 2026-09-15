@@ -32,6 +32,7 @@ import type {
 } from './activity-thread-types'
 
 const ZERO_RECT_FALLBACK_VIEWPORT = { width: 320, height: 600 }
+
 const observeActivityListRect: typeof observeElementRect = (instance, cb) =>
   observeElementRect(instance, (rect) => {
     cb(rect.height > 0 ? rect : ZERO_RECT_FALLBACK_VIEWPORT)
@@ -118,47 +119,58 @@ export function ActivityThreadListPane({
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
     () => new Set()
   )
+
   // Precedence: explicit props, then a caller-owned context (hosts that unmount
   // the pane on body switches), then pane-local state.
   const contextCollapse = useContext(ActivityThreadCollapseContext)
   const isControlled = collapsedGroupKeys !== undefined && onToggleGroupCollapse !== undefined
+
   const effectiveCollapsedGroupKeys = isControlled
     ? collapsedGroupKeys
     : (contextCollapse?.collapsedGroupKeys ?? internalCollapsedGroupKeys)
+
   const handleToggleGroup = isControlled
     ? onToggleGroupCollapse
     : (contextCollapse?.onToggleGroupCollapse ??
       ((groupKey: string) => {
         setInternalCollapsedGroupKeys((prev) => {
           const next = new Set(prev)
+
           if (next.has(groupKey)) {
             next.delete(groupKey)
           } else {
             next.add(groupKey)
           }
+
           return next
         })
       }))
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const hasRestoredScrollRef = useRef(false)
+
   const handleScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       if (!scrollTopRef) {
         return
       }
+
       const scrollTop = event.currentTarget.scrollTop
+
       // A clamp-to-0 fired before the deferred restore must not wipe the saved offset.
       if (!hasRestoredScrollRef.current) {
         if (scrollTop === 0) {
           return
         }
+
         hasRestoredScrollRef.current = true
       }
+
       scrollTopRef.current = scrollTop
     },
     [scrollTopRef]
   )
+
   const virtualItems = useMemo(
     () =>
       buildActivityVirtualItems({
@@ -168,10 +180,12 @@ export function ActivityThreadListPane({
       }),
     [visibleThreadGroups, groupBy, effectiveCollapsedGroupKeys]
   )
+
   const headerItemIndexes = useMemo(
     () => getActivityHeaderItemIndexes(virtualItems),
     [virtualItems]
   )
+
   const selectedItemIndex = useMemo(
     () => findActivityThreadItemIndex(virtualItems, selectedPaneKey),
     [virtualItems, selectedPaneKey]
@@ -183,10 +197,12 @@ export function ActivityThreadListPane({
   const getItemKey = useCallback(
     (index: number) => {
       const item = virtualItems[index]
+
       return item ? getActivityVirtualItemKey(item) : `__stale_${index}`
     },
     [virtualItems]
   )
+
   const virtualizer = useVirtualizer({
     count: virtualItems.length,
     getScrollElement: () => scrollContainerRef.current,
@@ -194,10 +210,13 @@ export function ActivityThreadListPane({
     getItemKey,
     measureElement: (element, entry, instance) => {
       const measured = measureVirtualElementSize(element, entry, instance)
+
       if (measured > 0) {
         return measured
       }
+
       const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
+
       return estimateActivityVirtualItemSize(
         Number.isNaN(index) ? undefined : virtualItems[index],
         compactMode
@@ -209,20 +228,26 @@ export function ActivityThreadListPane({
           groupBy !== 'none'
             ? getActiveStickyHeaderIndex(headerItemIndexes, range.startIndex)
             : null
+
         const previousStickyIndex =
           activeStickyIndex !== null
             ? getPreviousStickyHeaderIndex(headerItemIndexes, activeStickyIndex)
             : null
+
         const indexSet = new Set(defaultRangeExtractor(range))
+
         if (activeStickyIndex !== null) {
           indexSet.add(activeStickyIndex)
         }
+
         if (previousStickyIndex !== null) {
           indexSet.add(previousStickyIndex)
         }
+
         if (selectedItemIndex !== null && selectedItemIndex >= 0) {
           indexSet.add(selectedItemIndex)
         }
+
         return Array.from(indexSet).sort((a, b) => a - b)
       },
       [groupBy, headerItemIndexes, selectedItemIndex]
@@ -238,6 +263,7 @@ export function ActivityThreadListPane({
     if (measuredCompactModeRef.current === compactMode) {
       return
     }
+
     measuredCompactModeRef.current = compactMode
     virtualizer.measure()
   }, [virtualizer, compactMode])
@@ -250,6 +276,7 @@ export function ActivityThreadListPane({
     if (!scrollTopRef || hasRestoredScrollRef.current) {
       return
     }
+
     if (restoreArmedAtRef.current === null) {
       restoreArmedAtRef.current = Date.now()
     } else if (Date.now() - restoreArmedAtRef.current > DEFERRED_SCROLL_RESTORE_WINDOW_MS) {
@@ -257,23 +284,30 @@ export function ActivityThreadListPane({
       // restore on some later growth would yank the viewport out from the user.
       hasRestoredScrollRef.current = true
       scrollTopRef.current = 0
+
       return
     }
+
     const scrollContainer = scrollContainerRef.current
+
     if (!scrollContainer) {
       return
     }
+
     // Against the max offset, not the content height: a viewport taller than the
     // remaining content clamps the assignment to 0 and burns the one restore.
     const maxScrollTop = Math.max(0, totalSize - scrollContainer.clientHeight)
+
     if (scrollTopRef.current > maxScrollTop) {
       return
     }
+
     scrollContainer.scrollTop = scrollTopRef.current
     hasRestoredScrollRef.current = true
   }, [scrollTopRef, totalSize])
 
   const scrollOffset = virtualizer.scrollOffset ?? 0
+
   const activeStickyHeaderIndex =
     groupBy !== 'none'
       ? getActiveStickyHeaderIndexForScroll({
@@ -285,6 +319,7 @@ export function ActivityThreadListPane({
       : null
 
   const resizable = onResizeStart !== undefined
+
   return (
     <aside
       ref={threadListRef}
@@ -328,11 +363,14 @@ export function ActivityThreadListPane({
           >
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const item = virtualItems[virtualRow.index]
+
               if (!item) {
                 return null
               }
+
               const isActiveSticky =
                 item.type === 'header' && virtualRow.index === activeStickyHeaderIndex
+
               return (
                 <div
                   key={virtualRow.key}

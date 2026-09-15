@@ -20,6 +20,7 @@ import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 
 function recordFor(provider: 'claude' | 'codex', sessionId: string): AgentSessionRecord {
   const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+
   return {
     ...record,
     provider,
@@ -42,10 +43,13 @@ function harness(
   const live = new Map<string, unknown>()
   const restoreHandoff = vi.fn(async () => undefined)
   const serializedIds: string[] = []
+
   const serialize = <T>(sessionId: string, task: () => Promise<T>): Promise<T> => {
     serializedIds.push(sessionId)
+
     return task()
   }
+
   const restorer = new StructuredAgentSessionReadableRestorer({
     store: {
       getRecord: (sessionId: string) => records.find((r) => r.sessionId === sessionId) ?? null,
@@ -61,6 +65,7 @@ function harness(
     retrySettlement: async () => true,
     restoreHandoff
   })
+
   return { restorer, live, restoreHandoff, serializedIds }
 }
 
@@ -134,6 +139,7 @@ describe('a record whose journal cannot be read', () => {
     // refusal: attach still recovers it, so the caller publishes the tab and lets the pane's hold
     // finish the job. Throwing, or reporting success, would both be wrong.
     vi.spyOn(readRestore, 'restoreStructuredAgentSessionRead').mockResolvedValue(null)
+
     const { restorer, live } = harness([
       recordFor('claude', 'session-no-journal-claude'),
       recordFor('codex', 'session-no-journal-codex')
@@ -153,6 +159,7 @@ describe('the host answer a client acts on', () => {
 
   function record(provider: 'claude' | 'codex', workspaceId: string) {
     const base = recordFor(provider, 'session-answered')
+
     return { ...base, location: { ...base.location, workspaceId } }
   }
 

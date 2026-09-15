@@ -20,5 +20,6 @@ export function agentRowDotState(
     case 'unverifiable':
       return state
   }
+
   return 'idle'
 }

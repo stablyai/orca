@@ -26,14 +26,17 @@ vi.mock('./relay-session-broker', () => {
       if (!this.live) {
         throw new Error('relay_control_not_active')
       }
+
       return { v: 1, relayHostId: this.hostId, relayDeviceId, inviteExpiresAt: 0 }
     }
     static connect = vi.fn(async () => {
       const broker = new RelaySessionBroker()
       fakes.brokers.push(broker)
+
       return broker
     })
   }
+
   return { RelaySessionBroker }
 })
 
@@ -46,6 +49,7 @@ function service(): DesktopRelayService {
     accessToken: 'access-1',
     relayEntitled: true
   })
+
   const runtimeRpc = {
     getE2EEKeypair: () => ({
       publicKey: new Uint8Array(32).fill(7),
@@ -60,6 +64,7 @@ function service(): DesktopRelayService {
       getMobilePairingConnectionMode: () => 'automatic'
     })
   } as unknown as OrcaRuntimeRpcServer
+
   return new DesktopRelayService({
     authConfig: {
       relayDirectorUrl: 'https://relay.example.test',
@@ -77,6 +82,7 @@ describe('DesktopRelayService broker liveness', () => {
     // Why: ownership stays 'valid' after a control socket dies, so the stale
     // handle otherwise reaches create_pairing_relay and fails the pairing.
     const relayService = service()
+
     try {
       await expect(relayService.createPairingRelay('device-1')).resolves.toMatchObject({
         binding: { relayDeviceId: 'device-1' }
@@ -97,6 +103,7 @@ describe('DesktopRelayService broker liveness', () => {
 
   it('keeps using a live broker instead of replacing it', async () => {
     const relayService = service()
+
     try {
       await relayService.createPairingRelay('device-1')
       await relayService.createPairingRelay('device-2')

@@ -14,6 +14,7 @@ describe('handshake framing', () => {
       type: 'orca-relay-handshake',
       version: '0.1.0+deadbeef'
     })
+
     expect(sent[0]).toBe(MessageType.Handshake)
     expect(sent.length).toBeGreaterThan(HEADER_LENGTH)
 
@@ -32,6 +33,7 @@ describe('handshake framing', () => {
       type: 'orca-relay-handshake-ok',
       version: '0.1.0+deadbeef'
     })
+
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder((f) => frames.push(f))
     decoder.feed(sent)
@@ -45,6 +47,7 @@ describe('handshake framing', () => {
       expected: '0.1.0+aaa',
       got: '0.1.0+bbb'
     })
+
     const frames: DecodedFrame[] = []
     const decoder = new FrameDecoder((f) => frames.push(f))
     decoder.feed(sent)

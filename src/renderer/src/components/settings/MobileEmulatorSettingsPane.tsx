@@ -39,7 +39,9 @@ type MobileEmulatorSettingsPaneProps = {
 }
 
 const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
+
 const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
+
 const SIMULATOR_STATE_SUFFIX_RE =
   /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
 
@@ -47,12 +49,14 @@ function statusText(availability: EmulatorAvailability | null, enabled: boolean)
   if (!enabled) {
     return translate('auto.components.settings.MobileEmulatorSettingsPane.a4f1c82d90', 'Disabled')
   }
+
   if (!availability) {
     return translate(
       'auto.components.settings.MobileEmulatorSettingsPane.b5e2d93e01',
       'Checking...'
     )
   }
+
   return availability.available
     ? translate('auto.components.settings.MobileEmulatorSettingsPane.c6f3ea4f12', 'Ready')
     : translate('auto.components.settings.MobileEmulatorSettingsPane.d704fb5023', 'Needs setup')
@@ -62,9 +66,11 @@ function statusBadgeClassName(availability: EmulatorAvailability | null, enabled
   if (!enabled) {
     return 'border-border/50 bg-muted/30 text-muted-foreground'
   }
+
   if (!availability) {
     return 'border-border/50 bg-muted/30 text-muted-foreground'
   }
+
   return availability.available
     ? 'border-status-success-border bg-status-success-background text-status-success'
     : 'border-destructive/30 bg-destructive/10 text-destructive'
@@ -73,12 +79,15 @@ function statusBadgeClassName(availability: EmulatorAvailability | null, enabled
 function deviceLabel(device: SimulatorDeviceRow): string {
   const state = device.state.trim()
   const name = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
+
   if (device.isAvailable === false) {
     return `${name} (Unavailable)`
   }
+
   if (!state || state.toLowerCase() === 'shutdown') {
     return name
   }
+
   return `${name} (${state})`
 }
 
@@ -88,6 +97,7 @@ function isAndroidDevice(device: SimulatorDeviceRow): boolean {
 
 function DeviceSelectItemLabel({ device }: { device: SimulatorDeviceRow }): React.JSX.Element {
   const Icon = isAndroidDevice(device) ? AndroidLogo : IosBrandIcon
+
   return (
     <span className="flex min-w-0 items-center gap-2">
       <Icon className="size-3.5 shrink-0 fill-current text-muted-foreground" />
@@ -103,6 +113,7 @@ function availabilityDetail(availability: EmulatorAvailability | null): string {
       'Checking Android SDK and iOS Simulator support.'
     )
   }
+
   if (availability.available) {
     return availability.devices.length === 1
       ? translate(
@@ -115,6 +126,7 @@ function availabilityDetail(availability: EmulatorAvailability | null): string {
           { value0: availability.devices.length }
         )
   }
+
   return availability.simctl.message || availability.serveSim.message || availability.message
 }
 
@@ -128,12 +140,14 @@ export function MobileEmulatorSettingsPane({
 
   const refreshAvailability = useCallback(async (): Promise<void> => {
     setRefreshing(true)
+
     try {
       const result = (await callRuntimeRpc(
         { kind: 'local' },
         'emulator.availability',
         {}
       )) as EmulatorAvailability
+
       setAvailability(result)
     } catch (error) {
       setAvailability({
@@ -155,9 +169,11 @@ export function MobileEmulatorSettingsPane({
   }, [refreshAvailability])
 
   const devices = availability?.devices ?? []
+
   const selectedDeviceKnown = devices.some(
     (device) => device.udid === settings.mobileEmulatorDefaultDeviceUdid
   )
+
   const selectValue =
     settings.mobileEmulatorDefaultDeviceUdid && selectedDeviceKnown
       ? settings.mobileEmulatorDefaultDeviceUdid
@@ -170,6 +186,7 @@ export function MobileEmulatorSettingsPane({
         'Orca will auto-select an emulator device after devices are detected.'
       )
     }
+
     return translate(
       'auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75',
       'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'

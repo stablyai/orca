@@ -50,13 +50,16 @@ function pathFlavorFor(root: string): typeof posix | typeof win32 {
 
 function normalizeRootPath(root: string): string {
   const flavor = pathFlavorFor(root)
+
   const normalized =
     flavor === win32 ? flavor.normalize(root.replace(/\//g, '\\')) : flavor.normalize(root)
+
   // Why: `C:\` is the whole root, and trimming its separator would make win32.join answer the
   // drive-relative `C:x`, which resolves against the host's cwd instead of inside the grant.
   if (flavor === win32 && /^[a-zA-Z]:\\$/.test(normalized)) {
     return normalized
   }
+
   // Why: a trailing separator would make the containment prefix check accept a sibling directory.
   return normalized.length > 1 && normalized.endsWith(flavor.sep)
     ? normalized.slice(0, -1)
@@ -73,9 +76,11 @@ export function mintDocPreviewGrant(params: {
   const requestBase = normalizeRootPath(params.requestBase ?? params.root)
   const root = normalizeRootPath(params.root)
   const flavor = pathFlavorFor(requestBase)
+
   if (!isAtOrInsideRoot(requestBase, root, flavor)) {
     throw new Error('Document preview root is outside its request base')
   }
+
   const grant: DocPreviewGrant = {
     id: randomBytes(16).toString('hex'),
     owner: params.owner,
@@ -85,7 +90,9 @@ export function mintDocPreviewGrant(params: {
     entryRelativePath: params.entryRelativePath.replace(/\\/g, '/'),
     browserPageId: params.browserPageId
   }
+
   grantsById.set(grant.id, grant)
+
   return grant
 }
 
@@ -104,6 +111,7 @@ const revocationListeners = new Set<(grant: DocPreviewGrant) => void>()
 /** Why the whole grant and not its id: it is already gone from the registry when listeners run. */
 export function onDocPreviewGrantRevoked(listener: (grant: DocPreviewGrant) => void): () => void {
   revocationListeners.add(listener)
+
   return () => revocationListeners.delete(listener)
 }
 
@@ -116,11 +124,14 @@ function notifyRevoked(grant: DocPreviewGrant): void {
 export function revokeDocPreviewGrant(grantId: string): boolean {
   canonicalRootByGrantId.delete(grantId)
   const grant = grantsById.get(grantId)
+
   if (!grant) {
     return false
   }
+
   grantsById.delete(grantId)
   notifyRevoked(grant)
+
   return true
 }
 
@@ -128,6 +139,7 @@ export function revokeAllDocPreviewGrants(): void {
   canonicalRootByGrantId.clear()
   const revoked = [...grantsById.values()]
   grantsById.clear()
+
   for (const grant of revoked) {
     notifyRevoked(grant)
   }
@@ -153,11 +165,14 @@ export function resolveDocPreviewCandidatePath(
     // Why: keep empty segments visible to the safety check except a single trailing one from `dir/`.
     return !(segment === '' && index === all.length - 1)
   })
+
   if (segments.length === 0 || hasUnsafeSegment(segments)) {
     return null
   }
+
   const flavor = pathFlavorFor(grant.requestBase)
   const resolved = flavor.normalize(flavor.join(grant.requestBase, ...segments))
+
   return isInsideRoot(grant.requestBase, resolved, flavor) ? resolved : null
 }
 
@@ -167,6 +182,7 @@ function isInsideRoot(
   flavor: typeof posix | typeof win32
 ): boolean {
   const rootPrefix = root.endsWith(flavor.sep) ? root : `${root}${flavor.sep}`
+
   return candidate.startsWith(rootPrefix)
 }
 
@@ -207,13 +223,17 @@ export function resolveDocPreviewTargetPath(
   relativePath: string
 ): string | null {
   const resolved = resolveDocPreviewCandidatePath(grant, relativePath)
+
   if (!resolved) {
     return null
   }
+
   if (resolved === resolveEntryAbsolutePath(grant)) {
     return resolved
   }
+
   const flavor = pathFlavorFor(grant.requestBase)
+
   return directoryAuthorityRoots(grant).some((root) => isInsideRoot(root, resolved, flavor))
     ? resolved
     : null
@@ -222,22 +242,29 @@ export function resolveDocPreviewTargetPath(
 /** Expands a live grant to the directory containing one reader-approved request. */
 export function authorizeDocPreviewDirectory(grantId: string, relativePath: string): boolean {
   const grant = grantsById.get(grantId)
+
   if (!grant) {
     return false
   }
+
   const candidate = resolveDocPreviewCandidatePath(grant, relativePath)
+
   if (!candidate) {
     return false
   }
+
   const flavor = pathFlavorFor(grant.requestBase)
   const directory = normalizeRootPath(flavor.dirname(candidate))
+
   if (!isAtOrInsideRoot(grant.requestBase, directory, flavor)) {
     return false
   }
+
   if (!directoryAuthorityRoots(grant).some((root) => isAtOrInsideRoot(root, directory, flavor))) {
     grant.authorizedRoots.push(directory)
     canonicalRootByGrantId.delete(grant.id)
   }
+
   return true
 }
 
@@ -260,6 +287,7 @@ export async function resolveCanonicalDocPreviewPath(
 ): Promise<string | null> {
   try {
     let canonicalRoots = canonicalRootByGrantId.get(grant.id)
+
     if (!canonicalRoots) {
       const entryAbsolute = resolveEntryAbsolutePath(grant)
       canonicalRoots = Promise.all([
@@ -269,6 +297,7 @@ export async function resolveCanonicalDocPreviewPath(
       ]).then(([boundaryPath, entryPath, ...rootPaths]) => {
         const boundary = normalizeRootPath(boundaryPath)
         const flavor = pathFlavorFor(boundary)
+
         return {
           boundary,
           roots: rootPaths
@@ -279,11 +308,14 @@ export async function resolveCanonicalDocPreviewPath(
       })
       canonicalRootByGrantId.set(grant.id, canonicalRoots)
     }
+
     const [{ boundary, roots, entry }, canonicalPath] = await Promise.all([
       canonicalRoots,
       realpath(absolutePath)
     ])
+
     const flavor = pathFlavorFor(boundary)
+
     return isInsideRoot(boundary, canonicalPath, flavor) &&
       (canonicalPath === entry || roots.some((root) => isInsideRoot(root, canonicalPath, flavor)))
       ? canonicalPath
@@ -291,6 +323,7 @@ export async function resolveCanonicalDocPreviewPath(
   } catch {
     // Why: a root that no longer canonicalizes must not fall back to the lexical answer.
     canonicalRootByGrantId.delete(grant.id)
+
     return null
   }
 }
@@ -307,12 +340,15 @@ export function toRuntimeWorktreeRelativePath(
   const flavor = pathFlavorFor(worktreeRoot)
   const normalizedRoot = normalizeRootPath(worktreeRoot)
   const relative = flavor.relative(normalizedRoot, absolutePath)
+
   if (!relative || relative === '..' || relative.startsWith(`..${flavor.sep}`)) {
     return null
   }
+
   if (flavor === win32 && /^[a-zA-Z]:/.test(relative)) {
     return null
   }
+
   return relative.replace(/\\/g, '/')
 }
 
@@ -321,6 +357,7 @@ export function toRuntimeWorktreeRelativeDirectoryPath(
   absolutePath: string
 ): string | null {
   const normalizedRoot = normalizeRootPath(worktreeRoot)
+
   return normalizeRootPath(absolutePath) === normalizedRoot
     ? ''
     : toRuntimeWorktreeRelativePath(worktreeRoot, absolutePath)

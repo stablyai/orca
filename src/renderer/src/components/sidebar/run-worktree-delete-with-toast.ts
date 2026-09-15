@@ -38,10 +38,12 @@ export function runWorktreeDeleteWithToast(
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
     ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {})
   }
+
   const removal =
     Object.keys(removeOptions).length > 0
       ? removeWorktree(target, options.force === true, removeOptions)
       : removeWorktree(target, options.force === true)
+
   return removal
     .then((result) => {
       if (result.ok) {
@@ -56,18 +58,24 @@ export function runWorktreeDeleteWithToast(
               : {})
           })
         }
+
         if (focusSuccessor) {
           commitFocus()
         }
+
         return true
       }
+
       const state = getDeleteStateForWorktreeHost(
         { id: worktreeId, hostId: target.executionHostId ?? undefined },
         useAppStore.getState().deleteStateByWorktreeId
       )
+
       const canForceDelete = state?.canForceDelete ?? false
+
       const hasKnownChanges =
         (useAppStore.getState().gitStatusByWorktree[worktreeId]?.length ?? 0) > 0
+
       showDeleteWorktreeFailureToast({
         error: result.error,
         canForceDelete,
@@ -78,10 +86,12 @@ export function runWorktreeDeleteWithToast(
         onForceDelete: () => {
           // Recapture focus because the user may have navigated while the toast was open.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+
           // The explicit Force Delete retry may waive an unverified PTY-stop proof.
           const forceRemoval = useAppStore
             .getState()
             .removeWorktree(target, true, { allowUnverifiedPtyStop: true })
+
           forceRemoval
             .then((forceResult) => {
               if (!forceResult.ok) {
@@ -101,8 +111,10 @@ export function runWorktreeDeleteWithToast(
                     }
                   }
                 )
+
                 return
               }
+
               commitForceFocus()
               options.onForceDeleted?.(target)
             })
@@ -128,6 +140,7 @@ export function runWorktreeDeleteWithToast(
         worktreeId,
         worktreeName
       })
+
       return false
     })
     .catch((err: unknown) => {
@@ -138,6 +151,7 @@ export function runWorktreeDeleteWithToast(
         ),
         { description: err instanceof Error ? err.message : String(err) }
       )
+
       return false
     })
 }

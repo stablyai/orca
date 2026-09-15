@@ -6,8 +6,10 @@ export function filterPathsToWslDistros(
   distros: readonly string[]
 ): string[] {
   const allowed = new Set(distros.map((distro) => distro.toLowerCase()))
+
   return paths.filter((candidate) => {
     const parsed = parseWslUncPath(candidate)
+
     return !parsed || allowed.has(parsed.distro.toLowerCase())
   })
 }
@@ -19,6 +21,8 @@ export async function filterPathsToRunningWslDistrosAsync(
   if (process.platform !== 'win32') {
     return [...paths]
   }
+
   const runningDistros = paths.some(isWslUncPath) ? await listRunningWslDistrosAsync() : []
+
   return filterPathsToWslDistros(paths, runningDistros)
 }

@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -261,6 +266,7 @@ describe('LocalPtyProvider', () => {
       })
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       vi.useFakeTimers({ toFake: ['Date'] })
+
       try {
         vi.setSystemTime(1_000_000)
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
@@ -291,6 +297,7 @@ describe('LocalPtyProvider', () => {
         .mockResolvedValue({ available: true, processName: 'powershell.exe' })
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       vi.useFakeTimers({ toFake: ['Date'] })
+
       try {
         vi.setSystemTime(1_000_000)
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
@@ -323,6 +330,7 @@ describe('LocalPtyProvider', () => {
       })
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       vi.useFakeTimers({ toFake: ['Date'] })
+
       try {
         vi.setSystemTime(1_000_000)
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
@@ -418,6 +426,7 @@ describe('LocalPtyProvider', () => {
         .mockResolvedValue({ available: true, processName: null })
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       vi.useFakeTimers({ toFake: ['Date'] })
+
       try {
         vi.setSystemTime(1_000_000)
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
@@ -457,6 +466,7 @@ describe('LocalPtyProvider', () => {
         .mockResolvedValue({ available: true, processName: 'claude', processId: 1000 })
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       vi.useFakeTimers({ toFake: ['Date'] })
+
       try {
         vi.setSystemTime(1_000_000)
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
@@ -488,6 +498,7 @@ describe('LocalPtyProvider', () => {
         .mockResolvedValue({ available: true, processName: null, anchorPidForeign: true })
       readWindowsPtyJobProcessIdsMock.mockReturnValue(new Set([12345, 999]))
       vi.useFakeTimers({ toFake: ['Date'] })
+
       try {
         vi.setSystemTime(1_000_000)
         const { id } = await provider.spawn({ cols: 80, rows: 24 })

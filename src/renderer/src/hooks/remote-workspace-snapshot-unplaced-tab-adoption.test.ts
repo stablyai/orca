@@ -30,16 +30,23 @@ import { resolveWorkspaceTerminalHostAuthority } from '../lib/workspace-terminal
 import type { DirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator-types'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const TARGET_ID = 'ssh-target-1'
+
 const REPO_ROOT = '/srv/proj'
+
 const ALPHA = `${REPO_ROOT}/alpha`
+
 const BETA = `${REPO_ROOT}/beta`
+
 const ALPHA_ID = `repoA::${ALPHA}`
+
 const BETA_ID = `repoA::${BETA}`
 
 const authority: DirectSshAuthority = {
@@ -79,6 +86,7 @@ function snapshot(revision: number): RemoteWorkspaceObservedSnapshot {
     [ALPHA]: [tabRow(ALPHA, 'T1', 0), tabRow(ALPHA, 'T2', 1)],
     [BETA]: [tabRow(BETA, 'T3', 0)]
   }
+
   return {
     namespace: 'workspace',
     revision,
@@ -102,6 +110,7 @@ function snapshot(revision: number): RemoteWorkspaceObservedSnapshot {
 /** Same shape as the snapshot above, minus the terminal rows. */
 function emptySnapshot(revision: number): RemoteWorkspaceObservedSnapshot {
   const base = snapshot(revision)
+
   return {
     ...base,
     session: {
@@ -133,6 +142,7 @@ function createStore(): TestStore {
     // they are the signals under test.
     reconnectPersistedTerminals: (async () => {}) as never
   })
+
   return store
 }
 
@@ -200,6 +210,7 @@ async function applySnapshot(
   snap: RemoteWorkspaceObservedSnapshot
 ): Promise<void> {
   vi.useFakeTimers()
+
   try {
     const pending = applyDirectSshRemoteWorkspaceSnapshot({
       store,
@@ -211,6 +222,7 @@ async function applySnapshot(
       waitForWorkspaceSessionReady: async () => true,
       finalizeHydratedTerminals: () => 0
     })
+
     // Exercise the real placement deadline without spending ten wall-clock seconds per snapshot.
     await vi.advanceTimersByTimeAsync(10_000)
     await pending
@@ -238,6 +250,7 @@ function syncPhase(store: TestStore): string | undefined {
 describe('a host snapshot whose terminal tabs cannot be placed locally', () => {
   it('merges against state changed while an unplaced path waits and times out', async () => {
     vi.useFakeTimers()
+
     try {
       const store = createStore()
       // ALPHA is placeable, while BETA keeps the placement waiter open.
@@ -253,6 +266,7 @@ describe('a host snapshot whose terminal tabs cannot be placed locally', () => {
         waitForWorkspaceSessionReady: async () => true,
         finalizeHydratedTerminals: () => 0
       })
+
       await Promise.resolve()
       await Promise.resolve()
       addLocalTab(store, 'created-while-waiting')

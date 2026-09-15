@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
+
 const {
   handleMock,
   lstatMock,
@@ -28,6 +29,7 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('fs/promises', () => ({
   lstat: lstatMock,
   mkdir: mkdirMock,
@@ -40,6 +42,7 @@ vi.mock('fs/promises', () => ({
   unlink: unlinkMock,
   rm: vi.fn()
 }))
+
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -61,6 +64,7 @@ const store = {
   ],
   getSettings: () => ({ workspaceDir: path.resolve('/workspace') })
 }
+
 const enoent = (): Error => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 function createProvider(uploadSession: FileUploadSession): IFilesystemProvider {
@@ -97,6 +101,7 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
     getState: () => ({ status }),
     sftp: vi.fn()
   })
+
   const mockFile = (p: string): void => {
     const rp = path.resolve(p)
     lstatMock.mockImplementation(async (x: string) => {
@@ -110,9 +115,11 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
   }
+
   const invoke = (args: Record<string, unknown>) =>
     handlers.get('fs:importExternalPaths')!(
       null,
@@ -158,6 +165,7 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
           close: vi.fn().mockResolvedValue(undefined)
         }
       }
+
       return {
         stat: vi.fn().mockResolvedValue({
           size: 12,
@@ -205,10 +213,12 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
 
   it('falls back to local import when connectionId is absent', async () => {
     mockFile('/tmp/dropped/file.txt')
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/file.txt'],
       destDir: path.resolve('/workspace/repo/src')
     })
+
     expect(results[0]).toMatchObject({ status: 'imported' })
     expect(openMock).toHaveBeenCalledWith(
       path.resolve('/tmp/dropped/file.txt'),

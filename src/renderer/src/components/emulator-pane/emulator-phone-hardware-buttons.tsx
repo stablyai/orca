@@ -6,10 +6,12 @@ export function PhoneHardwareButtons({ layout }: { layout: DeviceFrameLayout }) 
   const actionHeight = `${Math.max(18, Math.min(34, layout.shellHeight * 0.04))}px`
   const volumeHeight = `${Math.max(34, Math.min(64, layout.shellHeight * 0.08))}px`
   const powerHeight = `${Math.max(42, Math.min(76, layout.shellHeight * 0.095))}px`
+
   const leftStyle = {
     left: `${buttonInset}px`,
     width: sideButtonThickness
   }
+
   const rightStyle = {
     right: `${buttonInset}px`,
     width: sideButtonThickness

@@ -46,6 +46,7 @@ export async function closeSharedControlTestServers(): Promise<void> {
           for (const client of server.clients) {
             client.close()
           }
+
           server.close(() => resolve())
         })
     )
@@ -61,12 +62,14 @@ export async function createSharedControlTestServer(
   const delayedResponses: (() => void)[] = []
   let connectionCount = 0
   let closedAfterFirstStreamingResponse = false
+
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
   const wss = new WebSocketServer({
     host: '127.0.0.1',
     port: 0,
     autoPong: options.disableAutoPong !== true
   })
+
   servers.push(wss)
 
   wss.on('connection', (ws) => {
@@ -77,35 +80,46 @@ export async function createSharedControlTestServer(
       if (isBinary) {
         return
       }
+
       const frame = data.toString()
+
       if (!sharedKey) {
         const hello = JSON.parse(frame) as { publicKeyB64: string }
         sharedKey = deriveSharedKey(
           serverKeyPair.secretKey,
           publicKeyFromBase64(hello.publicKeyB64)
         )
+
         if (
           options.suppressReadyFrame ||
           connectionCount <= (options.suppressReadyFrameCount ?? 0)
         ) {
           return
         }
+
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
+
       const plaintext = decrypt(frame, sharedKey)
+
       if (!plaintext) {
         return
       }
+
       if (!authenticated) {
         auths.push(JSON.parse(plaintext))
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+
         if (options.sendBinaryAfterAuth) {
           ws.send(Buffer.from([1, 2, 3]), { binary: true })
         }
+
         return
       }
+
       handleRequest(
         ws,
         sharedKey,
@@ -117,7 +131,9 @@ export async function createSharedControlTestServer(
             if (!options.closeAfterFirstStreamingResponse || closedAfterFirstStreamingResponse) {
               return false
             }
+
             closedAfterFirstStreamingResponse = true
+
             return true
           }
         },
@@ -128,6 +144,7 @@ export async function createSharedControlTestServer(
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -136,9 +153,11 @@ export async function createSharedControlTestServer(
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return {
     pairing,
     requests,
@@ -158,24 +177,32 @@ function handleRequest(
   delayedResponses: (() => void)[]
 ): void {
   requests.push(request)
+
   if (options.sendKeepaliveBeforeResponse && options.keepaliveDelayMs !== undefined) {
     const timer = setInterval(
       () => sendEncrypted(ws, sharedKey, { _keepalive: true }),
       options.keepaliveDelayMs
     )
+
     ws.once('close', () => clearInterval(timer))
   }
+
   if (options.silentMethods?.includes(request.method)) {
     return
   }
+
   if (options.closeBeforeResponse) {
     ws.close(4001, 'test close')
+
     return
   }
+
   const streaming = isStreamingMethod(request.method)
+
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
     : (options.resultForRequest?.(request.method) ?? { method: request.method })
+
   const sendResponse = (): void => {
     if (options.sendUnknownResponseBeforeResponse) {
       sendEncrypted(ws, sharedKey, {
@@ -185,6 +212,7 @@ function handleRequest(
         _meta: { runtimeId: 'runtime-test' }
       })
     }
+
     sendEncrypted(ws, sharedKey, {
       id: request.id,
       ok: true,
@@ -193,28 +221,39 @@ function handleRequest(
       _meta: { runtimeId: 'runtime-test' }
     })
   }
+
   const closeAfterResponse = streaming && options.closeAfterStreamingResponse?.() === true
+
   if (options.sendKeepaliveBeforeResponse && options.keepaliveDelayMs === undefined) {
     sendEncrypted(ws, sharedKey, { _keepalive: true })
   }
+
   if (options.delaySubscriptionReady && streaming) {
     delayedResponses.push(sendResponse)
+
     return
   }
+
   if (options.delayedMethods?.includes(request.method)) {
     delayedResponses.push(sendResponse)
+
     return
   }
+
   if (options.responseDelayMs !== undefined) {
     setTimeout(() => {
       sendResponse()
+
       if (closeAfterResponse) {
         setTimeout(() => ws.close(), 0)
       }
     }, options.responseDelayMs)
+
     return
   }
+
   sendResponse()
+
   if (closeAfterResponse) {
     setTimeout(() => ws.close(), 0)
   }

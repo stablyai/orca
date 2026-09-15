@@ -36,6 +36,7 @@ describe('SkillDeleteRequestSchema', () => {
       target: { runtime: 'host', somethingNew: 1 },
       skills: [SKILL]
     })
+
     expect(parsed.target).toEqual({ runtime: 'host' })
   })
 
@@ -44,6 +45,7 @@ describe('SkillDeleteRequestSchema', () => {
       operationId: 'op',
       skills: [{ ...SKILL, updatedAt: null }]
     })
+
     expect(parsed.skills[0].updatedAt).toBeNull()
   })
 
@@ -72,6 +74,7 @@ describe('plan and result schemas', () => {
         }
       ]
     })
+
     expect(plan.skills[0].blocked).toBe('bundled')
   })
 
@@ -106,6 +109,7 @@ describe('plan and result schemas', () => {
         }
       ]
     })
+
     expect(result.skills[0].stagedPaths).toHaveLength(1)
   })
 })

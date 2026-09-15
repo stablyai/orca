@@ -28,6 +28,7 @@ type TaskPageJiraIssueListProps = {
 
 function statusColumnRanks(order: JiraProjectStatusOrder | null): Map<string, number> {
   const ranks = new Map<string, number>()
+
   for (const [columnIndex, statusIds] of (order?.statusIdsByColumn ?? []).entries()) {
     for (const statusId of statusIds) {
       if (!ranks.has(statusId)) {
@@ -35,6 +36,7 @@ function statusColumnRanks(order: JiraProjectStatusOrder | null): Map<string, nu
       }
     }
   }
+
   return ranks
 }
 
@@ -43,9 +45,11 @@ function sectionColumnRank(
   ranks: ReadonlyMap<string, number>
 ): number {
   let rank = Number.POSITIVE_INFINITY
+
   for (const issue of section.issues) {
     rank = Math.min(rank, ranks.get(issue.status.id) ?? Number.POSITIVE_INFINITY)
   }
+
   return rank
 }
 
@@ -55,9 +59,11 @@ export function groupJiraIssuesByStatus(
   statusDirection: 'asc' | 'desc' = 'asc'
 ): TaskPageJiraIssueSection[] {
   const sections = new Map<string, TaskPageJiraIssueSection>()
+
   for (const issue of issues) {
     const key = `status:${issue.status.name}`
     const section = sections.get(key)
+
     if (section) {
       section.issues.push(issue)
     } else {
@@ -66,14 +72,18 @@ export function groupJiraIssuesByStatus(
   }
 
   const ranks = statusColumnRanks(statusOrder)
+
   const sectionRanks = new Map(
     [...sections.values()].map((section) => [section.key, sectionColumnRank(section, ranks)])
   )
+
   const sortedSections = [...sections.values()].sort((a, b) => {
     const rankA = sectionRanks.get(a.key) ?? Number.POSITIVE_INFINITY
     const rankB = sectionRanks.get(b.key) ?? Number.POSITIVE_INFINITY
+
     return rankA === rankB ? a.label.localeCompare(b.label) : rankA - rankB
   })
+
   return statusDirection === 'desc' ? sortedSections.toReversed() : sortedSections
 }
 
@@ -81,6 +91,7 @@ function isSelectedIssue(issue: JiraIssue, selectedIssue: JiraIssue | null): boo
   if (!selectedIssue || issue.key !== selectedIssue.key) {
     return false
   }
+
   return !selectedIssue.siteId || !issue.siteId || selectedIssue.siteId === issue.siteId
 }
 
@@ -102,6 +113,7 @@ function JiraIssueRow({
   showSiteContext: boolean
 }): React.JSX.Element {
   const labels = issue.labels.slice(0, 3)
+
   const contextLabel =
     showSiteContext && issue.siteName
       ? `${issue.siteName} / ${issue.project.key}`
@@ -120,6 +132,7 @@ function JiraIssueRow({
         if (event.target !== event.currentTarget) {
           return
         }
+
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onOpenIssue(issue)
@@ -287,6 +300,7 @@ export function TaskPageJiraIssueList({
   statusOrder
 }: TaskPageJiraIssueListProps): React.JSX.Element {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
+
   const sections = useMemo(
     () => groupJiraIssuesByStatus(issues, statusOrder, statusDirection),
     [issues, statusDirection, statusOrder]
@@ -296,6 +310,7 @@ export function TaskPageJiraIssueList({
     <div className="divide-y divide-border/50">
       {sections.map((section) => {
         const open = !collapsedGroups.has(section.key)
+
         return (
           <Collapsible
             key={section.key}
@@ -303,11 +318,13 @@ export function TaskPageJiraIssueList({
             onOpenChange={(nextOpen) => {
               setCollapsedGroups((current) => {
                 const next = new Set(current)
+
                 if (nextOpen) {
                   next.delete(section.key)
                 } else {
                   next.add(section.key)
                 }
+
                 return next
               })
             }}

@@ -8,8 +8,10 @@ export function isTerminalSendRpcAccepted(response: RpcResponse): boolean {
   if (!response.ok) {
     return false
   }
+
   if (!isRecord(response.result) || !isRecord(response.result.send)) {
     return false
   }
+
   return response.result.send.accepted === true
 }

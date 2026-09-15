@@ -33,16 +33,20 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
   ): Promise<SearchResult> {
     const store = this.host.requireStore()
     const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+
     const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
       store,
       rootPath,
       authorizedRootPath
     )
+
     const maxResults = Math.max(
       1,
       Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
+
     const wslInfo = parseWslPath(authorizedRootPath)
+
     if (
       (wslInfo || localGitOptions.wslDistro) &&
       !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
@@ -54,6 +58,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
       const previousChild = this.activeRuntimeTextSearches.get(searchKey)
+
       if (previousChild) {
         killSpawnedRipgrepProcess(previousChild)
       }
@@ -64,6 +69,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       let processErrorObserved = false
       let unavailableExitObserved = false
       let child: ChildProcessHandle | null = null
+
       const transformAbsPath = wslInfo
         ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
         : undefined
@@ -72,28 +78,37 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
         if (resolved) {
           return
         }
+
         resolved = true
+
         if (this.activeRuntimeTextSearches.get(searchKey) === child) {
           this.activeRuntimeTextSearches.delete(searchKey)
         }
+
         cleanupListeners()
         resolvePromise(result)
       }
+
       const resolveOnce = (): void => finish(finalize(acc))
+
       const resolveWithoutRipgrep = (): void =>
         finish(searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions))
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
+
       const cleanupListeners = (): void => {
         lines.clear()
+
         if (killTimeout) {
           clearTimeout(killTimeout)
           killTimeout = null
         }
+
         child?.stdout?.off('data', onStdoutData)
         child?.stderr?.off('data', onStderrData)
         child?.off('error', onError)
         child?.off('close', onClose)
+
         if (child) {
           absorbPendingRipgrepSpawnError(child, {
             errorObserved: processErrorObserved,
@@ -110,6 +125,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
           maxResults,
           transformAbsPath
         )
+
         if (verdict === 'stop' && child) {
           killSpawnedRipgrepProcess(child)
         }
@@ -120,24 +136,32 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
+
       child = nextChild
       this.activeRuntimeTextSearches.set(searchKey, nextChild)
 
       nextChild.stdout!.setEncoding('utf-8')
+
       const onStdoutData = (chunk: string): void => {
         lines.push(chunk, processLine)
       }
+
       const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
       }
+
       const onError = (): void => {
         processErrorObserved = true
+
         if (child && isRipgrepUnavailableExit(child, null, null)) {
           resolveWithoutRipgrep()
+
           return
         }
+
         resolveOnce()
       }
+
       const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
         if (
           child &&
@@ -147,12 +171,16 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
         ) {
           unavailableExitObserved = true
           resolveWithoutRipgrep()
+
           return
         }
+
         const tail = lines.finish()
+
         if (tail !== null) {
           processLine(tail)
         }
+
         resolveOnce()
       }
 
@@ -163,9 +191,11 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
       killTimeout = setTimeout(() => {
         acc.truncated = true
+
         if (child) {
           killSpawnedRipgrepProcess(child)
         }
+
         resolveOnce()
       }, SEARCH_TIMEOUT_MS)
     })
@@ -176,6 +206,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
     relativePath: string
   ): Promise<RuntimeFileExplorerPath> {
     const [target] = await this.resolveFileExplorerPaths(worktreeSelector, [relativePath])
+
     return target
   }
 
@@ -184,6 +215,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
     relativePaths: readonly string[]
   ): Promise<RuntimeFileExplorerPath[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+
     return relativePaths.map((relativePath) => ({
       worktree: target.worktree,
       path: joinWorktreeRelativePath(
@@ -204,6 +236,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
     if (!provider) {
       return []
     }
+
     return provider.listFiles(rootPath, { maxResults, signal })
   }
 }

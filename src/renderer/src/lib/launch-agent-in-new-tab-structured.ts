@@ -23,6 +23,7 @@ function promptDeliveryFromSettlement(
   if (settlement.kind === 'structured' || settlement.kind === 'refused-then-legacy') {
     return settlement.promptDeliveryResult ?? Promise.resolve(UNDELIVERED)
   }
+
   return Promise.resolve(UNDELIVERED)
 }
 
@@ -35,10 +36,12 @@ export function launchAgentInStructuredNewTab(
   args: StructuredNewTabLaunchArgs
 ): StructuredNewTabLaunch {
   const hasPrompt = Boolean(args.plan.prompt)
+
   const structuredSettlement = args.plan
     .launch({
       legacyFallback: async () => {
         const fallback = args.legacyLaunch()
+
         // Why: a legacy launch with no delivery promise still delivered an argv-carried or draft
         // prompt; only a null launch (no startup plan) is a failure.
         const promptDeliveryResult =
@@ -46,6 +49,7 @@ export function launchAgentInStructuredNewTab(
           (hasPrompt
             ? Promise.resolve({ delivered: Boolean(fallback), failureNotified: fallback === null })
             : undefined)
+
         return {
           primaryTabId: fallback?.tabId ?? null,
           ...(promptDeliveryResult ? { promptDeliveryResult } : {})
@@ -60,6 +64,7 @@ export function launchAgentInStructuredNewTab(
         },
       (error: unknown): StructuredAgentLaunchSettlement => ({ kind: 'failed', error })
     )
+
   void structuredSettlement.then((settlement) => {
     // Why: unknown already shows the launch badge and failed already toasted; this is the log
     // line the old fire-and-forget fallback claim kept.
@@ -67,6 +72,7 @@ export function launchAgentInStructuredNewTab(
       console.error('Structured agent launch failed', settlement.error)
     }
   })
+
   return {
     structuredSettlement,
     // Why: draft mode has no delivery event; the composer adopts the text and the user sends it.

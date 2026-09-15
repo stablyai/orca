@@ -2,7 +2,9 @@ import type { IpcRenderer } from 'electron'
 import type { PreloadApi } from './api-types'
 
 type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage'
+
 type UsageProviderApi = PreloadApi[UsageProviderApiKey]
+
 type UsageRangeArgs = { scope: string; range: string }
 
 export function createUsageProviderApi<Key extends UsageProviderApiKey>(

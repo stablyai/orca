@@ -35,11 +35,14 @@ function truncatePreservingSurrogates(value: string, maxLength: number): string 
   if (value.length <= maxLength) {
     return value
   }
+
   const truncated = value.slice(0, maxLength)
   const lastCode = truncated.charCodeAt(truncated.length - 1)
+
   if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
     return truncated.slice(0, -1)
   }
+
   return truncated
 }
 
@@ -49,9 +52,11 @@ export function activityThreadResponseRenderPreview({
   responsePreview: string
 }): string {
   const trimmed = responsePreview.trim()
+
   if (trimmed.length <= ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH) {
     return trimmed
   }
+
   return `${truncatePreservingSurrogates(
     trimmed,
     ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH
@@ -62,32 +67,41 @@ export function agentTitle(event: ActivityEvent): string {
   if (event.state === 'working') {
     return 'Agent working'
   }
+
   if (event.state === 'done') {
     return event.entry.interrupted ? 'Agent interrupted' : 'Agent finished'
   }
+
   return event.state === 'waiting' ? 'Agent waiting for input' : 'Agent needs input'
 }
 
 export function agentSummary(event: ActivityEvent): string {
   const prompt = getAgentRowPrimaryText(event.entry)
+
   if (event.state === 'working') {
     return prompt || 'The agent is working on the current turn.'
   }
+
   if (event.state === 'done') {
     const message = event.entry.lastAssistantMessage?.trim()
+
     return message || prompt || 'Completed the current turn.'
   }
+
   return prompt || event.entry.lastAssistantMessage?.trim() || 'The agent paused for user input.'
 }
 
 export function agentMeta(event: ActivityEvent): string {
   const agent = formatAgentTypeLabel(event.agentType)
+
   if (event.state === 'working') {
     return `${agent} ${event.state}`
   }
+
   if (event.state === 'done') {
     return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
   }
+
   return event.state === 'waiting' ? `${agent} waiting` : `${agent} blocked`
 }
 
@@ -118,15 +132,18 @@ export type ActivityThreadStatusId = AgentDotState
  *  interrupted predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
   const state = thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
+
   if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
     return 'interrupted'
   }
+
   return state
 }
 
 // Interrupted rows deliberately keep the done glyph (#2569).
 export function threadAgentState(thread: AgentPaneThread): AgentDotState {
   const id = activityThreadStatusId(thread)
+
   return id === 'interrupted' ? 'done' : id
 }
 
@@ -185,22 +202,27 @@ function normalizeScanLabel(value: string): string {
 
 function previewDuplicatesIdentity(preview: string, title: string, workspace: string): boolean {
   const normalized = normalizeScanLabel(preview)
+
   if (!normalized) {
     return true
   }
+
   return normalized === normalizeScanLabel(title) || normalized === normalizeScanLabel(workspace)
 }
 
 export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRowCopy {
   const workspaceLabel = getActivityThreadWorkspaceTitle(thread.worktree)
   const taskTitle = thread.paneTitle.trim() || workspaceLabel
+
   const renderedPreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
+
   const liveState = thread.currentAgentState ?? thread.latestEvent?.state ?? null
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
   const state = threadAgentState(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
+
   if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
     return {
       taskTitle,
@@ -211,6 +233,7 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
       workspaceLabel
     }
   }
+
   if (state !== 'done' && state !== 'idle') {
     return {
       taskTitle,
@@ -220,5 +243,6 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
       workspaceLabel
     }
   }
+
   return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, workspaceLabel }
 }

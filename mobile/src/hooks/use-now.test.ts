@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
     },
     addEventListener: (_event: string, listener: (nextState: string) => void) => {
       appState.listener = listener
+
       return { remove: appState.remove }
     }
   }
@@ -28,6 +29,7 @@ describe('useNow', () => {
 
   function Harness({ enabled = true }: { enabled?: boolean }): null {
     latest = useNow(1_000, enabled)
+
     return null
   }
 

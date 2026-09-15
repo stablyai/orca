@@ -64,9 +64,11 @@ export class RuntimeProjectGroupController {
     createdFrom?: ProjectGroup['createdFrom']
   }): Promise<ProjectGroup> {
     const store = this.deps.getStore()
+
     if (!store?.createProjectGroup) {
       throw new Error('runtime_unavailable')
     }
+
     const group = store.createProjectGroup({
       name: input.name,
       parentPath: input.parentPath ?? null,
@@ -74,7 +76,9 @@ export class RuntimeProjectGroupController {
       parentGroupId: input.parentGroupId ?? null,
       createdFrom: input.createdFrom ?? 'manual'
     })
+
     this.deps.notifyReposChanged()
+
     return group
   }
 
@@ -83,39 +87,52 @@ export class RuntimeProjectGroupController {
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
   ): Promise<ProjectGroup | null> {
     const store = this.deps.getStore()
+
     if (!store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')
     }
+
     const updated = store.updateProjectGroup(groupId, updates)
+
     if (updated) {
       this.deps.notifyReposChanged()
     }
+
     return updated
   }
 
   async deleteGroup(groupId: string): Promise<{ deleted: boolean }> {
     const store = this.deps.getStore()
+
     if (!store?.deleteProjectGroup) {
       throw new Error('runtime_unavailable')
     }
+
     const deleted = store.deleteProjectGroup(groupId)
+
     if (deleted) {
       this.deps.notifyReposChanged()
     }
+
     return { deleted }
   }
 
   async moveProject(repoSelector: string, groupId: string | null, order?: number): Promise<Repo> {
     const store = this.deps.getStore()
+
     if (!store?.moveProjectToGroup) {
       throw new Error('runtime_unavailable')
     }
+
     const repo = await this.deps.resolveRepo(repoSelector)
     const moved = store.moveProjectToGroup(repo.id, groupId, order)
+
     if (!moved) {
       throw new Error('repo_not_found')
     }
+
     this.deps.notifyReposChanged()
+
     return moved
   }
 
@@ -131,18 +148,23 @@ export class RuntimeProjectGroupController {
     pendingFirstAgentMessageRename?: boolean
   }): Promise<FolderWorkspace> {
     const store = this.deps.getStore()
+
     if (!store?.createFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+
     const projectGroups = store.getProjectGroups?.() ?? []
     const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
+
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
         ? input.folderPath
         : group?.parentPath
+
     if (!group || !folderPath) {
       throw new Error('folder_workspace_project_group_not_found')
     }
+
     const status = await getFolderWorkspacePathStatusForPath(
       {
         folderPath,
@@ -153,12 +175,16 @@ export class RuntimeProjectGroupController {
       },
       { getSshFilesystemProvider }
     )
+
     assertFolderWorkspacePathUsable(status)
+
     const workspace = store.createFolderWorkspace({
       ...input,
       creatorProvenance: input.creatorProvenance ?? { kind: 'host' }
     })
+
     this.deps.notifyReposChanged()
+
     return workspace
   }
 
@@ -166,9 +192,11 @@ export class RuntimeProjectGroupController {
     request: FolderWorkspacePathStatusRequest
   ): Promise<FolderWorkspacePathStatus> {
     const store = this.deps.getStore()
+
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+
     return getFolderWorkspacePathStatus(store, request, { getSshFilesystemProvider })
   }
 
@@ -177,17 +205,22 @@ export class RuntimeProjectGroupController {
     updates: FolderWorkspaceUpdates
   ): Promise<FolderWorkspace | null> {
     const store = this.deps.getStore()
+
     if (!store?.updateFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
       const workspace = store
         .getFolderWorkspaces?.()
         .find((entry) => entry.id === folderWorkspaceId)
+
       if (!workspace) {
         return null
       }
+
       const projectGroups = store.getProjectGroups?.() ?? []
+
       const status = await getFolderWorkspacePathStatusForPath(
         {
           folderPath: updates.folderPath,
@@ -201,40 +234,53 @@ export class RuntimeProjectGroupController {
         },
         { getSshFilesystemProvider }
       )
+
       assertFolderWorkspacePathUsable(status)
     }
+
     const updated = store.updateFolderWorkspace(folderWorkspaceId, updates)
+
     if (updated) {
       this.deps.notifyReposChanged()
     }
+
     return updated
   }
 
   async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
     const store = this.deps.getStore()
+
     if (!store?.removeFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+
     const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
+
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
       // Why: a mixed-host group has no single PTY target; forgetting the
       // workspace must still succeed, so skip the sweep instead of failing.
       let connectionId: string | null | undefined
+
       try {
         connectionId = this.deps.resolveFolderConnectionId(workspace)
       } catch (error) {
         console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
       }
+
       if (connectionId !== undefined) {
         await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
       }
+
       this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
     }
+
     const deleted = store.removeFolderWorkspace(folderWorkspaceId)
+
     if (deleted) {
       this.deps.notifyReposChanged()
     }
+
     return { deleted }
   }
 }

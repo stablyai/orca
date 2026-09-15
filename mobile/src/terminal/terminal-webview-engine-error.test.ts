@@ -30,10 +30,13 @@ vi.mock('react-native', () => ({
 
 vi.mock('react-native-webview', async () => {
   const React = await import('react')
+
   const WebView = React.forwardRef((props: Record<string, unknown>, ref) => {
     React.useImperativeHandle(ref, () => nativeWebViewMethods)
+
     return React.createElement('WebView', props)
   })
+
   return { WebView, default: WebView }
 })
 
@@ -53,10 +56,13 @@ function createTerminalWebViewRenderer(
   act(() => {
     renderer = create(createElement(TerminalWebView, { onEngineError, ...props }))
   })
+
   if (!renderer) {
     throw new Error('TerminalWebView did not render')
   }
+
   activeRenderer = renderer
+
   return { onEngineError, renderer }
 }
 
@@ -86,6 +92,7 @@ describe('TerminalWebView engine errors', () => {
       })
       activeRenderer = null
     }
+
     vi.clearAllMocks()
     vi.restoreAllMocks()
   })
@@ -145,6 +152,7 @@ describe('TerminalWebView engine errors', () => {
   it('paints the fatal overlay when web-ready never arrives', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const { onEngineError, renderer } = createTerminalWebViewRenderer()
 
@@ -164,6 +172,7 @@ describe('TerminalWebView engine errors', () => {
   it('does not fire the watchdog once web-ready has arrived', () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const { onEngineError, renderer } = createTerminalWebViewRenderer()
 
@@ -182,15 +191,18 @@ describe('TerminalWebView engine errors', () => {
   it('queues iOS foreground traffic until the current document answers its ping', () => {
     const terminalRef = createRef<TerminalWebViewHandle>()
     const onWebReady = vi.fn()
+
     const terminalTheme = {
       mode: 'dark',
       theme: { background: '#111111', foreground: '#eeeeee' }
     }
+
     const { renderer } = createTerminalWebViewRenderer(vi.fn(), {
       ref: terminalRef,
       onWebReady,
       terminalTheme
     })
+
     postWebViewMessage(renderer, { type: 'web-ready' })
     nativeWebViewMethods.postMessage.mockClear()
 
@@ -216,6 +228,7 @@ describe('TerminalWebView engine errors', () => {
     nativeWebViewMethods.postMessage.mockClear()
     const mutablePlatform = Platform as { OS: string }
     mutablePlatform.OS = 'android'
+
     try {
       act(() => {
         terminalRef.current?.prepareForForegroundRecovery()
@@ -229,6 +242,7 @@ describe('TerminalWebView engine errors', () => {
 
   it('reloads a terminated iOS content process and restores theme on readiness', () => {
     const terminalRef = createRef<TerminalWebViewHandle>()
+
     const { onEngineError, renderer } = createTerminalWebViewRenderer(vi.fn(), {
       ref: terminalRef,
       terminalTheme: {
@@ -236,6 +250,7 @@ describe('TerminalWebView engine errors', () => {
         theme: { background: '#ffffff', foreground: '#111111' }
       }
     })
+
     postWebViewMessage(renderer, { type: 'web-ready' })
     nativeWebViewMethods.postMessage.mockClear()
     const webView = renderer.root.findByType('WebView')

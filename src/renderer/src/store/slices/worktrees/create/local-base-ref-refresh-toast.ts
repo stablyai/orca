@@ -6,6 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 
 export function localBaseRefRefreshFailureDetail(result: LocalBaseRefRefreshResult): string {
   const ownerWorktreePath = result.ownerWorktreePath?.trim()
+
   switch (result.status) {
     case 'skipped_dirty_worktree':
       // Create already succeeded — guide cleanup + manual base update, not "try again".

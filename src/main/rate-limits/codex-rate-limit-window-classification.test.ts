@@ -9,6 +9,7 @@ function usedPercentByWindow(result: CodexRateLimitWindowsSnapshot | null): {
   weekly: number | null
 } {
   const classified = classifyCodexRateLimitWindows(result)
+
   return {
     session: classified.session?.usedPercent ?? null,
     weekly: classified.weekly?.usedPercent ?? null

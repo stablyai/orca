@@ -35,6 +35,7 @@ type EditorFixture = {
 function createEditorFixture(destroyed = false): EditorFixture {
   const focusListeners = new Set<() => void>()
   let focused = false
+
   return {
     editor: {
       isDestroyed: destroyed,
@@ -54,6 +55,7 @@ function createEditorFixture(destroyed = false): EditorFixture {
     } as unknown as Editor,
     focus: () => {
       focused = true
+
       for (const listener of focusListeners) {
         listener()
       }
@@ -116,6 +118,7 @@ describe('useRichMarkdownPendingFocus', () => {
     fixture.store.pendingEditorFocusRequest = pendingRequest()
     fixture.autoFocusRichEditor.mockImplementationOnce(() => {
       replacement.focus()
+
       return vi.fn()
     })
 

@@ -7,7 +7,9 @@ import {
 } from '../../../shared/raster-image-preview-limits'
 
 export const MAX_FEEDBACK_IMAGE_COUNT = 4
+
 export const MAX_FEEDBACK_IMAGE_BYTES = 8 * 1024 * 1024
+
 export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [
   'image/png',
   'image/jpeg',
@@ -16,6 +18,7 @@ export const SUPPORTED_FEEDBACK_IMAGE_TYPES = [
 ] as const
 
 export const FEEDBACK_IMAGE_FILE_ACCEPT = SUPPORTED_FEEDBACK_IMAGE_TYPES.join(',')
+
 const MAX_FEEDBACK_IMAGE_DETAIL_ERRORS = 4
 
 export type FeedbackImageDraft = {
@@ -76,6 +79,7 @@ export async function readFeedbackImageFiles(
   const errors: string[] = []
   let remaining = MAX_FEEDBACK_IMAGE_COUNT - existingCount
   let omittedErrorCount = 0
+
   const addError = (createMessage: () => string): void => {
     if (errors.length < MAX_FEEDBACK_IMAGE_DETAIL_ERRORS) {
       errors.push(createMessage())
@@ -87,6 +91,7 @@ export async function readFeedbackImageFiles(
   try {
     for (const file of files) {
       const fileName = feedbackImageDisplayName(file)
+
       if (!isSupportedType(file.type)) {
         addError(() =>
           translate(
@@ -97,6 +102,7 @@ export async function readFeedbackImageFiles(
         )
         continue
       }
+
       if (file.size === 0) {
         addError(() =>
           translate('auto.lib.feedback.image.attachments.empty', '{{fileName}} is empty.', {
@@ -105,6 +111,7 @@ export async function readFeedbackImageFiles(
         )
         continue
       }
+
       if (file.size > MAX_FEEDBACK_IMAGE_BYTES) {
         addError(() =>
           translate(
@@ -118,6 +125,7 @@ export async function readFeedbackImageFiles(
         )
         continue
       }
+
       if (remaining <= 0) {
         addError(() =>
           translate(
@@ -128,7 +136,9 @@ export async function readFeedbackImageFiles(
         )
         break
       }
+
       const data = new Uint8Array(await file.arrayBuffer())
+
       try {
         assertRasterImagePreviewWithinLimits(data, file.type)
       } catch (error) {
@@ -142,6 +152,7 @@ export async function readFeedbackImageFiles(
           )
           continue
         }
+
         if (error instanceof Error && error.message === INVALID_RASTER_IMAGE_PREVIEW_ERROR) {
           addError(() =>
             translate(
@@ -152,8 +163,10 @@ export async function readFeedbackImageFiles(
           )
           continue
         }
+
         throw error
       }
+
       remaining -= 1
       images.push({
         // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN
@@ -190,5 +203,6 @@ export function extractImageFilesFromDataTransfer(data: DataTransfer | null): Fi
   if (!data) {
     return []
   }
+
   return Array.from(data.files).filter((file) => file.type.startsWith('image/'))
 }

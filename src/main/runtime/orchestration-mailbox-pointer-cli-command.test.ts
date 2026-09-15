@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 describe('orchestration mailbox pointer CLI command', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }

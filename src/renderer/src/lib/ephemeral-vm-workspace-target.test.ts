@@ -57,11 +57,13 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         }
       }
     })
+
     const setupResult = {
       project: { id: 'project-1' },
       setup: { id: 'setup-1', hostId: 'local' },
       repo: { id: 'repo-runtime' }
     } as ProjectHostSetupResult
+
     const setupExistingFolder = vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>(
       async () => setupResult
     )
@@ -135,11 +137,13 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         }
       }
     })
+
     const setupResult = {
       project: { id: 'project-1' },
       setup: { id: 'setup-1', hostId: 'local' },
       repo: { id: 'repo-runtime' }
     } as ProjectHostSetupResult
+
     const setupExistingFolder = vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>(
       async () => setupResult
     )
@@ -260,6 +264,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         }
       }
     })
+
     const setupExistingFolder =
       vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>()
 
@@ -292,6 +297,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
       stdout: 'nope',
       stderr: 'logs'
     })
+
     const setupExistingFolder =
       vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>()
 
@@ -344,6 +350,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         }
       }
     })
+
     const setupExistingFolder = vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>(
       async () => null
     )
@@ -396,6 +403,7 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         }
       }
     })
+
     const setupExistingFolder = vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>(
       async () => {
         throw new Error('Not a valid git repository: /workspace/not-a-repo')

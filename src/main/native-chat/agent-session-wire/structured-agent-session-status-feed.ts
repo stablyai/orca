@@ -131,8 +131,10 @@ export class StructuredAgentSessionStatusFeed {
     for (const [sessionId] of this.deps.sessions) {
       this.publish(sessionId, undefined, { replay: true })
     }
+
     this.subscribers.set(subscriber.id, subscriber)
     this.emit(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
+
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -154,10 +156,13 @@ export class StructuredAgentSessionStatusFeed {
 
   unsubscribe(id: string): void {
     const subscriber = this.subscribers.get(id)
+
     if (!subscriber) {
       return
     }
+
     this.subscribers.delete(id)
+
     try {
       subscriber.emit({ type: 'end' })
     } catch {
@@ -168,9 +173,11 @@ export class StructuredAgentSessionStatusFeed {
   /** Revoke live execution authority while retaining the last projection for reload history. */
   revokeLive(sessionId: string): void {
     const previous = this.published.get(sessionId)
+
     if (!previous) {
       return
     }
+
     const { hostExecutionOwned: _hostExecutionOwned, ...retained } = previous
     this.published.set(sessionId, retained)
     this.broadcast({
@@ -183,17 +190,22 @@ export class StructuredAgentSessionStatusFeed {
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
   publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
     const session = this.deps.sessions.get(sessionId)
+
     if (!session) {
       return
     }
+
     const summary = this.summaryFor(sessionId, session, journal ?? session.journal)
     const previous = this.published.get(sessionId)
+
     if (previous && summariesEqual(previous, summary)) {
       return
     }
+
     this.published.set(sessionId, summary)
     this.broadcast({ type: 'status', session: summary })
     this.sink(summary)
+
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {
@@ -212,6 +224,7 @@ export class StructuredAgentSessionStatusFeed {
     const readOnly = journal.isReadOnly
     const fence = session.fence
     let projection = this.journalProjections.get(journal)
+
     if (
       !projection ||
       projection.epoch !== cursor.epoch ||
@@ -234,17 +247,20 @@ export class StructuredAgentSessionStatusFeed {
       }
       this.journalProjections.set(journal, projection)
     }
+
     const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where an owner
     // handoff or a mid-session switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+
     // Usage is dropped here on purpose: a `task_progress` tick would otherwise fail the
     // equality check and re-broadcast a full summary to every remote subscriber for a
     // number no session list renders. Tokens stay live on the background-task channel.
     const backgroundTasks = this.deps
       .readBackgroundTasks?.(sessionId)
       ?.tasks?.map(({ totalTokens: _totalTokens, ...task }) => task)
+
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const { writeStartupDiagnosticLineMock } = vi.hoisted(() => ({
   writeStartupDiagnosticLineMock: vi.fn()
 }))
+
 vi.mock('../startup/startup-diagnostics', () => ({
   writeStartupDiagnosticLine: writeStartupDiagnosticLineMock
 }))
@@ -104,6 +105,7 @@ describe('startMainThreadChurnProbe', () => {
     vi.stubEnv(MAIN_THREAD_DIAGNOSTICS_ENV, '1')
     writeStartupDiagnosticLineMock.mockClear()
     vi.useFakeTimers()
+
     try {
       startMainThreadChurnProbe({ extraStats: () => ({ diffCache: { hits: 3, misses: 1 } }) })
       await vi.advanceTimersByTimeAsync(5_100)

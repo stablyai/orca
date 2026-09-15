@@ -40,6 +40,7 @@ export function useFileExplorerAutoReveal({
     if (scrollFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(scrollFrameRef.current)
     scrollFrameRef.current = null
   }, [])
@@ -50,6 +51,7 @@ export function useFileExplorerAutoReveal({
     if (activeFileId === prevActiveFileIdRef.current) {
       return
     }
+
     prevActiveFileIdRef.current = activeFileId
 
     if (!activeFileId || !activeWorktreeId || !worktreePath) {
@@ -65,6 +67,7 @@ export function useFileExplorerAutoReveal({
     // to one concrete file on disk and should keep Explorer selection in sync
     // just like a normal edit tab. Diffs and conflict-review tabs do not.
     const activeFile = openFiles.find((f) => f.id === activeFileId)
+
     if (
       !activeFile ||
       activeFile.worktreeId !== activeWorktreeId ||
@@ -79,6 +82,7 @@ export function useFileExplorerAutoReveal({
       // File is already visible in the tree — just scroll to it and select
       setSelectedPath(filePath)
       const targetIndex = rowProjection.getIndexByPath(filePath)
+
       if (targetIndex !== null) {
         cancelScrollFrame()
         scrollFrameRef.current = requestAnimationFrame(() => {

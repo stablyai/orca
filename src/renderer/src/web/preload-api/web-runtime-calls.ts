@@ -32,19 +32,25 @@ export async function callRuntimeEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = requireActiveEnvironment()
+
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
+
   const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
     if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
       return Promise.resolve(manuallyDisconnectedResponse(environment))
     }
+
     return getClientForEnvironment(environment).call(method, params, { timeoutMs })
   })
+
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
+
   updateEnvironmentFromResponse(environment, response)
+
   return response as RuntimeRpcResponse<TResult>
 }
 
@@ -55,19 +61,25 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
+
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
+
   const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
     if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
       return Promise.resolve(manuallyDisconnectedResponse(environment))
     }
+
     return getClientForEnvironment(environment).call(method, params, { timeoutMs })
   })
+
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
+
   updateEnvironmentFromResponse(environment, response)
+
   return response as RuntimeRpcResponse<TResult>
 }
 
@@ -77,11 +89,13 @@ export async function callRuntimeResult<TResult>(
   timeoutMs?: number
 ): Promise<TResult> {
   const response = await callRuntimeEnvelope(method, params, timeoutMs)
+
   if (!response.ok) {
     // Why keep the code: callers classify recoverable host failures by token, and the message alone
     // (e.g. "Parent selector was not found.") carries none.
     throw Object.assign(new Error(response.error.message), { code: response.error.code })
   }
+
   return response.result as TResult
 }
 
@@ -92,6 +106,7 @@ export async function callRuntimeResultWithOwner<TResult>(
 ): Promise<{ result: TResult; hostId: ExecutionHostId; environmentId: string }> {
   const environmentId = requireActiveEnvironment().id
   const result = await callRuntimeResult<TResult>(method, params, timeoutMs)
+
   return { result, hostId: toRuntimeExecutionHostId(environmentId), environmentId }
 }
 
@@ -111,9 +126,11 @@ export function withRuntimeWorktreeOwner<T extends Worktree>(
   hostId: ExecutionHostId
 ): T {
   const runtimeOwner = parseExecutionHostId(hostId)
+
   if (runtimeOwner?.kind !== 'runtime') {
     return worktree
   }
+
   return { ...worktree, runtimeOwnerEnvironmentId: runtimeOwner.environmentId }
 }
 

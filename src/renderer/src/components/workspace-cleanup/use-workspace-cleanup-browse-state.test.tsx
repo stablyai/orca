@@ -26,18 +26,23 @@ vi.mock('@/store', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function mountController(): { current: WorkspaceCleanupBrowseController | null } {
   const ref: { current: WorkspaceCleanupBrowseController | null } = { current: null }
+
   function Probe(): null {
     ref.current = useWorkspaceCleanupBrowseState()
+
     return null
   }
+
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => root!.render(<Probe />))
+
   return ref
 }
 
@@ -57,6 +62,7 @@ describe('useWorkspaceCleanupBrowseState', () => {
     if (root) {
       act(() => root!.unmount())
     }
+
     root = null
     container = null
     document.body.replaceChildren()
@@ -114,6 +120,7 @@ describe('useWorkspaceCleanupBrowseState', () => {
     const format = new Proxy({}, { get: () => () => 'chip' }) as Parameters<
       typeof listAppliedWorkspaceCleanupFilters
     >[1]
+
     const chip = listAppliedWorkspaceCleanupFilters(
       store.getState().workspaceCleanupBrowse.filters,
       format

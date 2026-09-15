@@ -70,10 +70,13 @@ function collectHookListings(result: unknown): CodexHookListing[] {
     result && typeof result === 'object' && Array.isArray((result as { data?: unknown }).data)
       ? ((result as { data: unknown[] }).data as { hooks?: unknown }[])
       : []
+
   const listings: CodexHookListing[] = []
   const seenKeys = new Set<string>()
+
   for (const entry of data) {
     const hooks = Array.isArray(entry?.hooks) ? entry.hooks : []
+
     for (const hook of hooks as Record<string, unknown>[]) {
       if (
         typeof hook?.key !== 'string' ||
@@ -82,11 +85,13 @@ function collectHookListings(result: unknown): CodexHookListing[] {
       ) {
         continue
       }
+
       // Why: hooks/list repeats user-scope hooks per requested cwd; grants
       // must consider each key once.
       if (seenKeys.has(hook.key)) {
         continue
       }
+
       seenKeys.add(hook.key)
       listings.push({
         key: hook.key,
@@ -96,6 +101,7 @@ function collectHookListings(result: unknown): CodexHookListing[] {
       })
     }
   }
+
   return listings
 }
 
@@ -117,6 +123,7 @@ export async function runCodexHookTrustGrantSession(
     request.invocation,
     async (rpc) => {
       const expectedKeys = new Set(request.expectedTrustKeys)
+
       const matchManaged = (listing: CodexHookListing): boolean =>
         listing.command === request.managedCommand &&
         expectedKeys.has(normalizeHookTrustKeyForLookup(listing.key))
@@ -124,6 +131,7 @@ export async function runCodexHookTrustGrantSession(
       const listResult = await rpc.request('hooks/list', { cwds: [request.hooksListCwd] })
       const managedListings = collectHookListings(listResult).filter(matchManaged)
       const managedKeyCoverage = normalizedKeyCoverage(managedListings)
+
       if (
         managedListings.length !== expectedKeys.size ||
         !setContainsEvery(managedKeyCoverage, expectedKeys)
@@ -136,13 +144,16 @@ export async function runCodexHookTrustGrantSession(
       }
 
       const needingTrust = managedListings.filter((listing) => listing.trustStatus !== 'trusted')
+
       if (needingTrust.length > 0) {
         // Why: same wire shape as the Codex TUI "Trust all" flow — one upsert
         // edit under hooks.state with each key's Codex-computed current hash.
         const value: Record<string, { trusted_hash: string }> = {}
+
         for (const listing of needingTrust) {
           value[listing.key] = { trusted_hash: listing.currentHash }
         }
+
         await rpc.request('config/batchWrite', {
           edits: [{ keyPath: 'hooks.state', value, mergeStrategy: 'upsert' }],
           reloadUserConfig: true
@@ -153,6 +164,7 @@ export async function runCodexHookTrustGrantSession(
       const verifiedListings = collectHookListings(verifyResult).filter(matchManaged)
       const verifiedKeyCoverage = normalizedKeyCoverage(verifiedListings)
       const untrusted = verifiedListings.filter((listing) => listing.trustStatus !== 'trusted')
+
       if (
         verifiedListings.length !== expectedKeys.size ||
         !setContainsEvery(verifiedKeyCoverage, expectedKeys) ||
@@ -170,6 +182,7 @@ export async function runCodexHookTrustGrantSession(
               reasonClass: 'post-grant-mismatch'
             }
       }
+
       return {
         outcome: 'granted',
         wroteTrust: needingTrust.length > 0,
@@ -194,5 +207,6 @@ function setContainsEvery(values: ReadonlySet<string>, expected: ReadonlySet<str
       return false
     }
   }
+
   return true
 }

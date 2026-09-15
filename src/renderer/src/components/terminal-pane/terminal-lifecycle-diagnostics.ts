@@ -8,6 +8,7 @@ type TerminalLifecycleDiagnosticDetails = {
 }
 
 const emittedDiagnostics = new Set<string>()
+
 const MAX_EMITTED_DIAGNOSTICS = 500
 
 export function warnTerminalLifecycleAnomaly(
@@ -23,12 +24,15 @@ export function warnTerminalLifecycleAnomaly(
     details.ptyId ?? '',
     details.reason ?? ''
   ].join('|')
+
   if (emittedDiagnostics.has(key)) {
     return
   }
+
   if (emittedDiagnostics.size >= MAX_EMITTED_DIAGNOSTICS) {
     emittedDiagnostics.clear()
   }
+
   emittedDiagnostics.add(key)
   console.warn(`[terminal-lifecycle] ${event}`, details)
 }

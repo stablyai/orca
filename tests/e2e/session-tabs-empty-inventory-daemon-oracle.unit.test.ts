@@ -21,6 +21,7 @@ import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runti
 import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync'
 
 const ENVIRONMENT_ID = 'env-live-unpublished'
+
 const WORKTREE = 'repo1::/path/wt1'
 
 type WriterSubprocess = SubprocessHandle & {
@@ -31,6 +32,7 @@ type WriterSubprocess = SubprocessHandle & {
 function createWriterSubprocess(pid: number): WriterSubprocess {
   let onExit: ((code: number) => void) | null = null
   const write = vi.fn<(data: string) => void>()
+
   return {
     pid,
     getForegroundProcess: () => 'codex',
@@ -64,13 +66,16 @@ describe('unpublished empty inventory daemon oracle', () => {
 
   it('keeps the resume dispatch parked and exactly one daemon writer live', async () => {
     const subprocesses: ReturnType<typeof createWriterSubprocess>[] = []
+
     const host = new TerminalHost({
       spawnSubprocess: () => {
         const subprocess = createWriterSubprocess(90_000 + subprocesses.length)
         subprocesses.push(subprocess)
+
         return subprocess
       }
     })
+
     await host.createOrAttach({
       sessionId: 'original-live-session',
       cols: 80,
@@ -78,6 +83,7 @@ describe('unpublished empty inventory daemon oracle', () => {
       launchAgent: 'codex',
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
+
     const call = vi.fn(async () => ({
       ok: true,
       result: {
@@ -91,6 +97,7 @@ describe('unpublished empty inventory daemon oracle', () => {
         hostScope: { hostIds: ['runtime:env'], omittedHostIds: [] }
       }
     }))
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     let resumeSweeps = 0
     let replacement: Promise<unknown> | null = null
@@ -113,6 +120,7 @@ describe('unpublished empty inventory daemon oracle', () => {
     await (replacement ?? Promise.resolve())
 
     const liveSessionIds = host.listSessions().map(({ sessionId }) => sessionId)
+
     for (const sessionId of liveSessionIds) {
       host.write(sessionId, `writer:${sessionId}`)
     }
@@ -131,9 +139,11 @@ describe('unpublished empty inventory daemon oracle', () => {
       writerCalls: [[['writer:original-live-session']]]
     })
     expect(call).toHaveBeenCalledOnce()
+
     for (const subprocess of subprocesses) {
       subprocess.exit()
     }
+
     await host.dispose()
   })
 
@@ -164,13 +174,16 @@ describe('unpublished empty inventory daemon oracle', () => {
 
   it('records legacy unconditional empty hydration releasing the resume dispatch', async () => {
     const subprocesses: ReturnType<typeof createWriterSubprocess>[] = []
+
     const host = new TerminalHost({
       spawnSubprocess: () => {
         const subprocess = createWriterSubprocess(90_000 + subprocesses.length)
         subprocesses.push(subprocess)
+
         return subprocess
       }
     })
+
     await host.createOrAttach({
       sessionId: 'original-live-session',
       cols: 80,
@@ -178,6 +191,7 @@ describe('unpublished empty inventory daemon oracle', () => {
       launchAgent: 'codex',
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
+
     // Legacy hosts answer the liveness probe with a scoped zero-terminal census.
     const call = vi.fn(async () => ({
       ok: true,
@@ -188,6 +202,7 @@ describe('unpublished empty inventory daemon oracle', () => {
         hostScope: { hostIds: ['runtime:env'], omittedHostIds: [] }
       }
     }))
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     let resumeSweeps = 0
     let replacement: Promise<unknown> | null = null
@@ -210,6 +225,7 @@ describe('unpublished empty inventory daemon oracle', () => {
     await (replacement ?? Promise.resolve())
 
     const liveSessionIds = host.listSessions().map(({ sessionId }) => sessionId)
+
     for (const sessionId of liveSessionIds) {
       host.write(sessionId, `writer:${sessionId}`)
     }
@@ -228,9 +244,11 @@ describe('unpublished empty inventory daemon oracle', () => {
       writerCalls: [[['writer:original-live-session']], [['writer:replacement-resume-session']]]
     })
     expect(call).toHaveBeenCalledOnce()
+
     for (const subprocess of subprocesses) {
       subprocess.exit()
     }
+
     await host.dispose()
   })
 })

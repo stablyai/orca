@@ -5,6 +5,7 @@ import {
 } from './agent-status-observation'
 
 const PANE_A = 'tab-a:11111111-1111-4111-8111-111111111111'
+
 const PANE_B = 'tab-b:22222222-2222-4222-8222-222222222222'
 
 function observe(
@@ -80,10 +81,12 @@ describe('AgentStatusObservationSequencer', () => {
     const sequencer = new AgentStatusObservationSequencer('authority-1')
 
     const first = observe(sequencer, PANE_A)
+
     // Why: overflow the bounded per-pane map so PANE_A's entry is definitely evicted.
     for (let i = 0; i < 2_000; i++) {
       observe(sequencer, `tab-flood:${i}`)
     }
+
     const afterEviction = observe(sequencer, PANE_A)
 
     expect(afterEviction.revision).toBeGreaterThan(first.revision)
@@ -99,6 +102,7 @@ describe('AgentStatusObservationSequencer', () => {
       boundary: true,
       kind: 'snapshot'
     })
+
     const plain = sequencer.observe(PANE_A, { origin: 'title', observedAt: 43, boundary: false })
 
     expect(boundary).toMatchObject({

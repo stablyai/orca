@@ -49,9 +49,11 @@ describe('runtime Git API contract', () => {
       },
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
+
     const registeredMethods = GIT_METHODS.map((method) => method.name).sort()
 
     expect(registeredMethods).toEqual(Object.keys(RPC_TO_RUNTIME_COMMAND).sort())
+
     for (const commandName of Object.values(RPC_TO_RUNTIME_COMMAND)) {
       expect(commands[commandName]).toBeTypeOf('function')
     }

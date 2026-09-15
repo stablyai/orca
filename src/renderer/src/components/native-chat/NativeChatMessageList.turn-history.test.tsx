@@ -12,15 +12,20 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 const scrollTo = vi.fn()
+
 let restoreViewport = (): void => {}
+
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
 })
+
 afterAll(() => restoreViewport())
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
+
 function item(
   itemId: string,
   body: AgentJournalItemBody,
@@ -28,16 +33,19 @@ function item(
 ): AgentJournalRenderItem {
   return { itemId, body, sequence, observedAt: sequence * 1000, revision: 1 }
 }
+
 const user = item(
   'user',
   { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Make the change' }] },
   1
 )
+
 const prose = item(
   'prose',
   { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Updating the files.' }] },
   2
 )
+
 function diff(patch = '@@ -1 +1 @@\n-before\n+after'): AgentJournalRenderItem {
   return item(
     'diff',
@@ -49,6 +57,7 @@ function diff(patch = '@@ -1 +1 @@\n-before\n+after'): AgentJournalRenderItem {
     3
   )
 }
+
 function session(items: AgentJournalRenderItem[]): NativeChatLiveSession {
   return {
     messages: projectStructuredItemsToNativeChat(items),
@@ -61,6 +70,7 @@ function session(items: AgentJournalRenderItem[]): NativeChatLiveSession {
     readPhase: 'ready'
   }
 }
+
 function view(items: AgentJournalRenderItem[], structured = true) {
   return (
     <NativeChatMessageList
@@ -107,12 +117,15 @@ describe('turn history presentation', () => {
       },
       4
     )
+
     const initial = [user, prose, diff(), approval]
     const { rerender } = render(view(initial))
     expect(screen.queryByText('Run tests?')).toBeNull()
+
     if (approval.body.kind !== 'approval') {
       throw new Error('fixture')
     }
+
     const resolved = {
       ...approval,
       revision: 2,
@@ -126,6 +139,7 @@ describe('turn history presentation', () => {
         }
       }
     }
+
     rerender(view([user, prose, diff('@@ -0,0 +1,2 @@\n+first\n+second'), resolved]))
     expect(screen.getByRole('button', { name: /1 changed file \+2/ })).toBeInTheDocument()
     expect(screen.getByText('Run tests?')).toBeInTheDocument()
@@ -141,6 +155,7 @@ describe('turn history presentation', () => {
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Again' }] },
       5
     )
+
     const secondDiff = { ...diff(), itemId: 'second-diff', sequence: 6, observedAt: 6000 }
     const items = [user, prose, diff(), secondUser, secondDiff]
     const { rerender } = render(view(items))

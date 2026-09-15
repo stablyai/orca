@@ -16,6 +16,7 @@ export function buildAgentAvailabilitySettingsUpdate(
   enabled: boolean
 ): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
   const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+
   const nextDisabled = enabled
     ? latestDisabled.filter((agent) => agent !== id)
     : latestDisabled.includes(id)
@@ -42,6 +43,7 @@ export function createAgentAvailabilityUpdateQueue(): (
           buildAgentAvailabilitySettingsUpdate(getSettings() ?? fallbackSettings, agentId, enabled)
         )
       )
+
     return pendingUpdate.then(() => undefined)
   }
 }

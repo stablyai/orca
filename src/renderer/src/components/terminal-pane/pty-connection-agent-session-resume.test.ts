@@ -36,8 +36,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -58,6 +61,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -67,6 +71,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -87,6 +92,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -97,9 +103,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -109,9 +117,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -120,6 +130,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -155,10 +166,12 @@ describe('connectPanePty', () => {
           coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
         }
       }
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
+
     const launchConfig = {
       agentCommand: "codex '--model' 'gpt-5' '--reasoning-effort' 'high'",
       agentArgs: '--model gpt-5 --reasoning-effort high',
@@ -170,6 +183,7 @@ describe('connectPanePty', () => {
         ORCA_WORKSPACE_ID: 'wrong-workspace'
       }
     }
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -200,6 +214,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
@@ -212,6 +227,7 @@ describe('connectPanePty', () => {
     const reattachArgs = transport.connect.mock.calls.find(
       ([args]) => args.sessionId === 'lost-pty'
     )?.[0]
+
     const launchToken = (reattachArgs?.env as Record<string, string> | undefined)
       ?.ORCA_AGENT_LAUNCH_TOKEN
 
@@ -309,6 +325,7 @@ describe('connectPanePty', () => {
         }
       }) as never
     )
+
     try {
       await flushAsyncTicks(20)
       await new Promise((resolve) => setTimeout(resolve, 70))
@@ -341,15 +358,18 @@ describe('connectPanePty', () => {
           coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
         }
       }
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
+
     const launchConfig = {
       agentCommand: "codex '--model' 'gpt-5-mini'",
       agentArgs: '--model gpt-5-mini',
       agentEnv: {}
     }
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -377,6 +397,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
@@ -470,10 +491,12 @@ describe('connectPanePty', () => {
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
       expect(transport.attach).not.toHaveBeenCalled()
+
       const options = transport.connect.mock.calls[0]?.[0] as {
         sessionId?: string
         command?: string
       }
+
       expect(options.sessionId).toBe(retainedPtyId)
       expect(options.command).toContain('claude-session-1')
       expect(options.command?.match(/--resume/g)).toHaveLength(1)
@@ -491,6 +514,7 @@ describe('connectPanePty', () => {
           coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
         }
       }
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
@@ -547,6 +571,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
@@ -586,10 +611,13 @@ describe('connectPanePty', () => {
       if (opts.sessionId) {
         return undefined
       }
+
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
+
       onPtySpawn?.('fresh-pty')
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
@@ -632,6 +660,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: staleSessionId }

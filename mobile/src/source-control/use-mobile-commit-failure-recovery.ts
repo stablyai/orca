@@ -30,6 +30,7 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
     () => (failure && summary ? hasExpandedCommitFailureDetails(failure.error, summary) : false),
     [failure, summary]
   )
+
   const prompt = useMemo(
     () =>
       failure && summary
@@ -48,20 +49,26 @@ export function useMobileCommitFailureRecovery({ client, connState, worktreeId, 
     if (launching || !prompt) {
       return false
     }
+
     if (!client || connState !== 'connected') {
       setLaunchError('Waiting for desktop...')
       triggerError()
+
       return false
     }
+
     setLaunching(true)
     setLaunchError(null)
+
     try {
       await createTerminalAndSendPrompt(client, worktreeId, prompt)
       triggerSuccess()
+
       return true
     } catch (err) {
       triggerError()
       setLaunchError(err instanceof Error ? err.message : 'Failed to launch agent')
+
       return false
     } finally {
       setLaunching(false)

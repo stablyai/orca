@@ -30,6 +30,7 @@ function sessionWith(input: {
   session.prompts = input.prompts ?? new ClaudePromptRegistry()
   session.connection.interrupt = interrupt
   session.connection.cancelAsyncMessage = cancelAsyncMessage
+
   return { session, interrupt, cancelAsyncMessage }
 }
 
@@ -58,10 +59,12 @@ describe('cancelClaudeTurn', () => {
 
   it('settles every cancelled queued waiter when the CLI advertises the capability', async () => {
     const cancelled = Array.from({ length: 64 }, (_, index) => `queued-${index}`)
+
     const { session, interrupt, cancelAsyncMessage } = sessionWith({
       capabilities: ['interrupt_receipt_v1', 'interrupt_cancel_queued_v1'],
       interrupt: async () => ({ still_queued: [], cancelled })
     })
+
     const resolutions = cancelled.map(() => vi.fn())
     session.dispatchWaiters = cancelled.map((sentUuid, index): ClaudeDispatchWaiter => ({
       acceptsResult: false,
@@ -90,10 +93,12 @@ describe('cancelClaudeTurn', () => {
 
   it('rejects an ambiguously written dispatch when a later interrupt confirms it was cancelled', async () => {
     let cancelledUuid = ''
+
     const { session } = sessionWith({
       capabilities: ['interrupt_cancel_queued_v1'],
       interrupt: async () => ({ still_queued: [], cancelled: [cancelledUuid] })
     })
+
     session.connection.send = vi.fn(async () => {
       throw new Error('connection lost after write')
     })
@@ -146,6 +151,7 @@ describe('answerClaudePrompt', () => {
   it('resolves cancellation observation when teardown clears the prompt registry', async () => {
     const prompts = new ClaudePromptRegistry()
     const settle = vi.fn()
+
     const prompt = prompts.register({
       requestId: 'perm-clear',
       toolName: 'Bash',
@@ -154,15 +160,20 @@ describe('answerClaudePrompt', () => {
       suggestions: [],
       settle
     })!
+
     prompts.bindJournalItemId('journal-clear', prompt.promptKey)
     const claim = prompts.claim('journal-clear', 'approval')
+
     if (!claim) {
       throw new Error('expected prompt claim')
     }
+
     const observed = prompts.observeCancellation(claim)
+
     if (!observed) {
       throw new Error('expected cancellation observation')
     }
+
     let observedCancellation = false
     void observed.then(() => {
       observedCancellation = true
@@ -180,6 +191,7 @@ describe('answerClaudePrompt', () => {
   it('settles the pending prompt callback and forgets it', async () => {
     const prompts = new ClaudePromptRegistry()
     const settle = vi.fn()
+
     const prompt = prompts.register({
       requestId: 'perm-1',
       toolName: 'Bash',
@@ -188,6 +200,7 @@ describe('answerClaudePrompt', () => {
       suggestions: [],
       settle
     })!
+
     prompts.bindJournalItemId('journal-1', prompt.promptKey)
     const { session } = sessionWith({ interrupt: async () => undefined, prompts })
     const resolvePrompt = vi.fn()
@@ -203,9 +216,11 @@ describe('answerClaudePrompt', () => {
     }
 
     const claim = prompts.claim('journal-1', 'approval')
+
     if (!claim) {
       throw new Error('expected prompt claim')
     }
+
     await answerClaudePrompt(session, claim, 'allow')
 
     expect(settle).toHaveBeenCalledWith(
@@ -244,6 +259,7 @@ describe('stopClaudeBackgroundTasks', () => {
 
   it('stops issuing requests when ownership changes between tasks', async () => {
     const backgroundTasks = new ClaudeBackgroundTaskTracker()
+
     for (const taskId of ['task-1', 'task-2']) {
       backgroundTasks.observe({
         type: 'system',
@@ -253,10 +269,13 @@ describe('stopClaudeBackgroundTasks', () => {
         is_backgrounded: true
       })
     }
+
     let current = true
+
     const stopTask = vi.fn(async (_taskId: string) => {
       current = false
     })
+
     const session = { backgroundTasks, connection: { stopTask } } as unknown as ClaudeSession
 
     await stopClaudeBackgroundTasks(session, undefined, () => current)

@@ -20,6 +20,7 @@ describe('resolveSshWorkspaceForget', () => {
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map()
     })
+
     expect(result.kind).toBe('not-ssh')
   })
 
@@ -29,6 +30,7 @@ describe('resolveSshWorkspaceForget', () => {
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map()
     })
+
     expect(result.kind).toBe('not-ssh')
   })
 
@@ -38,6 +40,7 @@ describe('resolveSshWorkspaceForget', () => {
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map() // ssh-dead not present -> ghost
     })
+
     expect(result).toEqual({ kind: 'ghost', targetId: 'ssh-dead' })
   })
 
@@ -47,6 +50,7 @@ describe('resolveSshWorkspaceForget', () => {
       sshConnectionStates: stateMap({ 'ssh-live': 'connected' }),
       sshTargetLabels: new Map([['ssh-live', 'Live']])
     })
+
     expect(result).toEqual({ kind: 'connected', targetId: 'ssh-live' })
   })
 
@@ -56,6 +60,7 @@ describe('resolveSshWorkspaceForget', () => {
       sshConnectionStates: stateMap({ 'ssh-live': 'error' }),
       sshTargetLabels: new Map([['ssh-live', 'Live']])
     })
+
     expect(result).toEqual({ kind: 'disconnected', targetId: 'ssh-live', status: 'error' })
   })
 
@@ -65,6 +70,7 @@ describe('resolveSshWorkspaceForget', () => {
       sshConnectionStates: new Map(),
       sshTargetLabels: new Map([['ssh-live', 'Live']])
     })
+
     expect(result).toEqual({ kind: 'disconnected', targetId: 'ssh-live', status: 'disconnected' })
   })
 })

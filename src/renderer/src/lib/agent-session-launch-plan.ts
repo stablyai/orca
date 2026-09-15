@@ -81,10 +81,13 @@ export function adoptAgentSessionLaunchVerdict(
       ) {
         return null
       }
+
       const worktreeId = target?.worktreeId ?? verdict.worktreeId
+
       if (!worktreeId) {
         throw new Error('A structured agent launch needs the workspace it targets.')
       }
+
       return settleStructuredAgentLaunch(
         worktreeId,
         verdict.agent,
@@ -104,6 +107,7 @@ export function structuredAgentSessionLaunchFeasible(
   request: AgentSessionStructuredFeasibilityRequest
 ): boolean {
   const { settings, ...args } = request
+
   // Why: the narrow settings ride on the built input, not the store, so a caller names the exact
   // settings this answer turns on without having to hold a whole store-shaped object.
   // The builder still reads launch customization off `store.settings`: safe only because the caller

@@ -8,6 +8,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 
 const { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } =
   await import('./orca-runtime-adopt-terminal-orphans-from-inventory')
+
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -16,8 +17,11 @@ const {
 } = await import('./structured-worker-identity')
 
 const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+
 const prototype = OrcaRuntimeWithAdoptTerminalOrphansFromInventory.prototype
+
 const getLivePaneKey = prototype.getLiveTerminalPaneKey
+
 const resolveActiveTerminal = prototype.resolveActiveTerminal
 
 function installRecord(lease: { runtimeKind: string; claimStatus: string } | null): void {
@@ -47,6 +51,7 @@ function registerWorker(): string {
     worktreeId: 'wt_1',
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   return handle
 }
 
@@ -129,6 +134,7 @@ describe('implicit sender resolution refuses to guess', () => {
       }),
       listTerminals: async () => ({ terminals: [{ handle: 'term_a' }, { handle: 'term_b' }] })
     }
+
     await expect(
       resolveActiveTerminal.call(preReady, 'id:wt_1', { requireUnambiguous: true })
     ).rejects.toThrow('no_active_terminal')

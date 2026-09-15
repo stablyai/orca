@@ -14,6 +14,7 @@ const hooks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: { getPath: () => '', on: vi.fn(), isReady: () => true }
 }))
+
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
     setListener: (listener: ((payload: EnrichedAgentHookEventPayload) => void) | null) => {
@@ -22,12 +23,15 @@ vi.mock('../agent-hooks/server', () => ({
     setPaneStatusClearListener: vi.fn()
   }
 }))
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
   setMigrationUnsupportedPtyListener: vi.fn()
 }))
+
 vi.mock('../window/dashboard-popout-window', () => ({
   getDashboardPopoutWindow: () => null
 }))
+
 vi.mock('./synthetic-title-runtime', () => ({
   driveSyntheticTitleFromHook: vi.fn(),
   shouldSuppressCodexAutoApprovalSyntheticTitleFromHook: () => false,

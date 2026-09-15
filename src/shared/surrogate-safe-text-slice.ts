@@ -10,7 +10,9 @@ export function sliceAtCodeUnitLimit(value: string, limit: number): string {
   if (value.length <= limit) {
     return value
   }
+
   const end = limit > 0 && isHighSurrogate(value.charCodeAt(limit - 1)) ? limit - 1 : limit
+
   return value.slice(0, end)
 }
 

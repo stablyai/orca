@@ -100,6 +100,7 @@ describe('runtime environment shared-control connection cache', () => {
 
   it('leaves a subscription-holding connection untouched by an absent verdict', async () => {
     const server = await createSharedControlTestServer()
+
     const subscription = await subscribeRemoteRuntimeSharedControlRequest(
       ENVIRONMENT_ID,
       server.pairing,
@@ -108,6 +109,7 @@ describe('runtime environment shared-control connection cache', () => {
       1_000,
       { onResponse: vi.fn(), onError: vi.fn(), onClose: vi.fn() }
     )
+
     server.closeClients()
     await waitFor(
       () => getRemoteRuntimeSharedControlDiagnostics(ENVIRONMENT_ID)?.state === 'reconnecting'
@@ -129,10 +131,12 @@ describe('runtime environment shared-control connection cache', () => {
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
   const startedAt = Date.now()
+
   while (!predicate()) {
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error('Timed out waiting for cached shared-control connection')
     }
+
     await delay(10)
   }
 }

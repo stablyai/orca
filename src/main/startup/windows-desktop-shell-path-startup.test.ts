@@ -3,9 +3,11 @@ import { startWindowsDesktopBeforeShellPathReady } from './windows-desktop-shell
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -15,6 +17,7 @@ describe('Windows desktop shell PATH startup', () => {
     const events: string[] = []
     const bindServices = vi.fn(() => events.push('bind'))
     const openWindow = vi.fn(() => events.push('open'))
+
     const options = {
       bindServices,
       openWindow,
@@ -37,6 +40,7 @@ describe('Windows desktop shell PATH startup', () => {
     const shellPath = deferred()
     const window = { visible: true }
     const openWindow = vi.fn(() => window)
+
     const startServices = vi.fn(() => ({
       firstWindowReady: Promise.resolve(),
       localPtyReady: Promise.resolve(),

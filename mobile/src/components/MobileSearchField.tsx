@@ -62,6 +62,7 @@ export function MobileSearchField({
     }
 
     let timeout: ReturnType<typeof setTimeout> | undefined
+
     // Why: wait for the open-press interaction + layout to finish, then focus
     // so the soft keyboard actually appears (not just a caret with no IME).
     const task = InteractionManager.runAfterInteractions(() => {
@@ -72,6 +73,7 @@ export function MobileSearchField({
 
     return () => {
       task.cancel()
+
       if (timeout) {
         clearTimeout(timeout)
       }
@@ -84,6 +86,7 @@ export function MobileSearchField({
     } else {
       onChangeText('')
     }
+
     // Why: pressing the clear chip steals focus and drops the keyboard;
     // re-focus so the user can keep typing without tapping the field again.
     requestAnimationFrame(() => {

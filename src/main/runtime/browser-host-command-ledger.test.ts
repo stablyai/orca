@@ -18,6 +18,7 @@ describe('BrowserHostCommandLedger', () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     const firstDelivery = vi.fn()
     const release = ledger.attach(firstDelivery)
+
     const issued = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -27,6 +28,7 @@ describe('BrowserHostCommandLedger', () => {
         executionHostKey: 'native:runtime-a:1'
       }
     })
+
     release()
     const replacementDelivery = vi.fn()
 
@@ -42,6 +44,7 @@ describe('BrowserHostCommandLedger', () => {
   it('retains unsettled commands when replacement delivery fails partway through replay', async () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     const release = ledger.attach(vi.fn())
+
     const create = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -51,11 +54,13 @@ describe('BrowserHostCommandLedger', () => {
         executionHostKey: 'native:runtime-a:1'
       }
     })
+
     const navigate = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
       command: { type: 'navigate', url: 'https://remote.internal' }
     })
+
     release()
     expect(() =>
       ledger.attach((event) => {
@@ -77,11 +82,14 @@ describe('BrowserHostCommandLedger', () => {
 
   it('publishes bounded per-page sequences and settles results in order', async () => {
     const emit = vi.fn()
+
     const ledger = new BrowserHostCommandLedger({
       authority,
       createCommandId: (sequence) => `command-${sequence}`
     })
+
     ledger.attach(emit)
+
     const create = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 4,
@@ -91,6 +99,7 @@ describe('BrowserHostCommandLedger', () => {
         executionHostKey: 'host-key-a'
       }
     })
+
     const navigate = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 4,
@@ -110,6 +119,7 @@ describe('BrowserHostCommandLedger', () => {
   it('accepts exact result replay but rejects conflicting or stale results', async () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     ledger.attach(vi.fn())
+
     const issued = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -119,6 +129,7 @@ describe('BrowserHostCommandLedger', () => {
         executionHostKey: 'host-key-a'
       }
     })
+
     const completed = resultParams(issued.event, { status: 'completed' })
 
     expect(ledger.settle(completed)).toBe(true)
@@ -138,6 +149,7 @@ describe('BrowserHostCommandLedger', () => {
       maxOutstandingCommands: 1,
       maxOutstandingCommandsPerPage: 1
     })
+
     const input = {
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -165,6 +177,7 @@ describe('BrowserHostCommandLedger', () => {
   it('fences outstanding outcomes and rejects late results on close', async () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     ledger.attach(vi.fn())
+
     const issued = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -174,6 +187,7 @@ describe('BrowserHostCommandLedger', () => {
         executionHostKey: 'host-key-a'
       }
     })
+
     void issued.result.catch(() => undefined)
 
     ledger.close()
@@ -186,6 +200,7 @@ describe('BrowserHostCommandLedger', () => {
   it('makes outstanding outcomes unknown at exact page retirement', async () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     ledger.attach(vi.fn())
+
     const issued = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -206,6 +221,7 @@ describe('BrowserHostCommandLedger', () => {
   it('admits close-first only for reconciliation of imported inventory', async () => {
     const ledger = new BrowserHostCommandLedger({ authority })
     ledger.attach(vi.fn())
+
     const input = {
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -239,6 +255,7 @@ describe('BrowserHostCommandLedger', () => {
         command: { type: 'navigate', url: 'https://remote.internal' }
       })
     ).toThrow('browser_host_command_create_required')
+
     const issued = ledger.issue({
       browserPageId: 'page-b',
       pageHostGeneration: 2,
@@ -248,6 +265,7 @@ describe('BrowserHostCommandLedger', () => {
         executionHostKey: 'host-key-a'
       }
     })
+
     expect(() =>
       ledger.issue({
         browserPageId: 'page-c',

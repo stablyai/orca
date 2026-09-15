@@ -42,11 +42,14 @@ test.use({
 })
 
 const PARKED_FRAME_SCRIPT_DELAY_MS = 750
+
 const PARKED_FRAME_COUNT = 25
+
 const PARK_VERDICT_BURST_SETTLE_MS = TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS * 4
 
 function parkedTuiFrame(runId: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
+
   const rows = [
     '╭────────────────────────────────────────────────────────────────────╮',
     `│ Parked view restore Frame ${String(frame).padStart(3, '0')} ${frame % 2 === 0 ? '🟢' : '🟡'} ${progress} │`,
@@ -57,6 +60,7 @@ function parkedTuiFrame(runId: string, frame: number): string {
     '╰──────────────┴──────────────────────┴──────────────────────────────╯',
     `PARKED_RESTORE_FINAL_${runId}_${frame}`
   ]
+
   return [
     '\x1b[?2026h',
     '\x1b[?1049h',
@@ -72,6 +76,7 @@ function writeParkedFrameScript(scriptPath: string, runId: string): void {
   const frames = Array.from({ length: PARKED_FRAME_COUNT }, (_, frame) =>
     parkedTuiFrame(runId, frame)
   )
+
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(
     scriptPath,
@@ -94,6 +99,7 @@ function cycleReferenceFrame(runId: string): string {
     '╰───────────────┴──────────────────────────────────────────╯',
     `CYCLE_REFERENCE_${runId}`
   ]
+
   return [
     '\x1b[?1049h',
     '\x1b[2J\x1b[H',
@@ -115,6 +121,7 @@ function writeCycleReferenceScript(scriptPath: string, runId: string): void {
 function terminalContentRows(serialized: string): string[] {
   // eslint-disable-next-line no-control-regex
   const stripped = serialized.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+
   return stripped
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+$/, ''))
@@ -126,6 +133,7 @@ async function readParkingWiring(
 ): Promise<{ present: boolean; parkDelayMs: number | null }> {
   return page.evaluate(() => {
     const debug = (window as ParkingDebugWindow).__terminalParkingDebug
+
     return { present: debug !== undefined, parkDelayMs: debug?.parkDelayMs ?? null }
   })
 }
@@ -136,10 +144,12 @@ async function readParkingWiring(
 async function skipUnlessParkingWired(page: Page): Promise<void> {
   const deadline = Date.now() + 2_000
   let wiring = await readParkingWiring(page)
+
   while (!wiring.present && Date.now() < deadline) {
     await page.waitForTimeout(250)
     wiring = await readParkingWiring(page)
   }
+
   test.skip(
     !wiring.present,
     'terminal hidden view parking wiring has not landed (window.__terminalParkingDebug missing)'
@@ -154,6 +164,7 @@ type TerminalTabViewState = {
 async function readTerminalTabViewState(page: Page, tabId: string): Promise<TerminalTabViewState> {
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
+
     return {
       hasManager: manager !== undefined,
       paneCount: manager?.getPanes?.().length ?? 0
@@ -164,9 +175,11 @@ async function readTerminalTabViewState(page: Page, tabId: string): Promise<Term
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     state.setActiveTabType('terminal')
     state.setActiveTab(targetTabId)
@@ -183,13 +196,16 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('createActiveTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
 
@@ -201,15 +217,18 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     .toBe(tabId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
+
   return tabId
 }
 
 async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
+
     return Object.keys(store.getState().unreadTerminalTabs)
   })
 }
@@ -217,12 +236,15 @@ async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
 async function isWorktreeUnread(page: Page, worktreeId: string): Promise<boolean> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       return false
     }
+
     const worktree = Object.values(store.getState().worktreesByRepo)
       .flat()
       .find((candidate) => candidate.id === worktreeId)
+
     return worktree?.isUnread === true
   }, worktreeId)
 }
@@ -233,15 +255,18 @@ async function getTerminalTabTitle(
   tabId: string
 ): Promise<string | null> {
   const tabs = await getWorktreeTabs(page, worktreeId)
+
   return tabs.find((tab) => tab.id === tabId)?.title ?? null
 }
 
 async function hasPendingStartupCommand(page: Page, tabId: string): Promise<boolean> {
   return page.evaluate((tabId) => {
     const store = window.__store
+
     if (!store) {
       return false
     }
+
     return store.getState().pendingStartupByTabId[tabId] !== undefined
   }, tabId)
 }
@@ -261,9 +286,11 @@ async function setUpParkableTabA(page: Page): Promise<ParkableTabSetup> {
   await waitForActiveTerminalManager(page, 30_000)
   const tabASnapshot = await waitForPaneIdentitySnapshot(page, 1)
   const tabAPtyId = tabASnapshot.panes[0]?.ptyId
+
   if (!tabAPtyId) {
     throw new Error('parking spec tab A did not bind a PTY')
   }
+
   return {
     worktreeId,
     tabAId: tabASnapshot.tabId,
@@ -284,6 +311,7 @@ test.describe('Terminal hidden view parking', () => {
     const finalMarker = `PARKED_RESTORE_FINAL_${runId}_${PARKED_FRAME_COUNT - 1}`
     const scriptPath = path.join(testRepoPath, `.orca-parked-rich-tui-${runId}.mjs`)
     writeParkedFrameScript(scriptPath, runId)
+
     try {
       await sendToTerminal(orcaPage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
       await expect
@@ -294,9 +322,11 @@ test.describe('Terminal hidden view parking', () => {
         .toContain(finalMarker)
 
       const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
+
       const parkDetectedAfterMs = await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
         parkDelayMs: PARKING_DELAY_MS
       })
+
       const wiring = await readParkingWiring(orcaPage)
       testInfo.annotations.push({
         type: 'terminal-parking',
@@ -436,9 +466,11 @@ test.describe('Terminal hidden view parking', () => {
     const tabCId = await createActiveTerminalTab(orcaPage, worktreeId)
     await orcaPage.evaluate((tabId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('parking exclusion spec: window.__store is unavailable')
       }
+
       store.getState().queueTabStartupCommand(tabId, { command: 'echo parked-exclusion-probe' })
     }, tabCId)
     expect(await hasPendingStartupCommand(orcaPage, tabCId)).toBe(true)
@@ -487,6 +519,7 @@ test.describe('Terminal hidden view parking', () => {
     const marker = `CYCLE_REFERENCE_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-cycle-reference-${runId}.mjs`)
     writeCycleReferenceScript(scriptPath, runId)
+
     try {
       await sendToTerminal(orcaPage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
       await expect
@@ -528,6 +561,7 @@ test.describe('Terminal hidden view parking', () => {
         const rows = terminalContentRows(await getTerminalContent(orcaPage, 12_000))
         // Garble sentinel: the hidden-skip banner must never appear.
         expect(rows.join('\n')).not.toContain('Orca skipped hidden terminal output')
+
         return rows
       }
 
@@ -540,11 +574,13 @@ test.describe('Terminal hidden view parking', () => {
       // separate premise guard needed for a vacuous-green check.
       const CYCLES = 25
       const mismatches: string[] = []
+
       for (let cycle = 1; cycle < CYCLES; cycle++) {
         // Why: each cycle intentionally flips this tab's rendered verdict twice.
         // Let the production anti-churn burst window lapse before the next one.
         await orcaPage.waitForTimeout(PARK_VERDICT_BURST_SETTLE_MS)
         const rows = await runOneParkRevealCycle(cycle)
+
         if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
           mismatches.push(
             `cycle ${cycle}:\n  expected: ${JSON.stringify(referenceRows)}\n  actual:   ${JSON.stringify(rows)}`

@@ -8,9 +8,11 @@ export function hasRemoteRuntimePtyForTab(
   if (tabPtyIds?.some((ptyId) => parseRemoteRuntimePtyId(ptyId) !== null)) {
     return true
   }
+
   if (!leafPtyIdsById) {
     return false
   }
+
   for (const leafId in leafPtyIdsById) {
     if (
       Object.hasOwn(leafPtyIdsById, leafId) &&
@@ -19,5 +21,6 @@ export function hasRemoteRuntimePtyForTab(
       return true
     }
   }
+
   return false
 }

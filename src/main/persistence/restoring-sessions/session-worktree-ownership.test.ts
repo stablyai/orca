@@ -8,6 +8,7 @@ import {
 } from './session-worktree-ownership'
 
 const TARGET = 'repo-1::/workspace/target'
+
 const OTHER = 'repo-1::/workspace/other'
 
 function sessionWith(field: keyof WorkspaceSessionState, value: unknown): WorkspaceSessionState {

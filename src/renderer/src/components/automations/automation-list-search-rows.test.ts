@@ -24,6 +24,7 @@ import {
 } from './automations-page-fixtures'
 
 const repo = { id: REPO_ID, displayName: 'orca', path: '/src/orca' } as Repo
+
 const repoMap = new Map([[REPO_ID, repo]])
 
 function fieldsFor(
@@ -42,6 +43,7 @@ describe('automation search row fields', () => {
       workspaceId: 'ws-1',
       agentId: 'claude'
     })
+
     const fields = fieldsFor(makeAutomationListRow({ automation, hostLabel: 'build-box' }), {
       repoMap,
       worktreeMap: new Map([['ws-1', { displayName: 'feature/login-retry' }]])
@@ -63,6 +65,7 @@ describe('automation search row fields', () => {
         automation: makeAutomation({ workspaceMode: 'new_per_run', baseBranch: 'main' })
       })
     )
+
     expect(fields.workspace).toBe('main')
   })
 
@@ -71,6 +74,7 @@ describe('automation search row fields', () => {
       makeAutomationListRow({ automation: makeAutomation({ projectId: 'missing' }) }),
       { repoMap }
     )
+
     expect(fields.project).toBe(AUTOMATION_LIST_SEARCH_UNKNOWN_PROJECT)
   })
 
@@ -80,9 +84,11 @@ describe('automation search row fields', () => {
 
   it('indexes external jobs by provider, target host, and workdir', () => {
     const [entry] = buildExternalAutomationListEntries([makeScopedExternalManager()])
+
     if (!entry) {
       throw new Error('fixture produced no external entry')
     }
+
     const fields = buildExternalAutomationSearchFields(entry)
     expect(fields.name).toBe('Hermes job')
     expect(fields.agent).toBe('Hermes')
@@ -100,7 +106,9 @@ describe('automation search row index', () => {
         hostLabel: 'build-box'
       })
     ]
+
     const [first, second] = listRows.map((row) => row.key)
+
     const rows = buildAutomationListSearchRows(
       buildAutomationSearchRowSources(listRows, { repoMap })
     )
@@ -114,6 +122,7 @@ describe('automation search row index', () => {
 
   it('bounds prompt indexing per row regardless of prompt size', () => {
     const prompt = `${'x'.repeat(AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS)}unique-tail`
+
     const rows = buildAutomationListSearchRows(
       buildAutomationSearchRowSources(
         [makeAutomationListRow({ automation: makeAutomation({ prompt }) })],
@@ -122,10 +131,13 @@ describe('automation search row index', () => {
         }
       )
     )
+
     const index = rows[0]?.index
+
     if (!index) {
       throw new Error('no row built')
     }
+
     expect(index.prompt.length).toBe(AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS)
     expect(automationListSearchIndexMatches(index, 'unique-tail')).toBe(false)
   })
@@ -136,6 +148,7 @@ describe('automation search row index', () => {
         [makeAutomationListRow({ automation: makeAutomation({ nextRunAt: Date.now() }) })],
         { repoMap }
       )
+
     // Why: nextRunAt churns on every tick and must not invalidate the index.
     expect(buildAutomationListSearchRowFingerprint(build())).toBe(
       buildAutomationListSearchRowFingerprint(build())
@@ -146,10 +159,12 @@ describe('automation search row index', () => {
     const base = buildAutomationSearchRowSources([makeAutomationListRow({ hostLabel: '' })], {
       repoMap
     })
+
     const renamedHost = buildAutomationSearchRowSources(
       [makeAutomationListRow({ hostLabel: 'build-box' })],
       { repoMap }
     )
+
     expect(buildAutomationListSearchRowFingerprint(base)).not.toBe(
       buildAutomationListSearchRowFingerprint(renamedHost)
     )

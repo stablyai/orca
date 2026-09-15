@@ -46,9 +46,11 @@ function createPreservedDaemonHandle(
       await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
     }
   }
+
   if (mode) {
     handle.mode = mode
   }
+
   return handle
 }
 
@@ -68,10 +70,12 @@ export function createOutOfProcessLauncher(
     // what makes a bare module-scoped slot safe — keep it that way or a concurrent launch can steal it.
     const attributedReason = attributedReplaceReason
     attributedReplaceReason = null
+
     let adoptionClient: DaemonClient | null = new DaemonClient({
       socketPath,
       tokenPath
     })
+
     try {
       // Why: acquire the full pair before control-only probes so an expired inherited deadline can't fire in the probe-to-adoption gap.
       // Why bounded: unbudgeted this grants a fresh 5s to each of four connect/hello steps, so a
@@ -82,15 +86,18 @@ export function createOutOfProcessLauncher(
       adoptionClient.disconnect()
       adoptionClient = null
     }
+
     const releaseAdoptionClient = (): void => {
       adoptionClient?.disconnect()
       adoptionClient = null
     }
+
     const preserveDaemon = async (
       mode?: 'degraded-new-pty-fallback'
     ): Promise<DaemonProcessHandle> => {
       const connectedClient = adoptionClient ?? undefined
       adoptionClient = null
+
       return holdDaemonAdoptionLease(
         createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, mode),
         socketPath,
@@ -100,6 +107,7 @@ export function createOutOfProcessLauncher(
         pidPath
       )
     }
+
     try {
       const preservedHandle = await prepareDaemonReplacement({
         runtimeDir,
@@ -111,6 +119,7 @@ export function createOutOfProcessLauncher(
         releaseAdoptionClient,
         preserveDaemon
       })
+
       if (preservedHandle) {
         return preservedHandle
       }
@@ -121,6 +130,7 @@ export function createOutOfProcessLauncher(
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       let launched
+
       try {
         launched = await launchDaemonChild({
           entryPath,
@@ -137,12 +147,14 @@ export function createOutOfProcessLauncher(
         if (!(error instanceof DaemonEndpointUnavailableError) || error.reason !== 'occupied') {
           throw error
         }
+
         // Why adopt rather than retry: another daemon proved it owns the endpoint and is
         // answering on it. Forking again would lose the same race, and reporting a startup
         // failure strands this app on local non-persistent PTYs beside a healthy daemon.
         console.warn(
           '[daemon] Endpoint was taken by another daemon during startup — adopting it instead'
         )
+
         // Why pidPath: adopting reconciles the PID record against the identity the daemon
         // reports over hello, repairing a record that names the wrong incarnation. Every other
         // adoption path passes it; this one skipped it, so the incumbent we adopt here was the
@@ -174,16 +186,21 @@ export function createOutOfProcessLauncher(
           unlinkOwnedDaemonPidFile(pidPath, launched.child.pid as number, launchNonce)
           throw error
         }
+
         // Why: another client may have adopted this live process; keep its pid record until exit, but remove one published after an early exit.
         let pidRecordRemoved = false
+
         const removeExitedPidRecord = (): void => {
           if (pidRecordRemoved) {
             return
           }
+
           pidRecordRemoved = true
           unlinkOwnedDaemonPidFile(pidPath, launched.child.pid as number, launchNonce)
         }
+
         launched.child.once('exit', removeExitedPidRecord)
+
         if (
           (launched.child.exitCode !== null && launched.child.exitCode !== undefined) ||
           (launched.child.signalCode !== null && launched.child.signalCode !== undefined)
@@ -191,10 +208,12 @@ export function createOutOfProcessLauncher(
           launched.child.off('exit', removeExitedPidRecord)
           removeExitedPidRecord()
         }
+
         throw error
       }
     } catch (error) {
       releaseAdoptionClient()
+
       // Why: the launcher may now fork onto an endpoint it could not classify, because the
       // publisher is the real guard — and that guard works by refusing to overwrite what it
       // cannot prove dead, so the child exits instead of splitting the brain. Correct, but
@@ -209,12 +228,14 @@ export function createOutOfProcessLauncher(
         console.warn(
           '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
         )
+
         try {
           return await preserveDaemon('degraded-new-pty-fallback')
         } catch {
           // It stopped answering between the probe and the adoption; report the launch failure.
         }
       }
+
       throw error
     }
   }

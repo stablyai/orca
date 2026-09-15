@@ -34,10 +34,12 @@ export function CmdJPaletteTipDialog({
   // Why: read the live binding so the title chip stays correct after a rebind
   // and on Linux/Windows (Ctrl+Shift+J) — matching the visual's key chips.
   const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
+
   const displayShortcutLabel =
     worktreePaletteShortcutLabel !== 'Unassigned'
       ? worktreePaletteShortcutLabel
       : formatShortcutLabel('worktree.palette')
+
   // The tip's title uses "<shortcut>" as a placeholder token; split it so we
   // can render the live label as a styled <kbd> chip inline. Missing token
   // degrades to the plain title.

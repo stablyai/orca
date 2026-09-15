@@ -10,6 +10,7 @@ export async function forceStopRelayForTarget(
 ): Promise<void> {
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
   const escapedSockName = shellEscape(sockName)
+
   const script = [
     `sock_name=${escapedSockName}`,
     'base="${HOME}/.orca-remote"',

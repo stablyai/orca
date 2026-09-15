@@ -41,30 +41,39 @@ function createFakeSpawnChild(options: {
   hang?: boolean
 }): EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn>; stdout: EventEmitter } {
   const { stdout, code = 0, error, pid = 4242, hang = false } = options
+
   const child = new EventEmitter() as EventEmitter & {
     pid: number
     kill: ReturnType<typeof vi.fn>
     stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
   }
+
   child.pid = pid
   child.kill = vi.fn()
+
   const stdoutStream = new EventEmitter() as EventEmitter & {
     setEncoding: ReturnType<typeof vi.fn>
   }
+
   stdoutStream.setEncoding = vi.fn()
   child.stdout = stdoutStream
+
   if (!hang) {
     queueMicrotask(() => {
       if (error) {
         child.emit('error', error)
+
         return
       }
+
       if (stdout !== undefined) {
         stdoutStream.emit('data', stdout)
       }
+
       child.emit('close', code)
     })
   }
+
   return child
 }
 
@@ -158,9 +167,11 @@ describe('registerAppHandlers', () => {
     grantFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
     registerMacKeyboardLayoutChangeNotificationsMock.mockReset()
+
     for (const probe of Object.values(windowsProbes)) {
       probe.mockClear()
     }
+
     processKillSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
@@ -204,12 +215,14 @@ describe('registerAppHandlers', () => {
 
   it('waits for pre-relaunch cleanup before exiting', async () => {
     let finishCleanup!: () => void
+
     const onBeforeRelaunch = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishCleanup = resolve
         })
     )
+
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
     const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
@@ -250,12 +263,14 @@ describe('registerAppHandlers', () => {
 
   it('waits for pre-relaunch cleanup before restarting through the normal pipeline', async () => {
     let finishCleanup!: () => void
+
     const onBeforeRelaunch = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishCleanup = resolve
         })
     )
+
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
     const restartPromise = Promise.resolve(handlers.get('app:restart')?.(null))
@@ -382,8 +397,10 @@ describe('registerAppHandlers', () => {
     const handler = handlers.get('app:getKeyboardInputSourceId')
     expect(handler).toBeDefined()
     let settled = false
+
     const resultPromise = Promise.resolve(handler?.(null)).then((result) => {
       settled = true
+
       return result
     })
 

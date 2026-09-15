@@ -25,10 +25,13 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       string,
       { worktree: ResolvedWorktree; executionHostId: ExecutionHostId }
     >()
+
     const repos = this.store?.getRepos() ?? []
     const resolvedWorktrees = await this.listResolvedWorktrees()
+
     const visibilitySourceMatchersByRepoId =
       this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
+
     for (const worktree of resolvedWorktrees) {
       if (
         !this.isRuntimeWorktreeVisible(
@@ -38,29 +41,36 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       ) {
         continue
       }
+
       // Why: `getRepo(id)` is host-blind, so a candidate on one SSH host could be filed under
       // another's key and then answer for a path it does not hold. Rival rows that disagree with
       // no worktree host name no single filesystem authority, so that candidate is dropped.
       const routing = resolveWorktreeHostRouting(repos, worktree)
+
       if (routing.kind === 'ambiguous') {
         continue
       }
+
       const target = {
         worktree,
         executionHostId: routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
       }
+
       targets.set(`${target.executionHostId}\0${worktree.id}`, target)
     }
+
     for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
       try {
         const candidateConnectionId = this.resolveFolderWorkspaceConnectionId(folderWorkspace)
         const worktree = this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+
         const target = {
           worktree,
           executionHostId: candidateConnectionId
             ? toSshExecutionHostId(candidateConnectionId)
             : LOCAL_EXECUTION_HOST_ID
         }
+
         targets.set(`${target.executionHostId}\0${worktree.id}`, target)
       } catch {
         // An ambiguous folder workspace has no single filesystem authority.
@@ -76,10 +86,13 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       absolutePath,
       executionHostId
     )
+
     if (!owner) {
       return null
     }
+
     const target = targets.get(`${owner.executionHostId}\0${owner.workspaceId}`)
+
     return target ? { ...target, relativePath: owner.relativePath } : null
   }
 
@@ -94,11 +107,13 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
     this.mobileSessionTabsNotifyCoalescer.flushAll()
     const subscription = { listener, clientNavigationId }
     this.mobileSessionTabListeners.add(subscription)
+
     return () => {
       // Why: flush pending coalesced notifies before dropping this listener so a
       // subscriber closing mid-window still receives the latest settled state.
       this.mobileSessionTabsNotifyCoalescer.flushAll()
       this.mobileSessionTabListeners.delete(subscription)
+
       if (this.mobileSessionTabListeners.size === 0) {
         this.mobileSessionTabsAgentStatusHeartbeat.cancelPending()
       }
@@ -115,11 +130,14 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
   // extra RPC round-trip. Pre-allocating by ptyId lets issueHandle reuse it.
   preAllocateHandleForPty(ptyId: string): string {
     const existing = this.handleByPtyId.get(ptyId)
+
     if (existing) {
       return existing
     }
+
     const handle = this.createPreAllocatedTerminalHandle()
     this.handleByPtyId.set(ptyId, handle)
+
     return handle
   }
 
@@ -135,18 +153,23 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
   ): void {
     const previous = this.pendingPtyHandleReplacementFences.get(ptyId)
     const merged = new Set(previous?.staleHandles)
+
     for (const handle of staleHandles) {
       merged.add(handle)
     }
+
     // A PTY normally has one direct and one renderer alias. Keep a small bound
     // in case a malformed provider emits an unbounded alias stream.
     while (merged.size > 16) {
       const oldest = merged.values().next().value
+
       if (typeof oldest !== 'string') {
         break
       }
+
       merged.delete(oldest)
     }
+
     this.pendingPtyHandleReplacementFences.set(ptyId, {
       incarnationId,
       staleHandles: merged,
@@ -160,13 +183,17 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       // incarnation. Never let that predecessor alias be reintroduced.
       return
     }
+
     const retained = this.handleByPtyIncarnation.get(ptyId)
+
     if (retained?.handle === handle) {
       this.handleByPtyIncarnation.delete(ptyId)
     } else {
       this.invalidatePtyIncarnationHandle(ptyId)
     }
+
     this.handleByPtyId.set(ptyId, handle)
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.adoptPreAllocatedHandle(leaf)
     }
@@ -179,23 +206,29 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
     options: { exactRestoredSurface?: boolean } = {}
   ): void {
     const trimmed = handle?.trim()
+
     if (!trimmed || !trimmed.startsWith('term_')) {
       return
     }
+
     const pty = this.ptysById.get(ptyId)
+
     const changedIncarnation = Boolean(
       incarnationId && pty?.incarnationId && incarnationId !== pty.incarnationId
     )
+
     if (changedIncarnation) {
       const priorHandle = this.handleByPtyId.get(ptyId)
       this.invalidateAllHandlesForPty(ptyId)
       pty!.tabId = null
       pty!.paneKey = null
+
       // Reusing an exported handle would make stale client metadata name the replacement process.
       if (priorHandle === trimmed) {
         return
       }
     }
+
     if (this.isTerminalHandleAdoptionBlocked(ptyId, trimmed)) {
       if (
         !options.exactRestoredSurface ||
@@ -205,6 +238,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
         return
       }
     }
+
     // Why: after an app/runtime restart, the live PTY child still has its
     // original ORCA_TERMINAL_HANDLE, but the runtime's in-memory map is gone.
     this.registerPreAllocatedHandleForPty(ptyId, trimmed)

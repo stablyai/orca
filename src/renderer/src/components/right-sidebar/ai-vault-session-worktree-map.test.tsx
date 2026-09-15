@@ -73,12 +73,19 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 const worktreeA = makeWorktree({ id: 'repo-1::/repo/alpha', path: '/repo/alpha' })
+
 const worktreeB = makeWorktree({ id: 'repo-1::/repo/beta', path: '/repo/beta' })
+
 const sessionInA = makeSession({ id: 'codex:in-a', cwd: '/repo/alpha/src' })
+
 const sessionInB = makeSession({ id: 'codex:in-b', cwd: '/repo/beta' })
+
 const sessionUnmatched = makeSession({ id: 'codex:lost', cwd: '/elsewhere/deep' })
+
 const repos = [makeRepo()]
+
 const worktrees = [worktreeA, worktreeB]
+
 const sessions = [sessionInA, sessionInB, sessionUnmatched]
 
 describe('useAiVaultSessionWorktreeMap', () => {
@@ -87,6 +94,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
     const { result, rerender } = renderHook(
       ({ activeWorktreeId }: { activeWorktreeId: string | null }) => {
         const map = useAiVaultSessionWorktreeMap({ sessions, repos, worktrees })
+
         return {
           map,
           infoFor: (sessionId: string) =>
@@ -116,13 +124,16 @@ describe('useAiVaultSessionWorktreeMap', () => {
       path: '/srv/orca',
       hostId: 'ssh:target-1'
     })
+
     const archivedWorktree = makeWorktree({
       id: 'repo-1::/repo/attic',
       path: '/repo/attic',
       isArchived: true
     })
+
     const allWorktrees = [...worktrees, sshWorktree, archivedWorktree]
     const allRepos = [...repos, makeRepo({ id: 'repo-ssh', path: '/srv/orca' })]
+
     const allSessions = [
       sessionInA, // active worktree
       sessionInB, // non-active worktree
@@ -194,6 +205,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
       id: 'repo-1::/repo/alpha-sibling',
       path: '/repo/alpha-sibling'
     })
+
     const session = makeSession({ id: 'codex:sibling', cwd: '/repo/alpha-sibling/src' })
 
     const { result } = renderHook(() =>
@@ -215,11 +227,13 @@ describe('useAiVaultSessionWorktreeMap', () => {
     const manyWorktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::/repo/w${i}`, path: `/repo/w${i}` })
     )
+
     const manySessions = Array.from({ length: 400 }, (_, i) =>
       makeSession({ id: `codex:s${i}`, cwd: `/repo/w${i % manyWorktrees.length}/src` })
     )
 
     const startedAt = performance.now()
+
     const { result } = renderHook(() =>
       useAiVaultSessionWorktreeMap({
         sessions: manySessions,
@@ -227,6 +241,7 @@ describe('useAiVaultSessionWorktreeMap', () => {
         worktrees: manyWorktrees
       })
     )
+
     const elapsedMs = performance.now() - startedAt
 
     expect(result.current.size).toBe(manySessions.length)
@@ -243,9 +258,11 @@ describe('lazy OMP child resume targets', () => {
     'keeps child and grandchild in their own worktree with active %s',
     (activeWorktreeId) => {
       const parent = makeSession({ agent: 'omp', id: 'omp:parent', cwd: worktreeA.path })
+
       const { result } = renderHook(() =>
         useAiVaultSessionWorktreeMap({ sessions: [parent], repos, worktrees })
       )
+
       for (const id of ['child', 'grandchild']) {
         const session = makeSession({
           agent: 'omp',
@@ -253,7 +270,9 @@ describe('lazy OMP child resume targets', () => {
           cwd: worktreeA.path,
           subagent: { parentSessionId: parent.sessionId, agentType: null, status: null }
         })
+
         expect(result.current.has(id)).toBe(false)
+
         const target = resolveAiVaultHistorySessionResumeState({
           session,
           worktreeInfo: result.current.get(id) ?? null,
@@ -261,6 +280,7 @@ describe('lazy OMP child resume targets', () => {
           worktrees,
           repos
         })
+
         expect(target).toEqual({
           blocked: false,
           worktreeId: worktreeA.id,
@@ -278,6 +298,7 @@ describe('lazy OMP child resume targets', () => {
         subagent: { parentSessionId: 'parent', agentType: null, status: null },
         ...overrides
       })
+
       expect(
         resolveAiVaultHistorySessionResumeState({
           session,

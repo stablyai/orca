@@ -12,6 +12,7 @@ export type SessionSearchSyntheticSource = { container: string; id: string }
 
 export function splitSyntheticSessionSource(path: string): SessionSearchSyntheticSource | null {
   const openCode = splitOpenCodeSqliteCandidate(path)
+
   return openCode ? { container: openCode.dbPath, id: openCode.sessionId } : null
 }
 
@@ -38,19 +39,24 @@ export function sessionSearchEnumeratedContainers(
   issues: readonly AiVaultScanIssue[]
 ): Map<string, Set<string>> {
   const containers = new Map<string, Set<string>>()
+
   for (const candidate of candidates) {
     const synthetic = splitSyntheticSessionSource(candidate.file.path)
+
     if (!synthetic) {
       continue
     }
+
     const ids = containers.get(synthetic.container) ?? new Set<string>()
     ids.add(synthetic.id)
     containers.set(synthetic.container, ids)
   }
+
   for (const issue of issues) {
     if (issue.kind !== 'notice') {
       containers.delete(issue.path)
     }
   }
+
   return containers
 }

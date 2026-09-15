@@ -57,6 +57,7 @@ function createEligibility(
 }
 
 type DialogFields = ReturnType<typeof useCreatePullRequestDialogFields>
+
 type DialogGeneration = NonNullable<
   Parameters<typeof useCreatePullRequestDialogFields>[0]['generation']
 >
@@ -94,6 +95,7 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
       submitting: false,
       generation: currentInput.generation
     })
+
     return null
   }
 
@@ -101,6 +103,7 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
     if (!latest) {
       throw new Error('dialog fields were not rendered')
     }
+
     return latest
   }
 
@@ -127,6 +130,7 @@ function renderDialogFields(input: DialogFieldsRenderInput): {
 describe('useCreatePullRequestDialogFields', () => {
   it('updates an untouched base field when the creation default changes for the same branch', async () => {
     const harness = renderDialogFields({ eligibility: createEligibility() })
+
     try {
       await harness.rerender({ eligibility: createEligibility() })
       expect(harness.current().base).toBe('main')
@@ -161,6 +165,7 @@ describe('useCreatePullRequestDialogFields', () => {
       eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/main' }),
       currentBaseRef: 'stacked-parent'
     })
+
     try {
       await harness.rerender({
         eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/main' }),
@@ -180,6 +185,7 @@ describe('useCreatePullRequestDialogFields', () => {
       eligibility: createEligibility({ defaultBaseRef: null }),
       currentBaseRef: 'refs/remotes/origin/release'
     })
+
     try {
       await harness.rerender({
         eligibility: createEligibility({ defaultBaseRef: null }),
@@ -197,6 +203,7 @@ describe('useCreatePullRequestDialogFields', () => {
       eligibility: createEligibility(),
       currentBaseRef: 'refs/remotes/origin/main'
     })
+
     try {
       await harness.rerender({
         eligibility: createEligibility(),
@@ -224,6 +231,7 @@ describe('useCreatePullRequestDialogFields', () => {
       eligibility: createEligibility(),
       currentBaseRef: 'refs/remotes/origin/main'
     })
+
     try {
       await harness.rerender({
         eligibility: createEligibility(),
@@ -265,6 +273,7 @@ describe('useCreatePullRequestDialogFields', () => {
       body: 1,
       draft: 0
     }
+
     const generation: DialogGeneration = {
       generating: true,
       generateError: null,
@@ -280,10 +289,12 @@ describe('useCreatePullRequestDialogFields', () => {
       onGenerate: () => undefined,
       onCancelGenerate: () => undefined
     }
+
     const harness = renderDialogFields({
       eligibility: createEligibility(),
       generation
     })
+
     try {
       await harness.rerender({
         eligibility: createEligibility(),

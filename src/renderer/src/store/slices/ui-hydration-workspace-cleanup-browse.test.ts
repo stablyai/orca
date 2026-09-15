@@ -5,6 +5,7 @@ import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
 function persistedWithIdleDays(idleMinDays: number | null) {
   const browse = createDefaultWorkspaceCleanupBrowseState()
   browse.filters.activity.idleMinDays = idleMinDays
+
   return makePersistedUI({ workspaceCleanup: { dismissals: {}, browse } })
 }
 
@@ -55,6 +56,7 @@ describe('workspace cleanup browse hydration', () => {
 
   it('still hydrates dismissals on sync, which are main-owned and not edited here', () => {
     const store = createUIStore()
+
     const dismissal = {
       worktreeId: 'repo-1::/repo/one',
       dismissedAt: Date.now(),

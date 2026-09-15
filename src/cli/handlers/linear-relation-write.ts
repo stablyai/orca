@@ -20,11 +20,13 @@ export function linearRelationWriteHandler(operation: 'add' | 'remove'): Command
       relationship: parseRelationship(getRequiredStringFlag(flags, 'type')),
       operation
     }
+
     const response = await client.call<LinearIssueRelationWriteResult>(
       'linear.issueRelationWrite',
       request,
       { timeoutMs: LINEAR_WRITE_TIMEOUT_MS }
     )
+
     printResult(response, json, formatLinearRelationWrite)
   }
 }
@@ -36,11 +38,13 @@ function parseRelationship(value: string): LinearIssueRelationship {
     related: 'relatedTo',
     'duplicate-of': 'duplicateOf'
   }[value]
+
   if (!relationship) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--type must be blocks, blocked-by, related, or duplicate-of'
     )
   }
+
   return relationship as LinearIssueRelationship
 }

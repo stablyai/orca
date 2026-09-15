@@ -23,6 +23,7 @@ function makeBufferLine(
 ): TestBufferLine {
   const columns =
     options.columns ?? Array.from({ length: text.length + 1 }, (_value, index) => index)
+
   return {
     isWrapped: options.isWrapped ?? false,
     length: text.length,
@@ -35,10 +36,12 @@ function makeBufferLine(
     ) => {
       if (outColumns) {
         outColumns.length = 0
+
         for (let index = startColumn; index <= endColumn; index++) {
           outColumns.push(columns[index] ?? index)
         }
       }
+
       return text.slice(startColumn, endColumn)
     }
   }
@@ -58,12 +61,14 @@ describe('buildWrappedLogicalLine', () => {
     const rows = Array.from({ length: 1_000 }, (_value, index) =>
       makeBufferLine('b'.repeat(80), { isWrapped: index > 0 })
     )
+
     const observedRows: number[] = []
 
     const logicalLine = buildWrappedLogicalLine(
       {
         getLine: (y) => {
           observedRows.push(y)
+
           return rows[y]
         }
       },
@@ -95,6 +100,7 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
     const secondRowCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, 2)
     const expectedText = middleStart + middleEnd
     const firstBoundary = firstRowCandidates.filter((candidate) => candidate.text === expectedText)
+
     const secondBoundary = secondRowCandidates.filter(
       (candidate) => candidate.text === expectedText
     )
@@ -157,9 +163,11 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
 
       const firstRowCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, 1)
       const secondRowCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, 2)
+
       const firstBoundary = firstRowCandidates.filter(
         (candidate) => candidate.text === expectedPath
       )
+
       const secondBoundary = secondRowCandidates.filter(
         (candidate) => candidate.text === expectedPath
       )
@@ -241,11 +249,13 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
     const rows = makeThreeLinkRows()
     const buffer = { getLine: (y: number) => rows[y] }
     const expectedText = middleStart + middleEnd
+
     const before = buildHardWrappedPathLogicalLineCandidates(buffer, 1).find(
       (candidate) => candidate.text === expectedText
     )
 
     rows[1] = makeBufferLine(`${middleEnd} · validation-screenshots/03-after-dark-theme.png`)
+
     const after = buildHardWrappedPathLogicalLineCandidates(buffer, 1).find(
       (candidate) => candidate.text === expectedText
     )
@@ -264,6 +274,7 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
       {
         getLine: (y: number) => {
           observedRows.push(y)
+
           return rows[y]
         }
       },
@@ -281,10 +292,12 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
     const secondRow = `${secondFragment} · C:\\other.ts`
     const secondColumns = Array.from({ length: secondRow.length + 1 }, (_value, index) => index * 2)
     const rows = [makeBufferLine(firstRow), makeBufferLine(secondRow, { columns: secondColumns })]
+
     const candidates = buildHardWrappedPathLogicalLineCandidates(
       { getLine: (y: number) => rows[y] },
       2
     )
+
     const candidate = candidates.find((item) => item.text === `${firstFragment}${secondFragment}`)
 
     expect(candidate).toBeDefined()

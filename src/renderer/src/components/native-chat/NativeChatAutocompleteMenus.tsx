@@ -19,9 +19,11 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   onRetry: () => void
 }): React.JSX.Element {
   const activeItemRef = useRef<HTMLButtonElement | null>(null)
+
   const commands = autocomplete.items.filter(
     (item): item is Extract<NativeChatPickerItem, { kind: 'command' }> => item.kind === 'command'
   )
+
   const skills = autocomplete.items.filter(
     (item): item is Extract<NativeChatPickerItem, { kind: 'skill' }> => item.kind === 'skill'
   )
@@ -32,15 +34,19 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
 
   const hasSkillStatus =
     autocomplete.skillStatus === 'loading' || autocomplete.skillStatus === 'error'
+
   const showCommandsHeading = autocomplete.grouped && commands.length > 0
   const showSkillsHeading = autocomplete.grouped && (skills.length > 0 || hasSkillStatus)
+
   const noMatches =
     autocomplete.skillStatus === 'ready' && commands.length === 0 && skills.length === 0
+
   const emptyText = noMatches ? getPickerEmptyText(autocomplete) : null
   const collision = commands.find((item) => item.skillCollision)
   const duplicate = skills.find((item) => item.sources.length > 1)
 
   let optionIndex = 0
+
   return (
     <div
       id={listboxId}
@@ -50,6 +56,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       {showCommandsHeading ? <PickerGroupHeading kind="commands" /> : null}
       {commands.map((item) => {
         const index = optionIndex++
+
         return (
           <PickerOption
             key={item.id}
@@ -97,6 +104,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       ) : null}
       {skills.map((item) => {
         const index = optionIndex++
+
         return (
           <PickerOption
             key={item.id}
@@ -143,12 +151,14 @@ function getPickerEmptyText(
   if (!autocomplete.commandsEnabled) {
     return translate('components.native-chat.composer.noSkills', 'No matching skills')
   }
+
   if (autocomplete.skillsEnabled) {
     return translate(
       'components.native-chat.composer.noCommandsOrSkills',
       'No matching commands or skills'
     )
   }
+
   return translate('components.native-chat.composer.noCommands', 'No matching commands')
 }
 
@@ -187,6 +197,7 @@ function PickerOption({
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
   const selected = index === activeIndex
+
   return (
     <button
       id={`${listboxId}-option-${index}`}
@@ -240,6 +251,7 @@ function getPickerAnnotation(item: NativeChatPickerItem): string | null {
       'Also a skill name - agent decides'
     )
   }
+
   if (item.kind === 'skill' && item.sources.length > 1) {
     // Why: name the interpolation `sourceCount`, not `count` — a `count` option
     // makes i18next resolve plural-suffixed keys that these locales don't define.
@@ -249,6 +261,7 @@ function getPickerAnnotation(item: NativeChatPickerItem): string | null {
       { sourceCount: item.sources.length }
     )
   }
+
   return null
 }
 
@@ -259,6 +272,7 @@ function scopeLabel(sourceKind: SkillSourceKind | undefined): string {
     bundled: translate('components.native-chat.composer.skillScopeBuiltIn', 'Built-in'),
     plugin: translate('components.native-chat.composer.skillScopePlugin', 'Plugin')
   }
+
   return sourceKind ? (labels[sourceKind] ?? '') : ''
 }
 

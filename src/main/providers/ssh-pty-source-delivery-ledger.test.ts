@@ -16,6 +16,7 @@ describe('SshPtySourceDeliveryLedger', () => {
   it('retains cancellation ownership when recovery transfer is superseded', async () => {
     const request = vi.fn(async () => ({ canceled: true, sentEndSu: 0, creditedEndSu: 0 }))
     const ledger = new SshPtySourceDeliveryLedger({ request } as never, vi.fn())
+
     const older = ledger.install(
       'pty-1',
       Object.freeze({
@@ -28,6 +29,7 @@ describe('SshPtySourceDeliveryLedger', () => {
         recoveryEndSu: 0
       })
     )
+
     ledger.install(
       'pty-1',
       Object.freeze({
@@ -65,9 +67,11 @@ describe('SshPtySourceDeliveryLedger', () => {
 
   it('keeps the current activation when a stale rejected token cannot cancel it', async () => {
     const publish = vi.fn()
+
     const request = vi.fn(async () => {
       throw new Error('Unknown or stale PTY source delivery cancellation')
     })
+
     const ledger = new SshPtySourceDeliveryLedger({ request } as never, publish)
     ledger.install('pty-1', activation('token-current')).commit()
 

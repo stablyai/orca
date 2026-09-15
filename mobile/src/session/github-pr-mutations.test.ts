@@ -31,6 +31,7 @@ function clientRejecting(message: string) {
 }
 
 const WORKTREE_ID = 'repo-42::/path/to/wt'
+
 const ENTERPRISE_PR_REPO = { owner: 'o', repo: 'r', host: 'github.acme.test' }
 
 describe('fetchResolveReviewThread / fetchUpdatePRTitle — bare-boolean host result', () => {
@@ -39,11 +40,14 @@ describe('fetchResolveReviewThread / fetchUpdatePRTitle — bare-boolean host re
       threadId: 't',
       resolve: true
     })
+
     expect(resolve).toEqual({ ok: true })
+
     const title = await fetchUpdatePRTitle(clientReturning(okResponse(true)), WORKTREE_ID, {
       prNumber: 1,
       title: 'New'
     })
+
     expect(title).toEqual({ ok: true })
   })
 
@@ -53,11 +57,14 @@ describe('fetchResolveReviewThread / fetchUpdatePRTitle — bare-boolean host re
       WORKTREE_ID,
       { threadId: 't', resolve: true }
     )
+
     expect(resolve.ok).toBe(false)
+
     const title = await fetchUpdatePRTitle(clientReturning(okResponse(undefined)), WORKTREE_ID, {
       prNumber: 1,
       title: 'New'
     })
+
     expect(title.ok).toBe(false)
   })
 
@@ -70,6 +77,7 @@ describe('fetchResolveReviewThread / fetchUpdatePRTitle — bare-boolean host re
         resolve: false
       }
     )
+
     expect(resolve.ok).toBe(false)
   })
 })
@@ -89,11 +97,14 @@ describe('mutation transport rejection normalization', () => {
         resolve: true
       }
     )
+
     expect(resolve).toEqual({ ok: false, error: 'connection dropped' })
+
     const title = await fetchUpdatePRTitle(clientRejecting('connection dropped'), WORKTREE_ID, {
       prNumber: 1,
       title: 'New'
     })
+
     expect(title).toEqual({ ok: false, error: 'connection dropped' })
   })
 
@@ -101,6 +112,7 @@ describe('mutation transport rejection normalization', () => {
     const out = await fetchMergePR(clientReturning(errResponse('permission denied')), WORKTREE_ID, {
       prNumber: 1
     })
+
     expect(out).toEqual({ ok: false, error: 'permission denied' })
   })
 })
@@ -146,6 +158,7 @@ describe('Enterprise PR repo forwarding', () => {
 describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed envelope', () => {
   it('sends owner/repo/commentId(+body) and reads the { ok } envelope', async () => {
     const editClient = clientReturning(okResponse({ ok: true }))
+
     const edit = await fetchUpdateIssueComment(editClient, {
       owner: 'o',
       repo: 'r',
@@ -153,6 +166,7 @@ describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed e
       commentId: 5,
       body: 'edited'
     })
+
     expect(edit).toEqual({ ok: true })
     expect(editClient.sendRequest).toHaveBeenCalledWith('github.project.updateIssueCommentBySlug', {
       owner: 'o',
@@ -163,12 +177,14 @@ describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed e
     })
 
     const delClient = clientReturning(okResponse({ ok: true }))
+
     const del = await fetchDeleteIssueComment(delClient, {
       owner: 'o',
       repo: 'r',
       host: 'github.acme.test',
       commentId: 5
     })
+
     expect(del).toEqual({ ok: true })
     expect(delClient.sendRequest).toHaveBeenCalledWith('github.project.deleteIssueCommentBySlug', {
       owner: 'o',
@@ -185,6 +201,7 @@ describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed e
       ),
       { owner: 'o', repo: 'r', commentId: 5, body: 'x' }
     )
+
     expect(out).toEqual({ ok: false, error: 'not authorized' })
   })
 
@@ -194,6 +211,7 @@ describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed e
       repo: 'r',
       commentId: 5
     })
+
     expect(out).toEqual({ ok: false, error: 'offline' })
   })
 })

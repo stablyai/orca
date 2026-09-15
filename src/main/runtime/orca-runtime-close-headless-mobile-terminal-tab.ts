@@ -25,48 +25,60 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     } = {}
   ): void {
     const closedParentTabId = tab.parentTabId
+
     const retirementProofs = snapshot.tabs.flatMap((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         return []
       }
+
       const proof = this.getMobileSessionTerminalRetirementProof(
         worktreeId,
         candidate,
         options.authorizedPty
       )
+
       return proof ? [proof] : []
     })
+
     const projectedPtyIds = this.commitHeadlessTerminalTabRetirement(
       worktreeId,
       closedParentTabId,
       { allowMissing: options.allowMissingPersistedTab, force: options.force }
     )
+
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
+
     if (options.authorizedPty) {
       options.authorizedPty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(options.authorizedPty.ptyId, false)
     }
+
     // Why: local provider ids can be reused after restart, so a dormant
     // persisted id is not kill authority. SSH relay ids remain durable exact
     // identities even before pane metadata reconnects.
     const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
+
     for (const candidate of snapshot.tabs) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         continue
       }
+
       const authorizedPty =
         options.authorizedPty &&
         this.getMobileTerminalLeafPtyIds(candidate).includes(options.authorizedPty.ptyId)
           ? options.authorizedPty
           : null
+
       const livePty = this.findPtyForMobileTerminalTab(worktreeId, candidate) ?? authorizedPty
       const ptyId = livePty?.ptyId ?? candidate.ptyId
+
       const hasOtherOwner = snapshot.tabs.some(
         (other) =>
           other.type === 'terminal' &&
           other.parentTabId !== closedParentTabId &&
           other.ptyId === ptyId
       )
+
       if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
         // Why: a live serve leaf can exist before its debounced binding reaches
         // persistence. Include it from the authoritative snapshot so split
@@ -74,18 +86,23 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         ptyIdsToKill.add(ptyId)
       }
     }
+
     if (options.killPtys !== false) {
       for (const ptyId of ptyIdsToKill) {
         this.ptyController?.kill(ptyId)
       }
     }
+
     const nextTabs = snapshot.tabs.filter((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         return true
       }
+
       return false
     })
+
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
@@ -108,6 +125,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         : {}),
       tabs: nextTabs
     }
+
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
@@ -117,22 +135,30 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     move: RuntimeMobileSessionTabMove
   ): Promise<RuntimeMobileSessionTabMoveResult> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       throw new Error('tab_not_found')
     }
+
     if (!this.notifier?.moveSessionTab) {
       return this.moveHeadlessMobileSessionTab(worktreeId, snapshot, move)
     }
+
     const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
+
     if (!hostTabId) {
       throw new Error('tab_not_found')
     }
+
     const publicSnapshot = this.toMobileSessionTabsResult(snapshot)
     const targetGroup = publicSnapshot.tabGroups?.find((group) => group.id === move.targetGroupId)
+
     if (!targetGroup) {
       throw new Error('target_group_not_found')
     }
@@ -141,20 +167,25 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     // tab grouping is owned by the outer terminal tab id.
     if (move.kind === 'reorder') {
       const tabOrder = this.normalizeMobileSessionTabOrder(snapshot, targetGroup, move.tabOrder)
+
       if (!tabOrder.includes(hostTabId)) {
         throw new Error('invalid_tab_order')
       }
+
       this.notifier.moveSessionTab(worktreeId, {
         ...move,
         tabId: hostTabId,
         tabOrder
       })
+
       return { moved: true }
     }
+
     this.notifier.moveSessionTab(worktreeId, {
       ...move,
       tabId: hostTabId
     })
+
     return { moved: true }
   }
 
@@ -173,22 +204,28 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     }
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+
     // Why: when a renderer is authoritative (desktop host reached via shared
     // control), it owns pane geometry and republishes it — a headless write here
     // would be overwritten and could fight the renderer. Persist only headlessly.
     if (this.getAvailableAuthoritativeWindow()) {
       return { updated: true }
     }
+
     // Why: resolve to the host tab id (older/raw-id clients) so the persisted
     // layout entry matches, matching setMobileSessionTabProps.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+
     const resolvedArgs = { ...args, tabId: hostTabId }
     const acceptedLayout = this.persistHeadlessTerminalPaneLayout(worktreeId, resolvedArgs)
+
     if (acceptedLayout) {
       this.applyHeadlessTerminalPaneLayoutToSnapshot(worktreeId, {
         tabId: hostTabId,
@@ -197,6 +234,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
+
     return { updated: true }
   }
 
@@ -213,19 +251,25 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     }
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+
     // Why: a renderer-authoritative host owns + republishes tab props, so a
     // headless write would be overwritten. Persist only when headless.
     if (this.getAvailableAuthoritativeWindow()) {
       return { updated: true }
     }
+
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+
     this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
     this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
+
     return { updated: true }
   }
 }

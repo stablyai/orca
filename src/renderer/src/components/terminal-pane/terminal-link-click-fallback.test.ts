@@ -22,6 +22,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const {
   storeState,
   openUrlMock,
@@ -70,6 +71,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         runtimeEnvironmentId: null
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -101,6 +103,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         ])
       }
     )
+
     await flushAsyncWork()
     await flushDoubleRaf()
 
@@ -138,6 +141,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         openWithSystemDefault: true
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -159,6 +163,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         runtimeEnvironmentId: null
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -184,6 +189,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         runtimeEnvironmentId: null
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -196,6 +202,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
     setPlatform('Macintosh')
+
     const rows = [
       makeBufferLine('open mobile/mock-'),
       makeBufferLine('homepage.html', { isWrapped: true })
@@ -212,6 +219,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         runtimeEnvironmentId: null
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -242,6 +250,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         ])
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -267,6 +276,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         pathExistsCache: new Map([['active\0/repo/unknown-dir', true]])
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(false)
@@ -276,12 +286,15 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('retries a wrapped file click even when xterm already marked the link active', async () => {
     setPlatform('Macintosh')
+
     const rows = [
       makeBufferLine('/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/'),
       makeBufferLine('packages/expo-two-way-audio/android/src/main/java/expo/modules/'),
       makeBufferLine('twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt')
     ]
+
     const { terminal, element } = makeFallbackTerminal(rows)
+
     const disposable = installFilePathLinkClickFallback(1, terminal, {
       startupCwd: '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5',
       worktreeId: 'wt-1',
@@ -291,6 +304,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
       pathExistsCache: new Map<string, boolean>()
     })
+
     const mouseUp = getRegisteredMouseUpHandler(element)
     const preventDefault = vi.fn()
     const stopPropagation = vi.fn()
@@ -320,10 +334,13 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('does not intercept regular URL clicks in the file-path fallback', async () => {
     setPlatform('Macintosh')
+
     const rows = [
       makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
     ]
+
     const { terminal, element } = makeFallbackTerminal(rows)
+
     const disposable = installFilePathLinkClickFallback(1, terminal, {
       startupCwd: '/tmp',
       worktreeId: 'wt-1',
@@ -333,6 +350,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
       pathExistsCache: new Map<string, boolean>()
     })
+
     const mouseUp = getRegisteredMouseUpHandler(element)
     const preventDefault = vi.fn()
     const stopPropagation = vi.fn()
@@ -359,9 +377,11 @@ describe('createFilePathLinkProvider range bounds', () => {
   it('ignores regular URLs from a direct ordinary-click fallback on desktop', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false }
+
     const rows = [
       makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
     ]
+
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
     const mouseUp = getRegisteredBubbleMouseUpHandler(element)
@@ -392,9 +412,11 @@ describe('createFilePathLinkProvider range bounds', () => {
   it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false }
+
     const rows = [
       makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
     ]
+
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
     const mouseUp = getRegisteredBubbleMouseUpHandler(element)
@@ -455,18 +477,24 @@ describe('createFilePathLinkProvider range bounds', () => {
   it('asks for the first-use preference from the direct URL click fallback', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
+
     const rows = [
       makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
     ]
+
     const requestOpenLinksInAppPreference = vi.fn(async () => {
       storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
+
       return true
     })
+
     const { terminal, element } = makeFallbackTerminal(rows)
+
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
       requestOpenLinksInAppPreference
     })
+
     const mouseUp = getRegisteredBubbleMouseUpHandler(element)
     const preventDefault = vi.fn()
 
@@ -527,6 +555,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
     setPlatform('Macintosh')
+
     const rows = [
       makeBufferLine('/private/tmp/or'),
       makeBufferLine('ca-setup-e2e.hO'),
@@ -549,6 +578,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       runtimeEnvironmentId: null,
       openWithSystemDefault: true
     })
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)
@@ -564,11 +594,14 @@ describe('createFilePathLinkProvider range bounds', () => {
     const middleEnd = 'transparent-terminal-scrollbar-gutter.png'
     const middlePath = middleStart + middleEnd
     const thirdPath = 'validation-screenshots/03-after-light-theme.png'
+
     const rows = [
       makeBufferLine(`${firstPath} · ${middleStart}`),
       makeBufferLine(`${middleEnd} · ${thirdPath}`)
     ]
+
     const pathExistsCache = new Map([[`active\0/repo/${middlePath}`, true]])
+
     const positions = [
       { x: firstPath.length + ' · '.length + 2, y: 1 },
       { x: 2, y: 2 }
@@ -582,6 +615,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         runtimeEnvironmentId: null,
         pathExistsCache
       })
+
       await flushDoubleRaf()
 
       expect(opened).toBe(true)
@@ -590,6 +624,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         { forceContentReload: true }
       )
     }
+
     expect(openFileMock).toHaveBeenCalledTimes(2)
   })
 })

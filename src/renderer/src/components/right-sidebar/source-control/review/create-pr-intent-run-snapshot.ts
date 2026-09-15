@@ -47,25 +47,33 @@ export function createCreatePrIntentRunSnapshot({
     if (runIsCurrent()) {
       return false
     }
+
     abortedByStaleTarget = true
+
     return true
   }
 
   const refreshIntentSnapshot = async (): Promise<boolean> => {
     const refreshed = await refreshGitStatusForCreatePrIntent(token)
+
     if (!refreshed) {
       return false
     }
+
     // Why: a terminal checkout may land in this snapshot before React updates the target ref; stop before staging/committing/pushing on a different branch.
     if (!createPrIntentGitStatusMatchesToken(token, refreshed.status)) {
       abortedByStaleTarget = true
+
       return false
     }
+
     if (abortIfStale()) {
       return false
     }
+
     latestStatusEntries = refreshed.status.entries
     latestUpstreamStatus = refreshed.upstreamStatus
+
     return true
   }
 
@@ -74,18 +82,23 @@ export function createCreatePrIntentRunSnapshot({
       unstaged: latestStatusEntries.filter((entry) => entry.area === 'unstaged'),
       untracked: latestStatusEntries.filter((entry) => entry.area === 'untracked')
     })
+
     if (stagePaths.length === 0) {
       return true
     }
+
     setIsExecutingBulk(true)
+
     try {
       await bulkStageRuntimeGitPaths(operationTarget, stagePaths)
     } finally {
       setIsExecutingBulk(false)
     }
+
     if (abortIfStale()) {
       return false
     }
+
     return refreshIntentSnapshot()
   }
 

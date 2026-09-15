@@ -28,21 +28,26 @@ export class AgentAwakeStatusLease {
   renew(status: AgentAwakeStatus): boolean {
     this.statuses.set(status.paneKey, status)
     const now = this.now()
+
     if (!this.isEligible(status, now)) {
       return false
     }
+
     this.scheduleAt(status.receivedAt + AGENT_AWAKE_STATUS_STALE_AFTER_MS, now)
+
     return true
   }
 
   countEligible(): number {
     const now = this.now()
     let count = 0
+
     for (const status of this.statuses.values()) {
       if (this.isEligible(status, now)) {
         count += 1
       }
     }
+
     return count
   }
 
@@ -63,14 +68,17 @@ export class AgentAwakeStatusLease {
     this.clearTimer()
     const now = this.now()
     let earliestExpiry: number | null = null
+
     for (const status of this.statuses.values()) {
       if (!this.isEligible(status, now)) {
         continue
       }
+
       const expiry = status.receivedAt + AGENT_AWAKE_STATUS_STALE_AFTER_MS
       const nextCheckAt = expiry === now ? now + 1 : expiry
       earliestExpiry = earliestExpiry === null ? nextCheckAt : Math.min(earliestExpiry, nextCheckAt)
     }
+
     if (earliestExpiry !== null) {
       this.scheduleAt(earliestExpiry, now)
     }
@@ -83,6 +91,7 @@ export class AgentAwakeStatusLease {
     ) {
       return
     }
+
     this.clearTimer()
     this.timerExpiresAt = expiry
     this.timer = setTimeout(() => {
@@ -91,6 +100,7 @@ export class AgentAwakeStatusLease {
       this.scheduleNextExpiry()
       this.onExpiry()
     }, expiry - now)
+
     if (typeof this.timer.unref === 'function') {
       this.timer.unref()
     }
@@ -101,6 +111,7 @@ export class AgentAwakeStatusLease {
       clearTimeout(this.timer)
       this.timer = null
     }
+
     this.timerExpiresAt = null
   }
 }

@@ -16,6 +16,7 @@ export function shouldPruneTerminalHandle(args: {
   if (args.liveHandles.has(args.handle)) {
     return false
   }
+
   return !(args.showNativeChat && args.handle === args.activeHandle)
 }
 
@@ -38,9 +39,11 @@ export function resolveRetainedTerminalHandles(context: {
   activeHandle: string | null
 }): ReadonlySet<string> {
   const { activeHandle } = context
+
   if (!activeHandle || shouldPruneTerminalHandle({ handle: activeHandle, ...context })) {
     return context.liveHandles
   }
+
   return new Set(context.liveHandles).add(activeHandle)
 }
 
@@ -53,12 +56,15 @@ export function pruneTerminalKeyboardMetrics<T>(
   shouldPrune: (handle: string) => boolean
 ): Map<string, T> {
   let next: Map<string, T> | null = null
+
   for (const handle of previous.keys()) {
     if (!shouldPrune(handle)) {
       continue
     }
+
     next ??= new Map(previous)
     next.delete(handle)
   }
+
   return next ?? previous
 }

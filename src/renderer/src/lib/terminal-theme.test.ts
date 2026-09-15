@@ -16,16 +16,19 @@ const INSTRUCTION_BLOCK_BACKGROUND = '#3e4451'
 function parseHexColor(color: string): [number, number, number] | null {
   const match = /^#([0-9a-f]{6})$/i.exec(color)
   const hex = match?.[1]
+
   if (!hex) {
     return null
   }
 
   const value = Number.parseInt(hex, 16)
+
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
 }
 
 function toLinearChannel(channel: number): number {
   const scaled = channel / 255
+
   return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
 }
 
@@ -41,6 +44,7 @@ function contrastRatio(first: string, second: string): number {
 
   expect(firstRgb, `${first} should be a 6-digit hex color`).not.toBeNull()
   expect(secondRgb, `${second} should be a 6-digit hex color`).not.toBeNull()
+
   if (!firstRgb || !secondRgb) {
     throw new Error('Expected contrast colors to parse as 6-digit hex values')
   }
@@ -250,6 +254,7 @@ describe('default dark terminal theme selection contrast', () => {
 
     expect(selectionBackground, 'selectionBackground should be defined').toBeDefined()
     expect(selectionForeground, 'selectionForeground should be defined').toBeDefined()
+
     if (!selectionBackground || !selectionForeground) {
       throw new Error(`${DEFAULT_TERMINAL_THEME_DARK} is missing selection colors`)
     }
@@ -266,6 +271,7 @@ describe('default light terminal theme ANSI contrast', () => {
     const theme = getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT)
 
     expect(theme, `${DEFAULT_TERMINAL_THEME_LIGHT} should exist`).not.toBeNull()
+
     if (!theme?.background) {
       throw new Error(`${DEFAULT_TERMINAL_THEME_LIGHT} is missing a background color`)
     }
@@ -273,9 +279,11 @@ describe('default light terminal theme ANSI contrast', () => {
     for (const key of ['cyan', 'white', 'brightCyan', 'brightWhite'] as const) {
       const color = theme[key]
       expect(color, `${DEFAULT_TERMINAL_THEME_LIGHT}.${key} should be defined`).toBeDefined()
+
       if (!color) {
         throw new Error(`${DEFAULT_TERMINAL_THEME_LIGHT}.${key} is missing`)
       }
+
       expect(contrastRatio(color, theme.background)).toBeGreaterThanOrEqual(4.5)
     }
   })

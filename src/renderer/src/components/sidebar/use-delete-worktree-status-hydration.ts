@@ -29,20 +29,25 @@ export function useDeleteWorktreeStatusHydration({
   const settings = useAppStore((state) => state.settings)
   const generation = isOpen ? deleteTargets.map(getWorktreeHostIdentity).join('\n') : ''
   const generationRef = useRef(generation)
+
   const [statusByIdentity, setStatusByIdentity] = useState<Map<string, GitStatusResult['entries']>>(
     () => new Map()
   )
+
   const currentStatusByIdentity =
     generationRef.current === generation ? statusByIdentity : EMPTY_STATUS_BY_IDENTITY
 
   useEffect(() => {
     generationRef.current = generation
     setStatusByIdentity(new Map())
+
     if (!isOpen) {
       return
     }
+
     const gitStatusByWorktree = useAppStore.getState().gitStatusByWorktree
     const currentState = useAppStore.getState()
+
     const targets = orderDeleteWorktreeStatusHydrationTargets({
       targets: deleteTargets.filter(
         (target) => !target.isMainWorktree && !isFolderWorkspaceDelete(repoMap, target)
@@ -51,19 +56,25 @@ export function useDeleteWorktreeStatusHydration({
       activeWorktreeId: currentState.activeWorktreeId,
       activeExecutionHostId: currentState.activeWorkspaceExecutionHostId
     })
+
     const controller = new AbortController()
+
     for (const target of targets) {
       const identity = getWorktreeHostIdentity(target)
       const existingStatus = target.hostId ? undefined : gitStatusByWorktree[target.id]
+
       if (existingStatus) {
         setStatusByIdentity((current) => new Map(current).set(identity, existingStatus))
         continue
       }
+
       const owner = target.hostId
         ? findRepoForHost(repos, target.repoId, { hostId: target.hostId })
         : undefined
+
       const parsedHost = parseExecutionHostId(target.hostId)
       const runtimeEnvironmentId = parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+
       const runtimeSettings = target.hostId
         ? settings
           ? { ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }
@@ -72,6 +83,7 @@ export function useDeleteWorktreeStatusHydration({
             { repos, settings, worktreesByRepo: useAppStore.getState().worktreesByRepo },
             target.id
           )
+
       void getRuntimeGitStatus(
         {
           settings: runtimeSettings,
@@ -92,6 +104,7 @@ export function useDeleteWorktreeStatusHydration({
           // Best effort only; deletion performs the authoritative backend check.
         })
     }
+
     return () => {
       controller.abort()
     }

@@ -21,6 +21,7 @@ vi.mock('../source-control/pull-request-template', () => ({
 }))
 
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
 
 describe('Gitea pull request creation', () => {
@@ -65,6 +66,7 @@ describe('Gitea pull request creation', () => {
         body: 'Body',
         draft: true
       })
+
       return Response.json({
         number: 13,
         title: 'Add Gitea create',
@@ -79,6 +81,7 @@ describe('Gitea pull request creation', () => {
         }
       })
     })
+
     globalThis.fetch = fetchMock as never
 
     await expect(
@@ -109,6 +112,7 @@ describe('Gitea pull request creation', () => {
         stderr: ''
       }))
     }
+
     getSshGitProviderMock.mockReturnValue(remoteGit)
     globalThis.fetch = vi.fn(async () =>
       Response.json({

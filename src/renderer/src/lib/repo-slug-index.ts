@@ -55,16 +55,19 @@ export function clearRepoSlugCacheEntry(repoId: string): void {
   // Why: an in-flight-only resolution has no `slugByRepoId` entry yet, so it
   // must be invalidated via the in-flight map too or its late write survives.
   const keys = new Set<string>()
+
   for (const key of slugByRepoId.keys()) {
     if (key.endsWith(suffix)) {
       keys.add(key)
     }
   }
+
   for (const key of slugResolutionInFlight.keys()) {
     if (key.endsWith(suffix)) {
       keys.add(key)
     }
   }
+
   for (const key of keys) {
     deleteRepoSlugCacheKey(key)
     invalidateSlugResolution(key)
@@ -77,14 +80,19 @@ async function resolveRepoSlug(
 ): Promise<string | null> {
   const cacheKey = slugCacheKey(repo.id, settings)
   const cached = readRepoSlugCache(cacheKey)
+
   if (cached.hit) {
     return cached.value
   }
+
   const inFlight = slugResolutionInFlight.get(cacheKey)
+
   if (inFlight) {
     return inFlight
   }
+
   const generation = slugResolutionGeneration.get(cacheKey) ?? 0
+
   const resolution = (async () => {
     // Why: only write the resolved value if this key wasn't invalidated
     // mid-flight; otherwise a stale slug would repopulate the cache.
@@ -92,10 +100,13 @@ async function resolveRepoSlug(
       if ((slugResolutionGeneration.get(cacheKey) ?? 0) === generation) {
         rememberRepoSlug(cacheKey, value)
       }
+
       return value
     }
+
     try {
       const target = getActiveRuntimeTarget(settings)
+
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ owner: string; repo: string; host?: string } | null>(
@@ -105,10 +116,13 @@ async function resolveRepoSlug(
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+
       if (!result) {
         return commit(null)
       }
+
       const slug = githubRepoIdentityKey(result)
+
       return commit(slug)
     } catch {
       // Why: GHES classification depends on auth that may change outside Orca;
@@ -116,7 +130,9 @@ async function resolveRepoSlug(
       return commit(null)
     }
   })()
+
   slugResolutionInFlight.set(cacheKey, resolution)
+
   try {
     return await resolution
   } finally {
@@ -135,14 +151,17 @@ async function buildIndex(
   // and remove repos. Without this, every removed repo's id (and its
   // negative-cached null) lingers forever.
   const liveKeys = new Set(repos.map((r) => slugCacheKey(r.id, settingsForRepoOwner(r, settings))))
+
   for (const key of slugByRepoId.keys()) {
     if (!liveKeys.has(key)) {
       deleteRepoSlugCacheKey(key)
       invalidateSlugResolution(key)
     }
   }
+
   const next: SlugIndex = new Map()
   const upstreamNext: SlugIndex = new Map()
+
   const results = await Promise.all(
     repos.map(async (r) => ({
       repo: r,
@@ -151,19 +170,23 @@ async function buildIndex(
       slug: await resolveRepoSlug(r, settingsForRepoOwner(r, settings))
     }))
   )
+
   for (const { repo, slug } of results) {
     if (slug) {
       next.set(slug, [...(next.get(slug) ?? []), repo])
     }
+
     // Why: a Project card references the upstream repo, but a contributor's
     // clone has their personal fork as `origin`, so the origin-only index
     // dropped every row (#12647). `repo.upstream` is already resolved when the
     // repo is added, so this costs no extra IPC.
     const upstreamKey = repoUpstreamIdentityKey(repo, slug)
+
     if (upstreamKey && upstreamKey !== slug) {
       upstreamNext.set(upstreamKey, [...(upstreamNext.get(upstreamKey) ?? []), repo])
     }
   }
+
   return {
     index: next,
     upstreamIndex: upstreamNext,
@@ -205,12 +228,14 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
         if (gen !== generationRef.current) {
           return
         }
+
         setIndex(next)
         setUpstreamIndex(nextUpstream)
         setReady(true)
         setRetryDelayMs(nextRetryDelayMs)
       }
     )
+
     return () => {
       generationRef.current += 1
     }
@@ -220,7 +245,9 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
     if (retryDelayMs === null) {
       return
     }
+
     const retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
+
     return () => {
       clearTimeout(retryTimer)
     }
@@ -229,12 +256,16 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
   return useMemo(() => {
     const lookupSlugMatches = (slug: string | null | undefined, host?: string): RepoSlugMatches => {
       const [owner, repo] = slug?.split('/') ?? []
+
       if (!owner || !repo) {
         return { origin: [], upstream: [] }
       }
+
       const key = githubRepoIdentityKey({ owner, repo, host })
+
       return { origin: index.get(key) ?? [], upstream: upstreamIndex.get(key) ?? [] }
     }
+
     return {
       lookupSlugMatches,
       // Why: origin wins — when the upstream repo itself is open, a row must
@@ -243,6 +274,7 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
       // `lookupSlugMatches` so an unselected clone cannot hide a selected fork.
       lookupSlug: (slug: string | null | undefined, host?: string): Repo[] => {
         const { origin, upstream } = lookupSlugMatches(slug, host)
+
         return origin.length > 0 ? origin : upstream
       },
       ready

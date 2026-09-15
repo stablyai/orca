@@ -52,6 +52,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: (_ptyId: string, data: string) => {
         writes.push(data)
+
         return data !== '\r'
       },
       kill: () => true,

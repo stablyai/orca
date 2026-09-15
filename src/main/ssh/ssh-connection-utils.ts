@@ -27,13 +27,18 @@ export type SshConnectionCallbacks = {
 
 export function isPassphraseError(err: Error): boolean {
   const msg = err.message.toLowerCase()
+
   return msg.includes('passphrase') || msg.includes('encrypted key') || msg.includes('bad decrypt')
 }
 
 export const INITIAL_RETRY_ATTEMPTS = 5
+
 export const INITIAL_RETRY_DELAY_MS = 2000
+
 export const RECONNECT_BACKOFF_MS = [1000, 2000, 5000, 5000, 10000, 10000, 10000, 30000, 30000]
+
 export const CONNECT_TIMEOUT_MS = 30_000
+
 export const SSH_CREDENTIAL_TIMEOUT_MS = 120_000
 
 const TRANSIENT_ERROR_CODES = new Set([
@@ -51,6 +56,7 @@ function sshErrorLevel(err: Error): unknown {
 
 export function isAuthError(err: Error): boolean {
   const msg = err.message.toLowerCase()
+
   return (
     msg.includes('all configured authentication methods failed') ||
     msg.includes('authentication failed') ||
@@ -73,19 +79,25 @@ export function isTransientError(err: Error): boolean {
   ) {
     return true
   }
+
   const code = 'code' in err && typeof err.code === 'string' ? err.code : undefined
+
   if (code && TRANSIENT_ERROR_CODES.has(code)) {
     return true
   }
+
   if (err.message.includes('ETIMEDOUT')) {
     return true
   }
+
   if (err.message.includes('ECONNREFUSED')) {
     return true
   }
+
   if (err.message.includes('ECONNRESET')) {
     return true
   }
+
   return false
 }
 
@@ -93,9 +105,11 @@ const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
 
 export function isSystemSshFallbackError(err: Error): boolean {
   const code = (err as NodeJS.ErrnoException).code
+
   if (code && SYSTEM_SSH_FALLBACK_ERROR_CODES.has(code)) {
     return true
   }
+
   return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
 }
 
@@ -114,6 +128,7 @@ export function isGssapiSystemSshFallbackCandidate(
   if (target.gssapiAuthentication === true) {
     return false
   }
+
   return (isAuthError(err) || isPassphraseError(err)) && resolved?.gssapiAuthentication === true
 }
 
@@ -126,30 +141,39 @@ export function shellEscape(s: string): string {
 }
 
 const REMOTE_COMMAND_CHUNK_MAX_BYTES = 1_024
+
 const REMOTE_COMMAND_PRINTF_ESCAPED_BYTES = new Set([0x21, 0x27, 0x5c])
 
 function encodeRemoteCommandForPrintf(command: string): string[] {
   const chunks: string[] = []
   let chunk = ''
   let chunkBytes = 0
+
   for (const character of command) {
     const codePoint = character.codePointAt(0)!
+
     const isSafePrintableAscii =
       codePoint >= 0x20 && codePoint <= 0x7e && !REMOTE_COMMAND_PRINTF_ESCAPED_BYTES.has(codePoint)
+
     const encodedCharacter =
       codePoint > 0x7f || isSafePrintableAscii
         ? character
         : `\\0${codePoint.toString(8).padStart(3, '0')}`
+
     const encodedBytes = codePoint > 0x7f ? Buffer.byteLength(character) : encodedCharacter.length
+
     if (chunkBytes + encodedBytes > REMOTE_COMMAND_CHUNK_MAX_BYTES) {
       chunks.push(chunk)
       chunk = ''
       chunkBytes = 0
     }
+
     chunk += encodedCharacter
     chunkBytes += encodedBytes
   }
+
   chunks.push(chunk)
+
   return chunks
 }
 
@@ -158,10 +182,13 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
   // Why: csh/tcsh split multiline SSH exec strings before /bin/sh sees them.
   // POSIX printf rebuilds bounded argument chunks without consuming relay stdin.
   const encodedChunks = encodeRemoteCommandForPrintf(command)
+
   const decodeAndRun =
     'decoded=$(printf %b "$@" && printf _) || exit $?; ' +
     'decoded=${decoded%_}; exec /bin/sh -c "$decoded"'
+
   const chunkArguments = encodedChunks.map(shellEscape).join(' ')
+
   return `exec /bin/sh -c ${shellEscape(decodeAndRun)} orca-command ${chunkArguments}`
 }
 
@@ -173,6 +200,7 @@ export type SshExecOptions = {
 export function createSshOperationAbortError(): Error & { name: string } {
   const error = new Error('SSH operation was cancelled') as Error & { name: string }
   error.name = 'AbortError'
+
   return error
 }
 
@@ -191,6 +219,7 @@ export function buildConnectConfig(
 ): ConnectConfig {
   const effectiveHost = resolveEffectiveHost(target, resolved)
   const effectivePort = resolveEffectivePort(target, resolved)
+
   const effectiveUser =
     isOpenSshConfigBackedTarget(target) && resolved
       ? (resolved.user ?? target.username)
@@ -221,6 +250,7 @@ export function buildConnectConfig(
     (options.includePrivateKey ?? !agent)
       ? resolvePrivateKeys(target, resolved)
       : resolveUnencryptedExplicitPrivateKeys(target, resolved)
+
   configurePrivateKeyAuthentication(
     config as ConnectConfig,
     keys,
@@ -234,9 +264,11 @@ function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | n
   if (isOpenSshConfigBackedTarget(target) && resolved?.hostname) {
     return resolved.hostname
   }
+
   if (shouldUseResolvedEndpoint(target, resolved)) {
     return resolved!.hostname
   }
+
   return target.host || resolved?.hostname || target.label
 }
 
@@ -244,11 +276,13 @@ function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | n
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.port || target.port || 22
   }
+
   // Why: imported config aliases store 22 as the schema default even when an
   // included/wildcard OpenSSH rule later resolves a different effective Port.
   if (target.configHost && target.port === 22 && resolved?.port) {
     return resolved.port
   }
+
   return target.port || resolved?.port || 22
 }
 
@@ -256,6 +290,8 @@ function shouldUseResolvedEndpoint(target: SshTarget, resolved: SshResolvedConfi
   if (!target.configHost || !resolved?.hostname) {
     return false
   }
+
   const host = target.host.trim()
+
   return host === '' || host === target.configHost || host === target.label
 }

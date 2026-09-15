@@ -31,15 +31,20 @@ export function isMobileMethodUnavailableError(
 
 export function directoryCacheFromFileList(files: LegacyMobileFileEntry[]): DirectoryCache {
   const childrenByDir = new Map<string, Map<string, boolean>>()
+
   const ensureDir = (path: string): Map<string, boolean> => {
     let children = childrenByDir.get(path)
+
     if (!children) {
       children = new Map()
       childrenByDir.set(path, children)
     }
+
     return children
   }
+
   ensureDir('')
+
   for (const file of files) {
     const parts = file.relativePath.split('/').filter(Boolean)
     let parentPath = ''
@@ -48,11 +53,13 @@ export function directoryCacheFromFileList(files: LegacyMobileFileEntry[]): Dire
       const children = ensureDir(parentPath)
       children.set(name, children.get(name) === true || isDirectory)
       parentPath = parentPath ? `${parentPath}/${name}` : name
+
       if (isDirectory) {
         ensureDir(parentPath)
       }
     })
   }
+
   // Why: plain `cache[path] = ...` with a '__proto__' path segment mutates the
   // object's prototype instead of storing the directory; fromEntries always
   // creates own keys.

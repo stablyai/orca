@@ -125,9 +125,11 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = join(dir, entry.name)
+
     if (entry.isDirectory()) {
       return listSourceFiles(fullPath)
     }
+
     // Test harnesses and fixtures stub the store action rather than closing anything.
     if (
       !/\.(ts|tsx)$/.test(entry.name) ||
@@ -136,6 +138,7 @@ function listSourceFiles(dir: string): string[] {
     ) {
       return []
     }
+
     return [fullPath]
   })
 }
@@ -162,10 +165,12 @@ describe('browser workspace close census', () => {
 
   it('lists every renderer file that closes a browser workspace', () => {
     const root = join(process.cwd(), 'src/renderer')
+
     const closers = listSourceFiles(root)
       .filter((filePath) => countCloseBrowserTabMentions(readFileSync(filePath, 'utf8')) > 0)
       .map((filePath) => relative(process.cwd(), filePath).split(sep).join('/'))
       .sort()
+
     expect(closers).toEqual(BROWSER_WORKSPACE_CLOSE_SITES.map((site) => site.path).sort())
   })
 
@@ -176,11 +181,13 @@ describe('browser workspace close census', () => {
   it('every plan-routed site forwards the plan cleanup reason into its local teardown', () => {
     const forwardsReason =
       /plan\.localCloseReason\s*\?\s*\{\s*reason:\s*plan\.localCloseReason\s*\}\s*:\s*undefined/g
+
     // Why: the expression existing somewhere in the file is not the wiring — a call that drops it on
     // the floor reads identically. Both halves are pinned: the reason is computed, and the close
     // calls carry it.
     const carriesReason =
       /closeBrowserTab\(\s*[^()]*?(?:[Cc]loseOptions|plan\.localCloseReason)[^()]*?\)/g
+
     for (const site of BROWSER_WORKSPACE_CLOSE_SITES) {
       const source = stripComments(readFileSync(join(process.cwd(), site.path), 'utf8'))
       expect({

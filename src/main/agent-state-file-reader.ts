@@ -2,7 +2,9 @@ import { readNodeFileSyncWithinLimit } from '../shared/node-bounded-file-reader'
 import { assertJsonTextStructureWithinLimits } from '../shared/json-text-structure-limit'
 
 export const MAX_AGENT_STATE_FILE_BYTES = 4 * 1024 * 1024
+
 export const MAX_AGENT_STATE_JSON_STRUCTURAL_TOKENS = 1_000_000
+
 export const MAX_AGENT_STATE_JSON_NESTING_DEPTH = 128
 
 export function readAgentStateFileSync(filePath: string): string {
@@ -15,5 +17,6 @@ export function readAgentStateJsonFileSync(filePath: string): unknown {
     structuralTokens: MAX_AGENT_STATE_JSON_STRUCTURAL_TOKENS,
     nestingDepth: MAX_AGENT_STATE_JSON_NESTING_DEPTH
   })
+
   return JSON.parse(content) as unknown
 }

@@ -57,12 +57,14 @@ describe('workspace.stale resync', () => {
       getTarget: (id: string) => ({ id, host: 'example.test', username: 'dev' }),
       listTargets: () => []
     }))
+
     const win = {
       isDestroyed: () => false,
       webContents: {
         send: (_channel: string, event: RemoteWorkspaceChangedEvent) => sent.push(event)
       }
     }
+
     registerRemoteWorkspaceHandlers(store, () => win as never)
   })
 
@@ -102,6 +104,7 @@ describe('workspace.stale resync', () => {
         namespace: 'target-1'
       })
     }
+
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1))
 
     request.mockResolvedValue({

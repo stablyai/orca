@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 export const RUN_TARGET_ADD_HOST_KEY = 'add-host'
+
 export const RUN_TARGET_RECIPES_KEY = 'per-workspace-env'
 
 /** A row in the run-target list. Hosts commit; the last two open a submenu. */
@@ -28,6 +29,7 @@ export function getEphemeralVmLabel(): string {
 export function getRecipeCommandDisplay(command: string): string {
   const trimmed = command.trim()
   const quoted = trimmed.match(/^"([^"]+)"/) ?? trimmed.match(/^'([^']+)'/)
+
   return quoted?.[1] ?? trimmed.split(/\s+/)[0] ?? trimmed
 }
 
@@ -35,12 +37,14 @@ export function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
   if (recipe.destroyDisabled) {
     return translate('auto.components.NewWorkspaceComposerCard.destroyDisabled', 'destroy disabled')
   }
+
   if (recipe.destroy) {
     return translate(
       'auto.components.NewWorkspaceComposerCard.destroyConfigured',
       'destroy configured'
     )
   }
+
   return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
 }
 
@@ -70,6 +74,7 @@ export function buildRunTargetRows({
   hasAddHost: boolean
 }): { rows: RunTargetRowModel[]; matchedRecipes: EphemeralVmRecipeOption[] } {
   const trimmed = query.trim().toLowerCase()
+
   const hostMatches = (option: ProjectHostSetupOption): boolean =>
     trimmed === '' ||
     matches(option.label, trimmed) ||
@@ -80,10 +85,12 @@ export function buildRunTargetRows({
     (option): option is ReadyProjectHostSetupOption =>
       option.kind === 'ready' && hostMatches(option)
   )
+
   const needsSetup = hostOptions.filter(
     (option): option is NeedsSetupProjectHostOption =>
       option.kind === 'needs-setup' && hostMatches(option)
   )
+
   const matchedRecipes = recipes.filter(
     (recipe) =>
       trimmed === '' ||
@@ -100,11 +107,14 @@ export function buildRunTargetRows({
       option
     }))
   ]
+
   if (matchedRecipes.length > 0) {
     rows.push({ key: RUN_TARGET_RECIPES_KEY, kind: 'recipes' })
   }
+
   if (hasAddHost) {
     rows.push({ key: RUN_TARGET_ADD_HOST_KEY, kind: 'add-host' })
   }
+
   return { rows, matchedRecipes }
 }

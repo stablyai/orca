@@ -119,9 +119,11 @@ export const ACTIVITY_QUERY = `
 export function mapActivity(node: RawActivityNode): LinearIssueActivityEntry {
   const changes: LinearIssueActivityEntry['changes'] = []
   pushActivityChange(changes, 'title', node.fromTitle, node.toTitle)
+
   if (node.updatedDescription) {
     changes.push({ field: 'description' })
   }
+
   pushActivityChange(changes, 'priority', node.fromPriority, node.toPriority)
   pushActivityChange(changes, 'estimate', node.fromEstimate, node.toEstimate)
   pushActivityChange(changes, 'dueDate', node.fromDueDate, node.toDueDate)
@@ -133,24 +135,31 @@ export function mapActivity(node: RawActivityNode): LinearIssueActivityEntry {
   pushActivityChange(changes, 'parent', node.fromParent, node.toParent)
   pushActivityChange(changes, 'team', node.fromTeam, node.toTeam)
   pushActivityChange(changes, 'milestone', node.fromProjectMilestone, node.toProjectMilestone)
+
   if (node.addedLabels?.length) {
     changes.push({ field: 'labelsAdded', to: node.addedLabels })
   }
+
   if (node.removedLabels?.length) {
     changes.push({ field: 'labelsRemoved', from: node.removedLabels })
   }
+
   if (node.relationChanges?.length) {
     changes.push({ field: 'relations', to: node.relationChanges })
   }
+
   if (node.attachment) {
     changes.push({ field: 'attachment', to: node.attachment })
   }
+
   for (const field of ['archived', 'autoArchived', 'autoClosed', 'trashed'] as const) {
     if (node[field] != null) {
       changes.push({ field, to: node[field] })
     }
   }
+
   const bot = node.botActor
+
   return {
     id: node.id,
     createdAt: node.createdAt,
@@ -181,5 +190,6 @@ function pushActivityChange(
   if (from == null && to == null) {
     return
   }
+
   changes.push({ field, from: from ?? null, to: to ?? null })
 }

@@ -26,6 +26,7 @@ export function useWorktreeJumpPaletteLocalState({
       workspaceHostScope: state.workspaceHostScope
     }))
   )
+
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const liveQueryRef = useRef(query)
@@ -34,10 +35,12 @@ export function useWorktreeJumpPaletteLocalState({
   liveQueryRef.current = query
   const taskSourceUrl = useMemo(() => parseCmdJTaskSourceUrl(query), [query])
   const paletteSearchQuery = taskSourceUrl ? query.trim() : deferredQuery.trim()
+
   const deferredCreateAction = useMemo(
     () => getWorktreePaletteCreateActionState({ query: deferredQuery }),
     [deferredQuery]
   )
+
   const createWorktreeName = taskSourceUrl ? query.trim() : deferredCreateAction.createWorktreeName
   const showCreateAction = deferredCreateAction.showCreateAction || taskSourceUrl !== null
   const [selectedItemId, setSelectedItemId] = useState('')
@@ -46,9 +49,11 @@ export function useWorktreeJumpPaletteLocalState({
   // Create is armed by an explicit keyboard/pointer move, except for task URLs.
   const selectionMovedByUserRef = useRef(false)
   const digitShortcutItemsRef = useRef<readonly PaletteItem[]>([])
+
   const [filter, setFilter] = useState<PaletteFilterState>(() =>
     buildPaletteFilterFromSidebarScope(sidebarScope)
   )
+
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')
@@ -69,14 +74,17 @@ export function useWorktreeJumpPaletteLocalState({
   const [previousQuery, setPreviousQuery] = useState(query)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const visibilityChanged = previousVisible !== visible
+
   if (previousQuery !== query || visibilityChanged) {
     setPreviousQuery(query)
     setPreviousVisible(visible)
     setExpandedSectionCaps({})
+
     if (visibilityChanged && visible) {
       setFilter(buildPaletteFilterFromSidebarScope(sidebarScope))
     }
   }
+
   return {
     query,
     setQuery,

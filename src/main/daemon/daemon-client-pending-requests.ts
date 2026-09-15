@@ -27,9 +27,11 @@ export class DaemonPendingRequests {
   settle(response: RpcResponse): void {
     if (response.id) {
       const pending = this.requests.get(response.id)
+
       if (pending) {
         this.requests.delete(response.id)
         clearTimeout(pending.timer)
+
         if (response.ok) {
           pending.resolve(response.payload)
         } else {

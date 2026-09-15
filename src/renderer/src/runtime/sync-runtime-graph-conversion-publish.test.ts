@@ -8,13 +8,17 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const DOC_LOCATION = {
   kind: 'workspace-doc' as const,
   worktreeId: WORKTREE_ID,
@@ -30,6 +34,7 @@ function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WORKTREE_ID
   })
+
   return store
 }
 
@@ -51,13 +56,18 @@ function collectLayoutGroupIds(node: unknown, into: string[] = []): string[] {
   if (!node || typeof node !== 'object') {
     return into
   }
+
   const candidate = node as { type?: string; groupId?: string; first?: unknown; second?: unknown }
+
   if (candidate.type === 'leaf' && candidate.groupId) {
     into.push(candidate.groupId)
+
     return into
   }
+
   collectLayoutGroupIds(candidate.first, into)
   collectLayoutGroupIds(candidate.second, into)
+
   return into
 }
 
@@ -66,12 +76,15 @@ function collectLayoutGroupIds(node: unknown, into: string[] = []): string[] {
 function expectGroupsAndLayoutConsistent(store: ReturnType<typeof createTestStore>): void {
   const snapshot = worktreeSnapshot(store)
   const publishedTabIds = new Set((snapshot?.tabs ?? []).map((tab) => tab.id))
+
   for (const group of snapshot?.tabGroups ?? []) {
     expect(group.tabOrder.filter((tabId) => !publishedTabIds.has(tabId))).toEqual([])
     expect((group.recentTabIds ?? []).filter((tabId) => !publishedTabIds.has(tabId))).toEqual([])
     expect(group.activeTabId === null || publishedTabIds.has(group.activeTabId)).toBe(true)
   }
+
   const groupIds = new Set((snapshot?.tabGroups ?? []).map((group) => group.id))
+
   for (const layoutGroupId of collectLayoutGroupIds(snapshot?.tabGroupLayout)) {
     expect(groupIds.has(layoutGroupId)).toBe(true)
   }
@@ -91,11 +104,13 @@ describe('mobile publish across an address-bar conversion', () => {
     // Presence precondition: an ordinary URL tab publishes throughout, so an empty answer would
     // fail rather than pass by the publisher being broken for browser tabs entirely.
     const urlTab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
+
     const docTab = store.getState().createBrowserTab(WORKTREE_ID, '', {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null
     })
+
     const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id ?? ''
 
     expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
@@ -104,6 +119,7 @@ describe('mobile publish across an address-bar conversion', () => {
       kind: 'web',
       url: 'https://converted.example/'
     })
+
     expect(webPage).not.toBeNull()
     expect(publishedBrowserWorkspaceIds(store).sort()).toEqual([urlTab.id, docTab.id].sort())
 
@@ -111,6 +127,7 @@ describe('mobile publish across an address-bar conversion', () => {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+
     expect(docPage).not.toBeNull()
     expect(publishedBrowserWorkspaceIds(store)).toEqual([urlTab.id])
   })
@@ -127,25 +144,31 @@ describe('mobile publish across an address-bar conversion', () => {
     expect(sourceGroupId).not.toBe('')
     const splitGroupId = store.getState().createEmptySplitGroup(WORKTREE_ID, sourceGroupId, 'right')
     expect(splitGroupId).not.toBeNull()
+
     const docTab = store.getState().createBrowserTab(WORKTREE_ID, '', {
       docLocation: DOC_LOCATION,
       title: 'index.html',
       browserRuntimeEnvironmentId: null,
       targetGroupId: splitGroupId ?? undefined
     })
+
     const docPageId = store.getState().browserPagesByWorkspace[docTab.id]?.[0]?.id ?? ''
+
     const docUnifiedTabId =
       (store.getState().unifiedTabsByWorktree[WORKTREE_ID] ?? []).find(
         (tab) => tab.contentType === 'browser' && tab.entityId === docTab.id
       )?.id ?? ''
+
     const urlUnifiedTabId =
       (store.getState().unifiedTabsByWorktree[WORKTREE_ID] ?? []).find(
         (tab) => tab.contentType === 'browser' && tab.entityId === urlTab.id
       )?.id ?? ''
+
     expect(docUnifiedTabId).not.toBe('')
 
     const publishedGroupIds = (): Set<string> =>
       new Set((worktreeSnapshot(store)?.tabGroups ?? []).map((group) => group.id))
+
     const layoutGroupIds = (): string[] =>
       collectLayoutGroupIds(worktreeSnapshot(store)?.tabGroupLayout)
 
@@ -162,6 +185,7 @@ describe('mobile publish across an address-bar conversion', () => {
       kind: 'web',
       url: 'https://converted.example/'
     })
+
     expect(webPage).not.toBeNull()
     expect(publishedUnifiedTabIds(store).has(docUnifiedTabId)).toBe(true)
     expect(publishedGroupIds().has(splitGroupId ?? '')).toBe(true)
@@ -172,6 +196,7 @@ describe('mobile publish across an address-bar conversion', () => {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+
     expect(docPage).not.toBeNull()
     expect(publishedUnifiedTabIds(store).has(docUnifiedTabId)).toBe(false)
     expect(publishedGroupIds().has(splitGroupId ?? '')).toBe(false)

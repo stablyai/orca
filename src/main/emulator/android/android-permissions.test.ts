@@ -51,6 +51,7 @@ describe('permissionArgs', () => {
     expect(() => permissionArgs('emulator-5554', 'grant', 'com.example.app')).toThrowError(
       EmulatorError
     )
+
     try {
       permissionArgs('emulator-5554', 'grant', 'com.example.app')
       throw new Error('expected permissionArgs to throw')

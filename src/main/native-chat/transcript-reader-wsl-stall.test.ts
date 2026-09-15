@@ -34,6 +34,7 @@ function handleServing(body: Buffer, delayMs = 0) {
           const slice = body.subarray(position, Math.min(position + length, body.length))
           slice.copy(buffer, offset)
           const settle = () => resolve({ bytesRead: slice.length, buffer })
+
           if (delayMs > 0) {
             setTimeout(settle, delayMs)
           } else {
@@ -53,6 +54,7 @@ beforeEach(() => {
 describe('native chat transcript read with a stalled post-resolution body read', () => {
   it('surfaces a retryable error without notFound when the first chunk never settles', async () => {
     vi.useFakeTimers()
+
     try {
       mocks.open.mockResolvedValue({
         read: vi.fn(() => new Promise(() => {})),
@@ -72,6 +74,7 @@ describe('native chat transcript read with a stalled post-resolution body read',
   it('succeeds when every chunk is slow but under the deadline, past the whole-file budget', async () => {
     vi.useFakeTimers()
     const healthyPath = '\\\\wsl.localhost\\Debian\\home\\ada\\.claude\\projects\\p\\session.jsonl'
+
     try {
       const chunkDelayMs = WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS / 2
       mocks.open.mockResolvedValue(handleServing(Buffer.from(`${LINE}\n`), chunkDelayMs))

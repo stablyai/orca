@@ -15,6 +15,7 @@ function journalItem(
 
 function snapshot(items: AgentJournalRenderItem[], fence: number): AgentSessionSubscribeEvent {
   const newest = items.length
+
   return {
     type: 'snapshot',
     sessionId: 'session-1',
@@ -44,6 +45,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let listener: ((value: unknown) => void) | null = null
+
   const sendRequest = vi.fn(async (method: string) => ({
     ok: true,
     result:
@@ -55,10 +57,13 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
         : {},
     _meta: { runtimeId: 'r1' }
   }))
+
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
     listener = onData
+
     return vi.fn()
   })
+
   const client = { sendRequest, subscribe } as unknown as RpcClient
   // Stable across renders: a fresh callback would re-run the hold/subscribe effect
   // and release the session out from under the test.
@@ -74,6 +79,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
       agent: 'codex',
       onSendError
     } as never)
+
     return null
   }
 
@@ -89,6 +95,7 @@ describe('useMobileStructuredAgentSession turn indicator', () => {
   })
 
   const runningTurn = journalItem(1, { kind: 'turn', turnId: 'turn-1', state: 'running' })
+
   const reasoning = journalItem(2, {
     kind: 'message',
     role: 'reasoning',

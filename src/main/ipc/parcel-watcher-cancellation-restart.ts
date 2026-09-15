@@ -22,7 +22,9 @@ export function restoreWatcherRecordsAfterCancellation(
   if (records.size === 0) {
     return
   }
+
   const replacement = ensureWatcherProcess()
+
   if (!replacement) {
     failAllWatcherSubscriptions(
       records,
@@ -33,8 +35,10 @@ export function restoreWatcherRecordsAfterCancellation(
       )
     )
     onUnavailable()
+
     return
   }
+
   for (const record of records.values()) {
     record.interrupted = true
     resetPendingSubscribeAttempt(record)
@@ -65,6 +69,7 @@ export async function restartCancelledWatcherChild(
 ): Promise<void> {
   const exited = await terminateWatcherChild(child)
   const shouldRestore = onTerminationFinished(exited)
+
   if (!exited) {
     const error = createWatcherChildTerminationFailure(child)
     cancelledSubscribes.finishRestart(child, error)
@@ -72,11 +77,14 @@ export async function restartCancelledWatcherChild(
     failWatcherRecordsAfterTerminationDeadline(records, error)
     throw error
   }
+
   cancelledSubscribes.finishRestart(child)
   resolvePendingWatcherUnsubscribes(pendingUnsubscribes)
+
   if (!shouldRestore) {
     return
   }
+
   restoreWatcherRecordsAfterCancellation(
     records,
     ensureWatcherProcess,

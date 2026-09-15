@@ -108,6 +108,7 @@ describe('readWorkspaceFileDragPaths', () => {
     )
 
     expect(result.status).toBe('rejected')
+
     if (result.status === 'rejected') {
       expect(result.reason).toBe('paths-too-large')
       expect(result.pathCount).toBe(0)

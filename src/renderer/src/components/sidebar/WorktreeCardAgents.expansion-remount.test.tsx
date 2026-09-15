@@ -91,6 +91,7 @@ async function mountAgents(worktreeId: string): Promise<HTMLElement> {
   await act(async () => {
     root.render(<WorktreeCardAgents worktreeId={worktreeId} />)
   })
+
   return host
 }
 
@@ -98,9 +99,11 @@ function summaryButton(host: HTMLElement): HTMLButtonElement {
   // The compact multi-agent summary is the only control carrying aria-expanded
   // when the agents are flat (no per-agent child disclosure).
   const button = host.querySelector<HTMLButtonElement>('button[aria-expanded]')
+
   if (!button) {
     throw new Error('compact agent summary button not found')
   }
+
   return button
 }
 
@@ -168,6 +171,7 @@ describe('worktree-card-agents-expansion-state module cache', () => {
     function Probe({ worktreeId }: { worktreeId: string }) {
       const { collapsedLineageParents, toggleLineageParent } =
         useWorktreeAgentExpansionState(worktreeId)
+
       return (
         <button
           type="button"
@@ -218,6 +222,7 @@ describe('worktree-card-agents-expansion-state module cache', () => {
         compactRootListExpanded: true
       })
     }
+
     expect(getWorktreeAgentExpansionCountForTests()).toBe(MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS)
   })
 })

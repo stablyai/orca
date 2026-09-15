@@ -10,6 +10,7 @@ vi.mock('../github/client', async (importOriginal) => ({
 }))
 
 const getRepoUpstream = vi.mocked(client.getRepoUpstream)
+
 const getRepoSlug = vi.mocked(client.getRepoSlug)
 
 type BackfillInternals = { repositoryForkBackfill: { run(): Promise<void> } }
@@ -37,7 +38,9 @@ function attachStore(runtime: OrcaRuntimeService, repos: Repo[]) {
     const index = repos.findIndex((repo) => repo.id === repoId)
     repos[index] = { ...repos[index], ...updates }
   })
+
   Object.assign(runtime, { store: { getRepos: () => repos, updateRepo } })
+
   return updateRepo
 }
 
@@ -67,6 +70,7 @@ describe('startup fork-upstream backfill', () => {
 
   it('migrates a same-name fork to the upstream owner avatar', async () => {
     const runtime = new OrcaRuntimeService()
+
     const updateRepo = attachStore(runtime, [
       makeRepo({
         path: '/workspace/rocket',
@@ -78,6 +82,7 @@ describe('startup fork-upstream backfill', () => {
         }
       })
     ])
+
     getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
     getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket' })
 
@@ -99,6 +104,7 @@ describe('startup fork-upstream backfill', () => {
     // spelling fell through and had its upstream read off this client's copy of the path. A
     // runtime row's nested target holds its files too, and is equally not ours to read.
     const runtime = new OrcaRuntimeService()
+
     const updateRepo = attachStore(runtime, [
       makeRepo({ id: 'repo-ssh', executionHostId: 'ssh:builder' }),
       makeRepo({ id: 'repo-openclaw', executionHostId: 'ssh:openclaw' }),
@@ -120,9 +126,11 @@ describe('startup fork-upstream backfill', () => {
     getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
     let resolveSlug!: (value: { owner: string; repo: string }) => void
     let markSlugStarted!: () => void
+
     const slugStarted = new Promise<void>((resolve) => {
       markSlugStarted = resolve
     })
+
     getRepoSlug.mockImplementationOnce(
       () =>
         new Promise((resolve) => {

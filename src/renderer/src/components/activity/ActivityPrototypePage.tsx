@@ -40,12 +40,15 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const setShowChildAgents = useAppStore((s) => s.setAgentsShowChildAgents)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
+
   const [activePortalSlotId, setActivePortalSlotId] =
     useState<ActivityTerminalPortalSlotId>('primary')
+
   const [primaryPortalTargetEl, setPrimaryPortalTargetEl] = useState<HTMLElement | null>(null)
   const [secondaryPortalTargetEl, setSecondaryPortalTargetEl] = useState<HTMLElement | null>(null)
   // Why (default width): thread cards are the primary surface; 480px lets prompts fill line-clamp-3 and keeps the per-card actions readable.
   const [threadListWidth, setThreadListWidth] = useState(480)
+
   const {
     containerRef: threadListRef,
     isResizing: isThreadListResizing,
@@ -68,6 +71,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     markAllReadThreads,
     visibleThreadGroups
   } = useAgentPaneThreads({ query, readFilter, groupBy, selectedPaneKey, showChildAgents })
+
   if (!selectedPaneKeyIsLive) {
     // Why: rows disappear when agent retention or tab state changes; clear stale selection before detail/portal rendering targets it.
     setSelectedPaneKey(null)
@@ -76,10 +80,13 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const selectedThread = effectiveSelectedPaneKey
     ? (allThreads.find((thread) => thread.paneKey === effectiveSelectedPaneKey) ?? null)
     : null
+
   const selectedTabId = selectedThread?.tab.id ?? null
+
   const selectedWorktreeAvailable = selectedThread
     ? hasActivityThreadWorkspace(selectedThread, storeData)
     : false
+
   // Why: repo-less terminal buckets can produce Activity rows, but the workspace Terminal tree only portals real worktrees.
   const selectedHasLiveTab =
     selectedThread && selectedTabId && selectedWorktreeAvailable
@@ -87,46 +94,58 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           (tab) => tab.id === selectedTabId
         )
       : false
+
   const displayedThread = displayedPaneKey
     ? (allThreads.find((thread) => thread.paneKey === displayedPaneKey) ?? null)
     : null
+
   const displayedTabId = displayedThread?.tab.id ?? null
+
   const displayedWorktreeAvailable = displayedThread
     ? hasActivityThreadWorkspace(displayedThread, storeData)
     : false
+
   const displayedHasLiveTab =
     displayedThread && displayedTabId && displayedWorktreeAvailable
       ? (storeData.tabsByWorktree[displayedThread.worktree.id] ?? []).some(
           (tab) => tab.id === displayedTabId
         )
       : false
+
   const { visibleThread, stagedThread } = reconcileActivityPortalThreads({
     selectedThread,
     displayedThread,
     selectedHasLiveTab: Boolean(selectedHasLiveTab),
     displayedHasLiveTab: Boolean(displayedHasLiveTab)
   })
+
   const inactivePortalSlotId = otherActivityTerminalSlot(activePortalSlotId)
+
   const portalTargetBySlot = {
     primary: primaryPortalTargetEl,
     secondary: secondaryPortalTargetEl
   } satisfies Record<ActivityTerminalPortalSlotId, HTMLElement | null>
+
   const activePortalTargetEl = portalTargetBySlot[activePortalSlotId]
   const inactivePortalTargetEl = portalTargetBySlot[inactivePortalSlotId]
+
   const visiblePortalStatus = useActivityTerminalPortalStatus(
     activePortalTargetEl,
     visibleThread?.paneKey ?? null,
     visibleThread?.migrationUnsupportedPtyId !== undefined
   )
+
   const stagedPortalStatus = useActivityTerminalPortalStatus(
     inactivePortalTargetEl,
     stagedThread?.paneKey ?? null,
     stagedThread?.migrationUnsupportedPtyId !== undefined
   )
+
   const visiblePortalReady = visiblePortalStatus === 'ready'
   const visiblePortalUnavailable = visiblePortalStatus === 'unavailable'
   const stagedPortalReady = stagedPortalStatus === 'ready'
   const stagedPortalUnavailable = stagedPortalStatus === 'unavailable'
+
   const showTerminalLoadingLabel = useActivityTerminalLoadingLabel(
     Boolean(visibleThread && !stagedThread && !visiblePortalReady)
   )
@@ -143,6 +162,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // Why useMemo: stable descriptor identity so subscribers keep React.memo bail-outs; inactive descriptor stages the next terminal at the same size.
   const portalDescriptors = useMemo(() => {
     const descriptors: ActivityTerminalPortalTarget[] = []
+
     if (visibleThread && activePortalTargetEl) {
       descriptors.push({
         slotId: activePortalSlotId,
@@ -155,6 +175,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         active: true
       })
     }
+
     if (stagedThread && inactivePortalTargetEl) {
       descriptors.push({
         slotId: inactivePortalSlotId,
@@ -167,6 +188,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         active: false
       })
     }
+
     return descriptors
   }, [
     activePortalSlotId,
@@ -188,16 +210,21 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       stagedPortalReady,
       stagedPortalUnavailable
     })
+
     if (swap?.kind === 'clear') {
       setDisplayedPaneKey(null)
+
       return
     }
+
     if (swap?.kind === 'swap-staged') {
       // Why: a stale selected pane must swap to the unavailable state, not leave the previous pane visible under the new row.
       setActivePortalSlotId(inactivePortalSlotId)
       setDisplayedPaneKey(swap.paneKey)
+
       return
     }
+
     if (swap?.kind === 'settle-visible') {
       setDisplayedPaneKey(swap.paneKey)
     }
@@ -237,6 +264,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     }
 
     window.addEventListener('keydown', focusActivityFilter, { capture: true })
+
     return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
@@ -282,18 +310,23 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ) {
       return
     }
+
     // Why (React #185): a turn stamped ahead of this clock (SSH/remote execution host) can never
     // have its unread cleared, and each retry lands on a later millisecond, so acknowledgeAgents'
     // `prev < now` guard rewrites the ack map every time and re-enters here forever through
     // storeData. Auto-read is once per turn, not a retry.
     const autoAcknowledgeKey = `${selectedThread.paneKey}:${selectedThread.latestTimestamp}`
+
     if (autoAcknowledgedTurnRef.current === autoAcknowledgeKey) {
       return
     }
+
     const selectedThreadHasDetailOnlyView =
       !selectedHasLiveTab || selectedThread.migrationUnsupportedPtyId !== undefined
+
     const selectedThreadIsVisibleTerminal =
       visibleThread?.paneKey === effectiveSelectedPaneKey && visiblePortalReady
+
     if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
       autoAcknowledgedTurnRef.current = autoAcknowledgeKey
       storeData.acknowledgeAgents([selectedThread.paneKey])

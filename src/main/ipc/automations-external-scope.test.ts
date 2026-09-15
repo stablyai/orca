@@ -24,6 +24,7 @@ const relay = {
   request: vi.fn<(method: string, params: unknown) => Promise<unknown>>(),
   isDisposed: () => false
 }
+
 vi.mock('../ssh/ssh-target-registry', () => ({
   getActiveMultiplexer: () => relay
 }))
@@ -58,9 +59,11 @@ const state: {
 /** Async like the real bridge: Electron turns a handler's sync throw into a rejection. */
 async function invoke(channel: string, payload?: unknown): Promise<unknown> {
   const handler = ipcHandlers.get(channel)
+
   if (!handler) {
     throw new Error(`no handler registered for ${channel}`)
   }
+
   return await handler(null, payload)
 }
 
@@ -175,10 +178,12 @@ describe('probe scope retention', () => {
           probe.release = () => resolve({ jobs: [], hermesAvailable: true, error: null })
         })
     )
+
     const pending = invoke('automations:listExternalManagerForOwner', {
       owner: desktopSsh(),
       provider: 'hermes'
     }) as Promise<unknown>
+
     const settled = pending.catch((error: unknown) => error)
     await Promise.resolve()
 
@@ -191,10 +196,12 @@ describe('probe scope retention', () => {
 
   it('keeps probing a host that is still retained', async () => {
     await invoke('automations:retainExternalScopes', { owners: [desktopSsh()] })
+
     const entry = (await invoke('automations:listExternalManagerForOwner', {
       owner: desktopSsh(),
       provider: 'hermes'
     })) as { manager: unknown }
+
     expect(entry.manager).not.toBeNull()
   })
 })
@@ -206,6 +213,7 @@ describe('Orca automation traffic priority', () => {
     const lease = state.service.externalProbePriority
     expect(lease).not.toBeNull()
     let finish: () => void = () => undefined
+
     const dispatch = lease!(
       () =>
         new Promise<void>((resolve) => {
@@ -217,6 +225,7 @@ describe('Orca automation traffic priority', () => {
       owner: desktopSsh(),
       provider: 'hermes'
     }) as Promise<unknown>
+
     await Promise.resolve()
     // Why: the probe is queued, not started — this is the only thing keeping
     // external discovery from competing with the work the user is waiting on.

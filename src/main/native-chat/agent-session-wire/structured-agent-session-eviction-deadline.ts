@@ -30,6 +30,7 @@ export function withStructuredAgentSessionEvictionDeadline(
     name: step.name,
     run: async (context) => {
       let timer: ReturnType<typeof setTimeout> | undefined
+
       try {
         await Promise.race([
           Promise.resolve(step.run(context)),

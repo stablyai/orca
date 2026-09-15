@@ -83,12 +83,14 @@ export function resolveWorktreeExecutionHost<T extends ExecutionHostOwnerRow>(
   worktree: { repoId: string; hostId?: string | null }
 ): WorktreeExecutionHostResolution<T> {
   const worktreeHostId = normalizeExecutionHostId(worktree.hostId)
+
   if (worktreeHostId) {
     // The worktree names its own host, which outranks every repo row. A row on a *different* host
     // is not evidence about this one — falling back to it is the cross-host leak: one SSH host's
     // pane routed to another. A row on *this* host still is evidence, and is the only place a
     // runtime's nested SSH target appears.
     const owner = lookup.byHost(worktree.repoId, worktreeHostId)
+
     return {
       kind: 'resolved',
       hostId: worktreeHostId,
@@ -98,14 +100,19 @@ export function resolveWorktreeExecutionHost<T extends ExecutionHostOwnerRow>(
       owner
     }
   }
+
   const match = lookup.byId(worktree.repoId)
+
   if (match.kind !== 'resolved') {
     return { kind: 'unresolved', reason: match.kind === 'ambiguous' ? 'ambiguous' : 'unknown' }
   }
+
   const hostId = resolveOwnerRowHostId(match.owner)
+
   if (!hostId) {
     return { kind: 'unresolved', reason: 'malformed' }
   }
+
   return {
     kind: 'resolved',
     hostId,
@@ -125,23 +132,30 @@ export function createRepoRowExecutionHostLookup<T extends ExecutionHostOwnerRow
   repos: readonly T[]
 ): ExecutionHostOwnerLookup<T> {
   const rowsById = new Map<string, T[]>()
+
   for (const repo of repos) {
     const rows = rowsById.get(repo.id)
+
     if (rows) {
       rows.push(repo)
     } else {
       rowsById.set(repo.id, [repo])
     }
   }
+
   const rowsFor = (repoId: string): readonly T[] => rowsById.get(repoId) ?? EMPTY_ROWS
+
   return {
     byId: (repoId) => {
       const rows = rowsFor(repoId)
       const owner = rows[0]
+
       if (!owner) {
         return { kind: 'missing' }
       }
+
       const ownerHostId = resolveOwnerRowHostId(owner)
+
       return rows.some((repo) => resolveOwnerRowHostId(repo) !== ownerHostId)
         ? { kind: 'ambiguous' }
         : { kind: 'resolved', owner }

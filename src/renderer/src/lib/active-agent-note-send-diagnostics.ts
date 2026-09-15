@@ -19,6 +19,7 @@ export function reportNoteSendFailure(
   if (result.status === 'sent' || result.status === 'empty') {
     return result
   }
+
   const code = result.code ?? codeForStatus(result.status)
   console.warn('[review-notes] send failed', {
     code,
@@ -26,6 +27,7 @@ export function reportNoteSendFailure(
     tabId: noteTarget?.tabId,
     leafId: noteTarget?.leafId
   })
+
   return { ...result, code }
 }
 
@@ -56,7 +58,9 @@ function isTimeoutError(error: unknown): boolean {
   if (hasRuntimeRpcErrorCode(error, 'runtime_timeout')) {
     return true
   }
+
   const message = error instanceof Error ? error.message : String(error)
+
   return message.includes('timeout')
 }
 

@@ -54,6 +54,7 @@ export type AgentHookEventPayload = {
 }
 
 export type StructuredHostStatus = 'held' | 'owned'
+
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string

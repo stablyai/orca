@@ -8,6 +8,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../../../source-control/hosted-review-git-options'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
+
 export async function findOpenPRByHeadBase(args: {
   repoPath: string
   repo: GitHubApiRepository
@@ -17,6 +18,7 @@ export async function findOpenPRByHeadBase(args: {
   options?: HostedReviewExecutionOptions
 }): Promise<{ number: number; url: string } | null> {
   const context = githubRepoContext(args.repoPath, args.connectionId)
+
   const { stdout } = await ghExecFileAsync(
     [
       'pr',
@@ -40,10 +42,13 @@ export async function findOpenPRByHeadBase(args: {
       ...githubHostExecOptions(args.repo)
     }
   )
+
   const list = JSON.parse(stdout) as { number?: number; url?: string }[]
+
   if (list.length !== 1 || !list[0]?.number || !list[0]?.url) {
     return null
   }
+
   return { number: list[0].number, url: list[0].url }
 }
 
@@ -59,25 +64,32 @@ export async function readPullRequestTemplate(
     'docs/pull_request_template.md',
     'docs/PULL_REQUEST_TEMPLATE.md'
   ]
+
   const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
+
   if (connectionId && !remoteProvider) {
     return ''
   }
+
   for (const relativeCandidate of relativeCandidates) {
     try {
       if (remoteProvider) {
         const result = await remoteProvider.readFile(
           joinWorktreeRelativePath(repoPath, relativeCandidate)
         )
+
         if (result.isBinary) {
           continue
         }
+
         return result.content
       }
+
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional PR template path.
     }
   }
+
   return ''
 }

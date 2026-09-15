@@ -20,9 +20,11 @@ function agentsOf(body: AgentJournalItemBody | undefined): NativeChatSubagentEnt
   if (!body || body.kind !== 'message') {
     return []
   }
+
   const block = body.blocks.find(
     (candidate): candidate is NativeChatSubagentGroupBlock => candidate.type === 'subagent-group'
   )
+
   return block ? block.agents : []
 }
 
@@ -33,23 +35,29 @@ function isGroupRow(identity: AgentJournalItemIdentity, groupId: string): boolea
 function harness(groupKey: string | null = TURN_1) {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
   const tombstones: AgentJournalItemIdentity[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => items.push({ identity, body }),
     appendTombstone: (identity) => tombstones.push(identity),
     publish: vi.fn()
   }
+
   let clock = 1_000
   let key = groupKey
+
   const roster = new ClaudeSubagentRoster({
     sink,
     currentGroupKey: () => key,
     now: () => (clock += 1)
   })
+
   const roles = (): NativeChatSubagentEntry[] => agentsOf(items.at(-1)?.body)
+
   /** The last row written for one group, so a test can read a row that is no
    *  longer the newest one. */
   const rolesIn = (groupId: string): NativeChatSubagentEntry[] =>
     agentsOf(items.findLast((item) => isGroupRow(item.identity, groupId))?.body)
+
   return {
     roster,
     items,
@@ -361,10 +369,12 @@ describe('ClaudeSubagentRoster', () => {
   describe('groups that no later event can reach', () => {
     it('loses contact with a group evicted past the bound', () => {
       const { roster, rolesIn, setGroupKey } = harness('turn-0')
+
       for (let index = 0; index < 33; index += 1) {
         setGroupKey(`turn-${index}`)
         roster.observeSystemFrame(started({ task_id: `task-${index}`, description: 'Audit' }))
       }
+
       expect(rolesIn('turn-0')).toEqual([expect.objectContaining({ state: 'unverifiable' })])
       expect(rolesIn('turn-32')).toEqual([expect.objectContaining({ state: 'working' })])
     })
@@ -449,13 +459,16 @@ describe('ClaudeSubagentRoster — through the real sink queue', () => {
   it('lands every revision, not just the one that was already in flight', async () => {
     const appended: AgentJournalItemBody[] = []
     let published = 0
+
     const journal = {
       appendItem: async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         appended.push(body)
+
         return { cursor: { epoch: 'e', sequence: appended.length } }
       },
       appendTombstone: async () => ({ epoch: 'e', sequence: 0 })
     } as unknown as AgentSessionJournal
+
     const deferred = createDeferredStructuredAgentSessionEventSink()
     deferred.bind({
       journal,
@@ -505,12 +518,14 @@ describe('ClaudeSubagentRoster — authoritative outcomes and retained budgets',
 
   it('bounds lifetime admissions when reclassification repeatedly removes entries', () => {
     const { roster, items } = harness()
+
     for (let i = 0; i < 100; i++) {
       roster.observeSystemFrame(started({ task_id: `task-${i}`, description: `Agent ${i}` }))
       roster.observeSystemFrame(
         system('task_started', { task_id: `task-${i}`, task_type: 'local_bash' })
       )
     }
+
     expect(items).toHaveLength(64)
   })
 })
@@ -561,24 +576,30 @@ describe('ClaudeSubagentRoster — invocation fences', () => {
     roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: 'first' }))
     roster.observeToolResult('first', false)
     setGroupKey('churn')
+
     for (let i = 0; i < 513; i++) {
       roster.observeSystemFrame(
         system('task_updated', { task_id: `other-${i}`, tool_use_id: `tool-${i}` })
       )
     }
+
     roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: 'first' }))
     expect(rolesIn(TURN_1)[0].state).toBe('completed')
   })
 
   it('bounds invocation history and refuses to reopen beyond the retained budget', () => {
     const { roster, roles } = harness()
+
     for (let i = 0; i < 20; i++) {
       roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: `tool-${i}` }))
+
       if (i >= 16) {
         expect(roles()[0].state).toBe('unverifiable')
       }
+
       roster.observeToolResult(`tool-${i}`, false)
     }
+
     roster.observeSystemFrame(started({ task_id: 'task-1', tool_use_id: 'tool-0' }))
     expect(roles()[0].state).toBe('unverifiable')
   })

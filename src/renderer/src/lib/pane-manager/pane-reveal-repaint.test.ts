@@ -10,6 +10,7 @@ import {
 import { PaneManager } from './pane-manager'
 
 type FakeWebglAddon = { clearTextureAtlas: ReturnType<typeof vi.fn> }
+
 type FakePaneManager = {
   resetWebglTextureAtlases: Mock<() => void>
   refreshAllPanes: Mock<() => void>
@@ -17,6 +18,7 @@ type FakePaneManager = {
 
 function createPane(options: { webglAddon?: FakeWebglAddon | null } = {}): ManagedPaneInternal {
   const leafId = '33333333-3333-4333-8333-333333333333' as never
+
   return {
     id: 1,
     leafId,
@@ -62,10 +64,12 @@ function createVisibilityProbeManager(onValues: () => void): PaneManager {
     panes: {
       values: () => {
         onValues()
+
         return []
       }
     }
   })
+
   return manager
 }
 
@@ -86,14 +90,17 @@ describe('schedulePaneRevealRepaint', () => {
         }
       })
     }
+
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
+
     return manager
   }
 
   function flushFrame(): void {
     const queue = rafQueue
     rafQueue = []
+
     for (const callback of queue) {
       callback(16)
     }
@@ -105,6 +112,7 @@ describe('schedulePaneRevealRepaint', () => {
     rafQueue = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       rafQueue.push(callback)
+
       return rafQueue.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -114,6 +122,7 @@ describe('schedulePaneRevealRepaint', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -204,6 +213,7 @@ describe('schedulePaneRevealRepaint', () => {
         throw new Error('pane torn down mid-frame')
       }
     } as never as ManagedPaneInternal
+
     const webglAddon = { clearTextureAtlas: vi.fn() }
     const livePane = createPane({ webglAddon })
     registerPaneManager(() => [explosivePane, livePane])
@@ -233,9 +243,11 @@ describe('schedulePaneRevealRepaint', () => {
   it('skips delayed repaint and present when the manager hides before settle', () => {
     let repaintValuesRead = 0
     let presentValuesRead = 0
+
     const repaintManager = createVisibilityProbeManager(() => {
       repaintValuesRead += 1
     })
+
     const presentManager = createVisibilityProbeManager(() => {
       presentValuesRead += 1
     })

@@ -28,12 +28,14 @@ export async function importOneSource(
   // canonicalization so top-level symlinks are rejected instead of being
   // silently dereferenced by realpath.
   let sourceStat: Awaited<ReturnType<typeof lstat>>
+
   try {
     sourceStat = await lstat(resolvedSource)
   } catch (error) {
     if (isENOENT(error)) {
       return { sourcePath, status: 'skipped', reason: 'missing' }
     }
+
     if (
       error instanceof Error &&
       'code' in error &&
@@ -42,6 +44,7 @@ export async function importOneSource(
     ) {
       return { sourcePath, status: 'skipped', reason: 'permission-denied' }
     }
+
     return {
       sourcePath,
       status: 'failed',
@@ -66,6 +69,7 @@ export async function importOneSource(
   // trees when a symlink is discovered halfway through recursive copy.
   if (isDir) {
     const hasSymlink = await preScanForSymlinks(resolvedSource)
+
     if (hasSymlink) {
       return { sourcePath, status: 'skipped', reason: 'symlink' }
     }
@@ -85,6 +89,7 @@ export async function importOneSource(
     if (isDir) {
       await rm(destPath, { recursive: true, force: true }).catch(() => {})
     }
+
     return {
       sourcePath,
       status: 'failed',
@@ -124,16 +129,20 @@ async function deconflictName(
   const ext = hasMeaningfulExt ? originalName.slice(dotIndex) : ''
 
   let candidate = `${stem} copy${ext}`
+
   if (!(await nameExists(destDir, candidate)) && !reservedNames.has(candidate)) {
     return candidate
   }
 
   let counter = 2
+
   while (counter < 10000) {
     candidate = `${stem} copy ${counter}${ext}`
+
     if (!(await nameExists(destDir, candidate)) && !reservedNames.has(candidate)) {
       return candidate
     }
+
     counter += 1
   }
 
@@ -146,11 +155,13 @@ async function deconflictName(
 async function nameExists(dir: string, name: string): Promise<boolean> {
   try {
     await lstat(join(dir, name))
+
     return true
   } catch (error) {
     if (isENOENT(error)) {
       return false
     }
+
     throw error
   }
 }

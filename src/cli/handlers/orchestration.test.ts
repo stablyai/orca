@@ -1,15 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
+
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+
 const originalPaneKey = process.env.ORCA_PANE_KEY
+
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
 
 // Why: isolate the handler's flag-to-param mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -18,11 +23,13 @@ import { printResult } from '../format'
 
 afterEach(() => {
   getTerminalHandleMock.mockReset()
+
   if (originalTerminalHandle === undefined) {
     delete process.env.ORCA_TERMINAL_HANDLE
   } else {
     process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
   }
+
   if (originalPaneKey === undefined) {
     delete process.env.ORCA_PANE_KEY
   } else {
@@ -404,6 +411,7 @@ describe('orchestration timeout flag validation', () => {
     const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
       result: { messages: { id: string }[]; count: number; formatted?: string }
     }
+
     expect(response.result.messages.map((m) => m.id)).toEqual(['msg_new'])
     expect(response.result.count).toBe(1)
     // Why: the pre-peek runtime built `formatted` from all rows, including
@@ -431,12 +439,14 @@ describe('orchestration timeout flag validation', () => {
 
   it('warns when a pre-peek runtime returned a full 100-row page', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+
     const rows = Array.from({ length: 100 }, (_, i) => ({
       id: `msg_${i}`,
       from_handle: 'a',
       subject: `s${i}`,
       read: i === 0 ? 0 : 1
     }))
+
     callMock.mockResolvedValue({ result: { messages: rows, count: 100 } })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -515,12 +525,14 @@ describe('orchestration timeout flag validation', () => {
 
   it('envelopes ask --json through the shared result printer', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+
     const response = {
       id: 'req_ask',
       ok: true,
       result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false },
       _meta: { runtimeId: 'runtime_1' }
     }
+
     callMock.mockResolvedValue(response)
     vi.mocked(printResult).mockClear()
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

@@ -44,9 +44,11 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
   ): void {
     const listeners = this.resizeListeners.get(ptyId)
+
     if (!listeners) {
       return
     }
+
     notifyRuntimeListeners(listeners, (listener) => listener(event), 'pty-resize')
   }
 
@@ -70,24 +72,30 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       handle,
       paneKey ?? undefined
     )
+
     if (!dispatch) {
       return
     }
+
     // A process that dies while we are stopping it is that stop succeeding, not a failure:
     // settling it as `failed` here made the in-flight worker-stop report its own success as an error.
     // Only a stop begun in THIS runtime can claim the exit; a `stopping` row left durable by a
     // killed process would otherwise absorb a much later crash as a clean stop.
     const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
+
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
       this._orchestrationDb.settleWorkerStop(dispatch.id)
+
       return
     }
 
     const errorContext = describeTerminalExitCause(cause)
+
     const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
       workerProcessExited: true,
       terminationReason: cause.kind
     })
+
     if (isDeliberateTerminalExit(cause)) {
       return
     }
@@ -98,16 +106,20 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     try {
       const owningRun = this._orchestrationDb.getRun?.(dispatch.run_id)
       const active = this._orchestrationDb.getActiveCoordinatorRun?.()
+
       const recipient =
         owningRun && owningRun.legacy !== 1
           ? { to: `run:${owningRun.id}`, runId: owningRun.id }
           : active
             ? { to: active.coordinator_handle, runId: undefined }
             : null
+
       if (!recipient) {
         return
       }
+
       const task = this._orchestrationDb.getTask?.(dispatch.task_id, dispatch.run_id)
+
       // Why: prefer the explicit task title and keep the derived one single-line and bounded;
       // a raw multi-paragraph spec inlined here breaks the coordinator's escalation banner.
       const title =
@@ -118,7 +130,9 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
               displayName: task.display_name
             }).taskTitle
           : ''
+
       const named = title ? `"${title}" (${dispatch.task_id})` : dispatch.task_id
+
       const escalation = this._orchestrationDb.insertMessage({
         from: handle,
         to: recipient.to,
@@ -135,6 +149,7 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
         }),
         runId: dispatch.run_id
       })
+
       this.notifyMessageArrived(escalation.to_handle, escalation.type)
     } catch (error) {
       console.warn('[orchestration] failed to escalate worker exit', {
@@ -162,6 +177,7 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     serializedHostScope: string | null
   ): Promise<'live' | 'exited' | 'unverifiable'> {
     const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
+
     if (structuredSessionId) {
       // A structured session has no PTY, so the process table can only ever fail to find it —
       // answering `exited` from that absence would release a running provider child. The durable
@@ -171,22 +187,28 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       // for the life of the DB.
       return observeStructuredWorker({ sessionId: structuredSessionId }).status
     }
+
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
+
     if (!hostScope || !this.ptyController?.listProcesses) {
       return 'unverifiable'
     }
+
     const listed = await withTimeoutResult(
       this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
+
     if (!listed.ok) {
       return 'unverifiable'
     }
+
     return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
   }
 
   protected getTerminalTopologyRevision(worktreeId: string): number {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
+
     return (
       this.getWorkspaceSessionForWorktree(worktreeId)?.terminalTopologyRevisionByRepoId?.[repoId] ??
       this.terminalTopologyRevisionByRepoId.get(repoId) ??
@@ -200,20 +222,25 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     if (request.claims.length === 0) {
       throw new Error('terminal_orphan_claims_required')
     }
+
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+
     return this.runWorktreeTerminalMutation(workspace.id, async () => {
       const resolvedWorkspace = workspace.folderWorkspace
         ? this.folderWorkspaceToResolvedWorktree(workspace.folderWorkspace)
         : await this.resolveWorktreeSelector(`id:${workspace.id}`)
+
       const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
         [resolvedWorkspace],
         workspace.id,
         undefined,
         workspace.connectionId ?? null
       )
+
       if (!inventory) {
         throw new Error('terminal_liveness_unavailable')
       }
+
       return this.adoptTerminalOrphansFromInventoryUnderMutation(request, workspace, inventory)
     })
   }

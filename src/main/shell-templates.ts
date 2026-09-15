@@ -156,6 +156,7 @@ export function getZshShellReadyMarkerRegistrationBlock(
     printf "${escapedMarker}"
   fi`
     : `  printf "${escapedMarker}"`
+
   const startupCommandBlock = supportsStartupCommand
     ? `
   if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
@@ -165,6 +166,7 @@ export function getZshShellReadyMarkerRegistrationBlock(
     zle accept-line
   fi`
     : ''
+
   return `# Why: capture the prior zle-line-init so the marker chains to it. On a
 # re-source we are already the bound widget, so keep the function captured
 # the first time instead of clobbering it to empty (which would silently
@@ -205,6 +207,7 @@ export function getFishShellReadyInitCommand(
   supportsStartupCommand = false
 ): string {
   const readyMarkerBlock = emitReadyMarker ? `  builtin printf "${escapedMarker}"\n` : ''
+
   const startupCommandBlock = supportsStartupCommand
     ? `  if set -q ${POSIX_SHELL_STARTUP_COMMAND_ENV}
     set -l __orca_command "\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
@@ -214,6 +217,7 @@ export function getFishShellReadyInitCommand(
     return $status
   end\n`
     : ''
+
   return `function __orca_shell_ready_marker --on-event fish_prompt
 ${readyMarkerBlock}  functions -e __orca_shell_ready_marker
 ${startupCommandBlock}end`

@@ -25,6 +25,7 @@ vi.mock('sonner', () => ({ toast: { info: toastInfoMock } }))
 vi.mock('@/store', () => {
   const useAppStore = <T>(selector: (state: typeof storeState) => T): T => selector(storeState)
   useAppStore.getState = (): typeof storeState => storeState
+
   return { useAppStore }
 })
 
@@ -32,6 +33,7 @@ const mountedRoots: Root[] = []
 
 function HookProbe({ persistedUIReady }: { persistedUIReady: boolean }): null {
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
+
   return null
 }
 
@@ -84,6 +86,7 @@ describe('useOsc52ClipboardDefaultOnNotice', () => {
     for (const root of mountedRoots.splice(0)) {
       act(() => root.unmount())
     }
+
     document.body.innerHTML = ''
   })
 

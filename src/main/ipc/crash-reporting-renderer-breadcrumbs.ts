@@ -14,7 +14,9 @@ function sanitizeRendererBreadcrumbData(value: unknown): CrashReportBreadcrumbDa
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
+
   const primitiveData: Record<string, unknown> = {}
+
   for (const [key, entry] of Object.entries(value)) {
     if (typeof entry === 'string' || typeof entry === 'boolean' || entry === null) {
       primitiveData[key] = entry
@@ -22,7 +24,9 @@ function sanitizeRendererBreadcrumbData(value: unknown): CrashReportBreadcrumbDa
       primitiveData[key] = entry
     }
   }
+
   const sanitized = sanitizeCrashReportDetails(primitiveData)
+
   return Object.keys(sanitized).length > 0 ? sanitized : undefined
 }
 
@@ -37,6 +41,7 @@ function recordRendererBreadcrumbTrace(
       ...(data ? { 'breadcrumb.data': data } : {})
     }
   })
+
   // Why: main-process native crashes cannot persist memory-only breadcrumbs.
   // A tiny trace span gives the next crash report durable pre-crash context.
   span.end()
@@ -47,9 +52,13 @@ function recordRendererBreadcrumbTrace(
 // erasing the pre-crash trail. Coalesce repeats into one entry that carries a
 // suppressed count instead.
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
+
 const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
+
 const REACT_COMMIT_CASCADE_BREADCRUMB = 'react_commit_cascade'
+
 const REPLAY_GUARD_WEDGED_BREADCRUMB = 'terminal_replay_guard_wedged_release'
+
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
@@ -60,7 +69,9 @@ const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   REPLAY_GUARD_WEDGED_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
+
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
+
 // Why: these carry no message identity — they are per-tab telemetry whose rate,
 // not whose text, is the signal. Coalescing by name alone bounds a many-tab
 // storm to one ring entry plus a suppressed count.
@@ -71,6 +82,7 @@ const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
 // 30-entry ring to two such bursts. `suppressedSinceLast` keeps the pane count
 // — the only signal these carry — in one slot.
 const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_exhausted'])
+
 // Why: the 30-slot ring is the scarce sink; the durable span stream is not. For
 // bounded-rate pane telemetry whose multiplicity is the whole signal, spans are the
 // only place a burst survives the restart that clears the ring, so coalesce the ring
@@ -84,6 +96,7 @@ function rendererBreadcrumbCoalesceKey(
   if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
     return name
   }
+
   // Why presence and not value: `ptyId`/`tabIdHash` are absent on the restore call
   // site (layout-serialization restoreScrollbackBuffers) and present on reattach, so
   // their presence is the call-site identity a mixed burst would otherwise lose. Four
@@ -91,6 +104,7 @@ function rendererBreadcrumbCoalesceKey(
   if (name === REPLAY_GUARD_WEDGED_BREADCRUMB) {
     return `${name}:${data?.ptyId ? 'pty' : ''}:${data?.tabIdHash ? 'tab' : ''}`
   }
+
   // Why trigger and not name alone: `burst` means damping engaged a commit
   // short of React #185, `window` means slow benign churn. Collapsing them
   // would drop the near-crash signal into a slow-churn slot. Still bounded —
@@ -98,6 +112,7 @@ function rendererBreadcrumbCoalesceKey(
   if (name === PARK_VERDICT_CHURN_BREADCRUMB) {
     return `${name}:${String(data?.trigger ?? '')}`
   }
+
   // Why keyed on surface and driver frame: the popout and the main window can
   // cascade independently, and two different driving writes are two different
   // bugs that last-write coalescing would collapse into one. A driverless crumb
@@ -105,25 +120,31 @@ function rendererBreadcrumbCoalesceKey(
   if (name === REACT_COMMIT_CASCADE_BREADCRUMB) {
     return `${name}:${String(data?.rendererSurface ?? '')}:${String(data?.driverFrame ?? '')}`
   }
+
   // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
     const kind = String(data?.kind ?? '')
     const reason = kind === 'webgl-atlas-reset' ? data?.reason : undefined
+
     return reason ? `${name}:${kind}:${String(reason)}` : `${name}:${kind}`
   }
+
   // Why: a stale map can emit once per tab-id/verdict; key by verdict so
   // last-write coalescing cannot erase the other signal while remaining bounded.
   if (name === DUPLICATE_TAB_OWNER_BREADCRUMB) {
     return `${name}:${String(data?.resolvedToActiveWorktree ?? '')}`
   }
+
   const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
   const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined
+
   const message =
     typeof primaryMessage === 'string' && primaryMessage.length > 0
       ? primaryMessage
       : typeof fallbackMessage === 'string' && fallbackMessage.length > 0
         ? fallbackMessage
         : undefined
+
   // Why: message-less failures have no stable identity, so grouping them could
   // erase unrelated crash evidence. Sanitization already caps messages at 240 chars.
   if (!message) {
@@ -145,6 +166,7 @@ function rendererBreadcrumbCoalesceKey(
           data?.errorMessage
         ]
       : [data?.reasonStack, data?.reasonType, data?.reasonName]
+
   // Why: error storms re-serialize the same message + up-to-4KB stack per event just to build a map key — reuse the last key on field-equality.
   if (
     lastCoalesceKey !== null &&
@@ -154,28 +176,35 @@ function rendererBreadcrumbCoalesceKey(
   ) {
     return lastCoalesceKey
   }
+
   const key = JSON.stringify([name, message, ...sourceIdentity])
   lastCoalesceName = name
   lastCoalesceMessage = message
   lastCoalesceSource = sourceIdentity
   lastCoalesceKey = key
+
   return key
 }
 
 let lastCoalesceName: string | null = null
+
 let lastCoalesceMessage: string | undefined
+
 let lastCoalesceSource: unknown[] | null = null
+
 let lastCoalesceKey: string | null = null
 
 function arraysShallowEqual(a: unknown[] | null, b: unknown[]): boolean {
   if (!a || a.length !== b.length) {
     return false
   }
+
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) {
       return false
     }
   }
+
   return true
 }
 
@@ -186,18 +215,24 @@ export function recordRendererBreadcrumbFromRenderer(
   if (!args || typeof args.name !== 'string') {
     return
   }
+
   const data = sanitizeRendererBreadcrumbData(args.data)
+
   if (COALESCED_RENDERER_BREADCRUMB_NAMES.has(args.name)) {
     const coalesceKey = rendererBreadcrumbCoalesceKey(args.name, data)
+
     if (!coalesceKey) {
       if (origin) {
         recordCrashBreadcrumb(args.name, data, origin)
       } else {
         recordCrashBreadcrumb(args.name, data)
       }
+
       recordRendererBreadcrumbTrace(args.name, data)
+
       return
     }
+
     const coalesceResult = recordCoalescedCrashBreadcrumb({
       name: args.name,
       data,
@@ -205,6 +240,7 @@ export function recordRendererBreadcrumbFromRenderer(
       minIntervalMs: RENDERER_BREADCRUMB_COALESCE_MS,
       ...(origin ? { origin } : {})
     })
+
     if (PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES.has(args.name)) {
       // Why the raw data: every event already gets its own span, so folding the ring's
       // running count in here would double-count in any span-stream total.
@@ -225,6 +261,7 @@ export function recordRendererBreadcrumbFromRenderer(
     } else {
       recordCrashBreadcrumb(args.name, data)
     }
+
     recordRendererBreadcrumbTrace(args.name, data)
   }
 }

@@ -11,11 +11,13 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 }))
 
 let nextRafId = 1
+
 let pendingRafs = new Map<number, FrameRequestCallback>()
 
 function flushAnimationFrames(timestamp = 16): void {
   const callbacks = Array.from(pendingRafs.values())
   pendingRafs = new Map()
+
   for (const callback of callbacks) {
     callback(timestamp)
   }
@@ -36,6 +38,7 @@ function createPane(options: {
   let xtermRect: { width: number; height: number } | null = null
   let display = 'block'
   const leafId = '22222222-2222-4222-8222-222222222222'
+
   const pane = {
     id: 7,
     leafId,
@@ -70,6 +73,7 @@ function createPane(options: {
       display = next
     }
   }
+
   return pane as unknown as TestPane
 }
 
@@ -83,6 +87,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
       vi.fn((callback: FrameRequestCallback) => {
         const id = nextRafId++
         pendingRafs.set(id, callback)
+
         return id
       })
     )
@@ -107,6 +112,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
       retryIfUnmeasurable: true
     })
+
     pane.setRect({ width: 800, height: 600 })
     flushAnimationFrames()
     vi.advanceTimersByTime(16)
@@ -122,6 +128,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
       retryIfUnmeasurable: true
     })
+
     pane.setRect({ width: 800, height: 600 })
     vi.advanceTimersByTime(32)
 
@@ -138,6 +145,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
       retryIfUnmeasurable: true
     })
+
     handle.cancel()
     pane.setRect({ width: 800, height: 600 })
     flushAnimationFrames()
@@ -155,6 +163,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
       shouldContinue: () => current,
       retryIfUnmeasurable: true
     })
+
     current = false
     pane.setRect({ width: 800, height: 600 })
     flushAnimationFrames()
@@ -187,6 +196,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
       retryIfUnmeasurable: true
     })
+
     for (let frame = 0; frame < 40; frame += 1) {
       flushAnimationFrames(frame * 16)
       vi.advanceTimersByTime(16)
@@ -272,6 +282,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
       retryIfUnmeasurable: true,
       deferIfHidden: true
     })
+
     handle.cancel()
 
     pane.setDisplay('block')
@@ -314,6 +325,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
       retryIfUnmeasurable: true,
       deferIfHidden: true
     })
+
     safeFitAndThen(pane, 'reattach-pty-resize', second, {
       retryIfUnmeasurable: true,
       deferIfHidden: true
@@ -353,6 +365,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
       retryIfUnmeasurable: true
     })
+
     await vi.advanceTimersByTimeAsync(40 * 32)
 
     expect(continuation).not.toHaveBeenCalled()
@@ -397,6 +410,7 @@ describe('safeFitAndThen unmeasurable-pane retry', () => {
     const handle = safeFitAndThen(pane, 'reattach-pty-resize', continuation, {
       retryIfUnmeasurable: true
     })
+
     display = 'none'
     flushAnimationFrames()
     vi.advanceTimersByTime(16)
@@ -419,6 +433,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
       rect: { width: 800, height: 600 },
       proposed: () => ({ cols: 80, rows: 24 })
     })
+
     safeFit(pane)
     expect(paneFitClientSizeChanged(pane)).toBe(false)
   })
@@ -428,6 +443,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
       rect: { width: 800, height: 600 },
       proposed: () => ({ cols: 80, rows: 24 })
     })
+
     safeFit(pane)
     pane.setRect({ width: 640, height: 480 })
     expect(paneFitClientSizeChanged(pane)).toBe(true)
@@ -438,6 +454,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
       rect: { width: 800, height: 600 },
       proposed: () => ({ cols: 80, rows: 24 })
     })
+
     safeFit(pane)
     pane.setRect({ width: 800.4, height: 599.6 })
     expect(paneFitClientSizeChanged(pane)).toBe(false)
@@ -448,6 +465,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
       rect: { width: 800, height: 600 },
       proposed: () => ({ cols: 80, rows: 24 })
     })
+
     safeFit(pane)
     pane.setRect({ width: 0, height: 0 })
     expect(paneFitClientSizeChanged(pane)).toBe(true)
@@ -460,6 +478,7 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
       rect: { width: 800, height: 600 },
       proposed: () => ({ cols: 80, rows: 24 })
     })
+
     safeFit(pane)
     pane.setXtermRect({ width: 800, height: 560 })
     expect(paneFitClientSizeChanged(pane)).toBe(true)
@@ -469,10 +488,12 @@ describe('paneFitClientSizeChanged (reveal fit gate)', () => {
 describe('deferred metric flush inside safeFit', () => {
   function createMetricPane(): ManagedPane & { fitAddon: { fit: ReturnType<typeof vi.fn> } } {
     const terminal = { cols: 80, rows: 24, options: {} as Record<string, unknown> }
+
     // Grid shrinks once the parked large font lands — the case the min-dimension
     // gate exists to reject, but which it can only see after the flush.
     const proposeDimensions = (): { cols: number; rows: number } =>
       Number(terminal.options.fontSize ?? 10) >= 24 ? { cols: 5, rows: 2 } : { cols: 40, rows: 20 }
+
     return {
       id: 11,
       terminal,
@@ -506,6 +527,7 @@ describe('deferred metric flush inside safeFit', () => {
 
   it('reports the post-metric grid used by the next safe fit', () => {
     const terminal = { cols: 80, rows: 24, options: {} as Record<string, unknown> }
+
     const pane = {
       id: 12,
       terminal,
@@ -522,6 +544,7 @@ describe('deferred metric flush inside safeFit', () => {
         )
       }
     } as unknown as ManagedPane
+
     applyOrDeferPaneMetricOptions(pane, { fontSize: 18 }, false)
 
     expect(readProposedPaneFitDimensions(pane)).toEqual({ cols: 20, rows: 10 })
@@ -530,6 +553,7 @@ describe('deferred metric flush inside safeFit', () => {
 
   it('reports an owner override even while the pane is unmeasurable', () => {
     const resize = vi.fn()
+
     const pane = {
       terminal: { cols: 80, rows: 24, options: {}, resize },
       container: {
@@ -538,6 +562,7 @@ describe('deferred metric flush inside safeFit', () => {
       },
       fitAddon: { proposeDimensions: vi.fn() }
     } as unknown as ManagedPane
+
     setFitOverride('pty-override', 'mobile-fit', 49, 20)
 
     try {

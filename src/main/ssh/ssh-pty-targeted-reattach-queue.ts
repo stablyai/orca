@@ -31,11 +31,15 @@ export class SshPtyTargetedReattachQueue {
           )
         }
       }
+
       this.running.set(key, entry)
+
       if (this.active < this.maxConcurrency) {
         entry.start()
+
         return
       }
+
       this.waiting.push(entry)
     })
   }
@@ -51,6 +55,7 @@ export class SshPtyTargetedReattachQueue {
     if (this.running.get(key) === entry) {
       this.running.delete(key)
     }
+
     this.active--
     this.waiting.shift()?.start()
   }

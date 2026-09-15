@@ -31,6 +31,7 @@ async function replayRemoteSnapshot(
   await writeXterm(term, '\x1b[2J\x1b[3J\x1b[H')
   await writeXterm(term, snapshot.rehydrateSequences + snapshot.snapshotAnsi)
   await writeXterm(term, POST_REPLAY_REATTACH_RESET)
+
   // The fix: the restorer writes the pending mid-escape tail LAST, after the
   // reset (mirrors drainReplayDataQueue in pty-connection.ts).
   if (snapshot.pendingEscapeTailAnsi) {
@@ -41,9 +42,11 @@ async function replayRemoteSnapshot(
 function renderVisible(term: Terminal): string {
   const buf = term.buffer.active
   const lines: string[] = []
+
   for (let y = 0; y < term.rows; y += 1) {
     lines.push(buf.getLine(buf.viewportY + y)?.translateToString(true) ?? '')
   }
+
   return lines.join('\n').replace(/\s+$/g, '')
 }
 
@@ -51,6 +54,7 @@ describe('#7329 remote-server snapshot corruption', () => {
   it('disarms rehydrated mouse modes but keeps bracketed paste after a reattach snapshot', async () => {
     const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       // A live remote shell that armed bracketed paste (bash 4.4+/readline
       // default) and vt200+SGR mouse (a TUI the user just exited uncleanly).
@@ -81,6 +85,7 @@ describe('#7329 remote-server snapshot corruption', () => {
   it('disarms any-motion (?1003) and pixel-encoded (?1016) mouse modes left by a killed TUI', async () => {
     const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       // An agent TUI armed any-motion tracking, then was SIGKILLed — no
       // disarm bytes ever reach the daemon, so its tracker keeps the mode.
@@ -103,6 +108,7 @@ describe('#7329 remote-server snapshot corruption', () => {
   it('drops a mid-escape tail so continuation bytes render literally after reattach', async () => {
     const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       // A remote PTY read that ends mid-escape: the shell was about to paint a
       // colored prompt but the read boundary split the SGR sequence. The next
@@ -142,6 +148,7 @@ describe('#7329 remote-server snapshot corruption', () => {
     // continuation and completes the dangling sequence with no eaten byte.
     const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       await emulatorWrite(emu, '\x1b[38;5;') // dangling: params so far
       const snapshot = emu.getSnapshot({ scrollbackRows: 0 })
@@ -165,6 +172,7 @@ describe('#7329 remote-server snapshot corruption', () => {
     // byte. This is strictly narrower than the bug it fixes (which garbled every
     // real split escape), and pre-fix such a stream simply dropped the partial.
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       await writeXterm(term, 'prompt$ ')
       await writeXterm(term, '\x1b[3') // armed tail, no continuation ever comes

@@ -15,10 +15,13 @@ export class PRRefreshVisibility {
 
   report(candidates: GitHubPRRefreshCandidate[], generation: number, windowId: number): boolean {
     const existing = this.visibleByWindow.get(windowId)
+
     if (existing && generation < existing.generation) {
       return false
     }
+
     this.visibleByWindow.set(windowId, { generation, keys: new Set(candidates.map(refreshKey)) })
+
     return true
   }
 
@@ -29,16 +32,19 @@ export class PRRefreshVisibility {
         .filter((contents) => !contents.isDestroyed())
         .map((contents) => contents.id)
     )
+
     for (const windowId of Array.from(this.visibleByWindow.keys())) {
       if (!liveWindowIds.has(windowId)) {
         this.visibleByWindow.delete(windowId)
       }
     }
+
     for (const visible of this.visibleByWindow.values()) {
       if (visible.keys.has(key)) {
         return true
       }
     }
+
     return false
   }
 }

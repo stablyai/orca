@@ -29,6 +29,7 @@ const store = {
   updatePendingWorktreeCreation: vi.fn(
     (creationId: string, patch: Partial<PendingWorktreeCreation>) => {
       const entry = store.pendingWorktreeCreations[creationId]
+
       if (entry) {
         store.pendingWorktreeCreations[creationId] = { ...entry, ...patch }
       }

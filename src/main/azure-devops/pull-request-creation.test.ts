@@ -26,6 +26,7 @@ vi.mock('../source-control/pull-request-template', () => ({
 }))
 
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
 
 describe('Azure DevOps pull request creation', () => {
@@ -68,6 +69,7 @@ describe('Azure DevOps pull request creation', () => {
         description: 'Body',
         isDraft: true
       })
+
       return Response.json({
         pullRequestId: 37,
         title: 'Add Azure create',
@@ -81,6 +83,7 @@ describe('Azure DevOps pull request creation', () => {
         }
       })
     })
+
     globalThis.fetch = fetchMock as never
 
     await expect(
@@ -110,12 +113,14 @@ describe('Azure DevOps pull request creation', () => {
       stderr: ''
     })
     const versions: (string | null)[] = []
+
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
       expect(url.pathname).toBe(
         '/tfs/MyCollection/MyProject/_apis/git/repositories/my-repo/pullRequests'
       )
       versions.push(url.searchParams.get('api-version'))
+
       if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
         return new Response(
           JSON.stringify({
@@ -125,6 +130,7 @@ describe('Azure DevOps pull request creation', () => {
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         )
       }
+
       return Response.json({
         pullRequestId: 51,
         title: 'Server create',
@@ -137,6 +143,7 @@ describe('Azure DevOps pull request creation', () => {
         }
       })
     })
+
     globalThis.fetch = fetchMock as never
 
     await expect(
@@ -166,6 +173,7 @@ describe('Azure DevOps pull request creation', () => {
         { status: 400 }
       )
     )
+
     globalThis.fetch = fetchMock as never
 
     await expect(
@@ -190,6 +198,7 @@ describe('Azure DevOps pull request creation', () => {
         stderr: ''
       }))
     }
+
     getSshGitProviderMock.mockReturnValue(remoteGit)
     globalThis.fetch = vi.fn(async () =>
       Response.json({

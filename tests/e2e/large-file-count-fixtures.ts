@@ -40,11 +40,13 @@ export async function removeLargeFileCountRepo(repoPath: string): Promise<void> 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(repoPath, { recursive: true, force: true })
+
       return
     } catch (error) {
       if (attempt === 4) {
         throw error
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
     }
   }
@@ -62,13 +64,16 @@ function writeFileTree(
   contentForIndex: (index: number) => string
 ): void {
   let currentDir: string | null = null
+
   for (let index = 0; index < fileCount; index += 1) {
     const dirIndex = Math.floor(index / filesPerDirectory)
     const dirPath = path.join(repoPath, rootDirName, `dir-${String(dirIndex).padStart(4, '0')}`)
+
     if (dirPath !== currentDir) {
       mkdirSync(dirPath, { recursive: true })
       currentDir = dirPath
     }
+
     writeFileSync(
       path.join(dirPath, `file-${String(index).padStart(6, '0')}.ts`),
       contentForIndex(index)
@@ -108,10 +113,12 @@ export function createLargeFileCountRepo(
   runGit(repoPath, ['commit', '-m', 'Initial large file count fixture', '--quiet'])
 
   const untrackedFileBytes = options.untrackedFileBytes ?? 0
+
   const untrackedPadding =
     untrackedFileBytes > 0
       ? `// ${'x'.repeat(78)}\n`.repeat(Math.ceil(untrackedFileBytes / 81))
       : ''
+
   writeFileTree(
     repoPath,
     'generated',

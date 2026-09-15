@@ -36,6 +36,7 @@ function environment(): PublicKnownRuntimeEnvironment {
 /** What the sidebar host header renders from: 'available' is online, 'disconnected' is the offline GUI. */
 function sidebarHostHealth(): string | undefined {
   const state = useAppStore.getState()
+
   return buildExecutionHostRegistry({
     repos: [],
     settings: state.settings,
@@ -46,9 +47,11 @@ function sidebarHostHealth(): string | undefined {
 
 function liveRuntimeStatus(): RuntimeStatus {
   const response = createCompatibleRuntimeStatusResponse()
+
   if (!response.ok) {
     throw new Error('fixture must be a successful status response')
   }
+
   return response.result
 }
 
@@ -61,10 +64,12 @@ async function settle(): Promise<void> {
 describe('remote Orca server reconnect', () => {
   let unsubs: (() => void)[] = []
   let stopBridge: (() => void) | null = null
+
   let subscriptionResponders: {
     selector: string
     onResponse: (response: unknown) => void
   }[] = []
+
   let liveRuntimeId = 'remote-runtime'
   let failingStatusProbes = 0
 
@@ -84,8 +89,10 @@ describe('remote Orca server reconnect', () => {
             // Captured before the block so a probe that is still dialing answers with the
             // runtime it was dispatched against, not with whatever restarted meanwhile.
             const dispatchedRuntimeId = liveRuntimeId
+
             if (failingStatusProbes > 0) {
               failingStatusProbes -= 1
+
               // status.get dials its own socket; it can fail while the control transport is up.
               return {
                 id: 'status.get',
@@ -97,6 +104,7 @@ describe('remote Orca server reconnect', () => {
                 _meta: { runtimeId: null }
               }
             }
+
             return createCompatibleRuntimeStatusResponse(dispatchedRuntimeId)
           }),
           call: vi.fn(async () => ({ id: 'x', ok: true, result: [] })),
@@ -109,6 +117,7 @@ describe('remote Orca server reconnect', () => {
                 selector: args.selector,
                 onResponse: callbacks.onResponse
               })
+
               return { unsubscribe: vi.fn() }
             }
           )
@@ -130,9 +139,11 @@ describe('remote Orca server reconnect', () => {
   afterEach(() => {
     stopBridge?.()
     stopBridge = null
+
     for (const unsub of unsubs.splice(0)) {
       unsub()
     }
+
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
@@ -141,9 +152,11 @@ describe('remote Orca server reconnect', () => {
   /** Delivers the replay-tagged first response a shared-control reconnect produces. */
   function replaySubscription(selector = ENVIRONMENT_ID): void {
     const responder = subscriptionResponders.findLast((entry) => entry.selector === selector)
+
     if (!responder) {
       throw new Error(`no client-event subscription for ${selector}`)
     }
+
     responder.onResponse(
       tagRuntimeSubscriptionReplayResponse({
         id: 'sub',

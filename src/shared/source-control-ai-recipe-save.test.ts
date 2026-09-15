@@ -10,6 +10,7 @@ import type { Repo } from './repo-types'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
+
   return {
     ...base,
     defaultTuiAgent: 'codex',
@@ -142,9 +143,11 @@ describe('source-control AI recipe saves', () => {
 
     expect(result.target).toEqual({ type: 'global' })
     expect('sourceControlAi' in result).toBe(true)
+
     if (!('sourceControlAi' in result)) {
       throw new Error('Expected a global save result')
     }
+
     expect(result.sourceControlAi.actions?.pullRequest).toEqual({
       agentId: 'custom',
       commandInputTemplate: '{basePrompt}\n\nreview',
@@ -181,6 +184,7 @@ describe('source-control AI recipe saves', () => {
     if (!('sourceControlAi' in result)) {
       throw new Error('Expected a global save result')
     }
+
     expect(result.sourceControlAi.actions?.pullRequest).toEqual({
       agentId: 'claude',
       commandInputTemplate: '{basePrompt}',

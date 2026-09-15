@@ -15,6 +15,7 @@ describe('remote runtime JSON frame admission', () => {
 
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
+
     try {
       const depth = REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS.nestingDepth + 1
       const amplified = `${'['.repeat(depth)}0${']'.repeat(depth)}`

@@ -75,9 +75,11 @@ describe('setup hook trust', () => {
 
   it('persists and returns the approved trust state', async () => {
     let persisted: unknown
+
     const client = {
       sendRequest: async (_method: string, params: unknown) => {
         persisted = params
+
         return { ok: true, result: null }
       }
     } as unknown as RpcClient

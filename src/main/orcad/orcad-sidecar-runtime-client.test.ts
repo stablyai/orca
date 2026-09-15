@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 
 const { createConnection } = vi.hoisted(() => ({ createConnection: vi.fn() }))
+
 vi.mock('node:net', () => ({ createConnection }))
 
 import { sendOrcadSidecarRequest } from './orcad-sidecar-runtime-client'
@@ -14,7 +15,9 @@ function startRequest(timeout = 1000) {
     end: vi.fn(),
     destroy: vi.fn()
   })
+
   createConnection.mockReturnValue(socket)
+
   const metadata: RuntimeMetadata = {
     runtimeId: 'test',
     pid: 1,
@@ -22,9 +25,11 @@ function startRequest(timeout = 1000) {
     authToken: null,
     transports: [{ kind: 'named-pipe', endpoint: 'test-pipe' }]
   }
+
   const result = sendOrcadSidecarRequest(metadata, 'browser.screenshot', {}, timeout)
   socket.emit('connect')
   const request = JSON.parse(socket.write.mock.calls[0][0]) as { id: string }
+
   return { socket, result, id: request.id }
 }
 
@@ -39,14 +44,17 @@ describe('sidecar response framing', () => {
     const wire = `${JSON.stringify({ id, ok: true, result: 'x'.repeat(1024 * 1024) })}\n`
     const originalIndexOf = String.prototype.indexOf
     let searchedCharacters = 0
+
     const search = vi
       .spyOn(String.prototype, 'indexOf')
       .mockImplementation(function (this: string, value, position) {
         if (value === '\n') {
           searchedCharacters += this.length - (position ?? 0)
         }
+
         return originalIndexOf.call(this, value, position)
       })
+
     try {
       for (let offset = 0; offset < wire.length; offset += 256) {
         socket.emit('data', wire.slice(offset, offset + 256))
@@ -54,6 +62,7 @@ describe('sidecar response framing', () => {
     } finally {
       search.mockRestore()
     }
+
     await expect(result).resolves.toHaveLength(1024 * 1024)
     expect(searchedCharacters).toBe(wire.length)
   })
@@ -62,9 +71,11 @@ describe('sidecar response framing', () => {
     const { socket, result, id } = startRequest()
     const expected = { image: 'A'.repeat(1024 * 1024), text: '😀é' }
     const wire = `\n${JSON.stringify({ _keepalive: true })}\n${JSON.stringify({ id, ok: true, result: expected })}\r\n`
+
     for (let offset = 0; offset < wire.length; offset += 8192) {
       socket.emit('data', wire.slice(offset, offset + 8192))
     }
+
     await expect(result).resolves.toEqual(expected)
     expect(socket.end).toHaveBeenCalledOnce()
   })
@@ -85,9 +96,11 @@ describe('sidecar response framing', () => {
     const { socket, result } = startRequest()
     const rejected = expect(result).rejects.toThrow('response is too large')
     const chunk = 'a'.repeat(1024 * 1024)
+
     for (let index = 0; index < 64; index += 1) {
       socket.emit('data', chunk)
     }
+
     expect(socket.destroy).not.toHaveBeenCalled()
     socket.emit('data', 'a')
     await rejected

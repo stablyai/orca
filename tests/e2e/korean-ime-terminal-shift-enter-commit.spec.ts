@@ -26,39 +26,54 @@ const PROMPT = '› '
 
 function stripTerminalControls(value: string): string {
   let output = ''
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code === 0x1b) {
       const next = value[index + 1]
+
       if (next === ']') {
         index += 2
+
         while (index < value.length) {
           const current = value.charCodeAt(index)
+
           if (current === 0x07) {
             break
           }
+
           if (current === 0x1b && value[index + 1] === '\\') {
             index += 1
             break
           }
+
           index += 1
         }
+
         continue
       }
+
       if (next === '[') {
         index += 2
+
         while (index < value.length && value.charCodeAt(index) < 0x40) {
           index += 1
         }
+
         continue
       }
+
       continue
     }
+
     if ((code >= 0 && code <= 0x08) || (code >= 0x0b && code <= 0x1f) || code === 0x7f) {
       continue
     }
+
     output += value[index]
   }
+
   return output
 }
 
@@ -100,6 +115,7 @@ process.stdin.on('data', handleData)
 async function readSubmitted(page: Page): Promise<string[]> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const matches = [...content.matchAll(/\[SUBMITTED_JSON_[^\]]+\]("[\s\S]*?")/g)]
+
   return matches
     .map((match) => {
       try {
@@ -115,9 +131,11 @@ async function readReceived(page: Page): Promise<string | null> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const matches = [...content.matchAll(/\[RECEIVED_JSON_[^\]]+\]("[\s\S]*?")/g)]
   const encoded = matches.at(-1)?.[1]
+
   if (!encoded) {
     return null
   }
+
   try {
     return JSON.parse(encoded) as string
   } catch {
@@ -141,6 +159,7 @@ async function installImeKeyEventLog(page: Page): Promise<void> {
   await page.evaluate(() => {
     const target = window as unknown as { __imeKeyEvents: ImeKeyEvent[] }
     target.__imeKeyEvents = []
+
     const record = (event: KeyboardEvent): void => {
       target.__imeKeyEvents.push({
         type: event.type,
@@ -154,6 +173,7 @@ async function installImeKeyEventLog(page: Page): Promise<void> {
         timeStamp: event.timeStamp
       })
     }
+
     window.addEventListener('keydown', record, true)
     window.addEventListener('keyup', record, true)
   })
@@ -172,6 +192,7 @@ async function attachEvidence(page: Page, testInfo: TestInfo, name: string): Pro
     terminal: await getTerminalContent(page, 20_000),
     submitted: await readSubmitted(page)
   }
+
   await testInfo.attach(`${name}.json`, {
     body: `${JSON.stringify(evidence, null, 2)}\n`,
     contentType: 'application/json'
@@ -253,6 +274,7 @@ async function dispatchCommittingEnterChord(
   redispatchTimestampOffset = 0
 ): Promise<void> {
   const timestamp = Date.now() / 1000
+
   const composingKeydown = session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
     key: 'Enter',
@@ -264,7 +286,9 @@ async function dispatchCommittingEnterChord(
     text: '',
     unmodifiedText: ''
   })
+
   const commit = session.send('Input.insertText', { text: '하' })
+
   const redispatch = () =>
     session.send('Input.dispatchKeyEvent', {
       type: 'rawKeyDown',
@@ -277,6 +301,7 @@ async function dispatchCommittingEnterChord(
       text: '',
       unmodifiedText: ''
     })
+
   const balancingKeyup = () =>
     session.send('Input.dispatchKeyEvent', {
       type: 'keyUp',
@@ -290,8 +315,10 @@ async function dispatchCommittingEnterChord(
 
   if (!redispatchAfterKeyup) {
     await Promise.all([composingKeydown, commit, redispatch(), balancingKeyup()])
+
     return
   }
+
   await Promise.all([composingKeydown, commit, balancingKeyup()])
   await page.waitForTimeout(80)
   await redispatch()
@@ -339,9 +366,11 @@ async function dispatchPlainEnter(session: CDPSession): Promise<void> {
 async function readPromptLine(page: Page): Promise<string> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const promptIndex = content.lastIndexOf(PROMPT)
+
   if (promptIndex === -1) {
     return ''
   }
+
   return (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '').trimEnd()
 }
 
@@ -388,6 +417,7 @@ async function assertCtrlOutcome(page: Page): Promise<void> {
       })
       .toBe('하 하 하\u001b[13;5u')
     expect(await readSubmitted(page), 'CSI-u must not submit the line').toEqual([])
+
     return
   }
 
@@ -473,6 +503,7 @@ const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
 
 test.describe('Korean IME terminal committing Enter chords', () => {
   test.describe.configure({ mode: 'serial' })
+
   for (const chord of COMMITTING_ENTER_CHORDS) {
     for (const redispatchAfterKeyup of [false, true]) {
       const order = redispatchAfterKeyup ? 'keyup-before-redispatch' : 'redispatch-before-keyup'
@@ -504,9 +535,11 @@ test.describe('Korean IME terminal committing Enter chords', () => {
           await commitSyllableAndSpace(session, orcaPage)
           await composeHangulSyllable(session, orcaPage)
           await commitSyllableAndSpace(session, orcaPage)
+
           if (chord.preHeldModifier) {
             await dispatchHeldModifier(session, chord.preHeldModifier, 'rawKeyDown')
           }
+
           await composeHangulSyllable(session, orcaPage)
           await dispatchCommittingEnterChord(
             session,
@@ -516,6 +549,7 @@ test.describe('Korean IME terminal committing Enter chords', () => {
             redispatchAfterKeyup,
             chord.redispatchTimestampOffset
           )
+
           if (chord.preHeldModifier) {
             await dispatchHeldModifier(session, chord.preHeldModifier, 'keyUp')
           }

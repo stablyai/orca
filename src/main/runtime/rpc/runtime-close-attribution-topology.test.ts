@@ -62,6 +62,7 @@ describe('runtime close attribution topology', () => {
       .fn()
       .mockResolvedValueOnce({ closed: true, refused: true, refusalReason: 'stale-terminal' })
       .mockResolvedValue({ closed: true })
+
     const runtime = {
       getRuntimeId: () => 'runtime-owner-1',
       closeMobileSessionTab,
@@ -70,6 +71,7 @@ describe('runtime close attribution topology', () => {
       ),
       refuseUnattributedMobileSessionTabClose: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -136,6 +138,7 @@ describe('runtime close attribution topology', () => {
 
   it('keeps concurrent cross-worktree request and target identities distinct', async () => {
     const closeMobileSessionTab = vi.fn().mockResolvedValue({ closed: true })
+
     const runtime = {
       getRuntimeId: () => 'runtime-owner-2',
       listMobileSessionTabs: vi.fn(async (worktree: string) =>
@@ -143,6 +146,7 @@ describe('runtime close attribution topology', () => {
       ),
       closeMobileSessionTab
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await Promise.all(
@@ -192,13 +196,17 @@ describe('runtime close attribution topology', () => {
       .fn()
       .mockResolvedValueOnce({ handle: 'terminal-live', tabId: 'tab-live', ptyKilled: true })
       .mockRejectedValueOnce(new Error('terminal_handle_stale'))
+
     const listSessions = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'runtime-owner-3',
       closeTerminal,
       listSessions
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
     const context = {
       clientKind: 'runtime' as const,
       pairedDeviceId: 'device-terminal',

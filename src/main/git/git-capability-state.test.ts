@@ -43,6 +43,7 @@ describe('Git capability execution-host state', () => {
 
   it('uses native capability state for a prepared host-routed WSL worktree', async () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
     try {
       seedWslLinkedWorktreeGitRoutingForTests(String.raw`C:\repo\linked`)
 
@@ -62,8 +63,10 @@ describe('Git capability execution-host state', () => {
 
   it('starts non-candidate capability work without an added async turn', async () => {
     let started = false
+
     const result = withLocalGitCapabilityCacheForExecution({ cwd: '/repo' }, async () => {
       started = true
+
       return 'done'
     })
 

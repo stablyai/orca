@@ -11,20 +11,27 @@ import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
 const SELECT_SESSION = 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
+
 const UPSERT_SESSION = `INSERT INTO journal_sessions (session_id, epoch, updated_at)
 VALUES (?, ?, ?)
 ON CONFLICT(session_id) DO UPDATE SET epoch = excluded.epoch, updated_at = excluded.updated_at`
+
 const INSERT_ROW =
   'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
+
 const SELECT_EPOCH_ROWS = `SELECT epoch, seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? ORDER BY seq ASC`
+
 const SELECT_ROWS_AFTER = `SELECT epoch, seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
+
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
+
 const DELETE_SUFFIX = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq >= ?'
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const row = db.prepare(SELECT_SESSION).get(sessionId) as { epoch?: string } | undefined
+
   return row?.epoch ?? null
 }
 
@@ -44,6 +51,7 @@ export function insertJournalRow(
 ): number {
   const rowJson = serializeJournalRow(row)
   db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, row.ts, rowJson)
+
   return Buffer.byteLength(rowJson, 'utf8')
 }
 
@@ -67,13 +75,16 @@ export function* iterateJournalEpochRows(
   epoch: string
 ): Generator<JournalStoredRow> {
   let afterSeq = Number.MIN_SAFE_INTEGER
+
   for (;;) {
     const page = readJournalRowsAfter(db, sessionId, epoch, afterSeq, EPOCH_ROW_PAGE_SIZE)
     yield* page
     const last = page.at(-1)
+
     if (page.length < EPOCH_ROW_PAGE_SIZE || last === undefined) {
       return
     }
+
     afterSeq = last.seq
   }
 }
@@ -90,6 +101,7 @@ export function readJournalRowsAfter(
       db.prepare(SELECT_ROWS_AFTER_LIMITED).all(sessionId, epoch, afterSeq, limit)
     )
   }
+
   return toStoredRows(db.prepare(SELECT_ROWS_AFTER).all(sessionId, epoch, afterSeq))
 }
 
@@ -111,12 +123,14 @@ export function deleteJournalRowSuffix(
   fromSeq: number
 ): number {
   const deleted = db.prepare(DELETE_SUFFIX).run(sessionId, epoch, fromSeq)
+
   return Number(deleted.changes ?? 0)
 }
 
 function toStoredRows(rows: readonly unknown[]): JournalStoredRow[] {
   return rows.map((entry) => {
     const record = entry as { epoch: string; seq: number; ts: number; row_json: string }
+
     return { epoch: record.epoch, seq: record.seq, ts: record.ts, rowJson: record.row_json }
   })
 }

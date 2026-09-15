@@ -77,15 +77,19 @@ export function StateBadge({ state }: { state: GitLabWorkItem['state'] }): React
 export function normalizeGitLabLabels(labels: readonly string[]): string[] {
   const seen = new Set<string>()
   const normalized: string[] = []
+
   for (const label of labels) {
     const trimmed = label.trim()
     const key = trimmed.toLowerCase()
+
     if (!trimmed || seen.has(key)) {
       continue
     }
+
     seen.add(key)
     normalized.push(trimmed)
   }
+
   return normalized
 }
 
@@ -100,9 +104,11 @@ export function formatGitLabLabelDraft(labels: readonly string[]): string {
 export function toggleGitLabLabelDraft(value: string, label: string): string {
   const labels = parseGitLabLabelDraft(value)
   const key = label.trim().toLowerCase()
+
   const next = labels.some((item) => item.toLowerCase() === key)
     ? labels.filter((item) => item.toLowerCase() !== key)
     : [...labels, label]
+
   return formatGitLabLabelDraft(next)
 }
 
@@ -112,9 +118,11 @@ export function gitLabUserKey(user: GitLabAssignableUser): string {
 
 export function dedupeGitLabUsers(users: readonly GitLabAssignableUser[]): GitLabAssignableUser[] {
   const byKey = new Map<string, GitLabAssignableUser>()
+
   for (const user of users) {
     byKey.set(gitLabUserKey(user), user)
   }
+
   return Array.from(byKey.values()).sort((a, b) => a.username.localeCompare(b.username))
 }
 
@@ -130,6 +138,7 @@ export function CommentCard({
   onResolve?: (threadId: string, resolved: boolean) => void
 }): React.JSX.Element {
   const hasThread = Boolean(comment.threadId)
+
   return (
     <div className="rounded-md border border-border/40 bg-muted/30 p-3">
       <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -201,6 +210,7 @@ export function PipelineJobRow({
   onRetry: (job: GitLabPipelineJob) => void
 }): React.JSX.Element {
   const canRetry = ['failed', 'canceled', 'cancelled'].includes(job.status)
+
   return (
     <div className="rounded-md">
       <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_80px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">

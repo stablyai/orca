@@ -7,8 +7,10 @@ export function resolveRpcWorkspaceCreatorProvenance(
   if (context.pairedDeviceId) {
     return { kind: 'paired-device', deviceId: context.pairedDeviceId }
   }
+
   if (context.clientId || context.clientKind || context.connectionId) {
     throw new Error('authenticated_device_identity_missing')
   }
+
   return { kind: 'host' }
 }

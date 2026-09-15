@@ -37,8 +37,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -59,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -68,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -88,6 +93,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -98,9 +104,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -110,9 +118,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -121,6 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -153,6 +164,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
@@ -176,15 +188,18 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
     await flushAsyncTicks()
+
     const onDataMock = pane.terminal.onData as unknown as {
       mock: { calls: [[(data: string) => void] | []] }
     }
+
     const terminalInputHandler = onDataMock.mock.calls[0]?.[0]
     expect(terminalInputHandler).toBeTypeOf('function')
     terminalInputHandler?.('a')
@@ -202,15 +217,18 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
     await flushAsyncTicks()
+
     const onDataMock = pane.terminal.onData as unknown as {
       mock: { calls: [[(data: string) => void] | []] }
     }
+
     const terminalInputHandler = onDataMock.mock.calls[0]?.[0]
     expect(terminalInputHandler).toBeTypeOf('function')
     terminalInputHandler?.('a')
@@ -263,6 +281,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
@@ -272,6 +291,7 @@ describe('connectPanePty', () => {
       createManager(1) as never,
       createDeps() as never
     ) as unknown as { markShortcutTerminalInputSent: () => void }
+
     await flushAsyncTicks()
     binding.markShortcutTerminalInputSent()
 
@@ -289,6 +309,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
@@ -308,6 +329,7 @@ describe('connectPanePty', () => {
         `\x1b[4;6H\x1b[38;2;231;237;247m${'#'.repeat(36)} ${'opentui'.repeat(48)}\x1b[0m`
       ].join('')
     )
+
     expect(frames.every((frame) => frame.length <= 2048 && frame.includes('\x1b['))).toBe(true)
     expect(frames.join('').length).toBeGreaterThan(128 * 1024)
 
@@ -325,6 +347,7 @@ describe('connectPanePty', () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -332,6 +355,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
@@ -371,6 +395,7 @@ describe('connectPanePty', () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -378,6 +403,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
@@ -417,6 +443,7 @@ describe('connectPanePty', () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -424,6 +451,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
@@ -461,6 +489,7 @@ describe('connectPanePty', () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -468,6 +497,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
@@ -515,6 +545,7 @@ describe('connectPanePty', () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     try {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport()
@@ -522,6 +553,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )

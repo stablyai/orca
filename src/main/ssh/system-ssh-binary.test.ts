@@ -54,6 +54,7 @@ describe('findSystemSsh', () => {
       if (path === 'C:\\Git\\usr\\bin\\ssh.exe') {
         return { isFile: () => true }
       }
+
       throw new Error('missing')
     })
 
@@ -72,6 +73,7 @@ describe('findSystemSsh', () => {
       if (path === '/nix/store/ssh/bin/ssh') {
         return { isFile: () => true }
       }
+
       throw new Error('missing')
     })
 

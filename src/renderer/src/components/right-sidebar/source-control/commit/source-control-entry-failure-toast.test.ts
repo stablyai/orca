@@ -7,9 +7,11 @@ const { toastError, toastDismiss } = vi.hoisted(() => ({
   toastError: vi.fn<(title: string, options?: SourceControlToastTestOptions) => void>(),
   toastDismiss: vi.fn<(id: string) => void>()
 }))
+
 vi.mock('sonner', () => ({ toast: { error: toastError, dismiss: toastDismiss } }))
 
 const { storeState } = vi.hoisted(() => ({ storeState: { activeWorktreeId: 'wt-1' } }))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, { getState: () => storeState })
 }))
@@ -23,6 +25,7 @@ type FailureToastInput = Parameters<typeof showSourceControlEntryFailureToast>[0
 
 function lastToast(): { title: string; options: SourceControlToastTestOptions } {
   const [title = '', options = {}] = toastError.mock.lastCall ?? []
+
   return { title, options }
 }
 
@@ -40,6 +43,7 @@ function show(overrides: Partial<FailureToastInput> = {}): void {
 function clickRetry(): { preventDefault: ReturnType<typeof vi.fn> } {
   const event = { preventDefault: vi.fn() }
   lastToast().options.action?.onClick(event)
+
   return event
 }
 

@@ -55,6 +55,7 @@ export async function createUntitledMarkdownFile(
   const baseName = 'untitled'
   const ext = '.md'
   const MAX_ATTEMPTS = 100
+
   const context = {
     settings,
     worktreeId,
@@ -64,11 +65,13 @@ export async function createUntitledMarkdownFile(
     expectedSshTargetId: options.expectedSshTargetId,
     expectedSshConnectionGeneration: options.expectedSshConnectionGeneration
   }
+
   const assertCurrent = (): void => {
     if (options.operationProvenance) {
       requireOperationAssertion(options.assertOperationCurrent)()
     }
   }
+
   const templateContent = options.template
     ? await readMarkdownDocumentTemplateContent(context, options.template)
     : null
@@ -86,6 +89,7 @@ export async function createUntitledMarkdownFile(
     const filePath = joinPath(worktreePath, fileName)
 
     assertCurrent()
+
     if (await runtimePathExists(context, filePath)) {
       continue
     }
@@ -93,6 +97,7 @@ export async function createUntitledMarkdownFile(
     try {
       assertCurrent()
       await createRuntimePath(context, filePath, 'file')
+
       if (templateContent !== null) {
         try {
           assertCurrent()
@@ -125,9 +130,11 @@ export async function createUntitledMarkdownFile(
     } catch (err) {
       const isEexist =
         err instanceof Error && (err.message.includes('EEXIST') || err.message.includes('exists'))
+
       if (isEexist && attempt < MAX_ATTEMPTS) {
         continue
       }
+
       throw err
     }
   }
@@ -149,6 +156,7 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
   if (operationProvenance) {
     requireOperationAssertion(assertOperationCurrent)()
   }
+
   const context = {
     settings,
     worktreeId,
@@ -158,6 +166,7 @@ export async function createUntitledMarkdownFileWithTemplateSelection(
     expectedSshTargetId,
     expectedSshConnectionGeneration
   }
+
   const templates = await listMarkdownDocumentTemplates(context, worktreePath)
   const selection = await requestMarkdownTemplateSelection(templates)
 
@@ -179,5 +188,6 @@ function requireOperationAssertion(assertCurrent: (() => void) | undefined): () 
   if (!assertCurrent) {
     throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
   }
+
   return assertCurrent
 }

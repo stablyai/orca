@@ -29,7 +29,9 @@ import type {
 } from '../../shared/jira-types'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
+
 const issueSummaryRequests = new JiraCancellableRequests()
+
 const searchRequests = new JiraCancellableRequests()
 
 function normalizeSiteId(value: unknown): string | undefined {
@@ -38,11 +40,13 @@ function normalizeSiteId(value: unknown): string | undefined {
 
 function normalizeSiteSelection(value: unknown): JiraSiteSelection | undefined {
   const siteId = normalizeSiteId(value)
+
   return siteId as JiraSiteSelection | undefined
 }
 
 function clampLimit(value: unknown, fallback = 30): number {
   const limit = typeof value === 'number' && Number.isFinite(value) ? value : fallback
+
   return Math.min(Math.max(1, limit), 100)
 }
 
@@ -50,6 +54,7 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   if (value === undefined) {
     return undefined
   }
+
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
 }
 
@@ -58,13 +63,17 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const input = value as JiraIssueUpdate
+
   if (input.title !== undefined && typeof input.title !== 'string') {
     return null
   }
+
   if (input.labels !== undefined && normalizeStringArray(input.labels) === undefined) {
     return null
   }
+
   if (
     input.assigneeAccountId !== undefined &&
     input.assigneeAccountId !== null &&
@@ -72,6 +81,7 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   ) {
     return null
   }
+
   if (
     input.priorityId !== undefined &&
     input.priorityId !== null &&
@@ -79,9 +89,11 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   ) {
     return null
   }
+
   if (input.transitionId !== undefined && typeof input.transitionId !== 'string') {
     return null
   }
+
   return input
 }
 
@@ -95,15 +107,18 @@ export function registerJiraHandlers(): void {
     ) {
       return { ok: false, error: 'Site URL, email, and API token are required.' }
     }
+
     const result = await connect({
       siteUrl: args.siteUrl,
       email: args.email,
       apiToken: args.apiToken,
       authType: args.authType === 'server' ? 'server' : 'cloud'
     })
+
     if (result.ok) {
       _resetPreflightCache()
     }
+
     return result
   })
 
@@ -114,9 +129,11 @@ export function registerJiraHandlers(): void {
 
   ipcMain.handle('jira:selectSite', async (_event, args: { siteId: JiraSiteSelection }) => {
     const siteId = normalizeSiteSelection(args?.siteId)
+
     if (!siteId) {
       return getStatus()
     }
+
     return selectSite(siteId)
   })
 
@@ -141,6 +158,7 @@ export function registerJiraHandlers(): void {
       if (typeof args?.jql !== 'string') {
         return []
       }
+
       return searchRequests.run(args.requestId, (signal) =>
         searchIssues(args.jql, clampLimit(args.limit), normalizeSiteSelection(args.siteId), signal)
       )
@@ -160,6 +178,7 @@ export function registerJiraHandlers(): void {
       const filter = VALID_FILTERS.has(args?.filter as JiraIssueFilter)
         ? (args!.filter as JiraIssueFilter)
         : undefined
+
       return listIssues(filter, clampLimit(args?.limit), normalizeSiteSelection(args?.siteId))
     }
   )
@@ -168,6 +187,7 @@ export function registerJiraHandlers(): void {
     if (typeof args?.key !== 'string' || !args.key.trim()) {
       return null
     }
+
     return getIssue(args.key.trim(), normalizeSiteId(args.siteId))
   })
 
@@ -182,6 +202,7 @@ export function registerJiraHandlers(): void {
       ) {
         return null
       }
+
       return issueSummaryRequests.run(args.requestId, (signal) =>
         getIssueSummary(args.key.trim(), args.siteId.trim(), signal)
       )
@@ -196,12 +217,15 @@ export function registerJiraHandlers(): void {
     if (typeof args?.projectId !== 'string' || !args.projectId.trim()) {
       return { ok: false, error: 'Project is required.' }
     }
+
     if (typeof args?.issueTypeId !== 'string' || !args.issueTypeId.trim()) {
       return { ok: false, error: 'Issue type is required.' }
     }
+
     if (typeof args?.title !== 'string' || !args.title.trim()) {
       return { ok: false, error: 'Title is required.' }
     }
+
     return createIssue({
       siteId: normalizeSiteId(args.siteId),
       projectId: args.projectId.trim(),
@@ -222,10 +246,13 @@ export function registerJiraHandlers(): void {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
         return { ok: false, error: 'Issue key is required.' }
       }
+
       const updates = normalizeIssueUpdate(args.updates)
+
       if (!updates) {
         return { ok: false, error: 'Updates object is required.' }
       }
+
       return updateIssue(args.key.trim(), updates, normalizeSiteId(args.siteId))
     }
   )
@@ -236,9 +263,11 @@ export function registerJiraHandlers(): void {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
         return { ok: false, error: 'Issue key is required.' }
       }
+
       if (typeof args?.body !== 'string' || !args.body.trim()) {
         return { ok: false, error: 'Comment body is required.' }
       }
+
       return addIssueComment(args.key.trim(), args.body.trim(), normalizeSiteId(args.siteId))
     }
   )
@@ -247,6 +276,7 @@ export function registerJiraHandlers(): void {
     if (typeof args?.key !== 'string' || !args.key.trim()) {
       return []
     }
+
     return getIssueComments(args.key.trim(), normalizeSiteId(args.siteId))
   })
 
@@ -260,6 +290,7 @@ export function registerJiraHandlers(): void {
       if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
         return []
       }
+
       return listIssueTypes(args.projectIdOrKey.trim(), normalizeSiteId(args.siteId))
     }
   )
@@ -270,9 +301,11 @@ export function registerJiraHandlers(): void {
       if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
         return []
       }
+
       if (typeof args?.issueTypeId !== 'string' || !args.issueTypeId.trim()) {
         return []
       }
+
       return listCreateFields(
         args.projectIdOrKey.trim(),
         args.issueTypeId.trim(),
@@ -291,6 +324,7 @@ export function registerJiraHandlers(): void {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
         return []
       }
+
       return listAssignableUsers(
         args.key.trim(),
         typeof args.query === 'string' ? args.query : undefined,
@@ -310,6 +344,7 @@ export function registerJiraHandlers(): void {
     if (typeof args?.key !== 'string' || !args.key.trim()) {
       return []
     }
+
     return listTransitions(args.key.trim(), normalizeSiteId(args.siteId))
   })
 
@@ -319,6 +354,7 @@ export function registerJiraHandlers(): void {
       if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
         return { statusIdsByColumn: [] }
       }
+
       return getProjectStatusOrder(args.projectKey.trim(), normalizeSiteId(args.siteId))
     }
   )

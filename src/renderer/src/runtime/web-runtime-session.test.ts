@@ -54,6 +54,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -97,6 +98,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       ok: true,
       result: makeSnapshot()
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -134,6 +136,7 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
         worktreeId: WORKTREE_ID,
         provisionalTabId
       })
+
     expect(confirmed('provisional-a')).toBe(true)
     expect(confirmed('provisional-b')).toBe(false)
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
@@ -162,12 +165,14 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
     const pending = makeSnapshot()
     const recovered = { ...pending, publicationEpoch: 'recovered', snapshotVersion: 2 }
     const state = { state: 'before' }
+
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'list',
       ok: true,
       result: pending,
       _meta: { runtimeId: 'host-runtime' }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -215,6 +220,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
 
   it('activates caller-owned session surfaces without steering host or clients', async () => {
     const snapshot = makeSnapshot()
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({

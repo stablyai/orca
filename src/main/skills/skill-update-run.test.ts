@@ -25,6 +25,7 @@ function makeRunner(
   const child = new FakeChild()
   const spawnCalls: { command: string; args: string[]; options: Record<string, unknown> }[] = []
   const states: SkillUpdateRun[] = []
+
   const runner = new SkillUpdateRunner({
     now: () => 1000,
     resolveCommand: overrides.resolveCommand ?? (() => '/usr/local/bin/npx'),
@@ -35,9 +36,11 @@ function makeRunner(
     onState: (run) => states.push(run),
     spawnProcess: ((command: string, args: string[], options: Record<string, unknown>) => {
       spawnCalls.push({ command, args, options })
+
       return child as never
     }) as never
   })
+
   return { runner, child, spawnCalls, states }
 }
 
@@ -114,6 +117,7 @@ describe('SkillUpdateRunner', () => {
     const { runner, child } = makeRunner({
       rescanOutdatedNames: async () => ['orchestration']
     })
+
     runner.start(['orca-cli', 'orchestration'])
     child.emit('close', 1)
     await flush()
@@ -129,6 +133,7 @@ describe('SkillUpdateRunner', () => {
         throw new Error('scan blew up')
       }
     })
+
     runner.start(['orca-cli'])
     child.emit('error', new Error('spawn ENOENT'))
     await flush()
@@ -159,6 +164,7 @@ describe('SkillUpdateRunner', () => {
     // releasing the UI synchronously would let a second npx write the same
     // bundles as the one still being killed.
     let finishKill = (): void => {}
+
     const { runner } = makeRunner({
       killTree: (_pid, killRoot) =>
         new Promise<void>((resolve) => {
@@ -168,6 +174,7 @@ describe('SkillUpdateRunner', () => {
           }
         })
     })
+
     runner.start(['orca-cli'])
     runner.cancel()
     await flush()
@@ -183,6 +190,7 @@ describe('SkillUpdateRunner', () => {
 
   it('releases the run even if the kill sweep never settles', async () => {
     vi.useFakeTimers()
+
     try {
       // Stop is already spent by this point, so a sweep that hangs would leave
       // the run wedged in `running` with no way out.
@@ -206,6 +214,7 @@ describe('SkillUpdateRunner', () => {
   it('does not let a cancelled child settle the run that replaced it', async () => {
     const children: FakeChild[] = []
     const states: SkillUpdateRun[] = []
+
     const runner = new SkillUpdateRunner({
       now: () => 1000,
       resolveCommand: () => '/usr/local/bin/npx',
@@ -216,9 +225,11 @@ describe('SkillUpdateRunner', () => {
       spawnProcess: (() => {
         const child = new FakeChild()
         children.push(child)
+
         return child as never
       }) as never
     })
+
     runner.start(['orca-cli'])
     runner.cancel()
     await flush()
@@ -249,12 +260,14 @@ describe('SkillUpdateRunner', () => {
 
   it('ignores a re-scan that resolves after the run was cancelled', async () => {
     let releaseRescan = (): void => {}
+
     const { runner, child } = makeRunner({
       rescanOutdatedNames: () =>
         new Promise<string[]>((resolve) => {
           releaseRescan = () => resolve([])
         })
     })
+
     runner.start(['orca-cli'])
     child.emit('close', 0)
     await flush()
@@ -270,6 +283,7 @@ describe('SkillUpdateRunner', () => {
     const killTree = vi.fn(async (_pid: number, killRoot: () => void) => {
       killRoot()
     })
+
     const { runner, child } = makeRunner({ killTree })
     child.pid = 4242
     runner.start(['orca-cli'])
@@ -303,8 +317,10 @@ describe('SkillUpdateRunner', () => {
 
   it('spawns npx from a Program Files (x86) install instead of refusing it', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
     try {
       const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
+
       const { runner, spawnCalls } = makeRunner({
         resolveCommand: () => npx,
         buildSpawnArgs: getSpawnArgsForWindows
@@ -321,9 +337,11 @@ describe('SkillUpdateRunner', () => {
     const { runner, child, states } = makeRunner({ rescanOutdatedNames: async () => [] })
     runner.start(['orca-cli'])
     const pushesAfterStart = states.length
+
     for (let frame = 0; frame < 25; frame += 1) {
       child.stdout.emit('data', Buffer.from(`\rfetching ${frame}%`))
     }
+
     expect(states.length).toBe(pushesAfterStart)
 
     child.emit('close', 0)

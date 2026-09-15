@@ -25,24 +25,39 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 const ASAR_APP_PATH = join('/packaged', 'resources', 'app.asar')
+
 const ASAR_UNPACKED_ENTRY = join(
   '/packaged',
   'resources',
@@ -51,7 +66,9 @@ const ASAR_UNPACKED_ENTRY = join(
   'main',
   'daemon-entry.js'
 )
+
 const ORCAD_ROOT = join('/opt', 'orcad')
+
 const ORCAD_ADJACENT_ENTRY = join(ORCAD_ROOT, 'daemon-entry.js')
 
 /** Drive one launch under the given layout and return the entry path that was forked. */
@@ -67,16 +84,19 @@ async function forkedDaemonEntryPath(layout: {
   probeSocketExistsMock.mockImplementation((p?: string) => p === layout.existingEntry)
   checkDaemonHealthMock.mockResolvedValue('unreachable')
   await mod.initDaemonPtyProvider()
+
   const launcher = spawnerInstances[0].launcher as (
     socketPath: string,
     tokenPath: string
   ) => Promise<unknown>
+
   forkMock.mockImplementationOnce(() => {
     throw new Error('stop after entry resolution')
   })
   await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow(
     'stop after entry resolution'
   )
+
   return forkMock.mock.calls.at(-1)?.[0] as string
 }
 

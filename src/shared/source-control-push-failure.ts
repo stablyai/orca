@@ -1,27 +1,39 @@
 import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_PUSH_FAILURE_SUMMARY = 'Push failed.'
+
 const LINT_PUSH_FAILURE_SUMMARY = 'Lint failed during push.'
+
 const PRE_PUSH_FAILURE_SUMMARY = 'Pre-push hook failed.'
+
 export const PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS = 64 * 1024
 
 const PUSH_FAILURE_PROMPT_OUTPUT_LIMIT = 12_000
+
 export const PUSH_FAILURE_PROMPT_FILE_LIMIT = 40
+
 const PUSH_FAILURE_REPLY_INSTRUCTION =
   'Reply with the root cause, files changed, validation run, final git status, and anything left for the user.'
 
 const ANSI_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u001b\u009b][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
+
 const CONTROL_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g
+
 const LOW_SIGNAL_LINE_PATTERN =
   /^(?:npm\s+(?:warn|warning)\b.*(?:env|config)|npm\s+notice\b|husky\s+-\s+deprecated\b)/i
+
 const PUSH_HOOK_PATTERN = /\b(?:pre-push|prepush)\b/i
+
 const PUSH_HOOK_RUNNER_PATTERN = /\b(?:husky|lint-staged|lefthook)\b/i
+
 const PUSH_CONTEXT_PATTERN = /\b(?:failed to push|hook declined to push|git push)\b/i
+
 const LINT_PATTERN = /\b(?:eslint|oxlint|lint-staged|lint)\b/i
+
 const REMOTE_PUSH_EXCLUSION_PATTERN =
   /authentication failed|repository not found|not a git repository|does not appear to be a git repository|permission denied|protected branch|pre-receive hook declined|non-fast-forward|fetch first|updates were rejected|stale info|submodule|failed to push all needed submodules|unable to push submodule|unable to access|could not resolve host|network is unreachable|connection timed out|failed to connect|rpc failed|remote end hung up/i
 
@@ -36,6 +48,7 @@ function normalizePushFailure(raw: string): string {
 
 function getMeaningfulLines(raw: string): string[] {
   const lines = getPushFailureNormalizedLines(normalizePushFailure(raw))
+
   const hasSignalLine = lines.some(
     (line) =>
       PUSH_HOOK_PATTERN.test(line) || PUSH_HOOK_RUNNER_PATTERN.test(line) || LINT_PATTERN.test(line)
@@ -46,27 +59,34 @@ function getMeaningfulLines(raw: string): string[] {
   }
 
   const filtered = lines.filter((line) => !LOW_SIGNAL_LINE_PATTERN.test(line))
+
   return filtered.length > 0 ? filtered : lines
 }
 
 function getPushFailureNormalizedLines(normalized: string): string[] {
   const lines: string[] = []
   let lineStart = 0
+
   for (let index = 0; index <= normalized.length; index += 1) {
     if (index < normalized.length && normalized.charCodeAt(index) !== 10) {
       continue
     }
+
     const line = normalized.slice(lineStart, index).trim()
+
     if (line.length > 0) {
       lines.push(line)
     }
+
     lineStart = index + 1
   }
+
   return lines
 }
 
 export function isPushHookFailure(raw: string): boolean {
   const normalized = normalizePushFailure(raw)
+
   if (!normalized) {
     return false
   }
@@ -137,18 +157,23 @@ export function hasExpandedPushFailureDetails(raw: string, summary: string): boo
 function foldPushFailureComparisonWhitespace(value: string): string {
   let result = ''
   let pendingSpace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isPushFailureComparisonWhitespace(code)) {
       pendingSpace = result.length > 0
       continue
     }
+
     if (pendingSpace) {
       result += ' '
       pendingSpace = false
     }
+
     result += value[index]
   }
+
   return result
 }
 
@@ -176,6 +201,7 @@ function truncatePromptText(value: string, limit: number): string {
   const omitted = value.length - limit
   const headLength = Math.floor(limit * 0.35)
   const tailLength = limit - headLength
+
   return [
     value.slice(0, headLength),
     `\n[...${omitted} characters omitted...]\n`,
@@ -192,13 +218,17 @@ function buildPushFailurePromptFileLines(
   }
 
   const visibleEntries = entries.slice(0, PUSH_FAILURE_PROMPT_FILE_LIMIT)
+
   const lines = visibleEntries.map((entry) => {
     return `- ${JSON.stringify(entry.path)} (${entry.status}, ${entry.area})`
   })
+
   const omittedCount = Math.max(0, totalEntryCount - visibleEntries.length)
+
   if (omittedCount > 0) {
     lines.push(`- ...${omittedCount} more changed files omitted...`)
   }
+
   return lines
 }
 
@@ -254,6 +284,7 @@ export function appendPushFailureCustomInstruction(
   customInstruction: string
 ): string {
   const trimmedInstruction = customInstruction.trim()
+
   if (!trimmedInstruction) {
     return prompt
   }
@@ -264,6 +295,7 @@ export function appendPushFailureCustomInstruction(
     trimmedInstruction,
     ''
   ].join('\n')
+
   if (!prompt.endsWith(PUSH_FAILURE_REPLY_INSTRUCTION)) {
     return `${prompt}${customInstructionBlock}`
   }

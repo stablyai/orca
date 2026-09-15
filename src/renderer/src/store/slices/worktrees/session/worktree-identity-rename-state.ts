@@ -65,26 +65,34 @@ export function buildWorktreeRenameState(
   if (oldWorktreeId === newWorktreeId) {
     return {}
   }
+
   const renamed: Record<string, unknown> = {}
+
   const renameKey = <T>(
     key: keyof AppState,
     mapValue: (value: T) => T = (value) => value
   ): void => {
     const map = s[key as keyof AppState] as Record<string, unknown> | undefined
+
     if (!map || !(oldWorktreeId in map)) {
       return
     }
+
     const next = { ...map }
     next[newWorktreeId] = mapValue(next[oldWorktreeId] as T)
     delete next[oldWorktreeId]
     renamed[key] = next
   }
+
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+
   const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
   const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+
   const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
     const renamedValue = withNewWorktreeId(value)
+
     return value.docLocation?.worktreeId === oldWorktreeId
       ? {
           ...renamedValue,
@@ -98,6 +106,7 @@ export function buildWorktreeRenameState(
         }
       : renamedValue
   }
+
   const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
     tabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
     browserTabsByWorktree: (workspaces: BrowserWorkspace[]) =>
@@ -117,27 +126,35 @@ export function buildWorktreeRenameState(
     unifiedTabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
     groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId)
   }
+
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
   }
+
   // Recency keys may carry a host prefix. Preserve that prefix while moving
   // the path-derived id so a rename cannot merge host twins.
   const nextVisitRecency = { ...s.lastVisitedAtByWorktreeId }
   let visitRecencyChanged = false
+
   for (const [key, value] of Object.entries(s.lastVisitedAtByWorktreeId)) {
     const rawId = getWorktreeIdFromVisitKey(key)
+
     if (rawId !== oldWorktreeId) {
       continue
     }
+
     const nextKey =
       rawId === key ? newWorktreeId : `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
+
     nextVisitRecency[nextKey] = value
     delete nextVisitRecency[key]
     visitRecencyChanged = true
   }
+
   if (visitRecencyChanged) {
     renamed.lastVisitedAtByWorktreeId = nextVisitRecency
   }
+
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
     files.map(withNewWorktreeId)
@@ -155,7 +172,9 @@ export function buildWorktreeRenameState(
         f.worktreeId === oldWorktreeId ? { ...f, worktreeId: newWorktreeId } : f
       )
     : s.openFiles
+
   const currentBrowserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
+
   const browserPagesByWorkspace = Object.values(currentBrowserPagesByWorkspace).some((pages) =>
     pages.some(
       (page) => page.worktreeId === oldWorktreeId || page.docLocation?.worktreeId === oldWorktreeId
@@ -168,7 +187,9 @@ export function buildWorktreeRenameState(
         ])
       )
     : s.browserPagesByWorkspace
+
   const currentRecentlyClosedBrowserPagesByWorkspace = s.recentlyClosedBrowserPagesByWorkspace ?? {}
+
   const recentlyClosedBrowserPagesByWorkspace = Object.values(
     currentRecentlyClosedBrowserPagesByWorkspace
   ).some((pages) =>
@@ -183,16 +204,21 @@ export function buildWorktreeRenameState(
         ])
       )
     : s.recentlyClosedBrowserPagesByWorkspace
+
   let everActivated = s.everActivatedWorktreeIds
+
   if (everActivated.has(oldWorktreeId)) {
     everActivated = new Set(everActivated)
     everActivated.delete(oldWorktreeId)
     everActivated.add(newWorktreeId)
   }
+
   const pendingReconnectWorktreeIds = s.pendingReconnectWorktreeIds?.includes(oldWorktreeId)
     ? s.pendingReconnectWorktreeIds.map((id) => (id === oldWorktreeId ? newWorktreeId : id))
     : s.pendingReconnectWorktreeIds
+
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
+
   const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
     (record) => record.worktreeId === oldWorktreeId
   )

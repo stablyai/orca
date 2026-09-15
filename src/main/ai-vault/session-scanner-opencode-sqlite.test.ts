@@ -15,6 +15,7 @@ afterEach(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   tempDirs = []
 })
 
@@ -22,6 +23,7 @@ function createTempDb(): { db: Database.Database; path: string } {
   const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-sqlite-'))
   tempDirs.push(dir)
   const path = join(dir, 'opencode.db')
+
   return { db: new Database(path), path }
 }
 
@@ -163,6 +165,7 @@ function insertMessage(
         ? { title: args.summaryTitle ?? null, body: args.summaryBody ?? null }
         : undefined
   })
+
   db.prepare(
     `INSERT INTO message (id, session_id, time_created, time_updated, data)
      VALUES (?, ?, ?, ?, ?)`
@@ -184,11 +187,13 @@ function insertPart(
     type: args.type ?? 'text',
     text: args.text ?? 'hello world'
   })
+
   db.prepare(
     `INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(args.id, args.messageId, args.sessionId, args.timeCreated, args.timeCreated, data)
 }
+
 describe('listOpenCodeSqliteSessions', () => {
   it('returns candidates sorted by time_updated desc via the synthesized mtimeMs', async () => {
     const { db, path } = createTempDb()
@@ -208,11 +213,13 @@ describe('listOpenCodeSqliteSessions', () => {
     db.close()
 
     const issues: AiVaultScanIssue[] = []
+
     const candidates = await listOpenCodeSqliteSessions({
       dbPaths: [path],
       limit: 10,
       issues
     })
+
     expect(issues).toEqual([])
     expect(candidates).toHaveLength(2)
     expect(candidates[0].agent).toBe('opencode')
@@ -247,6 +254,7 @@ describe('listOpenCodeSqliteSessions', () => {
       limit: 10,
       issues: []
     })
+
     expect(candidates).toHaveLength(1)
     expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(newPath, 'ses_duplicate'))
   })
@@ -277,6 +285,7 @@ describe('listOpenCodeSqliteSessions', () => {
       limit: 10,
       issues: []
     })
+
     expect(candidates.map((c) => c.file.path)).toEqual([
       buildOpenCodeSqliteCandidatePath(path, 'ses_normal')
     ])
@@ -286,21 +295,25 @@ describe('listOpenCodeSqliteSessions', () => {
     const { db, path } = createTempDb()
     db.exec('CREATE TABLE other (id TEXT)')
     db.close()
+
     const candidates = await listOpenCodeSqliteSessions({
       dbPaths: [path],
       limit: 10,
       issues: []
     })
+
     expect(candidates).toEqual([])
   })
 
   it('records an issue when the DB file does not exist', async () => {
     const issues: AiVaultScanIssue[] = []
+
     const candidates = await listOpenCodeSqliteSessions({
       dbPaths: ['/nonexistent/opencode.db'],
       limit: 10,
       issues
     })
+
     expect(candidates).toEqual([])
     expect(issues).toHaveLength(1)
     expect(issues[0].agent).toBe('opencode')
@@ -314,11 +327,13 @@ describe('listOpenCodeSqliteSessions', () => {
     db.close()
 
     const issues: AiVaultScanIssue[] = []
+
     const candidates = await listOpenCodeSqliteSessions({
       dbPaths: [path],
       limit: 10,
       issues
     })
+
     expect(issues).toEqual([])
     expect(candidates).toHaveLength(1)
     expect(candidates[0].file.path).toBe(buildOpenCodeSqliteCandidatePath(path, 'ses_minimal'))
@@ -375,6 +390,7 @@ describe('parseOpenCodeSqliteSession', () => {
       sessionId: 'ses_1',
       platform: 'darwin'
     })
+
     expect(session).not.toBeNull()
     expect(session!.agent).toBe('opencode')
     expect(session!.sessionId).toBe('ses_1')
@@ -424,6 +440,7 @@ describe('parseOpenCodeSqliteSession', () => {
       sessionId: 'ses_2',
       platform: 'darwin'
     })
+
     expect(session).not.toBeNull()
     expect(session!.title).toBe('fallback title from summary')
   })
@@ -437,11 +454,13 @@ describe('parseOpenCodeSqliteSession', () => {
       timeUpdated: 1_777_634_001_000
     })
     db.close()
+
     const session = await parseOpenCodeSqliteSession({
       dbPath: path,
       sessionId: 'ses_missing',
       platform: 'darwin'
     })
+
     expect(session).toBeNull()
   })
 
@@ -449,11 +468,13 @@ describe('parseOpenCodeSqliteSession', () => {
     const { db, path } = createTempDb()
     db.exec('CREATE TABLE other (id TEXT)')
     db.close()
+
     const session = await parseOpenCodeSqliteSession({
       dbPath: path,
       sessionId: 'ses_1',
       platform: 'darwin'
     })
+
     expect(session).toBeNull()
   })
 
@@ -468,6 +489,7 @@ describe('parseOpenCodeSqliteSession', () => {
       sessionId: 'ses_minimal',
       platform: 'darwin'
     })
+
     expect(session).not.toBeNull()
     expect(session!.sessionId).toBe('ses_minimal')
     expect(session!.filePath).toBe(path)
@@ -489,11 +511,13 @@ describe('parseOpenCodeSqliteSession', () => {
       model: JSON.stringify({ modelID: 'claude-sonnet-4-5' })
     })
     db.close()
+
     const session = await parseOpenCodeSqliteSession({
       dbPath: path,
       sessionId: 'ses_3',
       platform: 'darwin'
     })
+
     expect(session).not.toBeNull()
     expect(session!.model).toBe('claude-sonnet-4-5')
   })

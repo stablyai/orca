@@ -27,18 +27,23 @@ export function deviceLabel(
   if (!device) {
     return 'Mobile Emulator'
   }
+
   if (typeof device === 'string') {
     return device.length > 20 && device.includes('-') ? 'Mobile Emulator' : device
   }
+
   if ('displayName' in device && device.displayName) {
     return device.displayName
   }
+
   if ('name' in device && device.name) {
     return device.name
   }
+
   if ('device' in device && device.device && !device.device.includes('-')) {
     return device.device
   }
+
   return 'Mobile Emulator'
 }
 
@@ -47,13 +52,17 @@ export function simulatorPreviewStreamUrl(info?: EmulatorStreamInfo): string | u
   if (!info) {
     return undefined
   }
+
   if (info.streamUrl) {
     return info.streamUrl
   }
+
   if (info.url) {
     const base = info.url.replace(/\/$/, '')
+
     return `${base}/stream.mjpeg`
   }
+
   return undefined
 }
 
@@ -61,6 +70,7 @@ export function pickDefaultDevice(devices: SimulatorDeviceRow[]): SimulatorDevic
   const available = devices.filter((d) => d.isAvailable !== false)
   const booted = available.filter((d) => d.state === 'Booted')
   const bootedIphone = booted.find((d) => /iPhone/i.test(d.name || ''))
+
   return (
     bootedIphone ||
     booted[0] ||

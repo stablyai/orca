@@ -46,18 +46,24 @@ export function collectClientLayoutGroupIds(
   layout: TabGroupLayoutNode | null | undefined
 ): Set<string> {
   const result = new Set<string>()
+
   const visit = (node: TabGroupLayoutNode | null | undefined): void => {
     if (!node) {
       return
     }
+
     if (node.type === 'leaf') {
       result.add(node.groupId)
+
       return
     }
+
     visit(node.first)
     visit(node.second)
   }
+
   visit(layout)
+
   return result
 }
 
@@ -68,14 +74,18 @@ export function pruneClientTabGroupLayout(
   if (!layout) {
     return null
   }
+
   if (layout.type === 'leaf') {
     return validGroupIds.has(layout.groupId) ? layout : null
   }
+
   const first = pruneClientTabGroupLayout(layout.first, validGroupIds)
   const second = pruneClientTabGroupLayout(layout.second, validGroupIds)
+
   if (first && second) {
     return { ...layout, first, second }
   }
+
   return first ?? second
 }
 
@@ -99,6 +109,7 @@ export function reconcileClientOwnedTabPlacement(
   const rekeyTabId = (tabId: string): string => input.rekeyedTabIds.get(tabId) ?? tabId
   const working = new Map<string, WorkingGroup>()
   const groupOrder: string[] = []
+
   for (const group of input.currentGroups) {
     const rekeyed =
       input.rekeyedTabIds.size === 0
@@ -109,17 +120,21 @@ export function reconcileClientOwnedTabPlacement(
             activeTabId: group.activeTabId ? rekeyTabId(group.activeTabId) : group.activeTabId,
             recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId)
           }
+
     working.set(group.id, {
       group: rekeyed,
       tabOrder: rekeyed.tabOrder.filter((tabId) => input.validUnifiedTabIds.has(tabId))
     })
     groupOrder.push(group.id)
   }
+
   const ensureGroup = (groupId: string): WorkingGroup => {
     const existing = working.get(groupId)
+
     if (existing) {
       return existing
     }
+
     // Why: a rendered layout leaf can precede its group record (hydration races) — repair it.
     const created: WorkingGroup = {
       group: {
@@ -131,19 +146,24 @@ export function reconcileClientOwnedTabPlacement(
       },
       tabOrder: []
     }
+
     working.set(groupId, created)
     groupOrder.push(groupId)
+
     return created
   }
+
   const activeGroupIdIfValid =
     input.currentActiveGroupId &&
     (working.has(input.currentActiveGroupId) || layoutGroupIds.has(input.currentActiveGroupId))
       ? input.currentActiveGroupId
       : null
+
   const resolveTargetGroupId = (requestedGroupId: string): string | undefined => {
     if (working.has(requestedGroupId) || layoutGroupIds.has(requestedGroupId)) {
       return requestedGroupId
     }
+
     // Why: with no local group to join, repair the rendered leaf first; failing that,
     // materialize the requested group so a tab is never published into an unrendered one.
     return (
@@ -155,55 +175,74 @@ export function reconcileClientOwnedTabPlacement(
   }
 
   const movedTabIds = new Set<string>()
+
   for (const move of input.placementMoves) {
     if (!input.validUnifiedTabIds.has(move.tabId)) {
       continue
     }
+
     const targetGroupId = resolveTargetGroupId(move.groupId)
+
     if (!targetGroupId) {
       continue
     }
+
     movedTabIds.add(move.tabId)
+
     for (const entry of working.values()) {
       if (entry.group.id !== targetGroupId) {
         entry.tabOrder = entry.tabOrder.filter((tabId) => tabId !== move.tabId)
       }
     }
+
     const target = ensureGroup(targetGroupId)
+
     if (!target.tabOrder.includes(move.tabId)) {
       target.tabOrder.push(move.tabId)
     }
   }
+
   for (const adopted of input.adoptedTabs) {
     if (movedTabIds.has(adopted.tabId) || !input.validUnifiedTabIds.has(adopted.tabId)) {
       continue
     }
+
     const targetGroupId = resolveTargetGroupId(adopted.groupId)
+
     if (!targetGroupId) {
       continue
     }
+
     const target = ensureGroup(targetGroupId)
+
     if (!target.tabOrder.includes(adopted.tabId)) {
       target.tabOrder.push(adopted.tabId)
     }
   }
 
   const reconciled: TabGroup[] = []
+
   for (const groupId of groupOrder) {
     const entry = working.get(groupId)
+
     if (!entry) {
       continue
     }
+
     const { group, tabOrder } = entry
+
     const intentActive =
       input.intentTabId && tabOrder.includes(input.intentTabId) ? input.intentTabId : null
+
     const displacedActive =
       group.activeTabId && !tabOrder.includes(group.activeTabId) ? group.activeTabId : null
+
     // Why: a host-side close (or a placement move away) must land the user where a local
     // close would (MRU, then neighbor), picking only among tabs surviving this snapshot.
     const repairOrder = displacedActive
       ? group.tabOrder.filter((tabId) => tabOrder.includes(tabId) || tabId === displacedActive)
       : null
+
     const activeTabId =
       intentActive ??
       (displacedActive && repairOrder
@@ -211,8 +250,10 @@ export function reconcileClientOwnedTabPlacement(
           tabOrder[0] ??
           null)
         : (group.activeTabId ?? tabOrder[0] ?? null))
+
     const validActiveTabId =
       activeTabId && tabOrder.includes(activeTabId) ? activeTabId : (tabOrder[0] ?? null)
+
     reconciled.push({
       ...group,
       tabOrder,
@@ -236,35 +277,44 @@ export function reconcileClientOwnedTabPlacement(
       )
       .map((group) => group.id)
   )
+
   let groups = reconciled.filter(
     (group) =>
       group.tabOrder.length > 0 ||
       input.isGroupReserved(group.id) ||
       (layoutGroupIds.has(group.id) && !emptiedGroupIds.has(group.id))
   )
+
   if (groups.length === 0 && reconciled.length > 0) {
     // Why: never drop to zero groups — closeUnifiedTab keeps the last pane too.
     const fallback =
       reconciled.find((group) => group.id === input.currentActiveGroupId) ?? reconciled[0]
+
     groups = [fallback]
   }
+
   const survivingGroupIds = new Set(groups.map((group) => group.id))
+
   const intentGroupId = input.intentTabId
     ? (groups.find((group) => group.tabOrder.includes(input.intentTabId as string))?.id ?? null)
     : null
+
   const reservedEmptyFallbackGroupId = input.reservedEmptyGroupFallbackTabId
     ? (groups.find((group) =>
         group.tabOrder.includes(input.reservedEmptyGroupFallbackTabId as string)
       )?.id ?? null)
     : null
+
   const nextActiveGroupId =
     intentGroupId ??
     reservedEmptyFallbackGroupId ??
     (input.currentActiveGroupId && survivingGroupIds.has(input.currentActiveGroupId)
       ? input.currentActiveGroupId
       : (groups.find((group) => layoutGroupIds.has(group.id))?.id ?? groups[0]?.id ?? null))
+
   let layout = pruneClientTabGroupLayout(input.currentLayout, survivingGroupIds)
   const renderedGroupIds = collectClientLayoutGroupIds(layout)
+
   // Why: a surviving group must stay reachable — repair hydration races by appending a leaf.
   for (const group of groups) {
     if (!renderedGroupIds.has(group.id)) {
@@ -274,6 +324,7 @@ export function reconcileClientOwnedTabPlacement(
         : leaf
     }
   }
+
   return {
     groups: groups.length > 0 ? groups : null,
     activeGroupId: nextActiveGroupId,

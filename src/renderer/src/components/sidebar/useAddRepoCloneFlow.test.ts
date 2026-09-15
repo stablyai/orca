@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
@@ -33,20 +34,24 @@ vi.mock('react', async (importOriginal) => {
     },
     useRef: <T>(value: T) => {
       const index = mocks.refIndex++
+
       return {
         current: index in mocks.refValues ? (mocks.refValues[index] as T) : value
       }
     },
     useState: <T>(initial: T | (() => T)) => {
       const index = mocks.stateIndex++
+
       const value =
         index in mocks.stateValues
           ? mocks.stateValues[index]
           : typeof initial === 'function'
             ? (initial as () => T)()
             : initial
+
       const setter = vi.fn()
       mocks.stateSetters[index] = setter
+
       return [value as T, setter]
     }
   }
@@ -62,6 +67,7 @@ vi.mock('@/store', () => {
       }
     }
   )
+
   return { useAppStore }
 })
 
@@ -127,6 +133,7 @@ describe('useAddRepoCloneFlow', () => {
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
     })
+
     await result.handleClone()
 
     expect(mocks.cloneRemote).toHaveBeenCalledWith({
@@ -172,6 +179,7 @@ describe('useAddRepoCloneFlow', () => {
   it('strips Electron IPC wrappers from clone errors', async () => {
     const cloneError =
       'Clone failed: Destination already exists and is not empty: /srv/orca. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'
+
     mocks.cloneRemote.mockRejectedValue(
       new Error(`Error invoking remote method 'repos:cloneRemote': Error: ${cloneError}`)
     )
@@ -185,6 +193,7 @@ describe('useAddRepoCloneFlow', () => {
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
     })
+
     await result.handleClone()
 
     expect(mocks.stateSetters[3]).toHaveBeenCalledWith(cloneError)
@@ -192,11 +201,13 @@ describe('useAddRepoCloneFlow', () => {
 
   it('clones through the selected runtime environment', async () => {
     const repo = makeRepo({ id: 'runtime-repo' })
+
     const localRepo = makeRepo({
       id: repo.id,
       path: '/local/runtime-repo',
       executionHostId: 'local'
     })
+
     mocks.storeState.repos = [localRepo]
     mocks.callRuntimeRpc.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockResolvedValue(true)
@@ -210,6 +221,7 @@ describe('useAddRepoCloneFlow', () => {
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
     })
+
     await result.handleClone()
 
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(

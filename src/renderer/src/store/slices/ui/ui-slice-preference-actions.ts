@@ -78,11 +78,13 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeVisibleExecutionHostIds(ids)
       // Why: workspaceHostScope stays the compat/default-host signal for creation flows; visibility can now be multi-select.
       let workspaceHostScope: WorkspaceHostScope = get().workspaceHostScope
+
       if (normalized === null) {
         workspaceHostScope = 'all'
       } else if (normalized.length === 1) {
         workspaceHostScope = normalized[0]
       }
+
       set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
       window.api.ui
         .set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
@@ -122,17 +124,22 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         if (!worktreeId) {
           return s
         }
+
         const current = s.showDotfilesByWorktree[worktreeId] ?? true
+
         if (current === showDotfiles) {
           return s
         }
+
         const next = { ...s.showDotfilesByWorktree }
+
         // Why: showing dotfiles is the default; only persist worktree-level opt-outs.
         if (showDotfiles) {
           delete next[worktreeId]
         } else {
           next[worktreeId] = false
         }
+
         return { showDotfilesByWorktree: next }
       }),
     toggleShowDotfilesForWorktree: (worktreeId) =>
@@ -140,13 +147,16 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         if (!worktreeId) {
           return s
         }
+
         const nextShowDotfiles = !(s.showDotfilesByWorktree[worktreeId] ?? true)
         const next = { ...s.showDotfilesByWorktree }
+
         if (nextShowDotfiles) {
           delete next[worktreeId]
         } else {
           next[worktreeId] = false
         }
+
         return { showDotfilesByWorktree: next }
       }),
 
@@ -194,12 +204,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     toggleCollapsedGroup: (key) =>
       set((s) => {
         const next = new Set(s.collapsedGroups)
+
         if (next.has(key)) {
           next.delete(key)
         } else {
           next.add(key)
         }
+
         window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
+
         return { collapsedGroups: next }
       }),
 
@@ -266,10 +279,13 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     toggleStatusBarItem: (item) =>
       set((s) => {
         const current = s.statusBarItems || DEFAULT_STATUS_BAR_ITEMS
+
         const updated = current.includes(item)
           ? current.filter((i) => i !== item)
           : [...current, item]
+
         window.api.ui.set({ statusBarItems: updated }).catch(console.error)
+
         return { statusBarItems: updated }
       }),
 

@@ -5,6 +5,7 @@
 // close/select through the exact same closures the keyboard path uses. Dispatch is synchronous,
 // so the reclaim intent set inside the panel's close handler still lands before webview teardown.
 export const FLOATING_WORKSPACE_GUEST_CLOSE_EVENT = 'orca:floating-workspace-guest-close'
+
 export const FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT =
   'orca:floating-workspace-guest-select-index'
 
@@ -24,6 +25,7 @@ export function dispatchFloatingWorkspaceGuestClose(
   if (typeof window === 'undefined') {
     return
   }
+
   window.dispatchEvent(new CustomEvent(FLOATING_WORKSPACE_GUEST_CLOSE_EVENT, { detail }))
 }
 
@@ -33,5 +35,6 @@ export function dispatchFloatingWorkspaceGuestSelectIndex(
   if (typeof window === 'undefined') {
     return
   }
+
   window.dispatchEvent(new CustomEvent(FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT, { detail }))
 }

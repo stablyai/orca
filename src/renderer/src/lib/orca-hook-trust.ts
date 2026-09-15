@@ -12,17 +12,22 @@ export async function hashOrcaHookScript(content: string): Promise<string> {
   // Cast: the Electron type lib declares subtle non-optional, but the browser
   // leaves it undefined off a secure context.
   const subtle = (globalThis.crypto as Crypto | undefined)?.subtle as SubtleCrypto | undefined
+
   if (subtle) {
     const digest = await subtle.digest('SHA-256', bytes)
+
     return bytesToHex(new Uint8Array(digest))
   }
+
   return bytesToHex(sha256(bytes))
 }
 
 function bytesToHex(view: Uint8Array): string {
   const hex: string[] = []
+
   for (let i = 0; i < view.length; i += 1) {
     hex.push(view[i].toString(16).padStart(2, '0'))
   }
+
   return hex.join('')
 }

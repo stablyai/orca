@@ -35,9 +35,11 @@ export function readCodexBackgroundTaskFrame(
 ): CodexBackgroundTaskFrame | null {
   if (event.method === 'turn/started' || event.method === 'turn/completed') {
     const turnId = readCodexTurnId(event.params)
+
     if (turnId === null) {
       return null
     }
+
     return {
       kind: 'turn',
       threadId: event.threadId,
@@ -48,11 +50,14 @@ export function readCodexBackgroundTaskFrame(
           : codexChildTurnState(readRecord(readRecord(event.params).turn).status)
     }
   }
+
   if (event.method !== 'item/started' && event.method !== 'item/completed') {
     return null
   }
+
   const item = readCodexThreadItem(readRecord(event.params).item)
   const activity = item && readCodexSubagentActivity(item)
+
   if (
     !activity ||
     activity.agentThreadId === primaryThreadId ||
@@ -60,6 +65,7 @@ export function readCodexBackgroundTaskFrame(
   ) {
     return null
   }
+
   return {
     kind: 'subagent',
     agentThreadId: activity.agentThreadId,

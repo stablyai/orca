@@ -45,16 +45,20 @@ describe('secure-file coarse-ctime mode drift', () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockImplementation((targetPath: string) => {
       const path = String(targetPath)
+
       if (path === paths.dir) {
         return fakeStats(true, state.dirMode)
       }
+
       if (path === paths.file) {
         return fakeStats(false, state.fileMode)
       }
+
       throw new Error(`unexpected stat path ${path}`)
     })
     chmodSyncMock.mockImplementation((targetPath: string, mode: number) => {
       const path = String(targetPath)
+
       if (path === paths.dir) {
         state.dirMode = mode & 0o777
       } else if (path === paths.file) {
@@ -71,6 +75,7 @@ describe('secure-file coarse-ctime mode drift', () => {
     statSyncMock.mockReset()
     __resetSecureFileWindowsUserSidForTests()
     __resetSecureFileHardenedPathsForTests()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }

@@ -7,9 +7,13 @@ import {
 } from '../../../../shared/utf8-byte-limits'
 
 const TERMINAL_PASTE_ESCAPE_CODE_POINT = 0x1b
+
 const TERMINAL_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b
+
 const TERMINAL_PASTE_INERT_ESCAPE = '\u241b'
+
 const LINE_FEED_CODE_POINT = 0x0a
+
 const CARRIAGE_RETURN_CODE_POINT = 0x0d
 
 export function chunkTerminalPastePlan(plan: TerminalPastePlan): string[] {
@@ -21,9 +25,11 @@ export function* iterateTerminalPastePlanChunks(plan: TerminalPastePlan): Genera
     plan.windowsInputRecordNewline === 'csi-u' ? 8 : 4,
     plan.maxChunkBytes ?? TERMINAL_PASTE_CHUNK_MAX_BYTES
   )
+
   if (plan.bracketed) {
     yield BRACKETED_PASTE_START
   }
+
   yield* iterateTextByUtf8Bytes(
     plan.payload.plainText,
     maxChunkBytes,
@@ -31,6 +37,7 @@ export function* iterateTerminalPastePlanChunks(plan: TerminalPastePlan): Genera
     plan.newlinePolicy,
     plan.windowsInputRecordNewline
   )
+
   if (plan.bracketed) {
     yield BRACKETED_PASTE_END
   }
@@ -45,9 +52,11 @@ function* iterateTextByUtf8Bytes(
 ): Generator<string> {
   let chunk = ''
   let chunkBytes = 0
+
   for (let index = 0; index < text.length; index += 1) {
     const codePoint = readUtf8CodePointAt(text, index)
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
+
     // Why: iterator normalization avoids a full-size copy and keeps CRLF atomic across chunks.
     if (
       newlinePolicy !== 'preserve' &&
@@ -57,11 +66,14 @@ function* iterateTextByUtf8Bytes(
     ) {
       continue
     }
+
     const isLineEnding =
       newlinePolicy !== 'preserve' &&
       (codePoint === LINE_FEED_CODE_POINT || codePoint === CARRIAGE_RETURN_CODE_POINT)
+
     const normalizedCodePoint = isLineEnding ? CARRIAGE_RETURN_CODE_POINT : codePoint
     const sanitizedEscape = sanitizeEscapes && codePoint === TERMINAL_PASTE_ESCAPE_CODE_POINT
+
     const next =
       isLineEnding && newlinePolicy === 'windows-input-record'
         ? windowsInputRecordNewline === 'csi-u'
@@ -72,27 +84,34 @@ function* iterateTextByUtf8Bytes(
           : normalizedCodePoint === codePoint
             ? text.slice(index, index + codeUnitLength)
             : '\r'
+
     const nextBytes =
       isLineEnding && newlinePolicy === 'windows-input-record'
         ? next.length
         : getUtf8ByteLengthForCodePoint(
             sanitizedEscape ? TERMINAL_PASTE_INERT_ESCAPE_CODE_POINT : normalizedCodePoint
           )
+
     if (chunk && chunkBytes + nextBytes > maxBytes) {
       yield chunk
       chunk = next
       chunkBytes = nextBytes
+
       if (codeUnitLength === 2) {
         index += 1
       }
+
       continue
     }
+
     chunk += next
     chunkBytes += nextBytes
+
     if (codeUnitLength === 2) {
       index += 1
     }
   }
+
   if (chunk) {
     yield chunk
   }

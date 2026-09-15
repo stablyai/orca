@@ -9,6 +9,7 @@ export function promoteLegacyCoordinatorMailForTakeover(
   if (!retainedCoordinatorHandle) {
     return
   }
+
   this.db
     .prepare(
       `UPDATE messages
@@ -74,9 +75,11 @@ export function getUniqueLegacyCoordinatorHandle(
   runId: string
 ): string | null {
   const adoption = this.getLegacyAdoption()
+
   if (!adoption || adoption.adopted_run_id !== runId) {
     return null
   }
+
   const workerHandles = new Set(
     (
       this.db
@@ -93,6 +96,7 @@ export function getUniqueLegacyCoordinatorHandle(
         .all(runId, runId) as { handle: string }[]
     ).map((row) => row.handle)
   )
+
   const durableRows = this.db
     .prepare(
       `SELECT coordinator_handle AS handle
@@ -111,10 +115,13 @@ export function getUniqueLegacyCoordinatorHandle(
     .all(adoption.adopted_at, runId, adoption.adopted_at) as {
     handle: string
   }[]
+
   if (durableRows.some((row) => workerHandles.has(row.handle))) {
     return null
   }
+
   const candidates = new Set(durableRows.map((row) => row.handle))
+
   const mailRows = this.db
     .prepare(
       `SELECT m.to_handle AS handle
@@ -143,6 +150,7 @@ export function getUniqueLegacyCoordinatorHandle(
     ) as {
     handle: string
   }[]
+
   for (const row of mailRows) {
     if (
       !workerHandles.has(row.handle) &&
@@ -152,6 +160,7 @@ export function getUniqueLegacyCoordinatorHandle(
       candidates.add(row.handle)
     }
   }
+
   return candidates.size === 1 ? ([...candidates][0] ?? null) : null
 }
 

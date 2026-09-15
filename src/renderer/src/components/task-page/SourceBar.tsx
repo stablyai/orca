@@ -13,6 +13,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
+
 export function TaskPageSourceBar({
   model
 }: {
@@ -48,6 +49,7 @@ export function TaskPageSourceBar({
     handleLinearTeamSelectionChange,
     handleLinearScopeOpen
   } = model
+
   return (
     <div className="flex items-center justify-between gap-2">
       <div
@@ -76,6 +78,7 @@ export function TaskPageSourceBar({
           const active = taskSource === source.id
           const sourceAvailabilityNotice = taskSourceAvailabilityNoticeByProvider[source.id] ?? null
           const sourceDisabled = source.disabled || sourceAvailabilityNotice?.blocking
+
           return (
             <Tooltip key={source.id}>
               <TooltipTrigger asChild>
@@ -86,6 +89,7 @@ export function TaskPageSourceBar({
                     if (sourceAvailabilityNotice?.blocking) {
                       return
                     }
+
                     taskSourceManuallyChangedRef.current = true
                     openTaskPage(
                       {
@@ -156,6 +160,7 @@ export function TaskPageSourceBar({
                   if (!selectedLinearTeamForExternalLink?.url) {
                     return
                   }
+
                   void window.api.shell.openUrl(selectedLinearTeamForExternalLink.url)
                 }}
                 disabled={!selectedLinearTeamForExternalLink}

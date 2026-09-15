@@ -30,6 +30,7 @@ class ManualIdleClock {
   setTimeout(callback: () => void, delayMs: number): ManualTimer {
     const timer = { callback, dueAt: this.nowMs + delayMs, cancelled: false }
     this.timers.add(timer)
+
     return timer
   }
 
@@ -45,10 +46,12 @@ class ManualIdleClock {
 
   advanceBy(ms: number): void {
     this.nowMs += ms
+
     for (const timer of [...this.timers].sort((a, b) => a.dueAt - b.dueAt)) {
       if (timer.cancelled || timer.dueAt > this.nowMs) {
         continue
       }
+
       this.timers.delete(timer)
       timer.callback()
     }
@@ -58,6 +61,7 @@ class ManualIdleClock {
     return this.timers.size
   }
 }
+
 type DaemonServerInternals = {
   connections: {
     clients: Map<string, { controlSocket: Socket }>
@@ -77,6 +81,7 @@ type DaemonServerInternals = {
 
 function createMockSubprocess(): SubprocessHandle & { exit(code: number): void } {
   let onExit: ((code: number) => void) | null = null
+
   return {
     pid: 9345,
     getForegroundProcess: () => null,
@@ -99,10 +104,12 @@ function createMockSubprocess(): SubprocessHandle & { exit(code: number): void }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 2_000
+
   while (!predicate()) {
     if (Date.now() >= deadline) {
       throw new Error('Timed out waiting for daemon idle state')
     }
+
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
 }
@@ -113,31 +120,40 @@ async function requestOnRawSocket(
 ): Promise<{ error?: string }> {
   return new Promise((resolve, reject) => {
     let buffer = ''
+
     const cleanup = (): void => {
       clearTimeout(timeout)
       socket.off('data', onData)
     }
+
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString('utf8')
+
       for (;;) {
         const newlineIndex = buffer.indexOf('\n')
+
         if (newlineIndex === -1) {
           return
         }
+
         const line = buffer.slice(0, newlineIndex)
         buffer = buffer.slice(newlineIndex + 1)
         const message = JSON.parse(line) as { id?: string; error?: string }
+
         if (message.id === request.id) {
           cleanup()
           resolve(message)
+
           return
         }
       }
     }
+
     const timeout = setTimeout(() => {
       cleanup()
       reject(new Error(`Timed out waiting for raw response ${request.id}`))
     }, 2_000)
+
     socket.on('data', onData)
     socket.write(`${JSON.stringify(request)}\n`)
   })
@@ -247,6 +263,7 @@ describe('current daemon lifecycle retirement', () => {
       ...args: unknown[]
     ) => {
       replyFlushed = args.find((arg) => typeof arg === 'function') as (() => void) | undefined
+
       return originalWrite(chunk)
     }) as unknown as Socket['write'])
     const dispose = vi.spyOn(daemon.host, 'dispose')
@@ -477,11 +494,13 @@ describe('current daemon lifecycle retirement', () => {
     )
     const daemon = server as unknown as DaemonServerInternals
     await waitFor(() => daemon.connections.clients.has('startup-control-create'))
+
     const response = await requestOnRawSocket(control, {
       id: 'control-only-create',
       type: 'createOrAttach',
       payload: { sessionId: 'must-not-start', cols: 80, rows: 24 }
     })
+
     expect(response.error).toContain('connection is incomplete')
     expect(daemon.lifecycle.retirementRequested).toBe(false)
     expect(clock.pendingCount).toBe(0)
@@ -514,11 +533,13 @@ describe('current daemon lifecycle retirement', () => {
     paired.disconnect()
     await waitFor(() => daemon.lifecycle.retirementRequested)
     expect(clock.pendingCount).toBe(0)
+
     const response = await requestOnRawSocket(incomplete, {
       id: 'overlap-control-create',
       type: 'createOrAttach',
       payload: { sessionId: 'must-not-start', cols: 80, rows: 24 }
     })
+
     expect(response.error).toContain('connection is incomplete')
     expect(daemon.lifecycle.retirementRequested).toBe(true)
 
@@ -578,11 +599,13 @@ describe('current daemon lifecycle retirement', () => {
     await startServer()
     const current = new DaemonPtyAdapter({ socketPath, tokenPath })
     await current.listProcesses()
+
     const currentClient = (
       current as unknown as {
         client: DaemonClient
       }
     ).client
+
     const currentRequest = vi.spyOn(currentClient, 'request')
 
     await current.disconnectOnly()
@@ -600,11 +623,13 @@ describe('current daemon lifecycle retirement', () => {
     await startServer({ protocolVersion: 23 })
     const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
     await legacy.listProcesses()
+
     const legacyClient = (
       legacy as unknown as {
         client: DaemonClient
       }
     ).client
+
     const legacyRequest = vi.spyOn(legacyClient, 'request')
 
     await legacy.disconnectOnly()

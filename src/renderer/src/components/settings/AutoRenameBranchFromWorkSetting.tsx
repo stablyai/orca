@@ -38,6 +38,7 @@ const BUILT_IN_BRANCH_NAME_PROMPT = buildBranchNamePrompt({
   firstPrompt: '{first agent prompt}',
   assistantMessage: '{agent initial response, when available}'
 })
+
 export function shouldOpenAutoRenameBranchAdvanced(searchQuery: string): boolean {
   return (
     normalizeSettingsSearchQuery(searchQuery) !== '' &&
@@ -64,15 +65,19 @@ export function AutoRenameBranchFromWorkSetting({
   const [optionsOpen, setOptionsOpen] = useState(false)
   const advancedSearchOpen = shouldOpenAutoRenameBranchAdvanced(searchQuery)
   const advancedOpen = optionsOpen || advancedSearchOpen
+
   const persistedBranchNameTemplate = resolveSourceControlActionCommandTemplate(
     config.actions,
     'branchName'
   )
+
   const persistedBranchNameTemplateRef = useRef(persistedBranchNameTemplate)
   persistedBranchNameTemplateRef.current = persistedBranchNameTemplate
+
   const [branchNameTemplateDraft, setBranchNameTemplateDraft] = useState(
     persistedBranchNameTemplate
   )
+
   const [isSavingPrompt, setIsSavingPrompt] = useState(false)
   const branchNamePromptDirty = branchNameTemplateDraft !== persistedBranchNameTemplate
 
@@ -94,10 +99,12 @@ export function AutoRenameBranchFromWorkSetting({
 
   const onBranchPromptDirtyChangeRef = useRef(onBranchPromptDirtyChange)
   onBranchPromptDirtyChangeRef.current = onBranchPromptDirtyChange
+
   const setSettingRootRef = useCallback((node: HTMLDivElement | null): void => {
     if (node !== null) {
       return
     }
+
     // Why: Settings owns the global unsaved-branch-prompt guard; reset it
     // when this setting detaches without a passive cleanup-only Effect.
     onBranchPromptDirtyChangeRef.current?.(false)
@@ -107,7 +114,9 @@ export function AutoRenameBranchFromWorkSetting({
     if (!branchNamePromptDirty || isSavingPrompt) {
       return
     }
+
     setIsSavingPrompt(true)
+
     try {
       await writeSourceControlAiSettings((current) => ({
         actions: setSourceControlActionDefault(current.actions, 'branchName', {
@@ -307,6 +316,7 @@ export function AutoRenameBranchFromWorkSetting({
                     branchNameTemplateDraft.endsWith('\n') || branchNameTemplateDraft.length === 0
                       ? ''
                       : ' '
+
                   setBranchNameTemplateDraft(`${branchNameTemplateDraft}${separator}{${variable}}`)
                 }}
               />

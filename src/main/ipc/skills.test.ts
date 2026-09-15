@@ -52,9 +52,11 @@ vi.mock('../wsl', () => ({
     if (pathValue === '\\\\wsl.localhost\\Ubuntu\\home\\alice') {
       return '/home/alice'
     }
+
     if (pathValue === 'C:\\repo\\worktree') {
       return '/mnt/c/repo/worktree'
     }
+
     return pathValue
   }
 }))
@@ -65,6 +67,7 @@ import { clearSkillDiscoveryCaches } from '../skills/skill-discovery-target'
 describe('registerSkillsHandlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const repos = [{ id: 'repo-1', path: 'C:\\Users\\alice\\repo' }]
+
   const store = {
     getRepos: vi.fn(() => repos)
   }
@@ -103,20 +106,25 @@ describe('registerSkillsHandlers', () => {
   function getDiscoverHandler() {
     registerSkillsHandlers(store as never)
     const call = handleMock.mock.calls.find((entry: unknown[]) => entry[0] === 'skills:discover')
+
     if (!call) {
       throw new Error('skills:discover handler was not registered')
     }
+
     return call[1] as (_event: unknown, target?: unknown) => Promise<unknown>
   }
 
   function getFreshnessHandler() {
     registerSkillsHandlers(store as never)
+
     const call = handleMock.mock.calls.find(
       (entry: unknown[]) => entry[0] === 'skills:freshnessInventory'
     )
+
     if (!call) {
       throw new Error('skills:freshnessInventory handler was not registered')
     }
+
     return call[1] as (_event: unknown) => Promise<unknown>
   }
 

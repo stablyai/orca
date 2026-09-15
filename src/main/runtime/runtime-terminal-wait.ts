@@ -75,22 +75,28 @@ export class RuntimeTerminalWait {
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
     const pty = this.deps.getLivePty(handle)
+
     if (pty) {
       if (condition === 'exit' && !pty.pty.connected) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
+
       const ptyWaitText = buildTerminalWaitText(
         pty.pty.tailBuffer,
         pty.pty.tailPartialLine,
         pty.pty.preview
       )
+
       const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
+
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
+
       if (condition === 'tui-idle' && this.ptySatisfied(pty.pty, ptyWaitText)) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
+
       return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
         const effectiveTimeoutMs =
           typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
@@ -98,6 +104,7 @@ export class RuntimeTerminalWait {
             : condition === 'tui-idle'
               ? this.deps.defaultTimeoutMs
               : 0
+
         const waiter: TerminalWaiter = {
           handle,
           condition,
@@ -107,18 +114,23 @@ export class RuntimeTerminalWait {
           cancelIdlePoll: null,
           abortCleanup: null
         }
+
         if (!this.waiters.bindAbort(waiter, options?.signal)) {
           reject(new Error('request_aborted'))
+
           return
         }
+
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
             this.waiters.remove(waiter)
             reject(new Error('timeout'))
           }, effectiveTimeoutMs)
         }
+
         this.waiters.add(waiter)
         const live = this.deps.getLivePty(handle)
+
         if (!live) {
           this.waiters.remove(waiter)
           reject(new Error('terminal_handle_stale'))
@@ -130,7 +142,9 @@ export class RuntimeTerminalWait {
             live.pty.tailPartialLine,
             live.pty.preview
           )
+
           const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
+
           if (blockedReason) {
             this.waiters.resolve(
               waiter,
@@ -140,6 +154,7 @@ export class RuntimeTerminalWait {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
             this.polls.startPty(waiter, live.pty)
+
             if (live.pty.lastAgentStatus === null && livePtyWaitText.length === 0) {
               this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
             }
@@ -147,13 +162,16 @@ export class RuntimeTerminalWait {
         }
       })
     }
+
     const { leaf } = this.deps.getLiveLeaf(handle)
+
     if (condition === 'exit' && getTerminalState(leaf) === 'exited') {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
 
     const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
     const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
+
     if (condition === 'tui-idle' && leafBlockedReason) {
       return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
     }
@@ -190,6 +208,7 @@ export class RuntimeTerminalWait {
 
       if (!this.waiters.bindAbort(waiter, options?.signal)) {
         reject(new Error('request_aborted'))
+
         return
       }
 
@@ -207,6 +226,7 @@ export class RuntimeTerminalWait {
       // exit honest instead of hanging on a terminal that already changed.
       try {
         const live = this.deps.getLiveLeaf(handle)
+
         if (getTerminalState(live.leaf) === 'exited') {
           this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
         } else if (condition === 'tui-idle') {
@@ -215,7 +235,9 @@ export class RuntimeTerminalWait {
             live.leaf.tailPartialLine,
             live.leaf.preview
           )
+
           const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
+
           if (blockedReason) {
             this.waiters.resolve(
               waiter,
@@ -232,6 +254,7 @@ export class RuntimeTerminalWait {
             // while the last OSC title is still "working"; keep polling the
             // preview/title until the waiter resolves or hits its timeout.
             this.polls.startLeaf(waiter, live.leaf)
+
             if (live.leaf.lastAgentStatus === null && liveLeafWaitText.length === 0) {
               this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
             }

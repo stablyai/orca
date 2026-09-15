@@ -11,6 +11,7 @@ export function vitestRecordingScheduler(): RecordingScheduler {
       await vi.advanceTimersByTimeAsync(0)
     })
   }
+
   return {
     start() {
       vi.useFakeTimers({
@@ -25,25 +26,32 @@ export function vitestRecordingScheduler(): RecordingScheduler {
       })
       vi.setSystemTime(RECORDING_EPOCH)
       let seed = 1
+
       const random = () => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
         return seed / 4294967296
       }
+
       vi.spyOn(Math, 'random').mockImplementation(random)
+
       if (globalThis.crypto !== undefined) {
         let id = 0
         vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(
           () => `00000000-0000-4000-8000-${(++id).toString(16).padStart(12, '0')}`
         )
       }
+
       if (globalThis.crypto !== undefined) {
         vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((array) => {
           if (array) {
             const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength)
+
             for (let i = 0; i < bytes.length; i++) {
               bytes[i] = Math.floor(random() * 256)
             }
           }
+
           return array
         })
       }

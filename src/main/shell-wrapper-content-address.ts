@@ -41,7 +41,9 @@ export type ShellWrapperFileBuilder = (root: string) => readonly ShellWrapperFil
 // would need that input folded in here, or two genuinely different trees would
 // collide on one directory.
 const HASH_PROBE_ROOT = '/__orca_shell_wrapper_root__'
+
 const ROOT_HASH_LENGTH = 16
+
 // Why the hash sits ABOVE this leaf rather than below it: ZDOTDIR
 // self-reference guards -- in TS and as `*/shell-ready/zsh` globs baked into
 // the wrapper scripts -- match on that exact suffix. Without it a wrapper
@@ -52,6 +54,7 @@ const WRAPPER_ROOT_LEAF = 'shell-ready'
 
 export function resolveShellWrapperRoot(baseDir: string, build: ShellWrapperFileBuilder): string {
   const digest = createHash('sha256')
+
   for (const [path, content] of build(HASH_PROBE_ROOT)) {
     // Relative, so the digest does not vary with the base dir it is naming.
     digest.update(path.slice(HASH_PROBE_ROOT.length))
@@ -59,5 +62,6 @@ export function resolveShellWrapperRoot(baseDir: string, build: ShellWrapperFile
     digest.update(content)
     digest.update('\0')
   }
+
   return join(baseDir, digest.digest('hex').slice(0, ROOT_HASH_LENGTH), WRAPPER_ROOT_LEAF)
 }

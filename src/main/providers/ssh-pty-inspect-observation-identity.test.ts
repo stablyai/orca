@@ -10,7 +10,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createSshPtyProviderRpcOperations } from './ssh-pty-provider-rpc-operations'
 
 const RELAY_PTY_ID = 'pty-1'
+
 const APP_PTY_ID = `ssh:conn-1@@${RELAY_PTY_ID}`
+
 const INCARNATION_ID = 'inc-1'
 
 /** Answers `pty.inspectProcess` with a fresh host observation per request, held open on demand. */
@@ -21,6 +23,7 @@ function createInspectingOperations(): {
 } {
   const resolvers: ((value: unknown) => void)[] = []
   const request = vi.fn(() => new Promise((resolve) => resolvers.push(resolve)))
+
   return {
     operations: createSshPtyProviderRpcOperations({
       mux: { request } as never,
@@ -53,9 +56,11 @@ describe('SSH pty.inspectProcess observation identity', () => {
     const { operations, request, resolvers } = createInspectingOperations()
 
     const failing = operations.inspectProcess(APP_PTY_ID, { expectedIncarnationId: INCARNATION_ID })
+
     const overlapping = operations.inspectProcess(APP_PTY_ID, {
       expectedIncarnationId: INCARNATION_ID
     })
+
     await flush()
 
     expect(request).toHaveBeenCalledTimes(2)

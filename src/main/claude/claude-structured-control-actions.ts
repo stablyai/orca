@@ -32,12 +32,15 @@ export async function cancelClaudeTurn(
   if (!isCurrent()) {
     return { cancelled: false }
   }
+
   const cancelQueued = supportsClaudeQueuedInterruptCancellation(session)
+
   try {
     const receipt = await session.connection.interrupt({
       ...(cancelQueued ? { cancelQueued: true } : {}),
       timeoutMs
     })
+
     if (cancelQueued) {
       settleCancelledClaudeDispatchWaiters(session, receipt?.cancelled ?? [], onDispatchSettledLate)
     } else {
@@ -45,11 +48,13 @@ export async function cancelClaudeTurn(
         await session.connection.cancelAsyncMessage(uuid, { timeoutMs }).catch(() => {})
       }
     }
+
     return { cancelled: true }
   } catch (error) {
     if (error instanceof ClaudeControlRequestError) {
       return { cancelled: false }
     }
+
     throw error
   }
 }
@@ -61,13 +66,17 @@ export async function stopClaudeBackgroundTasks(
   taskId?: string
 ): Promise<{ cancelled: boolean }> {
   const stoppableTaskIds = session.backgroundTasks.stoppableTaskIds
+
   const taskIds =
     taskId === undefined ? stoppableTaskIds : stoppableTaskIds.includes(taskId) ? [taskId] : []
+
   let cancelled = false
+
   for (const taskId of taskIds) {
     if (!isCurrent()) {
       break
     }
+
     try {
       await session.connection.stopTask(taskId, { timeoutMs })
       cancelled = true
@@ -77,6 +86,7 @@ export async function stopClaudeBackgroundTasks(
       }
     }
   }
+
   return { cancelled }
 }
 
@@ -88,11 +98,15 @@ export async function answerClaudePrompt(
   if (!session.prompts.ownsClaim(claim)) {
     throw new Error(`claude is no longer waiting on ${claim.itemId}`)
   }
+
   const response = applyClaudePromptAnswer(claim.found, optionId)
+
   if (response === null) {
     session.prompts.releaseClaim(claim)
+
     return
   }
+
   session.prompts.forget(claim.found.prompt)
   claim.found.prompt.settle(response)
   session.translator?.journalPrompts.resolve(claim.found.prompt.promptKey)

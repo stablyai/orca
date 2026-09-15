@@ -7,15 +7,18 @@ import { describe, expect, it } from 'vitest'
 
 const steps = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
   .runs.steps
+
 const toolchain = steps.find((step) => step.name === 'Use external node-gyp')
 
 describe('CI native toolchain preparation', () => {
   it('probes only after both cache restore variants and before native rebuilding', () => {
     const index = steps.indexOf(toolchain)
+
     for (const id of ['native-cache-restore', 'native-cache-restore-only']) {
       expect(index).toBeGreaterThan(steps.findIndex((step) => step.id === id))
       expect(toolchain.env.NATIVE_CACHE_HIT).toContain(`steps.${id}.outputs.cache-hit`)
     }
+
     expect(index).toBeLessThan(steps.findIndex((step) => step.name === 'Prepare native runtime'))
     expect(toolchain.if).toBe("runner.os == 'Linux' && inputs.native-runtime != 'none'")
   })
@@ -32,9 +35,11 @@ describe('CI native toolchain preparation', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-ci-native-toolchain-'))
     const log = join(directory, 'commands')
     const environment = join(directory, 'github-env')
+
     try {
       writeFileSync(log, '')
       writeFileSync(environment, '')
+
       for (const [name, source] of [
         ['node', 'echo "node $*" >> "$COMMAND_LOG"\nexit "$PROBE_STATUS"'],
         ['npm', 'echo "npm $*" >> "$COMMAND_LOG"\nif [ "$1" = root ]; then echo /global; fi']
@@ -43,6 +48,7 @@ describe('CI native toolchain preparation', () => {
         writeFileSync(path, `#!/bin/sh\n${source}\n`)
         chmodSync(path, 0o755)
       }
+
       execFileSync('bash', ['-e', '-o', 'pipefail', '-c', toolchain.run], {
         env: {
           ...process.env,

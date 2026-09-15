@@ -32,14 +32,17 @@ export type GitLabRawDiscussion = {
 
 export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRComment[] {
   const out: MRComment[] = []
+
   for (const discussion of discussions) {
     const notes = discussion.notes ?? []
+
     for (const note of notes) {
       if (note.system === true) {
         // Why: skip GitLab's auto-generated activity entries — they
         // would dominate a busy MR's conversation tab if rendered.
         continue
       }
+
       out.push({
         id: note.id ?? 0,
         author: note.author?.username ?? 'unknown',
@@ -55,6 +58,7 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
       })
     }
   }
+
   // Why: oldest-first matches gitlab.com's conversation rendering and
   // makes "what's new" intuitive when polling for updates later.
   return out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
@@ -69,6 +73,7 @@ export async function fetchDiscussions(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabRawDiscussion[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
+
   const { stdout } = await glabExecFileAsync(
     [
       'api',
@@ -79,5 +84,6 @@ export async function fetchDiscussions(
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
+
   return JSON.parse(stdout) as GitLabRawDiscussion[]
 }

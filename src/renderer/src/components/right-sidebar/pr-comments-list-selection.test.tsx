@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 vi.mock('@/components/ui/dropdown-menu', () => {
   // Radix keeps the selection callback on the group, so the mocked items need it too.
   let onRadioValueChange: ((value: string) => void) | undefined
+
   return {
     DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
     DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -37,6 +38,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       onValueChange?: (value: string) => void
     }) => {
       onRadioValueChange = onValueChange
+
       return <>{children}</>
     },
     DropdownMenuRadioItem: ({
@@ -53,6 +55,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
         role="menuitemradio"
         onClick={() => {
           onSelect?.({ preventDefault: () => {} } as unknown as Event)
+
           if (value !== undefined) {
             onRadioValueChange?.(value)
           }
@@ -65,6 +68,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
   }
 })
+
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
@@ -77,6 +81,7 @@ import {
 import { PRCommentsList } from './checks-panel/comments-list'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -124,6 +129,7 @@ function renderList(props: {
       />
     </TooltipProvider>
   )
+
   act(() => {
     root.render(props.strictMode ? <StrictMode>{list}</StrictMode> : list)
   })
@@ -165,6 +171,7 @@ function clickButton(label: string): void {
         candidate.textContent?.includes(label) ||
         candidate.getAttribute('aria-label')?.includes(label)
     )
+
   if (!button) {
     const availableButtons = [...container.querySelectorAll('button')]
       .map(
@@ -172,8 +179,10 @@ function clickButton(label: string): void {
           candidate.getAttribute('aria-label') ?? candidate.textContent?.trim() ?? '<unlabeled>'
       )
       .join(', ')
+
     throw new Error(`Button not found: ${label}. Available buttons: ${availableButtons}`)
   }
+
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -191,9 +200,11 @@ function selectDisplayMode(label: string): void {
   const item = [...container.querySelectorAll('[role="menuitemradio"]')].find(
     (candidate) => candidate.textContent === label
   )
+
   if (!item) {
     throw new Error(`Display mode not found: ${label}`)
   }
+
   act(() => {
     item.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -207,6 +218,7 @@ function renderedGroupOrder(labels: readonly string[]): string[] {
 
 function clickMenuItem(label: string): void {
   clickButton('More comment actions')
+
   const menuItem =
     [...document.body.querySelectorAll('[role="menuitem"]')].find((candidate) =>
       candidate.textContent?.includes(label)
@@ -216,9 +228,11 @@ function clickMenuItem(label: string): void {
         candidate.textContent?.includes(label) ||
         candidate.getAttribute('aria-label')?.includes(label)
     )
+
   if (!menuItem) {
     throw new Error(`Menu item not found: ${label}`)
   }
+
   act(() => {
     menuItem.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -391,6 +405,7 @@ describe('PRCommentsList comment resolution selection', () => {
     const selectedCheckbox = container.querySelector<HTMLButtonElement>(
       'button[role="checkbox"][aria-checked="true"]'
     )
+
     expect(selectedCheckbox).not.toBeNull()
     act(() => {
       selectedCheckbox?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -408,6 +423,7 @@ describe('PRCommentsList comment resolution selection', () => {
         isBot: true
       })
     ]
+
     renderList({ comments })
     clickButton('Queue for agent')
 
@@ -443,6 +459,7 @@ describe('PRCommentsList comment resolution selection', () => {
         isBot: true
       })
     ]
+
     renderList({ comments: queuedComments, contextKey: 'review:42' })
     clickButton('Queue for agent')
 
@@ -497,11 +514,13 @@ describe('PRCommentsList comment resolution selection', () => {
   it('does not refresh LRU recency for an abandoned Suspense render', () => {
     const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts' })]
     const queuedGroupIds = ['thread:thread-1'] as const
+
     const seedContext = (contextKey: string): void => {
       seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
     }
 
     seedContext('review:oldest')
+
     for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
       seedContext(`review:recent-${i}`)
     }
@@ -519,11 +538,13 @@ describe('PRCommentsList comment resolution selection', () => {
   it('bounds persisted review contexts while retaining recently restored selections', () => {
     const comments = [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
     const queuedGroupIds = ['thread:thread-1'] as const
+
     const seedContext = (contextKey: string): void => {
       seedPRCommentsListSelectionForTests(contextKey, queuedGroupIds)
     }
 
     seedContext('review:keep')
+
     for (let i = 0; i < MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS - 1; i += 1) {
       seedContext(`review:stale-${i}`)
     }

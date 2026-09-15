@@ -12,6 +12,7 @@ export const PAIRING_METHODS = [
       if (!ctx.pairing) {
         throw new Error('pairing_context_unavailable')
       }
+
       return await ctx.pairing.getEndpoints(params)
     }
   }),
@@ -22,6 +23,7 @@ export const PAIRING_METHODS = [
       if (!ctx.pairing) {
         throw new Error('pairing_context_unavailable')
       }
+
       return await ctx.pairing.provisionRelay(params)
     }
   })

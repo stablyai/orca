@@ -14,10 +14,12 @@ vi.mock('electron', () => ({
 beforeEach(clearCrashBreadcrumbsForTest)
 
 type ResumeListener = () => void
+
 type PowerLifecycleEvent = 'suspend' | 'resume'
 
 function createResumeSource() {
   const listeners = new Map<PowerLifecycleEvent, ResumeListener>()
+
   const source = {
     on: vi.fn((event: PowerLifecycleEvent, callback: ResumeListener) => {
       listeners.set(event, callback)
@@ -30,6 +32,7 @@ function createResumeSource() {
       }
     })
   }
+
   return {
     source,
     fireSuspend: () => listeners.get('suspend')?.(),
@@ -57,6 +60,7 @@ describe('registerSystemResumeBroadcast', () => {
     const listener = { onSuspend: vi.fn(), onResume: vi.fn() }
     const unsubscribe = subscribeSystemPowerLifecycle(listener)
     listener.onResume.mockClear()
+
     const stopBroadcast = registerSystemResumeBroadcast({
       resumeSource: source,
       getWindows: () => []
@@ -91,6 +95,7 @@ describe('registerSystemResumeBroadcast', () => {
   it('stops broadcasting after unsubscribe', () => {
     const { source, fireResume } = createResumeSource()
     const window = createWindow()
+
     const unsubscribe = registerSystemResumeBroadcast({
       resumeSource: source,
       getWindows: () => [window]

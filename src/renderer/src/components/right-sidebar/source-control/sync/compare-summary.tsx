@@ -52,9 +52,11 @@ export function shouldShowCompareSummary(summary: GitBranchCompareSummary | null
   if (!summary || summary.status === 'loading') {
     return true
   }
+
   if (summary.status !== 'ready') {
     return true
   }
+
   return typeof summary.commitsAhead === 'number' && summary.commitsAhead > 0
 }
 
@@ -110,6 +112,7 @@ export function CompareSummary({
 
   const commitsAhead = summary.commitsAhead
   const showCommitsAhead = typeof commitsAhead === 'number' && commitsAhead > 0
+
   const commitsAheadTitle = showCommitsAhead
     ? translate(
         'auto.components.right.sidebar.source.control.compare.summary.dd72a6fd37',

@@ -59,6 +59,7 @@ describe('composeTerminalViewAttributes', () => {
       'light',
       { terminalCursorStyle: 'underline', terminalCursorBlink: false }
     )
+
     expect(attrs.background).toEqual([30, 30, 46])
     expect(attrs.foreground).toEqual([0xd0, 0xd0, 0xd0])
     // color.blend parity: a = round(0.5*255)/255; ch = bg + round((fg-bg)*a).
@@ -75,6 +76,7 @@ describe('composeTerminalViewAttributes', () => {
       'dark',
       cursorSettings
     )
+
     expect(attrs.cursor).toEqual([255, 0, 0])
 
     const blended = composeTerminalViewAttributes(
@@ -82,6 +84,7 @@ describe('composeTerminalViewAttributes', () => {
       'dark',
       cursorSettings
     )
+
     // #f00a → alpha 0xaa: 0 + round(255 * (0xaa/0xff)) = 170.
     expect(blended.cursor).toEqual([170, 0, 0])
   })
@@ -92,6 +95,7 @@ describe('composeTerminalViewAttributes', () => {
       'dark',
       cursorSettings
     )
+
     expect(attrs.ansi[16]).toEqual([0x10, 0x20, 0x30])
     // Untouched tail entries stay on the generated cube.
     expect(attrs.ansi[17]).toEqual([0x00, 0x00, 0x5f])
@@ -105,6 +109,7 @@ describe('composeTerminalViewAttributes', () => {
       'dark',
       cursorSettings
     )
+
     expect(attrs.ansi[1]).toEqual([0xcc, 0x00, 0x00])
     expect(attrs.foreground).toEqual([0xff, 0xff, 0xff])
   })
@@ -155,6 +160,7 @@ describe('applyTerminalAppearance publication', () => {
   function stubPublishBridge(): ReturnType<typeof vi.fn> {
     const publish = vi.fn<(attributes: TerminalViewAttributes) => void>()
     vi.stubGlobal('window', { api: { pty: { publishTerminalViewAttributes: publish } } })
+
     return publish
   }
 
@@ -244,6 +250,7 @@ describe('applyTerminalAppearance publication', () => {
     const modes = publish.mock.calls.map(
       (call) => (call[0] as TerminalViewAttributes).colorSchemeMode
     )
+
     expect(modes).toEqual(['dark', 'light'])
   })
 })

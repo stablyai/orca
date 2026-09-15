@@ -36,6 +36,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('persists cleared branch-scoped linked reviews when git status observes a branch switch', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -71,6 +72,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('persists cleared branch-scoped push target when git status observes a branch switch', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -105,6 +107,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('does not persist a delayed branch-switch clear over a newer manual relink', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -112,10 +115,13 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/stack/one',
       linkedPR: 101
     })
+
     let resolveClearPersist!: () => void
+
     const clearPersisted = new Promise<void>((resolve) => {
       resolveClearPersist = resolve
     })
+
     mockApi.worktrees.updateMeta.mockImplementation(async ({ updates }) => {
       if (
         updates.linkedPR === null &&
@@ -155,6 +161,7 @@ describe('updateWorktreeGitIdentity', () => {
   it('does not persist a delayed branch-switch clear over a newer push target update', async () => {
     const store = createTestStore()
     const nextPushTarget = { remoteName: 'fork', branchName: 'next/review-head' }
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -162,10 +169,13 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/stack/one',
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
+
     let resolveClearPersist!: () => void
+
     const clearPersisted = new Promise<void>((resolve) => {
       resolveClearPersist = resolve
     })
+
     mockApi.worktrees.updateMeta.mockImplementation(async ({ updates }) => {
       if (
         updates.linkedPR === null &&
@@ -202,6 +212,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('persists a clear when the branch switches again before the first clear write finishes', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -210,14 +221,18 @@ describe('updateWorktreeGitIdentity', () => {
       linkedPR: 101,
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
+
     let releaseFirstClear!: () => void
+
     const firstClearReleased = new Promise<void>((resolve) => {
       releaseFirstClear = resolve
     })
+
     let clearCalls = 0
     mockApi.worktrees.updateMeta.mockImplementation(async ({ updates }) => {
       if (updates.linkedPR === null && updates.pushTarget === undefined) {
         clearCalls += 1
+
         if (clearCalls === 1) {
           await firstClearReleased
         }
@@ -253,6 +268,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('clears stale linked reviews rehydrated by a refetch while branch-switch clear persists', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -261,10 +277,13 @@ describe('updateWorktreeGitIdentity', () => {
       linkedPR: 101,
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
+
     let resolveClearPersist!: () => void
+
     const clearPersisted = new Promise<void>((resolve) => {
       resolveClearPersist = resolve
     })
+
     mockApi.worktrees.updateMeta.mockImplementation(async ({ updates }) => {
       if (updates.linkedPR === null) {
         await clearPersisted
@@ -314,6 +333,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('clears stale linked reviews rehydrated before branch-switch clear starts persisting', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -363,6 +383,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('clears stale linked reviews rehydrated by a late worktree refetch after clear persists', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -371,6 +392,7 @@ describe('updateWorktreeGitIdentity', () => {
       linkedPR: 101,
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
+
     const staleRefetch = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -414,6 +436,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('keeps stale linked reviews cleared after a later observed branch switch', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -421,6 +444,7 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/stack/one',
       linkedPR: 101
     })
+
     const laterBranch = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -454,6 +478,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves a clean refreshed head when a later stale linked row arrives', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -461,6 +486,7 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/stack/one',
       linkedPR: 101
     })
+
     const cleanHeadAdvance = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -470,6 +496,7 @@ describe('updateWorktreeGitIdentity', () => {
       linkedPR: null,
       pushTarget: undefined
     })
+
     const staleLinkedRow = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -505,6 +532,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('allows a clean worktree refresh to observe a later branch after stale-refetch protection', async () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -512,6 +540,7 @@ describe('updateWorktreeGitIdentity', () => {
       branch: 'refs/heads/stack/one',
       linkedPR: 101
     })
+
     const laterBranch = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',

@@ -20,8 +20,11 @@ import { StructuredAgentSessionHandoffOperationGuard } from './structured-agent-
 import { assertScheduledStructuredHandoffIsAdmissible } from './structured-agent-session-handoff-revalidation'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-alpha-1'
+
 const OPERATION_A = `${NOW}-00000000000000000000000000000001`
+
 const OPERATION_B = `${NOW}-00000000000000000000000000000002`
 
 let root: string | null = null
@@ -36,6 +39,7 @@ afterEach(async () => {
 async function createGuard() {
   root = await mkdtemp(join(tmpdir(), 'orca-handoff-operation-guard-'))
   const store = await AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+
   return { guard: new StructuredAgentSessionHandoffOperationGuard(store), store }
 }
 
@@ -52,6 +56,7 @@ function status(phase: 'switching' | 'queued' | 'idle'): AgentSessionHandoffStat
 describe('structured handoff operation ownership', () => {
   it('reserves one winner across concurrent admissions', async () => {
     const { guard } = await createGuard()
+
     const check = (operationId: string) =>
       guard.check({
         callerKey: operationId,
@@ -141,12 +146,14 @@ describe('queued handoff fence revalidation', () => {
     mode: 'after-turn',
     action: 'start'
   }
+
   const queued = status('queued')
 
   it('accepts the same live owner and fence', () => {
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({ runtimeKind: 'native', ownerProcess: null })
     )
+
     expect(queuedStructuredHandoffCanBegin(record, queued, params)).toBe(true)
   })
 
@@ -176,6 +183,7 @@ describe('queued handoff fence revalidation', () => {
 describe('scheduled handoff revalidation', () => {
   it('refuses a native turn accepted ahead of the scheduled handoff', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-handoff-revalidation-'))
+
     const journal = await openAgentSessionJournal({
       identity: {
         sessionId: SESSION,
@@ -186,12 +194,14 @@ describe('scheduled handoff revalidation', () => {
       },
       journalDir: join(root, 'journal')
     })
+
     const journalSequence = journal.cursor().sequence
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'turn-running' },
       { kind: 'status', text: 'running', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
       { fence: 7 }
     )
+
     const params: AgentSessionHandoffRequest = {
       envelope: {
         sessionId: SESSION,

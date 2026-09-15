@@ -54,6 +54,7 @@ export function selectSendTargetInputs(
   if (s.agentSendPopoverTargetMode?.worktreeId !== worktreeId) {
     return EMPTY_SEND_TARGET_INPUTS
   }
+
   return {
     agentStatusByPaneKey: s.agentStatusByPaneKey,
     tabsByWorktree: s.tabsByWorktree,
@@ -68,8 +69,10 @@ export function selectSendTargetControlInputs(
   worktreeId: string
 ): SendTargetControlInputs {
   const targetMode = s.agentSendPopoverTargetMode
+
   if (targetMode?.worktreeId !== worktreeId) {
     return EMPTY_SEND_TARGET_CONTROL_INPUTS
   }
+
   return { targetMode, agentStatusEpoch: s.agentStatusEpoch }
 }

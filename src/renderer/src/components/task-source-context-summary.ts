@@ -74,14 +74,18 @@ export function getTaskSourceAvailabilityNotice(args: {
   sourceCount?: number
 }): TaskSourceAvailabilityNotice | null {
   const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
+
   if (unavailableHosts.length === 0) {
     return null
   }
+
   const sourceCount = Math.max(args.sourceCount ?? unavailableHosts.length, unavailableHosts.length)
   const blocking = unavailableHosts.length >= sourceCount
   const hostStatusLabels = unavailableHosts.map((host) => `${host.hostLabel} ${host.statusLabel}`)
+
   const target =
     unavailableHosts.length === 1 ? hostStatusLabels[0] : `${unavailableHosts.length} source hosts`
+
   return {
     label: blocking
       ? translate(
@@ -111,24 +115,30 @@ function getRepoBackedTaskSourceSummary(args: {
   selectedRepoCount?: number
 }): TaskSourceContextSummary {
   const contexts = args.repoContexts ?? []
+
   const hostLabels = uniqueLabels(
     contexts.map((context) => getHostLabel(context.hostId, args.hostLabelById))
   )
+
   const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
   const availabilityLabel = getAvailabilityLabel(unavailableHosts)
+
   const identityLabels = uniqueLabels(
     contexts.map((context) => getProviderIdentityLabel(context.providerIdentity))
   )
+
   const accountLabels = uniqueLabels(contexts.map((context) => context.accountLabel))
   const repoCount = args.selectedRepoCount ?? contexts.length
   const hostLabel = hostLabels.length === 0 ? 'No host' : formatShortList(hostLabels)
   const accountLabel = accountLabels.length > 0 ? `Account: ${formatLongList(accountLabels)}` : null
+
   const targetLabel =
     accountLabels.length > 1
       ? formatShortList(accountLabels)
       : repoCount > 1
         ? `${repoCount} projects`
         : (identityLabels[0] ?? contexts[0]?.accountLabel ?? 'Selected project')
+
   const titleParts = [
     args.providerLabel,
     hostLabels.length > 0 ? `Host: ${formatLongList(hostLabels)}` : null,
@@ -163,6 +173,7 @@ function getAccountBackedTaskSourceSummary(
   const hostLabel = getHostLabel(args.accountHostId ?? 'local', args.hostLabelById)
   const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [], args.hostLabelById)
   const availabilityLabel = getAvailabilityLabel(unavailableHosts)
+
   const titleParts = [
     `${providerLabel} source`,
     `Host: ${hostLabel}`,
@@ -173,6 +184,7 @@ function getAccountBackedTaskSourceSummary(
       : null,
     `Account: ${target}`
   ].filter((part): part is string => Boolean(part))
+
   return {
     label: [providerLabel, hostLabel, availabilityLabel, target]
       .filter((part): part is string => Boolean(part))
@@ -187,6 +199,7 @@ function getProviderIdentityLabel(
   if (!identity) {
     return null
   }
+
   switch (identity.provider) {
     case 'github':
       return `${identity.owner}/${identity.repo}`
@@ -204,14 +217,18 @@ function getProviderIdentityLabel(
 function uniqueLabels(labels: readonly (string | null | undefined)[]): string[] {
   const seen = new Set<string>()
   const result: string[] = []
+
   for (const label of labels) {
     const trimmed = label?.trim()
+
     if (!trimmed || seen.has(trimmed)) {
       continue
     }
+
     seen.add(trimmed)
     result.push(trimmed)
   }
+
   return result
 }
 
@@ -224,19 +241,25 @@ function getUnavailableHosts(
 }[] {
   const seen = new Set<string>()
   const unavailableHosts: { hostLabel: string; statusLabel: string }[] = []
+
   for (const availability of hostAvailability) {
     const statusLabel = getAvailabilityStatusLabel(availability)
+
     if (!statusLabel) {
       continue
     }
+
     const hostLabel = getHostLabel(availability.hostId, hostLabelById)
     const key = `${hostLabel}\u0000${statusLabel}`
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     unavailableHosts.push({ hostLabel, statusLabel })
   }
+
   return unavailableHosts
 }
 
@@ -255,9 +278,11 @@ function getAvailabilityStatusLabel(availability: TaskSourceHostAvailability): s
     case 'unsupported-provider':
       return 'provider unsupported on this host'
   }
+
   if (availability.status) {
     return availability.status === 'connected' ? null : getSshStatusLabel(availability.status)
   }
+
   switch (availability.health) {
     case 'local':
     case 'available':
@@ -280,9 +305,11 @@ function getAvailabilityLabel(
   if (unavailableHosts.length === 0) {
     return null
   }
+
   if (unavailableHosts.length === 1) {
     return unavailableHosts[0].statusLabel
   }
+
   return `${unavailableHosts.length} unavailable`
 }
 
@@ -308,6 +335,7 @@ function formatShortList(labels: readonly string[]): string {
   if (labels.length <= 2) {
     return labels.join(', ')
   }
+
   return `${labels[0]} +${labels.length - 1}`
 }
 

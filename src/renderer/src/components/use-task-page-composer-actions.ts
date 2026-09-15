@@ -13,6 +13,7 @@ import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
+
 export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
   const {
     setTaskResumeState,
@@ -57,6 +58,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     setLinearTeamRefreshNonce,
     setLinearTeamSelection
   } = model
+
   // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
@@ -70,6 +72,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [linearTaskSourceContext, openModal]
   )
+
   const handleUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
       // Why: like handleUseWorkItem — open the pre-filled dialog instead of creating the worktree directly, so the user confirms name/agent/setup.
@@ -78,6 +81,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [openComposerForLinearItem]
   )
+
   const handleOpenOrUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
       if (openLinearIssueWorkspaceOrStart(issue, () => handleUseLinearItem(issue)) === 'opened') {
@@ -86,6 +90,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [handleUseLinearItem]
   )
+
   const handleLinearWorkspaceChange = useCallback(
     (workspaceId: LinearWorkspaceSelection): void => {
       clearSelectedLinearIssue()
@@ -158,6 +163,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
       setLinearIssues
     ]
   )
+
   const handleLinearTeamSelectionChange = useCallback(
     (next: ReadonlySet<string>, persisted: string[] | null): void => {
       setLinearTeamSelection(new Set(next))
@@ -171,6 +177,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [updateSettings, setLinearTeamSelection]
   )
+
   const handleLinearScopeOpen = useCallback((): void => {
     void checkLinearConnection(true)
     void listLinearTeams(selectedLinearWorkspaceId, {
@@ -183,10 +190,12 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
         console.warn('[TaskPage] Failed to refresh Linear teams')
       })
   }, [checkLinearConnection, listLinearTeams, selectedLinearWorkspaceId, setAvailableTeams])
+
   const handleLinearAccessConnected = useCallback((): void => {
     setLinearTeamRefreshNonce((n) => n + 1)
     setLinearRefreshNonce((n) => n + 1)
   }, [setLinearTeamRefreshNonce, setLinearRefreshNonce])
+
   const openComposerForJiraItem = useCallback(
     (issue: JiraIssue): void => {
       const taskSourceContext = bindTaskPageJiraItemSourceContext({
@@ -194,6 +203,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
         sites: jiraSites,
         sourceContext: jiraTaskSourceContext
       })
+
       if (!taskSourceContext) {
         // Why: composer drops Jira items without matching source context — refuse rather than create unlinked.
         toast.error(
@@ -202,8 +212,10 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
             'Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.'
           )
         )
+
         return
       }
+
       const linkedWorkItem: LinkedWorkItemSummary = {
         type: 'issue',
         provider: 'jira',
@@ -212,6 +224,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
         url: issue.url,
         jiraIdentifier: issue.key
       }
+
       openModal('new-workspace-composer', {
         linkedWorkItem,
         taskSourceContext,
@@ -221,6 +234,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [jiraSites, jiraTaskSourceContext, openModal]
   )
+
   const handleUseJiraItem = useCallback(
     (issue: JiraIssue): void => {
       useAppStore.getState().recordFeatureInteraction('jira-tasks')
@@ -228,6 +242,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     },
     [openComposerForJiraItem]
   )
+
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
@@ -237,6 +252,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
   })
+
   const nextModel = model as typeof model & {
     openComposerForLinearItem: typeof openComposerForLinearItem
     handleUseLinearItem: typeof handleUseLinearItem
@@ -249,6 +265,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     handleUseJiraItem: typeof handleUseJiraItem
     taskPageListChromeHidden: typeof taskPageListChromeHidden
   }
+
   nextModel.openComposerForLinearItem = openComposerForLinearItem
   nextModel.handleUseLinearItem = handleUseLinearItem
   nextModel.handleOpenOrUseLinearItem = handleOpenOrUseLinearItem
@@ -259,6 +276,8 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   nextModel.openComposerForJiraItem = openComposerForJiraItem
   nextModel.handleUseJiraItem = handleUseJiraItem
   nextModel.taskPageListChromeHidden = taskPageListChromeHidden
+
   return nextModel
 }
+
 export type TaskPageComposerActionsModel = ReturnType<typeof useTaskPageComposerActions>

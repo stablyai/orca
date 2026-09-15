@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { isQualifiedPluginKey } from './plugin-manifest'
 
 export const PLUGIN_KILL_LIST_ENTRY_LIMIT = 4_096
+
 /** Publisher clocks and client clocks disagree by minutes, never by days. */
 export const PLUGIN_KILL_LIST_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000
 
@@ -25,6 +26,7 @@ export const pluginKillListSchema = z
   })
   .superRefine((killList, context) => {
     const seen = new Set<string>()
+
     for (const [index, plugin] of killList.plugins.entries()) {
       if (seen.has(plugin.pluginKey)) {
         context.addIssue({
@@ -33,11 +35,13 @@ export const pluginKillListSchema = z
           message: `duplicate killed plugin: ${plugin.pluginKey}`
         })
       }
+
       seen.add(plugin.pluginKey)
     }
   })
 
 export type PluginKillList = z.infer<typeof pluginKillListSchema>
+
 export type PluginKillListEntry = z.infer<typeof pluginKillListEntrySchema>
 
 /** A far-future generatedAt makes every genuine later list look "older" and

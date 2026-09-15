@@ -47,6 +47,7 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false,
     setCaret: vi.fn(),
     setHistory: vi.fn()
   }
+
   const hook = renderHook(() =>
     useNativeChatComposerKeyDown({
       autocomplete,
@@ -57,6 +58,7 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false,
       ...callbacks
     })
   )
+
   return { handler: hook.result.current, callbacks }
 }
 
@@ -94,6 +96,7 @@ describe('useNativeChatComposerKeyDown', () => {
     (agent) => {
       const draft = 'Explain /cle before continuing'
       const caret = 'Explain /cle'.length
+
       const autocomplete = deriveComposerAutocomplete(
         draft,
         caret,
@@ -101,6 +104,7 @@ describe('useNativeChatComposerKeyDown', () => {
         [],
         getNativeChatAgentProfile(agent)
       )
+
       expect(autocomplete.mode).toBe('slash')
       const { handler, callbacks } = setup(autocomplete, false, draft)
       const event = keyEvent('Enter')

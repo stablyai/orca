@@ -68,16 +68,19 @@ export abstract class RelayDispatcherClientState {
     if (this.notificationHandlers.has(method)) {
       throw new Error(`Notification handler for ${method} is already registered`)
     }
+
     this.notificationHandlers.set(method, handler)
   }
 
   onClientDetached(listener: (clientId: number, cause: PtyConsumerCloseCause) => void): () => void {
     this.clientDetachListeners.add(listener)
+
     return () => this.clientDetachListeners.delete(listener)
   }
 
   onDisposed(listener: () => void): () => void {
     this.disposeListeners.add(listener)
+
     return () => this.disposeListeners.delete(listener)
   }
 
@@ -87,7 +90,9 @@ export abstract class RelayDispatcherClientState {
     if (this.ptyDataPublicationAdmission) {
       throw new Error('PTY data publication admission is already registered')
     }
+
     this.ptyDataPublicationAdmission = admission
+
     return () => {
       if (this.ptyDataPublicationAdmission === admission) {
         this.ptyDataPublicationAdmission = null

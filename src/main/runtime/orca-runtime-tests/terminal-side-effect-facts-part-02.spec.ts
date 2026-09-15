@@ -32,6 +32,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('prefers the tracked title over the renderer snapshot lastTitle', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: 'visible content',
       cols: 80,
@@ -39,6 +40,7 @@ describe('terminal side-effect fact channel', () => {
       // Renderer xterm never saw the synthetic frame (no longer rides pty:data), so its serializer reports a stale title.
       lastTitle: 'stale shell title'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -59,6 +61,7 @@ describe('terminal side-effect fact channel', () => {
   it('falls back to the provider snapshot for a restored PTY with no mounted renderer', async () => {
     const { runtime } = createSideEffectRuntime()
     const serializeBuffer = vi.fn()
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: 'restored screen\r\n',
       scrollbackAnsi: 'restored history\r\n',
@@ -68,6 +71,7 @@ describe('terminal side-effect fact channel', () => {
       seq: 900,
       source: 'headless'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -98,6 +102,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('prefers provider history over a partial headless mirror for requested snapshots', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: 'authoritative screen\r\n',
       scrollbackAnsi: 'deep provider history\r\n',
@@ -106,6 +111,7 @@ describe('terminal side-effect fact channel', () => {
       seq: 900,
       source: 'headless'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -154,11 +160,14 @@ describe('terminal side-effect fact channel', () => {
 
   it('bounds a hung authoritative provider acquisition and reuses its fallback', async () => {
     vi.useFakeTimers()
+
     try {
       let releaseProvider: (value: null) => void = () => {}
+
       const hungProvider = new Promise<null>((resolve) => {
         releaseProvider = resolve
       })
+
       const serializeProviderBuffer = vi
         .fn()
         .mockReturnValueOnce(hungProvider)
@@ -169,6 +178,7 @@ describe('terminal side-effect fact channel', () => {
           seq: 200,
           source: 'headless'
         })
+
       const { runtime } = createSideEffectRuntime()
       runtime.setPtyController({
         write: () => true,
@@ -183,9 +193,11 @@ describe('terminal side-effect fact channel', () => {
       const firstSnapshot = runtime.serializeAuthoritativeTerminalBuffer('pty-1', {
         scrollbackRows: 5000
       })
+
       const concurrentSnapshot = runtime.serializeAuthoritativeTerminalBuffer('pty-1', {
         scrollbackRows: 5000
       })
+
       expect(serializeProviderBuffer).toHaveBeenCalledOnce()
       await vi.advanceTimersByTimeAsync(AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS)
       await expect(firstSnapshot).resolves.toMatchObject({
@@ -221,11 +233,13 @@ describe('terminal side-effect fact channel', () => {
 
   it('falls back to provider history when a mounted renderer has not hydrated yet', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: '',
       cols: 80,
       rows: 24
     })
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: '',
       scrollbackAnsi: 'restored history\r\n',
@@ -234,6 +248,7 @@ describe('terminal side-effect fact channel', () => {
       seq: 900,
       source: 'headless'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -260,6 +275,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('keeps an empty renderer snapshot when the provider has no retained content', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: '',
       scrollbackAnsi: '',
@@ -268,6 +284,7 @@ describe('terminal side-effect fact channel', () => {
       seq: 0,
       source: 'headless'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -285,6 +302,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('does not let pre-response bytes hide restored provider history', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: 'restored history\r\nqueued',
       cols: 80,
@@ -292,6 +310,7 @@ describe('terminal side-effect fact channel', () => {
       seq: 906,
       source: 'headless'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -316,6 +335,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('keeps restored provider history authoritative after later live output', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: 'restored history\r\nlater output',
       cols: 80,
@@ -323,6 +343,7 @@ describe('terminal side-effect fact channel', () => {
       seq: 912,
       source: 'headless'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -373,6 +394,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('tracks live alternate-screen transitions after a provider snapshot', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: 'restored tui',
       cols: 80,
@@ -381,6 +403,7 @@ describe('terminal side-effect fact channel', () => {
       source: 'headless',
       alternateScreen: true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -404,6 +427,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('keeps mode transitions that race a provider snapshot response', async () => {
     const { runtime } = createSideEffectRuntime()
+
     let resolveProviderSnapshot:
       | ((snapshot: {
           data: string
@@ -414,6 +438,7 @@ describe('terminal side-effect fact channel', () => {
           alternateScreen: boolean
         }) => void)
       | undefined
+
     const serializeProviderBuffer = vi.fn(
       () =>
         new Promise<{
@@ -427,6 +452,7 @@ describe('terminal side-effect fact channel', () => {
           resolveProviderSnapshot = resolve
         })
     )
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -523,12 +549,14 @@ describe('terminal side-effect fact channel', () => {
     syncSinglePty(runtime)
 
     runtime.onPtyData('pty-1', 'plain output\n', 100)
+
     // Simulate a record title restored by a path that bypassed the tracker.
     const records = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null }>
       }
     ).ptysById
+
     records.get('pty-1')!.lastOscTitle = 'Cursor Agent'
 
     // Why: a hookless Cursor pane has no other identity to restore (#10258).
@@ -547,10 +575,12 @@ describe('terminal side-effect fact channel', () => {
   it('emits the chunk agentStatus events before its side-effect batch', () => {
     // Cross-channel contract order per chunk: status → titles → bell.
     const order: string[] = []
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       onTerminalAgentStatus: () => order.push('agentStatus:set'),
       onTerminalSideEffects: () => order.push('pty:sideEffect')
     })
+
     syncSinglePty(runtime)
 
     runtime.onPtyData(
@@ -611,6 +641,7 @@ describe('terminal side-effect fact channel', () => {
   it('touches mobile snapshots once for decorative spinner ticks, again on idle', () => {
     const { runtime } = createSideEffectRuntime()
     syncSinglePty(runtime)
+
     const touchSpy = vi.spyOn(
       runtime as unknown as { touchMobileSessionSnapshotsForPty: (ptyId: string) => void },
       'touchMobileSessionSnapshotsForPty'
@@ -619,6 +650,7 @@ describe('terminal side-effect fact channel', () => {
     for (const frame of ['⠋', '⠙', '⠹', '⠸', '⠼']) {
       runtime.ingestSyntheticTitleFrame('pty-1', `\x1b]0;${frame} Cursor Agent\x07`)
     }
+
     // Five ticks with the same de-spinnered title: one snapshot fan-out.
     expect(touchSpy).toHaveBeenCalledTimes(1)
 
@@ -636,12 +668,14 @@ describe('terminal side-effect fact channel', () => {
 
   it('seeds the lazily created tracker from the daemon-snapshot title', async () => {
     const { runtime, batches } = createSideEffectRuntime()
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: 'restored scrollback\n',
       cols: 80,
       rows: 24,
       lastTitle: 'Codex working'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

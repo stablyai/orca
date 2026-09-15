@@ -17,6 +17,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let promptNaturalHeight = 0
+
 let resizeCallback: ResizeObserverCallback | null = null
 
 class PromptResizeObserver implements ResizeObserver {
@@ -75,6 +76,7 @@ describe('AutomationPromptDisclosure', () => {
         if (this.tagName !== 'P') {
           return 0
         }
+
         return this.classList.contains('line-clamp-4')
           ? Math.min(promptNaturalHeight, 80)
           : promptNaturalHeight
@@ -182,6 +184,7 @@ describe('AutomationPromptDisclosure', () => {
   it('preserves expansion and focus across unrelated automation updates', async () => {
     promptNaturalHeight = 240
     const user = userEvent.setup()
+
     const { rerender } = render(
       <AutomationDetail
         automation={makeAutomation(1)}

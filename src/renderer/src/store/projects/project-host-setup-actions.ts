@@ -39,11 +39,14 @@ export function createProjectHostSetupActions(
       try {
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
+
         const projectProviderIdentity =
           args.projectProviderIdentity ??
           get().projects.find((project) => project.id === args.projectId)?.providerIdentity
+
         // Why: the target host may not have a project record yet; carry the selected source-host identity across the boundary.
         const setupArgs = projectProviderIdentity ? { ...args, projectProviderIdentity } : args
+
         const result =
           target.kind === 'local'
             ? await window.api.projects.setupExistingFolder(setupArgs)
@@ -55,6 +58,7 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
+
         const repo = repoWithFetchedOwner(result.repo, target)
         const repoHostId = getRepoExecutionHostId(repo)
         const setup = setupWithFetchedOwner(result.setup, target)
@@ -67,12 +71,15 @@ export function createProjectHostSetupActions(
                 repoMatchesHostIdentity(entry, repo.id, repoHostId) ? repo : entry
               )
             : [...s.repos, repo]
+
           const nextProjects = s.projects.some((entry) => entry.id === project.id)
             ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
             : [...s.projects, project]
+
           const nextSetups = s.projectHostSetups.some((entry) => entry.id === setup.id)
             ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
             : [...s.projectHostSetups, setup]
+
           return {
             repos: nextRepos,
             projects: nextProjects,
@@ -82,6 +89,7 @@ export function createProjectHostSetupActions(
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
           description: repo.displayName
         })
+
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
@@ -90,6 +98,7 @@ export function createProjectHostSetupActions(
           description: message,
           duration: ERROR_TOAST_DURATION
         })
+
         return null
       }
     },
@@ -98,6 +107,7 @@ export function createProjectHostSetupActions(
       try {
         const target = getProjectSetupRuntimeTarget(args.hostId)
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
+
         const result =
           target.kind === 'local'
             ? await window.api.projects.createHostSetup(args)
@@ -109,6 +119,7 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
+
         const setup = setupWithFetchedOwner(result.setup, target)
         const project = normalizeProjectRow(result.project)
         set((s) => ({
@@ -119,6 +130,7 @@ export function createProjectHostSetupActions(
             ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
             : [...s.projectHostSetups, setup]
         }))
+
         return { project, setup }
       } catch (err) {
         console.error('Failed to create project host setup:', err)
@@ -127,6 +139,7 @@ export function createProjectHostSetupActions(
           description: message,
           duration: ERROR_TOAST_DURATION
         })
+
         return null
       }
     },
@@ -134,10 +147,13 @@ export function createProjectHostSetupActions(
     updateProjectHostSetup: async (args) => {
       try {
         const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+
         const target = currentSetup
           ? getProjectSetupRuntimeTarget(currentSetup.hostId)
           : { kind: 'local' as const }
+
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
+
         const result =
           target.kind === 'local'
             ? await window.api.projects.updateHostSetup(args)
@@ -149,6 +165,7 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
+
         const setup = setupWithFetchedOwner(result.setup, target)
         const project = normalizeProjectRow(result.project)
         const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
@@ -168,6 +185,7 @@ export function createProjectHostSetupActions(
             ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
             : [...s.projectHostSetups, setup]
         }))
+
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to update project host setup:', err)
@@ -176,6 +194,7 @@ export function createProjectHostSetupActions(
           description: message,
           duration: ERROR_TOAST_DURATION
         })
+
         return null
       }
     },
@@ -183,10 +202,13 @@ export function createProjectHostSetupActions(
     deleteProjectHostSetup: async (args) => {
       try {
         const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+
         const target = currentSetup
           ? getProjectSetupRuntimeTarget(currentSetup.hostId)
           : { kind: 'local' as const }
+
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
+
         const result =
           target.kind === 'local'
             ? await window.api.projects.deleteHostSetup(args)
@@ -198,22 +220,27 @@ export function createProjectHostSetupActions(
                   { timeoutMs: 15_000 }
                 )
               ).result
+
         const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         set((s) => {
           const projectHostSetups = s.projectHostSetups.filter(
             (setup) => setup.id !== result.setup.id
           )
+
           const repos =
             repo && repoHostId
               ? s.repos.filter((entry) => !repoMatchesHostIdentity(entry, repo.id, repoHostId))
               : s.repos
+
           const projects =
             repo && !projectHostSetups.some((setup) => setup.projectId === result.project.id)
               ? s.projects.filter((project) => project.id !== result.project.id)
               : s.projects
+
           const survivingRepoIds = new Set(repos.map((r) => r.id))
           const removedRepoIds = s.repos.filter((r) => !survivingRepoIds.has(r.id)).map((r) => r.id)
+
           return {
             repos,
             projects,
@@ -221,6 +248,7 @@ export function createProjectHostSetupActions(
             ...omitSparsePresetsForRepos(s, removedRepoIds)
           }
         })
+
         return { ...result, repo }
       } catch (err) {
         console.error('Failed to delete project host setup:', err)
@@ -232,6 +260,7 @@ export function createProjectHostSetupActions(
             duration: ERROR_TOAST_DURATION
           }
         )
+
         return null
       }
     },
@@ -240,9 +269,11 @@ export function createProjectHostSetupActions(
       try {
         const parsedHost = parseExecutionHostId(args.hostId)
         const target = getProjectSetupRuntimeTarget(args.hostId)
+
         if (parsedHost?.kind !== 'ssh') {
           await assertProjectHostSetupMutationRuntimeCapabilities(target)
         }
+
         const repo =
           parsedHost?.kind === 'ssh'
             ? await window.api.repos.cloneRemote({
@@ -266,6 +297,7 @@ export function createProjectHostSetupActions(
                     { timeoutMs: 10 * 60_000 }
                   )
                 ).repo
+
         return await get().setupProjectExistingFolder({
           projectId: args.projectId,
           hostId: args.hostId,
@@ -281,6 +313,7 @@ export function createProjectHostSetupActions(
           description: message,
           duration: ERROR_TOAST_DURATION
         })
+
         return null
       }
     }

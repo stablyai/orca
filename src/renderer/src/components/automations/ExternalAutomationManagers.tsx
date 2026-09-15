@@ -157,16 +157,20 @@ export function ExternalAutomationManagers({
             <div className="divide-y divide-border/40">
               {manager.jobs.map((job) => {
                 const scheduleDisplay = getExternalAutomationScheduleDisplay(manager, job)
+
                 const disabledMessage = getExternalAutomationActionDisabledMessage({
                   manager,
                   actionInProgress: runningActionKey !== null
                 })
+
                 // Scope-qualified so two hosts running the same provider cannot
                 // label each other's rows or spin each other's buttons.
                 const jobKey = externalAutomationJobKey(scope, job.id)
                 const nameId = `automation-name-${jobKey}`
+
                 const actionKey = (action: ExternalAutomationAction): string =>
                   externalAutomationActionKey(scope, job.id, action)
+
                 return (
                   <div
                     key={jobKey}

@@ -12,9 +12,11 @@ describe('unhandled provider frame journal fallback', () => {
     )
 
     expect(item).not.toBeNull()
+
     if (!item) {
       throw new Error('expected substantive provider frame')
     }
+
     expect(item.body).toMatchObject({
       kind: 'status',
       text: 'future-provider · notification:new/event',
@@ -92,6 +94,7 @@ describe('unhandled provider frame journal fallback', () => {
       threadId: 'thread-1',
       status: { type: 'systemError' }
     })
+
     const claude = unhandledProviderFrameJournalItem('claude', 'message:result', {
       subtype: 'error_during_execution',
       is_error: true,
@@ -173,6 +176,7 @@ describe('unhandled provider frame journal fallback', () => {
     const row = unhandledProviderFrameJournalItem('codex', 'notification:warning', {
       message: 'Your plan limit resets in 2 hours.'
     })
+
     expect(row?.body.text).toBe('Your plan limit resets in 2 hours.')
     // The raw frame stays available behind the row's disclosure.
     expect(row?.body.providerFrame?.kind).toBe('notification:warning')
@@ -180,6 +184,7 @@ describe('unhandled provider frame journal fallback', () => {
 
   it('bounds a provider sentence inline', () => {
     const message = 'abcdefghij'
+
     const row = unhandledProviderFrameJournalItem(
       'codex',
       'notification:warning',
@@ -217,6 +222,7 @@ describe('a failed provider dependency', () => {
         failureReason: 'reauthenticationRequired'
       }
     )
+
     expect(item?.classification).toBe('error-surface')
     expect(item?.body.text).toContain('failed to start')
     expect(item?.body.text).not.toContain('notification:mcpServer')

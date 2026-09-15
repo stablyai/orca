@@ -16,7 +16,9 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
     createCodexProvider(input.codex),
     createOpenCodeProvider(input.opencode)
   ]
+
   const daily = buildDailyOverview(input)
+
   const bestDay =
     daily.length === 0
       ? null
@@ -24,6 +26,7 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
           (best, entry) => (!best || entry.totalTokens > best.totalTokens ? entry : best),
           null
         )
+
   const totalTokens = providers.reduce((sum, provider) => sum + provider.totalTokens, 0)
   const newInputTokens = providers.reduce((sum, provider) => sum + provider.newInputTokens, 0)
   const outputTokens = providers.reduce((sum, provider) => sum + provider.outputTokens, 0)
@@ -33,9 +36,11 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   const activityCount = providers.reduce((sum, provider) => sum + provider.activityCount, 0)
   const knownCost = providers.reduce((sum, provider) => sum + (provider.estimatedCostUsd ?? 0), 0)
   const hasKnownCost = providers.some((provider) => provider.estimatedCostUsd !== null)
+
   const hasPartialCost = providers.some(
     (provider) => provider.hasData && provider.estimatedCostUsd === null
   )
+
   const lastUpdatedAt =
     providers.reduce<number | null>(
       (latest, provider) =>
@@ -75,12 +80,15 @@ export function formatUsageTokens(value: number): string {
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(1)}B`
   }
+
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
+
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
+
   return value.toLocaleString()
 }
 
@@ -88,5 +96,6 @@ export function formatUsageCost(value: number | null): string {
   if (value === null) {
     return 'n/a'
   }
+
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }

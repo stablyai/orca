@@ -79,6 +79,7 @@ describe('digit-index shortcuts', () => {
       'tab.selectByIndex': ['Mod+1'],
       'workspace.selectByIndex': ['Ctrl+1']
     }
+
     expect(
       matchKeybindingDigitIndex(
         'tab.selectByIndex',

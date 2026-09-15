@@ -23,7 +23,9 @@ import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 import { captureStableTabScreenshot } from './terminal-tab-screenshot'
 
 const SILENT_FOREGROUND_COMMAND = 'node -e "setInterval(() => {}, 1000)"\r'
+
 const TAB_A_GLYPH_ROW = 'abcdefghijklmnopqrstuvwxyz 0123456789 []{}<>/\\#@%&*+=~'
+
 const TAB_B_GLYPH_ROW = 'ZYXWVUTSRQPONMLKJIHGFEDCBA 9876543210 !?^"\'();:,.|$_-'
 
 type TabTerminalGeometry = {
@@ -83,9 +85,11 @@ type HiddenOutputRecoveryWindow = Window & {
 async function forceWebglOnActiveTab(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state?.settings) {
       throw new Error('Store unavailable')
     }
+
     window.__store?.setState({
       settings: {
         ...state.settings,
@@ -93,12 +97,14 @@ async function forceWebglOnActiveTab(page: Page): Promise<void> {
       }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     window.__paneManagers?.get(tabId ?? '')?.setTerminalGpuAcceleration?.('on')
   })
 }
@@ -107,6 +113,7 @@ async function ensureTwoTerminalTabs(
   page: Page
 ): Promise<{ firstTabId: string; secondTabId: string }> {
   const worktreeId = (await getActiveWorktreeId(page))!
+
   if ((await page.locator('[data-testid="sortable-tab"]').count()) < 2) {
     await page.getByRole('button', { name: 'New tab' }).click({ force: true })
     await page
@@ -117,20 +124,27 @@ async function ensureTwoTerminalTabs(
       .poll(() => page.locator('[data-testid="sortable-tab"]').count(), { timeout: 5_000 })
       .toBeGreaterThanOrEqual(2)
   }
+
   const firstTabId = (await getActiveTabId(page))!
+
   const secondTabId = await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const tabs = state.tabsByWorktree[worktreeId] ?? []
     const other = tabs.find((tab) => tab.id !== state.activeTabId)
+
     return other?.id ?? null
   }, worktreeId)
+
   if (!secondTabId) {
     throw new Error('Expected a second terminal tab')
   }
+
   return { firstTabId, secondTabId }
 }
 
@@ -140,16 +154,21 @@ async function createAgentMarkedTerminalTab(
   command: string
 ): Promise<string> {
   const worktreeId = (await getActiveWorktreeId(page))!
+
   return page.evaluate(
     ({ worktreeId, agent, command }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const state = store.getState()
+
       const tab = state.createTab(worktreeId, undefined, undefined, {
         launchAgent: agent
       })
+
       state.queueTabStartupCommand(tab.id, {
         command,
         launchAgent: agent,
@@ -161,6 +180,7 @@ async function createAgentMarkedTerminalTab(
       })
       state.setActiveTab(tab.id)
       state.setActiveTabType('terminal')
+
       return tab.id
     },
     { worktreeId, agent, command }
@@ -178,9 +198,11 @@ async function createGrokMarkedTerminalTab(page: Page): Promise<string> {
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     store.getState().setActiveTab(id)
     store.getState().setActiveTabType('terminal')
   }, tabId)
@@ -202,6 +224,7 @@ async function waitForWebglOnTab(page: Page, tabId: string): Promise<boolean> {
     .waitForFunction(
       (id) => {
         const diagnostics = window.__paneManagers?.get(id)?.getRenderingDiagnostics?.() ?? []
+
         return diagnostics.some((entry) => entry.hasWebgl)
       },
       tabId,
@@ -218,19 +241,24 @@ async function waitForPanePtyIdOnTab(page: Page, tabId: string): Promise<string>
         page.evaluate((id) => {
           const manager = window.__paneManagers?.get(id)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return pane?.container?.dataset?.ptyId ?? null
         }, tabId),
       { timeout: 15_000, message: `Pane for tab ${tabId} did not receive a PTY binding` }
     )
     .not.toBeNull()
+
   const ptyId = await page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane?.container?.dataset?.ptyId ?? null
   }, tabId)
+
   if (!ptyId) {
     throw new Error(`Pane for tab ${tabId} has no PTY binding`)
   }
+
   return ptyId
 }
 
@@ -241,9 +269,11 @@ async function readPaneIdentityOnTab(
   const identity = await page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       return null
     }
+
     return {
       leafId: pane.container.dataset.leafId ?? null,
       ptyId: pane.container.dataset.ptyId ?? null,
@@ -251,9 +281,11 @@ async function readPaneIdentityOnTab(
       rows: pane.terminal.rows
     }
   }, tabId)
+
   if (!identity?.leafId || !identity.ptyId) {
     throw new Error(`Pane identity for tab ${tabId} is incomplete`)
   }
+
   return {
     leafId: identity.leafId,
     ptyId: identity.ptyId,
@@ -289,6 +321,7 @@ async function injectPaneData(
       ) ?? false,
     { paneKey, data, meta }
   )
+
   if (!injected) {
     throw new Error(`No terminal PTY data injector registered for ${paneKey}`)
   }
@@ -302,9 +335,11 @@ async function setHiddenSnapshotOverride(
   await page.evaluate(
     ({ ptyId, snapshot }) => {
       const api = (window as HiddenOutputRecoveryWindow).__terminalHiddenSnapshotOverride
+
       if (!api) {
         throw new Error('Hidden snapshot override API unavailable')
       }
+
       api.setPending(ptyId, snapshot)
       api.resolve(ptyId)
     },
@@ -315,9 +350,11 @@ async function setHiddenSnapshotOverride(
 async function resetTerminalOutputSchedulerDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
     const debug = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug
+
     if (!debug) {
       throw new Error('Terminal output scheduler debug API unavailable')
     }
+
     debug.reset()
   })
 }
@@ -332,6 +369,7 @@ async function waitForHiddenOutputSchedulerActivity(
           const snapshot = (
             window as SchedulerDebugWindow
           ).__terminalOutputSchedulerDebug?.snapshot()
+
           return snapshot?.backgroundEnqueueCount ?? 0
         }),
       {
@@ -340,11 +378,14 @@ async function waitForHiddenOutputSchedulerActivity(
       }
     )
     .toBeGreaterThan(0)
+
   return page.evaluate(() => {
     const snapshot = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug?.snapshot()
+
     if (!snapshot) {
       throw new Error('Terminal output scheduler debug API unavailable')
     }
+
     return {
       backgroundEnqueueCount: snapshot.backgroundEnqueueCount,
       scheduledDrainCount: snapshot.scheduledDrainCount,
@@ -355,6 +396,7 @@ async function waitForHiddenOutputSchedulerActivity(
 
 async function startHiddenPtyOutputBurst(page: Page, ptyId: string, runId: string): Promise<void> {
   const marker = `${TAB_SWITCH_MARKER_PREFIX}_PTY_${runId}`
+
   const script = [
     `const marker=${JSON.stringify(marker)};`,
     'setTimeout(()=>{',
@@ -366,6 +408,7 @@ async function startHiddenPtyOutputBurst(page: Page, ptyId: string, runId: strin
     '},1);',
     '},30);'
   ].join('')
+
   // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
   await runNodeScriptInTerminal(page, ptyId, script, { prefix: 'orca-tab-switch-burst' })
 }
@@ -380,13 +423,16 @@ async function writeStaticTabContent(
     async ({ id, marker, glyphRow }) => {
       const manager = window.__paneManagers?.get(id)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         throw new Error(`Pane unavailable for tab ${id}`)
       }
+
       const rows = Array.from(
         { length: 14 },
         (_, row) => `${marker} row ${row} | ${glyphRow} |\r\n`
       ).join('')
+
       await new Promise<void>((resolve) =>
         pane.terminal.write(`\x1b[2J\x1b[3J\x1b[H\x1b[?25l${rows}`, resolve)
       )
@@ -411,13 +457,16 @@ async function injectHiddenStreamingBurst(page: Page, tabId: string, runId: stri
     ({ tabId, marker }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
       if (!pane) {
         throw new Error(`No terminal pane for tab ${tabId}`)
       }
+
       // Why: Grok sessions can emit large formatted bursts while the tab is
       // hidden; stress the visibility-resume flush path beyond a few lines.
       const burst = Array.from({ length: 400 }, (_, frame) => {
         const progress = `${'█'.repeat((frame % 16) + 1)}${'░'.repeat(16 - ((frame % 16) + 1))}`
+
         return [
           `hidden_stream frame=${String(frame).padStart(3, '0')} ${marker}`,
           `Dimension              │ Rating                                              │`,
@@ -425,6 +474,7 @@ async function injectHiddenStreamingBurst(page: Page, tabId: string, runId: stri
           `abcdefghijklmnopqrstuvwxyz 0123456789 []{}<>/\\#@%&*+=~`
         ].join('\r\n')
       }).join('\r\n')
+
       return new Promise<void>((resolve) => {
         pane.terminal.write(`${burst}\r\n`, resolve)
       })
@@ -439,21 +489,27 @@ async function readTabTerminalGeometry(
   runId: string
 ): Promise<TabTerminalGeometry> {
   const marker = `${TAB_SWITCH_MARKER_PREFIX}_${runId}`
+
   return page.evaluate(
     ({ tabId, marker }) => {
       const overlay = document.querySelector<HTMLElement>(
         `[data-terminal-overlay-tab-id="${tabId}"]`
       )
+
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
       if (!pane) {
         throw new Error(`No terminal pane for tab ${tabId}`)
       }
+
       const overlayRect = overlay?.getBoundingClientRect()
       const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
+
       if (!screen) {
         throw new Error(`No xterm screen for tab ${tabId}`)
       }
+
       const screenRect = screen.getBoundingClientRect()
       const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
       const renderedContentWidth = pane.terminal.cols * cellWidth
@@ -461,15 +517,19 @@ async function readTabTerminalGeometry(
       const contentWidthRatio = screenRect.width > 0 ? renderedContentWidth / screenRect.width : 0
       const buffer = pane.terminal.buffer.active
       let markerPresent = false
+
       for (let row = 0; row < pane.terminal.rows; row += 1) {
         const line = buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
+
         if (line.includes(marker)) {
           markerPresent = true
           break
         }
       }
+
       const diagnostics = manager?.getRenderingDiagnostics?.() ?? []
       const hasWebgl = diagnostics.some((entry) => entry.hasWebgl)
+
       return {
         tabId,
         overlayWidth: overlayRect?.width ?? 0,
@@ -494,23 +554,28 @@ function geometryLooksCorrupted(geometry: TabTerminalGeometry): string | null {
   if (geometry.overlayDisplay === 'none') {
     return 'overlay still display:none after activation'
   }
+
   if (geometry.overlayWidth < 200 || geometry.overlayHeight <= 0) {
     return `overlay dimensions invalid (${geometry.overlayWidth}x${geometry.overlayHeight}px)`
   }
+
   if (geometry.cols < 40 || geometry.rows <= 0) {
     return `terminal grid invalid (${geometry.cols}x${geometry.rows})`
   }
+
   // Why: half-width bug paints content in only ~50% of the screen; rowRight
   // lags far behind screenRight when cols are stale.
   if (geometry.contentWidthRatio > 0 && geometry.contentWidthRatio < 0.82) {
     return `content width ratio ${geometry.contentWidthRatio.toFixed(3)} < 0.82`
   }
+
   if (
     geometry.screenWidth > 0 &&
     geometry.rowRight < geometry.screenRight - geometry.cellWidth * 4
   ) {
     return `rowRight ${geometry.rowRight.toFixed(1)} lags screenRight ${geometry.screenRight.toFixed(1)}`
   }
+
   return null
 }
 
@@ -560,6 +625,7 @@ test.describe('Terminal tab switch visual restore', () => {
       // Why: rapid back-to-back switches mirror the user's leave/return pattern
       // and race the overlay's rAF/50ms refit retries.
       await activateTerminalTab(orcaPage, firstTabId)
+
       if (cycle % 3 === 0) {
         await activateTerminalTab(orcaPage, secondTabId)
         await activateTerminalTab(orcaPage, firstTabId)
@@ -568,6 +634,7 @@ test.describe('Terminal tab switch visual restore', () => {
       // Sample immediately — bug often shows before the 50ms overlay refit retry.
       const immediate = await readTabTerminalGeometry(orcaPage, firstTabId, runId)
       const immediateIssue = geometryLooksCorrupted(immediate)
+
       if (immediateIssue) {
         corruptionReports.push(`cycle ${cycle} immediate: ${immediateIssue}`)
         await captureTabScreenshot(
@@ -581,6 +648,7 @@ test.describe('Terminal tab switch visual restore', () => {
       await orcaPage.waitForTimeout(60)
       const settled = await readTabTerminalGeometry(orcaPage, firstTabId, runId)
       const settledIssue = geometryLooksCorrupted(settled)
+
       if (settledIssue) {
         corruptionReports.push(`cycle ${cycle} settled: ${settledIssue}`)
         await captureTabScreenshot(
@@ -591,6 +659,7 @@ test.describe('Terminal tab switch visual restore', () => {
         )
       }
     }
+
     const schedulerActivity = await waitForHiddenOutputSchedulerActivity(orcaPage)
     expect(schedulerActivity.scheduledDrainCount).toBeGreaterThan(0)
 
@@ -629,6 +698,7 @@ test.describe('Terminal tab switch visual restore', () => {
 
     const corruptionReports: string[] = []
     const renderPaths: string[] = []
+
     for (let cycle = 0; cycle < 6; cycle += 1) {
       const liveFrame = cycle * 4
       const restoreFrame = liveFrame + 1
@@ -653,13 +723,16 @@ test.describe('Terminal tab switch visual restore', () => {
       renderPaths.push(
         `cycle ${cycle}: ${describeAltScreenRenderPath(renderedFrame, liveFrame, restoreFrame)}`
       )
+
       // Why: whichever path won must have painted its own frame. Anything else
       // on screen means the restore replayed stale content.
       const staleFrame =
         renderedFrame !== null && renderedFrame !== liveFrame && renderedFrame !== restoreFrame
           ? `alt-screen shows frame ${renderedFrame}, expected ${liveFrame} (live write) or ${restoreFrame} (reveal restore)`
           : null
+
       const issue = geometryLooksCorrupted(geometry) ?? staleFrame
+
       if (issue || !geometry.markerPresent) {
         corruptionReports.push(
           `cycle ${cycle}: ${issue ?? 'marker missing after alt-screen redraw'}`
@@ -706,12 +779,14 @@ test.describe('Terminal tab switch visual restore', () => {
     await activateTerminalTab(orcaPage, shellTabId)
     const runId = `${Date.now()}`
     const marker = `${TAB_SWITCH_MARKER_PREFIX}_SKIPPED_AGENT_${runId}`
+
     const hiddenFrame = [
       '\x1b[?2026h',
       `${marker} hidden renderer frame`,
       'status=streaming while tab-hidden',
       '\x1b[?2026l'
     ].join('\r\n')
+
     await resetHiddenOutputDebug(orcaPage)
     await injectPaneData(orcaPage, paneKey, hiddenFrame, {
       seq: hiddenFrame.length,
@@ -757,6 +832,7 @@ test.describe('Terminal tab switch visual restore', () => {
     await activateTerminalTab(orcaPage, shellTabId)
     const runId = `${Date.now()}`
     const marker = `${TAB_SWITCH_MARKER_PREFIX}_SKIPPED_GROK_${runId}`
+
     // Why: synchronized-output mode exercises the hidden renderer skip path
     // used by agent TUIs before light tab resume requests recovery.
     const hiddenFrame = [
@@ -765,6 +841,7 @@ test.describe('Terminal tab switch visual restore', () => {
       'status=streaming while tab-hidden',
       '\x1b[?2026l'
     ].join('\r\n')
+
     await resetHiddenOutputDebug(orcaPage)
     await injectPaneData(orcaPage, paneKey, hiddenFrame, {
       seq: hiddenFrame.length,
@@ -813,8 +890,10 @@ test.describe('Terminal tab switch visual restore', () => {
       window.__paneManagers?.get(id)?.setTerminalGpuAcceleration?.('on')
     }, secondTabId)
     const secondWebgl = await waitForWebglOnTab(orcaPage, secondTabId)
+
     if (!firstWebgl || !secondWebgl) {
       test.skip(true, 'WebGL never attached on both tabs')
+
       return
     }
 
@@ -837,6 +916,7 @@ test.describe('Terminal tab switch visual restore', () => {
     const baseline = await captureStableTabScreenshot(orcaPage, firstTabId)
 
     const screenshotMismatches: string[] = []
+
     for (let cycle = 0; cycle < 8; cycle += 1) {
       await activateTerminalTab(orcaPage, secondTabId)
       // Why: do not write into the hidden tab here — new bytes would change the
@@ -846,6 +926,7 @@ test.describe('Terminal tab switch visual restore', () => {
       await orcaPage.waitForTimeout(100)
       const afterReturn = await captureStableTabScreenshot(orcaPage, firstTabId)
       const diff = compareTerminalScreenshots(baseline, afterReturn)
+
       if (!diff.matches) {
         screenshotMismatches.push(
           `cycle ${cycle}: ${diff.diffPixels} px (${(diff.diffRatio * 100).toFixed(2)}%)`

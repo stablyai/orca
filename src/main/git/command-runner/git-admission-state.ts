@@ -2,16 +2,24 @@ import { availableParallelism } from 'node:os'
 import type { GitAdmissionTier } from './git-exec-options'
 
 export const GENERAL_CAP = Math.max(2, Math.min(4, availableParallelism() - 4))
+
 export const NETWORK_CAP = 3
+
 export const GENERAL_HEADROOM = 2
+
 export const NETWORK_HEADROOM = 1
+
 export const ROUTE_CAP = 2
+
 export const ROUTE_HEADROOM = 1
+
 export const GIT_ADMISSION_AGING_MS = 15_000
+
 // General 4+2 and network 3+1 are disjoint, so at most ten git children run globally.
 export const MAX_GIT_CHILDREN = 10
 
 export type AdmissionClass = 'general' | 'network'
+
 export type AdmissionSlotKind = 'base' | 'headroom'
 
 export type GitAdmissionRequest = {
@@ -113,6 +121,7 @@ export class AdmissionEventPublisher {
     if (!this.listener) {
       return
     }
+
     const event: GitAdmissionEvent = {
       sequence: this.nextSequence++,
       phase: details.phase,
@@ -126,6 +135,7 @@ export class AdmissionEventPublisher {
       queued: details.queued,
       budgets: [...details.budgets].map(([key, budget]) => ({ key, ...budget }))
     }
+
     try {
       this.listener(event)
     } catch {

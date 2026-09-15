@@ -16,9 +16,11 @@ export async function observeReplayedTerminalPrompt(
   signal: AbortSignal | undefined
 ): Promise<{ send: RuntimeTerminalSend } | null> {
   const replayedSend = (replayedMutationReceipt as { send?: RuntimeTerminalSend } | undefined)?.send
+
   if (!replayedSend?.prompt || !waitSubmitMs || waitSubmitMs <= 0) {
     return null
   }
+
   try {
     const prompt = await runtime.observeTerminalAgentPrompt(
       handle,
@@ -26,6 +28,7 @@ export async function observeReplayedTerminalPrompt(
       waitSubmitMs,
       signal
     )
+
     return { send: { ...replayedSend, prompt } }
   } catch (error) {
     if (
@@ -34,6 +37,7 @@ export async function observeReplayedTerminalPrompt(
     ) {
       throw error
     }
+
     return {
       send: {
         ...replayedSend,
@@ -52,7 +56,9 @@ export function ensureUnsupportedTerminalPromptReceipt(
   if (send.prompt) {
     return send
   }
+
   const binding = runtime.getTerminalPromptRequestBinding(handle)
+
   return {
     ...send,
     prompt: {

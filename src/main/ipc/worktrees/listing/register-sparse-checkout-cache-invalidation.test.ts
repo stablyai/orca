@@ -43,6 +43,7 @@ describe('registerSparseCheckoutCacheInvalidation', () => {
   it('clears only the resolved repo`s cache when the invalidator registry fires', () => {
     const store = makeStore([{ id: 'repo-1', path: '/repo-1' } as Repo])
     const dispose = registerSparseCheckoutCacheInvalidation(mainWindow, store)
+
     try {
       runWorktreeChangeInvalidators('repo-1')
       expect(clearSparseCheckoutStateCacheForRepoMock).toHaveBeenCalledWith('/repo-1')
@@ -55,6 +56,7 @@ describe('registerSparseCheckoutCacheInvalidation', () => {
   it('falls back to a full clear when the repo cannot be resolved', () => {
     const store = makeStore([])
     const dispose = registerSparseCheckoutCacheInvalidation(mainWindow, store)
+
     try {
       runWorktreeChangeInvalidators('unknown-repo')
       expect(clearSparseCheckoutStateCacheMock).toHaveBeenCalledTimes(1)
@@ -67,6 +69,7 @@ describe('registerSparseCheckoutCacheInvalidation', () => {
   it('forwards a background stale-while-revalidate flip to the shared worktrees-changed notification', () => {
     const store = makeStore([{ id: 'repo-1', path: '/repo-1' } as Repo])
     const dispose = registerSparseCheckoutCacheInvalidation(mainWindow, store)
+
     try {
       const listener = onSparseCheckoutStateChangedMock.mock.calls.at(-1)?.[0]
       listener?.('/repo-1', '/repo-1/wt-a', true)

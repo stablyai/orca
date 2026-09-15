@@ -15,6 +15,7 @@ export function buildSetupAgentStartupHookSettings(
   setupAgentStartupPolicy: SetupAgentStartupPolicy
 ): RepoHookSettings {
   const defaults = getDefaultRepoHookSettings()
+
   return {
     ...defaults,
     ...current,

@@ -17,13 +17,16 @@ function item(index: number): AgentJournalRenderItem {
 
 it('visits only the retained sequence window and its boundary', () => {
   let reads = 0
+
   const items = Array.from({ length: 10000 }, (_, index) => ({
     ...item(index),
     get sequence() {
       reads += 1
+
       return index
     }
   }))
+
   expect(newestWholeSequenceGroups(items, 100).map((entry) => entry.itemId)).toEqual(
     Array.from({ length: 100 }, (_, index) => String(9900 + index))
   )

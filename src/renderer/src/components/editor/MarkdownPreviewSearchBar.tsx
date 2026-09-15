@@ -14,6 +14,7 @@ export function MarkdownPreviewSearchBar({
 }): React.JSX.Element {
   const { rootRef, setSearchInputElement, query, setQuery, matchCount, activeMatchIndex } =
     foundation
+
   const { moveToMatch, closeSearch } = viewport
 
   return (
@@ -27,13 +28,17 @@ export function MarkdownPreviewSearchBar({
             if (event.key === 'Enter' && event.shiftKey) {
               event.preventDefault()
               moveToMatch(-1)
+
               return
             }
+
             if (event.key === 'Enter') {
               event.preventDefault()
               moveToMatch(1)
+
               return
             }
+
             if (event.key === 'Escape') {
               event.preventDefault()
               closeSearch()

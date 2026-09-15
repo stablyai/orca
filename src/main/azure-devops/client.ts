@@ -19,6 +19,7 @@ import {
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
+
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
 export type AzureDevOpsAuthStatus = {
@@ -51,9 +52,11 @@ async function getRepository(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repo.repository)}`
   )
+
   if (!raw) {
     return { idOrName: repo.repository, webBaseUrl: repo.webBaseUrl }
   }
+
   return {
     idOrName: raw.id?.trim() || repo.repository,
     webBaseUrl: raw.webUrl ?? raw._links?.web?.href ?? repo.webBaseUrl
@@ -66,6 +69,7 @@ function readStatusList(
   if (Array.isArray(raw)) {
     return raw
   }
+
   return raw?.value ?? []
 }
 
@@ -82,14 +86,19 @@ async function getPullRequestStatuses(
       String(pr.pullRequestId)
     )}/statuses`
   )
+
   const prStatuses = readStatusList(raw)
+
   if (prStatuses.length > 0) {
     return prStatuses
   }
+
   const commitId = pr.lastMergeSourceCommit?.commitId?.trim()
+
   if (!commitId) {
     return pr.statuses ?? []
   }
+
   const commitStatuses = await requestAzureDevOpsJson<
     RawAzureDevOpsStatus[] | { value?: RawAzureDevOpsStatus[] }
   >(
@@ -98,6 +107,7 @@ async function getPullRequestStatuses(
       commitId
     )}/statuses`
   )
+
   return readStatusList(commitStatuses)
 }
 
@@ -108,6 +118,7 @@ async function normalizePullRequest(
   raw: RawAzureDevOpsPullRequest
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const statuses = await getPullRequestStatuses(repo, repoIdOrName, raw)
+
   return mapAzureDevOpsPullRequest(raw, deriveAzureDevOpsStatus(statuses), webBaseUrl)
 }
 
@@ -118,15 +129,19 @@ function sortPullRequestsForBranch(
   const leftStatus = left.status?.trim().toLowerCase()
   const rightStatus = right.status?.trim().toLowerCase()
   const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
+
   // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
   if (abandonedOrder !== 0) {
     return abandonedOrder
   }
+
   const leftTime = Date.parse(left.closedDate ?? left.creationDate ?? '') || 0
   const rightTime = Date.parse(right.closedDate ?? right.creationDate ?? '') || 0
+
   if (leftTime !== rightTime) {
     return rightTime - leftTime
   }
+
   return Number(rightStatus === 'active') - Number(leftStatus === 'active')
 }
 
@@ -134,6 +149,7 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
   const config = getAzureDevOpsAuthConfig()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
   const hasToken = azureDevOpsTokenConfigured(config)
+
   if (!baseUrl && !hasToken) {
     return {
       configured: false,
@@ -143,6 +159,7 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
       tokenConfigured: false
     }
   }
+
   if (!baseUrl) {
     return {
       configured: true,
@@ -160,7 +177,9 @@ export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus>
       uniqueName?: string | null
     } | null
   }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000 })
+
   const user = connection?.authenticatedUser
+
   return {
     configured: hasToken || connection !== null,
     authenticated: connection !== null && (hasToken || user !== null),
@@ -181,16 +200,20 @@ export async function getAzureDevOpsPullRequest(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   const repository = repo ? await getRepository(repo) : null
+
   if (!repo || !repository) {
     return null
   }
+
   const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
       String(prNumber)
     )}`
   )
+
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
 }
 
@@ -203,6 +226,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   throwOnFailure = false
 ): Promise<AzureDevOpsPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
+
   if (!branchName && linkedPRNumber == null) {
     return null
   }
@@ -212,7 +236,9 @@ export async function getAzureDevOpsPullRequestForBranch(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   const repository = repo ? await getRepository(repo) : null
+
   if (!repo || !repository) {
     return null
   }
@@ -230,7 +256,9 @@ export async function getAzureDevOpsPullRequestForBranch(
       },
       throwOnFailure
     )
+
     const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
+
     if (raw) {
       // Why (#9171): discard a non-open implicit branch match on the repo
       // default branch and fall through to the linked-number fallback below.
@@ -243,6 +271,7 @@ export async function getAzureDevOpsPullRequestForBranch(
         connectionId,
         localGitOptions: getHostedReviewLocalGitOptions(options)
       })
+
       if (!hideOnDefaultBranch) {
         return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
       }
@@ -252,6 +281,7 @@ export async function getAzureDevOpsPullRequestForBranch(
   if (typeof linkedPRNumber !== 'number') {
     return null
   }
+
   const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
     repo,
     `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
@@ -260,6 +290,7 @@ export async function getAzureDevOpsPullRequestForBranch(
     {},
     throwOnFailure
   )
+
   return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
 }
 

@@ -37,21 +37,26 @@ export function createCloseFileAction(
         const newEditorViewMode = { ...s.editorViewMode }
         delete newEditorViewMode[fileId]
         const markdownVisibilityKeys = new Set([fileId])
+
         if (closedFile?.markdownPreviewSourceFileId) {
           markdownVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
         }
+
         const visibilityKeysToRemove = [...markdownVisibilityKeys].filter(
           (key) =>
             !newFiles.some((file) => file.id === key || file.markdownPreviewSourceFileId === key)
         )
+
         const newMarkdownFrontmatterVisible =
           visibilityKeysToRemove.length > 0
             ? removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
             : s.markdownFrontmatterVisible
+
         const newMarkdownTableOfContentsVisible =
           visibilityKeysToRemove.length > 0
             ? removeMarkdownVisibilityKeys(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
             : s.markdownTableOfContentsVisible
+
         // Why: editorCursorLine is keyed by fileId and grows unbounded across a long session without cleanup on close.
         const newEditorCursorLine = { ...s.editorCursorLine }
         delete newEditorCursorLine[fileId]
@@ -61,9 +66,11 @@ export function createCloseFileAction(
         if (s.activeFileId === fileId) {
           // Find next file within the same worktree
           const worktreeId = closedFile?.worktreeId
+
           const worktreeFiles = worktreeId
             ? newFiles.filter((f) => f.worktreeId === worktreeId)
             : newFiles
+
           if (worktreeFiles.length === 0) {
             newActiveId = null
           } else {
@@ -73,11 +80,13 @@ export function createCloseFileAction(
                   .filter((f) => f.worktreeId === worktreeId)
                   .findIndex((f) => f.id === fileId)
               : idx
+
             newActiveId =
               closedWorktreeIdx >= worktreeFiles.length
                 ? worktreeFiles.at(-1)!.id
                 : worktreeFiles[closedWorktreeIdx].id
           }
+
           if (worktreeId) {
             newActiveFileIdByWorktree[worktreeId] = newActiveId
           }
@@ -85,32 +94,40 @@ export function createCloseFileAction(
 
         // Why: editors share a mixed tab strip with browser tabs; closing the last editor should reveal a browser tab before falling back to a terminal.
         const activeWorktreeId = s.activeWorktreeId
+
         const remainingForWorktree = activeWorktreeId
           ? newFiles.filter((f) => f.worktreeId === activeWorktreeId)
           : newFiles
+
         const browserTabsForWorktree = activeWorktreeId
           ? (s.browserTabsByWorktree[activeWorktreeId] ?? [])
           : []
+
         const terminalTabsForWorktree = activeWorktreeId
           ? (s.tabsByWorktree[activeWorktreeId] ?? [])
           : []
+
         const fallbackBrowserTabId =
           activeWorktreeId && browserTabsForWorktree.length > 0
             ? (s.activeBrowserTabIdByWorktree[activeWorktreeId] ??
               browserTabsForWorktree[0]?.id ??
               null)
             : s.activeBrowserTabId
+
         const newActiveTabType =
           remainingForWorktree.length > 0
             ? s.activeTabType
             : browserTabsForWorktree.length > 0
               ? 'browser'
               : 'terminal'
+
         const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+
         if (activeWorktreeId && remainingForWorktree.length === 0) {
           newActiveTabTypeByWorktree[activeWorktreeId] =
             browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
         }
+
         const shouldDeactivateWorktree =
           activeWorktreeId !== null &&
           remainingForWorktree.length === 0 &&
@@ -119,6 +136,7 @@ export function createCloseFileAction(
 
         // Why: prune the closed id from tabBarOrderByWorktree so stale ids don't shift positions on the next reconcile.
         const worktreeId = closedFile?.worktreeId ?? activeWorktreeId
+
         const nextTabBarOrderByWorktree =
           worktreeId && s.tabBarOrderByWorktree
             ? {
@@ -132,6 +150,7 @@ export function createCloseFileAction(
         let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
         let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
         const wtRecent = closedFile?.worktreeId
+
         // Why: exclude untitled unedited files (deleted from disk after close, so Cmd+Shift+T can't reopen a gone path) and ephemeral preview tabs from the reopen stack.
         if (
           closedFile &&
@@ -145,6 +164,7 @@ export function createCloseFileAction(
             mirroredFromRuntimeSession: _mirrored,
             ...snap
           } = closedFile
+
           const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
           const position = getRecentlyClosedTabPosition(s, wtRecent, fileId)
           nextRecentlyClosed = {
@@ -209,6 +229,7 @@ export function createCloseFileAction(
               entry.contentType === 'conflict-review' ||
               entry.contentType === 'check-details')
         )
+
         if (unifiedTab) {
           get().closeUnifiedTab(unifiedTab.id)
           break

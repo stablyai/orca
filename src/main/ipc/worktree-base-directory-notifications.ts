@@ -44,17 +44,22 @@ export function scheduleWorktreeBaseNotification(
 ): void {
   if (watch.disposed || watch.mainWindow.isDestroyed()) {
     clearPendingWorktreeBaseNotifications(watch)
+
     return
   }
+
   for (const repoId of changes.structureRepoIds ?? []) {
     watch.pendingStructureRepoIds.add(repoId)
   }
+
   for (const repoId of changes.gitStatusRepoIds ?? []) {
     watch.pendingGitStatusRepoIds.add(repoId)
   }
+
   for (const repoId of changes.headIdentityRepoIds ?? []) {
     watch.pendingHeadIdentityRepoIds.add(repoId)
   }
+
   // Why: callers that cannot attribute the burst to specific worktrees (watcher
   // failure, event overflow) omit the scope entirely; that is a loss of
   // knowledge, so it must widen to a full re-read rather than narrow to nothing.
@@ -65,26 +70,34 @@ export function scheduleWorktreeBaseNotification(
   clearTimeout(watch.notifyTimer ?? undefined)
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
+
     if (watch.disposed || watch.mainWindow.isDestroyed()) {
       clearPendingWorktreeBaseNotifications(watch)
+
       return
     }
+
     const pendingStructure = [...watch.pendingStructureRepoIds]
     const hasHeadIdentity = watch.pendingHeadIdentityRepoIds.size > 0
+
     const sourceControlRepoIds = new Set(
       [...watch.pendingGitStatusRepoIds, ...watch.pendingHeadIdentityRepoIds].filter(
         (repoId) => !watch.pendingStructureRepoIds.has(repoId)
       )
     )
+
     const emitHeadIdentities = pendingStructure.length === 0
     const headIdentityScope = watch.pendingHeadIdentityScope
     clearPendingWorktreeBaseNotifications(watch)
+
     for (const repoId of pendingStructure) {
       notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId, watch.connectionId)
     }
+
     for (const repoId of sourceControlRepoIds) {
       notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId)
     }
+
     if (
       supportsWorktreeHeadIdentityRefresh(watch) &&
       (pendingStructure.length > 0 || hasHeadIdentity)

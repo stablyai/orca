@@ -39,6 +39,7 @@ export function useMarkdownPreviewFoundation({
     sourceWorktreeId,
     sourceRuntimeEnvironmentId
   })
+
   const {
     rootRef,
     renderedContent,
@@ -49,27 +50,34 @@ export function useMarkdownPreviewFoundation({
   } = source
 
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
+
   const tableOfContentsItems = useMemo(
     () => selectMarkdownTableOfContents(showTableOfContents, renderedContent),
     [renderedContent, showTableOfContents]
   )
+
   const markdownDocumentIndex = useMemo(
     () => createMarkdownDocumentIndex(markdownDocuments),
     [markdownDocuments]
   )
+
   const frontMatterInner = useMemo(() => {
     if (!frontMatter) {
       return ''
     }
+
     return frontMatter.raw
       .replace(/^(?:---|\+\+\+)\r?\n/, '')
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
+
   const toggleableSourceFileId: string | null = sourceFileId ?? null
+
   const frontmatterVisible = toggleableSourceFileId
     ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
+
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const activeAnnotationBlockKeyRef = useRef(activeAnnotationBlockKey)
   useEffect(() => {
@@ -79,10 +87,13 @@ export function useMarkdownPreviewFoundation({
     if (!activeAnnotationBlockKey) {
       return
     }
+
     const root = rootRef.current
+
     if (!root || previewHasAnnotationBlockKey(root, activeAnnotationBlockKey)) {
       return
     }
+
     setActiveAnnotationBlockKey(null)
   }, [activeAnnotationBlockKey, renderedContent, rootRef])
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
@@ -93,18 +104,22 @@ export function useMarkdownPreviewFoundation({
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
+
   const markdownReviewNotes = useMemo(
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
     [markdownComments]
   )
+
   const unsentMarkdownReviewNotes = useMemo(
     () => markdownReviewNotes.filter((note) => !note.sentAt),
     [markdownReviewNotes]
   )
+
   const unsentMarkdownReviewPrompt = useMemo(
     () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, renderedContent),
     [renderedContent, unsentMarkdownReviewNotes]
   )
+
   const unsentMarkdownReviewScope = useMemo<NotesSendMenuScope<MarkdownReviewNote>[]>(
     () => [
       {
@@ -116,6 +131,7 @@ export function useMarkdownPreviewFoundation({
     ],
     [unsentMarkdownReviewNotes, unsentMarkdownReviewPrompt]
   )
+
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
   )

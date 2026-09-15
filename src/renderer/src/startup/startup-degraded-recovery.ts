@@ -49,22 +49,27 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     reconnectPersistedTerminals,
     abortSignal
   } = args
+
   const stepLabel = error instanceof Error && error.message ? error.message : String(error)
   console.error(
     '[startup] Workspace session hydration failed; leaving disk state untouched:',
     stepLabel,
     error
   )
+
   if (isCancelled()) {
     return
   }
+
   // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
   useAppStore.setState({ startupWorktreeRefreshCompleted: true })
   // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
   const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
+
   if (fallbackUI) {
     hydratePersistedUI(fallbackUI, 'startup')
   }
+
   // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
   toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
     description: translate(
@@ -80,11 +85,14 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
       }
     }
   })
+
   if (reconnectStarted) {
     // Why (issue #1158): re-running reconnect over its partially-mutated state would double-set ptyIds and drain pending* twice — force the flag, clear pending*.
     forceWorkspaceSessionReady()
+
     return
   }
+
   try {
     await window.api.app.awaitFirstWindowStartupServices()
     await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
@@ -95,6 +103,7 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
   } catch (reconnectErr) {
     console.error('[startup] reconnectPersistedTerminals failed in error path:', reconnectErr)
+
     // Why (issue #1158): the await may have run during StrictMode teardown; re-check cancellation so a cancelled pass 1 doesn't stomp pass 2's hydration.
     if (!isCancelled()) {
       // Why (issue #1158): recovery threw too; force the flag so the shell still mounts.

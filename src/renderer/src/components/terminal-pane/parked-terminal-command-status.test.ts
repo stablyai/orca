@@ -3,11 +3,17 @@ import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-statu
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'
+
 const PTY_ID_SSH = 'ssh:target-1@@pty-9'
+
 const TAB_ID = 'tab-1'
+
 const WORKTREE_ID = 'repo-1::/tmp/wt-1'
+
 const PANE_KEY = `${TAB_ID}:11111111-1111-4111-8111-111111111111`
+
 const PANE_ID = 1
+
 // Mirrors COMMAND_CODE_OUTPUT_DONE_SETTLE_MS.
 const DONE_SETTLE_MS = 1500
 
@@ -26,19 +32,25 @@ type MockStoreState = {
 }
 
 let mockStoreState: MockStoreState
+
 const dispatchTerminalCommandFinishedEvent = vi.fn()
+
 const resolveLiveAgentStatusConnectionRouting = vi.fn()
+
 const getConnectionIdFromState = vi.fn()
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mockStoreState }
 }))
+
 vi.mock('@/hooks/terminal-command-finished-event', () => ({
   dispatchTerminalCommandFinishedEvent
 }))
+
 vi.mock('@/lib/agent-status-connection-ownership', () => ({
   resolveLiveAgentStatusConnectionRouting
 }))
+
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState
 }))
@@ -71,6 +83,7 @@ function makeStatusEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatus
 async function createPolicy(ptyId: string) {
   const { createParkedTerminalCommandStatusPolicy } =
     await import('./parked-terminal-command-status')
+
   return createParkedTerminalCommandStatusPolicy({
     ptyId,
     worktreeId: WORKTREE_ID,
@@ -302,6 +315,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
       agentType: 'command-code'
     })
     const policy = await createPolicy(PTY_ID_LOCAL)
+
     const { cancelCommandCodeDoneSettle, setCommandCodeDoneSettleExecutor } =
       await import('./command-code-done-settle')
 

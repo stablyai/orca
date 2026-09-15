@@ -87,6 +87,7 @@ export function writeRetentionFixture(directory: string): string {
       'process.stdin.resume()'
     ].join('\n')
   )
+
   return fixturePath
 }
 
@@ -96,6 +97,7 @@ function shellQuote(value: string): string {
 
 export function retentionFixtureCommand(fixturePath: string, sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
+
   return process.platform === 'win32'
     ? // PowerShell needs the call operator when the executable is quoted; cmd.exe also accepts it.
       `& ${command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')}`
@@ -137,10 +139,13 @@ export async function createHostCliTerminal(
     activate: false,
     presentation: 'background'
   })
+
   const { handle, tabId } = created.terminal
+
   if (!tabId) {
     throw new Error('Host did not report a tab id for the CLI-created terminal')
   }
+
   // The host mints the pane identity before spawn, so read it back from the host
   // rather than from a renderer that may not have materialized the tab yet.
   const summary = (
@@ -148,13 +153,17 @@ export async function createHostCliTerminal(
       terminal: handle
     })
   ).terminal
+
   const ptyId = created.terminal.ptyId ?? summary.ptyId
+
   if (!ptyId) {
     throw new Error('Host did not report a PTY for the CLI-created terminal')
   }
+
   if (!summary.leafId) {
     throw new Error('Host did not report a leaf id for the CLI-created terminal')
   }
+
   expect(
     isDaemonShapedPtyId(ptyId, worktreeId),
     `CLI terminal ${ptyId} must carry the daemon id shape this seam excludes from classification`
@@ -165,6 +174,7 @@ export async function createHostCliTerminal(
       message: 'CLI-created terminal never started its fixture process'
     })
     .toBe(1)
+
   return {
     handle,
     tabId,
@@ -182,12 +192,15 @@ export async function readHostTerminalInventory(
   const snapshot = await call<SessionTabsListResult>('session.tabs.list', {
     worktree: `id:${worktreeId}`
   })
+
   const terminals = snapshot.tabs.filter((tab) => tab.type === 'terminal')
   const ptyIdByTabId: Record<string, string | null> = {}
+
   for (const tab of terminals) {
     const parentTabId = tab.parentTabId ?? tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]!
     ptyIdByTabId[parentTabId] = tab.ptyId ?? null
   }
+
   return {
     publicationEpoch: snapshot.publicationEpoch,
     tabIds: Object.keys(ptyIdByTabId),
@@ -225,16 +238,20 @@ export async function createHostRendererTerminalTab(
 ): Promise<string> {
   const tabId = await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Host renderer store is unavailable')
     }
+
     store.getState().setActiveView('terminal')
     store.getState().setActiveWorktree(id)
     const tab = store.getState().createTab(id)
     store.getState().setActiveTab(tab.id)
     store.getState().setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
+
   await expect
     .poll(
       () =>
@@ -248,6 +265,7 @@ export async function createHostRendererTerminalTab(
       { timeout: 60_000, message: `Host renderer tab ${tabId} never spawned a PTY` }
     )
     .not.toBeNull()
+
   return tabId
 }
 
@@ -263,10 +281,12 @@ export async function readHostInventoryWhenTabAppears(
     .poll(
       async () => {
         inventory = await readHostTerminalInventory(call, worktreeId)
+
         return inventory.tabIds.includes(tabId)
       },
       { timeout: 60_000, message }
     )
     .toBe(true)
+
   return inventory!
 }

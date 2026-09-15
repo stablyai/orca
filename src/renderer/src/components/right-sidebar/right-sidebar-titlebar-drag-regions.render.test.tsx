@@ -33,6 +33,7 @@ const mockAppState = vi.hoisted(() => ({
 
 function notifyAppStore(): void {
   mockAppState.snapshotCache.clear()
+
   for (const listener of mockAppState.listeners) {
     listener()
   }
@@ -45,6 +46,7 @@ function getMockKnownWorktree(): { id: string; repoId: string } {
       repoId: 'repo-1'
     }
   }
+
   return mockAppState.cachedWorktree
 }
 
@@ -62,10 +64,12 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 
 vi.mock('@/store', async () => {
   const React = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   const getSnapshot = (selector: (state: Record<string, unknown>) => unknown): unknown => {
     if (mockAppState.snapshotCache.has(selector)) {
       return mockAppState.snapshotCache.get(selector)
     }
+
     const selected = selector({
       rightSidebarOpen: mockAppState.rightSidebarOpen,
       rightSidebarWidth: 350,
@@ -83,7 +87,9 @@ vi.mock('@/store', async () => {
       checksByWorktreeId: {},
       keybindings: {}
     })
+
     mockAppState.snapshotCache.set(selector, selected)
+
     return selected
   }
 
@@ -92,6 +98,7 @@ vi.mock('@/store', async () => {
       React.useSyncExternalStore(
         (listener) => {
           mockAppState.listeners.add(listener)
+
           return () => {
             mockAppState.listeners.delete(listener)
           }
@@ -118,6 +125,7 @@ vi.mock('@/components/ui/tooltip', () => ({
         'data-tooltip-trigger': 'true'
       })
     }
+
     return <span data-tooltip-trigger>{children}</span>
   }
 }))
@@ -130,6 +138,7 @@ vi.mock('@/components/ui/context-menu', () => ({
         'data-context-menu-trigger': 'true'
       })
     }
+
     return <span data-context-menu-trigger>{children}</span>
   },
   ContextMenuContent: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -149,6 +158,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
         'data-dropdown-trigger': 'true'
       })
     }
+
     return <span data-dropdown-trigger>{children}</span>
   }
 }))
@@ -179,18 +189,22 @@ vi.mock('./PortsPanel', () => ({
 
 function openingTag(markup: string, className: string): string {
   const match = markup.match(new RegExp(`<[^>]+class="[^"]*${className}[^"]*"[^>]*>`))
+
   if (!match) {
     throw new Error(`opening tag with class "${className}" not found in ${markup}`)
   }
+
   return match[0]
 }
 
 function buttonOpeningTag(markup: string, ariaLabelPrefix: string): string {
   const escapedPrefix = ariaLabelPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const match = markup.match(new RegExp(`<button[^>]+aria-label="${escapedPrefix}[^"]*"[^>]*>`))
+
   if (!match) {
     throw new Error(`button with aria-label prefix "${ariaLabelPrefix}" not found in ${markup}`)
   }
+
   return match[0]
 }
 

@@ -18,9 +18,11 @@ async function openNotificationSettings(
   })
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
   const featureTipDialog = page.getByRole('dialog', { name: 'Voice Dictation is here' })
+
   if (await featureTipDialog.isVisible().catch(() => false)) {
     await page.getByRole('button', { name: 'Maybe Later' }).click()
   }
+
   await expect(
     page
       .locator('[data-settings-section="notifications"]')
@@ -37,16 +39,21 @@ test.describe('Notification settings', () => {
     await openNotificationSettings(orcaPage)
 
     const notificationsSection = orcaPage.locator('[data-settings-section="notifications"]')
+
     const enableNotificationsSwitch = notificationsSection.getByRole('switch', {
       name: 'Enable Notifications'
     })
+
     const agentTaskCompleteSwitch = notificationsSection.getByRole('switch', {
       name: 'Agent Task Complete'
     })
+
     const terminalBellSwitch = notificationsSection.getByRole('switch', { name: 'Terminal Bell' })
+
     const suppressWhileFocusedSwitch = notificationsSection.getByRole('switch', {
       name: 'Suppress While Focused'
     })
+
     const sendTestButton = notificationsSection.getByRole('button', {
       name: 'Send Test Notification'
     })
@@ -84,6 +91,7 @@ test.describe('Notification settings', () => {
     await expect
       .poll(async () => {
         const settings = await getSettings(orcaPage)
+
         return {
           enabled: settings.notifications.enabled,
           agentTaskComplete: settings.notifications.agentTaskComplete

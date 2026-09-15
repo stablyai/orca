@@ -54,38 +54,72 @@ export type {
 } from './runtime-git-client-context'
 
 export const getRuntimeGitScope = getRuntimeGitScopeImplementation
+
 export const getRuntimeGitStatus = getRuntimeGitStatusImplementation
+
 export const setRuntimeGitStatusUpstreamRefWatch = setRuntimeGitStatusUpstreamRefWatchImplementation
+
 export const getRuntimeGitSubmoduleStatus = getRuntimeGitSubmoduleStatusImplementation
+
 export const getRuntimeGitIgnoredPaths = getRuntimeGitIgnoredPathsImplementation
+
 export const getRuntimeGitHistory = getRuntimeGitHistoryImplementation
+
 export const getRuntimeGitConflictOperation = getRuntimeGitConflictOperationImplementation
+
 export const abortRuntimeGitMerge = abortRuntimeGitMergeImplementation
+
 export const abortRuntimeGitRebase = abortRuntimeGitRebaseImplementation
+
 export const getRuntimeGitDiff = getRuntimeGitDiffImplementation
+
 export const getRuntimeGitBranchCompare = getRuntimeGitBranchCompareImplementation
+
 export const getRuntimeGitCommitCompare = getRuntimeGitCommitCompareImplementation
+
 export const getRuntimeGitUpstreamStatus = getRuntimeGitUpstreamStatusImplementation
+
 export const fetchRuntimeGit = fetchRuntimeGitImplementation
+
 export const syncRuntimeGitForkDefaultBranch = syncRuntimeGitForkDefaultBranchImplementation
+
 export const pullRuntimeGit = pullRuntimeGitImplementation
+
 export const fastForwardRuntimeGit = fastForwardRuntimeGitImplementation
+
 export const rebaseRuntimeGitFromBase = rebaseRuntimeGitFromBaseImplementation
+
 export const pushRuntimeGit = pushRuntimeGitImplementation
+
 export const getRuntimeGitBranchDiff = getRuntimeGitBranchDiffImplementation
+
 export const getRuntimeGitCommitDiff = getRuntimeGitCommitDiffImplementation
+
 export const commitRuntimeGit = commitRuntimeGitImplementation
+
 export const generateRuntimeCommitMessage = generateRuntimeCommitMessageImplementation
+
 export const discoverRuntimeCommitMessageModels = discoverRuntimeCommitMessageModelsImplementation
+
 export const cancelRuntimeGenerateCommitMessage = cancelRuntimeGenerateCommitMessageImplementation
+
 export const generateRuntimePullRequestFields = generateRuntimePullRequestFieldsImplementation
+
 export const cancelRuntimeGeneratePullRequestFields =
   cancelRuntimeGeneratePullRequestFieldsImplementation
+
 export const stageRuntimeGitPath = stageRuntimeGitPathImplementation
+
 export const bulkStageRuntimeGitPaths = bulkStageRuntimeGitPathsImplementation
+
 export const unstageRuntimeGitPath = unstageRuntimeGitPathImplementation
+
 export const bulkUnstageRuntimeGitPaths = bulkUnstageRuntimeGitPathsImplementation
+
 export const bulkDiscardRuntimeGitPaths = bulkDiscardRuntimeGitPathsImplementation
+
 export const discardRuntimeGitPath = discardRuntimeGitPathImplementation
+
 export const getRuntimeGitRemoteFileUrl = getRuntimeGitRemoteFileUrlImplementation
+
 export const getRuntimeGitRemoteCommitUrl = getRuntimeGitRemoteCommitUrlImplementation

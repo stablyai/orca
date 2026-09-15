@@ -24,6 +24,7 @@ export function getRepoBackedTaskEmptyState(args: {
       )
     }
   }
+
   if (args.provider === 'github') {
     return {
       title: translate(
@@ -36,6 +37,7 @@ export function getRepoBackedTaskEmptyState(args: {
       )
     }
   }
+
   switch (args.gitlabView) {
     case 'issues':
       return {

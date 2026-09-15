@@ -13,6 +13,7 @@ const { getLegacyCopiedCodexSessionBridgeScanPreferenceMock, readdirMock, statMo
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return {
     ...actual,
     readdir: readdirMock,
@@ -21,9 +22,13 @@ vi.mock('fs/promises', async () => {
 })
 
 const FILE_COUNT = 125_000
+
 const FAKE_ROOT = join('/', 'tmp', 'orca-large-codex-home')
+
 const RUNTIME_SESSIONS_ROOT = join(FAKE_ROOT, 'runtime', 'sessions')
+
 const SYSTEM_SESSIONS_ROOT = join(FAKE_ROOT, 'system', 'sessions')
+
 const RUNTIME_BULK_DIR = join(RUNTIME_SESSIONS_ROOT, 'bulk')
 
 vi.mock('../codex/codex-home-paths', () => ({
@@ -62,16 +67,20 @@ describe('listCodexSessionFiles large directories', () => {
       if (dirPath === RUNTIME_SESSIONS_ROOT) {
         return [dirent('bulk', 'directory')]
       }
+
       if (dirPath === RUNTIME_BULK_DIR) {
         return largeSessionEntries
       }
+
       if (dirPath === SYSTEM_SESSIONS_ROOT) {
         return []
       }
+
       throw new Error(`Unexpected readdir path: ${dirPath}`)
     })
     statMock.mockImplementation(async (filePath) => {
       const match = /session-(\d+)\.jsonl$/.exec(filePath.replaceAll('\\', '/'))
+
       return {
         dev: 1,
         ino: match ? Number(match[1]) + 1 : 0

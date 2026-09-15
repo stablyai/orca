@@ -63,6 +63,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
   options: RuntimeBrowserClientPageAdoptionOptions
 ): Promise<RuntimeBrowserClientPageAdoptionResult> {
   const inventory = options.lease.pageInventory
+
   if (
     options.lease.pageReconciliationProtocolVersion !== 1 ||
     options.lease.pageInventoryProtocolVersion !== 1 ||
@@ -71,6 +72,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
   ) {
     return NOTHING_TO_ADOPT
   }
+
   const adoptable = selectAdoptableClientHostedPages({
     inventory,
     browserHostClientId: options.lease.browserHostClientId,
@@ -81,28 +83,35 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     // DOM is still alive down the recovery path, which recreates it from scratch instead.
     hasRuntimePage: (browserPageId) => {
       const page = options.pages.getPage(browserPageId)
+
       return page !== undefined && !isRestoredClientHostedBrowserPlacement(page.placement)
     }
   })
+
   if (adoptable.length === 0) {
     return NOTHING_TO_ADOPT
   }
+
   const executionHostKeyByWorkspaceId = new Map<string, string>()
   const goneWorkspaceIds = new Set<string>()
+
   for (const workspaceId of new Set(adoptable.map((page) => page.workspaceId))) {
     const resolved = await options.resolveExecutionHostKey(workspaceId)
+
     if (resolved.status === 'resolved') {
       executionHostKeyByWorkspaceId.set(workspaceId, resolved.executionHostKey)
     } else if (resolved.status === 'workspace-gone') {
       goneWorkspaceIds.add(workspaceId)
     }
   }
+
   // A page whose workspace is gone is settled, not pending: nothing will ever restore it, so it must
   // not hold this client's rows open. Anything else unadopted is a "not yet".
   const settle = (pages: readonly AdoptableClientHostedPage[]): readonly string[] =>
     pages
       .filter((page) => !goneWorkspaceIds.has(page.workspaceId))
       .map((page) => page.browserPageId)
+
   const intents = buildClientPageAdoptionIntents({
     pages: adoptable,
     authority: {
@@ -115,10 +124,13 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     },
     executionHostKeyByWorkspaceId
   })
+
   if (intents.length === 0) {
     return { adoptedPageIds: [], unadoptedPageIds: settle(adoptable) }
   }
+
   const intentsByPageId = new Map(intents.map((intent) => [intent.browserPageId, intent]))
+
   const adoptedPageIds = new Set(
     await options.authority.adoptClientPages(
       {
@@ -131,23 +143,29 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       options.signal ? { signal: options.signal } : {}
     )
   )
+
   const byPageId = new Map(adoptable.map((page) => [page.browserPageId, page]))
   const publishedWorkspaces = new Set<string>()
   const publishedPageIds: string[] = []
+
   for (const browserPageId of adoptedPageIds) {
     const page = byPageId.get(browserPageId)
     const intent = intentsByPageId.get(browserPageId)
     const placement = options.authority.getPlacement(browserPageId)
+
     if (!page || !intent || placement?.kind !== 'client') {
       continue
     }
+
     try {
       const restored = options.pages.getPage(browserPageId)
+
       if (restored && isRestoredClientHostedBrowserPlacement(restored.placement)) {
         // Why retire rather than update in place: the record is being replaced wholesale by the
         // host's own report, and publishing over a live id is refused by design.
         options.pages.retirePage(browserPageId, restored.placement)
       }
+
       options.pages.publishClientPage({
         browserPageId,
         workspaceId: page.workspaceId,
@@ -170,10 +188,13 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       })
     }
   }
+
   for (const workspaceId of publishedWorkspaces) {
     options.notifyWorkspace(workspaceId)
   }
+
   const published = new Set(publishedPageIds)
+
   return {
     adoptedPageIds: publishedPageIds,
     unadoptedPageIds: settle(adoptable.filter((page) => !published.has(page.browserPageId)))

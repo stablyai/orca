@@ -13,15 +13,18 @@ test('PTY capability lookup keeps renderer JavaScript responsive while main is s
 }) => {
   await orcaPage.evaluate(() => {
     const getCapabilities = window.api.pty.getAuthoritativeBufferSnapshotCapabilities
+
     if (!getCapabilities) {
       throw new Error('PTY snapshot capability API is unavailable')
     }
+
     const probe: CapabilityProbe = {
       calls: 0,
       gapsMs: [],
       returnDurationsMs: [],
       timer: 0
     }
+
     let previousTickAt = performance.now()
     probe.timer = window.setInterval(() => {
       const tickAt = performance.now()
@@ -47,15 +50,20 @@ test('PTY capability lookup keeps renderer JavaScript responsive while main is s
   const mainBlockedMs = await electronApp.evaluate(() => {
     const startedAt = Date.now()
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_500)
+
     return Date.now() - startedAt
   })
+
   const metrics = await orcaPage.evaluate(() => {
     const probe = (window as typeof window & { __capabilityProbe?: CapabilityProbe })
       .__capabilityProbe
+
     if (!probe) {
       throw new Error('Capability probe missing')
     }
+
     clearInterval(probe.timer)
+
     return {
       calls: probe.calls,
       maxGapMs: Math.max(...probe.gapsMs),

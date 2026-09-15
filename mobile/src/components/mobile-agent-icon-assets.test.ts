@@ -16,7 +16,9 @@ const GLYPH_AGENT_IDS = new Set<TuiAgent>([
 ])
 
 const dirname = import.meta.dirname
+
 const assetsDir = path.resolve(dirname, '../../../src/shared/agent-icons')
+
 const assetsModuleSource = readFileSync(path.join(dirname, 'mobile-agent-icon-assets.ts'), 'utf8')
 
 // Why: these agents previously loaded from Google's favicon service, which is

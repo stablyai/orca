@@ -37,6 +37,7 @@ export function WorkspaceSpaceManagerTable({
     visibleSelectionState,
     allVisibleSelected
   } = model
+
   return (
     <>
       {hasRows || isInitialScan ? (
@@ -122,9 +123,11 @@ export function WorkspaceSpaceManagerTable({
                 rows.map((worktree) => {
                   const identity = getWorkspaceSpaceWorktreeIdentity(worktree)
                   const decisionDetails = decisionDetailsByWorktreeId.get(identity)
+
                   if (!decisionDetails) {
                     return null
                   }
+
                   return (
                     <WorkspaceSpaceWorktreeRow
                       key={identity}

@@ -8,23 +8,28 @@ export function createUiPersistenceActions(set: UISliceSet, _get: UISliceGet): P
     notePersistedUIWriteStarted: (fields) =>
       set((s) => {
         const counts = { ...s.persistedUIWriteInFlightCounts }
+
         for (const field of fields) {
           counts[field] = (counts[field] ?? 0) + 1
         }
+
         return { persistedUIWriteInFlightCounts: counts }
       }),
     persistedUIWriteBaselineGeneration: 0,
     notePersistedUIWriteSettled: (fields, flushed, options) =>
       set((s) => {
         const counts = { ...s.persistedUIWriteInFlightCounts }
+
         for (const field of fields) {
           const next = (counts[field] ?? 0) - 1
+
           if (next > 0) {
             counts[field] = next
           } else {
             delete counts[field]
           }
         }
+
         // Why the generation guard: a hydration during the round trip made the
         // baseline authoritative for state NEWER than this write; folding the
         // sent values over it would blank the mirror-vs-baseline diff and leave
@@ -37,6 +42,7 @@ export function createUiPersistenceActions(set: UISliceSet, _get: UISliceGet): P
           s.persistedUIWriteBaseline &&
           options !== undefined &&
           options.sentAtGeneration === s.persistedUIWriteBaselineGeneration
+
         return {
           persistedUIWriteInFlightCounts: counts,
           ...(foldable

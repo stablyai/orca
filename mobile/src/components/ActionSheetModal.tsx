@@ -29,9 +29,11 @@ function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon):
   if (icon) {
     return icon
   }
+
   if (destructive || /delete|remove/i.test(label)) {
     return Trash2
   }
+
   return Edit3
 }
 
@@ -60,6 +62,7 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
         {actions.map((action, i) => {
           const Icon = iconForAction(action.label, action.destructive, action.icon)
           const customIcon = action.renderIcon?.()
+
           return (
             <View key={action.label}>
               {i > 0 && <View style={styles.separator} />}
@@ -72,6 +75,7 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
                 disabled={action.disabled || action.loading}
                 onPress={() => {
                   action.onPress()
+
                   if (!action.skipAutoClose && onClose) {
                     onClose()
                   }
@@ -109,6 +113,7 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
 
 export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
   const pendingActionRef = useRef<(() => void) | null>(null)
+
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
       ? {

@@ -10,6 +10,7 @@ export function getProjectHostSetupForRepo(
 ): ProjectHostSetup {
   // A repo id can exist on multiple hosts; the host-qualified setup is authoritative.
   const executionHostId = getRepoExecutionHostId(repo)
+
   return (
     setups.find((setup) => setup.repoId === repo.id && setup.hostId === executionHostId) ??
     setups.find((setup) => setup.repoId === repo.id) ??
@@ -22,6 +23,7 @@ export function getProjectHostSetupWorktreeMeta(
   repo: Repo
 ): Pick<WorktreeMeta, 'projectId' | 'hostId' | 'projectHostSetupId'> {
   const setup = getProjectHostSetupForRepo(setups, repo)
+
   return {
     projectId: setup.projectId,
     hostId: setup.hostId,

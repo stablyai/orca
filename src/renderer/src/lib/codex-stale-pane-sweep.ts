@@ -20,9 +20,13 @@ const SWEEP_ATTEMPT_DELAYS_MS = [300, 1500, 4000, 10_000, 20_000] as const
 // EARLIEST due entry — a single timer that drained everything let one pane's
 // short delay consume another's later rung and cut its ladder short.
 const dueAtByPtyId = new Map<string, number>()
+
 const attemptsByPtyId = new Map<string, number>()
+
 const notifiedPtyIds = new Set<string>()
+
 let flushTimer: ReturnType<typeof setTimeout> | null = null
+
 let flushTimerDueAt: number | null = null
 
 /**
@@ -37,12 +41,14 @@ export function notifyCodexPaneBoundForStaleSweep(ptyId: string): void {
   if (notifiedPtyIds.has(ptyId)) {
     return
   }
+
   // Why: the pane-account registry only records daemon HOST spawns, so a relay
   // or SSH pane can never come back stale — every rung it takes is a remote RPC
   // (15s timeout) spent to learn nothing. Drop it before it reaches the queue.
   if (isForeignMachineCodexPtyId(ptyId)) {
     return
   }
+
   queue(ptyId, SWEEP_ATTEMPT_DELAYS_MS[0])
   armForEarliestDue()
 }
@@ -71,6 +77,7 @@ export function resetCodexStalePaneSweepForTests(): void {
     clearTimeout(flushTimer)
     flushTimer = null
   }
+
   flushTimerDueAt = null
   dueAtByPtyId.clear()
   attemptsByPtyId.clear()
@@ -86,20 +93,25 @@ function queue(ptyId: string, delayMs: number): void {
 
 function armForEarliestDue(): void {
   let earliestDueAt: number | null = null
+
   for (const dueAt of dueAtByPtyId.values()) {
     if (earliestDueAt === null || dueAt < earliestDueAt) {
       earliestDueAt = dueAt
     }
   }
+
   if (earliestDueAt === null) {
     return
   }
+
   if (flushTimer !== null) {
     if (flushTimerDueAt !== null && flushTimerDueAt <= earliestDueAt) {
       return
     }
+
     clearTimeout(flushTimer)
   }
+
   flushTimerDueAt = earliestDueAt
   flushTimer = setTimeout(
     () => {
@@ -114,6 +126,7 @@ function armForEarliestDue(): void {
 function takeDuePtyIds(): string[] {
   const now = Date.now()
   const duePtyIds: string[] = []
+
   for (const [ptyId, dueAt] of dueAtByPtyId) {
     // Why: folding a never-inspected PTY into an earlier sweep is what coalesces
     // the startup burst, and costs it nothing. A PTY already waiting on a retry
@@ -122,9 +135,11 @@ function takeDuePtyIds(): string[] {
       duePtyIds.push(ptyId)
     }
   }
+
   for (const ptyId of duePtyIds) {
     dueAtByPtyId.delete(ptyId)
   }
+
   return duePtyIds
 }
 
@@ -138,27 +153,34 @@ function shouldRetry(scan: CodexPaneScanResult): boolean {
 function queueNextRung(ptyId: string): void {
   const attempt = (attemptsByPtyId.get(ptyId) ?? 0) + 1
   const delayMs = SWEEP_ATTEMPT_DELAYS_MS[attempt]
+
   if (delayMs === undefined) {
     attemptsByPtyId.delete(ptyId)
+
     return
   }
+
   attemptsByPtyId.set(ptyId, attempt)
   queue(ptyId, delayMs)
 }
 
 async function flush(): Promise<void> {
   const ptyIds = takeDuePtyIds()
+
   if (ptyIds.length === 0) {
     // Why: a timer can fire a hair early; re-aim it rather than dropping the queue.
     armForEarliestDue()
+
     return
   }
 
   let scans: CodexPaneScanResult[]
+
   try {
     scans = await markRestoredStaleCodexSessionsForRestart({ ptyIds })
   } catch (err) {
     console.warn('Codex stale-pane restart sweep failed:', err)
+
     // Why: a thrown sweep is no more conclusive than an unusable process read, so
     // spend a rung rather than dropping these panes. Re-aiming is what keeps the
     // panes this sweep never touched — parked on a later rung, and no longer
@@ -166,24 +188,30 @@ async function flush(): Promise<void> {
     for (const ptyId of ptyIds) {
       queueNextRung(ptyId)
     }
+
     armForEarliestDue()
+
     return
   }
 
   const scanByPtyId = new Map(scans.map((scan) => [scan.ptyId, scan]))
+
   for (const ptyId of ptyIds) {
     const scan = scanByPtyId.get(ptyId)
+
     if (scan?.notified === true) {
       notifiedPtyIds.add(ptyId)
       attemptsByPtyId.delete(ptyId)
       continue
     }
+
     // Why: a PTY the scan never saw is not yet listed against its tab, which is
     // the same "ask again shortly" case as an unusable process read.
     if (scan !== undefined && !shouldRetry(scan)) {
       attemptsByPtyId.delete(ptyId)
       continue
     }
+
     queueNextRung(ptyId)
   }
 

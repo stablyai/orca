@@ -7,6 +7,7 @@ vi.mock('electron', () => ({
     getAppPath: () => '/host/app'
   }
 }))
+
 vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
@@ -25,20 +26,27 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   userDataPath: '/host/user-data',
   entryExists: () => false
 }
+
 const WORKER_HANDLE = 'term_legacy_ssh_worker'
+
 const WORKER_PANE = 'tab_legacy_ssh:33333333-3333-4333-8333-333333333333'
+
 const COORDINATOR_HANDLE = 'term_legacy_ssh_coord'
+
 const COORDINATOR_PANE = 'tab_legacy_coord:44444444-4444-4444-8444-444444444444'
+
 const WORKER_ENV = {
   ORCA_TERMINAL_HANDLE: WORKER_HANDLE,
   ORCA_PANE_KEY: WORKER_PANE,
   ORCA_AGENT_LAUNCH_TOKEN: 'legacy-ssh-token'
 }
+
 const COORDINATOR_ENV = {
   ORCA_TERMINAL_HANDLE: COORDINATOR_HANDLE,
   ORCA_PANE_KEY: COORDINATOR_PANE,
   ORCA_AGENT_LAUNCH_TOKEN: 'legacy-ssh-coordinator-token'
 }
+
 const RUNTIME_AUTHORITY = {
   kind: 'ssh' as const,
   targetId: 'saved-target',
@@ -48,16 +56,19 @@ const RUNTIME_AUTHORITY = {
 
 function createLegacyRuntime() {
   const db = new OrchestrationDb(':memory:')
+
   const run = db.createRun({
     objective: 'Adopted legacy SSH work',
     coordinatorHandle: COORDINATOR_HANDLE,
     coordinatorPaneKey: COORDINATOR_PANE
   })
+
   const task = db.createTask({
     spec: 'legacy SSH assignment',
     runId: run.id,
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(db, task.id, WORKER_HANDLE, WORKER_PANE)
   const sqlite = (db as unknown as { db: Database.Database }).db
   sqlite
@@ -91,10 +102,12 @@ function createLegacyRuntime() {
       evidence?.terminalHandle === WORKER_HANDLE &&
       evidence.paneKey === WORKER_PANE &&
       evidence.launchToken === WORKER_ENV.ORCA_AGENT_LAUNCH_TOKEN
+
     const coordinator =
       evidence?.terminalHandle === COORDINATOR_HANDLE &&
       evidence.paneKey === COORDINATOR_PANE &&
       evidence.launchToken === COORDINATOR_ENV.ORCA_AGENT_LAUNCH_TOKEN
+
     if (
       (!worker && !coordinator) ||
       evidence.host?.kind !== 'ssh' ||
@@ -103,6 +116,7 @@ function createLegacyRuntime() {
     ) {
       return null
     }
+
     const identity = worker
       ? {
           terminalHandle: WORKER_HANDLE,
@@ -114,6 +128,7 @@ function createLegacyRuntime() {
           paneKey: COORDINATOR_PANE,
           launchToken: COORDINATOR_ENV.ORCA_AGENT_LAUNCH_TOKEN
         }
+
     return {
       hostScope: { kind: 'ssh', targetId: RUNTIME_AUTHORITY.targetId },
       terminalHandle: identity.terminalHandle,
@@ -123,12 +138,14 @@ function createLegacyRuntime() {
     }
   })
   vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
   return { db, runtime, run: db.getRun(run.id)!, dispatch }
 }
 
 describe('legacy SSH orchestration fallback', () => {
   it('acknowledges a consuming check only after remote output', async () => {
     const { db, runtime, run } = createLegacyRuntime()
+
     const message = db.insertMessage({
       runId: run.id,
       deliveryContract: 'legacy_direct',
@@ -136,6 +153,7 @@ describe('legacy SSH orchestration fallback', () => {
       to: WORKER_HANDLE,
       subject: 'retained SSH mail'
     })
+
     const request = {
       argv: ['orchestration', 'check', '--unread', '--inject', '--json'],
       cwd: '/home/alice/repo',
@@ -180,6 +198,7 @@ describe('legacy SSH orchestration fallback', () => {
 
   it('keeps peek formatted and non-consuming', async () => {
     const { db, runtime, run } = createLegacyRuntime()
+
     const message = db.insertMessage({
       runId: run.id,
       deliveryContract: 'legacy_direct',
@@ -203,6 +222,7 @@ describe('legacy SSH orchestration fallback', () => {
       const output = JSON.parse(peek.stdout) as {
         result: { formatted: string }
       }
+
       expect(output).toMatchObject({
         result: {
           messages: [{ id: message.id }],
@@ -224,18 +244,22 @@ describe('legacy SSH orchestration fallback', () => {
 
   it('reads and acknowledges current Run delivery', async () => {
     const { db, runtime, run } = createLegacyRuntime()
+
     const message = db.insertMessage({
       runId: run.id,
       from: WORKER_HANDLE,
       to: `run:${run.id}`,
       subject: 'current Run mail'
     })
+
     const baseRequest = {
       cwd: '/home/alice/repo',
       env: COORDINATOR_ENV,
       runtimeAuthority: RUNTIME_AUTHORITY
     }
+
     const spawn = vi.fn()
+
     const hostCliAvailable = {
       ...LEGACY_FALLBACK_OPTIONS,
       entryExists: () => true,
@@ -251,6 +275,7 @@ describe('legacy SSH orchestration fallback', () => {
         },
         hostCliAvailable
       )
+
       expect(checked.stdout).toContain('Delivery ')
       expect(checked.stdout).toContain(`${message.id} [status] from=${WORKER_HANDLE}`)
       expect(spawn).not.toHaveBeenCalled()
@@ -263,9 +288,11 @@ describe('legacy SSH orchestration fallback', () => {
         },
         hostCliAvailable
       )
+
       const result = JSON.parse(checkedJson.stdout) as {
         result: { deliveryId: string; messages: { id: string }[] }
       }
+
       expect(result.result.messages).toEqual([expect.objectContaining({ id: message.id })])
 
       const acknowledged = await runRemoteOrcaCli(
@@ -296,6 +323,7 @@ describe('legacy SSH orchestration fallback', () => {
 
   it('replays an SSH legacy ask by retry request without creating another question', async () => {
     const { db, runtime } = createLegacyRuntime()
+
     const argv = [
       'orchestration',
       'ask',
@@ -309,6 +337,7 @@ describe('legacy SSH orchestration fallback', () => {
       '55555555-5555-4555-8555-555555555555',
       '--json'
     ]
+
     const request = {
       argv,
       cwd: '/home/alice/repo',
@@ -341,18 +370,21 @@ describe('legacy SSH orchestration fallback', () => {
 
   it('resumes and acknowledges a question answer', async () => {
     const { db, runtime, run, dispatch } = createLegacyRuntime()
+
     const pending = db.createQuestion({
       runId: run.id,
       dispatchId: dispatch.id,
       askerHandle: WORKER_HANDLE,
       question: 'Proceed?'
     })
+
     const answer = db.answerQuestion({
       messageId: pending.question.message_id,
       runId: run.id,
       consumerGeneration: run.consumer_generation,
       body: 'yes'
     })
+
     const sqlite = (db as unknown as { db: Database.Database }).db
     sqlite
       .prepare(
@@ -410,8 +442,10 @@ describe('legacy SSH orchestration fallback', () => {
     async (_label, retryArgv, expectedMessage) => {
       const { db, runtime } = createLegacyRuntime()
       const sqlite = (db as unknown as { db: Database.Database }).db
+
       const countMessages = (): number =>
         (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
+
       const before = countMessages()
 
       try {
@@ -455,8 +489,10 @@ describe('legacy SSH orchestration fallback', () => {
   ])('refuses a valueless --retry-request on orchestration %s', async (_label, commandArgv) => {
     const { db, runtime } = createLegacyRuntime()
     const sqlite = (db as unknown as { db: Database.Database }).db
+
     const countMessages = (): number =>
       (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
+
     const before = countMessages()
 
     try {

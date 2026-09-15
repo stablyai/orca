@@ -3,7 +3,9 @@ import { gitLabJobTraceToLogExcerpt, toGitLabJobLogExcerptResult } from './gitla
 import { PR_CHECK_LOG_TAIL_BYTES } from './check-job-log-tail-slice'
 
 const CSI_ERASE = '\u001b[0K'
+
 const RESET = '\u001b[0;m'
+
 const CR = '\r'
 
 describe('gitLabJobTraceToLogExcerpt', () => {

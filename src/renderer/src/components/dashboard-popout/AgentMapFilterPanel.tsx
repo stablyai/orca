@@ -66,14 +66,17 @@ export function AgentMapFilterPanel({
   onShowOrchestrationLinksChange
 }: AgentMapFilterPanelProps): React.JSX.Element {
   const [open, setOpen] = useState<ReadonlySet<SectionId>>(() => new Set<SectionId>(['quick']))
+
   const toggleSection = (id: SectionId, next: boolean): void =>
     setOpen((current) => {
       const updated = new Set(current)
+
       if (next) {
         updated.add(id)
       } else {
         updated.delete(id)
       }
+
       return updated
     })
 
@@ -85,6 +88,7 @@ export function AgentMapFilterPanel({
   const agentTypes = [...agentTypeCounts.keys()]
 
   const boardActive = activeDashboardFilterCount(filters)
+
   const activeCount =
     boardActive +
     map.activeCount +
@@ -98,6 +102,7 @@ export function AgentMapFilterPanel({
     onShowOrchestrationLinksChange(true)
     setOpen(new Set<SectionId>(['quick']))
   }
+
   const applyQuickView = (id: Parameters<typeof map.applyQuickView>[0]): void => {
     onFiltersChange({ projects: [], workspaceStatuses: [], reviewStates: [] })
     onShowAgentlessWorkspacesChange(false)
@@ -111,6 +116,7 @@ export function AgentMapFilterPanel({
     filters.workspaceStatuses.length +
     filters.reviewStates.length +
     (showAgentlessWorkspaces ? 1 : 0)
+
   const workspaceSummary: AgentMapSectionSummary =
     pickedWorkspaceCount === 0
       ? { text: translate('dashboardPopout.map.filters.summaryAll', 'All'), active: false }
@@ -120,6 +126,7 @@ export function AgentMapFilterPanel({
           }),
           active: true
         }
+
   const projectSummary: AgentMapSectionSummary =
     filters.projects.length === 0
       ? { text: translate('dashboardPopout.map.filters.summaryAll', 'All'), active: false }
@@ -294,6 +301,7 @@ export function AgentMapFilterPanel({
                 label: option.label,
                 color: option.color
               })
+
               return (
                 <AgentMapFilterCheckbox
                   key={option.id}

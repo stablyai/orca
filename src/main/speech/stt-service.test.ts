@@ -32,11 +32,13 @@ const {
       const listeners = this.listeners.get(eventName) ?? new Set()
       listeners.add(listener)
       this.listeners.set(eventName, listeners)
+
       return this
     }
 
     off(eventName: string, listener: (...args: unknown[]) => void): this {
       this.listeners.get(eventName)?.delete(listener)
+
       return this
     }
 
@@ -46,6 +48,7 @@ const {
 
     removeAllListeners(): this {
       this.listeners.clear()
+
       return this
     }
 
@@ -57,12 +60,15 @@ const {
 
     postMessage(message: WorkerMessage): void {
       this.messages.push(message)
+
       if (message.type === 'init' && this.emitReadyOnInit) {
         queueMicrotask(() => this.emit('message', { type: 'ready' }))
       }
+
       if (message.type === 'stop' && this.emitStoppedOnStop) {
         queueMicrotask(() => this.emit('message', { type: 'stopped' }))
       }
+
       if (message.type === 'teardown') {
         this.terminated = true
       }
@@ -70,9 +76,11 @@ const {
 
     terminate(): Promise<void> {
       this.terminated = true
+
       if (this.emitExitOnTerminate) {
         this.emit('exit', 0)
       }
+
       return this.terminatePromise ?? Promise.resolve()
     }
   }
@@ -179,6 +187,7 @@ describe('SttService', () => {
 
   it('keeps an idle worker warm for an hour', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -202,6 +211,7 @@ describe('SttService', () => {
 
   it('resets the idle teardown timer after each stop', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -265,9 +275,11 @@ describe('SttService', () => {
 
   it('rejects deletion prep while the target model is starting', async () => {
     let resolveModelState: (state: { id: string; status: string }) => void = () => {}
+
     const modelStatePromise = new Promise<{ id: string; status: string }>((resolve) => {
       resolveModelState = resolve
     })
+
     const service = new SttService({
       getModelState: vi.fn(() => modelStatePromise),
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
@@ -303,13 +315,16 @@ describe('SttService', () => {
 
   it('rejects deletion prep when a target warm worker cannot be torn down during another start', async () => {
     let resolveModelState: (state: { id: string; status: string }) => void = () => {}
+
     const secondModelState = new Promise<{ id: string; status: string }>((resolve) => {
       resolveModelState = resolve
     })
+
     const getModelState = vi
       .fn()
       .mockResolvedValueOnce({ id: 'model-a', status: 'ready' })
       .mockReturnValue(secondModelState)
+
     const service = new SttService({
       getModelState,
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
@@ -329,6 +344,7 @@ describe('SttService', () => {
 
   it('uses the OpenAI transcription session without creating a worker', async () => {
     const sink = vi.fn()
+
     const service = new SttService({
       getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
@@ -388,6 +404,7 @@ describe('SttService', () => {
 
   it('times out startup when the worker never reports ready', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -395,10 +412,12 @@ describe('SttService', () => {
       } as never)
 
       MockWorker.emitReadyOnInit = false
+
       const startPromise = service.startDictation('model-a', vi.fn(), undefined, 'desktop').then(
         () => 'resolved',
         (error) => (error instanceof Error ? error.message : String(error))
       )
+
       await Promise.resolve()
       const worker = getLastWorker()
       expect(worker).toBeDefined()
@@ -432,6 +451,7 @@ describe('SttService', () => {
 
   it('removes lifecycle listeners when the active worker errors', async () => {
     const sink = vi.fn()
+
     const service = new SttService({
       getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
@@ -458,6 +478,7 @@ describe('SttService', () => {
 
   it('allows slow offline stop decoding before terminating the worker', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -486,6 +507,7 @@ describe('SttService', () => {
       getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
     } as never)
+
     const events: unknown[] = []
 
     await service.startDictation('model-a', (event) => events.push(event), undefined, 'desktop')
@@ -510,12 +532,14 @@ describe('SttService', () => {
       getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
     } as never)
+
     const events: unknown[] = []
 
     await service.startDictation(
       'model-a',
       (event) => {
         events.push(event)
+
         if (event.type === 'error') {
           void service.stopDictation('desktop')
         }
@@ -560,6 +584,7 @@ describe('SttService', () => {
       getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
     } as never)
+
     const events: unknown[] = []
 
     await service.startDictation('model-a', (event) => events.push(event), undefined, 'desktop')
@@ -572,6 +597,7 @@ describe('SttService', () => {
 
   it('does not retain or reuse a worker that timed out while stopping', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -601,6 +627,7 @@ describe('SttService', () => {
 
   it('does not wait for worker termination to resolve a timed-out stop', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new SttService({
         getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
@@ -627,10 +654,12 @@ describe('SttService', () => {
 
   it('rejects idle warm reuse when the model is no longer ready', async () => {
     let modelStatus = 'ready'
+
     const getModelState = vi.fn().mockImplementation(async () => ({
       id: 'model-a',
       status: modelStatus
     }))
+
     const service = new SttService({
       getModelState,
       getModelDir: vi.fn().mockReturnValue('/tmp/model-a')

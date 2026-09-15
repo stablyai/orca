@@ -33,14 +33,23 @@ import { createUnifiedTabLookup } from './tab-bar-item-model'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 const isWindows = navigator.userAgent.includes('Windows')
+
 export const isMacOs = navigator.userAgent.includes('Mac')
+
 type AppStoreState = ReturnType<typeof useAppStore.getState>
+
 type GitStatusEntries = AppStoreState['gitStatusByWorktree'][string]
+
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
+
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
+
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+
 const EMPTY_PROJECTS: AppStoreState['projects'] = []
+
 const EMPTY_REPOS: AppStoreState['repos'] = []
+
 const EMPTY_WORKTREES_BY_REPO: AppStoreState['worktreesByRepo'] = {}
 
 export function getProjectRuntimeShellMenuMode(
@@ -49,9 +58,11 @@ export function getProjectRuntimeShellMenuMode(
   if (!projectRuntime) {
     return null
   }
+
   if (projectRuntime.status === 'repair-required') {
     return 'wsl'
   }
+
   return projectRuntime.runtime.kind === 'wsl' ? 'wsl' : 'host'
 }
 
@@ -105,51 +116,66 @@ export function useTabBarRuntimeModel({
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const mobileEmulatorTabIntroDismissed = useAppStore((s) => s.mobileEmulatorTabIntroDismissed)
+
   const showMobileEmulatorIntroCallout = shouldShowMobileEmulatorTabIntro({
     persistedUIReady,
     mobileEmulatorTabIntroDismissed,
     mobileEmulatorEnabled,
     isMacOs
   })
+
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
+
   const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
+
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
+
   const defaultWindowsPowerShellImplementation = useAppStore((s) =>
     resolveWindowsPowerShellImplementationSetting(s.settings)
   )
+
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const settings = useAppStore((s) => s.settings)
+
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
+
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
   const worktreeConnectionId = useAppStore(
     (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
   )
+
   const worktreeRemotePlatform = useAppStore((s) => {
     if (!worktreeConnectionId) {
       return null
     }
+
     return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
   })
+
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+
   const disabledTuiAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
+
   const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
   const { detectedIds } = useDetectedAgents(agentDetectionTarget)
+
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
@@ -158,20 +184,25 @@ export function useTabBarRuntimeModel({
       ),
     [agentCmdOverrides, defaultAgent, detectedIds, disabledTuiAgents]
   )
+
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
+
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     activeRuntimeEnvironmentId,
     worktreeConnectionId
   )
+
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
   )
+
   const shouldProbeWindowsShellCapabilities =
     isWindows ||
     Boolean(activeRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
+
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
@@ -179,28 +210,35 @@ export function useTabBarRuntimeModel({
     runtimeTarget,
     worktreeConnectionId
   )
+
   const shellMenuHostPlatform = worktreeConnectionId
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
     : windowsTerminalCapabilities.hostPlatform
+
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
     activeRuntimeEnvironmentId,
     hostPlatform: shellMenuHostPlatform,
     isWindowsClient: isWindows,
     worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
+
   // Why: `projects`/`repos`/`worktreesByRepo` feed nothing but the local runtime context below, and
   // `worktreesByRepo` churns on every worktree write; ungated, each write re-renders every tab strip.
   const needsLocalProjectRuntime =
     showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
+
   const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
+
   const worktreesByRepo = useAppStore((s) =>
     needsLocalProjectRuntime ? s.worktreesByRepo : EMPTY_WORKTREES_BY_REPO
   )
+
   const localProjectRuntime = useMemo(() => {
     if (!needsLocalProjectRuntime) {
       return undefined
     }
+
     return getLocalProjectExecutionRuntimeContext(
       { activeRepoId, activeWorktreeId, projects, repos, settings, worktreesByRepo },
       worktreeId,
@@ -227,31 +265,39 @@ export function useTabBarRuntimeModel({
     worktreeId,
     worktreesByRepo
   ])
+
   const projectRuntimeShellMenuMode = getProjectRuntimeShellMenuMode(localProjectRuntime)
   const resolvedGroupId = groupId ?? activeGroupIdForWorktree ?? worktreeId
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
+
   const unifiedTabByVisibleId = useMemo(
     () => createUnifiedTabLookup(unifiedTabs, resolvedGroupId),
     [resolvedGroupId, unifiedTabs]
   )
+
   const workspaceHasSimulatorTab = useMemo(
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
     [unifiedTabs]
   )
+
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
       const policy = getClientCreationActionPolicy(state, worktreeId)
+
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
     })
   )
+
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
+
   // Why: every retained TabBar observes the same hot maps; one feature-gated selector shares their projections.
   const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
     useAppStore(useShallow(selectTabBarAgentProjections))
+
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )

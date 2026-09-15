@@ -49,6 +49,7 @@ class FakeSocket extends EventEmitter {
   write(line: string, callback?: (error?: Error | null) => void): boolean {
     this.writes.push(line)
     callback?.(this.writeError)
+
     return true
   }
 
@@ -58,6 +59,7 @@ class FakeSocket extends EventEmitter {
 
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -79,6 +81,7 @@ function pendingConnectThatRejectsOnAbort(signal?: AbortSignal): Promise<never> 
 
 async function loadClientModule() {
   vi.resetModules()
+
   return await import('./macos-native-provider-client')
 }
 
@@ -97,11 +100,13 @@ describe('MacOSNativeProviderClient', () => {
     spawnMock.mockImplementation(() => {
       const provider = new FakeProvider()
       providers.push(provider)
+
       return provider
     })
     connectMacOSProviderSocketMock.mockImplementation(async () => {
       const socket = new FakeSocket()
       sockets.push(socket)
+
       return socket
     })
   })
@@ -136,6 +141,7 @@ describe('MacOSNativeProviderClient', () => {
     const originalIndexOf = String.prototype.indexOf
     const originalIncludes = String.prototype.includes
     let searchedUnits = 0
+
     const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
       this: string,
       needle: string,
@@ -144,8 +150,10 @@ describe('MacOSNativeProviderClient', () => {
       if (needle === '\n') {
         searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
       }
+
       return originalIndexOf.call(this, needle, fromIndex)
     })
+
     const includes = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
       this: string,
       needle: string,
@@ -154,8 +162,10 @@ describe('MacOSNativeProviderClient', () => {
       if (needle === '\n') {
         searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
       }
+
       return originalIncludes.call(this, needle, fromIndex)
     })
+
     try {
       for (let offset = 0; offset < reply.length; offset += 4096) {
         socket.emit('data', reply.slice(offset, offset + 4096))
@@ -164,6 +174,7 @@ describe('MacOSNativeProviderClient', () => {
       search.mockRestore()
       includes.mockRestore()
     }
+
     await expect(call).resolves.toEqual(result)
     expect(searchedUnits).toBeLessThanOrEqual(reply.length * 3)
     client.shutdown()
@@ -192,9 +203,11 @@ describe('MacOSNativeProviderClient', () => {
     const client = new MacOSNativeProviderClient()
 
     const firstCall = client.capabilities()
+
     const firstRejection = expect(firstCall).rejects.toThrow(
       'native macOS provider handshake timed out'
     )
+
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     const firstSocket = sockets[0]!
 
@@ -222,6 +235,7 @@ describe('MacOSNativeProviderClient', () => {
       protocolVersion: 1,
       supports: {}
     }
+
     secondSocket.emit(
       'data',
       `${JSON.stringify({ id: secondRequest.id, ok: true, result: capabilities })}\n`
@@ -263,6 +277,7 @@ describe('MacOSNativeProviderClient', () => {
       protocolVersion: 1,
       supports: {}
     }
+
     secondSocket.emit(
       'data',
       `${JSON.stringify({ id: secondRequest.id, ok: true, result: capabilities })}\n`
@@ -317,6 +332,7 @@ describe('MacOSNativeProviderClient', () => {
       elementIndex: 0,
       value: 'draft'
     })
+
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     const socket = sockets[0]!
     await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
@@ -389,6 +405,7 @@ describe('MacOSNativeProviderClient', () => {
       app: 'TextEdit',
       elementIndex: 0
     })
+
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     const socket = sockets[0]!
     await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
@@ -454,6 +471,7 @@ describe('MacOSNativeProviderClient', () => {
     const pendingConnects: {
       resolve: (socket: FakeSocket) => void
     }[] = []
+
     connectMacOSProviderSocketMock.mockImplementation(
       async () =>
         await new Promise<FakeSocket>((resolve) => {

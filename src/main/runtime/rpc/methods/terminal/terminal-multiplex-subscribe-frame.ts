@@ -17,18 +17,24 @@ export function installMultiplexSubscribeFrame(
   state.handleSubscribeFrame = async (payload) => {
     const raw = decodeTerminalStreamJson<unknown>(payload)
     const parsed = TerminalMultiplexSubscribeFrame.safeParse(raw)
+
     if (!parsed.success) {
       return
     }
+
     const request = parsed.data
     const resolution = resolveMultiplexSubscribePty(state, request)
+
     const ptyId =
       typeof resolution === 'string' || resolution === null ? resolution : await resolution
+
     if (!ptyId) {
       return
     }
+
     let stream: TerminalMultiplexStream | null = null
     let installedStream: TerminalMultiplexStream | null = null
+
     try {
       stream = await initializeMultiplexStream(state, request, ptyId, (installed) => {
         installedStream = installed
@@ -37,31 +43,39 @@ export function installMultiplexSubscribeFrame(
       if (!installedStream) {
         throw error
       }
+
       if (state.streams.get(request.streamId) !== installedStream) {
         return
       }
+
       state.detachStream(request.streamId, null)
       state.sendStreamError(
         request.streamId,
         error instanceof Error ? error.message : String(error)
       )
       state.emit({ type: 'end', streamId: request.streamId })
+
       return
     }
+
     if (!stream) {
       return
     }
+
     try {
       const published = await publishMultiplexInitialSnapshot(state, request, stream)
+
       if (!published) {
         return
       }
+
       activateMultiplexStream(state, request, stream, published)
     } catch (error) {
       // A successor may already own the reused stream ID; never tear it down here.
       if (state.streams.get(request.streamId) !== stream) {
         return
       }
+
       state.detachStream(request.streamId, null)
       state.sendStreamError(
         request.streamId,

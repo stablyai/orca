@@ -22,7 +22,9 @@ import {
 // A diff result carries whole file contents on both sides, so an entry count alone bounds
 // nothing: the real budget is characters, and one entry can legitimately be huge.
 export const MAX_SETTLED_DIFF_CACHE_ENTRIES = 32
+
 export const MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS = 1_000_000
+
 export const MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS = 8_000_000
 
 export type SettledDiffCacheStats = {
@@ -76,15 +78,21 @@ export class SettledDiffCache {
   get(key: string, stamp: WorktreeDiffStamp | null): GitDiffResult | undefined {
     if (!stamp) {
       this.unprovable += 1
+
       return undefined
     }
+
     // BoundedMap.get() already refreshes the LRU position.
     const entry = this.entries.get(key)
+
     if (!entry || entry.stamp !== stamp.value) {
       this.misses += 1
+
       return undefined
     }
+
     this.hits += 1
+
     return entry.result
   }
 
@@ -97,18 +105,25 @@ export class SettledDiffCache {
     if (!stamp) {
       return
     }
+
     if (readGeneration !== this.generation) {
       this.invalidatedDuringRead += 1
+
       return
     }
+
     if (!canProveUnchangedByStamp(stamp)) {
       this.racyWrites += 1
+
       if (isDiffStampClockSkewed(stamp)) {
         this.clockSkewedWrites += 1
       }
+
       return
     }
+
     const characters = resultCharacterCount(result)
+
     if (this.entries.set(key, { stamp: stamp.value, result, characters })) {
       this.stores += 1
     }

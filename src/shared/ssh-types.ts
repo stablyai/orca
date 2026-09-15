@@ -3,10 +3,15 @@ import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
+
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
+
 export const LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 3 * 60 * 60
+
 export const DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS = 24 * 60 * 60
+
 export const DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS = 0
+
 export const SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD = 'relay.configureGraceTime'
 
 export type SshTarget = {
@@ -63,6 +68,7 @@ export type SshTarget = {
 
 /** Renderer-authored target fields; registration generations are allocated and owned by main. */
 export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
+
 export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
 
 /** Public target identity and observed host metadata safe to mirror to a paired client. */
@@ -246,6 +252,7 @@ export function sshRemotePtyLeaseAllowsReattach(
   if (lease.state === 'terminated') {
     return false
   }
+
   return (
     lease.state !== 'expired' ||
     (lease.supersededBy === undefined && lease.relayIdRecycled !== true)

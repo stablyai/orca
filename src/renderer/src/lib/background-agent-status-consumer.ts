@@ -25,9 +25,11 @@ export function createBackgroundAgentStatusConsumer(args: {
   observeLaunchIngress: () => AgentStatusObservation
 } {
   const processAgentStatus = createAgentStatusOscProcessor()
+
   const resolveRouting = (): AgentStatusConnectionRouting | undefined => {
     const ptyId = args.getPtyId()
     const state = useAppStore.getState()
+
     return resolveLiveAgentStatusConnectionRouting({
       state,
       paneKey: args.paneKey,
@@ -36,11 +38,14 @@ export function createBackgroundAgentStatusConsumer(args: {
       runtimeEnvironmentId: args.runtimeEnvironmentId
     })
   }
+
   const consume = (data: string): void => {
     const processed = processAgentStatus(data)
+
     for (const payload of processed.payloads) {
       if (!args.mainOwnsAgentStatusWrites) {
         const routing = resolveRouting()
+
         // Why: hidden callbacks can outlive tab reuse; only the exact current
         // pane-to-PTY binding may update its status ownership.
         if (routing) {
@@ -61,14 +66,17 @@ export function createBackgroundAgentStatusConsumer(args: {
           )
         }
       }
+
       args.onAgentStatus?.(payload)
     }
   }
+
   const observeLaunchIngress = (): AgentStatusObservation =>
     rendererAgentStatusObservations.observe(args.paneKey, {
       origin: 'launch',
       observedAt: Date.now(),
       kind: 'transition'
     })
+
   return { consume, resolveRouting, observeLaunchIngress }
 }

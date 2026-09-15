@@ -24,6 +24,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -41,6 +42,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -138,6 +140,7 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
       expect(printed.ok).toBe(false)
       expect(printed.error.message).toContain('`--pairing-code` does not retarget')
     }
+
     expect(callMock).not.toHaveBeenCalled()
     process.exitCode = 0
   })
@@ -173,6 +176,7 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
       endpoints: [],
       preferredEndpointId: null
     }
+
     resolveEnvironmentMock.mockReturnValue(environment)
     removeEnvironmentMock.mockReturnValue(environment)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

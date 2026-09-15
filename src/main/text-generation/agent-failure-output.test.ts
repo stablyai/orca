@@ -5,6 +5,7 @@ import {
 } from './agent-failure-output'
 
 const ESC = String.fromCharCode(27)
+
 const BEL = String.fromCharCode(7)
 
 describe('captureAgentGenerationFailureOutput', () => {
@@ -36,6 +37,7 @@ describe('formatAgentGenerationFailureOutputForDisplay', () => {
       stdout: 'partial result',
       stderr: 'No API key found for github-copilot.'
     })
+
     expect(text).toBe(
       'Pi exited with code 1.\n\n[stderr]\nNo API key found for github-copilot.\n\n[stdout]\npartial result'
     )
@@ -48,6 +50,7 @@ describe('formatAgentGenerationFailureOutputForDisplay', () => {
       stdout: 'Not logged in · Please run /login',
       stderr: '   '
     })
+
     expect(text).toBe(
       'Claude exited with code unknown.\n\n[stdout]\nNot logged in · Please run /login'
     )
@@ -60,6 +63,7 @@ describe('formatAgentGenerationFailureOutputForDisplay', () => {
       stdout: '',
       stderr: `${ESC}]0;title${BEL}${ESC}[91mline one${ESC}[0m\r\nsafe ${String.fromCharCode(0x202e)}evil${String.fromCharCode(0x202c)} tail\rline three`
     })
+
     expect(text).toBe('Pi exited with code 1.\n\n[stderr]\nline one\nsafe evil tail\nline three')
   })
 
@@ -70,6 +74,7 @@ describe('formatAgentGenerationFailureOutputForDisplay', () => {
       stdout: '',
       stderr: `${ESC}]0;unfinished title\nNo API key found.\nUse /login to log in.`
     })
+
     expect(text).toContain('No API key found.\nUse /login to log in.')
   })
 })

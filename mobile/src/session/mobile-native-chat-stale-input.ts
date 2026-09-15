@@ -48,7 +48,9 @@ export async function healMobileNativeChatStaleInput(args: {
   if (!isMobileNativeChatInputStale(args.terminal)) {
     return true
   }
+
   let cleared = false
+
   try {
     cleared = await pasteMobileNativeChatImagePaths({
       client: args.client,
@@ -62,9 +64,12 @@ export async function healMobileNativeChatStaleInput(args: {
     // Leave marked for the next attempt.
     return false
   }
+
   if (!cleared) {
     return false
   }
+
   clearMobileNativeChatInputStale(args.terminal)
+
   return true
 }

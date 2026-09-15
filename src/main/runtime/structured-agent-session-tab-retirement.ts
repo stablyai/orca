@@ -18,6 +18,7 @@ export function findStructuredAgentSessionTab(
   sessionId: string
 ): RuntimeMobileSessionSnapshotTab | null {
   const tabId = structuredAgentSessionTabId(sessionId)
+
   return (
     snapshot.tabs.find(
       (candidate) =>
@@ -37,11 +38,14 @@ export function retireStructuredAgentSessionTabFrom(
   sessionId: string
 ): RuntimeMobileSessionTabsSnapshot | null {
   const tab = findStructuredAgentSessionTab(snapshot, sessionId)
+
   if (!tab) {
     return null
   }
+
   const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
   const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+
   return {
     ...snapshot,
     snapshotVersion: snapshot.snapshotVersion + 1,

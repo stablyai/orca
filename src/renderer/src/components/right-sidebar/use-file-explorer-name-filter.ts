@@ -29,24 +29,30 @@ export function useFileExplorerNameFilter({
   activeWorktreeId: string | null
 }): UseFileExplorerNameFilterResult {
   const [nameFilterQuery, setNameFilterQuery] = useState('')
+
   const [nameFilterCollapsedPaths, setNameFilterCollapsedPaths] = useState<Set<string>>(
     () => new Set()
   )
+
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
+
   const nameFilterQueryTooLarge = useMemo(
     () => isFileExplorerNameFilterQueryTooLarge(nameFilterQuery),
     [nameFilterQuery]
   )
+
   const hasNameFilter = isFilesViewActive && hasNameFilterQuery
   useEffect(() => {
     if (!hasNameFilter) {
       setNameFilterCollapsedPaths((current) => (current.size > 0 ? new Set() : current))
     }
   }, [hasNameFilter])
+
   const nameFilterFiles = useRuntimeFileListForWorktree({
     enabled: hasNameFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId
   })
+
   const nameFilterSource = useMemo(
     () =>
       hasNameFilter
@@ -69,6 +75,7 @@ export function useFileExplorerNameFilter({
       nameFilterQueryTooLarge
     ]
   )
+
   const handleClearNameFilter = useCallback(() => {
     setNameFilterQuery('')
   }, [setNameFilterQuery])

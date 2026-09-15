@@ -47,6 +47,7 @@ export function buildEphemeralVmRecipeCleanupCommand(args: {
   payload: EphemeralVmRecipeCleanupPayload
 }): string {
   const payloadBase64 = Buffer.from(`${JSON.stringify(args.payload)}\n`, 'utf8').toString('base64')
+
   return [
     'node',
     '-e',

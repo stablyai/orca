@@ -11,45 +11,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -187,6 +203,7 @@ describe('registerPtyHandlers', () => {
   })
   it('reports agent ownership through pty:listSessions so the renderer cannot guess it', async () => {
     registerPtyHandlers(mainWindow as never)
+
     // Why: the renderer's binding map is empty during restore, so agent ownership is the only
     // positive liveness evidence it has. Dropping it here force-killed live sessions (#8459).
     const owner = {
@@ -207,6 +224,7 @@ describe('registerPtyHandlers', () => {
         terminalHandle: 'term_claimed'
       }
     }
+
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -391,6 +409,7 @@ describe('registerPtyHandlers', () => {
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
     }
+
     const provider = {
       spawn: vi.fn(async () => ({ id: 'remote-pty' })),
       write: vi.fn(),
@@ -413,6 +432,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     }
+
     registerSshPtyProvider('ssh-1', provider as never)
     registerPtyHandlers(
       mainWindow as never,
@@ -429,11 +449,14 @@ describe('registerPtyHandlers', () => {
       env: {}
     })
     unregisterSshPtyProvider('ssh-1')
+
     const listenerFor = (channel: string): ((event: unknown, args: unknown) => void) => {
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === channel)
+
       if (!call) {
         throw new Error(`missing ${channel} listener`)
       }
+
       return call[1] as (event: unknown, args: unknown) => void
     }
 
@@ -474,6 +497,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     }
+
     registerSshPtyProvider('ssh-1', provider as never)
     registerPtyHandlers(mainWindow as never)
     setPtyOwnership('remote-pty', 'ssh-1')
@@ -498,6 +522,7 @@ describe('registerPtyHandlers', () => {
       hasChildProcesses: true,
       unavailable: true as const
     }))
+
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider({ inspectProcess } as never)
 

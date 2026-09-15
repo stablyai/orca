@@ -28,17 +28,22 @@ export function emitRelayWatcherEvents(
   if (closed || events.length === 0) {
     return
   }
+
   const mapped: MappedWatcherEvent[] = events.map((event) => ({
     kind: event.type,
     absolutePath: event.path,
     ...(event.isDirectory === undefined ? {} : { isDirectory: event.isDirectory })
   }))
+
   // Grouping walks every path, so only the chunking path pays for it — and only once across all clients.
   let grouped: MappedWatcherEvent[] | null = null
+
   const groupedByDirectory = (): MappedWatcherEvent[] =>
     (grouped ??= groupWatcherEventsByDirectory(mapped))
+
   let sizing: WatcherBatchSizing | null = null
   const batchSizing = (): WatcherBatchSizing => (sizing ??= measureWatcherBatch(mapped))
+
   for (const clientId of dispatcher.activeClientIds()) {
     publishWatcherBatchToClient(
       dispatcher,
@@ -60,16 +65,19 @@ function groupWatcherEventsByDirectory(
   mapped: readonly MappedWatcherEvent[]
 ): MappedWatcherEvent[] {
   const groups = new Map<string, MappedWatcherEvent[]>()
+
   for (const event of mapped) {
     // Runs on the remote host: derive the parent with the runtime-flavored resolver, not a '/' split.
     const parentPath = resolveRuntimePath(event.absolutePath, '..')
     const group = groups.get(parentPath)
+
     if (group) {
       group.push(event)
     } else {
       groups.set(parentPath, [event])
     }
   }
+
   return Array.from(groups.values()).flat()
 }
 
@@ -80,11 +88,13 @@ function encodedWatcherEventBytes(event: MappedWatcherEvent): number {
 function measureWatcherBatch(mapped: readonly MappedWatcherEvent[]): WatcherBatchSizing {
   const eventBytes = new Map<MappedWatcherEvent, number>()
   let batchBytes = Math.max(0, mapped.length - 1)
+
   for (const event of mapped) {
     const bytes = encodedWatcherEventBytes(event)
     eventBytes.set(event, bytes)
     batchBytes += bytes
   }
+
   return { eventBytes, batchBytes }
 }
 
@@ -119,19 +129,25 @@ function publishWatcherBatchToClient(
   // Rejection is ambiguous: an over-capacity frame is chunkable, a full producer queue is real data loss.
   // The empty envelope is encoded once; event JSON sizes are exact deltas apart from array commas.
   const eventsCapacity = dispatcher.producerEnvelopeBudget('fs.changed', { events: [] }, clientId)
+
   if (eventsCapacity < 0) {
     emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
+
     return
   }
+
   const { eventBytes, batchBytes } = batchSizing()
+
   if (batchBytes <= eventsCapacity) {
     emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
+
     return
   }
 
   const grouped = groupedByDirectory()
   const groupedEventBytes = grouped.map((event) => eventBytes.get(event)!)
   let index = 0
+
   while (index < grouped.length) {
     // Why: the retention ledger covers every producer publication despite its legacy name, and admission
     // is lane-agnostic: chunks queued past its low-water reserve (half the 2 MB queue) starve interactive
@@ -140,33 +156,44 @@ function publishWatcherBatchToClient(
     // which forces a readDir per directory in its file tree.
     if (!dispatcher.producerRetentionBelowLowWater(clientId)) {
       emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
+
       return
     }
+
     let end = index
     let chunkBytes = 0
+
     while (end < grouped.length) {
       const nextBytes = groupedEventBytes[end] + (end === index ? 0 : 1)
+
       if (chunkBytes + nextBytes > eventsCapacity) {
         break
       }
+
       chunkBytes += nextBytes
       end += 1
     }
+
     if (end === index || !publish(grouped.slice(index, end))) {
       emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
+
       return
     }
+
     index = end
   }
 }
 
 function overflowMarkerPublisher(dispatcher: RelayDispatcher): RelayClientResyncMarkerPublisher {
   const existing = overflowMarkerPublishers.get(dispatcher)
+
   if (existing) {
     return existing
   }
+
   const publisher = createRelayClientResyncMarkerPublisher(dispatcher, 'fs.changed')
   overflowMarkerPublishers.set(dispatcher, publisher)
+
   return publisher
 }
 
@@ -190,6 +217,7 @@ export function emitRelayWatcherOverflow(
   if (closed) {
     return
   }
+
   for (const clientId of dispatcher.activeClientIds()) {
     emitWatcherOverflowToClient(dispatcher, clientId, rootPath)
   }

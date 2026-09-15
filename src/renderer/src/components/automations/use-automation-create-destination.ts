@@ -67,12 +67,14 @@ function choiceMessage(reason: AutomationCreateDestinationChoiceReason): string 
       'Automations with no host cannot hold new ones. Choose a host to create this automation on.'
     )
   }
+
   if (reason === 'unavailable') {
     return translate(
       'auto.components.automations.createDestination.unavailable',
       'That host cannot hold a new automation yet. Choose another host to create this one on.'
     )
   }
+
   return translate(
     'auto.components.automations.createDestination.unselected',
     'Choose the host that stores and schedules this automation.'
@@ -95,6 +97,7 @@ export function useAutomationCreateDestination(
     repoTables,
     projects
   } = input
+
   const [captured, setCaptured] = useState<AutomationCreateDestination | null>(null)
   const [reason, setReason] = useState<AutomationCreateDestinationChoiceReason>('unselected')
 
@@ -105,13 +108,16 @@ export function useAutomationCreateDestination(
     setCaptured(null)
     setReason('unselected')
   }
+
   if (open && !captured) {
     // Re-resolves until it first captures: a catalog still hydrating must not lock
     // the form into "choose a host" once the host it would have picked arrives.
     const entry =
       preselectAutomationCreateHost(entries, filterStableKey, activeWorkspaceStableKey) ??
       soleAutomationCreateHost(entries, catalog.hydration)
+
     const resolved = resolveAutomationCreateDestination(entry)
+
     if (resolved.status === 'ready') {
       setCaptured(resolved)
     } else if (resolved.reason !== reason) {
@@ -124,7 +130,9 @@ export function useAutomationCreateDestination(
       const resolved = resolveAutomationCreateDestination(
         entries.find((entry) => entry.stableKey === stableKey)
       )
+
       setCaptured(resolved.status === 'ready' ? resolved : null)
+
       if (resolved.status !== 'ready') {
         setReason(resolved.reason)
       }
@@ -150,7 +158,9 @@ export function useAutomationCreateDestination(
       if (!captured) {
         return { ok: false, notice: ownerNotice(choiceMessage(reason)) }
       }
+
       const revalidated = revalidateAutomationCreateDestination(captured, entriesRef.current)
+
       if (revalidated.status === 'stale') {
         return {
           ok: false,
@@ -164,9 +174,11 @@ export function useAutomationCreateDestination(
           }
         }
       }
+
       if (revalidated.status !== 'ready') {
         return { ok: false, notice: ownerNotice(choiceMessage(revalidated.reason)) }
       }
+
       if (automationCreateProjectMismatch(repoTablesRef.current, revalidated, projectId)) {
         return {
           ok: false,
@@ -178,6 +190,7 @@ export function useAutomationCreateDestination(
           )
         }
       }
+
       return { ok: true, destination: revalidated }
     },
     [captured, reason]

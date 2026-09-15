@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { fallbackParkedPaneCandidates } from './terminal-parked-tab-watchers'
 
 const TAB_ID = 'tab-1'
+
 const PTY_ID = 'repo::/worktree@@session-1'
+
 const SECOND_PTY_ID = 'repo::/worktree@@session-2'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 describe('fallbackParkedPaneCandidates', () => {

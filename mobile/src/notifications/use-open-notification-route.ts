@@ -14,14 +14,19 @@ export function useOpenNotificationRoute(): (target: NotificationNavigationTarge
   return useCallback(
     (target) => {
       const recoveryRoute = notificationCredentialRecoveryRoute(target)
+
       if (recoveryRoute) {
         router.push(recoveryRoute)
+
         return
       }
+
       if (target.sessionTarget) {
         openHostStackRoute(target.hostId, target.sessionTarget)
+
         return
       }
+
       router.push(hostStackHostRoute(target.hostId))
     },
     [openHostStackRoute, router]

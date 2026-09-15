@@ -7,7 +7,9 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const sourcePath = 'src/renderer/src/lib/markdown-review-notes.ts'
+
 const baseline = process.argv[2] ?? '20ab9950654'
+
 async function load(contents) {
   const result = await build({
     stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(sourcePath)) },
@@ -16,15 +18,20 @@ async function load(contents) {
     format: 'esm',
     write: false
   })
+
   return import(
     `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
   )
 }
+
 const before = await load(
   execFileSync('git', ['show', `${baseline}:${sourcePath}`], { encoding: 'utf8' })
 )
+
 const after = await load(readFileSync(sourcePath, 'utf8'))
+
 const results = []
+
 for (const [name, lineCount, width, count, iterations] of [
   ['small', 20, 40, 1, 1000],
   ['long-lines', 1000, 1000, 20, 3],
@@ -34,6 +41,7 @@ for (const [name, lineCount, width, count, iterations] of [
   const content = Array.from({ length: lineCount }, (_, i) => `${i}: ${'x'.repeat(width)}`).join(
     '\r\n'
   )
+
   const notes = Array.from({ length: count }, (_, i) => ({
     id: `${i}`,
     worktreeId: 'bench',
@@ -44,28 +52,35 @@ for (const [name, lineCount, width, count, iterations] of [
     createdAt: i,
     side: 'modified'
   }))
+
   assert.equal(
     after.formatMarkdownReviewNotes(notes, content),
     before.formatMarkdownReviewNotes(notes, content)
   )
   const arms = { before, after }
   const samples = { before: [], after: [] }
+
   function run(arm) {
     const start = performance.now()
+
     for (let i = 0; i < iterations; i++) {
       arms[arm].formatMarkdownReviewNotes(notes, content)
     }
+
     return (performance.now() - start) / iterations
   }
+
   for (let i = 0; i < 6; i++) {
     run('before')
     run('after')
   }
+
   for (const pair of buildCounterbalancedSchedule(12, 'before', 'after')) {
     for (const arm of pair) {
       samples[arm].push(run(arm))
     }
   }
+
   const median = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)]
   results.push({
     name,
@@ -76,6 +91,7 @@ for (const [name, lineCount, width, count, iterations] of [
     afterMs: median(samples.after)
   })
 }
+
 console.log(
   JSON.stringify({ node: process.version, platform: process.platform, baseline, results }, null, 2)
 )

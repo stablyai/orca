@@ -222,6 +222,7 @@ describe('keybindings', () => {
     for (const platform of platforms) {
       expect(getEffectiveKeybindingsForAction(minimizeAction, platform)).toEqual([])
     }
+
     expect(getEffectiveKeybindingsForAction('floatingTerminal.toggle', 'darwin')).toEqual([
       'Mod+Alt+A'
     ])

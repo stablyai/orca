@@ -18,6 +18,7 @@ export function registerAgentPaneAuthorityIpcHandlers(
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
+
     try {
       agentHookServer.restorePaneAuthority(paneKey)
     } catch (err) {
@@ -28,6 +29,7 @@ export function registerAgentPaneAuthorityIpcHandlers(
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
+
     try {
       agentHookServer.retirePaneAuthority(paneKey)
       clearMigrationUnsupportedPtysForPaneKey(paneKey)
@@ -39,8 +41,10 @@ export function registerAgentPaneAuthorityIpcHandlers(
     if (!value || typeof value !== 'object') {
       return
     }
+
     const args = value as Record<string, unknown>
     const ptyId = typeof args.ptyId === 'string' ? args.ptyId : undefined
+
     if (
       typeof args.fromPaneKey !== 'string' ||
       typeof args.toPaneKey !== 'string' ||
@@ -56,6 +60,7 @@ export function registerAgentPaneAuthorityIpcHandlers(
     ) {
       return
     }
+
     try {
       agentHookServer.transferPaneAuthority(args.fromPaneKey, args.toPaneKey, ptyId)
     } catch (err) {

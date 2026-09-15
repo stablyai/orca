@@ -18,6 +18,7 @@ describe('spawn token read-back', () => {
       'ORCA_AGENT_SESSION_SPAWN_TOKEN=tok-123',
       'HOME=/home/dev'
     ].join('\0')
+
     expect(spawnTokenFromEnvironBlock(block)).toBe('tok-123')
   })
 

@@ -20,6 +20,7 @@ export function DashboardAgentChildDisclosure({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+
   const handleToggleChildren = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
@@ -28,9 +29,11 @@ export function DashboardAgentChildDisclosure({
     },
     [onToggleChildAgents]
   )
+
   const stopMouseDown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
   }, [])
+
   const stopKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.stopPropagation()

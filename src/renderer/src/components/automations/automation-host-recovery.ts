@@ -29,6 +29,7 @@ function versionSettingsTarget(entry: AutomationHostCatalogEntry): SettingsNavig
       sectionId: entry.stableRef.authority.environmentId
     }
   }
+
   // A desktop SSH host with no registration generation is a stale registration,
   // repaired by re-adding the target rather than by updating anything.
   return { pane: entry.stableRef.selector.kind === 'ssh' ? 'ssh' : 'automations', repoId: null }
@@ -36,19 +37,26 @@ function versionSettingsTarget(entry: AutomationHostCatalogEntry): SettingsNavig
 
 function reconnect(entry: AutomationHostCatalogEntry, deps: AutomationHostRecoveryDeps): void {
   const authority = entry.stableRef.authority
+
   // Authority first: an unreachable server cannot be asked to dial its own targets.
   if (authority.kind === 'runtime' && entry.authorityHealth === 'unavailable') {
     deps.connectRuntimeEnvironment(authority.environmentId)
+
     return
   }
+
   if (entry.stableRef.selector.kind === 'ssh') {
     deps.connectSshTarget(entry.stableRef.selector.targetId)
+
     return
   }
+
   if (authority.kind === 'runtime') {
     deps.connectRuntimeEnvironment(authority.environmentId)
+
     return
   }
+
   // Desktop Self has no transport to dial, so the only honest fallback is to re-ask.
   deps.retry(entry)
 }
@@ -61,12 +69,15 @@ export function runAutomationHostRecovery(
   if (!entry) {
     return
   }
+
   switch (action) {
     case 'retry':
       deps.retry(entry)
+
       return
     case 'reconnect':
       reconnect(entry, deps)
+
       return
     case 'update-server':
       deps.openSettings(versionSettingsTarget(entry))

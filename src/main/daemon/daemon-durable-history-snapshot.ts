@@ -49,9 +49,11 @@ export async function buildDurableCheckpointSnapshot(opts: {
   scrollbackRows?: number
 }): Promise<TerminalSnapshot> {
   const pendingRecords = opts.pendingRecords ?? []
+
   if (!opts.restoreInfo && pendingRecords.length === 0) {
     return opts.liveSnapshot
   }
+
   if (
     opts.restoreInfo &&
     pendingRecords.length === 0 &&
@@ -71,13 +73,16 @@ export async function buildDurableCheckpointSnapshot(opts: {
       DAEMON_RESTORE_SCROLLBACK_ROWS
     )
   })
+
   const replay = new ColdRestoreReplayWriter(emulator)
+
   try {
     // Why not seed the live window when there is no disk history: pending records
     // are the raw stream. Replaying them on top of the already-truncated live
     // snapshot would duplicate the newest rows and evict the older recoverable ones.
     if (opts.restoreInfo) {
       const base = restoreBaseFrom(opts.restoreInfo)
+
       for (const segment of [
         base.scrollbackAnsi,
         base.rehydrateSequences,
@@ -88,12 +93,16 @@ export async function buildDurableCheckpointSnapshot(opts: {
           return opts.liveSnapshot
         }
       }
+
       emulator.setRestoredOscLinks(base.oscLinks)
+
       if (base.lastTitle) {
         emulator.setLastTitle(base.lastTitle)
       }
+
       emulator.setCwd(base.cwd)
     }
+
     // Why a scanner, not emulator state: ownership is lifecycle evidence bound
     // to byte order — newer replayed output (a TUI starting) must revoke a
     // persisted proof exactly as it would have live.
@@ -104,16 +113,20 @@ export async function buildDurableCheckpointSnapshot(opts: {
     ownershipScanner.seedOwner(
       opts.restoreInfo ? opts.restoreInfo.terminalOwner : opts.liveSnapshot.terminalOwner
     )
+
     if (!(await replayPendingRecords(replay, pendingRecords))) {
       return opts.liveSnapshot
     }
+
     for (const record of pendingRecords) {
       if (record.kind === 'output') {
         scanAllForOwnership(ownershipScanner, record.data)
       }
     }
+
     const snapshot = emulator.getSnapshot()
     const terminalOwner = ownershipScanner.owner
+
     return {
       ...snapshot,
       ...(terminalOwner ? { terminalOwner } : {}),
@@ -126,6 +139,7 @@ export async function buildDurableCheckpointSnapshot(opts: {
     }
   } catch (error) {
     console.warn('[history] durable snapshot rebuild failed:', error)
+
     return opts.liveSnapshot
   } finally {
     emulator.dispose()
@@ -153,11 +167,14 @@ function restoreBaseFrom(restoreInfo: ColdRestoreInfo): RestoreBase {
  *  scanner has no confirmation source, so triggers are consumed as revocations. */
 function scanAllForOwnership(scanner: TerminalShellLifecycleScanner, data: string): void {
   let rest = data
+
   while (rest.length > 0) {
     const events = scanner.scan(rest)
+
     if (events.uncleanDeathTriggerEnd === undefined) {
       return
     }
+
     rest = rest.slice(events.uncleanDeathTriggerEnd)
   }
 }
@@ -171,17 +188,22 @@ async function replayPendingRecords(
       if (!(await replay.write(record.data))) {
         return false
       }
+
       continue
     }
+
     if (record.kind === 'resize') {
       if (!isValidTerminalHistorySize(record.cols, record.rows)) {
         return false
       }
+
       await replay.resize(record.cols, record.rows)
       continue
     }
+
     await replay.clearScrollback()
   }
+
   return true
 }
 
@@ -189,5 +211,6 @@ function countAnsiRows(ansi: string): number {
   if (ansi.length === 0) {
     return 0
   }
+
   return ansi.split(/\r\n|\n|\r/).filter((row) => row.length > 0).length
 }

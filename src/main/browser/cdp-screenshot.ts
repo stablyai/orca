@@ -1,7 +1,9 @@
 import type { WebContents } from 'electron'
 
 const SCREENSHOT_TIMEOUT_MS = 8000
+
 const FALLBACK_CAPTURE_TIMEOUT_MS = 1000
+
 const SCREENSHOT_TIMEOUT_MESSAGE =
   'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
 
@@ -17,15 +19,18 @@ function applyFallbackClip(
   }
 
   const clip = params?.clip
+
   if (!clip || typeof clip !== 'object') {
     return image
   }
+
   const clipRect = clip as Record<string, unknown>
 
   const x = typeof clipRect.x === 'number' ? clipRect.x : Number.NaN
   const y = typeof clipRect.y === 'number' ? clipRect.y : Number.NaN
   const width = typeof clipRect.width === 'number' ? clipRect.width : Number.NaN
   const height = typeof clipRect.height === 'number' ? clipRect.height : Number.NaN
+
   const scale =
     typeof clipRect.scale === 'number' && Number.isFinite(clipRect.scale) && clipRect.scale > 0
       ? clipRect.scale
@@ -41,7 +46,9 @@ function applyFallbackClip(
     width: Math.round(width * scale),
     height: Math.round(height * scale)
   }
+
   const imageSize = image.getSize()
+
   if (
     cropRect.x < 0 ||
     cropRect.y < 0 ||
@@ -65,16 +72,20 @@ function encodeNativeImageScreenshot(
   }
 
   const clippedImage = applyFallbackClip(image, params)
+
   if (!clippedImage || clippedImage.isEmpty()) {
     return null
   }
 
   const format = params?.format === 'jpeg' ? 'jpeg' : 'png'
+
   const quality =
     typeof params?.quality === 'number' && Number.isFinite(params.quality)
       ? Math.max(0, Math.min(100, Math.round(params.quality)))
       : undefined
+
   const buffer = format === 'jpeg' ? clippedImage.toJPEG(quality ?? 90) : clippedImage.toPNG()
+
   return { data: buffer.toString('base64') }
 }
 
@@ -89,6 +100,7 @@ function getLayoutClip(metrics: {
   const size = metrics.cssContentSize ?? metrics.contentSize
   const width = size?.width
   const height = size?.height
+
   if (
     typeof width !== 'number' ||
     !Number.isFinite(width) ||
@@ -116,6 +128,7 @@ async function sendCommandWithTimeout<T>(
   timeoutMessage: string
 ): Promise<T> {
   let timer: NodeJS.Timeout | null = null
+
   try {
     return await Promise.race([
       webContents.debugger.sendCommand(method, params ?? {}) as Promise<T>,
@@ -137,7 +150,9 @@ export async function captureFullPageScreenshot(
   if (webContents.isDestroyed()) {
     throw new Error('WebContents destroyed')
   }
+
   const dbg = webContents.debugger
+
   if (!dbg.isAttached()) {
     throw new Error('Debugger not attached')
   }
@@ -152,7 +167,9 @@ export async function captureFullPageScreenshot(
     cssContentSize?: { width?: number; height?: number }
     contentSize?: { width?: number; height?: number }
   }>(webContents, 'Page.getLayoutMetrics', undefined, SCREENSHOT_TIMEOUT_MESSAGE)
+
   const clip = getLayoutClip(metrics)
+
   if (!clip) {
     throw new Error('Unable to determine full-page screenshot bounds')
   }
@@ -185,27 +202,36 @@ export function captureScreenshot(
 ): void {
   if (webContents.isDestroyed()) {
     onError('WebContents destroyed')
+
     return
   }
+
   const dbg = webContents.debugger
+
   if (!dbg.isAttached()) {
     onError('Debugger not attached')
+
     return
   }
 
   const screenshotParams: Record<string, unknown> = {}
+
   if (params?.format) {
     screenshotParams.format = params.format
   }
+
   if (params?.quality) {
     screenshotParams.quality = params.quality
   }
+
   if (params?.clip) {
     screenshotParams.clip = params.clip
   }
+
   if (params?.captureBeyondViewport != null) {
     screenshotParams.captureBeyondViewport = params.captureBeyondViewport
   }
+
   if (params?.fromSurface != null) {
     screenshotParams.fromSurface = params.fromSurface
   }
@@ -213,32 +239,39 @@ export function captureScreenshot(
   let settled = false
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
   const clearTimers = (): void => {
     if (timeoutTimer) {
       clearTimeout(timeoutTimer)
       timeoutTimer = null
     }
+
     if (fallbackTimer) {
       clearTimeout(fallbackTimer)
       fallbackTimer = null
     }
   }
+
   const settleResult = (result: unknown): void => {
     if (settled) {
       return
     }
+
     settled = true
     clearTimers()
     onResult(result)
   }
+
   const settleError = (message: string): void => {
     if (settled) {
       return
     }
+
     settled = true
     clearTimers()
     onError(message)
   }
+
   // Why: a compositor invalidate is cheap and can recover guest instances that
   // are visible but have not produced a fresh frame since being reclaimed into
   // the active browser tab.
@@ -247,10 +280,12 @@ export function captureScreenshot(
   } catch {
     // Some guest teardown paths reject repaint requests. Fall through to CDP.
   }
+
   timeoutTimer = setTimeout(() => {
     if (settled) {
       return
     }
+
     // Why: capturePage is only a best-effort fallback. If it also stalls, the
     // CDP proxy must still settle instead of inheriting the compositor hang.
     fallbackTimer = setTimeout(
@@ -264,21 +299,28 @@ export function captureScreenshot(
           if (settled) {
             return
           }
+
           if (fallbackTimer) {
             clearTimeout(fallbackTimer)
             fallbackTimer = null
           }
+
           let fallback: { data: string } | null = null
+
           try {
             fallback = encodeNativeImageScreenshot(image, params)
           } catch {
             settleError(SCREENSHOT_TIMEOUT_MESSAGE)
+
             return
           }
+
           if (fallback) {
             settleResult(fallback)
+
             return
           }
+
           settleError(SCREENSHOT_TIMEOUT_MESSAGE)
         },
         () => {
@@ -286,6 +328,7 @@ export function captureScreenshot(
             clearTimeout(fallbackTimer)
             fallbackTimer = null
           }
+
           settleError(SCREENSHOT_TIMEOUT_MESSAGE)
         }
       )

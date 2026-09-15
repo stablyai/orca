@@ -42,6 +42,7 @@ export function MobileTerminalInputActions({
   onDictationCancel
 }: MobileTerminalInputActionsProps) {
   const dictationActive = dictation.isStarting || dictation.isRecording
+
   return (
     <>
       <Pressable

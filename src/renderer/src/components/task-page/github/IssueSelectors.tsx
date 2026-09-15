@@ -6,6 +6,7 @@ import { LoaderCircle, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import { GitHubAssigneeAvatar } from './Avatars'
+
 export function GitHubIssueLabelSelector({
   labels,
   selectedLabels,
@@ -22,6 +23,7 @@ export function GitHubIssueLabelSelector({
   onChange: (labels: string[]) => void
 }): React.JSX.Element {
   const selectedSet = useMemo(() => new Set(selectedLabels), [selectedLabels])
+
   const toggleLabel = useCallback(
     (label: string) => {
       onChange(
@@ -32,6 +34,7 @@ export function GitHubIssueLabelSelector({
     },
     [onChange, selectedLabels, selectedSet]
   )
+
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <label className="text-[11px] font-medium text-muted-foreground">
@@ -98,6 +101,7 @@ export function GitHubIssueLabelSelector({
     </div>
   )
 }
+
 export function GitHubIssueAssigneeSelector({
   assignees,
   selectedAssignees,
@@ -117,6 +121,7 @@ export function GitHubIssueAssigneeSelector({
     () => new Set(selectedAssignees.map((assignee) => assignee.login.toLowerCase())),
     [selectedAssignees]
   )
+
   const toggleAssignee = useCallback(
     (assignee: GitHubAssignableUser) => {
       const key = assignee.login.toLowerCase()
@@ -128,6 +133,7 @@ export function GitHubIssueAssigneeSelector({
     },
     [onChange, selectedAssignees, selectedLogins]
   )
+
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <label className="text-[11px] font-medium text-muted-foreground">
@@ -170,6 +176,7 @@ export function GitHubIssueAssigneeSelector({
           ) : (
             assignees.map((assignee) => {
               const selected = selectedLogins.has(assignee.login.toLowerCase())
+
               return (
                 <button
                   key={assignee.login}

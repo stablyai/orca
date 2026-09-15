@@ -75,6 +75,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
       queuedMessageCount: 0,
       subagentTranscriptCount: 0
     }
+
     expect(
       filterAiVaultSessions([baseSession, empty], {
         query: '',
@@ -101,6 +102,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
       ],
       'folder'
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0].sessions).toHaveLength(3)
     expect(groups[0].label).toBe('repo/app')
@@ -114,6 +116,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
       ],
       'folder'
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0].sessions).toHaveLength(2)
     expect(groups[0].label).toBe('Café/app'.normalize('NFC'))
@@ -127,6 +130,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
       ],
       'folder'
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0].sessions).toHaveLength(2)
   })
@@ -139,6 +143,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
       ],
       'folder'
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0].sessions.map((session) => session.id)).toEqual(['claude:1', 'claude:2'])
   })
@@ -151,12 +156,14 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
       ],
       'folder'
     )
+
     expect(groups).toHaveLength(2)
   })
 
   it('folds the project-grouping fallback onto the resolved folder project key', () => {
     const resolved = { ...baseSession, cwd: '/Users/ada/repo/app' }
     const unresolved = { ...baseSession, id: 'claude:2', cwd: '/Users/ada/repo/app/' }
+
     // Key literal, not folderGroupKey(), so the test still fails if both builders drift together.
     const groups = groupAiVaultSessions([resolved, unresolved], 'project', {
       sessionProjectById: new Map([
@@ -166,6 +173,7 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
         ]
       ])
     })
+
     expect(groups).toHaveLength(1)
     expect(groups[0].sessions).toHaveLength(2)
   })
@@ -208,8 +216,10 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
       id: String(i),
       cwd: `/other/${i}`
     }))
+
     const activeWorktreePaths = Array.from({ length: 100 }, (_, i) => `/repo/${i}`)
     const normalize = vi.spyOn(String.prototype, 'normalize')
+
     try {
       expect(
         filterAiVaultSessions(sessions, {
@@ -229,14 +239,17 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
 
   it('does not read transcript previews for empty or field-only queries', () => {
     let reads = 0
+
     const sessions = Array.from({ length: 1000 }, (_, i) => ({
       ...baseSession,
       id: String(i),
       get previewMessages() {
         reads++
+
         return baseSession.previewMessages
       }
     }))
+
     for (const query of ['', 'repo:repo', 'path:app']) {
       expect(
         filterAiVaultSessions(sessions, {
@@ -249,6 +262,7 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
         })
       ).toHaveLength(1000)
     }
+
     expect(reads).toBe(0)
     expect(
       filterAiVaultSessions(sessions, {
@@ -272,9 +286,11 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
           ? 'invalid'
           : new Date(1700000000000 + ((i * 173) % 1999) * 1000).toISOString()
     }))
+
     const parse = vi.spyOn(Date, 'parse')
     let actual: AiVaultSession[]
     let expected: AiVaultSession[]
+
     try {
       expected = [...sessions].sort(
         (a, b) => Date.parse(b.updatedAt ?? b.modifiedAt) - Date.parse(a.updatedAt ?? a.modifiedAt)
@@ -293,6 +309,7 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
     } finally {
       parse.mockRestore()
     }
+
     actual.forEach((session, i) => expect(session).toBe(expected[i]))
   })
 
@@ -316,12 +333,14 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
       ['/Users/ada/repo', '/Users/ada/repository'],
       ['/', '/anywhere']
     ]
+
     for (const [workspace, cwd] of cases) {
       const expected =
         isPathInsideOrEqual(workspace, cwd) ||
         (parseWslUncPath(workspace)
           ? isPathInsideOrEqual(parseWslUncPath(workspace)!.linuxPath, cwd)
           : false)
+
       const actual = filterAiVaultSessions([{ ...baseSession, cwd }], {
         query: '',
         agents: ['claude'],
@@ -330,6 +349,7 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
         activeWorktreePaths: [workspace],
         hideEmptySessions: false
       })
+
       expect({ workspace, cwd, matched: actual.length === 1 }).toEqual({
         workspace,
         cwd,
@@ -345,9 +365,11 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
       createdAt:
         i % 37 === 0 ? 'invalid' : new Date(1700000000000 + ((i * 91) % 499) * 1000).toISOString()
     }))
+
     const expected = [...sessions].sort(
       (a, b) => Date.parse(b.createdAt ?? b.modifiedAt) - Date.parse(a.createdAt ?? a.modifiedAt)
     )
+
     const actual = filterAiVaultSessions(sessions, {
       query: '',
       agents: ['claude'],
@@ -356,6 +378,7 @@ describe('/shared ai-vault-session-filters (hoisted matchers and sort keys)', ()
       activeWorktreePaths: [],
       hideEmptySessions: false
     })
+
     actual.forEach((session, i) => expect(session).toBe(expected[i]))
   })
 })

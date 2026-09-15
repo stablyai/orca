@@ -2,6 +2,7 @@ import type { NativeChatSubagentState } from '../../shared/native-chat-types'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
 
 const MAX_CHILDREN = 128
+
 const MAX_SETTLED_TURNS = 256
 
 export type CodexChildExecution = {
@@ -28,12 +29,15 @@ export class CodexSubagentExecutions {
     parentTurnId: string | null | undefined
   ): CodexExecutionChild | undefined {
     const child = this.child(agentThreadId)
+
     if (!child) {
       return undefined
     }
+
     if (!child.registered || parentTurnId !== undefined) {
       child.parentTurnId = parentTurnId ?? null
     }
+
     child.registered = true
     // Retain one overflow unit so the journal can append its per-row truncation marker.
     child.label ??=
@@ -41,6 +45,7 @@ export class CodexSubagentExecutions {
         ?.trim()
         .replace(/\s+/g, ' ')
         .slice(0, MAX_SUBAGENT_FIELD_CHARS + 1) || null
+
     return child
   }
 
@@ -51,13 +56,17 @@ export class CodexSubagentExecutions {
   ): { child: CodexExecutionChild; execution: CodexChildExecution } | null {
     const key = JSON.stringify([agentThreadId, turnId])
     const settled = this.settledTurns.get(key)
+
     if (state === 'working' && settled !== undefined) {
       return null
     }
+
     const child = this.child(agentThreadId)
+
     if (!child) {
       return null
     }
+
     if (
       state === 'working' &&
       child.execution?.turnId === turnId &&
@@ -65,20 +74,27 @@ export class CodexSubagentExecutions {
     ) {
       return null
     }
+
     const execution = { turnId, state: settled ?? state }
+
     if (state !== 'working') {
       this.settledTurns.set(key, execution.state)
+
       while (this.settledTurns.size > MAX_SETTLED_TURNS) {
         const oldest = this.settledTurns.keys().next().value
+
         if (oldest === undefined) {
           break
         }
+
         this.settledTurns.delete(oldest)
       }
     }
+
     if (state === 'working' || !child.execution || child.execution.turnId === turnId) {
       child.execution = execution
     }
+
     return { child, execution }
   }
 
@@ -108,16 +124,21 @@ export class CodexSubagentExecutions {
 
   private child(agentThreadId: string): CodexExecutionChild | undefined {
     const existing = this.children.get(agentThreadId)
+
     if (existing) {
       return existing
     }
+
     if (this.children.size >= MAX_CHILDREN) {
       const settled = [...this.children].find(([, child]) => child.execution?.state !== 'working')
+
       if (!settled) {
         return undefined
       }
+
       this.children.delete(settled[0])
     }
+
     const child: CodexExecutionChild = {
       agentThreadId,
       registered: false,
@@ -125,7 +146,9 @@ export class CodexSubagentExecutions {
       parentTurnId: null,
       execution: null
     }
+
     this.children.set(agentThreadId, child)
+
     return child
   }
 }
@@ -134,11 +157,14 @@ export function codexChildTurnState(status: unknown): NativeChatSubagentState {
   if (status === 'completed') {
     return 'completed'
   }
+
   if (status === 'interrupted') {
     return 'stopped'
   }
+
   if (status === 'failed') {
     return 'failed'
   }
+
   return 'unverifiable'
 }

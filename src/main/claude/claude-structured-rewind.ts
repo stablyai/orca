@@ -32,7 +32,9 @@ export class ClaudeRewindAttempt {
     if (!this.intent) {
       return null
     }
+
     this.refusal ??= claudeRewindRefusalFromMessage(message)
+
     return this.refusal
   }
 
@@ -43,9 +45,11 @@ export class ClaudeRewindAttempt {
     if (!this.intent) {
       return
     }
+
     if (!launch.resumed || !deps.readTranscriptLeaf) {
       throw new AgentSessionRewindRefusal('unsupported')
     }
+
     launch.options = {
       ...launch.options,
       resume: launch.providerSessionId,
@@ -61,13 +65,17 @@ export class ClaudeRewindAttempt {
   ): Promise<string | null> {
     const intent = this.intent
     this.clear()
+
     if (this.refusal) {
       throw this.refusal
     }
+
     if (!intent) {
       return null
     }
+
     let leaf: string | null
+
     try {
       leaf = await deps.readTranscriptLeaf!({
         providerSessionId: launch.providerSessionId,
@@ -75,6 +83,7 @@ export class ClaudeRewindAttempt {
         intentionalRewindUuid: intent.targetUuid,
         claudeConfigDir: launch.claudeConfigDir
       })
+
       if (leaf !== intent.targetUuid) {
         throw new AgentSessionRewindRefusal('proof-mismatch')
       }
@@ -83,8 +92,10 @@ export class ClaudeRewindAttempt {
         ? error
         : new AgentSessionRewindRefusal('proof-mismatch')
     }
+
     // Persistence failure is an unknown outcome, never evidence that the provider refused.
     await this.onProved?.(leaf)
+
     return leaf
   }
 
@@ -102,17 +113,22 @@ export async function proveClaudeRewindRecovery(
   if (!recovery) {
     return null
   }
+
   if (!launch.resumed || launch.resumeLeafUuid !== recovery.leafUuid || !deps.readTranscriptLeaf) {
     throw new AgentSessionRewindRefusal('proof-mismatch')
   }
+
   const leaf = await deps.readTranscriptLeaf({
     providerSessionId: launch.providerSessionId,
     previousLeafUuid: recovery.leafUuid,
     claudeConfigDir: launch.claudeConfigDir
   })
+
   if (leaf !== recovery.leafUuid) {
     throw new AgentSessionRewindRefusal('proof-mismatch')
   }
+
   await recovery.onProved()
+
   return leaf
 }

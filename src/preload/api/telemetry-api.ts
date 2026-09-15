@@ -17,11 +17,13 @@ export type DiagnosticsStatusPayload = {
     | 'orca_diagnostics_disabled'
     | 'ci'
 }
+
 export type DiagnosticsBundlePayload = {
   readonly bundleSubmissionId: string
   readonly bytes: number
   readonly spanCount: number
 }
+
 export type DiagnosticsUploadPayload =
   | {
       readonly ticketId: string

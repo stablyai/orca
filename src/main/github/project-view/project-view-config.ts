@@ -12,6 +12,7 @@ import { normalizeField, type RawProjectV2Field } from './project-view-field-nor
 import { FIELD_CONFIG_FRAGMENT } from './project-view-query-fragments'
 
 const VIEWS_PAGE_SIZE = 20
+
 const FIELDS_PAGE_SIZE = 50
 
 // ─── Project config fetch (views + fields, paginated) ──────────────────
@@ -65,6 +66,7 @@ export async function fetchProjectViewsPage(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
+
   const query = `
     query(${afterVar}$owner:String!, $num:Int!) {
       ${root}(login:$owner) {
@@ -89,25 +91,33 @@ export async function fetchProjectViewsPage(args: {
     }
     ${FIELD_CONFIG_FRAGMENT}
   `
+
   const vars: GraphqlVars = { owner: args.owner, num: args.projectNumber }
+
   if (args.after) {
     vars.after = args.after
   }
+
   const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
     query,
     vars,
     projectGhExecOptions(args.host)
   )
+
   if (!res.ok) {
     return res
   }
+
   const top = res.data[root]
   const project = top?.projectV2 ?? null
+
   if (!project || typeof project.id !== 'string') {
     return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
   }
+
   const pageInfo = project.views?.pageInfo
   const views = (project.views?.nodes ?? []).filter((v): v is RawProjectView => v !== null)
+
   return {
     ok: true,
     project: { id: project.id, title: project.title ?? '', url: project.url ?? '' },
@@ -139,8 +149,10 @@ export async function fetchViewFieldsContinuation(
     }
     ${FIELD_CONFIG_FRAGMENT}
   `
+
   const collected: RawProjectV2Field[] = []
   let cursor: string | null = after
+
   while (cursor !== null) {
     const res = await runGraphql<{
       node?: {
@@ -151,18 +163,23 @@ export async function fetchViewFieldsContinuation(
         }
       } | null
     }>(query, { viewId, after: cursor }, projectGhExecOptions(host))
+
     if (!res.ok) {
       return res
     }
+
     const view = res.data.node ?? null
+
     if (!view) {
       return { ok: false, error: driftError('view disappeared during field pagination') }
     }
+
     const nodes = (view.fields?.nodes ?? []).filter((f): f is RawProjectV2Field => f !== null)
     collected.push(...nodes)
     const pi = view.fields?.pageInfo
     cursor = pi?.hasNextPage === true && typeof pi.endCursor === 'string' ? pi.endCursor : null
   }
+
   return { ok: true, fields: collected }
 }
 
@@ -173,32 +190,43 @@ export function finalizeView(
   if (typeof raw.id !== 'string' || typeof raw.layout !== 'string') {
     return { ok: false, drift: driftError('view missing id or layout') }
   }
+
   const layout = raw.layout as GitHubProjectViewLayout
   const fields: GitHubProjectField[] = []
   const all = [...(raw.fields?.nodes ?? []), ...extraFields.map((f) => f as RawProjectV2Field)]
+
   for (const f of all) {
     const n = normalizeField(f)
+
     if (n) {
       fields.push(n)
     }
   }
+
   const groupByFields: GitHubProjectField[] = []
+
   for (const f of raw.groupByFields?.nodes ?? []) {
     const n = normalizeField(f)
+
     if (n) {
       groupByFields.push(n)
     }
   }
+
   const sortByFields: GitHubProjectSort[] = []
+
   for (const s of raw.sortByFields?.nodes ?? []) {
     if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {
       continue
     }
+
     const n = normalizeField(s.field)
+
     if (n) {
       sortByFields.push({ direction: s.direction, field: n })
     }
   }
+
   return {
     ok: true,
     view: {
@@ -224,12 +252,15 @@ export function matchesSelector(
   if (sel.viewId && raw.id === sel.viewId) {
     return 'id'
   }
+
   if (sel.viewNumber !== undefined && raw.number === sel.viewNumber) {
     return 'number'
   }
+
   if (sel.viewName && raw.name === sel.viewName) {
     return 'name'
   }
+
   if (
     sel.viewId === undefined &&
     sel.viewNumber === undefined &&
@@ -238,5 +269,6 @@ export function matchesSelector(
   ) {
     return 'default'
   }
+
   return 'none'
 }

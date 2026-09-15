@@ -17,12 +17,15 @@ export function resolveActiveBrowserLoadFailure(
   if (!failure) {
     return null
   }
+
   // Why: a guest still painting the error page reports chrome-error://chromewebdata/, never the
   // URL that failed — so a URL comparison here would read the standing failure as gone.
   if (isChromiumErrorPage(currentUrl)) {
     return failure
   }
+
   const attemptedUrl = normalizeBrowserNavigationUrl(failure.validatedUrl) ?? failure.validatedUrl
   const guestUrl = normalizeBrowserNavigationUrl(currentUrl) ?? currentUrl
+
   return attemptedUrl === guestUrl ? failure : null
 }

@@ -13,6 +13,7 @@ import {
 // from a column the scope will never show.
 
 let harness: SessionSearchHarness | null = null
+
 let control: SessionSearchHarness | null = null
 
 afterEach(async () => {

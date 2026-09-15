@@ -34,12 +34,15 @@ export class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithC
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
+
     const runOpts = {
       ...opts,
       activate: select && navigationTargetsHost(navigation)
     }
+
     const mutationId = opts.clientMutationId
     let result: RuntimeMobileSessionCreateTerminalResult
+
     if (!mutationId) {
       result = await this.runCreateMobileSessionTerminal(worktreeSelector, runOpts)
     } else {
@@ -52,23 +55,29 @@ export class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithC
       // immediately so a retry can start a fresh create.
       const inflight = this.mobileTerminalCreateByMutationId.get(mutationKey)
       const run = inflight ?? this.runCreateMobileSessionTerminal(worktreeSelector, runOpts)
+
       if (!inflight) {
         this.mobileTerminalCreateByMutationId.set(mutationKey, run)
+
         const drop = (): void => {
           if (this.mobileTerminalCreateByMutationId.get(mutationKey) === run) {
             this.mobileTerminalCreateByMutationId.delete(mutationKey)
           }
         }
+
         void run.then(() => {
           setTimeout(drop, MOBILE_TERMINAL_CREATE_RESULT_TTL_MS).unref?.()
         }, drop)
       }
+
       result = await run
     }
+
     if (select) {
       const worktreeId =
         this.getValidatedExplicitWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorktreeSelector(worktreeSelector)).id
+
       this.applyMobileSessionTabNavigation(
         this.getMobileSessionTabsForWorktree(worktreeId),
         result.tab.id,
@@ -76,6 +85,7 @@ export class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithC
         opts.clientNavigationId
       )
     }
+
     return result
   }
 }

@@ -18,6 +18,7 @@ describe('copyTerminalHandleForPane', () => {
       },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
 
     await expect(
@@ -45,6 +46,7 @@ describe('copyTerminalHandleForPane', () => {
         message: 'terminal not found'
       }
     })
+
     const writeClipboardText = vi.fn()
 
     await expect(

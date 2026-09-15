@@ -36,6 +36,7 @@ function stubWindow(ssh: SshApiStub): void {
         onDetectedPortsChanged: () => () => {},
         onStateChanged: (handler: (data: { targetId: string; state: unknown }) => void) => {
           onStateChangedHandler = handler
+
           return () => {}
         }
       }
@@ -86,6 +87,7 @@ describe('direct SSH hydration target metadata', () => {
     for (const unsub of unsubs.splice(0)) {
       unsub()
     }
+
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -119,6 +121,7 @@ describe('direct SSH hydration target metadata', () => {
     stubWindow({
       listTargets: () => {
         listTargetsCalls += 1
+
         return Promise.resolve([{ id: 'ssh-live', label: 'devbox' }])
       },
       listRemovedTargetLabels: () => new Promise(() => {}),
@@ -209,6 +212,7 @@ describe('direct SSH hydration target metadata', () => {
     stubWindow({
       listTargets: () => {
         listTargetsCalls += 1
+
         return Promise.resolve(
           listTargetsCalls === 1
             ? [{ id: 'ssh-alpha', label: 'alpha' }]

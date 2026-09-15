@@ -39,6 +39,7 @@ export async function probePtyRunningWork(
   if (ptyIds.length === 0) {
     return []
   }
+
   const probes: PtyRunningWorkProbe[] = ptyIds.map((ptyId) => ({
     ptyId,
     verdict: 'unverifiable',
@@ -50,9 +51,11 @@ export async function probePtyRunningWork(
   const settle = Promise.all(
     ptyIds.map(async (ptyId, index) => {
       const probe = probes[index]
+
       if (!probe) {
         return
       }
+
       try {
         // Why the flag: this probe backs decisions that act once and destructively, so it is worth
         // a host process-table read on platforms where the child question costs one. The polled
@@ -60,20 +63,26 @@ export async function probePtyRunningWork(
         const inspection = await inspectRuntimeTerminalProcess(settings, ptyId, {
           scanChildProcesses: true
         })
+
         probe.timedOut = false
+
         if (isClientOnlyUnverifiableInspection(inspection)) {
           probe.verdict = 'unverifiable'
           probe.reason = inspection.reason
+
           return
         }
+
         // `hasChildProcesses` cannot hold the third answer: a host that could not read its own
         // process table spells that the same way as one that read it and found nothing. Windows
         // relays spelled it `false` unconditionally, which read here as `exited`.
         if (inspection.childProcessEvidence === 'unverifiable') {
           probe.verdict = 'unverifiable'
           probe.reason = 'host_child_processes_unobserved'
+
           return
         }
+
         probe.verdict =
           (inspection.childProcessEvidence ??
             (inspection.hasChildProcesses ? 'children' : 'no-children')) === 'children'
@@ -91,6 +100,7 @@ export async function probePtyRunningWork(
   )
 
   let deadline: ReturnType<typeof setTimeout> | undefined
+
   try {
     await Promise.race([
       settle,
@@ -101,5 +111,6 @@ export async function probePtyRunningWork(
   } finally {
     clearTimeout(deadline)
   }
+
   return probes
 }

@@ -224,6 +224,7 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
       onRejected?: ((reason: unknown) => unknown) | null
     ): Promise<unknown> {
       const native = nativeOf.get(this) as Promise<unknown>
+
       return native.then(onFulfilled ?? undefined, onRejected ?? undefined)
     }
   }
@@ -239,6 +240,7 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     if (types.isPromise(completionValue)) {
       return await (completionValue as Promise<unknown>)
     }
+
     return { ...(completionValue as Record<string, unknown>) }
   }
 
@@ -262,11 +264,13 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     cancel: () => void
   } {
     const handlers: Record<string, (event: unknown) => void> = {}
+
     const noopEvent = {
       preventDefault(): void {},
       stopPropagation(): void {},
       stopImmediatePropagation(): void {}
     }
+
     const grab: Record<string, unknown> = {
       host: {
         addEventListener(type: string, fn: (event: unknown) => void): void {
@@ -279,7 +283,9 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
       freezeHighlight(): void {},
       cleanup(): void {}
     }
+
     const window = { __orcaGrab: grab }
+
     return {
       window,
       click: () => handlers.click?.(noopEvent),
@@ -359,6 +365,7 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     const bare = runInNewContext('new Promise(function(r){ r({ page: {}, target: {} }); })', {
       Promise: ZoneAwarePromiseLike
     })
+
     // Symbol.toStringTag='Promise' fools a toString check — exactly why the
     // boundary must use the brand-based IsPromise, which still rejects it.
     expect(Object.prototype.toString.call(bare)).toBe('[object Promise]')

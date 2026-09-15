@@ -10,9 +10,11 @@ let copyString: ((value: string) => string) | null = null
 
 function detectBufferCopier(): ((value: string) => string) | null {
   const buffer = (globalThis as { Buffer?: typeof Buffer }).Buffer
+
   if (typeof buffer?.from !== 'function') {
     return null
   }
+
   try {
     if (buffer.from(ROUND_TRIP_PROBE, 'utf16le').toString('utf16le') !== ROUND_TRIP_PROBE) {
       return null
@@ -20,6 +22,7 @@ function detectBufferCopier(): ((value: string) => string) | null {
   } catch {
     return null
   }
+
   return (value) => buffer.from(value, 'utf16le').toString('utf16le')
 }
 
@@ -29,6 +32,7 @@ function resolveCopyString(): (value: string) => string {
     copyString =
       detectBufferCopier() ?? ((value: string) => copyUtf16SuffixToOwnedString(value, value.length))
   }
+
   return copyString
 }
 
@@ -41,6 +45,7 @@ export function ownRetainedString(value: string): string {
   if (value.length < MIN_SLICED_STRING_LENGTH) {
     return value
   }
+
   return resolveCopyString()(value)
 }
 

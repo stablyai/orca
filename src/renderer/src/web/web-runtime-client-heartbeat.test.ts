@@ -6,21 +6,30 @@ import { WebRuntimeClient } from './web-runtime-client'
 // keeping its timer armed while the window is hidden.
 
 const fakeSockets: FakeWebSocket[] = []
+
 let visibilityState: DocumentVisibilityState = 'visible'
+
 let nextIntervalId = 1
+
 const documentListeners = new Map<string, () => void>()
+
 const intervalCallbacks = new Map<number, () => void>()
+
 const setIntervalMock = vi.fn((callback: () => void, _intervalMs: number): number => {
   const intervalId = nextIntervalId++
   intervalCallbacks.set(intervalId, callback)
+
   return intervalId
 })
+
 const clearIntervalMock = vi.fn((intervalId: number): void => {
   intervalCallbacks.delete(intervalId)
 })
+
 const addDocumentEventListenerMock = vi.fn((event: string, listener: () => void): void => {
   documentListeners.set(event, listener)
 })
+
 const removeDocumentEventListenerMock = vi.fn((event: string, listener: () => void): void => {
   if (documentListeners.get(event) === listener) {
     documentListeners.delete(event)
@@ -67,12 +76,14 @@ function makeConnectedClient(): {
   setVisible: (visible: boolean) => void
 } {
   let nowMs = 1_000
+
   const client = new WebRuntimeClient({
     v: 2,
     endpoint: 'ws://127.0.0.1:6768',
     deviceToken: 'token',
     publicKeyB64: Buffer.alloc(32).toString('base64')
   })
+
   const internals = client as unknown as HeartbeatInternals
   // Override the protected time/visibility seams deterministically.
   internals.now = () => nowMs
@@ -85,6 +96,7 @@ function makeConnectedClient(): {
   internals.lastInboundFrameAt = nowMs
   internals.lastHeartbeatTickAt = nowMs
   internals.heartbeatProbeSentAt = null
+
   return {
     client,
     internals,

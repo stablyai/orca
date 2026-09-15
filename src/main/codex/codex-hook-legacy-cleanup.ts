@@ -28,7 +28,9 @@ import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 
 const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
+
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
+
 const LEGACY_ORCA_PROFILE_BLOCK_END = '# END ORCA AGENT STATUS HOOKS'
 
 // Why: when the real-home lane owns ~/.codex/hooks.json (system-default flag ON
@@ -59,18 +61,23 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
   if (systemCodexHomeHookSweepSuppressed()) {
     return
   }
+
   const legacyConfigPath = getSystemConfigPath()
   const runtimeConfigPath = getConfigPath()
+
   if (legacyConfigPath === runtimeConfigPath) {
     return
   }
 
   const systemHomePath = getSystemCodexHomePath()
+
   const hasRecordedRealHomeGrant =
     readCodexTrustGrantLedgerHomeForReconciliation(systemHomePath) !== null
+
   // Why: the pre-write guard below compares against these bytes; a separate
   // later read would let a concurrent save land between parse and snapshot.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(legacyConfigPath)
+
   // Why: `config === null` with no raw is the "could not read" answer, not the
   // "no hooks here" one — the branch below removes managed trust entries AND
   // their grant-ledger record, so acting on it would discard approvals over a
@@ -78,10 +85,12 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
   if (config === null && previousRaw === null) {
     return
   }
+
   if (!config?.hooks || previousRaw === null) {
     if (hasRecordedRealHomeGrant) {
       removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
     }
+
     return
   }
 
@@ -89,24 +98,29 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
   const nextHooks = { ...config.hooks }
   const trustEntries: CodexTrustEntry[] = []
   let removedManagedHook = false
+
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       continue
     }
+
     const eventTrustEntries = collectManagedTrustEntries(
       legacyConfigPath,
       eventName,
       definitions,
       isManagedCommand
     )
+
     // Why: user hook configs can be large; avoid the argument limit from push(...entries).
     for (const entry of eventTrustEntries) {
       trustEntries.push(entry)
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
     removedManagedHook ||= definitions.some((definition) =>
       hookDefinitionHasManagedCommand(definition, isManagedCommand)
     )
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -135,6 +149,7 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
           // never replace that newer dotfiles generation with our stale parse.
           throw new Error('System Codex hooks changed during trust repair')
         }
+
         writeHooksJson(hooksWritePath, { ...config, hooks: nextHooks }, { preserveMode: true })
       },
       restoreHooks: () => writeFileAtomically(hooksWritePath, previousRaw, { mode: previousMode })
@@ -143,6 +158,7 @@ async function sweepLegacySystemManagedHooks(): Promise<void> {
     // path that is not represented by the current grant ledger.
     removeSelfComputedMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
   }
+
   if (removedManagedHook || hasRecordedRealHomeGrant) {
     // Why: the ledger recognizes Codex-computed hashes and remains a retry
     // marker if a prior cleanup removed hooks.json but could not update TOML.
@@ -155,12 +171,15 @@ export function stripLegacyManagedProfileBlock(content: string): string {
     startMarker: LEGACY_ORCA_PROFILE_BLOCK_START,
     endMarker: LEGACY_ORCA_PROFILE_BLOCK_END
   })
+
   // A stray marker above a complete block must not hide it: take the first
   // terminated region and leave the orphan (and the user text around it) alone.
   const region = regions.find((candidate) => candidate.terminated) ?? regions[0]
+
   if (!region) {
     return content
   }
+
   if (!region.terminated) {
     // #18861: deleting to EOF took user text appended below the block. This
     // legacy body's shape is not knowable from current source, so there is
@@ -169,31 +188,38 @@ export function stripLegacyManagedProfileBlock(content: string): string {
     // destroying the user's trust entries.
     return content
   }
+
   // Rejoin with the file's own terminator; a bare \n seam here left Windows
   // configs with mixed endings.
   const eol = content.includes('\r\n') ? '\r\n' : '\n'
   const before = content.slice(0, region.markerOffset).replace(/[ \t]*(?:\r?\n)*$/, '')
   const after = content.slice(region.endOffset).replace(/^(?:\r?\n)+/, '')
+
   if (!before) {
     return after
   }
+
   if (!after) {
     return before.endsWith('\n') ? before : `${before}${eol}`
   }
+
   return `${before}${eol}${eol}${after}`
 }
 
 function cleanupLegacyCodexProfileHooks(): void {
   const profilePath = getLegacyCodexProfileTomlPath()
+
   if (!existsSync(profilePath)) {
     return
   }
 
   const existing = readFileSync(profilePath, 'utf-8')
   const next = stripLegacyManagedProfileBlock(existing)
+
   if (next === existing) {
     return
   }
+
   // Why: #2778 wrote Orca hooks into a Codex profile file; runtime CODEX_HOME supersedes it, so remove only Orca's marked block.
   if (next.trim().length === 0) {
     unlinkSync(profilePath)

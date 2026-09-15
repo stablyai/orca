@@ -69,6 +69,7 @@ resolver #1
 describe('withMacTailscaleDnsHintForDiagnostic', () => {
   it('adds a Tailscale DNS hint for the Codex lookup failure from the issue', () => {
     const diagnostic = parseMacTailscaleDnsDiagnostic(MAGIC_DNS_ONLY_SCUTIL)
+
     const result = withMacTailscaleDnsHintForDiagnostic(
       'Codex failed. Check the agent CLI configuration and try again.',
       'stream disconnected before completion: failed to lookup address information: nodename nor servname provided, or not known',

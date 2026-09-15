@@ -14,9 +14,11 @@ import { getTabRootStateClasses } from './drop-indicator'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+
 vi.mock('../../runtime/client-hosted-browser-row-close', () => ({
   closeClientHostedBrowserRow: vi.fn()
 }))
+
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { focusGroup: () => void }) => unknown) =>
     selector({ focusGroup: () => {} })
@@ -34,6 +36,7 @@ const ROW: ClientHostedBrowserRow = {
 }
 
 const mountedRoots: Root[] = []
+
 let mountedRoot: Root | null = null
 
 function rowsTree(groupActiveTabId: string | null): React.JSX.Element {
@@ -59,6 +62,7 @@ function renderRows(groupActiveTabId: string | null = null): HTMLElement {
   act(() => {
     root.render(rowsTree(groupActiveTabId))
   })
+
   return container
 }
 
@@ -70,9 +74,11 @@ function rerenderRows(groupActiveTabId: string | null): void {
 
 function rowElement(container: HTMLElement): HTMLElement {
   const row = container.querySelector<HTMLElement>('[data-client-hosted-browser-row-id="page-1"]')
+
   if (!row) {
     throw new Error('row not found')
   }
+
   return row
 }
 
@@ -88,9 +94,11 @@ function clickRow(container: HTMLElement): void {
 
 function clickClose(container: HTMLElement): void {
   const button = container.querySelector('button[aria-label="Close hosted page"]')
+
   if (!button) {
     throw new Error('close button not found')
   }
+
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })

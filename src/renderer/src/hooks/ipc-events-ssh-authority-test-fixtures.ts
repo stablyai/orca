@@ -17,21 +17,25 @@ export function buildSshAuthorityReconciliationHarness(args: {
   storedState: () => Record<string, unknown> | undefined
 } {
   const targetId = 'target-reconciliation'
+
   const baseState = {
     targetId,
     status: 'connected' as const,
     error: null,
     reconnectAttempt: 0
   }
+
   const partialState = { ...baseState, ...args.partialAuthority }
   const latestState = { ...baseState, ...args.latestAuthority }
   const sshConnectionStates = new Map<string, Record<string, unknown>>()
   let sshStateListener: ((data: { targetId: string; state: unknown }) => void) | undefined
   const getState = vi.fn(() => Promise.resolve(latestState))
   const requestReconnect = vi.fn(async () => ({ status: 'complete' }))
+
   const setSshConnectionState = vi.fn((nextTargetId: string, state: Record<string, unknown>) => {
     sshConnectionStates.set(nextTargetId, state)
   })
+
   const storeState = buildStoreState({
     sshTargetLabels: new Map([[targetId, 'Reconciliation Target']]),
     sshConnectionStates,
@@ -45,6 +49,7 @@ export function buildSshAuthorityReconciliationHarness(args: {
     clearDirectSshTargetPtyBindings: vi.fn(),
     clearRemovedSshTargetState: vi.fn()
   })
+
   const coordinator = {
     requestReconnect,
     replaceAuthority: vi.fn(),
@@ -94,6 +99,7 @@ export function buildSshAuthorityReconciliationHarness(args: {
         getState,
         onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
           sshStateListener = listener
+
           return () => {}
         }
       }
@@ -105,6 +111,7 @@ export function buildSshAuthorityReconciliationHarness(args: {
       if (!sshStateListener) {
         throw new Error('Expected SSH state listener')
       }
+
       sshStateListener({ targetId, state: partialState })
     },
     getState,

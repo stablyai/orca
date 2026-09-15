@@ -40,6 +40,7 @@ export const PREVIEW_CONTENT_FIELDS = ['content'] as const
 
 export function previewableBinaryByteLimit(maxContentBytes: number): number {
   const base64Bytes = Math.max(0, maxContentBytes - PREVIEWABLE_BINARY_EMPTY_RESULT_BYTES)
+
   return Math.floor(base64Bytes / 4) * 3
 }
 
@@ -54,6 +55,7 @@ export async function readPreviewFileWithinCap(
     if (error instanceof FileReadCapExceededError) {
       throw new Error('file_too_large')
     }
+
     throw error
   }
 }
@@ -68,6 +70,7 @@ export function assertPreviewWithinTransportBudget(
   ) {
     throw new Error('file_too_large')
   }
+
   return result
 }
 
@@ -98,9 +101,11 @@ export function assertRuntimeFileMutationExpectation(
   if (!expectedExecutionHostId) {
     throw new Error(RUNTIME_FILE_MUTATION_UPDATE_REQUIRED)
   }
+
   if (expectedExecutionHostId !== executionHostId) {
     throw new Error('Workspace host changed; refresh and try again')
   }
+
   assertSshMutationExpectation(
     getSshTargetIdForExecutionHost(executionHostId) ?? undefined,
     expectedSshTargetId,
@@ -177,9 +182,11 @@ export type TerminalFileGrant = {
 export function isMobilePreviewableImagePath(relativePath: string): boolean {
   const basename = basenameFromRelativePath(relativePath)
   const dotIndex = basename.lastIndexOf('.')
+
   if (dotIndex <= 0) {
     return false
   }
+
   return MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
 }
 
@@ -204,10 +211,12 @@ export function trackRuntimeFileWatcherUnsubscribe(
     .finally(() => {
       pendingRuntimeFileWatcherUnsubscribes.delete(promise)
     })
+
   pendingRuntimeFileWatcherUnsubscribes.add(promise)
   void promise.catch((err: unknown) => {
     console.error('[runtime-files.watch] unsubscribe error', { rootPath, err })
   })
+
   return promise
 }
 

@@ -156,9 +156,11 @@ describe('RpcDispatcher computer-use validation errors', () => {
 
   it('provides local identity to read-only federation authorization', async () => {
     const getOrCreateLocalMutationCallerFingerprint = vi.fn(() => 'local-caller')
+
     const runtime = Object.assign(makeRuntime(), {
       getOrchestrationDb: () => ({ getOrCreateLocalMutationCallerFingerprint })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
 
     const response = await dispatcher.dispatch(

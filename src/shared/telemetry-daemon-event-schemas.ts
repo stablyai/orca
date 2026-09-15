@@ -32,6 +32,7 @@ export const runtimeRpcStartErrorClassSchema = z.enum([
   'invalid_path',
   'unknown'
 ])
+
 export type RuntimeRpcStartErrorClass = z.infer<typeof runtimeRpcStartErrorClassSchema>
 
 // Why: runtime discovery failures can contain user paths; keep telemetry to closed filesystem/socket categories.
@@ -178,6 +179,7 @@ export const settingsChangedSchema = z
 
 // Managed-hook installer label from `AGENT_HOOK_TARGETS`, distinct from `AGENT_KIND_VALUES`; `claude` (not `claude-code`) is intentional.
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
+
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
 // Why: config-shape errors (not user content); callers must truncate before `track` — `.max(200)` drops overlength strings.

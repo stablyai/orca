@@ -6,16 +6,21 @@ import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
 // wsl.exe would make every WSL session vanish app-wide with no signal distinguishing
 // "discovery broken" from "distro stopped", and would re-spawn wsl.exe every 2s forever.
 let cache: string[] | null = null
+
 let retryAfterMs = 0
+
 let failureStreak = 0
+
 let inFlightProbe: Promise<string[]> | null = null
 
 function armRetryAfterFailure(): void {
   const now = Date.now()
+
   // Concurrent completions belong to the retry window already armed by the first result.
   if (now < retryAfterMs) {
     return
   }
+
   failureStreak += 1
   retryAfterMs = now + wslDistroListRetryDelayMs(failureStreak)
 }
@@ -32,19 +37,23 @@ export function resolveRunningWslDistros(probe: () => Promise<string[]>): Promis
   if (inFlightProbe) {
     return inFlightProbe
   }
+
   if (Date.now() < retryAfterMs) {
     return Promise.resolve(cache ?? [])
   }
+
   const result = probe()
     .then((distros) => {
       cache = distros
       retryAfterMs = 0
       failureStreak = 0
+
       return cache
     })
     .catch((error: unknown) => {
       armRetryAfterFailure()
       console.warn('[wsl] running-distro probe failed; falling back to last-known-good list', error)
+
       return cache ?? []
     })
     .finally(() => {
@@ -52,7 +61,9 @@ export function resolveRunningWslDistros(probe: () => Promise<string[]>): Promis
         inFlightProbe = null
       }
     })
+
   inFlightProbe = result
+
   return result
 }
 

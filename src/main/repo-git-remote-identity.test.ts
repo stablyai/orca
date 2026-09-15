@@ -6,6 +6,7 @@ import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 vi.mock('./git/runner', () => ({ gitExecFileAsync: vi.fn() }))
 
 const gitlabRemote = 'origin\tgit@gitlab.example.com:team/orca.git (fetch)\n'
+
 const gitlabIdentity = {
   canonicalKey: 'gitlab.example.com/team/orca',
   remoteName: 'origin',
@@ -18,6 +19,7 @@ function registerHost(connectionId: string, stdout = gitlabRemote) {
   const exec = vi.fn().mockResolvedValue({ stdout, stderr: '' })
   registerSshGitProvider(connectionId, { exec } as never)
   registered.push(connectionId)
+
   return exec
 }
 
@@ -51,6 +53,7 @@ describe('probeGitRemoteIdentity', () => {
 
   it('routes each SSH host to its own git provider', async () => {
     const m4air = registerHost('m4air')
+
     const openclaw = registerHost(
       'openclaw',
       'origin\tgit@gitlab.example.com:team/other.git (fetch)\n'

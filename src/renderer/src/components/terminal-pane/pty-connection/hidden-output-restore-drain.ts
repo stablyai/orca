@@ -21,22 +21,29 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     if (session.hiddenOutputRestorePendingOverflow) {
       session.hiddenOutputRestorePendingOverflow = false
       discardPendingLiveChunksSalvagingQueries()
+
       return 'overflow'
     }
+
     while (session.hiddenOutputRestorePendingChunks.length > 0) {
       const chunks = session.hiddenOutputRestorePendingChunks
       session.hiddenOutputRestorePendingChunks = []
       session.hiddenOutputRestorePendingChars = 0
+
       for (const [index, chunk] of chunks.entries()) {
         const data = session.getChunkDataAfterSnapshot(chunk, snapshotSeq)
+
         if (data === null) {
           // Why: renderer-only OSC stripping makes raw seq offsets unmappable onto cleaned text; refetch instead of risking duplicate output.
           for (const discarded of chunks.slice(index)) {
             session.salvageRendererQueriesFromDiscardedRestoreData(discarded.data)
           }
+
           discardPendingLiveChunksSalvagingQueries()
+
           return 'refetch'
         }
+
         // Why: advance the continuity point so reconciliation neither re-drops drained chunks as duplicates nor misreads the next live chunk as a gap.
         if (typeof chunk.seq === 'number' && session.restoredSnapshotExpectedStartSeq !== null) {
           session.restoredSnapshotExpectedStartSeq = Math.max(
@@ -44,17 +51,21 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
             chunk.seq
           )
         }
+
         if (data) {
           session.writePtyOutputToXterm(data, true)
           session.recordRendererOrderedSeq(chunk)
         }
       }
+
       if (session.hiddenOutputRestorePendingOverflow) {
         session.hiddenOutputRestorePendingOverflow = false
         discardPendingLiveChunksSalvagingQueries()
+
         return 'overflow'
       }
     }
+
     return 'drained'
   }
 
@@ -62,6 +73,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     const discarded = session.hiddenOutputRestorePendingChunks
     session.hiddenOutputRestorePendingChunks = []
     session.hiddenOutputRestorePendingChars = 0
+
     for (const chunk of discarded) {
       session.salvageRendererQueriesFromDiscardedRestoreData(chunk.data)
     }
@@ -84,9 +96,11 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     if (session.hiddenOutputRestoreDeferredRetryTimer === null) {
       return
     }
+
     clearTimeout(session.hiddenOutputRestoreDeferredRetryTimer)
     session.hiddenOutputRestoreDeferredRetryTimer = null
   }
+
   session.cleanupHiddenOutputRestoreDeferredRetry =
     session.clearHiddenOutputRestoreDeferredRetryTimer
 
@@ -94,9 +108,11 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     if (session.hiddenOutputRestoreForegroundDeadlineTimer === null) {
       return
     }
+
     clearTimeout(session.hiddenOutputRestoreForegroundDeadlineTimer)
     session.hiddenOutputRestoreForegroundDeadlineTimer = null
   }
+
   session.cleanupHiddenOutputRestoreForegroundDeadline =
     session.clearHiddenOutputRestoreForegroundDeadlineTimer
 
@@ -113,14 +129,18 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     ) {
       return
     }
+
     const ptyId = session.hiddenOutputRestorePtyId
+
     if (ptyId === null || session.transport.getPtyId() !== ptyId) {
       return
     }
+
     const deadlineGeneration = session.hiddenOutputRestoreGeneration
     // Why: only foreground output blocked behind recovery gets a deadline; hidden-time restore work has no user impact.
     session.hiddenOutputRestoreForegroundDeadlineTimer = setTimeout(() => {
       session.hiddenOutputRestoreForegroundDeadlineTimer = null
+
       if (
         session.disposed ||
         session.hiddenOutputRestoreGeneration !== deadlineGeneration ||
@@ -129,6 +149,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       ) {
         return
       }
+
       // A fetched snapshot plus live overflow is backpressure, not unavailable recovery. The
       // replay paints synchronously before it awaits its fit, so this deadline never lands
       // mid-paint: adopt that painted image as the baseline — the overflow abandon below
@@ -136,10 +157,12 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       const replayed = session.hiddenOutputRestorePendingOverflow
         ? session.hiddenOutputRestoreReplayingSnapshot
         : null
+
       if (replayed) {
         session.setRestoredSnapshotBaseline(ptyId, replayed, replayed.paintsContent === true)
         session.noteHiddenOutputRestoreFloodBackpressure()
       }
+
       session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, {
         quiet: replayed !== null
       })
@@ -157,6 +180,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     if (!isRemoteExecutionHostPtyId(ptyId)) {
       return false
     }
+
     if (session.hiddenOutputRestoreRemoteAbandonCycles >= HIDDEN_OUTPUT_RESTORE_REMOTE_REARM_MAX) {
       // Why the reset: the budget bounds ONE stall, and returning false ends that
       // stall with the loss banner. Without this, the counter only ever clears on a
@@ -164,8 +188,10 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       // long-lived SSH pane at zero tolerance — every later hidden episode banners
       // on the first null even though that null is still only `unverifiable`.
       session.hiddenOutputRestoreRemoteAbandonCycles = 0
+
       return false
     }
+
     session.hiddenOutputRestoreRemoteAbandonCycles += 1
     recordTerminalFreezeBreadcrumb('restore-abandon-rearm', {
       id: redactPtyIdForDiagnostics(ptyId),
@@ -174,6 +200,7 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
     })
     session.noteHiddenOutputRestoreFloodBackpressure()
     session.writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
+
     return true
   }
 }

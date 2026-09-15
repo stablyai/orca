@@ -72,6 +72,7 @@ export type ImeNativeTextKeyEvent = {
 }
 
 export const XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT = 'xterm-composition-transaction-accepted'
+
 export const XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT = 'xterm-composition-transaction-settled'
 
 export type TerminalImeNativeTextForwarder = IDisposable & {
@@ -130,6 +131,7 @@ function matchesClaimedPress(
   if (event.code && claimedPress.code) {
     return event.code === claimedPress.code
   }
+
   return event.key === claimedPress.key
 }
 
@@ -166,14 +168,17 @@ export function installTerminalImeNativeTextForwarder(args: {
 
   const findClaimedRecordId = (event: ImeNativeTextKeyEvent): string | null => {
     const direct = claimedKeyId(event)
+
     if (claimedKeyRecords.has(direct)) {
       return direct
     }
+
     for (const [id, record] of claimedKeyRecords) {
       if (matchesClaimedPress(event, record)) {
         return id
       }
     }
+
     return null
   }
 
@@ -181,14 +186,17 @@ export function installTerminalImeNativeTextForwarder(args: {
   const settleRelease = (recordId: string, release: ImeReleaseKeyEvent): void => {
     const record = claimedKeyRecords.get(recordId)
     claimedKeyRecords.delete(recordId)
+
     if (!record?.obligation) {
       return
     }
+
     const report = encodeImeReleaseForKitty(record.obligation, release, {
       press: { key: record.key, code: record.code },
       currentKittyKeyboardFlags: args.getKittyKeyboardFlags?.() ?? 0,
       layoutCharacterForCode: getLayoutCharacterForCode
     })
+
     if (report) {
       args.sendInput(report)
     }
@@ -205,6 +213,7 @@ export function installTerminalImeNativeTextForwarder(args: {
   ): void => {
     const recordId = claimedKeyId(commit.press)
     const existing = claimedKeyRecords.get(recordId)
+
     if (obligation || !existing) {
       claimedKeyRecords.set(recordId, {
         key: commit.press.key,
@@ -212,6 +221,7 @@ export function installTerminalImeNativeTextForwarder(args: {
         obligation: obligation ?? existing?.obligation ?? null
       })
     }
+
     if (commit.keyup) {
       settleRelease(recordId, commit.keyup)
     }
@@ -243,9 +253,11 @@ export function installTerminalImeNativeTextForwarder(args: {
         settleCommit(pendingCommit, null)
         pendingCommit = null
       }
+
       if (event.repeat !== true) {
         // Why: a fresh same-key press proves the prior press ended; settle its owed release first.
         const staleRecordId = findClaimedRecordId(event)
+
         if (staleRecordId !== null) {
           settleRelease(staleRecordId, {
             key: event.key,
@@ -259,9 +271,11 @@ export function installTerminalImeNativeTextForwarder(args: {
           })
         }
       }
+
       if (!isNativeTextKeydown(event, args.isComposing())) {
         return false
       }
+
       pendingCommit = {
         press: {
           key: event.key,
@@ -273,8 +287,10 @@ export function installTerminalImeNativeTextForwarder(args: {
         },
         keyup: null
       }
+
       return true
     }
+
     if (event.type === 'keyup') {
       if (pendingCommit && matchesClaimedPress(event, pendingCommit.press)) {
         // Copy the release's own fields: the commit has not happened yet, and
@@ -289,12 +305,16 @@ export function installTerminalImeNativeTextForwarder(args: {
           capsLock: event.getModifierState?.('CapsLock') === true,
           numLock: event.getModifierState?.('NumLock') === true
         }
+
         return true
       }
+
       const recordId = findClaimedRecordId(event)
+
       if (recordId === null) {
         return false
       }
+
       // Why the forwarder owns this instead of returning false: xterm's kitty
       // state is defensively reset while the application tracker stays active,
       // so delegating the release would either lose it or emit it under flags
@@ -309,8 +329,10 @@ export function installTerminalImeNativeTextForwarder(args: {
         capsLock: event.getModifierState?.('CapsLock') === true,
         numLock: event.getModifierState?.('NumLock') === true
       })
+
       return true
     }
+
     // Keep the keydown's armed state but still bypass xterm so it does not
     // double-send printable text before our input forward runs.
     return event.type === 'keypress' && pendingCommit !== null
@@ -320,6 +342,7 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (!(event instanceof InputEvent)) {
       return
     }
+
     // Why: an accepted composition transaction already owns its commit; letting
     // it through here would send the text a second time.
     if (compositionTransactionPending && event.inputType === 'insertText') {
@@ -327,20 +350,28 @@ export function installTerminalImeNativeTextForwarder(args: {
         settleCommit(pendingCommit, null)
         pendingCommit = null
       }
+
       event.stopImmediatePropagation()
+
       return
     }
+
     const commit = pendingCommit
+
     if (!commit) {
       return
     }
+
     pendingCommit = null
+
     if (event.inputType !== 'insertText') {
       // A non-text input takes the press over; it delivered nothing, so only the
       // keyup suppression survives.
       settleCommit(commit, null)
+
       return
     }
+
     if (event.data) {
       // Read the mutable flags EXACTLY once, here: kitty state can change
       // between keydown and commit, and the release must describe the same
@@ -349,12 +380,15 @@ export function installTerminalImeNativeTextForwarder(args: {
         committedText: event.data,
         layoutCharacterForCode: getLayoutCharacterForCode
       })
+
       args.sendInput(encoding.report ?? event.data)
       settleCommit(commit, encoding.release)
     } else {
       settleCommit(commit, null)
     }
+
     event.stopImmediatePropagation()
+
     // Clear the helper textarea so the committed text doesn't accumulate. Also load-bearing:
     // macOS decides an automatic period substitution from the characters already in the field,
     // so emptying it is what keeps #11504 from firing. Measured - with this line removed and

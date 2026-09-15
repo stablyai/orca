@@ -33,6 +33,7 @@ export type ElectronHomeIsolation = {
 
 function normalizeComparablePath(candidatePath: string, platform = process.platform): string {
   const normalized = path.resolve(candidatePath)
+
   return platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -47,6 +48,7 @@ function assertOverlayDoesNotReplaceIsolation(
   const restrictedKey = Object.keys(overlay).find((key) =>
     RESTRICTED_ENV_KEYS.has(key.toUpperCase())
   )
+
   if (restrictedKey) {
     throw new Error(`${overlayName}.${restrictedKey} cannot override the E2E home boundary`)
   }
@@ -74,6 +76,7 @@ export function createElectronHomeIsolation({
   // short names). Git canonicalizes worktree paths, so a non-canonical HOME
   // makes freshly created worktrees invisible to Orca's listing comparisons.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
+
   // Why: a bad fixture path must fail before Electron can resolve a real Codex
   // home; userData isolation alone does not change app.getPath('home').
   if (areSameHomePath(isolatedHome, realHome)) {

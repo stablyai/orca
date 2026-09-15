@@ -22,6 +22,7 @@ describe('ref-mirroring vet steps', () => {
     const job = readWorkflow(`.github/workflows/${channel}-mac-build.yml`).jobs[
       `build-${channel}-mac`
     ]
+
     const checkout = job.steps.find((step) => step.uses === 'actions/checkout@v6')
     expect(checkout.with['fetch-depth']).toBe(1)
     expect(job.steps.some((step) => step.run?.includes('gh release list'))).toBe(true)
@@ -39,10 +40,12 @@ describe('ref-mirroring vet steps', () => {
       const step = readWorkflow(`.github/workflows/${channel}-mac-build.yml`).jobs[
         `build-${channel}-mac`
       ].steps.find((candidate) => candidate.name === `Compute ${channel} version`)
+
       expect(step.run).toContain('git/matching-refs/tags/v')
       expect(step.run).not.toMatch(
         /gh release list[\s\S]*--repo "\$GITHUB_REPOSITORY"[\s\S]*--json tagName/
       )
+
       if (channel !== 'adhoc') {
         expect(step.run).toContain('channel_tags=')
       }
@@ -53,6 +56,7 @@ describe('ref-mirroring vet steps', () => {
     const checkout = readWorkflow('.github/workflows/release-cut.yml').jobs.cut.steps.find(
       (step) => step.uses === 'actions/checkout@v6'
     )
+
     expect(checkout.with['fetch-depth']).toBe(0)
   })
 
@@ -60,12 +64,16 @@ describe('ref-mirroring vet steps', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-checkout-identity-'))
     const source = join(directory, 'source')
     const shallow = join(directory, 'shallow')
+
     const run = (program, args, cwd) => {
       const result = runProcessSync({ program, args, cwd })
       expect(result.code, result.stderr).toBe(0)
+
       return result.stdout.trim()
     }
+
     const git = (args, cwd = directory) => run('git', args, cwd)
+
     try {
       git(['init', source])
       git(['config', 'user.name', 'CI test'], source)
@@ -78,6 +86,7 @@ describe('ref-mirroring vet steps', () => {
       git(['clone', '--depth=1', '--no-tags', pathToFileURL(source).href, shallow])
       expect(git(['rev-list', '--count', 'HEAD'], shallow)).toBe('1')
       expect(git(['tag', '--list'], shallow)).toBe('')
+
       const script = `
         const result = [];
         for (const [channel, exported] of [['daily', 'Daily'], ['hourly', 'Hourly'], ['adhoc', 'Adhoc']]) {
@@ -89,6 +98,7 @@ describe('ref-mirroring vet steps', () => {
         }
         process.stdout.write(JSON.stringify(result));
       `
+
       const identities = (cwd) => run(process.execPath, ['--input-type=module', '-e', script], cwd)
       expect(identities(shallow)).toBe(identities(source))
       expect(
@@ -102,6 +112,7 @@ describe('ref-mirroring vet steps', () => {
   it('checks out only the vetted commit without remirroring refs', () => {
     const steps = readWorkflow('.github/workflows/adhoc-mac-build.yml').jobs['build-adhoc-mac']
       .steps
+
     const checkout = steps.find((step) => step.name === 'Checkout the requested ref')
     expect(checkout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
     expect(checkout.with['fetch-depth']).toBe(1)

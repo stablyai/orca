@@ -40,6 +40,7 @@ function runtimeRpcRefuses(method: string): void {
       if (called === method) {
         throw new Error(FENCING_REQUIRED)
       }
+
       return await previous?.(target, called, params, options)
     }
   )
@@ -50,6 +51,7 @@ function watchSettings(): { open: ReturnType<typeof vi.fn>; target: ReturnType<t
   const target = vi.fn()
   mocks.state.openSettingsPage = open
   mocks.state.openSettingsTarget = target
+
   return { open, target }
 }
 
@@ -111,9 +113,11 @@ describe('AutomationsPage notice recovery', () => {
     })
 
     const notice = container.querySelector('[data-testid="automation-owner-conflict"]')
+
     const recover = [...(notice?.querySelectorAll('button') ?? [])].find(
       (button) => button.textContent === 'Update server'
     )
+
     expect(recover).toBeDefined()
     await act(async () => {
       recover?.click()

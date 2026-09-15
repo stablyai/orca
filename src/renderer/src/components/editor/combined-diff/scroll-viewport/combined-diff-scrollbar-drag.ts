@@ -18,11 +18,14 @@ export function beginCombinedDiffScrollbarDrag({
   ownerWindow = window
 }: CombinedDiffScrollbarDragOptions): CombinedDiffScrollbarDragCleanup {
   let cleaned = false
+
   const cleanup = (): void => {
     if (cleaned) {
       return
     }
+
     cleaned = true
+
     try {
       if (track.hasPointerCapture(pointerId)) {
         track.releasePointerCapture(pointerId)
@@ -30,6 +33,7 @@ export function beginCombinedDiffScrollbarDrag({
     } catch {
       // Best effort: unmount cleanup can run after Chromium has already dropped capture.
     }
+
     ownerWindow.removeEventListener('pointermove', onPointerMove)
     ownerWindow.removeEventListener('pointerup', cleanup)
     ownerWindow.removeEventListener('pointercancel', cleanup)

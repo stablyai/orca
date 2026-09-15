@@ -22,6 +22,7 @@ export function LinearAgentSkillNotes(): React.JSX.Element {
       <div className="grid gap-2 sm:grid-cols-2">
         {notes.map((note) => {
           const Icon = note.icon
+
           return (
             <div
               key={note.id}

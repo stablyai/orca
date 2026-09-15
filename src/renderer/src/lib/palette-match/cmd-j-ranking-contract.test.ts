@@ -7,9 +7,11 @@ import { matchPaletteTabDocument } from './tab-match'
 
 function ready(query: string) {
   const prepared = preparePaletteQuery(query)
+
   if (prepared.state !== 'ready') {
     throw new Error(`Expected ready query: ${query}`)
   }
+
   return prepared
 }
 
@@ -54,6 +56,7 @@ describe('Cmd+J semantic proof contract', () => {
       }),
       ready('alpha beta')
     )
+
     expect(match?.rank).toMatchObject({ coverage: 2, strength: 0 })
     expect(match?.titleRanges).toEqual([])
     expect(match?.secondaryMatches).toEqual([{ index: 0, ranges: [{ start: 1, end: 6 }] }])
@@ -68,8 +71,10 @@ describe('Cmd+J semantic proof contract', () => {
       role,
       destinationEligible: false
     })
+
     const match = (visibleFields: ReturnType<typeof field>[]) => {
       const query = ready('alpha beta')
+
       return matchPaletteDocument({
         document: buildPaletteDocument({
           id: 'order-invariant',
@@ -118,11 +123,13 @@ describe('Cmd+J semantic proof contract', () => {
       }),
       ready('src/main.ts /home/me')
     )
+
     expect(multi?.secondaryMatches.map((proof) => proof.index)).toEqual([0, 1])
   })
 
   it('promotes eligible equality but not repository equality', () => {
     const eligible = matchTitleAndPath('notes', '/tmp/atlas', '/tmp/atlas')
+
     const ineligible = matchPaletteTabDocument(
       buildPaletteTabDocument({
         id: 'repo-hit',
@@ -134,6 +141,7 @@ describe('Cmd+J semantic proof contract', () => {
       }),
       ready('/tmp/atlas')
     )
+
     expect(eligible?.rank.destination).toBe(1)
     expect(ineligible?.rank.destination).toBe(2)
   })
@@ -166,8 +174,10 @@ describe('Cmd+J semantic proof contract', () => {
         }
       ]
     })
+
     const run = (query: string) => {
       const prepared = ready(query)
+
       return matchPaletteDocument({
         document,
         tokens: prepared.tokens,
@@ -175,6 +185,7 @@ describe('Cmd+J semantic proof contract', () => {
         tokenCountBeforeDeduplication: prepared.tokenCountBeforeDeduplication
       })
     }
+
     expect(run('#123')?.rank.destination).toBe(0)
     expect(run('#123 #123')?.rank.destination).toBe(2)
     expect(run('#123 migration')?.rank.destination).toBe(2)
@@ -194,6 +205,7 @@ describe('Cmd+J semantic proof contract', () => {
       }),
       ready('atlas sprint')
     )
+
     expect(match?.rank).toMatchObject({
       coverage: 2,
       containerOnlyTokenCount: 1,

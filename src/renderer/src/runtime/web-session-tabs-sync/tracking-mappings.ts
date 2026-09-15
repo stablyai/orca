@@ -16,13 +16,17 @@ function hostSessionTabMappingKey(args: {
 export function clearHostSessionTabIdMappings(environmentId: string, worktreeId: string): void {
   const mappingKeysByWorktree = hostSessionTabMappingKeysByEnvironmentAndWorktree.get(environmentId)
   const mappingKeys = mappingKeysByWorktree?.get(worktreeId)
+
   if (!mappingKeys) {
     return
   }
+
   for (const mappingKey of mappingKeys) {
     hostSessionTabIdByLocalKey.delete(mappingKey)
   }
+
   mappingKeysByWorktree?.delete(worktreeId)
+
   if (mappingKeysByWorktree?.size === 0) {
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(environmentId)
   }
@@ -34,8 +38,10 @@ export function setHostSessionTabIdMapping(
 ): void {
   const mappingKey = hostSessionTabMappingKey(args)
   hostSessionTabIdByLocalKey.set(mappingKey, hostTabId)
+
   const mappingKeysByWorktree =
     hostSessionTabMappingKeysByEnvironmentAndWorktree.get(args.environmentId) ?? new Map()
+
   const mappingKeys = mappingKeysByWorktree.get(args.worktreeId) ?? new Set<string>()
   mappingKeys.add(mappingKey)
   mappingKeysByWorktree.set(args.worktreeId, mappingKeys)

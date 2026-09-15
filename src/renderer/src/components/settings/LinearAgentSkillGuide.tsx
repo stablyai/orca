@@ -36,6 +36,7 @@ function SetupStatusIcon({
       </span>
     )
   }
+
   if (done) {
     return (
       <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
@@ -43,6 +44,7 @@ function SetupStatusIcon({
       </span>
     )
   }
+
   return (
     <span className="flex size-5 items-center justify-center rounded-full border border-border/70 text-muted-foreground">
       <Circle className="size-2.5" />
@@ -60,9 +62,11 @@ export function LinearAgentSkillGuide({
   // Count durable outcomes even while a recheck runs so the pill does not flash
   // from "All set" down to "2 of 3 ready" during skill/connection scans.
   const checking = status.connectionChecking || status.skillChecking
+
   const completed = [status.connected, status.skillInstalled, status.visibleInTasks].filter(
     Boolean
   ).length
+
   const total = 3
   const allReady = completed === total && !checking
 

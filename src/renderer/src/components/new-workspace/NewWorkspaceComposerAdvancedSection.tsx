@@ -111,9 +111,11 @@ export function NewWorkspaceComposerAdvancedSection({
 }: NewWorkspaceComposerAdvancedSectionProps): React.JSX.Element {
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
+
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
       stopAfterBytes: TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
     })
+
     if (
       !byteLengthMeasurement.exceededLimit &&
       !shouldHandleTextControlPaste(text, { measuredByteLength: byteLengthMeasurement.byteLength })

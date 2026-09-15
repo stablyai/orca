@@ -28,12 +28,15 @@ function consumeKeyboardEvent(event: KeyboardEvent): void {
 
 function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   const className = 'size-4 shrink-0 text-muted-foreground'
+
   if (item.type === 'terminal') {
     return <TerminalSquare className={className} />
   }
+
   if (item.type === 'browser') {
     return <Globe2 className={className} />
   }
+
   if (
     item.contentType === 'diff' ||
     item.contentType === 'conflict-review' ||
@@ -41,6 +44,7 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   ) {
     return <GitCompare className={className} />
   }
+
   return <FileText className={className} />
 }
 
@@ -56,6 +60,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   const openOrAdvance = useCallback(
     (direction: 1 | -1): void => {
       const store = useAppStore.getState()
+
       if (store.activeView !== 'terminal' || !store.activeWorktreeId) {
         return
       }
@@ -65,21 +70,25 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         store.activeWorktreeId,
         normalizeCtrlTabOrderMode(store.settings?.ctrlTabOrderMode)
       )
+
       if (!model) {
         return
       }
 
       const current = switcherRef.current
       const selectedKey = current?.items[current.selectedIndex]?.key ?? null
+
       const currentIndex =
         selectedKey == null
           ? model.activeIndex
           : model.items.findIndex((item) => item.key === selectedKey)
+
       const selectedIndex = getNextRecentTabSwitcherIndex(
         model.items.length,
         currentIndex,
         direction
       )
+
       setSwitcherState({ items: model.items, selectedIndex })
     },
     [setSwitcherState]
@@ -89,9 +98,11 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
     const current = switcherRef.current
     setSwitcherState(null)
     const selected = current?.items[current.selectedIndex]
+
     if (!selected) {
       return
     }
+
     activateCyclableTab(useAppStore.getState(), selected)
   }, [setSwitcherState])
 
@@ -103,7 +114,9 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
     const unsubscribeKeyDown = window.api.ui.onCtrlTabKeyDown(({ shiftKey }) => {
       openOrAdvance(shiftKey ? -1 : 1)
     })
+
     const unsubscribeKeyUp = window.api.ui.onCtrlTabKeyUp(commit)
+
     return () => {
       unsubscribeKeyDown()
       unsubscribeKeyUp()
@@ -113,32 +126,40 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const store = useAppStore.getState()
+
       if (matchesRecentTabSwitcherChord(event, getShortcutPlatform(), store.keybindings)) {
         // Why: Electron's native before-input-event path is authoritative, but
         // CDP/test-dispatched keys can reach the renderer directly. Respect the
         // keybinding registry here too so tests do not bypass user customization.
         consumeKeyboardEvent(event)
         openOrAdvance(event.shiftKey ? -1 : 1)
+
         return
       }
+
       if (!switcherRef.current) {
         return
       }
+
       if (event.key === 'Escape') {
         consumeKeyboardEvent(event)
         cancel()
       }
     }
+
     const onKeyUp = (event: KeyboardEvent): void => {
       if (!switcherRef.current || !isRecentTabSwitcherCommitRelease(event)) {
         return
       }
+
       consumeKeyboardEvent(event)
       commit()
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', cancel)
+
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })
@@ -166,6 +187,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         <div className="max-h-[min(360px,60vh)] overflow-hidden py-1">
           {switcher.items.map((item, index) => {
             const selected = index === switcher.selectedIndex
+
             return (
               <div
                 key={item.key}

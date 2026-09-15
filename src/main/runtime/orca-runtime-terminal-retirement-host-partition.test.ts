@@ -7,17 +7,24 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 
 const CONNECTION_ID = 'conn-1'
+
 const SSH_HOST_ID: ExecutionHostId = `ssh:${CONNECTION_ID}`
+
 const SSH_REPO_ID = 'ssh-repo'
+
 const SSH_WORKTREE_ID = `${SSH_REPO_ID}::/remote/worktree`
+
 const SSH_PTY_LEFT = `ssh:${CONNECTION_ID}@@pty-left`
+
 const SSH_PTY_RIGHT = `ssh:${CONNECTION_ID}@@pty-right`
 
 function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -42,6 +49,7 @@ function makeSshSnapshot(): RuntimeMobileSessionTabsSnapshot {
     expandedLeafId: 'left',
     ptyIdsByLeafId: { left: SSH_PTY_LEFT, right: SSH_PTY_RIGHT }
   }
+
   return {
     worktree: SSH_WORKTREE_ID,
     publicationEpoch: 'renderer',
@@ -121,14 +129,17 @@ function partitionedStore(): PartitionedStoreHarness {
     [LOCAL_EXECUTION_HOST_ID, getDefaultWorkspaceSession()],
     [SSH_HOST_ID, makePersistedSshSession()]
   ])
+
   const writes: { hostId: ExecutionHostId | undefined; session: WorkspaceSessionState }[] = []
   const reads: (ExecutionHostId | undefined)[] = []
+
   const store = {
     getRepos: () => [SSH_REPO],
     getRepo: (id: string) => (id === SSH_REPO_ID ? SSH_REPO : undefined),
     getWorkspaceSessionHostIds: () => [...sessions.keys()],
     getWorkspaceSession: (hostId?: ExecutionHostId) => {
       reads.push(hostId)
+
       return sessions.get(hostId ?? LOCAL_EXECUTION_HOST_ID) ?? getDefaultWorkspaceSession()
     },
     setWorkspaceSession: (session: WorkspaceSessionState, hostId?: ExecutionHostId) => {
@@ -137,6 +148,7 @@ function partitionedStore(): PartitionedStoreHarness {
     },
     flushOrThrow: vi.fn()
   } as never
+
   return { store, sessions, writes, reads }
 }
 
@@ -177,6 +189,7 @@ function syncSshSplit(runtime: OrcaRuntimeService, snapshot: RuntimeMobileSessio
 describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', () => {
   it('routes a stale catalog owner to the unique persisted session owner', async () => {
     const staleHostId: ExecutionHostId = 'runtime:stale-host'
+
     const persistedTab = {
       id: 'tab',
       ptyId: 'persisted-pty',
@@ -187,6 +200,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       sortOrder: 0,
       createdAt: 1
     }
+
     const localSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [SSH_WORKTREE_ID]: [persistedTab] },
@@ -199,6 +213,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         }
       }
     }
+
     const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
       [LOCAL_EXECUTION_HOST_ID, localSession],
       [
@@ -210,6 +225,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         }
       ]
     ])
+
     const store = {
       getRepos: () => [{ ...SSH_REPO, executionHostId: staleHostId }],
       getRepo: () => ({ ...SSH_REPO, executionHostId: staleHostId }),
@@ -222,6 +238,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         sessions.set(hostId ?? LOCAL_EXECUTION_HOST_ID, session),
       flushOrThrow: vi.fn()
     } as never
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -253,6 +270,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       sortOrder: 0,
       createdAt: 1
     }
+
     const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
       [
         LOCAL_EXECUTION_HOST_ID,
@@ -285,6 +303,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       // The SSH copy of the same `repoId::path` currently has no terminals.
       [SSH_HOST_ID, { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } }]
     ])
+
     const store = {
       getRepos: () => [SSH_REPO],
       getRepo: (id: string) => (id === SSH_REPO_ID ? SSH_REPO : undefined),
@@ -299,6 +318,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn()
     } as never
+
     const runtime = new OrcaRuntimeService(store)
     const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
@@ -324,6 +344,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
 
   it('clears resume records from the partition that owned the tabs when the catalog owner rotated', async () => {
     const staleHostId: ExecutionHostId = 'runtime:stale-host'
+
     const sessions = new Map<ExecutionHostId, WorkspaceSessionState>([
       [
         LOCAL_EXECUTION_HOST_ID,
@@ -334,6 +355,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       ],
       [staleHostId, { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } }]
     ])
+
     const store = {
       getRepos: () => [{ ...SSH_REPO, executionHostId: staleHostId }],
       getRepo: () => ({ ...SSH_REPO, executionHostId: staleHostId }),
@@ -348,6 +370,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn()
     } as never
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -368,6 +391,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
 
   it('hydrates the persisted owner when a folder host is absent from the host index', () => {
     const folderWorktreeId = 'folder:folder-1'
+
     const localSession = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -381,7 +405,9 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         ]
       }
     }
+
     const folderHostId: ExecutionHostId = 'runtime:folder-host'
+
     const store = {
       getRepos: () => [],
       getFolderWorkspaces: () => [
@@ -397,6 +423,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       getWorkspaceSession: (hostId?: ExecutionHostId) =>
         hostId === LOCAL_EXECUTION_HOST_ID ? localSession : getDefaultWorkspaceSession()
     } as never
+
     const controller = new RuntimeWorkspaceSessionController({
       getStore: () => store,
       resolveFolderConnectionId: () => null,
@@ -413,10 +440,13 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     const runtime = new OrcaRuntimeService(harness.store)
     const physicalStop = makeDeferred()
     const kill = vi.fn(() => true)
+
     const stopAndWait = vi.fn(async () => {
       await physicalStop.promise
+
       return true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -432,6 +462,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     const stopping = runtime.stopTerminalsForWorktree(`id:${SSH_WORKTREE_ID}`, {
       resolvedWorktreeId: SSH_WORKTREE_ID
     })
+
     await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledWith(SSH_PTY_LEFT))
     let settled = false
     void stopping.then(() => {
@@ -448,12 +479,15 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
   it('continues stopping later PTYs when one provider retirement rejects', async () => {
     const harness = partitionedStore()
     const runtime = new OrcaRuntimeService(harness.store)
+
     const stopAndWait = vi.fn(async (ptyId: string) => {
       if (ptyId === SSH_PTY_LEFT) {
         throw new Error('relay_unavailable')
       }
+
       return true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: vi.fn(() => true),
@@ -520,6 +554,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
   it('still retires a local pane from the local partition', async () => {
     const harness = partitionedStore()
     const sshBefore = harness.sessions.get(SSH_HOST_ID)!
+
     const localRepo = {
       id: 'local-repo',
       path: '/worktree',
@@ -527,7 +562,9 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       badgeColor: 'blue',
       addedAt: 1
     } as const
+
     const localWorktreeId = 'local-repo::/worktree'
+
     const localSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -558,13 +595,16 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
         }
       }
     }
+
     harness.sessions.set(LOCAL_EXECUTION_HOST_ID, localSession)
+
     const store = {
       ...(harness.store as object),
       getRepos: () => [SSH_REPO, localRepo],
       getRepo: (id: string) =>
         id === SSH_REPO_ID ? SSH_REPO : id === 'local-repo' ? localRepo : undefined
     } as never
+
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
     const snapshot = makeSshSnapshot()

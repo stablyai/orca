@@ -29,6 +29,7 @@ async function mountIpcEvents(): Promise<Mounted> {
 
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
+
     return { ...actual, useEffect: (effect: () => void | (() => void)) => void effect() }
   })
   vi.doMock('../store', () => ({
@@ -53,6 +54,7 @@ async function mountIpcEvents(): Promise<Mounted> {
       onEvent: (environmentId: string, event: RuntimeClientEvent) => void
     }) => {
       onRuntimeEvent = deps.onEvent
+
       return { sync: vi.fn(), stop: vi.fn() }
     }
   }))
@@ -68,12 +70,14 @@ async function mountIpcEvents(): Promise<Mounted> {
           typeof args[0] === 'function' ? () => {} : new Promise(() => {})
     }
   )
+
   const api = new Proxy(
     {
       automations: new Proxy(
         {
           onChanged: (listener: ChangedListener) => {
             onDesktopChange = listener
+
             return () => {}
           }
         } as Record<string, unknown>,
@@ -82,6 +86,7 @@ async function mountIpcEvents(): Promise<Mounted> {
     } as Record<string, unknown>,
     { get: (target, prop: string) => target[prop] ?? autoStubNamespace }
   )
+
   vi.stubGlobal('window', {
     api,
     dispatchEvent,
@@ -97,12 +102,14 @@ async function mountIpcEvents(): Promise<Mounted> {
       if (!onRuntimeEvent) {
         throw new Error('Expected the runtime client-event handler to be registered')
       }
+
       onRuntimeEvent(environmentId, event)
     },
     emitDesktopChange: (payload) => {
       if (!onDesktopChange) {
         throw new Error('Expected the desktop automations:changed listener to be registered')
       }
+
       onDesktopChange(payload)
     },
     details: () =>

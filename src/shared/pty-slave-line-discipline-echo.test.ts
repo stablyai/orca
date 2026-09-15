@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const execFileMock = vi.hoisted(() => vi.fn())
+
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import { createPtySlaveLineEditorProbe, readPtySlavePath } from './pty-slave-line-discipline-echo'
@@ -13,7 +14,9 @@ function answerStty(output: string | null): void {
 }
 
 const COOKED = 'speed 38400 baud;\nlflags: icanon isig iexten echo echoe echok echoctl\n'
+
 const RAW = 'speed 38400 baud;\nlflags: -icanon -isig -iexten -echo -echoe -echok -echoctl\n'
+
 const LINE_EDITOR = `${RAW}cchars: lnext = <undef>; min = 1; time = 0;\n`
 
 beforeEach(() => {
@@ -76,6 +79,7 @@ describe('createPtySlaveLineEditorProbe', () => {
 
   it('keeps probing after a transient failure and only latches a permanent one', async () => {
     const probe = createPtySlaveLineEditorProbe('/dev/ttys048', 'darwin')
+
     // Why: a multi-pane restore forks these in a burst, so EAGAIN and the timeout kill
     // are contention — condemning the pty to guessing for its whole life on one of
     // those is the failure mode, not the protection.
@@ -87,6 +91,7 @@ describe('createPtySlaveLineEditorProbe', () => {
       execFileMock.mockImplementationOnce((_c, _a, _o, cb) => cb(transient, '', ''))
       await expect(probe?.()).resolves.toBe('unknown')
     }
+
     execFileMock.mockImplementationOnce((_c, _a, _o, cb) => cb(null, LINE_EDITOR, ''))
     await expect(probe?.()).resolves.toBe('line-editor')
     expect(execFileMock).toHaveBeenCalledTimes(4)

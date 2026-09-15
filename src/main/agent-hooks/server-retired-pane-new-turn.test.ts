@@ -7,7 +7,9 @@ const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
 }))
+
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
 beforeEach(() => {
@@ -16,6 +18,7 @@ beforeEach(() => {
   getCohortAtEmitMock.mockReset()
   getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
 })
+
 afterEach(() => vi.restoreAllMocks())
 
 /** Each source's own new-turn boundary, as `isNewTurnEvent` classifies it. `null` means the
@@ -61,6 +64,7 @@ function reviveRetiredPane(source: unknown, hookEventName: string): boolean {
     },
     'conn-1'
   )
+
   return server.getStatusSnapshot().some((entry) => entry.paneKey === PANE)
 }
 

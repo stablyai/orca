@@ -33,11 +33,14 @@ export function DefaultWindowsProjectRuntimeSetting({
   const defaultRuntime = normalizeGlobalWindowsRuntimeDefault(settings.localWindowsRuntimeDefault)
   const nextWslDistro = getNextDefaultWslDistro(defaultRuntime, wslDistros)
   const distroOptions = getVisibleDistroOptions(defaultRuntime, wslDistros)
+
   const handleRuntimeChange = (value: DefaultRuntimeSegment): void => {
     if (value === 'windows-host') {
       void updateSettings({ localWindowsRuntimeDefault: { kind: 'windows-host' } })
+
       return
     }
+
     if (nextWslDistro) {
       void updateSettings({
         localWindowsRuntimeDefault: { kind: 'wsl', distro: nextWslDistro }
@@ -137,6 +140,7 @@ function getNextDefaultWslDistro(
   if (defaultRuntime.kind === 'wsl' && defaultRuntime.distro?.trim()) {
     return defaultRuntime.distro.trim()
   }
+
   return wslDistros.find((distro) => distro.trim().length > 0) ?? null
 }
 
@@ -145,6 +149,7 @@ function getVisibleDistroOptions(
   wslDistros: readonly string[]
 ): string[] {
   const options = [...wslDistros]
+
   if (
     defaultRuntime.kind === 'wsl' &&
     defaultRuntime.distro &&
@@ -152,6 +157,7 @@ function getVisibleDistroOptions(
   ) {
     return [defaultRuntime.distro, ...options]
   }
+
   return options
 }
 
@@ -166,18 +172,21 @@ function getDefaultRuntimeDescription(
       'Projects inherit Windows unless a project overrides it.'
     )
   }
+
   if (!wslAvailable && !wslCapabilitiesLoading) {
     return translate(
       'auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslUnavailable',
       'WSL is not available. Projects that inherit WSL will need repair.'
     )
   }
+
   if (!defaultRuntime.distro) {
     return translate(
       'auto.components.settings.DefaultWindowsProjectRuntimeSetting.distroRequired',
       'Choose a WSL distro before projects can inherit WSL.'
     )
   }
+
   return translate(
     'auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslDescription',
     'Projects inherit {{value0}} via WSL unless a project overrides it.',

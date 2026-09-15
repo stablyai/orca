@@ -4,11 +4,14 @@ import { closeProcessRegistry } from './close-process-registry'
 describe('closeProcessRegistry', () => {
   it('continues closing sibling processes when one close rejects', async () => {
     const entries = new Set(['first', 'second'])
+
     const closeEntry = vi.fn(async (id: string) => {
       if (id === 'first' && closeEntry.mock.calls.filter(([entry]) => entry === id).length === 1) {
         throw new Error('transient close failure')
       }
+
       entries.delete(id)
+
       return true
     })
 

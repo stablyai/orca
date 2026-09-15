@@ -67,6 +67,7 @@ export function useRemoteFileBrowserPathPreview({
     setPreview(null)
     previewGenRef.current++
     lastCommittedPrefixRef.current = ''
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
@@ -76,6 +77,7 @@ export function useRemoteFileBrowserPathPreview({
   const discardPreview = useCallback(() => {
     setPreview(null)
     previewGenRef.current++
+
     // Cancel any pending debounced resolve so it can't fire after Escape dismisses the preview.
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
@@ -85,6 +87,7 @@ export function useRemoteFileBrowserPathPreview({
 
   const cancelPreviewWork = useCallback(() => {
     previewGenRef.current++
+
     for (const timerRef of [debounceTimerRef, pasteResolveTimerRef]) {
       if (timerRef.current) {
         clearTimeout(timerRef.current)
@@ -121,14 +124,17 @@ export function useRemoteFileBrowserPathPreview({
           setPreview(null)
           previewGenRef.current++
         }
+
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current)
           debounceTimerRef.current = null
         }
+
         if (pasteResolveTimerRef.current) {
           clearTimeout(pasteResolveTimerRef.current)
           pasteResolveTimerRef.current = null
         }
+
         return
       }
 
@@ -138,14 +144,17 @@ export function useRemoteFileBrowserPathPreview({
           setPreview(null)
           previewGenRef.current++
         }
+
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current)
           debounceTimerRef.current = null
         }
+
         return
       }
 
       const parsed = parsePathInput(raw, pathFlavor)
+
       // Fast path: unchanged committed prefix updates only the local filter, so intra-segment typing issues no browseDir call.
       if (
         parsed.mode === 'path' &&
@@ -156,12 +165,14 @@ export function useRemoteFileBrowserPathPreview({
       ) {
         // Runs even while preview.loading: unchanged prefix hits the same listing, so blocking keystrokes would only feel laggy.
         setPreview({ ...preview, filter: parsed.trailingFilter })
+
         return
       }
 
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
       }
+
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null
         resolvePathInput(raw)
@@ -175,20 +186,26 @@ export function useRemoteFileBrowserPathPreview({
       if (e.defaultPrevented) {
         return
       }
+
       if (shouldDeferRemoteFileBrowserPasteResolve(e.clipboardData.getData('text/plain'))) {
         return
       }
+
       // Paste resolves immediately (no debounce), but defer a tick so onChange has applied the pasted value to filter.
       if (pasteResolveTimerRef.current) {
         clearTimeout(pasteResolveTimerRef.current)
       }
+
       pasteResolveTimerRef.current = setTimeout(() => {
         pasteResolveTimerRef.current = null
+
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current)
           debounceTimerRef.current = null
         }
+
         const value = inputRef.current?.value ?? ''
+
         if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value, pathFlavor)) {
           resolvePathInput(value)
         }

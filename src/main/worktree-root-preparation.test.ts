@@ -76,6 +76,7 @@ describe('prepareLocalWorktreeRootForRepo', () => {
         ...repo,
         path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo'
       })
+
       await Promise.resolve()
       expect(mkdirMock).not.toHaveBeenCalled()
 

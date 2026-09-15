@@ -33,17 +33,21 @@ export function summarizeAutomationRunUsage(
     if (!latest || run.createdAt > latest.createdAt) {
       latest = run
     }
+
     const usage = run.usage
+
     if (!usage || usage.status !== 'known') {
       unavailableRuns++
       continue
     }
+
     knownRuns++
     inputTokens += usage.inputTokens ?? 0
     outputTokens += usage.outputTokens ?? 0
     cacheTokens += (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
     reasoningOutputTokens += usage.reasoningOutputTokens ?? 0
     totalTokens += usage.totalTokens ?? 0
+
     if (usage.estimatedCostUsd !== null) {
       estimatedCostUsd += usage.estimatedCostUsd
       hasKnownCost = true

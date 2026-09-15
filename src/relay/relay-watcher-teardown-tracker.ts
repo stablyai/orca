@@ -22,9 +22,11 @@ export class RelayWatcherTeardownTracker {
 
   close(state: RelayWatcherTeardownState, removeActiveState: () => void): Promise<void> {
     const pending = this.pending.get(state.rootKey)
+
     if (pending) {
       return pending
     }
+
     if (!state.closed) {
       state.closed = true
       state.generation++
@@ -33,10 +35,13 @@ export class RelayWatcherTeardownTracker {
       state.clientWatchIds.clear()
       removeActiveState()
     }
+
     const subscription = state.subscription
+
     const teardown = subscription
       ? callUnsubscribe(subscription)
       : state.setupWaiters.promise.then(() => undefined)
+
     let tracked: Promise<void>
     tracked = teardown
       .then(
@@ -47,24 +52,30 @@ export class RelayWatcherTeardownTracker {
         },
         (error) => {
           const physicalExit = isWatcherProcessFailure(error) ? error.physicalExit : undefined
+
           if (!subscription && !physicalExit) {
             this.failed.delete(state.rootKey)
             this.forgetRoot(state.rootPath)
+
             return
           }
+
           // Why: failed physical teardown must remain retryable and consume capacity.
           this.failed.set(state.rootKey, { state, error })
+
           if (physicalExit) {
             // Why: an unkillable child still owns native handles until its later
             // physical exit, even when teardown began before setup published.
             void physicalExit.then(() => {
               const failed = this.failed.get(state.rootKey)
+
               if (failed?.state === state && failed.error === error) {
                 this.failed.delete(state.rootKey)
                 this.forgetRoot(state.rootPath)
               }
             })
           }
+
           throw error
         }
       )
@@ -74,17 +85,21 @@ export class RelayWatcherTeardownTracker {
         }
       })
     this.pending.set(state.rootKey, tracked)
+
     return tracked
   }
 
   join(rootKey: string): Promise<void> | undefined {
     const pending = this.pending.get(rootKey)
     const failed = this.failed.get(rootKey)
+
     if (!pending) {
       return failed ? Promise.reject(failed.error) : undefined
     }
+
     return pending.then(() => {
       const settledFailure = this.failed.get(rootKey)
+
       if (settledFailure) {
         throw settledFailure.error
       }
@@ -107,6 +122,7 @@ export class RelayWatcherTeardownTracker {
    */
   settlePending(): Promise<void> | undefined {
     const inFlight = [...this.pending.values()]
+
     return inFlight.length === 0 ? undefined : Promise.allSettled(inFlight).then(() => undefined)
   }
 }

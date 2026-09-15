@@ -30,7 +30,9 @@ import { removeTreeSync } from './windows-transient-lock-removal'
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 const EVERYONE_SID = 'S-1-1-0'
+
 const BUILTIN_ADMINISTRATORS_SID = 'S-1-5-32-544'
+
 /** High, System and Protected mandatory levels: the token is elevated. Medium (S-1-16-8192) is not. */
 const ELEVATED_INTEGRITY_SID = /\bS-1-16-(?:12288|16384|20480)\b/
 
@@ -41,6 +43,7 @@ function currentUserSid(): string {
     args: ['/user', '/fo', 'csv', '/nh'],
     timeoutMs: 10_000
   })
+
   return result.stdout.trim().split(/","/)[1]!.replace(/"$/, '')
 }
 
@@ -61,6 +64,7 @@ function icacls(...args: string[]): { code: number | null; stdout: string } {
     args,
     timeoutMs: 10_000
   })
+
   return { code: result.code, stdout: result.stdout }
 }
 
@@ -76,18 +80,22 @@ function isElevated(): boolean {
   if (process.platform !== 'win32') {
     return false
   }
+
   const result = runProcessSync({
     program: windowsSystem32Binary('whoami.exe'),
     args: ['/groups', '/fo', 'csv', '/nh'],
     timeoutMs: 10_000
   })
+
   if (ELEVATED_INTEGRITY_SID.test(result.stdout)) {
     return true
   }
+
   // Unelevated, Administrators is present only as "Group used for deny only".
   const administrators = result.stdout
     .split(/\r?\n/)
     .find((line) => line.includes(BUILTIN_ADMINISTRATORS_SID))
+
   return administrators?.includes('Enabled group') ?? false
 }
 
@@ -99,16 +107,20 @@ function readAclEntries(path: string): string[] {
   const arg = path.length < 260 ? path : `\\\\?\\${path}`
   const { stdout } = icacls(arg)
   const entries: string[] = []
+
   for (const [index, rawLine] of stdout.split(/\r?\n/).entries()) {
     const line = index === 0 ? rawLine.slice(arg.length) : rawLine
     const trimmed = line.trim()
+
     if (!trimmed && index > 0) {
       break
     }
+
     if (trimmed.includes(':(')) {
       entries.push(trimmed)
     }
   }
+
   return entries
 }
 
@@ -209,9 +221,11 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
 
   it('hardens a path longer than MAX_PATH', () => {
     let dir = join(root, 'long')
+
     while (dir.length < 280) {
       dir = join(dir, 'x'.repeat(40))
     }
+
     mkdirSync(dir, { recursive: true })
     const file = join(dir, 'secret.json')
     expect(file.length).toBeGreaterThan(260)
@@ -319,11 +333,13 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
       } else {
         process.env.TEMP = realTemp
       }
+
       if (realTmp === undefined) {
         delete process.env.TMP
       } else {
         process.env.TMP = realTmp
       }
+
       warn.mockRestore()
     }
 
@@ -374,11 +390,14 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
     writeFileSync(file, '{}')
 
     const unhandled: unknown[] = []
+
     const capture = (reason: unknown): void => {
       unhandled.push(reason)
     }
+
     process.on('unhandledRejection', capture)
     let settled = false
+
     try {
       bestEffortRestrictWindowsPath(file, false, () => {
         settled = true

@@ -11,6 +11,7 @@ export function requestVirtualizedScrollAnchorRecord(scrollElementSelector: stri
   if (typeof document === 'undefined') {
     return
   }
+
   document
     .querySelector(scrollElementSelector)
     ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))

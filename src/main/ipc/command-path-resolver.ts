@@ -15,26 +15,32 @@ export type ResolveCommandOptions = {
 // case-sensitive Record — so look the key up case-insensitively.
 function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | undefined {
   const direct = env[key]
+
   if (direct !== undefined) {
     return direct
   }
+
   const lowerKey = key.toLowerCase()
+
   for (const [envKey, value] of Object.entries(env)) {
     if (envKey.toLowerCase() === lowerKey) {
       return value
     }
   }
+
   return undefined
 }
 
 function getWindowsExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'
   const extensions = pathext.split(';').filter((ext) => ext.length > 0)
+
   // Why: when the command already carries an extension (e.g. `node.exe`), an
   // exact-name match must be allowed alongside the PATHEXT permutations.
   if (command.includes('.')) {
     extensions.unshift('')
   }
+
   return extensions
 }
 
@@ -42,15 +48,19 @@ async function isExecutableFile(candidate: string, isWin: boolean): Promise<bool
   try {
     // Why: stat (not lstat) so symlinked CLIs resolve to their real target.
     const stats = await stat(candidate)
+
     if (stats.isDirectory()) {
       // Why: PATH dirs carry the search/exec bit; reject them like `[ ! -d ]`.
       return false
     }
+
     if (isWin) {
       // Extension membership already enforced by the PATHEXT permutation.
       return stats.isFile()
     }
+
     await access(candidate, fsConstants.X_OK)
+
     return true
   } catch {
     return false
@@ -71,6 +81,7 @@ export async function isCommandOnLocalPath(
   if (!command) {
     return false
   }
+
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
@@ -92,15 +103,18 @@ export async function isCommandOnLocalPath(
       // Why: forward-slash joins so candidates are statable on every platform
       // (Windows fs accepts `/`), keeping the win32 lookup testable off-Windows.
       const candidate = path.posix.join(dir, command) + ext
+
       // Why: preserve the prior `.some(line => path.isAbsolute(line))` filter
       // over where/which stdout — only absolute resolutions count.
       if (!isAbsolute(candidate)) {
         continue
       }
+
       if (await isExecutableFile(candidate, isWin)) {
         return true
       }
     }
   }
+
   return false
 }

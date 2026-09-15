@@ -20,9 +20,11 @@ const conn = {} as SshConnection
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+
   if (!match) {
     throw new Error(`No encoded PowerShell command found in: ${command}`)
   }
+
   return Buffer.from(match[1]!, 'base64').toString('utf16le')
 }
 
@@ -61,6 +63,7 @@ describe('resolveRemoteNodePath', () => {
     'accepts npm elsewhere on PATH without probing another Node candidate',
     async () => {
       const root = mkdtempSync(path.join(os.tmpdir(), 'orca-split-node-npm-'))
+
       try {
         const nodePath = path.join(root, 'selected node', 'bin', 'node')
         const npmBinDir = path.join(root, 'npm elsewhere', 'bin')
@@ -160,14 +163,17 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     const home = mkdtempSync(path.join(os.tmpdir(), 'orca-mise-probe-'))
+
     try {
       const shimPath = path.join(home, 'custom-mise/shims/node')
       const installPath = path.join(home, 'custom-mise/installs/node/v20.11.0/bin/node')
+
       for (const target of [shimPath, installPath]) {
         mkdirSync(path.dirname(target), { recursive: true })
         writeFileSync(target, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
         chmodSync(target, 0o755)
       }
+
       writeFileSync(path.join(home, '.zshrc'), 'export MISE_DATA_DIR=~/custom-mise\n')
 
       const output = execFileSync('/bin/sh', ['-c', callScript], {
@@ -192,6 +198,7 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     const home = mkdtempSync(path.join(os.tmpdir(), 'orca-mise-env-probe-'))
+
     try {
       const miseDataDir = path.join(home, 'env-mise')
       const installPath = path.join(miseDataDir, 'installs/node/v20.11.0/bin/node')
@@ -219,6 +226,7 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     const home = mkdtempSync(path.join(os.tmpdir(), 'orca-mise-xdg-probe-'))
+
     try {
       const xdgDataHome = path.join(home, 'xdg')
       const installPath = path.join(xdgDataHome, 'mise/installs/node/v20.11.0/bin/node')
@@ -294,6 +302,7 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     const home = mkdtempSync(path.join(os.tmpdir(), 'orca-nvm-probe-'))
+
     try {
       const nodePath = path.join(home, 'tilde-nvm/versions/node/v20.11.0/bin/node')
       mkdirSync(path.dirname(nodePath), { recursive: true })
@@ -321,6 +330,7 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     const home = mkdtempSync(path.join(os.tmpdir(), 'orca-xdg-probe-'))
+
     try {
       // A name the seeded `${XDG_DATA_HOME:-$HOME/.local/share}/mise` default cannot reach, so
       // only the dotfile arm can find it.
@@ -354,6 +364,7 @@ describe('resolveRemoteNodePath', () => {
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
     const home = mkdtempSync(path.join(os.tmpdir(), 'orca-xdg-default-probe-'))
+
     try {
       // sshd's exec channel runs without the profile, so XDG_DATA_HOME is often simply absent.
       const nodePath = path.join(home, '.local/share/custom-mise/installs/node/20.11.0/bin/node')
@@ -544,6 +555,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock
       .mockRejectedValueOnce(sessionLimitError)
       .mockResolvedValueOnce('/bin/bash')
@@ -556,6 +568,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock.mockRejectedValueOnce(sessionLimitError)
 
     await expect(
@@ -567,6 +580,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock
       .mockResolvedValueOnce('/usr/local/bin/node\n')
       .mockRejectedValueOnce(sessionLimitError)
@@ -580,6 +594,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock.mockResolvedValueOnce('\n').mockRejectedValueOnce(sessionLimitError)
 
     await expect(
@@ -591,6 +606,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock
       .mockResolvedValueOnce('\n')
       .mockResolvedValueOnce('/bin/bash')
@@ -606,6 +622,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock.mockRejectedValueOnce(sessionLimitError)
 
     await expect(
@@ -619,6 +636,7 @@ describe('resolveRemoteNodePath', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     execCommandMock
       .mockResolvedValueOnce('C:\\Program Files\\nodejs\\node.exe\n')
       .mockRejectedValueOnce(sessionLimitError)
@@ -636,11 +654,14 @@ describe('resolveRemoteNodePath', () => {
     // so without re-raising it here the resolver would launder cancellation
     // into a fatal "Node.js not found" and defeat the sequential fallback.
     const controller = new AbortController()
+
     const abortError = Object.assign(new Error('SSH operation was cancelled'), {
       name: 'AbortError'
     })
+
     execCommandMock.mockImplementation(() => {
       controller.abort()
+
       return Promise.reject(abortError)
     })
 

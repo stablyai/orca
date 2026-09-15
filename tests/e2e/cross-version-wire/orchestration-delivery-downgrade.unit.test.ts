@@ -10,23 +10,29 @@ const PRE_V41 = 'aac38d698ff75ac4c8658addab48ef5a83617619'
 
 test('pre-v41 code opens, acknowledges and writes a v41 database, then current code reopens it', async () => {
   const checkout = await materializeReleaseCheckout(PRE_V41)
+
   const baseline = await importReleaseCheckoutModule(
     checkout,
     'src/main/runtime/orchestration/db.ts'
   )
+
   const OldDb = baseline.OrchestrationDb as typeof OrchestrationDb
   const directory = mkdtempSync(join(tmpdir(), 'orca-delivery-downgrade-'))
   const path = join(directory, 'orchestration.db')
   let db: OrchestrationDb | undefined
+
   try {
     db = new OldDb(path)
     expect(db.db.pragma('user_version', { simple: true })).toBe(40)
+
     const run = db.createRun({
       objective: 'downgrade round trip',
       coordinatorHandle: 'coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
+
     const insert = (subject: string) =>
       db!.insertMessage({
         runId: run.id,
@@ -34,6 +40,7 @@ test('pre-v41 code opens, acknowledges and writes a v41 database, then current c
         to: `run:${run.id}`,
         subject
       })
+
     const oldMessage = insert('obsolete heartbeat')
     const oldBatch = db.getOrCreateRunDelivery(params)!
     db.close()

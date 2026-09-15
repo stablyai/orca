@@ -43,19 +43,25 @@ export function staleSubagentRosterRevisions(
   items: Iterable<AgentJournalRenderItem>
 ): JournalSubagentLivenessRevision[] {
   const revisions: JournalSubagentLivenessRevision[] = []
+
   for (const item of items) {
     const body = item.body
+
     if (body.kind !== 'message' || !body.blocks.some(hasWorkingChild)) {
       continue
     }
+
     // A key that will not parse cannot be re-addressed, and appending under a
     // fresh identity would duplicate the row rather than revise it.
     const identity = parseAgentJournalItemKey(item.itemId)
+
     if (!identity || agentJournalItemKey(identity) !== item.itemId) {
       continue
     }
+
     revisions.push({ identity, body: { ...body, blocks: settleBlocks(body.blocks) } })
   }
+
   return revisions
 }
 
@@ -74,14 +80,18 @@ function settleBlocks(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
   const settled = blocks.map((block) =>
     hasWorkingChild(block) ? settleGroup(block as NativeChatSubagentGroupBlock) : block
   )
+
   const rosters = settled.filter(isSubagentGroupBlock)
   const only = rosters.length === 1 ? rosters[0] : undefined
+
   if (!only) {
     return settled
   }
+
   // The plain-text twin is all a client without the block type ever shows, so it
   // has to move with the block or the two would disagree about the same row.
   const twin = subagentGroupFallbackText(only.agents)
+
   return settled.map((block) =>
     block.type === 'text' && isSubagentGroupFallbackText(block.text)
       ? { ...block, text: twin }

@@ -42,6 +42,7 @@ export type HandleState = {
 export type WslTranscriptFsProcessFactory = () => ChildProcess
 
 export const WSL_TRANSCRIPT_FS_PROCESS_CLOSE_TIMEOUT_MS = 30_000
+
 // Why: idle Electron-as-Node children are tens of MB; reap them instead of
 // holding RSS for the app session.
 // Longer than the close deadline so a pending close never outlives its slot.
@@ -65,5 +66,6 @@ export function attachSlotChild(
   // Neither the child nor its channel may keep the parent's event loop alive.
   child.unref()
   child.channel?.unref?.()
+
   return slot
 }

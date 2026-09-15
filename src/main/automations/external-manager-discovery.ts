@@ -14,9 +14,13 @@ import { isExternalAutomationCommandOnPath } from './external-manager-local-comm
 import { externalAutomationRelayErrorMessage } from './external-manager-relay'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
+
 const HERMES_CRON_DIR = join(HERMES_HOME, 'cron')
+
 const HERMES_JOBS_FILE = join(HERMES_CRON_DIR, 'jobs.json')
+
 const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
+
 const PROVIDER_LABELS: Record<ExternalAutomationProvider, string> = {
   hermes: 'Hermes',
   openclaw: 'OpenClaw'
@@ -30,23 +34,30 @@ async function readLocalHermesJobs(): Promise<unknown[]> {
   if (!existsSync(HERMES_JOBS_FILE)) {
     return []
   }
+
   const content = await readFile(HERMES_JOBS_FILE, 'utf-8')
   const parsed = JSON.parse(content) as unknown
+
   const jobs = Array.isArray(parsed)
     ? parsed
     : isRecord(parsed) && Array.isArray(parsed.jobs)
       ? parsed.jobs
       : []
+
   return Promise.all(
     jobs.map(async (job) => {
       if (!isRecord(job)) {
         return job
       }
+
       const jobId = typeof job.id === 'string' ? job.id : null
+
       if (!jobId) {
         return job
       }
+
       const runsPage = await readHermesCronOutputRunsPage(jobId, { page: 1, pageSize: 0 })
+
       return {
         ...job,
         run_count: runsPage.total,
@@ -60,8 +71,10 @@ async function readLocalOpenClawJobs(): Promise<unknown[]> {
   if (!existsSync(OPENCLAW_JOBS_FILE)) {
     return []
   }
+
   const content = await readFile(OPENCLAW_JOBS_FILE, 'utf-8')
   const parsed = JSON.parse(content) as unknown
+
   return isRecord(parsed) && Array.isArray(parsed.jobs) ? parsed.jobs : []
 }
 
@@ -80,14 +93,18 @@ export async function listLocalManager(
     isExternalAutomationCommandOnPath(provider),
     provider === 'hermes' ? readLocalHermesJobs() : readLocalOpenClawJobs()
   ])
+
   const available = availableResult.status === 'fulfilled' && availableResult.value
   const jobs = jobsResult.status === 'fulfilled' ? jobsResult.value : []
   const readError = jobsResult.status === 'rejected' ? String(jobsResult.reason) : null
+
   if (!available && jobs.length === 0 && !readError) {
     return null
   }
+
   const managerId = `${provider}:local`
   const providerLabel = PROVIDER_LABELS[provider]
+
   return {
     id: managerId,
     provider,
@@ -112,6 +129,7 @@ export async function listRemoteManager(
   const providerLabel = PROVIDER_LABELS[provider]
   const managerProviderId = `${provider}:ssh:${target.id}`
   const mux = getActiveMultiplexer(target.id)
+
   if (!mux || mux.isDisposed()) {
     return {
       id: managerProviderId,
@@ -125,6 +143,7 @@ export async function listRemoteManager(
       jobs: []
     }
   }
+
   try {
     const result = (await mux.request('externalAutomations.list', { provider })) as {
       jobs?: unknown[]
@@ -132,9 +151,12 @@ export async function listRemoteManager(
       openclawAvailable?: boolean
       error?: string | null
     }
+
     const commandAvailable =
       provider === 'hermes' ? result.hermesAvailable === true : result.openclawAvailable === true
+
     const readError = result.error ?? null
+
     return {
       id: managerProviderId,
       provider,

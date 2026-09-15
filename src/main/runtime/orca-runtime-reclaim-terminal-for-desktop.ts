@@ -29,6 +29,7 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
   // when there was nothing to reclaim.
   async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
     this.cancelPendingDriverMutations(ptyId)
+
     if (this.isMobileSubscriberActive(ptyId)) {
       this.setMobileDisplayMode(ptyId, 'desktop')
       await this.applyMobileDisplayMode(ptyId)
@@ -38,36 +39,49 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
       // the terminal tab on the phone) must default to phone-fit again, not stay
       // in passive desktop-watch mode.
       this.setMobileDisplayMode(ptyId, 'auto')
+
       if (this.remoteDesktopFloor.hasLayoutState(ptyId)) {
         await this.applyRemoteDesktopLayout(ptyId)
       }
+
       return true
     }
+
     const heldOverride = this.terminalFitOverrides.get(ptyId)
+
     if (heldOverride && this.remoteDesktopFloor.hasLayoutState(ptyId)) {
       const pending = this.pendingRestoreTimers.get(ptyId)
+
       if (pending) {
         clearTimeout(pending.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
+
       const softLeaver = this.pendingSoftLeavers.get(ptyId)
+
       if (softLeaver) {
         clearTimeout(softLeaver.timer)
         this.pendingSoftLeavers.delete(ptyId)
       }
+
       this.setDriver(ptyId, { kind: 'idle' })
       const converged = await this.applyRemoteDesktopLayout(ptyId)
+
       if (!converged) {
         // Explicit take-back always clears the lock; resize convergence is
         // best-effort and the desktop renderer will retry on its next frame.
         this.releaseDesktopTakeBack(ptyId)
         this.setMobileDisplayMode(ptyId, 'auto')
+
         return true
       }
+
       this.setDriver(ptyId, { kind: 'desktop' })
       this.setMobileDisplayMode(ptyId, 'auto')
+
       return true
     }
+
     if (heldOverride) {
       // Why: with no subscribers, resolveDesktopRestoreTarget can fall through
       // to current PTY size — which is at phone dims (wrong). Prefer a fresh
@@ -80,16 +94,20 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
       await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       this.releaseDesktopTakeBack(ptyId)
       this.setMobileDisplayMode(ptyId, 'auto')
+
       return true
     }
+
     // Why: a stale lock — driver still reads mobile with no active subscriber
     // and no held override (e.g. reclaimed inside the soft-leave grace, or a
     // subscriber that dropped without a clean unsubscribe). Release it so the
     // banner can't linger; there is nothing to resize.
     if (this.getDriver(ptyId).kind === 'mobile') {
       this.releaseDesktopTakeBack(ptyId)
+
       return true
     }
+
     return false
   }
 
@@ -97,11 +115,14 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
   // revoking soft-leave grace admission for input floors.
   protected cancelPendingDriverMutations(ptyId: string): void {
     const pendingRestore = this.pendingRestoreTimers.get(ptyId)
+
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
     }
+
     const pendingSoft = this.pendingSoftLeavers.get(ptyId)
+
     if (pendingSoft) {
       clearTimeout(pendingSoft.timer)
       this.pendingSoftLeavers.delete(ptyId)
@@ -117,6 +138,7 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
   // dims on its next settled frame.
   protected releaseDesktopTakeBack(ptyId: string): void {
     this.setDriver(ptyId, { kind: 'desktop' })
+
     if (this.terminalFitOverrides.has(ptyId)) {
       this.terminalFitOverrides.delete(ptyId)
       this.notifier?.terminalFitOverrideChanged(ptyId, 'desktop-fit', 0, 0)
@@ -131,12 +153,15 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
   // docs/mobile-fit-hold.md.
   protected getAutoRestoreFitMs(): number | null {
     const raw = this.store?.getSettings().mobileAutoRestoreFitMs ?? null
+
     if (raw == null) {
       return null
     }
+
     if (typeof raw !== 'number' || !Number.isFinite(raw)) {
       return null
     }
+
     return Math.min(Math.max(raw, MOBILE_AUTO_RESTORE_FIT_MIN_MS), MOBILE_AUTO_RESTORE_FIT_MAX_MS)
   }
 
@@ -148,6 +173,7 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
     for (const [, entry] of this.pendingRestoreTimers) {
       clearTimeout(entry.timer)
     }
+
     this.pendingRestoreTimers.clear()
   }
 
@@ -170,7 +196,9 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
     if (!this.store?.updateSettings) {
       return this.getAutoRestoreFitMs()
     }
+
     let normalized: number | null
+
     if (ms == null) {
       normalized = null
     } else if (typeof ms !== 'number' || !Number.isFinite(ms)) {
@@ -181,10 +209,13 @@ export class OrcaRuntimeWithReclaimTerminalForDesktop extends OrcaRuntimeWithMob
         MOBILE_AUTO_RESTORE_FIT_MAX_MS
       )
     }
+
     this.store.updateSettings({ mobileAutoRestoreFitMs: normalized }, { notifyListeners: true })
+
     if (normalized == null) {
       this.cancelAllPendingFitRestoreTimers()
     }
+
     return normalized
   }
 }

@@ -14,10 +14,12 @@ function sleep(ms: number): Promise<void> {
 
 async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('Timed out waiting for condition')
     }
+
     await sleep(50)
   }
 }
@@ -25,12 +27,15 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 function processExists(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
     if (code === 'ESRCH') {
       return false
     }
+
     throw error
   }
 }
@@ -45,9 +50,11 @@ function readPidFile(pidFile: string): number[] {
 
 function trackPidFile(pidFile: string): number[] {
   const pids = readPidFile(pidFile)
+
   for (const pid of pids) {
     processesToCleanUp.add(pid)
   }
+
   return pids
 }
 
@@ -55,11 +62,13 @@ function waitForExit(child: ChildProcess, timeoutMs = 5000): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve()
   }
+
   return new Promise((resolveExit, reject) => {
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('Timed out waiting for dev wrapper exit'))
     }, timeoutMs)
+
     child.once('exit', () => {
       clearTimeout(timer)
       resolveExit()
@@ -71,10 +80,13 @@ async function stopWrapper(wrapper: ChildProcess): Promise<void> {
   if (wrapper.pid) {
     processesToCleanUp.add(wrapper.pid)
   }
+
   if (wrapper.exitCode === null && wrapper.signalCode === null) {
     wrapper.kill('SIGINT')
   }
+
   await waitForExit(wrapper)
+
   if (wrapper.pid) {
     processesToCleanUp.delete(wrapper.pid)
   }
@@ -83,6 +95,7 @@ async function stopWrapper(wrapper: ChildProcess): Promise<void> {
 async function stopWrapperAndTrackedPids(wrapper: ChildProcess, pids: number[]): Promise<void> {
   await stopWrapper(wrapper)
   await waitFor(() => pids.every((pid) => !processExists(pid)))
+
   for (const pid of pids) {
     processesToCleanUp.delete(pid)
   }
@@ -90,6 +103,7 @@ async function stopWrapperAndTrackedPids(wrapper: ChildProcess, pids: number[]):
 
 function stashWebBuild(): () => void {
   const outWebPath = resolve('out/web')
+
   if (!existsSync(outWebPath)) {
     return () => {
       rmSync(outWebPath, { recursive: true, force: true })
@@ -101,6 +115,7 @@ function stashWebBuild(): () => void {
   const tempDir = mkdtempSync(join(dirname(outWebPath), '.orca-dev-web-stash-'))
   const stashedPath = join(tempDir, 'web')
   renameSync(outWebPath, stashedPath)
+
   return () => {
     rmSync(outWebPath, { recursive: true, force: true })
     mkdirSync(resolve('out'), { recursive: true })
@@ -116,12 +131,15 @@ describe('run-electron-vite-dev web client prepare', () => {
         process.kill(pid, 'SIGTERM')
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
         if (code !== 'ESRCH') {
           throw error
         }
       }
     }
+
     await sleep(100)
+
     for (const pid of processesToCleanUp) {
       try {
         if (processExists(pid)) {
@@ -129,11 +147,13 @@ describe('run-electron-vite-dev web client prepare', () => {
         }
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
         if (code !== 'ESRCH') {
           throw error
         }
       }
     }
+
     processesToCleanUp.clear()
   })
 

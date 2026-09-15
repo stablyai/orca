@@ -24,8 +24,11 @@ export type {
 export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
+
 type TerminalLayoutsByTabId = ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
+
 type TerminalPaneOwner = {
   tabId: string
   leafId: string
@@ -39,16 +42,21 @@ const paneOwnersByPtyIdByLayoutIdentity = new WeakMap<
 
 function resolvePaneKeyForPtyId(layouts: TerminalLayoutsByTabId, ptyId: string): PaneKey | null {
   let paneOwnersByPtyId = paneOwnersByPtyIdByLayoutIdentity.get(layouts)
+
   if (!paneOwnersByPtyId) {
     paneOwnersByPtyId = new Map<string, TerminalPaneOwner>()
     paneOwnersByPtyIdByLayoutIdentity.set(layouts, paneOwnersByPtyId)
   }
+
   const cachedOwner = paneOwnersByPtyId.get(ptyId)
+
   if (cachedOwner) {
     const layout = Object.prototype.propertyIsEnumerable.call(layouts, cachedOwner.tabId)
       ? layouts[cachedOwner.tabId]
       : undefined
+
     const ptyIdsByLeafId = layout?.ptyIdsByLeafId
+
     if (
       ptyIdsByLeafId &&
       Object.prototype.propertyIsEnumerable.call(ptyIdsByLeafId, cachedOwner.leafId) &&
@@ -56,16 +64,20 @@ function resolvePaneKeyForPtyId(layouts: TerminalLayoutsByTabId, ptyId: string):
     ) {
       return cachedOwner.paneKey
     }
+
     paneOwnersByPtyId.delete(ptyId)
   }
+
   for (const [tabId, layout] of Object.entries(layouts)) {
     for (const [leafId, leafPtyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
       if (leafPtyId !== ptyId) {
         continue
       }
+
       try {
         const paneKey = makePaneKey(tabId, leafId)
         paneOwnersByPtyId.set(ptyId, { tabId, leafId, paneKey })
+
         return paneKey
       } catch {
         // Preserve first-match behavior for malformed legacy layout rows.
@@ -73,6 +85,7 @@ function resolvePaneKeyForPtyId(layouts: TerminalLayoutsByTabId, ptyId: string):
       }
     }
   }
+
   return null
 }
 
@@ -95,17 +108,20 @@ function normalizeInspectionResult(
   if (typeof result !== 'object' || result === null) {
     return clientOnlyUnverifiableInspection(remote ? 'old_host' : 'terminal_gone')
   }
+
   // A client-only result may have crossed a mixed-version preload/runtime boundary.
   if (isClientOnlyUnverifiableInspection(result)) {
     return clientOnlyUnverifiableInspection(
       typeof result.reason === 'string' ? result.reason : 'transport_loss'
     )
   }
+
   // An old host has no evidence member. Its compatibility process name is not
   // an observation and must never reach remote identity consumers.
   if (remote && result.foregroundProcessEvidence === undefined) {
     return clientOnlyUnverifiableInspection('old_host')
   }
+
   // Older main/preload pairs may still return the removed boolean. Normalize it
   // at the boundary while those peers are being upgraded.
   if (
@@ -116,15 +132,18 @@ function normalizeInspectionResult(
   ) {
     return clientOnlyUnverifiableInspection('terminal_gone')
   }
+
   return result
 }
 
 export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Date.now()): void {
   const state = useAppStore.getState()
   const paneKey = resolvePaneKeyForPtyId(state.terminalLayoutsByTabId, ptyId)
+
   if (!paneKey) {
     return
   }
+
   try {
     // Why: paired/runtime sends can bypass xterm.onData, so hibernation
     // needs the same user-input marker from the PTY-id route.
@@ -141,22 +160,28 @@ export async function inspectRuntimeTerminalProcess(
   options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
 ): Promise<RuntimeTerminalProcessInspection> {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
     : getActiveRuntimeTarget(settings)
+
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   const remote = isRemoteInspectionPtyId(ptyId)
+
   if (target.kind !== 'environment' || !terminal) {
     try {
       const result = await (options
         ? window.api.pty.inspectProcess(ptyId, options)
         : window.api.pty.inspectProcess(ptyId))
+
       return normalizeInspectionResult(result, remote)
     } catch (error) {
       const reason = classifyTerminalProcessInspectionFailure(error)
+
       if (reason) {
         return clientOnlyUnverifiableInspection(reason)
       }
+
       throw error
     }
   }
@@ -177,12 +202,15 @@ export async function inspectRuntimeTerminalProcess(
       },
       { timeoutMs: 15_000 }
     )
+
     return normalizeInspectionResult(result.process, true)
   } catch (error) {
     const reason = classifyTerminalProcessInspectionFailure(error)
+
     if (reason) {
       return clientOnlyUnverifiableInspection(reason)
     }
+
     throw error
   }
 }
@@ -199,17 +227,22 @@ export async function confirmRuntimeTerminalForegroundProcess(
   ptyId: string
 ): Promise<string | null> {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
     : getActiveRuntimeTarget(settings)
+
   if (target.kind === 'environment' && getRemoteRuntimeTerminalHandle(ptyId)) {
     return null
   }
+
   const confirmForegroundProcess = window.api.pty.confirmForegroundProcess
+
   // Why the shape check: a preload older than this handler has no such method.
   if (typeof confirmForegroundProcess !== 'function') {
     return null
   }
+
   return confirmForegroundProcess(ptyId).catch(() => null)
 }
 
@@ -219,9 +252,11 @@ export function sendRuntimePtyInput(
   data: string
 ): boolean {
   const tooLarge = isRuntimePtyInputTooLarge(data)
+
   if (tooLarge === true) {
     return false
   }
+
   if (tooLarge !== false) {
     // Why: this is a fire-and-forget path, so accepted paste-sized input must
     // yield before validation and then dispatch without blocking the renderer.
@@ -232,8 +267,10 @@ export function sendRuntimePtyInput(
         }
       })
       .catch(() => {})
+
     return true
   }
+
   return sendRuntimePtyInputWithinLimit(settings, ptyId, data)
 }
 
@@ -243,13 +280,17 @@ function sendRuntimePtyInputWithinLimit(
   data: string
 ): boolean {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
     : getActiveRuntimeTarget(settings)
+
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+
   if (target.kind !== 'environment' || !terminal) {
     window.api.pty.write(ptyId, data)
     recordRuntimeTerminalInputForPtyId(ptyId)
+
     return true
   }
 
@@ -268,6 +309,7 @@ function sendRuntimePtyInputWithinLimit(
       // Why: web session snapshots can retire a remote handle while xterm still
       // flushes a final input event. The next host snapshot will reattach.
     })
+
   return true
 }
 
@@ -277,24 +319,33 @@ export async function sendRuntimePtyInputVerified(
   data: string
 ): Promise<boolean> {
   const tooLarge = isRuntimePtyInputTooLarge(data)
+
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
     return false
   }
+
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
     : getActiveRuntimeTarget(settings)
+
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+
   if (target.kind !== 'environment' || !terminal) {
     const accepted = await window.api.pty.writeAccepted(ptyId, data)
+
     if (!accepted) {
       window.api.pty.write(ptyId, data)
       // Why: SSH/local fallback writes are fire-and-forget. Callers use this
       // boolean to continue UX flow, while hook telemetry confirms real turns.
       recordRuntimeTerminalInputForPtyId(ptyId)
+
       return true
     }
+
     recordRuntimeTerminalInputForPtyId(ptyId)
+
     return accepted
   }
 
@@ -305,15 +356,19 @@ export async function sendRuntimePtyInputVerified(
       { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
       { timeoutMs: 15_000 }
     )
+
     if (result.send.accepted === true) {
       recordRuntimeTerminalInputForPtyId(ptyId)
+
       return true
     }
+
     return false
   } catch (error) {
     if (classifyTerminalProcessInspectionFailure(error) === 'terminal_gone') {
       return false
     }
+
     throw error
   }
 }

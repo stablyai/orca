@@ -8,6 +8,7 @@ import { build as buildVite } from 'vite'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 type FixtureResult = {
@@ -277,16 +278,19 @@ async function runFixture(): Promise<FixtureResult> {
 
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [mainPath, `--user-data-dir=${join(root, 'profile')}`]
+
   const { executable, args } = resolveElectronProbeLaunch({
     electronBinary,
     electronArgs,
     platform: process.platform,
     display: env.DISPLAY
   })
+
   const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 60_000 })
   const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${rawResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
   return JSON.parse(rawResult) as FixtureResult
 }
 

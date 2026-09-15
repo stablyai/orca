@@ -24,5 +24,6 @@ export function awaitRelayWatcherSetup(
 function createRelayWatchAbortError(): Error {
   const error = new Error('Request "fs.watch" was cancelled')
   error.name = 'AbortError'
+
   return error
 }

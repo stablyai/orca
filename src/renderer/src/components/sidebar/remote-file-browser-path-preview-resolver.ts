@@ -40,9 +40,11 @@ export async function resolvePathInput({
   setPreview
 }: ResolvePathInputArgs): Promise<void> {
   const parsed = parsePathInput(raw, pathFlavor)
+
   if (parsed.mode !== 'path') {
     return
   }
+
   const gen = ++previewGenRef.current
 
   if (parsed.invalid) {
@@ -53,11 +55,13 @@ export async function resolvePathInput({
       error: parsed.invalid,
       loading: false
     })
+
     return
   }
 
   // Pick the base path; `~` needs the resolved home, so fetch and cache it once before resolving.
   let basePath: string
+
   if (parsed.base === 'root') {
     basePath = '/'
   } else if (parsed.base === 'drive') {
@@ -71,16 +75,20 @@ export async function resolvePathInput({
         error: null,
         loading: true
       })
+
       try {
         const home = await fetchListing('~')
+
         if (gen !== previewGenRef.current) {
           return
         }
+
         homePathRef.current = home.resolvedPath
       } catch (err) {
         if (gen !== previewGenRef.current) {
           return
         }
+
         setPreview({
           resolvedPath,
           entries: [],
@@ -88,9 +96,11 @@ export async function resolvePathInput({
           error: err instanceof Error ? err.message : String(err),
           loading: false
         })
+
         return
       }
     }
+
     basePath = homePathRef.current!
   } else {
     basePath = resolvedPath
@@ -105,13 +115,17 @@ export async function resolvePathInput({
   }))
 
   let currentPath = basePath
+
   try {
     for (const segment of parsed.committedSegments) {
       const listing = await fetchListing(currentPath)
+
       if (gen !== previewGenRef.current) {
         return
       }
+
       const outcome = resolveSegmentStep(segment, currentPath, listing.entries)
+
       if (outcome.type === 'error') {
         setPreview({
           resolvedPath: currentPath,
@@ -120,21 +134,27 @@ export async function resolvePathInput({
           error: outcome.message,
           loading: false
         })
+
         return
       }
+
       if (outcome.type === 'stay') {
         if (segment === '..') {
           currentPath = parentPath(currentPath, listing.pathFlavor)
         }
+
         continue
       }
+
       currentPath = joinPath(currentPath, outcome.name, listing.pathFlavor)
     }
 
     const finalListing = await fetchListing(currentPath)
+
     if (gen !== previewGenRef.current) {
       return
     }
+
     lastCommittedPrefixRef.current = committedPrefix(raw)
     setPreview({
       resolvedPath: finalListing.resolvedPath,
@@ -147,6 +167,7 @@ export async function resolvePathInput({
     if (gen !== previewGenRef.current) {
       return
     }
+
     setPreview({
       resolvedPath: currentPath,
       entries: [],
@@ -160,5 +181,6 @@ export async function resolvePathInput({
 // Portion before the final separator; distinguishes filter-only edits from committed-path changes.
 export function committedPrefix(raw: string): string {
   const i = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'))
+
   return i === -1 ? '' : raw.slice(0, i + 1)
 }

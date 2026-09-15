@@ -35,6 +35,7 @@ function expectGateEquivalent(data: string, label: string): void {
 function makeExactByteLength(unit: string, byteLength: number): string {
   const unitBytes = Buffer.byteLength(unit, 'utf8')
   const repeats = Math.floor(byteLength / unitBytes)
+
   return unit.repeat(repeats) + 'a'.repeat(byteLength - repeats * unitBytes)
 }
 
@@ -43,6 +44,7 @@ function* legacyIterateTerminalOutputFrameChunks(
   meta?: TerminalOutputMeta
 ): Generator<TerminalOutputFrameChunk> {
   const rawLength = meta?.rawLength ?? data.length
+
   if (meta?.transformed || rawLength !== data.length) {
     yield {
       opcode: TerminalStreamOpcode.OutputSpan,
@@ -50,12 +52,16 @@ function* legacyIterateTerminalOutputFrameChunks(
       displayLength: data.length,
       seq: meta?.seq
     }
+
     return
   }
+
   if (!legacyByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)) {
     yield { bytes: encodeTerminalStreamText(data), displayLength: data.length, seq: meta?.seq }
+
     return
   }
+
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
   const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
@@ -69,18 +75,22 @@ function* legacyIterateTerminalOutputFrameChunks(
     if (!chunk) {
       return null
     }
+
     const chunkSeq = canPreserveChunkSeq ? startSeq! + chunkStartOffset + chunk.length : undefined
     const current = { text: chunk, seq: chunkSeq }
     chunk = ''
     chunkBytes = 0
     chunkStartOffset = offset
+
     return current
   }
 
   for (const part of data) {
     const partBytes = legacyByteLength(part)
+
     if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
       const nextChunk = takeChunk()
+
       if (nextChunk) {
         if (shouldDelayFinalSeq) {
           if (delayedChunk) {
@@ -89,6 +99,7 @@ function* legacyIterateTerminalOutputFrameChunks(
               displayLength: delayedChunk.text.length
             }
           }
+
           delayedChunk = nextChunk
         } else {
           yield {
@@ -99,11 +110,14 @@ function* legacyIterateTerminalOutputFrameChunks(
         }
       }
     }
+
     chunk += part
     chunkBytes += partBytes
     offset += part.length
   }
+
   const finalChunk = takeChunk()
+
   if (shouldDelayFinalSeq) {
     if (finalChunk) {
       if (delayedChunk) {
@@ -112,8 +126,10 @@ function* legacyIterateTerminalOutputFrameChunks(
           displayLength: delayedChunk.text.length
         }
       }
+
       delayedChunk = finalChunk
     }
+
     if (delayedChunk) {
       yield {
         bytes: encodeTerminalStreamText(delayedChunk.text),
@@ -121,8 +137,10 @@ function* legacyIterateTerminalOutputFrameChunks(
         seq: meta.seq
       }
     }
+
     return
   }
+
   if (finalChunk) {
     yield {
       bytes: encodeTerminalStreamText(finalChunk.text),
@@ -136,6 +154,7 @@ type FrameShape = { base64: string; seq: number | 'undefined'; opcode: number | 
 
 function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameShape[] {
   const out: FrameShape[] = []
+
   for (const frame of frames) {
     out.push({
       base64: Buffer.from(frame.bytes).toString('base64'),
@@ -143,6 +162,7 @@ function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameShape[
       opcode: frame.opcode ?? 'undefined'
     })
   }
+
   return out
 }
 
@@ -153,11 +173,16 @@ function expectEquivalent(data: string, meta: TerminalOutputMeta | undefined, la
 }
 
 const SURROGATE_PAIR = '\u{1f600}'
+
 const LONE_HIGH = '\ud83d'
+
 const LONE_LOW = '\ude00'
+
 // Extremes of both surrogate ranges: U+10000 (D800 DC00) and U+10FFFF (DBFF DFFF).
 const FIRST_ASTRAL = '\u{10000}'
+
 const LAST_ASTRAL = '\u{10ffff}'
+
 const SURROGATE_EDGES = [
   '\ud800',
   '\udbff',
@@ -200,29 +225,35 @@ function seqPreservingMeta(data: string, seq: number): TerminalOutputMeta {
 
 function escapeUnits(value: string): string {
   const units: string[] = []
+
   for (let index = 0; index < value.length; index += 1) {
     units.push(`U+${value.charCodeAt(index).toString(16).toUpperCase()}`)
   }
+
   return units.join(' ')
 }
 
 function repeatToLength(unit: string, codeUnits: number): string {
   let out = ''
+
   while (out.length < codeUnits) {
     out += unit
   }
+
   return out.slice(0, out.length - (out.length % unit.length))
 }
 
 // Deterministic PRNG so a fuzz failure is reproducible from the seed alone.
 function makeRandom(seed: number): () => number {
   let state = seed >>> 0 || 1
+
   return () => {
     state ^= state << 13
     state >>>= 0
     state ^= state >>> 17
     state ^= state << 5
     state >>>= 0
+
     return state / 0x1_0000_0000
   }
 }
@@ -243,9 +274,11 @@ const FUZZ_ALPHABET = [
 
 function randomText(random: () => number, parts: number): string {
   let out = ''
+
   for (let index = 0; index < parts; index += 1) {
     out += FUZZ_ALPHABET[Math.floor(random() * FUZZ_ALPHABET.length)]
   }
+
   return out
 }
 
@@ -271,10 +304,12 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('matches when probe boundaries bisect or surround surrogate pairs', () => {
     const probe = TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS
+
     for (const offset of [-2, -1, 0, 1, 2]) {
       const pairStart = probe + offset
       const prefix = 'a'.repeat(pairStart)
       const suffix = '\u20ac'.repeat(12_000)
+
       for (const middle of [SURROGATE_PAIR, LONE_HIGH, LONE_LOW, LONE_LOW + LONE_HIGH]) {
         const data = prefix + middle + suffix
         expectGateEquivalent(data, `probe offset=${offset} middle=${escapeUnits(middle)}`)
@@ -285,6 +320,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('stops correctly when late wide text crosses the cap', () => {
     const asciiPrefix = 'a'.repeat(16_000)
+
     for (const wide of ['\u00e9', '\u20ac', SURROGATE_PAIR, LONE_HIGH]) {
       for (const wideParts of [8_000, 12_000, 16_000]) {
         const data = asciiPrefix + wide.repeat(wideParts)
@@ -350,6 +386,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('matches with lone surrogates, including a trailing lone high surrogate', () => {
     const filler = 'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES + 5)
+
     for (const data of [
       LONE_HIGH,
       LONE_LOW,
@@ -371,6 +408,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('matches at both ends of both surrogate ranges (U+D800..U+DBFF, U+DC00..U+DFFF)', () => {
     const filler = 'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES + 5)
+
     for (const edge of SURROGATE_EDGES) {
       for (const data of [
         edge,
@@ -381,6 +419,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
       ]) {
         sweepAll(data, `surrogate-edge ${escapeUnits(edge)} len=${data.length}`)
       }
+
       // Land the split inside the edge sequence itself.
       for (let offset = -4; offset <= 4; offset += 1) {
         const data = `${'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES + offset)}${edge}${'b'.repeat(8)}`
@@ -419,10 +458,12 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
   it('sweeps a chunk boundary across a lone surrogate at CHUNK-4..CHUNK+4', () => {
     for (let offset = -4; offset <= 4; offset += 1) {
       const prefixBytes = TERMINAL_STREAM_CHUNK_BYTES + offset
+
       for (const lone of [LONE_HIGH, LONE_LOW]) {
         const data = `${'a'.repeat(prefixBytes)}${lone}${'b'.repeat(64)}`
         sweepAll(data, `lone ${lone === LONE_HIGH ? 'high' : 'low'} boundary offset=${offset}`)
       }
+
       // Lone high surrogate as the very last code unit of the payload.
       const trailing = `${'a'.repeat(prefixBytes)}${LONE_HIGH}`
       sweepAll(trailing, `trailing lone high offset=${offset}`)
@@ -466,6 +507,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('matches on realistic mixed terminal output', () => {
     const line = '\u001b[35m\u273b Thinking\u001b[0m about the \u20ac plan \u{1f600} 42 passed\r\n'
+
     for (const repeats of [1, 200, 2000, 6000]) {
       const data = line.repeat(repeats)
       sweepAll(data, `mixed repeats=${repeats}`)
@@ -474,6 +516,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('fuzzes 4000 short random payloads over the surrogate/control alphabet', () => {
     const random = makeRandom(0x5eed_1234)
+
     for (let trial = 0; trial < 4000; trial += 1) {
       const data = randomText(random, Math.floor(random() * 40))
       expectEquivalent(data, undefined, `fuzz-small trial=${trial}`)
@@ -487,6 +530,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('fuzzes 800 near-cap payloads whose split point lands in the random region', () => {
     const random = makeRandom(0x1234_5eed)
+
     for (let trial = 0; trial < 800; trial += 1) {
       const fillerLength = TERMINAL_STREAM_CHUNK_BYTES - 6 + Math.floor(random() * 12)
       const data = 'q'.repeat(fillerLength) + randomText(random, 1 + Math.floor(random() * 24))
@@ -500,9 +544,11 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
     const data = `${'a'.repeat(200 * 1024)}${SURROGATE_PAIR.repeat(4096)}${LONE_HIGH}`
     const frames = [...iterateTerminalOutputFrameChunks(data, seqPreservingMeta(data, 999_999))]
     expect(frames.length).toBeGreaterThan(4)
+
     for (const frame of frames) {
       expect(frame.bytes.byteLength).toBeLessThanOrEqual(TERMINAL_STREAM_CHUNK_BYTES)
     }
+
     expect(Buffer.concat(frames.map((frame) => Buffer.from(frame.bytes))).toString('utf8')).toBe(
       Buffer.from(new TextEncoder().encode(data)).toString('utf8')
     )
@@ -533,15 +579,19 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
         for (const rawDelta of [undefined, 0, 1, -1] as (number | undefined)[]) {
           for (const transformed of [undefined, false, true] as (boolean | undefined)[]) {
             const meta: TerminalOutputMeta = {}
+
             if (seq !== undefined) {
               meta.seq = seq
             }
+
             if (rawDelta !== undefined) {
               meta.rawLength = data.length + rawDelta
             }
+
             if (transformed !== undefined) {
               meta.transformed = transformed
             }
+
             const rawLength = meta.rawLength ?? data.length
             const reachesChunkLoop = !meta.transformed && rawLength === data.length
             const canPreserveChunkSeq = typeof meta.seq === 'number' && rawLength === data.length

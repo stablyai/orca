@@ -53,6 +53,7 @@ describe('inspectSetupScriptImportCandidates', () => {
       inspectSetupScriptImportCandidates(
         makeReader({ '.superset/config.json': JSON.stringify({ setup }) })
       )
+
     const exact = Array.from({ length: SETUP_SCRIPT_IMPORT_MAX_COMMAND_PARTS }, () => 'x')
 
     await expect(inspect(exact)).resolves.toMatchObject([{ setup: exact.join('\n') }])
@@ -64,6 +65,7 @@ describe('inspectSetupScriptImportCandidates', () => {
       inspectSetupScriptImportCandidates(
         makeReader({ '.superset/config.json': JSON.stringify({ setup }) })
       )
+
     const exact = 'x'.repeat(SETUP_SCRIPT_IMPORT_MAX_FIELD_CODE_UNITS)
     const exactUtf8 = 'é'.repeat(SETUP_SCRIPT_IMPORT_MAX_FIELD_BYTES / 2)
 
@@ -80,6 +82,7 @@ describe('inspectSetupScriptImportCandidates', () => {
           '.codex/environments/environment.toml': `[setup]\nscript = """${setup}"""`
         })
       )
+
     const exact = 'x'.repeat(SETUP_SCRIPT_IMPORT_MAX_FIELD_CODE_UNITS)
 
     await expect(inspect(exact)).resolves.toMatchObject([{ provider: 'codex', setup: exact }])
@@ -91,6 +94,7 @@ describe('inspectSetupScriptImportCandidates', () => {
       name: index === SETUP_SCRIPT_IMPORT_MAX_CMUX_COMMANDS - 1 ? 'Setup' : 'Build',
       command: 'pnpm install'
     }))
+
     await expect(
       inspectSetupScriptImportCandidates(
         makeReader({ '.cmux/cmux.json': JSON.stringify({ commands }) })
@@ -109,6 +113,7 @@ describe('inspectSetupScriptImportCandidates', () => {
     const exactToml = `[setup]\nscript = "pnpm install"${'\n'.repeat(
       SETUP_SCRIPT_IMPORT_MAX_TOML_LINES - 2
     )}`
+
     await expect(
       inspectSetupScriptImportCandidates(
         makeReader({ '.codex/environments/environment.toml': exactToml })

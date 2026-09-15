@@ -21,6 +21,7 @@ export function AgentMapFilterSection({
   // A section doing something stays open: a collapsed row must never be the
   // reason the map looks smaller than the filters claim.
   const expanded = open || summary.active
+
   return (
     <div className="border-t border-border first:border-t-0">
       <button

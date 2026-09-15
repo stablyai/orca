@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from './session-scanner-service-protocol'
 
 const invalidateSessionParseCacheEntry = vi.hoisted(() => vi.fn())
+
 const scanAiVaultSessions = vi.hoisted(() => vi.fn())
 
 // Only the invalidation hook is replaced; the title reader shares this module.
@@ -9,11 +10,14 @@ vi.mock('./session-scanner-parse-cache', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   invalidateSessionParseCacheEntry
 }))
+
 vi.mock('./session-scanner', () => ({ scanAiVaultSessions }))
+
 vi.mock('./session-parse-cache-persistence', () => ({
   flushSessionParseCachePersist: vi.fn(() => Promise.resolve()),
   initSessionParseCachePersistence: vi.fn()
 }))
+
 vi.mock('./session-subagent-reader', () => ({
   listLocalAiVaultSubagentSessions: vi.fn(() => Promise.resolve({ sessions: [], issues: [] }))
 }))
@@ -37,6 +41,7 @@ describe('AI Vault service entry cache invalidation', () => {
   beforeAll(async () => {
     process.send = ((message: { type: string; id?: number }) => {
       sent.push(message)
+
       return true
     }) as typeof process.send
     await import('./session-scanner-service-entry')

@@ -12,13 +12,17 @@ export function resolvePtyOwnerBackend(args: {
   if (args.platform !== 'win32') {
     return 'posix-pty'
   }
+
   const shell = shellBasename(args.shellPath)
+
   if (shell === 'wsl.exe' || shell === 'wsl') {
     return 'windows-wsl'
   }
+
   // Why: requested WSL metadata can survive a spawn fallback; the winning native shell owns the PTY.
   if (!shell && args.wslDistro) {
     return 'windows-wsl'
   }
+
   return 'windows-conpty'
 }

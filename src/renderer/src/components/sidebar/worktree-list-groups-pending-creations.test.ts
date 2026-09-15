@@ -31,9 +31,11 @@ describe('buildRows pending creations', () => {
 
     const types = rows.map((row) => row.type)
     const headerIndex = types.indexOf('header')
+
     const pendingIndex = rows.findIndex(
       (row) => row.type === 'pending-creation' && row.creationId === 'c1'
     )
+
     const itemIndex = types.indexOf('item')
     expect(headerIndex).toBeGreaterThanOrEqual(0)
     expect(pendingIndex).toBe(headerIndex + 1)

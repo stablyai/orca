@@ -47,9 +47,11 @@ import {
 
 export default function WorkspaceCleanupDialog(): React.JSX.Element | null {
   const lifecycle = useWorkspaceCleanupDialogLifecycle()
+
   if (!lifecycle.mountedContent) {
     return null
   }
+
   return <WorkspaceCleanupDialogContent {...lifecycle} />
 }
 
@@ -72,9 +74,11 @@ function WorkspaceCleanupDialogContent({
   const refreshWorkspaceSpace = useAppStore((s) => s.refreshWorkspaceSpace)
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
   const workspaceSpaceProgress = useAppStore((s) => s.workspaceSpaceScanProgress)
+
   const genericDeletionPhaseByWorktreeId = useAppStore(
     useShallow(selectWorkspaceCleanupDeletionPhases)
   )
+
   const browse = useWorkspaceCleanupBrowseState()
   const [facetPanelOpen, setFacetPanelOpen] = useState(false)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
@@ -91,10 +95,12 @@ function WorkspaceCleanupDialogContent({
     if (open && !wasOpenRef.current) {
       setOpenedAt(Date.now())
     }
+
     wasOpenRef.current = open
   }, [open])
 
   const { removalInFlightRef } = removal
+
   const deletionPhaseByIdentity = useMemo(
     () =>
       getWorkspaceCleanupDeletionPhaseByIdentity(
@@ -104,6 +110,7 @@ function WorkspaceCleanupDialogContent({
       ),
     [genericDeletionPhaseByWorktreeId, removal.deletionPhaseByIdentity, scan?.candidates]
   )
+
   const deletingIdentities = useMemo(
     () => new Set(Object.keys(deletionPhaseByIdentity)),
     [deletionPhaseByIdentity]
@@ -113,19 +120,23 @@ function WorkspaceCleanupDialogContent({
   // The browse view promises Git facts for every row. The broad scan defers
   // some reads for performance, so fill those gaps while the modal is open.
   const gitEvidenceNeeded = open
+
   const gitEvidence = useWorkspaceCleanupGitEvidence({
     enabled: gitEvidenceNeeded,
     candidates,
     scannedAt: scan?.scannedAt ?? null
   })
+
   const evidencedCandidates = useMemo(
     () => applyWorkspaceCleanupGitEvidence(candidates, gitEvidence.evidenceByIdentity),
     [candidates, gitEvidence.evidenceByIdentity]
   )
+
   // Why: a live clock would re-run every facet on each render; the newer of
   // scan time and open time is the honest stable "as of" moment — a fresh scan
   // keeps its timestamp, a stale hydrated snapshot is judged from this open.
   const facetNow = Math.max(scan?.scannedAt ?? 0, openedAt)
+
   const facetRows = useWorkspaceCleanupFacetRows({
     candidates: evidencedCandidates,
     filters: browse.filters,
@@ -133,11 +144,13 @@ function WorkspaceCleanupDialogContent({
     now: facetNow,
     facetPanelOpen
   })
+
   const rows = useWorkspaceCleanupRowOrder({
     rows: facetRows.rows,
     streaming: loading,
     sort: browse.sort
   })
+
   // Why (STA-4343): rows are keyed by host-qualified identity, not by
   // `worktreeId` — two hosts can list the same `repoId::path` workspace, and an
   // id-keyed selection would confirm one host's row and delete the other's.
@@ -154,12 +167,15 @@ function WorkspaceCleanupDialogContent({
       ),
     [repos, scan?.errors]
   )
+
   const initialLoading = loading && candidates.length === 0
+
   const runSpaceScan = useCallback(() => {
     void refreshWorkspaceSpace().catch((scanError: unknown) => {
       if (!mountedRef.current) {
         return
       }
+
       toast.error(
         translate(
           'components.workspace.cleanup.browse.measureSizesFailed',
@@ -174,6 +190,7 @@ function WorkspaceCleanupDialogContent({
 
   const selectedCandidates = useMemo(() => {
     const byIdentity = new Map(rows.map((row) => [row.identity, row.candidate]))
+
     return [...selectedIds]
       .map((identity) => byIdentity.get(identity))
       .filter(
@@ -183,6 +200,7 @@ function WorkspaceCleanupDialogContent({
           !deletingIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
       )
   }, [deletingIdentities, rows, selectedIds])
+
   const selectedCount = selectedCandidates.length
 
   // A destructive dialog leaves selection to the user.
@@ -194,9 +212,11 @@ function WorkspaceCleanupDialogContent({
           facetRows.facetMatchedIdentities.has(identity) && !deletingIdentities.has(identity)
       )
     )
+
     if (next.size === selectedIds.size) {
       return
     }
+
     setSelectedIds(next)
     toast.info(formatWithheldSelectionNotice(selectedIds.size - next.size))
   })
@@ -205,6 +225,7 @@ function WorkspaceCleanupDialogContent({
     if (!open || removal.confirming) {
       return
     }
+
     // Why: destructive selection must stay scoped to the rows the user can
     // currently review after a filter change — and only then; keying on the
     // user's filter state (not the matched set, whose identity changes every
@@ -214,16 +235,21 @@ function WorkspaceCleanupDialogContent({
 
   const pruneVanishedSelections = useEffectEvent(() => {
     const isDeleting = (identity: string): boolean => deletingIdentities.has(identity)
+
     const kept = [...selectedIds].filter(
       (identity) => candidateIdentities.has(identity) && !isDeleting(identity)
     )
+
     if (kept.length === selectedIds.size) {
       return
     }
+
     const vanishedCount = [...selectedIds].filter(
       (identity) => !candidateIdentities.has(identity) && !isDeleting(identity)
     ).length
+
     setSelectedIds(new Set(kept))
+
     if (vanishedCount > 0) {
       toast.info(formatVanishedSelectionNotice(vanishedCount))
     }
@@ -233,6 +259,7 @@ function WorkspaceCleanupDialogContent({
     if (loading) {
       return
     }
+
     pruneVanishedSelections()
   }, [candidateIdentities, deletingIdentities, loading])
 
@@ -244,6 +271,7 @@ function WorkspaceCleanupDialogContent({
             setSelectedIds((current) => {
               const next = new Set(current)
               next.delete(getWorkspaceCleanupCandidateIdentity(candidate))
+
               return next
             })
           }
@@ -281,14 +309,17 @@ function WorkspaceCleanupDialogContent({
         : facetRows.selectableIdentities.filter((identity) => !deletingIdentities.has(identity)),
     [deletingIdentities, facetRows.selectableIdentities, removal.removalInFlight]
   )
+
   // Header state is scoped to the same rows the header action controls.
   const selectedSelectableCount = useMemo(() => {
     let count = 0
+
     for (const identity of selectableIdentities) {
       if (selectedIds.has(identity)) {
         count += 1
       }
     }
+
     return count
   }, [selectableIdentities, selectedIds])
 
@@ -296,6 +327,7 @@ function WorkspaceCleanupDialogContent({
     (selectAll: boolean) => {
       setSelectedIds((current) => {
         const next = new Set(current)
+
         for (const identity of selectableIdentities) {
           if (selectAll) {
             next.add(identity)
@@ -303,6 +335,7 @@ function WorkspaceCleanupDialogContent({
             next.delete(identity)
           }
         }
+
         return next
       })
     },
@@ -310,16 +343,19 @@ function WorkspaceCleanupDialogContent({
   )
 
   const openConfirmRemove = removal.openConfirmRemove
+
   const handleRemoveRow = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       if (removalInFlightRef.current) {
         return
       }
+
       setSelectedIds(new Set([getWorkspaceCleanupCandidateIdentity(candidate)]))
       openConfirmRemove([candidate])
     },
     [openConfirmRemove, removalInFlightRef, setSelectedIds]
   )
+
   const handleViewCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       markCandidateViewed(candidate)

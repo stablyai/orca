@@ -29,17 +29,29 @@ import {
 } from './clipboard-remote-file-staging'
 
 const TTL_MS = 60 * 60 * 1000
+
 const RETRY_MS = 60 * 1000
+
 const NOW_MS = 1_760_000_000_000
+
 const TEMP_ROOT = resolve('fixture-temp')
+
 const UID_SUFFIX = typeof process.getuid === 'function' ? `-${process.getuid()}` : ''
+
 const STAGING_ROOT = join(TEMP_ROOT, `orca-clipboard-files${UID_SUFFIX}`)
+
 const MARKER_PATH = join(STAGING_ROOT, '.legacy-cleanup-complete')
+
 const UUID_A = '00000000-0000-4000-8000-000000000000'
+
 const UUID_B = '00000000-0000-4000-8000-000000000001'
+
 const EXPIRED_TRANSFER = `1759990000000-${UUID_A}`
+
 const FRESH_TRANSFER = `1760000000000-${UUID_B}`
+
 const LEGACY_EXPIRED = `orca-clipboard-file-${EXPIRED_TRANSFER}`
+
 const LEGACY_FRESH = `orca-clipboard-file-${FRESH_TRANSFER}`
 
 type MockDirent = { name: string; isDirectory: () => boolean }
@@ -193,6 +205,7 @@ describe('remote clipboard staging ownership', () => {
       if (targetPath === STAGING_ROOT) {
         return safeDirectoryStats()
       }
+
       throw missingError()
     })
 
@@ -236,6 +249,7 @@ describe('remote clipboard staging ownership', () => {
     const entries = Array.from({ length: 257 }, (_, index) =>
       directoryEntry(`1759990000000-00000000-0000-4000-8000-${String(index).padStart(12, '0')}`)
     )
+
     opendirMock.mockResolvedValue(openedDirectory(entries))
     let active = 0
     let peak = 0
@@ -244,6 +258,7 @@ describe('remote clipboard staging ownership', () => {
       peak = Math.max(peak, active)
       await new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate))
       active -= 1
+
       return safeDirectoryStats()
     })
 
@@ -268,16 +283,19 @@ describe('legacy remote clipboard staging compatibility', () => {
   it('marks migration complete when a legacy child falls beyond the 4096-entry window', async () => {
     let visited = 0
     let reachedLateLegacyChild = false
+
     function* foreignEntries(): Generator<MockDirent> {
       for (let index = 0; index < 200_000; index += 1) {
         if (index === 4_096) {
           reachedLateLegacyChild = true
           yield directoryEntry(LEGACY_EXPIRED)
         }
+
         visited += 1
         yield directoryEntry(`foreign-${index}`, index % 2 === 0)
       }
     }
+
     opendirMock.mockResolvedValue(openedDirectory(foreignEntries()))
 
     await cleanupLegacyRemoteClipboardStaging(TEMP_ROOT, NOW_MS)

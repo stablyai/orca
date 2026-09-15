@@ -55,6 +55,7 @@ export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000
 const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
 
 export type { CodexManagedTrustGrantPlan }
+
 export type { CodexTrustGrantFallbackReason, CodexTrustGrantTelemetryLane }
 
 export type CodexManagedTrustGrantOutcome =
@@ -68,7 +69,9 @@ const diagnostics = {
   verifyFailed: 0,
   lastFallbackReason: null as CodexTrustGrantFallbackReason | null
 }
+
 export type CodexTrustGrantDiagnostics = typeof diagnostics
+
 const transientRetryAfterByHost = new Map<string, number>()
 
 export const getCodexTrustGrantDiagnostics = (): CodexTrustGrantDiagnostics => ({ ...diagnostics })
@@ -90,9 +93,11 @@ function fallback(
 ): CodexManagedTrustGrantOutcome {
   diagnostics.fellBack += 1
   diagnostics.lastFallbackReason = reason
+
   if (reason === 'verify-failed') {
     diagnostics.verifyFailed += 1
   }
+
   console.warn(
     `[codex-trust-grant] falling back to self-computed trust (reason=${reason}, host=${plan.host.kind})`,
     detail ?? ''
@@ -105,6 +110,7 @@ function fallback(
     ...(reason === 'error' ? { errorClass: classifyCodexTrustGrantError(detail) } : {}),
     ...(verifyClass !== undefined ? { verifyClass } : {})
   })
+
   return { lane: 'fallback', reason }
 }
 
@@ -128,14 +134,17 @@ function completeGrant(
   result: CodexHookTrustGrantSessionResult
 ): CodexManagedTrustGrantOutcome {
   const { plan, expected, hostKey, configSnapshot } = attempt
+
   const rejectGrant = (
     detail: unknown,
     verifyClass: CodexTrustGrantVerifyClass
   ): CodexManagedTrustGrantOutcome => {
     restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
     startTransientCooldown(hostKey)
+
     return fallback(plan, 'verify-failed', detail, verifyClass)
   }
+
   if (result.outcome === 'verify-failed') {
     return rejectGrant(result.reason, result.reasonClass)
   }
@@ -144,14 +153,18 @@ function completeGrant(
   const seenNormalizedKeys = new Set<string>()
   const grantedEntries: CodexTrustEntry[] = []
   const ledgerRecord: Record<string, CodexTrustGrantLedgerEntry> = {}
+
   for (const granted of result.entries) {
     const match = byNormalizedKey.get(granted.normalizedKey)
+
     if (!match) {
       return rejectGrant(`unexpected granted key ${granted.key}`, 'unexpected-key')
     }
+
     if (seenNormalizedKeys.has(granted.normalizedKey)) {
       return rejectGrant(`duplicate granted key ${granted.key}`, 'duplicate-key')
     }
+
     seenNormalizedKeys.add(granted.normalizedKey)
     grantedEntries.push({ ...match.entry, trustedHash: granted.trustedHash })
     ledgerRecord[granted.normalizedKey] = {
@@ -159,10 +172,13 @@ function completeGrant(
       trustedHash: granted.trustedHash
     }
   }
+
   if (seenNormalizedKeys.size !== expected.length) {
     return rejectGrant('granted entry set did not cover expected entries', 'coverage')
   }
+
   transientRetryAfterByHost.delete(hostKey)
+
   try {
     writeCodexTrustGrantLedgerHome(plan.runtimeHomePath, {
       binary: attempt.currentStamp,
@@ -172,6 +188,7 @@ function completeGrant(
     // Why: a ledger write failure only costs an extra session next launch.
     console.warn('[codex-trust-grant] failed to persist grant ledger', error)
   }
+
   diagnostics.granted += 1
   console.log(
     `[codex-trust-grant] granted ${grantedEntries.length} managed hook entries via codex app-server ` +
@@ -182,6 +199,7 @@ function completeGrant(
     hostKind: plan.host.kind,
     lane: plan.telemetryLane
   })
+
   return { lane: 'rpc', entries: grantedEntries }
 }
 
@@ -202,12 +220,15 @@ async function runGrantAttempt(
     configSnapshot: captureCodexTrustConfig(plan.tomlPath),
     startedAtMs: Date.now()
   }
+
   let unsupportedError: unknown
+
   try {
     return await codexAppServerCapabilityCache.runWithFallback(
       hostKey,
       async () => {
         removeSelfComputedTrustBeforeGrant(plan)
+
         return completeGrant(
           attempt,
           await runSession(
@@ -226,21 +247,26 @@ async function runGrantAttempt(
           // this one waited behind it; nothing was mutated, so nothing to undo.
           return fallback(plan, 'unsupported-cached')
         }
+
         restoreCodexTrustConfig(plan.tomlPath, attempt.configSnapshot)
         transientRetryAfterByHost.delete(hostKey)
+
         return fallback(plan, 'unsupported', unsupportedError)
       },
       (error) => {
         if (!isCodexAppServerUnsupportedError(error)) {
           return false
         }
+
         unsupportedError = error
+
         return true
       }
     )
   } catch (error) {
     restoreCodexTrustConfig(plan.tomlPath, attempt.configSnapshot)
     startTransientCooldown(hostKey)
+
     return fallback(plan, 'error', error)
   }
 }
@@ -260,32 +286,42 @@ export async function grantManagedCodexHookTrust(
     if (process.env[DISABLE_ENV_FLAG] === '1') {
       return fallback(plan, 'disabled')
     }
+
     if (plan.managedEntries.length === 0) {
       return fallback(plan, 'no-managed-entries')
     }
+
     const expected = buildExpectedEntries(plan)
     const resolvedHost = await resolveCodexTrustGrantHost(plan.host)
     const ledgerEntries = findLedgerGrant(plan, expected, resolvedHost.binaryStamp)
+
     if (ledgerEntries !== null) {
       diagnostics.ledgerHits += 1
+
       return { lane: 'rpc', entries: ledgerEntries }
     }
+
     if (isCodexStateDbBackfillPending(plan.runtimeHomePath)) {
       // Why: a short trust RPC can refresh Codex's abandoned lease and strand every pane again.
       return fallback(plan, 'retry-cached')
     }
 
     const hostKey = getCodexAppServerHostKey(plan.host)
+
     if (!codexAppServerCapabilityCache.shouldTry(hostKey)) {
       return fallback(plan, 'unsupported-cached')
     }
+
     const transientRetryAfter = transientRetryAfterByHost.get(hostKey)
+
     if (transientRetryAfter !== undefined) {
       if (Date.now() < transientRetryAfter) {
         return fallback(plan, 'retry-cached')
       }
+
       transientRetryAfterByHost.delete(hostKey)
     }
+
     return await runExclusivelyForCodexTrustConfig(plan.tomlPath, () =>
       runGrantAttempt(plan, expected, resolvedHost, hostKey)
     )

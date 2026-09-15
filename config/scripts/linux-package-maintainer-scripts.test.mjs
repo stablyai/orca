@@ -7,6 +7,7 @@ describe('Linux package maintainer scripts', () => {
       new URL('../../resources/linux/packaging/after-remove.sh', import.meta.url),
       'utf8'
     )
+
     const unlinkStart = script.indexOf('link="/usr/bin/orca-ide"')
     const upgradeGuard = script.slice(0, unlinkStart)
 

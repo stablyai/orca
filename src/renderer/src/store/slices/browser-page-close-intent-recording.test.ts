@@ -3,22 +3,29 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
+
 vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: vi.fn(),
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<object>()
+
   return { ...actual, callRuntimeRpc: mocks.callRuntimeRpc }
 })
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const DOC_LOCATION = {
   kind: 'workspace-doc' as const,
   worktreeId: WORKTREE_ID,
@@ -51,6 +58,7 @@ function createStoreWithClientHostedPage(handleOverrides: Record<string, unknown
     }
   }))
   mocks.callRuntimeRpc.mockClear()
+
   return { store, pageId }
 }
 

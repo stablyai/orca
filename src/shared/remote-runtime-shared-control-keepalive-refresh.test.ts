@@ -24,6 +24,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
     promise: Promise<unknown>
   } {
     const pendingRequests = new Map<string, SharedControlPendingRequest<unknown>>()
+
     const promise = requestSharedControl({
       pendingRequests,
       deviceToken: 'device-token',
@@ -36,8 +37,10 @@ describe('shared control keepalive timeout refresh semantics', () => {
       send: () => undefined,
       refreshTimeoutOnKeepalive: options.refreshTimeoutOnKeepalive
     })
+
     // Swallow the eventual rejection so unhandled-rejection noise doesn't leak.
     promise.catch(() => undefined)
+
     return { pendingRequests, promise }
   }
 
@@ -50,6 +53,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
       await vi.advanceTimersByTimeAsync(200)
       refreshSharedControlPendingRequestTimeouts(pendingRequests)
     }
+
     await vi.advanceTimersByTimeAsync(1)
 
     await expect(promise).rejects.toThrow()
@@ -93,6 +97,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
   it('aborts one pending request without disturbing its peer', async () => {
     const pendingRequests = new Map<string, SharedControlPendingRequest<unknown>>()
     const controller = new AbortController()
+
     const start = (method: string, signal?: AbortSignal) =>
       requestSharedControl({
         pendingRequests,
@@ -104,6 +109,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
         send: () => undefined,
         signal
       })
+
     const cancelled = start('worktree.hang', controller.signal)
     const survivor = start('worktree.ps')
 

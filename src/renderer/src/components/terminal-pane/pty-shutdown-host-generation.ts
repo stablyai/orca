@@ -1,6 +1,7 @@
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 
 type HostSleepPhase = Extract<RuntimeClientEvent, { type: 'worktreeTerminalSleepState' }>['phase']
+
 type ActiveHostSleepDisposition = {
   generation: number
   phase: 'pending' | 'committed'
@@ -10,6 +11,7 @@ const hostSleepPhaseByPtyId = new Map<
   string,
   { generation: number; phase: HostSleepPhase; expiresAt: number }
 >()
+
 // Why: retain terminal ordering longer than live guards so delayed frames cannot resurrect a settled sleep.
 const HOST_SLEEP_PHASE_GRACE_MS = 60_000
 
@@ -29,17 +31,20 @@ export function shouldApplyHostSleepPhase(
 ): boolean {
   pruneHostSleepPhases()
   const prior = hostSleepPhaseByPtyId.get(key)
+
   if (
     (prior && generation < prior.generation) ||
     (disposition && generation < disposition.generation)
   ) {
     return false
   }
+
   if (disposition?.generation === generation) {
     if (disposition.phase === 'committed' && phase !== 'committed' && phase !== 'woken') {
       return false
     }
   }
+
   if (prior?.generation === generation) {
     if (phase === 'started') {
       if (
@@ -68,6 +73,7 @@ export function shouldApplyHostSleepPhase(
       return false
     }
   }
+
   hostSleepPhaseByPtyId.delete(key)
   hostSleepPhaseByPtyId.set(key, {
     generation,
@@ -75,5 +81,6 @@ export function shouldApplyHostSleepPhase(
     expiresAt: Date.now() + HOST_SLEEP_PHASE_GRACE_MS
   })
   pruneHostSleepPhases()
+
   return true
 }

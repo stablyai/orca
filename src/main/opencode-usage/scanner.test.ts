@@ -16,6 +16,7 @@ function createTempDb(): { db: Database.Database; path: string } {
   const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-'))
   tempDirs.push(dir)
   const path = join(dir, 'opencode.db')
+
   return { db: new Database(path), path }
 }
 
@@ -177,6 +178,7 @@ describe('parseOpenCodeUsageDatabase', () => {
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     tempDirs = []
   })
 
@@ -401,11 +403,13 @@ describe('scanOpenCodeUsageDatabases', () => {
     } else {
       process.env.XDG_DATA_HOME = previousXdgDataHome
     }
+
     if (previousOpenCodeDb === undefined) {
       delete process.env.OPENCODE_DB
     } else {
       process.env.OPENCODE_DB = previousOpenCodeDb
     }
+
     rmSync(dataRoot, { recursive: true, force: true })
   })
 
@@ -413,10 +417,13 @@ describe('scanOpenCodeUsageDatabases', () => {
     const path = join(openCodeDir, fileName)
     const db = new Database(path)
     createSessionTotalsSchema(db)
+
     for (const [sessionId, inputTokens] of rows) {
       insertSessionTotalsRow(db, sessionId, inputTokens)
     }
+
     db.close()
+
     return path
   }
 
@@ -495,9 +502,11 @@ describe('scanOpenCodeUsageDatabases', () => {
     writeSessionTotalsDb('opencode-backup.db', [['session-1', 400]])
 
     const first = await scanOpenCodeUsageDatabases([], [])
+
     const firstBackup = first.processedDatabases.find((database) =>
       database.path.endsWith('opencode-backup.db')
     )
+
     expect(firstBackup?.ownedSessionIds).toEqual([])
 
     const db = new Database(canonicalPath)
@@ -505,9 +514,11 @@ describe('scanOpenCodeUsageDatabases', () => {
     db.close()
 
     const second = await scanOpenCodeUsageDatabases([], first.processedDatabases)
+
     const secondBackup = second.processedDatabases.find((database) =>
       database.path.endsWith('opencode-backup.db')
     )
+
     // A reused cache entry is the same object; a reparse would produce a new one.
     expect(secondBackup).toBe(firstBackup)
     expect(
@@ -546,6 +557,7 @@ describe('scanOpenCodeUsageDatabases', () => {
       ['session-1', 1000],
       ['session-2', 200]
     ])
+
     writeSessionTotalsDb('opencode-backup.db', [
       ['session-1', 400],
       ['session-9', 50]

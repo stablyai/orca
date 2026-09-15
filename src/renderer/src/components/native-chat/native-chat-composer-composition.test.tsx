@@ -30,6 +30,7 @@ type TestFieldProps = Omit<NativeChatComposerFieldProps, 'imeEnterGesture'>
 
 function TestField(props: TestFieldProps): React.JSX.Element {
   const imeEnterGesture = useImeEnterGestureOwnership()
+
   return <NativeChatComposerField {...props} imeEnterGesture={imeEnterGesture} />
 }
 
@@ -162,6 +163,7 @@ describe('native chat composer composition ownership', () => {
 
     fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
     fireEvent.compositionEnd(input, { data: '가' })
+
     const redispatch = fireEvent.keyDown(input, {
       key: 'Enter',
       keyCode: 13,
@@ -264,12 +266,14 @@ describe('native chat composer composition ownership', () => {
 
   it('replays a draft clear dropped mid-composition when the field settles on blur', () => {
     let settledValue: string | null = null
+
     const props = fieldProps({
       draft: '안녕',
       onImeSettled: (element) => {
         settledValue = element.value
       }
     })
+
     const view = render(<TestField {...props} />)
     const input = textarea()
     fireEvent.compositionStart(input)

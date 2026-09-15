@@ -8,6 +8,7 @@ vi.mock('electron', () => ({
 }))
 
 type CompositionOptions = { onError(error: Error): void }
+
 const compositions: { options: CompositionOptions; closed: Error[] }[] = []
 
 vi.mock('./paired-runtime-browser-client-host-composition', () => ({
@@ -31,6 +32,7 @@ vi.mock('./paired-runtime-browser-client-host-composition', () => ({
       if (error) {
         this.record.closed.push(error)
       }
+
       return Promise.resolve(true)
     }
 
@@ -79,9 +81,11 @@ async function connectionIdentity(
 ): Promise<{ current: string; legacy: string }> {
   await startPairedRuntimeBrowserClientHost({ environment, authorityRuntimeId })
   const identity = getPairedRuntimeBrowserClientRouteIdentity(environment.id)
+
   if (!identity) {
     throw new Error('missing route identity')
   }
+
   return {
     current: identity.authorityConnectionIdentity,
     legacy: identity.legacyAuthorityConnectionIdentity
@@ -111,6 +115,7 @@ describe('client host authority connection identity', () => {
   // identity would serve one of them the other's cookies.
   it('separates environments, pairing revisions, and server keys', async () => {
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
+
     const identities = [
       await connectionIdentity(pairedEnvironment('environment-a'), 'runtime-a'),
       await connectionIdentity(pairedEnvironment('environment-b'), 'runtime-a'),

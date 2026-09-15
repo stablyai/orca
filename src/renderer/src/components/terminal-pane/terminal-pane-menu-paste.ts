@@ -34,6 +34,7 @@ export const getTerminalPaneMenuShortcutPlatform = (): NodeJS.Platform => {
   if (navigator.userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   return navigator.userAgent.includes('Windows') ? 'win32' : 'linux'
 }
 
@@ -64,6 +65,7 @@ export const executeTerminalPaneMenuPasteText = async (
   const transport = context.paneTransportsRef.current.get(pane.id)
   const ptyId = transport?.getPtyId() ?? null
   const shortcutPlatform = getTerminalPaneMenuShortcutPlatform()
+
   const plan = await planTerminalPasteWithYield({
     text,
     source,
@@ -86,6 +88,7 @@ export const executeTerminalPaneMenuPasteText = async (
     windowsInputRecordNewline: options?.windowsInputRecordNewline,
     terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
   })
+
   const execution = await executeTerminalPastePlan(plan, {
     pasteText: (pasteText, pasteOptions) =>
       pasteTerminalText(pane.terminal, pasteText, pasteOptions),
@@ -93,16 +96,21 @@ export const executeTerminalPaneMenuPasteText = async (
     isTargetCurrent: () => isPanePasteTargetMounted(context, pane, transport, ptyId),
     canContinue: () => isPanePasteTargetMounted(context, pane, transport, ptyId)
   })
+
   if (execution.status !== 'pasted') {
     context.onPasteError(formatTerminalPasteExecutionError(execution.reason))
+
     return false
   }
+
   if (text) {
     recordTerminalUserInputForLeaf(context.tabId, pane.leafId)
   }
+
   if (options?.recoverImagePasteWebglAtlas) {
     scheduleImagePasteWebglAtlasRecovery()
   }
+
   return true
 }
 
@@ -114,11 +122,13 @@ export const pasteTerminalPaneMenuClipboard = async (
   if (!pane) {
     return
   }
+
   const { tabId, worktreeId, forceBracketedMultilineTextPaste, onPasteError } = context
   const connectionId = getConnectionId(worktreeId) ?? null
   const state = useAppStore.getState()
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
+
   const result = await pasteTerminalClipboard({
     readClipboardText: window.api.ui.readClipboardText,
     saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -146,9 +156,11 @@ export const pasteTerminalPaneMenuClipboard = async (
       onPasteError(`Image paste failed: ${detail}`)
     }
   })
+
   if (result.status !== 'pasted') {
     return
   }
+
   // Why: Radix returns focus to the menu trigger (the pane container) on
   // close. Refocus only after a completed paste so rejected async targets
   // do not steal focus from the user's new control.

@@ -35,10 +35,12 @@ describe('diagnostics RPC methods', () => {
       totalMemory: 1024,
       collectedAt: 123
     }
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getMemorySnapshot: vi.fn().mockResolvedValue(snapshot)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: DIAGNOSTICS_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('diagnostics.memory'))

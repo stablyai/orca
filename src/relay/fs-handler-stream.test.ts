@@ -11,12 +11,14 @@ import { tmpdir } from 'node:os'
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
 
 type NotificationLane = 'producer' | 'bulk' | 'control'
+
 type Notification = {
   method: string
   params?: Record<string, unknown>
   lane: NotificationLane
   clientId?: number
 }
+
 type MockRequestContext = { clientId?: number; isStale: () => boolean }
 
 function createMockDispatcher() {
@@ -24,6 +26,7 @@ function createMockDispatcher() {
     string,
     (params: Record<string, unknown>, context?: MockRequestContext) => Promise<unknown>
   >()
+
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: Notification[] = []
   const droppedProducerFrames: Notification[] = []
@@ -31,6 +34,7 @@ function createMockDispatcher() {
   let producerSaturated = false
   let holdControlSettlement = false
   const heldControlSettlements: (() => void)[] = []
+
   return {
     onRequest: vi.fn(
       (
@@ -45,10 +49,13 @@ function createMockDispatcher() {
     }),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       const frame: Notification = { method, params, lane: 'producer' }
+
       if (producerSaturated) {
         droppedProducerFrames.push(frame)
+
         return
       }
+
       notifications.push(frame)
     }),
     notifyBulk: vi.fn(
@@ -74,11 +81,13 @@ function createMockDispatcher() {
       ): boolean => {
         notifications.push({ method, params, lane: 'control', clientId })
         const settle = () => onSettled?.({ ok: true })
+
         if (holdControlSettlement) {
           heldControlSettlements.push(settle)
         } else {
           settle()
         }
+
         return true
       }
     ),
@@ -95,6 +104,7 @@ function createMockDispatcher() {
     },
     settleHeldControlFrames() {
       holdControlSettlement = false
+
       for (const settle of heldControlSettlements.splice(0)) {
         settle()
       }
@@ -105,16 +115,20 @@ function createMockDispatcher() {
       context?: MockRequestContext
     ) {
       const handler = requestHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       return handler(params, context)
     },
     callNotification(method: string, params: Record<string, unknown> = {}) {
       const handler = notificationHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       handler(params)
     }
   }
@@ -130,6 +144,7 @@ function collectStream(d: ReturnType<typeof createMockDispatcher>): StreamOutcom
   const chunks: { seq: number; data: string }[] = []
   let end: { streamId: number } | null = null
   let err: { code: string; message: string } | null = null
+
   for (const n of d._notifications) {
     if (n.method === 'fs.streamChunk') {
       chunks.push({ seq: n.params!.seq as number, data: n.params!.data as string })
@@ -142,6 +157,7 @@ function collectStream(d: ReturnType<typeof createMockDispatcher>): StreamOutcom
       }
     }
   }
+
   return { chunks, end, err }
 }
 
@@ -153,10 +169,12 @@ async function flush(times = 5): Promise<void> {
 
 async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (!predicate()) {
     if (Date.now() > deadline) {
       throw new Error('waitFor: predicate did not become true in time')
     }
+
     await new Promise((r) => setImmediate(r))
   }
 }
@@ -187,6 +205,7 @@ describe('FsHandler readFileStream', () => {
       { filePath },
       { isStale: () => false }
     )) as { streamId: number; totalSize: number; resultEncoding: string }
+
     expect(meta.streamId).toBeDefined()
     expect(meta.totalSize).toBe(content.length)
     expect(meta.resultEncoding).toBe('base64')
@@ -259,9 +278,11 @@ describe('FsHandler readFileStream', () => {
     writeFileSync(filePath, content)
 
     const sampleHandle = await fs.open(filePath, 'r')
+
     const fileHandlePrototype = Object.getPrototypeOf(sampleHandle) as {
       read: typeof sampleHandle.read
     }
+
     await sampleHandle.close()
 
     type PositionedRead = (
@@ -271,7 +292,9 @@ describe('FsHandler readFileStream', () => {
       length: number | null,
       position: number | null
     ) => Promise<{ bytesRead: number; buffer: Buffer }>
+
     const originalRead = fileHandlePrototype.read as unknown as PositionedRead
+
     const readSpy = vi.spyOn(fileHandlePrototype, 'read').mockImplementation(async function (
       this: typeof sampleHandle,
       buffer: Buffer,
@@ -280,8 +303,10 @@ describe('FsHandler readFileStream', () => {
       position: number | null = null
     ) {
       const readLength = position === 0 && length !== null ? Math.min(length, 5) : length
+
       return originalRead.call(this, buffer, offset, readLength, position)
     } as typeof sampleHandle.read)
+
     try {
       await dispatcher.callRequest('fs.readFileStream', { filePath }, { isStale: () => false })
       await waitFor(() => collectStream(dispatcher).end !== null)
@@ -306,6 +331,7 @@ describe('FsHandler readFileStream', () => {
       { filePath },
       { isStale: () => false }
     )) as { totalSize: number; empty: boolean; streamId?: number }
+
     expect(meta.empty).toBe(true)
     expect(meta.totalSize).toBe(0)
     expect(meta.streamId).toBeUndefined()
@@ -326,6 +352,7 @@ describe('FsHandler readFileStream', () => {
       { filePath },
       { isStale: () => false }
     )) as { totalSize: number; empty: boolean; isBinary: boolean }
+
     expect(meta.empty).toBe(true)
     expect(meta.isBinary).toBe(true)
   })
@@ -340,6 +367,7 @@ describe('FsHandler readFileStream', () => {
       { filePath },
       { isStale: () => false }
     )) as { totalSize: number; empty: boolean; isBinary: boolean; streamId?: number }
+
     expect(meta.empty).toBe(true)
     expect(meta.isBinary).toBe(true)
     expect(meta.totalSize).toBe(0)
@@ -361,6 +389,7 @@ describe('FsHandler readFileStream', () => {
     writeFileSync(filePath, content)
 
     let stale = false
+
     const meta = (await dispatcher.callRequest(
       'fs.readFileStream',
       { filePath },
@@ -422,6 +451,7 @@ describe('FsHandler readFileStream', () => {
     for (let seq = 1; seq < 6; seq += 1) {
       dispatcher.callNotification('fs.streamAck', { streamId: meta.streamId, seq })
     }
+
     await waitFor(() => collectStream(dispatcher).end !== null)
 
     const { chunks, err } = collectStream(dispatcher)
@@ -460,6 +490,7 @@ describe('FsHandler readFileStream', () => {
 
     const registry = (handler as unknown as { streamRegistry: { size(): number } }).streamRegistry
     const context = { clientId: 5, isStale: () => false }
+
     const terminalFrames = () =>
       dispatcher._notifications.filter(
         (n) => n.method === 'fs.streamEnd' || n.method === 'fs.streamError'
@@ -469,6 +500,7 @@ describe('FsHandler readFileStream', () => {
       await dispatcher.callRequest('fs.readFileStream', { filePath }, context)
       await waitFor(() => terminalFrames().length === i + 1)
     }
+
     // The fd must go back even though its terminal frame is still undelivered.
     await waitFor(() => registry.size() === 0)
 
@@ -494,6 +526,7 @@ describe('FsHandler readFileStream', () => {
 
   it('rejects the 17th concurrent stream with TooManyStreams', async () => {
     const paths: string[] = []
+
     for (let i = 0; i < 17; i++) {
       const p = path.join(tmpDir, `s${i}.png`)
       writeFileSync(p, Buffer.alloc(8 * 1024 * 1024, 0x42))
@@ -502,6 +535,7 @@ describe('FsHandler readFileStream', () => {
 
     const isStale = () => false
     const queuedPumps: (() => void)[] = []
+
     // Why: the concurrency cap is about registered active streams. Hold the
     // scheduled pumps so fast CI machines cannot finish early streams before
     // the 17th request checks the registry size.
@@ -509,21 +543,26 @@ describe('FsHandler readFileStream', () => {
       .spyOn(globalThis, 'setImmediate')
       .mockImplementation((callback: (...args: unknown[]) => void, ...args: unknown[]) => {
         queuedPumps.push(() => callback(...args))
+
         return {} as NodeJS.Immediate
       })
+
     try {
       for (let i = 0; i < 16; i++) {
         await dispatcher.callRequest('fs.readFileStream', { filePath: paths[i] }, { isStale })
       }
+
       await expect(
         dispatcher.callRequest('fs.readFileStream', { filePath: paths[16] }, { isStale })
       ).rejects.toThrow(/Too many concurrent streams/)
     } finally {
       setImmediateSpy.mockRestore()
     }
+
     for (const runPump of queuedPumps) {
       runPump()
     }
+
     await flush(50)
   }, 20_000)
 })

@@ -10,23 +10,29 @@ const mocks = vi.hoisted(() => ({
   launchStatus: vi.fn((_worktreeId: string, _provider: string): string => 'idle'),
   createTab: vi.fn()
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => 'none', {
     getState: () => ({ activeWorktreeId: 'wt-1' })
   })
 }))
+
 vi.mock('@/lib/worktree-agent-activation-gate', () => ({
   gateWorktreeAgentActivation: mocks.gate
 }))
+
 vi.mock('@/lib/structured-agent-session-launch', () => ({
   getStructuredAgentLaunchStatus: mocks.launchStatus
 }))
+
 vi.mock('@/lib/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: vi.fn()
 }))
+
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'none'
 }))
+
 vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
   pruneParkedTerminalWatchers: vi.fn(),
   terminalWatcherLiveWorkspaceIds: () => new Set(),
@@ -35,7 +41,9 @@ vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
 }))
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 let root: Root | undefined
+
 afterEach(async () => {
   await act(async () => root?.unmount())
   vi.clearAllMocks()
@@ -51,6 +59,7 @@ function Watcher(): null {
     createTab: mocks.createTab,
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 0 })
   } as unknown as TerminalColdActivationController)
+
   return null
 }
 

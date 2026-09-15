@@ -16,6 +16,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -44,6 +45,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('resubscribes with the latest pane viewport after the remote stream closes', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -72,9 +74,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
+
     // Drain microtasks WITHOUT advancing timers, so the 33ms viewport batcher
     // cannot fire — the replayed Resize frame must come from the round-trip
     // flush alone (this test fails if that flush is removed).
@@ -85,6 +89,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
 
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -121,14 +126,17 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('replays a claim before separately framed input and query replies', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeSubscribe.mockImplementation(
         async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
           subscriptionCallbacks = callbacks
+
           return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
         }
       )
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -156,6 +164,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         const opcodes = subscriptionSendBinary.mock.calls
           .map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
           .filter((opcode) => opcode !== undefined)
+
         expect(opcodes).toEqual([
           TerminalStreamOpcode.Subscribe,
           TerminalStreamOpcode.ClaimViewport,
@@ -165,12 +174,14 @@ describe('createRemoteRuntimePtyTransport', () => {
           TerminalStreamOpcode.Input
         ])
       })
+
       // Query replies must stay their own frames: concatenating them with keystrokes
       // produces a mixed payload the host classifier cannot recognise as a reply.
       const input = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+
       expect(input).toEqual(['x', '\x1b[?1;2c', 'z'])
       transport.destroy?.()
     } finally {
@@ -180,8 +191,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('coalesces rapid remote terminal input before sending it to the runtime', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -212,8 +225,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('sends coalesced terminal input as binary frames once the stream is established', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -242,8 +257,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not coalesce large remote terminal input chunks above the terminal ceiling', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -282,15 +299,18 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
+
       if (args.method === 'terminal.send') {
         return Promise.resolve({
           ok: true,
           result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } }
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -316,20 +336,24 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('preserves queued remote input order before acknowledged terminal input', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeCall.mockImplementation((args) => {
         if (args.method === 'terminal.create') {
           return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
         }
+
         if (args.method === 'terminal.send') {
           return Promise.resolve({
             ok: true,
             result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 2 } }
           })
         }
+
         return Promise.resolve({ ok: true, result: {} })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -366,15 +390,18 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
+
       if (args.method === 'terminal.send') {
         return Promise.resolve({
           ok: true,
           result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } }
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -391,6 +418,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
+
       if (args.method === 'terminal.send') {
         return Promise.resolve({
           ok: true,
@@ -403,9 +431,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -425,11 +455,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('yields while validating accepted large acknowledged remote input before terminal.send RPCs', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeCall.mockImplementation((args) => {
         if (args.method === 'terminal.create') {
           return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
         }
+
         if (args.method === 'terminal.send') {
           return Promise.resolve({
             ok: true,
@@ -442,14 +474,17 @@ describe('createRemoteRuntimePtyTransport', () => {
             }
           })
         }
+
         return Promise.resolve({ ok: true, result: {} })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
         leafId: 'pane:1'
       })
+
       const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
 
       await transport.connect({ url: '', callbacks: {} })
@@ -463,9 +498,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.runAllTimersAsync()
 
       await expect(accepted).resolves.toBe(true)
+
       const sendTexts = runtimeCall.mock.calls
         .filter((call) => call[0].method === 'terminal.send')
         .map((call) => call[0].params.text)
+
       expect(sendTexts.join('')).toBe(text)
     } finally {
       vi.useRealTimers()
@@ -479,6 +516,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
+
       if (args.method === 'terminal.send') {
         return Promise.resolve({
           ok: true,
@@ -491,9 +529,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -509,6 +549,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const sendTexts = runtimeCall.mock.calls
       .filter((call) => call[0].method === 'terminal.send')
       .map((call) => call[0].params.text)
+
     expect(sendTexts).toEqual([firstChunk, rejectedChunk])
   })
 
@@ -517,9 +558,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'terminal.create') {
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -537,8 +580,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('preserves literal LF input when sending remote PTY binary frames', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -566,8 +611,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('coalesces rapid remote viewport updates before sending the latest size', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -601,8 +648,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('sends an activity claim before the user input it sizes', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -620,6 +669,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       const frames = subscriptionSendBinary.mock.calls.map((call) =>
         decodeTerminalStreamFrame(call[0])
       )
+
       expect(frames.map((frame) => frame?.opcode)).toEqual([
         TerminalStreamOpcode.ClaimViewport,
         TerminalStreamOpcode.Resize,
@@ -638,10 +688,12 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -656,6 +708,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
     expect(transport.claimViewport?.(101, 33)).toBe(true)
+
     for (let index = 0; index < 10_000; index += 1) {
       expect(transport.sendInputImmediate(`\x1b[?${index};2c`)).toBe(true)
     }
@@ -666,6 +719,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+
       expect(input).toHaveLength(64)
       expect(input.at(0)).toBe('\x1b[?9936;2c')
       expect(input.at(-1)).toBe('\x1b[?9999;2c')

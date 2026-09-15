@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RunnerModule from './runner'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
+
 const ghExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./runner', async () => {
   const actual = await vi.importActual<typeof RunnerModule>('./runner')
+
   return {
     ...actual,
     gitExecFileAsync: gitExecFileAsyncMock,
@@ -76,35 +78,47 @@ describe('resolveLocalGitUsername', () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'config' && args[1] === '--get') {
         const value = gitConfig[args[2]]
+
         if (value !== undefined) {
           return { stdout: `${value}\n`, stderr: '' }
         }
+
         throw makeExecError(`missing config ${args[2]}`)
       }
+
       if (args[0] === 'remote' && args.length === 1) {
         const remotes = new Set(Object.keys(remoteUrls))
+
         if (originRemoteUrl) {
           remotes.add('origin')
         }
+
         return { stdout: `${[...remotes].join('\n')}\n`, stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         const remoteUrl = args[2] === 'origin' ? originRemoteUrl : remoteUrls[args[2]]
+
         if (remoteUrl) {
           return { stdout: `${remoteUrl}\n`, stderr: '' }
         }
+
         throw makeExecError(`missing ${args[2]} remote`)
       }
+
       if (args[0] === 'branch' && args[1] === '--show-current') {
         return { stdout: `${currentBranch}\n`, stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         // origin/HEAD unset — resolveDefaultBaseRefViaExec falls through to probes.
         throw makeExecError('no origin/HEAD')
       }
+
       if (args[0] === 'rev-parse') {
         throw makeExecError(`missing ref ${args.at(-1)}`)
       }
+
       throw makeExecError(`unexpected git args: ${args.join(' ')}`)
     })
   })
@@ -160,6 +174,7 @@ describe('resolveLocalGitUsername', () => {
       if (args[0].length === 1 && args[0][0] === 'remote') {
         throw makeExecError('remote enumeration failed')
       }
+
       return original(...args)
     })
     ghExecFileAsyncMock.mockResolvedValue({ stdout: 'gh-demo\n', stderr: '' })
@@ -224,6 +239,7 @@ describe('resolveLocalGitUsername', () => {
 
     // api + auth-status fallback on the first resolution; cached afterwards.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+
     for (const [, options] of ghExecFileAsyncMock.mock.calls) {
       expect(options).toMatchObject({ timeout: 2500 })
     }
@@ -231,10 +247,12 @@ describe('resolveLocalGitUsername', () => {
 
   it('ignores rate-limit JSON bodies from gh api user so they never become branch prefixes', async () => {
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
+
     const rateLimitJson = JSON.stringify({
       message: 'API rate limit exceeded for user ID 6427696',
       status: '403'
     })
+
     ghExecFileAsyncMock
       .mockRejectedValueOnce(makeExecError('gh api failed', { stdout: rateLimitJson }))
       .mockRejectedValueOnce(makeExecError('gh auth status failed'))

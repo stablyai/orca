@@ -83,9 +83,11 @@ describe('GitHandler', () => {
 
   it('runs remote worktree deletion inside the relay watcher fence', async () => {
     const removalError = new Error('fenced before Git')
+
     const runWithRemovalFence = vi.fn(async () => {
       throw removalError
     })
+
     handler.dispose()
     handler = new GitHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
       runWithRemovalFence
@@ -102,11 +104,13 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
       gitCommit(tmpDir, 'initial')
+
       const baseBranch = execFileSync('git', ['branch', '--show-current'], {
         cwd: tmpDir,
         encoding: 'utf-8',
         stdio: 'pipe'
       }).trim()
+
       execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
       writeFileSync(path.join(tmpDir, 'file.txt'), 'feature\n')
       gitCommit(tmpDir, 'feature change')
@@ -133,11 +137,13 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
       gitCommit(tmpDir, 'initial')
+
       const baseBranch = execFileSync('git', ['branch', '--show-current'], {
         cwd: tmpDir,
         encoding: 'utf-8',
         stdio: 'pipe'
       }).trim()
+
       execFileSync('git', ['checkout', '-b', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
       writeFileSync(path.join(tmpDir, 'file.txt'), 'feature\n')
       gitCommit(tmpDir, 'feature change')
@@ -166,16 +172,19 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
       gitCommit(tmpDir, 'initial')
+
       const baseBranch = execFileSync('git', ['branch', '--show-current'], {
         cwd: tmpDir,
         encoding: 'utf-8',
         stdio: 'pipe'
       }).trim()
+
       execFileSync('git', ['branch', 'feature'], { cwd: tmpDir, stdio: 'pipe' })
 
       const before = (await dispatcher.callRequest('git.localBranches', {
         worktreePath: tmpDir
       })) as { current: string | null; branches: string[] }
+
       expect(before.current).toBe(baseBranch)
       expect(before.branches).toContain('feature')
       expect(before.branches[0]).toBe(baseBranch)
@@ -193,6 +202,7 @@ describe('GitHandler', () => {
       const after = (await dispatcher.callRequest('git.localBranches', {
         worktreePath: tmpDir
       })) as { current: string | null; branches: string[] }
+
       expect(after.current).toBe('feature')
       expect(after.branches[0]).toBe('feature')
     })
@@ -215,6 +225,7 @@ describe('GitHandler', () => {
         ['config', '--get', 'remote.pr-contributor-orca.orca-created'],
         { cwd: tmpDir, encoding: 'utf-8' }
       ).trim()
+
       expect(value).toBe('true')
     })
 
@@ -245,6 +256,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(current).toBe('you/fix-auth')
     })
 
@@ -281,6 +293,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(refs).toBe('')
     })
 
@@ -301,10 +314,12 @@ describe('GitHandler', () => {
           expectedHead: staleHead
         })
       ).rejects.toThrow('changed after the workspace was deleted')
+
       const refs = execFileSync('git', ['branch', '--list', 'feature/preserved'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(refs).toContain('feature/preserved')
     })
 

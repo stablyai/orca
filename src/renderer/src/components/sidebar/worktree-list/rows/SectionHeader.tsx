@@ -91,31 +91,38 @@ export function renderWorktreeSectionHeaderRow(args: {
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
   const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
+
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
       ? row.projectGroup.id
       : undefined
+
   // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
   const projectGroupHostIdForHeader =
     row.projectGroup && 'createdFrom' in row.projectGroup
       ? getProjectGroupHostId(row.projectGroup)
       : undefined
+
   const repoHeaderIndex =
     projectIdForHeader !== undefined
       ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
       : undefined
+
   const repoHeaderBucketKey =
     projectIdForHeader !== undefined
       ? headerDrag.repoHeaderBucketByRepoId.get(projectIdForHeader)
       : undefined
+
   const projectGroupHeaderIndex =
     projectGroupIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupIdForHeader)
       : undefined
+
   const projectGroupHeaderBucketKey =
     projectGroupIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupIdForHeader)
       : undefined
+
   const isDraggableRepoHeader = Boolean(
     headerDrag.canReorderRepoHeaders &&
     isRepoHeader &&
@@ -123,6 +130,7 @@ export function renderWorktreeSectionHeaderRow(args: {
     repoHeaderBucketKey &&
     (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
   )
+
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupIdForHeader &&
@@ -130,24 +138,30 @@ export function renderWorktreeSectionHeaderRow(args: {
     (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
       0) > 1
   )
+
   const isDraggingThis =
     headerDrag.canReorderRepoHeaders &&
     headerDrag.repoDrag.state.draggingRepoId !== null &&
     headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
+
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
     headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupIdForHeader
+
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
       ? getWorkspaceStatusFromGroupKey(row.key, ctx.workspaceStatuses)
       : null
+
   const isPinnedHeader = row.key === PINNED_GROUP_KEY
+
   const repoHeaderColor = resolveProjectGroupHeaderColor({
     groupBy: ctx.groupBy,
     headerKey: row.key,
     badgeColor: row.repo?.badgeColor
   })
+
   const createState = row.repo
     ? getRepoHeaderCreateState({
         repo: row.repo,
@@ -157,6 +171,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           : null
       })
     : null
+
   const folderBackedProjectGroup =
     isProjectGroupHeader &&
     !row.repo &&
@@ -165,17 +180,21 @@ export function renderWorktreeSectionHeaderRow(args: {
     row.projectGroup.parentPath
       ? row.projectGroup
       : null
+
   const projectGroupPathStatus = folderBackedProjectGroup
     ? ctx.getCachedFolderWorkspacePathStatus({
         scope: 'project-group',
         projectGroupId: folderBackedProjectGroup.id
       })
     : null
+
   const isHeaderCollapsed = ctx.collapsedGroups.has(row.key)
+
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
     row.count > 0 &&
     (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null || isPinnedHeader)
+
   return (
     <div
       key={vItem.key}
@@ -284,12 +303,14 @@ export function renderWorktreeSectionHeaderRow(args: {
           if (shouldIgnoreRepoHeaderToggle(event)) {
             return
           }
+
           ctx.toggleGroupWithScrollAnchor(row.key)
         }}
         onKeyDown={(e) => {
           if (shouldIgnoreRepoHeaderToggle(e)) {
             return
           }
+
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             ctx.toggleGroupWithScrollAnchor(row.key)

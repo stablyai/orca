@@ -16,6 +16,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 
 function fixtureSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 1234,
     getForegroundProcess: () => null,
@@ -58,6 +59,7 @@ describe('transport-drop attachment release', () => {
 
   function sessionOf(started: DaemonServer, sessionId: string): Session | undefined {
     const host = (started as unknown as { host: { sessions: Map<string, Session> } }).host
+
     return host.sessions.get(sessionId)
   }
 
@@ -67,6 +69,7 @@ describe('transport-drop attachment release', () => {
       tokenPath,
       spawnSubprocess: () => fixtureSubprocess()
     })
+
     await started.start()
     server = started
 

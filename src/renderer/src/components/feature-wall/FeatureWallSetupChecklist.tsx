@@ -52,6 +52,7 @@ function SetupStepRow(props: {
   const { step, done, active, ordinal, onSelect, layout } = props
   const isEmbedded = layout === 'embedded'
   const localizedStepCopy = getLocalizedFeatureWallSetupChecklistCopy(step)
+
   return (
     <button
       type="button"
@@ -105,6 +106,7 @@ function SetupSection(props: {
   layout: FeatureWallSetupChecklistLayout
 }): React.JSX.Element {
   const doneCount = props.steps.filter((step) => props.progress.stepDone[step.id]).length
+
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -134,28 +136,37 @@ function SetupSection(props: {
 
 function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.Element | null {
   const { activeStep } = props
+
   if (!activeStep) {
     return null
   }
+
   const activeDone = props.progress.stepDone[activeStep.id]
+
   if (activeStep.id === 'default-agent') {
     return <DefaultAgentAction />
   }
+
   if (activeStep.id === 'add-two-repos') {
     return <AddReposAction />
   }
+
   if (activeStep.id === 'notifications') {
     return <NotificationAction />
   }
+
   if (activeStep.id === 'two-worktrees') {
     return <WorkspacesAction done={activeDone} />
   }
+
   if (activeStep.id === 'browser') {
     return <BrowserAction done={activeDone} />
   }
+
   if (activeStep.id === 'task-sources') {
     return <TaskSourcesAction />
   }
+
   if (activeStep.id === 'agent-capabilities') {
     return (
       <AgentCapabilitiesSetupAction
@@ -164,9 +175,11 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
       />
     )
   }
+
   if (activeStep.id === 'setup-script') {
     return <SetupScriptAction />
   }
+
   return null
 }
 
@@ -174,12 +187,15 @@ function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JS
   if (props.stepId === 'two-worktrees') {
     return <SetupWorkspacesVisual />
   }
+
   if (props.stepId === 'add-two-repos') {
     return <SetupMultipleReposVisual />
   }
+
   if (props.stepId === 'browser') {
     return <SetupBrowserVisual />
   }
+
   return null
 }
 
@@ -189,11 +205,14 @@ function DefaultAgentAction(): React.JSX.Element {
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
+
   const selectedAgent =
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
+
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
+
   const handleSelectAgent = useCallback(
     (agent: TuiAgent) => {
       void updateSettings({ defaultTuiAgent: agent })
@@ -220,6 +239,7 @@ function DefaultAgentAction(): React.JSX.Element {
 function NotificationAction(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+
   return (
     <div className="max-w-3xl">
       <NotificationStep settings={settings} updateSettings={updateSettings} />
@@ -258,15 +278,18 @@ export function FeatureWallSetupChecklist(
   const { activeStep, progress, onSelectStep, layout = 'modal' } = props
   const isEmbedded = layout === 'embedded'
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
+
   // Only steps with a visual constrain the caption to a narrow column so the
   // illustration can sit beside it; captionless steps let the copy run full width.
   const hasStepVisual =
     activeStep?.id === 'two-worktrees' ||
     activeStep?.id === 'browser' ||
     activeStep?.id === 'add-two-repos'
+
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
   const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const visualBreakpoint = isEmbedded ? 'xl' : 'sm'
+
   const visualGridClass =
     visualBreakpoint === 'xl'
       ? 'gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:gap-12'

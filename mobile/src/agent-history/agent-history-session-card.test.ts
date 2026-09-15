@@ -68,6 +68,7 @@ describe('buildMobileAgentHistoryResumeActionState', () => {
       [session({ id: 'claude:1' }), session({ id: 'codex:2', agent: 'codex' })],
       'codex:2'
     )
+
     expect(state.get('claude:1')).toEqual({ disabled: true, loading: false })
     expect(state.get('codex:2')).toEqual({ disabled: true, loading: true })
   })
@@ -108,6 +109,7 @@ describe('buildMobileAgentHistorySections', () => {
         now: NOW
       }
     )
+
     const allCards = sections.flatMap((s) => s.data)
     expect(allCards.map((card) => card.id)).toEqual(['claude:1'])
   })
@@ -117,6 +119,7 @@ describe('buildMobileAgentHistorySections', () => {
       [session(), session({ id: 'claude:2', title: 'Repair terminal tabs' })],
       { query: 'repair', scope: 'all', scopeFilterPaths: [], activeWorktreePath: null, now: NOW }
     )
+
     expect(sections.flatMap((s) => s.data).map((card) => card.id)).toEqual(['claude:2'])
   })
 
@@ -127,6 +130,7 @@ describe('buildMobileAgentHistorySections', () => {
       session({ id: 'claude:in', cwd: '/Users/ada/repo/app/src' }),
       session({ id: 'claude:out', cwd: '/Users/ada/other-repo' })
     ]
+
     const sections = buildMobileAgentHistorySections(sessions, {
       query: '',
       scope: 'workspace',
@@ -134,6 +138,7 @@ describe('buildMobileAgentHistorySections', () => {
       activeWorktreePath: '/Users/ada/repo/app',
       now: NOW
     })
+
     expect(sections.flatMap((s) => s.data).map((card) => card.id)).toEqual(['claude:in'])
   })
 
@@ -143,6 +148,7 @@ describe('buildMobileAgentHistorySections', () => {
       session({ id: 'claude:sibling', cwd: '/Users/ada/repo/app-feature/lib' }),
       session({ id: 'claude:foreign', cwd: '/Users/ada/unrelated' })
     ]
+
     const sections = buildMobileAgentHistorySections(sessions, {
       query: '',
       scope: 'project',
@@ -150,6 +156,7 @@ describe('buildMobileAgentHistorySections', () => {
       activeWorktreePath: '/Users/ada/repo/app',
       now: NOW
     })
+
     expect(
       sections
         .flatMap((s) => s.data)
@@ -165,6 +172,7 @@ describe('buildMobileAgentHistorySections', () => {
       session({ id: 'claude:a', cwd: '/Users/ada/repo/app' }),
       session({ id: 'claude:b', cwd: '/Users/ada/elsewhere' })
     ]
+
     const sections = buildMobileAgentHistorySections(sessions, {
       query: '',
       scope: 'workspace',
@@ -172,6 +180,7 @@ describe('buildMobileAgentHistorySections', () => {
       activeWorktreePath: null,
       now: NOW
     })
+
     expect(
       sections
         .flatMap((s) => s.data)
@@ -185,6 +194,7 @@ describe('buildMobileAgentHistorySections', () => {
       session({ id: 'claude:a', cwd: '/Users/ada/repo/app' }),
       session({ id: 'claude:b', cwd: '/Users/ada/elsewhere' })
     ]
+
     const sections = buildMobileAgentHistorySections(sessions, {
       query: '',
       scope: 'all',
@@ -192,6 +202,7 @@ describe('buildMobileAgentHistorySections', () => {
       activeWorktreePath: '/Users/ada/repo/app',
       now: NOW
     })
+
     expect(
       sections
         .flatMap((s) => s.data)

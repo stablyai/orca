@@ -10,53 +10,73 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 const MANAGED_ORIGIN_HOME = join(TEST_MANAGED_ROOT, 'origin', 'home')
+
 const MANAGED_CURRENT_HOME = join(TEST_MANAGED_ROOT, 'current', 'home')
+
 const MANAGED_SHARED_HOME = join(TEST_MANAGED_ROOT, 'shared-mirror', 'home')
+
 const ORIGIN_ROLLOUT = join(MANAGED_ORIGIN_HOME, 'sessions', '2026', '07', '20', 'rollout-a.jsonl')
+
 const SHARED_ROLLOUT = join(MANAGED_SHARED_HOME, 'sessions', '2026', '07', '20', 'rollout-a.jsonl')
 
 describe('registerPtyHandlers', () => {
@@ -65,6 +85,7 @@ describe('registerPtyHandlers', () => {
   it('records route provenance for a process-wide CODEX_HOME', async () => {
     const previousCodexHome = process.env.CODEX_HOME
     process.env.CODEX_HOME = '/process/custom-codex-home'
+
     try {
       setLocalPtyProvider({
         spawn: vi.fn(async () => ({ id: 'pty-process-home' })),
@@ -150,6 +171,7 @@ describe('registerPtyHandlers', () => {
       if (filePath.endsWith('auth.json')) {
         throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
       }
+
       return ''
     })
     const resolveHome = vi.fn(() => MANAGED_CURRENT_HOME)
@@ -185,9 +207,11 @@ describe('registerPtyHandlers', () => {
         transcriptPath: ORIGIN_ROLLOUT
       }
     })
+
     const rejection = expect(launch).rejects.toThrow(
       'The Codex account credentials for this session are temporarily unavailable. Try opening the terminal again.'
     )
+
     await vi.advanceTimersByTimeAsync(2_000)
     await rejection
 
@@ -207,6 +231,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [
@@ -214,6 +239,7 @@ describe('registerPtyHandlers', () => {
         { id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }
       ]
     })
+
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -262,10 +288,12 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [{ id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }]
     })
+
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -305,6 +333,7 @@ describe('registerPtyHandlers', () => {
     type RuntimeSpawnController = {
       spawn(args: Record<string, unknown>): Promise<{ id: string }>
     }
+
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-runtime-resumed' })),
       write: vi.fn(),
@@ -316,6 +345,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
@@ -324,6 +354,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [
@@ -331,6 +362,7 @@ describe('registerPtyHandlers', () => {
         { id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }
       ]
     })
+
     handlers.clear()
     registerPtyHandlers(
       mainWindow as never,
@@ -375,6 +407,7 @@ describe('registerPtyHandlers', () => {
     type RuntimeSpawnController = {
       spawn(args: Record<string, unknown>): Promise<{ id: string }>
     }
+
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-runtime-resumed' })),
       write: vi.fn(),
@@ -386,6 +419,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
@@ -394,10 +428,12 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [{ id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }]
     })
+
     handlers.clear()
     const resolveHome = vi.fn(() => MANAGED_SHARED_HOME)
     registerPtyHandlers(

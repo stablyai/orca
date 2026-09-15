@@ -19,8 +19,11 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { computeRemoteRelayDir } from './ssh-relay-versioned-install'
 
 const LINUX = getRemoteHostPlatform('linux-x64')
+
 const WINDOWS = getRemoteHostPlatform('win32-x64')
+
 const VERSION = '0.1.0+abc123'
+
 const SHELL_RELAY_DIR = `/var/services/homes/alice/.orca-remote/relay-${VERSION}`
 
 describe('relayRemoteDirSegments', () => {
@@ -130,6 +133,7 @@ describe('relay upload stage namespace', () => {
 
   it('maps only the attempt-owned payload subtree', () => {
     const payload = relayUploadStageSftpNamespaceMapping(namespace, LINUX, shellStageDir)
+
     const version = relayUploadStageSftpNamespaceMapping(
       namespace,
       LINUX,

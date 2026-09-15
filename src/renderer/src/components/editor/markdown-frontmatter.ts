@@ -13,6 +13,7 @@ export type FrontMatter = {
  */
 export function extractFrontMatter(content: string): FrontMatter | null {
   const match = content.match(FRONTMATTER_RE)
+
   if (!match) {
     return null
   }
@@ -33,5 +34,6 @@ export function prependFrontMatter(raw: string, body: string): string {
   // the closing delimiter. Normalising to exactly one trailing newline prevents
   // accumulating extra blank lines on every save cycle.
   const normalizedRaw = raw.endsWith('\n') ? raw : `${raw}\n`
+
   return `${normalizedRaw}${body}`
 }

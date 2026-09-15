@@ -126,6 +126,7 @@ function bundleResult(): SkillBundleInstallResult {
 }
 
 let sink: CapturingSink
+
 let directory: string
 
 beforeEach(() => {
@@ -156,6 +157,7 @@ describe('skill operation observability', () => {
     expect(serialized).toContain('version-456')
     expect(serialized).toContain('global-ssh')
     expect(serialized).toContain('provider-alias')
+
     for (const value of Object.values(PRIVATE_VALUES)) {
       expect(serialized).not.toContain(value)
     }
@@ -170,6 +172,7 @@ describe('skill operation observability', () => {
         expiresAt: '2030-01-01T00:00:00Z'
       }
     })
+
     operation.fail(new Error(Object.values(PRIVATE_VALUES).join(' ')))
     const traceFile = join(directory, 'trace.ndjson')
     writeFileSync(traceFile, `${sink.records.map((record) => JSON.stringify(record)).join('\n')}\n`)
@@ -185,6 +188,7 @@ describe('skill operation observability', () => {
     })
 
     expect(bundle.payload).toContain('skill-install-unknown')
+
     for (const value of Object.values(PRIVATE_VALUES)) {
       expect(bundle.payload).not.toContain(value)
     }
@@ -200,6 +204,7 @@ describe('skill operation observability', () => {
     expect(serialized).toContain('modified')
     expect(serialized).toContain('provider-alias')
     expect(serialized).not.toContain('selected-private-skill')
+
     for (const value of Object.values(PRIVATE_VALUES)) {
       expect(serialized).not.toContain(value)
     }
@@ -215,10 +220,12 @@ describe('skill operation observability', () => {
       orphanCount: 3,
       truncated: true
     })
+
     const upload = startSkillPhaseOperation({
       phase: 'upload',
       compressedBytes: 40 * 1024 * 1024
     })
+
     upload.complete({ status: 'complete' })
     recordSkillCapabilityAbsence({
       capability: 'skills.install.bundle.v1',
@@ -239,10 +246,12 @@ describe('skill operation observability', () => {
       transport: 'download-grant',
       compressedBytes: 1234
     })
+
     download.fail(new Error(Object.values(PRIVATE_VALUES).join(' ')))
 
     const serialized = JSON.stringify(sink.records)
     expect(serialized).toContain('skill-operation-unknown')
+
     for (const value of Object.values(PRIVATE_VALUES)) {
       expect(serialized).not.toContain(value)
     }
@@ -256,13 +265,16 @@ describe('skill operation observability', () => {
       join(source, 'SKILL.md'),
       '---\nname: observed-skill\ndescription: Private test\n---\n\nPrivate instructions\n'
     )
+
     const created = await createSkillPackageArchive({
       sourceDirectory: source,
       archivePath,
       packageId: 'observed-package',
       versionId: 'observed-version'
     })
+
     const archive = readFileSync(archivePath)
+
     const fetcher: typeof fetch = async () =>
       new Response(Uint8Array.from(archive), {
         headers: {
@@ -270,6 +282,7 @@ describe('skill operation observability', () => {
           'content-length': String(archive.length)
         }
       })
+
     const downloaded = await downloadSkillPackageGrant({
       url: 'https://storage.test/package',
       expiresAt: '2030-01-01T00:00:00Z',
@@ -280,9 +293,11 @@ describe('skill operation observability', () => {
       requireHttps: true,
       fetcher
     })
+
     await downloaded.cleanup()
 
     const providerRoot = join(directory, 'private-provider')
+
     const placement = await reconcileSkillProviderPlacement({
       canonicalPath: source,
       skillName: 'observed-skill',

@@ -3,7 +3,9 @@ import type * as React from 'react'
 import { ORCA_TERMINAL_COMMAND_FINISHED_EVENT } from '@/hooks/terminal-command-finished-event'
 
 type WorktreesChangedCallback = (data: { repoId: string }) => void
+
 type GitStatusMetadataChangedCallback = (data: { repoId: string }) => void
+
 type HookParams = {
   activeRepoId: string | null
   activeWorktreeId: string | null
@@ -27,10 +29,12 @@ async function renderHookOnce(params: HookParams): Promise<{
   const cleanups: (() => void)[] = []
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof React>('react')
+
     return {
       ...actual,
       useEffect: (effect: () => void | (() => void)) => {
         const cleanup = effect()
+
         if (typeof cleanup === 'function') {
           cleanups.push(cleanup)
         }
@@ -43,16 +47,21 @@ async function renderHookOnce(params: HookParams): Promise<{
   let gitStatusMetadataChangedCallback: GitStatusMetadataChangedCallback | null = null
   const onChangedUnsubscribe = vi.fn()
   const onGitStatusMetadataChangedUnsubscribe = vi.fn()
+
   const onChangedSubscribe = vi.fn((callback: WorktreesChangedCallback) => {
     worktreesChangedCallback = callback
+
     return onChangedUnsubscribe
   })
+
   const onGitStatusMetadataChangedSubscribe = vi.fn(
     (callback: GitStatusMetadataChangedCallback) => {
       gitStatusMetadataChangedCallback = callback
+
       return onGitStatusMetadataChangedUnsubscribe
     }
   )
+
   const windowListeners = new Map<string, EventListener>()
 
   vi.stubGlobal('window', {
@@ -76,10 +85,13 @@ async function renderHookOnce(params: HookParams): Promise<{
   })
 
   const { useGitStatusPushSignalRefresh } = await import('./git-status-push-signal-refresh')
+
   function PushSignalRefreshHarness(props: HookParams): null {
     useGitStatusPushSignalRefresh(props)
+
     return null
   }
+
   PushSignalRefreshHarness(params)
 
   return {
@@ -107,6 +119,7 @@ describe('useGitStatusPushSignalRefresh', () => {
 
   it('nudges status when the active repo reports a worktrees change', async () => {
     const fetchStatus = vi.fn()
+
     const harness = await renderHookOnce({
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
@@ -123,6 +136,7 @@ describe('useGitStatusPushSignalRefresh', () => {
 
   it('nudges status when the active repo reports git status metadata changes', async () => {
     const fetchStatus = vi.fn()
+
     const harness = await renderHookOnce({
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
@@ -139,6 +153,7 @@ describe('useGitStatusPushSignalRefresh', () => {
 
   it('nudges status when a terminal command finishes in the active worktree', async () => {
     const fetchStatus = vi.fn()
+
     const harness = await renderHookOnce({
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
@@ -155,6 +170,7 @@ describe('useGitStatusPushSignalRefresh', () => {
 
   it('drops nudges while the window is hidden', async () => {
     const fetchStatus = vi.fn()
+
     const harness = await renderHookOnce({
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
@@ -171,6 +187,7 @@ describe('useGitStatusPushSignalRefresh', () => {
 
   it('subscribes to nothing while disabled', async () => {
     const fetchStatus = vi.fn()
+
     const harness = await renderHookOnce({
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
@@ -185,6 +202,7 @@ describe('useGitStatusPushSignalRefresh', () => {
 
   it('unsubscribes preload and command-finished signals on cleanup', async () => {
     const fetchStatus = vi.fn()
+
     const harness = await renderHookOnce({
       activeRepoId: 'repo-1',
       activeWorktreeId: 'wt-1',
@@ -193,9 +211,11 @@ describe('useGitStatusPushSignalRefresh', () => {
     })
 
     expect(harness.cleanups.length).toBe(2)
+
     for (const cleanup of harness.cleanups) {
       cleanup()
     }
+
     expect(harness.windowListeners.size).toBe(0)
     expect(harness.onChangedUnsubscribe).toHaveBeenCalledTimes(1)
     expect(harness.onGitStatusMetadataChangedUnsubscribe).toHaveBeenCalledTimes(1)

@@ -7,13 +7,19 @@ import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = []
+
 let settings: Partial<GlobalSettings> | null = null
+
 const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
 
 vi.mock('@/store', () => ({

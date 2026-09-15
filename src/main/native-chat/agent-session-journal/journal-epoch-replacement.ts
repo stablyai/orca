@@ -41,14 +41,17 @@ export function replaceJournalEpoch(input: {
 }): void {
   const epoch = input.mintEpoch()
   const state = createJournalReducerState(input.identity.sessionId, epoch)
+
   const epochRow: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
     providerHandle: input.identity.providerHandle,
     ...journalRowBase(epoch, 1, input.fence, input.now())
   }
+
   const rows: JournalRow[] = [epochRow]
   applyJournalRow(state, epochRow)
+
   for (const item of input.items) {
     const row = buildJournalItemRow({
       state,
@@ -58,18 +61,22 @@ export function replaceJournalEpoch(input: {
       fence: input.fence,
       ts: item.observedAt ?? input.now()
     })
+
     assertJournalFence(row.fence, state.highestFence)
     applyJournalRow(state, row)
     rows.push(row)
   }
 
   input.db.exec('BEGIN IMMEDIATE')
+
   try {
     deleteAllJournalRows(input.db)
     clearJournalRepairMarker(input.db, input.identity.sessionId)
+
     for (const row of rows) {
       insertJournalRow(input.db, input.identity.sessionId, row)
     }
+
     upsertJournalSessionRow(input.db, input.identity.sessionId, epoch, epochRow.ts)
     input.db.exec('COMMIT')
   } catch (error) {

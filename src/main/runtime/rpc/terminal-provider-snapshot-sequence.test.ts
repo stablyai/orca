@@ -25,12 +25,15 @@ const request: RpcRequest = {
 it('replays post-capture output in the provider snapshot sequence domain', async () => {
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
   const registry = createSubscriptionRegistryDouble()
+
   let dataListener:
     | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
     | undefined
+
   let resolveSnapshot:
     | ((snapshot: { data: string; cols: number; rows: number; seq: number }) => void)
     | undefined
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -40,6 +43,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
     handleMobileUnsubscribe: vi.fn(),
     subscribeToTerminalData: vi.fn((_ptyId, listener) => {
       dataListener = listener
+
       return vi.fn()
     }),
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -61,6 +65,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
     cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
     waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -80,6 +85,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
     expect(
       binaryFrames.some((bytes) => {
         const frame = decodeTerminalStreamFrame(bytes)
+
         return (
           frame?.opcode === TerminalStreamOpcode.Output &&
           decodeTerminalStreamText(frame.payload) === 'fresh'
@@ -95,6 +101,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
 it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
   const registry = createSubscriptionRegistryDouble()
+
   let resizeListener:
     | ((event: {
         cols: number
@@ -104,9 +111,11 @@ it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
         seq: number
       }) => void)
     | undefined
+
   const serializeTerminalBuffer = vi
     .fn()
     .mockResolvedValue({ data: 'restored tui', cols: 80, rows: 24 })
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -123,6 +132,7 @@ it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
     subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
     subscribeToTerminalResize: vi.fn((_ptyId, listener) => {
       resizeListener = listener
+
       return vi.fn()
     }),
     subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
@@ -134,7 +144,9 @@ it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
     sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
     updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
   const dispatchPromise = dispatcher.dispatchStreaming(
     {
       ...request,

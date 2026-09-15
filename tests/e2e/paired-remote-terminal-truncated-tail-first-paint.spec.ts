@@ -13,8 +13,11 @@ import {
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
 const RETENTION_PARK_DELAY_MS = 100
+
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-truncated-tail-'))
+
 const fixturePath = path.join(scratch, 'truncated-tail-terminal.mjs')
+
 writeFileSync(
   fixturePath,
   [
@@ -52,6 +55,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(marker: string): string {
   const command = [process.execPath, fixturePath, marker]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -61,9 +65,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -77,23 +83,30 @@ test('paints a paired remote terminal when only its retained text tail overflowe
   test.setTimeout(120_000)
   const firstPaintMarker = `REMOTE_TRUNCATED_TAIL_FIRST_PAINT_${Date.now()}`
   const liveMarker = `REMOTE_TRUNCATED_TAIL_LIVE_${Date.now()}`
+
   const worktree = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
     const activeWorktreeId = state?.activeWorktreeId
+
     if (!activeWorktreeId) {
       throw new Error('Headed host did not select its seeded worktree')
     }
+
     const activeWorktree = state
       .allWorktrees()
       .find((candidate) => candidate.id === activeWorktreeId)
+
     if (!activeWorktree) {
       throw new Error('Headed host active worktree was absent from inventory')
     }
+
     return { id: activeWorktree.id, path: activeWorktree.path }
   })
+
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedWebClient(electronApp, offer)
   let terminal: string | null = null
+
   try {
     await expect
       .poll(
@@ -109,6 +122,7 @@ test('paints a paired remote terminal when only its retained text tail overflowe
         { timeout: 30_000 }
       )
       .toBe(true)
+
     const created = await callRuntime<{
       tab: {
         parentTabId: string
@@ -122,7 +136,9 @@ test('paints a paired remote terminal when only its retained text tail overflowe
       select: false,
       navigation: 'caller'
     })
+
     terminal = created.tab.terminal
+
     if (!terminal) {
       throw new Error('Paired runtime did not publish the overflow fixture terminal')
     }
@@ -179,6 +195,7 @@ test('paints a paired remote terminal when only its retained text tail overflowe
             'terminal.read',
             { terminal }
           )
+
           return {
             marker: result.terminal.tail.join('\n').includes(firstPaintMarker),
             truncated: result.terminal.truncated
@@ -197,9 +214,11 @@ test('paints a paired remote terminal when only its retained text tail overflowe
       (worktreeId) => window.__store?.getState().setActiveWorktree(worktreeId),
       worktree.id
     )
+
     const restoredRemoteTab = client.page.locator(
       `[data-testid="sortable-tab"][data-tab-id="${webTabId}"]`
     )
+
     await expect(restoredRemoteTab).toBeVisible({ timeout: 30_000 })
     await restoredRemoteTab.click()
     await expect(restoredRemoteTab).toHaveAttribute('data-active', 'true')
@@ -220,6 +239,7 @@ test('paints a paired remote terminal when only its retained text tail overflowe
     if (terminal) {
       await callRuntime(client.page, 'terminal.closeTab', { terminal }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 })
@@ -233,6 +253,7 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
     'The legacy fallback requires a host without terminal.paired-parking.v1.'
   )
   test.setTimeout(120_000)
+
   const worktreeIds = await orcaPage.evaluate(() =>
     window.__store
       ?.getState()
@@ -240,15 +261,20 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
       .slice(0, 2)
       .map((worktree) => worktree.id)
   )
+
   if (!worktreeIds || worktreeIds.length < 2) {
     throw new Error('Paired retention fixture requires two seeded worktrees')
   }
+
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+
   const client = await launchPairedWebClient(electronApp, offer, {
     terminalParkingDelayMs: RETENTION_PARK_DELAY_MS,
     terminalRetentionLimit: 1
   })
+
   const createdTerminals: string[] = []
+
   try {
     expect(await client.page.evaluate(() => window.api.e2e.getConfig())).toMatchObject({
       exposeStore: true,
@@ -274,6 +300,7 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
                 .allWorktrees()
                 .map((worktree) => worktree.id)
             )
+
             return ids.every((id) => known.has(id))
           }, worktreeIds),
         { timeout: 30_000 }
@@ -286,8 +313,10 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
     })
 
     const remoteTabs: { tabId: string; terminal: string; worktreeId: string; marker: string }[] = []
+
     for (const [index, worktreeId] of worktreeIds.entries()) {
       const marker = `PAIRED_RETENTION_${index}_${Date.now()}`
+
       const created = await callRuntime<{
         tab: { parentTabId: string; terminal: string | null }
       }>(client.page, 'session.tabs.createTerminal', {
@@ -297,9 +326,11 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
         select: false,
         navigation: 'caller'
       })
+
       if (!created.tab.terminal) {
         throw new Error(`Paired retention terminal ${index} was not published`)
       }
+
       createdTerminals.push(created.tab.terminal)
       const tabId = toWebTerminalSurfaceTabId(created.tab.parentTabId)
       await expect
@@ -379,6 +410,7 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
               const state = window.__store?.getState()
               const terminalTabs = Object.values(state?.tabsByWorktree ?? {}).flat()
               const verdicts = window.__terminalParkingDebug?.worktreeVerdicts() ?? []
+
               return {
                 activeView: state?.activeView,
                 budgetEnabled: state?.settings?.terminalHiddenWorktreeRetentionBudget,
@@ -389,6 +421,7 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
                 ),
                 verdicts: worktreeIds.map((worktreeId) => {
                   const verdict = verdicts.find((candidate) => candidate.worktreeId === worktreeId)
+
                   return verdict
                     ? {
                         forceParked: verdict.forceParked,
@@ -455,9 +488,11 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
     }, older.worktreeId)
+
     const olderTab = client.page.locator(
       `[data-testid="sortable-tab"][data-tab-id="${older.tabId}"]`
     )
+
     await expect(olderTab).toBeVisible({ timeout: 30_000 })
     await olderTab.click()
     await waitForActivePanePtyId(client.page, 30_000)
@@ -478,6 +513,7 @@ test('legacy paired hosts retain the lossy hidden-manager budget fallback @headf
     for (const terminal of createdTerminals) {
       await callRuntime(client.page, 'terminal.closeTab', { terminal }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 })

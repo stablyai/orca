@@ -30,23 +30,29 @@ import {
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
+
   if (!activation) {
     return 'available'
   }
+
   const value = activation.getState()
+
   return value === 'ready' ? 'openable' : value
 }
 
 export function initializeMainProcessRuntime(): OrcaRuntimeService {
   const store = state.store
   const stats = state.stats
+
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
   }
+
   const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => {
       const environment = resolveEnvironment(app.getPath('userData'), selector)
       const pairing = getPreferredPairingOffer(environment)
+
       return {
         environmentId: environment.id,
         name: environment.name,
@@ -65,9 +71,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         envelope
       )
   }
+
   // Why here and not in the window listener: `subscribeEnrichedStatus` also fires under headless
   // `orca serve`, which never opens one, and the fleet path runs there too.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
+
   const runtime = new OrcaRuntimeService(store, stats, {
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
@@ -133,11 +141,13 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     orchestrationEnvironmentTransport,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),
     getSettings: () => store.getSettings()
   })
+
   app.once('will-quit', () => sessionSearch?.dispose())
   state.runtime = runtime
   agentHookServer.subscribeEnrichedStatus((enriched) =>
@@ -149,6 +159,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtime.notifyMobileSessionTabsChanged(worktreeId)
   })
+
   return runtime
 }
 
@@ -157,9 +168,11 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   const claudeAccounts = state.claudeAccounts
   const codexAccounts = state.codexAccounts
   const rateLimits = state.rateLimits
+
   if (!store || !claudeAccounts || !codexAccounts || !rateLimits) {
     throw new Error('Account services must be initialized before runtime wiring')
   }
+
   runtime.setArtifactService(
     new ArtifactCloudService(app.getPath('userData'), () =>
       isArtifactSharingEnabled(state.store?.getSettings())

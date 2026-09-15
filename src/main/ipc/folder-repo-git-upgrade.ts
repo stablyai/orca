@@ -68,6 +68,7 @@ function isUpgradeCandidate(repo: Repo): boolean {
  */
 function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
   const prefix = `${repo.id}::${repo.path}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+
   return Object.keys(store.getAllWorktreeMeta()).some((key) => key.startsWith(prefix))
 }
 
@@ -75,6 +76,7 @@ function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
 async function readGitMarkerSignature(repoPath: string): Promise<string | null> {
   try {
     const marker = await stat(join(repoPath, '.git'))
+
     return `${marker.mtimeMs}:${marker.ctimeMs}:${marker.ino}`
   } catch {
     return null
@@ -107,10 +109,13 @@ function resolveUpgrade(
   if (!isGitRepo(repoPath)) {
     return null
   }
+
   const gitRoot = getGitRepoRoot(repoPath)
+
   if (resolveRealPath(gitRoot) !== resolveRealPath(repoPath)) {
     return null
   }
+
   return normalizeRuntimePathForComparison(gitRoot) === normalizeRuntimePathForComparison(repoPath)
     ? { folderUpgradeGitRootPath: gitRoot, externalWorktreeVisibility: 'hide' }
     : { folderUpgradeGitRootPath: gitRoot }
@@ -121,30 +126,40 @@ type UpgradeResult = 'upgraded' | 'blocked' | 'rejected'
 async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<UpgradeResult> {
   // Re-read after the marker stat: the repo can be removed or already upgraded mid-tick.
   const current = watch.store.getRepo(repoId)
+
   if (!current || !isUpgradeCandidate(current)) {
     return 'blocked'
   }
+
   if (hasExtraFolderWorkspaces(watch.store, current)) {
     return 'blocked'
   }
+
   const updates = resolveUpgrade(current.path)
+
   if (!updates) {
     return 'rejected'
   }
+
   const upgraded = watch.store.updateRepo(repoId, { kind: 'git', ...updates })
+
   if (!upgraded) {
     return 'upgraded'
   }
+
   // Adding a git project prepares its worktree root; an upgrade has to do the same.
   await prepareLocalWorktreeRootForRepo(watch.store, upgraded)
   invalidateAuthorizedRootsCache()
+
   if (watch.disposed) {
     return 'upgraded'
   }
+
   // Why: reuse the repo-mutation notifier so paired clients refetch too (#11994) and
   // the repo picks up the base/common-dir watchers it was skipped for as a folder.
   notifyReposChanged(watch.mainWindow)
   notifyWorktreesChanged(watch.mainWindow, repoId)
+
   return 'upgraded'
 }
 
@@ -155,22 +170,28 @@ async function pollOnce(watch: UpgradeWatch): Promise<void> {
   const candidates = watch.mainWindow.isDestroyed()
     ? []
     : watch.store.getRepos().filter(isUpgradeCandidate)
+
   watch.hasCandidates = candidates.length > 0
   const liveKeys = new Set<string>()
+
   for (const repo of candidates) {
     if (watch.disposed) {
       return
     }
+
     const key = normalizeRuntimePathForComparison(repo.path)
     liveKeys.add(key)
     const signature = await readGitMarkerSignature(repo.path)
+
     if (signature === null || rejectedMarkers.get(key) === signature) {
       continue
     }
+
     if ((await upgradeFolderRepo(watch, repo.id)) === 'rejected') {
       rejectedMarkers.set(key, signature)
     }
   }
+
   for (const key of rejectedMarkers.keys()) {
     if (!liveKeys.has(key)) {
       rejectedMarkers.delete(key)
@@ -188,10 +209,13 @@ function wakeWatch(watch: UpgradeWatch): void {
   if (watch.disposed) {
     return
   }
+
   watch.hasCandidates = true
+
   if (!watch.timer) {
     return
   }
+
   clearTimeout(watch.timer)
   watch.timer = null
   scheduleTick(watch)
@@ -199,19 +223,24 @@ function wakeWatch(watch: UpgradeWatch): void {
 
 async function runTick(watch: UpgradeWatch): Promise<void> {
   watch.timer = null
+
   if (watch.disposed) {
     return
   }
+
   if (!watch.visibility.isWindowVisible()) {
     // Parked: the visibility listener resumes the loop, so no timer is rescheduled.
     watch.parkedWhileHidden = true
+
     return
   }
+
   try {
     await pollOnce(watch)
   } catch {
     // Transient fs error: retry on the next tick.
   }
+
   if (!watch.disposed) {
     scheduleTick(watch)
   }
@@ -232,12 +261,15 @@ export function startFolderRepoGitUpgradeWatch(
   if (mainWindow.isDestroyed()) {
     return
   }
+
   if (activeWatch) {
     activeWatch.store = store
     activeWatch.mainWindow = mainWindow
     wakeWatch(activeWatch)
+
     return
   }
+
   const watch: UpgradeWatch = {
     store,
     mainWindow,
@@ -252,12 +284,14 @@ export function startFolderRepoGitUpgradeWatch(
     parkedWhileHidden: false,
     disposed: false
   }
+
   activeWatch = watch
   setFolderRepoGitUpgradeWakeListener(() => wakeWatch(watch))
   watch.unsubscribeVisibility = watch.visibility.onWindowBecameVisible(() => {
     if (watch.disposed || !watch.parkedWhileHidden) {
       return
     }
+
     watch.parkedWhileHidden = false
     void runTick(watch)
   })
@@ -266,16 +300,20 @@ export function startFolderRepoGitUpgradeWatch(
 
 export function stopFolderRepoGitUpgradeWatch(): void {
   const watch = activeWatch
+
   if (!watch) {
     return
   }
+
   activeWatch = null
   watch.disposed = true
   setFolderRepoGitUpgradeWakeListener(null)
   rejectedMarkers.clear()
+
   if (watch.timer) {
     clearTimeout(watch.timer)
     watch.timer = null
   }
+
   watch.unsubscribeVisibility()
 }

@@ -8,6 +8,7 @@ const DETECTION_SCRIPT = [
 
 export async function detectSkillProvidersInWsl(distro: string): Promise<string[]> {
   let result
+
   try {
     // Why probe: a bare `sh -c` has no login shell, so a PATH built by nvm/mise
     // rc files never applies and an installed codex/claude reads as absent.
@@ -22,9 +23,11 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
   } catch {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
+
   if (result.code !== 0) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
+
   // Unconditional, not just on an empty list: the script ends in `|| true`, so
   // without the login PATH each lookup independently reads absent. A `claude`
   // on the default PATH via Windows interop plus an nvm-only `codex` returns a
@@ -33,6 +36,7 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
   if (!result.environmentResolved) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
+
   return result.stdout
     .split(/\r?\n/u)
     .filter((provider) => provider === 'codex' || provider === 'claude')

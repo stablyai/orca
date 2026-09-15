@@ -9,6 +9,7 @@ import { encodeNdjson } from './ndjson'
 
 vi.mock('./ndjson', async (importOriginal) => {
   const actual = await importOriginal<{ encodeNdjson: typeof encodeNdjson }>()
+
   return { ...actual, encodeNdjson: vi.fn(actual.encodeNdjson) }
 })
 
@@ -21,13 +22,17 @@ function write(
   sessionId = 'session-1'
 ): string[] {
   const lines: string[] = []
+
   const socket: Pick<Socket, 'write'> = {
     write: vi.fn((line: string) => {
       lines.push(line)
+
       return true
     })
   }
+
   writeStreamDataEvents(socket, sessionId, data, maxLineBytes, rawLength, seq, transformed)
+
   return lines
 }
 
@@ -41,21 +46,27 @@ function previousWrites(
   sessionId = 'session-1'
 ): string[] {
   const explicitRawLength = rawLength === data.length ? undefined : rawLength
+
   if (transformed) {
     return [encodeStreamDataEvent(sessionId, data, rawLength, seq, true)]
   }
+
   const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
+
   const chunks = splitStreamDataForNdjson(
     sessionId,
     data,
     carriesMetadata ? Math.max(1, maxLineBytes - 96) : maxLineBytes,
     explicitRawLength
   )
+
   let consumed = 0
+
   return chunks.map((chunk) => {
     consumed += chunk.length
     const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
+
     return encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq)
   })
 }
@@ -111,6 +122,7 @@ describe('writeStreamDataEvents wire parity', () => {
       'é中🐙'.repeat(40),
       '\ud800x\udc00🐙'.repeat(20)
     ]
+
     for (const sessionId of ['session-1', 'ssh/"中🐙']) {
       for (const data of payloads) {
         for (const maxLineBytes of [1, 96, 160, 256, 4096]) {
@@ -131,6 +143,7 @@ describe('writeStreamDataEvents wire parity', () => {
               transformed,
               sessionId
             )
+
             expect(write(data, maxLineBytes, rawLength, seq, transformed, sessionId)).toEqual(
               expected
             )
@@ -148,16 +161,19 @@ describe('writeStreamDataEvents wire parity', () => {
 
   it('keeps split frames within the byte cap and preserves code points and sequence spans', () => {
     const data = '🐙é中\x1b[0m"\\\n'.repeat(100)
+
     for (const seq of [undefined, 9000]) {
       const lines = write(data, 256, data.length, seq)
       expect(lines.length).toBeGreaterThan(1)
       let consumed = 0
+
       const chunks = lines.map((line) => {
         expect(Buffer.byteLength(line, 'utf8')).toBeLessThanOrEqual(256)
         expect(line.endsWith('\n')).toBe(true)
         const { payload } = JSON.parse(line)
         expect(payload.data).not.toMatch(/^[\udc00-\udfff]|[\ud800-\udbff]$/)
         consumed += payload.data.length
+
         if (seq !== undefined) {
           expect(payload.seq).toBe(seq - data.length + consumed)
           expect(payload.rawLength).toBe(payload.data.length)
@@ -165,8 +181,10 @@ describe('writeStreamDataEvents wire parity', () => {
         } else {
           expect(Object.keys(payload)).toEqual(['data'])
         }
+
         return payload.data as string
       })
+
       expect(chunks.join('')).toBe(data)
     }
   })

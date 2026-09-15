@@ -33,9 +33,11 @@ export function useFeatureWallTaskSourcePresentation(
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const settings = useAppStore((s) => s.settings)
+
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
+
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
@@ -45,14 +47,17 @@ export function useFeatureWallTaskSourcePresentation(
     if (!isOpen) {
       return
     }
+
     // Why: the Tasks tour copy depends on whether a task source is already
     // usable, so connected users should not see setup-oriented guidance.
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
+
     if (!linearStatusCurrent || !linearStatusChecked) {
       void checkLinearConnection()
     }
+
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }

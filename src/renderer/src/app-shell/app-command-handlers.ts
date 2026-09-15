@@ -83,13 +83,17 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
  */
 function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
   const store = useAppStore.getState()
+
   if (store.activeTabType === 'terminal') {
     return store.activeTabId
   }
+
   if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
     return null
   }
+
   const activeTab = store.getActiveTab(activeWorktreeId)
+
   return activeTab?.contentType === 'agent-session' ? activeTab.id : null
 }
 
@@ -117,10 +121,13 @@ export function createAppCommandHandlers(
     terminalShortcutPolicy,
     workspaceChromeActive
   } = state
+
   const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
   const canRevealRightSidebar = !creationLayoutActive && canShowRightSidebarForView(activeView)
+
   const claim = (actionId: KeybindingActionId, run: () => void): boolean => {
     input?.preventDefault()
+
     if (
       input &&
       keybindingContext === 'terminal' &&
@@ -132,9 +139,12 @@ export function createAppCommandHandlers(
         keybindings
       })
     }
+
     run()
+
     return true
   }
+
   const revealRightSidebarTab = (
     actionId: KeybindingActionId,
     tab: Parameters<AppShortcutActions['setRightSidebarTab']>[0]
@@ -153,6 +163,7 @@ export function createAppCommandHandlers(
         if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
           return false
         }
+
         return claim('worktree.history.back', () => useAppStore.getState().goBackWorktree())
       }
     ],
@@ -162,6 +173,7 @@ export function createAppCommandHandlers(
         if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
           return false
         }
+
         return claim('worktree.history.forward', () => useAppStore.getState().goForwardWorktree())
       }
     ],
@@ -173,6 +185,7 @@ export function createAppCommandHandlers(
           const store = useAppStore.getState()
           const nextShowSleeping = !store.showSleepingWorkspaces
           store.setShowSleepingWorkspaces(nextShowSleeping)
+
           if (nextShowSleeping) {
             store.setSidebarOpen(true)
           }
@@ -184,6 +197,7 @@ export function createAppCommandHandlers(
         if (floatingTerminalOpen || !floatingTerminalEnabled) {
           return false
         }
+
         return claim('floatingWorkspace.maximize', openFloatingWorkspaceMaximized)
       }
     ],
@@ -193,12 +207,15 @@ export function createAppCommandHandlers(
         if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
+
         // Why: a structured chat tab is renamed through the same inline editor, so gating on
         // 'terminal' alone left the shortcut a silent no-op there.
         const tabId = resolveRenameTargetTabId(activeWorktreeId)
+
         if (!tabId) {
           return false
         }
+
         return claim('tab.rename', () => requestTerminalTabRename(tabId))
       }
     ],
@@ -208,6 +225,7 @@ export function createAppCommandHandlers(
         if (!workspaceChromeActive || floatingWorkspaceFocused || !activeWorktreeId) {
           return false
         }
+
         return claim('workspace.rename', () => {
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
@@ -220,11 +238,14 @@ export function createAppCommandHandlers(
         if (floatingWorkspaceFocused) {
           return false
         }
+
         const store = useAppStore.getState()
         const target = resolveHoveredWorkspaceDeleteTarget(store)
+
         if (!target) {
           return false
         }
+
         return claim('workspace.delete', () => {
           deleteHoveredWorkspaceImmediately(store, target)
         })
@@ -236,6 +257,7 @@ export function createAppCommandHandlers(
         if (activeView === 'settings') {
           return false
         }
+
         return claim('workspace.openBoard', () => {
           useAppStore.getState().setSidebarOpen(true)
           window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
@@ -246,9 +268,11 @@ export function createAppCommandHandlers(
       'view.tasks',
       () => {
         const store = useAppStore.getState()
+
         if (activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
           return false
         }
+
         return claim('view.tasks', () => store.openTaskPage())
       }
     ],

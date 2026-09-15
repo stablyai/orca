@@ -91,11 +91,13 @@ afterEach(() => {
 describe('createDirectSshHostHydration', () => {
   it('replaces only the exact SSH host catalog when repo IDs collide', async () => {
     const owner = authority()
+
     const store = createStore<AppState>(() =>
       state({
         repos: [repo('shared', null), repo('shared', 'target-a'), repo('shared', 'target-b')]
       })
     )
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(async () => hostSnapshot(owner, [repo('shared', 'target-a')])),
@@ -115,6 +117,7 @@ describe('createDirectSshHostHydration', () => {
 
   it('keeps the manual cross-host order when the host catalog is republished', async () => {
     const owner = authority('box')
+
     const store = createStore<AppState>(() =>
       state({
         repos: [repo('bravo', 'box'), repo('alpha', null), repo('delta', 'box')],
@@ -125,6 +128,7 @@ describe('createDirectSshHostHydration', () => {
         ]
       })
     )
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(async () =>
@@ -143,6 +147,7 @@ describe('createDirectSshHostHydration', () => {
   // the newcomer sinks to the tail, rather than the overlay being discarded for being incomplete.
   it('keeps ranked rows in order and appends unranked ones when the overlay is partial', async () => {
     const owner = authority('box')
+
     const store = createStore<AppState>(() =>
       state({
         repos: [repo('bravo', 'box'), repo('alpha', null), repo('delta', 'box')],
@@ -152,6 +157,7 @@ describe('createDirectSshHostHydration', () => {
         ]
       })
     )
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(async () =>
@@ -174,6 +180,7 @@ describe('createDirectSshHostHydration', () => {
     store.subscribe(() => {
       publications += 1
     })
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(async () =>
@@ -193,13 +200,16 @@ describe('createDirectSshHostHydration', () => {
     const owner = authority()
     const store = createStore<AppState>(() => state({ repos: [repo('cached', 'target-a')] }))
     let resolveLate!: (value: HostRepoCatalogSnapshot) => void
+
     const lateSnapshot = new Promise<HostRepoCatalogSnapshot>((resolve) => {
       resolveLate = resolve
     })
+
     let publications = 0
     store.subscribe(() => {
       publications += 1
     })
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(() => lateSnapshot),
@@ -232,13 +242,16 @@ describe('createDirectSshHostHydration', () => {
     const store = createStore<AppState>(() => state({ repos: [repo('cached', 'target-a')] }))
     let current = true
     let resolve!: (value: ReturnType<typeof hostSnapshot>) => void
+
     const pendingSnapshot = new Promise<HostRepoCatalogSnapshot>((settle) => {
       resolve = settle
     })
+
     let publications = 0
     store.subscribe(() => {
       publications += 1
     })
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: () => pendingSnapshot,
@@ -259,6 +272,7 @@ describe('createDirectSshHostHydration', () => {
     vi.useFakeTimers()
     const owner = authority()
     const store = createStore<AppState>(() => state())
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: () => new Promise<HostRepoCatalogSnapshot>(() => {}),
@@ -277,6 +291,7 @@ describe('createDirectSshHostHydration', () => {
 
   it('replaces only exact-host Git and folder lineage across both key namespaces', async () => {
     const owner = authority()
+
     const store = createStore<AppState>(() =>
       state({
         repos: [
@@ -352,6 +367,7 @@ describe('createDirectSshHostHydration', () => {
         }
       })
     )
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(),
@@ -429,6 +445,7 @@ describe('createDirectSshHostHydration', () => {
     const foreignLineage = productionLineage('b::/work', 'b::/parent')
     const hostWorkspace = productionWorkspaceLineage('a::/work', 'a::/parent')
     const foreignWorkspace = productionWorkspaceLineage('b::/work', 'b::/parent')
+
     const store = createStore<AppState>(() =>
       state({
         repos: [repo('a', 'target-a'), repo('b', 'target-b')],
@@ -446,6 +463,7 @@ describe('createDirectSshHostHydration', () => {
         }
       })
     )
+
     const snapshot: HostLineageSnapshot = {
       authoritative: true,
       authority: {
@@ -460,16 +478,19 @@ describe('createDirectSshHostHydration', () => {
         [worktreeWorkspaceKey('a::/work')]: hostWorkspace
       }
     }
+
     let publications = 0
     store.subscribe(() => {
       publications += 1
     })
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(),
       listLineage: vi.fn(async () => structuredClone(snapshot)),
       isCurrentAuthority: () => true
     })
+
     const beforeLineage = store.getState().worktreeLineageById
     const beforeWorkspace = store.getState().workspaceLineageByChildKey
 
@@ -498,6 +519,7 @@ describe('createDirectSshHostHydration', () => {
 
   it('rejects lineage captured before a newer same-authority catalog revision', async () => {
     const owner = authority()
+
     const store = createStore<AppState>(() =>
       state({
         repos: [repo('a', 'target-a')],
@@ -509,20 +531,26 @@ describe('createDirectSshHostHydration', () => {
         }
       })
     )
+
     let resolveLineage!: (value: HostLineageSnapshot) => void
+
     const pendingLineage = new Promise<HostLineageSnapshot>((resolve) => {
       resolveLineage = resolve
     })
+
     const hydration = createDirectSshHostHydration({
       store,
       listRepos: vi.fn(async () => hostSnapshot(owner, [repo('a', 'target-a')])),
       listLineage: () => pendingLineage,
       isCurrentAuthority: () => true
     })
+
     const firstInput = await hydration.capturePreparationInput(owner, 'reconnect')
+
     if (!firstInput) {
       throw new Error('Expected first preparation input')
     }
+
     const pending = hydration.readHostScopedLineage(firstInput)
     await hydration.capturePreparationInput(owner, 'wake-refresh')
     const beforeLateLineage = store.getState().worktreeLineageById

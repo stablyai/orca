@@ -13,6 +13,7 @@ describe('agent-browser process environment', () => {
       platform: 'darwin',
       userDataPath: `/private/var/folders/${'long-profile-segment/'.repeat(12)}`
     })
+
     const socketDirectory = env.AGENT_BROWSER_SOCKET_DIR
 
     expect(ownsSocketDirectory).toBe(true)
@@ -30,6 +31,7 @@ describe('agent-browser process environment', () => {
       platform: 'linux',
       userDataPath: '/profile'
     })
+
     expect(configured.env.AGENT_BROWSER_SOCKET_DIR).toBe('/custom/socket-dir')
     expect(configured.ownsSocketDirectory).toBe(false)
 
@@ -38,6 +40,7 @@ describe('agent-browser process environment', () => {
       platform: 'win32',
       userDataPath: 'C:\\Users\\Orca'
     })
+
     expect(windows.env.AGENT_BROWSER_SOCKET_DIR).toBeUndefined()
     expect(windows.env.PATH).toBe('C:\\Windows')
     expect(windows.ownsSocketDirectory).toBe(false)
@@ -52,6 +55,7 @@ describe('agent-browser process environment', () => {
         platform,
         userDataPath: '/profile'
       })
+
       expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe(String(AGENT_BROWSER_IDLE_TIMEOUT_MS))
     }
   )
@@ -66,6 +70,7 @@ describe('agent-browser process environment', () => {
       platform: 'darwin',
       userDataPath: '/profile'
     })
+
     expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe('5000')
   })
 
@@ -74,11 +79,13 @@ describe('agent-browser process environment', () => {
     vi.mocked(fs.mkdirSync).mockImplementationOnce(() => {
       throw new Error('EACCES')
     })
+
     const { env, ownsSocketDirectory } = createAgentBrowserProcessEnvironment({
       inheritedEnv: { PATH: '/bin' },
       platform: 'linux',
       userDataPath: '/profile'
     })
+
     expect(env.AGENT_BROWSER_SOCKET_DIR).toBeUndefined()
     expect(ownsSocketDirectory).toBe(false)
     expect(env.AGENT_BROWSER_IDLE_TIMEOUT_MS).toBe(String(AGENT_BROWSER_IDLE_TIMEOUT_MS))

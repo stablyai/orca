@@ -27,6 +27,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     // An inaccessible process is still alive; only a missing pid proves exit.
@@ -37,6 +38,7 @@ function isAlive(pid: number): boolean {
 // Teardown is asynchronous; poll instead of guessing how long the job takes.
 async function waitUntilDead(pid: number, timeoutMs = 30_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (isAlive(pid) && Date.now() < deadline) {
     await sleep(50)
   }
@@ -60,6 +62,7 @@ describeOnWindows('ConPTY job ownership', () => {
     grandchildPid: number
   }> {
     const nodePty = await import('node-pty')
+
     const proc = nodePty.spawn('cmd.exe', [], {
       name: 'xterm-256color',
       cols: 80,
@@ -67,11 +70,13 @@ describeOnWindows('ConPTY job ownership', () => {
       cwd: process.cwd(),
       useConptyDll: true
     })
+
     spawned.push(proc)
 
     let grandchildPid: number | null = null
     proc.onData((chunk) => {
       const match = /ORCA_GC=(\d+)/.exec(chunk)
+
       if (match && grandchildPid === null) {
         grandchildPid = Number(match[1])
       }
@@ -83,16 +88,20 @@ describeOnWindows('ConPTY job ownership', () => {
       "{detached:true,windowsHide:true,stdio:'ignore'});",
       "c.unref();console.log('ORCA_GC='+c.pid);"
     ].join('')
+
     proc.write(`node -e "${script}"\r`)
 
     for (let attempt = 0; attempt < 80 && grandchildPid === null; attempt += 1) {
       await sleep(250)
     }
+
     if (grandchildPid === null) {
       throw new Error('grandchild never reported its pid')
     }
+
     // Let the shell settle so the pid list is not read mid-spawn.
     await sleep(1_000)
+
     return { proc, grandchildPid }
   }
 
@@ -136,6 +145,7 @@ describeOnWindows('ConPTY job ownership', () => {
     await sleep(2_000)
 
     expect(isAlive(grandchildPid)).toBe(true)
+
     try {
       process.kill(grandchildPid)
     } catch {
@@ -153,6 +163,7 @@ describeOnWindows('ConPTY job ownership', () => {
     // Covering it needs a helper that passes the flag to CreateProcess.
     const nodePty = await import('node-pty')
     const marker = join(mkdtempSync(join(tmpdir(), 'orca-breakaway-')), 'marker.txt')
+
     const proc = nodePty.spawn('cmd.exe', [], {
       name: 'xterm-256color',
       cols: 100,
@@ -160,6 +171,7 @@ describeOnWindows('ConPTY job ownership', () => {
       cwd: tmpdir(),
       useConptyDll: true
     })
+
     spawned.push(proc)
 
     let output = ''

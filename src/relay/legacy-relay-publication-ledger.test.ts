@@ -9,10 +9,12 @@ describe('LegacyRelayPublicationLedger', () => {
       relayHighBytes: 15,
       relayLowBytes: 8
     })
+
     const first = ledger.tryReserve([
       { clientKey: 'a', bytes: 7 },
       { clientKey: 'b', bytes: 7 }
     ])
+
     expect(first).not.toBeNull()
     expect(ledger.retainedBytes).toBe(14)
     expect(ledger.tryReserve([{ clientKey: 'a', bytes: 4 }])).toBeNull()
@@ -30,10 +32,12 @@ describe('LegacyRelayPublicationLedger', () => {
       relayHighBytes: 20,
       relayLowBytes: 5
     })
+
     const leases = ledger.tryReserve([
       { clientKey: 'a', bytes: 4 },
       { clientKey: 'b', bytes: 4 }
     ])
+
     expect(ledger.belowLowWater()).toBe(false)
 
     leases?.[0].release()

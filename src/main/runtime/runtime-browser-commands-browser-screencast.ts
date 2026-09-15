@@ -40,27 +40,35 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
         'Client-hosted browser pages do not support server screencast.'
       )
     }
+
     const target = await this.resolveBrowserCommandTarget(params)
+
     const { browserPageId, webContents: guest } = this.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId
     )
+
     const subscriptionId = `browser-screencast:${browserPageId}:${randomUUID()}`
     const viewport = normalizeScreencastViewport(params)
     const budget = normalizeScreencastFrameBudget(params)
     let resolveSubscriberDone!: () => void
+
     const subscriberDone = new Promise<void>((resolve) => {
       resolveSubscriberDone = resolve
     })
+
     let createdPageStream = false
     let active = this.activeScreencastsByPageId.get(browserPageId)
+
     while (active?.stopping) {
       await active.session?.done
       active = this.activeScreencastsByPageId.get(browserPageId)
     }
+
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
+
       const record = {
         format: params.format,
         session: null,
@@ -69,22 +77,26 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
         viewportOwnerSubscriptionId: null,
         appliedBudget: budget
       } as ActiveBrowserScreencastPage
+
       record.started = startBrowserScreencast(guest, {
         format: params.format,
         ...budget,
         ...viewport,
         onFrame: (bytes) => {
           const ghosts: string[] = []
+
           for (const [subscriptionId, subscriber] of record.subscribers) {
             // A slow viewer drops this frame without stalling every other viewer, but the
             // newest refusal is retained so a gate that opens later can still be filled.
             const delivered = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
             subscriber.pendingFrame = delivered ? null : bytes
             subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, delivered)
+
             if (screencastSubscriberIsGhost(subscriber.delivery)) {
               ghosts.push(subscriptionId)
             }
           }
+
           // Evicting after the fan-out keeps a teardown that stops the session from cutting the
           // remaining viewers out of this frame.
           for (const subscriptionId of ghosts) {
@@ -92,6 +104,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
               this.leaveScreencastSubscriber(record, subscriptionId, record.session)
             }
           }
+
           return true
         },
         onEvent: (event) => {
@@ -110,19 +123,23 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
       void record.started
         .then((session) => {
           record.session = session
+
           return session.done
         })
         .finally(() => {
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)
           }
+
           for (const subscriber of record.subscribers.values()) {
             subscriber.resolveDone()
           }
+
           record.subscribers.clear()
         })
         .catch(() => {})
     }
+
     active.subscribers.set(subscriptionId, {
       sendBinary: stream.sendBinary,
       emit: stream.emit,
@@ -134,12 +151,15 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
     })
+
     // Why: normalizeScreencastViewport keeps undefined dimensions, so a sizeless
     // subscriber taking ownership would clear the emulation for every viewer.
     if (hasScreencastViewportSize(viewport)) {
       active.viewportOwnerSubscriptionId = subscriptionId
     }
+
     let session: BrowserScreencastSession
+
     try {
       session = await active.started
     } catch (error) {
@@ -147,6 +167,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
       resolveSubscriberDone()
       throw error
     }
+
     // Why: a device that force-quit and reconnected arrives on a fresh socket, so the
     // connection-keyed replacement upstream cannot see its old subscription. Run this after the
     // joiner is registered — the page then never empties mid-replacement and stops the stream.
@@ -158,20 +179,25 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
         }
       }
     }
+
     if (!createdPageStream) {
       if (active.viewportOwnerSubscriptionId === subscriptionId) {
         await session.updateViewport(viewport)
       }
+
       await applySharedScreencastFrameBudget(active, session)
     }
+
     return {
       subscriptionId,
       flushPendingFrame: () => {
         const subscriber = active.subscribers.get(subscriptionId)
         const bytes = subscriber?.pendingFrame
+
         if (!subscriber || !bytes) {
           return
         }
+
         const delivered = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
         subscriber.pendingFrame = delivered ? null : bytes
         // The replay is this subscriber's first chance to reach its socket, so it is also where
@@ -197,6 +223,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
     params: { expression: string } & BrowserCommandTargetParams
   ): Promise<BrowserEvalResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().evaluate(
       params.expression,
       target.worktreeId,

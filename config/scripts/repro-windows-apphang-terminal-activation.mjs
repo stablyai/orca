@@ -12,6 +12,7 @@ import { runGpuMode } from './windows-apphang-repro/terminal-activation-scenario
 import { summarizeResult } from './windows-apphang-repro/apphang-report-summary.mjs'
 
 const defaultCycles = 14
+
 const defaultOutputLines = 1_600
 
 function parseArgs() {
@@ -32,56 +33,72 @@ function parseArgs() {
       printHelp()
       process.exit(0)
     }
+
     if (arg === '--keep') {
       args.keep = true
       continue
     }
+
     if (arg === '--no-source-control') {
       args.sourceControl = false
       continue
     }
+
     if (arg === '--no-dead-pty-reactivate') {
       args.deadPtyReactivate = false
       continue
     }
+
     const [name, value] = arg.split('=', 2)
+
     if (name === '--cycles') {
       args.cycles = parsePositiveInt(name, value)
       continue
     }
+
     if (name === '--distro') {
       args.distro = value?.trim() || null
       continue
     }
+
     if (name === '--expect') {
       if (!['none', 'repro', 'pass'].includes(value)) {
         throw new Error(`Unsupported --expect=${value}. Use none, repro, or pass.`)
       }
+
       args.expect = value
       continue
     }
+
     if (name === '--gpu') {
       const modes = (value ?? '')
         .split(',')
         .map((entry) => entry.trim())
         .filter(Boolean)
+
       if (modes.length === 0 || modes.some((mode) => !['on', 'off', 'auto'].includes(mode))) {
         throw new Error(`Unsupported --gpu=${value}. Use on, off, auto, or a comma-list.`)
       }
+
       args.gpuModes = modes
       continue
     }
+
     if (name === '--output-lines') {
       args.outputLines = parsePositiveInt(name, value)
       continue
     }
+
     if (name === '--report') {
       args.reportPath = value?.trim() || null
+
       if (!args.reportPath) {
         throw new Error('--report requires a file path.')
       }
+
       continue
     }
+
     throw new Error(`Unknown argument: ${arg}`)
   }
 
@@ -107,9 +124,11 @@ Options:
 
 function parsePositiveInt(name, value) {
   const parsed = Number.parseInt(value ?? '', 10)
+
   if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== value) {
     throw new Error(`${name} requires a positive integer.`)
   }
+
   return parsed
 }
 
@@ -117,12 +136,15 @@ async function main() {
   if (process.platform !== 'win32') {
     throw new Error('This repro harness is intentionally Windows-only.')
   }
+
   const args = parseArgs()
   const distros = listWslDistros()
   const distro = args.distro ?? distros[0]
+
   if (!distro) {
     throw new Error('No user WSL distro found. Install/enable WSL or pass --distro=NAME.')
   }
+
   console.log(
     `[apphang-repro] issue=https://github.com/stablyai/orca/issues/6874 distro=${distro} gpuModes=${args.gpuModes.join(',')} cycles=${args.cycles}`
   )
@@ -132,9 +154,11 @@ async function main() {
   )
 
   const results = []
+
   try {
     for (const gpuMode of args.gpuModes) {
       results.push(await runGpuMode(gpuMode, args, fixture))
+
       if (args.expect === 'repro' && results.at(-1)?.reproduced) {
         break
       }
@@ -153,6 +177,7 @@ async function main() {
     summary: results.map(summarizeResult),
     results
   }
+
   if (args.reportPath) {
     const reportPath = path.resolve(args.reportPath)
     mkdirSync(path.dirname(reportPath), { recursive: true })
@@ -166,24 +191,30 @@ async function main() {
   // it must fail both --expect=repro and --expect=pass rather than being
   // miscounted as hang evidence or as a clean pass.
   const harnessErrors = results.filter((result) => result.harnessError)
+
   if (harnessErrors.length > 0) {
     const harnessErrorLines = harnessErrors
       .map((result) => `  gpu=${result.gpuMode}: ${result.harnessError}`)
       .join('\n')
+
     console.error(
       `[apphang-repro] Harness failed in ${harnessErrors.length} run(s); result inconclusive:\n${harnessErrorLines}`
     )
+
     if (args.expect !== 'none') {
       process.exit(1)
     }
   }
+
   const reproduced = results.some((result) => result.reproduced)
+
   if (args.expect === 'repro' && !reproduced) {
     console.error(
       '[apphang-repro] Expected to reproduce the hang, but no hang evidence was observed.'
     )
     process.exit(1)
   }
+
   if (args.expect === 'pass' && reproduced) {
     console.error('[apphang-repro] Expected a clean pass, but hang evidence was observed.')
     process.exit(1)

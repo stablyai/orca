@@ -53,6 +53,7 @@ describe('structured agent session launch', () => {
 
     const intent = createStructuredAgentSessionLaunchIntent('workspace-1', 'codex')
     const receipt = await launchStructuredAgentSession(intent)
+
     const params = vi
       .mocked(callStructuredAgentSession)
       .mock.calls.find(([, method]) => method === 'agentSession.create')?.[2] as {
@@ -151,6 +152,7 @@ describe('structured agent session launch', () => {
     const notResolvableYet = Object.assign(new Error('selector_not_found'), {
       code: 'selector_not_found'
     })
+
     vi.mocked(callStructuredAgentSession)
       .mockRejectedValueOnce(notResolvableYet)
       .mockRejectedValueOnce(notResolvableYet)
@@ -243,6 +245,7 @@ describe('structured agent session launch', () => {
     const createCalls = vi
       .mocked(callStructuredAgentSession)
       .mock.calls.filter(([, method]) => method === 'agentSession.create')
+
     const first = createCalls[0]?.[2]
     const second = createCalls[1]?.[2]
     expect(first).toBe(intent.params)
@@ -312,6 +315,7 @@ describe('structured agent session launch', () => {
       mockSupportedCreate(() => {
         throw Object.assign(new Error(code), { code })
       })
+
       const oldHostError = await launchStructuredAgentSession(
         createStructuredAgentSessionLaunchIntent(`workspace-old-host-${code}`, 'codex')
       ).catch((caught: unknown) => caught)
@@ -325,6 +329,7 @@ describe('structured agent session launch', () => {
     mockSupportedCreate(() => {
       throw Object.assign(new Error('Connection lost'), { code: 'runtime_error' })
     })
+
     const transportError = await launchStructuredAgentSession(
       createStructuredAgentSessionLaunchIntent('workspace-offline', 'codex')
     ).catch((caught: unknown) => caught)

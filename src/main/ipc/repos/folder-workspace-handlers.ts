@@ -32,6 +32,7 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_path_status_args'
     ) as FolderWorkspacePathStatusRequest
+
     return getFolderWorkspacePathStatus(store, args, { getSshFilesystemProvider })
   })
 
@@ -43,15 +44,19 @@ export function registerFolderWorkspaceHandlers(
         rawArgs,
         'invalid_folder_workspace_create_args'
       )
+
       const projectGroups = store.getProjectGroups()
       const group = projectGroups.find((entry) => entry.id === args.projectGroupId)
+
       const folderPath =
         typeof args.folderPath === 'string' && args.folderPath.trim().length > 0
           ? args.folderPath
           : group?.parentPath
+
       if (!group || !folderPath) {
         throw new Error('folder_workspace_project_group_not_found')
       }
+
       const status = await getFolderWorkspacePathStatusForPath(
         {
           folderPath,
@@ -62,12 +67,16 @@ export function registerFolderWorkspaceHandlers(
         },
         { getSshFilesystemProvider }
       )
+
       assertFolderWorkspacePathUsable(status)
+
       const workspace = store.createFolderWorkspace({
         ...args,
         creatorProvenance: { kind: 'host' }
       })
+
       notifyReposChanged(mainWindow)
+
       return workspace
     }
   )
@@ -80,15 +89,19 @@ export function registerFolderWorkspaceHandlers(
         rawArgs,
         'invalid_folder_workspace_update_args'
       )
+
       if (
         typeof args.updates.folderPath === 'string' &&
         args.updates.folderPath.trim().length > 0
       ) {
         const workspace = store.getFolderWorkspace(args.folderWorkspaceId)
+
         if (!workspace) {
           return null
         }
+
         const projectGroups = store.getProjectGroups()
+
         const status = await getFolderWorkspacePathStatusForPath(
           {
             folderPath: args.updates.folderPath,
@@ -102,12 +115,16 @@ export function registerFolderWorkspaceHandlers(
           },
           { getSshFilesystemProvider }
         )
+
         assertFolderWorkspacePathUsable(status)
       }
+
       const updated = store.updateFolderWorkspace(args.folderWorkspaceId, args.updates)
+
       if (updated) {
         notifyReposChanged(mainWindow)
       }
+
       return updated
     }
   )
@@ -118,6 +135,7 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
+
     // Why: the runtime owns PTY/browser/session teardown and notifies on success.
     return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId)).deleted
   })

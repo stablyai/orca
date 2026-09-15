@@ -13,15 +13,20 @@ describe('SSH file stream inactivity timer', () => {
     const allocate = vi.spyOn(globalThis, 'setTimeout')
     const onTimeout = vi.fn()
     const unsubscribe = vi.fn()
+
     const deadline = createSshFileStreamInactivityDeadline(onTimeout, (listener) => {
       listener.onResume()
+
       return unsubscribe
     })
+
     deadline.reset()
     vi.advanceTimersByTime(30_000)
+
     for (let chunk = 0; chunk < 1000; chunk += 1) {
       deadline.reset()
     }
+
     expect(allocate).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(59_999)
     expect(onTimeout).not.toHaveBeenCalled()
@@ -37,17 +42,22 @@ describe('SSH file stream inactivity timer', () => {
     const allocate = vi.spyOn(globalThis, 'setTimeout')
     const onTimeout = vi.fn()
     let power!: SystemPowerLifecycleListener
+
     const deadline = createSshFileStreamInactivityDeadline(onTimeout, (listener) => {
       power = listener
       listener.onResume()
+
       return vi.fn()
     })
+
     deadline.reset()
     vi.advanceTimersByTime(30_000)
     power.onSuspend()
+
     for (let chunk = 0; chunk < 1000; chunk += 1) {
       deadline.reset()
     }
+
     expect(vi.getTimerCount()).toBe(0)
     vi.advanceTimersByTime(120_000)
     expect(onTimeout).not.toHaveBeenCalled()
@@ -65,10 +75,13 @@ describe('SSH file stream inactivity timer', () => {
     vi.useFakeTimers()
     const onTimeout = vi.fn()
     const unsubscribe = vi.fn()
+
     const subscribe = vi.fn((listener: SystemPowerLifecycleListener) => {
       listener.onResume()
+
       return unsubscribe
     })
+
     const deadline = createSshFileStreamInactivityDeadline(onTimeout, subscribe)
     deadline.reset()
     deadline.clear()

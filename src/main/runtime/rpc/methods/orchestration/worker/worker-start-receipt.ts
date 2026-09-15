@@ -21,11 +21,14 @@ export function failWorkerStartWithReceipt(args: {
   const agentSessionRefusal = isAgentSessionPtyWriteRefusedError(args.error)
     ? args.error.refusal
     : undefined
+
   const reason =
     (agentSessionRefusal &&
       structuredChatPtyWriteRefusalCopy(agentSessionRefusal, 'worker-start')) ??
     (args.error instanceof Error ? args.error.message : String(args.error))
+
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
+
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason, {
@@ -33,12 +36,15 @@ export function failWorkerStartWithReceipt(args: {
         // verdict never means the worker lacks its task — keep the authority its report needs.
         retainCapability: isAgentPromptStalledError(args.error)
       })
+
   // Only name cleanup this start actually left behind: a terminal it created and still owns. A
   // structured session is discarded by the teardown, a pane the user typed into is theirs, and an
   // unknown outcome is not settled — none of the three has anything for `worker-release` to close.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
+
   const releasable =
     residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)
+
   return {
     runId: args.runId,
     taskId: args.taskId,

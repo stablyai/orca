@@ -5,7 +5,9 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const FIXTURE_REPO_ID = 'dev-fixture-repo'
+
 const FIXTURE_WORKTREE_ID = `${FIXTURE_REPO_ID}::/dev/orca-sample`
+
 const FIXTURE_LEAF_IDS = [
   '11111111-1111-4111-8111-111111111111',
   '22222222-2222-4222-8222-222222222222',
@@ -63,6 +65,7 @@ function fixtureTab(id: string, title: string, sortOrder: number): TerminalTab {
 /** Populate a fresh development profile with representative activity rows. */
 export function seedDevActivityFixture(): void {
   const state = useAppStore.getState()
+
   if (state.repos.length > 0 || Object.keys(state.agentStatusByPaneKey).length > 0) {
     return
   }
@@ -70,6 +73,7 @@ export function seedDevActivityFixture(): void {
   const now = Date.now()
   const repo = fixtureRepo()
   const worktree = fixtureWorktree()
+
   const tabs = [
     fixtureTab('dev-fixture-tab-1', 'Refactor activity filters', 0),
     fixtureTab('dev-fixture-tab-2', 'Review empty-state copy', 1),

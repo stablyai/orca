@@ -22,6 +22,7 @@ const TERMINAL_IME_CANDIDATE_SELECTION_KEYS = new Set([
   '8',
   '9'
 ])
+
 const TERMINAL_IME_CANDIDATE_DIGITS = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
 
 function isTerminalImeCandidateSelectionKey(key: string): boolean {
@@ -34,6 +35,7 @@ export function isTerminalImeCandidateSelectionKeyEvent(event: XtermBypassEvent)
   if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
     return false
   }
+
   return isTerminalImeCandidateSelectionKey(event.key)
 }
 
@@ -56,6 +58,7 @@ export function armTerminalImePendingCandidateKeyRelease(
   if (event.type !== 'keydown' || !isTerminalImeCandidateSelectionKeyEvent(event)) {
     return
   }
+
   releases.set(event.key, now + TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS)
 }
 
@@ -74,18 +77,23 @@ export function shouldApplyTerminalImePendingCandidateKeyRelease(
       releases.has(event.key)
     )
   }
+
   if (event.type === 'keyup') {
     // Why: keyup modifier flags can reflect keys pressed after the original
     // selector keydown, so release suppression matches only the pending key.
     return isTerminalImeCandidateSelectionKey(event.key) && releases.has(event.key)
   }
+
   if (!isTerminalImeCandidateSelectionKeyEvent(event)) {
     return false
   }
+
   const expiresAt = releases.get(event.key)
+
   if (expiresAt === undefined) {
     return false
   }
+
   return now <= expiresAt
 }
 

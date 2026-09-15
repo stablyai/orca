@@ -38,11 +38,13 @@ export function activeArtifactListSearchQuery(
   if (isClipboardTextByteLengthOverLimit(rawQuery, maxBytes)) {
     return null
   }
+
   return rawQuery.trim().toLowerCase() || null
 }
 
 export function artifactMatchesSearchQuery(item: ArtifactListItem, query: string): boolean {
   const activeQuery = activeArtifactListSearchQuery(query)
+
   return activeQuery === null || artifactSearchHaystack(item).includes(activeQuery)
 }
 
@@ -52,8 +54,10 @@ export function filterArtifactsBySearchQuery(
 ): readonly ArtifactListItem[] {
   // Why: normalize once per filter, not once per artifact.
   const activeQuery = activeArtifactListSearchQuery(query)
+
   if (activeQuery === null) {
     return artifacts
   }
+
   return artifacts.filter((item) => artifactSearchHaystack(item).includes(activeQuery))
 }

@@ -17,11 +17,13 @@ describe('skill bundle artifacts', () => {
     const target = join(resourceRoot, 'skills')
     const source = resolve('resources', 'skills')
     await mkdir(target, { recursive: true })
+
     const [manifest, registry, releaseMapping] = await Promise.all(
       ['current-manifest.json', 'snapshot-registry.json', 'release-mapping.json'].map((name) =>
         readFile(join(source, name), 'utf8')
       )
     )
+
     await Promise.all([
       writeFile(join(target, 'current-manifest.json'), manifest),
       writeFile(join(target, 'snapshot-registry.json'), registry),
@@ -39,9 +41,11 @@ describe('skill bundle artifacts', () => {
     const legacyManifest = JSON.parse(manifest)
     legacyManifest.schemaVersion = 1
     legacyManifest.appVersion = '1.0.0'
+
     for (const skill of legacyManifest.skills) {
       skill.appVersion = '1.0.0'
     }
+
     await Promise.all([
       writeFile(join(legacyTarget, 'current-manifest.json'), JSON.stringify(legacyManifest)),
       writeFile(join(legacyTarget, 'snapshot-registry.json'), registry),
@@ -59,11 +63,13 @@ describe('skill bundle artifacts', () => {
     const target = join(resourceRoot, 'skills')
     const source = resolve('resources', 'skills')
     await mkdir(target, { recursive: true })
+
     const [manifest, registry, releaseMapping] = await Promise.all(
       ['current-manifest.json', 'snapshot-registry.json', 'release-mapping.json'].map((name) =>
         readFile(join(source, name), 'utf8')
       )
     )
+
     const malformedMapping = JSON.parse(releaseMapping)
     malformedMapping.releases[0] = { appVersion: 'invalid' }
     await Promise.all([

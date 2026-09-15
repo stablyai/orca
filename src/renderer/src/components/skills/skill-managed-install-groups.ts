@@ -17,6 +17,7 @@ function groupKey(install: ManagedSkillInstall): string {
     install.versionId,
     install.bundleDigest ?? install.name
   ]
+
   return identity.join(':')
 }
 
@@ -24,13 +25,16 @@ export function groupManagedSkillInstalls(
   installs: readonly ManagedSkillInstall[]
 ): SkillManagedInstallGroup[] {
   const groups = new Map<string, SkillManagedInstallGroup>()
+
   for (const install of installs) {
     const key = groupKey(install)
     const existing = groups.get(key)
+
     if (existing) {
       existing.installs.push(install)
       continue
     }
+
     groups.set(key, {
       key,
       packageId: install.packageId,
@@ -41,6 +45,7 @@ export function groupManagedSkillInstalls(
       installs: [install]
     })
   }
+
   return [...groups.values()].map((group) => ({
     ...group,
     installs: group.installs.sort((left, right) => left.name.localeCompare(right.name))
@@ -51,5 +56,6 @@ export function groupInstallState(group: SkillManagedInstallGroup): ManagedSkill
   if (group.installs.some((install) => install.state === 'modified')) {
     return 'modified'
   }
+
   return group.installs.some((install) => install.state === 'missing') ? 'missing' : 'unchanged'
 }

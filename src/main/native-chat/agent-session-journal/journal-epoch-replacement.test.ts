@@ -24,12 +24,16 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 let clock = 1_000
+
 let database: OpenJournalDatabase
+
 const journals = createTrackedJournalOpener()
 
 function now(): number {
   clock += 1
+
   return clock
 }
 
@@ -65,6 +69,7 @@ afterEach(async () => {
   } catch {
     // Already closed by the case.
   }
+
   await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })

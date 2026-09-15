@@ -13,6 +13,7 @@ import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 // share a row with the GitHub side.
 
 export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
+
 export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
 
 // ── MR state mapping ────────────────────────────────────────────────
@@ -22,20 +23,25 @@ export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConc
 
 export function mapMRState(state: string, isDraft?: boolean, title?: string): MRState {
   const s = state?.toLowerCase()
+
   if (s === 'merged') {
     return 'merged'
   }
+
   if (s === 'closed') {
     return 'closed'
   }
+
   if (s === 'locked') {
     return 'locked'
   }
+
   // Why: GitLab supports drafts via either a boolean field (newer API) or
   // a `Draft:` / `WIP:` title prefix (legacy). Either signal counts.
   if (isDraft || (title && /^(draft|wip):\s*/i.test(title))) {
     return 'draft'
   }
+
   return 'opened'
 }
 
@@ -60,6 +66,7 @@ export function mapGitLabIssueInfo(data: {
   // command + --output flag combination. Accept both.
   const number = data.iid ?? data.number ?? 0
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
+
   return {
     number,
     title: data.title,
@@ -102,6 +109,7 @@ type GitLabMRRaw = {
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
   const mergeable = deriveMergeable(data)
   const mergeStateStatus = deriveMergeStateStatus(data, mergeable)
+
   return {
     number: data.iid ?? data.number ?? 0,
     title: data.title,
@@ -127,6 +135,7 @@ function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   if (data.has_conflicts === true) {
     return 'CONFLICTING'
   }
+
   // Why: detailed_merge_status is GitLab's richest signal. Treat
   // 'mergeable' as the only positive value — every other state
   // (checking, ci_must_pass, draft_status, etc.) is an unknown from the
@@ -134,9 +143,11 @@ function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   if (data.detailed_merge_status === 'mergeable') {
     return 'MERGEABLE'
   }
+
   if (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') {
     return 'CONFLICTING'
   }
+
   // Why: `detailed_merge_status` only exists from GitLab 15.6. Without this fallback an older
   // instance reports UNKNOWN forever, and the merge UI (which now gates on MERGEABLE) would
   // permanently show "Checking" with no merge button. Only the positive legacy value is trusted;
@@ -144,6 +155,7 @@ function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   if (data.detailed_merge_status === undefined && data.merge_status === 'can_be_merged') {
     return 'MERGEABLE'
   }
+
   return 'UNKNOWN'
 }
 
@@ -155,13 +167,17 @@ function deriveMergeStateStatus(
   if (mergeable === 'CONFLICTING') {
     return 'conflict'
   }
+
   if (mergeable === 'MERGEABLE') {
     return 'mergeable'
   }
+
   const status = data.detailed_merge_status?.toLowerCase()
+
   if (!status) {
     return undefined
   }
+
   return status
 }
 
@@ -176,24 +192,29 @@ export function derivePipelineStatus(
   if (!rollup) {
     return 'neutral'
   }
+
   if (typeof rollup === 'string') {
     return classifyPipelineString(rollup)
   }
+
   if (!Array.isArray(rollup)) {
     return classifyPipelineString(rollup.status ?? '')
   }
+
   // Why: a job array is just a check list, so route it through the shared classifier instead of
   // re-deriving the rules here — a local copy drifted (manual-only read green, an unrecognized
   // status demoted a passing pipeline to neutral).
   const { state } = summarizeProviderChecks(
     rollup.map((job) => {
       const s = job.status?.toLowerCase() ?? ''
+
       return {
         status: mapPipelineJobStatusToCheckStatus(s),
         conclusion: mapPipelineJobStatusToConclusion(s)
       }
     })
   )
+
   // Why: CheckStatus has no 'none'; an empty job list carries the same "nothing to report" meaning.
   return state === 'none' ? 'neutral' : state
 }
@@ -233,6 +254,7 @@ export function mapMRToWorkItem(
 ): GitLabWorkItem {
   const labels = (data.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name))
   const number = data.iid ?? 0
+
   return {
     // Why: id needs to be unique across providers in the picker. Prefix
     // 'gitlab-mr-' so a GitHub PR #5 and a GitLab MR !5 don't collide.
@@ -281,6 +303,7 @@ export function mapIssueToWorkItem(
   // Issues only ever resolve to 'opened' or 'closed' (issue state space is
   // narrower than MRs); coerce defensively without inventing values.
   const state = data.state?.toLowerCase() === 'opened' ? 'opened' : 'closed'
+
   return {
     id: `gitlab-issue-${data.id ?? `${repoId}-${number}`}`,
     type: 'issue',
@@ -298,12 +321,15 @@ export function mapIssueToWorkItem(
 
 function classifyPipelineString(status: string): CheckStatus {
   const s = status.toLowerCase()
+
   if (s === 'success') {
     return 'success'
   }
+
   if (s === 'failed' || s === 'action_required') {
     return 'failure'
   }
+
   // Why: GitLab only reports pipeline-level `manual` when the pipeline is *blocked* on a human
   // trigger (a manual job with allow_failure: false), so it is outstanding rather than broken or
   // done. Red overstated it; neutral would drop the cue entirely and paint the worktree card's MR
@@ -312,6 +338,7 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'manual') {
     return 'pending'
   }
+
   // Why: `skipped` and `canceled` pipelines stay neutral (the fall-through below) even though the
   // job rollup calls the same jobs passing/failing. GitLab's own MR widget paints both grey, and
   // `allow_merge_on_skipped_pipeline` defaults to false, so a skipped pipeline still blocks merge —
@@ -326,5 +353,6 @@ function classifyPipelineString(status: string): CheckStatus {
   ) {
     return 'pending'
   }
+
   return 'neutral'
 }

@@ -69,6 +69,7 @@ describe('process gone diagnostics', () => {
       { pid: 10, type: 'Tab', memory: { workingSetSize: 1024 * 500 } },
       { pid: 11, type: 'GPU', memory: { workingSetSize: 1024 * 500 } }
     ])
+
     expect(details.processMetricsLargestPid).toBe(10)
     expect(details.processMetricsLargestType).toBe('Tab')
   })
@@ -508,6 +509,7 @@ describe('process gone diagnostics', () => {
       { pid: 10, type: 'Tab', memory: { workingSetSize: -1024 * 50 } },
       { pid: 11, type: 'Tab', memory: { workingSetSize: 1024 * 100 } }
     ])
+
     expect(details.processMetricsRendererWorkingSetMB).toBe(100)
   })
 
@@ -519,6 +521,7 @@ describe('process gone diagnostics', () => {
         memory: { workingSetSize: 1024 * 10, peakWorkingSetSize: -1024 * 90 }
       }
     ])
+
     expect(details.processMetricsRendererPeakWorkingSetMB).toBe(0)
   })
 
@@ -533,6 +536,7 @@ describe('process gone diagnostics', () => {
     const details = collectProcessGoneMetricDetails([
       { pid: 10, type: 'Tab', memory: { workingSetSize: 1024 * 200 + 700 } }
     ])
+
     expect(details.processMetricsRendererWorkingSetMB).toBe(201)
   })
 
@@ -572,6 +576,7 @@ describe('process gone diagnostics', () => {
       },
       'renderer'
     )
+
     expect(details.processMetricsCount).toBe(1)
     expect(details.systemMemoryFreeMB).toBe(500)
     expect(details.processMetricsPreGoneRendererWorkingSetMB).toBe(100)
@@ -581,6 +586,7 @@ describe('process gone diagnostics', () => {
 
   it("arms an unref'd interval so sampling never holds the event loop open", () => {
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+
     try {
       startPreGoneCrashSampling(60_000)
       const timer = setIntervalSpy.mock.results[0]?.value as NodeJS.Timeout

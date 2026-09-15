@@ -32,16 +32,19 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   }
 ): void {
   const state = useAppStore.getState()
+
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     return
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   const launchAgent = opts?.startup?.launchAgent ?? opts?.agent ?? undefined
+
   if (
     launchAgent &&
     tabs.some(
@@ -55,11 +58,13 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
 
   if (!launchAgent) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+
     if (hasLivePty) {
       return
     }
 
     const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
+
     if (hasMirroredHostTabs) {
       // Why: the host session still owns these tabs — wait for the mirror to repopulate PTY handles instead of duplicating a terminal.
       return
@@ -70,6 +75,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
+
     if (tabs.length > 0 && renderableTabCount === 0) {
       return
     }
@@ -80,6 +86,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   }
 
   const startup = opts?.startup
+
   const viewModeProps = launchAgent
     ? initialAgentTabViewModeProps(state.settings, {
         agent: launchAgent,
@@ -89,6 +96,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         )
       })
     : {}
+
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
   void createWebRuntimeSessionTerminal({
     worktreeId,

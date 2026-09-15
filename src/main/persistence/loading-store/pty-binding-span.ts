@@ -18,6 +18,7 @@ export function spawnCommitBindingOrigin(
   if (expectedSourceBinding !== undefined) {
     return 'split'
   }
+
   return commit.isReattach === true || commit.agentSessionEnsure?.disposition === 'adopted'
     ? 'reattach'
     : 'spawn'
@@ -25,6 +26,7 @@ export function spawnCommitBindingOrigin(
 
 // Bound frequent no-op traces; writes, refusals, and failures are always recorded.
 export const PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW = 200
+
 const FAST_LANE_WINDOW_MS = 60_000
 
 let fastLaneWindow: { startMs: number; emitted: number } | null = null
@@ -33,10 +35,13 @@ function admitFastLaneSpan(nowMs: number): boolean {
   if (!fastLaneWindow || nowMs - fastLaneWindow.startMs >= FAST_LANE_WINDOW_MS) {
     fastLaneWindow = { startMs: nowMs, emitted: 0 }
   }
+
   if (fastLaneWindow.emitted >= PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW) {
     return false
   }
+
   fastLaneWindow.emitted += 1
+
   return true
 }
 
@@ -68,9 +73,11 @@ export function startPtyBindingSpan(entry: {
       if (record.attributes['binding.outcome'] !== 'fast_lane') {
         return true
       }
+
       return admitFastLaneSpan(Date.now())
     }
   })
+
   return {
     setEligibility(verdict) {
       span.setAttribute('binding.eligible', verdict.eligible)
@@ -78,10 +85,13 @@ export function startPtyBindingSpan(entry: {
     },
     finish(outcome, error) {
       span.setAttribute('binding.outcome', outcome)
+
       if (outcome === 'threw') {
         span.fail(error instanceof Error ? error : String(error))
+
         return
       }
+
       span.end()
     }
   }

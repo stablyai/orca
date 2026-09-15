@@ -68,6 +68,7 @@ describe('parseJiraIssueUrl', () => {
 describe('Jira site and issue matching', () => {
   it('matches the complete origin and base path while retaining duplicate accounts', () => {
     const parsed = parseJiraIssueUrl('https://jira.company.com:8443/jira/browse/ORCA-123')!
+
     const matches = getMatchingJiraSites(parsed, [
       site('a', 'https://jira.company.com:8443/jira'),
       site('b', 'https://jira.company.com:8443/jira/'),
@@ -75,6 +76,7 @@ describe('Jira site and issue matching', () => {
       site('port', 'https://jira.company.com/jira'),
       site('query', 'https://jira.company.com:8443/jira?account=a')
     ])
+
     expect(matches.map((candidate) => candidate.id)).toEqual(['a', 'b'])
   })
 

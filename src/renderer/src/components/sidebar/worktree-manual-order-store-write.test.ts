@@ -16,7 +16,9 @@ import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-muta
  */
 
 const initialState = useAppStore.getInitialState()
+
 const REPO_ID = 'repo-manual-order'
+
 const GROUP_KEY = `repo:${REPO_ID}`
 
 const updateMeta = vi.fn().mockResolvedValue(undefined)
@@ -29,10 +31,12 @@ function seedManualOrderedRows(count: number): Worktree[] {
       manualOrder: 100_000 - index
     })
   )
+
   useAppStore.setState({
     sortBy: 'smart',
     worktreesByRepo: { [REPO_ID]: worktrees }
   })
+
   return worktrees
 }
 

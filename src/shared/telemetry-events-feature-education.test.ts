@@ -30,6 +30,7 @@ describe('feature education telemetry event schemas', () => {
       source: 'setup_guide_parallel_work',
       was_feature_previously_interacted: false
     })
+
     const outcome = eventSchemas.contextual_tour_outcome.safeParse({
       tour_id: 'workspace-agent-sessions',
       source: 'setup_guide_parallel_work',

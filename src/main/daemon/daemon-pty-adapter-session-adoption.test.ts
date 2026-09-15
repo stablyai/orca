@@ -30,6 +30,7 @@ const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMo
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -38,6 +39,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -51,6 +53,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
+
   let lastSpawnOpts: {
     sessionId: string
     cols: number
@@ -59,14 +62,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     env?: Record<string, string>
     command?: string
   } | null
+
   let daemonLog: DaemonFileLog
 
   beforeEach(async () => {
     const harness = await startDaemonAdapterHarness((opts) => {
       lastSpawnOpts = opts
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -176,11 +182,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('does not inspect cold history for attach-only ownership checks', async () => {
       const historyDir = join(dir, 'attach-only-history')
+
       const historyAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         historyPath: historyDir
       })
+
       const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
       const probe = vi.spyOn(reader, 'probeRestorableHistory')
       const getAppliedSize = vi.spyOn(historyAdapter, 'getAppliedSize')
@@ -205,6 +213,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnected = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const request = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
         isNew: false,
         snapshot: null,
@@ -212,7 +221,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         shellState: 'unsupported',
         incarnationId: 'legacy-stable-pane-incarnation'
       })
+
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+
       try {
         await expect(
           legacy.spawn({
@@ -247,6 +258,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnected = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const request = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockResolvedValueOnce({
@@ -257,7 +269,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           incarnationId: 'legacy-replacement-incarnation'
         })
         .mockResolvedValueOnce({})
+
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+
       try {
         await expect(
           legacy.spawn({
@@ -321,18 +335,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
       const exits: string[] = []
       adapter2.onExit(({ id: exitedId }) => exits.push(exitedId))
+
       const client = (
         adapter2 as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const request = client.request.bind(client)
       vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
         const result = await request(type, payload)
+
         if (type === 'createOrAttach') {
           lastSubprocess._simulateExit(0)
           await waitFor(() => exits.includes(id))
         }
+
         return result
       })
 
@@ -348,6 +366,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnected = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const request = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) =>
@@ -361,7 +380,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
                 incarnationId: 'legacy-attach-incarnation'
               } as never)
         )
+
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+
       try {
         await expect(legacy.attach('legacy-session')).resolves.toBeUndefined()
       } finally {
@@ -387,6 +408,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) =>
@@ -396,7 +418,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
               ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
               : ({} as never)
         )
+
       const current = new DaemonPtyAdapter({ socketPath, tokenPath })
+
       try {
         await expect(current.attach('raced-current-session')).rejects.toThrow(
           'Session not found: raced-current-session'
@@ -422,6 +446,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) =>
@@ -431,7 +456,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
               ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
               : ({} as never)
         )
+
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+
       try {
         await expect(legacy.attach('raced-legacy-session')).rejects.toThrow(
           'Session not found: raced-legacy-session'
@@ -458,19 +485,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async (type: string) => {
           if (type === 'getSize') {
             return { size: { cols: 100, rows: 30 } } as never
           }
+
           if (type === 'createOrAttach') {
             return { isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never
           }
+
           throw new Error('kill transport lost')
         })
+
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+
       try {
         await expect(legacy.attach('orphaned-legacy-session')).rejects.toBeInstanceOf(
           TerminalSessionOwnerUnverifiedError
@@ -495,7 +527,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     // proofs (terminal list demotion, send guard) are defeated forever.
     it('drops cached session ids an authoritative inventory omits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
       const staleId = 'repo::/repo/stale@@deadbeef'
+
       ;(adapter as unknown as { activeSessionIds: Set<string> }).activeSessionIds.add(staleId)
       expect(adapter.hasPty(staleId)).toBe(true)
 
@@ -542,6 +576,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         spawnSubprocess: (opts) => {
           lastSpawnOpts = opts
           lastSubprocess = createMockSubprocess()
+
           return lastSubprocess
         }
       })
@@ -559,6 +594,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       )
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
       try {
         adapter = new DaemonPtyAdapter({ socketPath, tokenPath, pidPath })
 
@@ -578,6 +614,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('reports the daemon session WSL owner', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       try {
         const spawned = await adapter.spawn({
           cols: 80,
@@ -599,10 +636,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.listProcesses()
       const firstIdentity = adapter.getLastAuthenticatedDaemonIdentity()
       expect(firstIdentity).not.toBeNull()
+
       const identityChanges: {
         previous: NonNullable<typeof firstIdentity>
         current: NonNullable<typeof firstIdentity>
       }[] = []
+
       adapter.onDaemonIdentityChanged(() => {
         throw new Error('audit listener failed')
       })
@@ -622,6 +661,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         spawnSubprocess: (opts) => {
           lastSpawnOpts = opts
           lastSubprocess = createMockSubprocess()
+
           return lastSubprocess
         }
       })
@@ -670,6 +710,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         state: string
         evidenceSources: readonly string[]
       }[] = []
+
       adapter.onAuditEligibilityObservation((observation) => observations.push(observation))
       await adapter.listProcesses()
 
@@ -747,6 +788,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('evicts oldest tombstone when exceeding limit', async () => {
       // Why: MAX_TOMBSTONES is 1000; spawning that many is slow, so verify eviction with a small batch via the public spawn API.
       const ids: string[] = []
+
       for (let i = 0; i < 5; i++) {
         const id = `evict-${i}`
         ids.push(id)

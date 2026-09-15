@@ -23,12 +23,16 @@ function refreshWindowsHostPath(env: NodeJS.ProcessEnv | undefined): NodeJS.Proc
   if (!env) {
     return undefined
   }
+
   const currentPath = process.env.Path ?? process.env.PATH
+
   if (currentPath === undefined) {
     return env
   }
+
   const next = { ...env }
   const pathKeys = Object.keys(next).filter((key) => key.toLowerCase() === 'path')
+
   if (pathKeys.length === 0) {
     next[process.env.Path === undefined ? 'PATH' : 'Path'] = currentPath
   } else {
@@ -36,6 +40,7 @@ function refreshWindowsHostPath(env: NodeJS.ProcessEnv | undefined): NodeJS.Proc
       next[key] = currentPath
     }
   }
+
   return next
 }
 
@@ -51,30 +56,38 @@ export function prepareWindowsHostGitEnvironment(
   ) {
     return null
   }
+
   const ready = waitForWindowsHostGitEnvironment().then(() => refreshWindowsHostPath(env))
+
   if (!signal) {
     return ready
   }
+
   if (signal.aborted) {
     return Promise.reject(createAbortError())
   }
+
   return new Promise((resolve, reject) => {
     let settled = false
     const cleanup = (): void => signal.removeEventListener('abort', onAbort)
+
     const onAbort = (): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       reject(createAbortError())
     }
+
     signal.addEventListener('abort', onAbort, { once: true })
     ready.then(
       (value) => {
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
         resolve(value)
@@ -83,6 +96,7 @@ export function prepareWindowsHostGitEnvironment(
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
         reject(error)

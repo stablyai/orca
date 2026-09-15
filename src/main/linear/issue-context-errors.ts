@@ -32,20 +32,25 @@ export function includeErrorCode(error: unknown): LinearIncludeErrorCode {
       return error.code
     }
   }
+
   return 'linear_include_failed'
 }
 
 export function classifyLinearError(error: unknown): LinearErrorCode {
   const message = linearMessage(error).toLowerCase()
+
   if (message.includes('rate limit') || message.includes('429')) {
     return 'linear_rate_limited'
   }
+
   if (message.includes('timeout') || message.includes('timed out')) {
     return 'linear_timeout'
   }
+
   if (message.includes('permission') || message.includes('forbidden') || message.includes('403')) {
     return 'linear_permission_denied'
   }
+
   if (
     message.includes('network') ||
     message.includes('econnreset') ||
@@ -54,11 +59,13 @@ export function classifyLinearError(error: unknown): LinearErrorCode {
   ) {
     return 'linear_network_error'
   }
+
   return 'linear_network_error'
 }
 
 export function linearMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
+
   return sanitizeLinearErrorMessage(message)
 }
 
@@ -80,20 +87,24 @@ export function sanitizeLinearErrorMessage(message: string): string {
 function stripLinearStackTrace(message: string): string {
   for (let index = 0; index < message.length; index += 1) {
     const code = message.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       continue
     }
 
     let candidateStart = index + 1
+
     if (code === 13 && message.charCodeAt(candidateStart) === 10) {
       candidateStart += 1
     }
+
     while (
       candidateStart < message.length &&
       isLinearStackWhitespace(message.charCodeAt(candidateStart))
     ) {
       candidateStart += 1
     }
+
     if (
       message.startsWith('at', candidateStart) &&
       isLinearStackWhitespace(message.charCodeAt(candidateStart + 2))

@@ -150,13 +150,16 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
 } as const satisfies ProviderFrameClassificationTable
 
 const ERROR_VARIANT_KEYS = new Set(['type', 'status', 'state', 'subtype', 'outcome'])
+
 const ERROR_VALUE_KEYS = new Set(['error', 'failureReason', 'failure_reason'])
 
 function isErrorVariant(value: unknown): boolean {
   if (typeof value !== 'string') {
     return false
   }
+
   const normalized = value.replace(/[_\s-]/g, '').toLowerCase()
+
   return (
     normalized.startsWith('error') || normalized.startsWith('fail') || normalized === 'systemerror'
   )
@@ -165,32 +168,42 @@ function isErrorVariant(value: unknown): boolean {
 function hasProviderError(payload: unknown): boolean {
   const pending = [payload]
   const seen = new WeakSet<object>()
+
   while (pending.length > 0) {
     const value = pending.pop()
+
     if (typeof value !== 'object' || value === null || seen.has(value)) {
       continue
     }
+
     seen.add(value)
+
     if (Array.isArray(value)) {
       pending.push(...value)
       continue
     }
+
     for (const [key, nested] of Object.entries(value)) {
       if ((key === 'isError' || key === 'is_error') && nested === true) {
         return true
       }
+
       if (key === 'success' && nested === false) {
         return true
       }
+
       if (ERROR_VARIANT_KEYS.has(key) && isErrorVariant(nested)) {
         return true
       }
+
       if (ERROR_VALUE_KEYS.has(key) && nested !== null && nested !== false && nested !== '') {
         return true
       }
+
       pending.push(nested)
     }
   }
+
   return false
 }
 
@@ -236,16 +249,20 @@ function catalogClassification(
 ): ProviderFrameClassification | undefined {
   if (provider === 'codex') {
     const item = itemKind(kind)
+
     if (item !== null) {
       return CODEX_ITEM_CLASSIFICATIONS[item]
     }
+
     return PROVIDER_FRAME_CLASSIFICATIONS.codex[
       notificationKind(kind) as CodexAppServerNotificationMethod
     ]
   }
+
   if (provider === 'claude') {
     return PROVIDER_FRAME_CLASSIFICATIONS.claude[kind as ClaudeStreamJsonFrameKind]
   }
+
   return undefined
 }
 
@@ -260,15 +277,19 @@ export function classifyProviderFrame(
   if (hasProviderError(payload)) {
     return 'error-surface'
   }
+
   if (isDeltaShapedProviderFrameKind(kind)) {
     return 'stream-into-item'
   }
+
   if (provider === 'claude' && kind === 'message:result') {
     const subtype =
       typeof payload === 'object' && payload !== null
         ? (payload as Record<string, unknown>).subtype
         : undefined
+
     return subtype === 'success' ? 'status-chrome' : 'error-surface'
   }
+
   return catalogClassification(provider, kind) ?? 'timeline-substantive'
 }

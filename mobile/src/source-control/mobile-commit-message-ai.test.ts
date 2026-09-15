@@ -6,17 +6,21 @@ import { cancelMobileCommitMessage, requestMobileCommitMessage } from './mobile-
 function ok(result: unknown): RpcSuccess {
   return { id: 'r', ok: true, result, _meta: { runtimeId: 'rt' } }
 }
+
 function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
+
 function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
   calls: Array<{ method: string; params: unknown }>
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
+
       return responses.shift() ?? fail('unexpected')
     })
   }

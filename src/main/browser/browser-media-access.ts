@@ -24,12 +24,15 @@ export function hasSystemMediaAccess(mediaType: string | undefined): boolean {
   if (process.platform !== 'darwin') {
     return true
   }
+
   if (mediaType === 'audio') {
     return systemPreferences.getMediaAccessStatus('microphone') === 'granted'
   }
+
   if (mediaType === 'video') {
     return systemPreferences.getMediaAccessStatus('camera') === 'granted'
   }
+
   return false
 }
 
@@ -41,6 +44,7 @@ export async function requestSystemMediaAccess(
   }
 
   const mediaTypes = requestedMediaTypes(details)
+
   if (mediaTypes.size === 0) {
     return false
   }
@@ -49,15 +53,19 @@ export async function requestSystemMediaAccess(
     // Why: macOS only shows the TCC prompt from the app process, so Chromium's
     // media grant is paired with the OS-level request at the actual media ask.
     const granted = await systemPreferences.askForMediaAccess('microphone')
+
     if (!granted) {
       return false
     }
   }
+
   if (mediaTypes.has('video')) {
     const granted = await systemPreferences.askForMediaAccess('camera')
+
     if (!granted) {
       return false
     }
   }
+
   return true
 }

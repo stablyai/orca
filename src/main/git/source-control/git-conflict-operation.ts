@@ -24,17 +24,21 @@ export async function detectConflictOperation(
   const [hasMergeHead, hasCherryPickHead, hasRebaseMergeDir, hasRebaseApplyDir] = await Promise.all(
     [mergeHead, cherryPickHead, rebaseMergeDir, rebaseApplyDir].map(pathExists)
   )
+
   const hasRebaseDir = hasRebaseMergeDir || hasRebaseApplyDir
 
   if (hasMergeHead) {
     return 'merge'
   }
+
   if (hasRebaseDir) {
     return 'rebase'
   }
+
   if (hasCherryPickHead) {
     return 'cherry-pick'
   }
+
   return 'unknown'
 }
 
@@ -42,6 +46,7 @@ export async function detectConflictOperation(
 async function pathExists(target: string): Promise<boolean> {
   try {
     await access(target)
+
     return true
   } catch {
     return false

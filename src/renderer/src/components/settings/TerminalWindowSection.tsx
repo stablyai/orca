@@ -36,7 +36,9 @@ export function TerminalWindowSection({
     if (relaunchingBlur) {
       return
     }
+
     setRelaunchingBlur(true)
+
     try {
       await window.api.app.relaunch()
     } catch {

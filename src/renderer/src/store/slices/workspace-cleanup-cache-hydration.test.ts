@@ -76,21 +76,26 @@ describe('workspace cleanup cache hydration', () => {
   it('reconciles a refresh into the hydrated snapshot instead of clearing it', async () => {
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan, vi.fn().mockResolvedValue(makeCachedScan()))
     const store = createCleanupTestStore()
     await store.getState().hydrateWorkspaceCleanupFromCache()
 
     const scanPromise = store.getState().scanWorkspaceCleanup()
+
     const refreshedAlpha = makeCandidate({
       worktreeId: 'repo1::/tmp/alpha',
       displayName: 'alpha',
       lastActivityAt: NOW - 1000,
       fingerprint: 'fingerprint-alpha-2'
     })
+
     const gamma = makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' })
     onProgress?.({
       scanId: 'scan-1',
@@ -131,18 +136,23 @@ describe('workspace cleanup cache hydration', () => {
   it('keeps one scan streaming across a dialog close and reopen', async () => {
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan, vi.fn().mockResolvedValue(null))
     const store = createCleanupTestStore()
 
     const first = store.getState().scanWorkspaceCleanup()
+
     const early = [
       makeCandidate({ worktreeId: 'repo1::/tmp/one' }),
       makeCandidate({ worktreeId: 'repo1::/tmp/two' })
     ]
+
     onProgress?.({
       scanId: 'scan-1',
       scannedAt: NOW,
@@ -166,6 +176,7 @@ describe('workspace cleanup cache hydration', () => {
       makeCandidate({ worktreeId: 'repo1::/tmp/four' }),
       makeCandidate({ worktreeId: 'repo1::/tmp/five' })
     ]
+
     onProgress?.({
       scanId: 'scan-1',
       scannedAt: NOW,

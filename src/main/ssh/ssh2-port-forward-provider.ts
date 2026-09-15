@@ -14,6 +14,7 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
 
   async start(conn: SshConnection, options: PortForwardStartOptions): Promise<StartedPortForward> {
     const client = conn.getClient()
+
     if (!client) {
       throw new Error('SSH connection is not established')
     }
@@ -34,13 +35,17 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
         (err, channel) => {
           if (err) {
             socket.destroy()
+
             return
           }
+
           if (closed || socket.destroyed) {
             closeChannel(channel)
             socket.destroy()
+
             return
           }
+
           socket.pipe(channel).pipe(socket)
           channel.on('close', () => socket.destroy())
           channel.on('error', () => socket.destroy())
@@ -64,10 +69,13 @@ export class Ssh2PortForwardProvider implements SshPortForwardProvider {
       if (closed) {
         return Promise.resolve()
       }
+
       closed = true
+
       for (const socket of activeSockets) {
         socket.destroy()
       }
+
       return new Promise((resolve) => {
         server.close(() => resolve())
       })
@@ -89,10 +97,12 @@ function listen(server: Server, host: string, port: number): Promise<void> {
       server.removeListener('listening', onListening)
       reject(new Error(`Failed to listen on ${host}:${port}: ${err.message}`))
     }
+
     const onListening = (): void => {
       server.removeListener('error', onError)
       resolve()
     }
+
     server.once('error', onError)
     server.once('listening', onListening)
     server.listen(port, host)

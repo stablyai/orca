@@ -66,16 +66,20 @@ export class RelayControlClient {
     if (this.state !== 'idle') {
       return Promise.reject(new Error('relay_control_already_started'))
     }
+
     this.state = 'opening'
     const socket = this.createSocket(this.controlUrl, this.options.relayJwt)
     this.socket = socket
     socket.once('open', () => this.sendHostHello())
     socket.on('message', (raw, isBinary) => {
       this.silenceWatchdog.noteInbound()
+
       if (isBinary) {
         this.failProtocol('binary control message')
+
         return
       }
+
       this.handleMessage(raw)
     })
     socket.once('error', (error) => {
@@ -91,6 +95,7 @@ export class RelayControlClient {
       this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
     )
     this.connectTimer.unref()
+
     return new Promise((resolve, reject) => {
       this.connectResolve = resolve
       this.connectReject = reject
@@ -132,6 +137,7 @@ export class RelayControlClient {
     authorization: DeviceCredentialInstallAuthorization
   }): ReturnType<RelayControlRequests['installCredential']> {
     const { reqId, ...request } = input
+
     return this.requests.installCredential(reqId, request, (payload) => this.sendActive(payload))
   }
 
@@ -155,10 +161,12 @@ export class RelayControlClient {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
     this.silenceWatchdog.stop()
+
     if (wasConnecting) {
       this.connectReject?.(new Error('relay_control_closed'))
       this.clearConnectPromise()
     }
+
     this.requests.rejectAll(new Error('relay_control_closed'))
     const socket = this.socket
     this.socket = null
@@ -169,6 +177,7 @@ export class RelayControlClient {
     if (!this.socket || this.state !== 'opening') {
       return
     }
+
     this.state = 'proving'
     this.socket.send(
       encodeRelayHostHello({
@@ -180,39 +189,55 @@ export class RelayControlClient {
 
   private handleMessage(raw: RawData): void {
     const message = parseRelayControlMessage(raw)
+
     if (!message) {
       this.failProtocol('invalid control JSON')
+
       return
     }
+
     if (this.state === 'proving') {
       this.handleProofMessage(message)
+
       return
     }
+
     if (this.state !== 'active' && this.state !== 'draining') {
       this.failProtocol('control message before activation')
+
       return
     }
+
     if (RelayPingMessageSchema.safeParse(message).success) {
       this.socket?.send(JSON.stringify({ type: 'pong', t: message.t }))
+
       return
     }
+
     const connection = RelayConnectionOpenMessageSchema.safeParse(message)
+
     if (connection.success) {
       // Also while draining: a drain-only cell refuses new phones, so a conn-open
       // arriving after drain was issued before it and only this cell holds that
       // pending connection. Dropping it stranded the phone until its attach deadline.
       this.options.onConnectionOpen(connection.data)
+
       return
     }
+
     const drain = RelayDrainMessageSchema.safeParse(message)
+
     if (drain.success) {
       this.state = 'draining'
       this.options.onDrain(drain.data)
+
       return
     }
+
     if (this.requests.resolveMessage(message)) {
       return
     }
+
     // Drop a well-formed control message we do not recognize, matching how every
     // other Orca decoder treats an unknown frame (see the silent-drop convention
     // in docs/reference/remote-wire-compatibility.md). The control channel has no
@@ -229,8 +254,10 @@ export class RelayControlClient {
 
   private handleProofMessage(message: Record<string, unknown>): void {
     const challenge = RelayHostChallengeMessageSchema.safeParse(message)
+
     if (challenge.success) {
       let invalidReason = 'unknown'
+
       const proofB64 = answerRelayHostChallenge(challenge.data, {
         relayOrigin: this.relayOrigin,
         ...this.options.identity,
@@ -244,11 +271,14 @@ export class RelayControlClient {
           invalidReason = reason
         }
       })
+
       if (!proofB64) {
         // Reason names the failing check only; field values never surface here.
         this.failProtocol(`invalid host challenge: ${invalidReason} origin=${this.relayOrigin}`)
+
         return
       }
+
       this.socket?.send(
         JSON.stringify({
           type: 'host-challenge-ack',
@@ -256,13 +286,18 @@ export class RelayControlClient {
           proofB64
         })
       )
+
       return
     }
+
     const ack = RelayHostHelloAckMessageSchema.safeParse(message)
+
     if (!ack.success) {
       this.failProtocol('invalid host proof message')
+
       return
     }
+
     this.state = 'active'
     this.silenceWatchdog.start()
     this.connectResolve?.(ack.data)
@@ -273,6 +308,7 @@ export class RelayControlClient {
     if (!this.socket || (this.state !== 'active' && this.state !== 'draining')) {
       throw new Error('relay_control_not_active')
     }
+
     this.socket.send(JSON.stringify(payload))
   }
 
@@ -286,10 +322,12 @@ export class RelayControlClient {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
     this.silenceWatchdog.stop()
+
     if (wasConnecting) {
       this.connectReject?.(new Error(`relay_control_closed_${code}`))
       this.clearConnectPromise()
     }
+
     this.requests.rejectAll(new Error(`relay_control_closed_${code}`))
     this.options.onClose(code)
   }
@@ -298,6 +336,7 @@ export class RelayControlClient {
     if (this.state !== 'opening' && this.state !== 'proving') {
       return
     }
+
     this.connectReject?.(new Error('relay_control_connect_timeout'))
     this.clearConnectPromise()
     this.socket?.terminate()
@@ -308,6 +347,7 @@ export class RelayControlClient {
       clearTimeout(this.connectTimer)
       this.connectTimer = null
     }
+
     this.connectResolve = null
     this.connectReject = null
   }

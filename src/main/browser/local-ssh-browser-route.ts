@@ -40,7 +40,9 @@ export class LocalSshBrowserRoute {
     if (this.closed) {
       return Promise.reject(new Error('browser_local_route_closed'))
     }
+
     this.listenPromise ??= this.socks.listen()
+
     return this.listenPromise
   }
 
@@ -48,6 +50,7 @@ export class LocalSshBrowserRoute {
     if (this.closed) {
       return
     }
+
     this.closed = true
     const route = this.executionRoute
     this.executionRoute = null
@@ -56,6 +59,7 @@ export class LocalSshBrowserRoute {
 
   private async openTarget(target: BrowserNetworkTunnelOpen): Promise<Duplex> {
     const route = await this.requireExecutionRoute()
+
     return openExecutionRouteSocketAsDuplex(route.connect(target))
   }
 
@@ -72,23 +76,29 @@ export class LocalSshBrowserRoute {
     timeoutMs = 4_000
   ): Promise<'ok' | 'forwarding-blocked' | 'ssh-unavailable'> {
     let route: Awaited<ReturnType<BrowserNetworkExecutionRouteResolver>>
+
     try {
       route = await this.requireExecutionRoute()
     } catch {
       return 'ssh-unavailable'
     }
+
     const socket = route.connect({ host: '127.0.0.1', port: 9 })
+
     return new Promise((resolve) => {
       let settled = false
+
       const settle = (verdict: 'ok' | 'forwarding-blocked' | 'ssh-unavailable'): void => {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timeout)
         socket.destroy()
         resolve(verdict)
       }
+
       const timeout = setTimeout(() => settle('ok'), timeoutMs)
       socket.on('connect', () => settle('ok'))
       socket.on('error', (error) =>
@@ -104,13 +114,17 @@ export class LocalSshBrowserRoute {
     if (this.closed) {
       throw new Error('browser_local_route_closed')
     }
+
     const current = this.executionRoute
+
     if (current?.isValid()) {
       return current
     }
+
     this.routePromise ??= this.resolveFreshRoute().finally(() => {
       this.routePromise = null
     })
+
     return this.routePromise
   }
 
@@ -119,10 +133,13 @@ export class LocalSshBrowserRoute {
   > {
     const stale = this.executionRoute
     this.executionRoute = null
+
     if (stale) {
       void Promise.resolve(stale.close()).catch(() => {})
     }
+
     const authority = this.dependencies.getAuthority(this.targetId)
+
     const route = await this.dependencies.resolveExecutionRoute({
       executionHost: {
         kind: 'ssh',
@@ -135,18 +152,22 @@ export class LocalSshBrowserRoute {
       runtimeId: 'local-ssh-browser-route',
       runtimeRevision: 0
     })
+
     if (this.closed) {
       void Promise.resolve(route.close()).catch(() => {})
       throw new Error('browser_local_route_closed')
     }
+
     this.executionRoute = route
     // Why: rotation aborts the route; dropping it here makes the next dial re-resolve.
     void route.whenInvalidated?.then(() => {
       if (this.executionRoute === route) {
         this.executionRoute = null
       }
+
       void Promise.resolve(route.close()).catch(() => {})
     })
+
     return route
   }
 }
@@ -163,9 +184,11 @@ const SSH_OPEN_ADMINISTRATIVELY_PROHIBITED = 1
  */
 function isAdministrativelyProhibited(error: Error): boolean {
   const reason = (error as Error & { reason?: unknown }).reason
+
   if (typeof reason === 'number') {
     return reason === SSH_OPEN_ADMINISTRATIVELY_PROHIBITED
   }
+
   return /administratively prohibited/i.test(error.message)
 }
 
@@ -176,6 +199,7 @@ async function defaultDependencies(): Promise<LocalSshBrowserRouteDependencies> 
     import('./browser-network-execution-route-dispatch'),
     import('../ssh/ssh-provider-authority')
   ])
+
   return {
     resolveExecutionRoute: resolveBrowserNetworkExecutionRoute,
     getAuthority: (targetId) => authority.getSshProviderAuthority(targetId)
@@ -188,17 +212,21 @@ export async function retainLocalSshBrowserRoute(
   dependencies?: LocalSshBrowserRouteDependencies
 ): Promise<{ host: '127.0.0.1'; port: number }> {
   let route = routesByTargetId.get(targetId)
+
   if (!route) {
     route = new LocalSshBrowserRoute(targetId, dependencies ?? (await defaultDependencies()))
     routesByTargetId.set(targetId, route)
   }
+
   try {
     const address = await route.listen()
+
     return { host: '127.0.0.1', port: address.port }
   } catch (error) {
     if (routesByTargetId.get(targetId) === route) {
       routesByTargetId.delete(targetId)
     }
+
     void route.close().catch(() => {})
     throw error
   }
@@ -209,17 +237,21 @@ export async function probeLocalSshBrowserRouteForwarding(
   targetId: string
 ): Promise<'ok' | 'forwarding-blocked' | 'ssh-unavailable'> {
   const route = routesByTargetId.get(targetId)
+
   if (!route) {
     return 'ssh-unavailable'
   }
+
   return route.probeForwarding()
 }
 
 export async function closeLocalSshBrowserRouteForTarget(targetId: string): Promise<void> {
   const route = routesByTargetId.get(targetId)
+
   if (!route) {
     return
   }
+
   routesByTargetId.delete(targetId)
   await route.close()
 }

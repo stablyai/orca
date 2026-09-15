@@ -14,7 +14,9 @@ export type SftpWriteCapture = {
 }
 
 type SftpCallback = (err: Error | null, resolved?: string) => void
+
 const NO_SUCH_SFTP_FILE = Object.assign(new Error('No such file'), { code: 2 })
+
 // Stdout of the relay-side pty-master cloexec patch; kept as a literal so the fixture states the
 // wire token it is standing in for rather than importing the module under test.
 const NODE_PTY_CLOEXEC_STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
@@ -23,6 +25,7 @@ export function makeMockConnection(capture: SftpWriteCapture): SshConnection {
   // Why: production attaches/removes real listeners (including prependOnceListener), so the fake must be an emitter.
   const sftpCreate = (): unknown => {
     const sftp = new EventEmitter()
+
     return Object.assign(sftp, {
       mkdir: vi.fn((_p: string, cb: SftpCallback) => cb(null)),
       // This host's shell home and SFTP start directory agree, so no namespace redirect is possible.
@@ -31,6 +34,7 @@ export function makeMockConnection(capture: SftpWriteCapture): SshConnection {
       createWriteStream: vi.fn().mockImplementation((path: string) => {
         capture.paths.push(path)
         const ws = new EventEmitter()
+
         return Object.assign(ws, {
           end: vi.fn((data?: string) => {
             capture.contents[path] = `${capture.contents[path] ?? ''}${data ?? ''}`
@@ -42,6 +46,7 @@ export function makeMockConnection(capture: SftpWriteCapture): SshConnection {
       end: vi.fn(() => setTimeout(() => sftp.emit('close'), 0))
     })
   }
+
   return {
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(false),
     exec: vi.fn().mockResolvedValue({
@@ -101,6 +106,7 @@ export function makeRepairToolchainSkipExecResponses(): ExecResponse[] {
 
 export function decodePowerShellCommand(command: string): string | null {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
 }
 
@@ -138,6 +144,7 @@ export function makeExecResponses(opts: {
       '' // clean stage root
     ]
   }
+
   if (opts.npmInstall !== 'ok') {
     // Skip path, exactly as production runs it: no chmod-prebuilds (node-pty is gone) and no rebuild
     // (it provably can't compile here). The probe still runs to catch a dead @parcel/watcher.
@@ -158,7 +165,9 @@ export function makeExecResponses(opts: {
       'READY'
     ]
   }
+
   const probe = opts.probe ?? 'ok'
+
   const probeSlot: ExecResponse =
     opts.probeStdoutOverride !== undefined
       ? opts.probeStdoutOverride
@@ -169,34 +178,43 @@ export function makeExecResponses(opts: {
           : probe === 'dir-gone'
             ? { reject: 'cd: no such file or directory' }
             : probe
+
   const slots: ExecResponse[] = [
     ...makeStagedFirstInstallExecPrefix(),
     '', // npm install native deps
     '', // chmod prebuilds
     probeSlot
   ]
+
   // Cleanup execs only run when the probe resolved (not when it rejected).
   const probeResolved = typeof probeSlot === 'string'
   let loadable = false
+
   if (probeResolved) {
     const probeOk = probeSlot.includes('ORCA-NPTY-PROBE-OK')
     loadable = probeOk
+
     if (!probeOk) {
       slots.push('') // cat stderr (graceful failure path captures detail)
     }
+
     slots.push('') // rm -f stderr (best-effort cleanup)
+
     if (!probeOk) {
       slots.push('') // npm rebuild with lifecycle scripts explicitly enabled
       slots.push('') // chmod prebuilds after rebuild
       const repairProbe = opts.repairProbe === 'ok' ? 'ORCA-NPTY-PROBE-OK\n' : 'MISSING\n'
       slots.push(repairProbe)
       loadable = repairProbe.includes('ORCA-NPTY-PROBE-OK')
+
       if (!loadable) {
         slots.push('') // cat stderr after unsuccessful rebuild
       }
+
       slots.push('') // rm -f stderr after rebuild probe
     }
   }
+
   // Publication is gated on the probe: only a tree this host actually loaded is shared.
   if (loadable) {
     // The cloexec patch runs first, and publication is gated on its status, so `patched` is what
@@ -204,6 +222,8 @@ export function makeExecResponses(opts: {
     slots.push(`${NODE_PTY_CLOEXEC_STATUS_PREFIX}patched\n`)
     slots.push('') // promote the private tree into the shared native-deps cache
   }
+
   slots.push('', 'DEAD', '', 'READY') // clean stage root, launch, credential, readiness
+
   return slots
 }

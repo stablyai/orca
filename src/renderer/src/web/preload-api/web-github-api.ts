@@ -17,6 +17,7 @@ export type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<W
 export function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
+
   const githubApi = {
     viewer: () => Promise.resolve(null),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
@@ -29,6 +30,7 @@ export function createGitHubApi(): WebGitHubApi {
         candidate.linkedPRNumber == null &&
         candidate.fallbackPRNumber != null &&
         candidate.fallbackPRSource != null
+
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,
@@ -39,6 +41,7 @@ export function createGitHubApi(): WebGitHubApi {
         ...(reason ? { reason } : {}),
         ...(acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {})
       })
+
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }
         : { kind: 'no-pr', fetchedAt: Date.now() }
@@ -90,9 +93,11 @@ export function createGitHubApi(): WebGitHubApi {
     mergePR: (args) => route<WebGitHubResult<'mergePR'>>(GITHUB_WEB_RPC_METHODS.mergePR, args),
     markPRReadyForReview: async (args) => {
       const status = await getRemoteRuntimeStatus().catch(() => null)
+
       if (!status?.capabilities?.includes(GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY)) {
         return { ok: false, error: GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE }
       }
+
       return route<WebGitHubResult<'markPRReadyForReview'>>(
         GITHUB_WEB_RPC_METHODS.markPRReadyForReview,
         args

@@ -36,6 +36,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const setShareButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -47,13 +48,17 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
     if (!cardRef.current || capturing) {
       return
     }
+
     setCapturing(true)
+
     try {
       const dataUrl = await toPng(cardRef.current, {
         pixelRatio: 2,
         backgroundColor: undefined
       })
+
       await window.api.ui.writeClipboardImage(dataUrl)
+
       return true
     } finally {
       if (isMountedRef.current) {
@@ -64,6 +69,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
 
   const handleCopy = useCallback(async () => {
     const ok = await captureToClipboard()
+
     if (ok && isMountedRef.current) {
       clearCopiedResetTimer()
       setCopied(true)
@@ -77,6 +83,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const handleShareToX = useCallback(async () => {
     const { provider, summary, range } = props
     const providerName = provider === 'claude' ? 'Claude' : 'Codex'
+
     const rangeLabel =
       range === '7d'
         ? 'last 7 days'
@@ -92,6 +99,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
         : (summary as unknown as { totalTokens: number }).totalTokens
 
     const cost = summary.estimatedCostUsd
+
     const costStr =
       cost === null ? 'n/a' : cost < 0.01 ? `$${cost.toFixed(4)}` : `$${cost.toFixed(2)}`
 
@@ -99,9 +107,11 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
       if (v >= 1_000_000) {
         return `${(v / 1_000_000).toFixed(1)}M`
       }
+
       if (v >= 1_000) {
         return `${(v / 1_000).toFixed(1)}k`
       }
+
       return v.toLocaleString()
     }
 
@@ -112,6 +122,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
       '',
       'github.com/stablyai/orca'
     ]
+
     const url = `https://x.com/intent/post?text=${encodeURIComponent(lines.join('\n'))}`
     await window.api.shell.openUrl(url)
   }, [props])

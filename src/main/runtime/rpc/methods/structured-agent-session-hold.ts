@@ -21,6 +21,7 @@ const HOLD_CLEANUP_PREFIX = 'agentSession.hold'
 
 function holderKeyFor(ctx: RpcContext, holderId: string): string {
   const client = ctx.clientId?.trim() || (ctx.clientKind ?? 'runtime')
+
   return `${ctx.connectionId ?? 'local'}:${client}:${holderId}`
 }
 
@@ -41,12 +42,14 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
         () => host.release(params.sessionId, holderKey),
         ctx.connectionId
       )
+
       try {
         await host.hold(params.sessionId, holderKey)
       } catch (error) {
         ctx.runtime.cleanupSubscription(holdCleanupIdFor(params.sessionId, holderKey))
         throw error
       }
+
       return { held: true as const }
     }
   }),
@@ -59,6 +62,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS = [
       host.release(params.sessionId, holderKey)
       // Retires the backstop too; its release is a no-op against a holder already gone.
       ctx.runtime.cleanupSubscription(holdCleanupIdFor(params.sessionId, holderKey))
+
       return { released: true as const }
     }
   })

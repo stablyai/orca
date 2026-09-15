@@ -58,6 +58,7 @@ export function ActivityThreadListToolbar({
   showInlineActions?: boolean
 }): React.JSX.Element | null {
   const showToolbar = showFilterControls || showOptionsMenu
+
   if (!showToolbar) {
     return null
   }

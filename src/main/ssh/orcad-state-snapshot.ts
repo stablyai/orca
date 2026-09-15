@@ -42,6 +42,7 @@ function assertPlainMemberName(member: string): string {
   if (!/^[A-Za-z0-9._-]+$/.test(member)) {
     throw new Error(`Unsafe orcad snapshot member name: ${JSON.stringify(member)}`)
   }
+
   return member
 }
 
@@ -68,6 +69,7 @@ export function captureOrcadStateSnapshotCommand(
   const root = shellEscape(userDataDir)
   const dir = shellEscape(snapshotDir)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+
   const memberTests = ORCAD_SNAPSHOT_MEMBERS.map(
     // Why the accumulated name is NOT quoted: `$members` is re-split by the shell before it
     // reaches tar, so a quoted name arrives as a literal `'profiles'` that tar cannot stat.
@@ -75,6 +77,7 @@ export function captureOrcadStateSnapshotCommand(
     (member) =>
       `[ -e ${root}/${shellEscape(member)} ] && members="$members ${assertPlainMemberName(member)}";`
   ).join(' ')
+
   return [
     `members=;`,
     memberTests,
@@ -91,9 +94,11 @@ export type OrcadSnapshotCapture = 'captured' | 'empty' | 'failed'
 
 export function parseOrcadSnapshotCapture(output: string): OrcadSnapshotCapture {
   const value = output.trim().split('\n').pop()?.trim()
+
   if (value === 'CAPTURED') {
     return 'captured'
   }
+
   return value === 'EMPTY' ? 'empty' : 'failed'
 }
 
@@ -103,6 +108,7 @@ export function probeOrcadStateSnapshotCommand(
 ): string {
   assertPosixHost(host)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+
   return `test -f ${archive} && echo PRESENT || echo ABSENT`
 }
 
@@ -124,9 +130,11 @@ export function restoreOrcadStateSnapshotCommand(
   assertPosixHost(host)
   const root = shellEscape(userDataDir)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+
   const removals = ORCAD_SNAPSHOT_MEMBERS.map(
     (member) => `rm -rf ${root}/${shellEscape(member)};`
   ).join(' ')
+
   return [
     `test -f ${archive} || { echo MISSING; exit 0; };`,
     `test -d ${root} || mkdir -p ${root};`,
@@ -139,9 +147,11 @@ export type OrcadSnapshotRestore = 'restored' | 'missing' | 'failed'
 
 export function parseOrcadSnapshotRestore(output: string): OrcadSnapshotRestore {
   const value = output.trim().split('\n').pop()?.trim()
+
   if (value === 'RESTORED') {
     return 'restored'
   }
+
   return value === 'MISSING' ? 'missing' : 'failed'
 }
 
@@ -156,6 +166,7 @@ export function newestStateMtimeCommand(host: RemoteHostPlatform, userDataDir: s
   assertPosixHost(host)
   const root = shellEscape(userDataDir)
   const paths = ORCAD_SNAPSHOT_MEMBERS.map((member) => `${root}/${shellEscape(member)}`).join(' ')
+
   return [
     `newest=$(find ${paths} -type f -exec stat -c %Y {} + 2>/dev/null ||`,
     `find ${paths} -type f -exec stat -f %m {} + 2>/dev/null);`,
@@ -166,8 +177,10 @@ export function newestStateMtimeCommand(host: RemoteHostPlatform, userDataDir: s
 
 export function parseNewestStateMtimeSeconds(output: string): number | null {
   const value = output.trim().split('\n').pop()?.trim()
+
   if (!value || !/^\d+$/.test(value)) {
     return null
   }
+
   return Number.parseInt(value, 10)
 }

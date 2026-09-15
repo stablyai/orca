@@ -23,6 +23,7 @@ let nextCheckRunDetailsRequestId = 0
 
 export function createCheckRunDetailsRequestId(): number {
   nextCheckRunDetailsRequestId += 1
+
   return nextCheckRunDetailsRequestId
 }
 
@@ -44,17 +45,21 @@ export function getCheckRunTabIdentity(check: PRCheckDetail): string {
   if (check.checkRunId) {
     return `check-run:${check.checkRunId}`
   }
+
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
   }
+
   // Why: GitLab jobs reuse `stage: name` across pipeline runs and can lack a web_url,
   // so the numeric job id is the only stable per-job tab identity.
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}`
   }
+
   if (check.url) {
     return `url:${check.url}`
   }
+
   return `name:${check.name}`
 }
 

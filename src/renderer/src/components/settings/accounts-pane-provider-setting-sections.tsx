@@ -10,6 +10,7 @@ import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const { localAccountRuntimeSentenceLabel, recordFeatureInteraction, settings, updateSettings } =
     model
+
   return (
     <section key="gemini" id="accounts-gemini" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -80,6 +81,7 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
 
 export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const { recordFeatureInteraction, recordOpenCodeSettingEdit, settings, updateSettings } = model
+
   return (
     <section key="opencode-go" id="accounts-opencode-go" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">

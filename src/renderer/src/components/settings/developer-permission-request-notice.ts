@@ -14,8 +14,10 @@ export function showDeveloperPermissionRequestNotice(
         'Permission granted'
       )
     )
+
     return
   }
+
   if (result.openedSystemSettings) {
     toast.message(
       translate(
@@ -23,8 +25,10 @@ export function showDeveloperPermissionRequestNotice(
         'Opened macOS Privacy & Security'
       )
     )
+
     return
   }
+
   if (result.id === 'local-network') {
     toast.message(
       translate(
@@ -45,8 +49,10 @@ export function showDeveloperPermissionRequestNotice(
         }
       }
     )
+
     return
   }
+
   toast.message(
     translate(
       'auto.components.settings.DeveloperPermissionsPane.66e94d6cf3',

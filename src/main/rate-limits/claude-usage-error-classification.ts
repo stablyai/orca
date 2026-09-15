@@ -13,17 +13,21 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
     if (error.status === 429) {
       return terminal('rate-limited')
     }
+
     if (error.status === 401) {
       return recoverableAuth('stale-token')
     }
+
     if (error.status === 403) {
       return error.message.includes('user:profile')
         ? terminal('missing-scope')
         : recoverableAuth('stale-token')
     }
+
     if (error.status >= 500) {
       return fallbackOnly('server')
     }
+
     return terminal('usage-unavailable')
   }
 
@@ -32,6 +36,7 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
   }
 
   const message = error instanceof Error ? error.message : String(error)
+
   if (/\babort|network|econn|enotfound|etimedout|fetch failed|dns\b/i.test(message)) {
     return fallbackOnly('network')
   }
@@ -47,12 +52,15 @@ export function classifyClaudeCredentialAbsence(input: {
   if (input.managedRefreshDeferredByLivePty) {
     return terminal('deferred-by-live-session')
   }
+
   if (input.keychainUnavailable) {
     return fallbackOnly('keychain-unavailable')
   }
+
   if (input.hasRefreshableCredentials) {
     return recoverableAuth('refreshable-credentials-without-token')
   }
+
   return terminal('missing-credentials')
 }
 

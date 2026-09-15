@@ -40,6 +40,7 @@ export function useRuntimeEnvironmentMutationActions({
     if (isSaving) {
       return
     }
+
     setAddServerFormOpen(false)
     setName('')
     setPairingCode('')
@@ -49,6 +50,7 @@ export function useRuntimeEnvironmentMutationActions({
   const addEnvironment = async (allowLoopback: boolean): Promise<void> => {
     const trimmedName = name.trim()
     const trimmedPairingCode = pairingCode.trim()
+
     if (!trimmedName || !trimmedPairingCode) {
       toast.error(
         translate(
@@ -56,11 +58,14 @@ export function useRuntimeEnvironmentMutationActions({
           'Name and pairing code are required.'
         )
       )
+
       return
     }
+
     const duplicate = environments.find(
       (environment) => environment.name.trim().toLowerCase() === trimmedName.toLowerCase()
     )
+
     if (duplicate) {
       toast.error(
         translate(
@@ -69,35 +74,45 @@ export function useRuntimeEnvironmentMutationActions({
           { value0: duplicate.name }
         )
       )
+
       return
     }
+
     setAddServerFailure(null)
     setIsSaving(true)
+
     try {
       const result = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
         name: trimmedName,
         pairingCode: trimmedPairingCode,
         allowLoopback
       })
+
       if (!result.ok) {
         if (mountedRef.current) {
           setAddServerFailure({ kind: result.kind, message: result.message })
         }
+
         return
       }
+
       if (mountedRef.current) {
         setName('')
         setPairingCode('')
       }
+
       await loadEnvironments({
         environmentId: result.environment.id,
         runtimeStatus: result.runtimeStatus
       })
+
       if (!allowLocalRuntime) {
         const connected = await connectEnvironment(result.environment)
+
         if (!connected) {
           await window.api.runtimeEnvironments.remove({ selector: result.environment.id })
           await loadEnvironments()
+
           return
         }
       } else {
@@ -111,6 +126,7 @@ export function useRuntimeEnvironmentMutationActions({
           )
         }
       }
+
       if (mountedRef.current) {
         setAddServerFormOpen(false)
       }
@@ -137,6 +153,7 @@ export function useRuntimeEnvironmentMutationActions({
   ): Promise<boolean> => {
     setRemovingId(environment.id)
     setRemoveError(null)
+
     try {
       if (isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, environment.id)) {
         if (mountedRef.current) {
@@ -147,10 +164,13 @@ export function useRuntimeEnvironmentMutationActions({
             )
           )
         }
+
         return false
       }
+
       await window.api.runtimeEnvironments.remove({ selector: environment.id })
       await loadEnvironments()
+
       if (mountedRef.current) {
         toast.success(
           translate(
@@ -160,14 +180,17 @@ export function useRuntimeEnvironmentMutationActions({
           )
         )
       }
+
       return true
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to remove runtime environment.'
+
       if (mountedRef.current) {
         setRemoveError(message)
         toast.error(message)
       }
+
       return false
     } finally {
       if (mountedRef.current) {

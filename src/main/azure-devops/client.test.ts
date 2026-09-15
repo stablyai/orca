@@ -22,17 +22,21 @@ function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'):
     if (args[0] === 'remote') {
       return { stdout: 'https://dev.azure.com/acme/Project/_git/repo\n', stderr: '' }
     }
+
     if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
       return { stdout: `${defaultRef}\n`, stderr: '' }
     }
+
     if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
       return { stdout: 'default-oid\n', stderr: '' }
     }
+
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
 }
 
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
 
 describe('Azure DevOps client', () => {
@@ -74,6 +78,7 @@ describe('Azure DevOps client', () => {
       const url = new URL(String(input))
       expect(url.pathname).toBe('/tfs/MyCollection/_apis/connectionData')
       versions.push(url.searchParams.get('api-version'))
+
       if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
         return new Response(
           JSON.stringify({
@@ -83,6 +88,7 @@ describe('Azure DevOps client', () => {
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         )
       }
+
       return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
     }) as never
 
@@ -108,6 +114,7 @@ describe('Azure DevOps client', () => {
         search: url.search,
         authorization: null
       })
+
       const response = (body: unknown): Response =>
         new Response(JSON.stringify(body), {
           status: 200,
@@ -120,11 +127,13 @@ describe('Azure DevOps client', () => {
           webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
         })
       }
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
         expect(url.searchParams.get('searchCriteria.sourceRefName')).toBe(
           'refs/heads/feature/azure'
         )
         expect(url.searchParams.get('searchCriteria.status')).toBe('all')
+
         return response({
           value: [
             {
@@ -145,11 +154,13 @@ describe('Azure DevOps client', () => {
           ]
         })
       }
+
       if (
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/18/statuses'
       ) {
         return response({ value: [{ state: 'succeeded' }] })
       }
+
       return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
     }) as never
 
@@ -178,6 +189,7 @@ describe('Azure DevOps client', () => {
     })
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
         return new Response(
           JSON.stringify({
@@ -187,6 +199,7 @@ describe('Azure DevOps client', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
       }
+
       // The pull-request list lookup fails (auth/transport).
       return new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })
     }) as never
@@ -209,6 +222,7 @@ describe('Azure DevOps client', () => {
     })
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
+
       const response = (body: unknown): Response =>
         new Response(JSON.stringify(body), {
           status: 200,
@@ -218,6 +232,7 @@ describe('Azure DevOps client', () => {
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
         return response({ id: 'repo-guid' })
       }
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
         return response({
           value: [
@@ -241,11 +256,13 @@ describe('Azure DevOps client', () => {
           ]
         })
       }
+
       if (
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/21/statuses'
       ) {
         return response({ value: [{ state: 'succeeded' }] })
       }
+
       return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
     }) as never
 
@@ -263,6 +280,7 @@ describe('Azure DevOps client', () => {
     primeGitExecWithDefaultBranch()
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
+
       const response = (body: unknown): Response =>
         new Response(JSON.stringify(body), {
           status: 200,
@@ -272,6 +290,7 @@ describe('Azure DevOps client', () => {
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
         return response({ id: 'repo-guid' })
       }
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
         return response({
           value: [
@@ -286,6 +305,7 @@ describe('Azure DevOps client', () => {
           ]
         })
       }
+
       return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
     }) as never
 
@@ -296,6 +316,7 @@ describe('Azure DevOps client', () => {
     primeGitExecWithDefaultBranch()
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
+
       const response = (body: unknown): Response =>
         new Response(JSON.stringify(body), {
           status: 200,
@@ -305,6 +326,7 @@ describe('Azure DevOps client', () => {
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
         return response({ id: 'repo-guid' })
       }
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
         return response({
           value: [
@@ -319,6 +341,7 @@ describe('Azure DevOps client', () => {
           ]
         })
       }
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40') {
         return response({
           pullRequestId: 40,
@@ -329,11 +352,13 @@ describe('Azure DevOps client', () => {
           lastMergeSourceCommit: { commitId: 'linked-oid' }
         })
       }
+
       if (
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40/statuses'
       ) {
         return response({ value: [{ state: 'succeeded' }] })
       }
+
       return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
     }) as never
 
@@ -348,6 +373,7 @@ describe('Azure DevOps client', () => {
     })
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
+
       const response = (body: unknown): Response =>
         new Response(JSON.stringify(body), {
           status: 200,
@@ -357,6 +383,7 @@ describe('Azure DevOps client', () => {
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
         return response({ id: 'repo-guid' })
       }
+
       if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
         return response({
           value: [
@@ -371,11 +398,13 @@ describe('Azure DevOps client', () => {
           ]
         })
       }
+
       if (
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/31/statuses'
       ) {
         return response({ value: [{ state: 'succeeded' }] })
       }
+
       return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
     }) as never
 
@@ -389,11 +418,13 @@ describe('Azure DevOps client', () => {
       stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
     })
     let cancelledBodies = 0
+
     const fetchMock = vi.fn(async () =>
       cancelTrackingResponse(502, () => {
         cancelledBodies += 1
       })
     )
+
     globalThis.fetch = fetchMock as never
 
     await getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')

@@ -14,12 +14,17 @@ import { EMULATOR_STREAM_PARK_DELAY_MS } from './use-emulator-stream-window-visi
 // not just the rendered DOM.
 
 type FrameListener = (data: { streamId: string; bytes: ArrayBuffer }) => void
+
 type ErrorListener = (data: { streamId: string; message: string }) => void
 
 let container: HTMLDivElement
+
 let root: Root
+
 let startFrameStream: ReturnType<typeof vi.fn>
+
 let stopFrameStream: ReturnType<typeof vi.fn>
+
 let streamCounter: number
 
 beforeEach(() => {

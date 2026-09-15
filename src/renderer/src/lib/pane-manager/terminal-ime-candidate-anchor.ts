@@ -38,6 +38,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   if (!terminal.element || !terminal.textarea) {
     return null
   }
+
   const screenElement = terminal.element.querySelector<HTMLElement>('.xterm-screen')
   const compositionView = terminal.element.querySelector<HTMLElement>('.composition-view')
   const textarea = terminal.textarea
@@ -49,12 +50,15 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!screenElement) {
       return null
     }
+
     const rect = screenElement.getBoundingClientRect()
     const cellWidth = rect.width / terminal.cols
     const cellHeight = rect.height / terminal.rows
+
     if (!(cellWidth > 0) || !(cellHeight > 0)) {
       return null
     }
+
     return { cellWidth, cellHeight, cols: terminal.cols, rows: terminal.rows }
   }
 
@@ -81,9 +85,11 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   const anchorLeft = (column: number, cells: ImeAnchorCellMetrics): number => {
     const cursorLeft = column * cells.cellWidth
     const width = Number.parseFloat(textarea.style.width)
+
     if (!Number.isFinite(width)) {
       return cursorLeft
     }
+
     return Math.max(0, Math.min(cursorLeft, cells.cols * cells.cellWidth - width))
   }
 
@@ -97,6 +103,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
     writeStyle(textarea, 'left', `${anchorLeft(column, cells)}px`)
+
     if (isCursorAgent && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)
@@ -108,6 +115,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
 
   const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
     const buf = terminal.buffer.active
+
     // Why: Cursor Agent draws its prompt UI while leaving xterm's public cursor
     // on a blank row, so the OS IME anchor needs the rendered prompt row instead.
     const cursorAgentAnchor = resolveCursorAgentImeAnchor({
@@ -118,7 +126,9 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       cursorY: buf.cursorY,
       knownCursorAgent: cursorAgentSeen
     })
+
     cursorAgentSeen ||= cursorAgentAnchor !== null
+
     return {
       anchor: cursorAgentAnchor ?? {
         row: buf.cursorY,
@@ -132,19 +142,25 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!screenElement) {
       return
     }
+
     // Re-measure per composition (font size or zoom may have changed since the
     // last one); every compositionupdate then reuses it and forces no layout.
     const staleMetrics =
       !metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows
+
     if (event?.type !== 'compositionupdate' || staleMetrics) {
       metrics = measureCells()
     }
+
     const cells = metrics
+
     if (!cells) {
       return
     }
+
     const { anchor, isCursorAgent } = resolveAnchor()
     applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
+
     // Why: xterm re-positions the textarea from a setTimeout(0) of its own after
     // each compositionupdate, so the correction has to land after that timer —
     // one pending timer per burst, re-reading the anchor when it fires.
@@ -153,20 +169,26 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
         window.clearTimeout(deferredApply)
         deferredApply = null
       }
+
       return
     }
+
     // Re-queue after xterm's latest timer while keeping only one correction pending.
     if (deferredApply !== null) {
       window.clearTimeout(deferredApply)
     }
+
     deferredApply = window.setTimeout(() => {
       deferredApply = null
+
       if (!textarea.isConnected) {
         return
       }
+
       if (!metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows) {
         metrics = measureCells()
       }
+
       if (metrics) {
         const current = resolveAnchor()
         applyAnchor(current.anchor.row, current.anchor.column, metrics, current.isCursorAgent)
@@ -176,5 +198,6 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
 
   terminal.element.addEventListener('compositionstart', handler)
   terminal.element.addEventListener('compositionupdate', handler)
+
   return handler
 }

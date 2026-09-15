@@ -58,11 +58,13 @@ vi.mock('@/store/worktree-repo-index', async (importOriginal) => {
   indexSpies.getIndexedAllWorktrees.mockImplementation(actual.getIndexedAllWorktrees)
   indexSpies.getIndexedWorktreeMap.mockImplementation(actual.getIndexedWorktreeMap)
   indexSpies.getIndexedWorktreeById.mockImplementation(actual.getIndexedWorktreeById)
+
   return { ...actual, ...indexSpies }
 })
 
 vi.mock('@/components/ui/popover', async () => {
   const { cloneElement } = await import('react')
+
   return {
     Popover: ({
       children,
@@ -75,6 +77,7 @@ vi.mock('@/components/ui/popover', async () => {
     }) => {
       popoverMock.open = open ?? false
       popoverMock.onOpenChange = onOpenChange
+
       return <div>{children}</div>
     },
     // Radix `asChild` renders the child itself and owns its click; mirror that.
@@ -192,18 +195,22 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string }): Worktree {
 
 function seed(worktrees: Worktree[], repoIds: string[] = [REPO_ID]): void {
   const byRepo: Record<string, Worktree[]> = {}
+
   for (const worktree of worktrees) {
     byRepo[worktree.repoId] = [...(byRepo[worktree.repoId] ?? []), worktree]
   }
+
   storeState.worktreesByRepo = byRepo
   storeState.repos = repoIds.map(makeRepo)
 }
 
 function trigger(): HTMLButtonElement {
   const node = document.querySelector<HTMLButtonElement>('button[role="combobox"]')
+
   if (!node) {
     throw new Error('parent picker trigger not found')
   }
+
   return node
 }
 
@@ -219,17 +226,21 @@ function candidateLabels(): string[] {
 
 function searchInput(): HTMLInputElement {
   const node = document.querySelector<HTMLInputElement>('[data-slot="command-input"]')
+
   if (!node) {
     throw new Error('parent picker search input not found')
   }
+
   return node
 }
 
 function rowFor(label: string): HTMLElement {
   const row = rows().find((node) => node.textContent?.includes(label))
+
   if (!row) {
     throw new Error(`row not found for ${label}`)
   }
+
   return row
 }
 
@@ -380,11 +391,13 @@ describe('ComposerParentWorktreePicker', () => {
       displayName: 'Attached',
       instanceId: 'attached-instance'
     })
+
     const nested = makeWorktree({
       id: 'nested',
       displayName: 'Nested',
       instanceId: 'nested-instance'
     })
+
     const outside = makeWorktree({ id: 'outside', displayName: 'Outside' })
     seed([attached, nested, outside])
     storeState.workspaceLineageByChildKey = {
@@ -496,6 +509,7 @@ describe('ComposerParentWorktreePicker', () => {
       displayName: 'Attached',
       instanceId: 'current-instance'
     })
+
     seed([attached])
     storeState.workspaceLineageByChildKey = {
       [worktreeWorkspaceKey(attached.id)]: {
@@ -528,6 +542,7 @@ describe('ComposerParentWorktreePicker', () => {
     const view = render(
       <ComposerParentWorktreePicker repoId={REPO_ID} value={null} onChange={vi.fn()} />
     )
+
     fireEvent.click(trigger())
     expect(rows().length).toBeGreaterThan(0)
 

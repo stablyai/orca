@@ -46,6 +46,7 @@ export function NativeChatPromptEditor({
 }: Props): React.JSX.Element {
   const placeholderRef = useRef(placeholder)
   placeholderRef.current = placeholder
+
   const editor = useEditor(
     {
       extensions: [
@@ -87,15 +88,21 @@ export function NativeChatPromptEditor({
           if (event.defaultPrevented) {
             return true
           }
+
           const text = event.clipboardData?.getData('text/plain')
+
           if (text == null) {
             return false
           }
+
           const content = editor?.schema.nodeFromJSON(promptTextContent(text))
+
           if (!content) {
             return false
           }
+
           view.dispatch(view.state.tr.replaceSelection(new Slice(content.content, 1, 1)))
+
           return true
         },
         clipboardTextSerializer: (slice) =>
@@ -139,14 +146,19 @@ export function NativeChatPromptEditor({
             },
             set value(value: string) {
               const old = promptTextMap(editor.state.doc)
+
               if (old.text === value) {
                 return
               }
+
               if (!value) {
                 editor.commands.setContent(promptTextContent(''), { emitUpdate: false })
+
                 return
               }
+
               let start = 0
+
               while (
                 start < old.text.length &&
                 start < value.length &&
@@ -154,7 +166,9 @@ export function NativeChatPromptEditor({
               ) {
                 start++
               }
+
               let end = 0
+
               while (
                 end < old.text.length - start &&
                 end < value.length - start &&
@@ -162,19 +176,23 @@ export function NativeChatPromptEditor({
               ) {
                 end++
               }
+
               // A text replacement intersecting an atom replaces its entire serialized token.
               while (start > 0 && old.positions[start - 1] === old.positions[start]) {
                 start--
               }
+
               while (
                 end > 0 &&
                 old.positions[old.text.length - end] === old.positions[old.text.length - end - 1]
               ) {
                 end--
               }
+
               const content = editor.schema.nodeFromJSON(
                 promptTextContent(value.slice(start, value.length - end))
               )
+
               editor.commands.command(({ tr }) => {
                 tr.replaceRange(
                   old.positions[start],
@@ -182,6 +200,7 @@ export function NativeChatPromptEditor({
                   new Slice(content.content, 1, 1)
                 )
                 tr.setMeta('preventUpdate', true)
+
                 return true
               })
             },
@@ -227,6 +246,7 @@ export function NativeChatPromptEditor({
         : null,
     [editor]
   )
+
   useImperativeHandle(inputRef, () => input!, [input])
 
   return <EditorContent editor={editor} {...events} />

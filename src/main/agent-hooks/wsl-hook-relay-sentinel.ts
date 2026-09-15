@@ -51,6 +51,7 @@ export function waitForWslRelaySentinel(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       reject(Object.assign(new Error(formatStartupFailure(failure)), { startup: failure }))
@@ -64,6 +65,7 @@ export function waitForWslRelaySentinel(
     const notifyClosed = (): void => {
       if (!closedNotified) {
         closedNotified = true
+
         for (const cb of closeCallbacks) {
           cb()
         }
@@ -73,8 +75,10 @@ export function waitForWslRelaySentinel(
     const dispatch = (chunk: Buffer): void => {
       if (dataCallbacks.length === 0) {
         pendingChunks.push(chunk)
+
         return
       }
+
       for (const cb of dataCallbacks) {
         cb(chunk)
       }
@@ -100,18 +104,23 @@ export function waitForWslRelaySentinel(
     child.on('close', (code) => {
       if (sentinelSeen) {
         notifyClosed()
+
         return
       }
+
       fail({ kind: 'exit', code: code ?? exitCode, stderr: stderrOutput })
     })
 
     child.stdout.on('data', (chunk: Buffer) => {
       if (sentinelSeen) {
         dispatch(chunk)
+
         return
       }
+
       stdoutBuffer = Buffer.concat([stdoutBuffer, chunk])
       const idx = stdoutBuffer.indexOf(sentinel)
+
       if (idx === -1) {
         // Why: pre-sentinel stdout is untrusted startup noise; cap it so a
         // broken guest cannot grow memory until the timeout fires.
@@ -119,15 +128,19 @@ export function waitForWslRelaySentinel(
           child.kill()
           fail({ kind: 'exit', code: null, stderr: 'startup output exceeded 64 KiB' })
         }
+
         return
       }
+
       sentinelSeen = true
       settled = true
       clearTimeout(timeout)
       const trailing = stdoutBuffer.subarray(idx + sentinel.length)
+
       if (trailing.length > 0) {
         pendingChunks.push(trailing)
       }
+
       const transport: MultiplexerTransport = {
         write: (data, onSettled) => {
           return child.stdin.write(data, (error?: Error | null) => {
@@ -137,10 +150,12 @@ export function waitForWslRelaySentinel(
         supportsWriteSettlement: true,
         onDrain: (cb) => {
           child.stdin.on('drain', cb)
+
           return () => child.stdin.off('drain', cb)
         },
         onData: (cb) => {
           dataCallbacks.push(cb)
+
           if (dataCallbacks.length === 1 && pendingChunks.length > 0) {
             queueMicrotask(() => {
               for (const pending of pendingChunks.splice(0)) {
@@ -156,6 +171,7 @@ export function waitForWslRelaySentinel(
         resumeReads: () => child.stdout.resume(),
         close: () => child.kill()
       }
+
       resolve(transport)
     })
   })
@@ -163,8 +179,10 @@ export function waitForWslRelaySentinel(
 
 function formatStartupFailure(failure: WslRelayStartupFailure): string {
   const detail = failure.stderr.trim()
+
   if (failure.kind === 'timeout') {
     return `WSL hook relay did not become ready within ${RELAY_SENTINEL_TIMEOUT_MS / 1000}s${detail ? `: ${detail}` : ''}`
   }
+
   return `WSL hook relay exited (code ${failure.code ?? 'unknown'})${detail ? `: ${detail}` : ''}`
 }

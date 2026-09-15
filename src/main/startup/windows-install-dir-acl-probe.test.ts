@@ -18,7 +18,9 @@ import {
 } from './windows-install-dir-acl.test-fixture'
 
 const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\orca'
+
 const ORPHAN = ORPHAN_PACKAGE_ACE
+
 const RESTRICTED_GRANT = RESTRICTED_PACKAGES_ACE
 
 function dacl(target: string, firstAce: string, ...rest: string[]): string {
@@ -36,6 +38,7 @@ function probe(options: WindowsInstallDirAclProbeOptions): Promise<Record<string
       ...options,
       recordBreadcrumb: (name, data) => {
         resolve({ ...(data as Record<string, unknown>), name })
+
         return undefined
       }
     })
@@ -56,6 +59,7 @@ describe('probeWindowsInstallDirAcl', () => {
     const data = await probe({
       spawnFn: fakeSpawn((target) => icaclsDacl(target, [], ENGLISH_BASELINE_ACES)).spawnFn
     })
+
     expect(data.name).toBe(WINDOWS_INSTALL_DIR_ACL_BREADCRUMB)
     expect(data.status).toBe('ok')
     expect(data.orphanPackageSidCount).toBe(0)
@@ -113,6 +117,7 @@ describe('probeWindowsInstallDirAcl', () => {
           : dacl(target, RESTRICTED_GRANT, ORPHAN)
       ).spawnFn
     })
+
     expect(data.hasWellKnownPackageGrant).toBe(true)
     expect(data.matchesPoisonSignature).toBe(true)
   })
@@ -120,6 +125,7 @@ describe('probeWindowsInstallDirAcl', () => {
   it('reports whether the well-known name check could be trusted', async () => {
     const english = await probeWith(ORPHAN)
     expect(english.wellKnownNameCheckReliable).toBe(true)
+
     const localized = await new Promise<Record<string, unknown>>((resolve) => {
       resetWindowsInstallDirAclProbeForTest()
       probeWindowsInstallDirAcl({
@@ -133,10 +139,12 @@ describe('probeWindowsInstallDirAcl', () => {
         ).spawnFn,
         recordBreadcrumb: (_name, d) => {
           resolve(d as Record<string, unknown>)
+
           return undefined
         }
       })
     })
+
     expect(localized.matchesPoisonSignature).toBe(true)
     expect(localized.wellKnownNameCheckReliable).toBe(false)
   })
@@ -163,6 +171,7 @@ describe('probeWindowsInstallDirAcl', () => {
   it('never passes a recursive or write flag', async () => {
     const fake = fakeSpawn((target) => dacl(target, ORPHAN))
     await probe({ spawnFn: fake.spawnFn })
+
     for (const call of fake.calls) {
       expect(call.args).toHaveLength(1)
       expect(call.args[0]).not.toMatch(/^\//)

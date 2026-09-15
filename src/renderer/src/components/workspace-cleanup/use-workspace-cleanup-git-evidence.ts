@@ -56,10 +56,12 @@ export function useWorkspaceCleanupGitEvidence({
   // Why: streaming ticks call publish repeatedly; unchanged evidence must not
   // mint new Map/Set identities or every subscriber re-renders per tick.
   const publishDirtyRef = useRef(false)
+
   const publish = useCallback(() => {
     if (!mountedRef.current || !publishDirtyRef.current) {
       return
     }
+
     publishDirtyRef.current = false
     setState({
       evidenceByIdentity: new Map(evidenceRef.current),
@@ -72,8 +74,10 @@ export function useWorkspaceCleanupGitEvidence({
   const pump = useCallback(() => {
     if (activeRequestWorktreeIdsRef.current.size > 0 || queueRef.current.length === 0) {
       publish()
+
       return
     }
+
     const generation = generationRef.current
     // Why: main truncates targeted scans at this shared limit; a larger request
     // would silently drop the overflow ids while marking them attempted.
@@ -81,27 +85,34 @@ export function useWorkspaceCleanupGitEvidence({
     queueRef.current = queueRef.current.slice(worktreeIds.length)
     const scanId = crypto.randomUUID()
     activeScanIdRef.current = scanId
+
     for (const worktreeId of worktreeIds) {
       queuedRef.current.delete(worktreeId)
       inFlightRef.current.add(worktreeId)
       activeRequestWorktreeIdsRef.current.add(worktreeId)
       attemptedRef.current.add(worktreeId)
     }
+
     publishDirtyRef.current = true
+
     const acceptCandidates = (nextCandidates: readonly WorkspaceCleanupCandidate[]): void => {
       if (generation !== generationRef.current) {
         return
       }
+
       for (const candidate of nextCandidates) {
         if (!activeRequestWorktreeIdsRef.current.has(candidate.worktreeId)) {
           continue
         }
+
         evidenceRef.current.set(getWorkspaceCleanupCandidateIdentity(candidate), candidate)
         inFlightRef.current.delete(candidate.worktreeId)
         publishDirtyRef.current = true
       }
+
       publish()
     }
+
     void window.api.workspaceCleanup
       .scan({ worktreeIds, scanId }, (progress) => acceptCandidates(progress.candidates))
       .then((result) => acceptCandidates(result.candidates))
@@ -113,12 +124,15 @@ export function useWorkspaceCleanupGitEvidence({
         if (activeScanIdRef.current === scanId) {
           activeScanIdRef.current = null
         }
+
         for (const worktreeId of worktreeIds) {
           activeRequestWorktreeIdsRef.current.delete(worktreeId)
+
           if (generation === generationRef.current && inFlightRef.current.delete(worktreeId)) {
             publishDirtyRef.current = true
           }
         }
+
         pump()
       })
     publish()
@@ -133,9 +147,11 @@ export function useWorkspaceCleanupGitEvidence({
     if ((wasEnabled && !enabled) || (enabled && snapshotChanged)) {
       generationRef.current += 1
       const activeScanId = activeScanIdRef.current
+
       if (activeScanId) {
         void window.api.workspaceCleanup.cancelScan?.(activeScanId)
       }
+
       queueRef.current = []
       queuedRef.current.clear()
       inFlightRef.current.clear()
@@ -145,9 +161,11 @@ export function useWorkspaceCleanupGitEvidence({
       publishDirtyRef.current = true
       publish()
     }
+
     if (!enabled) {
       return
     }
+
     // Why: the exclusion set must cover queued/in-flight ids too — a cap that
     // counts them would permanently skip everything past it on a settled scan.
     const targets = selectWorkspaceCleanupGitEvidenceTargets(candidates, {
@@ -158,13 +176,17 @@ export function useWorkspaceCleanupGitEvidence({
       ]),
       maxTargets: Number.POSITIVE_INFINITY
     })
+
     if (targets.length === 0) {
       return
     }
+
     queueRef.current.push(...targets)
+
     for (const target of targets) {
       queuedRef.current.add(target)
     }
+
     totalRef.current += targets.length
     publishDirtyRef.current = true
     pump()
@@ -173,6 +195,7 @@ export function useWorkspaceCleanupGitEvidence({
   useEffect(
     () => () => {
       const activeScanId = activeScanIdRef.current
+
       if (activeScanId) {
         void window.api.workspaceCleanup.cancelScan?.(activeScanId)
       }

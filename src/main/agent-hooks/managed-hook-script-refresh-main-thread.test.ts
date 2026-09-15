@@ -15,23 +15,30 @@ const state = vi.hoisted(() => ({
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsModule>()
   const wrapped: Record<string, unknown> = { ...actual }
+
   for (const [name, value] of Object.entries(actual)) {
     if (!name.endsWith('Sync') || typeof value !== 'function') {
       continue
     }
+
     const original = value as ((...args: unknown[]) => unknown) & Record<string, unknown>
+
     const recorder = (...args: unknown[]): unknown => {
       state.syncCalls.push({ name, target: typeof args[0] === 'string' ? args[0] : '' })
+
       return original(...args)
     }
+
     Object.assign(recorder, original)
     wrapped[name] = recorder
   }
+
   return { ...wrapped, default: wrapped }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromisesModule>()
+
   return {
     ...actual,
     default: actual,
@@ -44,6 +51,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeOsModule>()
+
   return { ...actual, default: actual, homedir: () => state.home }
 })
 
@@ -71,10 +79,12 @@ describe('managed hook script refresh stays off the main thread', () => {
 
   it('uses no synchronous HOME filesystem calls for missing or stale scripts', async () => {
     const hooksDir = join(state.home, '.orca', 'agent-hooks')
+
     const claudeScript = join(
       hooksDir,
       process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
     )
+
     await mkdir(hooksDir, { recursive: true })
     await writeFile(claudeScript, 'stale', 'utf-8')
     state.syncCalls = []

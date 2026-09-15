@@ -20,6 +20,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -37,6 +38,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -49,6 +51,7 @@ describe('COMMAND_SPECS collision check', () => {
   it('has no duplicate command or alias paths', () => {
     // Why: first-match resolution would silently shadow duplicate aliases.
     const seen = new Set<string>()
+
     for (const spec of COMMAND_SPECS) {
       for (const path of specPaths(spec)) {
         const key = path.join(' ')
@@ -60,8 +63,10 @@ describe('COMMAND_SPECS collision check', () => {
 
   it('allows every flag documented in command usage strings', () => {
     const flagPattern = /--([a-zA-Z0-9-]+)/g
+
     for (const spec of COMMAND_SPECS) {
       const allowed = new Set([...GLOBAL_FLAGS, ...spec.allowedFlags])
+
       for (const match of spec.usage.matchAll(flagPattern)) {
         const flag = match[1]
         expect(
@@ -155,15 +160,18 @@ describe('command aliases dispatch to the canonical handler', () => {
     expect(callMock).not.toHaveBeenCalled()
     const schema = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
     expect(schema.schemaVersion).toBe(1)
+
     const rm = schema.commands.find(
       (command: { command: string }) => command.command === 'worktree rm'
     )
+
     expect(rm.aliases).toContainEqual(['worktree', 'remove'])
   })
 
   it('keeps `agent-context` local when remote environment variables are set', async () => {
     vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
     vi.stubEnv('ORCA_ENVIRONMENT', 'stale-environment')
+
     try {
       await main(['agent-context', '--json'], '/tmp/repo')
 

@@ -6,6 +6,7 @@ vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn
 
 function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 99999,
     getForegroundProcess: vi.fn(() => null),
@@ -40,6 +41,7 @@ describe('TerminalHost cwd readability verdict', () => {
 
   afterEach(async () => {
     await host.dispose()
+
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
     }

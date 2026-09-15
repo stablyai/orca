@@ -64,6 +64,7 @@ describe('workspace delete app command', () => {
 
   it('claims the chord and immediately deletes the active workspace', () => {
     const input = shortcutInput()
+
     const handler = createAppCommandHandlers(shortcutState(), input, 'terminal').get(
       'workspace.delete'
     )

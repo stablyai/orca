@@ -25,6 +25,7 @@ vi.mock('../windows-process-tree-kill', () => ({
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+
   return {
     ...actual,
     spawn: vi.fn(actual.spawn)
@@ -55,6 +56,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
   it('discovers dynamic models through the agent CLI', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -63,6 +65,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('cursor', undefined)
@@ -87,6 +90,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
   it('writes the Claude list_models request to stdin and parses the control response', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -95,6 +99,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       stdin: { on: vi.fn(), end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
@@ -145,6 +150,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
   it('falls back to the Claude seed models when the CLI lacks list_models', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -153,6 +159,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       stdin: { on: vi.fn(), end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
@@ -175,6 +182,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
   it('discovers dynamic models through the configured agent command override', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -183,6 +191,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('cursor', undefined, 'npx cursor-agent')
@@ -194,6 +203,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: true,
       defaultModelId: 'auto'
     })
+
     if (process.platform === 'win32') {
       expect(spawnMock).toHaveBeenCalledWith(
         expect.stringMatching(/cmd\.exe$/i),
@@ -212,6 +222,7 @@ describe('discoverCommitMessageModelsLocal', () => {
   it('discovers dynamic models through the selected WSL distro login shell', async () => {
     await withPlatform('win32', async () => {
       const listeners = new Map<string, (value: unknown) => void>()
+
       const child = {
         pid: 123,
         kill: vi.fn(),
@@ -220,6 +231,7 @@ describe('discoverCommitMessageModelsLocal', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
+
       spawnMock.mockReturnValue(child as never)
 
       const pending = discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
@@ -256,6 +268,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
   it('falls back to static models when dynamic discovery returns no parseable models', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -264,6 +277,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('pi', undefined)
@@ -280,6 +294,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
   it('parses Pi model discovery from stderr when the CLI exits successfully', async () => {
     const listeners = new Map<string, (value: unknown) => void>()
+
     const child = {
       pid: 123,
       kill: vi.fn(),
@@ -288,6 +303,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       stdin: { end: vi.fn() },
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
+
     spawnMock.mockReturnValue(child as never)
 
     const pending = discoverCommitMessageModelsLocal('pi', undefined)
@@ -317,6 +333,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     try {
       const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+
       const assertion = expect(pending).resolves.toMatchObject({
         success: false,
         error: 'Cursor model discovery timed out after 60s.'
@@ -432,6 +449,7 @@ describe('generateCommitMessageFromContext', () => {
       })
       expect(cwd).toBe('/remote/repo')
       expect(timeoutMs).toBe(60_000)
+
       return {
         stdout: 'auto - Auto\ngpt-5.2 - GPT-5.2\n',
         stderr: '',
@@ -462,6 +480,7 @@ describe('generateCommitMessageFromContext', () => {
       new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
       { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
     )
+
     const result = await discoverCommitMessageModelsRemote(
       'cursor',
       '/remote/repo',

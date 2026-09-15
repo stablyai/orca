@@ -47,16 +47,20 @@ export function validateFileRangeRequest(
       'fs.readFileRange requires a non-negative safe-integer position'
     )
   }
+
   if (typeof length !== 'number' || !Number.isSafeInteger(length) || length <= 0) {
     throw new FileRangeReadRequestError('fs.readFileRange requires a positive integer length')
   }
+
   if (length > MAX_FILE_RANGE_READ_BYTES) {
     throw new FileRangeReadRequestError(
       `fs.readFileRange length ${length} exceeds the ${MAX_FILE_RANGE_READ_BYTES}-byte limit`
     )
   }
+
   if (position > Number.MAX_SAFE_INTEGER - (length - 1)) {
     throw new FileRangeReadRequestError('fs.readFileRange window exceeds safe-integer offsets')
   }
+
   return { position, length }
 }

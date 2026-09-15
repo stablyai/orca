@@ -8,6 +8,7 @@ import {
 } from './command-code-done-settle'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const OTHER_PANE_KEY = 'tab-2:22222222-2222-4222-8222-222222222222'
 
 describe('command code done settle window', () => {

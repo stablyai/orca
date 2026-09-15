@@ -18,16 +18,21 @@ export function resolveWindowsShellStartupFamily(
   shell: string | null | undefined
 ): AgentStartupShell {
   const trimmed = shell?.trim()
+
   if (!trimmed) {
     return 'powershell'
   }
+
   if (trimmed === WINDOWS_GIT_BASH_SHELL) {
     return 'posix'
   }
+
   const basename = trimmed.replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+
   if (basename === 'cmd.exe') {
     return 'cmd'
   }
+
   // Why: wsl.exe and bash.exe (Git for Windows) launch POSIX shells, so queued
   // commands must use POSIX quoting and `cd '<cwd>'` rather than cmd/PowerShell.
   // Extension-less forms reach the same executables through PATHEXT.
@@ -39,6 +44,7 @@ export function resolveWindowsShellStartupFamily(
   ) {
     return 'posix'
   }
+
   return 'powershell'
 }
 
@@ -52,5 +58,6 @@ export function resolveLocalWindowsAgentStartupShell(args: {
   if (args.platform !== 'win32' || args.isRemote) {
     return undefined
   }
+
   return resolveWindowsShellStartupFamily(args.terminalWindowsShell)
 }

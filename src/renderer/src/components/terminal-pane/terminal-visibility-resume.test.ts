@@ -8,37 +8,50 @@ import {
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn()
 }))
+
 const presentPaneViewport = vi.fn()
+
 const presentPaneViewportPreservingSynchronizedOutput = vi.fn()
+
 vi.mock('@/lib/pane-manager/pane-webgl-renderer', () => ({
   presentPaneViewport: (pane: unknown) => presentPaneViewport(pane),
   presentPaneViewportPreservingSynchronizedOutput: (pane: unknown) =>
     presentPaneViewportPreservingSynchronizedOutput(pane)
 }))
+
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn()
 }))
+
 vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
   enforceTerminalCurrentScrollIntent: vi.fn(),
   syncTerminalScrollIntentFromViewport: vi.fn()
 }))
+
 vi.mock('./pane-helpers', () => ({
   fitAndFocusPanes: vi.fn(),
   fitPanes: vi.fn(),
   focusActivePane: vi.fn()
 }))
+
 const flushDeferredPaneMetricOptionsIfMeasurable = vi.fn((_pane: unknown) => false)
+
 vi.mock('@/lib/pane-manager/pane-fit', () => ({
   flushDeferredPaneMetricOptionsIfMeasurable: (pane: unknown) =>
     flushDeferredPaneMetricOptionsIfMeasurable(pane)
 }))
+
 const repairPaneWebglCanvasDprMismatch = vi.fn((_pane: unknown) => false)
+
 vi.mock('@/lib/pane-manager/terminal-canvas-dpr-repair', () => ({
   repairPaneWebglCanvasDprMismatch: (pane: unknown) => repairPaneWebglCanvasDprMismatch(pane)
 }))
+
 const resetTerminalLinkifierHoverState = vi.fn()
+
 const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
+
 vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
   resetTerminalLinkifierHoverState: (terminal: unknown) =>
     resetTerminalLinkifierHoverState(terminal),
@@ -104,6 +117,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const terminal = { name: 'trimmed-terminal' }
     const manager = createManager()
     manager.getPanes.mockReturnValue([{ terminal }])
+
     const { enforceTerminalCurrentScrollIntent, syncTerminalScrollIntentFromViewport } = vi.mocked(
       await import('@/lib/pane-manager/terminal-scroll-intent')
     )
@@ -164,6 +178,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const manager = createManager()
     manager.getPanes.mockReturnValue([pane])
     repairPaneWebglCanvasDprMismatch.mockReturnValueOnce(true)
+
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )
@@ -183,6 +198,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const pane = { terminal: {} }
     const manager = createManager()
     manager.getPanes.mockReturnValue([pane])
+
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )
@@ -308,9 +324,11 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const terminal = { name: 'streaming-terminal' }
     const manager = createManager()
     manager.getPanes.mockReturnValue([{ terminal }])
+
     const { syncTerminalScrollIntentFromViewport } = vi.mocked(
       await import('@/lib/pane-manager/terminal-scroll-intent')
     )
+
     const { flushTerminalOutput } = vi.mocked(
       await import('@/lib/pane-manager/pane-terminal-output-scheduler')
     )
@@ -333,9 +351,11 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const terminal = { name: 'hidden-streaming-terminal' }
     const manager = createManager()
     manager.getPanes.mockReturnValue([{ terminal }])
+
     const { syncTerminalScrollIntentFromViewport } = vi.mocked(
       await import('@/lib/pane-manager/terminal-scroll-intent')
     )
+
     const { flushTerminalOutput } = vi.mocked(
       await import('@/lib/pane-manager/pane-terminal-output-scheduler')
     )
@@ -399,6 +419,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )
+
     const manager = createManager()
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
@@ -420,6 +441,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )
+
     const manager = createManager()
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,

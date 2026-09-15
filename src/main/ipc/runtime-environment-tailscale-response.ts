@@ -8,6 +8,7 @@ export function withTailscaleHintForResponse<TResult>(
   if (response.ok === true) {
     return response
   }
+
   return {
     ...response,
     error: {

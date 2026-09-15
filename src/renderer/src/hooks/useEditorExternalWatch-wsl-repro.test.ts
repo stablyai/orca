@@ -3,8 +3,10 @@ import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
+
   return { ...actual, notifyEditorExternalFileChange: vi.fn() }
 })
 
@@ -13,6 +15,7 @@ import { notifyEditorExternalFileChange } from '@/components/editor/editor-autos
 import { createExternalWatchEventHandler } from './useEditorExternalWatch'
 
 const worktreePath = '\\\\wsl.localhost\\Ubuntu\\workspace\\repo'
+
 const restoredPath = '//wsl.localhost/Ubuntu/workspace/repo/file.ts'
 
 function payload(): FsChangedPayload {
@@ -89,6 +92,7 @@ describe('WSL watcher stale-refresh reproduction', () => {
 
   it('keeps the same aliases distinct on a POSIX desktop', () => {
     vi.stubGlobal('navigator', { userAgent: 'Linux' })
+
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
       worktreeId: 'wt-wsl',
       worktreePath,
@@ -120,6 +124,7 @@ describe('WSL watcher stale-refresh reproduction', () => {
       ],
       setExternalMutation: vi.fn()
     } as never)
+
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
       worktreeId: 'wt-wsl',
       worktreePath: driveRoot,
@@ -147,6 +152,7 @@ describe('WSL watcher stale-refresh reproduction', () => {
   it('tombstones and restores a /mnt alias from native-drive watcher events', () => {
     const driveRoot = 'C:\\workspace\\repo'
     const mountedPath = '//wsl.localhost/Ubuntu/mnt/c/workspace/repo/file.ts'
+
     const file = {
       id: mountedPath,
       filePath: mountedPath,
@@ -156,13 +162,16 @@ describe('WSL watcher stale-refresh reproduction', () => {
       isDirty: false,
       externalMutation: null as 'deleted' | null
     }
+
     const setExternalMutation = vi.fn((_id: string, mutation: 'deleted' | null) => {
       file.externalMutation = mutation
     })
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [file],
       setExternalMutation
     } as never)
+
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
       worktreeId: 'wt-wsl',
       worktreePath: driveRoot,

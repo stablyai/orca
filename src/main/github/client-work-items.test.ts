@@ -80,6 +80,7 @@ vi.mock('./rate-limit', () => ({
 
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+
   return {
     ...actual,
     // Why: these suites drive source resolution through the legacy gh-utils

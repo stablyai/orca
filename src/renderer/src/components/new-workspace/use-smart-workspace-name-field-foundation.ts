@@ -27,6 +27,7 @@ export function useSmartWorkspaceNameFieldFoundation(
     jiraSourceContext,
     selectedSource
   } = props
+
   const {
     addRepo,
     checkLinearConnection,
@@ -66,18 +67,22 @@ export function useSmartWorkspaceNameFieldFoundation(
       settings: s.settings
     }))
   )
+
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === repoId) ?? null,
     [repoId, repos]
   )
+
   const selectedRepoOwnerSettings = useMemo(
     () => getRepoOwnerRoutedSettings(settings, selectedRepo),
     [selectedRepo, settings]
   )
+
   const githubSourceContext = useMemo(() => {
     if (githubSourceContextOverride?.provider === 'github') {
       return githubSourceContextOverride
     }
+
     return selectedRepo
       ? buildTaskSourceContextFromRepo({
           provider: 'github',
@@ -86,6 +91,7 @@ export function useSmartWorkspaceNameFieldFoundation(
         })
       : null
   }, [githubSourceContextOverride, selectedRepo])
+
   const gitlabSourceContext = useMemo(
     () =>
       selectedRepo
@@ -97,6 +103,7 @@ export function useSmartWorkspaceNameFieldFoundation(
         : null,
     [selectedRepo]
   )
+
   const repoBackedSearchTargets = useMemo<RepoBackedSearchTarget[]>(
     () =>
       (repoBackedSearchRepos.length > 0
@@ -125,6 +132,7 @@ export function useSmartWorkspaceNameFieldFoundation(
       })),
     [githubSourceContext, gitlabSourceContext, repoBackedSearchRepos, selectedRepo]
   )
+
   const linearSourceContext = useMemo(
     () =>
       selectedRepo
@@ -136,12 +144,16 @@ export function useSmartWorkspaceNameFieldFoundation(
         : null,
     [selectedRepo]
   )
+
   const state = useSmartWorkspaceNameFieldState(textOnly, value)
+
   const jiraConnection = useJiraSourceConnection({
     enabled: !disabled && !textOnly && jiraSourceContext !== null,
     sourceContext: jiraSourceContext
   })
+
   const jiraConnectionStatus = jiraConnection.status
+
   const jiraSource = useJiraUrlSource({
     value,
     enabled:
@@ -152,11 +164,15 @@ export function useSmartWorkspaceNameFieldFoundation(
     sourceContext: jiraSourceContext,
     connection: jiraConnection
   })
+
   const jiraSourceConnected = jiraConnectionStatus?.connected === true
+
   const showJiraSiteContext =
     state.mode === 'jira' && jiraConnectionStatus?.selectedSiteId === 'all'
+
   const jiraStatusId = React.useId()
   const linearStatusId = React.useId()
+
   const availability = useSmartWorkspaceFieldAvailability({
     props,
     state,

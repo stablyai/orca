@@ -77,7 +77,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 ])
 
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
+
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
+
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worktree_id_requires_full_path',
   'run_not_found',
@@ -143,6 +145,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+
   if (
     error instanceof Error &&
     'code' in error &&
@@ -150,8 +153,10 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
+
     return errorResponse(id, meta, code, message, computerErrorData(code, message))
   }
+
   if (
     error instanceof Error &&
     'code' in error &&
@@ -166,6 +171,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       (error as { data?: unknown }).data
     )
   }
+
   if (
     error instanceof Error &&
     'code' in error &&
@@ -180,6 +186,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       (error as { data?: unknown }).data
     )
   }
+
   if (
     error instanceof Error &&
     'code' in error &&
@@ -194,10 +201,13 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       (error as { data?: unknown }).data
     )
   }
+
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
     return errorResponse(id, meta, message, message)
   }
+
   const skillInstallFailure = classifySkillInstallFailureCode(message)
+
   if (skillInstallFailure) {
     return errorResponse(
       id,
@@ -207,9 +217,11 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       skillInstallFailure
     )
   }
+
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
+
   return errorResponse(id, meta, 'runtime_error', message)
 }
 
@@ -227,6 +239,7 @@ export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknow
   ) {
     return errorResponse(id, meta, (error as { code: string }).code, error.message)
   }
+
   return mapRuntimeError(id, meta, error)
 }
 
@@ -240,5 +253,6 @@ export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unkno
   ) {
     return errorResponse(id, meta, (error as { code: string }).code, error.message)
   }
+
   return mapRuntimeError(id, meta, error)
 }

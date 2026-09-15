@@ -20,9 +20,11 @@ it('gives the localhost SSH journey its same-filesystem server and agent prerequ
   expect(setup.run).toContain('PasswordAuthentication no')
   expect(setup.run).toContain('UsePAM yes')
   expect(setup.run).toContain('mkdir -p "$HOME/.pi/agent"')
+
   for (const key of ['ORCA_E2E_SSH_PORT', 'ORCA_E2E_SSH_USER', 'ORCA_E2E_SSH_IDENTITY_FILE']) {
     expect(setup.run).toContain(key)
   }
+
   const run = job.steps.find((step) => step.name === 'Run localhost SSH terminal and hook journey')
   expect(run.env.ORCA_E2E_SSH_LOCALHOST).toBe('1')
   expect(run.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS).toBe('1')
@@ -37,6 +39,7 @@ it('gives the localhost SSH journey its same-filesystem server and agent prerequ
 
 it('selects the localhost journey for its remote hook authorities', () => {
   const spec = 'tests/e2e/ssh-localhost.spec.ts'
+
   for (const file of [
     'src/relay/relay-agent-hook-runtime.ts',
     'src/relay/agent-hook-server.ts',
@@ -48,5 +51,6 @@ it('selects the localhost journey for its remote hook authorities', () => {
     expect(existsSync(resolve(import.meta.dirname, '../..', file)), file).toBe(true)
     expect(selectPrE2eSpecs([file])).toContain(spec)
   }
+
   expect(selectPrE2eSpecs(['src/renderer/src/components/Unrelated.tsx'])).not.toContain(spec)
 })

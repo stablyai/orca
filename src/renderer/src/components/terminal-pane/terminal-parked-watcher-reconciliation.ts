@@ -23,15 +23,20 @@ export function fallbackParkedPaneCandidates(
   const layout = state.terminalLayoutsByTabId[tab.id]
   const rootLeafIds = collectLeafIdsInOrder(layout?.root)
   const rootlessLeafId = layout ? resolveRootlessTerminalLayoutLeafId(layout) : null
+
   const leafIds =
     rootLeafIds.length > 0 ? rootLeafIds : rootlessLeafId !== null ? [rootlessLeafId] : []
+
   if (leafIds.length === 0) {
     return []
   }
+
   const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
   const titleSlots = Object.keys(state.runtimePaneTitlesByTabId[tab.id] ?? {})
+
   const reusableSlot =
     leafIds.length === 1 && titleSlots.length === 1 ? Number(titleSlots[0]) : null
+
   return leafIds.map((leafId, index) => ({
     ptyId: ptyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null),
     paneId: reusableSlot ?? -(index + 1),
@@ -46,6 +51,7 @@ export function resolveParkedTerminalPaneCandidates(
 ): ParkedTerminalPaneCapture[] {
   const captured = capturedPanesByTabId.get(tab.id)
   const fallback = fallbackParkedPaneCandidates(tab, state)
+
   const capturedIsCurrent =
     captured !== undefined &&
     captured.panes.length > 0 &&
@@ -57,11 +63,14 @@ export function resolveParkedTerminalPaneCandidates(
             (candidate) => candidate.leafId === pane.leafId && candidate.ptyId === pane.ptyId
           )
         )))
+
   if (capturedIsCurrent) {
     return captured.panes
   }
+
   return fallback.map((pane) => {
     const prior = captured?.panes.find((candidate) => candidate.leafId === pane.leafId)
+
     return prior
       ? {
           ...pane,
@@ -90,6 +99,7 @@ export function reconcileParkedWatcherPtyIds(args: {
   const retainedPtyIds = Array.from(args.paneIdByPtyId.keys()).filter((ptyId) =>
     args.expectedPtyIds.has(ptyId)
   )
+
   return {
     restartAll: args.entryTabPtyId !== args.currentTabPtyId,
     addedPtyIds: Array.from(args.expectedPtyIds).filter((ptyId) => !args.paneIdByPtyId.has(ptyId)),

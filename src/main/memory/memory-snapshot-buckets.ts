@@ -11,7 +11,9 @@ export type MemorySnapshotStore = Pick<
 >
 
 const APP_HISTORY_KEY = '__app__'
+
 const HISTORY_CAPACITY = 60
+
 const HISTORY_STALE_MS = 10 * 60 * 1000
 
 type HistoryRing = {
@@ -23,19 +25,24 @@ const historyByKey = new Map<string, HistoryRing>()
 
 export function pushMemoryHistorySample(key: string, memoryBytes: number, now: number): void {
   let ring = historyByKey.get(key)
+
   if (!ring) {
     ring = { samples: [], touchedAt: now }
     historyByKey.set(key, ring)
   }
+
   ring.samples.push(memoryBytes)
+
   if (ring.samples.length > HISTORY_CAPACITY) {
     ring.samples.shift()
   }
+
   ring.touchedAt = now
 }
 
 export function readMemoryHistory(key: string): number[] {
   const ring = historyByKey.get(key)
+
   return ring ? [...ring.samples] : []
 }
 
@@ -76,15 +83,18 @@ export function resolveWorktreeMemoryNames(
 } {
   const scope = parseWorkspaceKey(worktreeId)
   const folder = scope?.type === 'folder' ? store.getFolderWorkspace(scope.folderWorkspaceId) : null
+
   if (folder) {
     const worktree = folderWorkspaceToWorktree(folder)
     const group = store.getProjectGroups().find((item) => item.id === folder.projectGroupId)
+
     return {
       worktreeName: worktree.displayName,
       repoId: worktree.repoId,
       repoName: group?.name?.trim() || worktree.displayName
     }
   }
+
   // Orca worktree ids look like `${repoId}::${absolutePath}`.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const repoId = parsed?.repoId ?? worktreeId

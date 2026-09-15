@@ -35,6 +35,7 @@ function defaultCollator(): Intl.Collator {
 
 function toSortFields(entry: AutomationHostCatalogEntry): SortFields {
   const { authority, selector } = entry.stableRef
+
   return {
     entry,
     authorityRank: authority.kind === 'desktop' ? 0 : 1,
@@ -61,16 +62,20 @@ export function orderAutomationHostCatalogEntries(
     if (a.authorityRank !== b.authorityRank) {
       return a.authorityRank - b.authorityRank
     }
+
     if (a.authorityId !== b.authorityId) {
       return (
         collator.compare(a.authorityLabel, b.authorityLabel) ||
         compareIds(a.authorityId, b.authorityId)
       )
     }
+
     if (a.kindRank !== b.kindRank) {
       return a.kindRank - b.kindRank
     }
+
     return collator.compare(a.label, b.label) || compareIds(a.targetId, b.targetId)
   })
+
   return decorated.map((fields) => fields.entry)
 }

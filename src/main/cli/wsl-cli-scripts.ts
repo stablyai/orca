@@ -1,4 +1,5 @@
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
+
 const BRIDGE_MANAGED_MARKER = '# Orca managed WSL CLI PowerShell bridge'
 
 export function buildWslLauncher(
@@ -6,6 +7,7 @@ export function buildWslLauncher(
   bridgePath = '${XDG_DATA_HOME:-$HOME/.local/share}/orca/orca-wsl-bridge.ps1'
 ): string {
   const encodedTarget = Buffer.from(windowsLauncherPath, 'utf8').toString('base64')
+
   return `#!/usr/bin/env bash
 set -euo pipefail
 ${MANAGED_MARKER}
@@ -128,6 +130,7 @@ export function getBridgePathFromCommandPath(commandPath: string): string {
 export function buildSafeReplaceGuard(path: string, managedMarker: string): string {
   const quotedPath = quoteShell(path)
   const quotedMarker = quoteShell(managedMarker)
+
   return [
     `if [ -L ${quotedPath} ]; then`,
     '  echo "__ORCA_CONFLICT__"',
@@ -141,6 +144,7 @@ export function buildSafeReplaceGuard(path: string, managedMarker: string): stri
 
 export function buildRegistrationLockPrelude(commandPath: string): string {
   const lockDir = getPosixDirname(getBridgePathFromCommandPath(commandPath))
+
   // Why: the per-distro queue only serializes one Orca process; flock covers
   // a second install (e.g. stable + nightly) mutating the same distro files.
   return [
@@ -159,6 +163,7 @@ export function buildManagedLegacyRemoveCommand(quotedLegacyCommandPath: string)
 
 export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: string): string {
   const bridgePath = getBridgePathFromCommandPath(commandPath)
+
   return [
     // Why -eu not -euo pipefail: this script runs via runWslProcess's `sh -s`,
     // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
@@ -175,6 +180,7 @@ export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: 
 
 export function parseManagedLauncherTarget(content: string): string | null {
   const encoded = content.match(/^# ORCA_WIN_LAUNCHER_B64=([A-Za-z0-9+/=]+)$/m)?.[1]
+
   if (encoded) {
     try {
       return Buffer.from(encoded, 'base64').toString('utf8')
@@ -184,6 +190,7 @@ export function parseManagedLauncherTarget(content: string): string | null {
   }
 
   const legacyTarget = content.match(/^ORCA_WIN_LAUNCHER='((?:[^']|'"'"')*)'$/m)?.[1]
+
   return legacyTarget ? legacyTarget.replaceAll(`'"'"'`, "'") : null
 }
 

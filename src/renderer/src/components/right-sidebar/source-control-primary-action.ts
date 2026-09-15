@@ -81,16 +81,19 @@ function resolvePrimaryActionLabel(
       'Force Push'
     )
   }
+
   if (decision.labelIntent === 'create_pr') {
     const copy = localizedHostedReviewCopy(
       resolveSupportedHostedReviewCopyProvider(inputs.hostedReviewCreation?.provider)
     )
+
     return translate(
       'auto.components.right.sidebar.source.control.primary.action.e7ffa46946',
       'Create {{value0}}',
       { value0: copy.shortLabel }
     )
   }
+
   switch (decision.labelIntent) {
     case 'commit':
       return translate(
@@ -134,6 +137,7 @@ function resolvePrimaryActionTitle(
   const copy = localizedHostedReviewCopy(
     resolveSupportedHostedReviewCopyProvider(inputs.hostedReviewCreation?.provider)
   )
+
   switch (decision.titleIntent) {
     case 'commit_in_progress':
       return translate(
@@ -173,6 +177,7 @@ function resolvePrimaryActionTitle(
           'Preparing branch for review…'
         )
       }
+
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.c72e5e65d1',
         'Prepare this branch and create a {{value0}}',

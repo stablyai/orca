@@ -10,6 +10,7 @@ function getCssRuleBody(selector: string): string {
   const ruleStart = ruleMarker + 1
   const bodyStart = mainCss.indexOf('{', ruleStart) + 1
   const bodyEnd = mainCss.indexOf('}', bodyStart)
+
   return mainCss.slice(bodyStart, bodyEnd)
 }
 
@@ -18,6 +19,7 @@ describe('worktree card active styling', () => {
     const primary = getCssRuleBody(
       "[data-worktree-card-surface][data-worktree-card-active='primary']"
     )
+
     const darkPrimary = getCssRuleBody(
       ".dark [data-worktree-card-surface][data-worktree-card-active='primary']"
     )
@@ -35,6 +37,7 @@ describe('worktree card active styling', () => {
     const secondary = getCssRuleBody(
       "[data-worktree-card-surface][data-worktree-card-active='secondary']"
     )
+
     const darkSecondary = getCssRuleBody(
       ".dark [data-worktree-card-surface][data-worktree-card-active='secondary']"
     )

@@ -31,6 +31,7 @@ export function useAiVaultOriginalPaneActions(): {
       terminalLayoutsByTabId: s.terminalLayoutsByTabId
     }))
   )
+
   // Why: loading, filtered, or collapsed views may render no session rows.
   // Build once on the first actual lookup, then share it across visible rows.
   const getOriginalPaneIndex = useMemo(
@@ -52,6 +53,7 @@ export function useAiVaultOriginalPaneActions(): {
 
   const jumpToOriginalPane = useCallback((session: AiVaultSession): void => {
     const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
+
     if (!target) {
       toast.error(
         translate(
@@ -59,6 +61,7 @@ export function useAiVaultOriginalPaneActions(): {
           'Original pane is no longer available.'
         )
       )
+
       return
     }
 
@@ -69,8 +72,10 @@ export function useAiVaultOriginalPaneActions(): {
           'Worktree is no longer available.'
         )
       )
+
       return
     }
+
     const state = useAppStore.getState()
     state.setActiveTabType('terminal')
     activateTabAndFocusPane(target.tabId, target.leafId, {

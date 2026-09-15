@@ -18,10 +18,12 @@ import {
 describe('fetchWorkspaceSessionFromHosts', () => {
   it('reads saved runtime host partitions before runtime repos are loaded', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
+
     const localSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeWorktreeId: 'local-wt'
     }
+
     const remoteSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -39,6 +41,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
         ]
       }
     }
+
     const get = vi.fn(async (hostId?: string) =>
       hostId === 'runtime:env-1' ? remoteSession : localSession
     )
@@ -53,6 +56,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 
   it('returns runtime owners for worktrees loaded from runtime host partitions', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
+
     const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
       if (hostId === 'runtime:env-1') {
         return {
@@ -73,6 +77,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           }
         }
       }
+
       return getDefaultWorkspaceSession()
     })
 
@@ -87,6 +92,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
   it('normalizes canonical worktree session keys in runtime owner maps', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
     const workspaceKey = worktreeWorkspaceKey(worktreeId)
+
     const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
       if (hostId === 'runtime:env-1') {
         return {
@@ -107,6 +113,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           }
         }
       }
+
       return getDefaultWorkspaceSession()
     })
 
@@ -119,6 +126,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 
   it('returns runtime owners for folder workspace session keys', async () => {
     const folderKey = folderWorkspaceKey('folder-1')
+
     const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
       if (hostId === 'runtime:env-1') {
         return {
@@ -140,6 +148,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           }
         }
       }
+
       return getDefaultWorkspaceSession()
     })
 
@@ -153,6 +162,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 
   it('returns runtime owners for sleeping-agent-only runtime worktrees', async () => {
     const worktreeId = 'remote-repo::/srv/sleeping-wt'
+
     const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {
       if (hostId === 'runtime:env-1') {
         return {
@@ -172,6 +182,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
           }
         }
       }
+
       return getDefaultWorkspaceSession()
     })
 
@@ -412,6 +423,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 
   it('routes canonical worktree keys using their raw worktree owner', () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
+
     const owner = buildHostIdByWorktreeId({
       repos: [],
       worktreesByRepo: {
@@ -425,6 +437,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
   it('builds local-first host snapshots reused by synchronous persistence', () => {
     const localWorktreeId = 'local-repo::C:\\src\\local'
     const remoteWorktreeId = 'remote-repo::/srv/remote'
+
     const makeTab = (id: string, worktreeId: string) => ({
       id,
       ptyId: null,
@@ -435,6 +448,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
       sortOrder: 0,
       createdAt: 1
     })
+
     const payload: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -442,6 +456,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
         [remoteWorktreeId]: [makeTab('remote-tab', remoteWorktreeId)]
       }
     }
+
     const state = {
       repos: [
         { id: 'local-repo', connectionId: null, executionHostId: 'local' },
@@ -485,6 +500,7 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 describe('buildHostIdByWorktreeId nested ownership', () => {
   it('persists an SSH worktree in its paired HUB session partition', () => {
     const worktreeId = 'nested-repo::/srv/remote-wt'
+
     const owner = buildHostIdByWorktreeId({
       repos: [
         {
@@ -513,6 +529,7 @@ describe('persistWorkspaceSessionByHost', () => {
   it('awaits every host write before crossing the durable flush boundary', async () => {
     const localWorktreeId = 'local-repo::/src/local'
     const remoteWorktreeId = 'remote-repo::/srv/remote'
+
     const payload: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -542,6 +559,7 @@ describe('persistWorkspaceSessionByHost', () => {
         ]
       }
     }
+
     const set = vi.fn().mockResolvedValue(undefined)
     const flush = vi.fn().mockResolvedValue(undefined)
 

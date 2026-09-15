@@ -5,6 +5,7 @@ export function createBrowserClientPageRetainedRoot(document: Document): HTMLDiv
   root.dataset.browserClientPageRetainedRoot = ''
   root.style.display = 'contents'
   document.body.appendChild(root)
+
   return root
 }
 
@@ -30,6 +31,7 @@ export function createBrowserClientPageRetainedHost(
     overflow: 'hidden',
     pointerEvents: 'none'
   })
+
   return host
 }
 
@@ -40,16 +42,19 @@ export function createBrowserClientPageWebview(options: {
 }): Electron.WebviewTag {
   const webview =
     options.createWebview?.() ?? (options.document.createElement('webview') as Electron.WebviewTag)
+
   webview.setAttribute('partition', options.partition)
   webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.setAttribute('src', 'about:blank')
   Object.assign(webview.style, { display: 'flex', width: '100%', height: '100%' })
+
   return webview
 }
 
 export function readBrowserClientPageAttachedGuestId(webview: Electron.WebviewTag): number | null {
   try {
     const webContentsId = webview.getWebContentsId()
+
     return Number.isInteger(webContentsId) && webContentsId > 0 ? webContentsId : null
   } catch {
     return null

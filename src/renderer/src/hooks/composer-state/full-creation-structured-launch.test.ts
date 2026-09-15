@@ -57,6 +57,7 @@ describe('settleFullCreationStructuredLaunch', () => {
     mocks.settleStructuredAgentLaunch.mockImplementation(
       async (_worktreeId, _agent, _options, hooks) => {
         hooks.onStructuredReady('session-1')
+
         return { kind: 'structured', sessionId: 'session-1' }
       }
     )

@@ -20,6 +20,7 @@ export async function readMobileHostedReviewGitStatus(
   worktreeId: string
 ): Promise<MobileHostedReviewStatusReadResult> {
   const reply = await gitStatusProjectionRead.request(client, { worktree: `id:${worktreeId}` })
+
   try {
     return { ok: true, status: gitStatusProjectionRead.interpret(reply) }
   } catch (error) {
@@ -35,6 +36,7 @@ export function mobileHostedReviewBranchStillMatches(
   status: MobileGitStatusResult | null
 ): boolean {
   const branch = status?.branch
+
   return Boolean(branch && (branch === inputBranch || branch === `refs/heads/${inputBranch}`))
 }
 
@@ -49,16 +51,19 @@ async function settleMobileHostedReviewMutation(
   fallback: string
 ): Promise<MobileHostedReviewMutationResult> {
   let reply: RpcResponse
+
   try {
     reply = await send()
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : fallback }
   }
+
   try {
     interpret(reply)
   } catch (error) {
     return { ok: false, error: refusedRpcMessageOrFallback(error, fallback) }
   }
+
   return { ok: true }
 }
 
@@ -92,17 +97,21 @@ export async function commitMobileHostedReviewStagedChanges(
   message: string
 ): Promise<MobileHostedReviewMutationResult> {
   let reply: RpcResponse
+
   try {
     reply = await gitCommitRun.request(client, { worktree: `id:${worktreeId}`, message })
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Commit failed' }
   }
+
   let outcome: ReturnType<typeof gitCommitRun.interpret>
+
   try {
     outcome = gitCommitRun.interpret(reply)
   } catch (error) {
     return { ok: false, error: refusedRpcMessageOrFallback(error, 'Commit failed') }
   }
+
   // An accepted reply still reports in-band, so `success: false` is a failed commit.
   return outcome.success === true
     ? { ok: true }

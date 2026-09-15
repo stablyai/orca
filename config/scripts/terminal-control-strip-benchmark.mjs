@@ -12,6 +12,7 @@ if (!process.execArgv.includes('--experimental-transform-types')) {
     ['--experimental-transform-types', '--no-warnings', import.meta.filename],
     { stdio: 'inherit' }
   )
+
   process.exit(result.status ?? 1)
 }
 
@@ -19,10 +20,12 @@ nodeModule.registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier.startsWith('.') && !/\.[cm]?[jt]s$/.test(specifier) && context.parentURL) {
       const candidate = new URL(`${specifier}.ts`, context.parentURL)
+
       if (existsSync(fileURLToPath(candidate))) {
         return { url: candidate.href, shortCircuit: true }
       }
     }
+
     return nextResolve(specifier, context)
   }
 })
@@ -31,6 +34,7 @@ const PRODUCTION_SOURCE = readFileSync(
   new URL('../../src/shared/terminal-control-stripping.ts', import.meta.url),
   'utf8'
 )
+
 for (const marker of [
   'export function stripTerminalControl(data: string): string',
   'strippedInBlock === CONTROL_DENSITY_FALLBACK_COUNT',
@@ -51,23 +55,34 @@ const { stripTerminalControl: stripAdaptive } = await import(
 )
 
 const ESC = String.fromCharCode(0x1b)
+
 const BEL = String.fromCharCode(0x07)
+
 const ANSI_ESCAPE_RE = new RegExp(
   `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}]*(?:${BEL}|${ESC}\\\\))`,
   'g'
 )
+
 const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
   `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
   'g'
 )
+
 const HISTORY_LIMIT = 300
+
 const SCAN_LIMIT = 4096
+
 const SAMPLE_ID_LENGTH = 24
+
 // Mirrors terminal-control-stripping.ts; the marker guard above fails if either is retuned.
 const CONTROL_DENSITY_BLOCK_CODE_UNITS = 64
+
 const CONTROL_DENSITY_FALLBACK_COUNT = 32
+
 const ITERATIONS = Number(process.env.ORCA_STRIP_BENCH_ITERATIONS ?? '501')
+
 let resultChecksum = 0
+
 let validatedPairs = 0
 
 if (!Number.isSafeInteger(ITERATIONS) || ITERATIONS <= 0) {
@@ -81,6 +96,7 @@ function isStrippedCode(code) {
 function terminalControlMayAffectText(data) {
   for (let index = 0; index < data.length; index += 1) {
     const code = data.charCodeAt(index)
+
     if (
       code === 0x0d ||
       code === 0x1b ||
@@ -90,6 +106,7 @@ function terminalControlMayAffectText(data) {
       return true
     }
   }
+
   return false
 }
 
@@ -97,14 +114,18 @@ function stripPerChar(data) {
   if (!terminalControlMayAffectText(data)) {
     return data
   }
+
   const withoutAnsi = data.replace(ANSI_ESCAPE_RE, '').replace(INCOMPLETE_ANSI_ESCAPE_RE, '')
   let output = ''
+
   for (let index = 0; index < withoutAnsi.length; index += 1) {
     if (isStrippedCode(withoutAnsi.charCodeAt(index))) {
       continue
     }
+
     output += withoutAnsi[index]
   }
+
   return output
 }
 
@@ -112,17 +133,21 @@ function stripSliceRuns(data) {
   if (!terminalControlMayAffectText(data)) {
     return data
   }
+
   const withoutAnsi = data.replace(ANSI_ESCAPE_RE, '').replace(INCOMPLETE_ANSI_ESCAPE_RE, '')
   let output = ''
   let runStart = 0
+
   for (let index = 0; index < withoutAnsi.length; index += 1) {
     if (isStrippedCode(withoutAnsi.charCodeAt(index))) {
       if (index > runStart) {
         output += withoutAnsi.slice(runStart, index)
       }
+
       runStart = index + 1
     }
   }
+
   return runStart === 0 ? withoutAnsi : output + withoutAnsi.slice(runStart)
 }
 
@@ -130,18 +155,22 @@ function adaptiveFallbackIndex(data) {
   const withoutAnsi = data.replace(ANSI_ESCAPE_RE, '').replace(INCOMPLETE_ANSI_ESCAPE_RE, '')
   let strippedInBlock = 0
   let blockEnd = 64
+
   for (let index = 0; index < withoutAnsi.length; index += 1) {
     if (index === blockEnd) {
       strippedInBlock = 0
       blockEnd += 64
     }
+
     if (isStrippedCode(withoutAnsi.charCodeAt(index))) {
       strippedInBlock += 1
+
       if (strippedInBlock === 32) {
         return index
       }
     }
   }
+
   return -1
 }
 
@@ -154,14 +183,19 @@ function makeTuiFixture(length, sampleId, strippedControl) {
     `${strippedControl}\x1b[35m✻ Thinking...\x1b[0m\r\n`,
     '  ⏺ Running tests... 42 passed, 0 failed\r\n'
   ]
+
   let text = `${fixedSampleId(sampleId)}\r\n`
+
   for (let lineIndex = 0; ; lineIndex += 1) {
     const next = lines[lineIndex % lines.length]
+
     if (text.length + next.length > length) {
       break
     }
+
     text += next
   }
+
   return text + 'x'.repeat(length - text.length)
 }
 
@@ -172,8 +206,10 @@ function makeTuiFixture(length, sampleId, strippedControl) {
 function makeSubThresholdDenseFixture(length, sampleId, strippedControl) {
   const id = fixedSampleId(sampleId)
   const units = []
+
   for (let index = 0; index < length; index += 1) {
     const blockOffset = index % CONTROL_DENSITY_BLOCK_CODE_UNITS
+
     if (index < id.length) {
       units.push(id[index])
     } else if (blockOffset % 2 === 1 && blockOffset < (CONTROL_DENSITY_FALLBACK_COUNT - 1) * 2) {
@@ -182,6 +218,7 @@ function makeSubThresholdDenseFixture(length, sampleId, strippedControl) {
       units.push(String.fromCharCode(97 + (index % 26)))
     }
   }
+
   return units.join('')
 }
 
@@ -190,18 +227,21 @@ function makeDenseFixture(length, sampleId, strippedControl) {
   const suffix = '\x1b[0m'
   const bodyLength = length - prefix.length - suffix.length
   const body = `x${strippedControl}`.repeat(Math.floor(bodyLength / 2))
+
   return `${prefix}${body}${bodyLength % 2 === 0 ? '' : 'x'}${suffix}`
 }
 
 function median(samples) {
   const sorted = [...samples].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
+
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
 function measure(strip, fixture) {
   const start = performance.now()
   const output = strip(fixture)
+
   return { elapsed: performance.now() - start, output }
 }
 
@@ -222,27 +262,36 @@ function recordRotation(fixture, sampleId, lead, samples) {
     strip,
     input: fixture.make(sampleId, control)
   }))
+
   if (inputs.some(({ input }) => input.length !== fixture.length)) {
     throw new Error(`invalid inputs for ${fixture.label}, sample ${sampleId}`)
   }
+
   const results = new Map()
+
   for (let offset = 0; offset < inputs.length; offset += 1) {
     const entry = inputs[(lead + offset) % inputs.length]
     results.set(entry.name, measure(entry.strip, entry.input))
   }
+
   const outputs = [...results.values()].map(({ output }) => output)
+
   if (new Set(outputs).size !== 1) {
     throw new Error(`strip mismatch for ${fixture.label}, sample ${sampleId}`)
   }
+
   for (const [name, result] of results) {
     consumeOutput(result.output)
     samples[name].push(result.elapsed)
   }
+
   validatedPairs += 1
 }
 
 const denseBodyLength = SCAN_LIMIT - '\x1b[35m'.length - SAMPLE_ID_LENGTH - '\x1b[0m'.length
+
 const denseControlPercent = ((Math.floor(denseBodyLength / 2) / SCAN_LIMIT) * 100).toFixed(1)
+
 const fixtures = [
   {
     label: `${HISTORY_LIMIT} history TUI`,
@@ -295,27 +344,34 @@ const selectorFixtures = [
     expected: -1
   }
 ]
+
 for (const fixture of selectorFixtures) {
   const actual = adaptiveFallbackIndex(fixture.data)
+
   if (actual !== fixture.expected) {
     throw new Error(`${fixture.label} fallback index ${actual}, expected ${fixture.expected}`)
   }
 }
 
 const pad = (value, width) => String(value).padStart(width)
+
 console.log('Complete stripTerminalControl path. Lower is better.')
+
 console.log(`iterations=${ITERATIONS} (${ITERATIONS * 3} rotated samples/implementation, median)`)
+
 console.log(
   `${pad('fixture', 25)} ${pad('per-char', 11)} ${pad('slice runs', 12)} ${pad('adaptive', 11)} ${pad('vs legacy', 10)} ${pad('vs slice', 9)}`
 )
 
 for (const fixture of fixtures) {
   const samples = { perChar: [], sliceRuns: [], adaptive: [] }
+
   for (let index = 0; index < ITERATIONS; index += 1) {
     for (let lead = 0; lead < IMPLEMENTATIONS.length; lead += 1) {
       recordRotation(fixture, `${index}:lead-${lead}`, lead, samples)
     }
   }
+
   const perChar = median(samples.perChar)
   const sliceRuns = median(samples.sliceRuns)
   const adaptive = median(samples.adaptive)
@@ -323,8 +379,11 @@ for (const fixture of fixtures) {
     `${pad(fixture.label, 25)} ${pad(`${(perChar * 1000).toFixed(1)} us`, 11)} ${pad(`${(sliceRuns * 1000).toFixed(1)} us`, 12)} ${pad(`${(adaptive * 1000).toFixed(1)} us`, 11)} ${pad(`${(perChar / adaptive).toFixed(2)}x`, 10)} ${pad(`${(sliceRuns / adaptive).toFixed(2)}x`, 9)}`
   )
 }
+
 console.log(
   `\nvalidated=${validatedPairs} measured rotations, result checksum=${resultChecksum >>> 0}`
 )
+
 console.log(`selector checks=${selectorFixtures.length}`)
+
 console.log('Production calls are bounded to 4096, 4096, 300, and 301 code units.')

@@ -76,14 +76,17 @@ export function TaskSourceProviderCard({
 }: TaskSourceProviderCardProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const [lastDefaultExpanded, setLastDefaultExpanded] = useState(defaultExpanded)
+
   // Auto-expand only ever opens: collapsing is the user's call, so a readiness
   // change that moves the auto-expand target cannot close a card in use.
   if (lastDefaultExpanded !== defaultExpanded) {
     setLastDefaultExpanded(defaultExpanded)
+
     if (defaultExpanded) {
       setExpanded(true)
     }
   }
+
   const status = getTaskProviderSetupStatus(readiness)
   const progress = getTaskProviderCompletedSteps(readiness)
   const visibilityLocked = visible && !canHide

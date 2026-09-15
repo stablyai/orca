@@ -4,11 +4,17 @@ import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const SOURCE_TAB_ID = 'tab-source'
+
 const TARGET_TAB_ID = 'tab-target'
+
 const PRIMARY_PTY_ID = 'ssh:target-a@@pty-primary'
+
 const SIBLING_PTY_ID = 'ssh:target-a@@pty-sibling'
+
 const SURVIVOR_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const DETACHED_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 const authority = {
@@ -76,6 +82,7 @@ function createSplitDetachStore() {
       ]
     ])
   })
+
   return store
 }
 

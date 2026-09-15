@@ -27,7 +27,9 @@ const scanResult: NestedRepoScanResult = {
   maxRepos: 100,
   timeoutMs: null
 }
+
 const attemptId = '2fbac1e3-5094-45b4-80a6-90281e6e9e09'
+
 const nextAttemptId = 'd22bb9e0-b7f8-480a-8a2a-9b34f84f2c42'
 
 describe('nested repo telemetry payloads', () => {
@@ -98,6 +100,7 @@ describe('nested repo telemetry payloads', () => {
       foundCount: 600,
       selectedCount: 500
     })
+
     const result = buildNestedRepoImportResultTelemetry({
       attemptId,
       surface: 'sidebar',
@@ -171,6 +174,7 @@ describe('nested repo telemetry payloads', () => {
       runtimeKind: 'local',
       scan: scanResult
     })
+
     const action = buildNestedRepoImportActionTelemetry({
       attemptId,
       surface: 'sidebar',
@@ -179,6 +183,7 @@ describe('nested repo telemetry payloads', () => {
       foundCount: 3,
       selectedCount: 3
     })
+
     const result = buildNestedRepoImportResultTelemetry({
       attemptId,
       surface: 'sidebar',
@@ -188,6 +193,7 @@ describe('nested repo telemetry payloads', () => {
       selectedCount: 3,
       result: { importedCount: 3, alreadyKnownCount: 0, failedCount: 0, projects: [] }
     })
+
     const nextScan = buildNestedRepoScanTelemetry({
       attemptId: nextAttemptId,
       surface: 'sidebar',

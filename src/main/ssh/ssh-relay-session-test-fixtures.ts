@@ -15,6 +15,7 @@ type SshRelaySessionTestDeps = {
 
 export function createMockDeps(): SshRelaySessionTestDeps {
   const mockConn = {} as SshConnection
+
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
@@ -35,9 +36,11 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     noteSshRemotePtyKillReplayAttempt: vi.fn(),
     persistPtyBinding: vi.fn()
   } as unknown as Store
+
   const mockPortForward = {
     removeAllForwards: vi.fn()
   } as unknown as SshPortForwardManager
+
   const mockWindow = {
     isDestroyed: () => false,
     // Why: the port scanner visibility-gates its ticks; a visible mock window
@@ -46,7 +49,9 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     isMinimized: () => false,
     webContents: { send: vi.fn() }
   } as unknown as BrowserWindow
+
   const getMainWindow = vi.fn().mockReturnValue(mockWindow)
+
   return { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow }
 }
 

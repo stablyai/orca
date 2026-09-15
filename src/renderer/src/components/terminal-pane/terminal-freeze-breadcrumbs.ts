@@ -15,9 +15,13 @@ import {
 import { maybeStartTerminalRenderDesyncSentinel } from './terminal-render-desync-trigger'
 
 const rendererDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
+
 const ATLAS_FONT_PROBE_MISMATCH = 'atlas-font-probe-mismatch'
+
 const ATLAS_CRASH_MIRROR_INTERVAL_MS = 30_000
+
 let lastAtlasCrashMirrorAt = Number.NEGATIVE_INFINITY
+
 let suppressedAtlasCrashMirrors = 0
 
 export function recordTerminalFreezeBreadcrumb(
@@ -39,14 +43,19 @@ export function recordTerminalFreezeBreadcrumb(
 // instrumentation, not absence of the event.
 setTerminalWebglDiagnosticRecorder((kind, detail) => {
   rendererDeliveryBreadcrumbs.record(kind, detail)
+
   if (kind === ATLAS_FONT_PROBE_MISMATCH) {
     const now = Date.now()
+
     if (now - lastAtlasCrashMirrorAt < ATLAS_CRASH_MIRROR_INTERVAL_MS) {
       suppressedAtlasCrashMirrors++
+
       return
     }
+
     lastAtlasCrashMirrorAt = now
   }
+
   // `kind` last: it is the coalescing discriminator, so a detail field of the
   // same name must not be able to shadow it.
   recordRendererCrashBreadcrumb(TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB, {
@@ -56,6 +65,7 @@ setTerminalWebglDiagnosticRecorder((kind, detail) => {
       : {}),
     kind
   })
+
   if (kind === ATLAS_FONT_PROBE_MISMATCH) {
     suppressedAtlasCrashMirrors = 0
   }
@@ -71,6 +81,7 @@ maybeStartTerminalRenderDesyncSentinel()
 // rasterizer arm of the bold-collapse family) through this global. Crumbs are
 // coalesced upstream, so a rasterization storm cannot flood the report.
 type AtlasFontProbeMismatch = { desired?: string; actual?: string }
+
 ;(globalThis as { __orcaAtlasFontProbe?: (mismatch: AtlasFontProbeMismatch) => void })[
   '__orcaAtlasFontProbe'
 ] = (mismatch) => {

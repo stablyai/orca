@@ -64,6 +64,7 @@ export function disposeClosedEditorTabs(
         // append generation suffixes; closing the tab owns that whole namespace.
         const { originalModelPathPrefix, modifiedModelPathPrefix } =
           getDiffViewerMonacoModelPathPrefixes(closedFile.id)
+
         diffModelPathPrefixes.push(originalModelPathPrefix, modifiedModelPathPrefix)
         diffViewStateCache.delete(closedFile.id)
         diffViewStateOwners.push(closedFile.id)
@@ -71,6 +72,7 @@ export function disposeClosedEditorTabs(
         scrollTopOwners.push(closedFile.id)
         break
       }
+
       case 'conflict-review':
         break
       case 'check-details':

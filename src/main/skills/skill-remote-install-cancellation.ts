@@ -5,8 +5,10 @@ export class SkillRemoteInstallCancellation {
     if (this.operations.has(operationId)) {
       throw new Error('skill-install-operation-in-progress')
     }
+
     const controller = new AbortController()
     this.operations.set(operationId, controller)
+
     return controller.signal
   }
 
@@ -19,6 +21,7 @@ export class SkillRemoteInstallCancellation {
   cancel(operationId: string): boolean {
     const controller = this.operations.get(operationId)
     controller?.abort()
+
     return Boolean(controller)
   }
 }

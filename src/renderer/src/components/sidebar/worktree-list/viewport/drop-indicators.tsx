@@ -8,6 +8,7 @@ export function renderWorktreeSidebarDropIndicators(args: {
   worktreeDragState: ReturnType<typeof useWorktreeDragRuntime>['worktreeDragState']
 }): React.ReactNode {
   const { headerDrag, worktreeDragState } = args
+
   return (
     <>
       {headerDrag.canReorderRepoHeaders &&

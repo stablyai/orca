@@ -6,6 +6,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -13,9 +14,11 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -24,6 +27,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
@@ -32,9 +36,13 @@ vi.mock('../git/worktree', async (importOriginal) => ({
 import { OrcaRuntimeService } from './orca-runtime'
 
 const LOCAL_REPO_ID = 'repo-local'
+
 const LOCAL_REPO_PATH = '/Users/me/dev/app'
+
 const SSH_REPO_ID = 'repo-ssh'
+
 const SSH_REPO_PATH = '/home/user/app'
+
 const SSH_CONNECTION_ID = 'box-1'
 
 function gitWorktree(path: string, isMain = false) {
@@ -44,6 +52,7 @@ function gitWorktree(path: string, isMain = false) {
 /** Local rows sort ahead of the remote ones, mirroring the fleet order that starves the cap. */
 function makeStore() {
   const metaById: Record<string, unknown> = {}
+
   return {
     getRepo: (id: string) =>
       makeStore()
@@ -70,6 +79,7 @@ function makeStore() {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] as object), ...meta }
+
       return metaById[id]
     },
     removeWorktreeMeta: () => {},

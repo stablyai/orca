@@ -17,7 +17,9 @@ export function getWorktreeSelectionIntent(
   if (event.shiftKey) {
     return 'range'
   }
+
   const toggle = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+
   return toggle ? 'toggle' : 'replace'
 }
 
@@ -36,26 +38,32 @@ export function updateWorktreeSelection(params: {
 
   if (intent === 'toggle') {
     const next = new Set(previousSelectedIds)
+
     if (next.has(targetId)) {
       next.delete(targetId)
     } else {
       next.add(targetId)
     }
+
     return { selectedIds: next, anchorId: targetId }
   }
 
   const anchorId = previousAnchorId
+
   if (!anchorId) {
     return { selectedIds: new Set([targetId]), anchorId: targetId }
   }
+
   const targetIndex = visibleIds.indexOf(targetId)
   const anchorIndex = visibleIds.indexOf(anchorId)
+
   if (targetIndex === -1 || anchorIndex === -1) {
     return { selectedIds: new Set([targetId]), anchorId: targetId }
   }
 
   const start = Math.min(anchorIndex, targetIndex)
   const end = Math.max(anchorIndex, targetIndex)
+
   return {
     selectedIds: new Set(visibleIds.slice(start, end + 1)),
     anchorId
@@ -69,11 +77,13 @@ export function pruneWorktreeSelection(
 ): { selectedIds: Set<string>; anchorId: string | null } {
   const visible = new Set(visibleIds)
   const next = new Set<string>()
+
   for (const id of selectedIds) {
     if (visible.has(id)) {
       next.add(id)
     }
   }
+
   return {
     selectedIds: next,
     anchorId: anchorId && visible.has(anchorId) ? anchorId : (next.values().next().value ?? null)
@@ -93,9 +103,11 @@ export function updateWorktreeAreaSelection(params: {
 
   if (additive) {
     const selectedIds = new Set(previousSelectedIds)
+
     for (const id of orderedAreaIds) {
       selectedIds.add(id)
     }
+
     return {
       selectedIds,
       anchorId: orderedAreaIds.at(-1) ?? previousAnchorId
@@ -115,10 +127,12 @@ export function areWorktreeSelectionsEqual(
   if (a.size !== b.size) {
     return false
   }
+
   for (const id of a) {
     if (!b.has(id)) {
       return false
     }
   }
+
   return true
 }

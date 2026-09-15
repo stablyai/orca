@@ -39,9 +39,11 @@ export function skillSourceKindDeletionEligibility(
     case 'bundled': {
       return blocked('bundled')
     }
+
     case 'plugin': {
       return blocked('plugin')
     }
+
     case 'home':
     case 'repo': {
       return { deletable: true }

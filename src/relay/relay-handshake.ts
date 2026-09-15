@@ -15,6 +15,7 @@ import { relayLogLine } from './relay-diagnostic-log'
 
 // Why: clients treat this exit code as non-retryable; other non-zero exits are transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
+
 // Why distinct from 42: a refused credential is a live daemon saying no, which the client must
 // not confuse with a crashed bridge (exit 0/1) or with a version skew (42).
 export const EXIT_CODE_CREDENTIAL_MISMATCH = 43
@@ -24,20 +25,26 @@ export function readLaunchVersion(): string {
   try {
     const entry = process.argv[1]
     let dir: string
+
     if (entry) {
       let resolved = entry
+
       try {
         resolved = realpathSync(entry)
       } catch {
         /* fall back to the unresolved path */
       }
+
       dir = dirname(resolved)
     } else {
       dir = process.cwd()
     }
+
     const versionFile = join(dir, '.version')
+
     if (existsSync(versionFile)) {
       const v = readFileSync(versionFile, 'utf-8').trim()
+
       if (v) {
         return v
       }
@@ -45,6 +52,7 @@ export function readLaunchVersion(): string {
   } catch {
     /* fall through */
   }
+
   return RELAY_VERSION
 }
 
@@ -60,12 +68,15 @@ export type DaemonHandshakeCallbacks = {
 // Why: read one handshake frame before attaching the dispatcher; version mismatch closes the socket so the bridge exits 42.
 export function setupDaemonHandshake(sock: Socket, cb: DaemonHandshakeCallbacks): void {
   let handshakeResolved = false
+
   const decoder: FrameDecoder = new FrameDecoder(
     (frame: DecodedFrame) => {
       if (handshakeResolved) {
         return
       }
+
       const accepted = handleDaemonHandshakeFrame(sock, frame, cb)
+
       if (accepted) {
         handshakeResolved = true
         const leftover = decoder.drain()
@@ -82,6 +93,7 @@ export function setupDaemonHandshake(sock: Socket, cb: DaemonHandshakeCallbacks)
   const onHandshakeData = (chunk: Buffer): void => {
     decoder.feed(chunk)
   }
+
   sock.on('data', onHandshakeData)
   ;(sock as Socket & { __orcaOnHandshake?: typeof onHandshakeData }).__orcaOnHandshake =
     onHandshakeData
@@ -89,6 +101,7 @@ export function setupDaemonHandshake(sock: Socket, cb: DaemonHandshakeCallbacks)
 
 export function detachHandshakeListener(sock: Socket): void {
   const tagged = sock as Socket & { __orcaOnHandshake?: (chunk: Buffer) => void }
+
   if (tagged.__orcaOnHandshake) {
     sock.removeListener('data', tagged.__orcaOnHandshake)
     delete tagged.__orcaOnHandshake
@@ -101,30 +114,39 @@ function handleDaemonHandshakeFrame(
   cb: DaemonHandshakeCallbacks
 ): boolean {
   const { launchVersion, endpointCredential } = cb
+
   if (frame.type !== MessageType.Handshake) {
     process.stderr.write(
       `[relay] Protocol violation pre-handshake: type=${frame.type}; closing socket\n`
     )
     sock.destroy()
+
     return false
   }
+
   let msg: ReturnType<typeof parseHandshakeMessage>
+
   try {
     msg = parseHandshakeMessage(frame.payload)
   } catch (err) {
     relayLogLine(`[relay] Could not parse handshake: ${(err as Error).message}; closing socket`)
     sock.destroy()
+
     return false
   }
+
   if (msg.type !== 'orca-relay-handshake') {
     relayLogLine(`[relay] Unexpected handshake type from client: ${msg.type}; closing socket`)
     sock.destroy()
+
     return false
   }
+
   if (msg.version !== launchVersion) {
     relayLogLine(
       `[relay] Handshake mismatch: own=${launchVersion}, client=${msg.version}; closing socket`
     )
+
     try {
       sock.write(
         encodeHandshakeFrame({
@@ -136,22 +158,31 @@ function handleDaemonHandshakeFrame(
     } catch {
       /* best-effort — close+exit-42 still wins */
     }
+
     sock.end()
+
     return false
   }
+
   const presented = 'endpointCredential' in msg ? msg.endpointCredential : undefined
+
   if (endpointCredential !== undefined && presented !== endpointCredential) {
     relayLogLine('[relay] Endpoint credential mismatch; closing socket')
+
     try {
       sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-credential-mismatch' }))
     } catch {
       /* best-effort — the close alone still refuses */
     }
+
     sock.end()
+
     return false
   }
+
   process.stderr.write(`[relay] Handshake OK from version=${msg.version}\n`)
   sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-ok', version: launchVersion }))
+
   return true
 }
 
@@ -176,6 +207,7 @@ export function runConnectHandshake(
       if (handshakeDone) {
         return
       }
+
       if (frame.type !== MessageType.Handshake) {
         process.stderr.write(
           `[relay-connect] Protocol violation: expected Handshake frame, got type=${frame.type}\n`
@@ -183,7 +215,9 @@ export function runConnectHandshake(
         sock.destroy()
         process.exit(1)
       }
+
       let msg: ReturnType<typeof parseHandshakeMessage>
+
       try {
         msg = parseHandshakeMessage(frame.payload)
       } catch (err) {
@@ -193,14 +227,17 @@ export function runConnectHandshake(
         sock.destroy()
         process.exit(1)
       }
+
       if (msg.type === 'orca-relay-handshake-ok') {
         process.stderr.write(`[relay-connect] Handshake OK at version=${msg.version}\n`)
         handshakeDone = true
         const leftover = decoder.drain()
         sock.removeAllListeners('data')
         cb.onAccepted(leftover)
+
         return
       }
+
       if (msg.type === 'orca-relay-handshake-mismatch') {
         // Why: exit inside the write callback; stderr is async on pipe transports, so exiting early drops the version detail.
         process.stderr.write(
@@ -210,8 +247,10 @@ export function runConnectHandshake(
             process.exit(EXIT_CODE_VERSION_MISMATCH)
           }
         )
+
         return
       }
+
       if (msg.type === 'orca-relay-handshake-credential-mismatch') {
         process.stderr.write(
           `[relay-connect] Endpoint credential refused by daemon; exiting ${EXIT_CODE_CREDENTIAL_MISMATCH}\n`,
@@ -220,8 +259,10 @@ export function runConnectHandshake(
             process.exit(EXIT_CODE_CREDENTIAL_MISMATCH)
           }
         )
+
         return
       }
+
       process.stderr.write(`[relay-connect] Unexpected handshake type: ${msg.type}\n`)
       sock.destroy()
       process.exit(1)

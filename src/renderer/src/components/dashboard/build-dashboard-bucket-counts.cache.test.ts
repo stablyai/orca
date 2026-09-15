@@ -10,12 +10,17 @@ import {
 } from './build-dashboard-bucket-counts'
 
 const NOW = 1_000_000_000
+
 // Freshness decay boundaries are exercised via generation bumps; the exact stale
 // window belongs to the shared agent-status constants.
 const AGENT_STALE_STEP = 60_000
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const PANE_1 = makePaneKey('tab1', LEAF_1)
+
 const PANE_2 = makePaneKey('tab2', LEAF_2)
 
 function worktree(id: string): Worktree {
@@ -123,6 +128,7 @@ describe('buildDashboardBucketCounts per-worktree cache', () => {
       ...state,
       runtimePaneTitlesByTabId: { ...state.runtimePaneTitlesByTabId, tab2: { 0: 'sh' } }
     }
+
     const counts = buildDashboardBucketCounts(next, NOW + 500, cache, 1)
     expect(cache.lastComputedWorktreeIds).toEqual(['w2'])
     // Correctness: identical to a cold, uncached run over the same state.
@@ -141,6 +147,7 @@ describe('buildDashboardBucketCounts per-worktree cache', () => {
         [PANE_1]: { ...entry(PANE_1, 'tab1', 'w1'), prompt: 'new streamed prompt' }
       }
     }
+
     const counts = buildDashboardBucketCounts(next, NOW + 500, cache, 1)
     expect(cache.lastComputedWorktreeIds).toEqual(['w1'])
     expect(counts).toEqual(buildDashboardBucketCounts(next, NOW + 500))
@@ -164,12 +171,14 @@ describe('buildDashboardBucketCounts per-worktree cache', () => {
       ...state,
       worktreesByRepo: { r1: [worktree('w1')] }
     }
+
     buildDashboardBucketCounts(next, NOW + 500, cache, 1)
     expect([...cache.byWorktree.keys()]).toEqual(['w1'])
   })
 
   it('matches the uncached result for acknowledgement changes', () => {
     const cache = createDashboardBucketCountsCache()
+
     const state: DashboardSnapshotState = {
       ...baseState(),
       agentStatusByPaneKey: {
@@ -177,11 +186,14 @@ describe('buildDashboardBucketCounts per-worktree cache', () => {
         [PANE_2]: entry(PANE_2, 'tab2', 'w2')
       }
     }
+
     buildDashboardBucketCounts(state, NOW, cache, 1)
+
     const acked: DashboardSnapshotState = {
       ...state,
       acknowledgedAgentsByPaneKey: { [PANE_1]: NOW }
     }
+
     const counts = buildDashboardBucketCounts(acked, NOW + 500, cache, 1)
     expect(counts).toEqual(buildDashboardBucketCounts(acked, NOW + 500))
     // Rows don't depend on acks — the recount must not rebuild any row pipeline.

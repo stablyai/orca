@@ -9,10 +9,13 @@ import CodexRestartChip from './CodexRestartChip'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const PTY_ONE = 'worktree-1@@pty-1'
+
 const PTY_TWO = 'worktree-1@@pty-2'
 
 let container: HTMLDivElement
+
 let forgetStalePanes: ReturnType<typeof vi.fn>
+
 let root: Root
 
 function notice(previousAccountLabel: string, nextAccountLabel: string) {
@@ -23,9 +26,11 @@ function button(scope: ParentNode, label: string): HTMLButtonElement {
   const match = Array.from(scope.querySelectorAll('button')).find(
     (candidate) => candidate.textContent?.trim() === label
   )
+
   if (!match) {
     throw new Error(`missing ${label} button`)
   }
+
   return match
 }
 
@@ -270,6 +275,7 @@ describe('CodexRestartChip pane focus', () => {
         }
       ])
     })
+
     return terminalInput
   }
 

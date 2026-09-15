@@ -8,8 +8,11 @@ import { TooltipProvider } from '../ui/tooltip'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 
 const check = vi.fn()
+
 const message = 'Could not reach the update server: net::ERR_CONNECTION_REFUSED'
+
 const error: UpdateStatus = { state: 'error', message }
+
 const actionableErrors: UpdateStatus[] = [
   { ...error, userInitiated: true },
   { ...error, version: '1.4.200' },

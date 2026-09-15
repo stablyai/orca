@@ -58,6 +58,7 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
 
   it('matches canonical session keys against raw shutdown worktree IDs', () => {
     const rawWorktreeId = 'repo-a::/worktree-a'
+
     const session = {
       activeRepoId: null,
       activeWorktreeId: null,
@@ -74,6 +75,7 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
   it('excludes runtime-owned session worktrees for raw and canonical owner keys', () => {
     const rawWorktreeId = 'repo-a::/remote/worktree'
     const canonicalWorktreeKey = `worktree:${rawWorktreeId}`
+
     const session = {
       activeRepoId: null,
       activeWorktreeId: null,
@@ -97,6 +99,7 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
 
   it('keeps SSH-owned session worktrees eligible for local recovery routing', () => {
     const rawWorktreeId = 'repo-a::/ssh/worktree'
+
     const session = {
       activeRepoId: null,
       activeWorktreeId: null,
@@ -150,9 +153,11 @@ describe('collectWorktreeHydrationRepoIdsFromSession', () => {
     const emptyTabsByWorktree = Object.fromEntries(
       Array.from({ length: 326 }, (_, index) => [`repo-empty-${index}::/wt`, []])
     )
+
     const staleActiveTabTypes = Object.fromEntries(
       Array.from({ length: 326 }, (_, index) => [`repo-empty-${index}::/wt`, 'terminal'])
     )
+
     const session = {
       activeRepoId: null,
       activeWorktreeId: null,

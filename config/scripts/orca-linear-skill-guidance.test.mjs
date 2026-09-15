@@ -4,13 +4,18 @@ import { describe, expect, it } from 'vitest'
 import { LINEAR_COMMAND_SPECS } from '../../src/cli/specs/linear'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 // Why: orca-linear and its legacy linear-tickets alias now ship hybrid discovery stubs, so
 // their version-sensitive command guidance lives in the authoritative guide sources — assert
 // that content there. The installable stub projections are checked separately below.
 const canonicalGuidePath = join(projectDir, 'skill-guides', 'orca-linear.md')
+
 const legacyGuidePath = join(projectDir, 'skill-guides', 'linear-tickets.md')
+
 const canonicalStubPath = join(projectDir, 'skills', 'orca-linear', 'SKILL.md')
+
 const legacyStubPath = join(projectDir, 'skills', 'linear-tickets', 'SKILL.md')
+
 const legacyIntro =
   '`linear-tickets` is the legacy bundled name for `orca-linear`. This copy remains complete; its CLI commands are identical to `orca-linear` and always use `ORCA linear ...`.'
 

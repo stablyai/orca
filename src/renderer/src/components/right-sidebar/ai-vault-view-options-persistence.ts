@@ -42,6 +42,7 @@ export function createDefaultAiVaultViewOptions(): AiVaultViewOptions {
 
 export function enabledAiVaultAgents(disabledAgents: readonly AiVaultAgent[]): AiVaultAgent[] {
   const disabled = new Set<AiVaultAgent>(disabledAgents)
+
   return AI_VAULT_AGENTS.filter((agent) => !disabled.has(agent))
 }
 
@@ -56,6 +57,7 @@ function isAiVaultGroup(value: unknown): value is AiVaultGroup {
 export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions {
   const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   const catalog = new Set<string>(AI_VAULT_AGENTS)
+
   // Why: empty selection is intentional (Clear all agents) so users can enable only one agent.
   const disabledAgents = Array.isArray(record.disabledAgents)
     ? [...new Set(record.disabledAgents)].filter(
@@ -79,6 +81,7 @@ function getRendererStorage(): AiVaultViewOptionsStorage | null {
   if (typeof window === 'undefined') {
     return null
   }
+
   try {
     return window.localStorage
   } catch {
@@ -92,8 +95,10 @@ export function readAiVaultViewOptions(
   if (!storage) {
     return createDefaultAiVaultViewOptions()
   }
+
   try {
     const raw = storage.getItem(AI_VAULT_VIEW_OPTIONS_STORAGE_KEY)
+
     return raw ? normalizeAiVaultViewOptions(JSON.parse(raw)) : createDefaultAiVaultViewOptions()
   } catch {
     return createDefaultAiVaultViewOptions()
@@ -107,12 +112,14 @@ export function writeAiVaultViewOptions(
   if (!storage) {
     return false
   }
+
   try {
     // Why: view preferences are per client, so desktop and mobile must not overwrite each other.
     storage.setItem(
       AI_VAULT_VIEW_OPTIONS_STORAGE_KEY,
       JSON.stringify(normalizeAiVaultViewOptions(options))
     )
+
     return true
   } catch {
     return false

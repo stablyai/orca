@@ -6,6 +6,7 @@ import type { EmulatorGesturePoint } from './emulator-screen-gesture'
 export function useEmulatorPaneControls(worktreeId: string, onRotateSettled?: () => void) {
   const nextRotateOrientationRef = useRef<'landscape_left' | 'portrait'>('landscape_left')
   const visualOrientationEpochRef = useRef(0)
+
   const [visualOrientation, setVisualOrientation] =
     useState<EmulatorDeviceVisualOrientation>('portrait')
 
@@ -37,14 +38,17 @@ export function useEmulatorPaneControls(worktreeId: string, onRotateSettled?: ()
       orientation,
       worktree: worktreeId
     })
+
     if (visualOrientationEpochRef.current !== epoch) {
       return null
     }
+
     const nextVisualOrientation = orientation === 'landscape_left' ? 'landscape' : 'portrait'
     setVisualOrientation(nextVisualOrientation)
     nextRotateOrientationRef.current =
       orientation === 'landscape_left' ? 'portrait' : 'landscape_left'
     onRotateSettled?.()
+
     return nextVisualOrientation
   }, [onRotateSettled, worktreeId])
 

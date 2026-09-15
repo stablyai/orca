@@ -19,20 +19,26 @@ export function cleanupE2ECrashpad(userDataDir: string): void {
       encoding: 'utf8',
       timeout: 5_000
     })
+
     for (const row of table.split('\n')) {
       const match = row.match(/^\s*(\d+)\s+(.+)$/)
+
       if (!match || !ownsCrashpad(match[2], userDataDir)) {
         continue
       }
+
       const pid = Number(match[1])
+
       if (!Number.isSafeInteger(pid) || pid <= 1) {
         continue
       }
+
       try {
         const command = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
           encoding: 'utf8',
           timeout: 5_000
         })
+
         if (ownsCrashpad(command, userDataDir)) {
           process.kill(pid, 'SIGTERM')
         }

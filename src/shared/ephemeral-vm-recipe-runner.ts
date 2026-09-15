@@ -110,6 +110,7 @@ export async function runEphemeralVmRecipeStart(
 ): Promise<EphemeralVmRecipeStartResult> {
   validateRepoPath(args.repoPath)
   const context = buildRecipeContext(args.recipe, args.repoPath, args.context)
+
   const processResult = await runRecipeCommand({
     command: args.recipe.create,
     repoPath: args.repoPath,
@@ -134,6 +135,7 @@ export async function runEphemeralVmRecipeStart(
   }
 
   const parsed = parseEphemeralVmRecipeResult(processResult.stdout)
+
   if (!parsed.ok) {
     return {
       ok: false,
@@ -142,7 +144,9 @@ export async function runEphemeralVmRecipeStart(
       ...processResult
     }
   }
+
   const checkoutModeError = getEphemeralVmRecipeCheckoutModeError(args.recipe, parsed.result)
+
   if (checkoutModeError) {
     return {
       ok: false,
@@ -166,11 +170,13 @@ export async function runEphemeralVmRecipeCleanup(
   args: EphemeralVmRecipeCleanupArgs
 ): Promise<EphemeralVmRecipeCleanupResult> {
   validateRepoPath(args.repoPath)
+
   if (args.recipe.destroyDisabled || !args.recipe.destroy) {
     return { ok: true, skipped: true, stdout: '', stderr: '', exitCode: null, signal: null }
   }
 
   const payload = buildEphemeralVmRecipeCleanupPayload(args)
+
   const processResult = await runRecipeCommand({
     command: args.recipe.destroy,
     repoPath: args.repoPath,
@@ -187,6 +193,7 @@ export async function runEphemeralVmRecipeCleanup(
   })
 
   const failure = getEphemeralVmRecipeDestroyFailure(processResult)
+
   if (failure) {
     return failure
   }
@@ -198,11 +205,13 @@ export async function runEphemeralVmRecipeSuspend(
   args: EphemeralVmRecipeLifecycleArgs
 ): Promise<EphemeralVmRecipeCleanupResult> {
   validateRepoPath(args.repoPath)
+
   if (!args.recipe.suspend) {
     return { ok: true, skipped: true, stdout: '', stderr: '', exitCode: null, signal: null }
   }
 
   const payload = buildEphemeralVmRecipeLifecyclePayload({ ...args, mode: 'suspend' })
+
   const processResult = await runRecipeCommand({
     command: args.recipe.suspend,
     repoPath: args.repoPath,
@@ -234,6 +243,7 @@ export async function runEphemeralVmRecipeResume(
   args: EphemeralVmRecipeLifecycleArgs
 ): Promise<EphemeralVmRecipeResumeResult> {
   validateRepoPath(args.repoPath)
+
   if (!args.recipe.resume) {
     return {
       ok: true,
@@ -245,6 +255,7 @@ export async function runEphemeralVmRecipeResume(
   }
 
   const payload = buildEphemeralVmRecipeLifecyclePayload({ ...args, mode: 'resume' })
+
   const processResult = await runRecipeCommand({
     command: args.recipe.resume,
     repoPath: args.repoPath,
@@ -271,6 +282,7 @@ export async function runEphemeralVmRecipeResume(
   }
 
   const parsed = parseEphemeralVmRecipeResult(processResult.stdout)
+
   if (!parsed.ok) {
     return {
       ok: false,
@@ -280,7 +292,9 @@ export async function runEphemeralVmRecipeResume(
       ...processResult
     }
   }
+
   const checkoutModeError = getEphemeralVmRecipeCheckoutModeError(args.recipe, parsed.result)
+
   if (checkoutModeError) {
     return {
       ok: false,
@@ -317,6 +331,7 @@ function buildRecipeContext(
 
 function validateRepoPath(repoPath: string): void {
   const stat = statSync(repoPath)
+
   if (!stat.isDirectory()) {
     throw new Error(`Recipe repo path is not a directory: ${repoPath}`)
   }

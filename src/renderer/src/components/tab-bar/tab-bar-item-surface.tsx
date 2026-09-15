@@ -58,6 +58,7 @@ export function renderTabBarItems({
     onCloseAllFiles,
     onMakePreviewFilePermanent
   } = props
+
   const {
     resolvedGroupId,
     generatedTabTitlesEnabled,
@@ -96,17 +97,20 @@ export function renderTabBarItems({
       iconPath: item.type === 'editor' ? item.data.filePath : undefined,
       color: item.type === 'terminal' ? (item.data.color ?? null) : null
     }
+
     if (item.type === 'terminal') {
       const terminalTab = {
         ...item.data,
         title: resolveTerminalTabTitle(item.data, generatedTabTitlesEnabled, item.data.title)
       }
+
       const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
       // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
       const resolvedAgent = resolveNativeChatTabAgentEvidence(terminalTab, unifiedTabForItem)
       // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
       const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
       const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
+
       const canToggleViewMode =
         unifiedTabForItem !== undefined &&
         canSwitchNativeChatView({
@@ -119,6 +123,7 @@ export function renderTabBarItems({
           isChatViewMode: unifiedTabForItem.viewMode === 'chat',
           structuredSessionId: unifiedTabForItem.structuredSessionId ?? null
         })
+
       return (
         <SortableTab
           key={item.id}
@@ -155,6 +160,7 @@ export function renderTabBarItems({
         />
       )
     }
+
     if (item.type === 'browser') {
       return (
         <BrowserTab
@@ -186,8 +192,10 @@ export function renderTabBarItems({
         />
       )
     }
+
     if (item.type === 'simulator') {
       const simulatorLabel = item.data.label || 'Mobile Emulator'
+
       const simulatorFile: OpenFile & { tabId: string } = {
         id: item.id,
         tabId: item.id,
@@ -199,6 +207,7 @@ export function renderTabBarItems({
         isDirty: false,
         mode: 'edit'
       }
+
       return (
         <EditorFileTab
           key={item.id}
@@ -227,6 +236,7 @@ export function renderTabBarItems({
         />
       )
     }
+
     if (item.type === 'agent-session') {
       const structuredTab: TerminalTab = {
         id: item.id,
@@ -241,6 +251,7 @@ export function renderTabBarItems({
           ? { launchAgent: item.data.agentSessionAgent as TuiAgent }
           : {})
       }
+
       return (
         <SortableTab
           key={item.id}
@@ -273,6 +284,7 @@ export function renderTabBarItems({
         />
       )
     }
+
     return (
       <EditorFileTab
         key={item.id}

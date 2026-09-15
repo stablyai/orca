@@ -5,6 +5,7 @@ const baseTokenizer = TaskList.config.markdownTokenizer as MarkdownTokenizer
 
 function normalizeTaskListToken(token: MarkdownToken, lexer: MarkdownLexerConfiguration): void {
   const firstNested = token.nestedTokens?.[0]
+
   if (
     token.type === 'taskItem' &&
     firstNested?.type === 'code' &&
@@ -31,10 +32,13 @@ export const RichMarkdownTaskList = TaskList.extend({
       if (typeof baseTokenizer.start === 'function' && baseTokenizer.start(src) !== 0) {
         return undefined
       }
+
       const token = baseTokenizer.tokenize(src, tokens, lexer)
+
       if (token) {
         normalizeTaskListToken(token, lexer)
       }
+
       return token
     }
   }

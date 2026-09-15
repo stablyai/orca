@@ -51,11 +51,13 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     sourceControlAiActionsVisible,
     stateRequestKey
   } = model
+
   // Why: hosted-review conflicts come from the host mergeability check (no local MERGE_HEAD), so the prompt reproduces the merge locally.
   const handleResolveConflictsWithAI = useCallback(async (): Promise<void> => {
     if (!sourceControlAiActionsVisible || !activeWorktreeId || !activeConflictReview) {
       return
     }
+
     const conflictFiles = activeConflictReview.conflictSummary?.files ?? []
     // Why: swapping the composer to another action never fires onOpenChange, so a queued
     // comment-resolution ack would survive and post fixing replies on this launch instead.
@@ -103,11 +105,13 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       ) {
         return
       }
+
       // Why: re-entering while a launch/ack is still landing would post a second
       // fixing reply on the same threads.
       if (commentResolutionAckBusyRef.current) {
         return
       }
+
       if (selectedGroups.length === 0) {
         toast.message(
           translate(
@@ -115,8 +119,10 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
             'No unresolved comments selected.'
           )
         )
+
         return
       }
+
       // Why: pr.prRepo can be missing while comments are still visible; fall back to the PR URL.
       const githubTargetFromPr =
         activeReview.provider === 'github' && prNumber && pr?.prRepo
@@ -127,14 +133,18 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
               prRepo: pr.prRepo
             }
           : undefined
+
       const githubTargetFromUrl = ((): PendingPRCommentAiAckGithubTarget | undefined => {
         if (activeReview.provider !== 'github' || githubTargetFromPr) {
           return undefined
         }
+
         const link = parseGitHubIssueOrPRLink(activeReview.url || pr?.url || '')
+
         if (!link || link.type !== 'pr') {
           return undefined
         }
+
         return {
           repoPath: repo.path,
           repoId: repo.id,
@@ -146,7 +156,9 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
           }
         }
       })()
+
       const githubTarget = githubTargetFromPr ?? githubTargetFromUrl
+
       // Why: resolving needs no prRepo, so a degraded PR entry that only yields a number must
       // still ack by resolving instead of failing every selected thread.
       const githubResolveTarget =
@@ -154,12 +166,14 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         (activeReview.provider === 'github' && prNumber
           ? { repoPath: repo.path, repoId: repo.id, prNumber }
           : undefined)
+
       // Why: the ack resolves against this MR after delivery, so pin the iid now — the panel
       // may already be showing a different review by then.
       const gitlabTarget =
         activeReview.provider === 'gitlab'
           ? { repoPath: repo.path, repoId: repo.id, iid: activeReview.number }
           : undefined
+
       const commentResolution = {
         reviewContextKey: stateRequestKey,
         provider: activeReview.provider,
@@ -168,6 +182,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         githubResolveTarget,
         gitlabTarget
       }
+
       claimedCommentResolutionRef.current = null
       commentResolutionLaunchAcceptedRef.current = false
       setAgentComposerState({
@@ -223,6 +238,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       commentResolutionLaunchAcceptedRef
     ]
   )
+
   return { handleResolveConflictsWithAI, handleResolveCommentsWithAI }
 }
 

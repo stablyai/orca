@@ -35,6 +35,7 @@ export function useTerminalPaneController(
   useTerminalPaneTitleEffects(reconciliation)
   const context = Object.assign(reconciliation, useTerminalPaneContextActions(reconciliation))
   const mobile = Object.assign(context, useTerminalPaneMobileActions(context))
+
   return Object.assign(mobile, useTerminalPaneProjection(mobile))
 }
 

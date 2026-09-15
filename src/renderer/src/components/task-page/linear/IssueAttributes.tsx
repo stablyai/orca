@@ -3,6 +3,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { translate } from '@/i18n/i18n'
 import { ChevronDown, LoaderCircle, Check, UserRound, FolderKanban, Tag } from 'lucide-react'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
+
 export function TaskPageLinearIssueAttributes({
   model
 }: {
@@ -26,6 +27,7 @@ export function TaskPageLinearIssueAttributes({
     newLinearMembers,
     newLinearLabels
   } = model
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-4 mt-2">
       {/* Status Selector */}
@@ -38,6 +40,7 @@ export function TaskPageLinearIssueAttributes({
           >
             {(() => {
               const selectedState = newLinearStates.data.find((s) => s.id === newLinearIssueStateId)
+
               return (
                 <>
                   <span
@@ -102,6 +105,7 @@ export function TaskPageLinearIssueAttributes({
               const selectedAssignee = newLinearMembers.data.find(
                 (m) => m.id === newLinearIssueAssigneeId
               )
+
               if (selectedAssignee) {
                 return (
                   <>
@@ -118,6 +122,7 @@ export function TaskPageLinearIssueAttributes({
                   </>
                 )
               }
+
               return (
                 <>
                   <UserRound className="size-3.5 text-muted-foreground/70" />
@@ -257,6 +262,7 @@ export function TaskPageLinearIssueAttributes({
                 const selectedProj = newLinearIssueProjects.find(
                   (p) => p.id === newLinearIssueProjectId
                 )
+
                 return selectedProj?.name || 'Project'
               })()}
             </span>
@@ -335,6 +341,7 @@ export function TaskPageLinearIssueAttributes({
             <div>
               {newLinearLabels.data.map((l) => {
                 const isSelected = newLinearIssueLabelIds.includes(l.id)
+
                 return (
                   <button
                     key={l.id}

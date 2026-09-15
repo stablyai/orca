@@ -31,13 +31,16 @@ describe('pairing invite director resolution', () => {
   it('authenticates only to the configured director and accepts a strictly newer move', async () => {
     const socket = new FakeSocket()
     let url = ''
+
     const resolving = resolvePairingInviteThroughDirector({
       relay,
       createSocket: (value) => {
         url = value
+
         return socket as unknown as WebSocket
       }
     })
+
     socket.onopen?.()
     expect(url).toBe('wss://relay.onorca.dev/v1/connect/AbCdEf0123_-xyZ9')
     expect(url).not.toContain('?')
@@ -64,10 +67,12 @@ describe('pairing invite director resolution', () => {
 
   it('rejects malformed moves with untrusted extra fields', async () => {
     const socket = new FakeSocket()
+
     const resolving = resolvePairingInviteThroughDirector({
       relay,
       createSocket: () => socket as unknown as WebSocket
     })
+
     socket.onmessage?.({
       data: JSON.stringify({
         type: 'relay-moved',
@@ -83,10 +88,12 @@ describe('pairing invite director resolution', () => {
 
   it('describes a same-epoch move without accepting it', async () => {
     const socket = new FakeSocket()
+
     const resolving = resolvePairingInviteThroughDirector({
       relay,
       createSocket: () => socket as unknown as WebSocket
     })
+
     socket.onmessage?.({
       data: JSON.stringify({
         type: 'relay-moved',

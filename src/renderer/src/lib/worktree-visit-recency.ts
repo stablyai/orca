@@ -24,7 +24,9 @@ export function getWorktreeVisitTimestamp(
   if (!timestamps) {
     return undefined
   }
+
   const qualified = timestamps[getWorktreeHostIdentity(worktree)]
+
   return qualified ?? timestamps[worktree.id]
 }
 
@@ -43,14 +45,17 @@ export function getWorktreeVisitKey(worktreeId: string, hostId?: ExecutionHostId
  */
 export function getWorktreeIdFromVisitKey(key: string): string {
   const separator = key.indexOf('|')
+
   if (separator === -1) {
     return key
   }
+
   // Empty host is the canonical unknown-host bucket. Known host ids are the
   // other valid prefixes; a legacy worktree id may itself contain `|`.
   if (isWorktreeHostIdentity(key)) {
     return getWorktreeIdFromHostIdentity(key)
   }
+
   return key
 }
 
@@ -83,6 +88,7 @@ export function removeWorktreeVisitEntriesForTargets(
   const next: Record<string, number> = {}
   const qualified = new Set<string>()
   const legacyIds = new Set<string>()
+
   for (const target of targets) {
     if (target.hostId) {
       qualified.add(getWorktreeVisitKey(target.id, target.hostId))
@@ -90,14 +96,18 @@ export function removeWorktreeVisitEntriesForTargets(
       legacyIds.add(target.id)
     }
   }
+
   for (const [key, timestamp] of Object.entries(timestamps)) {
     const rawId = getWorktreeIdFromVisitKey(key)
     const remove = qualified.has(key) || legacyIds.has(rawId)
+
     if (remove) {
       changed = true
       continue
     }
+
     next[key] = timestamp
   }
+
   return changed ? next : (timestamps as Record<string, number>)
 }

@@ -8,10 +8,13 @@ export class DirectSshWorktreeRefreshTargetQueue {
     task.state = retrying ? 'retrying' : 'queued'
     task.queuedAt = now
     const lane = this.queuedByTarget.get(task.key.targetId)
+
     if (lane) {
       lane.push(task)
+
       return
     }
+
     this.queuedByTarget.set(task.key.targetId, [task])
     this.targetOrder.push(task.key.targetId)
   }
@@ -21,19 +24,23 @@ export class DirectSshWorktreeRefreshTargetQueue {
       const targetId = this.targetOrder.shift()!
       const lane = this.queuedByTarget.get(targetId)
       const task = lane?.shift()
+
       if (!lane || !task) {
         this.queuedByTarget.delete(targetId)
         continue
       }
+
       if (lane.length > 0) {
         this.targetOrder.push(targetId)
       } else {
         this.queuedByTarget.delete(targetId)
       }
+
       if (task.state !== 'terminal' && task.waiters.size > 0) {
         return task
       }
     }
+
     return null
   }
 

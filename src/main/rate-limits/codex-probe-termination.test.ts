@@ -4,6 +4,7 @@ import { CODEX_PROBE_SHUTDOWN_DRAIN_MS, terminateCodexProbeChild } from './codex
 
 function makeFakeChild() {
   const emitter = new EventEmitter()
+
   const child = {
     pid: 4321,
     exitCode: null as number | null,
@@ -21,6 +22,7 @@ function makeFakeChild() {
       emitter.emit('error', new Error('signal delivery failed'))
     }
   }
+
   return child
 }
 
@@ -63,6 +65,7 @@ describe('terminateCodexProbeChild', () => {
   it('resolves within the hard-kill bound even if the child never reports exit', async () => {
     const child = makeFakeChild()
     let settled = false
+
     const done = terminateCodexProbeChild(child, { platform: 'linux' }).then(() => {
       settled = true
     })
@@ -75,6 +78,7 @@ describe('terminateCodexProbeChild', () => {
   it('does not treat a child error as proof that the process exited', async () => {
     const child = makeFakeChild()
     let settled = false
+
     const done = terminateCodexProbeChild(child, { platform: 'linux' }).then(() => {
       settled = true
     })
@@ -110,11 +114,14 @@ describe('terminateCodexProbeChild', () => {
   it('waits for the Windows descendant tree kill before releasing the probe', async () => {
     const child = makeFakeChild()
     let finishTreeKill!: () => void
+
     const treeKill = new Promise<void>((resolve) => {
       finishTreeKill = resolve
     })
+
     const killWindowsProcessTree = vi.fn(() => treeKill)
     let settled = false
+
     const done = terminateCodexProbeChild(child, {
       platform: 'win32',
       drainMs: 0,

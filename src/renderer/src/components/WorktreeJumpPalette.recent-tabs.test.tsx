@@ -25,6 +25,7 @@ import {
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
+
   return {
     ...actual,
     useTranslation: () => ({
@@ -64,12 +65,14 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
   activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
 }))
+
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
 }))
 
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
+
   return {
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -85,6 +88,7 @@ vi.mock('@/components/ui/command', async () => {
       commandProps?: { value?: string; onValueChange?: (next: string) => void }
     }) => {
       setCommandSelection = commandProps?.onValueChange ?? null
+
       return open ? (
         <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
           {children}
@@ -101,6 +105,7 @@ vi.mock('@/components/ui/command', async () => {
       placeholder?: string
     }) => {
       setCommandQuery = onValueChange ?? null
+
       return (
         <input
           data-command-input="true"
@@ -140,9 +145,13 @@ vi.mock('@/components/ui/command', async () => {
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 let testRoot: Root
+
 let testContainer: HTMLDivElement
+
 let setCommandQuery: ((next: string) => void) | null = null
+
 let setCommandSelection: ((next: string) => void) | null = null
 
 async function flushEffects(): Promise<void> {
@@ -213,6 +222,7 @@ function getTabRowIds(): string[] {
           )?.id ?? ''
     )
 }
+
 function getTabRowShortcutDigits(): string[] {
   return [
     ...testContainer.querySelectorAll<HTMLElement>(
@@ -224,6 +234,7 @@ function getTabRowShortcutDigits(): string[] {
       .filter((text) => /^\d+$/.test(text))
   )
 }
+
 function clickSeeMore(): void {
   ;[...testContainer.querySelectorAll('button')]
     .find((button) => button.textContent?.includes('See more'))
@@ -291,9 +302,11 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   })
   it('shows more recent chats and terminals from the empty-query view', async () => {
     await renderPalette(makeManyTabState(12))
+
     const seeMoreButton = [...testContainer.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('See more')
     )
+
     expect(seeMoreButton).toBeDefined()
     expect(testContainer.textContent).toContain('6 more')
     await act(async () => {
@@ -349,6 +362,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   function makeTypedRelevanceState(): Partial<AppState> {
     const weak = makeWorktree('wt-weak', 'improve-agent-dashboard-performance')
     const host = makeWorktree('wt-host', 'docs-update')
+
     return {
       worktreesByRepo: { 'repo-1': [weak, host] },
       showSleepingWorkspaces: true,
@@ -505,10 +519,12 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
 
     expect(getTabRowIds()).toEqual([])
+
     // Why: cmdk claims the first row it sees, which before hydration is a worktree.
     const firstWorktreeId = getRenderedRowIds().find((id) =>
       id.startsWith(encodePaletteIdentity(['worktree']))
     )
+
     expect(firstWorktreeId).toBeDefined()
     await act(async () => {
       setCommandSelection?.(firstWorktreeId ?? '')
@@ -552,6 +568,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     const worktreeIds = getRenderedRowIds().filter((id) =>
       id.startsWith(encodePaletteIdentity(['worktree']))
     )
+
     expect(worktreeIds.length).toBeGreaterThan(1)
     // Why the second row: only a selection that differs from the auto-picked head proves the user moved it.
     const movedTo = worktreeIds[1]
@@ -592,11 +609,14 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         ]
       }
     })
+
     await renderPalette({ ...hydrated, tabsByWorktree: {} })
     expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
+
     const movedTo = getRenderedRowIds().filter((id) =>
       id.startsWith(encodePaletteIdentity(['workspace-tab']))
     )[1]
+
     await act(async () => {
       setCommandSelection?.(movedTo)
     })
@@ -622,6 +642,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
       }
     })
+
     await renderPalette({ ...hydrated, tabsByWorktree: {} })
     expect(getTabRowIds()).toEqual(['tab-beta'])
 

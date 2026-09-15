@@ -42,17 +42,21 @@ export function mobileStructuredSendDelivery(
   if (result.status === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
+
   if (result.status === 'refused') {
     const refusalState = agentSessionRefusalOperationState('agentSession.send', result.code)
+
     if (refusalState === 'unknown') {
       return { outcome: 'unknown', operationIdSpent: false, error: null }
     }
+
     return {
       outcome: 'rejected',
       operationIdSpent: refusalState === 'settled-rejected' && !retained,
       error: result.message
     }
   }
+
   if (result.status !== 'accepted') {
     return {
       outcome: 'rejected',
@@ -60,10 +64,13 @@ export function mobileStructuredSendDelivery(
       error: result.message === 'Request not sent' ? 'Message not sent' : result.message
     }
   }
+
   const submission = result.value.submission as AgentSessionSendResult['submission'] | undefined
+
   if (!submission || submission.dispatchState === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
+
   if (submission.dispatchState === 'rejected') {
     return {
       outcome: 'rejected',
@@ -71,10 +78,12 @@ export function mobileStructuredSendDelivery(
       error: structuredAgentSessionRejectionNotice(submission.reason)
     }
   }
+
   if (retained) {
     // A payload match cannot distinguish retrying the ambiguous action from a
     // later identical intent. Wait for the stream to settle and release it.
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
+
   return { outcome: 'accepted', operationIdSpent: true, error: null }
 }

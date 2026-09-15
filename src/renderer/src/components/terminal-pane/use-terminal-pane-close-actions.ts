@@ -32,12 +32,15 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     updateSettings,
     worktreeId
   } = controller
+
   const executeClosePane = useCallback(
     (paneId: number) => {
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       if (manager.getPanes().length <= 1) {
         onCloseTab()
       } else {
@@ -45,16 +48,20 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         closeWebRuntimeTerminal(ptyId)
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
+
         if (leafId) {
           useAppStore.getState().setCacheTimerStartedAt(makePaneKey(tabId, leafId), null)
           useAppStore.getState().dropAgentStatus(makePaneKey(tabId, leafId), { paneRemoved: true })
         }
+
         setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+
         if (leafId) {
           syncPanePtyLayoutBindingForLeaf?.(leafId, null, paneId)
         } else {
           syncPanePtyLayoutBinding(paneId, null)
         }
+
         manager.closePane(paneId)
       }
     },
@@ -67,37 +74,48 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       tabId
     ]
   )
+
   const getCloseDialogCopyKind = useCallback(
     (paneId: number) => resolveLeafCloseCopyKind(tabId, managerRef.current?.getLeafId(paneId)),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [tabId]
   )
+
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
       if ((managerRef.current?.getPanes().length ?? 0) <= 1) {
         executeClosePane(paneId)
+
         return
       }
+
       const transport = paneTransportsRef.current.get(paneId)
       const ptyId = transport?.getPtyId()
+
       if (!ptyId) {
         executeClosePane(paneId)
+
         return
       }
+
       const settings = useAppStore.getState().settings
       let decided = false
+
       const decide = (act: () => void): void => {
         if (decided) {
           return
         }
+
         decided = true
         act()
       }
+
       const confirmClose = (): void =>
         setPendingCloseConfirmation({
           paneId,
           copyKind: getCloseDialogCopyKind(paneId)
         })
+
       const probeTimeout = setTimeout(() => decide(confirmClose), RUNNING_CLOSE_PROBE_TIMEOUT_MS)
       // Why the shared probe rather than a direct inspect: this is the same question the tab-close
       // guard asks, and the two must not drift on what an unanswered host means.
@@ -130,6 +148,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       closeActivePane: (): void => {
         const manager = managerRef.current
         const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
         if (pane) {
           handleRequestClosePane(pane.id)
         }
@@ -138,30 +157,37 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [handleRequestClosePane]
   )
+
   const handleSearchSelectedText = useCallback((selectedText: string): void => {
     useAppStore.getState().showRightSidebarSearch({ query: selectedText })
   }, [])
+
   const handleConfirmClose = useCallback(
     (dontAskAgain: boolean) => {
       if (pendingCloseConfirmation === null) {
         return
       }
+
       const paneId = pendingCloseConfirmation.paneId
       setPendingCloseConfirmation(null)
+
       if (dontAskAgain) {
         void updateSettings({
           skipCloseTerminalWithRunningProcessConfirm: true
         })
       }
+
       executeClosePane(paneId)
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [executeClosePane, pendingCloseConfirmation, updateSettings]
   )
+
   const handleCancelClose = useCallback(() => {
     setPendingCloseConfirmation(null)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [])
+
   const resolveExternalPaneDropTarget = useCallback(
     ({
       sourcePaneId,
@@ -173,9 +199,11 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       clientY: number
     }) => {
       const panes = managerRef.current?.getPanes() ?? []
+
       if (panes.length <= 1 || !panes.some((pane) => pane.id === sourcePaneId)) {
         return null
       }
+
       return resolveTerminalTabStripDropTarget({
         clientX,
         clientY,
@@ -186,13 +214,16 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [worktreeId]
   )
+
   const handleExternalPaneDrop = useCallback(
     (sourcePaneId: number, target: PaneExternalDropTarget): boolean => {
       if (!isTerminalTabStripDropTarget(target)) {
         return false
       }
+
       const fallbackPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId() ?? null
       const sourcePaneCwd = paneCwdRef.current.get(sourcePaneId)
+
       return (
         detachTerminalPaneToTab({
           fallbackPtyId,

@@ -50,6 +50,7 @@ export function listAppliedWorkspaceCleanupFilters(
 ): WorkspaceCleanupAppliedFilter[] {
   const defaults = createDefaultWorkspaceCleanupFilterState()
   const applied: WorkspaceCleanupAppliedFilter[] = []
+
   const add = (
     id: string,
     label: string,
@@ -66,6 +67,7 @@ export function listAppliedWorkspaceCleanupFilters(
       activity: { ...f.activity, idleMinDays: null }
     }))
   }
+
   if (activity.neverVisited) {
     add('activity.neverVisited', format.neverVisited(), (f) => ({
       ...f,
@@ -79,12 +81,14 @@ export function listAppliedWorkspaceCleanupFilters(
       size: { ...f.size, minBytes: null }
     }))
   }
+
   if (size.maxBytes !== null) {
     add('size.maxBytes', format.maxSize(size.maxBytes), (f) => ({
       ...f,
       size: { ...f.size, maxBytes: null }
     }))
   }
+
   if (!size.includeUnsized) {
     add('size.includeUnsized', format.excludesUnsized(), (f) => ({
       ...f,
@@ -102,14 +106,17 @@ export function listAppliedWorkspaceCleanupFilters(
       })
     )
   }
+
   if (!status.matchStatusless) {
     add('status.matchStatusless', format.excludesStatusless(), (f) => ({
       ...f,
       status: { ...f.status, matchStatusless: true }
     }))
   }
+
   for (const key of ['archived', 'pinned', 'unread', 'comment'] as const) {
     const value = status[key]
+
     if (value !== 'any') {
       add(`status.${key}`, format.triState(key, value), (f) => ({
         ...f,
@@ -124,6 +131,7 @@ export function listAppliedWorkspaceCleanupFilters(
       agent: { ...f.agent, states: [] }
     }))
   }
+
   if (agent.retainedDoneAgents !== 'any') {
     add(
       'agent.retainedDoneAgents',
@@ -141,26 +149,31 @@ export function listAppliedWorkspaceCleanupFilters(
       git: { ...f.git, states: [] }
     }))
   }
+
   if (git.minAhead !== null && git.minAhead > 0) {
     add('git.minAhead', format.minAhead(git.minAhead), (f) => ({
       ...f,
       git: { ...f.git, minAhead: null }
     }))
   }
+
   if (git.minBehind !== null && git.minBehind > 0) {
     add('git.minBehind', format.minBehind(git.minBehind), (f) => ({
       ...f,
       git: { ...f.git, minBehind: null }
     }))
   }
+
   if (git.branchQuery.trim().length > 0) {
     add('git.branchQuery', format.branchQuery(git.branchQuery.trim()), (f) => ({
       ...f,
       git: { ...f.git, branchQuery: '' }
     }))
   }
+
   for (const key of ['prunable', 'locked'] as const) {
     const value = git[key]
+
     if (value !== 'any') {
       add(`git.${key}`, format.triState(key, value), (f) => ({
         ...f,
@@ -175,12 +188,14 @@ export function listAppliedWorkspaceCleanupFilters(
       review: { ...f.review, presence: defaults.review.presence }
     }))
   }
+
   if (review.states.length > 0) {
     add('review.states', format.list('reviewState', review.states.length), (f) => ({
       ...f,
       review: { ...f.review, states: [] }
     }))
   }
+
   if (review.providers.length > 0) {
     add('review.providers', format.list('reviewProvider', review.providers.length), (f) => ({
       ...f,
@@ -194,6 +209,7 @@ export function listAppliedWorkspaceCleanupFilters(
       ticket: { ...f.ticket, presence: defaults.ticket.presence }
     }))
   }
+
   if (ticket.sources.length > 0) {
     add('ticket.sources', format.list('ticketSource', ticket.sources.length), (f) => ({
       ...f,
@@ -207,6 +223,7 @@ export function listAppliedWorkspaceCleanupFilters(
       context: { ...f.context, presence: defaults.context.presence }
     }))
   }
+
   if (context.completelyEmpty) {
     add('context.completelyEmpty', format.completelyEmpty(), (f) => ({
       ...f,
@@ -220,12 +237,14 @@ export function listAppliedWorkspaceCleanupFilters(
       location: { ...f.location, hostIds: [] }
     }))
   }
+
   if (location.repoIds.length > 0) {
     add('location.repoIds', format.list('repo', location.repoIds.length), (f) => ({
       ...f,
       location: { ...f.location, repoIds: [] }
     }))
   }
+
   if (location.pathPrefix.trim().length > 0) {
     add('location.pathPrefix', format.pathPrefix(location.pathPrefix.trim()), (f) => ({
       ...f,
@@ -239,6 +258,7 @@ export function listAppliedWorkspaceCleanupFilters(
       safety: { ...f.safety, blockers: [] }
     }))
   }
+
   if (safety.dismissed !== 'any') {
     add('safety.dismissed', format.triState('dismissed', safety.dismissed), (f) => ({
       ...f,

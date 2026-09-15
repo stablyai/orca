@@ -20,6 +20,7 @@ describe('ExternalAutomationsHandler referenced log paths', () => {
     } else {
       process.env.HERMES_HOME = previousHermesHome
     }
+
     await rm(hermesHome, { recursive: true, force: true })
     vi.resetModules()
   })

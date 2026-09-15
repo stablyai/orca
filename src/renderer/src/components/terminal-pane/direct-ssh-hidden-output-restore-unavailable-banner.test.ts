@@ -38,13 +38,19 @@ import {
 //     src/renderer/src/components/terminal-pane/direct-ssh-hidden-output-restore-unavailable-banner.test.ts
 
 const scheduleRuntimeGraphSync = vi.fn()
+
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
+
 const toastInfo = vi.fn()
+
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -56,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -65,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -84,6 +92,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -94,9 +103,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -106,9 +117,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -116,6 +129,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -125,11 +139,15 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 // ── Scenario identities ─────────────────────────────────────────────────────
 // Real direct-SSH app PTY id shape (shared/ssh-pty-id.ts).
 const SSH_PTY_ID = 'ssh:coder-ws@@pty-1'
+
 // Overflows the renderer's hidden background queue (2MB lossy cap), dropping the
 // backlog and latching main-model restore.
 const HIDDEN_BYTES = 'x'.repeat(2 * 1024 * 1024 + 1)
+
 const LIVE_AGENT_CHUNK = 'LIVE_AGENT_CHUNK\r\n'
+
 const HOST_SNAPSHOT_MARKER = 'HOST_SNAPSHOT_HIDDEN_AGENT_CONTENT'
+
 const HOST_SNAPSHOT = {
   data: `${HOST_SNAPSHOT_MARKER}\r\n`,
   cols: 120,
@@ -137,6 +155,7 @@ const HOST_SNAPSHOT = {
   seq: HIDDEN_BYTES.length + LIVE_AGENT_CHUNK.length,
   source: 'headless'
 }
+
 const BANNER_FRAGMENT = 'main recovery was unavailable'
 
 type HostSnapshot = typeof HOST_SNAPSHOT
@@ -154,30 +173,38 @@ function stubMainBufferSnapshot(
   impl: () => Promise<HostSnapshot | null>
 ): ReturnType<typeof vi.fn> {
   const getMainBufferSnapshot = vi.fn(impl)
+
   ;(window.api.pty as unknown as Record<string, unknown>).getMainBufferSnapshot =
     getMainBufferSnapshot
+
   return getMainBufferSnapshot
 }
 
 async function connectHiddenDirectSshPane(): Promise<SshPaneDrive> {
   const { connectPanePty } = await import('./pty-connection')
   const transport = createMockTransport(SSH_PTY_ID)
+
   const capturedDataCallback: {
     current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
   } = { current: null }
+
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
     capturedDataCallback.current = callbacks?.onData ?? null
+
     return SSH_PTY_ID
   })
   transportFactoryQueue.push(transport)
   const pane = createPane(1)
   const manager = createManager(1)
+
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: false }
   })
+
   const disposable = connectPanePty(pane as never, manager as never, deps as never)
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
+
   return {
     transport,
     pane,
@@ -216,6 +243,7 @@ function observeFinalPaneState(drive: SshPaneDrive): {
   hiddenOutputRecoveredFromHostSnapshot: boolean
 } {
   const joined = drive.writtenChunks().join('')
+
   return {
     rawHiddenBacklogWritten: joined.includes('x'.repeat(1024)),
     liveAgentChunkWritten: joined.includes('LIVE_AGENT_CHUNK'),
@@ -249,6 +277,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     const getMainBufferSnapshot: ReturnType<typeof vi.fn> = stubMainBufferSnapshot(async () =>
       getMainBufferSnapshot.mock.calls.length <= 4 ? null : HOST_SNAPSHOT
     )
+
     const drive = await connectHiddenDirectSshPane()
     vi.useFakeTimers()
     driveHiddenBacklogThenReveal(drive)
@@ -306,9 +335,11 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     for (let step = 0; step < 6; step += 1) {
       await allowSelfHealWindow()
     }
+
     const bannerCount = drive
       .writtenChunks()
       .filter((data) => data.includes(BANNER_FRAGMENT)).length
+
     expect(bannerCount).toBe(1)
     const settledRequests = getMainBufferSnapshot.mock.calls.length
     expect(settledRequests).toBeGreaterThan(4)
@@ -317,6 +348,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     for (let step = 0; step < 4; step += 1) {
       await allowSelfHealWindow()
     }
+
     expect(getMainBufferSnapshot.mock.calls.length).toBe(settledRequests)
     expect(drive.writtenChunks().filter((data) => data.includes(BANNER_FRAGMENT)).length).toBe(1)
     drive.disposable.dispose()
@@ -334,6 +366,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     await advanceThroughNullRetryBudget()
 
     let seq = HIDDEN_BYTES.length + LIVE_AGENT_CHUNK.length
+
     for (let step = 0; step < 60; step += 1) {
       const chunk = `LIVE_TICK_${step}\r\n`
       seq += chunk.length
@@ -356,6 +389,7 @@ describe('direct-SSH hidden-output restore abandonment', () => {
       await vi.advanceTimersByTimeAsync(300)
       await flushAsyncTicks(20)
     }
+
     expect(getMainBufferSnapshot.mock.calls.length).toBe(settledRequests)
     expect(drive.writtenChunks().join('').split(BANNER_FRAGMENT).length - 1).toBe(1)
     drive.disposable.dispose()
@@ -373,15 +407,19 @@ describe('direct-SSH hidden-output restore abandonment', () => {
     driveHiddenBacklogThenReveal(drive)
     await flushAsyncTicks(20)
     await advanceThroughNullRetryBudget()
+
     for (let step = 0; step < 6; step += 1) {
       await allowSelfHealWindow()
     }
+
     expect(drive.writtenChunks().filter((data) => data.includes(BANNER_FRAGMENT))).toHaveLength(1)
 
     // Second episode on the SAME ssh: id: the host is alive again but its snapshot
     // lands just past the 750ms foreground deadline.
     hostIsSilent = false
+
     let seq = HIDDEN_BYTES.length + LIVE_AGENT_CHUNK.length
+
     ;(drive.deps.isVisibleRef as { current: boolean }).current = false
     seq += HIDDEN_BYTES.length
     drive.deliver(HIDDEN_BYTES, seq)

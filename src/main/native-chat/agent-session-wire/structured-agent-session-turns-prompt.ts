@@ -24,21 +24,27 @@ export async function performPrompt(
   }
 ): Promise<TurnOutcome<AgentSessionPromptResult>> {
   const validated = validatePendingPrompt(ctx, input)
+
   if (!validated.ok) {
     return validated
   }
+
   const { prompt } = validated
   const question = prompt.kind === 'question' ? prompt : null
   const freeText = decodeCodexQuestionOptionId(input.optionId)
+
   const acceptsFreeText =
     question?.freeTextQuestionId !== undefined &&
     freeText?.questionId === question.freeTextQuestionId &&
     freeText.answer.trim().length > 0
+
   const grouped = question?.questions ? decodeAgentSessionQuestionAnswers(input.optionId) : null
+
   const acceptsGrouped =
     grouped !== null &&
     question?.questions !== undefined &&
     isValidAgentSessionQuestionAnswers(question.questions, grouped)
+
   if (
     !acceptsFreeText &&
     !acceptsGrouped &&
@@ -46,7 +52,9 @@ export async function performPrompt(
   ) {
     return invalid(`Option ${input.optionId} is not offered by item ${input.itemId}.`)
   }
+
   const identity = parseAgentJournalItemKey(input.itemId)
+
   if (!identity) {
     return invalid(`Item id ${input.itemId} is not a well-formed item key.`)
   }
@@ -57,7 +65,9 @@ export async function performPrompt(
     resolvedBy: ctx.resolvedBy,
     resolvedAt: ctx.now()
   }
+
   const committed: { item?: Awaited<ReturnType<typeof ctx.journal.appendItem>> } = {}
+
   try {
     await ctx.adapter.answerPrompt({
       sessionId: ctx.sessionId,
@@ -80,9 +90,11 @@ export async function performPrompt(
     if (!committed.item && error instanceof AgentSessionPromptUnavailableError) {
       return invalid(error.message)
     }
+
     if (!committed.item) {
       throw error
     }
+
     await ctx.journal.appendItem(
       { provider: 'orca', clientMessageId: `${input.itemId}#delivery` },
       {
@@ -95,10 +107,13 @@ export async function performPrompt(
     )
     ctx.publish()
   }
+
   const appended = committed.item
+
   if (!appended) {
     throw new Error(`Provider adapter did not commit prompt ${input.itemId}.`)
   }
+
   return {
     ok: true,
     value: { itemId: appended.itemId, revision: appended.revision, resolution }

@@ -52,6 +52,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollOffsetRef,
     scrollAnchorRef
   } = props
+
   const scrollRef = useRef<HTMLDivElement>(null)
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
@@ -65,10 +66,12 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
   const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
+
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
   )
+
   const folderBackedProjectGroupIds = useMemo(
     () =>
       new Set(
@@ -96,12 +99,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   })
 
   const session = useWorktreeDragSession({ rows, scrollRef })
+
   const lineageDrop = useWorktreeLineageDropCommit({
     repoMap,
     worktreeMap,
     worktreeLineageById,
     worktreeDragGroups: session.worktreeDragGroups
   })
+
   const runtime = useWorktreeDragRuntime({
     worktreeDragSessionRef: session.worktreeDragSessionRef,
     statusDropAnchorsRef: session.statusDropAnchorsRef,
@@ -220,6 +225,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     onDropWorktreesOnWorkspaceBoard: props.onDropWorktreesOnWorkspaceBoard,
     shouldShowWorkspaceBoardDropIndicator: props.shouldShowWorkspaceBoardDropIndicator
   })
+
   const nativeDrag = useWorktreeNativeDrag({
     ctx: dropCtx,
     session,
@@ -227,10 +233,12 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollRef,
     markScrollMovement
   })
+
   useWorktreeDocumentDrop({
     ctx: dropCtx,
     worktreeDragSessionRef: session.worktreeDragSessionRef
   })
+
   const statusDrag = useWorkspaceStatusRowDrag({
     ctx: dropCtx,
     session,
@@ -256,7 +264,9 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   // would run the teardown below mid-drag; depend only on the stable teardown callbacks.
   const { cancelPendingRevealFrames, clearRevealHighlightFrame, clearRevealHighlightTimeout } =
     reveal
+
   const { clearWorktreeDrag } = runtime
+
   const setScrollRootRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null && scrollRef.current !== null) {
@@ -266,6 +276,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         clearRevealHighlightTimeout()
         clearWorktreeDrag()
       }
+
       scrollRef.current = node
       setScrollElement(node)
     },
@@ -276,19 +287,24 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       clearWorktreeDrag
     ]
   )
+
   const handleScrollPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const scrollbarWidth = event.currentTarget.offsetWidth - event.currentTarget.clientWidth
+
       if (scrollbarWidth <= 0) {
         return
       }
+
       const rect = event.currentTarget.getBoundingClientRect()
+
       if (event.clientX >= rect.right - scrollbarWidth) {
         markDirectScrollInput()
       }
     },
     [markDirectScrollInput]
   )
+
   const handleScroll = useCallback(() => {
     markScrollMovement()
   }, [markScrollMovement])
@@ -363,6 +379,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           })}
           {virtualItems.map((vItem) => {
             const row = renderRows[vItem.index]
+
             return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
           })}
         </div>

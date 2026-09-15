@@ -10,6 +10,7 @@ describe('agent completion coordinator', () => {
 
   it('allows later done-only hook completions from the same long-lived process', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -46,6 +47,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses delayed replays of the same hook completion snapshot', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -61,6 +63,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex' as const,
       stateStartedAt: 1_700_000_000_000
     }
+
     coordinator.observeHookStatus(completion)
     vi.advanceTimersByTime(5_000)
     coordinator.observeHookStatus(completion)
@@ -70,6 +73,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses the same hook completion replay after fresh work starts', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -85,6 +89,7 @@ describe('agent completion coordinator', () => {
       agentType: 'codex' as const,
       stateStartedAt: 1_700_000_000_000
     }
+
     coordinator.observeHookStatus(completedTurn)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
@@ -113,6 +118,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses same-agent title replay after hook-backed fresh work starts', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -160,6 +166,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses stale title completion replay after a pane remount until fresh work appears', () => {
     const dispatchCompletion = vi.fn()
+
     const firstCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -193,6 +200,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses stale title completion replay after a hook completion remount', () => {
     const dispatchCompletion = vi.fn()
+
     const firstCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',

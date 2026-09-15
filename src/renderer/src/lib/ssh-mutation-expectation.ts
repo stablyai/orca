@@ -24,9 +24,11 @@ export function captureDirectSshMutationExpectation(
     ? state.sshStateByEnvironment?.get(runtimeEnvironmentId)?.connectionStates.get(connectionId)
         ?.connectionGeneration
     : state.sshConnectionStates.get(connectionId)?.connectionGeneration
+
   if (generation === undefined) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   return {
     expectedExecutionHostId: toSshExecutionHostId(connectionId),
     expectedSshTargetId: connectionId,
@@ -40,20 +42,25 @@ export function captureWorktreeSshMutationExpectation(
 ): SshMutationExpectation & { expectedExecutionHostId: 'local' | `ssh:${string}` } {
   const route = resolveWorktreeOperationRoute(state, worktreeId)
   const host = parseExecutionHostId(route?.executionHostId)
+
   if (host?.kind === 'local' || host?.kind === 'runtime') {
     return { expectedExecutionHostId: 'local' }
   }
+
   if (host?.kind !== 'ssh') {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   const generation = route?.runtimeEnvironmentId
     ? state.sshStateByEnvironment
         .get(route.runtimeEnvironmentId)
         ?.connectionStates.get(host.targetId)?.connectionGeneration
     : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
+
   if (generation === undefined) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   return {
     expectedExecutionHostId: host.id,
     expectedSshTargetId: host.targetId,

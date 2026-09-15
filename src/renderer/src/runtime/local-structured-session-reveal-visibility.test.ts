@@ -22,9 +22,12 @@ import type { WebSessionTabsSyncState } from './web-session-tabs-sync'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync'
 
 const WORKTREE = 'repo-1::/tmp/wt-reveal'
+
 const HOST_TAB_ID = 'agent-session:codex-reveal-1'
+
 // The projection renames a host tab id into the renderer's own namespace.
 const SESSION_TAB = 'structured-agent-session-codex-reveal-1'
+
 // One string for the renderer's whole lifetime, which is exactly why retiring it is unrecoverable.
 const RENDERER_EPOCH = 'renderer:11111111-2222-3333-4444-555555555555'
 

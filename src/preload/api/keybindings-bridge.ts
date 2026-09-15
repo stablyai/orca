@@ -15,7 +15,9 @@ export const keybindingsApi = {
   onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: KeybindingFileSnapshot): void =>
       callback(snapshot)
+
     ipcRenderer.on('keybindings:changed', listener)
+
     return () => ipcRenderer.removeListener('keybindings:changed', listener)
   }
 } satisfies PreloadApi['keybindings']

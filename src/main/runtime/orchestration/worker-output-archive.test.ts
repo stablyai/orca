@@ -71,6 +71,7 @@ describe('worker output archive WSL routing', () => {
       clipping: [],
       warnings: []
     })
+
     const session = {
       paneKey: 'tab:worker',
       processIncarnation: 'pty:wsl-incarnation',
@@ -84,6 +85,7 @@ describe('worker output archive WSL routing', () => {
       },
       observedAt: Date.now()
     }
+
     const runtime = {
       getExactWorkerProviderSession: vi.fn(() => session),
       readTerminal: vi.fn()
@@ -117,6 +119,7 @@ describe('worker output archive WSL routing', () => {
   it('does not resolve an SSH transcript locally when its provider is unavailable', async () => {
     vi.mocked(sshFilesystemDispatch.getSshFilesystemProvider).mockReturnValue(undefined)
     transcriptReadSpy = vi.spyOn(workerTranscriptRead, 'readWorkerTranscript')
+
     const runtime = {
       getExactWorkerProviderSession: vi.fn(() => ({
         paneKey: 'tab:ssh-worker',
@@ -168,6 +171,7 @@ describe('worker output archive WSL routing', () => {
       clipping: [],
       warnings: []
     })
+
     const runtime = {
       getExactWorkerProviderSession: vi.fn(() => ({
         paneKey: 'tab:worker',

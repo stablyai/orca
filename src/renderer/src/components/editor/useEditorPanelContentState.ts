@@ -14,6 +14,7 @@ import { useEditorPanelActiveTabContentLoad } from './useEditorPanelActiveTabCon
 import { useEditorPanelContentReloadTriggers } from './useEditorPanelContentReloadTriggers'
 
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
+
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
 type UseEditorPanelContentStateParams = {
@@ -54,10 +55,12 @@ export function useEditorPanelContentState({
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef(editorViewMode)
   const isVisibleRef = useRef(isVisible)
+
   const selectedConflictReviewFile =
     activeFile?.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
       ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
       : null
+
   const activeContentFileId = selectedConflictReviewFile?.id ?? activeFile?.id ?? null
   const activeContentFileIdRef = useRef(activeContentFileId)
 
@@ -72,15 +75,19 @@ export function useEditorPanelContentState({
 
   const invalidateFileContent = useCallback((fileIds: string[]): void => {
     const uniqueIds = new Set(fileIds)
+
     for (const fileId of uniqueIds) {
       fileReadGenerationRef.current[fileId] = ++fileReadGenerationCounterRef.current
       delete fileLoadRetryAttemptsRef.current[fileId]
     }
+
     setFileContents((prev) => {
       const next = { ...prev }
       let changed = false
+
       for (const fileId of uniqueIds) {
         const existing = next[fileId]
+
         // Why: keep the last-known bytes rendered and swap them when the lazy
         // reload lands — dropping them flashes "Loading…" on every reveal.
         if (existing && existing.isStale !== true) {
@@ -88,20 +95,25 @@ export function useEditorPanelContentState({
           changed = true
         }
       }
+
       return changed ? next : prev
     })
   }, [])
 
   const invalidateDiffContent = useCallback((fileIds: string[]): void => {
     const uniqueIds = new Set(fileIds)
+
     for (const fileId of uniqueIds) {
       diffReadGenerationRef.current[fileId] = ++diffReadGenerationCounterRef.current
     }
+
     setDiffContents((prev) => {
       const next = { ...prev }
       let changed = false
+
       for (const fileId of uniqueIds) {
         const existing = next[fileId]
+
         // Why: keep the last-known diff rendered and swap it when the lazy
         // reload lands — dropping it flashes "Loading diff…" on every reveal.
         if (existing && existing.isStale !== true) {
@@ -109,6 +121,7 @@ export function useEditorPanelContentState({
           changed = true
         }
       }
+
       return changed ? next : prev
     })
   }, [])
@@ -147,20 +160,26 @@ export function useEditorPanelContentState({
           if (!prev[file.id]) {
             return prev
           }
+
           const next = { ...prev }
           delete next[file.id]
+
           return next
         })
         void loadDiffContent(file, { force: true })
+
         return
       }
+
       delete fileLoadRetryAttemptsRef.current[file.id]
       setFileContents((prev) => {
         if (!prev[file.id]) {
           return prev
         }
+
         const next = { ...prev }
         delete next[file.id]
+
         return next
       })
       void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {

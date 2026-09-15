@@ -23,10 +23,12 @@ vi.mock('./linux-package-install-command', () => ({
 // Counts hash passes without changing read behavior.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     createReadStream: (...args: Parameters<typeof actual.createReadStream>) => {
       hashPasses.count += 1
+
       return actual.createReadStream(...args)
     }
   }
@@ -36,14 +38,21 @@ vi.mock('node:fs', async (importOriginal) => {
 const describePosix = describe.skipIf(process.platform === 'win32')
 
 const VERSION = '1.2.3'
+
 const PAYLOAD = 'orca package payload'
+
 const SHA512 = createHash('sha512').update(PAYLOAD).digest('base64')
 
 let recovery: typeof RecoveryModule
+
 let tempRoot: string
+
 let cacheRoot: string
+
 let updaterDir: string
+
 let downloadDir: string
+
 let outsideDir: string
 
 function recoveryFor(overrides: Partial<LinuxPackageInstallRecovery> = {}) {
@@ -59,12 +68,14 @@ function recoveryFor(overrides: Partial<LinuxPackageInstallRecovery> = {}) {
 async function writePackage(name: string, contents = PAYLOAD): Promise<string> {
   const filePath = path.join(downloadDir, name)
   await fsp.writeFile(filePath, contents)
+
   return filePath
 }
 
 /** Captures a well-formed downloaded event unless a field is overridden. */
 function capture(overrides: Record<string, unknown> = {}): LinuxPackageArtifact | null {
   const downloadedFile = (overrides.downloadedFile ?? path.join(downloadDir, 'orca.deb')) as string
+
   return recovery.captureLinuxPackageArtifact({
     version: VERSION,
     files: [{ url: path.basename(downloadedFile), sha512: SHA512 }],
@@ -104,6 +115,7 @@ describe('captureLinuxPackageArtifact', () => {
       path: path.join(downloadDir, 'orca.deb'),
       sha512: SHA512
     } satisfies LinuxPackageArtifact
+
     expect(capture()).toEqual(artifact)
     expect(recovery.getTrackedLinuxPackageArtifact()).toEqual(artifact)
   })
@@ -590,10 +602,12 @@ describePosix('validation coalescing', () => {
   it('performs one hash pass for concurrent requests', async () => {
     await writePackage('orca.deb')
     capture()
+
     const [first, second] = await Promise.all([
       recovery.resolveLinuxPackageInstallInstructions(recoveryFor()),
       recovery.resolveLinuxPackageRevealTarget(recoveryFor())
     ])
+
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(true)
     expect(hashPasses.count).toBe(1)
@@ -617,9 +631,11 @@ describePosix('validation coalescing', () => {
       downloadedFile: path.join(downloadDir, 'orca-next.deb'),
       files: [{ url: 'orca-next.deb', sha512: SHA512 }]
     })
+
     const second = recovery.resolveLinuxPackageInstallInstructions(
       recoveryFor({ version: '1.2.4' })
     )
+
     await Promise.all([first, second])
     expect(hashPasses.count).toBe(2)
   })

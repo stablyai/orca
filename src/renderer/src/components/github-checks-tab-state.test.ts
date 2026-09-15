@@ -35,6 +35,7 @@ const checkRunDetails: PRCheckRunDetails = {
 describe('github checks tab state', () => {
   it('preserves local check state while the source checks reference is unchanged', () => {
     const sourceChecks = [check('unit')]
+
     const state = updateGitHubChecksTabLocalChecks(
       createGitHubChecksTabState(sourceChecks, 'repo-a'),
       [check('refreshed')]
@@ -46,6 +47,7 @@ describe('github checks tab state', () => {
   it('resets local checks and expanded details when source checks change', () => {
     const oldSource = [check('old')]
     const nextSource = [check('next')]
+
     const stateWithDetails = updateGitHubChecksTabDetails(
       toggleGitHubChecksTabExpandedKey(
         updateGitHubChecksTabLocalChecks(createGitHubChecksTabState(oldSource, 'repo-a'), [
@@ -69,6 +71,7 @@ describe('github checks tab state', () => {
 
   it('toggles expanded check keys without discarding loaded details', () => {
     const sourceChecks = [check('unit')]
+
     const state = updateGitHubChecksTabDetails(
       createGitHubChecksTabState(sourceChecks, 'repo-a'),
       'unit',
@@ -89,6 +92,7 @@ describe('github checks tab state', () => {
 
   it('settles details only for the request that still owns the check key', () => {
     const sourceChecks = [check('unit')]
+
     const loading = beginGitHubChecksTabDetails(
       createGitHubChecksTabState(sourceChecks, 'repo-a'),
       'unit',
@@ -113,11 +117,13 @@ describe('github checks tab state', () => {
 
   it('gives a retry ownership over an older in-flight request', () => {
     const sourceChecks = [check('unit')]
+
     const first = beginGitHubChecksTabDetails(
       createGitHubChecksTabState(sourceChecks, 'repo-a'),
       'unit',
       1
     )
+
     const retry = beginGitHubChecksTabDetails(first, 'unit', 2)
 
     expect(retry.detailsByCheckKey.unit).toEqual({
@@ -145,6 +151,7 @@ describe('github checks tab state', () => {
 
   it('keeps a retry error visible while the replacement request is loading', () => {
     const sourceChecks = [check('unit')]
+
     const failed = settleGitHubChecksTabDetails(
       beginGitHubChecksTabDetails(createGitHubChecksTabState(sourceChecks, 'repo-a'), 'unit', 1),
       'unit',
@@ -162,6 +169,7 @@ describe('github checks tab state', () => {
 
   it('clears loaded details when a retry starts after a successful load', () => {
     const sourceChecks = [check('unit')]
+
     const loaded = settleGitHubChecksTabDetails(
       beginGitHubChecksTabDetails(createGitHubChecksTabState(sourceChecks, 'repo-a'), 'unit', 1),
       'unit',
@@ -180,6 +188,7 @@ describe('github checks tab state', () => {
 
   it('drops settlement after a source refresh clears request ownership', () => {
     const oldSource = [check('old')]
+
     const loading = updateGitHubChecksTabDetails(
       createGitHubChecksTabState(oldSource, 'repo-a'),
       'unit',
@@ -190,6 +199,7 @@ describe('github checks tab state', () => {
         error: null
       }
     )
+
     const refreshed = resolveGitHubChecksTabState(loading, [check('new')], 'repo-a')
 
     expect(refreshed.contextOwner).toBe(loading.contextOwner)
@@ -205,6 +215,7 @@ describe('github checks tab state', () => {
 
   it('resets request ownership when the context changes with the same checks array', () => {
     const sourceChecks = [check('unit')]
+
     const loading = updateGitHubChecksTabDetails(
       createGitHubChecksTabState(sourceChecks, 'repo-a'),
       'unit',

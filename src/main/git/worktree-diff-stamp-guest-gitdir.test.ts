@@ -10,13 +10,16 @@ vi.mock('node:fs/promises', () => ({ readFile: readFileMock, stat: statMock }))
 import { readWorktreeDiffStamp } from './source-control/worktree-diff-stamp'
 
 const slashed = (value: unknown): string => String(value).replaceAll('\\', '/')
+
 const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 // A worktree on the Windows drive whose repo lives in the distro's own filesystem: the worktree
 // resolves to a drive letter, so the gitdir pointer beside it — which is not drvfs — has no
 // drive to derive and needs the distro the diff read already carries.
 const HOST_WORKTREE = 'C:/wt/x'
+
 const GUEST_GIT_DIR = '/home/me/repo/.git/worktrees/x'
+
 const HOST_GIT_DIR = '//wsl.localhost/Ubuntu/home/me/repo/.git/worktrees/x'
 
 describe('readWorktreeDiffStamp with a non-drvfs gitdir pointer', () => {
@@ -25,13 +28,16 @@ describe('readWorktreeDiffStamp with a non-drvfs gitdir pointer', () => {
     statMock.mockReset()
     readFileMock.mockImplementation(async (target: string) => {
       const value = slashed(target)
+
       if (value === `${HOST_WORKTREE}/.git`) {
         return `gitdir: ${GUEST_GIT_DIR}\n`
       }
+
       // Detached HEAD, so the stamp needs no ref-store walk.
       if (value === `${HOST_GIT_DIR}/HEAD`) {
         return `${'a'.repeat(40)}\n`
       }
+
       throw missing()
     })
     statMock.mockImplementation(async (target: string) =>

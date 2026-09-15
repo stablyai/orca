@@ -12,21 +12,25 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
     connect(host.endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
     directPathForEndpoint(host, host.endpoint)
   )
+
   if (Platform.OS === 'web') {
     return logical
   }
 
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
   endpointLifecycle.setForeground(AppState.currentState === 'active')
+
   const appStateSubscription = AppState.addEventListener('change', (state) => {
     endpointLifecycle.setForeground(state === 'active')
   })
+
   const closeLogical = logical.close
   logical.close = () => {
     appStateSubscription.remove()
     endpointLifecycle.stop()
     closeLogical()
   }
+
   const notifyLogicalForeground = logical.notifyForeground
   logical.notifyForeground = (reason = 'focus') => {
     // Why: a nudge while already foreground must not re-enter setForeground —
@@ -34,5 +38,6 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
     endpointLifecycle.nudge(reason)
     notifyLogicalForeground(reason)
   }
+
   return logical
 }

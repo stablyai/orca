@@ -23,14 +23,18 @@ vi.mock('./browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 vi.mock('node:fs', async (importOriginal) => await importOriginal<typeof NodeFs>())
+
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -261,10 +265,12 @@ describe('native cookie import clear scope', () => {
     const stagedPath = setPendingCookieImportMock.mock.calls[0][1] as string
     expect(existsSync(`${stagedPath}-wal`)).toBe(false)
     const staged = new DatabaseSync(stagedPath, { readOnly: true })
+
     try {
       expect(
         staged.prepare('SELECT domain, format_version FROM orca_cookie_import_scope').all()
       ).toEqual([{ domain: 'github.com', format_version: 1 }])
+
       const rows = (
         staged
           .prepare('SELECT host_key, name, value FROM cookies ORDER BY host_key, name')
@@ -275,6 +281,7 @@ describe('native cookie import clear scope', () => {
         // as bytes when it was written from a buffer.
         value: typeof row.value === 'string' ? row.value : Buffer.from(row.value).toString('latin1')
       }))
+
       expect(rows).toEqual([
         // The stale github.com row was replaced by the imported one — the clear that is justified.
         { host_key: '.github.com', name: 'user_session', value: 'imported-github' },

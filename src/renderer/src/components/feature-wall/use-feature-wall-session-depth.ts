@@ -41,6 +41,7 @@ export function useFeatureWallSessionDepth(
     aiCommitPrConfigured,
     onTourDepthSummaryChange
   } = input
+
   const sessionDepthRef = useRef<{
     visitedWorkflows: Set<FeatureWallWorkflowId>
     visitedAgentSteps: Set<AgentsStepId>
@@ -48,6 +49,7 @@ export function useFeatureWallSessionDepth(
     visitedReviewSteps: Set<ReviewStepId>
     lastGroupId: FeatureWallWorkflowId | null
   }>(undefined!)
+
   sessionDepthRef.current ??= {
     visitedWorkflows: new Set(),
     visitedAgentSteps: new Set(),
@@ -58,6 +60,7 @@ export function useFeatureWallSessionDepth(
 
   const getTourDepthSummary = useCallback((): FeatureWallTourDepthSummary => {
     const session = sessionDepthRef.current
+
     const progress = getFeatureWallCompletionProgress({
       visitedWorkflows: session.visitedWorkflows,
       visitedAgentSteps: session.visitedAgentSteps,
@@ -71,6 +74,7 @@ export function useFeatureWallSessionDepth(
       githubConfigured,
       aiCommitPrConfigured
     })
+
     return buildFeatureWallTourDepthSummary({
       ...progress,
       visitedWorkflows: session.visitedWorkflows,
@@ -97,10 +101,13 @@ export function useFeatureWallSessionDepth(
   useEffect(() => {
     if (!isOpen) {
       wasOpenRef.current = false
+
       return
     }
+
     const openedNow = !wasOpenRef.current
     wasOpenRef.current = true
+
     if (openedNow) {
       // Why: depth telemetry is per explicit tour session; persisted completion
       // can color the UI but must not leak into current-session depth fields.
@@ -112,6 +119,7 @@ export function useFeatureWallSessionDepth(
         lastGroupId: null
       }
     }
+
     publishTourDepthSummary()
   }, [isOpen, publishTourDepthSummary])
 
@@ -124,6 +132,7 @@ export function useFeatureWallSessionDepth(
     },
     [publishTourDepthSummary]
   )
+
   const markAgentStepVisitedForSession = useCallback(
     (id: AgentsStepId): void => {
       sessionDepthRef.current.visitedAgentSteps.add(id)
@@ -131,6 +140,7 @@ export function useFeatureWallSessionDepth(
     },
     [publishTourDepthSummary]
   )
+
   const markWorkbenchStepVisitedForSession = useCallback(
     (id: WorkbenchStepId): void => {
       sessionDepthRef.current.visitedWorkbenchSteps.add(id)
@@ -138,6 +148,7 @@ export function useFeatureWallSessionDepth(
     },
     [publishTourDepthSummary]
   )
+
   const markReviewStepVisitedForSession = useCallback(
     (id: ReviewStepId): void => {
       sessionDepthRef.current.visitedReviewSteps.add(id)

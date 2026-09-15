@@ -12,12 +12,17 @@ import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
 import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
 
 export { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
+
 export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
+
 export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
+
 export { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
+
 export { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
 
 const AGENT_CATALOG_PREFIX = 'auto.lib.agent.catalog.'
+
 const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 
 // Why: product names and agent labels stay Latin — MT reads them as common words (Codex→copy, Gemini→zodiac).
@@ -264,15 +269,19 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
   if (!enValue?.trim()) {
     return true
   }
+
   if (/^https?:\/\//.test(enValue) || enValue.startsWith('orca://')) {
     return true
   }
+
   if (isEnglishOnlyKey(key)) {
     return true
   }
+
   if (isStyleValue(enValue)) {
     return true
   }
+
   return NEVER_TRANSLATE_VALUES.has(enValue)
 }
 
@@ -284,21 +293,25 @@ function includesPreservedLatinTerm(value, term) {
   if (!value.includes(term)) {
     return false
   }
+
   if (!/^[A-Za-z_]+$/.test(term)) {
     return true
   }
+
   return new RegExp(`(^|[^A-Za-z_])${escapeRegExp(term)}($|[^A-Za-z_])`).test(value)
 }
 
 function replaceMistranslatedForm(value, wrong, brand, locale) {
   let result = ''
   let cursor = 0
+
   for (let at = value.indexOf(wrong); at !== -1; at = value.indexOf(wrong, cursor)) {
     const end = at + wrong.length
     result += value.slice(cursor, at)
     result += overlapsCanonicalRendering(brand, locale, value, at, end) ? wrong : brand
     cursor = end
   }
+
   return result + value.slice(cursor)
 }
 
@@ -312,27 +325,33 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
     if (!includesPreservedLatinTerm(enValue, brand)) {
       continue
     }
+
     // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —
     // skip the revert so カーソル survives for these settings.
     if (isScreenCursorContext(brand, enValue, key)) {
       continue
     }
+
     if (includesPreservedLatinTerm(result, brand)) {
       continue
     }
+
     for (const wrong of wrongForms) {
       if (!result.includes(wrong)) {
         continue
       }
+
       // Why: #12113 — a generic term's correct translation is not a mistranslation; reverting it
       // rewrote ~2000 translated values back to English on every repair run.
       if (isCanonicalGenericRendering(brand, locale, wrong)) {
         continue
       }
+
       // Why: "Copy identifier" legitimately uses 사본/复制 — only swap when English names the brand.
       if (brand === 'Codex' && /\bCopy\b/i.test(enValue)) {
         continue
       }
+
       result = replaceMistranslatedForm(result, wrong, brand, locale)
     }
   }
@@ -361,6 +380,7 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
       new RegExp(`(${CJK_LATIN_SPACED_TERM_PATTERN})(${CJK_LATIN_SPACED_TERM_PATTERN})`, 'g'),
       '$1 $2'
     )
+
   if (locale === 'ko') {
     // Korean particles attach to the noun (no space) only when the particle is a complete token at a
     // boundary — re-glue "Orca 에"/"PR 을"/"에서는" but keep "Jira 이슈"/"Orca 로고"/"agent 에뮬레이터".
@@ -372,6 +392,7 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
       '$1$2'
     )
   }
+
   return result
 }
 
@@ -382,42 +403,53 @@ function phraseFixMatchesEnglish(enValue, fix) {
   if (fix.whenEnMatches) {
     return fix.whenEnMatches.test(enValue)
   }
+
   return enValue.toLowerCase().includes(fix.whenEnIncludes.toLowerCase())
 }
 
 function applyPhraseFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
+
   for (const fix of LOCALE_PHRASE_FIXES[locale] ?? []) {
     if (!phraseFixMatchesEnglish(enValue, fix)) {
       continue
     }
+
     if (fix.skipKeyPrefixes?.some((prefix) => key.startsWith(prefix))) {
       continue
     }
+
     result = result.replace(fix.pattern, fix.replacement)
   }
+
   return result
 }
 
 export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
+
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
     let result = applyBrandMistranslationFixes(enValue, keyOverride, locale, key)
     result = applyPhraseFixes(enValue, result, locale, key)
+
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
+
     return result
   }
 
   const valueOverride = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
+
   if (valueOverride) {
     let result = applyBrandMistranslationFixes(enValue, valueOverride, locale, key)
     result = applyPhraseFixes(enValue, result, locale, key)
+
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
     }
+
     return result
   }
 
@@ -429,6 +461,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
 
   if (key.includes('.search.')) {
     const searchOverride = SEARCH_KEYWORD_OVERRIDES[locale]?.[enValue]
+
     if (searchOverride) {
       result = searchOverride
     }
@@ -436,6 +469,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
 
   result = applyBrandMistranslationFixes(enValue, result, locale, key)
   result = applyPhraseFixes(enValue, result, locale, key)
+
   if (['zh', 'ja', 'ko'].includes(locale)) {
     result = applyCjkLatinTermSpacing(result, locale)
   }
@@ -461,23 +495,29 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
 export function collectStringLeaves(value, prefix = '', leaves = []) {
   if (typeof value === 'string') {
     leaves.push({ key: prefix, value })
+
     return leaves
   }
+
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return leaves
   }
+
   for (const [key, child] of Object.entries(value)) {
     collectStringLeaves(child, prefix ? `${prefix}.${key}` : key, leaves)
   }
+
   return leaves
 }
 
 export function setLeaf(catalog, key, translatedValue) {
   const parts = key.split('.')
   let cursor = catalog
+
   for (let index = 0; index < parts.length - 1; index += 1) {
     cursor = cursor[parts[index]]
   }
+
   cursor[parts.at(-1)] = translatedValue
 }
 
@@ -487,17 +527,20 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
   for (const leaf of leaves) {
     const current = leaf.key.split('.').reduce((cursor, part) => cursor?.[part], localeCatalog)
+
     // Why: en.json carries keys the locale catalog has not been bootstrapped with yet; repair only
     // rewrites values that already exist, so skip instead of crashing on undefined.
     if (typeof current !== 'string') {
       continue
     }
+
     const next = repairTranslatedValue({
       key: leaf.key,
       enValue: leaf.value,
       localeValue: current,
       locale
     })
+
     if (next !== current) {
       setLeaf(localeCatalog, leaf.key, next)
       repaired += 1
@@ -519,16 +562,19 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
         localeCatalog.menu.exploreOrca = '探索 Orca'
         repaired += 1
       }
+
       if (localeCatalog.menu.gettingStarted !== 'Orca 入门') {
         localeCatalog.menu.gettingStarted = 'Orca 入门'
         repaired += 1
       }
     }
+
     if (locale === 'ko') {
       if (localeCatalog.menu.exploreOrca !== 'Orca 둘러보기') {
         localeCatalog.menu.exploreOrca = 'Orca 둘러보기'
         repaired += 1
       }
+
       if (localeCatalog.menu.gettingStarted !== 'Orca 시작하기') {
         localeCatalog.menu.gettingStarted = 'Orca 시작하기'
         repaired += 1
@@ -541,6 +587,7 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
 export function repairCacheMap(cache, locale) {
   let repaired = 0
+
   for (const [enValue, translated] of cache.entries()) {
     const next = shouldPreserveEnglishValue(enValue)
       ? enValue
@@ -550,10 +597,12 @@ export function repairCacheMap(cache, locale) {
           localeValue: translated,
           locale
         })
+
     if (next !== translated) {
       cache.set(enValue, next)
       repaired += 1
     }
   }
+
   return repaired
 }

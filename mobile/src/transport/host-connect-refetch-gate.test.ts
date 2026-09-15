@@ -4,6 +4,7 @@ import type { ConnectionState } from './types'
 
 function refetchesFor(states: ConnectionState[]): number {
   const gate = createHostConnectRefetchGate()
+
   return states.filter((state) => gate.observe(state)).length
 }
 

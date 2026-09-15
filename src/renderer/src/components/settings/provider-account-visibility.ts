@@ -33,6 +33,7 @@ export function getProviderAccountRuntime(account: ProviderAccount): {
     'authMethod' in account
       ? (account.managedAuthRuntime ?? 'host')
       : (account.managedHomeRuntime ?? 'host')
+
   return {
     runtime,
     wslDistro: account.wslDistro ?? null
@@ -46,14 +47,19 @@ export function getProviderAccountActiveIdForView(
   if (runtime.runtime === 'host') {
     return selection.activeAccountIdsByRuntime?.host ?? selection.activeAccountId ?? null
   }
+
   if (runtime.wslDistro) {
     return selection.activeAccountIdsByRuntime?.wsl?.[runtime.wslDistro] ?? null
   }
+
   const wsl = selection.activeAccountIdsByRuntime?.wsl ?? {}
+
   if (wsl[WSL_DEFAULT_DISTRO_KEY]) {
     return wsl[WSL_DEFAULT_DISTRO_KEY]
   }
+
   const selectedIds = Array.from(new Set(Object.values(wsl).filter(Boolean)))
+
   return selectedIds.length === 1 ? selectedIds[0] : null
 }
 
@@ -72,12 +78,15 @@ export function providerAccountMatchesView(
     // downstream SSH host; a Windows runtime owns both host and WSL accounts.
     return options.ownerPlatform === 'win32' || accountView.runtime !== 'wsl'
   }
+
   if (runtime.runtime === 'host') {
     return accountView.runtime !== 'wsl'
   }
+
   if (accountView.runtime !== 'wsl') {
     return false
   }
+
   return runtime.wslDistro ? accountView.wslDistro === runtime.wslDistro : true
 }
 
@@ -97,5 +106,6 @@ export function providerAccountIsActiveInView(
       account.id
     )
   }
+
   return getProviderAccountActiveIdForView(selection, runtime) === account.id
 }

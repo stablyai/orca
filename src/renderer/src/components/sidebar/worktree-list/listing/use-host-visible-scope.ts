@@ -25,26 +25,33 @@ export function useSidebarHostVisibleScope(args: {
   pairedDeviceIdsByEnvironment: Parameters<typeof filterFolderWorkspacesFromOtherDevices>[1]
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
+
   const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
     filterState
+
   const visibleHostIdSet = useMemo(
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
   )
+
   const visibleReposForRows = useMemo(() => {
     if (!visibleHostIdSet) {
       return repos
     }
+
     return repos.filter((repo) => {
       const hostId =
         repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
+
       return visibleHostIdSet.has(hostId)
     })
   }, [defaultHostId, repos, visibleHostIdSet])
+
   const visibleProjectGroupsForRows = useMemo(
     () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
     [defaultHostId, projectGroups, visibleHostIdSet]
   )
+
   const visibleFolderWorkspacesForRows = useMemo(() => {
     const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
       folderWorkspaces,
@@ -52,9 +59,11 @@ export function useSidebarHostVisibleScope(args: {
       visibleHostIdSet,
       defaultHostId
     )
+
     if (!hideWorkspacesFromOtherDevices) {
       return hostVisibleWorkspaces
     }
+
     return filterFolderWorkspacesFromOtherDevices(
       hostVisibleWorkspaces,
       args.pairedDeviceIdsByEnvironment

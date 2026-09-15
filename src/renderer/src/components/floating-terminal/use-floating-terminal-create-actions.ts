@@ -42,10 +42,13 @@ export function useFloatingTerminalCreateActions({
   const activateFloatingItem = useCallback(
     (visibleId: string) => {
       const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+
       if (!item) {
         return
       }
+
       activateTab(item.id)
+
       if (item.contentType === 'terminal') {
         setActiveTab(item.entityId)
         focusTerminalTabSurface(item.entityId)
@@ -55,6 +58,7 @@ export function useFloatingTerminalCreateActions({
           .browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
             (tab) => tab.id === item.entityId
           )
+
         if (workspace?.activePageId && window.api?.browser) {
           void window.api.browser.notifyActiveTabChanged({ browserPageId: workspace.activePageId })
         }
@@ -68,6 +72,7 @@ export function useFloatingTerminalCreateActions({
       const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, {
         activate: false
       })
+
       activateTab(tab.id)
       focusTerminalTabSurface(tab.id)
     },
@@ -78,6 +83,7 @@ export function useFloatingTerminalCreateActions({
     if (!ensureClientCreationActionAllowed(FLOATING_TERMINAL_WORKTREE_ID, 'managed-browser')) {
       return
     }
+
     const url = browserDefaultUrl ?? 'about:blank'
     createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
       title: translate(
@@ -94,6 +100,7 @@ export function useFloatingTerminalCreateActions({
     if (!markdownCwd) {
       return
     }
+
     void (async () => {
       try {
         const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
@@ -102,9 +109,11 @@ export function useFloatingTerminalCreateActions({
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
           LOCAL_RUNTIME_SETTINGS
         )
+
         if (!fileInfo) {
           return
         }
+
         openFile(fileInfo, {
           preview: false,
           targetGroupId: activeGroup?.id,
@@ -120,9 +129,11 @@ export function useFloatingTerminalCreateActions({
     void (async () => {
       try {
         const document = await window.api.app.pickFloatingMarkdownDocument()
+
         if (!document) {
           return
         }
+
         openMarkdownDocumentInFloatingWorkspace(openFile, document, {
           targetGroupId: activeGroup?.id
         })

@@ -108,11 +108,13 @@ describe('browser.screencast RPC wiring', () => {
     'forwards the caller pairing scope %s to the runtime',
     async (clientKind, expected) => {
       const browserScreencast = vi.fn(async () => {})
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         browserScreencast,
         cleanupSubscription: vi.fn()
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
 
       await dispatcher.dispatchStreaming(

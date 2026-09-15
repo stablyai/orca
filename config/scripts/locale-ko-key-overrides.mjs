@@ -7,6 +7,7 @@ import path from 'node:path'
 const jsonPath = path.join(import.meta.dirname, 'locale-ko-key-overrides.json')
 
 let parsed
+
 try {
   parsed = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
 } catch (error) {

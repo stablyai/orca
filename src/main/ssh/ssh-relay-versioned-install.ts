@@ -26,6 +26,7 @@ import {
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 const INSTALL_COMPLETE_NAME = '.install-complete'
+
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 type RelayInstalledProbeOptions = {
@@ -52,19 +53,23 @@ function execHostCommand(
  */
 export function readLocalFullVersion(localRelayDir: string): string {
   const versionFile = join(localRelayDir, '.version')
+
   if (!existsSync(versionFile)) {
     throw new Error(
       `Orca's local relay build is missing its version marker at ${versionFile}. ` +
         `This usually indicates a packaging or build problem; reinstall Orca.`
     )
   }
+
   const v = readFileSync(versionFile, 'utf-8').trim()
+
   if (!v) {
     throw new Error(
       `Orca's local relay version marker at ${versionFile} is empty. ` +
         `This usually indicates a packaging or build problem; reinstall Orca.`
     )
   }
+
   return v
 }
 
@@ -92,6 +97,7 @@ export function computeRemoteInstallDir(
     pathFlavor === 'windows'
       ? getRemoteHostPlatform('win32-x64')
       : getRemoteHostPlatform('linux-x64')
+
   return joinRemotePath(
     host,
     remoteHome,
@@ -121,6 +127,7 @@ export async function isRemoteInstallComplete(
   options?: RelayInstalledProbeOptions
 ): Promise<boolean> {
   const remoteRelayDir = remoteInstallDir
+
   try {
     const probe = await execHostCommand(
       conn,
@@ -131,12 +138,15 @@ export async function isRemoteInstallComplete(
       ]),
       { signal: options?.signal }
     )
+
     return probe.trim() === 'OK'
   } catch (err) {
     options?.signal?.throwIfAborted()
+
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     return false
   }
 }
@@ -157,11 +167,13 @@ export async function finalizeInstall(
   await execHostCommand(conn, host, writeRemoteEmptyFileCommand(host, sentinel), {
     signal: options?.signal
   })
+
   if (options?.releaseLock !== false) {
     await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock), {
       signal: options?.signal
     }).catch(() => {})
   }
+
   options?.signal?.throwIfAborted()
 }
 

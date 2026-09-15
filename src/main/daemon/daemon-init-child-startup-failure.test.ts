@@ -15,21 +15,35 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -57,6 +71,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const mod = await importFresh()
     checkDaemonHealthMock.mockResolvedValue('unreachable')
     await mod.initDaemonPtyProvider()
+
     function basicClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
@@ -65,6 +80,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         disconnect: vi.fn()
       }
     }
+
     daemonClientMock.mockImplementationOnce(basicClient)
     daemonClientMock.mockImplementationOnce(basicClient)
     daemonClientMock.mockImplementationOnce(function postReadyClient() {
@@ -73,11 +89,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         ...identityMethods()
       }
     })
+
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
       exit: []
     }
+
     const child = {
       pid: 12345,
       connected: true,
@@ -85,13 +103,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       signalCode: null as NodeJS.Signals | null,
       on(event: string, callback: (arg?: unknown) => void) {
         handlers[event]?.push(callback)
+
         if (event === 'message') {
           queueMicrotask(() => callback({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       off(event: string, callback: (arg?: unknown) => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+
         return this
       },
       kill: vi.fn(() => true),
@@ -100,16 +121,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }),
       unref: vi.fn()
     }
+
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
       queueMicrotask(() => {
         child.exitCode = 0
+
         for (const callback of handlers.exit.slice()) {
           callback(0)
         }
       })
+
       return true
     })
+
     forkMock.mockReturnValueOnce(child)
+
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string,
@@ -138,9 +164,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     checkDaemonHealthMock.mockResolvedValue('unreachable')
     await mod.initDaemonPtyProvider()
     const adoptionDisconnects: ReturnType<typeof vi.fn>[] = []
+
     function MockFailingAdoptionClient() {
       const disconnect = vi.fn()
       adoptionDisconnects.push(disconnect)
+
       return {
         ensureConnected: vi.fn(async () => {
           throw new Error('adoption unavailable')
@@ -152,14 +180,17 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         disconnect
       }
     }
+
     for (let index = 0; index < 3; index++) {
       daemonClientMock.mockImplementationOnce(MockFailingAdoptionClient)
     }
+
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
       exit: []
     }
+
     const child = {
       pid: 12345,
       connected: true,
@@ -167,17 +198,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       signalCode: null as NodeJS.Signals | null,
       on(event: string, callback: (arg?: unknown) => void) {
         handlers[event]?.push(callback)
+
         if (event === 'message') {
           queueMicrotask(() => callback({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       once(event: string, callback: (arg?: unknown) => void) {
         handlers[event]?.push(callback)
+
         return this
       },
       off(event: string, callback: (arg?: unknown) => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+
         return this
       },
       disconnect: vi.fn(() => {
@@ -185,7 +220,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       }),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
+
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string,
@@ -202,9 +239,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adoptionDisconnects.at(-1)).toHaveBeenCalledOnce()
 
     child.exitCode = 0
+
     for (const callback of handlers.exit.slice()) {
       callback(0)
     }
+
     expect(unlinkOwnedDaemonPidFileMock).toHaveBeenCalledWith(
       '/fake/daemon.pid',
       12345,
@@ -221,21 +260,25 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('already exited'), { code: 'ESRCH' })
     })
+
     const child = {
       pid: 12345,
       on(event: string, cb: (arg?: unknown) => void) {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready' }))
         }
+
         return this
       },
       off: vi.fn(),
       disconnect: vi.fn(),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
 
     try {
@@ -254,15 +297,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('rejects startup cleanup when SIGKILL never produces child exit', async () => {
     vi.useFakeTimers()
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
+
     try {
       const mod = await importFresh()
       checkDaemonHealthMock.mockResolvedValue('unreachable')
       await mod.initDaemonPtyProvider()
+
       const handlers: Record<string, ((arg?: unknown) => void)[]> = {
         message: [],
         error: [],
         exit: []
       }
+
       const child = {
         pid: 12345,
         connected: true,
@@ -270,13 +316,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         signalCode: null,
         on(event: string, callback: (arg?: unknown) => void) {
           handlers[event]?.push(callback)
+
           if (event === 'message') {
             queueMicrotask(() => callback({ type: 'ready' }))
           }
+
           return this
         },
         off(event: string, callback: (arg?: unknown) => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+
           return this
         },
         disconnect: vi.fn(() => {
@@ -284,7 +333,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         }),
         unref: vi.fn()
       }
+
       forkMock.mockReturnValueOnce(child)
+
       const launcher = spawnerInstances[0].launcher as (
         socketPath: string,
         tokenPath: string
@@ -312,13 +363,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const signalError = Object.assign(new Error('operation not permitted'), {
       code: 'EPERM'
     })
+
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw signalError
     })
+
     try {
       const mod = await importFresh()
       checkDaemonHealthMock.mockResolvedValue('unreachable')
       await mod.initDaemonPtyProvider()
+
       const child = {
         pid: 12345,
         connected: true,
@@ -328,6 +382,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           if (event === 'message') {
             queueMicrotask(() => callback({ type: 'ready' }))
           }
+
           return this
         },
         off: vi.fn(),
@@ -336,7 +391,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         }),
         unref: vi.fn()
       }
+
       forkMock.mockReturnValueOnce(child)
+
       const launcher = spawnerInstances[0].launcher as (
         socketPath: string,
         tokenPath: string
@@ -361,15 +418,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   it('settles startup with both errors when a malformed-ready child ignores termination', async () => {
     vi.useFakeTimers()
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true)
+
     try {
       const mod = await importFresh()
       checkDaemonHealthMock.mockResolvedValue('unreachable')
       await mod.initDaemonPtyProvider()
+
       const handlers: Record<string, ((arg?: unknown) => void)[]> = {
         message: [],
         error: [],
         exit: []
       }
+
       const child = {
         pid: 12345,
         connected: true,
@@ -377,13 +437,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         signalCode: null,
         on(event: string, callback: (arg?: unknown) => void) {
           handlers[event]?.push(callback)
+
           if (event === 'message') {
             queueMicrotask(() => callback({ type: 'ready' }))
           }
+
           return this
         },
         off(event: string, callback: (arg?: unknown) => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
+
           return this
         },
         disconnect: vi.fn(() => {
@@ -391,7 +454,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         }),
         unref: vi.fn()
       }
+
       forkMock.mockReturnValueOnce(child)
+
       const launcher = spawnerInstances[0].launcher as (
         socketPath: string,
         tokenPath: string
@@ -432,28 +497,35 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
       exit: []
     }
+
     const offMock = vi.fn((event: string, cb: (arg?: unknown) => void) => {
       handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
       return child
     })
+
     const child = {
       pid: undefined,
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
+
         if (event === 'error') {
           queueMicrotask(() => cb(new Error('startup failed')))
         }
+
         return this
       },
       off: offMock,
       disconnect: vi.fn(),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
 
     await expect(launcher('/fake/socket', '/fake/token')).rejects.toThrow('startup failed')
@@ -479,56 +551,68 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       pidPath?: string,
       launchNonce?: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     const handlers: Record<string, ((arg?: unknown) => void)[]> = {
       message: [],
       error: [],
       exit: []
     }
+
     const stderrDataCbs: ((chunk: Buffer) => void)[] = []
     const stderrDestroy = vi.fn()
+
     const stderr = {
       on(event: string, cb: (chunk: Buffer) => void) {
         if (event === 'data') {
           stderrDataCbs.push(cb)
         }
+
         return this
       },
       off(event: string, cb: (chunk: Buffer) => void) {
         if (event === 'data') {
           const idx = stderrDataCbs.indexOf(cb)
+
           if (idx !== -1) {
             stderrDataCbs.splice(idx, 1)
           }
         }
+
         return this
       },
       destroy: stderrDestroy
     }
+
     const child = {
       pid: 4321,
       exitCode: null as number | null,
       stderr,
       on(event: string, cb: (arg?: unknown) => void) {
         handlers[event]?.push(cb)
+
         if (event === 'exit') {
           // Why: deliver the stderr tail before exit so the failure path sees the crash reason (mirrors a module-load crash).
           queueMicrotask(() => {
             for (const dataCb of stderrDataCbs.slice()) {
               dataCb(Buffer.from("Error: Cannot find module 'electron'\n"))
             }
+
             child.exitCode = 1
             cb(1)
           })
         }
+
         return this
       },
       off: vi.fn((event: string, cb: (arg?: unknown) => void) => {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
         return child
       }),
       disconnect: vi.fn(),
       unref: vi.fn()
     }
+
     forkMock.mockReturnValueOnce(child)
 
     const error = await launcher(

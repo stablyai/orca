@@ -5,5 +5,6 @@ export function stripInheritedBuildModeEnv(env: NodeJS.ProcessEnv): NodeJS.Proce
   // and Vitest take the wrong branch. Caller/renderer env and shell rc still win.
   const next = { ...env }
   delete next.NODE_ENV
+
   return next
 }

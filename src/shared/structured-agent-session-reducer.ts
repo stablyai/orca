@@ -49,6 +49,7 @@ export type StructuredAgentSessionAction =
   | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
 
 const MAX_RETAINED_SUBMISSIONS = 256
+
 // Well above the renderer's initial read window (300) plus a page, so only genuinely
 // long live sessions trim; anything trimmed is still reachable by paging older.
 const MAX_RETAINED_ITEMS = 1024
@@ -72,6 +73,7 @@ function hostClockField(
   previous: StructuredAgentHostClock | undefined
 ): { hostClock?: StructuredAgentHostClock } {
   const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
+
   return hostClock ? { hostClock } : {}
 }
 
@@ -107,15 +109,19 @@ function mergeItems(
   removedIds: readonly string[]
 ): AgentJournalRenderItem[] {
   const removed = new Set(removedIds)
+
   const byId = new Map(
     current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
   )
+
   for (const item of incoming) {
     const prior = byId.get(item.itemId)
+
     if (!prior || item.revision >= prior.revision) {
       byId.set(item.itemId, item)
     }
   }
+
   return [...byId.values()].sort((left, right) => left.sequence - right.sequence)
 }
 
@@ -132,15 +138,19 @@ function mergeSubmissions(
   items: readonly AgentJournalRenderItem[]
 ): AgentJournalSubmission[] {
   const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
+
   for (const submission of incoming) {
     byId.set(submission.clientMessageId, submission)
   }
+
   const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
+
   const itemIds = new Set(
     items
       .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
       .map((item) => item.itemId)
   )
+
   // Loaded user messages need their provider alias for durable turn attribution.
   return sorted.filter(
     (submission, index) =>
@@ -159,12 +169,15 @@ export function reduceStructuredAgentSession(
     // Keep the last transcript visible while a reconnect rehydrates the stream.
     return { ...state, status: 'loading', error: undefined }
   }
+
   if (action.type === 'error') {
     return { ...state, status: 'error', error: action.message }
   }
+
   if (action.type === 'handoff') {
     return { ...state, handoff: action.handoff }
   }
+
   if (action.type === 'history-page') {
     return {
       ...replacePage(
@@ -178,19 +191,25 @@ export function reduceStructuredAgentSession(
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
+
   if (action.type === 'older-page') {
     const requested = action.requestedCursor
+
     if (state.epoch !== requested.epoch || action.page.epoch !== requested.epoch) {
       return state
     }
+
     const head = state.items[0]
+
     // A live batch head-trimmed past the anchor while this read was in flight, so the
     // page no longer abuts the retained window; merging it would leave a silent hole.
     // The caller re-anchors on the new head and asks again.
     if (head && head.sequence > requested.sequence) {
       return state
     }
+
     const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
+
     return {
       ...state,
       items,
@@ -200,10 +219,13 @@ export function reduceStructuredAgentSession(
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
+
   const event = action.event
+
   if (event.type === 'end') {
     return state
   }
+
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
       ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
@@ -211,19 +233,25 @@ export function reduceStructuredAgentSession(
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
+
   if (state.epoch !== event.batch.cursor.epoch) {
     return state
   }
+
   if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
     return state
   }
+
   const backgroundTasks =
     event.backgroundTasks !== undefined ? event.backgroundTasks : state.backgroundTasks
+
   const activity = event.activity !== undefined ? event.activity : state.activity
+
   const journalUnchanged =
     event.batch.items.length === 0 &&
     event.batch.removedItemIds.length === 0 &&
     event.batch.submissions.length === 0
+
   if (
     event.batch.cursor.sequence === state.cursor?.sequence &&
     journalUnchanged &&
@@ -238,10 +266,13 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
+
   const merged = journalUnchanged
     ? state.items
     : mergeItems(state.items, event.batch.items, event.batch.removedItemIds)
+
   const items = trimRetainedItems(merged, state.retainedItemLimit)
+
   return {
     ...state,
     cursor: event.batch.cursor,
@@ -267,5 +298,6 @@ export function oldestStructuredAgentSessionCursor(
   state: StructuredAgentSessionState
 ): AgentJournalCursor | null {
   const oldest = state.items[0]
+
   return state.epoch && oldest ? { epoch: state.epoch, sequence: oldest.sequence } : null
 }

@@ -44,7 +44,9 @@ function isRecord(value: unknown): value is ArtifactShareRecord {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const record = value as Partial<ArtifactShareRecord>
+
   const requiredFieldsValid = [
     record.slug,
     record.editToken,
@@ -53,14 +55,17 @@ function isRecord(value: unknown): value is ArtifactShareRecord {
     record.cloudProfileId,
     record.apiOrigin
   ].every((field) => typeof field === 'string' && field.length > 0)
+
   const expiresAtValid =
     record.expiresAt === undefined ||
     (typeof record.expiresAt === 'string' && Number.isFinite(Date.parse(record.expiresAt)))
+
   const savedAtValid =
     record.savedAt === undefined ||
     (typeof record.savedAt === 'number' &&
       Number.isSafeInteger(record.savedAt) &&
       record.savedAt >= 0)
+
   return requiredFieldsValid && expiresAtValid && savedAtValid
 }
 
@@ -69,9 +74,11 @@ function compareRecordsNewestFirst(
   [sourceKeyB, recordB]: [string, ArtifactShareRecord]
 ): number {
   const savedAtDifference = (recordB.savedAt ?? -1) - (recordA.savedAt ?? -1)
+
   if (savedAtDifference !== 0) {
     return savedAtDifference
   }
+
   return sourceKeyA < sourceKeyB ? -1 : sourceKeyA > sourceKeyB ? 1 : 0
 }
 
@@ -81,6 +88,7 @@ function pruneRecords(
   preserveExpired?: { sourceKey: string; slug: string; editToken: string }
 ): { shares: Record<string, ArtifactShareRecord>; changed: boolean } {
   const currentEntries = Object.entries(shares)
+
   const unexpired = currentEntries.filter(
     ([sourceKey, record]) =>
       (preserveExpired?.sourceKey === sourceKey &&
@@ -89,10 +97,12 @@ function pruneRecords(
       record.expiresAt === undefined ||
       Date.parse(record.expiresAt) > now
   )
+
   const retained =
     unexpired.length > MAX_ARTIFACT_SHARE_RECORDS
       ? unexpired.sort(compareRecordsNewestFirst).slice(0, MAX_ARTIFACT_SHARE_RECORDS)
       : unexpired
+
   return {
     shares: Object.fromEntries(retained),
     changed: retained.length !== currentEntries.length
@@ -106,18 +116,23 @@ function readRecords(
   pruneExpired = true
 ): ArtifactShareRecordFile {
   const path = recordPath(profileId, userDataPath)
+
   if (!existsSync(path)) {
     return { version: 2, lifecycleGeneration: 0, lifecycleNonce: '', shares: {} }
   }
+
   let parsed: ParsedArtifactShareRecordFile
+
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8')) as ParsedArtifactShareRecordFile
   } catch (error) {
     throw new Error('Artifact share records could not be read safely.', { cause: error })
   }
+
   if (parsed.version === 1) {
     return { version: 2, lifecycleGeneration: 0, lifecycleNonce: '', shares: {} }
   }
+
   if (
     parsed.version !== 2 ||
     !parsed.shares ||
@@ -126,13 +141,17 @@ function readRecords(
   ) {
     throw new Error('Artifact share records have an unsupported format.')
   }
+
   const shareEntries = Object.entries(parsed.shares as Record<string, unknown>)
+
   const validShares = Object.fromEntries(
     shareEntries.filter((entry): entry is [string, ArtifactShareRecord] => isRecord(entry[1]))
   )
+
   const pruned = pruneExpired
     ? pruneRecords(validShares, Date.now(), preserveExpired)
     : { shares: validShares, changed: false }
+
   const records: ArtifactShareRecordFile = {
     version: 2,
     lifecycleGeneration:
@@ -142,9 +161,11 @@ function readRecords(
     lifecycleNonce: typeof parsed.lifecycleNonce === 'string' ? parsed.lifecycleNonce : '',
     shares: pruned.shares
   }
+
   if (pruned.changed || shareEntries.length !== Object.keys(validShares).length) {
     writeSecureJsonFile(path, records)
   }
+
   return records
 }
 
@@ -171,6 +192,7 @@ export function getArtifactShareRecord(
   scope: ArtifactShareScope
 ): ArtifactShareRecord | null {
   const record = readRecords(profileId, userDataPath).shares[sourceKey]
+
   return record && matchesScope(record, scope) ? record : null
 }
 
@@ -196,6 +218,7 @@ export function refreshArtifactShareRecordExpiration(
 ): void {
   const records = readRecords(profileId, userDataPath, { sourceKey, ...expected })
   const current = records.shares[sourceKey]
+
   if (
     !current ||
     !matchesScope(current, scope) ||
@@ -204,6 +227,7 @@ export function refreshArtifactShareRecordExpiration(
   ) {
     return
   }
+
   records.shares[sourceKey] = {
     ...current,
     cloudOrganizationId: scope.cloudOrganizationId,
@@ -220,6 +244,7 @@ export function removeArtifactShareRecords(
   match: { sourceKey?: string; slug?: string }
 ): void {
   const records = readRecords(profileId, userDataPath)
+
   for (const [sourceKey, record] of Object.entries(records.shares)) {
     if (
       matchesScope(record, scope) &&
@@ -228,16 +253,19 @@ export function removeArtifactShareRecords(
       delete records.shares[sourceKey]
     }
   }
+
   writeDurableSecureJsonFile(recordPath(profileId, userDataPath), records)
 }
 
 export function clearArtifactShareRecords(profileId: string, userDataPath: string): void {
   let lifecycleGeneration = 0
+
   try {
     lifecycleGeneration = readRecords(profileId, userDataPath, undefined, false).lifecycleGeneration
   } catch {
     // Clearing must recover sign-out from an unreadable token index.
   }
+
   writeDurableSecureJsonFile(recordPath(profileId, userDataPath), {
     version: 2,
     lifecycleGeneration: lifecycleGeneration + 1,
@@ -248,6 +276,7 @@ export function clearArtifactShareRecords(profileId: string, userDataPath: strin
 
 export function captureArtifactShareLifecycle(profileId: string, userDataPath: string): string {
   const records = readRecords(profileId, userDataPath, undefined, false)
+
   return `${records.lifecycleGeneration}:${records.lifecycleNonce}`
 }
 

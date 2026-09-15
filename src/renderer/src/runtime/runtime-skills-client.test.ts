@@ -30,6 +30,7 @@ function discoveryResult(skillName: string): SkillDiscoveryResult {
 }
 
 const discover = vi.fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+
 const runtimeEnvironmentCall = vi.fn()
 
 beforeEach(() => {

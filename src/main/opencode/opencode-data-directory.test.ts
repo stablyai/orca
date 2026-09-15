@@ -26,6 +26,7 @@ describe('resolveOpenCodeDataDirectory', () => {
     'uses the OpenCode cross-platform default instead of app-data directories on %s',
     (platform) => {
       stubPlatform(platform)
+
       const environment = {
         LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local',
         APPDATA: 'C:\\Users\\test\\AppData\\Roaming',

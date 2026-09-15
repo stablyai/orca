@@ -17,12 +17,14 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
   let serverKeys: ReturnType<typeof generateKeyPair>
   let mobileEphemeralKeys: ReturnType<typeof generateKeyPair>
   let wsSent: string[]
+
   let mockWs: {
     OPEN: 1
     readyState: number
     send: ReturnType<typeof vi.fn>
     close: ReturnType<typeof vi.fn>
   }
+
   let channel: E2EEChannel
   let onReady: (channel: E2EEChannel) => void
   let onError: (code: number, reason: string) => void
@@ -69,6 +71,7 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
     targetChannel.handleRawMessage(
       encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'device-abc' }), sharedKey)
     )
+
     return sharedKey
   }
 
@@ -119,6 +122,7 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
     wsSent.length = 0
 
     const newMobileKeys = generateKeyPair()
+
     const newChannel = new E2EEChannel(mockWs as unknown as WebSocket, {
       serverSecretKey: serverKeys.secretKey,
       resolveAuthenticatedDevice: (token) =>
@@ -155,6 +159,7 @@ describe('E2EE integration (simulated mobile ↔ desktop)', () => {
 
     channel.onMessage((plaintext, encryptedReply) => {
       received.push(plaintext)
+
       // Simulate streaming: send multiple encrypted responses
       for (let i = 0; i < 3; i++) {
         encryptedReply(

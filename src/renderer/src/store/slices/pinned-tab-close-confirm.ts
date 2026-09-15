@@ -30,8 +30,10 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
   const advanceRequest = (): boolean => {
     const next = queuedRequests.shift() ?? null
     set({ pinnedTabCloseConfirm: next })
+
     return next !== null
   }
+
   const advanceAfterAction = (): void => {
     if (advanceRequest()) {
       nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
@@ -47,17 +49,22 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
         // tick. Queue them so replacing the visible request cannot strand the
         // first tab's close cleanup and buffered exit state.
         queuedRequests.push(request)
+
         return
       }
+
       set({ pinnedTabCloseConfirm: request })
     },
 
     cancelPinnedTabCloseRequest: (request) => {
       if (get().pinnedTabCloseConfirm === request) {
         advanceAfterAction()
+
         return
       }
+
       const index = queuedRequests.indexOf(request)
+
       if (index !== -1) {
         queuedRequests.splice(index, 1)
       }
@@ -67,10 +74,13 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
       if (Date.now() < nextRequestActionAllowedAt) {
         return
       }
+
       const request = get().pinnedTabCloseConfirm
+
       if (!request) {
         return
       }
+
       // Why: advance before running onConfirm so a re-entrant close queues
       // behind the next real request instead of seeing the stale one.
       advanceAfterAction()
@@ -81,10 +91,13 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
       if (Date.now() < nextRequestActionAllowedAt) {
         return
       }
+
       const request = get().pinnedTabCloseConfirm
+
       if (!request) {
         return
       }
+
       // Why: CLI close requests wait for a response even when the user cancels.
       advanceAfterAction()
       request.onCancel?.()

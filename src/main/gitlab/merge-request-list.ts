@@ -42,6 +42,7 @@ export async function listMergeRequests(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+
   // Why: MRs live on the user's fork (origin); route through the preference resolver so fork workflows share plumbing.
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
@@ -50,6 +51,7 @@ export async function listMergeRequests(
     connectionId,
     localGitOptions
   )
+
   if (!projectRef) {
     if (connectionId) {
       // Why: SSH-backed repos have no local cwd; a cwd-less glab could resolve an unrelated project.
@@ -65,11 +67,13 @@ export async function listMergeRequests(
         }
       }
     }
+
     // Why: fallback — let glab infer the project from cwd when the host isn't in getGlabKnownHosts.
     const stateFlag = mrListStateFlags(state)
     // Why: apply the same search as the API path, else queries are silently ignored on cwd-inferred repos (#6263).
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()
+
     try {
       const { stdout } = await glabExecFileAsync(
         [
@@ -90,7 +94,9 @@ export async function listMergeRequests(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
+
       const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(stdout)
+
       return {
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
@@ -112,21 +118,27 @@ export async function listMergeRequests(
       release()
     }
   }
+
   // Why: GitLab's API uses an absent state param to mean "any"; drop it for 'all'.
   const stateParam = state === 'all' ? '' : `&state=${state}`
   const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
+
   const path =
     `projects/${encodedProject(projectRef.path)}/merge_requests?` +
     `page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc&with_merge_status_recheck=false${stateParam}${searchParam}`
+
   const repoId = projectRef.path
 
   await acquire()
+
   try {
     const { body, headers } = await glabApiWithHeaders(
       [...glabHostnameArgs(projectRef, connectionId), path],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(body)
+
     return {
       items: data.map((d) => mapMRToWorkItem(d, repoId, projectRef)),
       page,

@@ -2,11 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParkedTerminalByteWatcherOptions } from './parked-terminal-byte-watcher'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const OTHER_WORKTREE_ID = 'repo::/other-worktree'
+
 const TAB_ID = 'tab-1'
+
 const PTY_ID = `${WORKTREE_ID}@@session-1`
+
 const SECOND_PTY_ID = `${WORKTREE_ID}@@session-2`
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 type StartedWatcher = {
@@ -15,9 +21,11 @@ type StartedWatcher = {
 }
 
 const startedWatchers: StartedWatcher[] = []
+
 const startParkedTerminalByteWatcher = vi.fn((options: ParkedTerminalByteWatcherOptions) => {
   const dispose = vi.fn()
   startedWatchers.push({ options, dispose })
+
   return dispose
 })
 
@@ -33,10 +41,12 @@ type ExitSubscription = {
 }
 
 const exitSubscriptions: ExitSubscription[] = []
+
 const subscribeToPtyExit = vi.fn(
   (ptyId: string, callback: (code: number, context: { hadPrimary: boolean }) => void) => {
     const unsubscribe = vi.fn()
     exitSubscriptions.push({ ptyId, callback, unsubscribe })
+
     return unsubscribe
   }
 )
@@ -47,6 +57,7 @@ vi.mock('./pty-dispatcher', () => ({
 }))
 
 const consumePreHandlerPtyState = vi.fn()
+
 vi.mock('./pty-pre-handler-buffer', () => ({
   discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId),
   hasPreHandlerPtyExit: (ptyId: string) => unownedExitPtyIds.has(ptyId)
@@ -62,7 +73,9 @@ type CloseTerminalTabOptions = {
   onClosed?: () => void
   onCancel?: () => void
 }
+
 const closeTerminalTab = vi.fn()
+
 vi.mock('../terminal/terminal-tab-actions', () => ({
   closeTerminalTab: (tabId: string, options?: CloseTerminalTabOptions) =>
     closeTerminalTab(tabId, options)
@@ -121,6 +134,7 @@ import {
 } from './terminal-parked-tab-watchers'
 
 const ptyWrite = vi.fn()
+
 const originalWindow = (globalThis as { window?: unknown }).window
 
 function capturePanes(
@@ -421,6 +435,7 @@ describe('terminal-parked-tab-watchers', () => {
       { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
     ])
     syncParked()
+
     const layout = {
       root: {
         type: 'split' as const,
@@ -432,6 +447,7 @@ describe('terminal-parked-tab-watchers', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
     }
+
     mockStoreState.terminalLayoutsByTabId[TAB_ID] = layout
 
     exitSubscriptions
@@ -601,6 +617,7 @@ describe('terminal-parked-tab-watchers', () => {
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }
+
       closeTab(tabId)
     }
 

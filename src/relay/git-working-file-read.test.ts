@@ -11,6 +11,7 @@ describe('readWorkingDiffFile', () => {
     if (tmpDir) {
       await rm(tmpDir, { recursive: true, force: true })
     }
+
     tmpDir = null
   })
 
@@ -65,11 +66,13 @@ describe('readWorkingDiffFile', () => {
   it('returns base64 content for previewable image working-tree files', async () => {
     tmpDir = await mkdtemp(path.join(tmpdir(), 'relay-working-file-'))
     const filePath = path.join(tmpDir, 'image.png')
+
     // Why: PNG signature + trailing null byte forces the binary-detection heuristic to trip.
     const pngBuffer = Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       Buffer.from([0x00])
     ])
+
     await writeFile(filePath, pngBuffer)
 
     await expect(readWorkingDiffFile(filePath)).resolves.toEqual({

@@ -7,11 +7,14 @@ export function aggregateDirectSshPreparationMetrics(
   joinCount: number
 ): DirectSshPreparationMetrics {
   const aggregate = createEmptyDirectSshPreparationMetrics()
+
   for (const outcome of outcomes) {
     const metrics = outcome.metrics
+
     if (!metrics) {
       continue
     }
+
     aggregate.queueWaitDurationsMs = [
       ...aggregate.queueWaitDurationsMs,
       ...metrics.queueWaitDurationsMs
@@ -34,6 +37,8 @@ export function aggregateDirectSshPreparationMetrics(
       metrics.estimatedLateWorkAllowanceCount
     )
   }
+
   aggregate.schedulerOverlappingJoinCount += joinCount
+
   return aggregate
 }

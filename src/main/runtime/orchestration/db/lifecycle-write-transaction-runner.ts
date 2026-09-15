@@ -11,9 +11,11 @@ export function runLifecycleWriteTransaction<T>(
   operation: () => T
 ): T {
   const transaction = beginLifecycleWriteTransaction(db, savepoint)
+
   try {
     const result = operation()
     commitLifecycleWriteTransaction(db, transaction)
+
     return result
   } catch (error) {
     rollbackLifecycleWriteTransaction(db, transaction)

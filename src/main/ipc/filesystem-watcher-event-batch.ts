@@ -31,6 +31,7 @@ export function queueWatcherEvents(
     // memory before flush sends the same conservative overflow refresh.
     batch.events = []
     batch.overflowed = true
+
     return
   }
 

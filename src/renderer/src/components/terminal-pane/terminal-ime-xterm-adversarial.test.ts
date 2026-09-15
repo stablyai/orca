@@ -4,6 +4,7 @@ import { Terminal as EsmTerminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const requireFromHere = createRequire(import.meta.url)
+
 const { Terminal: CjsTerminal } = requireFromHere('@xterm/xterm') as {
   Terminal: typeof EsmTerminal
 }
@@ -21,11 +22,14 @@ function openTerminal(TerminalType: typeof EsmTerminal): {
   document.body.appendChild(container)
   const terminal = new TerminalType()
   terminal.open(container)
+
   if (!terminal.textarea) {
     throw new Error('xterm textarea was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, textarea: terminal.textarea }
 }
 
@@ -35,9 +39,11 @@ function composition(
   data?: string
 ): void {
   const event = new CompositionEvent(type, { bubbles: true })
+
   if (data !== undefined) {
     Object.defineProperty(event, 'data', { value: data })
   }
+
   textarea.dispatchEvent(event)
 }
 
@@ -67,6 +73,7 @@ function compositionState(terminal: EsmTerminal): {
       }
     }
   )._core._compositionHelper
+
   return {
     endTimer: helper._compositionEndTimer,
     positionTimer: helper._compositionPositionTimer,
@@ -184,11 +191,13 @@ describe.each([
   it('bounds tracked timers during same-task transaction bursts', async () => {
     const { emitted, terminal, textarea } = openTerminal(TerminalType)
     let maximumTimerCount = 0
+
     for (let index = 0; index < 256; index++) {
       start(textarea, '가')
       composition(textarea, 'compositionend', '가')
       maximumTimerCount = Math.max(maximumTimerCount, compositionState(terminal).timers.size)
     }
+
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('가'.repeat(256))
@@ -208,6 +217,7 @@ describe.each([
           callback()
         }
       })
+
       return token
     }) as typeof setTimeout)
     vi.spyOn(globalThis, 'clearTimeout').mockImplementation(((token: object) => {
@@ -221,6 +231,7 @@ describe.each([
     const staleEndTimer = compositionState(terminal).endTimer
     composition(textarea, 'compositionupdate', 'B')
     const newState = compositionState(terminal)
+
     for (const callback of callbacks) {
       callback()
     }

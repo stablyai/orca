@@ -22,6 +22,7 @@ describe('host-qualified worktree metadata', () => {
   const createStoreWithRepo = (): Store => {
     const store = createStore()
     store.addRepo(makeRepo({ id: 'repo-1', path: '/workspace' }))
+
     return store
   }
 
@@ -116,11 +117,13 @@ describe('host-qualified worktree metadata', () => {
     seed.flush()
     const persisted = readDataFile() as PersistedState
     const alias = composeWorktreeHostIdentity('local', worktreeId)
+
     const secondKey = canonicalWorktreeIdentity({
       worktreeId,
       executionHostId: 'local',
       instanceId: '33333333-3333-4333-8333-333333333333'
     })
+
     persisted.worktreeMetaByIdentity ??= {}
     persisted.worktreeIdentityAliases ??= {}
     persisted.worktreeMetaByIdentity[secondKey] = {
@@ -182,11 +185,13 @@ describe('host-qualified worktree metadata', () => {
   it('moves the locator alias without changing canonical identity', () => {
     const store = createStore()
     const meta = store.setWorktreeMetaForHost(worktreeId, 'local', { displayName: 'Feature' })
+
     const identityKey = canonicalWorktreeIdentity({
       worktreeId,
       executionHostId: 'local',
       instanceId: meta.instanceId!
     })
+
     const renamedId = 'repo-1::/workspace/renamed-feature'
 
     store.migrateWorktreeIdentity(worktreeId, renamedId)
@@ -203,6 +208,7 @@ describe('host-qualified worktree metadata', () => {
 
   it('keeps the canonical identity stable when the locator changes', () => {
     const store = createStore()
+
     const meta = store.setWorktreeMetaForHost(worktreeId, 'local', {
       displayName: 'Feature'
     })
@@ -212,6 +218,7 @@ describe('host-qualified worktree metadata', () => {
       executionHostId: 'local',
       instanceId: meta.instanceId!
     })
+
     const after = canonicalWorktreeIdentity({
       worktreeId: 'repo-1::/workspace/renamed-feature',
       executionHostId: 'local',
@@ -341,11 +348,13 @@ describe('host-qualified worktree metadata', () => {
     const source = oldKey ? persisted.worktreeMetaByIdentity?.[oldKey] : undefined
     expect(source?.instanceId).toBeTruthy()
     const newAlias = composeWorktreeHostIdentity(newHostId, worktreeId)
+
     const newKey = canonicalWorktreeIdentity({
       worktreeId,
       executionHostId: newHostId,
       instanceId: source!.instanceId!
     })
+
     persisted.worktreeMetaByIdentity ??= {}
     persisted.worktreeIdentityAliases ??= {}
     persisted.worktreeMetaByIdentity[newKey] = { ...source!, hostId: newHostId }

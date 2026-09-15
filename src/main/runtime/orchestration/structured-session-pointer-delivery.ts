@@ -98,6 +98,7 @@ export function decideStructuredPointerDelivery(input: {
   if (!isSettledNativeOwner(input.refusal)) {
     return { deliver: false, retain: 'owner-not-settled-native' }
   }
+
   return decideStructuredSessionPointerDelivery(input)
 }
 
@@ -114,14 +115,17 @@ export function decideStructuredSessionPointerDelivery(input: {
   if (!input.session) {
     return { deliver: false, retain: 'session-not-attached' }
   }
+
   // Checked before the turn gate: a pending prompt has no running turn, so the turn test alone
   // reads it as idle, and sending there queues a nudge behind something only a human can clear.
   if (input.session.awaitingHuman) {
     return { deliver: false, retain: 'awaiting-human' }
   }
+
   if (input.session.turnRunning) {
     return { deliver: false, retain: 'turn-unsettled' }
   }
+
   return { deliver: true }
 }
 

@@ -42,10 +42,12 @@ vi.mock('../../store', () => {
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {}
   }
+
   const useAppStore = Object.assign(
     (selector: (state: unknown) => unknown) => selector(storeState),
     { getState: () => storeState }
   )
+
   return { useAppStore }
 })
 
@@ -62,6 +64,7 @@ function renderOverlay(): { root: Root; container: HTMLDivElement } {
   act(() => {
     root.render(<PetOverlay />)
   })
+
   return { root, container }
 }
 
@@ -108,6 +111,7 @@ describe('PetOverlay drag hit area', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null

@@ -13,6 +13,7 @@ import {
 
 function skill(name: string): DiscoveredSkill {
   const directoryPath = path.join('home', 'test', '.agents', 'skills', name)
+
   return {
     id: name,
     name,
@@ -30,6 +31,7 @@ function skill(name: string): DiscoveredSkill {
 
 function placement(name: string, status: SkillFreshnessStatus): SkillFreshnessInstallation {
   const unresolvedPath = path.join('home', 'test', '.agents', 'skills', name)
+
   return {
     id: name,
     name,

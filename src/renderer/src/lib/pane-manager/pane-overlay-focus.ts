@@ -14,5 +14,6 @@ export function focusPanePreservingOverlays(
   ) {
     return
   }
+
   pane.terminal.focus()
 }

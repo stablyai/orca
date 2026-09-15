@@ -18,11 +18,13 @@ const worktreeScanGenerations = new Map<string, number>()
 
 function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
   const keyPrefix = `${repoPath}\0`
+
   for (const key of inFlightWorktreeScans.keys()) {
     if (key.startsWith(keyPrefix)) {
       return true
     }
   }
+
   return false
 }
 
@@ -31,6 +33,7 @@ export function bumpWorktreeScanGeneration(repoPath: string): void {
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return
   }
+
   worktreeScanGenerations.set(repoPath, (worktreeScanGenerations.get(repoPath) ?? 0) + 1)
 }
 
@@ -39,6 +42,7 @@ function pruneWorktreeScanGeneration(repoPath: string): void {
   if (!worktreeScanGenerations.has(repoPath)) {
     return
   }
+
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     worktreeScanGenerations.delete(repoPath)
   }
@@ -72,22 +76,28 @@ function shareWorktreeScan(
   if (options.signal) {
     return run(repoPath, options)
   }
+
   const generation = worktreeScanGenerations.get(repoPath) ?? 0
   const timeout = options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   // Why: callers with different deadlines cannot safely share which timeout wins the scan.
   // Why `kind`: a strict joiner must never receive a softened `[]` from a lenient scan.
   const key = `${repoPath}\0${options.wslDistro ?? ''}\0${timeout}\0${options.includeCreatePreparations === true}\0${generation}\0${kind}`
   const inFlight = inFlightWorktreeScans.get(key)
+
   if (inFlight) {
     return inFlight
   }
+
   const scan = run(repoPath, options).finally(() => {
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }
+
     pruneWorktreeScanGeneration(repoPath)
   })
+
   inFlightWorktreeScans.set(key, scan)
+
   return scan
 }
 
@@ -104,6 +114,7 @@ async function runAnnotatedWorktreeScan(
   options: GitWorktreeExecOptions
 ): Promise<GitWorktreeInfo[]> {
   const worktrees = await listWorktreeGraph(repoPath, options)
+
   return annotateSparseCheckoutStatus(repoPath, worktrees, options)
 }
 

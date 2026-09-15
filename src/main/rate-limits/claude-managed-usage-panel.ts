@@ -17,10 +17,12 @@ function getManagedUsagePanelAuthPreparation(
   if (process.platform === 'win32') {
     return null
   }
+
   if (account.managedAuthRuntime === 'wsl') {
     if (!account.wslLinuxAuthPath || !account.wslDistro) {
       return null
     }
+
     return {
       configDir: location.managedAuthPath,
       runtime: 'wsl',
@@ -31,6 +33,7 @@ function getManagedUsagePanelAuthPreparation(
       provenance: `managed:${account.id}:inactive-preview`
     }
   }
+
   return {
     configDir: location.managedAuthPath,
     runtime: 'host',
@@ -54,6 +57,7 @@ function canTrustManagedUsagePanelSupplement(
   if (!requireMatchingOAuthWindow) {
     return true
   }
+
   const sharedWindowMatches = [
     oauthLimits.session && cliLimits.session
       ? windowsAgree(oauthLimits.session, cliLimits.session)
@@ -62,6 +66,7 @@ function canTrustManagedUsagePanelSupplement(
       ? windowsAgree(oauthLimits.weekly, cliLimits.weekly)
       : null
   ].filter((match): match is boolean => match !== null)
+
   // Why: older Claude builds may ignore the scoped Keychain and expose the active account.
   return sharedWindowMatches.length > 0 && sharedWindowMatches.every(Boolean)
 }
@@ -77,7 +82,9 @@ export async function fetchClaudeManagedUsagePanelSupplement(input: {
   if (input.signal?.aborted) {
     return null
   }
+
   const authPreparation = getManagedUsagePanelAuthPreparation(input.account, input.location)
+
   if (!authPreparation) {
     return null
   }
@@ -91,9 +98,11 @@ export async function fetchClaudeManagedUsagePanelSupplement(input: {
         networkProxySettings: input.networkProxySettings,
         signal: input.signal
       })
+
       if (input.signal?.aborted) {
         return null
       }
+
       if (
         !canTrustManagedUsagePanelSupplement(
           input.oauthLimits,
@@ -103,10 +112,13 @@ export async function fetchClaudeManagedUsagePanelSupplement(input: {
       ) {
         return null
       }
+
       const refreshed = await readStagedClaudeManagedPreviewCredentials(input.location)
+
       if (refreshed && refreshed !== input.credentialsJson) {
         await writeClaudeManagedCredentialsJson(input.location, refreshed)
       }
+
       return cliLimits
     }
   )

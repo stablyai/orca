@@ -11,9 +11,11 @@ export type GitLineStats = { added?: number; removed?: number }
 // Limits how many untracked files we read at once when counting their lines,
 // so a worktree with thousands of new files cannot exhaust file descriptors.
 const UNTRACKED_READ_CONCURRENCY = 8
+
 // Keep status polling cheap: large untracked files are commonly generated
 // assets, and reading them every poll can stall the source-control sidebar.
 export const MAX_UNTRACKED_LINE_COUNT_BYTES = 2 * 1024 * 1024
+
 // Why: the cache must hold at least one full status scan's untracked set
 // (capped at DEFAULT_GIT_STATUS_LIMIT entries). A smaller cache is worse than
 // none: a sequential scan over more files than the cap evicts every entry
@@ -21,6 +23,7 @@ export const MAX_UNTRACKED_LINE_COUNT_BYTES = 2 * 1024 * 1024
 // file's contents (#8013). 2x leaves headroom for a second window polling a
 // different worktree; entries are ~200 bytes, so worst case is a few MB.
 const UNTRACKED_STATS_CACHE_MAX_ENTRIES = 2 * DEFAULT_GIT_STATUS_LIMIT
+
 const NEWLINE_BYTE = 0x0a
 
 type CachedUntrackedStats = {
@@ -37,7 +40,9 @@ function parseNumstatCount(value: string): number | undefined {
   if (value === '-') {
     return undefined
   }
+
   const count = Number.parseInt(value, 10)
+
   return Number.isFinite(count) ? count : undefined
 }
 
@@ -47,11 +52,14 @@ function parseNumstatCount(value: string): number | undefined {
 function normalizeNumstatPath(rawPath: string): string {
   const decodedPath = decodeGitCQuotedPath(rawPath)
   const braced = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(decodedPath)
+
   if (braced) {
     return `${braced[1]}${braced[3]}${braced[4]}`
   }
+
   const marker = ' => '
   const markerIndex = decodedPath.lastIndexOf(marker)
+
   return markerIndex === -1 ? decodedPath : decodedPath.slice(markerIndex + marker.length)
 }
 
@@ -61,48 +69,60 @@ export function parseNumstat(stdout: string): Map<string, GitLineStats> {
   }
 
   const stats = new Map<string, GitLineStats>()
+
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
     }
+
     const parts = line.split('\t')
     const rawPath = parts.slice(2).join('\t')
+
     if (!rawPath) {
       continue
     }
+
     stats.set(normalizeNumstatPath(rawPath), {
       added: parseNumstatCount(parts[0] ?? ''),
       removed: parseNumstatCount(parts[1] ?? '')
     })
   }
+
   return stats
 }
 
 function parseNulDelimitedNumstat(stdout: string): Map<string, GitLineStats> {
   const stats = new Map<string, GitLineStats>()
   const records = iterateNulDelimitedFields(stdout)[Symbol.iterator]()
+
   for (let next = records.next(); !next.done; next = records.next()) {
     const record = next.value
+
     if (!record) {
       continue
     }
+
     const parts = record.split('\t')
     const rawPath = parts.slice(2).join('\t')
     let path = rawPath
+
     if (!path) {
       // Git -z emits rename paths as: "added<TAB>removed<TAB>\0old\0new\0".
       // The empty header path is followed by the preimage and postimage.
       records.next()
       path = records.next().value ?? ''
     }
+
     if (!path) {
       continue
     }
+
     stats.set(path, {
       added: parseNumstatCount(parts[0] ?? ''),
       removed: parseNumstatCount(parts[1] ?? '')
     })
   }
+
   return stats
 }
 
@@ -110,6 +130,7 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
   try {
     const fileStat = await lstat(absolutePath)
     const cached = untrackedStatsCache.get(absolutePath)
+
     if (
       cached &&
       cached.size === fileStat.size &&
@@ -121,30 +142,40 @@ async function countFileAdditions(absolutePath: string): Promise<GitLineStats> {
       // survive another worktree's scan sharing this cache.
       untrackedStatsCache.delete(absolutePath)
       untrackedStatsCache.set(absolutePath, cached)
+
       return cached.stats
     }
+
     if (fileStat.isSymbolicLink()) {
       return rememberUntrackedStats(absolutePath, fileStat, { added: 1 })
     }
+
     if (!fileStat.isFile() || fileStat.size > MAX_UNTRACKED_LINE_COUNT_BYTES) {
       return rememberUntrackedStats(absolutePath, fileStat, {})
     }
+
     const { buffer } = await readNodeFileWithinLimit(absolutePath, MAX_UNTRACKED_LINE_COUNT_BYTES)
+
     if (isBinaryBuffer(buffer)) {
       return rememberUntrackedStats(absolutePath, fileStat, {})
     }
+
     if (buffer.length === 0) {
       return rememberUntrackedStats(absolutePath, fileStat, { added: 0 })
     }
+
     let newlineCount = 0
+
     for (let i = 0; i < buffer.length; i += 1) {
       if (buffer[i] === NEWLINE_BYTE) {
         newlineCount += 1
       }
     }
+
     // A trailing newline marks the final line as complete; without one the last
     // partial line still counts as an added line (matching git's numstat).
     const endsWithNewline = buffer.at(-1) === NEWLINE_BYTE
+
     return rememberUntrackedStats(absolutePath, fileStat, {
       added: endsWithNewline ? newlineCount : newlineCount + 1
     })
@@ -167,12 +198,15 @@ function rememberUntrackedStats(
     ctimeMs: fileStat.ctimeMs,
     stats
   })
+
   if (untrackedStatsCache.size > UNTRACKED_STATS_CACHE_MAX_ENTRIES) {
     const oldestKey = untrackedStatsCache.keys().next().value
+
     if (oldestKey) {
       untrackedStatsCache.delete(oldestKey)
     }
   }
+
   return stats
 }
 
@@ -181,6 +215,7 @@ function rememberUntrackedStats(
 function createGitLineStatsAbortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
+
   return error
 }
 
@@ -190,6 +225,7 @@ export async function collectUntrackedAdditions(
   signal?: AbortSignal
 ): Promise<Map<string, GitLineStats>> {
   const result = new Map<string, GitLineStats>()
+
   for (let i = 0; i < untrackedPaths.length; i += UNTRACKED_READ_CONCURRENCY) {
     // Why: an aborted refresh must reject (not resolve partial counts) so a
     // cancelled scan cannot look like a completed status result, and so we
@@ -197,6 +233,7 @@ export async function collectUntrackedAdditions(
     if (signal?.aborted) {
       throw createGitLineStatsAbortError()
     }
+
     const chunk = untrackedPaths.slice(i, i + UNTRACKED_READ_CONCURRENCY)
     await Promise.all(
       chunk.map(async (relativePath) => {
@@ -204,9 +241,11 @@ export async function collectUntrackedAdditions(
       })
     )
   }
+
   if (signal?.aborted) {
     throw createGitLineStatsAbortError()
   }
+
   return result
 }
 
@@ -217,9 +256,11 @@ export function applyLineStats(
   if (!stats) {
     return
   }
+
   if (stats.added !== undefined) {
     entry.added = stats.added
   }
+
   if (stats.removed !== undefined) {
     entry.removed = stats.removed
   }

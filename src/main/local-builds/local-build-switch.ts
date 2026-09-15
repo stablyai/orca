@@ -13,27 +13,35 @@ export async function chooseLocalBuild(
     properties: ['openFile'],
     filters: [{ name: 'Orca update manifest', extensions: ['yml'] }]
   }
+
   const selection = await (window
     ? dialog.showOpenDialog(window, openDialogOptions)
     : dialog.showOpenDialog(openDialogOptions))
+
   const manifestPath = selection.filePaths[0]
+
   if (selection.canceled || !manifestPath) {
     return null
   }
+
   const candidate = await loadLocalBuildCandidate(manifestPath, process.arch)
+
   try {
     if (compareAppVersions(candidate.version, app.getVersion()) === 0) {
       throw new Error(
         'This build has the same version as the running app. Run pn build:mac again to create a uniquely versioned build.'
       )
     }
+
     const compatibility = await assertLocalBuildCompatibility(candidate.compatibility)
+
     const terminalSummary =
       compatibility.liveTerminalCount === 0
         ? 'No live terminals need to reconnect.'
         : `${compatibility.liveTerminalCount} live terminal${
             compatibility.liveTerminalCount === 1 ? '' : 's'
           } will reconnect after restart.`
+
     const messageBoxOptions: Electron.MessageBoxOptions = {
       type: 'question',
       title: 'Use Local Orca Build?',
@@ -44,9 +52,11 @@ export async function chooseLocalBuild(
       cancelId: 1,
       noLink: true
     }
+
     const confirmation = await (window
       ? dialog.showMessageBox(window, messageBoxOptions)
       : dialog.showMessageBox(messageBoxOptions))
+
     if (confirmation.response === 0) {
       return candidate
     }
@@ -54,6 +64,8 @@ export async function chooseLocalBuild(
     await candidate.close()
     throw error
   }
+
   await candidate.close()
+
   return null
 }

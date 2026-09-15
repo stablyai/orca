@@ -31,6 +31,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
     setItems,
     setMutatingStatus
   } = model
+
   const addHostedItemComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
@@ -38,12 +39,16 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       if (!client || mutatingStatus) {
         return
       }
+
       const body = itemCommentDraft.trim()
+
       if (!body) {
         return
       }
+
       setMutatingStatus(true)
       setError('')
+
       try {
         const response =
           item.provider === 'github'
@@ -74,23 +79,28 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
                     },
                 { timeoutMs: 30_000 }
               )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as {
           ok?: boolean
           error?: string
           comment?: DetailComment
         }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to add comment')
         }
+
         const comment: DetailComment = result.comment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
           author: 'You'
         }
+
         setItemCommentDraft('')
         setDetailPayload((current) =>
           current &&
@@ -133,12 +143,16 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       if (!client || mutatingStatus || item.source.type !== 'pr') {
         return
       }
+
       const reviewers = logins ?? splitReviewerList(itemReviewersDraft)
+
       if (reviewers.length === 0) {
         return
       }
+
       setMutatingStatus(true)
       setError('')
+
       try {
         const response = await client.sendRequest(
           'github.requestPRReviewers',
@@ -149,25 +163,33 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as { ok?: boolean; error?: string }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
+
         const nextReviewRequests = (() => {
           const byLogin = new Map<string, GitHubAssignableUser>()
+
           for (const reviewer of detailPayload?.provider === 'github'
             ? detailPayload.reviewRequests
             : (item.source.reviewRequests ?? [])) {
             const login = reviewer.login.trim()
+
             if (login) {
               byLogin.set(login.toLowerCase(), reviewer)
             }
           }
+
           for (const login of reviewers) {
             const normalized = login.trim().replace(/^@/, '')
+
             if (normalized && !byLogin.has(normalized.toLowerCase())) {
               byLogin.set(normalized.toLowerCase(), {
                 login: normalized,
@@ -176,8 +198,10 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
               })
             }
           }
+
           return Array.from(byLogin.values())
         })()
+
         setActionItem((current) =>
           current?.provider === 'github' && current.source.id === item.source.id
             ? {
@@ -201,6 +225,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
             ? { ...current, reviewRequests: nextReviewRequests }
             : current
         )
+
         if (!logins) {
           setItemReviewersDraft('')
         }
@@ -218,8 +243,10 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       if (!client || mutatingStatus || item.source.type !== 'pr') {
         return
       }
+
       setMutatingStatus(true)
       setError('')
+
       try {
         const response = await client.sendRequest(
           'github.prChecks',
@@ -231,12 +258,15 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         if (!Array.isArray(response.result)) {
           throw new Error('Invalid checks response')
         }
+
         const checks = response.result as GitHubDetailCheck[]
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
@@ -268,6 +298,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
     },
     [client, detailPayload, mutatingStatus]
   )
+
   return Object.assign(model, {
     addHostedItemComment,
     copyTaskLink,

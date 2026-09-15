@@ -10,6 +10,7 @@ const comment = (body: string): PRComment => ({
   createdAt: '',
   url: ''
 })
+
 function originalSummary(body: string): string {
   const line = body
     .replace(/<!--[\s\S]*?-->/g, ' ')
@@ -21,11 +22,14 @@ function originalSummary(body: string): string {
         .trim()
     )
     .find((line) => line.length > 0)
+
   if (!line) {
     return 'comment'
   }
+
   return `comment — ${line.length > 72 ? `${line.slice(0, 71).trimEnd()}…` : line}`
 }
+
 afterEach(() => vi.restoreAllMocks())
 
 describe('review acknowledgement summary', () => {

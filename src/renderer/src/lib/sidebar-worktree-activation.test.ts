@@ -44,12 +44,14 @@ describe('sidebar worktree activation', () => {
 
   it('switches immediately while an ephemeral runtime wake is pending', async () => {
     let resolveResume: ((value: null) => void) | undefined
+
     const resumeWorkspace = vi.fn(
       () =>
         new Promise<null>((resolve) => {
           resolveResume = resolve
         })
     )
+
     vi.stubGlobal('window', {
       api: { ephemeralVm: { resumeWorkspace } }
     })

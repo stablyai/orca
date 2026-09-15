@@ -16,14 +16,17 @@ function hasNonAsciiCharacters(value: string): boolean {
       return true
     }
   }
+
   return false
 }
 
 function getWindowsAsciiSharedDataRoots(): string[] {
   const publicDir = process.env.PUBLIC
+
   const systemDriveProgramData = process.env.SystemDrive
     ? `${process.env.SystemDrive}\\ProgramData`
     : undefined
+
   const candidates = [
     process.env.PROGRAMDATA,
     process.env.ProgramData,
@@ -33,13 +36,17 @@ function getWindowsAsciiSharedDataRoots(): string[] {
     systemDriveProgramData,
     'C:\\ProgramData'
   ]
+
   const roots: string[] = []
+
   for (const candidate of candidates) {
     if (!candidate || hasNonAsciiCharacters(candidate) || roots.includes(candidate)) {
       continue
     }
+
     roots.push(candidate)
   }
+
   return roots
 }
 
@@ -54,6 +61,7 @@ export function getSpeechModelCacheDirCandidates(
     .update(resolve(requestedModelsDir))
     .digest('hex')
     .slice(0, WINDOWS_SAFE_CACHE_HASH_LENGTH)
+
   const candidates = getWindowsAsciiSharedDataRoots()
     .map((root) => join(root, 'Orca', 'speech-models', requestedModelsDirHash))
     .filter((modelsDir) => !hasNonAsciiCharacters(modelsDir))
@@ -67,11 +75,14 @@ export function getSpeechModelCacheDirCandidates(
 
 async function copyMissingCacheEntry(sourcePath: string, targetPath: string): Promise<void> {
   const sourceStat = await stat(sourcePath)
+
   if (sourceStat.isDirectory()) {
     await mkdir(targetPath, { recursive: true })
+
     for (const entry of await readdir(sourcePath, { withFileTypes: true })) {
       await copyMissingCacheEntry(join(sourcePath, entry.name), join(targetPath, entry.name))
     }
+
     return
   }
 

@@ -42,6 +42,7 @@ export function createStructuredClaudeRuntimeAdapter(
   deps: StructuredClaudeRuntimeAdapterDeps
 ): ClaudeStructuredSessionAdapter {
   const { store } = deps
+
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
@@ -80,6 +81,7 @@ export function createStructuredClaudeRuntimeAdapter(
       const transcriptPath = await resolveSessionFilePath('claude', providerSessionId, {
         claudeProjectsDir: join(claudeConfigDir, 'projects')
       })
+
       if (transcriptPath && intentionalRewindUuid !== undefined) {
         return (
           await proveClaudeTranscriptBranch({
@@ -90,6 +92,7 @@ export function createStructuredClaudeRuntimeAdapter(
           })
         ).leafUuid
       }
+
       return transcriptPath
         ? await readClaudeTranscriptLeafUuid(transcriptPath, providerSessionId, previousLeafUuid)
         : null

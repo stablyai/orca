@@ -16,6 +16,7 @@ vi.mock('node:fs/promises', () => ({
 
 async function loadHostMemory() {
   vi.resetModules()
+
   return import('./host-memory')
 }
 

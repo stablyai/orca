@@ -55,17 +55,20 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
 
   useEffect(() => {
     let active = true
+
     if (!client || connState !== 'connected' || !worktreeId) {
       // Why: leave already-loaded rows (and expand state) alone across a drop —
       // resolveMobileHistoryScreenView keeps them visible (STA-1511).
       return
     }
+
     // Why (F10): clear only the error (it wins render precedence, so a stale one would outlive a
     // successful retry) — the loaded rows stay up until fresh ones land instead of flashing empty.
     setError(null)
     void (async () => {
       try {
         const result = await fetchMobileGitHistory(client, worktreeId)
+
         if (active) {
           setRows(mapMobileCommitRows(result, Date.now()))
         }
@@ -75,6 +78,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         }
       }
     })()
+
     return () => {
       active = false
     }
@@ -82,14 +86,17 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
 
   const retry = useCallback(() => {
     setError(null)
+
     // Why: retrying the fetch is useless while the transport's reconnect loop
     // is parked at its backoff cap — revive the connection instead (mirrors
     // MobileSourceControlPanel / issue #5049). The load effect re-runs via
     // connState once the fresh client connects.
     if (connState !== 'connected' && hostId) {
       void forceReconnect(hostId)
+
       return
     }
+
     setReloadNonce((n) => n + 1)
   }, [connState, forceReconnect, hostId])
 
@@ -103,6 +110,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     if (!expanded || !client || connState !== 'connected') {
       return
     }
+
     const commitId = expanded
     let stale = false
     setFilesById((prev) => (prev[commitId] ? prev : { ...prev, [commitId]: 'loading' }))
@@ -112,6 +120,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         const compared = gitCommitCompareRead.interpret(reply)
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const entries = compared.accepted ? (compared.value as GitBranchChangeEntry[]) : []
+
         if (!stale) {
           setFilesById((prev) => ({ ...prev, [commitId]: entries }))
         }
@@ -124,6 +133,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           )
         }
       })
+
     return () => {
       stale = true
     }
@@ -135,6 +145,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     ({ item }: { item: MobileCommitRow }) => {
       const files = filesById[item.id]
       const isOpen = expanded === item.id
+
       return (
         <View style={styles.commit}>
           <Pressable
@@ -201,6 +212,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       </View>
     )
   }
+
   if (view.kind === 'loading') {
     return (
       <View style={styles.state}>
@@ -208,6 +220,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       </View>
     )
   }
+
   if (view.kind === 'empty') {
     return (
       <View style={styles.state}>
@@ -215,6 +228,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       </View>
     )
   }
+
   return (
     <FlatList
       data={view.rows}

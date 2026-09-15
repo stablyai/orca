@@ -50,6 +50,7 @@ export function QuickCommandsList({
   // Why: keep an active filter clearable if a delete or paired desktop edit
   // leaves only one command while the sheet is open.
   const showSearch = totalCount > 1 || query.length > 0
+
   return (
     <View style={styles.listBody}>
       {showSearch ? (

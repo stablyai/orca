@@ -29,6 +29,7 @@ vi.mock('electron', () => ({
 describe('Dispatch mailbox Delivery', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -41,13 +42,16 @@ describe('Dispatch mailbox Delivery', () => {
     const dbPath = join(directory, 'orchestration.db')
     const firstDb = new OrchestrationDb(dbPath)
     const first = createRuntime(firstDb)
+
     const run = firstDb.createRun({
       objective: 'Dispatch mailbox',
       coordinatorHandle: 'term_dispatch_coordinator',
       coordinatorPaneKey:
         '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444'
     })
+
     const task = firstDb.createTask({ spec: 'Wait for guidance', runId: run.id })
+
     const dispatch = createRootDispatch(
       firstDb,
       task.id,
@@ -56,7 +60,9 @@ describe('Dispatch mailbox Delivery', () => {
       undefined,
       'pty-mailbox:mailbox-incarnation'
     )
+
     const address = `dispatch:${dispatch.id}`
+
     const firstMessage = firstDb.insertMessage({
       from: run.coordinator_handle!,
       to: address,
@@ -118,14 +124,17 @@ describe('Dispatch mailbox Delivery', () => {
       temporaryDirectories.push(directory)
       const dbPath = join(directory, 'orchestration.db')
       const firstDb = new OrchestrationDb(dbPath)
+
       const run = firstDb.createRun({
         objective: 'Ambiguous Dispatch pointer',
         coordinatorHandle: 'term_dispatch_coordinator',
         coordinatorPaneKey:
           '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444'
       })
+
       const task = firstDb.createTask({ spec: 'Read ambiguous guidance', runId: run.id })
       const processIncarnation = `${PTY_ID}:mailbox-incarnation`
+
       const dispatch = createRootDispatch(
         firstDb,
         task.id,
@@ -134,18 +143,22 @@ describe('Dispatch mailbox Delivery', () => {
         undefined,
         processIncarnation
       )
+
       const message = firstDb.insertMessage({
         from: run.coordinator_handle!,
         to: `dispatch:${dispatch.id}`,
         subject: 'Ambiguous guidance',
         runId: run.id
       })
+
       const target = { ptyId: PTY_ID, processIncarnation }
       expect(firstDb.stageMailboxPointerEnter([message.id], target)).toBe(true)
       expect(firstDb.markMailboxPointerWriteAttempted([message.id], target)).toBe(true)
+
       if (phase === MAILBOX_POINTER_ENTER_ATTEMPTED) {
         expect(firstDb.markMailboxPointerEnterAttempted([message.id], target)).toBe(true)
       }
+
       firstDb.close()
 
       const restartedDb = new OrchestrationDb(dbPath)
@@ -179,11 +192,13 @@ describe('Dispatch mailbox Delivery', () => {
 
   it('keeps an active worker Delivery stable when the coordinator Run is rebound', () => {
     const db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'Rebound coordinator',
       coordinatorHandle: 'term_old_coordinator',
       coordinatorPaneKey: 'tab_old:leaf_old'
     })
+
     const task = db.createTask({ spec: 'Keep worker mail', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     db.insertMessage({
@@ -192,6 +207,7 @@ describe('Dispatch mailbox Delivery', () => {
       subject: 'Stable guidance',
       runId: run.id
     })
+
     const delivery = db.getOrCreateMailboxDelivery({
       runId: run.id,
       mailboxHandle: `dispatch:${dispatch.id}`,

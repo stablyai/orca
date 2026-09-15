@@ -9,5 +9,6 @@ export async function runWithGitWorktreeOperationLock<T>(
   run: () => Promise<T>
 ): Promise<T> {
   const key = await realpath(worktreePath).catch(() => resolve(worktreePath))
+
   return runWithGitOperationLock(key, signal, run)
 }

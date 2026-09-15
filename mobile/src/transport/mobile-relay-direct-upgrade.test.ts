@@ -10,7 +10,9 @@ import type { RpcClient } from './rpc-client'
 import type { HostProfile, RpcResponse } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 const relay: MobileRelayEndpoint = {
@@ -54,6 +56,7 @@ function installed(journal: MobileRelayDirectUpgradeJournal) {
 
 function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
   let stored = journal
+
   return {
     readJournal: vi.fn(async () => stored),
     writeJournal: vi.fn(async (next: MobileRelayDirectUpgradeJournal) => {
@@ -76,6 +79,7 @@ describe('existing direct pairing relay upgrade', () => {
     deps.writeJournal.mockImplementation(async (next) => {
       journal = next
     })
+
     const client = clientWith([
       success({ v: 1, relay }),
       success({
@@ -122,8 +126,10 @@ describe('existing direct pairing relay upgrade', () => {
     const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
       new Uint8Array(length).fill(3)
     )
+
     const committed = installed(journal)
     const deps = dependencies(journal)
+
     const client = clientWith([
       success({
         v: 1,
@@ -141,6 +147,7 @@ describe('existing direct pairing relay upgrade', () => {
 
   it('cleans pending state and leaves direct access unchanged for an old desktop', async () => {
     const deps = dependencies()
+
     const client = clientWith([
       {
         id: 'rpc',
@@ -171,11 +178,13 @@ describe('existing direct pairing relay upgrade', () => {
     const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
       new Uint8Array(length).fill(5)
     )
+
     const committed = installed(journal)
     const deps = dependencies(journal)
     deps.saveHost.mockRejectedValue(
       new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
     )
+
     const client = clientWith([
       success({
         v: 1,

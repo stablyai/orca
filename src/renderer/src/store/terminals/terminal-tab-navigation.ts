@@ -20,10 +20,12 @@ export function createTerminalTabNavigationActions(
         const tabMap = new Map(tabs.map((t) => [t.id, t]))
         const orderedSet = new Set(tabIds)
         const missingTabs = tabs.filter((t) => !orderedSet.has(t.id))
+
         const reordered = [
           ...tabIds.map((id) => tabMap.get(id)!).filter(Boolean),
           ...missingTabs
         ].map((tab, i) => ({ ...tab, sortOrder: i }))
+
         return {
           tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: reordered }
         }
@@ -35,18 +37,22 @@ export function createTerminalTabNavigationActions(
         const newTabBarOrder = { ...s.tabBarOrderByWorktree, [worktreeId]: order }
         // Keep terminal tab sortOrder in sync for persistence
         const tabs = s.tabsByWorktree[worktreeId]
+
         if (!tabs) {
           return { tabBarOrderByWorktree: newTabBarOrder }
         }
+
         const tabMap = new Map(tabs.map((t) => [t.id, t]))
         // Extract terminal IDs in their new relative order
         const terminalIdsInOrder = order.filter((id) => tabMap.has(id))
         const orderedSet = new Set(terminalIdsInOrder)
         const missingTabs = tabs.filter((t) => !orderedSet.has(t.id))
+
         const updatedTabs = [
           ...terminalIdsInOrder.map((id) => tabMap.get(id)!).filter(Boolean),
           ...missingTabs
         ].map((tab, i) => ({ ...tab, sortOrder: i }))
+
         return {
           tabBarOrderByWorktree: newTabBarOrder,
           tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: updatedTabs }
@@ -62,16 +68,20 @@ export function createTerminalTabNavigationActions(
           s.activeWorktreeId,
           tabId
         )
+
         const isActiveWorktreeTab =
           tabOwnerWorktreeId !== null && tabOwnerWorktreeId === s.activeWorktreeId
+
         const nextUnreadTerminalTabs =
           isActiveWorktreeTab && s.unreadTerminalTabs[tabId]
             ? (() => {
                 const copy = { ...s.unreadTerminalTabs }
                 delete copy[tabId]
+
                 return copy
               })()
             : s.unreadTerminalTabs
+
         // Why: activeTabId marks the visible tab, so background bells remain unread.
         return {
           activeTabId: isActiveWorktreeTab ? tabId : s.activeTabId,
@@ -87,11 +97,13 @@ export function createTerminalTabNavigationActions(
         }
       })
       const state = get()
+
       const ownerUnifiedTabs =
         tabOwnerWorktreeId !== null &&
         Object.hasOwn(state.unifiedTabsByWorktree, tabOwnerWorktreeId)
           ? state.unifiedTabsByWorktree[tabOwnerWorktreeId]
           : []
+
       // Why: a duplicated entity id must activate the same owner chosen above.
       const item =
         ownerUnifiedTabs.find(
@@ -100,6 +112,7 @@ export function createTerminalTabNavigationActions(
         Object.values(state.unifiedTabsByWorktree)
           .flat()
           .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+
       if (item) {
         state.activateTab(
           item.id,

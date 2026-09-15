@@ -16,9 +16,13 @@ import {
 } from '../../../shared/protocol-version'
 
 const ENVIRONMENT_ID = 'env-repaired'
+
 const CAPTURED_REVISION = 41
+
 const REPLACEMENT_REVISION = 42
+
 const CAPTURED_CONNECTION_GENERATION = 7
+
 const REPLACEMENT_CONNECTION_GENERATION = 8
 
 type RuntimeCallArgs = {
@@ -31,8 +35,11 @@ type RuntimeCallArgs = {
 }
 
 const runtimeEnvironmentCall = vi.fn<(args: RuntimeCallArgs) => unknown>()
+
 const stageExternalPathsForRuntimeUpload = vi.fn()
+
 const uploadExternalFileToRuntime = vi.fn<(args: Record<string, unknown>) => unknown>()
+
 const importExternalPaths = vi.fn()
 
 const nestedSshContext = {
@@ -138,9 +145,11 @@ function expectEveryRuntimeCallBoundToCapturedRevision(ownership: {
 }): void {
   const calls = runtimeEnvironmentCall.mock.calls
   expect(calls.filter(([args]) => args.method === 'status.get')).toHaveLength(1)
+
   for (const [args] of calls) {
     expect(args.selector).toBe(ENVIRONMENT_ID)
     expect(args.expectedEnvironmentPairingRevision).toBe(CAPTURED_REVISION)
+
     if (args.method.startsWith('files.') && args.method !== 'files.stat') {
       expect(args.expectedEnvironmentRuntimeId).toBe('hub-runtime')
       expect(args.params).toMatchObject({
@@ -189,8 +198,10 @@ describe('runtime file import pairing revision', () => {
           ENVIRONMENT_ID,
           REPLACEMENT_CONNECTION_GENERATION
         )
+
         return runtimeStatusResponse()
       }
+
       return successfulRuntimeResponse(args.method)
     })
 
@@ -209,9 +220,11 @@ describe('runtime file import pairing revision', () => {
       if (args.method === 'status.get') {
         return runtimeStatusResponse()
       }
+
       if (args.method === 'files.stat') {
         return missingRuntimePathResponse()
       }
+
       return successfulRuntimeResponse(args.method)
     })
     uploadExternalFileToRuntime.mockImplementation(async () => {
@@ -219,6 +232,7 @@ describe('runtime file import pairing revision', () => {
         ENVIRONMENT_ID,
         REPLACEMENT_CONNECTION_GENERATION
       )
+
       return { byteLength: 40 * 1024 * 1024 }
     })
 
@@ -246,6 +260,7 @@ describe('runtime file import pairing revision', () => {
     runtimeEnvironmentCall.mockResolvedValue(runtimeStatusResponse())
     stageExternalPathsForRuntimeUpload.mockImplementation(async () => {
       setEnvironmentRevision(REPLACEMENT_REVISION)
+
       return { sources: [] }
     })
 
@@ -264,13 +279,16 @@ describe('runtime file import pairing revision', () => {
       if (args.method === 'status.get') {
         return runtimeStatusResponse()
       }
+
       if (args.method === 'files.stat') {
         return missingRuntimePathResponse()
       }
+
       return successfulRuntimeResponse(args.method)
     })
     uploadExternalFileToRuntime.mockImplementation(async () => {
       setEnvironmentRevision(REPLACEMENT_REVISION)
+
       return { byteLength: 40 * 1024 * 1024 }
     })
 
@@ -300,16 +318,21 @@ describe('runtime file import pairing revision', () => {
       if (args.expectedEnvironmentPairingRevision !== CAPTURED_REVISION) {
         throw new Error('replacement HUB received an import RPC')
       }
+
       if (args.method === 'status.get') {
         return runtimeStatusResponse()
       }
+
       if (args.method === 'files.stat') {
         return missingRuntimePathResponse()
       }
+
       if (args.method === 'files.commitUpload') {
         setEnvironmentRevision(REPLACEMENT_REVISION)
+
         return repairedRuntimeResponse(args.method)
       }
+
       return successfulRuntimeResponse(args.method)
     })
 
@@ -333,12 +356,15 @@ describe('runtime file import pairing revision', () => {
       if (args.method === 'status.get') {
         return runtimeStatusResponse()
       }
+
       if (args.method === 'files.stat') {
         return missingRuntimePathResponse()
       }
+
       if (args.method === 'files.commitUpload') {
         setEnvironmentRevision(REPLACEMENT_REVISION)
       }
+
       return successfulRuntimeResponse(args.method)
     })
 
@@ -382,9 +408,11 @@ describe('runtime file import pairing revision', () => {
       if (args.method === 'status.get') {
         return runtimeStatusResponse()
       }
+
       if (args.method === 'files.stat') {
         return missingRuntimePathResponse()
       }
+
       return successfulRuntimeResponse(args.method)
     })
     uploadExternalFileToRuntime.mockRejectedValue(new Error('disk full'))
@@ -400,9 +428,11 @@ describe('runtime file import pairing revision', () => {
       'files.delete',
       'files.delete'
     ])
+
     const deleteCalls = runtimeEnvironmentCall.mock.calls
       .map(([args]) => args as RuntimeCallArgs)
       .filter((args) => args.method === 'files.delete')
+
     expect(deleteCalls).toHaveLength(2)
     expect(deleteCalls.map((args) => args.params?.recursive)).toEqual([false, true])
     expect(deleteCalls[0]?.params?.relativePath).toMatch(/^assets\/\.broken\.txt\.orca-upload-/)

@@ -36,8 +36,10 @@ describe('useTerminalWindowWakeRecovery', () => {
   const manager = {} as PaneManager
   let systemResumedCallback: (() => void) | null = null
   const unsubscribeSystemResumed = vi.fn()
+
   const onSystemResumed = vi.fn((callback: () => void) => {
     systemResumedCallback = callback
+
     return unsubscribeSystemResumed
   })
 
@@ -129,6 +131,7 @@ describe('useTerminalWindowWakeRecovery', () => {
       getActivePane: () => ({ container: { querySelector: () => (covered ? {} : null) } }),
       getPanes: () => []
     } as unknown as PaneManager
+
     renderWakeRecoveryHook(true, true, chatManager)
 
     window.dispatchEvent(new Event('focus'))
@@ -153,6 +156,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     const wakeCrumbs = getTerminalFreezeBreadcrumbs().filter((crumb) =>
       crumb.kind.startsWith('wake-recovery:')
     )
+
     expect(wakeCrumbs.map((crumb) => [crumb.kind, crumb.detail])).toEqual([
       ['wake-recovery:focus', { clearGlyphAtlases: false }],
       ['wake-recovery:system-resumed', { clearGlyphAtlases: true }]
@@ -186,6 +190,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     const scheduled: { settle: FrameRequestCallback | null } = { settle: null }
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduled.settle = callback
+
       return 1
     })
     const reassertPtySizeAfterWindowWake = vi.fn()
@@ -236,6 +241,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     const resizeManager = { getPanes: () => [pane] } as unknown as PaneManager
     repairPaneWebglCanvasDprMock.mockReturnValue('repaired')
     vi.stubGlobal('devicePixelRatio', 1)
+
     const { unmount } = renderHook(() =>
       useTerminalWindowWakeRecovery({
         isVisible: true,
@@ -290,6 +296,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     const callbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callbacks.push(callback)
+
       return callbacks.length
     })
     vi.stubGlobal('devicePixelRatio', 1)
@@ -321,6 +328,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     const callbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callbacks.push(callback)
+
       return callbacks.length
     })
     vi.stubGlobal('devicePixelRatio', 1)
@@ -338,6 +346,7 @@ describe('useTerminalWindowWakeRecovery', () => {
     vi.stubGlobal('devicePixelRatio', 2)
     window.dispatchEvent(new Event('resize'))
     let callbackCount = 0
+
     while (callbacks.length > 0) {
       callbacks.shift()?.(performance.now())
       callbackCount += 1

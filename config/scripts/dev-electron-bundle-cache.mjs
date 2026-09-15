@@ -55,6 +55,7 @@ export function isDevBundleInUse(dir, processTable) {
   // process was launched with. A mismatch would read as "not running" and delete a live bundle.
   // Checking both can only ever protect more, which is the safe direction.
   const alternate = dir.startsWith('/private/') ? dir.slice('/private'.length) : `/private${dir}`
+
   return processTable.includes(`${dir}/`) || processTable.includes(`${alternate}/`)
 }
 
@@ -64,7 +65,9 @@ export function selectStaleDevBundleDirs({ bundles, currentDir, processTable, no
       if (dir === currentDir || isDevBundleInUse(dir, processTable)) {
         return false
       }
+
       const buildInFlight = !hasMarker && nowMs - mtimeMs < IN_PROGRESS_WINDOW_MS
+
       return !buildInFlight
     })
     .map(({ dir }) => dir)

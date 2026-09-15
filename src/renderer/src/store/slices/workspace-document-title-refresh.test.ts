@@ -8,23 +8,28 @@ import {
 } from '../../../../shared/workspace-doc-history'
 
 createStoreCascadesMockApi()
+
 const WT = 'repo1::/path/wt1'
 
 describe('workspace document history title refresh', () => {
   it('does not publish unchanged titles but preserves real visits and title changes', () => {
     const store = createTestStore()
+
     const location = {
       kind: 'workspace-doc' as const,
       worktreeId: WT,
       filePath: '/path/wt1/doc.html'
     }
+
     store.getState().recordWorkspaceDocVisit(location, 'Document')
     const history = store.getState().workspaceDocHistory
     const listener = vi.fn()
     const unsubscribe = store.subscribe(listener)
+
     for (let i = 0; i < 200; i++) {
       store.getState().recordWorkspaceDocVisit(location, 'Document', { bump: false })
     }
+
     expect(listener).not.toHaveBeenCalled()
     expect(store.getState().workspaceDocHistory).toBe(history)
     store.getState().recordWorkspaceDocVisit(location, 'Renamed', { bump: false })
@@ -36,11 +41,13 @@ describe('workspace document history title refresh', () => {
 
   it('still trims an over-cap history that a persisted state carried in', () => {
     const store = createTestStore()
+
     const location = {
       kind: 'workspace-doc' as const,
       worktreeId: WT,
       filePath: '/path/wt1/doc-0.html'
     }
+
     const overCap: WorkspaceDocHistoryEntry[] = Array.from(
       { length: MAX_WORKSPACE_DOC_HISTORY_ENTRIES + 5 },
       (_unused, index) => ({
@@ -54,6 +61,7 @@ describe('workspace document history title refresh', () => {
         visitCount: 1
       })
     )
+
     store.setState({ workspaceDocHistory: overCap })
 
     // The title is already current, but skipping here would strand the list above its cap forever.
@@ -70,6 +78,7 @@ describe('workspace document history title refresh', () => {
       lastVisitedAt: 10,
       visitCount: 1
     }
+
     expect(workspaceDocHistoryEntriesEqual(base, { ...base })).toBe(true)
     expect(workspaceDocHistoryEntriesEqual(base, { ...base, title: 'Other' })).toBe(false)
     expect(workspaceDocHistoryEntriesEqual(base, { ...base, visitCount: 2 })).toBe(false)

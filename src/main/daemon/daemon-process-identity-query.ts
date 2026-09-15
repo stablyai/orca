@@ -19,6 +19,7 @@ export type PsProcessIdentity = {
 function parsePsProcessIdentity(output: string): PsProcessIdentity {
   // BSD ps formats lstart as a fixed-width 24-character timestamp.
   const startedAtMs = Date.parse(output.slice(0, 24))
+
   return {
     commandLine: output.slice(24).trim(),
     startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null
@@ -31,6 +32,7 @@ export function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
       encoding: 'utf8',
       timeout: 2_000
     })
+
     return parsePsProcessIdentity(output)
   } catch {
     return null
@@ -50,12 +52,15 @@ export async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessI
         (error, output) => {
           if (error) {
             reject(error)
+
             return
           }
+
           resolve(output)
         }
       )
     })
+
     return parsePsProcessIdentity(stdout)
   } catch {
     return null
@@ -64,14 +69,18 @@ export async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessI
 
 export function parseWindowsProcessIdentityJson(stdout: string): WindowsProcessIdentity | null {
   const trimmed = stdout.trim()
+
   if (!trimmed) {
     return null
   }
+
   try {
     const parsed = JSON.parse(trimmed) as { cmd?: unknown; start?: unknown }
+
     if (typeof parsed.cmd !== 'string' || !parsed.cmd) {
       return null
     }
+
     return {
       commandLine: parsed.cmd,
       startedAtMs:
@@ -93,6 +102,7 @@ export async function queryWindowsProcessIdentity(
   pid: number
 ): Promise<WindowsProcessIdentity | null> {
   const startedAt = performance.now()
+
   try {
     const { stdout } = await execFileAsync(
       'powershell.exe',
@@ -110,6 +120,7 @@ export async function queryWindowsProcessIdentity(
         timeout: 3_000
       }
     )
+
     return parseWindowsProcessIdentityJson(stdout)
   } catch {
     return null

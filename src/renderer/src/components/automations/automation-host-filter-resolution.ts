@@ -82,12 +82,15 @@ function resolvePresentEntry(
     // Why: an offline authority can neither confirm removal nor prove an orphan was repaired.
     return retain(filter, entry, 'unavailable')
   }
+
   if (entry.catalogState === 'unhydrated') {
     return retain(filter, entry, 'loading')
   }
+
   if (entry.catalogState === 'removed') {
     return referenced ? retain(filter, entry, 'ghost') : fallBackToAllHosts()
   }
+
   return retain(filter, entry, 'ready')
 }
 
@@ -98,11 +101,14 @@ function resolveAbsentEntry(
   hydration: AutomationCatalogHydrationEvidence
 ): AutomationHostFilterResolution {
   const authorityKey = automationAuthorityCatalogKey(host.authority)
+
   if (hydration.unavailableAuthorityKeys.has(authorityKey)) {
     return retain(filter, null, 'unavailable')
   }
+
   if (host.authority.kind === 'runtime') {
     const environmentId = host.authority.environmentId
+
     if (!hydration.savedRuntimeEnvironmentIds.has(environmentId)) {
       // The whole authority is gone — only a settled saved-runtime catalog proves that.
       return hydration.runtimeCatalogSettled
@@ -110,20 +116,24 @@ function resolveAbsentEntry(
         : retain(filter, null, 'loading')
     }
   }
+
   if (host.selector.kind === 'self') {
     // Desktop Self and every saved runtime's Self are always projected, so an
     // absent one means the saved catalog has not produced it yet.
     return retain(filter, null, 'loading')
   }
+
   if (host.selector.kind === 'orphan') {
     return hydration.orphanSettledAuthorityKeys.has(authorityKey)
       ? fallBackToAllHosts()
       : retain(filter, null, 'loading')
   }
+
   const sshHydrated =
     host.authority.kind === 'desktop'
       ? hydration.desktopSshHydrated
       : (hydration.runtimeSshHydratedByEnvironmentId.get(host.authority.environmentId) ?? false)
+
   return sshHydrated ? fallBackToAllHosts() : retain(filter, null, 'loading')
 }
 
@@ -131,10 +141,13 @@ export function resolveAutomationHostFilter(
   input: AutomationHostFilterResolutionInput
 ): AutomationHostFilterResolution {
   const stableKey = automationHostFilterStableKey(input.filter)
+
   if (input.filter.kind === 'all' || stableKey === null) {
     return ALL_RESOLUTION
   }
+
   const entry = input.catalog.byStableKey.get(stableKey)
+
   return entry
     ? resolvePresentEntry(input.filter, entry, input.referencedStableKeys?.has(stableKey) ?? false)
     : resolveAbsentEntry(input.filter, input.filter.host, input.catalog.hydration)

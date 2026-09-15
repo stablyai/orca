@@ -58,10 +58,12 @@ const EMPTY_SSH: AutomationCatalogSshSource = {
 
 function toSshTargets(source: AutomationCatalogSshSource): AutomationCatalogSshTargetInput[] {
   const targets: AutomationCatalogSshTargetInput[] = []
+
   for (const [targetId, label] of source.targetLabels) {
     const generation = source.targetGenerations?.get(targetId)
     targets.push({ targetId, label, ...(generation === undefined ? {} : { generation }) })
   }
+
   return targets
 }
 
@@ -70,9 +72,11 @@ function toSshMirror(
   missingConnectionStatus?: SshConnectionStatus
 ): AutomationCatalogSshMirrorInput {
   const connectionStatusByTargetId = new Map<string, SshConnectionStatus>()
+
   for (const [targetId, state] of source.connectionStates) {
     connectionStatusByTargetId.set(targetId, state.status)
   }
+
   return {
     targetsHydrated: source.targetsHydrated,
     targets: toSshTargets(source),
@@ -89,6 +93,7 @@ export function runtimeAuthorityHealth(
   if (!runtime.status) {
     return 'loading'
   }
+
   return runtime.status.status === null ? 'unavailable' : 'fresh'
 }
 
@@ -102,9 +107,11 @@ export function runtimeQuerySupport(
   runtime: AutomationCatalogRuntimeSource
 ): AutomationHostQuerySupport {
   const capabilities = runtime.status?.status?.capabilities
+
   if (!capabilities) {
     return 'scoped'
   }
+
   return capabilities.includes(AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY)
     ? 'scoped'
     : 'legacy-unscoped'
@@ -133,6 +140,7 @@ export function buildAutomationHostCatalogSource(
         kind: 'runtime',
         environmentId: runtime.environmentId
       }
+
       return {
         environmentId: runtime.environmentId,
         label: runtime.label,

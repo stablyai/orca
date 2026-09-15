@@ -142,6 +142,7 @@ describe('resolveTerminalShortcutAction', () => {
 
   it('uses CSI-u for a non-Windows PTY reached from Windows only while Kitty is active', () => {
     const getWindowsShiftEnterEncoding = vi.fn(() => 'csi-u' as const)
+
     const resolve = (kittyActive: boolean) =>
       resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', shiftKey: true }),
@@ -156,6 +157,7 @@ describe('resolveTerminalShortcutAction', () => {
         getWindowsShiftEnterEncoding,
         () => false
       )
+
     expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
     expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
     expect(getWindowsShiftEnterEncoding).not.toHaveBeenCalled()
@@ -176,6 +178,7 @@ describe('resolveTerminalShortcutAction', () => {
           undefined,
           encoding
         )
+
       expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
       expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
     }
@@ -251,6 +254,7 @@ describe('resolveTerminalShortcutAction', () => {
 
   it('honors Kitty negotiation for a Windows PTY reached from macOS', () => {
     const getWindowsShiftEnterEncoding = vi.fn(() => 'alt-enter' as const)
+
     const resolve = (kittyActive: boolean) =>
       resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', shiftKey: true }),
@@ -265,6 +269,7 @@ describe('resolveTerminalShortcutAction', () => {
         getWindowsShiftEnterEncoding,
         () => true
       )
+
     expect(resolve(true)).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
     expect(resolve(false)).toEqual({ type: 'sendInput', data: '\x1b\r' })
     expect(getWindowsShiftEnterEncoding).toHaveBeenCalledTimes(2)
@@ -277,6 +282,7 @@ describe('resolveTerminalShortcutAction', () => {
     const hasCtrlEnterCsiUAuthority = vi.fn(() => false)
     const csiU = { type: 'sendInput', data: '\x1b[13;5u' }
     const legacyCr = { type: 'sendInput', data: '\r' }
+
     const resolveCtrlEnter = (
       localConpty: boolean,
       kittyActive: boolean,
@@ -285,6 +291,7 @@ describe('resolveTerminalShortcutAction', () => {
       isLocalWindowsConptyPane.mockReturnValue(localConpty)
       getKittyKeyboardFlagsActivePane.mockReturnValue(kittyActive ? 1 : 0)
       hasCtrlEnterCsiUAuthority.mockReturnValue(trustedConsumer)
+
       return resolveTerminalShortcutAction(
         event({ key: 'Enter', code: 'Enter', ctrlKey: true }),
         false,

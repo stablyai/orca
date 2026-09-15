@@ -13,11 +13,14 @@ import {
 export function readRetryRequestFlag(flags: Map<string, string | boolean>): string | undefined {
   const value = flags.get('retry-request')
   rejectValuelessFlag(value, 'retry-request')
+
   if (value === undefined) {
     return undefined
   }
+
   if (!isOrchestrationRetryRequestId(value)) {
     throw new RuntimeClientError('invalid_argument', RETRY_REQUEST_ID_GUIDANCE)
   }
+
   return value
 }

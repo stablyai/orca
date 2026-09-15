@@ -6,6 +6,7 @@ import { sourceControlActionRecipeMatchesTarget } from './source-control-action-
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
+
   return {
     ...base,
     sourceControlAi: {

@@ -7,7 +7,9 @@ import {
 } from './browser-slice-test-harness'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
@@ -35,6 +37,7 @@ describe('createBrowserSlice runtime guard', () => {
   it('routes browser settings per client without changing the durable Active Server', async () => {
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
       const { selector, method } = request as RuntimeEnvironmentCallRequest & { selector: string }
+
       return Promise.resolve({
         id: `${selector}-${method}`,
         ok: true,
@@ -79,6 +82,7 @@ describe('createBrowserSlice runtime guard', () => {
       const { selector, method } = request as RuntimeEnvironmentCallRequest & {
         selector: string
       }
+
       if (method !== 'browser.profileList') {
         return Promise.resolve({
           id: `${selector}-${method}`,
@@ -87,11 +91,13 @@ describe('createBrowserSlice runtime guard', () => {
           _meta: { runtimeId: `runtime-${selector}` }
         })
       }
+
       if (selector === 'windows-2') {
         return new Promise((resolve) => {
           resolveWindowsProfiles = resolve
         })
       }
+
       return Promise.resolve({
         id: 'linux-profiles',
         ok: true,
@@ -147,11 +153,13 @@ describe('createBrowserSlice runtime guard', () => {
     let resolveImport: ((value: unknown) => void) | undefined
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
       const { selector, method } = request as RuntimeEnvironmentCallRequest & { selector: string }
+
       if (selector === 'windows-2' && method === 'browser.profileImportFromBrowser') {
         return new Promise((resolve) => {
           resolveImport = resolve
         })
       }
+
       return Promise.resolve({
         id: `${selector}-${method}`,
         ok: true,
@@ -168,6 +176,7 @@ describe('createBrowserSlice runtime guard', () => {
     const importing = store
       .getState()
       .importCookiesFromBrowser('windows-profile', 'chrome', 'Default')
+
     await vi.waitFor(() => expect(resolveImport).toBeDefined())
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'windows-2',

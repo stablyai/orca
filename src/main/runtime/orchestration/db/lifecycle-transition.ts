@@ -23,8 +23,10 @@ export function beginLifecycleWriteTransaction(
   if (!/^[a-z][a-z0-9_]*$/.test(savepoint)) {
     throw new Error(`Invalid lifecycle savepoint: ${savepoint}`)
   }
+
   const nested = db.isTransaction
   db.exec(nested ? `SAVEPOINT ${savepoint}` : 'BEGIN IMMEDIATE')
+
   return { savepoint: nested ? savepoint : null }
 }
 
@@ -42,8 +44,10 @@ export function rollbackLifecycleWriteTransaction(
   if (transaction.savepoint) {
     db.exec(`ROLLBACK TO ${transaction.savepoint}`)
     db.exec(`RELEASE ${transaction.savepoint}`)
+
     return
   }
+
   db.exec('ROLLBACK')
 }
 
@@ -131,9 +135,11 @@ export function transitionLifecycleWithDb(
 ): { changed: boolean } {
   const entity = ENTITY_TABLE[params.entity]
   const allowed = Array.isArray(params.from) ? params.from : [params.from]
+
   const current = db
     .prepare(`SELECT ${entity.state} AS state FROM ${entity.table} WHERE ${entity.id} = ?`)
     .get(params.id) as { state: string } | undefined
+
   if (!current) {
     throw new OrchestrationError(
       'lifecycle_not_found',
@@ -144,6 +150,7 @@ export function transitionLifecycleWithDb(
       }
     )
   }
+
   if (!allowed.includes(current.state)) {
     throw new OrchestrationError(
       'lifecycle_conflict',
@@ -151,13 +158,16 @@ export function transitionLifecycleWithDb(
       { entity: params.entity, id: params.id, state: current.state }
     )
   }
+
   const legal = LEGAL_TRANSITIONS[params.entity][current.state] ?? []
+
   const promptReportCorrection =
     params.correction === 'unobserved_prompt_report' &&
     current.state === 'failed' &&
     ((params.entity === 'task' && params.to === 'completed') ||
       (params.entity === 'dispatch' && params.to === 'completed') ||
       (params.entity === 'worker' && params.to === 'succeeded'))
+
   if (!legal.includes(params.to) && !promptReportCorrection) {
     throw new OrchestrationError(
       'lifecycle_conflict',
@@ -167,24 +177,29 @@ export function transitionLifecycleWithDb(
   }
 
   const projection = Object.entries(params.projection ?? {})
+
   for (const [column] of projection) {
     if (!PROJECTION_COLUMNS.has(column)) {
       throw new Error(`Unsupported lifecycle projection column: ${column}`)
     }
   }
+
   const assignments = [`${entity.state} = ?`, ...projection.map(([column]) => `${column} = ?`)]
+
   const values: unknown[] = [
     params.to,
     ...projection.map(([, value]) => value),
     params.id,
     ...allowed
   ]
+
   const result = db
     .prepare(
       `UPDATE ${entity.table} SET ${assignments.join(', ')}
        WHERE ${entity.id} = ? AND ${entity.state} IN (${allowed.map(() => '?').join(', ')})`
     )
     .run(...(values as (string | number | bigint | null)[]))
+
   if (result.changes !== 1) {
     throw new OrchestrationError(
       'lifecycle_conflict',

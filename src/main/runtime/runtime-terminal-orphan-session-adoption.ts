@@ -9,6 +9,7 @@ import { canonicalizeTerminalSessionWorktreeId } from './workspace-session-workt
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 
 type Claim = RuntimeTerminalOrphanAdoptionRequest['claims'][number]
+
 type Topology = NonNullable<RuntimeTerminalOrphanAdoptionRequest['topology']>
 
 export function buildRuntimeTerminalOrphanSession(args: {
@@ -29,12 +30,15 @@ export function buildRuntimeTerminalOrphanSession(args: {
     topologyTabsById,
     topologyGroups
   } = args
+
   const next = structuredClone(session)
   canonicalizeTerminalSessionWorktreeId(next, sessionWorktreeId, worktreeId)
   const existingTabs = next.tabsByWorktree[worktreeId] ?? []
   const tabsById = new Map(existingTabs.map((tab) => [tab.id, tab]))
+
   for (const { claim, pty, paneKey } of validated) {
     let tab = tabsById.get(claim.tabId)
+
     if (!tab) {
       const title = getLatestPtyTitle(pty) ?? pty.controllerTitle ?? `Terminal ${tabsById.size + 1}`
       tab = {
@@ -51,6 +55,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
       }
       tabsById.set(claim.tabId, tab)
     }
+
     const existingLayout = next.terminalLayoutsByTabId[claim.tabId]
     const topologyTab = topologyTabsById.get(claim.tabId)
     next.terminalLayoutsByTabId[claim.tabId] = topologyTab
@@ -93,23 +98,29 @@ export function buildRuntimeTerminalOrphanSession(args: {
       [paneKey]: claim.incarnationId
     }
   }
+
   const adoptedTabIds = [...new Set(validated.map(({ claim }) => claim.tabId))]
   next.tabsByWorktree[worktreeId] = [...tabsById.values()]
+
   const activeTabId =
     request.activeTabId && tabsById.has(request.activeTabId)
       ? request.activeTabId
       : (adoptedTabIds[0] ?? null)
+
   const existingGroups = next.tabGroups?.[worktreeId] ?? []
+
   const targetGroupId =
     (request.activeGroupId && existingGroups.some((group) => group.id === request.activeGroupId)
       ? request.activeGroupId
       : existingGroups[0]?.id) ??
     request.activeGroupId ??
     randomUUID()
+
   const proposedGroups = topologyGroups.map((group) => ({
     ...group,
     worktreeId: worktreeId
   }))
+
   const groups =
     existingGroups.length === 0 && proposedGroups.length > 0
       ? proposedGroups
@@ -117,6 +128,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
         ? existingGroups
             .map((group) => {
               const proposed = proposedGroups.find((candidate) => candidate.id === group.id)
+
               const tabOrder = proposed
                 ? [
                     ...group.tabOrder.filter((tabId) => !adoptedTabIds.includes(tabId)),
@@ -125,6 +137,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
                 : group.id === targetGroupId && proposedGroups.length === 0
                   ? [...new Set([...group.tabOrder, ...adoptedTabIds])]
                   : group.tabOrder.filter((tabId) => !adoptedTabIds.includes(tabId))
+
               return {
                 ...group,
                 tabOrder,
@@ -144,11 +157,13 @@ export function buildRuntimeTerminalOrphanSession(args: {
               )
             )
         : [{ id: targetGroupId, worktreeId: worktreeId, activeTabId, tabOrder: adoptedTabIds }]
+
   const retainedGroups = groups.filter((group) => group.tabOrder.length > 0)
   next.tabGroups = {
     ...next.tabGroups,
     [worktreeId]: retainedGroups
   }
+
   const mergedGroupLayout = mergeTerminalOrphanGroupLayout({
     existingLayout: next.tabGroupLayouts?.[worktreeId],
     existingGroupIds: existingGroups.map((group) => group.id),
@@ -156,12 +171,14 @@ export function buildRuntimeTerminalOrphanSession(args: {
     proposedGroupIds: proposedGroups.map((group) => group.id),
     mergedGroupIds: retainedGroups.map((group) => group.id)
   })
+
   if (mergedGroupLayout) {
     next.tabGroupLayouts = {
       ...next.tabGroupLayouts,
       [worktreeId]: mergedGroupLayout
     }
   }
+
   const activeGroup =
     (request.activeGroupId
       ? retainedGroups.find(
@@ -172,10 +189,12 @@ export function buildRuntimeTerminalOrphanSession(args: {
       : undefined) ??
     retainedGroups.find((group) => activeTabId && group.tabOrder.includes(activeTabId)) ??
     retainedGroups[0]!
+
   const convergedActiveTabId =
     activeTabId && activeGroup.tabOrder.includes(activeTabId)
       ? activeTabId
       : activeGroup.activeTabId
+
   next.activeTabIdByWorktree = {
     ...next.activeTabIdByWorktree,
     ...(convergedActiveTabId ? { [worktreeId]: convergedActiveTabId } : {})
@@ -185,5 +204,6 @@ export function buildRuntimeTerminalOrphanSession(args: {
     [worktreeId]: activeGroup.id
   }
   const persisted = advanceTerminalTopologyRevision(next, worktreeId)
+
   return persisted
 }

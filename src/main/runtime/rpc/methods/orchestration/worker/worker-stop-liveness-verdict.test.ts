@@ -33,9 +33,11 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method.handler(method.params!.parse(params), { runtime })
   }
 
@@ -45,7 +47,9 @@ describe('worker-stop against a terminal we lost contact with', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const task = db.createTask({ spec: 'stop worker', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -53,6 +57,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
       startOptions: {},
       runtimeEpoch: runtime.getRuntimeId()
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -64,6 +69,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id)
+
     return started.dispatch
   }
 
@@ -72,6 +78,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
       status: 'unverifiable',
       reason: 'its SSH provider is no longer registered'
     })
+
     const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_worker',
       tabId: 'tab_worker',
@@ -79,6 +86,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
       ptyStopVerdict: 'unverifiable',
       ptyStopReason: 'its SSH provider is no longer registered'
     })
+
     const dispatch = createWorker()
 
     await expect(
@@ -96,6 +104,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
       processAction: string
       lastError: string
     }
+
     // Losing contact is a reason to report honestly, never to stop trying.
     expect(closeTerminal).toHaveBeenCalledWith('term_worker')
     expect(stopped.processAction).toBe('closed_agent_terminal')
@@ -158,11 +167,13 @@ describe('worker-stop against a terminal we lost contact with', () => {
       status: 'live',
       ptyIds: ['runtime:pty:1']
     })
+
     const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_worker',
       tabId: 'tab_worker',
       ptyKilled: true
     })
+
     const dispatch = createWorker()
 
     await expect(
@@ -195,9 +206,11 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const closeTerminal = vi.spyOn(runtime, 'closeTerminal')
     const dispatch = createWorker()
     const resource = db.getWorkerTerminalResourceByOwner(dispatch.id)
+
     if (!resource) {
       throw new Error('Expected worker terminal resource')
     }
+
     ;(db as unknown as { db: { prepare: (sql: string) => { run: (id: string) => void } } }).db
       .prepare('DELETE FROM worker_terminal_resources WHERE id = ?')
       .run(resource.id)
@@ -247,6 +260,7 @@ describe('worker-stop against a terminal we lost contact with', () => {
     const stopped = (await call('orchestration.workerStop', { dispatch: dispatch.id })) as {
       lastError: string
     }
+
     expect(stopped.lastError).toBe('The recorded worker process is exited; no terminal was closed.')
   })
 })

@@ -17,12 +17,14 @@ export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacityS
   protected handleFrame(client: RelayClient, frame: DecodedFrame): void {
     // Before the KeepAlive early return: a keepalive is the only proof a quiet client is still there.
     client.lastReceivedAt = Date.now()
+
     if (frame.id > client.highestReceivedSeq) {
       client.highestReceivedSeq = frame.id
     }
 
     if (frame.type === MessageType.KeepAlive) {
       client.keepaliveObserved = true
+
       return
     }
 
@@ -41,6 +43,7 @@ export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacityS
   protected prepareFrame(msg: OutgoingJsonRpcMessage): PreparedRelayFrame {
     const payload = prepareJsonRpcPayload(msg)
     const params = 'method' in msg && msg.method === 'pty.data' ? (msg.params ?? {}) : null
+
     return Object.freeze({
       payload,
       frameBytes: HEADER_LENGTH + payload.byteLength,
@@ -71,6 +74,7 @@ export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacityS
     if (this.disposed || client.closed) {
       return false
     }
+
     return this.enqueuePreparedFrame(
       client,
       this.prepareFrame(msg),
@@ -90,14 +94,19 @@ export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacityS
     if (this.disposed || client.closed) {
       return false
     }
+
     const encode = (): Buffer => {
       const seq = client.nextOutgoingSeq++
+
       return encodePreparedJsonRpcFrame(frame.payload, seq, client.highestReceivedSeq)
     }
+
     const admissionParams = frame.ptyDataAdmissionParams
+
     const isStillAdmitted = admissionParams
       ? () => this.admitsPtyDataPublication(client.id, admissionParams)
       : undefined
+
     return client.writer.enqueue(
       lane,
       encode,

@@ -7,21 +7,25 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 function methodNotFound(): Error {
   const err = new Error('Method not found: fs.readFileRange') as Error & { code?: number }
   err.code = -32601
+
   return err
 }
 
 function providerWith(request: ReturnType<typeof vi.fn>): SshFilesystemProvider {
   const mux = { request, onNotification: () => () => {} } as unknown as SshChannelMultiplexer
+
   return new SshFilesystemProvider('conn-1', mux)
 }
 
 describe('SshFilesystemProvider.readFileRange', () => {
   it('decodes the base64 window the relay returned', async () => {
     const payload = Buffer.from('hello')
+
     const request = vi.fn().mockResolvedValue({
       base64: payload.toString('base64'),
       bytesRead: payload.length
     })
+
     const result = await providerWith(request).readFileRange('/x.jsonl', 7, 5)
     expect(result.bytes).toEqual(payload)
     expect(result.bytesRead).toBe(5)
@@ -34,10 +38,12 @@ describe('SshFilesystemProvider.readFileRange', () => {
 
   it('reports a short window as read without complaint', async () => {
     const payload = Buffer.from('tail')
+
     const request = vi.fn().mockResolvedValue({
       base64: payload.toString('base64'),
       bytesRead: payload.length
     })
+
     const result = await providerWith(request).readFileRange('/x.jsonl', 0, 64)
     expect(result.bytesRead).toBe(4)
     expect(result.bytes).toEqual(payload)
@@ -92,6 +98,7 @@ describe('SshFilesystemProvider.readFileRange', () => {
       base64: Buffer.from('ab').toString('base64'),
       bytesRead: 9
     })
+
     await expect(providerWith(request).readFileRange('/x.jsonl', 0, 10)).rejects.toThrow(
       /inconsistent byte count/
     )
@@ -99,10 +106,12 @@ describe('SshFilesystemProvider.readFileRange', () => {
 
   it('rejects a byte count larger than the requested length', async () => {
     const payload = Buffer.from('abcdef')
+
     const request = vi.fn().mockResolvedValue({
       base64: payload.toString('base64'),
       bytesRead: payload.length
     })
+
     await expect(providerWith(request).readFileRange('/x.jsonl', 0, 2)).rejects.toThrow(
       /inconsistent byte count/
     )

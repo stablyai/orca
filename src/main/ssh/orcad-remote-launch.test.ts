@@ -17,6 +17,7 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
+
 const windows = getRemoteHostPlatform('win32-x64')
 
 const SPEC = {
@@ -102,6 +103,7 @@ describe('stopping a running orcad', () => {
   it('sends SIGTERM and never SIGKILL', () => {
     const command = stopOrcadCommand(posix, SPEC.remoteInstallDir, { waitSeconds: 20 })
     expect(command).toContain('kill -TERM')
+
     for (const kill of ['kill -9', 'kill -KILL', 'kill -SIGKILL', 'pkill']) {
       expect(command).not.toContain(kill)
     }

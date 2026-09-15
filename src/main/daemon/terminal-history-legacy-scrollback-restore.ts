@@ -7,6 +7,7 @@ import { readTerminalHistoryTextAsync } from './terminal-history-file-reader'
 import { TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES } from './terminal-history-file-limits'
 
 const ALT_SCREEN_ON = '\x1b[?1049h'
+
 const ALT_SCREEN_OFF = '\x1b[?1049l'
 
 // Why: handles the upgrade transition where sessions created before the
@@ -17,15 +18,19 @@ export async function detectColdRestoreFromLegacyScrollback(
   meta: SessionMeta
 ): Promise<ColdRestoreInfo | null> {
   const scrollbackPath = join(basePath, getHistorySessionDirName(sessionId), 'scrollback.bin')
+
   if (!existsSync(scrollbackPath)) {
     return null
   }
+
   try {
     const scrollback = await readTerminalHistoryTextAsync(
       scrollbackPath,
       TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES
     )
+
     const truncated = truncateAltScreen(scrollback)
+
     return {
       snapshotAnsi: truncated,
       scrollbackAnsi: truncated,
@@ -55,17 +60,20 @@ function truncateAltScreen(data: string): string {
 
   let onIdx = data.indexOf(ALT_SCREEN_ON)
   let offIdx = data.indexOf(ALT_SCREEN_OFF)
+
   while (onIdx !== -1 || offIdx !== -1) {
     if (onIdx !== -1 && (offIdx === -1 || onIdx < offIdx)) {
       if (depth === 0) {
         outermostUnmatchedOnIdx = onIdx
       }
+
       depth++
       onIdx = data.indexOf(ALT_SCREEN_ON, onIdx + ALT_SCREEN_ON.length)
     } else {
       if (depth > 0) {
         depth--
       }
+
       offIdx = data.indexOf(ALT_SCREEN_OFF, offIdx + ALT_SCREEN_OFF.length)
     }
   }

@@ -64,6 +64,7 @@ export type ZshPtyOptions = {
  */
 function buildProbe(report: readonly string[], resultPath: string): string {
   const prints = report.map((name) => `print -r -- "${name}=<\${${name}:-UNSET}>";`).join(' ')
+
   return `{ ${prints} } > ${JSON.stringify(resultPath)}`
 }
 
@@ -71,13 +72,17 @@ function parseValues(resultPath: string): Record<string, string> {
   if (!existsSync(resultPath)) {
     return {}
   }
+
   const values: Record<string, string> = {}
+
   for (const line of readFileSync(resultPath, 'utf8').split('\n')) {
     const match = /^(\w+)=<(.*)>$/.exec(line.trim())
+
     if (match) {
       values[match[1]] = match[2]
     }
   }
+
   return values
 }
 
@@ -111,12 +116,15 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
   let answeredCompinit = false
   let lastDataAt = Date.now()
   let resolveReady: (() => void) | undefined
+
   const ready = new Promise<void>((resolve) => {
     resolveReady = resolve
   })
+
   proc.onData((data) => {
     output += data
     lastDataAt = Date.now()
+
     // Why this is answered rather than configured away: a host whose global
     // zshrc runs `compinit` over directories it considers insecure — CI runners
     // do — stops startup and ASKS, and a real PTY will sit at that question
@@ -129,12 +137,14 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
       answeredCompinit = true
       proc.write('y\r')
     }
+
     if (resolveReady && output.includes(sentinel)) {
       resolveReady()
       resolveReady = undefined
     }
   })
   let hasExited = false
+
   const exited = new Promise<void>((resolve) => {
     proc.onExit(() => {
       hasExited = true
@@ -143,6 +153,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
   })
 
   let timer: ReturnType<typeof setTimeout> | null = null
+
   const timedOut = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(
       () => reject(new Error(`timed out waiting for the zsh prompt:\n${output}`)),
@@ -161,18 +172,22 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
   async function waitForQuiet(quietMs: number): Promise<void> {
     while (!hasExited) {
       const idleFor = Date.now() - lastDataAt
+
       if (idleFor >= quietMs) {
         return
       }
+
       await new Promise((resolve) => setTimeout(resolve, quietMs - idleFor))
     }
   }
 
   try {
     await Promise.race([waitForQuiet(250), exited, timedOut])
+
     if (hasExited) {
       return { output, values: parseValues(resultPath), exitedBeforePrompt: true }
     }
+
     // Why the prompt is replaced rather than parsed: it only has to carry the
     // sentinel from the SECOND prompt on — the first is where the deferred hook
     // does its work, and that has already happened by now.
@@ -185,27 +200,34 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     // reaches a prompt, and that is an outcome worth comparing rather than a
     // twenty-second timeout.
     await Promise.race([ready, exited, timedOut])
+
     if (hasExited) {
       return { output, values: parseValues(resultPath), exitedBeforePrompt: true }
     }
+
     for (const command of options.commands ?? []) {
       proc.write(`${command}\r`)
     }
+
     if (options.report?.length) {
       proc.write(`${buildProbe(options.report, resultPath)}\r`)
     }
+
     proc.write('exit\r')
     await Promise.race([exited, timedOut])
+
     return { output, values: parseValues(resultPath), exitedBeforePrompt: false }
   } finally {
     if (timer !== null) {
       clearTimeout(timer)
     }
+
     try {
       proc.kill()
     } catch {
       // Already exited normally.
     }
+
     rmSync(workDir, { recursive: true, force: true })
   }
 }
@@ -213,8 +235,10 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
 /** Writes a throwaway $HOME with the given zsh startup files. */
 export function makeZshHome(files: Record<string, string>): string {
   const home = mkdtempSync(join(tmpdir(), 'orca-zsh-home-'))
+
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(home, name), content)
   }
+
   return home
 }

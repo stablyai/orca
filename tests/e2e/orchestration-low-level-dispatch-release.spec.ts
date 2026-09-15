@@ -20,9 +20,11 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
   const pane = await waitForActivePaneHookDescriptor(orcaPage)
+
   const resolved = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
     paneKey: pane.paneKey
   })
+
   const terminalHandle = resolved.result.terminal.handle
   await expect
     .poll(async () => (await findTerminal(client, terminalHandle)).incarnationId, {
@@ -30,21 +32,25 @@ test('low-level Dispatches can be abandoned and stopped without closing their pa
     })
     .toBeTruthy()
   const before = await findTerminal(client, terminalHandle)
+
   if (!before.incarnationId) {
     throw new Error('The target terminal never published a process incarnation')
   }
+
   const run = await client.call<{ run: { id: string } }>('orchestration.runCreate', {
     objective: 'Release low-level Dispatches',
     from: terminalHandle
   })
 
   const abandonedTask = await createTask(client, run.result.run.id, terminalHandle, 'abandon')
+
   const abandonedDispatch = await dispatchTask(
     client,
     run.result.run.id,
     abandonedTask,
     terminalHandle
   )
+
   const shownBeforeAbandon = await showDispatch(client, abandonedTask)
   expect(shownBeforeAbandon.id).toBe(abandonedDispatch)
   expect(shownBeforeAbandon.status).toBe('dispatched')
@@ -107,6 +113,7 @@ async function createTask(
     run: runId,
     callerTerminalHandle: coordinatorHandle
   })
+
   return created.result.task.id
 }
 
@@ -122,6 +129,7 @@ async function dispatchTask(
     from: terminalHandle,
     to: terminalHandle
   })
+
   return dispatched.result.dispatch.id
 }
 
@@ -132,6 +140,7 @@ async function showDispatch(
   const shown = await client.call<{
     dispatch: { id: string; status: string; last_failure: string | null }
   }>('orchestration.dispatchShow', { task: taskId })
+
   return shown.result.dispatch
 }
 
@@ -139,5 +148,6 @@ async function findTerminal(client: RuntimeClient, handle: string) {
   const listed = await client.call<RuntimeTerminalListResult>('terminal.list')
   const terminal = listed.result.terminals.find((candidate) => candidate.handle === handle)
   expect(terminal).toBeDefined()
+
   return terminal!
 }

@@ -39,21 +39,26 @@ export function MobileNativeChatPromptCard({
         prompt={ask}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
+
           if (accepted) {
             onDismissAsk?.()
           }
+
           return accepted
         }}
         onCancel={async () => {
           const accepted = (await onCancelAsk?.()) ?? false
+
           if (accepted) {
             onDismissAsk?.()
           }
+
           return accepted
         }}
       />
     )
   }
+
   if (permission) {
     return (
       <MobileNativeChatPermission
@@ -64,6 +69,7 @@ export function MobileNativeChatPromptCard({
       />
     )
   }
+
   if (question) {
     return (
       <MobileNativeChatQuestion
@@ -74,5 +80,6 @@ export function MobileNativeChatPromptCard({
       />
     )
   }
+
   return null
 }

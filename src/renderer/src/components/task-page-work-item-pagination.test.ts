@@ -31,12 +31,14 @@ function item(repoId: string, id: string, updatedAt: string): GitHubWorkItem {
 // decreasing updatedAt, on repo `r`, so `at(-1)` is the oldest.
 function run(r: string, from: number, to: number): GitHubWorkItem[] {
   const out: GitHubWorkItem[] = []
+
   for (let n = from; n <= to; n += 1) {
     // Larger number => newer; encode as a descending timestamp so sort order is
     // unambiguous and distinct.
     const ts = `2026-01-01T00:00:${String(1000 - n).padStart(4, '0')}Z`
     out.push(item(r, `issue:${n}`, ts))
   }
+
   return out
 }
 
@@ -108,6 +110,7 @@ describe('resolveEmptyPageOutcome', () => {
       reason: 'load-failed',
       clampTotalPagesTo: null
     })
+
     for (const type of ['permission_denied', 'not_found', 'rate_limited', 'unknown'] as const) {
       expect(resolveEmptyPageOutcome({ ...base, target: 5, errorTypes: [type] })).toEqual({
         reason: 'load-failed',
@@ -256,6 +259,7 @@ describe('accumulateWorkItemPages', () => {
   it('drops the re-fetched boundary row that shares the previous page cursor', async () => {
     const boundary = item('r', 'issue:2', '2026-07-02')
     const existing = [[item('r', 'issue:1', '2026-07-03'), boundary]]
+
     // Inclusive cursor re-returns issue:2 (boundary) then genuinely older rows,
     // enough to fill a full page of size 2 after dedup.
     const fetchPage = vi.fn().mockResolvedValue({
@@ -272,9 +276,11 @@ describe('accumulateWorkItemPages', () => {
     })
 
     expect(result.cancelled).toBe(false)
+
     if (result.cancelled) {
       return
     }
+
     expect(result.newPages).toEqual([
       [item('r', 'issue:3', '2026-07-01'), item('r', 'issue:4', '2026-07-00')]
     ])
@@ -288,6 +294,7 @@ describe('accumulateWorkItemPages', () => {
     // a 2-item page and the count-derived totalPages would strand the tail.
     const existing = [run('r', 1, 3)]
     const cursor0 = run('r', 1, 3).at(-1)!.updatedAt
+
     const fetchPage = vi
       .fn()
       // <=cursor0 re-returns issue:3 (boundary) + 4,5 => 2 fresh, not yet a page.
@@ -305,9 +312,11 @@ describe('accumulateWorkItemPages', () => {
     })
 
     expect(result.cancelled).toBe(false)
+
     if (result.cancelled) {
       return
     }
+
     // One uniform full page of the 3 genuinely-new items 4,5,6 — nothing stranded.
     expect(result.newPages).toEqual([run('r', 4, 6)])
     expect(result.loadedPages).toBe(2)
@@ -317,6 +326,7 @@ describe('accumulateWorkItemPages', () => {
 
   it('does not confuse same-numbered items from different repos', async () => {
     const existing = [[item('repo-a', 'issue:9', '2026-07-02')]]
+
     // repo-b's issue:9 is a different item and must survive dedup.
     const fetchPage = vi
       .fn()
@@ -332,9 +342,11 @@ describe('accumulateWorkItemPages', () => {
     })
 
     expect(result.cancelled).toBe(false)
+
     if (result.cancelled) {
       return
     }
+
     expect(result.newPages).toEqual([[item('repo-b', 'issue:9', '2026-07-01')]])
     expect(result.loadedPages).toBe(2)
   })
@@ -342,6 +354,7 @@ describe('accumulateWorkItemPages', () => {
   it('flushes a short final page when the source is exhausted mid-page', async () => {
     const existing = [run('r', 1, 3)]
     const cursor0 = run('r', 1, 3).at(-1)!.updatedAt
+
     const fetchPage = vi
       .fn()
       // 2 fresh rows, short of pageSize 3...
@@ -359,9 +372,11 @@ describe('accumulateWorkItemPages', () => {
     })
 
     expect(result.cancelled).toBe(false)
+
     if (result.cancelled) {
       return
     }
+
     // Short final page rather than dropping issues 4,5.
     expect(result.newPages).toEqual([run('r', 4, 5)])
     expect(result.loadedPages).toBe(2)
@@ -370,6 +385,7 @@ describe('accumulateWorkItemPages', () => {
   it('stops (flushing progress) when a full page yields nothing new', async () => {
     const existing = [run('r', 1, 3)]
     const cursor0 = run('r', 1, 3).at(-1)!.updatedAt
+
     // First fetch adds issues 4,5 (2 fresh); second fetch re-returns only
     // already-seen rows (a >pageSize same-timestamp run) — no forward progress.
     const fetchPage = vi
@@ -387,9 +403,11 @@ describe('accumulateWorkItemPages', () => {
     })
 
     expect(result.cancelled).toBe(false)
+
     if (result.cancelled) {
       return
     }
+
     // The 2 buffered fresh rows are flushed rather than lost.
     expect(result.newPages).toEqual([run('r', 4, 5)])
     expect(fetchPage).toHaveBeenCalledTimes(2)
@@ -398,6 +416,7 @@ describe('accumulateWorkItemPages', () => {
   it('chains full pages until the target page is reached', async () => {
     const existing = [run('r', 1, 2)]
     const cursor0 = run('r', 1, 2).at(-1)!.updatedAt
+
     const fetchPage = vi
       .fn()
       .mockResolvedValueOnce({ items: run('r', 2, 4) }) // boundary 2 + 3,4
@@ -413,9 +432,11 @@ describe('accumulateWorkItemPages', () => {
     })
 
     expect(result.cancelled).toBe(false)
+
     if (result.cancelled) {
       return
     }
+
     expect(result.newPages).toEqual([run('r', 3, 4), run('r', 5, 6)])
     expect(result.loadedPages).toBe(3)
   })
@@ -443,6 +464,7 @@ describe('accumulateWorkItemPages', () => {
     // (it belongs to page 2, which the user hasn't requested yet).
     const existing1 = [run('r', 1, 3)]
     const fetch1 = vi.fn().mockResolvedValueOnce({ items: run('r', 3, 7) }) // boundary 3 + 4,5,6,7
+
     const call1 = await accumulateWorkItemPages({
       existingPages: existing1,
       initialCursor: run('r', 1, 3).at(-1)!.updatedAt,
@@ -451,10 +473,13 @@ describe('accumulateWorkItemPages', () => {
       fetchPage: fetch1,
       isCancelled: () => false
     })
+
     expect(call1.cancelled).toBe(false)
+
     if (call1.cancelled) {
       return
     }
+
     expect(call1.newPages).toEqual([run('r', 4, 6)]) // 7 discarded
 
     // Call 2: page1 is now on screen. The inclusive cursor re-fetches the
@@ -468,10 +493,13 @@ describe('accumulateWorkItemPages', () => {
       fetchPage: vi.fn().mockResolvedValueOnce({ items: run('r', 6, 9) }), // boundary 6 + 7,8,9
       isCancelled: () => false
     })
+
     expect(call2.cancelled).toBe(false)
+
     if (call2.cancelled) {
       return
     }
+
     expect(call2.newPages).toEqual([run('r', 7, 9)]) // 7 recovered, deduped, in order
   })
 

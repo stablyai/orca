@@ -5,7 +5,9 @@ import type {
 } from '../../shared/runtime-types'
 
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+
 await import('./orca-runtime-test-lifecycle.spec')
+
 const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
 
 const retired = {
@@ -57,6 +59,7 @@ function seedRuntimeWithStoredProof(): {
     snapshotVersion: stored.snapshotVersion + 1,
     retiredTerminalSurfaces: [retired]
   })
+
   return { runtime, internals }
 }
 
@@ -65,6 +68,7 @@ function seedRuntimeWithStoredProof(): {
 it('emits the stored retirement proofs on the frame a runtime-owned create publishes', async () => {
   const { runtime, internals } = seedRuntimeWithStoredProof()
   const events: RuntimeMobileSessionTabsResult[] = []
+
   const unsubscribe = runtime.onMobileSessionTabsChanged(
     (frame) => events.push(frame),
     'paired-client'

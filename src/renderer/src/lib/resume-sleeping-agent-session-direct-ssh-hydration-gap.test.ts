@@ -19,8 +19,11 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 const initialAppStoreState = useAppStore.getState()
 
 const TARGET_ID = 'ssh-target-1'
+
 const PATH = '/srv/proj/feature'
+
 const WORKTREE_ID = `repoSsh::${PATH}`
+
 const LOCAL_WORKTREE_ID = 'repoLocal::/home/dev/proj/feature'
 
 afterEach(() => {
@@ -85,6 +88,7 @@ function seedColdDirectSshStart(): SleepingAgentSessionRecord {
     tabsByWorktree: {},
     sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
   } as never)
+
   return record
 }
 
@@ -119,11 +123,13 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
 
   it('leaves a purely local workspace resuming with no added latency', () => {
     seedColdDirectSshStart()
+
     const localRecord = {
       ...makeRecord(LOCAL_WORKTREE_ID),
       paneKey: 'tab-2:leaf-1',
       tabId: 'tab-2'
     }
+
     useAppStore.setState({
       sleepingAgentSessionsByPaneKey: { [localRecord.paneKey]: localRecord }
     } as never)

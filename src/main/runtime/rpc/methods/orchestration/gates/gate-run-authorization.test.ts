@@ -13,6 +13,7 @@ import {
 } from '../../../orchestration-legacy-compatibility-dispatcher-test-fixture'
 
 const STRANGER_HANDLE = 'term_stranger_coord'
+
 const STRANGER_PANE = 'tab_stranger:77777777-7777-4777-8777-777777777777'
 
 afterEach(() => {
@@ -105,6 +106,7 @@ describe('orchestration gate Run authorization', () => {
 
   it('G3 refuses an unattested caller once the adopted Run is claimed', async () => {
     const harness = createHarness()
+
     const claim = await harness.dispatcher.dispatch(
       request(
         'orchestration.runUse',
@@ -113,6 +115,7 @@ describe('orchestration gate Run authorization', () => {
         'g3-legacy-claim'
       )
     )
+
     expect(claim).toMatchObject({ ok: true })
     bindCurrentCoordinatorRun(harness)
     const before = adoptedTaskState(harness)
@@ -133,11 +136,13 @@ describe('orchestration gate Run authorization', () => {
   it('G4 refuses an attested bound caller creating a gate in a stranger Run', async () => {
     const harness = createHarness()
     const runA = bindCurrentCoordinatorRun(harness)
+
     const strangerRun = harness.db.createRun({
       objective: 'stranger work',
       coordinatorHandle: STRANGER_HANDLE,
       coordinatorPaneKey: STRANGER_PANE
     })
+
     const strangerTask = harness.db.createTask({
       spec: 'stranger assignment',
       runId: strangerRun.id
@@ -166,11 +171,13 @@ describe('orchestration gate Run authorization', () => {
   it('G4 refuses the stranger Run even when it is named explicitly', async () => {
     const harness = createHarness()
     const runA = bindCurrentCoordinatorRun(harness)
+
     const strangerRun = harness.db.createRun({
       objective: 'stranger work',
       coordinatorHandle: STRANGER_HANDLE,
       coordinatorPaneKey: STRANGER_PANE
     })
+
     const strangerTask = harness.db.createTask({
       spec: 'stranger assignment',
       runId: strangerRun.id

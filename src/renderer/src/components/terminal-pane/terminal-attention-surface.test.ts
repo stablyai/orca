@@ -4,9 +4,13 @@ import { createTestStore, makeTab } from '@/store/slices/store-test-helpers'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const WORKSPACE = 'wt-1'
+
 const TAB = 'tab-1'
+
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
+
 const PANE = makePaneKey(TAB, LEAF)
 
 type TestStore = ReturnType<typeof createTestStore>
@@ -25,6 +29,7 @@ function seedLiveTab(): TestStore {
       }
     }
   })
+
   return store
 }
 

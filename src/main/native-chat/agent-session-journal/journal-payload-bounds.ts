@@ -36,9 +36,11 @@ export function boundPayload(
 ): AgentJournalBoundedPayload {
   const buffer = Buffer.from(payload, 'utf8')
   const digest = digestPayload(payload)
+
   if (buffer.byteLength <= limits.inlineHeadBytes) {
     return { head: payload, byteLength: buffer.byteLength, digest, truncated: false }
   }
+
   return {
     head: clipUtf8(buffer, limits.inlineHeadBytes),
     byteLength: buffer.byteLength,
@@ -54,9 +56,11 @@ export function boundInlineText(
   limits: JournalPayloadLimits
 ): { text: string; bounded: AgentJournalBoundedPayload } {
   const bounded = boundPayload(payload, limits)
+
   if (!bounded.truncated) {
     return { text: payload, bounded }
   }
+
   return {
     text: bounded.head + journalTruncationMarker(bounded.byteLength, bounded.digest),
     bounded
@@ -66,6 +70,7 @@ export function boundInlineText(
 /** Keep arbitrary tool input JSON bounded before it reaches a row. */
 export function boundToolInput(input: unknown, limits: JournalPayloadLimits): unknown {
   let encoded: string
+
   try {
     encoded = JSON.stringify(input) ?? 'null'
   } catch {
@@ -76,7 +81,9 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
       head: '[unserializable input]'
     }
   }
+
   const bounded = boundPayload(encoded, limits)
+
   return bounded.truncated
     ? {
         truncated: true,
@@ -90,9 +97,11 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
 /** Slice at a byte budget without splitting a multi-byte character. */
 function clipUtf8(buffer: Buffer, maxBytes: number): string {
   let end = maxBytes
+
   // A UTF-8 continuation byte is 0b10xxxxxx; walk back off a split sequence.
   while (end > 0 && (buffer[end] & 0b1100_0000) === 0b1000_0000) {
     end -= 1
   }
+
   return buffer.subarray(0, end).toString('utf8')
 }

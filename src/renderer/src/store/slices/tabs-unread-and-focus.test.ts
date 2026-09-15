@@ -9,6 +9,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -98,6 +99,7 @@ describe('TabsSlice', () => {
     it('stamps a tab created into a new split group', () => {
       const source = store.getState().createUnifiedTab(WT, 'terminal')
       const before = Date.now()
+
       const split = store.getState().createUnifiedTabInSplit(WT, 'terminal', {
         sourceGroupId: source.groupId,
         splitDirection: 'right'
@@ -116,9 +118,11 @@ describe('TabsSlice', () => {
 
       // Group B: split right of A, populate + focus it so tabA is visible-but-not-focused.
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
       }
+
       store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
       store.getState().focusGroup(WT, groupBId)
       store.setState({ activeWorktreeId: WT })
@@ -156,9 +160,11 @@ describe('TabsSlice', () => {
 
       // Split Group B to the right with its own tab (two visible groups, matching the split-group condition); focus it.
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
       }
+
       store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
       store.getState().focusGroup(WT, groupBId)
       store.setState({ activeWorktreeId: WT })
@@ -304,11 +310,13 @@ describe('TabsSlice', () => {
   describe('focusGroup', () => {
     it('does not broadcast active-surface writes when the focused group is already current', () => {
       const editorFileId = '/tmp/feature/src/main.ts'
+
       const tab = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'editor-tab-1',
         entityId: editorFileId,
         label: 'main.ts'
       })
+
       const groupId = store.getState().groupsByWorktree[WT][0].id
       store.setState({
         activeWorktreeId: WT,
@@ -349,9 +357,11 @@ describe('TabsSlice', () => {
       const tabA = store.getState().createUnifiedTab(WT, 'terminal')
       const groupAId = store.getState().groupsByWorktree[WT][0].id
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
       }
+
       store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
       // Focus Group B first so the active group is not A.
       store.getState().focusGroup(WT, groupBId)
@@ -373,9 +383,11 @@ describe('TabsSlice', () => {
       const tabA = store.getState().createUnifiedTab(WT, 'terminal')
       const groupAId = store.getState().groupsByWorktree[WT][0].id
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
+
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
       }
+
       const tabB = store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
 
       store.setState({

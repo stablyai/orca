@@ -50,14 +50,17 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
   ): number {
     const client = this.createClient(write, sinkOptions, sessionIdentity, sourceOptions)
     this.clients.set(client.id, client)
+
     return client.id
   }
 
   detachClient(clientId: number, cause: PtyConsumerCloseCause = 'local'): void {
     const client = this.clients.get(clientId)
+
     if (!client || client === this.primaryClient) {
       return
     }
+
     this.closeClient(client, new Error('Relay client detached'), true, cause)
   }
 
@@ -66,16 +69,20 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
   releaseDisplacedClient(clientId: number): void {
     if (clientId === this.primaryClient.id) {
       this.invalidateClient()
+
       return
     }
+
     this.detachClient(clientId)
   }
 
   feedClient(clientId: number, data: Buffer): void {
     const client = this.clients.get(clientId)
+
     if (!client) {
       return
     }
+
     this.feedForClient(client, data)
   }
 
@@ -87,30 +94,39 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     if (this.disposed) {
       return
     }
+
     this.disposed = true
+
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
     }
+
     for (const [id, pending] of this.pendingRelayRequests) {
       clearTimeout(pending.timer)
       pending.reject(new Error('Relay dispatcher disposed'))
       this.pendingRelayRequests.delete(id)
     }
+
     // Why: can't send responses after dispose; abort in-flight work so SSH-side scans/watchers release.
     this.requestAborts.abortAll()
+
     for (const client of this.clients.values()) {
       client.closed = true
       client.writer.close(new Error('Relay dispatcher disposed'))
     }
+
     for (const listener of Array.from(this.legacyCapacityListeners)) {
       listener()
     }
+
     this.legacyCapacityListeners.clear()
     this.clientCapacityListeners.clear()
+
     for (const listener of Array.from(this.disposeListeners)) {
       listener()
     }
+
     this.disposeListeners.clear()
   }
 
@@ -121,6 +137,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     sourceOptions?: RelayClientSourceOptions
   ): RelayClient {
     const id = this.nextClientId++
+
     const client = {
       id,
       decoder: undefined as unknown as FrameDecoder,
@@ -141,12 +158,14 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
         authenticationKind: 'unproved'
       }
     } satisfies RelayClient
+
     client.decoder = new FrameDecoder(
       (frame) => this.handleFrame(client, frame),
       (error) => this.closeClient(client, error, client !== this.primaryClient),
       { pause: sourceOptions?.pauseReads, resume: sourceOptions?.resumeReads }
     )
     client.writer = this.createWriter(client, write, sinkOptions)
+
     return client
   }
 
@@ -165,6 +184,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     if (this.disposed) {
       return
     }
+
     try {
       client.decoder.feed(data)
     } catch (err) {
@@ -180,6 +200,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
       if (this.disposed) {
         return
       }
+
       const now = Date.now()
       // Why this threshold and not TIMEOUT_MS: a healthy client answers the PREVIOUS tick, so its
       // lastReceivedAt is already up to KEEPALIVE_SEND_MS + RTT old. A tick gap beyond
@@ -189,25 +210,31 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
       // WAKE_GAP_MS guard (ssh-channel-multiplexer.ts).
       const resumedAfterPause = now - lastTickAt >= TIMEOUT_MS - KEEPALIVE_SEND_MS
       lastTickAt = now
+
       for (const client of this.clients.values()) {
         if (client.closed) {
           continue
         }
+
         if (resumedAfterPause) {
           client.attachedAt = now
+
           if (client.lastReceivedAt !== null) {
             client.lastReceivedAt = now
           }
         }
+
         client.writer.enqueue(
           'liveness',
           () => {
             const seq = client.nextOutgoingSeq++
+
             return encodeKeepAliveFrame(seq, client.highestReceivedSeq)
           },
           13
         )
       }
+
       this.reapSilentClients(now)
     }, KEEPALIVE_SEND_MS)
     // Why: unref so the keepalive interval doesn't pin the event loop and block process exit.
@@ -231,9 +258,11 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
       if (client === this.primaryClient) {
         continue
       }
+
       if (client.closed) {
         continue
       }
+
       // Why a client that has never spoken gets its own, much wider bound: a relay is launched
       // before its client finishes handshaking, and on a slow link that can exceed the silence
       // window, so judging it there would break the connect it is still completing. Leaving it
@@ -242,8 +271,10 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
         if (now - client.attachedAt > SILENT_CONNECT_TIMEOUT_MS) {
           this.closeClient(client, new Error('Relay client never spoke'), true)
         }
+
         continue
       }
+
       // Why keepaliveObserved gates this: not every client speaks the keepalive protocol. The
       // remote `orca` CLI sends one `orca.cli` request and waits for a result budgeted in minutes
       // (src/relay/remote-cli-timeout.ts), so judging it on inbound silence would kill
@@ -251,6 +282,7 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
       if (!client.keepaliveObserved || now - client.lastReceivedAt <= TIMEOUT_MS) {
         continue
       }
+
       this.closeClient(client, new Error('Relay client stopped answering'), true)
     }
   }
@@ -266,21 +298,27 @@ export abstract class RelayDispatcherClientLifecycle extends RelayDispatcherClie
     if (client.closed) {
       return
     }
+
     client.closed = true
     this.requestAborts.abortClient(client.id)
     client.writer.close(error)
     client.generation++
+
     if (remove) {
       this.clients.delete(client.id)
     }
+
     this.notifyClientDetached(client.id, cause)
+
     if (remove) {
       // Only for a client that is gone for good: an invalidated primary is revived by setWrite, and a
       // frame stranded by its retired sink must stay armed to retry. After the detach fan-out, so a
       // listener that unsubscribes on detach is not left holding a stale slot.
       this.clientCapacityListeners.delete(client.id)
     }
+
     this.notifyLegacyCapacity(true)
+
     if (!/^Relay (?:primary client invalidated|client detached)$/.test(error.message)) {
       process.stderr.write(`[relay] Client write closed: ${error.message}\n`)
     }

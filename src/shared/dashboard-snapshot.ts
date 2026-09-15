@@ -35,6 +35,7 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
+
 export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
 
 /** Completed agents stay green until acknowledged, then settle into gray idle. */
@@ -44,6 +45,7 @@ export function dashboardCardDisplayState(
   if (card.dotState === 'working' && card.workingMode === 'monitoring') {
     return 'monitoring'
   }
+
   return card.dotState === 'done' && !card.unseen ? 'idle' : card.dotState
 }
 
@@ -59,6 +61,7 @@ export type DashboardCardSubagent = {
 }
 
 export type DashboardCardHostKind = 'local' | 'ssh' | 'wsl' | 'remote'
+
 export type DashboardCardWorkspaceKind = 'worktree' | 'folder'
 
 export type DashboardWorkspace = {

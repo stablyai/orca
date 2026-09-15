@@ -15,6 +15,7 @@ export class PluginPanelNavigationRegistry {
 
   register(frame: NavigationFrame): void {
     this.prune()
+
     if (frame.name.startsWith(PLUGIN_PANEL_FRAME_NAME_PREFIX)) {
       this.frames.set(frame.frameTreeNodeId, { frame, initialSrcdocPending: true })
     }
@@ -27,15 +28,19 @@ export class PluginPanelNavigationRegistry {
   ): boolean {
     this.prune()
     const registeredTarget = frame ? this.frames.get(frame.frameTreeNodeId) : undefined
+
     if (registeredTarget) {
       // Why: registration happens before the host-provided srcdoc commits;
       // allow exactly that initial document, then contain every navigation.
       if (registeredTarget.initialSrcdocPending && destinationUrl === 'about:srcdoc') {
         registeredTarget.initialSrcdocPending = false
+
         return false
       }
+
       return true
     }
+
     return Boolean(initiator && this.frames.has(initiator.frameTreeNodeId))
   }
 

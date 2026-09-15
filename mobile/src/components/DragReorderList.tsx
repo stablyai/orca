@@ -24,13 +24,17 @@ import {
 } from './drag-reorder-positions'
 
 const ROW_SPRING = { damping: 28, stiffness: 350 }
+
 const LONG_PRESS_ACTIVATION_MS = 200
+
 // Why: joins row keys into a change-detection signature; NUL cannot occur in
 // a key, so the joined string is unambiguous.
 const KEY_SEPARATOR = '\u0000'
+
 // Why: drags near the viewport edges scroll the outer ScrollView so rows can
 // travel further than one screen; speed ramps up the closer the finger gets.
 const AUTO_SCROLL_EDGE = 72
+
 const AUTO_SCROLL_MAX_SPEED = 560
 
 type DragSharedState = {
@@ -89,11 +93,14 @@ export function DragReorderList<ItemT>({
 
   const updateDragPosition = (key: string): void => {
     'worklet'
+
     const rawTop =
       dragStartTop.value + dragTranslationY.value + (scrollOffsetY.value - dragStartScrollY.value)
+
     const top = Math.min(Math.max(rawTop, 0), Math.max(0, (count - 1) * rowHeight))
     activeTop.value = top
     const target = clampDragReorderIndex(Math.round(top / rowHeight), count)
+
     if (positions.value[key] !== target) {
       positions.value = moveDragReorderKey(positions.value, key, target)
       runOnJS(triggerSelection)()
@@ -104,14 +111,18 @@ export function DragReorderList<ItemT>({
   // frame callback keeps scrolling (and re-slotting the row) until it moves.
   const autoScroll = useFrameCallback((frame) => {
     const key = activeKey.value
+
     if (key === null) {
       return
     }
+
     const viewport = measure(scrollRef)
+
     if (viewport) {
       const topEdge = viewport.pageY + AUTO_SCROLL_EDGE
       const bottomEdge = viewport.pageY + viewport.height - AUTO_SCROLL_EDGE
       let velocity = 0
+
       if (dragPointerAbsY.value < topEdge) {
         velocity =
           -AUTO_SCROLL_MAX_SPEED * Math.min(1, (topEdge - dragPointerAbsY.value) / AUTO_SCROLL_EDGE)
@@ -120,23 +131,28 @@ export function DragReorderList<ItemT>({
           AUTO_SCROLL_MAX_SPEED *
           Math.min(1, (dragPointerAbsY.value - bottomEdge) / AUTO_SCROLL_EDGE)
       }
+
       if (velocity !== 0) {
         const maxOffset = Math.max(0, scrollContentHeight.value - viewport.height)
         const dtMs = frame.timeSincePreviousFrame ?? 16
+
         const next = Math.min(
           Math.max(scrollOffsetY.value + (velocity * dtMs) / 1000, 0),
           maxOffset
         )
+
         if (next !== scrollOffsetY.value) {
           scrollOffsetY.value = next
           scrollTo(scrollRef, 0, next, false)
         }
       }
     }
+
     updateDragPosition(key)
   }, false)
 
   const setAutoScrollActive = autoScroll.setActive
+
   const handleDragActiveChange = useCallback(
     (active: boolean) => {
       setAutoScrollActive(active)
@@ -160,13 +176,17 @@ export function DragReorderList<ItemT>({
   const moveRowByAccessibilityAction = useCallback(
     (key: string, delta: number) => {
       const fromIndex = keys.indexOf(key)
+
       if (fromIndex === -1) {
         return
       }
+
       const toIndex = Math.min(Math.max(fromIndex + delta, 0), keys.length - 1)
+
       if (toIndex === fromIndex) {
         return
       }
+
       const next = [...keys]
       next.splice(fromIndex, 1)
       next.splice(toIndex, 0, key)
@@ -260,6 +280,7 @@ function DragReorderRow({
       if (activeKey.value !== rowKey) {
         return
       }
+
       activeKey.value = null
       const orderedKeys = orderedKeysFromDragReorderPositions(positions.value)
       runOnJS(onCommit)(orderedKeys)
@@ -268,6 +289,7 @@ function DragReorderRow({
 
   const rowStyle = useAnimatedStyle(() => {
     const index = positions.value[rowKey] ?? 0
+
     if (activeKey.value === rowKey) {
       return {
         top: activeTop.value,
@@ -278,6 +300,7 @@ function DragReorderRow({
         transform: [{ scale: 1.02 }]
       }
     }
+
     return {
       top: withSpring(index * rowHeight, ROW_SPRING),
       zIndex: 0,

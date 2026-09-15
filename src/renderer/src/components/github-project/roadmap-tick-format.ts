@@ -12,6 +12,7 @@ export type RoadmapTickLabel = { label: string; sublabel: string | null }
 // Why: Intl.DateTimeFormat construction costs ~0.1-1ms, and these run per tick
 // and per bar on every render — cache per locale; the options never vary.
 const monthFormatters = new Map<string, Intl.DateTimeFormat>()
+
 const dayFormatters = new Map<string, Intl.DateTimeFormat>()
 
 function cachedFormatter(
@@ -20,10 +21,12 @@ function cachedFormatter(
   options: Intl.DateTimeFormatOptions
 ): Intl.DateTimeFormat {
   let formatter = cache.get(locale)
+
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(locale, options)
     cache.set(locale, formatter)
   }
+
   return formatter
 }
 
@@ -35,16 +38,20 @@ export function formatRoadmapTick(
 ): RoadmapTickLabel {
   const date = new Date(tick.startMs)
   const year = String(date.getUTCFullYear())
+
   if (zoom === 'year') {
     return { label: year, sublabel: null }
   }
+
   if (zoom === 'quarter') {
     return { label: `Q${Math.floor(date.getUTCMonth() / 3) + 1}`, sublabel: year }
   }
+
   const month = cachedFormatter(monthFormatters, locale, {
     month: 'short',
     timeZone: 'UTC'
   }).format(date)
+
   // Why: repeating the year on every month is noise — show it where the
   // reader loses the thread, at the grid's start and each January.
   return { label: month, sublabel: index === 0 || date.getUTCMonth() === 0 ? year : null }
@@ -60,9 +67,12 @@ export function formatRoadmapSpan(span: RoadmapSpan, locale: string): string {
     day: 'numeric',
     timeZone: 'UTC'
   })
+
   const start = format.format(new Date(span.startMs))
+
   if (span.point) {
     return start
   }
+
   return `${start} – ${format.format(new Date(span.endMs - ROADMAP_DAY_MS))}`
 }

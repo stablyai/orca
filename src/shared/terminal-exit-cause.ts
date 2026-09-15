@@ -58,14 +58,17 @@ export function resolveProcessExitCause(observation: {
   if (observation.hostReportsChildExitStatus === false) {
     return { kind: 'unknown', reason: 'host_status_unavailable' }
   }
+
   if (typeof observation.signal === 'number' && observation.signal > 0) {
     return { kind: 'signaled', signal: observation.signal }
   }
+
   // Why: the stop paths pass a negative code to mean "we asked it to stop and
   // never saw it die". That is an absence of evidence, not an exit status.
   if (observation.exitCode < 0) {
     return { kind: 'unknown', reason: 'stop_unverified' }
   }
+
   return { kind: 'exited', exitCode: observation.exitCode }
 }
 
@@ -81,6 +84,7 @@ export function resolveUnreportedExitCause(exitCode: number): TerminalExitCause 
   if (exitCode < 0) {
     return { kind: 'unknown', reason: 'stop_unverified' }
   }
+
   return exitCode === 0
     ? { kind: 'unknown', reason: 'cause_unreported' }
     : { kind: 'exited', exitCode }

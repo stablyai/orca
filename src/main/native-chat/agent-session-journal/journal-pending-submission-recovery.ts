@@ -15,10 +15,12 @@ export async function markJournalPendingSubmissionsUnknown(
         entry.dispatchState === 'pending' ||
         (entry.dispatchState === 'unknown' && entry.recovered !== true)
     )
+
   for (const entry of unresolved) {
     // An earlier reason already names a sharper fact than "the host restarted".
     const resolvedReason =
       entry.dispatchState === 'unknown' && entry.reason !== null ? entry.reason : reason
+
     await journal.resolveDispatch({
       clientMessageId: entry.clientMessageId,
       state: 'unknown',
@@ -27,5 +29,6 @@ export async function markJournalPendingSubmissionsUnknown(
       recovered: true
     })
   }
+
   return unresolved.map((entry) => entry.clientMessageId)
 }

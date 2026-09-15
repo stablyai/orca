@@ -1,6 +1,7 @@
 export const MOBILE_DICTATION_PCM_SAMPLE_RATE = 16000
 
 const PCM_BYTES_PER_SAMPLE = 2
+
 const MAX_PENDING_AUDIO_SECONDS = 5
 
 // Why: dictation chunk RPCs can wait through reconnect before timing out, so
@@ -22,10 +23,13 @@ export class MobileDictationPendingAudioBudget {
 
   tryReserve(byteLength: number): boolean {
     const normalizedByteLength = normalizeByteLength(byteLength)
+
     if (this.pendingBytes + normalizedByteLength > this.maxPendingBytes) {
       return false
     }
+
     this.pendingBytes += normalizedByteLength
+
     return true
   }
 
@@ -42,5 +46,6 @@ function normalizeByteLength(byteLength: number): number {
   if (!Number.isFinite(byteLength) || byteLength <= 0) {
     return 0
   }
+
   return Math.floor(byteLength)
 }

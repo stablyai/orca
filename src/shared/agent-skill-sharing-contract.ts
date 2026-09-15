@@ -4,9 +4,13 @@ import { SkillDiscoveryTargetSchema } from './skills'
 
 export const AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE =
   'agent_skill_sharing_unsupported_environment'
+
 export const AGENT_SKILL_SELECTOR_NOT_FOUND_CODE = 'agent_skill_selector_not_found'
+
 export const AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE = 'agent_skill_selector_ambiguous'
+
 export const AGENT_SKILL_SHARING_BUSY_CODE = 'agent_skill_sharing_busy'
+
 export const AGENT_SKILL_NOT_SHAREABLE_CODE = 'agent_skill_not_shareable'
 
 export const AgentSkillShareRequestSchema = z

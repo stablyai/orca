@@ -22,17 +22,22 @@ export class WatcherSupervisorCapacityWait {
 
   run<T>(operation: Promise<T>, retry: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const lifecycleGeneration = this.lifecycleGeneration
+
     return operation.catch(async (error: unknown) => {
       if (!(error instanceof WatcherChildCapacityError)) {
         throw error
       }
+
       if (lifecycleGeneration !== this.lifecycleGeneration) {
         throw watcherHostFailure('file watcher supervisor disposed', 'supervisor_disposed')
       }
+
       await this.wait(signal)
+
       if (lifecycleGeneration !== this.lifecycleGeneration) {
         throw watcherHostFailure('file watcher supervisor disposed', 'supervisor_disposed')
       }
+
       // Why: subscribe() wraps each retry in a fresh capacity wait, so a slot
       // reclaimed by crash recovery remains pending without polling or failure.
       return retry()
@@ -43,7 +48,9 @@ export class WatcherSupervisorCapacityWait {
     if (signal?.aborted) {
       return Promise.reject(createCapacityAbortError())
     }
+
     const state = this.state ?? this.createState()
+
     return state.waiters.wait({
       signal,
       createAbortError: createCapacityAbortError,
@@ -62,9 +69,11 @@ export class WatcherSupervisorCapacityWait {
   dispose(): void {
     this.lifecycleGeneration++
     const state = this.state
+
     if (!state) {
       return
     }
+
     this.state = null
     state.cancel()
     state.reject(
@@ -79,16 +88,19 @@ export class WatcherSupervisorCapacityWait {
   private createState(): CapacityWaitState {
     let resolve = (): void => undefined
     let reject = (_error: Error): void => undefined
+
     const promise = new Promise<void>((nextResolve, nextReject) => {
       resolve = nextResolve
       reject = nextReject
     })
+
     const state: CapacityWaitState = {
       waiters: new PromiseSettlementWaiters(promise),
       resolve,
       reject,
       cancel: () => undefined
     }
+
     this.state = state
     // Why: one physical slot launches the shared supervisor child; every root
     // awaiting this barrier can then subscribe through that same child.
@@ -96,8 +108,10 @@ export class WatcherSupervisorCapacityWait {
       if (this.state === state) {
         this.state = null
       }
+
       state.resolve()
     })
+
     return state
   }
 }

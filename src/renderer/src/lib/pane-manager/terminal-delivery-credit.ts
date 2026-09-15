@@ -12,6 +12,7 @@ function completeTerminalDeliveryCredit(credit: TerminalDeliveryCredit): void {
   if (credit.completed || credit.open || credit.pendingClaims > 0) {
     return
   }
+
   credit.completed = true
   credit.complete()
 }
@@ -27,8 +28,10 @@ export function deliverTerminalDataWithDeferredCredit(
     pendingClaims: 0,
     completed: false
   }
+
   const previousCredit = currentDeliveryCredit
   currentDeliveryCredit = credit
+
   try {
     deliver()
   } finally {
@@ -40,15 +43,19 @@ export function deliverTerminalDataWithDeferredCredit(
 
 export function takeCurrentTerminalDeliveryCredit(): (() => void) | null {
   const credit = currentDeliveryCredit
+
   if (!credit || !credit.open) {
     return null
   }
+
   credit.pendingClaims += 1
   let settled = false
+
   return () => {
     if (settled) {
       return
     }
+
     settled = true
     credit.pendingClaims -= 1
     completeTerminalDeliveryCredit(credit)

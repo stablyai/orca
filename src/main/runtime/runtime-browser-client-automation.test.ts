@@ -10,6 +10,7 @@ import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 describe('runtime browser client automation routing', () => {
   it('routes an explicit client page and returns its exact command result', async () => {
     const fixture = await createFixture()
+
     const routing = routeRuntimeBrowserClientAutomation({
       method: 'browser.click',
       params: { page: 'page-a', x: 10, y: 20 },
@@ -34,6 +35,7 @@ describe('runtime browser client automation routing', () => {
 
   it('routes the active client page in an explicit folder or worktree workspace', async () => {
     const fixture = await createFixture()
+
     const routing = routeRuntimeBrowserClientAutomation({
       method: 'browser.snapshot',
       params: { worktree: 'id:folder:folder-a' },
@@ -88,6 +90,7 @@ describe('runtime browser client automation routing', () => {
     ).rejects.toThrow('browser_host_capability_unavailable')
 
     const failed = await createFixture()
+
     const routing = routeRuntimeBrowserClientAutomation({
       method: 'browser.click',
       params: { page: 'page-a', x: 10 },
@@ -95,6 +98,7 @@ describe('runtime browser client automation routing', () => {
       leases: failed.leases,
       resolveWorkspace: failed.resolveWorkspace
     })
+
     await failed.waitForCommand()
     failed.settle({ status: 'failed', errorCode: 'browser_client_page_automation_failed' })
     await expect(routing).rejects.toThrow('browser_client_page_automation_failed')
@@ -106,6 +110,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a'
   })
+
   const lease = leases.attach({
     browserHostClientId: 'host-a',
     connectionId: 'connection-a',
@@ -116,6 +121,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
     pageInventory: [],
     pageReconciliationProtocolVersion: 1
   }).lease
+
   let command: BrowserClientHostCommandEvent | undefined
   let commandWaiter: ((event: BrowserClientHostCommandEvent) => void) | undefined
   leases.attachCommandDelivery(
@@ -131,6 +137,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
       commandWaiter = undefined
     }
   )
+
   const creation = leases.createClientPage({
     browserPageId: 'page-a',
     browserHostClientId: 'host-a',
@@ -138,9 +145,11 @@ async function createFixture(options: { automation?: boolean } = {}) {
     browserProfileId: 'default',
     executionHostKey: 'native:runtime-a:7'
   })
+
   if (!command) {
     throw new Error('expected browser client create command')
   }
+
   settleCommand(command, { status: 'completed' })
   const placement = await creation
   command = undefined
@@ -156,6 +165,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
     active: true
   })
   const resolveWorkspace = vi.fn(async () => ({ id: 'workspace-a' }))
+
   function settleCommand(
     event: BrowserClientHostCommandEvent,
     result: BrowserClientHostCommandResult
@@ -185,6 +195,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
       }
     )
   }
+
   return {
     leases,
     pages,
@@ -196,6 +207,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
       if (command) {
         return Promise.resolve(command)
       }
+
       return new Promise<BrowserClientHostCommandEvent>((resolve) => {
         commandWaiter = resolve
       })
@@ -204,6 +216,7 @@ async function createFixture(options: { automation?: boolean } = {}) {
       if (!command) {
         throw new Error('expected browser client command')
       }
+
       settleCommand(command, result)
     }
   }

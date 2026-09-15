@@ -86,6 +86,7 @@ export function SourceControlSectionFileList({
             />
           )
         }
+
         if (node.type === 'directory') {
           return (
             <SourceControlTreeDirectoryRow
@@ -102,12 +103,14 @@ export function SourceControlSectionFileList({
             />
           )
         }
+
         const submoduleExpansion = isExpandableSubmoduleEntry(node.entry)
           ? {
               isExpanded: expandedSubmoduleKeys.has(getSubmoduleExpansionKey(node.entry)),
               onToggle: () => toggleSubmodule(node.entry)
             }
           : undefined
+
         return (
           <UncommittedEntryRow
             key={node.key}
@@ -151,14 +154,17 @@ export function SourceControlSectionFileList({
             />
           )
         }
+
         const entry = row.entry
         const key = `${entry.area}::${entry.path}`
+
         const submoduleExpansion = isExpandableSubmoduleEntry(entry)
           ? {
               isExpanded: expandedSubmoduleKeys.has(getSubmoduleExpansionKey(entry)),
               onToggle: () => toggleSubmodule(entry)
             }
           : undefined
+
         return (
           <UncommittedEntryRow
             key={key}

@@ -11,9 +11,13 @@ import { StructuredAgentSessionHandoffOperationGuard } from './structured-agent-
 import type { StructuredAgentSessionHandoffFlowContext } from './structured-agent-session-handoff-types'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-flow-runner-outcome-write-failure'
+
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
+
 const OPERATION = `${NOW}-00000000000000000000000000000002`
+
 const roots: string[] = []
 
 afterEach(async () => {
@@ -46,10 +50,12 @@ async function failingFlowRunner(
 }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-handoff-flow-runner-'))
   roots.push(root)
+
   const store = await AgentSessionRecordStore.open({
     directory: join(root, 'store'),
     hostId: 'local'
   })
+
   const journal = await openAgentSessionJournal({
     identity: {
       sessionId: SESSION,
@@ -60,6 +66,7 @@ async function failingFlowRunner(
     },
     journalDir: join(root, 'journal')
   })
+
   const runner = new StructuredAgentSessionHandoffFlowRunner({
     deps: {
       store,
@@ -83,15 +90,18 @@ async function failingFlowRunner(
     },
     fail
   })
+
   return { runner, store, root }
 }
 
 describe('structured handoff flow runner outcome-write failure', () => {
   it('still reports the flow failure when the failed-outcome ledger write throws', async () => {
     const failures: unknown[] = []
+
     const { runner, store, root } = await failingFlowRunner(
       (_params, error) => void failures.push(error)
     )
+
     // Materialize the store file so its later disappearance reads as corruption, making every
     // subsequent ledger write reject.
     await store.admitOperation({
@@ -114,9 +124,11 @@ describe('structured handoff flow runner outcome-write failure', () => {
     const { runner } = await failingFlowRunner(() => {
       throw new Error('agent_session_ownership_unknown')
     })
+
     const leaked: unknown[] = []
     const observe = (reason: unknown): void => void leaked.push(reason)
     process.on('unhandledRejection', observe)
+
     try {
       runner.begin({ callerKey: 'client-1', params, turnId: null, fingerprint: 'fp' })
       await runner.drain()

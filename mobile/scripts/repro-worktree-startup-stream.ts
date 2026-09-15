@@ -15,10 +15,14 @@ import {
 } from './repro-worktree-startup-output'
 
 const WS_URL = process.env.ORCA_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
+
 const USER_DATA =
   process.env.ORCA_USER_DATA ?? `${process.env.HOME}/Library/Application Support/orca-dev`
+
 const repoSelector = process.argv[2]
+
 const worktreeName = process.argv[3]
+
 const startupCommand = process.argv[4] || 'claude'
 
 type RpcResponse = {
@@ -51,11 +55,14 @@ function readJson<T>(path: string): T {
   if (!existsSync(path)) {
     throw new Error(`Missing ${path}`)
   }
+
   return JSON.parse(readFileSync(path, 'utf8')) as T
 }
 
 const devices = readJson<Array<{ token: string }>>(join(USER_DATA, 'orca-devices.json'))
+
 const token = devices[0]?.token
+
 const keypair = readJson<{ publicKeyB64: string }>(join(USER_DATA, 'orca-e2ee-keypair.json'))
 
 if (!token || !keypair.publicKeyB64) {
@@ -63,14 +70,20 @@ if (!token || !keypair.publicKeyB64) {
 }
 
 let reqId = 0
+
 const pending = new Map<string, PendingRequest>()
+
 const streamListeners = new Map<string, (result: Record<string, unknown>) => void>()
+
 const clientKeys = nacl.box.keyPair()
+
 const serverPublicKey = Buffer.from(keypair.publicKeyB64, 'base64')
+
 const sharedKey = nacl.box.before(new Uint8Array(serverPublicKey), clientKeys.secretKey)
 
 function nextId(): string {
   reqId += 1
+
   return `startup-repro-${reqId}`
 }
 
@@ -89,17 +102,21 @@ function encrypt(plaintext: string): string {
   const bundle = new Uint8Array(nonce.length + ciphertext.length)
   bundle.set(nonce)
   bundle.set(ciphertext, nonce.length)
+
   return toBase64(bundle)
 }
 
 function decrypt(payload: string): string | null {
   const bundle = fromBase64(payload)
+
   if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
     return null
   }
+
   const nonce = bundle.subarray(0, nacl.box.nonceLength)
   const ciphertext = bundle.subarray(nacl.box.nonceLength)
   const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
+
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
@@ -115,11 +132,13 @@ function send(
 ): Promise<RpcResponse> {
   const id = nextId()
   sendRaw(ws, { id, deviceToken: token, method, params })
+
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(id)
       reject(new Error(`Timed out waiting for ${method}`))
     }, timeoutMs)
+
     pending.set(id, {
       method,
       resolve: (response) => {
@@ -140,25 +159,32 @@ function formatError(response: RpcResponse): string {
 
 async function waitForTerminals(ws: WebSocket, worktreeId: string): Promise<TerminalInfo[]> {
   const deadline = Date.now() + 60_000
+
   while (Date.now() < deadline) {
     const response = await send(ws, 'terminal.list', { worktree: worktreeId })
+
     if (!response.ok) {
       throw new Error(`terminal.list failed: ${formatError(response)}`)
     }
+
     const terminals = (response.result?.terminals ?? []) as Array<{
       handle?: string
       title?: string | null
     }>
+
     const handles = terminals
       .filter((terminal): terminal is { handle: string; title?: string | null } =>
         Boolean(terminal.handle)
       )
       .map((terminal) => ({ handle: terminal.handle, title: terminal.title ?? null }))
+
     if (handles.length > 0) {
       return handles
     }
+
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
+
   throw new Error('Timed out waiting for startup terminals')
 }
 
@@ -167,8 +193,10 @@ async function subscribe(ws: WebSocket, capture: StartupTerminalCapture): Promis
   streamListeners.set(id, (result) => {
     if (result.type === 'scrollback') {
       capture.scrollback = result
+
       return
     }
+
     if (result.type === 'data' && typeof result.chunk === 'string') {
       capture.chunks.push(result.chunk)
     }
@@ -194,10 +222,13 @@ async function run(ws: WebSocket): Promise<void> {
     ws.once('message', (data) => {
       clearTimeout(timeout)
       const msg = JSON.parse(data.toString()) as { type?: string }
+
       if (msg.type !== 'e2ee_ready') {
         reject(new Error(`Unexpected handshake response: ${data.toString()}`))
+
         return
       }
+
       resolve()
     })
   })
@@ -208,14 +239,18 @@ async function run(ws: WebSocket): Promise<void> {
       () => reject(new Error('Timed out waiting for e2ee_authenticated')),
       5000
     )
+
     ws.once('message', (data) => {
       clearTimeout(timeout)
       const plaintext = decrypt(data.toString())
       const msg = plaintext ? (JSON.parse(plaintext) as { type?: string }) : null
+
       if (msg?.type !== 'e2ee_authenticated') {
         reject(new Error(`Unexpected auth response: ${data.toString()}`))
+
         return
       }
+
       resolve()
     })
   })
@@ -226,10 +261,13 @@ async function run(ws: WebSocket): Promise<void> {
     { repo: repoSelector, name: worktreeName, startupCommand },
     120_000
   )
+
   if (!created.ok) {
     throw new Error(`worktree.create failed: ${formatError(created)}`)
   }
+
   const worktree = created.result?.worktree as { id?: string; path?: string } | undefined
+
   if (!worktree?.id) {
     throw new Error(`worktree.create returned no worktree id: ${formatError(created)}`)
   }
@@ -237,20 +275,24 @@ async function run(ws: WebSocket): Promise<void> {
   console.log(`worktree: ${worktree.id}`)
   const terminals = await waitForTerminals(ws, worktree.id)
   console.log(`terminals: ${terminals.map((terminal) => terminal.handle).join(', ')}`)
+
   const captures = terminals.map((terminal) => ({
     handle: terminal.handle,
     title: terminal.title,
     scrollback: null,
     chunks: []
   }))
+
   for (const capture of captures) {
     await subscribe(ws, capture)
   }
 
   await new Promise((resolve) => setTimeout(resolve, 15_000))
+
   for (const capture of captures) {
     await send(ws, 'terminal.unsubscribe', { subscriptionId: capture.handle }).catch(() => null)
   }
+
   const dir = saveStartupCaptures(captures, worktreeName)
   console.table(captures.map(summarizeStartupCapture))
   console.log(`saved: ${dir}`)
@@ -273,10 +315,13 @@ ws.on('open', () => {
 
 ws.on('message', (data) => {
   const raw = data.toString()
+
   if (raw.startsWith('{')) {
     return
   }
+
   const plaintext = decrypt(raw)
+
   if (!plaintext) {
     return
   }
@@ -284,15 +329,19 @@ ws.on('message', (data) => {
   const response = JSON.parse(plaintext) as RpcResponse
   const result = response.result
   const streamListener = streamListeners.get(response.id)
+
   if (streamListener && response.ok && (response.streaming || result?.type)) {
     streamListener(result ?? {})
+
     return
   }
 
   const request = pending.get(response.id)
+
   if (!request || request.method === 'terminal.subscribe') {
     return
   }
+
   pending.delete(response.id)
   request.resolve(response)
 })
@@ -301,6 +350,7 @@ ws.on('close', () => {
   for (const request of pending.values()) {
     request.reject(new Error('WebSocket closed'))
   }
+
   pending.clear()
 })
 

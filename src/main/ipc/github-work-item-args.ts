@@ -37,10 +37,13 @@ export function dispatchWorkItem<T>(
   localGitOptions?: LocalGitExecOptions
 ): Promise<T | null> | null {
   const { number, type } = args
+
   if (typeof number !== 'number' || !Number.isInteger(number) || number < 1) {
     return null
   }
+
   const safeType = type === 'issue' || type === 'pr' ? type : undefined
+
   // Why: open-by-number must pin the same source the list and start-point use,
   // else a fork and its upstream sharing a PR number resolve to different PRs.
   return fn(

@@ -40,10 +40,13 @@ export async function inspectSetupScriptPromptState({
 }): Promise<SetupScriptPromptInspection> {
   try {
     const hooksResult = await checkHooks()
+
     if (hooksResult.status === 'error') {
       return { status: 'error', repoId: repo.id }
     }
+
     const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
+
     if (hasEffectiveSetup) {
       return {
         status: 'ok',
@@ -55,6 +58,7 @@ export async function inspectSetupScriptPromptState({
     }
 
     const candidates = await inspectImports()
+
     return {
       status: 'ok',
       repoId: repo.id,
@@ -66,13 +70,16 @@ export async function inspectSetupScriptPromptState({
     if (isRuntimeScopeForbiddenError(error)) {
       return { status: 'forbidden', repoId: repo.id }
     }
+
     console.warn('[setup-script-prompt] Failed to inspect setup scripts:', error)
+
     return { status: 'error', repoId: repo.id }
   }
 }
 
 export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boolean {
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()
+
   return (
     resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
       hasLocalScript: Boolean(localSetup)
@@ -107,6 +114,7 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
   validRepoHostIdentities: Set<string>
 ): readonly string[] {
   const unambiguousIdentityByRepoId = new Map<string, string | null>()
+
   for (const identity of validRepoHostIdentities) {
     const separatorIndex = identity.indexOf('\0')
     const repoId = separatorIndex !== -1 ? identity.slice(separatorIndex + 1) : identity
@@ -117,18 +125,23 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
   }
 
   const next: string[] = []
+
   for (const entry of sanitizeSetupScriptPromptDismissals(value)) {
     const repoHostIdentity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+
     const validIdentity = validRepoHostIdentities.has(repoHostIdentity)
       ? repoHostIdentity
       : unambiguousIdentityByRepoId.get(repoHostIdentity)
+
     if (validIdentity) {
       const validEntry = getSetupScriptPromptDismissalKey(validIdentity)
+
       if (!next.includes(validEntry)) {
         next.push(validEntry)
       }
     }
   }
+
   // Why: fetchRepos / fetchRuntimeEnvironmentRepos / validateRepoScopedUi assign
   // this into set() on every catalog refresh. SetupScriptPromptCard Object.is-
   // subscribes to the array, so a fresh copy on a no-op prune is a guaranteed miss.
@@ -137,6 +150,7 @@ export function filterSetupScriptPromptDismissalsToValidRepos(
   if (isUnchangedDismissalList(value, next)) {
     return value
   }
+
   return next
 }
 
@@ -146,14 +160,17 @@ export function sanitizeSetupScriptPromptDismissals(value: unknown): readonly st
   }
 
   const next: string[] = []
+
   for (const entry of value) {
     if (typeof entry !== 'string' || !entry.startsWith(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX)) {
       continue
     }
+
     if (!next.includes(entry)) {
       next.push(entry)
     }
   }
+
   return next
 }
 
@@ -164,6 +181,7 @@ export function buildImportedHookSettings(
 ): RepoHookSettings {
   const defaults = getDefaultRepoHookSettings()
   const current = repo.hookSettings
+
   return {
     ...defaults,
     ...current,
@@ -188,9 +206,11 @@ export function buildImportedHookSettings(
 
 export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
   const [primaryFile, ...remainingFiles] = candidate.files
+
   if (!primaryFile) {
     return candidate.label
   }
+
   return remainingFiles.length > 0
     ? `${candidate.label} (${primaryFile} +${remainingFiles.length})`
     : `${candidate.label} (${primaryFile})`
@@ -202,19 +222,25 @@ export function formatCandidateSource(candidate: SetupScriptImportCandidate): st
 export function formatCandidateProvenance(candidate: SetupScriptImportCandidate): string | null {
   if (candidate.provider === 'package-manager') {
     const lockfile = candidate.files.find((file) => file !== 'package.json')
+
     if (lockfile) {
       return lockfile
     }
   }
+
   const [primaryFile, secondaryFile, ...rest] = candidate.files
+
   if (!primaryFile) {
     return null
   }
+
   if (!secondaryFile) {
     return primaryFile
   }
+
   if (rest.length === 0) {
     return `${primaryFile} and ${secondaryFile}`
   }
+
   return `${primaryFile} +${rest.length + 1} more`
 }

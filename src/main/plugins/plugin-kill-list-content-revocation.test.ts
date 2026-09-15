@@ -12,7 +12,9 @@ import { hashPluginTree } from './plugin-content-hash'
  *  VM recipe `create` strings are executed through spawn(..., { shell: true }). */
 
 const roots: string[] = []
+
 const services: PluginService[] = []
+
 const pluginKey = 'orca-samples.recipes'
 
 function contentManifest(): PluginManifest {
@@ -49,14 +51,17 @@ async function pluginRoot(): Promise<string> {
       })
     )
   ])
+
   return root
 }
 
 async function createService(root: string, isKilled: () => boolean): Promise<PluginService> {
   const content = await hashPluginTree(root)
+
   if (!content.ok) {
     throw new Error(content.error)
   }
+
   const service = new PluginService({
     userDataPath: root,
     hostVersion: '1.4.0',
@@ -69,7 +74,9 @@ async function createService(root: string, isKilled: () => boolean): Promise<Plu
     getPluginKillListEntry: (key) =>
       isKilled() && key === pluginKey ? { pluginKey, reason: 'Malware advisory' } : null
   })
+
   services.push(service)
+
   return service
 }
 

@@ -10,6 +10,7 @@ it.each([
     readDesktopAwayState({ getSystemIdleState: () => 'active', getSystemIdleTime: () => idle })
   ).toBe(away)
 })
+
 it('allows immediate delivery when locked and fails open when presence cannot be read', () => {
   expect(
     readDesktopAwayState({ getSystemIdleState: () => 'locked', getSystemIdleTime: () => 0 })

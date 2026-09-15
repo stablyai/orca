@@ -2,9 +2,13 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
 const SHORT_NAME = 'synthetic-short-prompt-demo'
+
 const RESIZE_NAME = 'synthetic-resize-prompt-demo'
+
 const LONG_NAME = 'visual-proof-long-prompt-demo'
+
 const END_MARKER = 'SYNTHETIC-END-MARKER'
+
 const RESIZE_PROMPT = `Synthetic resize focus validation. ${'placeholder '.repeat(24)}`
 
 test('automation detail keeps short prompts readable and reveals a very long prompt at narrow width', async ({
@@ -16,13 +20,17 @@ test('automation detail keeps short prompts readable and reveals a very long pro
   await orcaPage.evaluate(
     async ({ shortName, resizeName, resizePrompt, longName, endMarker }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const repo = store.getState().repos[0]
+
       if (!repo) {
         throw new Error('Seeded test repo is not available')
       }
+
       const base = {
         agentId: 'codex' as const,
         repo: `id:${repo.id}`,
@@ -34,12 +42,15 @@ test('automation detail keeps short prompts readable and reveals a very long pro
         enabled: false,
         missedRunGraceMinutes: 720
       }
+
       const createAutomation = async (params: typeof base & { name: string; prompt: string }) => {
         const response = await window.api.runtime.call({ method: 'automation.create', params })
+
         if (!response.ok) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
       }
+
       await createAutomation({
         ...base,
         name: shortName,
@@ -100,11 +111,13 @@ test('automation detail keeps short prompts readable and reveals a very long pro
   const showMore = orcaPage.getByRole('button', { name: 'Show more' })
   await expect(showMore).toBeVisible()
   expect(await showMore.getAttribute('aria-controls')).toBe(await prompt.getAttribute('id'))
+
   const collapsedMetrics = await prompt.evaluate((element) => ({
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight,
     lineClamp: getComputedStyle(element).webkitLineClamp
   }))
+
   expect(collapsedMetrics.scrollHeight).toBeGreaterThan(collapsedMetrics.clientHeight)
   expect(collapsedMetrics.lineClamp).toBe('4')
 
@@ -120,6 +133,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
     lineClamp: getComputedStyle(element).webkitLineClamp,
     overflowWrap: getComputedStyle(element).overflowWrap
   }))
+
   expect(expandedMetrics.clientHeight).toBeGreaterThan(80)
   expect(expandedMetrics.scrollHeight).toBeLessThanOrEqual(expandedMetrics.clientHeight + 1)
   expect(expandedMetrics.scrollWidth).toBeLessThanOrEqual(expandedMetrics.clientWidth + 1)
@@ -128,13 +142,17 @@ test('automation detail keeps short prompts readable and reveals a very long pro
 
   const markerProof = await prompt.evaluate(async (element, marker) => {
     const text = element.firstChild
+
     if (!(text instanceof Text)) {
       throw new Error('Prompt text node is unavailable')
     }
+
     const start = text.data.indexOf(marker)
+
     if (start === -1) {
       throw new Error('Prompt end marker is unavailable')
     }
+
     const range = document.createRange()
     range.setStart(text, start)
     range.setEnd(text, start + marker.length)
@@ -142,14 +160,17 @@ test('automation detail keeps short prompts readable and reveals a very long pro
     selection?.removeAllRanges()
     selection?.addRange(range)
     const scrollContainer = element.closest('[role="tabpanel"]')
+
     if (!(scrollContainer instanceof HTMLElement)) {
       throw new Error('Automation overview scroll container is unavailable')
     }
+
     scrollContainer.scrollTop +=
       range.getBoundingClientRect().bottom - scrollContainer.getBoundingClientRect().bottom + 16
     await new Promise(requestAnimationFrame)
     const markerRect = range.getBoundingClientRect()
     const containerRect = scrollContainer.getBoundingClientRect()
+
     return {
       selectedText: selection?.toString(),
       markerTop: markerRect.top,
@@ -158,6 +179,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
       visibleBottom: containerRect.bottom
     }
   }, END_MARKER)
+
   expect(markerProof.selectedText).toBe(END_MARKER)
   expect(markerProof.markerTop).toBeGreaterThanOrEqual(markerProof.visibleTop)
   expect(markerProof.markerBottom).toBeLessThanOrEqual(markerProof.visibleBottom)

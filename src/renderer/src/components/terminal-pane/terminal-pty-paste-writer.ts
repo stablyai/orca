@@ -9,6 +9,7 @@ export function writeTerminalPastePtyInput(
   if (!transport) {
     return false
   }
+
   // Why: paste chunking must respect PTY backpressure. sendInput only queues
   // local writes, while sendInputAccepted resolves after the PTY accepts them.
   return transport.sendInputAccepted?.(data) ?? transport.sendInput(data)

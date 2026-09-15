@@ -16,6 +16,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
 
   protected scheduleAutomaticUpdateCheck(delayMs: number): void {
     let effectiveDelayMs = delayMs
+
     // All retry-cadence callers pass exactly this constant, so keying backoff on it keeps one choke point instead of threading a flag through every schedule site.
     if (delayMs === AUTO_UPDATE_RETRY_INTERVAL_MS) {
       effectiveDelayMs = Math.min(
@@ -24,9 +25,11 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
       )
       this.consecutiveAutomaticRetrySchedules += 1
     }
+
     if (this.autoUpdateCheckTimer) {
       clearTimeout(this.autoUpdateCheckTimer)
     }
+
     this.autoUpdateCheckTimer = setTimeout(() => {
       // Why: Orca runs for days, so keep the next background check scheduled in the main process rather than tying it to relaunches or renderer lifetime.
       if (!this.runBackgroundUpdateCheck()) {
@@ -54,13 +57,17 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
+
     if (this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking') {
       return false
     }
+
     if (!app.isPackaged || is.dev) {
       this.sendStatus({ state: 'not-available' })
+
       return false
     }
+
     // Why: set the nudge marker before any events arrive so later checks can't inherit a stale campaign id; persisted id keeps a nudge card dismissable after relaunch.
     this.activeUpdateNudgeId = nudgeId
     // Why: 'checking-for-update' arrives a tick later, so a second focus/resume can slip in before status flips; track launch in memory to dedupe that gap.
@@ -68,13 +75,17 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     this.backgroundCheckPromotedToUserInitiated = false
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
+
     const launch = (): Promise<unknown> | undefined => {
       if (!this.isActiveUpdateCheckAttempt(attemptId)) {
         return undefined
       }
+
       this.markUpdateCheckLaunched(attemptId)
+
       return autoUpdater.checkForUpdates()
     }
+
     const run = this.pinDefaultReleaseFeed().then(launch)
     void Promise.resolve(run)
       .then(() => this.handleSettledUpdateCheckPromise(attemptId))
@@ -82,12 +93,15 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
         if (!this.isActiveUpdateCheckAttempt(attemptId)) {
           return
         }
+
         const wasUserInitiated = this.getSettledCheckUserInitiated()
         this.backgroundCheckLaunchPending = false
         this.backgroundCheckPromotedToUserInitiated = false
+
         if (wasUserInitiated) {
           this.userInitiatedCheck = false
         }
+
         void this.sendCheckFailureStatus(
           String(err?.message ?? err),
           wasUserInitiated,
@@ -95,6 +109,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
           err
         )
       })
+
     return true
   }
 
@@ -114,6 +129,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (this.includePrereleaseActive) {
       return
     }
+
     // Why: this flag makes electron-updater accept prerelease manifests; we keep the manifest-probed generic feed over the native GitHub provider because cancelled RCs can appear without assets.
     this.enablePrereleaseManifestChecks()
     this.includePrereleaseActive = true

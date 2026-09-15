@@ -4,11 +4,14 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   assertPatchedNodePtyConsoleListAgent,
   patchNodePtyConsoleListAgent
 } = require('../relay-assets/node-pty-1.1.0-console-list-agent-patch.cjs')
+
 const projectDir = resolve(import.meta.dirname, '..', '..')
+
 const cleanupDirs = []
 
 afterEach(() => {
@@ -57,6 +60,7 @@ function writeNodePtyFixture(version, agentSource) {
   mkdirSync(libDir, { recursive: true })
   writeFileSync(join(nodePtyDir, 'package.json'), JSON.stringify({ version }))
   writeFileSync(agentPath, agentSource)
+
   return { root, agentPath }
 }
 

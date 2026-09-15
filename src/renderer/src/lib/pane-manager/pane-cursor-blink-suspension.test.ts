@@ -23,6 +23,7 @@ import { isTerminalCursorBlinkSuspended } from './pane-cursor-blink-suspension'
  */
 
 const COLS = 80
+
 const ROWS = 24
 
 type TestPane = ManagedPaneInternal & { host: HTMLElement }
@@ -44,14 +45,17 @@ function write(terminal: Terminal, data: string): Promise<void> {
 function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean } = {}): TestPane {
   const host = document.createElement('div')
   document.body.appendChild(host)
+
   const terminal = new Terminal({
     cols: COLS,
     rows: ROWS,
     cursorBlink: options.cursorBlink ?? true,
     allowProposedApi: true
   })
+
   terminal.open(host)
   terminal.focus()
+
   const pane = {
     id: 1,
     terminal,
@@ -70,6 +74,7 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
     pendingWebglRefreshRafId: null,
     pendingObservedFitRafId: null
   } as unknown as TestPane
+
   return pane
 }
 
@@ -89,6 +94,7 @@ function renderedText(pane: TestPane): string {
 /** Reveal = the manager's resume pass, then the terminal regains real DOM focus. */
 async function reveal(panes: TestPane[], owner?: object): Promise<void> {
   resumePaneRendering(panes, owner)
+
   for (const pane of panes) {
     pane.terminal.focus()
   }
@@ -154,12 +160,14 @@ describe('hidden-pane cursor blink suspension', () => {
     // Real key input through xterm's textarea must still route to the PTY.
     const typed: string[] = []
     pane.terminal.onData((data) => typed.push(data))
+
     const keydown = new KeyboardEvent('keydown', {
       key: 'x',
       code: 'KeyX',
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(keydown, 'keyCode', { value: 88 })
     pane.terminal.textarea?.dispatchEvent(keydown)
     expect(typed, 'keystrokes must still reach the PTY after a hide/reveal').toEqual(['x'])
@@ -200,6 +208,7 @@ describe('hidden-pane cursor blink suspension', () => {
     for (let cycle = 0; cycle < 2; cycle++) {
       suspendPaneRendering(panes, { owner, livePanes: () => panes })
       resumePaneRendering(panes, owner)
+
       // One at a time: the DOM renderer only paints a blinking cursor in the pane
       // that currently holds real focus, so focus each split half in turn.
       for (const [name, pane] of [
@@ -212,6 +221,7 @@ describe('hidden-pane cursor blink suspension', () => {
         expect(rendersBlinkingCursor(pane), `${name} blink, cycle ${cycle}`).toBe(true)
       }
     }
+
     expect(renderedText(left)).toContain('left$')
     expect(renderedText(right)).toContain('right$')
   })
@@ -261,10 +271,13 @@ function blinkCellsRedrawnPerWindow(terminal: Terminal, windowMs: number): numbe
       _core: { coreService: { decPrivateModes: { cursorBlink?: boolean } } }
     }
   )._core.coreService.decPrivateModes.cursorBlink
+
   const blinking = decPrivateBlink ?? terminal.options.cursorBlink === true
+
   if (!blinking) {
     return 0
   }
+
   return Math.floor(windowMs / BLINK_INTERVAL_MS) * terminal.cols
 }
 
@@ -286,6 +299,7 @@ describe('hidden-pane cursor blink redraw cost', () => {
     // The retention cap: MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS.
     const panes = Array.from({ length: 6 }, () => createTestPane({ webglAddon: true }))
     const windowMs = 30_000
+
     const cells = () =>
       panes.reduce((sum, pane) => sum + blinkCellsRedrawnPerWindow(pane.terminal, windowMs), 0)
 

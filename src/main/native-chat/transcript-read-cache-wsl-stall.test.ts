@@ -12,9 +12,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./session-file-resolver', () => ({
   resolveSessionFilePath: mocks.resolve
 }))
+
 vi.mock('./transcript-reader', () => ({
   readNativeChatTranscript: mocks.read
 }))
+
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat
@@ -44,6 +46,7 @@ beforeEach(() => {
 describe('cached native chat transcript read with a stalled post-resolution stat', () => {
   it('reports a retryable error without notFound and leaves nothing cached', async () => {
     vi.useFakeTimers()
+
     try {
       mocks.stat.mockReturnValueOnce(new Promise(() => {}))
       const stalled = readNativeChatTranscriptCached('claude', 'session-id')
@@ -79,6 +82,7 @@ describe('cached native chat transcript read with a stalled post-resolution stat
     const warm = await readNativeChatTranscriptCached('claude', 'session-id')
 
     vi.useFakeTimers()
+
     try {
       mocks.stat.mockReturnValueOnce(new Promise(() => {}))
       const stalled = readNativeChatTranscriptCached('claude', 'session-id')

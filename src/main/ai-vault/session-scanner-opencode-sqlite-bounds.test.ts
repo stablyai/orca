@@ -18,6 +18,7 @@ afterEach(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   tempDirs = []
 })
 
@@ -25,6 +26,7 @@ function createTempDb(): { db: Database.Database; path: string } {
   const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-bounds-'))
   tempDirs.push(dir)
   const path = join(dir, 'opencode.db')
+
   return { db: new Database(path), path }
 }
 
@@ -123,9 +125,11 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
   it('returns only the newest `limit` sessions by time_updated', async () => {
     const { db, path } = createTempDb()
     applySchema(db)
+
     for (let i = 0; i < 5; i++) {
       insertSession(db, `ses_${i}`, 1_777_634_000_000 + i * 1000)
     }
+
     db.close()
 
     const candidates = await listOpenCodeSqliteSessions({ dbPaths: [path], limit: 2, issues: [] })
@@ -138,9 +142,11 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
   it('omits the SQL limit for an Unlimited scan', async () => {
     const { db, path } = createTempDb()
     applySchema(db)
+
     for (let i = 0; i < 5; i++) {
       insertSession(db, `ses_${i}`, 1_777_634_000_000 + i * 1000)
     }
+
     db.close()
 
     const candidates = await listOpenCodeSqliteSessions({
@@ -148,6 +154,7 @@ describe('listOpenCodeSqliteSessions — LIMIT-first discovery', () => {
       limit: Number.POSITIVE_INFINITY,
       issues: []
     })
+
     expect(candidates).toHaveLength(5)
   })
 
@@ -207,6 +214,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
         text: i === 0 ? 'OLDEST_PROMPT' : `recent text ${i}`
       })
     }
+
     db.close()
 
     const session = await parseOpenCodeSqliteSession({
@@ -214,6 +222,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       sessionId: 'ses_big',
       platform: 'darwin'
     })
+
     expect(session).not.toBeNull()
     // Full user/assistant count is retained for display accuracy.
     expect(session!.messageCount).toBe(105)
@@ -245,6 +254,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
         text: `OLD_USER_TEXT_${i}`
       })
     }
+
     // 100 newer assistant messages whose only part is non-text (tool output), so
     // they fill the newest-100 window but contribute no preview text.
     for (let i = 0; i < 100; i++) {
@@ -257,6 +267,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
         text: `tool output ${i}`
       })
     }
+
     db.close()
 
     const session = await parseOpenCodeSqliteSession({
@@ -264,6 +275,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       sessionId: 'ses_window',
       platform: 'darwin'
     })
+
     expect(session).not.toBeNull()
     // Full user/assistant count is retained (3 user + 100 assistant).
     expect(session!.messageCount).toBe(103)
@@ -296,6 +308,7 @@ describe('parseOpenCodeSqliteSession — bounded preview window', () => {
       sessionId: 'ses_roles',
       platform: 'darwin'
     })
+
     expect(session!.messageCount).toBe(1)
   })
 })

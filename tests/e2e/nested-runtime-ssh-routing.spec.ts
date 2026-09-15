@@ -53,9 +53,12 @@ const test = base.extend<{ proxyJumpFixture: NestedRuntimeProxyJumpFixture | nul
   proxyJumpFixture: async ({}, provideFixture) => {
     if (!isDockerNestedRuntimeRun || process.platform === 'win32') {
       await provideFixture(null)
+
       return
     }
+
     const fixture = createNestedRuntimeProxyJumpFixture()
+
     try {
       await provideFixture(fixture)
     } finally {
@@ -73,6 +76,7 @@ test.skip(
   !isDockerNestedRuntimeRun,
   'Run with ORCA_E2E_NESTED_RUNTIME_SSH=1 and ORCA_E2E_WEB_CLIENT=1'
 )
+
 test.skip(process.platform === 'win32', 'ProxyJump fixture requires POSIX OpenSSH tooling')
 
 async function installProxyJumpFixture(
@@ -108,27 +112,36 @@ async function installProxyJumpFixture(
 async function activateHubRepoTerminal(page: Page, repoId: string): Promise<string> {
   return page.evaluate(async (repoId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('HUB store is unavailable')
     }
+
     await store.getState().fetchWorktrees(repoId)
+
     const worktree = store
       .getState()
       .worktreesByRepo[repoId]?.find((candidate) => candidate.isMainWorktree)
+
     if (!worktree) {
       throw new Error(`HUB worktree ${repoId} is unavailable`)
     }
+
     store.getState().setActiveWorktree(worktree.id)
+
     if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
       store.getState().createTab(worktree.id)
     }
+
     store.getState().setActiveTabType('terminal')
+
     return worktree.id
   }, repoId)
 }
 
 async function assertHubTerminal(page: Page, repoId: string, marker: string): Promise<string> {
   const worktreeId = await activateHubRepoTerminal(page, repoId)
+
   try {
     await waitForActivePanePtyId(page, 30_000)
   } catch (error) {
@@ -136,6 +149,7 @@ async function assertHubTerminal(page: Page, repoId: string, marker: string): Pr
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId ?? null
       const tabs = worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []) : []
+
       return {
         activeTabId: state?.activeTabId ?? null,
         activeTabType: state?.activeTabType ?? null,
@@ -148,20 +162,24 @@ async function assertHubTerminal(page: Page, repoId: string, marker: string): Pr
         tabs
       }
     })
+
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
     )
   }
+
   await focusActiveTerminalInput(page)
   await page.keyboard.insertText(terminalMarkerCommand(marker))
   await page.keyboard.press('Enter')
   await expect.poll(() => getTerminalContent(page), { timeout: 30_000 }).toContain(marker)
+
   return worktreeId
 }
 
 async function assertWebTerminal(page: Page, worktreeId: string, marker: string): Promise<void> {
   await expect(worktreeRow(page, worktreeId)).toBeVisible({ timeout: 30_000 })
   let lastActivationAttempt = 0
+
   try {
     await expect
       .poll(
@@ -169,6 +187,7 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
           const state = await page.evaluate((worktreeId) => {
             const current = window.__store?.getState()
             const tabs = current?.tabsByWorktree[worktreeId] ?? []
+
             return {
               active: current?.activeWorktreeId === worktreeId,
               hasBoundTerminal: tabs.some(
@@ -176,11 +195,14 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
               )
             }
           }, worktreeId)
+
           const now = Date.now()
+
           if ((!state.active || !state.hasBoundTerminal) && now - lastActivationAttempt >= 2_000) {
             lastActivationAttempt = now
             await worktreeRowSurface(page, worktreeId).click()
           }
+
           return state.active && state.hasBoundTerminal ? worktreeId : null
         },
         {
@@ -193,10 +215,13 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
   } catch (error) {
     const diagnostic = await page.evaluate(async (worktreeId) => {
       const state = window.__store?.getState()
+
       const worktree = Object.values(state?.worktreesByRepo ?? {})
         .flat()
         .find((candidate) => candidate.id === worktreeId)
+
       const environmentId = worktree?.runtimeOwnerEnvironmentId ?? null
+
       const runtimeTabs = environmentId
         ? await window.api.runtimeEnvironments.call({
             selector: environmentId,
@@ -204,6 +229,7 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
             params: { worktree: `id:${worktreeId}` }
           })
         : null
+
       return {
         activeTabId: state?.activeTabId ?? null,
         activeTabType: state?.activeTabType ?? null,
@@ -216,10 +242,12 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
         worktree
       }
     }, worktreeId)
+
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
     )
   }
+
   await expect(page.locator('[data-rendered-active-worktree-id]')).toHaveAttribute(
     'data-rendered-active-worktree-id',
     worktreeId
@@ -230,12 +258,16 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
         if (!(await page.locator('body').innerText()).includes('SSH connection required')) {
           return 'ready'
         }
+
         return page.evaluate((worktreeId) => {
           const state = window.__store?.getState()
+
           const worktree = Object.values(state?.worktreesByRepo ?? {})
             .flat()
             .find((candidate) => candidate.id === worktreeId)
+
           const repo = state?.repos.find((candidate) => candidate.id === worktree?.repoId)
+
           return JSON.stringify({
             activeRuntimeEnvironmentId: state?.settings?.activeRuntimeEnvironmentId ?? null,
             activeWorktreeId: state?.activeWorktreeId ?? null,
@@ -263,6 +295,7 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
       { timeout: 30_000, message: 'Paired web client showed a client-local SSH reconnect gate' }
     )
     .toBe('ready')
+
   try {
     await waitForActivePanePtyId(page, 30_000)
   } catch (error) {
@@ -270,6 +303,7 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId ?? null
       const tabs = worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []) : []
+
       return {
         activeTabId: state?.activeTabId ?? null,
         activeTabType: state?.activeTabType ?? null,
@@ -282,10 +316,12 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
         tabs
       }
     })
+
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
     )
   }
+
   await expect
     .poll(
       async () => {
@@ -297,6 +333,7 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
         } catch {
           return ''
         }
+
         return getTerminalContent(page)
       },
       {
@@ -310,9 +347,11 @@ async function assertWebTerminal(page: Page, worktreeId: string, marker: string)
 
 function remoteTerminalHandle(ptyId: string): string {
   const separator = ptyId.indexOf('@@')
+
   if (!ptyId.startsWith('remote:') || separator === -1) {
     throw new Error(`Expected runtime-owned PTY id, received ${ptyId}`)
   }
+
   return decodeURIComponent(ptyId.slice(separator + 2))
 }
 
@@ -323,6 +362,7 @@ async function assertRuntimeTerminalLifecycle(
 ): Promise<void> {
   const terminal = remoteTerminalHandle(ptyId)
   const command = terminalMarkerCommand(marker)
+
   const response = await client.page.evaluate(
     async ({ command, environmentId, terminal }) => {
       const resize = await window.api.runtimeEnvironments.call({
@@ -330,6 +370,7 @@ async function assertRuntimeTerminalLifecycle(
         method: 'terminal.resizeForClient',
         params: { terminal, mode: 'mobile-fit', cols: 91, rows: 31, clientId: 'nested-e2e' }
       })
+
       const send = await window.api.runtimeEnvironments.call({
         selector: environmentId,
         method: 'terminal.send',
@@ -339,10 +380,12 @@ async function assertRuntimeTerminalLifecycle(
           client: { id: 'nested-e2e', type: 'desktop' }
         }
       })
+
       return { resize, send }
     },
     { command, environmentId: client.environmentId, terminal }
   )
+
   expect(response.resize.ok).toBe(true)
   expect(response.send.ok).toBe(true)
   await expect.poll(() => getTerminalContent(client.page), { timeout: 30_000 }).toContain('31 91')
@@ -357,6 +400,7 @@ async function assertRuntimeTerminalLifecycle(
               method: 'terminal.read',
               params: { terminal, limit: 200 }
             })
+
             return read.ok ? JSON.stringify(read.result) : ''
           },
           { environmentId: client.environmentId, terminal }
@@ -374,13 +418,17 @@ async function reloadPairedClient(client: PairedElectronClient): Promise<void> {
     null,
     { timeout: 30_000 }
   )
+
   const reachable = await client.page.evaluate((environmentId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Paired desktop store is unavailable after reload')
     }
+
     return store.getState().refreshRuntimeEnvironmentStatus(environmentId)
   }, client.environmentId)
+
   expect(reachable).toBe(true)
   await client.installDirectSshAttemptProbe()
 }
@@ -390,6 +438,7 @@ async function assertRuntimeTerminalClose(
   ptyId: string
 ): Promise<void> {
   const terminal = remoteTerminalHandle(ptyId)
+
   const close = await client.page.evaluate(
     ({ environmentId, terminal }) =>
       window.api.runtimeEnvironments.call({
@@ -399,8 +448,10 @@ async function assertRuntimeTerminalClose(
       }),
     { environmentId: client.environmentId, terminal }
   )
+
   expect(close.ok).toBe(true)
   expect(close).toMatchObject({ result: { close: { handle: terminal, ptyKilled: true } } })
+
   try {
     await expect
       .poll(() =>
@@ -412,6 +463,7 @@ async function assertRuntimeTerminalClose(
               }
             }
           }
+
           return true
         }, ptyId)
       )
@@ -426,12 +478,15 @@ async function assertRuntimeTerminalClose(
             ptyId: pane.container?.dataset?.ptyId ?? null
           }))
         )
+
         const state = window.__store?.getState()
+
         const listed = await window.api.runtimeEnvironments.call({
           selector: environmentId,
           method: 'session.tabs.listAll',
           params: {}
         })
+
         return {
           panes: panes.filter((pane) => pane.ptyId === closedPtyId),
           tabs: Object.values(state?.tabsByWorktree ?? {})
@@ -447,6 +502,7 @@ async function assertRuntimeTerminalClose(
       },
       { closedPtyId: ptyId, environmentId: client.environmentId }
     )
+
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}`
     )
@@ -467,6 +523,7 @@ async function assertPairedPtyAbsent(client: PairedElectronClient, ptyId: string
               return false
             }
           }
+
           return true
         }, ptyId),
       { timeout: 30_000 }
@@ -486,6 +543,7 @@ async function activatePairedTerminalTab(
     .poll(() =>
       client.page.evaluate((expectedTabId) => {
         const state = window.__store?.getState()
+
         return state?.activeTabId === expectedTabId ? expectedTabId : null
       }, tabId)
     )
@@ -495,6 +553,7 @@ async function activatePairedTerminalTab(
   await client.page.keyboard.insertText(terminalMarkerCommand(marker))
   await client.page.keyboard.press('Enter')
   await expect.poll(() => getTerminalContent(client.page), { timeout: 30_000 }).toContain(marker)
+
   return ptyId
 }
 
@@ -512,23 +571,29 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
   let clientA: PairedElectronClient | null = null
   let clientB: PairedElectronClient | null = null
   let webClient: Awaited<ReturnType<typeof launchPairedWebClient>> | null = null
+
   try {
     if (!proxyJumpFixture) {
       throw new Error('ProxyJump fixture requires a POSIX system SSH client')
     }
+
     sshTarget = startDockerSshRelayTarget(testInfo)
     proxyJumpHost = startDockerSshRelayTarget(testInfo)
     proxyJumpDestination = startDockerSshRelayTarget(testInfo)
     const remote = await connectDockerSshRelayTarget(orcaPage, sshTarget)
     await installProxyJumpFixture(proxyJumpFixture, proxyJumpDestination, proxyJumpHost)
+
     const proxyJumpRemote = await connectDockerSshRelayTarget(orcaPage, proxyJumpDestination, {
       viaProxyJump: true
     })
+
     const localRepoId = await orcaPage.evaluate(() => {
       const repo = window.__store?.getState().repos.find((candidate) => !candidate.connectionId)
+
       if (!repo) {
         throw new Error('HUB local repo is unavailable')
       }
+
       return repo.id
     })
 
@@ -537,11 +602,13 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       localRepoId,
       `HUB_DESKTOP_LOCAL_${Date.now()}`
     )
+
     const hubSshWorktreeId = await assertHubTerminal(
       orcaPage,
       remote.repoId,
       `HUB_DESKTOP_SSH_${Date.now()}`
     )
+
     const hubProxyJumpWorktreeId = await assertHubTerminal(
       orcaPage,
       proxyJumpRemote.repoId,
@@ -573,6 +640,7 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       localRepoId,
       `PAIRED_A_LOCAL_${Date.now()}`
     )
+
     expect(localRoute.ptyId).toContain(encodeURIComponent(clientA.environmentId))
 
     const sshRoute = await assertInteractiveTerminal(
@@ -580,6 +648,7 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       remote.repoId,
       `PAIRED_A_SSH_${Date.now()}`
     )
+
     expect(sshRoute.localSshTargetIds).not.toContain(remote.targetId)
     expect(sshRoute.ptyId).toContain(encodeURIComponent(clientA.environmentId))
     expect(sshRoute.worktreeHostId).toBe(`ssh:${remote.targetId}`)
@@ -588,10 +657,12 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       clientA,
       dockerSshRelayRepoSentinel(sshTarget, DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
     )
+
     const pairedCreatedTerminal = await assertPairedTerminalCreation(
       clientA,
       `PAIRED_A_CREATED_SSH_${Date.now()}`
     )
+
     expect(pairedCreatedTerminal.ptyId).toContain(encodeURIComponent(clientA.environmentId))
     expect(remoteTerminalHandle(pairedCreatedTerminal.ptyId)).not.toBe(
       remoteTerminalHandle(sshRoute.ptyId)
@@ -614,11 +685,13 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       pairedCreatedTerminal.ptyId,
       `RPC_STREAM_${Date.now()}`
     )
+
     const proxyJumpRoute = await assertInteractiveTerminal(
       clientA,
       proxyJumpRemote.repoId,
       `PAIRED_A_PROXY_JUMP_${Date.now()}`
     )
+
     expect(proxyJumpRoute.localSshTargetIds).not.toContain(proxyJumpRemote.targetId)
     expect(proxyJumpRoute.worktreeHostId).toBe(`ssh:${proxyJumpRemote.targetId}`)
     expect(proxyJumpRoute.runtimeOwnerEnvironmentId).toBe(clientA.environmentId)
@@ -642,17 +715,21 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
 
     const offerB = await createRuntimeDesktopPairingOffer(orcaPage)
     clientB = await launchPairedElectronClient(offerB, testInfo, 'Nested SSH HUB B')
+
     const secondLocalRoute = await assertInteractiveTerminal(
       clientB,
       localRepoId,
       `PAIRED_B_LOCAL_${Date.now()}`
     )
+
     const secondViewerMarker = `PAIRED_B_SSH_${Date.now()}`
+
     const secondSshRoute = await assertInteractiveTerminal(
       clientB,
       remote.repoId,
       secondViewerMarker
     )
+
     expect(secondSshRoute.localSshTargetIds).toEqual([])
     expect(secondSshRoute.ptyId).toContain(encodeURIComponent(clientB.environmentId))
     expect(remoteTerminalHandle(secondSshRoute.ptyId)).toBe(remoteTerminalHandle(sshRoute.ptyId))
@@ -660,19 +737,23 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       remoteTerminalHandle(pairedCreatedTerminal.ptyId)
     )
     const sharedViewerMarker = `PAIRED_B_SHARED_${Date.now()}`
+
     const sharedCreatedPtyOnB = await activatePairedTerminalTab(
       clientB,
       pairedCreatedTerminal.tabId,
       sharedViewerMarker
     )
+
     expect(remoteTerminalHandle(sharedCreatedPtyOnB)).toBe(
       remoteTerminalHandle(pairedCreatedTerminal.ptyId)
     )
+
     const secondProxyJumpRoute = await assertInteractiveTerminal(
       clientB,
       proxyJumpRemote.repoId,
       `PAIRED_B_PROXY_JUMP_${Date.now()}`
     )
+
     expect(secondProxyJumpRoute.localSshTargetIds).toEqual([])
     expect(secondProxyJumpRoute.worktreeHostId).toBe(`ssh:${proxyJumpRemote.targetId}`)
     expect(remoteTerminalHandle(secondProxyJumpRoute.ptyId)).toBe(
@@ -684,6 +765,7 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       remote.repoId,
       `PAIRED_A_SHARED_RETURN_${Date.now()}`
     )
+
     expect(remoteTerminalHandle(sharedRouteOnA.ptyId)).toBe(
       remoteTerminalHandle(pairedCreatedTerminal.ptyId)
     )
@@ -692,11 +774,13 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       .toContain(sharedViewerMarker)
 
     await reloadPairedClient(clientA)
+
     const reloadedSshRoute = await assertInteractiveTerminal(
       clientA,
       remote.repoId,
       `PAIRED_A_RELOAD_${Date.now()}`
     )
+
     expect(reloadedSshRoute.localSshTargetIds).toEqual([])
     expect(reloadedSshRoute.runtimeOwnerEnvironmentId).toBe(clientA.environmentId)
 
@@ -704,12 +788,14 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
     await assertRuntimeSshStatus(clientA, remote.targetId, 'disconnected')
     await reconnectDisconnectedDockerSshRelayTarget(orcaPage, remote.targetId)
     await assertRuntimeSshStatus(clientA, remote.targetId, 'connected')
+
     const reconnectedSshRoute = await assertInteractiveTerminal(
       clientA,
       remote.repoId,
       `PAIRED_A_RELAY_RECONNECT_${Date.now()}`,
       { waitForReconnectReady: true }
     )
+
     expect(reconnectedSshRoute.localSshTargetIds).toEqual([])
 
     await restartProxyJumpDetachedRelay(
@@ -722,35 +808,41 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
       },
       [clientA, clientB]
     )
+
     const restartedRelayRoute = await assertInteractiveTerminal(
       clientA,
       remote.repoId,
       `PAIRED_A_RELAY_RESTART_${Date.now()}`,
       { waitForReconnectReady: true }
     )
+
     const restartedProxyJumpRelayRoute = await assertInteractiveTerminal(
       clientA,
       proxyJumpRemote.repoId,
       `PAIRED_A_PROXY_RELAY_RESTART_${Date.now()}`,
       { waitForReconnectReady: true }
     )
+
     expect(restartedProxyJumpRelayRoute.worktreeHostId).toBe(`ssh:${proxyJumpRemote.targetId}`)
     await assertNestedTerminalDestination(
       clientA,
       dockerSshRelayRepoSentinel(proxyJumpDestination, DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH)
     )
+
     const restartedRelayRouteOnB = await assertInteractiveTerminal(
       clientB,
       remote.repoId,
       `PAIRED_B_RELAY_RESTART_${Date.now()}`,
       { waitForReconnectReady: true }
     )
+
     const convergedRelayRouteOnA = await assertInteractiveTerminal(
       clientA,
       remote.repoId,
       `PAIRED_A_RELAY_RESTART_CONVERGED_${Date.now()}`,
       { waitForReconnectReady: true }
     )
+
     expect(remoteTerminalHandle(restartedRelayRouteOnB.ptyId)).toBe(
       remoteTerminalHandle(convergedRelayRouteOnA.ptyId)
     )
@@ -763,12 +855,14 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
     const rePairOffer = await createRuntimeDesktopPairingOffer(orcaPage)
     await rePairPairedElectronClient(clientA, rePairOffer, 'Nested SSH HUB A re-paired')
     await assertRuntimeSshStatus(clientA, remote.targetId, 'connected')
+
     const rePairedSshRoute = await assertInteractiveTerminal(
       clientA,
       remote.repoId,
       `PAIRED_A_REPAIRED_${Date.now()}`,
       { waitForReconnectReady: true }
     )
+
     expect(rePairedSshRoute.localSshTargetIds).toEqual([])
     expect(rePairedSshRoute.runtimeOwnerEnvironmentId).toBe(clientA.environmentId)
     expect(await clientA.getDirectSshAttemptTargetIds()).toEqual([])

@@ -11,6 +11,7 @@ afterEach(() => {
 
 function mockNow(values: number[]): void {
   const now = vi.spyOn(performance, 'now')
+
   for (const value of values) {
     now.mockReturnValueOnce(value)
   }

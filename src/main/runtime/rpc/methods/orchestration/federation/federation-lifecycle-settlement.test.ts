@@ -49,13 +49,16 @@ describe('orchestration federation lifecycle settlement', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
+
         if (method === 'orchestration.federationAck') {
           ackAttempts += 1
         }
+
         if (method === 'orchestration.federationAck' && failNextAckBeforeDelivery) {
           failNextAckBeforeDelivery = false
           throw new Error('connection lost before acknowledgment')
         }
+
         return (await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
@@ -132,6 +135,7 @@ describe('orchestration federation lifecycle settlement', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
   }
 
@@ -157,6 +161,7 @@ describe('orchestration federation lifecycle settlement', () => {
     const dispatch = homeDb.getDispatchContext(taskId)!
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+
     const sent = workerDispatcher.dispatch({
       id: 'rpc_waiting_worker_done',
       authToken: 'worker-local-token',
@@ -175,13 +180,16 @@ describe('orchestration federation lifecycle settlement', () => {
         })
       }
     })
+
     await vi.waitFor(() =>
       expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(1)
     )
     expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.state).toBe('ready')
+
     if (sync) {
       await homeRuntime.syncOrchestrationFederation()
     }
+
     return { sent, dispatch }
   }
 
@@ -194,6 +202,7 @@ describe('orchestration federation lifecycle settlement', () => {
   ) {
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+
     return workerDispatcher.dispatch(
       {
         id: `rpc_${requestId}`,
@@ -217,7 +226,9 @@ describe('orchestration federation lifecycle settlement', () => {
     if (!response.ok) {
       return `error:${response.error.code}`
     }
+
     const result = response.result as { lifecycle?: { action?: string } }
+
     return result.lifecycle?.action ?? 'missing'
   }
 
@@ -291,6 +302,7 @@ describe('orchestration federation lifecycle settlement', () => {
         undefined,
         outcome
       )) as RuntimeRpcResponse<unknown>
+
       await homeRuntime.syncOrchestrationFederatedDispatch(dispatch.id)
 
       expect(completed).toMatchObject({
@@ -332,9 +344,11 @@ describe('orchestration federation lifecycle settlement', () => {
           if (method === 'status.get') {
             return { ...workerRuntime.getStatus(), capabilities: legacyCapabilities }
           }
+
           if (method === 'orchestration.federationAttachStart') {
             const input = params as { dispatchId: string; protocolVersion: number }
             attachProtocol = input.protocolVersion
+
             return {
               dispatchId: input.dispatchId,
               state: 'ready',
@@ -345,15 +359,19 @@ describe('orchestration federation lifecycle settlement', () => {
               residualResources: []
             }
           }
+
           if (method === 'orchestration.federationPull') {
             return { runtimeEpoch: 'legacy_runtime_epoch', items: legacyItems }
           }
+
           if (method === 'orchestration.federationAck') {
             acknowledgment = params as Record<string, unknown>
+
             return {
               acknowledgedThrough: (params as { throughSequence: number }).throughSequence
             }
           }
+
           throw new Error(`Unexpected legacy worker method ${method}`)
         }
       )
@@ -458,6 +476,7 @@ describe('orchestration federation lifecycle settlement', () => {
           payloadHash: `persisted_protocol_${protocolVersion}_payload`
         }
       })
+
       const capability = workerDb.prepareRemoteAttachmentAuthority({
         dispatchId,
         paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -467,6 +486,7 @@ describe('orchestration federation lifecycle settlement', () => {
         setupState: 'completed',
         effects: []
       })
+
       workerDb.markRemoteAttachmentReady(dispatchId)
       restartWorkerRuntime()
 
@@ -498,6 +518,7 @@ describe('orchestration federation lifecycle settlement', () => {
     await homeDispatcher.dispatch(startRequest(task.id))
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(task.id)!
+
     const relay = workerDb.enqueueFederationRelay({
       dispatchId: dispatch.id,
       direction: 'to_home',
@@ -533,6 +554,7 @@ describe('orchestration federation lifecycle settlement', () => {
     await homeDispatcher.dispatch(startRequest(task.id))
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(task.id)!
+
     const relay = workerDb.enqueueFederationRelay({
       dispatchId: dispatch.id,
       direction: 'to_home',
@@ -574,6 +596,7 @@ describe('orchestration federation lifecycle settlement', () => {
     await homeDispatcher.dispatch(startRequest(task.id))
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(task.id)!
+
     const reports = (['succeeded', 'failed'] as const).map((outcome) =>
       workerDb.enqueueFederationRelay({
         dispatchId: dispatch.id,
@@ -617,6 +640,7 @@ describe('orchestration federation lifecycle settlement', () => {
     await homeDispatcher.dispatch(startRequest(task.id))
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(task.id)!
+
     const reports = ['first', 'retry'].map((body) =>
       workerDb.enqueueFederationRelay({
         dispatchId: dispatch.id,
@@ -648,6 +672,7 @@ describe('orchestration federation lifecycle settlement', () => {
               sequence: report.sequence,
               lifecycle: { action: 'completed' as const, authority: 'run_home' as const }
             }
+
             return [settlement, settlement]
           })
         }
@@ -665,6 +690,7 @@ describe('orchestration federation lifecycle settlement', () => {
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     const controller = new AbortController()
+
     const sent = workerDispatcher.dispatch(
       {
         id: 'rpc_aborted_worker_done',
@@ -686,6 +712,7 @@ describe('orchestration federation lifecycle settlement', () => {
       },
       { signal: controller.signal }
     )
+
     await vi.waitFor(() =>
       expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(1)
     )
@@ -718,12 +745,14 @@ describe('orchestration federation lifecycle settlement', () => {
     homeRuntime.stopOrchestrationFederationRelay()
     const dispatch = homeDb.getDispatchContext(task.id)!
     const controller = new AbortController()
+
     const sent = dispatchRemoteCompletion(
       task.id,
       dispatch.id,
       'replayed_worker_done_request',
       controller.signal
     )
+
     await vi.waitFor(() =>
       expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(1)
     )
@@ -731,16 +760,20 @@ describe('orchestration federation lifecycle settlement', () => {
 
     homeRuntime.ensureOrchestrationFederationRelay()
     await vi.waitFor(() => expect(ackAttempts).toBe(1))
+
     const acknowledgedAfterLoss = homeDb.getFederatedDispatch(
       dispatch.id
     )?.to_home_acknowledged_sequence
+
     restartHomeRuntime()
     await vi.waitFor(() =>
       expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.state).toBe('succeeded')
     )
+
     const acknowledgedAfterRetry = homeDb.getFederatedDispatch(
       dispatch.id
     )?.to_home_acknowledged_sequence
+
     restartHomeRuntime()
     homeRuntime.ensureOrchestrationFederationRelay()
     await homeRuntime.syncOrchestrationFederation()
@@ -753,6 +786,7 @@ describe('orchestration federation lifecycle settlement', () => {
       acknowledgedAfterRetry,
       ackAttempts
     }
+
     controller.abort()
     const response = (await sent) as RuntimeRpcResponse<unknown>
 
@@ -774,6 +808,7 @@ describe('orchestration federation lifecycle settlement', () => {
     const dispatch = homeDb.getDispatchContext(task.id)!
     const controllers = [new AbortController(), new AbortController()]
     const enqueue = vi.spyOn(workerDb, 'enqueueFederationRelay')
+
     const sent = controllers.map((controller, index) =>
       dispatchRemoteCompletion(
         task.id,
@@ -782,6 +817,7 @@ describe('orchestration federation lifecycle settlement', () => {
         controller.signal
       )
     )
+
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(2))
     await homeRuntime.syncOrchestrationFederation()
 
@@ -791,9 +827,11 @@ describe('orchestration federation lifecycle settlement', () => {
       pendingWorkerRelay: workerDb.listPendingFederationRelay(dispatch.id, 'to_home').length,
       ackAttempts
     }
+
     for (const controller of controllers) {
       controller.abort()
     }
+
     const responses = (await Promise.all(sent)) as RuntimeRpcResponse<unknown>[]
 
     expect({ ...observed, completions: responses.map(lifecycleResult) }).toEqual({

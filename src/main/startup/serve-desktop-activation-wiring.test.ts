@@ -4,18 +4,22 @@ import { describe, expect, it } from 'vitest'
 
 describe('serve desktop activation wiring', () => {
   const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+
   const preflightSource = readFileSync(
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
     'utf8'
   )
+
   const runtimeSource = readFileSync(
     join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
     'utf8'
   )
+
   const runtimeServiceSource = readFileSync(
     join(process.cwd(), 'src/main/startup/main-process-runtime-service.ts'),
     'utf8'
   )
+
   const windowCoreSource = readFileSync(
     join(process.cwd(), 'src/main/startup/main-window-core-services.ts'),
     'utf8'
@@ -35,20 +39,25 @@ describe('serve desktop activation wiring', () => {
     const startupIndex = runtimeSource.indexOf(
       'bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))'
     )
+
     const serveLaunchIndex = runtimeSource.indexOf('async function launchServeMode(')
     const serveDispatchIndex = runtimeSource.indexOf('  if (serveOptions) {', startupIndex)
+
     const ptyReadyIndex = runtimeSource.indexOf(
       'await state.localPtyStartupReady',
       serveLaunchIndex
     )
+
     const providerReadyIndex = runtimeSource.indexOf(
       'await state.localPtyProviderStartupReady',
       serveLaunchIndex
     )
+
     const headlessRegistrationIndex = runtimeSource.indexOf(
       'await registerHeadlessPtyRuntime(',
       serveLaunchIndex
     )
+
     const rpcIndex = runtimeSource.indexOf('await runtimeRpc.start()', serveLaunchIndex)
 
     expect(startupIndex).toBeGreaterThanOrEqual(0)
@@ -64,10 +73,12 @@ describe('serve desktop activation wiring', () => {
 
   it('publishes the named headless sentinel and only enables promotion after RPC is ready', () => {
     const serveIndex = runtimeSource.indexOf('async function launchServeMode(')
+
     const sentinelIndex = runtimeSource.indexOf(
       'runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID',
       serveIndex
     )
+
     const rpcIndex = runtimeSource.indexOf('await runtimeRpc.start()', serveIndex)
     const settleIndex = runtimeSource.indexOf('settleDesktopActivation()', rpcIndex)
 

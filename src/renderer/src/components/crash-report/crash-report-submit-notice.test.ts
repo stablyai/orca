@@ -97,6 +97,7 @@ describe('crash report submit notices', () => {
 
   it('redacts paths and tokens before displaying transport errors', () => {
     const token = `ghp_${'a'.repeat(30)}`
+
     const notice = getCrashReportSubmitFailureNotice(
       {
         error: `request failed at C:\\Users\\alice\\Orca\\crash-reports.json token=${token}`

@@ -385,6 +385,7 @@ describe('buildHydratedTabState – legacy format', () => {
       sortOrder,
       createdAt: 100 + sortOrder
     })
+
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
       // The globally-active tab belongs to w1.
@@ -414,6 +415,7 @@ describe('buildHydratedTabState – legacy format', () => {
     // Why: editor owner migration re-stamped a tab id a sibling record already
     // held. Two rows under one id repeat a React key and strand a ghost row.
     const duplicateId = 'editor:wt%3A%3Alungfish:env-a:FINAL-REPORT.md'
+
     const editorTab = (id: string, entityId: string, sortOrder: number) => ({
       id,
       entityId,
@@ -426,6 +428,7 @@ describe('buildHydratedTabState – legacy format', () => {
       sortOrder,
       createdAt: 1
     })
+
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
       unifiedTabs: {

@@ -8,14 +8,17 @@ type InventoryInternals = {
 function createInventoryRuntime(): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService()
   runtime.setPtyController({ listProcesses: vi.fn(async () => []) } as never)
+
   return runtime
 }
 
 async function waitForInventoryWaiter(runtime: OrcaRuntimeService): Promise<void> {
   const internals = runtime as unknown as InventoryInternals
+
   for (let index = 0; index < 20 && internals.sessionTabsInventoryWaiters.size === 0; index += 1) {
     await Promise.resolve()
   }
+
   expect(internals.sessionTabsInventoryWaiters.size).toBe(1)
 }
 
@@ -23,16 +26,20 @@ describe('authoritative session tab inventory publication', () => {
   it('primes daemon-backed inventory but withholds headed results until renderer publication', async () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
+
     const collect = vi.spyOn(
       runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
       'collectAllMobileSessionTabs'
     )
+
     let settled = false
 
     const pending = runtime.listAllMobileSessionTabsInventory().then((result) => {
       settled = true
+
       return result
     })
+
     await waitForInventoryWaiter(runtime)
 
     expect(collect).toHaveBeenCalledTimes(1)
@@ -87,6 +94,7 @@ describe('authoritative session tab inventory publication', () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+
     const collect = vi.spyOn(
       runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
       'collectAllMobileSessionTabs'
@@ -104,6 +112,7 @@ describe('authoritative session tab inventory publication', () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+
     const inventory = {
       snapshots: [],
       ptyInventory: {
@@ -113,16 +122,19 @@ describe('authoritative session tab inventory publication', () => {
         queriedHostIds: new Set(['local'])
       }
     }
+
     let collections = 0
     vi.spyOn(
       runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
       'collectAllMobileSessionTabs'
     ).mockImplementation(async () => {
       collections += 1
+
       if (collections <= 3) {
         expect(runtime.markRendererReloading(1)).not.toBeNull()
         runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
       }
+
       return inventory
     })
 
@@ -137,17 +149,21 @@ describe('authoritative session tab inventory publication', () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+
     const emptyInventory = {
       livePtyIds: new Set<string>(),
       allLivePtyIds: new Set<string>(),
       terminalIdentityByPtyId: new Map(),
       queriedHostIds: new Set(['local'])
     }
+
     const pendingResolves: ((inventory: typeof emptyInventory) => void)[] = []
+
     const internals = runtime as unknown as {
       refreshMobileSessionPtyInventory: (targetWorktreeId?: string | null) => Promise<unknown>
       performMobileSessionPtyRecordsRefresh: (targetWorktreeId: string | null) => Promise<unknown>
     }
+
     const perform = vi.spyOn(internals, 'performMobileSessionPtyRecordsRefresh').mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -172,10 +188,12 @@ describe('authoritative session tab inventory publication', () => {
 
   it('retries once and serves an unlabeled scan when the PTY census is unavailable', async () => {
     const runtime = new OrcaRuntimeService()
+
     const collect = vi.spyOn(
       runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
       'collectAllMobileSessionTabs'
     )
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
@@ -220,6 +238,7 @@ describe('authoritative session tab inventory publication', () => {
         leafId,
         incarnationId: 'incarnation-survived-host-relaunch'
       })
+
       return {
         livePtyIds: new Set([ptyId]),
         allLivePtyIds: new Set([ptyId]),
@@ -261,8 +280,10 @@ describe('authoritative session tab inventory publication', () => {
 
     const pending = runtime.listAllMobileSessionTabsInventory().then((result) => {
       settled = true
+
       return result
     })
+
     await waitForInventoryWaiter(runtime)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     await Promise.resolve()
@@ -301,6 +322,7 @@ describe('authoritative session tab inventory publication', () => {
       mobileSessionTabs: [],
       unchangedMobileSessionWorktrees: [worktree]
     })
+
     expect(incomplete.mobileSessionResyncWorktrees).toEqual([worktree])
     const pending = runtime.listAllMobileSessionTabsInventory()
     await waitForInventoryWaiter(runtime)
@@ -332,9 +354,11 @@ describe('authoritative session tab inventory publication', () => {
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     const fence = runtime.markRendererReloading(1)
+
     if (!fence) {
       throw new Error('expected renderer reload fence')
     }
+
     const pending = runtime.listAllMobileSessionTabsInventory()
     await waitForInventoryWaiter(runtime)
 
@@ -370,10 +394,12 @@ describe('authoritative session tab inventory publication', () => {
 
   it('does not scan when the inventory request is already cancelled', async () => {
     const runtime = createInventoryRuntime()
+
     const collect = vi.spyOn(
       runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
       'collectAllMobileSessionTabs'
     )
+
     const controller = new AbortController()
     controller.abort()
 
@@ -390,8 +416,10 @@ describe('authoritative session tab inventory publication', () => {
 
     const pending = runtime.listAllMobileSessionTabsInventory().then((result) => {
       settled = true
+
       return result
     })
+
     await waitForInventoryWaiter(runtime)
 
     expect(() =>
@@ -410,6 +438,7 @@ describe('authoritative session tab inventory publication', () => {
 
   it('reports no authoritative support behind the e2e disable override', () => {
     vi.stubEnv('ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY', '1')
+
     try {
       expect(createInventoryRuntime().supportsAuthoritativeSessionTabsInventory()).toBe(false)
     } finally {

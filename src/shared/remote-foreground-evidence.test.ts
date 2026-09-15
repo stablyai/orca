@@ -52,6 +52,7 @@ describe('remote foreground evidence contract', () => {
       lastAuthorityGeneration: 'host-a',
       lastObservationEpoch: 3
     }
+
     expect(admitRemoteForegroundEvidence(live, base)).toEqual(live)
     expect(
       admitRemoteForegroundEvidence(live, { ...base, lastObservationEpoch: live.observationEpoch })
@@ -137,6 +138,7 @@ describe('remote foreground evidence contract', () => {
 
   it('rejects delayed observations from a previously accepted host generation', () => {
     const knownAuthorityGenerations = new Set(['host-a', 'host-b'])
+
     const admission = {
       expectedPtyId: 'pty-1',
       expectedIncarnationId: 'inc-1',
@@ -146,6 +148,7 @@ describe('remote foreground evidence contract', () => {
       lastObservationEpoch: 1,
       knownAuthorityGenerations
     }
+
     expect(
       admitRemoteForegroundEvidence({ ...live, authorityGeneration: 'host-a' }, admission)
     ).toBeNull()

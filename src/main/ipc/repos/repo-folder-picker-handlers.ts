@@ -6,9 +6,11 @@ export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): voi
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']
     })
+
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
+
     return result.filePaths[0]
   })
 
@@ -16,9 +18,11 @@ export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): voi
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'multiSelections']
     })
+
     if (result.canceled || result.filePaths.length === 0) {
       return []
     }
+
     return result.filePaths
   })
 
@@ -28,9 +32,11 @@ export function registerRepoFolderPickerHandlers(mainWindow: BrowserWindow): voi
       // Why: macOS materializes typed partial paths with directory creation on; clone/create make the final path on submit.
       properties: ['openDirectory']
     })
+
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
+
     return result.filePaths[0]
   })
 }

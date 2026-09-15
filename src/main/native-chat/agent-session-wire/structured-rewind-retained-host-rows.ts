@@ -24,6 +24,7 @@ export function mergeRetainedHostLifecycleRows(
   const spineIndex = new Map(providerItems.map((item, index) => [item.itemId, index]))
   const rowsAfter = new Map<number, RetainedRow[]>()
   let anchor = -1
+
   for (const item of reference) {
     if (!isRetainedHostLifecycleRow(item)) {
       anchor = spineIndex.get(item.itemId) ?? anchor
@@ -31,7 +32,9 @@ export function mergeRetainedHostLifecycleRows(
       rowsAfter.set(anchor, [...(rowsAfter.get(anchor) ?? []), item])
     }
   }
+
   const merged = [...(rowsAfter.get(-1) ?? [])]
   providerItems.forEach((item, index) => merged.push(item, ...(rowsAfter.get(index) ?? [])))
+
   return merged
 }

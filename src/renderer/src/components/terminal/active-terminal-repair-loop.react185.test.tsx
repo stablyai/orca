@@ -52,6 +52,7 @@ function RepairEffectHarness(): null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const renderedActiveWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
+
   const tabs = useMemo(
     () =>
       renderedActiveWorktreeId !== null && Object.hasOwn(tabsByWorktree, renderedActiveWorktreeId)
@@ -68,6 +69,7 @@ function RepairEffectHarness(): null {
     activeTabIdByWorktree,
     renderedActiveWorktreeId
   })
+
   return null
 }
 
@@ -84,6 +86,7 @@ function measureRepairPasses(): number {
   useAppStore.setState({
     setActiveTab: (tabId) => {
       passes += 1
+
       if (passes <= MAX_PASSES) {
         setActiveTab(tabId)
       }
@@ -97,9 +100,11 @@ function measureRepairPasses(): number {
     useAppStore.setState({ setActiveTab })
     container.remove()
   }
+
   act(() => {
     root.render(<RepairEffectHarness />)
   })
+
   return passes
 }
 
@@ -140,12 +145,14 @@ describe('active-terminal repair effect cannot drive a React #185 update loop', 
 
   it('activates the active worktree unified tab when another worktree reuses the entity id', () => {
     const otherTab = unifiedTerminalTab('t1', 't1', 'wt-other', 'g-other')
+
     const otherPreviousTab = unifiedTerminalTab(
       'other-previous',
       'other-previous',
       'wt-other',
       'g-other'
     )
+
     const activeTab = unifiedTerminalTab('t1', 't1', 'wt-active', 'g-active')
     const previousActiveTab = unifiedTerminalTab('u-previous', 't2', 'wt-active', 'g-active')
     useAppStore.setState({

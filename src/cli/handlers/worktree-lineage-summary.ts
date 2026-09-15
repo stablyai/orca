@@ -23,22 +23,28 @@ export function printLineageSummary(result: RuntimeWorktreeCreateResult, json: b
   if (json) {
     return
   }
+
   for (const warning of result.warnings ?? []) {
     console.error(`warning: ${warning.message}`)
   }
+
   if (result.workspaceLineage) {
     const { parentWorkspaceKey, capture } = result.workspaceLineage
     console.error(
       `parent: ${parentWorkspaceKey} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
     )
+
     return
   }
+
   if (result.lineage) {
     const { parentWorktreeId, capture } = result.lineage
     console.error(
       `parent: ${parentWorktreeId} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
     )
+
     return
   }
+
   console.error('parent: none')
 }

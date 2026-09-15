@@ -20,6 +20,7 @@ export function notifyMainWindowBecameVisible(): void {
 
 export function onMainWindowBecameVisible(listener: MainWindowBecameVisibleListener): () => void {
   listeners.add(listener)
+
   return () => {
     listeners.delete(listener)
   }
@@ -34,5 +35,6 @@ export function isMainWindowVisible(window: MainWindowVisibilityState | null): b
   // tests use minimal window doubles that should stay visible by default.
   const isVisible = window.isVisible?.() ?? true
   const isMinimized = window.isMinimized?.() ?? false
+
   return isVisible && !isMinimized
 }

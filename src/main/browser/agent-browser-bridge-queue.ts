@@ -20,26 +20,33 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
       const liveEntries = [...tabs.entries()].filter(([, wcId]) => this.getWebContents(wcId))
       let switchedIndex = index ?? -1
       let resolvedPageId = browserPageId
+
       if (resolvedPageId) {
         switchedIndex = liveEntries.findIndex(([tabId]) => tabId === resolvedPageId)
       }
+
       if (switchedIndex < 0 || switchedIndex >= liveEntries.length) {
         const targetLabel =
           resolvedPageId != null ? `Browser page ${resolvedPageId}` : `Tab index ${index}`
+
         throw new BrowserError(
           'browser_tab_not_found',
           `${targetLabel} out of range (0-${liveEntries.length - 1})`
         )
       }
+
       const [tabId, wcId] = liveEntries[switchedIndex]
       this.activeWebContentsId = wcId
       // Why: resolveActiveTab prefers the per-worktree map, so update it or later commands keep routing to the old tab.
       const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(tabId)
+
       // Why: `tab switch --page` may omit --worktree, so still update the owning worktree's active slot for later scoped commands.
       if (owningWorktreeId) {
         this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
       }
+
       this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
+
       return { switched: switchedIndex, browserPageId: tabId }
     })
   }
@@ -70,14 +77,17 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     if (options.ensureSession !== false) {
       await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
     }
+
     this.assertCommandAdmission()
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
+
       if (!queue) {
         queue = []
         this.commandQueues.set(sessionName, queue)
       }
+
       queue.push({
         execute: (() =>
           this.executeWithVisibleTarget(
@@ -107,6 +117,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
 
     // Why: inactive panes are display:none; the automation lease makes only this target paintable without selecting it.
     const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
+
     try {
       const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
         sessionName,
@@ -114,6 +125,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         target,
         options
       )
+
       return await execute(sessionName, visibleTarget)
     } finally {
       restore()
@@ -127,6 +139,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     options: EnqueueTargetedCommandOptions
   ): Promise<ResolvedBrowserCommandTarget> {
     const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+
     if (visibleTarget.webContentsId === target.webContentsId) {
       return visibleTarget
     }
@@ -134,6 +147,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     if (this.activeWebContentsId === target.webContentsId) {
       this.activeWebContentsId = visibleTarget.webContentsId
     }
+
     if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
       this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
     }
@@ -153,11 +167,14 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     if (this.processingQueues.has(sessionName)) {
       return
     }
+
     this.processingQueues.add(sessionName)
 
     const queue = this.commandQueues.get(sessionName)
+
     while (queue && queue.length > 0) {
       const cmd = queue.shift()!
+
       try {
         const result = await cmd.execute()
         cmd.resolve(result)
@@ -169,6 +186,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     if (queue && queue.length === 0 && this.commandQueues.get(sessionName) === queue) {
       this.commandQueues.delete(sessionName)
     }
+
     this.processingQueues.delete(sessionName)
   }
 }

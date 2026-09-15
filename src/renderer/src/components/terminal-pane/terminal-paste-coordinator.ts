@@ -23,10 +23,15 @@ export {
   TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
   TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
 } from './terminal-paste-limits'
+
 export { executeTerminalPastePlan } from './terminal-paste-executor'
+
 export { getTerminalPasteOperationTimeoutMs } from './terminal-paste-executor'
+
 export { chunkTerminalPastePlan, iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
+
 export { createRedactedPasteDiagnostic } from './terminal-paste-diagnostics'
+
 export type {
   TerminalPasteExecutionResult,
   TerminalPastePayload,
@@ -68,6 +73,7 @@ export function createTerminalPastePayload({
   maxBytes?: number
 }): TerminalPastePayload {
   const metadata = measureTerminalPastePayloadMetadata(text, { stopAfterBytes: maxBytes })
+
   return {
     plainText: text,
     source,
@@ -93,6 +99,7 @@ export function planTerminalPaste({
   maxBytes = TERMINAL_PASTE_MAX_BYTES
 }: PlanTerminalPasteArgs): TerminalPastePlan {
   const payload = createTerminalPastePayload({ text, source, hasRichText, maxBytes })
+
   return buildTerminalPastePlan({
     forceBracketedPaste,
     forceBracketedPasteForMultiline,
@@ -126,6 +133,7 @@ export async function planTerminalPasteWithYield({
     yieldAfterCodeUnits: measureYieldAfterCodeUnits,
     yieldToEventLoop
   })
+
   const payload: TerminalPastePayload = {
     plainText: text,
     source,
@@ -135,6 +143,7 @@ export async function planTerminalPasteWithYield({
     hasControlSequences: metadata.hasControlSequences,
     lineEndingByteLength: metadata.lineEndingByteLength
   }
+
   return buildTerminalPastePlan({
     forceBracketedPaste,
     forceBracketedPasteForMultiline,
@@ -171,20 +180,25 @@ function buildTerminalPastePlan({
 }): TerminalPastePlan {
   const effectiveWindowsInputRecordNewline =
     !forceBracketedPaste && payload.lineCount > 1 ? windowsInputRecordNewline : undefined
+
   const plannedByteLength = effectiveWindowsInputRecordNewline
     ? payload.byteLength -
       payload.lineEndingByteLength +
       (payload.lineCount - 1) * (effectiveWindowsInputRecordNewline === 'csi-u' ? 7 : 2)
     : payload.byteLength
+
   const shouldChunk = plannedByteLength > maxDirectBytes
+
   const effectiveForceBracketedPaste =
     forceBracketedPaste ||
     (effectiveWindowsInputRecordNewline === undefined &&
       forceBracketedPasteForMultiline &&
       payload.lineCount > 1)
+
   const shouldBracketChunk =
     effectiveWindowsInputRecordNewline === undefined &&
     (effectiveForceBracketedPaste || terminalBracketedPasteMode)
+
   const mode = choosePasteMode({
     byteLength: plannedByteLength,
     forceBracketedPaste: effectiveForceBracketedPaste,
@@ -192,6 +206,7 @@ function buildTerminalPastePlan({
     shouldChunk,
     maxBytes
   })
+
   const plan: TerminalPastePlan = {
     target,
     payload,
@@ -211,6 +226,7 @@ function buildTerminalPastePlan({
     redactedDiagnostic: '',
     ...(mode === 'reject' ? { rejectReason: 'payload-too-large' } : {})
   }
+
   return {
     ...plan,
     redactedDiagnostic: createRedactedPasteDiagnostic(plan)
@@ -233,11 +249,14 @@ function choosePasteMode({
   if (byteLength > maxBytes) {
     return 'reject'
   }
+
   if (shouldChunk) {
     return 'chunked'
   }
+
   if (windowsInputRecordNewline !== undefined) {
     return 'windows-input-record'
   }
+
   return forceBracketedPaste ? 'bracketed-terminal' : 'direct'
 }

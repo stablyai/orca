@@ -9,12 +9,15 @@ import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../../shared/plugins/plugin-
 export function buildPanelDesignTokenCss(): string {
   const styles = getComputedStyle(document.documentElement)
   const declarations: string[] = []
+
   for (const token of PANEL_DESIGN_TOKEN_ALLOWLIST) {
     const value = styles.getPropertyValue(token).trim()
+
     if (value.length > 0) {
       declarations.push(`${token}:${value.replaceAll(/[{}<>;]/g, '')}`)
     }
   }
+
   return declarations.join(';')
 }
 

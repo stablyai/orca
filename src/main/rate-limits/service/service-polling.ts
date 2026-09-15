@@ -15,6 +15,7 @@ import {
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {
     this.pollInterval = normalizePollingInterval(ms)
+
     if (this.timer) {
       this.stopTimer()
       this.startTimer()
@@ -31,6 +32,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       if (!this.shouldBackgroundPoll()) {
         return
       }
+
       void this.fetchAll()
     }, this.pollInterval)
   }
@@ -61,10 +63,12 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
     }
+
     // Why: these fetches only power in-app UI; skip polling when hidden/minimized/unfocused to save CLI/API budget (refresh on activate).
     if (!this.mainWindow.isVisible() || this.mainWindow.isMinimized()) {
       return false
     }
+
     return this.mainWindow.isFocused()
   }
 
@@ -80,6 +84,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       grok: this.state.grok,
       antigravity: this.state.antigravity
     }
+
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
       limits
@@ -88,23 +93,29 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
     const retryableFailures: ActiveRateLimitProvider[] = []
+
     for (const { provider, limits } of this.getActiveProviderState()) {
       if (!limits || limits.status === 'idle' || limits.status === 'fetching') {
         return { kind: 'full' }
       }
+
       if (limits.status === 'ok' || limits.status === 'unavailable') {
         if (now - limits.updatedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
         }
+
         continue
       }
+
       // Why: a failed startup read is not fresh data; keep it eligible for activation recovery, throttled per provider.
       if (limits.status === 'error') {
         // Why: the server told us when to come back (Retry-After); retrying earlier burns the endpoint's budget and keeps the 429 alive.
         if (this.isRetryAfterActive(limits)) {
           continue
         }
+
         const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
+
         const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
           ? Math.min(
               ACTIVE_FAILURE_REFETCH_MS *
@@ -112,6 +123,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
               MAX_ACTIVE_FAILURE_REFETCH_MS
             )
           : MIN_REFETCH_MS
+
         if (now - lastRetryAt >= throttleMs) {
           retryableFailures.push(provider)
         }
@@ -121,6 +133,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (retryableFailures.length === 0) {
       return { kind: 'none' }
     }
+
     return { kind: 'providers', providers: retryableFailures }
   }
 
@@ -128,18 +141,22 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (plan.kind === 'none') {
       return
     }
+
     if (plan.kind === 'full') {
       // Why: a full fetch retries failing providers too; restart their retry clocks so the individual failure lane doesn't fire ahead of backoff.
       // Why: gated on !isFetching — the fetchAll below no-ops mid-flight, so don't consume the retry throttle for free.
       if (!this.isFetching) {
         const now = Date.now()
+
         for (const { provider, limits } of this.getActiveProviderState()) {
           if (limits?.status === 'error') {
             this.lastActiveFailureRetryAtByProvider[provider] = now
           }
         }
       }
+
       await this.fetchAll()
+
       return
     }
 
@@ -149,6 +166,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     }
 
     const now = Date.now()
+
     for (const provider of plan.providers) {
       this.lastActiveFailureRetryAtByProvider[provider] = now
     }
@@ -156,8 +174,10 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     const canRefreshIndividually = plan.providers.every((provider) =>
       INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
     )
+
     if (!canRefreshIndividually) {
       await this.fetchAll()
+
       return
     }
 
@@ -165,9 +185,11 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (plan.providers.includes('claude')) {
       await this.fetchClaudeOnly()
     }
+
     if (plan.providers.includes('codex')) {
       await this.fetchCodexOnly()
     }
+
     if (plan.providers.includes('grok')) {
       await this.fetchGrokOnly()
     }
@@ -177,6 +199,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (!this.shouldBackgroundPoll()) {
       return
     }
+
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
   }

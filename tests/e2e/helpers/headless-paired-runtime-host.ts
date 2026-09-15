@@ -42,6 +42,7 @@ type HeadlessHostCleanup = () => Promise<void> | void
 
 async function cleanupHeadlessHostResources(cleanups: HeadlessHostCleanup[]): Promise<void> {
   const failures: unknown[] = []
+
   for (const cleanup of cleanups) {
     try {
       await cleanup()
@@ -49,6 +50,7 @@ async function cleanupHeadlessHostResources(cleanups: HeadlessHostCleanup[]): Pr
       failures.push(error)
     }
   }
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Failed to clean up headless paired runtime host')
   }
@@ -61,6 +63,7 @@ async function cleanupHeadlessHostResources(cleanups: HeadlessHostCleanup[]): Pr
  */
 async function reserveFreeLoopbackPort(): Promise<number> {
   const probe = createServer()
+
   try {
     await new Promise<void>((resolve, reject) => {
       probe.once('error', reject)
@@ -69,6 +72,7 @@ async function reserveFreeLoopbackPort(): Promise<number> {
         resolve()
       })
     })
+
     return (probe.address() as AddressInfo).port
   } finally {
     await new Promise<void>((resolve) => probe.close(() => resolve()))
@@ -87,9 +91,11 @@ export async function launchHeadlessPairedRuntimeHost(
   const userDataDir = mkdtempSync(
     path.join(options.userDataParent ?? os.tmpdir(), 'orca-e2e-headless-paired-')
   )
+
   const servePort = options.pinnedServePort === true ? await reserveFreeLoopbackPort() : 0
   let agentBrowserSocketDir: string | null = null
   let app: ElectronApplication | undefined
+
   try {
     agentBrowserSocketDir = options.agentBrowserSocketParent
       ? mkdtempSync(path.join(options.agentBrowserSocketParent, 'orca-ab-'))
@@ -100,6 +106,7 @@ export async function launchHeadlessPairedRuntimeHost(
     )
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused
+
     const isolation = createElectronHomeIsolation({
       inheritedEnv: cleanEnv,
       launchEnv: {
@@ -110,10 +117,13 @@ export async function launchHeadlessPairedRuntimeHost(
       extraEnv: {},
       userDataDir
     })
+
     if (agentBrowserSocketDir) {
       isolation.env.AGENT_BROWSER_SOCKET_DIR = agentBrowserSocketDir
     }
+
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+
     const launchServeProcess = (): Promise<ElectronApplication> =>
       electron.launch({
         ...(options.executablePath ? { executablePath: options.executablePath } : {}),
@@ -128,14 +138,18 @@ export async function launchHeadlessPairedRuntimeHost(
         ],
         env: isolation.env
       })
+
     app = await launchServeProcess()
+
     const [offer] = await Promise.all([
       readPairingOffer(app),
       retryTransientMainEvaluate(() =>
         app.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
       ).then((home) => assertElectronResolvedIsolatedHome(home, isolation))
     ])
+
     let serveProcess = app
+
     return {
       get app() {
         return serveProcess
@@ -149,6 +163,7 @@ export async function launchHeadlessPairedRuntimeHost(
             'restartServeProcess requires launchHeadlessPairedRuntimeHost({ pinnedServePort: true })'
           )
         }
+
         await closeElectronAppForE2E(serveProcess)
         await restartOptions.betweenProcesses?.()
         const relaunched = await launchServeProcess()
@@ -185,6 +200,7 @@ export async function launchHeadlessPairedRuntimeHost(
     } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Headless runtime startup and cleanup failed')
     }
+
     throw error
   }
 }

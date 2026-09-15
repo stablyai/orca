@@ -22,9 +22,11 @@ export function nativeChatAttachmentOwnerUnchanged(
   if (captured.kind !== current.kind || captured.kind === 'not-ready') {
     return false
   }
+
   if (captured.kind !== 'ssh' || current.kind !== 'ssh') {
     return true
   }
+
   return (
     captured.connectionId === current.connectionId &&
     captured.worktreePath === current.worktreePath &&

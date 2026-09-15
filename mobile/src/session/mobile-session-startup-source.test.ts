@@ -5,37 +5,53 @@ import {
 } from './mobile-session-route-source-family.test-support'
 
 const source = readMobileSessionRouteSourceFamily()
+
 const startupSource = readMobileSessionRouteSource('./use-mobile-session-startup.ts')
+
 const tabReconciliationSource = readMobileSessionRouteSource(
   './use-mobile-session-tab-reconciliation.ts'
 )
+
 const bulkCloseSource = readMobileSessionRouteSource('./use-mobile-session-bulk-close.ts')
+
 const presentationSource = readMobileSessionRouteSource('./use-mobile-session-presentation.ts')
+
 const tabSwitchingSource = readMobileSessionRouteSource('./use-mobile-session-tab-switching.ts')
+
 const sheetsSource = readMobileSessionRouteSource('./MobileSessionSheets.tsx')
+
 const reconciliationHookSource = readMobileSessionRouteSource(
   './use-mobile-session-tabs-reconciliation.ts'
 )
+
 const terminalInventoryRecoverySource = readMobileSessionRouteSource(
   './use-mobile-terminal-inventory-recovery.ts'
 )
+
 const terminalSubscriptionSource = readMobileSessionRouteSource(
   './use-mobile-session-terminal-subscription.ts'
 )
+
 const terminalListSource = readMobileSessionRouteSource('./use-mobile-session-terminal-list.ts')
+
 const tabReconciliationOwnerSource = readMobileSessionRouteSource(
   './use-mobile-session-tab-reconciliation.ts'
 )
+
 const autoCreateHookSource = readMobileSessionRouteSource(
   './use-initial-session-terminal-autocreate.ts'
 )
+
 const foundationSource = readMobileSessionRouteSource('./use-mobile-session-foundation.ts')
+
 const terminalRuntimeSource = readMobileSessionRouteSource(
   './use-mobile-session-terminal-runtime.ts'
 )
+
 const terminalSubscriptionSourceForIdentity = readMobileSessionRouteSource(
   './use-mobile-session-terminal-subscription.ts'
 )
+
 const lifecycleSource = readMobileSessionRouteSource('./use-mobile-session-lifecycle.ts')
 
 function sliceBetween(startPattern: string, endPattern: string, targetSource = source): string {
@@ -43,6 +59,7 @@ function sliceBetween(startPattern: string, endPattern: string, targetSource = s
   expect(start).toBeGreaterThanOrEqual(0)
   const end = targetSource.indexOf(endPattern, start)
   expect(end).toBeGreaterThan(start)
+
   return targetSource.slice(start, end)
 }
 
@@ -58,6 +75,7 @@ describe('mobile session startup', () => {
       'const connectionVerdict =',
       presentationSource
     )
+
     expect(autoCreateCall).toContain('stateRef: initialSessionAutoCreateRef')
     expect(autoCreateCall).toContain(
       'consumeCreationRoute: () => router.setParams({ created: undefined })'
@@ -90,6 +108,7 @@ describe('mobile session startup', () => {
       'const connectionVerdict =',
       presentationSource
     )
+
     expect(autoCreateCall).toContain('stateRef: initialSessionAutoCreateRef')
     expect(autoCreateHookSource).toContain('sawSessionTabs: stateRef.current.sawSessionTabs')
   })
@@ -173,9 +192,11 @@ describe('mobile session startup', () => {
       'return {\n    consumeAcceptedSessionTabs',
       tabReconciliationSource
     )
+
     const probeStart = capabilityEffect.indexOf('startRuntimeCapabilityProbe(client,')
 
     expect(probeStart).toBeGreaterThanOrEqual(0)
+
     for (const reset of [
       'setBrowserScreencastSupported(null)',
       'setAgentSessionHistorySupported(null)',
@@ -200,6 +221,7 @@ describe('mobile session startup', () => {
       'return {\n    bulkCloseActions',
       bulkCloseSource
     )
+
     expect(pendingActivationEffect).toContain(
       'pendingTerminalActivationAttemptRef.current === activationKey'
     )
@@ -231,6 +253,7 @@ describe('mobile session startup', () => {
     const activationRequests = source.split('activateMobileSessionTab(client,').slice(1)
 
     expect(activationRequests).toHaveLength(4)
+
     for (const request of activationRequests) {
       expect(request.slice(0, request.indexOf('})'))).toContain('notifyClients: false')
       expect(request.slice(0, request.indexOf('})'))).toContain("navigation: 'caller'")
@@ -260,6 +283,7 @@ describe('mobile session startup', () => {
       'const applySessionTabs = useCallback(',
       'const consumeAcceptedSessionTabs = useCallback('
     )
+
     const recoveryContext = sliceBetween(
       'const pendingTerminalRecoveryContextCache = useMemo(',
       'const sessionTabsFetchReporting',
@@ -270,9 +294,11 @@ describe('mobile session startup', () => {
     const tabsStateWrite = 'setSessionTabs((prev)'
     const activeRefWrite = 'activeSessionTabIdRef.current = active?.id ?? null'
     const activeStateWrite = 'setActiveSessionTabId(active?.id ?? null)'
+
     for (const write of [tabsRefWrite, tabsStateWrite, activeRefWrite, activeStateWrite]) {
       expect(applySessionTabs).toContain(write)
     }
+
     expect(applySessionTabs.indexOf(tabsRefWrite)).toBeLessThan(
       applySessionTabs.indexOf(tabsStateWrite)
     )

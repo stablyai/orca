@@ -21,24 +21,30 @@ export type SenderScopedRequestCancellations = {
  */
 export function createSenderScopedRequestCancellations(): SenderScopedRequestCancellations {
   const controllers = new Map<string, AbortController>()
+
   const keyFor = (event: IpcMainInvokeEvent, requestToken: string): string =>
     `${event.sender.id}\0${requestToken}`
+
   return {
     begin: (event, requestToken) => {
       if (!requestToken) {
         return null
       }
+
       const key = keyFor(event, requestToken)
       controllers.get(key)?.abort()
       const controller = new AbortController()
       controllers.set(key, controller)
+
       return controller
     },
     finish: (event, requestToken, controller) => {
       if (!requestToken || !controller) {
         return
       }
+
       const key = keyFor(event, requestToken)
+
       if (controllers.get(key) === controller) {
         controllers.delete(key)
       }

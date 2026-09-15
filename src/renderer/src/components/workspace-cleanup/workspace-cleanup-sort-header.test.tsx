@@ -18,6 +18,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function render(sort: WorkspaceCleanupSortState, handlers: Record<string, unknown> = {}): void {
@@ -52,6 +53,7 @@ describe('WorkspaceCleanupSortHeader', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null

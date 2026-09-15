@@ -50,17 +50,21 @@ function fileUrlToAbsolutePath(url: URL): string | null {
 
 function normalizePathForCompare(p: string): string {
   let np = p.replaceAll('\\', '/')
+
   while (np.endsWith('/') && np.length > 1) {
     np = np.slice(0, -1)
   }
+
   return np
 }
 
 function hasMarkdownExtension(p: string): boolean {
   const lastDot = p.lastIndexOf('.')
+
   if (lastDot === -1) {
     return false
   }
+
   return MARKDOWN_EXTENSIONS.has(p.slice(lastDot).toLowerCase())
 }
 
@@ -69,9 +73,11 @@ function hasMarkdownExtension(p: string): boolean {
 // silently truncated.
 function extractTrailingLineCol(path: string): { path: string; line?: number; column?: number } {
   const match = /:(\d+)(?::(\d+))?$/.exec(path)
+
   if (!match) {
     return { path }
   }
+
   return {
     path: path.slice(0, match.index),
     line: Number(match[1]),
@@ -85,11 +91,14 @@ function extractHashLineCol(hash: string): { line?: number; column?: number } {
   if (!hash) {
     return {}
   }
+
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash
   const match = /^L(\d+)(?:C(\d+))?$/i.exec(trimmed)
+
   if (!match) {
     return {}
   }
+
   return {
     line: Number(match[1]),
     column: match[2] ? Number(match[2]) : undefined
@@ -103,6 +112,7 @@ function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL |
       // absolute path is first converted to the file URL form used downstream.
       return new URL(filesystemPathHrefToFileUri(rawHref))
     }
+
     return new URL(rawHref, toFileUrl(sourceFilePath))
   } catch {
     return null
@@ -121,11 +131,13 @@ export function resolveMarkdownLinkTarget(
   if (rawHref === undefined || rawHref === '') {
     return null
   }
+
   if (rawHref.startsWith('#')) {
     return { kind: 'anchor' }
   }
 
   const resolved = resolveRelativeToSource(rawHref, sourceFilePath)
+
   if (!resolved) {
     return null
   }
@@ -139,6 +151,7 @@ export function resolveMarkdownLinkTarget(
   }
 
   const rawAbsolutePath = fileUrlToAbsolutePath(resolved)
+
   if (rawAbsolutePath === null) {
     return null
   }
@@ -150,8 +163,10 @@ export function resolveMarkdownLinkTarget(
   let column = hashParsed.column
 
   let pathForClassification = rawAbsolutePath
+
   if (line === undefined) {
     const trailing = extractTrailingLineCol(rawAbsolutePath)
+
     if (trailing.line !== undefined) {
       pathForClassification = trailing.path
       line = trailing.line
@@ -165,6 +180,7 @@ export function resolveMarkdownLinkTarget(
     relativePathInsideRoot(worktreeRoot, pathForClassification) !== null
   ) {
     const relativePath = computeRelativePath(pathForClassification, worktreeRoot)
+
     return {
       kind: 'markdown',
       absolutePath: pathForClassification,
@@ -184,6 +200,7 @@ export function resolveMarkdownLinkTarget(
   // approximation; for trailing-colon paths there's no clean URL form,
   // so we reconstruct from the stripped absolute path.
   const cleanUri = line === undefined ? resolved.toString() : toFileUrl(pathForClassification)
+
   return {
     kind: 'file',
     uri: cleanUri,
@@ -198,9 +215,11 @@ const HTML_ATTRIBUTE_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g
 
 export function projectMarkdownHrefForClipboard(href: string): string | null {
   const projected = href.replace(HTML_ATTRIBUTE_WHITESPACE, '')
+
   if (!projected || containsAsciiControl(projected)) {
     return null
   }
+
   if (
     isWindowsAbsolutePathLike(projected) ||
     projected.startsWith('\\\\') ||
@@ -208,25 +227,32 @@ export function projectMarkdownHrefForClipboard(href: string): string | null {
   ) {
     return null
   }
+
   if (projected.startsWith('#')) {
     return projected
   }
 
   const scheme = /^([A-Za-z][A-Za-z\d+.-]*):/.exec(projected)?.[1]?.toLowerCase()
+
   if (!scheme) {
     return projected
   }
+
   if (scheme !== 'http' && scheme !== 'https' && scheme !== 'file') {
     return null
   }
+
   try {
     const parsed = new URL(projected)
+
     if (parsed.protocol !== `${scheme}:`) {
       return null
     }
+
     if (scheme === 'file' && !parsed.pathname) {
       return null
     }
+
     return projected
   } catch {
     return null
@@ -236,9 +262,11 @@ export function projectMarkdownHrefForClipboard(href: string): string | null {
 function containsAsciiControl(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code <= 31 || code === 127) {
       return true
     }
   }
+
   return false
 }

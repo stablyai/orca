@@ -19,6 +19,7 @@ const CURSOR_HOOK_RESPONSE_ENV = 'ORCA_CURSOR_HOOK_RESPONSE'
 
 export function getPosixManagedCommand(scriptPath: string, eventName: CursorEvent): string {
   const response = getCursorHookResponse(eventName)
+
   return wrapPosixHookCommand(
     scriptPath,
     { [CURSOR_HOOK_RESPONSE_ENV]: response },
@@ -28,6 +29,7 @@ export function getPosixManagedCommand(scriptPath: string, eventName: CursorEven
 
 export function getManagedCommand(scriptPath: string, eventName: CursorEvent): string {
   const response = getCursorHookResponse(eventName)
+
   return process.platform === 'win32'
     ? wrapWindowsHookCommand(
         scriptPath,

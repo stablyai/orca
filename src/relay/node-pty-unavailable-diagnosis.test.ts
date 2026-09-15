@@ -23,6 +23,7 @@ const UBUNTU_2004: NodePtyUnavailableHost = {
 }
 
 const MODULE_DIR = '/opt/orca/relay/node_modules/node-pty'
+
 const SEARCHED = ['build/Release', 'build/Debug', 'prebuilds/linux-x64']
 
 const INSTALLED: NodePtyBindingSurvey = {
@@ -69,6 +70,7 @@ describe('diagnoseNodePtyUnavailable', () => {
       loaderError:
         "/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found (required by /opt/orca/node_modules/node-pty/build/Release/pty.node)"
     })
+
     expect(verdict).toMatchObject({ status: 'blocked', reason: 'libc_floor' })
     const text = formatNodePtyUnavailableMessage(verdict)
     expect(text).toContain('GLIBC_2.34')
@@ -83,6 +85,7 @@ describe('diagnoseNodePtyUnavailable', () => {
         'The module was compiled against a different Node.js version using NODE_MODULE_VERSION 115. ' +
         'This version of Node.js requires NODE_MODULE_VERSION 127.'
     })
+
     expect(text).toContain('built for Node ABI 115, this host runs ABI 127')
     expect(text).toContain('v20.11.0')
   })
@@ -93,6 +96,7 @@ describe('diagnoseNodePtyUnavailable', () => {
     const text = message({
       survey: { ...INSTALLED, builtNodeAbi: '127' }
     })
+
     expect(text).toContain('built for Node ABI 127, this host runs ABI 115')
   })
 
@@ -115,6 +119,7 @@ describe('diagnoseNodePtyUnavailable', () => {
     const verdict = diagnose({
       loaderError: 'libstdc++.so.6: cannot open shared object file: No such file or directory'
     })
+
     expect(verdict.reason).toBe('shared_library_missing')
     const text = formatNodePtyUnavailableMessage(verdict)
     expect(text).toContain('libstdc++.so.6 is not installed on this host')
@@ -126,6 +131,7 @@ describe('diagnoseNodePtyUnavailable', () => {
       survey: NOTHING_INSTALLED,
       toolchain: toolchain(['python3'])
     })
+
     expect(missing.reason).toBe('toolchain_missing')
     const text = formatNodePtyUnavailableMessage(missing)
     expect(text).toContain('make and a C++ compiler are not installed')
@@ -138,6 +144,7 @@ describe('diagnoseNodePtyUnavailable', () => {
       survey: NOTHING_INSTALLED,
       toolchain: toolchain(['make', 'g++', 'python3'])
     })
+
     expect(present.reason).toBe('dependency_missing')
     expect(formatNodePtyUnavailableMessage(present)).not.toContain('apt-get')
   })
@@ -162,6 +169,7 @@ describe('diagnoseNodePtyUnavailable', () => {
     const verdict = diagnose({
       unverifiableBecause: 'the node-pty load probe did not finish in time'
     })
+
     expect(verdict.status).toBe('unverifiable')
     const text = formatNodePtyUnavailableMessage(verdict)
     expect(text).toContain('could not establish why')
@@ -197,6 +205,7 @@ describe('diagnoseNodePtyUnavailable', () => {
     const cause = toTerminalUnavailableCause(
       diagnose({ loaderError: "version `GLIBC_2.34' not found" })
     )
+
     expect(parseTerminalUnavailableCause(cause)).toEqual(cause)
     expect(mayRepairFromCause(cause)).toBe(true)
     expect(cause.host).toMatchObject({ arch: 'x64', nodeAbi: '115', glibcVersion: '2.31' })

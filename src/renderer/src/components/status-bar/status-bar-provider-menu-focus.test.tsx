@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const recordFeatureInteractionMock = vi.fn()
+
 const usagePercentageDisplayMock = 'used'
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     memo: function memo<T>(component: T): T {
@@ -62,30 +64,38 @@ type ReactElementLike = {
 
 function findChildByType(node: unknown, typeName: string): ReactElementLike {
   const stack = [node]
+
   while (stack.length > 0) {
     const current = stack.pop()
+
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       continue
     }
+
     if (Array.isArray(current)) {
       stack.push(...current)
       continue
     }
+
     const el = current as ReactElementLike
     const type = el.type as { name?: string } | string | undefined
     const matchedName = typeof type === 'string' ? type : type?.name
+
     if (matchedName === typeName) {
       return el
     }
+
     if (el.props && 'children' in el.props) {
       stack.push(el.props.children)
     }
   }
+
   throw new Error(`Could not find ${typeName}`)
 }
 
 async function renderProviderDetailsMenu(): Promise<unknown> {
   const { ProviderDetailsMenu } = await import('./StatusBar')
+
   return ProviderDetailsMenu({
     provider: {
       provider: 'codex',
@@ -122,6 +132,7 @@ describe('ProviderDetailsMenu focus handoff', () => {
     expect(providerPanel.props.usagePercentageDisplay).toBe('used')
 
     const preventDefault = vi.fn()
+
     ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
       preventDefault
     })

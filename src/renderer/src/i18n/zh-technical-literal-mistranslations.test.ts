@@ -10,25 +10,33 @@ function findByKey(node: unknown, key: string): string | undefined {
   if (!node || typeof node !== 'object') {
     return undefined
   }
+
   if (Array.isArray(node)) {
     for (const item of node) {
       const found = findByKey(item, key)
+
       if (found !== undefined) {
         return found
       }
     }
+
     return undefined
   }
+
   const record = node as Record<string, unknown>
+
   if (typeof record[key] === 'string') {
     return record[key] as string
   }
+
   for (const value of Object.values(record)) {
     const found = findByKey(value, key)
+
     if (found !== undefined) {
       return found
     }
   }
+
   return undefined
 }
 

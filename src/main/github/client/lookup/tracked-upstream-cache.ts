@@ -2,6 +2,7 @@ import { splitRemoteBranchName } from '../../../../shared/git-effective-upstream
 import type { OwnerRepo } from '../../gh-utils'
 import { readLocalGitConfigSignature } from '../../local-git-config-signature'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+
 export type TrackedUpstreamBranch = {
   remoteName: string
   branchName: string
@@ -36,6 +37,7 @@ export const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
 export function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
   const generation = Symbol()
   trackedUpstreamSnapshotGenerations.set(cacheKey, generation)
+
   return generation
 }
 
@@ -52,12 +54,15 @@ export function pruneTrackedUpstreamSnapshotCache(now: number): void {
       trackedUpstreamSnapshotCache.delete(cacheKey)
     }
   }
+
   // Why: workspace/runtime churn can create unbounded unique keys within one TTL window, so expiry sweeping alone isn't a memory bound.
   while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     trackedUpstreamSnapshotCache.delete(oldestKey)
   }
 }
@@ -82,9 +87,11 @@ export function __resetTrackedUpstreamBranchCacheForTests(): void {
 
 export function parseTrackedUpstreamBranch(upstreamRef: string): TrackedUpstreamBranch | null {
   const parsed = splitRemoteBranchName(upstreamRef.trim())
+
   if (!parsed) {
     return null
   }
+
   return parsed
 }
 
@@ -97,9 +104,11 @@ export function shouldRetryTrackedUpstreamBranch(
   if (upstreamBranch.branchName !== branchName) {
     return true
   }
+
   if (!headRepo) {
     return true
   }
+
   return githubRepoIdentityKey(upstreamHeadRepo) !== githubRepoIdentityKey(headRepo)
 }
 
@@ -126,11 +135,13 @@ export async function doesTrackedUpstreamCacheConfigSignatureMatch(
   if (!cached.gitConfigSignature) {
     return true
   }
+
   const currentSignature = await readLocalGitConfigSignature({
     repoPath,
     connectionId: connectionId ?? null,
     ...localGitOptions
   })
+
   return currentSignature === cached.gitConfigSignature
 }
 
@@ -142,5 +153,6 @@ export function getTrackedUpstreamBranchCacheKey(
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
+
   return [runtimeKey, repoPath].join('\0')
 }

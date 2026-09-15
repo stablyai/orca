@@ -42,11 +42,13 @@ function makeState(args: {
   const agent = args.agent ?? 'codex'
   const tab = terminalTab(args.worktreeId, args.aiVaultTitle)
   const listeners = new Set<(state: AppState, previous: AppState) => void>()
+
   const providerSession = {
     key: 'session_id' as const,
     id: `${agent}-session`,
     transcriptPath: `/sessions/${agent}.jsonl`
   }
+
   const statusEntry = {
     state: 'done' as const,
     prompt: '',
@@ -59,6 +61,7 @@ function makeState(args: {
     providerSession,
     stateHistory: []
   }
+
   let state = {
     activeWorktreeId: args.worktreeId,
     activeWorkspaceExecutionHostId: args.executionHostId,
@@ -102,11 +105,13 @@ function makeState(args: {
           )
         }
       }
+
       for (const listener of listeners) {
         listener(state, previous)
       }
     }
   } as unknown as AppState
+
   return {
     getState: () => state,
     pingAgentStatus: () => {
@@ -120,6 +125,7 @@ function makeState(args: {
           ])
         )
       }
+
       for (const listener of listeners) {
         listener(state, previous)
       }
@@ -133,6 +139,7 @@ function makeState(args: {
             if (!entry.providerSession) {
               return [paneKey, entry]
             }
+
             return [
               paneKey,
               { ...entry, providerSession: { ...entry.providerSession, id: sessionId } }
@@ -140,6 +147,7 @@ function makeState(args: {
           })
         )
       }
+
       for (const listener of listeners) {
         listener(state, previous)
       }
@@ -148,6 +156,7 @@ function makeState(args: {
       args.path = path
       const previous = state
       state = { ...state, worktreesByRepo: { changed: [] } }
+
       for (const listener of listeners) {
         listener(state, previous)
       }
@@ -155,12 +164,14 @@ function makeState(args: {
     removeSleepingRecord: () => {
       const previous = state
       state = { ...state, sleepingAgentSessionsByPaneKey: {} }
+
       for (const listener of listeners) {
         listener(state, previous)
       }
     },
     subscribe: (listener: (next: AppState, previous: AppState) => void) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     }
   }
@@ -176,6 +187,7 @@ describe('AI Vault tab title sync', () => {
         worktreeId: 'worktree-1',
         path: '/workspace/albacore'
       })
+
       const resolveSessionTitles = vi.fn(async () => titleResult(agent, `${agent} conversation`))
       const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
 
@@ -223,6 +235,7 @@ describe('AI Vault tab title sync', () => {
       path: '/workspace/albacore',
       sleeping: true
     })
+
     const stop = startAiVaultTabTitleSync({
       ...store,
       resolveSessionTitles: async () => titleResult('codex', 'Stable conversation')
@@ -244,14 +257,17 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
+
     let title = 'First name'
     let refresh: (() => void) | undefined
+
     const stop = startAiVaultTabTitleSync({
       ...store,
       resolveSessionTitles: async () => titleResult('codex', title),
       setTimer: (callback, delay) => {
         expect(delay).toBe(5 * 60_000)
         refresh = callback
+
         return 1
       },
       clearTimer: () => {}
@@ -274,12 +290,15 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
+
     let refreshDelay: number | undefined
+
     const stop = startAiVaultTabTitleSync({
       ...store,
       resolveSessionTitles: async () => ({ titles: [] }),
       setTimer: (_callback, delay) => {
         refreshDelay = delay
+
         return 1
       },
       clearTimer: () => {}
@@ -295,14 +314,17 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
+
     const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Deferred conversation'))
     let runScheduled: (() => void) | undefined
     const cancelScheduled = vi.fn()
+
     const stop = startAiVaultTabTitleSync({
       ...store,
       resolveSessionTitles,
       scheduleReconcile: (callback) => {
         runScheduled = callback
+
         return cancelScheduled
       }
     })
@@ -319,6 +341,7 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
+
     const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Stable conversation'))
     const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
 
@@ -337,6 +360,7 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
+
     const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Stable conversation'))
     const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
 
@@ -355,6 +379,7 @@ describe('AI Vault tab title sync', () => {
       worktreeId: 'worktree-1',
       path: '/workspace/albacore'
     })
+
     const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Original conversation'))
     const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
 
@@ -375,6 +400,7 @@ describe('AI Vault tab title sync', () => {
       tabId: `tab-${index}`,
       worktreeId: `worktree-${index}`
     })
+
     const groups = batchAiVaultTitleRequests(
       Array.from({ length: 65 }, (_, index) => request(index))
     )
@@ -393,12 +419,15 @@ describe('AI Vault tab title sync', () => {
       tabId: `tab-${index}`,
       worktreeId: `worktree-${index}`
     })
+
     const requests = [
       ...Array.from({ length: 65 }, (_, index) => request('ssh:dev-box', index)),
       request('runtime:server-1', 100)
     ]
+
     const calls: AiVaultTitleRequest[][] = []
     const completions: (() => void)[] = []
+
     const pending = settleAiVaultTitleRequestBatches(
       requests,
       (batch) =>

@@ -161,6 +161,7 @@ describe('mapRuntimeError', () => {
     const error = new Error(
       'keyboard input requires the target window to be focused; retry with --restore-window'
     )
+
     Object.assign(error, { code: 'window_not_focused' })
 
     const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
@@ -186,6 +187,7 @@ describe('mapRuntimeError', () => {
   it('does not recommend a blind retry after a coordinate press may have landed', () => {
     const message =
       'coordinate click aborted because the recipient changed; 1 press(es) may already have been delivered'
+
     const error = Object.assign(new Error(message), { code: 'window_not_focused' })
 
     const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)

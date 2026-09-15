@@ -12,10 +12,12 @@ export function findTabAgentEntry(
   terminalTabId: string
 ): AgentStatusEntry | undefined {
   const prefix = `${terminalTabId}:`
+
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     if (paneKey.startsWith(prefix)) {
       return entry
     }
   }
+
   return undefined
 }

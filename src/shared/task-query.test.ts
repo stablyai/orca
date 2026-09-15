@@ -92,6 +92,7 @@ describe('parseTaskQuery', () => {
     const parsed = parseTaskQuery(
       'assignee:@me author:alice review-requested:@me label:bug free text'
     )
+
     expect(parsed.assignee).toBe('@me')
     expect(parsed.author).toBe('alice')
     expect(parsed.reviewRequested).toBe('@me')

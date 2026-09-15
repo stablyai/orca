@@ -20,18 +20,22 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
     async (_event, args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
       const repo = resolveRepoForExecutionHost(store, repoId, args.hostId)
+
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
+
       // The resolved repo supplies host ownership when legacy callers omit args.hostId.
       const removalHostId = getRepoExecutionHostId(repo)
       const inFlightKey = getWorktreeRemovalInFlightKey(args.worktreeId, removalHostId)
       const optionsKey = getWorktreeRemovalOptionsKey(args)
       const inFlightRemoval = worktreeRemovalsInFlight.get(inFlightKey)
+
       if (inFlightRemoval) {
         if (inFlightRemoval.optionsKey === optionsKey) {
           return inFlightRemoval.promise
         }
+
         throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
       }
 
@@ -39,7 +43,9 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, () =>
         executeWorktreeRemoval(context, args, repo, repoId, worktreePath, removalHostId)
       )
+
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
+
       try {
         const result = await removal
         options?.onWorktreeLifecycle?.({
@@ -47,6 +53,7 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
           worktreeId: args.worktreeId,
           path: parseWorktreeId(args.worktreeId).worktreePath
         })
+
         return result
       } finally {
         if (worktreeRemovalsInFlight.get(inFlightKey)?.promise === removal) {

@@ -60,6 +60,7 @@ describe('OpenCode guarded terminal send', () => {
         client: { id: 'desktop-1', type: 'desktop' }
       })
     )
+
     await vi.advanceTimersByTimeAsync(1_500)
 
     await expect(send).resolves.toMatchObject({

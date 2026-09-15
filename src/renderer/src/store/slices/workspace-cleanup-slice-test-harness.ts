@@ -8,6 +8,7 @@ import {
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 
 export const WORKTREE_ID = 'repo1::/tmp/old-workspace'
+
 export const NOW = 1_700_000_000_000
 
 export function makeCandidate(
@@ -106,9 +107,11 @@ export function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, resolve, reject }
 }

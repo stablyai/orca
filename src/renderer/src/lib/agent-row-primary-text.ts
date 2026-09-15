@@ -6,13 +6,18 @@ import {
 } from '../../../shared/orca-dispatch-status-prompt'
 
 export const ORCA_DISPATCH_PREAMBLE_PREFIX = ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
+
 const ORCA_DISPATCH_TASK_MARKER = ORCA_DISPATCH_STATUS_TASK_MARKER
+
 const ORCA_DISPATCH_TASK_ID_MARKER = 'Your task ID is:'
+
 // Why: match deriveGeneratedTabTitle's scan budget — previews only need the
 // first non-empty task line, not the rest of a paste-sized worker prompt.
 const ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT = 512
+
 // Why: task id lives near the top of the preamble; keep that scan tight.
 const ORCA_DISPATCH_TASK_ID_SCAN_LIMIT = 1024
+
 // Why: === TASK === sits after CLI instructions (a few KB). Cap the search so a
 // malformed multi-MB prompt without a marker never full-scans the task body.
 const ORCA_DISPATCH_TASK_MARKER_SCAN_LIMIT = 32_768
@@ -34,14 +39,19 @@ export function orchestrationLabelsMatchLiveDispatch(
   if (!isOrcaDispatchPrompt(entry.prompt)) {
     return false
   }
+
   const orchestrationTaskId = entry.orchestration?.taskId?.trim()
+
   if (!orchestrationTaskId) {
     return false
   }
+
   const liveTaskId = getOrcaDispatchTaskId(entry.prompt)
+
   if (!liveTaskId) {
     return true
   }
+
   return liveTaskId === orchestrationTaskId
 }
 
@@ -59,9 +69,11 @@ export function getAgentRowPrimaryText(
       getOrcaDispatchTaskPreview(entry.prompt)
     )
   }
+
   if (isOrcaDispatchPrompt(entry.prompt)) {
     return getOrcaDispatchTaskPreview(entry.prompt)
   }
+
   return entry.prompt.trim()
 }
 
@@ -73,6 +85,7 @@ export function getAgentRowGeneratedTitleText(
   if (isOrcaDispatchPrompt(entry.prompt)) {
     return getAgentRowPrimaryText(entry)
   }
+
   return entry.prompt
 }
 
@@ -80,11 +93,14 @@ export function getOrcaDispatchTaskId(prompt: string): string | null {
   if (!isOrcaDispatchPrompt(prompt)) {
     return null
   }
+
   const scan = prompt.trimStart().slice(0, ORCA_DISPATCH_TASK_ID_SCAN_LIMIT)
   const markerIndex = scan.indexOf(ORCA_DISPATCH_TASK_ID_MARKER)
+
   if (markerIndex === -1) {
     return null
   }
+
   // Why: delimit on the first whitespace, not just a newline. The task id is a
   // whitespace-free token, and by the time this parses a live status prompt the
   // trailing newline has been folded to a space by normalizeSingleLinePreview —
@@ -92,6 +108,7 @@ export function getOrcaDispatchTaskId(prompt: string): string | null {
   const afterMarker = scan.slice(markerIndex + ORCA_DISPATCH_TASK_ID_MARKER.length).trimStart()
   const idEnd = afterMarker.search(/\s/)
   const idLine = idEnd === -1 ? afterMarker : afterMarker.slice(0, idEnd)
+
   return idLine || null
 }
 
@@ -105,23 +122,30 @@ function getOrcaDispatchTaskPreview(prompt: string): string {
   if (!isOrcaDispatchPrompt(prompt)) {
     return ''
   }
+
   const scan = prompt
     .trimStart()
     .slice(0, ORCA_DISPATCH_TASK_MARKER_SCAN_LIMIT + ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT)
+
   // Why: share the normalizer's standalone-line marker rule. A naive indexOf
   // would treat base-drift commit subjects that mention `=== TASK ===` as the
   // real separator when helpers are called with raw multi-line preambles.
   const taskMarkerIndex = findOrcaDispatchTaskMarkerIndex(scan)
+
   if (taskMarkerIndex === -1) {
     return ''
   }
+
   const taskBodyStart = taskMarkerIndex + ORCA_DISPATCH_TASK_MARKER.length
   const taskBody = scan.slice(taskBodyStart, taskBodyStart + ORCA_DISPATCH_TASK_PREVIEW_SCAN_LIMIT)
+
   for (const line of taskBody.split(/\r?\n/)) {
     const preview = line.trim().replace(/\s+/g, ' ')
+
     if (preview) {
       return preview
     }
   }
+
   return ''
 }

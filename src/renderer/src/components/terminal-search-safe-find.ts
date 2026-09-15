@@ -29,6 +29,7 @@ export function safeFind(
     if (isDecorationPositiveIntegerError(error)) {
       return false
     }
+
     throw error
   }
 }

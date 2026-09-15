@@ -20,6 +20,7 @@ const GROK_EFFORT_CHOICES = [
 // on the rest, so expose each model's ceiling rather than one shared menu.
 function grokEffort(ceiling: 'high' | 'xhigh'): CatalogOption {
   const ceilingIndex = GROK_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+
   return {
     // Why: `LaunchPreferences` is a strict zod object over model/effort/mode, so a
     // novel id is dropped client-side and rejected on the wire.

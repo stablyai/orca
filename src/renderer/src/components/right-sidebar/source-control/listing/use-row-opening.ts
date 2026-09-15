@@ -44,11 +44,14 @@ export function useSourceControlRowOpening({
       if (!event || !activeWorktreeId || !isSourceControlSplitOpenModifier(event, isMac)) {
         return undefined
       }
+
       const sourceGroupId =
         activeGroupIdByWorktree[activeWorktreeId] ?? groupsByWorktree[activeWorktreeId]?.[0]?.id
+
       if (!sourceGroupId) {
         return undefined
       }
+
       return createEmptySplitGroup(activeWorktreeId, sourceGroupId, 'right') ?? undefined
     },
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
@@ -59,24 +62,32 @@ export function useSourceControlRowOpening({
     if (!activeWorktreeId || s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
       return null
     }
+
     const activeFileId = s.activeFileIdByWorktree?.[activeWorktreeId]
+
     if (!activeFileId) {
       return null
     }
+
     const activeFile = s.openFiles?.find(
       (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
     )
+
     return activeFile
       ? buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
       : null
   })
+
   const activeOpenAvailableRowKeys = useMemo(() => {
     const keys = new Set<string>()
+
     for (const entry of visibleSelectionEntries) {
       keys.add(entry.key)
     }
+
     return keys
   }, [visibleSelectionEntries])
+
   const activeOpenRowKeys = useMemo(
     () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
     [activeOpenAvailableRowKeys, activeOpenFileSignature]
@@ -87,20 +98,26 @@ export function useSourceControlRowOpening({
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+
       const targetGroupId = resolveSplitTargetGroupId(event)
       const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
+
       if (entry.conflictKind && entry.conflictStatus) {
         if (entry.conflictStatus === 'unresolved') {
           trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
         }
+
         openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path), {
           targetGroupId,
           preview: openAsPreview
         })
+
         return
       }
+
       const language = detectLanguage(entry.path)
       const filePath = joinPath(worktreePath, entry.path)
+
       // Why: unstaged markdown diffs open as an edit tab in Changes view (one tab per file); staged diffs still get a separate diff tab since that isn't what the editor edits.
       if (language === 'markdown' && entry.area === 'unstaged') {
         openFile(
@@ -114,8 +131,10 @@ export function useSourceControlRowOpening({
           { targetGroupId, preview: openAsPreview }
         )
         setEditorViewMode(filePath, 'changes')
+
         return
       }
+
       openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
         targetGroupId,
         preview: openAsPreview
@@ -143,6 +162,7 @@ export function useSourceControlRowOpening({
       ) {
         return
       }
+
       const targetGroupId = resolveSplitTargetGroupId(event)
       openBranchDiff(
         activeWorktreeId,

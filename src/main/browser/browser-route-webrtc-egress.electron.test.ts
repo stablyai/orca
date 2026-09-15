@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { resolveElectronProbeLaunch } from './electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 type ProbeResult = {
@@ -17,6 +18,7 @@ type ProbeResult = {
 
 afterAll(() => {
   const failures: unknown[] = []
+
   for (const root of fixtureRoots) {
     try {
       rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
@@ -24,6 +26,7 @@ afterAll(() => {
       failures.push(error)
     }
   }
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Failed to clean up WebRTC egress fixtures')
   }
@@ -139,23 +142,29 @@ function runProbe(protectedGuest: boolean): ProbeResult {
   writeFileSync(mainPath, probeMain(resultPath, protectedGuest))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [mainPath, `--user-data-dir=${join(root, 'profile')}`]
+
   const { executable, args } = resolveElectronProbeLaunch({
     electronBinary,
     electronArgs,
     platform: process.platform,
     display: env.DISPLAY
   })
+
   const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 30_000 })
   const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${rawResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
   if (rawResult === 'no result') {
     throw new Error(`${rawResult}\n${run.stdout}\n${run.stderr}`)
   }
+
   const parsed = JSON.parse(rawResult) as ProbeResult | { error: string }
+
   if ('error' in parsed) {
     throw new Error(parsed.error)
   }
+
   return parsed
 }
 

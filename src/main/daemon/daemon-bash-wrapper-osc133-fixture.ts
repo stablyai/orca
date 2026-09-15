@@ -32,6 +32,7 @@ export function runInteractiveBashRcfile(rcfileContent: string, tempDir: string)
 
   expect(result.error).toBeUndefined()
   expect(result.status).toBe(0)
+
   return result.stdout
 }
 

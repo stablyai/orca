@@ -16,6 +16,7 @@ export class BrowserClientHostAuthorityReplacementWait {
     if (this.timer) {
       return
     }
+
     this.timer = setTimeout(() => {
       this.timer = null
       expire()

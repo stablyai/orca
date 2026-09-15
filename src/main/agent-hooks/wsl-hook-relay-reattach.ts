@@ -13,7 +13,9 @@ export function ensureWslHookRelayForReattach(
   if (connectionId || result.isReattach !== true || typeof result.wslDistro !== 'string') {
     return
   }
+
   const distro = result.wslDistro.trim()
+
   if (distro) {
     ensureForDistro(distro)
   }

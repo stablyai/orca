@@ -49,12 +49,15 @@ export async function routeWebRuntimeConnectionFrame(
 ): Promise<void> {
   const raw = typeof rawData === 'string' ? rawData : null
   const sharedKey = context.getSharedKey()
+
   if (context.getState() === 'handshaking') {
     if (raw === null || !sharedKey) {
       return
     }
+
     try {
       const control = JSON.parse(raw) as { type?: unknown }
+
       if (control.type === 'e2ee_ready') {
         context.sendEncrypted({
           type: 'e2ee_auth',
@@ -70,20 +73,25 @@ export async function routeWebRuntimeConnectionFrame(
             WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
           ]
         })
+
         return
       }
     } catch {
       // The authenticated control frame is encrypted, so non-JSON is normal here.
     }
+
     const plaintext = decrypt(raw, sharedKey)
+
     if (plaintext === null) {
       return
     }
+
     try {
       const control = JSON.parse(plaintext) as {
         type?: unknown
         error?: { code?: string; message?: string }
       }
+
       if (control.type === 'e2ee_authenticated') {
         context.setConnected()
       } else if (control.type === 'e2ee_error' || control.error?.code === 'unauthorized') {
@@ -96,69 +104,91 @@ export async function routeWebRuntimeConnectionFrame(
     } catch {
       // Ignore malformed handshake payloads; the server will close on timeout.
     }
+
     return
   }
 
   if (context.getState() !== 'connected' || !sharedKey) {
     return
   }
+
   if (raw === null) {
     const encrypted = await websocketPayloadToUint8(rawData)
+
     if (sourceWs && context.getSocket() !== sourceWs) {
       return
     }
+
     if (!encrypted) {
       return
     }
+
     const plaintext = decryptBytes(encrypted, sharedKey)
+
     if (!plaintext) {
       return
     }
+
     for (const subscription of context.subscriptions.values()) {
       subscription.callbacks.onBinary?.(plaintext)
     }
+
     return
   }
 
   const plaintext = decrypt(raw, sharedKey)
+
   if (plaintext === null) {
     return
   }
+
   let response: RuntimeRpcResponse<unknown> | Record<string, unknown>
+
   try {
     response = JSON.parse(plaintext) as RuntimeRpcResponse<unknown> | Record<string, unknown>
   } catch {
     return
   }
+
   if (isKeepaliveFrame(response) || !('id' in response) || typeof response.id !== 'string') {
     return
   }
+
   if (isRuntimeFailureResponse(response) && response.error.code === 'unauthorized') {
     const error = createWebRuntimeUnauthorizedError()
     context.setAuthFailed()
     context.rejectUnauthorized(error)
     context.notifyUnauthorized()
     context.getSocket()?.close()
+
     return
   }
 
   const subscription = context.subscriptions.get(response.id)
+
   if (subscription) {
     const subscriptionResponse = response as RuntimeRpcResponse<unknown>
+
     if (subscriptionResponse.ok === false) {
       context.subscriptions.delete(response.id)
     }
+
     subscription.callbacks.onResponse(subscriptionResponse)
+
     if (subscriptionResponse.ok && isEndResult(subscriptionResponse.result)) {
       context.subscriptions.delete(response.id)
       subscription.callbacks.onClose?.()
     }
+
     return
   }
+
   const pending = context.pending.get(response.id)
+
   if (!pending) {
     return
   }
+
   context.pending.delete(response.id)
   window.clearTimeout(pending.timeout)
   pending.resolve(response as RuntimeRpcResponse<unknown>)
@@ -187,11 +217,14 @@ async function websocketPayloadToUint8(
   if (value instanceof Uint8Array) {
     return value
   }
+
   if (value instanceof ArrayBuffer) {
     return new Uint8Array(value)
   }
+
   if (value instanceof Blob) {
     return new Uint8Array(await value.arrayBuffer())
   }
+
   return null
 }

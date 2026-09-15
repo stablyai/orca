@@ -1,13 +1,18 @@
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 const BROWSER_SCREENCAST_KIND = 0x62
+
 const BROWSER_SCREENCAST_VERSION = 1
+
 const HEADER_BYTES = 16
+
 export const BROWSER_SCREENCAST_MAX_METADATA_BYTES = 64 * 1024
+
 export const BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 512,
   nestingDepth: 8
 } as const
+
 const METADATA_KEYS = [
   'offsetTop',
   'pageScaleFactor',
@@ -54,9 +59,11 @@ function byteToFormat(value: number): BrowserScreencastFormat | null {
   if (value === 1) {
     return 'jpeg'
   }
+
   if (value === 2) {
     return 'png'
   }
+
   return null
 }
 
@@ -68,9 +75,11 @@ function decodeJson(bytes: Uint8Array): unknown {
   if (bytes.byteLength > BROWSER_SCREENCAST_MAX_METADATA_BYTES) {
     return null
   }
+
   try {
     const content = new TextDecoder().decode(bytes)
     assertJsonTextStructureWithinLimits(content, BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS)
+
     return JSON.parse(content) as unknown
   } catch {
     return null
@@ -83,17 +92,22 @@ function isFiniteNumber(value: unknown): value is number {
 
 function decodeFrameMetadata(bytes: Uint8Array): BrowserScreencastFrameMetadata | null {
   const raw = decodeJson(bytes)
+
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null
   }
+
   const input = raw as Record<string, unknown>
   const metadata: BrowserScreencastFrameMetadata = {}
+
   for (const key of METADATA_KEYS) {
     const value = input[key]
+
     if (isFiniteNumber(value)) {
       metadata[key] = value
     }
   }
+
   return metadata
 }
 
@@ -110,6 +124,7 @@ export function encodeBrowserScreencastFrame(frame: BrowserScreencastFrame): Uin
   view.setUint32(12, 0, true)
   out.set(metadata, HEADER_BYTES)
   out.set(frame.image, HEADER_BYTES + metadata.byteLength)
+
   return out
 }
 
@@ -117,37 +132,50 @@ export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreenca
   if (bytes.byteLength < HEADER_BYTES) {
     return null
   }
+
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+
   if (
     view.getUint8(0) !== BROWSER_SCREENCAST_KIND ||
     view.getUint8(1) !== BROWSER_SCREENCAST_VERSION
   ) {
     return null
   }
+
   if (view.getUint8(2) !== BrowserScreencastOpcode.Frame) {
     return null
   }
+
   const format = byteToFormat(view.getUint8(3))
+
   if (!format) {
     return null
   }
+
   const seq = view.getUint32(4, true)
   const metadataLength = view.getUint32(8, true)
+
   if (metadataLength > BROWSER_SCREENCAST_MAX_METADATA_BYTES) {
     return null
   }
+
   if (view.getUint32(12, true) !== 0) {
     return null
   }
+
   const payloadStart = HEADER_BYTES
   const imageStart = payloadStart + metadataLength
+
   if (imageStart > bytes.byteLength) {
     return null
   }
+
   const metadata = decodeFrameMetadata(bytes.subarray(payloadStart, imageStart))
+
   if (!metadata) {
     return null
   }
+
   return {
     opcode: BrowserScreencastOpcode.Frame,
     seq,

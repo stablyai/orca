@@ -18,6 +18,7 @@ type PlacementObservation = { copyFallback: boolean }
 
 function normalizedPath(path: string): string {
   const normalized = resolve(path)
+
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
@@ -55,14 +56,19 @@ async function createProviderAlias(
 ): Promise<void> {
   if (filesystem.createAlias) {
     await filesystem.createAlias(canonicalPath, destinationPath)
+
     return
   }
+
   const parent = dirname(destinationPath)
   await mkdir(parent, { recursive: true })
+
   if (process.platform === 'win32') {
     await symlink(resolve(canonicalPath), destinationPath, 'junction')
+
     return
   }
+
   const realParent = await realpath(parent).catch(() => resolve(parent))
   const realCanonical = await realpath(canonicalPath)
   await symlink(relative(realParent, realCanonical), destinationPath, 'dir')
@@ -84,10 +90,12 @@ async function reconcileExistingPlacement(input: {
     input.destination.provider,
     input.destinationPath
   )
+
   if (previous?.topology === 'independent-copy') {
     const observed = await input.filesystem
       .observeSkill(input.destinationPath, input.previousReceipt?.fileModes)
       .catch(() => null)
+
     if (!observed || observed.observedDigest !== input.previousReceipt?.packageDigest) {
       return {
         provider: input.destination.provider,
@@ -97,6 +105,7 @@ async function reconcileExistingPlacement(input: {
         ...placementFailure('skill-placement-modified-copy')
       }
     }
+
     if (observed.observedDigest === input.packageDigest) {
       return {
         provider: input.destination.provider,
@@ -105,6 +114,7 @@ async function reconcileExistingPlacement(input: {
         status: 'unchanged'
       }
     }
+
     await replaceOwnedSkillPlacementCopy(
       input.canonicalPath,
       input.destinationPath,
@@ -118,6 +128,7 @@ async function reconcileExistingPlacement(input: {
           }
         : undefined
     )
+
     return {
       provider: input.destination.provider,
       path: input.destinationPath,
@@ -125,6 +136,7 @@ async function reconcileExistingPlacement(input: {
       status: 'installed'
     }
   }
+
   if (input.filesystem.aliasTargets) {
     return (await input.filesystem.aliasTargets(input.canonicalPath, input.destinationPath))
       ? {
@@ -141,8 +153,10 @@ async function reconcileExistingPlacement(input: {
           ...placementFailure('skill-placement-unowned-link')
         }
   }
+
   const resolvedDestination = await realpath(input.destinationPath).catch(() => null)
   const resolvedCanonical = await realpath(input.canonicalPath).catch(() => input.canonicalPath)
+
   if (
     resolvedDestination &&
     normalizedPath(resolvedDestination) === normalizedPath(resolvedCanonical)
@@ -154,10 +168,13 @@ async function reconcileExistingPlacement(input: {
       status: 'unchanged'
     }
   }
+
   const stat = await lstat(input.destinationPath)
+
   if (stat.isSymbolicLink()) {
     if (!resolvedDestination && previous?.topology === 'provider-alias') {
       await input.filesystem.remove(input.destinationPath)
+
       return createMissingPlacement({
         canonicalPath: input.canonicalPath,
         destinationPath: input.destinationPath,
@@ -167,6 +184,7 @@ async function reconcileExistingPlacement(input: {
         observation: input.observation
       })
     }
+
     return {
       provider: input.destination.provider,
       path: input.destinationPath,
@@ -175,6 +193,7 @@ async function reconcileExistingPlacement(input: {
       ...placementFailure('skill-placement-unowned-link')
     }
   }
+
   return {
     provider: input.destination.provider,
     path: input.destinationPath,
@@ -195,6 +214,7 @@ async function createMissingPlacement(input: {
 }): Promise<SkillPlacementResult> {
   try {
     await createProviderAlias(input.canonicalPath, input.destinationPath, input.filesystem)
+
     return {
       provider: input.destination.provider,
       path: input.destinationPath,
@@ -203,6 +223,7 @@ async function createMissingPlacement(input: {
     }
   } catch {
     input.observation.copyFallback = true
+
     try {
       await createSkillPlacementCopyAtMissingDestination(
         input.canonicalPath,
@@ -211,6 +232,7 @@ async function createMissingPlacement(input: {
         input.fileModes,
         input.transaction?.stagingPath
       )
+
       return {
         provider: input.destination.provider,
         path: input.destinationPath,
@@ -243,19 +265,23 @@ export async function reconcileSkillProviderPlacement(input: {
   if (input.destination.readsCanonicalRoot) {
     return null
   }
+
   const destinationPath = join(input.destination.rootPath, input.skillName)
   const filesystem = input.filesystem ?? nativeSkillInstallFilesystem
   const observation: PlacementObservation = { copyFallback: false }
+
   const operation = startSkillPhaseOperation({
     phase: 'placement',
     platform: input.targetPlatform,
     destination: 'provider-placement',
     provider: input.destination.provider
   })
+
   try {
     const aliasExists = filesystem.aliasTargets
       ? await filesystem.aliasTargets(input.canonicalPath, destinationPath).catch(() => false)
       : false
+
     const result =
       aliasExists || (await pathExists(destinationPath))
         ? await reconcileExistingPlacement({
@@ -265,6 +291,7 @@ export async function reconcileSkillProviderPlacement(input: {
             observation
           })
         : await createMissingPlacement({ ...input, destinationPath, filesystem, observation })
+
     operation.complete({
       status: result.status,
       errorCategory: result.errorCategory ?? 'none',
@@ -279,6 +306,7 @@ export async function reconcileSkillProviderPlacement(input: {
               : 'symlink',
       copyFallbackCount: observation.copyFallback ? 1 : 0
     })
+
     return result
   } catch {
     const result: SkillPlacementResult = {
@@ -288,6 +316,7 @@ export async function reconcileSkillProviderPlacement(input: {
       status: 'failed',
       ...placementFailure('skill-placement-reconciliation-failed', true)
     }
+
     operation.complete({
       status: result.status,
       errorCategory: result.errorCategory,
@@ -295,6 +324,7 @@ export async function reconcileSkillProviderPlacement(input: {
       aliasMechanism: 'none',
       copyFallbackCount: observation.copyFallback ? 1 : 0
     })
+
     return result
   }
 }

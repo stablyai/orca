@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 
 const DEFAULT_CHECK_DETAILS_HEIGHT = 260
+
 const MIN_CHECK_DETAILS_HEIGHT = 72
+
 const MAX_CHECK_DETAILS_HEIGHT = 520
 
 export function clampCheckDetailsHeight(height: number): number {
@@ -20,6 +22,7 @@ export function useCheckDetailsResize(enabled: boolean): {
       if (!enabled) {
         return
       }
+
       event.preventDefault()
       dragStartRef.current = { y: event.clientY, height: detailsHeight }
     },
@@ -29,9 +32,11 @@ export function useCheckDetailsResize(enabled: boolean): {
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent): void => {
       const dragStart = dragStartRef.current
+
       if (!dragStart) {
         return
       }
+
       setDetailsHeight(clampCheckDetailsHeight(dragStart.height + event.clientY - dragStart.y))
     }
 
@@ -41,6 +46,7 @@ export function useCheckDetailsResize(enabled: boolean): {
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
+
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)

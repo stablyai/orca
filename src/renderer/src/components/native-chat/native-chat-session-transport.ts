@@ -32,9 +32,11 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
   if (err instanceof RuntimeRpcCallError && err.code === 'method_not_found') {
     return RUNTIME_TOO_OLD
   }
+
   if (isRuntimeCompatBlockError(err)) {
     return RUNTIME_TOO_OLD
   }
+
   return RUNTIME_NATIVE_CHAT_READ_ERROR
 }
 
@@ -60,6 +62,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
           { agent, sessionId, limit, transcriptPath },
           { timeoutMs: 15_000 }
         )
+
         return parseRuntimeNativeChatReadSessionResult(result)
       } catch (err) {
         return { error: toRuntimeNativeChatErrorMessage(err) }
@@ -84,14 +87,18 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         if (attempt !== activeAttempt) {
           return
         }
+
         handleUnsubscribe = null
         reconnectPendingAttempt = attempt
+
         if (cancelled || reconnectTimer) {
           return
         }
+
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null
           reconnectPendingAttempt = null
+
           if (!cancelled) {
             openStream()
           }
@@ -120,6 +127,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 if (cancelled || attempt !== activeAttempt) {
                   return
                 }
+
                 if (response.ok === false) {
                   if (!receivedInitial) {
                     receivedInitial = true
@@ -133,8 +141,10 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     handleUnsubscribe?.()
                     scheduleReconnect(attempt)
                   }
+
                   return
                 }
+
                 const frame = response.result as {
                   type?: string
                   messages?: NativeChatAppendedMessages
@@ -143,10 +153,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   lifecycle?: unknown
                   pending?: boolean
                 }
+
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
                 // No transcript behind this window yet — forwarded so the view can
                 // stop spinning, but it is not the settled initial read.
                 const pending = frame?.pending === true
+
                 if (
                   (frame?.type === 'appended' ||
                     frame?.type === 'snapshot' ||
@@ -157,6 +169,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     if (!pending) {
                       receivedInitial = true
                     }
+
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
@@ -215,14 +228,17 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
             // must never replace or tear down the current stream.
             if (cancelled || attempt !== activeAttempt || reconnectPendingAttempt === attempt) {
               handle.unsubscribe()
+
               return
             }
+
             handleUnsubscribe = handle.unsubscribe
           })
           .catch((err: unknown) => {
             if (cancelled || attempt !== activeAttempt) {
               return
             }
+
             // Initial subscribe failed (e.g. a too-old runtime lacking the method).
             // Surface the same compatibility-specific copy as a direct read.
             if (!receivedInitial) {
@@ -233,8 +249,10 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 hasMore: false,
                 error: toRuntimeNativeChatErrorMessage(err)
               })
+
               return
             }
+
             // Why: a failed reconnect is still a transient dropped-stream state;
             // keep retrying after the backoff instead of stranding a live view.
             scheduleReconnect(attempt)
@@ -250,10 +268,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       // the watcher's cleanup key anyway.
       return () => {
         cancelled = true
+
         if (reconnectTimer) {
           clearTimeout(reconnectTimer)
           reconnectTimer = null
         }
+
         reconnectPendingAttempt = null
         handleUnsubscribe?.()
         handleUnsubscribe = null
@@ -271,5 +291,6 @@ export function getNativeChatSessionTransport(
   if (runtimeEnvironmentId && !isWebClientLocation()) {
     return createRuntimeNativeChatTransport(runtimeEnvironmentId)
   }
+
   return localNativeChatTransport
 }

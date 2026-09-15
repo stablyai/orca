@@ -35,10 +35,12 @@ async function findClaimedOwner(
 ): Promise<{ claimToken: string; path: string } | null | undefined> {
   const matches = (await readdir(lockParent)).flatMap((entry) => {
     const match = CLAIMED_OWNER_PATTERN.exec(entry)
+
     return match?.[1] === ownerToken && match[2]
       ? [{ claimToken: match[2], path: join(lockParent, entry) }]
       : []
   })
+
   return matches.length === 1 ? matches[0] : matches.length === 0 ? null : undefined
 }
 
@@ -52,6 +54,7 @@ async function resolveClaimSource(
   | { kind: 'active' | 'foreign' | 'unverifiable' }
 > {
   const ownerPath = join(lockParent, ownerFileName(owner.token))
+
   try {
     return parseOwner(await readFile(ownerPath, 'utf8'), owner.token)
       ? { kind: 'ready', sourcePath: ownerPath }
@@ -63,14 +66,18 @@ async function resolveClaimSource(
   }
 
   const claimedOwner = await findClaimedOwner(lockParent, owner.token)
+
   if (claimedOwner === undefined || claimedOwner === null) {
     return { kind: 'unverifiable' }
   }
+
   const priorClaimRecordPath = join(
     lockParent,
     claimRecordFileName(owner.token, claimedOwner.claimToken)
   )
+
   let priorClaim: ManagedHookLockClaim | null
+
   try {
     priorClaim = parseClaim(
       await readFile(priorClaimRecordPath, 'utf8'),
@@ -81,25 +88,33 @@ async function resolveClaimSource(
     if (hasCode(error, 'ENOENT')) {
       return { kind: 'unverifiable' }
     }
+
     throw error
   }
+
   if (!priorClaim) {
     return { kind: 'unverifiable' }
   }
+
   if (priorClaim.hostIdentity !== hostIdentity) {
     return { kind: 'foreign' }
   }
+
   const currentIdentity = await readManagedHookProcessIdentity(priorClaim.pid)
+
   const recoverOwnInactiveClaim =
     priorClaim.pid === process.pid &&
     currentIdentity === processIdentity &&
     !activeClaimTokens.has(priorClaim.claimToken)
+
   if (currentIdentity === undefined) {
     return { kind: 'unverifiable' }
   }
+
   if (currentIdentity === priorClaim.processIdentity && !recoverOwnInactiveClaim) {
     return { kind: 'active' }
   }
+
   return { kind: 'ready', sourcePath: claimedOwner.path, priorClaimRecordPath }
 }
 
@@ -110,10 +125,13 @@ async function claimManagedHookLock(
   processIdentity: string
 ): Promise<ClaimResult> {
   const source = await resolveClaimSource(lockParent, owner, hostIdentity, processIdentity)
+
   if (source.kind !== 'ready') {
     return source
   }
+
   const claimToken = randomUUID()
+
   const claim = {
     ownerToken: owner.token,
     claimToken,
@@ -121,6 +139,7 @@ async function claimManagedHookLock(
     hostIdentity,
     processIdentity
   }
+
   const claimRecordPath = join(lockParent, claimRecordFileName(owner.token, claimToken))
   const claimedOwnerPath = join(lockParent, claimedOwnerFileName(owner.token, claimToken))
   await writeFile(claimRecordPath, JSON.stringify(claim), {
@@ -128,6 +147,7 @@ async function claimManagedHookLock(
     flag: 'wx',
     mode: 0o600
   })
+
   try {
     try {
       // Why: renaming the witness elects one claimant without ever dropping the hard link.
@@ -136,9 +156,12 @@ async function claimManagedHookLock(
       if (hasCode(error, 'ENOENT')) {
         return { kind: 'contended' }
       }
+
       throw error
     }
+
     activeClaimTokens.add(claimToken)
+
     if (source.priorClaimRecordPath) {
       try {
         await removeFileIfPresent(source.priorClaimRecordPath)
@@ -146,6 +169,7 @@ async function claimManagedHookLock(
         console.warn('[agent-hooks] Failed to clean prior managed-hook claim record', error)
       }
     }
+
     return { kind: 'claimed', claim, claimRecordPath, claimedOwnerPath }
   } finally {
     if (!activeClaimTokens.has(claimToken)) {
@@ -169,29 +193,38 @@ export async function removeManagedHookLock(
   processIdentity: string
 ): Promise<ManagedHookLockRemoval> {
   const claimed = await claimManagedHookLock(lockParent, owner, hostIdentity, processIdentity)
+
   if (claimed.kind === 'contended') {
     return 'active'
   }
+
   if (claimed.kind === 'unverifiable') {
     const state = await inspectManagedHookLock(lockPath)
+
     if (state.kind === 'missing' || (state.kind === 'owned' && state.owner.token !== owner.token)) {
       return 'removed'
     }
   }
+
   if (claimed.kind !== 'claimed') {
     return claimed.kind
   }
 
   let removed = false
+
   try {
     const state = await inspectManagedHookLock(lockPath)
+
     if (state.kind === 'unknown') {
       return 'unverifiable'
     }
+
     if (state.kind === 'missing' || state.owner.token !== owner.token) {
       removed = true
+
       return 'removed'
     }
+
     try {
       await unlink(lockPath)
     } catch (error) {
@@ -199,10 +232,13 @@ export async function removeManagedHookLock(
         return 'unverifiable'
       }
     }
+
     removed = true
+
     return 'removed'
   } finally {
     activeClaimTokens.delete(claimed.claim.claimToken)
+
     if (removed) {
       try {
         await cleanAcquiredClaim(claimed)

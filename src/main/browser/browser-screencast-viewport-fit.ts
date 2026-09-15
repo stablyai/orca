@@ -18,6 +18,7 @@ function scaleToFit(
   height: number
 } {
   const scale = Math.min(1, maxWidth / width, maxHeight / height)
+
   return {
     width: Math.round(width * scale),
     height: Math.round(height * scale)
@@ -31,13 +32,17 @@ export function scaleSnapshotToFit(
   options: BrowserScreencastOptions
 ): NativeImage {
   const size = image.getSize()
+
   if (!size.width || !size.height) {
     return image
   }
+
   const fitted = scaleToFit(size.width, size.height, options.maxWidth, options.maxHeight)
+
   if (fitted.width === size.width && fitted.height === size.height) {
     return image
   }
+
   return image.resize(fitted)
 }
 
@@ -54,24 +59,30 @@ export function isLiveFrameCompatibleWithViewport(
 ): boolean {
   const viewportWidth = positiveInteger(options.viewportWidth)
   const viewportHeight = positiveInteger(options.viewportHeight)
+
   if (!viewportWidth || !viewportHeight) {
     return true
   }
+
   if (!imageSize) {
     return true
   }
+
   const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
   const cssViewport = { width: viewportWidth, height: viewportHeight }
+
   const deviceViewport = {
     width: Math.round(viewportWidth * deviceScaleFactor),
     height: Math.round(viewportHeight * deviceScaleFactor)
   }
+
   const scaledDeviceViewport = scaleToFit(
     deviceViewport.width,
     deviceViewport.height,
     options.maxWidth,
     options.maxHeight
   )
+
   // Why: Chromium can stream CSS-sized, DPR-sized, or maxWidth/maxHeight-scaled
   // bitmaps for the same emulated viewport. All are client-authoritative; stale
   // host BrowserView frames are the incompatible ones we need to drop.

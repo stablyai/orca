@@ -19,6 +19,7 @@ afterEach(() => {
 describe('reconnectSshTargetForRendererStartup', () => {
   it('publishes the connect result before startup terminal restoration continues', async () => {
     const publishState = vi.fn()
+
     const result = await reconnectSshTargetForRendererStartup({
       targetId: 'ssh-1',
       timeoutMs: 1_000,
@@ -37,6 +38,7 @@ describe('reconnectSshTargetForRendererStartup', () => {
 
   it('does not synthesize the missing half of a partial startup authority', async () => {
     const publishState = vi.fn()
+
     const partialState = {
       targetId: 'ssh-1',
       status: 'connected',
@@ -61,6 +63,7 @@ describe('reconnectSshTargetForRendererStartup', () => {
     vi.useFakeTimers()
     const publishState = vi.fn()
     const onFailure = vi.fn()
+
     const resultPromise = reconnectSshTargetForRendererStartup({
       targetId: 'ssh-1',
       timeoutMs: 1_000,

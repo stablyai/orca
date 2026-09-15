@@ -29,10 +29,13 @@ describe('CodexPaneAccountRegistryMutations', () => {
   it('retries a one-shot spawn record and merges it with the recovered file', async () => {
     let readable = false
     let persisted = JSON.stringify({ version: 2, panes: { existing: EXISTING } })
+
     const write = vi.fn((registry: CodexPaneAccountRegistryFile) => {
       persisted = JSON.stringify(registry)
+
       return true
     })
+
     const mutations = new CodexPaneAccountRegistryMutations({
       read: () => (readable ? parseRegistry(persisted) : null),
       write
@@ -52,10 +55,13 @@ describe('CodexPaneAccountRegistryMutations', () => {
     let readable = false
     let persisted = JSON.stringify({ version: 2, panes: { existing: EXISTING } })
     const read = vi.fn(() => (readable ? parseRegistry(persisted) : null))
+
     const write = vi.fn((registry: CodexPaneAccountRegistryFile) => {
       persisted = JSON.stringify(registry)
+
       return true
     })
+
     const mutations = new CodexPaneAccountRegistryMutations({ read, write })
 
     mutations.record('spawned', SPAWNED)

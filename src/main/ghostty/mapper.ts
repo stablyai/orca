@@ -50,23 +50,29 @@ export function mapGhosttyToOrca(
       if (!isMacOS) {
         return null
       }
+
       if (v === 'true' || v === 'on') {
         return { key: 'terminalMacOptionAsAlt', value: 'true' }
       }
+
       if (v === 'false' || v === 'off') {
         return { key: 'terminalMacOptionAsAlt', value: 'false' }
       }
+
       if (v === 'left' || v === 'right') {
         return { key: 'terminalMacOptionAsAlt', value: v }
       }
+
       return null
     },
 
     'background-opacity': (v) => {
       const num = Number(v)
+
       if (!Number.isFinite(num) || num < 0 || num > 1) {
         return null
       }
+
       return { key: 'terminalBackgroundOpacity', value: num }
     },
 
@@ -74,6 +80,7 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return { colorOverrides: { background: normalizeHex(v) } }
     },
 
@@ -81,6 +88,7 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return { colorOverrides: { foreground: normalizeHex(v) } }
     },
 
@@ -88,6 +96,7 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return { colorOverrides: { cursor: normalizeHex(v) } }
     },
 
@@ -95,6 +104,7 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return { colorOverrides: { selectionBackground: normalizeHex(v) } }
     },
 
@@ -102,39 +112,50 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return { colorOverrides: { selectionForeground: normalizeHex(v) } }
     },
 
     palette: (_v, rawValue) => {
       const entries = Array.isArray(rawValue) ? rawValue : [rawValue]
       const overrides: Partial<TerminalColorOverrides> = {}
+
       for (const entry of entries) {
         const eqIdx = entry.indexOf('=')
+
         if (eqIdx === -1) {
           continue
         }
+
         const idxStr = entry.slice(0, eqIdx).trim()
         const color = entry.slice(eqIdx + 1).trim()
         const index = Number.parseInt(idxStr, 10)
+
         if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
           continue
         }
+
         const mapped = PALETTE_INDEX_MAP[index]
+
         if (mapped) {
           overrides[mapped] = normalizeHex(color)
         }
       }
+
       if (Object.keys(overrides).length === 0 && entries.length > 0) {
         return null
       }
+
       return { colorOverrides: overrides }
     },
 
     'background-blur-radius': (v) => {
       const num = parseStrictInt(v)
+
       if (num === null || num < 0) {
         return null
       }
+
       return { key: 'windowBackgroundBlur', value: num > 0 }
     },
 
@@ -142,6 +163,7 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return [
         { key: 'terminalDividerColorDark', value: normalizeHex(v) },
         { key: 'terminalDividerColorLight', value: normalizeHex(v) }
@@ -150,25 +172,31 @@ export function mapGhosttyToOrca(
 
     'unfocused-split-opacity': (v) => {
       const num = Number(v)
+
       if (!Number.isFinite(num) || num < 0 || num > 1) {
         return null
       }
+
       return { key: 'terminalInactivePaneOpacity', value: num }
     },
 
     'window-padding-x': (v) => {
       const num = parsePaddingValue(v)
+
       if (num === null) {
         return null
       }
+
       return { key: 'terminalPaddingX', value: num }
     },
 
     'window-padding-y': (v) => {
       const num = parsePaddingValue(v)
+
       if (num === null) {
         return null
       }
+
       return { key: 'terminalPaddingY', value: num }
     },
 
@@ -177,15 +205,20 @@ export function mapGhosttyToOrca(
     // The settings UI clamps terminalLineHeight to [1, 3], so reject outside it.
     'adjust-cell-height': (v) => {
       const match = /^\+?(\d+(?:\.\d+)?)%$/.exec(v.trim())
+
       if (!match) {
         return null
       }
+
       const percent = Number(match[1])
       const rawLineHeight = 1 + percent / 100
+
       if (rawLineHeight > 3) {
         return null
       }
+
       const lineHeight = Math.round(100 + percent) / 100
+
       return { key: 'terminalLineHeight', value: lineHeight }
     },
 
@@ -193,6 +226,7 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
+
       return { colorOverrides: { cursorAccent: normalizeHex(v) } }
     },
 
@@ -200,14 +234,17 @@ export function mapGhosttyToOrca(
       if (v !== 'true' && v !== 'false') {
         return null
       }
+
       return { key: 'terminalMouseHideWhileTyping', value: v === 'true' }
     },
 
     'cursor-opacity': (v) => {
       const num = Number(v)
+
       if (!Number.isFinite(num) || num < 0 || num > 1) {
         return null
       }
+
       return { key: 'terminalCursorOpacity', value: num }
     },
 
@@ -215,22 +252,27 @@ export function mapGhosttyToOrca(
       if (typeof v !== 'string' || v.trim().length === 0) {
         return null
       }
+
       return { key: 'terminalFontFamily', value: v }
     },
 
     'font-size': (v) => {
       const num = Number(v)
+
       if (!Number.isFinite(num) || num <= 0) {
         return null
       }
+
       return { key: 'terminalFontSize', value: num }
     },
 
     'font-weight': (v) => {
       const num = Number(v)
+
       if (!Number.isFinite(num) || num < 100 || num > 900) {
         return null
       }
+
       return { key: 'terminalFontWeight', value: num }
     },
 
@@ -238,6 +280,7 @@ export function mapGhosttyToOrca(
       if (v !== 'bar' && v !== 'block' && v !== 'underline') {
         return null
       }
+
       return { key: 'terminalCursorStyle', value: v }
     },
 
@@ -247,6 +290,7 @@ export function mapGhosttyToOrca(
       if (v !== 'true' && v !== 'false') {
         return null
       }
+
       return { key: 'terminalCursorBlink', value: v === 'true' }
     },
 
@@ -256,6 +300,7 @@ export function mapGhosttyToOrca(
       if (v !== 'true' && v !== 'false') {
         return null
       }
+
       return { key: 'terminalFocusFollowsMouse', value: v === 'true' }
     },
 
@@ -263,6 +308,7 @@ export function mapGhosttyToOrca(
       if (v !== 'primary-paste' && v !== 'ignore') {
         return null
       }
+
       return { key: 'primarySelectionMiddleClickPaste', value: v === 'primary-paste' }
     }
   }
@@ -292,12 +338,14 @@ export function mapGhosttyToOrca(
     }
 
     const parser = FIELD_PARSERS[key]
+
     if (!parser) {
       unsupportedKeys.push(key)
       continue
     }
 
     const result = parser(value, rawValue)
+
     if (result === null) {
       unsupportedKeys.push(key)
       continue

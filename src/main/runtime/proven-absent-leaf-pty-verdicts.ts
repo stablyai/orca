@@ -6,8 +6,10 @@ export function pruneExpiredProvenAbsentLeafPtyVerdicts(
 ): void {
   if (ttlMs <= 0) {
     verdicts.clear()
+
     return
   }
+
   for (const [ptyId, verdictAt] of verdicts) {
     if (nowMs - verdictAt >= ttlMs) {
       verdicts.delete(ptyId)

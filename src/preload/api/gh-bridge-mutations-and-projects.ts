@@ -146,7 +146,9 @@ export const ghMutationsAndProjectsApi = {
       _event: Electron.IpcRendererEvent,
       payload: { repoPath: string; repoId?: string; type: 'issue' | 'pr'; number: number }
     ): void => callback(payload)
+
     ipcRenderer.on('gh:workItemMutated', listener)
+
     return () => ipcRenderer.removeListener('gh:workItemMutated', listener)
   },
   checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),

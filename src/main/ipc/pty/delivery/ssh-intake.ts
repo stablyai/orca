@@ -17,6 +17,7 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
       if (!session.runtime) {
         throw new Error('SSH PTY output requires the main terminal model')
       }
+
       return session.runtime.acceptPtyDataBounded(
         event.id,
         event.data,
@@ -39,9 +40,11 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
       ),
     prepareExit: (event) => {
       const release = session.preparePtyExitForRenderer(event)
+
       if (!release) {
         throw new Error('pty_renderer_exit_in_progress')
       }
+
       return release
     },
     finalizeExit: (event) => {
@@ -54,16 +57,20 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
       const provider = sshProvidersByGeneration.get(generation) as
         | (IPtyProvider & { hasPtyDeliveryPauseAdapter?: () => boolean })
         | undefined
+
       if (!provider?.hasPtyDeliveryPauseAdapter?.()) {
         return false
       }
+
       provider.pauseProducer?.(id)
+
       return true
     },
     resumeProvider: (generation, id) =>
       sshProvidersByGeneration.get(generation)?.resumeProducer?.(id),
     closeProvider: (generation, reason) => {
       const provider = sshProvidersByGeneration.get(generation)
+
       ;(
         provider as (IPtyProvider & { closeOutputIntake?: (reason: string) => void }) | undefined
       )?.closeOutputIntake?.(reason)
@@ -73,6 +80,7 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
     onGenerationClosed: (providerGeneration) => {
       for (const id of session.pendingData.keys()) {
         const pending = session.pendingData.get(id)
+
         if (
           pending?.projectionAdmissionIds &&
           session.sshOutputIntake?.hasProjectionFromGeneration(
@@ -85,6 +93,7 @@ export function installSessionSshOutputIntake(session: PtyIpcSession): void {
           session.pendingOverflowMarkedPtys.delete(id)
         }
       }
+
       sshProvidersByGeneration.delete(providerGeneration)
     },
     publishSourceAck: publishSshPtySourceAck,

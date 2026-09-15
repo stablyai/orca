@@ -42,10 +42,12 @@ export function carryProjectStateThroughIdentityChange(
   const orphanedPrevious = previousProjects.filter((project) => !projectedIds.has(project.id))
   const unmatched = projectedProjects.filter((project) => !previousById.has(project.id))
   const previousIndicesByRepo = new Map<string, number[]>()
+
   if (unmatched.length > 0) {
     orphanedPrevious.forEach((previous, index) => {
       for (const repoId of previous.sourceRepoIds) {
         const indices = previousIndicesByRepo.get(repoId)
+
         if (indices) {
           indices.push(index)
         } else {
@@ -54,13 +56,16 @@ export function carryProjectStateThroughIdentityChange(
       }
     })
   }
+
   const candidates = unmatched.flatMap((project) => {
     const overlaps = new Map<number, number>()
+
     for (const repoId of new Set(project.sourceRepoIds)) {
       for (const index of previousIndicesByRepo.get(repoId) ?? []) {
         overlaps.set(index, (overlaps.get(index) ?? 0) + 1)
       }
     }
+
     // Preserve input order when the candidate comparator ties on legacy duplicate IDs.
     return [...overlaps]
       .sort(([left], [right]) => left - right)
@@ -70,6 +75,7 @@ export function carryProjectStateThroughIdentityChange(
         shared
       }))
   })
+
   candidates.sort(
     (left, right) =>
       right.shared - left.shared ||
@@ -79,6 +85,7 @@ export function carryProjectStateThroughIdentityChange(
   )
   const claimedPreviousIds = new Set<string>()
   const predecessorByProjectId = new Map<string, Project>()
+
   for (const candidate of candidates) {
     if (
       claimedPreviousIds.has(candidate.previous.id) ||
@@ -86,21 +93,30 @@ export function carryProjectStateThroughIdentityChange(
     ) {
       continue
     }
+
     claimedPreviousIds.add(candidate.previous.id)
     predecessorByProjectId.set(candidate.project.id, candidate.previous)
   }
+
   const remappedProjectIds = new Map<string, string>()
+
   const projects = projectedProjects.map((project) => {
     const exact = previousById.get(project.id)
+
     if (exact) {
       return carryUserState(project, exact)
     }
+
     const predecessor = predecessorByProjectId.get(project.id)
+
     if (!predecessor) {
       return project
     }
+
     remappedProjectIds.set(predecessor.id, project.id)
+
     return carryUserState(project, predecessor)
   })
+
   return { projects, remappedProjectIds }
 }

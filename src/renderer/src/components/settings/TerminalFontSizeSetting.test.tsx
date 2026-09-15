@@ -40,9 +40,11 @@ describe('TerminalFontSizeSetting', () => {
 
   function getInput(): HTMLInputElement {
     const input = container.querySelector<HTMLInputElement>('input[type="number"]')
+
     if (!input) {
       throw new Error('font size input not found')
     }
+
     return input
   }
 
@@ -50,9 +52,11 @@ describe('TerminalFontSizeSetting', () => {
     const [decrement, increment] = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button')
     )
+
     if (!decrement || !increment) {
       throw new Error('stepper buttons not found')
     }
+
     return { decrement, increment }
   }
 

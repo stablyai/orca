@@ -25,6 +25,7 @@ export function newWorktreeAgentOptionFor(id: string | null | undefined): NewWor
   if (id === 'blank' || id === '__blank__') {
     return NEW_WORKTREE_BLANK_AGENT
   }
+
   return NEW_WORKTREE_AGENT_OPTIONS.find((agent) => agent.id === id) ?? NEW_WORKTREE_BLANK_AGENT
 }
 
@@ -51,9 +52,11 @@ function isSelectableAgent(
   if (agent.id === '__blank__') {
     return true
   }
+
   if (!isMobileTuiAgentEnabled(agent.id, settings?.disabledTuiAgents)) {
     return false
   }
+
   return detectedAgentIds === null || detectedAgentIds.has(agent.id)
 }
 
@@ -75,6 +78,7 @@ export function resolveNewWorktreeAgentSelection({
   }
 
   const preferred = pickPreferredNewWorktreeAgent(runtimeSettings, detectedAgentIds)
+
   if (!agentOverridden) {
     return { selectedAgent: preferred, agentOverridden: false }
   }

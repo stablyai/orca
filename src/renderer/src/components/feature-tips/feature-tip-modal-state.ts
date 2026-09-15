@@ -17,6 +17,7 @@ export function getFeatureTipForModal(args: {
   settings: { voice?: GlobalSettings['voice'] } | null | undefined
 }): FeatureTip | null {
   const modalTipId = isFeatureTipId(args.modalData.tipId) ? args.modalData.tipId : null
+
   if (modalTipId) {
     return FEATURE_TIPS.find((tip) => tip.id === modalTipId) ?? null
   }

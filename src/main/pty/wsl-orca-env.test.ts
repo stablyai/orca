@@ -137,12 +137,14 @@ describe('addOrcaWslInteropEnv', () => {
     const windowsEnv: Record<string, string> = {
       ORCA_AGENT_HOOK_ENDPOINT: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\agent-hooks\\endpoint.cmd'
     }
+
     addOrcaWslInteropEnv(windowsEnv)
     expect(windowsEnv.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
 
     const guestEnv: Record<string, string> = {
       ORCA_AGENT_HOOK_ENDPOINT: '/home/jin/.orca-wsl/agent-hooks/port-4567/endpoint.env'
     }
+
     addOrcaWslInteropEnv(guestEnv)
     expect(guestEnv.WSLENV).toContain('ORCA_AGENT_HOOK_ENDPOINT/u')
     expect(guestEnv.WSLENV).not.toContain('ORCA_AGENT_HOOK_ENDPOINT/p')
@@ -210,6 +212,7 @@ describe('addOrcaWslInteropEnv', () => {
     const env: Record<string, string> = {
       ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'
     }
+
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WSL_HOOK_RELAY_VERSION/u')
   })
@@ -219,6 +222,7 @@ describe('addOrcaWslInteropEnv', () => {
       OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc',
       ORCA_OPENCODE_CONFIG_DIR: '/home/jin/.orca-relay/opencode-overlays/abc'
     }
+
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toContain('OPENCODE_CONFIG_DIR/u')
     expect(env.WSLENV).toContain('ORCA_OPENCODE_CONFIG_DIR/u')
@@ -233,6 +237,7 @@ describe('addOrcaWslInteropEnv', () => {
       OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc',
       ORCA_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\opencode-overlays\\abc'
     }
+
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR')
     expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')

@@ -63,10 +63,13 @@ export function registerMobileDriverIpcBridge(
         setRemoteViewersForBrowserPage(pending.event.browserPageId, pending.event.hasRemoteViewers)
       }
     }
+
     pendingMobileStateEvents.length = 0
   }
+
   const enqueue = (event: PendingMobileStateEvent): void => {
     pendingMobileStateEvents.push(event)
+
     while (pendingMobileStateEvents.length > MAX_PENDING_MOBILE_STATE_EVENTS) {
       pendingMobileStateEvents.shift()
     }
@@ -77,10 +80,13 @@ export function registerMobileDriverIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       if (!mobileStateHydrated) {
         enqueue({ kind: 'fit', event })
+
         return
       }
+
       setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
     })
   )
@@ -89,13 +95,17 @@ export function registerMobileDriverIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       if (!mobileStateHydrated) {
         enqueue({ kind: 'driver', event })
+
         return
       }
+
       setDriverForPty(event.ptyId, event.driver)
     })
   )
+
   const unsubscribeLaunchDraftResolution = window.api.runtime.onNativeChatLaunchDraftResolved?.(
     (event) => {
       applyNativeChatLaunchDraftResolved(useAppStore.getState(), {
@@ -104,18 +114,23 @@ export function registerMobileDriverIpcBridge(
       })
     }
   )
+
   if (unsubscribeLaunchDraftResolution) {
     unsubs.push(unsubscribeLaunchDraftResolution)
   }
+
   unsubs.push(
     window.api.runtime.onBrowserDriverChanged((event) => {
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       if (!mobileStateHydrated) {
         enqueue({ kind: 'browser-driver', event })
+
         return
       }
+
       setDriverForBrowserPage(event.browserPageId, event.driver)
     })
   )
@@ -125,13 +140,17 @@ export function registerMobileDriverIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       if (!mobileStateHydrated) {
         enqueue({ kind: 'browser-remote-viewers', event })
+
         return
       }
+
       setRemoteViewersForBrowserPage(event.browserPageId, event.hasRemoteViewers)
     }
   )
+
   if (unsubscribeBrowserRemoteViewers) {
     unsubs.push(unsubscribeBrowserRemoteViewers)
   }
@@ -142,24 +161,31 @@ export function registerMobileDriverIpcBridge(
   // host with an uncloseable page it cannot see. Hydration below is unguarded for the same reason.
   let clientHostedRowsHydrated = false
   const pendingClientHostedRowEvents: ClientHostedBrowserRowsEvent[] = []
+
   const settleClientHostedRowHydration = (): void => {
     clientHostedRowsHydrated = true
+
     for (const event of pendingClientHostedRowEvents) {
       applyClientHostedBrowserRows(event)
     }
+
     pendingClientHostedRowEvents.length = 0
   }
+
   unsubs.push(
     window.api.runtime.onClientHostedBrowserRowsChanged((event) => {
       // Why: subscribe before the snapshot round trip and buffer, or the older snapshot
       // overwrites a page created while it was in flight.
       if (!clientHostedRowsHydrated) {
         pendingClientHostedRowEvents.push(event)
+
         while (pendingClientHostedRowEvents.length > MAX_PENDING_MOBILE_STATE_EVENTS) {
           pendingClientHostedRowEvents.shift()
         }
+
         return
       }
+
       applyClientHostedBrowserRows(event)
     })
   )
@@ -169,6 +195,7 @@ export function registerMobileDriverIpcBridge(
       if (disposed) {
         return
       }
+
       hydrateClientHostedBrowserRows(events)
       settleClientHostedRowHydration()
     })
@@ -176,6 +203,7 @@ export function registerMobileDriverIpcBridge(
       if (disposed) {
         return
       }
+
       console.error('Failed to hydrate client-hosted browser rows:', error)
       settleClientHostedRowHydration()
     })
@@ -192,6 +220,7 @@ export function registerMobileDriverIpcBridge(
         if (disposed) {
           return
         }
+
         hydrateOverrides(overrides)
         hydrateDrivers(drivers)
         hydrateBrowserDrivers(browserDrivers)
@@ -203,6 +232,7 @@ export function registerMobileDriverIpcBridge(
         if (disposed) {
           return
         }
+
         console.error('Failed to hydrate mobile terminal state:', error)
         mobileStateHydrated = true
         applyPendingMobileStateEvents()

@@ -3,6 +3,7 @@ import { Fragment, type Node as PmNode, type Schema } from '@tiptap/pm/model'
 import { TextSelection, type Transaction } from '@tiptap/pm/state'
 
 const BLOCKED_CONTAINER_TYPES = new Set(['listItem', 'taskItem', 'tableCell', 'tableHeader'])
+
 const PARAGRAPH_JOIN_NEIGHBOR_TYPES = new Set(['paragraph', 'heading'])
 
 function isEmptyParagraph(node: PmNode | null | undefined): boolean {
@@ -28,12 +29,14 @@ type TextblockBoundary = {
 
 function getTextblockBoundary(editor: Editor): TextblockBoundary | null {
   const { selection } = editor.state
+
   if (!selection.empty || !selection.$from.parent.isTextblock) {
     return null
   }
 
   const { $from } = selection
   const textblockDepth = $from.depth
+
   for (let depth = 1; depth < textblockDepth; depth += 1) {
     if (BLOCKED_CONTAINER_TYPES.has($from.node(depth).type.name)) {
       return null
@@ -42,6 +45,7 @@ function getTextblockBoundary(editor: Editor): TextblockBoundary | null {
 
   const parentIndex = $from.index(textblockDepth - 1)
   const container = $from.node(textblockDepth - 1)
+
   return {
     after: container.maybeChild(parentIndex + 1) ?? null,
     before: container.maybeChild(parentIndex - 1) ?? null,
@@ -67,21 +71,26 @@ function splitParagraphAtFirstSoftNewline(
   paragraph.content.forEach((child) => {
     if (foundSoftNewline) {
       afterNodes.push(child)
+
       return
     }
 
     if (!child.isText || !child.text?.includes('\n')) {
       beforeNodes.push(child)
+
       return
     }
 
     const newlineIndex = child.text.indexOf('\n')
+
     if (newlineIndex > 0) {
       beforeNodes.push(schema.text(child.text.slice(0, newlineIndex), child.marks))
     }
+
     if (newlineIndex + 1 < child.text.length) {
       afterNodes.push(schema.text(child.text.slice(newlineIndex + 1), child.marks))
     }
+
     foundSoftNewline = true
   })
 
@@ -108,6 +117,7 @@ function createSoftNewlineJoin(
     // Why: ProseMirror Transform.join substitutes paragraph text `\n` with
     // hardBreak nodes at textblock boundaries, which makes hard-wrapped prose narrow.
     const content = left.content.append(right.content)
+
     if (!left.type.validContent(content)) {
       return null
     }
@@ -123,20 +133,24 @@ function createSoftNewlineJoin(
   }
 
   const split = splitParagraphAtFirstSoftNewline(right, schema)
+
   if (!split) {
     return null
   }
 
   const headingContent = left.content.append(split.before)
+
   if (!left.type.validContent(headingContent)) {
     return null
   }
 
   const nodes = [left.type.create(left.attrs, headingContent, left.marks)]
+
   if (split.after.size > 0) {
     if (!right.type.validContent(split.after)) {
       return null
     }
+
     nodes.push(right.type.create(right.attrs, split.after, right.marks))
   }
 
@@ -159,6 +173,7 @@ function dispatchSoftNewlineJoin(
 
 export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backward' | 'forward') {
   const boundary = getTextblockBoundary(editor)
+
   if (!boundary) {
     return false
   }
@@ -176,11 +191,13 @@ export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backwar
       if (!before) {
         return false
       }
+
       // Why: ProseMirror's default Backspace join converts soft `\n` text in
       // the previous paragraph into hardBreak nodes. Delete the blank block only.
       const tr = editor.state.tr.delete(currentStart, currentEnd)
       setSelectionNear(tr, currentStart - 1)
       editor.view.dispatch(tr)
+
       return true
     }
 
@@ -189,16 +206,20 @@ export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backwar
       const tr = editor.state.tr.delete(from, currentStart)
       setSelectionNear(tr, tr.mapping.map(selection.from, -1))
       editor.view.dispatch(tr)
+
       return true
     }
 
     if (before && current.isTextblock && before.isTextblock) {
       const join = createSoftNewlineJoin(before, current, editor.state.schema)
+
       if (!join) {
         return false
       }
+
       const from = currentStart - before.nodeSize
       dispatchSoftNewlineJoin(editor, from, currentEnd, join)
+
       return true
     }
 
@@ -213,9 +234,11 @@ export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backwar
     if (!after) {
       return false
     }
+
     const tr = editor.state.tr.delete(currentStart, currentEnd)
     setSelectionNear(tr, currentStart)
     editor.view.dispatch(tr)
+
     return true
   }
 
@@ -225,15 +248,19 @@ export function deleteAdjacentEmptyParagraph(editor: Editor, direction: 'backwar
     const tr = editor.state.tr.delete(currentEnd, currentEnd + after.nodeSize)
     setSelectionNear(tr, currentEnd - 1)
     editor.view.dispatch(tr)
+
     return true
   }
 
   if (after && current.isTextblock && after.isTextblock) {
     const join = createSoftNewlineJoin(current, after, editor.state.schema)
+
     if (!join) {
       return false
     }
+
     dispatchSoftNewlineJoin(editor, currentStart, currentEnd + after.nodeSize, join)
+
     return true
   }
 

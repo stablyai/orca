@@ -115,8 +115,10 @@ export function BrowserPageToolbar({
         goBack: () => {
           if (canGoBack) {
             webviewRef.current?.goBack()
+
             return
           }
+
           if (convertedFrom) {
             returnAcrossBrowserPageConversion(browserPageId, convertedFrom)
           }
@@ -124,8 +126,10 @@ export function BrowserPageToolbar({
         goForward: () => {
           if (canGoForward) {
             webviewRef.current?.goForward()
+
             return
           }
+
           if (convertedTo) {
             advanceAcrossBrowserPageConversion(browserPageId, convertedTo)
           }
@@ -196,6 +200,7 @@ export function BrowserPageToolbar({
           if (!externalUrl) {
             return
           }
+
           void window.api.shell.openUrl(externalUrl)
         },
         label: translate(

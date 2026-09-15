@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../../../../../', import.meta.url)))
+
 const componentsRoot = path.join(repoRoot, 'src/renderer/src/components')
 
 const updateCapableCallers = new Map<string, readonly string[]>([
@@ -128,21 +129,27 @@ function readRepoFile(relativePath: string): string {
 
 function findProductionPanelCallers(dir: string): string[] {
   const found: string[] = []
+
   for (const entry of readdirSync(dir)) {
     const entryPath = path.join(dir, entry)
     const stat = statSync(entryPath)
+
     if (stat.isDirectory()) {
       found.push(...findProductionPanelCallers(entryPath))
       continue
     }
+
     if (!entryPath.endsWith('.tsx') || entryPath.includes('.test.')) {
       continue
     }
+
     const source = readFileSync(entryPath, 'utf8')
+
     if (source.includes('<AgentSkillSetupPanel')) {
       found.push(relativeRepoPath(entryPath))
     }
   }
+
   return found.sort()
 }
 
@@ -150,6 +157,7 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
   it('keeps every update-capable production caller on an explicit single-skill update command', () => {
     for (const [relativePath, expectedSnippets] of updateCapableCallers) {
       const source = readRepoFile(relativePath)
+
       for (const snippet of expectedSnippets) {
         expect(source, `${relativePath} should include ${snippet}`).toContain(snippet)
       }
@@ -223,6 +231,7 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
       expect(source, `${relativePath} intentionally hides the installed action`).not.toContain(
         'installedCommand='
       )
+
       for (const snippet of expectedSnippets) {
         expect(source, `${relativePath} should include ${snippet}`).toContain(snippet)
       }

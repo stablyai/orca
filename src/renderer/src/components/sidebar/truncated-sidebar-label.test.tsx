@@ -112,6 +112,7 @@ describe('TruncatedSidebarLabel', () => {
     const originalResizeObserver = globalThis.ResizeObserver
     let constructed = 0
     let disconnected = 0
+
     class CountingResizeObserver {
       constructor(_callback: ResizeObserverCallback) {
         constructed += 1
@@ -122,6 +123,7 @@ describe('TruncatedSidebarLabel', () => {
         disconnected += 1
       }
     }
+
     globalThis.ResizeObserver = CountingResizeObserver as unknown as typeof ResizeObserver
 
     try {

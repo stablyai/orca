@@ -16,11 +16,14 @@ import {
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
+
 // Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
 // reviewer data per PR). The default 5s cap aborted responses right as they
 // completed, so the work was discarded and retried on the next refresh (#8807).
 const PULL_REQUEST_LIST_TIMEOUT_MS = 15_000
+
 const PULL_REQUEST_PAGE_LIMIT = 50
+
 const MAX_PULL_REQUEST_PAGES = 5
 
 type GiteaAuthConfig = {
@@ -43,16 +46,19 @@ type RequestOptions = {
 
 function envValue(name: string): string | null {
   const value = process.env[name]?.trim() ?? ''
+
   return value.length > 0 ? value : null
 }
 
 export function normalizeGiteaApiBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, '')
+
   return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
 }
 
 function getAuthConfig(): GiteaAuthConfig {
   const apiBaseUrl = envValue('ORCA_GITEA_API_BASE_URL')
+
   return {
     apiBaseUrl: apiBaseUrl ? normalizeGiteaApiBaseUrl(apiBaseUrl) : null,
     token: envValue('ORCA_GITEA_TOKEN')
@@ -69,11 +75,13 @@ function configuredApiBaseUrl(repo: GiteaRepoRef): string {
 
 function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['searchParams']): URL {
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
+
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
       url.searchParams.set(key, String(value))
     }
   }
+
   return url
 }
 
@@ -87,6 +95,7 @@ async function requestJsonAtBase<T>(
   throwOnFailure = false
 ): Promise<T | null> {
   const config = getAuthConfig()
+
   try {
     const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
       headers: {
@@ -95,18 +104,23 @@ async function requestJsonAtBase<T>(
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
+
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
+
       if (throwOnFailure) {
         throw new Error(`Gitea request failed: HTTP ${response.status}`)
       }
+
       return null
     }
+
     return (await response.json()) as T
   } catch (error) {
     if (throwOnFailure) {
       throw error
     }
+
     return null
   }
 }
@@ -141,10 +155,12 @@ async function getCommitStatus(
   if (!headSha) {
     return 'neutral'
   }
+
   const data = await requestJson<RawGiteaCombinedStatus>(
     repo,
     `/repos/${encodedRepoPath(repo)}/commits/${encodeURIComponent(headSha)}/status`
   )
+
   return deriveGiteaCommitStatus(data)
 }
 
@@ -153,21 +169,26 @@ async function normalizePullRequest(
   raw: RawGiteaPullRequest
 ): Promise<GiteaPullRequestInfo | null> {
   const status = await getCommitStatus(repo, raw.head?.sha?.trim())
+
   return mapGiteaPullRequest(raw, status)
 }
 
 function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
   const ref = raw.head?.ref?.trim()
+
   if (ref === branchName) {
     return true
   }
+
   const label = raw.head?.label?.trim()
+
   return label === branchName || label?.endsWith(`:${branchName}`) === true
 }
 
 export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
   const config = getAuthConfig()
   const tokenConfigured = config.token !== null
+
   if (!config.apiBaseUrl && !tokenConfigured) {
     return {
       configured: false,
@@ -177,6 +198,7 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
       tokenConfigured: false
     }
   }
+
   if (!config.apiBaseUrl) {
     return {
       configured: true,
@@ -191,6 +213,7 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
     const version = await requestJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
       timeoutMs: 4000
     })
+
     return {
       configured: version !== null,
       authenticated: false,
@@ -205,6 +228,7 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
     username?: string | null
     full_name?: string | null
   }>(config.apiBaseUrl, '/user', { timeoutMs: 4000 })
+
   return {
     configured: true,
     authenticated: user !== null,
@@ -225,13 +249,16 @@ export async function getGiteaPullRequest(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   if (!repo) {
     return null
   }
+
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}`
   )
+
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
@@ -244,6 +271,7 @@ export async function getGiteaPullRequestForBranch(
   throwOnFailure = false
 ): Promise<GiteaPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
+
   if (!branchName && linkedPRNumber == null) {
     return null
   }
@@ -253,6 +281,7 @@ export async function getGiteaPullRequestForBranch(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   if (!repo) {
     return null
   }
@@ -281,7 +310,9 @@ export async function getGiteaPullRequestForBranch(
       PULL_REQUEST_PAGE_LIMIT,
       MAX_PULL_REQUEST_PAGES
     )
+
     const raw = pullRequests.find((item) => matchesBranch(item, branchName))
+
     if (raw) {
       // Why (#9171): discard a non-open implicit branch match on the repo
       // default branch and fall through to the linked-number fallback below.
@@ -294,6 +325,7 @@ export async function getGiteaPullRequestForBranch(
         connectionId,
         localGitOptions: getHostedReviewLocalGitOptions(options)
       })
+
       if (!hideOnDefaultBranch) {
         return normalizePullRequest(repo, raw)
       }
@@ -303,12 +335,14 @@ export async function getGiteaPullRequestForBranch(
   if (typeof linkedPRNumber !== 'number') {
     return null
   }
+
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
     `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
     {},
     throwOnFailure
   )
+
   return raw ? normalizePullRequest(repo, raw) : null
 }
 

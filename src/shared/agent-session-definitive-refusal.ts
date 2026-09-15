@@ -31,5 +31,6 @@ export function isDefinitiveAgentSessionCreateRefusal(code: string | null | unde
   if (typeof code !== 'string') {
     return false
   }
+
   return DEFINITIVE_REFUSAL_CODES.has(code) || DEFINITIVE_RPC_ERROR_CODES.has(code)
 }

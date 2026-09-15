@@ -8,10 +8,12 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 // controller inventory or the CLI reports it connected/writable forever.
 
 const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function makeStore() {
   const session: WorkspaceSessionState = getDefaultWorkspaceSession()
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
@@ -76,6 +78,7 @@ function makeRuntimeWithLeaf(options: {
       }
     ]
   })
+
   return runtime
 }
 

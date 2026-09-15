@@ -14,11 +14,13 @@ export function usePendingStartupParkPresence(
   return useAppStore(
     useShallow((state) => {
       let presence: Record<string, true> | null = null
+
       for (const tab of terminalTabs) {
         if (state.pendingStartupByTabId[tab.id] !== undefined) {
           ;(presence ??= {})[tab.id] = true
         }
       }
+
       return presence ?? EMPTY_PENDING_STARTUP
     })
   )

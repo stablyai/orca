@@ -137,6 +137,7 @@ describe('probeCodexAuthPresence', () => {
     const first = probeCodexAuthPresence('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex', {
       signal: firstController.signal
     })
+
     const second = probeCodexAuthPresence('\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex', {
       signal: secondController.signal
     })

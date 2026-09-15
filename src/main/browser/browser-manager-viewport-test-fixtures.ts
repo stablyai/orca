@@ -3,6 +3,7 @@ import type { BrowserManagerMocks } from './browser-manager-test-harness'
 
 export const GUEST_ELECTRON_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
+
 export const GUEST_CLEAN_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
 
@@ -34,6 +35,7 @@ export function createViewportGuestFactory(
     let currentUa = GUEST_ELECTRON_UA
     // Why: getURL() reports the last COMMITTED url — it does not move at did-start-navigation.
     let committedUrl = url
+
     const guest = {
       id,
       isDestroyed: vi.fn(() => false),
@@ -58,6 +60,7 @@ export function createViewportGuestFactory(
         off: vi.fn()
       }
     }
+
     return {
       guest,
       debuggerSendCommand,

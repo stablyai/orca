@@ -64,7 +64,9 @@ export function evaluateOrcadActivation(
         'failed to bind, or be wedged before readiness. Nothing was activated.'
     }
   }
+
   const health = readiness.health
+
   if (!health) {
     return {
       decision: 'reject',
@@ -75,6 +77,7 @@ export function evaluateOrcadActivation(
         'too old to gate on and do not activate it.'
     }
   }
+
   // Why identity first: a stale orcad already holding the port would answer readiness and
   // report its own (healthy) daemon. Activating on that record points the pointer at bytes
   // nobody is running.
@@ -88,6 +91,7 @@ export function evaluateOrcadActivation(
         'upload did not land. Nothing was activated.'
     }
   }
+
   if (!readiness.boundEndpoint) {
     return {
       decision: 'reject',
@@ -97,7 +101,9 @@ export function evaluateOrcadActivation(
         'activated.'
     }
   }
+
   const daemon = health.terminalDaemon
+
   if (daemon.state === 'absent') {
     return {
       decision: 'reject',
@@ -108,6 +114,7 @@ export function evaluateOrcadActivation(
         'prevent. Nothing was activated.'
     }
   }
+
   if (daemon.state === 'degraded') {
     return {
       decision: 'reject',
@@ -118,6 +125,7 @@ export function evaluateOrcadActivation(
         'Nothing was activated; the previous version is still serving.'
     }
   }
+
   if (!daemon.selfTest.ok) {
     return {
       decision: 'reject',
@@ -127,6 +135,7 @@ export function evaluateOrcadActivation(
         'listening but cannot create a terminal. Nothing was activated.'
     }
   }
+
   if (!daemon.ownsFreshSessions) {
     return {
       decision: 'reject',
@@ -136,13 +145,16 @@ export function evaluateOrcadActivation(
         'would not survive its own restart. Nothing was activated.'
     }
   }
+
   const warnings: string[] = []
+
   if (daemon.selfTest.coverage === 'handshake') {
     warnings.push(
       'The PTY self-test covered the daemon handshake only — this platform does not spawn a ' +
         'probe PTY. Terminal creation is unproven on this host.'
     )
   }
+
   if (health.buildVersion !== expected.fullVersion) {
     // Not a rejection: the hash already proved identity, and ORCA_VERSION is whatever the
     // launch command exported. Worth saying, because a mismatch means the launch env is wrong.
@@ -151,5 +163,6 @@ export function evaluateOrcadActivation(
         `${expected.fullVersion}; check ORCA_VERSION in the launch command.`
     )
   }
+
   return { decision: 'activate', coverage: daemon.selfTest.coverage, warnings }
 }

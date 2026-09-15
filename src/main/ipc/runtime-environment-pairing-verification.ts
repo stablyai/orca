@@ -24,9 +24,11 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   args: VerifyAndAddRuntimeEnvironmentArgs
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
   const parsed = parseHostAccessLink(args.pairingCode)
+
   if (!parsed.ok) {
     return { ok: false, kind: 'access-link-invalid', message: parsed.message }
   }
+
   if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback) {
     return {
       ok: false,
@@ -36,6 +38,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
 
   let runtimeStatus: RuntimeStatus
+
   try {
     const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
       parsed.value.pairing,
@@ -46,6 +49,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
       undefined,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
+
     if (!response.ok) {
       return {
         ok: false,
@@ -53,10 +57,13 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
         message: response.error.message
       }
     }
+
     const statusVerification = verifyRemotePairingRuntimeStatus(response.result)
+
     if (!statusVerification.ok) {
       return statusVerification
     }
+
     runtimeStatus = statusVerification.runtimeStatus
   } catch (error) {
     return classifyPairingVerificationError(error, parsed.value.displayEndpoint)
@@ -64,6 +71,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
 
   const usesSshTunnel = parsed.value.endpointKind === 'loopback' && args.allowLoopback === true
   let environment: ReturnType<typeof addEnvironmentFromPairingCode>
+
   try {
     environment = addEnvironmentFromPairingCode(userDataPath, {
       ...args,
@@ -79,6 +87,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
           : 'Orca verified the host but could not save it. Check local settings storage and try again.'
     }
   }
+
   return {
     ok: true,
     environment: redactRuntimeEnvironment(environment),
@@ -94,6 +103,7 @@ function classifyPairingVerificationError(
     if (error.code === 'invalid_argument') {
       return invalidAccessLinkResult()
     }
+
     if (error.code === 'unauthorized' || error.pairingStage === 'access-grant') {
       return {
         ok: false,
@@ -101,6 +111,7 @@ function classifyPairingVerificationError(
         message: 'This access link is no longer valid. Generate a new link on the other host.'
       }
     }
+
     if (error.pairingStage === 'host-identity') {
       return {
         ok: false,
@@ -108,6 +119,7 @@ function classifyPairingVerificationError(
         message: `Orca reached ${endpoint}, but that host does not match this access link.`
       }
     }
+
     if (error.pairingStage === 'runtime') {
       return {
         ok: false,
@@ -115,15 +127,18 @@ function classifyPairingVerificationError(
         message: `The connection to ${endpoint} was interrupted during verification.`
       }
     }
+
     if (error.pairingStage === 'connect') {
       return unreachableHostResult(endpoint)
     }
   }
+
   if (error instanceof Error) {
     return error.message.startsWith('Invalid public key')
       ? invalidAccessLinkResult()
       : { ok: false, kind: 'connection-interrupted', message: error.message }
   }
+
   return unreachableHostResult(endpoint)
 }
 

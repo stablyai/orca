@@ -17,7 +17,9 @@ import { vi } from 'vitest'
 
 /** Node hands back a `Timeout` object; other environments hand back an id. */
 type RealTimerHandle = ReturnType<typeof setTimeout> | number
+
 type ArmTimer = (...args: never[]) => RealTimerHandle
+
 type ClearTimer = (handle?: RealTimerHandle) => void
 
 type TimerGlobals = {
@@ -32,8 +34,11 @@ type TimerGlobals = {
 const timerGlobals = globalThis as unknown as TimerGlobals
 
 const armedTimeouts = new Set<RealTimerHandle>()
+
 const armedIntervals = new Set<RealTimerHandle>()
+
 let originalTimers: TimerGlobals | null = null
+
 let trackingTimers: TimerGlobals | null = null
 
 /** Returns the handle untouched so callers keep `unref()` and friends. */
@@ -41,6 +46,7 @@ const trackArmed = (arm: ArmTimer, armed: Set<RealTimerHandle>): ArmTimer =>
   Object.assign((...args: never[]) => {
     const handle = arm(...args)
     armed.add(handle)
+
     return handle
   }, arm)
 
@@ -50,6 +56,7 @@ const trackCleared = (clear: ClearTimer, armed: Set<RealTimerHandle>): ClearTime
     if (handle !== undefined) {
       armed.delete(handle)
     }
+
     clear(handle)
   }, clear)
 
@@ -60,12 +67,14 @@ export function trackRealTimers(): void {
   if (trackingTimers || vi.isFakeTimers()) {
     return
   }
+
   const original: TimerGlobals = {
     setTimeout: timerGlobals.setTimeout,
     setInterval: timerGlobals.setInterval,
     clearTimeout: timerGlobals.clearTimeout,
     clearInterval: timerGlobals.clearInterval
   }
+
   originalTimers = original
   trackingTimers = {
     setTimeout: trackArmed(original.setTimeout, armedTimeouts),
@@ -80,19 +89,23 @@ export function trackRealTimers(): void {
 export function clearTrackedRealTimers(): void {
   const original = originalTimers
   const tracking = trackingTimers
+
   if (!original || !tracking) {
     return
   }
+
   try {
     for (const handle of armedTimeouts) {
       original.clearTimeout(handle)
     }
+
     for (const handle of armedIntervals) {
       original.clearInterval(handle)
     }
   } finally {
     armedTimeouts.clear()
     armedIntervals.clear()
+
     // Why: a fake clock installed over the wrapper owns the globals until vitest restores it, so only
     // take back what is still ours; tracking stays on until then rather than clobbering the fakes.
     if (timerGlobals.setTimeout === tracking.setTimeout) {

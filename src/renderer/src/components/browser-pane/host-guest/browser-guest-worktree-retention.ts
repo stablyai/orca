@@ -32,6 +32,7 @@ export function selectBrowserGuestEvictionWorktreeIds(args: {
   const evictedIds: string[] = []
   const seen = new Set<string>()
   let retained = 0
+
   for (const worktreeId of args.orderedWorktreeIds) {
     if (
       seen.has(worktreeId) ||
@@ -42,15 +43,19 @@ export function selectBrowserGuestEvictionWorktreeIds(args: {
       seen.add(worktreeId)
       continue
     }
+
     seen.add(worktreeId)
+
     if (retained < limit) {
       retained += 1
       continue
     }
+
     if (args.isEvictable(worktreeId)) {
       evictedIds.push(worktreeId)
     }
   }
+
   return evictedIds
 }
 
@@ -63,9 +68,11 @@ export function worktreeHoldsLiveBrowserGuests(
 ): boolean {
   return browserTabs.some((tab) => {
     const pages = browserPagesByWorkspace[tab.id] ?? []
+
     if (pages.length === 0) {
       return hasLiveGuest(tab.id)
     }
+
     return pages.some((page) => hasLiveGuest(page.id))
   })
 }
@@ -89,8 +96,10 @@ export function browserTabVisibilityPageIds(tab: BrowserWorkspace): readonly str
 // LRU order = worktree activation order; activating moves the id to the front.
 export function touchBrowserGuestWorktreeRecency(recency: string[], worktreeId: string): void {
   const index = recency.indexOf(worktreeId)
+
   if (index !== -1) {
     recency.splice(index, 1)
   }
+
   recency.unshift(worktreeId)
 }

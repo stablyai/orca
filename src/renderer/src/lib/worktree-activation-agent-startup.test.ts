@@ -131,6 +131,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   it('opens the startup default tab in native chat when configured', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+
     const store = createMockStore({
       createTab,
       settings: {
@@ -165,6 +166,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     (_label, draftPrompt, expectedViewMode) => {
       let createdIndex = 0
       const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+
       const store = createMockStore({
         createTab,
         settings: {

@@ -6,6 +6,7 @@ import { NativeChatTaskList } from './NativeChatTaskList'
 import type { NativeChatTaskList as TaskList } from '../../../../shared/native-chat-task-list'
 
 afterEach(cleanup)
+
 const previous: TaskList = {
   tasks: [
     { content: 'Read', status: 'in_progress', activeForm: 'Reading' },
@@ -13,6 +14,7 @@ const previous: TaskList = {
     { content: 'Test', status: 'pending' }
   ]
 }
+
 const current: TaskList = {
   tasks: [
     { content: 'Read', status: 'completed', activeForm: 'Reading' },
@@ -28,9 +30,11 @@ describe('NativeChatTaskList', () => {
     expect(screen.getByText('Writing').closest('li')).toHaveClass('text-foreground')
     expect(screen.getByText('Test')).toBeInTheDocument()
     expect(screen.getByLabelText('1 of 3 tasks completed')).toHaveTextContent('1/3')
+
     for (const glyph of ['circle', 'circle-dot', 'circle-check']) {
       expect(container.querySelector(`.lucide-${glyph}`)).not.toBeNull()
     }
+
     expect(screen.getByText('In progress:')).toHaveClass('sr-only')
   })
 

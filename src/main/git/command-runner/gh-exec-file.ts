@@ -59,6 +59,7 @@ function ghRateLimitScope(
   resolved: ResolvedCommand
 ): string {
   const runtime = resolved.wsl ? `wsl:${resolved.wsl.distro.toLowerCase()}` : 'native'
+
   // Why: an explicit argv hostname controls the actual gh request even when
   // GH_HOST or options.host disagree, so breaker state must follow that host.
   const host =
@@ -68,6 +69,7 @@ function ghRateLimitScope(
     options.env?.GH_HOST ??
     process.env.GH_HOST ??
     'github.com'
+
   return ghRateLimitScopeKey(runtime, host)
 }
 
@@ -81,11 +83,13 @@ function assertGhRateLimitScopeAvailable(
   if (exemptProbe) {
     return
   }
+
   const blockedUntilMs = getGhRateLimitBlockedUntilMs(
     bucket,
     Date.now(),
     ghRateLimitScope(args, options, resolved)
   )
+
   if (blockedUntilMs !== null) {
     throw createGhRateLimitBlockedError(bucket, blockedUntilMs)
   }
@@ -115,6 +119,7 @@ export async function ghExecFileAsync(
   let lastError: unknown
   let attemptedHostFallback = false
   let attemptedDefaultWslFallback = false
+
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
       // Why to-termination and not execFileCapture: `gh` on PATH is routinely a
@@ -137,13 +142,16 @@ export async function ghExecFileAsync(
         },
         resolved.termination
       )
+
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
       lastError = err
       const { stderr } = extractExecError(err)
+
       if (isGhPrimaryRateLimitStderr(stderr)) {
         notifyGhPrimaryRateLimit(rateLimitBucket, ghRateLimitScope(args, options, resolved))
       }
+
       if (
         process.platform === 'win32' &&
         !attemptedDefaultWslFallback &&
@@ -153,6 +161,7 @@ export async function ghExecFileAsync(
         isHostCommandMissing(err, 'gh')
       ) {
         const wslResolved = resolveDefaultWslCli('gh', args)
+
         if (wslResolved) {
           // Why: WSL-only Windows installs have no host gh.exe, and global calls (rate_limit/auth) carry no cwd to route by.
           resolved = wslResolved
@@ -162,6 +171,7 @@ export async function ghExecFileAsync(
           continue
         }
       }
+
       if (!attemptedHostFallback && canFallBackToHostGitHubCli('gh', args, resolved, stderr)) {
         resolved = resolveHostGitHubCli('gh', args)
         attemptedHostFallback = true
@@ -169,20 +179,26 @@ export async function ghExecFileAsync(
         attempt = -1
         continue
       }
+
       const isLastAttempt = attempt >= GH_RETRY_DELAYS_MS.length
+
       if (idempotent && !isLastAttempt && isTransientGhError(stderr)) {
         // Why: honor the server's Retry-After over our backoff (a shorter sleep just re-fails); cap so a huge hint can't stall IPC.
         const retryAfterMs = parseRetryAfterMs(stderr)
+
         const delayMs =
           retryAfterMs !== null
             ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
             : GH_RETRY_DELAYS_MS[attempt]
+
         await sleep(delayMs, options.signal)
         continue
       }
+
       throw err
     }
   }
+
   // Unreachable: the loop either returns or throws. Here for TS exhaustiveness.
   throw lastError
 }

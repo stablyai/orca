@@ -34,10 +34,13 @@ export function useTerminalSaveDialog({
   const requestCloseFile = useCallback(
     (fileId: string) => {
       const file = openFiles.find((openFile) => openFile.id === fileId)
+
       if (file?.isDirty) {
         setSaveDialogFileId(fileId)
+
         return
       }
+
       closeFile(fileId)
     },
     [closeFile, openFiles]

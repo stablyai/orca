@@ -8,7 +8,9 @@ import {
 } from './agent-attention-policy'
 
 const WORKSPACE = 'wt-1'
+
 const SUBJECT = 'tab-1:leaf-1'
+
 const GROUP = 'tab-1'
 
 function makeSurface(overrides: Partial<AgentAttentionSurface> = {}): AgentAttentionSurface {
@@ -41,6 +43,7 @@ function completion(overrides: Partial<AgentAttentionRequest> = {}): AgentAttent
 
 function makeSink(): AgentAttentionSink & { calls: string[] } {
   const calls: string[] = []
+
   return {
     calls,
     unread: {
@@ -59,15 +62,18 @@ describe('resolveAgentAttention', () => {
       completion(),
       makeSurface({ hasLiveSession: () => false })
     )
+
     expect(decision).toEqual({ admitted: false, cause: 'no-live-session' })
   })
 
   it('admits a dead surface when fresh activity evidence stands in for liveness', () => {
     const admitSurface = vi.fn(() => ({ admitted: true, groupId: GROUP }) as const)
+
     const decision = resolveAgentAttention(
       completion({ hasFreshActivityEvidence: true }),
       makeSurface({ hasLiveSession: () => false, admitSurface })
     )
+
     expect(decision.admitted).toBe(true)
     // The surface must be told which evidence admitted the event so it can pick its gate.
     expect(admitSurface).toHaveBeenCalledWith(
@@ -81,6 +87,7 @@ describe('resolveAgentAttention', () => {
       completion(),
       makeSurface({ admitSurface: () => ({ admitted: false, cause: 'superseded-surface' }) })
     )
+
     expect(decision).toEqual({ admitted: false, cause: 'superseded-surface' })
 
     const sink = makeSink()
@@ -93,6 +100,7 @@ describe('resolveAgentAttention', () => {
       completion(),
       makeSurface({ admitSurface: () => ({ admitted: false, cause: 'unknown-surface' }) })
     )
+
     expect(decision).toEqual({ admitted: false, cause: 'unknown-surface' })
   })
 
@@ -101,6 +109,7 @@ describe('resolveAgentAttention', () => {
       completion(),
       makeSurface({ isSurfaceViewed: () => true })
     )
+
     expect(decision).toMatchObject({ admitted: true, unread: null })
 
     const sink = makeSink()
@@ -113,6 +122,7 @@ describe('resolveAgentAttention', () => {
       completion({ groupAttentionEnabled: true }),
       makeSurface()
     )
+
     const sink = makeSink()
     applyAgentAttention(decision, sink)
     expect(sink.calls).toEqual([
@@ -137,10 +147,12 @@ describe('resolveAgentAttention', () => {
   it('falls back to workspace visibility when the event names no surface', () => {
     const isWorkspaceViewed = vi.fn(() => true)
     const admitSurface = vi.fn()
+
     const decision = resolveAgentAttention(
       completion({ subject: { workspaceId: WORKSPACE } }),
       makeSurface({ isWorkspaceViewed, admitSurface })
     )
+
     expect(decision).toMatchObject({ admitted: true, unread: null })
     expect(isWorkspaceViewed).toHaveBeenCalledWith(WORKSPACE)
     // No surface key means there is no address to validate.
@@ -150,10 +162,12 @@ describe('resolveAgentAttention', () => {
   it('delivers a bell without validating the surface address or writing unread', () => {
     const admitSurface = vi.fn()
     const isSurfaceViewed = vi.fn()
+
     const decision = resolveAgentAttention(
       completion({ reason: 'terminal-bell', settlesTurn: false }),
       makeSurface({ admitSurface, isSurfaceViewed })
     )
+
     expect(decision).toMatchObject({ admitted: true, unread: null })
     expect(admitSurface).not.toHaveBeenCalled()
     expect(isSurfaceViewed).not.toHaveBeenCalled()
@@ -168,6 +182,7 @@ describe('resolveAgentAttention', () => {
       completion(),
       makeSurface({ isWorkspaceActive: (workspaceId) => workspaceId === WORKSPACE })
     )
+
     expect(decision).toMatchObject({ admitted: true, delivery: { workspaceIsActive: true } })
   })
 

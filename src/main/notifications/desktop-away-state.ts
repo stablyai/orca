@@ -8,10 +8,13 @@ type IdleMonitor = {
 export function readDesktopAwayState(monitor: IdleMonitor): boolean | undefined {
   try {
     const state = monitor.getSystemIdleState(MOBILE_NOTIFICATION_AWAY_SECONDS)
+
     if (state === 'locked' || state === 'idle') {
       return true
     }
+
     const idle = monitor.getSystemIdleTime()
+
     return Number.isFinite(idle) && idle >= 0 ? idle >= MOBILE_NOTIFICATION_AWAY_SECONDS : undefined
   } catch {
     // Unknown presence must not silence a phone.

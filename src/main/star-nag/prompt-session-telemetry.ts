@@ -28,6 +28,7 @@ export function trackStarNagSessionOutcome(
     starAttemptPromise: _starAttemptPromise,
     ...context
   } = session
+
   track('star_nag_outcome', {
     ...context,
     outcome,

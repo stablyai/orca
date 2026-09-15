@@ -17,6 +17,7 @@ vi.mock('os', () => ({
 
 vi.mock('ssh2', () => {
   class MockBaseAgent {}
+
   return {
     BaseAgent: MockBaseAgent,
     createAgent: (...args: unknown[]) => mocks.createAgent(...args),
@@ -64,12 +65,15 @@ describe('createIdentityFilteredAgent', () => {
     })
 
     const agent = createIdentityFilteredAgent('/tmp/agent.sock', ['~/.ssh/work_key'])
+
     const identities = await new Promise<unknown[]>((resolve, reject) => {
       agent?.getIdentities((error, keys) => {
         if (error) {
           reject(error)
+
           return
         }
+
         resolve(keys ?? [])
       })
     })
@@ -88,12 +92,15 @@ describe('createIdentityFilteredAgent', () => {
     })
 
     const agent = createIdentityFilteredAgent('/tmp/agent.sock', ['~\\.ssh\\work_key'])
+
     const identities = await new Promise<unknown[]>((resolve, reject) => {
       agent?.getIdentities((error, keys) => {
         if (error) {
           reject(error)
+
           return
         }
+
         resolve(keys ?? [])
       })
     })
@@ -115,12 +122,15 @@ describe('createIdentityFilteredAgent', () => {
     })
 
     const agent = createIdentityFilteredAgent('/tmp/agent.sock', ['/home/testuser/.ssh/work_key'])
+
     const identities = await new Promise<unknown[]>((resolve, reject) => {
       agent?.getIdentities((error, keys) => {
         if (error) {
           reject(error)
+
           return
         }
+
         resolve(keys ?? [])
       })
     })

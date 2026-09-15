@@ -25,17 +25,22 @@ export function listBoundAgentTabActions(
   if (!keybindings) {
     return []
   }
+
   const disabled = new Set(normalizeDisabledTuiAgents(disabledTuiAgents))
   const bound: BoundAgentTabAction[] = []
+
   for (const agent of ALL_TUI_AGENTS) {
     if (disabled.has(agent)) {
       continue
     }
+
     const actionId = agentTabActionId(agent)
+
     if ((keybindings[actionId] ?? []).length > 0) {
       bound.push({ agent, actionId })
     }
   }
+
   return bound
 }
 
@@ -52,5 +57,6 @@ export function resolveDefaultAgentForNewTab(args: {
   disabledTuiAgents: readonly TuiAgent[] | null | undefined
 }): TuiAgent | null {
   const preferred = args.defaultTuiAgent === 'blank' ? null : args.defaultTuiAgent
+
   return pickTuiAgent(preferred, args.detectedAgentIds ?? [], args.disabledTuiAgents)
 }

@@ -18,6 +18,7 @@ export function getAutomationHostDetailDisplay(input: {
   hostLabelById?: ReadonlyMap<string, string>
 }): AutomationHostDetailDisplay {
   const { automation, entry, hostLabelById } = input
+
   if (entry) {
     return {
       label: entry.label,
@@ -27,10 +28,13 @@ export function getAutomationHostDetailDisplay(input: {
           : `${entry.authorityLabel} · ${entry.label}`
     }
   }
+
   const hostId =
     automation.executionTargetType === 'ssh'
       ? toSshExecutionHostId(automation.executionTargetId)
       : 'local'
+
   const label = hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId)
+
   return { label, title: label }
 }

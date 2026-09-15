@@ -71,6 +71,7 @@ describe('node-pty diagnostic error hints', () => {
   it('does not duplicate an existing recovery hint', () => {
     const message =
       "node-pty: open_slave failed: EMFILE (errno 24, Too many open files) - slave='/dev/ttys003'"
+
     const hinted = `${PTY_ALLOCATION_HINT} ${message}`
 
     expect(addNodePtyRecoveryHint(hinted)).toBe(hinted)

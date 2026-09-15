@@ -72,6 +72,7 @@ export default function ImageDiffViewer({
   layout = 'fill'
 }: ImageDiffViewerProps): JSX.Element {
   const isIntrinsicLayout = layout === 'intrinsic'
+
   // Why: in inline (single-column) mode the grid defaults to equal row
   // heights, which squishes each preview into half the panel. Using
   // minmax(32rem, 1fr) ensures content panes are tall enough to show a

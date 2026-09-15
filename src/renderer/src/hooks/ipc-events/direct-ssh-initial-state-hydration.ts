@@ -14,15 +14,19 @@ export async function hydrateDirectSshInitialState(
 ): Promise<void> {
   try {
     const targets = await window.api.ssh.listTargets()
+
     if (runtime.isStopped()) {
       return
     }
+
     // Why: the loaded list is the hydration evidence (#9911) — never gate it behind the
     // best-effort tombstone RPC, whose await also lets concurrent target writes land.
     useAppStore.getState().setSshTargetsMetadata(targets)
+
     const hydrateRemovedLabels = async (): Promise<void> => {
       try {
         const removedLabels = await window.api.ssh.listRemovedTargetLabels()
+
         if (!runtime.isStopped()) {
           useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
         }
@@ -31,15 +35,19 @@ export async function hydrateDirectSshInitialState(
         console.warn('[direct-ssh] failed to load removed SSH target labels:', error)
       }
     }
+
     void hydrateRemovedLabels()
     let nextIndex = 0
+
     const drainTargets = async (): Promise<void> => {
       while (nextIndex < targets.length && !runtime.isStopped()) {
         const target = targets[nextIndex]
         nextIndex += 1
         const hydrationWatermark = watermarkByTargetId.get(target.id) ?? 0
+
         try {
           const state = await window.api.ssh.getState({ targetId: target.id })
+
           if (
             !runtime.isStopped() &&
             state &&
@@ -54,6 +62,7 @@ export async function hydrateDirectSshInitialState(
         }
       }
     }
+
     await Promise.all(
       Array.from({ length: Math.min(HYDRATION_FANOUT, targets.length) }, drainTargets)
     )

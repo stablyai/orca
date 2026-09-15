@@ -38,6 +38,7 @@ const PARAMS = {
 const IDENTITY = journalIdentityFor(RECORD, PARAMS)
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 function userMessage(text: string): AgentJournalMessageItem {
@@ -55,10 +56,12 @@ function adapterWith(providerHistoryWindow?: () => Promise<ProviderHistoryWindow
   dispatch: ReturnType<typeof vi.fn>
 } {
   const dispatch = vi.fn()
+
   const adapter = {
     dispatch,
     ...(providerHistoryWindow ? { providerHistoryWindow } : {})
   } as unknown as StructuredAgentSessionAdapter
+
   return { adapter, dispatch }
 }
 
@@ -71,6 +74,7 @@ async function crashedJournal(clientMessageId = 'cm_1', text = 'deploy the thing
       sessionId: IDENTITY.sessionId
     })
   })
+
   await journal.appendSubmission({
     clientMessageId,
     payloadFingerprint: digestPayload(text),
@@ -87,7 +91,9 @@ async function attach(adapter: StructuredAgentSessionAdapter) {
     journalRoot: root,
     adapter
   })
+
   journals.track(attached.journal)
+
   return attached
 }
 
@@ -138,6 +144,7 @@ describe('attachJournal restart reconciliation', () => {
 
   it('does not fail the attach when reading provider history throws', async () => {
     await crashedJournal()
+
     const { adapter } = adapterWith(async () => {
       throw new Error('transcript unreadable')
     })

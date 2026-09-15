@@ -6,19 +6,23 @@ function formatTokens(value: number): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
+
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
+
   return value.toLocaleString()
 }
 
 function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
   let max = 1
+
   // Why: all-time usage histories can exceed V8's argument limit if spread
   // into Math.max, even though the chart only renders the last 10 days.
   for (const entry of daily) {
     max = Math.max(max, entry.totalTokens)
   }
+
   return max
 }
 
@@ -76,6 +80,7 @@ export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): Reac
               className: 'bg-fuchsia-500/70'
             }
           ]
+
           return (
             <div key={entry.day} className="flex h-full min-w-0 flex-col justify-end gap-2">
               <span className="text-center text-[11px] text-muted-foreground">

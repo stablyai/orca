@@ -32,18 +32,23 @@ export function applyGitStatusUpstreamRefWatchRequest(
   const providerGeneration = args.connectionId
     ? getSshGitProviderGeneration(args.connectionId)
     : undefined
+
   return setWorktreeGitStatusRefWatch(
     { ...args, ...(providerGeneration !== undefined ? { providerGeneration } : {}) },
     async (bindingSignal) => {
       if (!args.branch || !args.upstreamName) {
         return undefined
       }
+
       const signal = boundedSignal(bindingSignal)
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return resolveGitStatusUpstreamRef(
           (gitArgs, cwd, requestSignal) =>
             provider.exec(gitArgs, cwd, {
@@ -60,6 +65,7 @@ export function applyGitStatusUpstreamRefWatchRequest(
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
       const gitOptions = getLocalGitOptionsForRepo(store, repo)
+
       return resolveGitStatusUpstreamRef(
         (gitArgs, cwd, requestSignal) =>
           gitExecFileAsync(gitArgs, {

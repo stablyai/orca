@@ -17,6 +17,7 @@ import {
   findLinearWorkflowStateForStatus,
   getLinearStatusSectionState
 } from './task-page-linear-issue-model'
+
 export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel) {
   const {
     settings,
@@ -37,6 +38,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
     filteredLinearIssues,
     pagedLinearIssues
   } = model
+
   const linearBoardSections = useMemo(
     () =>
       groupLinearIssues(
@@ -46,49 +48,63 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
       ),
     [pagedLinearIssues, linearGroupBy, linearOrderBy]
   )
+
   const linearStatusBoardEnabled = linearGroupBy === 'none' || linearGroupBy === 'status'
+
   const handleLinearBoardCardDragStart = useCallback(
     (issue: LinearIssue, event: React.DragEvent<HTMLDivElement>) => {
       if (!linearStatusBoardEnabled || linearBoardUpdatingIssueIds.has(issue.id)) {
         event.preventDefault()
+
         return
       }
+
       if (!writeLinearBoardIssueDragData(event.dataTransfer, issue.id)) {
         event.preventDefault()
+
         return
       }
+
       setLinearBoardDraggingIssueId(issue.id)
     },
     [linearBoardUpdatingIssueIds, linearStatusBoardEnabled, setLinearBoardDraggingIssueId]
   )
+
   const handleLinearBoardDragOver = useCallback(
     (section: LinearGroupSection, event: React.DragEvent<HTMLElement>) => {
       if (!linearStatusBoardEnabled || !getLinearStatusSectionState(section)) {
         return
       }
+
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
       setLinearBoardDragOverKey(section.key)
     },
     [linearStatusBoardEnabled, setLinearBoardDragOverKey]
   )
+
   const handleLinearBoardDrop = useCallback(
     async (section: LinearGroupSection, event: React.DragEvent<HTMLElement>) => {
       event.preventDefault()
       event.stopPropagation()
       setLinearBoardDragOverKey(null)
       const targetState = getLinearStatusSectionState(section)
+
       if (!linearStatusBoardEnabled || !targetState) {
         return
       }
+
       const draggedIssue = readLinearBoardIssueDragData(event.dataTransfer)
+
       const issueId =
         draggedIssue.status === 'issue'
           ? draggedIssue.issueId
           : draggedIssue.status === 'hidden'
             ? linearBoardDraggingIssueId
             : null
+
       const issue = filteredLinearIssues.find((item) => item.id === issueId)
+
       if (
         !issue ||
         linearBoardUpdatingIssueIds.has(issue.id) ||
@@ -96,12 +112,15 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
       ) {
         return
       }
+
       setLinearBoardUpdatingIssueIds((prev) => {
         const next = new Set(prev)
         next.add(issue.id)
+
         return next
       })
       const previousState = issue.state
+
       const applyFallbackState = (state: LinearIssue['state']) => {
         setSelectedLinearIssueFallback((prev) =>
           prev?.id === issue.id
@@ -112,13 +131,16 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
             : prev
         )
       }
+
       try {
         const states = await linearTeamStates(
           linearTaskSourceContext ?? settings,
           issue.team.id,
           issue.workspaceId
         )
+
         const workflowState = findLinearWorkflowStateForStatus(states, targetState)
+
         if (!workflowState) {
           toast.error(
             translate(
@@ -130,13 +152,16 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
               }
             )
           )
+
           return
         }
+
         const nextState: LinearIssue['state'] = {
           name: workflowState.name,
           type: workflowState.type,
           color: workflowState.color
         }
+
         patchLinearIssue(
           issue.id,
           {
@@ -150,6 +175,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
           state: nextState
         })
         applyFallbackState(nextState)
+
         const result = await linearUpdateIssue(
           linearTaskSourceContext ?? settings,
           issue.id,
@@ -158,6 +184,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
           },
           issue.workspaceId
         )
+
         if (result.ok === false) {
           patchLinearIssue(
             issue.id,
@@ -176,8 +203,10 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
             result.error ??
               translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
           )
+
           return
         }
+
         invalidateLinearIssueLists({
           sourceContext: linearTaskSourceContext
         })
@@ -203,6 +232,7 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
         setLinearBoardUpdatingIssueIds((prev) => {
           const next = new Set(prev)
           next.delete(issue.id)
+
           return next
         })
       }
@@ -222,23 +252,28 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
       setLinearBoardUpdatingIssueIds
     ]
   )
+
   const toggleLinearDisplayProperty = useCallback(
     (property: LinearDisplayProperty): void => {
       if (property === 'team') {
         setLinearTeamPropertyTouched(true)
       }
+
       setLinearDisplayProperties((prev) => {
         const next = new Set(prev)
+
         if (next.has(property)) {
           next.delete(property)
         } else {
           next.add(property)
         }
+
         return next
       })
     },
     [setLinearTeamPropertyTouched, setLinearDisplayProperties]
   )
+
   const nextModel = model as typeof model & {
     linearBoardSections: typeof linearBoardSections
     linearStatusBoardEnabled: typeof linearStatusBoardEnabled
@@ -247,12 +282,15 @@ export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel)
     handleLinearBoardDrop: typeof handleLinearBoardDrop
     toggleLinearDisplayProperty: typeof toggleLinearDisplayProperty
   }
+
   nextModel.linearBoardSections = linearBoardSections
   nextModel.linearStatusBoardEnabled = linearStatusBoardEnabled
   nextModel.handleLinearBoardCardDragStart = handleLinearBoardCardDragStart
   nextModel.handleLinearBoardDragOver = handleLinearBoardDragOver
   nextModel.handleLinearBoardDrop = handleLinearBoardDrop
   nextModel.toggleLinearDisplayProperty = toggleLinearDisplayProperty
+
   return nextModel
 }
+
 export type TaskPageLinearBoardModel = ReturnType<typeof useTaskPageLinearBoard>

@@ -30,10 +30,13 @@ export function consumeBrowserPageDeferredNavigation(pageId: string): string | n
   const now = Date.now()
   purgeExpiredDeferredNavigations(now)
   const entry = deferredNavigationsByPageId.get(pageId)
+
   if (!entry) {
     return null
   }
+
   deferredNavigationsByPageId.delete(pageId)
+
   return entry.url
 }
 

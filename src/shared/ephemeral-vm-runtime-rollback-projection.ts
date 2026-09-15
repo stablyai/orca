@@ -10,6 +10,7 @@ export function projectRuntimeForRollback(
   const recipe = runtime.recipe
     ? (({ checkoutMode: _checkoutMode, ...rollbackRecipe }) => rollbackRecipe)(runtime.recipe)
     : undefined
+
   const recipeResult =
     runtime.recipeResult.schemaVersion === 2
       ? (({ checkoutMode: _checkoutMode, ...rollbackResult }) => ({
@@ -17,6 +18,7 @@ export function projectRuntimeForRollback(
           schemaVersion: 1 as const
         }))(runtime.recipeResult)
       : runtime.recipeResult
+
   return RollbackEphemeralVmRuntimeRecordSchema.parse({
     ...runtime,
     ...(recipe ? { recipe } : {}),
@@ -29,9 +31,11 @@ export function mergeRuntimeFeatures<T extends { id: string; recipeId: string; c
   required: readonly T[]
 ): T[] {
   const merged = new Map(existing.map((entry) => [featureIdentity(entry), entry]))
+
   for (const entry of required) {
     merged.set(featureIdentity(entry), entry)
   }
+
   return sortRuntimeFeatures([...merged.values()])
 }
 

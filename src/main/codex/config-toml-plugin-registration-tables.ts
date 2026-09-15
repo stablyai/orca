@@ -43,20 +43,24 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
   const lines = config.split('\n')
   const headers = scanTomlTableHeaders(lines)
   const entries = new Map<string, CodexRegistrationEntry>()
+
   for (let index = 0; index < headers.length; index += 1) {
     const header = headers[index]!
     const root = header.segments[0]
     const name = header.segments[1]
+
     // Why: `[[marketplaces.x]]` is not a shape Codex writes; treating an array of
     // tables as one registration would key it by a name it may not own.
     if (header.isArray || !isCodexRegistrationRoot(root) || name === undefined) {
       continue
     }
+
     const end = headers[index + 1]?.index ?? lines.length
     const key = getCodexRegistrationKey(root, name)
     const isOwner = header.segments.length === 2
     const existing = entries.get(key)
     const block = readRegistrationBlock(lines, header.index, end)
+
     if (!existing) {
       entries.set(key, {
         key,
@@ -69,6 +73,7 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
       })
       continue
     }
+
     entries.set(key, {
       ...existing,
       // Why: a duplicate owner table is invalid TOML; the first one wins, exactly
@@ -82,6 +87,7 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
           : existing.fields
     })
   }
+
   return entries
 }
 
@@ -96,14 +102,18 @@ export function hasCodexRegistrationEntries(config: string): boolean {
 function readRegistrationBlock(lines: string[], start: number, end: number): string {
   let state = createTomlLineScanState()
   let lastBodyLine = start
+
   for (let index = start; index < end; index += 1) {
     const line = lines[index] ?? ''
     const trimmed = line.trim()
+
     if (!isTomlStructuralLine(state) || (trimmed !== '' && !trimmed.startsWith('#'))) {
       lastBodyLine = index
     }
+
     state = updateTomlLineScanState(state, line)
   }
+
   return lines
     .slice(start, lastBodyLine + 1)
     .join('\n')
@@ -117,10 +127,12 @@ function isRealCalendarDate(year: number, month: number, day: number): boolean {
   if (month < 1 || month > 12 || day < 1) {
     return false
   }
+
   // Day 0 of the following month is the last day of this one; setUTCFullYear avoids
   // the two-digit-year remapping the Date constructor applies.
   const lastOfMonth = new Date(0)
   lastOfMonth.setUTCFullYear(year, month, 0)
+
   return day <= lastOfMonth.getUTCDate()
 }
 
@@ -128,6 +140,7 @@ function isRealCalendarDate(year: number, month: number, day: number): boolean {
 export function normalizeCodexRegistrationValue(raw: string): string {
   const stripped = stripTomlTrailingComment(raw)
   const quoted = parseTomlSingleLineStringValue(stripped, 0)
+
   return quoted && quoted.end === stripped.length ? `string:${quoted.value}` : stripped
 }
 
@@ -140,12 +153,15 @@ export function parseCodexRegistrationTimestamp(raw: string): number | null {
   const quoted = parseTomlSingleLineStringValue(stripped, 0)
   const text = quoted && quoted.end === stripped.length ? quoted.value : stripped
   const match = REGISTRATION_TIMESTAMP_PATTERN.exec(text)
+
   // Why: Date.parse rolls `2025-02-30` forward to March 2 rather than rejecting it,
   // so a malformed runtime value would read as NEWER and win against canonical.
   if (!match || !isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))) {
     return null
   }
+
   const parsed = Date.parse(text.replace(' ', 'T'))
+
   return Number.isFinite(parsed) ? parsed : null
 }
 
@@ -165,10 +181,13 @@ type TomlTableHeaderMarker = {
 function scanTomlTableHeaders(lines: string[]): TomlTableHeaderMarker[] {
   const markers: TomlTableHeaderMarker[] = []
   let state = createTomlLineScanState()
+
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? ''
+
     if (isTomlStructuralLine(state)) {
       const header = getTomlTableHeader(line)
+
       if (header) {
         const table = parseTomlTableHeaderPath(header)
         markers.push({
@@ -178,8 +197,10 @@ function scanTomlTableHeaders(lines: string[]): TomlTableHeaderMarker[] {
         })
       }
     }
+
     state = updateTomlLineScanState(state, line)
   }
+
   return markers
 }
 
@@ -191,24 +212,29 @@ function readTomlTableFields(
   const fields = new Map<string, CodexRegistrationField>()
   let state = createTomlLineScanState()
   let index = headerIndex + 1
+
   while (index < end) {
     const line = lines[index] ?? ''
     const parsed = isTomlStructuralLine(state) ? parseTomlKeyPath(line) : null
     const name = parsed?.segments.length === 1 ? parsed.segments[0] : null
+
     if (!parsed || !name || line[parsed.end] !== '=') {
       state = updateTomlLineScanState(state, line)
       index += 1
       continue
     }
+
     let raw = line.slice(parsed.end + 1).trim()
     state = updateTomlLineScanState(state, line)
     let valueEnd = index + 1
+
     while (!isTomlStructuralLine(state) && valueEnd < end) {
       const continuation = lines[valueEnd] ?? ''
       raw += `\n${continuation.trim()}`
       state = updateTomlLineScanState(state, continuation)
       valueEnd += 1
     }
+
     if (!fields.has(name)) {
       fields.set(name, {
         raw,
@@ -216,27 +242,36 @@ function readTomlTableFields(
         lineIndex: index
       })
     }
+
     index = valueEnd
   }
+
   return fields
 }
 
 function stripTomlTrailingComment(raw: string): string {
   let index = 0
+
   while (index < raw.length) {
     const char = raw[index]
+
     if (char === '#') {
       return raw.slice(0, index).trim()
     }
+
     if (char === '"' || char === "'") {
       const quoted = parseTomlSingleLineStringValue(raw, index)
+
       if (!quoted) {
         return raw.trim()
       }
+
       index = quoted.end
       continue
     }
+
     index += 1
   }
+
   return raw.trim()
 }

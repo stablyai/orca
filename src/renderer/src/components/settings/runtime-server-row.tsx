@@ -56,6 +56,7 @@ export function RuntimeServerRow({
   const runtimeStatusEntry = useAppStore((state) =>
     state.runtimeStatusByEnvironmentId.get(environment.id)
   )
+
   const effectiveDetails = runtimeStatusEntry
     ? {
         ...(details ?? {
@@ -73,11 +74,14 @@ export function RuntimeServerRow({
           runtimeStatusEntry.remoteControl ?? runtimeStatusEntry.status?.remoteControl ?? null
       }
     : details
+
   const detailsDescription = getHostDetailsDescription(effectiveDetails)
+
   const connectionState =
     details?.status === 'loading' && !runtimeStatusEntry?.status
       ? 'checking'
       : getRuntimeServerConnectionState(effectiveDetails)
+
   // A connected host exposes Disconnect; otherwise Connect.
   const isReachable = isRuntimeServerTransportConnected(connectionState)
   const actionBusy = connecting || switching || disconnecting || removing

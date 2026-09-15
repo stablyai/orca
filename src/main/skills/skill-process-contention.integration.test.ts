@@ -7,35 +7,47 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createSkillPackageArchive } from './skill-package-creation'
 
 const RUN_REAL_PROCESS = process.env.ORCA_REAL_PROCESS_SKILL_TEST === '1'
+
 const require = createRequire(import.meta.url)
+
 const vitestBin = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
+
 const childTest = resolve('src/main/skills/skill-process-contention-child.test.ts')
+
 const roots: string[] = []
+
 const children: ChildProcess[] = []
 
 function childOutput(child: ChildProcess): { value(): string } {
   let output = ''
+
   const append = (chunk: Buffer): void => {
     output = `${output}${chunk.toString('utf8')}`.slice(-8_192)
   }
+
   child.stdout?.on('data', append)
   child.stderr?.on('data', append)
+
   return { value: () => output }
 }
 
 async function waitForFile(path: string, child: ChildProcess, output: () => string): Promise<void> {
   const deadline = Date.now() + 15_000
+
   while (Date.now() < deadline) {
     if (await stat(path).catch(() => null)) {
       return
     }
+
     if (child.exitCode !== null || child.signalCode !== null) {
       throw new Error(
         `skill-contention-child-exited-${child.exitCode ?? child.signalCode}: ${output()}`
       )
     }
+
     await new Promise<void>((resolveWait) => setTimeout(resolveWait, 20))
   }
+
   throw new Error(`skill-contention-marker-timeout: ${output()}`)
 }
 
@@ -76,7 +88,9 @@ function startChild(input: {
       windowsHide: true
     }
   )
+
   children.push(child)
+
   return { child, output: childOutput(child).value }
 }
 
@@ -90,6 +104,7 @@ async function waitForExit(child: ChildProcess, output: () => string): Promise<v
               child.kill('SIGKILL')
               rejectExit(new Error(`skill-contention-child-timeout: ${output()}`))
             }, 15_000)
+
             child.once('error', (error) => {
               clearTimeout(timeout)
               rejectExit(error)
@@ -100,6 +115,7 @@ async function waitForExit(child: ChildProcess, output: () => string): Promise<v
             })
           }
         )
+
   if (exit.code !== 0) {
     throw new Error(`skill-contention-child-failed-${exit.code ?? exit.signal}: ${output()}`)
   }
@@ -111,6 +127,7 @@ afterEach(async () => {
       child.kill('SIGKILL')
     }
   }
+
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -124,17 +141,20 @@ describe.runIf(RUN_REAL_PROCESS)('skill multi-process contention', () => {
       join(source, 'SKILL.md'),
       '---\nname: contention-skill\ndescription: Contention\n---\n\n# Contention\n'
     )
+
     const archive = await createSkillPackageArchive({
       sourceDirectory: source,
       archivePath: join(root, 'package.tar.gz'),
       packageId: 'package-contention',
       versionId: 'version_1'
     })
+
     const readyPath = join(root, 'holder-ready')
     const releasePath = join(root, 'holder-release')
     const holderResultPath = join(root, 'holder-result.json')
     const blockedResultPath = join(root, 'blocked-result.json')
     const retryResultPath = join(root, 'retry-result.json')
+
     const holder = startChild({
       root,
       archivePath: archive.archivePath,
@@ -143,6 +163,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill multi-process contention', () => {
       releasePath,
       resultPath: holderResultPath
     })
+
     await waitForFile(readyPath, holder.child, holder.output)
 
     const blocked = startChild({
@@ -153,6 +174,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill multi-process contention', () => {
       releasePath,
       resultPath: blockedResultPath
     })
+
     await waitForExit(blocked.child, blocked.output)
     expect(JSON.parse(await readFile(blockedResultPath, 'utf8'))).toMatchObject({
       status: 'failed',
@@ -174,6 +196,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill multi-process contention', () => {
       releasePath,
       resultPath: retryResultPath
     })
+
     await waitForExit(retry.child, retry.output)
     expect(JSON.parse(await readFile(retryResultPath, 'utf8'))).toMatchObject({
       status: 'unchanged'

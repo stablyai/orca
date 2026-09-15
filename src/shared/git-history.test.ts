@@ -8,8 +8,11 @@ import {
 import { GIT_HISTORY_COMMIT_FORMAT } from './git-history-log-parser'
 
 const HEAD_OID = 'a'.repeat(40)
+
 const REMOTE_OID = 'b'.repeat(40)
+
 const BASE_OID = 'c'.repeat(40)
+
 const DECORATION_SEPARATOR = '\x1f'
 
 function logRecord({
@@ -47,6 +50,7 @@ function createHistoryExecutor(limitRecords = 2): {
   calls: string[][]
 } {
   const calls: string[][] = []
+
   const executor = vi.fn(async (args: string[], cwd: string) => {
     expect(cwd).toBe('/repo')
     calls.push(args)
@@ -55,20 +59,26 @@ function createHistoryExecutor(limitRecords = 2): {
     if (command === 'rev-parse' && args.includes('HEAD^{commit}')) {
       return { stdout: `${HEAD_OID}\n` }
     }
+
     if (command === 'rev-parse' && args.includes('refs/remotes/origin/feature^{commit}')) {
       return { stdout: `${REMOTE_OID}\n` }
     }
+
     if (command === 'symbolic-ref') {
       return { stdout: 'feature\n' }
     }
+
     if (command === 'for-each-ref') {
       return { stdout: 'refs/remotes/origin/feature\0origin/feature\n' }
     }
+
     if (command === 'merge-base') {
       return { stdout: `${BASE_OID}\n` }
     }
+
     if (command === 'log') {
       const includesRemoteRoot = args.includes(REMOTE_OID)
+
       return {
         stdout: Array.from({ length: limitRecords }, (_, index) =>
           logRecord({
@@ -207,6 +217,7 @@ describe('git history loader', () => {
   it('does not list newly fetched upstream commits in old workspace history', async () => {
     const upstreamOnlyOid = 'd'.repeat(40)
     const calls: string[][] = []
+
     const executor = vi.fn(async (args: string[], cwd: string) => {
       expect(cwd).toBe('/repo')
       calls.push(args)
@@ -215,26 +226,34 @@ describe('git history loader', () => {
       if (command === 'rev-parse' && args.includes('HEAD^{commit}')) {
         return { stdout: `${HEAD_OID}\n` }
       }
+
       if (command === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
         return { stdout: `${REMOTE_OID}\n` }
       }
+
       if (command === 'rev-parse' && args.includes('origin/main^{commit}')) {
         return { stdout: `${REMOTE_OID}\n` }
       }
+
       if (command === 'rev-parse' && args.includes('origin/main')) {
         return { stdout: 'refs/remotes/origin/main\n' }
       }
+
       if (command === 'symbolic-ref') {
         return { stdout: 'old-workspace\n' }
       }
+
       if (command === 'for-each-ref') {
         return { stdout: 'refs/remotes/origin/main\0origin/main\n' }
       }
+
       if (command === 'merge-base') {
         return { stdout: `${HEAD_OID}\n` }
       }
+
       if (command === 'log') {
         const includesRemoteRoot = args.includes(REMOTE_OID)
+
         return {
           stdout: includesRemoteRoot
             ? [
@@ -291,6 +310,7 @@ describe('git history loader', () => {
       if (args[0] === 'rev-parse') {
         throw new Error('ambiguous argument HEAD')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -315,18 +335,23 @@ describe('symbolic full-name resolution', () => {
       if (args[0] === 'rev-parse' && args.includes('--symbolic-full-name')) {
         return { stdout: symbolicStdout }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: `${HEAD_OID}\n` }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'main\n' }
       }
+
       if (args[0] === 'for-each-ref' || args[0] === 'merge-base') {
         return { stdout: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: logRecord({ hash: HEAD_OID, message: 'only' }) }
       }
+
       return { stdout: '' }
     }) as unknown as GitHistoryExecutor
   }

@@ -15,22 +15,27 @@ function sleep(ms: number): Promise<void> {
 function processExists(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
     if (code === 'ESRCH') {
       return false
     }
+
     throw error
   }
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('Timed out waiting for condition')
     }
+
     await sleep(50)
   }
 }
@@ -45,9 +50,11 @@ function readPidFile(pidFile: string): number[] {
 
 function trackPidFile(pidFile: string): number[] {
   const pids = readPidFile(pidFile)
+
   for (const pid of pids) {
     processesToCleanUp.add(pid)
   }
+
   return pids
 }
 
@@ -58,11 +65,13 @@ function waitForExit(
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve({ code: child.exitCode, signal: child.signalCode })
   }
+
   return new Promise((resolveExit, reject) => {
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('Timed out waiting for dev wrapper exit'))
     }, timeoutMs)
+
     child.once('exit', (code, signal) => {
       clearTimeout(timer)
       resolveExit({ code, signal })
@@ -76,19 +85,24 @@ async function stopWrapper(
   if (wrapper.pid) {
     processesToCleanUp.add(wrapper.pid)
   }
+
   if (wrapper.exitCode === null && wrapper.signalCode === null) {
     wrapper.kill('SIGINT')
   }
+
   const result = await waitForExit(wrapper)
+
   if (wrapper.pid) {
     processesToCleanUp.delete(wrapper.pid)
   }
+
   return result
 }
 
 async function stopWrapperAndTrackedPids(wrapper: ChildProcess, pids: number[]): Promise<void> {
   await stopWrapper(wrapper)
   await waitFor(() => pids.every((pid) => !processExists(pid)))
+
   for (const pid of pids) {
     processesToCleanUp.delete(pid)
   }
@@ -96,12 +110,15 @@ async function stopWrapperAndTrackedPids(wrapper: ChildProcess, pids: number[]):
 
 function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env = { ...process.env }
+
   for (const key of Object.keys(env)) {
     if (key.startsWith('ORCA_DEV_')) {
       delete env[key]
     }
   }
+
   delete env.ELECTRON_EXEC_PATH
+
   return { ...env, ...extra }
 }
 
@@ -130,12 +147,16 @@ function spawnDevWrapper(
     env,
     stdio: ['ignore', 'pipe', 'pipe']
   })
+
   let output = ''
+
   const collect = (chunk: Buffer): void => {
     output += chunk.toString()
   }
+
   wrapper.stdout?.on('data', collect)
   wrapper.stderr?.on('data', collect)
+
   return { wrapper, readOutput: () => output }
 }
 
@@ -162,12 +183,15 @@ describe('run-electron-vite-dev', () => {
         process.kill(pid, 'SIGTERM')
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
         if (code !== 'ESRCH') {
           throw error
         }
       }
     }
+
     await sleep(100)
+
     for (const pid of processesToCleanUp) {
       try {
         if (processExists(pid)) {
@@ -175,11 +199,13 @@ describe('run-electron-vite-dev', () => {
         }
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
         if (code !== 'ESRCH') {
           throw error
         }
       }
     }
+
     processesToCleanUp.clear()
   })
 
@@ -275,6 +301,7 @@ describe('run-electron-vite-dev', () => {
       stableName: string | null
       electronExecPath: string | null
     }
+
     expect(envSnapshot.args).toContain('--remote-debugging-port=9444')
     expect(envSnapshot.label).toBe('payment-ui @ feature/billing-shell')
     expect(envSnapshot.branch).toBe('feature/billing-shell')
@@ -376,6 +403,7 @@ describe('run-electron-vite-dev', () => {
       stableName: string | null
       electronExecPath: string | null
     }
+
     expect(envSnapshot.args).not.toContain('--stable-name')
     expect(envSnapshot.args).toContain('--remote-debugging-port=9445')
     expect(envSnapshot.stableName).toBe('1')
@@ -390,6 +418,7 @@ describe('run-electron-vite-dev', () => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
       const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mjs')
       const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
+
       const baseEnv = devWrapperTestEnv({
         ORCA_ELECTRON_VITE_CLI: fakeCliPath,
         ORCA_SKIP_DEV_CLI_PREPARE: '1',
@@ -401,6 +430,7 @@ describe('run-electron-vite-dev', () => {
       async function runWrapper(runId: string): Promise<{ electronExecPath: string }> {
         const pidFile = join(tempDir, `${runId}.pid`)
         const envFile = join(tempDir, `${runId}.json`)
+
         const { wrapper, readOutput } = spawnDevWrapper(
           [wrapperPath, '--remote-debugging-port=9448'],
           {
@@ -420,16 +450,20 @@ describe('run-electron-vite-dev', () => {
         const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
           electronExecPath: string | null
         }
+
         expect(envSnapshot.electronExecPath).toBeTypeOf('string')
         await stopWrapperAndTrackedPids(wrapper, trackedPids)
+
         return { electronExecPath: envSnapshot.electronExecPath! }
       }
 
       let distDir: string | null = null
+
       try {
         const firstRun = await runWrapper('first')
         const appPath = dirname(dirname(dirname(firstRun.electronExecPath)))
         distDir = dirname(appPath)
+
         const icuDataPath = join(
           appPath,
           'Contents',
@@ -438,6 +472,7 @@ describe('run-electron-vite-dev', () => {
           'Resources',
           'icudtl.dat'
         )
+
         expect(existsSync(icuDataPath)).toBe(true)
 
         rmSync(icuDataPath, { force: true })
@@ -488,6 +523,7 @@ describe('run-electron-vite-dev', () => {
       const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
         electronExecPath: string | null
       }
+
       expect(envSnapshot.electronExecPath).toBeTypeOf('string')
 
       const appPath = dirname(dirname(dirname(envSnapshot.electronExecPath!)))

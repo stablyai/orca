@@ -6,6 +6,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createDetectedAgentsSlice } from './detected-agents'
 
 const detectAgents = vi.fn()
+
 const refreshAgents = vi.fn()
 
 globalThis.window = {
@@ -29,6 +30,7 @@ function createTestStore(repos: Repo[]) {
   const store = create<AppState>()(
     (...args) => createDetectedAgentsSlice(...args) as unknown as AppState
   )
+
   store.setState({
     repos,
     projects: [],
@@ -36,6 +38,7 @@ function createTestStore(repos: Repo[]) {
     activeRepoId: repos[0]?.id ?? null,
     activeWorktreeId: null
   } as Partial<AppState>)
+
   return store
 }
 
@@ -51,6 +54,7 @@ describe('local detected agent context lifecycle', () => {
 
   it('deduplicates Floating-first callers without cached or settlement broadcast fanout', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveDetection = resolve
@@ -58,6 +62,7 @@ describe('local detected agent context lifecycle', () => {
     )
     const store = createTestStore([])
     let broadcasts = 0
+
     const unsubscribe = store.subscribe(() => {
       broadcasts += 1
     })
@@ -111,6 +116,7 @@ describe('local detected agent context lifecycle', () => {
 
   it('does not restore a project context cleared while detection is in flight', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveDetection = resolve
@@ -130,6 +136,7 @@ describe('local detected agent context lifecycle', () => {
 
   it('does not let an older detect overwrite a successful refresh', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveDetection = resolve
@@ -150,6 +157,7 @@ describe('local detected agent context lifecycle', () => {
 
   it('does not let an older failed detect erase a successful refresh', async () => {
     let rejectDetection: (error: Error) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((_resolve, reject) => {
         rejectDetection = reject
@@ -174,6 +182,7 @@ describe('local detected agent context lifecycle', () => {
       pathSource: string
       pathFailureReason: string
     }) => void = () => {}
+
     refreshAgents.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveRefresh = resolve
@@ -198,6 +207,7 @@ describe('local detected agent context lifecycle', () => {
 
   it('retries after an authoritative refresh fails without a usable cache', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveDetection = resolve

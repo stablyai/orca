@@ -11,7 +11,9 @@ import {
 } from './automation-page-parts'
 
 const RUN_ROW_HEIGHT_PX = 59
+
 const RUN_ROW_OVERSCAN = 10
+
 const RUNS_VIEWPORT_INITIAL_RECT = { width: 1024, height: 600 }
 
 export function AutomationRunsTable({
@@ -34,6 +36,7 @@ export function AutomationRunsTable({
       loadMoreRequestedRef.current = false
     }
   }, [loading])
+
   const virtualizer = useVirtualizer({
     count: entries.length,
     getScrollElement: () => scrollRef.current,
@@ -69,6 +72,7 @@ export function AutomationRunsTable({
         onScroll={(event) => {
           const { clientHeight, scrollHeight, scrollTop } = event.currentTarget
           const nearEnd = scrollHeight - scrollTop - clientHeight < RUN_ROW_HEIGHT_PX * 10
+
           if (hasMore && !loading && nearEnd && !loadMoreRequestedRef.current) {
             loadMoreRequestedRef.current = true
             onLoadMore()
@@ -102,9 +106,11 @@ export function AutomationRunsTable({
           <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const entry = entries[virtualRow.index]
+
               if (!entry) {
                 return null
               }
+
               return (
                 <div
                   key={virtualRow.key}

@@ -27,9 +27,12 @@ export function useNetworkSafeTabEntrySelection({
   const pinnedOptionIndex = pinnedOptionId
     ? activeOptions.findIndex((option) => getActiveOptionId(option) === pinnedOptionId)
     : -1
+
   const rankedOption = pinnedOptionIndex < 0 ? activeOptions[0] : undefined
+
   const rankedClassification =
     rankedOption?.kind === 'entry' ? rankedOption.option.classification : null
+
   // A history row navigates away too, so it waits on the same scan: while the
   // index is still loading "readme" has no file rows yet, and Enter must not
   // quietly leave for readme.io.
@@ -38,6 +41,7 @@ export function useNetworkSafeTabEntrySelection({
     (rankedOption?.kind === 'history' ||
       rankedClassification?.kind === 'search' ||
       rankedClassification?.kind === 'host-url')
+
   // Why: a still-scanning index can promote a file match later, so hold Enter
   // unless the scan can no longer change the ranking — it failed outright, or
   // the text is a phrase that would never rank as a file.
@@ -46,6 +50,7 @@ export function useNetworkSafeTabEntrySelection({
     fileIndexFailed ||
     (rankedClassification?.kind === 'search' &&
       isUnambiguousSearchQuery(rankedClassification.query))
+
   const rankingKey = `${menuOpen}:${query}`
   const hasRankedOption = rankedOption !== undefined
   // Why: once a query ranked a local action first, a later re-index that promotes
@@ -57,14 +62,17 @@ export function useNetworkSafeTabEntrySelection({
       blockedNetworkRankingRef.current = rankingKey
     }
   }, [fileIndexReady, hasRankedOption, rankedNetworkAction, rankingKey])
+
   const networkActionAllowed =
     networkRankingSettled && blockedNetworkRankingRef.current !== rankingKey
+
   const activeSelectedIndex =
     pinnedOptionIndex >= 0
       ? pinnedOptionIndex
       : activeOptions.length === 0 || (rankedNetworkAction && !networkActionAllowed)
         ? null
         : 0
+
   return {
     activeSelectedIndex,
     selectedActiveOption:

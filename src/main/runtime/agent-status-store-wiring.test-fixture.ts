@@ -33,6 +33,7 @@ export function makeAgentStatusStoreWiring(): {
   attach: (runtime: WiredRuntime) => () => void
 } {
   const statusStore = new AgentHookServer()
+
   return {
     statusStore,
     deps: {

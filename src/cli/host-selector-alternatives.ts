@@ -7,6 +7,7 @@ export type SshTargetSummary = {
   connected?: boolean
   connectionStatus?: string
 }
+
 export type EnvironmentSummary = { id: string; name: string }
 
 export type HostAlternatives = {
@@ -22,10 +23,13 @@ export function findSshTargetByName(
   name: string
 ): SshTargetSummary | undefined {
   const byId = targets.find((target) => target.id === name)
+
   if (byId) {
     return byId
   }
+
   const byLabel = matchesByLabel(targets, name)
+
   // Why: two targets can share a label. Picking the first would silently choose a machine for
   // the caller — the failure this whole selector path exists to prevent — so an ambiguous name
   // resolves to nothing and the caller is told to use an id.
@@ -34,6 +38,7 @@ export function findSshTargetByName(
 
 function matchesByLabel(targets: readonly SshTargetSummary[], name: string): SshTargetSummary[] {
   const wanted = name.trim().toLowerCase()
+
   return targets.filter((target) => target.label.trim().toLowerCase() === wanted)
 }
 
@@ -42,6 +47,7 @@ export function ambiguousSshTargets(
   name: string
 ): SshTargetSummary[] {
   const byLabel = matchesByLabel(targets, name)
+
   return byLabel.length > 1 ? byLabel : []
 }
 
@@ -50,10 +56,13 @@ export function findEnvironmentByName(
   name: string
 ): EnvironmentSummary | undefined {
   const byId = environments.find((environment) => environment.id === name)
+
   if (byId) {
     return byId
   }
+
   const byName = matchesByEnvironmentName(environments, name)
+
   // Why: the environment store itself refuses an ambiguous name rather than guessing; resolving
   // one here would quietly reintroduce the guess it exists to prevent.
   return byName.length === 1 ? byName[0] : undefined
@@ -64,6 +73,7 @@ function matchesByEnvironmentName(
   name: string
 ): EnvironmentSummary[] {
   const wanted = name.trim().toLowerCase()
+
   return environments.filter((environment) => environment.name.trim().toLowerCase() === wanted)
 }
 
@@ -72,6 +82,7 @@ export function ambiguousEnvironments(
   name: string
 ): EnvironmentSummary[] {
   const byName = matchesByEnvironmentName(environments, name)
+
   return byName.length > 1 ? byName : []
 }
 
@@ -86,16 +97,19 @@ export function crossKindNextSteps(
   const steps: string[] = []
   const ssh = findSshTargetByName(alternatives.sshTargets, name)
   const environment = findEnvironmentByName(alternatives.environments, name)
+
   if (requested !== 'ssh' && ssh) {
     steps.push(
       `"${name}" is an SSH target on this Orca host, not a paired server. Use --host ssh:${ssh.id}.`
     )
   }
+
   if (requested !== 'environment' && environment) {
     steps.push(
       `"${name}" is a paired Orca server, not an SSH target. Use --environment ${environment.name}.`
     )
   }
+
   return steps
 }
 
@@ -104,6 +118,7 @@ export function crossKindNextSteps(
 export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
   try {
     const result = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries')
+
     return result.result.targets
   } catch (error) {
     // Why: hosts predating listTargetSummaries still answer listTargets, and both are served by
@@ -112,11 +127,13 @@ export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSu
     if (error instanceof Error && 'code' in error && error.code === 'method_not_found') {
       try {
         const legacy = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargets')
+
         return await enrichLegacySshTargetStates(client, legacy.result.targets)
       } catch {
         return []
       }
     }
+
     return []
   }
 }
@@ -134,7 +151,9 @@ async function enrichLegacySshTargetStates(
             remotePlatform?: 'linux' | 'darwin' | 'win32'
           } | null
         }>('ssh.getState', { targetId: target.id })
+
         const state = response.result.state
+
         return {
           ...target,
           ...(state?.status === undefined
@@ -161,11 +180,14 @@ export async function resolveSshHostTargetId(
 ): Promise<string> {
   const targets = await listSshTargets(client)
   const matched = findSshTargetByName(targets, targetId)
+
   if (matched) {
     return matched.id
   }
+
   const { RuntimeClientError } = await import('./runtime/types.js')
   const ambiguous = ambiguousSshTargets(targets, targetId)
+
   if (ambiguous.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -176,6 +198,7 @@ export async function resolveSshHostTargetId(
       }
     )
   }
+
   throw new RuntimeClientError(
     'invalid_argument',
     `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target named or with id ${targetId}.`,

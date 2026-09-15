@@ -22,6 +22,7 @@ const testState = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof testState) => unknown) => {
     testState.subscribedSelectors.push(selector as (state: unknown) => unknown)
+
     return selector(testState)
   }
 }))
@@ -39,9 +40,13 @@ import {
 } from './use-terminal-quick-command-hosts'
 
 let renderedHosts: TerminalQuickCommandHost[] = []
+
 let renderedExecutionHostId: ExecutionHostId = 'local'
+
 let refreshRemoteHost = (): void => {}
+
 let remoteHostLoadFailed = false
+
 let remoteHostPending = false
 
 function Probe({ enabled = true }: { enabled?: boolean }): null {
@@ -51,6 +56,7 @@ function Probe({ enabled = true }: { enabled?: boolean }): null {
   refreshRemoteHost = result.refreshRemoteHost
   remoteHostLoadFailed = result.remoteHostLoadFailed
   remoteHostPending = result.remoteHostPending
+
   return null
 }
 
@@ -92,9 +98,11 @@ describe('useTerminalQuickCommandHosts', () => {
 
     const disabledHosts = renderedHosts
     expect(testState.subscribedSelectors).toHaveLength(1)
+
     for (let write = 0; write < 1_000; write += 1) {
       testState.subscribedSelectors[0](testState)
     }
+
     refreshRemoteHost()
 
     expect(renderedExecutionHostId).toBe('local')

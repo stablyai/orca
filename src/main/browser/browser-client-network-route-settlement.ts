@@ -5,12 +5,16 @@ export function createRouteRetirement(): {
   reject: (error: unknown) => void
 } {
   let resolve = (): void => {}
+
   let reject = (_error: unknown): void => {}
+
   const promise = new Promise<void>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   void promise.catch(() => undefined)
+
   return { promise, resolve, reject }
 }
 
@@ -19,6 +23,7 @@ export function waitForRoute<T>(work: Promise<T>, signal: AbortSignal): Promise<
   if (signal.aborted) {
     return Promise.reject(new Error('browser_client_network_route_aborted'))
   }
+
   return new Promise((resolve, reject) => {
     const abort = (): void => reject(new Error('browser_client_network_route_aborted'))
     signal.addEventListener('abort', abort, { once: true })

@@ -25,10 +25,13 @@ export async function getWindowsDefaultRouteInterfaceNames(
     const stdout = await (
       environment.runPowerShell ?? createPowerShellRunner(environment.systemRoot)
     )(buildDefaultRouteScript(), POWERSHELL_TIMEOUT_MS)
+
     const parsed = JSON.parse(stdout.trim()) as unknown
+
     if (!Array.isArray(parsed) || !parsed.every((name) => typeof name === 'string')) {
       return null
     }
+
     return new Set(parsed)
   } catch {
     return null
@@ -50,6 +53,7 @@ function createPowerShellRunner(systemRoot = 'C:\\Windows'): PowerShellRunner {
     'v1.0',
     'powershell.exe'
   )
+
   return (script, timeoutMs) =>
     new Promise((resolve, reject) => {
       execFile(

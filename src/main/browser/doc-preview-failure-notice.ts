@@ -21,11 +21,13 @@ export function setDocPreviewFailureSink(sink: DocPreviewFailureSink | null): vo
  */
 export function publishDocPreviewFailure(failure: DocPreviewFailure): void {
   const sink = failureSink
+
   // Why: a read can outlive the window that asked for it, and sending into torn-down
   // WebContents throws — an unreadable asset must not take the protocol handler with it.
   if (!sink || sink.isDestroyed?.()) {
     return
   }
+
   try {
     sink.send(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, failure)
   } catch {

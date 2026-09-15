@@ -28,6 +28,7 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.taskCreate', () => {
     it('creates a task', async () => {
       setup()
+
       const result = (await call('orchestration.taskCreate', {
         spec: 'implement feature X',
         taskTitle: 'Feature X',
@@ -75,6 +76,7 @@ describe('orchestration RPC methods', () => {
         paneKey: coordinatorPaneKey,
         processIncarnation: 'pty-creator:incarnation-a'
       } as never)
+
       const result = (await call('orchestration.taskCreate', {
         spec: 'spawn related workspace',
         callerTerminalHandle: 'term_creator'
@@ -118,6 +120,7 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.taskList', {
         status: 'ready'
       })) as { count: number }
+
       expect(result.count).toBe(1)
     })
 
@@ -332,6 +335,7 @@ describe('orchestration RPC methods', () => {
       provideInjectIdentity()
       const task = db.createTask({ spec: 'work' })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+
       const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_a',
         accepted: true,
@@ -377,11 +381,13 @@ describe('orchestration RPC methods', () => {
       provideInjectIdentity()
       const task = db.createTask({ spec: 'line one\nline two' })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+
       const agentPrompt = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_a',
         accepted: true,
         bytesWritten: 1
       })
+
       const rawSend = vi.spyOn(runtime, 'sendTerminal')
 
       await call('orchestration.dispatch', {
@@ -467,6 +473,7 @@ describe('orchestration RPC methods', () => {
         dryRun: true,
         from: 'term_coord'
       })) as { preamble: string }
+
       const dispatched = (await call('orchestration.dispatch', {
         task: task.id,
         to: 'term_a',
@@ -476,6 +483,7 @@ describe('orchestration RPC methods', () => {
 
       const section = (preamble: string) =>
         preamble.match(/=== SUB-DISPATCH ===[\s\S]*?(?=\n=== TASK ===)/)?.[0]
+
       expect(section(preview.preamble)).toBeDefined()
       expect(section(preview.preamble)).toBe(section(dispatched.preamble))
     })
@@ -512,6 +520,7 @@ describe('orchestration RPC methods', () => {
 
     it('returns null for unknown task', async () => {
       setup()
+
       const result = (await call('orchestration.dispatchShow', {
         task: 'task_fake'
       })) as { dispatch: null }

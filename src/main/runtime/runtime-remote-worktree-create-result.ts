@@ -24,12 +24,15 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
             : {})
         }
       : undefined
+
   const resultForRenderer = returnedSetup
     ? { ...args.result, setup: returnedSetup }
     : (() => {
         const { setup: _setup, ...resultWithoutSetup } = args.result
+
         return resultWithoutSetup
       })()
+
   const resultWithStartupTerminal =
     args.didSpawnStartup && args.startupTerminalHandle
       ? {
@@ -44,7 +47,9 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
           }
         }
       : resultForRenderer
+
   const requested = args.request.runHooks ? 'run' : (args.request.setupDecision ?? 'inherit')
+
   const setupReceipt = {
     requested,
     hookFound: Boolean(args.result.setup),
@@ -61,8 +66,10 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
             : ('spawn_failed' as const),
     ...(args.setupTerminalHandle ? { terminalHandle: args.setupTerminalHandle } : {})
   }
+
   const resultWithReceipt = args.request.awaitTerminalProvisioning
     ? { ...resultWithStartupTerminal, setupReceipt }
     : resultWithStartupTerminal
+
   return args.warning ? { ...resultWithReceipt, warning: args.warning } : resultWithReceipt
 }

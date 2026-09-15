@@ -38,18 +38,24 @@ export async function rememberSteadyStateAnchor(
 ): Promise<void> {
   if (evidence.verdict !== 'live' || !recognizeAgentProcess(evidence.processName)) {
     anchors.delete(session)
+
     return
   }
+
   let fingerprint: string | null
+
   try {
     fingerprint = await buildPaneProcessFingerprint(rows, session.pid)
   } catch {
     fingerprint = null
   }
+
   if (fingerprint === null || evidence.processName === null) {
     anchors.delete(session)
+
     return
   }
+
   anchors.set(session, {
     agentName: evidence.processName,
     fingerprint,

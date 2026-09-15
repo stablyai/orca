@@ -11,6 +11,7 @@ const emptyDraft = (): Draft => ({ title: '', body: '' })
 describe('useTaskCreationDraftRetention', () => {
   it('does not fan out writes while typing and saves the latest text on dismissal', () => {
     const writeDraft = vi.fn()
+
     const view = renderHook(
       ({ open, draft }) => useTaskCreationDraftRetention({ open, draft, writeDraft }),
       { initialProps: { open: true, draft: emptyDraft() } }
@@ -29,10 +30,12 @@ describe('useTaskCreationDraftRetention', () => {
 
   it('saves the latest text when an open composer unmounts', () => {
     const writeDraft = vi.fn()
+
     const view = renderHook(
       ({ draft }) => useTaskCreationDraftRetention({ open: true, draft, writeDraft }),
       { initialProps: { draft: { title: 'First', body: '' } } }
     )
+
     view.rerender({ draft: { title: 'Latest', body: 'Details' } })
 
     view.unmount()
@@ -43,6 +46,7 @@ describe('useTaskCreationDraftRetention', () => {
 
   it('clears a successful draft without resurrecting it during close cleanup', () => {
     const writeDraft = vi.fn()
+
     const view = renderHook(
       ({ open }) =>
         useTaskCreationDraftRetention({
@@ -63,6 +67,7 @@ describe('useTaskCreationDraftRetention', () => {
 
   it('does not create a draft when an unopened composer unmounts', () => {
     const writeDraft = vi.fn()
+
     const view = renderHook(() =>
       useTaskCreationDraftRetention({ open: false, draft: emptyDraft(), writeDraft })
     )

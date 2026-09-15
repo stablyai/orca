@@ -28,6 +28,7 @@ export function createWebAppApi(): Partial<PreloadApi> {
         for (const { state, hostId } of sessions) {
           writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(state))
         }
+
         writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
       },
       // Staging already wrote through to browser storage, so there is nothing left to join.

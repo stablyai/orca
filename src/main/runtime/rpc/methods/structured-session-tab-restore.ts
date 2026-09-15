@@ -18,6 +18,7 @@ export async function restoreStructuredTabsIfSupported(
     context.clientKind === 'mobile'
       ? isStructuredNativeChatEnabled(context.runtime)
       : supportsStructuredAgentSessions(context)
+
   if (shouldRestore && typeof context.runtime.restoreStructuredAgentSessionTabs === 'function') {
     await context.runtime.restoreStructuredAgentSessionTabs()
   }

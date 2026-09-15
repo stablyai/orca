@@ -14,6 +14,7 @@ const conn = {} as SshConnection
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
 }
 
@@ -116,6 +117,7 @@ describe('detectRemoteHostPlatform', () => {
     const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
       ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
     )
+
     splitSpy.mockRestore()
     expect(usedWhitespaceFieldSplit).toBe(false)
   })

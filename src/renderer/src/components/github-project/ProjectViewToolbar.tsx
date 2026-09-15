@@ -21,16 +21,20 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
     doFetch,
     setAppliedQueryByView
   } = tableState
+
   const selectedViewUrl = table
     ? `${table.project.url}/views/${table.selectedView.number ?? ''}`
     : null
+
   const refreshLabel = loading
     ? translate('auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5', 'Refreshing')
     : translate('auto.components.github.project.ProjectViewWrapper.71fb69926c', 'Refresh')
+
   const refresh = (): void => {
     if (!activeProject || !viewId) {
       return
     }
+
     void doFetch(
       {
         owner: activeProject.owner,
@@ -43,6 +47,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
       currentAppliedOverride
     )
   }
+
   return (
     <div className="flex min-w-0 flex-none flex-wrap items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
       <ProjectPicker
@@ -68,13 +73,16 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
             if (!activeProject || !viewId) {
               return
             }
+
             setAppliedQueryByView((previous) => {
               const next = { ...previous }
+
               if (override === undefined) {
                 delete next[currentProjectViewKey]
               } else {
                 next[currentProjectViewKey] = override
               }
+
               return next
             })
             void doFetch(
@@ -146,17 +154,23 @@ function ProjectSearchInput({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const modifierPressed = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+
       if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
         return
       }
+
       if (document.querySelector('[role="dialog"]')) {
         return
       }
+
       const input = inputRef.current
+
       if (!input) {
         return
       }
+
       const target = event.target
+
       if (
         target instanceof HTMLElement &&
         target !== input &&
@@ -166,12 +180,15 @@ function ProjectSearchInput({
       ) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       input.focus()
       input.select()
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [])
 

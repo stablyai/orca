@@ -1,9 +1,15 @@
 export const UI_LANGUAGE_SYSTEM = 'system'
+
 export const UI_LANGUAGE_ENGLISH = 'en'
+
 export const UI_LANGUAGE_CHINESE = 'zh'
+
 export const UI_LANGUAGE_KOREAN = 'ko'
+
 export const UI_LANGUAGE_JAPANESE = 'ja'
+
 export const UI_LANGUAGE_SPANISH = 'es'
+
 export const UI_LANGUAGE_FRENCH = 'fr'
 
 export type BuiltInUiLanguage =
@@ -16,6 +22,7 @@ export type BuiltInUiLanguage =
   | typeof UI_LANGUAGE_FRENCH
 
 export type PluginUiLanguage = `plugin:${string}`
+
 export type UiLanguage = BuiltInUiLanguage | PluginUiLanguage
 
 const UI_LANGUAGE_VALUES = new Set<BuiltInUiLanguage>([
@@ -39,6 +46,7 @@ export function normalizeUiLanguage(value: unknown): UiLanguage {
   if (isPluginUiLanguage(value)) {
     return value
   }
+
   return UI_LANGUAGE_VALUES.has(value as BuiltInUiLanguage)
     ? (value as BuiltInUiLanguage)
     : UI_LANGUAGE_SYSTEM

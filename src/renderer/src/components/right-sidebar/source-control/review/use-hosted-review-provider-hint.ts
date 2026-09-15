@@ -60,21 +60,25 @@ export function useSourceControlHostedReviewProviderHint({
     Boolean(branchName) &&
     branchName !== 'HEAD' &&
     Boolean(activeWorktreeId)
+
   const hostedReviewCreationRequestMatchesCurrent =
     hostedReviewCreationRequestState !== null &&
     activeRepo?.id === hostedReviewCreationRequestState.repoId &&
     activeWorktreeId === hostedReviewCreationRequestState.worktreeId &&
     branchName === hostedReviewCreationRequestState.branch
+
   const isHostedReviewCreationLoading =
     shouldResolveHostedReviewCreation &&
     hostedReviewCreationRequestMatchesCurrent &&
     hostedReviewCreationRequestState.status === 'loading' &&
     hostedReview === null
+
   // Why: infer provider from the remote host when unknown, so a GitLab (etc.) repo shows its own review copy instead of the GitHub default.
   const remoteInferredHostedReviewProvider = useMemo(
     () => parseRemoteRepo(activeRepo?.gitRemoteIdentity?.remoteUrl ?? '')?.provider ?? null,
     [activeRepo?.gitRemoteIdentity?.remoteUrl]
   )
+
   const provisionalHostedReviewProvider = useMemo(
     () =>
       resolveProvisionalHostedReviewProvider({
@@ -107,6 +111,7 @@ export function useSourceControlHostedReviewProviderHint({
       remoteInferredHostedReviewProvider
     ]
   )
+
   useEffect(() => {
     const hasConcreteProviderHint =
       hostedReview !== null ||
@@ -141,6 +146,7 @@ export function useSourceControlHostedReviewProviderHint({
     linkedGitLabMR,
     provisionalHostedReviewProvider
   ])
+
   const hostedReviewCreationForHeader = useMemo(() => {
     // Why: during a fresh preflight, disable stale Create PR eligibility while state reconciles, but preserve provider copy from the last snapshot.
     if (isHostedReviewCreationLoading) {
@@ -149,8 +155,10 @@ export function useSourceControlHostedReviewProviderHint({
         { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
         provisionalHostedReviewProvider
       )
+
       return buildLoadingHostedReviewCreationEligibility(provider)
     }
+
     return hostedReviewCreation
   }, [
     activeRepoId,

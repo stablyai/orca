@@ -12,6 +12,7 @@ const mutableProcess = process as unknown as { getSystemVersion?: () => string }
 
 async function loadPlatformApi(): Promise<typeof platformApi> {
   vi.resetModules()
+
   return (await import('./platform-bridge')).platformApi
 }
 
@@ -30,6 +31,7 @@ describe('platformApi.get', () => {
     mutableProcess.getSystemVersion = getSystemVersion
 
     const first = platformApi.get()
+
     for (let index = 0; index < 100; index += 1) {
       expect(platformApi.get()).toBe(first)
     }

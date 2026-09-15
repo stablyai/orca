@@ -65,6 +65,7 @@ describe('isImeCompositionKeyDown', () => {
       ctrlKey: true,
       isComposing: true
     })
+
     expect(gesture).toEqual({ active: true, carried: false, owned: true })
 
     gesture = resolveImeModifierGesture(gesture.active, {
@@ -104,6 +105,7 @@ describe('useImeEnterGestureOwnership', () => {
     shiftKey?: boolean
   }): ImeEnterGestureEventForTest {
     let prevented = false
+
     return {
       key: init.key,
       keyCode: init.keyCode,
@@ -148,10 +150,13 @@ describe('useImeEnterGestureOwnership', () => {
     ).toBe(true)
     result.current.setComposing(false)
     let frame: FrameRequestCallback | undefined
+
     const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       frame = cb
+
       return 1
     })
+
     result.current.onKeyUp(gestureEvent({ key: '1', keyCode: 49 }))
     frame?.(0)
     raf.mockRestore()

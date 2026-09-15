@@ -8,6 +8,7 @@ function serializeQuestionPrompt(toolInput: unknown): string | undefined {
   if (toolInput === undefined || toolInput === null) {
     return undefined
   }
+
   try {
     return JSON.stringify(toolInput)
   } catch {
@@ -42,10 +43,12 @@ export function extractPiToolFields(
       eventName === 'message_end' && hookPayload.role === 'assistant'
         ? readString(hookPayload, 'text')
         : undefined
+
     return assistantText
       ? { ...clearActiveToolFieldsUpdate(), lastAssistantMessage: assistantText }
       : clearActiveToolFieldsUpdate()
   }
+
   if (
     eventName === 'tool_call' ||
     eventName === 'tool_execution_start' ||
@@ -54,6 +57,7 @@ export function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
+
     // Why: OMP's `ask` uses the same questions/options shape as Pi's question tool.
     const interactivePrompt =
       isPiCompatibleAskTool(agentKind, toolName) &&
@@ -62,11 +66,13 @@ export function extractPiToolFields(
           ? serializeQuestionPrompt(rawToolInput)
           : deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
+
     return toolUpdate(
       { toolName, toolInput, interactivePrompt },
       { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
     )
   }
+
   if (
     agentKind === 'omp' &&
     (eventName === 'tool_approval_requested' || eventName === 'tool_approval_resolved')
@@ -81,11 +87,14 @@ export function extractPiToolFields(
       { hasToolInputField: true }
     )
   }
+
   if (eventName === 'message_end' && hookPayload.role === 'assistant') {
     const text = readString(hookPayload, 'text')
+
     if (text) {
       return { lastAssistantMessage: text }
     }
   }
+
   return {}
 }

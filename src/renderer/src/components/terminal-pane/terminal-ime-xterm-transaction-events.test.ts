@@ -11,10 +11,13 @@ import {
 } from './terminal-ime-native-text-forwarder'
 
 const requireFromHere = createRequire(import.meta.url)
+
 const { Terminal: CjsTerminal } = requireFromHere('@xterm/xterm') as {
   Terminal: typeof EsmTerminal
 }
+
 const xtermPackageRoot = dirname(requireFromHere.resolve('@xterm/xterm/package.json'))
+
 // Read from the installed package rather than hard-coding: the point of the assertions
 // below is that the bundle, its sourcemap and the declared version agree, which a literal
 // would only restate. A stale literal fails every bump for no reason.
@@ -49,9 +52,11 @@ async function openComposedTerminal(TerminalType: typeof EsmTerminal): Promise<{
   const container = document.createElement('div')
   document.body.appendChild(container)
   terminal.open(container)
+
   if (!terminal.element || !terminal.textarea) {
     throw new Error('xterm input elements were not created')
   }
+
   const events: string[] = []
   const output: string[] = []
   terminal.onData((data) => output.push(data))
@@ -68,6 +73,7 @@ async function openComposedTerminal(TerminalType: typeof EsmTerminal): Promise<{
   terminal.textarea.value = '한'
   terminal.textarea.setSelectionRange(1, 1)
   await nextEventLoop()
+
   return { terminal, textarea: terminal.textarea, events, output }
 }
 
@@ -94,12 +100,15 @@ describe.each([
     await new Promise<void>((resolve) => terminal.write('\x1b[>0q', resolve))
 
     expect(output).toEqual([`\x1bP>|xterm.js(${EXPECTED_XTERM_VERSION})\x1b\\`])
+
     const sourceMap = JSON.parse(
       readFileSync(join(xtermPackageRoot, 'lib', sourceMapName), 'utf8')
     ) as { sources: string[]; sourcesContent: (string | null)[] }
+
     const versionSourceIndex = sourceMap.sources.findIndex((source) =>
       source.endsWith('/common/Version.ts')
     )
+
     expect(sourceMap.sourcesContent[versionSourceIndex]).toContain(
       `XTERM_VERSION = '${EXPECTED_XTERM_VERSION}'`
     )
@@ -172,6 +181,7 @@ describe.each([
     for (let index = 0; index < 3; index++) {
       textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '한', bubbles: true }))
     }
+
     expect(events).toEqual(['accepted'])
     await nextEventLoop()
 
@@ -185,9 +195,11 @@ describe.each([
     const container = document.createElement('div')
     document.body.appendChild(container)
     terminal.open(container)
+
     if (!terminal.element || !terminal.textarea) {
       throw new Error('xterm input elements were not created')
     }
+
     const output: string[] = []
     terminal.onData((data) => output.push(data))
     const textarea = terminal.textarea
@@ -212,11 +224,13 @@ describe.each([
 
   it('rejects stale composition ends after settlement', async () => {
     const { terminal, textarea, events, output } = await openComposedTerminal(TerminalType)
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: terminal.element,
       isComposing: () => false,
       sendInput: (data) => terminal.input(data)
     })
+
     terminal.attachCustomKeyEventHandler((event) => !forwarder.claimKeyEvent(event))
 
     textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '한', bubbles: true }))

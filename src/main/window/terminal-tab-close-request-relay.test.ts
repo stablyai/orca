@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipcEmitter = new EventEmitter()
+
 const ipcMainMock = {
   on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
     ipcEmitter.on(channel, listener)
@@ -23,13 +24,16 @@ describe('requestTerminalTabCloseFromRenderer', () => {
   it('waits for the targeted renderer durability acknowledgement', async () => {
     const { requestTerminalTabCloseFromRenderer } =
       await import('./terminal-tab-close-request-relay')
+
     const webContents = { isDestroyed: () => false, send: vi.fn() }
     const otherWebContents = {}
     const mainWindow = { isDestroyed: () => false, webContents }
+
     const pending = requestTerminalTabCloseFromRenderer(mainWindow as never, 'tab-1', {
       localPtyTeardownOwnedExternally: true,
       force: true
     })
+
     const request = webContents.send.mock.calls[0]?.[1] as {
       requestId: string
       tabId: string
@@ -63,11 +67,14 @@ describe('requestTerminalTabCloseFromRenderer', () => {
   it('propagates renderer cancellation instead of reporting success', async () => {
     const { requestTerminalTabCloseFromRenderer } =
       await import('./terminal-tab-close-request-relay')
+
     const webContents = { isDestroyed: () => false, send: vi.fn() }
+
     const pending = requestTerminalTabCloseFromRenderer(
       { isDestroyed: () => false, webContents } as never,
       'tab-pinned'
     )
+
     const request = webContents.send.mock.calls[0]?.[1] as { requestId: string }
 
     ipcEmitter.emit(

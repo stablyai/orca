@@ -68,6 +68,7 @@ describe('resolveExternalAutomationScope', () => {
         registry([target])
       )
     ).toThrow(ExternalAutomationScopeError)
+
     try {
       resolveExternalAutomationScope(
         { owner: desktopSsh('target-a', 3), provider: 'hermes' },

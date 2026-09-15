@@ -12,10 +12,12 @@ vi.mock('../hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+
 vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 
@@ -25,6 +27,7 @@ vi.mock('../ipc/registered-worktree-roots-cache', () => ({
 
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
@@ -34,6 +37,7 @@ vi.mock('../git/repo', async (importOriginal) => {
 
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
@@ -111,16 +115,19 @@ describe('session.tabs title/status churn coalescing', () => {
     const priv = runtime as unknown as SessionTabsPrivate
 
     const emits: number[] = []
+
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
       emits.push(snapshot.snapshotVersion)
     })
 
     // A spinner-in-title agent flips the title ~20 times within a second.
     const FLIPS = 20
+
     for (let i = 0; i < FLIPS; i++) {
       priv.touchMobileSessionSnapshotsForPty('pty-1')
       vi.advanceTimersByTime(10)
     }
+
     // Nothing has fired yet — all flips landed inside the trailing window.
     expect(emits).toHaveLength(0)
 
@@ -142,6 +149,7 @@ describe('session.tabs title/status churn coalescing', () => {
     const priv = runtime as unknown as SessionTabsPrivate
 
     const emits: number[] = []
+
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
       emits.push(snapshot.snapshotVersion)
     })
@@ -165,6 +173,7 @@ describe('session.tabs title/status churn coalescing', () => {
     const priv = runtime as unknown as SessionTabsPrivate
 
     const emits: number[] = []
+
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
       emits.push(snapshot.snapshotVersion)
     })

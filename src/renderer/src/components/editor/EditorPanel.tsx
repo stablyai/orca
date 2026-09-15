@@ -46,26 +46,33 @@ function EditorPanelInner({
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const activeWorktreeId = activeFile?.worktreeId
+
   const canOpenWorkspaceFileBrowser = useAppStore((s) =>
     activeWorktreeId && activeFile
       ? canShowWorkspaceFileBrowserAction(s, activeWorktreeId, activeFile.filePath)
       : false
   )
+
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
+
   // Why: background Git refreshes for other worktrees must not wake every
   // mounted Monaco/rich editor pane.
   const gitStatusEntries = useAppStore((s) =>
     selectEditorPanelGitStatusEntries(s, activeWorktreeId)
   )
+
   const gitBranchEntries = useAppStore((s) =>
     selectEditorPanelGitBranchEntries(s, activeWorktreeId)
   )
+
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+
   const markdownRichModeSizeOverridden = useAppStore(
     (s) => activeFileId !== null && s.markdownRichModeSizeOverride[activeFileId] === true
   )
+
   const editorViewMode = useAppStore((s) => s.editorViewMode)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
@@ -75,42 +82,52 @@ function EditorPanelInner({
   const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
+
   const editorDraftSelector = useMemo(
     () => createEditorPanelDraftSelector(activeFile),
     [activeFile]
   )
+
   const editorDrafts = useAppStore(editorDraftSelector)
   const settings = useAppStore((s) => s.settings)
   const panelRef = useRef<HTMLDivElement>(null)
+
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
+
   const copiedPathToastResetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after the editor panel unmounts; skip path
   // toast feedback instead of starting a reset timer on a stale panel.
   const pathCopyMountedRef = useRef(false)
+
   const clearCopiedPathToastResetTimer = useCallback((): void => {
     if (copiedPathToastResetTimerRef.current === null) {
       return
     }
+
     window.clearTimeout(copiedPathToastResetTimerRef.current)
     copiedPathToastResetTimerRef.current = null
   }, [])
+
   const setPanelRef = useCallback(
     (node: HTMLDivElement | null) => {
       panelRef.current = node
       pathCopyMountedRef.current = node !== null
+
       if (!node) {
         clearCopiedPathToastResetTimer()
       }
     },
     [clearCopiedPathToastResetTimer]
   )
+
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
 
   if (settings?.diffDefaultView !== prevDiffView) {
     setPrevDiffView(settings?.diffDefaultView)
+
     if (settings?.diffDefaultView !== undefined) {
       setSideBySide(settings.diffDefaultView === 'side-by-side')
     }
@@ -121,6 +138,7 @@ function EditorPanelInner({
     activeFile.mode === 'edit' &&
     canUseChangesModeForFile(activeFile) &&
     editorViewMode[activeFile.id] === 'changes'
+
   const { fileContents, diffContents, reloadContent } = useEditorPanelContentState({
     activeFile,
     isChangesMode: requestedChangesMode,
@@ -129,11 +147,13 @@ function EditorPanelInner({
     editorViewMode,
     isVisible
   })
+
   const isChangesMode =
     requestedChangesMode &&
     !!activeFile &&
     !fileContents[activeFile.id]?.isBinary &&
     !fileContents[activeFile.id]?.loadError
+
   const {
     renameDialogFile,
     renameError,
@@ -168,6 +188,7 @@ function EditorPanelInner({
     openFiles,
     requestRenameForFile
   })
+
   useEditorCmdSaveRequest({
     activeFile,
     openFiles,
@@ -180,15 +201,20 @@ function EditorPanelInner({
     if (!activeFile) {
       return
     }
+
     const copyState = getEditorHeaderCopyState(activeFile)
+
     if (!copyState.copyText) {
       return
     }
+
     try {
       await window.api.ui.writeClipboardText(copyState.copyText)
+
       if (!pathCopyMountedRef.current) {
         return
       }
+
       clearCopiedPathToastResetTimer()
       const nextToast = { fileId: activeFile.id, token: Date.now() }
       setCopiedPathToast(nextToast)
@@ -200,6 +226,7 @@ function EditorPanelInner({
       if (!pathCopyMountedRef.current) {
         return
       }
+
       clearCopiedPathToastResetTimer()
       setCopiedPathToast(null)
     }
@@ -208,6 +235,7 @@ function EditorPanelInner({
   if (!activeFile) {
     return null
   }
+
   const model = getEditorPanelRenderModel({
     activeFile,
     fileContents,
@@ -222,11 +250,13 @@ function EditorPanelInner({
 
   const handleOpenPreviewToSide = (): void => {
     const state = useAppStore.getState()
+
     const sourceGroupId = activeViewStateId
       ? ((state.unifiedTabsByWorktree[activeFile.worktreeId] ?? []).find(
           (t) => t.id === activeViewStateId
         )?.groupId ?? null)
       : null
+
     openFilePreviewToSide({
       language: model.resolvedLanguage,
       filePath: activeFile.filePath,
@@ -234,10 +264,12 @@ function EditorPanelInner({
       sourceGroupId
     })
   }
+
   const handleOpenDiffTargetFile = (preferredMarkdownViewMode?: 'rich'): void => {
     if (!model.openFileState.canOpen) {
       return
     }
+
     openFile({
       filePath: activeFile.filePath,
       relativePath: activeFile.relativePath,
@@ -246,26 +278,35 @@ function EditorPanelInner({
       language: detectLanguage(activeFile.relativePath),
       mode: 'edit'
     })
+
     if (preferredMarkdownViewMode) {
       setEditorViewMode(activeFile.filePath, 'edit')
       setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
     }
   }
+
   const handleEditorToggleChange = (next: EditorToggleValue): void => {
     const fileId = activeFile.id
+
     if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
       handleOpenDiffTargetFile('rich')
+
       return
     }
+
     if (next === 'changes') {
       setEditorViewMode(fileId, 'changes')
+
       return
     }
+
     setEditorViewMode(fileId, 'edit')
+
     if (next !== 'edit') {
       setMarkdownViewMode(fileId, next)
     }
   }
+
   const handleOpenMarkdownPreview = (): void => {
     openMarkdownPreview(
       {
@@ -278,21 +319,26 @@ function EditorPanelInner({
       { sourceFileId: activeFile.id }
     )
   }
+
   const handleOpenContainingFolder = (): void => {
     // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
     if (activeFile.mode === 'check-details') {
       return
     }
+
     if (
       isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
         connectionId: getConnectionId(activeFile.worktreeId)
       })
     ) {
       showLocalPathOpenBlockedToast()
+
       return
     }
+
     window.api.shell.openPath(activeFile.filePath)
   }
+
   const disableRenameBrowse = Boolean(
     settingsForRuntimeOwner(
       settings,
@@ -300,11 +346,14 @@ function EditorPanelInner({
     )?.activeRuntimeEnvironmentId?.trim() ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
+
   const markdownDocumentStateFileId =
     activeFile.mode === 'markdown-preview'
       ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
       : activeFile.id
+
   let activeMarkdownContent: string | null = null
+
   if (activeFile.mode === 'markdown-preview') {
     activeMarkdownContent =
       editorDrafts[markdownDocumentStateFileId] ?? fileContents[activeFile.id]?.content ?? null
@@ -312,17 +361,21 @@ function EditorPanelInner({
     activeMarkdownContent =
       editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
   }
+
   const canShowMarkdownFrontmatterToggle = Boolean(
     model.isMarkdown &&
     (activeFile.mode === 'markdown-preview' || model.mdViewMode !== 'source') &&
     activeMarkdownContent &&
     extractFrontMatter(activeMarkdownContent)
   )
+
   // Why: front-matter shows by default; the map only carries per-file hide overrides.
   const isMarkdownFrontmatterVisible =
     markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
+
   const isMarkdownTableOfContentsVisible =
     markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
+
   const createActiveMarkdownArtifactRequest = () =>
     Promise.resolve(
       createCurrentMarkdownArtifactRequest(

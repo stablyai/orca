@@ -10,6 +10,7 @@ class CountingSpanOwnerMap extends Map<string, unknown> {
 
   override get(key: string): unknown {
     this.getCalls += 1
+
     return super.get(key)
   }
 }
@@ -60,6 +61,7 @@ function commitSpan(
 ) {
   const reservation = ledger.reserve(owner, sourceSpan, consumers)
   ledger.commit(reservation)
+
   return reservation
 }
 
@@ -70,6 +72,7 @@ describe('SshPtySourceObligationLedger', () => {
     const owner = identity()
     ledger.open(owner)
     let endReads = 0
+
     for (let index = 0; index < count; index += 1) {
       const original = span(owner, `span-${index}`, index, 'x')
       commitSpan(
@@ -79,16 +82,20 @@ describe('SshPtySourceObligationLedger', () => {
           ...original,
           get sourceEndSu() {
             endReads += 1
+
             return original.sourceEndSu
           }
         })
       )
     }
+
     endReads = 0
+
     for (let index = 0; index < count; index += 1) {
       ledger.settle(`span-${index}`, 'model', 'accepted')
       ledger.settle(`span-${index}`, 'desktop', 'parsed')
     }
+
     expect(endReads).toBeLessThanOrEqual(count * 32)
     expect(ledger.snapshot(owner)).toMatchObject({
       obligationsTerminalEndSu: count,
@@ -105,13 +112,16 @@ describe('SshPtySourceObligationLedger', () => {
     const ledger = new SshPtySourceObligationLedger()
     const owner = identity()
     ledger.open(owner, 100)
+
     for (let index = 0; index < 8; index += 1) {
       commitSpan(ledger, owner, span(owner, `span-${index}`, 100 + index, 'x'))
       ledger.settle(`span-${index}`, 'model', 'accepted')
     }
+
     for (const index of [0, 1, 7, 6, 5, 4]) {
       ledger.settle(`span-${index}`, 'desktop', 'parsed')
     }
+
     const earlyAck = ledger.queueAck(owner)!
     earlyAck.onSettled({ ok: true })
     expect(ledger.snapshot(owner)).toMatchObject({
@@ -158,6 +168,7 @@ describe('SshPtySourceObligationLedger', () => {
     const ledger = new SshPtySourceObligationLedger()
     const owner = identity()
     ledger.open(owner)
+
     for (let index = 0; index < spanCount; index += 1) {
       commitSpan(ledger, owner, span(owner, `span-${index}`, index, 'x'))
     }
@@ -166,21 +177,26 @@ describe('SshPtySourceObligationLedger', () => {
       spanOwners: Map<string, unknown>
       tokens: Map<string, { spans: readonly { span: PtySourceSpan }[] }>
     }
+
     const countedSpanOwners = new CountingSpanOwnerMap(internals.spanOwners)
     internals.spanOwners = countedSpanOwners
     const tokenRecord = Array.from(internals.tokens.values())[0]
+
     if (!tokenRecord) {
       throw new Error('test token record missing')
     }
 
     let legacyVisits = 0
+
     for (let index = 0; index < spanCount; index += 1) {
       for (const candidate of tokenRecord.spans) {
         legacyVisits += 1
+
         if (candidate.span.spanId === `span-${index}`) {
           break
         }
       }
+
       expect(ledger.obligation(`span-${index}`, 'model').state).toBe('open')
     }
 
@@ -398,12 +414,14 @@ describe('SshPtySourceObligationLedger', () => {
 
   it('bounds closed-token tombstones and removes committed reservation indexes', () => {
     const ledger = new SshPtySourceObligationLedger()
+
     const owners = Array.from({ length: 300 }, (_, index) =>
       identity(`token-${index}`, {
         id: `pty-${index}`,
         ptyIncarnation: `incarnation-${index}`
       })
     )
+
     for (const [index, owner] of owners.entries()) {
       ledger.open(owner)
       commitSpan(ledger, owner, span(owner, `span-${index}`, 0, 'x'), ['model'])

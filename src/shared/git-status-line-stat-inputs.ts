@@ -18,6 +18,7 @@ export function collectGitStatusLineStatInputs(
 
   for (const entry of entries) {
     const area = entry.area
+
     if (area === 'staged') {
       hasStaged = true
     } else if (area === 'unstaged') {

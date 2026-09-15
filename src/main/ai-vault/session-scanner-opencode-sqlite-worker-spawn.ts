@@ -21,16 +21,19 @@ export function resolveOpenCodeSqliteWorkerEntryPath(
     // worker and main entry both import it; worker entries remain in out/main.
     join(runtimeDir, '..', WORKER_ENTRY_FILENAME)
   ]
+
   return candidates.find(pathExists) ?? candidates[0]!
 }
 
 function defaultWorkerFactory(): Worker {
   const workerPath = resolveOpenCodeSqliteWorkerEntryPath()
+
   // Why: a missing built entry must throw synchronously so the client can fail
   // closed before it waits on a worker that can never post a result.
   if (!existsSync(workerPath)) {
     throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
   }
+
   return new Worker(workerPath)
 }
 
@@ -38,6 +41,7 @@ let sharedClient: OpenCodeSqliteWorkerClient | null = null
 
 function getSharedClient(): OpenCodeSqliteWorkerClient {
   sharedClient ??= new OpenCodeSqliteWorkerClient({ workerFactory: defaultWorkerFactory })
+
   return sharedClient
 }
 

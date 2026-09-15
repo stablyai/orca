@@ -40,6 +40,7 @@ describe('deriveMobilePrBranchContext', () => {
       status({ branch: 'feature', head: 'sha-status' }),
       branchCompare('sha-compare')
     )
+
     expect(result.headSha).toBe('sha-status')
     expect(result.branch).toBe('feature')
   })
@@ -49,6 +50,7 @@ describe('deriveMobilePrBranchContext', () => {
       status({ branch: 'feature', head: undefined }),
       branchCompare('sha-compare')
     )
+
     expect(result.headSha).toBe('sha-compare')
   })
 
@@ -57,6 +59,7 @@ describe('deriveMobilePrBranchContext', () => {
       status({ branch: 'feature', head: undefined }),
       branchCompare(null)
     )
+
     expect(result.headSha).toBeNull()
   })
 
@@ -91,20 +94,25 @@ describe('loadMobilePrBranchContext', () => {
           result: { entries: [], conflictOperation: 'unknown', branch: 'feat', head: 'sha-status' }
         }
       }
+
       if (method === 'repo.list') {
         return {
           ok: true,
           result: { repos: [{ id: 'repo', worktreeBaseRef: 'main' }] }
         }
       }
+
       if (method === 'git.branchCompare') {
         return { ok: false, error: { message: 'compare failed' } }
       }
+
       if (method === 'github.repoSlug') {
         return { ok: true, result: { owner: 'stablyai', repo: 'orca' } }
       }
+
       return { ok: false, error: { message: `unexpected ${method}` } }
     })
+
     const out = await loadMobilePrBranchContext({ sendRequest } as never, 'repo::/wt')
     expect(out).toEqual({
       branch: 'feat',
@@ -121,8 +129,10 @@ describe('loadMobilePrBranchContext', () => {
       if (method === 'github.repoSlug') {
         return { ok: true, result: { owner: 'stablyai', repo: 'orca' } }
       }
+
       return { ok: false, error: { message: `unexpected ${method}` } }
     })
+
     const out = await loadMobilePrRepoContext({ sendRequest } as never, 'repo::/wt')
     expect(out).toEqual({ isGithubRepo: true })
     expect(sendRequest).toHaveBeenCalledTimes(1)

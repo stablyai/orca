@@ -36,7 +36,9 @@ const IMPORT_PATTERN =
 
 // Why: trailing slash, so a sibling like src/shared/child-process-foo.ts is scanned, not exempted.
 const OWNER_DIRECTORY = 'src/shared/child-process/'
+
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
+
 const IGNORED_DIRECTORIES = new Set([
   'node_modules',
   'dist',
@@ -61,24 +63,30 @@ function isTestFile(path: string): boolean {
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
   let entries: string[]
+
   try {
     entries = readdirSync(root)
   } catch {
     return found
   }
+
   for (const entry of entries) {
     if (IGNORED_DIRECTORIES.has(entry)) {
       continue
     }
+
     const full = join(root, entry)
+
     if (statSync(full).isDirectory()) {
       found = found.concat(collectSourceFiles(full))
       continue
     }
+
     if (SCANNED_EXTENSIONS.some((extension) => full.endsWith(extension))) {
       found.push(full)
     }
   }
+
   return found
 }
 
@@ -93,6 +101,7 @@ function codeText(contents: string): string {
 describe('child_process import boundary', () => {
   const repoRoot = resolve(__dirname, '..', '..', '..')
   const files = collectSourceFiles(join(repoRoot, 'src'))
+
   const offenders = files
     .map((file) => relative(repoRoot, file).split('\\').join('/'))
     .filter((path) => !isTestFile(path))

@@ -9,20 +9,27 @@ export function extractAttachmentContentIdsFromHtml(html: string | undefined | n
   if (!html) {
     return []
   }
+
   const ids: string[] = []
   const seen = new Set<string>()
+
   // content, secure/attachment, thumbnail, and rest thumbnail forms
   const pattern =
     /\/(?:rest\/api\/\d+\/attachment\/(?:content|thumbnail)|secure\/(?:attachment|thumbnail))\/(\d+)(?:\/|\b|"|'|\?)/gi
+
   let match: RegExpExecArray | null
+
   while ((match = pattern.exec(html)) !== null) {
     const id = match[1]
+
     if (!id || seen.has(id)) {
       continue
     }
+
     seen.add(id)
     ids.push(id)
   }
+
   return ids
 }
 
@@ -34,6 +41,7 @@ export function selectPreferredAttachmentIds(args: {
 }): { preferredIds: string[]; fallbackRan: boolean; needCount: number } {
   const needing = args.mediaAttrs.filter((attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url)))
   const needCount = needing.length
+
   if (needCount === 0) {
     // Why: no attachment-needing ADF media — skip downloads (do not sweep HTML-only).
     return { preferredIds: [], fallbackRan: false, needCount: 0 }
@@ -45,22 +53,29 @@ export function selectPreferredAttachmentIds(args: {
 
   if (needCount > preferredIds.length) {
     const metas = parseImageAttachmentMetas(args.attachmentField)
+
     // Why: multiple Jira screenshots often share image.png — assign next unused meta per node.
     for (const node of needing) {
       if (preferredIds.length >= MAX_IMAGES) {
         break
       }
+
       const alt = (node.alt ?? '').trim()
+
       if (!alt) {
         continue
       }
+
       const altKey = alt.toLowerCase()
+
       const meta = metas.find(
         (candidate) => candidate.filename.toLowerCase() === altKey && !taken.has(candidate.id)
       )
+
       if (!meta) {
         continue
       }
+
       taken.add(meta.id)
       preferredIds.push(meta.id)
       fallbackRan = true
@@ -85,9 +100,11 @@ export function warnIfMediaResolutionIncomplete(args: {
   if (args.needCount <= 0) {
     return
   }
+
   if (args.resolvedCount >= args.needCount) {
     return
   }
+
   console.warn('[jira] inline image resolution incomplete', {
     siteId: args.siteId,
     issueKey: args.issueKey,

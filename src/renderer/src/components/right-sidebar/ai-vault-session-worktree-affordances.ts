@@ -34,24 +34,28 @@ export function aiVaultWorktreeJumpTooltip(
       'Jump to Worktree'
     )
   }
+
   if (!worktreeInfo) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.noRecordedWorktree',
       'No worktree was recorded for this session.'
     )
   }
+
   if (worktreeInfo.status === 'archived') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.archivedJumpUnavailable',
       'This session is in an archived worktree.'
     )
   }
+
   if (worktreeInfo.status === 'unavailable') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeMatch',
       'No active worktree matches this session.'
     )
   }
+
   return translate(
     'auto.components.right.sidebar.AiVaultSessionWorktree.noActiveWorktreeTarget',
     'No active worktree is available.'
@@ -60,9 +64,11 @@ export function aiVaultWorktreeJumpTooltip(
 
 export function aiVaultWorktreeCompactPath(pathValue: string): string {
   const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
+
   if (parts.length >= 2) {
     return parts.slice(-2).join('/')
   }
+
   return parts[0] ?? pathValue
 }
 
@@ -73,11 +79,13 @@ export function shouldShowAiVaultSessionWorktreeLine(
   if (!worktreeInfo) {
     return false
   }
+
   // Why: workspace scope already limits history to the active workspace; the
   // worktree row adds no value when the session lives in the worktree on screen.
   if (options?.vaultScope === 'workspace' && worktreeInfo.status === 'current') {
     return false
   }
+
   return true
 }
 
@@ -89,11 +97,13 @@ export function shouldShowAiVaultWorktreeStatusBadge(
   if (status === 'active') {
     return false
   }
+
   // Why: workspace scope already filters to the active workspace, so "Current
   // worktree" is redundant in the default history view.
   if (status === 'current' && options?.vaultScope === 'workspace') {
     return false
   }
+
   return true
 }
 
@@ -104,18 +114,21 @@ export function aiVaultWorktreeStatusLabel(status: AiVaultSessionWorktreeStatus)
       'Current worktree'
     )
   }
+
   if (status === 'active') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.activeWorktree',
       'Active worktree'
     )
   }
+
   if (status === 'archived') {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionWorktree.archivedWorktree',
       'Archived worktree'
     )
   }
+
   return translate(
     'auto.components.right.sidebar.AiVaultSessionWorktree.unavailableWorktree',
     'Unavailable worktree'

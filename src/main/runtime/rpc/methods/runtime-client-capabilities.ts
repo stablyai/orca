@@ -10,8 +10,10 @@ export const RUNTIME_CLIENT_CAPABILITY_METHODS = [
       if (!updateClientCapabilities) {
         throw new Error('client_capabilities_update_unsupported')
       }
+
       const clientCapabilities = params.clientCapabilities as RuntimeCapability[]
       updateClientCapabilities(clientCapabilities)
+
       return { clientCapabilities }
     }
   })

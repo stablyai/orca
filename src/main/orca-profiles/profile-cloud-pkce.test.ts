@@ -48,15 +48,18 @@ function readHttp(url: string): Promise<HttpResponse> {
         resolve({ body, headers: response.headers, statusCode: response.statusCode })
       })
     })
+
     request.on('error', reject)
   })
 }
 
 function callbackUrl(redirectUri: string, params: Record<string, string>): string {
   const url = new URL(redirectUri)
+
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value)
   }
+
   return url.toString()
 }
 
@@ -73,9 +76,11 @@ async function startedFlow(): Promise<{
   const nonce = authUrl.searchParams.get('nonce')
   const redirectUri = authUrl.searchParams.get('redirect_uri')
   const state = authUrl.searchParams.get('state')
+
   if (!nonce || !redirectUri || !state) {
     throw new Error('Expected PKCE flow to create nonce, redirect_uri, and state')
   }
+
   return { authUrl, flow, nonce, redirectUri, state }
 }
 
@@ -91,6 +96,7 @@ describe('Orca cloud PKCE flow', () => {
     const invalidResponse = await readHttp(
       callbackUrl(redirectUri, { code: 'wrong-code', state: 'wrong-state' })
     )
+
     expect(invalidResponse.statusCode).toBe(400)
 
     const validResponse = await readHttp(callbackUrl(redirectUri, { code: 'real-code', state }))

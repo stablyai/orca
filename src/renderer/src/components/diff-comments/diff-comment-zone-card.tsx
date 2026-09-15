@@ -91,9 +91,11 @@ export function renderDiffCommentZoneCard(
           onUpdateCommentRef.current && comment.canEdit !== false
             ? async (body) => {
                 const fn = onUpdateCommentRef.current
+
                 if (!fn) {
                   return false
                 }
+
                 return fn(comment.id, body)
               }
             : undefined

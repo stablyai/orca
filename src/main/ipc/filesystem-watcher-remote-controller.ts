@@ -77,19 +77,24 @@ const handleRemoteWatcherTerminalError: RemoteWatcherTerminalErrorHandler = (
 ): void => {
   installToken.terminalError = error
   const state = watcherLifecycleState.remoteWatchers.get(key)
+
   if (!state || state.installToken !== installToken) {
     return
   }
+
   watcherLifecycleState.remoteWatchers.delete(key)
   state.batch.close()
+
   if (
     watcherLifecycleState.remoteWatchersClosed ||
     watcherLifecycleState.suspendedRemoteWatcherListeners.has(key)
   ) {
     return
   }
+
   console.warn(`[filesystem-watcher] SSH watcher terminated for ${key}:`, error)
   const startedAt = Date.now()
+
   for (const listener of state.listeners.values()) {
     scheduleRemoteWatcherRetry(listener, connectionId, worktreePath, startedAt, true)
   }

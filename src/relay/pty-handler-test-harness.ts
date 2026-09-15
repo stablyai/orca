@@ -26,6 +26,7 @@ export function createMockDispatcher() {
     string,
     (params: Record<string, unknown>, context?: TestRequestContext) => Promise<unknown>
   >()
+
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
 
@@ -54,16 +55,20 @@ export function createMockDispatcher() {
       context?: TestRequestContext
     ) {
       const handler = requestHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       return handler(params, context)
     },
     callNotification(method: string, params: Record<string, unknown> = {}) {
       const handler = notificationHandlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       handler(params)
     }
   }
@@ -121,6 +126,7 @@ export function beginPtyHandlerTest(mocks: PtyHandlerTestMocks): {
 
   const dispatcher = createMockDispatcher()
   const handler = createTestPtyHandler(dispatcher)
+
   return { dispatcher, handler, originalPlatform }
 }
 
@@ -133,6 +139,7 @@ export async function endPtyHandlerTest(
   await cleanup.catch(() => {})
   vi.useRealTimers()
   vi.restoreAllMocks()
+
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }

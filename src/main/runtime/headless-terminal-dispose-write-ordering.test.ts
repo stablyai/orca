@@ -47,6 +47,7 @@ function createRuntime(): OrcaRuntimeService {
     getSize: () => ({ cols: 80, rows: 24 }),
     resize: () => true
   })
+
   return runtime
 }
 
@@ -68,12 +69,15 @@ describe('disposeHeadlessTerminal write ordering', () => {
       if (!emulators.includes(this)) {
         emulators.push(this)
       }
+
       events.push(`write:${emulators.indexOf(this)}:${data.trim()}`)
+
       return write.call(this, data, opts)
     })
     vi.spyOn(HeadlessEmulator.prototype, 'dispose').mockImplementation(
       function (this: HeadlessEmulator) {
         events.push(`dispose:${emulators.indexOf(this)}`)
+
         return dispose.call(this)
       }
     )

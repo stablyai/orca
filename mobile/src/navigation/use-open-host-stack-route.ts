@@ -24,6 +24,7 @@ export function useOpenHostStackRoute(): (hostId: string, target: HostStackRoute
         pendingNavigation.controller.cancel()
         pendingNavigation = null
       }
+
       armedRef.current = null
     },
     []

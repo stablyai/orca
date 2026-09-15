@@ -19,6 +19,7 @@ class MockWebContents extends EventEmitter {
     if (mocks.finishLoads) {
       queueMicrotask(() => this.emit('did-finish-load'))
     }
+
     return Promise.resolve()
   }
 }
@@ -43,6 +44,7 @@ class MockBrowserWindow {
 }
 
 vi.mock('electron', () => ({ BrowserWindow: mocks.BrowserWindow }))
+
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     getDefaultProfile: vi.fn(() => ({ id: 'default', partition: 'persist:orca-browser' }))
@@ -74,6 +76,7 @@ function registerWorkspaceDocPage(browserPageId: string): void {
     entryRelativePath: 'index.html',
     browserPageId
   })
+
   const guest = {
     isFocused: () => false,
     isDestroyed: () => false,
@@ -83,6 +86,7 @@ function registerWorkspaceDocPage(browserPageId: string): void {
     setWindowOpenHandler: vi.fn(),
     setWebRTCIPHandlingPolicy: vi.fn()
   }
+
   installDocPreviewGuestPolicy(guest as never, { id: 1, send: vi.fn() })
 }
 
@@ -107,10 +111,12 @@ describe('OffscreenBrowserBackend lifecycle', () => {
   it('settles a pending load and removes its waiters when the page is destroyed', async () => {
     vi.useFakeTimers()
     mocks.finishLoads = false
+
     const browserManager = {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     const backend = new OffscreenBrowserBackend(browserManager as never)
 
     await backend.createTab({
@@ -136,6 +142,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     const backend = new OffscreenBrowserBackend(browserManager as never)
     registerWorkspaceDocPage('doc-page-1')
 
@@ -161,11 +168,15 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     let releaseOwnerRetirement!: () => void
+
     const ownerRetirementBlocked = new Promise<void>((resolve) => {
       releaseOwnerRetirement = resolve
     })
+
     const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -174,9 +185,11 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     await backend.createTab({ browserPageId: 'page-2', url: 'about:blank', worktreeId: 'wt' })
     const close = backend.closeTab('page-1')
     await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+
     const pageWasUnregisteredBeforeRetirement = browserManager.unregisterGuest.mock.calls.some(
       ([pageId]) => pageId === 'page-1'
     )
+
     releaseOwnerRetirement()
     await close
 
@@ -191,11 +204,15 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     let releaseOwnerRetirement!: () => void
+
     const ownerRetirementBlocked = new Promise<void>((resolve) => {
       releaseOwnerRetirement = resolve
     })
+
     const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -217,7 +234,9 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     const onPageClosed = vi.fn(async () => {})
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -232,7 +251,9 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     const onPageClosed = vi.fn(async () => {})
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -251,11 +272,15 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     let releaseOwnerRetirement!: () => void
+
     const ownerRetirementBlocked = new Promise<void>((resolve) => {
       releaseOwnerRetirement = resolve
     })
+
     const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -280,11 +305,15 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     let releaseOwnerRetirement!: () => void
+
     const ownerRetirementBlocked = new Promise<void>((resolve) => {
       releaseOwnerRetirement = resolve
     })
+
     const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -294,10 +323,12 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
 
     const shutdown = backend.destroyAll()
+
     const outcome = await Promise.race([
       shutdown.then(() => 'settled'),
       new Promise<string>((resolve) => setImmediate(() => resolve('pending')))
     ])
+
     expect(outcome).toBe('pending')
 
     releaseOwnerRetirement()
@@ -309,9 +340,11 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     let activeRetirements = 0
     let peakRetirements = 0
     const releases: (() => void)[] = []
+
     const onPageClosed = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -323,6 +356,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
           })
         })
     )
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({ onPageClosed })
     })
@@ -350,6 +384,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
       registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
+
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({
         onPageClosed: vi.fn(async () => {

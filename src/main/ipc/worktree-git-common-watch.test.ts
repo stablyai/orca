@@ -21,24 +21,29 @@ import { startGitCommonWatch } from './worktree-git-common-watch'
 vi.mock('./parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: vi.fn()
 }))
+
 // Records every stat target so a test can assert which paths a parked poll stopped touching.
 const { statCalls } = vi.hoisted(() => ({ statCalls: [] as string[] }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     stat: (...args: Parameters<typeof actual.stat>) => {
       statCalls.push(String(args[0]))
+
       return actual.stat(...args)
     }
   }
 })
 
 const POLL_MS = 25
+
 // Reconciliation runs every 15 poll ticks. Fake timers keep native re-arm tests
 // independent of host load while preserving the production interval.
 const RECONCILIATION_TICKS = 15
+
 // Advance one extra reconciliation window so the fake performance clock crosses the
 // 15-tick boundary even when timer and filesystem-promise scheduling differ by a tick.
 const alwaysVisible: WorktreePollerWindowVisibility = {
@@ -55,6 +60,7 @@ async function replaceWorktreesRoot(
 ): Promise<void> {
   const previousInode = (await stat(worktreesDir)).ino
   await rm(worktreesDir, { recursive: true })
+
   // Linux reuses freed directory inodes, and removing the tree frees several at
   // once, so the recreated root can land back on its own old inode and look
   // unchanged to reconciliation. Park inodes in HELD siblings until the root
@@ -62,12 +68,15 @@ async function replaceWorktreesRoot(
   // siblings live next to `worktrees`, which no poll or watch path enumerates.
   for (let attempt = 0; attempt < 16; attempt++) {
     await mkdir(retainedEntry, { recursive: true })
+
     if ((await stat(worktreesDir)).ino !== previousInode) {
       return
     }
+
     await rm(worktreesDir, { recursive: true })
     await mkdir(join(commonDir, `worktrees-inode-hold-${++inodeReservationCount}`))
   }
+
   throw new Error('could not obtain a fresh inode for the replaced worktrees root')
 }
 
@@ -80,11 +89,13 @@ function createVisibilityHarness(): {
   let visible = true
   // A set, not a single slot: the darwin path parks two independent watches.
   const listeners = new Set<() => void>()
+
   return {
     source: {
       isWindowVisible: () => visible,
       onWindowBecameVisible: (nextListener) => {
         listeners.add(nextListener)
+
         return () => {
           listeners.delete(nextListener)
         }
@@ -95,6 +106,7 @@ function createVisibilityHarness(): {
     },
     show: () => {
       visible = true
+
       for (const listener of listeners) {
         listener()
       }
@@ -126,6 +138,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     subscribeMock.mockImplementation(async (dir, callback, _opts, hooks = {}) => {
       const unsubscribe = vi.fn(async () => {})
       childSubscriptions.push({ dir, callback, hooks, unsubscribe })
+
       return { unsubscribe }
     })
   }
@@ -136,17 +149,21 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
   function narrowSubscription(): ChildSubscription {
     const subscription = narrowSubscriptions()[0]
+
     if (!subscription) {
       throw new Error('narrow watcher subscription not installed')
     }
+
     return subscription
   }
 
   function primarySubscription(): ChildSubscription {
     const subscription = childSubscriptions.find((item) => !item.dir.endsWith('worktrees'))
+
     if (!subscription) {
       throw new Error('primary watcher subscription not installed')
     }
+
     return subscription
   }
 
@@ -154,9 +171,11 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-git-common-watch-'))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
     const commonDir = await realpath(root)
+
     if (withWorktrees) {
       await mkdir(join(commonDir, 'worktrees'))
     }
+
     return commonDir
   }
 
@@ -186,6 +205,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       getStatusRefPaths,
       onWatchError
     )
+
     cleanups.push(() => watch.unsubscribe())
   }
 
@@ -196,9 +216,11 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await startWatch(commonDir, received)
 
     expect(subscribeMock).toHaveBeenCalledTimes(2)
+
     const narrowCall = subscribeMock.mock.calls.find(
       ([dir]) => dir === join(commonDir, 'worktrees')
     )
+
     expect(narrowCall?.[0]).toBe(join(commonDir, 'worktrees'))
     expect(narrowCall?.[2]).toEqual({})
 
@@ -265,6 +287,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
         { timeout: 2_000 }
       )
       .catch(() => {})
+
     const duringOrdinaryTicks = statCalls.filter(
       (path) => path === headPath || path === configPath
     ).length
@@ -290,12 +313,14 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await writeFile(join(commonDir, 'refs', 'remotes', 'origin', 'main'), 'aaa\n')
     const visibility = createVisibilityHarness()
     const target = makeTarget(commonDir)
+
     const watchTarget = {
       kind: target.kind,
       path: target.path,
       repos: target.repos,
       gitStatusRefPaths: new Set<string>()
     }
+
     const watch = await startGitCommonWatch(
       target,
       () => {},
@@ -305,6 +330,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       undefined,
       () => [...watchTarget.gitStatusRefPaths]
     )
+
     cleanups.push(() => watch.unsubscribe())
     const baseline = visibility.listenerCount()
 
@@ -446,6 +472,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const worktreesDir = join(commonDir, 'worktrees')
     const visibility = createVisibilityHarness()
     const received: WorktreeBasePollEvent[][] = []
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -493,6 +520,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const worktreesDir = join(commonDir, 'worktrees')
     const visibility = createVisibilityHarness()
     const received: WorktreeBasePollEvent[][] = []
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -531,6 +559,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const commonDir = await makeCommonDir(true)
     const received: WorktreeBasePollEvent[][] = []
     const onOverflow = vi.fn()
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -542,6 +571,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       undefined,
       onOverflow
     )
+
     cleanups.push(() => watch.unsubscribe())
 
     narrowSubscription().hooks.onOverflow?.()
@@ -584,6 +614,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
   }): Promise<{ commonDir: string; worktreesDir: string; received: WorktreeBasePollEvent[][] }> {
     const commonDir = await makeCommonDir(false)
     const received: WorktreeBasePollEvent[][] = []
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -591,11 +622,13 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       'darwin',
       visibility.source
     )
+
     cleanups.push(() => watch.unsubscribe())
     visibility.hide()
     // Let the armed poll observe the hidden window and park itself.
     await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
     statCalls.length = 0
+
     return { commonDir, worktreesDir: join(commonDir, 'worktrees'), received }
   }
 
@@ -648,6 +681,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const commonDir = await makeCommonDir(false)
     const worktreesDir = join(commonDir, 'worktrees')
     const received: WorktreeBasePollEvent[][] = []
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -655,6 +689,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       'darwin',
       visibility.source
     )
+
     cleanups.push(() => watch.unsubscribe())
 
     await mkdir(worktreesDir)
@@ -668,6 +703,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     installSubscribeMock()
     const visibility = createVisibilityHarness()
     const commonDir = await makeCommonDir(false)
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       () => {},
@@ -691,6 +727,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     const visibility = createVisibilityHarness()
     const received: WorktreeBasePollEvent[][] = []
     const fullScans: number[] = []
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -699,6 +736,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       visibility.source,
       () => fullScans.push(Date.now())
     )
+
     cleanups.push(() => watch.unsubscribe())
 
     visibility.hide()
@@ -718,9 +756,11 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
   it('re-arms the native stream when the root is replaced with the same child names', async () => {
     vi.useFakeTimers()
+
     const restorePerformanceNow = vi
       .spyOn(nodePerformance, 'now')
       .mockImplementation(() => Date.now())
+
     try {
       installSubscribeMock()
       const commonDir = await makeCommonDir(true)
@@ -759,16 +799,20 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
   it('disposes an in-flight stale resubscribe and fences its interruption hook', async () => {
     vi.useFakeTimers()
+
     const restorePerformanceNow = vi
       .spyOn(nodePerformance, 'now')
       .mockImplementation(() => Date.now())
+
     try {
       const deferredSubscribe = Promise.withResolvers<{
         unsubscribe: () => Promise<void>
       }>()
+
       subscribeMock.mockImplementation(async (dir, callback, _opts, hooks = {}) => {
         const unsubscribe = vi.fn(async () => {})
         childSubscriptions.push({ dir, callback, hooks, unsubscribe })
+
         return narrowSubscriptions().length === 2 ? deferredSubscribe.promise : { unsubscribe }
       })
       const commonDir = await makeCommonDir(true)
@@ -837,6 +881,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     installSubscribeMock()
     const commonDir = await makeCommonDir(true)
     const received: WorktreeBasePollEvent[][] = []
+
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
@@ -844,6 +889,7 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       'darwin',
       alwaysVisible
     )
+
     await watch.unsubscribe()
     expect(narrowSubscription().unsubscribe).toHaveBeenCalledTimes(1)
 

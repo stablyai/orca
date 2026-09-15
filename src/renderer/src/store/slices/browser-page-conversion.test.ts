@@ -5,32 +5,41 @@ import { browserPageSchema } from '../../../../shared/workspace-session-browser-
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn(), callRuntimeRpc: vi.fn() }))
+
 vi.mock('@/lib/doc-preview-grants', () => ({
   releaseDocPreviewGrant: mocks.releaseDocPreviewGrant,
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<object>()
+
   return { ...actual, callRuntimeRpc: mocks.callRuntimeRpc.mockResolvedValue({}) }
 })
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const DOC_LOCATION = {
   kind: 'workspace-doc' as const,
   worktreeId: WORKTREE_ID,
   filePath: '/home/alice/wt1/report/index.html'
 }
+
 const OTHER_DOC_LOCATION = {
   kind: 'workspace-doc' as const,
   worktreeId: WORKTREE_ID,
   filePath: '/home/alice/wt1/report/details.html'
 }
+
 const LIVE_GRANT_URL = `orca-preview://${'a'.repeat(32)}/report/index.html`
 
 function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
@@ -42,6 +51,7 @@ function createStoreWithWorktree(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WORKTREE_ID
   })
+
   return store
 }
 
@@ -54,7 +64,9 @@ function createDocTab(store: ReturnType<typeof createTestStore>): {
     title: 'index.html',
     browserRuntimeEnvironmentId: null
   })
+
   const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
+
   return { tabId: tab.id, pageId }
 }
 
@@ -210,6 +222,7 @@ describe('convertBrowserPage history legs', () => {
       kind: 'web',
       url: 'https://example.com/'
     })
+
     expect(webPage?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
     expect(webPage?.convertedTo ?? null).toBeNull()
 
@@ -223,12 +236,14 @@ describe('convertBrowserPage history legs', () => {
 
     expect(returned?.docLocation).toEqual(DOC_LOCATION)
     expect(returned?.convertedFrom ?? null).toBeNull()
+
     // Ownership rides the forward pointer too — explicit null keeps the page client-local.
     const expectedForward = {
       kind: 'url',
       url: 'https://example.com/',
       browserRuntimeEnvironmentId: null
     }
+
     expect(returned?.convertedTo).toEqual(expectedForward)
     // Forward's target survives the session schema (z.object strips what it does not name).
     const parsed = browserPageSchema.parse(store.getState().browserPagesByWorkspace[tabId]?.[0])
@@ -238,9 +253,11 @@ describe('convertBrowserPage history legs', () => {
   it('the advance leg re-records convertedFrom and consumes convertedTo — a two-entry ping-pong', () => {
     const store = createStoreWithWorktree()
     const { pageId } = createDocTab(store)
+
     const webPage = store
       .getState()
       .convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
+
     const docPage = store
       .getState()
       .convertBrowserPage(
@@ -267,6 +284,7 @@ describe('convertBrowserPage placement and activation', () => {
   it('converts a background page without stealing the active page', () => {
     const store = createStoreWithWorktree()
     const { tabId, pageId: docPageId } = createDocTab(store)
+
     const webPage = store.getState().createBrowserPage(tabId, 'https://active.example/', {
       activate: true
     })
@@ -347,15 +365,18 @@ describe('convertBrowserPage placement and activation', () => {
   // this desktop (the ssh-execution-boundary concern).
   it('carries runtime ownership through provenance and honors it on the return leg', () => {
     const store = createStoreWithWorktree()
+
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/', {
       browserRuntimeEnvironmentId: 'env-1'
     })
+
     const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
 
     const docPage = store.getState().convertBrowserPage(pageId, {
       kind: 'workspace-doc',
       docLocation: DOC_LOCATION
     })
+
     expect(docPage?.convertedFrom).toEqual({
       kind: 'url',
       url: 'https://remote.example/',
@@ -371,12 +392,14 @@ describe('convertBrowserPage placement and activation', () => {
       },
       { leg: 'history-return' }
     )
+
     expect(returned?.browserRuntimeEnvironmentId).toBe('env-1')
   })
 
   it('returns a worktree-inferred remote page as inferred, never as client-local', () => {
     const store = createStoreWithWorktree()
     const { pageId } = createDocTab(store)
+
     // The return leg says "inferred" by passing the property explicitly undefined.
     const returned = store
       .getState()
@@ -385,6 +408,7 @@ describe('convertBrowserPage placement and activation', () => {
         { kind: 'web', url: 'https://remote.example/', browserRuntimeEnvironmentId: undefined },
         { leg: 'history-return' }
       )
+
     expect(returned).not.toBeNull()
     expect('browserRuntimeEnvironmentId' in (returned ?? {})).toBe(false)
   })

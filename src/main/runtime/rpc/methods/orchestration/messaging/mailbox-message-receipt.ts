@@ -20,9 +20,11 @@ export function exposeMessage(message: MessageRow): MailboxMessageReceipt {
 export function exposeMessages(messages: MessageRow[]): MailboxMessageReceipt[] {
   return messages.map((message) => {
     const exposed: Partial<MessageRow> = { ...message }
+
     for (const column of INTERNAL_MESSAGE_COLUMNS) {
       delete exposed[column]
     }
+
     return exposed as MailboxMessageReceipt
   })
 }

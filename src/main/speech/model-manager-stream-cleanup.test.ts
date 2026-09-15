@@ -38,30 +38,36 @@ describe('ModelManager stream cleanup', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const timeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
     try {
       const response = new PassThrough() as PassThrough & {
         statusCode: number
         headers: Record<string, string>
       }
+
       response.statusCode = 200
       response.headers = { 'content-length': '1000' }
       const responseHandlers: ((response: unknown) => void)[] = []
+
       const request = {
         abort: vi.fn(() => request),
         end: vi.fn(() => {
           for (const handler of responseHandlers) {
             handler(response)
           }
+
           return request
         }),
         on: vi.fn((event: string, cb: (response: unknown) => void) => {
           if (event === 'response') {
             responseHandlers.push(cb)
           }
+
           return request
         }),
         off: vi.fn(() => request)
       }
+
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
@@ -72,10 +78,13 @@ describe('ModelManager stream cleanup', () => {
         'm',
         () => false
       )
+
       await vi.advanceTimersByTimeAsync(60_000)
+
       for (let index = 0; index < 1000; index += 1) {
         response.write(Buffer.from('a'))
       }
+
       await vi.advanceTimersByTimeAsync(119_999)
       expect(request.abort).not.toHaveBeenCalled()
       response.end()

@@ -5,6 +5,7 @@ import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 
 const handler = vi.fn(() => ({ source: 'server' }))
+
 const methods = [
   defineMethod({
     name: 'browser.click',

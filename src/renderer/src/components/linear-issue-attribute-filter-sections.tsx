@@ -41,9 +41,11 @@ function facetSummary(
   truncated: boolean
 ): LinearIssueFilterSectionSummary {
   const count = selectedLinearMetadataGroupKeys(options, selectedIds).length
+
   if (count === 0) {
     return { text: '', partial: false }
   }
+
   return {
     text: translate(
       'auto.components.linear-issue-attribute-filter-sections.countSelected',
@@ -257,6 +259,7 @@ export function LinearIssueFilterSectionDetail({
     const isStatus = section === 'status'
     const options = isStatus ? statusOptions : labelOptions
     const selectedIds = isStatus ? value.stateIds : value.labelIds
+
     return (
       <div>
         <SectionBack onBack={onBack} />
@@ -327,12 +330,16 @@ export function LinearIssueFilterSectionDetail({
         onSelect={(key) => {
           if (!key) {
             onChange({ ...value, assignee: null })
+
             return
           }
+
           if (key === '__unassigned__') {
             onChange({ ...value, assignee: { kind: 'unassigned' } })
+
             return
           }
+
           onChange({ ...value, assignee: { kind: 'user', id: key } })
         }}
       />

@@ -26,6 +26,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 function item(ordinal: number): AgentJournalItemIdentity {
@@ -52,11 +53,14 @@ function injectReleaseFailure(journal: AgentSessionJournal): {
   let failing = true
   internals.database.db.close = () => {
     calls += 1
+
     if (failing) {
       throw new Error('injected release failure')
     }
+
     release()
   }
+
   return { calls: () => calls, stopFailing: () => (failing = false) }
 }
 
@@ -101,11 +105,13 @@ describe('closed-state admission happens at enqueue', () => {
   it('refuses every write entry point after the close has settled', async () => {
     const journal = await openJournal()
     await journal.close()
+
     const settle = (attempt: Promise<unknown>): Promise<unknown> =>
       attempt.then(
         () => new Error('resolved instead of refusing'),
         (error: unknown) => error
       )
+
     const refusals = [
       settle(journal.appendItem(item(1), body('after'), { fence: 1 })),
       settle(journal.appendTombstone(item(3), { fence: 1 })),
@@ -128,6 +134,7 @@ describe('closed-state admission happens at enqueue', () => {
       settle(journal.rollEpoch('handle_forked', 1)),
       settle(journal.replaceEpochItems('handle_forked', 1, []))
     ]
+
     for (const refusal of refusals) {
       expect(await refusal).toMatchObject({ code: 'journal_closed' })
     }
@@ -213,6 +220,7 @@ describe('negative controls', () => {
       if (this.called) {
         return
       }
+
       this.called = true
       this.calls += 1
       this.release()
@@ -230,12 +238,15 @@ describe('negative controls', () => {
   it('an unconditional second-call no-op leaves a failed close unreleasable', async () => {
     let failing = true
     let released = false
+
     const model = new UnconditionalNoOpClose(() => {
       if (failing) {
         throw new Error('injected release failure')
       }
+
       released = true
     })
+
     await expect(model.close()).rejects.toThrow('injected release failure')
     failing = false
     await expect(model.close()).resolves.toBeUndefined()
@@ -246,12 +257,15 @@ describe('negative controls', () => {
 
   it('an always-reentrant close issues the second db.close() that throws', async () => {
     let open = true
+
     const release = (): void => {
       if (!open) {
         throw new Error('ERR_INVALID_STATE: database is not open')
       }
+
       open = false
     }
+
     const model = new AlwaysReentrantClose()
     await model.close(release)
     await expect(model.close(release)).rejects.toThrow('database is not open')

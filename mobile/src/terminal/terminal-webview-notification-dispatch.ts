@@ -39,6 +39,7 @@ export function dispatchTerminalWebViewNotification(
       msg.mouseTrackingMode === 'any'
         ? msg.mouseTrackingMode
         : 'none'
+
     handlers.onModesChanged?.({
       bracketedPasteMode: !!msg.bracketedPasteMode,
       altScreen: !!msg.altScreen,
@@ -48,6 +49,7 @@ export function dispatchTerminalWebViewNotification(
     })
   } else if (msg.type === 'terminal-input') {
     const bytes = typeof msg.bytes === 'string' ? msg.bytes : ''
+
     if (bytes.length > 0) {
       handlers.onTerminalInput?.(bytes)
     }
@@ -55,6 +57,7 @@ export function dispatchTerminalWebViewNotification(
     handlers.onTerminalTap?.()
   } else if (msg.type === 'terminal-file-tap') {
     const pathText = typeof msg.pathText === 'string' ? msg.pathText : ''
+
     if (pathText.length > 0) {
       const line = typeof msg.line === 'number' ? msg.line : null
       const column = typeof msg.column === 'number' ? msg.column : null
@@ -62,6 +65,7 @@ export function dispatchTerminalWebViewNotification(
     }
   } else if (msg.type === 'open-url') {
     const url = typeof msg.url === 'string' ? msg.url : ''
+
     if (url.length > 0) {
       handlers.onOpenUrl?.(url)
     }
@@ -69,11 +73,13 @@ export function dispatchTerminalWebViewNotification(
     handlers.onKeyboardAvoidanceMetrics?.(parseTerminalKeyboardAvoidanceMetrics(msg))
   } else if (msg.type === 'haptic') {
     const kind = msg.kind
+
     if (kind === 'selection' || kind === 'success' || kind === 'error' || kind === 'edge-bump') {
       handlers.onHaptic?.(kind)
     }
   } else if (msg.type === 'font-scale-changed') {
     const scale = typeof msg.fontScale === 'number' ? msg.fontScale : 0
+
     if (scale > 0) {
       handlers.onTextScaleChange?.(scale)
     }

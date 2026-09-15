@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = resolve('config/scripts/project-renderer-web-client.mjs')
+
 const temporaryRoots = []
 
 function writeFixtureFile(root, relativePath, contents) {
@@ -16,6 +17,7 @@ function writeFixtureFile(root, relativePath, contents) {
 function createRendererFixture() {
   const root = mkdtempSync(join(tmpdir(), 'orca-web-projection-'))
   temporaryRoots.push(root)
+
   const manifest = {
     'web-index.html': {
       file: 'assets/web-entry.js',
@@ -54,6 +56,7 @@ function createRendererFixture() {
   )
   writeFixtureFile(root, 'out/renderer/assets/desktop-entry.js', 'export const desktop = true;')
   writeFixtureFile(root, 'out/web/stale.js', 'stale')
+
   return root
 }
 
@@ -72,6 +75,7 @@ describe('renderer web client projection', () => {
 
   it('copies and minifies only the web dependency closure', () => {
     const root = createRendererFixture()
+
     const result = spawnSync(process.execPath, [scriptPath], {
       cwd: root,
       encoding: 'utf8'
@@ -90,6 +94,7 @@ describe('renderer web client projection', () => {
   it('fails when the renderer manifest omits the web entry', () => {
     const root = createRendererFixture()
     writeFixtureFile(root, 'out/renderer/.vite/manifest.json', '{}')
+
     const result = spawnSync(process.execPath, [scriptPath], {
       cwd: root,
       encoding: 'utf8'

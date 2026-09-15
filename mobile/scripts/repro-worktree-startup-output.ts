@@ -33,9 +33,11 @@ function normalizePreview(value: string): string {
 export function summarizeStartupCapture(capture: StartupTerminalCapture): Record<string, unknown> {
   const serialized =
     typeof capture.scrollback?.serialized === 'string' ? capture.scrollback.serialized : ''
+
   const live = capture.chunks.join('')
   const serializedPreview = normalizePreview(serialized)
   const livePreview = normalizePreview(live)
+
   return {
     handle: capture.handle,
     title: capture.title,
@@ -59,17 +61,22 @@ export function saveStartupCaptures(
 ): string {
   const dir = join(process.cwd(), 'terminal-startup-repro', worktreeName)
   mkdirSync(dir, { recursive: true })
+
   for (const capture of captures) {
     const base = capture.handle.replace(/[^a-z0-9_-]/gi, '-')
+
     const serialized =
       typeof capture.scrollback?.serialized === 'string' ? capture.scrollback.serialized : ''
+
     writeFileSync(join(dir, `${base}.serialized.ansi`), serialized)
     writeFileSync(join(dir, `${base}.live.ansi`), capture.chunks.join(''))
     writeFileSync(join(dir, `${base}.json`), JSON.stringify(capture, null, 2))
   }
+
   writeFileSync(
     join(dir, 'summary.json'),
     JSON.stringify(captures.map(summarizeStartupCapture), null, 2)
   )
+
   return dir
 }

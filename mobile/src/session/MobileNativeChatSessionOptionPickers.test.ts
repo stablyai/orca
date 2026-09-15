@@ -13,6 +13,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
@@ -20,8 +21,10 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   X: 'X'
 }))
+
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
+
   return {
     BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
       visible ? React.createElement('BottomDrawer', { visible }, children) : null
@@ -85,6 +88,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       invokeAction,
       recordCommand: vi.fn()
     }
+
     act(() => {
       renderer = create(
         createElement(MobileNativeChatSessionOptionPickers, { controller, isWorking })
@@ -131,16 +135,21 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     const label = renderer!.root
       .findAll((node) => node.type === 'Text')
       .find((node) => (node.props as { children?: unknown }).children === text)
+
     if (!label) {
       throw new Error(`No row labeled ${text}`)
     }
+
     let parent = label.parent
+
     while (parent && parent.type !== 'Pressable') {
       parent = parent.parent
     }
+
     if (!parent) {
       throw new Error(`No pressable row for ${text}`)
     }
+
     return parent as unknown as {
       props: {
         onPress: () => void
@@ -175,9 +184,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       accessibilityLabel: 'Model, Sonnet 5 High',
       disabled: false
     })
+
     const labels = renderer!.root
       .findAll((node) => node.type === 'Text')
       .map((node) => (node.props as { children?: unknown }).children)
+
     expect(labels).toContain('Sonnet 5 High')
   })
 
@@ -253,12 +264,14 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     ])
     await act(async () => pill('Model').props.onPress())
     await act(async () => rowByText('Effort').props.onPress())
+
     const captions = renderer!.root
       .findAll((node) => node.type === 'Text')
       .filter(
         (node) =>
           (node.props as { children?: unknown }).children === 'Sent to the agent — not confirmed'
       )
+
     expect(captions.length > 0).toBe(scenario.caption)
   })
 

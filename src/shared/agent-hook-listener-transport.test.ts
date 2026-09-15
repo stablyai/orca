@@ -29,6 +29,7 @@ function createReadableRequest(headers: IncomingHttpHeaders = {}): FakeIncomingM
   const req = new EventEmitter() as FakeIncomingMessage
   req.headers = headers
   req.destroy = vi.fn(() => req.emit('close'))
+
   return req
 }
 
@@ -75,6 +76,7 @@ describe('shared agent-hook-listener', () => {
       'x-orca-agent-hook-env': 'production',
       'x-orca-agent-hook-version': '1'
     })
+
     const body = readRequestBody(req as unknown as IncomingMessage)
     req.emit('data', Buffer.from('{"hook_event_name":"UserPromptSubmit","prompt":"hello"}'))
     req.emit('end')
@@ -91,6 +93,7 @@ describe('shared agent-hook-listener', () => {
 
   it('decodes base64 metadata headers without corrupting path text', () => {
     const worktreeId = 'repo::/tmp/中文 worktree'
+
     const merged = mergeAgentHookRequestHeaders(
       { hook_event_name: 'UserPromptSubmit', prompt: 'hello' },
       {
@@ -123,6 +126,7 @@ describe('shared agent-hook-listener', () => {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'hello'
     }
+
     const merged = mergeAgentHookRequestHeaders(rawBody, {
       'x-orca-pane-key': paneKey,
       'x-orca-tab-id': 'tab-1'
@@ -241,6 +245,7 @@ describe('shared agent-hook-listener', () => {
 
     it('writes the endpoint file atomically with the right contents and mode', () => {
       const finalPath = join(dir, getEndpointFileName())
+
       const ok = writeEndpointFile(dir, finalPath, {
         port: 12345,
         token: 'abcdef-0123',
@@ -248,12 +253,14 @@ describe('shared agent-hook-listener', () => {
         version: '1',
         transport: 'raw-json-v1'
       })
+
       expect(ok).toBe(true)
       const text = readFileSync(finalPath, 'utf8')
       expect(text).toContain('ORCA_AGENT_HOOK_PORT=12345')
       expect(text).toContain('ORCA_AGENT_HOOK_TOKEN=abcdef-0123')
       expect(text).toContain('ORCA_AGENT_HOOK_VERSION=1')
       expect(text).toContain('ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1')
+
       // POSIX 0o600 — owner read/write only.
       if (process.platform !== 'win32') {
         const mode = statSync(finalPath).mode & 0o777
@@ -263,12 +270,14 @@ describe('shared agent-hook-listener', () => {
 
     it('refuses unsafe values', () => {
       const finalPath = join(dir, getEndpointFileName())
+
       const ok = writeEndpointFile(dir, finalPath, {
         port: 12345,
         token: 'safe-token',
         env: 'foo&bar',
         version: '1'
       })
+
       expect(ok).toBe(false)
     })
   })

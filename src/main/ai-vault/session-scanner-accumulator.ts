@@ -77,9 +77,11 @@ export function accumulatorSessionIdentity(
   accumulator: SessionAccumulator
 ): TranscriptSessionIdentity | null {
   const sessionId = accumulator.sessionId.trim()
+
   if (!sessionId) {
     return null
   }
+
   return {
     sessionId,
     cwd: accumulator.cwd,
@@ -130,9 +132,11 @@ export function finalizeSession(
   } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
+
   if (!sessionId) {
     return null
   }
+
   const title =
     accumulator.title ||
     accumulator.fallbackTitle ||
@@ -188,14 +192,18 @@ export function generatedSessionTitle(agent: AiVaultAgent, sessionId: string): s
 
 export function updateTimeline(accumulator: SessionAccumulator, timestamp: unknown): void {
   const parsed = timestampMs(timestamp)
+
   if (!Number.isFinite(parsed)) {
     return
   }
+
   const iso = new Date(parsed).toISOString()
+
   if (!accumulator.createdAt || parsed < accumulator.earliestTimestampMs) {
     accumulator.createdAt = iso
     accumulator.earliestTimestampMs = Math.trunc(parsed)
   }
+
   // ISO serialization truncates fractional milliseconds; latestTimestampMs retains them.
   if (!accumulator.updatedAt || parsed >= Math.trunc(accumulator.latestTimestampMs)) {
     accumulator.updatedAt = iso
@@ -219,6 +227,7 @@ export function addPreviewMessage(
   if (args.publishMessage !== false && accumulator.messages.active) {
     publishTranscriptMessage(accumulator, args.role, args.text, args.timestamp)
   }
+
   // Seeded before the preview-empty return so the copy body never depends on
   // preview-only normalization rules.
   seedFullFirstUserPrompt(
@@ -228,14 +237,17 @@ export function addPreviewMessage(
     args.seedFirstUserPrompt
   )
   const text = normalizePreviewText(args.text ?? '')
+
   if (!text) {
     return
   }
+
   accumulator.previewMessages.push({
     role: args.role,
     text,
     timestamp: timestampIso(args.timestamp)
   })
+
   if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
     accumulator.previewMessages.shift()
     accumulator.previewMessagesTruncated = true
@@ -255,6 +267,7 @@ export function addPreviewContent(
     () => extractFullFirstUserPromptText(content),
     options?.seedFirstUserPrompt
   )
+
   // Published from the content value, not the preview string: a consumer needs
   // the whole turn, including the tool blocks the 220-char preview drops.
   if (accumulator.messages.active) {
@@ -262,6 +275,7 @@ export function addPreviewContent(
       accumulator.messages.push(message)
     }
   }
+
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
@@ -281,6 +295,7 @@ function publishTranscriptMessage(
 ): void {
   const messageRole = transcriptMessageRole(role)
   const messageText = text === null ? null : boundedText(text)
+
   if (messageRole && messageText) {
     accumulator.messages.push({
       role: messageRole,
@@ -314,6 +329,7 @@ export function seedFullFirstUserPrompt(
 
 export function timestampIso(value: unknown): string | null {
   const parsed = timestampMs(value)
+
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null
 }
 
@@ -328,16 +344,21 @@ export function updateLatestLocation(
   // Transcripts are append-only, so the first record carrying a cwd is the start.
   if (accumulator.cwd === null) {
     const startCwd = extractString(record.cwd)
+
     if (startCwd) {
       accumulator.cwd = startCwd
     }
   }
+
   const timestamp = extractString(record.timestamp)
   const parsed = timestamp ? Date.parse(timestamp) : accumulator.latestTimestampMs
+
   if (!Number.isFinite(parsed) || parsed < accumulator.latestTimestampMs) {
     return
   }
+
   const branch = extractString(record.gitBranch)
+
   if (branch) {
     accumulator.branch = branch
   }
@@ -350,5 +371,6 @@ export function sessionSortTime(session: AiVaultSession): number {
 export function sessionIdFromFileName(filePath: string): string {
   const fileName = basename(filePath, extname(filePath))
   const match = fileName.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+
   return match?.[0] ?? fileName
 }

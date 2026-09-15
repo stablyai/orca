@@ -13,6 +13,7 @@ export function useMobileNativeChatPinchGesture(): {
   const fontScaleRef = useRef(1)
   fontScaleRef.current = fontScale
   const pinchBase = useRef(1)
+
   // Why: run the gesture callbacks on the JS thread (not a reanimated worklet) so
   // they can touch React refs/state and quantizeFontScale directly — accessing
   // those from the UI-thread worklet crashes the app.

@@ -11,6 +11,7 @@ type ClipboardDataStub = {
 
 function createClipboardDataStub(): ClipboardDataStub {
   const store = new Map<string, string>()
+
   return {
     setData(format, value) {
       store.set(format, value)
@@ -30,6 +31,7 @@ function mountTerminalWithSelection(selectionText: string): HTMLElement {
     clipboardData?.setData('text/plain', selectionText)
     event.preventDefault()
   })
+
   return terminalElement
 }
 
@@ -46,10 +48,12 @@ function stubExecCommand(
     if (command !== 'copy') {
       return false
     }
+
     beforeDispatch?.()
     const event = new Event('copy', { bubbles: true, cancelable: true })
     Object.defineProperty(event, 'clipboardData', { value: clipboardData })
     source.dispatchEvent(event)
+
     return true
   }
 }
@@ -76,10 +80,12 @@ describe('web copy fallback vs. the terminal selection', () => {
     const source = document.createElement('div')
     document.body.appendChild(source)
     const clipboardData = createClipboardDataStub()
+
     const clobber = (event: Event): void => {
       const data = (event as unknown as { clipboardData?: ClipboardDataStub }).clipboardData
       data?.setData('text/plain', 'later document handler')
     }
+
     stubExecCommand(source, clipboardData, () => document.addEventListener('copy', clobber))
 
     try {
@@ -97,10 +103,12 @@ describe('web copy fallback vs. the terminal selection', () => {
     document.body.appendChild(source)
     const clipboardData = createClipboardDataStub()
     stubExecCommand(source, clipboardData)
+
     const clobber = (event: Event): void => {
       const data = (event as unknown as { clipboardData?: ClipboardDataStub }).clipboardData
       data?.setData('text/plain', 'later window handler')
     }
+
     window.addEventListener('copy', clobber)
 
     try {

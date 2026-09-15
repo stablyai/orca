@@ -2,6 +2,7 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 
 type WorktreeCardDetailSectionProps = React.HTMLAttributes<HTMLElement>
+
 type WorktreeCardDetailSectionContentProps = React.HTMLAttributes<HTMLDivElement>
 
 export function WorktreeCardDetailSection({

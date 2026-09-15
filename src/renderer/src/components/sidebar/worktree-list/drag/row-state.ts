@@ -69,14 +69,17 @@ export function areWorktreeDragPreviewOffsetsEqual(
   if (a === b) {
     return true
   }
+
   if (a.size !== b.size) {
     return false
   }
+
   for (const [key, value] of a) {
     if (b.get(key) !== value) {
       return false
     }
   }
+
   return true
 }
 
@@ -108,6 +111,7 @@ export function clearWorktreeDropPreview(
     previous.dropIndicatorY === null &&
     (args.preserveOffsets === true || previous.previewOffsetsByWorktreeId.size === 0) &&
     (args.matchPointerY !== true || previous.pointerY === args.pointerY)
+
   return unchanged
     ? previous
     : {
@@ -136,6 +140,7 @@ export function applyWorktreeDropPreview(
       previous.previewOffsetsByWorktreeId,
       drop.previewOffsetsByWorktreeId
     )
+
   return unchanged
     ? previous
     : { ...previous, ...drop, lineageDropTargetId: null, pointerY: args.pointerY }
@@ -154,6 +159,7 @@ export function applyWorktreeLineageDropPreview(
   ) {
     return previous
   }
+
   // Keep the target under the pointer when switching from a reorder gap to nesting.
   return {
     ...previous,

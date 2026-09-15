@@ -22,16 +22,20 @@ const FAILED_CONCLUSIONS = new Set([
 export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
   const conclusion = (check.conclusion ?? '').toLowerCase()
   const status = (check.status ?? '').toLowerCase()
+
   if (FAILED_CONCLUSIONS.has(conclusion)) {
     return 'failed'
   }
+
   if (PASSED_CONCLUSIONS.has(conclusion)) {
     return 'passed'
   }
+
   // Why: anything that has not reached a terminal status is still running, whatever it calls itself.
   if (conclusion === 'pending' || status !== 'completed') {
     return 'pending'
   }
+
   return 'neutral'
 }
 
@@ -42,12 +46,15 @@ export function resolveProviderCheckState(
   if (counts.total === 0) {
     return 'none'
   }
+
   if (counts.failed > 0) {
     return 'failure'
   }
+
   if (counts.pending > 0) {
     return 'pending'
   }
+
   return counts.passed > 0 ? 'success' : 'neutral'
 }
 
@@ -58,8 +65,10 @@ export function summarizeProviderChecks(
   let failed = 0
   let pending = 0
   let neutral = 0
+
   for (const check of checks) {
     const outcome = classifyCheckOutcome(check)
+
     if (outcome === 'passed') {
       passed += 1
     } else if (outcome === 'failed') {
@@ -70,7 +79,9 @@ export function summarizeProviderChecks(
       neutral += 1
     }
   }
+
   const total = checks.length
+
   return {
     state: resolveProviderCheckState({ total, passed, failed, pending }),
     total,
@@ -86,15 +97,19 @@ export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined
   if (!summary) {
     return 'Checks'
   }
+
   if (summary.total === 0) {
     return 'No checks'
   }
+
   if (summary.failed > 0) {
     return `${summary.failed} failing`
   }
+
   if (summary.pending > 0) {
     return `${summary.pending} pending`
   }
+
   return summary.state === 'neutral'
     ? 'Unresolved checks'
     : `${summary.passed}/${summary.total} passed`

@@ -59,6 +59,7 @@ describe('HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS', () => {
 describe('parseWorkspaceSessionsByHostId global-field residue', () => {
   it('drops a non-local global field the local slice already owns', () => {
     const local = localSession({ browserUrlHistory: history('https://local.test') })
+
     const partitions = parse(
       {
         [HOST]: {
@@ -68,6 +69,7 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       },
       local
     )
+
     // Back to the default from the spread, not the 65 KB stale replica. The merge reads this field
     // from local whenever local has it, so the renderer still sees `https://local.test`
     // (`workspace-session-host-split.test.ts` pins that half of the contract).
@@ -80,10 +82,12 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
     const local = localSession({})
     expect(local.workspaceDocHistory).toBeUndefined()
     const docs = [docEntry('/repo/remote.md')]
+
     const partitions = parse(
       { [HOST]: { ...getDefaultWorkspaceSession(), workspaceDocHistory: docs } },
       local
     )
+
     // Retained, so the merge's "fall back to any slice that has it" path still finds a value.
     expect(partitions[HOST]?.workspaceDocHistory).toEqual(docs)
   })
@@ -91,6 +95,7 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
   it('drops that same field once the local slice does have it', () => {
     const localDocs = [docEntry('/repo/local.md')]
     const local = localSession({ workspaceDocHistory: localDocs })
+
     const partitions = parse(
       {
         [HOST]: {
@@ -100,6 +105,7 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       },
       local
     )
+
     expect(partitions[HOST]).not.toHaveProperty('workspaceDocHistory')
     expect(local.workspaceDocHistory).toEqual(localDocs)
   })
@@ -110,7 +116,9 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       activeWorktreeId: 'repo-1::/tmp/local',
       activeTabId: 'local-tab'
     })
+
     const tabs = { 'repo-1::/tmp/a': [] }
+
     const partitions = parse(
       {
         [HOST]: {
@@ -125,6 +133,7 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
       },
       local
     )
+
     expect(partitions[HOST]?.activeWorktreeId).toBe('repo-1::/tmp/a')
     expect(partitions[HOST]?.activeTabId).toBe('remote-tab')
     expect(partitions[HOST]?.tabsByWorktree).toEqual(tabs)
@@ -133,9 +142,11 @@ describe('parseWorkspaceSessionsByHostId global-field residue', () => {
 
   it('is a no-op when no local slice is supplied', () => {
     const stale = history('https://stale.test')
+
     const partitions = parse({
       [HOST]: { ...getDefaultWorkspaceSession(), browserUrlHistory: stale }
     })
+
     expect(partitions[HOST]?.browserUrlHistory).toEqual(stale)
   })
 })

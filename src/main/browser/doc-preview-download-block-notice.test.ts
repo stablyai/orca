@@ -9,30 +9,37 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./doc-preview-failure-notice', () => ({
   publishDocPreviewFailure: mocks.publishDocPreviewFailure
 }))
+
 vi.mock('./doc-preview-guest-policy', () => ({
   readDocPreviewGuestBoundGrantId: (guest: object) => mocks.boundGrantIdByGuest.get(guest) ?? null
 }))
+
 vi.mock('./doc-preview-grant-registry', () => ({
   onDocPreviewGrantRevoked: (listener: (grant: { id: string }) => void) => {
     mocks.revocationListener = listener
+
     return vi.fn()
   }
 }))
 
 const GRANT_ID = 'a'.repeat(32)
+
 const OTHER_GRANT_ID = 'b'.repeat(32)
 
 /** Only the identity matters: the module asks the guest registry what grant this contents holds. */
 function guestBoundTo(grantId: string | null): Electron.WebContents {
   const guest = {} as Electron.WebContents
+
   if (grantId !== null) {
     mocks.boundGrantIdByGuest.set(guest, grantId)
   }
+
   return guest
 }
 
 async function loadNotifier(): Promise<(guest: Electron.WebContents) => void> {
   const module = await import('./doc-preview-download-block-notice')
+
   return module.noticeDocPreviewDownloadBlocked
 }
 

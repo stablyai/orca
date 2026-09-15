@@ -53,11 +53,13 @@ function reportRendererPtyVisibility(
 ): void {
   for (const transport of paneTransports.values()) {
     const ptyId = transport.getPtyId()
+
     if (!ptyId || ptyId.startsWith('remote:')) {
       // Why: remote-runtime PTYs use a relay path outside main's local
       // renderer-visibility registry, so reporting them here is misleading.
       continue
     }
+
     setRendererPtyVisibilityClaim(transport, ptyId, visible)
   }
 }
@@ -94,6 +96,7 @@ export function useTerminalPaneGlobalEffects({
   const renderingSuspendedByVisibilityRef = useRef(false)
   const hiddenReasonRef = useRef<TerminalHiddenReason | null>(null)
   const rendererVisible = isVisible && isWorktreeActive
+
   // Why: the active pane can rebind to a new PTY (deferred reattach / eager
   // adopt) or switch active leaf without isActive/isVisible/isWorktreeActive
   // flipping. Derive the active leaf's live PTY reactively from the same
@@ -103,8 +106,10 @@ export function useTerminalPaneGlobalEffects({
   const activeLeafPtyId = useAppStore((state) => {
     const layout = state.terminalLayoutsByTabId[tabId]
     const activeLeafId = layout?.activeLeafId
+
     return activeLeafId ? (layout.ptyIdsByLeafId?.[activeLeafId] ?? null) : null
   })
+
   const {
     captureViewportPositions,
     withSuppressedScrollTracking,
@@ -116,6 +121,7 @@ export function useTerminalPaneGlobalEffects({
     visibleResumeCompleteRef: wasVisibleRef,
     paneCount
   })
+
   useTerminalContainerFitSync({
     isVisible: rendererVisible,
     isSyncFitEnabled,
@@ -134,6 +140,7 @@ export function useTerminalPaneGlobalEffects({
   useEffect(() => {
     const paneTransports = paneTransportsRef.current
     reportRendererPtyVisibility(paneTransports, rendererVisible)
+
     return () => {
       for (const transport of paneTransports.values()) {
         releaseRendererPtyVisibilityClaim(transport)
@@ -143,20 +150,24 @@ export function useTerminalPaneGlobalEffects({
 
   useEffect(() => {
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     manager.setAtlasRecoveryVisible?.(rendererVisible)
     const wasVisible = wasVisibleRef.current
     const wasWorktreeActive = wasWorktreeActiveRef.current
     isActiveRef.current = isActive
     isVisibleRef.current = rendererVisible
+
     if (rendererVisible) {
       const shouldUseLightTabResume =
         isWorktreeActive &&
         hasCompletedVisibleResumeRef.current &&
         !renderingSuspendedByVisibilityRef.current &&
         (wasVisible || hiddenReasonRef.current === 'tab')
+
       resumeTerminalVisibility({
         manager,
         isActive,
@@ -174,8 +185,10 @@ export function useTerminalPaneGlobalEffects({
       hasCompletedVisibleResumeRef.current = true
       hiddenReasonRef.current = null
       applyPendingFollowOutputRequests()
+
       return
     }
+
     const hiddenState = hideTerminalVisibility({
       manager,
       wasVisible,
@@ -184,6 +197,7 @@ export function useTerminalPaneGlobalEffects({
       hasCompletedVisibleResume: hasCompletedVisibleResumeRef.current,
       captureViewportPositions
     })
+
     renderingSuspendedByVisibilityRef.current = hiddenState.renderingSuspended
     hiddenReasonRef.current = hiddenState.hiddenReason
 
@@ -194,37 +208,50 @@ export function useTerminalPaneGlobalEffects({
 
   useEffect(() => {
     const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null
+
     if (!ptyId || ptyId.startsWith('remote:')) {
       return
     }
+
     // Why: main uses this as a scheduler hint only, so the foreground pane's
     // renderer output gets first chance at the bounded ACK reserve. The cleanup
     // reports the old PTY inactive before the effect re-runs for a rebind.
     window.api.pty.setActiveRendererPty?.(ptyId, true)
+
     return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
   }, [isActive, isVisible, isWorktreeActive, activeLeafPtyId])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {
       const detail = (event as CustomEvent<{ tabId?: string }>).detail
+
       if (!detail?.tabId || detail.tabId !== tabId) {
         return
       }
+
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       const panes = manager.getPanes()
+
       if (panes.length < 2) {
         return
       }
+
       const pane = manager.getActivePane() ?? panes[0]
+
       if (!pane) {
         return
       }
+
       toggleExpandPane(pane.id)
     }
+
     window.addEventListener(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, onToggleExpand)
+
     return () => window.removeEventListener(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, onToggleExpand)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId])
@@ -240,7 +267,9 @@ export function useTerminalPaneGlobalEffects({
         scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded
       })
     }
+
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
   }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
 
@@ -255,7 +284,9 @@ export function useTerminalPaneGlobalEffects({
         getPaneTransports: () => paneTransportsRef.current
       })
     }
+
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
+
     return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
   }, [tabId, managerRef, paneTransportsRef])
 
@@ -266,20 +297,26 @@ export function useTerminalPaneGlobalEffects({
     if (typeof document === 'undefined') {
       return
     }
+
     const onDictationInsert = (event: Event): void => {
       if (!isActiveRef.current) {
         return
       }
+
       const detail = (
         event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
       ).detail
+
       const text = typeof detail === 'string' ? detail : detail?.text
+
       if (!text) {
         return
       }
+
       if (typeof detail === 'object' && detail.tabId && detail.tabId !== tabId) {
         return
       }
+
       const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
       handleTerminalProgrammaticTextPaste({
         detail: {
@@ -293,7 +330,9 @@ export function useTerminalPaneGlobalEffects({
         getPaneTransports: () => paneTransportsRef.current
       })
     }
+
     document.addEventListener('dictation:insertText', onDictationInsert)
+
     return () => document.removeEventListener('dictation:insertText', onDictationInsert)
   }, [isActiveRef, managerRef, paneTransportsRef, tabId])
 
@@ -304,10 +343,12 @@ export function useTerminalPaneGlobalEffects({
     if (!isActive && !isVisible) {
       return
     }
+
     return window.api.ui.onFileDrop((data) => {
       if (data.target !== 'terminal') {
         return
       }
+
       if (data.tabId) {
         if (data.tabId !== tabId) {
           return
@@ -315,14 +356,19 @@ export function useTerminalPaneGlobalEffects({
       } else if (!isActive) {
         return
       }
+
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       const wtId = worktreeIdRef.current
+
       if (!wtId) {
         return
       }
+
       void handleTerminalFileDrop({
         manager,
         paneTransports: paneTransportsRef.current,

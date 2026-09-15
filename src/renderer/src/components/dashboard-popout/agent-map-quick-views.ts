@@ -35,7 +35,9 @@ export const ALL_AGENT_MAP_STATES: readonly AgentMapState[] = [
 
 /** Stop indices used by the quick views, named so the intent survives a re-scale. */
 const STOP_30_MIN = 4
+
 const STOP_1_DAY = 9
+
 const STOP_3_DAY = 11
 
 export function emptyAgentMapFilterState(agentTypes: readonly string[]): AgentMapFilterState {
@@ -127,5 +129,6 @@ export function applyAgentMapQuickView(
 ): AgentMapFilterState {
   const view = AGENT_MAP_QUICK_VIEWS.find((candidate) => candidate.id === id)
   const base = emptyAgentMapFilterState(agentTypes)
+
   return view ? view.apply(base) : base
 }

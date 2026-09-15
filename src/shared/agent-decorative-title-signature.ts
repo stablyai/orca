@@ -8,10 +8,13 @@ export function getDecorativeAgentTitleSignature(title: string): string | null {
   if (title.length > DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT) {
     return null
   }
+
   const status = detectAgentStatusFromTitle(title)
+
   if (!status) {
     return null
   }
+
   // Why: agent spinners can emit OSC title frames many times per second; the
   // spinner glyph is live decoration, not meaningful tab or sort state.
   return `${status}:${normalizeDecorativeAgentTitleText(title)}`
@@ -19,30 +22,37 @@ export function getDecorativeAgentTitleSignature(title: string): string | null {
 
 export function isDecorativeAgentTitleFrameChange(prevTitle: string, nextTitle: string): boolean {
   const prevSignature = getDecorativeAgentTitleSignature(prevTitle)
+
   return prevSignature !== null && prevSignature === getDecorativeAgentTitleSignature(nextTitle)
 }
 
 function normalizeDecorativeAgentTitleText(title: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < title.length; index += 1) {
     const code = title.charCodeAt(index)
+
     if (
       normalized.length === 0 &&
       (isDecorativeTitleWhitespace(code) || isSpinnerFrameGlyph(code))
     ) {
       continue
     }
+
     if (isDecorativeTitleWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += title.charAt(index)
   }
+
   return normalized
 }
 

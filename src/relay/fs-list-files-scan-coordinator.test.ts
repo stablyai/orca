@@ -17,10 +17,12 @@ type Deferred = {
 function deferred(): Deferred {
   let resolve!: (files: string[]) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<string[]>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -32,6 +34,7 @@ function controllableScan(): {
 } {
   const starts: AbortSignal[] = []
   let current: Deferred | null = null
+
   return {
     starts,
     start: (signal: AbortSignal) => {
@@ -47,6 +50,7 @@ function controllableScan(): {
         },
         { once: true }
       )
+
       return scan.promise
     },
     finish: (files: string[]) => current?.resolve(files)
@@ -128,6 +132,7 @@ describe('ListFilesScanCoordinator', () => {
       signal: first.signal,
       start: scan.start
     })
+
     const secondResult = coordinator.run({
       clientId: 1,
       key: 'a',
@@ -157,6 +162,7 @@ describe('ListFilesScanCoordinator', () => {
       signal: first.signal,
       start: scan.start
     })
+
     const secondResult = coordinator.run({ clientId: 1, key: 'a', start: scan.start })
 
     first.abort()
@@ -208,6 +214,7 @@ describe('ListFilesScanCoordinator', () => {
       signal: requester.signal,
       start: scan.start
     })
+
     requester.abort()
     await expect(first).rejects.toSatisfy(isFileListingCancellation)
 

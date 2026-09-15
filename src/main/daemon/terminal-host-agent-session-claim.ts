@@ -15,10 +15,13 @@ export async function createOrAttachClaimedAgentSession(args: {
   createOrAttach: (options: InternalCreateOrAttachOptions) => Promise<CreateOrAttachResult>
 }): Promise<CreateOrAttachResult> {
   const ensureRequest = args.options.agentSessionEnsure
+
   if (!ensureRequest) {
     return await args.createOrAttach(args.options)
   }
+
   let created: CreateOrAttachResult | null = null
+
   const ensured = await args.owners.ensure({
     claim: ensureRequest.claim,
     surface: ensureRequest.surface,
@@ -27,13 +30,16 @@ export async function createOrAttachClaimedAgentSession(args: {
         ...args.options,
         agentSessionGeneration: generation
       })
+
       return { ptyId: args.options.sessionId }
     },
     isLive: args.isLive
   })
+
   if (ensured.disposition === 'created' && created) {
     return { ...(created as CreateOrAttachResult), agentSessionEnsure: ensured }
   }
+
   const adopted = await args.createOrAttach({
     ...args.options,
     sessionId: ensured.owner.ptyId,
@@ -41,5 +47,6 @@ export async function createOrAttachClaimedAgentSession(args: {
     agentSessionEnsure: undefined,
     attachOnly: true
   })
+
   return { ...adopted, agentSessionEnsure: ensured }
 }

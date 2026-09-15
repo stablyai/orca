@@ -61,6 +61,7 @@ function makeExternalEntry(
     canManage: true,
     jobs: []
   }
+
   const job: ExternalAutomationJob = {
     id: 'job-1',
     managerId: manager.id,
@@ -81,6 +82,7 @@ function makeExternalEntry(
     runs: [],
     ...overrides
   }
+
   return {
     key: `${manager.id}:${job.id}`,
     scope: {
@@ -176,6 +178,7 @@ describe('automation-list-view', () => {
       sort: null,
       locale: 'en'
     })
+
     expect(items.map((item) => item.id)).toEqual([rowKey('ok'), 'manager-1:job-1'])
   })
 
@@ -219,6 +222,7 @@ describe('automation-list-view', () => {
       sort: { field: 'name', direction: 'asc' },
       locale: 'en'
     })
+
     expect(items.map((item) => item.name)).toEqual(['Alpha digest', 'Zebra job'])
   })
 
@@ -229,6 +233,7 @@ describe('automation-list-view', () => {
       makeCatalogRow('succeeded-codex', { agentId: 'codex' }, 'completed'),
       makeCatalogRow('never-codex', { agentId: 'codex' })
     ]
+
     const ids = (filter: Partial<AutomationListFilter>) =>
       filterAutomationListRows(rows, {
         ...EMPTY_AUTOMATION_LIST_FILTER,
@@ -258,9 +263,12 @@ describe('automation-list-view', () => {
       hostLabel: targetId ?? '',
       usageSummary: null
     })
+
     const rows = [hostRow('on-a', 'ssh-a'), hostRow('on-b', 'ssh-b'), hostRow('legacy', null)]
+
     const keyOf = (row: AutomationListRow): string =>
       row.catalogRef ? hostStableKey(row.catalogRef) : ''
+
     const ids = (hostStableKeys: readonly string[]) =>
       filterAutomationListRows(rows, {
         ...EMPTY_AUTOMATION_LIST_FILTER,
@@ -308,6 +316,7 @@ describe('automation-list-view', () => {
       sort: { field: 'lastRun', direction: 'desc' },
       locale: 'en'
     })
+
     expect(items.map((item) => item.id)).toEqual([
       'manager-1:job-1',
       rowKey('old'),

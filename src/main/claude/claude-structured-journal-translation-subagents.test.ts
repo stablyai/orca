@@ -19,23 +19,30 @@ function orcaClientMessageId(identity: AgentJournalItemIdentity): string | null 
 
 function harness() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => items.push({ identity, body }),
     appendTombstone: vi.fn(),
     publish: vi.fn()
   }
+
   const translator = createClaudeJournalTranslator({ sink, fallbackIdPrefix: 'test' })
+
   const groupRows = () =>
     items.filter((item) => orcaClientMessageId(item.identity) === GROUP_ITEM_ID)
+
   const agentsOf = (body: AgentJournalItemBody | undefined): NativeChatSubagentEntry[] => {
     if (!body || body.kind !== 'message') {
       return []
     }
+
     const block = body.blocks.find(
       (candidate): candidate is NativeChatSubagentGroupBlock => candidate.type === 'subagent-group'
     )
+
     return block ? block.agents : []
   }
+
   /** The last roster row written for one group, so a test can read a group that
    *  is no longer the live one. */
   const rosterIn = (groupId: string): NativeChatSubagentEntry[] =>
@@ -43,13 +50,17 @@ function harness() {
       items.findLast((item) => orcaClientMessageId(item.identity) === `claude-subagents:${groupId}`)
         ?.body
     )
+
   const rosterOf = (turnUuid: string): NativeChatSubagentEntry[] =>
     rosterIn(`claude-session:${turnUuid}`)
+
   const roster = (): NativeChatSubagentEntry[] => agentsOf(groupRows().at(-1)?.body)
+
   const fallbackRows = (): AgentJournalItemBody[] =>
     items
       .filter((item) => (orcaClientMessageId(item.identity) ?? '').startsWith('provider-frame:'))
       .map((item) => item.body)
+
   return { translator, groupRows, roster, rosterIn, rosterOf, fallbackRows }
 }
 

@@ -86,6 +86,7 @@ export class AgentSessionJournal {
       connection: () => this.database?.db ?? null,
       enqueue: (run) => this.queue.serializePastGate(run)
     })
+
     const collaborators = createJournalStoreCollaborators({
       identity: this.identity,
       journalDir: this.journalDir,
@@ -109,6 +110,7 @@ export class AgentSessionJournal {
       journal: () => this,
       enqueue: (build) => this.enqueue(build)
     })
+
     this.rowWriter = collaborators.rowWriter
     this.epochController = collaborators.epochController
     this.itemAppender = collaborators.itemAppender
@@ -136,6 +138,7 @@ export class AgentSessionJournal {
   async open(): Promise<void> {
     await ensureJournalDir(this.journalDir)
     this.database = openJournalDatabase(this.dbPath)
+
     try {
       await this.restore()
     } catch (error) {
@@ -152,6 +155,7 @@ export class AgentSessionJournal {
    *  after a failure, and permanently closed to writes either way (§ close). */
   close(): Promise<void> {
     this.queue.markClosed()
+
     return this.closer.close()
   }
 
@@ -218,6 +222,7 @@ export class AgentSessionJournal {
     options: JournalTombstoneInput
   ): Promise<AgentJournalCursor> {
     const itemId = agentJournalItemKey(identity)
+
     return this.enqueue(journalTombstoneRowBuilder(() => this.state, itemId, options.fence)).then(
       (row) => ({ epoch: row.epoch, sequence: row.seq })
     )
@@ -282,6 +287,7 @@ export class AgentSessionJournal {
         `agent-session journal for ${this.identity.sessionId} is not open`
       )
     }
+
     return this.database
   }
 

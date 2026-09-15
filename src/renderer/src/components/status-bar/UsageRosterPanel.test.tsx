@@ -14,12 +14,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-icon={agent} />
 }))
+
 vi.mock('@/hooks/useResetCountdownClock', () => ({
   useResetCountdownClock: mocks.useResetCountdownClock
 }))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuItem: ({
     children,
@@ -90,6 +93,7 @@ describe('UsageRow', () => {
   it('uses one shared clock for live reset labels across the roster', () => {
     const sessionReset = mocks.now + 2 * 60_000
     const weeklyReset = mocks.now + 7 * 24 * 60 * 60_000
+
     const markup = renderToStaticMarkup(
       <TooltipProvider>
         <UsageRosterPanel
@@ -296,9 +300,11 @@ describe('UsageRosterPanel density picker', () => {
     const button = [...container.querySelectorAll('button')].find(
       (node) => node.textContent === label
     )
+
     if (!button) {
       throw new Error(`missing "${label}" segment`)
     }
+
     return button as HTMLButtonElement
   }
 

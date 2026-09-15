@@ -40,20 +40,25 @@ export function normalizeAgentSessionConversationName(value: unknown): string | 
   if (typeof value !== 'string') {
     return null
   }
+
   // Surrogates first, so the gap one leaves collapses with the run around it.
   const collapsed = value.replace(LONE_SURROGATE, '').replace(UNRENDERABLE_RUN, ' ').trim()
+
   if (!collapsed || BLANK_ONLY.test(collapsed)) {
     return null
   }
+
   if (collapsed.length <= AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH) {
     return collapsed
   }
+
   // Cut on a character boundary: a raw slice can strand a lone high surrogate,
   // which every surface then renders as U+FFFD.
   const truncated = sliceAtCodeUnitLimit(
     collapsed,
     AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH
   ).replace(TRAILING_DANGLE, '')
+
   return truncated || null
 }
 

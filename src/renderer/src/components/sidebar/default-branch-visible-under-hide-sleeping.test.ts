@@ -100,6 +100,7 @@ describe('#8873 default-branch workspace under "Hide sleeping"', () => {
       'visibleWorkspaceHostIds',
       'workspaceHostScope'
     ]
+
     const optionKeys = Object.keys(visibleOptions())
 
     const alwaysShowKnob = [...filterKeys, ...optionKeys].find((key) =>
@@ -162,6 +163,7 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
       branch: '',
       head: ''
     }
+
     expect(isDefaultBranchWorkspace(folder)).toBe(false)
 
     expect(visible([folder], { alwaysShowDefaultBranchWorkspace: true })).toEqual([folder.id])

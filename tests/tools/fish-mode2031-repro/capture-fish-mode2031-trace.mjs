@@ -35,44 +35,64 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
+
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../..')
 
 const pty = require(path.join(REPO_ROOT, 'node_modules/node-pty'))
+
 const { INITIAL_MODE_2031_REPLY_SCAN_STATE, mode2031SequenceFor, scanMode2031ReplyDecision } =
   await import(path.join(REPO_ROOT, 'src/shared/terminal-color-scheme-protocol.ts'))
 
 // ---------------------------------------------------------------- args
 
 const argv = process.argv.slice(2)
+
 const flag = (name) => argv.includes(`--${name}`)
+
 const opt = (name, fallback) => {
   const hit = argv.find((a) => a.startsWith(`--${name}=`))
+
   return hit === undefined ? fallback : hit.slice(name.length + 3)
 }
 
 const REPLY_DELAY_MS = Number(opt('delay', '0'))
+
 const SHELL = opt('shell', '/opt/homebrew/bin/fish')
+
 const USE_USER_CONFIG = flag('user-config')
+
 const ANSWER_PROBES = !flag('no-probes')
+
 const REPLY_ENABLED = !flag('no-reply')
+
 const EMIT_JSON = flag('json')
+
 const ACCEPT_DELAY_MS = Number(opt('accept-delay', '300'))
+
 const PASTE = flag('paste')
+
 const PROMPT_CMD = flag('prompt-cmd')
+
 const TYPEAHEAD = flag('typeahead')
+
 const TYPEAHEAD_AT_MS = Number(opt('typeahead-at', '150'))
+
 const SETTLE_MS = Number(opt('settle', '400'))
 
 const PROMPT_MARK = 'HARNESS> '
+
 const CHILD_CMD = `python3 -c 'import sys; d=sys.stdin.readline(); print("GOT:", repr(d))'`
 
 // ---------------------------------------------------------------- tracing
 
 const t0 = process.hrtime.bigint()
+
 const ms = () => Number(process.hrtime.bigint() - t0) / 1e6
+
 const stamp = () => ms().toFixed(3).padStart(10, ' ')
 
 const trace = []
+
 function log(dir, label, detail) {
   const line = `[${stamp()}ms] ${dir.padEnd(12)} ${label}${detail ? ` ${detail}` : ''}`
   trace.push(line)
@@ -81,8 +101,10 @@ function log(dir, label, detail) {
 
 function esc(s) {
   let out = ''
+
   for (const ch of s) {
     const c = ch.codePointAt(0)
+
     if (ch === '\x1b') {
       out += '\\e'
     } else if (ch === '\n') {
@@ -99,12 +121,15 @@ function esc(s) {
       out += ch
     }
   }
+
   return out
 }
 
 const CHUNK_PRINT_CAP = 1200
+
 function escCapped(s) {
   const e = esc(s)
+
   return e.length > CHUNK_PRINT_CAP
     ? `${e.slice(0, CHUNK_PRINT_CAP)}…<+${e.length - CHUNK_PRINT_CAP} esc-chars>`
     : e
@@ -113,16 +138,21 @@ function escCapped(s) {
 // ---------------------------------------------------------------- fish config
 
 let configHome = null
+
 const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: 'en_US.UTF-8' }
+
 delete env.FISH_HISTORY
+
 if (!USE_USER_CONFIG) {
   configHome = mkdtempSync(path.join(tmpdir(), 'fish-2031-'))
   mkdirSync(path.join(configHome, 'fish'), { recursive: true })
+
   // Plain prompt: no Tide, no async prompt machinery. fish core still toggles
   // DEC 2031 in tty_handoff.rs regardless of the prompt.
   const promptBody = PROMPT_CMD
     ? `set -l __x (/bin/echo -n ok); printf '${PROMPT_MARK}'`
     : `printf '${PROMPT_MARK}'`
+
   writeFileSync(
     path.join(configHome, 'fish/config.fish'),
     [
@@ -163,13 +193,21 @@ const term = pty.spawn(SHELL, ['-l', '-i'], {
 })
 
 let scanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
+
 let all = ''
+
 let replyCount = 0
+
 const replyEvents = []
+
 const decisionEvents = []
+
 let phase = 'boot'
+
 let chunkSeq = 0
+
 let lastDecision = null
+
 let staleReplyCount = 0
 
 function ptyWrite(bytes, label) {
@@ -182,9 +220,11 @@ function sendMode2031Reply(reason) {
   // Stale = the scanner has already seen fish's `CSI ?2031l` (tty handed to a child)
   // by the time this reply actually reaches the PTY. That reply lands in the child's stdin.
   const stale = lastDecision === 'unsubscribed'
+
   if (stale) {
     staleReplyCount += 1
   }
+
   replyEvents.push({ at: ms(), phase, reason, delayMs: REPLY_DELAY_MS, stale })
   ptyWrite(
     mode2031SequenceFor('dark'),
@@ -197,22 +237,28 @@ function answerProbes(data) {
   if (!ANSWER_PROBES) {
     return
   }
+
   // oxlint-disable no-control-regex -- terminal escape sequences require control chars
   if (/\x1b\[(?:0)?c/.test(data)) {
     ptyWrite('\x1b[?62;4;6;22c', 'probe reply DA1')
   }
+
   if (/\x1b\[>(?:0)?c/.test(data)) {
     ptyWrite('\x1b[>1;95;0c', 'probe reply DA2')
   }
+
   if (/\x1b\[(?:6n)/.test(data)) {
     ptyWrite('\x1b[1;1R', 'probe reply CPR')
   }
+
   if (/\x1b\[>q/.test(data)) {
     ptyWrite('\x1bP>|orca-harness(1)\x1b\\', 'probe reply XTVERSION')
   }
+
   if (/\x1b\]10;\?/.test(data)) {
     ptyWrite('\x1b]10;rgb:ffff/ffff/ffff\x1b\\', 'probe reply OSC 10')
   }
+
   if (/\x1b\]11;\?/.test(data)) {
     ptyWrite('\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\', 'probe reply OSC 11')
   }
@@ -224,9 +270,11 @@ term.onData((data) => {
   all += data
   // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
   const mode2031ToggleRe = /\x1b\[\?([0-9;]+)([hl])/g
+
   const toggles = [...data.matchAll(mode2031ToggleRe)]
     .filter((m) => m[1].split(';').some((p) => Number(p) === 2031))
     .map((m) => `?2031${m[2]}`)
+
   log(
     'PTY->SCANNER',
     `chunk#${seq} len=${data.length}${toggles.length ? ` toggles=[${toggles.join(',')}]` : ''}`,
@@ -236,6 +284,7 @@ term.onData((data) => {
   const before = scanState
   const result = scanMode2031ReplyDecision(scanState, data)
   scanState = result.state
+
   if (result.decision || before.pendingSubscribe !== scanState.pendingSubscribe || scanState.tail) {
     log(
       'SCANNER',
@@ -243,6 +292,7 @@ term.onData((data) => {
       `state={tail:"${esc(scanState.tail)}",pendingSubscribe:${scanState.pendingSubscribe}}`
     )
   }
+
   if (result.decision) {
     lastDecision = result.decision
     decisionEvents.push({ at: ms(), seq, decision: result.decision, phase })
@@ -255,10 +305,12 @@ term.onData((data) => {
       setTimeout(() => sendMode2031Reply(`chunk#${seq} +${REPLY_DELAY_MS}ms`), REPLY_DELAY_MS)
     }
   }
+
   answerProbes(data)
 })
 
 let exitInfo = null
+
 term.onExit((e) => {
   exitInfo = e
   log('PTY', 'exit', JSON.stringify(e))
@@ -267,15 +319,20 @@ term.onExit((e) => {
 // ---------------------------------------------------------------- driving
 
 const sleep = (n) => new Promise((r) => setTimeout(r, n))
+
 async function waitFor(pred, timeoutMs, what) {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (pred()) {
       return true
     }
+
     await sleep(10)
   }
+
   log('HARNESS', 'TIMEOUT', `waiting for ${what}`)
+
   return false
 }
 
@@ -332,6 +389,7 @@ try {
     log('HARNESS', 'MARK', '--- pressing Enter (prompt-accept -> tty handoff to child) ---')
     ptyWrite('\r', 'Enter')
   }
+
   await sleep(1200)
 
   const repliesDuringAccept = replyCount - repliesBeforeAccept
@@ -364,6 +422,7 @@ try {
 
   ptyWrite('exit\r', 'exit')
   await waitFor(() => exitInfo !== null, 3000, 'shell exit')
+
   try {
     term.kill()
   } catch {}

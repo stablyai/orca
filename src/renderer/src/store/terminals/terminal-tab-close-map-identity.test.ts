@@ -62,6 +62,7 @@ function storeWithTwoTabs(): ReturnType<typeof createTestStore> {
       ]
     }
   })
+
   return store
 }
 
@@ -74,6 +75,7 @@ describe('closeTab map identity', () => {
   it('keeps the reference of every per-tab map the closing tab had no entry in', () => {
     const store = storeWithTwoTabs()
     const before = store.getState()
+
     const snapshot = Object.fromEntries(
       UNTOUCHED_FIELDS.map((field) => [field, before[field]])
     ) as Record<string, unknown>
@@ -83,6 +85,7 @@ describe('closeTab map identity', () => {
     const after = store.getState()
     // The tab really closed — otherwise the identity assertions below are vacuous.
     expect(after.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toEqual(['tab-b'])
+
     for (const field of UNTOUCHED_FIELDS) {
       expect(after[field], field).toBe(snapshot[field])
     }

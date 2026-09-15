@@ -9,6 +9,7 @@ import {
 } from './windows-powershell-hook-launcher'
 
 const MANAGED_SCRIPT_BASE_NAME = /^[A-Za-z0-9_-]+$/
+
 const WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE = '*\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*'
 
 export function wrapRuntimeHomeHookCommand(
@@ -18,6 +19,7 @@ export function wrapRuntimeHomeHookCommand(
   if (!MANAGED_SCRIPT_BASE_NAME.test(scriptBaseName)) {
     throw new Error(`Invalid managed script base name: ${scriptBaseName}`)
   }
+
   // Why: default-form every var — a static hook precheck (Grok) rejects the whole command on a bare
   // reference it cannot resolve, even in a branch that platform never takes.
   const windowsScript = `"\${HOME-}/.orca/agent-hooks/${scriptBaseName}.cmd"`
@@ -29,11 +31,13 @@ export function wrapRuntimeHomeHookCommand(
   // exit stays visible as EPIPE (#8110). A Windows caller may abandon the pipe, so there the
   // answer comes first and the drain only runs with an Orca env behind it (#11549).
   const posixMissingScriptFallback = neutralJson ? `${drain}; ${neutralJson}` : drain
+
   const windowsMissingScriptFallback = [
     ...(neutralJson ? [neutralJson] : []),
     WINDOWS_GIT_BASH_HOOK_ENVIRONMENT_GUARD,
     drain
   ].join('; ')
+
   // Why platform-selected even when HOME is unset: which stdin rule applies follows the
   // caller, not the reason the script could not be found.
   const missingScriptFallback = `case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsMissingScriptFallback} ;; *) ${posixMissingScriptFallback} ;; esac`
@@ -47,6 +51,7 @@ export function wrapRuntimeHomeHookCommand(
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${windowsMissingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${windowsMissingScriptFallback}; fi`
   const posixBranch = `if [ -f ${posixScript} ] && [ -r ${posixScript} ] && [ -x ${posixScript} ]; then /bin/sh ${posixScript}; else ${posixMissingScriptFallback}; fi`
+
   // Why: OSTYPE is shell-owned, so platform selection adds no process to every hook invocation.
   return `if [ -z "\${HOME-}" ]; then ${missingScriptFallback}; else case "\${OSTYPE-}" in msys*|cygwin*|win32*) ${windowsBranch} ;; *) ${posixBranch} ;; esac; fi`
 }

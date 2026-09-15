@@ -2,11 +2,14 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
 
 const appStateListeners = new Set<() => void>()
+
 let currentAppState: AppStateStatus | null = AppState.currentState
+
 let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null
 
 function subscribeToAppState(listener: () => void): () => void {
   appStateListeners.add(listener)
+
   if (!appStateSubscription) {
     currentAppState = AppState.currentState
     appStateSubscription = AppState.addEventListener('change', (nextState) => {
@@ -17,6 +20,7 @@ function subscribeToAppState(listener: () => void): () => void {
 
   return () => {
     appStateListeners.delete(listener)
+
     if (appStateListeners.size === 0) {
       appStateSubscription?.remove()
       appStateSubscription = null
@@ -38,13 +42,17 @@ export function useNow(intervalMs = 30_000, enabled = true): number {
   useEffect(() => {
     const resumed = running && !wasRunningRef.current
     wasRunningRef.current = running
+
     if (!running) {
       return
     }
+
     if (resumed) {
       setNow(Date.now())
     }
+
     const id = setInterval(() => setNow(Date.now()), intervalMs)
+
     return () => clearInterval(id)
   }, [intervalMs, running])
 

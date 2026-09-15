@@ -32,9 +32,11 @@ function useAutomationSearchRows(
 ): AutomationListSearchRow[] {
   const fingerprint = useMemo(() => buildAutomationListSearchRowFingerprint(sources), [sources])
   const cacheRef = useRef<{ fingerprint: string; rows: AutomationListSearchRow[] } | null>(null)
+
   if (!cacheRef.current || cacheRef.current.fingerprint !== fingerprint) {
     cacheRef.current = { fingerprint, rows: buildAutomationListSearchRows(sources) }
   }
+
   return cacheRef.current.rows
 }
 
@@ -70,32 +72,39 @@ export function useAutomationListSearch({
   // Why: keep the input snappy; matching is deferred so caret never waits on
   // index scans. Only the normalized active query can fire a search.
   const deferredListSearchQuery = useDeferredValue(listSearchQuery)
+
   const liveListSearchResolution = useMemo(
     () => resolveAutomationListSearchQuery(listSearchQuery),
     [listSearchQuery]
   )
+
   const deferredListSearchResolution = useMemo(
     () => resolveAutomationListSearchQuery(deferredListSearchQuery),
     [deferredListSearchQuery]
   )
+
   // Why: field feedback tracks the live value so a huge paste is labeled
   // immediately; list filtering stays on the deferred resolution.
   const isListSearchQueryTooLarge = liveListSearchResolution.status === 'too_large'
+
   // Why: null means search must not run (empty, whitespace, or too large).
   const activeListSearchQuery =
     deferredListSearchResolution.status === 'active' ? deferredListSearchResolution.query : null
+
   const isListSearchActive = activeListSearchQuery !== null
 
   const automationSearchSources = useMemo(
     () => buildAutomationSearchRowSources(rows, { repoMap, worktreeMap }),
     [rows, repoMap, worktreeMap]
   )
+
   const automationSearchRows = useAutomationSearchRows(automationSearchSources)
 
   const externalAutomationSearchSources = useMemo(
     () => buildExternalAutomationSearchRowSources(externalAutomationEntries),
     [externalAutomationEntries]
   )
+
   const externalAutomationSearchRows = useAutomationSearchRows(externalAutomationSearchSources)
 
   // Why: matching runs only when the normalized query or search content changes —
@@ -120,19 +129,24 @@ export function useAutomationListSearch({
     if (filteredRowKeys === null) {
       return rows
     }
+
     if (filteredRowKeys.length === 0) {
       return []
     }
+
     // Keyed by row, not automation id: a bare-id map holds one entry for two
     // hosts' copies, so one host's row would be dropped and the other doubled.
     const byKey = new Map(rows.map((row) => [row.key, row]))
     const next: AutomationListRow[] = []
+
     for (const key of filteredRowKeys) {
       const row = byKey.get(key)
+
       if (row) {
         next.push(row)
       }
     }
+
     return next
   }, [rows, filteredRowKeys])
 
@@ -140,17 +154,22 @@ export function useAutomationListSearch({
     if (filteredExternalAutomationKeys === null) {
       return externalAutomationEntries
     }
+
     if (filteredExternalAutomationKeys.length === 0) {
       return []
     }
+
     const byKey = new Map(externalAutomationEntries.map((entry) => [entry.key, entry]))
     const next: ExternalAutomationListEntry[] = []
+
     for (const key of filteredExternalAutomationKeys) {
       const entry = byKey.get(key)
+
       if (entry) {
         next.push(entry)
       }
     }
+
     return next
   }, [externalAutomationEntries, filteredExternalAutomationKeys])
 
@@ -163,27 +182,36 @@ export function useAutomationListSearch({
     if (activeListSearchQuery === null) {
       return
     }
+
     const localVisible =
       selectedExternalKey === null &&
       selectedRowKey != null &&
       filteredRows.some((row) => row.key === selectedRowKey)
+
     const externalVisible =
       selectedExternalKey != null &&
       filteredExternalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
+
     if (localVisible || externalVisible) {
       return
     }
+
     const firstLocal = filteredRows[0]
+
     if (firstLocal) {
       if (selectedExternalKey !== null) {
         selectExternalKey(null)
       }
+
       if (selectedRowKey !== firstLocal.key) {
         selectAutomationRow(firstLocal.key)
       }
+
       return
     }
+
     const firstExternal = filteredExternalAutomationEntries[0]
+
     if (firstExternal && selectedExternalKey !== firstExternal.key) {
       selectExternalKey(firstExternal.key)
     }

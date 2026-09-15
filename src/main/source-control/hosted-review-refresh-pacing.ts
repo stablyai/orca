@@ -27,6 +27,7 @@ export const MAX_ACTIVE_BRANCHES = 8
 export const ACTIVE_CLAIM_TTL_MS = NO_REVIEW_REFRESH_INTERVAL_MS
 
 export const LOOKUP_BACKOFF_BASE_MS = 60_000
+
 export const LOOKUP_BACKOFF_MAX_MS = 15 * 60_000
 
 /**

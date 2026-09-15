@@ -18,6 +18,7 @@ describe('web git preload API', () => {
 
   it('routes remote commit URL requests through the runtime git API', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
+
     const worktree = {
       id: 'wt-1',
       repoId: 'repo-1',
@@ -40,10 +41,12 @@ describe('web git preload API', () => {
       lastActivityAt: 0,
       workspaceStatus: 'todo'
     }
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'repo.list') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -52,6 +55,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'worktree.detectedList') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -60,6 +64,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'git.remoteCommitUrl') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -68,6 +73,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,
@@ -100,6 +106,7 @@ describe('web git preload API', () => {
 
   it('sends the branch line total merge base only when the chip asked for one', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
+
     const worktree = {
       id: 'wt-1',
       repoId: 'repo-1',
@@ -122,10 +129,12 @@ describe('web git preload API', () => {
       lastActivityAt: 0,
       workspaceStatus: 'todo'
     }
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'repo.list') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -134,6 +143,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'worktree.detectedList') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -142,6 +152,7 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,

@@ -26,7 +26,9 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
+
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
@@ -115,6 +117,7 @@ export class PiTitlebarExtensionService {
 
     try {
       writeFileSync(path, source)
+
       return 'written'
     } catch {
       return 'failed'
@@ -126,6 +129,7 @@ export class PiTitlebarExtensionService {
       getAppEnvironment().getPath('userData'),
       OMP_MANAGED_STATUS_EXTENSION_DIR
     )
+
     try {
       mkdirSync(fallbackDir, { recursive: true })
     } catch {
@@ -133,6 +137,7 @@ export class PiTitlebarExtensionService {
     }
 
     const fallbackPath = join(fallbackDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
+
     return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
   }
 
@@ -141,6 +146,7 @@ export class PiTitlebarExtensionService {
     kind: PiAgentKind
   ): PiManagedExtensionEnv {
     const extensionsDir = join(sourceAgentDir, 'extensions')
+
     try {
       mkdirSync(extensionsDir, { recursive: true })
     } catch {
@@ -157,6 +163,7 @@ export class PiTitlebarExtensionService {
         withOrcaManagedExtensionMarker(getPiPrefillExtensionSource(kind))
       )
     }
+
     const statusExtensionPath = join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
     const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
     const statusResult = this.writeManagedExtension(statusExtensionPath, statusSource)
@@ -180,6 +187,7 @@ export class PiTitlebarExtensionService {
     options?: { materializeDefaultHome?: boolean }
   ): Record<string, string> {
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
+
     if (kind !== 'prime-agent') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
@@ -195,12 +203,15 @@ export class PiTitlebarExtensionService {
     // homes on every open (#10196). Only materialize the default home when the
     // caller opts in (explicit agent launch) or the dir already exists.
     const materializeDefaultHome = options?.materializeDefaultHome !== false
+
     if (!existsSync(sourceAgentDir) && !materializeDefaultHome) {
       if (kind === 'omp') {
         const statusSource = withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
         const statusExtensionPath = this.writeOmpFallbackStatusExtension(statusSource)
+
         return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
       }
+
       return {}
     }
 
@@ -210,8 +221,10 @@ export class PiTitlebarExtensionService {
 
     const installed = this.installManagedExtensions(sourceAgentDir, kind)
     const env: Record<string, string> = {}
+
     if (kind === 'omp') {
       env.ORCA_OMP_SOURCE_AGENT_DIR = installed.sourceAgentDir
+
       if (installed.statusExtensionPath) {
         env.ORCA_OMP_STATUS_EXTENSION = installed.statusExtensionPath
       }
@@ -220,6 +233,7 @@ export class PiTitlebarExtensionService {
     } else {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     }
+
     return env
   }
 

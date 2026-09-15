@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const originalPlatform = process.platform
+
 const originalGetuidDescriptor = Object.getOwnPropertyDescriptor(process, 'getuid')
 
 type LinuxIdentityFixture = {
@@ -14,42 +15,52 @@ async function loadLinuxIdentity(fixture: LinuxIdentityFixture) {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   Object.defineProperty(process, 'getuid', { configurable: true, value: () => 1000 })
   const statFields = ['S', ...Array.from({ length: 18 }, () => '0'), '4242']
+
   const readFile = vi.fn(async (path: string | URL) => {
     if (String(path).endsWith('host-id') && fixture.hostToken) {
       return fixture.hostToken
     }
+
     switch (String(path)) {
       case '/proc/sys/kernel/random/boot_id':
         if (fixture.bootId) {
           return `${fixture.bootId}\n`
         }
+
         break
       case `/proc/${process.pid}/stat`:
       case '/proc/123/stat':
         if (!fixture.statErrorCode) {
           return `123 (node relay) ${statFields.join(' ')}`
         }
+
         break
       default:
         throw new Error(`unexpected path: ${String(path)}`)
     }
+
     throw Object.assign(new Error(`unavailable path: ${String(path)}`), {
       code: fixture.statErrorCode ?? 'ENOENT'
     })
   })
+
   const readlink = vi.fn(async (path: string | URL) => {
     if (fixture.pidNamespace) {
       return fixture.pidNamespace
     }
+
     throw Object.assign(new Error(`unavailable path: ${String(path)}`), { code: 'EACCES' })
   })
+
   const mkdir = vi.fn(async () => {
     if (!fixture.hostToken) {
       throw Object.assign(new Error('host-local storage unavailable'), { code: 'EACCES' })
     }
   })
+
   const lstat = vi.fn(async (path: string | URL) => {
     const isToken = String(path).endsWith('host-id')
+
     return {
       isDirectory: () => !isToken,
       isFile: () => isToken,
@@ -57,6 +68,7 @@ async function loadLinuxIdentity(fixture: LinuxIdentityFixture) {
       uid: process.getuid?.() ?? 0
     }
   })
+
   vi.doMock('node:fs/promises', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     lstat,
@@ -64,43 +76,54 @@ async function loadLinuxIdentity(fixture: LinuxIdentityFixture) {
     readFile,
     readlink
   }))
+
   return { identity: await import('./managed-hook-owner-identity'), readFile }
 }
 
 async function loadWindowsIdentity() {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   const execFileAsync = vi.fn(async (_file: string, args: string[]) => ({
     stdout: args.join(' ').includes('MachineGuid')
       ? '\r\n    MachineGuid    REG_SZ    AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE\r\n'
       : '1777777777000\r\n'
   }))
+
   vi.doMock('node:util', () => ({ promisify: () => execFileAsync }))
+
   return { identity: await import('./managed-hook-owner-identity'), execFileAsync }
 }
 
 async function loadDarwinIdentity() {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
   let psCalls = 0
+
   const execFileAsync = vi.fn(async (file: string) => {
     if (file === 'sysctl') {
       return { stdout: 'boot-session\n' }
     }
+
     if (file === 'ps' && ++psCalls === 1) {
       throw new Error('transient ps failure')
     }
+
     return { stdout: 'Wed Aug  5 12:00:00 2026 node app\n' }
   })
+
   vi.doMock('node:util', () => ({ promisify: () => execFileAsync }))
+
   return await import('./managed-hook-owner-identity')
 }
 
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+
   if (originalGetuidDescriptor) {
     Object.defineProperty(process, 'getuid', originalGetuidDescriptor)
   } else {
     Reflect.deleteProperty(process, 'getuid')
   }
+
   vi.unstubAllEnvs()
   vi.doUnmock('node:fs/promises')
   vi.doUnmock('node:child_process')
@@ -111,6 +134,7 @@ afterEach(() => {
 describe('managed hook owner identity', () => {
   it('uses durable host-local identity without requiring Linux machine identity files', async () => {
     vi.stubEnv('SSH_CONNECTION', '198.51.100.8 53100 10.0.0.7 2222')
+
     const { identity, readFile } = await loadLinuxIdentity({
       hostToken: '00000000-0000-4000-8000-000000000001',
       bootId: 'current-boot-id',
@@ -125,11 +149,13 @@ describe('managed hook owner identity', () => {
 
   it('separates SSH backends that share a key, endpoint, and boot metadata', async () => {
     vi.stubEnv('SSH_CONNECTION', '198.51.100.8 53100 10.0.0.7 2222')
+
     const first = await loadLinuxIdentity({
       hostToken: '00000000-0000-4000-8000-000000000001',
       bootId: 'shared-kernel-boot-id',
       pidNamespace: 'pid:[4026533001]'
     })
+
     const firstHost = await first.identity.readManagedHookHostIdentity()
     const firstProcess = await first.identity.readManagedHookProcessIdentity(123)
     const fingerprint = 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
@@ -137,6 +163,7 @@ describe('managed hook owner identity', () => {
 
     vi.doUnmock('node:fs/promises')
     vi.resetModules()
+
     const second = await loadLinuxIdentity({
       hostToken: '00000000-0000-4000-8000-000000000002',
       bootId: 'shared-kernel-boot-id',
@@ -159,12 +186,14 @@ describe('managed hook owner identity', () => {
       bootId: 'first-boot-id',
       pidNamespace: 'pid:[4026533001]'
     }
+
     const first = await loadLinuxIdentity(fixture)
     const firstHost = await first.identity.readManagedHookHostIdentity()
     const firstProcess = await first.identity.readManagedHookProcessIdentity(123)
 
     vi.doUnmock('node:fs/promises')
     vi.resetModules()
+
     const second = await loadLinuxIdentity({
       ...fixture,
       bootId: 'second-boot-id',
@@ -194,6 +223,7 @@ describe('managed hook owner identity', () => {
 
   it('includes namespace, boot, and start ticks when Linux exposes them', async () => {
     vi.stubEnv('SSH_CONNECTION', '')
+
     const { identity } = await loadLinuxIdentity({
       hostToken: '00000000-0000-4000-8000-000000000001',
       bootId: 'current-boot-id',

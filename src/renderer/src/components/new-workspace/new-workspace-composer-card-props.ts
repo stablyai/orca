@@ -21,10 +21,13 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
+
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
 
 export const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
+
 export const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
+
 export const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
 
 export type NewWorkspaceComposerCardProps = {
@@ -121,5 +124,7 @@ export type NewWorkspaceComposerCardProps = {
 }
 
 export type NeedsProjectHostOption = NeedsSetupProjectHostOption
+
 export type ReadyProjectHostOption = Extract<ProjectHostSetupOption, { kind: 'ready' }>
+
 export type SmartWorkspaceNameFieldProps = React.ComponentProps<typeof SmartWorkspaceNameField>

@@ -49,6 +49,7 @@ describe('useNativeChatRetainedSession', () => {
 
   function Probe(props: UseNativeChatLiveSessionArgs): null {
     latest = useNativeChatRetainedSession(props)
+
     return null
   }
 
@@ -56,6 +57,7 @@ describe('useNativeChatRetainedSession', () => {
     if (!root) {
       root = createRoot(document.createElement('div'))
     }
+
     await act(async () => root?.render(createElement(Probe, props)))
   }
 

@@ -5,6 +5,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE_KEY = makePaneKey('tab-authority', '11111111-1111-4111-8111-111111111111')
+
 const SECOND_PANE_KEY = makePaneKey('tab-authority-2', '22222222-2222-4222-8222-222222222222')
 
 describe('AgentHookServer authority evidence', () => {
@@ -14,12 +15,14 @@ describe('AgentHookServer authority evidence', () => {
     for (const server of servers) {
       server.stop()
     }
+
     servers.length = 0
   })
 
   it('freezes pre-listen commitments separately from current-runtime observations', async () => {
     const server = new AgentHookServer()
     servers.push(server)
+
     const hydrated = {
       paneKey: PANE_KEY,
       launchToken: 'launch-before-restart',
@@ -30,6 +33,7 @@ describe('AgentHookServer authority evidence', () => {
       receivedAt: 100,
       stateStartedAt: 100
     } satisfies AgentHookEventPayload & { receivedAt: number; stateStartedAt: number }
+
     server._getStateForTests().lastStatusByPaneKey.set(PANE_KEY, hydrated)
 
     await server.start()
@@ -185,6 +189,7 @@ describe('AgentHookServer authority evidence', () => {
     servers.push(server)
     const launchToken = 'launch-before-restart'
     const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
+
     const hydrated = {
       paneKey: PANE_KEY,
       launchToken,
@@ -195,6 +200,7 @@ describe('AgentHookServer authority evidence', () => {
       receivedAt: 100,
       stateStartedAt: 100
     } satisfies AgentHookEventPayload & { receivedAt: number; stateStartedAt: number }
+
     server._getStateForTests().lastStatusByPaneKey.set(PANE_KEY, hydrated)
     server.registerPaneKeyAlias('tab-authority:0', PANE_KEY, 'old-pty')
     await server.start()

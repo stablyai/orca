@@ -21,15 +21,20 @@ export async function resolveSshReconnectModelPaint(args: {
   if (!args.reconnectMayUseModel) {
     return { altFrameWouldBeSkipped: false, paintsFromModel: false, snapshot: null }
   }
+
   // Decide before the probe: an exit makes the snapshot unusable, so waiting only delays replay.
   const replayTransition = lastAlternateScreenTransition(args.replay)
+
   if (replayTransition === 'exited') {
     return { altFrameWouldBeSkipped: false, paintsFromModel: false, snapshot: null }
   }
+
   const snapshot = await args.fetchSnapshot()
+
   const altFrameWouldBeSkipped = snapshot
     ? shouldSkipAltFrameForWidthMismatch(snapshot.cols, args.readTargetCols())
     : false
+
   return {
     altFrameWouldBeSkipped,
     paintsFromModel: sshReconnectPaintsFromModel({

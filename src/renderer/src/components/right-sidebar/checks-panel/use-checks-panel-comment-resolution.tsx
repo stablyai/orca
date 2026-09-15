@@ -65,6 +65,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     sourceControlAiActionsVisible,
     commentResolutionLaunchAcceptedRef
   } = model
+
   const handleResolve = useCallback(
     async (
       threadId: string,
@@ -72,15 +73,19 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       options: { notifyOnFailure?: boolean } = {}
     ): Promise<boolean> => {
       const notifyOnFailure = options.notifyOnFailure !== false
+
       const rollbackThread = (previousThreadComments: PRComment[]): void => {
         setComments((prev) => restorePRCommentThreadSnapshot(prev, previousThreadComments))
       }
+
       if (repo && activeGitLabReview) {
         let previousThreadComments: PRComment[] = []
         setComments((prev) => {
           previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+
           return markPRCommentThreadResolved(prev, threadId, resolve)
         })
+
         const result = await resolveGitLabMRDiscussionForChecks({
           repoPath: repo.path,
           repoId: repo.id,
@@ -89,18 +94,24 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
           discussionId: threadId,
           resolved: resolve
         })
+
         if (!result.ok) {
           rollbackThread(previousThreadComments)
+
           if (notifyOnFailure) {
             toast.error(result.error)
           }
+
           return false
         }
+
         return true
       }
+
       if (!repo || !prNumber) {
         return false
       }
+
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
         branch,
@@ -108,20 +119,26 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         pr?.prRepo,
         pr?.headSha
       )
+
       let previousThreadComments: PRComment[] = []
       setComments((prev) => {
         previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+
         return markPRCommentThreadResolved(prev, threadId, resolve)
       })
+
       const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
         repoId: repo.id,
         prRepo: pr?.prRepo
       })
+
       if (!isCurrentAsyncResult(requestKey)) {
         return ok
       }
+
       if (!ok) {
         rollbackThread(previousThreadComments)
+
         if (notifyOnFailure) {
           toast.error(
             translate(
@@ -131,6 +148,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
           )
         }
       }
+
       return ok
     },
     [
@@ -149,11 +167,14 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
   )
 
   const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
+
   const commentsDisabledReason = canTargetPRComments
     ? undefined
     : 'Commenting requires a GitHub PR repository target.'
+
   const detectedAgentsForAI =
     typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
+
   const noEnabledAgentKnown =
     detectedAgentsForAI != null &&
     pickDefaultSourceControlAgent(
@@ -161,11 +182,13 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       detectedAgentsForAI,
       settings?.disabledTuiAgents
     ) == null
+
   const aiActionDisabledReason = !activeWorktreeId
     ? 'Select a workspace before launching an AI action.'
     : noEnabledAgentKnown
       ? 'No enabled AI agents. Configure agents in Settings.'
       : undefined
+
   useEffect(() => {
     if (!sourceControlAiActionsVisible) {
       setAgentComposerState(null)
@@ -181,6 +204,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     commentResolutionLaunchAcceptedRef,
     setAgentComposerState
   ])
+
   const resolveCommentsWithAIDisabledReason = commentResolutionAckBusy
     ? 'Still finishing the previous comment launch.'
     : commentsLoading
@@ -196,6 +220,7 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
               : activeReview.provider === 'gitlab' && !activeGitLabReview
                 ? 'Open a GitLab MR before resolving comments.'
                 : undefined
+
   return {
     handleResolve,
     canTargetPRComments,

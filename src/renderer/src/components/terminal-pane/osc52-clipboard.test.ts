@@ -194,11 +194,14 @@ describe('createOsc52OscHandler', () => {
     } = {}
   ) {
     const settingEnabled = 'settingEnabled' in overrides ? overrides.settingEnabled : true
+
     const writeClipboardText =
       overrides.writeClipboardText ??
       vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+
     const showBlockedWriteToast = vi.fn()
     const showWriteFailedToast = overrides.showWriteFailedToast ?? vi.fn()
+
     const handler = createOsc52OscHandler({
       getSettingEnabled: () => settingEnabled,
       getReplaying: () => overrides.replaying ?? false,
@@ -206,6 +209,7 @@ describe('createOsc52OscHandler', () => {
       showBlockedWriteToast,
       showWriteFailedToast
     })
+
     return { handler, writeClipboardText, showBlockedWriteToast, showWriteFailedToast }
   }
 
@@ -220,9 +224,11 @@ describe('createOsc52OscHandler', () => {
     // Why: a 15-byte sequence repeated across one hostile chunk would otherwise fire
     // a million IPC round-trips and native clipboard writes. Last write still wins.
     const { handler, writeClipboardText } = setup()
+
     for (let i = 0; i < 1000; i++) {
       handler(`c;${b64(`copy ${i}`)}`)
     }
+
     await Promise.resolve()
     expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('copy 999')
   })
@@ -241,6 +247,7 @@ describe('createOsc52OscHandler', () => {
     // Why getters, not values: settings hydrate and toggle after the handler is registered.
     let enabled = false
     const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+
     const handler = createOsc52OscHandler({
       getSettingEnabled: () => enabled,
       getReplaying: () => false,
@@ -288,14 +295,18 @@ describe('createOsc52OscHandler', () => {
     // Why the listener: an unhandled rejection here does not fail this suite on its own,
     // so without it the `.catch` on the coalesced write is deletable with nothing going red.
     const unhandled: unknown[] = []
+
     const record = (reason: unknown): void => {
       unhandled.push(reason)
     }
+
     process.on('unhandledRejection', record)
     const written: string[] = []
+
     const showWriteFailedToast = vi.fn(() => {
       throw new Error('toast unavailable')
     })
+
     try {
       // Why not vi.fn here: the spy tracks settled results, which marks the rejection
       // handled and hides exactly the leak this test exists to catch.
@@ -304,6 +315,7 @@ describe('createOsc52OscHandler', () => {
         getReplaying: () => false,
         writeClipboardText: (text) => {
           written.push(text)
+
           return Promise.reject(new Error('denied by OS'))
         },
         showBlockedWriteToast: vi.fn(),
@@ -325,6 +337,7 @@ describe('createOsc52OscHandler', () => {
     const showWriteFailedToast = vi.fn(() => {
       throw new Error('toast unavailable')
     })
+
     const { handler } = setup({
       writeClipboardText: vi.fn<(text: string) => Promise<void>>(() => {
         throw new Error('clipboard unavailable')
@@ -349,6 +362,7 @@ describe('createOsc52OscHandler', () => {
         throw new Error('clipboard unavailable')
       })
       .mockResolvedValue(undefined)
+
     const { handler } = setup({ writeClipboardText })
 
     handler(`c;${b64('first')}`)

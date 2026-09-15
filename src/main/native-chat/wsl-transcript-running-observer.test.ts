@@ -23,17 +23,21 @@ describe('WSL transcript running observer', () => {
   it('shares one running-distro probe across staggered watchers', async () => {
     const ubuntu = vi.fn()
     const debian = vi.fn()
+
     const stopUbuntu = observeWslTranscriptRunningState(
       '\\\\wsl.localhost\\Ubuntu\\home\\ada\\a.jsonl',
       () => ubuntu(true),
       () => ubuntu(false)
     )
+
     await vi.advanceTimersByTimeAsync(1_000)
+
     const stopDebian = observeWslTranscriptRunningState(
       '\\\\wsl.localhost\\Debian\\home\\ada\\b.jsonl',
       () => debian(true),
       () => debian(false)
     )
+
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(mocks.listRunning).toHaveBeenCalledTimes(1)
@@ -48,6 +52,7 @@ describe('WSL transcript running observer', () => {
 
   it('coalesces slow subscription callbacks and retains the latest observation', async () => {
     let finishFirst: (() => void) | undefined
+
     const callback = vi
       .fn()
       .mockImplementationOnce(
@@ -57,6 +62,7 @@ describe('WSL transcript running observer', () => {
           })
       )
       .mockResolvedValue(undefined)
+
     const stop = observeWslTranscriptRunningState(
       '\\\\wsl.localhost\\Ubuntu\\home\\ada\\a.jsonl',
       callback,

@@ -27,11 +27,13 @@ export function readClaudeSettingsEffort(settings: unknown): string | null {
 
 export function readClaudeSettingsFastMode(settings: unknown): boolean | null {
   const value = record(record(settings)?.effective)?.fastMode
+
   return typeof value === 'boolean' ? value : null
 }
 
 export function readClaudeSettingsFastModePerSessionOptIn(settings: unknown): boolean | null {
   const value = record(record(settings)?.effective)?.fastModePerSessionOptIn
+
   return typeof value === 'boolean' ? value : null
 }
 
@@ -47,6 +49,7 @@ export function readClaudeFastModeFacts(value: unknown): {
   // Narrowed by lookup, so the wire string reaches the session only as a known state.
   const matched = FAST_MODE_STATES.find((entry) => entry === state)
   const reportedDisabledReason = text(row?.fast_mode_disabled_reason)
+
   return {
     ...(matched ? { state: matched } : {}),
     ...(reportedDisabledReason ? { disabledReason: reportedDisabledReason } : {}),
@@ -56,9 +59,11 @@ export function readClaudeFastModeFacts(value: unknown): {
 
 export function observeClaudeFastModeFacts(session: ClaudeSession, value: unknown): void {
   const facts = readClaudeFastModeFacts(value)
+
   if (facts.state) {
     session.fastModeState = facts.state
   }
+
   if (facts.disabledReason) {
     session.fastModeDisabledReason = facts.disabledReason
   } else if (facts.state || facts.disabledReasonReported) {
@@ -87,6 +92,7 @@ export function readClaudeCurrentModel(session: ClaudeSession): {
   const confirmed =
     session.reportedModelMutation === session.optionMutationSequence &&
     session.reportedOptions.model !== undefined
+
   return {
     id: confirmed
       ? session.reportedOptions.model
@@ -113,6 +119,7 @@ export async function readClaudeListedModels(
   timeoutMs: number | undefined
 ): Promise<ListedModel[]> {
   const catalog = await session.connection.supportedModels({ timeoutMs }).catch(() => null)
+
   return catalog ? listedModels({ models: catalog }) : []
 }
 
@@ -121,9 +128,11 @@ export function claudeModelEffortLevels(
   models: readonly ListedModel[]
 ): { modelId: string | undefined; levels: ReadonlySet<string> | null } {
   const modelId = readClaudeCurrentModel(session).id
+
   const matched = modelId
     ? models.find((model) => model.id === modelId || model.resolvedModel === modelId)
     : undefined
+
   return {
     modelId: matched?.id ?? modelId,
     levels: matched ? new Set(matched.efforts.map((choice) => choice.value)) : null
@@ -138,6 +147,7 @@ export function claudeModelFastModeSupport(
   const reportedModelId = requestedModel ?? readClaudeCurrentModel(session).id
   const modelId = reportedModelId ?? models.find((model) => model.isDefault)?.id
   const matched = modelId ? matchListedModel(models, modelId) : undefined
+
   return {
     modelId: matched?.id ?? modelId,
     supported: matched?.supportsFastMode ?? null
@@ -145,6 +155,7 @@ export function claudeModelFastModeSupport(
 }
 
 const TRANSIENT_FAST_MODE_REASONS = new Set(['network_error', 'unknown', 'pending'])
+
 const NON_BLOCKING_FAST_MODE_REASONS = new Set(['preference', 'sdk_opt_in_required'])
 
 function claudeFastModeSupport(
@@ -154,14 +165,17 @@ function claudeFastModeSupport(
   if (disabledReason && TRANSIENT_FAST_MODE_REASONS.has(disabledReason)) {
     return undefined
   }
+
   if (disabledReason && !NON_BLOCKING_FAST_MODE_REASONS.has(disabledReason)) {
     return { supported: false, reason: disabledReason }
   }
+
   if (!models.some((model) => model.supportsFastMode === true)) {
     return models.length > 0 && models.every((model) => model.supportsFastMode === false)
       ? { supported: false, reason: 'model-not-supported' }
       : undefined
   }
+
   return { supported: true }
 }
 
@@ -174,10 +188,13 @@ function listedModelFastModeSupport(
 
 function decodedFastMode(session: ClaudeSession): boolean | undefined {
   const encoded = session.options.get('fastMode')
+
   if (encoded === undefined) {
     return undefined
   }
+
   const decoded = decodeStructuredAgentSessionOptionValue('fastMode', encoded)
+
   return typeof decoded === 'boolean' ? decoded : undefined
 }
 
@@ -202,37 +219,48 @@ export async function readClaudeStructuredSessionOptions(
   timeoutMs: number | undefined
 ): Promise<AgentSessionOptionsResult> {
   const readMutationSequence = session.optionMutationSequence
+
   const [catalog, settings] = await Promise.all([
     session.connection.supportedModels({ timeoutMs }).catch(() => null),
     session.connection.getSettings({ timeoutMs }).catch(() => null)
   ])
+
   if (settings !== null && readMutationSequence === session.optionMutationSequence) {
     const effort = readClaudeSettingsEffort(settings)
     const fastMode = readClaudeSettingsFastMode(settings)
     const perSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(settings)
+
     if (effort) {
       session.reportedOptions.effort = effort
     }
+
     if (fastMode !== null) {
       session.reportedOptions.fastMode = fastMode
+
       if (decodedFastMode(session) !== undefined) {
         session.options.set('fastMode', String(fastMode))
       }
+
       session.confirmedOptions.add('fastMode')
     }
+
     if (perSessionOptIn !== null) {
       session.fastModePerSessionOptIn = perSessionOptIn
     }
   }
+
   const discovered = listedModels(catalog ? { models: catalog } : null)
   const models = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
   const model = currentModelId(models, current.id)
+
   if (!models.some((entry) => entry.id === model)) {
     models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
   }
+
   const effort = session.options.get('effort') ?? session.reportedOptions.effort
   let desiredFastMode = decodedFastMode(session)
+
   if (
     desiredFastMode === true &&
     listedModelFastModeSupport(discovered, model) === false &&
@@ -242,6 +270,7 @@ export async function readClaudeStructuredSessionOptions(
     session.confirmedOptions.delete('fastMode')
     desiredFastMode = false
   }
+
   // The child answers Fast two ways and need not answer both: the settings readback
   // carries the boolean, and the session frames carry a routing state. A fresh
   // session reports the state while the boolean is still absent, so without this
@@ -252,7 +281,9 @@ export async function readClaudeStructuredSessionOptions(
     desiredFastMode ??
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
+
   const support = claudeFastModeSupport(discovered, session.fastModeDisabledReason)
+
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -261,6 +292,7 @@ export async function readClaudeStructuredSessionOptions(
       ? ['fastMode']
       : [])
   ]
+
   return {
     models: models.map((entry) => ({
       id: entry.id,

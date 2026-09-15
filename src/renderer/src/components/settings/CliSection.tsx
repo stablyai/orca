@@ -49,9 +49,11 @@ function getRevealLabel(platform: string): string {
   if (platform === 'darwin') {
     return 'Show in Finder'
   }
+
   if (platform === 'win32') {
     return 'Show in Explorer'
   }
+
   return 'Show in File Manager'
 }
 
@@ -59,12 +61,15 @@ function getInstallDescription(platform: string): string {
   if (platform === 'darwin') {
     return 'Register `orca` in /usr/local/bin.'
   }
+
   if (platform === 'linux') {
     return 'Register `orca-ide` in ~/.local/bin.'
   }
+
   if (platform === 'win32') {
     return 'Register `orca` in your user PATH.'
   }
+
   return 'CLI registration is not yet available on this platform.'
 }
 
@@ -83,16 +88,20 @@ export function CliSection({
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const mountedRef = useMountedRef()
+
   const agentRuntime = useMemo(
     () =>
       getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
     [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
   )
+
   const cliSkillFreshnessName = useLocalCliSkillFreshnessName(agentRuntime)
+
   const cliSkillDiscoveryTarget = useMemo(
     () => getSkillDiscoveryTargetForRuntime(agentRuntime),
     [agentRuntime]
   )
+
   const {
     installed: cliSkillDetected,
     loading: cliSkillLoading,
@@ -102,19 +111,23 @@ export function CliSection({
     discoveryTarget: cliSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const cliSkillInstallCommand = buildSkillCommandForRuntime(
     ORCA_CLI_SKILL_INSTALL_COMMAND,
     agentRuntime
   )
+
   const cliSkillUpdateCommand = buildSkillCommandForRuntime(
     ORCA_CLI_SKILL_UPDATE_COMMAND,
     agentRuntime
   )
+
   const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
     currentPlatform,
     settings,
     agentRuntime
   )
+
   const getCliSkillPrerequisiteStatus = useCallback(
     () =>
       agentRuntime.runtime === 'wsl'
@@ -134,6 +147,7 @@ export function CliSection({
 
   const closeDialog = useCallback((): void => setDialogOpen(false), [])
   const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
+
   const { busyAction, installFailure, clearInstallFailure, install, remove } =
     useCliRegistrationActions({
       commandName,
@@ -145,6 +159,7 @@ export function CliSection({
   const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
     clearInstallFailure()
+
     try {
       handleStatusChange(await window.api.cli.getInstallStatus())
     } catch (error) {
@@ -174,6 +189,7 @@ export function CliSection({
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
   const revealLabel = getRevealLabel(currentPlatform)
+
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
 

@@ -33,10 +33,13 @@ export async function resolveWorktreeAddBaseContext(
   options: AddWorktreeOptions
 ): Promise<WorktreeAddBaseContext> {
   let effectiveBaseOid: string | null = null
+
   const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, async (qualifiedRef) => {
     effectiveBaseOid = await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)
+
     return effectiveBaseOid !== null
   })
+
   const localBaseRefRefresh = refreshLocalBaseRef
     ? await refreshLocalBaseRefForWorktreeCreate(
         repoPath,
@@ -46,6 +49,7 @@ export async function resolveWorktreeAddBaseContext(
         options
       )
     : undefined
+
   const localBaseRefUpdateSuggestion =
     !refreshLocalBaseRef && options.suggestLocalBaseRefUpdate
       ? await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
@@ -56,6 +60,7 @@ export async function resolveWorktreeAddBaseContext(
           options
         )
       : undefined
+
   return {
     effectiveBase,
     // Refresh/suggestion work can span ref changes; only reuse the immediate resolution probe.
@@ -74,12 +79,14 @@ export async function persistWorktreeCreationBase(
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   const configKey = `branch.${branch}.base`
+
   try {
     await gitExecFileAsync(['config', '--local', '--replace-all', configKey, effectiveBase], {
       ...gitExecOptions(worktreePath, options)
     })
   } catch (error) {
     console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
+
     try {
       // Why: reused branch names may carry stale base metadata; if replacement fails, unset it so consumers don't trust stale lineage.
       await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
@@ -101,6 +108,7 @@ export async function configurePushAutoSetupRemote(
   try {
     // Why: `--get` (not `--local --get`) treats a value at any scope as an explicit user choice.
     let alreadySet = false
+
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
         ...gitExecOptions(worktreePath, options)
@@ -109,10 +117,12 @@ export async function configurePushAutoSetupRemote(
     } catch (readError) {
       // Why: exit 1 means unset; other codes are real read failures and must not overwrite config.
       const code = (readError as { code?: unknown })?.code
+
       if (code !== 1) {
         throw readError
       }
     }
+
     if (!alreadySet) {
       await gitExecFileAsync(['config', '--local', 'push.autoSetupRemote', 'true'], {
         ...gitExecOptions(worktreePath, options)
@@ -189,15 +199,18 @@ async function performAddWorktree(
   // Why: enable long paths for this Windows checkout without changing user Git config.
   const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
+
   if (noCheckout) {
     args.push('--no-checkout')
   }
+
   if (options.checkoutExistingBranch) {
     // Why: -b would create a new branch instead of checking out the selected one.
     args.push(worktreePath, branch)
   } else {
     // Why: --no-track avoids inheriting the base's upstream so `git status` won't misreport "behind by N" pre-publish; first push sets it (see push.autoSetupRemote below).
     args.push('--no-track', '-b', branch, worktreePath)
+
     if (baseBranch) {
       const baseContext = await resolveWorktreeAddBaseContext(
         repoPath,
@@ -205,12 +218,14 @@ async function performAddWorktree(
         refreshLocalBaseRef,
         options
       )
+
       effectiveBase = baseContext.effectiveBase
       localBaseRefRefresh = baseContext.localBaseRefRefresh
       localBaseRefUpdateSuggestion = baseContext.localBaseRefUpdateSuggestion
       args.push(effectiveBase)
     }
   }
+
   try {
     await gitExecFileAsync(args, {
       ...gitExecOptions(repoPath, options),
@@ -237,6 +252,7 @@ async function performAddWorktree(
   // linked worktree writes the shared common-dir config (whole repo) — intentional and idempotent,
   // so it's warn-only and not rolled back on failure.
   await configurePushAutoSetupRemote(worktreePath, options)
+
   return {
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
     ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})

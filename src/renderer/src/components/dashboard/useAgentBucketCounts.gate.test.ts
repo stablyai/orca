@@ -35,6 +35,7 @@ function storeState(): AppState {
 // driven directly: allocate the 14-key object, then `shallow()` it against the
 // previous one. Kept here as the comparison baseline.
 let previousShallow: Record<string, unknown> | null = null
+
 const shallowInputs = (s: AppState): Record<string, unknown> => ({
   repos: s.repos,
   worktreesByRepo: s.worktreesByRepo,
@@ -51,12 +52,16 @@ const shallowInputs = (s: AppState): Record<string, unknown> => ({
   acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
   agentStatusEpoch: s.agentStatusEpoch
 })
+
 const shallowSelector = (s: AppState): Record<string, unknown> => {
   const next = shallowInputs(s)
+
   if (previousShallow !== null && shallow(previousShallow, next)) {
     return previousShallow
   }
+
   previousShallow = next
+
   return next
 }
 
@@ -67,21 +72,26 @@ function countAllocations(run: () => void): { entries: number; maps: number } {
   let maps = 0
   Object.entries = ((target: object) => {
     entries += 1
+
     return realEntries(target)
   }) as typeof Object.entries
+
   class CountingMap<K, V> extends RealMap<K, V> {
     constructor(init?: readonly (readonly [K, V])[] | null) {
       super(init as never)
       maps += 1
     }
   }
+
   globalThis.Map = CountingMap as unknown as MapConstructor
+
   try {
     run()
   } finally {
     Object.entries = realEntries
     globalThis.Map = RealMap
   }
+
   return { entries, maps }
 }
 
@@ -101,8 +111,10 @@ describe('agent bucket count input gate', () => {
         selectAgentBucketCountState(state)
       }
     })
+
     const shallowBaseline = countAllocations(() => {
       shallowSelector(state)
+
       for (let write = 0; write < STORE_WRITES; write += 1) {
         shallowSelector(state)
       }
@@ -124,6 +136,7 @@ describe('agent bucket count input gate', () => {
       ...state,
       unreadCountsByWorktree: {}
     } as unknown as AppState
+
     expect(selectAgentBucketCountState(unrelated)).toBe(first)
 
     const moved = { ...state, agentStatusEpoch: 1 } as unknown as AppState
@@ -136,6 +149,7 @@ describe('agent bucket count input gate', () => {
     const state = storeState()
     const inputs = selectAgentBucketCountState(state)
     expect(inputs.settings).toBeNull()
+
     for (const key of [
       'repos',
       'worktreesByRepo',

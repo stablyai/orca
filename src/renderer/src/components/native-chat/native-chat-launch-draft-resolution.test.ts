@@ -61,11 +61,13 @@ describe('launchDraftResolvedByTranscript', () => {
   it('does not resolve when "load earlier" only prepends history', () => {
     const tail = { ...userMessage('u9', 'earlier turn'), timestamp: SEEDED_AT - 600_000 }
     const baseline = { userTurnCount: 1, lastUserTurnId: 'u9' }
+
     const paged = [
       { ...userMessage('u7', 'older'), timestamp: SEEDED_AT - 900_000 },
       { ...userMessage('u8', 'older'), timestamp: SEEDED_AT - 800_000 },
       tail
     ]
+
     expect(launchDraftResolvedByTranscript({ createdAt: SEEDED_AT }, paged, baseline)).toBe(false)
   })
 })

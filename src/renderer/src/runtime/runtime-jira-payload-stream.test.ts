@@ -14,6 +14,7 @@ afterEach(() => {
 describe('readRuntimeJiraPayload', () => {
   it('reassembles chunks and unsubscribes when the stream ends', async () => {
     const unsubscribe = vi.fn()
+
     const subscribe = vi.fn(
       async (_args: unknown, callbacks: RuntimeEnvironmentSubscribeCallbacks) => {
         callbacks.onResponse({
@@ -34,9 +35,11 @@ describe('readRuntimeJiraPayload', () => {
           result: { type: 'end' },
           _meta: { runtimeId: 'runtime-1' }
         })
+
         return { unsubscribe, sendBinary: vi.fn() }
       }
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
 
     await expect(
@@ -58,9 +61,11 @@ describe('readRuntimeJiraPayload', () => {
           result: { type: 'unknown' },
           _meta: { runtimeId: 'runtime-1' }
         })
+
         return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
       }
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
 
     await expect(

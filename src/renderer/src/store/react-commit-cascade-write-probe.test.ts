@@ -6,6 +6,7 @@ const { probe, noteWrite } = vi.hoisted(() => ({
   probe: { armed: false },
   noteWrite: vi.fn()
 }))
+
 vi.mock('@/lib/react-commit-cascade-store-write-samples', () => ({
   reactCommitCascadeWriteProbe: probe,
   noteReactCommitCascadeStoreWrite: (boundary: object, partial: unknown) =>

@@ -4,7 +4,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendRuntimePtyInput = vi.fn()
+
 const sendRuntimePtyInputVerified = vi.fn()
+
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args),
   sendRuntimePtyInputVerified: (...args: unknown[]) => sendRuntimePtyInputVerified(...args)
@@ -28,7 +30,9 @@ import {
 } from '../../../../shared/agent-tui-input-clear'
 
 const SETTINGS = {} as Parameters<typeof sendNativeChatMessage>[0]
+
 const PTY = 'pty-launch-draft'
+
 const DRAFT = 'Linked Linear issue: ABC-123\nhttps://linear.app/x/issue/ABC-123'
 
 const writes = (): string[] => sendRuntimePtyInput.mock.calls.map((call) => call[2] as string)
@@ -39,6 +43,7 @@ beforeEach(() => {
   sendRuntimePtyInput.mockReturnValue(true)
   resetNativeChatPtySendQueuesForTests()
 })
+
 afterEach(() => {
   vi.useRealTimers()
   resetNativeChatPtySendQueuesForTests()
@@ -76,6 +81,7 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
     const writeTimes = new Map<string, number>()
     sendRuntimePtyInput.mockImplementation((_settings, _pty, bytes: string) => {
       writeTimes.set(bytes, performance.now())
+
       return true
     })
     sendNativeChatMessage(SETTINGS, PTY, 'edited', {
@@ -86,6 +92,7 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
 
     const blockedUntil =
       performance.now() + NATIVE_CHAT_CLEAR_CONFIRM_MS + NATIVE_CHAT_SUBMIT_DELAY_MS + 50
+
     while (performance.now() < blockedUntil) {
       // Simulate a renderer long task delaying both nominal deadlines.
     }
@@ -133,6 +140,7 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
       clearInput: '\x15',
       confirmCleared: () => true
     })
+
     expect(withConfirm.settleAfterMs).toBe(
       NATIVE_CHAT_SUBMIT_DELAY_MS + NATIVE_CHAT_CLEAR_CONFIRM_MS
     )

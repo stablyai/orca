@@ -68,17 +68,21 @@ export function listStoredWorktreeRowsForRepo(
 ): GitWorktreeInfo[] {
   const expectedHostId = getRepoExecutionHostId(repo)
   const byWorktreeId = new Map<string, GitWorktreeInfo>()
+
   for (const [worktreeId, meta] of Object.entries(
     readAllWorktreeMetaForHost(store, expectedHostId)
   )) {
     const parsed = splitWorktreeId(worktreeId)
+
     if (!parsed || parsed.repoId !== repo.id) {
       continue
     }
+
     // Why: one repo id can be registered on several execution hosts, so a degraded host must not republish another host's rows (same gate as worktrees.ts).
     if (meta.hostId ? meta.hostId !== expectedHostId : repoOwnerCount > 1) {
       continue
     }
+
     byWorktreeId.set(worktreeId, {
       path: parsed.worktreePath,
       head: '',
@@ -92,6 +96,7 @@ export function listStoredWorktreeRowsForRepo(
         : {})
     })
   }
+
   return [...byWorktreeId.values()]
 }
 
@@ -104,6 +109,7 @@ export async function resolveRepoWorktreeRows(
   repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): Promise<RepoWorktreeRow[]> {
   const { store } = deps
+
   if (isFolderRepo(repo)) {
     return deps.listFolderWorkspaces(repo, repoOwnerCount).map((worktree) => ({
       ...worktree,
@@ -122,6 +128,7 @@ export async function resolveRepoWorktreeRows(
       comment: worktree.comment
     }))
   }
+
   // Why the catch: `withTimeout` resolves its fallback on rejection too, so the rejection must be absorbed
   // first for `null` to mean "timed out" only. A stall never reached a verdict, so restore persisted rows
   // instead of publishing a healthy-looking empty catalog; a rejection is a real answer and keeps its
@@ -133,28 +140,36 @@ export async function resolveRepoWorktreeRows(
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
   )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
+
   const gitWorktrees = preserveFolderUpgradeWorktreePath(repo, scan.worktrees)
+
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
   }
+
   const expectedHostId = getRepoExecutionHostId(repo)
+
   return gitWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     // Why: lineage validation needs a durable instance ID even when the runtime sees a workspace before renderer discovery-stamp.
     const existingMeta = metaById[worktreeId]
+
     // A host-qualified row is exact; the locator-keyed one is only trustworthy when this repo owns it.
     const ownedExistingMeta =
       readWorktreeMetaForHost(store, worktreeId, expectedHostId) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+
     const meta = ownedExistingMeta?.instanceId
       ? ownedExistingMeta
       : ownedExistingMeta || (!existingMeta && repoOwnerCount === 1)
         ? writeWorktreeMetaForHost(store, worktreeId, expectedHostId, {})
         : undefined
+
     const merged = {
       ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
       hostId: meta?.hostId ?? expectedHostId
     }
+
     return {
       ...merged,
       parentWorktreeId: null,
@@ -187,9 +202,11 @@ export async function resolveScopedWorktreeIdRow(
 ): Promise<RepoWorktreeRow | null> {
   const { store } = deps
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
+
   if (!parsed?.repoId || !parsed.worktreePath) {
     return null
   }
+
   const owners = store
     .getRepos()
     .filter(
@@ -197,31 +214,40 @@ export async function resolveScopedWorktreeIdRow(
         repo.id === parsed.repoId &&
         (requiredHostId === undefined || getRepoExecutionHostId(repo) === requiredHostId)
     )
+
   // Why: one repo id can be registered on several execution hosts, and only the fleet scan decides
   // between unqualified rows. A host qualifier narrows the same-id set without scanning other owners.
   if (owners.length !== 1) {
     return null
   }
+
   const repo = owners[0]
+
   const rows = await resolveRepoWorktreeRows(
     deps,
     repo,
     store.getAllWorktreeMeta() ?? {},
     resolveLocalProjectRuntimesForRepos(store, [repo])
   )
+
   const projected = projectResolvedWorktreeLineage(rows, store.getAllWorktreeLineage?.() ?? {})
   const exact = projected.find((worktree) => worktree.id === worktreeId)
+
   if (exact) {
     return exact
   }
+
   // Why (#16243): the scan can spell this id's path differently — the divergence `path:` absorbs.
   // One equivalent row may stand in; two is an ambiguity a scoped lookup must refuse, not guess.
   const comparisonKey = worktreeIdComparisonKey(worktreeId)
+
   if (comparisonKey === null) {
     return null
   }
+
   const equivalent = projected.filter(
     (worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey
   )
+
   return equivalent.length === 1 ? equivalent[0] : null
 }

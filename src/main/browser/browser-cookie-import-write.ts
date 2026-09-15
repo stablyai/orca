@@ -32,6 +32,7 @@ export function importedCookieIdentity(
   // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/; hostOnly is how
   // the identity says "omit domain", the same contract the CDP restore params already read.
   const isHostPrefixed = cookie.name.startsWith(HOST_PREFIX)
+
   return {
     url: cookie.url,
     name: cookie.name,
@@ -61,6 +62,7 @@ export function planImportedCookieWrite(
   if (partition.status === 'unreadable') {
     return { status: 'skip', reason: partition.reason }
   }
+
   return {
     status: 'write',
     identity: importedCookieIdentity(
@@ -79,6 +81,7 @@ export function importedCookieRemovalKey(identity: CookieClearIdentity): {
   const removalUrl = new URL(identity.url)
   const path = identity.path ?? '/'
   removalUrl.pathname = path.startsWith('/') ? path : '/'
+
   return { url: removalUrl.toString(), name: identity.name }
 }
 
@@ -149,26 +152,32 @@ export function planImportWrites<T extends PlannableCookie>(
     // planImportedCookieWrite uses — so path B can plan before it has resolved a write URL.
     if (cookie.partition.status === 'unreadable') {
       const family = registrableFamily(cookie.domain)
+
       if (family === null) {
         hasUnrepresentableSkip = true
       } else {
         skippedFamilies.add(family)
       }
+
       skips.push({ cookie, reason: cookie.partition.reason })
       continue
     }
+
     provisional.push(cookie)
   }
 
   // Pass 2: a readable cookie whose family was skipped is suppressed too — otherwise its family's
   // removal scope would be widened by a domain we then decline to write back (STA-4300 §2b).
   const writes: T[] = []
+
   for (const cookie of provisional) {
     const family = registrableFamily(cookie.domain)
+
     if (family !== null && skippedFamilies.has(family)) {
       skips.push({ cookie, reason: 'family partition unreadable' })
       continue
     }
+
     writes.push(cookie)
   }
 
@@ -183,10 +192,12 @@ function summaryDomain(domain: string): string {
 function firstNonPrintable(value: string): string {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code < 0x20 || code > 0x7e) {
       return `pos=${index} char=U+${code.toString(16).padStart(4, '0')}`
     }
   }
+
   return 'none found'
 }
 
@@ -205,6 +216,7 @@ export async function writeImportedCookies(
 
   for (const cookie of cookies) {
     const plan = planImportedCookieWrite(cookie, cookie.partition)
+
     if (plan.status === 'skip') {
       phase.partitionSkipped += 1
       options.log(
@@ -212,9 +224,11 @@ export async function writeImportedCookies(
       )
       continue
     }
+
     // Why: a rejected CDP command can still have reached Chromium before the transport failed.
     // Record the coordinate before dispatch so a replace rollback removes every possible write.
     phase.attemptedKeys.push(importedCookieRemovalKey(plan.identity))
+
     try {
       await store.writeCookieIdentity(plan.identity)
       phase.importedCount += 1
@@ -222,11 +236,13 @@ export async function writeImportedCookies(
     } catch (err) {
       phase.writeRejected += 1
       phase.failure = err
+
       if (phase.writeRejected <= 5) {
         options.log(
           `  cookie write REJECTED: domain=${summaryDomain(cookie.domain)} valLen=${cookie.value.length} badChar=${firstNonPrintable(cookie.value)} err=${String(err)}`
         )
       }
+
       if (options.stopOnFailure) {
         break
       }

@@ -57,10 +57,12 @@ export type RuntimeMarkdownSaveTabResult = {
 
 export function hashMarkdownContent(content: string): string {
   let hash = 0xcbf29ce484222325n
+
   for (let i = 0; i < content.length; i += 1) {
     hash ^= BigInt(content.charCodeAt(i))
     hash = BigInt.asUintN(64, hash * 0x100000001b3n)
   }
+
   return `content:${utf8ByteLength(content)}:${hash.toString(16).padStart(16, '0')}`
 }
 

@@ -48,6 +48,7 @@ function createDividerDragHarness(): DividerDragHarness {
   const animationFrames = new Map<number, FrameRequestCallback>()
   const previousPane = createPaneElement(100)
   const nextPane = createPaneElement(300)
+
   const divider = {
     style: { setProperty: vi.fn() },
     classList: { add: vi.fn(), remove: vi.fn() },
@@ -65,6 +66,7 @@ function createDividerDragHarness(): DividerDragHarness {
     previousElementSibling: previousPane,
     nextElementSibling: nextPane
   } as unknown as HTMLElement
+
   vi.stubGlobal('document', { createElement: vi.fn(() => divider) })
   vi.stubGlobal('window', {
     addEventListener: vi.fn((event: string, listener: EventListener) => {
@@ -82,6 +84,7 @@ function createDividerDragHarness(): DividerDragHarness {
     vi.fn((callback: FrameRequestCallback) => {
       nextFrameId += 1
       animationFrames.set(nextFrameId, callback)
+
       return nextFrameId
     })
   )

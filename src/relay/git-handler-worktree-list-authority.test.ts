@@ -60,6 +60,7 @@ describe('relay worktree-list authority (#14004)', () => {
           ? Promise.reject(unsupportedZError())
           : Promise.resolve({ stdout: WORKTREE_LIST_OUTPUT, stderr: '' })
       )
+
     // Prime the capability cache so the probe is not repeated; later scans go straight to the fallback.
     await dispatcher.callRequest('git.listWorktrees', { repoPath: '/repo' })
 
@@ -77,6 +78,7 @@ describe('relay worktree-list authority (#14004)', () => {
       if (args.includes('-z')) {
         return Promise.reject(unsupportedZError())
       }
+
       return failListing
         ? Promise.reject(new Error('transient relay failure'))
         : Promise.resolve({ stdout: WORKTREE_LIST_OUTPUT, stderr: '' })
@@ -87,9 +89,11 @@ describe('relay worktree-list authority (#14004)', () => {
     ).rejects.toThrow('transient relay failure')
 
     failListing = false
+
     const result = (await dispatcher.callRequest('git.listWorktrees', {
       repoPath: '/repo'
     })) as Record<string, unknown>[]
+
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({ path: '/repo', isMainWorktree: true })
   })

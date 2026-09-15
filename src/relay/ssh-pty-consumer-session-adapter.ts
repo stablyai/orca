@@ -62,16 +62,20 @@ export class SshPtyConsumerSessionAdapter {
     dispatcher.onClientDetached((clientId, cause) => {
       const connectionKey = String(clientId)
       const grant = this.session.activeGrant(connectionKey)
+
       if (grant) {
         this.clearPausedForGrant(grant)
       }
+
       this.session.close(connectionKey, cause)
+
       if (grant) {
         this.sourceCredit.retainOrCloseOnDetach(grant)
       }
     })
     dispatcher.onNotification('pty.setDeliveryPaused', (params, context) => {
       const grant = this.session.activeGrant(String(context.clientId))
+
       if (
         !grant ||
         grant.clientGeneration !== params.clientGeneration ||
@@ -81,12 +85,15 @@ export class SshPtyConsumerSessionAdapter {
       ) {
         return
       }
+
       if (grant.capabilities?.outputFlowControl) {
         const token = typeof params.deliveryToken === 'string' ? params.deliveryToken : ''
         const identity = this.sourceCredit.ownsDelivery(token, grant, params.id)
+
         if (!identity) {
           return
         }
+
         if (params.paused) {
           this.pausedDeliveryByPty.set(params.id, identity)
         } else if (this.pausedDeliveryByPty.get(params.id) !== identity) {
@@ -95,6 +102,7 @@ export class SshPtyConsumerSessionAdapter {
           this.pausedDeliveryByPty.delete(params.id)
         }
       }
+
       this.setDeliveryPaused?.(params.id, params.paused)
     })
     dispatcher.onNotification('pty.ackData', (params, context) => {
@@ -107,6 +115,7 @@ export class SshPtyConsumerSessionAdapter {
       for (const id of this.pausedDeliveryByPty.keys()) {
         this.setDeliveryPaused?.(id, false)
       }
+
       this.pausedDeliveryByPty.clear()
       this.sourceCredit.dispose()
     })
@@ -138,6 +147,7 @@ export class SshPtyConsumerSessionAdapter {
     acceptedSourceEndSu: number
   ) {
     this.clearPausedIdentity(oldIdentity)
+
     return this.sourceCredit.rotate(
       oldIdentity,
       this.session.activeGrant(String(newClientId)),
@@ -219,30 +229,38 @@ export class SshPtyConsumerSessionAdapter {
     context: RequestContext
   ): Promise<PtyConsumerSessionGrant> {
     const params = parseOpenClientParams(rawParams)
+
     if (params.protocolVersion !== PTY_CONSUMER_SESSION_PROTOCOL_VERSION) {
       throw new Error(
         `Unsupported pty.openClient protocol version: ${params.protocolVersion || 'missing'}`
       )
     }
+
     const identity = requireIdentity(context)
+
     const admission = this.session.admit(params, {
       connectionId: String(context.clientId),
       principal: identity.principal,
       authenticated: identity.authenticated,
       allowSessionOwner: identity.allowSessionOwner
     })
+
     if (!context.onResponseSettled) {
       admission.rollbackPublication()
       throw new Error('SSH PTY consumer response publication fence is unavailable')
     }
+
     context.onResponseSettled((result) => {
       if (!result.ok) {
         admission.rollbackPublication()
+
         return
       }
+
       admission.commitPublication()
       this.closeDisplacedOwner(admission.displacedOwner)
     })
+
     return admission.grant
   }
 
@@ -252,9 +270,11 @@ export class SshPtyConsumerSessionAdapter {
     if (!displaced) {
       return
     }
+
     this.clearPausedForGrant(displaced.grant)
     this.sourceCredit.retainOrCloseOnDetach(displaced.grant)
     const clientId = Number(displaced.connectionId)
+
     if (Number.isSafeInteger(clientId)) {
       this.dispatcher.releaseDisplacedClient(clientId)
     }
@@ -275,6 +295,7 @@ export class SshPtyConsumerSessionAdapter {
       ) {
         continue
       }
+
       this.pausedDeliveryByPty.delete(id)
       this.setDeliveryPaused?.(id, false)
     }

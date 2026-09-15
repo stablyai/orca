@@ -14,29 +14,38 @@ export function bindReattachLiveDataDeferral(session: ConnectPanePtySession): vo
     if (session.reattachLiveDataDeferralDepth <= 0) {
       return
     }
+
     if (!deliver) {
       const owner = session.deferredReattachLiveDataOwners.get(acceptedGeneration)
+
       if (owner) {
         owner.failed = true
       }
     }
+
     session.reattachLiveDataDeferralDepth -= 1
+
     if (session.reattachLiveDataDeferralDepth > 0) {
       return
     }
+
     const queue = session.deferredReattachLiveData
     session.deferredReattachLiveData = null
     const currentPtyId = session.transport.getPtyId()
     const currentGeneration = session.transportStreamGeneration
     const currentOwner = session.deferredReattachLiveDataOwners.get(currentGeneration)
     session.deferredReattachLiveDataOwners = new Map()
+
     if (session.disposed || !queue) {
       queue?.discard()
+
       return
     }
+
     const chunks = queue.takeAll()
     // Why: paint the authoritative replay first, then admit deferred live chunks so the replay clear can't erase newer output.
     let deliveredDeferredChunks = 0
+
     for (const chunk of chunks) {
       if (
         chunk.ptyId !== currentPtyId ||
@@ -46,6 +55,7 @@ export function bindReattachLiveDataDeferral(session: ConnectPanePtySession): vo
         chunk.ackCredit?.()
         continue
       }
+
       if (chunk.ackCredit) {
         deliverTerminalDataWithDeferredCredit(chunk.ackCredit, () => {
           session.dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
@@ -53,8 +63,10 @@ export function bindReattachLiveDataDeferral(session: ConnectPanePtySession): vo
       } else {
         session.dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
       }
+
       deliveredDeferredChunks += 1
     }
+
     if (deliveredDeferredChunks > 0) {
       // Why: replay restores the viewport before these newer bytes parse; settle the deferred slice, then apply the latest user intent.
       flushTerminalOutput(session.pane.terminal, { maxChars: MAX_DEFERRED_REATTACH_LIVE_CHARS })
@@ -67,6 +79,7 @@ export function bindReattachLiveDataDeferral(session: ConnectPanePtySession): vo
         ) {
           return
         }
+
         enforceTerminalCurrentScrollIntent(session.pane.terminal)
       })
     }

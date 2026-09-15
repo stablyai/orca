@@ -48,9 +48,11 @@ describe('local filesystem watcher large batches', () => {
     handleMock.mockReset()
     vi.mocked(stat).mockReset()
     vi.mocked(subscribeParcelWatcher).mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -65,6 +67,7 @@ describe('local filesystem watcher large batches', () => {
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
     vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
       watcherCallback = callback as typeof watcherCallback
+
       return { unsubscribe: vi.fn() } as never
     })
 
@@ -89,6 +92,7 @@ describe('local filesystem watcher large batches', () => {
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
     vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
       watcherCallback = callback as typeof watcherCallback
+
       return { unsubscribe: vi.fn() } as never
     })
     const worktreePath = resolve('/tmp/repo')
@@ -120,6 +124,7 @@ describe('local filesystem watcher large batches', () => {
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
     vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
       watcherCallback = callback as typeof watcherCallback
+
       return { unsubscribe: vi.fn() } as never
     })
     const worktreePath = resolve('/tmp/repo')
@@ -149,6 +154,7 @@ describe('local filesystem watcher large batches', () => {
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
     vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
       watcherCallback = callback as typeof watcherCallback
+
       return { unsubscribe: vi.fn() } as never
     })
     const worktreePath = resolve('/tmp/repo')
@@ -157,11 +163,14 @@ describe('local filesystem watcher large batches', () => {
     await handlers['fs:watchWorktree']({ sender }, { worktreePath })
     // Step under the trailing window so only the max wait can force a flush.
     const step = 100
+
     for (let elapsed = 0; elapsed <= WATCH_BATCH_MAX_WAIT_MS; elapsed += step) {
       watcherCallback?.(null, [{ type: 'update', path: join(worktreePath, `f-${elapsed}.ts`) }])
+
       if (elapsed < WATCH_BATCH_MAX_WAIT_MS) {
         expect(sender.send).not.toHaveBeenCalled()
       }
+
       await vi.advanceTimersByTimeAsync(step)
     }
 

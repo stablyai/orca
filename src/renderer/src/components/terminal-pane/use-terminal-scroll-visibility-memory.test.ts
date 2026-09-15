@@ -40,11 +40,13 @@ function runEffectCleanups(): void {
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
     useEffect: (effect: () => void | (() => void)) => {
       const cleanup = effect()
+
       if (typeof cleanup === 'function') {
         reactRefState.effectCleanups.push(cleanup)
       }
@@ -52,9 +54,11 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
+
       if (!reactRefState.slots[index]) {
         reactRefState.slots[index] = { current: value }
       }
+
       return reactRefState.slots[index] as { current: T }
     }
   }
@@ -87,11 +91,13 @@ describe('useTerminalScrollVisibilityMemory', () => {
 
   afterEach(() => {
     runEffectCleanups()
+
     if (originalRequestAnimationFrame) {
       globalThis.requestAnimationFrame = originalRequestAnimationFrame
     } else {
       delete (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame
     }
+
     if (originalCancelAnimationFrame) {
       globalThis.cancelAnimationFrame = originalCancelAnimationFrame
     } else {
@@ -104,16 +110,20 @@ describe('useTerminalScrollVisibilityMemory', () => {
       onScroll: vi.fn(() => ({ dispose: vi.fn() })),
       scrollToBottom: vi.fn()
     }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }])
     }
+
     const animationFrames: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       animationFrames.push(callback)
+
       return animationFrames.length
     })
 
     beginHookRender()
+
     const visibilityMemory = useTerminalScrollVisibilityMemory({
       managerRef: { current: manager as never },
       isVisibleRef: { current: true },
@@ -134,20 +144,25 @@ describe('useTerminalScrollVisibilityMemory', () => {
 
   it('does not turn a pinned viewport into follow-output when pending focus requests catch up', () => {
     mocks.getTerminalScrollIntentKind.mockReturnValue('pinnedViewport')
+
     const terminal = {
       onScroll: vi.fn(() => ({ dispose: vi.fn() })),
       scrollToBottom: vi.fn()
     }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }])
     }
+
     const animationFrames: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       animationFrames.push(callback)
+
       return animationFrames.length
     })
 
     beginHookRender()
+
     const visibilityMemory = useTerminalScrollVisibilityMemory({
       managerRef: { current: manager as never },
       isVisibleRef: { current: true },
@@ -172,14 +187,17 @@ describe('useTerminalScrollVisibilityMemory', () => {
       onScroll: vi.fn(() => ({ dispose: vi.fn() })),
       scrollToBottom: vi.fn()
     }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }])
     }
+
     const cancelAnimationFrame = vi.fn()
     globalThis.requestAnimationFrame = vi.fn(() => 7)
     globalThis.cancelAnimationFrame = cancelAnimationFrame
 
     beginHookRender()
+
     const visibilityMemory = useTerminalScrollVisibilityMemory({
       managerRef: { current: manager as never },
       isVisibleRef: { current: true },

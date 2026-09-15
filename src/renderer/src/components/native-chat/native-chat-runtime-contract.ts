@@ -12,7 +12,9 @@ export function parseRuntimeNativeChatTurnLifecycle(
   if (typeof value !== 'object' || value === null) {
     return undefined
   }
+
   const record = value as Record<string, unknown>
+
   if (
     (record.state !== 'working' &&
       record.state !== 'completed' &&
@@ -27,6 +29,7 @@ export function parseRuntimeNativeChatTurnLifecycle(
   ) {
     return undefined
   }
+
   return {
     state: record.state,
     turnId: record.turnId.trim(),
@@ -42,19 +45,24 @@ export function parseRuntimeNativeChatReadSessionResult(
   if (typeof value !== 'object' || value === null) {
     return { error: RUNTIME_NATIVE_CHAT_READ_ERROR }
   }
+
   const record = value as Record<string, unknown>
+
   if (Array.isArray(record.messages)) {
     const lifecycle = parseRuntimeNativeChatTurnLifecycle(record.lifecycle)
+
     return {
       messages: record.messages as NativeChatAppendedMessages,
       ...(lifecycle ? { lifecycle } : {})
     }
   }
+
   if (typeof record.error === 'string') {
     return {
       error: record.error,
       ...(record.notFound === true ? { notFound: true } : {})
     }
   }
+
   return { error: RUNTIME_NATIVE_CHAT_READ_ERROR }
 }

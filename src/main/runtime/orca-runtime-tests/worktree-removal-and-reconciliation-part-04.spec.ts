@@ -45,6 +45,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('does not inspect or delete a local path when SSH runtime orphan cleanup has no filesystem provider', async () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-runtime-ssh-missing-fs-'))
+
     const repo = {
       id: 'repo-runtime-ssh-missing-fs',
       path: '/remote/repo',
@@ -53,16 +54,20 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-missing-fs'
     }
+
     const worktreeId = `${repo.id}::${localPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [worktreeId]: makeWorktreeMeta({
         orcaCreatedAt: Date.now(),
         orcaCreationSource: 'ssh'
       })
     }
+
     const removeWorktreeMeta = vi.fn((id: string) => {
       delete metaById[id]
     })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
@@ -71,10 +76,12 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (id: string) => metaById[id],
       setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
         metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[id]
       },
       removeWorktreeMeta
     }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -86,6 +93,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     }
+
     registerSshGitProvider(repo.connectionId, gitProvider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
@@ -214,11 +222,13 @@ describe('OrcaRuntimeService', () => {
 
   it('fails locked dirty-force deletes before hooks, link cleanup, or PTY teardown', async () => {
     const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
       getRepo: () => repo
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const killSpy = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
@@ -251,11 +261,13 @@ describe('OrcaRuntimeService', () => {
 
   it('rechecks a runtime Git lock after the archive hook before teardown', async () => {
     const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
       getRepo: () => repo
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const killSpy = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
@@ -440,6 +452,7 @@ describe('OrcaRuntimeService', () => {
     const { runtime, worktreeBaseStatus } = createReconcileRuntime()
     const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     const gitSpy = mockReconcileGit({})
+
     try {
       await reconcileWithToken(runtime, token)
 
@@ -462,6 +475,7 @@ describe('OrcaRuntimeService', () => {
     const { runtime, worktreeBaseStatus } = createReconcileRuntime()
     const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     const gitSpy = mockReconcileGit({ postFetchSha: 'created-base-sha' })
+
     try {
       await reconcileWithToken(runtime, token)
 
@@ -481,6 +495,7 @@ describe('OrcaRuntimeService', () => {
     const { runtime, worktreeBaseStatus } = createReconcileRuntime()
     const token = runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     const gitSpy = mockReconcileGit({ ancestor: false })
+
     try {
       await reconcileWithToken(runtime, token)
 
@@ -500,6 +515,7 @@ describe('OrcaRuntimeService', () => {
     const staleToken = stale.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     stale.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     const staleGitSpy = mockReconcileGit({})
+
     try {
       await reconcileWithToken(stale.runtime, staleToken)
       expect(stale.worktreeBaseStatus).not.toHaveBeenCalled()
@@ -529,6 +545,7 @@ describe('OrcaRuntimeService', () => {
     const missingBase = createReconcileRuntime()
     const missingBaseToken = missingBase.runtime.recordOptimisticReconcileToken(TEST_WORKTREE_ID)
     const gitSpy = mockReconcileGit({ baseRefMissing: true })
+
     try {
       await reconcileWithToken(missingBase.runtime, missingBaseToken)
       expect(gitSpy).not.toHaveBeenCalledWith(['reset', '--hard', 'new-base-sha'], {
@@ -581,6 +598,7 @@ describe('OrcaRuntimeService', () => {
 
   it('preserves create-time metadata on later runtime listings when Windows path formatting differs', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
+
     const runtimeStore = {
       getRepo: (id: string) => runtimeStore.getRepos().find((repo) => repo.id === id),
       getRepos: () => [
@@ -598,6 +616,7 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         const existingMeta = metaById[worktreeId]
+
         const nextMeta: WorktreeMeta = {
           displayName: meta.displayName ?? existingMeta?.displayName ?? '',
           comment: meta.comment ?? existingMeta?.comment ?? '',
@@ -612,7 +631,9 @@ describe('OrcaRuntimeService', () => {
           sortOrder: meta.sortOrder ?? existingMeta?.sortOrder ?? 0,
           lastActivityAt: meta.lastActivityAt ?? existingMeta?.lastActivityAt ?? 0
         }
+
         metaById[worktreeId] = nextMeta
+
         return nextMeta
       },
       removeWorktreeMeta: () => {},
@@ -628,6 +649,7 @@ describe('OrcaRuntimeService', () => {
         branchPrefixCustom: ''
       })
     }
+
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     vi.mocked(listWorktrees)

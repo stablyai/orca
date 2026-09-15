@@ -62,10 +62,12 @@ function parseEnvironments(value: string | null): MirroredRuntimeEnvironment[] {
   if (!value) {
     return []
   }
+
   return value
     .split('\u0000')
     .map((entry) => {
       const [environmentId = '', , rawGeneration = '0', rawRevision = ''] = entry.split('\u0001')
+
       return {
         environmentId,
         expectedEnvironmentConnectionGeneration: Number(rawGeneration),
@@ -82,13 +84,16 @@ export function installGlobalSessionTabsSubscriptions({
   refs
 }: GlobalSubscriptionInstallArgs): (() => void) | undefined {
   const environments = parseEnvironments(runtimeSessionMirrorEnvironmentKey)
+
   const ownerRevisions = new Map(
     (workspaceSessionReady ? environments : []).map(
       ({ environmentId, expectedEnvironmentPairingRevision }) =>
         [environmentId, expectedEnvironmentPairingRevision] as const
     )
   )
+
   const previousOwnerRevisions = refs.ownerRevisions.current
+
   for (const [environmentId, previousRevision] of previousOwnerRevisions) {
     if (
       !ownerRevisions.has(environmentId) ||
@@ -97,9 +102,12 @@ export function installGlobalSessionTabsSubscriptions({
       clearWebSessionTabsTrackingForEnvironment(environmentId)
     }
   }
+
   refs.ownerRevisions.current = ownerRevisions
+
   for (const [key, omission] of refs.visibilityResumeOmissions.current) {
     const previousRevision = previousOwnerRevisions.get(omission.environmentId)
+
     if (
       !ownerRevisions.has(omission.environmentId) ||
       (previousOwnerRevisions.has(omission.environmentId) &&
@@ -108,18 +116,21 @@ export function installGlobalSessionTabsSubscriptions({
       refs.visibilityResumeOmissions.current.delete(key)
     }
   }
+
   if (!workspaceSessionReady || environments.length === 0) {
     return undefined
   }
 
   const subscriptionSpecs: WindowVisibilitySubscriptionSpec[] = []
   const environmentIdBySpec: string[] = []
+
   const coordinator = new VisibilityResumeCoordinator({
     environments,
     environmentIdBySubscriptionSpec: environmentIdBySpec,
     omissions: refs.visibilityResumeOmissions.current,
     activeRuntimeWorktreeKey: () => refs.activeRuntimeWorktreeKey.current
   })
+
   refs.snapshotReceipt.current = coordinator.recordSnapshotReceipt.bind(coordinator)
   refs.snapshotApply.current = coordinator.shouldApplySnapshot.bind(coordinator)
   refs.snapshotAccepted.current = coordinator.recordSnapshot.bind(coordinator)
@@ -130,6 +141,7 @@ export function installGlobalSessionTabsSubscriptions({
       expectedEnvironmentConnectionGeneration,
       expectedEnvironmentPairingRevision
     } = environment
+
     if (
       !shouldSyncAllRuntimeSessionTabs({
         activeRuntimeEnvironmentId: environmentId,
@@ -138,12 +150,14 @@ export function installGlobalSessionTabsSubscriptions({
     ) {
       continue
     }
+
     let requestedInitialLoad = false
     const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
     environmentIdBySpec.push(environmentId)
     subscriptionSpecs.push({
       subscribe: (isCurrent, { visibilityGeneration }) => {
         const awaitingVisibilityResumeInventory = { value: visibilityGeneration > 0 }
+
         if (!requestedInitialLoad) {
           requestedInitialLoad = true
           loadInitialWebSessionTabs({
@@ -154,6 +168,7 @@ export function installGlobalSessionTabsSubscriptions({
             isCurrent
           })
         }
+
         return window.api.runtimeEnvironments.subscribe(
           {
             selector: environmentId,
@@ -170,6 +185,7 @@ export function installGlobalSessionTabsSubscriptions({
               ) {
                 return
               }
+
               handleGlobalSessionEvent({
                 environmentId,
                 expectedEnvironmentConnectionGeneration,
@@ -212,11 +228,15 @@ export function installGlobalSessionTabsSubscriptions({
     onVisibilityResume: ({ visibilityGeneration, restartingSpecIndexes }) =>
       coordinator.beginVisibilityResume(visibilityGeneration, restartingSpecIndexes)
   })
+
   return () => {
     refs.snapshotReceipt.current = () => {}
+
     refs.snapshotApply.current = () => true
     refs.snapshotAccepted.current = () => {}
+
     dispose()
+
     for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
       const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
       clearWebSessionCloseIntentsForOwner(owner)

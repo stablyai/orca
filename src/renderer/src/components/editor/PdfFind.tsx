@@ -24,9 +24,11 @@ export default function PdfFind({
   const dispatchFind = useCallback(
     (type: string, findPrevious = false): void => {
       const eventBus = eventBusRef.current
+
       if (!eventBus || !requestQuery) {
         return
       }
+
       eventBus.dispatch('find', {
         source: null,
         type,
@@ -56,6 +58,7 @@ export default function PdfFind({
     if (!input) {
       return
     }
+
     input.focus()
     input.select()
   }, [])
@@ -64,28 +67,36 @@ export default function PdfFind({
     if (!isOpen) {
       return
     }
+
     if (!requestQuery) {
       const eventBus = eventBusRef.current
+
       if (eventBus) {
         eventBus.dispatch('findbarclose', { source: null })
       }
+
       return
     }
+
     dispatchFind('')
   }, [requestQuery, isOpen, dispatchFind, eventBusRef])
 
   useEffect(() => {
     const eventBus = eventBusRef.current
+
     if (!eventBus || !isOpen) {
       return
     }
+
     const handleMatchesCount = (evt: {
       matchesCount: { current: number; total: number }
     }): void => {
       setActiveMatch(evt.matchesCount.current)
       setTotalMatches(evt.matchesCount.total)
     }
+
     eventBus.on('updatefindmatchescount', handleMatchesCount)
+
     return () => {
       eventBus.off('updatefindmatchescount', handleMatchesCount)
     }
@@ -94,6 +105,7 @@ export default function PdfFind({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       e.stopPropagation()
+
       if (e.key === 'Escape') {
         onClose()
       } else if (e.key === 'Enter' && e.shiftKey) {

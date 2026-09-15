@@ -5,7 +5,9 @@ type MigrationUnsupportedPtyEvent =
   | { type: 'clear'; ptyId: string }
 
 const entriesByPtyId = new Map<string, MigrationUnsupportedPtyEntry>()
+
 let listener: ((event: MigrationUnsupportedPtyEvent) => void) | null = null
+
 let persistenceListener: ((entries: MigrationUnsupportedPtyEntry[]) => void) | null = null
 
 export function setMigrationUnsupportedPtyListener(
@@ -34,20 +36,24 @@ export function clearMigrationUnsupportedPty(ptyId: string): void {
   if (!entriesByPtyId.delete(ptyId)) {
     return
   }
+
   listener?.({ type: 'clear', ptyId })
   persistenceListener?.(getMigrationUnsupportedPtySnapshot())
 }
 
 export function clearMigrationUnsupportedPtysForPaneKey(paneKey: string): void {
   const ptyIdsToClear: string[] = []
+
   for (const [ptyId, entry] of entriesByPtyId) {
     if (entry.paneKey === paneKey) {
       ptyIdsToClear.push(ptyId)
     }
   }
+
   if (ptyIdsToClear.length === 0) {
     return
   }
+
   // Why: pane teardown can clear several legacy PTYs for one stable pane.
   // Persist once after the batch instead of rebuilding the full snapshot for
   // every entry while still emitting individual renderer clear events.
@@ -55,23 +61,28 @@ export function clearMigrationUnsupportedPtysForPaneKey(paneKey: string): void {
     entriesByPtyId.delete(ptyId)
     listener?.({ type: 'clear', ptyId })
   }
+
   persistenceListener?.(getMigrationUnsupportedPtySnapshot())
 }
 
 export function clearMigrationUnsupportedPtysByTabPrefix(tabId: string): void {
   const prefix = `${tabId}:`
   const ptyIdsToClear: string[] = []
+
   for (const [ptyId, entry] of entriesByPtyId) {
     if (entry.paneKey?.startsWith(prefix)) {
       ptyIdsToClear.push(ptyId)
     }
   }
+
   if (ptyIdsToClear.length === 0) {
     return
   }
+
   for (const ptyId of ptyIdsToClear) {
     entriesByPtyId.delete(ptyId)
     listener?.({ type: 'clear', ptyId })
   }
+
   persistenceListener?.(getMigrationUnsupportedPtySnapshot())
 }

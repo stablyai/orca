@@ -25,12 +25,14 @@ function textGenerationRecipeIsConfigured(
   if (Object.hasOwn(recipe ?? {}, 'agentId')) {
     return true
   }
+
   if (
     typeof recipe?.commandInputTemplate === 'string' &&
     recipe.commandInputTemplate.trim() !== DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
   ) {
     return true
   }
+
   return typeof recipe?.agentArgs === 'string' && recipe.agentArgs.trim().length > 0
 }
 
@@ -68,9 +70,11 @@ export function hasConfiguredSourceControlTextGenerationDefaults(input: {
 }): boolean {
   const repoRecipe = normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
     ?.actionOverrides?.[input.actionId]
+
   if (textGenerationRecipeIsConfigured(input.actionId, repoRecipe)) {
     return true
   }
+
   if (
     textGenerationRecipeIsConfigured(
       input.actionId,
@@ -79,6 +83,7 @@ export function hasConfiguredSourceControlTextGenerationDefaults(input: {
   ) {
     return true
   }
+
   return (
     input.settings?.sourceControlAi?.agentId != null ||
     (input.actionId === 'commitMessage' && input.settings?.commitMessageAi?.agentId != null)

@@ -42,6 +42,7 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
   routes: Record<string, CodexTestRoute>
 } {
   const connections: FakeConnection[] = []
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -51,6 +52,7 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
       closed: false,
       request: async (method, params) => {
         connection.calls.push({ method, params })
+
         return routes[method]?.(params) ?? {}
       },
       notify: () => {},
@@ -58,15 +60,20 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
       respondWithError: () => {},
       close: async () => {
         connection.closed = true
+
         return true
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   routes['thread/start'] ??= () => ({
     thread: { id: CODEX_TEST_THREAD_ID, path: '/rollouts/abc.jsonl' }
   })
+
   return { connections, openConnection, routes }
 }
 
@@ -99,6 +106,7 @@ export async function acquiredCodexAdapter(input: {
     now: () => 1_700_000_000_500,
     onDispatchSettledLate: (settlement) => input.settlements.push(settlement)
   })
+
   const identity: AgentSessionJournalIdentity = {
     sessionId: 'session-1',
     workspaceId: 'ws-1',
@@ -106,12 +114,14 @@ export async function acquiredCodexAdapter(input: {
     agent: 'codex',
     providerHandle: { kind: 'codex', threadId: CODEX_TEST_THREAD_ID }
   }
+
   await adapter.acquire({
     identity,
     fence: 7,
     spawnToken: 'spawn-9',
     events: input.sink ?? recordingSink()
   })
+
   return adapter
 }
 

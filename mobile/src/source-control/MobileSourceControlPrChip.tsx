@@ -77,6 +77,7 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
 
 function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
   const color = statusColor(rollup.token)
+
   return (
     <View style={hubStyles.rollup}>
       <RollupIcon kind={rollup.kind} color={color} />
@@ -88,6 +89,7 @@ function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
 function RollupIcon({ kind, color }: { kind: MobilePrChipRollup['kind']; color: string }) {
   const size = 13
   const strokeWidth = 2.3
+
   switch (kind) {
     case 'conflict':
       return <AlertTriangle size={size} color={color} strokeWidth={strokeWidth} />
@@ -115,6 +117,7 @@ function chipAccessibilityLabel(summary: MobilePrChipSummary): string {
         summary.commentCount != null && summary.commentCount > 0
           ? `, ${summary.commentCount} unresolved comments`
           : ''
+
       return `Pull request #${summary.number}, ${summary.stateLabel}, ${summary.rollup.text}${comments}. Open pull request.`
     }
   }

@@ -72,22 +72,28 @@ export function selectOpenTabSearchEntryState(
     state.activeWorktreeId === worktreeId
       ? (state.activeWorkspaceExecutionHostId ?? undefined)
       : undefined
+
   // Why getKnownWorktreeById: folder workspaces are absent from worktreesByRepo.
   const worktree = state.getKnownWorktreeById(worktreeId, preferredHostId) ?? null
+
   if (!worktree) {
     return null
   }
+
   const repoCandidates = state.repos.filter((candidate) => candidate.id === worktree.repoId)
   const resolvedHostId = worktree.hostId ?? preferredHostId
+
   const repo =
     (resolvedHostId
       ? repoCandidates.find((candidate) => getRepoExecutionHostId(candidate) === resolvedHostId)
       : undefined) ??
     repoCandidates[0] ??
     null
+
   // preferredHostId last: it found this worktree, so it beats the local default
   // when neither the worktree nor a repo names a host.
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined, preferredHostId)
+
   return {
     activeBrowserTabId: state.activeBrowserTabId,
     activeFileId: state.activeFileId,
@@ -128,11 +134,14 @@ export function buildOpenTabSearchEntries(
   agentState: OpenTabSearchAgentState
 ): OpenTabSearchEntries {
   const { repo, worktree } = state
+
   const scopedWorktree =
     worktree.hostId === state.executionHostId
       ? worktree
       : { ...worktree, hostId: state.executionHostId }
+
   const worktrees = [scopedWorktree]
+
   const scope = {
     worktrees,
     ownershipWorktrees: getPaletteOwnershipWorktreeIds(state),

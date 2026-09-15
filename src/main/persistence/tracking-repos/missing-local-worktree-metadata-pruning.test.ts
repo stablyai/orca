@@ -11,6 +11,7 @@ import {
 } from './missing-local-worktree-metadata-pruning'
 
 const REPO_ID = 'repo-1'
+
 const LIVE_ID = `${REPO_ID}::/workspace/live`
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -44,6 +45,7 @@ function makeMeta(worktreeId: string): WorktreeMeta {
 function makeState(repo = makeRepo()): PersistedState {
   const state = getDefaultPersistedState('/home/test')
   state.repos = [repo]
+
   return state
 }
 
@@ -58,6 +60,7 @@ function pruneCaptured(
   platform?: NodeJS.Platform
 ): string[] {
   const wanted = new Set(ids)
+
   return pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     state,
     scan,
@@ -69,13 +72,16 @@ function pruneCaptured(
 describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
   it('removes 2,709 sessionless rows in one batch without cloning or changing session state', () => {
     const state = makeState()
+
     const staleIds = Array.from(
       { length: 2_709 },
       (_, index) => `${REPO_ID}::/workspace/stale-${index}`
     )
+
     const allIds = [LIVE_ID, ...staleIds]
     state.worktreeMetaByIdentity = {}
     state.worktreeIdentityAliases = {}
+
     for (const [index, worktreeId] of allIds.entries()) {
       const meta = makeMeta(worktreeId)
       const identityKey = `identity-${index}`
@@ -83,15 +89,18 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
       state.worktreeMetaByIdentity[identityKey] = meta
       state.worktreeIdentityAliases[`local|${worktreeId}`] = [identityKey]
     }
+
     state.worktreeLineageById[staleIds[0]!] = { worktreeId: staleIds[0] } as never
     state.workspaceLineageByChildKey[worktreeWorkspaceKey(staleIds[0]!)] = {
       childWorkspaceKey: worktreeWorkspaceKey(staleIds[0]!)
     } as never
     state.workspaceSession.terminalTopologyRevisionByRepoId = { [REPO_ID]: 7 }
+
     const hostSession = {
       ...getDefaultWorkspaceSession(),
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 11 }
     }
+
     state.workspaceSessionsByHostId = { 'runtime:mirror': hostSession }
     const scan = capture(state)
     const session = state.workspaceSession
@@ -179,7 +188,9 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     const worktreeId = `${REPO_ID}::/workspace/${field}`
     state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     const scan = capture(state)
+
     const ownerKey = field === 'lastVisitedAtByWorktreeId' ? `local|${worktreeId}` : worktreeId
+
     ;(state.workspaceSession as unknown as Record<string, unknown>)[field] = {
       [ownerKey]: []
     }
@@ -296,9 +307,11 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     const supersededIds = Array.from({ length: 4 }, (_, i) => `${REPO_ID}::/workspace/lost-${i}`)
     const recycledIds = [`${REPO_ID}::/workspace/recycled`]
     const allIds = [...liveIds, ...terminatedIds, ...supersededIds, ...recycledIds]
+
     for (const worktreeId of allIds) {
       state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     }
+
     const lease = (worktreeId: string, index: number, extra: object) => ({
       targetId: 'builder',
       ptyId: `pty-${index}`,
@@ -307,6 +320,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
       updatedAt: 1,
       ...extra
     })
+
     state.sshRemotePtyLeases = [
       ...liveIds.map((id, i) => lease(id, i, { state: 'detached' })),
       ...terminatedIds.map((id, i) => lease(id, 100 + i, { state: 'terminated' })),
@@ -348,6 +362,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
   it('preserves canonically equivalent session and top-level owners', () => {
     const candidateId = `${REPO_ID}::/workspace/Café`.normalize('NFC')
     const ownerId = candidateId.normalize('NFD')
+
     const ownerMutations: ((state: PersistedState) => void)[] = [
       (state) => {
         state.workspaceSession.activeWorktreeId = ownerId
@@ -385,6 +400,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     const worktreeId = `${REPO_ID}::/workspace/non-owning-preferences`
     state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     const showDotfilesByWorktree = { [worktreeId]: true }
+
     const workspaceCleanup = {
       dismissals: {
         [worktreeId]: {
@@ -395,6 +411,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
         }
       }
     }
+
     state.ui.showDotfilesByWorktree = showDotfilesByWorktree
     state.ui.workspaceCleanup = workspaceCleanup
     const scan = capture(state)
@@ -457,6 +474,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
         state.repos[0] = makeRepo({ kind: 'folder' })
       }
     ]
+
     for (const mutate of mutations) {
       const state = makeState()
       const worktreeId = `${REPO_ID}::/workspace/stale`
@@ -470,6 +488,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
   it('fails closed when project runtime routing changes away and back during the scan', () => {
     const state = makeState()
     const worktreeId = `${REPO_ID}::/workspace/project-routing-race`
+
     const project: Project = {
       id: 'project-1',
       displayName: 'project',
@@ -479,6 +498,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     state.projects = [project]
     state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     const scan = capture(state)
@@ -514,6 +534,7 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
   it('rejects malformed, folder-instance, WSL, and non-native Windows candidate paths', () => {
     const state = makeState()
     const foreignWindowsId = `${REPO_ID}::C:\\workspace\\stale`
+
     const ids = [
       `${REPO_ID}::relative/path`,
       `${REPO_ID}::`,
@@ -523,9 +544,11 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
       `${REPO_ID}::/home/user/wsl-legacy`,
       foreignWindowsId
     ]
+
     for (const worktreeId of ids) {
       state.worktreeMeta[worktreeId] = makeMeta(worktreeId)
     }
+
     const scan = capture(state)
 
     expect(pruneCaptured(state, scan, ids.slice(0, -2))).toEqual([])

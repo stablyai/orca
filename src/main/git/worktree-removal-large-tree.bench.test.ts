@@ -12,9 +12,11 @@ import { removeWorktree } from './worktree'
 import { getWorktreeTrashRoot, whenWorktreeTrashDeletionsSettled } from '../worktree-trash'
 
 const execFileAsync = promisify(execFile)
+
 const describeBench = process.env.ORCA_WORKTREE_REMOVAL_BENCH ? describe : describe.skip
 
 const FIXTURE_DIRECTORIES = 200
+
 const FIXTURE_FILES_PER_DIRECTORY = 500
 
 describeBench('worktree removal on a large checkout', () => {
@@ -50,12 +52,14 @@ describeBench('worktree removal on a large checkout', () => {
         )
       )
     }
+
     await git(['add', '-A'], worktreePath)
     await git(['commit', '-qm', 'large tree'], worktreePath)
   }, 900_000)
 
   afterAll(async () => {
     await whenWorktreeTrashDeletionsSettled()
+
     if (scratchDir) {
       await rm(scratchDir, { recursive: true, force: true })
     }

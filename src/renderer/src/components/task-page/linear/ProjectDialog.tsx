@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { ChevronDown, Check, X, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TaskPageLinearProjectFields } from './ProjectFields'
+
 export function TaskPageLinearProjectDialog({
   model
 }: {
@@ -28,6 +29,7 @@ export function TaskPageLinearProjectDialog({
     newLinearProjectTargetTeam,
     handleCreateNewLinearProject
   } = model
+
   return (
     <Dialog
       open={newLinearProjectOpen}

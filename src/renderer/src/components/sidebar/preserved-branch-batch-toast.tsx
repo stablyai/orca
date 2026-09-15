@@ -24,6 +24,7 @@ function PreservedBranchBatchToastBody({
   onReview: () => void
 }): React.JSX.Element {
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
+
   return (
     <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
@@ -54,18 +55,22 @@ export function showPreservedBranchBatchToast(
   if (branches.length === 0) {
     return
   }
+
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
   const toastId = `preserved-branch-batch:${branches[0].worktreeId}:${branches.length}`
+
   const removedWorkspaces = translate(
     'auto.components.sidebar.preserved.branch.batch.toast.cea24c2b7d',
     '{{count}} workspaces removed',
     { count: workspaceCount }
   )
+
   const keptBranches = translate(
     'auto.components.sidebar.preserved.branch.batch.toast.0e0379f24a',
     '{{count}} branches kept',
     { count: branches.length }
   )
+
   const onReview = (): void => {
     useAppStore.getState().openModal('preserved-branch-review', { branches })
     toast.dismiss(toastId)
@@ -92,6 +97,7 @@ export async function forceDeletePreservedBranchBatch(
   if (branches.length === 0) {
     return
   }
+
   const progressToastId = `force-delete-branch-batch:${branches[0].worktreeId}:${branches.length}`
   toast.loading(
     translate(
@@ -102,20 +108,24 @@ export async function forceDeletePreservedBranchBatch(
     { id: progressToastId }
   )
   const branchesByRepo = new Map<string, ActionablePreservedBranch[]>()
+
   for (const branch of branches) {
     const repoId = getRepoIdFromWorktreeId(branch.worktreeId)
     const repoBranches = branchesByRepo.get(repoId)
+
     if (repoBranches) {
       repoBranches.push(branch)
     } else {
       branchesByRepo.set(repoId, [branch])
     }
   }
+
   const groupResults = await mapWithConcurrency(
     [...branchesByRepo.values()],
     BRANCH_REPO_DELETE_CONCURRENCY,
     async (repoBranches) => {
       const results: PreservedBranchDeleteResult[] = []
+
       for (const branch of repoBranches) {
         results.push({
           branch,
@@ -130,11 +140,14 @@ export async function forceDeletePreservedBranchBatch(
             })
         })
       }
+
       return results
     }
   )
+
   const results = groupResults.flat()
   const failures = results.filter((result) => !result.result.ok)
+
   if (failures.length === 0) {
     toast.success(
       translate(
@@ -144,13 +157,17 @@ export async function forceDeletePreservedBranchBatch(
       ),
       { id: progressToastId }
     )
+
     return
   }
+
   const deletedCount = branches.length - failures.length
+
   const description = failures
     .map(({ branch, result }) => (result.ok ? '' : `${branch.branchName}: ${result.error}`))
     .filter(Boolean)
     .join('; ')
+
   const failedBranches = failures.map(({ branch }) => branch)
   toast.error(
     translate(

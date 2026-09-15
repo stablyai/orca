@@ -19,12 +19,14 @@ function resumedLink(fence: number): AgentSessionProviderHandleLink {
 describe('recordAgentSessionProviderHandle', () => {
   it('advances a live Claude chain head and its proof', () => {
     const record = agentSessionRecordFixture()
+
     const next = recordAgentSessionProviderHandle({
       record,
       fence: record.lease.runtimeFence,
       link: resumedLink(record.lease.runtimeFence),
       now: 4_000
     })
+
     expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ leafUuid: 'leaf-2' })
     expect(next.lease.provenHandleLinkId).toBe('link-2')
   })
@@ -36,12 +38,14 @@ describe('recordAgentSessionProviderHandle', () => {
       handoffStage: 'new-owner-proving',
       provenHandleLinkId: null
     })
+
     const next = recordAgentSessionProviderHandle({
       record: agentSessionRecordFixture(lease),
       fence: lease.runtimeFence,
       link: resumedLink(lease.runtimeFence),
       now: 4_000
     })
+
     expect(next.providerHandleChain.at(-1)?.handle).toMatchObject({ leafUuid: 'leaf-2' })
     expect(next.lease).toMatchObject({ claimStatus: 'reserved', provenHandleLinkId: null })
   })

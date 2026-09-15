@@ -76,6 +76,7 @@ describe('OrcaRuntimeService', () => {
         floatingTerminalEnabled: false
       })
     } as never)
+
     expect(disabledRuntime.getStatus().floatingWorkspaceEnabled).toBe(false)
   })
 
@@ -83,6 +84,7 @@ describe('OrcaRuntimeService', () => {
     const getRepos = vi.fn(store.getRepos)
     const listProcesses = vi.fn().mockResolvedValue([])
     const floatingPtyId = `${FLOATING_TERMINAL_WORKTREE_ID}@@pty-1`
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         activeRepoId: null,
@@ -107,7 +109,9 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService({ ...runtimeStore, getRepos } as never)
+
     const ptyController = {
       livePtyIds: new Set([floatingPtyId]),
       write: () => true,
@@ -118,6 +122,7 @@ describe('OrcaRuntimeService', () => {
       },
       listProcesses
     }
+
     const hasPty = vi.spyOn(ptyController, 'hasPty')
     runtime.setPtyController(ptyController)
 
@@ -152,6 +157,7 @@ describe('OrcaRuntimeService', () => {
   it('does not block a targeted mobile session tab list on an unrelated worktree scan', async () => {
     const remoteWorktreeId = 'repo-ssh::/remote/worktree'
     const remotePtyId = 'ssh:ssh-target@@remote-pty'
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         activeRepoId: 'repo-ssh',
@@ -177,14 +183,17 @@ describe('OrcaRuntimeService', () => {
       }),
       'ssh:ssh-target'
     )
+
     const remoteRepo = {
       ...store.getRepos()[0],
       id: 'repo-ssh',
       connectionId: 'ssh-target'
     }
+
     runtimeStore.getRepos = () => [remoteRepo]
     runtimeStore.getRepo = (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const listProcesses = vi.fn(async () => [
       {
         id: remotePtyId,
@@ -195,6 +204,7 @@ describe('OrcaRuntimeService', () => {
         worktreeId: remoteWorktreeId
       }
     ])
+
     runtime.setPtyController({
       listProcesses,
       write: () => true,
@@ -205,15 +215,19 @@ describe('OrcaRuntimeService', () => {
     registerSshGitProvider('ssh-target', { listWorktrees } as never)
 
     vi.useFakeTimers()
+
     try {
       let timeoutId: ReturnType<typeof setTimeout> | undefined
+
       const timeout = new Promise<null>((resolve) => {
         timeoutId = setTimeout(() => resolve(null), 1_000)
       })
+
       const resultPromise = runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(1_000)
       const result = await Promise.race([resultPromise, timeout])
+
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId)
       }
@@ -243,6 +257,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       getRepos: () => undefined
@@ -272,21 +287,25 @@ describe('OrcaRuntimeService', () => {
 
   it('routes mobile Codex reset consumption through the account mutation coordinator', async () => {
     const runtime = createRuntime()
+
     const expectedScope = {
       target: { runtime: 'host' as const, wslDistro: null },
       accountId: 'codex-account',
       accountRevision: 42,
       offerRevision: 'v1:offer'
     }
+
     const capturedCodex = {
       accounts: [],
       activeAccountId: expectedScope.accountId,
       activeAccountIdsByRuntime: { host: expectedScope.accountId, wsl: {} }
     }
+
     const capturedRateLimits = {
       codexTarget: expectedScope.target,
       marker: 'captured-before-queue-advanced'
     }
+
     const codexAccounts = {
       consumeRateLimitResetCredit: vi.fn().mockResolvedValue({
         outcome: 'reset',
@@ -300,6 +319,7 @@ describe('OrcaRuntimeService', () => {
         activeAccountIdsByRuntime: { host: 'queued-next-account', wsl: {} }
       }))
     }
+
     const rateLimits = {
       consumeCodexRateLimitResetCredit: vi.fn(),
       getState: vi.fn(() => ({
@@ -307,6 +327,7 @@ describe('OrcaRuntimeService', () => {
         marker: 'after-queue-advanced'
       }))
     }
+
     runtime.setAccountServices({
       claudeAccounts: {
         listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
@@ -336,21 +357,25 @@ describe('OrcaRuntimeService', () => {
 
   it('maps a definite pre-provider rejection into an authoritative current snapshot', async () => {
     const runtime = createRuntime()
+
     const expectedScope = {
       target: { runtime: 'host' as const, wslDistro: null },
       accountId: 'codex-account',
       accountRevision: 42,
       offerRevision: 'v1:stale'
     }
+
     const codex = {
       accounts: [],
       activeAccountId: null,
       activeAccountIdsByRuntime: { host: null, wsl: {} }
     }
+
     const rateLimitState = {
       codexTarget: expectedScope.target,
       marker: 'current-after-rejection'
     }
+
     runtime.setAccountServices({
       claudeAccounts: {
         listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))

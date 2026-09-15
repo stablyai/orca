@@ -34,7 +34,9 @@ import {
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import type { RuntimeCapability } from './protocol-version'
+
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
+
 const IDLE_CLOSE_MS = 60_000
 
 export class RemoteRuntimeRequestConnection {
@@ -60,8 +62,10 @@ export class RemoteRuntimeRequestConnection {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
+
     const requestId = randomUUID()
     let preparedRequest: RemoteRuntimePreparedRequest
+
     try {
       preparedRequest = prepareRemoteRuntimeRequest(this.pendingRequests, () =>
         serializeRemoteRuntimeRpcRequest({
@@ -74,7 +78,9 @@ export class RemoteRuntimeRequestConnection {
     } catch (error) {
       return Promise.reject(toRemoteRuntimeRequestError(error))
     }
+
     this.clearIdleCloseTimer()
+
     return new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
       const onAbort = (): void => {
         const error = abortSignalReason(signal!)
@@ -87,17 +93,21 @@ export class RemoteRuntimeRequestConnection {
           () => this.close(error)
         )
       }
+
       const timeout = setTimeout(() => {
         const pending = this.pendingRequests.get(requestId)
+
         if (!pending) {
           return
         }
+
         this.pendingRequests.delete(requestId)
         releaseRemoteRuntimePreparedRequest(pending)
         const error = remoteRuntimeTimeoutError()
         pending.reject(error)
         this.close(error)
       }, timeoutMs)
+
       this.pendingRequests.set(requestId, {
         resolve: (response) => {
           signal?.removeEventListener('abort', onAbort)
@@ -111,8 +121,10 @@ export class RemoteRuntimeRequestConnection {
         preparedRequest
       })
       signal?.addEventListener('abort', onAbort, { once: true })
+
       if (signal?.aborted) {
         onAbort()
+
         return
       }
 
@@ -133,6 +145,7 @@ export class RemoteRuntimeRequestConnection {
 
     const closeError = error ?? remoteRuntimeUnavailableError()
     rejectRemoteRuntimeRequestReadyWaiters(this.readyWaiters, closeError)
+
     for (const [requestId, pending] of this.pendingRequests) {
       clearTimeout(pending.timeout)
       this.pendingRequests.delete(requestId)
@@ -150,6 +163,7 @@ export class RemoteRuntimeRequestConnection {
 
   private ensureReady(signal?: AbortSignal): Promise<void> {
     const ws = this.ws
+
     if (this.state === 'ready' && ws?.readyState === WebSocket.OPEN && this.sharedKey) {
       return Promise.resolve()
     }
@@ -185,10 +199,13 @@ export class RemoteRuntimeRequestConnection {
         }
       }
     })
+
     if (!opened.ok) {
       this.close(opened.error)
+
       return
     }
+
     this.ws = opened.socket.ws
     this.sharedKey = opened.socket.sharedKey
     this.socketCleanup = opened.socket.cleanup
@@ -198,23 +215,29 @@ export class RemoteRuntimeRequestConnection {
   private handleTextFrame(frame: string): void {
     if (this.state === 'awaiting_ready') {
       this.handleReadyFrame(frame)
+
       return
     }
 
     const sharedKey = this.sharedKey
+
     if (!sharedKey) {
       return
     }
+
     const plaintext = decrypt(frame, sharedKey)
+
     if (plaintext === null) {
       this.close(
         invalidRemoteRuntimeResponseError('Remote Orca runtime returned an undecryptable frame.')
       )
+
       return
     }
 
     if (this.state === 'awaiting_authenticated') {
       this.handleAuthenticatedFrame(plaintext)
+
       return
     }
 
@@ -223,15 +246,20 @@ export class RemoteRuntimeRequestConnection {
 
   private handleReadyFrame(frame: string): void {
     const error = parseReadyFrame(frame)
+
     if (error) {
       this.close(error)
+
       return
     }
+
     this.state = 'awaiting_authenticated'
     const sharedKey = this.sharedKey
+
     if (!sharedKey) {
       return
     }
+
     this.ws?.send(
       encrypt(
         serializeRemoteRuntimePayload({
@@ -246,10 +274,13 @@ export class RemoteRuntimeRequestConnection {
 
   private handleAuthenticatedFrame(plaintext: string): void {
     const error = parseAuthenticatedFrame(plaintext)
+
     if (error) {
       this.close(error)
+
       return
     }
+
     this.state = 'ready'
     resolveRemoteRuntimeRequestReadyWaiters(this.readyWaiters)
     this.scheduleIdleCloseIfUnused()
@@ -260,10 +291,13 @@ export class RemoteRuntimeRequestConnection {
       plaintext,
       pendingRequests: this.pendingRequests
     })
+
     if (result.error) {
       this.close(result.error)
+
       return
     }
+
     if (result.resolved) {
       this.scheduleIdleCloseIfUnused()
     }
@@ -273,18 +307,25 @@ export class RemoteRuntimeRequestConnection {
     const pending = this.pendingRequests.get(requestId)
     const ws = this.ws
     const sharedKey = this.sharedKey
+
     if (!pending) {
       return
     }
+
     if (this.state !== 'ready' || !ws || ws.readyState !== WebSocket.OPEN || !sharedKey) {
       this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
+
       return
     }
+
     const serializedRequest = takeRemoteRuntimePreparedRequest(pending)
+
     if (serializedRequest === null) {
       this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
+
       return
     }
+
     try {
       ws.send(encrypt(serializedRequest, sharedKey))
     } catch (error) {
@@ -294,9 +335,11 @@ export class RemoteRuntimeRequestConnection {
 
   private rejectPendingRequest(requestId: string, error: Error): void {
     const pending = this.pendingRequests.get(requestId)
+
     if (!pending) {
       return
     }
+
     this.pendingRequests.delete(requestId)
     clearTimeout(pending.timeout)
     releaseRemoteRuntimePreparedRequest(pending)
@@ -308,8 +351,10 @@ export class RemoteRuntimeRequestConnection {
     if (this.pendingRequests.size > 0 || this.readyWaiters.length > 0 || this.state !== 'ready') {
       return
     }
+
     this.clearIdleCloseTimer()
     this.idleCloseTimer = setTimeout(() => this.close(), IDLE_CLOSE_MS)
+
     if (typeof this.idleCloseTimer.unref === 'function') {
       this.idleCloseTimer.unref()
     }

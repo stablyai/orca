@@ -28,8 +28,10 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     const invalidateRetention = (): void => {
       setBrowserGuestRetentionRevision((revision) => revision + 1)
     }
+
     const removeDownloadTracking = installBrowserPageDownloadActivityTracking(invalidateRetention)
     const removePaintRetentionTracking = onBrowserGuestPaintRetentionChange(invalidateRetention)
+
     return () => {
       removeDownloadTracking()
       removePaintRetentionTracking()
@@ -41,22 +43,28 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
     if (!renderedActiveWorktreeId) {
       return
     }
+
     const recency = browserGuestWorktreeRecencyRef.current
     touchBrowserGuestWorktreeRecency(recency, renderedActiveWorktreeId)
+
     for (let index = recency.length - 1; index >= 0; index--) {
       if (!workspaceSurfaceIdSet.has(recency[index])) {
         recency.splice(index, 1)
       }
     }
+
     if (!browserGuestRetentionBudgetEnabled) {
       return
     }
+
     const state = useAppStore.getState()
     const recencyIds = new Set(recency)
+
     const orderedWorktreeIds = [
       ...recency,
       ...workspaceSurfaceIds.filter((id) => !recencyIds.has(id))
     ]
+
     const evictedWorktreeIds = selectBrowserGuestEvictionWorktreeIds({
       orderedWorktreeIds,
       activeWorktreeId: renderedActiveWorktreeId,
@@ -72,6 +80,7 @@ export function useTerminalBrowserRetention(controller: TerminalParkingFoundatio
       isEvictable: (worktreeId) =>
         !browserTabsVetoGuestEviction(state.browserTabsByWorktree[worktreeId] ?? [])
     })
+
     for (const worktreeId of evictedWorktreeIds) {
       destroyWorktreeBrowserGuests(
         state.browserTabsByWorktree,

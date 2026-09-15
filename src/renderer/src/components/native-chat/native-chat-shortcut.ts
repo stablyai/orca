@@ -23,11 +23,14 @@ export function matchesNativeChatToggleShortcut(
   if (e.altKey || !e.shiftKey) {
     return false
   }
+
   // Primary modifier is Cmd on Mac, Ctrl on Linux/Windows — and must be the
   // *only* primary modifier so this can't collide with Cmd+Ctrl chords.
   const primary = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+
   if (!primary) {
     return false
   }
+
   return e.key.toLowerCase() === 'j'
 }

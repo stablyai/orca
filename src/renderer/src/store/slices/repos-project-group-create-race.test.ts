@@ -20,7 +20,9 @@ const projectGroup: ProjectGroup = {
   createdAt: 1,
   updatedAt: 1
 }
+
 const refreshedGroup = { ...projectGroup, name: 'Renamed after creation', updatedAt: 2 }
+
 const otherHostGroup = { ...projectGroup, executionHostId: 'runtime:other' }
 
 beforeEach(() => {
@@ -35,10 +37,13 @@ afterEach(() => {
 function setup(runtimeEnvironmentId: string | null) {
   const created = Promise.withResolvers<ProjectGroup>()
   const createStarted = Promise.withResolvers<void>()
+
   const create = vi.fn(() => {
     createStarted.resolve()
+
     return created.promise
   })
+
   const list = vi.fn(async () => [refreshedGroup])
   vi.stubGlobal('window', {
     api: {
@@ -46,10 +51,13 @@ function setup(runtimeEnvironmentId: string | null) {
       runtimeEnvironments: {
         call: async (request: RuntimeEnvironmentCallRequest) => {
           const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(request)
+
           if (compatibility) {
             return compatibility
           }
+
           expect(request).toMatchObject({ selector: runtimeEnvironmentId })
+
           switch (request.method) {
             case 'projectGroup.create':
               return { id: 'create', ok: true, result: { group: await create() } }
@@ -68,6 +76,7 @@ function setup(runtimeEnvironmentId: string | null) {
     projectGroups: [otherHostGroup]
   })
   const ownerHostId = runtimeEnvironmentId ? `runtime:${runtimeEnvironmentId}` : 'local'
+
   return { store, created, createStarted, ownerHostId }
 }
 
@@ -80,6 +89,7 @@ describe.each([null, 'env-1'])('project group creation on host %s', (runtimeEnvi
     const refreshedState = store.getState()
     const listener = vi.fn()
     const unsubscribe = store.subscribe(listener)
+
     try {
       created.resolve(projectGroup)
       await expect(pendingCreate).resolves.toEqual({

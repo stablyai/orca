@@ -40,10 +40,12 @@ async function snapshotStatusRefSignatures(
   const signatures = new Map<string, string>()
   await forEachWithConcurrency([...paths], GIT_COMMON_SNAPSHOT_CONCURRENCY, async (path) => {
     const signature = await gitCommonFileSignature(path)
+
     if (signature !== null) {
       signatures.set(path, signature)
     }
   })
+
   return signatures
 }
 
@@ -54,11 +56,13 @@ async function snapshotPrimaryCheckoutSignatures(
   await Promise.all(
     PRIMARY_CHECKOUT_METADATA_FILES.map(async (name) => {
       const signature = await gitCommonFileSignature(join(commonDirPath, name))
+
       if (signature !== null) {
         signatures.set(name, signature)
       }
     })
   )
+
   return signatures
 }
 
@@ -70,17 +74,20 @@ async function snapshotGitCommon(
   statusRefPaths = new Set<string>()
 ): Promise<GitCommonSnapshot> {
   const worktreesDir = join(commonDirPath, 'worktrees')
+
   const [worktreesDirSignature, primarySignatures, statusRefSignatures] = await Promise.all([
     gitCommonDirectorySignature(worktreesDir),
     includePrimary ? snapshotPrimaryCheckoutSignatures(commonDirPath) : new Map<string, string>(),
     snapshotStatusRefSignatures(statusRefPaths)
   ])
+
   // Why: enumerate the worktrees dir EVERY tick rather than gating the readdir on its stat signature.
   // A single readdir of a small dir is negligible next to the per-entry structural stats that already
   // run each tick, and the signature gate could miss a same-granule add+remove on a coarse-mtime/FAT
   // filesystem (its size/mtime/ino/ctime all collide), leaving a linked worktree add/remove undetected
   // until the ~30s index backstop (#9882 review). The listing is the authoritative add/remove signal.
   let entryPaths: string[]
+
   try {
     const entries = await readdir(worktreesDir, { withFileTypes: true })
     entryPaths = entries
@@ -104,6 +111,7 @@ async function snapshotGitCommon(
     const previousEntry = previous?.entries.get(entryPath)
     entries.set(entryPath, await snapshotGitCommonEntry(entryPath, previousEntry, forceFullScan))
   })
+
   // Why: the expensive per-entry `index` read stays gated on each entry's own dir signature; onFullScan
   // now reflects an ungated index-metadata backstop fan-out (forceFullScan) — the real periodic cost —
   // rather than the always-run worktrees-dir readdir.
@@ -136,6 +144,7 @@ export async function startGitCommonPolling(
   let disposed = false
   let ticking = false
   let tickCount = 0
+
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -143,30 +152,38 @@ export async function startGitCommonPolling(
     false,
     new Set(getStatusRefPaths())
   )
+
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
   const tick = async (forceFullScan = false): Promise<void> => {
     timer = null
+
     if (disposed) {
       return
     }
+
     if (!visibility.isWindowVisible()) {
       parkedWhileHidden = true
+
       return
     }
+
     if (ticking) {
       return
     }
+
     ticking = true
     // Why: measure from tick start so cadence is start-to-start, not gap-after-completion (which would
     // land each visible refresh a full scan-duration late every tick).
     const startedAt = Date.now()
     tickCount++
+
     const shouldForceFullScan =
       options.forceFullScanEveryTick === true ||
       forceFullScan ||
       tickCount % INDEX_BACKSTOP_TICKS === 0
+
     try {
       const next = await snapshotGitCommon(
         commonDirPath,
@@ -175,14 +192,18 @@ export async function startGitCommonPolling(
         shouldForceFullScan,
         new Set(getStatusRefPaths())
       )
+
       if (disposed) {
         return
       }
+
       if (next.didFullScan) {
         onFullScan?.()
       }
+
       const events = diffGitCommon(commonDirPath, snapshot, next)
       snapshot = next
+
       if (events.length > 0) {
         onEvents(events)
       }
@@ -191,6 +212,7 @@ export async function startGitCommonPolling(
     } finally {
       ticking = false
     }
+
     if (!disposed) {
       // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
       // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
@@ -199,6 +221,7 @@ export async function startGitCommonPolling(
         0,
         Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
       )
+
       timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
@@ -208,6 +231,7 @@ export async function startGitCommonPolling(
     if (disposed || !parkedWhileHidden) {
       return
     }
+
     parkedWhileHidden = false
     // Why: a linked index can change without its parent dir signature moving;
     // force the leaf read when diffing the retained pre-hide snapshot.
@@ -220,9 +244,11 @@ export async function startGitCommonPolling(
   return {
     unsubscribe: async () => {
       disposed = true
+
       if (timer) {
         clearTimeout(timer)
       }
+
       unsubscribeVisibility()
     }
   }

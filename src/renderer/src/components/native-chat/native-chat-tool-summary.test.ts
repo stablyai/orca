@@ -54,6 +54,7 @@ describe('summarizeToolRun', () => {
       { type: 'tool-result', output: 'x' },
       { type: 'tool-call', name: 'Edit', input: { file_path: '/x/app.tsx' } }
     ]
+
     expect(summarizeToolRun(blocks)).toBe('Bash ls  ·  Edit app.tsx')
   })
 
@@ -63,6 +64,7 @@ describe('summarizeToolRun', () => {
       { type: 'tool-call', name: '   ', input: { command: 'x' } },
       { type: 'tool-call', name: 'Edit', input: { file_path: '/x/app.tsx' } }
     ]
+
     expect(summarizeToolRun(blocks)).toBe('Bash ls  ·  Edit app.tsx')
   })
 })
@@ -74,6 +76,7 @@ describe('countToolCalls', () => {
       { type: 'tool-result', output: 'x' },
       { type: 'tool-call', name: 'Read', input: {} }
     ]
+
     expect(countToolCalls(blocks)).toBe(2)
   })
 })

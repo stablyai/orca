@@ -46,6 +46,7 @@ export function ensureOverlayRestoreWrappers(root: string): boolean {
   const bashDir = join(root, 'bash')
 
   const zshenv = buildZshStartupHook(getRelayZshWrapperSpec())
+
   const bashRc = `# Orca relay bash overlay wrapper
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
@@ -168,9 +169,11 @@ unset __orca_initializing_wrapper
   // Existence alone is not enough; stale wrappers would miss later fixes such
   // as preserving post-.zshenv ZDOTDIR.
   const stale = files.filter(([path, content]) => readFileOrNull(path) !== content)
+
   if (stale.length > 0 && !writeShellWrapperFiles(stale, '[relay/shell-overlay]')) {
     return false
   }
+
   return files.every(([path]) => isNonEmptyFile(path))
 }
 

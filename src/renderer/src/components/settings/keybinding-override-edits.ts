@@ -24,6 +24,7 @@ export function removeBindingOverride(
 ): KeybindingOverrides {
   const next = { ...overrides }
   delete next[actionId]
+
   return next
 }
 

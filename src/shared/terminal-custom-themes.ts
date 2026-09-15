@@ -2,6 +2,7 @@ import type { TerminalColorOverrides } from './terminal-color-overrides'
 import { HEX_COLOR_RE } from './color-validation'
 
 export type TerminalCustomThemeSource = 'warp' | 'ghostty' | 'manual'
+
 export type TerminalCustomThemeMode = 'dark' | 'light' | 'unknown'
 
 export type TerminalCustomTheme = {
@@ -41,6 +42,7 @@ export type WarpThemeImportPreview = {
 }
 
 export const MAX_TERMINAL_CUSTOM_THEMES = 200
+
 export const CUSTOM_TERMINAL_THEME_PREFIX = 'custom:'
 
 export const TERMINAL_COLOR_KEYS = [
@@ -102,6 +104,7 @@ function removeControlCharacters(value: string): string {
   return [...value]
     .filter((character) => {
       const code = character.charCodeAt(0)
+
       return code >= 32 && code !== 127
     })
     .join('')
@@ -109,6 +112,7 @@ function removeControlCharacters(value: string): string {
 
 export function normalizeTerminalThemeId(value: unknown, fallback = 'theme'): string {
   const raw = typeof value === 'string' ? value : fallback
+
   const normalized = removeControlCharacters(raw)
     .trim()
     .toLowerCase()
@@ -116,6 +120,7 @@ export function normalizeTerminalThemeId(value: unknown, fallback = 'theme'): st
     .replace(/[^a-z0-9:_-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^-+|-+$/g, '')
+
   return normalized || fallback
 }
 
@@ -123,10 +128,12 @@ export function normalizeTerminalThemeName(value: unknown, fallback = 'Imported 
   if (typeof value !== 'string') {
     return fallback
   }
+
   const normalized = removeControlCharacters(value)
     .replace(/[\\/]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
+
   return normalized || fallback
 }
 
@@ -134,11 +141,15 @@ export function normalizeTerminalHexColor(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
+
   const trimmed = value.trim()
+
   if (!HEX_COLOR_RE.test(trimmed)) {
     return null
   }
+
   const withoutHash = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
+
   const expanded =
     withoutHash.length === 3
       ? withoutHash
@@ -146,6 +157,7 @@ export function normalizeTerminalHexColor(value: unknown): string | null {
           .map((character) => `${character}${character}`)
           .join('')
       : withoutHash
+
   return `#${expanded.toLowerCase()}`
 }
 
@@ -153,19 +165,24 @@ export function normalizeTerminalColorOverrides(value: unknown): TerminalColorOv
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
+
   const input = value as Record<string, unknown>
   const output: TerminalColorOverrides = {}
+
   for (const key of TERMINAL_COLOR_KEYS) {
     const color = normalizeTerminalHexColor(input[key])
+
     if (color) {
       output[key] = color
     }
   }
+
   return output
 }
 
 export function hasUsableTerminalThemeColors(terminal: TerminalColorOverrides): boolean {
   const ansiCount = TERMINAL_ANSI_COLOR_KEYS.filter((key) => terminal[key]).length
+
   return Boolean(terminal.background && terminal.foreground && ansiCount > 0)
 }
 
@@ -181,10 +198,12 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
   }
+
   const normalized = value
     .filter((entry): entry is string => typeof entry === 'string')
     .map((entry) => entry.trim())
     .filter(Boolean)
+
   return normalized.length > 0 ? [...new Set(normalized)] : undefined
 }
 
@@ -194,23 +213,28 @@ export function normalizeTerminalCustomThemes(value: unknown): TerminalCustomThe
   }
 
   const byId = new Map<string, TerminalCustomTheme>()
+
   for (const entry of value.slice(-MAX_TERMINAL_CUSTOM_THEMES)) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       continue
     }
+
     const input = entry as Record<string, unknown>
     const source = normalizeSource(input.source)
     const name = normalizeTerminalThemeName(input.name)
     const idBase = normalizeTerminalThemeId(input.id ?? `${source}:${name}`)
     const id = idBase.includes(':') ? idBase : `${source}:${idBase}`
     const terminal = normalizeTerminalColorOverrides(input.terminal)
+
     if (!id || !name || !hasUsableTerminalThemeColors(terminal)) {
       continue
     }
+
     const importedAt =
       typeof input.importedAt === 'string' && input.importedAt.trim()
         ? input.importedAt
         : new Date(0).toISOString()
+
     byId.set(id, {
       id,
       name,

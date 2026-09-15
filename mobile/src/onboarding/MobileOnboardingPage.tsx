@@ -6,6 +6,7 @@ import type { MobileSessionView } from '../storage/session-view-preferences'
 import { colors } from '../theme/mobile-theme'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
+
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
 
 type Props = {

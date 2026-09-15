@@ -27,6 +27,7 @@ export function isElevated() {
   if (process.platform !== 'win32') {
     return false
   }
+
   // Use the WindowsPrincipal role check via PowerShell rather than `whoami`,
   // which under a Git Bash / MSYS PATH can resolve to a Unix whoami that
   // rejects the /groups flag.
@@ -34,5 +35,6 @@ export function isElevated() {
     `[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()` +
       `).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)`
   )
+
   return stdout.trim().toLowerCase() === 'true'
 }

@@ -3,7 +3,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow-execute.ts'), 'utf8')
+
 const PREFLIGHT_SOURCE = readFileSync(join(__dirname, 'agent-trust-preflight.ts'), 'utf8')
+
 const STRUCTURED_SOURCE = readFileSync(
   join(__dirname, 'worktree-creation-structured-session.ts'),
   'utf8'
@@ -14,12 +16,14 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
 describe('worktree creation flow agent trust preflight', () => {
   it('forwards the repo SSH connection id when pre-marking agent trust', () => {
     const preflight = PREFLIGHT_SOURCE
+
     const createFlow = sourceBetween(
       FLOW_SOURCE,
       'const backendSpawned = result.startupTerminal?.spawned === true',

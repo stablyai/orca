@@ -16,7 +16,9 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('lucide-react-native', () => ({ Monitor: 'Monitor', MoreVertical: 'MoreVertical' }))
+
 vi.mock('./StatusDot', () => ({ StatusDot: 'StatusDot' }))
 
 const host: HostProfile = {
@@ -27,7 +29,9 @@ const host: HostProfile = {
   publicKeyB64: 'key',
   lastConnected: 0
 }
+
 const verdict: ConnectionVerdict = { kind: 'normal', label: 'Connected' }
+
 const loaded: HostWorktreeInfo = {
   hostId: 'host-1',
   totalWorktrees: 12,
@@ -68,6 +72,7 @@ describe('MobileHostCard', () => {
         })
       )
     })
+
     return renderer!.root
       .findAllByType('Text')
       .flatMap((node) => node.children.filter((child) => typeof child === 'string'))

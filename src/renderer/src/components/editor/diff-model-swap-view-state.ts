@@ -11,17 +11,21 @@ export function preserveDiffViewStateAcrossModelSwaps(
     // models, so capture once before either diff side starts rotating.
     pendingViewState ??= diffEditor.saveViewState()
   }
+
   const scheduleRestore = (): void => {
     if (!pendingViewState) {
       return
     }
+
     if (restoreFrame !== null) {
       cancelAnimationFrame(restoreFrame)
     }
+
     restoreFrame = requestAnimationFrame(() => {
       restoreFrame = null
       const viewState = pendingViewState
       pendingViewState = null
+
       if (viewState && diffEditor.getModel()) {
         diffEditor.restoreViewState(viewState)
       }
@@ -30,6 +34,7 @@ export function preserveDiffViewStateAcrossModelSwaps(
 
   const originalEditor = diffEditor.getOriginalEditor()
   const modifiedEditor = diffEditor.getModifiedEditor()
+
   const subscriptions = [
     originalEditor.onWillChangeModel(captureViewState),
     originalEditor.onDidChangeModel(scheduleRestore),
@@ -42,9 +47,11 @@ export function preserveDiffViewStateAcrossModelSwaps(
       for (const subscription of subscriptions) {
         subscription.dispose()
       }
+
       if (restoreFrame !== null) {
         cancelAnimationFrame(restoreFrame)
       }
+
       restoreFrame = null
       pendingViewState = null
     }

@@ -12,6 +12,7 @@ type StoredBody = AgentSessionRewindRecord['retained'][number]['body']
 export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody {
   let normalized: unknown = body
   const fallback = () => ({ kind: 'status', text: JSON.stringify(body) })
+
   if (body.kind === 'message') {
     normalized = {
       ...body,
@@ -25,6 +26,7 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
         ) {
           return block
         }
+
         if (
           block.type === 'tool-call' &&
           'state' in block &&
@@ -32,6 +34,7 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
         ) {
           return block
         }
+
         return { type: 'text', text: JSON.stringify(block) }
       })
     }
@@ -57,8 +60,10 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
   ) {
     normalized = fallback()
   }
+
   if (!isAdmissibleAgentJournalItemBody(normalized)) {
     throw new Error('agent_session_rewind:invalid-retained-body')
   }
+
   return normalized
 }

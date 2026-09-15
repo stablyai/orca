@@ -22,10 +22,12 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makePane(id: number): ManagedPane {
   const leafId = `leaf-${id}` as ManagedPane['leafId']
+
   return {
     id,
     leafId,
@@ -117,6 +119,7 @@ function renderOverlay({
     )
   })
   mounted.push({ container, root })
+
   return { container, onClosePane, onRemoveTitle, onRenameSubmit }
 }
 
@@ -127,12 +130,15 @@ function pressInputKey(
 ): void {
   act(() => {
     const event = new KeyboardEvent('keydown', { key, bubbles: true })
+
     if (options?.isComposing !== undefined) {
       Object.defineProperty(event, 'isComposing', { value: options.isComposing })
     }
+
     if (options?.keyCode !== undefined) {
       Object.defineProperty(event, 'keyCode', { value: options.keyCode })
     }
+
     input.dispatchEvent(event)
   })
 }
@@ -153,6 +159,7 @@ describe('TerminalPaneHeaderOverlay', () => {
     const removeTitle = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove pane title: server"]'
     )
+
     expect(removeTitle).not.toBeNull()
 
     act(() => removeTitle?.click())
@@ -193,6 +200,7 @@ describe('TerminalPaneHeaderOverlay', () => {
       renamingPaneId: 1,
       renameValue: '日本語 pane'
     })
+
     const input = container.querySelector<HTMLInputElement>('.pane-title-input')
 
     expect(input).not.toBeNull()
@@ -208,11 +216,13 @@ describe('TerminalPaneHeaderOverlay', () => {
 
   it('shows new-session continuation on the active agent pane header', () => {
     const onContinueAgentSessionInNewSession = vi.fn()
+
     const { container } = renderOverlay({
       paneTitles: { 1: '', 2: '' },
       canContinueAgentSessionInNewSession: true,
       onContinueAgentSessionInNewSession
     })
+
     const handoff = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Continue in New Session…"]'
     )

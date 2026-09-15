@@ -27,6 +27,7 @@ export function shortenMobileTerminalDiagnosticId(value: string | null | undefin
   if (!value) {
     return null
   }
+
   return value.slice(-8)
 }
 
@@ -34,6 +35,7 @@ export function getMobileTerminalDiagnosticErrorName(error: unknown): string {
   if (error instanceof Error && error.name) {
     return error.name
   }
+
   return typeof error
 }
 
@@ -46,6 +48,7 @@ export function logMobileTerminalDiagnostic(
   if (typeof __DEV__ !== 'undefined' && !__DEV__) {
     return
   }
+
   // Keep this structured and content-free so users can safely share a filtered log.
   console.log(MOBILE_TERMINAL_DIAGNOSTIC_TAG, event, details)
 }
@@ -90,6 +93,7 @@ export class MobileTerminalDiagnostics {
     if (this.streamGateByHandle.get(handle) === reason) {
       return
     }
+
     this.streamGateByHandle.set(handle, reason)
     logMobileTerminalDiagnostic('stream-skipped', {
       handle: shortenMobileTerminalDiagnosticId(handle),
@@ -113,6 +117,7 @@ export class MobileTerminalDiagnostics {
     if (this.firstStreamEventSeqByHandle.get(handle) === seq) {
       return
     }
+
     this.firstStreamEventSeqByHandle.set(handle, seq)
     logMobileTerminalDiagnostic('stream-first-event', {
       handle: shortenMobileTerminalDiagnosticId(handle),
@@ -201,7 +206,9 @@ export class MobileTerminalDiagnostics {
       activeTab?.type === 'terminal' && typeof activeTab.terminal === 'string'
         ? activeTab.terminal
         : null
+
     const appliedSnapshot = { ...snapshot, tabs }
+
     const signature = [
       appliedSnapshot.publicationEpoch ?? '',
       appliedSnapshot.snapshotVersion,
@@ -209,9 +216,11 @@ export class MobileTerminalDiagnostics {
       activeHandle ?? '',
       selectionSource
     ].join(':')
+
     if (this.lastAppliedTabsSignature === signature) {
       return
     }
+
     this.lastAppliedTabsSignature = signature
     this.logTabs('tabs-applied', appliedSnapshot, activeTab, activeHandle, { selectionSource })
   }
@@ -220,6 +229,7 @@ export class MobileTerminalDiagnostics {
     if (reason === 'already-in-flight' && this.tabsFetchSkipLogged) {
       return
     }
+
     this.tabsFetchSkipLogged = reason === 'already-in-flight'
     logMobileTerminalDiagnostic('tabs-fetch-skipped', { reason })
   }
@@ -227,9 +237,11 @@ export class MobileTerminalDiagnostics {
   tabsFetchStarted(worktreeId: string): void {
     this.tabsFetchSkipLogged = false
     const now = Date.now()
+
     if (this.lastFetchedTabsSignature != null && now - this.lastTabsFetchStartAt < 10_000) {
       return
     }
+
     this.lastTabsFetchStartAt = now
     logMobileTerminalDiagnostic('tabs-fetch-start', {
       worktree: shortenMobileTerminalDiagnosticId(worktreeId)
@@ -248,6 +260,7 @@ export class MobileTerminalDiagnostics {
 
   tabsFetchSucceeded(snapshot: DiagnosticTabsSnapshot): void {
     const activeTab = snapshot.tabs.find((tab) => tab.isActive) ?? null
+
     const signature = [
       snapshot.publicationEpoch ?? '',
       snapshot.snapshotVersion,
@@ -255,14 +268,18 @@ export class MobileTerminalDiagnostics {
       activeTab?.id ?? '',
       activeTab?.type ?? ''
     ].join(':')
+
     if (this.lastFetchedTabsSignature === signature) {
       return
     }
+
     this.lastFetchedTabsSignature = signature
+
     const activeHandle =
       activeTab?.type === 'terminal' && typeof activeTab.terminal === 'string'
         ? activeTab.terminal
         : null
+
     this.logTabs('tabs-fetch-success', snapshot, activeTab, activeHandle)
   }
 

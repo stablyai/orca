@@ -17,6 +17,7 @@ class FakeWorker {
     const listeners = this.listeners.get(event) ?? new Set()
     listeners.add(listener)
     this.listeners.set(event, listeners)
+
     return this
   }
 
@@ -34,6 +35,7 @@ class FakeWorker {
 
   async terminate(): Promise<number> {
     this.terminated = true
+
     return 1
   }
 
@@ -46,6 +48,7 @@ class FakeWorker {
 
 function setup(): { client: AiVaultScannerWorkerClient; worker: FakeWorker } {
   const worker = new FakeWorker()
+
   return {
     client: new AiVaultScannerWorkerClient({
       workerFactory: () => worker as unknown as Worker
@@ -59,11 +62,13 @@ function setupWorkerFactory(): {
   workers: FakeWorker[]
 } {
   const workers: FakeWorker[] = []
+
   return {
     client: new AiVaultScannerWorkerClient({
       workerFactory: () => {
         const worker = new FakeWorker()
         workers.push(worker)
+
         return worker as unknown as Worker
       }
     }),
@@ -108,10 +113,12 @@ describe('AiVaultScannerWorkerClient', () => {
   it('cancels active work without dispatching the next call concurrently', async () => {
     const { client, worker } = setup()
     const controller = new AbortController()
+
     const first = client.resolveTitles(
       [{ agent: 'codex', sessionId: 'session' }],
       controller.signal
     )
+
     const second = client.resolveTitles([{ agent: 'claude', sessionId: 'other' }])
     const firstId = worker.posted[0]!.id
 
@@ -151,6 +158,7 @@ describe('AiVaultScannerWorkerClient', () => {
 
   it('keeps the unrefed worker resident so incremental parse state survives idle time', async () => {
     vi.useFakeTimers()
+
     try {
       const { client, worker } = setup()
       const result = client.resolveTitles([{ agent: 'codex', sessionId: 'session' }])
@@ -170,6 +178,7 @@ describe('AiVaultScannerWorkerClient', () => {
   it('bounds queued calls while one request is active', async () => {
     const { client } = setup()
     const active = client.resolveTitles([{ agent: 'codex', sessionId: 'active' }])
+
     const queued = Array.from({ length: 16 }, (_, index) =>
       client.resolveTitles([{ agent: 'codex', sessionId: `queued-${index}` }])
     )

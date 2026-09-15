@@ -15,12 +15,14 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
   const runtimeSubscribe = vi.fn()
   const refreshSessionTabsSnapshot = vi.fn(async () => {})
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError?: (error: { code: string; message: string }) => void
     onClose?: () => void
   } | null = null
+
   let hostListCalls = 0
 
   function emitMultiplexReady(): void {
@@ -31,13 +33,17 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     const frame = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .findLast((candidate) => candidate?.opcode === TerminalStreamOpcode.Subscribe)
+
     if (!frame) {
       throw new Error('missing terminal subscribe frame')
     }
+
     const payload = decodeTerminalStreamJson<{ streamId: number; terminal: string }>(frame.payload)
+
     if (!payload) {
       throw new Error('invalid terminal subscribe payload')
     }
+
     return payload
   }
 
@@ -48,7 +54,9 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return []
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         return payload ? [payload.terminal] : []
       })
   }
@@ -111,6 +119,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -118,6 +127,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       onPtyExit,
       onPtyRebind: vi.fn()
     })
+
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-stale',
       cols: 80,
@@ -132,7 +142,9 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       if (args.method !== 'session.tabs.list') {
         return { ok: true, result: {} }
       }
+
       hostListCalls += 1
+
       return { ok: true, result: hostSnapshot('terminal-stale', hostListCalls + 1, 'epoch-1') }
     })
     subscriptionCallbacks?.onResponse({
@@ -143,6 +155,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         message: 'terminal_handle_stale'
       }
     })
+
     return { transport, onError, onPtyExit }
   }
 
@@ -160,9 +173,11 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       if (request.method === 'session.tabs.activate') {
         return { ok: true, result: hostSnapshot('terminal-stale', 1, 'epoch-1') }
       }
+
       if (request.method === 'terminal.resolvePane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         const separator = params.paneKey.indexOf(':')
+
         return {
           ok: true,
           result: {
@@ -175,12 +190,14 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
           }
         }
       }
+
       return { ok: true, result: { terminal: { handle: 'terminal-stale' } } }
     })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
         queueMicrotask(emitMultiplexReady)
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -191,6 +208,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   it('reattaches from a rotated host handle published after the recovery cutoff', async () => {
     vi.useFakeTimers()
+
     try {
       const { transport, onPtyExit } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
@@ -224,6 +242,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   it('reattaches when the post-cutoff snapshot republishes the same live handle', async () => {
     vi.useFakeTimers()
+
     try {
       const { transport, onError } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
@@ -252,6 +271,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   it('ignores a same-handle snapshot while automatic recovery is still running', async () => {
     vi.useFakeTimers()
+
     try {
       const { transport } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
@@ -274,6 +294,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   it('reattaches from a same-handle snapshot delivered inside the Reconnect window', async () => {
     vi.useFakeTimers()
+
     try {
       const { transport, onError } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
@@ -305,9 +326,11 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   it('revives a latched require-replacement pane when online or system resume fires', async () => {
     vi.useFakeTimers()
+
     try {
       const { transport, onError } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
 
@@ -336,10 +359,13 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   it('leaves Reconnect available when online fires on a pane latched during the attach wait', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
+
       runtimeCall.mockImplementation(async (request: { method: string }) => {
         if (request.method === 'session.tabs.activate') {
           return {
@@ -350,8 +376,10 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
             }
           }
         }
+
         return { ok: true, result: {} }
       })
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -359,6 +387,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         onPtyExit: vi.fn(),
         onPtyRebind: vi.fn()
       })
+
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-stale',
         cols: 80,
@@ -384,9 +413,11 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
   // evidence the auto-recovery window ran out, so it must not license reattaching a fenced handle.
   it('does not reattach a fenced same handle when only a UI latch closed the window', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -394,6 +425,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         onPtyExit: vi.fn(),
         onPtyRebind: vi.fn()
       })
+
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-stale',
         cols: 80,
@@ -408,7 +440,9 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         if (args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
+
         hostListCalls += 1
+
         return { ok: true, result: hostSnapshot('terminal-stale', hostListCalls + 1, 'epoch-1') }
       })
       // The stream drops and the resubscribe fails fatally with a stale handle: markDisconnected()

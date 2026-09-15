@@ -41,13 +41,16 @@ function decodeGroupedToken(value: string): GroupedTokenPayload | null {
   if (!value.startsWith(GROUPED_TOKEN_PREFIX)) {
     return null
   }
+
   try {
     const decoded = JSON.parse(
       decodeURIComponent(value.slice(GROUPED_TOKEN_PREFIX.length))
     ) as Record<string, unknown>
+
     if (typeof decoded.promptKey !== 'string' || typeof decoded.questionId !== 'string') {
       return null
     }
+
     if (decoded.kind === 'option' && typeof decoded.optionId === 'string') {
       return {
         kind: 'option',
@@ -56,12 +59,14 @@ function decodeGroupedToken(value: string): GroupedTokenPayload | null {
         optionId: decoded.optionId
       }
     }
+
     if (decoded.kind === 'free-text') {
       return { kind: 'free-text', promptKey: decoded.promptKey, questionId: decoded.questionId }
     }
   } catch {
     return null
   }
+
   return null
 }
 
@@ -73,15 +78,20 @@ function decodeGroupedFreeTextAnswer(value: string): {
   if (!value.startsWith(GROUPED_TOKEN_PREFIX)) {
     return null
   }
+
   // The payload is percent-encoded, so the first `:` after the prefix is the answer separator.
   const separator = value.indexOf(':', GROUPED_TOKEN_PREFIX.length)
+
   if (separator === -1) {
     return null
   }
+
   const payload = decodeGroupedToken(value.slice(0, separator))
+
   if (payload?.kind !== 'free-text') {
     return null
   }
+
   try {
     return {
       promptKey: payload.promptKey,
@@ -110,11 +120,14 @@ export function projectGroupedQuestion(
 ): MobileChatQuestion | null {
   const answered = answersFor(draft, promptKey).length
   const question = questions[answered]
+
   if (!question) {
     return null
   }
+
   const heading = question.header ? `${question.header}: ${question.question}` : question.question
   const optionDescriptions = question.options.map((option) => option.description)
+
   return {
     question:
       questions.length > 1 ? `${heading} (${answered + 1} of ${questions.length})` : heading,
@@ -152,11 +165,14 @@ function answerFromResponse(
   // Multi-select submits comma-joined parts; tokens and free text are encoded, so the separator is stable.
   const optionIds: string[] = []
   let other: string | undefined
+
   for (const part of response.split(', ')) {
     const trimmed = part.trim()
     const freeText = decodeGroupedFreeTextAnswer(trimmed)
+
     if (freeText) {
       const answer = freeText.answer.trim()
+
       if (
         freeText.promptKey !== promptKey ||
         freeText.questionId !== question.id ||
@@ -165,11 +181,13 @@ function answerFromResponse(
       ) {
         return null
       }
+
       other = answer
       continue
     }
 
     const payload = decodeGroupedToken(trimmed)
+
     if (
       payload?.kind !== 'option' ||
       payload.promptKey !== promptKey ||
@@ -177,19 +195,26 @@ function answerFromResponse(
     ) {
       return null
     }
+
     optionIds.push(payload.optionId)
   }
+
   const offered = new Set(question.options.map((option) => option.id))
+
   if (optionIds.some((optionId) => !offered.has(optionId))) {
     return null
   }
+
   if (other && !question.freeTextQuestionId) {
     return null
   }
+
   const answerCount = optionIds.length + (other ? 1 : 0)
+
   if (answerCount === 0 || (!question.multiSelect && answerCount !== 1)) {
     return null
   }
+
   return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
 }
 
@@ -205,17 +230,23 @@ export function advanceGroupedQuestion(args: {
 }): GroupedQuestionAdvance | null {
   const collected = answersFor(args.draft, args.promptKey)
   const question = args.questions[collected.length]
+
   if (!question) {
     return null
   }
+
   const answer = answerFromResponse(args.response, question, args.promptKey)
+
   if (!answer) {
     return null
   }
+
   const answers = [...collected, answer]
+
   if (answers.length < args.questions.length) {
     return { kind: 'advance', draft: { promptKey: args.promptKey, answers } }
   }
+
   // Never send a group the host would refuse — the user would see a silent failure with no way back.
   return isValidAgentSessionQuestionAnswers(args.questions, answers)
     ? { kind: 'submit', optionId: encodeAgentSessionQuestionAnswers(answers) }

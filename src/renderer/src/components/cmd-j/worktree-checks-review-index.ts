@@ -27,18 +27,22 @@ export function buildWorktreeChecksReviewIndex({
   settings
 }: WorktreeChecksReviewIndexArgs): Map<Worktree, HostedReviewInfo | null> {
   const reviews = new Map<Worktree, HostedReviewInfo | null>()
+
   if (!prCache || !hostedReviewCache) {
     return reviews
   }
 
   for (const worktree of worktrees) {
     const repo = resolvePaletteRepoForWorktree(worktree, EMPTY_REPO_MAP, repoByHostIdentity)
+
     if (!repo) {
       continue
     }
+
     // Why: Cmd+J builds this index for every worktree before search runs, so a
     // branch-less folder workspace or partially hydrated row must not throw here.
     const branch = resolveWorktreeBranchLabel(worktree)
+
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,
@@ -48,6 +52,7 @@ export function buildWorktreeChecksReviewIndex({
       repo.executionHostId,
       true
     )
+
     const hostedReviewKey = getHostedReviewCacheKey(
       repo.path,
       branch,
@@ -57,9 +62,11 @@ export function buildWorktreeChecksReviewIndex({
       repo.executionHostId,
       true
     )
+
     // Why: Cmd+J should expose exactly the review metadata Checks has already
     // resolved, without starting another provider lookup from the search path.
     const pr = prCache[prKey]?.data
+
     const review = selectChecksPanelReview({
       hostedReview: hostedReviewCache[hostedReviewKey]?.data,
       pr,
@@ -70,6 +77,7 @@ export function buildWorktreeChecksReviewIndex({
       linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: worktree.linkedGiteaPR ?? null
     })
+
     if (review) {
       // Why: persisted IDs can be identical across execution hosts; the search
       // scope preserves these object references while sorting and filtering.

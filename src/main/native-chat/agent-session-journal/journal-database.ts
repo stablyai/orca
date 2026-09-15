@@ -23,23 +23,29 @@ export function journalPragmaNumber(db: Database.Database, name: string): number
 export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
   const probe = new Database(dbPath)
   let stored: number
+
   try {
     stored = journalPragmaNumber(probe, 'user_version')
   } catch (error) {
     probe.close()
     throw error
   }
+
   if (stored > JOURNAL_DB_SCHEMA_VERSION) {
     probe.close()
+
     return { db: new Database(dbPath, { readonly: true, fileMustExist: true }), readOnly: true }
   }
+
   let transferred = false
+
   try {
     configureJournalPragmas(probe)
     createJournalSchema(probe, stored)
     hardenSqliteDatabaseFiles(dbPath)
     const opened = { db: probe, readOnly: false }
     transferred = true
+
     return opened
   } finally {
     if (!transferred) {
@@ -68,7 +74,9 @@ function createJournalSchema(db: Database.Database, stored: number): void {
   if (stored >= JOURNAL_DB_SCHEMA_VERSION) {
     return
   }
+
   db.exec('BEGIN IMMEDIATE')
+
   try {
     db.exec(createJournalTablesSql())
     db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION}`)

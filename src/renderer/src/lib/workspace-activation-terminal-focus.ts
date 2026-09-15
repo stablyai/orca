@@ -8,9 +8,11 @@ function resolveActivatedWorkspaceTerminalTabId(
   activation: ActivateAndRevealResult | false
 ): string | null {
   const state = useAppStore.getState()
+
   if (activation && activation.primaryTabId) {
     return activation.primaryTabId
   }
+
   if (
     state.activeWorktreeId !== worktreeId ||
     state.activeView !== 'terminal' ||
@@ -18,6 +20,7 @@ function resolveActivatedWorkspaceTerminalTabId(
   ) {
     return null
   }
+
   return state.activeTabId
 }
 
@@ -28,12 +31,14 @@ export function queueWorkspaceActivationTerminalFocus(
   activation: ActivateAndRevealResult | false
 ): boolean {
   const tabId = resolveActivatedWorkspaceTerminalTabId(worktreeId, activation)
+
   if (!tabId) {
     return false
   }
 
   requestAnimationFrame(() => {
     const state = useAppStore.getState()
+
     if (
       state.activeWorktreeId !== worktreeId ||
       state.activeView !== 'terminal' ||
@@ -50,5 +55,6 @@ export function queueWorkspaceActivationTerminalFocus(
       focusTerminalTabSurface(tabId)
     }
   })
+
   return true
 }

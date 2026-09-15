@@ -21,21 +21,28 @@ export async function hydrateWorkspaceCleanupScanFromCache({
   if (hasLiveScanState()) {
     return false
   }
+
   let cached: WorkspaceCleanupScanResult | null
+
   try {
     cached = await window.api.workspaceCleanup.getCachedScan()
   } catch {
     // Why: hydration is best-effort; the rescan that follows is the recovery.
     return false
   }
+
   if (cached === null || hasLiveScanState()) {
     return false
   }
+
   const candidates = await enrich(cached.candidates)
+
   // Why: enrichment awaits terminal probes; a scan may have started meanwhile.
   if (hasLiveScanState()) {
     return false
   }
+
   apply({ ...cached, candidates })
+
   return true
 }

@@ -38,11 +38,13 @@ function buildFixture(childCount: number): {
   const worktreeMap = new Map<string, Worktree>()
   const lineageById: Record<string, WorktreeLineage> = {}
   worktreeMap.set('root', makeWorktree('root'))
+
   for (let index = 0; index < childCount; index += 1) {
     const id = `child-${index}`
     worktreeMap.set(id, makeWorktree(id))
     lineageById[id] = makeLineage(id, 'root')
   }
+
   return { lineageById, worktreeMap }
 }
 
@@ -94,10 +96,12 @@ describe('worktree lineage projection cache', () => {
 
     const withoutFirstChild = { ...lineageById }
     delete withoutFirstChild['child-0']
+
     const reprojected = getProjectedWorktreeLineageChildrenByParentId(
       withoutFirstChild,
       worktreeMap
     )
+
     expect(reprojected.get('root')?.map((worktree) => worktree.id)).toEqual(['child-1'])
     expect(
       getLineageRenderInfo(
@@ -114,10 +118,12 @@ describe('worktree lineage projection cache', () => {
       ['a', makeWorktree('a')],
       ['b', makeWorktree('b')]
     ])
+
     const lineageById: Record<string, WorktreeLineage> = {
       a: makeLineage('a', 'b'),
       b: makeLineage('b', 'a')
     }
+
     const cyclic = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     expect([...cyclic].sort()).toEqual(['a', 'b'])
     expect(getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)).toBe(cyclic)

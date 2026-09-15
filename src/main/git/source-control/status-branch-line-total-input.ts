@@ -19,11 +19,13 @@ export function createBranchLineTotalInput(
   statusSucceeded: boolean
 ): { mergeBase: string; compute: () => Promise<GitBranchLineTotal | undefined> } | undefined {
   const mergeBase = readGitBranchLineTotalMergeBaseParam(options.branchLineTotalMergeBase)
+
   // Why: a failed status scan leaves the untracked list untrustworthy, so the
   // total would silently under-count rather than be absent.
   if (mergeBase === undefined || !statusSucceeded) {
     return undefined
   }
+
   return {
     mergeBase,
     compute: () =>

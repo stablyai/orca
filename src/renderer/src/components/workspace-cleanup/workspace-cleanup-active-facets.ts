@@ -26,6 +26,7 @@ export function listActiveWorkspaceCleanupFacetGroups(
   filters: WorkspaceCleanupFilterState
 ): WorkspaceCleanupFacetGroupKey[] {
   const defaults = createDefaultWorkspaceCleanupFilterState()
+
   return FACET_GROUP_KEYS.filter((key) => !isGroupEqual(filters[key], defaults[key]))
 }
 
@@ -41,16 +42,21 @@ function isGroupEqual(left: unknown, right: unknown): boolean {
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
       return false
     }
+
     const leftMembers = left.map(String).sort()
     const rightMembers = right.map(String).sort()
+
     return leftMembers.every((member, index) => member === rightMembers[index])
   }
+
   if (isRecord(left) || isRecord(right)) {
     if (!isRecord(left) || !isRecord(right)) {
       return false
     }
+
     const leftKeys = Object.keys(left).sort()
     const rightKeys = Object.keys(right).sort()
+
     return (
       leftKeys.length === rightKeys.length &&
       leftKeys.every(
@@ -58,6 +64,7 @@ function isGroupEqual(left: unknown, right: unknown): boolean {
       )
     )
   }
+
   return left === right
 }
 

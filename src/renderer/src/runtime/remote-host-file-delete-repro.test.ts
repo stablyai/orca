@@ -16,30 +16,44 @@ const { confirm, toastError } = vi.hoisted(() => ({
   confirm: vi.fn(),
   toastError: vi.fn()
 }))
+
 const fsReadFile = vi.fn()
+
 const fsDeletePath = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
 
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
+
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))
+
 vi.mock('@/components/editor/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
   requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('@/components/right-sidebar/fileExplorerUndoRedo', () => ({
   commitFileExplorerOp: vi.fn()
 }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 const initialState = useAppStore.getInitialState()
+
 const SSH_CONNECTION_ID = 'ssh-target-1'
+
 const REMOTE_PATH = '/home/user/project/src/index.ts'
+
 const REMOTE_REPO_ID = 'repo-ssh'
+
 const REMOTE_WORKTREE_ID = `${REMOTE_REPO_ID}::/home/user/project`
+
 const FOLDER_WORKSPACE_ID = 'folder-workspace-1'
+
 const LOCAL_PATH = '/tmp/project/src/index.ts'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
@@ -126,6 +140,7 @@ beforeEach(() => {
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentCall.mockImplementation((args: { method: string; selector?: string }) => {
     const runtimeId = args.selector ?? 'env-1'
+
     return (
       createCompatibleRuntimeStatusResponseIfNeeded(args, runtimeId) ?? {
         id: 'rpc-1',

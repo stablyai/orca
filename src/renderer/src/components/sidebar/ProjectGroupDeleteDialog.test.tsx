@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -45,17 +46,21 @@ function findButton(label: string): HTMLButtonElement {
   const button = Array.from(document.body.querySelectorAll('button')).find((entry) =>
     entry.textContent?.includes(label)
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   return button
 }
 
 function getCheckbox(): HTMLButtonElement {
   const checkbox = document.body.querySelector('[role="checkbox"]')
+
   if (!(checkbox instanceof HTMLButtonElement)) {
     throw new Error('Checkbox not rendered')
   }
+
   return checkbox
 }
 
@@ -108,12 +113,14 @@ describe('ProjectGroupDeleteDialog', () => {
 
   it('disables project choices, cancel, and delete actions while deleting', async () => {
     let finishConfirm: () => void = () => undefined
+
     const onConfirm = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishConfirm = resolve
         })
     )
+
     renderDialog({ onConfirm })
 
     act(() => {

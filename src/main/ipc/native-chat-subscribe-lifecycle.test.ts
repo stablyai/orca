@@ -63,11 +63,14 @@ beforeEach(() => {
 function deferredSubscription(): DeferredSubscription {
   const unsubscribe = vi.fn()
   let resolvePromise: (subscription: TestSubscription) => void = () => {}
+
   let rejectPromise: (error: Error) => void = () => {}
+
   const promise = new Promise<TestSubscription>((resolve, reject) => {
     resolvePromise = resolve
     rejectPromise = reject
   })
+
   return {
     promise,
     reject: rejectPromise,
@@ -79,9 +82,11 @@ function deferredSubscription(): DeferredSubscription {
 function createSender(id: number): SenderHarness {
   let destroyed = false
   const destroyedCallbacks: (() => void)[] = []
+
   return {
     destroy: () => {
       destroyed = true
+
       for (const callback of destroyedCallbacks) {
         callback()
       }
@@ -102,9 +107,11 @@ function createSender(id: number): SenderHarness {
 
 function subscribe(sender: SenderHarness['sender'], subscriptionId: string): void {
   const listener = listeners.get('nativeChat:subscribe')
+
   if (!listener) {
     throw new Error('subscribe listener not registered')
   }
+
   listener({ sender }, { subscriptionId, agent: 'claude', sessionId: `session-${subscriptionId}` })
 }
 
@@ -120,34 +127,42 @@ type InitialSnapshotCallback = (
 // call; transcript-watch fires it during setup, so tests invoke it directly.
 function initialSnapshot(callIndex: number): InitialSnapshotCallback {
   const call = subscribeTranscript.mock.calls[callIndex]
+
   if (!call) {
     throw new Error('subscribeTranscript was not called')
   }
+
   return (call[0] as { onInitialSnapshot: InitialSnapshotCallback }).onInitialSnapshot
 }
 
 function setupSignal(callIndex: number): AbortSignal {
   const signal = subscribeTranscript.mock.calls[callIndex]?.[1]
+
   if (!(signal instanceof AbortSignal)) {
     throw new Error('subscribe setup signal was not provided')
   }
+
   return signal
 }
 
 function unsubscribe(sender: SenderHarness['sender'], subscriptionId: string): void {
   const listener = listeners.get('nativeChat:unsubscribe')
+
   if (!listener) {
     throw new Error('unsubscribe listener not registered')
   }
+
   listener({ sender }, { subscriptionId })
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1000): Promise<void> {
   const startedAt = Date.now()
+
   while (!predicate()) {
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error('timed out waiting for lifecycle state')
     }
+
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
 }

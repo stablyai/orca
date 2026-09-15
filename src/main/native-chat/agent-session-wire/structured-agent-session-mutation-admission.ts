@@ -53,18 +53,23 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { envelope, plan, journal } = request
+
   if (!journal) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
+
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: plan.method,
     sessionId: envelope.sessionId,
     fields: plan.fields
   })
+
   const conflict = agentSessionFingerprintConflict(envelope, hostFingerprint)
+
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
+
   const admitted = await request.store.admitMutationOperation({
     callerKey: request.callerKey,
     envelope,
@@ -72,16 +77,20 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     now: request.now(),
     ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+
   if (!admitted) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
+
   const { admission, record } = admitted
+
   if (admission.decision === 'refused') {
     return refuseAgentSessionMutation(admission.refusal)
   }
 
   const fence = record.lease.runtimeFence
   const context = turnContext(request, journal, fence)
+
   if (admission.decision === 'replay') {
     const replay = resolveAgentSessionReplayOutcome({
       operationId: envelope.clientOperationId,
@@ -90,12 +99,15 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context),
       recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
     })
+
     if (replay.decision === 'refuse') {
       return refuseAgentSessionMutation(replay.refusal)
     }
+
     if (replay.decision === 'replay') {
       return { ok: true, replayed: true, fence, cursor: journal.cursor(), value: replay.value }
     }
+
     // Nothing durable landed, so this id is about to run for the first time. A
     // refused call leaves its ledger row behind, and replaying past the lease and
     // the fence would let a resend act under an owner that has since changed — so
@@ -106,6 +118,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       ledger: { decision: 'admit', row: admission.row },
       lease: record.lease
     })
+
     if (rerun.decision === 'refused') {
       return refuseAgentSessionMutation(rerun.refusal)
     }
@@ -120,6 +133,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     plan,
     context
   })
+
   return outcome.ok
     ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
     : refuseAgentSessionMutation(outcome.refusal)
@@ -131,6 +145,7 @@ function turnContext<TValue>(
   fence: number
 ): AgentSessionTurnContext {
   const persistedOptions = request.store.getRecord(request.envelope.sessionId)?.options
+
   return {
     sessionId: request.envelope.sessionId,
     journal,

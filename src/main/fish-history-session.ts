@@ -16,8 +16,11 @@ import { isAbsolute, join } from 'node:path'
  * tool's data for the session, not just fish's history.
  */
 const SESSION_PREFIX = 'orca_'
+
 const RELAY_SESSION_PREFIX = 'orca_relay_'
+
 const SAFE_SESSION_NAME = /^orca_(?:relay_)?[0-9a-f]{1,64}$/
+
 /** Deliberately does NOT match the relay prefix. A relay host keyed by its
  *  CLIENT's worktree ids shares the one fish data dir with any desktop Orca on
  *  the same machine, whose live set knows nothing of those ids — so an
@@ -55,8 +58,10 @@ export function relayFishHistorySessionName(worktreeHash: string): string {
  *  `XDG_DATA_HOME`/`HOME` than the shells it spawns, and fish follows its own. */
 export function resolveFishHistoryDir(env: NodeJS.ProcessEnv = process.env): string {
   const xdg = env.XDG_DATA_HOME?.trim()
+
   const dataHome =
     xdg && isAbsolute(xdg) ? xdg : join(env.HOME?.trim() || homedir(), '.local', 'share')
+
   return join(dataHome, 'fish')
 }
 
@@ -67,7 +72,9 @@ function removeHistoryFile(path: string): boolean {
     if (!lstatSync(path).isFile()) {
       return false
     }
+
     rmSync(path)
+
     return true
   } catch {
     return false
@@ -81,10 +88,13 @@ export function deleteFishHistoryFile(session: string, dirs: Iterable<string>): 
   if (!isSafeFishHistorySession(session)) {
     return false
   }
+
   let removed = false
+
   for (const dir of new Set(dirs)) {
     removed = removeHistoryFile(join(dir, `${session}_history`)) || removed
   }
+
   return removed
 }
 
@@ -116,28 +126,37 @@ export function sweepOrphanedFishHistoryFiles(
   if (liveWorktreeHashes.size === 0) {
     return 0
   }
+
   let removed = 0
+
   for (const dir of new Set(dirs)) {
     let entries: string[]
+
     try {
       entries = readdirSync(dir)
     } catch {
       continue
     }
+
     for (const entry of entries) {
       const hash = ORCA_HISTORY_FILE.exec(entry)?.[1]
+
       if (!hash || liveWorktreeHashes.has(hash)) {
         continue
       }
+
       const path = join(dir, entry)
+
       if (minAgeMs > 0 && !isOlderThan(path, minAgeMs, now)) {
         continue
       }
+
       if (removeHistoryFile(path)) {
         removed += 1
       }
     }
   }
+
   return removed
 }
 

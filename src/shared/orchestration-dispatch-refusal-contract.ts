@@ -51,16 +51,19 @@ function taskNotStartableNextSteps(detail: TaskNotStartableDetail): string[] {
       `--retry-of must name the latest settled Dispatch of a failed or blocked Task; check orca orchestration dispatch-show --task ${detail.taskId} --json and orca orchestration worker-show --dispatch ${detail.retryOf} --json.`
     ]
   }
+
   if (detail.unmetDependencies.length > 0) {
     return [
       `Dependencies ${detail.unmetDependencies.join(', ')} are not completed. Wait for running ones with orca orchestration check --wait --json; retry or unblock failed ones before dispatching again.`
     ]
   }
+
   if (detail.status === 'dispatched') {
     return [
       `The Task already has an active Dispatch; inspect it with orca orchestration dispatch-show --task ${detail.taskId} --json.`
     ]
   }
+
   return [
     `A ${detail.status} Task cannot be dispatched; create a new Task or use worker-start --retry-of for a failed attempt.`
   ]

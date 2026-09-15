@@ -28,12 +28,17 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 const NOW = 1_700_000_000_000
+
 const TARGET_ID = 'prod'
+
 const FIRST_GENERATION = 4
+
 const REPLACEMENT_GENERATION = 5
 
 function prodTarget(generation: number): SshTarget {
@@ -116,6 +121,7 @@ async function createStoreFromState(state: Record<string, unknown>) {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -124,6 +130,7 @@ async function reloadStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -240,6 +247,7 @@ describe('workspace-pinned automations capture a registration generation', () =>
       createdAt: NOW,
       updatedAt: NOW
     }
+
     const store = await createStoreFromState(
       pinnedState(FIRST_GENERATION, { automations: [legacy] })
     )

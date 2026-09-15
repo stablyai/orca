@@ -27,8 +27,10 @@ export function createSessionSearchService({
       if (request.cursor === '') {
         return { kind: 'malformed-cursor' }
       }
+
       try {
         const result = engine.search(request)
+
         return {
           kind: 'results',
           hits: result.hits.map(
@@ -80,6 +82,7 @@ export function createSessionSearchService({
         if (!(error instanceof SessionSearchCursorError)) {
           throw error
         }
+
         return error.rejection === 'stale-generation'
           ? {
               kind: 'stale-cursor',

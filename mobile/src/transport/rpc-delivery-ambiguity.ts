@@ -5,6 +5,7 @@ const deliveryUnknownErrors = new WeakSet<Error>()
 
 export function markRpcDeliveryUnknown<T extends Error>(error: T): T {
   deliveryUnknownErrors.add(error)
+
   return error
 }
 

@@ -49,7 +49,9 @@ type TerminalQuickCommandHostState = {
 }
 
 const EMPTY_RUNTIME_ENVIRONMENTS: readonly PublicKnownRuntimeEnvironment[] = []
+
 const DISABLED_TERMINAL_QUICK_COMMAND_HOSTS: TerminalQuickCommandHost[] = []
+
 const DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE: TerminalQuickCommandHostState = {
   executionHostId: LOCAL_EXECUTION_HOST_ID,
   loadRemote: null,
@@ -122,10 +124,13 @@ export function useTerminalQuickCommandHosts(
       if (!enabled) {
         return DISABLED_TERMINAL_QUICK_COMMAND_HOST_STATE
       }
+
       const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
       const parsedExecutionHost = parseExecutionHostId(executionHostId)
+
       const remoteEnvironmentId =
         parsedExecutionHost?.kind === 'runtime' ? parsedExecutionHost.environmentId : null
+
       return {
         executionHostId,
         loadRemote: state.loadRuntimeTerminalQuickCommands,
@@ -162,6 +167,7 @@ export function useTerminalQuickCommandHosts(
       remoteState.supported === null ||
       remoteState === undefined)
   )
+
   const remoteHostLoadFailed = Boolean(
     remoteHostPending &&
     remoteState?.connectionGeneration === remoteConnectionGeneration &&
@@ -173,7 +179,9 @@ export function useTerminalQuickCommandHosts(
     if (!enabled) {
       return DISABLED_TERMINAL_QUICK_COMMAND_HOSTS
     }
+
     const hostOptions = getTerminalQuickCommandHostOptions(settings, runtimeEnvironments)
+
     const result: TerminalQuickCommandHost[] = [
       {
         commands: settings?.terminalQuickCommands ?? [],
@@ -182,6 +190,7 @@ export function useTerminalQuickCommandHosts(
           hostOptions.find((host) => host.id === LOCAL_EXECUTION_HOST_ID)?.label ?? 'This computer'
       }
     ]
+
     if (
       !remoteHostId ||
       !remoteEnvironmentId ||
@@ -190,11 +199,13 @@ export function useTerminalQuickCommandHosts(
     ) {
       return result
     }
+
     result.push({
       commands: remoteState.commands,
       hostId: remoteHostId,
       label: hostOptions.find((host) => host.id === remoteHostId)?.label ?? remoteEnvironmentId
     })
+
     return result
   }, [
     enabled,

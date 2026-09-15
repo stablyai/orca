@@ -12,22 +12,29 @@ export async function createDesktopTerminal(
 ): Promise<dependencies.RuntimeTerminalCreate> {
   runtime.assertGraphReady()
   const win = rendererWindow ?? runtime.getAuthoritativeWindow()
+
   const workspace = worktreeSelector
     ? await runtime.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
     : null
+
   const launchOpts = workspace
     ? await runtime.resolveAgentTerminalCreateOptions(workspace, opts)
     : opts
+
   const worktreeId = workspace?.id
+
   const cwd = workspace
     ? runtime.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd)
     : launchOpts.cwd
+
   const requestId = dependencies.randomUUID()
+
   const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
     const timer = setTimeout(() => {
       dependencies.getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
       reject(new Error('Terminal creation timed out'))
     }, 10000)
+
     const handler = (
       event: dependencies.IpcMainEvent,
       response: {
@@ -40,14 +47,17 @@ export async function createDesktopTerminal(
       if (event.sender !== win.webContents || response.requestId !== requestId) {
         return
       }
+
       clearTimeout(timer)
       dependencies.getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
+
       if (response.error) {
         reject(new Error(response.error))
       } else {
         resolve({ tabId: response.tabId!, title: response.title ?? launchOpts.title ?? '' })
       }
     }
+
     dependencies.getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
     win.webContents.send('terminal:requestTabCreate', {
       requestId,
@@ -69,7 +79,9 @@ export async function createDesktopTerminal(
       ...dependencies.ownerSurfacing(opts.surfaceOwner !== false)
     })
   })
+
   const handle = await runtime.waitForTerminalHandle(reply.tabId)
+
   return {
     handle,
     tabId: reply.tabId,

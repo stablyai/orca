@@ -1,4 +1,5 @@
 import { BrowserError } from '../browser/browser-error'
+
 const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
   '--args': true,
   '--cdp': true,
@@ -6,6 +7,7 @@ const TARGET_OVERRIDE_FLAGS: Record<string, true> = {
   '--profile': true,
   '--session': true
 }
+
 const TARGET_OVERRIDE_FLAG_PREFIXES = Object.keys(TARGET_OVERRIDE_FLAGS).map((flag) => `${flag}=`)
 
 function parseExecArguments(input: string): string[] {
@@ -13,6 +15,7 @@ function parseExecArguments(input: string): string[] {
   let value = ''
   let quote: '"' | "'" | null = null
   let escaped = false
+
   for (const char of input.trim()) {
     if (escaped) {
       value += char
@@ -36,40 +39,52 @@ function parseExecArguments(input: string): string[] {
       value += char
     }
   }
+
   if (escaped) {
     value += '\\'
   }
+
   if (quote) {
     throw new BrowserError('invalid_argument', 'Browser command has an unclosed quote.')
   }
+
   if (value) {
     args.push(value)
   }
+
   return args
 }
+
 function stripTargetOverrideArguments(args: string[]): string[] {
   const stripped: string[] = []
+
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]
+
     if (TARGET_OVERRIDE_FLAGS[arg]) {
       index++
       continue
     }
+
     if (TARGET_OVERRIDE_FLAG_PREFIXES.some((prefix) => arg.startsWith(prefix))) {
       continue
     }
+
     stripped.push(arg)
   }
+
   return stripped
 }
 
 function waitArguments(params: Record<string, unknown>): string[] {
   const args = ['wait']
+
   if (params.selector) {
     args.push(String(params.selector))
   } else if (params.timeout != null && !params.text && !params.url && !params.load && !params.fn) {
     args.push(String(params.timeout))
   }
+
   for (const [key, flag] of [
     ['text', '--text'],
     ['url', '--url'],
@@ -81,11 +96,13 @@ function waitArguments(params: Record<string, unknown>): string[] {
       args.push(flag, String(params[key]))
     }
   }
+
   return args
 }
 
 function cookieSetArguments(params: Record<string, unknown>): string[] {
   const args = ['cookies', 'set', String(params.name ?? ''), String(params.value ?? '')]
+
   for (const [key, flag] of [
     ['domain', '--domain'],
     ['path', '--path'],
@@ -96,22 +113,29 @@ function cookieSetArguments(params: Record<string, unknown>): string[] {
       args.push(flag, String(params[key]))
     }
   }
+
   if (params.secure) {
     args.push('--secure')
   }
+
   if (params.httpOnly) {
     args.push('--httpOnly')
   }
+
   return args
 }
+
 function cookieDeleteArguments(params: Record<string, unknown>): string[] {
   const args = ['cookies', 'clear']
+
   if (params.name) {
     args.push('--name', String(params.name))
   }
+
   if (params.domain) {
     args.push('--domain', String(params.domain))
   }
+
   return args
 }
 
@@ -121,6 +145,7 @@ export function externalChromiumCommandArguments(
 ): string[] | null {
   const text = (key: string): string => String(params[key] ?? '')
   const optional = (key: string): string[] => (params[key] == null ? [] : [String(params[key])])
+
   switch (method) {
     case 'browserClick':
       return ['click', text('element')]
@@ -167,6 +192,7 @@ export function externalChromiumCommandArguments(
       ) {
         return null
       }
+
       return ['mouse', 'click', text('x'), text('y'), ...optional('button')]
     case 'browserMouseUp':
       return ['mouse', 'up', ...optional('button')]
@@ -234,6 +260,7 @@ export function externalChromiumCommandArguments(
       ) {
         return null
       }
+
       return ['set', 'viewport', text('width'), text('height')]
     case 'browserWait':
       return waitArguments(params)

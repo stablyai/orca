@@ -78,12 +78,15 @@ async function configureFixtureGit(home: string, repositories: string): Promise<
   const hooksDirectory = join(home, 'hooks')
   const configPath = join(home, '.gitconfig')
   await mkdir(hooksDirectory, { recursive: true })
+
   const gitEnvironment: NodeJS.ProcessEnv = {
     GIT_CONFIG_GLOBAL: configPath,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0'
   }
+
   const repositoryBaseUrl = pathToFileURL(`${repositories}${sep}`).href
+
   const entries = [
     [`url.${repositoryBaseUrl}.insteadOf`, 'https://github.com/stablyai/'],
     ['protocol.file.allow', 'always'],
@@ -91,9 +94,11 @@ async function configureFixtureGit(home: string, repositories: string): Promise<
     ['tag.gpgSign', 'false'],
     ['core.hooksPath', hooksDirectory]
   ] as const
+
   for (const [key, value] of entries) {
     await runGit(home, ['config', '--file', configPath, key, value], gitEnvironment)
   }
+
   return gitEnvironment
 }
 
@@ -161,9 +166,11 @@ async function createMarketplaceFixture(): Promise<MarketplaceFixture> {
 async function openPluginSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     state.openSettingsTarget({ pane: 'plugins', repoId: null })
     state.openSettingsPage()
   })
@@ -207,9 +214,11 @@ async function applyInstalledLanguage(page: Page): Promise<void> {
   const languageId = 'plugin:stablyai.orca-portuguese/pt-BR'
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     state.openSettingsTarget({ pane: 'appearance', repoId: null })
   })
   await expect(page.locator('[data-settings-section="appearance"]')).toBeVisible()
@@ -276,6 +285,7 @@ test('installs and applies official Phase 1 content from a fresh profile', async
   const fixture = await createMarketplaceFixture()
   const session = createRestartSession(testInfo as TestInfo, fixture.gitEnvironment)
   let launched: Awaited<ReturnType<typeof session.launch>> | null = null
+
   try {
     launched = await session.launch()
     await runMarketplaceJourney(launched.page)
@@ -283,6 +293,7 @@ test('installs and applies official Phase 1 content from a fresh profile', async
     if (launched) {
       await session.close(launched.app)
     }
+
     await session.dispose()
     await rm(fixture.root, { recursive: true, force: true })
   }

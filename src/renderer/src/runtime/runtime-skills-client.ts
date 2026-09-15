@@ -43,6 +43,7 @@ export async function discoverSkillsForRuntimeTarget(
   if (runtimeTarget.kind === 'local') {
     return window.api.skills.discover(target)
   }
+
   return callRuntimeRpc<SkillDiscoveryResult>(
     runtimeTarget,
     'skills.discover',
@@ -56,6 +57,7 @@ export async function discoverSkillsForRuntimeTarget(
 }
 
 const SKILL_DELETE_PREVIEW_TIMEOUT_MS = 60_000
+
 const SKILL_DELETE_TIMEOUT_MS = 5 * 60_000
 
 /**
@@ -70,11 +72,13 @@ export async function runtimeTargetSupportsSkillDelete(
   if (!runtimeTarget) {
     return false
   }
+
   if (runtimeTarget.kind === 'local') {
     // Desktop answers true immediately; on web the "local" host is a remote
     // server that updates independently, so the preload probes its capability.
     return window.api.skills.deleteSupported()
   }
+
   return runtimeEnvironmentSupportsCapability(runtimeTarget.environmentId, SKILL_DELETE_CAPABILITY)
 }
 
@@ -83,8 +87,10 @@ async function assertSkillDeleteSupported(runtimeTarget: RuntimeClientTarget): P
     if (!(await window.api.skills.deleteSupported())) {
       throw new Error(SKILL_DELETE_UPDATE_REQUIRED_MESSAGE)
     }
+
     return
   }
+
   try {
     await assertRuntimeEnvironmentCapability(
       runtimeTarget.environmentId,
@@ -105,9 +111,11 @@ export async function previewSkillDeletionOnRuntimeTarget(
   request: SkillDeleteRequest
 ): Promise<SkillDeletePlan> {
   await assertSkillDeleteSupported(runtimeTarget)
+
   if (runtimeTarget.kind === 'local') {
     return window.api.skills.previewDelete(request)
   }
+
   return callRuntimeRpc<SkillDeletePlan>(runtimeTarget, 'skills.previewDelete', request, {
     timeoutMs: SKILL_DELETE_PREVIEW_TIMEOUT_MS
   })
@@ -118,9 +126,11 @@ export async function deleteSkillsOnRuntimeTarget(
   request: SkillDeleteRequest
 ): Promise<SkillDeleteResult> {
   await assertSkillDeleteSupported(runtimeTarget)
+
   if (runtimeTarget.kind === 'local') {
     return window.api.skills.delete(request)
   }
+
   return callRuntimeRpc<SkillDeleteResult>(runtimeTarget, 'skills.delete', request, {
     timeoutMs: SKILL_DELETE_TIMEOUT_MS
   })

@@ -25,6 +25,7 @@ const PROSE = [
   'stale',
   'session'
 ]
+
 // Tool output is paths, hashes and log lines — and the same words the
 // conversation uses, because a `rg` over this repository prints them. That
 // overlap is what the benchmark turns on: it is what makes a conversation
@@ -45,6 +46,7 @@ const TOOL_ONLY = [
   'byteOffset',
   'MAX_RETRIES'
 ]
+
 // Half the tool tokens are conversation words. Deliberately pessimistic: the
 // more of a query term lives in `tool_text`, the more the column filter costs,
 // so a number measured here holds on a real transcript tree.
@@ -52,19 +54,23 @@ const TOOL = [...PROSE, ...TOOL_ONLY]
 
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state + 0x6d2b79f5) >>> 0
     let t = Math.imul(state ^ (state >>> 15), 1 | state)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
 
 function words(random: () => number, vocabulary: readonly string[], count: number): string {
   const out: string[] = []
+
   for (let index = 0; index < count; index++) {
     out.push(vocabulary[Math.floor(random() * vocabulary.length)]!)
   }
+
   return out.join(' ')
 }
 
@@ -92,16 +98,20 @@ export async function writeToolHeavyCorpus(args: {
   const proseWordsPerTurn = 160
   // Tool and prose words are not the same length, so the share is over bytes.
   const proseBytesPerTurn = proseWordsPerTurn * 6
+
   const toolWordCount = Math.max(
     1,
     Math.round((proseBytesPerTurn * args.toolShare) / (1 - args.toolShare) / 22)
   )
+
   let transcriptBytes = 0
   let toolBytes = 0
   let proseBytes = 0
+
   for (let session = 0; transcriptBytes < args.targetBytes; session++) {
     const sessionId = `00000000-0000-4000-8000-${String(session).padStart(12, '0')}`
     const lines: string[] = []
+
     for (let turn = 0; turn < 40; turn++) {
       const at = new Date(1740000000000 + turn * 60_000).toISOString()
       const question = words(random, PROSE, 40)
@@ -142,11 +152,13 @@ export async function writeToolHeavyCorpus(args: {
         })
       )
     }
+
     const path = join(root, `${sessionId}.jsonl`)
     const body = `${lines.join('\n')}\n`
     await writeFile(path, body)
     transcriptBytes += Buffer.byteLength(body)
     files.push(path)
   }
+
   return { root, files, transcriptBytes, toolBytes, proseBytes }
 }

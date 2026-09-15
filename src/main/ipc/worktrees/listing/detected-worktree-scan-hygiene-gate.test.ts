@@ -13,16 +13,20 @@ const { listRepoWorktreesMock, pruneLineageMock, pruneMetadataMock, registerWork
 vi.mock('../../../repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
+
 vi.mock('../../../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
+
 vi.mock('../../registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: registerWorktreeRootsMock
 }))
+
 vi.mock('../../../worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: pruneLineageMock
 }))
+
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
   pruneMetadataMissingFromAuthoritativeLocalScan: pruneMetadataMock
 }))
@@ -34,6 +38,7 @@ const {
   invalidateDetectedWorktreeScanCache,
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
+
 const { invalidateLocalWorktreeMetadataPruneInputs } =
   await import('../../../local-worktree-metadata-prune-gate')
 
@@ -44,6 +49,7 @@ function worktreeAt(path: string): GitWorktreeInfo {
 }
 
 const captureExpectation = vi.fn(() => ({ repo: { id: repo.id }, metadata: [] }))
+
 const store = { captureNativeLocalWorktreeMetadataScanExpectation: captureExpectation } as never
 
 /** Each listing must miss the TTL cache, the way a renderer poll past the window does. */
@@ -81,6 +87,7 @@ describe('detected worktree scan hygiene gate', () => {
       expect(scan.hygieneDue).toBe(false)
       expect(scan.metadataPrune).toBeUndefined()
     }
+
     expect(captureExpectation).toHaveBeenCalledTimes(1)
   })
 

@@ -14,9 +14,11 @@ function findFolderWorkspaceByKey(
   folderWorkspaces: readonly FolderWorkspace[]
 ): FolderWorkspace | null {
   const scope = parseWorkspaceKey(worktreeId)
+
   if (scope?.type !== 'folder') {
     return null
   }
+
   return folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId) ?? null
 }
 
@@ -32,10 +34,13 @@ export function getKnownSidebarWorktreeById(
         (candidate) => candidate.id === worktreeId && candidate.hostId === executionHostId
       ) ?? null)
     : worktreeMap.get(worktreeId)
+
   if (worktree) {
     return worktree
   }
+
   const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
+
   return folderWorkspace ? folderWorkspaceToWorktree(folderWorkspace) : null
 }
 
@@ -54,6 +59,7 @@ export function sidebarWorkspaceStillExists(
   ) {
     return true
   }
+
   return findFolderWorkspaceByKey(worktreeId, folderWorkspaces) !== null
 }
 
@@ -68,6 +74,7 @@ export function getFolderWorkspaceRevealGroupKeys(
   }
 ): string[] {
   const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
+
   if (!folderWorkspace) {
     return []
   }
@@ -76,12 +83,15 @@ export function getFolderWorkspaceRevealGroupKeys(
   const keys: string[] = []
   const seen = new Set<string>()
   let groupId: string | null = folderWorkspace.projectGroupId
+
   while (groupId && !seen.has(groupId)) {
     seen.add(groupId)
     const group = groupsById.get(groupId)
+
     if (!group) {
       break
     }
+
     keys.unshift(getProjectGroupHeaderKey(group.id))
     groupId = group.parentGroupId
   }
@@ -90,6 +100,7 @@ export function getFolderWorkspaceRevealGroupKeys(
   // lane and host headers are the ones actually hiding the row (#15362). Lane
   // keys come from the same function grouping uses, so the two cannot disagree.
   const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
+
   if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
     keys.push(
       getFolderWorkspaceLaneKey(
@@ -99,10 +110,12 @@ export function getFolderWorkspaceRevealGroupKeys(
       )
     )
   }
+
   if (owningGroup && options?.defaultHostId) {
     keys.push(
       `host:${getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)}`
     )
   }
+
   return keys
 }

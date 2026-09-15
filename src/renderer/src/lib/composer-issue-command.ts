@@ -28,6 +28,7 @@ export function buildTrustedComposerIssueCommand(
   if (input.trustDecision !== 'run' || !shouldPrepareComposerIssueCommand(input)) {
     return undefined
   }
+
   return {
     command: renderIssueCommandTemplate(input.template.trim(), {
       issueNumber: input.issueNumber,

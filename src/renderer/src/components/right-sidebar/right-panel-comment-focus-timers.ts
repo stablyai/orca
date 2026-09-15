@@ -6,6 +6,7 @@ export function clearRightPanelCommentFocusTimer(timerRef: RightPanelCommentFocu
   if (timerRef.current === null) {
     return
   }
+
   clearTimeout(timerRef.current)
   timerRef.current = null
 }

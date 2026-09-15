@@ -50,10 +50,13 @@ function admissibleTree(
   if (!captured || exited) {
     return null
   }
+
   if (platform === 'win32') {
     return { platform: 'win32', tree: captured as WindowsDescendantSnapshot }
   }
+
   const tree = captured as DescendantSnapshot
+
   return tree.rootPgid === null ? null : { platform: 'posix', tree }
 }
 
@@ -130,26 +133,35 @@ export function createClaudeChildTreeReaper(
   function captureOnce(): Promise<void> {
     if (refreshing) {
       const pending = refreshing
+
       return pending.then(() => queuedRefresh ?? undefined)
     }
+
     if (snapshot !== undefined) {
       return Promise.resolve()
     }
+
     if (capturing) {
       const pending = capturing
+
       return pending.then(() => queuedRefresh ?? undefined)
     }
+
     const rootPid = child.pid
+
     if (!rootPid || exited()) {
       // Only the root's death makes a missing snapshot final: its descendants
       // have reparented, and no later walk can reach them.
       snapshot = exited() ? null : snapshot
+
       return Promise.resolve()
     }
+
     const capture =
       platform === 'win32'
         ? (deps.captureWindowsDescendants ?? captureWindowsDescendantSnapshot)
         : (deps.captureDescendants ?? captureDescendantSnapshot)
+
     capturing = capture(rootPid)
       .catch(() => null)
       .then((captured) => {
@@ -160,6 +172,7 @@ export function createClaudeChildTreeReaper(
         // read as proof that there was nothing to find.
         const rootExited = exited()
         const tree = admissibleTree(captured, platform, rootExited)
+
         if (tree) {
           snapshot = tree
         } else if (rootExited) {
@@ -175,6 +188,7 @@ export function createClaudeChildTreeReaper(
       .finally(() => {
         capturing = null
       })
+
     return capturing
   }
 
@@ -182,27 +196,37 @@ export function createClaudeChildTreeReaper(
     if (exited()) {
       return Promise.resolve()
     }
+
     const rootPid = child.pid
+
     if (!rootPid) {
       return Promise.resolve()
     }
+
     const capture =
       platform === 'win32'
         ? (deps.captureWindowsDescendants ?? captureWindowsDescendantSnapshot)
         : (deps.captureDescendants ?? captureDescendantSnapshot)
+
     const operation = (async () => {
       const captured = await capture(rootPid).catch(() => null)
+
       if (exited()) {
         return
       }
+
       const tree = admissibleTree(captured, platform, false)
+
       if (!tree) {
         return
       }
+
       if (snapshot === undefined) {
         snapshot = tree
+
         return
       }
+
       if (snapshot !== null) {
         // A merge that returns null saw a same-PID identity change: a
         // recycle/replace decision, not an absent descendant, so no row here may
@@ -213,13 +237,17 @@ export function createClaudeChildTreeReaper(
       // Keep an earlier admissible snapshot when this close-boundary read fails;
       // it remains the only identity-safe evidence after root exit.
     })()
+
     refreshing = operation
+
     const clearRefreshing = (): void => {
       if (refreshing === operation) {
         refreshing = null
       }
     }
+
     void operation.then(clearRefreshing, clearRefreshing)
+
     return operation
   }
 
@@ -227,32 +255,43 @@ export function createClaudeChildTreeReaper(
     if (queuedRefresh) {
       return queuedRefresh
     }
+
     const operation = pending.then(() => {
       if (exited()) {
         return
       }
+
       return startRefresh()
     })
+
     queuedRefresh = operation
+
     const clearQueuedRefresh = (): void => {
       if (queuedRefresh === operation) {
         queuedRefresh = null
       }
     }
+
     void operation.then(clearQueuedRefresh, clearQueuedRefresh)
+
     return operation
   }
 
   async function refresh(): Promise<void> {
     const pending = capturing ?? refreshing
+
     if (pending) {
       await queueRefreshAfter(pending)
+
       return
     }
+
     if (queuedRefresh) {
       await queuedRefresh
+
       return
     }
+
     try {
       await startRefresh()
     } catch {
@@ -264,11 +303,14 @@ export function createClaudeChildTreeReaper(
   async function judgeTree(): Promise<DescendantTreeVerdict> {
     const killRoot = (): boolean => terminateClaudeRoot({ child, exited })
     const rootPid = child.pid
+
     if (!rootPid) {
       // Never spawned, so the OS never created a tree to orphan.
       return 'exited'
     }
+
     await captureOnce()
+
     if (platform === 'win32') {
       // Why taskkill's own outcome is never the verdict: it resolves identically
       // on a timeout, an access denial, a recycled root and a real kill.
@@ -284,25 +326,32 @@ export function createClaudeChildTreeReaper(
               }).then(() => undefined),
         killRoot
       })
+
       if (!rootVerified && !exited()) {
         return 'unverifiable'
       }
+
       return snapshot?.platform === 'win32'
         ? await (deps.terminateWindowsDescendants ?? verifyWindowsDescendantSnapshotExit)(
             snapshot.tree
           )
         : 'unverifiable'
     }
+
     if (snapshot?.platform !== 'posix') {
       killRoot()
+
       return 'unverifiable'
     }
+
     if (snapshot.tree.descendants.length === 0) {
       // Read while the root was alive and childless: a later table read has no
       // row it could match, so it would add nothing to this observation.
       killRoot()
+
       return 'exited'
     }
+
     // Why the root is killed while verification is already running, and never
     // SIGSTOPped first the way the Codex non-group path does: measured on macOS, a
     // killed child of a stopped parent stays a zombie row in ps with its lstart
@@ -316,7 +365,9 @@ export function createClaudeChildTreeReaper(
       : terminateDescendantSnapshotWithVerdict(snapshot.tree, {
           requireIdentityBeforeSignal: true
         })
+
     killRoot()
+
     // What the verification observed is the verdict: a kill that reports no
     // signal means the handle was already gone, never that the tree survived.
     return verdictPromise
@@ -329,19 +380,23 @@ export function createClaudeChildTreeReaper(
       if (inFlight) {
         return inFlight
       }
+
       const attempt = judgeTree()
         .catch((): DescendantTreeVerdict => 'unverifiable')
         .then((verdict) => {
           treeVerdict =
             TREE_VERDICT_TRUST[verdict] > TREE_VERDICT_TRUST[treeVerdict] ? verdict : treeVerdict
+
           return verdict
         })
+
       inFlight = attempt
       void attempt.finally(() => {
         if (inFlight === attempt) {
           inFlight = null
         }
       })
+
       return attempt
     },
     get treeVerdict() {

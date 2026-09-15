@@ -21,6 +21,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -35,9 +36,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -147,6 +150,7 @@ describe('Store', () => {
       id: `state-${index + 1}`,
       label: `State ${index + 1}`
     })).toReversed()
+
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -166,6 +170,7 @@ describe('Store', () => {
       id: `final-${String(index + 1).padStart(3, '0')}`,
       label: `Final ${index + 1}`
     })).toReversed()
+
     store.updateUI({ workspaceStatuses: authored })
     store.flush()
 
@@ -267,12 +272,14 @@ describe('Store', () => {
     expect(store.getUI()._workspaceStatusesDefaultVisualsMigrated).toBe(true)
 
     store.flush()
+
     const persisted = readDataFile() as {
       ui?: {
         _workspaceStatusesDefaultWorkflowMigrated?: boolean
         _workspaceStatusesDefaultVisualsMigrated?: boolean
       }
     }
+
     expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
   })
@@ -294,9 +301,11 @@ describe('Store', () => {
     })
 
     const store = await createStore()
+
     const inProgress = store
       .getUI()
       .workspaceStatuses?.find((status) => status.id === 'in-progress')
+
     expect(inProgress).toMatchObject({ color: 'blue', icon: 'circle-dot' })
   })
 

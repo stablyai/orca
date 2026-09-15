@@ -44,6 +44,7 @@ async function makeFixture() {
   const commandPath = join(commandDirectory, 'orca-ide')
   await mkdir(commandDirectory, { recursive: true })
   await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+
   return { root, appImagePath, cacheRootPath, commandDirectory, commandPath }
 }
 
@@ -139,6 +140,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     const foreignTarget = join(fixture.root, 'foreign', 'resources', 'bin', 'orca-ide')
     await symlink(foreignTarget, fixture.commandPath)
     const extract = vi.fn(extractPayload)
+
     const installer = new CliInstaller({
       ...installerOptions(fixture),
       appImageExtractRunner: extract
@@ -165,12 +167,14 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
   it('keeps installation bound to the extracted generation', async () => {
     const fixture = await makeFixture()
     let extractedRoot: AppImageExtractedRoot | null = null
+
     class ReplacingAppImageInstaller extends CliInstaller {
       protected override async ensureLinuxAppImagePayload(): Promise<AppImageExtractedRoot | null> {
         extractedRoot = await super.ensureLinuxAppImagePayload()
         await writeFile(fixture.appImagePath, '#!/usr/bin/env bash\n# replacement generation\n', {
           mode: 0o755
         })
+
         return extractedRoot
       }
     }
@@ -193,10 +197,12 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
     const fixture = await makeFixture()
     const firstInstaller = new CliInstaller(installerOptions(fixture))
     const first = await firstInstaller.install()
+
     const firstRoot = resolveAppImageExtractedRoot({
       appImagePath: fixture.appImagePath,
       cacheRootPath: fixture.cacheRootPath
     })!
+
     const relocatedPath = join(fixture.root, 'downloads', 'Orca.AppImage')
     await mkdir(dirname(relocatedPath), { recursive: true })
     await rename(fixture.appImagePath, relocatedPath)
@@ -205,6 +211,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
 
     await expect(relocatedInstaller.getStatus()).resolves.toMatchObject({ state: 'stale' })
     const repaired = await relocatedInstaller.install()
+
     const relocatedRoot = resolveAppImageExtractedRoot({
       appImagePath: relocatedPath,
       cacheRootPath: fixture.cacheRootPath
@@ -220,10 +227,12 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
 
   it('preserves a foreign command that appears at the final ownership fence', async () => {
     const fixture = await makeFixture()
+
     const predictedRoot = resolveAppImageExtractedRoot({
       appImagePath: fixture.appImagePath,
       cacheRootPath: fixture.cacheRootPath
     })!
+
     const ownedOldTarget = join(
       dirname(predictedRoot.rootPath),
       'a'.repeat(24),
@@ -231,6 +240,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
       'bin',
       'orca-ide'
     )
+
     const foreignTarget = join(fixture.root, 'foreign', 'orca-ide')
     await symlink(ownedOldTarget, fixture.commandPath)
 
@@ -242,10 +252,12 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI ownership', () => {
         launcherPath: string
       ): Promise<CliInstallStatus> {
         this.inspectionCount += 1
+
         if (this.inspectionCount === 3) {
           await unlink(commandPath)
           await symlink(foreignTarget, commandPath)
         }
+
         return super.inspectSymlink(commandPath, launcherPath)
       }
     }

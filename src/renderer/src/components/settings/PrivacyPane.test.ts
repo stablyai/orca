@@ -22,6 +22,7 @@ const { getConsentStateMock, setOptInMock } = vi.hoisted(() => ({
   getConsentStateMock: vi.fn<() => Promise<TelemetryConsentState>>(),
   setOptInMock: vi.fn<(optedIn: boolean) => Promise<void>>()
 }))
+
 vi.mock('../../lib/telemetry', () => ({
   getConsentState: getConsentStateMock,
   setOptIn: setOptInMock
@@ -57,6 +58,7 @@ describe('PrivacyPane — toggle markup reflects stored preference', () => {
         settings: buildSettings({ optedIn: true })
       })
     )
+
     expect(markup).toContain('aria-checked="true"')
   })
 
@@ -66,6 +68,7 @@ describe('PrivacyPane — toggle markup reflects stored preference', () => {
         settings: buildSettings({ optedIn: false })
       })
     )
+
     expect(markup).toContain('aria-checked="false"')
   })
 
@@ -82,6 +85,7 @@ describe('PrivacyPane — toggle markup reflects stored preference', () => {
         })
       })
     )
+
     expect(markup).toContain('aria-checked="false"')
   })
 })
@@ -192,6 +196,7 @@ describe('PrivacyPane — markup respects blocked state', () => {
         })
       })
     )
+
     expect(switchTag(markup)).not.toContain(' disabled=""')
   })
 
@@ -207,6 +212,7 @@ describe('PrivacyPane — markup respects blocked state', () => {
         })
       })
     )
+
     expect(switchTag(markup)).not.toContain(' disabled=""')
   })
 
@@ -219,6 +225,7 @@ describe('PrivacyPane — markup respects blocked state', () => {
         })
       })
     )
+
     expect(switchTag(markup)).not.toContain(' disabled=""')
   })
 })

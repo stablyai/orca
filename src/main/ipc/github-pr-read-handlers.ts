@@ -22,6 +22,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
   ipcMain.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
+
     return localGitOptions
       ? getRepoSlug(repo.path, getGitHubRepoConnectionId(repo), {
           localGitExecOptions: localGitOptions
@@ -32,6 +33,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
   ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
+
     return localGitOptions
       ? getRepoUpstream(repo.path, getGitHubRepoConnectionId(repo), {
           localGitExecOptions: localGitOptions
@@ -54,6 +56,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return getPRChecks(
         repo.path,
         args.prNumber,
@@ -82,6 +85,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return getPRCheckDetails(
         repo.path,
         {
@@ -111,6 +115,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return getPRComments(
         repo.path,
         args.prNumber,
@@ -136,9 +141,11 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (!args.reactionSubjectId?.trim()) {
         return false
       }
+
       return setPRCommentReaction(
         repo.path,
         args.reactionSubjectId.trim(),
@@ -165,6 +172,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return resolveReviewThread(
         repo.path,
         args.threadId,

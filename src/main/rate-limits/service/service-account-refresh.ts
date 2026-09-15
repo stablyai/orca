@@ -14,6 +14,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
   async refresh(): Promise<RateLimitState> {
     // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
     await this.fetchAll({ force: true })
+
     return this.getState()
   }
 
@@ -21,11 +22,13 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data, but replaying a subscription must not queue another forced fetch.
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
+
     return this.getState()
   }
 
   async refreshGrok(): Promise<RateLimitState> {
     await this.fetchGrokOnly({ force: true })
+
     return this.getState()
   }
 
@@ -43,6 +46,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
+
     // Why: weekly-only plans report no session window, so gating on session alone
     // dropped their snapshot and left the switcher's inline bars empty.
     if (
@@ -52,6 +56,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
     }
+
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
     // Why: a new account/target starts with a clean retry schedule.
@@ -68,6 +73,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
       codex: this.withFetchingStatus(null, 'codex')
     })
     await this.fetchCodexOnly({ force: true })
+
     return this.getState()
   }
 
@@ -82,6 +88,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
       codex: this.withFetchingStatus(targetChanged ? null : this.state.codex, 'codex')
     })
     await this.fetchCodexOnly({ force: true })
+
     return this.getState()
   }
 
@@ -93,30 +100,37 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     const codexTarget = normalizeCodexAccountSelectionTarget(options.target)
     const codexHomePath = options.codexHomePath
     const scopedStateBeforeReset = this.getState()
+
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
+
     if (missingWslCodexHome) {
       if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
         await this.fetchCodexOnly({ force: true })
       }
+
       throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
     }
+
     try {
       const outcome = await consumeCodexRateLimitResetCredit({
         codexHomePath,
         idempotencyKey: options.idempotencyKey
       })
+
       const state = await this.fetchCodexResetResultState(
         codexTarget,
         codexHomePath,
         scopedStateBeforeReset
       )
+
       return { outcome, state }
     } catch (error) {
       if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
         await this.fetchCodexOnly({ force: true })
       }
+
       throw error
     }
   }
@@ -126,6 +140,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: ClaudeAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeClaudeAccountSelectionTarget(target)
+
     // Why: snapshot the outgoing account's usage before clearing so the switcher's inline bars can show last-known data immediately.
     if (
       outgoingAccountId &&
@@ -134,6 +149,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     ) {
       this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)
     }
+
     this.claudeFetchTarget = nextTarget
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
@@ -148,6 +164,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
       claude: this.withFetchingStatus(null, 'claude')
     })
     await this.fetchClaudeOnly({ force: true })
+
     return this.getState()
   }
 
@@ -157,15 +174,18 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
     this.activeFailureStreakByProvider.claude = 0
+
     if (targetChanged) {
       // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
       this.lastClaudeAuthSnapshot = null
     }
+
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
     })
     await this.fetchClaudeOnly({ force: true })
+
     return this.getState()
   }
 
@@ -176,6 +196,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
       return
     }
+
     this.activeFailureStreakByProvider.claude = 0
     await this.fetchClaudeOnly({ force: true })
   }

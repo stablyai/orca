@@ -25,6 +25,7 @@ export function createGitRemoteStatus(
         if (areUpstreamStatusesEqual(s.remoteStatusesByWorktree[worktreeId], status)) {
           return s
         }
+
         return {
           remoteStatusesByWorktree: {
             ...s.remoteStatusesByWorktree,
@@ -45,6 +46,7 @@ export function createGitRemoteStatus(
     endRemoteOperation: () =>
       set((s) => {
         const next = Math.max(0, s.remoteOperationDepth - 1)
+
         return {
           remoteOperationDepth: next,
           isRemoteOperationActive: next > 0,
@@ -54,6 +56,7 @@ export function createGitRemoteStatus(
       }),
     fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
+
       try {
         const status = await getRuntimeGitUpstreamStatus(
           {
@@ -64,9 +67,11 @@ export function createGitRemoteStatus(
           },
           pushTarget
         )
+
         if (options?.applyUpstreamStatus !== false) {
           get().setUpstreamStatus(worktreeId, status)
         }
+
         return status
       } catch (error) {
         // Why: keep prior status on error — a synthetic {hasUpstream:false} would flash 'Publish Branch' on a tracked branch and a click could re-publish, clobbering the upstream.
@@ -80,7 +85,9 @@ export function createGitRemoteStatus(
             pushTarget
           })
         }
+
         console.error('fetchUpstreamStatus failed', error)
+
         return null
       }
     }

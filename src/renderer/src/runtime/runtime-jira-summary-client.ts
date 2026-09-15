@@ -5,6 +5,7 @@ import { getJiraRuntimeTarget, type RuntimeJiraSettings } from './runtime-jira-t
 
 export async function jiraReadStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
   const target = getJiraRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraConnectionStatus>(target, 'jira.readStatus', undefined, {
         timeoutMs: 15_000
@@ -20,20 +21,26 @@ export async function jiraLookupIssueSummary(
 ): Promise<JiraIssue | null> {
   const target = getJiraRuntimeTarget(settings)
   const args = { key, siteId }
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<JiraIssue | null>(target, 'jira.lookupIssueSummary', args, {
       timeoutMs: 30_000,
       signal
     })
   }
+
   if (signal?.aborted) {
     throw createSummaryAbortError()
   }
+
   const requestId = createBrowserUuid()
+
   const handleAbort = (): void => {
     void window.api.jira.cancelIssueSummary({ requestId }).catch(() => {})
   }
+
   signal?.addEventListener('abort', handleAbort, { once: true })
+
   try {
     return await window.api.jira.lookupIssueSummary({ ...args, requestId })
   } finally {
@@ -44,5 +51,6 @@ export async function jiraLookupIssueSummary(
 function createSummaryAbortError(): Error {
   const error = new Error('Jira summary lookup aborted')
   error.name = 'AbortError'
+
   return error
 }

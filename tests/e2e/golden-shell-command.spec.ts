@@ -42,22 +42,27 @@ test('seeded project terminal runs a typed shell command @golden', async ({ orca
         foregroundProcess =
           (await orcaPage.evaluate((id) => window.api.pty.inspectProcess(id), ptyId))
             .foregroundProcess ?? ''
+
         return foregroundProcess
       })
       .not.toBe('')
     const shell = shellBasename(foregroundProcess)
+
     if (shell === 'cmd') {
       const pwshAvailable = await orcaPage.evaluate(() => window.api.pwsh.isAvailable())
       expect(pwshAvailable, 'cmd.exe must not replace an available PowerShell default').toBe(false)
     }
+
     const begin = 'ORCA_E2E_PATH_BEGIN'
     const end = 'ORCA_E2E_PATH_END'
+
     const pathCommand =
       shell === 'pwsh' || shell === 'powershell'
         ? `Write-Output ${begin}; Write-Output $env:LOCALAPPDATA; Write-Output ${end}`
         : shell === 'cmd'
           ? `echo ${begin} & echo %LOCALAPPDATA% & echo ${end}`
           : `printf '${begin}\\n%s\\n${end}\\n' "$LOCALAPPDATA"`
+
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.type(pathCommand)
     await orcaPage.keyboard.press('Enter')
@@ -69,10 +74,12 @@ test('seeded project terminal runs a typed shell command @golden', async ({ orca
         const lines = stripAnsiEscapeSequences(await getTerminalContent(orcaPage, 8_000))
           .split(/\r?\n/)
           .map((line) => line.trim())
+
         const beginLine = lines.lastIndexOf(begin)
         const endLine = beginLine === -1 ? -1 : lines.indexOf(end, beginLine + 1)
         expandedPath =
           endLine === -1 ? '' : (lines.slice(beginLine + 1, endLine).find(Boolean) ?? '')
+
         return expandedPath
       })
       .not.toBe('')

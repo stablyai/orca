@@ -98,6 +98,7 @@ describe('structured session disposal from terminal close', () => {
 
   it('retries a transient structured-owner close after the tab is removed', async () => {
     vi.useFakeTimers()
+
     try {
       mocks.closeStructuredAgentSession
         .mockRejectedValueOnce(new Error('host unavailable'))

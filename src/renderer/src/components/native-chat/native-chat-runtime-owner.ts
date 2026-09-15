@@ -26,5 +26,6 @@ export function selectNativeChatRuntimeEnvironmentId(
   terminalTabId: string
 ): string | null {
   const worktreeId = findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId)
+
   return worktreeId ? getRuntimeEnvironmentIdForWorktree(state, worktreeId) : null
 }

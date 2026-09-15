@@ -16,25 +16,31 @@ function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
     }),
     'linux'
   )
+
   if (!parsed) {
     throw new Error('Expected a session fixture')
   }
+
   return Object.freeze({ ...parsed, ...overrides })
 }
 
 function checkBatches(batches: AiVaultSession[][]): AiVaultSession[] {
   const collection = new CodexSessionCollection()
   let expected: AiVaultSession[] = []
+
   for (const batch of batches) {
     expected = dedupeCodexSessionsBySessionId([...expected, ...batch])
+
     for (const value of batch) {
       collection.add(value)
     }
+
     const actual = [...collection.values()]
     expect(collection.size).toBe(expected.length)
     expect(actual).toHaveLength(expected.length)
     actual.forEach((value, index) => expect(value).toBe(expected[index]))
   }
+
   return [...collection.values()]
 }
 
@@ -124,10 +130,12 @@ describe('CodexSessionCollection', () => {
     const native = session()
     const ssh = session({ executionHostId: 'ssh:dev' })
     const ubuntu = session({ filePath: '\\\\wsl$\\Ubuntu\\home\\ada\\rollout-session.jsonl' })
+
     const ubuntuAlias = session({
       filePath: '\\\\wsl.localhost\\ubuntu\\home\\ada\\rollout-session.jsonl',
       codexHome: '/custom'
     })
+
     const debian = session({ filePath: '\\\\wsl$\\Debian\\home\\ada\\rollout-session.jsonl' })
     const otherId = session({ sessionId: 'other' })
     const otherName = session({ filePath: '/tmp/rollout-other.jsonl' })
@@ -142,16 +150,19 @@ describe('CodexSessionCollection', () => {
   it('does not rescan retained rows on admission', () => {
     let pathReads = 0
     const collection = new CodexSessionCollection()
+
     for (let index = 0; index < 1000; index++) {
       const value = session({ sessionId: `session-${index}` })
       collection.add({
         ...value,
         get filePath() {
           pathReads++
+
           return value.filePath
         }
       })
     }
+
     expect(collection.size).toBe(1000)
     expect([...collection.values()]).toHaveLength(1000)
     expect(pathReads).toBeLessThanOrEqual(2000)

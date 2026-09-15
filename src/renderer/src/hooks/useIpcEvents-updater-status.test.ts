@@ -10,9 +10,11 @@ describe('useIpcEvents updater integration', () => {
   it('routes updater status events into store state', async () => {
     const setUpdateStatus = vi.fn()
     const removeSshCredentialRequest = vi.fn()
+
     const updaterStatusListenerRef: { current: ((status: unknown) => void) | null } = {
       current: null
     }
+
     const credentialResolvedListenerRef: {
       current: ((data: { requestId: string }) => void) | null
     } = {
@@ -21,6 +23,7 @@ describe('useIpcEvents updater integration', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -158,6 +161,7 @@ describe('useIpcEvents updater integration', () => {
           getStatus: () => Promise.resolve({ state: 'idle' }),
           onStatus: (listener: (status: unknown) => void) => {
             updaterStatusListenerRef.current = listener
+
             return () => {}
           },
           onClearDismissal: () => () => {}
@@ -194,6 +198,7 @@ describe('useIpcEvents updater integration', () => {
           onDetectedPortsChanged: () => () => {},
           onCredentialResolved: (listener: (data: { requestId: string }) => void) => {
             credentialResolvedListenerRef.current = listener
+
             return () => {}
           }
         },
@@ -209,9 +214,11 @@ describe('useIpcEvents updater integration', () => {
     expect(setUpdateStatus).toHaveBeenCalledWith({ state: 'idle' })
 
     const availableStatus = { state: 'available', version: '1.2.3' }
+
     if (typeof updaterStatusListenerRef.current !== 'function') {
       throw new Error('Expected updater status listener to be registered')
     }
+
     updaterStatusListenerRef.current(availableStatus)
 
     expect(setUpdateStatus).toHaveBeenCalledWith(availableStatus)
@@ -219,6 +226,7 @@ describe('useIpcEvents updater integration', () => {
     if (typeof credentialResolvedListenerRef.current !== 'function') {
       throw new Error('Expected credential resolved listener to be registered')
     }
+
     credentialResolvedListenerRef.current({ requestId: 'req-1' })
 
     expect(removeSshCredentialRequest).toHaveBeenCalledWith('req-1')
@@ -230,6 +238,7 @@ describe('useIpcEvents updater integration', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -329,6 +338,7 @@ describe('useIpcEvents updater integration', () => {
         ui: makeEvents({
           onOpenSettings: () => {
             onOpenSettingsRegistered = true
+
             return () => {}
           },
           // Why: exercise the positive branch — an intent queued before mount is

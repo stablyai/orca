@@ -78,6 +78,7 @@ export class TerminalHostGoneError extends Error {
 // Connect ENOENT/ECONNREFUSED proves the endpoint is absent; open ENOENT can be a missing token file.
 export function isDaemonEndpointGoneError(err: unknown): boolean {
   const candidate = err as { code?: unknown; syscall?: unknown } | null
+
   return (
     typeof candidate === 'object' &&
     candidate !== null &&
@@ -88,6 +89,7 @@ export function isDaemonEndpointGoneError(err: unknown): boolean {
 
 export function decodeDaemonResponseError(message: string): Error {
   const prefix = 'Session not found: '
+
   return message.startsWith(prefix)
     ? new SessionNotFoundError(message.slice(prefix.length))
     : new DaemonProtocolError(message)

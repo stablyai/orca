@@ -33,13 +33,17 @@ export function RepositoryIconPicker({
   // Why: resolve this repo's upstream/avatar on the host that owns it, not the
   // focused runtime.
   const selectedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   const activeRuntimeEnvironmentId =
     selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
+
   const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
   const selectedEmoji = repo.repoIcon?.type === 'emoji' ? repo.repoIcon.emoji : ''
   const selectedBadgeColor = normalizeRepoBadgeColor(repo.badgeColor) ?? DEFAULT_REPO_BADGE_COLOR
+
   const initialTab =
     repo.repoIcon?.type === 'emoji' ? 'emoji' : repo.repoIcon?.type === 'lucide' ? 'icon' : 'avatar'
+
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
@@ -50,17 +54,22 @@ export function RepositoryIconPicker({
       if (repo.repoIcon.source === 'github') {
         return 'GitHub avatar'
       }
+
       return repo.repoIcon.label ?? 'Custom image'
     }
+
     if (repo.repoIcon?.type === 'emoji') {
       return `${repo.repoIcon.emoji} emoji`
     }
+
     if (repo.repoIcon?.type === 'lucide') {
       const label =
         getRepoLucideIconOptions().find((option) => option.name === selectedLucideName)?.label ??
         'Folder'
+
       return `${label} icon with repo color`
     }
+
     return 'Default'
   }, [repo.repoIcon, selectedLucideName])
 
@@ -80,11 +89,14 @@ export function RepositoryIconPicker({
 
   const handleUseGitHubAvatar = async () => {
     setLoadingGitHub(true)
+
     try {
       const resolution = await resolveGitHubAvatar({ forceLive: true })
+
       if (!mountedRef.current) {
         return
       }
+
       if (!resolution.repoIcon) {
         toast.error(
           translate(
@@ -92,10 +104,13 @@ export function RepositoryIconPicker({
             'No GitHub remote found for this repo.'
           )
         )
+
         return
       }
+
       // A null build means the stored icon/upstream already match — nothing to write.
       const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
+
       if (updates) {
         updateRepo(repo.id, updates)
       }
@@ -117,14 +132,18 @@ export function RepositoryIconPicker({
 
   const handleResetToDefault = async () => {
     setResetting(true)
+
     try {
       const resolution = await resolveGitHubAvatar({ forceLive: true }).catch(() => null)
+
       if (!mountedRef.current) {
         return
       }
+
       const updates = resolution
         ? buildRepositoryGitHubAvatarUpdate(repo, resolution, { clearMissingIcon: true })
         : { repoIcon: null }
+
       if (updates) {
         updateRepo(repo.id, updates)
       }
@@ -139,13 +158,16 @@ export function RepositoryIconPicker({
   useEffect(() => {
     const hasGitHubAvatar = repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github'
     const shouldRefresh = hasGitHubAvatar || repo.upstream === undefined
+
     if (!shouldRefresh || githubIdentityRefreshedRef.current === repo.id) {
       return
     }
+
     githubIdentityRefreshedRef.current = repo.id
     let cancelled = false
     void (async () => {
       let updates: Partial<Repo> | null
+
       try {
         if (hasGitHubAvatar) {
           // Why: stored upstream/icon metadata can outlive a GitHub repo transfer.
@@ -159,11 +181,14 @@ export function RepositoryIconPicker({
       } catch {
         return
       }
+
       if (cancelled || !mountedRef.current || !updates) {
         return
       }
+
       updateRepo(repo.id, updates)
     })()
+
     return () => {
       cancelled = true
     }

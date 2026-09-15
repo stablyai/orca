@@ -10,18 +10,29 @@ import {
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 
 const MACOS_LOGIN_PATH = '/usr/bin/login'
+
 const MACOS_BASH_PATH = '/bin/bash'
+
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
+
 const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
+
 const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
+
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
+
 // Why: the death-watch probe runs off the spawn path, so it can afford a bound
 // that outlasts a PAM stack answering slowly rather than misreading it as a hang.
 const LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS = 4_000
+
 const LOGIN_PREFLIGHT_MARKER = 'ORCA_LOGIN_PREFLIGHT_OK'
+
 const LOGIN_PREFLIGHT_MAX_BUFFER_BYTES = 1024
+
 const LOGIN_PREFLIGHT_RETRY_BASE_MS = 5_000
+
 const LOGIN_PREFLIGHT_RETRY_MAX_MS = 5 * 60_000
+
 // Why: daemons live for weeks across app updates, so a rejected verdict must not
 // disable TCC attribution forever; re-verify on a slow cadence (#9756).
 const LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS = 30 * 60_000
@@ -39,15 +50,22 @@ const DISABLE_ENV_VAR = 'ORCA_DISABLE_MACOS_LOGIN_SHELL'
  * maxBuffer, or spawn error) proves nothing about PAM and must not stick.
  */
 let cachedLoginPreflightResult: boolean | null = null
+
 let cachedRejectionAtMs: number | null = null
+
 let loginPreflightInFlight: Promise<LoginPreflightOutcome> | null = null
+
 let transientLoginPreflightFailure: { failureCount: number; retryAtMs: number } | null = null
+
 let loginPreflightCacheEpoch = 0
+
 let loginSessionProbeInFlight = false
+
 let loginSessionAcceptedInProcess = false
 
 function isDisabledByEnv(): boolean {
   const value = process.env[DISABLE_ENV_VAR]
+
   return value === '1' || value === 'true'
 }
 
@@ -78,15 +96,19 @@ async function runLoginPreflight(
       signal,
       timeoutMs
     })
+
     if (result.timedOut) {
       return { ok: false, conclusive: false, reason: 'timeout' }
     }
+
     if (result.code === null) {
       return { ok: false, conclusive: false, reason: 'error' }
     }
+
     if (result.code !== 0) {
       return { ok: false, conclusive: true, reason: 'rejected' }
     }
+
     // login(1) can return zero after an EOF-driven failed prompt, so only the
     // requested child program's output plus a clean exit proves PAM accepted it.
     return result.stdout === LOGIN_PREFLIGHT_MARKER
@@ -105,12 +127,14 @@ async function verifyRejectedLoginPreflightUnderPty(
   if (outcome.ok || !outcome.conclusive) {
     return outcome
   }
+
   const ptyOutcome = await runMacosLoginSessionPtyProbe(
     username,
     accountHome,
     LOGIN_PREFLIGHT_TIMEOUT_MS,
     LOGIN_PREFLIGHT_MAX_BUFFER_BYTES
   )
+
   // Why: a pipe-sensitive PAM stack must not override the production-shaped PTY oracle.
   return ptyOutcome.conclusive ? ptyOutcome : outcome
 }
@@ -130,6 +154,7 @@ function cachedOutcome(): LoginPreflightOutcome | null {
   if (cachedLoginPreflightResult === null) {
     return null
   }
+
   return cachedLoginPreflightResult
     ? { ok: true, conclusive: true, reason: 'accepted' }
     : { ok: false, conclusive: true, reason: 'rejected' }
@@ -143,6 +168,7 @@ function cacheConclusiveLoginPreflightOutcome(outcome: LoginPreflightOutcome): v
     // Why: periodic health probes must not extend one rejected verdict forever.
     cachedRejectionAtMs = Date.now()
   }
+
   cachedLoginPreflightResult = outcome.ok
   transientLoginPreflightFailure = null
 }
@@ -152,9 +178,11 @@ function loginPreflightSucceeds(
   accountHome: string
 ): Promise<LoginPreflightOutcome> {
   const cached = cachedOutcome()
+
   if (cached) {
     return Promise.resolve(cached)
   }
+
   if (!loginPreflightInFlight) {
     const cacheEpoch = loginPreflightCacheEpoch
     // Why: simultaneous pane restores share one PAM child instead of multiplying
@@ -164,6 +192,7 @@ function loginPreflightSucceeds(
       // Why: cache only a conclusive PAM verdict; a killed/timed-out probe is
       // environmental and must be retried next spawn, not stuck forever (F1).
       const mayUpdateCache = !loginSessionProbeInFlight && cacheEpoch === loginPreflightCacheEpoch
+
       if (outcome.conclusive && mayUpdateCache) {
         cacheConclusiveLoginPreflightOutcome(outcome)
       } else if (!outcome.conclusive && mayUpdateCache) {
@@ -173,15 +202,19 @@ function loginPreflightSucceeds(
           retryAtMs: Date.now() + loginPreflightRetryDelayMs(failureCount)
         }
       }
+
       if (!outcome.ok) {
         console.warn('[pty] macOS login(1) preflight failed; spawning shells directly')
       }
+
       // Why: release the in-flight slot so an inconclusive probe can re-run on the
       // next spawn instead of pinning every terminal to the degraded outcome.
       loginPreflightInFlight = null
+
       return outcome
     })
   }
+
   return loginPreflightInFlight
 }
 
@@ -202,20 +235,25 @@ export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome
   if (process.platform !== 'darwin' || isDisabledByEnv()) {
     return null
   }
+
   expireStaleRejectedVerdict()
+
   if (cachedLoginPreflightResult !== null) {
     return null
   }
+
   // Why: a persistently hung probe must not add 500 ms and a subprocess to every terminal spawn.
   if (transientLoginPreflightFailure && Date.now() < transientLoginPreflightFailure.retryAtMs) {
     return null
   }
+
   if (!existsSync(MACOS_LOGIN_PATH)) {
     return null
   }
 
   let username: string
   let accountHome: string
+
   try {
     const account = userInfo()
     username = account.username
@@ -223,9 +261,11 @@ export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome
   } catch {
     return null
   }
+
   if (!username || !accountHome) {
     return null
   }
+
   return loginPreflightSucceeds(username, accountHome)
 }
 
@@ -254,8 +294,10 @@ export async function probeMacosLoginSessionAlive(
   if (process.platform !== 'darwin' || isDisabledByEnv() || !existsSync(MACOS_LOGIN_PATH)) {
     return null
   }
+
   let username: string
   let accountHome: string
+
   try {
     const account = userInfo()
     username = account.username
@@ -263,17 +305,21 @@ export async function probeMacosLoginSessionAlive(
   } catch {
     return null
   }
+
   if (!username || !accountHome) {
     return null
   }
+
   // Why: reuse the startup warmup when present, and fence older spawn-path results from restoring a stale verdict.
   const existingPreflight = loginPreflightInFlight
   loginSessionProbeInFlight = true
   loginPreflightCacheEpoch++
   let outcome: LoginPreflightOutcome
+
   try {
     outcome = await (existingPreflight ??
       runLoginPreflight(username, accountHome, LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS, signal))
+
     if (!outcome.ok && !signal?.aborted && (!outcome.conclusive || loginSessionAcceptedInProcess)) {
       outcome = await runMacosLoginSessionPtyProbe(
         username,
@@ -288,9 +334,11 @@ export async function probeMacosLoginSessionAlive(
     loginPreflightCacheEpoch++
     loginSessionProbeInFlight = false
   }
+
   if (outcome.conclusive) {
     cacheConclusiveLoginPreflightOutcome(outcome)
   }
+
   return outcome
 }
 
@@ -329,22 +377,27 @@ export function wrapShellSpawnForMacosTccAttribution(
   if (process.platform !== 'darwin') {
     return { file, args }
   }
+
   if (file === MACOS_LOGIN_PATH || isDisabledByEnv()) {
     return { file, args }
   }
+
   if (!existsSync(MACOS_LOGIN_PATH)) {
     return { file, args }
   }
 
   let username: string
+
   try {
     username = userInfo().username
   } catch {
     return { file, args }
   }
+
   if (!username) {
     return { file, args }
   }
+
   // Why: an unprepared or failed host must fail open to a usable direct shell;
   // production fresh-spawn boundaries await prepareMacosTccLoginShell first.
   if (cachedLoginPreflightResult !== true) {
@@ -352,6 +405,7 @@ export function wrapShellSpawnForMacosTccAttribution(
   }
 
   const shellEnvValue = env?.SHELL || file
+
   // Why: Bash ignores --rcfile when argv[0] marks it as a login shell; Orca's
   // rcfile already reproduces login startup and must remain the active wrapper.
   const trampoline =

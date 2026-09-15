@@ -10,9 +10,11 @@ export function normalizeBrowserHistoryUrl(url: string): string {
     parsed.hostname = parsed.hostname.toLowerCase()
     parsed.protocol = parsed.protocol.toLowerCase()
     let normalized = parsed.toString()
+
     if (normalized.endsWith('/')) {
       normalized = normalized.slice(0, -1)
     }
+
     return normalized
   } catch {
     return redactKagiSessionToken(url).toLowerCase()
@@ -30,19 +32,23 @@ export function normalizeBrowserHistoryEntries(
   for (const entry of candidates) {
     const safeUrl = redactKagiSessionToken(entry.url)
     const key = normalizeBrowserHistoryUrl(safeUrl)
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     normalizedEntries.push(
       entry.url === safeUrl && entry.normalizedUrl === key
         ? entry
         : { ...entry, url: safeUrl, normalizedUrl: key }
     )
+
     if (normalizedEntries.length >= MAX_BROWSER_HISTORY_ENTRIES) {
       break
     }
   }
+
   return normalizedEntries
 }
 
@@ -52,12 +58,15 @@ export function pruneWorkspaceSessionBrowserHistory(
   if (!session.browserUrlHistory) {
     return session
   }
+
   const browserUrlHistory = normalizeBrowserHistoryEntries(session.browserUrlHistory)
+
   if (
     browserUrlHistory.length === session.browserUrlHistory.length &&
     browserUrlHistory.every((entry, index) => entry === session.browserUrlHistory?.[index])
   ) {
     return session
   }
+
   return { ...session, browserUrlHistory }
 }

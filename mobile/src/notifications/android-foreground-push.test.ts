@@ -9,11 +9,15 @@ const mocks = vi.hoisted(() => ({
   eligible: vi.fn().mockResolvedValue(true),
   schedule: vi.fn().mockResolvedValue('message-1')
 }))
+
 vi.mock('./push-receive', () => ({ canPresentForegroundPush: mocks.eligible }))
+
 vi.mock('react-native', () => ({ Platform: mocks.platform }))
+
 vi.mock('expo-notifications', () => ({
   addNotificationReceivedListener: (listener: typeof mocks.receive) => {
     mocks.receive = listener
+
     return { remove: mocks.remove }
   },
   scheduleNotificationAsync: mocks.schedule

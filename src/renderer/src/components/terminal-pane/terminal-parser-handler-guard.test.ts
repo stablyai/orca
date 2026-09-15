@@ -34,10 +34,12 @@ describe('guardParserHandler', () => {
 
   it('degrades a throwing handler to "not handled" and reports a breadcrumb', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const guarded = guardParserHandler('exploding-handler', () => {
         throw new TypeError('synthetic handler failure')
       })
+
       expect(guarded()).toBe(false)
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
         'terminal_parser_handler_error',
@@ -54,13 +56,16 @@ describe('guardParserHandler', () => {
 
   it('caps repeated reports per handler', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const guarded = guardParserHandler('spammy-handler', () => {
         throw new Error('always fails')
       })
+
       for (let i = 0; i < 20; i++) {
         guarded()
       }
+
       expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(5)
     } finally {
       errorSpy.mockRestore()
@@ -73,6 +78,7 @@ describe('guardParserHandler', () => {
     // the same poison sequence through a GUARDED handler keeps completing
     // writes.
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       vi.useFakeTimers()
       const term = new Terminal({ allowProposedApi: true })

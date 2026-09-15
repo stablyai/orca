@@ -29,15 +29,18 @@ for (const theme of ['dark', 'light'] as const) {
       name: 'Update failed. Click to expand.',
       exact: true
     })
+
     const card = orcaPage.getByRole('complementary', { name: 'Update error', exact: true })
     await expect(statusButton).toBeVisible()
     await expect(card).toBeHidden()
 
     await statusButton.click()
+
     // Capture before the assertion so the broken build provides the same visual evidence.
     const statusClickScreenshot = testInfo.outputPath(
       `update-error-after-status-click-${theme}.png`
     )
+
     await orcaPage.screenshot({ path: statusClickScreenshot, animations: 'disabled' })
     await testInfo.attach(`update-error-after-status-click-${theme}`, {
       path: statusClickScreenshot,

@@ -44,6 +44,7 @@ describe('daemon protocol version', () => {
     expect(supportsMode2031UnsubscribeFact(PROTOCOL_VERSION)).toBe(true)
     expect(supportsMode2031UnsubscribeFact(29)).toBe(true)
     expect(supportsMode2031UnsubscribeFact(28)).toBe(false)
+
     for (const version of PREVIOUS_DAEMON_PROTOCOL_VERSIONS.filter((version) => version < 29)) {
       expect(supportsMode2031UnsubscribeFact(version)).toBe(false)
     }

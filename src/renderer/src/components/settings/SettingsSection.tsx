@@ -56,6 +56,7 @@ export function SettingsSection({
   const sectionIsActive = isActive ?? activeFromContext === id
   const hasQuery = query.trim() !== ''
   const matchesQuery = !searchEntries || matchesSettingsSearch(query, searchEntries)
+
   if (!forceVisible) {
     if (hasQuery) {
       if (!sectionIsActive || !matchesQuery) {

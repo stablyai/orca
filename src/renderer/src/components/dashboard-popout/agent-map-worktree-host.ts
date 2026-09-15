@@ -11,12 +11,14 @@ export function agentMapWorktreeHost(
 } {
   const executionHostId = workspace?.executionHostId ?? cards[0]?.executionHostId
   const parsedHost = parseExecutionHostId(executionHostId)
+
   const hostKind =
     parsedHost?.kind === 'ssh'
       ? 'ssh'
       : parsedHost?.kind === 'runtime'
         ? 'remote'
         : (workspace?.hostKind ?? cards[0]?.hostKind)
+
   return {
     executionHostId,
     hostKind,

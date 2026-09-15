@@ -26,6 +26,7 @@ import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
 } from './worktree-refresh'
+
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
@@ -64,13 +65,17 @@ export function startPullRequestLookup(args: {
     requestStartedHostedReviewEntry,
     requestStartedPRRefreshToken
   } = args
+
   const request = (async () => {
     try {
       const runtimeRepo = getRuntimeRepoTarget(get(), repoPath, requestSettings)
+
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId)
         : null
+
       const requestHeadOid = candidateWorktree?.head ?? null
+
       const outcome = runtimeRepo
         ? await callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
             runtimeRepo.target,
@@ -108,6 +113,7 @@ export function startPullRequestLookup(args: {
               cachedMergeable: cached?.data?.mergeable ?? null,
               cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
             }
+
             const response = window.api.gh.refreshPRNow
               ? await window.api.gh.refreshPRNow({
                   candidate,
@@ -122,10 +128,13 @@ export function startPullRequestLookup(args: {
                   acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
                   currentHeadOid: requestHeadOid
                 })
+
             return normalizeGitHubPRForBranchOutcome(response)
           })()
+
       const pr: PRInfo | null =
         outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
+
       if (outcome.kind === 'upstream-error') {
         // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
@@ -141,11 +150,14 @@ export function startPullRequestLookup(args: {
               nextAutoRetryAt: outcome.nextAutoRetryAt,
               retryDisabledUntil: outcome.retryDisabledUntil
             }
+
             return { prRefreshStates: nextStates }
           })
         }
+
         return cached?.data ?? null
       }
+
       if (prRequestGenerations.get(cacheKey) === generation) {
         let skippedStaleLinkedPRLookup = false
         let didUpdatePRCache = false
@@ -153,8 +165,10 @@ export function startPullRequestLookup(args: {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
           if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber)) {
             skippedStaleLinkedPRLookup = true
+
             return s
           }
+
           const updates = setGitHubPRResultCaches(s, {
             prCacheKey: cacheKey,
             repoPath,
@@ -173,15 +187,20 @@ export function startPullRequestLookup(args: {
             requestStartedAt,
             requestStartedEntry: requestStartedHostedReviewEntry
           })
+
           didUpdatePRCache = updates.prCache !== undefined
+
           return updates.prCache || updates.hostedReviewCache ? updates : s
         })
+
         if (skippedStaleLinkedPRLookup) {
           return null
         }
+
         if (didUpdatePRCache) {
           debouncedSaveCache(get())
         }
+
         const linkedPRWorktree =
           options?.worktreeId && linkedPRNumber != null
             ? findUniqueWorktreeById(
@@ -190,6 +209,7 @@ export function startPullRequestLookup(args: {
                 repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
               )
             : null
+
         if (
           options?.worktreeId &&
           linkedPRWorktree &&
@@ -216,6 +236,7 @@ export function startPullRequestLookup(args: {
             }
           )
         }
+
         if (
           options?.worktreeId &&
           linkedPRWorktree &&
@@ -257,6 +278,7 @@ export function startPullRequestLookup(args: {
           })
         }
       }
+
       if (
         shouldPreserveExistingPRForFallbackMiss({
           currentPR: get().prCache[cacheKey]?.data,
@@ -270,22 +292,28 @@ export function startPullRequestLookup(args: {
       ) {
         return get().prCache[cacheKey]?.data ?? null
       }
+
       return pr ?? null
     } catch (err) {
       console.error('Failed to fetch PR:', err)
+
       return null
     } finally {
       const activeRequest = inflightPRRequests.get(cacheKey)
+
       if (activeRequest?.generation === generation) {
         inflightPRRequests.delete(cacheKey)
+
         if (prRequestGenerations.get(cacheKey) === generation) {
           prRequestGenerations.delete(cacheKey)
         }
       }
+
       if (requestStartedPRRefreshToken) {
         get().expireGitHubPRRefreshState(cacheKey, requestStartedPRRefreshToken)
       }
     }
   })()
+
   return request
 }

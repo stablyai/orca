@@ -73,9 +73,11 @@ export function useFileExplorerRowDrag({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
     const isNative = e.dataTransfer.types.includes('Files')
+
     if (!isInternal && !isNative) {
       return
     }
+
     e.preventDefault()
     e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy'
   }, [])
@@ -84,15 +86,18 @@ export function useFileExplorerRowDrag({
     (e: React.DragEvent) => {
       const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
       const isNative = !isInternal && e.dataTransfer.types.includes('Files')
+
       if (!isInternal && !isNative) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
 
       if (isInternal) {
         dragCounterRef.current += 1
         onDragTargetChange(rowDropDir)
+
         if (dragCounterRef.current === 1 && isDirectory && !isExpanded) {
           clearExpandTimer()
           expandTimerRef.current = setTimeout(() => {
@@ -108,6 +113,7 @@ export function useFileExplorerRowDrag({
         // Clearing the target for files lets the root container's subtle
         // bg-border indicate the fallback drop zone instead.
         onNativeDragTargetChange(isDirectory ? rowDropDir : null)
+
         // Reuse the same auto-expand delay for native drags over directories
         if (nativeDragCounterRef.current === 1 && isDirectory && !isExpanded) {
           clearNativeExpandTimer()
@@ -136,14 +142,17 @@ export function useFileExplorerRowDrag({
     (e: React.DragEvent) => {
       e.stopPropagation()
       dragCounterRef.current -= 1
+
       if (dragCounterRef.current <= 0) {
         dragCounterRef.current = 0
         clearExpandTimer()
       }
+
       // Decrement both counters since we cannot inspect types on dragleave
       // (dataTransfer.types is empty in some browsers during dragleave).
       // The clamp-to-zero prevents negative drift.
       nativeDragCounterRef.current -= 1
+
       if (nativeDragCounterRef.current <= 0) {
         nativeDragCounterRef.current = 0
         clearNativeExpandTimer()
@@ -167,10 +176,13 @@ export function useFileExplorerRowDrag({
       onDragTargetChange(null)
       onNativeDragTargetChange(null)
       const dragPaths = readWorkspaceFileDragPaths(e.dataTransfer)
+
       if (dragPaths.status === 'rejected') {
         toast.error(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+
         return
       }
+
       for (const sourcePath of dragPaths.paths) {
         onMoveDrop(sourcePath, rowDropDir)
       }

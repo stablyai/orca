@@ -27,12 +27,15 @@ function normalizeAgentDetectionTarget(
   if (target === undefined) {
     return undefined
   }
+
   if (target === null) {
     return { kind: 'local' }
   }
+
   if (typeof target === 'string') {
     return { kind: 'ssh', connectionId: target }
   }
+
   return target
 }
 
@@ -59,14 +62,17 @@ export function useDetectedAgents(
   // remote worktrees during hydration.
   const isUnknown = target === undefined
   const targetKind = target?.kind
+
   const targetId =
     target?.kind === 'ssh'
       ? target.connectionId
       : target?.kind === 'runtime'
         ? target.environmentId
         : null
+
   const localWorktreeId = target?.kind === 'local' ? target.worktreeId : undefined
   const localContextKey = target?.kind === 'local' ? target.contextKey : undefined
+
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -78,65 +84,82 @@ export function useDetectedAgents(
     if (isUnknown) {
       return null
     }
+
     if (targetKind === 'ssh' && targetId) {
       return s.remoteDetectedAgentIds[targetId] ?? null
     }
+
     if (targetKind === 'runtime' && targetId) {
       return s.runtimeDetectedAgentIds[targetId] ?? null
     }
+
     return localContextKey
       ? (s.localDetectedAgentIdsByContext[localContextKey] ?? null)
       : s.detectedAgentIds
   })
+
   const isLoading = useAppStore((s) => {
     if (isUnknown) {
       return true
     }
+
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
+
     if (targetKind === 'runtime' && targetId) {
       return s.isDetectingRuntimeAgents[targetId] ?? false
     }
+
     return localContextKey
       ? (s.isDetectingLocalAgentsByContext[localContextKey] ?? false)
       : s.isDetectingAgents
   })
+
   const isRefreshing = useAppStore((s) => {
     if (targetKind === 'runtime' && targetId) {
       return s.isRefreshingRuntimeAgents[targetId] ?? false
     }
+
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
+
     if (targetKind !== 'local') {
       return false
     }
+
     return localContextKey
       ? (s.isRefreshingLocalAgentsByContext[localContextKey] ?? false)
       : s.isRefreshingAgents
   })
+
   const detectionFailed =
     detectedIds === null &&
     !isLoading &&
     !isRefreshing &&
     remoteTargetKey !== null &&
     observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+
   // Why: refresh must hit the same host the list came from — refreshing the
   // local PATH while showing a remote server's agents is a silent no-op.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
     if (isUnknown) {
       return Promise.resolve([])
     }
+
     // Why: retained tab bars stay mounted; imperative action reads avoid six
     // no-op Zustand subscriptions per hook during unrelated store churn.
     const state = useAppStore.getState()
+
     if (targetKind === 'runtime' && targetId) {
       return state.refreshRuntimeDetectedAgents(targetId)
     }
+
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
+
     return state.refreshDetectedAgents(localWorktreeId)
   }, [isUnknown, localWorktreeId, targetKind, targetId])
 
@@ -144,14 +167,18 @@ export function useDetectedAgents(
     if (isUnknown) {
       return
     }
+
     const isNewRemoteTarget =
       remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+
     // Why: switching A → B → A is still one mounted surface; remember every
     // target so empty hosts don't respawn all detection subprocesses on each switch.
     if (remoteTargetKey !== null) {
       observedRemoteTargetKeysRef.current.add(remoteTargetKey)
     }
+
     const state = useAppStore.getState()
+
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
         void state.ensureRemoteDetectedAgents(targetId)

@@ -5,6 +5,7 @@ export class ClientRequestAborts {
     const key = this.key(clientId, requestId)
     const controller = new AbortController()
     this.controllers.set(key, controller)
+
     return { key, controller }
   }
 
@@ -18,10 +19,12 @@ export class ClientRequestAborts {
 
   abortClient(clientId: number): void {
     const prefix = `${clientId}:`
+
     for (const [key, controller] of this.controllers) {
       if (!key.startsWith(prefix)) {
         continue
       }
+
       controller.abort()
       this.controllers.delete(key)
     }
@@ -31,6 +34,7 @@ export class ClientRequestAborts {
     for (const [, controller] of this.controllers) {
       controller.abort()
     }
+
     this.controllers.clear()
   }
 

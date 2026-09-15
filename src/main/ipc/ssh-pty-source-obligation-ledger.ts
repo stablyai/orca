@@ -67,9 +67,11 @@ export class SshPtySourceObligationLedger {
     assertPtySourceIdentity(identity)
     assertNonNegativeSafeInteger(checkpointSourceEndSu, 'checkpointSourceEndSu')
     const key = ptySourceDeliveryKey(identity)
+
     if (this.tokens.has(key) || this.closedSnapshots.has(key)) {
       throw new Error('SSH PTY source token was already used')
     }
+
     this.tokens.set(key, createSourceToken(identity, checkpointSourceEndSu))
   }
 
@@ -79,10 +81,13 @@ export class SshPtySourceObligationLedger {
     requiredConsumers: readonly SshPtySourceConsumerId[]
   ): SshPtySourceAdmissionReservation {
     const token = this.requireToken(identity)
+
     if (token.state !== 'active') {
       throw new Error('SSH PTY source token no longer admits data')
     }
+
     assertPtySourceSpan(span)
+
     if (
       !samePtySourceDelivery(token.identity, span) ||
       span.sourceStartSu !== token.receivedEndSu ||
@@ -90,36 +95,46 @@ export class SshPtySourceObligationLedger {
     ) {
       throw new Error('SSH PTY source span is stale, duplicate, or non-contiguous')
     }
+
     const uniqueConsumers = Array.from(new Set(requiredConsumers))
+
     if (!uniqueConsumers.includes('model')) {
       throw new Error('SSH PTY source span requires the terminal model obligation')
     }
+
     const reservation = Object.freeze({
       reservationId: `ssh-source-admission:${this.nextReservationId++}`,
       span,
       requiredConsumers: Object.freeze(uniqueConsumers)
     })
+
     this.reservations.set(reservation.reservationId, {
       reservation,
       state: 'reserved'
     })
+
     return reservation
   }
 
   commit(reservation: SshPtySourceAdmissionReservation): void {
     const record = this.requireReservation(reservation)
+
     if (record.state !== 'reserved') {
       throw new Error('SSH PTY source admission reservation is not pending')
     }
+
     const token = this.requireToken(reservation.span)
+
     if (token.state !== 'active' || token.receivedEndSu !== reservation.span.sourceStartSu) {
       throw new Error('SSH PTY source admission reservation became stale')
     }
+
     const spanRecord = createSourceSpanRecord(
       token,
       reservation.span,
       reservation.requiredConsumers
     )
+
     token.spans.push(spanRecord)
     token.receivedEndSu = reservation.span.sourceEndSu
     this.spanOwners.set(reservation.span.spanId, spanRecord)
@@ -128,18 +143,23 @@ export class SshPtySourceObligationLedger {
 
   rollback(reservation: SshPtySourceAdmissionReservation): boolean {
     const record = this.reservations.get(reservation.reservationId)
+
     if (!record || record.reservation !== reservation || record.state !== 'reserved') {
       return false
     }
+
     this.reservations.delete(reservation.reservationId)
+
     return true
   }
 
   rollbackCommitted(reservation: SshPtySourceAdmissionReservation): boolean {
     const token = this.tokens.get(ptySourceDeliveryKey(reservation.span))
+
     if (!token || !samePtySourceDelivery(token.identity, reservation.span)) {
       return false
     }
+
     return rollbackCommittedSourceSpan(token, reservation, this.spanOwners)
   }
 
@@ -174,11 +194,14 @@ export class SshPtySourceObligationLedger {
 
   queueAck(identity: PtySourceDeliveryIdentity): SshPtySourceAckPublication | null {
     const token = this.requireToken(identity)
+
     if (token.obligationsTerminalEndSu <= token.ackQueuedEndSu) {
       return null
     }
+
     const endSu = token.obligationsTerminalEndSu
     token.ackQueuedEndSu = endSu
+
     return createSshPtySourceAckPublication(token, endSu, this.spanOwners, () =>
       this.maybeClose(token)
     )
@@ -186,10 +209,13 @@ export class SshPtySourceObligationLedger {
 
   retryQueuedAck(identity: PtySourceDeliveryIdentity): SshPtySourceAckPublication | null {
     const token = this.requireToken(identity)
+
     if (token.ackQueuedEndSu <= token.ackPublishedEndSu) {
       return null
     }
+
     const endSu = token.ackQueuedEndSu
+
     return createSshPtySourceAckPublication(token, endSu, this.spanOwners, () =>
       this.maybeClose(token)
     )
@@ -219,6 +245,7 @@ export class SshPtySourceObligationLedger {
     proof: Readonly<{ sentEndSu: number; creditedEndSu: number }>
   ): void {
     const token = this.requireToken(identity)
+
     if (
       token.state !== 'canceling' ||
       proof.sentEndSu !== token.receivedEndSu ||
@@ -226,6 +253,7 @@ export class SshPtySourceObligationLedger {
     ) {
       throw new Error('SSH PTY source cancellation proof is stale or invalid')
     }
+
     cancelOpenSourceObligations(token, 'relay-cancellation-proof')
     this.closeToken(token)
   }
@@ -258,13 +286,17 @@ export class SshPtySourceObligationLedger {
   snapshot(identity: PtySourceDeliveryIdentity): SshPtySourceTokenSnapshot {
     const key = ptySourceDeliveryKey(identity)
     const token = this.tokens.get(key)
+
     if (token && samePtySourceDelivery(token.identity, identity)) {
       return snapshotSourceToken(token)
     }
+
     const closed = this.closedSnapshots.get(key)
+
     if (closed && samePtySourceDelivery(closed, identity)) {
       return closed
     }
+
     throw new Error('Unknown or stale SSH PTY source token')
   }
 
@@ -274,9 +306,11 @@ export class SshPtySourceObligationLedger {
 
   obligation(spanId: string, consumer: SshPtySourceConsumerId): SshPtySourceObligationState {
     const obligation = requireSourceSpan(this.spanOwners, spanId).span.obligations.get(consumer)
+
     if (!obligation) {
       throw new Error('SSH PTY source consumer obligation does not exist')
     }
+
     return obligation
   }
 
@@ -323,9 +357,11 @@ export class SshPtySourceObligationLedger {
 
   private requireToken(identity: PtySourceDeliveryIdentity): TokenRecord {
     const token = this.tokens.get(ptySourceDeliveryKey(identity))
+
     if (!token || !samePtySourceDelivery(token.identity, identity)) {
       throw new Error('Unknown or stale SSH PTY source token')
     }
+
     return token
   }
 }

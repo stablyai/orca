@@ -44,6 +44,7 @@ describe('orcad forked-child paths', () => {
     writeFileSync(join(elsewhere, 'parcel-watcher-process-entry.js'), '')
     const originalCwd = process.cwd()
     process.chdir(elsewhere)
+
     try {
       expect(getWatcherProcessEntryPath()).toBe(join(deployRoot, 'parcel-watcher-process-entry.js'))
     } finally {

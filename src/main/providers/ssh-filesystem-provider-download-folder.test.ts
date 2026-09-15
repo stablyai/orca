@@ -64,6 +64,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   it('downloads a recursive tree through one SFTP session', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
     localDownloadRoots.push(root)
+
     const sftp = {
       stat: vi.fn(
         (remotePath: string, callback: (err: Error | undefined, value: unknown) => void) =>
@@ -83,6 +84,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
       ),
       end: vi.fn()
     }
+
     const createSftp = vi.fn(async () => sftp as never)
     provider = new SshFilesystemProvider('conn-1', mux as never, createSftp)
     const destination = join(root, 'src')
@@ -102,6 +104,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   it('rejects directory symlinks without following them', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
     localDownloadRoots.push(root)
+
     const sftp = {
       stat: vi.fn(
         (remotePath: string, callback: (err: Error | undefined, value: unknown) => void) =>
@@ -113,6 +116,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
       fastGet: vi.fn(),
       end: vi.fn()
     }
+
     provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
     await expect(provider.downloadFolder!('/remote/src', join(root, 'src'))).rejects.toThrow(
@@ -126,6 +130,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   it('rejects remote names that sanitize to the same local filename', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
     localDownloadRoots.push(root)
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -136,6 +141,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
       fastGet: vi.fn(),
       end: vi.fn()
     }
+
     provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
 
     await expect(provider.downloadFolder!('/remote/src', join(root, 'src'))).rejects.toThrow(
@@ -149,6 +155,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   it('cancels a pending SFTP session open', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
     localDownloadRoots.push(root)
+
     const createSftp = vi.fn(
       async (options?: { signal?: AbortSignal }) =>
         new Promise<never>((_resolve, reject) => {
@@ -157,12 +164,14 @@ describe('SshFilesystemProvider downloadFolder', () => {
           })
         })
     )
+
     provider = new SshFilesystemProvider('conn-1', mux as never, createSftp)
     const controller = new AbortController()
 
     const result = provider.downloadFolder!('/remote/src', join(root, 'src'), {
       signal: controller.signal
     })
+
     await vi.waitFor(() => expect(createSftp).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
 

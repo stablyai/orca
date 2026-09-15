@@ -94,6 +94,7 @@ export class CursorHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'cursor',
@@ -106,24 +107,29 @@ export class CursorHookService {
 
     const missing: string[] = []
     let presentCount = 0
+
     for (const eventName of CURSOR_EVENTS) {
       const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
+
       // Why: Cursor puts command directly on the definition (Claude nests under `hooks`); match both shapes.
       const hasCommand = definitions.some(
         (definition) =>
           definition.command === command ||
           (definition.hooks ?? []).some((hook) => hook.command === command)
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
         missing.push(eventName)
       }
     }
+
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0) {
       state = 'installed'
       detail = null
@@ -134,6 +140,7 @@ export class CursorHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: 'cursor', state, configPath, managedHooksPresent, detail }
   }
 
@@ -141,6 +148,7 @@ export class CursorHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'cursor',
@@ -163,14 +171,18 @@ export class CursorHookService {
       if (managedEvents.has(eventName)) {
         continue
       }
+
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       // Also strip entries with the command at the top level (Cursor schema).
       const strippedCursorShape = cleaned.filter(
         (definition) => !isManagedCommand(definition.command)
       )
+
       if (strippedCursorShape.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -181,10 +193,12 @@ export class CursorHookService {
     for (const eventName of CURSOR_EVENTS) {
       const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+
       // Sweep Claude- and Cursor-shaped variants so installs converge on one entry.
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
         (definition) => !isManagedCommand(definition.command)
       )
+
       // Why: Cursor's schema puts `command` directly on the definition (not under `hooks`); emit that shape.
       const definition: HookDefinition = buildManagedCommandDefinition(command)
       nextHooks[eventName] = [...cleaned, definition]
@@ -192,11 +206,14 @@ export class CursorHookService {
 
     // Why: Cursor requires `version: 1`; preserve user-pinned values.
     const nextConfig: Record<string, unknown> = { ...config, hooks: nextHooks }
+
     if (nextConfig.version === undefined) {
       nextConfig.version = 1
     }
+
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig)
+
     return this.getStatus()
   }
 
@@ -204,8 +221,10 @@ export class CursorHookService {
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`
+
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
       if (!config) {
         return {
           agent: 'cursor',
@@ -222,15 +241,18 @@ export class CursorHookService {
       for (const eventName of CURSOR_EVENTS) {
         const command = getPosixManagedCommand(remoteScriptPath, eventName)
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+
         // Why: dual-shape sweep so repeated installs converge on a single managed entry.
         const cleaned = removeManagedCommands(current, isManagedCommand).filter(
           (definition) => !isManagedCommand(definition.command)
         )
+
         const definition: HookDefinition = buildManagedCommandDefinition(command)
         nextHooks[eventName] = [...cleaned, definition]
       }
 
       const nextConfig: Record<string, unknown> = { ...config, hooks: nextHooks }
+
       if (nextConfig.version === undefined) {
         nextConfig.version = 1
       }
@@ -261,6 +283,7 @@ export class CursorHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'cursor',
@@ -273,21 +296,26 @@ export class CursorHookService {
 
     const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand).filter(
         (definition) => !isManagedCommand(definition.command)
       )
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
         nextHooks[eventName] = cleaned
       }
     }
+
     const nextConfig = { ...config, hooks: nextHooks }
     writeHooksJson(configPath, nextConfig)
+
     return this.getStatus()
   }
 }

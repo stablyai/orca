@@ -41,6 +41,7 @@ export function createLinearCustomViewListActions(
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
       const cacheKey = linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
+
       return get().linearCustomViewCache[scopedLinearCacheKey(scope, cacheKey)]?.data ?? null
     },
 
@@ -53,16 +54,20 @@ export function createLinearCustomViewListActions(
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
       const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(resolvedWorkspaceId, 'custom-views', model, limit)
       )
+
       const cached = get().linearCustomViewCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data ?? emptyLinearCollection<LinearCustomViewSummary>()
       }
 
       const inflight = inflightCustomViewRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -75,6 +80,7 @@ export function createLinearCustomViewListActions(
       let entry: InflightLinearCollectionRequest<LinearCustomViewSummary>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearListCustomViews(scope.settings, model, limit, resolvedWorkspaceId, {
         force: options?.force
       })
@@ -96,10 +102,12 @@ export function createLinearCustomViewListActions(
               })
             }))
           }
+
           return result
         })
         .catch((error) => {
           console.warn('[linear] listLinearCustomViews failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -112,15 +120,18 @@ export function createLinearCustomViewListActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           const fallback =
             get().linearCustomViewCache[cacheKey]?.data ??
             emptyLinearCollection<LinearCustomViewSummary>()
+
           return collectionWithWorkspaceError(fallback, resolvedWorkspaceId ?? 'default', error)
         })
         .finally(() => {
           if (inflightCustomViewRequests.get(cacheKey) === entry) {
             inflightCustomViewRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -143,6 +154,7 @@ export function createLinearCustomViewListActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightCustomViewRequests.set(cacheKey, entry)
+
       return promise
     }
   }

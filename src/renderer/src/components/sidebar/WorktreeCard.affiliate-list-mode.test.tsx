@@ -9,12 +9,17 @@ import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const openModal = vi.fn()
+
 const setRenamingWorktreeId = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
+
 const testDoubles = vi.hoisted(() => ({
   activateWorktreeFromSidebar: vi.fn()
 }))
+
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'comment']
+
 let settings: Partial<GlobalSettings> | null = null
 
 vi.mock('@/store', () => ({
@@ -178,9 +183,11 @@ describe('WorktreeCard affiliate list mode', () => {
     })
 
     const surface = container.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
+
     const parentContent = container.querySelector<HTMLElement>(
       '[data-worktree-card-parent-content=""]'
     )
+
     expect(surface).not.toBeNull()
     expect(parentContent?.className).toContain('gap-0.5')
     expect(parentContent?.className).toContain('pl-0')

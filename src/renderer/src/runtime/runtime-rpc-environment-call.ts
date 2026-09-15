@@ -20,6 +20,7 @@ export async function callRuntimeEnvironmentWithRevision(args: {
       args.expectedEnvironmentRuntimeId
     )
   }
+
   return window.api.runtimeEnvironments.call({
     selector: args.environmentId,
     method: args.method,

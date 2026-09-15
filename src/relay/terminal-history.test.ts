@@ -11,7 +11,9 @@ import {
 } from './terminal-history'
 
 const worktreeId = 'relay-test::/remote/worktree'
+
 const historyDir = join(homedir(), '.orca-remote', 'terminal-history')
+
 const historyPrefix = hashWorktreeId(worktreeId)
 
 afterEach(() => {

@@ -30,6 +30,7 @@ describe('Node source/copy content equality', () => {
     const sourcePath = join(root, 'source.md')
     const copyPath = join(root, 'copy.md')
     const sparseBytes = NODE_FILE_CONTENT_COMPARE_CHUNK_BYTES * 128
+
     for (const path of [sourcePath, copyPath]) {
       writeFileSync(path, 'same-prefix')
       truncateSync(path, sparseBytes)
@@ -38,11 +39,13 @@ describe('Node source/copy content equality', () => {
     expect(nodeSourceAndCopyContentsEqualSync(sourcePath, copyPath)).toBe(true)
 
     const descriptor = openSync(copyPath, 'r+')
+
     try {
       writeSync(descriptor, Buffer.from('x'), 0, 1, sparseBytes - 1)
     } finally {
       closeSync(descriptor)
     }
+
     expect(nodeSourceAndCopyContentsEqualSync(sourcePath, copyPath)).toBe(false)
   })
 

@@ -13,6 +13,7 @@ describe('RuntimeGraphReloadLifecycle', () => {
     vi.useFakeTimers()
     const settlements: RuntimeGraphReloadSettlement[] = []
     const timeouts: number[] = []
+
     const lifecycle = new RuntimeGraphReloadLifecycle({
       timeoutMs: 100,
       onSettled: (settlement) => settlements.push(settlement),
@@ -42,6 +43,7 @@ describe('RuntimeGraphReloadLifecycle', () => {
     vi.useFakeTimers()
     const settlements: RuntimeGraphReloadSettlement[] = []
     const timeouts: number[] = []
+
     const lifecycle = new RuntimeGraphReloadLifecycle({
       timeoutMs: 100,
       onSettled: (settlement) => settlements.push(settlement),
@@ -76,6 +78,7 @@ describe('RuntimeGraphReloadLifecycle', () => {
       timeoutMs: 100,
       onSettled: (settlement) => {
         settlements.push(settlement)
+
         if (settlement.outcome === 'cancelled' && !didReenter) {
           didReenter = true
           nestedRevision = lifecycle.begin(3)

@@ -57,27 +57,33 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
       this.db.exec(`ALTER TABLE messages ADD COLUMN delivered_at TEXT`)
     }
   }
+
   if (current < 4) {
     if (!this.hasColumn('tasks', 'created_by_terminal_handle')) {
       this.db.exec(`ALTER TABLE tasks ADD COLUMN created_by_terminal_handle TEXT`)
     }
   }
+
   if (current < 5) {
     if (!this.hasColumn('tasks', 'task_title')) {
       this.db.exec(`ALTER TABLE tasks ADD COLUMN task_title TEXT`)
     }
+
     if (!this.hasColumn('tasks', 'display_name')) {
       this.db.exec(`ALTER TABLE tasks ADD COLUMN display_name TEXT`)
     }
   }
+
   if (current < 6) {
     if (!this.hasColumn('dispatch_contexts', 'assignee_pane_key')) {
       this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN assignee_pane_key TEXT`)
     }
+
     if (!this.hasColumn('messages', 'sender_pane_key')) {
       this.db.exec(`ALTER TABLE messages ADD COLUMN sender_pane_key TEXT`)
     }
   }
+
   if (current < 7) {
     this.db
       .prepare(
@@ -86,6 +92,7 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
            ) VALUES (?, ?, 'this_database', 0, 1)`
       )
       .run(LEGACY_RUN_ID, 'Legacy orchestration state (inspect only)')
+
     for (const table of ['messages', 'tasks', 'dispatch_contexts', 'decision_gates']) {
       if (!this.hasColumn(table, 'run_id')) {
         this.db.exec(
@@ -93,6 +100,7 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
         )
       }
     }
+
     this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_run_sequence ON messages(run_id, sequence);
         CREATE INDEX IF NOT EXISTS idx_tasks_run_status ON tasks(run_id, status);
@@ -101,6 +109,7 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
         CREATE INDEX IF NOT EXISTS idx_runs_coordinator_pane ON runs(coordinator_pane_key);
       `)
   }
+
   if (current < 8) {
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS deliveries (
@@ -137,6 +146,7 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
       ON question_threads(dispatch_id, status);
       `)
   }
+
   if (current < 9 && !this.messagesTypeCheckAllowsQuestion()) {
     this.db.exec(`
         CREATE TABLE messages_new (
@@ -180,17 +190,21 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
           ON messages(to_handle, read, delivered_at, sequence);
       `)
   }
+
   if (current < 10) {
     if (!this.hasColumn('dispatch_contexts', 'capability_hash')) {
       this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN capability_hash TEXT')
     }
+
     if (!this.hasColumn('dispatch_contexts', 'process_incarnation')) {
       this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN process_incarnation TEXT')
     }
+
     if (!this.hasColumn('dispatch_contexts', 'capability_revoked_at')) {
       this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN capability_revoked_at TEXT')
     }
   }
+
   if (current < 11) {
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS mutation_receipts (
@@ -207,6 +221,7 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
         );
       `)
   }
+
   if (current < 12) {
     this.db.exec(`
         CREATE TABLE IF NOT EXISTS worker_dispatches (

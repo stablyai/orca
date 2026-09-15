@@ -13,6 +13,7 @@ export const AGENT_TUI_CLEAR_INPUT_FORWARD = '\x0b'
 export function buildAgentTuiClearInput(lineCount: number): string {
   const lines = Math.max(1, Math.min(AGENT_TUI_CLEAR_MAX_LINES, Math.floor(lineCount)))
   const repetitions = 2 * lines - 1
+
   return (
     AGENT_TUI_CLEAR_INPUT_LINE.repeat(repetitions) +
     AGENT_TUI_CLEAR_INPUT_FORWARD.repeat(repetitions)

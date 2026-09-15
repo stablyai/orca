@@ -14,8 +14,11 @@ const STORAGE_KEY = 'orca.githubProject.columnWidths'
 // Default fr weights — TITLE gets the most room; others sit at a
 // comfortable label-width. The numeric values are arbitrary ratios.
 export const DEFAULT_TITLE_WIDTH = 360
+
 export const DEFAULT_FIELD_WIDTH = 140
+
 export const ACTION_COLUMN_WIDTH = 80
+
 export const MIN_COLUMN_WIDTH = 60
 
 type WidthMap = Record<string, Record<string, number>>
@@ -23,10 +26,13 @@ type WidthMap = Record<string, Record<string, number>>
 function readMap(): WidthMap {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
+
     if (!raw) {
       return {}
     }
+
     const parsed = JSON.parse(raw)
+
     return parsed && typeof parsed === 'object' ? (parsed as WidthMap) : {}
   } catch {
     return {}
@@ -43,16 +49,19 @@ function writeMap(map: WidthMap): void {
 
 export function loadColumnWidths(scopeKey: string): Readonly<Record<string, number>> {
   const map = readMap()
+
   return map[scopeKey] ?? {}
 }
 
 export function saveColumnWidths(scopeKey: string, widths: Record<string, number>): void {
   const map = readMap()
+
   if (Object.keys(widths).length === 0) {
     delete map[scopeKey]
   } else {
     map[scopeKey] = widths
   }
+
   writeMap(map)
 }
 
@@ -65,8 +74,10 @@ export function resolveWidth(
   widths: Readonly<Record<string, number>>
 ): number {
   const stored = widths[field.id]
+
   if (typeof stored === 'number' && stored >= MIN_COLUMN_WIDTH) {
     return stored
   }
+
   return defaultWidthFor(field)
 }

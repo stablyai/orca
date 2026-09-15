@@ -1,13 +1,17 @@
 import { z } from 'zod'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
+
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+
 const EpochMsSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+
 const RelayHostIdSchema = z.string().regex(/^[A-Za-z0-9_-]{16}$/)
 
 function isCanonicalHttpsOrigin(value: string): boolean {
   try {
     const parsed = new URL(value)
+
     return parsed.protocol === 'https:' && value === parsed.origin
   } catch {
     return false
@@ -85,11 +89,17 @@ export const PairingGetEndpointsResultSchema = z
   .strict()
 
 export type PairingProvisionRelayParams = z.infer<typeof PairingProvisionRelayParamsSchema>
+
 export type PairingGetEndpointsParams = z.infer<typeof PairingGetEndpointsParamsSchema>
+
 export type DeviceCredentialInstalled = z.infer<typeof DeviceCredentialInstalledSchema>
+
 export type DeviceCredentialInstallStatusResult = z.infer<
   typeof DeviceCredentialInstallStatusResultSchema
 >
+
 export type DeviceResumeConfirmed = z.infer<typeof DeviceResumeConfirmedSchema>
+
 export type MobileRelayEndpoint = z.infer<typeof MobileRelayEndpointSchema>
+
 export type PairingGetEndpointsResult = z.infer<typeof PairingGetEndpointsResultSchema>

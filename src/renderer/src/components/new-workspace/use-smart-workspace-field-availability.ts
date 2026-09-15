@@ -49,6 +49,7 @@ export function useSmartWorkspaceFieldAvailability({
     onActiveSourceModeChange,
     value
   } = props
+
   const {
     mode,
     setMode,
@@ -74,6 +75,7 @@ export function useSmartWorkspaceFieldAvailability({
   }, [mode, onActiveSourceModeChange])
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const localGitlabAvailable = preflightStatusCurrent && preflightStatus?.glab?.installed === true
+
   const gitlabSourceAvailable = repoBackedSearchTargets.some((target) =>
     canUseGitLabSmartSource({
       localGitlabAvailable,
@@ -81,6 +83,7 @@ export function useSmartWorkspaceFieldAvailability({
       sourceHostId: target.gitlabSourceContext?.hostId
     })
   )
+
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
@@ -89,34 +92,44 @@ export function useSmartWorkspaceFieldAvailability({
       }),
     [gitlabSourceAvailable, linearStatus.connected]
   )
+
   const linearAvailable = availableTaskProviders.includes('linear')
+
   const availableModes = getSmartWorkspaceNameModes().filter((item) => {
     if (textOnly) {
       return item.id === 'text'
     }
+
     if (item.id === 'github') {
       return !repoBackedSourcesDisabled
     }
+
     if (item.id === 'gitlab') {
       return gitlabSourceAvailable
     }
+
     if (item.id === 'linear') {
       return linearAvailable
     }
+
     if (item.id === 'jira') {
       return jiraSourceConnected
     }
+
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
     }
+
     return true
   })
+
   const mrStateFilters = getMrStateFilters()
 
   useEffect(() => {
     if (availableModes.some((item) => item.id === mode)) {
       return
     }
+
     setMode(availableModes[0]?.id ?? 'text')
   }, [availableModes, mode, setMode])
 
@@ -124,6 +137,7 @@ export function useSmartWorkspaceFieldAvailability({
     if (!repoBackedSourcesDisabled) {
       return
     }
+
     setGithubItems([])
     setGitlabItems([])
     setBranches([])
@@ -150,9 +164,11 @@ export function useSmartWorkspaceFieldAvailability({
     if (disabled || textOnly) {
       return
     }
+
     if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
+
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
@@ -171,15 +187,20 @@ export function useSmartWorkspaceFieldAvailability({
       if (mode !== 'text') {
         setMode('text')
       }
+
       setOpen(false)
+
       return
     }
+
     if ((mode === 'gitlab' && gitlabSourceAvailable) || (mode === 'linear' && linearAvailable)) {
       return
     }
+
     if (mode !== 'gitlab' && mode !== 'linear') {
       return
     }
+
     setMode('smart')
     setGitlabItems([])
     setLinearIssues([])
@@ -208,6 +229,7 @@ export function useSmartWorkspaceFieldAvailability({
     if (!disabled) {
       return
     }
+
     setOpen(false)
     setGithubItems([])
     setGitlabItems([])
@@ -242,6 +264,7 @@ export function useSmartWorkspaceFieldAvailability({
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(value), SEARCH_DEBOUNCE_MS)
+
     return () => window.clearTimeout(timer)
   }, [setDebouncedQuery, value])
 

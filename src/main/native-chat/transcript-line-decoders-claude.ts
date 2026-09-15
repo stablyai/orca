@@ -18,6 +18,7 @@ import { claudeContentBlocks } from './transcript-record-blocks'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
 const MAX_EDIT_PATCH_HUNKS = 40
+
 const MAX_EDIT_PATCH_HUNK_LINES = 400
 
 /** Claude reports an edit as a snippet pair on the call, which cannot locate the
@@ -26,13 +27,17 @@ const MAX_EDIT_PATCH_HUNK_LINES = 400
 function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch | null {
   const result = asRecord(record.toolUseResult)
   const raw = result?.structuredPatch
+
   if (!Array.isArray(raw) || raw.length === 0) {
     return null
   }
+
   const hunks: NativeChatEditPatchHunk[] = []
+
   for (const entry of raw.slice(0, MAX_EDIT_PATCH_HUNKS)) {
     const hunk = asRecord(entry)
     const lines = hunk?.lines
+
     if (
       typeof hunk?.oldStart !== 'number' ||
       typeof hunk.newStart !== 'number' ||
@@ -40,6 +45,7 @@ function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch |
     ) {
       continue
     }
+
     hunks.push({
       oldStart: hunk.oldStart,
       oldLines: typeof hunk.oldLines === 'number' ? hunk.oldLines : 0,
@@ -50,10 +56,13 @@ function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch |
         .flatMap((line) => (typeof line === 'string' ? [line] : []))
     })
   }
+
   if (hunks.length === 0) {
     return null
   }
+
   const filePath = extractString(result?.filePath)
+
   return { ...(filePath ? { filePath } : {}), hunks }
 }
 
@@ -61,11 +70,14 @@ function claudeEditPatch(record: Record<string, unknown>): NativeChatEditPatch |
  *  block in a Claude result turn. */
 function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): NativeChatBlock[] {
   let attached = false
+
   return blocks.map((block) => {
     if (attached || block.type !== 'tool-result') {
       return block
     }
+
     attached = true
+
     return { ...block, editPatch: patch }
   })
 }
@@ -75,15 +87,20 @@ export function decodeClaudeTranscriptLine(
   fallbackId: string
 ): NativeChatMessage | null {
   const record = parseJsonObject(line)
+
   if (!record) {
     return null
   }
+
   const role = record.type
+
   if (role !== 'user' && role !== 'assistant') {
     return null
   }
+
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
+
   if (claudeInterruptedMessageId(record)) {
     // Why: keep Claude's injected boilerplate out of the user-bubble path while
     // preserving the interruption as a quiet, replayable conversation status.
@@ -95,18 +112,22 @@ export function decodeClaudeTranscriptLine(
       source: 'transcript'
     }
   }
+
   const message = asRecord(record.message)
   const editPatch = claudeEditPatch(record)
   const contentBlocks = claudeContentBlocks(message?.content)
   const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
+
   if (decodedBlocks.length === 0) {
     return null
   }
+
   // Why: Claude structurally marks injected turns, but tool-result records are
   // genuine output and must remain visible even when the containing turn is meta.
   const isInjectedUserTurn =
     role === 'user' &&
     (record.isMeta === true || record.isSynthetic === true || record.isCompactSummary === true)
+
   // Why image-source text survives the filter: Claude records a pasted image as a
   // companion turn marked `isMeta`, holding one `[Image: source: <path>]` block per
   // image. Dropping it left the prompt turn with no trace of its attachments — the
@@ -117,10 +138,13 @@ export function decodeClaudeTranscriptLine(
       ? decodedBlocks
       : decodedBlocks.filter((block) => block.type === 'tool-result')
     : decodedBlocks
+
   if (blocks.length === 0) {
     return null
   }
+
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
+
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks),
@@ -147,12 +171,15 @@ function claudeMessageRole(
 ): NativeChatMessage['role'] {
   if (role === 'user') {
     const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
+
     return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
   }
+
   return role
 }
 
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
+
   return Number.isFinite(parsed) ? parsed : null
 }

@@ -61,6 +61,7 @@ function spinnerCount(renderer: ReactTestRenderer): number {
 async function renderPane(): Promise<{ renderer: ReactTestRenderer; stream: Subscription }> {
   pageCounter += 1
   const subscriptions: Subscription[] = []
+
   const client = {
     subscribe: (
       _method: string,
@@ -69,6 +70,7 @@ async function renderPane(): Promise<{ renderer: ReactTestRenderer; stream: Subs
       options?: { onBinaryFrame?: (frame: BrowserScreencastFrame) => void }
     ) => {
       subscriptions.push({ listener, onBinaryFrame: options?.onBinaryFrame })
+
       return () => {}
     },
     request: vi.fn()
@@ -105,19 +107,24 @@ async function renderPane(): Promise<{ renderer: ReactTestRenderer; stream: Subs
     await Promise.resolve()
   })
   const mounted: ReactTestRenderer = renderer
+
   const viewport = mounted.root
     .findAllByType('View')
     .find((node) => typeof node.props.onLayout === 'function')
+
   if (!viewport) {
     throw new Error('Viewport with onLayout not found')
   }
+
   act(() => {
     viewport.props.onLayout({ nativeEvent: { layout: { width: 360, height: 640 } } })
   })
   const stream = subscriptions[0]
+
   if (!stream) {
     throw new Error('browser.screencast subscription not created')
   }
+
   return { renderer: mounted, stream }
 }
 
@@ -145,10 +152,12 @@ describe('MobileBrowserPane with a stream that reports ready but sends no frames
     })
 
     expect(spinnerCount(renderer)).toBe(0)
+
     const source = renderer.root
       .findAllByType('Image')
       .map((image) => (image.props.source as { uri?: string } | null)?.uri)
       .find((uri) => typeof uri === 'string')
+
     expect(source).toContain(Buffer.from(makeFrame().image).toString('base64'))
   })
 })

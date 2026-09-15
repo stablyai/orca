@@ -26,15 +26,19 @@ export function normalizeCreateReviewBaseSearchResults(
 ): string[] {
   const seen = new Set<string>()
   const branches: string[] = []
+
   for (const result of results) {
     // Why: hosted review APIs take branch names, while base search displays
     // remote-qualified refs. Detailed search already resolves slashy remotes.
     const branch = stripBaseRef((result.localBranchName || result.refName).trim())
+
     if (!branch || seen.has(branch)) {
       continue
     }
+
     seen.add(branch)
     branches.push(branch)
   }
+
   return branches
 }

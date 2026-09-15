@@ -82,6 +82,7 @@ describe('detectSparseCheckoutCached', () => {
 
   it('serves the stale value immediately past the reconcile window and corrects it in the background', async () => {
     const nowSpy = vi.spyOn(Date, 'now')
+
     try {
       nowSpy.mockReturnValue(1_000)
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
@@ -118,6 +119,7 @@ describe('detectSparseCheckoutCached', () => {
   it('does not resurrect an entry that was explicitly invalidated while a background revalidation was in flight', async () => {
     const nowSpy = vi.spyOn(Date, 'now')
     let resolveDetect: (isSparse: boolean) => void = () => {}
+
     try {
       nowSpy.mockReturnValue(1_000)
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
@@ -146,6 +148,7 @@ describe('detectSparseCheckoutCached', () => {
   it('does not let a stale in-flight revalidation clobber a fresh value written after remove+recreate at the same path', async () => {
     const nowSpy = vi.spyOn(Date, 'now')
     let resolveStaleDetect: (isSparse: boolean) => void = () => {}
+
     try {
       nowSpy.mockReturnValue(1_000)
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
@@ -180,6 +183,7 @@ describe('detectSparseCheckoutCached', () => {
     const listener = vi.fn()
     onSparseCheckoutStateChanged(listener)
     const nowSpy = vi.spyOn(Date, 'now')
+
     try {
       nowSpy.mockReturnValue(1_000)
       detectSparseCheckoutMock.mockResolvedValueOnce(false)
@@ -307,6 +311,7 @@ describe('detectSparseCheckoutCached with a WSL distro', () => {
     const listener = vi.fn()
     onSparseCheckoutStateChanged(listener)
     const nowSpy = vi.spyOn(Date, 'now')
+
     try {
       detectOnlyWithDistro('Ubuntu')
       nowSpy.mockReturnValue(1_000)

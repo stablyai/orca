@@ -14,7 +14,9 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 type ParkedMirrorWaiter = { environmentId: string; worktreeId: string; run: () => void }
 
 const hydratedGenerationByEnvironment = new Map<string, number>()
+
 const hydratedGenerationByWorktree = new Map<string, number>()
+
 const parkedWaitersByWorktree = new Map<string, ParkedMirrorWaiter>()
 
 function worktreeKey(environmentId: string, worktreeId: string): string {
@@ -42,15 +44,18 @@ export function hasHostSessionMirrorHydrated(environmentId: string, worktreeId: 
 
 function drainParkedWaiters(matches: (waiter: ParkedMirrorWaiter) => boolean): void {
   const dueKeys: string[] = []
+
   for (const [key, waiter] of parkedWaitersByWorktree) {
     if (matches(waiter)) {
       dueKeys.push(key)
     }
   }
+
   // Why: drain from a snapshot — a replay can re-park itself, and that new
   // waiter belongs to the next hydration, not this one.
   for (const key of dueKeys) {
     const waiter = parkedWaitersByWorktree.get(key)
+
     if (waiter) {
       parkedWaitersByWorktree.delete(key)
       waiter.run()
@@ -94,6 +99,7 @@ export function markHostSessionMirrorWorktreeHydrated(
 export function clearHostSessionMirrorHydration(environmentId: string): void {
   hydratedGenerationByEnvironment.delete(environmentId)
   const prefix = `${environmentId}\0`
+
   for (const key of hydratedGenerationByWorktree.keys()) {
     if (key.startsWith(prefix)) {
       hydratedGenerationByWorktree.delete(key)

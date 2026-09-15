@@ -8,6 +8,7 @@ describe('mapGhosttyToOrca — font & cursor', () => {
       'font-size': '14',
       'cursor-style': 'bar'
     })
+
     expect(result.diff).toEqual({
       terminalFontFamily: 'JetBrains Mono',
       terminalFontSize: 14,
@@ -256,6 +257,7 @@ describe('mapGhosttyToOrca — palette', () => {
     const result = mapGhosttyToOrca({
       palette: ['0=#000000', '1=#ff0000', '3=#ffaa00', '15=#ffffff']
     })
+
     expect(result.diff).toEqual({
       terminalColorOverrides: {
         black: '#000000',
@@ -310,6 +312,7 @@ describe('mapGhosttyToOrca — unsupported keys', () => {
       'font-size': '13',
       'background-blur-radius': '20'
     })
+
     expect(result.diff).toEqual({
       terminalFontFamily: 'Fira Code',
       terminalFontSize: 13,
@@ -328,6 +331,7 @@ describe('mapGhosttyToOrca — unsupported keys', () => {
       'custom-shader': 'shader.glsl',
       keybind: 'ctrl+a=new_window'
     })
+
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual([
       'window-decoration',

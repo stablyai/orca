@@ -5,6 +5,7 @@ import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 import type { Session } from './session'
 
 const { readSnapshot } = vi.hoisted(() => ({ readSnapshot: vi.fn() }))
+
 vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => ({
   ...(await importOriginal<typeof SnapshotReader>()),
   getStrictProcessTableSnapshotWithAge: readSnapshot
@@ -12,6 +13,7 @@ vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => 
 
 function table(command: string | null): ProcessTableRow[] {
   const foregroundPgid = command === null ? 100 : 101
+
   const shell: ProcessTableRow = {
     pid: 100,
     ppid: 1,
@@ -22,6 +24,7 @@ function table(command: string | null): ProcessTableRow[] {
     stat: command === null ? 'Ss+' : 'Ss',
     command: '/bin/bash'
   }
+
   return command === null
     ? [shell]
     : [
@@ -40,6 +43,7 @@ function table(command: string | null): ProcessTableRow[] {
 
 async function inspect(rawName: string, command: string | null) {
   readSnapshot.mockResolvedValue({ rows: table(command), capturedAgeMs: 0 })
+
   return inspectTerminalHostProcess({
     sessionId: 'busy-tab',
     session: {

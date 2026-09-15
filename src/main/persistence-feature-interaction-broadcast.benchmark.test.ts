@@ -16,17 +16,20 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 
 import { Store } from './persistence'
 
 const INTERACTIONS = 200
+
 const tempDirs: string[] = []
 
 function createStore(name: string): { dataFile: string; store: Store } {
   const dir = mkdtempSync(join(tmpdir(), `orca-ui-broadcast-${name}-`))
   tempDirs.push(dir)
   const dataFile = join(dir, 'orca-data.json')
+
   return { dataFile, store: new Store({ dataFile }) }
 }
 
@@ -46,10 +49,12 @@ describe('feature interaction UI broadcast benchmark', () => {
     optimizedStore.onUIChanged(() => optimizedBroadcasts++)
 
     const legacyStart = performance.now()
+
     for (let index = 0; index < INTERACTIONS; index++) {
       const featureInteractions = normalizeFeatureInteractions(
         legacyStore.getUI().featureInteractions
       )
+
       const existing = featureInteractions['agent-orchestration']
       legacyStore.updateUI({
         featureInteractions: {
@@ -61,12 +66,15 @@ describe('feature interaction UI broadcast benchmark', () => {
         }
       })
     }
+
     const legacyMs = performance.now() - legacyStart
 
     const optimizedStart = performance.now()
+
     for (let index = 0; index < INTERACTIONS; index++) {
       optimizedStore.recordFeatureInteraction('agent-orchestration')
     }
+
     const optimizedMs = performance.now() - optimizedStart
 
     expect(legacyBroadcasts).toBe(INTERACTIONS)

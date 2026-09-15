@@ -17,10 +17,13 @@ export function FolderPathStatusIndicator({
   status: FolderWorkspacePathStatus | null | undefined
 }): React.JSX.Element | null {
   const title = getFolderWorkspacePathStatusTitle(status)
+
   if (!status || status.exists || !title) {
     return null
   }
+
   const destructive = isConfirmedStaleFolderPathStatus(status)
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

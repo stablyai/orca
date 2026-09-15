@@ -48,6 +48,7 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
 }
 
 const MAX_LEGACY_IMPORT_SOURCE_BYTES = 16 * 1024 * 1024
+
 /** A roster is a status list; an imported one is as untrusted as any other block. */
 const MAX_LEGACY_IMPORT_SUBAGENTS = 64
 
@@ -70,6 +71,7 @@ export async function appendLegacyTranscriptMessages(input: {
   messages: NativeChatMessage[]
 }): Promise<number> {
   let appended = 0
+
   for (const message of input.messages) {
     await input.journal.appendItem(
       {
@@ -83,6 +85,7 @@ export async function appendLegacyTranscriptMessages(input: {
     )
     appended += 1
   }
+
   return appended
 }
 
@@ -94,15 +97,20 @@ export async function importLegacyTranscriptIntoJournal(input: {
   options?: LegacyImportOptions
 }): Promise<LegacyImportResult> {
   const prepared = await prepareLegacyTranscriptImport(input)
+
   if (!prepared.ok) {
     return prepared
   }
+
   // An empty import must preserve any existing repair anchor and disclosure.
   if (prepared.items.length === 0) {
     const current = input.journal.cursor()
+
     return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
   }
+
   const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, prepared.items)
+
   return { ok: true, epoch: cursor.epoch, cursor, imported: prepared.items.length, replaced: true }
 }
 
@@ -114,11 +122,14 @@ export async function prepareLegacyTranscriptImport(input: {
   const options = input.options ?? {}
   const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
   const transcriptAgent = resolveNativeChatTranscriptAgent(input.agent)
+
   if (!transcriptAgent) {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
+
   const filePath =
     options.filePath ?? (await resolveSessionFilePath(input.agent, input.sessionId, options))
+
   if (!filePath) {
     return { ok: false, error: `No transcript found for ${input.agent} session ${input.sessionId}` }
   }
@@ -128,6 +139,7 @@ export async function prepareLegacyTranscriptImport(input: {
   // later records; callers can retry after reducing the source or quota.
   try {
     const sourceBytes = (await stat(filePath)).size
+
     if (sourceBytes > MAX_LEGACY_IMPORT_SOURCE_BYTES) {
       return {
         ok: false,
@@ -139,6 +151,7 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   let decoded: { messages: NativeChatMessage[]; identities: AgentJournalItemIdentity[] }
+
   try {
     decoded = await decodeWithIdentities({
       filePath,
@@ -154,18 +167,23 @@ export async function prepareLegacyTranscriptImport(input: {
   if (decoded.identities.length !== decoded.messages.length) {
     return { ok: false, error: 'Legacy transcript identity coverage is incomplete' }
   }
+
   const replacement: JournalReplacementItem[] = []
+
   for (const [index, message] of decoded.messages.entries()) {
     const identity = decoded.identities[index]
+
     if (!identity) {
       continue
     }
+
     replacement.push({
       identity,
       body: legacyItemBody(message, limits),
       observedAt: message.timestamp ?? undefined
     })
   }
+
   return { ok: true, items: replacement }
 }
 
@@ -190,11 +208,13 @@ async function decodeWithIdentities(input: {
     agent: input.agent,
     sessionId: input.sessionId
   })
+
   const decode = TRANSCRIPT_DECODERS[input.transcriptAgent]
   const identities: AgentJournalItemIdentity[] = []
   let lineIndex = 0
 
   const stream = createReadStream(input.filePath, { encoding: 'utf-8' })
+
   const { messages } = await decodeTranscriptStream(
     stream,
     input.filePath,
@@ -203,6 +223,7 @@ async function decodeWithIdentities(input: {
       const trackedIdentity = tracker.identify(line, lineIndex)
       lineIndex += 1
       const message = decode(line, fallbackId)
+
       if (message) {
         identities.push(
           input.decodedMessageIdentities
@@ -215,10 +236,12 @@ async function decodeWithIdentities(input: {
             : trackedIdentity
         )
       }
+
       return message
     },
     true
   )
+
   return { messages, identities }
 }
 
@@ -232,6 +255,7 @@ function legacyItemBody(
   limits: JournalPayloadLimits
 ): AgentJournalItemBody {
   const only = message.blocks.length === 1 ? message.blocks[0] : undefined
+
   if (only?.type === 'tool-call') {
     // Legacy transcripts are untrusted and can contain arbitrarily large tool
     // arguments. Keep them on the same bounded path as live events before the
@@ -243,6 +267,7 @@ function legacyItemBody(
       state: 'completed'
     }
   }
+
   if (only?.type === 'tool-result') {
     return {
       kind: 'tool-call',
@@ -252,6 +277,7 @@ function legacyItemBody(
       output: boundPayload(only.output, limits)
     }
   }
+
   return {
     kind: 'message',
     role: message.role,
@@ -268,12 +294,15 @@ function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): Nativ
   if (block.type === 'text') {
     return { ...block, text: boundInlineText(block.text, limits).text }
   }
+
   if (block.type === 'tool-result') {
     return { ...block, output: boundInlineText(block.output, limits).text }
   }
+
   if (block.type === 'tool-call') {
     return { ...block, input: boundToolInput(block.input, limits) }
   }
+
   if (block.type === 'subagent-group') {
     return {
       ...block,
@@ -286,5 +315,6 @@ function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): Nativ
       }))
     }
   }
+
   return block
 }

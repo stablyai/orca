@@ -20,6 +20,7 @@ import {
 // fallback for sites that reject the cleaned identity, including some Turnstile deployments.
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 afterAll(() => {
@@ -193,11 +194,13 @@ async function runFixture(): Promise<FixtureResult> {
   writeFileSync(fixturePath, buildFixtureMain(modulePath, resultPath))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
+
   for (let attempt = 1; ; attempt += 1) {
     rmSync(resultPath, { force: true })
     // Why a fresh profile per attempt: a launch that never reached `ready` may have left the
     // Chromium profile mid-initialization, and reusing it would bias the retry.
     const electronArgs = [fixturePath, `--user-data-dir=${join(root, `profile-${attempt}`)}`]
+
     const run = spawnSync(
       executable,
       process.platform === 'linux'
@@ -205,12 +208,16 @@ async function runFixture(): Promise<FixtureResult> {
         : electronArgs,
       { encoding: 'utf8', env, timeout: 60_000 }
     )
+
     const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
+
     if (attempt < FIXTURE_LAUNCH_ATTEMPTS && neverReachedElectronReady(fixtureResult)) {
       continue
     }
+
     expect(run.error).toBeUndefined()
     expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
     return JSON.parse(fixtureResult) as FixtureResult
   }
 }
@@ -251,6 +258,7 @@ describe('browser session wire identity under Electron', () => {
     expect(wireBrands.find(({ brand }) => brand === 'Chromium')?.version).toBe(chromeMajor)
 
     const fullVersionList = ordinary?.clientHints['sec-ch-ua-full-version-list']
+
     if (fullVersionList) {
       expect(parseClientHintBrands(fullVersionList)).toEqual(
         result.navigatorUserAgentData?.highEntropy.fullVersionList
@@ -260,6 +268,7 @@ describe('browser session wire identity under Electron', () => {
     const auth = result.requests.find((request) =>
       request.url.startsWith('https://accounts.google.com/')
     )
+
     expect(auth, JSON.stringify(result.requests)).toBeDefined()
     expect(auth?.userAgent).toMatch(/Firefox\/\d/)
     expect(auth?.userAgent).not.toContain('Chrome')

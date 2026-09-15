@@ -48,6 +48,7 @@ type SectionRowsArgs = {
 
 function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSectionRows>) {
   const keys = new Set<string>()
+
   for (const row of sectionRows) {
     if (row.type === 'header') {
       keys.add(row.key)
@@ -63,6 +64,7 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
       keys.add(row.key)
     }
   }
+
   return keys
 }
 
@@ -83,7 +85,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () => getLogicalRepoOrderRankById(repos.map((repo) => repo.id)),
     [repos]
   )
+
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
+
   const placeholderRepoIds = useMemo(
     () =>
       getEmptyProjectPlaceholderRepoIds({
@@ -100,10 +104,12 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
+
   const pendingCreations = useMemo(
     () =>
       pendingCreationKeys.map((key) => {
         const separator = key.indexOf(' ')
+
         return {
           creationId: key.slice(0, separator),
           repoId: key.slice(separator + 1)
@@ -111,10 +117,12 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       }),
     [pendingCreationKeys]
   )
+
   const hostLabelOverrides = useMemo(
     () => getHostDisplayLabelOverrides(args.settings),
     [args.settings]
   )
+
   const hostOptions = useMemo(
     () =>
       buildSidebarHostOptions({
@@ -136,6 +144,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       hostLabelOverrides
     ]
   )
+
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
     [hostOptions]
@@ -191,11 +200,14 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       args.pinnedDisplayPolicy
     ]
   )
+
   const orderedHostOptions = useMemo(
     () => orderHostSectionOptions(hostOptions, workspaceHostOrder),
     [hostOptions, workspaceHostOrder]
   )
+
   const [hostDragActive, setHostDragActive] = useState(false)
+
   const handleReorderHostSections = useCallback(
     (orderedVisibleHostIds: ExecutionHostId[]) => {
       const visibleHostIds = new Set(orderedVisibleHostIds)
@@ -203,18 +215,22 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       const knownHostIds = new Set(hostOptionIds)
       const nextOrder: ExecutionHostId[] = [...orderedVisibleHostIds]
       const seen = new Set(nextOrder)
+
       // Why: dragging only covers rendered hosts; keep non-rendered SSH/runtime hosts in the saved order so they return in place.
       for (const hostId of [...workspaceHostOrder, ...hostOptionIds]) {
         if (!knownHostIds.has(hostId) || visibleHostIds.has(hostId) || seen.has(hostId)) {
           continue
         }
+
         nextOrder.push(hostId)
         seen.add(hostId)
       }
+
       setWorkspaceHostOrder(nextOrder)
     },
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
+
   const sectionRows = useMemo(
     () =>
       addHostSectionRows({
@@ -238,6 +254,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       rows
     ]
   )
+
   const renderedSidebarRowKeys = useMemo(
     () => collectRenderedSidebarRowKeys(sectionRows),
     [sectionRows]

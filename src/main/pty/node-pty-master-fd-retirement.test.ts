@@ -58,10 +58,13 @@ async function retiredPty(
   await new Promise<void>((resolve) => {
     term.onExit(() => resolve())
   })
+
   if (destroy) {
     ;(term as unknown as { destroy?: () => void }).destroy?.()
   }
+
   await new Promise<void>((resolve) => setTimeout(resolve, 400))
+
   return { term, spawnFd }
 }
 
@@ -124,6 +127,7 @@ describeOnLinux('node-pty master fd reuse', () => {
     live.onData((data) => {
       output += data
     })
+
     try {
       // The premise of this test: the kernel really did reissue the number. If it
       // stops holding, the assertion below would pass for the wrong reason.
@@ -151,6 +155,7 @@ describeOnLinux('node-pty master fd reuse', () => {
     live.onData((data) => {
       output += data
     })
+
     try {
       expect(masterFd(live)).toBe(spawnFd)
 
@@ -179,6 +184,7 @@ describeOnLinux('node-pty master fd reuse', () => {
     // `exec` replaces the shell, so the foreground pgrp's cmdline is distinct
     // from the file this pty was spawned with.
     const live = spawnPty('exec sleep 5')
+
     try {
       expect(masterFd(live)).toBe(spawnFd)
       // Let the shell finish exec'ing, or its own cmdline is still the fallback.

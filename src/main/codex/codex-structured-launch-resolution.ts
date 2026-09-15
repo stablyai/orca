@@ -34,13 +34,17 @@ export function createCodexStructuredLaunchResolver(
 ): (input: { identity: AgentSessionJournalIdentity }) => Promise<CodexStructuredLaunch> {
   return async ({ identity }) => {
     const record = deps.store.getRecord(identity.sessionId)
+
     if (!record) {
       throw new Error(`no durable agent-session record for ${identity.sessionId}`)
     }
+
     const { location, accountHome } = record
+
     if (record.provider !== 'codex') {
       throw new Error(`session ${identity.sessionId} is a ${record.provider} session`)
     }
+
     // This adapter spawns a child on the machine the runtime itself runs on.
     // A session pinned elsewhere belongs to that host's runtime, and quietly
     // starting it here would put a second writer on the same thread.
@@ -49,6 +53,7 @@ export function createCodexStructuredLaunchResolver(
         `codex structured sessions run on the local host, not ${location.executionHostId}`
       )
     }
+
     // Refuse before resolving launch data; a PID alone cannot prove Windows ownership.
     if (
       process.platform === 'win32' &&
@@ -56,19 +61,24 @@ export function createCodexStructuredLaunchResolver(
     ) {
       throw new Error('codex structured sessions require Windows process creation-time proof')
     }
+
     if (accountHome.variable !== 'CODEX_HOME') {
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
+
     const environment = await deps.resolveEnvironment?.()
     const pathEnv = environment?.PATH ?? environment?.Path ?? null
     const homePath = environment?.HOME ?? environment?.USERPROFILE
+
     const command = (deps.resolveCommand ?? resolveCodexCommand)({
       pathEnv,
       ...(homePath ? { homePath } : {})
     })
+
     const args = [...(record.launchArgs ?? []), 'app-server']
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
+
     return {
       command,
       args,

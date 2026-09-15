@@ -8,13 +8,19 @@ import type {
 } from './terminal-quick-command-types'
 
 export const MAX_QUICK_COMMANDS = 40
+
 export const MAX_QUICK_COMMAND_ID_LENGTH = 80
+
 export const MAX_QUICK_COMMAND_LABEL_LENGTH = 80
+
 export const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
+
 export const MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH = 4000
+
 // Why: agent prompt quick commands still launch through startup commands for
 // argv/flag agents, so this must stay within Orca's Windows shell safety cap.
 export const MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH = 6000
+
 const REMOVED_PRESET_IDS = new Set(['default-pwd', 'default-git-status'])
 
 const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
@@ -31,14 +37,19 @@ function normalizeTerminalQuickCommandScope(input: unknown): TerminalQuickComman
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { type: 'global' }
   }
+
   const record = input as Record<string, unknown>
+
   if (record.type !== 'repo') {
     return { type: 'global' }
   }
+
   const repoId = typeof record.repoId === 'string' ? record.repoId.trim() : ''
+
   if (!repoId) {
     return { type: 'global' }
   }
+
   return { type: 'repo', repoId: repoId.slice(0, MAX_QUICK_COMMAND_REPO_ID_LENGTH) }
 }
 
@@ -53,6 +64,7 @@ export function terminalQuickCommandMatchesRepo(
   repoId: string | null
 ): boolean {
   const scope = getTerminalQuickCommandScope(command)
+
   return scope.type === 'global' || (repoId !== null && scope.repoId === repoId)
 }
 
@@ -94,34 +106,45 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       continue
     }
+
     const record = item as Record<string, unknown>
     const rawId = typeof record.id === 'string' ? record.id.trim() : ''
+
     if (REMOVED_PRESET_IDS.has(rawId)) {
       continue
     }
+
     const hasLabel = typeof record.label === 'string'
+
     const action: TerminalQuickCommandAction =
       record.action === 'agent-prompt' ? 'agent-prompt' : 'terminal-command'
+
     const hasCommand = typeof record.command === 'string'
     const hasPrompt = typeof record.prompt === 'string'
+
     // Why: settings saves on every edit; preserve incomplete rows so a newly
     // added command is not deleted before the user fills in the command text.
     if (!hasLabel && !hasCommand && !hasPrompt) {
       continue
     }
+
     const agent = supportsTerminalAgentQuickCommand(record.agent) ? record.agent : null
+
     if (action === 'agent-prompt' && agent === null) {
       continue
     }
+
     const label = hasLabel ? String(record.label).trim() : ''
 
     const idBase = rawId || `quick-command-${normalized.length + 1}`
     let id = idBase.slice(0, MAX_QUICK_COMMAND_ID_LENGTH)
     let suffix = 2
+
     while (seenIds.has(id)) {
       id = `${idBase.slice(0, MAX_QUICK_COMMAND_ID_LENGTH - 4)}-${suffix}`
       suffix += 1
     }
+
     seenIds.add(id)
 
     const base = {
@@ -134,6 +157,7 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
       if (agent === null) {
         continue
       }
+
       const agentId = agent
       normalized.push({
         ...base,
@@ -164,6 +188,7 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
 
 function hasExactKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
   const actual = Object.keys(record)
+
   return actual.length === keys.length && keys.every((key) => Object.hasOwn(record, key))
 }
 
@@ -174,10 +199,13 @@ function isNormalizedTerminalQuickCommandScope(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const scope = value as Record<string, unknown>
+
   if (expected.type === 'global') {
     return hasExactKeys(scope, ['type']) && scope.type === 'global'
   }
+
   return (
     hasExactKeys(scope, ['type', 'repoId']) &&
     scope.type === 'repo' &&
@@ -189,7 +217,9 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const command = value as Record<string, unknown>
+
   if (
     command.id !== expected.id ||
     command.label !== expected.label ||
@@ -197,6 +227,7 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
   ) {
     return false
   }
+
   if (isTerminalAgentQuickCommand(expected)) {
     return (
       hasExactKeys(command, ['id', 'label', 'action', 'agent', 'prompt', 'scope']) &&
@@ -205,6 +236,7 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
       command.prompt === expected.prompt
     )
   }
+
   return (
     hasExactKeys(command, ['id', 'label', 'action', 'command', 'appendEnter', 'scope']) &&
     command.action === 'terminal-command' &&
@@ -221,13 +253,16 @@ export function parseNormalizedTerminalQuickCommands(
   if (!Array.isArray(input) || input.length > MAX_QUICK_COMMANDS) {
     return null
   }
+
   const normalized = normalizeTerminalQuickCommands(input)
+
   if (
     normalized.length !== input.length ||
     normalized.some((command, index) => !isNormalizedTerminalQuickCommand(input[index], command))
   ) {
     return null
   }
+
   return normalized
 }
 
@@ -240,10 +275,13 @@ export function applyTerminalQuickCommandMutation(
   if (mutation.type === 'delete') {
     return commands.filter((command) => command.id !== mutation.id)
   }
+
   const existingIndex = commands.findIndex((command) => command.id === mutation.command.id)
+
   if (existingIndex === -1) {
     return [...commands, mutation.command]
   }
+
   return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
 }
 
@@ -261,6 +299,7 @@ export function flattenTerminalQuickCommand(
   if (!LINE_BREAK_RE.test(command.command)) {
     return command
   }
+
   return {
     ...command,
     command: command.command

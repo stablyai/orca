@@ -28,6 +28,7 @@ const TURNS: NativeChatRailSlot[] = [
 ]
 
 const VIEWPORT = 300
+
 /** Ten 100px rows against a 300px viewport, scrolled off the bottom. */
 const MID_SCROLL = { clientHeight: VIEWPORT, scrollHeight: 1000, previousActiveId: null }
 

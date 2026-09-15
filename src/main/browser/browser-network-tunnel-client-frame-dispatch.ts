@@ -36,5 +36,6 @@ export function dispatchBrowserNetworkTunnelClientFrame(
                       )
                     )
                 : actions.invalid
+
   action()
 }

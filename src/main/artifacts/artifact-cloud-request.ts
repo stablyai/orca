@@ -35,12 +35,15 @@ export async function artifactRequest<T>(
     redirect: 'error',
     signal: AbortSignal.timeout(20_000)
   })
+
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { code?: string } | null
     throw new OrcaCloudRequestError(response.status, body?.code)
   }
+
   if (response.status === 204) {
     return undefined as T
   }
+
   return (await response.json()) as T
 }

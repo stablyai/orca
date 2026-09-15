@@ -39,66 +39,84 @@ export function reassignCanonicalWorktreeMetadataHost(
     if (getExecutionHostIdFromWorktreeHostIdentity(oldAlias) !== oldHostId) {
       continue
     }
+
     const worktreeId = getWorktreeIdFromHostIdentity(oldAlias)
+
     if (!worktreeId || rawKeys.length === 0) {
       continue
     }
+
     const identities: IdentityMove[] = []
     let safe = true
+
     for (const sourceKey of new Set(rawKeys)) {
       const sourceMeta = identityMeta[sourceKey]
+
       if (!sourceMeta) {
         safe = false
         break
       }
+
       let instanceId = sourceMeta.instanceId ?? repairedInstanceIds.get(sourceKey)
+
       if (instanceId === undefined) {
         instanceId = randomUUID()
         repairedInstanceIds.set(sourceKey, instanceId)
       }
+
       const nextKey = canonicalWorktreeIdentity({
         worktreeId,
         executionHostId: newHostId,
         instanceId
       })
+
       const nextMeta = { ...sourceMeta, instanceId, hostId: newHostId }
       const duplicate = identities.find((identity) => identity.nextKey === nextKey)
+
       if (duplicate && !isDeepStrictEqual(duplicate.nextMeta, nextMeta)) {
         safe = false
         break
       }
+
       if (!duplicate) {
         identities.push({ sourceKey, nextKey, instanceId, sourceMeta, nextMeta })
       }
     }
+
     if (!safe) {
       continue
     }
 
     const nextAlias = composeWorktreeHostIdentity(newHostId, worktreeId)
     const candidateKeys = new Set(identities.map((identity) => identity.nextKey))
+
     if ((aliases[nextAlias] ?? []).some((key) => !candidateKeys.has(key))) {
       continue
     }
+
     if (
       identities.some((identity) => {
         const existing = identityMeta[identity.nextKey]
+
         return existing !== undefined && !isDeepStrictEqual(existing, identity.nextMeta)
       })
     ) {
       continue
     }
+
     plans.push({ oldAlias, nextAlias, identities })
   }
 
   if (plans.length > 0) {
     state.worktreeIdentityAliases ??= {}
     state.worktreeMetaByIdentity ??= {}
+
     for (const plan of plans) {
       for (const identity of plan.identities) {
         identity.sourceMeta.instanceId ??= identity.instanceId
         state.worktreeMetaByIdentity[identity.nextKey] ??= identity.nextMeta
       }
+
       state.worktreeIdentityAliases[plan.nextAlias] = [
         ...new Set([
           ...(state.worktreeIdentityAliases[plan.nextAlias] ?? []),
@@ -109,6 +127,7 @@ export function reassignCanonicalWorktreeMetadataHost(
     }
 
     const referenced = new Set(Object.values(state.worktreeIdentityAliases).flat())
+
     for (const sourceKey of new Set(
       plans.flatMap((plan) => plan.identities.map((identity) => identity.sourceKey))
     )) {
@@ -119,10 +138,12 @@ export function reassignCanonicalWorktreeMetadataHost(
   }
 
   const preservedWorktreeIds = new Set<string>()
+
   for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
     if (getExecutionHostIdFromWorktreeHostIdentity(alias) === oldHostId) {
       preservedWorktreeIds.add(getWorktreeIdFromHostIdentity(alias))
     }
   }
+
   return { changed: plans.length > 0, preservedWorktreeIds }
 }

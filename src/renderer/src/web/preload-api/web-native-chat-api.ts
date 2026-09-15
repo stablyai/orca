@@ -22,6 +22,7 @@ export function createWebNativeChatApi(): NativeChatApi {
     subscribe: (args, onFrame) => {
       // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
       const environment = requireActiveEnvironmentOrNull()
+
       if (!environment) {
         onFrame({
           type: 'snapshot',
@@ -32,8 +33,10 @@ export function createWebNativeChatApi(): NativeChatApi {
             'Pair a host to view agent chat history.'
           )
         })
+
         return () => {}
       }
+
       let handle: { unsubscribe: () => void } | null = null
       let cancelled = false
       let receivedInitial = false
@@ -53,6 +56,7 @@ export function createWebNativeChatApi(): NativeChatApi {
               if (cancelled) {
                 return
               }
+
               if (!response.ok) {
                 if (!receivedInitial) {
                   receivedInitial = true
@@ -63,8 +67,10 @@ export function createWebNativeChatApi(): NativeChatApi {
                     error: response.error.message
                   })
                 }
+
                 return
               }
+
               const result = response.result as {
                 type?: string
                 messages?: NativeChatAppendedMessages
@@ -73,9 +79,11 @@ export function createWebNativeChatApi(): NativeChatApi {
                 lifecycle?: unknown
                 pending?: boolean
               }
+
               const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
               // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
               const pending = result?.pending === true
+
               if (
                 (result?.type === 'appended' ||
                   result?.type === 'snapshot' ||
@@ -86,6 +94,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                   if (!pending) {
                     receivedInitial = true
                   }
+
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
@@ -155,6 +164,7 @@ export function createWebNativeChatApi(): NativeChatApi {
             })
           }
         })
+
       return () => {
         cancelled = true
         handle?.unsubscribe()

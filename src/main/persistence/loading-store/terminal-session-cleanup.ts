@@ -27,7 +27,9 @@ export function deleteRemovedTerminalScrollbackSnapshots(
   if (!prior) {
     return
   }
+
   const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
+
   for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
     if (!nextRefs.has(ref)) {
       deleteTerminalScrollbackSnapshotSync(ref, storage)

@@ -27,11 +27,14 @@ function refreshHugeRepoWarningState(
 ): void {
   hugeRepoWarningStateByWorktreeId.delete(worktreeId)
   hugeRepoWarningStateByWorktreeId.set(worktreeId, state)
+
   while (hugeRepoWarningStateByWorktreeId.size > HUGE_REPO_WARNING_DISMISSAL_MAX_WORKTREES) {
     const oldestWorktreeId = hugeRepoWarningStateByWorktreeId.keys().next().value
+
     if (oldestWorktreeId === undefined) {
       break
     }
+
     hugeRepoWarningStateByWorktreeId.delete(oldestWorktreeId)
   }
 }
@@ -41,10 +44,13 @@ export function beginHugeRepoWarningProbe(
 ): HugeRepoWarningProbe {
   const instanceId = worktree.instanceId ?? ''
   let state = hugeRepoWarningStateByWorktreeId.get(worktree.id)
+
   if (!state || state.instanceId !== instanceId) {
     state = { instanceId, lifecycleToken: Symbol(worktree.id), dismissed: false }
   }
+
   refreshHugeRepoWarningState(worktree.id, state)
+
   return {
     worktreeId: worktree.id,
     instanceId,
@@ -54,20 +60,26 @@ export function beginHugeRepoWarningProbe(
 
 export function hasDismissedHugeRepoWarning(probe: HugeRepoWarningProbe): boolean {
   const state = hugeRepoWarningStateByWorktreeId.get(probe.worktreeId)
+
   if (!state || state.lifecycleToken !== probe.lifecycleToken || !state.dismissed) {
     return false
   }
+
   refreshHugeRepoWarningState(probe.worktreeId, state)
+
   return true
 }
 
 export function markHugeRepoWarningDismissed(probe: HugeRepoWarningProbe): boolean {
   const state = hugeRepoWarningStateByWorktreeId.get(probe.worktreeId)
+
   if (!state || state.lifecycleToken !== probe.lifecycleToken) {
     return false
   }
+
   state.dismissed = true
   refreshHugeRepoWarningState(probe.worktreeId, state)
+
   return true
 }
 
@@ -78,10 +90,13 @@ export function migrateHugeRepoWarningDismissal(
   if (oldWorktreeId === newWorktreeId) {
     return
   }
+
   const state = hugeRepoWarningStateByWorktreeId.get(oldWorktreeId)
+
   if (!state) {
     return
   }
+
   hugeRepoWarningStateByWorktreeId.delete(oldWorktreeId)
   // Why: preserve the once-per-worktree choice while invalidating actions that
   // captured the path before the rename.
@@ -95,9 +110,11 @@ export function forgetHugeRepoWarningDismissalsForWorktrees(
   removedWorktreeIds: Iterable<string>
 ): void {
   const removedIds = new Set(removedWorktreeIds)
+
   if (removedIds.size === 0) {
     return
   }
+
   for (const worktreeId of removedIds) {
     // Why: deleting the state also invalidates every outstanding probe token,
     // so late async completions cannot resurrect a removed worktree dismissal.
@@ -115,10 +132,12 @@ export function getHugeRepoWarningStateCountForTests(): number {
 
 export function getHugeRepoWarningDismissalCountForTests(): number {
   let count = 0
+
   for (const state of hugeRepoWarningStateByWorktreeId.values()) {
     if (state.dismissed) {
       count += 1
     }
   }
+
   return count
 }

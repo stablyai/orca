@@ -12,6 +12,7 @@ export function createSshPtySourceAckPublication(
   onPublished: () => void
 ): SshPtySourceAckPublication {
   let settled = false
+
   return Object.freeze({
     identity: token.identity,
     ack: Object.freeze({
@@ -25,10 +26,13 @@ export function createSshPtySourceAckPublication(
       if (settled) {
         return
       }
+
       settled = true
+
       if (!result.ok || token.state === 'closed' || endSu > token.ackQueuedEndSu) {
         return
       }
+
       token.ackPublishedEndSu = Math.max(token.ackPublishedEndSu, endSu)
       reclaimPublishedSourcePrefix(token, spanOwners)
       onPublished()

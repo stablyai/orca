@@ -24,6 +24,7 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
       const { db } = this.deps.database()
       db.exec('BEGIN IMMEDIATE')
+
       try {
         insertJournalRow(db, this.deps.sessionId, row)
         upsertJournalSessionRow(db, this.deps.sessionId, row.epoch, row.ts)
@@ -32,10 +33,12 @@ export class JournalRowWriter {
         db.exec('ROLLBACK')
         throw error
       }
+
       // COMMIT landed, so the row is durable: adopt it before anything that can
       // fail. Rejecting here instead would leave the next append reusing a
       // sequence the table already holds.
       this.deps.commit(row)
+
       return row
     })
   }

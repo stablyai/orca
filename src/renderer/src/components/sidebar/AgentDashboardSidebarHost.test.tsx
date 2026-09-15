@@ -37,6 +37,7 @@ describe('AgentDashboardSidebarHost', () => {
 
   it('closes the workspace board when the dashboard opens', async () => {
     const closeWorkspaceBoard = vi.fn()
+
     const view = render(
       <AgentDashboardSidebarHost
         sidebarOpen

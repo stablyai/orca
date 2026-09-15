@@ -7,11 +7,14 @@ export function skillScanSourceKinds(
   if (!sourceKinds?.length) {
     return undefined
   }
+
   const kinds = new Set(sourceKinds)
+
   if (kinds.has('home') || kinds.has('bundled')) {
     kinds.add('home')
     kinds.add('bundled')
   }
+
   return [...kinds].sort()
 }
 
@@ -22,8 +25,10 @@ export function rootMayContainSourceKind(
   if (!sourceKinds?.length) {
     return true
   }
+
   if (root.sourceKind === 'home') {
     return sourceKinds.includes('home') || sourceKinds.includes('bundled')
   }
+
   return sourceKinds.includes(root.sourceKind)
 }

@@ -38,6 +38,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
 }: StatusIndicatorProps) {
   const tooltipLabel =
     showTooltip && AGENT_STATUS_TOOLTIP_STATUSES.has(status) ? getWorktreeStatusLabel(status) : null
+
   let indicator: React.JSX.Element
 
   if (status === 'working') {

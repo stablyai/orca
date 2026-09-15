@@ -27,6 +27,7 @@ export function shouldHandleAutomationDetailTabArrowKey(event: {
   }
 
   const target = event.target
+
   if (target instanceof Element) {
     if (
       (target instanceof HTMLElement && target.isContentEditable) ||
@@ -36,6 +37,7 @@ export function shouldHandleAutomationDetailTabArrowKey(event: {
     ) {
       return false
     }
+
     if (target.closest('[role="dialog"], [role="menu"], [role="listbox"]')) {
       return false
     }
@@ -65,6 +67,7 @@ export function shouldHandleAutomationDetailEscapeKey(event: {
   }
 
   const target = event.target
+
   if (target instanceof Element) {
     if (target.getAttribute('data-escape-clears-value') === 'true') {
       return false
@@ -93,17 +96,22 @@ export function getAutomationDetailNextTab(args: {
   canAccessRuns?: boolean
 }): AutomationPaneTab | null {
   const { currentTab, key, canAccessRuns = true } = args
+
   if (key === 'ArrowRight') {
     if (currentTab === 'overview' && canAccessRuns) {
       return 'runs'
     }
+
     return null
   }
+
   if (key === 'ArrowLeft') {
     if (currentTab === 'runs') {
       return 'overview'
     }
+
     return null
   }
+
   return null
 }

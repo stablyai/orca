@@ -65,11 +65,13 @@ vi.mock('../worktree-root-preparation', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
+
 vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 
 import { registerRepoHandlers } from './repos'
 
 const MAIN_CHECKOUT = '/Users/dev/projects/orca'
+
 const LINKED_WORKTREE = '/Users/dev/orca/workspaces/orca/pr-3235'
 
 type AddResult = { repo: Repo } | { error: string }
@@ -90,9 +92,11 @@ describe('repos:add with git worktrees', () => {
 
   const callAdd = (args: { path: string; kind?: 'git' | 'folder' }): Promise<AddResult> => {
     const handler = handlers.get('repos:add')
+
     if (!handler) {
       throw new Error('repos:add handler was never registered')
     }
+
     return handler(null, args) as Promise<AddResult>
   }
 

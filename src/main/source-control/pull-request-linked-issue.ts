@@ -21,16 +21,20 @@ function inferIssueProvider(
   if (provider === 'github' || provider === 'gitlab') {
     return provider
   }
+
   if (provider) {
     return null
   }
+
   if (meta.linkedWorkItem?.type === 'issue') {
     if (meta.linkedWorkItem.provider === 'github' || meta.linkedWorkItem.provider === 'gitlab') {
       return meta.linkedWorkItem.provider
     }
   }
+
   const hasGitHub = isLinkedIssueNumber(meta.linkedIssue)
   const hasGitLab = isLinkedIssueNumber(meta.linkedGitLabIssue)
+
   return hasGitHub === hasGitLab ? null : hasGitHub ? 'github' : 'gitlab'
 }
 
@@ -40,6 +44,7 @@ function fallbackTitle(
   number: number
 ): string {
   const item = meta.linkedWorkItem
+
   return item?.provider === provider && item.type === 'issue' && item.number === number
     ? item.title
     : '(title unavailable)'
@@ -55,13 +60,16 @@ export async function loadPullRequestLinkedIssue(args: {
   if (!args.meta) {
     return null
   }
+
   const provider = inferIssueProvider(args.meta, args.provider)
+
   const number =
     provider === 'github'
       ? args.meta.linkedIssue
       : provider === 'gitlab'
         ? args.meta.linkedGitLabIssue
         : null
+
   if (!provider || !isLinkedIssueNumber(number)) {
     return null
   }

@@ -10,8 +10,10 @@ const SCAN_ISSUE_LIMIT = 500
 export function recordSessionScanIssue(issues: AiVaultScanIssue[], issue: AiVaultScanIssue): void {
   if (issues.length < SCAN_ISSUE_LIMIT - 1) {
     issues.push(issue)
+
     return
   }
+
   if (issues.length === SCAN_ISSUE_LIMIT - 1) {
     // Kinded: this row is a scan notice, not a skipped transcript — the panel
     // counts unkinded issues as skipped transcript files. Spread first so a

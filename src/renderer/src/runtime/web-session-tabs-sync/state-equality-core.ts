@@ -14,6 +14,7 @@ export function sameStringArray(a: readonly string[], b: readonly string[]): boo
   if (a.length !== b.length) {
     return false
   }
+
   return a.every((value, index) => value === b[index])
 }
 
@@ -24,6 +25,7 @@ export function sameAgentStateHistory(
   if (a.length !== b.length) {
     return false
   }
+
   return a.every(
     (entry, index) =>
       entry.state === b[index]?.state &&
@@ -40,6 +42,7 @@ export function agentStatusEntryEqual(
   if (!a) {
     return false
   }
+
   return (
     a.state === b.state &&
     a.workingMode === b.workingMode &&
@@ -96,25 +99,32 @@ export function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: str
   if (!recent || recent.length === 0) {
     return []
   }
+
   const valid = new Set(tabOrder)
   const seen = new Set<string>()
   const reversed: string[] = []
+
   for (let i = recent.length - 1; i >= 0; i -= 1) {
     const id = recent[i]
+
     if (!valid.has(id) || seen.has(id)) {
       continue
     }
+
     seen.add(id)
     reversed.push(id)
   }
+
   return reversed.toReversed()
 }
 
 export function pushRecentTabId(recent: string[] | undefined, tabId: string): string[] {
   const base = recent ?? []
+
   if (base.length > 0 && base.at(-1) === tabId) {
     return base
   }
+
   return [...base.filter((id) => id !== tabId), tabId]
 }
 
@@ -124,20 +134,26 @@ export function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecord
   batchContext?: WebSessionTabsBatchContext
 ): NonNullable<WebSessionTabsSyncState[K]> {
   const record = (state[recordKey] ?? {}) as NonNullable<WebSessionTabsSyncState[K]>
+
   if (!batchContext) {
     return { ...record } as NonNullable<WebSessionTabsSyncState[K]>
   }
+
   // Why: one batch owns its record copies, so later snapshots can update them without recopying every workspace.
   if (batchContext.changedRecords.has(recordKey)) {
     return record
   }
+
   const next = { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+
   const mutableState = state as unknown as Record<
     WebSessionTabsBatchRecordKey,
     Record<string, unknown>
   >
+
   mutableState[recordKey] = next as Record<string, unknown>
   batchContext.changedRecords.add(recordKey)
+
   return next
 }
 
@@ -151,14 +167,18 @@ export function withWorktreeEntry<T>(
   deleteNull = true
 ): Record<string, T> {
   const record = (state[recordKey] ?? {}) as Record<string, T>
+
   if (equal(record[key], value)) {
     return record
   }
+
   const next = writableWebSessionTabsRecord(state, recordKey, batchContext) as Record<string, T>
+
   if (value === null && deleteNull) {
     delete next[key]
   } else {
     next[key] = value as T
   }
+
   return next
 }

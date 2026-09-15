@@ -30,6 +30,7 @@ export function WorktreeStatusMenuItems(props: {
         <DropdownMenuRadioGroup value={props.contextWorkspaceStatus}>
           {props.workspaceStatuses.map((status) => {
             const meta = getWorkspaceStatusVisualMeta(status)
+
             return (
               <DropdownMenuRadioItem
                 key={status.id}

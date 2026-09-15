@@ -171,6 +171,7 @@ describe('createProjectHeaderDragSession', () => {
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
+
     const sessionFromLabel = createProjectHeaderDragSession({
       event: {
         button: 0,
@@ -185,6 +186,7 @@ describe('createProjectHeaderDragSession', () => {
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
+
     const sessionFromRowPadding = createProjectHeaderDragSession({
       event: {
         button: 0,

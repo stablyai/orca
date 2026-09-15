@@ -5,6 +5,7 @@ import { useAppStore } from '../../store'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 
 vi.mock('./GeneralRemoteServerUpdates', () => ({ GeneralRemoteServerUpdates: () => null }))
+
 vi.mock('./ReleaseChannelSection', () => ({ ReleaseChannelSection: () => null }))
 
 beforeEach(() => {

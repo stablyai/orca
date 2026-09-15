@@ -66,6 +66,7 @@ describe('OrcaRuntimeService', () => {
         activeWorktreeIdsOnShutdown: []
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
@@ -84,6 +85,7 @@ describe('OrcaRuntimeService', () => {
         activeWorktreeIdsOnShutdown: []
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
@@ -104,6 +106,7 @@ describe('OrcaRuntimeService', () => {
 
   it('preserves live SSH session identities when promoting a headless runtime', () => {
     const remotePtyId = 'ssh:ssh-1@@persisted-pty'
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         activeWorktreeIdsOnShutdown: [],
@@ -128,6 +131,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.registerPty(remotePtyId, TEST_WORKTREE_ID, 'ssh-1', {
@@ -183,6 +187,7 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReady(TEST_WINDOW_ID)
     const fence = runtime.markRendererReloading(TEST_WINDOW_ID)
+
     if (fence === null) {
       throw new Error('expected active renderer reload fence')
     }
@@ -195,12 +200,14 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps an earlier committed reload fenced when a later reload is cancelled', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = createRuntime()
       runtime.attachWindow(TEST_WINDOW_ID)
       runtime.markGraphReady(TEST_WINDOW_ID)
       const committedFence = runtime.markRendererReloading(TEST_WINDOW_ID)
       const cancelledFence = runtime.markRendererReloading(TEST_WINDOW_ID)
+
       if (committedFence === null || cancelledFence === null) {
         throw new Error('expected active renderer reload fences')
       }
@@ -222,6 +229,7 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.attachWindow(TEST_WINDOW_ID)
     const fence = runtime.markRendererReloading(TEST_WINDOW_ID)
+
     if (fence === null) {
       throw new Error('expected active promotion reload fence')
     }
@@ -251,6 +259,7 @@ describe('OrcaRuntimeService', () => {
 
   it('restores headless graph authority after a promoted renderer reload times out', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = createRuntime()
       runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
@@ -278,6 +287,7 @@ describe('OrcaRuntimeService', () => {
 
   it('moves a desktop graph to unavailable when its reload times out', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = createRuntime()
       runtime.attachWindow(TEST_WINDOW_ID)
@@ -339,6 +349,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not let a superseded reload timeout overwrite a newer renderer graph', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = createRuntime()
       runtime.attachWindow(TEST_WINDOW_ID)

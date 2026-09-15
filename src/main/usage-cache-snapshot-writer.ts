@@ -32,6 +32,7 @@ export class UsageCacheSnapshotWriter {
     this.pending = write.catch((error: unknown) => {
       console.error(`${this.logTag} Failed to persist usage cache:`, error)
     })
+
     return write
   }
 
@@ -45,6 +46,7 @@ export class UsageCacheSnapshotWriter {
     if (generation !== this.generation) {
       return
     }
+
     // Why serialize here and not at queue time: it blocks the main process for a multi-MB cache, and
     // superseded generations must not pay for it. Synchronous, so no mutation can tear the JSON.
     const payload = serialize()

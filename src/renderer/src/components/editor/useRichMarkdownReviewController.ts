@@ -51,14 +51,17 @@ export function useRichMarkdownReviewController({
   const [annotationTarget, setAnnotationTarget] = useState<RichMarkdownAnnotationTarget | null>(
     null
   )
+
   const [annotationPopover, setAnnotationPopover] = useState<RichMarkdownAnnotationTarget | null>(
     null
   )
+
   const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
   const canAnnotateRichMarkdownRef = useRef(false)
   const markdownCommentsRef = useRef<DiffComment[]>([])
   const markdownSourceLineOffsetRef = useRef(markdownSourceLineOffset)
   const annotationTargetFrameRef = useRef<number | null>(null)
+
   const {
     canAnnotateRichMarkdown,
     markdownComments,
@@ -84,7 +87,9 @@ export function useRichMarkdownReviewController({
     markdownReviewNotes,
     rootRef
   })
+
   const { clearReviewCopyTimers } = copyFeedback
+
   const rail = useRichMarkdownReviewRailController({
     canAnnotateRichMarkdown,
     content,
@@ -94,7 +99,9 @@ export function useRichMarkdownReviewController({
     markdownSourceLineOffsetRef,
     scrollContainerRef
   })
+
   const { cancelNotePositionFrame, clearAttentionTimers, setReviewRailOpen } = rail
+
   const reviewRailExpanded = shouldExpandRichMarkdownReviewRail({
     hasReviewNotes: markdownComments.length > 0,
     reviewRailOpen: rail.reviewRailOpen,
@@ -103,9 +110,11 @@ export function useRichMarkdownReviewController({
 
   const clearAllAnnotationHighlights = useCallback((): void => {
     const editor = editorRef.current
+
     if (!editor) {
       return
     }
+
     editor.view.dispatch(
       editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
         activeRange: null,
@@ -140,11 +149,15 @@ export function useRichMarkdownReviewController({
       annotationTargetFrameRef.current = window.requestAnimationFrame(() => {
         annotationTargetFrameRef.current = null
         const root = rootRef.current
+
         if (!root || annotationPopoverRef.current || !canAnnotateRichMarkdownRef.current) {
           setAnnotationTarget(null)
+
           return
         }
+
         const target = getRichMarkdownAnnotationTarget(editor, root)
+
         const hasExistingComment =
           target &&
           hasRichMarkdownCommentForRange(
@@ -152,6 +165,7 @@ export function useRichMarkdownReviewController({
             target,
             markdownSourceLineOffsetRef.current
           )
+
         setAnnotationTarget(hasExistingComment ? null : target)
       })
     },
@@ -163,6 +177,7 @@ export function useRichMarkdownReviewController({
       if (!annotationPopover || sourceRelativePath === null) {
         return
       }
+
       const result = await addDiffComment({
         worktreeId,
         filePath: sourceRelativePath,
@@ -176,10 +191,13 @@ export function useRichMarkdownReviewController({
         body,
         side: 'modified'
       })
+
       if (!result) {
         console.error('Failed to add markdown comment — draft preserved')
+
         return
       }
+
       updateRichMarkdownAnnotationHighlightsAfterSubmit({
         annotationPopover,
         comments: [...markdownComments, result],
@@ -209,34 +227,43 @@ export function useRichMarkdownReviewController({
       if (!canAnnotateRichMarkdown) {
         return false
       }
+
       // Why: product B — second chord while drafting must consume the key without
       // remounting the composer and silently discarding the in-progress note.
       if (annotationPopoverRef.current) {
         return true
       }
+
       const editor = editorRef.current
       const root = rootRef.current
+
       // Why: an immediate chord after a mouse-drag can run before ProseMirror
       // copies the native selection into editor.state; flush it before reading
       // the target so the composer opens on the live selection, not stale state.
       if (editor) {
         flushPendingProseMirrorSelection(editor)
       }
+
       // Why: keyboard callers require the live selection to avoid stale-target
       // races; the mouse button may use the target from the render that exposed it.
       const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
       const baseTarget = liveTarget ?? (requireLiveSelection ? null : annotationTarget)
+
       if (!baseTarget) {
         return false
       }
+
       const target = editor ? clampRichMarkdownAnnotationTarget(editor, baseTarget) : baseTarget
+
       if (
         !target ||
         hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)
       ) {
         setAnnotationTarget(null)
+
         return false
       }
+
       editor?.view.dispatch(
         editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
           activeRange: { from: target.from, to: target.to }
@@ -249,6 +276,7 @@ export function useRichMarkdownReviewController({
       setReviewRailOpen(true)
       setAnnotationPopover(target)
       setAnnotationTarget(null)
+
       return true
     },
     [
@@ -266,6 +294,7 @@ export function useRichMarkdownReviewController({
     if (canAnnotateRichMarkdown) {
       return
     }
+
     // Why: disabling annotations must immediately remove stale popovers and
     // highlights that cannot be derived from the next non-annotatable render.
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change

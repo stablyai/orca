@@ -6,9 +6,11 @@ function createSubprocess() {
   let onData: ((data: string) => void) | null = null
   let onExit: ((code: number) => void) | null = null
   let resolveConfirm: ((confirmed: boolean) => void) | undefined
+
   const confirmShellForeground = vi.fn(
     () => new Promise<boolean>((resolve) => void (resolveConfirm = resolve))
   )
+
   const handle = {
     pid: 999,
     getForegroundProcess: () => null,
@@ -29,6 +31,7 @@ function createSubprocess() {
     },
     dispose: () => {}
   } as unknown as SubprocessHandle
+
   return {
     handle,
     confirmShellForeground,
@@ -41,6 +44,7 @@ function createSubprocess() {
 describe('Session shell-owned recovery through the output barrier', () => {
   it('delivers post-kill shell output into the normalized snapshot instead of the discarded alt buffer', async () => {
     const sub = createSubprocess()
+
     const session = new Session({
       sessionId: 's1',
       cols: 80,
@@ -66,6 +70,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
 
   it('keeps split escapes intact and revokes stale proof when a snapshot lands mid-sequence', async () => {
     const sub = createSubprocess()
+
     const session = new Session({
       sessionId: 's2',
       cols: 80,
@@ -98,6 +103,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
 
   it('flushes queued bytes to clients when the shell exits mid-proof instead of dropping them', async () => {
     const sub = createSubprocess()
+
     // Models TerminalHost.reapSession: exit and disposal are one synchronous chain.
     const session: Session = new Session({
       sessionId: 's3',
@@ -107,6 +113,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
       shellReadySupported: false,
       onExit: () => session.dispose()
     } as never)
+
     const received: string[] = []
     const exits: number[] = []
     session.attachClient({
@@ -128,6 +135,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
 
   it('flushes nested episodes stacked inside one proof window when the shell exits', async () => {
     const sub = createSubprocess()
+
     const session: Session = new Session({
       sessionId: 's4',
       cols: 80,
@@ -136,6 +144,7 @@ describe('Session shell-owned recovery through the output barrier', () => {
       shellReadySupported: false,
       onExit: () => session.dispose()
     } as never)
+
     const received: string[] = []
     session.attachClient({ onData: (data: string) => received.push(data), onExit: () => {} })
 
@@ -148,9 +157,11 @@ describe('Session shell-owned recovery through the output barrier', () => {
     sub.exit(0)
 
     const joined = received.join('')
+
     for (const marker of ['AAA', 'BBB', 'CCC']) {
       expect(joined).toContain(marker)
     }
+
     expect(joined).not.toContain('\x1b[?1049l')
   })
 })

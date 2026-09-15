@@ -44,6 +44,7 @@ export async function getDiff(
     compareAgainstHead,
     ...gitRuntimeOptionsKey(options)
   ])
+
   // Why: register the dedupe synchronously (before any await) so concurrent identical reads
   // coalesce — including on the settled-cache lookup, which is itself I/O.
   return gitDiffReadDedupe.run(readKey, () =>
@@ -80,13 +81,17 @@ async function loadDiffThroughSettledCache(
   // A staged diff compares HEAD to the index, so the working tree is not one of its inputs.
   const stamp = await readWorktreeDiffStamp(worktreePath, filePath, !staged, options)
   const cached = settledDiffCache.get(readKey, stamp)
+
   if (cached) {
     return cached
   }
+
   const loaded = await loadDiff(worktreePath, filePath, staged, compareAgainstHead, options)
+
   if (loaded.reusable) {
     settledDiffCache.set(readKey, stamp, loaded.result, readGeneration)
   }
+
   return loaded.result
 }
 
@@ -106,12 +111,15 @@ async function loadDiff(
 ): Promise<LoadedDiff> {
   // Why: gitlink paths can't be read as blobs, so route submodule diffs explicitly (root → pointer, inner → recurse).
   const submodulePaths = await listSubmodulePaths(worktreePath, options)
+
   if (submodulePaths.length > 0) {
     const matchedSubmodule = findContainingSubmodule(submodulePaths, filePath)
+
     if (matchedSubmodule) {
       // Why: validate the .gitmodules-derived path against the worktree boundary so a crafted one can't escape the repo.
       const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, matchedSubmodule)
       const normalizedFilePath = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+
       if (normalizedFilePath === matchedSubmodule) {
         return notReusable(
           await buildSubmodulePointerDiff(
@@ -124,14 +132,18 @@ async function loadDiff(
           )
         )
       }
+
       const innerPath = normalizedFilePath.slice(matchedSubmodule.length + 1)
+
       const fromOid = staged
         ? await readGitlinkOidFromTree(worktreePath, 'HEAD', matchedSubmodule, options)
         : (await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, options)) ||
           (await readGitlinkOidFromTree(worktreePath, 'HEAD', matchedSubmodule, options))
+
       const toOid = staged
         ? await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, options)
         : await readWorkingSubmoduleHead(submoduleWorktreePath, options)
+
       // Why: a moved gitlink with a clean submodule worktree means the change is committed — diff the two commits.
       if (fromOid && toOid && fromOid !== toOid) {
         return notReusable(
@@ -144,6 +156,7 @@ async function loadDiff(
           )
         )
       }
+
       // The inner read stamps and caches against the submodule's own repo state.
       return notReusable(
         await getDiff(submoduleWorktreePath, innerPath, staged, compareAgainstHead, options)
@@ -166,6 +179,7 @@ async function loadDiff(
         readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options),
         readGitBlobAtIndexPath(worktreePath, filePath, options)
       ])
+
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
       modifiedContent = rightBlob.content
@@ -177,6 +191,7 @@ async function loadDiff(
       // tree read is a plain fs read that does not depend on it.
       // Git can run in the distro against a raw Linux worktree path while Node reads it through Win32.
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
+
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
           ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
@@ -185,6 +200,7 @@ async function loadDiff(
           ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
       ])
+
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
       modifiedContent = workingTreeBlob.content
@@ -204,10 +220,12 @@ async function loadDiff(
     modifiedIsBinary,
     filePath
   )
+
   // Why: mark a proven deletion so previewers don't mistake a read failure's empty side for one.
   if (result.kind === 'binary' && modifiedDeleted) {
     return { result: { ...result, modifiedDeleted: true }, reusable: !readFailed }
   }
+
   return { result, reusable: !readFailed }
 }
 

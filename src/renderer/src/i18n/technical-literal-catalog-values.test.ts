@@ -58,6 +58,7 @@ function readValue(catalog: object, key: string): unknown {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return undefined
     }
+
     return (value as Record<string, unknown>)[part]
   }, catalog)
 }

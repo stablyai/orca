@@ -24,6 +24,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -38,9 +39,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -89,6 +92,7 @@ describe('Store', () => {
 
   it('persists paired Jira linked-item metadata and drops mismatched source context', async () => {
     const store = await createStore()
+
     const linkedWorkItem = {
       provider: 'jira' as const,
       type: 'issue' as const,
@@ -97,6 +101,7 @@ describe('Store', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     }
+
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -229,11 +234,13 @@ describe('Store', () => {
 
   it('creates and updates folder workspaces from folder-backed project groups', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const linkedTask = {
       provider: 'linear' as const,
       type: 'issue' as const,
@@ -248,6 +255,7 @@ describe('Store', () => {
       name: 'Refund fix',
       linkedTask
     })
+
     const updated = store.updateFolderWorkspace(workspace.id, {
       comment: 'Coordinate api and web',
       isPinned: true,
@@ -289,11 +297,13 @@ describe('Store', () => {
 
   it('persists the exact folder workspace path provided on create and update', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const workspace = store.createFolderWorkspace({
       projectGroupId: group.id,
       folderPath: '/workspace/platform '
@@ -312,11 +322,13 @@ describe('Store', () => {
 
   it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const linkedTask = {
       provider: 'jira' as const,
       type: 'issue' as const,
@@ -325,6 +337,7 @@ describe('Store', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     }
+
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -345,6 +358,7 @@ describe('Store', () => {
       linkedTask,
       linkedTaskSourceContext
     })
+
     store.flush()
     const restored = await createStore()
 
@@ -370,11 +384,13 @@ describe('Store', () => {
     // parentPath is persisted verbatim, so a padded scan result would otherwise become a folderPath
     // that no path comparison matches.
     const store = await createStore()
+
     const padded = store.createProjectGroup({
       name: 'Platform',
       parentPath: '  /workspace/platform  ',
       createdFrom: 'folder-scan'
     })
+
     const blank = store.createProjectGroup({
       name: 'Blank',
       parentPath: '   ',
@@ -578,11 +594,13 @@ describe('Store', () => {
 
   it('removes folder workspace metadata and its scoped session state only', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     store.addRepo(
       makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: group.id })
     )

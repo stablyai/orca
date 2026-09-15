@@ -61,13 +61,16 @@ export function releaseStructuredWorkerSession(
   runtime?: Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>
 ): void {
   const binding = bindingsByDispatchId.get(dispatchId)
+
   if (!binding) {
     return
   }
+
   bindingsByDispatchId.delete(dispatchId)
   binding.disposeSubscription()
   structuredWorkerIdentities.forget(binding.handle)
   runtime?.forgetStructuredSessionMail?.(binding.sessionId)
+
   try {
     getStructuredAgentSessionHost()?.release(binding.sessionId, binding.holderId)
   } catch (error) {
@@ -86,6 +89,7 @@ export async function createStructuredWorkerSession(args: {
   onJournalActivity: (sessionId: string) => void
 }): Promise<{ identity: StructuredWorkerIdentity; host: StructuredAgentSessionHost }> {
   const sessionId = randomUUID()
+
   // Registered BEFORE the session is created, because `attach` is what spawns the provider child
   // and the child's environment is read from this registry at spawn time. Registering afterwards
   // ships a worker with no ORCA_TERMINAL_HANDLE, whose bare `orca orchestration check` then
@@ -102,12 +106,15 @@ export async function createStructuredWorkerSession(args: {
     worktreeId: args.worktreeId,
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   let created: Awaited<ReturnType<typeof createStructuredAgentSessionForWorktree>> | undefined
+
   try {
     created = await createStructuredAgentSessionForWorktree({
       runtime: args.runtime,
       ensureHost: async () => {
         await args.runtime.ensureStructuredAgentSessionHost()
+
         return requireInstalledHost()
       },
       caller: { callerKey: structuredPointerCallerKey(args.dispatchId) },
@@ -127,20 +134,24 @@ export async function createStructuredWorkerSession(args: {
       // Dispatching a worker is background work; it must not pull the surface away from the user.
       activate: false
     })
+
     if (!created.ok) {
       throw new OrchestrationError(
         'agent_unconfigured',
         `The structured ${args.agent} session for this worker was refused: ${created.refusal.message}`
       )
     }
+
     const host = requireInstalledHost()
     const record = host.deps.store.getRecord(sessionId)
+
     if (!record || !structuredWorkerHostScope(record.location)) {
       throw new OrchestrationError(
         'agent_unconfigured',
         'A structured worker must run on the local execution host outside WSL.'
       )
     }
+
     const holderId = structuredWorkerHoldId(args.dispatchId)
     await host.hold(sessionId, holderId)
     const disposeSubscription = subscribeForRedrive(host, sessionId, args.onJournalActivity)
@@ -150,14 +161,17 @@ export async function createStructuredWorkerSession(args: {
       holderId,
       disposeSubscription
     })
+
     return { identity, host }
   } catch (error) {
     // A start that fails after the session exists would otherwise strand a live provider child
     // that no dispatch owns and that nothing else in the runtime will ever retire.
     structuredWorkerIdentities.forget(identity.handle)
+
     if (structuredCreateMayHaveCommitted(created)) {
       await discardStructuredWorkerSession(sessionId, args.runtime)
     }
+
     throw error
   }
 }
@@ -196,9 +210,11 @@ export async function discardStructuredWorkerSession(
   runtime: Pick<OrcaRuntimeService, 'retireStructuredAgentSessionTabFromSnapshot'>
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     return
   }
+
   try {
     await host.setSessionTabVisibility?.(sessionId, false)
     await host.close(sessionId)
@@ -208,8 +224,10 @@ export async function discardStructuredWorkerSession(
       sessionId,
       error
     )
+
     return
   }
+
   retireSettledStructuredWorkerTab(sessionId, runtime)
 }
 
@@ -225,10 +243,13 @@ export async function sendStructuredWorkerPreamble(args: {
     role: 'user',
     blocks: [{ type: 'text', text: args.preamble }]
   }
+
   const fence = args.host.deps.store.getRecord(args.sessionId)?.lease.runtimeFence
+
   if (fence === undefined) {
     throw new Error('The structured worker session has no durable record to dispatch into.')
   }
+
   const result = await args.host.send(
     { callerKey: structuredPointerCallerKey(args.dispatchId) },
     {
@@ -241,13 +262,17 @@ export async function sendStructuredWorkerPreamble(args: {
       body
     }
   )
+
   if (!result.ok) {
     throw new Error(`The dispatch preamble was refused: ${result.refusal.message}`)
   }
+
   const submission = result.value.submission
+
   if (submission.dispatchState === 'accepted') {
     return
   }
+
   if (submission.dispatchState === 'rejected') {
     // A rejection is a verdict, not a mystery: the preamble provably did not happen.
     // `dispatch_preamble_undelivered` says exactly that, and says it as a code rather
@@ -259,6 +284,7 @@ export async function sendStructuredWorkerPreamble(args: {
       `The dispatch preamble was not delivered: ${submission.reason ?? 'no reason given'}.`
     )
   }
+
   // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown
   // adapter call settles as `unknown`, which is indistinguishable from a lost reply, so the start
   // may claim neither delivery nor failure: `operation_unknown` is what turns this into the
@@ -271,12 +297,14 @@ export async function sendStructuredWorkerPreamble(args: {
 
 function requireInstalledHost(): StructuredAgentSessionHost {
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     throw new OrchestrationError(
       'agent_unconfigured',
       'Structured agent sessions are unavailable on this runtime.'
     )
   }
+
   return host
 }
 
@@ -313,6 +341,7 @@ function subscribeForRedrive(
     flushMs: REDRIVE_FLUSH_MS,
     maxWaitMs: REDRIVE_MAX_WAIT_MS
   })
+
   try {
     const unsubscribe = host.subscribe({
       id: `orchestration:redrive:${sessionId}`,
@@ -323,6 +352,7 @@ function subscribeForRedrive(
         }
       }
     })
+
     // Disposal drops the pending timer rather than flushing it: every settlement reaches here, and
     // a redrive that fires after the hold is gone would nudge a session no dispatch owns.
     return () => {
@@ -332,6 +362,7 @@ function subscribeForRedrive(
   } catch (error) {
     console.warn('[orchestration] structured worker redrive subscription failed', sessionId, error)
     coalescer.dispose()
+
     return () => {}
   }
 }

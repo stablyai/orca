@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 
 const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
+
 const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
 
 type SidebarToolbarProps = {
@@ -32,6 +33,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
   const movedHintEligibleRef = React.useRef<boolean | null>(null)
   const persistedUIReady = useAppStore((state) => state.persistedUIReady)
+
   const hasUsedWorkspaceBoard = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'workspace-board')
   )
@@ -40,27 +42,33 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     if (!persistedUIReady) {
       return
     }
+
     // Why: only users who had already opened the old board location should
     // see the relocation hint; first-time users should not become eligible.
     if (movedHintEligibleRef.current === null) {
       movedHintEligibleRef.current = hasUsedWorkspaceBoard
     }
+
     if (!movedHintEligibleRef.current) {
       return
     }
+
     try {
       if (window.localStorage.getItem(WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY) === 'true') {
         return
       }
+
       window.localStorage.setItem(WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY, 'true')
     } catch {
       return
     }
 
     setWorkspaceBoardMovedHintOpen(true)
+
     const timeoutId = window.setTimeout(() => {
       setWorkspaceBoardMovedHintOpen(false)
     }, WORKSPACE_BOARD_MOVED_HINT_DURATION_MS)
+
     return () => window.clearTimeout(timeoutId)
   }, [hasUsedWorkspaceBoard, persistedUIReady])
 

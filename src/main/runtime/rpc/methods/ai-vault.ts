@@ -21,6 +21,7 @@ import {
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../shared/rpc-contract/ai-vault-params'
+
 export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
 
 export const AI_VAULT_METHODS = [
@@ -48,6 +49,7 @@ export const AI_VAULT_METHODS = [
     handler: async (params, { runtime, clientKind, clientCapabilities }) => {
       await runtime.ensureStructuredAgentSessionHost()
       let result
+
       try {
         result = await runtime.listAiVaultSessions({
           limit: params.unlimited ? undefined : params.limit,
@@ -60,13 +62,16 @@ export const AI_VAULT_METHODS = [
           error.message = describeAiVaultScanError(error.message)
           throw error
         }
+
         throw new Error(describeAiVaultScanError(String(error)))
       }
+
       // Why: web clients consume this response directly (no parent-side retag),
       // so sessions must come back stamped as the runtime host they addressed.
       const stamped = params.executionHostId
         ? restampAiVaultListResult(result, params.executionHostId)
         : result
+
       return projectStructuredAiVaultSessions(
         stamped,
         clientKind === undefined ||
@@ -87,8 +92,10 @@ export const AI_VAULT_METHODS = [
         // client-provided runtime/SSH stamp escape that host boundary.
         executionHostId: LOCAL_EXECUTION_HOST_ID
       }
+
       await runtime.ensureStructuredAgentSessionHost()
       assertLegacyAiVaultResumeAllowed(args)
+
       return runtime.prepareAiVaultSessionResume(args)
     }
   })

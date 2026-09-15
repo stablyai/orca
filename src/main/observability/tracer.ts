@@ -87,6 +87,7 @@ const noopSpan: ActiveSpan = {
 }
 
 let activeSink: TracerSink | null = null
+
 const contextStorage = new AsyncLocalStorage<SpanContext>()
 
 // 16-byte traceId / 8-byte spanId — compact hex IDs keep local NDJSON
@@ -94,6 +95,7 @@ const contextStorage = new AsyncLocalStorage<SpanContext>()
 function genTraceId(): string {
   return randomBytes(16).toString('hex')
 }
+
 function genSpanId(): string {
   return randomBytes(8).toString('hex')
 }
@@ -151,11 +153,14 @@ export async function withSpan<T>(
   }
 ): Promise<T> {
   const span = startSpan(name, options)
+
   try {
     const result = await contextStorage.run({ traceId: span.traceId, spanId: span.spanId }, () =>
       fn(span)
     )
+
     span.end()
+
     return result
   } catch (err) {
     span.fail(err as Error)
@@ -183,6 +188,7 @@ export function startSpan(
   if (!activeSink) {
     return noopSpan
   }
+
   const parent = contextStorage.getStore()
   const traceId = parent?.traceId ?? genTraceId()
   const spanId = genSpanId()
@@ -205,6 +211,7 @@ export function startSpan(
     if (pending.ended) {
       return
     }
+
     pending.ended = true
     pending.exit = exit
     const endTimeUnixNano = nowUnixNano()
@@ -229,6 +236,7 @@ export function startSpan(
     }
 
     const redacted = redactSpan(record, 'client')
+
     // Wrap in a `type: 'effect-span'` envelope so the NDJSON file is
     // compatible with Effect-style span output. Effect-oriented consumers
     // (the LGTM stack, jq cookbooks) can read the file unchanged.
@@ -270,6 +278,7 @@ export function startSpan(
  *  redactor handles the in-string secret stripping. */
 function formatError(err: Error): string {
   const head = `${err.name}: ${err.message}`
+
   return err.stack ? `${head}\n${err.stack}` : head
 }
 

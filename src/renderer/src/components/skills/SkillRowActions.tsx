@@ -23,6 +23,7 @@ function withReason(action: SkillRowAction, item: React.JSX.Element): React.JSX.
   if (!action.disabled || !action.disabledReason) {
     return item
   }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

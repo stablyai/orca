@@ -65,7 +65,9 @@ export const uiTerminalAndSessionTabsApi = {
         splitTelemetrySource?: TerminalPaneSplitSource
       }
     ) => callback(data)
+
     ipcRenderer.on('ui:createTerminal', listener)
+
     return () => ipcRenderer.removeListener('ui:createTerminal', listener)
   },
   onRequestTerminalCreate: (
@@ -75,7 +77,9 @@ export const uiTerminalAndSessionTabsApi = {
       _event: Electron.IpcRendererEvent,
       data: RuntimeTerminalCreateRequestPayload
     ) => callback(data)
+
     ipcRenderer.on('terminal:requestTabCreate', listener)
+
     return () => ipcRenderer.removeListener('terminal:requestTabCreate', listener)
   },
   onRequestTerminalTabMount: (
@@ -85,7 +89,9 @@ export const uiTerminalAndSessionTabsApi = {
       _event: Electron.IpcRendererEvent,
       data: { worktreeId: string; tabId?: string; ptyId?: string }
     ) => callback(data)
+
     ipcRenderer.on('terminal:requestTabMount', listener)
+
     return () => ipcRenderer.removeListener('terminal:requestTabMount', listener)
   },
   replyTerminalCreate: (reply: TerminalTabCreateReply): void => {
@@ -116,7 +122,9 @@ export const uiTerminalAndSessionTabsApi = {
         newLeafId?: string
       }
     ) => callback(data)
+
     ipcRenderer.on('ui:splitTerminal', listener)
+
     return () => ipcRenderer.removeListener('ui:splitTerminal', listener)
   },
   onRenameTerminal: (
@@ -126,7 +134,9 @@ export const uiTerminalAndSessionTabsApi = {
       _event: Electron.IpcRendererEvent,
       data: { tabId: string; title: string | null }
     ) => callback(data)
+
     ipcRenderer.on('ui:renameTerminal', listener)
+
     return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
   },
   onFocusTerminal: (
@@ -150,7 +160,9 @@ export const uiTerminalAndSessionTabsApi = {
         scrollToBottomIfOutputSinceLastView?: boolean
       }
     ) => callback(data)
+
     ipcRenderer.on('ui:focusTerminal', listener)
+
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
   onFocusEditorTab: (
@@ -160,7 +172,9 @@ export const uiTerminalAndSessionTabsApi = {
       _event: Electron.IpcRendererEvent,
       data: { tabId: string; worktreeId: string }
     ) => callback(data)
+
     ipcRenderer.on('ui:focusEditorTab', listener)
+
     return () => ipcRenderer.removeListener('ui:focusEditorTab', listener)
   },
   onCloseSessionTab: (
@@ -170,13 +184,17 @@ export const uiTerminalAndSessionTabsApi = {
       _event: Electron.IpcRendererEvent,
       data: { tabId: string; worktreeId: string }
     ) => callback(data)
+
     ipcRenderer.on('ui:closeSessionTab', listener)
+
     return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
   },
   onSessionTabCloseRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
       callback(request)
+
     ipcRenderer.on('ui:sessionTabCloseRequest', listener)
+
     return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
   },
   respondSessionTabClose: (response) => {
@@ -189,7 +207,9 @@ export const uiTerminalAndSessionTabsApi = {
       _event: Electron.IpcRendererEvent,
       data: { worktreeId: string } & RuntimeMobileSessionTabMove
     ) => callback(data)
+
     ipcRenderer.on('ui:moveSessionTab', listener)
+
     return () => ipcRenderer.removeListener('ui:moveSessionTab', listener)
   },
   onOpenFileFromMobile: (
@@ -209,7 +229,9 @@ export const uiTerminalAndSessionTabsApi = {
         runtimeEnvironmentId?: string
       }
     ) => callback(data)
+
     ipcRenderer.on('ui:openFileFromMobile', listener)
+
     return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
   }
 } satisfies Partial<PreloadApi['ui']>

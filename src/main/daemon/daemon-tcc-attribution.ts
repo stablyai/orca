@@ -23,10 +23,13 @@ function getMacDaemonTccAttributionCacheKey(
   try {
     const pidRecord = readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
     const parsedPid = parseDaemonPidFile(pidRecord)
+
     if (!parsedPid) {
       return null
     }
+
     const spawnerExists = parsedPid.spawnerExecPath ? existsSync(parsedPid.spawnerExecPath) : null
+
     return JSON.stringify([socketPath, tokenPath, protocolVersion, pidRecord, spawnerExists])
   } catch {
     return null
@@ -47,12 +50,14 @@ export async function getMacDaemonTccAttributionHealth(
   if (process.platform !== 'darwin') {
     return 'unknown'
   }
+
   const cacheKey = getMacDaemonTccAttributionCacheKey(
     runtimeDir,
     socketPath,
     tokenPath,
     protocolVersion
   )
+
   if (cacheKey && cachedMacDaemonTccAttributionHealth?.key === cacheKey) {
     return await cachedMacDaemonTccAttributionHealth.pending
   }
@@ -64,18 +69,24 @@ export async function getMacDaemonTccAttributionHealth(
       tokenPath,
       protocolVersion
     )
+
     if (!parsedPid) {
       return 'unknown'
     }
+
     if (parsedPid.spawnerExecPath) {
       return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
     }
+
     return 'unknown'
   })()
+
   if (cacheKey) {
     cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }
   }
+
   const health = await pending
+
   if (
     health === 'unknown' &&
     cachedMacDaemonTccAttributionHealth?.key === cacheKey &&
@@ -83,5 +94,6 @@ export async function getMacDaemonTccAttributionHealth(
   ) {
     cachedMacDaemonTccAttributionHealth = null
   }
+
   return health
 }

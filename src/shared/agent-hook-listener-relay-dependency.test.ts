@@ -5,45 +5,58 @@ import { describe, expect, it } from 'vitest'
 function readRuntimeSpecifiers(source: string): string[] {
   const specifiers: string[] = []
   const lines = source.split('\n')
+
   for (let index = 0; index < lines.length; index += 1) {
     const firstLine = lines[index].trimStart()
+
     const isRuntimeImport =
       firstLine.startsWith('import ') &&
       !firstLine.startsWith('import type ') &&
       !/^import\s+[\w$]+\s*=\s*require\s*\(/.test(firstLine)
+
     const isRuntimeReexport =
       (firstLine.startsWith('export {') || firstLine.startsWith('export *')) &&
       !firstLine.startsWith('export type ')
+
     if (!isRuntimeImport && !isRuntimeReexport) {
       continue
     }
+
     let statement = firstLine
+
     while (!/(?:^import\s*['"]|\bfrom\s*['"])/.test(statement) && index + 1 < lines.length) {
       index += 1
       statement += `\n${lines[index]}`
     }
+
     const match =
       statement.match(/^import\s*['"]([^'"]+)['"]/) ?? statement.match(/\bfrom\s*['"]([^'"]+)['"]/)
+
     if (match) {
       specifiers.push(match[1])
     }
   }
+
   for (const match of source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
     specifiers.push(match[1])
   }
+
   for (const match of source.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
     specifiers.push(match[1])
   }
+
   return specifiers
 }
 
 function resolveTypeScriptImport(importer: string, specifier: string): string | null {
   const candidate = resolve(dirname(importer), specifier)
+
   for (const path of [`${candidate}.ts`, `${candidate}.tsx`]) {
     if (existsSync(path)) {
       return path
     }
   }
+
   return null
 }
 
@@ -76,10 +89,12 @@ describe('agent hook listener relay dependency boundary', () => {
   it('keeps the transitive runtime graph inside Node builtins and shared modules', () => {
     const sharedRoot = resolve(__dirname)
     const listenerPathPrefix = resolve(sharedRoot, 'agent-hook-listener')
+
     const relayConsumers = [
       resolve(sharedRoot, '../relay/agent-hook-server.ts'),
       resolve(sharedRoot, '../relay/agent-hook-result-retry-scheduler.ts')
     ]
+
     const pending = relayConsumers.flatMap((consumer) =>
       readRuntimeSpecifiers(readFileSync(consumer, 'utf8'))
         .map((specifier) => resolveTypeScriptImport(consumer, specifier))
@@ -89,30 +104,38 @@ describe('agent hook listener relay dependency boundary', () => {
             dependency?.startsWith(`${listenerPathPrefix}/`) === true
         )
     )
+
     const seeded = new Set(pending)
     const visited = new Set<string>()
     const forbidden: string[] = []
 
     while (pending.length > 0) {
       const file = pending.pop()!
+
       if (visited.has(file)) {
         continue
       }
+
       visited.add(file)
       const source = readFileSync(file, 'utf8')
+
       for (const specifier of readRuntimeSpecifiers(source)) {
         if (specifier.startsWith('node:')) {
           continue
         }
+
         if (!specifier.startsWith('.')) {
           forbidden.push(`${file}: ${specifier}`)
           continue
         }
+
         const dependency = resolveTypeScriptImport(file, specifier)
+
         if (!dependency || !dependency.startsWith(sharedRoot)) {
           forbidden.push(`${file}: ${specifier}`)
           continue
         }
+
         pending.push(dependency)
       }
     }

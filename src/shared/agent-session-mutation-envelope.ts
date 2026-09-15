@@ -34,6 +34,7 @@ export function computeAgentSessionPayloadFingerprint(input: {
     sessionId: input.sessionId,
     fields: input.fields
   })
+
   return createHash('sha256').update(canonical).digest('hex')
 }
 
@@ -41,12 +42,15 @@ function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value ?? null)
   }
+
   if (Array.isArray(value)) {
     return `[${value.map(canonicalize).join(',')}]`
   }
+
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, entry]) => entry !== undefined)
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`).join(',')}}`
 }
 
@@ -91,9 +95,11 @@ export function admitAgentSessionMutation(input: {
 }): AgentSessionMutationAdmission {
   const { envelope, lease, ledger } = input
   const mismatch = agentSessionFingerprintConflict(envelope, input.hostFingerprint)
+
   if (mismatch) {
     return { decision: 'refused', refusal: mismatch }
   }
+
   if (ledger.decision === 'refused') {
     return {
       decision: 'refused',
@@ -103,13 +109,17 @@ export function admitAgentSessionMutation(input: {
       }
     }
   }
+
   if (ledger.decision === 'replay') {
     return { decision: 'replay', row: ledger.row }
   }
+
   const leaseRefusal = refuseUnlessWriterAdmitted(lease)
+
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
   }
+
   if (
     envelope.expectedRuntimeFence === null ||
     !isAgentSessionFenceCurrent(lease, envelope.expectedRuntimeFence)
@@ -123,6 +133,7 @@ export function admitAgentSessionMutation(input: {
       }
     }
   }
+
   return { decision: 'admit', row: ledger.row }
 }
 
@@ -132,24 +143,28 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
   if (lease.runtimeKind === 'native' && agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }
+
   if (lease.unreconciled) {
     return {
       code: 'execution_owner_reconciling',
       message: 'This host has not yet adjudicated the session lease.'
     }
   }
+
   if (lease.handoffStage !== null) {
     return {
       code: 'agent_session_conflict',
       message: `The session is mid-handoff (${lease.handoffStage}).`
     }
   }
+
   if (lease.runtimeKind === 'tui' && agentSessionLeaseAdmitsWriter(lease)) {
     return {
       code: 'agent_session_conflict',
       message: 'The agent terminal owns this session.'
     }
   }
+
   return {
     code: 'agent_session_ownership_unknown',
     message: 'The session has no live owner to accept writes.'

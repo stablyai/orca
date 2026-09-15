@@ -23,10 +23,13 @@ export type TerminalPaneHostState = {
 
 function computeTerminalPaneHostState(state: AppState, worktreeId: string): TerminalPaneHostState {
   const connectionId = getConnectionIdFromState(state, worktreeId)
+
   const nativeChatTranscriptIsLocalReadableResult =
     isNativeChatTranscriptLocalReadable(connectionId)
+
   const sshReconnectTargetId =
     connectionId && !isRuntimeOwnedSshTargetId(connectionId) ? connectionId : null
+
   if (!sshReconnectTargetId) {
     return {
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
@@ -38,7 +41,9 @@ function computeTerminalPaneHostState(state: AppState, worktreeId: string): Term
       sshReconnectTargetRemoved: false
     }
   }
+
   const sshReconnectEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,
@@ -79,7 +84,9 @@ function isSameHostState(a: TerminalPaneHostState, b: TerminalPaneHostState): bo
 }
 
 let cachedState: AppState | null = null
+
 let cachedByWorktreeId = new Map<string, TerminalPaneHostState>()
+
 let previousByWorktreeId = new Map<string, TerminalPaneHostState>()
 
 /**
@@ -105,14 +112,18 @@ export function selectTerminalPaneHostState(
     cachedByWorktreeId = new Map()
     cachedState = state
   }
+
   const cached = cachedByWorktreeId.get(worktreeId)
+
   if (cached) {
     return cached
   }
+
   const next = computeTerminalPaneHostState(state, worktreeId)
   const previous = previousByWorktreeId.get(worktreeId)
   const result = previous && isSameHostState(previous, next) ? previous : next
   cachedByWorktreeId.set(worktreeId, result)
+
   return result
 }
 

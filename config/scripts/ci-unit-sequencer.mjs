@@ -14,6 +14,7 @@ export default class TimingSequencer extends BaseSequencer {
       selectedShard: index
     })
     const selected = new Set(assignment.shards[index - 1].files)
+
     return specs.filter((spec) => selected.has(key(spec)))
   }
 }

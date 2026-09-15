@@ -32,11 +32,14 @@ function readOwnerOnlyRelayEndpointCredential(credentialFile: string): string | 
   try {
     if (process.platform !== 'win32') {
       const stat = statSync(credentialFile)
+
       if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()) {
         return undefined
       }
     }
+
     const value = readFileSync(credentialFile, 'utf8').trim()
+
     return isValidRelayEndpointCredential(value) ? value : undefined
   } catch {
     return undefined
@@ -57,6 +60,7 @@ export function readAdoptableRelayEndpointCredential(credentialFile: string): st
 /** Atomic, owner-only publication: temp file created exclusively, then renamed over the path. */
 export function writeRelayEndpointCredentialFile(credentialFile: string, credential: string): void {
   const tempFile = `${credentialFile}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`
+
   try {
     writeFileSync(tempFile, credential, { flag: 'wx', mode: 0o600 })
     renameSync(tempFile, credentialFile)
@@ -66,8 +70,10 @@ export function writeRelayEndpointCredentialFile(credentialFile: string, credent
     } catch {
       /* the temp file was never created, or the rename already consumed it */
     }
+
     throw error
   }
+
   if (process.platform !== 'win32') {
     chmodSync(credentialFile, 0o600)
   }
@@ -83,13 +89,17 @@ export function publishRelayEndpointCredential(
   if (!credentialFile) {
     return undefined
   }
+
   const adopted = readAdoptableRelayEndpointCredential(credentialFile)
+
   if (adopted !== undefined) {
     return adopted
   }
+
   const minted = mintRelayEndpointCredential()
   writeRelayEndpointCredentialFile(credentialFile, minted)
   relayLogLine(`[relay] Endpoint credential published: ${credentialFile}`)
+
   return minted
 }
 
@@ -101,6 +111,7 @@ export async function restrictWindowsRelayEndpointCredential(
   if (process.platform !== 'win32' || !process.env.USERNAME) {
     return
   }
+
   try {
     await runProcess({
       program: `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\icacls.exe`,

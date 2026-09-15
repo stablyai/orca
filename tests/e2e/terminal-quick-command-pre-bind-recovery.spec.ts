@@ -48,22 +48,26 @@ test.describe('Quick Command startup recovery', () => {
   }) => {
     const siblingBefore = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const siblingPtyId = siblingBefore.panes[0]?.ptyId
+
     if (!siblingPtyId) {
       throw new Error('Sibling terminal has no live PTY')
     }
 
     const siblingMarker = `ORCA_QUICK_COMMAND_SIBLING_${randomUUID()}`
+
     const siblingProbe = await runNodeScriptInTerminal(
       orcaPage,
       siblingPtyId,
       `process.stdout.write(${JSON.stringify(`${siblingMarker}\n`)})`
     )
+
     await waitForTerminalOutput(orcaPage, siblingMarker)
     siblingProbe.cleanup()
 
     const marker = `ORCA_QUICK_COMMAND_RECOVERY_${randomUUID()}`
     const label = `Recovery sentinel ${randomUUID()}`
     const identityPath = path.join(os.tmpdir(), `orca-quick-command-identity-${randomUUID()}.json`)
+
     const staged = stageNodeScriptForTerminal(
       `
 const { writeFileSync } = require('node:fs')
@@ -82,9 +86,11 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
       await orcaPage.evaluate(
         async ({ command, label }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('Renderer store unavailable')
           }
+
           await store.getState().updateSettings({
             terminalQuickCommands: [
               {
@@ -98,9 +104,11 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
             ]
           })
           const spawnBarrier = window.__terminalPtyPreSpawnE2EBarrier
+
           if (!spawnBarrier) {
             throw new Error('Terminal PTY pre-spawn E2E barrier unavailable')
           }
+
           spawnBarrier.arm()
         },
         { command: staged.command, label }
@@ -109,26 +117,33 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
       const quickCommandButton = orcaPage.getByRole('button', {
         name: `Run quick command: ${label}`
       })
+
       await expect(quickCommandButton).toBeVisible()
       await quickCommandButton.click()
       await orcaPage.evaluate(async () => {
         const spawnBarrier = window.__terminalPtyPreSpawnE2EBarrier
+
         if (!spawnBarrier) {
           throw new Error('Terminal PTY pre-spawn E2E barrier unavailable')
         }
+
         await spawnBarrier.waitUntilBlocked()
       })
 
       const blocked = await orcaPage.evaluate(() => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         const state = store.getState()
         const tabId = state.activeTabId
+
         if (!tabId) {
           throw new Error('Quick Command did not create an active tab')
         }
+
         return {
           generation:
             state.tabsByWorktree[state.activeWorktreeId ?? '']?.find((tab) => tab.id === tabId)
@@ -138,16 +153,20 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
           tabId
         }
       })
+
       expect(blocked.pending).toBe(staged.command)
       expect(blocked.status).toBe('blocked')
 
       await orcaPage.evaluate((tabId) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         const target = window as QueueObservationWindow
         const observations: QueueObservation[] = []
+
         const observe = (): void => {
           const state = store.getState()
           observations.push({
@@ -155,6 +174,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
             ptyIds: [...(state.ptyIdsByTabId[tabId] ?? [])]
           })
         }
+
         target.__quickCommandQueueObservations = observations
         target.__stopQuickCommandQueueObservations = store.subscribe(observe)
         observe()
@@ -164,11 +184,14 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
       // recovery ledger entirely and so reports generation 0.
       const remountResult = await orcaPage.evaluate((tabId) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Renderer store unavailable')
         }
+
         return state.remountTerminalTabForRecovery(tabId)
       }, blocked.tabId)
+
       expect(remountResult).toMatchObject({ remounted: true })
 
       // Keep the original pre-spawn attempt gated until React has committed the
@@ -182,9 +205,11 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
                 const state = window.__store?.getState()
                 const manager = window.__paneManagers?.get(tabId)
                 const pane = manager?.getPanes()[0]
+
                 const tab = state?.tabsByWorktree[state.activeWorktreeId ?? '']?.find(
                   (candidate) => candidate.id === tabId
                 )
+
                 return {
                   generation: tab?.generation ?? 0,
                   leafReady: Boolean(pane?.leafId),
@@ -206,6 +231,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
 
       let targetPtyId = ''
       let targetLeafId = ''
+
       const successorReady = (): Promise<{
         generation: number
         leafReady: boolean
@@ -218,9 +244,11 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
             const state = window.__store?.getState()
             const manager = window.__paneManagers?.get(tabId)
             const pane = manager?.getPanes()[0]
+
             const tab = state?.tabsByWorktree[state.activeWorktreeId ?? '']?.find(
               (candidate) => candidate.id === tabId
             )
+
             return {
               generation: tab?.generation ?? 0,
               leafReady: Boolean(pane?.leafId),
@@ -231,6 +259,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
           },
           { expectedGeneration: blocked.generation + 1, tabId: blocked.tabId }
         )
+
       try {
         await expect
           .poll(successorReady, {
@@ -249,6 +278,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
           ptyConnect: (window as Window & { __ptyConnectDiag?: string[] }).__ptyConnectDiag ?? [],
           barrier: window.__terminalPtyPreSpawnE2EBarrier?.status() ?? 'missing'
         }))
+
         throw new Error(
           `${error instanceof Error ? error.message : String(error)}\nDiagnostics: ${JSON.stringify(diagnostics)}`
         )
@@ -256,11 +286,13 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
 
       const successor = await orcaPage.evaluate((tabId) => {
         const pane = window.__paneManagers?.get(tabId)?.getPanes()[0]
+
         return {
           leafId: pane?.leafId ?? '',
           ptyId: pane?.container.dataset.ptyId ?? ''
         }
       }, blocked.tabId)
+
       targetPtyId = successor.ptyId
       targetLeafId = successor.leafId
       expect(targetPtyId).not.toBe('')
@@ -271,8 +303,10 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
         const target = window as QueueObservationWindow
         target.__stopQuickCommandQueueObservations?.()
         target.__stopQuickCommandQueueObservations = undefined
+
         return target.__quickCommandQueueObservations ?? []
       })
+
       const firstConsumed = queueObservations.find((observation) => !observation.pending)
       expect(firstConsumed?.ptyIds).toContain(targetPtyId)
 
@@ -281,15 +315,19 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
           () =>
             orcaPage.evaluate((tabId) => {
               const pane = window.__paneManagers?.get(tabId)?.getPanes()[0]
+
               return pane?.serializeAddon.serialize() ?? ''
             }, blocked.tabId),
           { message: 'Quick Command marker never reached the visible xterm' }
         )
         .toContain(marker)
+
       const targetContent = await orcaPage.evaluate((tabId) => {
         const pane = window.__paneManagers?.get(tabId)?.getPanes()[0]
+
         return pane?.serializeAddon.serialize() ?? ''
       }, blocked.tabId)
+
       expect(exactMarkerLineCount(targetContent, marker)).toBe(1)
 
       await expect.poll(() => existsSync(identityPath)).toBe(true)
@@ -306,6 +344,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
           const state = window.__store?.getState()
           const layout = state?.terminalLayoutsByTabId[tabId]
           const sessions = await window.api.pty.listSessions()
+
           return {
             layoutPtyIds: Object.values(layout?.ptyIdsByLeafId ?? {}),
             siblingLive: await window.api.pty.hasPty(siblingPtyId),
@@ -319,6 +358,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
         },
         { siblingPtyId, siblingTabId: siblingBefore.tabId, tabId: blocked.tabId, targetPtyId }
       )
+
       expect(ptyIdentity.targetLive).toBe(true)
       expect(ptyIdentity.targetSessionIds).toEqual([targetPtyId])
       expect(ptyIdentity.targetStorePtyIds).toContain(targetPtyId)

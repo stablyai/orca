@@ -20,44 +20,56 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     opts: { scrollbackRows?: number }
   ): Promise<HiddenOutputSnapshotResult> {
     const e2eSnapshot = readE2eHiddenSnapshotOverride(ptyId)
+
     if (e2eSnapshot) {
       const snapshot = await e2eSnapshot
+
       return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unavailable' }
     }
+
     if (session.canUseMainBufferSnapshot(ptyId)) {
       const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, opts)
+
       return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unavailable' }
     }
+
     if (
       session.transport.getPtyId() !== ptyId ||
       typeof session.transport.serializeBuffer !== 'function'
     ) {
       return { kind: 'unavailable' }
     }
+
     if (
       session.hiddenOutputRestoreLegacyPtyId === ptyId ||
       typeof session.transport.serializeBufferOutcome !== 'function'
     ) {
       const snapshot = await session.transport.serializeBuffer(opts)
+
       return snapshot ? { kind: 'snapshot', snapshot } : { kind: 'unknown-legacy-host' }
     }
+
     try {
       const outcome = await session.transport.serializeBufferOutcome(opts)
+
       if (outcome.availability.kind === 'snapshot') {
         // A success frame with no image is still the host's own answer to a request it received.
         return outcome.snapshot
           ? { kind: 'snapshot', snapshot: outcome.snapshot }
           : { kind: 'retry-worthy', source: 'host' }
       }
+
       if (outcome.availability.kind === 'retry-worthy') {
         return {
           kind: 'retry-worthy',
           source: isHostAnsweredSnapshotRetryCause(outcome.availability.cause) ? 'host' : 'local'
         }
       }
+
       if (outcome.availability.kind === 'permanently-unavailable') {
         return { kind: 'permanently-unavailable' }
       }
+
       return { kind: 'unknown-legacy-host' }
     } catch {
       // Why 'host': the reject path is the request timeout — the frame went out and the host stayed silent.
@@ -109,12 +121,15 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
   session.clearHiddenOutputRestoreFloodRepaintTimer = function (): void {
     session.cancelHiddenOutputRestoreFloodRepaintPark?.()
     session.cancelHiddenOutputRestoreFloodRepaintPark = null
+
     if (session.hiddenOutputRestoreFloodRepaintTimer === null) {
       return
     }
+
     clearTimeout(session.hiddenOutputRestoreFloodRepaintTimer)
     session.hiddenOutputRestoreFloodRepaintTimer = null
   }
+
   session.cleanupHiddenOutputRestoreFloodRepaint = session.clearHiddenOutputRestoreFloodRepaintTimer
 
   // Why: the repaint discards the buffer and replays a full snapshot, which repositions the viewport; a user reading scrollback must not be yanked to the bottom, so hold it until their own scroll intent returns to follow-output.
@@ -122,14 +137,18 @@ export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession
     session.cancelHiddenOutputRestoreFloodRepaintPark?.()
     session.cancelHiddenOutputRestoreFloodRepaintPark = null
     let repainted = false
+
     const cancelPark = onTerminalScrollIntentFollowOutput(session.pane.terminal, () => {
       repainted = true
       session.cancelHiddenOutputRestoreFloodRepaintPark = null
+
       if (session.disposed || session.transport.getPtyId() !== ptyId) {
         return
       }
+
       session.markHiddenOutputRestoreNeeded()
     })
+
     if (!repainted) {
       session.cancelHiddenOutputRestoreFloodRepaintPark = cancelPark
     }

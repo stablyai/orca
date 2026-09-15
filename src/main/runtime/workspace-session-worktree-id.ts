@@ -8,6 +8,7 @@ export function canonicalizeTerminalSessionWorktreeId(
   if (sourceWorktreeId === targetWorktreeId) {
     return
   }
+
   const tabs = session.tabsByWorktree[sourceWorktreeId] ?? []
   delete session.tabsByWorktree[sourceWorktreeId]
   session.tabsByWorktree[targetWorktreeId] = tabs.map((tab) => ({
@@ -16,6 +17,7 @@ export function canonicalizeTerminalSessionWorktreeId(
   }))
 
   const groups = session.tabGroups?.[sourceWorktreeId]
+
   if (groups) {
     delete session.tabGroups![sourceWorktreeId]
     session.tabGroups![targetWorktreeId] = groups.map((group) => ({
@@ -23,6 +25,7 @@ export function canonicalizeTerminalSessionWorktreeId(
       worktreeId: targetWorktreeId
     }))
   }
+
   for (const keyedState of [
     session.tabGroupLayouts,
     session.activeTabIdByWorktree,
@@ -31,6 +34,7 @@ export function canonicalizeTerminalSessionWorktreeId(
     if (!keyedState || !Object.hasOwn(keyedState, sourceWorktreeId)) {
       continue
     }
+
     keyedState[targetWorktreeId] = keyedState[sourceWorktreeId] as never
     delete keyedState[sourceWorktreeId]
   }

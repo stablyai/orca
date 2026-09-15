@@ -19,7 +19,9 @@ import {
 
 /** What remountTerminalTabForRecovery answers now that it reports admission. */
 const REMOUNTED = { remounted: true as const, generation: 1 }
+
 const TAB_MISSING = { remounted: false as const, declinedBy: 'tab-missing' as const }
+
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
 const {
@@ -39,8 +41,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -61,6 +66,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -70,6 +76,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -90,6 +97,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -100,9 +108,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -112,9 +122,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -123,6 +135,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -171,6 +184,7 @@ describe('connectPanePty', () => {
     }> {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
+
       const capturedDataCallback: {
         current:
           | ((
@@ -179,21 +193,26 @@ describe('connectPanePty', () => {
             ) => void)
           | null
       } = { current: null }
+
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
       const manager = createManager(1)
+
       const binding = connectPanePty(pane as never, manager as never, deps as never) as {
         syncProcessTracking: () => void
         dispose: () => void
       }
+
       await flushAsyncTicks(6)
       expect(capturedDataCallback.current).not.toBeNull()
+
       return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
     }
 
@@ -222,9 +241,11 @@ describe('connectPanePty', () => {
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { pane, dataCallback } = await connectHiddenPane(deps)
       const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       getMainBufferSnapshot.mockResolvedValue({
         data: 'model snapshot\r\n',
         cols: 100,
@@ -242,8 +263,10 @@ describe('connectPanePty', () => {
 
       // Reveal rides the visible-resume backlog recovery hook.
       ;(deps.isVisibleRef as { current: boolean }).current = true
+
       const { requestTerminalBacklogRecovery } =
         await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
       requestTerminalBacklogRecovery(pane.terminal as never)
       await flushAsyncTicks(20)
 
@@ -264,9 +287,11 @@ describe('connectPanePty', () => {
       const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { pane, transport, dataCallback } = await connectHiddenPane(deps)
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       getMainBufferSnapshot.mockResolvedValue({
         data: 'source-grid hidden snapshot\r\n',
         cols: 80,
@@ -280,8 +305,10 @@ describe('connectPanePty', () => {
       const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
       _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
       ;(deps.isVisibleRef as { current: boolean }).current = true
+
       const { requestTerminalBacklogRecovery } =
         await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
       requestTerminalBacklogRecovery(pane.terminal as never)
       await flushAsyncTicks(20)
 
@@ -311,9 +338,11 @@ describe('connectPanePty', () => {
       _resetTerminalPaneRecoveryForTests()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { pane, dataCallback } = await connectHiddenPane(deps)
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       getMainBufferSnapshot.mockResolvedValue({
         data: 'model snapshot\r\n',
         cols: 100,
@@ -326,14 +355,18 @@ describe('connectPanePty', () => {
       // Pipeline dies while hidden; certification-time recovery finds no remountable tab (budget unconsumed, no retry timer).
       remountTerminalTabForRecovery.mockReturnValueOnce(TAB_MISSING as never)
       const ackCredit = vi.fn()
+
       const { writeTerminalOutput } =
         await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
       writeTerminalOutput(pane.terminal, 'queued before certification', {
         foreground: false,
         ackCredit
       })
+
       const { notifyUndeliverableWrite } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
+
       notifyUndeliverableWrite(pane.terminal, 'write-stalled')
       expect(ackCredit).toHaveBeenCalledTimes(1)
       await flushAsyncTicks(4)
@@ -342,8 +375,10 @@ describe('connectPanePty', () => {
       const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
       _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
       ;(deps.isVisibleRef as { current: boolean }).current = true
+
       const { requestTerminalBacklogRecovery } =
         await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
       requestTerminalBacklogRecovery(pane.terminal as never)
       await flushAsyncTicks(20)
 
@@ -379,15 +414,19 @@ describe('connectPanePty', () => {
 
     it('marks hidden codex panes immediately — no startup renderer-query window remains', async () => {
       enableMainAuthority()
+
       const deps = createDeps({
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
+
       const { transport, dataCallback } = await connectHiddenPane(deps)
       const setHiddenRendererPty = getSetHiddenRendererPtyMock()
+
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
+
       transportOptions.onPtySpawn?.('pty-id')
       const factsHandler = await import('./terminal-side-effect-facts-handler')
 
@@ -408,9 +447,11 @@ describe('connectPanePty', () => {
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { pane, dataCallback } = await connectHiddenPane(deps)
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       getMainBufferSnapshot.mockResolvedValue({
         data: 'dropped bytes snapshot\r\n',
         cols: 100,
@@ -425,8 +466,10 @@ describe('connectPanePty', () => {
       _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
       expect(getMainBufferSnapshot).not.toHaveBeenCalled()
       ;(deps.isVisibleRef as { current: boolean }).current = true
+
       const { requestTerminalBacklogRecovery } =
         await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
       requestTerminalBacklogRecovery(pane.terminal as never)
       await flushAsyncTicks(20)
 
@@ -442,10 +485,12 @@ describe('connectPanePty', () => {
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { transport } = await connectHiddenPane(deps)
+
       // Simulate spawn completion so the pane registers its fact consumer (mock transport never calls onPtySpawn).
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
+
       transportOptions.onPtySpawn?.('pty-id')
       const factsHandler = await import('./terminal-side-effect-facts-handler')
 
@@ -468,14 +513,18 @@ describe('connectPanePty', () => {
     it('registers the fact-observed 2031 subscription for later theme flips', async () => {
       enableMainAuthority()
       const recordPaneMode2031Subscription = vi.fn()
+
       const deps = createDeps({
         isVisibleRef: { current: false },
         recordPaneMode2031Subscription
       })
+
       const { transport } = await connectHiddenPane(deps)
+
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
+
       transportOptions.onPtySpawn?.('pty-id')
       const factsHandler = await import('./terminal-side-effect-facts-handler')
 
@@ -498,6 +547,7 @@ describe('connectPanePty', () => {
       enableMainAuthority()
       const paneMode2031Ref = { current: new Map<number, boolean>() }
       const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
+
       const deps = createDeps({
         isVisibleRef: { current: false },
         paneMode2031Ref,
@@ -508,10 +558,13 @@ describe('connectPanePty', () => {
           paneLastThemeModeRef.current.set(paneId, subscribedMode)
         }
       })
+
       await connectHiddenPane(deps)
+
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
+
       transportOptions.onPtySpawn?.('pty-id')
       const factsHandler = await import('./terminal-side-effect-facts-handler')
       factsHandler._dispatchTerminalSideEffectBatchForTest({
@@ -544,6 +597,7 @@ describe('connectPanePty', () => {
         .slice(before)
         .flat()
         .filter((arg) => String(arg).includes('997'))
+
       expect(replies).toEqual([])
     })
 
@@ -566,10 +620,12 @@ describe('connectPanePty', () => {
 
     it('declares hidden-at-spawn for hidden codex panes too', async () => {
       enableMainAuthority()
+
       const deps = createDeps({
         isVisibleRef: { current: false },
         startup: { command: 'codex' }
       })
+
       const { transport } = await connectHiddenPane(deps)
       // Why: the 10s codex startup window is gone — codex spawns are main-owned from byte zero (main pin: pty.test.ts DA1-from-model).
       expect(transport.connect).toHaveBeenCalledWith(
@@ -585,9 +641,11 @@ describe('connectPanePty', () => {
       } as StoreState['settings']
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { transport, dataCallback } = await connectHiddenPane(deps)
+
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
+
       transportOptions.onPtySpawn?.('pty-id')
       const setHiddenRendererPty = getSetHiddenRendererPtyMock()
 
@@ -622,6 +680,7 @@ describe('connectPanePty', () => {
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: true } })
       const { dataCallback } = await connectHiddenPane(deps)
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
@@ -636,19 +695,24 @@ describe('connectPanePty', () => {
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: true } })
       await connectHiddenPane(deps)
+
       const transportOptions = createdTransportOptions.at(-1) as {
         onPtySpawn?: (ptyId: string) => void
       }
+
       transportOptions.onPtySpawn?.('pty-id')
+
       const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
         typeof vi.fn
       >
+
       const firstSnapshot = createDeferred<{
         data: string
         cols: number
         rows: number
         seq: number
       }>()
+
       getMainBufferSnapshot
         .mockReturnValueOnce(firstSnapshot.promise)
         .mockResolvedValue({ data: 'post-flood repaint\r\n', cols: 100, rows: 30, seq: 96 })

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const buildSteps = parse(
   readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
 ).jobs.build.steps
@@ -11,6 +12,7 @@ const buildSteps = parse(
 function stepIndex(name) {
   const index = buildSteps.findIndex((step) => step.name === name)
   expect(index, `missing build step: ${name}`).toBeGreaterThanOrEqual(0)
+
   return index
 }
 

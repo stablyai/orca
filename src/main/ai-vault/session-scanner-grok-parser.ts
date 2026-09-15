@@ -39,9 +39,11 @@ export async function parseGrokSessionFile(
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
+
   if (!record) {
     return null
   }
+
   const info = asRecord(record.info)
   const sessionId = extractString(info?.id) ?? sessionIdFromFileName(dirname(file.path))
   const accumulator = createAccumulator({ agent: 'grok', file, sessionId, messages })
@@ -57,6 +59,7 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.updated_at))
   updateTimeline(accumulator, extractString(record.last_active_at))
   await consumeGrokChatHistory(accumulator, dirname(file.path))
+
   return finalizeSession(accumulator, platform)
 }
 
@@ -69,14 +72,19 @@ async function consumeGrokChatHistory(
     { encoding: 'utf-8' },
     'scan'
   )
+
   const lines = createInterface({ input, crlfDelay: Infinity })
+
   try {
     for await (const line of lines) {
       const record = parseJsonObject(line)
+
       if (!record) {
         continue
       }
+
       const role = extractString(record.type)
+
       if (role !== 'user' && role !== 'assistant') {
         continue
       }
@@ -85,12 +93,14 @@ async function consumeGrokChatHistory(
         // Why: first-prompt copy must be the typed ask inside <user_query>, never
         // the injected <user_info> bootstrap row.
         const firstPromptBody = extractGrokFirstUserPromptText(record.content)
+
         const text = firstPromptBody
           ? normalizePreviewText(capGrokPreviewSource(firstPromptBody))
           : null
 
         if (firstPromptBody) {
           accumulator.title ??= normalizeTitleText(firstPromptBody)
+
           if (shouldCaptureFullFirstUserPrompt() && !accumulator.firstUserPrompt) {
             accumulator.firstUserPrompt = normalizeFullFirstUserPromptText(firstPromptBody)
           }
@@ -104,6 +114,7 @@ async function consumeGrokChatHistory(
             seedFirstUserPrompt: false
           })
         }
+
         continue
       }
 
@@ -133,6 +144,7 @@ export function extractGrokContentText(value: unknown): string | null {
   if (typeof value === 'string') {
     return extractGrokStringContentText(value)
   }
+
   return extractPreviewContentText(value)
 }
 
@@ -142,5 +154,6 @@ function capGrokPreviewSource(text: string): string {
 
 function extractGrokStringContentText(text: string): string | null {
   const unwrapped = stripGrokUserQueryEnvelope(text)
+
   return normalizePreviewText(capGrokPreviewSource(unwrapped))
 }

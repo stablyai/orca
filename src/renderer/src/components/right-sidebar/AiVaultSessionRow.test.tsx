@@ -173,10 +173,12 @@ it('threads child resume through expanded parent details without resuming the pa
     title: 'OMP worker',
     subagent: { parentSessionId: 'parent', agentType: 'worker', status: 'completed' }
   }
+
   vi.mocked(window.api.aiVault.listSubagentSessions).mockResolvedValue({
     sessions: [child],
     issues: []
   })
+
   const resume = {
     getState: vi.fn(() => ({
       blocked: false,
@@ -185,6 +187,7 @@ it('threads child resume through expanded parent details without resuming the pa
     })),
     onResume: vi.fn()
   }
+
   renderRow({
     session: {
       ...session,

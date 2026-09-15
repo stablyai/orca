@@ -23,8 +23,11 @@ import {
 } from './hermes-cron-run-count-cache'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
+
 const HERMES_OUTPUT_DIR = join(HERMES_HOME, 'cron', 'output')
+
 const HERMES_STATE_DB = join(HERMES_HOME, 'state.db')
+
 const EXTERNAL_JOB_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/
 
 export type HermesCronOutputRunsPage = {
@@ -65,6 +68,7 @@ export async function readHermesCronOutputRuns(jobId: string): Promise<unknown[]
 
 async function readHermesCronOutputRunRefs(jobId: string): Promise<HermesMergedRunRef[]> {
   const outputRuns = await readHermesOutputFileRunRefs(jobId)
+
   return mergeHermesOutputAndSessionRunRefs(outputRuns, readHermesSessionDbRunRefs(jobId))
 }
 
@@ -79,6 +83,7 @@ export function clearHermesCronOutputRunCountCache(jobId?: string): void {
 async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
   return readCachedHermesRunCount(jobId, async (targetJobId) => {
     const refs = await readHermesCronOutputRunRefs(targetJobId)
+
     return refs.length
   })
 }
@@ -86,6 +91,7 @@ async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
 async function hydrateHermesRunRef(jobId: string, ref: HermesMergedRunRef): Promise<unknown> {
   const outputRun = ref.output ? await readHermesOutputFileRun(ref.output) : null
   const sessionRun = ref.session ? readHermesSessionDbRunById(jobId, ref.session.id) : null
+
   return (
     mergeHermesOutputAndSessionRuns(
       outputRun ? [outputRun] : [],
@@ -110,24 +116,30 @@ export async function readHermesCronOutputRunsPage(
   if (!EXTERNAL_JOB_ID_PATTERN.test(jobId)) {
     return { total: 0, runs: [] }
   }
+
   const safePage = Math.max(1, Math.floor(page))
   const safePageSize = Math.max(0, Math.floor(pageSize))
+
   if (safePageSize === 0) {
     // Why: manager listing only needs a badge count; hydrating markdown logs
     // and full session transcripts can make opening Automations very slow.
     return { total: await readHermesCronOutputRunCount(jobId), runs: [] }
   }
+
   const runRefs = await readHermesCronOutputRunRefs(jobId)
   runRefs.sort((a, b) => {
     const aTime = getRawRunTime(a)
     const bTime = getRawRunTime(b)
+
     if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
       return bTime - aTime
     }
+
     return getRawRunId(b).localeCompare(getRawRunId(a))
   })
   const start = (safePage - 1) * safePageSize
   const pageRefs = runRefs.slice(start, start + safePageSize)
+
   return {
     total: runRefs.length,
     runs: await Promise.all(pageRefs.map((ref) => hydrateHermesRunRef(jobId, ref)))
@@ -138,6 +150,7 @@ function getRawRunId(run: unknown): string {
   if (typeof run === 'object' && run !== null && 'id' in run) {
     return String((run as { id: unknown }).id)
   }
+
   return ''
 }
 
@@ -145,16 +158,21 @@ function getRawRunTime(run: unknown): number {
   if (typeof run !== 'object' || run === null || !('run_at' in run)) {
     return Number.NaN
   }
+
   const runAt = (run as { run_at: unknown }).run_at
+
   return typeof runAt === 'string' ? Date.parse(runAt) : Number.NaN
 }
 
 async function readHermesOutputFileRunRefs(jobId: string): Promise<HermesOutputRunRef[]> {
   const outputDir = join(HERMES_OUTPUT_DIR, jobId)
+
   if (!existsSync(outputDir)) {
     return []
   }
+
   const entries = await readdir(outputDir, { withFileTypes: true })
+
   return entries
     .filter((entry) => entry.isFile() && HERMES_OUTPUT_FILE_PATTERN.test(entry.name))
     .map((entry) => ({
@@ -172,6 +190,7 @@ async function readHermesOutputFileRun(ref: HermesOutputRunRef): Promise<unknown
     const content = await readFile(ref.output_path, 'utf-8')
     const parsed = parseHermesOutput(content)
     const outputContent = await appendReferencedLogFile(parsed.outputContent)
+
     return {
       id: ref.id,
       job_id: ref.job_id,
@@ -202,10 +221,13 @@ function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[] {
   if (!existsSync(HERMES_STATE_DB)) {
     return []
   }
+
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
+
     try {
       const pattern = `cron\\_${escapeSqlLike(jobId)}\\_%`
+
       const rows = db
         .prepare(
           `SELECT id, started_at
@@ -214,8 +236,10 @@ function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[] {
             ORDER BY started_at DESC`
         )
         .all(pattern) as Record<string, unknown>[]
+
       return rows.map((row) => {
         const runId = typeof row.id === 'string' ? row.id : `${jobId}:${String(row.started_at)}`
+
         return {
           kind: 'session',
           id: runId,
@@ -236,8 +260,10 @@ function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
   if (!existsSync(HERMES_STATE_DB)) {
     return null
   }
+
   try {
     const db = new Database(HERMES_STATE_DB, { readonly: true, fileMustExist: true })
+
     try {
       const row = db
         .prepare(
@@ -247,9 +273,11 @@ function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
             WHERE id = ?`
         )
         .get(runId) as Record<string, unknown> | undefined
+
       if (!row) {
         return null
       }
+
       const messages = db
         .prepare(
           `SELECT role, content, tool_name, reasoning, reasoning_content
@@ -258,18 +286,22 @@ function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
               ORDER BY timestamp, id`
         )
         .all(runId) as Record<string, unknown>[]
+
       const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null
       const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
       const messageCount = typeof row.message_count === 'number' ? row.message_count : null
+
       const tokenCount =
         (typeof row.input_tokens === 'number' ? row.input_tokens : 0) +
         (typeof row.output_tokens === 'number' ? row.output_tokens : 0)
+
       const summaryParts = [
         title,
         model ? `Model: ${model}` : null,
         messageCount !== null ? `${messageCount} messages` : null,
         tokenCount > 0 ? `${tokenCount} tokens` : null
       ].filter(Boolean)
+
       return {
         id: runId,
         job_id: jobId,

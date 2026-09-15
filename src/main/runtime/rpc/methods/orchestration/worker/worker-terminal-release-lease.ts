@@ -12,10 +12,13 @@ export function workerTerminalLeaseIsCurrent(
   resource: WorkerTerminalResourceRow
 ): boolean {
   const worker = db.getWorkerDispatch(dispatchId)
+
   if (isStructuredWorkerHandle(resource.terminal_handle)) {
     return structuredWorkerTerminalLeaseIsCurrent(db, dispatchId, worker, resource)
   }
+
   const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
+
   // Exited PTYs retain identity and host evidence but no longer mint launch authority.
   return Boolean(
     worker?.agent_terminal_handle === resource.terminal_handle &&
@@ -45,6 +48,7 @@ function structuredWorkerTerminalLeaseIsCurrent(
   resource: WorkerTerminalResourceRow
 ): boolean {
   const identity = resolveStructuredWorkerIdentity(resource.terminal_handle, db)
+
   return Boolean(
     worker?.agent_terminal_handle === resource.terminal_handle &&
     identity &&

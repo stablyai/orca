@@ -17,6 +17,7 @@ describe('CommentMarkdown link click handler', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -26,6 +27,7 @@ describe('CommentMarkdown link click handler', () => {
     const onLinkClick = vi.fn((event: React.MouseEvent<HTMLElement>) => {
       event.preventDefault()
     })
+
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -56,6 +58,7 @@ describe('CommentMarkdown link click handler', () => {
     const onLinkClick = vi.fn((event: React.MouseEvent<HTMLElement>) => {
       event.preventDefault()
     })
+
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -72,6 +75,7 @@ describe('CommentMarkdown link click handler', () => {
     })
 
     const anchor = container.querySelector<HTMLAnchorElement>('a')
+
     const event = new window.MouseEvent('auxclick', {
       bubbles: true,
       cancelable: true,
@@ -104,6 +108,7 @@ describe('CommentMarkdown link click handler', () => {
     })
 
     const anchor = container.querySelector<HTMLAnchorElement>('a')
+
     const event = new window.MouseEvent('auxclick', {
       bubbles: true,
       cancelable: true,
@@ -173,6 +178,7 @@ describe('CommentMarkdown link click handler', () => {
     const anchor = container.querySelector<HTMLAnchorElement>(
       'a[href="file:///repo/worktree/src/main.ts"]'
     )
+
     expect(anchor).not.toBeNull()
     const event = new window.MouseEvent('click', { bubbles: true, cancelable: true })
 
@@ -191,6 +197,7 @@ describe('CommentMarkdown link click handler', () => {
     const onLinkClick = vi.fn((event: React.MouseEvent<HTMLElement>) => {
       event.preventDefault()
     })
+
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -236,6 +243,7 @@ describe('CommentMarkdown link click handler', () => {
     const routes = Array.from(container.querySelectorAll<HTMLAnchorElement>('a')).map((anchor) =>
       routeNativeChatHref(anchor.getAttribute('href'))
     )
+
     expect(routes).toEqual([
       { kind: 'file', pathText: '/tmp/sta-6481-explainer.html', line: null },
       { kind: 'file', pathText: 'docs/review.docx', line: null },
@@ -297,12 +305,15 @@ describe('CommentMarkdown link click handler', () => {
     })
 
     expect(container.querySelectorAll('a')).toHaveLength(0)
+
     for (const value of proseFalsePositives) {
       expect(container.textContent).toContain(value)
     }
+
     for (const value of quotedFalsePositives) {
       expect(container.textContent).toContain(value)
     }
+
     expect(Array.from(container.querySelectorAll('code')).map((code) => code.textContent)).toEqual(
       inlineCodeFalsePositives
     )
@@ -410,6 +421,7 @@ describe('CommentMarkdown link click handler', () => {
   it('preserves line suffixes on valid spaced path shapes', () => {
     const content =
       'Open "My Folder/notes:12", `My Notes.md:7`, and "C:\\My Folder\\notes.txt:12:3".'
+
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)

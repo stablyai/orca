@@ -45,18 +45,24 @@ export function ThemePicker({
     if (!importedHighlightSignal) {
       return
     }
+
     importedGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     setHighlightImported(true)
     const timer = setTimeout(() => setHighlightImported(false), 2000)
+
     return () => clearTimeout(timer)
   }, [importedHighlightSignal])
 
   const themeQuery = query.trim()
+
   const shouldShowThemeQueryLabel =
     themeQuery.length > 0 && !isSettingsFormOptionQueryTooLarge(themeQuery)
+
   const matchingThemes = filterTerminalThemeOptions(themeOptions, query)
+
   const selectedThemeLabel =
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
+
   const groupedThemes = [
     {
       label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
@@ -71,6 +77,7 @@ export function ThemePicker({
         .slice(0, MAX_THEME_RESULTS)
     }
   ].filter((group) => group.themes.length > 0)
+
   const visibleThemeCount = groupedThemes.reduce((sum, group) => sum + group.themes.length, 0)
 
   return (
@@ -118,6 +125,7 @@ export function ThemePicker({
                   'auto.components.settings.SettingsFormControls.imported_themes',
                   'Imported'
                 )
+
               return (
                 <div
                   key={group.label}

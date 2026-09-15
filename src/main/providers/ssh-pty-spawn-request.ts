@@ -9,6 +9,7 @@ export function buildSshPtySpawnRequest(args: {
   supportsCreateOperation: boolean
 }): Record<string, unknown> {
   const { options } = args
+
   return {
     cols: options.cols,
     rows: options.rows,

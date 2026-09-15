@@ -19,10 +19,13 @@ export function findBrowserWorkspaceForRemotePage(
   remotePageId: string
 ): { workspace: BrowserWorkspace; page: BrowserPage; unifiedTab: Tab | null } | null {
   const workspaces = state.browserTabsByWorktree[worktreeId] ?? []
+
   for (const workspace of workspaces) {
     const pages = state.browserPagesByWorkspace[workspace.id] ?? []
+
     for (const page of pages) {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+
       if (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) {
         return {
           workspace,
@@ -35,6 +38,7 @@ export function findBrowserWorkspaceForRemotePage(
       }
     }
   }
+
   return null
 }
 
@@ -56,6 +60,7 @@ export function browserWorkspaceHasClientHostedEnvironmentPage(
 ): boolean {
   return (state.browserPagesByWorkspace[workspace.id] ?? []).some((page) => {
     const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+
     return (
       handle?.environmentId === environmentId &&
       (handle.placement?.kind === 'client' ||
@@ -80,11 +85,14 @@ export function resolveMirroredBrowserTitle(
   existingPage: BrowserPage | undefined
 ): string {
   const published = tab.title.trim()
+
   const publishedIsHostFallback =
     published === '' || published === tab.url.trim() || published === 'Browser'
+
   if (existingPage && publishedIsHostFallback && tab.url === existingPage.url) {
     return existingPage.title
   }
+
   return published || 'Browser'
 }
 
@@ -99,7 +107,9 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
   if (tab.placement?.kind !== 'client') {
     return false
   }
+
   const hostClientId = readBrowserClientHostId()
+
   return hostClientId !== null && tab.placement.browserHostClientId === hostClientId
 }
 
@@ -128,6 +138,7 @@ export function resolveMirroredBrowserPageContent(
       canGoForward: existingPage.canGoForward
     }
   }
+
   return {
     url: tab.url,
     title: resolveMirroredBrowserTitle(tab, existingPage),
@@ -147,9 +158,11 @@ export function buildMirroredBrowserTabs(
   now: number
 ): MirroredBrowserTab[] {
   const renderedGroupIds = collectLayoutGroupIds(state.layoutByWorktree[snapshot.worktree])
+
   const clientGroupIds = new Set(
     (state.groupsByWorktree[snapshot.worktree] ?? []).map((group) => group.id)
   )
+
   return snapshot.tabs.filter(isReadyBrowserTab).map((tab, index) => {
     const existing = findBrowserWorkspaceForRemotePage(
       state,
@@ -157,17 +170,22 @@ export function buildMirroredBrowserTabs(
       environmentId,
       tab.browserPageId
     )
+
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index
+
     const recordedClientGroupId = peekWebSessionBrowserPlacementGroup({
       environmentId,
       worktreeId: snapshot.worktree,
       remotePageId: tab.browserPageId
     })
+
     const hostGroupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
+
     const existingClientGroupId =
       existing?.unifiedTab?.groupId !== hostGroupId ? existing?.unifiedTab?.groupId : undefined
+
     // Why: a staged row was placed by this client, so wherever it sits now is the user's own
     // choice — including a split made after the create recorded its intent. Rows the client never
     // staged carry no such truth: a pre-response snapshot may have parked them in the host group,
@@ -176,14 +194,17 @@ export function buildMirroredBrowserTabs(
       existing && state.remoteBrowserPageHandlesByPageId[existing.page.id]?.staged === true
         ? (existing.unifiedTab?.groupId ?? recordedClientGroupId)
         : (recordedClientGroupId ?? existingClientGroupId)
+
     const clientGroupId =
       preferredClientGroupId &&
       clientGroupIds.has(preferredClientGroupId) &&
       (renderedGroupIds.size === 0 || renderedGroupIds.has(preferredClientGroupId))
         ? preferredClientGroupId
         : undefined
+
     const groupId = clientGroupId ?? hostGroupId
     const content = resolveMirroredBrowserPageContent(tab, existing?.page)
+
     const nextPage: BrowserPage = {
       id: pageId,
       workspaceId,
@@ -198,9 +219,11 @@ export function buildMirroredBrowserTabs(
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
     }
+
     // Why: reuse hinges on browserPageEqual comparing workspaceId — the removed-workspace
     // page-list cleanup gates on page.workspaceId matching this entry's workspace.id.
     const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
+
     const workspace: BrowserWorkspace = {
       id: workspaceId,
       worktreeId: snapshot.worktree,
@@ -217,6 +240,7 @@ export function buildMirroredBrowserTabs(
       loadError: page.loadError,
       createdAt
     }
+
     return {
       workspace,
       page,

@@ -60,18 +60,23 @@ export function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
+
   const sourceSettings = useAppStore(
     useShallow((s) =>
       getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
     )
   )
+
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const prRepo = resolvePullRequestRepo(item, projectOrigin)
+
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
+
   const canMutateState = localState !== 'merged' && canMutateWithRepoContext
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
   const canMergeWithRepoContext = !!repoPath || mergeTarget.kind === 'environment'
+
   const mergeDisabled =
     !canMergeWithRepoContext || mergePending || !mergePresentation.directMergeAvailable
 
@@ -80,6 +85,7 @@ export function PRActionsPanel({
       if (!projectOrigin) {
         return
       }
+
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { state })
     },
     [patchProjectRowContent, projectOrigin]

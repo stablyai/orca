@@ -41,6 +41,7 @@ vi.mock('../store', () => ({
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))
+
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
@@ -53,6 +54,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       agent: 'codex' as const,
       isActive: true
     }
+
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([agentTab], {
@@ -100,6 +102,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       agent: 'codex' as const,
       isActive: true
     }
+
     const snapshot = makeSnapshot([agentTab], { activeTabId: agentTab.id })
 
     expect(
@@ -119,6 +122,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       sortOrder: 0,
       createdAt: NOW
     }
+
     const collided = applyWebSessionTabsSnapshot(
       makeState({
         unifiedTabsByWorktree: { [WT]: [squatter] },
@@ -128,6 +132,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW
     )
+
     expect(
       collided.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === 'session-seed')?.id
     ).not.toBe(structuredAgentSessionTabId('session-seed'))
@@ -147,6 +152,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       sortOrder: 0,
       createdAt: NOW
     }
+
     const patch = applyWebSessionTabsSnapshot(
       makeState({
         activeTabId: structuredTab.id,
@@ -199,6 +205,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       snapshotVersion: 10,
       activeTabType: null
     })
+
     const afterRestart = makeSnapshot([], {
       publicationEpoch: 'epoch-gen-2',
       snapshotVersion: 1,
@@ -207,12 +214,14 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(shouldApplyWebSessionTabsSnapshot(before, ENV)).toBe(true)
     expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV)).toBe(true)
+
     // Same-epoch non-newer frames are still rejected as stale/duplicate.
     const sameEpochOlder = makeSnapshot([], {
       publicationEpoch: 'epoch-gen-2',
       snapshotVersion: 1,
       activeTabType: null
     })
+
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
   })
 
@@ -222,11 +231,13 @@ describe('applyWebSessionTabsSnapshot', () => {
       snapshotVersion: 14,
       activeTabType: null
     })
+
     const merged = makeSnapshot([], {
       publicationEpoch: 'renderer:epoch-1:headless-merge:abc123',
       snapshotVersion: 8,
       activeTabType: null
     })
+
     const refreshedRenderer = makeSnapshot([], {
       publicationEpoch: 'renderer:epoch-1',
       snapshotVersion: 15,
@@ -256,11 +267,13 @@ describe('applyWebSessionTabsSnapshot', () => {
       snapshotVersion: 5,
       activeTabType: null
     })
+
     const pendingRestart = makeSnapshot([], {
       publicationEpoch: 'epoch-pending-restart',
       snapshotVersion: 1,
       activeTabType: null
     })
+
     const afterRestart = makeSnapshot([], {
       publicationEpoch: 'epoch-after-restart',
       snapshotVersion: 2,
@@ -282,11 +295,13 @@ describe('applyWebSessionTabsSnapshot', () => {
       snapshotVersion: 7,
       activeTabType: null
     })
+
     const afterRestart = makeSnapshot([], {
       publicationEpoch: 'epoch-after-runtime-restart',
       snapshotVersion: 1,
       activeTabType: null
     })
+
     const delayedOldEpoch = makeSnapshot([], {
       publicationEpoch: 'epoch-never-observed-by-this-worktree',
       snapshotVersion: 1,
@@ -311,6 +326,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       snapshotVersion: 3,
       activeTabType: null
     })
+
     const removed = {
       ...makeSnapshot([], {
         publicationEpoch: 'epoch-removed',
@@ -371,6 +387,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('scopes the replay reset to the replayed environment and worktree', () => {
     const snapshot = makeSnapshot([], { snapshotVersion: 5, activeTabType: null })
+
     const otherWorktree = makeSnapshot([], {
       worktree: 'repo::/other-worktree',
       snapshotVersion: 5,
@@ -399,6 +416,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       sortOrder: 0,
       createdAt: NOW
     }
+
     const floatingUnifiedTab: Tab = {
       id: floatingTab.id,
       entityId: floatingTab.id,
@@ -412,6 +430,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       isPreview: false
     }
+
     const state = makeState({
       activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
@@ -457,14 +476,17 @@ describe('applyWebSessionTabsSnapshot', () => {
       terminal: 'term_host',
       isActive: true
     }
+
     // Client closed host-tab-1; an in-flight pre-close snapshot still lists it.
     recordWebSessionCloseIntent({ environmentId: ENV }, WT, 'host-tab-1', NOW)
+
     const stalePreClose = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([surface]),
       ENV,
       NOW
     )
+
     expect((stalePreClose.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).not.toContain(
       toWebTerminalSurfaceTabId('host-tab-1')
     )
@@ -472,12 +494,14 @@ describe('applyWebSessionTabsSnapshot', () => {
     // The host's post-close snapshot omits the tab -> intent clears; a later
     // snapshot that re-adds the SAME id (a genuinely new tab) is no longer hidden.
     applyWebSessionTabsSnapshot(makeState(), makeSnapshot([]), ENV, NOW + 1)
+
     const reopened = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([surface], { snapshotVersion: 5 }),
       ENV,
       NOW + 2
     )
+
     expect((reopened.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).toContain(
       toWebTerminalSurfaceTabId('host-tab-1')
     )
@@ -494,6 +518,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       terminal: 'term_host',
       isActive: true
     }
+
     const authoritative = makeSnapshot([surface], { snapshotVersion: 6 })
 
     const initial = makeState()
@@ -522,6 +547,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     acceptReplayedWebSessionTabsSnapshot(ENV, WT)
     const state = makeState()
+
     const stalePatch = applyFreshWebSessionTabsSnapshot(
       state,
       makeSnapshot([], { snapshotVersion: 5, activeTabType: null }),
@@ -538,6 +564,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('keeps a client reorder until the host echoes it (no order snap-back)', () => {
     const local1 = toWebTerminalSurfaceTabId('host-tab-1')
     const local2 = toWebTerminalSurfaceTabId('host-tab-2')
+
     const surfaces: RuntimeMobileSessionTabsResult['tabs'] = [
       {
         type: 'terminal',
@@ -560,6 +587,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         isActive: false
       }
     ]
+
     const groupWithOrder = (tabOrder: string[]): RuntimeMobileSessionTabsResult['tabGroups'] => [
       { id: 'host-group-1', activeTabId: 'host-tab-1', tabOrder }
     ]
@@ -567,12 +595,14 @@ describe('applyWebSessionTabsSnapshot', () => {
     // Client dragged tab 2 ahead of tab 1; an in-flight snapshot still has the
     // original host order.
     recordWebSessionReorderIntent({ environmentId: ENV }, WT, 'host-group-1', [local2, local1], NOW)
+
     const stalePreMove = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot(surfaces, { tabGroups: groupWithOrder(['host-tab-1', 'host-tab-2']) }),
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     expect(stalePreMove.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([local2, local1])
 
     // The host's post-move snapshot echoes the new order -> intent clears; a
@@ -586,6 +616,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW + 1
     )
+
     const reverted = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot(surfaces, {
@@ -595,6 +626,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW + 2
     ) as Partial<WebSessionTabsSyncState>
+
     expect(reverted.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([local1, local2])
   })
 })

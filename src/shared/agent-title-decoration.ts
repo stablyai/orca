@@ -13,6 +13,7 @@ export function stripLeadingAgentTitleDecorationOrEmpty(title: string): string {
 
 export function stripLeadingAgentTitleDecoration(title: string): string {
   const stripped = stripLeadingAgentTitleDecorationOrEmpty(title)
+
   // Why: never return empty — a title that is *only* a status glyph should keep
   // its original text rather than collapse to a blank tab label.
   return stripped.length > 0 ? stripped : title

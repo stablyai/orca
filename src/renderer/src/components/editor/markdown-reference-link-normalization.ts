@@ -10,18 +10,23 @@ const REFERENCE_DEFINITION_PATTERN =
 function normalizeReferenceLabel(label: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < label.length; index += 1) {
     const code = label.charCodeAt(index)
+
     if (isMarkdownReferenceLabelWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += label.charAt(index)
   }
+
   return normalized.toLowerCase()
 }
 
@@ -49,6 +54,7 @@ function unwrapReferenceUrl(rawUrl: string): string {
 
 function parseReferenceDefinition(line: string): ReferenceLinkDefinition | null {
   const match = line.match(REFERENCE_DEFINITION_PATTERN)
+
   if (!match) {
     return null
   }
@@ -71,9 +77,11 @@ function splitReferenceDefinitions(content: string): {
 
   forEachReferenceDefinitionLine(content, (line, newline) => {
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
+
     if (fenceMatch) {
       const fenceChar = fenceMatch[1][0] as '`' | '~'
       const fenceLength = fenceMatch[1].length
+
       if (activeFence === null) {
         activeFence = fenceChar
         activeFenceLength = fenceLength
@@ -84,8 +92,10 @@ function splitReferenceDefinitions(content: string): {
     }
 
     const definition = activeFence === null ? parseReferenceDefinition(line) : null
+
     if (definition) {
       definitions.set(definition.label, definition)
+
       return
     }
 
@@ -100,27 +110,34 @@ function forEachReferenceDefinitionLine(
   visit: (line: string, newline: string) => void
 ): void {
   let lineStart = 0
+
   for (let index = 0; index <= content.length; index += 1) {
     const codeUnit = index < content.length ? content.charCodeAt(index) : 10
+
     if (index < content.length && codeUnit !== 10 && codeUnit !== 13) {
       continue
     }
+
     const hasLineEnding = index < content.length
     const hasCrLf = codeUnit === 13 && content.charCodeAt(index + 1) === 10
     const newline = hasLineEnding ? (hasCrLf ? '\r\n' : content[index]) : ''
     visit(content.slice(lineStart, index), newline)
+
     if (hasCrLf) {
       index += 1
     }
+
     lineStart = index + 1
   }
 }
 
 function isEscaped(content: string, index: number): boolean {
   let backslashCount = 0
+
   for (let cursor = index - 1; cursor >= 0 && content[cursor] === '\\'; cursor -= 1) {
     backslashCount += 1
   }
+
   return backslashCount % 2 === 1
 }
 
@@ -130,15 +147,19 @@ function findClosingBracket(content: string, start: number): number {
       return index
     }
   }
+
   return -1
 }
 
 function formatInlineReferenceLink(text: string, definition: ReferenceLinkDefinition): string {
   const escapedUrl = definition.url.replace(/[()\\]/g, '\\$&')
+
   if (!definition.title) {
     return `[${text}](${escapedUrl})`
   }
+
   const escapedTitle = definition.title.replace(/["\\]/g, '\\$&')
+
   return `[${text}](${escapedUrl} "${escapedTitle}")`
 }
 
@@ -165,9 +186,11 @@ function replaceReferenceLinks(
         fencePrefix.lastIndex = fenceProbe
         fenceMatch = fencePrefix.exec(markdown)
       }
+
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
+
         if (activeFence === null) {
           activeFence = fenceChar
           activeFenceLength = fenceLength
@@ -187,6 +210,7 @@ function replaceReferenceLinks(
     }
 
     const closingTextIndex = findClosingBracket(markdown, index + 1)
+
     if (closingTextIndex === -1) {
       result += markdown[index]
       isLineStart = false
@@ -196,6 +220,7 @@ function replaceReferenceLinks(
 
     const text = markdown.slice(index + 1, closingTextIndex)
     const afterText = markdown[closingTextIndex + 1]
+
     if (afterText === '(') {
       result += markdown[index]
       isLineStart = false
@@ -205,10 +230,12 @@ function replaceReferenceLinks(
 
     if (afterText === '[') {
       const closingLabelIndex = findClosingBracket(markdown, closingTextIndex + 2)
+
       if (closingLabelIndex !== -1) {
         const rawLabel = markdown.slice(closingTextIndex + 2, closingLabelIndex)
         const label = normalizeReferenceLabel(rawLabel || text)
         const definition = definitions.get(label)
+
         if (definition) {
           result += formatInlineReferenceLink(text, definition)
           isLineStart = false
@@ -218,6 +245,7 @@ function replaceReferenceLinks(
       }
     } else {
       const definition = definitions.get(normalizeReferenceLabel(text))
+
       if (definition) {
         result += formatInlineReferenceLink(text, definition)
         isLineStart = false
@@ -236,6 +264,7 @@ function replaceReferenceLinks(
 
 export function normalizeMarkdownReferenceLinks(content: string): string {
   const { definitions, markdown } = splitReferenceDefinitions(content)
+
   if (definitions.size === 0) {
     return content
   }

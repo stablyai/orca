@@ -19,11 +19,14 @@ import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-act
 const initialAppStoreState = useAppStore.getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
+
 const RUNTIME_ENV_ID = 'env-abfee683'
 
 function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree> {
   const workspacePath = path.join(path.sep, 'workspace', 'feature')
+
   return {
     ...makeCreatedAgentWorktree(),
     id: `repo-1::${workspacePath}`,
@@ -123,6 +126,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
       }
     }
   }))
+
   return paneKey
 }
 
@@ -168,6 +172,7 @@ describe('runtime-owned worktree activation with an unhydrated host mirror', () 
       createdWithAgent: undefined,
       hostId: 'local' as const
     }
+
     const state = baseState(worktree)
     state.activeWorkspaceExecutionHostId = null
     state.workspaceSessionReady = true

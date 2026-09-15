@@ -36,6 +36,7 @@ export function handleTerminalFileLink(
       ...deps,
       openWithSystemDefault: Boolean(event?.shiftKey)
     })
+
     return true
   }
 
@@ -44,11 +45,13 @@ export function handleTerminalFileLink(
     deps.worktreePath,
     terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
   )
+
   const fileContext = getTerminalFileContext(
     deps.worktreeId,
     deps.worktreePath,
     deps.runtimeEnvironmentId
   )
+
   const worktreeRoot = resolveKnownWorktreeRootPathLink(mappedPath)
   const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
   const isMac = navigator.userAgent.includes('Mac')
@@ -92,6 +95,7 @@ export function handleTerminalFileLink(
             ),
             run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
           }
+
   return requestTerminalLinkAction(event, actionContext, {
     destination: actionDestination ?? mappedPath,
     kind: worktreeRoot ? 'workspace' : 'file',

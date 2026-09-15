@@ -1,6 +1,7 @@
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
 
 type GpuInfoLevel = 'basic' | 'complete'
+
 const DEFAULT_GPU_CRASH_DIAGNOSTICS_WAIT_MS = 1_000
 
 type GpuInfoProvider = {
@@ -22,6 +23,7 @@ type GpuInfoSnapshot = {
 async function waitAtMost(promise: Promise<void>, timeoutMs: number): Promise<void> {
   const timeoutGate = Promise.withResolvers<void>()
   const timeout = setTimeout(timeoutGate.resolve, timeoutMs)
+
   try {
     await Promise.race([promise, timeoutGate.promise])
   } finally {
@@ -32,14 +34,17 @@ async function waitAtMost(promise: Promise<void>, timeoutMs: number): Promise<vo
 function waitForFirstAvailable(promises: Promise<boolean>[]): Promise<void> {
   const availableGate = Promise.withResolvers<void>()
   let remaining = promises.length
+
   for (const promise of promises) {
     void promise.then((available) => {
       remaining -= 1
+
       if (available || remaining === 0) {
         availableGate.resolve()
       }
     })
   }
+
   return availableGate.promise
 }
 
@@ -59,6 +64,7 @@ function finiteNumber(value: unknown): number | undefined {
 
 function addString(target: CrashReportBreadcrumbData, key: string, value: unknown): void {
   const safe = nonEmptyString(value)
+
   if (safe !== undefined) {
     target[key] = safe
   }
@@ -66,6 +72,7 @@ function addString(target: CrashReportBreadcrumbData, key: string, value: unknow
 
 function addNumber(target: CrashReportBreadcrumbData, key: string, value: unknown): void {
   const safe = finiteNumber(value)
+
   if (safe !== undefined) {
     target[key] = safe
   }
@@ -78,6 +85,7 @@ function activeGpuDevice(info: Record<string, unknown>): {
   const devices = Array.isArray(info.gpuDevice)
     ? info.gpuDevice.map(recordValue).filter((device) => device !== null)
     : []
+
   return {
     device: devices.find((device) => device.active === true) ?? devices[0] ?? null,
     count: devices.length
@@ -86,9 +94,11 @@ function activeGpuDevice(info: Record<string, unknown>): {
 
 function addFeatureStatuses(details: CrashReportBreadcrumbData, featureStatus: unknown): void {
   const status = recordValue(featureStatus)
+
   if (!status) {
     return
   }
+
   addString(details, 'gpuCompositingStatus', status.gpu_compositing)
   addString(details, 'gpuRasterizationStatus', status.rasterization)
   addString(details, 'gpuWebglStatus', status.webgl)
@@ -103,14 +113,17 @@ export function buildGpuCrashDiagnostics(
   const details: CrashReportBreadcrumbData = {
     gpuInfoLevel: snapshot?.level ?? 'unavailable'
   }
+
   addFeatureStatuses(details, featureStatus)
   const info = recordValue(snapshot?.info)
+
   if (!info) {
     return details
   }
 
   const { device, count } = activeGpuDevice(info)
   details.gpuDeviceCount = count
+
   if (device) {
     addNumber(details, 'gpuVendorId', device.vendorId)
     addNumber(details, 'gpuDeviceId', device.deviceId)
@@ -121,11 +134,13 @@ export function buildGpuCrashDiagnostics(
   }
 
   const aux = recordValue(info.auxAttributes)
+
   if (aux) {
     addString(details, 'gpuGlVendor', aux.glVendor)
     addString(details, 'gpuGlRenderer', aux.glRenderer)
     addString(details, 'gpuGlVersion', aux.glVersion)
   }
+
   return details
 }
 
@@ -152,23 +167,28 @@ export class GpuCrashDiagnosticsRecorder {
 
   record(): Promise<void> {
     this.recordingPromise ??= this.recordOnce()
+
     return this.recordingPromise
   }
 
   private async recordOnce(): Promise<void> {
     let featureStatus: unknown = null
+
     try {
       featureStatus = this.provider.getGPUFeatureStatus()
     } catch {
       // GPU teardown can race this read; device identity is still useful.
     }
+
     if (this.completeInfo === null) {
       await waitAtMost(
         waitForFirstAvailable([this.ensureBasicInfo(), this.ensureCompleteInfo()]),
         this.recordTimeoutMs
       )
     }
+
     const snapshot = this.preferredSnapshot()
+
     try {
       this.recordBreadcrumb(buildGpuCrashDiagnostics(snapshot, featureStatus))
     } catch {
@@ -182,6 +202,7 @@ export class GpuCrashDiagnosticsRecorder {
         this.basicInfoPromise = this.provider.getGPUInfo('basic').then(
           (info) => {
             this.basicInfo = info
+
             return true
           },
           () => false
@@ -190,6 +211,7 @@ export class GpuCrashDiagnosticsRecorder {
         this.basicInfoPromise = Promise.resolve(false)
       }
     }
+
     return this.basicInfoPromise
   }
 
@@ -199,6 +221,7 @@ export class GpuCrashDiagnosticsRecorder {
         this.completeInfoPromise = this.provider.getGPUInfo('complete').then(
           (info) => {
             this.completeInfo = info
+
             return true
           },
           () => false
@@ -207,6 +230,7 @@ export class GpuCrashDiagnosticsRecorder {
         this.completeInfoPromise = Promise.resolve(false)
       }
     }
+
     return this.completeInfoPromise
   }
 
@@ -214,9 +238,11 @@ export class GpuCrashDiagnosticsRecorder {
     if (this.completeInfo !== null) {
       return { info: this.completeInfo, level: 'complete' }
     }
+
     if (this.basicInfo !== null) {
       return { info: this.basicInfo, level: 'basic' }
     }
+
     return null
   }
 }

@@ -51,6 +51,7 @@ export async function scanRuntimeAiVaultSessions(
   options: RuntimeAiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
+
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
@@ -68,15 +69,18 @@ export async function scanRuntimeAiVaultSessions(
     },
     options.timeoutMs
   )
+
   if (response.ok === true) {
     try {
       const result = withRuntimeExecutionHost(
         parseAiVaultListResult(response.result),
         executionHostId
       )
+
       if (!args.scopePaths || args.scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
         return result
       }
+
       return {
         ...result,
         issues: [
@@ -100,6 +104,7 @@ export async function scanRuntimeAiVaultSessions(
       })
     }
   }
+
   return runtimeScanIssueResult({
     executionHostId,
     environmentId,
@@ -118,9 +123,11 @@ export async function resolveRuntimeAiVaultSessionTitles(
     'aiVault.resolveSessionTitles',
     { requests: args.requests }
   )
+
   if (response.ok !== true) {
     return { titles: [] }
   }
+
   try {
     return parseAiVaultSessionTitlesResult(response.result)
   } catch {
@@ -139,15 +146,19 @@ export async function prepareRuntimeAiVaultSessionResume(
     'aiVault.prepareSessionResume',
     args
   )
+
   if (response.ok !== true) {
     throw new Error(response.error.message)
   }
+
   const parsed = aiVaultPrepareSessionResumeResultSchema.safeParse(response.result)
+
   if (!parsed.success) {
     throw new Error(
       `Invalid aiVault.prepareSessionResume response: ${parsed.error.issues[0]?.message ?? 'unexpected result shape'}`
     )
   }
+
   return parsed.data
 }
 

@@ -30,6 +30,7 @@ export function migrateV41(this: OrchestrationDb, current: number): void {
   if (current >= 41) {
     return
   }
+
   this.db.exec(
     `DROP INDEX IF EXISTS idx_deliveries_one_outstanding;\n${OUTSTANDING_MAILBOX_INDEX_SQL}`
   )

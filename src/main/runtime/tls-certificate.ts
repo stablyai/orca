@@ -8,6 +8,7 @@ import { existsSync, readFileSync, chmodSync } from 'node:fs'
 import { join } from 'node:path'
 
 const TLS_CERT_FILENAME = 'orca-tls-cert.pem'
+
 const TLS_KEY_FILENAME = 'orca-tls-key.pem'
 
 export type TlsCertificate = {
@@ -24,6 +25,7 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
     const cert = readFileSync(certPath, 'utf-8')
     const key = readFileSync(keyPath, 'utf-8')
     const fingerprint = computeFingerprint(cert)
+
     if (fingerprint) {
       return { cert, key, fingerprint }
     }
@@ -68,6 +70,7 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
 
   const cert = readFileSync(certPath_, 'utf-8')
   const key = readFileSync(keyPath_, 'utf-8')
+
   return { cert, key, fingerprint: computeFingerprint(cert)! }
 }
 
@@ -82,6 +85,7 @@ function resolveOpenSslExecutable(): string {
     'C:\\Program Files (x86)\\Git\\usr\\bin\\openssl.exe',
     'C:\\Program Files (x86)\\Git\\mingw64\\bin\\openssl.exe'
   ]
+
   return windowsCandidates.find((candidate) => existsSync(candidate)) ?? 'openssl'
 }
 
@@ -100,6 +104,7 @@ function resolveOpenSslConfigPath(): string | null {
     'C:\\Program Files (x86)\\Git\\mingw64\\etc\\ssl\\openssl.cnf',
     'C:\\Program Files (x86)\\Git\\usr\\ssl\\openssl.cnf'
   ]
+
   return windowsConfigCandidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
@@ -107,10 +112,13 @@ function computeFingerprint(certPem: string): string | null {
   const derMatch = certPem.match(
     /-----BEGIN CERTIFICATE-----\n([\s\S]+?)\n-----END CERTIFICATE-----/
   )
+
   if (!derMatch?.[1]) {
     return null
   }
+
   const der = Buffer.from(derMatch[1].replace(/\n/g, ''), 'base64')
   const hash = createHash('sha256').update(der).digest('hex')
+
   return `sha256:${hash}`
 }

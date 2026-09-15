@@ -19,6 +19,7 @@ describe('RelayPtySourceCreditScheduler', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const scheduler = new RelayPtySourceCreditScheduler(ledger)
     const identities = Array.from({ length: 50 }, (_, index) => identity(index))
+
     for (const owner of identities) {
       ledger.open(owner, 1024)
       ledger.append(owner, {
@@ -33,6 +34,7 @@ describe('RelayPtySourceCreditScheduler', () => {
     }
 
     const visited: string[] = []
+
     for (let turn = 0; turn < 25; turn++) {
       const reservations = scheduler.takeTurn()
       expect(reservations.length).toBeLessThanOrEqual(2)
@@ -43,6 +45,7 @@ describe('RelayPtySourceCreditScheduler', () => {
           0
         )
       ).toBeLessThanOrEqual(32 * 1024)
+
       for (const reservation of reservations) {
         visited.push(reservation.identity.id)
         ledger.commitSend(reservation)
@@ -76,6 +79,7 @@ describe('RelayPtySourceCreditScheduler', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const scheduler = new RelayPtySourceCreditScheduler(ledger)
     const owners = [identity(1), identity(2), identity(3)]
+
     for (const owner of owners) {
       ledger.open(owner, 8)
       ledger.append(owner, {
@@ -88,11 +92,14 @@ describe('RelayPtySourceCreditScheduler', () => {
       })
       scheduler.enqueue(owner)
     }
+
     const reserveNextSend = ledger.reserveNextSend.bind(ledger)
+
     const reserve = vi.spyOn(ledger, 'reserveNextSend').mockImplementation((owner, maxSourceSu) => {
       if (owner === owners[1]) {
         throw new Error('delivery ledger corrupted')
       }
+
       return reserveNextSend(owner, maxSourceSu)
     })
 
@@ -100,9 +107,11 @@ describe('RelayPtySourceCreditScheduler', () => {
 
     expect(reserve).toHaveBeenCalledTimes(3)
     expect(reservations.map(({ identity: owner }) => owner.id)).toEqual(['pty-1', 'pty-3'])
+
     for (const reservation of reservations) {
       ledger.commitSend(reservation)
     }
+
     scheduler.takeTurn(2, 4)
     expect(reserve).toHaveBeenCalledTimes(5)
     expect(reserve.mock.calls.map(([owner]) => owner.id)).toEqual([

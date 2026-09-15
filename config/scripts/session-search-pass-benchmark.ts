@@ -16,15 +16,20 @@ import { writeSyntheticTranscriptCorpus } from '../../src/main/ai-vault-search/s
 // Never point this at a real transcript tree.
 
 const SESSIONS = 5_000
+
 const TURNS_PER_SESSION = 4
+
 const PROJECTS = 40
 
 const corpus = await writeSyntheticTranscriptCorpus({
   sessions: SESSIONS,
   turnsPerSession: TURNS_PER_SESSION
 })
+
 const root = await mkdtemp(join(tmpdir(), 'orca-search-pass-'))
+
 const roots = isolatedScanRoots(root)
+
 const databasePath = join(root, 'index', 'session-search.sqlite')
 
 try {
@@ -33,6 +38,7 @@ try {
   for (let index = 0; index < PROJECTS; index++) {
     await mkdir(join(roots.claudeProjectsDir, `project-${index}`), { recursive: true })
   }
+
   await Promise.all(
     corpus.files.map((path, index) =>
       rename(path, join(roots.claudeProjectsDir, `project-${index % PROJECTS}`, basename(path)))
@@ -42,6 +48,7 @@ try {
   resetSessionParseCacheForTests()
   resetTranscriptConsumersForTests()
   const errors: unknown[] = []
+
   const indexer = new SessionSearchIndexer({
     databasePath,
     roots,
@@ -51,6 +58,7 @@ try {
     passDeadlineMs: Number.MAX_SAFE_INTEGER,
     onError: (error) => errors.push(error)
   })
+
   try {
     const coldStarted = performance.now()
     await indexer.start()

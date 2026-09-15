@@ -15,7 +15,9 @@ vi.mock('../shared/child-process/run-process', () => ({
 }))
 
 const ok = { code: 0, signal: null, stdout: '7.4.0', stderr: '', timedOut: false }
+
 const missing = { code: 1, signal: null, stdout: '', stderr: 'not found', timedOut: false }
+
 const timedOut = { code: null, signal: 'SIGTERM' as const, stdout: '', stderr: '', timedOut: true }
 
 function setPlatform(platform: NodeJS.Platform): () => void {
@@ -181,6 +183,7 @@ describe('isPwshAvailable', () => {
       (spec: { timeoutMs: number }) =>
         new Promise((resolve) => {
           const finish = (error: Error | null): void => resolve(error ? missing : ok)
+
           if (spec.timeoutMs === 30_000) {
             finishWarmup = finish
           } else {
@@ -192,6 +195,7 @@ describe('isPwshAvailable', () => {
     try {
       const { isPwshAvailable, isPwshAvailableAsync, warmPwshAvailabilityCache } =
         await import('./pwsh')
+
       const staleProbe = isPwshAvailableAsync()
       const warmup = warmPwshAvailabilityCache()
       finishWarmup(null)

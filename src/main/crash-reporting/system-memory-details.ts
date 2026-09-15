@@ -34,6 +34,7 @@ export const SYSTEM_MEMORY_KEY_PREFIX = 'systemMemory'
 
 export function memoryKBFieldMB(value: unknown): number | undefined {
   const kb = typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
   return kb === undefined ? undefined : Math.round(Math.max(0, kb) / 1024)
 }
 
@@ -60,9 +61,11 @@ export type SystemMemoryPressureSignal =
 function readElectronSystemMemoryInfo(): SystemMemoryInfoLike | null {
   const read = (process as NodeJS.Process & { getSystemMemoryInfo?: () => SystemMemoryInfoLike })
     .getSystemMemoryInfo
+
   if (typeof read !== 'function') {
     return null
   }
+
   try {
     return read.call(process)
   } catch {
@@ -78,6 +81,7 @@ export function setSystemMemoryInfoReaderForTest(reader: SystemMemoryInfoReader 
 
 function numericDetail(details: CrashReportDetails, suffix: string): number | undefined {
   const value = details[`${SYSTEM_MEMORY_KEY_PREFIX}${suffix}`]
+
   return typeof value === 'number' ? value : undefined
 }
 
@@ -85,6 +89,7 @@ function numericDetail(details: CrashReportDetails, suffix: string): number | un
 function pagefileBacksCommit(details: CrashReportDetails): boolean | undefined {
   const total = numericDetail(details, 'TotalMB')
   const swapTotal = numericDetail(details, 'SwapTotalMB')
+
   return total === undefined || swapTotal === undefined ? undefined : swapTotal > total
 }
 
@@ -97,13 +102,16 @@ function pressureSignal(
     if (pagefileBacksCommit(details) === false) {
       return 'available-commit-hard-capped'
     }
+
     return volumeCoTimed && `${SYSTEM_MEMORY_KEY_PREFIX}SwapVolumeFreeMB` in details
       ? 'available-commit-volume-cotimed'
       : 'available-commit-unqualified'
   }
+
   if (platform === 'linux' && `${SYSTEM_MEMORY_KEY_PREFIX}AvailableMB` in details) {
     return 'mem-available'
   }
+
   return 'none'
 }
 
@@ -111,10 +119,13 @@ export function getSystemMemoryDetails(
   platform: NodeJS.Platform = process.platform
 ): CrashReportDetails {
   const info = systemMemoryInfoReader()
+
   if (!info) {
     return {}
   }
+
   const details: CrashReportDetails = {}
+
   const fields: readonly [keyof SystemMemoryInfoLike, string][] = [
     ['total', 'TotalMB'],
     ['free', 'FreeMB'],
@@ -124,13 +135,17 @@ export function getSystemMemoryDetails(
     ['fileBacked', 'FileBackedMB'],
     ['purgeable', 'PurgeableMB']
   ]
+
   for (const [field, suffix] of fields) {
     const mb = memoryKBFieldMB(info[field])
+
     if (mb !== undefined) {
       details[`${SYSTEM_MEMORY_KEY_PREFIX}${suffix}`] = mb
     }
   }
+
   details[`${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`] = pressureSignal(platform, details)
+
   return details
 }
 
@@ -156,6 +171,8 @@ export function withSwapVolumeFreeSpace(
     [`${SYSTEM_MEMORY_KEY_PREFIX}SwapVolumeFreeMB`]: volume.freeMB,
     [`${SYSTEM_MEMORY_KEY_PREFIX}SwapVolume`]: volume.volume
   }
+
   merged[`${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`] = pressureSignal(platform, merged, coTimed)
+
   return merged
 }

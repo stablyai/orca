@@ -42,7 +42,9 @@ class MockWebSocket {
     if (this.readyState === MockWebSocket.CLOSED) {
       return
     }
+
     this.readyState = MockWebSocket.CLOSED
+
     if (this.emitCloseOnClose) {
       this.onclose?.()
     }
@@ -67,15 +69,18 @@ class MockWebSocket {
 }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 type SentRpcRequest = { id: string; method: string; params?: unknown }
 
 function sentRequest(socket: MockWebSocket, method: string): SentRpcRequest {
   const request = sentRequests(socket, method)[0]
+
   if (request) {
     return request
   }
+
   throw new Error(`Request not sent: ${method}`)
 }
 
@@ -99,6 +104,7 @@ function encodeBrowserFrame(): Uint8Array {
   view.setUint32(12, 0, true)
   out.set(metadata, 16)
   out.set(image, 16 + metadata.byteLength)
+
   return out
 }
 
@@ -125,6 +131,7 @@ describe('mobile rpc-client connection timeout', () => {
 
   it('closes a socket that never opens so reconnect can run', () => {
     const states: string[] = []
+
     const client = connect('ws://desktop.invalid', 'token', 'server-key', (state) => {
       states.push(state)
     })
@@ -196,6 +203,7 @@ describe('mobile rpc-client connection timeout', () => {
       { worktree: 'id:wt-1' },
       () => {}
     )
+
     unsubscribe()
 
     expect(
@@ -212,6 +220,7 @@ describe('mobile rpc-client connection timeout', () => {
         client.subscribe('notifications.subscribe', {}, () => {})
       }
     })
+
     const socket = mockSockets[0]!
 
     socket.open()
@@ -238,6 +247,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => {},
       { onBinaryFrame: (frame) => frames.push(frame) }
     )
+
     const request = sentRequest(socket, 'browser.screencast')
     socket.receive(
       `encrypted:${JSON.stringify({
@@ -281,6 +291,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => {},
       { onBinaryFrame: () => {} }
     )
+
     const request = sentRequest(socket, 'browser.screencast')
     unsubscribe()
     socket.receive(
@@ -356,6 +367,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => {},
       { onBinaryFrame: () => {} }
     )
+
     unsubscribe()
 
     socket.open()
@@ -537,6 +549,7 @@ describe('mobile rpc-client connection timeout', () => {
         timeoutMs: 123
       }
     )
+
     await Promise.resolve()
 
     await vi.advanceTimersByTimeAsync(122)
@@ -566,6 +579,7 @@ describe('mobile rpc-client connection timeout', () => {
         timeoutMs: 123
       }
     )
+
     let requestOutcome = 'pending'
     request.then(
       () => {
@@ -600,10 +614,12 @@ describe('mobile rpc-client connection timeout', () => {
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
       socket.receive('encrypted:{"type":"e2ee_authenticated"}')
     }
+
     function connectAuthenticated() {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       const socket = mockSockets[0]!
       openAndAuthenticate(socket)
+
       return { client, socket }
     }
 
@@ -891,6 +907,7 @@ describe('mobile rpc-client connection timeout', () => {
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
       socket.receive('encrypted:{"type":"e2ee_authenticated"}')
     }
+
     function unauthorizedResponsePayload(id: string): string {
       return `encrypted:${JSON.stringify({ id, ok: false, error: { code: 'unauthorized', message: 'Unauthorized' } })}`
     }
@@ -923,6 +940,7 @@ describe('mobile rpc-client connection timeout', () => {
         if (i > 0) {
           await vi.advanceTimersByTimeAsync(1_000)
         }
+
         const socket = mockSockets[mockSockets.length - 1]!
         socket.open()
         socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
@@ -943,11 +961,13 @@ describe('mobile rpc-client connection timeout', () => {
         if (i > 0) {
           await vi.advanceTimersByTimeAsync(1_000)
         }
+
         const socket = mockSockets[mockSockets.length - 1]!
         socket.open()
         socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
         socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
       }
+
       await vi.advanceTimersByTimeAsync(1_000)
       authenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
@@ -980,6 +1000,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => null,
       (error: Error) => error
     )
+
     await vi.advanceTimersByTimeAsync(520_000)
 
     expect(client.getState()).toBe('reconnecting')

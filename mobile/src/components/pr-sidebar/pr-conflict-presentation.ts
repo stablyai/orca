@@ -42,8 +42,10 @@ export function resolveConflictDisplay(
   if (!hasMergeConflicts(pr)) {
     return null
   }
+
   const files = pr.conflictSummary?.files ?? []
   const localMergeClean = pr.conflictSummary?.localMergeState === 'clean'
+
   return {
     files,
     commitsBehind: pr.conflictSummary?.commitsBehind ?? null,

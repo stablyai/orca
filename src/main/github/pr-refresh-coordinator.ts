@@ -24,10 +24,15 @@ import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
 
 const retry = new PRRefreshRetryState()
+
 const queue = new PRRefreshQueue((key) => retry.reset(key))
+
 const pacing = new PRRefreshPacing()
+
 const visibility = new PRRefreshVisibility()
+
 const events = new PRRefreshEventPublisher()
+
 const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
 
 export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
@@ -36,6 +41,7 @@ export function setPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver |
 
 function removeInvisibleVisibleRefreshes(): void {
   const removed = queue.removeInvisibleVisibleEntries((key) => visibility.has(key))
+
   for (const entry of removed) {
     events.broadcast({
       aliases: Array.from(entry.aliases.values()),
@@ -49,6 +55,7 @@ function removeInvisibleVisibleRefreshes(): void {
 export function clearVisiblePRRefreshWindow(windowId: number): void {
   const hadVisibleRefreshes = visibility.clearWindow(windowId)
   pacing.clearActiveBurstWindow(windowId)
+
   if (hadVisibleRefreshes) {
     removeInvisibleVisibleRefreshes()
   }
@@ -67,18 +74,22 @@ export function enqueuePRRefresh(
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
   const skippedReason = validateCandidate(candidate)
+
   if (skippedReason) {
     queue.removeInvalidAlias(key, alias)
     events.record('skipped', reason, skippedReason)
     events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
+
     return
   }
 
   const enqueued = queue.enqueue(candidate, reason, priority, windowId)
   events.record(enqueued.coalesced ? 'coalesced' : 'enqueued', reason)
+
   if (shouldBroadcastQueued(reason, enqueued.dueAt)) {
     events.broadcast({ aliases: [enqueued.alias], reason, status: 'queued' })
   }
+
   drainer.schedule()
 }
 
@@ -90,7 +101,9 @@ export function reportVisiblePRRefreshCandidates(
   if (!visibility.report(candidates, generation, windowId)) {
     return
   }
+
   removeInvisibleVisibleRefreshes()
+
   for (const candidate of candidates) {
     enqueuePRRefresh(candidate, 'visible', 40, windowId)
   }
@@ -123,20 +136,25 @@ export async function refreshPRNow(
   aliasMap.set(alias.cacheKey, alias)
   const aliases = Array.from(aliasMap.values())
   const skippedReason = validateCandidate(candidate)
+
   if (skippedReason) {
     queue.removeInvalidAlias(key, alias)
+
     const outcome: PRRefreshOutcome = {
       kind: 'upstream-error',
       errorType: 'unknown',
       message: `Cannot refresh PR for this worktree: ${skippedReason}`,
       fetchedAt: Date.now()
     }
+
     events.broadcast({ aliases: [alias], reason, status: 'skipped', skippedReason })
+
     return outcome
   }
 
   const primaryGateUntil = await prRefreshRateLimitPausedUntil(candidate, false)
   const gateUntil = Math.max(primaryGateUntil ?? 0, retry.manualGateUntil(key))
+
   if (gateUntil > Date.now()) {
     queue.set(key, {
       key,
@@ -155,6 +173,7 @@ export async function refreshPRNow(
       skippedReason: 'rate-limit'
     })
     drainer.schedule(Math.max(1_000, gateUntil - Date.now()))
+
     return {
       kind: 'upstream-error',
       errorType: 'rate_limited',
@@ -169,6 +188,7 @@ export async function refreshPRNow(
   const requestSequence = events.nextSequence()
   const requestStartedAt = Date.now()
   events.broadcast({ aliases, reason, status: 'in-flight', requestStartedAt }, requestSequence)
+
   const outcome = await getPRForBranchOutcome(
     candidate.repoPath,
     candidate.branch,
@@ -177,12 +197,15 @@ export async function refreshPRNow(
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
     ...hostedReviewOptionArgs(candidate, reason)
   )
+
   let plannedRetryAt: number | undefined
   let broadcastOutcome = outcome
+
   if (outcome.kind === 'upstream-error' && visibility.has(key)) {
     plannedRetryAt = retry.nextVisibleErrorRetryAt(key)
     broadcastOutcome = retry.withErrorSchedule(outcome, plannedRetryAt)
   }
+
   events.observe(candidate, outcome)
   retry.noteManualGate(key, broadcastOutcome)
   events.broadcast(
@@ -195,5 +218,6 @@ export async function refreshPRNow(
       ? { pendingMergeabilityDelayMs: MANUAL_MERGEABILITY_PENDING_REFRESH_MS }
       : {})
   })
+
   return broadcastOutcome
 }

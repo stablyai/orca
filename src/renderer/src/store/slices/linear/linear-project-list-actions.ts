@@ -37,12 +37,14 @@ export function createLinearProjectListActions(
     getCachedLinearProjects: (query, limit = 20, workspaceId, options) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
+
       const cacheKey = linearCollectionCacheKey(
         resolvedWorkspaceId,
         'projects',
         query?.trim(),
         limit
       )
+
       return get().linearProjectCache[scopedLinearCacheKey(scope, cacheKey)]?.data ?? null
     },
 
@@ -51,16 +53,20 @@ export function createLinearProjectListActions(
       const { contextKey } = scope
       const resolvedWorkspaceId = workspaceId ?? getSelectedWorkspaceId(get().linearStatus)
       const trimmed = query?.trim() || undefined
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(resolvedWorkspaceId, 'projects', trimmed, limit)
       )
+
       const cached = get().linearProjectCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data ?? emptyLinearCollection<LinearProjectSummary>()
       }
 
       const inflight = inflightProjectRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -73,6 +79,7 @@ export function createLinearProjectListActions(
       let entry: InflightLinearCollectionRequest<LinearProjectSummary>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearListProjects(scope.settings, trimmed, limit, resolvedWorkspaceId, {
         force: options?.force
       })
@@ -94,10 +101,12 @@ export function createLinearProjectListActions(
               })
             }))
           }
+
           return result
         })
         .catch((error) => {
           console.warn('[linear] listLinearProjects failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -110,15 +119,18 @@ export function createLinearProjectListActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           const fallback =
             get().linearProjectCache[cacheKey]?.data ??
             emptyLinearCollection<LinearProjectSummary>()
+
           return collectionWithWorkspaceError(fallback, resolvedWorkspaceId ?? 'default', error)
         })
         .finally(() => {
           if (inflightProjectRequests.get(cacheKey) === entry) {
             inflightProjectRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(resolvedWorkspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -141,6 +153,7 @@ export function createLinearProjectListActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightProjectRequests.set(cacheKey, entry)
+
       return promise
     }
   }

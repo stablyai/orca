@@ -9,6 +9,7 @@ import { _resetAzureDevOpsRepoRefCache } from '../azure-devops/repository-ref'
 import { getHostedReviewForBranch } from './hosted-review'
 
 const execFileAsync = promisify(execFile)
+
 const OLD_ENV = process.env
 
 type SeenRequest = {
@@ -36,6 +37,7 @@ describe('Azure DevOps hosted review integration', () => {
 
   it('resolves an Azure Repos PR through real git remote parsing and HTTP API calls', async () => {
     const seen: SeenRequest[] = []
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
       seen.push({
@@ -49,6 +51,7 @@ describe('Azure DevOps hosted review integration', () => {
           id: 'repo-guid',
           webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
         })
+
         return
       }
 
@@ -68,6 +71,7 @@ describe('Azure DevOps hosted review integration', () => {
             }
           ]
         })
+
         return
       }
 
@@ -75,20 +79,25 @@ describe('Azure DevOps hosted review integration', () => {
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/31/statuses'
       ) {
         sendJson(res, { value: [{ state: 'succeeded' }] })
+
         return
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ message: 'not found' }))
     })
+
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-azure-review-'))
+
     try {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }
+
       process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
 
       await execFileAsync('git', ['init'], { cwd: repoPath })
@@ -132,6 +141,7 @@ describe('Azure DevOps hosted review integration', () => {
 
   it('prefers an active Azure Repos PR over a newer abandoned PR for the same branch', async () => {
     const seen: SeenRequest[] = []
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
       seen.push({
@@ -145,6 +155,7 @@ describe('Azure DevOps hosted review integration', () => {
           id: 'repo-guid',
           webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
         })
+
         return
       }
 
@@ -170,6 +181,7 @@ describe('Azure DevOps hosted review integration', () => {
             }
           ]
         })
+
         return
       }
 
@@ -177,6 +189,7 @@ describe('Azure DevOps hosted review integration', () => {
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40/statuses'
       ) {
         sendJson(res, { value: [{ state: 'failed' }] })
+
         return
       }
 
@@ -184,20 +197,25 @@ describe('Azure DevOps hosted review integration', () => {
         url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/41/statuses'
       ) {
         sendJson(res, { value: [{ state: 'succeeded' }] })
+
         return
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ message: 'not found' }))
     })
+
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-azure-review-active-'))
+
     try {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }
+
       process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = `http://127.0.0.1:${address.port}/acme/Project`
 
       await execFileAsync('git', ['init'], { cwd: repoPath })

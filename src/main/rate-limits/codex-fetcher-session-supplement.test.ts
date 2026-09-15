@@ -7,9 +7,13 @@ const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
+
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+
 vi.mock('node-pty', () => ({ spawn: vi.fn() }))
+
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
@@ -24,23 +28,28 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
   child.exitCode = null
+
   // Why: like the real app-server, the fake dies on stdin EOF or a signal —
   // the graceful shutdown path resolves only once the child reports exit.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
   }
+
   child.kill = vi.fn(() => {
     exitNow()
+
     return true
   })
   child.stdin = Object.assign(new EventEmitter(), {
     end: vi.fn(exitNow),
     write: vi.fn((line: string) => {
       const message = JSON.parse(line) as { id?: number; method?: string }
+
       if (message.method === 'initialize') {
         setTimeout(() => {
           child.stdout.emit(
@@ -49,6 +58,7 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
           )
         }, 0)
       }
+
       if (message.method === 'account/rateLimits/read') {
         setTimeout(() => {
           child.stdout.emit(
@@ -70,6 +80,7 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
       }
     })
   })
+
   return child
 }
 
@@ -112,6 +123,7 @@ async function fetchWeeklyOnly(rateLimitResetCredits?: unknown) {
   const resultPromise = fetchCodexRateLimits()
   await vi.advanceTimersByTimeAsync(1)
   await vi.advanceTimersByTimeAsync(1)
+
   return resultPromise
 }
 

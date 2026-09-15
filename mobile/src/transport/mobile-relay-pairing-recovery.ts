@@ -70,10 +70,12 @@ export function recoverMobileRelayPairing(
   if (recoveryPromise) {
     return recoveryPromise
   }
+
   const dependencies = { ...defaultDependencies, ...overrides }
   recoveryPromise = runRecovery(dependencies).finally(() => {
     recoveryPromise = null
   })
+
   return recoveryPromise
 }
 
@@ -83,20 +85,26 @@ async function runRecovery(
   if (dependencies.platform === 'web') {
     return 'none'
   }
+
   let journal: MobileRelayPairingJournal | null
+
   try {
     journal = await dependencies.loadJournal()
   } catch {
     return 'deferred'
   }
+
   if (!journal) {
     return 'none'
   }
+
   const bundle = await dependencies.readCredentialBundle(journal.metadata.host.id).catch(() => null)
   const hosts = await dependencies.loadHosts().catch(() => [])
   const existing = hosts.find(({ id }) => id === journal!.metadata.host.id)
+
   if (existing?.relayHostId === journal.metadata.relay.relayHostId && bundle) {
     await dependencies.clearJournal(journal.metadata.journalId)
+
     return 'recovered'
   }
 
@@ -105,8 +113,10 @@ async function runRecovery(
   // of an authoritatively committed install must not look like "nothing to
   // reconcile" — that journal is the only record left to retry the write from.
   let observedCommitted = false
+
   for (const credential of credentials) {
     let client: PairingCandidateClient | null = null
+
     try {
       client =
         credential.kind === 'invite'
@@ -121,13 +131,17 @@ async function runRecovery(
               expectedCredentialKind: 'resume'
             })
       const endpoints = await getRecoveryStatus(client, journal, credential.kind)
+
       if (endpoints.installStatus?.state === 'committed') {
         observedCommitted = true
         await publishCommitted(journal, endpoints, dependencies)
+
         return 'recovered'
       }
+
       if (credential.kind === 'invite' && endpoints.installStatus?.state === 'not-found') {
         journal = await transitionToInviteAuthorization(journal, dependencies)
+
         const installed = DeviceCredentialInstalledSchema.parse(
           requireRpcResultOrThrowCodedError(
             await client.sendRequest('pairing.provisionRelay', {
@@ -136,10 +150,12 @@ async function runRecovery(
             })
           )
         )
+
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
         observedCommitted = true
         await publishCommitted(journal, reconciled, dependencies)
+
         return 'recovered'
       }
     } catch {
@@ -149,6 +165,7 @@ async function runRecovery(
       client?.close()
     }
   }
+
   // Why: past invite expiry no credential can still establish what happened, so
   // retaining the journal cannot reconcile anything — it only fails every later
   // pairing with "recovery pending" forever. Re-pairing mints a fresh device and
@@ -160,8 +177,10 @@ async function runRecovery(
     journal.metadata.relay.inviteExpiresAt + ABANDON_GRACE_MS <= dependencies.now()
   ) {
     await dependencies.clearJournal(journal.metadata.journalId).catch(() => {})
+
     return 'abandoned'
   }
+
   return 'deferred'
 }
 
@@ -173,12 +192,15 @@ function recoveryCredentials(
   const credentials: { kind: 'resume' | 'invite'; token: string }[] = [
     { kind: 'resume', token: journal.secrets.pendingResumeToken }
   ]
+
   if (bundle?.current.token && bundle.current.token !== journal.secrets.pendingResumeToken) {
     credentials.push({ kind: 'resume', token: bundle.current.token })
   }
+
   if (journal.metadata.relay.inviteExpiresAt > now) {
     credentials.push({ kind: 'invite', token: journal.secrets.inviteToken })
   }
+
   return credentials
 }
 
@@ -208,6 +230,7 @@ function createInviteClient(
           }
         }
       }
+
       await dependencies.updateJournal(journal.metadata.journalId, () => next.metadata)
       replaceJournal(next)
     },
@@ -242,8 +265,10 @@ async function transitionToInviteAuthorization(
       authorizationMode: 'relay-basis'
     }
   }
+
   // Why: the branch change becomes durable only after authoritative not-found.
   await dependencies.updateJournal(journal.metadata.journalId, () => next.metadata)
+
   return next
 }
 
@@ -255,7 +280,9 @@ async function publishCommitted(
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
     throw new Error('relay pairing recovery was not committed')
   }
+
   const installed = endpoints.installStatus.result
+
   const reconciledJournal: MobileRelayPairingJournal = {
     ...journal,
     metadata: {
@@ -264,9 +291,11 @@ async function publishCommitted(
       authorizationMode: installed.authorizationMode
     }
   }
+
   if (journal.metadata.authorizationMode !== installed.authorizationMode) {
     await dependencies.updateJournal(journal.metadata.journalId, () => reconciledJournal.metadata)
   }
+
   await dependencies.writeCredentialBundle(
     promotePairingJournalCredential({ journal: reconciledJournal, installed })
   )
@@ -279,6 +308,7 @@ function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoin
   const url = new URL(relay.cellUrl)
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
+
   return {
     ...host,
     deviceToken: journal.secrets.deviceToken,

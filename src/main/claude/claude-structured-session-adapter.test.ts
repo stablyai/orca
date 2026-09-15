@@ -103,6 +103,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
       }
     })
+
     const adapter = adapterFor(claude)
 
     await adapter.acquire({
@@ -125,6 +126,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
       }
     })
+
     const adapter = adapterFor(claude)
 
     await adapter.acquire({
@@ -146,6 +148,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: true }]
       }
     })
+
     const adapter = adapterFor(claude, { resumed: true })
 
     await adapter.acquire({
@@ -168,6 +171,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         list_models: () => [{ value: 'opus', displayName: 'Opus', supportsFastMode: false }]
       }
     })
+
     const adapter = adapterFor(claude)
 
     await expect(
@@ -199,6 +203,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
           }
         }
       })
+
       const adapter = adapterFor(claude)
 
       await expect(
@@ -221,7 +226,9 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         }
       }
     })
+
     const adapter = adapterFor(claude)
+
     const input = {
       identity: identityFor(),
       fence: 7,
@@ -328,6 +335,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
 
   it('forwards configured launch environment while keeping ownership pins authoritative', async () => {
     const claude = fakeClaude()
+
     const adapter = adapterFor(claude, {
       env: {
         ANTHROPIC_AUTH_TOKEN: 'configured-token',
@@ -360,6 +368,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('re-pins the account home when the launch env would send the child elsewhere', async () => {
     const claude = fakeClaude()
     const accountHome = join(homedir(), '.claude')
+
     const adapter = adapterFor(claude, {
       claudeConfigDir: accountHome,
       env: { CLAUDE_CONFIG_DIR: '/other/account' }
@@ -404,6 +413,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         }
       }
     })
+
     const events: ClaudeStructuredSessionEvent[] = []
     await acquired(claude, {}, events)
 
@@ -425,15 +435,18 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
 
   it('resumes the same provider id and refuses an init proof for another session', async () => {
     const resumedClaude = fakeClaude()
+
     const resumed = adapterFor(resumedClaude, {
       resumed: true,
       resumeLeafUuid: 'leaf-before'
     })
+
     const acquisition = await resumed.acquire({
       identity: identityFor(),
       fence: 9,
       spawnToken: 'spawn-9'
     })
+
     expect(acquisition.link.origin).toBe('resumed')
     expect(acquisition.link.handle).toEqual({
       provider: 'claude',
@@ -480,6 +493,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       initProof: 'session-start',
       initAccount: { apiProvider: 'firstParty', tokenSource: 'none' }
     })
+
     const adapter = adapterFor(claude)
 
     await expect(
@@ -498,6 +512,7 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
       exitBeforeInit: 'claude stream-json exited (code 1): not logged in',
       unprovenCloseVerdict
     })
+
     return adapterFor(claude)
       .acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
       .catch((error: unknown) => error)
@@ -534,6 +549,7 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     const adapter = await acquired(claude)
     const connection = claude.connections[0]
     connection.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
+
     return { adapter, connection }
   }
 
@@ -544,6 +560,7 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
       root: 'exited',
       tree: 'unverifiable'
     })
+
     const error = await adapter.releaseAcquisition({ sessionId: 'session-1' }).catch((e) => e)
 
     expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
@@ -625,9 +642,11 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     connection.handlers.onExit?.(new Error('crashed'))
     await tick()
     let settled = false
+
     const closing = adapter.closeAll().then(() => {
       settled = true
     })
+
     await tick()
     expect(settled).toBe(false)
 
@@ -661,10 +680,12 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(claude, {}, events)
+
     const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' },
       suggestions: [{ type: 'addRules' }]
     })
+
     expect(events.at(-1)).toMatchObject({
       type: 'prompt',
       prompt: { kind: 'approval', toolName: 'Bash', promptKey: 'permission-1' }
@@ -691,6 +712,7 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
   it('collects every AskUserQuestion card before settling the one callback', async () => {
     const claude = fakeClaude()
     const adapter = await acquired(claude)
+
     const answered = invokeCanUseTool(
       claude.connections[0],
       'AskUserQuestion',
@@ -705,6 +727,7 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
         }
       }
     )
+
     adapter.bindPromptItemId('session-1', 'journal-q1', 'question-1', 'Library?')
     adapter.bindPromptItemId('session-1', 'journal-q2', 'question-1', 'Ship now?')
 
@@ -738,10 +761,12 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(claude, {}, events)
     const controller = new AbortController()
+
     const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-9', 'tool-9', {
       input: { command: 'rm -rf /' },
       signal: controller.signal
     })
+
     adapter.bindPromptItemId('session-1', 'journal-9', 'permission-9')
 
     controller.abort()
@@ -764,9 +789,11 @@ describe('ClaudeStructuredSessionAdapter prompts', () => {
   it('settles an in-flight permission callback when the session closes, leaving no dangling promise', async () => {
     const claude = fakeClaude()
     const adapter = await acquired(claude)
+
     const answered = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-close', 'tool-c', {
       input: { command: 'ls' }
     })
+
     await tick()
     expect(answered.settled()).toBe(false)
 

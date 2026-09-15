@@ -23,5 +23,6 @@ export function automationRowRecoveryHost(
   authority: AutomationAuthorityRef
 ): AutomationHostCatalogEntry | null {
   const ref = automationRowCatalogRef(captured, authority)
+
   return ref ? (catalog.byStableKey.get(hostStableKey(ref)) ?? null) : null
 }

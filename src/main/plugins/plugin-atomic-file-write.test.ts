@@ -13,13 +13,16 @@ const locks = vi.hoisted(() => ({ codes: [] as string[] }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
+
   return {
     ...actual,
     rename: async (source: string, target: string) => {
       const code = locks.codes.shift()
+
       if (!code) {
         return actual.rename(source, target)
       }
+
       throw Object.assign(new Error(`simulated ${code}`), { code })
     }
   }
@@ -28,6 +31,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 function withPlatform(platform: string): () => void {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+
   return () => {
     if (original) {
       Object.defineProperty(process, 'platform', original)
@@ -65,6 +69,7 @@ describe('writePluginFileAtomically', () => {
     const target = join(dir, 'provenance.json')
     await writePluginFileAtomically(target, '{}', { mode: 0o600 })
     const mode = (await stat(target)).mode & 0o777
+
     // Windows does not model POSIX permission bits.
     if (process.platform !== 'win32') {
       expect(mode).toBe(0o600)
@@ -79,6 +84,7 @@ describe('writePluginFileAtomically', () => {
   it('cleans up the temp file when the rename gives up', async () => {
     const restorePlatform = withPlatform('win32')
     locks.codes = Array.from({ length: 6 }, () => 'EPERM')
+
     try {
       await expect(writePluginFileAtomically(join(dir, 'current'), 'v')).rejects.toMatchObject({
         code: 'EPERM'
@@ -105,6 +111,7 @@ describe('writePluginFileAtomically', () => {
 describe('renamePluginFileWithWindowsRetry', () => {
   it('renames when the source exists', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-'))
+
     try {
       await writePluginFileAtomically(join(dir, 'from'), 'payload')
       await renamePluginFileWithWindowsRetry(join(dir, 'from'), join(dir, 'to'))
@@ -116,6 +123,7 @@ describe('renamePluginFileWithWindowsRetry', () => {
 
   it('rethrows a non-retryable error', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-'))
+
     try {
       await expect(
         renamePluginFileWithWindowsRetry(join(dir, 'absent'), join(dir, 'to'))
@@ -171,6 +179,7 @@ describe('renamePluginFileWithWindowsRetry', () => {
   it('does not retry off Windows', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-posix-'))
     const restorePlatform = withPlatform('linux')
+
     try {
       await writePluginFileAtomically(join(dir, 'from'), 'payload')
       locks.codes = ['EPERM', 'EPERM']

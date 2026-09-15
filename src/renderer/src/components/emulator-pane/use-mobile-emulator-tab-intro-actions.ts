@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 
 function closeAllSimulatorTabs(): void {
   const state = useAppStore.getState()
+
   for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
     for (const tab of tabs) {
       if (tab.contentType === 'simulator') {
@@ -41,6 +42,7 @@ export function useMobileEmulatorTabIntroActions(): {
     void (async () => {
       try {
         await updateSettings({ mobileEmulatorEnabled: false })
+
         // Why: updateSettings catches write failures; only close tabs once the
         // persisted setting is reflected in state.
         if (!isMobileEmulatorHidden()) {
@@ -50,8 +52,10 @@ export function useMobileEmulatorTabIntroActions(): {
               'Could not hide Mobile Emulator.'
             )
           )
+
           return
         }
+
         dismissIntro()
         closeAllSimulatorTabs()
         showMobileEmulatorHiddenToast({ openSettingsPage, openSettingsTarget })

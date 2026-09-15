@@ -44,6 +44,7 @@ export function UpdateAvailableRichContent({
 }): React.JSX.Element {
   const showMedia =
     release.mediaUrl && !mediaFailed && !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
+
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">

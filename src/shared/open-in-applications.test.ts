@@ -31,6 +31,7 @@ describe('normalizeOpenInApplications', () => {
 
   it('generates ids for missing or blank ids', () => {
     let counter = 0
+
     const rows = normalizeOpenInApplications(
       [
         { label: 'Cursor', command: 'cursor' },

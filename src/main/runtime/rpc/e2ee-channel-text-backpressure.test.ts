@@ -21,6 +21,7 @@ function publicKeyToBase64(key: Uint8Array): string {
 
 function createMockWs() {
   const sent: string[] = []
+
   return {
     OPEN: 1 as const,
     readyState: 1,
@@ -38,6 +39,7 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
   const clientKeys = generateKeyPair()
   const ws = createMockWs()
   const onError = vi.fn()
+
   const channel = new E2EEChannel(ws as unknown as WebSocket, {
     serverSecretKey: serverKeys.secretKey,
     resolveAuthenticatedDevice: (token) =>
@@ -48,6 +50,7 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
     onError,
     ...overrides
   })
+
   const sharedKey = deriveSharedKey(clientKeys.secretKey, serverKeys.publicKey)
   channel.handleRawMessage(
     JSON.stringify({ type: 'e2ee_hello', publicKeyB64: publicKeyToBase64(clientKeys.publicKey) })
@@ -55,6 +58,7 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
   channel.handleRawMessage(
     encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
   )
+
   return { channel, ws, sharedKey, onError }
 }
 
@@ -125,6 +129,7 @@ describe('E2EE text reply backpressure', () => {
       maxQueuedBytes: 150,
       maxQueuedFrames: 10
     })
+
     const first = setup({ outboundMemoryBudget })
     const second = setup({ outboundMemoryBudget })
     first.ws.bufferedAmount = 1_001

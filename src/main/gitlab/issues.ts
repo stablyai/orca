@@ -32,6 +32,7 @@ export async function getIssue(
 ): Promise<GitLabIssueInfo | null> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions)
+
   // Why: don't fall back to a cwd-inferred `glab issue view` when the project
   // can't be resolved — on an SSH connection cwd is not the repo dir, so glab
   // hits a non-repo dir and fails with `git: exit status 128`. Return null
@@ -40,7 +41,9 @@ export async function getIssue(
   if (!projectRef) {
     return null
   }
+
   await acquire()
+
   try {
     const { stdout } = await glabExecFileAsync(
       [
@@ -50,7 +53,9 @@ export async function getIssue(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = JSON.parse(stdout)
+
     return mapGitLabIssueInfo(data)
   } catch {
     return null
@@ -82,6 +87,7 @@ export async function listIssues(
   const currentPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
   const perPage = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -89,6 +95,7 @@ export async function listIssues(
     connectionId,
     localGitOptions
   )
+
   // Why: when the project can't be resolved we must NOT fall back to an
   // unscoped `glab issue list` that infers the project from cwd. For a repo
   // on an SSH connection there is no local cwd matching the repo, so glab
@@ -106,10 +113,13 @@ export async function listIssues(
       }
     }
   }
+
   await acquire()
+
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
     const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
+
     const { body, headers } = await glabApiWithHeaders(
       [
         ...glabHostnameArgs(projectRef, connectionId),
@@ -117,11 +127,13 @@ export async function listIssues(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = parseGlabJsonList<Record<string, unknown>>(body)
     const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
     // Why: a proxy can strip both headers, so a full page advertises one more to probe (#13357);
     // TaskPage retreats if that probe comes back empty.
     const probedTotalPages = data.length < perPage ? currentPage : currentPage + 1
+
     // Why: GitLab's project issues endpoint returns true issues only
     // (MRs are a separate endpoint), so no equivalent of GitHub's
     // pull_request filter is needed here.
@@ -157,10 +169,13 @@ export async function createIssue(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
+
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
+
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -168,13 +183,16 @@ export async function createIssue(
     connectionId,
     localGitOptions
   )
+
   if (!projectRef) {
     return {
       ok: false,
       error: 'Could not resolve GitLab project for this repository'
     }
   }
+
   await acquire()
+
   try {
     const { stdout } = await glabExecFileAsync(
       [
@@ -191,10 +209,13 @@ export async function createIssue(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = JSON.parse(stdout) as { iid?: number; web_url?: string; url?: string }
+
     if (typeof data.iid !== 'number') {
       return { ok: false, error: 'Unexpected response from GitLab' }
     }
+
     return {
       ok: true,
       number: data.iid,
@@ -202,6 +223,7 @@ export async function createIssue(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+
     return { ok: false, error: message }
   } finally {
     release()
@@ -232,13 +254,16 @@ export async function addIssueComment(
         localGitOptions
       )
     ).source
+
   if (!projectRef) {
     return {
       ok: false,
       error: 'Could not resolve GitLab project for this repository'
     }
   }
+
   await acquire()
+
   try {
     const { stdout } = await glabExecFileAsync(
       [
@@ -252,6 +277,7 @@ export async function addIssueComment(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = JSON.parse(stdout) as {
       id?: number
       author?: { username?: string; avatar_url?: string; state?: string } | null
@@ -261,6 +287,7 @@ export async function addIssueComment(
       // from the issue URL. We don't have the issue URL here, so leave blank
       // — the renderer falls back to the issue URL when comment.url is empty.
     }
+
     const comment: MRComment = {
       id: data.id ?? Date.now(),
       author: data.author?.username ?? 'You',
@@ -270,9 +297,11 @@ export async function addIssueComment(
       url: '',
       isBot: data.author?.state === 'bot'
     }
+
     return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
+
     return { ok: false, error: classifyGlabError(stderr).message }
   } finally {
     release()

@@ -1,4 +1,5 @@
 import type { ComposerModel } from './composer-model'
+
 export type ComposerSubmitState = {
   folderSubmitOrchestration: Pick<ComposerModel, 'submitFolderTarget'>
   fullSubmitSourcePreparation: Pick<ComposerModel, 'prepareFullSubmitSource'>

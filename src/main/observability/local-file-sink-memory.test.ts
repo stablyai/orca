@@ -9,11 +9,14 @@ function parseLine(raw: string): Record<string, unknown> {
 }
 
 let directory: string
+
 let sink: LocalFileSink | undefined
+
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-trace-memory-'))
   vi.useFakeTimers()
 })
+
 afterEach(() => {
   sink?.close()
   sink = undefined
@@ -25,8 +28,10 @@ function retainedHeap(): number {
   if (!globalThis.gc) {
     throw new Error('Memory regression requires --expose-gc')
   }
+
   globalThis.gc()
   globalThis.gc()
+
   return process.memoryUsage().heapUsed
 }
 
@@ -37,16 +42,19 @@ describe('trace sink rejected record retention', () => {
     const byteLength = vi.spyOn(Buffer, 'byteLength')
     let beforeFlush: number
     let afterFlush: number
+
     try {
       for (let index = 0; index < 20; index++) {
         sink.push({ index, text: '💡漢字' })
       }
+
       beforeFlush = byteLength.mock.calls.length
       sink.flush()
       afterFlush = byteLength.mock.calls.length
     } finally {
       byteLength.mockRestore()
     }
+
     expect(beforeFlush).toBe(0)
     expect(afterFlush).toBe(20)
   })
@@ -55,9 +63,11 @@ describe('trace sink rejected record retention', () => {
     const filePath = join(directory, 'trace.ndjson')
     sink = createLocalFileSink({ filePath, maxBytes: 64 * 1024, batchWindowMs: 200 })
     const before = retainedHeap()
+
     for (let index = 0; index < 24; index++) {
       sink.push({ index, payload: 'x'.repeat(1024 * 1024) })
     }
+
     const retained = retainedHeap() - before
     expect(statSync(filePath).size).toBe(0)
     expect(vi.getTimerCount()).toBe(1)

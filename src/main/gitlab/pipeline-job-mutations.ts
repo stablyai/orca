@@ -60,6 +60,7 @@ export async function getJobTrace(
     projectRef,
     async (projectRef) => {
       await acquire()
+
       try {
         const { stdout } = await glabExecFileAsync(
           [
@@ -72,14 +73,17 @@ export async function getJobTrace(
             timeout: JOB_TRACE_EXEC_TIMEOUT_MS
           }
         )
+
         return { ok: true, trace: stdout }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         // A job with no log is an empty log, not a failure: surfacing the 404 would
         // pin an error on the Checks row for a job canceled before it started.
         if (isMissingJobLogError(msg)) {
           return { ok: true, trace: '' }
         }
+
         return { ok: false, error: classifyJobLogError(msg).message }
       } finally {
         release()
@@ -105,6 +109,7 @@ export async function retryJob(
     projectRef,
     async (projectRef) => {
       await acquire()
+
       try {
         const { stdout } = await glabExecFileAsync(
           [
@@ -116,13 +121,16 @@ export async function retryJob(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         const trimmed = stdout.trim()
+
         return {
           ok: true,
           ...(trimmed ? { job: mapRetriedPipelineJob(JSON.parse(trimmed), jobId) } : {})
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         return { ok: false, error: classifyGlabError(msg).message }
       } finally {
         release()

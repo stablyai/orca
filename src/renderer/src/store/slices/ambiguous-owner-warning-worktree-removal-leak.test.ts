@@ -24,6 +24,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -48,6 +49,7 @@ import {
 import { createTestStore, seedStore, makeWorktree } from './store-test-helpers'
 
 const WT1 = 'repo1::/path/wt1'
+
 const WT2 = 'repo1::/path/wt2'
 
 function seedWorktrees(store: ReturnType<typeof createTestStore>): void {
@@ -120,6 +122,7 @@ describe('ambiguous-owner warning set is pruned on worktree removal', () => {
   it('does not accumulate across many remove cycles', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const store = createTestStore()
+
     for (let index = 0; index < 100; index += 1) {
       const worktreeId = `repo1::/path/cycle-${index}`
       seedStore(store, {

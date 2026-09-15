@@ -30,7 +30,9 @@ function failureDescription(failure: ComposerDropFailure): string | undefined {
   if (failure.status === 'failed') {
     return failure.reason ? compactIpcErrorMessage(failure.reason) : undefined
   }
+
   const copy = SKIP_REASON_COPY[failure.reason]
+
   return copy ? translate(copy.key, copy.fallback) : undefined
 }
 

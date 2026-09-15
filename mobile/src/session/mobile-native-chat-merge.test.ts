@@ -24,6 +24,7 @@ describe('mergeNativeChatMessages', () => {
       [msg('a'), msg('b'), msg('c')],
       [msg('b', { blocks: [{ type: 'text', text: 'updated' }] })]
     )
+
     expect(merged.map((m) => m.id)).toEqual(['a', 'b', 'c'])
     expect(merged[1]!.blocks).toEqual([{ type: 'text', text: 'updated' }])
   })
@@ -33,6 +34,7 @@ describe('mergeNativeChatMessages', () => {
       [msg('a', { source: 'transcript', blocks: [{ type: 'text', text: 'real' }] })],
       [msg('a', { source: 'scrape', blocks: [{ type: 'text', text: 'scraped' }] })]
     )
+
     expect(merged[0]!.blocks).toEqual([{ type: 'text', text: 'real' }])
   })
 

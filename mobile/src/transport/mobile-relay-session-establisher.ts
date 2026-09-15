@@ -56,22 +56,29 @@ export class MobileRelaySessionEstablisher {
     { outcome: 'established' } | { outcome: 'aborted' } | { outcome: 'failed'; error: Error | null }
   > {
     let lastError: Error | null = null
+
     for (const credential of credentials) {
       const result = await this.dial(credential)
+
       if (result.ok) {
         return { outcome: 'established' }
       }
+
       if (result.error instanceof RelayDialAbortedError) {
         return { outcome: 'aborted' }
       }
+
       lastError = result.error
       this.args.onDialFailure(result.error)
+
       if (!this.args.controller.shouldTryGraceAfterRelayFailure(result.error)) {
         break
       }
+
       // Why: a rejected version stays invalid; retry only the grace credential.
       this.args.controller.recordRejectedCredential(credential.version)
     }
+
     return { outcome: 'failed', error: lastError }
   }
 
@@ -94,10 +101,12 @@ export class MobileRelaySessionEstablisher {
     const { args } = this
     const relay = args.relay()
     const bundle = args.bundle()
+
     // Why: director resolution and grace fallback can finish after background/stop.
     if (!args.isActive() || !relay || !bundle) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
+
     const session = args.openRelay(
       relay,
       credential,
@@ -112,6 +121,7 @@ export class MobileRelaySessionEstablisher {
         }
       }
     )
+
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.
       await args.logical.migrateTo(
@@ -124,13 +134,18 @@ export class MobileRelaySessionEstablisher {
       if (!args.isActive() || directWon(args.logical)) {
         return { ok: false, error: new RelayDialAbortedError() }
       }
+
       return { ok: false, error: session.getFailure() ?? toError(error) }
     }
+
     args.controller.setActiveSession(session)
+
     if (!args.isForeground()) {
       args.controller.suspendActiveRelay(args.logical)
     }
+
     args.recordMigration()
+
     try {
       const applied = await persistResumeConfirmation({
         session,
@@ -138,6 +153,7 @@ export class MobileRelaySessionEstablisher {
         usedCredentialVersion: credential.version,
         writeBundle: args.writeBundle
       })
+
       args.adoptBundle(applied.bundle)
       args.scheduleLease(applied.leaseExpiry)
     } catch (error) {
@@ -145,7 +161,9 @@ export class MobileRelaySessionEstablisher {
       // failure would book backoff against it and can suspend the healthy session.
       args.onBookkeepingError(toError(error))
     }
+
     args.scheduleDirectProbe()
+
     return { ok: true }
   }
 }

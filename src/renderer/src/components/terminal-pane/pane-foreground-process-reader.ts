@@ -27,8 +27,10 @@ export function createPaneForegroundProcessReader(deps: {
     const options = expectedIncarnationId ? { expectedIncarnationId } : undefined
     const requestStartedAtMonotonic = performance.now()
     const remote = deps.isRemotePtyId?.(ptyId) === true
+
     if (remote) {
       const nextBindingKey = `${ptyId}\0${expectedIncarnationId ?? ''}`
+
       if (bindingKey !== nextBindingKey) {
         bindingKey = nextBindingKey
         authorityGeneration = null
@@ -36,11 +38,14 @@ export function createPaneForegroundProcessReader(deps: {
         knownAuthorityGenerations.clear()
       }
     }
+
     try {
       const reader = requiresConfirmation
         ? (deps.confirmForegroundProcess ?? deps.readForegroundProcess)
         : deps.readForegroundProcess
+
       const inspection = await (options ? reader(ptyId, options) : reader(ptyId))
+
       if (isClientOnlyUnverifiableInspection(inspection)) {
         // A client-only result is never shell evidence, even for a local
         // adapter that lost its provider while the pane stayed mounted.
@@ -59,12 +64,15 @@ export function createPaneForegroundProcessReader(deps: {
           lastObservationEpoch: observationEpoch,
           knownAuthorityGenerations
         })
+
         if (admitted) {
           authorityGeneration = admitted.authorityGeneration
           observationEpoch = admitted.observationEpoch
           knownAuthorityGenerations.add(admitted.authorityGeneration)
         }
+
         remoteEvidenceVerdict = admitted?.verdict ?? 'unverifiable'
+
         if (admitted?.verdict === 'live') {
           processName = admitted.processName
         }
@@ -76,6 +84,7 @@ export function createPaneForegroundProcessReader(deps: {
       // providers: no answer is still an unverifiable remote verdict.
       remoteEvidenceVerdict = 'unverifiable'
     }
+
     return {
       processName,
       remoteEvidenceVerdict,

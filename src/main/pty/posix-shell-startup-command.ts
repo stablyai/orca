@@ -4,6 +4,7 @@ export const POSIX_SHELL_STARTUP_COMMAND_ENV = 'ORCA_POSIX_SHELL_STARTUP_COMMAND
 
 export function supportsPosixShellStartupCommand(shellPath: string): boolean {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+
   return shellName === 'bash' || shellName === 'zsh' || shellName === 'fish'
 }
 

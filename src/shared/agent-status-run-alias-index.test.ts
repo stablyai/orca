@@ -50,8 +50,10 @@ describe('agent status provider alias index', () => {
       scope({ executionHostId: 'runtime:peer-a' }),
       scope({ workspaceId: 'folder-1', workspaceKind: 'folder' })
     ]
+
     const providers = ['claude', 'codex'] as const
     const sessionKeyKinds = ['session_id', 'conversation_id'] as const
+
     const aliases = scopes.flatMap((executionScope) =>
       providers.flatMap((provider) =>
         sessionKeyKinds.map((sessionKeyKind) =>
@@ -76,10 +78,12 @@ describe('agent status provider alias index', () => {
   it('serializes deterministically regardless of insertion order', () => {
     const firstKey = serializeAgentStatusProviderAliasKey(alias({ providerId: 'provider-a' }))
     const secondKey = serializeAgentStatusProviderAliasKey(alias({ providerId: 'provider-b' }))
+
     const first: AgentStatusRunAliasIndex = new Map([
       [secondKey, new Set(['run-b', 'run-a'])],
       [firstKey, new Set(['run-c'])]
     ])
+
     const second: AgentStatusRunAliasIndex = new Map([
       [firstKey, new Set(['run-c'])],
       [secondKey, new Set(['run-a', 'run-b'])]
@@ -109,6 +113,7 @@ describe('agent status provider alias index', () => {
   it('rejects split semantic duplicates instead of storing two raw keys', () => {
     const canonical = serializeAgentStatusProviderAliasKey(alias())
     const noncanonical = canonical.replace(':[', ':[ ')
+
     const serialized = JSON.stringify([
       { alias: canonical, runIds: ['run-a'] },
       { alias: noncanonical, runIds: ['run-b'] }
@@ -121,7 +126,9 @@ describe('agent status provider alias index', () => {
     const canonical = serializeAgentStatusProviderAliasKey(
       alias({ executionHostId: 'ssh:target-a' })
     )
+
     const noncanonical = canonical.replace('ssh:target-a', 'ssh:%74arget-a')
+
     const serialized = JSON.stringify([
       { alias: canonical, runIds: ['run-a'] },
       { alias: noncanonical, runIds: ['run-b'] }
@@ -140,6 +147,7 @@ describe('agent status provider alias index', () => {
 
   it('rejects an aggregate run-reference count beyond the global limit', () => {
     const index = fullAliasIndex(65)
+
     const serialized = JSON.stringify(
       [...index].map(([aliasKey, runIds]) => ({ alias: aliasKey, runIds: [...runIds] }))
     )

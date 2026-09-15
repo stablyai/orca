@@ -34,6 +34,7 @@ export type StoreIdentityChurnRow = {
 // Why bounded: an unbounded deep compare over a fully populated store would
 // dominate the measurement it is trying to take.
 const NODE_BUDGET = 20_000
+
 const MAX_DEPTH = 12
 
 type CompareBudget = { nodesLeft: number }
@@ -44,7 +45,9 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
+
   const prototype = Object.getPrototypeOf(value)
+
   return prototype === Object.prototype || prototype === null
 }
 
@@ -53,30 +56,40 @@ function valuesEqual(left: unknown, right: unknown, depth: number, budget: Compa
   if (Object.is(left, right)) {
     return true
   }
+
   budget.nodesLeft -= 1
+
   if (budget.nodesLeft <= 0 || depth > MAX_DEPTH) {
     return false
   }
+
   if (Array.isArray(left) || Array.isArray(right)) {
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
       return false
     }
+
     return left.every((entry, index) => valuesEqual(entry, right[index], depth + 1, budget))
   }
+
   if (!isPlainRecord(left) || !isPlainRecord(right)) {
     return false
   }
+
   const leftKeys = Object.keys(left)
+
   if (leftKeys.length !== Object.keys(right).length) {
     return false
   }
+
   return leftKeys.every(
     (key) => Object.hasOwn(right, key) && valuesEqual(left[key], right[key], depth + 1, budget)
   )
 }
 
 const churnedWritesByField = new Map<string, number>()
+
 const replacedWritesByField = new Map<string, number>()
+
 const churnedWritesByFieldSite = new Map<string, Map<string, number>>()
 
 function increment(counts: Map<string, number>, field: string): void {
@@ -95,16 +108,20 @@ export function armStoreIdentityChurnProbe(options?: { captureSites?: boolean })
 // the code to fix; the frames above it are the shared write plumbing. Every store
 // write middleware is named *-probe.ts, so a sibling wrapper's frame is skipped too.
 const SOURCE_FRAME = /:\d+:\d+\)?$/
+
 const PROBE_FRAME = /-probe\.[cm]?[jt]s\b/
 
 function callingSite(): string {
   const stack = new Error('store identity churn site').stack?.split('\n') ?? []
+
   for (const line of stack.slice(2)) {
     const frame = line.trim()
+
     if (SOURCE_FRAME.test(frame) && !PROBE_FRAME.test(frame) && !frame.includes('node_modules')) {
       return frame
     }
   }
+
   return 'unknown'
 }
 
@@ -129,10 +146,12 @@ export function readStoreIdentityChurnReport(): StoreIdentityChurnRow[] {
 function recordSite(field: string): void {
   const site = callingSite()
   let sites = churnedWritesByFieldSite.get(field)
+
   if (!sites) {
     sites = new Map()
     churnedWritesByFieldSite.set(field, sites)
   }
+
   sites.set(site, (sites.get(site) ?? 0) + 1)
 }
 
@@ -148,19 +167,25 @@ function recordWrite(
   fields: readonly string[]
 ): void {
   const budget: CompareBudget = { nodesLeft: NODE_BUDGET }
+
   for (const field of fields) {
     const before = previous[field]
     const after = next[field]
+
     if (Object.is(before, after)) {
       continue
     }
+
     increment(replacedWritesByField, field)
+
     // Primitives cannot churn: a different primitive is a real change.
     if (typeof after !== 'object' || after === null) {
       continue
     }
+
     if (valuesEqual(before, after, 0, budget)) {
       increment(churnedWritesByField, field)
+
       if (storeIdentityChurnProbe.captureSites) {
         recordSite(field)
       }
@@ -180,27 +205,36 @@ export function withStoreIdentityChurnProbe<TState>(
     const wrapped = ((partial: unknown, replace?: unknown): void => {
       if (!storeIdentityChurnProbe.armed) {
         ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
+
         return
       }
+
       const previous = get() as Record<string, unknown>
+
       // Why the write is passed through untouched: zustand owns when and how an
       // updater runs. The probe only compares the states on either side of it.
       ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
+
       try {
         const next = get() as Record<string, unknown>
+
         if (next === previous) {
           return
         }
+
         const fields =
           replace !== true && partial !== null && typeof partial === 'object'
             ? Object.keys(partial)
             : Object.keys(next)
+
         recordWrite(previous, next, fields)
       } catch {
         // A diagnostic on the app's universal write path must never break writes.
       }
     }) as typeof set
+
     api.setState = wrapped as typeof api.setState
+
     return createState(wrapped, get, api)
   }
 }

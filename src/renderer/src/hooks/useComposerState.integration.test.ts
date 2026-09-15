@@ -9,12 +9,15 @@ let originalApiDescriptor: PropertyDescriptor | undefined
 
 beforeEach(() => {
   originalApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+
   const ui = {
     onFileDrop: vi.fn<Window['api']['ui']['onFileDrop']>()
   } satisfies Pick<Window['api']['ui'], 'onFileDrop'>
+
   const preflight = {
     detectAgents: vi.fn<Window['api']['preflight']['detectAgents']>().mockResolvedValue([])
   } satisfies Pick<Window['api']['preflight'], 'detectAgents'>
+
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { preflight, ui }
@@ -23,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+
   if (originalApiDescriptor) {
     Object.defineProperty(window, 'api', originalApiDescriptor)
   } else {
@@ -45,12 +49,14 @@ describe('useComposerState integrated lifecycle', () => {
     vi.spyOn(window.api.ui, 'onFileDrop').mockImplementation(() => {
       const unsubscribe = vi.fn()
       unsubscribes.push(unsubscribe)
+
       return unsubscribe
     })
 
     const first = renderHook(() =>
       useComposerState({ initialName: 'first', persistDraft: false, createGateMode: 'quick' })
     )
+
     const second = renderHook(() =>
       useComposerState({ initialName: 'second', persistDraft: false, createGateMode: 'quick' })
     )

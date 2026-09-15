@@ -22,6 +22,7 @@ describe('startup UI hydration fallback', () => {
       showActiveOnly: true,
       filterRepoIds: ['repo-1']
     })
+
     const hydratePersistedUI = vi.fn<(ui: PersistedUIState) => void>()
 
     const uiHydrated = hydratePersistedUIAfterStartupRead({
@@ -34,6 +35,7 @@ describe('startup UI hydration fallback', () => {
     // already applied. The catch path must not replace the loaded UI with
     // fallback defaults that would then be written back to disk.
     const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
+
     if (fallbackUI) {
       hydratePersistedUI(fallbackUI)
     }
@@ -46,6 +48,7 @@ describe('startup UI hydration fallback', () => {
     const hydratePersistedUI = vi.fn<(ui: PersistedUIState) => void>()
 
     const fallbackUI = getStartupErrorFallbackUI(false)
+
     if (fallbackUI) {
       hydratePersistedUI(fallbackUI)
     }

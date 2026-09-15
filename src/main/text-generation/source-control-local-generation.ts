@@ -38,9 +38,11 @@ export function runLocalPlanForAgent(input: {
       holdHomeLockUntilExit,
       spawnAgent: input.spawnAgent
     })
+
   if (input.agentId !== 'codex') {
     return start().result
   }
+
   return runCodexLocalPlanUnderHomeLock(start, input.target, input.operation)
 }
 
@@ -54,6 +56,7 @@ function runCodexLocalPlanUnderHomeLock(
   let publishResult!: (result: InternalTextGenerationResult) => void
   let rejectResult!: (error: unknown) => void
   let resultPublished = false
+
   const result = new Promise<InternalTextGenerationResult>((resolve, reject) => {
     publishResult = (value) => {
       if (!resultPublished) {
@@ -61,21 +64,27 @@ function runCodexLocalPlanUnderHomeLock(
         resolve(value)
       }
     }
+
     rejectResult = reject
   })
+
   const queuedCancel = (): void => {
     canceledWhileQueued = true
     publishResult({ success: false, error: 'Generation canceled.', canceled: true })
   }
+
   setLocalGenerationCancelToken(laneKey, queuedCancel)
   void withCodexHomeProcessLock(
     resolveCodexHomeProcessLockKeyForSpawnEnv(target.env, target.wslDistro),
     async () => {
       if (canceledWhileQueued) {
         publishResult({ success: false, error: 'Generation canceled.', canceled: true })
+
         return
       }
+
       const execution = start(true)
+
       try {
         publishResult(await execution.result)
       } catch (error) {
@@ -93,6 +102,7 @@ function runCodexLocalPlanUnderHomeLock(
       }
     })
     .finally(() => clearLocalGenerationCancelToken(laneKey, queuedCancel))
+
   return result
 }
 
@@ -103,6 +113,7 @@ export function runCodexProcessWithHomeLock<T>(
   return new Promise<T>((resolve, reject) => {
     void withCodexHomeProcessLock(lockKey, async () => {
       const execution = start()
+
       try {
         resolve(await execution.result)
       } catch (error) {

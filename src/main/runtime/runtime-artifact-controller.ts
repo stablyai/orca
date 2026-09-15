@@ -53,6 +53,7 @@ export class RuntimeArtifactController {
     if (!this.service) {
       throw new Error('Artifact service is unavailable.')
     }
+
     return this.service
   }
 }

@@ -42,14 +42,17 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   clientCapabilities: readonly RuntimeCapability[] = []
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
+
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RemoteRuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
     )
   }
+
   const requestId = randomUUID()
   const statusRequestId = validateStatus ? randomUUID() : null
+
   const serializedStatusRequest = statusRequestId
     ? serializeRemoteRuntimePayload({
         id: statusRequestId,
@@ -57,11 +60,13 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         method: 'status.get'
       })
     : null
+
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
     clientCapabilities: remoteRuntimeClientCapabilities(clientCapabilities)
   })
+
   const pendingRequest = {
     preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
       serializeRemoteRuntimeRpcRequest({
@@ -73,7 +78,9 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       })
     )
   }
+
   let serializedRequest = takeRemoteRuntimePreparedRequest(pendingRequest)
+
   return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
     const keyPair = generateKeyPair()
     const sharedKey = deriveSharedKey(keyPair.secretKey, publicKeyFromBase64(pairing.publicKeyB64))
@@ -84,13 +91,16 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     const cleanupSocketListeners = (): void => {
       signal?.removeEventListener('abort', onAbort)
       const socket = ws
+
       if (!socket) {
         return
       }
+
       socket.off('open', onOpen)
       socket.off('error', onError)
       socket.off('close', onClose)
       socket.off('message', onMessage)
+
       if (socket.readyState !== WebSocket.CLOSED) {
         socket.on('error', ignoreSettledRemoteRuntimeSocketError)
       }
@@ -114,10 +124,13 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
 
     function refreshTimeout(): void {
       const refreshableTimeout = timeout as { refresh?: () => void }
+
       if (typeof refreshableTimeout.refresh === 'function') {
         refreshableTimeout.refresh()
+
         return
       }
+
       clearTimeout(timeout)
       timeout = setTimeout(onTimeout, timeoutMs)
     }
@@ -128,14 +141,17 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
+
       try {
         cleanupSocketListeners()
         ws?.close()
       } catch {
         // ignore best-effort close
       }
+
       if (result.ok === false) {
         reject(result.error)
       } else {
@@ -144,12 +160,14 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     }
 
     const finishError = (error: Error): void => finish({ ok: false, error })
+
     const finishResponse = (response: RuntimeRpcResponse<TResult>): void =>
       finish({ ok: true, response })
 
     function sendRequestedRpc(): void {
       const request = serializedRequest
       serializedRequest = null
+
       if (request === null) {
         finishError(
           new RemoteRuntimeClientError(
@@ -157,8 +175,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
             'Remote Orca runtime request was released before it could be sent.'
           )
         )
+
         return
       }
+
       ws?.send(encrypt(request, sharedKey))
     }
 
@@ -177,8 +197,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     })
 
     signal?.addEventListener('abort', onAbort, { once: true })
+
     if (signal?.aborted) {
       onAbort()
+
       return
     }
 
@@ -189,6 +211,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       finishError(
         new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`)
       )
+
       return
     }
 
@@ -227,6 +250,7 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       if (settled) {
         return
       }
+
       if (isBinary) {
         finishError(
           new RemoteRuntimeClientError(
@@ -238,8 +262,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
             }
           )
         )
+
         return
       }
+
       router.handleTextFrame(data.toString())
     }
 

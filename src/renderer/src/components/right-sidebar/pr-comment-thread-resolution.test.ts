@@ -24,8 +24,10 @@ describe('PR comment thread resolution helpers', () => {
       comment({ id: 2, threadId: 'thread-b', isResolved: false }),
       comment({ id: 3, threadId: 'thread-b', isResolved: false })
     ]
+
     const afterFirstSuccess = markPRCommentThreadResolved(base, 'thread-a', true)
     const failedThreadSnapshot = afterFirstSuccess.filter((item) => item.threadId === 'thread-b')
+
     const afterSecondOptimisticUpdate = markPRCommentThreadResolved(
       afterFirstSuccess,
       'thread-b',

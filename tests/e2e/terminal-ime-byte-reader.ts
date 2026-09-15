@@ -20,6 +20,7 @@ export function createTerminalImeByteReader(
   const readyMarker = `ORCA_IME_READER_READY_${runId}`
   const resultPrefix = `ORCA_IME_BYTES_${runId}`
   const scriptPath = path.join(testRepoPath, `.orca-ime-byte-reader-${runId}.cjs`)
+
   const source = `
 const expectedLineCount = ${expectedLineCount}
 const readyMarker = ${JSON.stringify(readyMarker)}
@@ -50,7 +51,9 @@ process.stdin.on('data', (chunk) => {
   }
 })
 `
+
   writeFileSync(scriptPath, source)
+
   return { expectedLineCount, readyMarker, resultPrefix, scriptPath }
 }
 
@@ -75,17 +78,21 @@ export async function waitForTerminalImeBytes(
         const terminal = await getTerminalContent(page, 100_000)
         const resultPattern = new RegExp(`${reader.resultPrefix}:(\\d+):([0-9a-f]+)`, 'g')
         const bySequence = new Map<number, string>()
+
         for (const match of terminal.matchAll(resultPattern)) {
           bySequence.set(Number(match[1]), match[2])
         }
+
         results = [...bySequence.entries()]
           .sort(([left], [right]) => left - right)
           .map(([, hex]) => hex)
+
         return results.length
       },
       { timeout: timeoutMs, message: 'IME byte reader did not receive every expected line' }
     )
     .toBe(reader.expectedLineCount)
+
   return results
 }
 

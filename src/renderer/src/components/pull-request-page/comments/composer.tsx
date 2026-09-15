@@ -46,18 +46,22 @@ export function GHCommentComposer({
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
+
     if (!el) {
       return
     }
+
     el.style.height = 'auto'
     el.style.height = `${Math.max(80, Math.min(el.scrollHeight, 240))}px`
   }, [])
 
   const handleSubmit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
+
     if (bodyState.status === 'empty') {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -65,9 +69,12 @@ export function GHCommentComposer({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setSubmitting(true)
+
     try {
       const result = await addIssueCommentForRepo({
         repoPath,
@@ -78,9 +85,11 @@ export function GHCommentComposer({
         type: itemType,
         prRepo
       })
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         setBody('')
         requestAnimationFrame(autoGrow)
@@ -117,6 +126,7 @@ export function GHCommentComposer({
     prRepo,
     onCommentAdded
   ])
+
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(

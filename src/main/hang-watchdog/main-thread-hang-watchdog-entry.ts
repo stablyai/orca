@@ -21,6 +21,7 @@ export function recordHangObservation(options: {
   if (!options.markerPath) {
     return
   }
+
   try {
     writeHangDetectionMarker(options.markerPath, {
       detectedAt: Date.now(),
@@ -40,6 +41,7 @@ export function runWatchdog(
   if (!port) {
     return
   }
+
   const loop = createHangWatchdogDetectionLoop({
     timeoutMs: config.timeoutMs,
     checkIntervalMs: config.checkIntervalMs,
@@ -65,6 +67,7 @@ export function runWatchdog(
     () => loop.tick(),
     config.checkIntervalMs
   )
+
   port.on('message', (message: MainToHangWatchdogWorkerMessage) => {
     if (message.type === 'heartbeat') {
       loop.recordHeartbeat()
@@ -73,6 +76,7 @@ export function runWatchdog(
         clearInterval(checkTimer)
         checkTimer = null
       }
+
       port.close()
     }
   })
@@ -80,6 +84,7 @@ export function runWatchdog(
 
 export function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogWorkerData {
   const data = value as Partial<HangWatchdogWorkerData> | null
+
   return (
     !!data &&
     Number.isInteger(data.parentPid) &&

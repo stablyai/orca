@@ -40,6 +40,7 @@ export default function WorkspaceKanbanDrawer(
   if (!props.open && !lingering) {
     return null
   }
+
   return <WorkspaceKanbanDrawerContent {...props} />
 }
 
@@ -62,9 +63,11 @@ function WorkspaceKanbanDrawerContent({
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const syncTaskStatusFromWorkspaceBoard = useAppStore((s) => s.syncTaskStatusFromWorkspaceBoard)
+
   const setSyncTaskStatusFromWorkspaceBoard = useAppStore(
     (s) => s.setSyncTaskStatusFromWorkspaceBoard
   )
+
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -75,10 +78,12 @@ function WorkspaceKanbanDrawerContent({
   const laneScrollerRef = useRef<HTMLDivElement>(null)
   const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const { createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
+
   const manualOrderCatalog = useMemo(
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
+
   const {
     activeWorktreeIdentity,
     boardDragGroups,
@@ -98,6 +103,7 @@ function WorkspaceKanbanDrawerContent({
     sortBy,
     workspaceStatuses
   })
+
   const {
     selectedWorktreeIds,
     selectedWorktrees,
@@ -107,6 +113,7 @@ function WorkspaceKanbanDrawerContent({
     clearSelection,
     selectForContextMenu
   } = useWorkspaceKanbanSelection(open, boardWorktrees, renderedBoardWorktrees)
+
   const { handleAreaSelectionPointerDown } = useWorkspaceKanbanAreaSelection({
     open,
     boardRef,
@@ -115,13 +122,16 @@ function WorkspaceKanbanDrawerContent({
     selectionAnchorId,
     updateSelectionForArea
   })
+
   const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
     useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
+
   const maybeSyncWorkspaceBoardTaskStatuses = useWorkspaceBoardTaskStatusSync({
     enabled: syncTaskStatusFromWorkspaceBoard,
     worktreesById: worktreeById,
     workspaceStatuses
   })
+
   const {
     dropPointerDraggedWorktreesInStatus,
     dropWorktreesAtEndOfStatus,
@@ -144,6 +154,7 @@ function WorkspaceKanbanDrawerContent({
     manualOrderCatalog,
     worktreesByStatus
   })
+
   // Why: dragging or right-clicking one visible match must not silently move
   // hidden selected cards. selectedWorktreeIds stays unfiltered so highlighting
   // and area-selection anchoring still see the whole selection.
@@ -156,17 +167,20 @@ function WorkspaceKanbanDrawerContent({
         : selectedWorktrees,
     [matchingWorktreeIds, selectedWorktrees]
   )
+
   // Why: selectForContextMenu closes over the unfiltered selection, so the
   // "Move to Status" payload has to be narrowed here too.
   const selectRenderedForContextMenu = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const selection = selectForContextMenu(event, worktree)
+
       return matchingWorktreeIds
         ? selection.filter((item) => matchingWorktreeIds.has(getWorktreeHostIdentity(item)))
         : selection
     },
     [matchingWorktreeIds, selectForContextMenu]
   )
+
   const {
     dragOverStatus,
     handleDragFinish,
@@ -179,6 +193,7 @@ function WorkspaceKanbanDrawerContent({
     setDragOverStatus,
     setPinDragOver
   } = useWorkspaceKanbanNativeDrag(dropWorktreesAtEndOfStatus)
+
   const { isPointerDragActiveRef, onCardPointerDownCapture } = useWorkspaceKanbanCardPointerDrag({
     open,
     boardRef,
@@ -190,14 +205,17 @@ function WorkspaceKanbanDrawerContent({
     onShouldShowDropIndicator: shouldWriteDropManualOrder,
     onPinDragTargetChange: setPinDragOver
   })
+
   const handleWorktreeActivate = useCallback(() => {
     onOpenChange(false)
   }, [onOpenChange])
+
   const handleHeaderClose = useCallback(() => {
     // Why: generic Radix close requests stay ignored so sidebar drag/outside
     // dismiss rules remain explicit; the header X is a board-owned close path.
     onOpenChange(false)
   }, [onOpenChange])
+
   const {
     handleRenameStatus,
     handleChangeStatusColor,

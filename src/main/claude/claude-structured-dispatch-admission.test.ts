@@ -13,13 +13,16 @@ import {
 describe('Claude structured dispatch admission', () => {
   it('settles a send queued behind a running turn when that turn starts, with no doubt in between', async () => {
     vi.useFakeTimers()
+
     try {
       const session = sessionFor()
       const settled = vi.fn()
+
       const running = await dispatchClaudeTurn(session, {
         clientMessageId: 'client-1',
         body: userMessage([{ type: 'text', text: 'one' }])
       })
+
       const runningUuid = session.dispatchWaiters[0]!.sentUuid
       expect(resolveClaudeReplayWaiter(session, userReplayFrame(runningUuid, 'one'), settled)).toBe(
         true
@@ -31,6 +34,7 @@ describe('Claude structured dispatch admission', () => {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
       })
+
       const queuedUuid = session.dispatchWaiters[0]!.sentUuid
       expect(running).toEqual({ state: 'admitted' })
       expect(queued).toEqual({ state: 'admitted' })
@@ -89,6 +93,7 @@ describe('Claude structured dispatch admission', () => {
 
   it('bounds pending replay identities instead of retaining an unbounded queue', async () => {
     const session = sessionFor()
+
     for (let index = 0; index < 64; index += 1) {
       await expect(
         dispatchClaudeTurn(session, {

@@ -57,15 +57,18 @@ class MockWebSocket {
 type SentRpcRequest = { id: string; method: string; params?: unknown }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function sentRequest(socket: MockWebSocket, method: string): SentRpcRequest {
   const request = socket.sent
     .map((payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as SentRpcRequest)
     .find((candidate) => candidate.method === method)
+
   if (!request) {
     throw new Error(`Request not sent: ${method}`)
   }
+
   return request
 }
 
@@ -139,6 +142,7 @@ describe('mobile rpc-client capabilities', () => {
 
   it('reaches connected when a slow host never answers capability negotiation', async () => {
     vi.useFakeTimers()
+
     try {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       const socket = mockSockets[0]!

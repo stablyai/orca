@@ -19,9 +19,11 @@ function createEditor(
     content,
     ...(typeof content === 'string' ? { contentType: 'markdown' as const } : {})
   })
+
   editors.push(editor)
   // Settle the trailing-node plugin before measuring selection-only transactions.
   editor.view.dispatch(editor.state.tr.setMeta('addToHistory', false))
+
   return editor
 }
 
@@ -29,6 +31,7 @@ afterEach(() => {
   for (const editor of editors.splice(0)) {
     editor.destroy()
   }
+
   vi.restoreAllMocks()
 })
 
@@ -95,13 +98,16 @@ describe('review rail source block reuse', () => {
   it('avoids serialization for every comment and repeated scroll while refreshing geometry', () => {
     const editor = createEditor()
     let sourceTop = 100
+
     const coords = vi.spyOn(editor.view, 'coordsAtPos').mockImplementation(() => ({
       top: sourceTop,
       bottom: sourceTop + 20,
       left: 0,
       right: 10
     }))
+
     const container = document.createElement('div')
+
     const comment: DiffComment = {
       id: 'note',
       worktreeId: 'workspace',
@@ -112,12 +118,15 @@ describe('review rail source block reuse', () => {
       createdAt: 1,
       side: 'modified'
     }
+
     const markdownComments = Array.from({ length: 5 }, (_, index) => ({
       ...comment,
       id: `note-${index}`,
       selectedText: index === 0 ? 'Heading' : undefined
     }))
+
     const serialize = vi.spyOn(editor.markdown!, 'serialize')
+
     const measure = () =>
       measureRichMarkdownReviewNotePositions({
         editor,
@@ -125,14 +134,17 @@ describe('review rail source block reuse', () => {
         markdownComments,
         markdownSourceLineOffset: 0
       })
+
     expect(measure()[0]?.top).toBe(100)
     expect(serialize).toHaveBeenCalledTimes(2 * editor.state.doc.childCount - 1)
     serialize.mockClear()
     sourceTop = 200
     container.scrollTop = 30
+
     for (let index = 0; index < 60; index++) {
       expect(measure()[0]?.top).toBe(230)
     }
+
     expect(serialize).not.toHaveBeenCalled()
     expect(coords).toHaveBeenCalledTimes(61 * markdownComments.length)
   })

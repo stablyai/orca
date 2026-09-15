@@ -15,6 +15,7 @@ function shortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   return navigator.userAgent.includes('Windows') ? 'win32' : 'linux'
 }
 
@@ -35,9 +36,11 @@ export function PluginKeybindingConsentPreview({
 }): React.JSX.Element | null {
   const overrides = useAppStore((state) => state.keybindings)
   const platform = shortcutPlatform()
+
   const bindings = commands.flatMap((command) =>
     command.keybindings.map((keybinding) => ({ command, keybinding }))
   )
+
   if (bindings.length === 0) {
     return null
   }
@@ -56,6 +59,7 @@ export function PluginKeybindingConsentPreview({
       <div className="space-y-2">
         {bindings.map(({ command, keybinding }) => {
           const shadowed = shadowedKeybindingTitles(keybinding.key, platform, overrides)
+
           return (
             <div
               key={`${command.id}:${keybinding.key}`}

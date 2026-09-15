@@ -1,7 +1,9 @@
 function createIdempotentOrcadCleanup(cleanup: () => Promise<void>): () => Promise<void> {
   let completion: Promise<void> | null = null
+
   return () => {
     completion ??= Promise.resolve().then(cleanup)
+
     return completion
   }
 }
@@ -11,6 +13,7 @@ export async function startOrcadWithLifecycle<T extends object>(
   cleanupHost: () => Promise<void>
 ): Promise<T & { stop(): Promise<void> }> {
   let cleanupRuntime = async (): Promise<void> => {}
+
   const cleanup = createIdempotentOrcadCleanup(async () => {
     try {
       await cleanupRuntime()
@@ -18,10 +21,12 @@ export async function startOrcadWithLifecycle<T extends object>(
       await cleanupHost()
     }
   })
+
   try {
     const handle = await start((nextCleanup) => {
       cleanupRuntime = nextCleanup
     })
+
     return { ...handle, stop: cleanup }
   } catch (error) {
     try {
@@ -30,6 +35,7 @@ export async function startOrcadWithLifecycle<T extends object>(
       // Keep the launch failure as the supervisor-facing verdict; cleanup still needs a breadcrumb.
       console.error('[orcad] startup cleanup failed:', cleanupError)
     }
+
     throw error
   }
 }

@@ -25,11 +25,15 @@ import {
 } from './palette-repo-resolution'
 
 export const WORKTREE_PALETTE_NAME_FIELD_ID = 'name'
+
 export const WORKTREE_PALETTE_BRANCH_FIELD_ID = 'branch'
+
 export const WORKTREE_PALETTE_REPO_FIELD_ID = 'repo'
+
 export const WORKTREE_PALETTE_HOST_FIELD_ID = 'host'
 
 export type PRCacheEntry = { data?: { number: number; title: string } | null } | undefined
+
 export type IssueCacheEntry = { data?: { number: number; title: string } | null } | undefined
 
 /**
@@ -58,9 +62,11 @@ function resolveReviewSource(
   sources: WorktreePaletteDocumentSources
 ): WorktreePaletteReviewSource | null {
   const checksReview = sources.checksReviewByWorktree?.get(worktree)
+
   if (checksReview) {
     return checksReview
   }
+
   // Why: an explicit null entry means the hosted-review index already answered
   // for this worktree, so falling back to the raw caches would contradict it.
   if (checksReview === null) {
@@ -68,12 +74,14 @@ function resolveReviewSource(
   }
 
   const branch = resolveWorktreeBranchLabel(worktree)
+
   // Why: legacy cache keys have no host identity, so only the local owner can
   // consume them without borrowing another host's review metadata.
   const cached =
     repo && sources.prCache && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
       ? sources.prCache[`${repo.path}::${branch}`]?.data
       : null
+
   if (
     cached &&
     (worktree.linkedPR === null || cached.number === worktree.linkedPR) &&
@@ -81,12 +89,15 @@ function resolveReviewSource(
   ) {
     return { provider: 'github', number: cached.number, title: cached.title }
   }
+
   if (worktree.linkedPR != null) {
     return { provider: 'github', number: worktree.linkedPR }
   }
+
   if (worktree.linkedGitLabMR != null) {
     return { provider: 'gitlab', number: worktree.linkedGitLabMR }
   }
+
   return null
 }
 
@@ -98,6 +109,7 @@ function resolveIssueTitle(
   if (worktree.linkedIssue == null || !repo || !sources.issueCache) {
     return ''
   }
+
   const key = getIssueCacheKey(
     repo.path,
     repo.id,
@@ -106,6 +118,7 @@ function resolveIssueTitle(
     repo.connectionId,
     repo.executionHostId
   )
+
   return sources.issueCache[key]?.data?.title ?? ''
 }
 
@@ -115,11 +128,13 @@ function buildEvidence(
   sources: WorktreePaletteDocumentSources
 ): PaletteComposedEvidence[] {
   const comment = buildWorktreeCommentEvidence(worktree.comment ?? '')
+
   if (sources.evidencePolicy === 'board') {
     return comment ? [comment] : []
   }
 
   const ports = sources.workspacePortsByWorktreeId?.get(worktree.id) ?? []
+
   const units = [
     comment,
     buildWorktreeAutomationEvidence(worktree),
@@ -131,6 +146,7 @@ function buildEvidence(
     }),
     ...ports.map((port) => buildWorktreePortEvidence(port))
   ]
+
   return units.filter((unit): unit is PaletteComposedEvidence => unit !== null)
 }
 
@@ -143,6 +159,7 @@ export function buildWorktreePaletteDocument(
     sources.repoMap,
     sources.repoMapByHostIdentity
   )
+
   return buildPaletteDocument({
     id: worktree.id,
     visibleFields: [
@@ -198,6 +215,7 @@ export function buildWorktreePaletteDocuments(
   sources: WorktreePaletteDocumentSources
 ): Map<string, PaletteDocument> {
   const documents = new Map<string, PaletteDocument>()
+
   for (const worktree of worktrees) {
     // Why the host identity (STA-4343): `repoId::path` repeats across hosts, so keying on
     // the bare id lets the second host overwrite the first and one workspace becomes
@@ -207,5 +225,6 @@ export function buildWorktreePaletteDocuments(
       buildWorktreePaletteDocument(worktree, sources)
     )
   }
+
   return documents
 }

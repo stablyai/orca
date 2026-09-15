@@ -19,11 +19,14 @@ export async function findKnownHugeFolderPathsToIgnore(
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
   const existing: string[] = []
+
   for (const name of KNOWN_HUGE_FOLDER_NAMES) {
     const full = path.join(worktreePath, name)
+
     if (!existsSync(full)) {
       continue
     }
+
     try {
       if ((await stat(full)).isDirectory()) {
         existing.push(name)
@@ -32,11 +35,14 @@ export async function findKnownHugeFolderPathsToIgnore(
       // ignore — folder vanished mid-check
     }
   }
+
   if (existing.length === 0) {
     return []
   }
+
   // Why: a folder already covered by an existing rule shouldn't be offered again.
   const ignored = new Set(await checkIgnoredPaths(worktreePath, existing, options).catch(() => []))
+
   return existing.filter((name) => !ignored.has(name))
 }
 
@@ -53,26 +59,33 @@ export async function appendFolderToGitignore(
   folderName: string
 ): Promise<boolean> {
   const safeFolderName = folderName.trim()
+
   if (!KNOWN_HUGE_FOLDER_NAMES.includes(safeFolderName) || /[\\/\r\n]/.test(safeFolderName)) {
     throw new Error(`Refusing to add unrecognized folder to .gitignore: ${folderName}`)
   }
+
   const gitignorePath = path.join(worktreePath, '.gitignore')
   const line = `${safeFolderName}/`
   let existingContent = ''
+
   try {
     existingContent = await readFile(gitignorePath, 'utf-8')
   } catch {
     // .gitignore doesn't exist yet — we'll create it below
   }
+
   const alreadyListed = existingContent
     .split(/\r?\n/)
     .map((l) => l.trim())
     .some((l) => l === safeFolderName || l === line)
+
   if (alreadyListed) {
     return false
   }
+
   // Why: keep a clean trailing newline whether or not the file ended with one.
   const needsLeadingNewline = existingContent.length > 0 && !existingContent.endsWith('\n')
   await appendFile(gitignorePath, `${needsLeadingNewline ? '\n' : ''}${line}\n`, 'utf-8')
+
   return true
 }

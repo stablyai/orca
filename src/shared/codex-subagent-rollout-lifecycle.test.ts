@@ -8,6 +8,7 @@ import { normalizeHookPayload } from './agent-hook-listener'
 import { makePaneKey } from './stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
 
 function jsonl(records: unknown[]): string {
@@ -21,6 +22,7 @@ describe('Codex rollout subagent lifecycle', () => {
     for (const dir of dirs) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     dirs.length = 0
   })
 
@@ -46,6 +48,7 @@ describe('Codex rollout subagent lifecycle', () => {
     )
     writeFileSync(childPath, jsonl([{ type: 'event_msg', payload: { type: 'task_started' } }]))
     const state = createHookListenerState()
+
     const event = (hookEventName: string): ReturnType<typeof normalizeHookPayload> =>
       normalizeHookPayload(
         state,

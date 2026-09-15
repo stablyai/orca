@@ -36,12 +36,14 @@ describe('artifact CLI handlers', () => {
   it('reads a relative HTML file and sends sanitized content to the runtime', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
+
     const call = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
       result: { status: 'ok', value: item },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await ARTIFACT_HANDLERS['artifacts share']!({
@@ -84,6 +86,7 @@ describe('artifact CLI handlers', () => {
     const handle = await open(join(cwd, 'oversized.html'), 'w')
     await handle.truncate(ARTIFACT_CLI_MAX_RPC_BYTES + 1)
     await handle.close()
+
     const call = vi.fn().mockResolvedValue({
       id: 'request-1',
       ok: true,
@@ -113,6 +116,7 @@ describe('artifact CLI handlers', () => {
       },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await ARTIFACT_HANDLERS['artifacts list']!({
@@ -133,6 +137,7 @@ describe('artifact CLI handlers', () => {
     async (command) => {
       const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
       await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
+
       const call = vi.fn().mockResolvedValue({
         id: 'request-1',
         ok: true,
@@ -162,11 +167,13 @@ describe('artifact CLI handlers', () => {
   ])('still attempts the publish RPC when the host %s', async (_label, settings) => {
     const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
+
     const call = vi.fn().mockImplementation((method: string) => {
       if (method === 'settings.get') {
         if (!settings) {
           return Promise.reject(new Error('unsupported_method'))
         }
+
         return Promise.resolve({
           id: 'request-1',
           ok: true,
@@ -174,6 +181,7 @@ describe('artifact CLI handlers', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       return Promise.resolve({
         id: 'request-2',
         ok: true,
@@ -181,6 +189,7 @@ describe('artifact CLI handlers', () => {
         _meta: { runtimeId: 'runtime-1' }
       })
     })
+
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     await ARTIFACT_HANDLERS['artifacts share']!({
@@ -201,6 +210,7 @@ describe('artifact CLI handlers', () => {
     async (command) => {
       const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
       await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
+
       const call = vi.fn().mockRejectedValue(
         new RuntimeRpcFailureError({
           id: 'request-1',
@@ -213,6 +223,7 @@ describe('artifact CLI handlers', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       )
+
       const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
       await expect(
@@ -244,6 +255,7 @@ describe('artifact CLI handlers', () => {
   it('reports the denial with a stable code in --json mode', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
+
     const call = vi.fn().mockRejectedValue(
       new RuntimeRpcFailureError({
         id: 'request-1',
@@ -256,6 +268,7 @@ describe('artifact CLI handlers', () => {
         _meta: { runtimeId: 'runtime-1' }
       })
     )
+
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     const error = await ARTIFACT_HANDLERS['artifacts share']!({
@@ -264,6 +277,7 @@ describe('artifact CLI handlers', () => {
       flags: new Map([['file', 'report.html']]),
       json: true
     }).catch((thrown: unknown) => thrown)
+
     reportCliError(error, true)
 
     expect(JSON.parse(String(log.mock.calls.at(-1)?.[0])).error).toMatchObject({

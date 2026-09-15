@@ -45,6 +45,7 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
     if (this.currentStatus.state !== 'error') {
       return null
     }
+
     return this.currentStatus.recovery?.kind === 'linux-package-install'
       ? this.currentStatus.recovery
       : null
@@ -89,18 +90,22 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
     this.assertCurrentLinuxPackageRecovery(recovery, artifact)
     this.recordLinuxPackageRecoveryUnavailable(recovery, reason)
     const message = LINUX_PACKAGE_RECOVERY_MESSAGES[reason]
+
     if (RECOVERY_CLEARING_REASONS.includes(reason)) {
       clearTrackedLinuxPackageArtifact()
       this.sendStatus({ state: 'error', message, version: recovery.version })
     }
+
     throw new Error(message)
   }
 
   protected async getLinuxPackageInstallInstructions(): Promise<LinuxPackageInstallInstructions> {
     const recovery = this.getActiveLinuxPackageRecovery()
+
     if (!recovery) {
       throw new Error('No package install recovery is available.')
     }
+
     const artifact = getTrackedLinuxPackageArtifact()
     recordUpdaterLifecycle('linux_package_recovery_requested', {
       action: 'copy-command',
@@ -108,29 +113,36 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
       version: recovery.version
     })
     const result = await resolveLinuxPackageInstallInstructions(recovery)
+
     if (!result.ok) {
       // Why: the renderer must distinguish "this machine has no package manager" (keep the card, promote
       // Show Package) from "the artifact is gone" (recovery is cleared and the card unmounts).
       if (result.reason === 'no-sudo' || result.reason === 'no-package-manager') {
         this.assertCurrentLinuxPackageRecovery(recovery, artifact)
         this.recordLinuxPackageRecoveryUnavailable(recovery, result.reason)
+
         return {
           ok: false,
           reason: result.reason,
           message: LINUX_PACKAGE_RECOVERY_MESSAGES[result.reason]
         }
       }
+
       this.failLinuxPackageRecovery(recovery, artifact, result.reason)
     }
+
     this.assertCurrentLinuxPackageRecovery(recovery, artifact)
+
     return { ok: true, command: result.command, packageFileName: result.packageFileName }
   }
 
   protected async showLinuxPackage(): Promise<void> {
     const recovery = this.getActiveLinuxPackageRecovery()
+
     if (!recovery) {
       throw new Error('No package install recovery is available.')
     }
+
     const artifact = getTrackedLinuxPackageArtifact()
     recordUpdaterLifecycle('linux_package_recovery_requested', {
       action: 'show-package',
@@ -138,10 +150,13 @@ export abstract class UpdaterPackageRecovery extends UpdaterInstallSupport {
       version: recovery.version
     })
     const result = await resolveLinuxPackageRevealTarget(recovery)
+
     if (!result.ok) {
       this.failLinuxPackageRecovery(recovery, artifact, result.reason)
     }
+
     this.assertCurrentLinuxPackageRecovery(recovery, artifact)
+
     // Why: this cache path belongs to the installed app host, not a workspace's SSH or WSL host.
     try {
       shell.showItemInFolder(result.path)

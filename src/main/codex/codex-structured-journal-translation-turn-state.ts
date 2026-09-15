@@ -1,4 +1,5 @@
 export const MAX_CODEX_ACTIVE_TURNS = 256
+
 export const MAX_CODEX_ACTIVE_TURN_BYTES = 256 * 1024
 
 export class CodexJournalActiveTurns {
@@ -28,6 +29,7 @@ export class CodexJournalActiveTurns {
 
   canRemember(threadId: string, turnId: string): boolean {
     const active = this.byThread.get(threadId)
+
     return (
       active?.has(turnId) === true ||
       (this.activeCount < CodexJournalActiveTurns.MAX_ENTRIES &&
@@ -45,32 +47,40 @@ export class CodexJournalActiveTurns {
 
   remember(threadId: string, turnId: string, startedAt?: number): boolean {
     const active = this.byThread.get(threadId)
+
     if (active?.has(turnId)) {
       return true
     }
+
     if (!this.canRemember(threadId, turnId)) {
       return false
     }
+
     if (startedAt !== undefined) {
       this.startedAtByTurn.set(this.turnKey(threadId, turnId), startedAt)
     }
+
     if (active) {
       active.add(turnId)
     } else {
       this.byThread.set(threadId, new Set([turnId]))
     }
+
     this.activeCount += 1
     this.retainedBytes += this.entryBytes(threadId, turnId)
+
     return true
   }
 
   forget(threadId: string, turnId: string): void {
     this.startedAtByTurn.delete(this.turnKey(threadId, turnId))
     const active = this.byThread.get(threadId)
+
     if (active?.delete(turnId)) {
       this.activeCount -= 1
       this.retainedBytes = Math.max(0, this.retainedBytes - this.entryBytes(threadId, turnId))
     }
+
     if (!active?.size) {
       this.byThread.delete(threadId)
     }

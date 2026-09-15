@@ -8,6 +8,7 @@ function createDelivery(): {
   write: ReturnType<typeof vi.fn>
 } {
   const write = vi.fn()
+
   return {
     delivery: createSshBackgroundStartupDelivery({
       command: 'codex "run the automation"',
@@ -27,6 +28,7 @@ function createMultilineDelivery(waitForShellReady: boolean): {
   write: ReturnType<typeof vi.fn>
 } {
   const write = vi.fn()
+
   return {
     delivery: createSshBackgroundStartupDelivery({
       command: MULTILINE_COMMAND,
@@ -97,6 +99,7 @@ describe('createSshBackgroundStartupDelivery shell-ready fallback', () => {
   // prompt-sensitive, so stretching it there is latency with nothing bought.
   it('keeps the short deadline for fast delivery, which waits for no marker', () => {
     const write = vi.fn()
+
     const delivery = createSshBackgroundStartupDelivery({
       command: 'codex "run the automation"',
       waitForShellReady: false,

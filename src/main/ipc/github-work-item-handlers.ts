@@ -35,6 +35,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return getIssue(
         repo.path,
         args.number,
@@ -46,6 +47,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
+
     return listIssues(
       repo.path,
       args.limit,
@@ -62,10 +64,12 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       args: GitHubRepoScopedArgs & { title: string; body: string } & GitHubCreateIssueFields
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       const fields =
         args.labels !== undefined || args.assignees !== undefined
           ? { labels: args.labels, assignees: args.assignees }
           : undefined
+
       return createIssue(
         repo.path,
         args.title,
@@ -92,6 +96,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return listWorkItems(
         repo.path,
         args.limit,
@@ -107,6 +112,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
 
   ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
+
     return countWorkItems(
       repo.path,
       args.query,
@@ -118,6 +124,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
 
   ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) => {
     const repo = assertRegisteredGitHubRepo(args, store)
+
     return dispatchWorkItem(args, repo, getWorkItem, getGitHubLocalGitOptionArgs(store, repo)[0])
   })
 
@@ -135,6 +142,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return getWorkItemByOwnerRepo(
         repo.path,
         { owner: args.owner, repo: args.repo, ...(args.host ? { host: args.host } : {}) },
@@ -148,6 +156,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
 
   ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) => {
     const repo = assertRegisteredGitHubRepo(args, store)
+
     return dispatchWorkItem(
       args,
       repo,
@@ -162,9 +171,11 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       const repo = args.repoId
         ? store.getRepos().find((candidate) => candidate.id === args.repoId)
         : assertRegisteredGitHubRepo(args, store)
+
       if (!repo) {
         return false
       }
+
       if (
         (args.type !== 'issue' && args.type !== 'pr') ||
         typeof args.number !== 'number' ||
@@ -173,10 +184,12 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       ) {
         return false
       }
+
       broadcastGitHubWorkItemMutation(
         { repoPath: repo.path, repoId: repo.id, type: args.type, number: args.number },
         event.sender.id
       )
+
       return true
     }
   )
@@ -197,6 +210,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       return getPRFileContents({
         repoPath: repo.path,
         connectionId: getGitHubRepoConnectionId(repo),

@@ -11,7 +11,9 @@ import {
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
+
 const SESSION_ID = 'session-alpha-1'
+
 let directory: string
 
 function reserveRequest(): AgentSessionReserveRequest {
@@ -52,6 +54,7 @@ describe('unsupported agent session record schema', () => {
   it('quarantines without upgrading and keeps the session fail-closed', async () => {
     const filePath = agentSessionStorePath(directory)
     const unsupported = { ...agentSessionRecordFixture(), schemaVersion: 1 }
+
     const payload = JSON.stringify({
       schemaVersion: AGENT_SESSION_STORE_SCHEMA_VERSION,
       hostId: 'local',
@@ -60,6 +63,7 @@ describe('unsupported agent session record schema', () => {
       retiredClaimKeys: [],
       unusableRecords: {}
     })
+
     await Promise.all([writeFile(filePath, payload), writeFile(`${filePath}.bak`, payload)])
 
     const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
@@ -79,6 +83,7 @@ describe('unsupported agent session record schema', () => {
 
   it('rejects an ad-hoc store schema without rewriting it', async () => {
     const filePath = agentSessionStorePath(directory)
+
     const payload = JSON.stringify({
       schemaVersion: 1,
       hostId: 'local',
@@ -87,6 +92,7 @@ describe('unsupported agent session record schema', () => {
       retiredClaimKeys: [],
       unusableRecords: {}
     })
+
     await writeFile(filePath, payload)
 
     await expect(AgentSessionRecordStore.open({ directory, hostId: 'local' })).rejects.toThrow(

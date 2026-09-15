@@ -4,9 +4,11 @@ import type { DaemonTransientFact } from './types'
 
 function createRelay() {
   const emitted: { sessionId: string; fact: DaemonTransientFact }[] = []
+
   const relay = new BackgroundTransientFactRelay((sessionId, fact) =>
     emitted.push({ sessionId, fact })
   )
+
   return { relay, emitted }
 }
 
@@ -83,6 +85,7 @@ describe('BackgroundTransientFactRelay', () => {
 
   it('never arms the stale-working-title timer (titles are main-authoritative)', () => {
     vi.useFakeTimers()
+
     try {
       const { relay, emitted } = createRelay()
       relay.setSessionBackground('s1', true)

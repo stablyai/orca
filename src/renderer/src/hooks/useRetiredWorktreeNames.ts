@@ -27,14 +27,18 @@ export function useRetiredWorktreeNames(
   useEffect(() => {
     if (!repoId) {
       setLoaded(null)
+
       return
     }
+
     let cancelled = false
+
     const settle = (registry: RetiredNameRegistry | null): void => {
       if (!cancelled) {
         setLoaded((previous) => retiredNamesAfterRefresh(previous, repoId, registry))
       }
     }
+
     void window.api.worktrees
       .listRetiredNames({ repoId })
       .then(settle)
@@ -42,6 +46,7 @@ export function useRetiredWorktreeNames(
         settle(null)
         console.warn(`Failed to load retired workspace names for repo ${repoId}:`, err)
       })
+
     return () => {
       cancelled = true
     }

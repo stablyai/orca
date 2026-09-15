@@ -19,6 +19,7 @@ export const DEFAULT_WS_PORT = 6768
 // Why: STA-2370 — the WS listener defaults to loopback so a desktop with no paired device is not
 // reachable from the LAN; it widens to all interfaces only on explicit pairing (or `orca serve`).
 export const WS_BIND_HOST_LOOPBACK = '127.0.0.1'
+
 export const WS_BIND_HOST_ALL_INTERFACES = '0.0.0.0'
 
 // Why brackets: `ws://::1:6768` is not a URL, and every consumer of this endpoint parses it
@@ -100,6 +101,7 @@ export function pairingUnavailable(
 
 export const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
   'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
+
 export const E2EE_KEY_UNAVAILABLE_GUIDANCE =
   'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
 
@@ -134,6 +136,7 @@ export function createWebClientUrl(endpoint: string, pairingUrl: string): string
   url.search = ''
   // Why: pairing URLs carry full credentials; the fragment keeps them out of proxy logs and Referer headers.
   url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
+
   return url.toString()
 }
 
@@ -141,5 +144,6 @@ export function webClientPathForEndpoint(pathname: string): string {
   if (!pathname || pathname === '/') {
     return '/web-index.html'
   }
+
   return `${pathname.replace(/\/$/, '')}/web-index.html`
 }

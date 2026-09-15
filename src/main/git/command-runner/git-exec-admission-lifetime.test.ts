@@ -22,13 +22,16 @@ vi.mock('node:child_process', async (importOriginal) => ({
   execFile: execFileMock,
   spawn: spawnMock
 }))
+
 vi.mock('./spawned-command-tree-kill', () => ({
   killSpawnedCommandTree: killSpawnedCommandTreeMock
 }))
+
 vi.mock('../../../shared/child-process/process-tree-termination', () => ({
   signalProcessTree: signalProcessTreeMock,
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
+
 // Why: the real FETCH_HEAD key derivation walks the filesystem (realpath/stat/readFile), so
 // concurrent same-repo callers join the lock lane in libuv threadpool completion order rather
 // than call order. Keep the real FIFO lock and drop only the key walk, which owns its coverage
@@ -36,6 +39,7 @@ vi.mock('../../../shared/child-process/process-tree-termination', () => ({
 vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
   const actual = await importOriginal<typeof GitFetchHeadLockModule>()
   const { runWithGitOperationLock } = await import('../../../shared/git-operation-lock')
+
   return {
     ...actual,
     runWithGitFetchHeadLock: <T>(
@@ -63,6 +67,7 @@ function mockChild(pid: number | undefined = 1234): ChildProcess {
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -102,6 +107,7 @@ describe('git exec admission lifetime', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, received: ExecCallback) => {
         callback = received
+
         return child
       }
     )
@@ -124,6 +130,7 @@ describe('git exec admission lifetime', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
         callbacks.push(callback)
+
         return children[callbacks.length - 1]
       }
     )
@@ -167,10 +174,12 @@ describe('git exec admission lifetime', () => {
   it('releases termination-barrier admission on confirmed close', async () => {
     const child = mockChild()
     spawnMock.mockReturnValue(child)
+
     const pending = gitExecFileAsync(['status'], {
       cwd: '/repo',
       terminationBarrier: true
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
 
@@ -182,11 +191,13 @@ describe('git exec admission lifetime', () => {
   it('retains barrier admission past bounded settlement until termination is observed', async () => {
     const child = mockChild()
     spawnMock.mockReturnValue(child)
+
     const pending = gitExecFileAsync(['status'], {
       cwd: '/repo',
       terminationBarrier: true,
       timeout: 10
     })
+
     const rejection = expect(pending).rejects.toThrow('timed out')
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
 
@@ -211,6 +222,7 @@ describe('git exec admission lifetime', () => {
         const child = mockChild()
         children.set(label, child)
         callbacks.set(label, callback)
+
         return child
       }
     )
@@ -219,11 +231,14 @@ describe('git exec admission lifetime', () => {
       cwd: '/repo',
       admissionTier: 'background'
     })
+
     await vi.waitFor(() => expect(callbacks.has('first')).toBe(true))
+
     const background = gitExecFileAsync(['fetch', 'background'], {
       cwd: '/repo',
       admissionTier: 'background'
     })
+
     const interactive = gitExecFileAsync(['fetch', 'interactive'], {
       cwd: '/repo',
       admissionTier: 'interactive'

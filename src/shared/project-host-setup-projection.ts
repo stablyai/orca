@@ -29,6 +29,7 @@ export function getProjectProviderIdentity(
 ): ProjectProviderIdentity | null {
   const owner = typeof repo.upstream?.owner === 'string' ? repo.upstream.owner.trim() : ''
   const name = typeof repo.upstream?.repo === 'string' ? repo.upstream.repo.trim() : ''
+
   if (owner && name) {
     return {
       provider: 'github',
@@ -37,20 +38,24 @@ export function getProjectProviderIdentity(
       ...(repo.upstream?.host ? { host: repo.upstream.host } : {})
     }
   }
+
   if (repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github') {
     const parts = (repo.repoIcon.label?.trim() ?? '').split('/')
     const iconOwner = parts[0]?.trim()
     const iconRepo = parts[1]?.trim()
+
     // Why: repo auto-detect can know the GitHub slug through the generated
     // avatar icon even when legacy `upstream` has not been backfilled yet.
     if (iconOwner && iconRepo && parts.length === 2) {
       let host: string | undefined
+
       try {
         const url = new URL(repo.repoIcon.src)
         host = url.protocol === 'https:' ? url.host : undefined
       } catch {
         // Legacy persisted icons can be malformed; keep the host-less fallback.
       }
+
       return {
         provider: 'github',
         owner: iconOwner,
@@ -59,6 +64,7 @@ export function getProjectProviderIdentity(
       }
     }
   }
+
   // Why: the remote URL retains HTTP(S) endpoint ports that the canonical
   // key omits, so prefer it when reconstructing a host-qualified GHES identity.
   return (
@@ -71,10 +77,13 @@ function getProjectGitRemoteIdentity(
   repo: Pick<Repo, 'gitRemoteIdentity'>
 ): NonNullable<Repo['gitRemoteIdentity']> | null {
   const identity = repo.gitRemoteIdentity
+
   const canonicalKey =
     typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
+
   const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
   const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
+
   return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
 }
 
@@ -109,13 +118,17 @@ export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
   const identity = getProjectProviderIdentity(repo)
+
   if (identity) {
     return getProjectIdForProviderIdentity(identity)
   }
+
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
+
   if (gitRemoteIdentity) {
     return `git:${gitRemoteIdentity.canonicalKey}`
   }
+
   return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
 }
 
@@ -140,6 +153,7 @@ function getProjectId(
 
 function isGitHubRemoteHost(host: string): boolean {
   const hostname = host.toLowerCase().replace(/:\d+$/, '')
+
   // A generic git remote is provider-neutral. Only infer GHES when the host
   // itself carries a GitHub/GHE signal; upstream/icon metadata handles custom names.
   return (
@@ -157,9 +171,11 @@ function projectProviderIdentity(
   repo: string
 ): ProjectProviderIdentity | null {
   const normalizedHost = normalizeGitHubRemoteHost(host)
+
   if (!isGitHubRemoteHost(normalizedHost)) {
     return null
   }
+
   return {
     provider: 'github',
     owner,
@@ -170,48 +186,65 @@ function projectProviderIdentity(
 
 function parseGitHubRemotePath(path: string): { owner: string; repo: string } | null {
   const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
+
   if (parts.length !== 2) {
     return null
   }
+
   const [owner, repoWithSuffix] = parts
   const repo = repoWithSuffix?.replace(/\.git$/i, '')
+
   return owner && repo ? { owner, repo } : null
 }
 
 function parseGitHubCanonicalKey(canonicalKey: string | undefined): ProjectProviderIdentity | null {
   const trimmed = canonicalKey?.trim()
+
   if (!trimmed) {
     return null
   }
+
   const slash = trimmed.indexOf('/')
+
   if (slash <= 0) {
     return null
   }
+
   const host = trimmed.slice(0, slash)
   const path = parseGitHubRemotePath(trimmed.slice(slash + 1))
+
   return path ? projectProviderIdentity(host, path.owner, path.repo) : null
 }
 
 function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIdentity | null {
   const trimmed = remoteUrl?.trim()
+
   if (!trimmed) {
     return null
   }
+
   const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
+
   if (sshMatch?.[1] && sshMatch[2] && sshMatch[3]) {
     return projectProviderIdentity(sshMatch[1], sshMatch[2], sshMatch[3])
   }
+
   try {
     const url = new URL(trimmed)
+
     if (!['git:', 'git+ssh:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
+
     const path = parseGitHubRemotePath(url.pathname)
+
     if (!path) {
       return null
     }
+
     // HTTP ports identify the API endpoint; SSH/git ports are transport-only.
     const host = url.protocol === 'http:' || url.protocol === 'https:' ? url.host : url.hostname
+
     return projectProviderIdentity(host, path.owner, path.repo)
   } catch {
     return null
@@ -235,9 +268,11 @@ function knownCatalogTimestamp(value: number): number | undefined {
 export function mergeCatalogCreatedAt(left: number, right: number): number {
   const known = knownCatalogTimestamp(left)
   const other = knownCatalogTimestamp(right)
+
   if (known === undefined || other === undefined) {
     return known ?? other ?? 0
   }
+
   return Math.min(known, other)
 }
 
@@ -245,9 +280,11 @@ export function mergeCatalogCreatedAt(left: number, right: number): number {
 export function mergeCatalogUpdatedAt(left: number, right: number): number {
   const known = knownCatalogTimestamp(left)
   const other = knownCatalogTimestamp(right)
+
   if (known === undefined || other === undefined) {
     return known ?? other ?? 0
   }
+
   return Math.max(known, other)
 }
 
@@ -255,6 +292,7 @@ function createProjectFromRepo(repo: Repo, projectId: string): Project {
   const identity = getProjectProviderIdentity(repo)
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
+
   return {
     id: projectId,
     displayName: repo.displayName,
@@ -272,10 +310,12 @@ function createProjectFromRepo(repo: Repo, projectId: string): Project {
 /** Mutates the draft in place — only ever call this on an accumulator this projection owns. */
 function mergeProjectRepo(accumulator: ProjectAccumulator, repo: Repo): void {
   const { project, sourceRepoIds } = accumulator
+
   if (!sourceRepoIds.has(repo.id)) {
     sourceRepoIds.add(repo.id)
     project.sourceRepoIds.push(repo.id)
   }
+
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   project.createdAt = mergeCatalogCreatedAt(project.createdAt, addedAt)
   project.updatedAt = mergeCatalogUpdatedAt(project.updatedAt, addedAt)
@@ -285,6 +325,7 @@ function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
   const hostId = getRepoExecutionHostId(repo)
   const createdAt = catalogTimestampFromAddedAt(repo.addedAt)
   const setupMethod = repo.projectHostSetupMethod ?? 'legacy-repo'
+
   return {
     id: repo.id,
     projectId,
@@ -316,12 +357,14 @@ export function projectHostSetupProjectionFromRepos(
   for (const repo of repos) {
     const projectId = getProjectId(repo)
     const existing = projectById.get(projectId)
+
     if (existing) {
       mergeProjectRepo(existing, repo)
     } else {
       const project = createProjectFromRepo(repo, projectId)
       projectById.set(projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
     }
+
     // Why normalize here: a repo row is untrusted persisted/wire data too, and these
     // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
     const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))

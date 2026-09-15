@@ -42,12 +42,14 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
   const autoMergeBusy = actions.isBusy({ kind: 'autoMerge' })
   const stateBusy = actions.isBusy({ kind: 'state' })
   const unlinkBusy = unlinking || mergeBusy || autoMergeBusy || stateBusy
+
   const showAutoMerge =
     avail.canAutoMerge &&
     canShowMobilePRAutoMergeControl({
       ...pr,
       autoMergeEnabled: autoMerge || pr.autoMergeEnabled === true
     })
+
   const showSecondary = avail.canClose || avail.canReopen || avail.canUnlink
   const actionError = unlinkError ?? actions.error
 
@@ -55,10 +57,13 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
     if (!client || unlinking) {
       return
     }
+
     setUnlinking(true)
     setUnlinkError(null)
+
     try {
       const outcome = await unlinkMobilePr(client, worktreeId)
+
       if (outcome.ok) {
         onUnlinked()
       } else {
@@ -79,6 +84,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
         confirmLabel: 'Merge'
       }
     }
+
     if (confirm?.kind === 'state' && confirm.state === 'closed') {
       return {
         title: 'Close pull request?',
@@ -86,6 +92,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
         confirmLabel: 'Close'
       }
     }
+
     return {
       title: 'Reopen pull request?',
       message: `#${pr.number} will be reopened.`,
@@ -97,8 +104,10 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
     if (!confirm) {
       return
     }
+
     // Engine errors take over the shared error line after this; drop unlink text.
     setUnlinkError(null)
+
     if (confirm.kind === 'merge') {
       actions.merge(confirm.method)
     } else {

@@ -38,13 +38,17 @@ export class RuntimeOrchestrationFederation {
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
+
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }
+
     this.timers.clear()
+
     if (this.terminalRecoveryTimer) {
       clearTimeout(this.terminalRecoveryTimer)
     }
+
     this.terminalRecoveryTimer = null
     this.terminalRecoveryInFlight = null
     this.terminalRecoveryRowId = 0
@@ -60,6 +64,7 @@ export class RuntimeOrchestrationFederation {
         'Connected-server orchestration is unavailable in this runtime.'
       )
     }
+
     return this.transport.resolve(selector)
   }
 
@@ -77,6 +82,7 @@ export class RuntimeOrchestrationFederation {
         'Connected-server orchestration is unavailable in this runtime.'
       )
     }
+
     if (isOrchestrationMutation(method, params) && !internal?.contractVerified) {
       const statusResponse = await this.transport.call(
         selector,
@@ -86,6 +92,7 @@ export class RuntimeOrchestrationFederation {
         undefined,
         internal?.expectedEnvironmentPairingRevision
       )
+
       if (statusResponse.ok === false) {
         throw new OrchestrationError(
           statusResponse.error.code,
@@ -93,7 +100,9 @@ export class RuntimeOrchestrationFederation {
           statusResponse.error.data
         )
       }
+
       const status = statusResponse.result as RuntimeStatus
+
       if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
         throw new OrchestrationError(
           'orchestration_migration_required',
@@ -102,6 +111,7 @@ export class RuntimeOrchestrationFederation {
         )
       }
     }
+
     const response = await this.transport.call(
       selector,
       method,
@@ -112,9 +122,11 @@ export class RuntimeOrchestrationFederation {
         : envelope,
       internal?.expectedEnvironmentPairingRevision
     )
+
     if (response.ok === false) {
       throw new OrchestrationError(response.error.code, response.error.message, response.error.data)
     }
+
     return response.result
   }
 
@@ -122,6 +134,7 @@ export class RuntimeOrchestrationFederation {
     if (!this.transport) {
       return
     }
+
     const dispatches = this.runtime.getOrchestrationDb().listActiveFederatedDispatches(runId)
     await Promise.allSettled(dispatches.map((dispatch) => this.syncDispatch(dispatch.dispatch_id)))
   }
@@ -129,9 +142,11 @@ export class RuntimeOrchestrationFederation {
   syncDispatch(dispatchId: string): Promise<void> {
     const db = this.runtime.getOrchestrationDb()
     const current = this.syncs.get(dispatchId)
+
     if (current?.db === db) {
       return current.promise
     }
+
     const sync = syncFederatedDispatch(this.runtime, dispatchId)
       .then(() => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
@@ -143,27 +158,34 @@ export class RuntimeOrchestrationFederation {
           console.warn(`[orchestration] Federation sync failed for ${dispatchId}:`, error)
           this.warnings.add(dispatchId)
         }
+
         throw error
       })
       .finally(() => {
         if (this.syncs.get(dispatchId)?.promise !== sync) {
           return
         }
+
         this.syncs.delete(dispatchId)
+
         if (!db.isFederatedDispatchRelayEligible(dispatchId)) {
           releaseFederationAckCheckpoint(this.runtime, dispatchId)
         }
       })
+
     this.syncs.set(dispatchId, { db, promise: sync })
+
     return sync
   }
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {
     const db = this.runtime.getOrchestrationDb()
     const current = this.syncs.get(dispatchId)
+
     if (current?.db === db) {
       await current.promise.catch(() => undefined)
     }
+
     await this.syncDispatch(dispatchId)
   }
 
@@ -171,28 +193,37 @@ export class RuntimeOrchestrationFederation {
     if (!this.transport) {
       return
     }
+
     for (const dispatch of this.runtime.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
       if (this.timers.has(dispatch.dispatch_id)) {
         continue
       }
+
       const tick = () => {
         const db = this.runtime.getOrchestrationDb()
+
         if (!db.isFederatedDispatchRelayEligible(dispatch.dispatch_id)) {
           const activeTimer = this.timers.get(dispatch.dispatch_id)
+
           if (activeTimer) {
             clearInterval(activeTimer)
           }
+
           this.timers.delete(dispatch.dispatch_id)
           this.warnings.delete(dispatch.dispatch_id)
+
           return
         }
+
         void this.syncDispatch(dispatch.dispatch_id).catch(() => undefined)
       }
+
       const timer = setInterval(tick, 1_000)
       timer.unref?.()
       this.timers.set(dispatch.dispatch_id, timer)
       tick()
     }
+
     this.ensureTerminalHistoryRecovery()
   }
 
@@ -200,10 +231,13 @@ export class RuntimeOrchestrationFederation {
     if (this.terminalRecoveryTimer || this.terminalRecoveryInFlight) {
       return
     }
+
     const generation = this.relayGeneration
+
     const recovery = this.recoverNextTerminalHistoryAcknowledgment(generation).catch((error) => {
       console.warn('[orchestration] terminal federation acknowledgment recovery failed', error)
     })
+
     this.terminalRecoveryInFlight = recovery
     void recovery.finally(() => {
       if (this.terminalRecoveryInFlight === recovery) {
@@ -214,23 +248,29 @@ export class RuntimeOrchestrationFederation {
 
   private async recoverNextTerminalHistoryAcknowledgment(generation: number): Promise<void> {
     const db = this.runtime.getOrchestrationDb()
+
     let historical = db.findNextTerminalFederatedDispatchPendingAcknowledgment(
       this.terminalRecoveryRowId
     )
+
     if (!historical && this.terminalRecoveryRowId > 0) {
       this.terminalRecoveryRowId = 0
       historical = db.findNextTerminalFederatedDispatchPendingAcknowledgment(0)
     }
+
     if (!historical) {
       return
     }
+
     this.terminalRecoveryRowId = historical.rowId
     await this.runtime
       .syncOrchestrationFederatedDispatch(historical.dispatchId)
       .catch(() => undefined)
+
     if (generation !== this.relayGeneration) {
       return
     }
+
     this.terminalRecoveryTimer = setTimeout(() => {
       this.terminalRecoveryTimer = null
       this.ensureTerminalHistoryRecovery()
@@ -240,15 +280,19 @@ export class RuntimeOrchestrationFederation {
 
   stopRelay(): void {
     this.relayGeneration += 1
+
     for (const timer of this.timers.values()) {
       clearInterval(timer)
     }
+
     this.timers.clear()
     this.warnings.clear()
     this.syncs.clear()
+
     if (this.terminalRecoveryTimer) {
       clearTimeout(this.terminalRecoveryTimer)
     }
+
     this.terminalRecoveryTimer = null
     this.terminalRecoveryInFlight = null
     this.terminalRecoveryRowId = 0

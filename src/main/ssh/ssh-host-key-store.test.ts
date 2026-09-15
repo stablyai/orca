@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // runner, and chmod 000 is simply readable when the suite runs as root. Why not vi.spyOn: node's
 // ESM namespace is not configurable, so spying on readFile throws.
 const { readFailure } = vi.hoisted(() => ({ readFailure: { error: null as Error | null } }))
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     readFile: (...args: Parameters<typeof actual.readFile>) =>
@@ -17,6 +19,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const { mkdtemp, readdir, readFile, rm, stat, writeFile } = await import('node:fs/promises')
+
 import {
   getSshHostKeyStoreFile,
   isTrusted,
@@ -31,11 +34,14 @@ function hostKey(keyType: string, seed: string): Buffer {
   const name = Buffer.from(keyType, 'utf8')
   const length = Buffer.alloc(4)
   length.writeUInt32BE(name.length, 0)
+
   return Buffer.concat([length, name, Buffer.from(seed.padEnd(32, '.'), 'utf8')])
 }
 
 const ED25519_A = hostKey('ssh-ed25519', 'key-a')
+
 const ED25519_B = hostKey('ssh-ed25519', 'key-b')
+
 const RSA_A = hostKey('ssh-rsa', 'rsa-a')
 
 function query(overrides: Partial<Parameters<typeof isTrusted>[0]> = {}) {
@@ -49,6 +55,7 @@ function query(overrides: Partial<Parameters<typeof isTrusted>[0]> = {}) {
 }
 
 let directory: string
+
 let storeFile: string
 
 beforeEach(async () => {
@@ -154,9 +161,11 @@ describe('ssh host key store', () => {
   it('drops a record whose key does not carry the type it claims', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     await trustHostKey(query(), storeFile)
+
     const stored = JSON.parse(await readFile(storeFile, 'utf-8')) as {
       hostKeys: { keyType: string }[]
     }
+
     stored.hostKeys[0]!.keyType = 'ssh-rsa'
     await writeFile(storeFile, JSON.stringify(stored), 'utf-8')
 
@@ -167,9 +176,11 @@ describe('ssh host key store', () => {
   it('drops a record whose fingerprint disagrees with its key', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     await trustHostKey(query(), storeFile)
+
     const stored = JSON.parse(await readFile(storeFile, 'utf-8')) as {
       hostKeys: { fingerprint: string }[]
     }
+
     stored.hostKeys[0]!.fingerprint = 'SHA256:not-the-key'
     await writeFile(storeFile, JSON.stringify(stored), 'utf-8')
 
@@ -205,9 +216,11 @@ describe('ssh host key store', () => {
     // A temp-file + rename swaps the inode; an in-place write truncates and keeps it, which is the
     // shape that can leave a half-written trust list readable after a crash.
     const after = await stat(storeFile)
+
     if (before.ino !== 0 && after.ino !== 0) {
       expect(after.ino).not.toBe(before.ino)
     }
+
     expect(await isTrusted(query(), storeFile)).toBe('match')
   })
 
@@ -301,10 +314,12 @@ describe('a host key store written by a newer version', () => {
   it('is not trusted and not overwritten', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-host-key-store-'))
     const storeFile = join(dir, 'ssh-host-keys.json')
+
     const future = JSON.stringify({
       version: 99,
       hostKeys: [{ shape: 'we do not understand' }]
     })
+
     await writeFile(storeFile, future, 'utf-8')
 
     try {

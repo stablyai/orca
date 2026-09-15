@@ -3,6 +3,7 @@ import { MAX_BUNDLE_BYTES } from './diagnostic-bundle-limits'
 import { postBodyForJson, postJsonForJson } from './diagnostic-upload-http'
 
 const TOKEN_REQUEST_TIMEOUT_MS = 10_000
+
 const UPLOAD_TIMEOUT_MS = 30_000
 
 export type UploadBundleOptions = {
@@ -41,6 +42,7 @@ type UploadResponse = {
  */
 export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBundleResult> {
   const bytes = Buffer.byteLength(opts.payload)
+
   if (bytes > MAX_BUNDLE_BYTES) {
     throw new Error(`bundle exceeds 4 MiB cap (${bytes} bytes)`)
   }
@@ -56,6 +58,7 @@ export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBun
     },
     TOKEN_REQUEST_TIMEOUT_MS
   )) as TokenResponse
+
   if (
     typeof tokenRes.token !== 'string' ||
     typeof tokenRes.upload_url !== 'string' ||
@@ -63,6 +66,7 @@ export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBun
   ) {
     throw new Error('malformed token response')
   }
+
   if (bytes > tokenRes.max_bytes) {
     throw new Error(`bundle exceeds server-issued cap (${bytes} > ${tokenRes.max_bytes})`)
   }
@@ -90,6 +94,7 @@ export async function uploadBundle(opts: UploadBundleOptions): Promise<UploadBun
   if (typeof uploadRes.ticket_id !== 'string' || uploadRes.ticket_id.length === 0) {
     throw new Error('malformed upload response: missing ticket_id')
   }
+
   return {
     ticketId: uploadRes.ticket_id
   }
@@ -109,24 +114,31 @@ export async function deleteBundle(opts: DeleteBundleOptions): Promise<void> {
  */
 export function validateUploadUrl(uploadUrl: string, tokenEndpoint: string): void {
   let parsedUpload: URL
+
   try {
     parsedUpload = new URL(uploadUrl)
   } catch {
     throw new Error('invalid upload_url from token endpoint')
   }
+
   let parsedToken: URL
+
   try {
     parsedToken = new URL(tokenEndpoint)
   } catch {
     throw new Error('invalid tokenEndpoint configuration')
   }
+
   const tokenIsHttps = parsedToken.protocol === 'https:'
+
   if (tokenIsHttps && parsedUpload.protocol !== 'https:') {
     throw new Error('upload_url must use https when tokenEndpoint is https')
   }
+
   if (parsedUpload.protocol !== 'https:' && parsedUpload.protocol !== 'http:') {
     throw new Error('upload_url must use http(s)')
   }
+
   // Same-origin host pin. Defends against a compromised token endpoint that
   // returns a valid-https upload_url pointing at an attacker-controlled host.
   if (parsedUpload.host !== parsedToken.host) {
@@ -138,11 +150,14 @@ function resolveDeleteEndpoint(tokenEndpoint: string, ticketId: string): string 
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(ticketId)) {
     throw new Error('ticketId has invalid format')
   }
+
   let parsedToken: URL
+
   try {
     parsedToken = new URL(tokenEndpoint)
   } catch {
     throw new Error('invalid tokenEndpoint configuration')
   }
+
   return new URL(`/diagnostics/delete/${encodeURIComponent(ticketId)}`, parsedToken).toString()
 }

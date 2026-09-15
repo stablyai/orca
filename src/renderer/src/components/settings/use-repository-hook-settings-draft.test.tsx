@@ -7,8 +7,11 @@ import type { Repo } from '../../../../shared/repo-types'
 import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-draft'
 
 type DraftController = ReturnType<typeof useRepositoryHookSettingsDraft>
+
 let latest: DraftController | null = null
+
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 const baseRepo: Repo = {
@@ -42,6 +45,7 @@ function Harness({
     repoHostIdentity: identity,
     onUpdateHookSettings: persist
   })
+
   return null
 }
 
@@ -55,6 +59,7 @@ function renderHarness(
     document.body.appendChild(container)
     root = createRoot(container)
   }
+
   act(() => root?.render(<Harness repo={repo} identity={identity} persist={persist} />))
 }
 

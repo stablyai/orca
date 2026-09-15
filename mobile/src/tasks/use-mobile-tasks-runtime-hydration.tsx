@@ -106,6 +106,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     taskResumeRef,
     visibleProviders
   } = model
+
   useEffect(() => {
     if (!client || connState !== 'connected') {
       taskResumeRef.current = {}
@@ -153,6 +154,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setMergeMethodTaskItem(null)
       setMergeMethodProjectRow(null)
       resetWorkspaceCreateState()
+
       return
     }
 
@@ -198,13 +200,16 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
 
     const hydrateTaskState = async (): Promise<void> => {
       const statusReply = await taskRuntimeStatusRead.request(client)
+
       if (stale) {
         return
       }
+
       // The guard stays between the request and the interpretation: a screen that has moved on
       // must not raise a refusal it no longer owns.
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       const status = taskRuntimeStatusRead.interpret(statusReply) as TaskRuntimeStatus
+
       if (!status.capabilities?.includes(MOBILE_TASKS_CAPABILITY)) {
         // Why: Tasks is additive RPC surface, so old desktop builds can still
         // pair but must not receive the newer task-specific method calls.
@@ -250,10 +255,13 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
         resetWorkspaceCreateState()
         setError('Update Orca desktop to use Tasks on mobile.')
         setTaskStateHydrated(false)
+
         return
       }
+
       setTasksSupportState({ kind: 'supported', client })
       setError('')
+
       // Why raw requests in the group and not startRpcOperation: main's Promise.all rejects as soon
       // as one leg rejects, and interpreting at an all-settled barrier would instead wait for the
       // slowest peer and let a later policy surface a different error.
@@ -263,17 +271,21 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
         taskPreflightRead.request(client),
         taskLinearStatusRead.request(client)
       ])
+
       if (stale) {
         return
       }
 
       const settingsResult = settingsRead.interpret(settingsResponse)
+
       const settings = settingsResult.accepted
         ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           ((settingsResult.value ?? {}) as RuntimeTaskSettings)
         : {}
+
       setRuntimeTaskSettings(settings)
       const uiRead = taskUiStateRead.interpret(uiReply)
+
       const uiState = uiRead.accepted
         ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           (uiRead.value as
@@ -283,38 +295,48 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
               }
             | undefined)
         : null
+
       setTrustedOrcaHooks(uiState?.trustedOrcaHooks ?? {})
       const resume = uiState?.taskResumeState ?? {}
       taskResumeRef.current = resume
       setGithubProjectHiddenFieldIdsByView(resume.githubProjectHiddenFieldIdsByView ?? {})
 
       const preflightRead = taskPreflightRead.interpret(preflightReply)
+
       const preflight = preflightRead.accepted
         ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           (preflightRead.value as { glab?: { installed?: boolean } })
         : null
+
       const linearRead = taskLinearStatusRead.interpret(linearStatusReply)
+
       const linearStatus = linearRead.accepted
         ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           (linearRead.value as LinearStatusResponse)
         : null
+
       const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
       const linearIsConnected = linearStatus?.connected === true
+
       const availableProviders = filterAvailableTaskProviders(preferredProviders, {
         gitlabInstalled: preflight?.glab?.installed === true,
         linearConnected: linearIsConnected
       })
+
       const nextVisibleProviders =
         preferredProviders.includes('linear') && !availableProviders.includes('linear')
           ? [...availableProviders, 'linear' as const]
           : availableProviders
+
       setLinearConnected(linearIsConnected)
+
       if (!linearIsConnected) {
         setLinearWorkspaces([])
         setLinearTeams([])
         setSelectedLinearTeamIds(new Set())
         setSelectedLinearWorkspaceId(null)
       }
+
       const nextProvider =
         requestedTaskSource && nextVisibleProviders.includes(requestedTaskSource)
           ? requestedTaskSource
@@ -322,21 +344,27 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
               isTaskProvider(settings.defaultTaskSource) ? settings.defaultTaskSource : undefined,
               nextVisibleProviders
             )
+
       const preset =
         resume.githubItemsPreset === null
           ? normalizeGitHubPreset(settings.defaultTaskViewPreset)
           : normalizeGitHubPreset(resume.githubItemsPreset ?? settings.defaultTaskViewPreset)
+
       const defaultPreset = normalizeGitHubPreset(settings.defaultTaskViewPreset)
+
       const githubQuery =
         resume.githubItemsPreset === null
           ? (resume.githubItemsQuery ?? '')
           : getTaskPresetQuery(preset)
+
       const nextLinearFilter = normalizeLinearFilter(resume.linearPreset)
       const nextLinearQuery = resume.linearQuery ?? ''
       defaultRepoSelectionRef.current = settings.defaultRepoSelection ?? null
       defaultLinearTeamSelectionRef.current = settings.defaultLinearTeamSelection ?? null
+
       const nextQuery =
         nextProvider === 'github' ? githubQuery : nextProvider === 'linear' ? nextLinearQuery : ''
+
       const nextAppliedQuery =
         nextProvider === 'github'
           ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
@@ -359,6 +387,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       if (stale) {
         return
       }
+
       setError(err instanceof Error ? err.message : 'Failed to load Tasks settings')
       setTaskStateHydrated(false)
     })
@@ -372,6 +401,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     if (visibleProviders.includes(provider)) {
       return
     }
+
     setProvider(resolveVisibleTaskProvider(provider, visibleProviders))
   }, [provider, visibleProviders])
 
@@ -381,20 +411,26 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     if (repoList.state.status !== 'loaded') {
       return
     }
+
     if (!repoSelectionHydratedRef.current) {
       repoSelectionHydratedRef.current = true
       setSelectedRepoIds(reconcileRepoSelection(repos, defaultRepoSelectionRef.current))
+
       return
     }
+
     setSelectedRepoIds((current) => {
       if (current.size === 0) {
         return current
       }
+
       const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
       const next = new Set([...current].filter((id) => availableIds.has(id)))
+
       return next.size === current.size ? current : next
     })
   }, [repoList.state.status, repos])
+
   return model
 }
 

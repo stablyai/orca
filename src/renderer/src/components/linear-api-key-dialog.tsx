@@ -61,11 +61,13 @@ export function LinearApiKeyDialog({
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
   const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
   const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
+
   if (resolvedDialogState !== dialogState) {
     // Why: parent-controlled close can race an in-flight connect request; keep
     // hidden draft/error state reset before the next open paints.
     setDialogState(resolvedDialogState)
   }
+
   const { apiKeyDraft, connectState, connectError } = resolvedDialogState
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -76,21 +78,28 @@ export function LinearApiKeyDialog({
 
   const handleConnect = async (): Promise<void> => {
     const apiKey = apiKeyDraft.trim()
+
     if (!apiKey || connectState === 'connecting') {
       return
     }
+
     setDialogState((current) => ({ ...current, connectState: 'connecting', connectError: null }))
+
     try {
       const result = await connectLinear(apiKey)
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         setDialogState(createLinearApiKeyDialogState())
         onOpenChange(false)
         onConnected?.()
+
         return
       }
+
       setDialogState((current) => ({
         ...current,
         connectState: 'error',
@@ -110,11 +119,13 @@ export function LinearApiKeyDialog({
   const resolvedTitle =
     title ??
     (workspace ? `Update Linear access for ${workspace.organizationName}` : 'Add Linear access')
+
   const resolvedDescription =
     description ??
     (workspace
       ? `Paste a Personal API key for ${workspace.organizationName}. If this workspace is already connected, Orca replaces its stored key.`
       : 'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.')
+
   const storageCopy =
     runtimeTarget.kind === 'environment'
       ? 'This key is stored by the active remote runtime.'

@@ -43,6 +43,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
   setPaneForegroundAgent: (paneKey, entry) => {
     set((s) => {
       const current = s.paneForegroundAgentByPaneKey[paneKey]
+
       if (
         current &&
         current.agent === entry.agent &&
@@ -53,6 +54,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
       ) {
         return s
       }
+
       return {
         paneForegroundAgentByPaneKey: { ...s.paneForegroundAgentByPaneKey, [paneKey]: entry }
       }
@@ -63,8 +65,10 @@ export const createPaneForegroundAgentSlice: StateCreator<
       if (!(paneKey in s.paneForegroundAgentByPaneKey)) {
         return s
       }
+
       const next = { ...s.paneForegroundAgentByPaneKey }
       delete next[paneKey]
+
       return { paneForegroundAgentByPaneKey: next }
     })
   },
@@ -82,6 +86,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
     // awaiting terminal teardown).
     set((s) => {
       const prefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+
       return (
         buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, prefixes) ?? s
       )
@@ -96,15 +101,20 @@ export function buildPaneForegroundAgentTabPrefixClearPatch(
   if (tabPrefixes.length === 0) {
     return null
   }
+
   const staleKeys = Object.keys(entries).filter((paneKey) =>
     tabPrefixes.some((prefix) => paneKey.startsWith(prefix))
   )
+
   if (staleKeys.length === 0) {
     return null
   }
+
   const next = { ...entries }
+
   for (const paneKey of staleKeys) {
     delete next[paneKey]
   }
+
   return { paneForegroundAgentByPaneKey: next }
 }

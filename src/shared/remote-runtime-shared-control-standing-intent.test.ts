@@ -33,6 +33,7 @@ describe('shared-control standing intent', () => {
   it('keeps recovery armed when the last subscription closes', async () => {
     const server = await createSharedControlTestServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
     const subscription = await connection.subscribe(
       'session.tabs.subscribeAll',
       {},
@@ -74,9 +75,12 @@ describe('shared-control standing intent', () => {
     vi.useFakeTimers()
     vi.spyOn(Math, 'random').mockReturnValue(1)
     const timerSpy = vi.spyOn(globalThis, 'setTimeout')
+
     const scheduler = new SharedControlReconnectScheduler()
+
     ;(scheduler as unknown as { attempt: number }).attempt = 100
     let opens = 0
+
     const open = (): void => {
       opens += 1
       scheduler.scheduleWithIdleBackoff(false, open)
@@ -105,6 +109,7 @@ describe('shared-control standing intent', () => {
     ({ manual, paused, subscriptions, scheduled }) => {
       vi.useFakeTimers()
       const connection = testConnection({ manual, paused })
+
       if (subscriptions > 0) {
         addLogicalSubscription(connection)
       }
@@ -182,6 +187,7 @@ function addLogicalSubscription(connection: RemoteRuntimeSharedControlConnection
     closeAfterReady: false,
     remoteSubscriptionId: null
   }
+
   unsafeConnection(connection).subscriptions.set(subscription.requestId, subscription)
 }
 
@@ -213,6 +219,7 @@ function setReconnectAttempt(
 function replaceOpen(connection: RemoteRuntimeSharedControlConnection): ReturnType<typeof vi.fn> {
   const open = vi.fn()
   unsafeConnection(connection).open = open
+
   return open
 }
 
@@ -228,10 +235,12 @@ function unsafeConnection(connection: RemoteRuntimeSharedControlConnection): {
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<void> {
   const startedAt = Date.now()
+
   while (!predicate()) {
     if (Date.now() - startedAt >= timeoutMs) {
       throw new Error('Timed out waiting for shared-control state')
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }

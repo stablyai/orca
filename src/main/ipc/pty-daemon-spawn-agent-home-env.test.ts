@@ -12,45 +12,61 @@ import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -124,7 +140,9 @@ describe('registerPtyHandlers', () => {
             }
           }): Promise<{ id: string }>
         }
+
         const daemonSpawn = setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -133,6 +151,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         const systemHome = '/Users/example/.codex'
         handlers.clear()
         registerPtyHandlers(
@@ -175,6 +194,7 @@ describe('registerPtyHandlers', () => {
       })
       it('prepares Codex project trust before a daemon-backed interactive launch', async () => {
         const workspacePath = '/repo/worktrees/new-feature'
+
         const resolveHome = vi.fn(
           (
             _target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null },
@@ -209,6 +229,7 @@ describe('registerPtyHandlers', () => {
           configurable: true,
           value: 'win32'
         })
+
         try {
           const spawnOptions = await daemonSpawnAndGetOptions(
             {},
@@ -223,6 +244,7 @@ describe('registerPtyHandlers', () => {
               worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\test\\repo'
             }
           )
+
           const { env } = spawnOptions
           expect(env.CODEX_HOME).toBeUndefined()
           expect(env.ORCA_CODEX_HOME).toBeUndefined()
@@ -242,6 +264,7 @@ describe('registerPtyHandlers', () => {
           configurable: true,
           value: 'win32'
         })
+
         try {
           const spawnOptions = await daemonSpawnAndGetOptions(
             {},
@@ -253,6 +276,7 @@ describe('registerPtyHandlers', () => {
             },
             { shellOverride: 'wsl.exe' }
           )
+
           expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
           expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
           expect(spawnOptions.envToDelete).toEqual(
@@ -270,6 +294,7 @@ describe('registerPtyHandlers', () => {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, undefined, {
             shellOverride: 'wsl.exe'
           })
+
           // Why: relay not connected yet → never cross the Windows overlay path into WSL.
           expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
           expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
@@ -312,6 +337,7 @@ describe('registerPtyHandlers', () => {
       it('points OPENCODE_CONFIG_DIR at the guest overlay when the WSL relay reports it', async () => {
         const guestDir = '/home/jin/.orca-relay/opencode-overlays/abc'
         const spy = vi.spyOn(wslHookRelayManager, 'getOpenCodeOverlayDir').mockReturnValue(guestDir)
+
         try {
           await withWin32Platform(async () => {
             const env = await daemonSpawnAndGetEnv(
@@ -321,6 +347,7 @@ describe('registerPtyHandlers', () => {
               undefined,
               { shellOverride: 'wsl.exe' }
             )
+
             expect(env.OPENCODE_CONFIG_DIR).toBe(guestDir)
             expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(guestDir)
             // The Windows-side source pointer must not cross into the guest.
@@ -337,6 +364,7 @@ describe('registerPtyHandlers', () => {
           () => ({ codexSystemDefaultRealHomeEnabled: true }) as never,
           { CODEX_HOME: '/managed/home', ORCA_CODEX_HOME: '/managed/home' }
         )
+
         expect(spawnOptions.env.CODEX_HOME).toBeUndefined()
         expect(spawnOptions.env.ORCA_CODEX_HOME).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['ORCA_CODEX_HOME']))
@@ -350,6 +378,7 @@ describe('registerPtyHandlers', () => {
           () => ({ codexSystemDefaultRealHomeEnabled: true }) as never,
           { CODEX_HOME: '/home/me/.config/codex', ORCA_CODEX_HOME: undefined }
         )
+
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['ORCA_CODEX_HOME']))
         expect(spawnOptions.envToDelete).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
       })
@@ -358,6 +387,7 @@ describe('registerPtyHandlers', () => {
           CODEX_HOME: '/managed/home',
           ORCA_CODEX_HOME: '/managed/home'
         })
+
         expect(spawnOptions.envToDelete ?? []).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
       })
       it('strips inherited Claude child-session stamps from daemon spawns', async () => {
@@ -369,6 +399,7 @@ describe('registerPtyHandlers', () => {
           CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
           CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa'
         })
+
         expect(spawnOptions.envToDelete).toEqual(
           expect.arrayContaining([
             'CLAUDE_CODE_CHILD_SESSION',
@@ -386,6 +417,7 @@ describe('registerPtyHandlers', () => {
           undefined,
           { CLAUDE_CODE_CHILD_SESSION: '1' }
         )
+
         expect(spawnOptions.envToDelete ?? []).not.toEqual(
           expect.arrayContaining(['CLAUDE_CODE_CHILD_SESSION'])
         )
@@ -397,11 +429,13 @@ describe('registerPtyHandlers', () => {
           configurable: true,
           value: 'linux'
         })
+
         try {
           // Why: overriding process.platform doesn't change the loaded node:path dialect; keep this synthetic PATH consistent.
           const env = await daemonSpawnAndGetEnv({
             PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
           })
+
           const entries = env.PATH.split(delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
@@ -421,6 +455,7 @@ describe('registerPtyHandlers', () => {
           configurable: true,
           value: '/tmp/orca-resources'
         })
+
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.PATH.split(delimiter)[0]).toBe(join('/tmp/orca-resources', 'bin'))
@@ -442,6 +477,7 @@ describe('registerPtyHandlers', () => {
           ORCA_CLAUDE_AGENT_STATUS_SETTINGS:
             '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
         })
+
         expect(spawnOptions.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(
           expect.arrayContaining(['ORCA_CLAUDE_AGENT_STATUS_SETTINGS'])
@@ -469,7 +505,9 @@ describe('registerPtyHandlers', () => {
             command?: string
           }): Promise<{ id: string }>
         }
+
         const daemonSpawn = setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -478,6 +516,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS =
           '/tmp/orca/agent-hooks/claude-agent-status-settings.json'
         handlers.clear()
@@ -503,7 +542,9 @@ describe('registerPtyHandlers', () => {
             env?: Record<string, string>
           }): Promise<{ id: string }>
         }
+
         const daemonSpawn = setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -512,6 +553,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
@@ -537,7 +579,9 @@ describe('registerPtyHandlers', () => {
             env?: Record<string, string>
           }): Promise<{ id: string }>
         }
+
         const daemonSpawn = setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -546,6 +590,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController

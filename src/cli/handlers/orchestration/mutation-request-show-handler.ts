@@ -7,6 +7,7 @@ import type { OrchestrationMutationRequestShowResult } from '../../../shared/orc
 export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> = {
   'orchestration request-show': async ({ flags, client, json }) => {
     const request = getRequiredStringFlag(flags, 'request')
+
     const result = await client
       .call<OrchestrationMutationRequestShowResult>('orchestration.requestShow', { request })
       .catch((error: unknown) => {
@@ -18,8 +19,10 @@ export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> 
             'This Orca server cannot look up orchestration mutation requests yet. Update Orca on the server, or inspect the Dispatch directly with orchestration worker-show.'
           )
         }
+
         throw error
       })
+
     printResult(
       result,
       json,

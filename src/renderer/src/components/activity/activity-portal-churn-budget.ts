@@ -26,13 +26,16 @@ export function createActivityPortalChurnBudget(args: {
       const at = now()
       prune(at)
       eventsAt.push(at)
+
       if (eventsAt.length > limit) {
         eventsAt.shift()
       }
+
       return eventsAt.length >= limit
     },
     isSpent() {
       prune(now())
+
       return eventsAt.length >= limit
     },
     clear() {

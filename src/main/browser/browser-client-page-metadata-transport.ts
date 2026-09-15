@@ -46,23 +46,29 @@ export class BrowserClientPageMetadataTransport {
   async publish(params: unknown): Promise<{ accepted: boolean }> {
     this.observeCurrentUrl?.(params)
     const sender = this.sender
+
     if (!sender) {
       throw new RemoteRuntimeClientError(
         'remote_runtime_unavailable',
         'Remote runtime browser host lease is unavailable.'
       )
     }
+
     const response = await sender.sendPageMetadataRequest(
       params,
       BROWSER_CLIENT_PAGE_METADATA_REQUEST_TIMEOUT_MS
     )
+
     if (!response.ok) {
       throw new RemoteRuntimeClientError(response.error.code, response.error.message)
     }
+
     const ack = BrowserClientPageMetadataAck.safeParse(response.result)
+
     if (!ack.success) {
       throw new Error('browser_client_page_metadata_ack_invalid')
     }
+
     return ack.data
   }
 }
@@ -79,6 +85,7 @@ export function registerBrowserClientPageMetadataTransport(
   transport: BrowserClientPageMetadataTransport
 ): () => void {
   transportsByEnvironmentId.set(environmentId, transport)
+
   return () => {
     if (transportsByEnvironmentId.get(environmentId) === transport) {
       transportsByEnvironmentId.delete(environmentId)
@@ -95,6 +102,7 @@ export function publishBrowserClientPageMetadata(
   params: unknown
 ): Promise<{ accepted: boolean }> {
   const transport = transportsByEnvironmentId.get(environmentId)
+
   if (!transport) {
     return Promise.reject(
       new RemoteRuntimeClientError(
@@ -103,5 +111,6 @@ export function publishBrowserClientPageMetadata(
       )
     )
   }
+
   return transport.publish(params)
 }

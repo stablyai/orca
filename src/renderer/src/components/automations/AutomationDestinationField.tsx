@@ -31,11 +31,13 @@ export function AutomationDestinationField({
   labelClassName?: string
 }): React.JSX.Element {
   const selected = control.resolution.status === 'ready' ? control.resolution.entry : null
+
   // Ineligible hosts stay listed but disabled: hiding them read as the host
   // being gone, and it hid every connected host on a pre-host-scoping server.
   const groups = groupAutomationHostEntriesByAuthority(
     control.entries.filter(automationCreateHostOffered)
   )
+
   const updateRequiredAuthorities = automationCreateUpdateRequiredAuthorityLabels(control.entries)
   const label = translate('auto.components.automations.createDestination.label', 'Host')
 

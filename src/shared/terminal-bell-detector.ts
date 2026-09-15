@@ -40,6 +40,7 @@ export function createBellDetector(): BellDetector {
         // bell state; avoid walking every byte of normal terminal output.
         if (!(hints.containsOscIntroducer ?? data.includes('\x1b]'))) {
           pendingEscape = data.endsWith('\x1b')
+
           return false
         }
       }
@@ -58,10 +59,12 @@ export function createBellDetector(): BellDetector {
 
           if (pendingOscEscape) {
             pendingOscEscape = char === '\x1b'
+
             if (char === '\\') {
               inOsc = false
               pendingOscEscape = false
             }
+
             continue
           }
 
@@ -80,7 +83,9 @@ export function createBellDetector(): BellDetector {
             pendingEscape = false
             continue
           }
+
           pendingEscape = false
+
           if (char === ']') {
             inOsc = true
             pendingOscEscape = false
@@ -92,6 +97,7 @@ export function createBellDetector(): BellDetector {
             // bell rather than silently swallowing it with the orphan ESC.
             return true
           }
+
           continue
         }
 

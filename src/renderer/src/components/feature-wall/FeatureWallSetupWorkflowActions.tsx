@@ -31,11 +31,13 @@ export function getSetupGuideGitRepo(
   const activeRepo = activeRepoId
     ? repos.find((entry) => entry.id === activeRepoId && isGitRepoKind(entry))
     : undefined
+
   return activeRepo ?? repos.find((entry) => isGitRepoKind(entry)) ?? null
 }
 
 export function AddReposAction(): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
+
   return (
     <Button type="button" size="sm" className="w-fit gap-2" onClick={() => openModal('add-repo')}>
       <Plus className="size-3.5" />
@@ -52,6 +54,7 @@ export function WorkspacesAction(props: { done: boolean }): React.JSX.Element | 
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const repos = useAppStore((s) => s.repos)
   const repo = getSetupGuideGitRepo(repos, activeRepoId)
+
   if (props.done) {
     return null
   }
@@ -63,10 +66,13 @@ export function WorkspacesAction(props: { done: boolean }): React.JSX.Element | 
       className="w-fit gap-2"
       onClick={() => {
         cancelPendingSetupGuideTourRequest()
+
         if (!repo) {
           promptForSetupGuideProject(openModal)
+
           return
         }
+
         const tourRequestId = createSetupGuideTourRequestId()
         openModal('new-workspace-composer', {
           initialRepoId: repo.id,
@@ -106,8 +112,10 @@ export function SetupScriptAction(): React.JSX.Element {
   useEffect(() => {
     if (!canConfigure) {
       setSetupScript('pnpm install')
+
       return
     }
+
     setSetupScript(repo.hookSettings?.scripts?.setup?.trim() || 'pnpm install')
   }, [canConfigure, repo])
 
@@ -115,6 +123,7 @@ export function SetupScriptAction(): React.JSX.Element {
     if (!repo || !isGitRepoKind(repo)) {
       return
     }
+
     setSettingsSearchQuery('')
     openSettingsTarget({
       pane: 'repo',
@@ -129,8 +138,10 @@ export function SetupScriptAction(): React.JSX.Element {
     if (!repo || !isGitRepoKind(repo)) {
       return
     }
+
     const current = repo.hookSettings
     const defaults = getDefaultRepoHookSettings()
+
     const nextHookSettings: RepoHookSettings = {
       ...defaults,
       ...current,
@@ -143,7 +154,9 @@ export function SetupScriptAction(): React.JSX.Element {
         setup: setupScript.trim()
       }
     }
+
     const updated = await updateRepo(repo.id, { hookSettings: nextHookSettings })
+
     if (updated) {
       toast.success(
         translate(
@@ -221,6 +234,7 @@ export function SetupScriptAction(): React.JSX.Element {
 export function useSetupTargetWorktree(): Worktree | null {
   const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+
   return useMemo(
     () =>
       allWorktrees.find((worktree) => worktree.id === activeWorktreeId) ?? allWorktrees[0] ?? null,
@@ -229,10 +243,12 @@ export function useSetupTargetWorktree(): Worktree | null {
 }
 
 let pendingSetupGuideTourCancel: (() => void) | null = null
+
 let setupGuideTourRequestSequence = 0
 
 function createSetupGuideTourRequestId(): string {
   setupGuideTourRequestSequence += 1
+
   return `setup-guide-tour-${setupGuideTourRequestSequence}`
 }
 
@@ -249,6 +265,7 @@ export function requestSetupGuideTourWhenReady(args: RequestContextualTourWhenRe
 export function isSetupGuideWorkspaceComposerRequestCurrent(requestId: string): boolean {
   const state = useAppStore.getState()
   const modalData = state.modalData as { setupGuideTourRequestId?: unknown }
+
   return (
     state.activeModal === 'new-workspace-composer' &&
     modalData.setupGuideTourRequestId === requestId

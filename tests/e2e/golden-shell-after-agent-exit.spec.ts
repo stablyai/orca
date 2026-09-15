@@ -23,6 +23,7 @@ function buildSplitMarkerEcho(prefix: string, suffix: string): { command: string
     process.platform === 'win32'
       ? `Write-Output ('${prefix}' + '${suffix}')`
       : `echo "${prefix}""${suffix}"`
+
   return { command, marker: `${prefix}${suffix}` }
 }
 

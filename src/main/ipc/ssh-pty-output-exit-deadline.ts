@@ -38,25 +38,30 @@ export class SshPtyOutputExitDeadline {
     return new Promise((resolve, reject) => {
       let timeoutStarted = false
       let settled = false
+
       const validateNormalExit = (): void => {
         if (timeoutStarted) {
           throw outputIntakeError('ssh_exit_delivery_canceled')
         }
       }
+
       const settle = (result: { ok: true } | { ok: false; error: Error }): void => {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(barrier.timer)
         this.releasePreparedExit(event)
         this.remove(event.providerGeneration, barrier)
+
         if (result.ok) {
           resolve()
         } else {
           reject(result.error)
         }
       }
+
       const barrier: SshPtyExitBarrier = {
         timer: setTimeout(() => {
           timeoutStarted = true
@@ -76,12 +81,15 @@ export class SshPtyOutputExitDeadline {
         }, this.barrierMs),
         reject: (error) => settle({ ok: false, error })
       }
+
       barrier.timer.unref?.()
       let barriers = this.barriersByGeneration.get(event.providerGeneration)
+
       if (!barriers) {
         barriers = new Set()
         this.barriersByGeneration.set(event.providerGeneration, barriers)
       }
+
       barriers.add(barrier)
       const promise = start(validateNormalExit)
       void promise.then(
@@ -101,14 +109,18 @@ export class SshPtyOutputExitDeadline {
 
   closeGeneration(providerGeneration: number, error: Error): void {
     const barriers = this.barriersByGeneration.get(providerGeneration)
+
     if (barriers) {
       for (const barrier of barriers) {
         clearTimeout(barrier.timer)
         barrier.reject(error)
       }
+
       this.barriersByGeneration.delete(providerGeneration)
     }
+
     const prefix = `${providerGeneration}\0`
+
     for (const key of this.preparedExits) {
       if (key.startsWith(prefix)) {
         this.releasePreparedExitKey(key)
@@ -119,11 +131,14 @@ export class SshPtyOutputExitDeadline {
 
   prepareExitOnce(event: SshPtyOutputExitEvent): void {
     const key = this.exitKey(event)
+
     if (this.preparedExits.has(key)) {
       return
     }
+
     const release = this.dependencies.intake.prepareExit(event)
     this.preparedExits.add(key)
+
     if (release) {
       this.preparedExitReleases.set(key, release)
     }
@@ -141,43 +156,56 @@ export class SshPtyOutputExitDeadline {
     barrier: SshPtyExitBarrier
   ): Promise<void> {
     const cancel = this.dependencies.intake.cancelSourceDelivery
+
     if (!cancel) {
       throw outputIntakeError('ssh_source_cancellation_publisher_unavailable')
     }
+
     this.dependencies.admission.cancelPty(
       { ptyId: event.id, providerGeneration: event.providerGeneration },
       'ssh_exit_delivery_canceled'
     )
     this.dependencies.sourceObligations.sealPty(event)
+
     const cancellation = this.dependencies.sourceObligations.requestPtyCancellationProof(
       event,
       (request) => cancel(event.providerGeneration, request)
     )
+
     let commit: SshPtySourceCancellationProofCommit | null
+
     try {
       commit = await this.withCancellationProofDeadline(cancellation)
     } catch (error) {
       if (!this.isActive(event.providerGeneration, barrier)) {
         return
       }
+
       throw error
     }
+
     if (!this.isActive(event.providerGeneration, barrier)) {
       return
     }
+
     if (!commit) {
       throw outputIntakeError('ssh_source_cancellation_identity_unavailable')
     }
+
     this.dependencies.projections.transferPty(event.id, 'ssh-exit-delivery-canceled')
     this.dependencies.sourceObligations.commitPtyCancellationProof(commit)
     this.prepareExitOnce(event)
+
     if (!this.isActive(event.providerGeneration, barrier)) {
       return
     }
+
     this.dependencies.intake.finalizeExit(event)
+
     if (!this.isActive(event.providerGeneration, barrier)) {
       return
     }
+
     this.dependencies.projections.closePty(
       event.id,
       event.providerGeneration,
@@ -202,9 +230,11 @@ export class SshPtyOutputExitDeadline {
 
   private releasePreparedExitKey(key: string): void {
     const release = this.preparedExitReleases.get(key)
+
     if (!release) {
       return
     }
+
     this.preparedExitReleases.delete(key)
     release()
   }
@@ -215,6 +245,7 @@ export class SshPtyOutputExitDeadline {
         () => reject(outputIntakeError('ssh_source_cancellation_proof_timeout')),
         this.cancellationProofMs
       )
+
       timer.unref?.()
       void promise.then(
         (value) => {
@@ -232,6 +263,7 @@ export class SshPtyOutputExitDeadline {
   private remove(providerGeneration: number, barrier: SshPtyExitBarrier): void {
     const barriers = this.barriersByGeneration.get(providerGeneration)
     barriers?.delete(barrier)
+
     if (barriers?.size === 0) {
       this.barriersByGeneration.delete(providerGeneration)
     }

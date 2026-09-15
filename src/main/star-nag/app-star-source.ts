@@ -5,5 +5,6 @@ export function getStarNagAppStarSource(source: StarNagPromptSource): AppStarSou
   if (source === 'agent_value_moment' || source === 'onboarding_completed') {
     return source
   }
+
   return 'star_nag'
 }

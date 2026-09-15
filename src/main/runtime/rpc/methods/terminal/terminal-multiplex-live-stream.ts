@@ -16,6 +16,7 @@ export function activateMultiplexStream(
   const { runtime, streams, emit } = state
   const { ptyId } = stream
   const { isMobile, size } = published
+
   if (!isMobile) {
     stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
       const mode =
@@ -23,6 +24,7 @@ export function activateMultiplexStream(
           ? event.mode
           : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey).mode ??
             'desktop-fit')
+
       emit({
         type: 'fit-override-changed',
         streamId: request.streamId,
@@ -39,10 +41,12 @@ export function activateMultiplexStream(
       })
     })
     const fitOverride = runtime.getTerminalFitOverride(ptyId)
+
     const desktopHold = runtime.getRemoteDesktopFitHold?.(
       ptyId,
       stream.remoteDesktopSubscriptionKey
     ) ?? { mode: 'desktop-fit' as const, cols: size?.cols ?? 0, rows: size?.rows ?? 0 }
+
     emit({
       type: 'fit-override-changed',
       streamId: request.streamId,
@@ -56,11 +60,13 @@ export function activateMultiplexStream(
       driver: runtime.getDriver(ptyId)
     })
   }
+
   stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
     stream.outputBatcher.flush()
     const resizeGeneration = stream.resizeGeneration + 1
     stream.resizeGeneration = resizeGeneration
     const widthChanged = stream.isMobile && event.cols !== stream.lastResizeCols
+
     if (widthChanged) {
       stream.lastResizeCols = event.cols
       // Why: re-serialize+replay the full scrollback at the new cols so restored hard-wrapped lines rewrap; live output resumes after the snapshot lands.
@@ -82,6 +88,7 @@ export function activateMultiplexStream(
           ) {
             return
           }
+
           if (!restreamed) {
             state.sendResizedFrame(stream, event)
           }
@@ -95,12 +102,16 @@ export function activateMultiplexStream(
           ) {
             return
           }
+
           state.sendResizedFrame(stream, event)
         })
+
       return
     }
+
     state.sendResizedFrame(stream, event)
   })
+
   // Install the resize listener before draining the parked viewport, since applyLayout emits synchronously.
   if (
     !stream.isMobile &&
@@ -121,6 +132,7 @@ export function activateMultiplexStream(
       !stream.supportsDesktopViewportClaims
     ).catch(() => {})
   }
+
   void runtime
     .waitForTerminal(request.terminal, {
       condition: 'exit',

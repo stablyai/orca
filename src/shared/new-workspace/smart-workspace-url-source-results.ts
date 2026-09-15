@@ -40,6 +40,7 @@ function withSmartNameFallback(
 
 function isGitHubLinkIntentMatch(intent: GitHubIssueOrPRLink, item: GitHubWorkItem): boolean {
   const itemLink = parseGitHubIssueOrPRLink(item.url)
+
   return (
     itemLink !== null &&
     itemLink.type === intent.type &&
@@ -53,6 +54,7 @@ function isGitLabLinkIntentMatch(
   item: GitLabWorkItem
 ): boolean {
   const itemLink = parseGitLabIssueOrMRLink(item.url)
+
   return (
     itemLink !== null &&
     itemLink.type === intent.type &&
@@ -88,13 +90,16 @@ export function buildSmartWorkspaceUrlSourceRows({
   value: string
 }): SmartWorkspaceUrlSourceRow[] | null {
   const trimmed = value.trim()
+
   if (githubUrlIntent && (mode === 'smart' || mode === 'github')) {
     const rows = githubItems
       .filter((item) => isGitHubLinkIntentMatch(githubUrlIntent, item))
       .map(toGitHubSourceRow)
       .slice(0, resultLimit)
+
     return withSmartNameFallback(mode, trimmed, rows)
   }
+
   if (gitlabUrlIntent && (mode === 'smart' || mode === 'gitlab')) {
     const rows = gitlabAvailable
       ? gitlabItems
@@ -106,9 +111,12 @@ export function buildSmartWorkspaceUrlSourceRows({
           }))
           .slice(0, resultLimit)
       : []
+
     return withSmartNameFallback(mode, trimmed, rows)
   }
+
   const linearUrlIntent = parseBoundedSmartWorkspaceLinearIssueUrlIntent(trimmed)
+
   if (linearUrlIntentOwnsResults && linearUrlIntent && (mode === 'smart' || mode === 'linear')) {
     const rows = linearAvailable
       ? linearIssues
@@ -120,7 +128,9 @@ export function buildSmartWorkspaceUrlSourceRows({
           }))
           .slice(0, resultLimit)
       : []
+
     return withSmartNameFallback(mode, trimmed, rows)
   }
+
   return null
 }

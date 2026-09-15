@@ -19,6 +19,7 @@ vi.mock('./mobile-tasks-dependencies', async () => {
   const react = await import('react')
   const { colors } = await import('../theme/mobile-theme')
   const { githubProjectIdentityKey } = await import('../../../src/shared/github/project-identity')
+
   return {
     useCallback: react.useCallback,
     useMemo: react.useMemo,
@@ -32,21 +33,25 @@ vi.mock('./mobile-tasks-dependencies', async () => {
 vi.mock('./mobile-tasks-legacy-foundation', async () => {
   const options = await import('./mobile-tasks-options')
   const linear = await import('./mobile-tasks-reviewer-linear')
+
   return {
     ...options,
     ...linear,
     groupLinearIssues: (issues: LinearIssue[], groupBy: LinearGroupBy, orderBy: LinearOrderBy) => {
       groupingInputSizes.push(issues.length)
+
       return linear.groupLinearIssues(issues, groupBy, orderBy)
     },
     groupSortedLinearIssues: (issues: readonly LinearIssue[], groupBy: LinearGroupBy) => {
       groupingInputSizes.push(issues.length)
+
       return linear.groupSortedLinearIssues(issues, groupBy)
     }
   }
 })
 
 const { sortLinearIssues, groupLinearIssues } = await import('./mobile-tasks-legacy-foundation')
+
 const { useMobileTasksProviderViewProjection } =
   await import('./use-mobile-tasks-provider-view-projection')
 
@@ -56,16 +61,20 @@ const STATES = [
   { name: 'In Progress', type: 'started', color: '#333333' },
   { name: 'Done', type: 'completed', color: '#444444' }
 ]
+
 const TEAMS = [
   { id: 'team-a', name: 'Alpha', key: 'ALP' },
   { id: 'team-b', name: 'Beta', key: 'BET' }
 ]
+
 const ASSIGNEES = [
   { id: 'user-1', displayName: 'Ada' },
   { id: 'user-2', displayName: 'Grace' },
   undefined
 ]
+
 const GROUPINGS: LinearGroupBy[] = ['none', 'status', 'assignee', 'priority', 'team']
+
 const ORDERINGS: LinearOrderBy[] = ['priority', 'updated', 'identifier']
 
 /** Deterministic issues: every field is a pure function of the index, so grouping,
@@ -73,6 +82,7 @@ const ORDERINGS: LinearOrderBy[] = ['priority', 'updated', 'identifier']
 function makeIssue(index: number): LinearIssue {
   const state = STATES[(index * 3) % STATES.length]!
   const team = TEAMS[(index * 5) % TEAMS.length]!
+
   return {
     id: `issue-${index}`,
     identifier: `${team.key}-${100 + ((index * 7) % 97)}`,
@@ -150,12 +160,15 @@ type Projection = ReturnType<typeof useMobileTasksProviderViewProjection>
 // Why: a stack, not a nullable handle — the react-test-renderer types degrade to `any`
 // when mobile dependencies are absent, and a union with them trips the type-aware gate.
 const mounted: ReactTestRenderer[] = []
+
 let latest: Projection | null = null
+
 let renderCount = 0
 
 function Probe(props: { input: ProbeInput }): null {
   renderCount += 1
   latest = useMobileTasksProviderViewProjection(createModel(props.input))
+
   return null
 }
 
@@ -164,6 +177,7 @@ function mount(overrides: Partial<ProbeInput> = {}): Projection {
   act(() => {
     mounted.push(create(createElement(Probe, { input })))
   })
+
   return current()
 }
 
@@ -171,6 +185,7 @@ function rerender(overrides: Partial<ProbeInput> = {}): Projection {
   const input = { ...DEFAULT_INPUT, ...overrides }
   const renderer = mounted[mounted.length - 1]!
   act(() => renderer.update(createElement(Probe, { input })))
+
   return current()
 }
 
@@ -185,6 +200,7 @@ function current(): Projection {
   if (!latest) {
     throw new Error('probe never rendered')
   }
+
   return latest
 }
 
@@ -202,6 +218,7 @@ function legacyProjection(input: ProbeInput): {
       .map((item) => item.source),
     input.linearOrderBy
   )
+
   return {
     issuesForView,
     listSections: groupLinearIssues(issuesForView, input.linearGroupBy, input.linearOrderBy),
@@ -227,15 +244,18 @@ function countLinearWork(run: () => void): WorkCounts {
       compare &&
         ((a: T, b: T) => {
           comparisons += 1
+
           return compare(a, b)
         })
     )
   } as typeof Array.prototype.sort
+
   try {
     run()
   } finally {
     Array.prototype.sort = nativeSort
   }
+
   return {
     groupingCalls: groupingInputSizes.length,
     issueVisits: groupingInputSizes.reduce((total, size) => total + size, 0),
@@ -288,11 +308,13 @@ describe('useMobileTasksProviderViewProjection linear sections', () => {
   it.each(ORDERINGS)('matches the pre-change sections for every grouping at order %s', (order) => {
     for (const linearGroupBy of GROUPINGS) {
       const projection = mount({ linearGroupBy, linearOrderBy: order })
+
       const legacy = legacyProjection({
         ...DEFAULT_INPUT,
         linearGroupBy,
         linearOrderBy: order
       })
+
       expect(shape(projection.linearIssueSections)).toEqual(shape(legacy.listSections))
       expect(shape(projection.linearBoardSections)).toEqual(shape(legacy.boardSections))
       expect(projection.linearIssuesForView.map((issue) => issue.id)).toEqual(
@@ -375,9 +397,11 @@ describe('useMobileTasksProviderViewProjection transitions', () => {
   it('does not mutate the shared sections when the list entries are built', () => {
     const projection = mount({ linearGroupBy: 'status' })
     const before = shape(projection.linearIssueSections)
+
     const entryIssueIds = projection.linearListEntries
       .filter((entry) => entry.type === 'issue')
       .map((entry) => (entry.type === 'issue' ? entry.issue.id : ''))
+
     expect(entryIssueIds).toHaveLength(50)
     expect(shape(projection.linearBoardSections)).toEqual(before)
   })
@@ -386,12 +410,15 @@ describe('useMobileTasksProviderViewProjection transitions', () => {
 describe('useMobileTasksProviderViewProjection grouping work', () => {
   it('halves the grouping work for a grouped mount against the pre-change projection', () => {
     const input = { ...DEFAULT_INPUT, linearGroupBy: 'status' as const }
+
     const before = countLinearWork(() => {
       legacyProjection(input)
     })
+
     const after = countLinearWork(() => {
       mount(input)
     })
+
     expect(before.groupingCalls).toBe(2)
     expect(after.groupingCalls).toBe(1)
     expect(before.issueVisits).toBe(100)
@@ -403,12 +430,15 @@ describe('useMobileTasksProviderViewProjection grouping work', () => {
 
   it('keeps both none grouping calls but drops their re-sorts', () => {
     const input = { ...DEFAULT_INPUT, linearGroupBy: 'none' as const }
+
     const before = countLinearWork(() => {
       legacyProjection(input)
     })
+
     const after = countLinearWork(() => {
       mount(input)
     })
+
     expect([before.groupingCalls, after.groupingCalls]).toEqual([2, 2])
     expect([before.issueVisits, after.issueVisits]).toEqual([100, 100])
     expect(before.comparisons - after.comparisons).toBe(2 * (input.items.length - 1))
@@ -416,9 +446,11 @@ describe('useMobileTasksProviderViewProjection grouping work', () => {
 
   it('does no grouping work on an unrelated rerender', () => {
     mount({ linearGroupBy: 'status' })
+
     const onRerender = countLinearWork(() => {
       rerender({ linearGroupBy: 'status', githubProjectPickerSearch: 'orca' })
     })
+
     expect(onRerender).toEqual({ groupingCalls: 0, issueVisits: 0, comparisons: 0 })
   })
 })

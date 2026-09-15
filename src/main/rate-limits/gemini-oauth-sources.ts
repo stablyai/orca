@@ -5,8 +5,11 @@ import { net } from 'electron'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
 
 const API_TIMEOUT_MS = 10_000
+
 const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
+
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+
 const LOAD_CODE_ASSIST_URL = 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'
 
 export type GeminiCredentials = {
@@ -40,11 +43,13 @@ export async function readAuthJson(): Promise<AuthJson | null> {
   for (const candidate of candidates) {
     try {
       const raw = await readFile(candidate, 'utf-8')
+
       return JSON.parse(raw) as AuthJson
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
         continue
       }
+
       throw err
     }
   }
@@ -56,6 +61,7 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
   try {
     const raw = await readFile(OAUTH_CREDS_PATH, 'utf-8')
     const parsed = JSON.parse(raw) as unknown
+
     if (
       parsed &&
       typeof parsed === 'object' &&
@@ -68,11 +74,13 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
     ) {
       return parsed as GeminiCredentials
     }
+
     return null
   } catch (err) {
     if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
       return null
     }
+
     throw err
   }
 }
@@ -115,6 +123,7 @@ export async function refreshAccessToken(
     refresh_token?: string
     expires_in?: number
   }
+
   return {
     accessToken: typeof data.access_token === 'string' ? data.access_token : null,
     newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null,
@@ -138,9 +147,11 @@ export async function loadProjectId(accessToken: string): Promise<string> {
   }
 
   const data = (await res.json()) as { cloudaicompanionProject?: string }
+
   if (typeof data.cloudaicompanionProject !== 'string') {
     throw new Error('Gemini project ID not found in API response')
   }
+
   return data.cloudaicompanionProject
 }
 
@@ -154,7 +165,9 @@ export async function tryRefreshTokenFromBundle(
   if (!allowCliOAuth) {
     return null
   }
+
   const clientCreds = await extractOAuthClientCredentials()
+
   if (!clientCreds) {
     return null
   }

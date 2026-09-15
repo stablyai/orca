@@ -19,6 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 // Why: relative to now — the labels under test are relative times, so fixed dates would rot.
 function artifact(slug: string, title: string): ArtifactListItem {
   const createdAt = new Date(Date.now() - DAY_MS).toISOString()
+
   return {
     artifact: {
       version: 1,
@@ -60,6 +61,7 @@ describe('ArtifactCollection', () => {
         />
       </TooltipProvider>
     )
+
     return { container, selectArtifact }
   }
 

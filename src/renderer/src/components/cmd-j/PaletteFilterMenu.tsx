@@ -29,6 +29,7 @@ function CategoryRoot({
       <CommandGroup>
         {groups.map((group) => {
           const selectedCount = group.selected.length
+
           return (
             <CommandItem
               key={group.field}
@@ -78,6 +79,7 @@ export default function PaletteFilterMenu({
 
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
+
     // Why: a single host (or single repository) is nothing to disambiguate between,
     // so that axis stays hidden rather than offering a no-op checkbox.
     if (model.hosts.length > 1) {
@@ -88,6 +90,7 @@ export default function PaletteFilterMenu({
         selected: filter.hostIds
       })
     }
+
     if (model.repositories.length > 1) {
       entries.push({
         field: 'repository',
@@ -97,6 +100,7 @@ export default function PaletteFilterMenu({
         selected: filter.repoIds
       })
     }
+
     return entries
   }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
 
@@ -115,10 +119,13 @@ export default function PaletteFilterMenu({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (!nextOpen) {
         resetMenuState()
+
         return
       }
+
       // Single axis: skip the category step and open straight into its options.
       if (groups.length === 1) {
         setActiveField(groups[0].field)
@@ -137,6 +144,7 @@ export default function PaletteFilterMenu({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       event.stopPropagation()
+
       if (event.key === 'Escape' && activeGroup != null && groups.length > 1) {
         event.preventDefault()
         goBackToRoot()

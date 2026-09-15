@@ -29,11 +29,13 @@ export function installBrowserClickedLinkRouting(
 ): void {
   const routingGlobal = globalThis as BrowserClickedLinkRoutingGlobal
   const existing = routingGlobal.__orcaBrowserClickedLinkRouting
+
   if (existing) {
     existing.foregroundFrameName = foregroundFrameName
     existing.backgroundFrameName = backgroundFrameName
     existing.isMac = isMac
     existing.allowUntrustedEvents = allowUntrustedEvents
+
     return
   }
 
@@ -44,9 +46,11 @@ export function installBrowserClickedLinkRouting(
     allowUntrustedEvents,
     listener: () => {}
   }
+
   state.listener = (event) => {
     const primaryClick = event.type === 'click' && event.button === 0
     const middleClick = event.type === 'auxclick' && event.button === 1
+
     if (
       !(event instanceof MouseEvent) ||
       (!event.isTrusted && !state.allowUntrustedEvents) ||
@@ -66,15 +70,18 @@ export function installBrowserClickedLinkRouting(
             (target.localName === 'a' || target.localName === 'area')) ||
             (target.namespaceURI === 'http://www.w3.org/2000/svg' && target.localName === 'a'))
       )
+
     if (!link || link.hasAttribute('download')) {
       return
     }
 
     const modifierClick = state.isMac ? event.metaKey : event.ctrlKey
     const otherPlatformModifier = state.isMac ? event.ctrlKey : event.metaKey
+
     if (otherPlatformModifier) {
       return
     }
+
     // Shift alone is browser-native new-window intent; keep OAuth and other
     // opener-dependent window flows in Orca's guarded popup window.
     if (event.shiftKey && !modifierClick && !middleClick) {
@@ -84,6 +91,7 @@ export function installBrowserClickedLinkRouting(
     const baseTarget = document.querySelector('base[target]')?.getAttribute('target') ?? ''
     const ownTarget = link.getAttribute('target')
     const effectiveTarget = (ownTarget === null ? baseTarget : ownTarget).trim().toLowerCase()
+
     // target=_blank is a new-tab request, exactly as it is in every other
     // browser; the modifiers are the other two ways to ask for one.
     if (!(middleClick || modifierClick || effectiveTarget === '_blank')) {
@@ -92,16 +100,19 @@ export function installBrowserClickedLinkRouting(
 
     const rawHref =
       link.getAttribute('href') ?? link.getAttributeNS('http://www.w3.org/1999/xlink', 'href')
+
     if (rawHref === null) {
       return
     }
 
     let targetUrl: URL
+
     try {
       targetUrl = new URL(rawHref, document.baseURI)
     } catch {
       return
     }
+
     if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
       return
     }
@@ -116,6 +127,7 @@ export function installBrowserClickedLinkRouting(
       openInBackground ? state.backgroundFrameName : state.foregroundFrameName
     )
   }
+
   routingGlobal.__orcaBrowserClickedLinkRouting = state
 
   // Why: page click handlers must get the first chance to cancel or rewrite a
@@ -137,6 +149,7 @@ export function installBrowserIframeClickedLinkRouting(
   const listener = (event: MouseEvent): void => {
     const primaryClick = event.type === 'click' && event.button === 0
     const middleClick = event.type === 'auxclick' && event.button === 1
+
     if (
       !(event instanceof MouseEvent) ||
       (!event.isTrusted && !allowUntrustedEvents) ||
@@ -156,12 +169,14 @@ export function installBrowserIframeClickedLinkRouting(
             (target.localName === 'a' || target.localName === 'area')) ||
             (target.namespaceURI === 'http://www.w3.org/2000/svg' && target.localName === 'a'))
       )
+
     if (!link || link.hasAttribute('download')) {
       return
     }
 
     const modifierClick = isMac ? event.metaKey : event.ctrlKey
     const otherPlatformModifier = isMac ? event.ctrlKey : event.metaKey
+
     if (otherPlatformModifier || (event.shiftKey && !modifierClick && !middleClick)) {
       return
     }
@@ -169,22 +184,26 @@ export function installBrowserIframeClickedLinkRouting(
     const baseTarget = document.querySelector('base[target]')?.getAttribute('target') ?? ''
     const ownTarget = link.getAttribute('target')
     const effectiveTarget = (ownTarget === null ? baseTarget : ownTarget).trim().toLowerCase()
+
     if (!(middleClick || modifierClick || effectiveTarget === '_blank')) {
       return
     }
 
     const rawHref =
       link.getAttribute('href') ?? link.getAttributeNS('http://www.w3.org/1999/xlink', 'href')
+
     if (rawHref === null) {
       return
     }
 
     let targetUrl: URL
+
     try {
       targetUrl = new URL(rawHref, document.baseURI)
     } catch {
       return
     }
+
     if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
       return
     }
@@ -201,8 +220,10 @@ export function installBrowserIframeClickedLinkRouting(
     window.removeEventListener('click', listener, false)
     window.removeEventListener('auxclick', listener, false)
   }
+
   window.addEventListener('click', listener, false)
   window.addEventListener('auxclick', listener, false)
+
   return cleanup
 }
 

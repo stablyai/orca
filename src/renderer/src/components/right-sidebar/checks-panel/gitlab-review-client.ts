@@ -17,6 +17,7 @@ export function gitLabMRCommentsToPRComments(
 ): PRComment[] {
   return (comments ?? []).map((comment) => {
     const { reactions: _reactions, ...compatibleComment } = comment
+
     // Why: the shared comments renderer expects GitHub reaction enums; GitLab award names are open-ended, so omit them here.
     return compatibleComment
   })
@@ -30,6 +31,7 @@ export async function fetchGitLabMRDetailsForChecks(args: {
   repoOwnerExecutionHostId?: string
 }): Promise<GitLabWorkItemDetails | null> {
   const target = getActiveRuntimeTarget(args.settings)
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<GitLabWorkItemDetails | null>(
       target,
@@ -42,6 +44,7 @@ export async function fetchGitLabMRDetailsForChecks(args: {
       { timeoutMs: 30_000 }
     )
   }
+
   return (await window.api.gl.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -60,6 +63,7 @@ export async function resolveGitLabMRDiscussionForChecks(args: {
   resolved: boolean
 }): Promise<GitLabDiscussionResolveResult> {
   const target = getActiveRuntimeTarget(args.settings)
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<GitLabDiscussionResolveResult>(
       target,
@@ -73,6 +77,7 @@ export async function resolveGitLabMRDiscussionForChecks(args: {
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gl.resolveMRDiscussion({
     repoPath: args.repoPath,
     repoId: args.repoId,

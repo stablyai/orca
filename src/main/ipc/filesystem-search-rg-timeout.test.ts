@@ -84,6 +84,7 @@ import { registerFilesystemHandlers } from './filesystem'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -92,6 +93,7 @@ function createMockProcess(): ChildProcess {
   ).setEncoding = vi.fn()
   ;(p as unknown as Record<string, unknown>).stderr = new EventEmitter()
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
+
   return p
 }
 
@@ -159,8 +161,10 @@ describe('filesystem rg search timeout', () => {
         { sender: { id: 7 } },
         { rootPath: '/repo', query: 'ok' }
       ) as Promise<unknown>
+
       await flushMicrotasks()
       const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+
       if (order === 'error-first') {
         expect(() => child.emit('error', error)).not.toThrow()
         child.emit('close', -2, null)
@@ -187,6 +191,7 @@ describe('filesystem rg search timeout', () => {
       { sender: { id: 7 } },
       { rootPath: '/repo', query: 'ok' }
     ) as Promise<{ files: unknown[] }>
+
     await flushMicrotasks()
     child.emit('error', new Error('post-spawn failure'))
 
@@ -206,6 +211,7 @@ describe('filesystem rg search timeout', () => {
       { sender: { id: 7 } },
       { rootPath: '/repo', query: 'ok' }
     ) as Promise<unknown>
+
     await flushMicrotasks()
     child.emit('close', 127, null)
 
@@ -280,6 +286,7 @@ describe('filesystem rg search timeout', () => {
       if (!child.stdout) {
         throw new Error('mock child stdout missing')
       }
+
       child.stdout.emit(
         'data',
         `${JSON.stringify({

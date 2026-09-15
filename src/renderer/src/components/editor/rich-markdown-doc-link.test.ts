@@ -19,9 +19,11 @@ function parentContext(code: boolean) {
 
 function scan(text: string, markNames: string[] = [], parentCode = false): string[] {
   const node = textContext(text, markNames)
+
   if (!canHoldDocLink(node, parentContext(parentCode))) {
     return []
   }
+
   return [...node.text.matchAll(DOC_LINK_PATTERN)].map((match) => match[1])
 }
 

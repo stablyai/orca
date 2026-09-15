@@ -29,10 +29,12 @@ export function MentionTextarea({
   const listboxId = useId()
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+
   const suggestions = useMemo(
     () => (mentionQuery ? filterGitHubMentionOptions(mentionOptions, mentionQuery.query) : []),
     [mentionOptions, mentionQuery]
   )
+
   const showSuggestions = mentionQuery !== null && suggestions.length > 0
 
   const syncMentionQuery = useCallback((textarea: HTMLTextAreaElement): void => {
@@ -46,9 +48,11 @@ export function MentionTextarea({
       const textarea = textareaRef.current
       const caret = textarea?.selectionStart ?? value.length
       const query = textarea ? findMentionQuery(value, caret) : mentionQuery
+
       if (!query) {
         return
       }
+
       const suffix = value[caret] && !/\s/.test(value[caret]) ? ' ' : ''
       const inserted = `@${option.login}${suffix}`
       const nextValue = `${value.slice(0, query.atIndex)}${inserted}${value.slice(caret)}`
@@ -131,24 +135,32 @@ export function MentionTextarea({
             if (event.key === 'ArrowDown') {
               event.preventDefault()
               setActiveIndex((current) => (current + 1) % suggestions.length)
+
               return
             }
+
             if (event.key === 'ArrowUp') {
               event.preventDefault()
               setActiveIndex((current) => (current - 1 + suggestions.length) % suggestions.length)
+
               return
             }
+
             if (event.key === 'Enter' || event.key === 'Tab') {
               event.preventDefault()
               insertMention(suggestions[activeIndex] ?? suggestions[0])
+
               return
             }
+
             if (event.key === 'Escape') {
               event.preventDefault()
               setMentionQuery(null)
+
               return
             }
           }
+
           onKeyDown?.(event)
         }}
         placeholder={placeholder}

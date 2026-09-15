@@ -52,9 +52,11 @@ export function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -65,13 +67,16 @@ export function GHEditSection({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const { isPending, run } = useImmediateMutation()
+
   // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
         return
       }
+
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, patch)
     },
     [projectOrigin, patchProjectRowContent]
@@ -80,23 +85,28 @@ export function GHEditSection({
   // Why: with projectOrigin set, read labels/assignees from the row's repo (not workspace path) so popovers match where writes target.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
+
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
     sourceSettings
   )
+
   const repoLabelsBySlug = useRepoLabelsBySlug(
     slugOwner,
     slugRepo,
     sourceSettings,
     projectOrigin?.host
   )
+
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
+
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
     sourceSettings
   )
+
   const repoAssigneesBySlug = useRepoAssigneesBySlug(
     slugOwner,
     slugRepo,
@@ -104,6 +114,7 @@ export function GHEditSection({
     sourceSettings,
     projectOrigin?.host
   )
+
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees on item change / detail resolve, but skip if the user made an optimistic edit so we don't clobber in-flight changes.
@@ -111,6 +122,7 @@ export function GHEditSection({
     if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
     }
+
     setLocalAssignees(assignees)
   }, [assigneesItemKey, assignees])
 

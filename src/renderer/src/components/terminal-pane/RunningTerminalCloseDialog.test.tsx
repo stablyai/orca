@@ -12,6 +12,7 @@ import {
 import RunningTerminalCloseDialog from './RunningTerminalCloseDialog'
 
 const initialState = useAppStore.getInitialState()
+
 const mountedRoots: Root[] = []
 
 // The store holds off any action for 350 ms after a queued request replaces the visible
@@ -48,17 +49,21 @@ function getButton(label: string): HTMLButtonElement {
   const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent === label
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   return button
 }
 
 function getCheckbox(): HTMLButtonElement {
   const checkbox = document.body.querySelector<HTMLButtonElement>('[role="checkbox"]')
+
   if (!checkbox) {
     throw new Error('Checkbox not found')
   }
+
   return checkbox
 }
 
@@ -76,6 +81,7 @@ describe('RunningTerminalCloseDialog', () => {
       advancePastGuard()
       useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
     }
+
     vi.mocked(Date.now).mockRestore()
     await act(async () => {
       for (const root of mountedRoots.splice(0)) {

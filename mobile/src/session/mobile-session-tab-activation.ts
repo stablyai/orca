@@ -27,6 +27,7 @@ async function retryIdempotentActivationAfterCutover(
 ): Promise<RpcResponse> {
   const diagnosticTarget = shortenMobileTerminalDiagnosticId(target)
   logMobileTerminalDiagnostic('activation-request', { operation, target: diagnosticTarget })
+
   try {
     const response = await request()
     logMobileTerminalDiagnostic('activation-result', {
@@ -35,6 +36,7 @@ async function retryIdempotentActivationAfterCutover(
       ok: response.ok,
       rpcCode: response.ok ? null : response.error.code
     })
+
     return response
   } catch (error) {
     if (!(error instanceof LogicalClientCutoverError)) {
@@ -45,10 +47,12 @@ async function retryIdempotentActivationAfterCutover(
       })
       throw error
     }
+
     logMobileTerminalDiagnostic('activation-cutover-retry', {
       operation,
       target: diagnosticTarget
     })
+
     // Why: cutover rejects ambiguous in-flight work after the replacement is
     // active; these state-setting requests are idempotent and safe to repeat once.
     try {
@@ -59,6 +63,7 @@ async function retryIdempotentActivationAfterCutover(
         ok: response.ok,
         rpcCode: response.ok ? null : response.error.code
       })
+
       return response
     } catch (retryError) {
       logMobileTerminalDiagnostic('activation-error', {

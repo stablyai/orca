@@ -16,9 +16,11 @@ export type RichMarkdownImagePasteArgs = {
 
 export function clipboardHasImage(event: ClipboardEvent): boolean {
   const data = event.clipboardData
+
   if (!data) {
     return false
   }
+
   return Array.from(data.items).some(
     (item) => item.kind === 'file' && item.type.startsWith('image/')
   )
@@ -44,6 +46,7 @@ export function handleRichMarkdownImagePaste({
       if (!sourcePath || !isRichMarkdownImagePasteTargetAvailable(editor, targetDom)) {
         return
       }
+
       return insertRichMarkdownImageFromPath({
         editor,
         filePath,

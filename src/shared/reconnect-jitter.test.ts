@@ -10,6 +10,7 @@ describe('withReconnectJitter', () => {
     const fleet = Array.from({ length: 32 }, (_, index) =>
       withReconnectJitter(500, () => index / 32)
     )
+
     expect(new Set(fleet).size).toBeGreaterThan(1)
     expect(Math.min(...fleet)).toBeGreaterThanOrEqual(500)
     expect(Math.max(...fleet)).toBeLessThanOrEqual(600)

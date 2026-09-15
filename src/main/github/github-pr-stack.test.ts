@@ -8,6 +8,7 @@ const { ghExecFileAsyncMock, rateLimitGuardMock, noteRateLimitSpendMock } = vi.h
 }))
 
 vi.mock('../git/runner', () => ({ ghExecFileAsync: ghExecFileAsyncMock }))
+
 vi.mock('./rate-limit', () => ({
   repositoryRateLimitGuard: rateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRateLimitSpendMock
@@ -20,6 +21,7 @@ import {
 } from './github-pr-stack'
 
 const repository = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+
 const summary: GitHubPRStack = {
   number: 51,
   position: 2,
@@ -90,6 +92,7 @@ describe('hydrateGitHubPRStack', () => {
     })
 
     const first = await hydrateGitHubPRStack(repository, 202, summary, { cwd: '/repo' })
+
     const sibling = await hydrateGitHubPRStack(
       repository,
       201,
@@ -153,6 +156,7 @@ describe('hydrateGitHubPRStack', () => {
         }
       })
     })
+
     ghExecFileAsyncMock
       .mockResolvedValueOnce(response('2026-08-10T00:00:00Z', true))
       .mockResolvedValueOnce(response('2026-08-10T00:01:00Z', false))
@@ -164,6 +168,7 @@ describe('hydrateGitHubPRStack', () => {
       { cwd: '/repo' },
       '2026-08-10T00:00:00Z'
     )
+
     const ready = await hydrateGitHubPRStack(
       repository,
       202,
@@ -224,6 +229,7 @@ describe('mergeGitHubPRStack', () => {
       headSha: 'api-sha',
       ghOptions: { cwd: '/repo' }
     })
+
     await vi.advanceTimersByTimeAsync(1_000)
 
     await expect(result).resolves.toEqual({ ok: true })
@@ -300,6 +306,7 @@ describe('mergeGitHubPRStack', () => {
       mergeAction: 'direct_merge',
       ghOptions: { cwd: '/repo' }
     })
+
     await vi.advanceTimersByTimeAsync(1_000)
     await vi.advanceTimersByTimeAsync(1_000)
 
@@ -320,6 +327,7 @@ describe('mergeGitHubPRStack', () => {
       mergeAction: 'direct_merge',
       ghOptions: { cwd: '/repo' }
     })
+
     await vi.advanceTimersByTimeAsync(180_000)
 
     await expect(result).resolves.toEqual({

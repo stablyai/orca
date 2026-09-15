@@ -35,6 +35,7 @@ export function SshTargetRow({
   const status = target.state?.status ?? 'disconnected'
   const isConnected = status === 'connected'
   const isBusy = connecting || isConnectingSshStatus(status)
+
   const dotColor = isConnected
     ? 'bg-green-500'
     : isBusy
@@ -51,9 +52,11 @@ export function SshTargetRow({
     // Why: prevent the row's onClick from also firing and treating the click
     // as a selection when the target is disconnected.
     e.stopPropagation()
+
     if (isBusy || isSshConnectInFlight(target.id)) {
       return
     }
+
     beginSshConnect(target.id)
     void onConnect(target.id).finally(() => {
       endSshConnect(target.id)

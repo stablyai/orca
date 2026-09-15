@@ -18,13 +18,17 @@ export function omitRecordKeys<T>(
   if (!record) {
     return {}
   }
+
   let next: Record<string, T> | null = null
+
   for (const key of keys) {
     if (!(key in record)) {
       continue
     }
+
     next ??= { ...record }
     delete next[key]
   }
+
   return next ?? record
 }

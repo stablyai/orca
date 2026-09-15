@@ -7,8 +7,10 @@ export function projectLocalStructuredSessionTabs(
   const structuredIds = new Set(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.id)
   )
+
   const visibleHostTabIds = structuredIds
   const visibleIds = structuredIds
+
   const projectedTabGroups = snapshot.tabGroups
     ?.map((group) => ({
       ...group,

@@ -1,6 +1,8 @@
 // Why: normal repositories stay complete while pathological fan-out/name payloads fail before retention.
 export const MOBILE_FILE_DIRECTORY_MAX_ENTRIES = 10_000
+
 export const MOBILE_FILE_DIRECTORY_MAX_RETAINED_BYTES = 4 * 1024 * 1024
+
 export const MOBILE_FILE_DIRECTORY_LIMIT_MESSAGE =
   'This folder is too large to show safely on mobile (limit: 10,000 items or a 4 MB listing).'
 
@@ -21,6 +23,7 @@ export function trackMobileFileDirectoryEntry(
 ): void {
   state.entries += 1
   state.retainedBytes += estimateMobileDirectoryEntryBytes(entry)
+
   if (
     state.entries > MOBILE_FILE_DIRECTORY_MAX_ENTRIES ||
     state.retainedBytes > MOBILE_FILE_DIRECTORY_MAX_RETAINED_BYTES
@@ -33,6 +36,7 @@ export function assertMobileFileDirectoryWithinLimit(
   entries: readonly NamedDirectoryEntry[]
 ): void {
   const state = createMobileFileDirectoryLimitState()
+
   for (const entry of entries) {
     trackMobileFileDirectoryEntry(state, entry)
   }

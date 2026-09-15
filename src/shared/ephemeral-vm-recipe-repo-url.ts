@@ -8,5 +8,6 @@ export function getProvisionedRootRecipeRepoUrl(
   if (checkoutMode !== 'provisioned-root' || !remoteUrl) {
     return undefined
   }
+
   return stripCredentialsFromMessage(remoteUrl)
 }

@@ -38,9 +38,11 @@ export function AddRepoNestedImportStep({
 }: AddRepoNestedImportStepProps): React.JSX.Element {
   const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
   const groupNameInputId = useId()
+
   const [pendingImportMode, setPendingImportMode] = useState<
     'folder' | 'group' | 'separate' | null
   >(null)
+
   const noRepositoriesSelected = selectedPaths.size === 0
   const showOpenAsFolderSpinner = isAdding && pendingImportMode === 'folder'
   const showSeparateSpinner = isAdding && pendingImportMode === 'separate'
@@ -56,10 +58,12 @@ export function AddRepoNestedImportStep({
     setPendingImportMode(mode)
     onImport(mode)
   }
+
   const handleOpenAsFolder = (): void => {
     setPendingImportMode('folder')
     onOpenAsFolder()
   }
+
   const repoCountLabel =
     scan.repos.length === 1
       ? translate('auto.components.sidebar.AddRepoNestedImportStep.8401a7a0d0', '1 repository')
@@ -68,6 +72,7 @@ export function AddRepoNestedImportStep({
           '{{value0}} repositories',
           { value0: scan.repos.length }
         )
+
   const foundSentence = translate(
     'auto.components.sidebar.AddRepoNestedImportStep.b4263a2ac4',
     'Found {{value0}} in {{value1}}.',

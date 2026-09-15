@@ -1,12 +1,17 @@
 import type { PreflightStatus } from '../../../../preload/api-types'
 
 export type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
+
 // Why: parallel to GhStatus — GitLab uses glab and the same three failure
 // modes (probe in-flight / installed-but-unauth / missing entirely).
 export type GlabStatus = GhStatus
+
 export type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
+
 export type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
+
 export type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
+
 export type PreflightRefreshProvider = 'gh' | 'glab' | 'bitbucket' | 'azureDevOps' | 'gitea'
 
 export type PreflightIntegrationStatuses = {
@@ -44,12 +49,15 @@ export function tokenApiStatusFromPreflight(
   if (!status?.configured) {
     return 'not-configured'
   }
+
   if (status.tokenConfigured && !status.baseUrl) {
     return 'configured'
   }
+
   if (status.tokenConfigured && !status.authenticated) {
     return 'not-authenticated'
   }
+
   return 'configured'
 }
 
@@ -57,9 +65,11 @@ export function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefine
   if (!status?.configured) {
     return 'not-configured'
   }
+
   if (status.tokenConfigured && !status.authenticated) {
     return 'not-authenticated'
   }
+
   return 'configured'
 }
 
@@ -67,6 +77,7 @@ function ghStatusFromPreflight(status: PreflightStatus['gh']): GhStatus {
   if (!status.installed) {
     return 'not-installed'
   }
+
   return status.authenticated ? 'connected' : 'not-authenticated'
 }
 
@@ -74,6 +85,7 @@ function glabStatusFromPreflight(status: PreflightStatus['glab']): GlabStatus {
   if (!status?.installed) {
     return 'not-installed'
   }
+
   return status.authenticated ? 'connected' : 'not-authenticated'
 }
 
@@ -81,6 +93,7 @@ function bitbucketStatusFromPreflight(status: PreflightStatus['bitbucket']): Bit
   if (!status?.configured) {
     return 'not-configured'
   }
+
   return status.authenticated ? 'connected' : 'not-authenticated'
 }
 
@@ -114,6 +127,7 @@ export function getPreflightIntegrationStatuses(
   const bitbucket = preflightStatus.bitbucket
   const azureDevOps = preflightStatus.azureDevOps
   const gitea = preflightStatus.gitea
+
   return {
     ghStatus: maybeChecking('gh', refreshingProviders, ghStatusFromPreflight(preflightStatus.gh)),
     glabStatus: maybeChecking(

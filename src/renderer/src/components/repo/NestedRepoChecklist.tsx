@@ -19,6 +19,7 @@ function NestedRepoSelectAllRow({
   const allSelected = total > 0 && selectedCount === total
   const noneSelected = selectedCount === 0
   const isMixed = !allSelected && !noneSelected
+
   const handleCheckboxRef = useCallback(
     (checkbox: HTMLInputElement | null) => {
       if (checkbox) {
@@ -27,6 +28,7 @@ function NestedRepoSelectAllRow({
     },
     [isMixed]
   )
+
   return (
     <label className="flex min-w-0 cursor-pointer items-center gap-2.5 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50">
       <input
@@ -86,6 +88,7 @@ export function NestedRepoChecklist({
             if (previous.size === scan.repos.length) {
               return new Set()
             }
+
             return new Set(scan.repos.map((repo) => repo.path))
           })
         }}
@@ -102,11 +105,13 @@ export function NestedRepoChecklist({
                 onChange={(event) => {
                   onSelectedPathsChange((previous) => {
                     const next = new Set(previous)
+
                     if (event.target.checked) {
                       next.add(repo.path)
                     } else {
                       next.delete(repo.path)
                     }
+
                     return next
                   })
                 }}

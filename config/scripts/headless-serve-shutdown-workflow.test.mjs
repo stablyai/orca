@@ -4,30 +4,39 @@ import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+
 const headlessLinuxGuide = readFileSync('docs/reference/headless-linux-server.md', 'utf8')
+
 const signalCase = readFileSync('config/docker/headless-serve-shutdown/run-signal-case.sh', 'utf8')
+
 const shutdownDockerRunner = readFileSync(
   'config/scripts/run-headless-serve-shutdown-docker.mjs',
   'utf8'
 )
+
 const shutdownDockerfile = readFileSync('config/docker/headless-serve-shutdown/Dockerfile', 'utf8')
+
 const desktopStartupOracle = readFileSync(
   'config/docker/headless-serve-shutdown/run-appimage-desktop-startup-case.sh',
   'utf8'
 )
+
 const headlessLinuxProse = headlessLinuxGuide.replace(/\s+/g, ' ')
 
 function readSystemdUnitBlocks(doc, unitName) {
   const escapedUnitName = unitName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
   return [...doc.matchAll(new RegExp(`^# /etc/systemd/system/${escapedUnitName}$`, 'gm'))].map(
     (match) => {
       const start = match.index + match[0].length
       const end = doc.indexOf('```', start)
       const nextUnitHeaderOffset = doc.slice(start).search(/^# \/etc\/systemd\/system\/.+$/m)
       const nextUnitHeader = nextUnitHeaderOffset === -1 ? -1 : start + nextUnitHeaderOffset
+
       if (end === -1 || (nextUnitHeader !== -1 && end > nextUnitHeader)) {
         throw new Error(`Missing closing code fence for ${unitName}`)
       }
+
       return doc.slice(start, end)
     }
   )
@@ -95,6 +104,7 @@ describe('headless serve shutdown PR gate', () => {
   it('checks that a serving-electron signal target owns the ready socket', () => {
     const ssRecord =
       'LISTEN 0 128 127.0.0.1:41235 0.0.0.0:* users:(("orca-ide",pid=23,fd=7),("orca-ide",pid=25,fd=8))'
+
     expect([...ssRecord.matchAll(/pid=([0-9]+)/g)].map((match) => match[1])).toEqual(['23', '25'])
     expect(signalCase).toContain(
       'listener_before_pids=$(grep -oE \'pid=[0-9]+\' <<<"$listener_before" | cut -d= -f2 || true)'
@@ -107,12 +117,15 @@ describe('headless serve shutdown PR gate', () => {
     expect(shutdownDockerfile).toContain(
       'COPY run-appimage-desktop-startup-case.sh /usr/local/bin/run-appimage-desktop-startup-case'
     )
+
     const startupCall = shutdownDockerRunner.indexOf(
       'runDesktopStartupOracle({ image, appImage, platform })'
     )
+
     const extractionCall = shutdownDockerRunner.indexOf(
       "'timeout --kill-after=10s 120s /input/orca.AppImage --appimage-extract"
     )
+
     const signalLoop = shutdownDockerRunner.indexOf("for (const signal of ['INT', 'TERM'])")
     expect(startupCall).toBeGreaterThan(-1)
     expect(extractionCall).toBeGreaterThan(startupCall)
@@ -179,8 +192,10 @@ describe('headless serve shutdown PR gate', () => {
   it('uses the registered CLI name from ordinary Linux shells', () => {
     const commandRule =
       'The registered Linux CLI command is `orca-ide`, not `orca`, to avoid shadowing the GNOME Orca screen reader.'
+
     const substitutionRule =
       "From an ordinary shell outside that service user's managed environment, substitute `orca-ide` for `orca` in commands below."
+
     const censusCommand = '`sudo -Hu orca /home/orca/.local/bin/orca-ide terminal list --json`'
 
     expect(headlessLinuxProse).toContain(commandRule)

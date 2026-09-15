@@ -30,6 +30,7 @@ async function createCodexHome(index: number): Promise<string> {
     join(codexHome, 'session_index.jsonl'),
     `${JSON.stringify({ id: `session-${index}`, thread_name: `Title ${index}` })}\n`
   )
+
   return codexHome
 }
 
@@ -58,6 +59,7 @@ describe('codex session index title cache', () => {
 
   it('refreshes cache recency when an existing Codex home is reused', async () => {
     const homes: string[] = []
+
     for (let index = 0; index < CACHE_LIMIT; index++) {
       const codexHome = await createCodexHome(index)
       homes.push(codexHome)
@@ -75,9 +77,11 @@ describe('codex session index title cache', () => {
 
   it('does not resurrect a pending cache hit after that home is evicted', async () => {
     let resolveSlowTitles: (titles: Map<string, string>) => void = () => {}
+
     const slowTitles = new Promise<Map<string, string>>((resolve) => {
       resolveSlowTitles = resolve
     })
+
     _storeCodexSessionIndexTitleCacheEntryForTest('slow-home', 'stable', slowTitles)
     const pendingHit = _readCachedCodexSessionIndexTitlesForTest('slow-home', 'stable')
 
@@ -88,6 +92,7 @@ describe('codex session index title cache', () => {
         Promise.resolve(new Map([[`session-${index}`, `Title ${index}`]]))
       )
     }
+
     expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(CACHE_LIMIT)
     expect(_hasCodexSessionIndexTitleCacheEntryForTest('slow-home')).toBe(false)
 
@@ -101,9 +106,11 @@ describe('codex session index title cache', () => {
 
   it('does not replace a newer same-home entry when an older cache hit resolves', async () => {
     let resolveOldTitles: (titles: Map<string, string>) => void = () => {}
+
     const oldTitles = new Promise<Map<string, string>>((resolve) => {
       resolveOldTitles = resolve
     })
+
     _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'old', oldTitles)
     const pendingOldHit = _readCachedCodexSessionIndexTitlesForTest('same-home', 'old')
 
@@ -121,9 +128,11 @@ describe('codex session index title cache', () => {
 
   it('preserves a newer same-home entry when an older cache hit rejects', async () => {
     let rejectOldTitles: (error: Error) => void = () => {}
+
     const oldTitles = new Promise<Map<string, string>>((_resolve, reject) => {
       rejectOldTitles = reject
     })
+
     _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'old', oldTitles)
     const pendingOldHit = _readCachedCodexSessionIndexTitlesForTest('same-home', 'old')
 

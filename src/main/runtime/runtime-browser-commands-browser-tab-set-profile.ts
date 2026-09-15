@@ -26,15 +26,19 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSetProfileResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     const browserPageId =
       target.browserPageId ?? this.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
+
     if (!browserPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
+
     // Why: 'default' is a synthetic id; fall back to the registry's default profile when not registered.
     const profile =
       browserSessionRegistry.getProfile(params.profileId) ??
       (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
+
     if (!profile) {
       throw new BrowserError(
         'invalid_argument',
@@ -44,6 +48,7 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
 
     // Why: short-circuit no-op switches so the renderer doesn't needlessly tear down and remount the webview.
     const currentProfileId = browserManager.getSessionProfileIdForTab(browserPageId) ?? 'default'
+
     if (currentProfileId === profile.id) {
       return {
         browserPageId,
@@ -67,14 +72,17 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
         if (reply.requestId !== requestId) {
           return
         }
+
         clearTimeout(timer)
         ipcMain.removeListener('browser:tabSetProfileReply', handler)
+
         if (reply.error) {
           reject(new Error(reply.error))
         } else {
           resolve()
         }
       }
+
       ipcMain.on('browser:tabSetProfileReply', handler)
       win.webContents.send('browser:requestTabSetProfile', {
         requestId,
@@ -104,6 +112,7 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
   }): Promise<BrowserTabProfileShowResult> {
     const target = await this.resolveBrowserCommandTarget(params)
     const tab = this.describeBrowserTab(params.page, target.worktreeId)
+
     return {
       browserPageId: tab.browserPageId,
       worktreeId: tab.worktreeId ?? null,
@@ -118,31 +127,38 @@ export class RuntimeBrowserCommandsWithBrowserTabSetProfile extends RuntimeBrows
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabProfileCloneResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     const sourceBrowserPageId =
       target.browserPageId ?? this.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
+
     if (!sourceBrowserPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
+
     const sourceTab = this.describeBrowserTab(sourceBrowserPageId, target.worktreeId)
     const profile = browserSessionRegistry.getProfile(params.profileId)
+
     if (!profile) {
       throw new BrowserError(
         'invalid_argument',
         `Browser profile ${params.profileId} was not found`
       )
     }
+
     const created = await this.createBrowserTabInRenderer(
       sourceTab.url,
       sourceTab.worktreeId ?? target.worktreeId,
       profile.id,
       profile.partition
     )
+
     // Why: wait for the cloned tab's webview to register so the returned browserPageId is operable by the next CLI call.
     try {
       await waitForTabRegistration(created.browserPageId)
     } catch {
       // Best-effort: registration may not fire if the worktree is hidden.
     }
+
     return {
       browserPageId: created.browserPageId,
       sourceBrowserPageId,

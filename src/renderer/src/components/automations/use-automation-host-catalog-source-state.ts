@@ -60,6 +60,7 @@ export function useAutomationHostCatalogSourceState({
       runtimeEnvironments.map((environment) => {
         const bucket = sshStateByEnvironment.get(environment.id)
         const status = runtimeStatusByEnvironmentId.get(environment.id)
+
         return {
           environmentId: environment.id,
           label: environment.name,

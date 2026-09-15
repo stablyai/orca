@@ -7,16 +7,21 @@ const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 /** Return a suffix that can only be the beginning of an OSC 9999 marker. */
 function findAgentStatusPrefixCarry(data: string): string {
   const lastChar = data.charCodeAt(data.length - 1)
+
   if (lastChar !== 0x1b && lastChar !== 0x5d && lastChar !== 0x39 && lastChar !== 0x3b) {
     return ''
   }
+
   const maxCarryLength = Math.min(data.length, OSC_AGENT_STATUS_PREFIX.length - 1)
+
   for (let length = maxCarryLength; length > 0; length -= 1) {
     const suffix = data.slice(data.length - length)
+
     if (OSC_AGENT_STATUS_PREFIX.startsWith(suffix)) {
       return suffix
     }
   }
+
   return ''
 }
 
@@ -37,15 +42,19 @@ function findAgentStatusTerminator(
   if (next.belIndex !== -1 && next.belIndex < searchFrom) {
     next.belIndex = data.indexOf('\x07', searchFrom)
   }
+
   if (next.stIndex !== -1 && next.stIndex < searchFrom) {
     next.stIndex = data.indexOf('\x1b\\', searchFrom)
   }
+
   if (next.belIndex === -1 && next.stIndex === -1) {
     return null
   }
+
   if (next.stIndex === -1 || (next.belIndex !== -1 && next.belIndex < next.stIndex)) {
     return { index: next.belIndex, length: 1 }
   }
+
   return { index: next.stIndex, length: 2 }
 }
 
@@ -67,10 +76,13 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
     // rebuilding a clean-data string for every PTY frame.
     if (pending.length === 0 && !data.includes(OSC_AGENT_STATUS_PREFIX)) {
       const carry = findAgentStatusPrefixCarry(data)
+
       if (carry.length === 0) {
         return { cleanData: data, payloads: [], lastPayloadCleanOffset: null }
       }
+
       pending = carry
+
       return {
         cleanData: data.slice(0, data.length - carry.length),
         payloads: [],
@@ -91,23 +103,28 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
 
     while (cursor < combined.length) {
       const start = combined.indexOf(OSC_AGENT_STATUS_PREFIX, cursor)
+
       if (start === -1) {
         const tail = combined.slice(cursor)
         const carry = findAgentStatusPrefixCarry(tail)
+
         if (carry.length > 0) {
           cleanData += tail.slice(0, tail.length - carry.length)
           pending = carry
         } else {
           cleanData += tail
         }
+
         break
       }
 
       cleanData += combined.slice(cursor, start)
       const payloadStart = start + OSC_AGENT_STATUS_PREFIX.length
+
       // Minus one so a `\x1b\\` straddling the previous chunk boundary is still found.
       const searchFrom =
         start === 0 && resumeFrom > 0 ? Math.max(payloadStart, resumeFrom - 1) : payloadStart
+
       const terminator = findAgentStatusTerminator(combined, searchFrom, nextTerminator)
 
       if (terminator === null) {
@@ -119,10 +136,12 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
       }
 
       const parsed = parseAgentStatusPayload(combined.slice(payloadStart, terminator.index))
+
       if (parsed) {
         payloads.push(parsed)
         lastPayloadCleanOffset = cleanData.length
       }
+
       cursor = terminator.index + terminator.length
     }
 

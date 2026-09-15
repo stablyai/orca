@@ -16,13 +16,17 @@ export function writeRichMarkdownSliceToClipboard(
   visibleText: string
 ): boolean {
   const status = inspectRichMarkdownSourceOwningSlice(slice)
+
   if (status.containsSourceOwningNode && !status.canPreserve) {
     showRichMarkdownSourceOwningCutLimitError()
+
     return false
   }
+
   const serialized = serializeRichMarkdownSliceForClipboard(view, slice)
   clipboardData.setData('text/html', serialized.html)
   clipboardData.setData('text/plain', visibleText)
+
   // Why: if the clipboard rejected the write we must not delete, and we must
   // surface the same cut-limit feedback so the no-op is not silent.
   if (
@@ -31,7 +35,9 @@ export function writeRichMarkdownSliceToClipboard(
       clipboardData.getData('text/plain') !== visibleText)
   ) {
     showRichMarkdownSourceOwningCutLimitError()
+
     return false
   }
+
   return true
 }

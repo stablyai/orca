@@ -32,13 +32,16 @@ export function useMobileTasksItemState() {
   const [prFileCommentDrafts, setPrFileCommentDrafts] = useState<Record<string, string>>({})
   const [copiedLinkKey, setCopiedLinkKey] = useState<string | null>(null)
   const copiedLinkResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const [expandedResolvedCommentGroups, setExpandedResolvedCommentGroups] = useState<Set<string>>(
     () => new Set()
   )
+
   const detailCommentGroups = useMemo(
     () => groupDetailComments(detailPayload?.comments ?? []),
     [detailPayload?.comments]
   )
+
   return {
     detailPayload,
     setDetailPayload,

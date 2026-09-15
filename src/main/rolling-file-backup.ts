@@ -16,6 +16,7 @@ export function writeRollingFileBackup(sourcePath: string, backupPath: string): 
   }
 
   const tempPath = `${backupPath}.${process.pid}.${randomUUID()}.tmp`
+
   try {
     // Why: replacing the backup from a fresh inode cannot mutate another file
     // through a hard link, and a failed rename leaves the prior backup intact.

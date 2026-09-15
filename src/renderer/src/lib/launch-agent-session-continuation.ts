@@ -26,6 +26,7 @@ export async function detectAgentSessionContinuationAgents(
   const state = useAppStore.getState()
   const connectionId = getConnectionIdFromState(state, worktreeId)
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   return connectionId
     ? state.ensureRemoteDetectedAgents(connectionId)
     : runtimeEnvironmentId
@@ -36,6 +37,7 @@ export async function detectAgentSessionContinuationAgents(
 async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {
   const state = useAppStore.getState()
   const label = getAgentLabel(agent)
+
   if (!isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents)) {
     toast.error(
       translate(
@@ -44,16 +46,19 @@ async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promis
         { agent: label }
       )
     )
+
     return false
   }
 
   let detectedAgents: TuiAgent[]
+
   try {
     detectedAgents = await detectAgentSessionContinuationAgents(worktreeId)
   } catch (error) {
     console.error('Agent detection failed for session continuation', error)
     detectedAgents = []
   }
+
   if (detectedAgents.includes(agent)) {
     return true
   }
@@ -65,6 +70,7 @@ async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promis
       { agent: label }
     )
   )
+
   return false
 }
 
@@ -85,6 +91,7 @@ export async function launchAgentSessionContinuation({
   await preflightAgentTrust({ agent, workspacePath, connectionId })
 
   const label = getAgentLabel(agent)
+
   const result = launchAgentInNewTab({
     agent,
     worktreeId,
@@ -102,8 +109,10 @@ export async function launchAgentSessionContinuation({
         )
       )
   })
+
   if (!result) {
     notifyLaunchFailed(label)
+
     return false
   }
 
@@ -119,6 +128,7 @@ export async function launchAgentSessionContinuation({
         notifyDeliveryFailed(label)
       })
   }
+
   return true
 }
 

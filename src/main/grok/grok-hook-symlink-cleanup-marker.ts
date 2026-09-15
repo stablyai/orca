@@ -23,12 +23,14 @@ export async function recordGrokSymlinkCleanup(
 ): Promise<void> {
   const realPath = await realpath(configPath)
   const stats = await stat(realPath)
+
   const marker: SymlinkCleanupMarker = {
     realPath,
     mtimeMs: stats.mtimeMs,
     size: stats.size,
     contentsHash: hash(contents)
   }
+
   await writeFile(markerPath(configPath), `${JSON.stringify(marker)}\n`, {
     encoding: 'utf8',
     mode: 0o600
@@ -40,8 +42,10 @@ export function matchesRecordedGrokSymlinkCleanup(configPath: string, contents: 
     const marker = JSON.parse(
       readFileSync(markerPath(configPath), 'utf8')
     ) as Partial<SymlinkCleanupMarker>
+
     const realPath = realpathSync(configPath)
     const stats = statSync(realPath)
+
     return (
       marker.realPath === realPath &&
       marker.mtimeMs === stats.mtimeMs &&

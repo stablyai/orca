@@ -79,6 +79,7 @@ describe('terminal mode reset profiles', () => {
       expect(profile).not.toContain('\x1b[?1000l')
       expect(profile).not.toContain('\x1b[?2004l')
     }
+
     expect(POST_REPLAY_LIVE_AGENT_REATTACH_RESET).not.toContain('\x1b[?1004l')
   })
 

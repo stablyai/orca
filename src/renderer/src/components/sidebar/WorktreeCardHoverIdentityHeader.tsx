@@ -31,6 +31,7 @@ export function WorktreeCardHoverIdentityHeader({
       {branchName}
     </div>
   ) : null
+
   const workspaceIdentity =
     workspaceTitle && workspaceTitle !== branchName ? (
       onRenameWorkspaceTitle ? (

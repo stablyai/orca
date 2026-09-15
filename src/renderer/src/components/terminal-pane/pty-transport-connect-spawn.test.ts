@@ -4,6 +4,7 @@ import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
+
   let onExit:
     | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
     | null = null
@@ -70,6 +71,7 @@ describe('createIpcPtyTransport', () => {
 
   it('threads provider command ownership through the spawn IPC', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const transport = createIpcPtyTransport({
       command: 'printf ready',
       commandDelivery: 'provider'
@@ -89,6 +91,7 @@ describe('createIpcPtyTransport', () => {
   it('forwards requested environment deletions to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+
     const transport = createIpcPtyTransport({
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
     })
@@ -103,11 +106,13 @@ describe('createIpcPtyTransport', () => {
   it('forwards automatic resume provenance to the PTY spawn', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+
     const resumeProviderSession = {
       key: 'session_id' as const,
       id: 'session-a',
       transcriptPath: '/Users/example/.codex/sessions/2026/07/20/rollout-a.jsonl'
     }
+
     const transport = createIpcPtyTransport({ resumeProviderSession })
 
     await transport.connect({ url: '', callbacks: {} })
@@ -124,6 +129,7 @@ describe('createIpcPtyTransport', () => {
 
   it('exposes local session metadata only for local IPC PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const localTransport = createIpcPtyTransport({
       cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
       shellOverride: 'wsl.exe',
@@ -139,6 +145,7 @@ describe('createIpcPtyTransport', () => {
         }
       }
     })
+
     const sshTransport = createIpcPtyTransport({
       connectionId: 'ssh-1',
       cwd: 'C:\\Users\\alice\\repo',
@@ -154,6 +161,7 @@ describe('createIpcPtyTransport', () => {
 
   it('keeps captured Windows and WSL metadata when existing PTYs reattach', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const currentWslForWindowsPty = createIpcPtyTransport({
       cwd: 'C:\\repo',
       shellOverride: 'pwsh.exe',
@@ -169,6 +177,7 @@ describe('createIpcPtyTransport', () => {
         }
       }
     })
+
     const currentWindowsForWslPty = createIpcPtyTransport({
       cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
       shellOverride: 'wsl.exe',
@@ -274,6 +283,7 @@ describe('createIpcPtyTransport', () => {
   it('passes startup commands through PTY spawn instead of writing them after connect', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi.fn().mockResolvedValue({ id: 'pty-1' })
+
     const writeMock = vi.fn()
 
     ;(globalThis as { window: typeof window }).window = {
@@ -288,11 +298,13 @@ describe('createIpcPtyTransport', () => {
           kill: vi.fn(),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
+
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
+
             return () => {}
           })
         }

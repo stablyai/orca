@@ -27,6 +27,7 @@ export function createNativeChatTranscriptRetention(): NativeChatTranscriptReten
       if (settled) {
         return messages
       }
+
       // An unsettled read includes a failed one: retained history beats blanking the pane for a transient error.
       return captured?.identity === identity ? captured.messages : EMPTY_NATIVE_CHAT_TRANSCRIPT
     }

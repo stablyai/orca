@@ -36,12 +36,15 @@ function installOnFakeGuest(
   const send = vi.fn()
   const isFocused = vi.fn(() => true)
   const setWebRTCIPHandlingPolicy = vi.fn()
+
   let windowOpenHandler: (details: { url: string }) => { action: string } = () => ({
     action: 'deny'
   })
+
   const register = (event: string, handler: (...args: never[]) => void): void => {
     handlers[event] = handler
   }
+
   const guest = {
     isFocused,
     isDestroyed: () => contentsDestroyed,
@@ -53,7 +56,9 @@ function installOnFakeGuest(
     }),
     setWebRTCIPHandlingPolicy
   }
+
   installDocPreviewGuestPolicy(guest as never, { id: hostId, send })
+
   return {
     contents: guest,
     handlers,
@@ -79,6 +84,7 @@ function boundGuest(): { grant: ReturnType<typeof mintGrant>; guest: FakeGuest }
   const grant = mintGrant()
   const guest = installOnFakeGuest()
   startMainFrameNavigation(guest, buildDocPreviewUrl(grant.id, 'index.html'))
+
   return { grant, guest }
 }
 
@@ -92,6 +98,7 @@ let nextDocPageOrdinal = 0
 
 function mintGrant(): ReturnType<typeof mintDocPreviewGrant> {
   nextDocPageOrdinal += 1
+
   return mintDocPreviewGrant({
     owner: { kind: 'ssh', connectionId: 'ssh-1' },
     root: '/home/alice/docs',
@@ -464,20 +471,24 @@ describe('doc preview guest policy', () => {
     // teardown that deleted by page alone would unregister the guest the reader is now looking at.
     it('leaves a re-minted preview registered when the guest it replaced tears down', () => {
       const first = mintGrant()
+
       const outgoing = installOnFakeGuest(
         HOST_RENDERER_ID,
         buildDocPreviewUrl(first.id, 'index.html')
       )
+
       const remint = mintDocPreviewGrant({
         owner: { kind: 'ssh', connectionId: 'ssh-1' },
         root: '/home/alice/docs',
         entryRelativePath: 'index.html',
         browserPageId: first.browserPageId
       })
+
       const incoming = installOnFakeGuest(
         HOST_RENDERER_ID,
         buildDocPreviewUrl(remint.id, 'index.html')
       )
+
       expect(getWorkspaceDocPageGuest(first.browserPageId, HOST_RENDERER_ID)).toBe(
         incoming.contents
       )

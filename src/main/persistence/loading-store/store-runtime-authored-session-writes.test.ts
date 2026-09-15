@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
 const { Store } = await import('./store')
 
 const HOST_ID = 'ssh:user@host'
+
 const WT = 'repo-1::/tmp/worktree-a'
 
 const stores: InstanceType<typeof Store>[] = []
@@ -43,6 +44,7 @@ afterEach(() => {
   for (const store of stores.splice(0)) {
     store.flush()
   }
+
   vi.restoreAllMocks()
 })
 
@@ -50,6 +52,7 @@ function createStore(): InstanceType<typeof Store> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-runtime-authored-')))
   const store = new Store({ dataFile: join(dir, 'orca-data.json') })
   stores.push(store)
+
   return store
 }
 

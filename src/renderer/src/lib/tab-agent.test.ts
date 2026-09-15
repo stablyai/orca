@@ -23,6 +23,7 @@ function resolveTabAgent(
 }
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 function entry(paneKey: string, agentType: AgentType | undefined): AgentStatusEntry {
@@ -43,6 +44,7 @@ function layout(activeLeafId: string | null): TerminalLayoutSnapshot {
 
 function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntry {
   const tabId = paneKey.slice(0, paneKey.indexOf(':'))
+
   const tab: TerminalTab = {
     id: tabId,
     ptyId: null,
@@ -53,6 +55,7 @@ function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntr
     sortOrder: 0,
     createdAt: 0
   }
+
   return {
     entry: { ...entry(paneKey, agentType), state: 'done' },
     worktreeId: tab.worktreeId,
@@ -77,6 +80,7 @@ describe('resolveTabAgent', () => {
       [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'claude'),
       [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex')
     }
+
     expect(resolveTabAgent(map, layout(LEAF_B), 'tab-1')).toBe('codex')
   })
 
@@ -85,6 +89,7 @@ describe('resolveTabAgent', () => {
       [`tab-1:${LEAF_A}`]: entry(`tab-1:${LEAF_A}`, 'claude'),
       [`tab-1:${LEAF_B}`]: entry(`tab-1:${LEAF_B}`, 'codex')
     }
+
     expect(resolveFocusedTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('claude')
     expect(resolveSiblingTabAgent(map, layout(LEAF_A), 'tab-1')).toBe('codex')
   })
@@ -119,6 +124,7 @@ describe('resolveTabAgent', () => {
         state: 'done' as const
       }
     }
+
     expect(resolveTabAgent(map, layout(LEAF_A), 'tab-1')).toBeNull()
   })
 
@@ -129,6 +135,7 @@ describe('resolveTabAgent', () => {
         state: 'done' as const
       }
     }
+
     expect(resolveFocusedCompletedTabAgent(map, undefined, 'tab-1')).toBe('openclaude')
     expect(resolveSiblingCompletedTabAgent(map, undefined, 'tab-1')).toBeNull()
   })

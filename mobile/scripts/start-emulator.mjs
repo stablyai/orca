@@ -30,11 +30,14 @@ import {
 import { ensureMobileExpoCli, getMobileExpoExecutablePath } from './mobile-expo-cli.mjs'
 
 const execFileAsync = promisify(execFile)
+
 const DEFAULT_METRO_PORT = 8081
+
 const METRO_PORT_SEARCH_LIMIT = 100
 
 // Parse CLI arguments
 const args = process.argv.slice(2)
+
 const options = {
   worktree: null,
   device: 'iPhone 17 Pro',
@@ -47,6 +50,7 @@ const options = {
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i]
+
   if (arg === '--worktree' && i + 1 < args.length) {
     options.worktree = args[++i]
   } else if (arg === '--device' && i + 1 < args.length) {
@@ -127,6 +131,7 @@ async function orca(args, options = {}) {
     encoding: 'utf8',
     timeout: options.timeout || 30000
   })
+
   return { stdout: stdout.trim(), stderr: stderr.trim() }
 }
 
@@ -141,6 +146,7 @@ async function getWorktree() {
     const result = JSON.parse(stdout)
     // Handle both response formats
     const worktreePath = result.worktree?.path || result.result?.worktree?.path
+
     if (worktreePath) {
       return worktreePath
     }
@@ -154,9 +160,11 @@ async function getWorktree() {
 // Get mobile directory path (worktree/mobile or current directory if already in mobile)
 function getMobileDir(worktree) {
   const currentDir = process.cwd()
+
   if (!options.worktree && path.basename(currentDir) === 'mobile') {
     return currentDir
   }
+
   return path.join(worktree, 'mobile')
 }
 
@@ -196,10 +204,12 @@ async function listSimulators() {
 
     for (const line of lines) {
       const runtimeMatch = line.match(/^-- (.+) --$/)
+
       if (runtimeMatch) {
         currentRuntime = runtimeMatch[1]
       } else {
         const deviceMatch = line.match(/^\s+(.+?) \(([A-F0-9-]+)\)\s*(\(.*\))?\s*$/)
+
         if (deviceMatch && currentRuntime.includes('iOS')) {
           devices.push({
             name: deviceMatch[1].trim(),
@@ -214,6 +224,7 @@ async function listSimulators() {
     return devices
   } catch (error) {
     logError(`Failed to list simulators: ${error.message}`)
+
     return []
   }
 }
@@ -251,14 +262,17 @@ function lanIpCandidates() {
   const entries = Object.entries(os.networkInterfaces()).flatMap(([name, interfaces]) =>
     (interfaces || []).map((iface) => ({ name, iface }))
   )
+
   return entries
     .filter(({ name, iface }) => {
       if (!iface || iface.family !== 'IPv4' || iface.internal) {
         return false
       }
+
       if (iface.address.startsWith('169.254.')) {
         return false
       }
+
       return !/^(awdl|bridge|gif|llw|p2p|stf|utun)/.test(name)
     })
     .sort((a, b) => interfaceRank(a.name) - interfaceRank(b.name))
@@ -269,6 +283,7 @@ function interfaceRank(name) {
   if (/^(en|eth|wlan)/.test(name)) {
     return 0
   }
+
   return 1
 }
 
@@ -280,9 +295,11 @@ function normalizeMetroUrl(rawUrl) {
   try {
     const url = new URL(rawUrl)
     const lanIp = lanIpCandidates()[0]
+
     if (lanIp && isLoopbackHost(url.hostname)) {
       url.hostname = lanIp
     }
+
     return url.toString().replace(/\/$/, '')
   } catch {
     return rawUrl
@@ -294,9 +311,11 @@ function metroUrlCandidates(initialUrl) {
     const url = new URL(initialUrl)
     const hosts = [url.hostname, ...lanIpCandidates(), 'localhost', '127.0.0.1']
     const uniqueHosts = [...new Set(hosts.filter(Boolean))]
+
     return uniqueHosts.map((host) => {
       const candidate = new URL(url.toString())
       candidate.hostname = host
+
       return candidate.toString().replace(/\/$/, '')
     })
   } catch {
@@ -315,8 +334,10 @@ function canListenOnPort(port) {
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
         resolve(false)
+
         return
       }
+
       reject(error)
     })
     server.listen({ port, host: '0.0.0.0' }, () => {
@@ -327,27 +348,33 @@ function canListenOnPort(port) {
 
 async function findAvailableMetroPort(startPort) {
   const endPort = startPort + METRO_PORT_SEARCH_LIMIT
+
   for (let port = startPort; port < endPort; port++) {
     if (await canListenOnPort(port)) {
       return port
     }
   }
+
   throw new Error(`No available Metro port found from ${startPort} to ${endPort - 1}`)
 }
 
 async function resolveMetroPort() {
   if (options.port) {
     const requestedPort = Number(options.port)
+
     if (!Number.isInteger(requestedPort) || requestedPort <= 0 || requestedPort > 65535) {
       throw new Error(`Invalid Metro port: ${options.port}`)
     }
+
     return requestedPort
   }
 
   const port = await findAvailableMetroPort(DEFAULT_METRO_PORT)
+
   if (port !== DEFAULT_METRO_PORT) {
     logInfo(`Port ${DEFAULT_METRO_PORT} is already in use; using ${port} instead`)
   }
+
   return port
 }
 
@@ -366,12 +393,16 @@ async function startMetro(worktree) {
 
     // Use local expo CLI directly instead of pnpm start to avoid workspace issues
     const expoPath = getMobileExpoExecutablePath(mobileDir)
+
     if (!expoPath) {
       reject(new Error('Mobile Expo CLI is missing after dependency setup.'))
+
       return
     }
+
     const expoArgs = ['start', '--host', 'lan', '--port', String(metroPort)]
     logInfo(`Using expo at: ${expoPath}`)
+
     const metro = spawn(expoPath, expoArgs, {
       cwd: mobileDir,
       env,
@@ -408,6 +439,7 @@ async function startMetro(worktree) {
       // Look for "Waiting on" message from Metro
       // When Metro says "Waiting on http://localhost:8081", we need to construct the dev-client URL
       const waitingMatch = line.match(/Waiting on (http:\/\/[^:]+):(\d+)/)
+
       if (waitingMatch && !resolved) {
         const host = waitingMatch[1]
         const port = waitingMatch[2]
@@ -422,6 +454,7 @@ async function startMetro(worktree) {
 
       // Also check for the dev-client URL format directly
       const urlMatch = line.match(/exp\+orca-mobile:\/\/expo-development-client\/\?url=([^\s]+)/)
+
       if (urlMatch && !resolved) {
         url = normalizeMetroUrl(decodeURIComponent(urlMatch[1]))
         logInfo(`Found Metro URL: ${url}`)
@@ -461,8 +494,10 @@ async function startMetro(worktree) {
 
     metro.on('exit', (code) => {
       exited = true
+
       if (!resolved) {
         resolved = true
+
         if (code !== 0) {
           reject(new Error(`Metro exited with code ${code}`))
         } else {
@@ -531,9 +566,11 @@ async function takeScreenshot(
   try {
     await execFileAsync('xcrun', ['simctl', 'io', deviceUdid, 'screenshot', outputPath])
     logSuccess(`Screenshot saved to: ${outputPath}`)
+
     return outputPath
   } catch (error) {
     logError(`Failed to take screenshot: ${error.message}`)
+
     return null
   }
 }
@@ -547,6 +584,7 @@ async function verifyMetro(url) {
 
   try {
     const response = await fetch(statusUrl, { signal: controller.signal })
+
     return (await response.text()).includes('packager-status:running')
   } catch {
     return false
@@ -561,6 +599,7 @@ async function findReachableMetroUrl(initialUrl) {
       return { url: candidate, reachable: true }
     }
   }
+
   return { url: initialUrl, reachable: false }
 }
 
@@ -605,9 +644,11 @@ async function main() {
 
     // Verify Metro is reachable
     const reachableMetro = await findReachableMetroUrl(metro.url)
+
     if (reachableMetro.url !== metro.url) {
       logInfo(`Using reachable Metro URL: ${reachableMetro.url}`)
     }
+
     metro.url = reachableMetro.url
 
     if (!reachableMetro.reachable) {
@@ -646,10 +687,12 @@ async function main() {
     await new Promise((resolve) => {
       let stopping = false
       let stopTimeout = null
+
       const finish = () => {
         if (stopTimeout) {
           clearTimeout(stopTimeout)
         }
+
         metro.process.off('exit', finish)
         process.off('SIGINT', stopMetro)
         process.off('SIGTERM', stopMetro)
@@ -657,21 +700,28 @@ async function main() {
         pairingRuntime?.stop()
         resolve()
       }
+
       const stopMetro = () => {
         if (stopping) {
           finish()
+
           return
         }
+
         stopping = true
         metro.process.kill('SIGINT')
         stopTimeout = setTimeout(finish, 2000)
         stopTimeout.unref?.()
       }
+
       metro.process.once('exit', finish)
+
       if (metro.isExited()) {
         finish()
+
         return
       }
+
       process.once('SIGINT', stopMetro)
       process.once('SIGTERM', stopMetro)
     })

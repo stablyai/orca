@@ -56,31 +56,39 @@ export async function readPairedHtmlPreviewInventory(
         params: { worktree: `id:${worktreeId}` },
         timeoutMs: 15_000
       })
+
     const [pagesResponse, tabsResponse] = await Promise.all([
       call('browser.tabList'),
       call('session.tabs.list')
     ])
+
     const state = window.__store?.getState()
+
     // Why named here: RPC results cross the preload boundary as `unknown`, so this is the one
     // place the shapes read below are asserted.
     const hostPages = pagesResponse.ok
       ? (pagesResponse.result as { tabs: { browserPageId: string; url: string; title: string }[] })
           .tabs
       : []
+
     const hostTabs = tabsResponse.ok
       ? (tabsResponse.result as { tabs: { id: string; type: string; url: string }[] }).tabs
       : []
+
     const workspaces = state?.browserTabsByWorktree[worktreeId] ?? []
     const unifiedTabs = state?.unifiedTabsByWorktree[worktreeId] ?? []
     const docWorkspaces: DocPreviewWorkspaceRow[] = []
+
     for (const workspace of workspaces) {
       for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
         if (browserPage.docLocation?.filePath !== docFilePath) {
           continue
         }
+
         const unifiedTab = unifiedTabs.find(
           (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
         )
+
         docWorkspaces.push({
           groupId: unifiedTab?.groupId ?? null,
           pageId: browserPage.id,
@@ -93,6 +101,7 @@ export async function readPairedHtmlPreviewInventory(
         })
       }
     }
+
     return {
       hostResponseOk: pagesResponse.ok && tabsResponse.ok,
       hostResponseError: JSON.stringify(
@@ -127,6 +136,7 @@ export function requireSingleDocWorkspace(
       `expected exactly one document browser workspace, saw ${inventory.docWorkspaces.length}`
     )
   }
+
   return inventory.docWorkspaces[0]!
 }
 
@@ -142,13 +152,16 @@ export async function readDocPreviewRenderedText(
     const guest = document.querySelector('webview[src^="orca-preview://"]') as {
       executeJavaScript?: (code: string) => Promise<unknown>
     } | null
+
     if (!guest?.executeJavaScript) {
       return null
     }
+
     try {
       const text = await guest.executeJavaScript(
         `document.querySelector(${JSON.stringify(targetSelector)})?.textContent ?? null`
       )
+
       return typeof text === 'string' ? text : null
     } catch {
       // Why: the guest rejects until it is attached and dom-ready; the caller polls.
@@ -173,9 +186,11 @@ export async function readDocPreviewElementCenter(
     const guest = document.querySelector('webview[src^="orca-preview://"]') as
       | (HTMLElement & { executeJavaScript?: (code: string) => Promise<unknown> })
       | null
+
     if (!guest?.executeJavaScript) {
       return null
     }
+
     try {
       const rect = (await guest.executeJavaScript(
         `(() => { const el = document.querySelector(${JSON.stringify(targetSelector)});
@@ -185,13 +200,17 @@ export async function readDocPreviewElementCenter(
           const y = r.top + r.height / 2;
           return el.contains(document.elementFromPoint(x, y)) ? { x, y } : null })()`
       )) as { x: number; y: number } | null
+
       if (!rect) {
         return null
       }
+
       const hostRect = guest.getBoundingClientRect()
+
       if (hostRect.width === 0 || hostRect.height === 0) {
         return null
       }
+
       return { x: hostRect.left + rect.x, y: hostRect.top + rect.y }
     } catch {
       return null
@@ -209,10 +228,13 @@ type RoutedPreviewLink = { url: string; opened: boolean }
 export async function armPairedHtmlPreviewLinkRouting(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('paired client exposed no store to observe link routing')
     }
+
     const routed: RoutedPreviewLink[] = []
+
     ;(window as unknown as { __routedPreviewLinks: RoutedPreviewLink[] }).__routedPreviewLinks =
       routed
     const original = store.getState().openBrowserProfileTabInActiveWorkspace
@@ -220,6 +242,7 @@ export async function armPairedHtmlPreviewLinkRouting(page: Page): Promise<void>
       openBrowserProfileTabInActiveWorkspace: async (url: string, profileId: string | null) => {
         const opened = await original(url, profileId)
         routed.push({ url, opened })
+
         return opened
       }
     } as never)
@@ -242,6 +265,7 @@ export async function readDocPreviewGuestRects(
     [...document.querySelectorAll('webview[src^="orca-preview://"]')].map((node) => {
       const element = node as HTMLElement
       const rect = element.getBoundingClientRect()
+
       return {
         src: element.getAttribute('src') ?? '',
         width: rect.width,

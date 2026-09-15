@@ -23,7 +23,9 @@ function message(buffer: Buffer): Record<string, unknown> | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
+
   return JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
 }
 
@@ -32,6 +34,7 @@ function responseResult(
   id: number
 ): Record<string, unknown> | undefined {
   const response = writes.map(message).find((entry) => entry?.id === id)
+
   return response?.result as Record<string, unknown> | undefined
 }
 
@@ -53,15 +56,18 @@ describe('relay PTY source restore retry', () => {
       (data, settle) => {
         primaryWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -83,21 +89,26 @@ describe('relay PTY source restore retry', () => {
     ).toBe('opened')
     initialSettlements[0]({ ok: true })
     expect(publication.publish('pty-1', { data: 'old' }, false)).toBe(true)
+
     const oldData = primaryWrites.map(message).find((entry) => entry?.method === 'pty.data')!
       .params as Record<string, unknown>
+
     const oldGrant = responseResult(primaryWrites, 1)!
     dispatcher.invalidateClient()
 
     const recoveredWrites: Buffer[] = []
+
     const recoveredClientId = dispatcher.attachClient(
       (data, settle) => {
         recoveredWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -134,9 +145,11 @@ describe('relay PTY source restore retry', () => {
       )
     ).toMatchObject({ status: 'restoreRequired' })
     expect(publication.accepts('pty-1')).toBe(true)
+
     for (const settle of restoreSettlements) {
       settle({ ok: true })
     }
+
     expect(publication.accepts('pty-1')).toBe(false)
 
     const retrySettlements: ((result: SinkWriteSettlement) => void)[] = []
@@ -158,9 +171,11 @@ describe('relay PTY source restore retry', () => {
     retrySettlements[0]({ ok: true })
 
     expect(publication.publish('pty-1', { data: 'live' }, false)).toBe(true)
+
     const sourceFrames = recoveredWrites
       .map(message)
       .filter((entry) => entry?.method === 'pty.data')
+
     expect(sourceFrames).toHaveLength(1)
     expect(sourceFrames[0]?.params).toMatchObject({
       data: 'live',

@@ -54,15 +54,19 @@ export async function runCreatePrIntentBranchPrep({
         'Updating branch…'
       )
     })
+
     const earlyFfResult = await runRemoteAction('fast_forward', {
       target: operationTarget
     })
+
     if (abortIfStale()) {
       return false
     }
+
     if (earlyFfResult.status === 'superseded') {
       return false
     }
+
     if (earlyFfResult.status !== 'ok') {
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'destructive',
@@ -71,8 +75,10 @@ export async function runCreatePrIntentBranchPrep({
           'Could not update the remote branch. Retry Create PR.'
         )
       })
+
       return false
     }
+
     if (!(await refreshIntentSnapshot())) {
       return false
     }
@@ -83,11 +89,13 @@ export async function runCreatePrIntentBranchPrep({
   }
 
   const stagedEntries = snapshot.entries.filter((entry) => entry.area === 'staged')
+
   if (stagedEntries.length === 0) {
     return true
   }
 
   let message = readCommitDraftForWorktree(commitDraftsRef.current, token.worktreeId).trim()
+
   if (!message) {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'muted',
@@ -97,9 +105,11 @@ export async function runCreatePrIntentBranchPrep({
       )
     })
     const generated = await generateCommitMessageForCreatePrIntent(token)
+
     if (abortIfStale()) {
       return false
     }
+
     if (!generated.ok || !generated.message) {
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: generated.reason === 'settings' ? 'muted' : 'destructive',
@@ -113,12 +123,15 @@ export async function runCreatePrIntentBranchPrep({
         ),
         action: generated.reason === 'settings' ? 'settings' : undefined
       })
+
       return false
     }
+
     const draftAfterGeneration = readCommitDraftForWorktree(
       commitDraftsRef.current,
       token.worktreeId
     ).trim()
+
     if (draftAfterGeneration) {
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'muted',
@@ -127,8 +140,10 @@ export async function runCreatePrIntentBranchPrep({
           'Review the commit message, then retry Create PR.'
         )
       })
+
       return false
     }
+
     message = generated.message
     updateCommitDrafts((prev) => writeCommitDraftForWorktree(prev, token.worktreeId, message))
   }
@@ -140,22 +155,27 @@ export async function runCreatePrIntentBranchPrep({
       'Committing changes…'
     )
   })
+
   const committed = await handleCommit(message, {
     skipStagedSnapshotCheck: true,
     skipActiveConflictCheck: true,
     target: operationTarget
   })
+
   if (abortIfStale()) {
     return false
   }
+
   if (!committed) {
     // Why: pre-commit/lint hooks may rewrite tracked files before failing; re-stage those outputs so retrying Create PR doesn't strand changes.
     if (await refreshIntentSnapshot()) {
       await stageLatestIntentPaths()
     }
+
     if (abortIfStale()) {
       return false
     }
+
     const commitFailure = commitErrorsRef.current[token.worktreeId] ?? null
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'destructive',
@@ -172,7 +192,9 @@ export async function runCreatePrIntentBranchPrep({
           )
       })
     })
+
     return false
   }
+
   return refreshIntentSnapshot()
 }

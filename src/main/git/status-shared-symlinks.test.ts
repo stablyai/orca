@@ -128,6 +128,7 @@ describe('getStatus shared symlink exclusion', () => {
   // Git C-quotes unless the reader opts out.
   it('drops shared symlinks whose names have a space or non-ASCII characters', async () => {
     const names = ['my shared dir', 'ライブラリ']
+
     for (const name of names) {
       symlinkSync(join(primary, 'node_modules'), join(worktree, name), 'dir')
     }

@@ -5,6 +5,7 @@ import { nativeChatTaskListState } from './native-chat-task-list-state'
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', timestamp: 1, source: 'transcript', blocks }
 }
+
 function call(content: string, status = 'pending'): NativeChatBlock {
   return { type: 'tool-call', name: 'TodoWrite', input: { todos: [{ content, status }] } }
 }
@@ -12,11 +13,13 @@ function call(content: string, status = 'pending'): NativeChatBlock {
 describe('nativeChatTaskListState', () => {
   it('projects one latest snapshot, preserves prose and leaves source messages unchanged', () => {
     const first = message('first', [call('Read')])
+
     const last = message('last', [
       { type: 'text', text: 'Here is the result' },
       call('Read', 'completed'),
       { type: 'tool-result', output: 'Updated todos' }
     ])
+
     const result = nativeChatTaskListState([first, last])
     expect(result.list?.tasks).toEqual([{ content: 'Read', status: 'completed' }])
     expect(result.messages[0]).toBe(first)
@@ -37,17 +40,21 @@ describe('nativeChatTaskListState', () => {
 
   it('does not replace valid state with malformed or failed calls, and retains their diagnostics', () => {
     const first = message('first', [call('Read')])
+
     const malformed = message('malformed', [
       { type: 'tool-call', name: 'TodoWrite', input: '{' },
       { type: 'tool-result', output: 'Invalid arguments', isError: true }
     ])
+
     const failed = message('failed', [
       call('Wrong', 'completed'),
       { type: 'tool-result', output: 'Update rejected', isError: true }
     ])
+
     const failedCall = message('failed-call', [
       { type: 'tool-call', name: 'TodoWrite', state: 'failed', input: { todos: [] } }
     ])
+
     const result = nativeChatTaskListState([first, malformed, failed, failedCall])
     expect(result.list?.tasks[0].content).toBe('Read')
     expect(result.messages.slice(1)).toEqual([malformed, failed, failedCall])
@@ -55,16 +62,19 @@ describe('nativeChatTaskListState', () => {
 
   it('retains task history and unrelated errors while selecting the paired snapshot', () => {
     const tasks: NativeChatBlock = call('Read')
+
     const shell: NativeChatBlock = {
       type: 'tool-call',
       name: 'shell',
       input: {}
     }
+
     const error: NativeChatBlock = {
       type: 'tool-result',
       output: 'Failed',
       isError: true
     }
+
     const success: NativeChatBlock = { type: 'tool-result', output: 'Updated' }
     const result = nativeChatTaskListState([message('mixed', [tasks, success, shell, error])])
     expect(result.list?.tasks[0].content).toBe('Read')

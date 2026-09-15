@@ -179,6 +179,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     events.length = 0
 
     runtime.onPtyExit('laptop-created-pty', 0)
@@ -238,6 +239,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const acknowledged = makeDeferred()
     const closeTerminalTab = vi.fn(() => acknowledged.promise)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -291,6 +293,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const acknowledged = makeDeferred()
     const closeTerminalTab = vi.fn(() => acknowledged.promise)
     const setBackgroundThrottling = vi.fn()
@@ -359,6 +362,7 @@ describe('OrcaRuntimeService', () => {
       reason: 'user',
       clientNavigationId: 'device-a'
     })
+
     await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
     expect(setBackgroundThrottling.mock.calls).toEqual([[false]])
 
@@ -371,6 +375,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const acknowledged = makeDeferred()
     const closeTerminalTab = vi.fn(() => acknowledged.promise)
     const kill = vi.fn(() => true)
@@ -439,6 +444,7 @@ describe('OrcaRuntimeService', () => {
       reason: 'user',
       clientNavigationId: 'device-a'
     })
+
     await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
     const session = getSession()
     setSession({
@@ -504,11 +510,14 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const flushOrThrow = vi.fn()
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'headless-left' })
       .mockResolvedValueOnce({ id: 'headless-right' })
+
     const kill = vi.fn(() => true)
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
     runtime.setPtyController({
@@ -518,10 +527,12 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
     const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'durable-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     await runtime.splitTerminal(terminal.handle, { direction: 'vertical' })
 
     await runtime.closeTerminalTab(terminal.handle)
@@ -547,6 +558,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07hello\r\n', 123)
 
     await expect(runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
@@ -579,6 +591,7 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID,
       activate: true
     })
+
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07hello\r\n', 123)
 
     await expect(runtime.resolveActiveTerminal(`id:${TEST_WORKTREE_ID}`)).resolves.toBe(

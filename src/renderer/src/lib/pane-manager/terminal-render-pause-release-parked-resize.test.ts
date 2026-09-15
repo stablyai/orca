@@ -22,12 +22,15 @@ function createPausedTerminal(options: {
   flushThrows?: boolean
 }): { terminal: unknown; service: FakeRenderService; order: string[] } {
   const order: string[] = []
+
   const flush = vi.fn(() => {
     order.push('flush')
+
     if (options.flushThrows) {
       throw new Error('renderer disposed')
     }
   })
+
   const service: FakeRenderService = {
     _isPaused: true,
     _needsFullRefresh: true,
@@ -35,6 +38,7 @@ function createPausedTerminal(options: {
     refreshRows: vi.fn(() => order.push('refreshRows')),
     _renderer: { value: { renderRows: vi.fn(() => order.push('renderRows')) } }
   }
+
   const terminal = {
     rows: 24,
     _core: {
@@ -42,6 +46,7 @@ function createPausedTerminal(options: {
       coreService: { decPrivateModes: { synchronizedOutput: options.synchronizedOutput === true } }
     }
   }
+
   return { terminal, service, order }
 }
 
@@ -91,12 +96,14 @@ describe.each(helpers)('%s parked renderer resize', (_name, present) => {
 describe('parked renderer resize on an unpaused terminal', () => {
   it('is left to xterm when the pause latch is not set', () => {
     const flush = vi.fn()
+
     const service = {
       _isPaused: false,
       _needsFullRefresh: false,
       _pausedResizeTask: { flush },
       refreshRows: vi.fn()
     }
+
     const terminal = {
       rows: 24,
       _core: {

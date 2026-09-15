@@ -57,7 +57,9 @@ function isLayoutComposedAsciiCharacter(
   if (key.length !== 1) {
     return false
   }
+
   const codePoint = key.codePointAt(0) as number
+
   return (
     codePoint > 0x20 &&
     codePoint <= 0x7e &&
@@ -90,22 +92,29 @@ export function resolveTerminalOptionShortcutAction(
   if (!context.isMac || event.metaKey || event.ctrlKey || !event.altKey) {
     return null
   }
+
   const isLeftOption = (context.optionKeyLocations & 1) !== 0
   const isRightOption = (context.optionKeyLocations & 2) !== 0
+
   const shouldActAsMeta =
     context.macOptionAsAlt === 'true' ||
     (context.macOptionAsAlt === 'left' && isLeftOption) ||
     (context.macOptionAsAlt === 'right' && isRightOption)
+
   const canSendComposedText =
     context.macOptionAsAlt === 'false' ||
     (context.macOptionAsAlt === 'left' && !isLeftOption && isRightOption) ||
     (context.macOptionAsAlt === 'right' && isLeftOption && !isRightOption)
+
   const configuredSideOwnsDeadKey =
     event.key === 'Dead' && context.macOptionAsAlt !== 'true' && shouldActAsMeta && !event.shiftKey
+
   const flags = context.getKittyKeyboardFlags()
+
   if (event.key === 'Dead' && context.macOptionAsAlt !== 'true' && !configuredSideOwnsDeadKey) {
     return (flags & KITTY_REPORT_EVENT_TYPES) === 0 ? null : { type: 'trackNativeOptionDeadKey' }
   }
+
   if (isImeOwnedKey(event) && !configuredSideOwnsDeadKey) {
     return null
   }
@@ -113,12 +122,15 @@ export function resolveTerminalOptionShortcutAction(
   if (context.macOptionAsAlt === 'true' && flags === 0) {
     return null
   }
+
   if (event.key !== 'Dead' && kittyEncodesModifiedTextKeys(flags)) {
     const isNumpad = event.code?.startsWith('Numpad') === true
     const primaryCharacterFallback = optionKittyPrimaryCharacterFallback(event)
+
     const baseCharacter =
       (event.code ? context.layoutCharacterForCode?.(event.code, false) : undefined) ??
       pc101CharacterForCode(event.code)
+
     const characterWithoutOption = event.code
       ? (context.layoutCharacterForCode?.(event.code, event.shiftKey) ??
         (!event.shiftKey
@@ -127,6 +139,7 @@ export function resolveTerminalOptionShortcutAction(
             ? baseCharacter?.toUpperCase()
             : undefined))
       : undefined
+
     if (
       !kittyReportsAllKeysAsEscapeCodes(flags) &&
       canSendComposedText &&
@@ -145,6 +158,7 @@ export function resolveTerminalOptionShortcutAction(
         associatedText:
           kittyReportsAllKeysAsEscapeCodes(flags) && canSendComposedText ? event.key : undefined
       })
+
       if (data) {
         return { type: 'sendInput', data, optionKittyRelease: createRelease(flags) }
       }
@@ -156,6 +170,7 @@ export function resolveTerminalOptionShortcutAction(
       const character =
         (event.code ? context.layoutCharacterForCode?.(event.code, false) : undefined) ??
         pc101CharacterForCode(event.code)
+
       if (character) {
         return {
           type: 'sendInput',
@@ -166,18 +181,22 @@ export function resolveTerminalOptionShortcutAction(
         }
       }
     }
+
     if (!shouldActAsMeta) {
       if (event.code === 'KeyB') {
         return { type: 'sendInput', data: '\x1bb' }
       }
+
       if (event.code === 'KeyF') {
         return { type: 'sendInput', data: '\x1bf' }
       }
+
       if (event.code === 'KeyD') {
         return { type: 'sendInput', data: '\x1bd' }
       }
     }
   }
+
   if (
     event.key === 'Dead' &&
     context.macOptionAsAlt !== 'true' &&
@@ -185,5 +204,6 @@ export function resolveTerminalOptionShortcutAction(
   ) {
     return { type: 'trackNativeOptionDeadKey' }
   }
+
   return null
 }

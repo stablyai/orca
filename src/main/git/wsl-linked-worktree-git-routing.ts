@@ -11,23 +11,36 @@ export {
 } from './wsl-linked-worktree-git-route-probe'
 
 type CachedRoute = { usesHostGit: boolean; expiresAt: number }
+
 type TransientRouteFailure = { count: number; retryAfter: number }
 
 // Bounds stale routing after delete/recreate while amortizing async parent walks on slow storage.
 export const WSL_LINKED_WORKTREE_ROUTE_TTL_MS = 30_000
+
 export const WSL_LINKED_WORKTREE_ROUTE_CACHE_PRUNE_THRESHOLD = 512
+
 export const WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS = 5_000
+
 export const WSL_LINKED_WORKTREE_ROUTE_MAX_PROBES_PER_CWD = 2
+
 export const WSL_LINKED_WORKTREE_ROUTE_MAX_PROBES_TOTAL = 32
+
 export const WSL_LINKED_WORKTREE_ROUTE_RETRY_BASE_MS = 1_000
+
 const WSL_LINKED_WORKTREE_ROUTE_RETRY_MAX_MS = 30_000
 
 const routeByCwd = new Map<string, CachedRoute>()
+
 const pendingRoutes = new Map<string, Promise<boolean>>()
+
 const transientFailuresByCwd = new Map<string, TransientRouteFailure>()
+
 const activeProbeCountByCwd = new Map<string, number>()
+
 let activeProbeCount = 0
+
 let routeProbeGeneration = 0
+
 let nextRoutePruneAt = 0
 
 export function isWslLinkedWorktreeGitRoutingCandidate(
@@ -44,13 +57,17 @@ function normalize(path: string): string {
 
 function cachedRoute(cwd: string, now: number): boolean | undefined {
   const exact = routeByCwd.get(cwd)
+
   if (!exact) {
     return undefined
   }
+
   if (exact.expiresAt <= now) {
     routeByCwd.delete(cwd)
+
     return undefined
   }
+
   return exact.usesHostGit
 }
 
@@ -63,6 +80,7 @@ export type WslLinkedWorktreeRoutingOptions = {
 
 function rememberRoute(cwd: string, usesHostGit: boolean, now: number): boolean {
   const expiresAt = now + WSL_LINKED_WORKTREE_ROUTE_TTL_MS
+
   if (
     routeByCwd.size >= WSL_LINKED_WORKTREE_ROUTE_CACHE_PRUNE_THRESHOLD &&
     now >= nextRoutePruneAt
@@ -72,9 +90,12 @@ function rememberRoute(cwd: string, usesHostGit: boolean, now: number): boolean 
         routeByCwd.delete(cachedCwd)
       }
     }
+
     nextRoutePruneAt = now + WSL_LINKED_WORKTREE_ROUTE_TTL_MS
   }
+
   routeByCwd.set(cwd, { usesHostGit, expiresAt })
+
   return usesHostGit
 }
 
@@ -84,6 +105,7 @@ function routingAbortError(): Error {
 
 function forgetPathAndDescendants<T>(entries: Map<string, T>, root: string): void {
   const prefix = root.endsWith(win32.sep) ? root : root + win32.sep
+
   for (const path of entries.keys()) {
     if (path === root || path.startsWith(prefix)) {
       entries.delete(path)
@@ -108,6 +130,7 @@ export function invalidateWslLinkedWorktreeGitRouting(cwd: string): void {
 
 function rememberTransientFailure(cwd: string, now: number): void {
   const count = (transientFailuresByCwd.get(cwd)?.count ?? 0) + 1
+
   const retryDelay =
     count === 1
       ? 0
@@ -115,21 +138,25 @@ function rememberTransientFailure(cwd: string, now: number): void {
           WSL_LINKED_WORKTREE_ROUTE_RETRY_BASE_MS * 2 ** Math.min(count - 2, 10),
           WSL_LINKED_WORKTREE_ROUTE_RETRY_MAX_MS
         )
+
   if (
     !transientFailuresByCwd.has(cwd) &&
     transientFailuresByCwd.size >= WSL_LINKED_WORKTREE_ROUTE_CACHE_PRUNE_THRESHOLD
   ) {
     const oldest = transientFailuresByCwd.keys().next().value
+
     if (oldest !== undefined) {
       transientFailuresByCwd.delete(oldest)
     }
   }
+
   transientFailuresByCwd.delete(cwd)
   transientFailuresByCwd.set(cwd, { count, retryAfter: now + retryDelay })
 }
 
 function canStartRouteProbe(cwd: string, now: number): boolean {
   const failure = transientFailuresByCwd.get(cwd)
+
   return Boolean(
     (!failure || failure.retryAfter <= now) &&
     (activeProbeCountByCwd.get(cwd) ?? 0) < WSL_LINKED_WORKTREE_ROUTE_MAX_PROBES_PER_CWD &&
@@ -141,12 +168,15 @@ function trackRouteProbe(cwd: string): () => void {
   const generation = routeProbeGeneration
   activeProbeCount += 1
   activeProbeCountByCwd.set(cwd, (activeProbeCountByCwd.get(cwd) ?? 0) + 1)
+
   return () => {
     if (generation !== routeProbeGeneration) {
       return
     }
+
     activeProbeCount -= 1
     const remaining = (activeProbeCountByCwd.get(cwd) ?? 1) - 1
+
     if (remaining === 0) {
       activeProbeCountByCwd.delete(cwd)
     } else {
@@ -162,14 +192,17 @@ function waitForRouteUnlessAborted(
   if (!signal) {
     return route
   }
+
   if (signal.aborted) {
     return Promise.reject(routingAbortError())
   }
+
   return new Promise((resolve, reject) => {
     const onAbort = (): void => {
       signal.removeEventListener('abort', onAbort)
       reject(routingAbortError())
     }
+
     signal.addEventListener('abort', onAbort, { once: true })
     route.then(
       (result) => {
@@ -192,16 +225,21 @@ function discoverRoute(
   return new Promise((resolve) => {
     const generation = routeProbeGeneration
     let settled = false
+
     const finish = (usesHostGit: boolean, known: boolean): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
+
       if (generation !== routeProbeGeneration) {
         resolve(false)
+
         return
       }
+
       if (known) {
         transientFailuresByCwd.delete(cwd)
         resolve(rememberRoute(cwd, usesHostGit, now()))
@@ -210,6 +248,7 @@ function discoverRoute(
         resolve(usesHostGit)
       }
     }
+
     const timer = setTimeout(() => finish(false, false), WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS)
     timer.unref()
     const releaseProbe = trackRouteProbe(cwd)
@@ -234,31 +273,42 @@ export async function prepareWslLinkedWorktreeGitRouting(
   const platform = options.platform ?? process.platform
   const fileSystem = options.fileSystem ?? defaultWslLinkedWorktreeRoutingFileSystem
   const now = options.now ?? Date.now
+
   if (!isWslLinkedWorktreeGitRoutingCandidate(cwd, wslDistro, platform)) {
     return false
   }
+
   if (options.signal?.aborted) {
     throw routingAbortError()
   }
+
   const normalizedCwd = normalize(cwd)
   const cached = cachedRoute(normalizedCwd, now())
+
   if (cached !== undefined) {
     return cached
   }
+
   const pending = pendingRoutes.get(normalizedCwd)
+
   if (pending) {
     return waitForRouteUnlessAborted(pending, options.signal)
   }
+
   if (!canStartRouteProbe(normalizedCwd, now())) {
     return false
   }
+
   const discovery = discoverRoute(normalizedCwd, fileSystem, now)
+
   const route = discovery.finally(() => {
     if (pendingRoutes.get(normalizedCwd) === route) {
       pendingRoutes.delete(normalizedCwd)
     }
   })
+
   pendingRoutes.set(normalizedCwd, route)
+
   return waitForRouteUnlessAborted(route, options.signal)
 }
 

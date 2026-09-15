@@ -10,20 +10,24 @@ function passthrough(data: string, rawStartSeq = 0): PtyIngressEmission {
 
 function createBarrier(confirm: () => Promise<boolean>, maxPendingMs?: number) {
   const released: string[] = []
+
   const barrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: confirm,
     release: (emission) => released.push(emission.data),
     isAlive: () => true,
     ...(maxPendingMs !== undefined ? { maxPendingMs } : {})
   })
+
   return Object.assign(barrier, { released })
 }
 
 describe('clean-exit confirmation retirement', () => {
   it('retires a hung clean-exit proof so a later candidate can still prove ownership', async () => {
     let calls = 0
+
     const barrier = createBarrier(() => {
       calls += 1
+
       return calls === 1 ? new Promise(() => {}) : Promise.resolve(true)
     }, 20)
 
@@ -40,11 +44,14 @@ describe('clean-exit confirmation retirement', () => {
 
   it('contains a synchronously throwing confirm without wedging later candidates', async () => {
     let calls = 0
+
     const barrier = createBarrier(() => {
       calls += 1
+
       if (calls === 1) {
         throw new Error('sync boom')
       }
+
       return Promise.resolve(true)
     })
 

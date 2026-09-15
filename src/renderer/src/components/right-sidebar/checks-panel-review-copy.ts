@@ -19,6 +19,7 @@ type KeyedCopy = { key: string; fallback: string }
  */
 export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): string | undefined {
   const { reviewLabel, providerName, refresh } = input
+
   if (input.reviewLookup === 'positive_unresolved') {
     return translate(
       'auto.components.right.sidebar.checks.panel.review.detail.positive',
@@ -26,6 +27,7 @@ export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): stri
       { reviewLabel }
     )
   }
+
   if (isRateLimitRefresh(refresh)) {
     return translate(
       'auto.components.right.sidebar.checks.panel.review.detail.rate_limited',
@@ -33,6 +35,7 @@ export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): stri
       { reviewLabel, provider: providerName }
     )
   }
+
   if (refresh?.errorType === 'network') {
     return translate(
       'auto.components.right.sidebar.checks.panel.review.detail.network',
@@ -40,6 +43,7 @@ export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): stri
       { reviewLabel, provider: providerName }
     )
   }
+
   if (refresh?.status === 'error' || isHardRefreshError(refresh)) {
     return translate(
       'auto.components.right.sidebar.checks.panel.review.detail.untyped',
@@ -47,6 +51,7 @@ export function concurrentLookupDetail(input: ChecksPanelReviewStateInput): stri
       { reviewLabel }
     )
   }
+
   return undefined
 }
 
@@ -57,6 +62,7 @@ export function transientRefreshState(
 ): ChecksPanelReviewState {
   const { reviewLabel, providerName, refresh } = input
   const schedule = autoRetrySchedule(input)
+
   const base = {
     renderReview: false as const,
     composerMode,
@@ -64,14 +70,17 @@ export function transientRefreshState(
     recovery: ['retry'] as ChecksPanelRecoveryAction[],
     ...schedule
   }
+
   // Why: preserve the upstream GitHub-attributed 5xx copy in the unified state model.
   const githubUnavailableCopy =
     refresh?.errorType === 'server_error'
       ? getGitHubUnavailableEmptyStateCopy(refresh.errorType)
       : null
+
   if (githubUnavailableCopy) {
     return { ...base, ...githubUnavailableCopy }
   }
+
   if (isRateLimitRefresh(refresh)) {
     return {
       ...base,
@@ -87,6 +96,7 @@ export function transientRefreshState(
       )
     }
   }
+
   if (refresh?.errorType === 'network') {
     return {
       ...base,
@@ -102,6 +112,7 @@ export function transientRefreshState(
       )
     }
   }
+
   if (refresh?.errorType === 'unknown') {
     return {
       ...base,
@@ -117,6 +128,7 @@ export function transientRefreshState(
       )
     }
   }
+
   return {
     ...base,
     title: translate(
@@ -187,10 +199,13 @@ const HARD_ERROR_COPY: Record<
 
 export function hardRefreshErrorState(input: ChecksPanelReviewStateInput): ChecksPanelReviewState {
   const { reviewLabel, providerName, refresh } = input
+
   const copy =
     HARD_ERROR_COPY[(refresh?.errorType as keyof typeof HARD_ERROR_COPY) ?? 'gh_unavailable'] ??
     HARD_ERROR_COPY.gh_unavailable
+
   const vars = { provider: providerName, reviewLabel }
+
   return {
     renderReview: false,
     title: translate(copy.title.key, copy.title.fallback, vars),
@@ -272,11 +287,14 @@ export function skippedRefreshState(
   skippedReason: GitHubPRRefreshSkippedReason
 ): ChecksPanelReviewState | null {
   const copy = SKIPPED_COPY[skippedReason]
+
   if (!copy) {
     // `fresh` (and any unknown skip) with no accepted result → missing/unknown.
     return null
   }
+
   const vars = { reviewLabel: input.reviewLabel }
+
   return {
     renderReview: false,
     title: translate(copy.title.key, copy.title.fallback, vars),

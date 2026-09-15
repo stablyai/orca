@@ -5,6 +5,7 @@ import { exposeDispatchContext, exposeWorker, inspectWorkerTerminal } from './wo
 import type { DispatchContextRow, WorkerDispatchRow } from '../../../../orchestration/types'
 
 const DISPATCH_ID = 'ctx-worker'
+
 const TERMINAL_HANDLE = 'term-worker'
 
 function createHarness(args: {
@@ -18,11 +19,13 @@ function createHarness(args: {
     getTerminalLivenessVerdict: vi.fn(() => null),
     getOrchestrationDispatchAuthority: vi.fn(() => null)
   } as unknown as OrcaRuntimeService
+
   const db = {
     getWorkerDispatch: vi.fn(() => ({ agent_terminal_handle: TERMINAL_HANDLE })),
     getDispatchContextById: vi.fn(() => ({ host_scope: JSON.stringify(args.hostScope) })),
     isDispatchProcessCurrent: vi.fn(() => true)
   } as unknown as OrchestrationDb
+
   return { runtime, db }
 }
 

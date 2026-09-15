@@ -38,13 +38,19 @@ type RingBufferProbe = {
 }
 
 const COLS = 80
+
 const ROWS = 24
+
 /** Long enough that the wrap chain outruns V8's stack on any host. */
 const WRAPPED_ROWS = 12_000
+
 /** A line longer than this scrollback loses its first rows: the bug is eviction, not size. */
 const TRIMMED_HEAD_SCROLLBACK = 100
+
 const TRIMMED_HEAD_LINE_ROWS = 200
+
 const NEEDLE = 'needle'
+
 /**
  * Rows of one wrapped line per match, and how many matches that line holds. Enough matches to make
  * the highlight-all pass — which re-enters the line once per match — the dominant cost, and enough
@@ -52,7 +58,9 @@ const NEEDLE = 'needle'
  * addon's 1 000-decoration limit so the match count is exact.
  */
 const MATCH_ROW_STRIDE = 40
+
 const MATCHES_IN_LINE = 750
+
 /**
  * A full-buffer scan runs on the renderer's main thread on every keystroke in
  * the find bar, so anything near this is a visible freeze rather than a slow
@@ -97,6 +105,7 @@ function openTerminalWithSearch(scrollback: number = DESKTOP_TERMINAL_SCROLLBACK
   terminal.open(container)
   const search = new SearchAddon()
   terminal.loadAddon(search)
+
   return { terminal, search }
 }
 
@@ -181,6 +190,7 @@ describe('terminal search inside one very long wrapped line', () => {
         resultCount = event.resultCount
       })
       const startedAt = performance.now()
+
       const found = safeFind(
         (term, searchOptions) => search.findNext(term, searchOptions),
         NEEDLE,
@@ -221,18 +231,22 @@ describe('terminal search inside one very long wrapped line', () => {
     const paddedNeedle = NEEDLE + 'x'.repeat(COLS - NEEDLE.length)
     const lead = 'x'.repeat(COLS * (TRIMMED_HEAD_LINE_ROWS - 3))
     await write(terminal, `${lead}${paddedNeedle.repeat(2)}${'x'.repeat(COLS)}\r\n`)
+
     for (let i = 0; i < 60; i++) {
       await write(terminal, `line ${i}\r\n`)
     }
+
     const buffer = terminal.buffer.active
     expect(buffer.getLine(0)?.isWrapped).toBe(true)
 
     const matchRows: number[] = []
+
     for (let y = 0; y < buffer.length; y++) {
       if (buffer.getLine(y)?.translateToString().includes(NEEDLE)) {
         matchRows.push(y)
       }
     }
+
     expect(matchRows.length).toBe(2)
 
     // Cycle far enough to come back round in both directions: the surviving rows must stay
@@ -240,11 +254,13 @@ describe('terminal search inside one very long wrapped line', () => {
     // wrapped row including row 0, so a trimmed-head line was never searched backwards at all.
     for (const direction of ['findNext', 'findPrevious'] as const) {
       const visits = new Map<number, number>()
+
       for (let i = 0; i < 12; i++) {
         safeFind((term, options) => search[direction](term, options), NEEDLE, {
           decorations: SEARCH_DECORATIONS
         })
         const row = terminal.getSelectionPosition()?.start.y
+
         if (row !== undefined) {
           visits.set(row, (visits.get(row) ?? 0) + 1)
         }
@@ -267,6 +283,7 @@ describe('terminal search inside one very long wrapped line', () => {
     expect(buffer.getLine(buffer.length - 1)?.isWrapped).toBe(true)
 
     const startedAt = performance.now()
+
     const found = safeFind((term, options) => search.findNext(term, options), NEEDLE, {
       decorations: SEARCH_DECORATIONS
     })
@@ -279,9 +296,11 @@ describe('terminal search inside one very long wrapped line', () => {
     const { terminal, search } = openTerminalWithSearch(TRIMMED_HEAD_SCROLLBACK)
     const paddedNeedle = NEEDLE + 'x'.repeat(COLS - NEEDLE.length)
     await write(terminal, `${'x'.repeat(COLS * TRIMMED_HEAD_LINE_ROWS)}${paddedNeedle.repeat(4)}`)
+
     for (let i = 0; i < 20; i++) {
       await write(terminal, `line ${i}\r\n`)
     }
+
     // Narrowing a pane reflows the buffer, which leaves the ring holding entries at negative
     // indices, so `getLine(-1)` answers with a stale wrapped line instead of undefined. The rewind
     // has to stop at row 0 or it walks backwards forever and hangs the renderer.
@@ -293,6 +312,7 @@ describe('terminal search inside one very long wrapped line', () => {
     ).toContain('-1')
 
     const startedAt = performance.now()
+
     const found = safeFind((term, options) => search.findNext(term, options), NEEDLE, {
       decorations: SEARCH_DECORATIONS
     })

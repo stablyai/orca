@@ -6,6 +6,7 @@ function transportHarness(): {
   settlements: ((result: { ok: true } | { ok: false; error: Error }) => void)[]
 } {
   const settlements: ((result: { ok: true } | { ok: false; error: Error }) => void)[] = []
+
   return {
     transport: {
       write: (_data, onSettled) => {
@@ -36,6 +37,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
 
   it('reports a synchronous write failure without publishing success', () => {
     const error = new Error('write failed')
+
     const mux = new SshChannelMultiplexer({
       write: () => {
         throw error
@@ -44,6 +46,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
       onData: vi.fn(),
       onClose: vi.fn()
     })
+
     const settled = vi.fn()
 
     mux.notifyWithSettlement('pty.ackData', { acknowledgements: [] }, settled)
@@ -66,6 +69,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
       onData: vi.fn(),
       onClose: vi.fn()
     })
+
     const settled = vi.fn()
 
     mux.notifyWithSettlement('pty.ackData', { acknowledgements: [] }, settled)
@@ -75,6 +79,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
 
   it('fails an unsettled publication when the multiplexer is disposed', () => {
     const close = vi.fn()
+
     const mux = new SshChannelMultiplexer({
       write: () => false,
       supportsWriteSettlement: true,
@@ -83,6 +88,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
       onClose: vi.fn(),
       close
     })
+
     const settled = vi.fn()
 
     mux.notifyWithSettlement('pty.ackData', { acknowledgements: [] }, settled)

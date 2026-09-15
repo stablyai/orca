@@ -42,10 +42,12 @@ describe('writeFileToClipboard', () => {
 
   it('writes a public.file-url buffer on macOS', async () => {
     const writeBuffer = vi.fn()
+
     const result = await writeFileToClipboard(
       '/repo/a b.png',
       makeDeps({ platform: 'darwin', writeBuffer })
     )
+
     expect(result).toEqual({ ok: true })
     expect(writeBuffer).toHaveBeenCalledTimes(1)
     const [format, buffer] = writeBuffer.mock.calls[0]
@@ -58,6 +60,7 @@ describe('writeFileToClipboard', () => {
     const writeBuffer = vi.fn(() => {
       throw new Error('clipboard unavailable')
     })
+
     await expect(
       writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'darwin', writeBuffer }))
     ).resolves.toEqual({ ok: false, reason: 'clipboard-write-failed' })
@@ -81,10 +84,12 @@ describe('writeFileToClipboard', () => {
 
   it('shells out to Set-Clipboard on Windows, escaping quotes', async () => {
     const runCommand = vi.fn(async (_command: string, _args: string[]) => {})
+
     const result = await writeFileToClipboard(
       "/repo/o'brien.png",
       makeDeps({ platform: 'win32', runCommand })
     )
+
     expect(result).toEqual({ ok: true })
     const [command, args] = runCommand.mock.calls[0]
     expect(command).toBe('powershell.exe')
@@ -95,6 +100,7 @@ describe('writeFileToClipboard', () => {
     const runCommand = vi.fn(async (_command: string, _args: string[]) => {
       throw new Error('powershell.exe not found')
     })
+
     expect(
       await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'win32', runCommand }))
     ).toEqual({ ok: false, reason: 'clipboard-command-failed' })
@@ -102,10 +108,12 @@ describe('writeFileToClipboard', () => {
 
   it('uses the KDE text/uri-list payload on a KDE desktop', async () => {
     const runCommand = vi.fn(async (_command: string, _args: string[], _stdin?: string) => {})
+
     const result = await writeFileToClipboard(
       '/repo/a b.png',
       makeDeps({ platform: 'linux', desktop: 'KDE', runCommand })
     )
+
     expect(result).toEqual({ ok: true })
     const [command, args, stdin] = runCommand.mock.calls[0]
     expect(command).toBe('wl-copy')
@@ -128,6 +136,7 @@ describe('writeFileToClipboard', () => {
     const runCommand = vi.fn(async (_command: string, _args: string[]) => {
       throw new Error('command not found')
     })
+
     expect(
       await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runCommand }))
     ).toEqual({ ok: false, reason: 'unsupported-platform' })
@@ -139,8 +148,10 @@ describe('writeFileToClipboard', () => {
       if (command === 'wl-copy') {
         return
       }
+
       throw new Error('no xclip')
     })
+
     expect(
       await writeFileToClipboard('/repo/a.png', makeDeps({ platform: 'linux', runCommand }))
     ).toEqual({ ok: true })

@@ -37,6 +37,7 @@ export async function parseKimiSessionFile(
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   let stateRecord: Record<string, unknown> | null
+
   try {
     stateRecord = asRecord(
       JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
@@ -48,8 +49,10 @@ export async function parseKimiSessionFile(
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
+
     return null
   }
+
   if (!stateRecord) {
     return null
   }
@@ -63,6 +66,7 @@ export async function parseKimiSessionFile(
   const workDirBySessionId = await readKimiWorkDirBySessionId(
     kimiSessionIndexPathFromStatePath(file.path)
   )
+
   accumulator.cwd = workDirBySessionId.get(sessionId) ?? null
 
   accumulator.title = normalizeTitleText(extractString(stateRecord.title) ?? '')
@@ -80,6 +84,7 @@ async function consumeKimiWireTranscript(
   wirePath: string
 ): Promise<void> {
   let pendingAssistantText: string[] = []
+
   const flushAssistant = (): void => {
     // Why: previews use the 220-char limit (normalizePreviewText), not the
     // 96-char title limit — assistant replies are shown in full preview width
@@ -87,6 +92,7 @@ async function consumeKimiWireTranscript(
     // survives; normalizePreviewText then collapses whitespace and caps length.
     const text = normalizePreviewText(pendingAssistantText.join(''))
     pendingAssistantText = []
+
     if (text) {
       accumulator.messageCount++
       addPreviewMessage(accumulator, { role: 'assistant', text })
@@ -95,12 +101,15 @@ async function consumeKimiWireTranscript(
 
   const input = openTranscriptReadStream(wirePath, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
+
   try {
     for await (const line of lines) {
       const record = parseJsonObject(line)
+
       if (!record) {
         continue
       }
+
       switch (record.type) {
         case 'config.update':
           accumulator.model = extractString(record.modelAlias) ?? accumulator.model
@@ -132,17 +141,20 @@ async function consumeKimiWireTranscript(
     lines.close()
     input.destroy()
   }
+
   flushAssistant()
 }
 
 function consumeKimiUserMessage(accumulator: SessionAccumulator, value: unknown): void {
   const message = asRecord(value)
+
   // Why: only real user turns count. Kimi injects synthetic `role: "user"`
   // messages (origin.kind === "injection") for system reminders like the
   // auto-permission notice; those are not user activity.
   if (!message || message.role !== 'user' || asRecord(message.origin)?.kind !== 'user') {
     return
   }
+
   accumulator.messageCount++
   // Title uses the 96-char title limit; the preview uses the 220-char limit.
   accumulator.title ??= extractContentText(message.content)
@@ -155,18 +167,23 @@ function consumeKimiLoopEvent(
   flushAssistant: () => void
 ): void {
   const event = asRecord(value)
+
   if (!event) {
     return
   }
+
   if (event.type === 'content.part') {
     const part = asRecord(event.part)
+
     // Push the raw chunk text; flushAssistant normalizes the joined result so
     // multi-chunk spacing is not lost to per-chunk trimming.
     if (part?.type === 'text' && typeof part.text === 'string') {
       pendingAssistantText.push(part.text)
     }
+
     return
   }
+
   // A step end closes one assistant turn; flush its accumulated text as a single
   // preview message so streamed `content.part` chunks collapse into one entry.
   if (event.type === 'step.end') {
@@ -181,10 +198,13 @@ function kimiUsageTotal(value: unknown, usageScope: unknown): number {
   if (usageScope === 'session') {
     return 0
   }
+
   const usage = asRecord(value)
+
   if (!usage) {
     return 0
   }
+
   return (
     numberValue(usage.inputOther) +
     numberValue(usage.output) +

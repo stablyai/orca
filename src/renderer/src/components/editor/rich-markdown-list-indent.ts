@@ -29,17 +29,22 @@ type ListItemContext = {
 function resolveListItemContext(editor: Editor): ListItemContext | null {
   const { $from } = editor.state.selection
   let found: { itemType: ListItemTypeName; itemDepth: number } | null = null
+
   for (let depth = $from.depth; depth > 0; depth--) {
     const name = $from.node(depth).type.name
+
     if (!isListItemType(name)) {
       continue
     }
+
     if (!found) {
       found = { itemType: name, itemDepth: depth }
       continue
     }
+
     return { ...found, parentItemType: name }
   }
+
   return found ? { ...found, parentItemType: null } : null
 }
 
@@ -49,9 +54,11 @@ export function indentRichMarkdownListItem(editor: Editor): boolean {
 
 export function outdentRichMarkdownListItem(editor: Editor): boolean {
   const context = resolveListItemContext(editor)
+
   if (!context) {
     return false
   }
+
   // Why: the schema forbids a listItem sibling inside a taskList (and vice
   // versa), so a mixed nest cannot lift as-is — prosemirror-schema-list would
   // silently lift the item *out* of its list, dropping its marker entirely.
@@ -59,8 +66,10 @@ export function outdentRichMarkdownListItem(editor: Editor): boolean {
   if (context.parentItemType && context.parentItemType !== context.itemType) {
     splitListBeforeCursorItem(editor)
     retypeListAtCursor(editor, context.parentItemType)
+
     return editor.commands.liftListItem(context.parentItemType)
   }
+
   return editor.commands.liftListItem(context.itemType)
 }
 
@@ -71,26 +80,33 @@ export function outdentRichMarkdownListItem(editor: Editor): boolean {
  */
 function splitListBeforeCursorItem(editor: Editor): void {
   const context = resolveListItemContext(editor)
+
   if (!context) {
     return
   }
+
   const { state } = editor
   const { $from } = state.selection
+
   if ($from.index(context.itemDepth - 1) === 0) {
     return
   }
+
   editor.view.dispatch(state.tr.split($from.before(context.itemDepth), 1))
 }
 
 function retypeListAtCursor(editor: Editor, target: ListItemTypeName): void {
   const context = resolveListItemContext(editor)
+
   if (!context) {
     return
   }
+
   const { state } = editor
   const { from, to } = state.selection
   const listPos = state.selection.$from.before(context.itemDepth - 1)
   const list = state.doc.nodeAt(listPos)
+
   if (!list) {
     return
   }
@@ -99,11 +115,13 @@ function retypeListAtCursor(editor: Editor, target: ListItemTypeName): void {
   // intermediate doc the schema rejects, so swap the whole subtree at once.
   const itemType = state.schema.nodes[target]
   const items = list.children.map((item) => itemType.create(null, item.content, item.marks))
+
   const retyped = state.schema.nodes[LIST_TYPE_FOR_ITEM[target]].create(
     null,
     Fragment.from(items),
     list.marks
   )
+
   const tr = state.tr.replaceWith(listPos, listPos + list.nodeSize, retyped)
   // Why: replaceWith treats the old subtree as deleted, collapsing the cursor to
   // the range edge — the retype is size-preserving, so restore it verbatim.

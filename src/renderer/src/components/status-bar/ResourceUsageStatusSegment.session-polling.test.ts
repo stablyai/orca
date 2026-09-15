@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const SOURCE_PATH = resolve(__dirname, 'use-resource-usage-status-controller.ts')
+
 const INVENTORY_HOOK_PATH = resolve(__dirname, 'use-resource-session-inventory.ts')
 
 describe('ResourceUsageStatusSegment session inventory', () => {

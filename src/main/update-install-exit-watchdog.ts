@@ -24,6 +24,7 @@ export function armUpdateInstallExitWatchdog(timeoutMs = UPDATE_INSTALL_EXIT_TIM
   if (exitTimer) {
     return
   }
+
   exitTimer = setTimeout(() => {
     recordUpdaterLifecycle(
       'install_exit_watchdog_fired',

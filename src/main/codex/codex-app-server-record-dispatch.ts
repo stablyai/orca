@@ -36,6 +36,7 @@ export function createCodexAppServerRecordDispatcher(input: {
       clearTimeout(waiter.timer)
       waiter.reject(error)
     }
+
     pending.clear()
   }
 
@@ -48,36 +49,48 @@ export function createCodexAppServerRecordDispatcher(input: {
         new CodexAppServerFrameSizeError(waiter.method, record.observedBytes, record.maxLineBytes)
       )
     }
+
     pending.clear()
   }
 
   const dispatch = (message: Record<string, unknown>): void => {
     const hasMethod = typeof message.method === 'string'
     const hasId = typeof message.id === 'number' || typeof message.id === 'string'
+
     if (hasMethod && hasId) {
       input.handlers.onServerRequest?.({
         id: message.id as number | string,
         method: message.method as string,
         params: message.params
       })
+
       return
     }
+
     if (hasMethod) {
       input.handlers.onNotification?.(message.method as string, message.params)
+
       return
     }
+
     if (typeof message.id !== 'number') {
       input.handlers.onUnhandledFrame?.('frame:unclassified', message)
+
       return
     }
+
     const waiter = pending.get(message.id)
+
     if (!waiter) {
       input.handlers.onUnhandledFrame?.('response:unmatched', message)
+
       return
     }
+
     pending.delete(message.id)
     clearTimeout(waiter.timer)
     const error = message.error
+
     if (isAppServerRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(
@@ -91,13 +104,16 @@ export function createCodexAppServerRecordDispatcher(input: {
               `codex app-server ${waiter.method} failed: ${detail}`
             )
       )
+
       return
     }
+
     waiter.resolve(message.result)
   }
 
   const rejectOversized = (rejected: NdjsonRejectedRecord & { kind: 'line-too-long' }): void => {
     const classification = classifyJsonRpcPrefix(rejected.prefix)
+
     const payload = {
       reason: 'record-too-large',
       observedBytes: rejected.observedBytes,
@@ -106,8 +122,10 @@ export function createCodexAppServerRecordDispatcher(input: {
       ...('id' in classification ? { id: classification.id } : {}),
       ...('method' in classification ? { method: classification.method } : {})
     }
+
     if (classification.kind === 'response') {
       const waiter = pending.get(classification.id)
+
       if (waiter) {
         pending.delete(classification.id)
         clearTimeout(waiter.timer)
@@ -126,11 +144,15 @@ export function createCodexAppServerRecordDispatcher(input: {
             `codex app-server oversized response ${classification.id} had no pending request`
           )
         )
+
         return
       }
+
       input.handlers.onUnhandledFrame?.('frame:oversized-response', payload)
+
       return
     }
+
     if (classification.kind === 'server-request') {
       input.writeResponse({
         id: classification.id,
@@ -140,12 +162,16 @@ export function createCodexAppServerRecordDispatcher(input: {
         }
       })
       input.handlers.onUnhandledFrame?.('frame:oversized-request', payload)
+
       return
     }
+
     if (classification.kind === 'notification') {
       input.handlers.onUnhandledFrame?.('frame:oversized-notification', payload)
+
       return
     }
+
     input.handlers.onUnhandledFrame?.('frame:oversized-unclassified', payload)
     input.onProtocolFailure(
       new Error(

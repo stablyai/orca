@@ -12,12 +12,15 @@ export function extractWorktreePaletteCommentSnippet(
     if (/\s/.test(comment[snippetStart - 1])) {
       break
     }
+
     snippetStart--
   }
+
   for (let i = 0; i < 10 && snippetEnd < comment.length; i++) {
     if (/\s/.test(comment[snippetEnd])) {
       break
     }
+
     snippetEnd++
   }
 
@@ -28,12 +31,14 @@ export function extractWorktreePaletteCommentSnippet(
   if (snippetStart > 0 && (comment.charCodeAt(snippetStart) & 0xfc00) === 0xdc00) {
     snippetStart -= 1
   }
+
   if (snippetEnd < comment.length && (comment.charCodeAt(snippetEnd - 1) & 0xfc00) === 0xd800) {
     snippetEnd += 1
   }
 
   const prefix = snippetStart > 0 ? '\u2026' : ''
   const suffix = snippetEnd < comment.length ? '\u2026' : ''
+
   return {
     text: `${prefix}${comment.slice(snippetStart, snippetEnd)}${suffix}`,
     matchRange: {

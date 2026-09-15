@@ -32,15 +32,19 @@ export class RuntimeRepositoryRefQueries {
     if (!isRepoSearchRefsRequestLimit(limit)) {
       throw new Error('invalid_limit')
     }
+
     const effectiveLimit = clampRepoSearchRefsLimit(limit)
     const probeLimit = getRepoSearchRefsProbeLimit(effectiveLimit)
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (isFolderRepo(repo)) {
       return { refs: [], truncated: false }
     }
+
     const refDetails = repo.connectionId
       ? await this.searchRemote(repo, query, probeLimit)
       : await searchBaseRefDetails(repo.path, query, probeLimit)
+
     return {
       refs: refDetails.slice(0, effectiveLimit).map((entry) => entry.refName),
       refDetails: refDetails.slice(0, effectiveLimit),
@@ -55,16 +59,20 @@ export class RuntimeRepositoryRefQueries {
     repoSelector: string
   ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (isFolderRepo(repo)) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
+
     if (repo.connectionId) {
       return this.getRemoteDefault(repo)
     }
+
     const [defaultBaseRef, remoteCount] = await Promise.all([
       getBaseRefDefault(repo.path),
       getRemoteCount(repo.path)
     ])
+
     return { defaultBaseRef, remoteCount }
   }
 
@@ -72,9 +80,11 @@ export class RuntimeRepositoryRefQueries {
     repo: Repo
   ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
     const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
+
     if (!provider) {
       return { defaultBaseRef: null, remoteCount: 0 }
     }
+
     const [defaultBaseRef, remoteCount] = await Promise.all([
       resolveDefaultBaseRefViaExec(async (argv) => {
         try {
@@ -86,6 +96,7 @@ export class RuntimeRepositoryRefQueries {
               err: error
             })
           }
+
           throw error
         }
       }),
@@ -97,9 +108,11 @@ export class RuntimeRepositoryRefQueries {
             path: repo.path,
             err: error
           })
+
           return 0
         })
     ])
+
     return { defaultBaseRef, remoteCount }
   }
 
@@ -109,17 +122,23 @@ export class RuntimeRepositoryRefQueries {
     limit: number
   ): Promise<BaseRefSearchResult[]> {
     const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
+
     if (!provider) {
       return []
     }
+
     const normalizedQuery = normalizeRefSearchQuery(query)
+
     try {
       const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+
       const capabilities = getSshGitCapabilityCache(provider)
+
       const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
         return capabilities.runWithFallback(
           'for-each-ref-exclude',
@@ -147,19 +166,23 @@ export class RuntimeRepositoryRefQueries {
           isForEachRefExcludeUnsupportedError
         )
       }
+
       if (normalizedQuery.split('/').filter((token) => token.length > 0).length > 1) {
         const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
+
         return mergeBaseRefSearchResultGroups(
           results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
           limit
         )
       }
+
       return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
     } catch (error) {
       console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
         path: repo.path,
         err: error
       })
+
       return []
     }
   }

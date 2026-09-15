@@ -5,6 +5,7 @@ export function createMiniMaxCredentialsApi(): NonNullable<
 > {
   const notConfigured = { configured: false, cookieConfigured: false, apiKeyConfigured: false }
   const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
+
   return {
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
@@ -22,6 +23,7 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
     tokenFresh: false,
     error: null
   }
+
   return {
     getStatus: () => Promise.resolve(unsigned)
   }
@@ -33,6 +35,7 @@ export function createAccountsApi(): never {
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   }
+
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),

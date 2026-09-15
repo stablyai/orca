@@ -35,18 +35,22 @@ describe('selectWorktreeDiffComments', () => {
       const repoId = `repo-${repoIndex}`
       worktreesByRepo[repoId] = Array.from({ length: 100 }, (_, worktreeIndex) => {
         const worktreeId = `worktree-${repoIndex}-${worktreeIndex}`
+
         const worktree = {
           repoId,
           path: `/${repoId}/${worktreeId}`,
           ...(worktreeId === targetWorktreeId ? { diffComments: comments } : {})
         } as Worktree
+
         Object.defineProperty(worktree, 'id', {
           enumerable: true,
           get: () => {
             worktreeIdReads += 1
+
             return worktreeId
           }
         })
+
         return worktree
       })
     }
@@ -90,6 +94,7 @@ describe('selectWorktreeDiffComments', () => {
 
   it('reads review notes from a folder workspace', () => {
     const comments = [makeComment('folder-comment')]
+
     const folderWorkspace = {
       id: 'folder-1',
       executionHostId: 'local',

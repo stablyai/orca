@@ -17,15 +17,19 @@ function statusLabel(config: LoadedMcpConfigInspection): string {
   if (config.readError) {
     return 'Unreadable'
   }
+
   if (config.status === 'missing') {
     return 'Not found'
   }
+
   if (config.status === 'invalid') {
     return 'Invalid JSON'
   }
+
   if (config.servers.length === 0) {
     return 'No servers'
   }
+
   return `${config.servers.length} server${config.servers.length === 1 ? '' : 's'}`
 }
 
@@ -33,9 +37,11 @@ function statusClassName(config: LoadedMcpConfigInspection): string {
   if (config.readError || config.status === 'invalid') {
     return 'border-destructive/30 bg-destructive/10 text-destructive'
   }
+
   if (config.status === 'valid' && config.servers.length > 0) {
     return 'border-border/60 bg-background text-foreground'
   }
+
   return 'border-border/60 bg-muted/60 text-muted-foreground'
 }
 
@@ -43,9 +49,11 @@ function serverDetailLabel(server: LoadedMcpConfigInspection['servers'][number])
   if (server.transport === 'http') {
     return server.url ?? 'HTTP server'
   }
+
   if (server.transport === 'stdio') {
     return server.command ?? 'stdio server'
   }
+
   return server.issue ?? 'Invalid server'
 }
 

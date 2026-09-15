@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const execCommand = vi.fn()
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: (...args: unknown[]) => execCommand(...args),
   isUnconfirmedSshCommandTermination: (error: unknown) =>
@@ -20,11 +21,17 @@ import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const HOME = '/home/u'
+
 const SOCK_NAME = 'relay-deadbeef.sock'
+
 const CURRENT_DIR = `${HOME}/.orca-remote/relay-0.1.0+bd3ec370d21d`
+
 const OLD_SOCK = `${HOME}/.orca-remote/relay-0.1.0+7175e0a40ea7/${SOCK_NAME}`
+
 const HOST = getRemoteHostPlatform('linux-x64')
+
 const WINDOWS_HOST = getRemoteHostPlatform('win32-x64')
+
 const CONN = {} as SshConnection
 
 const SWEEP = {

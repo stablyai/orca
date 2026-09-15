@@ -57,12 +57,14 @@ describe('worktree unread (show-until-interact)', () => {
 
   it('routes multi-host project unread persistence by the worktree host (#10634)', () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo-shared::/home/user/wt',
       repoId: 'repo-shared',
       path: '/home/user/wt',
       hostId: 'ssh:ssh-1'
     })
+
     store.setState({
       repos: [
         { id: 'repo-shared', path: '/local', displayName: 'Local', badgeColor: '#000', addedAt: 0 },
@@ -123,6 +125,7 @@ describe('worktree unread (show-until-interact)', () => {
     // Why every passive path, not just markWorktreeUnread: each one runs from a background
     // notification, so any that still throws reproduces the uncaught renderer error.
     const worktreeId = 'repo-shared::/same/path'
+
     const ambiguousState = (): Partial<AppState> =>
       ({
         settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
@@ -165,6 +168,7 @@ describe('worktree unread (show-until-interact)', () => {
   it('warns once per workspace rather than on every activity event (#10634)', () => {
     // Why: activity bumps fire on every PTY event; an unbounded warn would flood the console.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const worktreeId = 'repo-spam::/same/path'
       const store = createTestStore()
@@ -179,6 +183,7 @@ describe('worktree unread (show-until-interact)', () => {
       } as Partial<AppState>)
 
       const before = warn.mock.calls.length
+
       for (let i = 0; i < 5; i++) {
         store.getState().bumpWorktreeActivity(worktreeId)
       }
@@ -191,12 +196,14 @@ describe('worktree unread (show-until-interact)', () => {
 
   it('clearWorktreeUnread clears isUnread and persists the change', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       isUnread: true
     })
+
     store.setState({
       worktreesByRepo: { repo1: [wt] },
       activeWorktreeId: wt.id
@@ -228,11 +235,13 @@ describe('worktree unread (show-until-interact)', () => {
 
   it('updates unread state for hidden detected worktrees', () => {
     const store = createTestStore()
+
     const hidden = makeWorktree({
       id: 'repo1::/path/hidden',
       repoId: 'repo1',
       path: '/path/hidden'
     })
+
     const detected = makeDetectedResult('repo1', [hidden])
     detected.worktrees[0] = { ...detected.worktrees[0], ownership: 'external', visible: false }
     store.setState({
@@ -250,12 +259,14 @@ describe('worktree unread (show-until-interact)', () => {
 
   it('clears unread state when activating a hidden detected worktree', () => {
     const store = createTestStore()
+
     const hidden = makeWorktree({
       id: 'repo1::/path/hidden',
       repoId: 'repo1',
       path: '/path/hidden',
       isUnread: true
     })
+
     const detected = makeDetectedResult('repo1', [hidden])
     detected.worktrees[0] = { ...detected.worktrees[0], ownership: 'external', visible: false }
     store.setState({

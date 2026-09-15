@@ -8,17 +8,20 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
 const tempRoots: string[] = []
+
 const CLEANUP_RETRY_COUNT = 6
 
 async function removeTempRoot(root: string): Promise<void> {
   for (let attempt = 0; attempt < CLEANUP_RETRY_COUNT; attempt += 1) {
     try {
       rmSync(root, { recursive: true, force: true })
+
       return
     } catch (error) {
       if (attempt === CLEANUP_RETRY_COUNT - 1) {
         throw error
       }
+
       // Why: Windows and WSL-backed git probes can release repo handles shortly
       // after the Electron fixture closes; retry to keep the smoke idempotent.
       await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
@@ -41,6 +44,7 @@ async function createGitRepo(prefix: string, repoName: string): Promise<string> 
   execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
   execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
   execFileSync('git', ['branch', '-M', 'main'], { cwd: repoPath, stdio: 'pipe' })
+
   return repoPath
 }
 
@@ -53,6 +57,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<void> {
   }, repoId)
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
   const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+
   if (await maybeLaterButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await maybeLaterButton.click()
   }
@@ -66,6 +71,7 @@ async function chooseProjectRuntime(
   const section = page.locator(`[data-settings-section="repo-${repoId}"]`)
   await section.getByRole('radio', { name: runtimeLabel, exact: true }).click()
   const applyButton = section.getByRole('button', { name: 'Apply runtime change' })
+
   if (await applyButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await applyButton.click()
   }
@@ -89,6 +95,7 @@ test.describe('Windows project runtime smoke', () => {
       available: await window.api.wsl.isAvailable(),
       distros: await window.api.wsl.listDistros()
     }))
+
     test.skip(!wsl.available || wsl.distros.length === 0, 'WSL distro is required for smoke')
     const wslDistro = wsl.distros[0]!
     const wslRepoPath = await createGitRepo('orca-e2e-project-runtime-', 'wsl-runtime-project')
@@ -96,6 +103,7 @@ test.describe('Windows project runtime smoke', () => {
     const smoke = await orcaPage.evaluate(
       async ({ hostRepoPath, wslRepoPath, wslDistro }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
@@ -105,6 +113,7 @@ test.describe('Windows project runtime smoke', () => {
         const state = store.getState()
         const hostRepo = state.repos.find((repo) => repo.path === hostRepoPath)
         const wslRepo = state.repos.find((repo) => repo.path === wslRepoPath)
+
         if (!hostRepo || !wslRepo) {
           throw new Error('Expected host and WSL smoke repos to be loaded')
         }
@@ -112,9 +121,11 @@ test.describe('Windows project runtime smoke', () => {
         const hostProject = state.projects.find((project) =>
           project.sourceRepoIds.includes(hostRepo.id)
         )
+
         const wslProject = state.projects.find((project) =>
           project.sourceRepoIds.includes(wslRepo.id)
         )
+
         if (!hostProject || !wslProject) {
           throw new Error('Expected host and WSL smoke projects to be loaded')
         }
@@ -128,6 +139,7 @@ test.describe('Windows project runtime smoke', () => {
 
         const hostWorktrees = await window.api.worktrees.listDetected({ repoId: hostRepo.id })
         const wslWorktrees = await window.api.worktrees.listDetected({ repoId: wslRepo.id })
+
         return {
           hostRepoId: hostRepo.id,
           wslRepoId: wslRepo.id,
@@ -150,24 +162,32 @@ test.describe('Windows project runtime smoke', () => {
     await expect(
       hostSection.getByText(`This project runs in ${smoke.wslDistro} via WSL.`)
     ).toBeVisible()
+
     const hostAfterWslUiSwitch = await orcaPage.evaluate((hostRepoId) => {
       const state = window.__store!.getState()
+
       const hostProject = state.projects.find((project) =>
         project.sourceRepoIds.includes(hostRepoId)
       )
+
       return hostProject?.localWindowsRuntimePreference
     }, smoke.hostRepoId)
+
     expect(hostAfterWslUiSwitch).toEqual({ kind: 'wsl', distro: smoke.wslDistro })
 
     await chooseProjectRuntime(orcaPage, smoke.hostRepoId, 'Windows')
     await expect(hostSection.getByText('This project runs on Windows.')).toBeVisible()
+
     const hostAfterWindowsUiSwitch = await orcaPage.evaluate((hostRepoId) => {
       const state = window.__store!.getState()
+
       const hostProject = state.projects.find((project) =>
         project.sourceRepoIds.includes(hostRepoId)
       )
+
       return hostProject?.localWindowsRuntimePreference
     }, smoke.hostRepoId)
+
     expect(hostAfterWindowsUiSwitch).toEqual({ kind: 'windows-host' })
 
     await openRepoSettings(orcaPage, smoke.wslRepoId)

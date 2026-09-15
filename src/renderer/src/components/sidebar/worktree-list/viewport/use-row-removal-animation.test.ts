@@ -84,6 +84,7 @@ describe('buildVirtualRowRemovalMotions', () => {
       scrollTop: 0,
       starts: [['wt:a', 100]]
     })
+
     expect(
       buildVirtualRowRemovalMotions({
         previous,

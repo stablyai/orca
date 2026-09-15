@@ -7,6 +7,7 @@ describe('locale-ko-key-overrides', () => {
     const overrides = JSON.parse(
       fs.readFileSync(new URL('./locale-ko-key-overrides.json', import.meta.url), 'utf8')
     )
+
     for (const value of Object.values(overrides)) {
       expect(Object.keys(value)).toEqual(['ko'])
     }

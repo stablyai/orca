@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
+
 vi.mock('./skill-package-download', () => ({
   downloadSkillPackageGrant: mocks.downloadSkillPackageGrant
 }))
@@ -74,9 +75,11 @@ describe('transferSkillPackageToRuntime', () => {
         if (method === 'skills.beginUpload') {
           beginRequests.push(params)
           beginAttempts += 1
+
           if (beginAttempts === 1) {
             throw new Error('connection dropped after receiver resumed upload')
           }
+
           return {
             id: 'rpc-begin',
             ok: true,
@@ -84,10 +87,12 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.uploadChunk') {
           const chunk = params as { offset: number; bytesBase64: string }
           expect(chunk.offset).toBe(4)
           expect(Buffer.from(chunk.bytesBase64, 'base64')).toEqual(bytes.subarray(4))
+
           return {
             id: 'rpc-chunk',
             ok: true,
@@ -95,6 +100,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         return {
           id: 'rpc-success',
           ok: true,
@@ -121,6 +127,7 @@ describe('transferSkillPackageToRuntime', () => {
       },
       requireHttps: true
     })
+
     await transferred.cleanup()
 
     expect(beginRequests).toEqual([
@@ -145,6 +152,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.uploadChunk') {
           return {
             id: 'rpc-2',
@@ -153,6 +161,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         return {
           id: 'rpc-3',
           ok: true,
@@ -207,6 +216,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.uploadChunk') {
           return {
             id: 'rpc-2',
@@ -215,6 +225,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.commitUpload') {
           return {
             id: 'rpc-3',
@@ -223,6 +234,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         return {
           id: 'rpc-4',
           ok: true,
@@ -280,9 +292,11 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.uploadChunk') {
           throw new Error('connection dropped')
         }
+
         return {
           id: 'rpc-cancel',
           ok: true,
@@ -338,11 +352,14 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.uploadChunk') {
           chunkAttempts += 1
+
           if (chunkAttempts === 1) {
             throw new Error('connection dropped after receiver write')
           }
+
           return {
             id: 'rpc-chunk',
             ok: true,
@@ -350,11 +367,14 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         if (method === 'skills.commitUpload') {
           commitAttempts += 1
+
           if (commitAttempts === 1) {
             throw new Error('connection dropped after receiver commit')
           }
+
           return {
             id: 'rpc-commit',
             ok: true,
@@ -362,8 +382,10 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         expect(method).toBe('skills.cancelUpload')
         expect(params).toEqual({ uploadId: 'upload-1' })
+
         return {
           id: 'rpc-cancel',
           ok: true,
@@ -390,6 +412,7 @@ describe('transferSkillPackageToRuntime', () => {
       },
       requireHttps: true
     })
+
     await transferred.cleanup()
 
     expect(chunkAttempts).toBe(2)
@@ -407,6 +430,7 @@ describe('transferSkillPackageToRuntime', () => {
       async (_userData: string, _environment: string, method: string) => {
         if (method === 'skills.beginUpload') {
           controller.abort()
+
           return {
             id: 'rpc-begin',
             ok: true,
@@ -414,6 +438,7 @@ describe('transferSkillPackageToRuntime', () => {
             _meta: { runtimeId: 'runtime-1' }
           }
         }
+
         return {
           id: 'rpc-cancel',
           ok: true,

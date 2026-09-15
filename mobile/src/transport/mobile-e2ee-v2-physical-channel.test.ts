@@ -24,6 +24,7 @@ import {
 } from './mobile-e2ee-v2-physical-channel'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
+
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
 function setup(decodeBinary: (raw: unknown) => Promise<Uint8Array | null>) {
@@ -34,16 +35,20 @@ function setup(decodeBinary: (raw: unknown) => Promise<Uint8Array | null>) {
     clientNonce: new Uint8Array(32).fill(3),
     clientKeyPair: client
   })
+
   const sent: (string | Uint8Array)[] = []
+
   const socket = {
     OPEN: 1,
     readyState: 1,
     bufferedAmount: 0,
     send: (frame: string | Uint8Array) => sent.push(frame)
   } satisfies MobileE2EEV2Socket
+
   const events: string[] = []
   const onAuthenticated = vi.fn(() => events.push('authenticated'))
   const onError = vi.fn()
+
   const channel = new MobileE2EEV2PhysicalChannel({
     session,
     socket,
@@ -54,6 +59,7 @@ function setup(decodeBinary: (raw: unknown) => Promise<Uint8Array | null>) {
     onBinary: (plaintext) => events.push(`binary:${plaintext[0]}`),
     onError
   })
+
   channel.start()
 
   const ready: MobileE2EEV2Ready = {
@@ -65,13 +71,16 @@ function setup(decodeBinary: (raw: unknown) => Promise<Uint8Array | null>) {
     selection: { framing: 2, payloadKinds: ['text', 'binary'] },
     context: session.hello.context
   }
+
   const handshake = validateMobileE2EEV2Handshake(session.hello, ready)!
+
   const schedule = deriveMobileE2EEV2KeySchedule({
     sharedSecret: deriveSharedKey(desktop.secretKey, client.publicKey),
     transcript: encodeMobileE2EEV2Transcript(handshake),
     clientNonce: handshake.clientNonce,
     desktopNonce: handshake.desktopNonce
   })
+
   return { channel, session, socket, sent, events, onAuthenticated, onError, ready, schedule }
 }
 
@@ -93,6 +102,7 @@ function serverFrame(
 
 async function authenticate(ctx: ReturnType<typeof setup>): Promise<void> {
   await ctx.channel.handleMessage(JSON.stringify(ctx.ready))
+
   const response = serverFrame(
     new TextEncoder().encode(
       JSON.stringify({
@@ -105,6 +115,7 @@ async function authenticate(ctx: ReturnType<typeof setup>): Promise<void> {
     0n,
     ctx.schedule
   )
+
   await ctx.channel.handleMessage(Buffer.from(response).toString('base64'))
 }
 
@@ -125,6 +136,7 @@ describe('mobile E2EE v2 physical channel', () => {
   it('classifies the encrypted desktop device-token rejection as global auth failure', async () => {
     const ctx = setup(async () => null)
     await ctx.channel.handleMessage(JSON.stringify(ctx.ready))
+
     const rejection = serverFrame(
       new TextEncoder().encode(
         JSON.stringify({ type: 'e2ee_error', error: { code: 'unauthorized' } })
@@ -199,9 +211,11 @@ describe('mobile E2EE v2 physical channel', () => {
     await authenticate(ctx)
     ctx.socket.bufferedAmount = 9 * 1024 * 1024
     const megabyte = new Uint8Array(1024 * 1024)
+
     for (let index = 0; index < 65; index++) {
       expect(ctx.channel.sendBinary(megabyte)).toBe(true)
     }
+
     expect(ctx.onError).toHaveBeenCalledOnce()
     expect(ctx.onError.mock.calls[0]![0].message).toBe('E2EE v2 outbound buffer overflow')
   })

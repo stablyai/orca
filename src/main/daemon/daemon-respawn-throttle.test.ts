@@ -5,11 +5,13 @@ import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-th
 describe('DaemonRespawnThrottle', () => {
   it('admits up to the cap, then refuses with the time left in the window', () => {
     let now = 0
+
     const throttle = new DaemonRespawnThrottle({
       maxAttempts: 3,
       windowMs: 1_000,
       now: () => now
     })
+
     expect(throttle.admit().allowed).toBe(true)
     now = 200
     expect(throttle.admit().allowed).toBe(true)
@@ -49,16 +51,19 @@ describe('DaemonSpawner crash-loop containment', () => {
 
   it('stops forking once the daemon has died repeatedly inside the window', async () => {
     const launcher = vi.fn(async () => handle)
+
     const spawner = new DaemonSpawner({
       runtimeDir: '/tmp/orcad-throttle-test',
       launcher,
       respawnThrottle: new DaemonRespawnThrottle({ maxAttempts: 3, windowMs: 60_000 })
     })
+
     for (let i = 0; i < 3; i += 1) {
       await spawner.ensureRunning()
       // What a dead daemon looks like to the adapter's respawn path.
       spawner.resetHandle()
     }
+
     expect(launcher).toHaveBeenCalledTimes(3)
     await expect(spawner.ensureRunning()).rejects.toBeInstanceOf(DaemonCrashLoopError)
     // The refusal must actually prevent the fork, not just annotate it.
@@ -67,11 +72,13 @@ describe('DaemonSpawner crash-loop containment', () => {
 
   it('does not count a cached handle as a new attempt', async () => {
     const launcher = vi.fn(async () => handle)
+
     const spawner = new DaemonSpawner({
       runtimeDir: '/tmp/orcad-throttle-test',
       launcher,
       respawnThrottle: new DaemonRespawnThrottle({ maxAttempts: 2, windowMs: 60_000 })
     })
+
     await spawner.ensureRunning()
     await spawner.ensureRunning()
     await spawner.ensureRunning()
@@ -80,11 +87,13 @@ describe('DaemonSpawner crash-loop containment', () => {
 
   it('lets an operator restart clear containment', async () => {
     const launcher = vi.fn(async () => handle)
+
     const spawner = new DaemonSpawner({
       runtimeDir: '/tmp/orcad-throttle-test',
       launcher,
       respawnThrottle: new DaemonRespawnThrottle({ maxAttempts: 1, windowMs: 60_000 })
     })
+
     await spawner.ensureRunning()
     spawner.resetHandle()
     await expect(spawner.ensureRunning()).rejects.toBeInstanceOf(DaemonCrashLoopError)

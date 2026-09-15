@@ -17,8 +17,11 @@ type HarnessProps = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
+
 let frames: (() => void)[] = []
+
 let focusCalls = 0
 
 /** Drain queued frames; each drained frame may queue the next. */
@@ -44,10 +47,13 @@ function Harness(props: HarnessProps): React.JSX.Element {
       attemptsRef.current += 1
       focusCalls += 1
       props.onFocus?.()
+
       if (attemptsRef.current <= (props.readyAfterAttempts ?? 0)) {
         return false
       }
+
       fieldRef.current?.focus()
+
       return true
     },
     insertTypedText: () => true,
@@ -64,6 +70,7 @@ function Harness(props: HarnessProps): React.JSX.Element {
       frames.push(callback)
     }
   })
+
   return createElement(
     'div',
     { ref: rootRef },

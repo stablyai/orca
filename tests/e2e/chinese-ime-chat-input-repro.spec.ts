@@ -45,47 +45,66 @@ const PROMPT = '› '
 
 function stripTerminalControls(value: string): string {
   let output = ''
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (code === 0x1b) {
       const next = value[index + 1]
+
       if (next === ']') {
         index += 2
+
         while (index < value.length) {
           const current = value.charCodeAt(index)
+
           if (current === 0x07) {
             break
           }
+
           if (current === 0x1b && value[index + 1] === '\\') {
             index += 1
             break
           }
+
           index += 1
         }
+
         continue
       }
+
       if (next === '[') {
         index += 2
+
         while (index < value.length && value.charCodeAt(index) < 0x40) {
           index += 1
         }
+
         continue
       }
+
       continue
     }
+
     if ((code >= 0 && code <= 0x08) || (code >= 0x0b && code <= 0x1f) || code === 0x7f) {
       continue
     }
+
     output += value[index]
   }
+
   return output
 }
 
 const CODEX_READY_RE = /Ask Codex|OpenAI/i
+
 const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
+
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
+
 const LINUX_IME_POLICY_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
+
 const WINDOWS_IME_POLICY_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150 Safari/537.36'
 
@@ -191,18 +210,22 @@ async function installImeEventProbe(page: Page): Promise<void> {
     targetWindow.__orcaImeEventLog = []
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!pane || !textarea) {
       throw new Error('No active terminal helper textarea')
     }
+
     const record = (event: Event): void => {
       const input = event instanceof InputEvent ? event : null
       const composition = event instanceof CompositionEvent ? event : null
@@ -230,6 +253,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
         cursorY: pane.terminal.buffer.active.cursorY
       })
     }
+
     for (const type of [
       'compositionstart',
       'compositionupdate',
@@ -241,6 +265,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
     ]) {
       textarea.addEventListener(type, record, true)
     }
+
     // Why: the Linux/Sogou post-composition guard lives on the terminal
     // element; record terminal-targeted compositionend without doubling key logs.
     pane.terminal.element?.addEventListener('compositionend', record, true)
@@ -250,6 +275,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
 async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
   return page.evaluate(() => {
     const targetWindow = window as unknown as { __orcaImeEventLog?: ImeEventLogEntry[] }
+
     return targetWindow.__orcaImeEventLog ?? []
   })
 }
@@ -257,10 +283,13 @@ async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
 async function readActiveCompositionText(page: Page): Promise<string> {
   return page.evaluate(() => {
     const active = document.activeElement
+
     if (!(active instanceof HTMLTextAreaElement)) {
       throw new Error('xterm helper textarea is not focused')
     }
+
     const view = active.closest('.xterm')?.querySelector<HTMLElement>('.composition-view')
+
     return view?.classList.contains('active')
       ? (view.textContent?.replaceAll('\u200e', '') ?? '')
       : ''
@@ -294,6 +323,7 @@ async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
 async function readPromptState(page: Page): Promise<TerminalPromptState | null> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const matches = [...content.matchAll(/\[SUBMITTED_JSON_[^\]]+\]("[\s\S]*?")/g)]
+
   const submitted = matches
     .map((match) => {
       try {
@@ -303,9 +333,12 @@ async function readPromptState(page: Page): Promise<TerminalPromptState | null> 
       }
     })
     .filter((value): value is string => value !== null)
+
   const promptIndex = content.lastIndexOf(PROMPT)
+
   const liveLine =
     promptIndex !== -1 ? (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '') : ''
+
   return {
     model: liveLine.trimEnd(),
     cursor: Array.from(liveLine.trimEnd()).length,
@@ -325,6 +358,7 @@ async function attachImeEvidence(
     promptState: await readPromptState(page),
     imeEvents: await readImeEventLog(page)
   }
+
   await testInfo.attach(`${name}.json`, {
     body: `${JSON.stringify(evidence, null, 2)}\n`,
     contentType: 'application/json'
@@ -418,9 +452,11 @@ async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
   // popup is still open (#6765); Orca's tracker must not flip inactive on it.
   await page.evaluate(() => {
     const active = document.activeElement
+
     if (!(active instanceof HTMLTextAreaElement)) {
       throw new Error('xterm helper textarea is not focused')
     }
+
     active.dispatchEvent(new CompositionEvent('compositionupdate', { data: '', bubbles: true }))
   })
 }
@@ -431,13 +467,17 @@ async function dispatchSogouPostCompositionEnd(page: Page, data: string): Promis
   // without making xterm finalize a synthetic preedit string.
   await page.evaluate((data) => {
     const active = document.activeElement
+
     if (!(active instanceof HTMLTextAreaElement)) {
       throw new Error('xterm helper textarea is not focused')
     }
+
     const terminalElement = active.closest('.xterm')
+
     if (!(terminalElement instanceof HTMLElement)) {
       throw new Error('xterm terminal element was not found')
     }
+
     terminalElement.dispatchEvent(new CompositionEvent('compositionend', { data, bubbles: false }))
   }, data)
 }
@@ -449,10 +489,12 @@ async function composeAndCommitChineseText(
   committedText: string
 ): Promise<void> {
   await focusActiveTerminalInput(page)
+
   for (const frame of preeditFrames) {
     await setImeComposition(session, frame)
     await page.waitForTimeout(80)
   }
+
   await commitImeText(session, committedText)
   await page.waitForTimeout(150)
 }
@@ -481,22 +523,27 @@ async function waitForCleanTerminalText(
 
 async function dismissCodexPromptsIfPresent(page: Page): Promise<void> {
   const deadline = Date.now() + 20_000
+
   while (Date.now() < deadline) {
     const content = stripTerminalControls(await getTerminalContent(page, 20_000))
+
     if (CODEX_READY_RE.test(content) && !CODEX_TRUST_PROMPT_RE.test(content)) {
       return
     }
+
     if (CODEX_TRUST_PROMPT_RE.test(content)) {
       await page.keyboard.press('Enter')
       await page.waitForTimeout(300)
       continue
     }
+
     if (CODEX_UPDATE_PROMPT_RE.test(content)) {
       await page.keyboard.type('3')
       await page.keyboard.press('Enter')
       await page.waitForTimeout(300)
       continue
     }
+
     await page.waitForTimeout(250)
   }
 }
@@ -548,9 +595,11 @@ test.describe('Chinese IME terminal chat input repro', () => {
 
       await commitImeText(session, '一二三四五六七八九十')
       await waitForLivePrompt(orcaPage, '一二三四五六七八九十')
+
       for (let index = 0; index < 5; index += 1) {
         await orcaPage.keyboard.press('ArrowLeft')
       }
+
       await dispatchImeProcessKey(session, 'KeyZ')
       await composeAndCommitChineseText(session, orcaPage, ['z', 'zh', '中'], '中')
       await waitForLivePrompt(orcaPage, '一二三四五中六七八九十')
@@ -718,16 +767,19 @@ test.describe('Chinese IME terminal chat input repro', () => {
       )
       await waitForLivePrompt(orcaPage, '再见')
       const postCompositionLog = await readImeEventLog(orcaPage)
+
       const postCompositionEndIndex = postCompositionLog.findIndex(
         (entry, index) =>
           index >= postCompositionLogStart &&
           entry.type === 'compositionend' &&
           entry.data === '再见'
       )
+
       const postCompositionSelectorIndex = postCompositionLog.findIndex(
         (entry, index) =>
           index > postCompositionEndIndex && entry.type === 'keydown' && entry.key === '3'
       )
+
       expect(
         postCompositionEndIndex,
         'Sogou post-composition repro must dispatch compositionend before the plain selector'
@@ -766,9 +818,11 @@ test.describe('Chinese IME terminal chat input repro', () => {
     } finally {
       await attachImeEvidence(orcaPage, testInfo, 'sogou-final-ime-evidence').catch(() => undefined)
       await session?.detach().catch(() => undefined)
+
       if (harnessStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })

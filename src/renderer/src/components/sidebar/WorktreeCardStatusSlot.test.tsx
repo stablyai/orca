@@ -32,6 +32,7 @@ describe('WorktreeCardStatusSlot', () => {
     state: 'open',
     status: 'failure'
   }
+
   const gitlabReview: WorktreeCardPrDisplay = {
     provider: 'gitlab',
     number: 456,
@@ -88,6 +89,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('suppresses the new-card unread badge while unread status is working', () => {
     mocks.status = 'working'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -113,6 +115,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('suppresses the new-card unread badge while unread status is permission', () => {
     mocks.status = 'permission'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -138,6 +141,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('keeps legacy unread working cards on the unread bell control', () => {
     mocks.status = 'working'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -242,6 +246,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('uses PR status instead of the quiet done dot when new card style is on', () => {
     mocks.status = 'done'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -262,6 +267,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('uses PR status instead of the inactive dot when new card style is on', () => {
     mocks.status = 'inactive'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -349,6 +355,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('keeps working activity ahead of PR status in new card style', () => {
     mocks.status = 'working'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
@@ -373,6 +380,7 @@ describe('WorktreeCardStatusSlot', () => {
 
   it('keeps permission activity ahead of PR status in new card style', () => {
     mocks.status = 'permission'
+
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"

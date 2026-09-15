@@ -15,6 +15,7 @@ export function closeLocalTerminalTabState(
   }
 ): void {
   const state = useAppStore.getState()
+
   if (
     options?.precomputedRetirementPlan?.tabId === terminalTabId ||
     Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === terminalTabId))
@@ -30,6 +31,7 @@ export function closeLocalTerminalTabState(
     } else {
       state.closeTab(terminalTabId)
     }
+
     return
   }
 
@@ -39,8 +41,10 @@ export function closeLocalTerminalTabState(
         tab.contentType === 'terminal' &&
         (tab.entityId === terminalTabId || tab.id === terminalTabId)
     )
+
     if (unified) {
       state.closeTab(unified.entityId, options)
+
       return
     }
   }

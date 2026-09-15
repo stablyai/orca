@@ -80,6 +80,7 @@ describe('rekeyOpenFilesForPathChange', () => {
   it('migrates unified tab entityId/id and group order', () => {
     seedEditTab()
     const oldId = useAppStore.getState().openFiles[0]!.id
+
     const tab: Tab = {
       id: oldId,
       entityId: oldId,
@@ -87,12 +88,14 @@ describe('rekeyOpenFilesForPathChange', () => {
       groupId: 'g1',
       title: 'a.md'
     } as never
+
     const group: TabGroup = {
       id: 'g1',
       tabOrder: [oldId],
       activeTabId: oldId,
       recentTabIds: [oldId]
     } as never
+
     useAppStore.setState({
       unifiedTabsByWorktree: { 'wt-1': [tab] },
       groupsByWorktree: { 'wt-1': [group] }

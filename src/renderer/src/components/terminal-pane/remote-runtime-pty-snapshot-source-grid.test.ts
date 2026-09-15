@@ -22,6 +22,7 @@ describe('remote transport snapshot source-grid threading', () => {
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -49,6 +50,7 @@ describe('remote transport snapshot source-grid threading', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -61,11 +63,13 @@ describe('remote transport snapshot source-grid threading', () => {
 
   it('carries the host grid on pushed snapshots and omits it when the host has none', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     const onReplayData = vi.fn()
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-1',
@@ -79,10 +83,13 @@ describe('remote transport snapshot source-grid threading', () => {
     await expect
       .poll(() => subscriptionSendBinary.mock.calls.length, { timeout: 5000 })
       .toBeGreaterThan(0)
+
     const subscribeFrame = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0] as Uint8Array))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+
     expect(subscribeFrame).toBeDefined()
+
     const streamId = decodeTerminalStreamJson<{ streamId: number }>(
       subscribeFrame!.payload
     )!.streamId

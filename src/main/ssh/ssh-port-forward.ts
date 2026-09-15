@@ -9,6 +9,7 @@ import type {
 } from './ssh-port-forward-provider'
 
 export type { PortForwardEntry }
+
 export type { PortForwardCloseReason }
 
 type SshPortForwardManagerCallbacks = {
@@ -65,6 +66,7 @@ export class SshPortForwardManager {
     label?: string
   ): Promise<PortForwardEntry> {
     const provider = this.providers.find((candidate) => candidate.canHandle(conn))
+
     if (!provider) {
       throw new Error('SSH connection is not established')
     }
@@ -80,14 +82,17 @@ export class SshPortForwardManager {
       label,
       onUnexpectedClose: (entry, reason) => {
         const active = this.forwards.get(id)
+
         if (active !== forward) {
           return
         }
+
         this.forwards.delete(id)
         this.callbacks.onForwardClosed?.(entry, reason)
       }
     })
     this.forwards.set(id, forward)
+
     return forward.entry
   }
 
@@ -100,9 +105,11 @@ export class SshPortForwardManager {
     label?: string
   ): Promise<PortForwardEntry> {
     const existing = this.forwards.get(id)
+
     if (!existing) {
       throw new Error(`Port forward "${id}" not found`)
     }
+
     const oldEntry = { ...existing.entry }
 
     // Why: use the async variant so the OS fully releases the port before
@@ -136,17 +143,21 @@ export class SshPortForwardManager {
       } catch {
         // best-effort rollback
       }
+
       throw err
     }
   }
 
   removeForward(id: string): PortForwardEntry | null {
     const forward = this.forwards.get(id)
+
     if (!forward) {
       return null
     }
+
     forward.dispose()
     this.forwards.delete(id)
+
     return forward.entry
   }
 
@@ -158,20 +169,25 @@ export class SshPortForwardManager {
   // the same port (update/reconnect) must wait until the owner fully releases it.
   private removeForwardAsync(id: string): Promise<PortForwardEntry | null> {
     const forward = this.forwards.get(id)
+
     if (!forward) {
       return Promise.resolve(null)
     }
+
     this.forwards.delete(id)
+
     return forward.close().then(() => forward.entry)
   }
 
   listForwards(connectionId?: string): PortForwardEntry[] {
     const entries: PortForwardEntry[] = []
+
     for (const { entry } of this.forwards.values()) {
       if (!connectionId || entry.connectionId === connectionId) {
         entries.push(entry)
       }
     }
+
     return entries
   }
 
@@ -179,11 +195,13 @@ export class SshPortForwardManager {
     const toRemove = [...this.forwards.entries()]
       .filter(([, { entry }]) => entry.connectionId === connectionId)
       .map(([id]) => id)
+
     await Promise.all(toRemove.map((id) => this.removeForwardAsync(id)))
   }
 
   dispose(): void {
     const ids = [...this.forwards.keys()]
+
     for (const id of ids) {
       this.removeForward(id)
     }

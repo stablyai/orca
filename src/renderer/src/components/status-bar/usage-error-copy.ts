@@ -5,27 +5,35 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'claude') {
     return 'Claude'
   }
+
   if (provider === 'codex') {
     return 'Codex'
   }
+
   if (provider === 'gemini') {
     return 'Gemini'
   }
+
   if (provider === 'opencode-go') {
     return 'OpenCode Go'
   }
+
   if (provider === 'kimi') {
     return 'Kimi'
   }
+
   if (provider === 'antigravity') {
     return 'Antigravity'
   }
+
   if (provider === 'minimax') {
     return 'MiniMax'
   }
+
   if (provider === 'grok') {
     return 'Grok'
   }
+
   return provider
 }
 
@@ -36,6 +44,7 @@ function isUsageRateLimitError(message: string | null): boolean {
   if (!message || /\bauthentication required\b/i.test(message)) {
     return false
   }
+
   return /\brate[- ]?limits?\b|\brate[- ]?limited\b/i.test(message)
 }
 
@@ -70,6 +79,7 @@ function getDelegatedCliRefreshProvider(
   if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
     return null
   }
+
   // Why: only these providers require a user-run CLI to rotate the read-only
   // session Orca consumes; Claude handles the same failure kind in-app.
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
@@ -77,12 +87,15 @@ function getDelegatedCliRefreshProvider(
 
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
+
   if (delegatedCliProvider === 'grok') {
     return translate('auto.components.status.bar.tooltip.e2c6a4f917', 'Run Grok to refresh')
   }
+
   if (delegatedCliProvider === 'kimi') {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
+
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
@@ -111,14 +124,17 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
         break
     }
   }
+
   // Why: MiniMax reports credential expiry through the payload, not an HTTP status,
   // so it needs its own copy rather than the generic refresh-failure label.
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return translate('auto.components.status.bar.tooltip.minimax.expired.label', 'Sign-in expired')
   }
+
   if (isUsageRateLimitError(p.error)) {
     return translate('auto.components.status.bar.tooltip.7ad719c4bf', 'Limited')
   }
+
   return translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
 }
 
@@ -127,22 +143,27 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     'auto.components.status.bar.tooltip.2c35eca8d4',
     'Unable to fetch usage'
   )
+
   if (!p.error) {
     return fallback
   }
+
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
+
   if (delegatedCliProvider === 'grok') {
     return translate(
       'auto.components.status.bar.tooltip.d1b7f509ac',
       'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.'
     )
   }
+
   if (delegatedCliProvider === 'kimi') {
     return translate(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   }
+
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
@@ -184,9 +205,11 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
         break
     }
   }
+
   if (isUsageRateLimitError(p.error)) {
     return p.error
   }
+
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return p.usageMetadata.credentialSource === 'api-key'
       ? translate(
@@ -198,13 +221,16 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'MiniMax session cookie expired. Replace it in Settings.'
         )
   }
+
   if (isUsageAuthError(p.error)) {
     const name = getProviderDisplayName(p.provider)
+
     return translate(
       'auto.components.status.bar.tooltip.8418ec448d',
       '{{value0}} usage could not be refreshed. Agent sessions may still be signed in.',
       { value0: name }
     )
   }
+
   return p.error
 }

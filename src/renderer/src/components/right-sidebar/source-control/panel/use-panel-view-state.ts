@@ -30,12 +30,15 @@ export function useSourceControlPanelViewState({
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const [filterExpanded, setFilterExpanded] = useState(false)
+
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
+
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
   )
+
   const sourceControlViewMode = persistedSourceControlViewMode
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
@@ -47,6 +50,7 @@ export function useSourceControlPanelViewState({
     if (!settings) {
       return
     }
+
     updateSettings({
       sourceControlViewMode: getNextSourceControlViewMode(sourceControlViewMode)
     })
@@ -54,6 +58,7 @@ export function useSourceControlPanelViewState({
 
   // Why: reset during render instead of key-remounting on switch (which caused a Windows IPC storm).
   const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)
+
   if (viewStateWorktreeId !== activeWorktreeId) {
     setViewStateWorktreeId(activeWorktreeId)
     setFilterExpanded(false)
@@ -68,11 +73,13 @@ export function useSourceControlPanelViewState({
   const toggleSection = useCallback((section: string) => {
     setCollapsedSections((prev) => {
       const next = new Set(prev)
+
       if (next.has(section)) {
         next.delete(section)
       } else {
         next.add(section)
       }
+
       return next
     })
   }, [])
@@ -80,11 +87,13 @@ export function useSourceControlPanelViewState({
   const toggleTreeDir = useCallback((key: string) => {
     setCollapsedTreeDirs((prev) => {
       const next = new Set(prev)
+
       if (next.has(key)) {
         next.delete(key)
       } else {
         next.add(key)
       }
+
       return next
     })
   }, [])

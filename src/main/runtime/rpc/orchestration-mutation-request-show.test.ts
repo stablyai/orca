@@ -21,9 +21,11 @@ function createHarness() {
   const db = new OrchestrationDb(':memory:')
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
+
   const effect = vi.fn((subject: string) =>
     db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
   )
+
   const dispatcher = new RpcDispatcher({
     runtime,
     methods: [
@@ -35,6 +37,7 @@ function createHarness() {
       ...REQUEST_SHOW_METHODS
     ]
   })
+
   return { db, runtime, dispatcher, effect }
 }
 
@@ -106,12 +109,15 @@ describe('orchestration.requestShow', () => {
     runtime.setOrchestrationDb(db)
     let finishMutation: (() => void) | undefined
     let reportStarted: (() => void) | undefined
+
     const mutationFinished = new Promise<void>((resolve) => {
       finishMutation = resolve
     })
+
     const mutationStarted = new Promise<void>((resolve) => {
       reportStarted = resolve
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -121,6 +127,7 @@ describe('orchestration.requestShow', () => {
           handler: async () => {
             reportStarted?.()
             await mutationFinished
+
             return { sent: true }
           }
         }),

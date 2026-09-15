@@ -14,6 +14,7 @@ export function validateComputerClipboardPasteText(text: string): void {
     if (isClipboardTextWriteTooLargeError(error)) {
       throw new RuntimeClientError('invalid_argument', CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
     }
+
     throw error
   }
 }
@@ -27,6 +28,7 @@ export async function validateComputerClipboardPasteTextWithYield(text: string):
     if (isClipboardTextWriteTooLargeError(error)) {
       throw new RuntimeClientError('invalid_argument', CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
     }
+
     throw error
   }
 }
@@ -36,7 +38,9 @@ export function validateComputerClipboardPasteTextWithBoundedYield(
 ): Promise<void> | void {
   if (text.length <= CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS) {
     validateComputerClipboardPasteText(text)
+
     return
   }
+
   return validateComputerClipboardPasteTextWithYield(text)
 }

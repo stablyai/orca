@@ -97,27 +97,34 @@ export function deriveWorkerTerminalListState(params: {
   resource: Pick<WorkerTerminalResourceRow, 'ownership_state' | 'release_state'> | null
 }): WorkerTerminalListState | null {
   const { resource } = params
+
   if (!resource) {
     return params.agentTerminalHandle ? 'retained' : null
   }
+
   if (resource.release_state === 'released') {
     return 'released'
   }
+
   if (resource.release_state === 'unknown') {
     return 'release_unknown'
   }
+
   if (resource.release_state === 'requested' || resource.release_state === 'releasing') {
     return 'release_pending'
   }
+
   if (resource.ownership_state !== 'owned' || resource.release_state === 'retained') {
     return 'retained'
   }
+
   if (
     params.workerState !== 'unsupervised' &&
     WORKER_RELEASABLE_STATES.includes(params.workerState)
   ) {
     return 'reclaimable'
   }
+
   return params.workerState !== 'unsupervised' && WORKER_SETTLED_STATES.includes(params.workerState)
     ? 'retained'
     : 'active'
@@ -136,6 +143,7 @@ export function decideWorkerTerminalRelease(
   if (resource.release_state === 'released' || resource.ownership_state === 'released') {
     return { action: 'already_released' }
   }
+
   switch (resource.ownership_state) {
     case 'external':
       return {

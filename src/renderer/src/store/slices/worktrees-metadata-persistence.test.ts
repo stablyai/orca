@@ -65,12 +65,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('force-deletes a preserved HUB-owned SSH branch through its HUB', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo-ssh::/srv/nested-wt',
       repoId: 'repo-ssh',
       hostId: 'ssh:hub-private-target',
       runtimeOwnerEnvironmentId: 'owner-hub'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-force-delete-branch',
       ok: true,
@@ -152,12 +154,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('persists SSH-owned worktree metadata through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo-ssh::/home/orca/wt1',
       repoId: 'repo-ssh',
       path: '/home/orca/wt1',
       hostId: 'ssh:ssh-1'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -186,6 +190,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('clears pending first-agent rename when the title is updated', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -193,6 +198,7 @@ describe('worktree remote runtime mutations', () => {
       displayName: 'Nautilus',
       pendingFirstAgentMessageRename: true
     })
+
     store.setState({
       worktreesByRepo: { repo1: [wt] }
     } as Partial<AppState>)
@@ -218,6 +224,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('clears stale hosted review cache and force-refetches when removing linked PR metadata', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -225,6 +232,7 @@ describe('worktree remote runtime mutations', () => {
       branch: 'refs/heads/pr-branch',
       linkedPR: 456
     })
+
     const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => ({
       id: `test-${method}`,
@@ -232,6 +240,7 @@ describe('worktree remote runtime mutations', () => {
       result: method === 'worktrees.list' ? [] : null
     }))
     const focusedRuntimeSettings = { activeRuntimeEnvironmentId: 'env-win' } as AppState['settings']
+
     const cacheKey = getHostedReviewCacheKey(
       '/repo1',
       'pr-branch',
@@ -241,12 +250,14 @@ describe('worktree remote runtime mutations', () => {
       null,
       true
     )
+
     const runtimeCacheKey = getHostedReviewCacheKey(
       '/repo1',
       'pr-branch',
       focusedRuntimeSettings,
       'repo1'
     )
+
     const prCacheKey = getGitHubPRCacheKey(
       '/repo1',
       'repo1',
@@ -256,14 +267,17 @@ describe('worktree remote runtime mutations', () => {
       null,
       true
     )
+
     const runtimePRCacheKey = getGitHubPRCacheKey(
       '/repo1',
       'repo1',
       'pr-branch',
       focusedRuntimeSettings
     )
+
     const legacyRepoPRCacheKey = getLegacyGitHubPRCacheKey('/repo1', 'repo1', 'pr-branch')
     const legacyPathPRCacheKey = getLegacyGitHubPRCacheKey('/repo1', undefined, 'pr-branch')
+
     const prData = {
       number: 456,
       title: 'Linked PR',
@@ -273,6 +287,7 @@ describe('worktree remote runtime mutations', () => {
       updatedAt: '2026-05-15T00:00:00.000Z',
       mergeable: 'MERGEABLE' as const
     }
+
     store.setState({
       settings: focusedRuntimeSettings,
       repos: [
@@ -341,6 +356,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('preserves linked GitLab MR fallback when removing linked GitHub PR metadata', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -349,6 +365,7 @@ describe('worktree remote runtime mutations', () => {
       linkedPR: 456,
       linkedGitLabMR: 789
     })
+
     const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
     store.setState({
       repos: [
@@ -402,11 +419,13 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/same/path'
     const local = makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'local' })
+
     const remote = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
       hostId: 'runtime:env-1'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-set-manual-order',
       ok: true,
@@ -436,11 +455,13 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/same/path'
     const local = makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'local' })
+
     const remote = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
       hostId: 'runtime:env-1'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-set-selected-owner',
       ok: true,

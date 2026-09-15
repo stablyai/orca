@@ -16,9 +16,11 @@ describe('GitHub provider request concurrency', () => {
 
   it('shares eight FIFO slots across work items and Projects and hands off after rejection', async () => {
     const store = createTestStore()
+
     const workRequests = Array.from({ length: 9 }, () =>
       Promise.withResolvers<ListWorkItemsResult<never>>()
     )
+
     let workCall = 0
     mockApi.gh.listWorkItems.mockImplementation(() => workRequests[workCall++].promise)
     const projectRequest = Promise.withResolvers<GetProjectViewTableResult>()
@@ -30,16 +32,19 @@ describe('GitHub provider request concurrency', () => {
         .fetchWorkItems(`repo-${index}`, `/repo/${index}`, 20, '')
         .catch(() => [])
     )
+
     const queuedProject = store.getState().fetchProjectViewTable({
       owner: 'acme',
       ownerType: 'organization',
       projectNumber: 1,
       viewId: 'view-1'
     })
+
     const queuedWork = store
       .getState()
       .fetchWorkItems('repo-queued', '/repo/queued', 20, '')
       .catch(() => [])
+
     await Promise.resolve()
 
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(8)
@@ -62,6 +67,7 @@ describe('GitHub provider request concurrency', () => {
     for (const request of workRequests.slice(1)) {
       request.resolve(emptyWorkItems)
     }
+
     await Promise.all([...activeWork.slice(1), queuedWork])
   })
 })

@@ -15,6 +15,7 @@ import {
 // (execCommand('copy') from a user gesture) both work. We route the read through Orca's
 // trusted clipboard IPC bridge instead, matching how the terminal already reads it.
 export const ORCA_CONTEXT_MENU_PASTE_PRIORITY = 10001
+
 export const ORCA_CONTEXT_MENU_PASTE_NAME = 'orca-ipc-paste'
 
 // Why: this path may either dispatch a native paste (needs getOption/trigger)
@@ -53,10 +54,12 @@ function resolvePasteMetadata(
   if (!metadata) {
     return { pasteOnNewLine: false, multicursorText: null, mode: null }
   }
+
   // Why: pasteOnNewLine only applies when the user copied a whole line with no
   // selection AND has empty-selection-clipboard enabled — same gate Monaco's
   // own paste handlers use.
   const emptySelectionClipboard = Boolean(editorInstance.getOption(emptySelectionClipboardOptionId))
+
   return {
     pasteOnNewLine: emptySelectionClipboard && metadata.isFromEmptySelection === true,
     multicursorText:
@@ -76,12 +79,14 @@ export function runOrcaContextMenuPaste(
   deps: OrcaContextMenuPasteDeps
 ): false | Promise<OrcaContextMenuPasteOutcome> {
   const editorInstance = deps.getFocusedEditor()
+
   // Why: only claim the paste when an editor truly has text focus and a model —
   // otherwise fall through so Monaco's default (and any other surface) behaves
   // exactly as before.
   if (!editorInstance || !editorInstance.getModel() || !editorInstance.hasTextFocus()) {
     return false
   }
+
   // Why: read-only editors (e.g. the unchanged side of a diff) must not accept
   // paste. The context menu hides the item via `when: writable`, but Cmd+V and
   // the command palette still reach this command, so guard explicitly.
@@ -97,6 +102,7 @@ async function performOrcaContextMenuPaste(
   deps: OrcaContextMenuPasteDeps
 ): Promise<OrcaContextMenuPasteOutcome> {
   let text: string
+
   try {
     text = await deps.readClipboardText({ maxBytes: MONACO_PASTE_MAX_BYTES })
   } catch (error) {
@@ -104,8 +110,10 @@ async function performOrcaContextMenuPaste(
     // the same too-large feedback the DOM-event paste path gives instead of
     // pasting a truncated payload.
     deps.onReadError?.(error)
+
     return { status: 'noop', reason: 'read-failed' }
   }
+
   if (!text) {
     return { status: 'noop', reason: 'empty' }
   }
@@ -116,15 +124,20 @@ async function performOrcaContextMenuPaste(
   const directMeasurement = measureTextControlPasteByteLength(text, {
     stopAfterBytes: MONACO_PASTE_DIRECT_MAX_BYTES
   })
+
   if (directMeasurement.exceededLimit) {
     const result = await executeMonacoLargeTextPaste(editorInstance, text, { readOnly: false })
+
     if (result.status === 'rejected' && result.reason === 'too-large') {
       deps.onTooLarge?.()
+
       return { status: 'noop', reason: 'too-large' }
     }
+
     if (result.status !== 'pasted') {
       return { status: 'noop', reason: 'target-lost' }
     }
+
     return { status: 'pasted', mode: 'chunked' }
   }
 
@@ -135,13 +148,16 @@ async function performOrcaContextMenuPaste(
   }
 
   const metadata = deps.getClipboardMetadata(text)
+
   const { pasteOnNewLine, multicursorText, mode } = resolvePasteMetadata(
     editorInstance,
     metadata,
     deps.emptySelectionClipboardOptionId
   )
+
   // Why: this is exactly how Monaco dispatches a paste internally — it respects
   // the current selection, multi-cursor, indentation, and undo grouping.
   editorInstance.trigger('keyboard', 'paste', { text, pasteOnNewLine, multicursorText, mode })
+
   return { status: 'pasted', mode: 'native' }
 }

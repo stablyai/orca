@@ -59,9 +59,13 @@ import {
 } from './browser-manager-test-harness'
 
 const GUEST_WEB_CONTENTS_ID = 6100
+
 const POPUP_WEB_CONTENTS_ID = 6101
+
 const ORPHAN_POPUP_WEB_CONTENTS_ID = 6102
+
 const SERVER_GUEST_WEB_CONTENTS_ID = 6103
+
 const BROWSER_PAGE_ID = 'client-page-1'
 
 describe('client-hosted downloads', () => {
@@ -79,12 +83,15 @@ describe('client-hosted downloads', () => {
       if (id === GUEST_WEB_CONTENTS_ID) {
         return guest
       }
+
       if (id === SERVER_GUEST_WEB_CONTENTS_ID) {
         return serverGuest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
     browserManager.attachGuestPolicies(guest as never)
@@ -120,6 +127,7 @@ describe('client-hosted downloads', () => {
     registerBrowserClientDownloadRouter('env-a', {
       route: (input) => {
         routed.push(input.guestWebContentsId)
+
         return input.guestWebContentsId === GUEST_WEB_CONTENTS_ID
           ? { kind: 'remote', route }
           : { kind: 'unowned' }
@@ -161,9 +169,11 @@ describe('client-hosted downloads', () => {
     const writes: { transferId: string; final: boolean }[] = []
     const aborts: { transferId: string }[] = []
     let releaseFirstWrite = (): void => {}
+
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve
     })
+
     const transport = new BrowserClientFileChannelTransport()
     transport.bind({
       fileChannelNegotiated: true,
@@ -171,13 +181,17 @@ describe('client-hosted downloads', () => {
       sendFileChannelRequest: async (method, params) => {
         if (method.endsWith('abort')) {
           aborts.push(params as { transferId: string })
+
           return { ok: true, result: { released: true }, _meta: {} } as never
         }
+
         const chunk = params as { transferId: string; final: boolean }
         writes.push(chunk)
+
         if (writes.length === 1) {
           await firstWrite
         }
+
         return {
           ok: true,
           result: chunk.final
@@ -300,6 +314,7 @@ describe('client-hosted downloads', () => {
     registerBrowserClientDownloadRouter('env-a', {
       route: (input): BrowserClientDownloadRouteOutcome => {
         routed.push(input.guestWebContentsId)
+
         return { kind: 'unowned' }
       }
     })
@@ -344,6 +359,7 @@ const clientHostedPage: BrowserClientHostedPageInventory = Object.freeze({
 function sentPayload(send: ReturnType<typeof vi.fn>, channel: string): Record<string, unknown> {
   const call = send.mock.calls.findLast((sent: unknown[]) => sent[0] === channel)
   expect(call).toBeDefined()
+
   return call?.[1] as Record<string, unknown>
 }
 
@@ -353,20 +369,24 @@ function requestedDownloadId(send: ReturnType<typeof vi.fn>): string {
 
 function savedTo(item: Electron.DownloadItem): string {
   const setSavePath = item.setSavePath as unknown as { mock: { calls: [string][] } }
+
   return setSavePath.mock.calls.at(0)?.[0] ?? ''
 }
 
 function stubRoute(): { route: BrowserClientDownloadRoute; completed: Promise<void> } {
   let resolveCompleted = (): void => {}
+
   const completed = new Promise<void>((resolve) => {
     resolveCompleted = resolve
   })
+
   const route: BrowserClientDownloadRoute = {
     transferId: 'transfer-1',
     browserPageId: BROWSER_PAGE_ID,
     stagingPath: '/tmp/staging/transfer-1/download',
     complete: async () => {
       resolveCompleted()
+
       return {
         workspaceRelativePath: '.orca/browser-downloads/report.csv',
         hostLabel: 'build-box'
@@ -374,5 +394,6 @@ function stubRoute(): { route: BrowserClientDownloadRoute; completed: Promise<vo
     },
     abort: async () => {}
   }
+
   return { route, completed }
 }

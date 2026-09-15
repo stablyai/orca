@@ -8,6 +8,7 @@ import {
 describe('CodexJournalActiveTurns', () => {
   it('refuses new turns at the bounded active capacity without evicting live state', () => {
     const active = new CodexJournalActiveTurns()
+
     for (let index = 0; index < MAX_CODEX_ACTIVE_TURNS; index += 1) {
       expect(active.remember(`thread-${index}`, `turn-${index}`)).toBe(true)
     }
@@ -23,9 +24,11 @@ describe('CodexJournalActiveTurns', () => {
 
   it('admits a new turn after an earlier turn settles', () => {
     const active = new CodexJournalActiveTurns()
+
     for (let index = 0; index < MAX_CODEX_ACTIVE_TURNS; index += 1) {
       active.remember('thread', `turn-${index}`)
     }
+
     active.forget('thread', 'turn-0')
 
     expect(active.remember('thread', 'turn-new')).toBe(true)

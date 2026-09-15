@@ -31,6 +31,7 @@ export function resolveTerminalUpdateViewportCapability(
   if (response.ok) {
     return 'supported'
   }
+
   return isMethodNotFoundRefusal(response) ? 'unsupported' : 'unknown'
 }
 
@@ -58,6 +59,7 @@ export function reduceTerminalFrameHeightRefit(
     if (state.keyboardVisible) {
       return { state: { ...state, pending: true }, shouldRefit: false }
     }
+
     return { state: { ...state, pending: false }, shouldRefit: true }
   }
 
@@ -65,9 +67,11 @@ export function reduceTerminalFrameHeightRefit(
     if (event.visible === state.keyboardVisible) {
       return { state, shouldRefit: false }
     }
+
     if (event.visible) {
       return { state: { ...state, keyboardVisible: true }, shouldRefit: false }
     }
+
     return {
       state: { ...state, keyboardVisible: false, pending: false },
       shouldRefit: state.pending
@@ -77,12 +81,14 @@ export function reduceTerminalFrameHeightRefit(
   if (event.height === state.frameHeight) {
     return { state, shouldRefit: false }
   }
+
   if (state.keyboardVisible) {
     return {
       state: { ...state, frameHeight: event.height, pending: true },
       shouldRefit: false
     }
   }
+
   return {
     state: { ...state, frameHeight: event.height, pending: false },
     shouldRefit: true

@@ -36,6 +36,7 @@ import { useSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 
 function Probe(): null {
   testState.sections = useSettingsNavigationMetadata()
+
   return null
 }
 
@@ -89,10 +90,12 @@ describe('settings navigation capability ownership', () => {
     const wslListDistros = vi.fn().mockResolvedValue([])
     const pwshIsAvailable = vi.fn().mockResolvedValue(false)
     const gitBashIsAvailable = vi.fn().mockResolvedValue(false)
+
     const runtimeGetStatus = vi
       .fn()
       .mockResolvedValueOnce({ hostPlatform: args.firstPlatform })
       .mockResolvedValueOnce({ hostPlatform: args.secondPlatform })
+
     const runtimeEnvironmentCall = vi.fn()
     Object.defineProperty(window, 'api', {
       configurable: true,

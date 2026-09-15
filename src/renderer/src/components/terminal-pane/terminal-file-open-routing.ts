@@ -34,12 +34,14 @@ export function isHtmlFilePath(filePath: string): boolean {
 
 function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   const store = useAppStore.getState()
+
   if (worktreeId) {
     // Why: following an HTML file link changes which worktree is foregrounded,
     // so it must record a history visit before opening the browser tab — but the
     // browser tab is the surface, so an emptied workspace must not gain a shell.
     activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   }
+
   const fileUrl = absolutePathToFileUri(filePath)
   const title = filePath.split(/[/\\]/).pop() ?? filePath
   store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
@@ -62,17 +64,22 @@ export function mapTerminalFilePath(
 ): string {
   const distro =
     wslDistro === null ? null : wslDistro?.trim() || parseWslUncPath(worktreePath)?.distro
+
   if (!distro || !filePath.startsWith('/')) {
     return filePath
   }
+
   // Why: only a proven local WSL pane may reinterpret this POSIX-looking path; SSH/runtime paths stay literal.
   const alreadyUnc = parseWslUncPath(filePath)
+
   if (alreadyUnc) {
     return toWindowsWslPath(alreadyUnc.linuxPath, alreadyUnc.distro)
   }
+
   if (filePath.startsWith('//')) {
     return filePath
   }
+
   // Why: /mnt/<drive> is a Windows drive mounted into WSL — reach it directly
   // instead of routing a native file back through the 9P share.
   return toWindowsWslPath(filePath, distro)
@@ -95,6 +102,7 @@ export function shouldOpenTerminalFileWithSystemDefault(
 }
 
 let latestOpenDetectedFilePathRequestId = 0
+
 let pendingEditorRevealFrameIds: number[] = []
 
 function cancelPendingEditorRevealFrames(): void {
@@ -103,23 +111,28 @@ function cancelPendingEditorRevealFrames(): void {
       cancelAnimationFrame(frameId)
     }
   }
+
   pendingEditorRevealFrameIds = []
 }
 
 function schedulePendingEditorReveal(callback: () => void): void {
   cancelPendingEditorRevealFrames()
+
   const firstFrameId = requestAnimationFrame(() => {
     pendingEditorRevealFrameIds = pendingEditorRevealFrameIds.filter(
       (frameId) => frameId !== firstFrameId
     )
+
     const secondFrameId = requestAnimationFrame(() => {
       pendingEditorRevealFrameIds = pendingEditorRevealFrameIds.filter(
         (frameId) => frameId !== secondFrameId
       )
       callback()
     })
+
     pendingEditorRevealFrameIds.push(secondFrameId)
   })
+
   pendingEditorRevealFrameIds.push(firstFrameId)
 }
 
@@ -130,17 +143,20 @@ export function openDetectedFilePath(
   deps: TerminalFileOpenDeps
 ): void {
   const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
+
   const mappedFilePath = mapTerminalFilePath(
     filePath,
     worktreePath,
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
   )
+
   const requestId = ++latestOpenDetectedFilePathRequestId
   cancelPendingEditorRevealFrames()
 
   void (async () => {
     let statResult
     const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
       fileContext,
       mappedFilePath
@@ -148,14 +164,18 @@ export function openDetectedFilePath(
 
     if (!openWithSystemDefault) {
       const worktreeRootLink = resolveKnownWorktreeRootPathLink(mappedFilePath)
+
       if (worktreeRootLink) {
         // Why: root workspace switching must work for SSH/runtime paths without
         // local auth/stat, while still coalescing provider + fallback clicks.
         await Promise.resolve()
+
         if (requestId !== latestOpenDetectedFilePathRequestId) {
           return
         }
+
         activateAndRevealWorktree(worktreeRootLink.id)
+
         return
       }
     }
@@ -165,6 +185,7 @@ export function openDetectedFilePath(
       if (canOpenWithSystemDefault) {
         await window.api.fs.authorizeExternalPath({ targetPath: mappedFilePath })
       }
+
       statResult = await statRuntimePath(fileContext, mappedFilePath)
     } catch {
       return
@@ -178,6 +199,7 @@ export function openDetectedFilePath(
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
       const openedWithSystemDefault = await window.api.shell.openFilePath(mappedFilePath)
+
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
@@ -187,6 +209,7 @@ export function openDetectedFilePath(
       if (canOpenWithSystemDefault) {
         await window.api.shell.openFilePath(mappedFilePath)
       }
+
       return
     }
 
@@ -194,6 +217,7 @@ export function openDetectedFilePath(
       // Why: the popover names Shift+Cmd/Ctrl "Download & open with default app", and the OS
       // cannot launch a remote path, so the direct gesture must reach the same download.
       await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+
       return
     }
 
@@ -202,14 +226,18 @@ export function openDetectedFilePath(
     if (isHtmlFilePath(mappedFilePath)) {
       if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
         openHtmlFileInBrowser(mappedFilePath, worktreeId)
+
         return
       }
+
       // Why: the same gesture renders remote HTML too, through the doc preview; only an
       // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
       const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
+
       if (plan.status === 'doc-preview') {
         activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
         openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+
         return
       }
     }
@@ -218,8 +246,10 @@ export function openDetectedFilePath(
     let targetWorktreeId = worktreeId
     let targetExecutionHostId: ExecutionHostId | undefined
     let relativePath = mappedFilePath
+
     if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
       const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
+
       if (maybeRelative !== null && maybeRelative.length > 0) {
         relativePath = maybeRelative
       }
@@ -230,12 +260,15 @@ export function openDetectedFilePath(
     ) {
       // Why: early resolution is only needed to avoid an existing sibling-tab collision.
       const runtimeOwnerId = fileContext.settings?.activeRuntimeEnvironmentId?.trim()
+
       const executionHostId = runtimeOwnerId
         ? toRuntimeExecutionHostId(runtimeOwnerId)
         : fileContext.connectionId
           ? toSshExecutionHostId(fileContext.connectionId)
           : LOCAL_EXECUTION_HOST_ID
+
       const siblingRoute = findWorkspaceFileRoute(store, executionHostId, mappedFilePath)
+
       if (siblingRoute) {
         targetWorktreeId = siblingRoute.worktreeId
         targetExecutionHostId = siblingRoute.executionHostId
@@ -277,16 +310,19 @@ export function openDetectedFilePath(
       // Why: scope the reveal to the opened editor tab id so owner-qualified tabs
       // across local/SSH/runtime contexts get it instead of an ambiguous path key.
       const fileId = openedStore.activeFileIdByWorktree[targetWorktreeId] ?? mappedFilePath
+
       if (language === 'markdown') {
         // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
         openedStore.setMarkdownViewMode(fileId, 'source')
       }
+
       const targetColumn = column ?? 1
       store.setPendingEditorReveal(null)
       schedulePendingEditorReveal(() => {
         if (requestId !== latestOpenDetectedFilePathRequestId) {
           return
         }
+
         store.setPendingEditorReveal({
           filePath: mappedFilePath,
           fileId,

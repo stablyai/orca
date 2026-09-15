@@ -20,13 +20,16 @@ import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-en
 function readGitConfigEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const count = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10)
   const config: Record<string, string> = {}
+
   for (let i = 0; i < count; i++) {
     const key = env[`GIT_CONFIG_KEY_${i}`]
     const value = env[`GIT_CONFIG_VALUE_${i}`]
+
     if (key !== undefined && value !== undefined) {
       config[key] = value
     }
   }
+
   return config
 }
 
@@ -36,6 +39,7 @@ describe('redirectPortedHostnameToEnv', () => {
       ['api', '--hostname', 'gitlab.example.com:8443', 'projects/foo%2Fbar/issues'],
       { cwd: '/repo' }
     )
+
     expect(args).toEqual(['api', 'projects/foo%2Fbar/issues'])
     expect(options.env?.GITLAB_HOST).toBe('gitlab.example.com:8443')
     expect(options.cwd).toBe('/repo')
@@ -60,6 +64,7 @@ describe('redirectPortedHostnameToEnv', () => {
       ['auth', 'status', '--hostname', 'gl.example.org:3001'],
       { env: { PATH: '/usr/bin' } }
     )
+
     expect(options.env?.PATH).toBe('/usr/bin')
     expect(options.env?.GITLAB_HOST).toBe('gl.example.org:3001')
   })
@@ -87,12 +92,14 @@ describe('parseRetryAfterMs', () => {
     const stderr = `${'noise\n'.repeat(10_000)}Retry-After: 12\n`
 
     expect(parseRetryAfterMs(stderr)).toBe(12_000)
+
     const usedRetryAfterMatch = matchSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         pattern.source.startsWith('retry-after:') &&
         pattern.source.includes('[^\\r\\n]')
     )
+
     expect(usedRetryAfterMatch).toBe(false)
   })
 
@@ -136,6 +143,7 @@ describe('extractExecError', () => {
       stderr: 'real stderr content',
       stdout: '{"data": null}'
     })
+
     expect(extractExecError(err)).toEqual({
       stderr: 'real stderr content',
       stdout: '{"data": null}'
@@ -147,6 +155,7 @@ describe('extractExecError', () => {
       stderr: Buffer.from('buf-stderr', 'utf-8'),
       stdout: Buffer.from('buf-stdout', 'utf-8')
     })
+
     expect(extractExecError(err)).toEqual({
       stderr: 'buf-stderr',
       stdout: 'buf-stdout'
@@ -183,6 +192,7 @@ describe('appendGitConfigEnv', () => {
       { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.quotePath', GIT_CONFIG_VALUE_0: 'false' },
       [['credential.guiPrompt', 'false']]
     )
+
     expect(env.GIT_CONFIG_COUNT).toBe('2')
     // Existing entry preserved.
     expect(env.GIT_CONFIG_KEY_0).toBe('core.quotePath')
@@ -200,6 +210,7 @@ describe('appendGitConfigEnv', () => {
         GIT_CONFIG_KEY_0: 'user.key',
         GIT_CONFIG_VALUE_0: 'caller-value'
       }
+
       expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
     }
   )
@@ -300,6 +311,7 @@ describe('guard-env WSLENV forwarding (#7652)', () => {
       { PATH: '/usr/bin', GIT_SSH_COMMAND: 'C:\\ssh\\ssh.exe' },
       'win32'
     )
+
     expect((callerSet.WSLENV ?? '').split(':')).not.toContain('GIT_SSH_COMMAND')
   })
 })
@@ -345,10 +357,12 @@ describe('redirectPortedHostnameToEnv WSLENV forwarding', () => {
     // the entry the ported host is silently dropped and glab talks to
     // gitlab.com (#12557).
     const { redirectPortedHostnameToEnv } = await import('./runner')
+
     const { options } = redirectPortedHostnameToEnv(
       ['api', '--hostname', 'gitlab.example.com:8443'],
       { env: { PATH: '/usr/bin' } }
     )
+
     expect(options.env?.GITLAB_HOST).toBe('gitlab.example.com:8443')
     expect((options.env?.WSLENV ?? '').split(':')).toContain('GITLAB_HOST')
   })

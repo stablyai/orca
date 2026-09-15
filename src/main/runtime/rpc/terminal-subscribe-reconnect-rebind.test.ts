@@ -26,6 +26,7 @@ const subscribeParams = {
 describe('terminal.subscribe reconnect rebind (STA-4510)', () => {
   it('keeps the rebound live stream when the pre-reconnect connection aborts', async () => {
     const registry = createSubscriptionRegistryDouble()
+
     const dataListeners: ((data: string, meta?: { seq?: number; rawLength?: number }) => void)[] =
       []
 
@@ -39,6 +40,7 @@ describe('terminal.subscribe reconnect rebind (STA-4510)', () => {
       handleMobileUnsubscribe: vi.fn(),
       subscribeToTerminalData: vi.fn((_ptyId: string, listener: (typeof dataListeners)[number]) => {
         dataListeners.push(listener)
+
         return vi.fn()
       }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -64,6 +66,7 @@ describe('terminal.subscribe reconnect rebind (STA-4510)', () => {
           })
       )
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     // --- connection A: the original mobile socket -------------------------

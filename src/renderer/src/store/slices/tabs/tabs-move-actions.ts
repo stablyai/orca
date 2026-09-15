@@ -21,37 +21,48 @@ export function createTabsMoveActions(
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, targetGroupId)
+
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
           return state
         }
+
         const { tab, worktreeId } = foundTab
+
         if (tab.groupId === targetGroupId) {
           return state
         }
+
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
+
         if (!sourceGroup) {
           return state
         }
+
         moved = true
 
         const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
         const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
         // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
         const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
+
         const targetIndex = Math.max(
           0,
           Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
         )
+
         targetOrder.splice(targetIndex, 0, tabId)
+
         const nextActiveGroupIdByWorktree = {
           ...state.activeGroupIdByWorktree,
           [worktreeId]: opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
         }
+
         const sourceRecentTabIds = sanitizeRecentTabIds(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
         )
+
         const nextGroups = (state.groupsByWorktree[worktreeId] ?? []).map((group) => {
           if (group.id === sourceGroup.id) {
             return {
@@ -65,8 +76,10 @@ export function createTabsMoveActions(
               recentTabIds: sourceRecentTabIds
             }
           }
+
           if (group.id === targetGroupId) {
             const sanitizedTargetRecent = sanitizeRecentTabIds(group.recentTabIds, targetOrder)
+
             return {
               ...group,
               activeTabId: opts?.activate ? tabId : group.activeTabId,
@@ -76,13 +89,17 @@ export function createTabsMoveActions(
                 : sanitizedTargetRecent
             }
           }
+
           return group
         })
+
         let nextLayoutByWorktree = state.layoutByWorktree
         let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
         let filteredGroups = nextGroups
+
         if (sourceOrder.length === 0) {
           filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+
           const collapsedState = collapseGroupLayout(
             nextLayoutByWorktree,
             nextActiveGroupIdByWorktreeResolved,
@@ -90,19 +107,23 @@ export function createTabsMoveActions(
             sourceGroup.id,
             targetGroupId
           )
+
           nextLayoutByWorktree = collapsedState.layoutByWorktree
           nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
         }
+
         const nextGroupsByWorktree = {
           ...state.groupsByWorktree,
           [worktreeId]: filteredGroups
         }
+
         const nextUnifiedTabsByWorktree = {
           ...state.unifiedTabsByWorktree,
           [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
             candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
           )
         }
+
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
           groupsByWorktree: nextGroupsByWorktree,
@@ -123,9 +144,11 @@ export function createTabsMoveActions(
             : {})
         }
       })
+
       if (moved && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('tab-splits')
       }
+
       return moved
     }
   }

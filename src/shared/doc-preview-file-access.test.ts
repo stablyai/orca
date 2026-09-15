@@ -25,6 +25,7 @@ async function createFixture(): Promise<{
   await Promise.all([mkdir(docs, { recursive: true }), mkdir(assets, { recursive: true })])
   const entry = join(docs, 'index.html')
   await writeFile(entry, '<h1>entry</h1>')
+
   return { workspace, entry, docs, assets }
 }
 
@@ -55,6 +56,7 @@ describe('readAuthorizedDocPreviewFile', () => {
     const fixture = await createFixture()
     const asset = join(fixture.assets, 'app.js')
     await writeFile(asset, 'console.log(1)')
+
     const request = {
       boundaryPath: fixture.workspace,
       entryPath: fixture.entry,
@@ -143,6 +145,7 @@ describe('readAuthorizedDocPreviewFile', () => {
     const fixture = await createFixture()
     const image = join(fixture.assets, 'logo.png')
     await writeFile(image, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
     const request = {
       boundaryPath: fixture.workspace,
       entryPath: fixture.entry,

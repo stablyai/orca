@@ -13,10 +13,15 @@ import { SessionScannerServiceSearch } from './session-scanner-service-search'
 import { resetTranscriptConsumersForTests } from './session-transcript-consumers'
 
 let harness: SessionSearchIndexerHarness
+
 let subject: SessionScannerServiceSearch
+
 let spawnRoot: string
+
 let lateRoot: string
+
 let currentRoots: SessionSearchScanRoots
+
 let spawnRoots: SessionSearchScanRoots
 
 beforeEach(async () => {
@@ -59,9 +64,11 @@ async function sessionsMatching(term: string): Promise<string[]> {
     operation: 'searchSessions',
     request: { query: term }
   })
+
   if (reply.operation !== 'searchSessions' || reply.value.kind !== 'results') {
     throw new Error(`expected results, got ${JSON.stringify(reply)}`)
   }
+
   return reply.value.hits.map((hit) => hit.sessionId).sort()
 }
 

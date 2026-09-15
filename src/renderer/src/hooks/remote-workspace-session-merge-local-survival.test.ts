@@ -19,6 +19,7 @@ import type { AppState } from '../store/types'
  * told, and a snapshot that predates a local change must not be able to delete that change.
  */
 const WORKTREE = 'repo-1::/home/user/bug-cats'
+
 const OTHER_WORKTREE = 'repo-1::/home/user/other'
 
 function terminalTab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -148,10 +149,12 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
     // on screen twice, which is the failure this guard exists for.
     const localGrok = terminalTab('grok-old')
     const hostGrok = terminalTab('grok-new')
+
     const current = sessionState({
       tabsByWorktree: { [WORKTREE]: [localGrok] },
       remoteSessionIdsByTabId: { 'grok-old': 'session-grok' }
     })
+
     const remote = sessionState({
       tabsByWorktree: { [WORKTREE]: [hostGrok] },
       remoteSessionIdsByTabId: { 'grok-new': 'session-grok' }
@@ -166,10 +169,12 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
     // The session guard must not swallow the setup tab, which has no agent session at all.
     const setup = terminalTab('setup')
     const agent = terminalTab('agent')
+
     const current = sessionState({
       tabsByWorktree: { [WORKTREE]: [agent, setup] },
       remoteSessionIdsByTabId: { agent: 'session-grok' }
     })
+
     const remote = sessionState({
       tabsByWorktree: { [WORKTREE]: [agent] },
       remoteSessionIdsByTabId: { agent: 'session-grok' }
@@ -184,6 +189,7 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
     // The reported home screen. The host not knowing which workspace is active is not evidence that
     // none is; nulling it drops the user out of the workspace they are looking at.
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] } })
+
     const remote = sessionState({
       activeWorktreeId: null,
       activeWorkspaceKey: null,
@@ -201,6 +207,7 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
     // The pair used to split exactly here: the host naming no worktree is precisely when it can
     // still name a repo, so activeRepoId followed the host while activeWorktreeId stayed local.
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] } })
+
     const remote = sessionState({
       activeWorktreeId: null,
       activeWorkspaceKey: null,
@@ -217,6 +224,7 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
 
   it('takes the host repo when it does name a worktree', () => {
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] } })
+
     const remote = sessionState({
       activeWorktreeId: OTHER_WORKTREE,
       activeRepoId: 'remote-repo',
@@ -232,6 +240,7 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
   it('still follows the host when it does name an active worktree', () => {
     // The preserve above must not freeze the pointer: a host that knows is still authoritative.
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] } })
+
     const remote = sessionState({
       activeWorktreeId: OTHER_WORKTREE,
       activeWorkspaceKey: worktreeWorkspaceKey(OTHER_WORKTREE),
@@ -250,6 +259,7 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
       activeWorkspaceKey: worktreeWorkspaceKey(OTHER_WORKTREE),
       tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] }
     })
+
     const remote = sessionState({
       activeWorktreeId: null,
       activeWorkspaceKey: null,
@@ -268,6 +278,7 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
       tabsByWorktree: { [WORKTREE]: [terminalTab('agent'), terminalTab('setup')] },
       activeTabIdByWorktree: { [WORKTREE]: 'setup' }
     })
+
     const remote = sessionState({
       tabsByWorktree: { [WORKTREE]: [terminalTab('agent')] },
       activeTabIdByWorktree: {}
@@ -297,6 +308,7 @@ describe('a tab id local state already holds under two worktrees', () => {
         [OTHER_WORKTREE]: [terminalTab('setup', { worktreeId: OTHER_WORKTREE })]
       }
     })
+
     const remote = sessionState({ activeWorktreeId: null, tabsByWorktree: {} })
 
     const merged = mergeDirectSshRemoteWorkspaceSession(
@@ -310,6 +322,7 @@ describe('a tab id local state already holds under two worktrees', () => {
     const owners = Object.entries(merged.tabsByWorktree)
       .filter(([, tabs]) => tabs.some((tab) => tab.id === 'setup'))
       .map(([worktreeId]) => worktreeId)
+
     expect(owners, 'one tab id survived under two worktrees').toHaveLength(1)
     // The survivor is the worktree the user is standing in, which is the owner
     // resolveActiveTabOwnerWorktreeId prefers — so the merge and the repair agree.
@@ -324,6 +337,7 @@ describe('a tab id local state already holds under two worktrees', () => {
         [OTHER_WORKTREE]: [terminalTab('build', { worktreeId: OTHER_WORKTREE })]
       }
     })
+
     const remote = sessionState({ activeWorktreeId: null, tabsByWorktree: {} })
 
     const merged = mergeDirectSshRemoteWorkspaceSession(
@@ -369,10 +383,12 @@ describe('local rows the snapshot carries no answer for', () => {
     // omits it is a host that was never told, not a host reporting the tabs were never applied —
     // and taking it literally re-applies the whole template on top of the user's tabs.
     const agent = terminalTab('agent')
+
     const current = sessionState({
       tabsByWorktree: { [WORKTREE]: [agent] },
       defaultTerminalTabsAppliedByWorktreeId: { [WORKTREE]: true }
     })
+
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [agent] } })
 
     const merged = merge(current, remote, { [WORKTREE]: [agent] })

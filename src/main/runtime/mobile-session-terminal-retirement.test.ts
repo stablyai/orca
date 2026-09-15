@@ -23,6 +23,7 @@ function splitSnapshot(): RuntimeMobileSessionTabsSnapshot {
     buffersByLeafId: { left: 'left buffer', right: 'right buffer' },
     titlesByLeafId: { left: 'Left', right: 'Right' }
   }
+
   return {
     worktree: WORKTREE_ID,
     publicationEpoch: 'host',
@@ -128,6 +129,7 @@ describe('mobile session terminal retirement', () => {
       snapshot: splitSnapshot(),
       ptyId: 'pty-left'
     })!
+
     const result = retireTerminalSurfacesFromSnapshot({
       snapshot: first.snapshot,
       ptyId: 'pty-right'
@@ -154,6 +156,7 @@ describe('mobile session terminal retirement', () => {
 
   it('does not retire an exact surface rebound to a replacement PTY', () => {
     const snapshot = splitSnapshot()
+
     const rebound = {
       ...snapshot,
       tabs: snapshot.tabs.map((tab) =>

@@ -88,15 +88,19 @@ function realMutations(
 function replyKey(commentId: number): string {
   return `reply:${commentId}`
 }
+
 function resolveKey(threadId: string): string {
   return `resolve:${threadId}`
 }
+
 function editKey(commentId: number): string {
   return `edit:${commentId}`
 }
+
 function deleteKey(commentId: number): string {
   return `delete:${commentId}`
 }
+
 const ROOT_KEY = 'root'
 
 // React adapter for the three interactive comment actions. Tracks per-action
@@ -112,16 +116,19 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
     () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),
     [input.mutations, client, worktreeId]
   )
+
   const ready = mutations !== null && (input.mutations !== undefined || connState === 'connected')
 
   const setBusy = useCallback((key: string, busy: boolean) => {
     setBusyKeys((prev) => {
       const next = new Set(prev)
+
       if (busy) {
         next.add(key)
       } else {
         next.delete(key)
       }
+
       return next
     })
   }, [])
@@ -131,24 +138,31 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       if (!ready || inFlightRef.current.has(key)) {
         return false
       }
+
       inFlightRef.current.add(key)
       setBusy(key, true)
       setError(null)
+
       try {
         const outcome = await mutate()
+
         if (outcome.ok) {
           triggerSuccess()
           await refetch()
+
           return true
         }
+
         triggerError()
         setError(outcome.error)
+
         return false
       } catch (err) {
         // Why: if a mutation (or the refetch) throws, still honor the boolean
         // contract — error haptic + message, return false — rather than rejecting.
         triggerError()
         setError(err instanceof Error ? err.message : 'Comment action failed')
+
         return false
       } finally {
         inFlightRef.current.delete(key)
@@ -163,7 +177,9 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       if (!mutations) {
         return Promise.resolve(false)
       }
+
       const params = buildReplyParams(prNumber, comment, body)
+
       return run(replyKey(comment.id), () => mutations.reply({ ...params, prRepo }))
     },
     [mutations, prNumber, prRepo, run]
@@ -172,9 +188,11 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
   const toggleResolve = useCallback(
     (comment: PRComment) => {
       const params = buildResolveParams(comment)
+
       if (!mutations || !params) {
         return Promise.resolve(false)
       }
+
       return run(resolveKey(params.threadId), () => mutations.resolveThread({ ...params, prRepo }))
     },
     [mutations, prRepo, run]
@@ -185,7 +203,9 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       if (!mutations) {
         return Promise.resolve(false)
       }
+
       const params = buildAddRootCommentParams(prNumber, body)
+
       return run(ROOT_KEY, () => mutations.addRootComment({ ...params, prRepo }))
     },
     [mutations, prNumber, prRepo, run]
@@ -197,7 +217,9 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       if (!mutations || !prRepo) {
         return Promise.resolve(false)
       }
+
       const params = buildEditCommentParams(prRepo, commentId, body)
+
       return run(editKey(commentId), () => mutations.editComment(params))
     },
     [mutations, prRepo, run]
@@ -208,7 +230,9 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       if (!mutations || !prRepo) {
         return Promise.resolve(false)
       }
+
       const params = buildDeleteCommentParams(prRepo, commentId)
+
       return run(deleteKey(commentId), () => mutations.deleteComment(params))
     },
     [mutations, prRepo, run]

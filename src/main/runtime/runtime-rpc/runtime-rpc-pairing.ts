@@ -53,12 +53,14 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const current = this.deviceRegistry?.getDevice(deviceId)
+
     if (
       current?.scope !== 'mobile' ||
       this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
     ) {
       return false
     }
+
     if (
       current.relayBinding &&
       (current.relayBinding.relayHostId !== binding.relayHostId ||
@@ -69,10 +71,13 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         return false
       }
     }
+
     const updated = this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
+
     if (updated) {
       this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     }
+
     return updated
   }
 
@@ -87,38 +92,48 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
+
     if (device?.scope !== 'mobile') {
       return false
     }
+
     if (device.relayBinding) {
       if (!this.queueRelayDeviceRevoke(device.relayBinding)) {
         return false
       }
     }
+
     // Why: unpairing must delete the phone's push token at the gateway too, and the
     // registration id is only readable while the device row still exists.
     this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
+
     if (!this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
+
     this.mobileRelayPairingProvider?.onDemandStateChanged?.()
     this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
+
     return true
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {
     const device = this.deviceRegistry?.getDevice(deviceId)
+
     if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
+
     this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(device.token)
+
     return true
   }
 
   getWebSocketEndpoint(): string | null {
     const ws = this.transports.find((t) => t.kind === 'websocket')
+
     return ws?.endpoint ?? null
   }
 
@@ -142,29 +157,37 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
     }
+
     const rawEndpoint = this.getWebSocketEndpoint()
+
     if (!rawEndpoint) {
       return pairingUnavailable(
         'websocket_unavailable',
         'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
       )
     }
+
     if (!this.deviceRegistry) {
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
     }
+
     const publicKeyB64 = this.getE2EEPublicKey()
+
     if (!publicKeyB64) {
       return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
     const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
+
     if (!advertised.ok) {
       return pairingUnavailable(advertised.reason, advertised.guidance)
     }
+
     const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
+
     try {
       const reach = args.reach ?? 'network'
       device = args.rotate
@@ -172,8 +195,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
+
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
     }
+
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint,
@@ -182,6 +207,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       pairedDeviceId: device.deviceId,
       scope
     })
+
     return {
       available: true,
       pairingUrl,
@@ -197,6 +223,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     if (!registrationId) {
       return
     }
+
     try {
       this.pushUnregisterOutbox.enqueue({ registrationId, deviceId })
       this.onPushUnregisterQueued?.()
@@ -213,6 +240,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     if (this.queueRelayDeviceRevoke(binding)) {
       return
     }
+
     try {
       this.deviceRegistry?.setRelayBinding(deviceId, binding)
     } catch (error) {
@@ -222,17 +250,21 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   protected queueRelayDeviceRevoke(binding: RelayDeviceBinding): boolean {
     let item: RelayRevokeOutboxItem
+
     try {
       item = this.relayRevokeOutbox.enqueue(binding)
     } catch (error) {
       console.error('[runtime] Failed to persist Relay device cleanup:', error)
+
       return false
     }
+
     try {
       this.mobileRelayPairingProvider?.onDeviceRevokeQueued(item)
     } catch (error) {
       console.warn('[runtime] Failed to notify Relay cleanup worker:', error)
     }
+
     return true
   }
 }

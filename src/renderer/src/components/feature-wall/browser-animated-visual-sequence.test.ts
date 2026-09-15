@@ -27,6 +27,7 @@ describe('browser animated visual sequence', () => {
       isCancelled: () => cancelled,
       wait: (ms) => {
         waits.push(ms)
+
         return Promise.resolve()
       },
       setPhase: (phase) => phases.push(phase),

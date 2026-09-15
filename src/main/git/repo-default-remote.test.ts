@@ -19,12 +19,15 @@ describe('getDefaultRemote', () => {
       if (argv[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/main\n' }
       }
+
       if (argv[0] === 'rev-parse') {
         return { stdout: 'abc123\n' }
       }
+
       if (argv[0] === 'config') {
         return { stdout: 'upstream\n' }
       }
+
       throw new Error('unexpected command')
     })
 
@@ -43,6 +46,7 @@ describe('getDefaultRemote', () => {
       if (argv[0] === 'remote') {
         return { stdout }
       }
+
       throw new Error('missing ref')
     })
 
@@ -60,6 +64,7 @@ describe('getDefaultRemote', () => {
       if (argv[0] === 'remote') {
         return { stdout }
       }
+
       throw new Error('missing ref')
     })
 
@@ -70,6 +75,7 @@ describe('getDefaultRemote', () => {
     for (let probe = 0; probe < 5; probe += 1) {
       gitExecFileAsyncMock.mockRejectedValueOnce(new Error('missing ref'))
     }
+
     gitExecFileAsyncMock.mockRejectedValueOnce('transport failed')
 
     await expect(getDefaultRemote('/repo')).rejects.toThrow(

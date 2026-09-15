@@ -56,6 +56,7 @@ function WindowLabel({
 // and markup can't drift between the two.
 export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX.Element {
   const hasData = Boolean(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)
+
   return (
     <span className="inline-flex items-center gap-1 text-muted-foreground">
       <span
@@ -103,6 +104,7 @@ function VerboseProviderUsage({
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+
     return (
       <>
         {visibleBuckets.map((bucket, index) => (

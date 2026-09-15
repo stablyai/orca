@@ -31,6 +31,7 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+
 // Why the runner and not child_process: WSL agent detection goes through
 // runWslProcess now, so a child_process mock never sees it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
@@ -45,6 +46,7 @@ vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(execFileMock, {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
   })
+
   return {
     execFile: execFileWithPromisify,
     spawn: vi.fn()
@@ -134,6 +136,7 @@ describe('preflight', () => {
       }
 
       const target = String(args[0])
+
       if (target === 'claude') {
         return {
           environmentResolved: true,
@@ -143,6 +146,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       if (target === 'continue') {
         return {
           environmentResolved: true,
@@ -152,6 +156,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       if (target === 'cursor-agent') {
         return {
           environmentResolved: true,
@@ -161,6 +166,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -172,6 +178,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'orca') {
         return {
           environmentResolved: true,
@@ -181,6 +188,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -192,6 +200,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'claude') {
         return {
           environmentResolved: true,
@@ -201,6 +210,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       if (String(args[0]) === 'orca') {
         return {
           environmentResolved: true,
@@ -210,6 +220,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -225,6 +236,7 @@ describe('preflight', () => {
       if (command !== 'where') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'claude') {
         return {
           environmentResolved: true,
@@ -234,6 +246,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       if (String(args[0]) === 'orca') {
         return {
           environmentResolved: true,
@@ -243,6 +256,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -256,6 +270,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       throw new Error('not found')
     })
     resolveCliCommandsMock.mockImplementation(
@@ -265,12 +280,15 @@ describe('preflight', () => {
             if (cmd === 'claude') {
               return [cmd, '/Users/test/.local/bin/claude']
             }
+
             if (cmd === 'codex') {
               return [cmd, '/Users/test/.asdf/shims/codex']
             }
+
             if (cmd === 'opencode') {
               return [cmd, '/Users/test/Library/pnpm/opencode']
             }
+
             return [cmd, cmd]
           })
         )
@@ -286,6 +304,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'claude') {
         return {
           environmentResolved: true,
@@ -295,6 +314,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
     resolveCliCommandsMock.mockImplementation(
@@ -312,6 +332,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       throw new Error('not found')
     })
     resolveCliCommandsMock.mockImplementation(() => {
@@ -326,6 +347,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'openclaude') {
         return {
           environmentResolved: true,
@@ -335,6 +357,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       if (String(args[0]) === 'cursor-agent') {
         return {
           environmentResolved: true,
@@ -344,6 +367,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -362,12 +386,14 @@ describe('preflight', () => {
     })
     mergePathSegmentsMock.mockImplementationOnce((segments: string[]) => {
       process.env.PATH = [...segments, '/usr/bin'].join(':')
+
       return segments
     })
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
         return {
           environmentResolved: true,
@@ -377,6 +403,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -389,6 +416,7 @@ describe('preflight', () => {
         process.env.PATH = originalPath
       }
     }
+
     expect(hydrateShellPathMock).toHaveBeenCalledWith()
     expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/home/test/.local/bin'])
   })
@@ -408,6 +436,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -426,6 +455,7 @@ describe('preflight', () => {
       expect(script).not.toContain("'orca'")
       expect(script).not.toContain("'orca-dev'")
       expect(script).not.toContain("'orca-ide'")
+
       if (script.includes("'claude'")) {
         return {
           environmentResolved: true,
@@ -435,6 +465,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -446,6 +477,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'vibe') {
         return {
           environmentResolved: true,
@@ -455,6 +487,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -466,9 +499,11 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
         return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
       }
+
       throw new Error('not found')
     })
 
@@ -490,6 +525,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -520,6 +556,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 

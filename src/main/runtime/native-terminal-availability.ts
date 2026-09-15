@@ -38,9 +38,11 @@ export function runtimeTerminalUnavailableCause(): RuntimeTerminalUnavailableCau
 /** The degradation entry for the recorded cause, or null when nothing is degraded. */
 export function runtimeTerminalDegradation(): RuntimeDegradation | null {
   const cause = unavailableCause
+
   if (!cause) {
     return null
   }
+
   return {
     code: TERMINAL_UNAVAILABLE_ERROR_CODE,
     capability: TERMINAL_PTY_DEGRADATION_CAPABILITY,

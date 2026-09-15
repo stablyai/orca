@@ -6,6 +6,7 @@ describe('createFileWatchEventBatcher', () => {
   it('keeps precise watcher events while the batch is under the overflow limit', () => {
     const emit = vi.fn()
     const batcher = createFileWatchEventBatcher('worktree-1', emit)
+
     const events: FsChangeEvent[] = [
       { kind: 'update', absolutePath: '/repo/file-a.ts' },
       { kind: 'delete', absolutePath: '/repo/file-b.ts' }
@@ -23,6 +24,7 @@ describe('createFileWatchEventBatcher', () => {
 
   it('collapses very large watcher bursts without spreading them onto the stack', () => {
     vi.useFakeTimers()
+
     try {
       const emit = vi.fn()
       const batcher = createFileWatchEventBatcher('worktree-1', emit)

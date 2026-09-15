@@ -16,10 +16,13 @@ function forkWith(event: 'message' | 'error' | 'none', value?: unknown, pid?: nu
     kill: ReturnType<typeof vi.fn>
     pid?: number
   }
+
   child.kill = vi.fn()
+
   if (pid !== undefined) {
     child.pid = pid
   }
+
   const forkProcess = vi.fn(() => {
     queueMicrotask(() => {
       if (event === 'message') {
@@ -28,8 +31,10 @@ function forkWith(event: 'message' | 'error' | 'none', value?: unknown, pid?: nu
         child.emit('error', new Error('spawn failed'))
       }
     })
+
     return child
   })
+
   return { child, forkProcess: forkProcess as never }
 }
 
@@ -82,6 +87,7 @@ describe('readWindowsConsoleAttachedProcessIds', () => {
 
   it('kills a silent helper at the bounded timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const { child, forkProcess } = forkWith('none')
       const result = readWindowsConsoleAttachedProcessIds(101, { forkProcess, timeoutMs: 10 })
@@ -95,6 +101,7 @@ describe('readWindowsConsoleAttachedProcessIds', () => {
 
   it('absorbs an asynchronous kill error after timeout settlement', async () => {
     vi.useFakeTimers()
+
     try {
       const { child, forkProcess } = forkWith('none')
       child.kill.mockImplementation(() => {

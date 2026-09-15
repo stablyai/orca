@@ -96,6 +96,7 @@ export function resetPRRefreshCoordinatorMocks(mocks: PRRefreshCoordinatorMocks)
     repositoryRateLimitGuardMock,
     spendsSharedGitHubComQuotaMock
   } = mocks
+
   vi.resetModules()
   vi.useFakeTimers()
   vi.setSystemTime(1_000)

@@ -11,6 +11,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
     ) {
       return Promise.resolve()
     }
+
     // Why: explicit-refresh callers must await the queued follow-up cycle when a poll is in flight, else the UI stops spinning early.
     return new Promise((resolve) => {
       this.fetchIdleResolvers.push(resolve)
@@ -27,8 +28,10 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
     ) {
       return
     }
+
     const resolvers = this.fetchIdleResolvers
     this.fetchIdleResolvers = []
+
     for (const resolve of resolvers) {
       resolve()
     }
@@ -37,6 +40,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
   protected beginFetchCycle(): AbortController {
     const controller = new AbortController()
     this.activeFetchAbortControllers.add(controller)
+
     return controller
   }
 
@@ -48,8 +52,10 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
     fn: (signal: AbortSignal) => Promise<void>
   ): Promise<AbortSignal> {
     const controller = this.beginFetchCycle()
+
     try {
       await fn(controller.signal)
+
       return controller.signal
     } finally {
       this.finishFetchCycle(controller)
@@ -60,6 +66,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
     for (const controller of this.activeFetchAbortControllers) {
       controller.abort()
     }
+
     this.activeFetchAbortControllers.clear()
   }
 
@@ -73,6 +80,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
   protected resolveAndClearFetchIdleWaiters(): void {
     const resolvers = this.fetchIdleResolvers
     this.fetchIdleResolvers = []
+
     for (const resolve of resolvers) {
       resolve()
     }

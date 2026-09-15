@@ -44,12 +44,16 @@ type GitProbeFailureCounts = {
 }
 
 const ISSUE_BRANCH_NAME = 'Initi-Project'
+
 const POLLING_WINDOW_MS = 7_200
+
 const TIMER_SAMPLE_MS = 16
+
 const MAX_RENDERER_TIMER_DRIFT_MS = 500
 
 function prepareNoUpstreamBranch(repoPath: string): void {
   execFileSync('git', ['checkout', '-B', ISSUE_BRANCH_NAME], { cwd: repoPath, stdio: 'pipe' })
+
   try {
     execFileSync('git', ['branch', '--unset-upstream', ISSUE_BRANCH_NAME], {
       cwd: repoPath,
@@ -58,6 +62,7 @@ function prepareNoUpstreamBranch(repoPath: string): void {
   } catch {
     // No upstream is the fixture state we need for the #4559 log pattern.
   }
+
   try {
     execFileSync('git', ['update-ref', '-d', `refs/remotes/origin/${ISSUE_BRANCH_NAME}`], {
       cwd: repoPath,
@@ -76,20 +81,24 @@ async function selectRepoForActivePolling(
   await page.evaluate(
     async ({ targetRepoPath, targetWorktreePath }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Expected e2e store to be exposed')
       }
 
       let state = store.getState()
       const repo = state.repos.find((candidate) => candidate.path === targetRepoPath)
+
       if (!repo) {
         throw new Error(`Expected repo to be loaded: ${targetRepoPath}`)
       }
+
       await state.fetchWorktrees(repo.id)
 
       state = store.getState()
       const worktrees = Object.values(state.worktreesByRepo).flat()
       const worktree = worktrees.find((candidate) => candidate.path === targetWorktreePath)
+
       if (!worktree) {
         throw new Error(
           `Expected active-polling worktree to exist: ${targetWorktreePath}; saw ${worktrees
@@ -97,6 +106,7 @@ async function selectRepoForActivePolling(
             .join(', ')}`
         )
       }
+
       state.setActiveWorktree(worktree.id)
       state.setRightSidebarOpen(true)
       state.setRightSidebarTab('source-control')
@@ -113,8 +123,10 @@ function clearTraceFile(diagnostics: DiagnosticsStatus): void {
   if (existsSync(diagnostics.traceFilePath)) {
     writeFileSync(diagnostics.traceFilePath, '', 'utf8')
   }
+
   for (let i = 1; i < 10; i++) {
     const rotatedPath = `${diagnostics.traceFilePath}.${i}`
+
     if (existsSync(rotatedPath)) {
       unlinkSync(rotatedPath)
     }
@@ -124,8 +136,10 @@ function clearTraceFile(diagnostics: DiagnosticsStatus): void {
 async function flushTraceFile(page: Page, diagnostics: DiagnosticsStatus): Promise<void> {
   if (diagnostics.bundleEnabled) {
     await page.evaluate(() => window.api.diagnostics.collectBundle(1))
+
     return
   }
+
   await page.waitForTimeout(500)
 }
 
@@ -136,6 +150,7 @@ async function measureRendererDuringPolling(page: Page): Promise<RendererTimerMe
       let samples = 0
       let lastTick = performance.now()
       const startedAt = lastTick
+
       const timer = window.setInterval(() => {
         const now = performance.now()
         maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
@@ -145,6 +160,7 @@ async function measureRendererDuringPolling(page: Page): Promise<RendererTimerMe
 
       await new Promise((resolve) => window.setTimeout(resolve, pollWindowMs))
       window.clearInterval(timer)
+
       return {
         elapsedMs: performance.now() - startedAt,
         maxTimerDriftMs,
@@ -161,37 +177,45 @@ function readGitProbeFailureCounts(traceFilePath: string, repoPath: string): Git
     noConfiguredUpstreamFailures: 0,
     missingSameNameOriginFailures: 0
   }
+
   for (const line of readFileSync(traceFilePath, 'utf8').split(/\r?\n/)) {
     if (!line.trim()) {
       continue
     }
+
     let record: {
       name?: string
       attributes?: { cwd?: string }
       exit?: { _tag?: string; cause?: unknown }
     }
+
     try {
       record = JSON.parse(line)
     } catch {
       continue
     }
+
     if (record.name !== 'git.exec' || record.attributes?.cwd !== repoPath) {
       continue
     }
 
     counts.observedGitCommands += 1
+
     if (record.exit?._tag !== 'Failure') {
       continue
     }
 
     const cause = String(record.exit.cause ?? '')
+
     if (cause.includes('git rev-parse --abbrev-ref HEAD@{u}')) {
       counts.noConfiguredUpstreamFailures += 1
     }
+
     if (cause.includes(`git rev-parse --verify --quiet refs/remotes/origin/${ISSUE_BRANCH_NAME}`)) {
       counts.missingSameNameOriginFailures += 1
     }
   }
+
   return counts
 }
 

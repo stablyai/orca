@@ -29,6 +29,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
 }): React.JSX.Element {
   const result = entry.result
   const workspaceTabWorktree = controller.resolveWorktree(result.worktreeId, result.executionHostId)
+
   const workspaceTabRepo = workspaceTabWorktree
     ? resolvePaletteRepoForWorktree(
         workspaceTabWorktree,
@@ -36,13 +37,17 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
         controller.repoByHostIdentity
       )
     : undefined
+
   const workspaceTabRepoName = workspaceTabRepo?.displayName ?? result.repoName
+
   const workspaceTabHostBadge = getPaletteHostBadge(
     workspaceTabRepo,
     controller.hostOptions,
     controller.hostFilterActive
   )
+
   const recentRow = controller.recentTabRowByItem.get(entry) ?? null
+
   const fallback =
     result.contentType === 'terminal' && result.occupantAgent ? (
       <span className="inline-flex" data-agent-icon={result.occupantAgent} aria-hidden="true">
@@ -53,6 +58,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
     ) : (
       <FileText className="size-3.5" aria-hidden="true" />
     )
+
   const sessionAge = formatPaletteSessionAge(result.lastActiveAt ?? null, controller.paletteNowMs)
 
   return (

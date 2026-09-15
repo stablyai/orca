@@ -19,6 +19,7 @@ export function assertSshPtyWriteFitsTransport(relayPtyId: string, data: string)
     0,
     0
   )
+
   if (frame.length > MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES) {
     throw new Error(
       `SSH PTY input exceeds the ${MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES}-byte transport limit`
@@ -34,12 +35,15 @@ export function writeToSshPty(
   if (mux.isDisposed()) {
     return false
   }
+
   try {
     assertSshPtyWriteFitsTransport(relayPtyId, data)
   } catch {
     return false
   }
+
   mux.notify('pty.data', { id: relayPtyId, data })
+
   return !mux.isDisposed()
 }
 
@@ -55,25 +59,31 @@ export function writeToSshPtyWithSettlement(
   if (mux.isDisposed()) {
     return Promise.resolve(writeRefused('transport_disposed'))
   }
+
   try {
     assertSshPtyWriteFitsTransport(relayPtyId, data)
   } catch {
     return Promise.resolve(writeRefused('payload_exceeds_transport_limit'))
   }
+
   return new Promise((resolve) => {
     let settled = false
+
     const finish = (settlement: WriteSettlement): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       resolve(settlement)
     }
+
     const timer = setTimeout(() => {
       mux.dispose('connection_lost')
       finish(writeUnverifiable('settlement_timeout', true))
     }, SSH_PTY_WRITE_SETTLEMENT_TIMEOUT_MS)
+
     timer.unref?.()
     mux.notifyWithSettlement('pty.data', { id: relayPtyId, data }, (result) =>
       finish(toWriteSettlement(result))

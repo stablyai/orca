@@ -16,6 +16,7 @@ import {
 } from './worktree-card-status-inputs'
 
 type SelectorState = Parameters<typeof selectRuntimePaneTitlesForWorktree>[0]
+
 type LayoutRootSelectorState = Parameters<typeof selectTerminalLayoutRootsForWorktree>[0]
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
@@ -45,6 +46,7 @@ describe('worktree card status input selectors', () => {
     const worktreeId = 'repo1::/path/wt1'
     const paneTitles = { 0: 'codex [working]' }
     const ptyIds = ['pty-1']
+
     const state: SelectorState = {
       tabsByWorktree: {
         [worktreeId]: [makeTab('tab-1', worktreeId)]
@@ -56,6 +58,7 @@ describe('worktree card status input selectors', () => {
         'tab-1': ptyIds
       }
     }
+
     const unrelatedUpdate: SelectorState = {
       ...state,
       runtimePaneTitlesByTabId: {
@@ -87,6 +90,7 @@ describe('worktree card status input selectors', () => {
 
   it('changes when this worktree receives a new live PTY id list', () => {
     const worktreeId = 'repo1::/path/wt1'
+
     const state: SelectorState = {
       tabsByWorktree: {
         [worktreeId]: [makeTab('tab-1', worktreeId)]
@@ -96,6 +100,7 @@ describe('worktree card status input selectors', () => {
         'tab-1': ['pty-1']
       }
     }
+
     const updated: SelectorState = {
       ...state,
       ptyIdsByTabId: {
@@ -113,10 +118,12 @@ describe('worktree card status input selectors', () => {
 
   it('stays shallow-equal when wake updates only PTY bindings inside terminal layouts', () => {
     const worktreeId = 'repo1::/path/wt1'
+
     const root: TerminalPaneLayoutNode = {
       type: 'leaf',
       leafId: '11111111-1111-4111-8111-111111111111'
     }
+
     const state: LayoutRootSelectorState = {
       tabsByWorktree: {
         [worktreeId]: [makeTab('tab-1', worktreeId)]
@@ -125,6 +132,7 @@ describe('worktree card status input selectors', () => {
         'tab-1': makeLayout(root, 'pty-before')
       }
     }
+
     const wakeBindingUpdate: LayoutRootSelectorState = {
       ...state,
       terminalLayoutsByTabId: {
@@ -153,6 +161,7 @@ describe('worktree card status input selectors', () => {
   // a fresh record per call multiplies by (visible cards x writes/sec).
   it('returns one identity per store generation instead of rebuilding per call', () => {
     const worktreeId = 'repo1::/path/wt1'
+
     const state: SelectorState & LayoutRootSelectorState = {
       tabsByWorktree: {
         [worktreeId]: [makeTab('tab-1', worktreeId)]
@@ -180,6 +189,7 @@ describe('worktree card status input selectors', () => {
 
   it('carries the same identity across unrelated pane-title and PTY churn', () => {
     const worktreeId = 'repo1::/path/wt1'
+
     const state: SelectorState = {
       tabsByWorktree: {
         [worktreeId]: [makeTab('tab-1', worktreeId)]
@@ -187,6 +197,7 @@ describe('worktree card status input selectors', () => {
       runtimePaneTitlesByTabId: { 'tab-1': { 0: 'codex [working]' } },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] }
     }
+
     const unrelatedUpdate: SelectorState = {
       ...state,
       runtimePaneTitlesByTabId: {

@@ -212,6 +212,7 @@ function sshTargetThatRanGit(): string | null {
       return id
     }
   }
+
   return null
 }
 
@@ -241,6 +242,7 @@ beforeEach(() => {
   resolveDefaultBaseRefViaExecMock.mockImplementation(
     async (run: (argv: string[]) => Promise<{ stdout: string }>) => {
       await run(['rev-parse', '--abbrev-ref', 'origin/HEAD'])
+
       return 'main'
     }
   )
@@ -302,6 +304,7 @@ describe('hosted-review lookups route on the resolved execution host', () => {
 
   it('does not dial this client for a runtime row whose nested target shares a local name', async () => {
     getBitbucketRepoSlugMock.mockResolvedValue({ workspace: 'acme', repo: 'widgets' })
+
     const commands = makeCommands(
       makeRepo({ connectionId: 'ssh-b', executionHostId: 'runtime:env-1' })
     )
@@ -395,6 +398,7 @@ describe('hosted-review creation routes on the resolved execution host', () => {
 
   it('creates a Bitbucket review locally for a runtime row rather than dialing its nested target', async () => {
     getBitbucketRepoSlugMock.mockResolvedValue({ workspace: 'acme', repo: 'widgets' })
+
     const commands = makeCommands(
       makeRepo({ connectionId: 'ssh-b', executionHostId: 'runtime:env-1' })
     )

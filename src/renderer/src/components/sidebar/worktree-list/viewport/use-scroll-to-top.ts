@@ -11,6 +11,7 @@ import {
 
 function readViewport(element: HTMLElement): { scrollTop: number; maxScroll: number } {
   const maxScroll = Math.max(0, element.scrollHeight - element.clientHeight)
+
   return {
     scrollTop: element.scrollTop,
     maxScroll
@@ -54,6 +55,7 @@ export function useWorktreeListScrollToTop({
 
   const publishVisible = useCallback((next: HardScrollUpDetectorState) => {
     detectorRef.current = next
+
     if (showScrollToTopRef.current !== next.visible) {
       showScrollToTopRef.current = next.visible
       setShowScrollToTop(next.visible)
@@ -81,19 +83,24 @@ export function useWorktreeListScrollToTop({
         // Jump-to-top already dismissed; if a stale timer lands in the suppress window, force-hide.
         if (now < suppressDetectionUntilRef.current) {
           publishVisible(createHardScrollUpDetectorState())
+
           return
         }
 
         const viewport = readViewport(element)
+
         const next = reduceHardScrollUpOnIdle(detectorRef.current, {
           ...viewport,
           t: now
         })
+
         // Belt-and-suspenders: if still visible past the deadline, force dismiss.
         if (next.visible && now - next.lastIntentAt >= HARD_SCROLL_UP.hideAfterIdleMs) {
           publishVisible(createHardScrollUpDetectorState())
+
           return
         }
+
         publishVisible(next)
       }, delayMs)
     },
@@ -107,10 +114,13 @@ export function useWorktreeListScrollToTop({
       next: HardScrollUpDetectorState
     ) => {
       publishVisible(next)
+
       if (!next.visible) {
         clearIdleTimer()
+
         return
       }
+
       // Only re-arm when intent is refreshed; scroll spam must not extend lifetime.
       if (next.lastIntentAt !== previous.lastIntentAt) {
         armIdleHide(element, next.lastIntentAt)
@@ -123,6 +133,7 @@ export function useWorktreeListScrollToTop({
     if (!scrollElement) {
       clearIdleTimer()
       publishVisible(createHardScrollUpDetectorState())
+
       return
     }
 
@@ -134,6 +145,7 @@ export function useWorktreeListScrollToTop({
       if (shouldForceHide(viewport)) {
         publishVisible(createHardScrollUpDetectorState())
         clearIdleTimer()
+
         return
       }
 
@@ -142,12 +154,14 @@ export function useWorktreeListScrollToTop({
       }
 
       const previous = detectorRef.current
+
       const next = reduceHardScrollUpOnWheel(previous, {
         ...viewport,
         t: now,
         deltaY: event.deltaY,
         deltaMode: event.deltaMode
       })
+
       applyDetectorResult(scrollElement, previous, next)
     }
 
@@ -158,6 +172,7 @@ export function useWorktreeListScrollToTop({
       if (shouldForceHide(viewport)) {
         publishVisible(createHardScrollUpDetectorState())
         clearIdleTimer()
+
         return
       }
 
@@ -171,18 +186,22 @@ export function useWorktreeListScrollToTop({
       }
 
       const previous = detectorRef.current
+
       const next = reduceHardScrollUpOnScroll(previous, {
         ...viewport,
         t: now
       })
+
       applyDetectorResult(scrollElement, previous, next)
     }
 
     const onPointerDown = (event: PointerEvent): void => {
       if (event.pointerType === 'touch') {
         touchScrollRef.current = true
+
         return
       }
+
       const rect = scrollElement.getBoundingClientRect()
       const nativeScrollbarWidth = scrollElement.offsetWidth - scrollElement.clientWidth
       const scrollbarHitWidth = Math.max(12, nativeScrollbarWidth)
@@ -200,6 +219,7 @@ export function useWorktreeListScrollToTop({
     scrollElement.addEventListener('pointerdown', onPointerDown, { passive: true })
     window.addEventListener('pointerup', onPointerEnd, { passive: true })
     window.addEventListener('pointercancel', onPointerEnd, { passive: true })
+
     return () => {
       scrollElement.removeEventListener('wheel', onWheel)
       scrollElement.removeEventListener('scroll', onScroll)
@@ -215,6 +235,7 @@ export function useWorktreeListScrollToTop({
     if (!scrollElement) {
       return
     }
+
     onUserScrollIntent?.()
     publishVisible(reduceHardScrollUpOnDismiss(detectorRef.current))
     clearIdleTimer()

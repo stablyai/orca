@@ -24,6 +24,7 @@ import { track } from '../../telemetry/client'
 type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
+
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
 export type E2EEChannelOptions = {
@@ -103,45 +104,62 @@ export class E2EEChannel {
     if (this.state === 'awaiting_hello') {
       if (typeof raw !== 'string') {
         this.onError(4001, 'Invalid handshake message')
+
         return
       }
+
       this.handleHello(raw)
+
       return
     }
 
     if (this.v2Session) {
       this.handleV2RawMessage(raw)
+
       return
     }
+
     const sharedKey = this.sharedKey
+
     if (!sharedKey) {
       return
     }
 
     if (typeof raw !== 'string') {
       const plaintextBytes = decryptBytes(raw, sharedKey)
+
       if (plaintextBytes === null) {
         this.trackDecryptFailure()
+
         return
       }
+
       this.consecutiveFailures = 0
+
       if (this.state !== 'ready') {
         this.onError(4001, 'Invalid binary message before authentication')
+
         return
       }
+
       this.binaryMessageHandler?.(plaintextBytes)
+
       return
     }
 
     const plaintext = decrypt(raw, sharedKey)
+
     if (plaintext === null) {
       this.trackDecryptFailure()
+
       return
     }
 
     this.consecutiveFailures = 0
+
     if (this.state === 'awaiting_auth') {
       this.handleAuth(plaintext)
+
       return
     }
 
@@ -150,30 +168,40 @@ export class E2EEChannel {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
         return
       }
+
       if (!isMobileE2EETextPayloadWithinLimit(response)) {
         this.closeForOutboundBudget('size')
+
         return
       }
+
       this.outbound.enqueueLegacyText(
         encrypt(response, this.sharedKey),
         () => Boolean(this.sharedKey),
         () => this.closeForOutboundBudget('queue')
       )
     }
+
     const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>): boolean => {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
         return false
       }
+
       if (!isMobileE2EEBinaryPayloadWithinLimit(response)) {
         this.closeForOutboundBudget('size')
+
         return false
       }
+
       if (!this.outbound.canSend(response.byteLength + 40)) {
         return false
       }
+
       this.ws.send(Buffer.from(encryptBytes(response, this.sharedKey)), { binary: true })
+
       return true
     }
+
     this.messageHandler?.(plaintext, encryptedReply, encryptedBinaryReply)
   }
 
@@ -188,10 +216,12 @@ export class E2EEChannel {
 
   private handleHello(raw: string): void {
     let hello: Record<string, unknown>
+
     try {
       hello = parseRemoteRuntimeJsonText(raw) as Record<string, unknown>
     } catch {
       this.onError(4001, 'Invalid handshake message')
+
       return
     }
 
@@ -201,32 +231,42 @@ export class E2EEChannel {
         serverSecretKey: this.serverSecretKey,
         expectedContext: this.transportContext
       })
+
       if (!session) {
         this.onError(4001, 'Invalid e2ee_hello v2')
+
         return
       }
+
       this.v2Session = session
       this.state = 'awaiting_auth'
+
       if (this.ws.readyState === this.ws.OPEN) {
         this.ws.send(JSON.stringify(session.ready))
       }
+
       return
     }
 
     if (this.requireV2) {
       this.onError(4001, 'E2EE v2 required')
+
       return
     }
+
     if (hello.type !== 'e2ee_hello' || typeof hello.publicKeyB64 !== 'string') {
       this.onError(4001, 'Invalid e2ee_hello')
+
       return
     }
 
     // Why: derive the shared key from our secret + client's public key.
     // Both sides compute the same shared secret via ECDH.
     const clientPublicKey = decodeMobileE2EEPublicKey(hello.publicKeyB64)
+
     if (!clientPublicKey) {
       this.onError(4001, 'Invalid public key')
+
       return
     }
 
@@ -246,11 +286,14 @@ export class E2EEChannel {
       v2Session: this.v2Session,
       resolveDevice: this.resolveAuthenticatedDevice
     })
+
     if (!authentication.ok) {
       this.sendEncryptedControl({ type: 'e2ee_error', error: { code: authentication.code } })
       this.onError(4001, authentication.code === 'bad_auth' ? 'Invalid e2ee_auth' : 'Unauthorized')
+
       return
     }
+
     const authenticatedDevice = authentication.device
 
     this.clientCapabilities = parseRuntimeClientCapabilities(authentication.auth.clientCapabilities)
@@ -301,10 +344,13 @@ export class E2EEChannel {
     if (!this.v2Session || this.ws.readyState !== this.ws.OPEN) {
       return false
     }
+
     if (!isMobileE2EEOutboundItemWithinLimit(item)) {
       this.closeForOutboundBudget('size')
+
       return false
     }
+
     return this.outbound.enqueueV2(item, this.v2Session, () => this.closeForOutboundBudget('queue'))
   }
 
@@ -316,6 +362,7 @@ export class E2EEChannel {
     } catch {
       // Telemetry is best-effort; closing the unsafe socket remains authoritative.
     }
+
     this.onError(1013, 'Outbound reply buffer overflow')
   }
 
@@ -333,6 +380,7 @@ export class E2EEChannel {
       clearTimeout(this.handshakeTimer)
       this.handshakeTimer = null
     }
+
     this.sharedKey = null
     this.authenticatedDevice = null
     this.v2Session = null

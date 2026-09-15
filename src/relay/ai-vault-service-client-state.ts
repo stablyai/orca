@@ -13,14 +13,19 @@ import {
 } from './ai-vault-service-protocol'
 
 export const RELAY_AI_VAULT_READY_TIMEOUT_MS = 5_000
+
 export const RELAY_AI_VAULT_SCAN_TIMEOUT_MS = 130_000
+
 export const RELAY_AI_VAULT_TITLE_TIMEOUT_MS = 15_000
+
 export const RELAY_AI_VAULT_MAX_CALLS = 16
+
 export const RELAY_AI_VAULT_IDLE_TIMEOUT_MS = 10 * 60_000
 
 export function relayAiVaultAbortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
+
   return error
 }
 
@@ -68,8 +73,10 @@ export function requeueRelayAiVaultServiceStart(
   if (call.sent || call.settled || call.startRetried) {
     return false
   }
+
   call.startRetried = true
   queue.unshift(call)
+
   return true
 }
 
@@ -83,13 +90,17 @@ export function settleRelayAiVaultServiceCall(
     clearTimeout(call.timer)
     call.timer = null
   }
+
   if (call.settled) {
     return
   }
+
   call.settled = true
+
   if (call.signal && call.onAbort) {
     call.signal.removeEventListener('abort', call.onAbort)
   }
+
   if (value instanceof Error) {
     call.reject(value)
   } else {
@@ -144,6 +155,7 @@ export class RelayAiVaultIdleRetirement {
     if (busy || this.timer) {
       return
     }
+
     this.timer = setTimeout(() => {
       this.timer = null
       retire()
@@ -162,11 +174,13 @@ export function retireRelayAiVaultServiceChild(child: ChildProcess): void {
 /** Orderly shutdown that never holds relay teardown past the kill deadline. */
 export function shutdownRelayAiVaultServiceChild(child: ChildProcess): Promise<void> {
   child.send({ type: 'shutdown' }, () => undefined)
+
   return new Promise<void>((resolve) => {
     const timer = setTimeout(() => {
       child.kill()
       resolve()
     }, 2_000)
+
     timer.unref?.()
     child.once('exit', () => {
       clearTimeout(timer)

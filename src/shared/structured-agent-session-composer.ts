@@ -49,7 +49,9 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!text.startsWith('/')) {
     return null
   }
+
   const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(text.trimEnd())
+
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }
 
@@ -67,6 +69,7 @@ export function structuredSlashCommands(
       commands.includes(entry.name as AgentSessionConversationCommand)
     )
   ]
+
   // Why: a host with no catalog to report would otherwise hide the commands the
   // agent itself implements, e.g. Codex's `/goal`.
   return [
@@ -97,6 +100,7 @@ export function isStructuredAgentSessionComposerCommand(
   agent: AgentType = 'codex'
 ): boolean {
   const command = commandParts(text)
+
   return Boolean(
     command && structuredRecognizedCommands(agent).some((entry) => entry.name === command.name)
   )
@@ -115,13 +119,16 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   controller: StructuredAgentSessionComposerOptions
 ): Promise<StructuredAgentSessionCommandOutcome> {
   const command = commandParts(text)
+
   if (!command || !isStructuredAgentSessionComposerCommand(text, controller.agent)) {
     return { handled: false, accepted: false, error: null }
   }
+
   if (command.name === 'clear' || command.name === 'compact') {
     if (command.argument) {
       return { handled: true, accepted: false, error: `Use /${command.name} without arguments.` }
     }
+
     if (
       !controller.conversationCommands?.includes(command.name) ||
       !controller.runConversationCommand
@@ -132,12 +139,16 @@ export async function dispatchStructuredAgentSessionComposerCommand(
         error: `/${command.name} is not supported by this chat host.`
       }
     }
+
     return { handled: true, ...(await controller.runConversationCommand(command.name)) }
   }
+
   if (command.name !== 'model' && command.name !== 'effort') {
     return unavailable(command.name)
   }
+
   const descriptor = controller.snapshot.find((entry) => entry.id === command.name)
+
   if (!descriptor || descriptor.kind.type !== 'select') {
     return {
       handled: true,
@@ -145,18 +156,23 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       error: `${command.name === 'model' ? 'Models' : 'Reasoning effort'} are unavailable for this chat session.`
     }
   }
+
   if (!command.argument) {
     const opened = await controller.invokeAction(command.name)
+
     return {
       handled: true,
       accepted: opened,
       error: opened ? null : `Could not open the ${command.name} picker.`
     }
   }
+
   const normalized = command.argument.toLowerCase()
+
   const choice = descriptor.kind.choices.find(
     (entry) => entry.value.toLowerCase() === normalized || entry.label.toLowerCase() === normalized
   )
+
   if (!choice) {
     return {
       handled: true,
@@ -164,7 +180,9 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       error: `${command.argument} is not an available ${command.name} for this chat session.`
     }
   }
+
   const applied = await controller.setOption(command.name, choice.value)
+
   return {
     handled: true,
     accepted: applied,

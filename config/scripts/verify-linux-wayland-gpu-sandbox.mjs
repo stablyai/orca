@@ -20,11 +20,17 @@ import {
 } from './linux-wayland-validation-watchdog.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
+
 const outMain = path.join(rootDir, 'out', 'main', 'index.js')
+
 const timeoutMs = 45_000
+
 const rendererSetupTimeoutMs = 30_000
+
 const appCloseTimeoutMs = 5_000
+
 const validationWatchdogMs = 7 * 60_000
+
 const gpuCrashPattern =
   /GPU process (?:exited unexpectedly|isn't usable)|gpu_data_manager|exit[_ -]?code=8704/i
 
@@ -34,6 +40,7 @@ function hasBaseReproductionEvidence({ error, gpuCrashLines, phase, terminalExer
   if (error instanceof MissingReproductionError) {
     return false
   }
+
   return (
     terminalExerciseStarted ||
     gpuCrashLines.length > 0 ||
@@ -46,9 +53,11 @@ function hasBaseReproductionEvidence({ error, gpuCrashLines, phase, terminalExer
 function parseArgs() {
   const modeArg = process.argv.find((arg) => arg.startsWith('--mode='))
   const mode = modeArg?.slice('--mode='.length) ?? 'verify-fix'
+
   if (mode !== 'verify-fix' && mode !== 'expect-repro') {
     throw new Error(`Unsupported --mode=${mode}`)
   }
+
   return { mode }
 }
 
@@ -65,6 +74,7 @@ function assertWaylandHost() {
   if (process.platform !== 'linux') {
     throw new Error('Wayland GPU sandbox validation must run on Linux.')
   }
+
   if (
     !process.env.WAYLAND_DISPLAY &&
     process.env.XDG_SESSION_TYPE !== 'wayland' &&
@@ -81,8 +91,10 @@ function ensureElectronRuntime() {
 function buildAppIfNeeded() {
   if (process.env.SKIP_BUILD === '1' && existsSync(outMain)) {
     console.log('[wayland-gpu] SKIP_BUILD=1 and out/main/index.js exists; skipping build.')
+
     return
   }
+
   run('npx', ['electron-vite', 'build', '--mode', 'e2e'])
 }
 
@@ -95,6 +107,7 @@ function createGitRepo() {
   writeFileSync(path.join(repoDir, 'package.json'), '{"private":true,"type":"module"}\n')
   run('git', ['add', '-A'], { cwd: repoDir, stdio: 'pipe' })
   run('git', ['commit', '-m', 'Initial validation fixture'], { cwd: repoDir, stdio: 'pipe' })
+
   return repoDir
 }
 
@@ -109,11 +122,13 @@ async function closeElectronApp(app) {
 
   const electronProcess = app.process()
   let closeError
+
   const didClose = await Promise.race([
     app.close().then(
       () => true,
       (error) => {
         closeError = error
+
         return false
       }
     ),
@@ -129,6 +144,7 @@ async function closeElectronApp(app) {
       `[wayland-gpu] Electron close failed: ${closeError instanceof Error ? closeError.message : closeError}`
     )
   }
+
   // Why: reproducing the Wayland GPU stall can wedge Chromium teardown after
   // the evidence is collected, so CI needs a bounded close path.
   if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
@@ -158,23 +174,28 @@ async function runValidation(mode) {
   let terminalExerciseStarted = false
   let commandLineSwitches = null
   const stderrLines = []
+
   const validationState = {
     startedAt: Date.now(),
     phase: 'initial'
   }
+
   const logPhase = createPhaseLogger({
     startedAt: validationState.startedAt,
     onPhase: (phase) => {
       validationState.phase = phase
     }
   })
+
   const stopWatchdog = startValidationWatchdog({
     timeoutMs: validationWatchdogMs,
     onTimeout: async () => {
       const gpuCrashLines = stderrLines.filter((line) => gpuCrashPattern.test(line))
       const rendererDiagnostics = await collectRendererDiagnostics(page)
+
       const reproduced =
         mode === 'expect-repro' && (terminalExerciseStarted || gpuCrashLines.length > 0)
+
       const payload = {
         mode,
         watchdogTimedOut: true,
@@ -185,12 +206,17 @@ async function runValidation(mode) {
         rendererDiagnostics,
         gpuCrashLines
       }
+
       const output = JSON.stringify(payload, null, 2)
+
       if (reproduced) {
         console.log(output)
+
         return 0
       }
+
       console.error(output)
+
       return 1
     }
   })
@@ -203,6 +229,7 @@ async function runValidation(mode) {
       ORCA_CODEX_HOME: _orcaCodexHome,
       ...env
     } = process.env
+
     void _unused
     void _display
     void _codexHome
@@ -232,6 +259,7 @@ async function runValidation(mode) {
     app.process().stderr?.on('data', (chunk) => {
       const text = chunk.toString()
       stderrLines.push(...text.split(/\r?\n/).filter(Boolean))
+
       if (process.env.ORCA_WAYLAND_GPU_VERBOSE === '1') {
         process.stderr.write(text)
       }
@@ -267,14 +295,17 @@ async function runValidation(mode) {
         'Base run already has --disable-gpu-sandbox; cannot validate the unfixed Wayland path.'
       )
     }
+
     if (mode === 'expect-repro' && commandLineSwitches.disableGpu) {
       throw new MissingReproductionError(
         'Base run has --disable-gpu; hardware acceleration is disabled and would mask the GPU sandbox path.'
       )
     }
+
     if (mode === 'verify-fix' && !commandLineSwitches.disableGpuSandbox) {
       throw new Error('Expected --disable-gpu-sandbox on Linux Wayland, but it was absent.')
     }
+
     if (mode === 'verify-fix' && commandLineSwitches.disableGpu) {
       throw new Error('Expected hardware acceleration to remain enabled, but --disable-gpu is set.')
     }
@@ -300,6 +331,7 @@ async function runValidation(mode) {
         'Terminal input and scroll stayed responsive without the fix on this host.'
       )
     }
+
     if (gpuCrashLines.length > 0) {
       throw new Error(`GPU crash evidence appeared in stderr:\n${gpuCrashLines.join('\n')}`)
     }
@@ -323,6 +355,7 @@ async function runValidation(mode) {
   } catch (error) {
     const gpuCrashLines = stderrLines.filter((line) => gpuCrashPattern.test(line))
     const rendererDiagnostics = await collectRendererDiagnostics(page)
+
     if (
       mode === 'expect-repro' &&
       hasBaseReproductionEvidence({
@@ -347,8 +380,10 @@ async function runValidation(mode) {
           2
         )
       )
+
       return
     }
+
     console.error(
       JSON.stringify(
         {
@@ -373,6 +408,7 @@ async function runValidation(mode) {
 }
 
 const { mode } = parseArgs()
+
 runValidation(mode).then(
   () => {
     // Why: a reproduced GPU stall can leave Playwright/Electron handles alive

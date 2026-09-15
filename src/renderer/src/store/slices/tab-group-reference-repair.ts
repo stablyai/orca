@@ -4,8 +4,10 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 function collectLayoutGroupIds(node: TabGroupLayoutNode, groupIds: Set<string>): void {
   if (node.type === 'leaf') {
     groupIds.add(node.groupId)
+
     return
   }
+
   collectLayoutGroupIds(node.first, groupIds)
   collectLayoutGroupIds(node.second, groupIds)
 }
@@ -17,6 +19,7 @@ export function layoutSpanningGroups(
   const first = existing ?? { type: 'leaf', groupId: groups[0].id }
   const laidOutGroupIds = new Set<string>()
   collectLayoutGroupIds(first, laidOutGroupIds)
+
   return groups
     .filter((group) => !laidOutGroupIds.has(group.id))
     .reduce<TabGroupLayoutNode>(
@@ -38,21 +41,27 @@ export function resolveTabGroupOwners(
 ): Map<string, string> {
   const persistedGroupIds = new Set(groups.map((group) => group.id))
   const tabGroupIdById = new Map(tabs.map((tab) => [tab.id, tab.groupId]))
+
   const tabOwners = new Map(
     tabs.filter((tab) => persistedGroupIds.has(tab.groupId)).map((tab) => [tab.id, tab.groupId])
   )
+
   for (const group of groups) {
     const tabIdAliases = tabIdAliasesByGroup?.get(group.id)
+
     for (const persistedTabId of group.tabOrder) {
       const tabId = tabIdAliases?.get(persistedTabId) ?? persistedTabId
+
       if (!tabGroupIdById.has(tabId)) {
         continue
       }
+
       if (!tabOwners.has(tabId)) {
         tabOwners.set(tabId, group.id)
       }
     }
   }
+
   return tabOwners
 }
 
@@ -62,18 +71,23 @@ export function appendOwnedTabIdsToGroups(
   tabOwners: ReadonlyMap<string, string>
 ): TabGroup[] {
   const tabIdsByGroup = new Map<string, string[]>()
+
   for (const [tabId, groupId] of tabOwners) {
     const tabIds = tabIdsByGroup.get(groupId) ?? []
     tabIds.push(tabId)
     tabIdsByGroup.set(groupId, tabIds)
   }
+
   return groups.map((group) => {
     const ownedTabIds = tabIdsByGroup.get(group.id)
+
     if (!ownedTabIds) {
       return group
     }
+
     const orderedTabIds = new Set(group.tabOrder)
     const missingTabIds = ownedTabIds.filter((tabId) => !orderedTabIds.has(tabId))
+
     return missingTabIds.length > 0
       ? { ...group, tabOrder: [...group.tabOrder, ...missingTabIds] }
       : group
@@ -90,12 +104,15 @@ export function adoptGrouplessTabs(
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const groups = groupsByWorktree[worktreeId] ?? []
     const owningGroupIdByTabId = new Map<string, string>()
+
     for (const group of groups) {
       for (const tabId of group.tabOrder) {
         owningGroupIdByTabId.set(tabId, owningGroupIdByTabId.get(tabId) ?? group.id)
       }
     }
+
     const orphanIds = tabs.filter((tab) => !owningGroupIdByTabId.has(tab.id)).map((tab) => tab.id)
+
     const host: TabGroup = groups[0] ?? {
       id: createBrowserUuid(),
       worktreeId,
@@ -103,6 +120,7 @@ export function adoptGrouplessTabs(
       tabOrder: [],
       recentTabIds: []
     }
+
     const adopted = orphanIds.length
       ? {
           ...host,
@@ -110,15 +128,19 @@ export function adoptGrouplessTabs(
           activeTabId: host.activeTabId ?? orphanIds[0]
         }
       : host
+
     for (const tabId of orphanIds) {
       owningGroupIdByTabId.set(tabId, adopted.id)
     }
+
     tabsByWorktree[worktreeId] = tabs.map((tab) => {
       const owningGroupId = owningGroupIdByTabId.get(tab.id)
+
       return owningGroupId && tab.groupId !== owningGroupId
         ? { ...tab, groupId: owningGroupId }
         : tab
     })
+
     if (orphanIds.length) {
       groupsByWorktree[worktreeId] = [adopted, ...groups.slice(1)]
       activeGroupIdByWorktree[worktreeId] ??= adopted.id

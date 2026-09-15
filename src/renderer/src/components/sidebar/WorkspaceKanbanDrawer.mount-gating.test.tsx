@@ -43,14 +43,18 @@ vi.mock('@/components/ui/sheet', () => ({
 vi.mock('./WorkspaceKanbanDrawerHeader', () => ({
   default: () => <div data-workspace-board-heavy-content="true" />
 }))
+
 vi.mock('./WorkspaceKanbanLaneGrid', () => ({ default: () => <div /> }))
+
 vi.mock('./WorkspaceKanbanPinDropTarget', () => ({ default: () => <div /> }))
+
 vi.mock('./WorkspaceKanbanAreaSelectionOverlay', () => ({
   default: React.forwardRef<HTMLDivElement>((_, ref) => <div ref={ref} />)
 }))
 
 vi.mock('./use-visible-workspace-kanban-worktree-ids', async (importOriginal) => {
   const actual = await importOriginal<typeof VisibleWorkspaceKanban>()
+
   return {
     ...actual,
     useVisibleWorkspaceKanbanWorktreeIds: (
@@ -62,11 +66,13 @@ vi.mock('./use-visible-workspace-kanban-worktree-ids', async (importOriginal) =>
       React.useEffect(() => {
         contentProbe.mounts()
         const unsubscribe = useAppStore.subscribe(() => contentProbe.storeNotifications())
+
         return () => {
           contentProbe.unmounts()
           unsubscribe()
         }
       }, [])
+
       return visibleIds
     }
   }
@@ -83,9 +89,11 @@ vi.mock('./use-workspace-kanban-selection', () => ({
     selectForContextMenu: vi.fn(() => [])
   })
 }))
+
 vi.mock('./use-workspace-kanban-area-selection', () => ({
   useWorkspaceKanbanAreaSelection: () => ({ handleAreaSelectionPointerDown: vi.fn() })
 }))
+
 vi.mock('./use-workspace-kanban-column-resize', () => ({
   useWorkspaceKanbanColumnResize: () => ({
     columnWidth: 308,
@@ -94,22 +102,28 @@ vi.mock('./use-workspace-kanban-column-resize', () => ({
     onColumnResizeKeyDown: vi.fn()
   })
 }))
+
 vi.mock('./use-workspace-kanban-card-pointer-drag', () => ({
   useWorkspaceKanbanCardPointerDrag: () => ({
     isPointerDragActiveRef: { current: false },
     onCardPointerDownCapture: vi.fn()
   })
 }))
+
 vi.mock('./use-workspace-kanban-shift-wheel-scroll', () => ({
   useWorkspaceKanbanShiftWheelScroll: vi.fn()
 }))
+
 vi.mock('./use-workspace-kanban-outside-dismiss', () => ({
   isWorkspaceBoardKeepOpenTarget: () => false,
   useWorkspaceKanbanOutsideDismiss: vi.fn()
 }))
+
 vi.mock('./use-workspace-status-drop', () => ({ useWorkspaceStatusDocumentDrop: vi.fn() }))
+
 vi.mock('@/components/contextual-tours/use-contextual-tour', async (importOriginal) => {
   const actual = await importOriginal<typeof ContextualTour>()
+
   return {
     ...actual,
     useContextualTour: (...args: Parameters<typeof actual.useContextualTour>) => {
@@ -120,9 +134,13 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', async (importOrigin
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 const onOpenChange = vi.fn()
+
 const onMenuOpenChange = vi.fn()
+
 let testContainer: HTMLDivElement
+
 let testRoot: Root
 
 function activeContentSubscriptions(): number {
@@ -132,6 +150,7 @@ function activeContentSubscriptions(): number {
 function requireStoreListenerCount(): number {
   const count = readStoreListenerCount()
   expect(count).not.toBeNull()
+
   return count ?? 0
 }
 

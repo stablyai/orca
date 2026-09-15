@@ -60,6 +60,7 @@ export async function previewSkillDeletion(
 export async function deleteSkills(input: SkillDeleteServiceInput): Promise<SkillDeleteResult> {
   const resolved = await buildSkillDeletePlan(input)
   const skills: SkillDeleteResultEntry[] = []
+
   for (const entry of resolved.plan.skills) {
     skills.push(
       entry.blocked
@@ -73,6 +74,7 @@ export async function deleteSkills(input: SkillDeleteServiceInput): Promise<Skil
         : await deleteOneSkill(entry, resolved, input)
     )
   }
+
   // Once per batch, on the executing host: the target coalescer, the per-root
   // cache, and the last-known-good retention would otherwise serve a pre-delete
   // answer and the row visibly comes back.
@@ -91,6 +93,7 @@ export async function deleteSkills(input: SkillDeleteServiceInput): Promise<Skil
       )
     ]
   })
+
   return { operationId: resolved.plan.operationId, skills }
 }
 
@@ -101,6 +104,7 @@ async function deleteOneSkill(
 ): Promise<SkillDeleteResultEntry> {
   const api = nativeSkillPathSemantics().sep === '\\' ? pathWin32 : pathPosix
   const canonical = entry.placements.find((placement) => placement.kind === 'canonical')
+
   // The lock key is the canonical placement's own LITERAL directory path, in the
   // filesystem's spelling — not `canonicalPath`'s dirname. Install hashes the
   // literal destination without realpath'ing it, so a symlinked component (a
@@ -112,7 +116,9 @@ async function deleteOneSkill(
   const lockKeyPath = resolved.toFilesystemPath(
     canonical?.path ?? entry.placements[0]?.path ?? api.dirname(entry.canonicalPath)
   )
+
   let releaseLock: (() => Promise<void>) | undefined
+
   try {
     releaseLock = await acquireSkillInstallLock({
       path: skillInstallLockPath(input.stateDirectory, lockKeyPath),
@@ -123,12 +129,14 @@ async function deleteOneSkill(
     // is unaffected.
     return { id: entry.id, name: entry.name, status: 'busy', removedPaths: [] }
   }
+
   try {
     return await runStagedDeletion(entry, resolved, input, lockKeyPath)
   } catch {
     await recoverSkillDeleteTransaction(input.stateDirectory, lockKeyPath, input.filesystem).catch(
       () => undefined
     )
+
     return { id: entry.id, name: entry.name, status: 'failed', removedPaths: [] }
   } finally {
     await releaseLock()
@@ -142,6 +150,7 @@ async function runStagedDeletion(
   lockKeyPath: string
 ): Promise<SkillDeleteResultEntry> {
   const moves = planSkillDeleteMoves(entry.placements, resolved.toFilesystemPath)
+
   const journal = (
     phase: SkillDeleteJournalV1['phase'],
     movedCount: number
@@ -155,6 +164,7 @@ async function runStagedDeletion(
     movedCount,
     moves
   })
+
   // Written before anything is renamed: a crash between staging and cleanup must
   // not orphan a directory nothing will ever revisit.
   await writeSkillDeleteJournal(input.stateDirectory, journal('prepared', 0))
@@ -165,6 +175,7 @@ async function runStagedDeletion(
     onProgress: (movedCount) =>
       writeSkillDeleteJournal(input.stateDirectory, journal('staging', movedCount))
   })
+
   if (staging.status !== 'staged') {
     return staging.status === 'partial'
       ? {
@@ -180,14 +191,17 @@ async function runStagedDeletion(
   await writeSkillDeleteJournal(input.stateDirectory, journal('staged', moves.length))
   const removal = await removeStagedSkillDeleteMoves(moves, input.filesystem)
   let receiptRemoved = true
+
   try {
     await removeSkillInstallReceipt(input.stateDirectory, lockKeyPath)
   } catch {
     receiptRemoved = false
   }
+
   if (removal.unremoved.length === 0 && receiptRemoved) {
     await rm(skillDeleteJournalPath(input.stateDirectory, lockKeyPath), { force: true })
   }
+
   return {
     id: entry.id,
     name: entry.name,
@@ -206,6 +220,7 @@ async function failedStagingResult(
   entry: SkillDeletePlanEntry
 ): Promise<SkillDeleteResultEntry> {
   await rm(skillDeleteJournalPath(stateDirectory, lockKeyPath), { force: true })
+
   return { id: entry.id, name: entry.name, status: 'failed', removedPaths: [] }
 }
 
@@ -214,5 +229,6 @@ function sourcePathsFor(
   removedSourcePaths: readonly string[]
 ): string[] {
   const removed = new Set(removedSourcePaths)
+
   return moves.filter((move) => removed.has(move.sourcePath)).map((move) => move.sourcePath)
 }

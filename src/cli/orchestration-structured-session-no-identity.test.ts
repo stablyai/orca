@@ -13,14 +13,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../shared/structured-session-marker'
 
 const callMock = vi.hoisted(() => vi.fn())
+
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./format', () => ({ printResult: vi.fn() }))
+
 vi.mock('./selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 
 const originalMarker = process.env[ORCA_STRUCTURED_SESSION_ENV]
+
 const originalHandle = process.env.ORCA_TERMINAL_HANDLE
 
 function invoke(command: string, flags = new Map<string, string | boolean>()) {
@@ -49,6 +52,7 @@ describe('a structured chat session with no orchestration identity', () => {
     } else {
       process.env[ORCA_STRUCTURED_SESSION_ENV] = originalMarker
     }
+
     if (originalHandle === undefined) {
       delete process.env.ORCA_TERMINAL_HANDLE
     } else {

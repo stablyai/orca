@@ -9,14 +9,17 @@ type CsiHandler = (params: number[]) => boolean
 
 function createFakeParser() {
   const handlers: CsiHandler[] = []
+
   return {
     registered: handlers,
     parser: {
       registerCsiHandler(_id: { final: string }, handler: CsiHandler) {
         handlers.push(handler)
+
         return {
           dispose() {
             const at = handlers.indexOf(handler)
+
             if (at !== -1) {
               handlers.splice(at, 1)
             }
@@ -97,6 +100,7 @@ describe('startup device attributes responder', () => {
       response: STARTUP_DA1_RESPONSE,
       reply: (d) => replies.push(d)
     })
+
     release()
 
     expect(registered).toHaveLength(0)

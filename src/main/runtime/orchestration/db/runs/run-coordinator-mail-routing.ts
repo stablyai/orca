@@ -22,6 +22,7 @@ export function rememberCurrentRunCoordinatorHandles(this: OrchestrationDb): voi
 
 export function createCoordinatorMailRoutingTrigger(this: OrchestrationDb): void {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.db.exec(`
       DROP TRIGGER IF EXISTS trg_messages_route_coordinator_mail;

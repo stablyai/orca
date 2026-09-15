@@ -32,9 +32,11 @@ function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(
   request: T | null | undefined
 ): T {
   const owner = request?.owner
+
   if (!request || !owner || !owner.authority || !owner.selector) {
     throw new Error('An automation owner is required for external automation requests.')
   }
+
   return request
 }
 
@@ -46,12 +48,16 @@ function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(
 function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: () => T): T {
   const release = scheduler.beginPriorityWork()
   let pending = false
+
   try {
     const result = run()
+
     if (result instanceof Promise) {
       pending = true
+
       return result.finally(release) as T
     }
+
     return result
   } finally {
     if (!pending) {
@@ -65,6 +71,7 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   // concurrency ceiling only mean anything if they outlive a single request.
   const probeScheduler = new ExternalAutomationProbeScheduler()
   const managerCache = new ExternalAutomationManagerCache()
+
   const scopedExternal = createScopedExternalAutomations({
     // Hidden runtime-owned targets are passed through on purpose: the guard
     // rejects them itself, so pre-filtering here would leak a different error.
@@ -72,6 +79,7 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     scheduler: probeScheduler,
     cache: managerCache
   })
+
   // Why: Orca automation CRUD now arrives over the local runtime RPC surface,
   // so the runtime methods take the lease through this hook instead of an arm here.
   service.externalProbePriority = (run) => underOrcaPriority(probeScheduler, run)

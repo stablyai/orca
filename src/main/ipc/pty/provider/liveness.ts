@@ -26,6 +26,7 @@ export function stripRemotePaneEnvWhenHooksDisabled(
   if (!connectionId || isRemoteAgentHooksEnabled()) {
     return env
   }
+
   if (
     !env ||
     (!('ORCA_PANE_KEY' in env) &&
@@ -35,30 +36,37 @@ export function stripRemotePaneEnvWhenHooksDisabled(
   ) {
     return env
   }
+
   const stripped = { ...env }
   delete stripped.ORCA_PANE_KEY
   delete stripped.ORCA_TAB_ID
   delete stripped.ORCA_WORKTREE_ID
   delete stripped.ORCA_AGENT_LAUNCH_TOKEN
+
   return stripped
 }
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)
   const hintedMessage = addNodePtyRecoveryHint(rawMessage)
+
   if (hintedMessage === rawMessage && err instanceof Error) {
     return err
   }
+
   if (err instanceof Error) {
     // Why: preserve the original stack/name/custom fields while adding the same recovery hint as the pty:spawn path.
     err.message = hintedMessage
+
     return err
   }
+
   return new Error(hintedMessage)
 }
 
 export function isPtyAlreadyGoneError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
+
   return (
     isSshPtyNotFoundError(err) ||
     // Why: the reattach path rewrites the relay's wording to SSH_SESSION_EXPIRED and only this
@@ -98,6 +106,7 @@ export function isObservedPtyExitEvidence(err: unknown): boolean {
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms)
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -121,15 +130,19 @@ export async function isProviderAgentSessionOwnerLive(
   owner: AgentSessionOwnerBinding
 ): Promise<boolean> {
   const session = (await provider.listProcesses()).find((candidate) => candidate.id === owner.ptyId)
+
   if (!session) {
     return false
   }
+
   if (provider.providesAgentSessionOwnerListings?.(owner.ptyId) !== true) {
     // Why: in-process local owners cannot serialize the controller claim; exact incarnation
     // liveness keeps that claim authoritative until the normal PTY exit releases it.
     const expectedIncarnation = ptyIncarnationById.get(owner.ptyId)
+
     return expectedIncarnation !== undefined && session.incarnationId === expectedIncarnation
   }
+
   return Boolean(
     session.agentSessionOwners?.some((candidate) =>
       agentSessionOwnerBindingsEqual(candidate, owner)
@@ -145,22 +158,29 @@ export async function verifyPtyStopped(
   if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
+
   if (!opts?.keepHistory) {
     return true
   }
+
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
+
   // Why: deadlineMs is absolute, so the settle poll must not outlive the caller's teardown budget.
   const deadline =
     opts.deadlineMs !== undefined ? Math.min(settleDeadline, opts.deadlineMs) : settleDeadline
+
   while (Date.now() < deadline) {
     await delay(Math.min(KEEP_HISTORY_STOP_POLL_MS, deadline - Date.now()))
+
     if (Date.now() >= deadline) {
       break
     }
+
     if (await isProviderPtyLive(provider, ptyId, deadline)) {
       return false
     }
   }
+
   return true
 }
 
@@ -171,6 +191,7 @@ export function finishPtyShutdown(
 ): string | undefined {
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
+
   if (connectionId) {
     // Deliberately does NOT retire a recorded undelivered stop. Some callers reach here having
     // asked the host and some having never asked it, so retiring from this one place would be a
@@ -178,7 +199,9 @@ export function finishPtyShutdown(
     // kill order. Retirement is left to the replay, which only acts on host evidence.
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
+
   ptyOwnership.delete(id)
   markClaudePtyExited(id)
+
   return incarnationId
 }

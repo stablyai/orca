@@ -19,11 +19,14 @@ export function resolveAgentStatusConnectionRouting(args: {
   runtimeEnvironmentId?: string | null
 }): AgentStatusConnectionRouting | undefined {
   const ptyId = args.ptyId?.trim()
+
   if (!ptyId) {
     return undefined
   }
+
   const expectedConnectionId = args.expectedConnectionId?.trim() || args.expectedConnectionId
   const sshPty = parseAppSshPtyId(ptyId)
+
   if (sshPty) {
     if (
       typeof args.runtimeEnvironmentId === 'string' ||
@@ -32,13 +35,16 @@ export function resolveAgentStatusConnectionRouting(args: {
     ) {
       return undefined
     }
+
     return { connectionId: sshPty.connectionId }
   }
+
   if (ptyId.startsWith('ssh:')) {
     return undefined
   }
 
   const runtimePty = parseRemoteRuntimePtyId(ptyId)
+
   if (runtimePty?.handle) {
     if (
       typeof expectedConnectionId === 'string' ||
@@ -49,8 +55,10 @@ export function resolveAgentStatusConnectionRouting(args: {
     ) {
       return undefined
     }
+
     return { connectionId: null }
   }
+
   if (ptyId.startsWith('remote:')) {
     return undefined
   }
@@ -60,6 +68,7 @@ export function resolveAgentStatusConnectionRouting(args: {
   if (typeof expectedConnectionId === 'string') {
     return undefined
   }
+
   return { connectionId: null }
 }
 
@@ -71,6 +80,7 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   runtimeEnvironmentId?: string | null
 }): AgentStatusConnectionRouting | undefined {
   const pane = parsePaneKey(args.paneKey)
+
   if (
     !pane ||
     !args.state.ptyIdsByTabId?.[pane.tabId]?.includes(args.ptyId) ||
@@ -78,10 +88,13 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   ) {
     return undefined
   }
+
   const routing = resolveAgentStatusConnectionRouting(args)
+
   if (!routing) {
     return undefined
   }
+
   // Why: transient relay reconnect clears statuses without dropping durable
   // PTY bindings; old renderer callbacks must stay blocked until reconnect.
   if (
@@ -91,5 +104,6 @@ export function resolveLiveAgentStatusConnectionRouting(args: {
   ) {
     return undefined
   }
+
   return routing
 }

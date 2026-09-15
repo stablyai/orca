@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import type * as osModule from 'node:os'
 
 let isolatedUserDataDir = ''
+
 let previousUserDataPath: string | undefined
 
 const { homedirMock } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: homedirMock.mockImplementation(actual.homedir)
@@ -62,6 +64,7 @@ const BATCH_SCRIPT_INSTALLERS = [
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {
@@ -90,6 +93,7 @@ describe('Windows managed hook post interpreter', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(isolatedUserDataDir, { recursive: true, force: true })
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
     rmSync(home, { recursive: true, force: true })
@@ -101,7 +105,9 @@ describe('Windows managed hook post interpreter', () => {
       for (const entry of BATCH_SCRIPT_INSTALLERS) {
         expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
       }
+
       const hooksDir = join(home, '.orca', 'agent-hooks')
+
       return readdirSync(hooksDir)
         .filter((name) => name.endsWith('.cmd'))
         .map((name) => ({ name, body: readFileSync(join(hooksDir, name), 'utf8') }))

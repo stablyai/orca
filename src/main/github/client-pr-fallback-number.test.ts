@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -189,9 +196,11 @@ describe('getPRForBranch', () => {
     const before = Date.now()
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
     expect(outcome.kind).toBe('upstream-error')
+
     if (outcome.kind !== 'upstream-error') {
       throw new Error('expected upstream-error')
     }
+
     expect(outcome.errorType).toBe('rate_limited')
     // ~120s cooldown surfaced as both the manual gate and the auto-retry time.
     expect(outcome.retryDisabledUntil).toBeDefined()

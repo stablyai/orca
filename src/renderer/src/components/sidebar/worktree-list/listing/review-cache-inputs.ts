@@ -26,9 +26,11 @@ export function selectWorktreeListReviewCacheInputs(
 ): WorktreeListReviewCacheInputs {
   const hasFolderWorkspaces = state.folderWorkspaces.length > 0
   const newCardStyle = state.settings?.experimentalNewWorktreeCardStyle === true
+
   const folderCardsNeedReview =
     hasFolderWorkspaces &&
     (newCardStyle ? cardProperties.includes('status') : cardProperties.includes('pr'))
+
   const needsPrCache = groupBy === 'pr-status' || folderCardsNeedReview
   const needsHostedReviewCache = newCardStyle && folderCardsNeedReview
 
@@ -37,6 +39,7 @@ export function selectWorktreeListReviewCacheInputs(
   if (!needsPrCache && !needsHostedReviewCache) {
     return EMPTY_WORKTREE_LIST_REVIEW_CACHE_INPUTS
   }
+
   return {
     prCache: needsPrCache ? state.prCache : null,
     hostedReviewCache: needsHostedReviewCache ? state.hostedReviewCache : null

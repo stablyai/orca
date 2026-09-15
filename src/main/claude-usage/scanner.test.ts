@@ -92,6 +92,7 @@ describe('parseClaudeUsageRecord', () => {
   it('merges duplicate streamed assistant usage by message and request id', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-claude-dedupe-'))
     const filePath = join(root, 'session.jsonl')
+
     try {
       await writeFile(
         filePath,

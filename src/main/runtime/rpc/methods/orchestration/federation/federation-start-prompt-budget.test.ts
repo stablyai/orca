@@ -19,9 +19,11 @@ describe('federation attach-start prompt budget', () => {
     const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
     const writePrompt = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.federationAttachStart'
     )
+
     if (!method) {
       throw new Error('federationAttachStart method is not registered')
     }

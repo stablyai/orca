@@ -101,10 +101,12 @@ export class MobileSocketWiring {
     })
     transport.onConnectionClose((_clientId, ws) => this.handleClose(ws))
     let attached = true
+
     return () => {
       if (!attached) {
         return
       }
+
       attached = false
       this.transports.delete(transport)
     }
@@ -124,9 +126,11 @@ export class MobileSocketWiring {
 
   terminateDeviceConnections(deviceToken: string): number {
     let terminated = 0
+
     for (const transport of this.transports) {
       terminated += transport.terminateClientConnections(deviceToken)
     }
+
     return terminated
   }
 
@@ -137,6 +141,7 @@ export class MobileSocketWiring {
     metadata: MobileSocketTransportMetadata
   ): void {
     let channel = this.channels.get(ws)
+
     if (!channel) {
       const connectionId = randomBytes(8).toString('hex')
       this.connectionIds.set(ws, connectionId)
@@ -150,14 +155,17 @@ export class MobileSocketWiring {
         outboundMemoryBudget: this.outboundMemoryBudget,
         resolveAuthenticatedDevice: (token) => {
           const device = this.deviceRegistry.validateToken(token)
+
           if (!device) {
             return null
           }
+
           // Why: outer relay authorization cannot choose the local Orca
           // identity; E2EE must resolve the same device before readiness.
           if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
             return null
           }
+
           return toAuthenticatedDevice(device)
         },
         onReady: (channel, device) => {
@@ -177,6 +185,7 @@ export class MobileSocketWiring {
             },
             transport: metadata
           }
+
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceToken)
           // Why: deferred — the client's e2ee_authenticated must not wait on a secure-file rewrite.
@@ -188,6 +197,7 @@ export class MobileSocketWiring {
           this.channels.get(ws)?.destroy()
           this.channels.delete(ws)
           ws.close(code, reason)
+
           if (reportUnpairedDevice) {
             try {
               this.onUnpairedDeviceAuthFailure?.(metadata)
@@ -200,18 +210,21 @@ export class MobileSocketWiring {
       })
       channel.onMessage((plaintext, reply, sendBinary) => {
         const socket = this.authenticatedSockets.get(ws)
+
         if (socket) {
           this.onText(socket, plaintext, reply, sendBinary)
         }
       })
       channel.onBinaryMessage((bytes) => {
         const socket = this.authenticatedSockets.get(ws)
+
         if (socket) {
           this.onBinary(socket, bytes)
         }
       })
       this.channels.set(ws, channel)
     }
+
     channel.handleRawMessage(message)
   }
 
@@ -221,11 +234,13 @@ export class MobileSocketWiring {
     this.channels.get(ws)?.destroy()
     this.channels.delete(ws)
     this.connectionIds.delete(ws)
+
     const hasOtherConnections =
       socket !== null &&
       Array.from(this.authenticatedSockets.values()).some(
         (candidate) => candidate.device.deviceToken === socket.device.deviceToken
       )
+
     this.onClose(socket, hasOtherConnections)
   }
 }

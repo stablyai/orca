@@ -4,6 +4,7 @@ export function recordAgentHibernationPaneOutput(paneKey: string): void {
   if (!paneKey) {
     return
   }
+
   outputEpochByPaneKey.set(paneKey, getAgentHibernationPaneOutputEpoch(paneKey) + 1)
 }
 
@@ -24,6 +25,7 @@ export function forgetAgentHibernationPaneOutput(paneKey: string): void {
 // once; mirror that bulk shape so callers don't re-implement the key scan.
 export function forgetAgentHibernationTabOutput(tabId: string): void {
   const prefix = `${tabId}:`
+
   for (const paneKey of outputEpochByPaneKey.keys()) {
     if (paneKey.startsWith(prefix)) {
       outputEpochByPaneKey.delete(paneKey)

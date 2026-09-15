@@ -1,6 +1,7 @@
 import os from 'node:os'
 
 const MAX_DIAGNOSTIC_LENGTH = 1_024
+
 // Alternatives in order: CSI; string sequences whose payload must also be dropped; remaining two-byte escapes.
 const ANSI_ESCAPE = new RegExp(
   [
@@ -10,19 +11,24 @@ const ANSI_ESCAPE = new RegExp(
   ].join('|'),
   'g'
 )
+
 const CONTROL_CHARACTERS = new RegExp(String.raw`[\u0000-\u001f\u007f]`, 'g')
+
 const MIN_REDACTED_USERNAME_LENGTH = 3
 
 function stringifyLoggerValue(value: unknown): string {
   if (typeof value === 'string') {
     return value
   }
+
   if (value instanceof Error) {
     return value.message
   }
+
   if (value === null || value === undefined) {
     return ''
   }
+
   if (typeof value === 'object') {
     try {
       return JSON.stringify(value) ?? ''
@@ -30,6 +36,7 @@ function stringifyLoggerValue(value: unknown): string {
       return ''
     }
   }
+
   return String(value)
 }
 
@@ -51,26 +58,36 @@ export function redactLinuxPackageInstallText(
   packagePath: string | null
 ): string | null {
   const raw = stringifyLoggerValue(value)
+
   if (raw.length === 0) {
     return null
   }
+
   let text = raw.replace(ANSI_ESCAPE, '').replace(CONTROL_CHARACTERS, ' ')
+
   if (packagePath) {
     text = replaceAllLiteral(text, packagePath, '<package>')
   }
+
   const homeDir = os.homedir()
+
   if (homeDir) {
     text = replaceAllLiteral(text, homeDir, '<home>')
   }
+
   // Why: privilege tools can name the user without including their home directory.
   const userName = readUserName()
+
   if (userName && userName.length >= MIN_REDACTED_USERNAME_LENGTH) {
     text = replaceAllLiteral(text, userName, '<user>')
   }
+
   text = text.replace(/\s+/g, ' ').trim()
+
   if (text.length === 0) {
     return null
   }
+
   return text.length > MAX_DIAGNOSTIC_LENGTH ? text.slice(0, MAX_DIAGNOSTIC_LENGTH) : text
 }
 

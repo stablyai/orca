@@ -41,10 +41,13 @@ function createGitRepo(repoPath: string): void {
 async function addSecondProject(page: Page, repoPath: string): Promise<void> {
   await page.evaluate(async (targetRepoPath) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const addedRepo = await store.getState().addRepoPath(targetRepoPath)
+
     if (!addedRepo) {
       throw new Error(`Failed to add repo at ${targetRepoPath}`)
     }
@@ -60,9 +63,11 @@ async function openComposerWithLinkedWorkItem(
   await page.evaluate(
     ({ linkedWorkItem, prefilledName, taskSourceContext }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.getState().openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName,
@@ -77,12 +82,15 @@ async function getJiraSourceContext(page: Page): Promise<TaskSourceContext> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const activeWorktreeId = state?.activeWorktreeId
+
     const setup = state?.projectHostSetups.find((candidate) =>
       state.worktreesByRepo[candidate.repoId]?.some((worktree) => worktree.id === activeWorktreeId)
     )
+
     if (!setup) {
       throw new Error('Active project host setup is unavailable')
     }
+
     return {
       kind: 'task-source',
       provider: 'jira',

@@ -5,6 +5,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -32,6 +33,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('still retires the regular TUI surface after an explicit terminal exit', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -69,6 +71,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onPtyRebind = vi.fn()
     resolvedPaneHandle = 'terminal-expired'
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -76,6 +79,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       onPtyExit,
       onPtyRebind
     })
+
     transport.attach({
       existingPtyId: 'remote:hub-env@@terminal-expired',
       cols: 80,
@@ -98,6 +102,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       return { ok: true, result: {} }
     })
 
@@ -140,11 +145,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onError = vi.fn()
     resolvedPaneHandle = 'terminal-mismatch'
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
       leafId: 'pane:1'
     })
+
     transport.attach({
       existingPtyId: 'remote:hub-env@@terminal-mismatch',
       callbacks: { onError }
@@ -175,11 +182,13 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onError = vi.fn()
     resolvedPaneHandle = 'terminal-expired'
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('legacy-hub', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
       leafId: 'pane:1'
     })
+
     transport.attach({
       existingPtyId: 'remote:legacy-hub@@terminal-expired',
       callbacks: { onError }
@@ -192,6 +201,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           error: { code: 'method_not_found', message: 'Unknown method: terminal.recoverPane' }
         }
       }
+
       return { ok: true, result: {} }
     })
 
@@ -217,6 +227,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('ignores stale stream end after reattaching a newer remote terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',

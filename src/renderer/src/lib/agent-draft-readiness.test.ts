@@ -14,6 +14,7 @@ const testState = vi.hoisted(() => ({
 vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (_ptyId: string, observer: (data: string) => void) => {
     testState.observer = observer
+
     return testState.unsubscribe
   }
 }))
@@ -23,7 +24,9 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 }))
 
 const PTY_ID = 'pty-buffered-codex'
+
 const CODEX_COMPOSER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
+
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 
 describe('waitForAgentDraftInputReady', () => {

@@ -10,12 +10,14 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
 
     this.removeEventListener = this.client.onEvent((raw) => {
       const event = raw as DaemonEvent
+
       if (event.type !== 'event') {
         return
       }
 
       if (event.event === 'data') {
         this.markSessionDirty(event.sessionId)
+
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.dataListeners]) {
           listener({
@@ -58,6 +60,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         ) {
           return
         }
+
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
           kind: 'transientFact',
@@ -65,15 +68,18 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         })
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+
         const pendingOperations = new Set([
           ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
           ...this.pendingClaimSpawnOperations
         ])
+
         for (const operation of pendingOperations) {
           if (operation.ignoreNextExit) {
             operation.ignoreNextExit = false
             continue
           }
+
           const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
           exits.push(
             event.payload.incarnationId
@@ -82,6 +88,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           )
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
+
         // Keep a raced exit available to the in-flight spawn even when the
         // adapter still remembers the predecessor's generation. Only the
         // generation currently published by this adapter may clear state or
@@ -92,11 +99,13 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         ) {
           return
         }
+
         this.clearExitedSessionState(
           event.sessionId,
           event.payload.code,
           event.payload.incarnationId
         )
+
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.exitListeners]) {
           listener({
@@ -114,9 +123,11 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
     if (!this.supportsStartupIngress) {
       return 0
     }
+
     const result = await this.client.request<{ appliedSeq: number }>('closeStartupQueryAuthority', {
       sessionId: id
     })
+
     return result.appliedSeq
   }
 }

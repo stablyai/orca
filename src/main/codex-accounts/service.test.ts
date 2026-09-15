@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -33,12 +34,14 @@ describe('CodexAccountService config sync', () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     const canonicalConfig = 'approval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       'approval_policy = "on-request"\n',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -55,6 +58,7 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
@@ -72,11 +76,13 @@ describe('CodexAccountService config sync', () => {
     const fixture = await createCanonicalHookTrustFixture()
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(canonicalConfigPath, fixture.config, 'utf-8')
+
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       'approval_policy = "on-request"\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -92,6 +98,7 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
@@ -99,16 +106,20 @@ describe('CodexAccountService config sync', () => {
     const { readCodexTrustGrantLedgerHome } = await import('../codex/codex-trust-grant-ledger')
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
       runtimeHome as never
     )
+
     const expectSanitizedManagedConfig = (): void => {
       const entries = readHookTrustEntries(join(managedHomePath, 'config.toml'))
+
       for (const key of fixture.orcaKeys) {
         expect(entries.has(key)).toBe(false)
       }
+
       // The launch-time hook mirror remaps user trust to this home's hooks.json.
       expect(entries.has(fixture.userKey)).toBe(false)
     }
@@ -130,12 +141,14 @@ describe('CodexAccountService config sync', () => {
       'model_instructions_file = "instructions.md"\nsandbox_mode = "danger-full-access"\n',
       'utf-8'
     )
+
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       'approval_policy = "on-request"\n',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -152,6 +165,7 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
@@ -170,6 +184,7 @@ describe('CodexAccountService config sync', () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     const { escapeTomlString } = await import('../codex/config-toml-trust')
     const userHookKey = `${join(testState.fakeHomeDir, '.codex', 'user-hooks.json')}:stop:0:0`
+
     const canonicalConfig = [
       'approval_policy = "never"',
       'sandbox_mode = "danger-full-access"',
@@ -177,14 +192,18 @@ describe('CodexAccountService config sync', () => {
       'trusted_hash = "sha256:user-owned"',
       ''
     ].join('\n')
+
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
+
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       canonicalConfig,
       '{"account":"managed"}\n'
     )
+
     const managedConfigPath = join(managedHomePath, 'config.toml')
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -201,6 +220,7 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
@@ -227,12 +247,14 @@ describe('CodexAccountService config sync', () => {
       'sandbox_mode = "danger-full-access"\n',
       '{"account":"one"}\n'
     )
+
     const secondManagedHomePath = createManagedHome(
       testState.userDataDir,
       'account-2',
       'sandbox_mode = "workspace-write"\n',
       '{"account":"two"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -259,6 +281,7 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
@@ -277,11 +300,13 @@ describe('CodexAccountService config sync', () => {
   it('re-syncs config when selecting an account', async () => {
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
     writeFileSync(canonicalConfigPath, 'sandbox_mode = "danger-full-access"\n', 'utf-8')
+
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       'approval_policy = "on-request"\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -297,11 +322,13 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -323,11 +350,13 @@ describe('CodexAccountService config sync', () => {
 
   it('does not throw on startup when the canonical config path is unreadable', async () => {
     mkdirSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), { recursive: true })
+
     const managedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       'approval_policy = "on-request"\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -343,6 +372,7 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()

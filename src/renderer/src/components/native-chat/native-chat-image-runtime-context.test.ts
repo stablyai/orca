@@ -18,12 +18,14 @@ function state(): AppState {
     sortOrder: 0,
     createdAt: 0
   }
+
   const worktree = {
     id: 'wt-1',
     repoId: 'repo',
     path: '/repo/worktree',
     hostId: 'local'
   }
+
   return {
     activeWorkspaceExecutionHostId: 'local',
     activeWorktreeId: 'wt-1',
@@ -49,6 +51,7 @@ describe('resolveNativeChatImageRuntimeContext', () => {
   it('keeps unrelated store writes out of the image-owner selector', () => {
     const storeState = state()
     const first = selectNativeChatImageOwnerState(storeState)
+
     const second = selectNativeChatImageOwnerState({
       ...storeState,
       agentStatusByPaneKey: {} as AppState['agentStatusByPaneKey']
@@ -69,12 +72,14 @@ describe('resolveNativeChatImageRuntimeContext', () => {
 
   it('derives a runtime host from an owner-only route during paired hydration', () => {
     const storeState = state()
+
     const ownerOnlyWorktree = {
       id: 'wt-1',
       repoId: 'repo',
       path: '/repo/worktree',
       runtimeOwnerEnvironmentId: 'owner-a'
     }
+
     const ownerState = {
       ...storeState,
       activeWorktreeId: null,

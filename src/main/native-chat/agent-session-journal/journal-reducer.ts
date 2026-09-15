@@ -63,14 +63,18 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
 export function applyJournalRow(state: JournalReducerState, row: JournalRow): void {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
+
   if (row.kind === 'epoch') {
     return
   }
+
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
+
   if (row.kind === 'item') {
     if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
       return
     }
+
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertItem(state, itemId, row.revision, {
@@ -81,21 +85,27 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
       observedAt: row.ts,
       ...(row.recovered ? { recovered: row.recovered } : {})
     })
+
     return
   }
+
   if (row.kind === 'tombstone') {
     removeItem(state, resolveItemId(state, row.itemId), row.revision)
+
     return
   }
+
   if (row.kind === 'lifecycle-batch') {
     if (state.appliedSettlementIds.has(row.settlementId)) {
       return
     }
+
     for (const mutation of row.mutations) {
       if (mutation.kind === 'item') {
         if (journalItemRevisionIsStale(state, mutation.itemId, mutation.revision)) {
           continue
         }
+
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         upsertItem(state, itemId, mutation.revision, {
@@ -110,13 +120,18 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
         removeItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
       }
     }
+
     rememberAppliedSettlementId(state, row.settlementId)
+
     return
   }
+
   if (row.kind === 'submission') {
     applySubmission(state, row)
+
     return
   }
+
   applyDispatch(state, row)
 }
 
@@ -125,11 +140,14 @@ export function rememberAppliedSettlementId(
   settlementId: string
 ): void {
   state.appliedSettlementIds.add(settlementId)
+
   while (state.appliedSettlementIds.size > MAX_JOURNAL_APPLIED_SETTLEMENT_IDS) {
     const oldest = state.appliedSettlementIds.values().next().value
+
     if (oldest === undefined) {
       return
     }
+
     state.appliedSettlementIds.delete(oldest)
   }
 }
@@ -140,10 +158,13 @@ export function resolveJournalItemId(
   body?: AgentJournalRenderItem['body']
 ): string {
   const aliased = state.aliases.get(itemId)
+
   if (aliased) {
     return aliased
   }
+
   const identity = parseAgentJournalItemKey(itemId)
+
   if (
     !body ||
     body.kind !== 'message' ||
@@ -153,11 +174,13 @@ export function resolveJournalItemId(
   ) {
     return itemId
   }
+
   const fingerprint = structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.send',
     sessionId: state.sessionId,
     fields: { body }
   })
+
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
   // A submission an echo may not claim is one that says the message never reached
   // the provider, so an item resembling it is somebody else's. That is `rejected`
@@ -173,11 +196,14 @@ export function resolveJournalItemId(
         candidate.payloadFingerprint === fingerprint &&
         state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
     )
+
   if (!submission) {
     return itemId
   }
+
   const submissionId = agentJournalSubmissionKey(submission.clientMessageId)
   state.aliases.set(itemId, submissionId)
+
   return submissionId
 }
 
@@ -192,18 +218,24 @@ function upsertItem(
   next: AgentJournalRenderItem
 ): void {
   const tombstoned = state.tombstones.get(itemId)
+
   if (tombstoned !== undefined && revision <= tombstoned) {
     return
   }
+
   const existing = state.items.get(itemId)
+
   if (existing && revision <= existing.revision) {
     return
   }
+
   if (!existing) {
     state.items.set(itemId, next)
     state.tombstones.delete(itemId)
+
     return
   }
+
   // Creation sequence is the ordering key; a revision refreshes content only.
   // `observedAt` is pinned with it: clients sort the timeline by that timestamp,
   // so letting a revision advance it makes the row jump past everything that
@@ -213,6 +245,7 @@ function upsertItem(
     existing.body.kind === 'message' &&
     existing.body.role === 'user' &&
     parseAgentJournalItemKey(itemId)?.provider === 'orca'
+
   state.items.set(itemId, {
     ...next,
     // Provider history may normalize text or omit local attachments from the original send.
@@ -225,13 +258,17 @@ function upsertItem(
 
 function removeItem(state: JournalReducerState, itemId: string, revision: number): void {
   const existing = state.items.get(itemId)
+
   if (existing && revision <= existing.revision) {
     return
   }
+
   const tombstoned = state.tombstones.get(itemId)
+
   if (tombstoned !== undefined && revision <= tombstoned) {
     return
   }
+
   state.tombstones.set(itemId, revision)
   state.items.delete(itemId)
 }
@@ -265,26 +302,32 @@ function applyDispatch(
   row: Extract<JournalRow, { kind: 'dispatch' }>
 ): void {
   const submission = state.submissions.get(row.clientMessageId)
+
   if (!submission) {
     return
   }
+
   // `rejected` is terminal; a late `unknown` must not reopen a settled answer.
   if (submission.dispatchState === 'rejected' || submission.dispatchState === 'accepted') {
     return
   }
+
   submission.fence = row.fence
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
   submission.reason = row.reason
   submission.resolvedAt = row.state === 'pending' ? null : row.ts
+
   if (row.recovered) {
     submission.recovered = row.recovered
   } else {
     delete submission.recovered
   }
+
   if (row.state !== 'accepted' || !row.providerItemId) {
     return
   }
+
   state.aliases.set(row.providerItemId, agentJournalSubmissionKey(row.clientMessageId))
   state.receipts.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
@@ -303,9 +346,11 @@ function acceptSubmissionFromProviderItem(
   if (providerItemId === resolvedItemId) {
     return
   }
+
   const submission = [...state.submissions.values()].find(
     (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
   )
+
   if (
     !submission ||
     submission.dispatchState === 'accepted' ||
@@ -313,6 +358,7 @@ function acceptSubmissionFromProviderItem(
   ) {
     return
   }
+
   submission.fence = row.fence
   submission.dispatchState = 'accepted'
   submission.providerItemId = providerItemId
@@ -332,6 +378,7 @@ export function renderJournalState(state: JournalReducerState): AgentJournalSnap
   // Sequence is the sole ordering key; map insertion order is not, because a
   // re-created item re-enters the map after the items that followed it.
   const items = [...state.items.values()].sort((a, b) => a.sequence - b.sequence)
+
   return {
     sessionId: state.sessionId,
     cursor: { epoch: state.epoch, sequence: state.lastSequence },

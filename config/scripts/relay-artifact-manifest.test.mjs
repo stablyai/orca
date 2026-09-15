@@ -17,6 +17,7 @@ import {
 } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 // Its own tree: building into out/relay would clobber a developer's build and
 // race the suites that read it.
 const relayOutDir = mkdtempSync(join(tmpdir(), 'orca-relay-contract-'))
@@ -41,20 +42,24 @@ describe('packaged relay artifact manifest', () => {
     for (const filename of expected) {
       expect(existsSync(join(outDir, filename)), `${platform}/${filename} missing`).toBe(true)
     }
+
     // Exactly, not merely at least: an undeclared artifact ships unhashed and
     // unprobed, which is the same gap in the other direction.
     const emitted = readdirSync(outDir)
       .filter((name) => name !== RELAY_VERSION_FILENAME)
       .sort()
+
     expect(emitted).toEqual([...expected].sort())
   })
 
   it.each([...RELAY_BUILD_PLATFORMS])('hashes every declared artifact for %s', (platform) => {
     const outDir = join(relayOutDir, platform)
     const hash = createHash('sha256')
+
     for (const filename of relayArtifactFilenames(isWindowsRelayPlatform(platform))) {
       hash.update(readFileSync(join(outDir, filename)))
     }
+
     const version = readFileSync(join(outDir, RELAY_VERSION_FILENAME), 'utf8')
 
     // A companion left out of the hash lets a changed relay reuse an existing

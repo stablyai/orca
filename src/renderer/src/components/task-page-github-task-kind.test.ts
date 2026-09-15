@@ -97,6 +97,7 @@ describe('scopeGitHubTaskSearch', () => {
   })
 
   const alreadyScoped = ['is:pr is:open', 'is:issue label:bug', 'IS:PR is:open', 'is:pull-request']
+
   for (const query of alreadyScoped) {
     it(`leaves "${query}" untouched apart from trimming`, () => {
       expect(scopeGitHubTaskSearch(` ${query} `, 'issues')).toBe(query)

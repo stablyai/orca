@@ -36,16 +36,20 @@ export async function remoteCodexIndexTitles(args: {
   signal?: AbortSignal
 }): Promise<Map<string, string>> {
   const cached = args.titleCaches.get(args.codexHome)
+
   if (cached) {
     return cached
   }
+
   const pending = readRemoteCodexIndexTitles(
     args.provider,
     args.codexHome,
     args.hostPlatform,
     args.signal
   )
+
   args.titleCaches.set(args.codexHome, pending)
+
   return pending
 }
 
@@ -56,22 +60,30 @@ async function readRemoteCodexIndexTitles(
   signal?: AbortSignal
 ): Promise<Map<string, string>> {
   const titleBySessionId = new Map<string, string>()
+
   try {
     throwIfAiVaultScanCancelled(signal)
+
     const { content, isBinary } = await provider.readFile(
       joinRemotePath(hostPlatform, codexHome, CODEX_SESSION_INDEX_FILE)
     )
+
     throwIfAiVaultScanCancelled(signal)
+
     if (isBinary) {
       return titleBySessionId
     }
+
     for await (const line of remoteSessionContentLines(content, signal)) {
       const record = parseJsonObject(line)
+
       if (!record) {
         continue
       }
+
       const sessionId = extractString(record.id)
       const title = normalizeTitleText(extractString(record.thread_name) ?? '')
+
       if (sessionId && title) {
         titleBySessionId.set(sessionId, title)
       }
@@ -80,5 +92,6 @@ async function readRemoteCodexIndexTitles(
     throwIfAiVaultScanCancelled(signal)
     // Codex indexes are opportunistic; raw transcripts remain sufficient.
   }
+
   return titleBySessionId
 }

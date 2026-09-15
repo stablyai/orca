@@ -22,10 +22,12 @@ const mocks = vi.hoisted(() => {
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     ptyIdsByTabId: {} as Record<string, string[]>
   }
+
   const suspendWorkspace = vi.fn().mockResolvedValue(null)
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
+
   return {
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
@@ -42,6 +44,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
 vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
   markWorktreeSleepIntent: mocks.markWorktreeSleepIntent,
@@ -122,20 +125,24 @@ describe('runSleepWorktree', () => {
 
   it('preserves active row position through section-scoped sidebar row ids', async () => {
     const requestAnimationFrame = vi.fn(() => 1)
+
     const scroller = {
       dispatchEvent: vi.fn(),
       scrollHeight: 100,
       scrollTop: 0
     }
+
     const row = {
       closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null),
       getBoundingClientRect: () => ({ top: 42 })
     }
+
     const option = {
       dataset: { worktreeId: 'wt-1' },
       closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null),
       querySelector: () => null
     }
+
     vi.stubGlobal('document', {
       querySelector: (selector: string) =>
         selector === '[data-worktree-sidebar]' ? scroller : null,
@@ -151,31 +158,38 @@ describe('runSleepWorktree', () => {
 
   it('anchors sleep restoration to the natural duplicate row when no primary row is marked', async () => {
     const requestAnimationFrame = vi.fn(() => 1)
+
     const scroller = {
       dispatchEvent: vi.fn(),
       scrollHeight: 100,
       scrollTop: 0
     }
+
     const pinnedGetBoundingClientRect = vi.fn(() => ({ top: 10 }))
     const naturalGetBoundingClientRect = vi.fn(() => ({ top: 42 }))
+
     const pinnedRow = {
       getBoundingClientRect: pinnedGetBoundingClientRect
     }
+
     const naturalRow = {
       getBoundingClientRect: naturalGetBoundingClientRect
     }
+
     const pinnedOption = {
       dataset: { worktreeId: 'wt-1', worktreeRowKey: 'pinned:wt-1' },
       closest: (selector: string) =>
         selector === '[data-worktree-virtual-row]' ? pinnedRow : null,
       querySelector: () => null
     }
+
     const naturalOption = {
       dataset: { worktreeId: 'wt-1', worktreeRowKey: 'all:wt-1' },
       closest: (selector: string) =>
         selector === '[data-worktree-virtual-row]' ? naturalRow : null,
       querySelector: () => null
     }
+
     vi.stubGlobal('document', {
       querySelector: (selector: string) =>
         selector === '[data-worktree-sidebar]' ? scroller : null,
@@ -204,6 +218,7 @@ describe('runSleepWorktree', () => {
 
   it('leaves a worktree the user activated mid-batch awake', async () => {
     let releaseFirst: () => void = () => {}
+
     mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
@@ -224,6 +239,7 @@ describe('runSleepWorktree', () => {
 
   it('marks each worktree only when its own teardown starts', async () => {
     let releaseFirst: () => void = () => {}
+
     mocks.state.shutdownWorktreeBrowsers.mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
@@ -288,6 +304,7 @@ describe('runSleepWorktree', () => {
       if (worktreeId === 'wt-1') {
         return Promise.reject(new Error('first failed'))
       }
+
       return Promise.resolve()
     })
 

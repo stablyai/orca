@@ -34,7 +34,9 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (typeof seq !== 'number' || typeof stream.expectedSeq !== 'number') {
       return false
     }
+
     const startSeq = seq - rawLength
+
     return startSeq > stream.expectedSeq
   }
 
@@ -46,7 +48,9 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (stream.resyncInFlight) {
       return
     }
+
     stream.resyncInFlight = true
+
     if (stream.pendingSnapshotRequest) {
       // Why: snapshot frame groups are not multiplexed; wait for the manual
       // snapshot to finish so its response cannot be mistaken for recovery.
@@ -54,8 +58,10 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
       // request without re-dispatching cannot hold the gate shut forever.
       stream.resyncPendingSend = true
       this.startResyncTimer(stream)
+
       return
     }
+
     this.sendResyncSnapshot(stream)
   }
 
@@ -63,17 +69,20 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (!stream.resyncInFlight || !stream.resyncPendingSend || stream.pendingSnapshotRequest) {
       return
     }
+
     this.sendResyncSnapshot(stream)
   }
 
   private sendResyncSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
     stream.resyncPendingSend = false
     this.startResyncTimer(stream)
+
     const sent = this.sendFrame(
       stream.streamId,
       TerminalStreamOpcode.SnapshotRequest,
       encodeTerminalStreamJson({ scrollbackRows: undefined })
     )
+
     if (!sent) {
       // Transport is down; the reconnect path re-subscribes from scratch.
       clearResyncTimer(stream)
@@ -85,11 +94,14 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
   // either way — and heal even if the flood ends with no further output.
   protected scheduleResyncRetry(stream: RemoteRuntimeMultiplexedTerminalState): void {
     stream.resyncAttempts += 1
+
     const delay = Math.min(
       REMOTE_TERMINAL_RESYNC_RETRY_MAX_MS,
       REMOTE_TERMINAL_RESYNC_RETRY_BASE_MS * 2 ** Math.min(stream.resyncAttempts - 1, 4)
     )
+
     clearResyncTimer(stream)
+
     const timer = setTimeout(() => {
       if (
         stream.resyncTimer !== timer ||
@@ -98,22 +110,29 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
       ) {
         return
       }
+
       stream.resyncTimer = null
+
       if (stream.pendingSnapshotRequest) {
         stream.resyncPendingSend = true
         this.startResyncTimer(stream)
+
         return
       }
+
       this.sendResyncSnapshot(stream)
     }, delay)
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+
     stream.resyncTimer = timer
   }
 
   private startResyncTimer(stream: RemoteRuntimeMultiplexedTerminalState): void {
     clearResyncTimer(stream)
+
     const timer = setTimeout(() => {
       if (
         stream.resyncTimer !== timer ||
@@ -122,13 +141,16 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
       ) {
         return
       }
+
       stream.resyncTimer = null
       stream.resyncInFlight = false
       stream.resyncPendingSend = false
     }, REMOTE_TERMINAL_RESYNC_TIMEOUT_MS)
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+
     stream.resyncTimer = timer
   }
 
@@ -143,6 +165,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     source?: 'headless' | 'renderer'
   } | null> {
     const outcome = await this.requestSnapshotOutcome(stream, opts)
+
     // Why: the concurrent-request guard used to reject before the outcome existed; keep that contract for legacy callers.
     if (
       outcome.availability.kind === 'retry-worthy' &&
@@ -150,6 +173,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     ) {
       throw new Error('Remote terminal snapshot already in flight.')
     }
+
     return outcome.snapshot
   }
 
@@ -160,18 +184,23 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (this.streams.get(stream.streamId) !== stream) {
       return Promise.resolve(retryWorthySnapshotOutcome('stream-detached'))
     }
+
     if (!this.ready || !this.subscription) {
       return Promise.resolve(retryWorthySnapshotOutcome('connection-not-ready'))
     }
+
     // Recovery uses an untagged snapshot frame group; callers can retry after
     // it completes instead of racing another request onto the same frame lane.
     if (stream.resyncInFlight) {
       return Promise.resolve(retryWorthySnapshotOutcome('resync-in-flight'))
     }
+
     if (stream.pendingSnapshotRequest) {
       return Promise.resolve(retryWorthySnapshotOutcome('request-already-in-flight'))
     }
+
     const requestId = this.allocateSnapshotRequestId()
+
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         if (stream.pendingSnapshotRequest?.timer === timer) {
@@ -180,10 +209,13 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
           this.recoverStalledStream(stream)
         }
       }, REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS)
+
       if (typeof timer.unref === 'function') {
         timer.unref()
       }
+
       stream.pendingSnapshotRequest = { requestId, resolve, reject, timer }
+
       if (
         !this.sendFrame(
           stream.streamId,
@@ -203,6 +235,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
         if (this.streams.get(stream.streamId) !== stream) {
           return
         }
+
         if (typeof snapshot?.seq === 'number' && typeof stream.expectedSeq !== 'number') {
           if (
             typeof stream.commandProbeBaselineSeq === 'number' &&
@@ -216,8 +249,10 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
               terminal: stream.terminal
             })
             this.recoverStalledStream(stream)
+
             return
           }
+
           stream.commandProbeBaselineSeq ??= snapshot.seq
         } else if (
           typeof snapshot?.seq === 'number' &&
@@ -232,8 +267,10 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
             terminal: stream.terminal
           })
           this.recoverStalledStream(stream)
+
           return
         }
+
         stream.watchdog.completeCommandResponseProbe()
         recordRendererCrashBreadcrumb('remote_terminal_stream_stall_probe_succeeded', {
           deliveredSeq: stream.expectedSeq ?? null,
@@ -257,6 +294,7 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     if (this.streams.get(stream.streamId) !== stream) {
       return
     }
+
     stream.watchdog.dispose()
     discardOutputAcknowledgements(stream)
     clearSnapshot(stream)
@@ -264,11 +302,13 @@ export abstract class RemoteRuntimeTerminalSnapshotController extends RemoteRunt
     rejectPendingSnapshotRequest(stream, 'Remote terminal stream stopped responding.')
     this.streams.delete(stream.streamId)
     this.sendFrame(stream.streamId, TerminalStreamOpcode.Unsubscribe)
+
     if (stream.callbacks.onTransportClose) {
       stream.callbacks.onTransportClose({ recoverable: true })
     } else {
       stream.callbacks.onError?.('Remote terminal stream stopped responding.')
     }
+
     this.closeIfIdle()
   }
 }

@@ -78,24 +78,32 @@ export function useNativeChatTranscriptScroll({
   const syncScrollState = useCallback(
     (event?: Event): ScrollGeometry | null => {
       const element = scrollRef.current
+
       if (!element) {
         return null
       }
+
       const geometry = geometryOf(element)
+
       if (event) {
         const wasFollowing = followingRef.current
         const programmatic = consumeProgrammaticScroll(event)
+
         const following = nextFollowingEnd({
           following: followingRef.current,
           programmatic,
           geometry
         })
+
         followingRef.current = following
+
         if (!programmatic) {
           reconcileReaderScroll(wasFollowing && !following)
         }
       }
+
       setShowJump(shouldShowJumpToLatest(followingRef.current, geometry))
+
       return geometry
     },
     [consumeProgrammaticScroll, reconcileReaderScroll, scrollRef]
@@ -107,11 +115,14 @@ export function useNativeChatTranscriptScroll({
   const onScroll = useCallback<UIEventHandler<HTMLDivElement>>(
     (event) => {
       const geometry = syncScrollState(event.nativeEvent)
+
       if (!geometry) {
         return
       }
+
       const previousScrollTop = previousScrollTopRef.current
       previousScrollTopRef.current = geometry.scrollTop
+
       if (
         shouldLoadEarlier({
           geometry,
@@ -151,9 +162,11 @@ export function useNativeChatTranscriptScroll({
 
   useEffect(() => {
     const element = scrollRef.current
+
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
+
     const observer = new ResizeObserver(() => {
       if (followingRef.current) {
         scrollToEnd()
@@ -161,12 +174,15 @@ export function useNativeChatTranscriptScroll({
         syncScrollState()
       }
     })
+
     // Observe the growing content, not just the fixed-height viewport, so an
     // in-place streaming growth is seen; also watch the viewport for reflows.
     observer.observe(element)
+
     if (contentRef.current) {
       observer.observe(contentRef.current)
     }
+
     return () => observer.disconnect()
   }, [contentRef, scrollRef, scrollToEnd, syncScrollState])
 

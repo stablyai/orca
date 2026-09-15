@@ -23,11 +23,13 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)
+
   const canDockSidebar = canDockPrSidebar({
     isWideLayout,
     availableWidth: contentRowWidth,
     dockWidth: PR_SIDEBAR_DOCK_WIDTH
   })
+
   const presentationMode = resolvePresentationMode(isWideLayout, canDockSidebar)
   // Inline-dock the sidebar only when wide and the repo is GitHub; otherwise it
   // lives in the RightDrawer overlay toggled by showPRSidebar.

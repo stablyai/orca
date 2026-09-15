@@ -60,6 +60,7 @@ describe('process rung requires a host-stamped proof', () => {
       launchAgent: 'claude',
       foregroundAgent: 'codex'
     })
+
     expect(unproven).toMatchObject({ agent: 'claude', source: 'launch' })
 
     const proven = resolveCanonicalPaneAgentIdentity({
@@ -67,6 +68,7 @@ describe('process rung requires a host-stamped proof', () => {
       foregroundAgent: 'codex',
       processProof: freshProof
     })
+
     expect(proven).toMatchObject({ agent: 'codex', source: 'process', coverage: 'covered' })
   })
 
@@ -76,6 +78,7 @@ describe('process rung requires a host-stamped proof', () => {
       foregroundAgent: 'codex',
       processProof: { ...freshProof, capturedAgeMs: 10_000 }
     })
+
     expect(expired).toMatchObject({ agent: 'claude', source: 'launch' })
 
     const mismatched = resolveCanonicalPaneAgentIdentity({
@@ -83,6 +86,7 @@ describe('process rung requires a host-stamped proof', () => {
       foregroundAgent: 'gemini',
       processProof: freshProof
     })
+
     expect(mismatched).toMatchObject({ agent: 'claude', source: 'launch' })
   })
 })
@@ -93,6 +97,7 @@ describe('uncovered compatibility lane', () => {
       title: 'Fix the parser - grok',
       uncoveredFallback: { agent: 'grok', titleOnly: true }
     })
+
     expect(identity).toMatchObject({
       agent: 'grok',
       source: 'title',
@@ -105,6 +110,7 @@ describe('uncovered compatibility lane', () => {
     const identity = resolveCanonicalPaneAgentIdentity({
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
+
     expect(identity).toMatchObject({
       agent: 'grok',
       source: 'title',
@@ -118,6 +124,7 @@ describe('uncovered compatibility lane', () => {
       title: 'anything - grok',
       uncoveredFallback: { agent: null }
     })
+
     expect(identity).toMatchObject({ agent: null, source: null, coverage: 'uncovered' })
   })
 
@@ -141,6 +148,7 @@ describe('uncovered compatibility lane', () => {
       foregroundAgent: 'codex',
       uncoveredFallback: { agent: 'codex' }
     })
+
     expect(identity).toMatchObject({
       agent: 'codex',
       source: null,
@@ -156,6 +164,7 @@ describe('canonical ladder inside the covered lane', () => {
       launchAgent: 'claude',
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
+
     expect(identity).toMatchObject({ agent: 'claude', source: 'launch', titleOnly: false })
   })
 
@@ -164,13 +173,16 @@ describe('canonical ladder inside the covered lane', () => {
       launchAgent: 'claude',
       siblingAgent: 'codex'
     })
+
     expect(withoutOptIn.agent).toBe('claude')
+
     const optedIn = resolveCanonicalPaneAgentIdentity({
       hookAgent: 'claude',
       hookIsLive: true,
       siblingAgent: 'codex',
       allowSibling: true
     })
+
     expect(optedIn).toMatchObject({ agent: 'claude', source: 'live-hook' })
   })
 
@@ -180,6 +192,7 @@ describe('canonical ladder inside the covered lane', () => {
       hookIsLive: false,
       completedHookAgent: 'codex'
     })
+
     expect(identity).toMatchObject({ agent: null, ambiguousAt: 'completed-hook' })
   })
 })
@@ -196,6 +209,7 @@ describe('reclaim-versus-stale-hook discriminator (run keys, not title text)', (
       currentRun: run1,
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
+
     expect(identity).toMatchObject({ agent: 'claude', source: 'completed-hook' })
   })
 
@@ -206,6 +220,7 @@ describe('reclaim-versus-stale-hook discriminator (run keys, not title text)', (
       currentRun: run2,
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
+
     expect(identity).toMatchObject({
       agent: 'grok',
       source: 'title',
@@ -222,6 +237,7 @@ describe('reclaim-versus-stale-hook discriminator (run keys, not title text)', (
       currentRun: run2,
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
+
     expect(identity).toMatchObject({ agent: 'claude', source: 'completed-hook' })
   })
 
@@ -231,6 +247,7 @@ describe('reclaim-versus-stale-hook discriminator (run keys, not title text)', (
       currentRun: run2,
       title: 'STA-4011 Linux Antigravity Commit Messages - grok'
     })
+
     expect(identity).toMatchObject({ agent: 'claude', source: 'completed-hook' })
   })
 })
@@ -242,6 +259,7 @@ describe('action floor', () => {
       title: 'claude',
       minimumSource: 'launch'
     })
+
     expect(identity).toMatchObject({ agent: null, source: null, coverage: 'covered' })
   })
 })
@@ -259,6 +277,7 @@ describe('wire evidence projection', () => {
       { authorityId: 'main:a', incarnation: 3 },
       { capturedAgeMs: 10, validForMs: 1_000 }
     )
+
     expect(wire).toMatchObject({
       coverage: 'uncovered',
       titleOnlyActionFallback: true,
@@ -272,6 +291,7 @@ describe('wire evidence projection', () => {
     const wire = buildPaneAgentIdentityEvidenceWire(
       resolveCanonicalPaneAgentIdentity({ launchAgent: 'claude' })
     )
+
     expect(wire).toMatchObject({ source: 'launch', coverage: 'covered' })
     expect(wire?.titleOnlyActionFallback).toBeUndefined()
   })

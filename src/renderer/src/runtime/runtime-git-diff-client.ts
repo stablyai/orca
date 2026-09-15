@@ -12,6 +12,7 @@ export async function getRuntimeGitDiff(
   args: { filePath: string; staged: boolean; compareAgainstHead?: boolean }
 ): Promise<GitDiffResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.diff({
       worktreePath: resolveLocalWorktreePath(context),
@@ -21,6 +22,7 @@ export async function getRuntimeGitDiff(
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<GitDiffResult>(
     target,
     'git.diff',
@@ -35,6 +37,7 @@ export async function getRuntimeGitBranchCompare(
   admissionTier: 'interactive' | 'background' = 'interactive'
 ): Promise<GitBranchCompareResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.branchCompare({
       worktreePath: resolveLocalWorktreePath(context),
@@ -43,6 +46,7 @@ export async function getRuntimeGitBranchCompare(
       admissionTier
     })
   }
+
   return callRuntimeRpc<GitBranchCompareResult>(
     target,
     'git.branchCompare',
@@ -56,6 +60,7 @@ export async function getRuntimeGitCommitCompare(
   commitId: string
 ): Promise<GitCommitCompareResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.commitCompare({
       worktreePath: resolveLocalWorktreePath(context),
@@ -63,6 +68,7 @@ export async function getRuntimeGitCommitCompare(
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<GitCommitCompareResult>(
     target,
     'git.commitCompare',
@@ -80,6 +86,7 @@ export async function getRuntimeGitBranchDiff(
   }
 ): Promise<GitDiffResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.branchDiff({
       worktreePath: resolveLocalWorktreePath(context),
@@ -89,6 +96,7 @@ export async function getRuntimeGitBranchDiff(
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<GitDiffResult>(
     target,
     'git.branchDiff',
@@ -107,6 +115,7 @@ export async function getRuntimeGitCommitDiff(
   }
 ): Promise<GitDiffResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.commitDiff({
       worktreePath: resolveLocalWorktreePath(context),
@@ -117,6 +126,7 @@ export async function getRuntimeGitCommitDiff(
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<GitDiffResult>(
     target,
     'git.commitDiff',

@@ -36,6 +36,7 @@ export function createGitRunnerModuleMock(mocks: GitRunnerMocks): Record<string,
       mocks.gitStreamOptionsMock(options)
       const { stdout } = await mocks.gitExecFileAsyncMock(args)
       const stoppedEarly = options.onStdout(stdout ?? '') === true
+
       return { stoppedEarly }
     },
     gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
@@ -70,20 +71,27 @@ export function createBoundedFileReaderModuleMock(
       if (maxBytes === 64 * 1024) {
         const value = await mocks.readFileMock(filePath)
         const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+
         if (buffer.length > maxBytes) {
           throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
         }
+
         return { buffer, stats: { isFile: () => true, size: buffer.length } }
       }
+
       const stats = await mocks.statMock(filePath)
+
       if (stats.size > maxBytes) {
         throw new actual.NodeFileReadTooLargeError(stats.size, maxBytes)
       }
+
       const value = await mocks.readFileMock(filePath)
       const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
+
       if (buffer.length > maxBytes) {
         throw new actual.NodeFileReadTooLargeError(buffer.length, maxBytes)
       }
+
       return { buffer, stats }
     }
   }

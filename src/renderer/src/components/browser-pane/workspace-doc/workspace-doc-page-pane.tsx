@@ -21,15 +21,18 @@ export function WorkspaceDocPagePane({
   const worktreeId = docLocation?.worktreeId ?? page.worktreeId
   const filePath = docLocation?.filePath ?? ''
   const worktreeRoot = useAppStore((store) => store.getKnownWorktreeById(worktreeId)?.path ?? null)
+
   // Why resolved here rather than stored on the page: ownership moves. A page persisted before a
   // pairing or an SSH reconnect would otherwise route its document actions at yesterday's host.
   const runtimeEnvironmentId = useAppStore(
     (store) => getRuntimeEnvironmentIdForWorktree(store, worktreeId) ?? null
   )
+
   const relativePath = useMemo(
     () => getRelativePathInsideRoot(filePath, worktreeRoot) ?? filePath,
     [filePath, worktreeRoot]
   )
+
   // Why the reader's whole surface and not just this page's activity: a preview keeps its pane
   // mounted behind a terminal or an editor, and focusing its guest from there would take the
   // keyboard away from what the reader is actually in.

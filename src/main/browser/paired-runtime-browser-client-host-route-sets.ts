@@ -39,6 +39,7 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
     if (this.closed || this.current) {
       throw new Error('browser_client_network_route_authority_unavailable')
     }
+
     this.current = { authority, routes: this.options.createRoutes(input, authority) }
   }
 
@@ -46,16 +47,19 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
     if (this.closed) {
       return
     }
+
     if (!this.recovery) {
       this.recovery = createRouteRecoveryGate()
       void this.recovery.promise.catch(() => undefined)
     }
+
     this.recoveryGeneration += 1
     this.requireCurrent().routes.suspend(error)
   }
 
   reconnect(authority: BrowserClientHostLeaseAuthority): void {
     const current = this.current
+
     if (
       this.closed ||
       !current ||
@@ -63,10 +67,13 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
     ) {
       throw new Error('browser_client_network_route_authority_changed')
     }
+
     const recovery = this.recovery
+
     if (!recovery) {
       throw new Error('browser_client_network_route_recovery_unexpected')
     }
+
     const generation = this.recoveryGeneration
     void current.routes
       .reconnect()
@@ -86,9 +93,11 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
   retireCurrent(error: Error): void {
     this.rejectRecovery(error)
     const current = this.current
+
     if (!current) {
       return
     }
+
     this.current = null
     this.retired.add(current.routes)
     const retiring = current.routes.retire(error)
@@ -110,14 +119,18 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
     this.closed = true
     this.rejectRecovery(error)
     const routes = new Set(this.retired)
+
     if (this.current) {
       routes.add(this.current.routes)
     }
+
     this.current = null
     const results = await Promise.allSettled([...routes].map((entry) => entry.close(error)))
+
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : []
     )
+
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Browser client host route cleanup failed')
     }
@@ -127,6 +140,7 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
     if (!this.current || this.closed) {
       throw new Error('browser_client_network_route_authority_unavailable')
     }
+
     return this.current
   }
 
@@ -138,6 +152,7 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
     if (this.recovery !== recovery || this.recoveryGeneration !== generation) {
       return
     }
+
     this.recovery = null
     recovery.reject(error)
     this.options.onRecoveryError(error)
@@ -145,9 +160,11 @@ export class PairedRuntimeBrowserClientHostRouteSets<Start> {
 
   private rejectRecovery(error: Error): void {
     const recovery = this.recovery
+
     if (!recovery) {
       return
     }
+
     this.recovery = null
     recovery.reject(error)
   }
@@ -159,11 +176,14 @@ function createRouteRecoveryGate(): {
   reject: (error: Error) => void
 } {
   let resolve = (): void => {}
+
   let reject = (_error: Error): void => {}
+
   const promise = new Promise<void>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -171,6 +191,7 @@ function waitForRouteRecovery(recovery: Promise<void>, signal: AbortSignal): Pro
   if (signal.aborted) {
     return Promise.reject(new Error('browser_client_host_command_aborted'))
   }
+
   return new Promise((resolve, reject) => {
     const abort = (): void => reject(new Error('browser_client_host_command_aborted'))
     signal.addEventListener('abort', abort, { once: true })

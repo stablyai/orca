@@ -34,14 +34,18 @@ export function useMobileNativeChatActiveResolution(args: {
     nativeChatTranscriptIsLocalReadable,
     worktreeId
   } = args
+
   const { isTabChatView, toggleTabChatView } = useMobileSessionViewMode({ hostId, worktreeId })
+
   const tabWantsChat =
     activeSessionTab?.type === 'agent-session' ||
     (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
+
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat
       ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
       : null
+
   const showNativeChat = activeChatResolution != null
   const showNativeChatRef = useRef(showNativeChat)
   const activeChatAgent = activeChatResolution?.agent ?? null
@@ -53,11 +57,15 @@ export function useMobileNativeChatActiveResolution(args: {
   }, [activeChatAgent, showNativeChat])
 
   const activeChatSessionId = activeChatResolution?.sessionId ?? null
+
   const activeChatStructured =
     activeChatResolution != null && activeSessionTab?.type === 'agent-session'
+
   const activeTabStatus = activeSessionTab?.agentStatus
+
   const activeTabAgentWorking =
     activeTabStatus?.state === 'working' && activeTabStatus.workingMode !== 'monitoring'
+
   const nativeChatStatus = activeChatResolution && !activeChatStructured ? activeTabStatus : null
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
   const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandleRef.current ?? ''}`

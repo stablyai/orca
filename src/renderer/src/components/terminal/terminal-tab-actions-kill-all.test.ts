@@ -93,6 +93,7 @@ describe('closeTerminalTab kill-all routing', () => {
     const state = baseState({
       openFiles: [{ id: 'editor-1', worktreeId: 'wt' }]
     })
+
     getStateMock.mockReturnValue(state)
 
     closeTerminalTab('terminal-1', { force: true })
@@ -110,6 +111,7 @@ describe('closeTerminalTab kill-all routing', () => {
     const state = baseState({
       browserTabsByWorktree: { wt: [{ id: 'browser-1' }] }
     })
+
     getStateMock.mockReturnValue(state)
 
     closeTerminalTab('terminal-1', { force: true })

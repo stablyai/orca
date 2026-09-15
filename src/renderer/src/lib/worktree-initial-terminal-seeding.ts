@@ -43,6 +43,7 @@ export function reseedGatedEmptyWorkspace(
   executionHostId?: ExecutionHostId
 ): void {
   const state = useAppStore.getState()
+
   if (
     callerProvidesSurface === true ||
     state.activeWorktreeId !== workspaceKey ||
@@ -50,6 +51,7 @@ export function reseedGatedEmptyWorkspace(
   ) {
     return
   }
+
   ensureWorktreeHasInitialTerminal(
     state,
     workspaceKey,
@@ -73,22 +75,26 @@ export function ensureWorktreeHasInitialTerminal(
   opts?: InitialTerminalOptions
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
+
   // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
   const ownerState =
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined
       ? store
       : useAppStore.getState()
+
   let sequencedStartup = startup
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = getSetupRunnerCommandPlatformForLaunch(setup)
+
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
       platform,
       shell: setup.shell
     })
+
     sequencedStartup = {
       ...startup,
       command: sequenced.startupCommand,
@@ -99,9 +105,11 @@ export function ensureWorktreeHasInitialTerminal(
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
   const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
+
   // Why: explicit spawn evidence survives the new-worktree ownership race; a host that owns terminal creation provides the same authority for later activations.
   if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+
     if (existingTerminalTabId && (setup || issueCommand)) {
       queueSetupAndIssueCommands(
         store,
@@ -112,11 +120,14 @@ export function ensureWorktreeHasInitialTerminal(
         wrappedSetupCommandStr,
         opts
       )
+
       return existingTerminalTabId
     }
+
     if (existingTerminalTabId && backendStartupTerminalSpawned) {
       return existingTerminalTabId
     }
+
     if (setup || issueCommand) {
       // Why: runtime-owned worktrees mirror session tabs async, so hold commands for the first mirrored tab instead of dropping them.
       queueHookCommandsForFirstWorktreeTab({
@@ -133,16 +144,19 @@ export function ensureWorktreeHasInitialTerminal(
           )
       })
     }
+
     return null
   }
 
   const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+
   // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
   // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
   // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.
   const setupNeedsHostTerminal =
     setup !== undefined &&
     (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') !== 'new-tab'
+
   if (
     opts?.callerProvidesSurface === true &&
     renderableTabCount === 0 &&
@@ -161,8 +175,10 @@ export function ensureWorktreeHasInitialTerminal(
       wrappedSetupCommandStr,
       opts
     )
+
     return null
   }
+
   // Why: only startup hydration honours the closed-last-tab tombstone. Every explicit
   // activation (sidebar, palette, automation resume, wake) re-seeds a surface instead,
   // because closing the last terminal normally deactivates the workspace too
@@ -175,17 +191,22 @@ export function ensureWorktreeHasInitialTerminal(
   // deactivation hooks for pane moves and retirement, where re-seeding is the wanted outcome.
   const shouldHonourClosedTerminalTombstone =
     Object.hasOwn(store.tabsByWorktree, worktreeId) && opts?.reseedEmptiedWorkspace !== true
+
   // Why: an execution host that has not answered is not a host with no terminals; seeding into that
   // gap is what adds a tab per launch (STA-4658). Explicit launch work below is a request to create
   // a terminal now, so it stays ungated.
   const shouldAutoCreate =
     hostAuthority === 'none' &&
     shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
+
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
+
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined
+
   if (!shouldAutoCreate && !shouldCreateForExplicitWork && !shouldCreateNewStartupTerminal) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
+
     if (existingTerminalTabId && (setup || issueCommand)) {
       // Why: main may have adopted the startup tab but failed to spawn setup; renderer must still launch the returned fallback setup.
       queueSetupAndIssueCommands(
@@ -197,8 +218,10 @@ export function ensureWorktreeHasInitialTerminal(
         wrappedSetupCommandStr,
         opts
       )
+
       return existingTerminalTabId
     }
+
     return null
   }
 
@@ -212,6 +235,7 @@ export function ensureWorktreeHasInitialTerminal(
     wrappedSetupCommandStr,
     opts
   )
+
   if (templatedTabId) {
     return templatedTabId
   }
@@ -223,6 +247,7 @@ export function ensureWorktreeHasInitialTerminal(
     (sequencedStartup?.telemetry
       ? (agentKindToTuiAgent(sequencedStartup.telemetry.agent_kind) ?? undefined)
       : undefined)
+
   const terminalTab = store.createTab(worktreeId, undefined, undefined, {
     pendingActivationSpawn: true,
     ...(launchAgent
@@ -241,6 +266,7 @@ export function ensureWorktreeHasInitialTerminal(
       : {}),
     ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
   })
+
   if (opts?.activateCreatedTabs !== false) {
     store.setActiveTab(terminalTab.id)
   }
@@ -254,8 +280,10 @@ export function ensureWorktreeHasInitialTerminal(
         sequencedStartup.sessionOptions
       )
     }
+
     store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
   }
+
   queueSetupAndIssueCommands(
     store,
     worktreeId,

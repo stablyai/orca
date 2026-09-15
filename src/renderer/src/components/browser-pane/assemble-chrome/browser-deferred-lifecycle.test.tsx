@@ -28,24 +28,31 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/store', async () => {
   const { useStore } = await import('zustand')
+
   return {
     useAppStore: (selector: (state: MockState) => unknown) => useStore(mocks.store!, selector)
   }
 })
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => null,
   getExecutionHostIdForWorktree: () => mocks.executionHostId
 }))
+
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
+
 vi.mock('../host-guest/webview-registry', () => ({ destroyPersistentWebview: mocks.destroy }))
+
 vi.mock('./BrowserMobileDriverOverlay', () => ({ BrowserMobileDriverOverlay: () => null }))
+
 vi.mock('./browser-page-pane', () => ({
   BrowserPagePane: ({ browserTab, isActive }: { browserTab: BrowserPage; isActive: boolean }) => (
     <input data-page-id={browserTab.id} data-active={isActive} />
   )
 }))
+
 vi.mock('../workspace-doc/workspace-doc-page-pane', () => ({
   WorkspaceDocPagePane: ({ page, isActive }: { page: BrowserPage; isActive: boolean }) => (
     <input data-page-id={page.id} data-active={isActive} />
@@ -77,6 +84,7 @@ function createState(): MockState {
     loadError: null,
     createdAt: 1
   }))
+
   return {
     browserTabsByWorktree: { 'wt-1': browsers },
     browserPagesByWorkspace: Object.fromEntries(
@@ -126,10 +134,12 @@ function selectPage(id: string): void {
 const surface = (active = true) => (
   <BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={active} />
 )
+
 function redraw(view: ReturnType<typeof render>, active = true): void {
   act(() => mocks.store!.setState({ ...mocks.state! }))
   view.rerender(surface(active))
 }
+
 const settle = () => act(async () => {})
 
 describe('deferred browser lifecycle through the overlay and SSH gate', () => {
@@ -164,15 +174,18 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
         if (consumer === 'automation') {
           token = acquireBrowserAutomationVisibility('a-2')
         }
+
         if (consumer === 'mobile') {
           hydrateBrowserDrivers([
             { browserPageId: 'a-2', driver: { kind: 'mobile', clientId: 'phone-1' } }
           ])
         }
+
         if (consumer === 'viewer') {
           hydrateBrowserRemoteViewerPages(['a-2'])
         }
       })
+
       try {
         redraw(view, false)
         expect(view.container.querySelectorAll('[data-page-id]')).toHaveLength(1)
@@ -186,6 +199,7 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
           if (token) {
             releaseBrowserAutomationVisibility(token)
           }
+
           hydrateBrowserDrivers([])
           hydrateBrowserRemoteViewerPages([])
         })
@@ -211,6 +225,7 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
           filePath: '/workspace/report.html'
         }
       }
+
       const view = render(surface())
       const page = view.container.querySelector<HTMLInputElement>('[data-page-id="a-1"]')!
       page.value = 'unsaved state'

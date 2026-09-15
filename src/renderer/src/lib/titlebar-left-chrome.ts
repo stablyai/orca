@@ -17,6 +17,7 @@ export function resolveLeftTitlebarChromeLayout({
   sidebarOpen
 }: LeftTitlebarChromeLayoutInput): LeftTitlebarChromeLayout {
   const shouldMount = workspaceChromeActive || stackedSidebarOpen || creationLayoutActive
+
   return {
     shouldMount,
     isFloating: shouldMount && !sidebarOpen && !stackedSidebarOpen

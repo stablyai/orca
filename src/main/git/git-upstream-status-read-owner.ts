@@ -12,6 +12,7 @@ function pushTargetKeyParts(pushTarget: GitPushTarget): readonly unknown[] {
   const { remoteName, branchName, remoteUrl, remoteCreated, ...rest } = pushTarget
   const exhaustive: Record<string, never> = rest
   void exhaustive
+
   return ['explicit-target', remoteName, branchName, remoteUrl ?? null, remoteCreated ?? null]
 }
 
@@ -34,6 +35,7 @@ export class GitUpstreamStatusReadOwner {
       worktreePath,
       pushTarget ? pushTargetKeyParts(pushTarget) : ['configured-upstream']
     ])
+
     return this.inFlightReads.run(key, load)
   }
 

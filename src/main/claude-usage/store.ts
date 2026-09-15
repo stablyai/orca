@@ -50,8 +50,10 @@ function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsageP
   if (state.schemaVersion === SCHEMA_VERSION) {
     return state
   }
+
   // Scanner changes invalidate totals, but preserving enabled keeps existing tracking on.
   const defaults = getDefaultState()
+
   return {
     ...defaults,
     scanState: {
@@ -69,6 +71,7 @@ function getClaudeUsageFile(): string {
   if (!_claudeUsageFile) {
     _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
   }
+
   return _claudeUsageFile
 }
 
@@ -107,6 +110,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
 
   async getSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): Promise<ClaudeUsageSummary> {
     await this.refresh(false)
+
     return buildSummary(this.state, scope, range)
   }
 
@@ -115,6 +119,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
     range: ClaudeUsageRange
   ): Promise<ClaudeUsageDailyPoint[]> {
     await this.refresh(false)
+
     return buildDaily(this.state, scope, range)
   }
 
@@ -124,6 +129,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
     kind: ClaudeUsageBreakdownKind
   ): Promise<ClaudeUsageBreakdownRow[]> {
     await this.refresh(false)
+
     return buildBreakdown(this.state, scope, range, kind)
   }
 
@@ -133,6 +139,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
     limit = 12
   ): Promise<ClaudeUsageSessionRow[]> {
     await this.refresh(false)
+
     return buildRecentSessions(this.state, scope, range, limit)
   }
 

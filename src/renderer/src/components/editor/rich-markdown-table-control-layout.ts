@@ -27,7 +27,9 @@ export type RichMarkdownTableControlLayout = {
 }
 
 const CONTROL_SIZE = 24
+
 const AXIS_CONTROL_THICKNESS = 14
+
 const EDGE_GAP = 4
 
 function clamp(value: number, minimum: number, maximum: number): number {

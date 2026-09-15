@@ -28,6 +28,7 @@ function makeFakeStore(opts: {
       if (opts.throwOnSettings) {
         throw new Error('disk fault')
       }
+
       return {
         telemetry: {
           installId: 'fake',
@@ -41,6 +42,7 @@ function makeFakeStore(opts: {
       if (opts.throwOnOnboarding) {
         throw new Error('disk fault')
       }
+
       return {
         outcome: null,
         lastCompletedStep: -1,
@@ -135,9 +137,11 @@ describe('onboarding-cohort-classifier', () => {
   it('warns at most once per session even across many degraded calls', () => {
     initOnboardingCohortClassifier(makeFakeStore({ existedBefore: false, throwOnSettings: true }))
     const warnSpy = console.warn as unknown as ReturnType<typeof vi.spyOn>
+
     for (let i = 0; i < 50; i++) {
       getOnboardingCohortAtEmit()
     }
+
     expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 })

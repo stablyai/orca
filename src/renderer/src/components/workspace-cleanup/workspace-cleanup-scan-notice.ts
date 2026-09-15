@@ -18,29 +18,36 @@ export function formatWorkspaceCleanupScanNotice(
   const visibleErrors = errors.filter(
     (error) => !isDisconnectedRemoteScanError(error.message ?? '')
   )
+
   if (visibleErrors.length === 0) {
     return null
   }
+
   if (visibleErrors.length === 1) {
     const error = visibleErrors[0]
     const repoName = formatScanErrorRepoName(error, repoNameById)
+
     return translate(
       'components.workspace.cleanup.scan.singleError',
       'Could not check {{value0}}: {{value1}}. Some workspaces may be missing. Refresh to try again.',
       { value0: repoName, value1: formatScanErrorReason(error.message) }
     )
   }
+
   const repoNames = visibleErrors
     .slice(0, 3)
     .map((error) => formatScanErrorRepoName(error, repoNameById))
     .join(', ')
+
   const moreCount = visibleErrors.length - 3
+
   const suffix =
     moreCount > 0
       ? translate('components.workspace.cleanup.scan.moreErrors', ', +{{value0}} more', {
           value0: moreCount
         })
       : ''
+
   return translate(
     'components.workspace.cleanup.scan.multipleErrors',
     'Could not check {{value0}} repositories ({{value1}}{{value2}}). Some workspaces may be missing. Refresh to try again.',
@@ -57,6 +64,7 @@ export function formatWorkspaceCleanupScanProgress(
       'Finding workspaces...'
     )
   }
+
   return translate(
     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7b7bde5181',
     'Checked workspaces so far: {{value0}}',
@@ -69,9 +77,11 @@ export function formatWorkspaceCleanupReadyToast(workspaceCount: number): string
   if (workspaceCount === 0) {
     return translate('components.workspace.cleanup.scan.noWorkspaces', 'No workspaces found.')
   }
+
   if (workspaceCount === 1) {
     return translate('components.workspace.cleanup.scan.readyOne', '1 workspace found.')
   }
+
   return translate('components.workspace.cleanup.scan.readyMany', '{{value0}} workspaces found.', {
     value0: workspaceCount
   })
@@ -82,10 +92,13 @@ function formatScanErrorRepoName(
   repoNameById: ReadonlyMap<string, string>
 ): string {
   const repoName = error.repoName?.trim()
+
   if (repoName) {
     return repoName
   }
+
   const fallback = error.repoId ? repoNameById.get(error.repoId)?.trim() : ''
+
   return (
     fallback || translate('components.workspace.cleanup.scan.fallbackRepository', 'a repository')
   )
@@ -98,5 +111,6 @@ function formatScanErrorReason(message: string | undefined): string {
       'Git could not list worktrees'
     )
   }
+
   return message.replace(/\.$/, '')
 }

@@ -575,6 +575,7 @@ describe('ClaudeUsageStore', () => {
   it('returns automation usage for a single matching worktree session', async () => {
     const worktreeId = 'repo-1::/workspace/repo-a'
     const completedAt = Date.parse('2026-04-09T15:06:00.000Z')
+
     const store = createStoreWithState({
       scanState: {
         enabled: true,
@@ -615,6 +616,7 @@ describe('ClaudeUsageStore', () => {
         }
       ]
     })
+
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
       isScanning: false,
@@ -623,7 +625,9 @@ describe('ClaudeUsageStore', () => {
       lastScanError: null,
       hasAnyClaudeData: true
     })
+
     ;(store as unknown as { refresh: typeof store.refresh }).refresh = refreshMock
+
     const request = {
       worktreeId,
       terminalSessionId: 'tab-1',

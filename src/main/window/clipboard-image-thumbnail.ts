@@ -28,7 +28,9 @@ export function buildClipboardImageThumbnail(
   if (image.isEmpty()) {
     return null
   }
+
   const size = image.getSize()
+
   try {
     assertClipboardImageDimensionsWithinLimit(size)
   } catch {
@@ -36,10 +38,13 @@ export function buildClipboardImageThumbnail(
     // decides whether to show a placeholder, so degrade to "no preview".
     return null
   }
+
   const thumbnailSize = clipboardImageThumbnailSize(size)
+
   const thumbnail =
     thumbnailSize.width === size.width && thumbnailSize.height === size.height
       ? image
       : image.resize({ ...thumbnailSize, quality: 'good' })
+
   return { dataUrl: thumbnail.toDataURL(), height: size.height, width: size.width }
 }

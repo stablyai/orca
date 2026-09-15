@@ -28,11 +28,15 @@
 'use strict'
 
 const fs = require('node:fs')
+
 const os = require('node:os')
+
 const path = require('node:path')
+
 const { Worker, isMainThread, workerData } = require('node:worker_threads')
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
+
 // The exact bundled native module (@parcel/watcher 2.5.6 + watcher-win32-x64).
 const watcherPath = path.join(REPO_ROOT, 'node_modules', '@parcel', 'watcher')
 
@@ -49,7 +53,9 @@ const IGNORE_DIRS = [
   '.venv',
   '__pycache__'
 ]
+
 const IGNORE = IGNORE_DIRS.flatMap((dir) => [`**/${dir}`, `**/${dir}/**`])
+
 const OPTS = { ignore: IGNORE, backend: 'windows' }
 
 const stats = {
@@ -74,17 +80,21 @@ function recordError(err) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
 const rand = (n) => Math.floor(Math.random() * n)
 
 function makeTree(dir, files, subdirs, nameLen) {
   fs.mkdirSync(dir, { recursive: true })
   const dirs = [dir]
+
   for (let d = 0; d < subdirs; d++) {
     const sub = path.join(dir, `sub-${d}`)
     fs.mkdirSync(sub, { recursive: true })
     dirs.push(sub)
   }
+
   let made = 0
+
   for (const d of dirs) {
     for (let f = 0; f < Math.ceil(files / dirs.length); f++) {
       const pad = 'x'.repeat(Math.max(0, nameLen - 12))
@@ -92,6 +102,7 @@ function makeTree(dir, files, subdirs, nameLen) {
       made++
     }
   }
+
   return made
 }
 
@@ -112,9 +123,11 @@ if (!isMainThread && workerData && workerData.role === 'churn') {
   const { dir, durationMs } = workerData
   const end = Date.now() + durationMs
   let i = 0
+
   while (Date.now() < end) {
     const a = path.join(dir, `churn-${i % 200}.txt`)
     const b = path.join(dir, `churn-${i % 200}.renamed.txt`)
+
     try {
       fs.writeFileSync(a, `payload-${i}`)
       fs.renameSync(a, b)
@@ -127,8 +140,10 @@ if (!isMainThread && workerData && workerData.role === 'churn') {
         } catch {}
       }
     }
+
     i++
   }
+
   process.exit(0)
 }
 
@@ -136,26 +151,34 @@ if (!isMainThread && workerData && workerData.role === 'subscriber') {
   // Mimics file-watcher-worker.ts: subscribe in a worker env to the SAME dir
   // the main env watches, then tear down per `mode`.
   const { dir, mode, holdMs } = workerData
+
   const watcher = require(watcherPath)
+
   ;(async () => {
     let sub
+
     try {
       sub = await watcher.subscribe(dir, () => {}, OPTS)
     } catch {
       process.exit(0)
     }
+
     await sleep(holdMs)
+
     if (mode === 'clean') {
       try {
         await sub.unsubscribe()
       } catch {}
+
       process.exit(0)
     }
+
     if (mode === 'dirty-exit') {
       // Exit the worker env WITHOUT unsubscribing — leaves the callback ref
       // registered in the process-global shared native Watcher.
       process.exit(0)
     }
+
     // mode === 'wait-terminate': linger; the main thread terminate()s us,
     // possibly while the subscription (or its unsubscribe) is in flight.
     await sleep(60_000)
@@ -167,11 +190,13 @@ if (!isMainThread && workerData && workerData.role === 'subscriber') {
 async function scenarioDeleteRoot(watcher, baseDir, durationMs, lane) {
   const end = Date.now() + durationMs
   let round = 0
+
   while (Date.now() < end) {
     const dir = path.join(baseDir, `wt-${lane}-${round}`)
     makeTree(dir, 120, 4, 20)
     let sub = null
     let errored = false
+
     try {
       stats.subscribes++
       sub = await watcher.subscribe(
@@ -180,14 +205,17 @@ async function scenarioDeleteRoot(watcher, baseDir, durationMs, lane) {
           if (err) {
             recordError(err)
             errored = true
+
             // Orca's createWatcher error path: unsubscribe from inside the
             // error callback.
             if (sub) {
               stats.unsubscribes++
               sub.unsubscribe().catch(() => {})
             }
+
             return
           }
+
           stats.eventBatches++
           stats.events += events.length
         },
@@ -199,17 +227,21 @@ async function scenarioDeleteRoot(watcher, baseDir, durationMs, lane) {
       round++
       continue
     }
+
     // Churn briefly, then delete the watched root while events are flowing.
     const churn = new Worker(__filename, {
       workerData: { role: 'churn', dir, durationMs: 300 }
     })
+
     await sleep(50 + rand(100))
     rmrf(dir)
     await sleep(rand(60))
+
     if (!errored && sub) {
       stats.unsubscribes++
       await sub.unsubscribe().catch(() => {})
     }
+
     await new Promise((r) => churn.once('exit', r))
     rmrf(dir)
     round++
@@ -219,12 +251,16 @@ async function scenarioDeleteRoot(watcher, baseDir, durationMs, lane) {
 async function scenarioUnsubChurn(watcher, baseDir, durationMs, lane) {
   const dir = path.join(baseDir, `unsub-${lane}`)
   makeTree(dir, 150, 3, 20)
+
   const churn = new Worker(__filename, {
     workerData: { role: 'churn', dir, durationMs }
   })
+
   const end = Date.now() + durationMs
+
   while (Date.now() < end) {
     let sub
+
     try {
       stats.subscribes++
       sub = await watcher.subscribe(
@@ -232,8 +268,10 @@ async function scenarioUnsubChurn(watcher, baseDir, durationMs, lane) {
         (err, events) => {
           if (err) {
             recordError(err)
+
             return
           }
+
           stats.eventBatches++
           stats.events += events.length
         },
@@ -243,8 +281,10 @@ async function scenarioUnsubChurn(watcher, baseDir, durationMs, lane) {
       recordError(err)
       continue
     }
+
     await sleep(rand(50))
     stats.unsubscribes++
+
     // Half the time don't await — overlapping unsubscribe with the next
     // subscribe on the same dir, like racing grace-teardown vs re-watch.
     if (rand(2) === 0) {
@@ -253,6 +293,7 @@ async function scenarioUnsubChurn(watcher, baseDir, durationMs, lane) {
       sub.unsubscribe().catch(() => {})
     }
   }
+
   await new Promise((r) => churn.once('exit', r))
   rmrf(dir)
 }
@@ -262,6 +303,7 @@ async function scenarioWorkerMix(watcher, baseDir, durationMs, lane) {
   makeTree(dir, 100, 3, 20)
   // Main env holds a long-lived subscription (desktop explorer watch).
   let mainSub = null
+
   try {
     stats.subscribes++
     mainSub = await watcher.subscribe(
@@ -269,8 +311,10 @@ async function scenarioWorkerMix(watcher, baseDir, durationMs, lane) {
       (err, events) => {
         if (err) {
           recordError(err)
+
           return
         }
+
         stats.eventBatches++
         stats.events += events.length
       },
@@ -279,41 +323,53 @@ async function scenarioWorkerMix(watcher, baseDir, durationMs, lane) {
   } catch (err) {
     recordError(err)
   }
+
   const churn = new Worker(__filename, {
     workerData: { role: 'churn', dir, durationMs }
   })
+
   const end = Date.now() + durationMs
+
   while (Date.now() < end) {
     const mode = ['clean', 'dirty-exit', 'wait-terminate'][rand(3)]
+
     const worker = new Worker(__filename, {
       workerData: { role: 'subscriber', dir, mode, holdMs: rand(150) }
     })
+
     stats.workersSpawned++
     const exited = new Promise((r) => worker.once('exit', r))
     worker.once('error', () => {})
+
     if (mode === 'wait-terminate') {
       await sleep(rand(100))
       stats.workersTerminated++
       await worker.terminate().catch(() => {})
     }
+
     await Promise.race([exited, sleep(1000)])
   }
+
   await new Promise((r) => churn.once('exit', r))
+
   if (mainSub) {
     stats.unsubscribes++
     await mainSub.unsubscribe().catch(() => {})
   }
+
   rmrf(dir)
 }
 
 async function scenarioOverflow(watcher, baseDir, durationMs, lane) {
   const end = Date.now() + durationMs
   let round = 0
+
   while (Date.now() < end) {
     const dir = path.join(baseDir, `ovf-${lane}-${round}`)
     // Long names fill the 1MB ReadDirectoryChangesW buffer faster.
     makeTree(dir, 4000, 8, 180)
     let sub = null
+
     try {
       stats.subscribes++
       sub = await watcher.subscribe(
@@ -321,12 +377,15 @@ async function scenarioOverflow(watcher, baseDir, durationMs, lane) {
         (err, events) => {
           if (err) {
             recordError(err)
+
             if (sub) {
               stats.unsubscribes++
               sub.unsubscribe().catch(() => {})
             }
+
             return
           }
+
           stats.eventBatches++
           stats.events += events.length
         },
@@ -338,18 +397,22 @@ async function scenarioOverflow(watcher, baseDir, durationMs, lane) {
       round++
       continue
     }
+
     // Parallel delete storm: multiple churn workers + recursive delete produce
     // a dense event burst while the backend thread stats each event.
     const churners = Array.from(
       { length: 3 },
       () => new Worker(__filename, { workerData: { role: 'churn', dir, durationMs: 500 } })
     )
+
     rmrf(dir)
     await Promise.all(churners.map((w) => new Promise((r) => w.once('exit', r))))
+
     if (sub) {
       stats.unsubscribes++
       await sub.unsubscribe().catch(() => {})
     }
+
     rmrf(dir)
     round++
   }
@@ -362,10 +425,12 @@ async function scenarioOverflow(watcher, baseDir, durationMs, lane) {
 async function scenarioDeleteMinimal(watcher, baseDir, durationMs, lane, { churn, unsub }) {
   const end = Date.now() + durationMs
   let round = 0
+
   while (Date.now() < end) {
     const dir = path.join(baseDir, `min-${lane}-${round}`)
     makeTree(dir, 120, 4, 20)
     let sub = null
+
     try {
       stats.subscribes++
       sub = await watcher.subscribe(
@@ -373,8 +438,10 @@ async function scenarioDeleteMinimal(watcher, baseDir, durationMs, lane, { churn
         (err, events) => {
           if (err) {
             recordError(err)
+
             return
           }
+
           stats.eventBatches++
           stats.events += events.length
         },
@@ -386,22 +453,28 @@ async function scenarioDeleteMinimal(watcher, baseDir, durationMs, lane, { churn
       round++
       continue
     }
+
     let churnWorker = null
+
     if (churn) {
       churnWorker = new Worker(__filename, {
         workerData: { role: 'churn', dir, durationMs: 300 }
       })
       await sleep(50 + rand(100))
     }
+
     rmrf(dir)
     await sleep(100)
+
     if (unsub && sub) {
       stats.unsubscribes++
       await sub.unsubscribe().catch(() => {})
     }
+
     if (churnWorker) {
       await new Promise((r) => churnWorker.once('exit', r))
     }
+
     rmrf(dir)
     round++
   }
@@ -437,22 +510,28 @@ async function main() {
   const watcher = require(watcherPath)
   const jobs = []
   const names = scenarioName === 'mixed' ? Object.keys(SCENARIOS) : [scenarioName]
+
   for (const name of names) {
     const s = SCENARIOS[name]
+
     if (!s) {
       log(`unknown scenario: ${name}`)
       process.exit(2)
     }
+
     const lanes = scenarioName === 'mixed' ? Math.max(1, Math.floor(s.lanes / 2)) : s.lanes
+
     for (let lane = 0; lane < lanes; lane++) {
       jobs.push(s.fn(watcher, baseDir, durationMs, lane))
     }
   }
+
   await Promise.all(jobs)
 
   const errs = Array.from(stats.errorMessages.entries())
     .map(([m, n]) => `${n}x "${m}"`)
     .join(', ')
+
   log(
     `done: subs=${stats.subscribes} unsubs=${stats.unsubscribes} batches=${stats.eventBatches} ` +
       `events=${stats.events} errors=${stats.errors} workers=${stats.workersSpawned} ` +

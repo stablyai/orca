@@ -17,6 +17,7 @@ export function setConfiguredAndroidSdkPath(path: string | null): void {
 // pure resolver lives in android-sdk-discovery; this wires it to the real host.
 export function discoverAndroidSdkFromHost(): AndroidSdkPaths | null {
   const env = configuredSdkPath ? { ...process.env, ANDROID_HOME: configuredSdkPath } : process.env
+
   try {
     return discoverAndroidSdk({ env, platform: platform(), homedir: homedir(), exists: existsSync })
   } catch {

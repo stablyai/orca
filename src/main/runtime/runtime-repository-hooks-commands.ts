@@ -27,8 +27,10 @@ export class RuntimeRepositoryHooksCommands {
 
   async getRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (repo.connectionId) {
       const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
       if (!fsProvider) {
         return {
           hasHooksFile: false,
@@ -37,9 +39,11 @@ export class RuntimeRepositoryHooksCommands {
           source: null
         }
       }
+
       try {
         const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
         const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
+
         return {
           hasHooksFile: Boolean(hooks),
           hooks,
@@ -56,9 +60,11 @@ export class RuntimeRepositoryHooksCommands {
         }
       }
     }
+
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
     const sharedHooks = hasFile ? loadHooks(repo.path) : null
+
     return {
       hasHooksFile: hasFile,
       hooks,
@@ -70,19 +76,25 @@ export class RuntimeRepositoryHooksCommands {
 
   async checkRepoHooks(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (isFolderRepo(repo)) {
       return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
+
     if (repo.connectionId) {
       const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
       if (!fsProvider) {
         return { status: 'error' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
+
       try {
         const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+
         if (result.isBinary) {
           return { status: 'ok' as const, hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
+
         return {
           status: 'ok' as const,
           hasHooks: true,
@@ -98,8 +110,10 @@ export class RuntimeRepositoryHooksCommands {
         }
       }
     }
+
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null
+
     return {
       status: 'ok' as const,
       hasHooks: has,
@@ -110,29 +124,37 @@ export class RuntimeRepositoryHooksCommands {
 
   async inspectRepoSetupScriptImports(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (isFolderRepo(repo)) {
       return []
     }
+
     return inspectSetupScriptImportCandidates(async (relativePath) => {
       const filePath = joinWorktreeRelativePath(repo.path, relativePath)
+
       if (repo.connectionId) {
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
         if (!fsProvider) {
           return null
         }
+
         try {
           const result = await fsProvider.readFile(filePath)
+
           return result.isBinary ? null : result.content
         } catch {
           return null
         }
       }
+
       try {
         return await readFile(filePath, 'utf-8')
       } catch (error) {
         if (!isENOENT(error)) {
           console.warn('[runtime] Failed to inspect setup script import candidate:', error)
         }
+
         return null
       }
     })
@@ -144,8 +166,10 @@ function setupTrust(
   scriptContentValue: string | undefined
 ): { contentHash: string; scriptContent: string } | undefined {
   const scriptContent = scriptContentValue?.trim()
+
   if (!scriptContent || repo.hookSettings?.commandSourcePolicy === 'local-only') {
     return undefined
   }
+
   return { contentHash: createHash('sha256').update(scriptContent).digest('hex'), scriptContent }
 }

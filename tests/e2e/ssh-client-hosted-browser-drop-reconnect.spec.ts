@@ -36,9 +36,13 @@ import {
  * retired, and the cookie jar has to survive because the partition name never changed.
  */
 const COOKIE_PAIR = `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
+
 const LOGIN_URL = `${SSH_REMOTE_ONLY_ORIGIN}/login`
+
 const ECHO_BEFORE_URL = `${SSH_REMOTE_ONLY_ORIGIN}/echo/before`
+
 const ECHO_AFTER_URL = `${SSH_REMOTE_ONLY_ORIGIN}/echo/after`
+
 const ROUTE_PARTITION_RE = /^persist:orca-browser-v1-[a-f0-9]{64}$/
 
 type HubSshState = {
@@ -57,6 +61,7 @@ test.skip(
 async function readHubSshState(page: Page, targetId: string): Promise<HubSshState> {
   return page.evaluate(async (targetId) => {
     const state = await window.api.ssh.getState({ targetId })
+
     return {
       status: state?.status ?? null,
       connectionGeneration: state?.connectionGeneration ?? null,
@@ -78,9 +83,11 @@ async function reconnectHubSshTarget(page: Page, targetId: string): Promise<HubS
         page.evaluate(async (targetId) => {
           try {
             const state = await window.api.ssh.connect({ targetId })
+
             if (state) {
               window.__store?.getState().setSshConnectionState(targetId, state)
             }
+
             return state?.status ?? null
           } catch {
             return null
@@ -93,6 +100,7 @@ async function reconnectHubSshTarget(page: Page, targetId: string): Promise<HubS
       }
     )
     .toBe('connected')
+
   return readHubSshState(page, targetId)
 }
 
@@ -102,12 +110,15 @@ async function waitForPairedGroupId(page: Page, worktreeId: string): Promise<str
       () =>
         page.evaluate((worktreeId) => {
           const state = window.__store?.getState()
+
           if (!state) {
             return null
           }
+
           if (state.activeWorktreeId !== worktreeId) {
             state.setActiveWorktree(worktreeId)
           }
+
           return state.activeGroupIdByWorktree[worktreeId] ?? null
         }, worktreeId),
       {
@@ -116,13 +127,16 @@ async function waitForPairedGroupId(page: Page, worktreeId: string): Promise<str
       }
     )
     .not.toBeNull()
+
   const groupId = await page.evaluate(
     (worktreeId) => window.__store?.getState().activeGroupIdByWorktree[worktreeId] ?? null,
     worktreeId
   )
+
   if (!groupId) {
     throw new Error('Paired client lost the SSH worktree tab group')
   }
+
   return groupId
 }
 
@@ -134,18 +148,22 @@ async function findMirroredBrowserPage(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (!browserPage.url.startsWith(url)) {
             continue
           }
+
           const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
           return {
             localPageId: browserPage.id,
             placementKind: handle?.placement?.kind ?? null
           }
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -159,10 +177,12 @@ async function readClientWebview(
   return page.evaluate(async (prefix) => {
     for (const candidate of document.querySelectorAll('webview')) {
       const webview = candidate as Electron.WebviewTag
+
       try {
         if (!webview.getURL().startsWith(prefix)) {
           continue
         }
+
         return {
           marker: (await webview.executeJavaScript(
             'document.querySelector("#marker")?.textContent ?? null'
@@ -173,6 +193,7 @@ async function readClientWebview(
         // The guest may still be attaching.
       }
     }
+
     return null
   }, url)
 }
@@ -183,6 +204,7 @@ async function countClientWebviews(page: Page, prefixes: readonly string[]): Pro
       [...document.querySelectorAll('webview')].filter((candidate) => {
         try {
           const url = (candidate as Electron.WebviewTag).getURL()
+
           return prefixes.some((prefix) => url.startsWith(prefix))
         } catch {
           return false
@@ -207,9 +229,11 @@ async function openClientHostedSshPage(
   await client.page.evaluate(
     async ({ groupId, url }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Paired client store is unavailable')
       }
+
       state.setBrowserDefaultUrl(url)
       await state.openNewBrowserTabInActiveWorkspace(groupId)
     },
@@ -222,9 +246,11 @@ async function openClientHostedSshPage(
     })
     .not.toBeNull()
   const mirrored = await findMirroredBrowserPage(client.page, worktreeId, url)
+
   if (!mirrored) {
     throw new Error(`Mirrored browser page disappeared for ${url}`)
   }
+
   expect(mirrored.placementKind, `${url} must be hosted on the viewing desktop`).toBe('client')
   await client.page.evaluate(
     ({ browserPageId, worktreeId }) => {
@@ -241,9 +267,11 @@ async function openClientHostedSshPage(
     })
     .not.toBeNull()
   const rendered = await readClientWebview(client.page, url)
+
   if (!rendered?.marker || !rendered.partition) {
     throw new Error(`Client-hosted guest for ${url} lost its marker or partition`)
   }
+
   return { marker: rendered.marker, partition: rendered.partition }
 }
 
@@ -253,6 +281,7 @@ test('recovers client-hosted SSH-routed browser pages across a real SSH drop', a
   test.setTimeout(900_000)
   let target: DockerSshRelayTarget | null = null
   let client: PairedElectronClient | null = null
+
   try {
     target = startDockerSshRelayTarget(testInfo)
     startSshRemoteOnlyBrowserFixture(target)
@@ -264,11 +293,13 @@ test('recovers client-hosted SSH-routed browser pages across a real SSH drop', a
       testInfo,
       'STA-4150 SSH client-hosted browser drop'
     )
+
     const sshRoute = await assertInteractiveTerminal(
       client,
       remote.repoId,
       `SSH_CLIENT_HOSTED_BROWSER_${Date.now()}`
     )
+
     expect(sshRoute.worktreeHostId, 'the workspace must live on the HUB-owned SSH host').toBe(
       `ssh:${remote.targetId}`
     )

@@ -107,12 +107,15 @@ export function getFirstIncompleteFeatureWallSetupStepId(
 ): FeatureWallSetupStepId {
   // Why: onboarding should prioritize Setup, while durable definitions retain the original order.
   const setupStep = getFeatureWallSetupStepsForSection('setup').find((step) => !stepDone[step.id])
+
   if (setupStep) {
     return setupStep.id
   }
+
   const parallelStep = getFeatureWallSetupStepsForSection('parallel-work').find(
     (step) => !stepDone[step.id]
   )
+
   return parallelStep?.id ?? FEATURE_WALL_SETUP_STEPS[0].id
 }
 

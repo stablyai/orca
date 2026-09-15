@@ -25,16 +25,19 @@ function windowRevision(window: RateLimitWindow | null): readonly unknown[] | nu
   if (!window) {
     return null
   }
+
   return [window.usedPercent, window.windowMinutes, window.resetsAt]
 }
 
 function buildOfferRevision(limits: ProviderRateLimits): string {
   const credits = limits.rateLimitResetCredits
+
   const creditRows = [...(credits?.credits ?? [])]
     .map((credit) => [credit.status, credit.expiresAt, credit.grantedAt] as const)
     .sort((left, right) => {
       const leftKey = JSON.stringify(left)
       const rightKey = JSON.stringify(right)
+
       return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
     })
 
@@ -59,9 +62,11 @@ export function buildCodexResetCreditExpectedScope({
   if (!account || limits?.provider !== 'codex') {
     return null
   }
+
   if ((limits.rateLimitResetCredits?.availableCount ?? 0) <= 0) {
     return null
   }
+
   if (
     !account.id.trim() ||
     account.id.length > 512 ||
@@ -74,6 +79,7 @@ export function buildCodexResetCreditExpectedScope({
   }
 
   const accountRuntime = account.managedHomeRuntime ?? 'host'
+
   if (target.runtime === 'host') {
     if (target.wslDistro !== null || accountRuntime !== 'host') {
       return null
@@ -81,6 +87,7 @@ export function buildCodexResetCreditExpectedScope({
   } else {
     const targetDistro = target.wslDistro?.trim()
     const accountDistro = account.wslDistro?.trim()
+
     if (
       !targetDistro ||
       targetDistro.length > 255 ||
@@ -92,6 +99,7 @@ export function buildCodexResetCreditExpectedScope({
   }
 
   const offerRevision = buildOfferRevision(limits)
+
   if (offerRevision.length > 4_096) {
     return null
   }

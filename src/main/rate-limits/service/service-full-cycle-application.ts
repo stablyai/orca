@@ -8,9 +8,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     options?: { force?: boolean }
   ): Promise<void> {
     const prepared = await this.prepareFetchAllCycle(signal, options)
+
     if (!prepared) {
       return
     }
+
     const {
       claudeTarget,
       claudeGeneration,
@@ -36,6 +38,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       ],
       grokResultPromise
     } = prepared
+
     if (signal.aborted) {
       return
     }
@@ -127,10 +130,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+
     if (signal.aborted) {
       return
     }
+
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
+
     // Why: a finishing skip has no provenance, so an in-flight result must never be
     // applied as though the target had become the system default (#STA-4422).
     const shouldApplyCodex =
@@ -138,29 +144,37 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       !latestCodexHome.skip &&
       codexGeneration === this.codexFetchGeneration &&
       codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
+
     const codexBecameUnavailable =
       !codexFetchGated && latestCodexHome.skip && codexGeneration === this.codexFetchGeneration
+
     // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
     const shouldApplyClaude =
       !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
+
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
     }
+
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
     }
+
     this.trackActiveFailureStreak('gemini', gemini)
     this.trackActiveFailureStreak('antigravity', antigravity)
+
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
+
     this.trackActiveFailureStreak('kimi', kimi)
+
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
@@ -192,9 +206,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     })
 
     const grokResult = await grokResultPromise
+
     if (signal.aborted) {
       return
     }
+
     const grok =
       grokResult.status === 'fulfilled'
         ? grokResult.value
@@ -206,6 +222,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
+
     this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,

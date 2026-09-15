@@ -22,8 +22,10 @@ export function captureForceParkedWorktreeBuffers({
   if (!shouldPreserveTerminalScrollbackBuffers(worktreeId, repos)) {
     return true
   }
+
   const { requested, captured } = captureTerminalShutdownBuffersBestEffort(tabIds, {
     includeLocalBuffers: false
   })
+
   return captured === requested
 }

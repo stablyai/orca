@@ -134,6 +134,7 @@ describe('listAppliedWorkspaceCleanupFilters', () => {
     filters.safety.dismissed = 'only'
 
     let next = filters
+
     for (const applied of list(filters)) {
       next = applied.clear(next)
     }

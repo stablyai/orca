@@ -6,6 +6,7 @@ const SHARED_KEY = new Uint8Array(32).fill(7)
 
 function createAwaitingAuthRouter() {
   const finishError = vi.fn<(error: Error) => void>()
+
   const router = new RemoteRuntimeRequestResponseRouter<unknown>({
     sharedKey: SHARED_KEY,
     serializedAuth: '{}',
@@ -18,7 +19,9 @@ function createAwaitingAuthRouter() {
     finishError,
     finishResponse: vi.fn()
   })
+
   router.state = 'awaiting_authenticated'
+
   return { finishError, router }
 }
 
@@ -38,6 +41,7 @@ describe('RemoteRuntimeRequestResponseRouter authentication frames', () => {
 
   it('reports explicit authentication rejection as a rejected pairing token', () => {
     const { finishError, router } = createAwaitingAuthRouter()
+
     const rejection = JSON.stringify({
       type: 'e2ee_error',
       error: { code: 'unauthorized' }

@@ -5,17 +5,22 @@ import { useAppStore } from '@/store'
 // Why: leave a short quiet window after agents finish so the prompt does not
 // interrupt follow-up typing or status churn from the completed run.
 const QUIET_WINDOW_MS = 1200
+
 const CHECK_DELAY_MS = 1200
+
 const ACTIVE_AGENT_STATES = new Set(['working', 'waiting', 'blocked'])
+
 const NON_TYPING_MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift'])
 
 type AgentStatusSnapshot = Record<string, AgentStatusEntry>
+
 type AgentValueMomentPreparation = Awaited<ReturnType<typeof window.api.starNag.agentValueMoment>>
 
 function hasMeaningfulPrompt(entry: AgentStatusEntry): boolean {
   if (entry.prompt.trim()) {
     return true
   }
+
   return entry.stateHistory.some((history) => history.prompt.trim())
 }
 
@@ -29,6 +34,7 @@ function hasSuccessfulDoneTransition(
 ): boolean {
   for (const [paneKey, entry] of Object.entries(current)) {
     const previousEntry = previous[paneKey]
+
     if (
       previousEntry &&
       previousEntry.state !== 'done' &&
@@ -42,6 +48,7 @@ function hasSuccessfulDoneTransition(
       return true
     }
   }
+
   return false
 }
 
@@ -68,36 +75,48 @@ export function StarNagAgentValueMomentObserver(): null {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
     }
+
     timerRef.current = setTimeout(() => {
       timerRef.current = null
+
       if (!pendingRef.current || requestedRef.current) {
         return
       }
+
       const elapsedSinceTyping = Date.now() - lastTypingAtRef.current
+
       if (
         hasActiveAgent(useAppStore.getState().agentStatusByPaneKey) ||
         elapsedSinceTyping < QUIET_WINDOW_MS
       ) {
         scheduleCheck()
+
         return
       }
+
       void (async () => {
         if (!preparationRef.current) {
           preparationRef.current = await window.api.starNag.agentValueMoment()
+
           if (preparationRef.current.status !== 'ready') {
             pendingRef.current = false
             requestedRef.current = true
+
             return
           }
         }
+
         const freshElapsedSinceTyping = Date.now() - lastTypingAtRef.current
+
         if (
           hasActiveAgent(useAppStore.getState().agentStatusByPaneKey) ||
           freshElapsedSinceTyping < QUIET_WINDOW_MS
         ) {
           scheduleCheck()
+
           return
         }
+
         pendingRef.current = false
         requestedRef.current = true
         await window.api.starNag.showAgentValueMoment()
@@ -112,10 +131,13 @@ export function StarNagAgentValueMomentObserver(): null {
           return
         }
       }
+
       lastTypingAtRef.current = Date.now()
     }
+
     window.addEventListener('keydown', markTyping, true)
     window.addEventListener('input', markTyping, true)
+
     return () => {
       window.removeEventListener('keydown', markTyping, true)
       window.removeEventListener('input', markTyping, true)
@@ -126,12 +148,15 @@ export function StarNagAgentValueMomentObserver(): null {
     const currentEntries = useAppStore.getState().agentStatusByPaneKey
     const previousEntries = previousEntriesRef.current
     previousEntriesRef.current = currentEntries
+
     if (!previousEntries || requestedRef.current) {
       return
     }
+
     if (!hasSuccessfulDoneTransition(previousEntries, currentEntries)) {
       return
     }
+
     pendingRef.current = true
     scheduleCheck()
   }, [agentStatusEpoch, scheduleCheck])

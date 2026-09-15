@@ -9,7 +9,9 @@ function createBatcher(options?: ConstructorParameters<typeof DaemonStreamDataBa
     writableLength: 0,
     write: vi.fn()
   } as unknown as Socket & { write: ReturnType<typeof vi.fn>; writableLength: number }
+
   const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket }), options)
+
   return { batcher, streamSocket }
 }
 
@@ -17,6 +19,7 @@ function writtenData(streamSocket: { write: ReturnType<typeof vi.fn> }): string 
   return streamSocket.write.mock.calls
     .map(([line]) => {
       const parsed = JSON.parse(String(line)) as { payload?: { data?: string } }
+
       return parsed.payload?.data ?? ''
     })
     .join('')
@@ -40,6 +43,7 @@ function nonSentinelWrites(streamSocket: { write: ReturnType<typeof vi.fn> }): P
 describe('DaemonStreamDataBatcher', () => {
   it('coalesces background output before writing daemon stream events', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
 
@@ -60,6 +64,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('flushes small interactive output immediately', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
 
@@ -96,6 +101,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('keeps large pending output batched even when an interactive redraw follows', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const pending = 'x'.repeat(1020)
@@ -117,6 +123,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('flushes interactive output for one session while another session has large pending output', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const background = 'x'.repeat(2048)
@@ -146,6 +153,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('holds bulk output while the socket buffer is deep and resumes on the next flush', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const bulk = 'x'.repeat(64 * 1024)
@@ -168,6 +176,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('lets interactive echo jump bulk held behind a deep socket', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
 
@@ -193,6 +202,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('lets a small session write through the gate while a flooding session holds (per-session fairness)', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
 
@@ -215,6 +225,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('never reorders bytes within a session around the small-session bypass', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
 
@@ -231,6 +242,7 @@ describe('DaemonStreamDataBatcher', () => {
       streamSocket.writableLength = 0
       batcher.flush('client-1')
       expect(writtenData(streamSocket)).toContain('x'.repeat(64))
+
       // Full reassembly, in order, once drained.
       const aPayload = streamSocket.write.mock.calls
         .map(
@@ -240,6 +252,7 @@ describe('DaemonStreamDataBatcher', () => {
         .filter((m) => m.sessionId === 'session-a')
         .map((m) => m.payload?.data ?? '')
         .join('')
+
       expect(aPayload).toBe(`${'x'.repeat(256 * 1024)}tail`)
     } finally {
       vi.useRealTimers()
@@ -248,6 +261,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('slices oversized held entries so one write cannot re-deepen the socket unboundedly', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const bulk = 'y'.repeat(64 * 1024 + 5)
@@ -264,6 +278,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('stops mid-queue when a written slice is followed by a still-deep socket', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const first = 'a'.repeat(70 * 1024)
@@ -272,6 +287,7 @@ describe('DaemonStreamDataBatcher', () => {
       // First slice write fills the socket past the gate; the remainder holds.
       streamSocket.write.mockImplementation(() => {
         streamSocket.writableLength = 200 * 1024
+
         return false
       })
       vi.advanceTimersByTime(2)
@@ -289,6 +305,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('writes through the gate once held bulk exceeds the memory safety valve', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const huge = 'z'.repeat(32 * 1024 * 1024 + 1)
@@ -306,6 +323,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('does not split surrogate pairs at the bulk slice boundary', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       // Position an astral char to straddle the 64K slice boundary.
@@ -314,6 +332,7 @@ describe('DaemonStreamDataBatcher', () => {
       batcher.enqueue('client-1', 'session-bulk', bulk)
       vi.advanceTimersByTime(2)
       expect(writtenData(streamSocket)).toBe(bulk)
+
       for (const [line] of streamSocket.write.mock.calls) {
         expect(String(line)).not.toContain('�')
       }
@@ -324,10 +343,12 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('keep-tail drops a droppable session over the cap and delivers a gap before the kept tail', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher({
         isSessionDroppable: (sessionId) => sessionId === 'session-bg'
       })
+
       // Two enqueues that together cross the 1MB cap.
       batcher.enqueue('client-1', 'session-bg', 'a'.repeat(900 * 1024))
       batcher.enqueue('client-1', 'session-bg', 'b'.repeat(300 * 1024))
@@ -341,12 +362,15 @@ describe('DaemonStreamDataBatcher', () => {
             payload: { data?: string; droppedChars?: number }
           }
       )
+
       expect(messages[0]?.event).toBe('dataGap')
       expect(messages[0]?.payload.droppedChars).toBe((900 + 300 - 512) * 1024)
+
       const delivered = messages
         .filter((m) => m.event === 'data')
         .map((m) => m.payload.data ?? '')
         .join('')
+
       expect(delivered.length).toBe(512 * 1024)
       // Keep-TAIL: the newest bytes survive.
       expect(delivered.endsWith('b'.repeat(300 * 1024))).toBe(true)
@@ -357,6 +381,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('accounts every dropped char across repeated drops (gap sums + delivered = enqueued)', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher({ isSessionDroppable: () => true })
       // Deep socket: data holds; a gap entry (~100B) may still write through —
@@ -369,6 +394,7 @@ describe('DaemonStreamDataBatcher', () => {
 
       streamSocket.writableLength = 0
       batcher.flush('client-1')
+
       const messages = streamSocket.write.mock.calls.map(
         ([line]) =>
           JSON.parse(String(line)) as {
@@ -376,9 +402,11 @@ describe('DaemonStreamDataBatcher', () => {
             payload: { data?: string; droppedChars?: number }
           }
       )
+
       const gapChars = messages
         .filter((m) => m.event === 'dataGap')
         .reduce((sum, m) => sum + (m.payload.droppedChars ?? 0), 0)
+
       const dataMessages = messages.filter((m) => m.event === 'data')
       const deliveredChars = dataMessages.reduce((sum, m) => sum + (m.payload.data?.length ?? 0), 0)
       expect(deliveredChars).toBeLessThanOrEqual(1024 * 1024)
@@ -392,12 +420,15 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('salvages reply-eliciting query bytes out of dropped data', () => {
     vi.useFakeTimers()
+
     try {
       const dsr = '\x1b[6n'
+
       const { batcher, streamSocket } = createBatcher({
         isSessionDroppable: () => true,
         salvageDroppedData: (dropped) => (dropped.includes(dsr) ? dsr : '')
       })
+
       // The DSR probe sits in the oldest (dropped) region.
       batcher.enqueue('client-1', 'session-bg', `flood${dsr}${'x'.repeat(900 * 1024)}`)
       batcher.enqueue('client-1', 'session-bg', 'y'.repeat(300 * 1024))
@@ -410,11 +441,13 @@ describe('DaemonStreamDataBatcher', () => {
             payload: { data?: string; droppedChars?: number; sequenceChars?: number }
           }
       )
+
       expect(messages[0]?.event).toBe('dataGap')
       // The salvaged query rides right after the gap, before the kept tail.
       expect(messages[1]?.event).toBe('data')
       expect(messages[1]?.payload.data).toBe(dsr)
       expect(messages[1]?.payload.sequenceChars).toBe(0)
+
       const originalSequenceChars = messages.reduce(
         (sum, message) =>
           sum +
@@ -423,6 +456,7 @@ describe('DaemonStreamDataBatcher', () => {
             : (message.payload.sequenceChars ?? message.payload.data?.length ?? 0)),
         0
       )
+
       expect(originalSequenceChars).toBe(`flood${dsr}${'x'.repeat(900 * 1024)}`.length + 300 * 1024)
     } finally {
       vi.useRealTimers()
@@ -431,21 +465,25 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('shrinks keep-tails as more backgrounded sessions queue (global aggregate budget)', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher({ isSessionDroppable: () => true })
       streamSocket.writableLength = 128 * 1024 // deep socket: queues accumulate
+
       // 17 backgrounded sessions × 768KB — each below the single-session cap,
       // but a reveal would have to drain the ~13MB aggregate (measured 2.5s
       // hidden-restore). The global budget thins each to ~2MB/17 ≈ 120KB.
       for (let s = 0; s < 17; s++) {
         batcher.enqueue('client-1', `session-${s}`, '#'.repeat(768 * 1024))
       }
+
       const totalQueued = batcher.queuedCharsForClient('client-1')
       expect(totalQueued).toBeLessThan(3 * 1024 * 1024)
       // Every session still keeps at least a full screen of newest tail.
       streamSocket.writableLength = 0
       batcher.flush('client-1')
       const perSession = new Map<string, number>()
+
       for (const m of nonSentinelWrites(streamSocket)) {
         if (m.event === 'data' && m.sessionId) {
           perSession.set(
@@ -454,6 +492,7 @@ describe('DaemonStreamDataBatcher', () => {
           )
         }
       }
+
       for (let s = 0; s < 17; s++) {
         expect(perSession.get(`session-${s}`) ?? 0).toBeGreaterThanOrEqual(64 * 1024)
       }
@@ -464,6 +503,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('never drops sessions that are not droppable', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher({ isSessionDroppable: () => false })
       const bulk = 'v'.repeat(2 * 1024 * 1024)
@@ -477,6 +517,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('delivers control events in byte order with the session data around them', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       batcher.enqueue('client-1', 'session-1', 'before')
@@ -492,6 +533,7 @@ describe('DaemonStreamDataBatcher', () => {
       const messages = streamSocket.write.mock.calls.map(
         ([line]) => JSON.parse(String(line)) as { event: string; payload: { data?: string } }
       )
+
       expect(messages.map((m) => m.event)).toEqual(['data', 'transientFact', 'data'])
       expect(messages[0]?.payload.data).toBe('before')
       expect(messages[2]?.payload.data).toBe('after')
@@ -502,6 +544,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it("holds a control event behind its session's held bulk (order latch)", () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       streamSocket.writableLength = 128 * 1024
@@ -528,6 +571,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('delivers a held queued tail (data + facts, in order) once the socket drains', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       streamSocket.writableLength = 128 * 1024
@@ -556,6 +600,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('arms one kernel-flush refill sentinel per held pass and resumes without waiting for drain', () => {
     vi.useFakeTimers()
+
     try {
       const { batcher, streamSocket } = createBatcher()
       const flushCallbacks: (() => void)[] = []
@@ -563,6 +608,7 @@ describe('DaemonStreamDataBatcher', () => {
         if (cb) {
           flushCallbacks.push(cb)
         }
+
         return true
       })
 
@@ -587,6 +633,7 @@ describe('DaemonStreamDataBatcher', () => {
 
   it('writes large stream data as parser-sized NDJSON events', () => {
     vi.useFakeTimers()
+
     try {
       const maxLineBytes = 256
       const { batcher, streamSocket } = createBatcher({ maxLineBytes })
@@ -597,6 +644,7 @@ describe('DaemonStreamDataBatcher', () => {
 
       batcher.enqueue('client-1', 'session-1', data)
       vi.advanceTimersByTime(2)
+
       for (const [line] of streamSocket.write.mock.calls) {
         parser.feed(String(line))
       }

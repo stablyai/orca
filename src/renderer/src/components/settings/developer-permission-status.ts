@@ -42,6 +42,7 @@ export function developerPermissionStatusLabel(
           'Managed by macOS'
         )
       }
+
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.statusCheckManually',
         'Check manually'
@@ -55,8 +56,10 @@ export function developerPermissionStatusClass(
   if (status === 'granted' || status === 'ready') {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
   }
+
   if (status === 'denied' || status === 'restricted') {
     return 'border-destructive/30 bg-destructive/10 text-destructive'
   }
+
   return 'border-border bg-muted text-muted-foreground'
 }

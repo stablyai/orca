@@ -52,9 +52,11 @@ describe('getEffectiveHooks', () => {
       if (path === TEST_REPO_ORCA_YAML_PATH) {
         return 'scripts:\n  setup: |\n    echo old-version\n'
       }
+
       if (path === TEST_WORKTREE_ORCA_YAML_PATH) {
         return 'scripts:\n  setup: |\n    echo new-version\n'
       }
+
       return ''
     })
 
@@ -74,10 +76,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "local setup"', archive: 'echo "local archive"' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -93,11 +97,13 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       commandSourcePolicy: 'shared-only',
       scripts: { setup: 'echo "local setup"', archive: 'echo "local archive"' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toBeNull()
@@ -109,10 +115,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "ui override"', archive: '' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -128,11 +136,13 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       commandSourcePolicy: 'local-only',
       scripts: { setup: 'echo "local setup"', archive: '' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -148,11 +158,13 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       commandSourcePolicy: 'run-both',
       scripts: { setup: 'echo "local setup"', archive: '' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -168,10 +180,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "legacy setup"', archive: 'echo "legacy archive"' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -190,10 +204,12 @@ describe('getEffectiveHooks', () => {
     )
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: '', archive: 'echo "legacy archive"' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -210,10 +226,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('futureFeature: enabled\n')
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "legacy setup"', archive: 'echo "legacy archive"' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -230,11 +248,13 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
 
     const { getEffectiveHooks } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       commandSourcePolicy: 'shared-first' as never,
       scripts: { setup: 'echo "legacy setup"', archive: 'echo "legacy archive"' }
     })
+
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
@@ -260,10 +280,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false)
 
     const { getSetupCommandSource } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "legacy setup"', archive: '' }
     })
+
     const result = getSetupCommandSource(repo)
 
     expect(result).toEqual({ source: 'local', command: 'echo "legacy setup"' })
@@ -275,10 +297,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
 
     const { getSetupCommandSource } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "legacy setup"', archive: '' }
     })
+
     const result = getSetupCommandSource(repo)
 
     expect(result).toEqual({ source: 'local', command: 'echo "legacy setup"' })
@@ -290,10 +314,12 @@ describe('getEffectiveHooks', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('futureFeature: enabled\n')
 
     const { getSetupCommandSource } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: 'echo "legacy setup"', archive: '' }
     })
+
     const result = getSetupCommandSource(repo)
 
     expect(result).toEqual({ source: 'local', command: 'echo "legacy setup"' })
@@ -307,10 +333,12 @@ describe('getEffectiveHooks', () => {
     )
 
     const { getSetupCommandSource } = await import('./hooks')
+
     const repo = makeRepo({
       mode: 'override',
       scripts: { setup: '', archive: 'echo "legacy archive"' }
     })
+
     const result = getSetupCommandSource(repo)
 
     expect(result).toEqual({ source: 'yaml', command: 'echo "yaml setup"' })

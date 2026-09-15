@@ -42,12 +42,15 @@ function nativeDependencyNames(): string[] {
     dependencies?: Record<string, string>
     optionalDependencies?: Record<string, string>
   }
+
   const declared = new Set([
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.optionalDependencies ?? {})
   ])
+
   return [...declared].filter((name) => {
     const dir = join(REPO_ROOT, 'node_modules', name)
+
     return existsSync(join(dir, 'binding.gyp')) || existsSync(join(dir, 'prebuilds'))
   })
 }
@@ -71,6 +74,7 @@ async function relayReachableSources(): Promise<string[]> {
     external: ['node-pty', '@parcel/watcher', 'electron'],
     define: { 'process.env.NODE_ENV': '"production"' }
   })
+
   return Object.keys(result.metafile.inputs).filter((input) => !input.includes('node_modules'))
 }
 
@@ -82,11 +86,13 @@ describe('relay native dependency coverage', () => {
     const imported = nativeDependencyNames().filter(
       (name) => text.includes(`'${name}'`) || text.includes(`"${name}"`)
     )
+
     expect(imported.length).toBeGreaterThan(0)
 
     const uncovered = imported.filter(
       (name) => !(name in RELAY_NATIVE_DEPS) && !(name in DEGRADES_WITHOUT_INSTALL)
     )
+
     expect(uncovered).toEqual([])
   }, 60_000)
 
@@ -95,7 +101,9 @@ describe('relay native dependency coverage', () => {
       dependencies?: Record<string, string>
       optionalDependencies?: Record<string, string>
     }
+
     const declared = { ...pkg.dependencies, ...pkg.optionalDependencies }
+
     for (const [name, version] of Object.entries(RELAY_NATIVE_DEPS)) {
       // The relay pins exact versions where the app carries a range, so compare
       // the base: a relay on a different version than the app marshals the same

@@ -6,11 +6,13 @@ import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
 import { StatsSnapshotWriter } from './stats-snapshot-writer'
 
 const MAX_EVENTS = 10_000
+
 // Why: countedPRs is a deduplication registry that grows with every PR created
 // through Orca. Without a cap, a heavily-used instance accumulates thousands of
 // URL strings across months. 2000 entries is about 6-12 months of active use
 // for a power user, and at ~50 chars per URL the overhead is ~100KB max.
 const MAX_COUNTED_PRS = 2_000
+
 // Why 5s instead of the main store's 300ms: stat events are infrequent
 // (a few per session) and not latency-sensitive for the UI.
 const DEBOUNCE_MS = 5_000
@@ -29,6 +31,7 @@ function getStatsFile(): string {
     // Safety fallback — should not be hit in normal startup.
     _statsFile = join(app.getPath('userData'), 'orca-stats.json')
   }
+
   return _statsFile
 }
 
@@ -54,6 +57,7 @@ export class StatsCollector {
 
   onAgentStarted(listener: (totalAgentsSpawned: number) => void): () => void {
     this.agentStartListeners.push(listener)
+
     return () => {
       this.agentStartListeners = this.agentStartListeners.filter((l) => l !== listener)
     }
@@ -90,9 +94,11 @@ export class StatsCollector {
 
   onAgentStop(sessionKey: string, at: number): void {
     const startAt = this.liveAgents.get(sessionKey)
+
     if (startAt === undefined) {
       return
     }
+
     this.liveAgents.delete(sessionKey)
     const durationMs = Math.max(0, at - startAt)
     this.aggregates.totalAgentTimeMs += durationMs
@@ -134,6 +140,7 @@ export class StatsCollector {
     if (this.quitFlushStarted) {
       return
     }
+
     this.closeOutLiveAgents()
     this.cancelPendingSave()
     this.snapshotWriter.writeSync(() => this.serialize())
@@ -156,12 +163,14 @@ export class StatsCollector {
     if (this.quitFlushPromise) {
       return this.quitFlushPromise
     }
+
     this.quitFlushStarted = true
     this.closeOutLiveAgents()
     this.cancelPendingSave()
     this.quitFlushPromise = this.enqueueWrite().catch((err) => {
       console.error('[stats] Failed to flush stats:', err)
     })
+
     return this.quitFlushPromise
   }
 
@@ -170,6 +179,7 @@ export class StatsCollector {
     // Why snapshot keys: onAgentStop mutates liveAgents, so we snapshot
     // the keys first to avoid iterator invalidation.
     const liveSessionKeys = Array.from(this.liveAgents.keys())
+
     for (const sessionKey of liveSessionKeys) {
       this.onAgentStop(sessionKey, now)
     }
@@ -185,6 +195,7 @@ export class StatsCollector {
     switch (event.type) {
       case 'agent_start':
         this.aggregates.totalAgentsSpawned++
+
         // Why: notify listeners synchronously AFTER increment so observers
         // see the post-increment count. Listener errors are swallowed to
         // keep stat recording robust — a buggy listener must not lose the
@@ -196,11 +207,14 @@ export class StatsCollector {
             console.error('[stats] agent-start listener threw:', err)
           }
         }
+
         break
       case 'pr_created':
         this.aggregates.totalPRsCreated++
+
         if (event.meta?.prUrl) {
           this.aggregates.countedPRs.push(String(event.meta.prUrl))
+
           // Why: trim oldest entries so the dedup array does not grow without
           // bound. The aggregate totalPRsCreated counter remains accurate; only
           // the dedup lookup for very old PRs is lost, which is acceptable
@@ -209,6 +223,7 @@ export class StatsCollector {
             this.aggregates.countedPRs = this.aggregates.countedPRs.slice(-MAX_COUNTED_PRS)
           }
         }
+
         break
       // agent_stop duration is handled directly in onAgentStop() to avoid
       // double-counting — the duration is added to totalAgentTimeMs there.
@@ -223,9 +238,11 @@ export class StatsCollector {
     if (this.quitFlushStarted) {
       return
     }
+
     if (this.writeTimer) {
       return // already scheduled
     }
+
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       // Why async: a chatty session can write ~900KB every 5s and stall the main thread.
@@ -246,6 +263,7 @@ export class StatsCollector {
     if (this.events.length > MAX_EVENTS) {
       this.events = this.events.slice(-MAX_EVENTS)
     }
+
     return JSON.stringify({
       schemaVersion: STATS_SCHEMA_VERSION,
       events: this.events,

@@ -10,7 +10,9 @@ export function handleBrowserNetworkTunnelHeartbeat(
 ): boolean {
   if (frame.opcode === BrowserNetworkTunnelOpcode.Ping) {
     sender.send(BrowserNetworkTunnelOpcode.Pong, frame.streamId, frame.payload)
+
     return true
   }
+
   return frame.opcode === BrowserNetworkTunnelOpcode.Pong
 }

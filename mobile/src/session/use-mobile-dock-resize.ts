@@ -22,6 +22,7 @@ function clampDockWidthForRow(width: number, availableWidth: number): number {
     Number.isFinite(availableWidth) && availableWidth > 0
       ? Math.max(HOST_DOCK_MIN_WIDTH, availableWidth - SESSION_DOCK_MIN_MAIN_WIDTH)
       : HOST_DOCK_MAX_WIDTH
+
   return Math.min(Math.min(HOST_DOCK_MAX_WIDTH, maxForRow), clampHostDockWidth(width))
 }
 
@@ -48,6 +49,7 @@ export function useMobileDockResize(availableWidth = 0): MobileDockResize {
         setDockWidth(clampDockWidthForRow(saved, availableWidthRef.current))
       }
     })
+
     return () => {
       stale = true
     }

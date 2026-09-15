@@ -151,9 +151,11 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
 
   it('is a no-op when the id list is empty', () => {
     const store = createTestStore()
+
     const before = {
       'repoA::/a/wt1': [{ id: 'tab-1', worktreeId: 'repoA::/a/wt1' }]
     }
+
     store.setState({ tabsByWorktree: before } as unknown as Partial<AppState>)
 
     store.getState().purgeWorktreeTerminalState([])
@@ -164,6 +166,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
   it('ignores the floating workspace sentinel while purging mixed real ids', () => {
     const store = createTestStore()
     const staleId = 'repoA::/a/wt1'
+
     const floatingFile = {
       id: 'floating-file',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -254,9 +257,11 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
   it('is a no-op when only the floating workspace sentinel is passed', () => {
     const store = createTestStore()
     const tabsByWorktree = {}
+
     const browserTabsByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
     }
+
     const openFiles = [
       {
         id: 'floating-file',
@@ -269,6 +274,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         mode: 'edit' as const
       }
     ]
+
     const unifiedTabsByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: [
         {
@@ -279,6 +285,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         }
       ]
     }
+
     const groupsByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: [
         {
@@ -288,6 +295,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         }
       ]
     }
+
     const layoutByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' }
     }

@@ -25,18 +25,24 @@ export function reconcileRequestedWorkerTerminalReleases(
   runtime: OrcaRuntimeService
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
   const active = activeReconciliationByRuntime.get(runtime)
+
   if (active?.promise) {
     active.rerunRequested = true
+
     return active.promise
   }
+
   const state: ActiveReconciliation = { rerunRequested: false }
+
   const reconciliation = runReconciliationPasses(runtime, state).finally(() => {
     if (activeReconciliationByRuntime.get(runtime) === state) {
       activeReconciliationByRuntime.delete(runtime)
     }
   })
+
   state.promise = reconciliation
   activeReconciliationByRuntime.set(runtime, state)
+
   return reconciliation
 }
 
@@ -45,6 +51,7 @@ async function runReconciliationPasses(
   state: ActiveReconciliation
 ): Promise<WorkerTerminalReleaseReconciliationResult> {
   const combined = emptyResult()
+
   do {
     state.rerunRequested = false
     const pass = await reconcileRequestedWorkerTerminalReleasesOnce(runtime)
@@ -54,10 +61,12 @@ async function runReconciliationPasses(
     combined.unknown += pass.unknown
     combined.retained += pass.retained
   } while (state.rerunRequested)
+
   if (combined.attempted > 0) {
     // Structured counts only; never transcript content or paths.
     console.info('[orchestration] worker terminal release reconciliation', combined)
   }
+
   return combined
 }
 
@@ -67,9 +76,11 @@ async function reconcileRequestedWorkerTerminalReleasesOnce(
   const db = runtime.getOrchestrationDb()
   const backlog = db.listWorkerTerminalReleaseBacklog()
   const result = { ...emptyResult(), attempted: backlog.length }
+
   for (const resource of backlog) {
     try {
       const attachment = db.getRemoteDispatchAttachment(resource.owner_dispatch_id)
+
       const receipt = attachment
         ? await releaseRemoteAttachment({
             runtime,
@@ -84,6 +95,7 @@ async function reconcileRequestedWorkerTerminalReleasesOnce(
             resource,
             mode: 'recovery'
           })
+
       if (receipt.state === 'released' || receipt.state === 'already_released') {
         result.released += 1
       } else if (receipt.state === 'release_pending') {
@@ -103,6 +115,7 @@ async function reconcileRequestedWorkerTerminalReleasesOnce(
       result.pending += 1
     }
   }
+
   return result
 }
 

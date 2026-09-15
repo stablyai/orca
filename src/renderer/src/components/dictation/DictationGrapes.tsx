@@ -34,6 +34,7 @@ export function DictationGrapes({ level, active, transitioning }: DictationGrape
         const energy = active ? normalizedLevel : 0
         const scale = grape.base + energy * grape.response
         const verticalOffset = energy * grape.lift * 2
+
         return (
           <span
             key={index}

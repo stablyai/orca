@@ -12,8 +12,10 @@ export function isIntrawordUnderscoreToken(text: string, index: number, token: s
   if (!token.startsWith('_')) {
     return false
   }
+
   const prev = index > 0 ? text[index - 1]! : ''
   const next = text[index + token.length] ?? ''
+
   return INTRAWORD_FLANK_PATTERN.test(prev) || INTRAWORD_FLANK_PATTERN.test(next)
 }
 
@@ -26,12 +28,15 @@ export function trimAutolinkTrailingPunctuation(url: string): { url: string; tra
   let parenthesisCountsReady = false
   let openParentheses = 0
   let closeParentheses = 0
+
   while (end > 0) {
     const char = url[end - 1]!
+
     if ('.,;:!?'.includes(char)) {
       end--
       continue
     }
+
     if (char === ')') {
       if (!parenthesisCountsReady) {
         for (let index = 0; index < end; index++) {
@@ -41,15 +46,19 @@ export function trimAutolinkTrailingPunctuation(url: string): { url: string; tra
             closeParentheses++
           }
         }
+
         parenthesisCountsReady = true
       }
+
       if (closeParentheses > openParentheses) {
         end--
         closeParentheses--
         continue
       }
     }
+
     break
   }
+
   return { url: url.slice(0, end), trailing: url.slice(end) }
 }

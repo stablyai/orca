@@ -57,11 +57,13 @@ describe('proven-dead agent session eviction settlement', () => {
     const restartRecord = agentSessionRecordFixture(
       agentSessionLeaseFixture({ runtimeKind: 'native', unreconciled: true })
     )
+
     const recovered = applyAgentSessionRestartAdjudication({
       record: restartRecord,
       probe: { outcome: 'indeterminate', reason: 'remote host unavailable' },
       now: NOW
     })
+
     const recoveryRecord = agentSessionRecordFixture(
       agentSessionLeaseFixture({ runtimeKind: 'native', handoffStage: 'recovering' })
     )

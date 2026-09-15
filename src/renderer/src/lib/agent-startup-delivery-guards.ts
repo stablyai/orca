@@ -35,12 +35,15 @@ export function clearConsumedAgentStartupDeliveriesForTests(): void {
 // closed or its worktree is removed.
 export function forgetAgentStartupDeliveriesForTabs(tabIds: Iterable<string>): void {
   const tabIdSet = tabIds instanceof Set ? tabIds : new Set(tabIds)
+
   if (tabIdSet.size === 0) {
     return
   }
+
   for (const key of consumedAgentStartupDeliveries) {
     // agentStartupDeliveryKey() is `${worktreeId}\0${tabId}\0${launchToken}`.
     const tabId = key.split('\0')[1] ?? ''
+
     if (tabIdSet.has(tabId)) {
       consumedAgentStartupDeliveries.delete(key)
     }

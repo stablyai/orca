@@ -17,6 +17,7 @@ export function prepareAiVaultSessionContinuation(args: {
   targetWorkspacePath: string
 }): AgentSessionContinuationRequest {
   const { session, targetWorktreeId, targetWorkspacePath } = args
+
   return {
     source: {
       capturedText: previewTranscript(session),

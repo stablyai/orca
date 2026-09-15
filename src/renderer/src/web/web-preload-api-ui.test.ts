@@ -93,6 +93,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'settings.get') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -101,6 +102,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,
@@ -133,6 +135,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'settings.get') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -141,6 +144,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,
@@ -229,6 +233,7 @@ describe('web UI preload API', () => {
     const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
       featureInteractions?: FeatureInteractionState
     }
+
     expect(stored.featureInteractions?.tasks).toEqual({
       firstInteractedAt: 100,
       interactionCount: 2
@@ -272,6 +277,7 @@ describe('web UI preload API', () => {
     installWebPreloadApi()
 
     const ui = await globals.window.api.ui.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
       featureInteractions?: FeatureInteractionState
     }
@@ -296,6 +302,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -339,6 +346,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -362,6 +370,7 @@ describe('web UI preload API', () => {
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-b' },
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-a' }
     ]
+
     await globals.window.api.ui.set({ manualRepoOrder, sidebarWidth: 280 })
 
     expect(runtimeCalls[0]).toEqual({ method: 'ui.set', params: { sidebarWidth: 280 } })
@@ -411,6 +420,7 @@ describe('web UI preload API', () => {
       { hostId: 'runtime:web-env-1', repoId: 'repo-b' },
       { hostId: 'runtime:web-env-1', repoId: 'repo-a' }
     ]
+
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
     globals.storage.setItem('orca.web.ui.v1', JSON.stringify({ manualRepoOrder: webOwnOrder }))
@@ -445,6 +455,7 @@ describe('web UI preload API', () => {
       { hostId: 'runtime:web-env-1', repoId: 'repo-b' },
       { hostId: 'runtime:web-env-1', repoId: 'repo-a' }
     ]
+
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
     globals.storage.setItem('orca.web.ui.v1', JSON.stringify({ manualRepoOrder: webOwnOrder }))
@@ -475,6 +486,7 @@ describe('web UI preload API', () => {
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
     manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
   }
+
   const hostUiSamples: Record<PairingLocalUiField, unknown> = {
     automationHostFilter: { kind: 'all' },
     hideWorkspacesFromOtherDevices: false,
@@ -499,6 +511,7 @@ describe('web UI preload API', () => {
         WebRuntimeClient: class {
           call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
             runtimeCalls.push({ method, params })
+
             return Promise.resolve({
               id: method,
               ok: true,
@@ -560,6 +573,7 @@ describe('web UI preload API', () => {
     installWebPreloadApi()
 
     const ui = await globals.window.api.ui.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
       contextualToursSeenIds?: string[]
     }
@@ -663,6 +677,7 @@ describe('web UI preload API', () => {
       featureInteractionTelemetryBuckets: { tasks: 'count_500_999' }
     } as never)
     const ui = await globals.window.api.ui.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as Record<
       string,
       unknown
@@ -704,6 +719,7 @@ describe('web UI preload API', () => {
     installWebPreloadApi()
 
     const ui = await globals.window.api.ui.recordFeatureInteraction('tasks')
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
       contextualToursSeenIds?: string[]
     }
@@ -718,6 +734,7 @@ describe('web UI preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
           calls.push({ method, params })
+
           if (method === 'skills.discover') {
             return Promise.resolve({
               id: method,
@@ -744,6 +761,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'computer.permissionsStatus') {
             return Promise.resolve({
               id: method,
@@ -760,6 +778,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'computer.permissions') {
             return Promise.resolve({
               id: method,
@@ -776,6 +795,7 @@ describe('web UI preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -825,6 +845,7 @@ describe('web UI preload API', () => {
           if (method === 'ui.set') {
             return Promise.reject(new Error('runtime disconnected'))
           }
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -860,6 +881,7 @@ describe('web UI preload API', () => {
           if (method === 'skills.discover') {
             return Promise.reject(new Error('runtime disconnected'))
           }
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -889,6 +911,7 @@ describe('web UI preload API', () => {
           if (method === 'computer.permissionsStatus') {
             return Promise.reject(new Error('runtime disconnected'))
           }
+
           return Promise.resolve({
             id: method,
             ok: true,

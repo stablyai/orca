@@ -5,6 +5,7 @@ import { resolveBackendDraftStartup } from './worktree-draft-startup-view-mode'
 type AppState = ReturnType<typeof useAppStore.getState>
 
 const initialSettings = useAppStore.getState().settings!
+
 const initialRepos = useAppStore.getState().repos
 
 const request = {
@@ -23,6 +24,7 @@ function viewModeFor(agent: string): string | undefined {
   const startup = resolveBackendDraftStartup({ ...(request as object), agent } as never) as
     | { viewMode?: string }
     | undefined
+
   return startup?.viewMode
 }
 

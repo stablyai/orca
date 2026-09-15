@@ -10,6 +10,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock
@@ -51,6 +52,7 @@ describe('DevinHookService', () => {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
       agent?: { model: string }
     }
+
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -60,9 +62,11 @@ describe('DevinHookService', () => {
     ]) {
       expect(config.hooks[eventName][0].hooks[0].command).toContain('devin-hook')
     }
+
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       expect(config.hooks[eventName][0].matcher).toBeUndefined()
     }
+
     const script = readFileSync(getDevinManagedScriptPath(), 'utf8')
     expect(script).toContain('/hook/devin')
     // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -86,6 +90,7 @@ describe('DevinHookService', () => {
       permissions: { mode: string }
       hooks: Record<string, unknown>
     }
+
     expect(config.permissions.mode).toBe('normal')
     expect(config.hooks.UserPromptSubmit).toBeDefined()
   })
@@ -163,6 +168,7 @@ describe('DevinHookService', () => {
   it('uses a cmd.exe wrapper for managed hook command on Windows', () => {
     const previous = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32' })
+
     try {
       const scriptPath = 'C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd'
       const command = getDevinManagedCommand(scriptPath)
@@ -196,12 +202,15 @@ describe('DevinHookService', () => {
 
     expect(removed.state).toBe('not_installed')
     const configPath = getDevinConfigPath()
+
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
+
     const commands = Object.values(config.hooks).flatMap((definitions) =>
       definitions.flatMap((definition) => definition.hooks.map((hook) => hook.command))
     )
+
     expect(commands.some((command) => command.includes('devin-hook'))).toBe(false)
   })
 
@@ -236,6 +245,7 @@ describe('DevinHookService', () => {
     const previous = process.platform
     const previousAppData = process.env.APPDATA
     Object.defineProperty(process, 'platform', { value: 'win32' })
+
     try {
       process.env.APPDATA = 'C:\\Users\\test\\AppData\\Roaming'
       expect(getDevinConfigPath()).toBe(
@@ -247,6 +257,7 @@ describe('DevinHookService', () => {
       expect(getDevinConfigPath()).toBe(join(homeDir, 'AppData', 'Roaming', 'devin', 'config.json'))
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
+
       if (previousAppData !== undefined) {
         process.env.APPDATA = previousAppData
       } else {

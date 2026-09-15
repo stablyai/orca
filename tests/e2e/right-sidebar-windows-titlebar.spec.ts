@@ -22,6 +22,7 @@ test.describe('Right sidebar native titlebar spacing', () => {
 
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available - is the app in dev mode?')
       }
@@ -37,18 +38,22 @@ test.describe('Right sidebar native titlebar spacing', () => {
       orcaPage.evaluate(() => {
         const header = document.querySelector<HTMLElement>('.right-sidebar-header-inset')
         const strip = document.querySelector<HTMLElement>('.right-sidebar-activity-strip')
+
         const closeButton = header?.querySelector<HTMLButtonElement>(
           'button[aria-label="Toggle right sidebar"]'
         )
+
         const titlebarActivityButtonCount =
           header?.querySelectorAll<HTMLButtonElement>(
             'button[aria-label]:not([aria-label="Toggle right sidebar"])'
           ).length ?? 0
+
         const activityButtons = Array.from(
           strip?.querySelectorAll<HTMLButtonElement>(
             'button[aria-label]:not([aria-label="Toggle right sidebar"])'
           ) ?? []
         )
+
         const firstButton = activityButtons[0]
         const lastButton = activityButtons.at(-1)
 
@@ -86,6 +91,7 @@ test.describe('Right sidebar native titlebar spacing', () => {
       .poll(
         async () => {
           headerGeometry = await measureHeader()
+
           return headerGeometry !== null
         },
         {
@@ -96,6 +102,7 @@ test.describe('Right sidebar native titlebar spacing', () => {
       .toBe(true)
 
     expect(headerGeometry).not.toBeNull()
+
     if (hasDesktopWindowChrome) {
       expect(headerGeometry!.titlebarActivityButtonCount).toBe(0)
       expect(headerGeometry!.stripTop).toBeGreaterThanOrEqual(headerGeometry!.headerBottom)
@@ -103,6 +110,7 @@ test.describe('Right sidebar native titlebar spacing', () => {
       expect(headerGeometry!.titlebarActivityButtonCount).toBe(headerGeometry!.activityButtonCount)
       expect(headerGeometry!.stripTop).toBeLessThan(headerGeometry!.headerBottom)
     }
+
     expect(headerGeometry!.closeTop).toBeLessThan(headerGeometry!.headerBottom)
     expect(headerGeometry!.firstButtonCenterHitsFirst).toBe(true)
     expect(headerGeometry!.lastButtonCenterHitsLast).toBe(true)

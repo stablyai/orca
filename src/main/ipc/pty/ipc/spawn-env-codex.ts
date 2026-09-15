@@ -32,6 +32,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     ctx.cwd,
     ctx.expectedWslDistro
   )
+
   const codexResumePreparation = ctx.preAdoptedStablePane
     ? null
     : ctx.deps.prepareCodexResumeHome({
@@ -42,6 +43,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
         launchEnv: ctx.baseEnv,
         workspacePath: ctx.cwd
       })
+
   ctx.codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
     : ctx.deps.noCodexResumeLaunch(ctx.preAdoptedStablePane ? undefined : args.command)
@@ -55,11 +57,13 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   // Why: declared after the strip so a local-provider spawn cannot capture the
   // pre-strip env — only the daemon branch below re-derives this from baseEnv.
   ctx.env = ctx.baseEnv
+
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
       workspacePath: ctx.cwd,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
     })) ?? null
+
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
@@ -74,6 +78,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
             : await selectLaunchCodexHome()
         )
       : null
+
   if (!ctx.preAdoptedStablePane && args.launchAgent === 'codex' && args.sessionId === undefined) {
     const resolution = resolveCodexHomeAfterManagedAuthReadiness({
       selectedCodexHomePath: ctx.selectedCodexHomePath,
@@ -98,11 +103,14 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
           })) ?? null
         )
     })
+
     ctx.selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
+
   if (args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
     await ensureCodexStateDbBackfillRecoveryStarted(ctx.selectedCodexHomePath)
   }
+
   ctx.spawnTiming.mark('codex_home')
   ctx.codexResumeHomeSelected = Boolean(
     codexResumeHome && codexHomePathsEqual(ctx.selectedCodexHomePath, codexResumeHome.codexHomePath)
@@ -120,18 +128,23 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
       skipCodexHomeEnv: ctx.skipCodexHomeEnv,
       settings: ptySettings
     })
+
   if (ctx.isDaemonHostSpawn && !ctx.preAdoptedStablePane) {
     if (ctx.effectiveSessionId === undefined) {
       // Should be unreachable: effectiveSessionId is a string when isDaemonHostSpawn; defense-in-depth.
       throw new Error('Invariant violation: daemon spawn without sessionId')
     }
+
     const sessionIdForEnv = ctx.effectiveSessionId
+
     // Why: this id reaches filesystem paths; reject traversal/separators so a crafted IPC payload can't escape the expected roots.
     if (!isSafePtySessionId(sessionIdForEnv, getAppEnvironment().getPath('userData'))) {
       throw new Error('Invalid PTY session id')
     }
+
     // Why: clone before mutating so injections don't leak back into args.env (renderer may reuse it).
     ctx.env = { ...ctx.baseEnv }
+
     try {
       buildPtyHostEnv(sessionIdForEnv, ctx.env, {
         isPackaged: getAppEnvironment().isPackaged(),
@@ -162,8 +175,10 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
       if (ctx.isMintedSessionId) {
         clearProviderPtyState(sessionIdForEnv)
       }
+
       throw err
     }
   }
+
   ctx.spawnTiming.mark('host_env')
 }

@@ -22,16 +22,20 @@ type FakeDiffEditor = editor.IStandaloneDiffEditor & {
 function createFakeEditor(initialCount: number): FakeDiffEditor {
   let count = initialCount
   let updateCallback: (() => void) | null = null
+
   const disposeUpdate = vi.fn(() => {
     updateCallback = null
   })
+
   const containerNode = document.createElement('div')
+
   const editor = {
     getLineChanges: () => (count > 0 ? Array.from({ length: count }, () => ({})) : []),
     goToDiff: vi.fn(),
     getContainerDomNode: () => containerNode,
     onDidUpdateDiff: (cb: () => void) => {
       updateCallback = cb
+
       return {
         dispose: disposeUpdate
       }
@@ -43,21 +47,26 @@ function createFakeEditor(initialCount: number): FakeDiffEditor {
     disposeUpdate,
     containerNode
   } as unknown as FakeDiffEditor
+
   return editor
 }
 
 let captured: DiffNavigationContextValue | null = null
+
 let registration: DiffEditorRegistrationContextValue | null = null
+
 let registrationRenderCount = 0
 
 function Probe(): null {
   captured = useDiffNavigation()
+
   return null
 }
 
 function RegistrationProbe(): null {
   registration = useDiffEditorRegistration()
   registrationRenderCount += 1
+
   return null
 }
 
@@ -83,6 +92,7 @@ describe('DiffNavigationProvider', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     container = null
     root = null

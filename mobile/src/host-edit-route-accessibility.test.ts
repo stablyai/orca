@@ -52,9 +52,11 @@ async function renderEditHostRoute(): Promise<ReactTestRenderer> {
     renderer = create(createElement(EditHostScreen))
     await Promise.resolve()
   })
+
   if (!renderer) {
     throw new Error('Edit host route did not render')
   }
+
   return renderer
 }
 

@@ -23,11 +23,13 @@ export function useEditorConflictNavigation(): (
   return useCallback(
     (file: OpenFile, content: string) => {
       const blocks = findGitConflictBlocks(content)
+
       if (blocks.length === 0) {
         return undefined
       }
 
       const currentIndex = navigationIndexByFile[file.id] ?? null
+
       return {
         currentIndex,
         total: blocks.length,
@@ -37,9 +39,11 @@ export function useEditorConflictNavigation(): (
             direction,
             total: blocks.length
           })
+
           if (nextIndex === null) {
             return
           }
+
           const line = blocks[nextIndex].startLine
           const markerLineLength = getGitConflictMarkerLineLength(content, line)
           setNavigationIndexByFile((previous) => ({ ...previous, [file.id]: nextIndex }))

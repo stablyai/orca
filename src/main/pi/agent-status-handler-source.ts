@@ -23,6 +23,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
   const ctxParam = ', ctx'
   const bareCtxParams = '_event, ctx'
   const captureSessionMetadata = ['    updateRuntimeOmpSessionMetadata(ctx)']
+
   const primeDaemonWorkerGuard =
     kind === 'prime-agent'
       ? [
@@ -30,6 +31,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '  if (!process.env.PRIME_AGENT_INTERNAL_DAEMON_WORKER) return'
         ]
       : []
+
   const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
 
   // Why: OMP suppresses its approval lifecycle unless an extension listens for it,

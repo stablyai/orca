@@ -16,6 +16,7 @@ export function NativeChatSupportedAgents(): React.JSX.Element {
         </span>
         {NATIVE_CHAT_SUPPORTED_AGENT_LIST.map((agent) => {
           const label = getAgentLabel(agent)
+
           return (
             <Tooltip key={agent}>
               <TooltipTrigger asChild>

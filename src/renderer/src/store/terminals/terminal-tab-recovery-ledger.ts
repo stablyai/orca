@@ -22,11 +22,14 @@ import type {
 // Backstop only — a breadcrumb-emitting ceiling for a loop the outcome gate
 // somehow failed to catch. The outcome gate is what stops a storm.
 export const MAX_RECOVERIES_PER_WINDOW = 3
+
 export const RECOVERY_WINDOW_MS = 5 * 60_000
+
 // Why a cooldown exists: one incident can trip several detectors (stall watch,
 // replay guard, input path) within seconds; the first remount fixes all of
 // them, the rest must coalesce instead of re-remounting mid-reattach.
 export const RECOVERY_COOLDOWN_MS = 15_000
+
 // Why reuse the direct-SSH settlement timeout: the same 31s bound already
 // decides when a pane's attach attempt has stopped being in flight. A 'pending'
 // ledger older than that describes a pane that never reported, not one still
@@ -84,15 +87,19 @@ export function readTerminalRecoveryOutcome(
   now: number
 ): TerminalPaneRecoveryOutcome | null {
   const ledger = tab.recovery
+
   if (!ledger) {
     return null
   }
+
   if (isSupersededLedger(tab, ledger)) {
     return 'superseded'
   }
+
   if (ledger.outcome === 'pending' && now - ledger.startedAt >= RECOVERY_SETTLEMENT_TIMEOUT_MS) {
     return 'timed-out'
   }
+
   return ledger.outcome
 }
 
@@ -116,17 +123,22 @@ export function admitTerminalRecoveryRemount(
   if (!tab) {
     return { admitted: false, declinedBy: 'tab-missing' }
   }
+
   const ledger = tab.recovery
+
   if (
     request.generation !== undefined &&
     request.generation !== captureTabRecoveryGeneration(tab)
   ) {
     return { admitted: false, declinedBy: 'stale-generation' }
   }
+
   if (request.trigger === 'external' || !ledger) {
     return ADMITTED
   }
+
   const recent = recentAttempts(ledger, request.now)
+
   if (recent.length >= MAX_RECOVERIES_PER_WINDOW) {
     // Unconditional: the backstop must survive supersession, or anything that
     // bumps tab.generation each cycle would lift the ceiling along with it.
@@ -136,12 +148,15 @@ export function admitTerminalRecoveryRemount(
       retryInMs: recent[0] + RECOVERY_WINDOW_MS - request.now
     }
   }
+
   if (request.trigger === 'user') {
     // The user asking again IS the new evidence. Only the window cap — the
     // backstop against a loop neither side can see — survives it.
     return ADMITTED
   }
+
   const outcome = readTerminalRecoveryOutcome(tab, request.now)
+
   if (outcome !== 'superseded') {
     if (ledger.outcome === 'pending') {
       if (outcome === 'pending') {
@@ -168,7 +183,9 @@ export function admitTerminalRecoveryRemount(
       return { admitted: false, declinedBy: 'settled-failure' }
     }
   }
+
   const last = recent.at(-1)
+
   if (last !== undefined && request.now - last < RECOVERY_COOLDOWN_MS) {
     return {
       admitted: false,
@@ -176,6 +193,7 @@ export function admitTerminalRecoveryRemount(
       retryInMs: last + RECOVERY_COOLDOWN_MS - request.now
     }
   }
+
   return ADMITTED
 }
 
@@ -188,6 +206,7 @@ export function nextTerminalRecoveryLedger(
   const previous = tab.recovery
   // Carried across supersession on purpose — see the window-cap note above.
   const carriedAttempts = previous ? recentAttempts(previous, request.now) : []
+
   return {
     attemptedAt: [...carriedAttempts, request.now],
     generation: captureTabRecoveryGeneration(tab) + 1,
@@ -206,6 +225,7 @@ export function settledTerminalRecoveryLedger(
   outcome: Exclude<TerminalPaneRecoveryOutcome, 'pending'>
 ): TerminalTabRecoveryLedger | null {
   const ledger = tab.recovery
+
   if (
     !ledger ||
     ledger.generation !== generation ||
@@ -214,5 +234,6 @@ export function settledTerminalRecoveryLedger(
   ) {
     return null
   }
+
   return { ...ledger, outcome }
 }

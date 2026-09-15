@@ -30,6 +30,7 @@ export function claudeTurnEndForResult(
 ): ClaudeTurnEnd {
   const reason = message.is_error === true ? claudeText(message.terminal_reason) : null
   const durationMs = message.duration_ms
+
   return {
     state:
       reason === 'aborted_streaming' || reason === 'aborted_tools' ? 'interrupted' : 'completed',
@@ -70,6 +71,7 @@ export function claudeTurnLifecycleItem(
   publishCoalescingKey: string
 } {
   const { sessionId, turnId, startedAt, userItemId } = turn
+
   return {
     identity: claudeTurnLifecycleIdentity(sessionId, turnId),
     body: agentJournalTurnBody(

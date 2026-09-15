@@ -6,9 +6,11 @@ vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
     let result = fallback
+
     for (const [key, value] of Object.entries(values ?? {})) {
       result = result.replace(`{{${key}}}`, value)
     }
+
     return result
   }
 }))
@@ -101,6 +103,7 @@ describe('InlineUsageBars', () => {
 
   it('keeps the footer meter for weekly-only Codex usage', async () => {
     const { ProviderSegment } = await import('./StatusBar')
+
     const limits: ProviderRateLimits = {
       provider: 'codex',
       session: null,

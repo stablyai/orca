@@ -18,6 +18,7 @@ describe('connection log buffer', () => {
 
   it('drops the oldest entries past the cap', () => {
     const store = createConnectionLogStore(3)
+
     for (let i = 1; i <= 5; i++) {
       store.append('host-a', entry(i))
     }
@@ -56,12 +57,14 @@ describe('connection log buffer', () => {
 
   it('hydrates persisted history without dropping events recorded during app startup', async () => {
     let finishLoad: (entries: readonly ConnectionLogEntry[]) => void = () => {}
+
     const load = vi.fn(
       () =>
         new Promise<readonly ConnectionLogEntry[]>((resolve) => {
           finishLoad = resolve
         })
     )
+
     const save = vi.fn(async () => {})
     const store = createConnectionLogStore(3, { load, save })
 
@@ -153,6 +156,7 @@ describe('connection log buffer', () => {
       .fn<() => Promise<readonly ConnectionLogEntry[]>>()
       .mockRejectedValueOnce(new Error('storage unavailable'))
       .mockResolvedValueOnce([entry(1)])
+
     const save = vi.fn(async () => {})
     const store = createConnectionLogStore(3, { load, save })
 

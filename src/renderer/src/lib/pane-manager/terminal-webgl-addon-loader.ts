@@ -8,7 +8,9 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 // right after the React root renders, and attachWebgl reads the resolved
 // constructor synchronously.
 let webglAddonConstructor: (new () => WebglAddon) | null = null
+
 let webglAddonLoad: Promise<void> | null = null
+
 let webglAddonLoadAttempts = 0
 
 // Why a cap rather than unlimited retries: a chunk that is genuinely gone (bad
@@ -37,9 +39,11 @@ export function primeTerminalWebglAddon(): Promise<void> {
   if (webglAddonConstructor || webglAddonLoad) {
     return webglAddonLoad ?? Promise.resolve()
   }
+
   if (webglAddonLoadAttempts >= WEBGL_ADDON_LOAD_ATTEMPT_LIMIT) {
     return Promise.resolve()
   }
+
   webglAddonLoadAttempts += 1
   webglAddonLoad = import('@xterm/addon-webgl').then(
     (module) => {
@@ -55,6 +59,7 @@ export function primeTerminalWebglAddon(): Promise<void> {
       console.warn('[terminal] WebGL addon failed to load — using DOM renderer:', error)
     }
   )
+
   return webglAddonLoad
 }
 
@@ -63,6 +68,7 @@ export function rearmTerminalWebglAddonLoad(): void {
   if (webglAddonConstructor) {
     return
   }
+
   webglAddonLoad = null
   webglAddonLoadAttempts = 0
 }

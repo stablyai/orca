@@ -27,12 +27,15 @@ export function finalizeImportedRepoAfterSkip(
   if (state.activeRepoId !== importedRepoId) {
     state.setActiveRepo(importedRepoId)
   }
+
   if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(importedRepoId)) {
     state.setFilterRepoIds([])
   }
+
   if (state.showActiveOnly) {
     state.setShowActiveOnly(false)
   }
+
   if (
     importedWorktrees.length > 0 &&
     state.hideDefaultBranchWorkspace &&
@@ -40,6 +43,7 @@ export function finalizeImportedRepoAfterSkip(
   ) {
     state.setHideDefaultBranchWorkspace(false)
   }
+
   // Why: with "Hide sleeping" on, a freshly imported project has no live PTY
   // yet, so the opted-out exemption would leave it invisible on arrival.
   if (

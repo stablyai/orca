@@ -42,9 +42,11 @@ function makeDeps(): GitStatusRefreshDeps {
 
 function stubGitStatus(statuses: GitStatusResult[]): ReturnType<typeof vi.fn> {
   const gitStatus = vi.fn()
+
   for (const status of statuses) {
     gitStatus.mockResolvedValueOnce(status)
   }
+
   gitStatus.mockResolvedValue(statuses.at(-1) ?? unchangedStatus)
   vi.stubGlobal('window', {
     api: {
@@ -59,6 +61,7 @@ function stubGitStatus(statuses: GitStatusResult[]): ReturnType<typeof vi.fn> {
       }
     }
   })
+
   return gitStatus
 }
 

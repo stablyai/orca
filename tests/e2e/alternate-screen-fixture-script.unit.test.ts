@@ -76,6 +76,7 @@ describe('spec alternate-screen fixtures', () => {
     // letting a later builder call in the same file satisfy the assertion vacuously.
     const end = source.indexOf('\n}', start)
     expect(end, `${name} has no closing brace; re-point this ratchet`).toBeGreaterThan(start)
+
     return source.slice(start, end)
   }
 

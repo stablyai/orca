@@ -27,12 +27,14 @@ export function aiVaultSessionDeleteBlockedReason(
       'Only sessions on this device can be deleted.'
     )
   }
+
   if (isSyntheticAiVaultSessionPath(session.filePath)) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
       "This session can't be deleted from Orca."
     )
   }
+
   if (!isAiVaultDeletableAgent(session.agent)) {
     return translate(
       'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonUnsupportedAgent',
@@ -40,5 +42,6 @@ export function aiVaultSessionDeleteBlockedReason(
       { value0: agentLabel(session.agent) }
     )
   }
+
   return null
 }

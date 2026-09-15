@@ -12,6 +12,7 @@ function seedWorktreeWithTab(store: ReturnType<typeof createTestStore>): string 
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
     }
   })
+
   return store.getState().createTab(WORKTREE_ID).id
 }
 
@@ -127,6 +128,7 @@ describe.each([
         repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
       }
     })
+
     return store.getState().createTab(bucketId).id
   }
 
@@ -135,6 +137,7 @@ describe.each([
   it('admits, observes and then refuses the same reason until a new trigger', () => {
     const store = createTestStore()
     const tabId = seedBucket(store)
+
     const row = (): { recovery?: unknown } | undefined =>
       store.getState().tabsByWorktree[bucketId]?.find((tab) => tab.id === tabId)
 
@@ -151,6 +154,7 @@ describe.each([
     if (!first.remounted) {
       throw new Error('unreachable: the first remount was admitted')
     }
+
     store.getState().settleTerminalTabRecovery(tabId, first.generation, 'failed')
     expect(row()?.recovery).toMatchObject({ outcome: 'failed' })
     expect(

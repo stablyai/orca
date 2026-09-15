@@ -16,6 +16,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // Mock the refresh boundary so we count invocations precisely without
 // triggering real IPC cascades (upstream probes, store mutations, etc.).
 const refreshMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./git-status-refresh', () => ({
   refreshGitStatusForWorktree: refreshMock
 }))
@@ -23,14 +24,19 @@ vi.mock('./git-status-refresh', () => ({
 const initialAppState = useAppStore.getInitialState()
 
 const REPO_ID = 'repo1'
+
 const WORKTREE_PATH = '/repo1'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 const REPO_ID2 = 'repo2'
+
 const WORKTREE_PATH2 = '/repo2'
+
 const WORKTREE_ID2 = `${REPO_ID2}::${WORKTREE_PATH2}`
 
 const repo: Repo = { ...TEST_REPO, kind: 'git', connectionId: null }
+
 const worktree: Worktree = makeWorktree({ id: WORKTREE_ID, repoId: REPO_ID, path: WORKTREE_PATH })
 
 const repo2: Repo = {
@@ -40,6 +46,7 @@ const repo2: Repo = {
   kind: 'git',
   connectionId: null
 }
+
 const worktree2: Worktree = makeWorktree({
   id: WORKTREE_ID2,
   repoId: REPO_ID2,
@@ -50,6 +57,7 @@ const roots: Root[] = []
 
 function HookProbe(): null {
   useGitStatusPolling()
+
   return null
 }
 
@@ -61,6 +69,7 @@ async function renderHook(): Promise<Root> {
   await act(async () => {
     root.render(createElement(HookProbe))
   })
+
   return root
 }
 
@@ -287,13 +296,16 @@ describe('useGitStatusPolling rerender stability', () => {
 
   it('aborts and rejects stale work when the execution host changes', async () => {
     let resolveFirst!: () => void
+
     const firstRefresh = new Promise<void>((resolve) => {
       resolveFirst = resolve
     })
+
     let firstRequest!: { signal: AbortSignal; shouldApply: () => boolean }
     refreshMock.mockImplementationOnce(
       (args: { request: { signal: AbortSignal; shouldApply: () => boolean } }) => {
         firstRequest = args.request
+
         return firstRefresh
       }
     )
@@ -319,13 +331,16 @@ describe('useGitStatusPolling rerender stability', () => {
 
   it('aborts and rejects stale work on unmount', async () => {
     let resolveFirst!: () => void
+
     const firstRefresh = new Promise<void>((resolve) => {
       resolveFirst = resolve
     })
+
     let firstRequest!: { signal: AbortSignal; shouldApply: () => boolean }
     refreshMock.mockImplementationOnce(
       (args: { request: { signal: AbortSignal; shouldApply: () => boolean } }) => {
         firstRequest = args.request
+
         return firstRefresh
       }
     )

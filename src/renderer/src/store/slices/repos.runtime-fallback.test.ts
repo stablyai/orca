@@ -13,7 +13,9 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const toastError = vi.hoisted(() => vi.fn())
+
 const toastInfo = vi.hoisted(() => vi.fn())
+
 const toastSuccess = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
@@ -33,6 +35,7 @@ const remoteRepo: Repo = {
 }
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
@@ -56,6 +59,7 @@ describe('repo slice runtime folder fallback', () => {
   it('blocks wrong-host runtime fallback', async () => {
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
       const { method } = request
+
       if (method === 'repo.add') {
         return {
           id: 'rpc-add-git',
@@ -64,6 +68,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (method === 'folderWorkspace.getPathStatus') {
         return {
           id: 'rpc-path-status',
@@ -78,6 +83,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (method === 'projectGroup.delete') {
         return {
           id: 'rpc-delete-status-scope',
@@ -86,6 +92,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     const store = createTestStore()
@@ -116,6 +123,7 @@ describe('repo slice runtime folder fallback', () => {
   it('treats runtime status RPC failures as host-scoped errors', async () => {
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
       const { method } = request
+
       if (method === 'repo.add') {
         return {
           id: 'rpc-add-git',
@@ -124,9 +132,11 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (method === 'folderWorkspace.getPathStatus') {
         throw new Error('status unavailable')
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     const store = createTestStore()
@@ -152,9 +162,11 @@ describe('repo slice runtime folder fallback', () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'status.get') {
         const response = createCompatibleRuntimeStatusResponse()
+
         if (!response.ok) {
           throw new Error('Expected compatible runtime status fixture')
         }
+
         return {
           ...response,
           result: {
@@ -165,10 +177,12 @@ describe('repo slice runtime folder fallback', () => {
           }
         }
       }
+
       return runtimeEnvironmentCall(args)
     })
     runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
       const { method } = request
+
       if (method === 'repo.add') {
         return {
           id: 'rpc-add-git',
@@ -177,6 +191,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     const store = createTestStore()
@@ -209,12 +224,14 @@ describe('repo slice runtime folder fallback', () => {
       displayName: 'non-git',
       kind: 'folder'
     }
+
     runtimeEnvironmentCall.mockImplementation((request) => {
       const { selector, method, params } = request as {
         selector: string
         method: string
         params?: unknown
       }
+
       if (method === 'repo.add' && (params as { kind?: string }).kind === 'git') {
         return {
           id: 'rpc-add-git',
@@ -223,6 +240,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (method === 'repo.add' && (params as { kind?: string }).kind === 'folder') {
         return {
           id: 'rpc-add-folder',
@@ -231,6 +249,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: `runtime-${selector}` }
         }
       }
+
       if (method === 'folderWorkspace.getPathStatus') {
         return {
           id: 'rpc-path-status',
@@ -244,6 +263,7 @@ describe('repo slice runtime folder fallback', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       throw new Error(`Unexpected runtime method ${method}`)
     })
     const store = createTestStore()
@@ -293,12 +313,14 @@ describe('repo slice runtime folder fallback', () => {
       addedAt: 1,
       kind: 'folder'
     }
+
     const reposAdd = vi.fn(
       (args: { path: string; kind: string }): { repo: Repo } | { error: string } =>
         args.kind === 'folder'
           ? { repo: folderRepo }
           : { error: 'Not a valid git repository: /local/non-git' }
     )
+
     vi.stubGlobal('window', {
       api: {
         repos: { add: reposAdd },

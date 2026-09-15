@@ -53,6 +53,7 @@ export function useSidebarFeedbackImages(params: {
       if (files.length === 0) {
         return
       }
+
       if (params.isSubmitting) {
         toast.warning(
           translate(
@@ -60,8 +61,10 @@ export function useSidebarFeedbackImages(params: {
             'Wait for the current feedback to finish sending before attaching more images.'
           )
         )
+
         return
       }
+
       // Why: read the committed count from the closure rather than a ref. A ref
       // synced in an effect can still be stale-low right after an add.
       const existingCount = imageCount + pendingImageReadsRef.current
@@ -70,21 +73,27 @@ export function useSidebarFeedbackImages(params: {
       void readFeedbackImageFiles(files, existingCount).then(
         ({ images: added, errors }) => {
           pendingImageReadsRef.current -= files.length
+
           if (!params.mountedRef.current) {
             added.forEach(releaseFeedbackImageDraft)
+
             return
           }
+
           setPendingImageReadCount((current) => Math.max(0, current - files.length))
+
           if (added.length > 0) {
             liveImageDraftsRef.current = [...liveImageDraftsRef.current, ...added]
             setImages((existing) => [...existing, ...added])
           }
+
           // Why: never drop an attachment without telling the user.
           errors.forEach((error) => toast.warning(error))
         },
         (error: unknown) => {
           pendingImageReadsRef.current -= files.length
           console.error('Failed to read feedback image attachments:', error)
+
           if (params.mountedRef.current) {
             setPendingImageReadCount((current) => Math.max(0, current - files.length))
             toast.error(
@@ -102,10 +111,12 @@ export function useSidebarFeedbackImages(params: {
 
   const handleRemoveImage = useCallback((id: string) => {
     const removed = liveImageDraftsRef.current.find((image) => image.id === id)
+
     if (removed) {
       releaseFeedbackImageDraft(removed)
       liveImageDraftsRef.current = liveImageDraftsRef.current.filter((image) => image.id !== id)
     }
+
     setImages((current) => current.filter((image) => image.id !== id))
   }, [])
 

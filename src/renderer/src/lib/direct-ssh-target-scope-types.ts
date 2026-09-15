@@ -22,14 +22,17 @@ export type DirectSshRepoOwner = Pick<
   Repo,
   'id' | 'path' | 'projectGroupId' | 'connectionId' | 'executionHostId'
 >
+
 export type DirectSshWorktreeOwner = Pick<
   Worktree,
   'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'
 >
+
 export type DirectSshFolderOwner = Pick<
   FolderWorkspace,
   'id' | 'projectGroupId' | 'folderPath' | 'connectionId' | 'executionHostId'
 >
+
 export type DirectSshGroupOwner = Pick<
   ProjectGroup,
   'id' | 'parentGroupId' | 'connectionId' | 'executionHostId'

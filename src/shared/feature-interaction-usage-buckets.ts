@@ -11,6 +11,7 @@ export const FEATURE_INTERACTION_USAGE_BUCKETS = [
   'count_500_999',
   'count_1000_plus'
 ] as const
+
 export type FeatureInteractionUsageBucket = (typeof FEATURE_INTERACTION_USAGE_BUCKETS)[number]
 
 export const FEATURE_INTERACTION_USAGE_BUCKET_SPECS = [
@@ -40,12 +41,15 @@ export function getFeatureInteractionUsageBucket(
   if (!Number.isInteger(count) || count <= 0) {
     return null
   }
+
   let bucket: FeatureInteractionUsageBucket | null = null
+
   for (const spec of FEATURE_INTERACTION_USAGE_BUCKET_SPECS) {
     if (count >= spec.min) {
       bucket = spec.bucket
     }
   }
+
   return bucket
 }
 

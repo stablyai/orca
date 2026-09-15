@@ -7,6 +7,7 @@ import {
 } from './terminal-input-quarantine'
 
 const TAB = 'tab-1'
+
 // Re-attach measured at ~1.1s in STA-2373 live QA; the tail lands just after.
 const REATTACH_MS = 1_100
 
@@ -24,10 +25,12 @@ describe('terminal input quarantine', () => {
     armTerminalInputQuarantine(TAB, 0)
     // The tail of `echo hi; rm -rf x` after the head was eaten by recovery.
     let at = REATTACH_MS
+
     for (const char of 'cho hi; rm -rf x') {
       expect(shouldDropQuarantinedTerminalInput(TAB, char, at)).toBe(true)
       at += 30
     }
+
     // The user's own Enter would have submitted the mangled line.
     expect(shouldDropQuarantinedTerminalInput(TAB, '\r', at)).toBe(true)
     expect(isTerminalInputQuarantined(TAB)).toBe(false)
@@ -76,6 +79,7 @@ describe('terminal input quarantine', () => {
     // No byte yet, so the idle gate cannot release the first keystroke however
     // long the user waited; from there normal typing never opens a 700ms gap.
     let at = 1_500
+
     for (const char of 'ls -la\r') {
       expect(shouldDropQuarantinedTerminalInput(TAB, char, at)).toBe(true)
       at += 150

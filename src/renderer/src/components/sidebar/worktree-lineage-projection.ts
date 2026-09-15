@@ -19,6 +19,7 @@ export function getProjectedWorktreeLineage(
   if (Object.hasOwn(lineageById, worktree.id)) {
     return lineageById[worktree.id]
   }
+
   return (worktree as WorktreeWithResolvedLineage).lineage
 }
 
@@ -45,15 +46,19 @@ function getLineageProjection(
   worktreeMap: ReadonlyMap<string, Worktree>
 ): LineageProjection {
   let byWorktreeMap = projectionByLineageAndWorktreeMap.get(lineageById)
+
   if (!byWorktreeMap) {
     byWorktreeMap = new WeakMap()
     projectionByLineageAndWorktreeMap.set(lineageById, byWorktreeMap)
   }
+
   let projection = byWorktreeMap.get(worktreeMap)
+
   if (!projection) {
     projection = {}
     byWorktreeMap.set(worktreeMap, projection)
   }
+
   return projection
 }
 
@@ -62,22 +67,30 @@ export function getCyclicProjectedWorktreeLineageIds(
   worktreeMap: ReadonlyMap<string, Worktree>
 ): Set<string> {
   const projection = getLineageProjection(lineageById, worktreeMap)
+
   if (projection.cyclicLineageIds) {
     return projection.cyclicLineageIds
   }
+
   const validLineageByChildId = new Map<string, WorktreeLineage>()
+
   for (const worktree of worktreeMap.values()) {
     const lineage = getProjectedWorktreeLineage(worktree, lineageById)
+
     if (!lineage) {
       continue
     }
+
     const parent = worktreeMap.get(lineage.parentWorktreeId)
+
     if (parent && isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)) {
       validLineageByChildId.set(worktree.id, lineage)
     }
   }
+
   const cyclicLineageIds = getCyclicWorktreeLineageChildIds(validLineageByChildId)
   projection.cyclicLineageIds = cyclicLineageIds
+
   return cyclicLineageIds
 }
 
@@ -88,10 +101,13 @@ export function getLineageRenderInfo(
   cyclicLineageIds: ReadonlySet<string>
 ): LineageRenderInfo {
   const lineage = getProjectedWorktreeLineage(worktree, lineageById)
+
   if (!lineage) {
     return { state: 'none' }
   }
+
   const parent = worktreeMap.get(lineage.parentWorktreeId)
+
   if (
     cyclicLineageIds.has(worktree.id) ||
     !parent ||
@@ -99,6 +115,7 @@ export function getLineageRenderInfo(
   ) {
     return { state: 'missing', lineage }
   }
+
   return { state: 'valid', lineage, parent }
 }
 
@@ -107,21 +124,28 @@ export function getProjectedWorktreeLineageChildrenByParentId(
   worktreeMap: ReadonlyMap<string, Worktree>
 ): Map<string, Worktree[]> {
   const projection = getLineageProjection(lineageById, worktreeMap)
+
   if (projection.childrenByParentId) {
     return projection.childrenByParentId
   }
+
   const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
   const childrenByParentId = new Map<string, Worktree[]>()
+
   for (const worktree of worktreeMap.values()) {
     const lineage = getLineageRenderInfo(worktree, lineageById, worktreeMap, cyclicLineageIds)
+
     if (lineage.state !== 'valid') {
       continue
     }
+
     const children = childrenByParentId.get(lineage.parent.id) ?? []
     children.push(worktree)
     childrenByParentId.set(lineage.parent.id, children)
   }
+
   projection.childrenByParentId = childrenByParentId
+
   return childrenByParentId
 }
 
@@ -134,14 +158,18 @@ export function getWorktreeLineageAncestors(
   const ancestors: Worktree[] = []
   const seen = new Set<string>()
   let current: Worktree | undefined = worktree
+
   while (current && !seen.has(current.id)) {
     seen.add(current.id)
     const lineage = getLineageRenderInfo(current, lineageById, worktreeMap, cyclicLineageIds)
+
     if (lineage.state !== 'valid') {
       break
     }
+
     ancestors.push(lineage.parent)
     current = lineage.parent
   }
+
   return ancestors
 }

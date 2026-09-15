@@ -24,6 +24,7 @@ const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
   const initialPairingInput = useMemo(() => readPairingInputFromLocation(window.location), [])
+
   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
   // the instant save path; mobile/legacy-unknown offers must be shown/probed.
   const startupDecision = useMemo(() => {
@@ -31,14 +32,17 @@ function WebRoot(): React.JSX.Element {
       initialPairingInput,
       hasStoredEnvironment: readStoredWebRuntimeEnvironment() !== null
     })
+
     if (
       decision.kind === 'auto-save-runtime-offer' ||
       (decision.kind === 'show-connect' && decision.initialPairingInput !== null)
     ) {
       clearPairingInputFromAddressBar()
     }
+
     return decision
   }, [initialPairingInput])
+
   const [hasEnvironment, setHasEnvironment] = useState(() => {
     if (startupDecision.kind === 'auto-save-runtime-offer') {
       saveStoredWebRuntimeEnvironment(
@@ -48,8 +52,10 @@ function WebRoot(): React.JSX.Element {
           previousEnvironment: readStoredWebRuntimeEnvironment()
         })
       )
+
       return true
     }
+
     return startupDecision.kind === 'use-stored-environment'
   })
 
@@ -65,6 +71,7 @@ function WebRoot(): React.JSX.Element {
   }
 
   installWebPreloadApi()
+
   return (
     <Suspense fallback={<div className="min-h-dvh bg-background" />}>
       <App />
@@ -74,6 +81,7 @@ function WebRoot(): React.JSX.Element {
 
 function WebRootBoundary(): React.JSX.Element {
   useTranslation()
+
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="web.root"

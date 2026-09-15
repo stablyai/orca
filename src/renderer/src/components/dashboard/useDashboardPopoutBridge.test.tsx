@@ -95,6 +95,7 @@ function makeSnapshotWatchState(): DashboardSnapshotWatchState {
 
 function Harness({ enabled }: { enabled: boolean }): null {
   useDashboardPopoutBridge(enabled)
+
   return null
 }
 
@@ -249,12 +250,14 @@ describe('useDashboardPopoutBridge', () => {
       'settings',
       'workspaceStatuses'
     ] as const
+
     for (const key of referenceInputs) {
       expect(
         dashboardSnapshotInputsChanged({ ...previousState, [key]: {} }, previousState),
         key
       ).toBe(true)
     }
+
     expect(
       dashboardSnapshotInputsChanged(
         { ...previousState, agentStatusByPaneKey: { ...previousState.agentStatusByPaneKey } },
@@ -288,11 +291,13 @@ describe('useDashboardPopoutBridge', () => {
       { runtimeEnvironmentCatalogHydrated: true },
       { removedRuntimeEnvironmentIds: new Set() }
     ]
+
     const republished = profileInputs
       .filter((next) =>
         dashboardSnapshotInputsChanged({ ...previousState, ...next }, previousState)
       )
       .map((next) => Object.keys(next)[0])
+
     expect(republished).toEqual(profileInputs.map((next) => Object.keys(next)[0]))
   })
 
@@ -359,6 +364,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
   const icons: Record<string, RepoIcon> = {
     r1: { type: 'image', src: 'data:image/png;base64,AAAA', source: 'upload' }
   }
+
   // Longer than PUBLISH_THROTTLE_MS, so the next store change publishes on the
   // leading edge instead of parking on the trailing timer.
   const PAST_THROTTLE_MS = 1_000
@@ -387,9 +393,11 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
   })
 
   const lastPublished = (): DashboardSnapshot => mocks.publishSnapshot.mock.calls.at(-1)![0]
+
   const setPopoutOpen = (open: boolean): void => {
     act(() => mocks.onPopoutOpenChanged.mock.calls[0][0](open))
   }
+
   const notifySnapshotInputsChanged = (): void => {
     const previousState = makeSnapshotWatchState()
     act(() =>
@@ -399,10 +407,12 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
       )
     )
   }
+
   const notifyUnrelatedStoreWrite = (): void => {
     const previousState = makeSnapshotWatchState()
     act(() => mocks.subscribeStore.mock.calls[0][0]({ ...previousState }, previousState))
   }
+
   const notifyStatusChurn = (): void => {
     const previousState = makeSnapshotWatchState()
     act(() =>
@@ -416,6 +426,7 @@ describe('useDashboardPopoutBridge repo icon publishing', () => {
       )
     )
   }
+
   const mountAndOpen = async (): Promise<void> => {
     await act(async () => root.render(<Harness enabled />))
     setPopoutOpen(true)

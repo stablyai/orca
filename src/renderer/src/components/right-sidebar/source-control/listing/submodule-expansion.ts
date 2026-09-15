@@ -38,14 +38,19 @@ export function parseSubmoduleExpansionKey(
   key: string
 ): { area: GitStatusEntry['area']; path: string } | null {
   const separatorIndex = key.indexOf('::')
+
   if (separatorIndex <= 0) {
     return null
   }
+
   const area = key.slice(0, separatorIndex)
+
   if (area !== 'staged' && area !== 'unstaged' && area !== 'untracked') {
     return null
   }
+
   const path = key.slice(separatorIndex + 2)
+
   return path ? { area, path } : null
 }
 
@@ -57,9 +62,11 @@ export function parseSubmoduleExpansionKey(
  */
 export function isExpandableSubmoduleEntry(entry: GitStatusEntry): boolean {
   const submodule = entry.submodule
+
   if (!submodule || entry.submoduleRoot) {
     return false
   }
+
   return submodule.commitChanged || submodule.trackedChanges || submodule.untrackedChanges
 }
 
@@ -77,6 +84,7 @@ export function buildSubmoduleChildEntry(
   parentArea: GitStatusEntry['area'] = innerEntry.area
 ): GitStatusEntry {
   const area = parentArea === 'staged' ? 'staged' : innerEntry.area
+
   return {
     ...innerEntry,
     path: `${submodulePath}/${innerEntry.path}`,
@@ -94,8 +102,10 @@ export function buildSubmoduleChildNodes(
   innerEntries: GitStatusEntry[]
 ): (SubmoduleSectionTreeNode & { type: 'file' })[] {
   const submodulePath = parent.entry.path
+
   return innerEntries.map((innerEntry) => {
     const childEntry = buildSubmoduleChildEntry(submodulePath, innerEntry, parent.entry.area)
+
     return {
       type: 'file',
       key: `${childEntry.area}::${childEntry.path}`,
@@ -129,14 +139,18 @@ export function injectExpandedSubmoduleEntries(
   emptyMessage: string
 ): RenderableSubmoduleListItem[] {
   const result: RenderableSubmoduleListItem[] = []
+
   for (const entry of entries) {
     result.push({ type: 'entry', entry })
     const expansionKey = getSubmoduleExpansionKey(entry)
+
     if (!isExpandableSubmoduleEntry(entry) || !expandedSubmoduleKeys.has(expansionKey)) {
       continue
     }
+
     const submodulePath = entry.path
     const state = submoduleStatusByKey[expansionKey]
+
     if (!state || state.status === 'loading') {
       result.push({
         type: 'submodule-placeholder',
@@ -148,6 +162,7 @@ export function injectExpandedSubmoduleEntries(
       })
       continue
     }
+
     if (state.status === 'error') {
       result.push({
         type: 'submodule-placeholder',
@@ -159,6 +174,7 @@ export function injectExpandedSubmoduleEntries(
       })
       continue
     }
+
     if (state.entries.length === 0) {
       result.push({
         type: 'submodule-placeholder',
@@ -170,12 +186,14 @@ export function injectExpandedSubmoduleEntries(
       })
       continue
     }
+
     for (const innerEntry of state.entries) {
       result.push({
         type: 'entry',
         entry: buildSubmoduleChildEntry(submodulePath, innerEntry, entry.area)
       })
     }
+
     if (state.didHitLimit) {
       result.push({
         type: 'submodule-placeholder',
@@ -186,6 +204,7 @@ export function injectExpandedSubmoduleEntries(
       })
     }
   }
+
   return result
 }
 
@@ -199,6 +218,7 @@ export function collectListSelectionEntries(
   rows: readonly RenderableSubmoduleListItem[]
 ): FlatEntry[] {
   const result: FlatEntry[] = []
+
   for (const row of rows) {
     if (row.type === 'entry') {
       result.push({
@@ -208,6 +228,7 @@ export function collectListSelectionEntries(
       })
     }
   }
+
   return result
 }
 
@@ -224,8 +245,10 @@ export function injectExpandedSubmoduleRows(
   emptyMessage: string
 ): RenderableSourceControlNode[] {
   const result: RenderableSourceControlNode[] = []
+
   for (const node of nodes) {
     result.push(node)
+
     if (
       node.type !== 'file' ||
       !isExpandableSubmoduleEntry(node.entry) ||
@@ -233,8 +256,10 @@ export function injectExpandedSubmoduleRows(
     ) {
       continue
     }
+
     const submodulePath = node.entry.path
     const state = submoduleStatusByKey[getSubmoduleExpansionKey(node.entry)]
+
     if (!state || state.status === 'loading') {
       result.push({
         type: 'submodule-placeholder',
@@ -246,6 +271,7 @@ export function injectExpandedSubmoduleRows(
       })
       continue
     }
+
     if (state.status === 'error') {
       result.push({
         type: 'submodule-placeholder',
@@ -257,6 +283,7 @@ export function injectExpandedSubmoduleRows(
       })
       continue
     }
+
     if (state.entries.length === 0) {
       result.push({
         type: 'submodule-placeholder',
@@ -268,9 +295,11 @@ export function injectExpandedSubmoduleRows(
       })
       continue
     }
+
     for (const childNode of buildSubmoduleChildNodes(node, state.entries)) {
       result.push(childNode)
     }
+
     if (state.didHitLimit) {
       result.push({
         type: 'submodule-placeholder',
@@ -281,5 +310,6 @@ export function injectExpandedSubmoduleRows(
       })
     }
   }
+
   return result
 }

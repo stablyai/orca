@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import { collectTerminalPerfRows, readJsonReport } from './terminal-perf-report-annotations.mjs'
 
 const reportPaths = process.argv.slice(2)
+
 if (reportPaths[0] === '--') {
   reportPaths.shift()
 }
@@ -60,6 +61,7 @@ function printMarkdownTable(rows) {
 
   console.log(`| ${columns.map(([label]) => label).join(' | ')} |`)
   console.log(`| ${columns.map(() => '---').join(' | ')} |`)
+
   for (const row of rows) {
     console.log(`| ${columns.map(([, key]) => markdownCell(row[key])).join(' | ')} |`)
   }

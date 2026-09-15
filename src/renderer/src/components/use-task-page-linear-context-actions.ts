@@ -33,6 +33,7 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
     setLinearCustomViewIssueLoadingTargetPage,
     setLinearCustomViewProjectsResult
   } = model
+
   const patchScopedLinearIssue = useCallback(
     (issueId: string, patch: Partial<LinearIssue>) => {
       const patchResult = (result: LinearCollectionResult<LinearIssue>) => ({
@@ -46,11 +47,13 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
             : item
         )
       })
+
       setLinearProjectIssuesResult(patchResult)
       setLinearCustomViewIssuesResult(patchResult)
     },
     [setLinearCustomViewIssuesResult, setLinearProjectIssuesResult]
   )
+
   const selectLinearMode = useCallback(
     (mode: LinearMode) => {
       clearSelectedLinearIssue()
@@ -98,6 +101,7 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
       setTaskResumeState
     ]
   )
+
   const openLinearProjectContext = useCallback(
     (
       project: LinearProjectSummary,
@@ -112,11 +116,14 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
             'Linear project is missing workspace context.'
           )
         )
+
         return
       }
+
       const parentView = options?.parentView ?? null
       clearSelectedLinearIssue()
       setLinearProjectParentView(parentView)
+
       if (parentView) {
         setSelectedLinearCustomView(parentView)
       } else {
@@ -125,6 +132,7 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
           items: []
         })
       }
+
       setLinearProjectIssuesResult({
         items: []
       })
@@ -168,6 +176,7 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
       setTaskResumeState
     ]
   )
+
   const openLinearCustomViewContext = useCallback(
     (view: LinearCustomViewSummary) => {
       if (!view.workspaceId) {
@@ -177,8 +186,10 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
             'Linear view is missing workspace context.'
           )
         )
+
         return
       }
+
       clearSelectedLinearIssue()
       setSelectedLinearProject(null)
       setSelectedLinearProjectDetail(null)
@@ -229,16 +240,19 @@ export function useTaskPageLinearContextActions(model: TaskPageLinearContextStat
       setTaskResumeState
     ]
   )
+
   const nextModel = model as typeof model & {
     patchScopedLinearIssue: typeof patchScopedLinearIssue
     selectLinearMode: typeof selectLinearMode
     openLinearProjectContext: typeof openLinearProjectContext
     openLinearCustomViewContext: typeof openLinearCustomViewContext
   }
+
   nextModel.patchScopedLinearIssue = patchScopedLinearIssue
   nextModel.selectLinearMode = selectLinearMode
   nextModel.openLinearProjectContext = openLinearProjectContext
   nextModel.openLinearCustomViewContext = openLinearCustomViewContext
+
   return nextModel
 }
 

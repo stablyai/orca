@@ -33,8 +33,11 @@ import {
 } from './helpers/terminal'
 
 const PAGE_MARKER = 'remote terminal browser owner'
+
 const POINTER_MARKER = 'local pointer received'
+
 const KEYBOARD_MARKER = 'local-keyboard-input'
+
 const TERMINAL_MARKER = 'remote-terminal-still-live-after-browser-close'
 
 async function readTabInventory(
@@ -52,6 +55,7 @@ async function readTabInventory(
   return page.evaluate(
     async ({ environmentId, worktreeId }) => {
       const state = window.__store?.getState()
+
       const [sessionResponse, browserResponse] = await Promise.all([
         window.api.runtimeEnvironments.call({
           selector: environmentId,
@@ -66,12 +70,15 @@ async function readTabInventory(
           timeoutMs: 15_000
         })
       ])
+
       if (!sessionResponse.ok) {
         throw new Error('host session tab inventory unavailable')
       }
+
       if (!browserResponse.ok) {
         throw new Error('host browser page inventory unavailable')
       }
+
       return {
         clientBrowserWorkspaces: (state?.browserTabsByWorktree[worktreeId] ?? []).length,
         clientBrowserTabs: (state?.unifiedTabsByWorktree[worktreeId] ?? []).filter(
@@ -99,6 +106,7 @@ async function startPageServer(): Promise<{ server: Server; url: string }> {
       <input id="keyboard-target" aria-label="keyboard target">
     </body></html>`)
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -107,6 +115,7 @@ async function startPageServer(): Promise<{ server: Server; url: string }> {
     })
   })
   const address = server.address() as AddressInfo
+
   return { server, url: `http://127.0.0.1:${address.port}/remote-terminal` }
 }
 
@@ -125,35 +134,46 @@ async function findTerminalLinkTarget(page: Page, link: string): Promise<{ x: nu
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen') ?? null
+
     if (!pane || !screen) {
       throw new Error('paired terminal screen unavailable')
     }
+
     const buffer = pane.terminal.buffer.active
+
     for (let row = 0; row < pane.terminal.rows; row += 1) {
       const text = buffer.getLine(buffer.viewportY + row)?.translateToString(false) ?? ''
       const column = text.indexOf(targetLink)
+
       if (column === -1) {
         continue
       }
+
       const cell = pane.terminal.dimensions?.css.cell
+
       if (!cell?.width || !cell.height) {
         throw new Error('paired terminal cell dimensions unavailable')
       }
+
       const rect = screen.getBoundingClientRect()
+
       return {
         x: rect.left + (column + targetLink.length / 2) * cell.width,
         y: rect.top + (row + 0.5) * cell.height
       }
     }
+
     throw new Error('paired terminal link unavailable')
   }, link)
 }
 
 function remoteTerminalHandle(ptyId: string): string {
   const separator = ptyId.indexOf('@@')
+
   if (!ptyId.startsWith('remote:') || separator === -1) {
     throw new Error(`Expected runtime-owned PTY id, received ${ptyId}`)
   }
+
   return decodeURIComponent(ptyId.slice(separator + 2))
 }
 
@@ -166,6 +186,7 @@ test('opens a paired-runtime terminal link on its owning host', async ({
   const fixture = await startPageServer()
   let client: PairedElectronClient | null = null
   let observerActive = false
+
   try {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
@@ -178,11 +199,13 @@ test('opens a paired-runtime terminal link on its owning host', async ({
     const offer = await createRuntimeDesktopPairingOffer(orcaPage)
     client = await launchPairedElectronClient(offer, testInfo, 'Remote terminal browser link')
     const page = client.page
+
     const worktreeId = await expect
       .poll(
         () =>
           page.evaluate((repoPath) => {
             const state = window.__store?.getState()
+
             return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
           }, testRepoPath),
         { timeout: 60_000, message: 'paired client never received the host worktree' }
@@ -191,12 +214,15 @@ test('opens a paired-runtime terminal link on its owning host', async ({
       .then(() =>
         page.evaluate((repoPath) => {
           const state = window.__store?.getState()
+
           return state?.allWorktrees().find((worktree) => worktree.path === repoPath)?.id ?? null
         }, testRepoPath)
       )
+
     if (!worktreeId) {
       throw new Error('paired client worktree disappeared after discovery')
     }
+
     await page.evaluate(
       async ({ environmentId, worktreeId }) => {
         const state = window.__store?.getState()
@@ -246,15 +272,19 @@ test('opens a paired-runtime terminal link on its owning host', async ({
           page.evaluate(
             ({ url, worktreeId }) => {
               const state = window.__store?.getState()
+
               const workspace = (state?.browserTabsByWorktree[worktreeId] ?? []).find(
                 (tab) => tab.url === url
               )
+
               const browserPage = workspace
                 ? (state?.browserPagesByWorkspace[workspace.id] ?? [])[0]
                 : null
+
               const handle = browserPage
                 ? state?.remoteBrowserPageHandlesByPageId[browserPage.id]
                 : null
+
               return workspace && browserPage && handle?.placement?.kind === 'client'
                 ? {
                     clientPageId: browserPage.id,
@@ -275,11 +305,14 @@ test('opens a paired-runtime terminal link on its owning host', async ({
         page.evaluate(
           ({ url, worktreeId }) => {
             const state = window.__store!.getState()
+
             const workspace = state.browserTabsByWorktree[worktreeId]!.find(
               (tab) => tab.url === url
             )!
+
             const browserPage = state.browserPagesByWorkspace[workspace.id]![0]!
             const handle = state.remoteBrowserPageHandlesByPageId[browserPage.id]!
+
             return {
               clientPageId: browserPage.id,
               clientRuntimeId: browserPage.browserRuntimeEnvironmentId,
@@ -334,6 +367,7 @@ test('opens a paired-runtime terminal link on its owning host', async ({
         worktreeId
       }
     )
+
     expect(content).toMatchObject({ ok: true, result: { result: PAGE_MARKER } })
 
     const browserTab = page.locator(`[data-tab-id="${identity.clientWorkspaceId}"]`)
@@ -342,6 +376,7 @@ test('opens a paired-runtime terminal link on its owning host', async ({
       .poll(() =>
         page.evaluate((worktreeId) => {
           const state = window.__store?.getState()
+
           return {
             browserWorkspaceId: state?.activeBrowserTabIdByWorktree[worktreeId] ?? null,
             tabType: state?.activeTabTypeByWorktree[worktreeId] ?? null
@@ -390,6 +425,7 @@ test('opens a paired-runtime terminal link on its owning host', async ({
     await ensureTerminalVisible(page, 30_000)
     await waitForActiveTerminalManager(page, 30_000)
     expect(await waitForActivePanePtyId(page, 30_000)).toBe(clientPtyId)
+
     const send = await page.evaluate(
       async ({ environmentId, terminal, text }) =>
         window.api.runtimeEnvironments.call({
@@ -409,6 +445,7 @@ test('opens a paired-runtime terminal link on its owning host', async ({
         text: `printf '%s\\n' ${JSON.stringify(TERMINAL_MARKER)}`
       }
     )
+
     expect(send).toMatchObject({ ok: true, result: { send: { accepted: true } } })
     await waitForTerminalOutput(page, TERMINAL_MARKER, 30_000)
     expect(await readTabInventory(page, client.environmentId, worktreeId)).toEqual(baseline)
@@ -420,6 +457,7 @@ test('opens a paired-runtime terminal link on its owning host', async ({
     if (observerActive && client) {
       await stopPanelNavigationObserver(client.app).catch(() => undefined)
     }
+
     try {
       await client?.dispose()
     } finally {

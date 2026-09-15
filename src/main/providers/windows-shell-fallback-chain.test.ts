@@ -9,16 +9,20 @@ const WIN_ENV: NodeJS.ProcessEnv = {
 }
 
 const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD = 'C:\\Windows\\System32\\cmd.exe'
 
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   return () => Object.defineProperty(process, 'platform', { configurable: true, value: original })
 }
 
 let restorePlatform: (() => void) | null = null
+
 afterEach(() => {
   restorePlatform?.()
   restorePlatform = null
@@ -38,6 +42,7 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
 
   it('builds pwsh -> Windows PowerShell -> cmd.exe attempts with per-shell args', () => {
     restorePlatform = setPlatform('win32')
+
     const attempts = buildWindowsPowerShellSpawnAttempts({
       shellPath: 'pwsh.exe',
       cwd: 'C:\\repo',
@@ -48,6 +53,7 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
         isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
       }
     })
+
     expect(attempts.map((a) => a.shellPath)).toEqual([PWSH7, WINDOWS_POWERSHELL, CMD])
     // PowerShell links use -EncodedCommand; cmd.exe uses /K chcp.
     expect(attempts[0].shellArgs).toContain('-EncodedCommand')
@@ -58,6 +64,7 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
   it('repro: when pwsh is only a Store alias, the primary attempt is the real Windows PowerShell', () => {
     restorePlatform = setPlatform('win32')
     const aliasStub = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
+
     const attempts = buildWindowsPowerShellSpawnAttempts({
       shellPath: 'pwsh.exe',
       cwd: 'C:\\repo',
@@ -68,10 +75,12 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
         isRealExecutable: (p) => p === aliasStub || p === WINDOWS_POWERSHELL
       }
     })
+
     // The bare/alias pwsh.exe must never be the primary spawn target.
     expect(attempts[0].shellPath).toBe(WINDOWS_POWERSHELL)
     expect(attempts.map((a) => a.shellPath)).not.toContain(aliasStub)
     expect(attempts.map((a) => a.shellPath)).not.toContain('pwsh.exe')
+
     // Every attempt is an absolute path ConPTY can launch.
     for (const attempt of attempts) {
       expect(pathWin32.isAbsolute(attempt.shellPath)).toBe(true)

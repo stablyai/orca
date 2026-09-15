@@ -21,6 +21,7 @@ import {
 import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
+
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
 
 export type ActiveTerminalNoteTarget = {
@@ -71,11 +72,13 @@ export function getActiveTerminalNoteTarget(
     state.activeTabType === 'terminal'
       ? (state.activeTabId ?? state.activeTabIdByWorktree[worktreeId])
       : state.activeTabIdByWorktree[worktreeId]
+
   if (!tabId || !(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)) {
     return null
   }
 
   const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+
   return leafId ? { tabId, leafId } : null
 }
 
@@ -85,19 +88,23 @@ export function getActiveAgentNoteTarget(
   now = Date.now()
 ): ActiveTerminalNoteTarget | null {
   const noteTarget = getActiveTerminalNoteTarget(state, worktreeId)
+
   if (!noteTarget || !isTerminalLeafId(noteTarget.leafId)) {
     return null
   }
 
   const activePtyId = getActivePanePtyId(state, noteTarget)
+
   if (!activePtyId) {
     return null
   }
 
   const entry = state.agentStatusByPaneKey?.[makePaneKey(noteTarget.tabId, noteTarget.leafId)]
+
   if (entry && isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
     return noteTarget
   }
+
   // Why: freshly opened agents can be idle before their first hook event. Use
   // renderer title/launch hints only to show the option; runtime still verifies
   // the focused terminal is an idle agent before sending Enter.
@@ -113,20 +120,26 @@ export function getActiveAgentRuntimeProbeDescriptor(
   worktreeId: string
 ): ActiveAgentRuntimeProbeDescriptor | null {
   const noteTarget = getActiveTerminalNoteTarget(state, worktreeId)
+
   if (!noteTarget || !isTerminalLeafId(noteTarget.leafId)) {
     return null
   }
+
   const activePtyId = getActivePanePtyId(state, noteTarget)
+
   if (!activePtyId) {
     return null
   }
+
   // Route by the worktree's owner host so the probe targets the host that runs
   // this worktree's agent terminal, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(state, worktreeId)
   )
+
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
+
   return {
     key: `${runtimeKey}:${worktreeId}:${noteTarget.tabId}:${noteTarget.leafId}:${activePtyId}`,
     worktreeId,
@@ -146,15 +159,18 @@ export async function probeActiveAgentNoteTarget({
     noteTarget,
     ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS
   )
+
   if (!terminal) {
     return false
   }
+
   const agentCheck = await callRuntimeRpc<{ isRunningAgent: boolean }>(
     runtimeTarget,
     'terminal.isRunningAgent',
     { terminal: terminal.handle },
     { timeoutMs: ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS }
   )
+
   return agentCheck.isRunningAgent
 }
 
@@ -175,8 +191,10 @@ export async function findActiveRuntimeTerminal(
     },
     { timeoutMs }
   )
+
   // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
   const runtimeTabId = toHostSessionTabId(noteTarget.tabId)
+
   return (
     terminals.find(
       (terminal) => terminal.tabId === runtimeTabId && terminal.leafId === noteTarget.leafId
@@ -189,17 +207,21 @@ function getActivePanePtyId(
   noteTarget: ActiveTerminalNoteTarget
 ): string | null {
   const livePtyIds = state.ptyIdsByTabId?.[noteTarget.tabId] ?? []
+
   if (livePtyIds.length === 0) {
     return null
   }
 
   const ptyIdsByLeafId = state.terminalLayoutsByTabId[noteTarget.tabId]?.ptyIdsByLeafId
+
   if (ptyIdsByLeafId && Object.keys(ptyIdsByLeafId).length > 0) {
     const activeLeafPtyId = ptyIdsByLeafId[noteTarget.leafId]
+
     // Why: layout maps can survive sleep/reconnect; ptyIdsByTabId is the live
     // PTY source of truth for whether submitting with Enter is currently safe.
     return activeLeafPtyId && livePtyIds.includes(activeLeafPtyId) ? activeLeafPtyId : null
   }
+
   return livePtyIds[0] ?? null
 }
 
@@ -211,10 +233,13 @@ function hasFocusedPaneAgentHint(
   const tab = (state.tabsByWorktree[worktreeId] ?? []).find(
     (entry) => entry.id === noteTarget.tabId
   )
+
   const runtimeTitle = getFocusedRuntimePaneTitle(state, noteTarget)
+
   if (runtimeTitle !== null) {
     return isRecognizedAgentTitle(runtimeTitle)
   }
+
   if (tab?.launchAgent) {
     return true
   }

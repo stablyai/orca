@@ -43,21 +43,26 @@ export async function readOptionalIncludes(
   sections: LinearIssueContextResult['meta']['sections']
 ): Promise<void> {
   const includeTasks: [LinearIssueInclude, () => Promise<void>][] = []
+
   if (request.include.comments) {
     includeTasks.push(['comments', async () => assignComments(resolved, result, sections)])
   }
+
   if (request.include.children) {
     includeTasks.push([
       'children',
       async () => assignChildren(resolved, request.depth, result, sections)
     ])
   }
+
   if (request.include.attachments) {
     includeTasks.push(['attachments', async () => assignAttachments(resolved, result, sections)])
   }
+
   if (request.include.relations) {
     includeTasks.push(['relations', async () => assignRelations(resolved, result, sections)])
   }
+
   if (request.include.activity) {
     includeTasks.push(['activity', async () => assignActivity(resolved, result, sections)])
   }
@@ -131,22 +136,28 @@ async function readComments(resolved: ResolvedIssue): Promise<{
   meta: LinearCollectionMeta
 }> {
   const entry = getRequiredEntry(resolved.workspace.id)
+
   const response = await readConnectionPages(LINEAR_COMMENTS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const client = getPublicFileUrlClient(entry)
+
       const raw = await client.client.rawRequest<RawCommentsResponse, Record<string, unknown>>(
         COMMENTS_QUERY,
         { id: resolved.issue.id, ...page }
       )
+
       return raw.data?.issue?.comments ?? null
     })
   })
+
   const nodes = response.nodes
+
   const items = nodes.slice(0, LINEAR_COMMENTS_CAP).map((comment) => {
     const body = comment.body ?? ''
     // Extract media from the full body before truncating so screenshots past
     // the body cap are still surfaced.
     const inlineMedia = extractLinearInlineMedia(body, 'comment', comment.id)
+
     return {
       id: comment.id,
       body: body.slice(0, LINEAR_COMMENT_BODY_CAP),
@@ -158,6 +169,7 @@ async function readComments(resolved: ResolvedIssue): Promise<{
       user: comment.user ?? null
     }
   })
+
   return {
     items,
     meta: collectionMeta(items.length, LINEAR_COMMENTS_CAP, response.hasMore)
@@ -171,6 +183,7 @@ async function readChildren(
   if (depth <= 0) {
     return { items: [], meta: collectionMeta(0, LINEAR_CHILDREN_NODE_CAP, false) }
   }
+
   const entry = getRequiredEntry(resolved.workspace.id)
   let returned = 0
   let capReached = false
@@ -179,27 +192,37 @@ async function readChildren(
   const readLevel = async (issueId: string, level: number): Promise<LinearIssueChildNode[]> => {
     if (level > depth || returned >= LINEAR_CHILDREN_NODE_CAP) {
       depthReached = true
+
       return []
     }
+
     const remaining = LINEAR_CHILDREN_NODE_CAP - returned
+
     const response = await readConnectionPages(remaining, async (page) => {
       return await withLinearRead(entry, async () => {
         const client = getPublicFileUrlClient(entry)
+
         const raw = await client.client.rawRequest<RawChildrenResponse, Record<string, unknown>>(
           CHILDREN_QUERY,
           { id: issueId, ...page }
         )
+
         return raw.data?.issue?.children ?? null
       })
     })
+
     const nodes = response.nodes
+
     if (response.hasMore || nodes.length > remaining) {
       capReached = true
     }
+
     const children = nodes.slice(0, remaining).map((node) => {
       returned += 1
+
       return { raw: node, child: mapIssue(node) as LinearIssueChildNode }
     })
+
     if (returned >= LINEAR_CHILDREN_NODE_CAP) {
       capReached = true
     }
@@ -207,22 +230,29 @@ async function readChildren(
     // Why: when the current level already exhausts the output cap, fetching
     // grandchildren would add latency without returning any additional nodes.
     const canReadNested = level < depth && returned < LINEAR_CHILDREN_NODE_CAP
+
     if (!canReadNested && level >= depth && children.length > 0) {
       depthReached = true
     }
+
     const mappedChildren: LinearIssueChildNode[] = []
+
     for (const { raw, child } of children) {
       const nested = canReadNested ? await readLevel(raw.id, level + 1) : []
+
       if (nested.length > 0) {
         child.children = nested
       }
+
       child.mayHaveMore = level >= depth || returned >= LINEAR_CHILDREN_NODE_CAP || response.hasMore
       mappedChildren.push(child)
     }
+
     return mappedChildren
   }
 
   const items = await readLevel(resolved.issue.id, 1)
+
   return {
     items,
     meta: {
@@ -238,15 +268,18 @@ async function readAttachments(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueAttachment[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
+
   const response = await readConnectionPages(LINEAR_ATTACHMENTS_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
         RawAttachmentsResponse,
         Record<string, unknown>
       >(ATTACHMENTS_QUERY, { id: resolved.issue.id, ...page })
+
       return raw.data?.issue?.attachments ?? null
     })
   })
+
   const items = response.nodes.slice(0, LINEAR_ATTACHMENTS_CAP).map((node) => ({
     id: node.id,
     title: node.title,
@@ -256,25 +289,31 @@ async function readAttachments(
     createdAt: node.createdAt,
     metadataOnly: true as const
   }))
+
   return {
     items,
     meta: collectionMeta(items.length, LINEAR_ATTACHMENTS_CAP, response.hasMore)
   }
 }
+
 async function readActivity(
   resolved: ResolvedIssue
 ): Promise<{ items: LinearIssueActivityEntry[]; meta: LinearCollectionMeta }> {
   const entry = getRequiredEntry(resolved.workspace.id)
+
   const response = await readConnectionPages(LINEAR_ACTIVITY_CAP, async (page) => {
     return await withLinearRead(entry, async () => {
       const raw = await entry.client.client.rawRequest<
         RawActivityResponse,
         Record<string, unknown>
       >(ACTIVITY_QUERY, { id: resolved.issue.id, ...page })
+
       return raw.data?.issue?.history ?? null
     })
   })
+
   const items = response.nodes.slice(0, LINEAR_ACTIVITY_CAP).map(mapActivity)
+
   return {
     items,
     meta: collectionMeta(items.length, LINEAR_ACTIVITY_CAP, response.hasMore)

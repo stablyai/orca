@@ -37,6 +37,7 @@ type SharedSkillSummary = {
 
 function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)
+
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
@@ -44,6 +45,7 @@ function rejectForwardedSkillFilesystem(ctx: HandlerContext, command: string): v
   if (!process.env.ORCA_CLI_CWD && !ctx.client.isRemote) {
     return
   }
+
   throw new RuntimeClientError(
     'invalid_environment',
     `orca skills ${command} must run on the machine whose installed skills you want to use. Run the command from an Orca terminal on that machine.`
@@ -52,14 +54,17 @@ function rejectForwardedSkillFilesystem(ctx: HandlerContext, command: string): v
 
 async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
   let enabled: unknown
+
   try {
     const response = await ctx.client.call<{
       settings?: { agentSkillSharingEnabled?: boolean }
     }>('settings.get')
+
     enabled = response.result?.settings?.agentSkillSharingEnabled
   } catch {
     return
   }
+
   if (enabled === false) {
     throw new RuntimeClientError(
       AGENT_SKILL_SHARING_DISABLED_CODE,
@@ -73,9 +78,11 @@ function requireCloudOperation<T>(operation: SkillCloudOperation<T>): T {
   if (operation.status === 'ok') {
     return operation.value
   }
+
   if (operation.status === 'reconnect-required') {
     throw new RuntimeClientError('authentication_required', 'Sign in to Orca and try again.')
   }
+
   throw new RuntimeClientError('authentication_unconfigured', operation.message)
 }
 
@@ -94,6 +101,7 @@ function formatInstalledSkills(skills: InstalledSkillSummary[]): string {
   if (skills.length === 0) {
     return 'No installed skills found.'
   }
+
   return skills
     .map(
       (skill) =>
@@ -137,6 +145,7 @@ async function callShare(
         'The connected Orca runtime does not support agent skill sharing yet. Update Orca on that machine and try again.'
       )
     }
+
     throw error
   }
 }
@@ -144,9 +153,11 @@ async function callShare(
 export const SKILL_SHARING_HANDLERS: Record<string, CommandHandler> = {
   'skills installed': async (ctx) => {
     rejectForwardedSkillFilesystem(ctx, 'installed')
+
     const response = await ctx.client.call<SkillDiscoveryResult>('skills.discover', {
       cwd: ctx.cwd
     })
+
     const skills = installedSummary(response.result)
     printResult({ ...response, result: { skills } }, ctx.json, (value) =>
       formatInstalledSkills(value.skills)
@@ -155,30 +166,38 @@ export const SKILL_SHARING_HANDLERS: Record<string, CommandHandler> = {
   'skills share': async (ctx) => {
     rejectForwardedSkillFilesystem(ctx, 'share')
     const skillSelectors = getRepeatedStringFlag(ctx.flags, 'skill')
+
     if (skillSelectors.length === 0) {
       throw new RuntimeClientError(
         'invalid_argument',
         'Select at least one installed skill with --skill. Run `orca skills installed` to list them.'
       )
     }
+
     const bundleLabel = stringFlag(ctx, 'bundle-name')
+
     if (!bundleLabel) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --bundle-name.')
     }
+
     const bundleName = normalizeSkillBundleName(bundleLabel)
+
     if (!bundleName) {
       throw new RuntimeClientError(
         'invalid_argument',
         '--bundle-name must contain at least one English letter or number.'
       )
     }
+
     await preflightPublishCapability(ctx)
+
     const response = await callShare(ctx, {
       skillSelectors,
       bundleName,
       releaseNotes: stringFlag(ctx, 'release-notes') ?? '',
       target: { cwd: ctx.cwd }
     })
+
     const value = sharedSummary(requireCloudOperation(response.result))
     printResult({ ...response, result: value }, ctx.json, formatSharedSkill)
   }

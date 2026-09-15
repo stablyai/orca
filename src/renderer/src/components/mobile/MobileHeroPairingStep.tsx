@@ -15,12 +15,15 @@ import { translate } from '@/i18n/i18n'
 /** Why: one full sentence per device kind so translators own word order and punctuation. */
 function pairDeviceHeading(): string {
   const ua = navigator.userAgent
+
   if (ua.includes('Mac')) {
     return translate('auto.components.mobile.MobileHero.pairThisMac', 'Pair this Mac.')
   }
+
   if (ua.includes('Windows')) {
     return translate('auto.components.mobile.MobileHero.pairThisPc', 'Pair this PC.')
   }
+
   return translate('auto.components.mobile.MobileHero.pairThisComputer', 'Pair this computer.')
 }
 
@@ -35,21 +38,25 @@ function emptyPairingQrMessage(args: {
   if (args.relayMintFailure != null) {
     return translate('auto.components.mobile.MobileHero.noRelayCode', 'No pairing code available')
   }
+
   if (!args.canGeneratePairing && args.connectionMode === 'automatic') {
     return translate(
       'auto.components.mobile.MobileHero.qrSignInRequired',
       'Sign in to create a Relay pairing code'
     )
   }
+
   if (args.pairingQrError && args.pairingUrl != null) {
     return translate(
       'auto.components.mobile.MobileHero.qrRenderFailed',
       'QR couldn’t be rendered — copy the code below'
     )
   }
+
   if (!args.canGeneratePairing) {
     return translate('auto.components.mobile.MobileHero.noPairingCode', 'No pairing code available')
   }
+
   return translate(
     'auto.components.mobile.MobileHero.qrGeneratePrompt',
     'Generate a pairing code to continue'
@@ -114,6 +121,7 @@ export function MobileHeroPairingStep({
           '--mp-pairing-qr-image-size': `${pairQrSize}px`,
           '--mp-pairing-qr-frame-size': `${pairQrSize + 20}px`
         } as React.CSSProperties)
+
   const copyPairingCodeRef = useRef<HTMLButtonElement | null>(null)
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
   const usingRelay = connectionMode === 'automatic'
@@ -121,6 +129,7 @@ export function MobileHeroPairingStep({
   // A custom address is a deliberate override: show the row outright rather than
   // behind a trigger that could not collapse it anyway.
   const networkDisclosurePinned = selectedAddressIsCustom
+
   const emptyQrMessage =
     !pairLoading && pairQrDataUrl == null
       ? emptyPairingQrMessage({
@@ -136,6 +145,7 @@ export function MobileHeroPairingStep({
     const pairingReady = pairingUrl != null && !pairLoading
     const becameReady = !pairingWasReadyRef.current && pairingReady
     pairingWasReadyRef.current = pairingReady
+
     if (becameReady && document.activeElement === document.body) {
       copyPairingCodeRef.current?.focus()
     }

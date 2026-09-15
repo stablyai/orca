@@ -16,10 +16,13 @@ function getPresentStringFlag(
   if (!flags.has(name)) {
     return undefined
   }
+
   const value = flags.get(name)
+
   if (typeof value === 'string' && value.length > 0) {
     return value
   }
+
   throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
 }
 
@@ -29,12 +32,14 @@ export function hasWorkspaceProjectTarget(flags: Map<string, string | boolean>):
 
 export function assertWorkspaceTargetFlagsCompatible(flags: Map<string, string | boolean>): void {
   const hasProjectTarget = hasWorkspaceProjectTarget(flags)
+
   if (flags.has('repo') && hasProjectTarget) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Choose either --repo or project target flags, not both.'
     )
   }
+
   if (flags.has('host') && !flags.has('project') && !flags.has('project-host-setup')) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -58,9 +63,11 @@ function findReadySetupOnHost(
   host: ParsedExecutionHost | undefined
 ): ProjectHostSetup | undefined {
   const candidates = setups.filter((candidate) => candidate.projectId === projectId)
+
   if (!host) {
     return candidates[0]
   }
+
   return (
     candidates.find((candidate) => normalizeExecutionHostId(candidate.hostId) === host.id) ??
     candidates.find((candidate) => hostFilterMatchesHostId(host, candidate.hostId))
@@ -74,10 +81,13 @@ export async function resolveProjectCreateTarget(
   const projectHostSetupId = getPresentStringFlag(flags, 'project-host-setup')
   const projectId = getPresentStringFlag(flags, 'project')
   const host = await resolveHostFlagTarget(flags, client)
+
   if (!projectHostSetupId && !projectId && !host) {
     return undefined
   }
+
   let result: Awaited<ReturnType<typeof client.call<{ setups: ProjectHostSetup[] }>>>
+
   try {
     result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
   } catch (error) {
@@ -89,12 +99,16 @@ export async function resolveProjectCreateTarget(
         'This Orca server does not support project host setup yet. Update Orca on the server and try again.'
       )
     }
+
     throw error
   }
+
   const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
+
   const setup = projectHostSetupId
     ? ready.find((candidate) => candidate.id === projectHostSetupId)
     : findReadySetupOnHost(ready, projectId, host)
+
   if (!setup) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -103,6 +117,7 @@ export async function resolveProjectCreateTarget(
         : `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`
     )
   }
+
   return {
     repoSelector: `id:${setup.repoId}`,
     setup

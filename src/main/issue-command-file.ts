@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { loadHooks } from './hooks'
 
 const ORCA_DIR = '.orca'
+
 const ISSUE_COMMAND_FILENAME = 'issue-command'
 
 export function getIssueCommandFilePath(repoPath: string): string {
@@ -61,13 +62,16 @@ export function writeIssueCommand(repoPath: string, content: string): void {
   try {
     if (!trimmed) {
       rmSync(filePath, { force: true })
+
       return
     }
 
     const orcaDir = join(repoPath, ORCA_DIR)
+
     if (!existsSync(orcaDir)) {
       mkdirSync(orcaDir, { recursive: true })
     }
+
     ensureOrcaDirIgnored(repoPath)
     writeFileSync(filePath, `${trimmed}\n`, 'utf-8')
   } catch (err) {
@@ -80,12 +84,15 @@ export function writeIssueCommand(repoPath: string, content: string): void {
 /** Ensure `.orca` is in `.gitignore` so the per-user directory is never committed. */
 function ensureOrcaDirIgnored(repoPath: string): void {
   const gitignorePath = join(repoPath, '.gitignore')
+
   try {
     if (existsSync(gitignorePath)) {
       const content = readFileSync(gitignorePath, 'utf-8')
+
       if (/^\.orca\/?$/m.test(content)) {
         return
       }
+
       const separator = content.endsWith('\n') ? '' : '\n'
       writeFileSync(gitignorePath, `${content}${separator}.orca\n`, 'utf-8')
     } else {

@@ -27,6 +27,7 @@ describe('getBrokenChecks / hasBrokenChecks', () => {
       check({ name: 'skip', conclusion: 'skipped' }),
       check({ name: 'pending', conclusion: 'pending' })
     ]
+
     expect(getBrokenChecks(checks).map((c) => c.name)).toEqual(['fail', 'cancel', 'timeout'])
     expect(hasBrokenChecks(checks)).toBe(true)
     expect(hasBrokenChecks([check({ conclusion: 'success' })])).toBe(false)
@@ -59,6 +60,7 @@ describe('buildFixChecksPrompt', () => {
       prUrl: 'u',
       checks: [check({ conclusion: 'success' })]
     })
+
     expect(prompt).toContain('No failing check is currently listed')
   })
 })
@@ -70,6 +72,7 @@ describe('buildResolveConflictsPrompt', () => {
       baseRef: 'main',
       files: ['src/a.ts', 'src/b.ts']
     })
+
     expect(prompt).toContain('Resolve the merge conflicts reported for this pull request')
     expect(prompt).toContain('"main"')
     expect(prompt).toContain('git fetch origin main')
@@ -92,6 +95,7 @@ describe('buildResolveConflictsPrompt', () => {
       baseRef: 'feature branch with spaces',
       files: ['x']
     })
+
     expect(prompt).toContain('quoting the ref exactly for the current shell')
     expect(prompt).not.toContain('git fetch origin feature branch with spaces')
   })

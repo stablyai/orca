@@ -10,19 +10,25 @@ export function assertNonEmptyString(value: unknown, name: string): asserts valu
 
 export function validateHello(hello: PtyConsumerSessionHello): void {
   assertNonEmptyString(hello.clientInstanceId, 'clientInstanceId')
+
   if (hello.requestedRole !== 'session-owner' && hello.requestedRole !== 'subscriber') {
     throw new Error('requestedRole must be session-owner or subscriber')
   }
+
   if (hello.resume) {
     if (!Number.isSafeInteger(hello.resume.ownerGeneration) || hello.resume.ownerGeneration <= 0) {
       throw new Error('resume.ownerGeneration must be a positive safe integer')
     }
+
     assertNonEmptyString(hello.resume.ownerLease, 'resume.ownerLease')
   }
+
   const flow = hello.capabilities?.outputFlowControl
+
   if (!flow) {
     return
   }
+
   if (
     !Array.isArray(flow.versions) ||
     flow.versions.length > MAX_CAPABILITY_VERSIONS ||
@@ -30,6 +36,7 @@ export function validateHello(hello: PtyConsumerSessionHello): void {
   ) {
     throw new Error('outputFlowControl.versions must contain positive safe integers')
   }
+
   if (!Number.isSafeInteger(flow.requestedWindowSu) || flow.requestedWindowSu <= 0) {
     throw new Error('outputFlowControl.requestedWindowSu must be a positive safe integer')
   }

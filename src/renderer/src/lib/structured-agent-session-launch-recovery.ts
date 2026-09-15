@@ -35,8 +35,10 @@ async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Pro
   if (hasAdoptedStructuredSession(state.intent)) {
     return
   }
+
   const snapshots = await refreshLocalStructuredSessionTabs()
   throwIfLaunchCancelled(state)
+
   const published = snapshots.some(
     (snapshot) =>
       snapshot.worktree === state.intent.worktreeId &&
@@ -44,6 +46,7 @@ async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Pro
         (tab) => tab.type === 'agent-session' && tab.sessionId === state.intent.sessionId
       )
   )
+
   if (!published && !hasAdoptedStructuredSession(state.intent)) {
     throw new Error('structured session tab publication unavailable')
   }
@@ -66,16 +69,20 @@ async function recoverPublishedSessionReceipt(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
+
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
     { kind: 'local' },
     'agentSession.history',
     { sessionId: state.intent.sessionId, direction: 'tail', limit: 1 }
   )
+
   throwIfLaunchCancelled(state)
   const fence = history.page.fence ?? (!history.ok ? history.fence : undefined)
+
   if (typeof fence !== 'number') {
     throw new Error('structured session fence publication unavailable')
   }
+
   return { sessionId: state.intent.sessionId, fence }
 }
 
@@ -84,24 +91,29 @@ async function retrySameIntent(
   priorError: unknown
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
+
   try {
     const receipt = await launchStructuredAgentSession(state.intent)
     throwIfLaunchCancelled(state)
     await verifyPublishedSession(state)
+
     return receipt
   } catch (error) {
     if (state.cancelled) {
       throw new StructuredAgentSessionLaunchCancelledError()
     }
+
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       throw error
     }
+
     try {
       return await recoverPublishedSessionReceipt(state)
     } catch {
       if (state.cancelled) {
         throw new StructuredAgentSessionLaunchCancelledError()
       }
+
       state.visibilityUnknown = true
       state.onVisibilityChanged?.()
       throw error ?? priorError
@@ -114,29 +126,35 @@ export async function launchAndReconcile(
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
   let receipt: StructuredAgentLaunchReceipt
+
   try {
     receipt = await launchStructuredAgentSession(state.intent)
   } catch (error) {
     if (state.cancelled) {
       throw new StructuredAgentSessionLaunchCancelledError()
     }
+
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       throw error
     }
+
     try {
       return await recoverPublishedSessionReceipt(state)
     } catch {
       return retrySameIntent(state, error)
     }
   }
+
   try {
     throwIfLaunchCancelled(state)
     await verifyPublishedSession(state)
+
     return receipt
   } catch (error) {
     if (state.cancelled) {
       throw new StructuredAgentSessionLaunchCancelledError()
     }
+
     return retrySameIntent(state, error)
   }
 }
@@ -147,6 +165,7 @@ export async function reconcileUnknownLaunch(
   throwIfLaunchCancelled(state)
   state.visibilityUnknown = false
   state.onVisibilityChanged?.()
+
   try {
     return await recoverPublishedSessionReceipt(state)
   } catch (error) {

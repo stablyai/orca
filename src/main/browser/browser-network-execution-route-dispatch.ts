@@ -17,19 +17,25 @@ export const resolveBrowserNetworkExecutionRoute: BrowserNetworkExecutionRouteRe
   if (context.executionHost.kind === 'native') {
     return resolveNativeBrowserNetworkExecutionRoute(context)
   }
+
   if (context.executionHost.kind === 'wsl') {
     const wslRoute = await import('./wsl-browser-network-execution-route')
+
     return wslRoute.resolveWslBrowserNetworkExecutionRoute(context)
   }
+
   const [{ getSshConnectionManager }, authority, sshRoute] = await Promise.all([
     import('../ssh/ssh-target-registry'),
     import('../ssh/ssh-provider-authority'),
     import('./ssh-browser-network-execution-route')
   ])
+
   const connectionManager = getSshConnectionManager()
+
   if (!connectionManager) {
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
+
   return sshRoute.resolveSshBrowserNetworkExecutionRoute(context, {
     connectionManager,
     isCurrentAuthority: authority.isCurrentSshProviderAuthority,

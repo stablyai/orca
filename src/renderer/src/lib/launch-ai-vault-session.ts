@@ -33,6 +33,7 @@ export function launchAiVaultSessionInNewTab(args: {
   const store = useAppStore.getState()
   let targetGroupId = args.targetGroupId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
+
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const runtimeLaunch = createWebRuntimeSessionTerminal({
       worktreeId: args.worktreeId,
@@ -49,12 +50,15 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
       activate: true
     })
+
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
       if (outcome.status === 'created') {
         useAppStore.getState().setActiveTabType('terminal')
       }
+
       return outcome
     })
+
     return {
       tabId: null,
       ...(targetGroupId ? { groupId: targetGroupId } : {}),
@@ -71,6 +75,7 @@ export function launchAiVaultSessionInNewTab(args: {
   const tab = args.cwd
     ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
     : store.createTab(args.worktreeId, targetGroupId)
+
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),
@@ -89,12 +94,14 @@ export function launchAiVaultSessionInNewTab(args: {
   const termIds = (fresh.tabsByWorktree[args.worktreeId] ?? []).map((t) => t.id)
   const editorIds = fresh.openFiles.filter((f) => f.worktreeId === args.worktreeId).map((f) => f.id)
   const browserIds = (fresh.browserTabsByWorktree?.[args.worktreeId] ?? []).map((t) => t.id)
+
   const base = reconcileTabOrder(
     fresh.tabBarOrderByWorktree[args.worktreeId],
     termIds,
     editorIds,
     browserIds
   )
+
   const order = base.filter((id) => id !== tab.id)
   order.push(tab.id)
   fresh.setTabBarOrder(args.worktreeId, order)

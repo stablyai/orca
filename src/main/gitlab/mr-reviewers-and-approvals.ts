@@ -24,7 +24,9 @@ export async function fetchMRReviewers(
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
+
   const data = JSON.parse(stdout) as { user?: GitLabRawUser | null }[]
+
   return data
     .map((entry) => mapGitLabUser(entry.user))
     .filter((u): u is GitLabAssignableUser => !!u)
@@ -55,9 +57,11 @@ export async function fetchMRApprovalState(
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
   ])
+
   if (approvalsRes.status === 'rejected' && stateRes.status === 'rejected') {
     return undefined
   }
+
   const approvals =
     approvalsRes.status === 'fulfilled'
       ? (JSON.parse(approvalsRes.value.stdout) as {
@@ -66,6 +70,7 @@ export async function fetchMRApprovalState(
           approved_by?: { user?: GitLabRawUser | null }[]
         })
       : null
+
   const state =
     stateRes.status === 'fulfilled'
       ? (JSON.parse(stateRes.value.stdout) as {
@@ -77,6 +82,7 @@ export async function fetchMRApprovalState(
           }[]
         })
       : null
+
   return {
     approvalsRequired:
       typeof approvals?.approvals_required === 'number' ? approvals.approvals_required : null,

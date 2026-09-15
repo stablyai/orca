@@ -36,6 +36,7 @@ function comment(overrides: Partial<PRComment> = {}): PRComment {
 }
 
 type PRCommentThreadGroup = Extract<PRCommentGroup, { kind: 'thread' }>
+
 type PRCommentStandaloneGroup = Extract<PRCommentGroup, { kind: 'standalone' }>
 
 function openThread(threadId: string, id = 10): PRCommentThreadGroup {
@@ -190,6 +191,7 @@ describe('getPRCommentGroupReplyTarget', () => {
         comment({ id: 12, threadId: 'T1', path: 'a.ts', body: 'latest' })
       ]
     }
+
     expect(getPRCommentGroupReplyTarget(group).id).toBe(10)
   })
 
@@ -208,6 +210,7 @@ describe('attachPRReviewReplyParent', () => {
       line: 4,
       isResolved: false
     })
+
     const reply = comment({ id: 99, body: 'Fixing.' })
     expect(attachPRReviewReplyParent(reply, parent)).toMatchObject({
       id: 99,
@@ -229,6 +232,7 @@ describe('attachPRReviewReplyParent', () => {
     })
   })
 })
+
 describe('resolvePRReviewReplyThreadId', () => {
   it('prefers the parent threadId', () => {
     expect(
@@ -244,6 +248,7 @@ describe('resolvePRReviewReplyThreadId', () => {
       comment({ id: 1, threadId: 'T_path', path: 'src/a.ts', line: 3 }),
       comment({ id: 2, threadId: 'T_id', path: 'src/b.ts', line: 9 })
     ]
+
     expect(
       resolvePRReviewReplyThreadId({
         parent: comment({ id: 2, path: 'src/b.ts', line: 9 }),
@@ -263,6 +268,7 @@ describe('resolvePRReviewReplyThreadId', () => {
       comment({ id: 1, threadId: 'T_one', path: 'src/a.ts', line: 3 }),
       comment({ id: 2, threadId: 'T_two', path: 'src/a.ts', line: 40 })
     ]
+
     expect(
       resolvePRReviewReplyThreadId({
         parent: comment({ id: 50, path: 'src/a.ts', line: undefined }),
@@ -396,6 +402,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
   it('resolves a review-summary thread instead of batching it into a conversation post', async () => {
     const resolveThread = vi.fn().mockResolvedValue(true)
     const replyAsConversation = vi.fn()
+
     const summaryThread: PRCommentGroup = {
       kind: 'thread',
       threadId: 'T_summary',
@@ -427,6 +434,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
   it('replies in-thread when the thread is already resolved', async () => {
     const replyInThread = vi.fn().mockResolvedValue(true)
     const resolveThread = vi.fn()
+
     const group: PRCommentGroup = {
       kind: 'thread',
       threadId: 'T1',
@@ -454,6 +462,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
   it('replies to the thread root, not the newest reply, on an already-resolved thread', async () => {
     const replyInThread = vi.fn().mockResolvedValue(true)
     const root = comment({ id: 10, threadId: 'T1', path: 'a.ts', isResolved: true })
+
     const group: PRCommentGroup = {
       kind: 'thread',
       threadId: 'T1',
@@ -642,6 +651,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
       provider: 'github',
       selectedGroups: [openThread('T1')]
     }
+
     clearPendingPRCommentAiAck()
     setPendingPRCommentAiAck(payload)
     expect(takePendingPRCommentAiAck()).toBe(payload)
@@ -657,6 +667,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
       selectedGroups: [openThread('D1')],
       gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 }
     }
+
     clearPendingPRCommentAiAck()
     setPendingPRCommentAiAck(payload)
     expect(takePendingPRCommentAiAck()?.gitlabTarget).toEqual({
@@ -679,6 +690,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
           peakInFlight = Math.max(peakInFlight, inFlight)
           await Promise.resolve()
           inFlight -= 1
+
           return true
         },
         canReply: true,
@@ -697,6 +709,7 @@ describe('getPRCommentGroupsNeedingReply', () => {
   it('keeps only the groups the host cannot close for us', () => {
     const summary = codeRabbitReviewSummary(30)
     const conversation = standalone(31)
+
     const resolvedThread: PRCommentGroup = {
       kind: 'thread',
       threadId: 'T_done',

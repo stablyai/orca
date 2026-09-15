@@ -12,6 +12,7 @@ export async function saveHermesAutomation({
   pageRefresh
 }: AutomationSaveContext): Promise<void> {
   const { repoMap, worktreeMap } = store
+
   const {
     draft,
     editingExternalTarget,
@@ -19,8 +20,10 @@ export async function saveHermesAutomation({
     setEditingExternalTarget,
     selectExternalKey
   } = local
+
   const repo = repoMap.get(draft.projectId)
   const selectedWorktree = worktreeMap.get(draft.workspaceId) ?? null
+
   if (!repo || !selectedWorktree) {
     toast.error(
       translate(
@@ -28,16 +31,21 @@ export async function saveHermesAutomation({
         'Choose an available workspace before saving.'
       )
     )
+
     return
   }
+
   const scopedExternal = list.scopedExternal
+
   const scope =
     editingExternalTarget?.scope ?? scopedExternal.createScope(repo.connectionId ?? null)
+
   const repoTargetMatches = scope
     ? scope.owner.selector.kind === 'ssh'
       ? repo.connectionId === scope.owner.selector.targetId
       : !repo.connectionId
     : false
+
   if (!scope || !repoTargetMatches) {
     toast.error(
       translate(
@@ -45,15 +53,19 @@ export async function saveHermesAutomation({
         'Choose a workspace on the same host as this Hermes automation.'
       )
     )
+
     return
   }
+
   const schedule = buildHermesCronSchedule(draft)
+
   const fields = {
     name: draft.name,
     prompt: draft.prompt,
     schedule,
     workdir: selectedWorktree.path
   }
+
   await scopedExternal.saveExternalAutomation(
     scope,
     {
@@ -64,9 +76,11 @@ export async function saveHermesAutomation({
     },
     editingExternalTarget?.job.id ?? null
   )
+
   if (!editingExternalTarget) {
     useAppStore.getState().recordFeatureInteraction('automation-created')
   }
+
   await pageRefresh.refresh()
   setCreateOpen(false)
   setEditingExternalTarget(null)

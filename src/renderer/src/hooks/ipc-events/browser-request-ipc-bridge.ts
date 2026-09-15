@@ -24,19 +24,25 @@ export function registerBrowserRequestIpcBridge(
               'Browser tabs are unavailable while a remote runtime is active'
             )
           })
+
           return
         }
+
         const store = useAppStore.getState()
         const worktreeId = data.worktreeId ?? store.activeWorktreeId
+
         if (!worktreeId) {
           window.api.ui.replyTabCreate({
             requestId: data.requestId,
             error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
           })
+
           return
         }
+
         // Why: CLI-created tabs should land in the active browser tab's group, not the terminal's UI-active group.
         const activeBrowserTabId = store.activeBrowserTabIdByWorktree[worktreeId]
+
         const activeBrowserUnifiedTab = activeBrowserTabId
           ? (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
               (t) => t.contentType === 'browser' && t.entityId === activeBrowserTabId
@@ -55,6 +61,7 @@ export function registerBrowserRequestIpcBridge(
           sessionPartition: data.sessionPartition,
           activate: data.activate === true
         })
+
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
         const browserPageId = pages[0]?.id ?? workspace.id
@@ -80,18 +87,24 @@ export function registerBrowserRequestIpcBridge(
               'Browser profiles are unavailable while a remote runtime is active'
             )
           })
+
           return
         }
+
         const store = useAppStore.getState()
+
         const owningWorkspace = Object.values(store.browserTabsByWorktree)
           .flat()
           .find((workspace) => {
             if (workspace.id === data.browserPageId) {
               return true
             }
+
             const pages = store.browserPagesByWorkspace[workspace.id] ?? []
+
             return pages.some((page) => page.id === data.browserPageId)
           })
+
         if (!owningWorkspace) {
           window.api.ui.replyTabSetProfile({
             requestId: data.requestId,
@@ -101,10 +114,13 @@ export function registerBrowserRequestIpcBridge(
               { value0: data.browserPageId }
             )
           })
+
           return
         }
+
         // Why: a workspace may host several browser pages; profile switch must tear down all sibling webviews, not just the IPC's.
         const workspacePages = store.browserPagesByWorkspace[owningWorkspace.id] ?? []
+
         if (workspacePages.length > 0) {
           for (const page of workspacePages) {
             // Document previews use a fixed partition, so profile changes must preserve their guests.
@@ -115,6 +131,7 @@ export function registerBrowserRequestIpcBridge(
         } else {
           destroyPersistentWebview(data.browserPageId)
         }
+
         store.switchBrowserTabProfile(owningWorkspace.id, data.profileId, data.sessionPartition)
         window.api.ui.replyTabSetProfile({ requestId: data.requestId })
       } catch (err) {
@@ -137,10 +154,13 @@ export function registerBrowserRequestIpcBridge(
               'Browser tabs are unavailable while a remote runtime is active'
             )
           })
+
           return
         }
+
         const store = useAppStore.getState()
         const explicitTargetId = data.tabId ?? null
+
         const replyBrowserTabNotFound = (tabId: string): void => {
           window.api.ui.replyTabClose({
             requestId: data.requestId,
@@ -152,6 +172,7 @@ export function registerBrowserRequestIpcBridge(
             )
           })
         }
+
         const replyPinnedBrowserCloseCanceled = (tabId: string): void => {
           window.api.ui.replyTabClose({
             requestId: data.requestId,
@@ -162,6 +183,7 @@ export function registerBrowserRequestIpcBridge(
             )
           })
         }
+
         const closeBrowserWorkspaceWithReply = (worktreeId: string, workspaceId: string): void => {
           const currentStore = useAppStore.getState()
           guardPinnedTabClose({
@@ -174,66 +196,88 @@ export function registerBrowserRequestIpcBridge(
             onCancel: () => replyPinnedBrowserCloseCanceled(workspaceId)
           })
         }
+
         const tabToClose =
           explicitTargetId ??
           (data.worktreeId
             ? (store.activeBrowserTabIdByWorktree?.[data.worktreeId] ?? null)
             : store.activeBrowserTabId)
+
         if (!tabToClose) {
           window.api.ui.replyTabClose({
             requestId: data.requestId,
             error: translate('auto.hooks.useIpcEvents.a8d2bf8e9e', 'No active browser tab to close')
           })
+
           return
         }
+
         // Why: the bridge keys tabs by browserPageId, but closeBrowserTab expects a workspace id.
         // Per the CLI's `tab close --page` contract, close only that page unless it is the last in its workspace.
         const isWorkspaceId = Object.values(store.browserTabsByWorktree)
           .flat()
           .some((ws) => ws.id === tabToClose)
+
         if (!isWorkspaceId) {
           const owningWorkspace = Object.entries(store.browserPagesByWorkspace).find(([, pages]) =>
             pages.some((p) => p.id === tabToClose)
           )
+
           if (owningWorkspace) {
             const [workspaceId, pages] = owningWorkspace
+
             const owningWorktreeId =
               Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
                 tabs.some((tab) => tab.id === workspaceId)
               )?.[0] ?? null
+
             if (data.worktreeId && owningWorktreeId !== data.worktreeId) {
               replyBrowserTabNotFound(tabToClose)
+
               return
             }
+
             if (pages.length <= 1) {
               if (owningWorktreeId) {
                 closeBrowserWorkspaceWithReply(owningWorktreeId, workspaceId)
+
                 return
               }
+
               store.closeBrowserTab(workspaceId)
             } else {
               store.closeBrowserPage(tabToClose)
             }
+
             window.api.ui.replyTabClose({ requestId: data.requestId })
+
             return
           }
         }
+
         const owningWorktreeId =
           Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
             tabs.some((tab) => tab.id === tabToClose)
           )?.[0] ?? null
+
         if (owningWorktreeId) {
           if (data.worktreeId && owningWorktreeId !== data.worktreeId) {
             replyBrowserTabNotFound(tabToClose)
+
             return
           }
+
           closeBrowserWorkspaceWithReply(owningWorktreeId, tabToClose)
+
           return
         }
+
         if (explicitTargetId) {
           replyBrowserTabNotFound(explicitTargetId)
+
           return
         }
+
         store.closeBrowserTab(tabToClose)
         window.api.ui.replyTabClose({ requestId: data.requestId })
       } catch (err) {

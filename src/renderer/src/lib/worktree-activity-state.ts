@@ -7,11 +7,15 @@ import {
 import { resolveAgentStatusWorktreeId } from './agent-status-worktree-attribution'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
+
 type BrowserLikeTab = { id: string }
 
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
+
 type PtyIdsByTabId = Record<string, string[]>
+
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
+
 export type LiveAgentWorktreeStatus = 'working' | 'monitoring' | 'permission'
 
 /**
@@ -37,18 +41,24 @@ export function getLiveAgentStatusByWorktreeId(
   const entries = Object.values(agentStatusByPaneKey ?? {}).filter((entry) =>
     isFreshNonDoneAgentStatus(entry, now)
   )
+
   if (entries.length === 0) {
     return new Map()
   }
+
   const worktreeIdByTabId = new Map<string, string>()
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree ?? {})) {
     for (const tab of tabs) {
       worktreeIdByTabId.set(tab.id, worktreeId)
     }
   }
+
   const result = new Map<string, LiveAgentWorktreeStatus>()
+
   for (const entry of entries) {
     const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)
+
     if (worktreeId) {
       const status =
         entry.state === 'working'
@@ -56,7 +66,9 @@ export function getLiveAgentStatusByWorktreeId(
             ? 'monitoring'
             : 'working'
           : 'permission'
+
       const current = result.get(worktreeId)
+
       if (
         status === 'permission' ||
         current === undefined ||
@@ -66,6 +78,7 @@ export function getLiveAgentStatusByWorktreeId(
       }
     }
   }
+
   return result
 }
 
@@ -77,12 +90,15 @@ export function hasActiveWorkspaceActivity(
   worktreeIdsWithLiveAgent: ReadonlySet<string>
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
+
   const hasLiveTerminal =
     ptyIdsByTabId != null && tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+
   const hasBrowser = (browserTabsByWorktree?.[worktreeId] ?? []).length > 0
   // Why: a running agent keeps the workspace visible through brief PTY gaps
   // such as an SSH reconnect or an unmounted remote pane. #7197
   const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
+
   return hasLiveTerminal || hasBrowser || hasLiveAgent
 }
 

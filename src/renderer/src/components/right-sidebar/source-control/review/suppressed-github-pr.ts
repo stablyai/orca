@@ -53,7 +53,9 @@ export function resolveSourceControlSuppressedGitHubPRState({
   ) {
     return null
   }
+
   const number = worktree.suppressedGitHubPR
+
   if (
     hasMatchingSuppressedPR ||
     (hostedReviewCreation?.blockedReason === 'existing_review' &&
@@ -61,23 +63,28 @@ export function resolveSourceControlSuppressedGitHubPRState({
   ) {
     return { number, status: 'matched' }
   }
+
   if (hostedReview !== null) {
     return null
   }
+
   if (
     hostedReviewCreationRequestFailed ||
     hostedReviewCreation?.reviewLookupOutcome === 'unavailable'
   ) {
     return null
   }
+
   if (isHostedReviewCreationLoading) {
     return { number, status: 'pending' }
   }
+
   if (
     hostedReviewCreation?.reviewLookupOutcome === 'found' ||
     hostedReviewCreation?.reviewLookupOutcome === 'not_found'
   ) {
     return null
   }
+
   return { number, status: 'pending' }
 }

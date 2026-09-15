@@ -101,19 +101,24 @@ export function ghUtilsModuleMock(mocks: GitHubClientMocks): GhUtilsModuleMock {
     githubRepoContext: mocks.githubRepoContextMock,
     classifyGhError: (stderr: string) => {
       const lower = stderr.toLowerCase()
+
       if (lower.includes('not found') || stderr.includes('HTTP 404')) {
         return { type: 'not_found', message: stderr }
       }
+
       if (lower.includes('rate limit')) {
         return { type: 'rate_limited', message: stderr }
       }
+
       if (lower.includes('resource not accessible')) {
         return { type: 'permission_denied', message: stderr }
       }
+
       return { type: 'unknown', message: stderr }
     },
     parseGitHubOwnerRepo: (remoteUrl: string) => {
       const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
+
       return match ? { owner: match[1], repo: match[2] } : null
     },
     acquire: mocks.acquireMock,
@@ -219,13 +224,16 @@ export function githubApiRepositoryModuleMock(
         connectionId,
         localGitOptions
       )
+
       const slug =
         fromRemote ?? (await mocks.getOwnerRepoMock(repoPath, connectionId, localGitOptions))
+
       // Mirror production: dotcom origin slugs come back pinned to github.com.
       return slug ? { host: 'github.com', ...slug } : slug
     },
     getIssueGitHubApiRepository: async (repoPath: string, connectionId?: string | null) => {
       const slug = await mocks.getIssueOwnerRepoMock(repoPath, connectionId)
+
       // Mirror production: issue slugs come back host-qualified to github.com.
       return slug ? { host: 'github.com', ...slug } : slug
     },
@@ -235,6 +243,7 @@ export function githubApiRepositoryModuleMock(
       connectionId?: string | null
     ) => {
       const slug = await mocks.getIssueOwnerRepoMock(repoPath, connectionId)
+
       return { source: slug ? { host: 'github.com', ...slug } : slug, fellBack: false }
     }
   }

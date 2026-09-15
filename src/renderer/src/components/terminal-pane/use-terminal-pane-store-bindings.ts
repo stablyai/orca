@@ -8,6 +8,7 @@ import type { TerminalPaneChatController } from './use-terminal-pane-chat-state'
 
 export function useTerminalPaneStoreBindings(controller: TerminalPaneChatController) {
   const { expectedLayoutLeafIds, isVisible, restoredLayout, tabId } = controller
+
   const {
     clearRuntimePaneTitle,
     clearTabPtyId,
@@ -28,8 +29,10 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
     updateTabPtyId,
     updateTabTitle
   } = useTerminalPaneStoreActions()
+
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
+
   const initialLayoutRef = useRef(restoredLayout)
   const settings = useAppStore((store) => store.settings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
@@ -37,13 +40,17 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
   const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => startup !== undefined && !isVisible
   )
+
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
+
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
+
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )

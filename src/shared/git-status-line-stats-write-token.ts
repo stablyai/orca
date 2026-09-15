@@ -15,20 +15,26 @@ const GIT_STATUS_LINE_STATS_WRITE_KEYS_MAX_ENTRIES = 1024
 // captures these generations at begin; a mismatch at store/clear time means an
 // invalidation happened mid-scan and the derived stats may be pre-mutation.
 let globalInvalidationGeneration = 0
+
 const keyInvalidationGenerationByWorktree = new Map<string, number>()
+
 // Why: overlapping recomputes must resolve latest-begun-wins without letting a
 // reuse-only read (which never stores) starve an older recompute's store.
 const lastStoredBeginSeqByWorktree = new Map<string, number>()
+
 let nextBeginSeq = 0
 
 function bumpBoundedKeyMap(map: Map<string, number>, cacheKey: string, value: number): void {
   map.delete(cacheKey)
   map.set(cacheKey, value)
+
   while (map.size > GIT_STATUS_LINE_STATS_WRITE_KEYS_MAX_ENTRIES) {
     const oldestKey = map.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     map.delete(oldestKey)
   }
 }

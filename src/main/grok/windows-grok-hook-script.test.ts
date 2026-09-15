@@ -21,10 +21,13 @@ function findUnguardedSubstringReads(lines: readonly string[]): string[] {
         unguarded.push(line)
       }
     }
+
     const guarded = line.match(/^if not defined (\w+) goto :/)
+
     if (guarded) {
       defined.add(guarded[1])
     }
+
     // A value is provably non-empty only if something outside an expansion survives:
     // `set "V=%OTHER%"` may undefine V, `set "V=%V%."` cannot. The lazy value stops at
     // the quote that closes the `set`, so a substitution like `%V:"=%` stays one token.
@@ -61,6 +64,7 @@ describe('buildWindowsGrokHookScript', () => {
 
   it('re-checks the envelope after appending the trailing-backslash sentinel', () => {
     const lines = buildWindowsGrokHookScript().split('\r\n')
+
     const appended = lines.indexOf(
       'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
     )
@@ -85,6 +89,7 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
     dirs.push(dir)
     const scriptPath = join(dir, 'grok-hook.cmd')
     writeFileSync(scriptPath, buildWindowsGrokHookScript())
+
     return scriptPath
   }
 
@@ -110,6 +115,7 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
   ): Promise<HookRun> {
     return new Promise((resolve, reject) => {
       let posted: URLSearchParams | undefined
+
       const server = createServer((req, res) => {
         let body = ''
         req.on('data', (chunk: Buffer) => {
@@ -120,9 +126,11 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
           res.writeHead(200).end()
         })
       })
+
       server.on('error', reject)
       server.listen(0, '127.0.0.1', () => {
         const address = server.address()
+
         const env: NodeJS.ProcessEnv = {
           ...process.env,
           ORCA_AGENT_HOOK_PORT: String(typeof address === 'object' && address ? address.port : 0),
@@ -130,8 +138,10 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
           ORCA_PANE_KEY: PANE_KEY,
           ORCA_WORKTREE_ID: WORKTREE_ID
         }
+
         delete env.ORCA_AGENT_HOOK_ENDPOINT
         delete env.GROK_HOME
+
         if (grokHome !== undefined) {
           env.GROK_HOME = grokHome
         }

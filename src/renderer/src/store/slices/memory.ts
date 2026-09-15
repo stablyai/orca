@@ -19,6 +19,7 @@ export const createMemorySlice: StateCreator<AppState, [], [], MemorySlice> = (s
       if (inFlightSnapshot) {
         return inFlightSnapshot
       }
+
       const request = (async () => {
         try {
           const snapshot = await window.api.memory.getSnapshot()
@@ -33,12 +34,15 @@ export const createMemorySlice: StateCreator<AppState, [], [], MemorySlice> = (s
           })
         }
       })()
+
       const trackedRequest = request.finally(() => {
         if (inFlightSnapshot === trackedRequest) {
           inFlightSnapshot = null
         }
       })
+
       inFlightSnapshot = trackedRequest
+
       return trackedRequest
     }
   }

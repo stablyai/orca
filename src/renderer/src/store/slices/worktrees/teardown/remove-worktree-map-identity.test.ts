@@ -3,6 +3,7 @@ import type { AppState } from '../../../types'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 
 const REMOVED_ID = 'repo-1::/repos/one/removed'
+
 const SURVIVING_ID = 'repo-1::/repos/one/kept'
 
 /** Only the maps this test asserts on; the cleanup reads them defensively. */
@@ -41,6 +42,7 @@ function removeWorktree(state: AppState): AppState {
     REMOVED_ID,
     new Set(['removed-tab'])
   )
+
   return current
 }
 

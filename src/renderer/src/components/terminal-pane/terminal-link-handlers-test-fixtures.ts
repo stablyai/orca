@@ -54,6 +54,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   const setMarkdownViewModeMock = vi.fn()
 
   const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
+
   const storeState = {
     settings: undefined as TerminalLinkStoreSettings | undefined,
     setActiveWorktree: setActiveWorktreeMock,

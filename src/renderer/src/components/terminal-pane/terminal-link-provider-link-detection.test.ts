@@ -21,6 +21,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const { storeState, fsPathExistsMock } = doubles
 
 vi.mock('@/store', () => ({
@@ -75,6 +76,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await new Promise<ILink[]>((resolve) => {
       provider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(links[0]).toBeDefined()
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
@@ -100,6 +102,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('does not invoke the xterm callback twice when the callback throws', async () => {
     const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')])
+
     const callback = vi.fn(() => {
       throw new Error('terminal was disposed')
     })
@@ -110,6 +113,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('does not show an unknown trailing-slash directory link', async () => {
     setPlatform('Macintosh')
+
     const { provider } = createProviderSetup(
       [makeBufferLine('/repo/unknown-dir/')],
       new Map([['active\0/repo/unknown-dir', true]])
@@ -131,6 +135,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await new Promise<ILink[]>((resolve) => {
       provider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(links[0]).toBeDefined()
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
@@ -141,13 +146,17 @@ describe('createFilePathLinkProvider range bounds', () => {
 
   it('bounds the terminal path-exists cache while preserving recent probes', async () => {
     const pathExistsCache = new Map<string, boolean>()
+
     for (let index = 0; index < TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES; index += 1) {
       pathExistsCache.set(`active\0/repo/old-${index}.ts`, true)
     }
+
     const pane = makePane([makeBufferLine('fresh.ts')])
+
     const managerRef = {
       current: { getPanes: () => [pane] } as unknown as PaneManager
     }
+
     const provider = createFilePathLinkProvider(
       1,
       {
@@ -177,9 +186,11 @@ describe('createFilePathLinkProvider range bounds', () => {
     const pathExistsCache = new Map<string, boolean>()
     const rows = [makeBufferLine('shared.ts')]
     const pane = makePane(rows)
+
     const managerRef = {
       current: { getPanes: () => [pane] } as unknown as PaneManager
     }
+
     const deps = {
       worktreeId: 'wt-1',
       worktreePath: '/repo',
@@ -190,15 +201,18 @@ describe('createFilePathLinkProvider range bounds', () => {
     }
 
     vi.mocked(getConnectionId).mockReturnValue('ssh-one')
+
     const firstProvider = createFilePathLinkProvider(
       1,
       deps,
       { textContent: '', style: { display: '' } } as unknown as HTMLElement,
       getTerminalFileOpenHint()
     )
+
     const firstLinks = await new Promise<ILink[]>((resolve) => {
       firstProvider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(firstLinks.map((link) => link.text)).toEqual(['shared.ts'])
     expect(fsPathExistsMock).toHaveBeenCalledWith({
       filePath: '/repo/shared.ts',
@@ -207,12 +221,14 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     vi.mocked(getConnectionId).mockReturnValue('ssh-two')
     fsPathExistsMock.mockResolvedValueOnce(false)
+
     const secondProvider = createFilePathLinkProvider(
       1,
       deps,
       { textContent: '', style: { display: '' } } as unknown as HTMLElement,
       getTerminalFileOpenHint()
     )
+
     const secondLinks = await new Promise<ILink[]>((resolve) => {
       secondProvider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
@@ -260,6 +276,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     vi.mocked(window.api.shell.pathExists).mockImplementation(async (pathValue) => {
       return pathValue === '/repo/package.json'
     })
+
     const { provider } = createProviderSetup([makeBufferLine('package.json')], new Map(), {
       startupCwd: '/repo/packages/web',
       getPaneLinkCwd: () => '/repo'
@@ -280,6 +297,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     ]
 
     const links = await collectLinks(rows, 1)
+
     const link = links.find(
       (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
     )
@@ -299,9 +317,11 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     const firstRowLinks = await collectLinks(rows, 1)
     const continuationLinks = await collectLinks(rows, 2)
+
     const firstRowLink = firstRowLinks.find(
       (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
     )
+
     const continuationLink = continuationLinks.find(
       (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
     )
@@ -320,14 +340,17 @@ describe('createFilePathLinkProvider range bounds', () => {
     const middleEnd = 'transparent-terminal-scrollbar-gutter.png'
     const middlePath = middleStart + middleEnd
     const thirdPath = 'validation-screenshots/03-after-light-theme.png'
+
     const rows = [
       makeBufferLine(`${firstPath} · ${middleStart}`),
       makeBufferLine(`${middleEnd} · ${thirdPath}`)
     ]
+
     const completePaths = new Set([firstPath, middlePath, thirdPath].map((path) => `/repo/${path}`))
     vi.mocked(getConnectionId).mockReturnValue('ssh-wrapped')
     fsPathExistsMock.mockImplementation(async ({ filePath }) => completePaths.has(filePath))
     const { provider } = createProviderSetup(rows, new Map())
+
     const provide = (line: number): Promise<ILink[]> =>
       new Promise((resolve) => provider.provideLinks(line, (links) => resolve(links ?? [])))
 
@@ -359,9 +382,11 @@ describe('createFilePathLinkProvider range bounds', () => {
   it('maps file link columns through multi-code-unit characters before the path', async () => {
     const text = 'e\u0301 src/main.ts'
     const columns = [0, 0, 1]
+
     for (let index = 3; index < text.length; index++) {
       columns[index] = index - 1
     }
+
     columns[text.length] = text.length - 1
 
     const links = await collectLinks([makeBufferLine(text, { columns })])
@@ -377,6 +402,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       makeBufferLine('open src/components/'),
       makeBufferLine('terminal-link-handlers.ts', { isWrapped: true })
     ]
+
     const provider = createProvider(rows)
     const exists = createDeferred<boolean>()
     vi.mocked(window.api.shell.pathExists).mockImplementation(() => exists.promise)

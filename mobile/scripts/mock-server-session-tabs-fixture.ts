@@ -7,11 +7,15 @@ import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
 // hence a uuid, not a clock read two restarts could land on.
 // The `mobile-local:` prefix is reserved for phone-local writes — never use it.
 const PUBLICATION_EPOCH = `mock-server:${randomUUID()}`
+
 const GROUP_ID = 'group-1'
+
 const PARENT_TAB_ID = 'tab-1'
+
 // The host only ever publishes terminal-layout UUIDs here; pane-key parsing
 // rejects any other shape, so a placeholder would mask pane-attribution bugs.
 const LEAF_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
+
 // The host publishes terminal surfaces as `${parentTabId}::${leafId}`.
 const SURFACE_TAB_ID = `${PARENT_TAB_ID}::${LEAF_ID}`
 
@@ -63,8 +67,10 @@ export function handleMockSessionTabsRequest(
   if (request.method === 'session.tabs.list') {
     const worktreeId = resolveWorktreeId(request.params?.worktree) ?? 'mock'
     respond(success(request.id, createMockSessionTabs(worktreeId)))
+
     return true
   }
+
   if (request.method === 'session.tabs.subscribe') {
     // Without a live stream the client's health loop keeps invalidating list
     // fetches mid-flight (barrier bump on the failed probe), so the session
@@ -73,11 +79,15 @@ export function handleMockSessionTabsRequest(
     const snapshot = createMockSessionTabs(worktreeId)
     respond(success(request.id, { type: 'snapshot', ...snapshot }, true))
     respond(success(request.id, { type: 'updated', ...snapshot }, true))
+
     return true
   }
+
   if (request.method === 'session.tabs.unsubscribe') {
     respond(success(request.id, { unsubscribed: true }))
+
     return true
   }
+
   return false
 }

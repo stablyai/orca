@@ -23,12 +23,14 @@ export async function cleanupFailedEphemeralVmStart(
   start: FailedStart
 ): Promise<boolean> {
   const cleanupError = await getCleanupError(args, start)
+
   if (cleanupError === null) {
     return true
   }
 
   const now = args.now ?? Date.now()
   const connection = getEphemeralVmRecipeResultConnection(start.recipeResult)
+
   const recovery: EphemeralVmRuntimeRecord = {
     id: start.context.instanceId ?? start.context.recipeId,
     recipeId: args.recipe.id,
@@ -47,15 +49,18 @@ export async function cleanupFailedEphemeralVmStart(
     updatedAt: now,
     recipeResult: start.recipeResult
   }
+
   try {
     upsertEphemeralVmRuntime(args.userDataPath, recovery)
   } catch (error) {
     if (!args.recipe.checkoutMode) {
       throw error
     }
+
     // Why: cleanup retry metadata must survive even when its feature companion is unreadable.
     upsertEphemeralVmRuntimeRollbackRecovery(args.userDataPath, recovery)
   }
+
   return false
 }
 
@@ -73,9 +78,11 @@ async function getCleanupError(
       onStdout: args.onStdout,
       onStderr: args.onStderr
     })
+
     if (cleanup.ok && !cleanup.skipped) {
       return null
     }
+
     return cleanup.ok
       ? 'Destroy is disabled for this recipe.'
       : (cleanup.error ?? 'Destroy failed.')

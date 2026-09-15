@@ -8,7 +8,9 @@ import {
 } from './renderer-owned-agent-status-registry'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const OTHER_PANE = 'tab-2:22222222-2222-4222-8222-222222222222'
+
 const ENV = 'web-env-1'
 
 describe('renderer-owned agent status registry', () => {

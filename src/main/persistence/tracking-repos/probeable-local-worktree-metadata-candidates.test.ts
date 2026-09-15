@@ -42,11 +42,13 @@ function makeMeta(worktreeId: string, overrides: Partial<WorktreeMeta> = {}): Wo
 function makeState(): PersistedState {
   const state = getDefaultPersistedState('/home/test')
   state.repos = [makeRepo()]
+
   return state
 }
 
 function probeableIds(state: PersistedState): string[] {
   const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
+
   return selectProbeableLocalWorktreeMetadataCandidates(state, scan, 'linux').map(
     ({ worktreeId }) => worktreeId
   )
@@ -93,11 +95,13 @@ describe('selectProbeableLocalWorktreeMetadataCandidates', () => {
 
   it('never widens what the authoritative prune would remove', () => {
     const state = makeState()
+
     const ids = [
       `${REPO_ID}::/workspace/free`,
       `${REPO_ID}::/workspace/pinned`,
       `${REPO_ID}::/workspace/remote`
     ]
+
     state.worktreeMeta[ids[0]] = makeMeta(ids[0])
     state.worktreeMeta[ids[1]] = makeMeta(ids[1])
     state.worktreeMeta[ids[2]] = makeMeta(ids[2], { hostId: 'ssh:box' })
@@ -105,6 +109,7 @@ describe('selectProbeableLocalWorktreeMetadataCandidates', () => {
 
     const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
     const selected = selectProbeableLocalWorktreeMetadataCandidates(state, scan, 'linux')
+
     // Feeding the unfiltered capture to the authoritative prune must reach the same verdict.
     const removed = pruneSessionlessMissingLocalWorktreeMetadataForRepo(
       state,

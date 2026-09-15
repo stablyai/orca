@@ -24,12 +24,14 @@ async function fixture(): Promise<{
     join(source, 'SKILL.md'),
     '---\nname: test-skill\ndescription: Test\n---\n\n# Test\n'
   )
+
   const archive = await createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, 'package.tar.gz'),
     packageId: 'package_1',
     versionId: 'version_1'
   })
+
   return {
     root,
     input: {
@@ -227,12 +229,14 @@ describe('skill install service', () => {
       orcaStateDirectory: input.orcaStateDirectory,
       detectedProviders: input.detectedProviders
     })
+
     expect(conflict.conflict?.kind).toBe('modified')
     expect(await readFile(join(canonical, 'local.md'), 'utf8')).toBe('keep canonical')
 
     await rm(claude, { force: true })
     await mkdir(claude)
     await writeFile(join(claude, 'local.md'), 'keep provider')
+
     const removed = await removeSharedSkill({
       operationId: 'remove_2',
       skillName: 'test-skill',
@@ -242,6 +246,7 @@ describe('skill install service', () => {
       detectedProviders: input.detectedProviders,
       conflictResolution: 'replace-and-discard-local'
     })
+
     expect(removed.status).toBe('partial')
     expect(await readFile(join(claude, 'local.md'), 'utf8')).toBe('keep provider')
   })
@@ -252,13 +257,16 @@ describe('skill install service', () => {
     const canonical = join(root, 'home', '.agents', 'skills', 'test-skill')
     const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
     let renameCount = 0
+
     const interruptedFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         renameCount += 1
+
         if (renameCount === 2) {
           throw new Error('injected-removal-interruption')
         }
+
         await nativeSkillInstallFilesystem.rename(source, target)
       }
     }
@@ -284,6 +292,7 @@ describe('skill install service', () => {
       orcaStateDirectory: input.orcaStateDirectory,
       detectedProviders: input.detectedProviders
     })
+
     expect(retried.status).toBe('removed')
   })
 
@@ -291,10 +300,12 @@ describe('skill install service', () => {
     const { root, input } = await fixture()
     const controller = new AbortController()
     const canonical = join(root, 'home', '.agents', 'skills', 'test-skill')
+
     const cancellingFilesystem = {
       ...nativeSkillInstallFilesystem,
       rename: async (source: string, target: string): Promise<void> => {
         await nativeSkillInstallFilesystem.rename(source, target)
+
         if (target === canonical) {
           controller.abort()
         }
@@ -332,6 +343,7 @@ describe('skill install service', () => {
     const canonical = join(root, 'home', '.agents', 'skills', 'test-skill')
     const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
     let deniedCopyObservation = false
+
     const interruptedFilesystem = {
       ...nativeSkillInstallFilesystem,
       createAlias: async () => {
@@ -342,6 +354,7 @@ describe('skill install service', () => {
           deniedCopyObservation = true
           throw new Error('injected-copy-interruption')
         }
+
         return nativeSkillInstallFilesystem.observeSkill(path)
       }
     }

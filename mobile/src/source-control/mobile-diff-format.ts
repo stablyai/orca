@@ -4,9 +4,11 @@ export function mobileDiffLinePrefix(kind: MobileDiffLine['kind']): string {
   if (kind === 'add') {
     return '+'
   }
+
   if (kind === 'delete') {
     return '-'
   }
+
   return ' '
 }
 

@@ -27,7 +27,9 @@ export function legacy7zaRelativePath(platform = process.platform, arch = proces
   if (platform === 'win32') {
     return ['node_modules', '7zip-bin', 'win', arch, '7za.exe']
   }
+
   const dir = platform === 'darwin' ? 'mac' : platform
+
   return ['node_modules', '7zip-bin', dir, arch, '7za']
 }
 
@@ -39,6 +41,7 @@ export function legacy7zaRelativePath(platform = process.platform, arch = proces
 // concurrent callers would each capture the other's patched function as their
 // "original" and the last `finally` would restore a diverting stub permanently.
 let stdoutDivertDepth = 0
+
 let originalStdoutWrite = null
 
 async function withStdoutDivertedToStderr(run) {
@@ -47,11 +50,14 @@ async function withStdoutDivertedToStderr(run) {
     process.stdout.write = (chunk, encoding, callback) =>
       process.stderr.write(chunk, encoding, callback)
   }
+
   stdoutDivertDepth += 1
+
   try {
     return await run()
   } finally {
     stdoutDivertDepth -= 1
+
     if (stdoutDivertDepth === 0) {
       process.stdout.write = originalStdoutWrite
       originalStdoutWrite = null
@@ -61,11 +67,13 @@ async function withStdoutDivertedToStderr(run) {
 
 export async function resolve7zaPath(projectDir = process.cwd()) {
   const override = process.env.ELECTRON_BUILDER_7ZIP_PATH
+
   if (override && isFile(override)) {
     return override
   }
 
   const legacy = resolve(projectDir, ...legacy7zaRelativePath())
+
   if (isFile(legacy)) {
     return legacy
   }
@@ -73,17 +81,21 @@ export async function resolve7zaPath(projectDir = process.cwd()) {
   // app-builder-lib reads the same env var and hard-fails on a stale value, so a
   // dangling override must be cleared rather than passed through to the download.
   const restoreOverride = override !== undefined
+
   if (restoreOverride) {
     delete process.env.ELECTRON_BUILDER_7ZIP_PATH
   }
+
   try {
     // The toolset is cached after the first download, so a release build has
     // already paid this cost by the time the signing gate runs.
     const { getPath7za } = require('app-builder-lib/out/toolsets/7zip.js')
     const toolsetPath = await withStdoutDivertedToStderr(() => getPath7za())
+
     if (!existsSync(toolsetPath)) {
       throw new Error(`app-builder-lib returned a 7za path that does not exist: ${toolsetPath}`)
     }
+
     return toolsetPath
   } finally {
     if (restoreOverride) {

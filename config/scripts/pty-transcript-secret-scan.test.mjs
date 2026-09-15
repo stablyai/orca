@@ -28,6 +28,7 @@ describe('pty transcript secret scan', () => {
         'Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345'
       ].join('\n')
     ).map((finding) => finding.kind)
+
     expect(kinds).toEqual(['jwt', 'google-api-key', 'google-refresh-token', 'bearer-token'])
   })
 
@@ -41,6 +42,7 @@ describe('pty transcript secret scan', () => {
     const findings = scanTranscriptForSecrets(
       'Resume with -c (or command below):\nagy --conversation=26dc1986-9eec-456a-a534-d93e5c1076c2'
     )
+
     expect(findings).toHaveLength(1)
     expect(findings[0].kind).toBe('uuid')
     expect(placeholderFor('uuid', findings[0].match.length)).toMatch(
@@ -112,6 +114,7 @@ describe('capture argv', () => {
       '--model',
       'sonnet'
     ])
+
     expect(options.name).toBe('antigravity-ready-personal-non-gemini')
     expect(options.cols).toBe(120)
     expect(command).toEqual(['agy', '--model', 'sonnet'])

@@ -116,12 +116,14 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/fallback-found-merged'
     const cachedPR = makePR({ number: 12, title: 'Visible open PR', state: 'open' })
+
     const mergedPR = makePR({
       number: 12,
       title: 'Merged PR',
       state: 'merged',
       headSha: 'head-oid'
     })
+
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
 
     store.setState({
@@ -180,6 +182,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/merged-pr-head-match'
     const worktreeId = 'wt-merged-direct-match'
+
     const cachedPR = makePR({
       number: 12,
       title: 'Merged PR still checked out',
@@ -230,6 +233,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/merged-pr-behind-head'
     const worktreeId = 'wt-merged-behind-head'
+
     const cachedPR = makePR({
       number: 13,
       title: 'Merged PR with unpulled final head',
@@ -333,6 +337,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoPath = '/repo'
     const repoId = 'repo-1'
     const branch = 'feature/merged-pr-stale-direct'
+
     const cachedPR = makePR({
       number: 12,
       title: 'Stale merged PR',

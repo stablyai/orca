@@ -18,26 +18,33 @@ export function createSetActiveFolderWorkspace(
   return (folderWorkspaceId, executionHostId) => {
     const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
     const workspace = findKnownWorktreeById(get(), workspaceKey, executionHostId)
+
     if (!workspace) {
       return
     }
+
     if (shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
+
     if (get().activeWorktreeId !== workspaceKey) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
+
     const reconciledActiveTabId =
       get().reconcileWorktreeTabModel(workspaceKey).activeRenderableTabId
+
     set((s) => {
       const { activeFileId, activeBrowserTabId, activeTabType, activeTabId } =
         deriveActiveSurfaceForWorktree(s, workspaceKey, undefined, {
           legacySelection: 'remembered-type',
           preferredTabId: reconciledActiveTabId ?? undefined
         })
+
       const nextEverActivated = s.everActivatedWorktreeIds.has(workspaceKey)
         ? s.everActivatedWorktreeIds
         : new Set([...s.everActivatedWorktreeIds, workspaceKey])
+
       return {
         activeRepoId: null,
         activeWorktreeId: workspaceKey,
@@ -65,6 +72,7 @@ export function createSetActiveFolderWorkspace(
     })
     // Why: cleared after the set() so a waiting pane connects against the activated state.
     clearWorktreeSleepIntent(workspaceKey)
+
     if (workspace.isUnread) {
       void get().updateFolderWorkspace(
         folderWorkspaceId,

@@ -61,10 +61,13 @@ export const DragSelectionGuard = Extension.create({
           if (!viewRef) {
             return true
           }
+
           const mouseDown = viewRef.input.mouseDown
+
           if (mouseDown && mouseDown.allowDefault && tr.selection instanceof CellSelection) {
             return false
           }
+
           return true
         },
 
@@ -84,6 +87,7 @@ export const DragSelectionGuard = Extension.create({
 
           const patchedOnSelectionChange = (): void => {
             const mouseDown = viewRef.input.mouseDown
+
             // Why: allowDefault is false on initial click, then becomes true
             // once the mouse moves ≥ 4 px — i.e. it's a genuine drag, not a
             // click. We only suppress during actual drags so normal
@@ -94,8 +98,10 @@ export const DragSelectionGuard = Extension.create({
               // passes for any direct dispatches that occur during drag.
               observer.setCurSelection()
               suppressedDuringDrag = true
+
               return
             }
+
             originalOnSelectionChange()
           }
 
@@ -110,26 +116,33 @@ export const DragSelectionGuard = Extension.create({
             if (!suppressedDuringDrag) {
               return
             }
+
             suppressedDuringDrag = false
+
             if (mouseUpFrameId !== null) {
               cancelAnimationFrame(mouseUpFrameId)
             }
+
             mouseUpFrameId = requestAnimationFrame(() => {
               mouseUpFrameId = null
+
               // Why: if the plugin was destroyed between mouseup and this
               // rAF callback, viewRef is null — bail out to avoid a
               // TypeError on viewRef.domSelectionRange().
               if (!viewRef || !editorView.dom.isConnected) {
                 return
               }
+
               // Why: if a new drag started between mouseup and this rAF
               // callback (extremely unlikely but possible within a single
               // frame), bail out to avoid disrupting the new drag's
               // native selection.
               const mouseDown = viewRef?.input?.mouseDown
+
               if (mouseDown && mouseDown.allowDefault) {
                 return
               }
+
               // Why: capture the native drag selection BEFORE ProseMirror
               // touches it. Chrome renders drag-created selections differently
               // from programmatically-set ones (table cells stay highlighted
@@ -163,6 +176,7 @@ export const DragSelectionGuard = Extension.create({
                 (savedFocus as Element).isConnected
               ) {
                 const sel = doc.getSelection()
+
                 if (sel) {
                   observer.stop()
                   sel.setBaseAndExtent(savedAnchor, savedAnchorOff, savedFocus, savedFocusOff)
@@ -181,6 +195,7 @@ export const DragSelectionGuard = Extension.create({
                 cancelAnimationFrame(mouseUpFrameId)
                 mouseUpFrameId = null
               }
+
               doc.removeEventListener('mouseup', handleMouseUp)
               doc.removeEventListener('selectionchange', patchedOnSelectionChange)
               observer.onSelectionChange = originalOnSelectionChange

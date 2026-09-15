@@ -114,13 +114,16 @@ export function SourceControlTextGenerationDialog({
           },
     [actionId, discoveryHostKey, repo, settings]
   )
+
   const baseParams = resolved.ok ? resolved.value.params : null
+
   const recipeLabel =
     actionId === 'commitMessage'
       ? 'commit-message recipe'
       : actionId === 'pullRequest'
         ? 'hosted-review recipe'
         : 'branch-name recipe'
+
   const saveTargets: SourceControlTextGenerationSaveTarget[] = repo?.id
     ? [
         {
@@ -150,6 +153,7 @@ export function SourceControlTextGenerationDialog({
           successMessage: `Saved ${recipeLabel} as a global default.`
         }
       ]
+
   const formKey = open
     ? JSON.stringify([
         actionId,

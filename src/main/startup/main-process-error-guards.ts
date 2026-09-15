@@ -30,6 +30,7 @@ function boundedString(value: unknown, maxLength: number, fallback = ''): string
 
 function fatalMainProcessErrorDetails(error: unknown): FatalMainProcessErrorDetails {
   let isError = false
+
   try {
     isError = error instanceof Error
   } catch {
@@ -56,9 +57,13 @@ function fatalMainProcessErrorDetails(error: unknown): FatalMainProcessErrorDeta
 // Why: one broken resource can reject hundreds of concurrent restore chains; each record does a
 // synchronous trace flush, so an uncapped storm stalls main and churns the trace-file rotation.
 const RECORD_WINDOW_MS = 60_000
+
 const RECORD_WINDOW_MAX = 20
+
 let recordWindowStartedAt = 0
+
 let recordWindowCount = 0
+
 let recordsSuppressed = 0
 
 /** Durably record a main-process fatal/near-fatal error before default handling runs. Exported for tests. */
@@ -67,20 +72,26 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
   // must never be lost to a window a storm already exhausted.
   if (kind === 'main_unhandled_rejection') {
     const now = Date.now()
+
     // Why: a backward clock jump (sleep/resume, NTP) would otherwise trap an exhausted window and suppress every breadcrumb until wall time catches up.
     if (now < recordWindowStartedAt || now - recordWindowStartedAt >= RECORD_WINDOW_MS) {
       recordWindowStartedAt = now
       recordWindowCount = 0
     }
+
     if (recordWindowCount >= RECORD_WINDOW_MAX) {
       recordsSuppressed += 1
+
       return
     }
+
     recordWindowCount += 1
   }
+
   const suppressedSinceLast = recordsSuppressed
   recordsSuppressed = 0
   const details = fatalMainProcessErrorDetails(error)
+
   try {
     recordDurableCrashBreadcrumb(
       kind,
@@ -90,6 +101,7 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
   } catch {
     // Why: diagnostics must never turn a fatal-error report into a second fault.
   }
+
   try {
     console.error(
       `[${kind}] ${details.errorStack || `${details.errorName}: ${details.errorMessage}`}`
@@ -102,6 +114,7 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
 export function installUncaughtPipeErrorGuard(): void {
   const onUncaughtException = (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
+
     if (errorCode === 'EIO' || errorCode === 'EPIPE') {
       return
     }

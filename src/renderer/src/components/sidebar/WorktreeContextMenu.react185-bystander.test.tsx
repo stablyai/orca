@@ -65,6 +65,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('./ProjectGroupNameDialog', () => ({ ProjectGroupNameDialog: () => null }))
+
 vi.mock('./WorktreeParentPickerPopover', () => ({ WorktreeParentPickerPopover: () => null }))
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
@@ -74,6 +75,7 @@ afterEach(() => {
     act(() => root.unmount())
     container.remove()
   }
+
   mounted.length = 0
 })
 
@@ -110,10 +112,12 @@ class SidebarBoundary extends React.Component<
 function mount(node: React.ReactNode, capture: Capture): HTMLDivElement {
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   const root = createRoot(container, {
     onUncaughtError: (error) => capture.errors.push(error as Error),
     onCaughtError: () => undefined
   })
+
   mounted.push({ container, root })
   act(() => {
     root.render(
@@ -122,6 +126,7 @@ function mount(node: React.ReactNode, capture: Capture): HTMLDivElement {
       </SidebarBoundary>
     )
   })
+
   return container
 }
 
@@ -141,6 +146,7 @@ function CommitCascadeDriver({
       onTick()
     }
   })
+
   return <div data-testid="driver">{ticks}</div>
 }
 
@@ -148,6 +154,7 @@ describe('WorktreeContextMenu and React #185', () => {
   it('opening the row context menu on its own does not trip the nested-update limit', () => {
     const capture: Capture = { errors: [], componentStacks: [] }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
     const container = mount(
       <WorktreeContextMenu worktree={worktreeFixture()}>
         <div data-testid="card-child">Card</div>
@@ -191,10 +198,12 @@ describe('WorktreeContextMenu and React #185', () => {
           if (ticks !== openAt) {
             return
           }
+
           hostRef.current
             ?.querySelector('[data-worktree-context-menu-scope]')
             ?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
         }, [ticks])
+
         return (
           <>
             <div ref={hostRef}>
@@ -212,9 +221,11 @@ describe('WorktreeContextMenu and React #185', () => {
       const depthErrors = capture.errors.filter((error) =>
         error.message.includes('Maximum update depth exceeded')
       )
+
       expect(depthErrors.length).toBeGreaterThan(0)
       blamedFrames.push(capture.componentStacks[0]?.split('\n')[1]?.trim() ?? '')
     }
+
     consoleError.mockRestore()
 
     // Carried as the assertion message so a React/Radix version bump reports the

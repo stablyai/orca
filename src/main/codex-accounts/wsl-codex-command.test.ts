@@ -35,11 +35,13 @@ describe('WSL Codex commands', () => {
       '/home/alice/managed-home',
       CODEX_READ_ONLY_APP_SERVER_ARGS
     ).at(-1)
+
     const defaultCommand = buildWslCodexAppServerArgs('Ubuntu', '/home/alice/managed-home').at(-1)
 
     for (const arg of CODEX_READ_ONLY_APP_SERVER_ARGS) {
       expect(readOnlyCommand).toContain(arg)
     }
+
     expect(defaultCommand).toContain('app-server')
     expect(defaultCommand).not.toContain('approval_policy=never')
   })

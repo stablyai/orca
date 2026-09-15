@@ -105,6 +105,7 @@ describe('codex session backfill scan dates', () => {
 describe('bounded backfill range construction', () => {
   it('does not allocate rejected dates for a decades-old pending marker', () => {
     const advance = vi.spyOn(Date.prototype, 'setUTCDate')
+
     try {
       expect(
         expandCodexSessionBackfillDatesThroughToday(

@@ -15,7 +15,9 @@ export type ActivityTerminalPortalTarget = {
 }
 
 let currentTargets: ActivityTerminalPortalTarget[] = []
+
 const emptyTargets: ActivityTerminalPortalTarget[] = []
+
 const subscribers = new Set<() => void>()
 
 type ActivityTerminalPortalFieldEquals = (
@@ -46,6 +48,7 @@ function haveSameActivityTerminalPortals(
     left.length === right.length &&
     left.every((target, index) => {
       const candidate = right[index]
+
       return (
         candidate !== undefined &&
         ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS.every((isEqual) => isEqual(target, candidate))
@@ -66,7 +69,9 @@ export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget
   if (currentTargets === targets || haveSameActivityTerminalPortals(currentTargets, targets)) {
     return
   }
+
   currentTargets = targets
+
   for (const subscriber of subscribers) {
     subscriber()
   }
@@ -74,6 +79,7 @@ export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget
 
 function subscribeActivityTerminalPortals(onStoreChange: () => void): () => void {
   subscribers.add(onStoreChange)
+
   return () => {
     subscribers.delete(onStoreChange)
   }
@@ -106,6 +112,7 @@ export function findActivityTerminalPortal(
   const matchingTab = targets.filter(
     (target) => target.worktreeId === query.worktreeId && target.tabId === query.tabId
   )
+
   if (
     query.slotId !== undefined ||
     query.paneKey !== undefined ||
@@ -117,10 +124,12 @@ export function findActivityTerminalPortal(
         (query.paneKey === undefined || target.paneKey === query.paneKey) &&
         (query.requestToken === undefined || target.requestToken === query.requestToken)
     )
+
     if (exact) {
       return exact
     }
   }
+
   return (
     matchingTab.find((target) => target.active) ??
     (matchingTab.length === 1 ? matchingTab[0] : null) ??

@@ -72,6 +72,7 @@ export function useHostHeaderDrag({
     previewOffsetX: number
     previewOffsetY: number
   } | null>(null)
+
   const deferredComputeFrameRef = useRef<number | null>(null)
 
   const clearDeferredComputeFrame = useCallback(() => {
@@ -85,31 +86,40 @@ export function useHostHeaderDrag({
     (pointerY: number): { dropIndex: number; dropIndicatorY: number } | null => {
       const session = dragSessionRef.current
       const container = getContainerRef.current()
+
       if (!session || !container) {
         return null
       }
+
       // Why: dragging host headers temporarily collapses their sections, so
       // live rects are the source of truth after the first promoted move.
       const rects = readHostHeaderRects(container)
+
       if (rects.length === 0 || rects.length < orderedIdsRef.current.length) {
         return null
       }
+
       session.headerRects = rects
       const containerRect = container.getBoundingClientRect()
       const localY = pointerY - containerRect.top + container.scrollTop
       let insertBefore = rects.length
+
       for (let i = 0; i < rects.length; i++) {
         const mid = (rects[i].top + rects[i].bottom) / 2
+
         if (localY < mid) {
           insertBefore = i
           break
         }
       }
+
       const INDICATOR_GAP_PX = 4
+
       const rawIndicatorY =
         insertBefore >= rects.length
           ? rects.at(-1)!.bottom + INDICATOR_GAP_PX
           : Math.max(0, rects[insertBefore].top - INDICATOR_GAP_PX)
+
       return {
         dropIndex: insertBefore,
         dropIndicatorY: Math.max(container.scrollTop, rawIndicatorY)
@@ -122,6 +132,7 @@ export function useHostHeaderDrag({
     if (!drop) {
       return
     }
+
     latestDropIndexRef.current = drop.dropIndex
     setState((prev) =>
       prev.dropIndex === drop.dropIndex && prev.dropIndicatorY === drop.dropIndicatorY
@@ -144,45 +155,59 @@ export function useHostHeaderDrag({
   const endDrag = useCallback(
     (commit: boolean, pointerY?: number) => {
       const session = dragSessionRef.current
+
       if (!session) {
         clearDeferredComputeFrame()
         setState(INITIAL_STATE)
         setSessionArmed(false)
+
         return
       }
+
       clearDeferredComputeFrame()
+
       try {
         session.handleEl.releasePointerCapture(session.pointerId)
       } catch {
         // Pointer capture may already be gone if the element unmounted.
       }
+
       session.preview?.remove()
       setSidebarPointerDragDocumentStyles(false)
+
       if (session.promoted) {
         swallowNextClickOnDragHandle(session.handleEl)
       }
+
       const finalIndex =
         commit && session.promoted
           ? (latestDropIndexRef.current ??
             (pointerY === undefined ? null : (computeDrop(pointerY)?.dropIndex ?? null)))
           : null
+
       dragSessionRef.current = null
       setState(INITIAL_STATE)
       setSessionArmed(false)
+
       if (finalIndex === null) {
         return
       }
+
       const ids = orderedIdsRef.current
       const fromIndex = ids.indexOf(session.hostId)
+
       if (fromIndex === -1) {
         return
       }
+
       const next = ids.slice()
       next.splice(fromIndex, 1)
       const insertAt = finalIndex > fromIndex ? finalIndex - 1 : finalIndex
+
       if (insertAt === fromIndex) {
         return
       }
+
       next.splice(insertAt, 0, session.hostId)
       onCommitRef.current(next)
     },
@@ -193,34 +218,44 @@ export function useHostHeaderDrag({
     if (!sessionArmed) {
       return
     }
+
     const onPointerMove = (e: PointerEvent): void => {
       const session = dragSessionRef.current
+
       if (!session || e.pointerId !== session.pointerId) {
         return
       }
+
       if (hasPointerBeenReleased(e)) {
         endDrag(false)
+
         return
       }
+
       if (!session.promoted) {
         const dx = e.clientX - session.startX
         const dy = e.clientY - session.startY
+
         if (dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
           return
         }
+
         session.promoted = true
+
         const { preview, offsetX, offsetY } = createSidebarDragPreview({
           sourceRow: session.handleEl,
           pointerX: e.clientX,
           pointerY: e.clientY,
           draggedCount: 1
         })
+
         session.preview = preview
         session.previewOffsetX = offsetX
         session.previewOffsetY = offsetY
         setSidebarPointerDragDocumentStyles(true)
         setState({ draggingHostId: session.hostId, dropIndex: null, dropIndicatorY: null })
       }
+
       if (session.preview) {
         updateSidebarDragPreviewPosition({
           preview: session.preview,
@@ -230,30 +265,40 @@ export function useHostHeaderDrag({
           offsetY: session.previewOffsetY
         })
       }
+
       const drop = computeDrop(e.clientY)
+
       if (!drop) {
         scheduleDeferredDropCompute(e.clientY)
+
         return
       }
+
       applyDrop(drop)
     }
+
     const onPointerUp = (e: PointerEvent): void => {
       const session = dragSessionRef.current
+
       if (session && e.pointerId === session.pointerId) {
         endDrag(true, e.clientY)
       }
     }
+
     const onPointerCancel = (e: PointerEvent): void => {
       const session = dragSessionRef.current
+
       if (session && e.pointerId === session.pointerId) {
         endDrag(false)
       }
     }
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         endDrag(false)
       }
     }
+
     const onBlur = (): void => endDrag(false)
 
     window.addEventListener('pointermove', onPointerMove)
@@ -261,6 +306,7 @@ export function useHostHeaderDrag({
     window.addEventListener('pointercancel', onPointerCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('blur', onBlur)
+
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
@@ -275,10 +321,13 @@ export function useHostHeaderDrag({
       if (event.button !== 0 || isHostHeaderActionTarget(event.target, event.currentTarget)) {
         return
       }
+
       const container = getContainerRef.current()
+
       if (!container || orderedIdsRef.current.length <= 1) {
         return
       }
+
       const headerRects = readHostHeaderRects(container)
       dragSessionRef.current = {
         hostId,

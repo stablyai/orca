@@ -20,6 +20,7 @@ test.use({
 async function hasPtySession(page: Page, ptyId: string): Promise<boolean> {
   return page.evaluate(async (id) => {
     const sessions = await window.api.pty.listSessions()
+
     return sessions.some((session) => session.id === id)
   }, ptyId)
 }
@@ -27,13 +28,16 @@ async function hasPtySession(page: Page, ptyId: string): Promise<boolean> {
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<void> {
   const tabId = await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
 
@@ -50,6 +54,7 @@ test('closing a parked terminal tab retires its exact PTY session', async ({ orc
   const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
   const tabId = snapshot.tabId
   const ptyId = snapshot.panes[0]?.ptyId
+
   if (!ptyId) {
     throw new Error('active terminal pane did not bind a PTY')
   }
@@ -80,9 +85,11 @@ test('closing a parked terminal tab retires its exact PTY session', async ({ orc
 
   await orcaPage.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is unavailable')
     }
+
     store.getState().closeTab(id)
   }, tabId)
 

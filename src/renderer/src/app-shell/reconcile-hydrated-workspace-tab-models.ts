@@ -8,8 +8,10 @@ export function reconcileHydratedWorkspaceTabModels(
   reconcileWorktreeTabModels: (worktreeIds: readonly string[]) => void
 ): string[] {
   const reconciled = Object.keys(session.tabsByWorktree)
+
   if (reconciled.length > 0) {
     reconcileWorktreeTabModels(reconciled)
   }
+
   return reconciled
 }

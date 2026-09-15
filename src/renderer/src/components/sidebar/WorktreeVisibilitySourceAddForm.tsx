@@ -25,13 +25,17 @@ export function WorktreeVisibilitySourceAddForm({
     event.preventDefault()
     setInputError(null)
     const result = await onAdd(rootPath)
+
     if (result === 'added') {
       setRootPath('')
+
       return
     }
+
     if (result === 'save-failed') {
       return
     }
+
     setInputError(
       result === 'limit'
         ? translate(

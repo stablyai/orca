@@ -24,6 +24,7 @@ type Props = {
 // parse error, so it can never crash the comment list.
 export function CommentMarkdown({ content, variant = 'comment' }: Props) {
   const base = variant === 'document' ? typography.bodySize : 13
+
   const blocks = useMemo<MarkdownBlock[] | null>(() => {
     try {
       return parseMarkdownBlocks(content)
@@ -58,6 +59,7 @@ function DetailsBlock({
 }) {
   const [open, setOpen] = useState(false)
   const Chevron = open ? ChevronDown : ChevronRight
+
   return (
     <View style={styles.details}>
       <Pressable
@@ -94,6 +96,7 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
       if (block.lang === 'mermaid') {
         return <MermaidDiagram source={block.text} base={base} />
       }
+
       return (
         <View style={styles.codeBlock}>
           <Text style={[styles.codeText, { fontSize: base - 1 }]}>{block.text}</Text>
@@ -145,6 +148,7 @@ function openMarkdownLink(url: string): void {
   if (!isAllowedMarkdownLinkUrl(url)) {
     return
   }
+
   void Linking.openURL(url).catch(() => {})
 }
 
@@ -152,9 +156,11 @@ function alignToFlex(align: CellAlign | undefined): 'flex-start' | 'center' | 'f
   if (align === 'center') {
     return 'center'
   }
+
   if (align === 'right') {
     return 'flex-end'
   }
+
   return 'flex-start'
 }
 
@@ -169,6 +175,7 @@ function TableBlock({
 }) {
   const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
   const columns = Array.from({ length: columnCount }, (_, c) => c)
+
   return (
     <ScrollView
       horizontal
@@ -210,6 +217,7 @@ function Inline({ text, base }: { text: string; base: number }) {
       return [{ kind: 'text', text }]
     }
   }, [text])
+
   return (
     <>
       {tokens.map((token, i) => {
@@ -220,6 +228,7 @@ function Inline({ text, base }: { text: string; base: number }) {
             </Text>
           )
         }
+
         if (token.kind === 'italic') {
           return (
             <Text key={i} style={styles.italic}>
@@ -227,6 +236,7 @@ function Inline({ text, base }: { text: string; base: number }) {
             </Text>
           )
         }
+
         if (token.kind === 'code') {
           return (
             <Text key={i} style={[styles.codeInline, { fontSize: base - 1 }]}>
@@ -234,6 +244,7 @@ function Inline({ text, base }: { text: string; base: number }) {
             </Text>
           )
         }
+
         if (token.kind === 'link') {
           return (
             <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
@@ -241,6 +252,7 @@ function Inline({ text, base }: { text: string; base: number }) {
             </Text>
           )
         }
+
         return <Text key={i}>{token.text}</Text>
       })}
     </>

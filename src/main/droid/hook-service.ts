@@ -141,7 +141,9 @@ function buildInstalledDroidConfig(
     if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -152,10 +154,12 @@ function buildInstalledDroidConfig(
   for (const event of DROID_EVENTS) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       ...event.definition,
       hooks: [buildManagedCommandHook(command)]
     }
+
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
@@ -171,6 +175,7 @@ export class DroidHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'droid',
@@ -184,22 +189,27 @@ export class DroidHookService {
     const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
+
     for (const event of DROID_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
+
       const hasCommand = definitions.some((definition) =>
         (definition.hooks ?? []).some((hook) => hook.command === command)
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
         missing.push(event.eventName)
       }
     }
+
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     // Why: surface hooksDisabled across every branch — without this, a
     // disabled-AND-partially-installed (or disabled-AND-not-installed) state
     // would silently swallow the disabled flag and the user would think a
@@ -227,6 +237,7 @@ export class DroidHookService {
           ? `Droid hooks are disabled in Factory settings; managed hook missing for events: ${missing.join(', ')}`
           : `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: 'droid', state, configPath, managedHooksPresent, detail }
   }
 
@@ -234,6 +245,7 @@ export class DroidHookService {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'droid',
@@ -247,6 +259,7 @@ export class DroidHookService {
     buildInstalledDroidConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 
@@ -259,8 +272,10 @@ export class DroidHookService {
     const home = remoteHome.replace(/\/$/, '')
     const remoteConfigPath = `${home}/.factory/settings.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
+
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
       if (!config) {
         return {
           agent: 'droid',
@@ -298,6 +313,7 @@ export class DroidHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'droid',
@@ -310,11 +326,14 @@ export class DroidHookService {
 
     const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -324,6 +343,7 @@ export class DroidHookService {
 
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
+
     return this.getStatus()
   }
 }

@@ -8,9 +8,11 @@ import {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
+
   const promise = new Promise<void>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -45,9 +47,11 @@ describe('createGitStatusRefreshScheduler', () => {
   it('refreshes immediately on resume and uses one 60-second safety timeout', async () => {
     vi.useFakeTimers()
     const reasons: GitStatusRefreshReason[] = []
+
     const task = vi.fn(async ({ reason }: { reason: GitStatusRefreshReason }) => {
       reasons.push(reason)
     })
+
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
@@ -91,15 +95,18 @@ describe('createGitStatusRefreshScheduler', () => {
     const calls: ReturnType<typeof deferred>[] = []
     let active = 0
     let maxActive = 0
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
       active += 1
       maxActive = Math.max(maxActive, active)
+
       return call.promise.finally(() => {
         active -= 1
       })
     })
+
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
@@ -125,11 +132,14 @@ describe('createGitStatusRefreshScheduler', () => {
   it('spaces sustained signal bursts by the activity floor instead of running back-to-back', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
@@ -155,11 +165,14 @@ describe('createGitStatusRefreshScheduler', () => {
   it('stretches activity and safety pacing after a slow scan', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
@@ -190,12 +203,15 @@ describe('createGitStatusRefreshScheduler', () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
     const signals: AbortSignal[] = []
+
     const task = vi.fn(({ signal }: { signal: AbortSignal }) => {
       const call = deferred()
       calls.push(call)
       signals.push(signal)
+
       return call.promise
     })
+
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
@@ -218,11 +234,14 @@ describe('createGitStatusRefreshScheduler', () => {
   it('does not stretch catch-up pacing with an aborted slow scan duration', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const scheduler = createScheduler(task)
 
     scheduler.resumeSafety()
@@ -288,11 +307,14 @@ describe('createGitStatusRefreshScheduler', () => {
   it('keeps slow-scan backoff across scheduler recreation when pacing is shared', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const pacing = createGitStatusRefreshPacing()
 
     const first = createScheduler(task, pacing)
@@ -315,11 +337,14 @@ describe('createGitStatusRefreshScheduler', () => {
   it('does not let an older disposed run erase replacement backoff', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const pacing = createGitStatusRefreshPacing()
 
     const first = createScheduler(task, pacing)
@@ -346,11 +371,14 @@ describe('createGitStatusRefreshScheduler', () => {
   it('lets an aborted old run pace repeated rebuilds until a replacement finishes', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const pacing = createGitStatusRefreshPacing()
 
     const first = createScheduler(task, pacing)

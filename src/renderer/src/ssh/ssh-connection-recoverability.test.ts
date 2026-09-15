@@ -67,6 +67,7 @@ describe('the two predicates together', () => {
     const unclassified = ALL_STATUSES.filter(
       (status) => !isConnectingSshStatus(status) && !canConnectSshStatus(status)
     )
+
     expect(unclassified).toEqual(['connected'])
   })
 })

@@ -30,12 +30,15 @@ const SESSION = 'claude-session'
 
 function harness() {
   const appended: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => appended.push({ identity, body }),
     appendTombstone: () => {},
     publish: vi.fn()
   }
+
   const translator = createClaudeJournalTranslator({ sink, fallbackIdPrefix: 'test' })
+
   // The reducer keys items by identity and orders them by first append, so the
   // render list the projector reads is the deduplicated append order.
   const items = (): AgentJournalRenderItem[] => {
@@ -51,8 +54,10 @@ function harness() {
         observedAt: index
       })
     })
+
     return [...byKey.values()].sort((a, b) => a.sequence - b.sequence)
   }
+
   return { translator, items, appended }
 }
 
@@ -145,6 +150,7 @@ function projected(items: readonly AgentJournalRenderItem[]): string {
   // No submission is outstanding: the send was acknowledged long ago, which is
   // exactly the state in which the reported session fell back to idle.
   expect(hasUnansweredStructuredAgentSessionDispatch([], null)).toBe(false)
+
   return projectStructuredAgentSessionStatus(items, [], null)
 }
 
@@ -184,8 +190,10 @@ describe('a Claude turn the provider resumed on its own', () => {
 
     const turns = items().flatMap((item) => {
       const turn = readAgentJournalTurn(item.body)
+
       return turn ? [turn] : []
     })
+
     expect(turns.map((turn) => turn.state)).toEqual(['completed', 'running'])
     expect(turns[1]?.turnId).toBe('a1')
     expect(turns[1]?.userItemId).toBe('legacy:claude:claude-session:turn-lifecycle%3Aa1')
@@ -199,13 +207,17 @@ describe('a Claude turn the provider resumed on its own', () => {
     translator.handle(result('r2', null, 9_000))
 
     const translatedItems = items()
+
     const originalTurn = translatedItems
       .map((item) => readAgentJournalTurn(item.body))
       .find((turn) => turn?.turnId === 'u1')
+
     expect(originalTurn?.userItemId).toBeDefined()
+
     if (!originalTurn?.userItemId) {
       throw new Error('expected the original turn to name its user row')
     }
+
     const userItem: AgentJournalRenderItem = {
       itemId: originalTurn.userItemId,
       revision: 1,
@@ -213,6 +225,7 @@ describe('a Claude turn the provider resumed on its own', () => {
       observedAt: 0,
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'go' }] }
     }
+
     const currentItems = [userItem, ...translatedItems]
     expect(selectStructuredAgentSettledTurns(currentItems).get(userItem.itemId)).toMatchObject({
       workedSeconds: 1
@@ -220,10 +233,12 @@ describe('a Claude turn the provider resumed on its own', () => {
 
     const legacyItems = currentItems.map((item) => {
       const turn = readAgentJournalTurn(item.body)
+
       return item.body.kind === 'turn' && turn
         ? { ...item, body: legacyAgentJournalTurnStatusBody(turn, item.itemId) }
         : item
     })
+
     expect(selectStructuredAgentSettledTurns(legacyItems).get(userItem.itemId)).toMatchObject({
       workedSeconds: 1
     })

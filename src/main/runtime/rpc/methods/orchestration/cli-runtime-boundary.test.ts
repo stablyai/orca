@@ -34,6 +34,7 @@ describe('orchestration CLI/runtime boundary', () => {
   async function callRpc(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
+
     return method.handler(parsed, ctx)
   }
 
@@ -48,6 +49,7 @@ describe('orchestration CLI/runtime boundary', () => {
             result: { identity: { handle: objectParams(params).terminal, live: true } } as T
           }
         }
+
         return { result: (await callRpc(method, objectParams(params))) as T }
       }
     }
@@ -94,9 +96,11 @@ describe('orchestration CLI/runtime boundary', () => {
   /** Looks up real DB-created tasks by unique fixture spec after the CLI allocates their IDs. */
   function taskBySpec(spec: string) {
     const task = db.listTasks().find((candidate) => candidate.spec === spec)
+
     if (!task) {
       throw new Error(`Expected task with spec: ${spec}`)
     }
+
     return task
   }
 })
@@ -105,9 +109,11 @@ describe('orchestration CLI/runtime boundary', () => {
 async function loadOrchestrationHandlers(): Promise<Record<string, CliHandler>> {
   vi.doMock('../../../../../cli/format', () => ({ printResult: vi.fn() }))
   const cliModulePath = '../../../../../cli/handlers/orchestration'
+
   const module = (await import(cliModulePath)) as {
     ORCHESTRATION_HANDLERS: Record<string, CliHandler>
   }
+
   return module.ORCHESTRATION_HANDLERS
 }
 

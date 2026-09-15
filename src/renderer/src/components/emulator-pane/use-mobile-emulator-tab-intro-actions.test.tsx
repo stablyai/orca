@@ -17,11 +17,14 @@ vi.mock('sonner', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let latestActions: ReturnType<typeof useMobileEmulatorTabIntroActions> | null = null
 
 function Probe(): null {
   latestActions = useMobileEmulatorTabIntroActions()
+
   return null
 }
 
@@ -58,6 +61,7 @@ function configureStoreForHideAction(overrides: {
       wasLastTab: false,
       worktreeId: 'worktree-1'
     }))
+
   const dismissMobileEmulatorTabIntro = overrides.dismissMobileEmulatorTabIntro ?? vi.fn()
   const openSettingsPage = vi.fn()
   const openSettingsTarget = vi.fn()
@@ -91,6 +95,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -106,6 +111,7 @@ describe('useMobileEmulatorTabIntroActions', () => {
         settings: { mobileEmulatorEnabled: false } as AppState['settings']
       })
     })
+
     const { closeUnifiedTab, dismissMobileEmulatorTabIntro } = configureStoreForHideAction({
       updateSettings
     })
@@ -128,6 +134,7 @@ describe('useMobileEmulatorTabIntroActions', () => {
 
   it('does not dismiss or close tabs when the setting write does not stick', async () => {
     const updateSettings = vi.fn<AppState['updateSettings']>(async () => {})
+
     const { closeUnifiedTab, dismissMobileEmulatorTabIntro } = configureStoreForHideAction({
       updateSettings
     })

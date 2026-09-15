@@ -28,12 +28,15 @@ function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.
   if (args.projectRuntime?.status === 'repair-required') {
     return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
   }
+
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
   }
+
   if (args.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
     return 'linux'
   }
+
   return CLIENT_PLATFORM
 }
 
@@ -47,6 +50,7 @@ export function resolveAgentResumeLaunchTarget(
   args: AgentResumeLaunchTargetArgs
 ): AgentResumeLaunchTarget {
   const platform = resolveResumeLaunchPlatform(args)
+
   return {
     platform,
     shell: resolveLocalWindowsAgentStartupShell({

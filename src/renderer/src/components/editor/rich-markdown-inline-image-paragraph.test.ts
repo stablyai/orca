@@ -12,6 +12,7 @@ const CRASH_SOURCE =
 
 function createRichMarkdownEditorFromSource(source: string): Editor {
   const codec = createRichMarkdownEditorCodec()
+
   return new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({
@@ -83,9 +84,11 @@ describe('rich markdown inline images inside a paragraph', () => {
 
     try {
       const paragraph = editor.state.doc.child(0)
+
       const imageIndex = [...Array(paragraph.childCount).keys()].find(
         (index) => paragraph.child(index).type.name === 'image'
       )
+
       expect(imageIndex).toBeDefined()
       expect(paragraph.child(imageIndex!).type.isInline).toBe(true)
     } finally {

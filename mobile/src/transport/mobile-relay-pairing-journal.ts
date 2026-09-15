@@ -53,9 +53,11 @@ export const MobileRelayPairingJournalSecretsSchema = z
 export type MobileRelayPairingJournalMetadata = z.infer<
   typeof MobileRelayPairingJournalMetadataSchema
 >
+
 export type MobileRelayPairingJournalSecrets = z.infer<
   typeof MobileRelayPairingJournalSecretsSchema
 >
+
 export type MobileRelayPairingJournal = {
   metadata: MobileRelayPairingJournalMetadata
   secrets: MobileRelayPairingJournalSecrets
@@ -74,6 +76,7 @@ export function createMobileRelayPairingJournal(args: {
   const installReqId = `install-${encodeBase64Url(randomBytes(16))}`
   const resumeConfirmReqId = `confirm-${encodeBase64Url(randomBytes(16))}`
   const { inviteToken, ...relayMetadata } = args.offer.relay
+
   return {
     metadata: MobileRelayPairingJournalMetadataSchema.parse({
       v: 1,
@@ -104,8 +107,10 @@ export function createMobileRelayPairingJournal(args: {
 function encodeBase64Url(value: Uint8Array | string): string {
   const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value
   let binary = ''
+
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

@@ -19,6 +19,7 @@ import { matchesSettingsSearch } from './settings-search'
 import { TooltipProvider } from '../ui/tooltip'
 
 let container: HTMLDivElement
+
 let root: Root
 
 const repo: Repo = {

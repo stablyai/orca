@@ -16,6 +16,7 @@ export function findTransferableWorkerTerminalResource(
   if (!params.paneKey || !params.processIncarnation) {
     return undefined
   }
+
   const candidates = this.db
     .prepare(
       `SELECT * FROM worker_terminal_resources
@@ -23,6 +24,7 @@ export function findTransferableWorkerTerminalResource(
           AND ownership_state != 'released'`
     )
     .all(params.processIncarnation, params.hostScope) as WorkerTerminalResourceRow[]
+
   const exact = candidates.filter(
     (candidate) =>
       candidate.pane_key &&
@@ -31,6 +33,7 @@ export function findTransferableWorkerTerminalResource(
       candidate.process_incarnation === params.processIncarnation &&
       candidate.host_scope === params.hostScope
   )
+
   if (
     exact.some((candidate) =>
       ['requested', 'releasing', 'unknown'].includes(candidate.release_state)
@@ -41,6 +44,7 @@ export function findTransferableWorkerTerminalResource(
       `Terminal ${params.terminalHandle} has a release in progress; wait for cleanup or use another terminal.`
     )
   }
+
   return exact.find(
     (candidate) =>
       candidate.ownership_state === 'owned' &&
@@ -58,9 +62,11 @@ export function workerTerminalResourceHasIdentityConflict(
   resourceId: string
 ): boolean {
   const resource = this.getWorkerTerminalResource(resourceId)
+
   if (!resource?.pane_key || !resource.process_incarnation) {
     return true
   }
+
   const candidates = this.db
     .prepare(
       `SELECT * FROM worker_terminal_resources
@@ -72,6 +78,7 @@ export function workerTerminalResourceHasIdentityConflict(
       resource.host_scope,
       resource.id
     ) as WorkerTerminalResourceRow[]
+
   return candidates.some(
     (candidate) =>
       candidate.pane_key &&

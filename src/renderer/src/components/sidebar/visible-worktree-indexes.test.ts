@@ -10,12 +10,14 @@ const counters = vi.hoisted(() => ({ cycleDetections: 0 }))
 
 vi.mock('../../../../shared/resolved-worktree-lineage', async (importOriginal) => {
   const actual = await importOriginal<typeof ResolvedWorktreeLineage>()
+
   return {
     ...actual,
     getCyclicWorktreeLineageChildIds: (
       ...args: Parameters<typeof actual.getCyclicWorktreeLineageChildIds>
     ) => {
       counters.cycleDetections += 1
+
       return actual.getCyclicWorktreeLineageChildIds(...args)
     }
   }
@@ -113,6 +115,7 @@ describe('visible worktree indexes', () => {
     const worktreeLineageById = { [child.id]: makeLineage(child, parent) }
 
     counters.cycleDetections = 0
+
     // Each call stands for one store write that re-fires the sidebar memo
     // (PTY spawn/exit, tab open/close, agent status transition) without
     // changing `worktreesByRepo`.
@@ -151,6 +154,7 @@ describe('visible worktree indexes', () => {
     const worktreesByRepo = { repo1: [parent, child] }
     const sortedIds = [child.id, parent.id]
     const worktreeLineageById = { [child.id]: makeLineage(child, parent) }
+
     const opts = visibleOptions({
       showSleepingWorkspaces: false,
       tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
@@ -172,6 +176,7 @@ describe('visible worktree indexes', () => {
       hostId: LOCAL_EXECUTION_HOST_ID,
       path: '/tmp/local'
     }
+
     const remote: Worktree = { ...makeWorktree('shared'), hostId: 'ssh:box', path: '/tmp/remote' }
     const worktreesByRepo = { repo1: [local, remote] }
 

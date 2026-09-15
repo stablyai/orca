@@ -268,17 +268,22 @@ describe('identity observation rebind audit', () => {
     const files = await glob(['src/**/*.{ts,tsx}', 'mobile/src/**/*.{ts,tsx}'], {
       ignore: ['**/*.test.*', '**/*.spec.*']
     })
+
     const actual: [string, number][] = []
+
     for (const path of files.sort()) {
       if (isTestFile(path)) {
         continue
       }
+
       const source = stripComments(readFileSync(join(process.cwd(), path), 'utf8'))
       const occurrences = source.match(IDENTITY_SEQUENCER_REBIND_RE)?.length ?? 0
+
       if (occurrences > 0) {
         actual.push([path, occurrences])
       }
     }
+
     expect(actual).toEqual(EXPECTED_REBIND_SITES.map((site) => [...site]))
   }, 30_000)
 })

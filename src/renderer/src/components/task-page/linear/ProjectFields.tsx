@@ -5,6 +5,7 @@ import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page-localized-options'
 import { ChevronDown, Check, UserRound, LoaderCircle, Users, Tag, Clock3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
 export function TaskPageLinearProjectFields({
   model
 }: {
@@ -35,6 +36,7 @@ export function TaskPageLinearProjectFields({
     newLinearProjectLabels,
     handleCreateNewLinearProject
   } = model
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5 scrollbar-sleek">
       <input
@@ -211,6 +213,7 @@ export function TaskPageLinearProjectFields({
               <div className="max-h-64 overflow-y-auto scrollbar-sleek">
                 {newLinearProjectMembers.data.map((member) => {
                   const selected = newLinearProjectMemberIds.includes(member.id)
+
                   return (
                     <button
                       key={member.id}
@@ -284,6 +287,7 @@ export function TaskPageLinearProjectFields({
                 ) : (
                   newLinearProjectLabels.data.map((label) => {
                     const selected = newLinearProjectLabelIds.includes(label.id)
+
                     return (
                       <button
                         key={label.id}

@@ -7,16 +7,21 @@ export function attachRemoteControlDiagnostics<TResult extends object>(
   environmentId: string
 ): RuntimeRpcResponse<TResult> {
   const remoteControl = getRemoteRuntimeSharedControlDiagnostics(environmentId)
+
   if (!remoteControl) {
     return response
   }
+
   if (response.ok) {
     const capabilities = (response.result as { capabilities?: readonly string[] }).capabilities
+
     if (!capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY)) {
       return response
     }
+
     return { ...response, result: { ...(response.result as object), remoteControl } as TResult }
   }
+
   return {
     ...response,
     error: {

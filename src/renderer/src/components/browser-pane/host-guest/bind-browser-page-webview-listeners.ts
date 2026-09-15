@@ -152,6 +152,7 @@ export function bindBrowserPageWebviewListeners({
   webview.addEventListener('did-start-navigation', handleDidStartNavigation)
   webview.addEventListener('did-redirect-navigation', handleDidRedirectNavigation)
   webview.addEventListener('did-stop-loading', handleDidStopLoading)
+
   // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
   const handleFindCloseOnNavigate = (): void => {
     setFindOpen(false)
@@ -169,6 +170,7 @@ export function bindBrowserPageWebviewListeners({
     // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
     const initialUrl =
       normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+
     trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.src = initialUrl
@@ -201,9 +203,11 @@ export function bindBrowserPageWebviewListeners({
     container.removeEventListener('drop', onContainerDrop)
     unsubscribeSystemResumed()
     guestRecovery.dispose()
+
     if (validateVisibleGuestRegistrationRef.current === guestRecovery.validateAfterResume) {
       validateVisibleGuestRegistrationRef.current = () => {}
     }
+
     if (retryGuestRecoveryRef.current === guestRecovery.retryRecovery) {
       retryGuestRecoveryRef.current = () => {}
     }

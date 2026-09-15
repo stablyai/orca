@@ -17,6 +17,7 @@ export async function askRemoteRunHome(args: {
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
+
   if (
     !db.verifyRemoteAttachmentAuthority({
       dispatchId: args.dispatchId,
@@ -30,14 +31,18 @@ export async function askRemoteRunHome(args: {
       'The remote Dispatch capability or exact worker process is invalid.'
     )
   }
+
   const options =
     args.params.options
       ?.split(',')
       .map((option) => option.trim())
       .filter(Boolean) ?? []
+
   let questionId = args.params.resume
+
   if (questionId) {
     const existing = db.getRemoteQuestion(questionId)
+
     if (!existing || existing.dispatch_id !== args.dispatchId) {
       throw new OrchestrationError(
         'question_not_found',
@@ -65,8 +70,10 @@ export async function askRemoteRunHome(args: {
       }),
       remoteQuestion: true
     })
+
     questionId = relay.message_id
   }
+
   args.recordMutationReceipt?.({
     accepted: true,
     answer: null,
@@ -78,14 +85,17 @@ export async function askRemoteRunHome(args: {
     timeoutMs
   })
   const deadline = Date.now() + timeoutMs
+
   while (true) {
     const question = db.getRemoteQuestion(questionId)
+
     if (!question || question.status === 'closed') {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Question ${questionId} closed because its remote Dispatch is inactive.`
       )
     }
+
     if (question.status === 'answered') {
       return {
         answer: question.answer_body,
@@ -98,6 +108,7 @@ export async function askRemoteRunHome(args: {
         timeoutMs
       }
     }
+
     if (args.signal?.aborted) {
       return {
         answer: null,
@@ -109,7 +120,9 @@ export async function askRemoteRunHome(args: {
         timeoutMs
       }
     }
+
     const remainingMs = deadline - Date.now()
+
     if (remainingMs <= 0) {
       return {
         answer: null,
@@ -121,6 +134,7 @@ export async function askRemoteRunHome(args: {
         timeoutMs
       }
     }
+
     await args.runtime.waitForMessage(`dispatch:${args.dispatchId}`, {
       timeoutMs: remainingMs,
       signal: args.signal

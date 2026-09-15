@@ -13,6 +13,7 @@ function listResult(issues: AiVaultScanIssue[]): AiVaultListResult {
 function session(index: number): AiVaultSession {
   const id = `session-${index}`
   const timestamp = new Date(Date.UTC(2026, 7, 2, 0, 0, index)).toISOString()
+
   return {
     id,
     executionHostId: 'local',

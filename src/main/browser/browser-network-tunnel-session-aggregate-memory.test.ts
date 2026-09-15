@@ -29,6 +29,7 @@ class AggregateMemorySocket extends EventEmitter implements BrowserNetworkTunnel
     if (callback) {
       this.writeCallbacks.push(callback)
     }
+
     return true
   }
 
@@ -38,6 +39,7 @@ class AggregateMemorySocket extends EventEmitter implements BrowserNetworkTunnel
 
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -87,12 +89,14 @@ function createSession(claimAggregateRetainedBytes: (bytes: number) => (() => vo
   socket: AggregateMemorySocket
 } {
   const socket = new AggregateMemorySocket()
+
   const session = new BrowserNetworkTunnelSession({
     tunnelGeneration: 7,
     connect: () => socket,
     sendBinary: () => true,
     claimAggregateRetainedBytes
   })
+
   session.handleBinary(
     frame(
       BrowserNetworkTunnelOpcode.Open,
@@ -100,6 +104,7 @@ function createSession(claimAggregateRetainedBytes: (bytes: number) => (() => vo
     )
   )
   socket.emit('connect')
+
   return { session, socket }
 }
 

@@ -20,13 +20,16 @@ export function disposeWatcherSupervisor(
   canaryDir: string | null
 ): null {
   const error = watcherHostFailure('file watcher supervisor disposed', 'supervisor_disposed')
+
   for (const record of records.values()) {
     resetPendingSubscribeAttempt(record)
     takePendingSubscribe(record)?.reject(error)
   }
+
   resolvePendingWatcherUnsubscribes(pendingUnsubscribes)
   cancelledSubscribes.completeAll()
   records.clear()
   child?.kill()
+
   return removeWatcherCanaryDirectory(canaryDir)
 }

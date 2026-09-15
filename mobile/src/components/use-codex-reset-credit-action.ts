@@ -14,9 +14,11 @@ import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
 function describeScope(snapshot: AccountsSnapshot, scope: CodexResetCreditExpectedScope): string {
   const account = snapshot.codex.accounts.find((candidate) => candidate.id === scope.accountId)
   const identity = account?.email ?? 'the selected managed account'
+
   if (scope.target.runtime === 'host') {
     return `${identity} on the host`
   }
+
   return `${identity} on WSL ${scope.target.wslDistro}`
 }
 
@@ -44,10 +46,12 @@ export function useCodexResetCreditAction({
   const supported = useCodexResetCreditCapability(client, connected)
   const [resetting, setResetting] = useState(false)
   const inFlightRef = useRef(false)
+
   const resetScope = useMemo(
     () => (snapshot ? getCodexResetCreditScope(snapshot) : null),
     [snapshot]
   )
+
   const scopeLabel = useMemo(
     () => (snapshot && resetScope ? describeScope(snapshot, resetScope) : null),
     [resetScope, snapshot]
@@ -58,29 +62,38 @@ export function useCodexResetCreditAction({
       if (!client || !hostId || inFlightRef.current) {
         return
       }
+
       inFlightRef.current = true
       setResetting(true)
+
       try {
         const result = await requestCodexResetCredit(client, {
           hostId,
           expectedScope,
           createIdempotencyKey: () => ExpoCrypto.randomUUID()
         })
+
         onSnapshot(result.snapshot)
+
         if ('status' in result) {
           const cleanupWarning = result.attemptJournalRetained
             ? '\n\nThis phone could not clear the discarded retry record. Retrying it is safe, but the record must be cleared before a new reset can be confirmed for this account.'
             : ''
+
           Alert.alert(
             'Reset details changed',
             `The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.${cleanupWarning}`
           )
+
           return
         }
+
         const copy = getCodexResetCreditOutcomeCopy(result.outcome)
+
         const cleanupWarning = result.attemptJournalRetained
           ? '\n\nThe host confirmed this attempt, but this phone could not clear its retry record. A later retry will reuse the same safe operation ID.'
           : ''
+
         Alert.alert(copy.title, `${copy.message}${cleanupWarning}`)
       } catch (error) {
         Alert.alert(
@@ -99,6 +112,7 @@ export function useCodexResetCreditAction({
     if (!supported || !connected || accountMutationBusy || resetting || !resetScope || !snapshot) {
       return
     }
+
     const confirmedScope = resetScope
     const confirmedLabel = describeScope(snapshot, confirmedScope)
     Alert.alert(

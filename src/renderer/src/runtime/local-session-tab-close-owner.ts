@@ -16,10 +16,12 @@ export async function withLocalSessionTabCloseOwner<T>(
 ): Promise<T> {
   const key = closeKey(worktreeId, tabId)
   owners.set(key, (owners.get(key) ?? 0) + 1)
+
   try {
     return await close()
   } finally {
     const remaining = (owners.get(key) ?? 1) - 1
+
     if (remaining === 0) {
       owners.delete(key)
     } else {

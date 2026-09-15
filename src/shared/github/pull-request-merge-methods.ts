@@ -51,15 +51,19 @@ export function normalizeGitHubPRMergeMethodSettings(args: {
     merge: args.mergeCommitAllowed === true,
     rebase: args.rebaseMergeAllowed === true
   }
+
   const defaultMethod = mapGitHubDefaultMergeMethod(args.defaultMethod)
   const firstAllowedMethod = GITHUB_PR_MERGE_METHODS.find((method) => allowedMethods[method])
+
   const resolvedDefault =
     defaultMethod && allowedMethods[defaultMethod]
       ? defaultMethod
       : (firstAllowedMethod ?? defaultMethod)
+
   if (!resolvedDefault) {
     return undefined
   }
+
   return {
     defaultMethod: resolvedDefault,
     allowedMethods
@@ -71,20 +75,24 @@ export function resolveGitHubPRMergeMethods(
 ): GitHubPRMergeMethodPresentation {
   const allowedMethods = settings?.allowedMethods ?? allMethodsAllowed()
   const firstAllowedMethod = GITHUB_PR_MERGE_METHODS.find((method) => allowedMethods[method])
+
   const defaultMethod =
     settings?.defaultMethod && allowedMethods[settings.defaultMethod]
       ? settings.defaultMethod
       : (firstAllowedMethod ?? 'squash')
+
   const orderedMethods = [
     defaultMethod,
     ...GITHUB_PR_MERGE_METHODS.filter((method) => method !== defaultMethod)
   ].filter((method) => allowedMethods[method])
+
   const methods = (orderedMethods.length > 0 ? orderedMethods : GITHUB_PR_MERGE_METHODS).map(
     (method) => ({
       method,
       label: GITHUB_PR_MERGE_METHOD_LABELS[method]
     })
   )
+
   return {
     defaultMethod,
     defaultLabel: GITHUB_PR_MERGE_METHOD_LABELS[defaultMethod],

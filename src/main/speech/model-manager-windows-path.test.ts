@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 }))
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const originalProgramData = process.env.PROGRAMDATA
 
 function setPlatform(platform: NodeJS.Platform): void {
@@ -30,6 +31,7 @@ function restoreEnvironment(): void {
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
+
   if (originalProgramData === undefined) {
     delete process.env.PROGRAMDATA
   } else {
@@ -54,6 +56,7 @@ describe('ModelManager Windows model path handling', () => {
 
   it('uses an ASCII cache path when the Windows default user data path has non-ASCII characters', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       setPlatform('win32')
       const programDataDir = join(dir, 'ProgramData')
@@ -76,6 +79,7 @@ describe('ModelManager Windows model path handling', () => {
 
   it('migrates existing ready model files from a non-ASCII Windows default cache', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       setPlatform('win32')
       const programDataDir = join(dir, 'ProgramData')
@@ -84,11 +88,14 @@ describe('ModelManager Windows model path handling', () => {
       appGetPathMock.mockImplementation((name: string) =>
         name === 'userData' ? userDataDir : join(dir, name)
       )
+
       const manifest = SPEECH_MODEL_CATALOG.find(
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )
+
       expect(manifest?.files).toBeDefined()
       const legacyModelDir = join(userDataDir, 'speech-models', manifest!.id)
+
       for (const file of manifest!.downloadFiles ?? []) {
         const filePath = join(legacyModelDir, file.name)
         mkdirSync(dirname(filePath), { recursive: true })
@@ -105,6 +112,7 @@ describe('ModelManager Windows model path handling', () => {
         id: manifest!.id,
         status: 'ready'
       })
+
       for (const file of manifest!.files ?? []) {
         expect(existsSync(join(migratedModelDir, file))).toBe(true)
       }
@@ -115,6 +123,7 @@ describe('ModelManager Windows model path handling', () => {
 
   it('deleting a migrated model removes the legacy copy so it is not resurrected on next launch', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       setPlatform('win32')
       const programDataDir = join(dir, 'ProgramData')
@@ -123,10 +132,13 @@ describe('ModelManager Windows model path handling', () => {
       appGetPathMock.mockImplementation((name: string) =>
         name === 'userData' ? userDataDir : join(dir, name)
       )
+
       const manifest = SPEECH_MODEL_CATALOG.find(
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )
+
       const legacyModelDir = join(userDataDir, 'speech-models', manifest!.id)
+
       for (const file of manifest!.downloadFiles ?? []) {
         const filePath = join(legacyModelDir, file.name)
         mkdirSync(dirname(filePath), { recursive: true })

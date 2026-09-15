@@ -14,8 +14,10 @@ import { buildHostedReviewDropdownItems } from './source-control-dropdown-review
 export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const ctx = deriveDropdownActionContext(inputs)
   const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx)
+
   const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
     buildRemoteDropdownItems(ctx)
+
   const { createPR, pushCreatePR } = buildHostedReviewDropdownItems(ctx)
   const { conflictOperation, isPullRequestOperationActive, globalBusy } = ctx
 
@@ -35,6 +37,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     fetch,
     publish
   ]
+
   if (conflictOperation === 'merge' || conflictOperation === 'rebase') {
     const isRebase = conflictOperation === 'rebase'
     const label = isRebase ? 'Abort rebase' : 'Abort merge'
@@ -49,9 +52,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       }
     )
   }
+
   if (!isPullRequestOperationActive) {
     return entries
   }
+
   return entries.map((entry) =>
     entry.kind === 'separator'
       ? entry

@@ -13,6 +13,7 @@ const { existsSyncMock, statSyncMock, accessSyncMock, wslUncDirectoryExistsMock,
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
+
   return {
     ...actual,
     existsSync: existsSyncMock,
@@ -41,6 +42,7 @@ import {
 } from './local-pty-utils'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+
 const NATIVE_DIR = 'C:\\Users\\jin\\repo'
 
 describe('validateWorkingDirectory', () => {
@@ -180,6 +182,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
+
     vi.restoreAllMocks()
   })
 
@@ -248,7 +251,9 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
       ORCA_ORIG_ZDOTDIR: '/home/jin',
       ORCA_SHELL_FEATURES: 'history'
     }
+
     const env: Record<string, string> = { HOME: '/home/jin', ...zshLaunchEnv }
+
     const ptySpawn = vi
       .fn()
       .mockImplementationOnce(() => {
@@ -281,6 +286,7 @@ describe('spawnShellWithFallback macOS TCC login wrapping', () => {
     // feature channel into the shell that finally starts.
     const bashLaunchEnv = { ORCA_SHELL_FEATURES: 'markers', BASH_ENV: '/userdata/bash/rcfile' }
     const env: Record<string, string> = { HOME: '/home/jin', ZDOTDIR: '/userdata/shell-ready/zsh' }
+
     const ptySpawn = vi
       .fn()
       .mockImplementationOnce(() => {

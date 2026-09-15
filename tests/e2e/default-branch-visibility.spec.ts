@@ -17,17 +17,20 @@ type SidebarVisibilityScenario = {
 async function seedSidebarVisibilityScenario(page: Page): Promise<SidebarVisibilityScenario> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
     const repo = state.repos[0]
+
     if (!repo) {
       throw new Error('Sidebar visibility E2E needs a seeded repo')
     }
 
     const currentWorktree = (state.worktreesByRepo[repo.id] ?? [])[0]
+
     if (!currentWorktree) {
       throw new Error('Sidebar visibility E2E needs a seeded worktree')
     }
@@ -113,6 +116,7 @@ test.describe('Default branch visibility', () => {
             state?.setHideDefaultBranchWorkspace(false)
             state?.setAlwaysShowDefaultBranchWorkspace(true)
             const featureTabs = state?.tabsByWorktree[featureId] ?? []
+
             return {
               alwaysShowDefaultBranchWorkspace: state?.alwaysShowDefaultBranchWorkspace ?? null,
               defaultBranchTabs: state?.tabsByWorktree[defaultBranchId]?.length ?? 0,

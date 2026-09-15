@@ -41,9 +41,11 @@ export function getSpeechModelDeletionErrorCode(
   if (error instanceof SpeechModelDeletionError) {
     return error.code
   }
+
   if (error instanceof Error && error.message === 'voice_model_in_use') {
     return 'voice_model_in_use'
   }
+
   return null
 }
 
@@ -54,9 +56,11 @@ export async function deleteLocalSpeechModel({
   modelId
 }: DeleteLocalSpeechModelArgs): Promise<void> {
   const manifest = getCatalogModel(modelId)
+
   if (!manifest) {
     throw new SpeechModelDeletionError('voice_model_unknown')
   }
+
   if (!isLocalSpeechModel(manifest)) {
     throw new SpeechModelDeletionError('voice_model_not_deletable')
   }
@@ -65,6 +69,7 @@ export async function deleteLocalSpeechModel({
   await modelManager.deleteModel(modelId)
 
   const currentVoice = store.getSettings().voice ?? getDefaultVoiceSettings()
+
   if (currentVoice.sttModel === modelId) {
     store.updateSettings(
       {

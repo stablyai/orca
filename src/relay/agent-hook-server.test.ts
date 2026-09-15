@@ -11,6 +11,7 @@ import * as agentHookListener from '../shared/agent-hook-listener/grok-result-di
 import { HOOK_REQUEST_MAX_BYTES } from '../shared/agent-hook-listener/request-body'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 type RelayServerInternals = {
@@ -47,8 +48,10 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -61,6 +64,7 @@ describe('RelayAgentHookServer', () => {
         },
         body: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hi' })
       })
+
       expect(res.status).toBe(204)
       expect(forward).toHaveBeenCalledTimes(1)
       const envelope = forward.mock.calls[0][0]
@@ -103,6 +107,7 @@ describe('RelayAgentHookServer', () => {
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
 
     await server.start()
+
     try {
       expect(forward).toHaveBeenCalledTimes(1)
       expect(forward.mock.calls[0][0]).toMatchObject({
@@ -137,6 +142,7 @@ describe('RelayAgentHookServer', () => {
         receivedAt: Date.now()
       })}\n`
     )
+
     const server = new RelayAgentHookServer({
       endpointDir: dir,
       forward: () => {
@@ -169,21 +175,26 @@ describe('RelayAgentHookServer', () => {
     const retryScheduler = internals.retryScheduler
     const originalAssistantRetry = retryScheduler.scheduleAssistantMessageRetry.bind(retryScheduler)
     const originalCodexRetry = retryScheduler.scheduleCodexSubagentPoll.bind(retryScheduler)
+
     const assistantRetry = vi
       .spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
       .mockImplementation((...args) => {
         order.push('assistant-retry')
         originalAssistantRetry(...args)
       })
+
     const codexRetry = vi
       .spyOn(retryScheduler, 'scheduleCodexSubagentPoll')
       .mockImplementation((...args) => {
         order.push('codex-retry')
         originalCodexRetry(...args)
       })
+
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -196,6 +207,7 @@ describe('RelayAgentHookServer', () => {
           payload: { prompt: 'ordered' }
         })
       })
+
       order.push('response')
       expect(res.status).toBe(204)
       expect(order).toEqual(['forward', 'assistant-retry', 'codex-retry', 'response'])
@@ -213,14 +225,17 @@ describe('RelayAgentHookServer', () => {
         throw new Error('forward failed')
       }
     })
+
     // Characterization deliberately observes cache/scheduler order without widening production API.
     const internals = server as unknown as RelayServerInternals
     const retryScheduler = internals.retryScheduler
     const assistantRetry = vi.spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
     const codexRetry = vi.spyOn(retryScheduler, 'scheduleCodexSubagentPoll')
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -233,6 +248,7 @@ describe('RelayAgentHookServer', () => {
           payload: { prompt: 'cached before throw' }
         })
       })
+
       expect(res.status).toBe(204)
       expect(internals.state.lastStatusByPaneKey.has(PANE_KEY)).toBe(true)
       expect(assistantRetry).not.toHaveBeenCalled()
@@ -248,6 +264,7 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
       await fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -311,8 +328,10 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -321,6 +340,7 @@ describe('RelayAgentHookServer', () => {
         },
         body: '{}'
       })
+
       expect(res.status).toBe(403)
       expect(forward).not.toHaveBeenCalled()
     } finally {
@@ -332,8 +352,10 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/unknown`, {
         method: 'POST',
         headers: {
@@ -342,6 +364,7 @@ describe('RelayAgentHookServer', () => {
         },
         body: JSON.stringify({ value: 'x'.repeat(HOOK_REQUEST_MAX_BYTES + 1) })
       })
+
       expect(res.status).toBe(404)
       expect(forward).not.toHaveBeenCalled()
     } finally {
@@ -353,6 +376,7 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
       await fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -389,8 +413,10 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/pi`, {
         method: 'POST',
         headers: {
@@ -445,6 +471,7 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
       await fetch(`http://127.0.0.1:${port}/hook/claude`, {
@@ -474,8 +501,10 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -492,6 +521,7 @@ describe('RelayAgentHookServer', () => {
           payload: { hook_event_name: 'BogusEvent', prompt: 'ignored' }
         })
       })
+
       // Why: hook server fails open with 204 even on rejected input — the
       // contract is "never block the agent", not "tell the agent it lost".
       expect(res.status).toBe(204)
@@ -505,6 +535,7 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const env = server.buildPtyEnv()
       expect(env.ORCA_AGENT_HOOK_PORT).toMatch(/^\d+$/)
@@ -522,6 +553,7 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start({ publishEndpoint: false })
+
     try {
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
       expect(server.publishEndpointFile()).toBe(true)
@@ -537,6 +569,7 @@ describe('RelayAgentHookServer', () => {
     const transcriptPath = join(dir, 'events.jsonl')
     writeFileSync(transcriptPath, '')
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
       await fetch(`http://127.0.0.1:${port}/hook/copilot`, {
@@ -599,6 +632,7 @@ describe('RelayAgentHookServer', () => {
     vi.stubEnv('HOME', dir)
     vi.stubEnv('USERPROFILE', dir)
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
       await fetch(`http://127.0.0.1:${port}/hook/grok`, {
@@ -615,6 +649,7 @@ describe('RelayAgentHookServer', () => {
           payload: { hookEventName: 'user_prompt_submit', prompt: 'hihi' }
         })
       })
+
       const response = await fetch(`http://127.0.0.1:${port}/hook/grok`, {
         method: 'POST',
         headers: {
@@ -653,9 +688,11 @@ describe('RelayAgentHookServer', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
       const paneKeyFor = (i: number): string => makePaneKey(`tab-${i}`, LEAF_ID)
+
       const postPane = (paneKey: string): Promise<Response> =>
         fetch(`http://127.0.0.1:${port}/hook/claude`, {
           method: 'POST',
@@ -674,6 +711,7 @@ describe('RelayAgentHookServer', () => {
       for (let i = 0; i < CAP; i++) {
         await postPane(paneKeyFor(i))
       }
+
       // Refresh the OLDEST pane just before overflow, then push one more pane.
       // Recency (not insertion) order must now evict pane 1, sparing pane 0.
       await postPane(paneKeyFor(0))
@@ -695,9 +733,11 @@ describe('RelayAgentHookServer', () => {
 
   it('forwards a Grok result when discovery finishes after the old retry window', async () => {
     let releaseDiscovery!: () => void
+
     const discovery = new Promise<void>((resolve) => {
       releaseDiscovery = resolve
     })
+
     vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -710,8 +750,10 @@ describe('RelayAgentHookServer', () => {
     vi.stubEnv('HOME', dir)
     vi.stubEnv('USERPROFILE', dir)
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const post = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${port}/hook/grok`, {
           method: 'POST',
@@ -752,15 +794,19 @@ describe('RelayAgentHookServer', () => {
 
   it('does not forward an old result over a newer same-text Grok turn', async () => {
     let releaseDiscovery!: () => void
+
     const discovery = new Promise<void>((resolve) => {
       releaseDiscovery = resolve
     })
+
     vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const post = (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${port}/hook/grok`, {
           method: 'POST',

@@ -50,14 +50,17 @@ export function createRepoCatalogActions(
         if (readoptions.length === 0 && s.pendingSshRepoReadoptions.length === 0) {
           return s
         }
+
         const pendingSshRepoReadoptions = mergeSshRepoReadoptions(
           s.pendingSshRepoReadoptions,
           readoptions
         )
+
         const reconciliation = reconcileReadoptedSshRepoRows(s.repos, pendingSshRepoReadoptions)
         const repos = reconciliation.repos
         const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
         const remainingSetups = filterSetupsForPrunedRepoRows(s.projectHostSetups, s.repos, repos)
+
         const compatibility = mergeProjectHostSetupCompatibility(
           projectCompatibilityFromRepos(repos),
           {
@@ -65,6 +68,7 @@ export function createRepoCatalogActions(
             setups: remainingSetups
           }
         )
+
         // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
         // must not churn catalog identity. This write is all-repos, not host-scoped,
         // so it cannot go through mergeFetchedProjectCompatibilityForHost. Reconcile
@@ -75,11 +79,13 @@ export function createRepoCatalogActions(
           compatibility.projects,
           (project) => project.id
         )
+
         const projectHostSetups = reconcileCatalogRows(
           s.projectHostSetups,
           compatibility.projectHostSetups,
           getProjectHostSetupOwnerKey
         )
+
         return {
           repos,
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
@@ -93,39 +99,48 @@ export function createRepoCatalogActions(
       const target = getActiveRuntimeTarget(
         settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
       )
+
       const settleLocalCatalog: (outcome: LocalRepoCatalogFetchOutcome) => void =
         target.kind === 'local' ? startLocalRepoCatalogFetch(get) : () => undefined
+
       let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
       // Why: overlapping repos:changed fetches can resolve out of order; a stale one must not overwrite a newer result and resurrect deleted projects (#7020).
       let generation = 0
       set((s) => {
         generation = s.reposFetchGeneration + 1
+
         return { reposFetchGeneration: generation }
       })
       const targetHostId = getRuntimeTargetHostId(target)
       claimRepoCatalogGeneration(get, targetHostId, generation)
+
       try {
         const catalog = await fetchRepoCatalogForTarget(target)
+
         // A newer same-host fetch superseded us while we awaited — drop this stale result.
         if (!isLatestRepoCatalogGeneration(get, targetHostId, generation)) {
           return
         }
+
         let finalizedHostRepos: Repo[] = []
         set((s) => {
           // Why: an in-flight fetch for a just-removed env would re-add purged repos and stick; skip only when the env was tombstoned, not merely unhydrated (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
             return s
           }
+
           // Why: re-adoption leaves a stale row on the old SSH target id (a ghost that fails "SSH target not found"); drop rows a live-host sibling supersedes.
           const result = mergeFetchedRepoCatalog(catalog, s.repos)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
           const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
+
           const projectCompatibility = projectCompatibilityForReconciledRepos(
             prunedRepos,
             catalog.projectHostSetupCompatibility
           )
+
           const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
             previous: {
               projects: s.projects,
@@ -139,9 +154,11 @@ export function createRepoCatalogActions(
             repos: prunedRepos,
             hostId: result.hostId
           })
+
           finalizedHostRepos = prunedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
+
           return {
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,

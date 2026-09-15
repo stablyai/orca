@@ -51,6 +51,7 @@ it('reads a directory once per pass, error or not', async () => {
 it('is a real directory read when nothing is mocked out from under it', async () => {
   readdir.mockImplementation(async (path: string) => {
     const { readdir: real } = await import('node:fs/promises')
+
     return (await real(path, { withFileTypes: true })) as unknown
   })
   const root = join(tmpdir(), `ss-listings-${process.pid}`)

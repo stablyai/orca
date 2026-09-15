@@ -32,22 +32,27 @@ export class AiVaultScanCoordinator {
     if (args.signal?.aborted) {
       return Promise.reject(scanCancellationError())
     }
+
     let entry = this.entries.get(args.key)
     const preempted = entry && args.force === true && canPreemptForForcedScan(entry) ? entry : null
+
     if (preempted) {
       this.removeEntry(args.key, preempted)
       entry = undefined
     }
+
     if (!entry) {
       entry = this.createEntry(args.key, args.force === true, args.start)
       this.entries.set(args.key, entry)
     }
+
     if (preempted) {
       // The replacement must be registered before the abort lands: waiters of
       // the old scan re-join it synchronously from their abort listener.
       preempted.preemptedBy = entry
       preempted.controller.abort()
     }
+
     return this.attach(args.key, entry, args.signal)
   }
 
@@ -57,6 +62,7 @@ export class AiVaultScanCoordinator {
     start: (signal: AbortSignal) => Promise<AiVaultListResult>
   ): ScanEntry {
     const controller = new AbortController()
+
     const entry: ScanEntry = {
       controller,
       force,
@@ -65,58 +71,75 @@ export class AiVaultScanCoordinator {
         if (controller.signal.aborted) {
           throw scanCancellationError()
         }
+
         return start(controller.signal)
       }),
       waiterCount: 0,
       settled: false,
       preemptedBy: null
     }
+
     const onSettled = (): void => {
       entry.settled = true
       this.removeEntry(key, entry)
     }
+
     void entry.promise.then(onSettled, onSettled)
+
     return entry
   }
 
   private attach(key: string, entry: ScanEntry, signal?: AbortSignal): Promise<AiVaultListResult> {
     entry.waiterCount++
+
     return new Promise((resolve, reject) => {
       let attached = true
+
       const detach = (): void => {
         if (!attached) {
           return
         }
+
         attached = false
         signal?.removeEventListener('abort', onAbort)
         entry.controller.signal.removeEventListener('abort', onAbort)
         entry.waiterCount--
+
         if (entry.waiterCount === 0 && !entry.settled && !entry.controller.signal.aborted) {
           this.removeEntry(key, entry)
           entry.controller.abort()
         }
       }
+
       const onAbort = (): void => {
         if (!attached) {
           return
         }
+
         // Why: a forced refresh aborts the shared entry, but the other waiters
         // never asked to cancel — rejecting them turns one window's Refresh into
         // a cancelled multi-host merge somewhere else. Re-join the replacement.
         const replacement = signal?.aborted ? null : entry.preemptedBy
         detach()
+
         if (!replacement) {
           reject(scanCancellationError())
+
           return
         }
+
         void this.attach(key, replacement, signal).then(resolve, reject)
       }
+
       signal?.addEventListener('abort', onAbort, { once: true })
       entry.controller.signal.addEventListener('abort', onAbort, { once: true })
+
       if (signal?.aborted || entry.controller.signal.aborted) {
         onAbort()
+
         return
       }
+
       void entry.promise.then(
         (result) => {
           if (attached) {
@@ -151,5 +174,6 @@ function canPreemptForForcedScan(entry: ScanEntry): boolean {
 function scanCancellationError(): Error {
   const error = new Error(AI_VAULT_SCAN_CANCELLED_MESSAGE)
   error.name = 'AbortError'
+
   return error
 }

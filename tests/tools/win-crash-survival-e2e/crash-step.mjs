@@ -24,6 +24,7 @@ export function crashMainProcess(pid) {
   if (!Number.isInteger(pid) || pid <= 0) {
     throw new Error(`crashMainProcess: refusing to kill invalid pid ${pid}`)
   }
+
   // NO '/T': tree-killing would take the detached daemon down with the main and
   // defeat the entire point of the test.
   execFileSync('taskkill', ['/F', '/PID', String(pid)], { stdio: 'ignore' })
@@ -50,6 +51,7 @@ export function scanPwshFailFast(sinceMs, runCommand = runCommandSync) {
   // parse) and back it off 5s for clock skew between Node's Date.now() and the
   // event-log timestamps.
   const startMs = Math.max(0, Math.floor(sinceMs) - 5000)
+
   const command = [
     `$start = [System.DateTimeOffset]::FromUnixTimeMilliseconds(${startMs}).LocalDateTime`,
     `$crashProviders = @('Application Error','Windows Error Reporting','.NET Runtime')`,
@@ -78,21 +80,27 @@ export function scanPwshFailFast(sinceMs, runCommand = runCommandSync) {
   ].join('\n')
 
   const { stdout, stderr, code, error } = runCommand(command)
+
   if (error) {
     throw new Error(`pwsh-failfast scan spawn failed: ${error.message}`)
   }
+
   // Why: unavailable event-log evidence cannot count as proof that no FailFast
   // occurred; fail the harness instead of converting an empty error into zero.
   if (code !== 0) {
     throw new Error(`pwsh-failfast scan failed (exit ${code}): ${stderr.trim()}`)
   }
+
   const trimmed = stdout.trim()
+
   if (!trimmed) {
     // Why: the script always serializes an events envelope, including for zero
     // matches; empty stdout means the load-bearing evidence never arrived.
     throw new Error('pwsh-failfast scan returned no JSON output')
   }
+
   let parsed
+
   try {
     parsed = JSON.parse(trimmed)
   } catch (parseError) {
@@ -101,6 +109,7 @@ export function scanPwshFailFast(sinceMs, runCommand = runCommandSync) {
         `stdout:\n${trimmed}\nstderr:\n${stderr}`
     )
   }
+
   if (
     !parsed ||
     typeof parsed !== 'object' ||
@@ -112,10 +121,14 @@ export function scanPwshFailFast(sinceMs, runCommand = runCommandSync) {
     // JSON must not be indistinguishable from an authoritative zero-event result.
     throw new Error('pwsh-failfast scan returned JSON without an events envelope')
   }
+
   const raw = parsed.events
+
   if (!Array.isArray(raw) && typeof raw !== 'object') {
     throw new Error('pwsh-failfast scan returned an invalid events envelope')
   }
+
   const events = Array.isArray(raw) ? raw : raw ? [raw] : []
+
   return { events }
 }

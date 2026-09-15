@@ -27,7 +27,9 @@ type AreaSelectionCardIdOptions = {
 }
 
 const AREA_SELECTED_ATTR = 'data-workspace-board-card-area-selected'
+
 export const AREA_SELECTION_AUTO_SCROLL_EDGE_SIZE = 48
+
 export const AREA_SELECTION_AUTO_SCROLL_MAX_DELTA = 22
 
 export function getAreaSelectionRect(
@@ -38,6 +40,7 @@ export function getAreaSelectionRect(
 ): AreaSelectionRect {
   const left = Math.min(startX, currentX)
   const top = Math.min(startY, currentY)
+
   return {
     left,
     top,
@@ -50,6 +53,7 @@ export function shouldIgnoreAreaSelectionStart(target: EventTarget | null): bool
   if (!(target instanceof Element)) {
     return false
   }
+
   return Boolean(
     target.closest(
       [
@@ -71,14 +75,19 @@ export function isScrollbarPointerDown(
   event: Pick<PointerEvent, 'target' | 'clientX' | 'clientY'>
 ): boolean {
   const target = event.target
+
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   const rect = target.getBoundingClientRect()
+
   const hitsVerticalScrollbar =
     target.scrollHeight > target.clientHeight && event.clientX >= rect.right - 14
+
   const hitsHorizontalScrollbar =
     target.scrollWidth > target.clientWidth && event.clientY >= rect.bottom - 14
+
   return hitsVerticalScrollbar || hitsHorizontalScrollbar
 }
 
@@ -88,32 +97,40 @@ export function getAreaSelectionCardIds(
   options: AreaSelectionCardIdOptions = {}
 ): string[] {
   const ids: string[] = []
+
   for (const card of cardRects) {
     const horizontalHit =
       selectionRect.left <= card.rect.right &&
       selectionRect.left + selectionRect.width >= card.rect.left
+
     if (!horizontalHit) {
       continue
     }
+
     const startContentY = card.scrollContainer
       ? options.scrollStartContentYByElement?.get(card.scrollContainer)
       : undefined
+
     let verticalHit =
       selectionRect.top <= card.rect.bottom &&
       selectionRect.top + selectionRect.height >= card.rect.top
+
     if (startContentY !== undefined && card.contentRect && options.currentY !== undefined) {
       const currentContentY =
         options.currentY - card.contentRect.containerTop + card.contentRect.scrollTop
+
       // Why: during lane scroll, viewport Y changes but the marquee range is
       // anchored to the content positions the user dragged across.
       verticalHit =
         Math.min(startContentY, currentContentY) <= card.contentRect.bottom &&
         Math.max(startContentY, currentContentY) >= card.contentRect.top
     }
+
     if (verticalHit) {
       ids.push(card.id)
     }
   }
+
   return ids
 }
 
@@ -123,10 +140,12 @@ export function getAreaSelectionScrollStartContentYByElement(
 ): Map<HTMLElement, number> {
   const startContentYByElement = new Map<HTMLElement, number>()
   const containers = board.querySelectorAll<HTMLElement>(AREA_SELECTION_SCROLL_CONTAINER_SELECTOR)
+
   for (const element of containers) {
     const rect = element.getBoundingClientRect()
     startContentYByElement.set(element, pointerY - rect.top + element.scrollTop)
   }
+
   return startContentYByElement
 }
 
@@ -141,19 +160,24 @@ export function getAreaSelectionAutoScrollDelta({
   maxDelta = AREA_SELECTION_AUTO_SCROLL_MAX_DELTA
 }: AreaSelectionAutoScrollParams): number {
   const maxScrollTop = Math.max(0, scrollHeight - clientHeight)
+
   if (maxScrollTop <= 0) {
     return 0
   }
 
   const topDistance = containerTop + edgeSize - pointerY
+
   if (topDistance > 0 && scrollTop > 0) {
     const ratio = Math.min(1, topDistance / edgeSize)
+
     return -Math.min(scrollTop, Math.max(1, Math.ceil(ratio * maxDelta)))
   }
 
   const bottomDistance = pointerY - (containerBottom - edgeSize)
+
   if (bottomDistance > 0 && scrollTop < maxScrollTop) {
     const ratio = Math.min(1, bottomDistance / edgeSize)
+
     return Math.min(maxScrollTop - scrollTop, Math.max(1, Math.ceil(ratio * maxDelta)))
   }
 
@@ -170,18 +194,22 @@ export function getAreaSelectionScrollContainer(
 
   for (const element of containers) {
     const rect = element.getBoundingClientRect()
+
     if (pointerX < rect.left || pointerX > rect.right) {
       continue
     }
+
     const distance =
       pointerY < rect.top
         ? rect.top - pointerY
         : pointerY > rect.bottom
           ? pointerY - rect.bottom
           : 0
+
     if (distance > AREA_SELECTION_AUTO_SCROLL_EDGE_SIZE * 2) {
       continue
     }
+
     if (!nearest || distance < nearest.distance) {
       nearest = { element, distance }
     }
@@ -193,8 +221,10 @@ export function getAreaSelectionScrollContainer(
 export function setOverlayRect(overlay: HTMLElement | null, rect: AreaSelectionRect | null): void {
   if (!overlay || !rect) {
     overlay?.classList.add('hidden')
+
     return
   }
+
   overlay.classList.remove('hidden')
   overlay.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`
   overlay.style.width = `${rect.width}px`
@@ -211,6 +241,7 @@ export function clearPreviewSelection(
       card.element.removeAttribute(AREA_SELECTED_ATTR)
     }
   }
+
   previewIds.clear()
 }
 
@@ -222,29 +253,36 @@ export function updatePreviewSelection(
   areaIds: readonly string[]
 ): void {
   const nextIds = additive ? new Set(baseSelectedIds) : new Set<string>()
+
   for (const id of areaIds) {
     nextIds.add(id)
   }
 
   for (const card of cardRects) {
     const element = card.element?.isConnected ? card.element : null
+
     if (!element) {
       if (!nextIds.has(card.id)) {
         previewIds.delete(card.id)
       }
+
       continue
     }
+
     const shouldPreview = nextIds.has(card.id)
     // Why: virtualization can remount the same card id; trust the live attr, not previewIds alone.
     const isPreviewed = element.getAttribute(AREA_SELECTED_ATTR) === 'true'
+
     if (shouldPreview === isPreviewed) {
       if (shouldPreview) {
         previewIds.add(card.id)
       } else {
         previewIds.delete(card.id)
       }
+
       continue
     }
+
     if (shouldPreview) {
       element.setAttribute(AREA_SELECTED_ATTR, 'true')
       previewIds.add(card.id)

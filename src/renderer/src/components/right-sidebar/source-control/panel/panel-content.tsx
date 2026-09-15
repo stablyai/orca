@@ -12,6 +12,7 @@ import type { SourceControlPanelReadyProps } from './panel-props'
 /** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -78,7 +79,9 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     filteredGrouped.staged.length > 0 ||
     filteredGrouped.unstaged.length > 0 ||
     filteredGrouped.untracked.length > 0
+
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
+
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
 

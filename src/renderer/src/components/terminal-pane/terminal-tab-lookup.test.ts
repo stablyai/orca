@@ -22,6 +22,7 @@ function iterableTabs(tabs: TerminalTab[]): {
   const iterator = vi.fn(function* () {
     yield* tabs
   })
+
   return {
     value: { [Symbol.iterator]: iterator } as unknown as TerminalTab[],
     iterator

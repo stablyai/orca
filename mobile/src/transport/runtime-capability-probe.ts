@@ -6,7 +6,9 @@ import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 // status.get without ever changing connState, so a one-shot probe would latch
 // capability-gated UI hidden until the screen remounts; retry until one lands.
 const CUTOVER_RETRY_DELAY_MS = 250
+
 const FAILURE_RETRY_BASE_DELAY_MS = 1_000
+
 const FAILURE_RETRY_MAX_DELAY_MS = 15_000
 
 export function startRuntimeCapabilityProbe(
@@ -23,26 +25,33 @@ export function startRuntimeCapabilityProbe(
         if (cancelled) {
           return
         }
+
         if (!response.ok) {
           scheduleRetry(false)
+
           return
         }
+
         const result = (response as RpcSuccess).result
+
         const rawCapabilities =
           result && typeof result === 'object'
             ? (result as { capabilities?: unknown }).capabilities
             : null
+
         const capabilities =
           Array.isArray(rawCapabilities) &&
           rawCapabilities.every((value) => typeof value === 'string')
             ? rawCapabilities
             : []
+
         onCapabilities(capabilities)
       },
       (error: unknown) => {
         if (cancelled) {
           return
         }
+
         scheduleRetry(isLogicalClientCutoverError(error))
       }
     )
@@ -54,12 +63,15 @@ export function startRuntimeCapabilityProbe(
     const delay = cutover
       ? CUTOVER_RETRY_DELAY_MS
       : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failureRetries++, FAILURE_RETRY_MAX_DELAY_MS)
+
     retryTimer = setTimeout(attempt, delay)
   }
 
   attempt()
+
   return () => {
     cancelled = true
+
     if (retryTimer) {
       clearTimeout(retryTimer)
     }

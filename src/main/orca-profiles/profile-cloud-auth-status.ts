@@ -11,6 +11,7 @@ export function getOrcaProfileAuthStatusFromProfile(
   const devAuthEnabled = isOrcaCloudDevAuthEnabled()
   const configured = configState.configured || devAuthEnabled
   const cloud = active.profile.cloud
+
   if (!cloud) {
     return {
       activeProfileId: active.profile.id,
@@ -22,6 +23,7 @@ export function getOrcaProfileAuthStatusFromProfile(
   }
 
   const session = readOrcaCloudSession(active.profile.id, userDataPath)
+
   if (!configured) {
     return {
       activeProfileId: active.profile.id,
@@ -36,6 +38,7 @@ export function getOrcaProfileAuthStatusFromProfile(
       setupMessage: configState.setupMessage
     }
   }
+
   if (session.status === 'found') {
     return {
       activeProfileId: active.profile.id,

@@ -19,16 +19,22 @@ import { migrateForkRemoteRefspecsWithExec } from './worktree-push-target-refspe
 const execFileAsync = promisify(execFile)
 
 const REPO_ID = 'repo-1'
+
 const FORK_REMOTE = 'pr-contributor-orca'
+
 const TRACKED_BRANCH = 'contributor/fix'
+
 const OTHER_FORK_BRANCHES = Array.from({ length: 12 }, (_, i) => `contributor/unrelated-${i}`)
 
 let scratchDir = ''
+
 let repoPath = ''
+
 let forkPath = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
+
   return stdout
 }
 
@@ -46,6 +52,7 @@ async function trackedRefsUnder(remoteName: string): Promise<string[]> {
     ['for-each-ref', '--format=%(refname:short)', `refs/remotes/${remoteName}/`],
     repoPath
   )
+
   return stdout.split(/\r?\n/).filter(Boolean)
 }
 
@@ -55,9 +62,11 @@ function worktreeId(suffix: string): string {
 
 function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
   const meta: Record<string, WorktreeMeta> = {}
+
   for (const [id, pushTarget] of Object.entries(entries)) {
     meta[id] = { pushTarget } as unknown as WorktreeMeta
   }
+
   return { getAllWorktreeMeta: () => meta }
 }
 
@@ -77,6 +86,7 @@ beforeEach(async () => {
   // 1000+-branch forks the issue describes (scaled down for test speed).
   await git(['clone', '-q', repoPath, forkPath], scratchDir)
   await setIdentity(forkPath)
+
   for (const branch of [TRACKED_BRANCH, ...OTHER_FORK_BRANCHES]) {
     await git(['checkout', '-qb', branch], forkPath)
     await writeFile(join(forkPath, `${branch.replace(/\//g, '-')}.txt`), 'x\n')
@@ -102,6 +112,7 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
     const refspecs = (await git(['config', '--get-all', `remote.${FORK_REMOTE}.fetch`], repoPath))
       .split(/\r?\n/)
       .filter(Boolean)
+
     expect(refspecs).toEqual([
       `+refs/heads/${TRACKED_BRANCH}*:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}*`
     ])
@@ -124,6 +135,7 @@ describe('minting a fork remote against the real Git binary (#17828)', () => {
       branchName: TRACKED_BRANCH,
       remoteUrl: forkPath
     }
+
     await prepareWorktreePushTargetWithExec(execGit, repoPath, target, () => false)
     // Mirrors `configureCreatedWorktreePushTargetWithExec`: local branch tracks the fork
     // remote, so a *bare* `git fetch` (the shape an agent running raw git actually types)
@@ -179,6 +191,7 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     const forkBranchCount = (await git(['branch', '--format=%(refname:short)'], forkPath))
       .split(/\r?\n/)
       .filter(Boolean).length
+
     await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
     await git(['fetch', FORK_REMOTE], repoPath)
     const before = await trackedRefsUnder(FORK_REMOTE)
@@ -206,9 +219,11 @@ describe('migrateForkRemoteRefspecsWithExec against the real Git binary', () => 
     )
 
     expect(migrated).toEqual([FORK_REMOTE])
+
     const refspecs = (await git(['config', '--get-all', `remote.${FORK_REMOTE}.fetch`], repoPath))
       .split(/\r?\n/)
       .filter(Boolean)
+
     expect(refspecs).toEqual([
       `+refs/heads/${TRACKED_BRANCH}*:refs/remotes/${FORK_REMOTE}/${TRACKED_BRANCH}*`
     ])

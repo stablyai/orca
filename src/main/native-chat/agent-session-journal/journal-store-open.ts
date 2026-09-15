@@ -53,15 +53,20 @@ export async function openJournalStoreState(input: {
   readOnly: () => boolean
 }): Promise<void> {
   const loaded = input.loaded !== undefined ? input.loaded : input.replay()
+
   if (!loaded) {
     input.start()
     await discloseFileFormatRemnant(input)
+
     return
   }
+
   input.adopt(loaded)
+
   if (loaded.truncateFrom !== undefined && !loaded.readOnly) {
     input.deleteSuffix(loaded.truncateFrom, loaded.state.lastSequence + 1)
   }
+
   // A repair that took every live row leaves the epoch with no anchor. Publish
   // one before anything can append into it: an ordinary row at sequence 1 would
   // replay as a clean timeline and hide that the history was never rebuilt.
@@ -71,11 +76,14 @@ export async function openJournalStoreState(input: {
     // still the answer `repair` and the disclosure below owe the caller.
     input.setMalformedRows(loaded.malformedRows)
   }
+
   if (input.malformedRows() > 0 && !input.readOnly()) {
     const disclosure = journalRepairDisclosure({ malformedRows: input.malformedRows() })
     await input.appendItem(disclosure.identity, disclosure.body, input.highestFence())
   }
+
   await settleStaleSubagentRosters(input, loaded)
+
   // Founding the epoch and appending the row are two transactions, and a
   // committed epoch sends every later open down this branch instead. Anything
   // that interrupts between them — a quit during startup restore, a failed
@@ -109,10 +117,13 @@ async function discloseFileFormatRemnant(input: {
   if (input.readOnly()) {
     return
   }
+
   const transcriptPath = findJournalFileFormatRemnant(input.journalDir)
+
   if (!transcriptPath) {
     return
   }
+
   const disclosure = journalFileFormatRemnantDisclosure({ transcriptPath, agent: input.agent })
   await input.appendItem(disclosure.identity, disclosure.body, input.highestFence())
 }
@@ -139,6 +150,7 @@ async function settleStaleSubagentRosters(
   if (input.readOnly() || loaded.corrupt) {
     return
   }
+
   for (const revision of staleSubagentRosterRevisions(loaded.state.items.values())) {
     await input.appendItem(revision.identity, revision.body, input.highestFence())
   }

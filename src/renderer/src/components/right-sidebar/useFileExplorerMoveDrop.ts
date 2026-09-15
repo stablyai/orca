@@ -10,7 +10,9 @@ function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
   }
+
   const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
+
   return match ? match[1] : err.message
 }
 
@@ -34,6 +36,7 @@ export function useFileExplorerMoveDrop({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
+
       const fileName = basename(sourcePath),
         sourceDir = dirname(sourcePath)
 
@@ -42,6 +45,7 @@ export function useFileExplorerMoveDrop({
       if (sourceDir === destDir) {
         return
       }
+
       if (
         destDir === sourcePath ||
         destDir.startsWith(`${sourcePath}/`) ||
@@ -57,6 +61,7 @@ export function useFileExplorerMoveDrop({
         try {
           const operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, operationOwner)
           const operationRoute = operationGuard.route
+
           const fileContext = {
             settings: operationRoute.settings,
             worktreeId: activeWorktreeId,
@@ -66,6 +71,7 @@ export function useFileExplorerMoveDrop({
             expectedSshTargetId: operationRoute.expectedSshTargetId,
             expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
           }
+
           operationGuard.assertCurrent()
           await executeOpenEditorPathMove({
             context: fileContext,
@@ -100,10 +106,13 @@ export function useFileExplorerMoveDrop({
           })
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, `Failed to move '${fileName}'.`))
+
           return
         }
+
         await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
       }
+
       void run()
     },
     [worktreePath, activeWorktreeId, refreshDir, getOperationOwnerForPath, setDropTargetDir]

@@ -9,6 +9,7 @@ import {
 } from '@/lib/client-creation-action-policy'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/web-runtime-session', () => ({

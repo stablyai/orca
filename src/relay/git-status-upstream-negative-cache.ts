@@ -4,6 +4,7 @@ import type { GitCommandRunner } from '../shared/git-effective-upstream'
 import type { GitUpstreamStatus } from '../shared/git-status-types'
 
 const NO_EFFECTIVE_UPSTREAM_CACHE_TTL_MS = 5 * 60_000
+
 const MAX_NO_EFFECTIVE_UPSTREAM_CACHE_ENTRIES = 512
 
 type NoEffectiveUpstreamCacheIdentity = {
@@ -18,8 +19,11 @@ type NoEffectiveUpstreamCacheEntry = {
 }
 
 const noEffectiveUpstreamByIdentity = new Map<string, NoEffectiveUpstreamCacheEntry>()
+
 const noEffectiveUpstreamInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+
 const retiredNoEffectiveUpstreamInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+
 const noEffectiveUpstreamWriteGeneration = new Map<string, number>()
 
 function noEffectiveUpstreamCacheKey(identity: NoEffectiveUpstreamCacheIdentity): string {
@@ -31,13 +35,17 @@ function readCachedNoEffectiveUpstreamStatus(
   nowMs = Date.now()
 ): GitUpstreamStatus | null {
   const entry = noEffectiveUpstreamByIdentity.get(cacheKey)
+
   if (!entry) {
     return null
   }
+
   if (entry.expiresAt <= nowMs) {
     noEffectiveUpstreamByIdentity.delete(cacheKey)
+
     return null
   }
+
   return entry.status
 }
 
@@ -52,9 +60,11 @@ function trimNoEffectiveUpstreamWriteGeneration(): void {
     if (noEffectiveUpstreamWriteGeneration.size <= MAX_NO_EFFECTIVE_UPSTREAM_CACHE_ENTRIES) {
       break
     }
+
     if (hasPendingNoEffectiveUpstreamProbe(cacheKey)) {
       continue
     }
+
     noEffectiveUpstreamWriteGeneration.delete(cacheKey)
   }
 }
@@ -72,28 +82,36 @@ function cacheNoEffectiveUpstreamStatus(
     noEffectiveUpstreamByIdentity.delete(cacheKey)
     noEffectiveUpstreamWriteGeneration.set(cacheKey, writeGeneration + 1)
     trimNoEffectiveUpstreamWriteGeneration()
+
     return
   }
+
   if ((noEffectiveUpstreamWriteGeneration.get(cacheKey) ?? 0) !== writeGeneration) {
     return
   }
+
   // Why: only cache negatives after probing origin/<branch>; other resolution
   // paths can fail without proving the same-name publish branch is absent.
   if (!probedSameNameOriginRef) {
     return
   }
+
   noEffectiveUpstreamByIdentity.set(cacheKey, {
     status,
     expiresAt: nowMs + NO_EFFECTIVE_UPSTREAM_CACHE_TTL_MS
   })
+
   while (noEffectiveUpstreamByIdentity.size > MAX_NO_EFFECTIVE_UPSTREAM_CACHE_ENTRIES) {
     const oldest = noEffectiveUpstreamByIdentity.keys().next()
+
     if (oldest.done) {
       break
     }
+
     noEffectiveUpstreamByIdentity.delete(oldest.value)
     noEffectiveUpstreamWriteGeneration.delete(oldest.value)
   }
+
   trimNoEffectiveUpstreamWriteGeneration()
 }
 
@@ -103,13 +121,16 @@ export async function readOrProbeNoEffectiveUpstreamStatus(
   options: { bypassCache?: boolean } = {}
 ): Promise<GitUpstreamStatus> {
   const cacheKey = noEffectiveUpstreamCacheKey(identity)
+
   if (options.bypassCache !== true) {
     const cachedStatus = readCachedNoEffectiveUpstreamStatus(cacheKey)
+
     if (cachedStatus) {
       return cachedStatus
     }
 
     const inFlight = noEffectiveUpstreamInFlight.get(cacheKey)
+
     if (inFlight) {
       return inFlight
     }
@@ -118,18 +139,23 @@ export async function readOrProbeNoEffectiveUpstreamStatus(
   let probedSameNameOriginRef = false
   const snapshotRunner = createGitConfigSnapshotRunner(runGit)
   const writeGeneration = noEffectiveUpstreamWriteGeneration.get(cacheKey) ?? 0
+
   const probe = getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${identity.branchName}`)) {
       probedSameNameOriginRef = true
     }
+
     return snapshotRunner(args)
   }).then((status) => {
     cacheNoEffectiveUpstreamStatus(cacheKey, status, probedSameNameOriginRef, writeGeneration)
+
     return status
   })
+
   if (options.bypassCache !== true) {
     noEffectiveUpstreamInFlight.set(cacheKey, probe)
   }
+
   try {
     return await probe
   } finally {
@@ -162,9 +188,11 @@ export function clearNoEffectiveUpstreamStatusCacheEntry(
 
 function retireNoEffectiveUpstreamProbe(cacheKey: string): void {
   const retiredProbe = noEffectiveUpstreamInFlight.get(cacheKey)
+
   if (!retiredProbe) {
     return
   }
+
   retiredNoEffectiveUpstreamInFlight.set(cacheKey, retiredProbe)
   void retiredProbe
     .finally(() => {

@@ -8,6 +8,7 @@ export function installTabDragMissedEndListeners(onMissedEnd: () => void): () =>
     if (cleanupTimer !== null) {
       window.clearTimeout(cleanupTimer)
     }
+
     cleanupTimer = window.setTimeout(() => {
       cleanupTimer = null
       onMissedEnd()
@@ -23,6 +24,7 @@ export function installTabDragMissedEndListeners(onMissedEnd: () => void): () =>
     if (cleanupTimer !== null) {
       window.clearTimeout(cleanupTimer)
     }
+
     window.removeEventListener('pointerup', clearIfDndMissedEnd)
     window.removeEventListener('pointercancel', clearIfDndMissedEnd)
     window.removeEventListener('blur', clearIfDndMissedEnd)

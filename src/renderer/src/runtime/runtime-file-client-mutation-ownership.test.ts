@@ -40,6 +40,7 @@ describe('runtime file client', () => {
       result: { ok: true },
       _meta: { runtimeId: 'remote-runtime' }
     })
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',
@@ -124,6 +125,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'old-hub-runtime' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
 
@@ -163,6 +165,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'old-hub-runtime' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
 
@@ -205,6 +208,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'old-hub-runtime' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
     runtimeEnvironmentCall.mockResolvedValue({
@@ -249,6 +253,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'old-hub-runtime' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
 
@@ -277,6 +282,7 @@ describe('runtime file client', () => {
     runtimeEnvironmentTransportCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'status.get') {
         statusCalls += 1
+
         return Promise.resolve({
           id: 'status',
           ok: true,
@@ -288,6 +294,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: statusCalls === 1 ? 'new-hub-runtime' : 'old-hub-runtime' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
     runtimeEnvironmentCall.mockResolvedValue({
@@ -296,6 +303,7 @@ describe('runtime file client', () => {
       result: { ok: true },
       _meta: { runtimeId: 'new-hub-runtime' }
     })
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-downgraded' },
       worktreeId: 'wt-hub-local',
@@ -333,11 +341,13 @@ describe('runtime file client', () => {
             _meta: { runtimeId: 'old-hub-runtime' }
           })
         }
+
         if (args.method === 'status.get') {
           currentRevision = 42
           replaceRuntimeEnvironmentRevisions([
             { id: 'env-repaired', createdAt: 1, pairingRevision: currentRevision }
           ])
+
           return Promise.resolve({
             id: 'status',
             ok: true,
@@ -349,6 +359,7 @@ describe('runtime file client', () => {
             _meta: { runtimeId: 'new-hub-runtime' }
           })
         }
+
         return runtimeEnvironmentCall(args)
       }
     )

@@ -7,8 +7,10 @@ export type RunReceipt = Omit<RunRow, (typeof INTERNAL_RUN_COLUMNS)[number]>
 
 export function exposeRun(run: RunRow): RunReceipt {
   const exposed: Partial<RunRow> = { ...run }
+
   for (const column of INTERNAL_RUN_COLUMNS) {
     delete exposed[column]
   }
+
   return exposed as RunReceipt
 }

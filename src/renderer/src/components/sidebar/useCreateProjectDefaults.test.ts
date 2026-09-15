@@ -14,14 +14,17 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
     useRef: <T>(value: T) => {
       const index = mocks.refIndex++
+
       if (!(index in mocks.refValues)) {
         mocks.refValues[index] = { current: value }
       }
+
       return mocks.refValues[index] as { current: T }
     },
     useEffect: (effect: () => void | (() => void)) => {
@@ -29,12 +32,15 @@ vi.mock('react', async (importOriginal) => {
     },
     useState: <T>(initial: T) => {
       const index = mocks.stateIndex++
+
       if (!(index in mocks.stateValues)) {
         mocks.stateValues[index] = initial
       }
+
       const setter = (value: T) => {
         mocks.stateValues[index] = value
       }
+
       return [mocks.stateValues[index] as T, setter]
     }
   }
@@ -52,7 +58,9 @@ import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 
 // State order inside the hook: [defaultParent, gitAvailability, runtimeParentStatus].
 const DEFAULT_PARENT_STATE = 0
+
 const GIT_AVAILABILITY_STATE = 1
+
 const RUNTIME_PARENT_STATUS_STATE = 2
 
 function flushAsync(): Promise<void> {
@@ -63,6 +71,7 @@ function useHarness(overrides: Partial<Parameters<typeof useCreateProjectDefault
   mocks.stateIndex = 0
   mocks.refIndex = 0
   const setCreateParent = vi.fn()
+
   const result = useCreateProjectDefaults({
     step: 'create',
     activeRuntimeEnvironmentId: null,
@@ -70,6 +79,7 @@ function useHarness(overrides: Partial<Parameters<typeof useCreateProjectDefault
     setCreateParent,
     ...overrides
   })
+
   return { result, setCreateParent }
 }
 
@@ -196,6 +206,7 @@ describe('useCreateProjectDefaults', () => {
       activeRuntimeEnvironmentId: 'env-1',
       createParent: ''
     })
+
     await flushAsync()
 
     expect(mocks.browseRuntimeServerDirectory).toHaveBeenCalledWith('env-1', '~')
@@ -216,6 +227,7 @@ describe('useCreateProjectDefaults', () => {
       activeRuntimeEnvironmentId: 'env-1',
       createParent: '/Users/alice/orca/projects/pr5115-target-switch'
     })
+
     await flushAsync()
 
     expect(runtime.result.createParentDefaultPending).toBe(true)
@@ -223,6 +235,7 @@ describe('useCreateProjectDefaults', () => {
     expect(runtime.setCreateParent).not.toHaveBeenCalled()
 
     runtime.result.markCreateParentTouched('/home/alice/projects')
+
     const runtimeEdited = useHarness({
       activeRuntimeEnvironmentId: 'env-1',
       createParent: '/home/alice/projects'

@@ -12,6 +12,7 @@ import {
 } from './agent-prompt-injection'
 
 const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
+
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
 
 describe('agent prompt injection bytes', () => {
@@ -77,6 +78,7 @@ describe('agent prompt injection bytes', () => {
         getAgentPromptSubmitDelayMs(platform, 40_000)
       )
     }
+
     expect(getTerminalPasteIngestMs('win32', 320_000)).toBeGreaterThan(
       getTerminalPasteIngestMs('darwin', 320_000)
     )

@@ -69,10 +69,13 @@ export function fakeClaude(
   const connections: FakeConnection[] = []
   const routes = options.routes ?? {}
   let replayIndex = 0
+
   const routed = (subtype: string, params?: Record<string, unknown>): unknown => {
     const route = routes[subtype]
+
     return route ? route(params) : undefined
   }
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -84,10 +87,13 @@ export function fakeClaude(
       closed: false,
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
+
         if (options.exitBeforeInit) {
           handlers.onExit?.(new Error(options.exitBeforeInit))
+
           return { models: [] }
         }
+
         if (options.initProof === 'session-start') {
           handlers.onMessage?.({
             type: 'system',
@@ -110,6 +116,7 @@ export function fakeClaude(
             ...(options.capabilities ? { capabilities: options.capabilities } : {})
           })
         }
+
         return {
           models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
           ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
@@ -118,6 +125,7 @@ export function fakeClaude(
       },
       getSettings: async () => {
         connection.calls.push({ subtype: 'get_settings' })
+
         // Shape measured from Claude Code 2.1.258: {applied, effective, sources},
         // and the only place the session's current effort is reported.
         return (
@@ -130,6 +138,7 @@ export function fakeClaude(
       },
       supportedModels: async () => {
         connection.calls.push({ subtype: 'list_models' })
+
         return (routed('list_models') as unknown[] | undefined) ?? []
       },
       setModel: async (model) => {
@@ -149,6 +158,7 @@ export function fakeClaude(
           subtype: 'interrupt',
           params: interruptOptions?.cancelQueued ? { cancelQueued: true } : {}
         })
+
         return routed('interrupt', interruptOptions) as
           | Awaited<ReturnType<ClaudeStreamJsonConnection['interrupt']>>
           | undefined
@@ -163,12 +173,15 @@ export function fakeClaude(
       },
       send: async (message) => {
         connection.sent.push(message)
+
         if (message.type === 'user' && options.replayUuid !== null) {
           const configuredReplayUuid = options.replayUuids
             ? options.replayUuids[replayIndex++]
             : options.replayUuid
+
           const replayUuid =
             configuredReplayUuid === undefined ? `user-uuid-${replayIndex}` : configuredReplayUuid
+
           if (replayUuid !== null) {
             handlers.onMessage?.({
               ...message,
@@ -181,12 +194,16 @@ export function fakeClaude(
       close: async () => {
         connection.closeCount += 1
         connection.closed = true
+
         return options.unprovenCloseVerdict === undefined
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openClaudeStreamJsonConnection
+
   return { connections, openConnection, routes }
 }
 
@@ -245,7 +262,9 @@ export async function acquired(
     undefined,
     onDispatchSettledLate
   )
+
   await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+
   return adapter
 }
 
@@ -270,11 +289,14 @@ export function invokeCanUseTool(
     signal: extra.signal ?? new AbortController().signal,
     ...(extra.suggestions ? { suggestions: extra.suggestions } : {})
   } as unknown as Parameters<NonNullable<ClaudeStreamJsonConnectionHandlers['canUseTool']>>[2]
+
   let done = false
+
   const promise = Promise.resolve(
     connection.handlers.canUseTool?.(toolName, extra.input ?? {}, options)
   ).finally(() => {
     done = true
   })
+
   return { promise, settled: () => done }
 }

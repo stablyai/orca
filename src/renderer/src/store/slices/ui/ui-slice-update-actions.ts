@@ -4,11 +4,13 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
     setUpdateStatus: (status) => {
       const { updateStatus: previousStatus, updateUserInitiatedCycle } = get()
+
       const update: Partial<
         Pick<
           UISlice,
@@ -17,11 +19,13 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
       > = {
         updateStatus: status
       }
+
       if (status.state === 'checking') {
         update.updateUserInitiatedCycle = status.userInitiated === true
       } else if (status.state === 'idle') {
         update.updateUserInitiatedCycle = false
       }
+
       if (status.state === 'available') {
         // Why: always overwrite (even with null) so a prior version's changelog can't leak into a later simple-mode update.
         update.updateChangelog = status.changelog ?? null
@@ -33,6 +37,7 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
         // Why: reset on cycle-boundary states so stale rich content from a previous cycle can't resurface.
         update.updateChangelog = null
       }
+
       // 'downloading'/'downloaded'/'error': leave updateChangelog untouched to keep the original 'available' content.
       const errorBecameActionable =
         status.state === 'error' &&
@@ -41,6 +46,7 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
           (status.version !== undefined && previousStatus.version === undefined) ||
           (status.recovery?.kind === 'linux-package-install' &&
             previousStatus.recovery?.kind !== 'linux-package-install'))
+
       if (status.state !== previousStatus.state || errorBecameActionable) {
         // Quiet check failures start collapsed so the status bar can still disclose them.
         update.updateCardCollapsed =
@@ -51,6 +57,7 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
           status.recovery?.kind !== 'linux-package-install' &&
           !('version' in previousStatus && previousStatus.version !== undefined)
       }
+
       set(update)
     },
     updateChangelog: null,
@@ -62,6 +69,7 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
       if (get().unexpectedSignoutDismissedVersions.includes(version)) {
         return
       }
+
       set({
         dismissedUnexpectedSignoutVersion: version,
         unexpectedSignoutDismissedVersions: [...get().unexpectedSignoutDismissedVersions, version]
@@ -81,16 +89,20 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
         // Why: the 'error' variant has no version field, so the card passes it via versionOverride.
         const dismissedUpdateVersion =
           versionOverride ?? ('version' in s.updateStatus ? (s.updateStatus.version ?? null) : null)
+
         const activeNudgeId =
           'activeNudgeId' in s.updateStatus ? (s.updateStatus.activeNudgeId ?? null) : null
+
         // Why: persist dismissal so relaunch doesn't immediately re-show the same card until a newer release.
         void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
         // Why: main can't otherwise tell an offered update was abandoned, which keeps a local-build session pinned and stalls background checks.
         void window.api.updater.dismissAvailableUpdate().catch(console.error)
+
         // Why: only consume the nudge campaign for cards from a nudge cycle, not ordinary dismissals.
         if (activeNudgeId) {
           void window.api.updater.dismissNudge().catch(console.error)
         }
+
         return { dismissedUpdateVersion, updateUserInitiatedCycle: false }
       }),
     updateCardCollapsed: false,

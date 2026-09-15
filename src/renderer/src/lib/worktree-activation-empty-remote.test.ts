@@ -11,8 +11,11 @@ import { toast } from 'sonner'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const initialAppStoreState = useAppStore.getState()
+
 const WORKTREE_PATH = path.join('workspace', 'feature')
+
 const REPO_PATH = path.join('workspace', 'repo')
+
 const ORCA_WORKSPACES_PATH = path.join('workspace', '.orca-workspaces')
 
 afterEach(() => {
@@ -52,6 +55,7 @@ function makeWorktree(): Worktree {
 describe('empty remote worktree activation', () => {
   it('creates a host terminal when waking an empty remote workspace', async () => {
     const worktree = makeWorktree()
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({
       ok: true,
       result: {
@@ -69,6 +73,7 @@ describe('empty remote worktree activation', () => {
         snapshotVersion: 1
       }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
@@ -124,10 +129,12 @@ describe('empty remote worktree activation', () => {
 
   it('surfaces a failed host terminal request without retrying ambiguously', async () => {
     const worktree = makeWorktree()
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({
       ok: false,
       error: { code: 'terminal_create_failed', message: 'Host refused the terminal' }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {

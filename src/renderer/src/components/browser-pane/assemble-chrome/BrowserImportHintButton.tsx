@@ -46,6 +46,7 @@ export function BrowserImportHintButton({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
   const effectiveProfileId = profileId ?? 'default'
+
   const shouldShow = shouldShowBrowserImportHint({
     persistedUIReady,
     browserImportHintHidden
@@ -53,6 +54,7 @@ export function BrowserImportHintButton({
 
   const supportedImportLabels = useMemo(() => {
     const platform = isMacUserAgent() ? 'darwin' : isLinuxUserAgent() ? 'linux' : 'win32'
+
     return getBrowserCookieImportSourceLabels(platform)
   }, [])
 
@@ -69,9 +71,11 @@ export function BrowserImportHintButton({
   const handleOpenChange = useCallback(
     (nextOpen: boolean): void => {
       setOpen(nextOpen)
+
       if (!nextOpen) {
         setImportMenuOpen(false)
       }
+
       if (nextOpen) {
         // Why: macOS treats other browsers' profile folders as app data. Only
         // probe them when the user opens the import hint.
@@ -85,11 +89,13 @@ export function BrowserImportHintButton({
     async (browserFamily: string, browserProfile?: string): Promise<void> => {
       setOpen(false)
       setImportMenuOpen(false)
+
       const result = await importCookiesFromBrowser(
         effectiveProfileId,
         browserFamily,
         browserProfile
       )
+
       if (result.ok) {
         const browser = detectedBrowsers.find((entry) => entry.family === browserFamily)
         emitBrowserCookieImportToast(
@@ -105,8 +111,10 @@ export function BrowserImportHintButton({
           ),
           result
         )
+
         return
       }
+
       toast.error(result.reason)
     },
     [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser]
@@ -116,6 +124,7 @@ export function BrowserImportHintButton({
     setOpen(false)
     setImportMenuOpen(false)
     const result = await importCookiesToProfile(effectiveProfileId)
+
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
@@ -126,8 +135,10 @@ export function BrowserImportHintButton({
         ),
         result
       )
+
       return
     }
+
     if (result.reason !== 'canceled') {
       toast.error(result.reason)
     }
@@ -152,10 +163,13 @@ export function BrowserImportHintButton({
     if (!open) {
       return
     }
+
     const dismiss = (): void => {
       handleOpenChange(false)
     }
+
     window.addEventListener('blur', dismiss)
+
     return () => window.removeEventListener('blur', dismiss)
   }, [handleOpenChange, open])
 

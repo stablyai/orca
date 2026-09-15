@@ -81,6 +81,7 @@ export async function generateCommitMessage(input: {
 }): Promise<GenerateCommitMessageResult> {
   const { context, params, target } = input
   const basePrompt = buildCommitMessagePrompt(context, '')
+
   const prompt =
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
@@ -91,22 +92,27 @@ export async function generateCommitMessage(input: {
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildCommitMessagePrompt(context, params.customPrompt ?? '')
+
   const planned = planCommitMessageGeneration(
     { ...params, backslash: commandBackslashMode(target) },
     prompt
   )
+
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
+
   const result = await executeGenerationPlan({
     ...input,
     plan: planned.plan,
     emptyResultName: 'message',
     operation: 'commit-message'
   })
+
   if (!result.success) {
     return { success: false, error: result.error, canceled: result.canceled }
   }
+
   try {
     return {
       success: true,
@@ -126,6 +132,7 @@ export async function generatePullRequestFields(input: {
 }): Promise<GeneratePullRequestFieldsResult<GeneratedPullRequestFields>> {
   const { context, params, target } = input
   const basePrompt = buildPullRequestFieldsPrompt(context, '')
+
   const prompt =
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
@@ -140,10 +147,12 @@ export async function generatePullRequestFields(input: {
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
+
   const planned = planCommitMessageGeneration(
     { ...params, backslash: commandBackslashMode(target) },
     prompt
   )
+
   if (!planned.ok) {
     return {
       success: false,
@@ -151,12 +160,14 @@ export async function generatePullRequestFields(input: {
       branchChangedByPreparation: context.branchChangedByPreparation
     }
   }
+
   const result = await executeGenerationPlan({
     ...input,
     plan: planned.plan,
     emptyResultName: 'details',
     operation: 'pull-request-fields'
   })
+
   if (!result.success) {
     return {
       success: false,
@@ -165,6 +176,7 @@ export async function generatePullRequestFields(input: {
       branchChangedByPreparation: context.branchChangedByPreparation
     }
   }
+
   try {
     return {
       success: true,
@@ -189,6 +201,7 @@ export async function generateBranchName(input: {
 }): Promise<GenerateBranchNameResult> {
   const { context, params, target } = input
   const basePrompt = buildBranchNamePrompt(context)
+
   const prompt =
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
@@ -197,23 +210,29 @@ export async function generateBranchName(input: {
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
+
   const planned = planCommitMessageGeneration(
     { ...params, backslash: commandBackslashMode(target) },
     prompt
   )
+
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
+
   const result = await executeGenerationPlan({
     ...input,
     plan: planned.plan,
     emptyResultName: 'branch name',
     operation: 'branch-name'
   })
+
   if (!result.success) {
     return result
   }
+
   const slug = sanitizeBranchSlug(result.rawOutput)
+
   return slug
     ? { success: true, slug, agentLabel: result.agentLabel }
     : {

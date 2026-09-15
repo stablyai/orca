@@ -18,6 +18,7 @@ export function skillInstallConflictResult(
     state.kind === 'name-collision'
       ? state.kind
       : 'modified'
+
   return {
     operationId,
     status: 'conflict',
@@ -40,9 +41,11 @@ export function skillInstallFailureResult(
   error: unknown
 ): SkillInstallResult | null {
   const failure = skillInstallFailureFromError(error)
+
   if (!failure || !['filesystem', 'recovery', 'cancelled'].includes(failure.category)) {
     return null
   }
+
   return {
     operationId: input.operationId,
     status: failure.category === 'cancelled' ? 'cancelled' : 'failed',
@@ -62,6 +65,7 @@ export function skillInstallReplacementAllowed(
   if (state.kind === 'missing' || state.kind === 'clean-update') {
     return input.conflictResolution !== 'cancel'
   }
+
   return (
     (state.kind === 'modified' || state.kind === 'unowned') &&
     input.conflictResolution === 'replace-and-discard-local'

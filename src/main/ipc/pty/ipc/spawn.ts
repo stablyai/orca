@@ -8,9 +8,11 @@ export function installPtySpawnIpcHandler(deps: PtySpawnIpcDeps): void {
 
   ipcMain.handle('pty:spawn', async (_event, args: PtySpawnIpcArgs) => {
     const startupPromise = getLocalPtyStartupPromise(args.connectionId)
+
     if (startupPromise) {
       await startupPromise
     }
+
     return runPtyIpcSpawn(deps, args)
   })
 }

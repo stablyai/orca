@@ -57,21 +57,26 @@ export function normalizeTrustedReviewUrl(url: string | null | undefined): strin
   if (!url) {
     return null
   }
+
   const trimmed = url.trim()
   let parsed: URL
+
   try {
     parsed = new URL(trimmed)
   } catch {
     return null
   }
+
   // Reject non-web schemes and any userinfo (`user:token@host`) — a prefix regex
   // alone would forward embedded credentials to the browser/shell.
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return null
   }
+
   if (parsed.username !== '' || parsed.password !== '') {
     return null
   }
+
   return trimmed
 }
 
@@ -102,12 +107,14 @@ export function resolveChecksPanelReviewLookup(
   const openReviewUrl =
     normalizeTrustedReviewUrl(input.hostedReview?.url) ??
     normalizeTrustedReviewUrl(input.eligibilityReview?.url)
+
   const hasPositiveEvidence =
     isPositiveHostedReviewNumber(input.linkedReviewNumber) ||
     isPositiveHostedReviewNumber(input.hostedReview?.number) ||
     isPositiveHostedReviewNumber(input.eligibilityReview?.number) ||
     input.eligibilityReviewLookupOutcome === 'found' ||
     (input.hostedReview != null && openReviewUrl !== null)
+
   if (hasPositiveEvidence) {
     return { state: 'positive_unresolved', openReviewUrl }
   }

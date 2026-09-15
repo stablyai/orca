@@ -40,9 +40,11 @@ test('the tab X button applies the same running-process confirmation as Cmd+W', 
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
+
   const hasPaneManager = await waitForActiveTerminalManager(orcaPage, 30_000)
     .then(() => true)
     .catch(() => false)
+
   test.skip(!hasPaneManager, 'Electron automation never mounted the live TerminalPane manager.')
   await waitForPaneCount(orcaPage, 1, 30_000)
 

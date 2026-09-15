@@ -61,15 +61,19 @@ export function buildSettingsNavigationMetadata({
     isWindowsTerminalHost,
     isMac
   })
+
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? getWebRuntimeEnvironmentsSearchEntry()
     : getRuntimeEnvironmentsSearchEntry()
+
   const reposById = new Map<string, Repo>()
+
   for (const repo of repos) {
     if (!reposById.has(repo.id)) {
       reposById.set(repo.id, repo)
     }
   }
+
   const options: SettingsNavigationBuildOptions = {
     isMac,
     isWindows,
@@ -104,30 +108,37 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
+
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
       const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
     })
   )
+
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
+
   const runtimeTarget = getActiveRuntimeTarget(settings)
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
+
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
     false,
     windowsTerminalCapabilityOwnerKey,
     capabilityLoadTarget
   )
+
   const isLocalWindowsHost = isWindowsTerminalCapabilityHost({
     isWindowsRenderer: isWindows,
     isWebClient,
@@ -137,6 +148,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         ? windowsTerminalCapabilities.hostPlatform
         : null
   })
+
   const isWindowsTerminalHost = isWindowsTerminalCapabilityHost({
     isWindowsRenderer: isWindows,
     isWebClient,

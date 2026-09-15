@@ -62,6 +62,7 @@ export async function reconcileManagedWslCliRegistrations(
   options: WslCliRegistrationReconciliationOptions
 ): Promise<WslCliRegistrationReconciliationResult[]> {
   const platform = options.platform ?? process.platform
+
   if (platform !== 'win32' || !options.isPackaged) {
     return []
   }
@@ -77,9 +78,11 @@ export async function reconcileManagedWslCliRegistrations(
 
   let createInstaller = options.createInstaller
   let getHostLauncherTarget = options.getHostLauncherTarget
+
   if (!createInstaller) {
     const hostInstaller = new CliInstaller()
     let hostStatus: Promise<CliInstallStatus> | null = null
+
     // Why: every distro must target this app install; share one Windows PATH /
     // launcher probe instead of spawning a PowerShell probe per distro. A
     // rejected probe is evicted so one transient failure cannot poison the run.
@@ -88,6 +91,7 @@ export async function reconcileManagedWslCliRegistrations(
         hostStatus = null
         throw error
       }))
+
     createInstaller = (distro: string) =>
       new WslCliInstaller({
         distro,
@@ -97,11 +101,14 @@ export async function reconcileManagedWslCliRegistrations(
   }
 
   const availableDistros = await (options.listDistros ?? listWslDistrosAsync)()
+
   const currentTarget = getHostLauncherTarget
     ? await getHostLauncherTarget().catch(() => null)
     : null
+
   const appVersion = options.appVersion ?? ''
   const distros = await registry.getCandidates(availableDistros, { currentTarget, appVersion })
+
   if (distros.length === 0) {
     return []
   }
@@ -110,6 +117,7 @@ export async function reconcileManagedWslCliRegistrations(
     distro: string
   ): Promise<WslCliRegistrationReconciliationResult> => {
     let repair: Awaited<ReturnType<ManagedWslCliInstaller['repairManagedRegistration']>>
+
     try {
       repair = await createInstaller(distro).repairManagedRegistration()
     } catch (error) {
@@ -119,12 +127,14 @@ export async function reconcileManagedWslCliRegistrations(
         error: error instanceof Error ? error.message : String(error)
       }
     }
+
     const result: WslCliRegistrationReconciliationResult = {
       distro,
       outcome: repair.changed ? 'repaired' : 'unchanged',
       state: repair.status.state,
       managed: repair.managed
     }
+
     const observation: WslCliRegistrationObservation =
       repair.status.state === 'unsupported'
         ? // Why: managed-ness is unknowable without interop; stamp the
@@ -138,6 +148,7 @@ export async function reconcileManagedWslCliRegistrations(
               ...(currentTarget ? { reconciled: { target: currentTarget, appVersion } } : {})
             }
           : { distro, inspected: true, managed: false, reconciled: null }
+
     try {
       // Why: ownership metadata must commit before a concurrent Settings
       // operation can mutate this distro, or stale startup state can win.
@@ -150,20 +161,24 @@ export async function reconcileManagedWslCliRegistrations(
         error instanceof Error ? error.message : String(error)
       )
     }
+
     return result
   }
 
   const results: WslCliRegistrationReconciliationResult[] = Array.from({
     length: distros.length
   })
+
   let nextIndex = 0
   await Promise.all(
     Array.from({ length: Math.min(MAX_CONCURRENT_DISTRO_REPAIRS, distros.length) }, async () => {
       for (;;) {
         const index = nextIndex++
+
         if (index >= distros.length) {
           return
         }
+
         const distro = distros[index]
         results[index] = await runSerializedWslCliRegistrationOperation(distro, () =>
           reconcileDistro(distro)
@@ -171,5 +186,6 @@ export async function reconcileManagedWslCliRegistrations(
       }
     })
   )
+
   return results
 }

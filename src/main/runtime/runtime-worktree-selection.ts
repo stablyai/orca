@@ -19,10 +19,12 @@ export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
         : typeof error === 'string'
           ? error
           : ''
+
   const stderr =
     error && typeof error === 'object' && 'stderr' in error
       ? String((error as { stderr: unknown }).stderr)
       : ''
+
   return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
@@ -34,6 +36,7 @@ export function getRuntimeWorktreeRemovalOptionsKey(
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
   // failed the PTY gate — it would inherit that failure instead of retrying.
   const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
+
   return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
 }
 
@@ -48,9 +51,11 @@ export function runtimeRepoMatchesExecutionHost(
   if (executionHostId == null) {
     return true
   }
+
   if (repo.executionHostId == null && repo.connectionId == null) {
     return true
   }
+
   return getRepoExecutionHostId(repo) === executionHostId
 }
 
@@ -59,9 +64,11 @@ export function parseExactWorktreeIdSelector(
 ): RuntimeWorktreeRemovalTarget | null {
   const worktreeId = selector.startsWith('id:') ? selector.slice(3) : selector
   const parsed = splitWorktreeId(worktreeId)
+
   if (!parsed || !parsed.repoId || !parsed.worktreePath) {
     return null
   }
+
   return {
     id: worktreeId,
     repoId: parsed.repoId,
@@ -77,7 +84,9 @@ export function getExplicitWorktreeIdSelector(selector: string | undefined): str
   if (!selector?.startsWith('id:')) {
     return null
   }
+
   const id = selector.slice(3)
+
   return id.length > 0 ? id : null
 }
 

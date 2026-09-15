@@ -10,10 +10,12 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   }
 
   const normalized: TaskProvider[] = []
+
   for (const provider of value) {
     if (!TASK_PROVIDER_SET.has(provider as TaskProvider)) {
       continue
     }
+
     if (!normalized.includes(provider as TaskProvider)) {
       normalized.push(provider as TaskProvider)
     }
@@ -37,9 +39,11 @@ export function filterAvailableTaskProviders(
     if (provider === 'github') {
       return true
     }
+
     if (provider === 'gitlab') {
       return availability.gitlabInstalled
     }
+
     return availability.linearConnected
   })
 
@@ -53,5 +57,6 @@ export function resolveVisibleTaskProvider(
   if (preferred && visibleProviders.includes(preferred)) {
     return preferred
   }
+
   return visibleProviders[0] ?? 'github'
 }

@@ -15,6 +15,7 @@ export function useFileExplorerDragEdgeScroll(
 
   const stopDragEdgeScroll = useCallback(() => {
     lastDragClientYRef.current = null
+
     if (edgeScrollRafRef.current !== null) {
       cancelAnimationFrame(edgeScrollRafRef.current)
       edgeScrollRafRef.current = null
@@ -26,9 +27,11 @@ export function useFileExplorerDragEdgeScroll(
     edgeScrollRafRef.current = null
     const viewport = scrollRef.current
     const clientY = lastDragClientYRef.current
+
     if (!viewport || clientY == null) {
       return
     }
+
     const rect = viewport.getBoundingClientRect()
     const y = clientY - rect.top
     const zone = DRAG_EDGE_ZONE_PX
@@ -50,6 +53,7 @@ export function useFileExplorerDragEdgeScroll(
   const startDragEdgeScroll = useCallback(
     (clientY: number) => {
       lastDragClientYRef.current = clientY
+
       if (edgeScrollRafRef.current === null) {
         edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
       }

@@ -13,15 +13,23 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createBrowserTabMock = vi.fn()
+
 const setActiveWorktreeMock = vi.fn()
+
 const openUrlMock = vi.fn()
+
 const openFileUriMock = vi.fn()
+
 const pathExistsMock = vi.fn(async () => true)
+
 const connectionOwner = vi.hoisted(() => ({ value: null as string | null | undefined }))
+
 const targetConnectionOwners = vi.hoisted(() => new Map<string, string | null | undefined>())
+
 const worktreeLookup = vi.hoisted(() => ({
   value: [] as { id: string; path: string; diffComments: never[] }[]
 }))
+
 const statRuntimePathMock = vi.hoisted(() => vi.fn(async () => ({ isDirectory: false })))
 
 // Minimal store: MarkdownPreview reads settings/worktreesByRepo plus a handful
@@ -53,32 +61,45 @@ vi.mock('@/store', () => {
     (selector: (s: typeof storeState) => unknown) => selector(storeState),
     { getState: () => storeState }
   )
+
   return { useAppStore }
 })
+
 vi.mock('@/store/slices/worktree-helpers', () => ({
   findWorktreeById: (_worktrees: unknown, id: string) =>
     worktreeLookup.value.find((worktree) => worktree.id === id) ?? null
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: (settings: unknown) => settings
 }))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: statRuntimePathMock
 }))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: (worktreeId: string) => targetConnectionOwners.get(worktreeId)
 }))
+
 vi.mock('@/lib/connection-owner-resolution', () => ({
   createConnectionIdForFileSelector: () => () => connectionOwner.value
 }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
+
 vi.mock('./MermaidBlock', () => ({ default: () => null }))
+
 vi.mock('./CodeBlockCopyButton', () => ({
   default: ({ children }: { children: React.ReactNode }) => children
 }))
+
 vi.mock('../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
+
 vi.mock('./NotesSendMenu', () => ({ NotesSendMenu: () => null }))
+
 vi.mock('./MarkdownTableOfContentsPanel', () => ({ MarkdownTableOfContentsPanel: () => null }))
 
 import MarkdownPreview from './MarkdownPreview'
@@ -146,12 +167,15 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
         />
       )
     })
+
     const anchor = Array.from(container.querySelectorAll<HTMLAnchorElement>('a')).find(
       (candidate) => candidate.getAttribute('href') === expectedHref
     )
+
     if (!anchor) {
       throw new Error('expected a rendered http anchor')
     }
+
     return anchor
   }
 

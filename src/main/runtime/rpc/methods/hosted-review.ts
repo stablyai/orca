@@ -12,6 +12,7 @@ export const HOSTED_REVIEW_METHODS = [
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
         params.linkedGitHubPR == null ? (params.fallbackGitHubPR ?? null) : null
+
       return runtime.getHostedReviewForBranch({
         repoSelector: params.repo,
         branch: params.branch,
@@ -33,6 +34,7 @@ export const HOSTED_REVIEW_METHODS = [
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
         params.linkedGitHubPR == null ? (params.fallbackGitHubPR ?? null) : null
+
       return runtime.getHostedReviewCreationEligibility({
         repoSelector: params.repo,
         worktreeSelector: params.worktree,

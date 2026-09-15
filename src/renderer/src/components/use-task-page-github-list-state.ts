@@ -12,6 +12,7 @@ import { sortWorkItemsByNumber } from '../../../shared/work-items'
 import { useAppStore } from '@/store'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
+
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const {
     pageData,
@@ -25,12 +26,15 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     taskResumeApplied,
     githubMode
   } = model
+
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const taskSearchInputRef = useRef<HTMLInputElement>(null)
+
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
     defaultTaskViewPreset
   )
+
   const [tasksLoading, setTasksLoading] = useState(false)
   const [tasksRefreshing, setTasksRefreshing] = useState(false)
   const [tasksFiltering, setTasksFiltering] = useState(false)
@@ -53,22 +57,27 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const paginationGenerationRef = useRef(0)
   // Why: entering Tasks with fresh cache still verifies remote status once, reconciled into existing rows to avoid a full table shuffle.
   const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
+
   // Why: split the display budget across repos so one provider page maps to one UI page without truncating rows later pages can't return.
   const githubPerRepoPageLimit = getTaskPagePerRepoLimit(
     selectedRepos.length,
     PER_REPO_FETCH_LIMIT,
     CROSS_REPO_DISPLAY_LIMIT
   )
+
   const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
+
   const githubResumeContextKey = buildTaskPageGitHubResumeContextKey({
     selectedReposKey,
     query: appliedTaskSearch.trim(),
     pageSize: githubPageSize
   })
+
   // Why: null entries are pages not fetched yet; numbered provider pages let a high-page click load directly without reading intermediate pages.
   const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
+
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(
         r.id,
@@ -77,16 +86,21 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
         r.path,
         getTaskPageRepoSourceContext(r, 'github')
       )
+
       if (cached) {
         merged.push(...cached)
       }
     }
+
     if (merged.length === 0) {
       return [[]]
     }
+
     const page0 = sortWorkItemsByNumber(merged).slice(0, githubPageSize)
+
     return [page0]
   })
+
   const [currentPage, setCurrentPage] = useState(0)
   const pagesRef = useRef(pages)
   const currentPageRef = useRef(currentPage)
@@ -116,16 +130,20 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
   useEffect(() => {
     const page = pages[currentPage]
+
     if (!taskResumeApplied || taskSource !== 'github' || githubMode !== 'items' || !page) {
       return
     }
+
     taskPageGitHubResumeCache.write(githubResumeContextKey, currentPage, page)
   }, [currentPage, githubMode, githubResumeContextKey, pages, taskResumeApplied, taskSource])
+
   const taskListPositionRef = useRef<{
     contextKey: string
     page: number
     scrollTop: number
   } | null>(null)
+
   useLayoutEffect(() => {
     if (
       taskSource !== 'github' ||
@@ -135,6 +153,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     ) {
       return
     }
+
     taskListPositionRef.current = {
       contextKey: githubResumeContextKey,
       page: currentPage,
@@ -145,6 +164,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     () => () => {
       const position = taskListPositionRef.current
       const state = useAppStore.getState()
+
       if (position && !state.taskPageData.openGitHubWorkItem) {
         state.setTaskListPosition({
           contextKey: position.contextKey,
@@ -235,6 +255,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     countWorkItemsAcrossRepos: typeof countWorkItemsAcrossRepos
     taskListPositionRef: typeof taskListPositionRef
   }
+
   nextModel.taskSearchInput = taskSearchInput
   nextModel.setTaskSearchInput = setTaskSearchInput
   nextModel.appliedTaskSearch = appliedTaskSearch
@@ -292,6 +313,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   nextModel.fetchWorkItemsNextPage = fetchWorkItemsNextPage
   nextModel.countWorkItemsAcrossRepos = countWorkItemsAcrossRepos
   nextModel.taskListPositionRef = taskListPositionRef
+
   return nextModel
 }
+
 export type TaskPageGitHubListStateModel = ReturnType<typeof useTaskPageGitHubListState>

@@ -14,6 +14,7 @@ export function installBrowserRoutePartitionPolicies(
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
   }
+
   void installBrowserSessionPartitionPolicies(
     { ...profile, partition },
     { applyAppWideProxy: false }
@@ -24,6 +25,7 @@ export function clearBrowserRoutePartitionPolicies(partition: string): void {
   if (!isBrowserRoutePartition(partition)) {
     return
   }
+
   const sess = session.fromPartition(partition)
   clearBrowserSessionUserAgentMode(sess)
   clearBrowserSessionPartitionPolicies(partition, sess)

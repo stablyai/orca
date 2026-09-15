@@ -6,7 +6,9 @@ import { pathToFileURL } from 'node:url'
 import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
 
 const API_VERSION = '2022-11-28'
+
 const RELEASE_CUT_AUTHOR = 'github-actions[bot]'
+
 const DESKTOP_RC_TAG_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$/
 
 export function isReleaseCutDraft(release) {
@@ -34,6 +36,7 @@ export function isTagBuiltFromCurrentRef(tag, { cwd = process.cwd() } = {}) {
   try {
     const tagCommit = gitOutput(['rev-parse', `${tag}^{}`], cwd)
     const currentCommit = gitOutput(['rev-parse', 'HEAD'], cwd)
+
     if (tagCommit === currentCommit) {
       return true
     }
@@ -54,10 +57,12 @@ async function githubJson(fetchImpl, url, token, options = {}) {
       ...options.headers
     }
   })
+
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw new Error(`GitHub request failed ${res.status} ${res.statusText}: ${body.slice(0, 300)}`)
   }
+
   return res.json()
 }
 
@@ -67,9 +72,11 @@ async function fetchReleases(repo, token, fetchImpl) {
     `https://api.github.com/repos/${repo}/releases?per_page=100`,
     token
   )
+
   if (!Array.isArray(releases)) {
     throw new Error(`GitHub releases response for ${repo} was not an array`)
   }
+
   return releases
 }
 
@@ -84,11 +91,13 @@ export async function publishCompleteDraftReleases({
   if (!repo) {
     throw new Error('repo is required')
   }
+
   if (!token) {
     throw new Error('token is required')
   }
 
   const releases = await fetchReleases(repo, token, fetchImpl)
+
   const candidates = releases
     .filter(isReleaseCutDraft)
     .sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime())
@@ -98,6 +107,7 @@ export async function publishCompleteDraftReleases({
 
   for (const release of candidates) {
     const tag = release.tag_name
+
     if (!(await Promise.resolve(isDraftBuiltFromCurrentRef({ tag, release })))) {
       const reason = 'tag is not built from the current release ref'
       skipped.push({ tag, reason })
@@ -143,6 +153,7 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
   if (!outputPath) {
     return
   }
+
   appendFileSync(
     outputPath,
     `${[

@@ -36,6 +36,7 @@ export function recordedCreatorIdentity(creator: DispatchCreator): {
   if (creator.kind === 'system') {
     return { creatorHandle: null, creatorPaneKey: null }
   }
+
   return { creatorHandle: creator.handle, creatorPaneKey: creator.paneKey ?? null }
 }
 
@@ -48,6 +49,7 @@ function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
   if (row.creator_pane_key && row.assignee_pane_key) {
     return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
   }
+
   return row.creator_handle != null && row.creator_handle === row.assignee_handle
 }
 
@@ -87,6 +89,7 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
   const local = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey) as
     | DispatchContextRow
     | undefined
+
   if (local && !isSelfCreatedDispatch(local)) {
     depths.push(local.depth)
   }
@@ -109,13 +112,16 @@ export function resolveCreatorDispatchId(
   if (creator.kind === 'system') {
     return null
   }
+
   const own = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey)
   // Why: a self-dispatch is not a parent Attempt, so it must not be stamped as the child's creator.
   const local = own && !isSelfCreatedDispatch(own) ? own : undefined
   const remote = findPotentiallyLiveAttachmentsForCreator.call(this, creator)
+
   if ((local ? 1 : 0) + remote.length !== 1) {
     return null
   }
+
   return local?.id ?? remote[0]?.dispatch_id ?? null
 }
 
@@ -134,6 +140,7 @@ function findPotentiallyLiveAttachmentsForCreator(
   if (!creator.paneKey || !creator.processIncarnation) {
     return []
   }
+
   const rows = this.db
     .prepare(
       `SELECT * FROM remote_dispatch_attachments
@@ -154,6 +161,7 @@ function findPotentiallyLiveAttachmentsForCreator(
       `Terminal ${creator.handle} matches ${matches.length} live remote attachments; cannot establish nesting depth.`
     )
   }
+
   return matches
 }
 
@@ -169,6 +177,7 @@ export function resolveChildDispatchDepth(
   maxDepth: number
 ): number {
   const childDepth = this.resolveCreatorDepth(creator) + 1
+
   if (childDepth > maxDepth) {
     throw new OrchestrationError(
       NESTED_WORKER_DEPTH_EXCEEDED_CODE,
@@ -176,6 +185,7 @@ export function resolveChildDispatchDepth(
       { effectsApplied: false, nextSteps: [...NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS] }
     )
   }
+
   return childDepth
 }
 

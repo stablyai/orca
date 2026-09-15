@@ -49,6 +49,7 @@ function setLiveAlias(
       }
     }
   }
+
   aliases.set(alias.cacheKey, alias)
 }
 
@@ -66,7 +67,9 @@ function mergeFollowUpAlias(
       }
     }
   }
+
   setLiveAlias(aliases, alias)
+
   return undefined
 }
 
@@ -94,14 +97,18 @@ function sameAliasRequestIdentity(
  *  insertions are the newer branch and win. */
 function dropSupersededWorktreeAliases(aliases: Map<string, GitHubPRRefreshAlias>): void {
   const liveCacheKeyByWorktree = new Map<string, string>()
+
   for (const [cacheKey, alias] of aliases) {
     if (!alias.worktreeId) {
       continue
     }
+
     const superseded = liveCacheKeyByWorktree.get(alias.worktreeId)
+
     if (superseded !== undefined) {
       aliases.delete(superseded)
     }
+
     liveCacheKeyByWorktree.set(alias.worktreeId, cacheKey)
   }
 }
@@ -135,6 +142,7 @@ export class PRRefreshQueue {
 
   nextOrder(): number {
     this.order += 1
+
     return this.order
   }
 
@@ -153,6 +161,7 @@ export class PRRefreshQueue {
     const existing = this.entries.get(key)
     const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
     const dueAt = freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0)
+
     if (!existing) {
       this.entries.set(key, {
         key,
@@ -164,15 +173,18 @@ export class PRRefreshQueue {
         queuedAt: this.nextOrder(),
         windowId
       })
+
       return { alias, key, dueAt, coalesced: false }
     }
 
     setLiveAlias(existing.aliases, alias)
+
     const shouldPromote =
       priority > existing.priority ||
       reason === 'manual' ||
       (reason === 'active' && existing.reason === 'active') ||
       (priority >= existing.priority && dueAt < existing.dueAt && bypassesFreshnessDelay(reason))
+
     if (shouldPromote) {
       existing.priority = priority
       existing.reason = reason
@@ -189,21 +201,27 @@ export class PRRefreshQueue {
         currentHeadOid: candidate.currentHeadOid ?? null
       }
     }
+
     return { alias, key, dueAt, coalesced: true }
   }
 
   removeInvalidAlias(key: string, alias: GitHubPRRefreshAlias): void {
     const existing = this.entries.get(key)
+
     if (!existing) {
       return
     }
+
     existing.aliases.delete(alias.cacheKey)
     const replacement = existing.aliases.values().next().value
+
     if (!replacement) {
       this.entries.delete(key)
       this.resetRetryState(key)
+
       return
     }
+
     if (existing.candidate.cacheKey === alias.cacheKey) {
       existing.candidate = {
         ...existing.candidate,
@@ -220,22 +238,27 @@ export class PRRefreshQueue {
   pruneWorktreeAliases(worktreeId: string): void {
     for (const [key, entry] of this.entries) {
       let removed = false
+
       for (const [cacheKey, alias] of entry.aliases) {
         if (alias.worktreeId === worktreeId) {
           entry.aliases.delete(cacheKey)
           removed = true
         }
       }
+
       if (!removed) {
         continue
       }
+
       if (entry.aliases.size === 0) {
         this.entries.delete(key)
         this.resetRetryState(key)
         continue
       }
+
       if (entry.candidate.worktreeId === worktreeId) {
         const replacement = entry.aliases.values().next().value
+
         if (replacement) {
           entry.candidate = {
             ...entry.candidate,
@@ -251,26 +274,34 @@ export class PRRefreshQueue {
 
   removeInvisibleVisibleEntries(isVisible: (key: string) => boolean): PRRefreshQueueEntry[] {
     const removed: PRRefreshQueueEntry[] = []
+
     for (const [key, entry] of this.entries) {
       if (entry.reason !== 'visible' || isVisible(key)) {
         continue
       }
+
       this.entries.delete(key)
       this.resetRetryState(key)
       removed.push(entry)
     }
+
     return removed
   }
 
   setVisibleFollowUp(entry: PRRefreshQueueEntry): void {
     const existing = this.entries.get(entry.key)
+
     if (!existing) {
       this.set(entry.key, entry)
+
       return
     }
+
     let candidateSuperseded = false
+
     for (const alias of entry.aliases.values()) {
       const preserved = mergeFollowUpAlias(existing.aliases, alias)
+
       if (
         preserved &&
         alias.worktreeId === entry.candidate.worktreeId &&
@@ -279,6 +310,7 @@ export class PRRefreshQueue {
         candidateSuperseded = true
       }
     }
+
     if (
       candidateSuperseded ||
       bypassesFreshnessDelay(existing.reason) ||
@@ -287,6 +319,7 @@ export class PRRefreshQueue {
     ) {
       return
     }
+
     this.set(entry.key, { ...entry, aliases: existing.aliases })
   }
 
@@ -294,15 +327,19 @@ export class PRRefreshQueue {
     activeOrder: (a: PRRefreshQueueEntry, b: PRRefreshQueueEntry) => number
   ): PRRefreshQueueEntry[] {
     const now = Date.now()
+
     return Array.from(this.entries.values()).sort((a, b) => {
       const aReady = a.dueAt <= now
       const bReady = b.dueAt <= now
+
       if (aReady && bReady) {
         return b.priority - a.priority || activeOrder(a, b) || a.dueAt - b.dueAt
       }
+
       if (aReady !== bReady) {
         return aReady ? -1 : 1
       }
+
       return a.dueAt - b.dueAt || b.priority - a.priority
     })
   }

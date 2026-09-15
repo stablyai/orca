@@ -30,6 +30,7 @@ export function buildRestoredRemoteBrowserPageHandles(
   browserPagesByWorkspace: Record<string, BrowserPage[]>
 ): Record<string, RemoteBrowserPageHandle> {
   const handles: Record<string, RemoteBrowserPageHandle> = {}
+
   for (const pages of Object.values(browserPagesByWorkspace)) {
     for (const page of pages) {
       if (
@@ -39,6 +40,7 @@ export function buildRestoredRemoteBrowserPageHandles(
       ) {
         continue
       }
+
       handles[page.id] = {
         environmentId: page.browserRuntimeEnvironmentId,
         remotePageId: page.remoteBrowserPageId,
@@ -47,6 +49,7 @@ export function buildRestoredRemoteBrowserPageHandles(
       }
     }
   }
+
   return handles
 }
 
@@ -75,6 +78,7 @@ export function getBrowserSettingsRuntimeEnvironmentId(
   state: Pick<AppState, 'browserSessionHostIdOverride' | 'settings'>
 ): string | null {
   const parsed = parseExecutionHostId(getBrowserSettingsHostId(state))
+
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
 }
 
@@ -90,12 +94,15 @@ export function getBrowserSessionProfileHostId(
   if (browserRuntimeEnvironmentId === null) {
     return LOCAL_EXECUTION_HOST_ID
   }
+
   if (browserRuntimeEnvironmentId !== undefined) {
     const runtimeEnvironmentId = browserRuntimeEnvironmentId.trim()
+
     return runtimeEnvironmentId
       ? toRuntimeExecutionHostId(runtimeEnvironmentId)
       : LOCAL_EXECUTION_HOST_ID
   }
+
   return getBrowserWorktreeHostId(state, worktreeId)
 }
 
@@ -165,11 +172,14 @@ export function getFallbackTabTypeForWorktree(
   if (openFiles.some((file) => file.worktreeId === worktreeId)) {
     return 'editor'
   }
+
   if ((browserTabsByWorktree?.[worktreeId] ?? []).length > 0) {
     return 'browser'
   }
+
   if ((terminalTabsByWorktree[worktreeId] ?? []).length > 0) {
     return 'terminal'
   }
+
   return 'terminal'
 }

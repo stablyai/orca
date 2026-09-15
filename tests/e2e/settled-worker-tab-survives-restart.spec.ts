@@ -41,32 +41,40 @@ async function findSecondaryWorktree(
     .poll(
       async () => {
         const listed = await client.call<{ worktrees: { id: string }[] }>('worktree.list', {})
+
         // The restart fixture only waits for the primary; refetch until the seeded secondary lands.
         const rendererWorktreeIds = await page.evaluate(async () => {
           const store = window.__store
+
           if (!store) {
             return []
           }
+
           await Promise.all(
             store.getState().repos.map((repo) => store.getState().fetchWorktrees(repo.id))
           )
+
           return Object.values(store.getState().worktreesByRepo)
             .flat()
             .map((worktree) => worktree.id)
         })
+
         targetWorktreeId =
           listed.result.worktrees.find(
             (worktree) =>
               worktree.id !== coordinatorWorktreeId && rendererWorktreeIds.includes(worktree.id)
           )?.id ?? null
+
         return targetWorktreeId
       },
       { timeout: 60_000, message: 'runtime never registered the secondary worktree' }
     )
     .not.toBeNull()
+
   if (!targetWorktreeId) {
     throw new Error('The seeded repository did not expose its secondary worktree')
   }
+
   return targetWorktreeId
 }
 
@@ -110,15 +118,19 @@ for (const daemonSessionGone of [false, true]) {
   {}, testInfo) => {
     test.setTimeout(300_000)
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
     if (!repoPath || !existsSync(repoPath)) {
       test.skip(true, 'Global setup did not produce a seeded test repo')
+
       return
     }
+
     clearCompletedWorkerLedger()
 
     const session = createRestartSession(testInfo, completedWorkerLaunchEnv)
     let firstApp: ElectronApplication | null = null
     let secondApp: ElectronApplication | null = null
+
     try {
       const first = await session.launch()
       firstApp = first.app
@@ -145,17 +157,21 @@ for (const daemonSessionGone of [false, true]) {
       const isolatedHome = await firstApp.evaluate(({ app }) => app.getPath('home'))
       const client = new RuntimeClient(session.userDataDir, 30_000, null, null)
       const coordinatorPane = await waitForActivePaneHookDescriptor(first.page)
+
       const coordinatorHandle = (
         await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
           paneKey: coordinatorPane.paneKey
         })
       ).result.terminal.handle
+
       const targetWorktreeId = await findSecondaryWorktree(
         first.page,
         client,
         coordinatorWorktreeId
       )
+
       const targetWorktreePath = splitWorktreeIdForFilesystem(targetWorktreeId)?.worktreePath
+
       if (!targetWorktreePath) {
         throw new Error('The secondary worktree did not expose a filesystem path')
       }
@@ -164,11 +180,13 @@ for (const daemonSessionGone of [false, true]) {
         objective: 'Keep one settled worker tab across restart',
         from: coordinatorHandle
       })
+
       const task = await client.call<{ task: { id: string } }>('orchestration.taskCreate', {
         spec: 'Report completion and stay open',
         run: run.result.run.id,
         callerTerminalHandle: coordinatorHandle
       })
+
       const started = await client.call<{
         dispatchId: string
         state: string
@@ -180,13 +198,17 @@ for (const daemonSessionGone of [false, true]) {
         agent: 'codex',
         timeoutMs: 30_000
       })
+
       expect(started.result.state).toBe('ready')
+
       const workerHandle = started.result.effects.find(
         (effect) => effect.kind === 'terminal' && effect.role === 'agent'
       )?.id
+
       if (!workerHandle) {
         throw new Error('worker-start did not return its agent terminal')
       }
+
       let worker: RuntimeTerminalSummary | undefined
       await expect
         .poll(
@@ -194,14 +216,17 @@ for (const daemonSessionGone of [false, true]) {
             worker = (await listRuntimeTerminals(client)).find(
               (terminal) => terminal.handle === workerHandle
             )
+
             return worker?.ptyId ?? null
           },
           { timeout: 30_000, message: 'background worker never published its PTY identity' }
         )
         .not.toBeNull()
+
       if (!worker?.ptyId) {
         throw new Error('Background worker did not publish its PTY')
       }
+
       const workerPtyId = worker.ptyId
       const workerTabId = worker.tabId
       const workerPaneKey = `${worker.tabId}:${worker.leafId}`
@@ -210,17 +235,21 @@ for (const daemonSessionGone of [false, true]) {
       await expect
         .poll(() => {
           dispatchCapability = readCompletedWorkerDispatchCapability()
+
           return dispatchCapability
         })
         .not.toBeNull()
+
       if (!dispatchCapability) {
         throw new Error('Background worker did not receive its dispatch capability')
       }
+
       const transcriptPath = seedCurrentCodexTranscript(
         isolatedHome,
         PROVIDER_SESSION_ID,
         targetWorktreePath
       )
+
       await first.page.evaluate(
         ({
           agentCommand,
@@ -232,10 +261,13 @@ for (const daemonSessionGone of [false, true]) {
           worktreeId
         }) => {
           const state = window.__store?.getState()
+
           if (!state) {
             throw new Error('Renderer store unavailable')
           }
+
           const metadata = { tabId, worktreeId, terminalHandle }
+
           const recovery = {
             providerSession: { key: 'session_id' as const, id: providerSessionId, transcriptPath },
             launchConfig: {
@@ -244,6 +276,7 @@ for (const daemonSessionGone of [false, true]) {
               agentEnv: {}
             }
           }
+
           for (const agentState of ['working', 'done'] as const) {
             state.setAgentStatus(
               paneKey,
@@ -265,6 +298,7 @@ for (const daemonSessionGone of [false, true]) {
           worktreeId: targetWorktreeId
         }
       )
+
       const completed = await client.call<{ message: { type: string } }>(
         'orchestration.send',
         {
@@ -280,10 +314,13 @@ for (const daemonSessionGone of [false, true]) {
         },
         { orchestrationCapability: dispatchCapability }
       )
+
       expect(completed.result.message.type).toBe('worker_done')
+
       const taskBeforeRestart = (
         await client.call('orchestration.taskList', { run: run.result.run.id })
       ).result
+
       const dispatchBeforeRestart = (
         await client.call('orchestration.dispatchShow', { task: task.result.task.id })
       ).result
@@ -298,12 +335,15 @@ for (const daemonSessionGone of [false, true]) {
       const launchesBeforeRestart = readCompletedWorkerLedger().filter(
         (event) => event.event === 'spawn'
       )
+
       if (daemonSessionGone) {
         const daemonDir = path.join(session.userDataDir, 'daemon')
+
         const daemon = new DaemonClient({
           socketPath: getDaemonSocketPath(daemonDir),
           tokenPath: getDaemonTokenPath(daemonDir)
         })
+
         try {
           await daemon.ensureConnected()
           await daemon.request('kill', { sessionId: workerPtyId, immediate: true })
@@ -313,6 +353,7 @@ for (const daemonSessionGone of [false, true]) {
                 'listSessions',
                 undefined
               )
+
               return result.sessions.some((entry) => entry.sessionId === workerPtyId)
             })
             .toBe(false)
@@ -320,9 +361,11 @@ for (const daemonSessionGone of [false, true]) {
           daemon.disconnect()
         }
       }
+
       const second = await session.launch()
       secondApp = second.app
       await waitForSessionReady(second.page)
+
       if (!daemonSessionGone) {
         // The restarted runtime must rediscover the daemon-owned worker before reveal.
         await expect
@@ -335,6 +378,7 @@ for (const daemonSessionGone of [false, true]) {
           )
           .toBe(true)
       }
+
       expect(
         await second.page.evaluate(
           ({ tabId, worktreeId }) =>
@@ -347,6 +391,7 @@ for (const daemonSessionGone of [false, true]) {
 
       // Hidden mount, then click to reveal: reveal runs the missing-session reconciler.
       await backgroundMountTab(second.page, targetWorktreeId, workerTabId)
+
       // Poll, don't sample: main's cache learns the session when the pane's deferred reattach lands,
       // and backgroundMountTab only waits for the pane manager to exist. A restarted main that never
       // attaches stays false for the whole window, which is the regression this guards.
@@ -359,29 +404,35 @@ for (const daemonSessionGone of [false, true]) {
           })
           .toBe(true)
       }
+
       await second.page.evaluate(
         ({ tabId, worktreeId }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('Renderer store unavailable')
           }
+
           type Transition = {
             activeWorktreeId: string | null
             tabPresent: boolean
             leafPtyIds: string[]
             activeTabId: string | null
           }
+
           const snapshot = (state: ReturnType<typeof store.getState>): Transition => ({
             activeWorktreeId: state.activeWorktreeId ?? null,
             tabPresent: Boolean(state.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)),
             leafPtyIds: Object.values(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}),
             activeTabId: state.activeTabIdByWorktree[worktreeId] ?? null
           })
+
           const transitions: Transition[] = [snapshot(store.getState())]
           const e2eWindow = window as typeof window & { __orcaRevealTransitions?: Transition[] }
           e2eWindow.__orcaRevealTransitions = transitions
           store.subscribe((state) => {
             const next = snapshot(state)
+
             if (JSON.stringify(next) !== JSON.stringify(transitions.at(-1))) {
               transitions.push(next)
             }
@@ -393,14 +444,17 @@ for (const daemonSessionGone of [false, true]) {
         .locator(`[role="option"][data-worktree-id="${targetWorktreeId}"]`)
         .first()
         .click()
+
       const visibleTab = second.page
         .locator(`[data-testid="sortable-tab"][data-tab-id="${workerTabId}"]`)
         .first()
+
       await visibleTab.click({ timeout: 10_000 })
       await expect(visibleTab).toBeVisible()
       await ensureTerminalVisible(second.page)
       // Give the reconciler's async verdict time to land; the tab must never have left.
       await second.page.waitForTimeout(3_000)
+
       const transitions = await second.page.evaluate(
         () =>
           (
@@ -413,6 +467,7 @@ for (const daemonSessionGone of [false, true]) {
             }
           ).__orcaRevealTransitions ?? []
       )
+
       // Pre-fix this read: leaf binding cleared -> tab removed -> worktree deselected -> tab re-added by graph sync.
       expect(
         transitions.filter(
@@ -427,6 +482,7 @@ for (const daemonSessionGone of [false, true]) {
           workerTabId
         )
       ).toBe(true)
+
       if (!daemonSessionGone) {
         expect(
           (await listRuntimeTerminals(client)).find((terminal) => terminal.ptyId === workerPtyId)
@@ -436,19 +492,24 @@ for (const daemonSessionGone of [false, true]) {
           readCompletedWorkerLedger().filter((event) => event.event === 'normal-exit')
         ).toEqual([])
       }
+
       const newLaunches = readCompletedWorkerLedger()
         .filter((event) => event.event === 'spawn')
         .slice(launchesBeforeRestart.length)
+
       if (daemonSessionGone) {
         expect(newLaunches.length).toBeLessThanOrEqual(1)
+
         for (const launch of newLaunches) {
           // Codex's --resume equivalent is the `resume <session-id>` subcommand.
           expect(launch.args).toContain('resume')
           expect(launch.args).toContain(PROVIDER_SESSION_ID)
         }
+
         const listed = await client.call<{
           workers: { dispatchId: string; terminalState: string; workerState: string }[]
         }>('orchestration.workerList', { run: run.result.run.id })
+
         await testInfo.attach('resumed-worker-accounting', {
           body: JSON.stringify({ newLaunches, workers: listed.result.workers }),
           contentType: 'application/json'
@@ -466,6 +527,7 @@ for (const daemonSessionGone of [false, true]) {
           await second.page.evaluate((ptyId) => window.api.pty.hasPty(ptyId), workerPtyId)
         ).toBe(true)
       }
+
       expect(readCompletedWorkerLedger().filter((event) => event.event === 'normal-exit')).toEqual(
         []
       )
@@ -476,9 +538,11 @@ for (const daemonSessionGone of [false, true]) {
         (await client.call('orchestration.dispatchShow', { task: task.result.task.id })).result
       ).toEqual(dispatchBeforeRestart)
       await expect(visibleTab).toBeVisible()
+
       const paneKeys = await second.page.evaluate((tabId) => {
         const layout = window.__store?.getState().terminalLayoutsByTabId[tabId]
         const leaves: string[] = []
+
         const visit = (node: NonNullable<typeof layout>['root']) => {
           if (node.type === 'leaf') {
             leaves.push(`${tabId}:${node.leafId}`)
@@ -487,11 +551,14 @@ for (const daemonSessionGone of [false, true]) {
             visit(node.second)
           }
         }
+
         if (layout?.root) {
           visit(layout.root)
         }
+
         return leaves
       }, workerTabId)
+
       expect(paneKeys).toContain(workerPaneKey)
       expect(
         await secondApp.evaluate(({ BrowserWindow }) =>
@@ -512,6 +579,7 @@ for (const daemonSessionGone of [false, true]) {
         )
       ).toBe(true)
       expect(persisted.terminalLayoutsByTabId[workerTabId]).toBeDefined()
+
       if (!daemonSessionGone) {
         expect(
           Object.values(persisted.terminalLayoutsByTabId[workerTabId].ptyIdsByLeafId)
@@ -521,9 +589,11 @@ for (const daemonSessionGone of [false, true]) {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })

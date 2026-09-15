@@ -60,6 +60,7 @@ vi.mock('../browser/browser-session-registry', () => ({
 
 function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
+
   const bridge = overrides.getAgentBrowserBridge
     ? overrides.getAgentBrowserBridge()
     : ({
@@ -67,6 +68,7 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
         getActivePageId: vi.fn(() => 'page-1'),
         tabList: vi.fn(() => ({ tabs: [] }))
       } as unknown as AgentBrowserBridge)
+
   return {
     resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
@@ -109,11 +111,13 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     const closeTab = vi.fn(async () => {})
     const retireRuntimeOwnedBrowserSessionTab = vi.fn()
+
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-offscreen', 202]])),
       getActivePageId: vi.fn(() => 'page-offscreen'),
       getActiveWebContentsId: vi.fn(() => 202)
     } as unknown as AgentBrowserBridge
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
@@ -145,11 +149,13 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     const closeTab = vi.fn(async () => {})
+
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-active', 303]])),
       getActivePageId: vi.fn(() => 'page-active'),
       getActiveWebContentsId: vi.fn(() => 303)
     } as unknown as AgentBrowserBridge
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
@@ -167,11 +173,13 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   it('reports not-closed when no headless tab can be resolved', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const closeTab = vi.fn(async () => {})
+
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map()),
       getActivePageId: vi.fn(() => null),
       getActiveWebContentsId: vi.fn(() => null)
     } as unknown as AgentBrowserBridge
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
@@ -189,10 +197,12 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
   it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
+
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
       keyboardInsertText
     } as unknown as AgentBrowserBridge
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,

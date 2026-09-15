@@ -19,6 +19,7 @@ import { forgetStaleCodexPanes, listStaleCodexPanes } from './codex-stale-pane-a
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 
 let userDataPath: string
+
 let previousUserDataPath: string | undefined
 
 function settingsWithSelection(
@@ -41,11 +42,13 @@ beforeEach(() => {
 afterEach(() => {
   __resetShellStartupEnvCache()
   rmSync(userDataPath, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   _internals.resetCache()
 })
 
@@ -257,6 +260,7 @@ describe('codex pane account registry', () => {
     for (let index = 0; index < 20; index += 1) {
       recordCodexPaneAccount(`pty-${index}`, { selectionKey: 'host', accountId: 'account-a' })
     }
+
     _internals.resetCache()
 
     expect(getCodexPaneAccount('pty-0')).not.toBeNull()

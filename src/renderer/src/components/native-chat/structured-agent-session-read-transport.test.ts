@@ -29,6 +29,7 @@ const target = { kind: 'local' } as const
 
 function snapshot(sequence: number): AgentSessionSubscribeEvent {
   const cursor: AgentJournalCursor = { epoch: 'epoch-a', sequence }
+
   const page: AgentSessionHistoryPage = {
     sessionId: 'session-a',
     epoch: cursor.epoch,
@@ -41,6 +42,7 @@ function snapshot(sequence: number): AgentSessionSubscribeEvent {
     hasOlder: false,
     hasNewer: false
   }
+
   return { type: 'snapshot', sessionId: 'session-a', page, fence: sequence }
 }
 
@@ -63,7 +65,9 @@ describe('structured agent-session read transport generations', () => {
         onEvent,
         unsubscribe: vi.fn<() => void>()
       }
+
       attempts.push(attempt)
+
       return attempt.closed.promise
     })
   })
@@ -82,8 +86,10 @@ describe('structured agent-session read transport generations', () => {
 
   it('flushes queued rows before reading the applied cursor for reconnect', async () => {
     vi.useFakeTimers()
+
     try {
       let state = EMPTY_STRUCTURED_AGENT_SESSION
+
       const transport = startStructuredAgentSessionReadTransport({
         applyEvent: (event) => {
           state = reduceStructuredAgentSession(state, { type: 'event', event })
@@ -94,6 +100,7 @@ describe('structured agent-session read transport generations', () => {
         sessionId: 'session-a',
         target
       })
+
       attempts[0].onEvent(snapshot(100))
       attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
       await flushPromises()
@@ -154,6 +161,7 @@ describe('structured agent-session read transport generations', () => {
 
   it('ignores callbacks from a subscription superseded by reconnect', async () => {
     vi.useFakeTimers()
+
     try {
       const applyEvent = vi.fn()
       const applyError = vi.fn()
@@ -202,7 +210,9 @@ describe('structured agent-session read transport unattached refusals', () => {
         onEvent,
         unsubscribe: vi.fn<() => void>()
       }
+
       attempts.push(attempt)
+
       return attempt.closed.promise
     })
   })
@@ -227,16 +237,20 @@ describe('structured agent-session read transport unattached refusals', () => {
     const error = new Error(code) as Error & { code: string }
     error.name = 'RuntimeRpcCallError'
     error.code = code
+
     return error
   }
 
   it('keeps an unattached history refusal off the pane and retries instead', async () => {
     vi.useFakeTimers()
+
     try {
       const applyError = vi.fn()
+
       const transport = startWithHydration(async () => {
         throw rpcRefusal(UNATTACHED)
       }, applyError)
+
       await flushPromises()
       expect(applyError).not.toHaveBeenCalled()
 
@@ -250,11 +264,14 @@ describe('structured agent-session read transport unattached refusals', () => {
 
   it('surfaces an unattached refusal that outlives the grace window', async () => {
     vi.useFakeTimers()
+
     try {
       const applyError = vi.fn()
+
       const transport = startWithHydration(async () => {
         throw rpcRefusal(UNATTACHED)
       }, applyError)
+
       await flushPromises()
       expect(applyError).not.toHaveBeenCalled()
 
@@ -264,6 +281,7 @@ describe('structured agent-session read transport unattached refusals', () => {
         await vi.advanceTimersByTimeAsync(750)
         attempts.at(-1)?.onError(rpcRefusal(UNATTACHED))
       }
+
       expect(applyError).not.toHaveBeenCalled()
 
       // ...and the failure is owed once it has passed.
@@ -278,11 +296,14 @@ describe('structured agent-session read transport unattached refusals', () => {
 
   it('reports an unrelated read failure immediately', async () => {
     vi.useFakeTimers()
+
     try {
       const applyError = vi.fn()
+
       const transport = startWithHydration(async () => {
         throw new Error('journal read failed')
       }, applyError)
+
       await flushPromises()
       expect(applyError).toHaveBeenCalledExactlyOnceWith('Error: journal read failed')
       transport.dispose()
@@ -293,6 +314,7 @@ describe('structured agent-session read transport unattached refusals', () => {
 
   it('classifies the raw refusal payload a stream delivers to its error callback', async () => {
     vi.useFakeTimers()
+
     try {
       const applyError = vi.fn()
       const transport = startWithHydration(async () => undefined, applyError)
@@ -312,6 +334,7 @@ describe('structured agent-session read transport unattached refusals', () => {
 
   it('restarts the grace once a read lands, so a later refusal is transitional again', async () => {
     vi.useFakeTimers()
+
     try {
       const applyError = vi.fn()
       const applyEvent = vi.fn()

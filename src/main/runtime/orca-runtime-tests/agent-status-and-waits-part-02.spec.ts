@@ -17,6 +17,7 @@ describe('OrcaRuntimeService', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -43,6 +44,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -83,6 +85,7 @@ describe('OrcaRuntimeService', () => {
   it('prefers fresh explicit working state over a stale permission title', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -98,6 +101,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -138,6 +142,7 @@ describe('OrcaRuntimeService', () => {
   it('reports permission from a live title over fresh explicit working state', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -153,6 +158,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -194,6 +200,7 @@ describe('OrcaRuntimeService', () => {
   it('does not let fresh explicit hook state authorize a current shell terminal', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -209,6 +216,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -249,6 +257,7 @@ describe('OrcaRuntimeService', () => {
   it('does not let fresh explicit hook state authorize a shell foreground process', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -264,6 +273,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -304,6 +314,7 @@ describe('OrcaRuntimeService', () => {
   it('uses strong provider confirmation to authorize fresh hook state over a shell foreground', async () => {
     const getForegroundProcess = vi.fn(async () => 'powershell.exe')
     const confirmForegroundProcess = vi.fn(async () => 'claude')
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       confirmForegroundProcess
@@ -326,6 +337,7 @@ describe('OrcaRuntimeService', () => {
     const provider = { inspectProcess: providerInspectProcess } as unknown as IPtyProvider
     const inspectProcess = vi.fn((ptyId: string) => inspectPtyProviderProcess(provider, ptyId))
     const getForegroundProcess = vi.fn(async () => null)
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       inspectProcess
@@ -343,8 +355,10 @@ describe('OrcaRuntimeService', () => {
       hasChildProcesses: true,
       unavailable: true as const
     }
+
     const inspectProcess = vi.fn(async () => inspection)
     const getForegroundProcess = vi.fn(async () => null)
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       inspectProcess
@@ -357,11 +371,13 @@ describe('OrcaRuntimeService', () => {
 
   it('calls foreground confirmation with its controller receiver', async () => {
     const getForegroundProcess = vi.fn(async () => 'powershell.exe')
+
     const confirmForegroundProcess = vi.fn(
       async function (this: { getForegroundProcess: typeof getForegroundProcess }) {
         return this.getForegroundProcess === getForegroundProcess ? 'codex' : null
       }
     )
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       confirmForegroundProcess
@@ -386,6 +402,7 @@ describe('OrcaRuntimeService', () => {
     ]
   ])('fails closed when shell-conflict confirmation returns %s', async (_case, confirm) => {
     const confirmForegroundProcess = vi.fn(confirm)
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess: async () => 'zsh',
       confirmForegroundProcess
@@ -414,6 +431,7 @@ describe('OrcaRuntimeService', () => {
   it('skips strong confirmation when ordinary foreground evidence recognizes an agent', async () => {
     const getForegroundProcess = vi.fn(async () => 'codex')
     const confirmForegroundProcess = vi.fn(async () => 'codex')
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       confirmForegroundProcess
@@ -430,6 +448,7 @@ describe('OrcaRuntimeService', () => {
   it('skips both foreground reads when current title evidence blocks explicit hook state', async () => {
     const getForegroundProcess = vi.fn(async () => 'zsh')
     const confirmForegroundProcess = vi.fn(async () => 'codex')
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       confirmForegroundProcess,
@@ -448,10 +467,12 @@ describe('OrcaRuntimeService', () => {
     for (const blocked of ['title', 'wait'] as const) {
       const getForegroundProcess = vi.fn(async () => 'zsh')
       const confirmForegroundProcess = vi.fn(async () => 'codex')
+
       const { runtime, handle } = await createExplicitAgentStatusHarness({
         getForegroundProcess,
         confirmForegroundProcess
       })
+
       runtime.onPtyData(
         'pty-1',
         blocked === 'title'
@@ -475,6 +496,7 @@ describe('OrcaRuntimeService', () => {
     const foreground = deferred<string | null>()
     const getForegroundProcess = vi.fn(() => foreground.promise)
     const confirmForegroundProcess = vi.fn(async () => 'codex')
+
     const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
       confirmForegroundProcess
@@ -493,6 +515,7 @@ describe('OrcaRuntimeService', () => {
     const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
       getForegroundProcess: async () => 'zsh'
     })
+
     runtime.setPtyController(null)
 
     const status = runtime.getTerminalAgentStatus(handle)
@@ -504,6 +527,7 @@ describe('OrcaRuntimeService', () => {
   it('rejects confirmation evidence when the handle rebinds during the fresh read', async () => {
     const confirmation = deferred<string | null>()
     const confirmForegroundProcess = vi.fn(() => confirmation.promise)
+
     const { runtime, handle, syncPty } = await createExplicitAgentStatusHarness({
       getForegroundProcess: async () => 'powershell.exe',
       confirmForegroundProcess
@@ -520,6 +544,7 @@ describe('OrcaRuntimeService', () => {
   it('rejects confirmation evidence when the owning PTY exits', async () => {
     const confirmation = deferred<string | null>()
     const confirmForegroundProcess = vi.fn(() => confirmation.promise)
+
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess: async () => 'powershell.exe',
       confirmForegroundProcess
@@ -576,6 +601,7 @@ describe('OrcaRuntimeService', () => {
   it('maps fresh explicit done hook state to idle for send readiness', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -591,6 +617,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,

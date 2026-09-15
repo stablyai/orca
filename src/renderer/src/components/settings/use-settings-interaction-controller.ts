@@ -28,6 +28,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     settings,
     updateSettings
   } = model
+
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const installedFontsLoadedRef = useRef(false)
@@ -44,6 +45,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+
   // Why: the close guard registers once, so it reads latest dirty state from a ref instead of a lagging closure.
   const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
   hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
@@ -54,6 +56,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
         .catch(() => undefined)
         .then(async () => {
           const latestSettings = useAppStore.getState().settings ?? settings
+
           if (!latestSettings) {
             return
           }
@@ -62,7 +65,9 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
           const resolvedPatch = typeof patch === 'function' ? patch(latestConfig) : patch
           await updateSettings({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
         })
+
       sourceControlAiWriteQueueRef.current = next
+
       return next
     },
     [settings, updateSettings]
@@ -73,6 +78,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
       if (node) {
         return
       }
+
       // Why: clear the transient search filter on close, else the next visit opens with whole sections still hidden.
       setSettingsSearchQuery('')
     },
@@ -81,9 +87,11 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
 
   const setContentScrollNode = useCallback((node: HTMLDivElement | null): void => {
     contentScrollRef.current = node
+
     if (node !== null) {
       return
     }
+
     // Why: cancel pending subsection jumps with the scroll container so a stale deep-link frame can't run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
@@ -92,6 +100,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
   useEffect(() => {
     // Why: StrictMode replays mount effects; async font requests should still commit while Settings is mounted.
     settingsMountedRef.current = true
+
     return () => {
       settingsMountedRef.current = false
     }
@@ -101,10 +110,12 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     if (!highlightedSettingsTargetId) {
       return
     }
+
     const timeout = window.setTimeout(
       () => setHighlightedSettingsTargetId(null),
       SETTINGS_TARGET_HIGHLIGHT_MS
     )
+
     return () => window.clearTimeout(timeout)
   }, [highlightedSettingsTargetId, setHighlightedSettingsTargetId])
 
@@ -119,11 +130,14 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
         if (!settingsMountedRef.current) {
           return
         }
+
         // Latch after the first successful attempt even when empty, so a font-less system doesn't reissue listFonts() each time.
         installedFontsLoadedRef.current = true
+
         if (fonts.length === 0) {
           return
         }
+
         setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
       })
       .catch(() => {
@@ -154,12 +168,15 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     if (!hasUnsavedSourceControlAiPromptChanges) {
       return true
     }
+
     const shouldDiscard = await promptDiscardSourceControlAiPromptChanges()
+
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
       setHasUnsavedBranchPromptChanges(false)
     }
+
     return shouldDiscard
   }, [
     promptDiscardSourceControlAiPromptChanges,
@@ -173,6 +190,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     if (!(await confirmDiscardSourceControlAiPromptChanges())) {
       return
     }
+
     closeSettingsPage()
   }, [closeSettingsPage, confirmDiscardSourceControlAiPromptChanges])
 

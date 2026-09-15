@@ -6,7 +6,9 @@ import {
 } from './terminal-ime-input-context-refresh'
 
 export type TerminalInputFocusSync = (focused: boolean) => void
+
 export type RefocusScheduler = TerminalImeInputContextRefocusScheduler
+
 export const REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE = 'data-regular-terminal-input-focused'
 
 export function isXtermHelperTextarea(target: EventTarget | null): target is HTMLElement {
@@ -17,6 +19,7 @@ export function setRegularTerminalInputFocusAttribute(focused: boolean): void {
   if (typeof document === 'undefined') {
     return
   }
+
   document.documentElement.toggleAttribute(REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE, focused)
 }
 
@@ -27,6 +30,7 @@ export function getPaneOwnedActiveHelperTextarea(
   if (!isXtermHelperTextarea(activeElement) || !container.contains(activeElement)) {
     return null
   }
+
   return activeElement
 }
 
@@ -37,6 +41,7 @@ export function releaseTerminalFocusForOutsidePointerDown(args: {
   syncFocused: TerminalInputFocusSync
 }): boolean {
   const activeHelper = getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)
+
   if (!activeHelper) {
     return false
   }
@@ -47,6 +52,7 @@ export function releaseTerminalFocusForOutsidePointerDown(args: {
 
   args.syncFocused(false)
   activeHelper.blur()
+
   return true
 }
 
@@ -59,11 +65,13 @@ export function releaseTerminalFocusForWindowBlur(args: {
   // refocus *that* split, not whichever helper happens to be first in the DOM
   // (a single TerminalPane hosts every split as siblings under one container).
   const releasedHelper = getPaneOwnedActiveHelperTextarea(args.container, args.activeElement)
+
   if (!releasedHelper) {
     return null
   }
 
   args.syncFocused(false)
+
   return releasedHelper
 }
 
@@ -89,6 +97,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
   if (!helper) {
     const ownerDocument = args.container.ownerDocument
     const releasedHelper = args.releasedHelper
+
     if (
       releasedHelper &&
       releasedHelper.isConnected &&
@@ -114,23 +123,30 @@ export function resyncTerminalFocusForWindowFocus(args: {
     schedule(() => {
       if (!reclaimedHelper.isConnected) {
         syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
+
         return
       }
+
       const active = reclaimedHelper.ownerDocument.activeElement
+
       if (
         active === reclaimedHelper ||
         isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
       ) {
         reclaimedHelper.focus()
+
         if (reclaimedHelper.ownerDocument.activeElement === reclaimedHelper) {
           args.syncFocused(true)
         } else {
           syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
         }
+
         return
       }
+
       syncFocusAfterFailedReclaim(active, args.syncFocused)
     })
+
     return true
   }
 

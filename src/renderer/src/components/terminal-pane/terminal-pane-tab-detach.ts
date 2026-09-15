@@ -2,10 +2,12 @@ import type { AppState } from '@/store'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
+
 export {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
 } from './terminal-tab-strip-drop-target'
+
 export type { TerminalTabStripDropTarget } from './terminal-tab-strip-drop-target'
 
 export type TerminalPaneTabDetachStore = Pick<
@@ -44,6 +46,7 @@ function withDetachedPtyFallback(args: {
   if (!args.ptyId || args.detachedLayout.ptyIdsByLeafId?.[args.leafId]) {
     return args.detachedLayout
   }
+
   return {
     ...args.detachedLayout,
     ptyIdsByLeafId: {
@@ -63,12 +66,15 @@ function moveCreatedTabToIndex(args: {
   if (args.targetIndex === undefined) {
     return
   }
+
   const group = args.store.groupsByWorktree[args.worktreeId]?.find(
     (candidate) => candidate.id === args.groupId
   )
+
   if (!group) {
     return
   }
+
   const orderWithoutCreatedTab = (group.tabOrder ?? []).filter((id) => id !== args.tabId)
   const insertionIndex = Math.min(Math.max(args.targetIndex, 0), orderWithoutCreatedTab.length)
   const nextOrder = [...orderWithoutCreatedTab]
@@ -89,39 +95,47 @@ export function detachTerminalPaneToTab(args: {
   worktreeId: string
 }): DetachedTerminalPaneTab | null {
   const initialStore = args.getStore()
+
   const targetGroupExists =
     initialStore.groupsByWorktree[args.worktreeId]?.some(
       (group) => group.id === args.targetGroupId
     ) ?? false
+
   if (!args.manager || !targetGroupExists || args.manager.getPanes().length <= 1) {
     return null
   }
 
   const sourceLeafId = args.manager.getLeafId(args.sourcePaneId)
+
   if (!sourceLeafId) {
     return null
   }
 
   const persistedPtyId =
     initialStore.terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[sourceLeafId]
+
   const cwdDeferred = Boolean(
     args.sourcePaneCwd?.pendingCwd || args.sourcePaneCwd?.deferredSplitSpawn
   )
+
   if (cwdDeferred && !persistedPtyId && !args.fallbackPtyId) {
     return null
   }
 
   args.persistLayoutSnapshot()
   const store = args.getStore()
+
   const detached = detachTerminalLayoutLeaf(
     store.terminalLayoutsByTabId[args.sourceTabId],
     sourceLeafId
   )
+
   if (!detached) {
     return null
   }
 
   const ptyId = detached.ptyId ?? args.fallbackPtyId ?? null
+
   const detachedLayout = withDetachedPtyFallback({
     leafId: sourceLeafId,
     ptyId,
@@ -135,9 +149,11 @@ export function detachTerminalPaneToTab(args: {
   }
 
   const latestStore = args.getStore()
+
   const sourceShellOverride = latestStore.tabsByWorktree[args.worktreeId]?.find(
     (candidate) => candidate.id === args.sourceTabId
   )?.shellOverride
+
   const tab = latestStore.createTab(args.worktreeId, args.targetGroupId, sourceShellOverride, {
     activate: true,
     initialPtyId: ptyId ?? undefined,
@@ -149,6 +165,7 @@ export function detachTerminalPaneToTab(args: {
       : {}),
     recordInteraction: true
   })
+
   const afterCreateStore = args.getStore()
   moveCreatedTabToIndex({
     groupId: args.targetGroupId,

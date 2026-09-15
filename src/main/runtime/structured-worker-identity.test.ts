@@ -143,6 +143,7 @@ describe('structured worker identity registry', () => {
   it('rehydrates a durable row whose persisted pane key belongs to its session', () => {
     const handle = mintStructuredWorkerHandle()
     const paneKey = mintStructuredWorkerPaneKey(SESSION_ID)
+
     const identity = registry.rehydrate({
       terminal_handle: handle,
       pane_key: paneKey,
@@ -150,6 +151,7 @@ describe('structured worker identity registry', () => {
       worktree_id: 'wt_1',
       host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
     })
+
     expect(identity?.sessionId).toBe(SESSION_ID)
     // The leaf is random, so the durable row is the ONLY place it survives a restart.
     expect(identity?.paneKey).toBe(paneKey)
@@ -202,6 +204,7 @@ describe('structured workers stay outside the PTY-only fail-closed paths', () =>
       worktreeId: 'wt_1',
       hostScope: { kind: 'local', hostId: 'local' }
     })
+
     try {
       const env = structuredWorkerChildIdentityEnv(SESSION_ID, {})
       // Registered, so this is a populated env — not the empty one an unregistered session gets,

@@ -28,6 +28,7 @@ vi.mock('../../runtime/web-runtime-session', () => ({
 }))
 
 const WT = 'wt-1'
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makeGroup(id: string, tabOrder: string[]): TabGroup {
@@ -81,6 +82,7 @@ function addPanelGeometry(groupId: string, panelRect: DOMRect, bodyRect: DOMRect
   body.getBoundingClientRect = () => bodyRect
   panel.appendChild(body)
   document.body.appendChild(panel)
+
   return panel
 }
 
@@ -100,9 +102,11 @@ function renderDragHook(
   onRender?: (drag: ReturnType<typeof useTabDragSplit>) => void
 ): ReturnType<typeof useTabDragSplit> {
   let result: ReturnType<typeof useTabDragSplit> | null = null
+
   function Probe(): null {
     result = useTabDragSplit({ worktreeId: WT })
     onRender?.(result)
+
     return null
   }
 
@@ -111,9 +115,11 @@ function renderDragHook(
   const root = createRoot(container)
   act(() => root.render(createElement(Probe)))
   mounted.push({ container, root })
+
   if (!result) {
     throw new Error('useTabDragSplit did not render')
   }
+
   return result
 }
 
@@ -181,6 +187,7 @@ afterEach(() => {
     act(() => root.unmount())
     container.remove()
   }
+
   document.body.replaceChildren()
   vi.clearAllMocks()
 })
@@ -282,8 +289,10 @@ describe('useTabDragSplit', () => {
           rect({ left: 500, top: 32, width: 400, height: 568 })
         )
       }
+
       const onRender = vi.fn()
       const drag = renderDragHook(onRender)
+
       const event = {
         ...makeDragEvent(makeDragData('group-1'), { x: 880, y: 300 }),
         ...(preview === 'insertion'
@@ -295,6 +304,7 @@ describe('useTabDragSplit', () => {
             }
           : {})
       }
+
       const previewKey = preview === 'split' ? 'hoveredDropTarget' : 'hoveredTabInsertion'
       act(() => drag.onDragStart(event as unknown as Parameters<typeof drag.onDragStart>[0]))
       act(() => drag.onDragMove(event as unknown as Parameters<typeof drag.onDragMove>[0]))

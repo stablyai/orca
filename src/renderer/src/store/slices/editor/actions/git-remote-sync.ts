@@ -26,10 +26,12 @@ export function createGitRemoteSync(
       let pushStageToastShown = false
       let pushed = false
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
+
       try {
         const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
         await fetchRuntimeGit(context, pushTarget)
         const upstreamStatusBeforePull = await getRuntimeGitUpstreamStatus(context, pushTarget)
+
         if (shouldForcePushWithLeaseForUpstream(upstreamStatusBeforePull)) {
           try {
             await pushRuntimeGit(context, { pushTarget, forceWithLease: true })
@@ -48,6 +50,7 @@ export function createGitRemoteSync(
           await pullRuntimeGit(context, pushTarget)
           // Why: push only if the pull left local commits ahead of the remote; skip the no-op push after a pure fast-forward.
           const upstreamStatus = await getRuntimeGitUpstreamStatus(context, pushTarget)
+
           if (upstreamStatus.ahead > 0) {
             try {
               await pushRuntimeGit(context, { pushTarget })
@@ -70,15 +73,19 @@ export function createGitRemoteSync(
           // Why: frame fetch/pull/upstream failures as "Sync failed..." since the user invoked Sync, not the inner step.
           toast.error(resolveRemoteOperationErrorMessage(error, { isSync: true }))
         }
+
         throw error
       } finally {
         get().endRemoteOperation()
       }
+
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTargetSettings: runtimeSettings
       })
+
       if (pushed) {
         const refreshGitHubForWorktree = get().refreshGitHubForWorktree
+
         if (typeof refreshGitHubForWorktree === 'function') {
           refreshGitHubForWorktree(worktreeId)
         }
@@ -94,6 +101,7 @@ export function createGitRemoteSync(
     ) => {
       get().beginRemoteOperation('rebase')
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
+
       try {
         await rebaseRuntimeGitFromBase(
           { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
@@ -105,10 +113,12 @@ export function createGitRemoteSync(
       } finally {
         get().endRemoteOperation()
       }
+
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTargetSettings: runtimeSettings
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
+
       if (typeof refreshGitHubForWorktree === 'function') {
         refreshGitHubForWorktree(worktreeId)
       }
@@ -117,6 +127,7 @@ export function createGitRemoteSync(
       // Why: like pushBranch — fire-and-forget the upstream refresh after the busy flag clears so new ahead/behind counts surface.
       get().beginRemoteOperation('fetch')
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
+
       try {
         await fetchRuntimeGit(
           { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
@@ -128,6 +139,7 @@ export function createGitRemoteSync(
       } finally {
         get().endRemoteOperation()
       }
+
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTargetSettings: runtimeSettings
       })

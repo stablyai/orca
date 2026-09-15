@@ -55,6 +55,7 @@ describe('reconcileReadoptedSshRepoRows', () => {
   it('does not accept a local or runtime sibling as the mapped new SSH row', () => {
     const oldSsh = repo({ id: 'shared', connectionId: 'ssh-old' })
     const local = repo({ id: 'shared' })
+
     const runtime = repo({
       id: 'shared',
       connectionId: 'ssh-new',

@@ -8,6 +8,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('react-native-webview', () => ({ WebView: 'WebView' }))
 
 // The diagram source is untrusted (agent output, PR/chat content). It is embedded

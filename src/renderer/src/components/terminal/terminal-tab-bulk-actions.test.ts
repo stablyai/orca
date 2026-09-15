@@ -70,6 +70,7 @@ describe('adopted native-chat disposal in legacy terminal bulk actions', () => {
       setActiveTab: vi.fn(),
       closeTab: mocks.closeTab
     }
+
     mocks.getState.mockReturnValue(state)
 
     await closeOtherTerminalTabs('keep', 'wt-1')
@@ -101,6 +102,7 @@ describe('adopted native-chat disposal in legacy terminal bulk actions', () => {
       closeTab: mocks.closeTab,
       closeFile: mocks.closeFile
     }
+
     mocks.reconcileTabOrder.mockReturnValue(['keep', 'close-a'])
     mocks.getState.mockReturnValue(state)
 

@@ -29,6 +29,7 @@ const itOnPosix = process.platform === 'win32' ? it.skip : it
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -37,6 +38,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -50,6 +52,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
+
   let lastSpawnOpts: {
     sessionId: string
     cols: number
@@ -63,8 +66,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     const harness = await startDaemonAdapterHarness((opts) => {
       lastSpawnOpts = opts
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -121,12 +126,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       try {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
           cwd: '/home/user',
           sessionId: 'dirty-checkpoint'
         })
+
         const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
         const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
 
@@ -164,6 +171,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const requestedSessionIds: string[] = []
       let inFlight = 0
       let maxInFlight = 0
+
       const request = vi.fn(async (_type: string, payload: { sessionId: string }) => {
         requestedSessionIds.push(payload.sessionId)
         inFlight++
@@ -174,6 +182,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             resolve()
           })
         })
+
         return {
           records: [{ kind: 'output', data: payload.sessionId }],
           seq: 1,
@@ -181,10 +190,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           snapshot: null
         }
       })
+
       const checkpoint = vi.fn(async () => 'committed' as const)
       const appendIncrements = vi.fn(async () => 'ok' as const)
       const dispose = vi.fn(async () => {})
       const disconnect = vi.fn()
+
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: typeof disconnect }
         historyManager: {
@@ -194,6 +205,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
+
       internals.client = { request, disconnect }
       internals.historyManager = { checkpoint, appendIncrements, dispose }
 
@@ -206,6 +218,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       for (const release of releaseSnapshotRequests.splice(0)) {
         release()
       }
+
       await waitFor(() => requestedSessionIds.length === 6)
 
       expect(maxInFlight).toBe(4)
@@ -213,6 +226,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       for (const release of releaseSnapshotRequests.splice(0)) {
         release()
       }
+
       await expect(checkpointing).resolves.toEqual(new Set(['a', 'b', 'c', 'd', 'e', 'f']))
       expect(appendIncrements).toHaveBeenCalledTimes(6)
       expect(checkpoint).not.toHaveBeenCalled()
@@ -222,14 +236,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const adapterClass = DaemonPtyAdapter as unknown as {
         PERIODIC_CHECKPOINT_DEADLINE_MS: number
       }
+
       const previousDeadline = adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS
       adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = 5
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const releases: (() => void)[] = []
       const requestedSessionIds: string[] = []
+
       const request = vi.fn(async (_type: string, payload: { sessionId: string }) => {
         requestedSessionIds.push(payload.sessionId)
         await new Promise<void>((resolve) => releases.push(resolve))
+
         return {
           records: [{ kind: 'output', data: payload.sessionId }],
           seq: 1,
@@ -237,7 +254,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           snapshot: null
         }
       })
+
       const appendIncrements = vi.fn(async () => 'ok' as const)
+
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         historyManager: {
@@ -249,6 +268,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         nonFinalCheckpointAdmissionSessionIds: Set<string>
         tryAdmitNonFinalCheckpoint(sessionId: string): boolean
       }
+
       internals.client = { request, disconnect: vi.fn() }
       internals.historyManager = {
         checkpoint: vi.fn(async () => 'committed' as const),
@@ -273,6 +293,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         for (const release of releases) {
           release()
         }
+
         await waitFor(() => internals.nonFinalCheckpointAdmissionSessionIds.size === 0)
       } finally {
         adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = previousDeadline
@@ -282,12 +303,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('lets one session hold only one global non-final admission', () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const internals = historyAdapter as unknown as {
         tryAdmitNonFinalCheckpoint(sessionId: string): boolean
         releaseNonFinalCheckpointAdmission(sessionId: string): void
         nonFinalCheckpointAdmissionSessionIds: Set<string>
         nonFinalAdmissionDeniedSessionIds: Set<string>
       }
+
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       try {
@@ -328,13 +351,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('logs non-final checkpoint RPC failures', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const request = vi.fn(async () => {
         throw new Error('daemon socket unavailable')
       })
+
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
+
       internals.client = { request, disconnect: vi.fn() }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -354,20 +380,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const adapterClass = DaemonPtyAdapter as unknown as {
         PERIODIC_CHECKPOINT_DEADLINE_MS: number
       }
+
       const previousDeadline = adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS
       adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = 5
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       let rejectRequest!: (error: unknown) => void
+
       const request = vi.fn(
         async () =>
           await new Promise<never>((_resolve, reject) => {
             rejectRequest = reject
           })
       )
+
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
+
       internals.client = { request, disconnect: vi.fn() }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -415,6 +445,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         snapshotRecords?: PendingOutputRecord[]
       }): CooldownInternals {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
         const request = vi.fn(async (_type: string, payload: Record<string, unknown>) => {
           if (payload.includeSnapshot === true) {
             return {
@@ -424,6 +455,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
               snapshot: { cols: 80, rows: 24 }
             }
           }
+
           return {
             records: [{ kind: 'output', data: 'x' }],
             seq: 1,
@@ -431,6 +463,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             snapshot: null
           }
         })
+
         const internals = historyAdapter as unknown as CooldownInternals
         internals.client = { request, disconnect: vi.fn() }
         internals.historyManager = {
@@ -438,6 +471,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           appendIncrements: vi.fn(async () => takeResult.appendResult ?? 'ok'),
           dispose: vi.fn(async () => {})
         }
+
         return internals
       }
 
@@ -458,6 +492,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         for (let i = 0; i < 22; i++) {
           await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
         }
+
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.client.request.mock.calls.length).toBe(requestsAfterSecondTick)
 
@@ -485,6 +520,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           overflowed: false,
           appendResult: 'needs-checkpoint'
         })
+
         internals.lastFullCheckpointAt.set('capped', Date.now())
 
         await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set())
@@ -551,12 +587,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       try {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
           cwd: '/home/user',
           sessionId: 'close-dirty-checkpoint'
         })
+
         const internals = historyAdapter as unknown as {
           dirtySessionVersions: Map<string, number>
         }
@@ -581,12 +619,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       try {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
           cwd: '/home/user',
           sessionId: 'sleep-checkpoint'
         })
+
         const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
 
         lastSubprocess._simulateData('latest before sleep\r\n')
@@ -605,6 +645,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: id
         })
+
         expect(restored.coldRestore?.scrollback).toContain('latest before sleep')
         historyAdapter.ackColdRestore(id)
 
@@ -614,6 +655,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: id
         })
+
         expect(remountAfterAck.coldRestore).toBeUndefined()
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
@@ -627,6 +669,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       try {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
         const { id } = await historyAdapter.spawn({
           cols: 80,
           rows: 24,
@@ -650,6 +693,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: id
         })
+
         expect(firstWake.coldRestore?.scrollback).toContain('first cycle content')
         historyAdapter.ackColdRestore(id)
         expect(historyAdapter.hasPty(id)).toBe(true)
@@ -667,6 +711,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: id
         })
+
         expect(secondWake.coldRestore?.scrollback).toContain('second cycle content')
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
@@ -688,6 +733,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const meta = JSON.parse(
         readFileSync(join(historyDir, getHistorySessionDirName(id), 'meta.json'), 'utf-8')
       )
+
       expect(meta.endedAt).toBeDefined()
       expect(meta.exitCode).toBe(0)
     })
@@ -721,6 +767,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cwd: '/home/user',
         sessionId: 'sleep-checkpoint'
       })
+
       const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
 
       lastSubprocess._simulateData('fresh output before sleep\r\n')
@@ -745,6 +792,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         env: { SHELL: '/bin/zsh' },
         sessionId: 'sleep-checkpoint-tail'
       })
+
       const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
 
       lastSubprocess._simulateData('\x1b]777;orca-shell-ready')

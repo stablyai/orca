@@ -22,6 +22,7 @@ const roots: string[] = []
 function makeRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'orcad-lock-'))
   roots.push(root)
+
   return root
 }
 
@@ -82,10 +83,12 @@ describe('acquireOrcadInstanceLock', () => {
       join(root, ORCAD_LOCK_FILE_NAME),
       JSON.stringify({ pid: 424242, identity: 'uid-1000', startedAtMs: 1, nonce: 'stale' })
     )
+
     const lock = acquireOrcadInstanceLock(
       root,
       hooks({ processIsAlive: () => true, startTimeMatches: () => false })
     )
+
     expect(JSON.parse(readFileSync(lock.path, 'utf8')).pid).toBe(process.pid)
   })
 

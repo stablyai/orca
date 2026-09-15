@@ -20,6 +20,7 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     if (!this.activeWebContentsId) {
       return null
     }
+
     return this.resolveTabIdSafe(this.activeWebContentsId)
   }
 
@@ -29,17 +30,23 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
   ): { browserPageId: string; url: string; title: string } | null {
     // Why: expose the same metadata lookup as other bridges, though the CDP bridge routes only one active tab.
     const resolvedPageId = browserPageId ?? this.getActivePageId()
+
     if (!resolvedPageId) {
       return null
     }
+
     const webContentsId = this.getRegisteredTabs().get(resolvedPageId)
+
     if (webContentsId == null) {
       return null
     }
+
     const guest = webContents.fromId(webContentsId)
+
     if (!guest || guest.isDestroyed()) {
       return null
     }
+
     return {
       browserPageId: resolvedPageId,
       url: guest.getURL(),
@@ -53,9 +60,11 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
 
     for (const [tabId, wcId] of this.getRegisteredTabs()) {
       const guest = webContents.fromId(wcId)
+
       if (!guest || guest.isDestroyed()) {
         continue
       }
+
       tabs.push({
         browserPageId: tabId,
         index,
@@ -73,8 +82,10 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     // Why: filter to live tabs so indices match tabList(), skipping destroyed-but-uncleaned entries.
     const liveEntries = [...this.getRegisteredTabs()].filter(([_tabId, wcId]) => {
       const guest = webContents.fromId(wcId)
+
       return guest && !guest.isDestroyed()
     })
+
     if (index < 0 || index >= liveEntries.length) {
       throw new BrowserError(
         'browser_tab_not_found',
@@ -83,9 +94,11 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     }
 
     const [tabId, wcId] = liveEntries[index]
+
     if (this.activeWebContentsId !== null) {
       this.invalidateRefMap(this.activeWebContentsId)
     }
+
     this.activeWebContentsId = wcId
 
     return { switched: index, browserPageId: tabId }
@@ -95,13 +108,17 @@ export class CdpTabCommands extends CdpBridgeCommandModule {
     if (this.activeWebContentsId === webContentsId) {
       this.activeWebContentsId = null
     }
+
     const tabId = this.resolveTabIdSafe(webContentsId)
+
     if (tabId) {
       const state = this.tabState.get(tabId)
       const guest = webContents.fromId(webContentsId)
+
       if (state && guest) {
         this.removeDebuggerListeners(guest, state)
       }
+
       this.tabState.delete(tabId)
       this.commandQueues.delete(tabId)
     }

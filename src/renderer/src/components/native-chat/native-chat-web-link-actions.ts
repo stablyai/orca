@@ -53,17 +53,22 @@ export function handleNativeChatWebLink(
         ? (deps.destinations.alternate ?? deps.destinations.primary)
         : deps.destinations.primary
     )
+
     return true
   }
+
   if (!isTerminalLinkActionActivation(event)) {
     return false
   }
 
   event.preventDefault()
+
   if (!deps.actionsEnabled) {
     open(deps.destinations.primary)
+
     return true
   }
+
   const keyboardAnchor = event.detail === 0 ? event.currentTarget?.getBoundingClientRect() : null
   deps.request({
     anchorX: keyboardAnchor?.left ?? event.clientX,
@@ -73,5 +78,6 @@ export function handleNativeChatWebLink(
     restoreFocus: deps.restoreFocus,
     ...buildHttpLinkActions(deps.destinations, open)
   })
+
   return true
 }

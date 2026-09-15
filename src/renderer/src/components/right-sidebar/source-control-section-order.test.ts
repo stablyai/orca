@@ -91,15 +91,18 @@ describe('buildSourceControlDisplaySections', () => {
       path: 'conflict.ts',
       conflictStatus: 'unresolved'
     })
+
     const resolved = entry({
       area: 'unstaged',
       path: 'resolved.ts',
       conflictStatus: 'resolved_locally'
     })
+
     const normal = entry({ area: 'unstaged', path: 'normal.ts' })
     const input = groups({ unstaged: [unresolved, resolved, normal] })
 
     const split = splitPinnedSourceControlConflicts(input)
+
     const sections = buildSourceControlDisplaySections(
       input,
       resolveSourceControlGroupOrder('changes-first')
@@ -119,10 +122,12 @@ describe('buildSourceControlDisplaySections', () => {
       conflictKind: 'both_modified',
       conflictStatus: 'resolved_locally'
     })
+
     const staged = entry({ area: 'staged', path: 'staged.ts' })
     const input = groups({ staged: [resolvedStaged, staged] })
 
     const split = splitPinnedSourceControlConflicts(input)
+
     const sections = buildSourceControlDisplaySections(
       input,
       resolveSourceControlGroupOrder('staged-first')
@@ -188,7 +193,9 @@ describe('buildSourceControlDisplaySections', () => {
       conflictKind: 'both_modified',
       conflictStatus: 'resolved_locally'
     })
+
     const normal = entry({ area: 'unstaged', path: 'normal.ts' })
+
     const sections = buildSourceControlDisplaySections(
       groups({ unstaged: [pinned, normal] }),
       resolveSourceControlGroupOrder('changes-first')
@@ -208,6 +215,7 @@ describe('buildSourceControlDisplaySections', () => {
       conflictKind: 'both_modified',
       conflictStatus: 'resolved_locally'
     })
+
     const sections = buildSourceControlDisplaySections(
       groups({
         unstaged: [resolved]
@@ -229,12 +237,14 @@ describe('buildSourceControlDisplaySections', () => {
       conflictKind: 'both_modified',
       conflictStatus: 'resolved_locally'
     })
+
     const staged = entry({
       area: 'staged',
       path: 'resolved-staged.ts',
       conflictKind: 'both_modified',
       conflictStatus: 'resolved_locally'
     })
+
     const sections = buildSourceControlDisplaySections(
       groups({
         staged: [staged],

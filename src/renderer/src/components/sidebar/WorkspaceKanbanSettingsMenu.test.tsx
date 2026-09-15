@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 
 const statuses: WorkspaceStatusDefinition[] = [{ id: 'todo', label: 'Todo' }]
+
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function renderMenu({
@@ -72,6 +74,7 @@ describe('WorkspaceKanbanSettingsMenu', () => {
     const toggle = document.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Sync board and issue status"]'
     )
+
     expect(toggle).not.toBeNull()
     expect(toggle?.getAttribute('aria-checked')).toBe('false')
 

@@ -6,6 +6,7 @@ import { classifyRerunChecksError } from '../../gh-error-classification'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { getPRChecks } from './get-pr-checks'
 import { parseActionsRunId } from './check-detail-field-mapping'
+
 export async function rerunPRChecks(
   repoPath: string,
   prNumber: number,
@@ -23,6 +24,7 @@ export async function rerunPRChecks(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -36,16 +38,19 @@ export async function rerunPRChecks(
     connectionId,
     localGitOptions
   )
+
   const candidates = options.failedOnly
     ? checks.filter((check) =>
         ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
       )
     : checks
+
   const workflowRunIds = new Set(
     candidates
       .map((check) => check.workflowRunId ?? parseActionsRunId(check.url))
       .filter((id): id is number => typeof id === 'number')
   )
+
   const checkRunIds = new Set(
     candidates
       .filter((check) => !check.workflowRunId && !parseActionsRunId(check.url))
@@ -64,17 +69,20 @@ export async function rerunPRChecks(
 
   let count = 0
   await acquire()
+
   try {
     for (const runId of workflowRunIds) {
       const endpoint = options.failedOnly
         ? `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/runs/${runId}/rerun-failed-jobs`
         : `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/runs/${runId}/rerun`
+
       await ghExecFileAsync(['api', '-X', 'POST', endpoint], {
         ...ghOptions,
         env: { ...process.env, GH_PROMPT_DISABLED: '1' }
       })
       count += 1
     }
+
     for (const checkRunId of checkRunIds) {
       await ghExecFileAsync(
         [
@@ -87,10 +95,12 @@ export async function rerunPRChecks(
       )
       count += 1
     }
+
     return { ok: true, count }
   } catch (err) {
     const { stderr } = extractExecError(err)
     const classified = classifyRerunChecksError(stderr).message
+
     // Why: these POSTs are not idempotent — say how many reruns already started so a retry isn't blind.
     return {
       ok: false,

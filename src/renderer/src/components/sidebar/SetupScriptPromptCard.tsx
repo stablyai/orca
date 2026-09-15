@@ -55,7 +55,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     () => findSetupScriptPromptRepo({ repos, activeRepoId, activeWorktree, settings }),
     [activeRepoId, activeWorktree, repos, settings]
   )
+
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
+
   const isDismissed = activeRepoHostIdentity
     ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
     : false
@@ -64,6 +66,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     if (!sidebarOpen || !activeRepo || !isGitRepoKind(activeRepo) || isDismissed) {
       setPromptState(null)
       setDetectedSetupDraft('')
+
       return
     }
 
@@ -73,16 +76,19 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
 
     async function inspectRepoSetup(): Promise<void> {
       const hostId = getRepoExecutionHostId(repo)
+
       const inspection = await inspectSetupScriptPromptState({
         repo,
         checkHooks: () => checkRuntimeHooks(settings, repo.id, hostId),
         inspectImports: () => inspectRuntimeSetupScriptImports(settings, repo.id, hostId)
       })
+
       if (!cancelled) {
         const nextState = {
           ...inspection,
           repoHostIdentity: getRepoHostIdentity(repo)
         }
+
         setPromptState(nextState)
         setDetectedSetupDraft(
           nextState.status === 'ok' && nextState.candidate?.provider === 'package-manager'
@@ -149,6 +155,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     if (!activeRepo) {
       return
     }
+
     if (
       promptState?.repoId === activeRepo.id &&
       promptState.repoHostIdentity === activeRepoHostIdentity &&
@@ -164,6 +171,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         })
       )
     }
+
     openLocalCommandSettings(activeRepo.id, getRepoExecutionHostId(activeRepo))
   }, [activeRepo, activeRepoHostIdentity, openLocalCommandSettings, promptState])
 
@@ -184,6 +192,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           })
         )
       }
+
       dismissSetupScriptPrompt(activeRepoHostIdentity)
     }
   }, [activeRepo, activeRepoHostIdentity, dismissSetupScriptPrompt, promptState])
@@ -196,20 +205,25 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       editedBeforeSave?: boolean
     }) => {
       const { candidate, hasSharedHooks, actionPrefix, editedBeforeSave } = input
+
       if (!activeRepo) {
         return
       }
+
       const importedRepoHostIdentity = getRepoHostIdentity(activeRepo)
       const importedHostId = getRepoExecutionHostId(activeRepo)
       setImportingRepoHostIdentity(importedRepoHostIdentity)
+
       try {
         const importedRepoId = activeRepo.id
         const nextSettings = buildImportedHookSettings(activeRepo, candidate, hasSharedHooks)
+
         const didUpdate = await updateRepo(
           activeRepo.id,
           { hookSettings: nextSettings },
           { hostId: importedHostId }
         )
+
         if (!didUpdate) {
           track(
             'setup_script_prompt_action',
@@ -223,6 +237,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
               editedBeforeSave
             })
           )
+
           if (mountedRef.current) {
             toast.error(
               translate(
@@ -231,8 +246,10 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
               )
             )
           }
+
           return
         }
+
         track(
           'setup_script_prompt_action',
           buildSetupScriptPromptActionTelemetry({
@@ -245,6 +262,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             editedBeforeSave
           })
         )
+
         if (actionPrefix === 'save_detected_setup') {
           if (mountedRef.current) {
             setPromptState((current) =>
@@ -258,8 +276,10 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
               )
             })
           }
+
           return
         }
+
         if (mountedRef.current) {
           setPromptState((current) => markSetupScriptPromptSaved(current, importedRepoHostIdentity))
           const skippedCount = candidate.unsupportedFields?.length ?? 0
@@ -285,6 +305,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           })
         )
         console.warn('[setup-script-prompt] Failed to save setup script:', error)
+
         if (mountedRef.current) {
           toast.error(
             translate(
@@ -308,16 +329,20 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     if (!activeRepo || promptState?.status !== 'ok' || !promptState.candidate) {
       return
     }
+
     const isPackageManagerCandidate = promptState.candidate.provider === 'package-manager'
     const actionPrefix = isPackageManagerCandidate ? 'save_detected_setup' : 'import'
+
     const editedBeforeSave =
       isPackageManagerCandidate && detectedSetupDraft.trim() !== promptState.candidate.setup.trim()
+
     const candidate = isPackageManagerCandidate
       ? {
           ...promptState.candidate,
           setup: detectedSetupDraft.trim()
         }
       : promptState.candidate
+
     if (!candidate.setup) {
       toast.error(
         translate(
@@ -325,8 +350,10 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           'Setup script cannot be empty'
         )
       )
+
       return
     }
+
     if (actionPrefix === 'save_detected_setup') {
       track(
         'setup_script_prompt_action',
@@ -338,6 +365,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         })
       )
     }
+
     await saveSetupCandidate({
       candidate,
       hasSharedHooks: promptState.hasSharedHooks,
@@ -352,6 +380,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     !activeRepoHostIdentity ||
     !isGitRepoKind(activeRepo) ||
     isDismissed
+
   const renderedPromptState = useRenderedSetupScriptPromptState({
     promptState,
     activeRepoId: activeRepo?.id ?? null,
@@ -378,10 +407,12 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const isInspectionError = renderedPromptState.status === 'error'
   const candidate = renderedPromptState.status === 'ok' ? renderedPromptState.candidate : null
   const isPackageManagerSuggestion = candidate?.provider === 'package-manager'
+
   const sharedSetupIgnored =
     renderedPromptState.status === 'ok' &&
     candidate === null &&
     ignoresSharedSetupScripts(activeRepo)
+
   const candidateSource = candidate ? formatCandidateSource(candidate) : null
   const candidateProvenance = candidate ? formatCandidateProvenance(candidate) : null
 

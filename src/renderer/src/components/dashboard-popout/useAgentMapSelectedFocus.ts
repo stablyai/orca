@@ -25,15 +25,20 @@ export function useAgentMapSelectedFocus({
     y: number
     zoom: number
   } | null>(null)
+
   useEffect(() => {
     const selected = agents.find((agent) => agent.card.paneKey === selectedPaneKey)
+
     if (!selectedPaneKey || !selected) {
       focusedAgentRef.current = null
       stopViewportTransition()
+
       return
     }
+
     const targetZoom = resolveFocusZoom()
     const focused = focusedAgentRef.current
+
     if (
       focused?.paneKey === selectedPaneKey &&
       focused.x === selected.x &&
@@ -42,6 +47,7 @@ export function useAgentMapSelectedFocus({
     ) {
       return
     }
+
     focusedAgentRef.current = {
       paneKey: selectedPaneKey,
       x: selected.x,

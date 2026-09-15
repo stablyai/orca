@@ -49,11 +49,14 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     commandCodeNewTurn,
     updatedAt
   } = args
+
   const boundaryResolved =
     entry.state === 'done' && entry.sessionBoundary !== true && existing?.sessionBoundary === true
+
   if (boundaryResolved) {
     recordHibernationBoundaryResolved(paneKey, updatedAt)
   }
+
   const completionRefreshWorktreeId =
     isAgentCompletionState(entry.state) &&
     entry.sessionBoundary !== true &&
@@ -61,16 +64,21 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     !isAgentCompletionState(existing.state)
       ? (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
       : null
+
   const wasFresh =
     !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
+
   const attributionChanged =
     existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
+
   const sameStateStateStartedAtChanged =
     !!existing && existing.state === entry.state && entry.stateStartedAt !== existing.stateStartedAt
+
   const sameStateDoneAttentionChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&
     agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
+
   const sortRelevantChange =
     !existing ||
     existing.state !== entry.state ||
@@ -79,6 +87,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     commandCodeNewTurn ||
     sameStateStateStartedAtChanged ||
     sameStateDoneAttentionChanged
+
   const doneRetentionFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&
@@ -96,16 +105,20 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.subagents !== existing.subagents ||
       entry.providerSession !== existing.providerSession ||
       entry.interrupted !== existing.interrupted)
+
   const retentionRelevantChange =
     sortRelevantChange ||
     attributionChanged ||
     existing?.workingMode !== entry.workingMode ||
     doneRetentionFieldsChanged
+
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
+
   const liveRecoveryWorktreeId =
     entry.state === 'done' && !retainsResumableRecoveryIdentity
       ? null
       : (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
+
   const liveRecoveryRecord = liveRecoveryWorktreeId
     ? sleepingRecordFromEntry({
         state,
@@ -118,10 +131,12 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
         origin: 'live'
       })
     : null
+
   const migrationUnsupported = pruneMigrationUnsupportedEntries(
     state.migrationUnsupportedByPtyId,
     (migrationEntry) => migrationEntry.paneKey === paneKey
   )
+
   return {
     existingSleepingRecord,
     liveRecoveryRecord,

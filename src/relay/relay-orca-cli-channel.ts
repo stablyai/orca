@@ -26,17 +26,22 @@ export async function runRelayOrcaCliChannel(
 ): Promise<void> {
   const myVersion = readLaunchVersion()
   let preparedArtifact: Awaited<ReturnType<typeof prepareRemoteArtifactCliInput>>
+
   try {
     preparedArtifact = await prepareRemoteArtifactCliInput(argv, process.cwd())
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     process.exitCode = 1
+
     return
   }
+
   const stdin =
     preparedArtifact.stdin ??
     (shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined)
+
   const env = pickRemoteCliEnv(process.env)
+
   const requestParams: RemoteArtifactCliForwardingParams = {
     argv,
     cwd: process.cwd(),
@@ -44,16 +49,20 @@ export async function runRelayOrcaCliChannel(
     ...(stdin !== undefined ? { stdin } : {}),
     ...(preparedArtifact.artifactInput ? { artifactInput: preparedArtifact.artifactInput } : {})
   }
+
   if (preparedArtifact.artifactInput) {
     try {
       assertRemoteArtifactCliForwardingFits(requestParams)
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
       process.exitCode = 1
+
       return
     }
   }
+
   const sock = createConnection({ path: sockPath })
+
   const stdoutWriter = new DispatcherClientWriter(
     (data, onSettled) =>
       process.stdout.write(data, (error) => {
@@ -65,11 +74,13 @@ export async function runRelayOrcaCliChannel(
       writableHighWaterMark: () => process.stdout.writableHighWaterMark,
       waitWriteDrain: (callback) => {
         process.stdout.once('drain', callback)
+
         return () => process.stdout.off('drain', callback)
       }
     },
     () => process.exit(1)
   )
+
   let nextSeq = 1
   let highestReceivedSeq = 0
   const requestId = 1
@@ -87,6 +98,7 @@ export async function runRelayOrcaCliChannel(
       nextSeq++,
       highestReceivedSeq
     )
+
     sock.write(frame)
   }
 
@@ -116,21 +128,27 @@ export async function runRelayOrcaCliChannel(
   ): void => {
     let pending = 0
     let completed = false
+
     const settle = (error?: Error): void => {
       if (completed) {
         return
       }
+
       if (error) {
         completed = true
         onFlushed(error)
+
         return
       }
+
       pending -= 1
+
       if (pending === 0) {
         completed = true
         onFlushed()
       }
     }
+
     if (typeof result.stdout === 'string' && result.stdout.length > 0) {
       pending += 1
       const output = Buffer.from(result.stdout)
@@ -141,10 +159,12 @@ export async function runRelayOrcaCliChannel(
         (settlement) => settle(settlement.ok ? undefined : settlement.error)
       )
     }
+
     if (typeof result.stderr === 'string' && result.stderr.length > 0) {
       pending += 1
       process.stderr.write(result.stderr, 'utf8', (error) => settle(error ?? undefined))
     }
+
     if (pending === 0) {
       completed = true
       onFlushed()
@@ -155,10 +175,13 @@ export async function runRelayOrcaCliChannel(
     if (frame.id > highestReceivedSeq) {
       highestReceivedSeq = frame.id
     }
+
     if (frame.type !== MessageType.Regular) {
       return
     }
+
     const msg = parseJsonRpcMessage(frame.payload)
+
     if (
       !('id' in msg) ||
       (msg.id !== requestId && msg.id !== postOutputRequestId) ||
@@ -166,32 +189,43 @@ export async function runRelayOrcaCliChannel(
     ) {
       return
     }
+
     const response = msg as JsonRpcResponse
+
     if (response.error) {
       process.stderr.write(`${response.error.message}\n`)
       finish(1)
+
       return
     }
+
     if (response.id === postOutputRequestId) {
       finish(initialExitCode)
+
       return
     }
+
     const result = (response.result ?? {}) as {
       stdout?: unknown
       stderr?: unknown
       exitCode?: unknown
       postOutput?: unknown
     }
+
     initialExitCode = typeof result.exitCode === 'number' ? result.exitCode : 0
     writeOutput(result, (error) => {
       if (error) {
         finish(1)
+
         return
       }
+
       if (result.postOutput === undefined) {
         finish(initialExitCode)
+
         return
       }
+
       sendPostOutput(result.postOutput)
     })
   })
@@ -212,6 +246,7 @@ export async function runRelayOrcaCliChannel(
           if (leftover.length > 0) {
             decoder.feed(leftover)
           }
+
           sock.on('data', (chunk) =>
             decoder.feed(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
           )
@@ -233,9 +268,12 @@ async function readOrcaCliStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) {
     return undefined
   }
+
   const chunks: Buffer[] = []
+
   for await (const chunk of process.stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
+
   return Buffer.concat(chunks).toString('utf8')
 }

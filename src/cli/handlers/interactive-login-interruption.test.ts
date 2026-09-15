@@ -44,12 +44,14 @@ describe('terminateInteractiveLoginProcess', () => {
   it('waits for both Windows tree termination and physical wrapper close', async () => {
     const child = loginChild()
     let finishTreeKill: (() => void) | undefined
+
     const killWindowsTree = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishTreeKill = resolve
         })
     )
+
     let terminated = false
 
     const pending = terminateInteractiveLoginProcess(child, 'SIGTERM', {
@@ -77,6 +79,7 @@ describe('terminateInteractiveLoginProcess', () => {
       platform: 'win32',
       killWindowsTree: vi.fn().mockResolvedValue(undefined)
     })
+
     await vi.advanceTimersByTimeAsync(LOGIN_PROCESS_CLOSE_FALLBACK_MS)
     expect(child.kill).toHaveBeenCalledOnce()
     expect(child.kill).toHaveBeenCalledWith(undefined)
@@ -111,6 +114,7 @@ describe('terminateInteractiveLoginProcess', () => {
     const pending = terminateInteractiveLoginProcess(child, 'SIGINT', {
       platform: 'darwin'
     })
+
     await vi.advanceTimersByTimeAsync(LOGIN_PROCESS_POSIX_GRACE_MS)
     expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGINT')
     expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')

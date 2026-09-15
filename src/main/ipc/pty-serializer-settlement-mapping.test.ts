@@ -19,45 +19,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -78,6 +94,7 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     const connectionId = 'ssh-identity-runtime'
     const appPtyId = `ssh:${connectionId}@@relay-pty`
     const remoteWrite = vi.fn()
@@ -106,6 +123,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
@@ -114,7 +132,9 @@ describe('registerPtyHandlers', () => {
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -183,13 +203,16 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     const appPtyId = 'ssh:ssh-fresh-fail@@relay-pty'
     const incarnationId = 'incarnation-fresh-fail'
     const runtime = new OrcaRuntimeService()
+
     const remoteShutdown = vi.fn(async () => {
       // Model the relay's exit callback winning before shutdown resolves.
       runtime.onPtyExit(appPtyId, 0, incarnationId)
     })
+
     registerSshPtyProvider('ssh-fresh-fail', {
       spawn: vi.fn(async () => ({ id: appPtyId, incarnationId })),
       write: vi.fn(),
@@ -211,6 +234,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
@@ -231,8 +255,10 @@ describe('registerPtyHandlers', () => {
         undefined,
         store as never
       )
+
       const spawnController = (runtime as unknown as { ptyController: RuntimeSpawnController })
         .ptyController
+
       const leafId = '11111111-1111-4111-8111-111111111111'
 
       await expect(
@@ -253,10 +279,12 @@ describe('registerPtyHandlers', () => {
       expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()
       expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)
       expect(piClearPtyMock).toHaveBeenCalledWith(appPtyId)
+
       const internals = runtime as unknown as {
         earlyExitedPtyIncarnations: Map<string, string | null>
         pendingPtyRegistrationIncarnations: Map<string, string | null>
       }
+
       expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
       expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
     } finally {
@@ -274,7 +302,9 @@ describe('registerPtyHandlers', () => {
       hasRendererSerializer?(ptyId: string): boolean
       getRendererSerializerGeneration?(ptyId: string): number
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -290,16 +320,20 @@ describe('registerPtyHandlers', () => {
 
     registerPtyHandlers(mainWindow as never, runtime as never)
     const paneKey = makePaneKey('tab-cli', '11111111-1111-4111-8111-111111111111')
+
     const gen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
       paneKey
     })) as number
+
     const spawnController = controller as unknown as RuntimeSpawnController
+
     const result = await spawnController.spawn({
       cols: 80,
       rows: 24,
       worktreeId: 'wt-1',
       env: { ORCA_PANE_KEY: ` ${paneKey} ` }
     })
+
     const replacementGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
       paneKey
     })) as number
@@ -328,6 +362,7 @@ describe('registerPtyHandlers', () => {
         timeoutMs?: number
       ): Promise<boolean>
     }
+
     const reusedPtyId = 'pty-reused'
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: reusedPtyId })),
@@ -341,6 +376,7 @@ describe('registerPtyHandlers', () => {
       getForegroundProcess: vi.fn(async () => null)
     } as never)
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -352,9 +388,11 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
     const paneKey = makePaneKey('tab-reused', '33333333-3333-4333-8333-333333333333')
     const spawnController = controller as unknown as RuntimeSpawnController
+
     const spawn = async (): Promise<void> => {
       await spawnController.spawn({
         cols: 80,
@@ -367,6 +405,7 @@ describe('registerPtyHandlers', () => {
     const firstGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
       paneKey
     })) as number
+
     await spawn()
     await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: firstGen })
     const priorGeneration = spawnController.getRendererSerializerGeneration?.(reusedPtyId) ?? 0
@@ -374,6 +413,7 @@ describe('registerPtyHandlers', () => {
     const secondGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
       paneKey
     })) as number
+
     await spawn()
     const ready = spawnController.waitForRendererSerializer?.(reusedPtyId, priorGeneration, 1_000)
     clearProviderPtyState(reusedPtyId)
@@ -388,7 +428,9 @@ describe('registerPtyHandlers', () => {
       hasRendererSerializer?(ptyId: string): boolean
       getRendererSerializerGeneration?(ptyId: string): number
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -410,6 +452,7 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never)
     const paneKey = makePaneKey('tab-crash', '22222222-2222-4222-8222-222222222222')
     const destroyedListeners: (() => void)[] = []
+
     const sender = {
       id: 42,
       isDestroyed: () => false,
@@ -430,6 +473,7 @@ describe('registerPtyHandlers', () => {
   it('does not retain a serializer declaration from an already-destroyed renderer', async () => {
     registerPtyHandlers(mainWindow as never)
     const paneKey = makePaneKey('tab-dead', '77777777-7777-4777-8777-777777777777')
+
     const sender = {
       id: 43,
       isDestroyed: () => true,
@@ -469,6 +513,7 @@ describe('registerPtyHandlers', () => {
       configurable: true,
       value: 'win32'
     })
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -519,6 +564,7 @@ describe('registerPtyHandlers', () => {
       configurable: true,
       value: 'win32'
     })
+
     const runtime = {
       setPtyController: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),

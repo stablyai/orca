@@ -4,6 +4,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 
 /** The only fields the count reads, so a projection over them is a sound cache key. */
 export type UnreadBadgeWorktree = Pick<Worktree, 'id' | 'isUnread'>
+
 export type UnreadBadgeTab = Pick<TerminalTab, 'id'>
 
 export type UnreadBadgeCountSources = {
@@ -28,6 +29,7 @@ export function getUnreadBadgeCount({
   }
 
   const unreadTabIds = new Set(Object.keys(unreadTerminalTabs))
+
   if (unreadTabIds.size === 0) {
     return unreadWorktreeIds.size
   }
@@ -37,6 +39,7 @@ export function getUnreadBadgeCount({
       if (!unreadTabIds.delete(tab.id)) {
         continue
       }
+
       unreadWorktreeIds.add(worktreeId)
     }
   }

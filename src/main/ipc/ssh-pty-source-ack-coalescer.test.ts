@@ -11,6 +11,7 @@ function publication(token: number, endSu: number, settled = vi.fn(), providerGe
     ptyIncarnation: `incarnation-${token}`,
     deliveryToken: `token-${token}`
   }
+
   return {
     identity,
     ack: {
@@ -30,13 +31,16 @@ describe('SshPtySourceAckCoalescer', () => {
       batch: PtySourceCreditAckBatch
       settle: (result: { ok: true } | { ok: false; error: Error }) => void
     }[] = []
+
     const firstSettled = vi.fn()
     const latestSettled = vi.fn()
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: (_providerGeneration, batch, settle) => writes.push({ batch, settle }),
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coalescer.enqueue(publication(1, 10, firstSettled))
     coalescer.enqueue(publication(1, 20, latestSettled))
     coalescer.flush()
@@ -53,6 +57,7 @@ describe('SshPtySourceAckCoalescer', () => {
   it('limits one batch to 64 tokens and gives the remainder another turn', () => {
     const batches: PtySourceCreditAckBatch[] = []
     const scheduled: (() => void)[] = []
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: (_providerGeneration, batch, settle) => {
         batches.push(batch)
@@ -60,10 +65,12 @@ describe('SshPtySourceAckCoalescer', () => {
       },
       schedule: (callback) => {
         scheduled.push(callback)
+
         return scheduled.length as unknown as ReturnType<typeof setTimeout>
       },
       cancelSchedule: vi.fn()
     })
+
     for (let token = 0; token < 70; token++) {
       coalescer.enqueue(publication(token, 1))
     }
@@ -76,6 +83,7 @@ describe('SshPtySourceAckCoalescer', () => {
 
   it('never mixes provider generations in one transport batch', () => {
     const generations: number[] = []
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: (providerGeneration, _batch, settle) => {
         generations.push(providerGeneration)
@@ -84,6 +92,7 @@ describe('SshPtySourceAckCoalescer', () => {
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coalescer.enqueue(publication(1, 1, vi.fn(), 1))
     coalescer.enqueue(publication(2, 1, vi.fn(), 2))
 
@@ -95,6 +104,7 @@ describe('SshPtySourceAckCoalescer', () => {
 
   it('settles every entry as failed on a synchronous send error', () => {
     const settled = vi.fn()
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: () => {
         throw new Error('send failed')
@@ -102,6 +112,7 @@ describe('SshPtySourceAckCoalescer', () => {
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coalescer.enqueue(publication(1, 10, settled))
     coalescer.flush()
 
@@ -114,10 +125,12 @@ describe('SshPtySourceAckCoalescer', () => {
   it('promotes a pending interval flush to immediate at the source threshold', () => {
     const delays: number[] = []
     const cancelSchedule = vi.fn()
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: vi.fn(),
       schedule: (_callback, delayMs) => {
         delays.push(delayMs)
+
         return delays.length as unknown as ReturnType<typeof setTimeout>
       },
       cancelSchedule
@@ -132,11 +145,13 @@ describe('SshPtySourceAckCoalescer', () => {
 
   it('fails queued callbacks exactly once during cleanup', () => {
     const settled = vi.fn()
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: vi.fn(),
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coalescer.enqueue(publication(1, 10, settled))
 
     coalescer.dispose()
@@ -147,6 +162,7 @@ describe('SshPtySourceAckCoalescer', () => {
   it('owns an in-flight callback until dispose and ignores its late transport callback', () => {
     let transportSettle!: (result: { ok: true } | { ok: false; error: Error }) => void
     const settled = vi.fn()
+
     const coalescer = new SshPtySourceAckCoalescer({
       publish: (_providerGeneration, _batch, settle) => {
         transportSettle = settle
@@ -154,6 +170,7 @@ describe('SshPtySourceAckCoalescer', () => {
       schedule: vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>),
       cancelSchedule: vi.fn()
     })
+
     coalescer.enqueue(publication(1, 10, settled))
     coalescer.flush()
 

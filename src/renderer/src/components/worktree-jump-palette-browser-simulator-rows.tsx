@@ -27,6 +27,7 @@ export function WorktreeJumpPaletteSimulatorRow({
 }): React.JSX.Element {
   const result = entry.result
   const simulatorWorktree = controller.resolveWorktree(result.worktreeId, result.executionHostId)
+
   const simulatorRepo = simulatorWorktree
     ? resolvePaletteRepoForWorktree(
         simulatorWorktree,
@@ -34,12 +35,15 @@ export function WorktreeJumpPaletteSimulatorRow({
         controller.repoByHostIdentity
       )
     : undefined
+
   const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
+
   const simulatorHostBadge = getPaletteHostBadge(
     simulatorRepo,
     controller.hostOptions,
     controller.hostFilterActive
   )
+
   const simulatorSessionAge = formatPaletteSessionAge(
     result.lastActiveAt ?? null,
     controller.paletteNowMs
@@ -122,6 +126,7 @@ export function WorktreeJumpPaletteBrowserRow({
 }): React.JSX.Element {
   const result = entry.result
   const browserWorktree = controller.resolveWorktree(result.worktreeId, result.executionHostId)
+
   const browserRepo = browserWorktree
     ? resolvePaletteRepoForWorktree(
         browserWorktree,
@@ -129,12 +134,15 @@ export function WorktreeJumpPaletteBrowserRow({
         controller.repoByHostIdentity
       )
     : undefined
+
   const browserRepoName = browserRepo?.displayName ?? result.repoName
+
   const browserHostBadge = getPaletteHostBadge(
     browserRepo,
     controller.hostOptions,
     controller.hostFilterActive
   )
+
   const browserSessionAge = formatPaletteSessionAge(
     result.lastActiveAt ?? null,
     controller.paletteNowMs

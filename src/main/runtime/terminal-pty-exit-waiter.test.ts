@@ -39,6 +39,7 @@ describe('PTY exit subscription', () => {
     for (let index = 0; index < 25; index += 1) {
       runtime.subscribeToPtyExit('pty-1', listener)()
     }
+
     runtime.onPtyExit('pty-1', 0)
 
     expect(listener).not.toHaveBeenCalled()

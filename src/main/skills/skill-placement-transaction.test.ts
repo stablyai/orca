@@ -17,6 +17,7 @@ const roots: string[] = []
 async function skill(root: string, body: string): Promise<{ path: string; digest: string }> {
   await mkdir(root, { recursive: true })
   await writeFile(join(root, 'SKILL.md'), body)
+
   return {
     path: root,
     digest: (await nativeSkillInstallFilesystem.observeSkill(root)).observedDigest
@@ -56,6 +57,7 @@ describe('skill placement transaction recovery', () => {
     const workspace = join(root, 'workspace')
     const canonical = await skill(join(workspace, '.agents', 'skills', 'alpha'), '# Skill')
     const stateDirectory = join(root, 'state')
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'workspace',
@@ -64,6 +66,7 @@ describe('skill placement transaction recovery', () => {
       detectedProviders: ['claude'],
       providerRootOverrides: {}
     })
+
     await transaction.prepare(null, receipt(canonical.path, canonical.digest, 'version_1', []))
 
     const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonical.path)
@@ -77,12 +80,14 @@ describe('skill placement transaction recovery', () => {
     const canonical = await skill(join(root, 'home', '.agents', 'skills', 'alpha'), '# New')
     const stateDirectory = join(root, 'state')
     const next = receipt(canonical.path, canonical.digest, 'version_1', [])
+
     const filesystem = {
       ...nativeSkillInstallFilesystem,
       createAlias: async () => {
         throw new Error('aliases-disabled')
       }
     }
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'global',
@@ -90,11 +95,14 @@ describe('skill placement transaction recovery', () => {
       detectedProviders: ['claude'],
       filesystem
     })
+
     await transaction.prepare(null, next)
     const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonical.path)
+
     if (!journal?.actions[0]) {
       throw new Error('missing placement action')
     }
+
     await mkdir(journal.actions[0].stagingPath, { recursive: true })
     await writeFile(join(journal.actions[0].stagingPath, 'partial'), 'partial')
 
@@ -123,6 +131,7 @@ describe('skill placement transaction recovery', () => {
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Old')
     const providerPath = join(home, '.claude', 'skills', 'alpha')
     await cp(canonical.path, providerPath, { recursive: true })
+
     const previous = receipt(canonical.path, canonical.digest, 'version_1', [
       {
         provider: 'agent-skills',
@@ -137,21 +146,26 @@ describe('skill placement transaction recovery', () => {
         status: 'installed'
       }
     ])
+
     await writeFile(join(canonical.path, 'SKILL.md'), '# New')
     const digest = (await nativeSkillInstallFilesystem.observeSkill(canonical.path)).observedDigest
     const next = receipt(canonical.path, digest, 'version_2', [])
     const stateDirectory = join(root, 'state')
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'global',
       homeDirectory: home,
       detectedProviders: ['claude']
     })
+
     await transaction.prepare(previous, next)
     const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonical.path)
+
     if (!journal?.actions[0]) {
       throw new Error('missing placement action')
     }
+
     await cp(canonical.path, journal.actions[0].stagingPath, { recursive: true })
     await rename(providerPath, journal.actions[0].backupPath)
 
@@ -174,6 +188,7 @@ describe('skill placement transaction recovery', () => {
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Old')
     const providerPath = join(home, '.claude', 'skills', 'alpha')
     await cp(canonical.path, providerPath, { recursive: true })
+
     const previous = receipt(canonical.path, canonical.digest, 'version_1', [
       {
         provider: 'claude',
@@ -182,10 +197,12 @@ describe('skill placement transaction recovery', () => {
         status: 'installed'
       }
     ])
+
     await writeFile(join(canonical.path, 'SKILL.md'), '# New')
     const digest = (await nativeSkillInstallFilesystem.observeSkill(canonical.path)).observedDigest
     const stateDirectory = join(root, 'state')
     let failRenames = true
+
     const filesystem = {
       ...nativeSkillInstallFilesystem,
       createAlias: async () => {
@@ -195,12 +212,15 @@ describe('skill placement transaction recovery', () => {
         if (failRenames && source.includes('.orca-placement-staging-')) {
           throw new Error('injected-placement-rename-failure')
         }
+
         if (failRenames && source.includes('.orca-placement-backup-')) {
           throw new Error('injected-rollback-rename-failure')
         }
+
         await nativeSkillInstallFilesystem.rename(source, target)
       }
     }
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'global',
@@ -208,6 +228,7 @@ describe('skill placement transaction recovery', () => {
       detectedProviders: ['claude'],
       filesystem
     })
+
     await transaction.prepare(previous, receipt(canonical.path, digest, 'version_2', []))
 
     const failed = await transaction.commit(receipt(canonical.path, digest, 'version_2', []))
@@ -227,6 +248,7 @@ describe('skill placement transaction recovery', () => {
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Skill')
     const previousPath = join(home, '.claude', 'skills', 'alpha')
     await cp(canonical.path, previousPath, { recursive: true })
+
     const previous = receipt(canonical.path, canonical.digest, 'version_1', [
       {
         provider: 'claude',
@@ -235,9 +257,11 @@ describe('skill placement transaction recovery', () => {
         status: 'installed'
       }
     ])
+
     const next = receipt(canonical.path, canonical.digest, 'version_2', [])
     const stateDirectory = join(root, 'state')
     const customRoot = join(root, 'managed-claude', 'skills')
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'global',
@@ -245,6 +269,7 @@ describe('skill placement transaction recovery', () => {
       detectedProviders: ['claude'],
       providerRootOverrides: { claude: customRoot }
     })
+
     await transaction.prepare(previous, next)
 
     const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonical.path)
@@ -268,6 +293,7 @@ describe('skill placement transaction recovery', () => {
     const sharedRoot = join(root, 'shared', 'skills')
     const previousPath = join(sharedRoot, 'alpha')
     await cp(canonical.path, previousPath, { recursive: true })
+
     const previous = receipt(canonical.path, canonical.digest, 'version_1', [
       {
         provider: 'claude',
@@ -276,8 +302,10 @@ describe('skill placement transaction recovery', () => {
         status: 'installed'
       }
     ])
+
     const next = receipt(canonical.path, canonical.digest, 'version_2', [])
     const stateDirectory = join(root, 'state')
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'global',
@@ -288,6 +316,7 @@ describe('skill placement transaction recovery', () => {
         grok: sharedRoot
       }
     })
+
     await expect(transaction.prepare(previous, next)).rejects.toThrow(
       'skill-install-provider-root-ownership-conflict'
     )
@@ -302,6 +331,7 @@ describe('skill placement transaction recovery', () => {
     const home = join(root, 'home')
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Skill')
     const sharedRoot = join(root, 'shared', 'skills')
+
     const previous = receipt(canonical.path, canonical.digest, 'version_1', [
       {
         provider: 'claude',
@@ -310,8 +340,10 @@ describe('skill placement transaction recovery', () => {
         status: 'skipped'
       }
     ])
+
     const next = receipt(canonical.path, canonical.digest, 'version_2', [])
     const stateDirectory = join(root, 'state')
+
     const transaction = createSkillPlacementTransaction({
       stateDirectory,
       scope: 'global',

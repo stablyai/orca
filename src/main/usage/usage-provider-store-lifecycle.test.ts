@@ -17,33 +17,41 @@ const { writeProbe } = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+
   return {
     ...actual,
     open: (async (...args: Parameters<typeof actual.open>) => {
       if (args[1] === 'w') {
         writeProbe.opens += 1
+
         if (writeProbe.blocked) {
           await new Promise<void>((resolve) => writeProbe.waiters.push(resolve))
         }
       }
+
       return actual.open(...args)
     }) as typeof actual.open,
     rename: ((...args: Parameters<typeof actual.rename>) => {
       writeProbe.renames += 1
+
       return actual.rename(...args)
     }) as typeof actual.rename
   }
 })
 
 type TestSource = { id: string }
+
 type TestSession = { id: string }
+
 type TestDailyAggregate = { day: string }
+
 type TestScanState = {
   enabled: boolean
   lastScanStartedAt: number | null
   lastScanCompletedAt: number | null
   lastScanError: string | null
 }
+
 type TestState = {
   schemaVersion: number
   worktreeFingerprint: string | null
@@ -52,19 +60,23 @@ type TestState = {
   dailyAggregates: TestDailyAggregate[]
   scanState: TestScanState
 }
+
 type TestScanResult = Pick<TestState, 'processedSources' | 'sessions' | 'dailyAggregates'>
+
 type TestScan = (
   worktrees: UsageScanWorktreeRef[],
   previous: TestSource[]
 ) => Promise<TestScanResult>
 
 const NOW = Date.parse('2026-04-10T16:00:00.000Z')
+
 const EMPTY_WORKTREE_FINGERPRINT = '[]'
 
 function makeState(
   overrides: Partial<Omit<TestState, 'scanState'>> & { scanState?: Partial<TestScanState> } = {}
 ): TestState {
   const { scanState, ...stateOverrides } = overrides
+
   return {
     schemaVersion: 1,
     worktreeFingerprint: null,
@@ -88,9 +100,11 @@ function emptyScanResult(): TestScanResult {
 
 function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((promiseResolve) => {
     resolve = promiseResolve
   })
+
   return { promise, resolve }
 }
 
@@ -136,6 +150,7 @@ describe('UsageProviderStoreLifecycle', () => {
   ): TestUsageStore {
     const store = new TestUsageStore(cacheFile, scan)
     stores.push(store)
+
     return store
   }
 
@@ -264,6 +279,7 @@ describe('UsageProviderStoreLifecycle', () => {
   it('retains the last successful projection when a scan fails', async () => {
     const cacheFile = join(tempDirectory, 'usage-0.json')
     const store = createStore()
+
     const previousState = makeState({
       worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
       processedSources: [{ id: 'source' }],
@@ -271,6 +287,7 @@ describe('UsageProviderStoreLifecycle', () => {
       dailyAggregates: [{ day: '2026-04-09' }],
       scanState: { enabled: true, lastScanCompletedAt: NOW - 1_000 }
     })
+
     store.replaceState(previousState)
     scan.mockRejectedValueOnce(new Error('scan exploded'))
 

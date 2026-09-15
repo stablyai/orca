@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
+
 vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/user-data' }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: mocks.requireSshFilesystemProvider
 }))
@@ -30,7 +32,9 @@ function sshGrant(): ReturnType<typeof mintDocPreviewGrant> {
     entryRelativePath: 'index.html',
     browserPageId: 'page-1'
   })
+
   authorizeDocPreviewDirectory(grant.id, grant.entryRelativePath)
+
   return grant
 }
 
@@ -46,7 +50,9 @@ function runtimeGrant(root = '/srv/repo/docs'): ReturnType<typeof mintDocPreview
     entryRelativePath: 'index.html',
     browserPageId: 'page-1'
   })
+
   authorizeDocPreviewDirectory(grant.id, grant.entryRelativePath)
+
   return grant
 }
 

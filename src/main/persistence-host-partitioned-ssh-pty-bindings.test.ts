@@ -21,9 +21,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -102,6 +104,7 @@ describe('Store SSH remote PTY bindings across host partitions', () => {
     const store = await createStore()
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')
     store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
+
     const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
       throw new Error('disk unavailable')
     })

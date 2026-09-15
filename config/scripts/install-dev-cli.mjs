@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 
 const scriptDir = import.meta.dirname
+
 const source = path.join(scriptDir, 'orca-dev.mjs')
 
 const commandPath =
@@ -21,6 +22,7 @@ function isOwnedByUs(target) {
     if (!lstatSync(target).isSymbolicLink()) {
       return false
     }
+
     return readlinkSync(target) === source
   } catch {
     return false
@@ -32,6 +34,7 @@ if (existsSync(commandPath)) {
     console.log(`[orca-dev] ${commandPath} already points to dev CLI.`)
     process.exit(0)
   }
+
   console.error(
     `[orca-dev] ${commandPath} exists but is not our symlink. Remove it manually if you want the dev CLI installed globally.`
   )

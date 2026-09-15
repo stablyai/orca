@@ -46,6 +46,7 @@ export function ConnectionDiagnosticsScreen({
   const diagnosisArgs = host
     ? { endpoint: host.endpoint, state, activePath, pendingPath, entries }
     : null
+
   const diagnosis = diagnosisArgs ? diagnoseConnection(diagnosisArgs) : null
   const incidentId = diagnosisArgs ? getReportableConnectionIncidentId(diagnosisArgs) : null
   const hostId = host?.id ?? null
@@ -57,6 +58,7 @@ export function ConnectionDiagnosticsScreen({
     if (!device || !hostId) {
       return
     }
+
     const { report } = await device.report()
     await writeClipboard(report)
     setCopiedHostId(hostId)
@@ -67,18 +69,23 @@ export function ConnectionDiagnosticsScreen({
     if (!device || !hostId || !submissionKey || submissionState === 'sending') {
       return
     }
+
     const startedKey = submissionKey
     setSubmissionStates((states) => updateDiagnosticsSubmissionState(states, startedKey, 'sending'))
     const fresh = await device.report()
+
     if (`${hostId}:${fresh.incidentId ?? ''}` !== startedKey) {
       setSubmissionStates((states) => updateDiagnosticsSubmissionState(states, startedKey, null))
+
       return
     }
+
     const result = await device.submit({
       report: fresh.report,
       appVersion: fresh.appVersion,
       platform: fresh.platform
     })
+
     setSubmissionStates((states) =>
       updateDiagnosticsSubmissionState(states, startedKey, result.ok ? 'sent' : 'failed')
     )

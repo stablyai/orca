@@ -42,6 +42,7 @@ vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(execFileMock, {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
   })
+
   return {
     execFile: execFileWithPromisify,
     spawn: vi.fn()
@@ -218,17 +219,21 @@ describe('preflight', () => {
 
   it('times out hung local preflight probes', async () => {
     vi.useFakeTimers()
+
     try {
       execFileAsyncMock.mockImplementation((command, args) => {
         if (command === 'git') {
           return Promise.resolve({ stdout: 'git version 2.0.0\n' })
         }
+
         if (command === 'gh' && Array.isArray(args) && args[0] === '--version') {
           return new Promise(() => {})
         }
+
         if (command === 'glab') {
           return Promise.reject(new Error('command not found: glab'))
         }
+
         throw new Error(`unexpected command ${String(command)}`)
       })
 
@@ -266,12 +271,15 @@ describe('preflight', () => {
       if (command === 'git') {
         return { stdout: 'git version 2.0.0\n' }
       }
+
       if (command === 'gh') {
         throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
       }
+
       if (command === 'glab') {
         throw Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' })
       }
+
       throw new Error(`unexpected command ${String(command)}`)
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
@@ -284,6 +292,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       if (script.includes('gh') && script.includes('auth status')) {
         return {
           environmentResolved: true,
@@ -293,6 +302,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error(`unexpected WSL script ${script}`)
     })
 
@@ -374,6 +384,7 @@ describe('preflight', () => {
         runPreflightCheck(false, { wslDistro: 'Ubuntu' }),
         runPreflightCheck(false, { wslDistro: 'Ubuntu' })
       ])
+
       const singleRunSpawns = runWslProcessMock.mock.calls.length
 
       runWslProcessMock.mockClear()
@@ -397,14 +408,18 @@ describe('preflight', () => {
       // trivially distinguishable in the cached result.
       let phase: 'stale' | 'fresh' = 'stale'
       let releaseStale!: () => void
+
       const staleGate = new Promise<void>((resolve) => {
         releaseStale = resolve
       })
+
       runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
         const isStale = phase === 'stale'
+
         if (isStale) {
           await staleGate
         }
+
         return {
           environmentResolved: true,
           code: isStale ? 1 : 0,
@@ -436,11 +451,14 @@ describe('preflight', () => {
     it('does not repopulate a cache that was reset while a probe was in flight', async () => {
       stubWslProbes()
       let release!: () => void
+
       const gate = new Promise<void>((resolve) => {
         release = resolve
       })
+
       runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
         await gate
+
         return {
           environmentResolved: true,
           code: 0,
@@ -464,6 +482,7 @@ describe('preflight', () => {
 
     it('re-probes after the cache entry expires so a transient failure self-heals', async () => {
       vi.useFakeTimers()
+
       try {
         stubWslProbes()
         runWslProcessMock.mockRejectedValue(new Error('distro not running'))
@@ -515,6 +534,7 @@ describe('preflight', () => {
 
   it('times out hung WSL preflight probes', async () => {
     vi.useFakeTimers()
+
     try {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -524,18 +544,22 @@ describe('preflight', () => {
         if (command === 'git') {
           return Promise.resolve({ stdout: 'git version 2.0.0\n' })
         }
+
         if (command === 'gh' || command === 'glab') {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
+
         throw new Error(`unexpected command ${String(command)}`)
       })
       runWslProcessMock.mockImplementation(({ script }: { script: string }) => {
         if (script.includes("'gh' --version")) {
           return new Promise(() => {})
         }
+
         if (script.includes("'glab' --version")) {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
+
         throw new Error(`unexpected WSL script ${script}`)
       })
 
@@ -628,21 +652,27 @@ describe('preflight', () => {
         stderr: '',
         timedOut: false
       })
+
       if (script.includes('git') && script.includes('--version')) {
         return ok('git version 2.0.0\n')
       }
+
       if (script.includes('gh') && script.includes('--version')) {
         return ok('gh version 2.0.0\n')
       }
+
       if (script.includes('glab') && script.includes('--version')) {
         return ok('glab version 1.92.1\n')
       }
+
       if (script.includes('gh') && script.includes('auth status')) {
         return ok('github.com\n  - Active account: true\n')
       }
+
       if (script.includes('glab') && script.includes('auth status')) {
         return ok('Logged in to gitlab.com\n')
       }
+
       throw new Error(`unexpected WSL script ${script}`)
     })
 
@@ -718,9 +748,11 @@ describe('preflight', () => {
     })
     execFileAsyncMock.mockImplementation(async (command, args) => {
       expect(command).not.toBe('wsl.exe')
+
       if (command === 'git' || command === 'gh' || command === 'glab') {
         return { stdout: `${String(command)} ok\n` }
       }
+
       throw new Error(`unexpected command ${String(command)} ${JSON.stringify(args)}`)
     })
 

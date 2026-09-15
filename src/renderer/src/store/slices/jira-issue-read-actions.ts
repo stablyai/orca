@@ -31,25 +31,33 @@ export function createJiraIssueReadActions(
       const scope = getJiraReadScope(get().settings, sourceContext)
       const cacheKey = scopedJiraCacheKey(scope, `${siteId}::${key.toUpperCase()}`)
       const cached = get().jiraIssueSummaryCache[cacheKey]
+
       if (!options?.force && isFreshJiraCacheEntry(cached)) {
         return cached.data
       }
+
       if (options?.force && cached) {
         set((state) => {
           const jiraIssueSummaryCache = { ...state.jiraIssueSummaryCache }
           delete jiraIssueSummaryCache[cacheKey]
+
           return { jiraIssueSummaryCache }
         })
       }
+
       const inflight = inflightIssueSummaryRequests.get(cacheKey)
+
       if (!options?.force && inflight?.contextKey === scope.contextKey) {
         return subscribeToJiraSummaryRequest(inflight, options?.signal)
       }
+
       if (options?.signal?.aborted) {
         throw createJiraAbortError('issue summary lookup')
       }
+
       let entry: SharedJiraSummaryRequest
       const controller = new AbortController()
+
       const promise = jiraLookupIssueSummary(scope.settings, key, siteId, controller.signal)
         .then((issue) => {
           if (
@@ -65,6 +73,7 @@ export function createJiraIssueReadActions(
               })
             }))
           }
+
           return issue
         })
         .finally(() => {
@@ -72,6 +81,7 @@ export function createJiraIssueReadActions(
             inflightIssueSummaryRequests.delete(cacheKey)
           }
         })
+
       entry = {
         promise,
         controller,
@@ -80,6 +90,7 @@ export function createJiraIssueReadActions(
         mutationGeneration: currentJiraMutationGeneration()
       }
       inflightIssueSummaryRequests.set(cacheKey, entry)
+
       return subscribeToJiraSummaryRequest(entry, options?.signal)
     },
 
@@ -87,10 +98,13 @@ export function createJiraIssueReadActions(
       const scope = getJiraReadScope(get().settings, options?.sourceContext)
       const issueCacheKey = scopedJiraCacheKey(scope, `${siteId ?? 'selected'}::${key}`)
       const cached = get().jiraIssueCache[issueCacheKey] ?? get().jiraIssueCache[key]
+
       if (isFreshJiraCacheEntry(cached)) {
         return cached.data
       }
+
       const inflight = inflightIssueRequests.get(issueCacheKey)
+
       if (
         inflight &&
         inflight.contextKey === scope.contextKey &&
@@ -98,8 +112,10 @@ export function createJiraIssueReadActions(
       ) {
         return inflight.promise
       }
+
       let entry: InflightJiraReadRequest<JiraIssue | null>
       const requestMutationGeneration = currentJiraMutationGeneration()
+
       const promise = jiraGetIssue(scope.settings, key, siteId)
         .then((issue) => {
           if (
@@ -118,10 +134,12 @@ export function createJiraIssueReadActions(
               })
             }))
           }
+
           return issue
         })
         .catch((error) => {
           console.warn('[jira] fetchJiraIssue failed:', error)
+
           if (
             isIntegrationCredentialDecryptionError(error) &&
             canWriteJiraReadResult(
@@ -145,12 +163,14 @@ export function createJiraIssueReadActions(
           ) {
             markJiraConnectionLost(set, scope)
           }
+
           return null
         })
         .finally(() => {
           if (inflightIssueRequests.get(issueCacheKey) === entry) {
             inflightIssueRequests.delete(issueCacheKey)
           }
+
           if (
             shouldRefreshJiraStatusAfterRead(siteId, get().jiraStatus) &&
             canWriteJiraReadResult(
@@ -163,12 +183,14 @@ export function createJiraIssueReadActions(
             void get().checkJiraConnection()
           }
         })
+
       entry = {
         promise,
         contextKey: scope.contextKey,
         mutationGeneration: requestMutationGeneration
       }
       inflightIssueRequests.set(issueCacheKey, entry)
+
       return promise
     }
   }

@@ -27,6 +27,7 @@ export function parseRemoteFederatedWorkerStartReceipt(
   if (!isRecord(value) || !isNonEmptyString(value.dispatchId) || !isNonEmptyString(value.state)) {
     throw new Error('The worker server returned an invalid attachment receipt.')
   }
+
   if (
     value.state === 'ready' &&
     (!isNonEmptyString(value.runtimeEpoch) ||
@@ -35,6 +36,7 @@ export function parseRemoteFederatedWorkerStartReceipt(
   ) {
     throw new Error('The worker server returned an invalid ready receipt.')
   }
+
   return value as RemoteFederatedWorkerStartReceipt
 }
 

@@ -25,10 +25,12 @@ const comparatorOverride = vi.hoisted(() => ({
 
 vi.mock('../../../../../../shared/file-name-sort', async (importOriginal) => {
   const actual = await importOriginal<typeof FileNameSortModule>()
+
   return {
     ...actual,
     compareFileNames: (a: string, b: string) => {
       counters.compareFileNames += 1
+
       return comparatorOverride.current
         ? comparatorOverride.current(a, b)
         : actual.compareFileNames(a, b)
@@ -38,20 +40,24 @@ vi.mock('../../../../../../shared/file-name-sort', async (importOriginal) => {
 
 vi.mock('../../source-control-tree', async (importOriginal) => {
   const actual = await importOriginal<typeof SourceControlTreeModule>()
+
   return {
     ...actual,
     buildGitStatusSourceControlTree: (
       ...args: Parameters<typeof actual.buildGitStatusSourceControlTree>
     ) => {
       counters.buildGitStatusSourceControlTree += 1
+
       return actual.buildGitStatusSourceControlTree(...args)
     },
     buildSourceControlTree: ((...args: unknown[]) => {
       counters.buildSourceControlTree += 1
+
       return (actual.buildSourceControlTree as (...a: unknown[]) => unknown)(...args)
     }) as typeof actual.buildSourceControlTree,
     flattenSourceControlTree: ((...args: unknown[]) => {
       counters.flattenSourceControlTree += 1
+
       return (actual.flattenSourceControlTree as (...a: unknown[]) => unknown)(...args)
     }) as typeof actual.flattenSourceControlTree
   }
@@ -59,29 +65,39 @@ vi.mock('../../source-control-tree', async (importOriginal) => {
 
 vi.mock('./submodule-expansion', async (importOriginal) => {
   const actual = await importOriginal<typeof SubmoduleExpansionModule>()
+
   return {
     ...actual,
     injectExpandedSubmoduleRows: ((...args: unknown[]) => {
       counters.injectExpandedSubmoduleRows += 1
+
       return (actual.injectExpandedSubmoduleRows as (...a: unknown[]) => unknown)(...args)
     }) as typeof actual.injectExpandedSubmoduleRows,
     injectExpandedSubmoduleEntries: ((...args: unknown[]) => {
       counters.injectExpandedSubmoduleEntries += 1
+
       return (actual.injectExpandedSubmoduleEntries as (...a: unknown[]) => unknown)(...args)
     }) as typeof actual.injectExpandedSubmoduleEntries
   }
 })
 
 const { compareFileNames } = await import('../../../../../../shared/file-name-sort')
+
 const { getSourceControlFileFilterState, filterSourceControlPathEntries } =
   await import('./file-filter')
+
 const { useSourceControlFileProjection } = await import('./use-file-projection')
 
 const NO_ENTRIES: GitStatusEntry[] = []
+
 const NO_COLLAPSED_TREE_DIRS = new Set<string>()
+
 const NO_EXPANDED_SUBMODULES = new Set<string>()
+
 const NO_COLLAPSED_SECTIONS = new Set<string>()
+
 const NO_SUBMODULE_STATUS = {}
+
 const GROUP_ORDER = ['unstaged', 'staged', 'untracked'] as const
 
 type ProjectionProps = {
@@ -142,6 +158,7 @@ function legacyFilterThenSort(
   filterQuery: string
 ): GitBranchChangeEntry[] {
   const state = getSourceControlFileFilterState(filterQuery)
+
   return [...filterSourceControlPathEntries(entries, state)].sort((a, b) =>
     compareFileNames(a.path, b.path)
   )
@@ -162,6 +179,7 @@ function makeStatusEntries(count: number): GitStatusEntry[] {
 function compareTopLevelDirOnly(a: string, b: string): number {
   const dirA = a.slice(0, a.indexOf('/'))
   const dirB = b.slice(0, b.indexOf('/'))
+
   return dirA < dirB ? -1 : dirA > dirB ? 1 : 0
 }
 
@@ -176,6 +194,7 @@ function makeTieHeavyEntries(count: number): GitBranchChangeEntry[] {
 
 beforeEach(() => {
   comparatorOverride.current = null
+
   for (const key of Object.keys(counters) as (keyof typeof counters)[]) {
     counters[key] = 0
   }
@@ -184,6 +203,7 @@ beforeEach(() => {
 describe('useSourceControlFileProjection branch entry ordering', () => {
   it('sorts committed branch entries once across many filter changes', () => {
     const branchEntries = makeBranchEntries(400)
+
     const { rerender } = renderProjection({
       entries: NO_ENTRIES,
       branchEntries,
@@ -228,6 +248,7 @@ describe('useSourceControlFileProjection branch entry ordering', () => {
   it('matches filter-then-sort under a comparator that is not a total order', () => {
     comparatorOverride.current = compareTopLevelDirOnly
     const branchEntries = makeTieHeavyEntries(300)
+
     const { result, rerender } = renderProjection({
       entries: NO_ENTRIES,
       branchEntries,
@@ -298,6 +319,7 @@ describe('useSourceControlFileProjection view-mode gating', () => {
       filterQuery: '',
       sourceControlViewMode: 'list'
     })
+
     const listRows = result.current.visibleListRowsBySection
     const listSelectionCount = result.current.visibleSelectionEntries.length
     expect(listSelectionCount).toBe(entries.length)

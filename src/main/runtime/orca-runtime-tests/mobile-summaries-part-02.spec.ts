@@ -22,6 +22,7 @@ describe('OrcaRuntimeService', () => {
     const now = Date.now()
     const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
     const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -38,6 +39,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -90,6 +92,7 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'split-tab'
     const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
     const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -106,6 +109,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -147,6 +151,7 @@ describe('OrcaRuntimeService', () => {
   it('suppresses restored-unconfirmed hook rows from worktree.ps', async () => {
     const leafId = '33333333-3333-4333-8333-333333333333'
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -163,6 +168,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -196,10 +202,12 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
+
     const metaById = {
       ...store.getAllWorktreeMeta(),
       [renamedWorktreeId]: makeWorktreeMeta({ displayName: 'renamed' })
     }
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       activeWorktreeId: renamedWorktreeId,
       activeTabIdByWorktree: { [renamedWorktreeId]: 'host-tab' },
@@ -218,13 +226,16 @@ describe('OrcaRuntimeService', () => {
         ]
       }
     })
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getWorkspaceSession: () => session
     }
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -313,6 +324,7 @@ describe('OrcaRuntimeService', () => {
     'projects %s agent activity to mobile at freshness offset %s',
     async (state, updatedAtOffset, hasHostSidebarActivity, status) => {
       const now = Date.now()
+
       const runtime = new OrcaRuntimeService(store, undefined, {
         getAgentStatusSnapshot: () => [
           {
@@ -328,6 +340,7 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+
       // Why: local rows only project while their tab exists (#6072); freshness
       // is what varies here, so keep the tab present in the runtime graph.
       runtime.attachWindow(1)
@@ -360,7 +373,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -408,7 +423,9 @@ describe('OrcaRuntimeService', () => {
         ]
       }
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -453,7 +470,9 @@ describe('OrcaRuntimeService', () => {
         ]
       }
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -494,8 +513,10 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const paneKey = 'daemon-tab:77777777-7777-4777-8777-777777777777'
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -511,6 +532,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     // paneKey-only record: the tabId rescue must not be what keeps this row.
     runtime['recordPtyWorktree']('daemon-pty', TEST_WORKTREE_ID, {
       connected: true,
@@ -533,7 +555,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -549,6 +573,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     runtime['recordPtyWorktree']('daemon-pty-2', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'daemon-tab',
@@ -571,11 +596,13 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const runtime = new OrcaRuntimeService(
       runtimeStore as never,
       undefined,
       makeAgentStatusStoreWiring().deps
     )
+
     runtime['recordPtyWorktree']('osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       tabId: 'osc-tab',
@@ -600,10 +627,12 @@ describe('OrcaRuntimeService', () => {
     // Hook payloads carry no ptyId; the OSC-observed one must survive the
     // hook row winning the freshness race or the ptyId rescue goes dead.
     const paneKey = 'race-tab:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
+
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, statusWiring.deps)
     runtime['recordPtyWorktree']('race-pty', TEST_WORKTREE_ID, {

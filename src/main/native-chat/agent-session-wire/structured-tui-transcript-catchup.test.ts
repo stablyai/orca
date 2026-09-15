@@ -9,10 +9,13 @@ import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catc
 const journals = createTrackedJournalOpener()
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-catchup'
+
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
+
 let store: AgentSessionRecordStore
 
 function rolloutLine(message: string): string {
@@ -39,6 +42,7 @@ async function createCatchupFixture() {
   const rollout = join(sessionsDir, `rollout-2026-08-11T10-00-00-${THREAD}.jsonl`)
   await mkdir(sessionsDir, { recursive: true })
   await writeFile(rollout, rolloutLine('before handoff'), 'utf8')
+
   const reserved = await store.reserveOwner({
     sessionId: SESSION,
     location: {
@@ -62,6 +66,7 @@ async function createCatchupFixture() {
     },
     now: NOW
   })
+
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId: SESSION,
@@ -86,6 +91,7 @@ async function createCatchupFixture() {
     },
     now: NOW
   })
+
   const journal = await journals.open({
     identity: {
       sessionId: SESSION,
@@ -96,6 +102,7 @@ async function createCatchupFixture() {
     },
     journalDir: join(root, 'journal')
   })
+
   return { fence, journal, rollout }
 }
 
@@ -160,6 +167,7 @@ describe('StructuredTuiTranscriptCatchup', () => {
           ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
           : []
       )
+
     expect(text).toEqual(['before host crash', 'while host was down'])
     recovered.stopAll()
   })

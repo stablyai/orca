@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     badgeColor: '#000',
     addedAt: 0
   }
+
   const activeWorktree = {
     id: 'wt-1',
     repoId: 'repo-1',
@@ -40,6 +41,7 @@ const mocks = vi.hoisted(() => {
     sortOrder: 0,
     lastActivityAt: 0
   }
+
   const calls = {
     openDiff: vi.fn(),
     openFile: vi.fn(),
@@ -52,6 +54,7 @@ const mocks = vi.hoisted(() => {
     requestEditorSaveQuiesce: vi.fn(),
     notifyEditorExternalFileChange: vi.fn()
   }
+
   return {
     activeRepo,
     activeWorktree,
@@ -68,6 +71,7 @@ vi.mock('@/store', () => {
       getState: () => mocks.state
     }
   )
+
   return { useAppStore }
 })
 
@@ -84,6 +88,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 
 vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     discardRuntimeGitPath: mocks.calls.discardRuntimeGitPath,
@@ -223,6 +228,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -268,6 +274,7 @@ function clickBranchRow(init: MouseEventInit = {}): void {
   const label = [...container.querySelectorAll('span')].find(
     (candidate) => candidate.textContent === 'branch.ts'
   )
+
   const row = label?.closest('div')
   expect(row).not.toBeNull()
   act(() => {
@@ -394,9 +401,11 @@ describe('SourceControl preview row opens', () => {
     mocks.state.settings = { activeRuntimeEnvironmentId: 'runtime-remote' }
 
     const row = container.querySelector<HTMLDivElement>('[data-source-control-path="src/file.ts"]')
+
     const discardButton = row?.querySelector<HTMLButtonElement>(
       'button[aria-label="Discard changes"]'
     )
+
     expect(discardButton).not.toBeNull()
     act(() => {
       discardButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -405,6 +414,7 @@ describe('SourceControl preview row opens', () => {
     const confirmButton = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.trim() === 'Discard'
     )
+
     expect(confirmButton).not.toBeNull()
     await act(async () => {
       confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -441,6 +451,7 @@ describe('SourceControl preview row opens', () => {
     const row = container.querySelector<HTMLDivElement>(
       '[data-source-control-path="packages/nested"]'
     )
+
     expect(row?.textContent).toContain('Stage inside submodule')
     expect(
       row?.querySelector('[title*="cannot stage file changes inside a submodule"]')
@@ -465,16 +476,19 @@ describe('SourceControl preview row opens', () => {
     const row = container.querySelector<HTMLDivElement>(
       '[data-source-control-path="june-11th-launch"]'
     )
+
     expect(row?.textContent).toContain('Stage inside submodule')
 
     const stageAllButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.trim() === 'Stage All'
     )
+
     expect(stageAllButton).toBeUndefined()
 
     const commitButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.trim() === 'Commit'
     )
+
     expect(commitButton).toBeDefined()
     expect(commitButton?.disabled).toBe(true)
 
@@ -500,6 +514,7 @@ describe('SourceControl preview row opens', () => {
     const stageAllButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.trim() === 'Stage All'
     )
+
     expect(stageAllButton).toBeDefined()
     expect(stageAllButton?.disabled).toBe(false)
 

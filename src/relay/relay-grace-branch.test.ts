@@ -9,6 +9,7 @@ import {
 } from './relay-grace-branch'
 
 const EMPTY_DETACHED_STARTUP_GRACE_MS = 30_000
+
 const IDLE_RELAY_GRACE_MS = 15 * 60_000
 
 function decide(overrides: Partial<RelayGraceDecisionInput> = {}) {
@@ -167,6 +168,7 @@ function relayGraceHost(
 ) {
   let configuredGraceMs = overrides.configuredGraceMs ?? 10_000
   let graceBranch: RelayGraceBranch | null = overrides.graceBranch ?? 'configured'
+
   const startGrace = vi.fn(
     (_reason: string, options?: { retryDeferredShutdown?: boolean }): void => {
       graceBranch = decide({

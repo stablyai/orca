@@ -52,25 +52,32 @@ export function resolveWorktreeBatchDeleteTargets(
     new Map(
       requestedWorktrees.map((request) => {
         const key = typeof request === 'string' ? request : `${request.hostId ?? ''}|${request.id}`
+
         return [key, request] as const
       })
     ).values()
   )
+
   const targets: Worktree[] = []
+
   for (const request of uniqueRequests) {
     const worktreeId = typeof request === 'string' ? request : request.id
+
     // A request that names a host resolves on THAT host, so confirming a remote
     // row can never fall through to a local checkout at the same path — and the
     // other host's row stays reachable instead of being masked by the id-keyed map.
     const target =
       lookupTarget(worktreeId, typeof request === 'string' ? undefined : request.hostId) ?? null
+
     if (typeof request !== 'string' && (!target || target.instanceId !== request.instanceId)) {
       return null
     }
+
     if (target && !target.isMainWorktree) {
       targets.push(target)
     }
   }
+
   return targets
 }
 
@@ -78,17 +85,22 @@ export function readWorktreeDeleteIdentities(value: unknown): WorktreeDeleteIden
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.flatMap((entry) => {
     if (!entry || typeof entry !== 'object' || !('id' in entry) || typeof entry.id !== 'string') {
       return []
     }
+
     const instanceId = 'instanceId' in entry ? entry.instanceId : undefined
+
     if (instanceId !== undefined && typeof instanceId !== 'string') {
       return []
     }
+
     const hostId = normalizeExecutionHostId(
       'hostId' in entry && typeof entry.hostId === 'string' ? entry.hostId : null
     )
+
     return [{ id: entry.id, instanceId, ...(hostId ? { hostId } : {}) }]
   })
 }

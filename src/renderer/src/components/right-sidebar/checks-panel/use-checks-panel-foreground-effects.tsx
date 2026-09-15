@@ -65,10 +65,12 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
     runtimeEnvironmentId,
     setGitStatusRefreshNonce
   } = model
+
   useEffect(() => {
     if (foregroundReviewEvidenceKey === null || !isPanelVisible) {
       foregroundedUnrenderedReviewKeyRef.current = null
     }
+
     if (isPanelVisible && repo && !isFolder && branch) {
       void fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
@@ -84,6 +86,7 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
         // the host's fast re-check tier (#11532).
         active: true
       })
+
       // Why: the gh-based refresh coordinator is GitHub-only; running it elsewhere gave a spurious gh_unavailable error hiding a valid composer.
       if (activeWorktreeId && isGitHubReviewContext) {
         const refreshRequest = resolveChecksPanelPRRefreshRequest({
@@ -95,9 +98,11 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
             foregroundReviewEvidenceKey !== null &&
             foregroundedUnrenderedReviewKeyRef.current === foregroundReviewEvidenceKey
         })
+
         if (refreshRequest.reason === 'active' && foregroundReviewEvidenceKey !== null) {
           foregroundedUnrenderedReviewKeyRef.current = foregroundReviewEvidenceKey
         }
+
         enqueueGitHubPRRefresh(activeWorktreeId, refreshRequest.reason, refreshRequest.priority)
       }
     }
@@ -134,13 +139,17 @@ export function useChecksPanelForegroundEffects(model: ChecksPanelForegroundEffe
     ) {
       return undefined
     }
+
     let skippedInitialRun = false
+
     return installWindowVisibilityInterval({
       run: () => {
         if (!skippedInitialRun) {
           skippedInitialRun = true
+
           return
         }
+
         setGitStatusRefreshNonce((value) => value + 1)
       },
       jitterOnVisible: true,

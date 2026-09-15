@@ -19,10 +19,12 @@ export function deleteScannedSessionFieldsForOwners(
     next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
       Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
         const separator = paneKey.lastIndexOf(':')
+
         return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
       })
     )
   }
+
   if (next.terminalSurfaceTombstonesByPaneKey) {
     next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
       Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
@@ -30,6 +32,7 @@ export function deleteScannedSessionFieldsForOwners(
       )
     )
   }
+
   if (next.sleepingAgentSessionsByPaneKey) {
     for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
       if (isRemovedOwner(record.worktreeId)) {
@@ -37,6 +40,7 @@ export function deleteScannedSessionFieldsForOwners(
       }
     }
   }
+
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
     (worktreeId) => !isRemovedOwner(worktreeId)
   )
@@ -48,6 +52,7 @@ export function workspaceSessionPartitionIdsForHost(
   hostId: string | null | undefined
 ): ExecutionHostId[] {
   const parsed = parseExecutionHostId(hostId)
+
   return parsed && parsed.id !== LOCAL_EXECUTION_HOST_ID
     ? [LOCAL_EXECUTION_HOST_ID, parsed.id]
     : [LOCAL_EXECUTION_HOST_ID]
@@ -68,10 +73,12 @@ export function removeWorkspaceSessionOwner(
   if (!session) {
     return session
   }
+
   const next = cloneWorkspaceSessionState(session)
   const removedTabIds = new Set<string>()
   deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, options)
   deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) => worktreeId === ownerKey)
+
   return next
 }
 
@@ -86,13 +93,17 @@ export function removeWorkspaceSessionOwners(
   if (!session || ownerKeys.size === 0) {
     return session
   }
+
   const next = cloneWorkspaceSessionState(session)
   const removedTabIds = new Set<string>()
+
   for (const ownerKey of ownerKeys) {
     deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds)
   }
+
   deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) =>
     ownerKeys.has(worktreeId)
   )
+
   return next
 }

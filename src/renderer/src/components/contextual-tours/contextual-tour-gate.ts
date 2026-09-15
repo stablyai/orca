@@ -34,6 +34,7 @@ export function isContextualTourAllowedForModal(
   if (activeModal === 'none') {
     return true
   }
+
   return tour.allowedActiveModals?.includes(activeModal) === true
 }
 
@@ -43,26 +44,33 @@ export function getMeasurableContextualTourTarget(
 ): ContextualTourTarget | null {
   const queryRoot = root ?? (typeof document !== 'undefined' ? document : null)
   const elements = getContextualTourTargetCandidates(selector, queryRoot)
+
   if (!elements) {
     return null
   }
+
   for (const element of elements) {
     if (!element || typeof element.getBoundingClientRect !== 'function') {
       continue
     }
+
     if (!isContextualTourTargetVisible(element)) {
       continue
     }
+
     let rect: DOMRect
+
     try {
       rect = element.getBoundingClientRect()
     } catch {
       continue
     }
+
     if (isMeasurableRect(rect)) {
       return { element, rect }
     }
   }
+
   return null
 }
 
@@ -77,9 +85,11 @@ export function getContextualTourStartStepIndex(
   const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
   const startIndex = Math.max(requiredStepIndex, 0)
   const step = tour.steps[startIndex]
+
   if (!step || !targetExists(step.targetSelector)) {
     return null
   }
+
   return startIndex
 }
 
@@ -93,6 +103,7 @@ export function getVisibleContextualTourStepIndexes(
       indexes.push(index)
     }
   })
+
   return indexes
 }
 
@@ -115,12 +126,15 @@ export function getPreviousVisibleContextualTourStepIndex(args: {
 }): number | null {
   const visible = getVisibleContextualTourStepIndexes(args.tour, args.targetExists)
   let prev: number | null = null
+
   for (const index of visible) {
     if (index >= args.currentStepIndex) {
       break
     }
+
     prev = index
   }
+
   return prev
 }
 
@@ -139,32 +153,41 @@ export function getContextualTourRequestDecision(args: {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
   }
+
   if (!args.autoEligible) {
     return { kind: 'blocked', reason: 'auto-disabled' }
   }
+
   if (args.onboardingVisible) {
     return { kind: 'blocked', reason: 'onboarding' }
   }
+
   if (args.seenIds.includes(args.tour.id)) {
     return { kind: 'blocked', reason: 'seen' }
   }
+
   if (args.sessionConsumed) {
     return { kind: 'blocked', reason: 'session-consumed' }
   }
+
   if (args.activeTourId !== null) {
     return { kind: 'blocked', reason: 'active-tour' }
   }
+
   if (!isContextualTourAllowedForModal(args.tour, args.activeModal)) {
     return { kind: 'blocked', reason: 'modal' }
   }
+
   if (args.blockingSurfaceVisible) {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
   const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists)
+
   if (stepIndex === null) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }
+
   return { kind: 'start', stepIndex }
 }
 
@@ -173,9 +196,11 @@ export function getContextualTourStepProgress(args: {
   stepIndex: number
 }): { current: number; total: number } | null {
   const visibleIndex = args.visibleStepIndexes.indexOf(args.stepIndex)
+
   if (visibleIndex === -1) {
     return null
   }
+
   return { current: visibleIndex + 1, total: args.visibleStepIndexes.length }
 }
 
@@ -203,10 +228,12 @@ function getContextualTourTargetCandidates(
   if (!queryRoot) {
     return []
   }
+
   try {
     if (typeof queryRoot.querySelectorAll === 'function') {
       return Array.from(queryRoot.querySelectorAll(selector))
     }
+
     return queryRoot.querySelector(selector) ? [queryRoot.querySelector(selector)!] : []
   } catch {
     return null
@@ -226,8 +253,10 @@ function isContextualTourTargetVisible(element: Element): boolean {
   }
 
   let current: Element | null = element
+
   while (current instanceof HTMLElement) {
     const style = window.getComputedStyle(current)
+
     if (
       style.display === 'none' ||
       style.visibility === 'hidden' ||
@@ -235,7 +264,9 @@ function isContextualTourTargetVisible(element: Element): boolean {
     ) {
       return false
     }
+
     current = current.parentElement
   }
+
   return true
 }

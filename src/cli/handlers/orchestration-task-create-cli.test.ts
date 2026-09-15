@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.hoisted(() => vi.fn())
+
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
+
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 
 // Why: isolate flag-to-RPC mapping; printResult only writes output.
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'

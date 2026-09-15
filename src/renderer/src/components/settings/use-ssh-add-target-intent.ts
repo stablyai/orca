@@ -13,6 +13,7 @@ export function useSshAddTargetIntent(
     ) {
       return
     }
+
     consumedAddTargetIntentSignalRef.current = addTargetIntentSignal
     openAddTargetForm()
   }, [addTargetIntentSignal, openAddTargetForm])

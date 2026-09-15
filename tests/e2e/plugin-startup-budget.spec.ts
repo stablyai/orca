@@ -12,6 +12,7 @@ import { pluginManifestSchema } from '../../src/shared/plugins/plugin-manifest'
 import { createRestartSession } from './helpers/orca-restart'
 
 const PLUGIN_COUNT = 20
+
 const SAMPLE_COUNT = 3
 
 type StartupSample = {
@@ -22,9 +23,11 @@ type StartupSample = {
 
 function updateProfile(userDataDir: string, pluginConsents: Record<string, string>): void {
   const profilePath = join(userDataDir, 'orca-data.json')
+
   const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as {
     settings?: Record<string, unknown>
   }
+
   profile.settings = {
     ...profile.settings,
     pluginSystemEnabled: true,
@@ -41,6 +44,7 @@ function seedPlugins(userDataDir: string, count: number): string[] {
   mkdirSync(pluginsDir, { recursive: true })
   const pluginConsents: Record<string, string> = {}
   const markerPaths: string[] = []
+
   for (let index = 0; index < count; index += 1) {
     const manifest = pluginManifestSchema.parse({
       manifestVersion: 1,
@@ -54,6 +58,7 @@ function seedPlugins(userDataDir: string, count: number): string[] {
       contributes: { panels: [], commands: [], events: [] },
       capabilities: []
     })
+
     const pluginKey = `${manifest.publisher}.${manifest.id}`
     const contentHash = (index + 1).toString(16).padStart(64, '0')
     const versionDir = join(pluginsDir, pluginKey, contentHash)
@@ -68,13 +73,16 @@ function seedPlugins(userDataDir: string, count: number): string[] {
     pluginConsents[pluginKey] = fingerprintPluginConsent(manifest)
     markerPaths.push(markerPath)
   }
+
   updateProfile(userDataDir, pluginConsents)
+
   return markerPaths
 }
 
 function parseMetric(output: string, event: string, key: string): number | null {
   const line = output.split('\n').find((candidate) => candidate.startsWith(`[startup] ${event} `))
   const value = line?.match(new RegExp(`(?:^| )${key}=([0-9.]+)(?: |$)`))?.[1]
+
   return value === undefined ? null : Number(value)
 }
 
@@ -84,11 +92,13 @@ async function launchSample(
   testInfo: TestInfo
 ): Promise<StartupSample> {
   let output = ''
+
   const launched = await session.launch({
     onStderr: (chunk) => {
       output += chunk
     }
   })
+
   try {
     await expect
       .poll(
@@ -108,6 +118,7 @@ async function launchSample(
       body: Buffer.from(output),
       contentType: 'text/plain'
     })
+
     return {
       readyToShowMs: parseMetric(output, 'ready-to-show', 't')!,
       pluginDurationMs: parseMetric(output, 'plugin-system-initialized', 'durationMs')!,
@@ -120,6 +131,7 @@ async function launchSample(
 
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((left, right) => left - right)
+
   return sorted[Math.floor(sorted.length / 2)]!
 }
 
@@ -130,6 +142,7 @@ test('keeps real Electron launch stable with 20 approved inert plugins', async (
   const baseline: StartupSample[] = []
   const populated: StartupSample[] = []
   let markerPaths: string[] = []
+
   try {
     for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
       seedPlugins(session.userDataDir, 0)

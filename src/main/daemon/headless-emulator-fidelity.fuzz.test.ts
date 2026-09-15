@@ -28,14 +28,18 @@ import {
 //   FUZZ_SEED=1234        re-run exactly one seed (repro from a failure log)
 
 const DEFAULT_ITERATIONS = 300
+
 const FIXED_SEED = readPositiveIntEnv('FUZZ_SEED')
+
 const ITERATIONS =
   FIXED_SEED !== null ? 1 : (readPositiveIntEnv('FUZZ_ITERATIONS') ?? DEFAULT_ITERATIONS)
+
 // Matches HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS in pty-connection.ts — the reveal restore's scrollback budget.
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 
 function readPositiveIntEnv(name: string): number | null {
   const raw = Number(process.env[name])
+
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null
 }
 
@@ -62,11 +66,13 @@ function buildCase(seed: number): FidelityCase {
   const rng = mulberry32(seed)
   const dims = DIMS[Math.floor(rng() * DIMS.length)]!
   const opCount = 12 + Math.floor(rng() * 28)
+
   const ops = buildAgentTuiStreamOps(rng, dims, {
     includeMouseModes: true,
     includeOscHyperlinks: false,
     opCount
   })
+
   return { seed, dims, ops, chunked: true }
 }
 
@@ -76,19 +82,23 @@ function firstDiff(stage: string, expected: unknown, actual: unknown): FidelityD
 
 async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | null> {
   const stream = testCase.ops.join('')
+
   const chunks = testCase.chunked
     ? splitIntoRandomChunks(mulberry32(testCase.seed ^ 0x9e3779b9), stream, {
         minLen: 3,
         maxLen: 120
       })
     : [stream]
+
   const emulator = new HeadlessEmulator({ cols: testCase.dims.cols, rows: testCase.dims.rows })
   const control = createRendererParityTerminal(testCase.dims)
   const restored = createRendererParityTerminal(testCase.dims)
+
   try {
     for (const chunk of chunks) {
       await emulator.write(chunk)
     }
+
     await writeChunksToTerminal(control.terminal, chunks)
 
     // Stage 1 — model fidelity: the emulator's screen must match the renderer twin before any serialization.
@@ -97,15 +107,18 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
       visibleRows(control.terminal),
       emulator.getVisibleLines()
     )
+
     if (modelDiff) {
       return modelDiff
     }
 
     // Stage 2 — reveal round trip: serialize like serializeHiddenOutputRecoveryBuffer, replay like applyMainBufferSnapshot, compare to the always-visible twin.
     const alt = emulator.isAlternateScreen
+
     const snapshot = emulator.getSnapshot({
       scrollbackRows: alt ? 0 : HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS
     })
+
     await writeChunksToTerminal(restored.terminal, [
       alt ? SNAPSHOT_REPLAY_PREAMBLE_ALT : SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
       snapshot.rehydrateSequences + snapshot.snapshotAnsi,
@@ -149,10 +162,13 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
             restored.terminal.modes.applicationCursorKeysMode
           )
     ]
+
     const diff = diffs.find((candidate) => candidate !== null) ?? null
+
     if (!diff) {
       return null
     }
+
     return diff
   } finally {
     emulator.dispose()
@@ -164,22 +180,28 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
 /** Greedy op-drop minimizer: shrinks a failing case to the smallest still-diverging op list (with its seed for FUZZ_SEED replay). */
 async function minimizeFailure(testCase: FidelityCase): Promise<FidelityCase> {
   let current = { ...testCase, chunked: false }
+
   if ((await runFidelityCase(current)) === null) {
     current = { ...testCase, chunked: true }
   }
+
   let budget = 400
   let shrunk = true
+
   while (shrunk && budget > 0) {
     shrunk = false
+
     for (let i = current.ops.length - 1; i >= 0 && budget > 0; i--) {
       const candidate = { ...current, ops: current.ops.toSpliced(i, 1) }
       budget -= 1
+
       if ((await runFidelityCase(candidate)) !== null) {
         current = candidate
         shrunk = true
       }
     }
   }
+
   return current
 }
 
@@ -199,6 +221,7 @@ describe('headless emulator snapshot fidelity fuzz', () => {
   it('drops OSC 8 underline from byte replay but preserves the range in snapshot metadata', async () => {
     const emulator = new HeadlessEmulator({ cols: 60, rows: 10 })
     const restored = createRendererParityTerminal({ cols: 60, rows: 10 })
+
     try {
       await emulator.write('\x1b]8;;https://example.com/pr/7\x07review link\x1b]8;;\x07 tail')
       const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
@@ -225,6 +248,7 @@ describe('headless emulator snapshot fidelity fuzz', () => {
       const seed = FIXED_SEED ?? 1 + i
       const testCase = buildCase(seed)
       const diff = await runFidelityCase(testCase)
+
       if (diff) {
         const minimized = await minimizeFailure(testCase)
         const minimizedDiff = await runFidelityCase(minimized)
@@ -237,11 +261,14 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     const emulator = new HeadlessEmulator({ cols: 20, rows: 6 })
     const control = createRendererParityTerminal({ cols: 20, rows: 6 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 6 })
+
     try {
       const bytes = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ12\r\n', '\x1b[1A\x1b[1K']
+
       for (const chunk of bytes) {
         await emulator.write(chunk)
       }
+
       await writeChunksToTerminal(control.terminal, bytes)
       const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
       await writeChunksToTerminal(restored.terminal, [
@@ -264,12 +291,15 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     const emulator = new HeadlessEmulator({ cols: 20, rows: 6 })
     const control = createRendererParityTerminal({ cols: 20, rows: 6 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 6 })
+
     try {
       // Wrap a 28-char line, then erase its entire first (source) row: cursor up twice, EL 2.
       const bytes = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ12\r\n', '\x1b[2A\x1b[2K']
+
       for (const chunk of bytes) {
         await emulator.write(chunk)
       }
+
       await writeChunksToTerminal(control.terminal, bytes)
       const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
       await writeChunksToTerminal(restored.terminal, [
@@ -293,12 +323,15 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     const emulator = new HeadlessEmulator({ cols: 20, rows: 4 })
     const control = createRendererParityTerminal({ cols: 20, rows: 4 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 4 })
+
     try {
       // 'A' dim, 'B' bold-only; patched serializer emits 22;1 for B (clear before re-set).
       const bytes = ['\x1b[2mA\x1b[22m\x1b[1mB\x1b[0m']
+
       for (const chunk of bytes) {
         await emulator.write(chunk)
       }
+
       await writeChunksToTerminal(control.terminal, bytes)
       const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
       await writeChunksToTerminal(restored.terminal, [
@@ -319,12 +352,15 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     const emulator = new HeadlessEmulator({ cols: 10, rows: 4 })
     const control = createRendererParityTerminal({ cols: 10, rows: 4 })
     const restored = createRendererParityTerminal({ cols: 10, rows: 4 })
+
     try {
       // Fill row 0 to the margin (wrap-pending), then CUP to a lower row; live cursor is (x=4, y=2).
       const bytes = ['0123456789\x1b[3;5H']
+
       for (const chunk of bytes) {
         await emulator.write(chunk)
       }
+
       await writeChunksToTerminal(control.terminal, bytes)
       const snapshot = emulator.getSnapshot({ scrollbackRows: 5000 })
       await writeChunksToTerminal(restored.terminal, [

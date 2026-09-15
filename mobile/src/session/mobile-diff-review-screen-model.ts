@@ -97,13 +97,17 @@ export function nextReviewIndexAfterMarkReviewed({
   const nextIndex = filteredQueue.findIndex(
     (item, index) => index > currentIndex && item.key !== currentItemKey && !item.isReviewed
   )
+
   const wrappedIndex = filteredQueue.findIndex(
     (item) => item.key !== currentItemKey && !item.isReviewed
   )
+
   const targetIndex = nextIndex !== -1 ? nextIndex : wrappedIndex !== -1 ? wrappedIndex : null
+
   if (targetIndex === null) {
     return null
   }
+
   return filter === 'unreviewed' && targetIndex > currentIndex ? targetIndex - 1 : targetIndex
 }
 
@@ -111,6 +115,7 @@ export function mobileReviewScopeLabel(item: MobileDiffReviewQueueItem): string 
   if (item.scope === 'branch') {
     return 'Branch'
   }
+
   return item.scope === 'staged' ? 'Staged' : 'Unstaged'
 }
 

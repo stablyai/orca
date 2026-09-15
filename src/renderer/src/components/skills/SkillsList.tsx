@@ -19,6 +19,7 @@ function moveOptionFocus(listbox: HTMLElement | null, from: HTMLElement, step: n
 
 function focusEdgeOption(listbox: HTMLElement | null, edge: 'first' | 'last'): void {
   const options = [...(listbox?.querySelectorAll<HTMLElement>(OPTION_SELECTOR) ?? [])]
+
   ;(edge === 'first' ? options.at(0) : options.at(-1))?.focus()
 }
 
@@ -69,17 +70,21 @@ export function SkillsList({
   const handleSelection = (index: number, selected: boolean, range: boolean): void => {
     const skill = skills[index]
     const anchorIndex = skills.findIndex((candidate) => candidate.id === anchorIdRef.current)
+
     if (range && selected && anchorIndex !== -1) {
       const [from, to] = [anchorIndex, index].sort((a, b) => a - b)
       onSelectResults(skills.slice(from, to + 1))
+
       return
     }
+
     anchorIdRef.current = skill.id
     onSelectedChange(skill.id, selected)
   }
 
   const onListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const option = event.currentTarget
+
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       moveOptionFocus(listRef.current, option, 1)
@@ -138,9 +143,11 @@ export function SkillsList({
         {skills.map((skill, index) => {
           const duplicateNameSelected =
             !selectedIds.has(skill.id) && selectedNames.has(skill.name.toLocaleLowerCase('en-US'))
+
           const shareEligible = isSkillShareEligible(skill, local)
           const deleteEligible = isSkillDeleteEligible(skill)
           const deleting = selectionMode === 'delete'
+
           return (
             <SkillRow
               key={skill.id}

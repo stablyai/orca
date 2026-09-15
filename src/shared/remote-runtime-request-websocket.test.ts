@@ -6,6 +6,7 @@ import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
 describe('openRemoteRuntimeWebSocket', () => {
   it('detaches Orca callback listeners when cleaned up', () => {
     const keyPair = generateKeyPair()
+
     const opened = openRemoteRuntimeWebSocket(
       {
         v: 2,
@@ -19,6 +20,7 @@ describe('openRemoteRuntimeWebSocket', () => {
         onTextFrame: vi.fn()
       }
     )
+
     if (!opened.ok) {
       throw opened.error
     }

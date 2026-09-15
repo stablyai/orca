@@ -4,6 +4,7 @@ import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
+
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 
 function runBatchedMessageMutation(
@@ -14,13 +15,16 @@ function runBatchedMessageMutation(
   if (ids.length === 0) {
     return
   }
+
   db.db.exec(`SAVEPOINT ${MESSAGE_MUTATION_SAVEPOINT}`)
+
   try {
     for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
       db.db.prepare(sqlForPlaceholders(placeholders)).run(...batch)
     }
+
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
   } catch (error) {
     db.db.exec(`ROLLBACK TO ${MESSAGE_MUTATION_SAVEPOINT}`)
@@ -36,6 +40,7 @@ export function getUnreadMessages(
 ): MessageRow[] {
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')
+
     return exposeMessageListTimestamps(
       this.db
         .prepare(
@@ -46,6 +51,7 @@ export function getUnreadMessages(
         .all(toHandle, ...types) as MessageRow[]
     )
   }
+
   return exposeMessageListTimestamps(
     this.db
       .prepare(
@@ -64,6 +70,7 @@ export function convertLifecycleMessageToRejection(
   reason: string
 ): MessageRow | undefined {
   const message = this.getMessageById(messageId)
+
   if (
     !message ||
     !['worker_done', 'heartbeat', 'escalation', 'decision_gate'].includes(message.type)
@@ -83,6 +90,7 @@ export function convertLifecycleMessageToRejection(
        WHERE id = ?`
     )
     .run(`Rejected ${message.type}: ${message.subject}`, body, payload, messageId)
+
   return this.getMessageById(messageId)
 }
 
@@ -100,19 +108,25 @@ export function getUndeliveredUnreadMessages(
     'pointer_enter_pending = 0',
     "delivery_contract = 'current_delivery'"
   ]
+
   const params: (string | number)[] = [toHandle]
+
   if (types?.length) {
     conditions.push(`type IN (${types.map(() => '?').join(',')})`)
     params.push(...types)
   }
+
   if (options?.excludeTypes?.length) {
     conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
     params.push(...options.excludeTypes)
   }
+
   const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
+
   if (options?.limit !== undefined) {
     params.push(Math.max(1, Math.floor(options.limit)))
   }
+
   return exposeMessageListTimestamps(
     this.db
       .prepare(
@@ -149,6 +163,7 @@ export function getMessageById(this: OrchestrationDb, id: string): MessageRow | 
   const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
     | MessageRow
     | undefined
+
   return message ? exposeMessageTimestamps(message) : undefined
 }
 
@@ -191,9 +206,11 @@ export function markAsUndelivered(this: OrchestrationDb, ids: string[]): void {
 
 export function areUnreadMessages(this: OrchestrationDb, toHandle: string, ids: string[]): boolean {
   let matched = 0
+
   for (let offset = 0; offset < ids.length; offset += MESSAGE_ID_UPDATE_BATCH_SIZE) {
     const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
     const placeholders = batch.map(() => '?').join(',')
+
     const row = this.db
       .prepare(
         `SELECT COUNT(*) AS count FROM messages INDEXED BY idx_messages_id
@@ -201,8 +218,10 @@ export function areUnreadMessages(this: OrchestrationDb, toHandle: string, ids: 
            AND id IN (${placeholders})`
       )
       .get(toHandle, ...batch) as { count: number }
+
     matched += row.count
   }
+
   return matched === ids.length
 }
 
@@ -237,6 +256,7 @@ export function getAllMessagesForHandle(
 ): MessageRow[] {
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')
+
     return exposeMessageListTimestamps(
       this.db
         .prepare(
@@ -245,6 +265,7 @@ export function getAllMessagesForHandle(
         .all(toHandle, ...types, limit) as MessageRow[]
     )
   }
+
   return exposeMessageListTimestamps(
     this.db
       .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
@@ -268,6 +289,7 @@ export function getThreadMessagesFor(
         .all(threadId, toHandle, afterSequence) as MessageRow[]
     )
   }
+
   return exposeMessageListTimestamps(
     this.db
       .prepare('SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? ORDER BY sequence ASC')

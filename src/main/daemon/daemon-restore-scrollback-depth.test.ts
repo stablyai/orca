@@ -20,15 +20,20 @@ import type { PendingOutputRecord, TerminalSnapshot } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
 
 const PREVIOUSLY_RECOVERABLE_LINE = 'LINE_01000'
+
 const OLDEST_WRITTEN_LINE = 'LINE_00001'
+
 const NEWEST_WRITTEN_LINE = `LINE_${String(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT).padStart(5, '0')}`
+
 const FRESH_AFTER_CHECKPOINT = 'FRESH_AFTER_CHECKPOINT'
 
 function numberedOutput(lineCount: number): string {
   let output = ''
+
   for (let index = 1; index <= lineCount; index += 1) {
     output += `LINE_${String(index).padStart(5, '0')}\r\n`
   }
+
   return output
 }
 
@@ -41,6 +46,7 @@ function createMockSubprocess(): SubprocessHandle & {
 } {
   let onData: ((data: string) => void) | undefined
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 4242,
     getForegroundProcess: vi.fn(() => null),
@@ -68,6 +74,7 @@ function simulateAdapterCrash(adapter: DaemonPtyAdapter): void {
     client: { disconnect: () => void }
     stopCheckpointTimer: () => void
   }
+
   internals.stopCheckpointTimer()
   internals.client.disconnect()
 }
@@ -76,6 +83,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
   it('live daemon memory still drops older rows so session count cannot grow unbounded', async () => {
     const subprocess = createMockSubprocess()
     const host = new TerminalHost({ spawnSubprocess: () => subprocess })
+
     try {
       await host.createOrAttach({
         sessionId: 'live-window',
@@ -119,6 +127,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const records: PendingOutputRecord[] = [
         { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
       ]
+
       expect(await manager.appendIncrements('restore-depth', 1, records)).toBe('ok')
 
       const restore = await reader.detectColdRestore('restore-depth')
@@ -134,6 +143,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         rows: 24,
         scrollback: DAEMON_SESSION_SCROLLBACK_ROWS
       })
+
       try {
         expect(live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))).toBe(true)
         const liveSnapshot = live.getSnapshot()
@@ -145,10 +155,12 @@ describe('STA-4091 previously recoverable restore depth', () => {
           ])
         ).toBe('ok')
         const restoreInfo = await reader.detectColdRestore('restore-depth')
+
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot,
           restoreInfo
         })
+
         expect(await manager.checkpoint('restore-depth', durable)).toBe('committed')
 
         const restore = await reader.detectColdRestore('restore-depth')
@@ -168,8 +180,10 @@ describe('STA-4091 previously recoverable restore depth', () => {
         rows: 24,
         scrollback: DAEMON_SESSION_SCROLLBACK_ROWS
       })
+
       try {
         live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot: live.getSnapshot(),
           restoreInfo: null,
@@ -177,6 +191,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
             { kind: 'output', data: numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT) }
           ]
         })
+
         expect(snapshotText(durable)).toContain(OLDEST_WRITTEN_LINE)
         expect(snapshotText(durable)).toContain(PREVIOUSLY_RECOVERABLE_LINE)
         expect(snapshotText(durable)).toContain(NEWEST_WRITTEN_LINE)
@@ -191,6 +206,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         rows: 24,
         scrollback: DAEMON_SESSION_SCROLLBACK_ROWS
       })
+
       try {
         expect(
           await manager.appendIncrements('restore-depth', 1, [
@@ -199,10 +215,12 @@ describe('STA-4091 previously recoverable restore depth', () => {
         ).toBe('ok')
         const restoreInfo = await reader.detectColdRestore('restore-depth')
         live.writeSync(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
+
         const durable = await buildDurableCheckpointSnapshot({
           liveSnapshot: { ...live.getSnapshot(), outputSequence: 9 },
           restoreInfo
         })
+
         expect(durable.outputSequence).toBe(9)
         expect(durable.scrollbackAnsi).toBe('')
         expect(durable.scrollbackLines).toBe(restoreInfo?.scrollbackLines)
@@ -228,6 +246,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         },
         terminalOwner: 'shell'
       }
+
       const liveSnapshot = {
         ...restoreInfo,
         scrollbackLines: 0,
@@ -267,6 +286,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         restoreInfo: null,
         pendingRecords: [{ kind: 'resize', cols: 0, rows: 24 }]
       })
+
       expect(durable).toBe(liveSnapshot)
     })
   })
@@ -288,6 +308,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         log,
         spawnSubprocess: () => {
           lastSubprocess = createMockSubprocess()
+
           return lastSubprocess
         }
       })
@@ -312,6 +333,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'remount-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
 
       const snapshot = await adapter.getBufferSnapshot(id)
@@ -329,6 +351,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'bounded-remount-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
 
       const snapshot = await adapter.getBufferSnapshot(id, { scrollbackRows: 24 })
@@ -345,6 +368,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'restart-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
 
       await adapter.shutdown(id, { immediate: true, keepHistory: true })
@@ -352,6 +376,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       const text = snapshotText(restore ?? {})
       expect(text).toContain(NEWEST_WRITTEN_LINE)
       expect(text).toContain(PREVIOUSLY_RECOVERABLE_LINE)
@@ -365,6 +390,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'reattach-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
 
       const reattach = await adapter.spawn({
@@ -373,6 +399,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: id,
         cwd: '/tmp'
       })
+
       expect(reattach.isReattach).toBe(true)
       expect(reattach.snapshot).toContain(NEWEST_WRITTEN_LINE)
       expect(reattach.snapshot).toContain(PREVIOUSLY_RECOVERABLE_LINE)
@@ -386,6 +413,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'adapter-reconnect-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
 
       await adapter.disconnectOnly()
@@ -404,6 +432,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(restore ?? {})).toContain(OLDEST_WRITTEN_LINE)
     })
 
@@ -414,6 +443,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'missing-history-after-drain',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
@@ -430,9 +460,11 @@ describe('STA-4091 previously recoverable restore depth', () => {
         expect(text).toContain(NEWEST_WRITTEN_LINE)
         expect(text).toContain('TAIL_AFTER_HISTORY_LOSS')
         expect(text).not.toContain(OLDEST_WRITTEN_LINE)
+
         const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
           ignoreCleanEnd: true
         })
+
         expect(snapshotText(restored ?? {})).toContain(NEWEST_WRITTEN_LINE)
         expect(snapshotText(restored ?? {})).toContain('TAIL_AFTER_HISTORY_LOSS')
         expect(restored?.scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
@@ -452,15 +484,18 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'incremental-crash-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
 
       const oldInternals = adapter as unknown as { checkpointDirtySessions: () => Promise<void> }
       await oldInternals.checkpointDirtySessions()
+
       const beforeCrash = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(beforeCrash?.pendingOutputSeq).toBe(2)
       expect(snapshotText(beforeCrash ?? {})).toContain(OLDEST_WRITTEN_LINE)
 
@@ -474,9 +509,11 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
       expect(reattach.snapshot).toContain(OLDEST_WRITTEN_LINE)
+
       const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(restored ?? {})).toContain(OLDEST_WRITTEN_LINE)
     })
 
@@ -487,6 +524,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'incremental-gap-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
@@ -494,6 +532,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const oldInternals = adapter as unknown as {
         client: { request: (method: string, params: unknown) => Promise<unknown> }
       }
+
       await oldInternals.client.request('takePendingOutput', {
         sessionId: id,
         includeSnapshot: false
@@ -509,9 +548,11 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const reattach = await adapter.spawn({ cols: 80, rows: 24, sessionId: id, cwd: '/tmp' })
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
       expect(reattach.snapshot).not.toContain(OLDEST_WRITTEN_LINE)
+
       const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(restored ?? {})).not.toContain(OLDEST_WRITTEN_LINE)
       expect(restored?.scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
       expect(warn).toHaveBeenCalledWith(
@@ -528,15 +569,18 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'empty-take-depth',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
 
       const oldInternals = adapter as unknown as { checkpointDirtySessions: () => Promise<void> }
       await oldInternals.checkpointDirtySessions()
+
       const beforeReattach = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(beforeReattach ?? {})).toContain(OLDEST_WRITTEN_LINE)
 
       // The trigger: a dirty mark with no new PTY records (the mock swallows the write, nothing echoes back).
@@ -558,12 +602,14 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const newInternals = adapter as unknown as {
         checkpointDirtySessions: () => Promise<void>
       }
+
       adapter.write(id, 'noop')
       await newInternals.checkpointDirtySessions()
 
       const restored = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(restored ?? {})).toContain(OLDEST_WRITTEN_LINE)
       expect(snapshotText(restored ?? {})).toContain(PREVIOUSLY_RECOVERABLE_LINE)
       expect(restored?.scrollbackLines).toBeGreaterThan(DAEMON_SESSION_SCROLLBACK_ROWS)
@@ -576,6 +622,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'error-fallback',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       const internals = adapter as unknown as { historyReader: HistoryReader }
       vi.spyOn(internals.historyReader, 'detectColdRestore').mockRejectedValue(
@@ -595,6 +642,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'overflow-reanchor',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
 
@@ -605,9 +653,11 @@ describe('STA-4091 previously recoverable restore depth', () => {
       const snapshot = await adapter.getBufferSnapshot(id)
       const text = `${snapshot?.scrollbackAnsi ?? ''}${snapshot?.data ?? ''}`
       expect(text).toContain(FRESH_AFTER_CHECKPOINT)
+
       const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(restore ?? {})).toContain(FRESH_AFTER_CHECKPOINT)
     })
 
@@ -618,6 +668,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'checkpoint-retryable',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
@@ -626,6 +677,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         historyManager: HistoryManager
         sessionsNeedingLiveCheckpoint: Set<string>
       }
+
       const checkpoint = vi
         .spyOn(internals.historyManager, 'checkpoint')
         .mockResolvedValueOnce('retryable')
@@ -639,20 +691,24 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(`${recovered?.scrollbackAnsi ?? ''}${recovered?.data ?? ''}`).toContain(
         FRESH_AFTER_CHECKPOINT
       )
+
       const restore = await new HistoryReader(historyDir).detectColdRestore(id, {
         ignoreCleanEnd: true
       })
+
       expect(snapshotText(restore ?? {})).toContain(FRESH_AFTER_CHECKPOINT)
       expect(checkpoint.mock.calls.at(-1)?.[1].scrollbackLines).toBe(DAEMON_SESSION_SCROLLBACK_ROWS)
       expect(internals.sessionsNeedingLiveCheckpoint.has(id)).toBe(false)
 
       checkpoint.mockResolvedValueOnce('retryable')
+
       const reattach = await adapter.spawn({
         cols: 80,
         rows: 24,
         sessionId: id,
         cwd: '/tmp'
       })
+
       expect(reattach.isReattach).toBe(true)
       expect(reattach.snapshot).toContain(FRESH_AFTER_CHECKPOINT)
     })
@@ -664,6 +720,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'checkpoint-unavailable',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
@@ -675,7 +732,9 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionsNeedingLiveCheckpoint: Set<string>
         checkpointDirtySessions: () => Promise<void>
       }
+
       const requests = vi.spyOn(internals.client, 'request')
+
       const checkpoint = vi
         .spyOn(internals.historyManager, 'checkpoint')
         .mockResolvedValue('unavailable')
@@ -689,11 +748,13 @@ describe('STA-4091 previously recoverable restore depth', () => {
 
       await internals.checkpointDirtySessions()
       await internals.checkpointDirtySessions()
+
       const snapshotTakes = requests.mock.calls.filter(
         ([method, params]) =>
           method === 'takePendingOutput' &&
           (params as { includeSnapshot?: boolean } | undefined)?.includeSnapshot === true
       )
+
       expect(snapshotTakes).toHaveLength(1)
       expect(checkpoint).toHaveBeenCalledTimes(1)
     })
@@ -705,6 +766,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'missing-drained-records',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
       lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
@@ -713,9 +775,11 @@ describe('STA-4091 previously recoverable restore depth', () => {
         client: { request: (method: string, params?: unknown) => Promise<unknown> }
         historyManager: HistoryManager
       }
+
       const request = internals.client.request.bind(internals.client)
       vi.spyOn(internals.client, 'request').mockImplementation(async (method, params) => {
         const result = await request(method, params)
+
         if (
           method === 'takePendingOutput' &&
           (params as { includeSnapshot?: boolean } | undefined)?.includeSnapshot &&
@@ -724,6 +788,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
         ) {
           delete (result as { drainedRecords?: PendingOutputRecord[] }).drainedRecords
         }
+
         return result
       })
       const checkpoint = vi.spyOn(internals.historyManager, 'checkpoint')
@@ -742,12 +807,14 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'overlay-sequence',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
 
       const internals = adapter as unknown as {
         client: { request: (method: string, params?: unknown) => Promise<unknown> }
       }
+
       const request = internals.client.request.bind(internals.client)
       let injected = false
       vi.spyOn(internals.client, 'request').mockImplementation(async (method, params) => {
@@ -759,6 +826,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
           injected = true
           lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
         }
+
         return request(method, params)
       })
 
@@ -777,12 +845,14 @@ describe('STA-4091 previously recoverable restore depth', () => {
         sessionId: 'reattach-overlay-sequence',
         cwd: '/tmp'
       })
+
       lastSubprocess.emitData(numberedOutput(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT))
       await adapter.getBufferSnapshot(id)
 
       const internals = adapter as unknown as {
         client: { request: (method: string, params?: unknown) => Promise<unknown> }
       }
+
       const request = internals.client.request.bind(internals.client)
       let injected = false
       vi.spyOn(internals.client, 'request').mockImplementation(async (method, params) => {
@@ -794,6 +864,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
           injected = true
           lastSubprocess.emitData(`${FRESH_AFTER_CHECKPOINT}\r\n`)
         }
+
         return request(method, params)
       })
 

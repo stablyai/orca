@@ -23,6 +23,7 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'manta')
+
   return {
     worktreeId: `repo-1::${worktreePath}`,
     repoId: 'repo-1',
@@ -61,6 +62,7 @@ describe('areWorktreeListsEqual', () => {
   it('detects order and field changes that affect the host list', () => {
     const first = [worktree({ worktreeId: 'a' }), worktree({ worktreeId: 'b' })]
     const reordered = [worktree({ worktreeId: 'b' }), worktree({ worktreeId: 'a' })]
+
     const renamed = [
       worktree({ worktreeId: 'a', displayName: 'renamed' }),
       worktree({ worktreeId: 'b' })
@@ -124,6 +126,7 @@ describe('areWorktreeListsEqual', () => {
   it('detects lineage changes', () => {
     const base = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-a' })
     const changedParent = worktree({ worktreeId: 'child', parentWorktreeId: 'parent-b' })
+
     const changedChildren = worktree({
       worktreeId: 'child',
       parentWorktreeId: 'parent-a',
@@ -142,6 +145,7 @@ describe('areWorktreeListsEqual', () => {
       lineageWorktreeInstanceId: 'child-instance',
       parentWorktreeInstanceId: 'parent-instance'
     })
+
     const changedParentInstance = worktree({
       worktreeId: 'child',
       parentWorktreeId: 'parent',

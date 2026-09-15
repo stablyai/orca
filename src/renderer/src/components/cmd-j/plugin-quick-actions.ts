@@ -28,6 +28,7 @@ export function buildPluginQuickActions(
         : { available: true },
     run: async () => {
       await executePluginCommand(command, 'plugin-palette')
+
       return { status: 'ok' }
     }
   }))

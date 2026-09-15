@@ -28,11 +28,13 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
     setItems,
     tasksSupported
   } = model
+
   useEffect(() => {
     if (!tasksSupported || !actionItem || !client) {
       setDetailPayload(null)
       setDetailLoading(false)
       setDetailError('')
+
       return
     }
 
@@ -52,9 +54,11 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const details = response.result as {
           body?: string
           comments?: DetailComment[]
@@ -79,9 +83,11 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
           }>
         } | null
+
         if (!details) {
           throw new Error('Details not found')
         }
+
         if (!stale) {
           setDetailPayload({
             provider: 'github',
@@ -99,6 +105,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             files: details.files ?? []
           })
         }
+
         return
       }
 
@@ -113,9 +120,11 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const details = response.result as {
           body?: string
           comments?: DetailComment[]
@@ -132,9 +141,11 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           reviewers?: unknown[]
           approvalState?: { approvalsRequired: number | null; approvalsLeft: number | null }
         } | null
+
         if (!details) {
           throw new Error('Details not found')
         }
+
         if (!stale) {
           setDetailPayload({
             provider: 'gitlab',
@@ -145,17 +156,20 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             pipelineJobs: details.pipelineJobs ?? []
           })
           const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+
           const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
             details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
               ? 'approved'
               : details.approvalState?.approvalsLeft && details.approvalState.approvalsLeft > 0
                 ? 'review_required'
                 : undefined
+
           const hydratedStatus = {
             ...(details.item?.mergeable !== undefined ? { mergeable: details.item.mergeable } : {}),
             ...(reviewDecision !== undefined ? { reviewDecision } : {}),
             ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
           }
+
           setActionItem((current) =>
             current?.provider === 'gitlab' && current.source.id === actionItem.source.id
               ? {
@@ -183,6 +197,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             )
           )
         }
+
         return
       }
 
@@ -204,16 +219,21 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           { timeoutMs: 30_000 }
         )
       ])
+
       if (!isSuccess(issueResponse)) {
         throw new Error(issueResponse.error.message)
       }
+
       const issue = issueResponse.result as LinearIssue | null
+
       const comments = isSuccess(commentsResponse)
         ? ((commentsResponse.result as DetailComment[]) ?? [])
         : []
+
       if (!issue) {
         throw new Error('Details not found')
       }
+
       if (!stale) {
         setDetailPayload({
           provider: 'linear',
@@ -228,12 +248,15 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           if (current?.provider !== 'linear' || current.source.id !== issue.id) {
             return current
           }
+
           const currentChildren = current.source.subIssues ?? []
           const nextChildren = issue.subIssues ?? []
+
           const alreadyHydrated =
             current.source.project?.id === issue.project?.id &&
             currentChildren.length === nextChildren.length &&
             currentChildren.every((child, index) => child.id === nextChildren[index]?.id)
+
           return alreadyHydrated
             ? current
             : (createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>)
@@ -257,6 +280,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
       stale = true
     }
   }, [actionItem, client, detailRefreshSeq, tasksSupported])
+
   return model
 }
 

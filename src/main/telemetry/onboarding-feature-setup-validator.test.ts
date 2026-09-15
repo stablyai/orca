@@ -19,6 +19,7 @@ describe('onboarding feature setup telemetry validation', () => {
       orchestration: true,
       selected_count: 2
     }
+
     const cases = [
       ['onboarding_feature_setup_toggled', { feature: 'browser_use', selected: false }],
       [

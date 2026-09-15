@@ -38,6 +38,7 @@ export async function lookupGitHubWorkItemForSource(
   args: GitHubWorkItemLookupArgs
 ): Promise<GitHubWorkItem | null> {
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
+
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -56,6 +57,7 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
+
   return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
 }
 
@@ -63,6 +65,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   args: GitHubWorkItemByOwnerRepoLookupArgs
 ): Promise<GitHubWorkItem | null> {
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
+
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitHubWorkItem, 'repoId'> | null>(
@@ -87,6 +90,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           number: args.number,
           type: args.type
         })
+
   return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
 }
 
@@ -95,6 +99,7 @@ export function lookupGitHubWorkItemDetailsForSource(
 ): Promise<GitHubWorkItemDetails | null> {
   const sourceContext = args.sourceContext
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
+
   if (runtimeHost) {
     return callRuntimeRpc<GitHubWorkItemDetails | null>(
       { kind: 'environment', environmentId: runtimeHost.environmentId },
@@ -107,6 +112,7 @@ export function lookupGitHubWorkItemDetailsForSource(
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
     repoId: args.repoId,

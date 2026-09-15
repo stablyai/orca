@@ -24,6 +24,7 @@ export async function supportsRemoteTranscriptRangeRead(
   if (!provider.readFileRange) {
     return false
   }
+
   return provider.supportsFileRangeRead ? provider.supportsFileRangeRead() : true
 }
 
@@ -35,6 +36,7 @@ export async function readRemoteTranscriptBoundaryBytes(
   const start = workerTranscriptBoundaryCheckpointStart(offset)
   const expectedBytes = offset - start
   const bytes = await readRemoteTranscriptRange(provider, filePath, start, expectedBytes)
+
   return bytes.length === expectedBytes ? bytes : null
 }
 
@@ -47,49 +49,63 @@ export async function readRemoteTranscriptRangedWindow(args: {
 }): Promise<RemoteTranscriptWindow | null> {
   const remoteStat = await args.provider.stat(args.filePath)
   const sourceIdentity = remoteWorkerTranscriptSourceIdentity(remoteStat)
+
   if (!sourceIdentity) {
     throw new Error('Remote transcript host did not provide stable file identity')
   }
+
   const fileSize = remoteStat.size
   const startOffset = args.requestedOffset ?? Math.max(0, fileSize - args.maxScanBytes)
+
   if (startOffset > fileSize) {
     return null
   }
+
   const scanEnd =
     args.requestedOffset === undefined
       ? fileSize
       : Math.min(fileSize, startOffset + args.maxScanBytes)
+
   const boundaryPrefix = await readRemoteTranscriptBoundaryBytes(
     args.provider,
     args.filePath,
     startOffset
   )
+
   if (!boundaryPrefix) {
     return null
   }
+
   const boundaryCheckpoint = createWorkerTranscriptBoundaryCheckpoint(boundaryPrefix)
+
   if (
     args.expectedBoundaryCheckpoint !== undefined &&
     boundaryCheckpoint !== args.expectedBoundaryCheckpoint
   ) {
     return null
   }
+
   const startsInsideRecord = boundaryPrefix.length > 0 && boundaryPrefix.at(-1) !== 0x0a
+
   const bytes = await readRemoteTranscriptRange(
     args.provider,
     args.filePath,
     startOffset,
     scanEnd - startOffset
   )
+
   if (bytes.length !== scanEnd - startOffset) {
     return null
   }
+
   const boundaryAfter = await readRemoteTranscriptBoundaryBytes(
     args.provider,
     args.filePath,
     startOffset
   )
+
   const after = remoteWorkerTranscriptSourceIdentity(await args.provider.stat(args.filePath))
+
   if (
     !boundaryAfter ||
     createWorkerTranscriptBoundaryCheckpoint(boundaryAfter) !== boundaryCheckpoint ||
@@ -97,6 +113,7 @@ export async function readRemoteTranscriptRangedWindow(args: {
   ) {
     return null
   }
+
   return {
     bytes,
     fileSize,
@@ -116,14 +133,17 @@ export async function readRemoteTranscriptRange(
 ): Promise<Buffer> {
   const windows: Buffer[] = []
   let bytesRead = 0
+
   while (bytesRead < length) {
     const windowLength = Math.min(MAX_FILE_RANGE_READ_BYTES, length - bytesRead)
     const window = await provider.readFileRange!(filePath, position + bytesRead, windowLength)
     windows.push(window.bytes)
     bytesRead += window.bytesRead
+
     if (window.bytesRead < windowLength) {
       break
     }
   }
+
   return Buffer.concat(windows, bytesRead)
 }

@@ -84,6 +84,7 @@ export function AccountsPane({
   const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
+
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
@@ -91,23 +92,28 @@ export function AccountsPane({
     wslDistros,
     wslCapabilitiesLoading
   )
+
   // Why: with a Remote Orca Server active the server owns provider accounts
   // (see #7973); every list/select/remove below must scope to it, not host/WSL.
   const isRemoteAccountScope = hasRemoteProviderAccountOwner(settings)
   const activeRuntimeEnvironmentId = settings.activeRuntimeEnvironmentId?.trim() || null
+
   // Why: keep the real name separate from the prose fallback below; the scope
   // label must not interpolate the fallback.
   const remoteServerName = isRemoteAccountScope
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
         ?.name ?? null)
     : null
+
   const remoteServerLabel = isRemoteAccountScope
     ? (remoteServerName ??
       translate('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
     : null
+
   const accountRuntime = isRemoteAccountScope
     ? { runtime: 'host' as const, label: remoteServerLabel ?? '' }
     : localAccountRuntime
+
   // Why: host runtime labels are standalone UI labels; interpolated prose needs sentence casing.
   const accountRuntimeSentenceLabel =
     !isRemoteAccountScope &&
@@ -115,10 +121,12 @@ export function AccountsPane({
     !navigator.userAgent.includes('Windows')
       ? `${accountRuntime.label.charAt(0).toLocaleLowerCase()}${accountRuntime.label.slice(1)}`
       : accountRuntime.label
+
   const localAccountRuntimeSentenceLabel =
     localAccountRuntime.runtime === 'host' && !navigator.userAgent.includes('Windows')
       ? `${localAccountRuntime.label.charAt(0).toLocaleLowerCase()}${localAccountRuntime.label.slice(1)}`
       : localAccountRuntime.label
+
   // Why: users read the remote-scoped list as their desktop accounts being
   // deleted (#8186); say they are intact and link the default-runtime control.
   // The web client has no desktop-owned accounts and cannot select Local
@@ -137,44 +145,55 @@ export function AccountsPane({
 
   const [codexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
+
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<CodexAccountAction>('idle')
+
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
+
   const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
   }
+
   const visibleClaudeAccounts = claudeAccounts.accounts.filter((account) =>
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
+
   const visibleCodexAccounts = codexAccounts.accounts.filter((account) =>
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
+
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
   // Why: System default lights only when no account row is active; while a remote
   // owner's platform is unknown WSL rows hide fail-closed, so check the full roster.
   const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
+
   const systemCodexActive = !(
     ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
   ).some((account) =>
     providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
   )
+
   const systemClaudeActive = !(
     ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
+
   // Why: the system default's real identity is host-scoped (it reflects the
   // runtime's own ~/.codex), so only surface it in the host view. Per-distro
   // WSL falls back to the generic label.
   const systemCodexIdentity =
     accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
+
   // Why: remote snapshots own their system-default identity, but the desktop's
   // rate-limit poll must not be misattributed to a remote account owner.
   const activeCodexAuthWarning = codexAccountsLoaded
@@ -187,6 +206,7 @@ export function AccountsPane({
         authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
       })
     : null
+
   // Why: the mirror keeps serving the last synced settings when ~/.codex is
   // unusable, so without this the user only sees their edits being ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
@@ -196,8 +216,10 @@ export function AccountsPane({
     // would name a config file that has nothing to do with the selected runtime.
     if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
       setCodexConfigSync(null)
+
       return
     }
+
     // Why: a temporarily locked managed home clears on its own, but this effect
     // only reruns on scope/runtime/selection changes — none of which a lock
     // release triggers. Without a retry the warning would stick until remount.
@@ -211,6 +233,7 @@ export function AccountsPane({
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
+
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
@@ -218,9 +241,11 @@ export function AccountsPane({
     if (recordedOpenCodeSettingEditsRef.current.has(field)) {
       return
     }
+
     recordedOpenCodeSettingEditsRef.current.add(field)
     recordFeatureInteraction('usage-tracking')
   }
+
   const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
     try {
       const status = await window.api.minimaxCredentials.getStatus()
@@ -230,6 +255,7 @@ export function AccountsPane({
       console.error('Failed to load MiniMax credential status:', error)
     }
   }
+
   const { saveMiniMaxCookie, clearMiniMaxCookie, saveMiniMaxApiKey, clearMiniMaxApiKey } =
     createMiniMaxCredentialActions({
       miniMaxCookieDraft,
@@ -260,6 +286,7 @@ export function AccountsPane({
             setCodexAccounts(snapshot.codex)
             setCodexAccountsLoaded(true)
           }
+
           if (!snapshot.failedProviders?.includes('claude')) {
             setClaudeAccounts(snapshot.claude)
           }
@@ -275,6 +302,7 @@ export function AccountsPane({
         }
       }
     )
+
     return () => {
       watcher.close()
     }
@@ -291,6 +319,7 @@ export function AccountsPane({
     fetchSettings,
     recordFeatureInteraction
   })
+
   const runClaudeAccountAction = createClaudeAccountActionRunner({
     settings,
     accountRuntime,
@@ -301,6 +330,7 @@ export function AccountsPane({
     fetchSettings,
     recordFeatureInteraction
   })
+
   const model: AccountsPaneSectionModel = {
     settings,
     updateSettings,
@@ -354,6 +384,7 @@ export function AccountsPane({
     saveMiniMaxCookie,
     clearMiniMaxCookie
   }
+
   const visibleSections = [
     wslSupportedPlatform &&
     !isRemoteAccountScope &&

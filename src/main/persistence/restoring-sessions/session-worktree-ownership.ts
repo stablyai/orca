@@ -56,6 +56,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionWorktreeReferenceKind>
 
 type WorktreeRow = { worktreeId?: string | null }
+
 type BrowserWorktreeRow = WorktreeRow & {
   docLocation?: { worktreeId?: string | null } | null
 }
@@ -69,13 +70,17 @@ export function getPersistedWorktreeOwnerId(ownerKey: string | null | undefined)
   if (!ownerKey) {
     return null
   }
+
   if (isWorktreeHostIdentity(ownerKey)) {
     return getWorktreeIdFromHostIdentity(ownerKey) || null
   }
+
   const scope = parseWorkspaceKey(ownerKey)
+
   if (scope?.type === 'folder') {
     return null
   }
+
   return scope?.type === 'worktree' ? scope.worktreeId : ownerKey
 }
 
@@ -85,27 +90,35 @@ export function createWorktreeOwnerCandidateCollector(
   owners: Set<string> = new Set<string>()
 ): WorktreeOwnerCandidateCollector {
   const candidateIdsByComparisonKey = new Map<string, string[]>()
+
   for (const candidateId of candidateIds) {
     const comparisonKey = worktreeRetentionIdComparisonKey(candidateId, platform)
+
     if (!comparisonKey) {
       continue
     }
+
     const matches = candidateIdsByComparisonKey.get(comparisonKey) ?? []
     matches.push(candidateId)
     candidateIdsByComparisonKey.set(comparisonKey, matches)
   }
+
   return {
     owners,
     addOwner: (ownerKey) => {
       const worktreeId =
         ownerKey && candidateIds.has(ownerKey) ? ownerKey : getPersistedWorktreeOwnerId(ownerKey)
+
       if (!worktreeId) {
         return
       }
+
       const comparisonKey = worktreeRetentionIdComparisonKey(worktreeId, platform)
+
       const equivalentCandidates = comparisonKey
         ? candidateIdsByComparisonKey.get(comparisonKey)
         : undefined
+
       if (equivalentCandidates) {
         for (const candidateId of equivalentCandidates) {
           owners.add(candidateId)
@@ -133,6 +146,7 @@ function collectWorktreeRows(
   if (!Array.isArray(rows)) {
     return
   }
+
   for (const row of rows as WorktreeRow[]) {
     add(row?.worktreeId)
   }
@@ -145,6 +159,7 @@ function collectBrowserRows(
   if (!Array.isArray(rows)) {
     return
   }
+
   for (const row of rows as BrowserWorktreeRow[]) {
     add(row?.worktreeId)
     add(row?.docLocation?.worktreeId)
@@ -161,30 +176,36 @@ function collectSessionFieldOwners(
       return
     case 'direct':
       add(typeof value === 'string' ? value : null)
+
       return
     case 'owner-keyed':
       collectRecordKeys(value, add)
+
       return
     case 'owner-keyed-row-arrays':
     case 'owner-keyed-browser-row-arrays':
       for (const [ownerKey, rows] of Object.entries((value ?? {}) as Record<string, unknown>)) {
         add(ownerKey)
+
         if (kind === 'owner-keyed-browser-row-arrays') {
           collectBrowserRows(rows, add)
         } else {
           collectWorktreeRows(rows, add)
         }
       }
+
       return
     case 'worktree-id-array':
       for (const ownerKey of (value ?? []) as string[]) {
         add(ownerKey)
       }
+
       return
     case 'row-record':
       for (const row of Object.values((value ?? {}) as Record<string, WorktreeRow>)) {
         add(row?.worktreeId)
       }
+
       return
     case 'row-arrays':
     case 'browser-row-arrays':
@@ -206,6 +227,7 @@ export function collectWorkspaceSessionWorktreeOwners(
 ): Set<string> {
   const collector = createWorktreeOwnerCandidateCollector(candidateIds, platform, owners)
   addWorkspaceSessionWorktreeOwners(session, collector)
+
   return owners
 }
 
@@ -229,6 +251,7 @@ export function addPersistedSessionWorktreeOwners(
   collector: WorktreeOwnerCandidateCollector
 ): void {
   addWorkspaceSessionWorktreeOwners(state.workspaceSession, collector)
+
   for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
     if (session) {
       addWorkspaceSessionWorktreeOwners(session, collector)
@@ -243,5 +266,6 @@ export function collectPersistedSessionWorktreeOwners(
 ): Set<string> {
   const collector = createWorktreeOwnerCandidateCollector(candidateIds, platform)
   addPersistedSessionWorktreeOwners(state, collector)
+
   return collector.owners
 }

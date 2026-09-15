@@ -23,7 +23,9 @@ import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const RUN_REVIEW_ORACLE = process.env.ORCA_REVIEW_SSH_OFFLINE_HEADERS === '1'
+
 const NODE_IMAGE = process.env.ORCA_REVIEW_SSH_NODE_IMAGE ?? 'node:24.12.0-bookworm'
+
 const TARGET_HOST = process.env.ORCA_REVIEW_SSH_TARGET_HOST ?? '127.0.0.1'
 
 type TargetFixture = {
@@ -88,29 +90,36 @@ async function startTarget(): Promise<TargetFixture> {
   const port = Number(run('docker', ['port', containerName, '22/tcp']).split(':').at(-1))
   // `docker run -d` returns before sshd binds; connect() against a closed port is a flake.
   await waitForSshBanner(port)
+
   return { containerName, identityFile, port, tempDir }
 }
 
 /** Resolves once sshd answers with its banner on the mapped port, or throws after the deadline. */
 async function waitForSshBanner(port: number, deadlineMs = 60_000): Promise<void> {
   const deadline = Date.now() + deadlineMs
+
   for (;;) {
     const gotBanner = await new Promise<boolean>((resolve) => {
       const socket = connect({ host: TARGET_HOST, port })
+
       const done = (value: boolean): void => {
         socket.destroy()
         resolve(value)
       }
+
       socket.setTimeout(2_000, () => done(false))
       socket.once('data', (chunk) => done(chunk.toString('utf8').startsWith('SSH-')))
       socket.once('error', () => done(false))
     })
+
     if (gotBanner) {
       return
     }
+
     if (Date.now() > deadline) {
       throw new Error(`sshd on port ${port} did not answer within ${deadlineMs / 1000}s`)
     }
+
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
 }
@@ -119,6 +128,7 @@ function stopTarget(fixture: TargetFixture | null): void {
   if (!fixture) {
     return
   }
+
   spawnSync('docker', ['rm', '-f', fixture.containerName], { stdio: 'ignore', timeout: 30_000 })
   rmSync(fixture.tempDir, { recursive: true, force: true })
 }
@@ -134,6 +144,7 @@ function createConnection(fixture: TargetFixture): SshConnection {
     identityFile: fixture.identityFile,
     identitiesOnly: true
   }
+
   return new SshConnection(target, { onStateChange: vi.fn() })
 }
 
@@ -155,6 +166,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)(
       expect(dockerExec(activeFixture, 'getent hosts nodejs.org')).toContain('127.0.0.1')
       const connection = createConnection(activeFixture)
       await connection.connect()
+
       try {
         const result = await deployAndLaunchRelay(connection, undefined, 60)
         expect(result.remoteRelayDir).toBeTruthy()
@@ -168,6 +180,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)(
             `node -e "require('node-pty'); require('@parcel/watcher'); console.log('NATIVE=loadable')"`
           ].join('; ')
         )
+
         console.log(`[offline-node-headers] ${NODE_IMAGE}: ${evidence.replace(/\n/g, ' ')}`)
         expect(evidence).toContain('PTY_NODE=built')
         expect(evidence).toContain('HEADERS=local')
@@ -188,6 +201,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)(
       )
       const connection = createConnection(activeFixture)
       await connection.connect()
+
       try {
         const error = await deployAndLaunchRelay(connection, undefined, 60).catch((e: Error) => e)
         expect(error).toBeInstanceOf(Error)

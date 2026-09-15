@@ -8,7 +8,9 @@ import {
 import type { SystemSshCommandChannel } from './system-ssh-command'
 
 const EXEC_TIMEOUT_MS = 30_000
+
 const COMMAND_CLOSE_GRACE_MS = 5_000
+
 const MAX_EXEC_OUTPUT_CHARS = 1024 * 1024
 
 type ExecCommandOptions = SshExecOptions & {
@@ -50,13 +52,16 @@ export async function execCommand(
 ): Promise<string> {
   const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, ...execOptions } = options ?? {}
   const signal = options?.signal
+
   if (signal?.aborted) {
     throw createSshOperationAbortError()
   }
+
   // Why: reconnect/disconnect can flip the connection back to ssh2 before a
   // killed local OpenSSH child emits close; the channel's transport is immutable.
   const openedWithSystemSsh = conn.usesSystemSshTransport?.() === true
   let channel: ClientChannel
+
   try {
     channel = await conn.exec(command, execOptions)
   } catch (error) {
@@ -64,6 +69,7 @@ export async function execCommand(
     redactRelayInstallMarkerError(error)
     throw error
   }
+
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
@@ -73,9 +79,11 @@ export async function execCommand(
 
     const cleanup = (): void => {
       clearTimeout(timeout)
+
       if (closeGraceTimer) {
         clearTimeout(closeGraceTimer)
       }
+
       signal?.removeEventListener('abort', onAbort)
       channel.off('error', fail)
       channel.stderr.off('error', fail)
@@ -83,21 +91,26 @@ export async function execCommand(
       channel.stderr.off('data', onStderrData)
       channel.off('close', onClose)
     }
+
     const settle = (fn: typeof resolve | typeof reject, val: string | Error): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       fn(val as never)
     }
+
     const guardUnconfirmedTeardown = (): void => {
       const swallowLateError = (): void => {}
+
       const cleanupGuards = (): void => {
         channel.off('error', swallowLateError)
         channel.stderr.off('error', swallowLateError)
         channel.off('close', cleanupGuards)
       }
+
       channel.on('error', swallowLateError)
       channel.stderr.on('error', swallowLateError)
       channel.once('close', cleanupGuards)
@@ -106,6 +119,7 @@ export async function execCommand(
       channel.resume()
       channel.stderr.resume()
     }
+
     // Why: sshd counts the session against MaxSessions until CHANNEL_CLOSE
     // completes. Settling on abort before the channel actually closes lets the
     // concurrent-bootstrap sequential fallback reissue an exec while the slot
@@ -114,6 +128,7 @@ export async function execCommand(
       if (terminationError) {
         return
       }
+
       terminationError = Object.assign(error, { sshChannelCloseConfirmed: false })
       clearTimeout(timeout)
       // Why: callers must not release an install lock while its remote npm
@@ -125,17 +140,22 @@ export async function execCommand(
       }, COMMAND_CLOSE_GRACE_MS)
       channel.close()
     }
+
     const fail = (err: Error): void => {
       redactRelayInstallMarkerError(err)
       requestTermination(err)
     }
+
     const onAbort = (): void => requestTermination(createSshOperationAbortError())
+
     const onStdoutData = (data: Buffer): void => {
       stdout = appendExecOutputTail(stdout, data.toString('utf-8'))
     }
+
     const onStderrData = (data: Buffer): void => {
       stderr = appendExecOutputTail(stderr, data.toString('utf-8'))
     }
+
     const onClose = (code: number): void => {
       if (
         !terminationError &&
@@ -146,12 +166,14 @@ export async function execCommand(
           sshChannelCloseConfirmed: false
         })
       }
+
       if (terminationError) {
         // Why: a system-SSH channel closes when the local OpenSSH child exits;
         // that does not prove the remote command stopped, especially with a ControlMaster.
         if (!openedWithSystemSsh) {
           terminationError.sshChannelCloseConfirmed = true
         }
+
         settle(reject, terminationError)
       } else if (code !== 0) {
         // Why: on the system-ssh transport channel.stderr carries local OpenSSH
@@ -159,6 +181,7 @@ export async function execCommand(
         const output = redactRelayInstallMarkerTokens(
           [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
         )
+
         settle(
           reject,
           new Error(
@@ -169,9 +192,11 @@ export async function execCommand(
         if (stderr && onStderr) {
           onStderr(redactRelayInstallMarkerTokens(stderr))
         }
+
         settle(resolve, stdout)
       }
     }
+
     const timeout = setTimeout(() => {
       requestTermination(
         Object.assign(
@@ -193,6 +218,7 @@ export async function execCommand(
     channel.on('data', onStdoutData)
     channel.stderr.on('data', onStderrData)
     channel.on('close', onClose)
+
     if (signal?.aborted) {
       onAbort()
     }
@@ -201,5 +227,6 @@ export async function execCommand(
 
 function appendExecOutputTail(existing: string, chunk: string): string {
   const combined = existing + chunk
+
   return combined.length > MAX_EXEC_OUTPUT_CHARS ? combined.slice(-MAX_EXEC_OUTPUT_CHARS) : combined
 }

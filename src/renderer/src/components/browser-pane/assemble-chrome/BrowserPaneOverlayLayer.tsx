@@ -25,7 +25,9 @@ type BrowserOverlayAssignment = {
 }
 
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
+
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+
 const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type BrowserOverlaySlotProps = {
@@ -55,14 +57,18 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
     },
     [browserTab.id]
   )
+
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+
   const browserPageIds =
     browserTab.pageIds && browserTab.pageIds.length > 0
       ? browserTab.pageIds
       : [browserTab.activePageId ?? browserTab.id]
+
   const needsGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const isMountAdmitted = useAnyBrowserPageMountAdmission(browserPageIds)
   const isPaintable = isActive || needsGuestPaint || isMountAdmitted
+
   // Why: CSS anchor positioning pins the overlay to its owning group's body — a tab move only swaps positionAnchor, no measurement/state.
   // Orphan branch (no anchorName) stays display:none until the tab is reassigned or destroyed.
   const style: React.CSSProperties = useMemo(
@@ -90,6 +96,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
           },
     [anchorName, isActive, isPaintable]
   )
+
   const handleFocus = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
       onFocusOwningGroup(groupId)
@@ -134,7 +141,9 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       focusedGroupId: state.activeGroupIdByWorktree[worktreeId]
     }))
   )
+
   const focusGroup = useAppStore((state) => state.focusGroup)
+
   const knownFocusedGroupId = useMemo(
     () =>
       focusedGroupId !== undefined && groups.some((group) => group.id === focusedGroupId)
@@ -152,24 +161,29 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   // Why: build this lookup outside the zustand selector — a fresh object inside it would break useShallow equality and re-render on every unrelated mutation.
   const groupActiveTabById = useMemo(() => {
     const lookup: Record<string, string | null | undefined> = {}
+
     for (const group of groups) {
       lookup[group.id] = group.activeTabId
     }
+
     return lookup
   }, [groups])
 
   // Map each browser tab to its owning group; tabs not in any group's unified-tab list are transient mid-move "orphans", not a steady state.
   const assignments = useMemo(() => {
     const entries = new Map<string, BrowserOverlayAssignment>()
+
     for (const tab of unifiedTabs) {
       if (tab.contentType !== 'browser') {
         continue
       }
+
       entries.set(tab.entityId, {
         groupId: tab.groupId,
         isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
       })
     }
+
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
@@ -178,6 +192,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       {browserTabs.map((browserTab) => {
         const assignment = assignments.get(browserTab.id)
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+
         const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
           ? 'inactive'
           : knownFocusedGroupId === undefined
@@ -185,6 +200,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
             : assignment?.groupId === knownFocusedGroupId
               ? 'focused'
               : 'inactive'
+
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
@@ -220,15 +236,19 @@ function ClientHostedBrowserRowOverlaySlot({
 }): React.JSX.Element | null {
   const rows = useClientHostedBrowserRows(worktreeId)
   const selection = useClientHostedBrowserRowSelection()
+
   const liveSelection =
     selection?.worktreeId === worktreeId && isClientHostedBrowserRowSelectionLive(selection, groups)
       ? selection
       : null
+
   const selectedRow = liveSelection
     ? rows.find((row) => row.browserPageId === liveSelection.browserPageId)
     : undefined
+
   const anchorName =
     selectedRow && liveSelection ? tabGroupBodyAnchorName(liveSelection.groupId) : undefined
+
   const style = useMemo<React.CSSProperties | null>(
     () =>
       anchorName
@@ -243,9 +263,11 @@ function ClientHostedBrowserRowOverlaySlot({
         : null,
     [anchorName]
   )
+
   if (!selectedRow || !style || !isWorktreeActive) {
     return null
   }
+
   return (
     <div
       style={style}

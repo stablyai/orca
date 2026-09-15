@@ -30,9 +30,11 @@ export type RuntimeEnvironmentSubscribeHandlers = {
 
 export const runtimeEnvironmentCall: Mock<(args: RuntimeEnvironmentCallRequest) => unknown> =
   vi.fn()
+
 export const runtimeEnvironmentTransportCall: Mock<
   (args: RuntimeEnvironmentCallRequest) => unknown
 > = vi.fn()
+
 export const runtimeEnvironmentSubscribe: Mock<
   (args: RuntimeEnvironmentCallRequest, handlers: RuntimeEnvironmentSubscribeHandlers) => unknown
 > = vi.fn()
@@ -106,6 +108,7 @@ export function resetRemoteRuntimeMocks() {
         (response) => active && handlers.onResponse(response),
         (error) => active && handlers.onError({ message: String(error) })
       )
+
       return {
         unsubscribe: () => {
           active = false
@@ -172,6 +175,7 @@ export function installLinkedPRClearStub(
   }
 ) {
   const cacheKey = `${args.repoId}::${args.branch}`
+
   const updateWorktreeMeta = vi.fn(
     async (
       worktreeId: string,
@@ -181,9 +185,11 @@ export function installLinkedPRClearStub(
       const currentWorktree = store
         .getState()
         .worktreesByRepo[args.repoId]?.find((worktree) => worktree.id === worktreeId)
+
       if (options?.shouldApply && !options.shouldApply(currentWorktree)) {
         return
       }
+
       store.setState((state) => {
         const nextWorktrees = {
           ...state.worktreesByRepo,
@@ -191,17 +197,21 @@ export function installLinkedPRClearStub(
             worktree.id === worktreeId ? { ...worktree, ...updates } : worktree
           )
         }
+
         const nextPRCache = { ...state.prCache }
         delete nextPRCache[cacheKey]
+
         return { worktreesByRepo: nextWorktrees, prCache: nextPRCache } as Partial<AppState>
       })
     }
   )
+
   store.setState({
     repos: [{ id: args.repoId, path: args.repoPath, name: 'repo', kind: 'git' }],
     worktreesByRepo: { [args.repoId]: [args.worktree] },
     updateWorktreeMeta
   } as unknown as Partial<AppState>)
+
   return updateWorktreeMeta
 }
 

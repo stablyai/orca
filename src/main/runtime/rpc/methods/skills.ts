@@ -51,6 +51,7 @@ export function resolveDiscoveryTarget(
         ...params,
         projectRuntime: runtime.resolveProjectRuntimeForWorktree(params.worktreeId)
       }
+
   return resolveSkillDiscoveryTarget(target)
 }
 
@@ -73,6 +74,7 @@ export const SKILL_METHODS = [
       // send worktree identity only; trusting their projectRuntime absence
       // would scan this host's native filesystem for a WSL-configured project.
       const resolvedTarget = resolveDiscoveryTarget(params, runtime)
+
       return discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
         providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
         refresh: params.refresh === true
@@ -104,23 +106,28 @@ export const SKILL_METHODS = [
     params: AgentSkillShareRequestSchema,
     handler: async (params, { runtime, signal, clientKind }) => {
       runtime.assertAgentSkillSharingAllowed()
+
       if (clientKind !== undefined) {
         throw new AgentSkillSharingError(
           AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
           'Publishing skills through a paired client is not supported. Run the command from Orca on the machine that stores the skills.'
         )
       }
+
       const resolvedTarget = resolveDiscoveryTarget(params.target ?? {}, runtime)
+
       if (resolvedTarget.kind !== 'native-host') {
         throw new AgentSkillSharingError(
           AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
           'Publishing skills from a forwarded WSL session is not supported yet. Run the command from Orca on the machine that stores the skills.'
         )
       }
+
       const discovered = await discoverSkillsOnTarget(resolvedTarget, runtime.listRepos(), {
         providerRootOverrides: await runtime.resolveSkillDiscoveryProviderRoots(resolvedTarget),
         refresh: true
       })
+
       return runtime.publishDiscoveredSkillsFromAgent(params, discovered.skills, signal)
     }
   }),
@@ -129,6 +136,7 @@ export const SKILL_METHODS = [
     params: SkillInstallRequestSchema,
     handler: async (params, { runtime, signal, clientCapabilities }) => {
       const result = await runtime.installSharedSkillRequest(params, signal)
+
       if (
         result.status === 'cancelled' &&
         !clientCapabilities?.includes(SKILL_INSTALL_RESULT_V2_CAPABILITY)
@@ -140,6 +148,7 @@ export const SKILL_METHODS = [
           failure: undefined
         }
       }
+
       return result
     }
   }),
@@ -161,6 +170,7 @@ export const SKILL_METHODS = [
     params: SkillsGetInstallProgressParams,
     handler: (params, { runtime }) => {
       const progress = runtime.getSharedSkillInstallProgress(params.operationId)
+
       return progress ? SkillBundleInstallProgressSchema.parse(progress) : null
     }
   }),

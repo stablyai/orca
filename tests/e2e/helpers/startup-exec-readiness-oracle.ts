@@ -29,6 +29,7 @@ export type BashExecProfileBarrier = {
 }
 
 const BASH_EXEC_LINE = 'exec -a figterm-sta4067 /bin/bash --noprofile --norc -l -i'
+
 const ZSH_EXEC_LINE = 'exec -a figterm-sta4067 /bin/zsh -o noglobalrcs -l -i'
 
 function execProfileContents(
@@ -37,12 +38,14 @@ function execProfileContents(
   barrier?: BashExecProfileBarrier
 ): string {
   const guard = `ORCA_STA4067_EXEC_${runId.replaceAll(/[^A-Za-z0-9_]/g, '_')}`
+
   const barrierScript = barrier
     ? [
         `: > ${shellQuote(barrier.startedPath)}`,
         `while [[ ! -e ${shellQuote(barrier.releasePath)} ]]; do sleep 0.02; done`
       ].join('\n  ')
     : ''
+
   return `if [[ -z "\${${guard}:-}" ]]; then
   export ${guard}=1
   ${barrierScript}
@@ -65,11 +68,13 @@ function shellQuote(value: string): string {
 
 function splitMarker(marker: string): [string, string] {
   const midpoint = Math.floor(marker.length / 2)
+
   return [marker.slice(0, midpoint), marker.slice(midpoint)]
 }
 
 function markerCommand(marker: string): string {
   const [left, right] = splitMarker(marker)
+
   return `printf '%s%s\\n' ${shellQuote(left)} ${shellQuote(right)}`
 }
 
@@ -93,6 +98,7 @@ async function expectSingleOwningPty(
             requireFreshPtyLiveness: true
           })
         )
+
         return (listed?.terminals ?? [])
           .filter((candidate) => candidate.tabId === tabId)
           .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
@@ -110,9 +116,11 @@ export async function callStartupExecRuntime<TResult>(
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -126,6 +134,7 @@ export function installBashExecProfile(
 ): () => void {
   const profilePath = path.join(homePath, '.bash_profile')
   writeFileSync(profilePath, bashExecProfileContents(runId, barrier))
+
   return () => rmSync(profilePath, { force: true })
 }
 
@@ -136,6 +145,7 @@ export function installZshExecProfile(
 ): () => void {
   const profilePath = path.join(homePath, '.zprofile')
   writeFileSync(profilePath, zshExecProfileContents(runId, barrier))
+
   return () => rmSync(profilePath, { force: true })
 }
 
@@ -149,10 +159,12 @@ export async function createStartupExecTerminal(
   shellEnv: Record<string, string> = {}
 ): Promise<StartupExecTerminal> {
   const startupMarker = `STA4067_STARTUP_READY_${runId}`
+
   const command = [
     `printf '%s|%s\\n' "$$" "$(tty)" > ${shellQuote(ledgerPath)}`,
     markerCommand(startupMarker)
   ].join('; ')
+
   const created = await callStartupExecRuntime<{
     tab: { parentTabId: string; terminal: string | null }
   }>(page, 'session.tabs.createTerminal', {
@@ -164,28 +176,35 @@ export async function createStartupExecTerminal(
     select: false,
     navigation: 'caller'
   })
+
   if (!created.tab.terminal) {
     throw new Error('Startup-exec terminal did not publish an authoritative handle')
   }
+
   const terminal = created.tab.terminal
+
   const tabId =
     tabIdNamespace === 'paired-client'
       ? toWebTerminalSurfaceTabId(created.tab.parentTabId)
       : created.tab.parentTabId
+
   await page.evaluate((id) => window.__store?.getState().setActiveWorktree(id), worktreeId)
   const tab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
   await expect(tab).toBeVisible({ timeout: 30_000 })
   await tab.click()
   await expect(tab).toHaveAttribute('data-active', 'true')
   const panePtyId = await waitForActivePanePtyId(page, 30_000)
+
   const shown = await callStartupExecRuntime<{ terminal: RuntimeTerminalShow }>(
     page,
     'terminal.show',
     { terminal }
   )
+
   if (!shown.terminal.ptyId) {
     throw new Error('Startup-exec terminal has no owning PTY identity')
   }
+
   await expectSingleOwningPty(
     page,
     worktreeId,
@@ -193,6 +212,7 @@ export async function createStartupExecTerminal(
     terminal,
     shown.terminal.ptyId
   )
+
   return {
     hostPtyId: shown.terminal.ptyId,
     panePtyId,
@@ -231,11 +251,13 @@ export async function expectStartupExecRecovery(
   const authoritative = await readTerminal(page, created.terminal)
   expect(authoritative.status).toBe('running')
   expect(count(authoritative.tail.join('\n'), created.startupMarker)).toBe(1)
+
   const shown = await callStartupExecRuntime<{ terminal: RuntimeTerminalShow }>(
     page,
     'terminal.show',
     { terminal: created.terminal }
   )
+
   expect(shown.terminal).toMatchObject({
     connected: true,
     ptyId: created.hostPtyId,

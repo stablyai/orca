@@ -24,6 +24,7 @@ type PaneProbe = {
 
 function frameNumber(content: string): number {
   const matches = [...content.matchAll(/REATTACH_FRAME_(\d+)/g)]
+
   return Number(matches.at(-1)?.[1] ?? 0)
 }
 
@@ -60,9 +61,11 @@ function writeStreamingTui(scriptPath: string): void {
 async function setFullscreen(app: ElectronApplication, page: Page): Promise<void> {
   await app.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]
+
     if (!window) {
       throw new Error('No Electron window')
     }
+
     window.show()
     window.setFullScreen(true)
   })
@@ -86,9 +89,11 @@ async function setFullscreen(app: ElectronApplication, page: Page): Promise<void
 async function createActiveDecoyTab(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
@@ -101,11 +106,13 @@ async function createActiveDecoyTab(page: Page, worktreeId: string): Promise<voi
 async function findRestoredTabForPty(page: Page, ptyId: string): Promise<string | null> {
   return page.evaluate((ptyId) => {
     const layouts = window.__store?.getState().terminalLayoutsByTabId ?? {}
+
     for (const [tabId, layout] of Object.entries(layouts)) {
       if (Object.values(layout.ptyIdsByLeafId ?? {}).includes(ptyId)) {
         return tabId
       }
     }
+
     return null
   }, ptyId)
 }
@@ -113,9 +120,11 @@ async function findRestoredTabForPty(page: Page, ptyId: string): Promise<string 
 async function activateTabWithoutFocus(page: Page, tabId: string): Promise<void> {
   await page.evaluate((tabId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     store.getState().setActiveTabType('terminal')
     store.getState().setActiveTab(tabId)
   }, tabId)
@@ -128,16 +137,21 @@ async function probePane(page: Page, tabId: string, ptyId: string): Promise<Pane
         ?.get(tabId)
         ?.getPanes?.()
         .find((candidate) => candidate.container.dataset.ptyId === ptyId)
+
       if (!pane) {
         return null
       }
+
       let proposed: { cols: number; rows: number } | null = null
+
       try {
         proposed = pane.fitAddon.proposeDimensions() ?? null
       } catch {
         proposed = null
       }
+
       const rect = pane.container.getBoundingClientRect()
+
       return {
         content: pane.serializeAddon.serialize(),
         cols: pane.terminal.cols,
@@ -166,6 +180,7 @@ test('restored hidden split drains live alternate-screen output without a click 
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
+
   try {
     const first = await session.launch()
     firstApp = first.app
@@ -181,9 +196,11 @@ test('restored hidden split drains live alternate-screen output without a click 
     await waitForPaneCount(first.page, 2, 30_000)
     const split = await waitForPaneIdentitySnapshot(first.page, 2)
     const streamingPane = split.panes.find((pane) => pane.leafId === split.activeLeafId)
+
     if (!streamingPane?.ptyId) {
       throw new Error('Split did not expose its active PTY')
     }
+
     expect(streamingPane.ptyId).toContain(PTY_SESSION_ID_SEPARATOR)
     await execInTerminal(
       first.page,
@@ -223,6 +240,7 @@ test('restored hidden split drains live alternate-screen output without a click 
       .poll(
         async () => {
           restoredTabId = await findRestoredTabForPty(second.page, streamingPane.ptyId!)
+
           return restoredTabId
         },
         { timeout: 20_000, message: 'Persisted split PTY was not restored into a tab layout' }
@@ -255,9 +273,11 @@ test('restored hidden split drains live alternate-screen output without a click 
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

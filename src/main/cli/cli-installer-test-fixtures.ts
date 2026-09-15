@@ -13,6 +13,7 @@ export async function makeFixture(): Promise<{
   const cliEntryPath = join(appPath, 'out', 'cli', 'index.js')
   await mkdir(join(appPath, 'out', 'cli'), { recursive: true })
   await writeFile(cliEntryPath, 'console.log("orca")\n', 'utf8')
+
   return { root, userDataPath, appPath }
 }
 
@@ -23,5 +24,6 @@ export async function createPackagedMacLauncher(root: string): Promise<string> {
     encoding: 'utf8',
     mode: 0o755
   })
+
   return resourcesPath
 }

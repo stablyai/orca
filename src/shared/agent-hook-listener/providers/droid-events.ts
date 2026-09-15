@@ -23,12 +23,14 @@ export function normalizeDroidEvent(
   if (eventName === 'SessionStart') {
     // Why: Droid's SessionStart fires while idle (TUI open/resume); wait for real activity before a working row.
     clearPaneTurnCacheState(state, paneKey)
+
     return null
   }
 
   const notificationMessage = readString(hookPayload, 'message')
   const droidToolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
   let stateName: 'working' | 'waiting' | 'done' | null = null
+
   if (
     eventName === 'PreToolUse' &&
     (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
@@ -51,6 +53,7 @@ export function normalizeDroidEvent(
     // Why: Droid emits no Stop on user-interrupt, only an idle notification when ready again.
     stateName = 'done'
   }
+
   if (!stateName) {
     return null
   }

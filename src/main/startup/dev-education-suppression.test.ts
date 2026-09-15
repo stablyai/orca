@@ -28,6 +28,7 @@ function createStoreState(overrides?: {
       ...overrides?.onboarding?.checklist
     }
   }
+
   let ui: PersistedUIState = {
     ...getDefaultUIState(),
     ...overrides?.ui
@@ -51,6 +52,7 @@ function createStoreState(overrides?: {
             ...updates.checklist
           }
         }
+
         return onboarding
       }),
       getUI: vi.fn(() => ui),
@@ -148,6 +150,7 @@ describe('suppressDevEducationForStore', () => {
     const featureInteractions = Object.fromEntries(
       FEATURE_INTERACTION_IDS.map((id) => [id, { firstInteractedAt: 1, interactionCount: 1 }])
     )
+
     const state = createStoreState({
       onboarding: {
         closedAt: 1,

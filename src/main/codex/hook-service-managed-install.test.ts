@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -58,9 +59,11 @@ describe('CodexHookService', () => {
     writeFileSync(join(systemCodexHome, 'config.toml'), 'approval_policy = "on-request"\n', 'utf-8')
     const managedHooksJsonPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'hooks.json')
     let releaseGrant!: () => void
+
     const grantHoldingSystemConfig = new Promise<void>((resolve) => {
       releaseGrant = resolve
     })
+
     const held = runExclusivelyForCodexTrustConfig(
       join(systemCodexHome, 'config.toml'),
       () => grantHoldingSystemConfig
@@ -82,6 +85,7 @@ describe('CodexHookService', () => {
     writeFileSync(join(systemCodexHome, 'config.toml'), 'approval_policy = "on-request"\n', 'utf-8')
     const managedHooksJsonPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'hooks.json')
     let releaseGrant!: () => void
+
     const held = runExclusivelyForCodexTrustConfig(
       join(systemCodexHome, 'config.toml'),
       () =>
@@ -114,6 +118,7 @@ describe('CodexHookService', () => {
     expect(status.state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+
     const hooksConfig = JSON.parse(readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
@@ -145,6 +150,7 @@ describe('CodexHookService', () => {
     const hooksConfig = JSON.parse(readFileSync(join(perAccountHome, 'hooks.json'), 'utf-8')) as {
       hooks: Record<string, unknown>
     }
+
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(localManagedCodexEvents())
     const trustConfig = readFileSync(join(perAccountHome, 'config.toml'), 'utf-8')
     expect(trustConfig).toContain('approval_policy = "on-request"')
@@ -180,6 +186,7 @@ describe('CodexHookService', () => {
       hooks: Record<string, unknown>
       _managed?: unknown
     }
+
     expect(hooksConfig._managed).toBeUndefined()
     expect(Object.keys(hooksConfig)).toEqual(['hooks'])
   })
@@ -194,6 +201,7 @@ describe('CodexHookService', () => {
       const spaceHome = join(tmpdir(), 'orca home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         const systemCodexHome = join(spaceHome, '.codex')
         mkdirSync(systemCodexHome, { recursive: true })
@@ -202,6 +210,7 @@ describe('CodexHookService', () => {
         expect(status.state).toBe('installed')
 
         const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+
         const hooksConfig = JSON.parse(
           readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
@@ -224,6 +233,7 @@ describe('CodexHookService', () => {
       const metacharHome = join(tmpdir(), 'orca %ORCA_TEST% ^ home')
       mkdirSync(metacharHome, { recursive: true })
       homedirMock.mockReturnValue(metacharHome)
+
       try {
         const systemCodexHome = join(metacharHome, '.codex')
         mkdirSync(systemCodexHome, { recursive: true })
@@ -232,6 +242,7 @@ describe('CodexHookService', () => {
         expect(status.state).toBe('installed')
 
         const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+
         const hooksConfig = JSON.parse(
           readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
@@ -256,6 +267,7 @@ describe('CodexHookService', () => {
       expect(status.state).toBe('installed')
 
       const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+
       const hooksConfig = JSON.parse(
         readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
       ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
@@ -264,6 +276,7 @@ describe('CodexHookService', () => {
       // holds an exotic character still asserts the correct (fallback) branch.
       const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
       const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(homes.tmpHome, '.orca', 'agent-hooks'))
+
       if (cmdSafe) {
         expect(command).not.toMatch(/powershell/i)
         expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
@@ -287,12 +300,14 @@ describe('CodexHookService', () => {
       // would block the event loop and starve this handler, so the child is
       // spawned asynchronously while the server drains the request concurrently.
       let resolveReceived: (value: { headers: Record<string, unknown>; body: string }) => void
+
       const receivedPromise = new Promise<{
         headers: Record<string, unknown>
         body: string
       }>((resolve) => {
         resolveReceived = resolve
       })
+
       const server = createServer((req, res) => {
         const chunks: Buffer[] = []
         req.on('data', (c: Buffer) => chunks.push(c))
@@ -304,6 +319,7 @@ describe('CodexHookService', () => {
           })
         })
       })
+
       await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
       const port = (server.address() as AddressInfo).port
 
@@ -312,16 +328,19 @@ describe('CodexHookService', () => {
           prompt: '你好世界',
           hook_event_name: 'UserPromptSubmit'
         })
+
         // Why: this suite may run inside an Orca-launched terminal whose env
         // already carries ORCA_AGENT_HOOK_ENDPOINT/PORT/TOKEN. The managed
         // script sources that endpoint file, so leave it out or the hook posts
         // to the live Orca instead of this test's listener.
         const cleanEnv = { ...process.env }
+
         for (const key of Object.keys(cleanEnv)) {
           if (key.startsWith('ORCA_')) {
             delete cleanEnv[key]
           }
         }
+
         const child = spawn('cmd.exe', ['/d', '/c', scriptPath], {
           env: {
             ...cleanEnv,
@@ -333,6 +352,7 @@ describe('CodexHookService', () => {
             ORCA_AGENT_HOOK_VERSION: '1'
           }
         })
+
         child.stdin.end(payload)
         const exitCode = await new Promise<number>((resolve) => child.on('close', resolve))
         expect(exitCode).toBe(0)
@@ -358,11 +378,13 @@ describe('CodexHookService', () => {
 
     const devUserDataDir = mkdtempSync(join(tmpdir(), 'orca-dev-codex-user-data-'))
     const prodUserDataDir = mkdtempSync(join(tmpdir(), 'orca-prod-codex-user-data-'))
+
     try {
       getPathMock.mockImplementation((name: string) => {
         if (name === 'userData') {
           return devUserDataDir
         }
+
         throw new Error(`unexpected app.getPath(${name})`)
       })
       process.env.ORCA_USER_DATA_PATH = devUserDataDir
@@ -372,6 +394,7 @@ describe('CodexHookService', () => {
         if (name === 'userData') {
           return prodUserDataDir
         }
+
         throw new Error(`unexpected app.getPath(${name})`)
       })
       process.env.ORCA_USER_DATA_PATH = prodUserDataDir
@@ -381,12 +404,15 @@ describe('CodexHookService', () => {
       const prodHooksPath = join(prodUserDataDir, 'codex-runtime-home', 'home', 'hooks.json')
       expect(existsSync(devHooksPath)).toBe(true)
       expect(existsSync(prodHooksPath)).toBe(true)
+
       const devHooks = JSON.parse(readFileSync(devHooksPath, 'utf-8')) as {
         hooks: Record<string, { hooks?: { command?: string }[] }[]>
       }
+
       const prodHooks = JSON.parse(readFileSync(prodHooksPath, 'utf-8')) as {
         hooks: Record<string, { hooks?: { command?: string }[] }[]>
       }
+
       expect(
         devHooks.hooks.Stop?.some((definition) =>
           definition.hooks?.some((hook) => hook.command === 'user-hook')

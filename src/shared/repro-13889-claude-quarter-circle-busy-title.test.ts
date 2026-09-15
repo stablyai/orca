@@ -15,6 +15,7 @@ import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-ty
 // 2.1.228 swapped the busy spinner from braille to quarter circles, which read as
 // "no agent" and made the tracker report a confirmed exit mid-turn (#13889).
 const BUSY_2_1_227 = ['⠂ Claude Code', '⠐ Claude Code', '⠂ Say hi in one word'] as const
+
 const BUSY_2_1_228 = ['◐ Claude Code', '◑ Claude Code', '◑ Say hi in one word'] as const
 
 const CAPTURED_2_1_228_TURN = [
@@ -28,14 +29,17 @@ const CAPTURED_2_1_228_TURN = [
 
 function trackTurn(titles: readonly string[]): string[] {
   const events: string[] = []
+
   const tracker = createAgentStatusTracker(
     () => events.push('idle'),
     () => events.push('working'),
     () => events.push('exited')
   )
+
   for (const title of titles) {
     tracker.handleTitle(title)
   }
+
   return events
 }
 
@@ -80,6 +84,7 @@ describe('Claude Code quarter-circle busy titles (#13889)', () => {
     const brailleTurn = CAPTURED_2_1_228_TURN.map((title) =>
       title.replace('◐', '⠂').replace('◑', '⠐')
     )
+
     expect(trackTurn(CAPTURED_2_1_228_TURN)).toEqual(trackTurn(brailleTurn))
   })
 

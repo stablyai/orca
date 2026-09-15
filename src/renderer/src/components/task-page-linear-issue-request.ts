@@ -26,6 +26,7 @@ export function buildLinearIssueListReadArgs(options: {
     isEmptyLinearIssueAttributeFilter(options.attributeFilter)
       ? undefined
       : options.attributeFilter
+
   return {
     kind: 'list',
     filter: options.filter ?? 'all',
@@ -45,11 +46,15 @@ export function buildLinearIssueListRequestSignature(options: {
   const sourceScope = options.sourceContext
     ? getTaskSourceCacheScope(options.sourceContext)
     : 'local'
+
   const workspace = options.workspaceId ?? 'default'
+
   if (options.searchQuery && options.searchQuery.trim().length > 0) {
     return `${sourceScope}::${workspace}::search::${options.searchQuery.trim()}`
   }
+
   const signature = linearIssueAttributeFilterSignature(options.attributeFilter)
+
   return `${sourceScope}::${workspace}::list::${options.filter ?? 'all'}::${options.limit}::${signature}`
 }
 
@@ -63,12 +68,15 @@ export function shouldForceLinearIssueListRead(options: {
   if (options.refreshForced) {
     return true
   }
+
   if (options.previousFilterRead === null) {
     return false
   }
+
   if (options.previousFilterRead.workspaceId !== options.nextFilterRead.workspaceId) {
     return false
   }
+
   return options.previousFilterRead.signature !== options.nextFilterRead.signature
 }
 
@@ -79,9 +87,11 @@ export function shouldClearTeamDerivedFacets(options: {
   next: LinearPrimaryTeamObservation
 }): boolean {
   const { previous, next } = options
+
   if (!previous) {
     return false
   }
+
   return previous.workspaceId === next.workspaceId && previous.teamId !== next.teamId
 }
 

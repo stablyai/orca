@@ -16,20 +16,26 @@ export function getWorkspaceCleanupDeletionPhaseByIdentity(
   const cleanupWorktreeIds = new Set(
     Object.keys(cleanupPhases).map(getWorkspaceCleanupIdentityWorktreeId)
   )
+
   const phases = { ...cleanupPhases }
+
   for (const candidate of candidates) {
     if (cleanupWorktreeIds.has(candidate.worktreeId)) {
       continue
     }
+
     const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+
     const phase =
       (hostId
         ? genericPhasesByDeleteStateKey[composeWorktreeHostIdentity(hostId, candidate.worktreeId)]
         : undefined) ?? genericPhasesByDeleteStateKey[candidate.worktreeId]
+
     if (phase) {
       phases[getWorkspaceCleanupCandidateIdentity(candidate)] = phase
     }
   }
+
   return phases
 }
 
@@ -44,17 +50,22 @@ export function selectWorkspaceCleanupDeletionPhases(s: {
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
 }): Record<string, WorkspaceCleanupDeletionPhase> {
   const phases: Record<string, WorkspaceCleanupDeletionPhase> = {}
+
   for (const [worktreeId, state] of Object.entries(s.deleteStateByWorktreeId)) {
     if (!state.isDeleting) {
       continue
     }
+
     const executionHostId = state.executionHostId ?? undefined
     const hostPrefix = executionHostId ? composeWorktreeHostIdentity(executionHostId, '') : null
+
     const key =
       hostPrefix && !worktreeId.startsWith(hostPrefix)
         ? composeWorktreeHostIdentity(executionHostId, worktreeId)
         : worktreeId
+
     phases[key] = state.phase ?? 'deleting'
   }
+
   return phases
 }

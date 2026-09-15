@@ -46,6 +46,7 @@ export function useInitialSessionTerminalAutoCreate(
     stateRef,
     worktreeId
   } = args
+
   // Why: the route re-creates both callbacks every render; useEffectEvent keeps them
   // out of the deps without mutating a ref during render.
   const consumeCreationRoute = useEffectEvent(args.consumeCreationRoute)
@@ -61,6 +62,7 @@ export function useInitialSessionTerminalAutoCreate(
     ) {
       consumeCreationRoute()
     }
+
     if (
       !client ||
       !shouldAutoCreateInitialSessionTerminal({
@@ -76,6 +78,7 @@ export function useInitialSessionTerminalAutoCreate(
     ) {
       return
     }
+
     stateRef.current.autoCreatedForWorktree = worktreeId
     createTerminal()
   }, [
@@ -102,5 +105,6 @@ export function useWorktreeSessionTabsLoaded(
     (_current: string | null, loaded: boolean) => (loaded ? worktreeId : null),
     null
   )
+
   return [loadedForWorktree === worktreeId, setLoaded]
 }

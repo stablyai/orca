@@ -13,6 +13,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -57,6 +58,7 @@ describe('feature interaction writer boundaries', () => {
         'const handleResetGithubTaskSearch'
       )
     ]
+
     for (const section of passiveSections) {
       expect(section).not.toMatch(providerWriter)
     }
@@ -64,12 +66,14 @@ describe('feature interaction writer boundaries', () => {
 
   it('records GitHub provider-depth for inline item mutation success paths', () => {
     const githubWriter = "recordFeatureInteraction('github-tasks')"
+
     // Why: table cells route success telemetry through the optimistic mutation
     // hook so provider-depth recording stays on one confirm path.
     const hookSource = readFileSync(
       join(COMPONENT_ROOT, '../hooks/useTaskPageGitHubWorkItemMutation.ts'),
       'utf8'
     )
+
     expect(
       sourceBetween(hookSource, "if (confirmed === 'confirmed')", 'return confirmed')
     ).toContain(githubWriter)
@@ -98,6 +102,7 @@ describe('feature interaction writer boundaries', () => {
     for (const section of sections) {
       expect(section).toContain('sourceContext')
     }
+
     const rowSource = componentSource('task-page/github/Rows.tsx')
     // Rows inline the repo lookup per cell rather than hoisting one const.
     expect(
@@ -107,6 +112,7 @@ describe('feature interaction writer boundaries', () => {
 
   it('suppresses Tasks surface telemetry for in-page provider switches and detail opens', () => {
     const suppression = 'recordTasksInteraction: false'
+
     const githubDetailSection = sourceBetween(
       componentSource('use-task-page-github-detail.ts'),
       'const openGitHubDetailPage',
@@ -137,6 +143,7 @@ describe('feature interaction writer boundaries', () => {
 
   it('records Cmd+J create-workspace as its own destination, not a generic quick action', () => {
     const source = componentSource('use-worktree-jump-palette-selection-actions.ts')
+
     const section = sourceBetween(
       source,
       'const handleSelectQuickAction',
@@ -192,6 +199,7 @@ describe('feature interaction writer boundaries', () => {
       sourceBetween(primarySource, 'const handleSubmitComment', 'return {'),
       sourceBetween(reviewSource, 'const handleResolveDiscussion', 'return {')
     ]
+
     for (const section of mutationSections) {
       expect(section).toContain(gitlabWriter)
       expect(section).toContain('showGitLabMutationError')
@@ -204,6 +212,7 @@ describe('feature interaction writer boundaries', () => {
       'onKeyDown={(e) => {',
       'className="grid w-full cursor-pointer'
     )
+
     expect(rowSection).toContain('e.target !== e.currentTarget')
     expect(rowSection.indexOf('e.target !== e.currentTarget')).toBeLessThan(
       rowSection.indexOf("e.key === 'Enter'")
@@ -221,6 +230,7 @@ describe('feature interaction writer boundaries', () => {
       componentSource('linear-item-drawer-edit-controller.tsx'),
       componentSource('linear-item-drawer-comment-footer.tsx')
     ].join('\n')
+
     const linearWriter = "recordFeatureInteraction('linear-tasks')"
 
     const taskPageSections = [
@@ -245,6 +255,7 @@ describe('feature interaction writer boundaries', () => {
         'const handleLinearWorkspaceChange'
       )
     ]
+
     for (const section of taskPageSections) {
       expect(section).toContain(linearWriter)
     }
@@ -257,6 +268,7 @@ describe('feature interaction writer boundaries', () => {
       sourceBetween(drawerSource, 'const handleLabelToggle', 'return {'),
       sourceBetween(drawerSource, 'const handleSubmit = useCallback(async () => {', 'return (')
     ]
+
     for (const section of drawerMutationSections) {
       expect(section).toContain(linearWriter)
     }
@@ -310,6 +322,7 @@ describe('feature interaction writer boundaries', () => {
       componentSource('settings/FloatingWorkspacePane.tsx'),
       componentSource('floating-terminal/FloatingTerminalIconContextMenu.tsx')
     ].join('\n')
+
     const passiveSources = [
       componentSource('../App.tsx'),
       componentSource('floating-terminal/FloatingTerminalPanel.tsx')

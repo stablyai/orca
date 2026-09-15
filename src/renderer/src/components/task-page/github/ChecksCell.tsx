@@ -5,6 +5,7 @@ import { CheckCircle2, AlertCircle, Clock3, Minus } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getChecksPillTone, getChecksLabel } from '@/components/task-page-checks-pill'
+
 export function PRChecksCell({
   item,
   onOpen,
@@ -19,16 +20,21 @@ export function PRChecksCell({
     if (item.type !== 'pr' || item.checksSummary) {
       return
     }
+
     const node = triggerRef.current
+
     if (!node || typeof IntersectionObserver === 'undefined') {
       return
     }
+
     let requested = false
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (requested || !entries.some((entry) => entry.isIntersecting)) {
           return
         }
+
         requested = true
         onLoadChecks()
         observer.disconnect()
@@ -37,9 +43,12 @@ export function PRChecksCell({
         rootMargin: '160px 0px'
       }
     )
+
     observer.observe(node)
+
     return () => observer.disconnect()
   }, [item.checksSummary, item.type, onLoadChecks])
+
   if (item.type !== 'pr') {
     return (
       <span className="text-[11px] text-muted-foreground">
@@ -47,7 +56,9 @@ export function PRChecksCell({
       </span>
     )
   }
+
   const summary = item.checksSummary
+
   const Icon =
     summary?.state === 'success'
       ? CheckCircle2
@@ -56,6 +67,7 @@ export function PRChecksCell({
         : summary?.state === 'pending'
           ? Clock3
           : Minus
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

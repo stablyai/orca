@@ -21,10 +21,12 @@ describe('guest viewport wheel forwarding', () => {
       isViewportPresetActive: () => active,
       canViewportScroll: () => active
     })
+
     const handler = guestOn.mock.calls.at(-1)![1] as (
       event: Electron.Event,
       input: Electron.MouseInputEvent
     ) => void
+
     const preventDefault = vi.fn()
     handler({ preventDefault } as unknown as Electron.Event, {
       type: 'mouseWheel',
@@ -35,6 +37,7 @@ describe('guest viewport wheel forwarding', () => {
       deltaY: 0,
       ...mouse
     })
+
     return preventDefault
   }
 
@@ -69,10 +72,12 @@ describe('guest viewport wheel forwarding', () => {
       isViewportPresetActive: () => true,
       canViewportScroll: () => false
     })
+
     const handler = guestOn.mock.calls.at(-1)![1] as (
       event: Electron.Event,
       input: Electron.MouseWheelInputEvent
     ) => void
+
     const preventDefault = vi.fn()
     handler(
       { preventDefault } as unknown as Electron.Event,

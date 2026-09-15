@@ -26,11 +26,14 @@ export function bumpScopeGeneration(scope: string): void {
   const next = scopeGeneration(scope) + 1
   scopeGenerations.delete(scope)
   scopeGenerations.set(scope, next)
+
   while (scopeGenerations.size > MAX_BRANCH_MAP_ENTRIES) {
     const oldest = scopeGenerations.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     evictedGeneration = Math.max(evictedGeneration, scopeGenerations.get(oldest) ?? 0)
     scopeGenerations.delete(oldest)
   }

@@ -25,6 +25,7 @@ import {
 const execFile = promisify(execFileCb)
 
 const OPENSSH_REGISTRY_KEY = 'HKLM\\SOFTWARE\\OpenSSH'
+
 let openSshDefaultShell: string | undefined
 
 export function readOpenSshDefaultShell(): string {
@@ -38,6 +39,7 @@ export function readOpenSshDefaultShell(): string {
       timeout: 3000,
       windowsHide: true
     })
+
     const match = output.match(/^\s*DefaultShell\s+REG_\w+\s+(.+?)\s*$/im)
     openSshDefaultShell = match?.[1] ?? ''
   } catch {
@@ -53,16 +55,19 @@ export function resolveWindowsDefaultShell(
   readDefaultShell: () => string = readOpenSshDefaultShell
 ): string {
   const envShell = env.SHELL
+
   if (envShell && existsPath(envShell)) {
     return envShell
   }
 
   const configuredShell = readDefaultShell()
+
   if (configuredShell && existsPath(configuredShell)) {
     return configuredShell
   }
 
   const systemRoot = env.SystemRoot || env.WINDIR || env.windir || 'C:\\Windows'
+
   const windowsPowerShell = pathWin32.join(
     systemRoot,
     'System32',
@@ -70,11 +75,13 @@ export function resolveWindowsDefaultShell(
     'v1.0',
     'powershell.exe'
   )
+
   if (existsPath(windowsPowerShell)) {
     return windowsPowerShell
   }
 
   const comspec = env.ComSpec || env.COMSPEC
+
   if (comspec && existsPath(comspec)) {
     return comspec
   }
@@ -92,6 +99,7 @@ export function resolveDefaultShell(): string {
   }
 
   const envShell = process.env.SHELL
+
   if (envShell && existsSync(envShell)) {
     return envShell
   }
@@ -101,6 +109,7 @@ export function resolveDefaultShell(): string {
       return candidate
     }
   }
+
   return '/bin/sh'
 }
 
@@ -111,6 +120,7 @@ export function resolveDefaultCwd(
 ): string {
   if (platform === 'win32') {
     const driveHome = env.HOMEDRIVE && env.HOMEPATH ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined
+
     return env.USERPROFILE || env.HOME || driveHome || homeDir || `${env.SystemDrive || 'C:'}\\`
   }
 
@@ -127,6 +137,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   // falls through to lsof.
   try {
     const { readlinkSync } = await import('node:fs')
+
     return readlinkSync(`/proc/${pid}/cwd`)
   } catch {
     // Fall through
@@ -149,7 +160,9 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
         timeout: 3000
       }
     )
+
     const lines = output.split('\n')
+
     for (const line of lines) {
       if (line.startsWith('n') && line.includes('/')) {
         // Why: lsof -d cwd is authoritative — don't second-guess it with
@@ -173,6 +186,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
 export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (err) {
     return (err as NodeJS.ErrnoException).code !== 'ESRCH'
@@ -185,13 +199,16 @@ function collectDescendants(
 ): (ProcessTableRow & { depth: number })[] {
   const descendants: (ProcessTableRow & { depth: number })[] = []
   const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
+
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
     descendants.push({ ...row, depth })
+
     for (const child of index.childrenByPpid.get(row.pid) ?? []) {
       stack.push({ row: child, depth: depth + 1 })
     }
   }
+
   return descendants
 }
 
@@ -201,10 +218,12 @@ async function getRecognizedForegroundDescendant(
 ): Promise<string | null> {
   try {
     const rows = await getProcessTableSnapshot()
+
     return getForegroundProcessNameFromProcessTable(rows, pid, fallbackProcess)
   } catch {
     // Fall through to node-pty's process name or the root command name.
   }
+
   return null
 }
 
@@ -221,20 +240,24 @@ function getForegroundProcessNameFromProcessTable(
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(pid)
   const candidates = collectDescendants(index, pid)
+
   // Why: SSH relays do not have the daemon's async wrapper cache. Inspect the
   // remote process tree so node/python agent entrypoints become real agents.
   const foregroundIsKnown =
     root?.stat.includes('+') === true ||
     candidates.some((candidate) => candidate.stat.includes('+'))
+
   const foregroundCandidates = foregroundIsKnown
     ? candidates.filter((candidate) => candidate.stat.includes('+'))
     : candidates
+
   const inspectionCandidates =
     fallbackProcess && isAgentForegroundWrapperProcess(fallbackProcess)
       ? foregroundCandidates.filter((candidate) =>
           isExpectedAgentProcess(getFirstCommandToken(candidate.command), fallbackProcess)
         )
       : foregroundCandidates
+
   if (
     fallbackProcess &&
     isAgentForegroundWrapperProcess(fallbackProcess) &&
@@ -242,13 +265,16 @@ function getForegroundProcessNameFromProcessTable(
   ) {
     return null
   }
+
   const ancestryCandidates = root ? [{ ...root, depth: 0 }, ...candidates] : candidates
   const selected = selectForegroundProcessCandidate(inspectionCandidates, ancestryCandidates)
+
   if (selected) {
     // Why: return the outer wrapper (omp) rather than a deeper recognized helper
     // in the same process lineage.
     return resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, candidates)
   }
+
   return null
 }
 
@@ -261,6 +287,7 @@ export async function getForegroundProcessName(
 ): Promise<string | null> {
   if (fallbackProcess) {
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
+
     if (fallbackRecognition) {
       // Why: node-pty can report OMP's wrapped Pi; enrich only that ambiguous
       // fallback so authoritative OMP reads keep the zero-subprocess fast path.
@@ -271,39 +298,48 @@ export async function getForegroundProcessName(
             fallbackRecognition.processName
           )
         }
+
         return (
           (await getRecognizedForegroundDescendant(pid, fallbackProcess)) ??
           fallbackRecognition.processName
         )
       }
+
       return fallbackRecognition.processName
     }
+
     if (process.platform === 'win32') {
       if (!shouldInspectWindowsAgentForeground(fallbackProcess)) {
         return fallbackProcess
       }
+
       return (
         (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
       )
     }
   }
+
   // Why: an unrecognized name is not proof of a non-agent foreground -- macOS p_comm truncates
   // to the executable basename, which for the native Claude install is its version directory
   // (`2.1.258`). The TTL-cached table read resolves the real command line; a foreground that
   // is genuinely not an agent still answers with its own name below.
   const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess)
+
   if (recognized) {
     return recognized
   }
+
   if (fallbackProcess) {
     return fallbackProcess
   }
+
   try {
     const { stdout } = await execFile('ps', ['-o', 'comm=', '-p', String(pid)], {
       encoding: 'utf-8',
       timeout: 3000,
       maxBuffer: PS_MAX_BUFFER_BYTES
     })
+
     return stdout.trim() || null
   } catch {
     return null
@@ -316,17 +352,22 @@ export function listShellProfiles(): { name: string; path: string }[] {
 
   try {
     const content = readFileSync('/etc/shells', 'utf-8')
+
     for (const line of content.split('\n')) {
       const trimmed = line.trim()
+
       if (!trimmed || trimmed.startsWith('#')) {
         continue
       }
+
       if (!existsSync(trimmed)) {
         continue
       }
+
       if (seen.has(trimmed)) {
         continue
       }
+
       seen.add(trimmed)
 
       const name = trimmed.split('/').pop() || trimmed

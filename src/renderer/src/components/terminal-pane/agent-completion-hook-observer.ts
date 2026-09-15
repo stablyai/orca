@@ -74,22 +74,28 @@ export function createAgentCompletionHookObserver({
 }: HookObserverOptions) {
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     recordPaneActivity()
+
     if (options.shouldSuppressHookCompletion?.(payload)) {
       if (isAttentionHookState(payload.state)) {
         clearPendingHookDone()
         clearPendingCodexAttention()
       }
+
       return
     }
+
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }
+
     if (payload.state === 'working') {
       const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
         ? payload.turnCompletedAt
         : undefined
+
       if (turnCompletedAt !== undefined) {
         const alreadyHandled = openStampedTail(turnCompletedAt)
+
         if (
           state.workingStatusObserved &&
           !alreadyHandled &&
@@ -101,12 +107,14 @@ export function createAgentCompletionHookObserver({
             stateStartedAt: turnCompletedAt,
             turnCompletedAt
           }
+
           const identity: LastCompletionIdentity = {
             source: 'hook',
             identity: completionIdentityFor('done', payload.agentType, turnCompletedAt),
             agentIdentity: hookCompletionAgentIdentity(payload),
             lastTurnCompletedAtNotified: turnCompletedAt
           }
+
           if (
             dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
               notifyWithoutLifecycle: true,
@@ -119,9 +127,12 @@ export function createAgentCompletionHookObserver({
         } else if (!state.workingStatusObserved) {
           rememberHandledTurnCompletedAt(turnCompletedAt)
         }
+
         options.dispatchHookLifecycle?.(payload)
+
         return
       }
+
       clearOriginStampedTail()
       recordWorkingBoundary(payload.stateStartedAt)
       clearPendingHookDone()
@@ -133,24 +144,32 @@ export function createAgentCompletionHookObserver({
       state.currentTurn += 1
       dropPendingTitle()
       options.dispatchHookLifecycle?.(payload)
+
       return
     }
+
     if (isAttentionHookState(payload.state)) {
       clearPendingHookDone()
       dispatchAttention(payload)
+
       return
     }
+
     if (payload.state === 'done' && payload.sessionBoundary === true) {
       return
     }
+
     if (payload.state !== 'done') {
       return
     }
+
     clearPendingCodexAttention()
     const identity = hookCompletionIdentity(payload)
+
     const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
       : undefined
+
     if (
       turnCompletedAt === undefined &&
       consumePendingStampedTailForAgent(hookCompletionAgentIdentity(payload), identity)
@@ -159,8 +178,10 @@ export function createAgentCompletionHookObserver({
         ? { source: 'hook', identity, agentIdentity: hookCompletionAgentIdentity(payload) }
         : null
       options.dispatchHookLifecycle?.(payload)
+
       return
     }
+
     if (
       turnCompletedAt !== undefined &&
       (turnCompletedAtAlreadyHandled(turnCompletedAt) ||
@@ -169,8 +190,10 @@ export function createAgentCompletionHookObserver({
     ) {
       consumeStampedTailForCurrentCoordinator(turnCompletedAt)
       options.dispatchHookLifecycle?.(payload)
+
       return
     }
+
     if (
       identity &&
       state.lastCompletionIdentity?.source === 'hook' &&
@@ -179,8 +202,10 @@ export function createAgentCompletionHookObserver({
       if (state.pendingHookDoneTimer !== null) {
         scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
       }
+
       return
     }
+
     if (
       !state.workingStatusObserved &&
       state.lastCompletionSource === 'hook' &&
@@ -189,13 +214,17 @@ export function createAgentCompletionHookObserver({
     ) {
       state.currentTurn += 1
     }
+
     state.lastCompletionIdentity = identity
       ? { source: 'hook', identity, agentIdentity: hookCompletionAgentIdentity(payload) }
       : null
+
     if (doneShouldUseQuietWindow(payload)) {
       scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
+
       return
     }
+
     dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
       agentStatus: payload,
       ...(state.lastCompletionIdentity ? { completionIdentity: state.lastCompletionIdentity } : {})
@@ -206,9 +235,11 @@ export function createAgentCompletionHookObserver({
     observeHookStatus,
     seedHookStatus: (payload: AgentCompletionStatusSnapshot) => {
       const { turnCompletedAt, ...unstampedPayload } = payload
+
       if (isFiniteTurnCompletedAt(turnCompletedAt)) {
         rememberHandledTurnCompletedAt(turnCompletedAt)
       }
+
       observeHookStatus(unstampedPayload)
     }
   }

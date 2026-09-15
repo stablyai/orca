@@ -18,6 +18,7 @@ function paragraph(text: string): JSONContent {
 
 function expectReopens(editor: Editor) {
   const reopened = createEditor(editor.getMarkdown())
+
   try {
     expect(reopened.getJSON()).toEqual(editor.getJSON())
   } finally {
@@ -33,6 +34,7 @@ describe('literal Markdown serialization', () => {
         type: 'doc',
         content: [paragraph('[literal][ref] and [ref]'), paragraph(definition)]
       })
+
       try {
         expectReopens(editor)
       } finally {
@@ -46,7 +48,9 @@ describe('literal Markdown serialization', () => {
       type: 'doc',
       content: [paragraph('[literal]'), paragraph('[[]]')]
     })
+
     const parse = vi.spyOn(editor.markdown!, 'parse')
+
     try {
       expect(editor.getMarkdown()).toBe('[literal]\n\n[[]]')
       expect(parse).toHaveBeenCalledTimes(2)
@@ -66,9 +70,11 @@ describe('literal Markdown serialization', () => {
   it('keeps upstream escaping when the parser cannot validate a block', () => {
     const editor = createEditor('[[]]')
     const upstream = editor.markdown!.serialize(editor.getJSON())
+
     const parse = vi.spyOn(editor.markdown!, 'parse').mockImplementation(() => {
       throw new Error('custom parser failure')
     })
+
     try {
       expect(editor.getMarkdown()).toBe(upstream)
     } finally {
@@ -92,6 +98,7 @@ describe('literal Markdown serialization', () => {
         }
       ]
     })
+
     try {
       expectReopens(editor)
     } finally {

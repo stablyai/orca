@@ -34,42 +34,56 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           : stream.initialSnapshotReceived
             ? 'recovery'
             : 'initial'
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
       if (stream.snapshotOverflowed) {
         return
       }
+
       stream.snapshotBytes += frame.payload.byteLength
+
       if (stream.snapshotBytes > MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES) {
         stream.snapshotOverflowed = true
+
         if (stream.snapshotTarget === 'initial') {
           stream.callbacks.onError?.(REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE)
         }
+
         return
       }
+
       stream.snapshotChunks.push(frame.payload)
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
       const data = stream.snapshotOverflowed
         ? null
         : decodeTerminalStreamText(concatBytes(stream.snapshotChunks))
+
       const target = stream.snapshotTarget
       const info = stream.snapshotInfo
       const pendingRequest = stream.pendingSnapshotRequest
+
       if (target === 'initial' && info?.truncated === true) {
         recordE2eRemoteTerminalInitialSnapshotTruncated()
       }
+
       // Initial truncation drops retained history, but the latest-screen image remains authoritative.
       const snapshotApplied =
         !stream.snapshotOverflowed && (target === 'initial' || info?.truncated !== true)
+
       const matchesPendingRequest =
         target === 'request' &&
         pendingRequest &&
         (typeof info?.requestId === 'number'
           ? info.requestId === pendingRequest.requestId
           : stream.initialSnapshotReceived)
+
       if (snapshotApplied) {
         if (matchesPendingRequest) {
           pendingRequest.resolve({
@@ -122,7 +136,9 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
         })
         clearPendingSnapshotRequest(stream)
       }
+
       clearSnapshot(stream)
+
       if (target === 'initial') {
         clearResyncTimer(stream)
         stream.expectedSeq = typeof info?.seq === 'number' ? info.seq : undefined
@@ -153,22 +169,30 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
       } else {
         this.sendDeferredResyncSnapshot(stream)
       }
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Error) {
       const message = decodeTerminalStreamText(frame.payload)
+
       if (message === TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR) {
         stream.capacityRejected = true
+
         return
       }
+
       clearSnapshot(stream)
       const pendingSnapshotRequest = stream.pendingSnapshotRequest
+
       if (pendingSnapshotRequest) {
         clearPendingSnapshotRequest(stream)
         pendingSnapshotRequest.reject(new Error(message))
         this.sendDeferredResyncSnapshot(stream)
+
         return
       }
+
       // Why: a failed resync must re-open the live path or output stalls forever.
       clearResyncTimer(stream)
       stream.resyncInFlight = false

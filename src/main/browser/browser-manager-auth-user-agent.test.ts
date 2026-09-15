@@ -62,6 +62,7 @@ const {
   guestOpenDevToolsMock,
   webContentsFromIdMock
 } = browserMocks
+
 const makeViewportGuest = createViewportGuestFactory(browserMocks)
 
 describe('browserManager', () => {
@@ -77,9 +78,11 @@ describe('browserManager', () => {
   it('presents the Firefox UA on Google auth hosts and restores the base UA off them', async () => {
     let currentUa = guestBaseUserAgent
     const sendCommand = vi.fn().mockResolvedValue(undefined)
+
     const setUserAgent = vi.fn((ua: string) => {
       currentUa = ua
     })
+
     const guest = {
       id: 408,
       isDestroyed: vi.fn(() => false),
@@ -95,6 +98,7 @@ describe('browserManager', () => {
       debugger: { isAttached: vi.fn(() => true), sendCommand },
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -103,12 +107,15 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     const willRedirect = guestOnMock.mock.calls.find(
       ([event]) => event === 'will-redirect'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     setUserAgent.mockClear()
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
@@ -118,9 +125,11 @@ describe('browserManager', () => {
     // Firefox WebContents UA installed by the direct navigation.
     sendCommand.mockClear()
     willRedirect(null, 'https://myaccount.google.com/', false, true)
+
     const uaOverrideIndex = sendCommand.mock.calls.findIndex(
       ([method]) => method === 'Emulation.setUserAgentOverride'
     )
+
     await expect(sendCommand.mock.results[uaOverrideIndex]?.value).resolves.toBeUndefined()
     expect(sendCommand.mock.calls[uaOverrideIndex]).toEqual([
       'Emulation.setUserAgentOverride',
@@ -135,6 +144,7 @@ describe('browserManager', () => {
 
   it('leaves the UA untouched on Google auth hosts for native-UA profiles', () => {
     const setUserAgent = vi.fn()
+
     const guest = {
       id: 409,
       isDestroyed: vi.fn(() => false),
@@ -149,6 +159,7 @@ describe('browserManager', () => {
       setUserAgent,
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -158,9 +169,11 @@ describe('browserManager', () => {
       rendererWebContentsId,
       userAgentMode: 'native'
     })
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     setUserAgent.mockClear()
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
@@ -171,6 +184,7 @@ describe('browserManager', () => {
     const nativeSession = { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     setBrowserSessionUserAgentMode(nativeSession as never, 'native')
     const setUserAgent = vi.fn()
+
     const guest = {
       id: 417,
       isDestroyed: vi.fn(() => false),
@@ -187,6 +201,7 @@ describe('browserManager', () => {
     }
 
     browserManager.attachGuestPolicies(guest as never)
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -214,6 +229,7 @@ describe('browserManager', () => {
       setUserAgent: vi.fn(),
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     webContentsFromIdMock.mockReturnValue(ownerGuest)
     browserManager.attachGuestPolicies(ownerGuest as never)
     browserManager.registerGuest({
@@ -226,6 +242,7 @@ describe('browserManager', () => {
     // The popup carries its own listeners so its handler is unambiguous.
     const popupOn = vi.fn()
     const popupSetUserAgent = vi.fn()
+
     const popupGuest = {
       id: 416,
       isDestroyed: vi.fn(() => false),
@@ -240,6 +257,7 @@ describe('browserManager', () => {
       setUserAgent: popupSetUserAgent,
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     browserManager.attachGuestPolicies(popupGuest as never, {
       browserTabId: 'browser-native-popup-owner',
       rootGuestWebContentsId: ownerGuest.id
@@ -248,6 +266,7 @@ describe('browserManager', () => {
     const popupDidStartNavigation = popupOn.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     expect(popupDidStartNavigation).toBeDefined()
 
     popupDidStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
@@ -262,20 +281,27 @@ describe('browserManager', () => {
     const debuggerHandlers = new Map<string, () => void>()
     let holdNextUserAgentOverride = false
     let releaseHeldUserAgentOverride = (): void => {}
+
     let rejectNextUserAgentOverride = false
+
     const sendCommand = vi.fn((method: string) => {
       if (method === 'Emulation.setUserAgentOverride' && holdNextUserAgentOverride) {
         holdNextUserAgentOverride = false
+
         return new Promise<void>((resolve) => {
           releaseHeldUserAgentOverride = resolve
         })
       }
+
       if (method === 'Emulation.setUserAgentOverride' && rejectNextUserAgentOverride) {
         rejectNextUserAgentOverride = false
+
         return Promise.reject(new Error('debugger detached'))
       }
+
       return Promise.resolve(undefined)
     })
+
     const guest = {
       id: 418,
       isDestroyed: vi.fn(() => false),
@@ -296,6 +322,7 @@ describe('browserManager', () => {
       },
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -304,9 +331,11 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+
     const willRedirect = guestOnMock.mock.calls.find(
       ([event]) => event === 'will-redirect'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     sendCommand.mockClear()
 
     rejectNextUserAgentOverride = true
@@ -349,9 +378,11 @@ describe('browserManager', () => {
     // identity. Leaving the auth host must read the override, not that stale value, or the guest
     // keeps presenting Firefox on every later host.
     sendCommand.mockClear()
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     rejectNextUserAgentOverride = true
     didStartNavigation(null, 'https://example.com/', false, true)
     await expect(sendCommand.mock.results.at(-1)?.value).rejects.toThrow('debugger detached')
@@ -432,6 +463,7 @@ describe('browserManager', () => {
       debugger: { isAttached: vi.fn(() => false), sendCommand: vi.fn() },
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -440,6 +472,7 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+
     const willRedirect = guestOnMock.mock.calls.find(
       ([event]) => event === 'will-redirect'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -476,6 +509,7 @@ describe('browserManager', () => {
       debugger: { isAttached: vi.fn(() => true), sendCommand: vi.fn(async () => undefined) },
       session: { getUserAgent: vi.fn(() => guestBaseUserAgent) }
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -484,6 +518,7 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -522,6 +557,7 @@ describe('browserManager', () => {
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     const willRedirect = guestOnMock.mock.calls.find(
       ([event]) => event === 'will-redirect'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -541,7 +577,9 @@ describe('browserManager', () => {
     const uaWrites = debuggerSendCommand.mock.calls.filter(
       ([method]) => method === 'Emulation.setUserAgentOverride'
     )
+
     expect(uaWrites.length).toBeGreaterThan(0)
+
     for (const [, params] of uaWrites) {
       expect((params as { userAgent: string }).userAgent).toBe(GUEST_CLEAN_UA)
     }

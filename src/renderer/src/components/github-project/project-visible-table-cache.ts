@@ -28,12 +28,15 @@ export function getNextVisibleProjectTableCache(input: {
     input.currentCacheKey,
     input.selectedRepoFingerprint
   )
+
   if (!visibleCacheKey || !input.sourceTable) {
     return null
   }
+
   if (input.slugIndexReady && input.filteredTable) {
     return { cacheKey: visibleCacheKey, table: input.filteredTable }
   }
+
   return input.previous
 }
 
@@ -47,9 +50,11 @@ export function getVisibleProjectTable(input: {
   if (input.slugIndexReady || !input.currentCacheKey) {
     return input.filteredTable
   }
+
   const visibleCacheKey = getVisibleProjectTableCacheKey(
     input.currentCacheKey,
     input.selectedRepoFingerprint
   )
+
   return input.cachedTable?.cacheKey === visibleCacheKey ? input.cachedTable.table : null
 }

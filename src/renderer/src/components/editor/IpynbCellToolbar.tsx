@@ -86,6 +86,7 @@ export function IpynbCellToolbar({
 }): React.JSX.Element {
   const Icon = cell.kind === 'code' ? Play : cell.kind === 'markdown' ? FileCode2 : Braces
   const executionLabel = cell.kind === 'code' ? `In [${cell.executionCount ?? ' '}]:` : cell.kind
+
   return (
     <div className="flex items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
       <Icon className="size-3.5" />

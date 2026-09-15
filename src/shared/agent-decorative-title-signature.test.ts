@@ -10,6 +10,7 @@ afterEach(() => {
 })
 
 const BRAILLE_SPINNER_FRAME_A = String.fromCharCode(0x280b)
+
 const BRAILLE_SPINNER_FRAME_B = String.fromCharCode(0x2819)
 
 describe('agent decorative title signatures', () => {
@@ -42,6 +43,7 @@ describe('agent decorative title signatures', () => {
 
   it('does not normalize oversized title text on the hot path', () => {
     const replace = vi.spyOn(String.prototype, 'replace')
+
     const title = `${BRAILLE_SPINNER_FRAME_A} Codex is thinking ${'x'.repeat(
       DECORATIVE_AGENT_TITLE_SIGNATURE_SOURCE_SCAN_LIMIT + 1
     )}`

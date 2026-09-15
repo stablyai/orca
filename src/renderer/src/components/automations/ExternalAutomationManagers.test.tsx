@@ -35,6 +35,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 function makeJob(overrides: Partial<ExternalAutomationJob> = {}): ExternalAutomationJob {
@@ -64,6 +65,7 @@ function makeManager(
   overrides: Partial<ExternalAutomationManager> = {}
 ): ExternalAutomationManager {
   const provider: ExternalAutomationProvider = overrides.provider ?? 'hermes'
+
   return {
     id: 'manager-1',
     provider,
@@ -109,6 +111,7 @@ type OnActionMock = ReturnType<
     ) => void
   >
 >
+
 type OnEditMock = ReturnType<
   typeof vi.fn<
     (
@@ -142,14 +145,17 @@ function renderManagers(
       />
     )
   })
+
   return { onAction, onEdit }
 }
 
 function getSwitch(index = 0): HTMLButtonElement {
   const node = container.querySelectorAll('button[role="switch"]')[index]
+
   if (!(node instanceof HTMLButtonElement)) {
     throw new Error(`expected a role="switch" control at ${index}`)
   }
+
   return node
 }
 

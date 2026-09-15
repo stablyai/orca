@@ -5,9 +5,13 @@ import {
 } from './codex-detached-pane-restart'
 
 let executorInstalled = false
+
 let executorGeneration = 0
+
 let sweepQueued = false
+
 let sweepRunning = false
+
 let sweepRequestedAfterRun = false
 
 export function hasAddedPendingCodexPaneRestart(
@@ -17,6 +21,7 @@ export function hasAddedPendingCodexPaneRestart(
   if (current === previous) {
     return false
   }
+
   return Object.keys(current).some((ptyId) => !previous[ptyId])
 }
 
@@ -24,6 +29,7 @@ export function hasAddedPendingCodexPaneRestart(
 export function installCodexDetachedPaneRestartExecutor(): () => void {
   executorInstalled = true
   const generation = ++executorGeneration
+
   const unsubscribe = useAppStore.subscribe((state, previousState) => {
     if (
       hasAddedPendingCodexPaneRestart(
@@ -34,9 +40,12 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       scheduleClaimSweep()
     }
   })
+
   scheduleClaimSweep()
+
   return () => {
     unsubscribe()
+
     if (executorGeneration === generation) {
       executorInstalled = false
       executorGeneration += 1
@@ -59,13 +68,17 @@ function scheduleClaimSweep(): void {
   if (!executorInstalled) {
     return
   }
+
   if (sweepRunning) {
     sweepRequestedAfterRun = true
+
     return
   }
+
   if (sweepQueued) {
     return
   }
+
   sweepQueued = true
   const generation = executorGeneration
   // Exact mounted-owner checks fence the claim; a microtask only exits the store write.
@@ -73,11 +86,15 @@ function scheduleClaimSweep(): void {
     if (!executorInstalled || executorGeneration !== generation) {
       return
     }
+
     sweepQueued = false
+
     if (sweepRunning) {
       sweepRequestedAfterRun = true
+
       return
     }
+
     sweepRunning = true
     void sweepUnclaimedCodexPaneRestarts()
       .catch((err) => {
@@ -85,6 +102,7 @@ function scheduleClaimSweep(): void {
       })
       .finally(() => {
         sweepRunning = false
+
         if (executorInstalled && sweepRequestedAfterRun) {
           sweepRequestedAfterRun = false
           scheduleClaimSweep()

@@ -28,18 +28,21 @@ const EMPTY_SNAPSHOT: PairedMobileDevicesSnapshot = {
 }
 
 let snapshot = EMPTY_SNAPSHOT
+
 // Why: Sidebar, Mobile page, and Settings can mount together; share one
 // device-list request so slow IPC does not fan out across surfaces.
 let activeRequest: {
   id: number
   promise: Promise<readonly PairedMobileDevice[]>
 } | null = null
+
 let latestRequestId = 0
 
 const listeners = new Set<() => void>()
 
 function publish(nextSnapshot: PairedMobileDevicesSnapshot): void {
   snapshot = nextSnapshot
+
   for (const listener of listeners) {
     listener()
   }
@@ -47,6 +50,7 @@ function publish(nextSnapshot: PairedMobileDevicesSnapshot): void {
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
+
   return () => {
     listeners.delete(listener)
   }
@@ -97,21 +101,25 @@ export function refreshPairedMobileDevices({
     .listDevices()
     .then((result) => {
       const devices = [...result.devices]
+
       if (requestId !== latestRequestId) {
         return supersededResult()
       }
+
       publish({
         devices,
         loaded: true,
         loading: false,
         error: false
       })
+
       return devices
     })
     .catch((error: unknown) => {
       if (requestId !== latestRequestId) {
         return supersededResult()
       }
+
       // Why: keep loaded:true so the loaded-gated mount effect can't refire into a
       // retry loop; flag error so consumers can distinguish a failed load from "no
       // devices" and recover.
@@ -130,6 +138,7 @@ export function refreshPairedMobileDevices({
     })
 
   activeRequest = { id: requestId, promise }
+
   return promise
 }
 
@@ -150,9 +159,12 @@ function addRecoveryConsumer(): () => void {
     window.addEventListener('focus', recoverPairedMobileDevicesOnReconnect)
     window.addEventListener('online', recoverPairedMobileDevicesOnReconnect)
   }
+
   enabledConsumerCount += 1
+
   return () => {
     enabledConsumerCount -= 1
+
     if (enabledConsumerCount === 0) {
       window.removeEventListener('focus', recoverPairedMobileDevicesOnReconnect)
       window.removeEventListener('online', recoverPairedMobileDevicesOnReconnect)
@@ -175,6 +187,7 @@ export function usePairedMobileDevices({
   refresh: typeof refreshPairedMobileDevices
 } {
   const currentSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+
   const refresh = useCallback(
     (options?: RefreshPairedMobileDevicesOptions) => refreshPairedMobileDevices(options),
     []
@@ -184,6 +197,7 @@ export function usePairedMobileDevices({
     if (!enabled || !refreshOnMount || currentSnapshot.loaded || currentSnapshot.loading) {
       return
     }
+
     void refreshPairedMobileDevices().catch(() => {
       // Callers that need visible error handling perform explicit refreshes.
     })
@@ -197,6 +211,7 @@ export function usePairedMobileDevices({
     if (!enabled) {
       return
     }
+
     return addRecoveryConsumer()
   }, [enabled])
 
@@ -210,10 +225,12 @@ export function usePairedMobileDevices({
 export function _resetPairedMobileDevicesCacheForTests(): void {
   latestRequestId += 1
   activeRequest = null
+
   if (enabledConsumerCount > 0) {
     window.removeEventListener('focus', recoverPairedMobileDevicesOnReconnect)
     window.removeEventListener('online', recoverPairedMobileDevicesOnReconnect)
   }
+
   enabledConsumerCount = 0
   publish(EMPTY_SNAPSHOT)
 }

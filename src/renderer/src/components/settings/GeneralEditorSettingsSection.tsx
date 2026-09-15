@@ -47,11 +47,13 @@ export function GeneralEditorSettingsSection({
     autoSaveDelayDraftState,
     settings.editorAutoSaveDelayMs
   )
+
   if (resolvedAutoSaveDelayDraftState !== autoSaveDelayDraftState) {
     // Why: Settings can be updated outside this pane; reconcile drafts before
     // paint so the visible input never lags behind the persisted value.
     setAutoSaveDelayDraftState(resolvedAutoSaveDelayDraftState)
   }
+
   const autoSaveDelayDraft = resolvedAutoSaveDelayDraftState.draft
 
   const updateAutoSaveDelayDraft = (draft: string): void => {
@@ -62,14 +64,18 @@ export function GeneralEditorSettingsSection({
 
   const commitAutoSaveDelay = (): void => {
     const trimmed = autoSaveDelayDraft.trim()
+
     if (trimmed === '') {
       setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs))
+
       return
     }
 
     const value = Number(trimmed)
+
     if (!Number.isFinite(value)) {
       setAutoSaveDelayDraftState(createAutoSaveDelayDraftState(settings.editorAutoSaveDelayMs))
+
       return
     }
 
@@ -78,6 +84,7 @@ export function GeneralEditorSettingsSection({
       MIN_EDITOR_AUTO_SAVE_DELAY_MS,
       MAX_EDITOR_AUTO_SAVE_DELAY_MS
     )
+
     updateSettings({ editorAutoSaveDelayMs: next })
     setAutoSaveDelayDraftState((current) =>
       updateAutoSaveDelayDraftState(current, settings.editorAutoSaveDelayMs, String(next))

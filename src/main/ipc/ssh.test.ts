@@ -2,24 +2,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createSshIpcMocks } = await import('./ssh-ipc-module-mocks')
+
   return createSshIpcMocks()
 })
 
 vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
+
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
+
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
+
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
+
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+
 vi.mock('../providers/ssh-pty-provider', () => mocks.sshPtyProvider)
+
 vi.mock('../providers/ssh-filesystem-provider', () => mocks.sshFilesystemProvider)
+
 vi.mock('./pty', () => mocks.pty)
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => mocks.sshFilesystemDispatch)
+
 vi.mock('../providers/ssh-git-provider', () => mocks.sshGitProvider)
+
 vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
+
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-error'
@@ -38,6 +54,7 @@ const {
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
+
   const {
     relayBuildId,
     handlers,
@@ -66,6 +83,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue({})
     mockConnectionManager.getState.mockReturnValue({
@@ -88,6 +106,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue({})
     mockConnectionManager.getState.mockReturnValue({
@@ -104,6 +123,7 @@ describe('SSH IPC handlers', () => {
         channel === 'ssh:state-changed' &&
         (payload as { state: SshConnectionState }).state.status === 'connected'
     )
+
     expect(connectedIndex).toBeGreaterThanOrEqual(0)
     expect(mockRegisterSshGitProvider.mock.invocationCallOrder[0]).toBeLessThan(
       mockWindow.webContents.send.mock.invocationCallOrder[connectedIndex]
@@ -127,6 +147,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const hostPlatform = {
       relayPlatform: 'win32-x64',
       os: 'win32',
@@ -136,6 +157,7 @@ describe('SSH IPC handlers', () => {
       pathSeparator: '\\',
       pathDelimiter: ';'
     }
+
     mockDeployAndLaunchRelay.mockResolvedValueOnce({
       transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
       serverBuildId: relayBuildId,
@@ -176,6 +198,7 @@ describe('SSH IPC handlers', () => {
 
   it('surfaces relay channel loss while the SSH connection remains alive', async () => {
     vi.useFakeTimers()
+
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -183,6 +206,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -196,6 +220,7 @@ describe('SSH IPC handlers', () => {
 
     try {
       await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
       const onDispose = mockMux.onDispose.mock.calls[0]?.[0] as
         | ((reason: 'shutdown' | 'connection_lost') => void)
         | undefined
@@ -205,6 +230,7 @@ describe('SSH IPC handlers', () => {
       const reconnectingState = handlers.get('ssh:getState')!(null, {
         targetId: 'ssh-1'
       }) as SshConnectionState
+
       expect(reconnectingState).toEqual({
         targetId: 'ssh-1',
         status: 'reconnecting',
@@ -223,6 +249,7 @@ describe('SSH IPC handlers', () => {
       const connectedState = handlers.get('ssh:getState')!(null, {
         targetId: 'ssh-1'
       }) as SshConnectionState
+
       expect(connectedState).toEqual({
         targetId: 'ssh-1',
         status: 'connected',
@@ -255,6 +282,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -268,6 +296,7 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
     const stagedGeneration = 1
+
     const callbacks = mockConnectionManager.callbacksRef.current as {
       onStateChange: (targetId: string, state: SshConnectionState) => void
     }
@@ -319,6 +348,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     // Why: mirror the real SshConnection — connect() drives the raw transport to
@@ -327,9 +357,11 @@ describe('SSH IPC handlers', () => {
     // matching the real ssh2 'ready' event (which fires async, post connect() call).
     mockConnectionManager.connect.mockImplementation(async () => {
       await Promise.resolve()
+
       const callbacks = mockConnectionManager.callbacksRef.current as {
         onStateChange: (targetId: string, state: SshConnectionState) => void
       }
+
       callbacks.onStateChange('ssh-1', {
         targetId: 'ssh-1',
         status: 'connecting',
@@ -343,6 +375,7 @@ describe('SSH IPC handlers', () => {
         reconnectAttempt: 0,
         supportsFolderDownload: true
       })
+
       return conn
     })
     mockConnectionManager.getConnection.mockReturnValue(conn)
@@ -372,6 +405,7 @@ describe('SSH IPC handlers', () => {
         channel === 'ssh:state-changed' &&
         (payload as { state?: SshConnectionState }).state?.status === 'connected'
     )
+
     expect(connectedBroadcasts).toEqual([])
   })
 
@@ -384,6 +418,7 @@ describe('SSH IPC handlers', () => {
   it('does not hold a stray connected as deploying-relay when no connect is in flight', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
+
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -391,6 +426,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -420,6 +456,7 @@ describe('SSH IPC handlers', () => {
       const callbacks = mockConnectionManager.callbacksRef.current as {
         onStateChange: (targetId: string, state: SshConnectionState) => void
       }
+
       mockWindow.webContents.send.mockClear()
       // A transport blip on the still-live SSH socket auto-recovers to 'connected' with
       // no ssh:connect in flight (connectInFlight is empty).
@@ -440,13 +477,16 @@ describe('SSH IPC handlers', () => {
       const stateChanges = mockWindow.webContents.send.mock.calls.filter(
         ([channel]) => channel === 'ssh:state-changed'
       )
+
       const lastStateChange = stateChanges.at(-1)
       expect(lastStateChange).toBeDefined()
       expect((lastStateChange![1] as { state: SshConnectionState }).state.status).toBe('connected')
+
       const heldAsDeploying = stateChanges.some(
         ([, payload]) =>
           (payload as { state?: SshConnectionState }).state?.status === 'deploying-relay'
       )
+
       expect(heldAsDeploying).toBe(false)
     } finally {
       vi.useRealTimers()
@@ -455,6 +495,7 @@ describe('SSH IPC handlers', () => {
 
   it('rebuilds instead of reusing a ready session while relay loss is pending', async () => {
     vi.useFakeTimers()
+
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -462,6 +503,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -475,6 +517,7 @@ describe('SSH IPC handlers', () => {
 
     try {
       await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
       const onDispose = mockMux.onDispose.mock.calls[0]?.[0] as
         | ((reason: 'shutdown' | 'connection_lost') => void)
         | undefined
@@ -520,6 +563,7 @@ describe('SSH IPC handlers', () => {
   it('keeps counting slow unstable relay reconnects until manual reconnect is required', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
+
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -527,6 +571,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -578,16 +623,20 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const transportState = (status: SshConnectionStatus): SshConnectionState => ({
       targetId: 'ssh-1',
       status,
       error: null,
       reconnectAttempt: 0
     })
+
     const setTransportStatus = (status: SshConnectionStatus): void => {
       mockConnectionManager.getState.mockReturnValue(transportState(status))
     }
+
     const maxRelayDelayMs = relayReconnectDelaysMs.at(-1)!
+
     const connectWithLiveTransport = async (): Promise<void> => {
       mockSshStore.getTarget.mockReturnValue(relayLostTarget)
       mockConnectionManager.connect.mockResolvedValue({})
@@ -600,6 +649,7 @@ describe('SSH IPC handlers', () => {
     it('does not consume attempts or publish the manual-reconnect banner', async () => {
       vi.useFakeTimers()
       vi.setSystemTime(0)
+
       try {
         await connectWithLiveTransport()
         setTransportStatus('reconnecting')
@@ -633,6 +683,7 @@ describe('SSH IPC handlers', () => {
     it('stops retrying once the transport reaches a terminal state', async () => {
       vi.useFakeTimers()
       vi.setSystemTime(0)
+
       try {
         await connectWithLiveTransport()
         setTransportStatus('reconnecting')
@@ -654,6 +705,7 @@ describe('SSH IPC handlers', () => {
     it('resets the relay budget when the connection disappears before retry', async () => {
       vi.useFakeTimers()
       vi.setSystemTime(0)
+
       try {
         await connectWithLiveTransport()
         getLatestRelayDisposeCallback()('connection_lost')
@@ -674,10 +726,12 @@ describe('SSH IPC handlers', () => {
     it('still reaches the manual-reconnect banner when the transport is healthy', async () => {
       vi.useFakeTimers()
       vi.setSystemTime(0)
+
       try {
         await connectWithLiveTransport()
         mockDeployAndLaunchRelay.mockRejectedValue(new Error('relay refused'))
         getLatestRelayDisposeCallback()('connection_lost')
+
         for (const delayMs of relayReconnectDelaysMs) {
           await vi.advanceTimersByTimeAsync(delayMs)
         }
@@ -693,6 +747,7 @@ describe('SSH IPC handlers', () => {
     it('restores the full relay budget once the transport reconnects', async () => {
       vi.useFakeTimers()
       vi.setSystemTime(0)
+
       try {
         await connectWithLiveTransport()
         mockDeployAndLaunchRelay.mockRejectedValue(new Error('relay refused'))
@@ -702,6 +757,7 @@ describe('SSH IPC handlers', () => {
         const callbacks = mockConnectionManager.callbacksRef.current as {
           onStateChange: (targetId: string, state: SshConnectionState) => void
         }
+
         callbacks.onStateChange('ssh-1', transportState('reconnecting'))
         callbacks.onStateChange('ssh-1', transportState('connected'))
         await vi.advanceTimersByTimeAsync(0)
@@ -719,6 +775,7 @@ describe('SSH IPC handlers', () => {
   it('reuses a fast relay reconnect after the post-ready stabilization window', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
+
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -726,6 +783,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)

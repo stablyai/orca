@@ -19,6 +19,7 @@ const testState = { dir: '' }
 
 const fsCalls = vi.hoisted(() => {
   const blocker = new Int32Array(new SharedArrayBuffer(4))
+
   const calls = {
     recording: false,
     dirPrefix: '',
@@ -49,7 +50,9 @@ const fsCalls = vi.hoisted(() => {
       if (!calls.inScope(target)) {
         return
       }
+
       calls.syncCalls.push(`${fn}:${target}`)
+
       if (calls.stallMs > 0) {
         // Atomics.wait blocks the thread the way an uninterruptible syscall does.
         Atomics.wait(blocker, 0, 0, calls.stallMs)
@@ -59,48 +62,63 @@ const fsCalls = vi.hoisted(() => {
       if (!calls.inScope(target)) {
         return null
       }
+
       calls.asyncCalls.push(`${fn}:${target}`)
       calls.beforeAsync?.(fn, target)
+
       return calls.failAsync?.(fn, target) ?? null
     }
   }
+
   return calls
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const patched: Record<string, unknown> = { ...actual }
+
   for (const name of Object.keys(actual)) {
     const original = (actual as unknown as Record<string, unknown>)[name]
+
     if (!name.endsWith('Sync') || typeof original !== 'function') {
       continue
     }
+
     const fn = original as (...args: unknown[]) => unknown
+
     const wrapper = (...args: unknown[]): unknown => {
       fsCalls.recordSync(name, args[0])
+
       return fn(...args)
     }
+
     patched[name] = Object.assign(wrapper, fn)
   }
+
   return { ...patched, default: patched }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   const patched: Record<string, unknown> = { ...actual }
+
   for (const name of ['stat', 'access', 'rename', 'copyFile', 'rm', 'mkdir', 'open']) {
     const fn = (actual as unknown as Record<string, (...args: unknown[]) => unknown>)[name]
     patched[name] = async (...args: unknown[]): Promise<unknown> => {
       const failure = fsCalls.recordAsync(name, args[0])
+
       if (failure) {
         throw failure
       }
+
       if (typeof args[0] === 'string') {
         await fsCalls.waitAsync?.(name, args[0])
       }
+
       return fn(...args)
     }
   }
+
   return { ...patched, default: patched }
 })
 
@@ -126,8 +144,11 @@ vi.mock('electron', () => ({
 }))
 
 const BACKUP_COUNT = 5
+
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+
 const PAST_ROTATION_INTERVAL_MS = BACKUP_MIN_INTERVAL_MS * 2
+
 const SAVE_DEBOUNCE_MS = 1_000
 
 const ROTATION_INTERLEAVE_CASES = [
@@ -182,6 +203,7 @@ async function createStore(dir: string): Promise<TestStore> {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store() as unknown as TestStore
 }
 
@@ -191,9 +213,11 @@ function dataFile(dir: string): string {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -212,10 +236,13 @@ function delayNextDataFileRename(dir: string): ReturnType<typeof deferred> & {
     if (held || fn !== 'rename' || !target.startsWith(dataFile(dir))) {
       return null
     }
+
     held = true
     started.resolve()
+
     return release.promise
   }
+
   return { ...release, started: started.promise }
 }
 
@@ -228,11 +255,13 @@ function seedStaleBackup(dir: string): void {
 
 function ringSnapshot(dir: string): Record<string, string> {
   const snapshot: Record<string, string> = {}
+
   for (const name of readdirSync(dir).sort()) {
     if (name === 'orca-data.json' || name.startsWith('orca-data.json.bak.')) {
       snapshot[name] = readFileSync(join(dir, name), 'utf-8')
     }
   }
+
   return snapshot
 }
 
@@ -242,6 +271,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
   function makeDir(): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-async-write-'))
     dirs.push(dir)
+
     return dir
   }
 
@@ -255,6 +285,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
   afterEach(() => {
     fsCalls.recording = false
     vi.useRealTimers()
+
     while (dirs.length > 0) {
       rmSync(dirs.pop() as string, { recursive: true, force: true })
     }
@@ -267,6 +298,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
   ): Promise<void> {
     store.updateUI({ sidebarWidth })
     recordFsCalls(dir)
+
     try {
       vi.advanceTimersByTime(PAST_ROTATION_INTERVAL_MS)
       await store.waitForPendingWrite()
@@ -323,6 +355,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     let lastTick = Date.now()
     let worstGapMs = 0
+
     const heartbeat = setInterval(() => {
       const now = Date.now()
       worstGapMs = Math.max(worstGapMs, now - lastTick)
@@ -361,10 +394,12 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       if (flushed || fn !== 'stat' || !target.endsWith('.bak.0')) {
         return
       }
+
       flushed = true
       store.updateUI({ sidebarWidth: 362 })
       store.flushOrThrow()
     }
+
     try {
       vi.advanceTimersByTime(PAST_ROTATION_INTERVAL_MS)
       await store.waitForPendingWrite()
@@ -481,15 +516,20 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       ) {
         heldOpen = true
         openStarted.resolve()
+
         return openRelease.promise
       }
+
       if (!heldRename && fn === 'rename' && target.startsWith(dataFile(dir))) {
         heldRename = true
         renameStarted.resolve()
+
         return renameRelease.promise
       }
+
       return null
     }
+
     recordFsCalls(dir)
 
     store.updateUI({ sidebarWidth: 631 })
@@ -497,6 +537,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     await openStarted.promise
     store.updateUI({ sidebarWidth: 632 })
     openRelease.resolve()
+
     const firstOutcome = await Promise.race([
       barrier.then(() => 'settled' as const),
       renameStarted.promise.then(() => 'retrying' as const)
@@ -542,9 +583,12 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       if (fn !== 'rename' || !target.includes('orca-github-cache.json.')) {
         return null
       }
+
       renameStarted.resolve()
+
       return renameRelease.promise
     }
+
     recordFsCalls(dir)
 
     store.updateUI({ sidebarWidth: 611 })
@@ -574,8 +618,10 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       if (held || fn !== 'stat' || target !== `${dataFile(dir)}.bak.0`) {
         return null
       }
+
       held = true
       rotationStarted.resolve()
+
       return rotationRelease.promise
     }
 
@@ -584,6 +630,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     vi.advanceTimersByTime(SAVE_DEBOUNCE_MS)
     const firstWrite = store.waitForPendingWrite()
     let allWrites = firstWrite
+
     try {
       await rotationStarted.promise
       store.updateUI({ sidebarWidth: 372 })
@@ -600,6 +647,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       fsCalls.recording = false
       fsCalls.waitAsync = null
     }
+
     const ring = ringSnapshot(dir)
     expect(JSON.parse(ring['orca-data.json']).ui.sidebarWidth).toBe(373)
     expect(JSON.parse(ring['orca-data.json.bak.0']).ui.sidebarWidth).toBe(372)
@@ -623,10 +671,12 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
         if (flushed || fn !== expectedFn || target !== expectedTarget) {
           return
         }
+
         flushed = true
         store.updateUI({ sidebarWidth: 364 })
         store.flushOrThrow()
       }
+
       try {
         vi.advanceTimersByTime(PAST_ROTATION_INTERVAL_MS)
         await store.waitForPendingWrite()
@@ -694,6 +744,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     seedStore.updateUI({ sidebarWidth: 320 })
     seedStore.flushOrThrow()
     const seed = readFileSync(dataFile(seedDir), 'utf-8')
+
     for (const dir of [asyncDir, syncDir]) {
       writeFileSync(dataFile(dir), seed, 'utf-8')
       // Holes: slots 1 and 3 occupied, 0 and 2 missing — exercises the per-slot existence branch.
@@ -703,6 +754,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     const widths = [321, 322, 323, 324, 325, 326]
     const asyncStore = await createStore(asyncDir)
+
     for (const width of widths) {
       asyncStore.updateUI({ sidebarWidth: width })
       vi.advanceTimersByTime(PAST_ROTATION_INTERVAL_MS)
@@ -710,6 +762,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     }
 
     const syncStore = await createStore(syncDir)
+
     for (const width of widths) {
       syncStore.updateUI({ sidebarWidth: width })
       syncStore.flushOrThrow()
@@ -726,6 +779,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     const store = await createStore(dir)
 
     recordFsCalls(dir)
+
     try {
       await store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
     } finally {
@@ -733,10 +787,12 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     }
 
     expect(fsCalls.syncCalls).toEqual([])
+
     // Durability is awaited, not merely debounced: the record is on disk when the promise resolves.
     const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
       sshPtyConsumerRecoveries: { clientInstanceId: string }[]
     }
+
     expect(persisted.sshPtyConsumerRecoveries).toHaveLength(1)
     expect(persisted.sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('client-1')
   })
@@ -766,6 +822,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     await store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
 
     recordFsCalls(dir)
+
     try {
       await store.removeSshPtyConsumerRecovery('ssh-1')
     } finally {
@@ -773,9 +830,11 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     }
 
     expect(fsCalls.syncCalls).toEqual([])
+
     const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
       sshPtyConsumerRecoveries: unknown[]
     }
+
     expect(persisted.sshPtyConsumerRecoveries).toEqual([])
   })
 
@@ -785,6 +844,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'attached' })
 
     recordFsCalls(dir)
+
     try {
       await store.markSshRemotePtyLeasesAsync('ssh-1', 'detached')
     } finally {
@@ -792,9 +852,11 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     }
 
     expect(fsCalls.syncCalls).toEqual([])
+
     const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
       sshRemotePtyLeases: { state: string }[]
     }
+
     expect(persisted.sshRemotePtyLeases[0]?.state).toBe('detached')
   })
 
@@ -808,6 +870,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-4', state: 'terminated' })
 
     recordFsCalls(dir)
+
     try {
       await store.markSshRemotePtyLeasesAttachedAsync('ssh-1', ['pty-1', 'pty-2', 'pty-4'])
     } finally {
@@ -815,9 +878,11 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     }
 
     expect(fsCalls.syncCalls).toEqual([])
+
     const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
       sshRemotePtyLeases: { ptyId: string; state: string }[]
     }
+
     expect(persisted.sshRemotePtyLeases).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ ptyId: 'pty-1', state: 'attached' }),
@@ -840,12 +905,15 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       if (held || fn !== 'open' || !target.endsWith('.tmp')) {
         return null
       }
+
       held = true
       firstOpen.resolve()
+
       return firstOpenRelease.promise
     }
 
     recordFsCalls(dir)
+
     try {
       const firstWrite = store.upsertSshPtyConsumerRecovery(consumerRecovery('client-1'))
       await firstOpen.promise
@@ -866,6 +934,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     const persisted = JSON.parse(readFileSync(dataFile(dir), 'utf-8')) as {
       sshPtyConsumerRecoveries: { clientInstanceId: string }[]
     }
+
     expect(persisted.sshPtyConsumerRecoveries[0]?.clientInstanceId).toBe('client-2')
   })
 
@@ -881,6 +950,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     let lastTick = Date.now()
     let worstGapMs = 0
+
     const heartbeat = setInterval(() => {
       const now = Date.now()
       worstGapMs = Math.max(worstGapMs, now - lastTick)
@@ -913,6 +983,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     store.updateUI({ sidebarWidth: 331 })
     recordFsCalls(dir)
+
     try {
       store.flushOrThrow()
     } finally {

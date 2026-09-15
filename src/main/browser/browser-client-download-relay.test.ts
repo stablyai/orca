@@ -33,6 +33,7 @@ function negotiatedTransport(
     sendFileChannelRequest: async (method, params) =>
       ({ ok: true, result: handler(method, params), _meta: {} }) as never
   })
+
   return transport
 }
 
@@ -45,11 +46,13 @@ function boundTransport(
     fileChannelAvailability: availability,
     sendFileChannelRequest: async () => ({ ok: true, result: {}, _meta: {} }) as never
   })
+
   return transport
 }
 
 function remoteRoute(outcome: ReturnType<BrowserClientDownloadRelay['route']>) {
   expect(outcome.kind).toBe('remote')
+
   return (outcome as { kind: 'remote'; route: BrowserClientDownloadRoute }).route
 }
 
@@ -57,6 +60,7 @@ function memoryFilesystem(contents: Buffer) {
   const removed: string[] = []
   const created: string[] = []
   const sweptSync: string[] = []
+
   return {
     removed,
     created,
@@ -88,14 +92,18 @@ afterEach(() => {
 describe('BrowserClientDownloadRelay', () => {
   it('streams the staged file to the remote and reports the remote destination', async () => {
     const writes: { offset: number; final: boolean; contentBase64: string }[] = []
+
     const transport = negotiatedTransport((_method, params) => {
       const chunk = params as { offset: number; final: boolean; contentBase64: string }
       writes.push({ offset: chunk.offset, final: chunk.final, contentBase64: chunk.contentBase64 })
+
       return chunk.final
         ? { accepted: true, workspaceRelativePath: '.orca/browser-downloads/report.pdf' }
         : { accepted: true }
     })
+
     const { filesystem, removed } = memoryFilesystem(Buffer.from('hello world'))
+
     const relay = new BrowserClientDownloadRelay({
       stagingRoot: '/tmp/staging',
       hostLabel: 'build-box',
@@ -133,6 +141,7 @@ describe('BrowserClientDownloadRelay', () => {
 
   it('removes the per-transfer staging directory when the transfer is aborted', async () => {
     const { filesystem, removed } = memoryFilesystem(Buffer.from('abc'))
+
     const relay = new BrowserClientDownloadRelay({
       stagingRoot: '/tmp/staging',
       hostLabel: 'build-box',
@@ -154,6 +163,7 @@ describe('BrowserClientDownloadRelay', () => {
     // Why: a leftover from an earlier run only proves the sweep if it exists before construction.
     await mkdir(path.join(stagingRoot, 'crashed-transfer'), { recursive: true })
     await writeFile(path.join(stagingRoot, 'crashed-transfer', 'download'), 'stale')
+
     try {
       const relay = new BrowserClientDownloadRelay({
         stagingRoot,
@@ -219,17 +229,23 @@ describe('BrowserClientDownloadRelay', () => {
     const writes: { final: boolean }[] = []
     const aborts: unknown[] = []
     let route: BrowserClientDownloadRoute | null = null
+
     const transport = negotiatedTransport((method, params) => {
       if (method.endsWith('abort')) {
         aborts.push(params)
+
         return { released: true }
       }
+
       writes.push(params as { final: boolean })
       // The user cancels while this chunk is in flight.
       void route?.abort()
+
       return { accepted: true }
     })
+
     const { filesystem, removed } = memoryFilesystem(Buffer.from('abc'))
+
     const relay = new BrowserClientDownloadRelay({
       stagingRoot: '/tmp/staging',
       hostLabel: 'build-box',
@@ -248,14 +264,19 @@ describe('BrowserClientDownloadRelay', () => {
 
   it('aborts the remote transfer and removes the staged copy when a chunk is rejected', async () => {
     const aborted: unknown[] = []
+
     const transport = negotiatedTransport((method, params) => {
       if (method.endsWith('abort')) {
         aborted.push(params)
+
         return { released: true }
       }
+
       return { accepted: false }
     })
+
     const { filesystem, removed } = memoryFilesystem(Buffer.from('abc'))
+
     const relay = new BrowserClientDownloadRelay({
       stagingRoot: '/tmp/staging',
       hostLabel: 'build-box',

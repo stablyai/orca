@@ -32,9 +32,11 @@ describe('applyGitHubPRRefreshEvent no-op updates', () => {
     store.getState().applyGitHubPRRefreshEvent(inFlightEvent(4))
 
     let notifications = 0
+
     const unsubscribe = store.subscribe(() => {
       notifications += 1
     })
+
     try {
       store.getState().applyGitHubPRRefreshEvent(inFlightEvent(4))
       store.getState().applyGitHubPRRefreshEvent(inFlightEvent(3))
@@ -50,9 +52,11 @@ describe('applyGitHubPRRefreshEvent no-op updates', () => {
     store.getState().applyGitHubPRRefreshEvent(inFlightEvent(1))
 
     let notifications = 0
+
     const unsubscribe = store.subscribe(() => {
       notifications += 1
     })
+
     try {
       store.getState().applyGitHubPRRefreshEvent(inFlightEvent(2))
     } finally {

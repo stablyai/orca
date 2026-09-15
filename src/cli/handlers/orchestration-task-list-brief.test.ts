@@ -17,6 +17,7 @@ async function runTaskListBrief(): Promise<{
     client: { call: callMock },
     json: true
   } as never)
+
   return vi.mocked(printResult).mock.calls[0]?.[0] as {
     result: { tasks: { spec: string; spec_truncated: boolean }[] }
   }
@@ -46,6 +47,7 @@ describe('orchestration task-list brief output', () => {
     const serverTasks = [
       { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
     ]
+
     callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
 
     const response = await runTaskListBrief()

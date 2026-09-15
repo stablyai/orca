@@ -4,10 +4,13 @@ function collectLayoutGroupIds(node: TabGroupLayoutNode | null | undefined, ids:
   if (!node) {
     return
   }
+
   if (node.type === 'leaf') {
     ids.push(node.groupId)
+
     return
   }
+
   collectLayoutGroupIds(node.first, ids)
   collectLayoutGroupIds(node.second, ids)
 }
@@ -19,17 +22,22 @@ function pruneLayout(
   if (!node) {
     return null
   }
+
   if (node.type === 'leaf') {
     return retainedGroupIds.has(node.groupId) ? node : null
   }
+
   const first = pruneLayout(node.first, retainedGroupIds)
   const second = pruneLayout(node.second, retainedGroupIds)
+
   if (!first) {
     return second
   }
+
   if (!second) {
     return first
   }
+
   return { ...node, first, second }
 }
 
@@ -41,16 +49,19 @@ function appendMissingGroups(
   collectLayoutGroupIds(layout, present)
   const presentSet = new Set(present)
   let next = layout
+
   for (const groupId of orderedGroupIds) {
     if (presentSet.has(groupId)) {
       continue
     }
+
     const leaf = { type: 'leaf' as const, groupId }
     next = next
       ? { type: 'split', direction: 'horizontal', first: next, second: leaf, ratio: 0.5 }
       : leaf
     presentSet.add(groupId)
   }
+
   return next
 }
 
@@ -62,6 +73,7 @@ function replaceLeaf(
   if (node.type === 'leaf') {
     return node.groupId === groupId ? replacement : node
   }
+
   return {
     ...node,
     first: replaceLeaf(node.first, groupId, replacement),
@@ -75,6 +87,7 @@ export function hasExactTerminalOrphanGroupLayout(
 ): boolean {
   const groupIds: string[] = []
   collectLayoutGroupIds(layout, groupIds)
+
   return (
     groupIds.length === expectedGroupIds.size &&
     new Set(groupIds).size === groupIds.length &&
@@ -92,10 +105,12 @@ export function mergeTerminalOrphanGroupLayout(args: {
   const mergedGroupIdSet = new Set(args.mergedGroupIds)
   const existingGroupIdSet = new Set(args.existingGroupIds)
   const proposedGroupIdSet = new Set(args.proposedGroupIds)
+
   let existing = appendMissingGroups(
     pruneLayout(args.existingLayout, existingGroupIdSet),
     args.existingGroupIds
   )
+
   const proposed = appendMissingGroups(
     pruneLayout(args.proposedLayout, proposedGroupIdSet),
     args.proposedGroupIds
@@ -104,24 +119,29 @@ export function mergeTerminalOrphanGroupLayout(args: {
   if (!existing) {
     return appendMissingGroups(proposed, args.mergedGroupIds) ?? undefined
   }
+
   if (!proposed) {
     return appendMissingGroups(existing, args.mergedGroupIds) ?? undefined
   }
 
   const sharedGroupIds = args.proposedGroupIds.filter((groupId) => existingGroupIdSet.has(groupId))
+
   const newGroupIds = new Set(
     args.proposedGroupIds.filter((groupId) => !existingGroupIdSet.has(groupId))
   )
+
   if (newGroupIds.size > 0 && sharedGroupIds.length === 1) {
     // One shared group identifies where the recovered subtree belonged without disturbing unrelated host layout.
     const anchorGroupId = sharedGroupIds[0]!
     const proposalAtAnchor = pruneLayout(proposed, new Set([anchorGroupId, ...newGroupIds]))
+
     if (proposalAtAnchor) {
       existing = replaceLeaf(existing, anchorGroupId, proposalAtAnchor)
     }
   } else if (newGroupIds.size > 0) {
     // With no unique anchor, append the intact recovered subtree so ambiguous client metadata cannot rewrite host groups.
     const newSubtree = pruneLayout(proposed, newGroupIds)
+
     if (newSubtree) {
       existing = {
         type: 'split',

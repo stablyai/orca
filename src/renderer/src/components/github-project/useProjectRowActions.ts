@@ -37,27 +37,34 @@ export function useProjectRowActions({
   const rowMutations = useProjectRowMutations(currentCacheKey)
   const { lookupSlug, lookupSlugMatches, ready: slugIndexReady } = useRepoSlugIndex()
   const [dialogRepoItem, setDialogRepoItem] = useState<DialogRepoItem | null>(null)
+
   const [slugDialog, setSlugDialog] = useState<{ origin: GitHubItemDialogProjectOrigin } | null>(
     null
   )
+
   const [repoNotInOrca, setRepoNotInOrca] = useState<{
     owner: string
     repo: string
     host?: string
     url: string | null
   } | null>(null)
+
   const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
+
   const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(
     dialogRepoItem,
     liveRepoIds,
     selectedRepoIds
   )
+
   if (resolvedDialogRepoItem !== dialogRepoItem) {
     setDialogRepoItem(resolvedDialogRepoItem)
   }
+
   const dialogRepo = resolvedDialogRepoItem
     ? (repos.find((repo) => repo.id === resolvedDialogRepoItem.repoId) ?? null)
     : null
+
   const dialogSourceContext = dialogRepo
     ? buildTaskSourceContextFromRepo({
         provider: 'github',
@@ -65,6 +72,7 @@ export function useProjectRowActions({
         repo: dialogRepo
       })
     : null
+
   const missingDialogs = resolveMissingRepoProjectDialogState({
     slugIndexReady,
     slugDialog,
@@ -72,9 +80,11 @@ export function useProjectRowActions({
     lookupSlug,
     selectedRepoIds
   })
+
   if (missingDialogs.slugDialog !== slugDialog) {
     setSlugDialog(missingDialogs.slugDialog)
   }
+
   if (missingDialogs.repoNotInOrca !== repoNotInOrca) {
     setRepoNotInOrca(missingDialogs.repoNotInOrca)
   }
@@ -84,16 +94,21 @@ export function useProjectRowActions({
       if (!table || !currentCacheKey) {
         return null
       }
+
       if (row.itemType !== 'ISSUE' && row.itemType !== 'PULL_REQUEST') {
         return null
       }
+
       if (row.content.number == null || !row.content.repository) {
         return null
       }
+
       const [owner, repo] = row.content.repository.split('/')
+
       if (!owner || !repo) {
         return null
       }
+
       return {
         owner,
         repo,
@@ -113,6 +128,7 @@ export function useProjectRowActions({
       if (!table) {
         return null
       }
+
       return resolveSelectedProjectRowRepo({
         row,
         lookupSlugMatches,
@@ -123,12 +139,15 @@ export function useProjectRowActions({
     },
     [lookupSlugMatches, selectedRepoIds, slugIndexReady, table]
   )
+
   const openUrlWithMessage = useCallback((row: GitHubProjectRow, message: string) => {
     if (row.content.url) {
       void window.api.shell.openUrl(row.content.url)
     }
+
     toast.message(message)
   }, [])
+
   const messageForResolution = useCallback(
     (row: GitHubProjectRow, status: string): boolean => {
       const message =
@@ -148,10 +167,13 @@ export function useProjectRowActions({
                   'This item matches multiple selected repositories.'
                 )
               : null
+
       if (!message) {
         return false
       }
+
       openUrlWithMessage(row, message)
+
       return true
     },
     [openUrlWithMessage]
@@ -160,20 +182,26 @@ export function useProjectRowActions({
   const openDialog = useCallback(
     (row: GitHubProjectRow) => {
       const origin = buildOrigin(row)
+
       if (!origin) {
         if (row.content.url) {
           void window.api.shell.openUrl(row.content.url)
         }
+
         return
       }
+
       const resolution = resolveRow(row)
+
       if (!resolution || messageForResolution(row, resolution.status)) {
         return
       }
+
       if (resolution.status === 'no_global_match') {
         setSlugDialog({ origin })
       } else if (resolution.status === 'selected_match' && table) {
         const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
+
         if (workItem) {
           setDialogRepoItem({
             workItem,
@@ -191,9 +219,11 @@ export function useProjectRowActions({
     (row: GitHubProjectRow) => {
       const origin = buildOrigin(row)
       const resolution = resolveRow(row)
+
       if (!origin || !resolution || messageForResolution(row, resolution.status)) {
         return
       }
+
       if (resolution.status === 'no_global_match') {
         setRepoNotInOrca({
           owner: origin.owner,
@@ -201,15 +231,20 @@ export function useProjectRowActions({
           host: origin.host,
           url: row.content.url ?? null
         })
+
         return
       }
+
       if (resolution.status !== 'selected_match' || !table) {
         return
       }
+
       const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
+
       if (!workItem) {
         return
       }
+
       // Why: issue #4756 changed only TaskPage's "Create workspace"; Project view stays on direct "start work now" launch.
       void launchWorkItemDirect({
         item: workItem,

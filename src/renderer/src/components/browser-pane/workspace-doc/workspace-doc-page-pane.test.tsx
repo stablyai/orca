@@ -11,7 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const WORKSPACE_ID = 'workspace-1'
+
 const OTHER_WORKSPACE_ID = 'workspace-2'
 
 const mocks = vi.hoisted(() => ({
@@ -22,12 +24,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(mocks.storeState)
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => null
 }))
+
 vi.mock('./HtmlDocPreview', () => ({
   HtmlDocPreview: ({ holdsGuestFocus }: { holdsGuestFocus?: boolean }) => {
     mocks.handedFocus.push(holdsGuestFocus)
+
     return null
   }
 }))
@@ -80,6 +85,7 @@ describe('the surface a document pane will hand its guest the keyboard from', ()
     act(() => {
       root.render(<WorkspaceDocPagePane page={docPage()} isActive={isActive} />)
     })
+
     return mocks.handedFocus.at(-1)
   }
 

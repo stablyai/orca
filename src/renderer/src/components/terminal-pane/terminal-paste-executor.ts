@@ -47,6 +47,7 @@ async function executeTerminalPastePlanNow(
   }: ExecuteTerminalPastePlanArgs
 ): Promise<TerminalPasteExecutionResult> {
   const startedAtMs = now()
+
   const finish = (
     status: TerminalPasteExecutionResult['status'],
     chunksWritten: number,
@@ -57,9 +58,11 @@ async function executeTerminalPastePlanNow(
   if (plan.mode === 'reject') {
     return finish('rejected', 0, plan.rejectReason ?? 'paste-rejected')
   }
+
   if (isTargetCurrent && !isTargetCurrent()) {
     return finish('cancelled', 0, 'stale-target')
   }
+
   if (plan.mode !== 'chunked') {
     const pasteResult = await runTerminalPasteOperationWithTimeout(() => {
       return pasteText(plan.payload.plainText, {
@@ -69,40 +72,50 @@ async function executeTerminalPastePlanNow(
           : {})
       })
     }, operationTimeoutMs)
+
     if (pasteResult.timedOut) {
       return finish('cancelled', 0, 'operation-timeout')
     }
+
     return finish('pasted', 1)
   }
+
   if (!writePty) {
     return finish('rejected', 0, 'pty-writer-unavailable')
   }
 
   let chunksWritten = 0
   let bracketedPasteOpen = false
+
   // Why: best-effort — a close that hangs or throws must not mask the real exit reason.
   const closeBracketedPasteFrame = async (): Promise<{ timedOut: boolean }> => {
     if (!bracketedPasteOpen) {
       return { timedOut: false }
     }
+
     bracketedPasteOpen = false
+
     if (canContinue && !canContinue()) {
       return { timedOut: false }
     }
+
     try {
       const closeResult = await runTerminalPasteOperationWithTimeout(
         () => writePty(BRACKETED_PASTE_END),
         operationTimeoutMs
       )
+
       if (closeResult.timedOut) {
         return { timedOut: true }
       }
+
       if (closeResult.value) {
         chunksWritten += 1
       }
     } catch {
       // The frame stays open only because the writer itself is gone; nothing left to do.
     }
+
     return { timedOut: false }
   }
 
@@ -111,44 +124,57 @@ async function executeTerminalPastePlanNow(
       if (isTargetCurrent && !isTargetCurrent()) {
         return { status: 'cancelled', reason: 'stale-target' }
       }
+
       if (canContinue && !canContinue()) {
         return { status: 'cancelled', reason: 'target-disconnected' }
       }
+
       const writeResult = await runTerminalPasteOperationWithTimeout(
         () => writePty(chunk),
         operationTimeoutMs
       )
+
       // Why: a failed close chunk is already the close attempt; retrying would emit a stray end.
       if (writeResult.timedOut) {
         bracketedPasteOpen = bracketedPasteOpen && chunk !== BRACKETED_PASTE_END
+
         return { status: 'cancelled', reason: 'operation-timeout' }
       }
+
       if (!writeResult.value) {
         bracketedPasteOpen = bracketedPasteOpen && chunk !== BRACKETED_PASTE_END
+
         return { status: 'cancelled', reason: 'target-disconnected' }
       }
+
       chunksWritten += 1
+
       if (chunk === BRACKETED_PASTE_START) {
         bracketedPasteOpen = true
       } else if (chunk === BRACKETED_PASTE_END) {
         bracketedPasteOpen = false
       }
+
       await yieldToEventLoop()
     }
+
     return { status: 'pasted' }
   }
 
   let outcome!: ChunkedPasteOutcome
   let closeTimedOut = false
+
   try {
     outcome = await writeChunks()
   } finally {
     // Why: every exit, including an unexpected writer rejection, must leave the frame closed.
     closeTimedOut = (await closeBracketedPasteFrame()).timedOut
   }
+
   if (closeTimedOut && outcome.reason === 'stale-target') {
     return finish('cancelled', chunksWritten, 'operation-timeout')
   }
+
   return finish(outcome.status, chunksWritten, outcome.reason)
 }
 
@@ -173,6 +199,7 @@ function result(
   reason?: TerminalPasteExecutionReason
 ): TerminalPasteExecutionResult {
   const roundedDurationMs = Math.max(0, Math.round(durationMs))
+
   return {
     status,
     chunksWritten,

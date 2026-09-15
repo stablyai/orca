@@ -16,6 +16,7 @@ import {
   terminalLayoutLeafIds,
   terminalRowsBySurface
 } from './web-session-terminal-orphan-recovery-surface-index'
+
 export {
   isRemovedSnapshot,
   isValidReadySurface,
@@ -31,6 +32,7 @@ export type TerminalOrphanRecoveryState = WebTerminalOrphanTopologyState & {
 }
 
 export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
+
 export type RecoveryDisposition = 'claim' | 'retain' | 'remove'
 
 type RecoverySurfaceCoordinates = {
@@ -47,7 +49,9 @@ type RecoverySurfaceCoordinates = {
 }
 
 export type RecoverySurface = RecoverySurfaceCoordinates & { handle: string }
+
 export type UnresolvedRecoverySurface = RecoverySurfaceCoordinates & { handle: null }
+
 export type AnyRecoverySurface = RecoverySurface | UnresolvedRecoverySurface
 
 export type PreparedRecovery = {
@@ -65,9 +69,11 @@ export function captureTerminalRecoveryTopologyToken(
 ): string {
   const tabs = state.tabsByWorktree[worktreeId]
   const groups = state.groupsByWorktree?.[worktreeId]
+
   return JSON.stringify({
     tabs: (tabs ?? []).map((tab) => {
       const layout = state.terminalLayoutsByTabId[tab.id]
+
       return {
         id: tab.id,
         ptyId: tab.ptyId,
@@ -107,17 +113,21 @@ export function prepareTerminalOrphanRecovery(
   if (isRemovedSnapshot(snapshot)) {
     return { candidates: [], unresolved: [], observed: [], retained: [] }
   }
+
   const rowsBySurface = terminalRowsBySurface(snapshot)
   const candidates: RecoverySurface[] = []
   const unresolved: UnresolvedRecoverySurface[] = []
   const observed: RecoverySurface[] = []
   const retained: AnyRecoverySurface[] = []
+
   for (const localTab of state.tabsByWorktree[snapshot.worktree] ?? []) {
     if (!isWebTerminalSurfaceTabId(localTab.id)) {
       continue
     }
+
     const layout = state.terminalLayoutsByTabId[localTab.id]
     const tabId = toHostSessionTabId(localTab.id)
+
     for (const { leafId, offTree } of terminalLayoutLeafIds(layout)) {
       const remotePtyId = layout?.ptyIdsByLeafId?.[leafId]
       const remote = remotePtyId ? parseRemoteRuntimePtyId(remotePtyId) : null
@@ -126,6 +136,7 @@ export function prepareTerminalOrphanRecovery(
       const readyIncoming = rows?.find(isValidReadySurface)
       const incoming = readyIncoming ?? rows?.[0]
       const pending = incoming !== undefined && !isValidReadySurface(incoming)
+
       const coordinates = {
         tabId,
         leafId,
@@ -141,6 +152,7 @@ export function prepareTerminalOrphanRecovery(
           state.activeTabIdByWorktree[snapshot.worktree] === localTab.id &&
           layout?.activeLeafId === leafId
       }
+
       if (offTree) {
         // Off-tree bindings cannot justify liveness/adoption claims; retain them pending host evidence.
         retained.push({
@@ -150,12 +162,15 @@ export function prepareTerminalOrphanRecovery(
         })
         continue
       }
+
       if (readyIncoming) {
         if (remote?.environmentId === environmentId) {
           observed.push({ ...coordinates, incoming: readyIncoming, handle: remote.handle })
         }
+
         continue
       }
+
       if (remote?.environmentId === environmentId) {
         candidates.push({ ...coordinates, handle: remote.handle })
       } else if (!remotePtyId) {
@@ -163,12 +178,14 @@ export function prepareTerminalOrphanRecovery(
       }
     }
   }
+
   return { candidates, unresolved, observed, retained }
 }
 
 export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): TerminalSurface {
   const incoming = surface.incoming
   const localTitle = typeof surface.localTab.title === 'string' ? surface.localTab.title.trim() : ''
+
   if (!surface.handle) {
     return {
       ...(incoming ?? {
@@ -189,6 +206,7 @@ export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): Termi
       terminal: null
     }
   }
+
   const base: TerminalSurface = incoming ?? {
     type: 'terminal',
     id: `${surface.tabId}::${surface.leafId}`,
@@ -199,6 +217,7 @@ export function buildRetainedTerminalSurface(surface: AnyRecoverySurface): Termi
     status: 'pending-handle',
     terminal: null
   }
+
   return {
     ...base,
     type: 'terminal',
@@ -220,53 +239,73 @@ export function mergeRetainedTerminalSurfaces(
   if (surfaces.length === 0 && filteredSurfaceKeys.size === 0) {
     return snapshot
   }
+
   const retainedByKey = new Map(
     surfaces.map((surface) => [surface.surfaceKey, buildRetainedTerminalSurface(surface)] as const)
   )
+
   const seen = new Set<string>()
+
   const tabs = snapshot.tabs.flatMap<RuntimeMobileSessionClientTab>((tab) => {
     if (tab.type !== 'terminal') {
       return [tab]
     }
+
     const key = surfaceKey(tab.parentTabId, tab.leafId)
+
     if (filteredSurfaceKeys.has(key)) {
       return []
     }
+
     const retained = retainedByKey.get(key)
+
     if (!retained) {
       return [tab]
     }
+
     if (seen.has(key)) {
       return []
     }
+
     seen.add(key)
+
     return [retained]
   })
+
   for (const surface of surfaces) {
     if (seen.has(surface.surfaceKey)) {
       continue
     }
+
     const row = retainedByKey.get(surface.surfaceKey)
+
     if (!row) {
       continue
     }
+
     let insertAt = -1
+
     for (let index = tabs.length - 1; index >= 0; index -= 1) {
       const tab = tabs[index]
+
       if (tab.type === 'terminal' && tab.parentTabId === surface.tabId) {
         insertAt = index + 1
         break
       }
     }
+
     if (insertAt < 0) {
       tabs.push(row)
     } else {
       tabs.splice(insertAt, 0, row)
     }
+
     seen.add(surface.surfaceKey)
   }
+
   const changed =
     tabs.length !== snapshot.tabs.length || tabs.some((tab, index) => tab !== snapshot.tabs[index])
+
   return changed ? { ...snapshot, tabs } : snapshot
 }
 
@@ -291,6 +330,7 @@ export function buildTopologyCandidates(
   claims: readonly RuntimeTerminalOrphanAdoptionClaim[]
 ): TerminalTab[] {
   const claimedTabIds = new Set(claims.map((claim) => claim.tabId))
+
   return [
     ...new Map(
       candidates

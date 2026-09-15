@@ -20,6 +20,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     await this.syncForCurrentSelection(effectiveTarget)
+
     return this.getPreparation(effectiveTarget)
   }
 
@@ -28,6 +29,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
     await this.syncForCurrentSelection(effectiveTarget)
+
     return this.getPreparation(effectiveTarget)
   }
 
@@ -40,18 +42,22 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
     await this.serializeMutation(async () => {
       const settings = this.store.getSettings()
+
       if (!settings.activeClaudeManagedAccountId) {
         const previousAccount = this.getActiveAccount(
           settings.claudeManagedAccounts,
           this.lastSyncedAccountId
         )
+
         await this.restoreSystemDefaultSnapshot(
           previousAccount ? await this.readManagedCredentials(previousAccount) : null,
           previousAccount ? await this.readManagedOauthAccount(previousAccount) : undefined
         )
         this.lastSyncedAccountId = null
+
         return
       }
+
       await this.doSyncForCurrentSelection()
     })
   }
@@ -76,6 +82,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(fn, fn)
     this.mutationQueue = next.catch(() => {})
+
     return next
   }
 
@@ -86,6 +93,7 @@ export class ClaudeRuntimeAuthService extends ClaudeRuntimeAuthSync {
     if (accountId === this.store.getSettings().activeClaudeManagedAccountId) {
       this.lastWrittenCredentialsJson = null
     }
+
     this.skipNextReadBackForAccountId = accountId
   }
 }

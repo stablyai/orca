@@ -13,9 +13,13 @@ const toastErrorMock = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
 const openUrlMock = vi.fn()
+
 const registerLocalhostLabelMock = vi.fn()
+
 const setActiveWorktreeMock = vi.fn()
+
 const createBrowserTabMock = vi.fn()
+
 const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
 
 const storeState = {
@@ -303,6 +307,7 @@ describe('openHttpLink', () => {
       'repo-local': [{ id: 'wt-local', projectId: 'repo-local' }],
       'repo-remote': [{ id: 'wt-remote', projectId: 'repo-remote' }]
     }
+
     const port = (repoId: string, worktreeId: string, path: string) => ({
       id: `tcp:5180:${worktreeId}`,
       kind: 'workspace' as const,
@@ -318,6 +323,7 @@ describe('openHttpLink', () => {
         confidence: 'cwd' as const
       }
     })
+
     storeState.workspacePortScan = {
       result: {
         platform: 'darwin',

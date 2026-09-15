@@ -17,11 +17,13 @@ const REBIND_CHECK_INTERVAL_MS = 30_000
 function closeFileSystemWatcher(watcher: FSWatcher): Promise<void> {
   const { promise, resolve } = Promise.withResolvers<void>()
   watcher.once('close', resolve)
+
   try {
     watcher.close()
   } catch {
     resolve()
   }
+
   return promise
 }
 
@@ -32,12 +34,15 @@ export function startShallowWatcher(
   onError: (error: Error) => void
 ): ShallowWatcherSubscription {
   const pathsByDirectory = new Map<string, Set<string>>()
+
   for (const relativePath of relativePaths) {
     const parts = relativePath.split(/[\\/]+/).filter(Boolean)
     const fileName = parts.pop()
+
     if (!fileName) {
       continue
     }
+
     const parent = parts.join('/')
     const fileNames = pathsByDirectory.get(parent) ?? new Set<string>()
     fileNames.add(fileName)
@@ -53,6 +58,7 @@ export function startShallowWatcher(
     if (disposed || reportedError) {
       return
     }
+
     reportedError = true
     onError(error instanceof Error ? error : new Error(String(error)))
   }
@@ -68,27 +74,36 @@ export function startShallowWatcher(
 
   const watchDirectory = (parent: string, fileNames: Set<string>, rebind = false): void => {
     const existing = watchers.get(parent)
+
     if (existing) {
       if (!rebind) {
         return
       }
+
       watchers.delete(parent)
       boundIdentities.delete(parent)
       void closeFileSystemWatcher(existing)
     }
+
     const directoryPath = join(rootPath, parent)
+
     try {
       const watcher = watch(directoryPath, { persistent: false }, (eventType, fileName) => {
         if (disposed) {
           return
         }
+
         const name = fileName?.toString()
+
         if (!name) {
           emitUpdates(parent, fileNames)
+
           return
         }
+
         if (parent === '' && pathsByDirectory.has(name)) {
           const nestedNames = pathsByDirectory.get(name)
+
           if (nestedNames) {
             // 'rename' is a create/delete of the nested dir itself, so the
             // existing binding (if any) is stale and must be replaced.
@@ -96,10 +111,12 @@ export function startShallowWatcher(
             emitUpdates(name, nestedNames)
           }
         }
+
         if (fileNames.has(name)) {
           emitUpdates(parent, [name])
         }
       })
+
       watcher.on('error', reportError)
       watchers.set(parent, watcher)
     } catch (error) {
@@ -113,6 +130,7 @@ export function startShallowWatcher(
   const directoryIdentitySync = (parent: string): string | null => {
     try {
       const entry = statSync(join(rootPath, parent))
+
       return entry.isDirectory() ? `${entry.dev}:${entry.ino}` : null
     } catch {
       return null
@@ -122,6 +140,7 @@ export function startShallowWatcher(
   const directoryIdentity = async (parent: string): Promise<string | null> => {
     try {
       const entry = await stat(join(rootPath, parent))
+
       return entry.isDirectory() ? `${entry.dev}:${entry.ino}` : null
     } catch {
       return null
@@ -130,17 +149,22 @@ export function startShallowWatcher(
 
   const refreshBinding = async (parent: string, fileNames: Set<string>): Promise<void> => {
     const identity = await directoryIdentity(parent)
+
     if (disposed || identity === null) {
       return
     }
+
     const bound = boundIdentities.get(parent)
+
     if (bound === identity) {
       return
     }
+
     // Either the directory appeared after we started, or it was replaced while
     // watched. Both leave the old binding deaf, so rebind and resync.
     watchDirectory(parent, fileNames, true)
     boundIdentities.set(parent, identity)
+
     if (bound !== undefined) {
       emitUpdates(parent, fileNames)
     }
@@ -150,10 +174,12 @@ export function startShallowWatcher(
     if (disposed) {
       return
     }
+
     for (const [parent, fileNames] of pathsByDirectory) {
       void refreshBinding(parent, fileNames)
     }
   }, REBIND_CHECK_INTERVAL_MS)
+
   rebindTimer.unref?.()
 
   for (const [parent, fileNames] of pathsByDirectory) {
@@ -163,6 +189,7 @@ export function startShallowWatcher(
     // identity, and the sweep would then never rebind it.
     const identityBeforeBind = directoryIdentitySync(parent)
     watchDirectory(parent, fileNames)
+
     if (watchers.has(parent) && identityBeforeBind !== null) {
       boundIdentities.set(parent, identityBeforeBind)
     }

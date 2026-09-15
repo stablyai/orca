@@ -91,6 +91,7 @@ export default function IssueSourceSelector({
   if (!origin || !upstream) {
     return null
   }
+
   if (sameGitHubOwnerRepo(origin, upstream)) {
     return null
   }
@@ -135,6 +136,7 @@ export default function IssueSourceSelector({
           if (disabled || persistedMatches('upstream')) {
             return
           }
+
           onChange('upstream')
         }}
         className={segmentClass(effective === 'upstream' ? 'active' : 'inactive', disabled)}
@@ -151,6 +153,7 @@ export default function IssueSourceSelector({
           if (disabled || persistedMatches('origin')) {
             return
           }
+
           onChange('origin')
         }}
         className={cn(

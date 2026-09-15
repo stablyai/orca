@@ -48,6 +48,7 @@ export function EditorPanelMarkdownActionsMenu({
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
   const hasMarkdownActions =
     isMarkdown && (shouldShowMarkdownExportAction || canShowMarkdownFrontmatterToggle)
+
   // Why: normal files always get Word Wrap so long/structured lines can unwrap without Settings (#9974).
   const wordWrapChecked = isDiffSurface ? diffWordWrap : editorWordWrap
   const onToggleWordWrap = isDiffSurface ? onToggleDiffWordWrap : onToggleEditorWordWrap

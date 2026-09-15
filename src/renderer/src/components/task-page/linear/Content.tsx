@@ -9,6 +9,7 @@ import { TaskPageLinearProjectList } from './ProjectList'
 import { TaskPageLinearCustomViewList } from './CustomViewList'
 import { TaskPageLinearCustomViewProjects } from './CustomViewProjects'
 import { TaskPageLinearIssueList } from './IssueList'
+
 export function TaskPageLinearContent({
   model
 }: {
@@ -30,6 +31,7 @@ export function TaskPageLinearContent({
     setLinearConnectOpen,
     handleUseLinearItem
   } = model
+
   return taskSource === 'linear' && selectedLinearIssue ? (
     <LinearIssueWorkspace
       issue={selectedLinearIssue}

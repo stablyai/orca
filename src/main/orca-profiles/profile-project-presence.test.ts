@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 async function loadPresenceModule() {
   vi.resetModules()
+
   return import('./profile-project-presence')
 }
 
@@ -46,6 +47,7 @@ function writeIndex(activeProfileId = 'personal'): void {
     activeProfileId,
     profiles: [profile('personal', 'Personal'), profile('work', 'Work')]
   }
+
   writeFileSync(join(testState.dir, 'orca-profile-index.json'), JSON.stringify(index), 'utf-8')
 }
 
@@ -54,6 +56,7 @@ function writeProfileState(profileId: string, repos: Repo[]): void {
     ...getDefaultPersistedState('/Users/tester'),
     repos
   }
+
   const dataFile = join(testState.dir, 'profiles', profileId, 'orca-data.json')
   mkdirSync(dirname(dataFile), { recursive: true })
   writeFileSync(dataFile, JSON.stringify(state), 'utf-8')
@@ -91,6 +94,7 @@ describe('profile project presence', () => {
     ])
 
     const { findOrcaProfileProjectsByPath } = await loadPresenceModule()
+
     const result = findOrcaProfileProjectsByPath(
       {
         path: 'c:/code/orca/',
@@ -126,6 +130,7 @@ describe('profile project presence', () => {
     ])
 
     const { findOrcaProfileProjectsByPath } = await loadPresenceModule()
+
     const result = findOrcaProfileProjectsByPath(
       {
         path: '/srv/orca',

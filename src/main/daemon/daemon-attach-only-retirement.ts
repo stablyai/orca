@@ -10,6 +10,7 @@ export async function retireUnexpectedAttachOnlySpawn(
     if (error instanceof SessionNotFoundError) {
       return
     }
+
     console.warn('[daemon] attach-only retire of unexpected spawn failed', {
       sessionId,
       error

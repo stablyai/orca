@@ -10,6 +10,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 
 const LOCAL_RUNTIME = { kind: 'local' } as const
+
 const EMPTY_ARTIFACTS: readonly ArtifactListItem[] = []
 
 export function artifactAccountIdentity(authStatus: OrcaProfileAuthStatus | null): string | null {
@@ -23,6 +24,7 @@ function appendArtifactPage(
   incoming: readonly ArtifactListItem[]
 ): readonly ArtifactListItem[] {
   const knownSlugs = new Set(current.map(({ artifact }) => artifact.slug))
+
   return [...current, ...incoming.filter(({ artifact }) => !knownSlugs.has(artifact.slug))]
 }
 
@@ -53,10 +55,12 @@ export function useArtifactPagination(
   setError: (error: string | null) => void
 } {
   const accountIdentity = artifactAccountIdentity(authStatus)
+
   const [artifactState, setArtifactState] = useState<{
     identity: string | null
     page: ArtifactListPage
   }>({ identity: null, page: { artifacts: [] } })
+
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,30 +73,38 @@ export function useArtifactPagination(
     const sequence = ++loadSequence.current
     loadingCursor.current = null
     setLoadingMore(false)
+
     if (!accountIdentity) {
       setArtifactState({ identity: null, page: { artifacts: [] } })
       setError(null)
       setLoading(false)
+
       return
     }
+
     setLoading(true)
     setError(null)
+
     try {
       const result = await callRuntimeRpc<ArtifactCloudOperation<ArtifactListPage>>(
         LOCAL_RUNTIME,
         'artifacts.list',
         {}
       )
+
       if (!artifactRequestIsCurrent(sequence, loadSequence.current, accountIdentity)) {
         return
       }
+
       if (result.status === 'ok') {
         setArtifactState({ identity: accountIdentity, page: result.value })
       } else {
         await refreshAuth()
+
         if (!artifactRequestIsCurrent(sequence, loadSequence.current, accountIdentity)) {
           return
         }
+
         setError(
           translate(
             'auto.components.artifacts.ArtifactsPage.signInAgain',
@@ -104,6 +116,7 @@ export function useArtifactPagination(
       if (!artifactRequestIsCurrent(sequence, loadSequence.current, accountIdentity)) {
         return
       }
+
       console.error('Failed to load artifacts:', loadError)
       setError(
         translate('auto.components.artifacts.ArtifactsPage.loadFailed', 'Could not load artifacts.')
@@ -117,6 +130,7 @@ export function useArtifactPagination(
 
   useEffect(() => {
     void loadArtifacts()
+
     return () => {
       loadSequence.current += 1
     }
@@ -124,35 +138,44 @@ export function useArtifactPagination(
 
   const loadMoreArtifacts = useCallback(async (): Promise<void> => {
     const cursor = currentPage?.nextCursor
+
     if (!accountIdentity || !cursor || loadingCursor.current) {
       return
     }
+
     const sequence = loadSequence.current
     loadingCursor.current = cursor
     setLoadingMore(true)
     setError(null)
+
     try {
       const result = await callRuntimeRpc<ArtifactCloudOperation<ArtifactListPage>>(
         LOCAL_RUNTIME,
         'artifacts.list',
         { cursor }
       )
+
       if (!artifactRequestIsCurrent(sequence, loadSequence.current, accountIdentity)) {
         return
       }
+
       if (result.status !== 'ok') {
         await refreshAuth()
+
         if (!artifactRequestIsCurrent(sequence, loadSequence.current, accountIdentity)) {
           return
         }
+
         setError(
           translate(
             'auto.components.artifacts.ArtifactsPage.signInAgain',
             'Sign in to Orca again to load artifacts.'
           )
         )
+
         return
       }
+
       setArtifactState((current) =>
         current.identity === accountIdentity
           ? {
@@ -170,6 +193,7 @@ export function useArtifactPagination(
       if (!artifactRequestIsCurrent(sequence, loadSequence.current, accountIdentity)) {
         return
       }
+
       console.error('Failed to load more artifacts:', loadError)
       setError(
         translate(

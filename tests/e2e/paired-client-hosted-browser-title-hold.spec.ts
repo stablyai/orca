@@ -28,6 +28,7 @@ async function startFixture(): Promise<Fixture> {
     response.end(`<!doctype html><html><head><title>${title}</title></head><body>
       <h1 id="marker">${title}</h1></body></html>`)
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -36,6 +37,7 @@ async function startFixture(): Promise<Fixture> {
     })
   })
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -62,6 +64,7 @@ async function findWorktreeId(page: Page, repoPath: string): Promise<string> {
       { timeout: 60_000 }
     )
     .not.toBeNull()
+
   return (await page.evaluate(
     (path) =>
       window.__store
@@ -86,13 +89,16 @@ async function mirroredPage(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (!browserPage.url.startsWith(url)) {
             continue
           }
+
           const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
           const placement = handle?.placement
+
           return {
             localPageId: browserPage.id,
             placementHostId:
@@ -103,6 +109,7 @@ async function mirroredPage(
           }
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -127,13 +134,16 @@ async function hostPublishedBrowserTitle(
         method: 'session.tabs.list',
         params: { worktree: `id:${worktreeId}` }
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result as { tabs: { browserPageId?: string; title?: string }[] }
     },
     { environmentId: client.environmentId, worktreeId }
   )
+
   return snapshot.tabs.find((tab) => tab.browserPageId === remotePageId)?.title ?? null
 }
 
@@ -145,6 +155,7 @@ async function waitForClientGuest(page: Page, prefix: string, message: string): 
         page.evaluate((prefix) => {
           for (const candidate of document.querySelectorAll('webview')) {
             const webview = candidate as Electron.WebviewTag
+
             try {
               if (webview.getURL().startsWith(prefix)) {
                 return true
@@ -153,6 +164,7 @@ async function waitForClientGuest(page: Page, prefix: string, message: string): 
               // still attaching
             }
           }
+
           return false
         }, prefix),
       { timeout: 60_000, message }
@@ -167,6 +179,7 @@ async function run(args: {
 }): Promise<void> {
   const fixture = await startFixture()
   let client: PairedElectronClient | null = null
+
   try {
     client = await launchPairedElectronClient(args.offer, args.testInfo, 'STA-4150 identity probe')
     const page = client.page
@@ -196,6 +209,7 @@ async function run(args: {
     const rendererHostId = await page.evaluate(
       () => window.api.browser.readClientHostId?.() ?? null
     )
+
     expect(rendererHostId).not.toBeNull()
     expect(rendererHostId).toBe(mirrored?.placementHostId)
 
@@ -221,6 +235,7 @@ async function run(args: {
       await page.evaluate(() => {
         const fault = (window as MetadataPublishFaultWindow).__browserClientPageMetadataPublishFault
         fault?.suppress()
+
         return fault?.snapshot() ?? null
       })
     ).toEqual({ suppressed: true })
@@ -228,11 +243,14 @@ async function run(args: {
       async ({ prefix, url }) => {
         for (const candidate of document.querySelectorAll('webview')) {
           const webview = candidate as Electron.WebviewTag
+
           if (webview.getURL().startsWith(prefix)) {
             await webview.loadURL(url)
+
             return
           }
         }
+
         throw new Error('no client-hosted guest to navigate')
       },
       { prefix: fixture.first, url: fixture.second }
@@ -249,6 +267,7 @@ async function run(args: {
     // so its title is still the create-time one and disagrees with the guest's.
     const remotePageId = (await mirroredPage(page, worktreeId, fixture.second))
       ?.remotePageId as string
+
     expect(remotePageId).toBeTruthy()
     const hostTitle = await hostPublishedBrowserTitle(client, worktreeId, remotePageId)
     expect(hostTitle).toBeTruthy()
@@ -256,6 +275,7 @@ async function run(args: {
 
     await page.evaluate((pageId) => {
       const observed: string[] = []
+
       ;(window as unknown as { __titles: string[] }).__titles = observed
       window.__store?.subscribe((state) => {
         for (const pages of Object.values(state.browserPagesByWorkspace)) {
@@ -271,6 +291,7 @@ async function run(args: {
     // A host republish is what rebuilds the row, so the sampling window has to contain one: each
     // new browser tab makes the host publish a fresh session-tab snapshot carrying every row.
     let republishes = 0
+
     for (let round = 0; round < 3; round += 1) {
       const roundUrl = `${fixture.first}?round=${round}`
       await page.evaluate(
@@ -310,6 +331,7 @@ async function run(args: {
     const titles = (await page.evaluate(
       () => (window as unknown as { __titles: string[] }).__titles
     )) as string[]
+
     // Without a republish carrying the host's own title for this row inside the window, the
     // not-toContain below passes on a test that exercised nothing. The per-round poll and title
     // check are what enforce that; this counts the rounds that cleared them.

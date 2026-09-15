@@ -13,15 +13,19 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -113,6 +117,7 @@ describe('SshConnection', () => {
     vi.mocked(uploadDirectoryViaSystemSsh).mockImplementationOnce(
       (_target, _localDir, _remoteDir, options) => {
         transferSignal = options?.signal
+
         return new Promise((_resolve, reject) => {
           transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
             once: true
@@ -122,9 +127,11 @@ describe('SshConnection', () => {
     )
 
     await conn.connect()
+
     const upload = conn.uploadDirectory('/tmp/local-relay', '/remote/relay', {
       signal: controller.signal
     })
+
     await vi.waitFor(() => expect(transferSignal).toBeDefined())
     controller.abort()
 
@@ -140,6 +147,7 @@ describe('SshConnection', () => {
     vi.mocked(writeFileViaSystemSsh).mockImplementationOnce(
       (_target, _remotePath, _contents, options) => {
         transferSignal = options?.signal
+
         return new Promise((_resolve, reject) => {
           transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
             once: true
@@ -149,9 +157,11 @@ describe('SshConnection', () => {
     )
 
     await conn.connect()
+
     const write = conn.writeFile('/remote/relay/.version', '0.1.0', {
       signal: controller.signal
     })
+
     await vi.waitFor(() => expect(transferSignal).toBeDefined())
     await conn.disconnect()
 
@@ -165,6 +175,7 @@ describe('SshConnection', () => {
       createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
       createCallbacks()
     )
+
     vi.mocked(uploadFileViaSystemSsh).mockImplementation(
       async (_target, _localPath, _remotePath, options) => {
         if (options?.signal?.aborted) {

@@ -46,19 +46,24 @@ function openClawCommand(action: ExternalAutomationAction): string {
 
 function normalizeHermesJobMutation(params: Record<string, unknown>): HermesJobMutation {
   const provider = externalAutomationProvider(params.provider)
+
   if (provider !== 'hermes') {
     throw new Error('Only Hermes cron creation and editing are supported.')
   }
+
   const name = typeof params.name === 'string' ? params.name.trim() : ''
   const prompt = typeof params.prompt === 'string' ? params.prompt.trim() : ''
   const schedule = typeof params.schedule === 'string' ? params.schedule.trim() : ''
   const workdir = typeof params.workdir === 'string' ? params.workdir.trim() : ''
+
   if (!prompt) {
     throw new Error('Hermes cron requires a prompt.')
   }
+
   if (!schedule) {
     throw new Error('Hermes cron requires a schedule.')
   }
+
   return {
     name: name || prompt.slice(0, 50).trim(),
     prompt,
@@ -75,6 +80,7 @@ export class ExternalAutomationCommandExecutor {
 
   async createJob(params: Record<string, unknown> = {}): Promise<{ ok: true }> {
     const input = normalizeHermesJobMutation(params)
+
     const args = [
       'cron',
       'create',
@@ -85,20 +91,25 @@ export class ExternalAutomationCommandExecutor {
       '--deliver',
       'local'
     ]
+
     if (input.workdir) {
       args.push('--workdir', input.workdir)
     }
+
     await this.runHermesCronCommand(args)
     this.clearHermesRunCount()
+
     return { ok: true }
   }
 
   async updateJob(params: Record<string, unknown> = {}): Promise<{ ok: true }> {
     const input = normalizeHermesJobMutation(params)
     const jobId = params.jobId
+
     if (typeof jobId !== 'string' || !EXTERNAL_AUTOMATION_JOB_ID_PATTERN.test(jobId)) {
       throw new Error('Invalid external automation job ID.')
     }
+
     const args = [
       'cron',
       'edit',
@@ -110,11 +121,14 @@ export class ExternalAutomationCommandExecutor {
       '--name',
       input.name
     ]
+
     if (input.workdir) {
       args.push('--workdir', input.workdir)
     }
+
     await this.runHermesCronCommand(args)
     this.clearHermesRunCount(jobId)
+
     return { ok: true }
   }
 
@@ -122,20 +136,25 @@ export class ExternalAutomationCommandExecutor {
     const provider = externalAutomationProvider(params.provider)
     const action = params.action
     const jobId = params.jobId
+
     if (!isExternalAutomationAction(action)) {
       throw new Error('Unsupported external automation action.')
     }
+
     if (typeof jobId !== 'string' || !EXTERNAL_AUTOMATION_JOB_ID_PATTERN.test(jobId)) {
       throw new Error('Invalid external automation job ID.')
     }
+
     const command = provider === 'hermes' ? hermesCommand(action) : openClawCommand(action)
     await this.runCommand(provider, ['cron', command, jobId], {
       encoding: 'utf-8',
       timeout: 30_000
     })
+
     if (provider === 'hermes') {
       this.clearHermesRunCount(jobId)
     }
+
     return { ok: true }
   }
 

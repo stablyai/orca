@@ -16,6 +16,7 @@ describe('terminateWindowsProcessTree', () => {
         callback(null)
       }
     )
+
     await terminateWindowsProcessTree(1234, {
       execFileImpl: execFileImpl as never
     })
@@ -41,6 +42,7 @@ describe('terminateWindowsProcessTree', () => {
         callback(new Error('not found'))
       }
     )
+
     await expect(
       terminateWindowsProcessTree(55, { execFileImpl: execFileImpl as never })
     ).resolves.toBeUndefined()

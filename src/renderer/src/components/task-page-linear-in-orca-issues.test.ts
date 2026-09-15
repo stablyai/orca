@@ -120,6 +120,7 @@ describe('filterLinearIssuesForInOrcaWorkspace', () => {
       issue({ id: '2', identifier: 'ENG-2', workspaceId: 'ws-b' }),
       issue({ id: '3', identifier: 'ENG-3' })
     ]
+
     expect(
       filterLinearIssuesForInOrcaWorkspace(issues, 'ws-a').map((item) => item.identifier)
     ).toEqual(['ENG-1', 'ENG-3'])
@@ -138,6 +139,7 @@ describe('filterLinearIssuesBySearchQuery', () => {
       }),
       issue({ id: '2', identifier: 'ENG-2', title: 'Other' })
     ]
+
     expect(filterLinearIssuesBySearchQuery(issues, 'login').map((item) => item.id)).toEqual(['1'])
     expect(filterLinearIssuesBySearchQuery(issues, 'platform').map((item) => item.id)).toEqual([
       '1'
@@ -167,10 +169,12 @@ describe('readLinkedLinearIssuesWithLimit', () => {
   it('preserves input order while bounding concurrent reads', async () => {
     let active = 0
     let maxActive = 0
+
     const refs = Array.from({ length: 9 }, (_, index) => ({
       identifier: `ENG-${index + 1}`,
       workspaceId: null
     }))
+
     const results = await readLinkedLinearIssuesWithLimit(
       refs,
       async (ref) => {
@@ -178,6 +182,7 @@ describe('readLinkedLinearIssuesWithLimit', () => {
         maxActive = Math.max(maxActive, active)
         await Promise.resolve()
         active -= 1
+
         return issue({ id: ref.identifier, identifier: ref.identifier })
       },
       3

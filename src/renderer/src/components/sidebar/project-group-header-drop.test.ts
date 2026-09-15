@@ -36,6 +36,7 @@ describe('getProjectGroupHeaderDragBucketKey', () => {
   it('scopes child groups to their parent bucket', () => {
     const root = group('root')
     const child = group('child', { parentGroupId: root.id })
+
     const groupsById = new Map([
       [root.id, root],
       [child.id, child]
@@ -57,11 +58,13 @@ describe('getSidebarOrderedProjectGroupHeaderIdsByBucket', () => {
     const rootB = group('root-b')
     const childA = group('child-a', { parentGroupId: rootA.id })
     const repo = { id: 'repo-a', projectGroupId: rootA.id } as Repo
+
     const groupsById = new Map([
       [rootA.id, rootA],
       [rootB.id, rootB],
       [childA.id, childA]
     ])
+
     const rows = [
       {
         type: 'header',
@@ -141,6 +144,7 @@ describe('computeProjectGroupHeaderDropPreview', () => {
   it('snaps a drop inside the last expanded Project Group section to its bottom boundary', () => {
     const INDICATOR_GAP = 4
     const sectionBottom = 380
+
     const preview = computeProjectGroupHeaderDropPreview({
       pointerY: 350,
       containerTop: 0,

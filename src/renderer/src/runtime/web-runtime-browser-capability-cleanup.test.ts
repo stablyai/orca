@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-session'
 
 const ENVIRONMENT_ID = 'runtime-1'
+
 const WORKTREE_ID = 'repo::/worktree'
 
 const mocks = vi.hoisted(() => ({

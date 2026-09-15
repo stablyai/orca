@@ -289,6 +289,7 @@ describe('resolveProjectExecutionRuntime', () => {
       wslAvailable: true,
       availableWslDistros: ['Ubuntu']
     })
+
     const wslProject = resolveProjectExecutionRuntime({
       appPlatform: 'win32',
       projectId: 'wsl-project',

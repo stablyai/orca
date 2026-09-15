@@ -83,12 +83,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('cleans up a preserved branch through the same host qualifier the removal used', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       hostId: 'runtime:env-1'
     })
+
     runtimeEnvironmentCall
       .mockResolvedValueOnce({
         id: 'rpc-rm',
@@ -145,12 +147,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('does not clean up a hidden same-id VM owned by another host', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/shared',
       repoId: 'repo1',
       path: '/path/shared',
       hostId: 'ssh:runtime-ssh-a'
     })
+
     mockApi.ephemeralVm.listRuntimes.mockResolvedValue([
       {
         id: 'runtime-a',
@@ -177,6 +181,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('removes a HUB-owned SSH worktree through its exact HUB transport owner', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo-ssh::/srv/nested-wt',
       repoId: 'repo-ssh',
@@ -184,6 +189,7 @@ describe('worktree remote runtime mutations', () => {
       hostId: 'ssh:hub-private-target',
       runtimeOwnerEnvironmentId: 'owner-hub'
     })
+
     runtimeEnvironmentCall
       .mockResolvedValueOnce({
         id: 'rpc-rm-nested',
@@ -251,12 +257,14 @@ describe('worktree remote runtime mutations', () => {
   it('retains separate preserved-branch cleanup routes for sequential same-id hosts', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
+
     const localWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
       path: '/same/path',
       hostId: 'local'
     })
+
     const remoteWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
@@ -264,6 +272,7 @@ describe('worktree remote runtime mutations', () => {
       hostId: 'ssh:shared-target',
       runtimeOwnerEnvironmentId: 'shared-hub'
     })
+
     mockApi.worktrees.remove.mockResolvedValueOnce({
       preservedBranch: { branchName: 'feature/local', head: 'local-head' }
     })
@@ -323,12 +332,14 @@ describe('worktree remote runtime mutations', () => {
   it('fails closed when several hosts preserved the same branch and no host is specified', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
+
     const localWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
       path: '/same/path',
       hostId: 'local'
     })
+
     const remoteWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
@@ -336,6 +347,7 @@ describe('worktree remote runtime mutations', () => {
       hostId: 'ssh:shared-target',
       runtimeOwnerEnvironmentId: 'shared-hub'
     })
+
     mockApi.worktrees.remove.mockResolvedValueOnce({
       preservedBranch: { branchName: 'feature/shared', head: 'shared-head' }
     })
@@ -415,12 +427,14 @@ describe('worktree remote runtime mutations', () => {
     'forgets a mirrored row when the remote returns %s',
     async (errorCode) => {
       const store = createTestStore()
+
       const wt = makeWorktree({
         id: 'repo-gone::/path/stale',
         repoId: 'repo-gone',
         path: '/path/stale',
         hostId: 'runtime:env-1'
       })
+
       runtimeEnvironmentCall.mockResolvedValue({
         id: 'rpc-rm',
         ok: false,
@@ -446,18 +460,22 @@ describe('worktree remote runtime mutations', () => {
   it('does not forget a row that becomes ambiguous while remote removal is in flight', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/path/stale'
+
     const original = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
       hostId: 'runtime:env-1'
     })
+
     const rival = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
       hostId: 'runtime:env-2'
     })
+
     runtimeEnvironmentCall.mockImplementationOnce(async () => {
       store.setState({ worktreesByRepo: { 'repo-shared': [original, rival] } })
+
       return {
         id: 'rpc-rm',
         ok: false,
@@ -484,16 +502,19 @@ describe('worktree remote runtime mutations', () => {
   it('refuses an unqualified forget-local when same-id rows exist on two hosts', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/path/stale'
+
     const local = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
       hostId: 'local'
     })
+
     const remote = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
       hostId: 'runtime:env-1'
     })
+
     store.setState({
       worktreesByRepo: { 'repo-shared': [local, remote] }
     } as Partial<AppState>)
@@ -514,12 +535,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('does not forget a mirrored row when diagnostics merely mention a missing code', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       hostId: 'runtime:env-1'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-rm',
       ok: false,
@@ -572,11 +595,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('removes SSH-owned worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo-ssh::/home/orca/wt1',
       repoId: 'repo-ssh',
       path: '/home/orca/wt1'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [

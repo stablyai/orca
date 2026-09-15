@@ -31,6 +31,7 @@ function buildDiffRows(): DiffRow[] {
       let ol = ''
       let nl = ''
       let mark = ' '
+
       if (ln.kind === 'ctx') {
         oldNo += 1
         newNo += 1
@@ -45,6 +46,7 @@ function buildDiffRows(): DiffRow[] {
         ol = String(oldNo)
         mark = '-'
       }
+
       result.push({
         key: `h${hi}-l${li}`,
         kind: 'line',
@@ -59,11 +61,13 @@ function buildDiffRows(): DiffRow[] {
     })
     result.push({ key: `h${hi}-slot`, kind: 'slot', hunk: hi })
   })
+
   return result
 }
 
 export function ReviewDiffRows(): JSX.Element {
   const rows = buildDiffRows()
+
   return (
     <>
       {rows.map((r) => {
@@ -77,6 +81,7 @@ export function ReviewDiffRows(): JSX.Element {
             </div>
           )
         }
+
         if (r.kind === 'slot') {
           return (
             <div key={r.key} className="ravs-note-row" data-hunk-slot={r.hunk}>
@@ -93,6 +98,7 @@ export function ReviewDiffRows(): JSX.Element {
             </div>
           )
         }
+
         return (
           <div
             key={r.key}

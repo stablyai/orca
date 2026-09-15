@@ -6,6 +6,7 @@ export class RuntimeWatcherPredecessorBarriers {
 
   throwIfRetained(rootPath: string): void {
     const failure = this.failures.get(rootPath)
+
     if (failure) {
       throw failure
     }
@@ -15,10 +16,13 @@ export class RuntimeWatcherPredecessorBarriers {
     if (!failure.physicalExit) {
       return
     }
+
     const retainedRoots = Array.from(rootPaths)
+
     for (const rootPath of retainedRoots) {
       this.failures.set(rootPath, failure)
     }
+
     const clearExactFailure = (): void => {
       for (const rootPath of retainedRoots) {
         if (this.failures.get(rootPath) === failure) {
@@ -26,6 +30,7 @@ export class RuntimeWatcherPredecessorBarriers {
         }
       }
     }
+
     void failure.physicalExit.then(clearExactFailure, clearExactFailure)
   }
 

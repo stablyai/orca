@@ -13,19 +13,26 @@ function baseProofResponses(
   return vi.fn<GitBranchCleanupExec>(async (args, options) => {
     if (args[0] === 'patch-id' && options?.stdin === 'branch-diff') {
       const response = responses.branchPatchId ?? 'branch-patch 0000000\n'
+
       if (response instanceof Error) {
         throw response
       }
+
       return { stdout: response }
     }
+
     if (args[0] === 'patch-id' && options?.stdin === 'squash-diff') {
       const response = responses.squashPatchId ?? 'branch-patch squash\n'
+
       if (response instanceof Error) {
         throw response
       }
+
       return { stdout: response }
     }
+
     const key = args.join(' ')
+
     const response =
       responses[key] ??
       {
@@ -41,9 +48,11 @@ function baseProofResponses(
         'rev-parse --verify --quiet squash^{tree}': 'squash-tree\n'
       }[key] ??
       ''
+
     if (response instanceof Error) {
       throw response
     }
+
     return { stdout: response }
   })
 }
@@ -54,6 +63,7 @@ describe('refreshBranchCleanupTargetRefs', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\nfoo\nfoo/bar\n' }
       }
+
       return { stdout: '' }
     })
 
@@ -82,6 +92,7 @@ describe('refreshBranchCleanupTargetRefs', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n' }
       }
+
       throw new Error('offline')
     })
 
@@ -139,6 +150,7 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
 
   it('preserves when the target squash scan exceeds the cap', async () => {
     const commits = Array.from({ length: 201 }, (_, index) => `commit-${index}`).join('\n')
+
     const runGit = baseProofResponses({
       'rev-list --ancestry-path --max-count=201 base..target': `${commits}\n`
     })
@@ -172,11 +184,13 @@ describe('branchHasNoUnmergedChangesOnAnyTarget', () => {
     const unsupported = Object.assign(new Error('unknown option'), {
       stderr: 'fatal: unknown rev --write-tree'
     })
+
     const runGit = baseProofResponses({
       'merge-tree --write-tree target refs/heads/feature/test': unsupported,
       'rev-list --right-only --merges --count target...refs/heads/feature/test': '0\n',
       'cherry -v target refs/heads/feature/test': '+ branch-only commit\n'
     })
+
     const capabilities = new GitCapabilityCache()
 
     await branchHasNoUnmergedChangesOnAnyTarget(
@@ -201,12 +215,14 @@ describe('branchHasNoUnmergedChangesWithLazyTargetRefresh', () => {
   it('skips refresh when local HEAD proves the branch changes are retained', async () => {
     const runGit = vi.fn<GitBranchCleanupExec>(async (args) => {
       const command = args.join(' ')
+
       const stdout =
         {
           'rev-parse --verify --quiet HEAD^{commit}': 'local-target\n',
           'merge-tree --write-tree local-target refs/heads/feature/test': 'local-tree\n',
           'rev-parse --verify --quiet local-target^{tree}': 'local-tree\n'
         }[command] ?? ''
+
       return { stdout }
     })
 
@@ -224,36 +240,48 @@ describe('branchHasNoUnmergedChangesWithLazyTargetRefresh', () => {
 
   it('refreshes before trusting a stale remote-tracking proof', async () => {
     let refreshed = false
+
     const runGit = vi.fn<GitBranchCleanupExec>(async (args) => {
       const command = args.join(' ')
+
       if (command === 'remote') {
         return { stdout: 'origin\n' }
       }
+
       if (command === 'fetch --prune origin') {
         refreshed = true
+
         return { stdout: '' }
       }
+
       if (command === 'rev-parse --verify --quiet refs/remotes/origin/main^{commit}') {
         return { stdout: 'remote-target\n' }
       }
+
       if (command === 'rev-parse --verify --quiet origin/main^{commit}') {
         return { stdout: 'short-remote-target\n' }
       }
+
       if (command === 'rev-parse --verify --quiet HEAD^{commit}') {
         return { stdout: 'local-target\n' }
       }
+
       if (command === 'merge-tree --write-tree remote-target refs/heads/feature/test') {
         return { stdout: refreshed ? 'changed-tree\n' : 'remote-tree\n' }
       }
+
       if (command === 'merge-tree --write-tree short-remote-target refs/heads/feature/test') {
         return { stdout: refreshed ? 'changed-tree\n' : 'short-remote-tree\n' }
       }
+
       if (command === 'rev-parse --verify --quiet remote-target^{tree}') {
         return { stdout: 'remote-tree\n' }
       }
+
       if (command === 'rev-parse --verify --quiet short-remote-target^{tree}') {
         return { stdout: 'short-remote-tree\n' }
       }
+
       return { stdout: '' }
     })
 

@@ -24,6 +24,7 @@ const tempDirs: string[] = []
 
 afterEach(() => {
   clearGrokSessionPathLookupCacheForTests()
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -32,6 +33,7 @@ afterEach(() => {
 function makeRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-grok-session-paths-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -42,10 +44,12 @@ function deferred<T>(): {
 } {
   let resolvePromise: (value: T) => void = () => undefined
   let rejectPromise: (error: Error) => void = () => undefined
+
   const promise = new Promise<T>((resolve, reject) => {
     resolvePromise = resolve
     rejectPromise = reject
   })
+
   return { promise, resolve: resolvePromise, reject: rejectPromise }
 }
 
@@ -190,6 +194,7 @@ describe('grok-session-paths', () => {
   it('does not descend below the documented group/session layout', async () => {
     const root = makeRoot()
     const sessionsDir = join(root, 'sessions')
+
     const nestedDecoy = join(
       sessionsDir,
       'group',
@@ -198,6 +203,7 @@ describe('grok-session-paths', () => {
       'sess-target',
       'chat_history.jsonl'
     )
+
     mkdirSync(dirname(nestedDecoy), { recursive: true })
     writeFileSync(nestedDecoy, '{}\n')
 
@@ -214,9 +220,11 @@ describe('grok-session-paths', () => {
   it('applies the hard group-entry bound to the filesystem iteration subset', async () => {
     const root = makeRoot()
     const sessionsDir = join(root, 'sessions')
+
     for (const group of ['a-group', 'b-group']) {
       mkdirSync(join(sessionsDir, group), { recursive: true })
     }
+
     const beyondBound = join(sessionsDir, 'z-target-group', 'sess-bounded', 'chat_history.jsonl')
     mkdirSync(dirname(beyondBound), { recursive: true })
     writeFileSync(beyondBound, '{}\n')
@@ -242,12 +250,14 @@ describe('grok-session-paths', () => {
   it('stops the directory iterator after the exact eligible-entry cap and closes it', async () => {
     let yielded = 0
     let closed = 0
+
     const entries = [
       { name: 'file', directory: false, symlink: false },
       { name: 'group-a', directory: true, symlink: false },
       { name: 'group-b', directory: true, symlink: false },
       { name: 'group-c', directory: true, symlink: false }
     ]
+
     setGrokSessionDirectoryOpenerForTests(async () => ({
       async *[Symbol.asyncIterator]() {
         for (const entry of entries) {
@@ -277,6 +287,7 @@ describe('grok-session-paths', () => {
     let calls = 0
     setGrokSessionPathScannerForTests(async () => {
       calls += 1
+
       return scan.promise
     })
 
@@ -297,6 +308,7 @@ describe('grok-session-paths', () => {
       started.push(key)
       const scan = deferred<string | null>()
       scans.set(key, scan)
+
       return scan.promise
     })
 
@@ -318,12 +330,15 @@ describe('grok-session-paths', () => {
       started.push(root)
       const scan = deferred<string | null>()
       scans.set(root, scan)
+
       return scan.promise
     })
+
     const roots = Array.from(
       { length: GROK_SESSION_SCAN_ACTIVE_ROOT_MAX + 2 },
       (_, index) => `/sessions/root-${index}`
     )
+
     const lookups = roots.map((root, index) =>
       findGrokChatHistoryBySessionId(root, `sess-${index}`)
     )
@@ -339,6 +354,7 @@ describe('grok-session-paths', () => {
     for (const root of roots.slice(2)) {
       scans.get(root)?.resolve(null)
     }
+
     await Promise.all(lookups)
   })
 
@@ -347,12 +363,15 @@ describe('grok-session-paths', () => {
     let calls = 0
     setGrokSessionPathScannerForTests(async () => {
       calls += 1
+
       return calls === 1 ? firstScan.promise : null
     })
     const active = findGrokChatHistoryBySessionId('/sessions/overflow', 'sess-active')
+
     const queued = Array.from({ length: GROK_SESSION_SCAN_QUEUE_MAX_ENTRIES }, (_, index) =>
       findGrokChatHistoryBySessionId('/sessions/overflow', `sess-queued-${index}`)
     )
+
     const overflow = findGrokChatHistoryBySessionId('/sessions/overflow', 'sess-overflow')
 
     await expect(overflow).resolves.toBeNull()
@@ -370,9 +389,11 @@ describe('grok-session-paths', () => {
     const started: string[] = []
     setGrokSessionPathScannerForTests(async (_root, sessionId) => {
       started.push(sessionId)
+
       if (sessionId === 'sess-reject') {
         return firstScan.promise
       }
+
       return null
     })
     const rejected = findGrokChatHistoryBySessionId('/sessions/reject', 'sess-reject')

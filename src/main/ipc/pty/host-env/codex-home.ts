@@ -70,9 +70,11 @@ export function getLocalOrcaCodexHomeEnvKeysToDelete(env: Record<string, string>
   const inheritedOrcaOverride = env.ORCA_CODEX_HOME ?? process.env.ORCA_CODEX_HOME
   const inheritedCodexHome = env.CODEX_HOME ?? process.env.CODEX_HOME
   const keysToDelete = ['ORCA_CODEX_HOME']
+
   if (inheritedOrcaOverride && inheritedCodexHome === inheritedOrcaOverride) {
     keysToDelete.push('CODEX_HOME')
   }
+
   return keysToDelete
 }
 
@@ -82,9 +84,11 @@ export function getCodexSelectionTargetForPty(
   wslDistro?: string | null
 ): CodexAccountSelectionTarget {
   const wslPath = typeof cwd === 'string' ? parseWslPath(cwd) : null
+
   if (isWslShellName(shellPath) || wslPath) {
     return { runtime: 'wsl', wslDistro: wslPath?.distro ?? wslDistro ?? null }
   }
+
   return { runtime: 'host' }
 }
 
@@ -95,10 +99,13 @@ export function getCompatibleSelectedCodexHomePath(
   if (!selectedCodexHomePath) {
     return null
   }
+
   const wslInfo = parseWslPath(selectedCodexHomePath)
+
   if (target.runtime === 'wsl') {
     return wslInfo || !isHostCodexHomeForWsl(selectedCodexHomePath) ? selectedCodexHomePath : null
   }
+
   return wslInfo || (process.platform === 'win32' && isWslCodexHomeForHost(selectedCodexHomePath))
     ? null
     : selectedCodexHomePath
@@ -106,6 +113,7 @@ export function getCompatibleSelectedCodexHomePath(
 
 export const MANAGED_CODEX_AUTH_UNAVAILABLE_MESSAGE =
   'The selected Codex account credentials are temporarily unavailable. Try opening the terminal again.'
+
 export const CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE =
   'The Codex account credentials for this session are temporarily unavailable. Try opening the terminal again.'
 
@@ -124,17 +132,20 @@ export function resolveCodexHomeAfterManagedAuthReadiness(
   args: ManagedCodexAuthResolutionArgs
 ): string | null | Promise<string | null> {
   const selectedCodexHomePath = args.selectedCodexHomePath
+
   if (
     args.requiredCodexHomePath &&
     !codexHomePathsEqual(selectedCodexHomePath, args.requiredCodexHomePath)
   ) {
     throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
   }
+
   const readiness = waitForManagedCodexAuthReady({
     codexHomePath: selectedCodexHomePath,
     settings: args.getSettings(),
     target: args.target
   })
+
   return readiness
     ? continueCodexHomeAfterManagedAuthWait(args, selectedCodexHomePath, readiness)
     : selectedCodexHomePath
@@ -147,47 +158,62 @@ async function continueCodexHomeAfterManagedAuthWait(
 ): Promise<string | null> {
   let selectedCodexHomePath = initialCodexHomePath
   let readiness = initialReadiness
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
     if (await readiness) {
       if (args.requiredCodexHomePath) {
         return selectedCodexHomePath
       }
+
       const currentCodexHomePath = await args.resolveCurrent()
+
       if (codexHomeSelectionsEqual(selectedCodexHomePath, currentCodexHomePath)) {
         return selectedCodexHomePath
       }
+
       selectedCodexHomePath = currentCodexHomePath
+
       if (attempt === 1) {
         break
       }
+
       const nextReadiness = waitForManagedCodexAuthReady({
         codexHomePath: selectedCodexHomePath,
         settings: args.getSettings(),
         target: args.target
       })
+
       if (!nextReadiness) {
         return selectedCodexHomePath
       }
+
       readiness = nextReadiness
       continue
     }
+
     if (args.requiredCodexHomePath) {
       throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
     }
+
     selectedCodexHomePath = await args.resolveAfterUnavailable(selectedCodexHomePath!)
+
     if (attempt === 1) {
       break
     }
+
     const nextReadiness = waitForManagedCodexAuthReady({
       codexHomePath: selectedCodexHomePath,
       settings: args.getSettings(),
       target: args.target
     })
+
     if (!nextReadiness) {
       return selectedCodexHomePath
     }
+
     readiness = nextReadiness
   }
+
   if (
     isCodexHomeAuthReadyForLaunch({
       codexHomePath: selectedCodexHomePath,
@@ -197,6 +223,7 @@ async function continueCodexHomeAfterManagedAuthWait(
   ) {
     return selectedCodexHomePath
   }
+
   throw new Error(MANAGED_CODEX_AUTH_UNAVAILABLE_MESSAGE)
 }
 
@@ -232,8 +259,10 @@ export function recordCodexPaneAccountForSpawn(args: {
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
     return
   }
+
   const customHomeOverride = getCustomCodexHomeOverrideForLaunch(args.launchEnv)
   const processHomeOverride = customHomeOverride ? getCustomCodexHomeOverrideForLaunch() : null
+
   const recheckableEnvironmentOverride =
     customHomeOverride?.source === 'environment' &&
     processHomeOverride?.source === 'environment' &&
@@ -243,6 +272,7 @@ export function recordCodexPaneAccountForSpawn(args: {
     )
       ? customHomeOverride.context
       : undefined
+
   const recheckableShellStartupOverride =
     customHomeOverride?.source === 'shell-startup' &&
     processHomeOverride?.source === 'shell-startup' &&
@@ -252,6 +282,7 @@ export function recordCodexPaneAccountForSpawn(args: {
     )
       ? customHomeOverride.context
       : undefined
+
   const record = args.settings
     ? resolveCodexPaneLaunchAccount({
         pinnedByResume: args.pinnedByResume,
@@ -271,10 +302,13 @@ export function recordCodexPaneAccountForSpawn(args: {
         target: args.target
       })
     : null
+
   if (!record) {
     forgetCodexPaneAccount(args.ptyId)
+
     return
   }
+
   recordCodexPaneAccount(args.ptyId, record)
 }
 
@@ -282,12 +316,15 @@ export function snapshotCodexPaneHomeRoutes(
   ptyIds: readonly (string | null | undefined)[]
 ): ReadonlyMap<string, CodexPaneHomeRoute | null> {
   const routes = new Map<string, CodexPaneHomeRoute | null>()
+
   for (const ptyId of ptyIds) {
     if (!ptyId || routes.has(ptyId)) {
       continue
     }
+
     routes.set(ptyId, getCodexPaneAccount(ptyId)?.homeRoute ?? null)
   }
+
   return routes
 }
 
@@ -299,5 +336,6 @@ export function codexReattachedHomeRouteField(
   if (!reattached || !routes.has(ptyId)) {
     return {}
   }
+
   return { reattachedHomeRoute: routes.get(ptyId) ?? null }
 }

@@ -46,6 +46,7 @@ export function readSavedCursorRegister(
   terminal: SerializeCursorTerminal
 ): SavedCursorRegister | null {
   const core = (terminal as TerminalWithSavedCursorCore)._core?.buffer
+
   if (
     typeof core?.savedX !== 'number' ||
     typeof core.savedY !== 'number' ||
@@ -53,18 +54,21 @@ export function readSavedCursorRegister(
   ) {
     return null
   }
+
   // savedY is absolute; DECRC restores it relative to the ybase current at
   // restore time, clamping at the top — mirror that clamp here. savedX can be
   // cols (DECSC during wrap-pending); CUP cannot re-create pending, so clamp.
   const y = Math.min(Math.max(core.savedY - core.ybase, 0), terminal.rows - 1)
   const x = Math.min(Math.max(core.savedX, 0), terminal.cols - 1)
   const originMode = core.savedOriginMode === true
+
   if (x === 0 && y === 0 && !originMode) {
     // Home is xterm's never-saved default: a fresh restore terminal already
     // sends DECRC to home, and skipping the injection avoids overwriting the
     // fresh terminal's default saved SGR/charset when nothing was ever saved.
     return null
   }
+
   return { x, y, originMode }
 }
 
@@ -75,12 +79,14 @@ export function serializeWithAbsoluteCursor<TOpts>(
   savedCursor?: SavedCursorRegister | null
 ): string {
   const serialized = serializer.serialize(opts)
+
   // Why skip empty snapshots: several callers treat '' as "nothing to
   // restore" (e.g. shutdown layout capture drops empty buffers); a bare CUP
   // would turn every idle pane into a persisted snapshot.
   if (serialized.length === 0) {
     return serialized
   }
+
   return `${serialized}${buildAbsoluteCursorRestoreSequence(terminal, savedCursor)}`
 }
 
@@ -97,15 +103,18 @@ export function buildAbsoluteCursorRestoreSequence(
   const scrollBottom = buffer?.scrollBottom ?? terminal.rows - 1
   const originMode = terminalWithCore.modes?.originMode === true
   const cupCursorY = cursorY - (originMode ? scrollTop : 0)
+
   // Why skip wrap-pending sources (cursorX == cols): plain replay already
   // reproduces that state exactly, while CUP would clamp to the last column
   // and clear the pending-wrap flag, changing how the next byte renders.
   // The remaining bounds checks are defensive: never emit a clamping CUP.
   const canRestoreCurrentCursor =
     cursorX >= 0 && cursorX < terminal.cols && cupCursorY >= 0 && cupCursorY < terminal.rows
+
   if (!canRestoreCurrentCursor && options.restoreModesWithoutCursor !== true) {
     return ''
   }
+
   // Why the DECSC injection: the serialized screen cannot carry the VT100
   // saved-cursor register, so a hidden DECSC followed by a post-reveal DECRC
   // restored to home and clobbered live cells (Bug D in
@@ -118,16 +127,21 @@ export function buildAbsoluteCursorRestoreSequence(
   const savedRestore = savedCursor
     ? `\x1b[r\x1b[?6${savedCursor.originMode ? 'h' : 'l'}\x1b[${savedCursor.y + 1};${savedCursor.x + 1}H\x1b7`
     : ''
+
   const mustRestoreModes = savedCursor != null || options.restoreModesWithoutCursor === true
+
   const scrollRegionRestore =
     mustRestoreModes && (scrollTop !== 0 || scrollBottom !== terminal.rows - 1)
       ? `\x1b[${scrollTop + 1};${scrollBottom + 1}r`
       : ''
+
   const originModeRestore = mustRestoreModes ? `\x1b[?6${originMode ? 'h' : 'l'}` : ''
+
   // CUP rows become margin-relative under DECOM; ordinary snapshots keep the
   // zero offset because scrollback length does not shift viewport coordinates.
   const currentCursorRestore = canRestoreCurrentCursor
     ? `\x1b[${cupCursorY + 1};${cursorX + 1}H`
     : ''
+
   return `${savedRestore}${scrollRegionRestore}${originModeRestore}${currentCursorRestore}`
 }

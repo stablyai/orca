@@ -8,10 +8,12 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
   spawn: vi.fn()
 }))
+
 vi.mock('../../observability/instrumentation', () => ({
   withGitSpan: (_attributes: unknown, run: (span: unknown) => unknown) =>
     run({ setAttribute: () => {} })
 }))
+
 vi.mock('../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn: vi.fn() }))
 
 import { gitExecFileAsync } from '../runner'
@@ -47,6 +49,7 @@ function hostFailure(stdout: string): Error {
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {
@@ -70,6 +73,7 @@ describe('wsl.exe host failure classification', () => {
       stdout: '',
       stderr: 'fatal: not a git repository\n'
     })
+
     expect(readWslHostFailureDiagnostic(guestFailure, WSL_COMMAND)).toBeNull()
     // Same exit code, but wsl.exe was never involved.
     expect(
@@ -89,6 +93,7 @@ describe('wsl.exe host failure classification', () => {
       wslDistro?: string
       code?: number
     }
+
     expect(error.message).toContain('Wsl/Service/WSL_E_DISTRO_NOT_FOUND')
     expect(error.message).toContain('kali-linux')
     expect(error.wslHostFailure).toBe(true)
@@ -118,6 +123,7 @@ describe('WSL-routed git subprocess', () => {
       const child = new EventEmitter() as EventEmitter & { pid: number; kill: () => void }
       child.pid = 4321
       child.kill = () => {}
+
       queueMicrotask(() =>
         callback?.(
           hostFailure(asUtf16Mojibake(WSL_DIAGNOSTIC)),
@@ -125,6 +131,7 @@ describe('WSL-routed git subprocess', () => {
           ''
         )
       )
+
       return child
     })
 

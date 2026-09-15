@@ -2,33 +2,43 @@ export function getRemoteLinearReadHelp(commandPath: string[]): string | null {
   if (commandPath.length === 1 && commandPath[0] === 'linear') {
     return LINEAR_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'issue')) {
     return LINEAR_ISSUE_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'list-issues')) {
     return LINEAR_MCP_ISSUE_LIST_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'search')) {
     return LINEAR_SEARCH_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'team', 'list')) {
     return LINEAR_TEAM_LIST_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'team', 'members')) {
     return LINEAR_TEAM_MEMBERS_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'team', 'states')) {
     return LINEAR_TEAM_STATES_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'team', 'labels')) {
     return LINEAR_TEAM_LABELS_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'project', 'list')) {
     return LINEAR_PROJECT_LIST_HELP
   }
+
   if (matchesRemoteCommand(commandPath, 'linear', 'list')) {
     return LINEAR_LIST_HELP
   }
+
   return null
 }
 

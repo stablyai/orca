@@ -38,6 +38,7 @@ afterEach(() => {
 describe('Linear save issue', () => {
   it('delegates creates with the MCP-required team and title', async () => {
     const runtime = new OrcaRuntimeService()
+
     const create = vi.spyOn(runtime, 'linearIssueCreate').mockResolvedValue({
       issue,
       meta: { workspaceId: 'workspace-1', writeId: 'write-1', deduplicated: false }
@@ -135,6 +136,7 @@ describe('Linear save issue', () => {
 
   it('resolves workflow lifecycle types while preferring exact state names', () => {
     const runtime = new OrcaRuntimeService() as unknown as SaveIssueInternals
+
     const states = [
       { id: 'state-progress', name: 'In Progress', type: 'started' },
       { id: 'state-started', name: 'Started', type: 'unstarted' }

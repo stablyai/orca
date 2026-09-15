@@ -23,6 +23,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
 // plaintext always yields the same ciphertext), which is what makes the
 // cross-field blob-collision reachable by a user.
 const cipherState = { encryptionAvailable: true, deterministic: false }
+
 const DETERMINISTIC_IV = 'd'.repeat(36)
 
 vi.mock('electron', () => ({
@@ -51,9 +52,11 @@ async function createStore() {
       ),
     decryptString: (ciphertext) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('enc:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('enc:'.length + 36 + 1)
     },
     describeProtectionGap: () => null
@@ -63,6 +66,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
@@ -74,6 +78,7 @@ const SECRETS = {
   opencodeSessionCookie: 'cookie-$&-value',
   httpProxyUrl: 'http://user:p@ss@proxy.local:8080'
 } as const
+
 const KAGI_LINK = 'https://kagi.com/session?token=abc123'
 
 describe('persistence single-serialize save guard', () => {
@@ -95,6 +100,7 @@ describe('persistence single-serialize save guard', () => {
     store.updateUI({ browserKagiSessionLink: KAGI_LINK })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
+
     return store
   }
 
@@ -134,10 +140,12 @@ describe('persistence single-serialize save guard', () => {
     await seedStoreWithSecrets()
 
     const raw = readFileSync(dataFile(), 'utf-8')
+
     const persisted = JSON.parse(raw) as {
       settings: { opencodeSessionCookie: string; httpProxyUrl: string }
       ui: { browserKagiSessionLink: string }
     }
+
     // Secrets are ciphertext on disk, plaintext nowhere in the payload.
     expect(persisted.settings.opencodeSessionCookie).not.toBe(SECRETS.opencodeSessionCookie)
     expect(persisted.settings.httpProxyUrl).not.toBe(SECRETS.httpProxyUrl)
@@ -161,6 +169,7 @@ describe('persistence single-serialize save guard', () => {
     const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
       settings: { opencodeSessionCookie: string; httpProxyUrl: string }
     }
+
     expect(persisted.settings.opencodeSessionCookie).toBe('')
     expect(persisted.settings.httpProxyUrl).toBe('')
 
@@ -188,17 +197,21 @@ describe('persistence single-serialize save guard', () => {
     // stay far below the threshold).
     const original = JSON.stringify.bind(JSON)
     let fullStateSerializations = 0
+
     const spy = vi.spyOn(JSON, 'stringify').mockImplementation(((
       value: unknown,
       ...rest: unknown[]
     ) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const out = original(value as any, ...(rest as [any?, any?]))
+
       if (typeof out === 'string' && out.length > 1_000) {
         fullStateSerializations++
       }
+
       return out
     }) as typeof JSON.stringify)
+
     try {
       store.updateUI({ sidebarWidth: 640 })
       vi.advanceTimersByTime(2000)
@@ -227,11 +240,13 @@ describe('persistence single-serialize save guard', () => {
     store.updateSettings({ opencodeSessionCookie: P })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
+
     const C = (
       JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
         settings: { opencodeSessionCookie: string }
       }
     ).settings.opencodeSessionCookie
+
     expect(C).not.toBe(P) // C is ciphertext
 
     // State 1: the plaintext bypass-rules field literally holds ciphertext C;
@@ -268,11 +283,13 @@ describe('persistence single-serialize save guard', () => {
     store.updateUI({ browserKagiSessionLink: K })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
+
     const C = (
       JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
         ui: { browserKagiSessionLink: string }
       }
     ).ui.browserKagiSessionLink
+
     expect(C).not.toBe(K) // C is ciphertext
 
     // State 1: env var literally named after the secret field, value = C; the

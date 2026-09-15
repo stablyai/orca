@@ -32,9 +32,11 @@ export function normalizeAiVaultSearchHistoryDays(value: unknown): number | null
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return null
   }
+
   // A fractional day floors to 0, which reads as "all history" on one side and
   // "now" on the other; make the two agree.
   const days = Math.floor(value)
+
   return days <= 0 ? null : Math.min(HISTORY_DAYS_MAX, days)
 }
 
@@ -48,9 +50,11 @@ export function resolveAiVaultSearchSettings(
   settings: { aiVaultSearch?: unknown } | null | undefined
 ): AiVaultSearchSettings {
   const raw = settings?.aiVaultSearch
+
   if (typeof raw !== 'object' || raw === null) {
     return { ...DEFAULT_AI_VAULT_SEARCH_SETTINGS }
   }
+
   return {
     enabled: 'enabled' in raw && raw.enabled === true,
     historyDays: normalizeAiVaultSearchHistoryDays('historyDays' in raw ? raw.historyDays : null)

@@ -33,10 +33,12 @@ const ptyQueues = new Map<string, PtyQueueState>()
 
 function getOrCreateState(ptyId: string): PtyQueueState {
   let state = ptyQueues.get(ptyId)
+
   if (!state) {
     state = { tail: Promise.resolve(), freeAt: Date.now(), depth: 0, handles: new Set() }
     ptyQueues.set(ptyId, state)
   }
+
   return state
 }
 
@@ -46,15 +48,18 @@ export function resetNativeChatPtySendQueuesForTests(): void {
       handle.cancel()
     }
   }
+
   ptyQueues.clear()
 }
 
 /** Abort every in-flight/queued chat send on this PTY (clears delayed Enter). */
 export function cancelNativeChatPtySends(ptyId: string): void {
   const state = ptyQueues.get(ptyId)
+
   if (!state) {
     return
   }
+
   for (const handle of state.handles) {
     handle.cancel()
   }
@@ -63,9 +68,11 @@ export function cancelNativeChatPtySends(ptyId: string): void {
 /** Wait until every chat sequence on this PTY has finished or been cancelled. */
 export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
   const state = ptyQueues.get(ptyId)
+
   if (!state) {
     return
   }
+
   await state.tail
 }
 
@@ -102,6 +109,7 @@ export function enqueueNativeChatPtySend(
     if (finished) {
       return
     }
+
     finished = true
     const resolve = release
     release = null
@@ -114,6 +122,7 @@ export function enqueueNativeChatPtySend(
         fn()
       }
     }, ms)
+
     timers.push(timer)
   }
 
@@ -125,14 +134,18 @@ export function enqueueNativeChatPtySend(
   const execute = (): Promise<void> =>
     new Promise<void>((resolve) => {
       release = resolve
+
       if (cancelled) {
         release = null
         finished = true
         resolve()
+
         return
       }
+
       bodyStarted = true
       start({ isCancelled: () => cancelled, delay, markSubmitted })
+
       if (durationMs <= 0) {
         markSubmitted()
       }
@@ -149,6 +162,7 @@ export function enqueueNativeChatPtySend(
     state.depth = Math.max(0, state.depth - 1)
     finished = true
     dropHandle()
+
     // Why: drop the per-pty record once nothing is in flight so the map does not
     // accumulate one permanent entry per pty over a long, multi-pane session.
     if (state.depth === 0 && state.handles.size === 0 && ptyQueues.get(ptyId) === state) {
@@ -164,10 +178,13 @@ export function enqueueNativeChatPtySend(
       if (cancelled) {
         return
       }
+
       cancelled = true
+
       for (const timer of timers) {
         clearTimeout(timer)
       }
+
       const shouldClear = bodyStarted && !submitted
       // Why: refund only THIS sequence's charged window rather than collapsing
       // freeAt to now — later queued sends still hold the line, so a blanket
@@ -176,6 +193,7 @@ export function enqueueNativeChatPtySend(
       state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
       finishEntry()
       dropHandle()
+
       if (shouldClear) {
         options?.onCancelUnsubmitted?.()
       }
@@ -185,6 +203,8 @@ export function enqueueNativeChatPtySend(
     bodyStarted: () => bodyStarted,
     finished: () => finished
   }
+
   state.handles.add(handle)
+
   return handle
 }

@@ -58,6 +58,7 @@ export function SessionActionMenuItems({
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
   const deleteLabel = translate('auto.components.right.sidebar.AiVaultSessionRow.delete', 'Delete')
+
   const deleteItem = (
     <Item
       variant="destructive"

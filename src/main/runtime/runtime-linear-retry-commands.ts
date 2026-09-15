@@ -24,6 +24,7 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     } = {}
   ): LinearAgentAccessError {
     const workspaceId = target?.workspaceId ?? extra.team?.workspaceId ?? ''
+
     // Why: the retry preserves id and target so duplicate recovery can prove intent without matching mutable content.
     const pinned =
       verb === 'create'
@@ -52,13 +53,16 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
               : []),
             ...(verb === 'attach' ? ['--url URL_HERE', '--title TITLE_HERE'] : [])
           ].join(' ')
+
     const retryPrefix = extra.bodyRequired || verb === 'comment' ? 'Pipe the same body and r' : 'R'
+
     const payloadNote =
       verb === 'attach'
         ? ' Replace TITLE_HERE/URL_HERE with the exact original payload values before running.'
         : verb === 'create'
           ? ' Replace TITLE_HERE with the exact original title before running.'
           : ''
+
     return linearError(
       'linear_write_unconfirmed',
       'Linear may have applied the write, but Orca could not confirm it.',
@@ -87,20 +91,26 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     identifier: string | readonly string[]
   ): Promise<void> {
     const identifiers = typeof identifier === 'string' ? [identifier] : identifier
+
     const normalized = new Map(
       identifiers.map((value) => [value.toLocaleUpperCase(), value] as const)
     )
+
     for (const worktree of await this.listResolvedWorktrees()) {
       const linkedIdentifier = normalized.get(
         (worktree.linkedLinearIssue ?? '').toLocaleUpperCase()
       )
+
       if (!linkedIdentifier) {
         continue
       }
+
       const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? workspaceId
+
       if (linkedWorkspaceId !== workspaceId) {
         continue
       }
+
       this.emitClientEvent({
         type: 'linearLinkedIssueUpdated',
         worktreeId: worktree.id,
@@ -113,6 +123,7 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     if (!fields) {
       return []
     }
+
     return [
       ...(fields.stateId ? [`--state=${this.commandToken(fields.stateId, 'STATE_ID')}`] : []),
       ...(fields.assigneeId
@@ -137,15 +148,19 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     if (priority === 1) {
       return 'urgent'
     }
+
     if (priority === 2) {
       return 'high'
     }
+
     if (priority === 3) {
       return 'medium'
     }
+
     if (priority === 4) {
       return 'low'
     }
+
     return 'none'
   }
 }

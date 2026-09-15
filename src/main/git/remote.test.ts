@@ -41,18 +41,23 @@ describe('git remote operations', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'review/pr-1738\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.remote')) {
         return { stdout: 'pr-prateek-orca\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.pushRemote')) {
         return { stdout: 'pr-prateek-orca\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.merge')) {
         return { stdout: 'refs/heads/prateek/fix-sidebar-agents-toggle\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.base')) {
         throw new Error('missing branch base')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -73,21 +78,27 @@ describe('git remote operations', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature/fix\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.remote')) {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.pushRemote')) {
         throw new Error('missing pushRemote')
       }
+
       if (args[0] === 'config' && args.includes('remote.pushDefault')) {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.merge')) {
         return { stdout: 'refs/heads/main\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.base')) {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -108,18 +119,23 @@ describe('git remote operations', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'review/pr-1\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1.remote')) {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1.pushRemote')) {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1.merge')) {
         return { stdout: 'refs/heads/main\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.review/pr-1.base')) {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -136,24 +152,31 @@ describe('git remote operations', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'imp/chinese-translation\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('remote.pushDefault')) {
         throw new Error('missing pushDefault')
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
         return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -175,24 +198,31 @@ describe('git remote operations', () => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'imp/chinese-translation\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
         throw new Error('missing pushRemote')
       }
+
       if (args[0] === 'config' && args.includes('remote.pushDefault')) {
         throw new Error('missing pushDefault')
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
         return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
         return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === '-v') {
         return {
           stdout: [
@@ -204,9 +234,11 @@ describe('git remote operations', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\npr-pynickle-orca\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -229,19 +261,24 @@ describe('git remote operations', () => {
       })),
       { name: 'pr-pynickle-orca', url: 'https://github.com/pynickle/orca.git' }
     ]
+
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'imp/chinese-translation\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
         return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
+
       if (args[0] === 'config') {
         throw new Error(`config key is not set: ${args.join(' ')}`)
       }
+
       if (args[0] === 'remote' && args[1] === '-v') {
         return {
           stdout: remotes
@@ -250,9 +287,11 @@ describe('git remote operations', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'remote') {
         throw new Error(`unexpected remote scan: ${args.join(' ')}`)
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -353,6 +392,7 @@ describe('git remote operations', () => {
       )
 
     let caught: Error | undefined
+
     try {
       await gitPush('/repo', false)
     } catch (error) {
@@ -377,6 +417,7 @@ describe('git remote operations', () => {
       )
 
     let caught: Error | undefined
+
     try {
       await gitPush('/repo', false)
     } catch (error) {
@@ -398,6 +439,7 @@ describe('git remote operations', () => {
       )
 
     let caught: Error | undefined
+
     try {
       await gitPush('/repo', false)
     } catch (error) {
@@ -435,6 +477,7 @@ describe('git remote operations', () => {
     const divergentError = new Error(
       'Command failed: git pull\n' + 'fatal: Need to specify how to reconcile divergent branches.'
     )
+
     gitExecFileAsyncMock
       // First attempt: plain pull rejects with git's reconciliation error.
       .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
@@ -474,6 +517,7 @@ describe('git remote operations', () => {
     const divergentError = new Error(
       'Command failed: git pull\n' + 'fatal: Need to specify how to reconcile divergent branches.'
     )
+
     gitExecFileAsyncMock
       // First attempt: validate the target, then the plain pull rejects.
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
@@ -497,9 +541,11 @@ describe('git remote operations', () => {
     const divergentError = new Error(
       'Command failed: git pull\n' + 'fatal: Need to specify how to reconcile divergent branches.'
     )
+
     const mergeConflictError = new Error(
       'Command failed: git pull --no-rebase\nCONFLICT (content): Merge conflict in file.txt'
     )
+
     gitExecFileAsyncMock
       // First attempt fails with the reconciliation error.
       .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
@@ -845,15 +891,19 @@ describe('git remote operations', () => {
       if (args[0] === 'check-ref-format') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'fetch') {
         fetchAttempts += 1
+
         if (fetchAttempts === 1) {
           throw Object.assign(new Error("fatal: couldn't find remote ref refs/heads/gone"), {
             stderr: "fatal: couldn't find remote ref refs/heads/gone\n"
           })
         }
+
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'config' && args[1] === '--get-all') {
         return {
           stdout:
@@ -861,6 +911,7 @@ describe('git remote operations', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -882,9 +933,11 @@ describe('git remote operations', () => {
       if (args[0] === 'check-ref-format') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'fetch') {
         throw new Error('network unreachable')
       }
+
       return { stdout: '', stderr: '' }
     })
 

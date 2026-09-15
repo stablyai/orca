@@ -18,6 +18,7 @@ describe('WSL Claude plugin metadata', () => {
 
   it('decodes present files and retains missing files as null', () => {
     const settings = JSON.stringify({ enabledPlugins: { 'plugin@market': true } })
+
     const output = [
       record('F', '0', '1', Buffer.from(settings).toString('base64')),
       record('F', '1', '0', '')

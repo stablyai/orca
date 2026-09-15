@@ -18,6 +18,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
     const synchronousFailure = vi.fn(() => {
       throw new Error('renderer closing')
     })
+
     const rejectedFailure = vi.fn().mockRejectedValue(new Error('ipc unavailable'))
 
     await expect(
@@ -29,6 +30,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
   it('delivers a threshold retained before the renderer subscribed', async () => {
     const onNotice = vi.fn()
     const acknowledgePending = vi.fn().mockResolvedValue(undefined)
+
     const unsubscribe = subscribeToMacosTccPromptNotice(
       {
         acknowledgePending,
@@ -55,17 +57,21 @@ describe('subscribeToMacosTccPromptNotice', () => {
   it('consumes concurrent mount and live signals only once', async () => {
     const listenerState: { listener?: (payload: { promptCount: number }) => void } = {}
     const acknowledgePending = vi.fn().mockResolvedValue(undefined)
+
     const consumePending = vi
       .fn()
       .mockResolvedValueOnce({ claimId: 8, promptCount: 3 })
       .mockResolvedValue(null)
+
     const onNotice = vi.fn()
+
     const unsubscribe = subscribeToMacosTccPromptNotice(
       {
         acknowledgePending,
         consumePending,
         onThreshold: (listener) => {
           listenerState.listener = listener
+
           return vi.fn()
         }
       },
@@ -87,8 +93,10 @@ describe('subscribeToMacosTccPromptNotice', () => {
     const pendingState: {
       resolve?: (payload: { claimId: number; promptCount: number } | null) => void
     } = {}
+
     const onNotice = vi.fn()
     const acknowledgePending = vi.fn().mockResolvedValue(undefined)
+
     const unsubscribe = subscribeToMacosTccPromptNotice(
       {
         acknowledgePending,
@@ -113,12 +121,15 @@ describe('subscribeToMacosTccPromptNotice', () => {
   it('retries once after releasing a transient failed display', async () => {
     const error = new Error('toast unavailable')
     const acknowledgePending = vi.fn().mockResolvedValue(undefined)
+
     const consumePending = vi
       .fn()
       .mockResolvedValueOnce({ claimId: 10, promptCount: 3 })
       .mockResolvedValueOnce({ claimId: 11, promptCount: 3 })
+
     const releasePending = vi.fn().mockResolvedValue(undefined)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const onNotice = vi
       .fn()
       .mockImplementationOnce(() => {
@@ -147,10 +158,12 @@ describe('subscribeToMacosTccPromptNotice', () => {
 
   it('bounds persistent display failures and release rejection', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const consumePending = vi
       .fn()
       .mockResolvedValueOnce({ claimId: 20, promptCount: 3 })
       .mockResolvedValueOnce({ claimId: 21, promptCount: 3 })
+
     const releasePending = vi.fn().mockResolvedValue(undefined)
     subscribeToMacosTccPromptNotice(
       {
@@ -217,6 +230,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
   it('falls back to live delivery when consuming throws synchronously', async () => {
     const listenerState: { listener?: (payload: { promptCount: number }) => void } = {}
     const onNotice = vi.fn()
+
     const consumePending = vi.fn(() => {
       throw new Error('ipc unavailable')
     })
@@ -227,6 +241,7 @@ describe('subscribeToMacosTccPromptNotice', () => {
           consumePending,
           onThreshold: (listener) => {
             listenerState.listener = listener
+
             return vi.fn()
           }
         },
@@ -269,10 +284,12 @@ describe('subscribeToMacosTccPromptNotice', () => {
   it('keeps live delivery with an older preload that has no consume API', () => {
     const listenerState: { listener?: (payload: { promptCount: number }) => void } = {}
     const onNotice = vi.fn()
+
     const unsubscribe = subscribeToMacosTccPromptNotice(
       {
         onThreshold: (listener) => {
           listenerState.listener = listener
+
           return vi.fn()
         }
       },

@@ -39,6 +39,7 @@ export function createDesktopMobileE2EEV2OutboundQueue(args: {
         item.kind === 'text'
           ? mobileE2EETextPayloadAdmissionBytes(item.plaintext)
           : mobileE2EEBinaryPayloadAdmissionBytes(item.plaintext)
+
       return Number.isFinite(bytes) ? bytes + 82 : bytes
     },
     getBufferedAmount: () => args.ws.bufferedAmount,

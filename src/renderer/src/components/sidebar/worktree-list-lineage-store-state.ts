@@ -35,6 +35,7 @@ export function setLineageFixtureState(
   } = {}
 ): void {
   const projectGroupDepth = Math.max(0, Math.floor(options.projectGroupDepth ?? 0))
+
   const parentProjectGroups: ProjectGroup[] = Array.from(
     { length: projectGroupDepth },
     (_, index) => ({
@@ -50,6 +51,7 @@ export function setLineageFixtureState(
       updatedAt: 1
     })
   )
+
   const projectGroup: ProjectGroup = {
     id: 'project-group-1',
     name: 'Personal',
@@ -62,10 +64,12 @@ export function setLineageFixtureState(
     createdAt: 1,
     updatedAt: 1
   }
+
   const repo = {
     ...makeRepo(),
     projectGroupId: options.projectGrouped ? projectGroup.id : null
   }
+
   const parent = makeWorktree({
     id: 'parent',
     instanceId: 'parent-instance',
@@ -73,6 +77,7 @@ export function setLineageFixtureState(
     branch: 'parent-branch',
     sortOrder: 30
   })
+
   const child = makeWorktree({
     id: 'child',
     instanceId: 'child-instance',
@@ -80,7 +85,9 @@ export function setLineageFixtureState(
     branch: 'child-branch',
     sortOrder: 20
   })
+
   Object.assign(child, options.childWorktreeOverrides)
+
   const grandchild = makeWorktree({
     id: 'grandchild',
     instanceId: 'grandchild-instance',
@@ -88,6 +95,7 @@ export function setLineageFixtureState(
     branch: 'grandchild-branch',
     sortOrder: 10
   })
+
   const unreadWorktreeIds = new Set(options.unreadWorktreeIds ?? [])
   parent.isUnread = unreadWorktreeIds.has(parent.id)
   child.isUnread = unreadWorktreeIds.has(child.id)

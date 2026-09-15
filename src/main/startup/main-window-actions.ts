@@ -23,6 +23,7 @@ import {
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
 let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+
 export function setMainWindowOpener(
   opener: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
 ): void {
@@ -44,8 +45,10 @@ export function focusExistingWindow(): void {
 export function showMainWindowFromTray(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     safelyRevealWindow(state.mainWindow)
+
     return
   }
+
   if (!isQuittingForUpdate()) {
     openWindow()
   }
@@ -54,9 +57,11 @@ export function showMainWindowFromTray(): void {
 export function openSettingsFromSystemMenu(): void {
   showMainWindowFromTray()
   const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
+
   if (!targetWindow) {
     return
   }
+
   recordCrashBreadcrumb('settings_opened')
   targetWindow.webContents.send('ui:openSettings')
   state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
@@ -66,6 +71,7 @@ export function quitFromSystemTray(): void {
   if (state.mainWindow && !state.mainWindow.isDestroyed()) {
     showMainWindowFromTray()
   }
+
   state.isQuitting = true
   app.quit()
 }
@@ -77,9 +83,11 @@ export function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void 
 
 export function getSystemTrayOptions(): SystemTrayOptions | null {
   const store = state.store
+
   if (!store) {
     return null
   }
+
   return {
     appIcon: store.getSettings().appIcon,
     isDevInstance: state.devInstanceIdentity?.isDev ?? false,
@@ -98,7 +106,9 @@ export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   if (process.platform !== 'darwin' || state.isServeMode) {
     return null
   }
+
   const options = getSystemTrayOptions()
+
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
@@ -107,18 +117,24 @@ export function createSystemTrayDeferred(
   onCreated?: () => void
 ): () => void {
   let trayCreated = false
+
   return () => {
     if (trayCreated || window.isDestroyed() || state.isQuitting || !state.store) {
       return
     }
+
     trayCreated = true
+
     if (process.platform === 'darwin') {
       if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
         onCreated?.()
       }
+
       return
     }
+
     const options = getSystemTrayOptions()
+
     if (options && createSystemTray(options)) {
       onCreated?.()
     }
@@ -130,6 +146,7 @@ export function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
     targetWindow && !targetWindow.isDestroyed()
       ? targetWindow.webContents
       : state.mainWindow?.webContents
+
   webContents?.send('ui:openFeatureTour')
 }
 
@@ -138,6 +155,7 @@ export function sendOpenSetupGuide(targetWindow?: BrowserWindow | null): void {
     targetWindow && !targetWindow.isDestroyed()
       ? targetWindow.webContents
       : state.mainWindow?.webContents
+
   webContents?.send('ui:openSetupGuide')
 }
 
@@ -146,6 +164,7 @@ export function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
     targetWindow && !targetWindow.isDestroyed()
       ? targetWindow.webContents
       : state.mainWindow?.webContents
+
   webContents?.send('ui:openCrashReport')
 }
 
@@ -163,6 +182,7 @@ export async function showRendererRecoveryPrompt(
     showMessageBox: (options) => {
       const window =
         state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined
+
       return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options)
     },
     copyToClipboard: (text) => clipboard.writeText(text),
@@ -170,14 +190,18 @@ export async function showRendererRecoveryPrompt(
       if (!state.mainWindow || state.mainWindow.isDestroyed()) {
         return
       }
+
       recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
+
       // Why: leave the breaker open so a re-crash re-raises this prompt instead of resuming the auto-reload loop.
       // Why watched: Reload is the dialog's default button, and an unwatched retry that stalls returns the user to
       // the same silent hang with no further prompt — the watchdog re-raises this dialog instead.
       if (retry) {
         retry()
+
         return
       }
+
       loadMainWindow(state.mainWindow)
     },
     quit: () => {

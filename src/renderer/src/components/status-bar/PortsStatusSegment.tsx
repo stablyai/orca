@@ -43,6 +43,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
   const unavailableHosts = useMemo(() => getUnavailableWorkspacePortHosts(scansByKey), [scansByKey])
+
   const hostLabel = useCallback(
     (host: WorkspacePortHostRef, hostScanKey: string, platform: NodeJS.Platform | null) => {
       if (host.kind === 'local') {
@@ -50,9 +51,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         // platform, so name the machine the scan actually ran on.
         return getLocalExecutionHostLabel(platform)
       }
+
       if (host.kind === 'unknown') {
         return hostScanKey
       }
+
       return (
         runtimeEnvironments.find((environment) => environment.id === host.environmentId)?.name ??
         host.environmentId
@@ -60,8 +63,10 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
     },
     [runtimeEnvironments]
   )
+
   const workspacePortCount = workspaceGroups.reduce((count, group) => count + group.ports.length, 0)
   const totalCount = workspacePortCount + externalPorts.length
+
   const unavailableNotices = useMemo<PortScanUnavailableNotice[]>(() => {
     if (unavailableHosts.length > 0) {
       return unavailableHosts.map((entry) => ({
@@ -70,26 +75,33 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
         reason: entry.reason
       }))
     }
+
     // Why: a projection published without per-host scans has no host to name.
     return scan?.unavailableReason
       ? [{ id: 'projection', host: scan.platform, reason: scan.unavailableReason }]
       : []
   }, [hostLabel, scan?.platform, scan?.unavailableReason, unavailableHosts])
+
   // Why: a failed scan keeps the host's last-good ports, and those ports are
   // counted in the badge and header — replacing the list with the notice would
   // leave the popover claiming N ports over an empty body. Only take over the
   // body when there is genuinely nothing left to list.
   const noticeReplacesList = Boolean(scan?.unavailableReason) && totalCount === 0
+
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (!nextOpen) {
         return
       }
+
       recordFeatureInteraction('ports')
+
       if (!runtimeTarget || !scanKey) {
         return
       }
+
       // Why: the 30s background poll is intentionally quiet; opening the
       // popover should still collapse that stale window without flashing icons.
       const publish = (result: WorkspacePortScanResult): void => {
@@ -100,6 +112,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey
         })
       }
+
       void scanWorkspacePortsForTarget(runtimeTarget)
         .then(publish)
         .catch((error) => {

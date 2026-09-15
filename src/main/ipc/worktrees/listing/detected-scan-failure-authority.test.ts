@@ -8,18 +8,23 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
   app: { getPath: () => '/tmp/orca-test' }
 }))
+
 vi.mock('../../../git/runner', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
+
 const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
+
 const { _resetWorktreeScanCacheForTests } = await import('../../../git/worktree-scan-cache')
+
 const { isRegisteredWorktreePath, invalidateAuthorizedRootsCache } =
   await import('../../registered-worktree-roots-cache')
 
 const REPO_PATH = '/workspace/repo'
+
 const repo = {
   id: 'repo-1',
   path: REPO_PATH,
@@ -58,6 +63,7 @@ function wslHostFailure(): Error {
 
 async function listDetected(): Promise<DetectedWorktreeListResult> {
   const result = await listDetectedWorktreesForCapturedRepo(createStore(), repo, () => true)
+
   return result as DetectedWorktreeListResult
 }
 

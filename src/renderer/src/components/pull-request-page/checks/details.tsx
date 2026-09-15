@@ -27,12 +27,15 @@ export function CheckDetailsPanel({
   const openUrl = details?.detailsUrl ?? details?.url ?? check.url
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
+
   const detailsStatusCheck: PRCheckDetail = {
     ...check,
     status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
     conclusion: (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
   }
+
   const hasOutput = Boolean(details?.title || details?.summary || details?.text)
+
   const annotationRows = assignUniqueListKeys(details?.annotations ?? [], (annotation) =>
     [
       annotation.path ?? 'annotation',
@@ -43,9 +46,11 @@ export function CheckDetailsPanel({
       annotation.message
     ].join('\0')
   )
+
   const jobRows = assignUniqueListKeys(details?.jobs ?? [], (job) =>
     job.id === null || job.id === undefined ? `name:${job.name}` : `id:${job.id}`
   )
+
   const hasAnnotations = annotationRows.length > 0
   const hasJobs = jobRows.length > 0
 

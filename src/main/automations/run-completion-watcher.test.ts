@@ -13,6 +13,7 @@ import type {
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
+
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
 vi.mock('electron', () => ({
@@ -36,6 +37,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -52,6 +54,7 @@ type TestStore = Awaited<ReturnType<typeof createStore>>
 
 function createAutomation(store: TestStore): Automation {
   store.addRepo(makeRepo())
+
   return store.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
@@ -74,9 +77,11 @@ const LAUNCH_TARGET = {
 
 function readRun(store: TestStore, automationId: string, runId: string): AutomationRun {
   const run = store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
+
   if (!run) {
     throw new Error('run missing')
   }
+
   return run
 }
 
@@ -104,6 +109,7 @@ describe('authority-owned automation run completion', () => {
   it('brings a headless dispatched run to a terminal state with no renderer attached', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
+
     const service = new AutomationService(store, {
       // Why: a dispatcher without a completion promise is exactly the case that
       // used to strand a run at 'dispatched' for the process lifetime.
@@ -122,6 +128,7 @@ describe('authority-owned automation run completion', () => {
   it('leaves a headless dispatched run alone when the authority cannot observe it', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(
@@ -144,6 +151,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(async () => {
@@ -189,6 +197,7 @@ describe('authority-owned automation run completion', () => {
         () => null
       )
     })
+
     vi.useFakeTimers()
     service.start()
     // Stranding needs a surface that reported ready and still cannot find the pane.
@@ -215,6 +224,7 @@ describe('authority-owned automation run completion', () => {
     })
 
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
+
     const service = new AutomationService(store, {
       terminalObserver: createObserver(
         () =>
@@ -223,6 +233,7 @@ describe('authority-owned automation run completion', () => {
           })
       )
     })
+
     service.start()
 
     await vi.waitFor(() => expect(resolveObservation).not.toBeNull())
@@ -238,6 +249,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(
@@ -277,6 +289,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const aborted: boolean[] = []
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: createObserver(
@@ -303,6 +316,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const publish = vi.fn()
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       onAutomationsChanged: publish
@@ -330,6 +344,7 @@ describe('automationsChanged publication', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const seen: { payload: AutomationsChangedPayload; status: string | undefined }[] = []
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       onAutomationsChanged: (payload) => {
@@ -366,6 +381,7 @@ describe('automationsChanged publication', () => {
     const automation = createAutomation(store)
     // An old client's event switch has no automationsChanged branch at all.
     const oldClientState = { repoRefreshes: 0 }
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       onAutomationsChanged: (payload) => {

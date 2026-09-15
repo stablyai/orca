@@ -37,6 +37,7 @@ export function attachMainWindowCoreServices(
   const keybindings = state.keybindings
   const codexRuntimeHome = state.codexRuntimeHome
   const claudeRuntimeAuth = state.claudeRuntimeAuth
+
   if (
     !store ||
     !runtime ||
@@ -54,6 +55,7 @@ export function attachMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
+
   registerCoreHandlers(
     store,
     runtime,
@@ -117,6 +119,7 @@ export function attachMainWindowCoreServices(
         if (window.webContents.id === webContentsId) {
           deps.markExpectedRendererReload(webContentsId)
         }
+
         deps.recordRendererReload(ignoreCache)
       },
       // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).

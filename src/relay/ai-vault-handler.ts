@@ -43,6 +43,7 @@ export class AiVaultHandler {
     )
     this.remoteHome = options.remoteHome ?? homedir()
     const hostPlatform = options.hostPlatform ?? currentRelayHostPlatform()
+
     // Why: an OS/arch this build has no path flavor for must not abort relay
     // startup — leaving the method unregistered soft-disables the feature and
     // the host falls back to its own SSH filesystem scan.
@@ -50,15 +51,20 @@ export class AiVaultHandler {
       relayLogLine(
         `[relay] Agent Session History disabled: unsupported platform ${process.platform}-${process.arch}`
       )
+
       return
     }
+
     // Why: same reasoning as an unsupported platform. Throwing here would take
     // relay startup — and every PTY on the host — down over a Vault wiring bug.
     const service = options.service
+
     if (!service) {
       relayLogLine('[relay] Agent Session History disabled: service unavailable')
+
       return
     }
+
     dispatcher.onRequest(SSH_AI_VAULT_LIST_SESSIONS_METHOD, (params, context) =>
       this.listSessions(service, params, context.signal)
     )
@@ -78,11 +84,13 @@ export class AiVaultHandler {
       if (error instanceof Error && error.name === 'AbortError') {
         throw error
       }
+
       // Why: titles are decoration. Degrade like an unresolvable title instead of
       // failing the RPC, which would surface a raw error on every list row.
       relayLogLine(
         `[relay-ai-vault-service] title resolution unavailable: ${error instanceof Error ? error.message : String(error)}`
       )
+
       return { titles: [] }
     }
   }
@@ -94,6 +102,7 @@ export class AiVaultHandler {
   ): Promise<AiVaultListResult> {
     const params = normalizeSshAiVaultRelayListParams(rawParams)
     let result: AiVaultListResult
+
     try {
       result = await this.scanCoordinator.run({
         key: JSON.stringify({
@@ -110,6 +119,7 @@ export class AiVaultHandler {
       if (error instanceof Error && error.name === 'AbortError') {
         throw error
       }
+
       result = {
         sessions: [],
         scannedAt: new Date().toISOString(),
@@ -124,9 +134,11 @@ export class AiVaultHandler {
         ]
       }
     }
+
     if (!params.scopePathsTruncated) {
       return result
     }
+
     return {
       ...result,
       issues: [
@@ -147,16 +159,21 @@ function normalizeTitleRequests(raw: unknown): AiVaultSessionTitleRequest[] {
   if (!Array.isArray(raw)) {
     return []
   }
+
   const requests: AiVaultSessionTitleRequest[] = []
+
   for (const value of raw.slice(0, AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)) {
     if (!value || typeof value !== 'object') {
       continue
     }
+
     const record = value as Record<string, unknown>
     const agent = record.agent
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId.trim() : ''
+
     const transcriptPath =
       typeof record.transcriptPath === 'string' ? record.transcriptPath.trim() : ''
+
     if (
       (agent !== 'claude' && agent !== 'codex') ||
       !sessionId ||
@@ -166,8 +183,10 @@ function normalizeTitleRequests(raw: unknown): AiVaultSessionTitleRequest[] {
     ) {
       continue
     }
+
     requests.push({ agent, sessionId, transcriptPath })
   }
+
   return requests
 }
 
@@ -176,10 +195,12 @@ export function normalizeSshAiVaultRelayListParams(
 ): SshAiVaultRelayListParams {
   const rawLimit = params.limit
   const unlimited = params.unlimited === true
+
   const limit =
     !unlimited && typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
       ? Math.min(Math.floor(rawLimit), SSH_AI_VAULT_LIST_LIMIT_MAX)
       : undefined
+
   const scopePaths = Array.isArray(params.scopePaths)
     ? params.scopePaths
         .slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT)
@@ -190,9 +211,11 @@ export function normalizeSshAiVaultRelayListParams(
             path.length <= SSH_AI_VAULT_SCOPE_PATH_MAX_LENGTH
         )
     : undefined
+
   const scopePathsTruncated =
     params.scopePathsTruncated === true ||
     (Array.isArray(params.scopePaths) && params.scopePaths.length > AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+
   return {
     ...(unlimited ? { unlimited: true } : {}),
     ...(limit === undefined ? {} : { limit }),
@@ -204,5 +227,6 @@ export function normalizeSshAiVaultRelayListParams(
 
 function currentRelayHostPlatform(): RemoteHostPlatform | null {
   const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
+
   return relayPlatform ? getRemoteHostPlatform(relayPlatform) : null
 }

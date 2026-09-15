@@ -12,6 +12,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 }))
 
 const runtimeCall = vi.fn()
+
 const killPty = vi.fn().mockResolvedValue(undefined)
 
 globalThis.window = {
@@ -27,6 +28,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { createTestStore, makeRuntimeOwnedWorktree, makeTab, seedStore } from './store-test-helpers'
 
 const worktreeId = 'repo1::/srv/worktree'
+
 const ptyId = 'remote:env-1@@pty-1'
 
 function seedRuntimeOwnedWorktree(store: ReturnType<typeof createTestStore>): void {

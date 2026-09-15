@@ -30,10 +30,13 @@ export async function captureClaudeAuthFromExistingConfigDir(
   runCommand: ClaudeCaptureCommand
 ): Promise<CapturedClaudeAuth> {
   const trimmed = configDir.trim()
+
   if (!trimmed) {
     throw new Error('A Claude config directory path is required.')
   }
+
   const resolvedDir = resolve(trimmed)
+
   if (process.platform !== 'darwin' && !existsSync(join(resolvedDir, '.credentials.json'))) {
     throw new Error(
       `No Claude credentials found in ${resolvedDir}. Run \`claude login\` into this directory first.`
@@ -41,6 +44,7 @@ export async function captureClaudeAuthFromExistingConfigDir(
   }
 
   let status = ''
+
   try {
     status = await runCommand(
       ['auth', 'status', '--json'],
@@ -51,7 +55,9 @@ export async function captureClaudeAuthFromExistingConfigDir(
   } catch (error) {
     console.warn('[claude-accounts] Could not read `claude auth status`:', error)
   }
+
   const currentLegacyKeychain = await readActiveClaudeKeychainCredentialsStrict()
+
   return captureClaudeAuthFromConfigDir(
     resolvedDir,
     status,
@@ -72,10 +78,13 @@ export async function captureClaudeAuthFromConfigDir(
     previousLegacyKeychain,
     previousLegacyCredentialsSha256
   )
+
   if (!credentialsJson) {
     throw new Error('Claude login completed, but no OAuth credentials were captured.')
   }
+
   const oauthAccount = readClaudeOauthAccount(configDir)
+
   return {
     credentialsJson,
     oauthAccount,
@@ -90,21 +99,27 @@ export async function readCapturedClaudeCredentials(
 ): Promise<string | null> {
   if (process.platform === 'darwin') {
     const scopedCredentialsJson = await readActiveClaudeKeychainCredentialsStrict(configDir)
+
     if (scopedCredentialsJson) {
       return scopedCredentialsJson
     }
+
     const legacyCredentialsJson = await readActiveClaudeKeychainCredentialsStrict()
+
     const legacyChanged =
       previousLegacyCredentialsSha256 === undefined
         ? legacyCredentialsJson !== previousLegacyKeychain
         : legacyCredentialsJson !== null &&
           createHash('sha256').update(legacyCredentialsJson).digest('hex') !==
             previousLegacyCredentialsSha256
+
     if (legacyCredentialsJson && legacyChanged) {
       return legacyCredentialsJson
     }
   }
+
   const credentialsPath = join(configDir, '.credentials.json')
+
   return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
 }
 
@@ -113,8 +128,10 @@ function readClaudeOauthAccount(configDir: string): unknown {
     if (!existsSync(configPath)) {
       continue
     }
+
     try {
       const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+
       if (parsed.oauthAccount) {
         return parsed.oauthAccount
       }
@@ -122,6 +139,7 @@ function readClaudeOauthAccount(configDir: string): unknown {
       continue
     }
   }
+
   return null
 }
 
@@ -133,6 +151,7 @@ function resolveClaudeIdentity(
   const status = parseJsonObject(statusOutput)
   const oauth = asRecord(oauthAccount)
   const credentialOauth = asRecord(parseJsonObject(credentialsJson)?.claudeAiOauth)
+
   return {
     email: normalizeField(
       readString(status, 'email') ??
@@ -172,5 +191,6 @@ function readString(value: Record<string, unknown> | null, key: string): string 
 
 function normalizeField(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }

@@ -11,7 +11,9 @@ export function resolveHostReadableAiVaultTitleRequests(
       if (!request.transcriptPath || signal?.aborted) {
         return request
       }
+
       let transcriptPath: string | null
+
       try {
         transcriptPath = await toHostReadableTranscriptPath(request.transcriptPath)
       } catch (error) {
@@ -20,6 +22,7 @@ export function resolveHostReadableAiVaultTitleRequests(
         void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
         transcriptPath = null
       }
+
       return transcriptPath && !signal?.aborted
         ? { ...request, transcriptPath }
         : { agent: request.agent, sessionId: request.sessionId }

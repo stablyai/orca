@@ -2,7 +2,9 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 
 export const FILE_EXPLORER_LOCAL_REFRESH_CONCURRENCY = 16
+
 export const FILE_EXPLORER_RUNTIME_REFRESH_CONCURRENCY = 8
+
 export const FILE_EXPLORER_REMOTE_REFRESH_CONCURRENCY = 4
 
 /**

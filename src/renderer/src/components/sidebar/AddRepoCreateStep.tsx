@@ -69,14 +69,17 @@ export function CreateStep({
     gitAvailability !== 'unavailable' &&
     !parentDefaultPending &&
     !isCreating
+
   const missingLocationLabel = translate(
     'auto.components.sidebar.AddRepoCreateStep.3a13f6e88b',
     'location not selected'
   )
+
   const missingServerLocationLabel = translate(
     'auto.components.sidebar.AddRepoCreateStep.6ed14c0281',
     'host folder not selected'
   )
+
   const isRemoteHost = Boolean(runtimeEnvironmentId || sshTargetId)
 
   const summaryParent = useMemo(
@@ -98,16 +101,21 @@ export function CreateStep({
       runtimeEnvironmentId
     ]
   )
+
   const targetPathPreview = useMemo(() => {
     const name = createName.trim() || CREATE_PROJECT_NAME_PLACEHOLDER
+
     return createParent.trim() ? joinCreateProjectPath(createParent, name) : ''
   }, [createName, createParent])
+
   const kindLabel = translate(
     'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
     'Git repository'
   )
+
   const showGitFallback = gitAvailability === 'unavailable'
   const showGitChecking = gitAvailability === 'checking'
+
   const showRuntimeMissingParent =
     runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
 

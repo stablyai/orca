@@ -41,6 +41,7 @@ export async function parseCursorSessionFile(
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
+
   return parseCursorSessionLines({ file, lines, platform, messages })
 }
 
@@ -61,16 +62,21 @@ export async function parseCursorSessionContent(
 
 function consumeCursorRecordLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
+
   updateTimeline(accumulator, extractString(record.timestamp))
   const role = extractString(record.role)
+
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
+
     if (role === 'user') {
       accumulator.title ??= extractMessageText(record.message) ?? extractContentText(record.content)
     }
+
     addPreviewContent(
       accumulator,
       role,
@@ -103,8 +109,10 @@ async function parseCursorSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createCursorSessionResumeState(args.file, args.messages)
+
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
+
   return state.finalize(args.platform, args.options)
 }

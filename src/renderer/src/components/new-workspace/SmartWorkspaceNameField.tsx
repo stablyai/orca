@@ -7,12 +7,15 @@ export type {
   SmartWorkspaceNameSelection,
   SmartWorkspaceNameFieldProps
 } from './smart-workspace-name-field-model'
+
 export { canUseGitLabSmartSource } from './smart-workspace-provider-availability'
+
 export { getRepoSlugCached } from './smart-workspace-repo-slug'
 
 export default function SmartWorkspaceNameField(
   props: SmartWorkspaceNameFieldProps
 ): React.JSX.Element {
   const controller = useSmartWorkspaceNameFieldController(props)
+
   return renderSmartWorkspaceNameField(controller)
 }

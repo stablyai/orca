@@ -20,7 +20,9 @@ export function taskWorkspaceHookMountAdapters(
       const useSsh = modules.load<
         typeof import('../../../tasks/use-mobile-tasks-workspace-ssh-state')
       >('mobile/src/tasks/use-mobile-tasks-workspace-ssh-state.tsx').useMobileTasksWorkspaceSshState
+
       const repo = { id: REPO, displayName: 'Repo', connectionId }
+
       const model = observableModel(context, {
         client: context.client,
         tasksSupported: true,
@@ -36,26 +38,33 @@ export function taskWorkspaceHookMountAdapters(
         workspaceSshState: null,
         workspaceSshConnecting: false
       })
+
       let actions: ReturnType<typeof useSsh>
+
       const hook = hookMount(() => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
         actions = useSsh(model as unknown as Parameters<typeof useSsh>[0])
       })
+
       let setup: unknown = 'unresolved'
+
       return {
         action(name) {
           if (name === 'mount') {
             return hook.mount()
           }
+
           if (name === 'connect') {
             return performHookAction(() => actions.connectWorkspaceSshRepo())
           }
+
           if (name === 'ensure-ready') {
             return actions.ensureWorkspaceSshReady(
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only id, displayName and connectionId.
               repo as Parameters<typeof actions.ensureWorkspaceSshReady>[0]
             )
           }
+
           if (name === 'resolve-setup') {
             return actions
               .resolveCreateSetupDecision(
@@ -64,9 +73,11 @@ export function taskWorkspaceHookMountAdapters(
               )
               .then((value: unknown) => {
                 setup = value
+
                 return value
               })
           }
+
           throw new Error(`Unknown workspace ssh action: ${name}`)
         },
         state: () =>
@@ -89,6 +100,7 @@ export function taskWorkspaceHookMountAdapters(
       >(
         'mobile/src/tasks/use-mobile-tasks-workspace-source-effects.tsx'
       ).useMobileTasksWorkspaceSourceEffects
+
       const model = observableModel(context, {
         client: context.client,
         tasksSupported: true,
@@ -107,20 +119,25 @@ export function taskWorkspaceHookMountAdapters(
         workspaceBaseBranchLoading: false,
         workspaceBaseBranchError: ''
       })
+
       const hook = hookMount(() => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
         useEffects(model as unknown as Parameters<typeof useEffects>[0])
       })
+
       return {
         action(name, args) {
           if (name === 'mount') {
             return hook.mount()
           }
+
           if (name === 'branch-query') {
             model.showWorkspaceBaseBranchPicker = true
             model.workspaceBaseBranchQuery = String(args.query ?? 'main')
+
             return hook.update()
           }
+
           throw new Error(`Unknown workspace source action: ${name}`)
         },
         state: () =>
@@ -140,6 +157,7 @@ export function taskWorkspaceHookMountAdapters(
       >(
         'mobile/src/tasks/use-mobile-tasks-workspace-sparse-actions.tsx'
       ).useMobileTasksWorkspaceSparseActions
+
       const model = observableModel(context, {
         client: context.client,
         tasksSupported: true,
@@ -161,19 +179,24 @@ export function taskWorkspaceHookMountAdapters(
         workspaceSshConnecting: false,
         showWorkspaceSparsePicker: false
       })
+
       let actions: ReturnType<typeof useSparse>
+
       const hook = hookMount(() => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
         actions = useSparse(model as unknown as Parameters<typeof useSparse>[0])
       })
+
       return {
         action(name) {
           if (name === 'mount') {
             return hook.mount()
           }
+
           if (name === 'save-preset') {
             return performHookAction(() => actions.saveWorkspaceSparsePreset())
           }
+
           throw new Error(`Unknown workspace sparse action: ${name}`)
         },
         state: () =>

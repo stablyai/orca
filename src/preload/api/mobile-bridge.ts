@@ -80,7 +80,9 @@ export const mobileApi = {
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, detail: MobileRelayStatusDetail) =>
       callback(detail)
+
     ipcRenderer.on('mobile:relayStatusChanged', listener)
+
     return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
   },
 
@@ -91,6 +93,7 @@ export const mobileApi = {
   onUnpairedDeviceAuthFailure: (callback: () => void): (() => void) => {
     const listener = () => callback()
     ipcRenderer.on('mobile:unpairedDeviceAuthFailure', listener)
+
     return () => ipcRenderer.removeListener('mobile:unpairedDeviceAuthFailure', listener)
   }
 } satisfies PreloadApi['mobile']

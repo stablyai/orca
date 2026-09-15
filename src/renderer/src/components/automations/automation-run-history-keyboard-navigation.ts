@@ -27,6 +27,7 @@ export function shouldHandleAutomationRunHistoryKey(event: {
   }
 
   const target = event.target
+
   if (target instanceof HTMLElement) {
     if (
       target.isContentEditable ||
@@ -36,9 +37,11 @@ export function shouldHandleAutomationRunHistoryKey(event: {
     ) {
       return false
     }
+
     if (target.closest('[role="dialog"], [role="menu"], [role="listbox"]')) {
       return false
     }
+
     // Enter belongs to the focused control; a focused run row is a button that opens itself on click.
     if (
       event.key === 'Enter' &&
@@ -59,16 +62,22 @@ export function getAutomationRunHistoryArrowTarget(args: {
   key: AutomationRunHistoryArrowKey
 }): AutomationRun | null {
   const { runs, selectedRunId, key } = args
+
   if (runs.length === 0) {
     return null
   }
+
   const currentIndex = selectedRunId ? runs.findIndex((run) => run.id === selectedRunId) : 0
+
   if (currentIndex < 0) {
     return runs[key === 'ArrowDown' ? 0 : runs.length - 1] ?? null
   }
+
   const nextIndex = key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1
+
   if (nextIndex < 0 || nextIndex >= runs.length) {
     return runs[currentIndex] ?? null
   }
+
   return runs[nextIndex] ?? null
 }

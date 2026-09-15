@@ -48,24 +48,31 @@ export function useNativeChatComposerKeyDown({
         if (event.key === 'Enter') {
           event.preventDefault()
         }
+
         return
       }
 
       if (autocomplete.mode === 'slash') {
         const items = autocomplete.items
+
         if (event.key === 'ArrowDown' && items.length > 0) {
           event.preventDefault()
           setActiveSuggestion((index) => (index + 1) % items.length)
+
           return
         }
+
         if (event.key === 'ArrowUp' && items.length > 0) {
           event.preventDefault()
           setActiveSuggestion((index) => (index - 1 + items.length) % items.length)
+
           return
         }
+
         if ((event.key === 'Enter' || event.key === 'Tab') && items.length > 0) {
           event.preventDefault()
           const item = items[activeSuggestion] ?? items[0]
+
           // A mid-prompt command is part of the sentence being written, so Enter
           // completes the token instead of sending the command on its own.
           if (event.key === 'Enter' && item.kind === 'command' && autocomplete.dispatchable) {
@@ -73,11 +80,14 @@ export function useNativeChatComposerKeyDown({
           } else {
             completePickerItem(item)
           }
+
           return
         }
+
         if (event.key === 'Escape') {
           event.preventDefault()
           dismissPicker(autocomplete.triggerKey)
+
           return
         }
       }
@@ -85,25 +95,33 @@ export function useNativeChatComposerKeyDown({
       if (event.key === 'Escape') {
         event.preventDefault()
         interrupt()
+
         return
       }
+
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         send()
+
         return
       }
+
       if (event.key === 'ArrowUp' && (draft === '' || history.index !== null)) {
         const recall = recallPrevious(history)
+
         if (recall.draft !== null) {
           event.preventDefault()
           setHistory(recall.history)
           setDraft(recall.draft)
           setCaret(recall.draft.length)
         }
+
         return
       }
+
       if (event.key === 'ArrowDown' && history.index !== null) {
         const recall = recallNext(history)
+
         if (recall.draft !== null) {
           event.preventDefault()
           setHistory(recall.history)

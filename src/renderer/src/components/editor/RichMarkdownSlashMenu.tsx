@@ -63,6 +63,7 @@ export function RichMarkdownSlashMenu({
           filteredCommands.map((command, index) => {
             const showGroup = command.group !== currentGroup
             currentGroup = command.group
+
             return (
               <React.Fragment key={command.id}>
                 {showGroup ? (

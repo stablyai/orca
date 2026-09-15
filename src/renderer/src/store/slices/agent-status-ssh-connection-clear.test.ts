@@ -18,6 +18,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
     const siblingB = 'tab-b:44444444-4444-4444-8444-444444444444'
     const unstamped = 'tab-legacy:55555555-5555-4555-8555-555555555555'
     const local = 'tab-local:66666666-6666-4666-8666-666666666666'
+
     for (const [paneKey, updatedAt, connectionId] of [
       [oldA, 10, 'ssh-a'],
       [secondA, 20, 'ssh-a'],
@@ -34,6 +35,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
           { connectionId }
         )
     }
+
     store
       .getState()
       .setAgentStatus(

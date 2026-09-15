@@ -42,17 +42,23 @@ const { getPathMock, homedirMock, resolveCodexCommandMock } = vi.hoisted(() => (
 }))
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
+
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return { ...actual, homedir: homedirMock }
 })
+
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 
 import { CodexHookService, getCodexManagedHookInstallMaterial } from './hook-service'
 
 let tmpHome: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
+
 let previousDisableTrustRpc: string | undefined
 
 beforeEach(() => {
@@ -68,6 +74,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   trustGrantInternals.resetDiagnostics()
@@ -79,18 +86,22 @@ afterEach(() => {
   trustGrantInternals.setGrantSessionRunner(null)
   trustGrantInternals.resetDiagnostics()
   codexAppServerCapabilityCache.clear()
+
   if (previousDisableTrustRpc === undefined) {
     delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
   } else {
     process.env.ORCA_DISABLE_CODEX_TRUST_RPC = previousDisableTrustRpc
   }
+
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -102,39 +113,49 @@ afterEach(() => {
 // duplicate tables on win32 that the RPC path never produces.
 function writeCodexLikeTrust(configPath: string, entries: CodexTrustEntry[]): void {
   let content = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : ''
+
   if (!/^\[hooks\.state\][ \t]*$/m.test(content)) {
     const separator = content.length === 0 ? '' : content.endsWith('\n') ? '' : '\n'
     content += `${separator}[hooks.state]\n`
   }
+
   for (const entry of entries) {
     const header = `[hooks.state."${escapeTomlString(computeTrustKey(entry))}"]`
+
     // Why: replace any existing table for this exact key so re-grants upgrade
     // in place instead of duplicating (mirrors codex's upsert merge strategy).
     const existingBlock = new RegExp(
       `(?:\\n)?${header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n(?:[^[\\n].*\\n?|\\n)*`,
       'g'
     )
+
     content = content.replace(existingBlock, '')
     content += `${content.endsWith('\n') ? '' : '\n'}\n${header}\ntrusted_hash = "${escapeTomlString(entry.trustedHash!)}"\n`
   }
+
   writeFileSync(configPath, content)
 }
 
 function installCodexLikeGrantRunner(): ReturnType<typeof vi.fn> {
   const codexHash = (key: string): string =>
     `sha256:codex-${parseTrustKey(key)?.eventLabel ?? 'unknown'}`
+
   const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
     const codexHome = request.invocation.env?.CODEX_HOME
     expect(codexHome).toBeTruthy()
+
     const entries: CodexTrustEntry[] = request.expectedTrustKeys.map((key) => {
       const parsed = parseTrustKey(key)!
+
       return {
         ...parsed,
         command: request.managedCommand,
         trustedHash: codexHash(key)
       }
     })
+
     writeCodexLikeTrust(join(codexHome!, 'config.toml'), entries)
+
     return {
       outcome: 'granted' as const,
       wroteTrust: true,
@@ -145,7 +166,9 @@ function installCodexLikeGrantRunner(): ReturnType<typeof vi.fn> {
       }))
     }
   })
+
   trustGrantInternals.setGrantSessionRunner(runner)
+
   return runner
 }
 
@@ -165,6 +188,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     const trustConfig = readFileSync(join(managedHome, 'config.toml'), 'utf-8')
     expect(trustConfig).toContain('sha256:codex-session_start')
+
     const selfComputed = computeTrustedHash({
       sourcePath: join(managedHome, 'hooks.json'),
       eventLabel: 'session_start',
@@ -173,6 +197,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       command: wrapPosixHookCommand(join(tmpHome, '.orca', 'agent-hooks', 'codex-hook.sh')),
       timeoutSec: 10
     })
+
     expect(trustConfig).not.toContain(selfComputed)
     expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(8)
   })
@@ -200,6 +225,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     const configPath = join(systemHome, 'config.toml')
     const material = getCodexManagedHookInstallMaterial()
     const trustedHash = 'sha256:codex-real-home-stop'
+
     const entry: CodexTrustEntry = {
       sourcePath: hooksPath,
       eventLabel: 'stop',
@@ -209,6 +235,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       timeoutSec: 10,
       trustedHash
     }
+
     const trustKey = computeTrustKey(entry)
     writeFileSync(hooksPath, `${JSON.stringify({ hooks: {} }, null, 2)}\n`)
     upsertHookTrustEntries(configPath, [entry])
@@ -258,6 +285,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       const operations: string[] = []
       rebaseInternals.setSessionRunner(async (request) => {
         operations.push(request.operation)
+
         if (request.operation === 'inspect-user-hook-trust') {
           return {
             outcome: 'inspected',
@@ -269,6 +297,7 @@ describe('CodexHookService app-server trust grant lane', () => {
             }))
           }
         }
+
         return { outcome: 'repaired', repaired: 1 }
       })
       installCodexLikeGrantRunner()
@@ -334,6 +363,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     // Why: the legacy Windows fallback intentionally writes slash variants;
     // duplicate detection is about the normalized trust identity.
     const upgradedEntries = readHookTrustEntries(join(managedHome, 'config.toml'))
+
     for (const eventLabel of [
       'session_start',
       'user_prompt_submit',
@@ -345,8 +375,10 @@ describe('CodexHookService app-server trust grant lane', () => {
       const count = [...upgradedEntries.keys()].filter((key) =>
         key.endsWith(`:${eventLabel}:0:0`)
       ).length
+
       expect(count, `duplicate trust entries for ${eventLabel}`).toBe(1)
     }
+
     expect(upgraded).toContain('sha256:codex-session_start')
   })
 
@@ -354,11 +386,13 @@ describe('CodexHookService app-server trust grant lane', () => {
     prepareSystemHome()
     const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
     mkdirSync(managedHome, { recursive: true })
+
     const userBlock = [
       '[hooks.state."/home/user/.codex/hooks.json:stop:3:1"]',
       'enabled = false',
       'trusted_hash = "sha256:user-owned-hash"'
     ].join('\n')
+
     writeFileSync(join(managedHome, 'config.toml'), `${userBlock}\n`)
     installCodexLikeGrantRunner()
 
@@ -390,6 +424,7 @@ describe('CodexHookService app-server trust grant lane', () => {
     delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
     rmSync(managedHome, { recursive: true, force: true })
     trustGrantInternals.resetDiagnostics()
+
     const runner = vi.fn(async (request: CodexHookTrustGrantRequest) => {
       const codexHome = request.invocation.env?.CODEX_HOME
       writeFileSync(
@@ -398,6 +433,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       )
       throw new Error('transport failed after config/batchWrite')
     })
+
     trustGrantInternals.setGrantSessionRunner(runner)
 
     expect((await service.install()).state).toBe('installed')

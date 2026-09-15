@@ -7,6 +7,7 @@ import { getLocalImageCacheKey, loadLocalImageAbsolutePath } from './useLocalIma
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT = 64
+
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_CONCURRENCY = 4
 
 type MarkdownImageRuntimeContext = Omit<RuntimeFileOperationArgs, 'connectionId'> & {
@@ -58,6 +59,7 @@ function collectImageDefinitions(
   ) {
     definitions.set(normalizeReferenceIdentifier(node.identifier), node.url)
   }
+
   for (const child of node.children ?? []) {
     collectImageDefinitions(child, definitions)
   }
@@ -69,6 +71,7 @@ export function extractMarkdownPreviewLocalImageCandidates(
   options: ExtractLocalImageCandidatesOptions = {}
 ): MarkdownPreviewLocalImageCandidate[] {
   const limit = Math.max(0, options.limit ?? MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT)
+
   if (limit === 0) {
     return []
   }
@@ -80,6 +83,7 @@ export function extractMarkdownPreviewLocalImageCandidates(
     .use(remarkGfm)
     .use(remarkFrontmatter, ['yaml', 'toml'])
     .parse(markdown) as MarkdownImageAstNode
+
   const definitions = new Map<string, string>()
   const candidates: MarkdownPreviewLocalImageCandidate[] = []
   const seenCacheKeys = new Set<string>()
@@ -90,18 +94,23 @@ export function extractMarkdownPreviewLocalImageCandidates(
     if (candidates.length >= limit) {
       return
     }
+
     const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+
     if (!absolutePath) {
       return
     }
+
     const cacheKey = getLocalImageCacheKey(
       absolutePath,
       options.connectionId,
       options.runtimeContext
     )
+
     if (seenCacheKeys.has(cacheKey)) {
       return
     }
+
     seenCacheKeys.add(cacheKey)
     candidates.push({ absolutePath, cacheKey, rawSrc })
   }
@@ -110,20 +119,24 @@ export function extractMarkdownPreviewLocalImageCandidates(
     if (candidates.length >= limit) {
       return
     }
+
     if (node.type === 'image' && typeof node.url === 'string') {
       appendRawSrc(node.url)
     } else if (node.type === 'imageReference' && typeof node.identifier === 'string') {
       const rawSrc = definitions.get(normalizeReferenceIdentifier(node.identifier))
+
       if (rawSrc) {
         appendRawSrc(rawSrc)
       }
     }
+
     for (const child of node.children ?? []) {
       visit(child)
     }
   }
 
   visit(tree)
+
   return candidates
 }
 
@@ -133,10 +146,12 @@ export function prewarmMarkdownPreviewLocalImages(
   options: PrewarmMarkdownPreviewLocalImagesOptions = {}
 ): MarkdownPreviewLocalImagePrewarm {
   const candidates = extractMarkdownPreviewLocalImageCandidates(markdown, filePath, options)
+
   const concurrency = Math.max(
     1,
     options.concurrency ?? MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_CONCURRENCY
   )
+
   const loadImage =
     options.loadImage ??
     ((candidate: MarkdownPreviewLocalImageCandidate) =>
@@ -145,10 +160,12 @@ export function prewarmMarkdownPreviewLocalImages(
         options.connectionId,
         options.runtimeContext
       ))
+
   let cancelled = false
   let nextIndex = 0
   let activeCount = 0
   let resolveDone!: () => void
+
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve
   })
@@ -163,16 +180,20 @@ export function prewarmMarkdownPreviewLocalImages(
     while (!cancelled && activeCount < concurrency && nextIndex < candidates.length) {
       const candidate = candidates[nextIndex]
       nextIndex += 1
+
       if (!candidate) {
         continue
       }
+
       activeCount += 1
       let loadPromise: Promise<unknown>
+
       try {
         loadPromise = loadImage(candidate)
       } catch {
         loadPromise = Promise.resolve()
       }
+
       loadPromise
         .catch(() => undefined)
         .finally(() => {
@@ -181,6 +202,7 @@ export function prewarmMarkdownPreviewLocalImages(
           settleIfFinished()
         })
     }
+
     settleIfFinished()
   }
 

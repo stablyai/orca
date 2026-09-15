@@ -26,6 +26,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeFileClient>()
+
   return {
     ...actual,
     downloadRuntimeFile: downloadRuntimeFileMock
@@ -114,6 +115,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('shows OS file copy for single local rows and SSH file rows on desktop', () => {
     const previous = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+
     try {
       expect(shouldShowCopyFileAction(fileNode, null, 1)).toBe(true)
       expect(shouldShowCopyFileAction(directoryNode, null, 1)).toBe(true)
@@ -131,6 +133,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('copies local and SSH file rows through the clipboard file API', async () => {
     const writeClipboardFile = vi.fn().mockResolvedValue({ ok: true })
+
     ;(
       globalThis as unknown as {
         window: { api: { ui: { writeClipboardFile: typeof writeClipboardFile } } }
@@ -150,6 +153,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('shows a failure toast when OS file copy fails', async () => {
     const writeClipboardFile = vi.fn().mockResolvedValue({ ok: false, reason: 'invalid-path' })
+
     ;(
       globalThis as unknown as {
         window: { api: { ui: { writeClipboardFile: typeof writeClipboardFile } } }
@@ -166,6 +170,7 @@ describe('FileExplorerRow collapse folder action', () => {
       ok: false,
       reason: 'staging-unavailable'
     })
+
     ;(
       globalThis as unknown as {
         window: { api: { ui: { writeClipboardFile: typeof writeClipboardFile } } }
@@ -181,6 +186,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('shows the remote copy rejection message when SSH materialization fails', async () => {
     const writeClipboardFile = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
+
     ;(
       globalThis as unknown as {
         window: { api: { ui: { writeClipboardFile: typeof writeClipboardFile } } }
@@ -200,7 +206,9 @@ describe('FileExplorerRow collapse folder action', () => {
         destinationPath: '/downloads/renamed\\entry.ts'
       })
       .mockResolvedValueOnce({ canceled: true })
+
     const openPath = vi.fn().mockResolvedValue(undefined)
+
     ;(
       globalThis as unknown as {
         window: {
@@ -227,9 +235,11 @@ describe('FileExplorerRow collapse folder action', () => {
         onClick: expect.any(Function)
       }
     })
+
     const action = toastSuccessMock.mock.calls[0]?.[1]?.action as
       | { onClick: () => void }
       | undefined
+
     action?.onClick()
     expect(openPath).toHaveBeenCalledWith('/downloads/renamed\\entry.ts')
     expect(toastErrorMock).not.toHaveBeenCalled()
@@ -240,6 +250,7 @@ describe('FileExplorerRow collapse folder action', () => {
       canceled: false,
       destinationPath: 'C:\\Users\\dev\\Downloads\\src-copy'
     })
+
     ;(
       globalThis as unknown as {
         window: { api: { fs: { downloadFolder: typeof downloadFolder } } }
@@ -260,7 +271,9 @@ describe('FileExplorerRow collapse folder action', () => {
       canceled: false,
       destinationPath: '/downloads/src'
     })
+
     const openPath = vi.fn().mockResolvedValue(undefined)
+
     ;(
       globalThis as unknown as {
         window: {
@@ -294,11 +307,14 @@ describe('FileExplorerRow collapse folder action', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     }
+
     downloadRuntimeFileMock.mockResolvedValueOnce({
       canceled: false,
       destinationPath: '/downloads/index.ts'
     })
+
     const openPath = vi.fn().mockResolvedValue(undefined)
+
     ;(
       globalThis as unknown as {
         window: {
@@ -328,6 +344,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('shows a failure toast when remote download fails', async () => {
     const downloadFile = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
+
     ;(
       globalThis as unknown as { window: { api: { fs: { downloadFile: typeof downloadFile } } } }
     ).window = { api: { fs: { downloadFile } } }

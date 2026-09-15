@@ -8,6 +8,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(fixturePath: string, marker: string): string {
   const command = [process.execPath, fixturePath, marker]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -59,6 +60,7 @@ export function createRemoteSessionBulkOpenFixture(): {
       "process.on('SIGINT', () => { stopFlood(); process.exit(0) })"
     ].join('\n')
   )
+
   return {
     command: (marker) => fixtureCommand(fixturePath, marker),
     dispose: () => rmSync(scratch, { recursive: true, force: true })

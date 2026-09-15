@@ -80,6 +80,7 @@ describe('workspace cleanup snapshot IPC', () => {
         candidates: [],
         errors: []
       })
+
       return result
     })
     beginPruneBatchMock.mockReset()
@@ -89,6 +90,7 @@ describe('workspace cleanup snapshot IPC', () => {
 
   it('persists the completed scan result after replying', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
@@ -101,6 +103,7 @@ describe('workspace cleanup snapshot IPC', () => {
 
   it('does not rewrite the fleet snapshot for a focused scan', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
@@ -112,6 +115,7 @@ describe('workspace cleanup snapshot IPC', () => {
 
   it('does not rewrite the fleet snapshot for a targeted evidence batch', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
@@ -125,6 +129,7 @@ describe('workspace cleanup snapshot IPC', () => {
 
   it('does not persist an empty-target scan over the fleet snapshot', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
@@ -138,9 +143,11 @@ describe('workspace cleanup snapshot IPC', () => {
 
   it('stops streaming progress after the invoking renderer is destroyed', async () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
+
     const send = vi.fn(() => {
       throw new Error('Object has been destroyed')
     })
@@ -161,9 +168,11 @@ describe('workspace cleanup snapshot IPC', () => {
       })
     })
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
+
     const event = makeScanEvent({
       once: vi.fn((eventName: string, listener: () => void) => {
         if (eventName === 'destroyed') {
@@ -187,6 +196,7 @@ describe('workspace cleanup snapshot IPC', () => {
       })
     })
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
@@ -213,6 +223,7 @@ describe('workspace cleanup snapshot IPC', () => {
       })
     })
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:scan')?.[1]
@@ -251,6 +262,7 @@ describe('workspace cleanup snapshot IPC', () => {
     const snapshot = { scannedAt: NOW, candidates: [], errors: [] }
     readScanSnapshotMock.mockResolvedValue(snapshot)
     registerWorkspaceCleanupHandlers(makeEmptyStore())
+
     const handler = vi
       .mocked(ipcMain.handle)
       .mock.calls.find(([channel]) => channel === 'workspaceCleanup:getCachedScan')?.[1]
@@ -262,6 +274,7 @@ describe('workspace cleanup snapshot IPC', () => {
 
   it('persists same-id dismissals by host and prunes every key by worktree id', async () => {
     let dismissals = {}
+
     const store = {
       ...makeEmptyStore(),
       getUI: () => ({ workspaceCleanup: { dismissals } }),
@@ -269,10 +282,13 @@ describe('workspace cleanup snapshot IPC', () => {
         dismissals = update.workspaceCleanup.dismissals
       }
     } as unknown as Store
+
     registerWorkspaceCleanupHandlers(store)
+
     const handler = Object.fromEntries(vi.mocked(ipcMain.handle).mock.calls)[
       'workspaceCleanup:dismiss'
     ]
+
     const base = {
       worktreeId: 'repo-1::/same',
       dismissedAt: NOW,
@@ -299,6 +315,7 @@ describe('workspace cleanup snapshot IPC', () => {
     registerWorkspaceCleanupHandlers(makeEmptyStore())
     const handlers = Object.fromEntries(vi.mocked(ipcMain.handle).mock.calls)
     const batch = { batchId: 'batch-1' }
+
     const target = {
       ...batch,
       worktreeId: 'repo-ssh::/remote/feature',

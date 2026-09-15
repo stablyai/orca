@@ -217,14 +217,18 @@ export const PR_E2E_SOURCE_ROUTES = [
 
 export function selectPrE2eSpecs(changedPaths, reportRoute = () => undefined) {
   const specs = new Set(changedPaths.filter((file) => /^tests\/e2e\/.*\.spec\.ts$/.test(file)))
+
   for (const route of PR_E2E_SOURCE_ROUTES) {
     const matchedFiles = changedPaths.filter(route.matches)
+
     if (matchedFiles.length === 0) {
       continue
     }
+
     route.specs.forEach((spec) => specs.add(spec))
     reportRoute(`[pr-e2e] ${route.id}: ${route.specs.join(', ')}`)
   }
+
   return [...specs].sort((left, right) => left.localeCompare(right))
 }
 
@@ -265,16 +269,20 @@ export function hasWslSourceChange(changedPaths) {
   const route = PR_E2E_SOURCE_ROUTES.find(
     (candidate) => candidate.id === 'terminal.windows-wsl-launch-and-paste'
   )
+
   return changedPaths.some(route.matches)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let input = ''
   process.stdin.setEncoding('utf8')
+
   for await (const chunk of process.stdin) {
     input += chunk
   }
+
   const changedPaths = input.split(/\r?\n/).filter(Boolean)
+
   if (process.argv.includes('--ssh-source')) {
     process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
   } else if (process.argv.includes('--reusable-workflow')) {

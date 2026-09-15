@@ -60,7 +60,9 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     if (!pendingRevealWorktree) {
       return
     }
+
     const current = argsRef.current
+
     if (current.agentSendTargetWorktreeId !== pendingRevealWorktree.worktreeId) {
       expandGroupsForWorktreeReveal(
         current,
@@ -74,12 +76,14 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       if (cancelled) {
         return
       }
+
       const targetWorktreeStillExists = sidebarWorkspaceStillExists(
         pendingRevealWorktree.worktreeId,
         argsRef.current.worktrees,
         argsRef.current.folderWorkspaces,
         pendingRevealWorktree.executionHostId
       )
+
       const targetIndex = pendingRevealWorktree.executionHostId
         ? findPreferredRenderRowIndexForWorktreeIdentity(
             renderRows,
@@ -94,17 +98,23 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
             pendingRevealWorktree.worktreeId,
             pinnedDisplayPolicy
           )
+
       const outcome = resolvePendingSidebarReveal({ targetIndex, targetWorktreeStillExists })
+
       if (outcome === 'clear') {
         pendingRevealRetryRef.current = null
         clearPendingRevealWorktreeId()
+
         return
       }
+
       if (outcome !== 'scroll-and-clear') {
         return
       }
+
       const targetRow = renderRows[targetIndex]
       const container = argsRef.current.scrollRef.current
+
       const revealedOption = container
         ? revealMountedWorktreeElement(
             container,
@@ -118,41 +128,52 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
             markRevealScroll
           )
         : null
+
       if (revealedOption) {
         if (pendingRevealWorktree.highlight) {
           const revealedRowKey =
             revealedOption.dataset.worktreeRowKey ?? getRenderRowSidebarKey(targetRow)
+
           if (revealedRowKey) {
             flashRevealedRow(revealedRowKey)
           }
         }
+
         if (pendingRevealWorktree.beginRename) {
           setRenamingWorktreeId({
             worktreeId: pendingRevealWorktree.worktreeId,
             rowKey: revealedOption.dataset.worktreeRowKey
           })
         }
+
         pendingRevealRetryRef.current = null
         clearPendingRevealWorktreeId()
+
         return
       }
 
       // Why: virtual indexing can leave the card edge clipped; stage it into the window, then retry the exact DOM reveal.
       virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'auto' })
       const previousRetry = pendingRevealRetryRef.current
+
       const nextRetryCount =
         previousRetry?.worktreeId === pendingRevealWorktree.worktreeId ? previousRetry.count + 1 : 1
+
       pendingRevealRetryRef.current = {
         worktreeId: pendingRevealWorktree.worktreeId,
         count: nextRetryCount
       }
+
       if (nextRetryCount <= MAX_REVEAL_RETRIES) {
         scheduleRetryTick(() => cancelled)
+
         return
       }
+
       pendingRevealRetryRef.current = null
       clearPendingRevealWorktreeId()
     })
+
     return () => {
       cancelled = true
       cancelPendingRevealFrames()
@@ -191,17 +212,20 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     if (!pendingRevealSidebarRow) {
       return
     }
+
     const current = argsRef.current
 
     const isProjectHeaderTarget =
       pendingRevealSidebarRow.rowKey.startsWith('project-group:') ||
       pendingRevealSidebarRow.rowKey.startsWith('project:') ||
       pendingRevealSidebarRow.rowKey.startsWith('repo:')
+
     if (isProjectHeaderTarget && current.groupBy !== 'repo') {
       return
     }
 
     let toggledAncestor = false
+
     for (const groupKey of getSidebarRowRevealAncestorKeys({
       rowKey: pendingRevealSidebarRow.rowKey,
       repoMap: current.repoMap,
@@ -213,36 +237,47 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         toggledAncestor = true
       }
     }
+
     if (toggledAncestor) {
       return
     }
 
     let cancelled = false
+
     const retryPendingReveal = (): boolean => {
       const previousRetry = pendingRowRevealRetryRef.current
+
       const nextRetryCount =
         previousRetry?.rowKey === pendingRevealSidebarRow.rowKey ? previousRetry.count + 1 : 1
+
       pendingRowRevealRetryRef.current = {
         rowKey: pendingRevealSidebarRow.rowKey,
         count: nextRetryCount
       }
+
       if (nextRetryCount <= MAX_REVEAL_RETRIES) {
         scheduleRetryTick(() => cancelled)
+
         return true
       }
+
       return false
     }
+
     schedulePendingRevealFrame(() => {
       if (cancelled) {
         return
       }
+
       const targetIndex = renderRows.findIndex((row) =>
         rowKeyMatchesRenderRow(row, pendingRevealSidebarRow.rowKey)
       )
+
       if (targetIndex === -1) {
         if (retryPendingReveal()) {
           return
         }
+
         pendingRowRevealRetryRef.current = null
         clearPendingRevealSidebarRow()
         toast.error(
@@ -251,10 +286,12 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
             'Target no longer exists'
           )
         )
+
         return
       }
 
       const container = argsRef.current.scrollRef.current
+
       const revealedElement = container
         ? revealMountedSidebarRowElement(
             container,
@@ -263,19 +300,24 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
             markRevealScroll
           )
         : null
+
       if (revealedElement) {
         if (pendingRevealSidebarRow.highlight) {
           flashRevealedRow(pendingRevealSidebarRow.rowKey)
         }
+
         pendingRowRevealRetryRef.current = null
         clearPendingRevealSidebarRow()
+
         return
       }
 
       virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'auto' })
+
       if (retryPendingReveal()) {
         return
       }
+
       pendingRowRevealRetryRef.current = null
       clearPendingRevealSidebarRow()
     })

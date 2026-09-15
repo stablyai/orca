@@ -23,8 +23,10 @@ export async function beginPtyIpcSpawn(
   ctx.codexHomeLaunchStartedSequence = !args.connectionId
     ? allocatePtyLifecycleSequence()
     : undefined
+
   const initialLeafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+
   const initialPaneKey =
     typeof args.worktreeId === 'string' &&
     typeof args.tabId === 'string' &&
@@ -33,6 +35,7 @@ export async function beginPtyIpcSpawn(
     initialLeafId
       ? makePaneKey(args.tabId, initialLeafId)
       : null
+
   const initialStablePanePtyId = (() => {
     try {
       return !args.connectionId && initialPaneKey
@@ -48,6 +51,7 @@ export async function beginPtyIpcSpawn(
       return undefined
     }
   })()
+
   ctx.reattachedCodexHomeRoutes = !args.connectionId
     ? new Map(
         snapshotCodexPaneHomeRoutes([
@@ -61,6 +65,7 @@ export async function beginPtyIpcSpawn(
 
   const earlyLeafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+
   const earlyPaneKey =
     typeof args.worktreeId === 'string' &&
     typeof args.tabId === 'string' &&
@@ -69,23 +74,29 @@ export async function beginPtyIpcSpawn(
     earlyLeafId
       ? makePaneKey(args.tabId, earlyLeafId)
       : null
+
   const earlyReservationKey = makePaneSpawnReservationKey(
     args.worktreeId,
     args.connectionId,
     earlyPaneKey
   )
+
   const pendingRuntimeCreate = earlyReservationKey
     ? pendingRuntimePaneCreatesByOwnerKey.get(earlyReservationKey)
     : undefined
+
   if (pendingRuntimeCreate) {
     await pendingRuntimeCreate.promise
   }
+
   const existingPaneSpawn = earlyReservationKey
     ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
     : undefined
+
   if (existingPaneSpawn) {
     return { ...(await existingPaneSpawn.promise), isReattach: true }
   }
+
   ctx.earlyStablePaneOwner =
     earlyPaneKey && args.worktreeId
       ? resolveStablePaneOwner(
@@ -103,6 +114,7 @@ export async function beginPtyIpcSpawn(
     ? reservePaneSpawn(ctx.paneSpawnReservationKey)
     : null
   ctx.finishTerminalInstall = (): void => {}
+
   ctx.stablePaneOwner = null
   ctx.stablePaneBindingPersisted = false
   ctx.rejectedRegistrationCandidate = null

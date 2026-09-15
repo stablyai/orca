@@ -162,14 +162,17 @@ describe('watcher removal gate', () => {
       } catch (error) {
         return error as Error
       }
+
       throw new Error('expected terminal install to be fenced')
     })()
+
     const watcherError = (() => {
       try {
         beginWatcherInstall('/repo')
       } catch (error) {
         return error as Error
       }
+
       throw new Error('expected watcher install to be fenced')
     })()
 

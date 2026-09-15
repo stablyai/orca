@@ -7,5 +7,6 @@ import { useRetainedAgentsSync } from './useRetainedAgents'
 // time the user scrolled that card out of view.
 export default function RetainedAgentsSyncGate(): null {
   useRetainedAgentsSync()
+
   return null
 }

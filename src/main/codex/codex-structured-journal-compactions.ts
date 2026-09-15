@@ -25,38 +25,51 @@ export class CodexJournalCompactions {
     if (!isCodexCompactionComplete(event.method, event.params)) {
       return null
     }
+
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
+
     if (!turnId) {
       return null
     }
+
     // Collapse compactions within a thread/turn; the canonical item replaces its legacy fallback.
     const key = createHash('sha256')
       .update(JSON.stringify([event.threadId, turnId]))
       .digest('hex')
+
     const source = event.method === 'item/completed' ? 'item' : 'legacy'
     const previous = this.turns.get(key)
+
     if (previous === 'item' || previous === source) {
       return CODEX_JOURNAL_ADMITTED
     }
+
     const admission = appendCodexLifecycleItem(
       this.sink,
       { provider: 'orca', clientMessageId: `codex-compaction:${key}` },
       { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
     )
+
     if (!admission.accepted) {
       return admission
     }
+
     const published = publishCodexLifecycle(this.sink)
+
     if (!published.accepted) {
       return published
     }
+
     this.turns.set(key, source)
+
     while (this.turns.size > MAX_CODEX_GENERIC_TURN_BUCKETS) {
       const oldest = this.turns.keys().next().value
+
       if (oldest !== undefined) {
         this.turns.delete(oldest)
       }
     }
+
     return CODEX_JOURNAL_ADMITTED
   }
 

@@ -29,13 +29,16 @@ type PasteChordEvent = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altK
 // raw control chars.
 export function firesNativePasteEvent(event: PasteChordEvent, isMac: boolean): boolean {
   const key = event.key.toLowerCase()
+
   if (isMac) {
     return key === 'v' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
   }
+
   // Ctrl+V and Ctrl+Shift+V both dispatch a native paste event on Windows/Linux.
   if (key === 'v' && event.ctrlKey && !event.metaKey && !event.altKey) {
     return true
   }
+
   return (
     event.key === 'Insert' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
   )

@@ -19,6 +19,7 @@ describe('sort comparator performance', () => {
       rows['sort']((a, b) => Intl.Collator('en', { numeric: true }).compare(a, b))
       rows.sort((a, b) => a['localeCompare'](b, undefined, options))
     `)
+
     expect(findings).toHaveLength(4)
     expect(
       findings.every(

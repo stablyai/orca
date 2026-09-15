@@ -33,6 +33,7 @@ export async function parseAntigravitySessionFile(
 ): Promise<AiVaultSession | null> {
   const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
+
   try {
     return await parseAntigravitySessionLines({ file, lines, platform, messages })
   } finally {
@@ -63,6 +64,7 @@ export function createAntigravitySessionResumeState(
   messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   const sessionId = antigravityConversationIdFromTranscriptPath(file.path) ?? ''
+
   // Why: the transcript has no cwd/model fields. Workspace enrichment is a
   // separate, conservative history join; protobuf/SQLite blobs are unstable.
   return accumulatorFoldResumeState(
@@ -79,14 +81,17 @@ async function parseAntigravitySessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createAntigravitySessionResumeState(args.file, args.messages)
+
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
+
   return state.finalize(args.platform, args.options)
 }
 
 function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
@@ -101,12 +106,15 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
     (type === 'USER_INPUT' || type === 'REQUEST')
   ) {
     const request = extractAntigravityUserRequest(content ?? '')
+
     if (!request) {
       return
     }
+
     accumulator.messageCount++
     accumulator.title ??= normalizeTitleText(request)
     addPreviewMessage(accumulator, { role: 'user', text: request, timestamp: record.created_at })
+
     return
   }
 
@@ -123,11 +131,14 @@ function consumeAntigravityRecordLine(accumulator: SessionAccumulator, line: str
 function extractAntigravityUserRequest(content: string): string | null {
   const opener = '<USER_REQUEST>'
   const startIndex = content.indexOf(opener)
+
   if (startIndex === -1) {
     return extractString(content)
   }
+
   const bodyStart = startIndex + opener.length
   const endIndex = content.indexOf('</USER_REQUEST>', bodyStart)
+
   return extractString(
     endIndex === -1 ? content.slice(bodyStart) : content.slice(bodyStart, endIndex)
   )

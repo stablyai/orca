@@ -33,13 +33,16 @@ export function sidecarUnchanged(
   file: SessionSidecarObservation | undefined
 ): boolean {
   const observed = file ?? 'none'
+
   if (observed === 'unknown' || entry === 'unknown') {
     return false
   }
+
   if (observed === 'none') {
     // Absent now: a hit only if it was absent before, or the agent never had one.
     return entry === undefined || entry === 'none'
   }
+
   return (
     typeof entry === 'object' &&
     entry.path === observed.path &&

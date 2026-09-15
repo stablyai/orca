@@ -31,6 +31,7 @@ export function useSmartWorkspaceNameFieldController({
 }: SmartWorkspaceNameFieldProps) {
   // Why: translate()-based options must refresh on language changes without remounting.
   useTranslation()
+
   const normalizedProps: NormalizedSmartWorkspaceNameFieldProps = {
     ...props,
     jiraSourceContext,
@@ -42,32 +43,43 @@ export function useSmartWorkspaceNameFieldController({
     allowCrossRepoProjectAdd,
     crossRepoSwitchTarget
   }
+
   const foundation = useSmartWorkspaceNameFieldFoundation(normalizedProps)
   const { linearLoading, setLinearUrlLoadingFeedbackQuery } = foundation
+
   const linearUrlIntent = useMemo(
     () => parseBoundedSmartWorkspaceLinearIssueUrlIntent(foundation.value),
     [foundation.value]
   )
+
   const linearUrlIntentOwnsInput =
     linearUrlIntent !== null && (foundation.mode === 'smart' || foundation.mode === 'linear')
+
   const linearQuery = linearUrlIntentOwnsInput ? foundation.value : foundation.debouncedQuery
+
   const sourceQueryWithinLimit = useMemo(
     () => isSmartWorkspaceSourceQueryWithinLimit(foundation.debouncedQuery),
     [foundation.debouncedQuery]
   )
+
   const linearQueryWithinLimit = useMemo(
     () => isSmartWorkspaceSourceQueryWithinLimit(linearQuery),
     [linearQuery]
   )
+
   useEffect(() => {
     if (!linearUrlIntentOwnsInput || !linearLoading) {
       setLinearUrlLoadingFeedbackQuery(null)
+
       return
     }
+
     setLinearUrlLoadingFeedbackQuery(null)
     const timer = window.setTimeout(() => setLinearUrlLoadingFeedbackQuery(linearQuery), 200)
+
     return () => window.clearTimeout(timer)
   }, [linearLoading, setLinearUrlLoadingFeedbackQuery, linearQuery, linearUrlIntentOwnsInput])
+
   const shouldQueryGithub =
     sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
@@ -76,16 +88,19 @@ export function useSmartWorkspaceNameFieldController({
     !textOnly &&
     foundation.repoBackedSearchTargets.length > 0 &&
     (foundation.mode === 'smart' || foundation.mode === 'github')
+
   const shouldQueryLinear =
     linearQueryWithinLimit &&
     !foundation.jiraSource.intent &&
     !textOnly &&
     foundation.linearAvailable &&
     (foundation.mode === 'smart' || foundation.mode === 'linear')
+
   const jiraSearchJql =
     foundation.mode === 'jira' && !foundation.jiraSource.intent && sourceQueryWithinLimit
       ? buildJiraIssueSearchJql(foundation.debouncedQuery)
       : null
+
   const shouldQueryJira =
     !disabled &&
     !textOnly &&
@@ -107,6 +122,7 @@ export function useSmartWorkspaceNameFieldController({
     shouldQueryJira,
     jiraSearchJql
   })
+
   const shouldQueryGitlab =
     sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
@@ -116,17 +132,21 @@ export function useSmartWorkspaceNameFieldController({
     foundation.gitlabSourceAvailable &&
     foundation.repoBackedSearchTargets.length > 0 &&
     (foundation.mode === 'smart' || foundation.mode === 'gitlab')
+
   useSmartWorkspaceGitlabSearch({
     foundation,
     sourceQueryWithinLimit,
     shouldQueryGitlab
   })
+
   const presentation = useSmartWorkspaceNameFieldPresentation(foundation, {
     linearUrlIntent,
     linearUrlIntentOwnsInput,
     linearQuery
   })
+
   const actions = useSmartWorkspaceNameFieldActions(foundation, presentation)
+
   const copy = getSmartWorkspaceNameFieldCopy({
     repoBackedSourcesDisabled,
     linearAvailable: foundation.linearAvailable,

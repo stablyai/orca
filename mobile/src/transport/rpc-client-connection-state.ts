@@ -39,6 +39,7 @@ export class RpcClientConnectionState {
     if (this.state === next) {
       return
     }
+
     const previous = this.state
     const dweltMs = Date.now() - this.stateEnteredAt
     this.state = next
@@ -50,6 +51,7 @@ export class RpcClientConnectionState {
       attempt: this.options.getReconnectAttempt(),
       endpoint: redactSocketEndpoint(this.options.endpoint)
     })
+
     if (next === 'connected') {
       this.lastConnectedAt = Date.now()
       this.resolveWaiters()
@@ -58,6 +60,7 @@ export class RpcClientConnectionState {
         next === 'auth-failed' ? 'Unauthorized — pairing may be revoked' : 'Connection closed'
       )
     }
+
     for (const listener of this.listeners) {
       listener(next)
     }
@@ -67,39 +70,48 @@ export class RpcClientConnectionState {
     if (this.state === 'connected') {
       return Promise.resolve()
     }
+
     if (this.options.isClosed()) {
       return Promise.reject(new Error('Client closed'))
     }
+
     return new Promise((resolve, reject) => {
       const waiter: ConnectWaiter = { resolve, reject, timeout: null }
+
       if (timeoutMs !== undefined) {
         waiter.timeout = setTimeout(
           () => {
             const index = this.waiters.indexOf(waiter)
+
             if (index !== -1) {
               this.waiters.splice(index, 1)
             }
+
             reject(new Error('Timed out while connecting to the remote Orca runtime.'))
           },
           Math.max(0, timeoutMs)
         )
       }
+
       this.waiters.push(waiter)
     })
   }
 
   rejectWaiters(reason: string): void {
     const error = new Error(reason)
+
     for (const waiter of this.waiters.splice(0)) {
       if (waiter.timeout) {
         clearTimeout(waiter.timeout)
       }
+
       waiter.reject(error)
     }
   }
 
   addListener(listener: (state: ConnectionState) => void): () => void {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
@@ -108,6 +120,7 @@ export class RpcClientConnectionState {
       if (waiter.timeout) {
         clearTimeout(waiter.timeout)
       }
+
       waiter.resolve()
     }
   }

@@ -72,15 +72,23 @@ export function connectPanePty(
   session.unregisterBacklogRecovery = null
   session.unregisterDocumentVisibilityRecovery = null
   session.cancelHiddenOutputSnapshotScrollRestore = (): void => {}
+
   session.pendingHiddenSnapshotFit = null
   session.pendingReattachFit = null
   session.cancelFreshSpawnFollowReset = (): void => {}
+
   session.cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
+
   session.cleanupHiddenOutputRestoreForegroundDeadline = (): void => {}
+
   session.cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
+
   session.resetRendererOrderedSeqForPtyExit = () => {}
+
   session.cleanupStartupDraftPasteTimers = (): void => {}
+
   session.unregisterE2ePtyDataInjection = (): void => {}
+
   session.startupInjectTimer = null
   session.agentTaskCompleteNotificationGraceTimer = null
   session.agentTaskCompleteNotificationMaxTimer = null
@@ -108,9 +116,13 @@ export function connectPanePty(
   // output plumbing inside the connect frame; lifecycle hooks (visibility
   // flips, exit, dispose) run before/after it exists, so start with no-ops.
   session.syncHiddenRendererPtyDelivery = () => {}
+
   session.releaseHiddenRendererPtyDelivery = () => {}
+
   session.handleRemoteOutputPauseChanged = () => {}
+
   session.handleRendererOwnedAgentStatus = () => {}
+
   session.remoteOutputGatedPtyId = null
   session.remoteOutputFactConsumerPtyId = null
   session.suppressViewportClaimTerminalResize = false
@@ -127,14 +139,17 @@ export function connectPanePty(
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }
+
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
     }
+
     writeTerminalOutput(session.pane.terminal, session.idleAgentTerminalModeReset, {
       foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
     })
   }
+
   // Why: passphrase-gate waits register a teardown here so dispose() can
   // actively unsubscribe + resolve them. Without this, a pane disposed
   // mid-wait leaks its zustand subscriber and the surrounding async IIFE
@@ -159,11 +174,14 @@ export function connectPanePty(
   // application expects even after defensive renderer-side kitty wipes.
   session.kittyKeyboardModes = (() => {
     const existing = session.deps.paneKittyKeyboardModesRef.current.get(session.pane.id)
+
     if (existing) {
       return existing
     }
+
     const created = new TerminalKittyKeyboardModeTracker()
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
+
     return created
   })()
   installSleepingRecordAccess(session)
@@ -175,34 +193,45 @@ export function connectPanePty(
   installAgentTaskCompleteNotify(session)
   installDirectSshRetryStatus(session)
   installPtyInputRecovery(session)
+
   // Async reattach/exit callbacks can outlive the PaneManager that created
   // them. Keep their layout writes keyed by the durable leaf identity and
   // admit them only while this transport still owns the pane slot.
   const isCurrentPaneTransport = (): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+
   session.syncPanePtyLayoutBinding = (ptyId: string | null): void => {
     if (!isCurrentPaneTransport()) {
       return
     }
+
     if (session.deps.syncPanePtyLayoutBindingForLeaf) {
       session.deps.syncPanePtyLayoutBindingForLeaf(session.pane.leafId, ptyId, session.pane.id)
+
       return
     }
+
     session.deps.syncPanePtyLayoutBinding(session.pane.id, ptyId)
   }
+
   session.clearExitedPanePtyLayoutBinding = (exitedPtyId: string): void => {
     if (!isCurrentPaneTransport()) {
       return
     }
+
     if (session.deps.clearExitedPanePtyLayoutBindingForLeaf) {
       session.deps.clearExitedPanePtyLayoutBindingForLeaf(session.pane.leafId, exitedPtyId)
+
       return
     }
+
     session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, exitedPtyId)
   }
+
   installPtyInputForward(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)
+
   return installSessionReconcileDispose(session)
 }

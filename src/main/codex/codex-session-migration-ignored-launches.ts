@@ -18,14 +18,18 @@ export class CodexSessionMigrationIgnoredLaunches {
 
   has(leaseId: string): boolean {
     const launch = this.launches.get(leaseId)
+
     if (!launch) {
       return false
     }
+
     // Why: an entry whose exit never arrived must age out, or it absorbs a later exit and strands that launch active.
     if (Date.now() - launch.recordedAt > CODEX_SESSION_MIGRATION_LEASE_RETENTION_MS) {
       this.launches.delete(leaseId)
+
       return false
     }
+
     return true
   }
 

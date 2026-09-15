@@ -24,14 +24,17 @@ export async function skillCloudRequest<T>(input: {
 }): Promise<T> {
   const apiUrl = resolveArtifactCloudApiUrl(input.apiUrl)
   const url = new URL(input.path, `${apiUrl}/`)
+
   if (url.origin !== apiUrl || !url.pathname.startsWith('/v1/')) {
     throw new Error('skill-cloud-request-path-invalid')
   }
+
   const deadline = createSkillCloudDeadline({
     signal: input.signal,
     timeoutMs: input.timeoutMs,
     timeoutMessage: 'skill-cloud-request-timeout'
   })
+
   try {
     const response = await (input.fetcher ?? fetch)(url, {
       method: input.method ?? 'GET',
@@ -45,10 +48,13 @@ export async function skillCloudRequest<T>(input: {
       signal: deadline.signal,
       redirect: 'error'
     })
+
     if (response.status === 204) {
       return undefined as T
     }
+
     const value: unknown = await response.json().catch(() => null)
+
     if (!response.ok) {
       const error = value as { code?: unknown; message?: unknown } | null
       throw new SkillCloudRequestError(
@@ -57,6 +63,7 @@ export async function skillCloudRequest<T>(input: {
         typeof error?.message === 'string' ? error.message : 'The skill Cloud request failed.'
       )
     }
+
     return value as T
   } finally {
     deadline.cleanup()

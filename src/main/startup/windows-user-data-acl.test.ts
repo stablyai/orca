@@ -17,6 +17,7 @@ function createFakeSpawn(exitCode: number): {
   spawnFn: (command: string, args?: readonly string[], options?: unknown) => EventEmitter
 } {
   const calls: SpawnCall[] = []
+
   return {
     calls,
     spawnFn: (_command: string, args: readonly string[] = []) => {
@@ -24,6 +25,7 @@ function createFakeSpawn(exitCode: number): {
       const child = new EventEmitter() as EventEmitter & { kill: () => void }
       child.kill = () => undefined
       setImmediate(() => child.emit('exit', exitCode))
+
       return child
     }
   }
@@ -51,18 +53,22 @@ describe('ensureWindowsUserDataAclGrant', () => {
 
   it('grants children + root then writes the marker', async () => {
     const fake = createFakeSpawn(0)
+
     const result = await awaitResult(userDataPath, {
       identity: 'testuser',
       spawnFn: fake.spawnFn as never
     })
+
     expect(result).toEqual({ mode: 'granted' })
     expect(fake.calls).toHaveLength(2)
     expect(fake.calls[0].target).toBe(join(userDataPath, '*'))
     expect(fake.calls[1].target).toBe(userDataPath)
     expect(fake.calls[0].args).toContain('testuser:(OI)(CI)(F)')
+
     const marker = JSON.parse(
       readFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), 'utf-8')
     )
+
     expect(marker.schemeVersion).toBe(WINDOWS_ACL_GRANT_SCHEME_VERSION)
     expect(marker.identity).toBe('testuser')
   })
@@ -77,10 +83,12 @@ describe('ensureWindowsUserDataAclGrant', () => {
       })
     )
     const fake = createFakeSpawn(0)
+
     const result = await awaitResult(userDataPath, {
       identity: 'testuser',
       spawnFn: fake.spawnFn as never
     })
+
     expect(result).toEqual({ mode: 'marker-hit' })
     expect(fake.calls).toHaveLength(0)
   })
@@ -95,30 +103,36 @@ describe('ensureWindowsUserDataAclGrant', () => {
       })
     )
     const fake = createFakeSpawn(0)
+
     const result = await awaitResult(userDataPath, {
       identity: 'testuser',
       spawnFn: fake.spawnFn as never
     })
+
     expect(result).toEqual({ mode: 'granted' })
     expect(fake.calls).toHaveLength(2)
   })
 
   it('does not write the marker when icacls fails, so the next launch retries', async () => {
     const fake = createFakeSpawn(5)
+
     const result = await awaitResult(userDataPath, {
       identity: 'testuser',
       spawnFn: fake.spawnFn as never
     })
+
     expect(result).toEqual({ mode: 'failed', reason: 'exit 5; exit 5' })
     expect(() => readFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE))).toThrow()
   })
 
   it('no-ops without a resolvable identity', async () => {
     const fake = createFakeSpawn(0)
+
     const result = await awaitResult(userDataPath, {
       identity: null,
       spawnFn: fake.spawnFn as never
     })
+
     expect(result).toEqual({ mode: 'no-identity' })
     expect(fake.calls).toHaveLength(0)
   })
@@ -126,10 +140,12 @@ describe('ensureWindowsUserDataAclGrant', () => {
   it('ignores a corrupt marker and re-grants', async () => {
     writeFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), '{not json')
     const fake = createFakeSpawn(0)
+
     const result = await awaitResult(userDataPath, {
       identity: 'testuser',
       spawnFn: fake.spawnFn as never
     })
+
     expect(result).toEqual({ mode: 'granted' })
   })
 })

@@ -15,8 +15,11 @@ import {
 } from './terminal-tab-activity-status'
 
 const TAB_ID = 'tab-1'
+
 const FIRST_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const NOW = 10_000
 
 const TAB: Pick<TerminalTab, 'id' | 'title'> = { id: TAB_ID, title: 'Codex' }
@@ -28,6 +31,7 @@ function entry(
   overrides: Partial<AgentStatusEntry> = {}
 ): AgentStatusEntry {
   const paneKey = `${TAB_ID}:${leafId}`
+
   return {
     paneKey,
     state,
@@ -66,6 +70,7 @@ describe('resolveTerminalTabActivityStatus', () => {
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
     })
+
     expect(
       resolveTerminalTabActivityStatus({
         tab: { id: TAB_ID, title: 'Codex - action required' },
@@ -93,6 +98,7 @@ describe('resolveTerminalTabActivityStatus', () => {
         agentType: 'gemini',
         updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
       })
+
       expect(
         resolveTerminalTabActivityStatus({
           tab: { id: TAB_ID, title: '✋ Gemini CLI' },
@@ -349,13 +355,16 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
   it('indexes one immutable marker snapshot once across all mounted tab lookups', () => {
     const ownKeys = vi.fn(Reflect.ownKeys)
     let valueReads = 0
+
     const markers: Record<string, true> = Object.fromEntries(
       Array.from({ length: 1_000 }, (_, index) => [`owner-${index}:leaf`, true] as const)
     )
+
     const unread = new Proxy<Record<string, true>>(markers, {
       ownKeys,
       get: (target, property, receiver) => {
         valueReads += 1
+
         return Reflect.get(target, property, receiver)
       }
     })

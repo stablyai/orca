@@ -10,6 +10,7 @@ import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/
 
 function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: ExecutionHostId): boolean {
   const state = useAppStore.getState()
+
   // Some lightweight callers/tests provide only the activation slice of state.
   if (!state.worktreesByRepo || !sidebarHasActiveFilters(state)) {
     return false
@@ -19,26 +20,32 @@ function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: Executi
     if (target.id !== worktreeId) {
       return false
     }
+
     if (!executionHostId) {
       return true
     }
+
     // Why strict: legacy rows publish without a host, and a hostless twin must not vouch for a
     // filtered ssh:*/runtime:* target — that would clear the user's filters instead of warning.
     if (!target.executionHostId) {
       return false
     }
+
     return (
       normalizeExecutionHostId(target.executionHostId) === normalizeExecutionHostId(executionHostId)
     )
   })
+
   if (inRenderedTargets) {
     return false
   }
+
   // Why: a retained agent can outlive its worktree; a deleted worktree fails every filter
   // pass, so without this check any active filter would blame itself for the missing row.
   if (!state.getKnownWorktreeById?.(worktreeId, executionHostId)) {
     return false
   }
+
   // Absent from the rendered list can mean a collapsed group, not a filter:
   // collapsed-but-unfiltered targets should be revealed, not toasted. The host
   // matters: an id-only check would pass on a filtered target's same-id twin
@@ -63,6 +70,7 @@ export function jumpToWorktreeFromSidebar(
     ...(hiddenBeforeActivation ? { revealInSidebar: false, clearSidebarFilters: false } : {}),
     ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {})
   })
+
   if (activated === false) {
     return false
   }
@@ -72,6 +80,7 @@ export function jumpToWorktreeFromSidebar(
 
   const hiddenAfterActivation =
     hiddenBeforeActivation && wasHiddenBySidebarFilters(worktreeId, options?.executionHostId)
+
   if (hiddenBeforeActivation && !hiddenAfterActivation) {
     // Activation can seed a terminal, making a workspace excluded only by Hide sleeping visible.
     // Queue the reveal after that state transition instead of reporting a filter conflict.
@@ -91,5 +100,6 @@ export function jumpToWorktreeFromSidebar(
       )
     )
   }
+
   return true
 }

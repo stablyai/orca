@@ -23,25 +23,40 @@ import { pendingSendsAsMessages } from '../../src/renderer/src/components/native
 import { assembleNativeChatSession } from '../../src/renderer/src/components/native-chat/native-chat-session-assembler'
 
 type Operation = (index: number) => number
+
 type ExpectedChecksum = (iterations: number) => number
+
 type Calibration = { iterations: number; elapsedMs: number; capped: boolean }
 
 const TARGET_SAMPLE_MS = 50
+
 const MAX_ITERATIONS = 16_777_216
+
 const ROUNDS = 10
+
 let checksum = 0
+
 let expectedChecksum = 0
+
 let validatedCases = 0
+
 let cappedCalibrations = 0
+
 let sessionSink: NativeChatSession | null = null
+
 let messageArraySink: NativeChatMessage[] | null = null
+
 let contentSink = ''
+
 let pendingMatchSink: Set<number> | null = null
+
 let userRowSink: readonly NativeChatUserRow[] | null = null
+
 const benchmarkStartedAt = performance.now()
 
 function proseFixture(count: number, bytes: number, withTurnId: boolean): NativeChatMessage[] {
   const payload = 'Ab Cd  '.repeat(Math.ceil(bytes / 7)).slice(0, bytes)
+
   return Array.from({ length: count }, (_, index) => ({
     id: `message-${index}`,
     role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
@@ -83,6 +98,7 @@ function legacyMessageUpdateSession(messages: NativeChatMessage[]): NativeChatSe
   const commandNames = new Set(
     getVerifiedNativeChatCommands('claude').map((command) => command.name)
   )
+
   return legacySession(surfaceSkillInvocationUserTurns(messages, commandNames))
 }
 
@@ -100,29 +116,36 @@ function oldEmptyPending(messages: NativeChatMessage[]): NativeChatMessage[] {
   // row scan is the whole cost here — keep it escaping and let the matcher take its exit.
   userRowSink = matchingNativeChatUserRows(messages)
   pendingMatchSink = selectPendingIndicesRepresentedByUserRows([], [])
+
   return []
 }
 
 function blockContent(message: NativeChatMessage): string {
   const block = message.blocks[0]
+
   if (!block) {
     return ''
   }
+
   if (block.type === 'text') {
     return block.text
   }
+
   if (block.type === 'tool-call') {
     return block.name
   }
+
   if (block.type === 'tool-result') {
     return block.output
   }
+
   return block.type === 'image-ref' ? (block.path ?? block.url ?? block.alt ?? '') : block.groupId
 }
 
 function messageWeight(message: NativeChatMessage, content: string): number {
   const idTail = message.id.length > 0 ? message.id.charCodeAt(message.id.length - 1) : 0
   const contentTail = content.length > 0 ? content.charCodeAt(content.length - 1) : 0
+
   return message.id.length + idTail + message.role.charCodeAt(0) + content.length + contentTail
 }
 
@@ -130,16 +153,21 @@ function consumeSession(session: NativeChatSession, index: number): number {
   sessionSink = session
   messageArraySink = session.messages
   const message = session.messages[index % session.messages.length]
+
   if (!message) {
     contentSink = ''
+
     return session.status.charCodeAt(0)
   }
+
   contentSink = blockContent(message)
+
   return session.status.charCodeAt(0) + messageWeight(message, contentSink)
 }
 
 function consumePendingOutput(messages: NativeChatMessage[], index: number): number {
   messageArraySink = messages
+
   return (index % 7) + 1
 }
 
@@ -147,21 +175,27 @@ function cyclicChecksum(values: readonly number[], iterations: number): number {
   if (values.length === 0) {
     return 0
   }
+
   const cycle = values.reduce((sum, value) => sum + value, 0)
   const fullCycles = Math.floor(iterations / values.length)
   let total = cycle * fullCycles
+
   for (let index = 0; index < iterations % values.length; index += 1) {
     total += values[index]!
   }
+
   return total
 }
 
 function sessionExpectedChecksum(session: NativeChatSession): ExpectedChecksum {
   const statusWeight = session.status.charCodeAt(0)
+
   const weights = session.messages.map((message) => {
     const content = blockContent(message)
+
     return messageWeight(message, content)
   })
+
   return (iterations) => statusWeight * iterations + cyclicChecksum(weights, iterations)
 }
 
@@ -172,12 +206,15 @@ function pendingExpectedChecksum(iterations: number): number {
 function runSample(operation: Operation, expected: ExpectedChecksum, iterations: number): number {
   let sampleChecksum = 0
   const startedAt = performance.now()
+
   for (let index = 0; index < iterations; index += 1) {
     sampleChecksum += operation(index)
   }
+
   const elapsedMs = performance.now() - startedAt
   checksum += sampleChecksum
   expectedChecksum += expected(iterations)
+
   return elapsedMs
 }
 
@@ -188,18 +225,23 @@ function median(samples: number[]): number {
 function calibrate(operation: Operation, expected: ExpectedChecksum): Calibration {
   let iterations = 1
   let reachedTarget = false
+
   while (true) {
     const elapsedMs = runSample(operation, expected, iterations)
+
     if (elapsedMs >= TARGET_SAMPLE_MS) {
       if (reachedTarget) {
         return { iterations, elapsedMs, capped: false }
       }
+
       reachedTarget = true
       continue
     }
+
     if (iterations >= MAX_ITERATIONS) {
       return { iterations, elapsedMs, capped: true }
     }
+
     reachedTarget = false
     iterations = Math.min(iterations * 2, MAX_ITERATIONS)
   }
@@ -220,6 +262,7 @@ function benchmark(
   cappedCalibrations += Number(baselineCalibration.capped) + Number(optimizedCalibration.capped)
   const baselineSamples: number[] = []
   const optimizedSamples: number[] = []
+
   for (let round = 0; round < ROUNDS; round += 1) {
     if (round % 2 === 0) {
       baselineSamples.push(
@@ -241,6 +284,7 @@ function benchmark(
       )
     }
   }
+
   const baselineMs = median(baselineSamples)
   const optimizedMs = median(optimizedSamples)
   const speedup = baselineMs / Math.max(optimizedMs, Number.EPSILON)
@@ -274,6 +318,7 @@ function benchmarkMessageUpdate(name: string, messages: NativeChatMessage[]): vo
 }
 
 const prose300 = proseFixture(300, 2_048, false)
+
 const fixtures = [
   ['300 x 2KB prose, no turnId', prose300],
   ['300 x 2KB prose, with turnId', proseFixture(300, 2_048, true)],
@@ -285,6 +330,7 @@ const fixtures = [
 console.log(
   `Node ${process.version}; ${ROUNDS} alternating interleaved median rounds; ${TARGET_SAMPLE_MS} ms calibration target; ${MAX_ITERATIONS} iteration cap`
 )
+
 console.log(
   'case\tbaseline iters\toptimized iters\tbaseline cal ms\toptimized cal ms\tbaseline ms/op\toptimized ms/op\tspeedup'
 )
@@ -306,6 +352,7 @@ benchmarkSessionArms(
 )
 
 deepStrictEqual(pendingSendsAsMessages([], prose300), oldEmptyPending(prose300))
+
 benchmark(
   '300 x 2KB empty pending',
   (index) => consumePendingOutput(oldEmptyPending(prose300), index),
@@ -314,6 +361,7 @@ benchmark(
 )
 
 const combinedSessionExpected = sessionExpectedChecksum(legacyMessageUpdateSession(prose300))
+
 benchmark(
   '300 x 2KB combined',
   (index) =>
@@ -326,11 +374,17 @@ benchmark(
 )
 
 strictEqual(checksum, expectedChecksum, 'benchmark checksum accounting drifted')
+
 strictEqual(sessionSink?.sessionId, 'benchmark', 'session outputs did not escape')
+
 strictEqual(Array.isArray(messageArraySink), true, 'message arrays did not escape')
+
 strictEqual(contentSink.length > 0, true, 'message content did not escape')
+
 strictEqual(pendingMatchSink instanceof Set, true, 'pending baseline scan did not escape')
+
 strictEqual(Array.isArray(userRowSink), true, 'user row scan did not escape')
+
 console.log(
   `validated=${validatedCases} cases, checksum=${checksum}, capped calibrations=${cappedCalibrations}, runtime=${(
     performance.now() - benchmarkStartedAt

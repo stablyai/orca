@@ -30,12 +30,14 @@ export function backfillWorkerTerminalResources(this: OrchestrationDb): void {
     assignee_pane_key: string | null
     process_incarnation: string | null
   }[]
+
   const insert = this.db.prepare(
     `INSERT INTO worker_terminal_resources (
        id, origin_dispatch_id, owner_dispatch_id, worktree_id, terminal_handle,
        pane_key, process_incarnation, ownership_state, release_state, retained_reason
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
+
   for (const row of rows) {
     insert.run(
       generateId('wtr'),
@@ -90,6 +92,7 @@ export function createWorkerTerminalResourceStatement(
       params.ownership,
       params.ownership === 'external' ? 'external_terminal' : null
     )
+
   return this.getWorkerTerminalResource(id) as WorkerTerminalResourceRow
 }
 
@@ -149,6 +152,7 @@ export function recordWorkerTerminalRecoveryAttempt(
         WHERE id = ?`
     )
     .run(resourceId)
+
   return this.getWorkerTerminalResource(resourceId)
 }
 
@@ -168,12 +172,14 @@ export function transferWorkerTerminalResourceStatement(
   }
 ): WorkerTerminalResourceRow {
   const resource = this.getWorkerTerminalResource(params.resourceId)
+
   if (!resource) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Worker terminal resource ${params.resourceId} was not found.`
     )
   }
+
   const priorOwners = JSON.parse(resource.prior_owner_dispatch_ids) as string[]
   priorOwners.push(resource.owner_dispatch_id)
   this.db
@@ -197,6 +203,7 @@ export function transferWorkerTerminalResourceStatement(
       params.hostScope,
       params.resourceId
     )
+
   return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
 }
 

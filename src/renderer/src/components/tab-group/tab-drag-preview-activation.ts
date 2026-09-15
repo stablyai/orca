@@ -15,9 +15,11 @@ function previewActiveSurfacePatch(
   if (state.activeWorktreeId !== worktreeId || !tabId) {
     return {}
   }
+
   const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
     (tab) => tab.id === tabId && tab.groupId === groupId
   )
+
   if (!unifiedTab) {
     return {}
   }
@@ -38,6 +40,7 @@ function previewActiveSurfacePatch(
     ) {
       return {}
     }
+
     return {
       activeTabId: unifiedTab.entityId,
       activeTabType: 'terminal',
@@ -48,6 +51,7 @@ function previewActiveSurfacePatch(
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('terminal')
     }
   }
+
   if (unifiedTab.contentType === 'browser') {
     if (
       state.activeTabType === 'browser' &&
@@ -57,6 +61,7 @@ function previewActiveSurfacePatch(
     ) {
       return {}
     }
+
     return {
       activeBrowserTabId: unifiedTab.entityId,
       activeTabType: 'browser',
@@ -67,6 +72,7 @@ function previewActiveSurfacePatch(
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('browser')
     }
   }
+
   if (unifiedTab.contentType === 'simulator') {
     if (
       state.activeTabType === 'simulator' &&
@@ -74,11 +80,13 @@ function previewActiveSurfacePatch(
     ) {
       return {}
     }
+
     return {
       activeTabType: 'simulator',
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
     }
   }
+
   if (
     state.activeTabType === 'editor' &&
     state.activeTabTypeByWorktree[worktreeId] === 'editor' &&
@@ -87,6 +95,7 @@ function previewActiveSurfacePatch(
   ) {
     return {}
   }
+
   return {
     activeFileId: unifiedTab.entityId,
     activeTabType: 'editor',
@@ -101,6 +110,7 @@ function previewActiveSurfacePatch(
 export function captureTabDragActivationSnapshot(worktreeId: string): TabDragActivationSnapshot {
   const state = useAppStore.getState()
   const groups = state.groupsByWorktree[worktreeId] ?? []
+
   return {
     activeGroupId: state.activeGroupIdByWorktree[worktreeId] ?? null,
     activeTabIdByGroup: Object.fromEntries(groups.map((group) => [group.id, group.activeTabId]))
@@ -124,11 +134,13 @@ export function applyDragPreviewTab({
     const groupUnchanged = targetGroup?.activeTabId === tabId
     const focusUnchanged = (state.activeGroupIdByWorktree[worktreeId] ?? null) === activeGroupId
     const surfacePatch = previewActiveSurfacePatch(state, worktreeId, groupId, tabId)
+
     if (groupUnchanged && focusUnchanged) {
       return Object.keys(surfacePatch).length > 0 ? surfacePatch : state
     }
 
     const next: Partial<AppState> = { ...surfacePatch }
+
     if (!groupUnchanged) {
       next.groupsByWorktree = {
         ...state.groupsByWorktree,
@@ -137,12 +149,14 @@ export function applyDragPreviewTab({
         )
       }
     }
+
     if (!focusUnchanged) {
       next.activeGroupIdByWorktree = {
         ...state.activeGroupIdByWorktree,
         [worktreeId]: activeGroupId
       }
     }
+
     return next
   })
 }
@@ -153,13 +167,16 @@ export function restoreTabDragActivationSnapshot(
 ): void {
   useAppStore.setState((state): Partial<AppState> => {
     const groups = state.groupsByWorktree[worktreeId] ?? []
+
     const groupsUnchanged = groups.every(
       (group) => (snapshot.activeTabIdByGroup[group.id] ?? null) === group.activeTabId
     )
+
     const focusUnchanged =
       (state.activeGroupIdByWorktree[worktreeId] ?? null) === snapshot.activeGroupId
 
     const next: Partial<AppState> = {}
+
     if (!groupsUnchanged) {
       next.groupsByWorktree = {
         ...state.groupsByWorktree,
@@ -169,6 +186,7 @@ export function restoreTabDragActivationSnapshot(
         }))
       }
     }
+
     if (!focusUnchanged) {
       if (snapshot.activeGroupId === null) {
         const nextActiveGroupIdByWorktree = { ...state.activeGroupIdByWorktree }
@@ -183,6 +201,7 @@ export function restoreTabDragActivationSnapshot(
     }
 
     const restoredGroupId = snapshot.activeGroupId
+
     if (restoredGroupId) {
       const restoredTabId = snapshot.activeTabIdByGroup[restoredGroupId] ?? null
       Object.assign(
@@ -211,6 +230,7 @@ export function restoreSourceGroupActiveTabAfterCrossGroupDrop({
   movedTabId: string
 }): void {
   const preDragActiveTabId = snapshot.activeTabIdByGroup[sourceGroupId] ?? null
+
   // Why: dropUnifiedTab already picks the next active tab when the moved tab
   // was the source group's selection; only preview contamination needs undo.
   if (preDragActiveTabId === movedTabId) {
@@ -220,9 +240,11 @@ export function restoreSourceGroupActiveTabAfterCrossGroupDrop({
   useAppStore.setState((state): Partial<AppState> => {
     const groups = state.groupsByWorktree[worktreeId] ?? []
     const sourceGroup = groups.find((group) => group.id === sourceGroupId)
+
     if (!sourceGroup || sourceGroup.activeTabId === preDragActiveTabId) {
       return state
     }
+
     return {
       groupsByWorktree: {
         ...state.groupsByWorktree,

@@ -61,6 +61,7 @@ function defaultRepos(): FixtureRepo[] {
 
 export function createGitHubIpcHarness(mocks: GitHubIpcMocks): GitHubIpcHarness {
   const handlers: HandlerMap = {}
+
   const harness: GitHubIpcHarness = {
     handlers,
     repos: defaultRepos(),
@@ -76,12 +77,15 @@ export function createGitHubIpcHarness(mocks: GitHubIpcMocks): GitHubIpcHarness 
     },
     reset: () => {
       setPlatform(ORIGINAL_PLATFORM)
+
       for (const fn of listGitHubIpcMockFns(mocks)) {
         fn.mockReset()
       }
+
       mocks.cohort.getCohortAtEmit.mockReturnValue({ nth_repo_added: undefined })
       mocks.electron.webContents.getAllWebContents.mockReturnValue([])
       clearPRRefreshValidationBackoffForTests()
+
       for (const key of Object.keys(handlers)) {
         delete handlers[key]
       }
@@ -98,5 +102,6 @@ export function createGitHubIpcHarness(mocks: GitHubIpcMocks): GitHubIpcHarness 
       })
     }
   }
+
   return harness
 }

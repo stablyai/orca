@@ -33,8 +33,10 @@ export function ActionButton({
           onClick={(event) => {
             if (disabled) {
               event.preventDefault()
+
               return
             }
+
             onClick(event)
           }}
         >

@@ -39,11 +39,13 @@ export function resolvePiSourceAgentDir(
   const primaryKey = PRIMARY_AGENT_DIR_ENV_BY_KIND[kind]
 
   const sourceDir = firstNonEmpty(env[sourceKey])
+
   if (sourceDir) {
     return sourceDir
   }
 
   const startupDir = readStartupEnv(primaryKey, env, shell)
+
   if (startupDir) {
     return startupDir
   }
@@ -65,5 +67,6 @@ export function resolvePiSourceAgentDir(
   ) {
     return env[primaryKey]
   }
+
   return undefined
 }

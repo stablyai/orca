@@ -12,6 +12,7 @@ afterEach(() => vi.unstubAllGlobals())
 function stubListSessions(impl: (scope?: unknown) => Promise<unknown[]>) {
   const listSessions = vi.fn(impl)
   vi.stubGlobal('window', { api: { pty: { listSessions } } })
+
   return listSessions
 }
 
@@ -136,8 +137,10 @@ describe('activation inventory census', () => {
           'Error invoking remote method: Error: No PTY provider for connection "box": the SSH relay for this host is not attached'
         )
       }
+
       return [{ id: 'local-1' }]
     })
+
     await expect(
       listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
     ).resolves.toEqual([{ id: 'local-1' }])
@@ -146,6 +149,7 @@ describe('activation inventory census', () => {
     const refused = stubListSessions(async () => {
       throw new Error('relay unavailable')
     })
+
     await expect(
       listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
     ).rejects.toThrow('relay unavailable')

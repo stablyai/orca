@@ -14,7 +14,9 @@ export function normalizeRemoteArtifactInput(value: unknown): RemoteArtifactInpu
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
+
   const input = value as Partial<RemoteArtifactInput>
+
   if (
     typeof input.sourceKey !== 'string' ||
     !input.sourceKey ||
@@ -24,6 +26,7 @@ export function normalizeRemoteArtifactInput(value: unknown): RemoteArtifactInpu
   ) {
     return null
   }
+
   return input as RemoteArtifactInput
 }
 
@@ -31,6 +34,7 @@ export function parseRemoteArtifactInput(value: string | undefined): RemoteArtif
   if (!value) {
     return null
   }
+
   try {
     return normalizeRemoteArtifactInput(JSON.parse(value))
   } catch {

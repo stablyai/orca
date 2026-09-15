@@ -17,12 +17,15 @@ vi.mock('electron', async (importOriginal) => ({
     removeAllListeners: () => {}
   }
 }))
+
 const { listWorktreesStrict } = vi.hoisted(() => ({ listWorktreesStrict: vi.fn() }))
+
 // The git binary is the external boundary for worktree.ps; everything above it stays real.
 vi.mock('../../../../../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict
 }))
+
 // The push path reaches the dashboard popout window, whose electron re-export cannot load here.
 vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: false },
@@ -166,14 +169,19 @@ const PRODUCER_TOKENS =
   /getAgentStatusSnapshot|getAgentProviderSessionSnapshot|enrichAgentStatusIpcPayload|mintAgentStatusFleetEvidence|resolveAgentStatusBinding|getOrchestrationFleetAgentStatusSnapshot|agentStatus:set/
 
 const PANE_KEY = 'tab-census:leaf-census'
+
 const TERMINAL_HANDLE = 'term_census'
+
 const PROCESS_INCARNATION = 'pty-census:inc-1'
+
 const DISPATCH_ID = 'dispatch-census'
+
 const WORKTREE_ID = 'wt-census'
 
 /** Exactly the entry the hook server holds; `toAgentStatusIpcPayload` is what it publishes. */
 function hookEntry(): EnrichedAgentHookEventPayload {
   const observedAt = Date.now() - 1_000
+
   return {
     paneKey: PANE_KEY,
     tabId: 'tab-census',
@@ -194,6 +202,7 @@ function censusRuntime(): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService(null, undefined, {
     getAgentStatusSnapshot: () => [publishedHookRow()]
   })
+
   vi.spyOn(runtime, 'getAgentStatusTerminalHandleForPaneKey').mockImplementation((paneKey) =>
     paneKey === PANE_KEY ? TERMINAL_HANDLE : undefined
   )
@@ -203,6 +212,7 @@ function censusRuntime(): OrcaRuntimeService {
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === TERMINAL_HANDLE ? PROCESS_INCARNATION : null
   )
+
   return runtime
 }
 
@@ -212,6 +222,7 @@ function seedWorker(db: OrchestrationDb): void {
     coordinatorHandle: 'term-coordinator',
     coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   })
+
   const task = db.createTask({ spec: 'census worker', runId: run.id })
   const sqlite = (db as unknown as { db: Database.Database }).db
   sqlite
@@ -235,6 +246,7 @@ const REPO_PATH = '/census/repo'
 /** Enough store for `worktree.ps` to resolve one worktree; the git listing is mocked above. */
 function censusStore() {
   const metaById: Record<string, unknown> = {}
+
   return {
     getRepo: (id: string) => (id === 'repo-census' ? censusStore().getRepos()[0] : undefined),
     getRepos: () => [
@@ -244,6 +256,7 @@ function censusStore() {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] as object), ...meta }
+
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -266,6 +279,7 @@ function censusStore() {
 describe('agent status producer census', () => {
   it('pins every production site that hands hook rows to a consumer', () => {
     const root = resolve(import.meta.dirname, '../../../../../..')
+
     const scanned = scanSourceTree(resolve(root, 'main'))
       .filter((file) => PRODUCER_TOKENS.test(stripComments(file.source)))
       .map((file) => `main/${file.relativePath}`)
@@ -276,12 +290,14 @@ describe('agent status producer census', () => {
 
   it('reads live on worker-list from a hook row that carries only a pane key', async () => {
     const db = new OrchestrationDb(':memory:')
+
     try {
       seedWorker(db)
       const runtime = censusRuntime()
       runtime.setOrchestrationDb(db)
 
       const params = ORCHESTRATION_WORKER_LIST_METHOD.params?.parse({})
+
       const page = (await ORCHESTRATION_WORKER_LIST_METHOD.handler(params, { runtime })) as {
         workers: { dispatchId: string; projection: { liveness: { verdict: string } } }[]
       }
@@ -298,6 +314,7 @@ describe('agent status producer census', () => {
 
   it('reads live on worker-show from a hook row that carries only a pane key', () => {
     const db = new OrchestrationDb(':memory:')
+
     try {
       seedWorker(db)
       const runtime = censusRuntime()
@@ -332,6 +349,7 @@ describe('agent status producer census', () => {
     ])
     // The hook row names its worktree by id, so learn the id the runtime minted before publishing.
     let rows: AgentStatusIpcPayload[] = []
+
     const runtime = new OrcaRuntimeService(censusStore() as never, undefined, {
       getAgentStatusSnapshot: () => rows
     })
@@ -365,22 +383,26 @@ describe('agent status producer census', () => {
     ) => {
       listeners.push(listener)
     }) as never)
+
     const window = {
       isDestroyed: () => false,
       webContents: {
         send: (channel: string, payload: AgentStatusIpcPayload) => sent.push({ channel, payload })
       }
     }
+
     const previousWindow = mainProcessState.mainWindow
     const previousRuntime = mainProcessState.runtime
     mainProcessState.mainWindow = window as never
     mainProcessState.runtime = runtime
+
     try {
       installMainWindowAgentStatusListeners({
         window: window as never,
         maybeAutoRenameBranchOnFirstWork: () => {},
         onRecordAgentState: () => {}
       })
+
       for (const listener of listeners) {
         listener(hookEntry())
       }

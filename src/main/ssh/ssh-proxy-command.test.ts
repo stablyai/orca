@@ -24,6 +24,7 @@ function createMockProxyProcess(): MockProxyProcess {
   })
   proc.stdout = Object.assign(new EventEmitter(), { pause: vi.fn(), resume: vi.fn() })
   proc.stderr = new EventEmitter()
+
   return proc
 }
 
@@ -128,6 +129,7 @@ describe('spawnProxyCommand', () => {
       22,
       'deploy'
     )
+
     // Nothing reads the Duplex, so pushing past the high-water mark backs up.
     for (let i = 0; i < 64; i += 1) {
       proc.stdout.emit('data', Buffer.alloc(4096))

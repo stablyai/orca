@@ -51,8 +51,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -73,6 +76,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -82,6 +86,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -102,6 +107,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -112,9 +118,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -124,9 +132,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -135,6 +145,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -172,17 +183,22 @@ describe('connectPanePty', () => {
   it('preserves a scrolled-up viewport after hidden-backlog snapshot replay', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -199,12 +215,15 @@ describe('connectPanePty', () => {
       if (data.includes('snapshot-state')) {
         pane.terminal.buffer.active.viewportY = 0
       }
+
       callback?.()
     })
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false }
     })
+
     const disposable = connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(6)
 
@@ -223,20 +242,27 @@ describe('connectPanePty', () => {
 
   it('cancels a delayed snapshot scroll restore when the pane binding is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { isTerminalScrollIntentRebuildInFlight } =
       await import('@/lib/pane-manager/terminal-scroll-intent-rebuild')
+
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -270,9 +296,11 @@ describe('connectPanePty', () => {
 
     pane.terminal.buffer.active.baseY = 200
     pane.terminal.buffer.active.viewportY = 200
+
     for (const callback of parseCallbacks) {
       callback()
     }
+
     await flushAsyncTicks()
 
     expect(isTerminalScrollIntentRebuildInFlight(pane.terminal)).toBe(false)
@@ -283,17 +311,22 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
     const live = 'visible-after\r\n'
     getMainBufferSnapshot.mockResolvedValue({
@@ -324,9 +357,11 @@ describe('connectPanePty', () => {
     pane.terminal.buffer.active.baseY = 200
     markTerminalFollowOutput(pane.terminal)
     pane.terminal.scrollToLine.mockClear()
+
     for (const callback of parseCallbacks) {
       callback()
     }
+
     await flushAsyncTicks()
 
     // Why: replay completion must not overwrite scroll intent recorded while xterm was still parsing the restored snapshot.
@@ -338,20 +373,25 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedReplayCallback: {
       current: ((data: string) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:env-1@@terminal-1', replay: '' }
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const refresh = vi.fn()
+
     const terminal = pane.terminal as typeof pane.terminal & {
       _core?: { refresh: typeof refresh }
     }
+
     terminal._core = { refresh }
     terminal.write = vi.fn((_data: string, callback?: () => void) => {
       callback?.()
@@ -374,11 +414,14 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedReplayCallback: {
       current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:env-1@@terminal-1', replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -389,6 +432,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     const manager = createManager(1)
     const deps = createDeps()
+
     const disposable = await withMockedDocumentActiveElement(textarea, async () => {
       const connection = connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(6)
@@ -401,8 +445,10 @@ describe('connectPanePty', () => {
         expect.any(Function)
       )
       expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+
       return connection
     })
+
     disposable.dispose()
   })
 
@@ -412,11 +458,14 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedReplayCallback: {
       current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:env-1@@terminal-1', replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -427,6 +476,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     const manager = createManager(1)
     const deps = createDeps()
+
     const disposable = await withMockedDocumentActiveElement(textarea, async () => {
       const connection = connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(6)
@@ -440,8 +490,10 @@ describe('connectPanePty', () => {
         POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
         expect.any(Function)
       )
+
       return connection
     })
+
     disposable.dispose()
   })
 
@@ -451,11 +503,14 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedReplayCallback: {
       current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:env-1@@terminal-1', replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -466,6 +521,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     const manager = createManager(1)
     const deps = createDeps()
+
     const disposable = await withMockedDocumentActiveElement(textarea, async () => {
       const connection = connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(6)
@@ -476,8 +532,10 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(12)
 
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+
       return connection
     })
+
     disposable.dispose()
   })
 
@@ -485,11 +543,14 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedReplayCallback: {
       current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:env-1@@terminal-1', replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -505,6 +566,7 @@ describe('connectPanePty', () => {
     configureTerminalFocusMode(pane, textarea)
     const manager = createManager(1)
     const deps = createDeps()
+
     const disposable = await withMockedDocumentActiveElement(textarea, async () => {
       const connection = connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(6)
@@ -519,19 +581,24 @@ describe('connectPanePty', () => {
       )
       expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?25h\x1b[?1004l', expect.any(Function))
       expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[I')
+
       return connection
     })
+
     disposable.dispose()
   })
 
   it('does not clear restored scrollback when eager metadata replay opts out', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedReplayCallback: {
       current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -562,11 +629,14 @@ describe('connectPanePty', () => {
   it('does not write a clear or reset for empty eager metadata replay', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedReplayCallback: {
       current: ((data: string, meta?: { clearBeforeReplay?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -591,11 +661,14 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-1')
+
     const capturedReplayCallback: {
       current: ((data: string) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedReplayCallback.current = callbacks.onReplayData ?? null
+
       return { id: 'remote:env-1@@terminal-1', replay: '' }
     })
     transportFactoryQueue.push(transport)
@@ -627,6 +700,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(2)
       pendingParses.shift()?.()
     }
+
     await flushAsyncTicks(4)
 
     expect(pane.terminal.write).not.toHaveBeenCalledWith('first replay', expect.any(Function))
@@ -637,17 +711,22 @@ describe('connectPanePty', () => {
 
   it('holds newer live bytes until a later replay frame has fully parsed', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { deliverTerminalDataWithDeferredCredit } =
       await import('@/lib/pane-manager/terminal-delivery-credit')
+
     enableActiveRuntimeEnvironment()
     const transport = createMockTransport('remote:env-1@@terminal-live-order')
+
     const callbacksRef: {
       replay: ((data: string) => void) | null
       data: ((data: string) => void) | null
     } = { replay: null, data: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       callbacksRef.replay = callbacks.onReplayData ?? null
       callbacksRef.data = callbacks.onData ?? null
+
       return 'remote:env-1@@terminal-live-order'
     })
     transportFactoryQueue.push(transport)
@@ -666,10 +745,12 @@ describe('connectPanePty', () => {
     })
     expect(writes).not.toContain('NEWER-LIVE\r\n')
     expect(acknowledgeLiveFrame).not.toHaveBeenCalled()
+
     for (let index = 0; index < 12 && parseCallbacks.length > 0; index += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(4)
     }
+
     await flushAsyncTicks(8)
 
     const replayIndex = writes.indexOf('authoritative replay')
@@ -698,6 +779,7 @@ describe('connectPanePty', () => {
     const replayCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       replayCallback.current = callbacks.onReplayData ?? null
+
       return 'remote:env-1@@terminal-old'
     })
     transportFactoryQueue.push(transport)
@@ -710,10 +792,12 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
     replayCallback.current?.('stale queued replay')
     vi.mocked(transport.getPtyId).mockReturnValue('remote:env-1@@terminal-replacement')
+
     while (parseCallbacks.length > 0) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(4)
     }
+
     await flushAsyncTicks(12)
 
     expect(writes).not.toContain('blocking replay')
@@ -723,16 +807,21 @@ describe('connectPanePty', () => {
 
   it('requests snapshot recovery for one oversized live frame deferred by replay', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { deliverTerminalDataWithDeferredCredit } =
       await import('@/lib/pane-manager/terminal-delivery-credit')
+
     const transport = createMockTransport('pty-large-live')
+
     const callbacksRef: {
       replay: ((data: string) => void) | null
       data: ((data: string) => void) | null
     } = { replay: null, data: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       callbacksRef.replay = callbacks.onReplayData ?? null
       callbacksRef.data = callbacks.onData ?? null
+
       return 'pty-large-live'
     })
     transportFactoryQueue.push(transport)
@@ -740,9 +829,11 @@ describe('connectPanePty', () => {
     const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
     const binding = connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
     await flushAsyncTicks(8)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue(null)
     getMainBufferSnapshot.mockClear()
 
@@ -754,10 +845,12 @@ describe('connectPanePty', () => {
       callbacksRef.data?.(oversizedLiveFrame)
     })
     expect(acknowledgeDroppedFrame).not.toHaveBeenCalled()
+
     while (parseCallbacks.length > 0) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(4)
     }
+
     await flushAsyncTicks(20)
 
     expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-large-live', {

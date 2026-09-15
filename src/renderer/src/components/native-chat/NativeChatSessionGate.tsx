@@ -18,12 +18,15 @@ export function NativeChatSessionGate({
 }: NativeChatSessionGateProps): JSX.Element {
   const lastResolutionRef = useRef<NativeChatPaneResolution | null>(null)
   const currentResolution = resolveNativeChatSession(input)
+
   const previousResolution =
     lastResolutionRef.current?.paneKey === input.paneKey ? lastResolutionRef.current : null
+
   const resolution = (() => {
     if (!currentResolution) {
       return previousResolution
     }
+
     if (
       previousResolution?.agent === currentResolution.agent &&
       previousResolution.sessionId &&
@@ -38,8 +41,10 @@ export function NativeChatSessionGate({
         transcriptPath: previousResolution.transcriptPath
       }
     }
+
     return currentResolution
   })()
+
   useEffect(() => {
     if (resolution) {
       // Why: hook and title evidence are transport-fed and can vanish between a
@@ -47,8 +52,10 @@ export function NativeChatSessionGate({
       lastResolutionRef.current = resolution
     }
   }, [resolution])
+
   if (!resolution) {
     return <NativeChatEmptyState kind="not-agent" />
   }
+
   return <>{children(resolution)}</>
 }

@@ -80,6 +80,7 @@ export function BrowserPagePane({
     isMobileDriven,
     hasRemoteViewer: isRemotelyViewed
   })
+
   const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
   const pageViewportContainer = pageViewport?.container ?? null
   const pageViewportScroller = pageViewport?.scroller ?? null
@@ -101,13 +102,16 @@ export function BrowserPagePane({
   )
   useEffect(() => {
     const subscribe = window.api.ui.onScrollBrowserPage
+
     if (!subscribe || !pageViewportScroller || !browserTab.viewportPresetId) {
       return
     }
+
     return subscribe((event) => {
       if (event.browserPageId !== browserTab.id) {
         return
       }
+
       scrollBrowserPageViewport(browserTab.id, event.deltaX, event.deltaY)
     })
   }, [browserTab.id, browserTab.viewportPresetId, pageViewportScroller])
@@ -120,11 +124,13 @@ export function BrowserPagePane({
   // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
   const trackNextLoadingEventRef = useRef(false)
+
   const recoveryNavigationValidationRef = useRef<{
     committed: boolean
     started: boolean
     targetUrl: string
   } | null>(null)
+
   const activeLoadFailureRef = useRef(browserTab.loadError)
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
   const onUpdatePageStateRef = useRef(onUpdatePageState)
@@ -134,6 +140,7 @@ export function BrowserPagePane({
     isActiveRef.current = isActive
   }, [isActive])
   const [findOpen, setFindOpen] = useState(false)
+
   const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({
     scrollX: 0,
     scrollY: 0,
@@ -141,19 +148,23 @@ export function BrowserPagePane({
   })
 
   const workspaceConnectionId = useAppStore((state) => getConnectionIdFromState(state, worktreeId))
+
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
+
   const webviewPartition = useBrowserPageWebviewPartition({
     sessionProfileId,
     sessionPartition
   })
+
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const slotViewport = useBrowserPageSlotViewport(workspaceId)
 
   const zoom = useBrowserPageZoomFeedback(browserTab.id)
   const { resourceNotice, setResourceNotice } = useBrowserPageResourceNotices(browserTab.id)
   const guestFocus = useWebviewGuestFocus(webviewRef)
+
   const {
     focusAddressBarNow,
     focusGuestNow: focusWebviewNow,
@@ -166,12 +177,15 @@ export function BrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
+
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,
     worktreeId
   })
+
   const grab = useGrabMode(browserTab.id)
   const markup = useBrowserPageMarkupCapture(webviewRef)
+
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: browserTab.id,
     isActive,
@@ -184,6 +198,7 @@ export function BrowserPagePane({
     browserAnnotationsLength: annotationSend.browserAnnotations.length,
     setBrowserAnnotationTrayOpen: annotationSend.setBrowserAnnotationTrayOpen
   })
+
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
     worktreeId,
@@ -201,6 +216,7 @@ export function BrowserPagePane({
     addressBarInputRef,
     browserTabUrl: browserTab.url
   })
+
   useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
@@ -262,6 +278,7 @@ export function BrowserPagePane({
     onUpdatePageStateRef,
     focusWebviewNow
   })
+
   const reload = useBrowserPageReloadActions({
     browserTab,
     webviewRef,
@@ -269,6 +286,7 @@ export function BrowserPagePane({
     retryGuestRecoveryRef,
     onUpdatePageStateRef
   })
+
   useBrowserPageFindShortcuts({
     browserTabId: browserTab.id,
     workspaceId,
@@ -297,11 +315,14 @@ export function BrowserPagePane({
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
   const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
   const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
+
   const shareableArtifactFile =
     workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
+
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
+
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
     feedbackVisible: zoom.browserZoomFeedbackVisible,
     isDefaultZoom: zoom.browserZoomPercent === zoom.browserDefaultZoomPercent
@@ -309,18 +330,22 @@ export function BrowserPagePane({
 
   useEffect(() => {
     const webview = webviewRef.current
+
     if (!webview) {
       return
     }
+
     // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
     webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
   }, [inputLocked])
 
   useEffect(() => {
     const webview = webviewRef.current
+
     if (!webview) {
       return
     }
+
     // Why: some Electron builds keep painting a hidden guest layer, so drop it from layout (display:none) instead of just hiding it.
     webview.style.display = showFailureOverlay ? 'none' : 'flex'
   }, [showFailureOverlay])

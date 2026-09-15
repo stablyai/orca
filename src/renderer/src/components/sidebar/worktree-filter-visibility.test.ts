@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
+
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
 
 import { worktreePassesSidebarFilters } from './worktree-filter-visibility'

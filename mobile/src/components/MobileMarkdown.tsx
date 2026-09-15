@@ -50,13 +50,17 @@ type Props = {
 }
 
 const MAX_TABLE_ROWS = 40
+
 const MAX_TABLE_COLUMNS = 8
+
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
+
 const MarkdownTextContext = createContext<ComponentType<TextProps>>(NativeText)
 
 function MarkdownText(props: TextProps): React.JSX.Element {
   const TextComponent = useContext(MarkdownTextContext)
+
   return createElement(TextComponent, props)
 }
 
@@ -64,10 +68,13 @@ function MarkdownText(props: TextProps): React.JSX.Element {
 // scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
 function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
   const route = routeMarkdownHref(href)
+
   if (route.kind === 'web') {
     void Linking.openURL(route.url).catch(() => {})
+
     return
   }
+
   if (route.kind === 'file' && onOpenFile) {
     onOpenFile(route.pathText)
   }
@@ -83,10 +90,13 @@ function renderTextRun(
   if (!onOpenFile) {
     return text
   }
+
   const segments = detectFilePathSegments(text)
+
   if (segments.length === 1 && segments[0]!.type === 'text') {
     return text
   }
+
   return segments.map((segment, segmentIndex) => {
     if (segment.type === 'file') {
       return (
@@ -99,22 +109,26 @@ function renderTextRun(
         </MarkdownText>
       )
     }
+
     return <Fragment key={`${keyPrefix}:${segmentIndex}`}>{segment.value}</Fragment>
   })
 }
 
 function renderInline(text: string, onOpenFile?: (pathText: string) => void): ReactNode[] {
   const parts: ReactNode[] = []
+
   const pattern = createMarkdownInlineMatcher(
     text,
     /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
     true
   )
+
   let pendingStart = 0
   let match: MarkdownInlineMatch | null
 
   while ((match = pattern.exec())) {
     const token = match[0]
+
     // Intraword `_` runs (snake_case, dunder tails) are literal text per
     // CommonMark; leaving them unflushed keeps surrounding file paths whole
     // for detection in the eventual text run.
@@ -123,15 +137,18 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
       pattern.lastIndex = match.index + 1
       continue
     }
+
     if (match.index > pendingStart) {
       parts.push(
         renderTextRun(text.slice(pendingStart, match.index), `t${pendingStart}`, onOpenFile)
       )
     }
+
     pendingStart = pattern.lastIndex
     const key = `${match.index}:${token}`
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
+
     if (image) {
       parts.push(
         <MarkdownText
@@ -163,11 +180,13 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
           {url}
         </MarkdownText>
       )
+
       if (trailing) {
         parts.push(<Fragment key={`${key}p`}>{trailing}</Fragment>)
       }
     } else if (token.startsWith('`')) {
       const code = token.slice(1, -1)
+
       if (onOpenFile && isFilePathCodeSpan(code)) {
         parts.push(
           <MarkdownText
@@ -209,6 +228,7 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
   if (pendingStart < text.length) {
     parts.push(renderTextRun(text.slice(pendingStart), `t${pendingStart}`, onOpenFile))
   }
+
   return parts
 }
 
@@ -222,11 +242,14 @@ function MobileMarkdownContent({
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
+
   // Scale prose sizes; inline spans inherit fontSize from the wrapping Text.
   const scaled = (size: number): { fontSize: number; lineHeight: number } | null =>
     textScale !== 1 ? { fontSize: size * textScale, lineHeight: (size + 6) * textScale } : null
+
   const proseScale = scaled(13)
   const listScale = scaled(14)
+
   if (!text) {
     return fallback ? (
       <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
@@ -234,6 +257,7 @@ function MobileMarkdownContent({
       </MarkdownText>
     ) : null
   }
+
   const mermaidSourceOccurrences = new Map<string, number>()
   // Native-chat range selection is set on each block; nested inline spans inherit it.
 
@@ -251,6 +275,7 @@ function MobileMarkdownContent({
             </MarkdownText>
           )
         }
+
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
@@ -260,6 +285,7 @@ function MobileMarkdownContent({
             </View>
           )
         }
+
         if (block.type === 'code') {
           // Mermaid fences render as diagrams (WebView), not as raw code — same as PR sidebar.
           // Unclosed fences are still streaming: mounting the WebView per tick would
@@ -267,6 +293,7 @@ function MobileMarkdownContent({
           if (isMobileMermaidLanguage(block.language) && block.closed) {
             const occurrence = mermaidSourceOccurrences.get(block.text) ?? 0
             mermaidSourceOccurrences.set(block.text, occurrence + 1)
+
             return (
               <MermaidDiagram
                 key={`${block.text}:${occurrence}`}
@@ -275,6 +302,7 @@ function MobileMarkdownContent({
               />
             )
           }
+
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? (
@@ -286,6 +314,7 @@ function MobileMarkdownContent({
             </View>
           )
         }
+
         if (block.type === 'image') {
           return (
             <Pressable
@@ -300,11 +329,13 @@ function MobileMarkdownContent({
             </Pressable>
           )
         }
+
         if (block.type === 'table') {
           const visibleHeaders = block.headers.slice(0, MAX_TABLE_COLUMNS)
           const visibleRows = block.rows.slice(0, MAX_TABLE_ROWS)
           const hiddenRows = Math.max(0, block.rows.length - visibleRows.length)
           const hiddenColumns = Math.max(0, block.headers.length - visibleHeaders.length)
+
           return (
             <ScrollView key={index} horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.table}>
@@ -339,6 +370,7 @@ function MobileMarkdownContent({
             </ScrollView>
           )
         }
+
         if (block.type === 'list') {
           return (
             <View key={index} style={styles.list}>
@@ -361,9 +393,11 @@ function MobileMarkdownContent({
             </View>
           )
         }
+
         if (block.type === 'rule') {
           return <View key={index} style={styles.rule} />
         }
+
         return (
           <MarkdownText
             key={index}
@@ -385,6 +419,7 @@ function MobileMarkdownContent({
 
 function MobileMarkdownInner(props: Props): React.JSX.Element | null {
   const TextComponent = props.rangeSelectable ? MobileSelectableText : NativeText
+
   return (
     <MarkdownTextContext.Provider value={TextComponent}>
       <MobileMarkdownContent {...props} />

@@ -12,9 +12,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
+
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: mocks.recordBreadcrumb
 }))
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))
@@ -65,6 +67,7 @@ function createGuest(): Electron.WebviewTag & {
     getURL: ReturnType<typeof vi.fn>
     reload: ReturnType<typeof vi.fn>
   }
+
   Object.assign(webview, {
     getURL: vi.fn(() => 'https://example.internal/'),
     getTitle: vi.fn(() => 'Example'),
@@ -83,6 +86,7 @@ function createGuest(): Electron.WebviewTag & {
     detach: mocks.detach,
     nextMetadataRevision: vi.fn(() => 1)
   })
+
   return webview
 }
 
@@ -249,6 +253,7 @@ describe('client-hosted browser pane over a dead guest', () => {
       webview.getTitle = vi.fn(() => {
         throw invalidGuestInstanceId()
       })
+
       return 'Last live title'
     })
 

@@ -55,6 +55,7 @@ describe('resolveConflictDisplay', () => {
         }
       })
     )
+
     expect(display).toEqual({
       files: ['src/a.ts', 'src/b.ts'],
       commitsBehind: 3,
@@ -84,6 +85,7 @@ describe('resolveConflictDisplay', () => {
         conflictSummary: { baseRef: 'main', baseCommit: 'x', commitsBehind: 0, files: [] }
       })
     )
+
     expect(display?.fileDetailsUnavailable).toBe(true)
   })
 
@@ -100,6 +102,7 @@ describe('resolveConflictDisplay', () => {
         }
       })
     )
+
     expect(display?.localMergeClean).toBe(true)
     expect(display?.mergeabilityRefreshCommands).toContain('git fetch origin')
     expect(display?.mergeabilityRefreshCommands).toContain('git commit --allow-empty --only')

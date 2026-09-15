@@ -62,10 +62,13 @@ function profileIdFromArgs(args: unknown): string {
   ) {
     throw new Error('invalid_orca_profile_id')
   }
+
   const profileId = (args as SwitchOrcaProfileArgs).profileId.trim()
+
   if (!profileId) {
     throw new Error('invalid_orca_profile_id')
   }
+
   return profileId
 }
 
@@ -73,14 +76,17 @@ function transferProjectArgsFromUnknown(args: unknown): TransferOrcaProfileProje
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_project_transfer')
   }
+
   const candidate = args as TransferOrcaProfileProjectArgs
   const sourceProfileId = candidate.sourceProfileId?.trim()
   const targetProfileId = candidate.targetProfileId?.trim()
   const repoId = candidate.repoId?.trim()
   const mode = candidate.mode
+
   if (!sourceProfileId || !targetProfileId || !repoId || (mode !== 'move' && mode !== 'copy')) {
     throw new Error('invalid_orca_profile_project_transfer')
   }
+
   return {
     sourceProfileId,
     targetProfileId,
@@ -93,21 +99,28 @@ function findProjectsByPathArgsFromUnknown(args: unknown): FindOrcaProfileProjec
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_project_path')
   }
+
   const candidate = args as FindOrcaProfileProjectsByPathArgs
   const path = typeof candidate.path === 'string' ? candidate.path.trim() : ''
+
   if (!path) {
     throw new Error('invalid_orca_profile_project_path')
   }
+
   let executionHostId: FindOrcaProfileProjectsByPathArgs['executionHostId'] = null
+
   if (candidate.executionHostId !== null && candidate.executionHostId !== undefined) {
     if (typeof candidate.executionHostId !== 'string') {
       throw new Error('invalid_orca_profile_project_path')
     }
+
     executionHostId = normalizeExecutionHostId(candidate.executionHostId)
+
     if (!executionHostId) {
       throw new Error('invalid_orca_profile_project_path')
     }
   }
+
   return {
     path,
     connectionId:
@@ -124,10 +137,13 @@ function orgIdFromUnknown(args: unknown): string {
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_org_selection')
   }
+
   const orgId = (args as SelectOrcaProfileOrgArgs).orgId?.trim()
+
   if (!orgId) {
     throw new Error('invalid_orca_profile_org_selection')
   }
+
   return orgId
 }
 
@@ -135,9 +151,11 @@ function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLink
   if (!args || typeof args !== 'object') {
     return {}
   }
+
   const candidate = args as CreateCloudLinkedOrcaProfileArgs
   const orgId = typeof candidate.orgId === 'string' ? candidate.orgId.trim() : undefined
   const name = typeof candidate.name === 'string' ? candidate.name.trim() : undefined
+
   return {
     ...(orgId ? { orgId } : {}),
     ...(name ? { name } : {})
@@ -191,6 +209,7 @@ export function registerOrcaProfileHandlers(
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
       const result = createLocalOrcaProfile(args)
       seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+
       return result
     }
   )
@@ -200,6 +219,7 @@ export function registerOrcaProfileHandlers(
     async (_event, args: SwitchOrcaProfileArgs): Promise<SwitchOrcaProfileResult> => {
       const profileId = profileIdFromArgs(args)
       const current = getOrcaProfileListState()
+
       if (profileId === current.activeProfileId) {
         return { status: 'already-active' }
       }
@@ -207,6 +227,7 @@ export function registerOrcaProfileHandlers(
       const activeProfile = current.profiles.find(
         (profile) => profile.id === current.activeProfileId
       )
+
       if (activeProfile?.cloud) {
         // Why: profile selection changes the expected identity synchronously;
         // stale refresh saves must fail even before relaunch teardown finishes.
@@ -215,6 +236,7 @@ export function registerOrcaProfileHandlers(
           getProfileUserDataPath()
         )
       }
+
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
       await flushActiveProfileBeforeFileMutation(store)
@@ -235,24 +257,31 @@ export function registerOrcaProfileHandlers(
     ): Promise<TransferOrcaProfileProjectResult> => {
       const args = transferProjectArgsFromUnknown(rawArgs)
       const current = getOrcaProfileListState()
+
       if (args.targetProfileId === current.activeProfileId) {
         throw new Error('active_target_orca_profile_transfer_requires_relaunch')
       }
+
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
         await flushActiveProfileBeforeFileMutation(store)
         const result = transferOrcaProfileProject(args, getProfileUserDataPath())
+
         if (result.status === 'transferred') {
           store.freezeWrites()
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)
           setActiveOrcaProfile(args.targetProfileId)
           scheduleProfileRelaunch('profile-transfer')
+
           return { ...result, willRelaunch: true }
         }
+
         return result
       }
+
       await flushActiveProfileBeforeFileMutation(store)
+
       return transferOrcaProfileProject(args, getProfileUserDataPath())
     }
   )
@@ -270,9 +299,11 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:connectCurrent',
     async (): Promise<ConnectCurrentOrcaProfileResult> => {
       const result = await connectCurrentOrcaProfile(getProfileUserDataPath())
+
       if (result.status === 'connected') {
         options.onAuthMutation?.()
       }
+
       return result
     }
   )
@@ -287,10 +318,12 @@ export function registerOrcaProfileHandlers(
         getProfileUserDataPath(),
         createCloudLinkedProfileArgsFromUnknown(rawArgs)
       )
+
       if (result.status === 'created') {
         seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
         options.onAuthMutation?.()
       }
+
       return result
     }
   )
@@ -299,9 +332,11 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:refreshAuth',
     async (): Promise<RefreshCurrentOrcaProfileAuthResult> => {
       const result = await refreshCurrentOrcaProfileAuth(getProfileUserDataPath())
+
       if (result.status === 'refreshed') {
         options.onAuthMutation?.()
       }
+
       return result
     }
   )
@@ -310,6 +345,7 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:signOutCurrent',
     async (): Promise<SignOutCurrentOrcaProfileResult> => {
       options.onBeforeSignOut?.()
+
       return signOutCurrentOrcaProfile(getProfileUserDataPath())
     }
   )
@@ -321,9 +357,11 @@ export function registerOrcaProfileHandlers(
         getProfileUserDataPath(),
         orgIdFromUnknown(rawArgs)
       )
+
       if (result.status === 'selected') {
         options.onAuthMutation?.()
       }
+
       return result
     }
   )

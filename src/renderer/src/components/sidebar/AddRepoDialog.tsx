@@ -26,11 +26,13 @@ export default React.memo(function AddRepoDialog({
   hosted?: AddRepoDialogHostedController
 }) {
   const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
+
   // Why: hosted mode never receives dropped paths through modalData — that
   // channel belongs to the store-modal instance.
   const droppedLocalPath = useAppStore((s) =>
     !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
   )
+
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
@@ -39,21 +41,27 @@ export default React.memo(function AddRepoDialog({
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
+
   const { closeModal, closeForFolderHandoff, finishProjectAdd, handleOpenSshSettings } =
     useAddRepoHostedController(hosted)
+
   const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
+
   const completeGitRepoAdd = useCompleteGitRepoAdd({
     closeModal,
     setHideDefaultBranchWorkspace,
     finishProjectAdd
   })
+
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
+
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
       ? hostSelection.selectedParsedHost.environmentId
       : null
+
   const {
     nestedScan,
     nestedSelectedPaths,
@@ -85,6 +93,7 @@ export default React.memo(function AddRepoDialog({
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     setStep
   })
+
   const {
     sshTargets,
     selectedTargetId,
@@ -110,6 +119,7 @@ export default React.memo(function AddRepoDialog({
     showRemoteNestedRepoReview,
     trackRemoteNestedScanResult
   )
+
   const {
     createName,
     createParent,
@@ -170,6 +180,7 @@ export default React.memo(function AddRepoDialog({
 
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
+
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath,
@@ -186,6 +197,7 @@ export default React.memo(function AddRepoDialog({
     setIsAdding,
     setAddProjectBusyLabel
   })
+
   const {
     serverPath,
     isAddingServerPath,
@@ -262,6 +274,7 @@ export default React.memo(function AddRepoDialog({
     if (step === 'nested') {
       trackNestedBackAction()
     }
+
     resetState()
   }, [resetState, step, trackNestedBackAction])
 
@@ -271,6 +284,7 @@ export default React.memo(function AddRepoDialog({
         if (step === 'nested' && !isAdding) {
           trackNestedBackAction()
         }
+
         closeModal()
         resetState()
       }
@@ -343,6 +357,7 @@ export default React.memo(function AddRepoDialog({
           if (!hostSelection.selectedHostId) {
             return
           }
+
           setCloneError(null)
           setStep('clone')
         }}
@@ -350,6 +365,7 @@ export default React.memo(function AddRepoDialog({
           if (!hostSelection.selectedHostId) {
             return
           }
+
           setCreateError(null)
           setStep('create')
         }}

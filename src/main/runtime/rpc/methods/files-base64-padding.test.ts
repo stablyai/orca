@@ -26,10 +26,12 @@ describe.each([
     ['AAA', true]
   ])('validates %j before writing (accepted: %s)', async (contentBase64, accepted) => {
     const write = vi.fn().mockResolvedValue({ ok: true })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       [runtimeMethod]: write
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_MUTATION_METHODS })
 
     const response = await dispatcher.dispatch({
@@ -46,6 +48,7 @@ describe.each([
 
     expect(response).toMatchObject({ ok: accepted })
     expect(write).toHaveBeenCalledTimes(accepted ? 1 : 0)
+
     if (accepted) {
       expect(write).toHaveBeenCalledWith(
         'id:wt-1',

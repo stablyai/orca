@@ -11,6 +11,7 @@ import {
 import { basename } from 'node:path'
 
 export const SHELL_PROMPT_PROBE_SETTLE_MS = 50
+
 export const MAX_SHELL_PROMPT_PROBES = 4
 
 export type ShellPromptReadinessProbe = {
@@ -28,9 +29,11 @@ export function createShellPromptReadinessProbe(options: {
   settleMs?: number
 }): ShellPromptReadinessProbe | null {
   const lineEditorProbe = createPtySlaveLineEditorProbe(options.slavePath)
+
   if (!lineEditorProbe) {
     return null
   }
+
   const settleMs = options.settleMs ?? SHELL_PROMPT_PROBE_SETTLE_MS
   const expectedShellName = options.shellPath ? basename(options.shellPath).toLowerCase() : null
   const shellCwd = options.shellCwd ?? process.cwd()
@@ -44,22 +47,28 @@ export function createShellPromptReadinessProbe(options: {
     if (disposed || scheduledGeneration !== generation) {
       return
     }
+
     const shellPid = options.getShellPid()
+
     if (!shellPid || (await lineEditorProbe()) !== 'line-editor') {
       return
     }
+
     if (disposed || scheduledGeneration !== generation) {
       return
     }
+
     const [shell, expectedPath] = await Promise.all([
       readShellProcessReadiness(shellPid),
       options.shellPath
         ? resolveShellExecutablePath(options.shellPath, shellCwd, options.shellPathEnv)
         : Promise.resolve(null)
     ])
+
     if (disposed || scheduledGeneration !== generation) {
       return
     }
+
     if (
       !shell?.foreground ||
       !expectedShellName ||
@@ -68,6 +77,7 @@ export function createShellPromptReadinessProbe(options: {
     ) {
       return
     }
+
     if (shell.executablePath !== expectedPath) {
       // Why widen past the launched path: a startup profile that `exec`s a second
       // install of the same shell (Homebrew Bash over /bin/bash) keeps the pid but
@@ -78,6 +88,7 @@ export function createShellPromptReadinessProbe(options: {
         shellCwd,
         options.shellPathEnv
       )
+
       if (
         disposed ||
         scheduledGeneration !== generation ||
@@ -86,6 +97,7 @@ export function createShellPromptReadinessProbe(options: {
         return
       }
     }
+
     disposed = true
     options.onPromptReady()
   }
@@ -99,11 +111,14 @@ export function createShellPromptReadinessProbe(options: {
       ) {
         return
       }
+
       generation += 1
       const scheduledGeneration = generation
+
       if (timer) {
         clearTimeout(timer)
       }
+
       timer = setTimeout(() => {
         timer = null
         probesStarted += 1
@@ -113,6 +128,7 @@ export function createShellPromptReadinessProbe(options: {
     dispose(): void {
       disposed = true
       generation += 1
+
       if (timer) {
         clearTimeout(timer)
         timer = null

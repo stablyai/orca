@@ -10,45 +10,61 @@ import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -79,6 +95,7 @@ describe('registerPtyHandlers', () => {
             env?: Record<string, string>
           }): Promise<{ id: string }>
         }
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -88,8 +105,10 @@ describe('registerPtyHandlers', () => {
           onPtyData: vi.fn(),
           preAllocateHandleForPty: vi.fn(() => 'handle-runtime-local')
         }
+
         const saved = process.env.CLAUDE_CODE_CHILD_SESSION
         process.env.CLAUDE_CODE_CHILD_SESSION = '1'
+
         try {
           handlers.clear()
           registerPtyHandlers(mainWindow as never, runtime as never)
@@ -118,8 +137,10 @@ describe('registerPtyHandlers', () => {
             env?: Record<string, string>
           }): Promise<{ id: string }>
         }
+
         const leafId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
         setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -127,6 +148,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
@@ -158,6 +180,7 @@ describe('registerPtyHandlers', () => {
           isReattach: true,
           launchAgent: 'codex'
         } as never)
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -165,8 +188,10 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           spawn(args: {
             cols: number
@@ -204,6 +229,7 @@ describe('registerPtyHandlers', () => {
         await withWin32Platform(async () => {
           _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
           const daemonSpawn = setupDaemonAdapter()
+
           const runtime = {
             setPtyController: vi.fn(),
             registerPty: vi.fn(),
@@ -211,16 +237,19 @@ describe('registerPtyHandlers', () => {
             onPtyExit: vi.fn(),
             onPtyData: vi.fn()
           }
+
           const settings = {
             localWindowsRuntimeDefault: { kind: 'windows-host' },
             terminalWindowsShell: 'powershell.exe',
             terminalWindowsWslDistro: 'Debian',
             terminalWindowsPowerShellImplementation: 'auto'
           }
+
           const store = makeProjectRuntimeStore({
             projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
             settings
           })
+
           handlers.clear()
           registerPtyHandlers(
             mainWindow as never,
@@ -230,6 +259,7 @@ describe('registerPtyHandlers', () => {
             undefined,
             store as never
           )
+
           const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
             spawn(args: {
               cols: number
@@ -265,6 +295,7 @@ describe('registerPtyHandlers', () => {
         await withWin32Platform(async () => {
           _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
           const daemonSpawn = setupDaemonAdapter()
+
           const runtime = {
             setPtyController: vi.fn(),
             registerPty: vi.fn(),
@@ -274,11 +305,13 @@ describe('registerPtyHandlers', () => {
             preparePtyExecutionContext: vi.fn().mockReturnValue(true),
             getOrchestrationCompatibilityHostId: vi.fn(() => 'compat-host')
           }
+
           const settings = {
             terminalWindowsShell: 'wsl.exe',
             terminalWindowsWslDistro: null,
             terminalWindowsPowerShellImplementation: 'auto'
           }
+
           handlers.clear()
           registerPtyHandlers(
             mainWindow as never,
@@ -286,6 +319,7 @@ describe('registerPtyHandlers', () => {
             undefined,
             (() => settings) as never
           )
+
           const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
             spawn(args: {
               cols: number
@@ -321,12 +355,14 @@ describe('registerPtyHandlers', () => {
       it('distinguishes an attached native context from an older daemon fallback', async () => {
         await withWin32Platform(async () => {
           _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+
           const settings = {
             localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
             terminalWindowsShell: 'wsl.exe',
             terminalWindowsWslDistro: 'Ubuntu',
             terminalWindowsPowerShellImplementation: 'auto'
           }
+
           const cases: {
             reportedWslDistro: string | null | undefined
             expectedWslDistro: string | null
@@ -346,6 +382,7 @@ describe('registerPtyHandlers', () => {
 
           for (const testCase of cases) {
             setupDaemonAdapter(true, testCase.reportedWslDistro)
+
             const runtime = {
               setPtyController: vi.fn(),
               createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -356,6 +393,7 @@ describe('registerPtyHandlers', () => {
               onPtyData: vi.fn(),
               preparePtyExecutionContext: vi.fn().mockReturnValue(true)
             }
+
             handlers.clear()
             registerPtyHandlers(
               mainWindow as never,
@@ -382,6 +420,7 @@ describe('registerPtyHandlers', () => {
         await withWin32Platform(async () => {
           _setWslCachesForTests({ available: true, distros: ['Debian'] })
           const daemonSpawn = setupDaemonAdapter()
+
           const runtime = {
             setPtyController: vi.fn(),
             registerPty: vi.fn(),
@@ -389,14 +428,17 @@ describe('registerPtyHandlers', () => {
             onPtyExit: vi.fn(),
             onPtyData: vi.fn()
           }
+
           const settings = {
             localWindowsRuntimeDefault: { kind: 'windows-host' },
             terminalWindowsShell: 'powershell.exe'
           }
+
           const store = makeProjectRuntimeStore({
             projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
             settings
           })
+
           handlers.clear()
           registerPtyHandlers(
             mainWindow as never,
@@ -406,6 +448,7 @@ describe('registerPtyHandlers', () => {
             undefined,
             store as never
           )
+
           const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
             spawn(args: {
               cols: number
@@ -441,7 +484,9 @@ describe('registerPtyHandlers', () => {
             command?: string
           }): Promise<{ id: string }>
         }
+
         const daemonSpawn = setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -450,6 +495,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
@@ -460,6 +506,7 @@ describe('registerPtyHandlers', () => {
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prevPackaged = mockedApp.isPackaged
         mockedApp.isPackaged = false
+
         try {
           await controller.spawn({
             cols: 80,
@@ -489,10 +536,12 @@ describe('registerPtyHandlers', () => {
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
+
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
             ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
           })
+
           expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
           expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
           expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
@@ -508,6 +557,7 @@ describe('registerPtyHandlers', () => {
         const prevPackaged = mockedApp.isPackaged
         mockedApp.isPackaged = false
         let spawnOptions: Awaited<ReturnType<typeof daemonSpawnAndGetOptions>>
+
         try {
           spawnOptions = await daemonSpawnAndGetOptions(
             {
@@ -539,6 +589,7 @@ describe('registerPtyHandlers', () => {
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
+
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
@@ -552,10 +603,12 @@ describe('registerPtyHandlers', () => {
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
+
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
             PATH: '/system/bin'
           })
+
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
           expect(env.PATH).toContain(
             `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
@@ -571,10 +624,12 @@ describe('registerPtyHandlers', () => {
         const mockedApp = app as unknown as { isPackaged: boolean }
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
+
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
             PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
           })
+
           expect(env.PATH).not.toContain('orca-terminal-attribution')
           expect(env.PATH).toContain('/system/bin')
         } finally {

@@ -21,8 +21,10 @@ export function appendCodexLifecycleMutations(
   mutations: readonly JournalLifecycleMutationInput[]
 ): StructuredAgentSessionSinkAdmission {
   const chunks = partitionJournalLifecycleMutations(settlementId, mutations)
+
   for (const { settlementId: id, mutations: chunk } of chunks) {
     let admission: StructuredAgentSessionSinkAdmission = ADMITTED
+
     if (sink.tryAppendLifecycleBatch) {
       admission = sink.tryAppendLifecycleBatch(id, chunk, { lifecycle: true })
     } else if (sink.appendLifecycleBatch) {
@@ -32,6 +34,7 @@ export function appendCodexLifecycleMutations(
         if (mutation.kind === 'item') {
           if (sink.tryAppendItem) {
             admission = sink.tryAppendItem(mutation.identity, mutation.body, { lifecycle: true })
+
             if (!admission.accepted) {
               return admission
             }
@@ -41,6 +44,7 @@ export function appendCodexLifecycleMutations(
         } else {
           if (sink.tryAppendTombstone) {
             admission = sink.tryAppendTombstone(mutation.identity, { lifecycle: true })
+
             if (!admission.accepted) {
               return admission
             }
@@ -50,16 +54,20 @@ export function appendCodexLifecycleMutations(
         }
       }
     }
+
     if (!admission.accepted) {
       return admission
     }
+
     const publishAdmission = sink.tryPublish
       ? sink.tryPublish({ lifecycle: true })
       : (sink.publish({ lifecycle: true }), ADMITTED)
+
     if (!publishAdmission.accepted) {
       return publishAdmission
     }
   }
+
   return ADMITTED
 }
 
@@ -77,7 +85,9 @@ export function appendCodexLifecycleItem(
   if (sink.tryAppendItem) {
     return criticalAdmission(sink.tryAppendItem(identity, body, { lifecycle: true }))
   }
+
   sink.appendItem(identity, body, { lifecycle: true })
+
   return CODEX_JOURNAL_ADMITTED
 }
 
@@ -92,7 +102,9 @@ export function appendCodexLifecycleTransition(
       sink.tryAppendLifecycleTransition(identitySizeBound, body, resolveIdentity)
     )
   }
+
   const admission = appendCodexLifecycleItem(sink, identitySizeBound, body)
+
   return admission.accepted ? publishCodexLifecycle(sink) : admission
 }
 
@@ -102,7 +114,9 @@ export function publishCodexLifecycle(
   if (sink.tryPublish) {
     return criticalAdmission(sink.tryPublish({ lifecycle: true }))
   }
+
   sink.publish({ lifecycle: true })
+
   return CODEX_JOURNAL_ADMITTED
 }
 
@@ -114,6 +128,7 @@ export function admitCodexLifecycleItems(
   if (items.length === 0) {
     return { accepted: false, reason: 'untranslated' }
   }
+
   if (sink.tryAppendLifecycleBatch) {
     const admission = criticalAdmission(
       sink.tryAppendLifecycleBatch(
@@ -122,13 +137,17 @@ export function admitCodexLifecycleItems(
         { lifecycle: true }
       )
     )
+
     return admission.accepted ? publishCodexLifecycle(sink) : admission
   }
+
   for (const item of items) {
     const admission = appendCodexLifecycleItem(sink, item.identity, item.body)
+
     if (!admission.accepted) {
       return admission
     }
   }
+
   return publishCodexLifecycle(sink)
 }

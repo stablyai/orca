@@ -36,13 +36,16 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
   // Mirrors getLocalRelayCandidates in ssh-relay-deploy: env override for
   // tests/dev, then packaged extraResources, then dev out/ paths.
   const candidates: string[] = []
+
   if (process.env.ORCA_RELAY_PATH) {
     candidates.push(join(process.env.ORCA_RELAY_PATH, 'wsl'))
   }
+
   if (process.resourcesPath) {
     candidates.push(join(process.resourcesPath, 'relay', 'wsl'))
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
   }
+
   try {
     const appPath = getAppEnvironment().getAppPath()
     candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
@@ -50,11 +53,14 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
   } catch {
     // app not ready in some test contexts — env/resources candidates suffice.
   }
+
   for (const dir of candidates) {
     const jsPath = join(dir, WSL_HOOK_RELAY_BUNDLE_NAME)
     const versionPath = join(dir, WSL_HOOK_RELAY_VERSION_FILE)
+
     if (existsSync(jsPath) && existsSync(versionPath)) {
       const version = readFileSync(versionPath, 'utf8').trim()
+
       // Why: the version lands inside single-quoted guest shell text and in
       // a guest path segment — refuse anything outside the safe alphabet.
       if (/^[A-Za-z0-9+.-]+$/.test(version)) {
@@ -62,6 +68,7 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
       }
     }
   }
+
   return null
 }
 
@@ -79,6 +86,7 @@ function guestRelayDirExpr(version: string): string {
  *  nvm node 20 off PATH). */
 export function buildGuestLaunchScript(version: string): string {
   const dir = guestRelayDirExpr(version)
+
   return [
     '#!/bin/sh',
     `d="${dir}"`,
@@ -104,6 +112,7 @@ export function buildGuestLaunchScript(version: string): string {
  *  so same-version concurrent installs cannot corrupt each other. */
 export function buildGuestInstallScript(bundleJs: Buffer, version: string): string {
   const b64 = bundleJs.toString('base64').replace(/(.{1,120})/g, '$1\n')
+
   return [
     'set -e',
     'umask 077',
@@ -135,6 +144,7 @@ export function spawnWslRelayProcess(
   // verbatim (same form as the Codex WSL login spawn), so `$HOME` reaches
   // sh unescaped and expands guest-side.
   const command = `exec sh "${guestRelayDirExpr(version)}/launch.sh"`
+
   return spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-c', command], {
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -155,6 +165,7 @@ export function spawnWslRelayProcess(
  *  distros would not have launched the relay anyway. */
 export function isWslDistroRunning(distro: string): Promise<boolean> {
   const wanted = distro.trim().toLowerCase()
+
   return listRunningWslDistrosAsync().then((running) =>
     running.some((candidate) => candidate.toLowerCase() === wanted)
   )
@@ -177,9 +188,11 @@ export async function runWslInstallProcess(
     // No maxOutputBytes: the default cap holds the whole stream so the slice
     // below can take the end of it.
   })
+
   // Tail, not head: the operative error ("mv: Read-only file system") lands
   // after whatever apt and base64 already printed.
   const stderr = result.stderr.slice(-MAX_STARTUP_BUFFER_BYTES)
+
   return result.timedOut
     ? { code: null, stderr: `${stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
     : { code: result.code, stderr }
@@ -215,15 +228,19 @@ export async function launchWslRelayWithInstall(options: {
   const { distro, env, bundleJsPath, version, io } = options
   let installTried = false
   let transientRetries = 0
+
   for (;;) {
     if (options.isDisposed()) {
       return
     }
+
     const child = io.spawnRelay(distro, env, version)
     options.onChild(child)
+
     try {
       const transport = await io.waitForSentinel(child)
       await options.connect(transport, child)
+
       return
     } catch (err) {
       // Why before the failure triage: once disposed, the guest install and retries below are
@@ -231,14 +248,19 @@ export async function launchWslRelayWithInstall(options: {
       if (options.isDisposed()) {
         return
       }
+
       const failure = (err as { startup?: WslRelayStartupFailure }).startup
+
       if (!failure) {
         throw err
       }
+
       if (failure.code === WSL_HOOK_RELAY_NO_NODE_EXIT_CODE) {
         options.onNoNode()
+
         return
       }
+
       if (
         /catastrophic failure/i.test(failure.stderr) &&
         transientRetries < TRANSIENT_RETRY_LIMIT
@@ -247,19 +269,25 @@ export async function launchWslRelayWithInstall(options: {
         await new Promise((resolve) => setTimeout(resolve, io.transientRetryDelayMs))
         continue
       }
+
       if (!installTried) {
         installTried = true
         const script = buildGuestInstallScript(io.readBundle(bundleJsPath), version)
         const result = await io.runInstall(distro, script, env)
+
         if (result.code === 0) {
           continue
         }
+
         options.onFailure(
           `guest install failed (code ${result.code ?? 'unknown'}): ${result.stderr.trim()}`
         )
+
         return
       }
+
       options.onFailure(formatWslRelayFailure(failure))
+
       return
     }
   }
@@ -267,6 +295,7 @@ export async function launchWslRelayWithInstall(options: {
 
 export function formatWslRelayFailure(failure: WslRelayStartupFailure): string {
   const detail = failure.stderr.trim()
+
   return `startup failed (${failure.kind}, code ${failure.code ?? 'unknown'})${detail ? `: ${detail}` : ''}`
 }
 
@@ -289,9 +318,11 @@ export function buildWslRelaySpawnEnv(
     [WSL_HOOK_RELAY_VERSION_ENV]: bundleVersion,
     [WSL_HOOK_RELAY_INSTANCE_ENV]: instanceKey
   }
+
   // Why: the relay derives its own guest endpoint path; a /p-translated
   // Windows endpoint here would only add WSLENV noise.
   delete env.ORCA_AGENT_HOOK_ENDPOINT
   addOrcaWslInteropEnv(env as Record<string, string>)
+
   return env
 }

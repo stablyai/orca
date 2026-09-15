@@ -34,6 +34,7 @@ describe('tuiAgentToAgentKind', () => {
 describe('agentKindToTuiAgent', () => {
   it('round-trips every shipped TuiAgent through its telemetry kind', () => {
     const agents = Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]
+
     for (const agent of agents) {
       expect(agentKindToTuiAgent(tuiAgentToAgentKind(agent))).toBe(agent)
     }

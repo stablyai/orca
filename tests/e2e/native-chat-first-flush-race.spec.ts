@@ -9,6 +9,7 @@ import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from '.
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 
 const LOADING_TITLE = 'Loading conversation…'
+
 const ERROR_TITLE = 'Could not load conversation'
 
 async function enableNativeChatSetting(page: Page): Promise<void> {
@@ -50,16 +51,21 @@ async function toggleTerminalTabToChatView(
 ): Promise<void> {
   await page.evaluate(({ tabId, worktreeId }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
+
     const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
       (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
     )
+
     if (!unifiedTab) {
       throw new Error('Unified terminal tab not found for chat toggle')
     }
+
     state.toggleTabViewMode(unifiedTab.id)
   }, args)
 }
@@ -73,6 +79,7 @@ function claudeTranscriptLines(args: {
   // broken by uuid, which would put the assistant turn first).
   const userTime = new Date()
   const assistantTime = new Date(userTime.getTime() + 2_000)
+
   const lines = [
     {
       sessionId: args.sessionId,
@@ -89,6 +96,7 @@ function claudeTranscriptLines(args: {
       message: { model: 'claude-opus-4', content: [{ type: 'text', text: args.assistantText }] }
     }
   ]
+
   return `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`
 }
 
@@ -116,6 +124,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
       'validation-screenshots',
       `native-chat-first-flush-race-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -162,8 +171,10 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
       await expect(orcaPage.getByText(ERROR_TITLE)).toHaveCount(0)
 
       const userText = 'Explain the native chat first-flush race fix for #8401'
+
       const assistantText =
         'The main process now retries a not-yet-flushed transcript instead of caching a permanent miss.'
+
       writeFileSync(transcriptPath, claudeTranscriptLines({ sessionId, userText, assistantText }))
 
       await expect(orcaPage.getByText(userText)).toBeVisible({ timeout: 30_000 })

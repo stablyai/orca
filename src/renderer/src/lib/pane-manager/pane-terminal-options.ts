@@ -3,9 +3,11 @@ import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/ter
 import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
+
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
 
 export const DEFAULT_TERMINAL_SCROLL_SENSITIVITY = 1.15
+
 export const DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY = 5
 
 export function normalizeTerminalScrollSensitivity(value: number | undefined): number {

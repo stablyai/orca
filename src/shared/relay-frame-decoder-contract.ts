@@ -37,6 +37,7 @@ export function containFrameDecoderContinuation(
   } catch {
     // Reset clears retained state before releasing paused read ownership.
   }
+
   publishFrameDecoderError(observer, new FrameDecoderContinuationError(cause))
 }
 

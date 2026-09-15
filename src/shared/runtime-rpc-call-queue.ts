@@ -2,9 +2,13 @@ import { abortSignalReason } from './abort-signal-reason'
 import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from './remote-runtime-memory-limits'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8
+
 const DEFAULT_REMOTE_RUNTIME_BACKGROUND_CALL_CONCURRENCY = 2
+
 export const RUNTIME_RPC_MAX_QUEUED_CALLS_PER_SELECTOR = 256
+
 export const RUNTIME_RPC_MAX_QUEUED_CALLS_TOTAL = 2_048
+
 export const RUNTIME_RPC_QUEUE_OVERLOAD_CODE = 'runtime_rpc_queue_overloaded'
 
 export class RuntimeRpcCallQueueOverloadError extends Error {
@@ -74,13 +78,17 @@ export class RuntimeRpcCallQueuePool {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
+
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
+
     const existingQueue = this.queues.get(selector)
+
     if (existingQueue && this.queuedCount(existingQueue) >= this.maxQueuedPerSelector) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('selector'))
     }
+
     if (
       !Number.isSafeInteger(retainedBytes) ||
       retainedBytes < 0 ||
@@ -90,6 +98,7 @@ export class RuntimeRpcCallQueuePool {
     }
 
     const queue = this.getQueue(selector)
+
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {
         background: isBackgroundRuntimeMethod(method),
@@ -100,20 +109,24 @@ export class RuntimeRpcCallQueuePool {
         started: false,
         signal
       }
+
       const targetQueue = call.background ? queue.background : queue.foreground
       targetQueue.push(call as QueuedRuntimeCall<unknown>)
       this.queuedCallCount += 1
       this.retainedCallBytes += retainedBytes
+
       if (signal) {
         call.onAbort = () => this.cancelQueuedCall(selector, queue, call)
         signal.addEventListener('abort', call.onAbort, { once: true })
       }
+
       this.pump(selector, queue)
     })
   }
 
   private getQueue(selector: string): RuntimeCallQueue {
     let queue = this.queues.get(selector)
+
     if (!queue) {
       queue = {
         active: 0,
@@ -125,31 +138,38 @@ export class RuntimeRpcCallQueuePool {
       }
       this.queues.set(selector, queue)
     }
+
     return queue
   }
 
   private pump(selector: string, queue: RuntimeCallQueue): void {
     while (queue.active < this.concurrency) {
       let call = this.takeForeground(queue)
+
       if (!call && queue.backgroundActive < this.backgroundConcurrency) {
         call = this.takeBackground(queue)
       }
+
       if (!call) {
         break
       }
 
       call.started = true
+
       if (call.signal && call.onAbort) {
         call.signal.removeEventListener('abort', call.onAbort)
       }
 
       queue.active += 1
+
       if (call.background) {
         queue.backgroundActive += 1
       }
+
       // Why: runtime streams and worktree actions share transport capacity with
       // per-card status refreshes, so decorative calls must not stampede it.
       let runPromise: Promise<unknown>
+
       try {
         runPromise = call.run()
       } catch (error) {
@@ -157,16 +177,21 @@ export class RuntimeRpcCallQueuePool {
         // validation errors must still flow through the cleanup path.
         runPromise = Promise.reject(error)
       }
+
       void runPromise.then(call.resolve, call.reject).finally(() => {
         this.retainedCallBytes = Math.max(0, this.retainedCallBytes - call.retainedBytes)
         queue.active = Math.max(0, queue.active - 1)
+
         if (call.background) {
           queue.backgroundActive = Math.max(0, queue.backgroundActive - 1)
         }
+
         if (queue.active === 0 && this.isEmpty(queue)) {
           this.queues.delete(selector)
+
           return
         }
+
         this.pump(selector, queue)
       })
     }
@@ -180,20 +205,26 @@ export class RuntimeRpcCallQueuePool {
     if (call.started || !call.signal) {
       return
     }
+
     const targetQueue = call.background ? queue.background : queue.foreground
     const head = call.background ? queue.backgroundHead : queue.foregroundHead
     const index = targetQueue.indexOf(call as QueuedRuntimeCall<unknown>, head)
+
     if (index === -1) {
       return
     }
+
     targetQueue.splice(index, 1)
     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
     this.retainedCallBytes = Math.max(0, this.retainedCallBytes - call.retainedBytes)
     call.reject(abortSignalReason(call.signal))
+
     if (queue.active === 0 && this.isEmpty(queue)) {
       this.queues.delete(selector)
+
       return
     }
+
     this.pump(selector, queue)
   }
 
@@ -201,10 +232,12 @@ export class RuntimeRpcCallQueuePool {
     if (queue.foregroundHead >= queue.foreground.length) {
       return undefined
     }
+
     const call = queue.foreground[queue.foregroundHead]
     queue.foregroundHead += 1
     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
     this.compactForeground(queue)
+
     return call
   }
 
@@ -212,10 +245,12 @@ export class RuntimeRpcCallQueuePool {
     if (queue.backgroundHead >= queue.background.length) {
       return undefined
     }
+
     const call = queue.background[queue.backgroundHead]
     queue.backgroundHead += 1
     this.queuedCallCount = Math.max(0, this.queuedCallCount - 1)
     this.compactBackground(queue)
+
     return call
   }
 
@@ -223,6 +258,7 @@ export class RuntimeRpcCallQueuePool {
     if (queue.foregroundHead <= 32 || queue.foregroundHead * 2 < queue.foreground.length) {
       return
     }
+
     // Why: large remote-runtime refresh bursts can queue many calls;
     // head indexes avoid O(n) shift costs while compaction releases closures.
     queue.foreground.splice(0, queue.foregroundHead)
@@ -233,6 +269,7 @@ export class RuntimeRpcCallQueuePool {
     if (queue.backgroundHead <= 32 || queue.backgroundHead * 2 < queue.background.length) {
       return
     }
+
     queue.background.splice(0, queue.backgroundHead)
     queue.backgroundHead = 0
   }

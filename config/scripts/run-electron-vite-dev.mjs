@@ -37,14 +37,20 @@ import {
 delete process.env.ELECTRON_RUN_AS_NODE
 
 const require = createRequire(import.meta.url)
+
 const repoRoot = path.resolve(import.meta.dirname, '../..')
+
 const STABLE_NAME_FLAG = '--stable-name'
+
 const rawForwardedArgs = process.argv.slice(2)
+
 // Why: keep an escape hatch for tools that key off Electron's stock app name.
 // The flag is runner-only and must not leak into Chromium/electron-vite.
 const useStableElectronName =
   process.env.ORCA_DEV_STABLE_NAME === '1' || rawForwardedArgs.includes(STABLE_NAME_FLAG)
+
 const forwardedRaw = rawForwardedArgs.filter((arg) => arg !== STABLE_NAME_FLAG)
+
 if (useStableElectronName) {
   process.env.ORCA_DEV_STABLE_NAME = '1'
 }
@@ -55,6 +61,7 @@ function readGitValue(args) {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore']
     }).trim()
+
     return value || null
   } catch {
     return null
@@ -70,8 +77,10 @@ function formatDevInstanceLabel(branch, worktreeName) {
     if (branch === worktreeName || lastBranchSegment(branch) === worktreeName) {
       return worktreeName
     }
+
     return `${worktreeName} @ ${branch}`
   }
+
   return branch || worktreeName || null
 }
 
@@ -84,6 +93,7 @@ function seedDevInstanceIdentityEnv() {
     process.env.ORCA_DEV_BRANCH ||
     readGitValue(['symbolic-ref', '--quiet', '--short', 'HEAD']) ||
     readGitValue(['rev-parse', '--short', 'HEAD'])
+
   const worktreeName = process.env.ORCA_DEV_WORKTREE_NAME || path.basename(repoRoot)
   const label = process.env.ORCA_DEV_INSTANCE_LABEL || formatDevInstanceLabel(branch, worktreeName)
   const identitySeed = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
@@ -91,17 +101,21 @@ function seedDevInstanceIdentityEnv() {
 
   process.env.ORCA_DEV_REPO_ROOT ||= repoRoot
   process.env.ORCA_DEV_INSTANCE_KEY ||= identitySeed
+
   if (branch) {
     process.env.ORCA_DEV_BRANCH ||= branch
   }
+
   if (worktreeName) {
     process.env.ORCA_DEV_WORKTREE_NAME ||= worktreeName
   }
+
   if (label) {
     // Why: parallel `pn dev` runs need a stable origin label for window titles,
     // Dock names, and automation sessions without re-running git in Electron.
     process.env.ORCA_DEV_INSTANCE_LABEL ||= label
   }
+
   process.env.ORCA_DEV_DOCK_TITLE ||= dockTitle
 }
 
@@ -113,6 +127,7 @@ function sanitizeMacAppBundleName(value) {
   return (
     Array.from(value, (char) => {
       const code = char.charCodeAt(0)
+
       return code < 32 || code === 127 || char === '/' || char === '\\' ? '-' : char
     })
       .join('')
@@ -125,11 +140,13 @@ function sanitizeMacAppBundleName(value) {
 function pruneStaleDevBundles(distDir) {
   const root = path.dirname(distDir)
   let bundles
+
   try {
     bundles = readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => {
         const dir = path.join(root, entry.name)
+
         return {
           dir,
           hasMarker: existsSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME)),
@@ -139,19 +156,24 @@ function pruneStaleDevBundles(distDir) {
   } catch {
     return
   }
+
   if (bundles.length <= 1) {
     return
   }
+
   const processTable = getDevBundleProcessTable()
+
   if (processTable === null) {
     return
   }
+
   const stale = selectStaleDevBundleDirs({
     bundles,
     currentDir: distDir,
     processTable,
     nowMs: Date.now()
   })
+
   for (const dir of stale) {
     try {
       rmSync(dir, { recursive: true, force: true })
@@ -166,11 +188,13 @@ function prepareMacDevElectronApp() {
 
   const sourceAppPath = path.join(repoRoot, 'node_modules', 'electron', 'dist', 'Electron.app')
   const electronPackagePath = path.join(repoRoot, 'node_modules', 'electron', 'package.json')
+
   if (!existsSync(sourceAppPath)) {
     return
   }
 
   let electronVersion = null
+
   try {
     electronVersion = JSON.parse(readFileSync(electronPackagePath, 'utf8')).version ?? null
   } catch {}
@@ -180,12 +204,14 @@ function prepareMacDevElectronApp() {
   // v11: stop patching the branch title into Info.plist so every dev bundle signs to one cdhash.
   // A stale copy only emits extra fields the parser ignores, so narrowing its schema needs no bump.
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
+
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
     )
     .digest('hex')
     .slice(0, 12)
+
   const distDir = path.join(repoRoot, 'out', 'electron-dev', hash)
   // Why: macOS Dock hover uses the bundle's filesystem display name for electron-vite's direct
   // binary launch path. This is what carries the per-branch name now that Info.plist no longer does,
@@ -205,6 +231,7 @@ function prepareMacDevElectronApp() {
   // click is lost, not misdirected.
   const bundleId = DEV_BUNDLE_ID
   process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
+
   // Why the patches are in the marker: bundleLayoutVersion alone does not cover them, so a cache
   // built before a patch value changed would be reused and keep presenting the old identity.
   const expectedMarker = JSON.stringify(
@@ -220,7 +247,9 @@ function prepareMacDevElectronApp() {
     null,
     2
   )
+
   const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+
   // Split by consequence: without this Chromium blank-crashes, so it gates whether the bundle can
   // run at all. The keyboard-layout helper below is optional -- swiftc builds it non-fatally, so on
   // a Mac without full Xcode it is simply absent and only a keyboard feature degrades.
@@ -232,6 +261,7 @@ function prepareMacDevElectronApp() {
     'Resources',
     'icudtl.dat'
   )
+
   const requiredResourcePaths = [
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
@@ -241,6 +271,7 @@ function prepareMacDevElectronApp() {
     if (!existsSync(markerPath) || !existsSync(appPath)) {
       return false
     }
+
     try {
       if (readFileSync(markerPath, 'utf8') !== expectedMarker) {
         return false
@@ -248,6 +279,7 @@ function prepareMacDevElectronApp() {
     } catch {
       return false
     }
+
     // Why: a previous interrupted copy can leave the marker and executable
     // present but miss Chromium framework resources, causing a blank crash.
     return (
@@ -259,6 +291,7 @@ function prepareMacDevElectronApp() {
   if (copiedAppIsUsable()) {
     pruneStaleDevBundles(distDir)
     process.env.ELECTRON_EXEC_PATH = executablePath
+
     return
   }
 
@@ -267,6 +300,7 @@ function prepareMacDevElectronApp() {
   // reach this rmSync while another instance is still running from it, deleting its app mid-session.
   // Reusing what is there matches what the runner did before the marker became conditional.
   const rebuildProcessTable = getDevBundleProcessTable()
+
   if (
     rebuildProcessTable !== null &&
     isDevBundleInUse(distDir, rebuildProcessTable) &&
@@ -282,6 +316,7 @@ function prepareMacDevElectronApp() {
       `[orca-dev] Another dev instance is running from this bundle; reusing it instead of rebuilding. Quit the other instance (or delete ${distDir}) to force a rebuild.`
     )
     process.env.ELECTRON_EXEC_PATH = executablePath
+
     return
   }
 
@@ -293,6 +328,7 @@ function prepareMacDevElectronApp() {
   restoreElectronFrameworkSymlinks(appPath)
 
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+
   const helperPlistPath = path.join(
     appPath,
     'Contents',
@@ -301,6 +337,7 @@ function prepareMacDevElectronApp() {
     'Contents',
     'Info.plist'
   )
+
   // Why every value here is constant: Info.plist is inside the signature seal, so a branch-varying
   // value (these keys used to carry the branch title) changed the ad-hoc cdhash per branch, and
   // macOS Keychain ACLs match on that cdhash — every branch read as a different app and re-prompted.
@@ -309,6 +346,7 @@ function prepareMacDevElectronApp() {
   for (const { key, value } of getDevBundlePlistPatches()) {
     setPlistValue(plistPath, key, value)
   }
+
   for (const { key, value } of getDevHelperPlistPatches()) {
     setPlistValue(helperPlistPath, key, value)
   }
@@ -363,6 +401,7 @@ function prepareMacDevElectronApp() {
   // notification-settings deep link for dev builds. Non-fatal: a signing
   // failure should not block `pnpm dev`.
   let signed = true
+
   try {
     execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', appPath])
   } catch (error) {
@@ -371,6 +410,7 @@ function prepareMacDevElectronApp() {
       `[orca-dev] ad-hoc codesign failed (dev notifications will not deliver): ${error?.message ?? error}`
     )
   }
+
   // Why only when signed: the marker is what marks this bundle reusable. Writing it after a failed
   // sign cached an unsigned bundle permanently -- the warning above scrolled past once and every
   // later launch silently reused it, losing notification delivery and the stable cdhash that keeps
@@ -379,6 +419,7 @@ function prepareMacDevElectronApp() {
   if (signed) {
     writeFileSync(markerPath, expectedMarker, 'utf8')
   }
+
   pruneStaleDevBundles(distDir)
   process.env.ELECTRON_EXEC_PATH = executablePath
 }
@@ -401,6 +442,7 @@ function ensureRelativeSymlink(linkPath, target) {
   }
 
   const targetPath = path.join(path.dirname(linkPath), target)
+
   if (!existsSync(targetPath)) {
     return
   }
@@ -412,6 +454,7 @@ function ensureRelativeSymlink(linkPath, target) {
 function restoreElectronFrameworkSymlinks(appPath) {
   const frameworkPath = path.join(appPath, 'Contents', 'Frameworks', 'Electron Framework.framework')
   const versionsPath = path.join(frameworkPath, 'Versions')
+
   if (!existsSync(path.join(versionsPath, 'A'))) {
     return
   }
@@ -420,6 +463,7 @@ function restoreElectronFrameworkSymlinks(appPath) {
   // duplicate directories. Recreate the relative bundle links after copying so
   // Chromium resolves resources through the canonical macOS framework layout.
   ensureRelativeSymlink(path.join(versionsPath, 'Current'), 'A')
+
   for (const entry of ['Electron Framework', 'Resources', 'Libraries', 'Helpers']) {
     ensureRelativeSymlink(path.join(frameworkPath, entry), `Versions/Current/${entry}`)
   }
@@ -429,15 +473,18 @@ function getDevUserDataPath() {
   if (process.env.ORCA_DEV_USER_DATA_PATH) {
     return process.env.ORCA_DEV_USER_DATA_PATH
   }
+
   if (process.platform === 'darwin') {
     return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
   }
+
   if (process.platform === 'win32') {
     return path.join(
       process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
       'orca-dev'
     )
   }
+
   return path.join(
     process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
     'orca-dev'
@@ -446,6 +493,7 @@ function getDevUserDataPath() {
 
 function prepareDevCliWrapper() {
   const userDataPath = getDevUserDataPath()
+
   const { binDir } = prepareDevCliTerminalWrappers({
     repoRoot,
     userDataPath,
@@ -460,6 +508,7 @@ function getElectronExecutable() {
   if (process.platform === 'win32') {
     return path.join(repoRoot, 'node_modules', 'electron', 'dist', 'electron.exe')
   }
+
   return path.join(repoRoot, 'node_modules', '.bin', 'electron')
 }
 
@@ -468,6 +517,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 }
 
 seedDevInstanceIdentityEnv()
+
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }
@@ -477,6 +527,7 @@ if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !==
 const electronViteCli =
   process.env.ORCA_ELECTRON_VITE_CLI ||
   path.join(path.dirname(require.resolve('electron-vite/package.json')), 'bin', 'electron-vite.js')
+
 const viteCli =
   process.env.ORCA_VITE_CLI ||
   path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
@@ -501,33 +552,42 @@ function latestMtimeMs(targetPath) {
       return null
     }
   })()
+
   if (!stat) {
     return 0
   }
+
   if (!stat.isDirectory()) {
     return stat.mtimeMs
   }
+
   let latest = stat.mtimeMs
+
   for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
       continue
     }
+
     latest = Math.max(latest, latestMtimeMs(path.join(targetPath, entry.name)))
   }
+
   return latest
 }
 
 function isDevWebClientFresh() {
   const outputMtime = getMtimeMs(getDevWebClientIndexPath())
+
   if (outputMtime === 0) {
     return false
   }
+
   const sourceMtime = Math.max(
     latestMtimeMs(path.join(repoRoot, 'vite.web.config.ts')),
     latestMtimeMs(path.join(repoRoot, 'src', 'renderer')),
     latestMtimeMs(path.join(repoRoot, 'src', 'shared')),
     latestMtimeMs(path.join(repoRoot, 'src', 'preload', 'api-types.ts'))
   )
+
   return sourceMtime <= outputMtime
 }
 
@@ -535,17 +595,21 @@ function prepareDevWebClient() {
   if (process.env.ORCA_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
     return
   }
+
   // Why: fresh worktrees should start Electron immediately; pairing already
   // falls back to non-browser URLs when the optional web bundle is unavailable.
   if (!existsSync(getDevWebClientIndexPath()) && process.env.ORCA_DEV_WEB_PREPARE !== '1') {
     console.error(
       '[orca-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set ORCA_DEV_WEB_PREPARE=1 when you need browser pairing.'
     )
+
     return
   }
+
   if (isDevWebClientFresh()) {
     return
   }
+
   console.error('[orca-dev] Building web client for pairing...')
   execFileSync(
     process.execPath,
@@ -571,32 +635,41 @@ function isPortFree(port) {
       try {
         srv.close()
       } catch {}
+
       resolve(false)
     })
     srv.once('listening', () => srv.close(() => resolve(true)))
     srv.listen(port, '127.0.0.1')
   })
 }
+
 async function pickDebugPort() {
   // Why: 32 bits of SHA1 (vs 16) reduces truncation bias; modulo 200 still
   // collides routinely across many worktrees, hence the probe sweep below.
   const seed = Number.parseInt(createHash('sha1').update(repoRoot).digest('hex').slice(0, 8), 16)
   const base = 9333 + (seed % 200) // deterministic base in 9333..9532; probe sweeps up to base+63
+
   for (let i = 0; i < 64; i++) {
     const p = base + i
+
     if (await isPortFree(p)) {
       return p
     }
   }
+
   return null
 }
+
 function parseDebugPortEnv(raw) {
   const n = Number.parseInt(raw, 10)
+
   if (!Number.isInteger(n) || n < 1 || n > 65535 || String(n) !== raw.trim()) {
     return null
   }
+
   return n
 }
+
 // Why: exact match (or `=` form) avoids false positives on hypothetical
 // `--remote-debugging-port-*` flags; the bare flag also covers the
 // space-separated form. `--remote-debugging-pipe` opts into pipe-based
@@ -607,32 +680,41 @@ const userPassedPort = forwardedRaw.some(
     a.startsWith('--remote-debugging-port=') ||
     a === '--remote-debugging-pipe'
 )
+
 // Why: --help/--version exit immediately; binding a probe socket and printing
 // a debug-port line would be noise.
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
+
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
   console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
 }
+
 // Why: automation launches this app while someone is working; announce that the
 // window will come up without taking the foreground so the mode is visible in logs.
 if (!isHelpOrVersion && process.env.ORCA_BACKGROUND_LAUNCH === '1') {
   console.error('[orca-dev] Background launch: window stays off screen; automate through CDP')
 }
+
 let forwardedExtras = []
+
 if (!userPassedPort && !isHelpOrVersion) {
   const envPortRaw = process.env.REMOTE_DEBUGGING_PORT
   let port = null
+
   if (envPortRaw) {
     port = parseDebugPortEnv(envPortRaw)
+
     if (port === null) {
       console.error(
         `[orca-dev] Ignoring invalid REMOTE_DEBUGGING_PORT=${JSON.stringify(envPortRaw)}; falling back to probe.`
       )
     }
   }
+
   if (port === null) {
     port = await pickDebugPort()
   }
+
   if (port !== null) {
     forwardedExtras = [`--remote-debugging-port=${port}`]
     // Why: stderr keeps stdout clean for downstream parsing; log uses
@@ -645,8 +727,11 @@ if (!userPassedPort && !isHelpOrVersion) {
     )
   }
 }
+
 prepareDevWebClient()
+
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
+
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
   env: process.env,
@@ -657,15 +742,18 @@ const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
 })
 
 let isShuttingDown = false
+
 let forcedKillTimer = null
 
 function signalExitCode(signal) {
   if (signal === 'SIGINT') {
     return 130
   }
+
   if (signal === 'SIGTERM') {
     return 143
   }
+
   return 1
 }
 
@@ -679,7 +767,9 @@ function terminateChild(signal) {
       stdio: 'ignore',
       windowsHide: true
     })
+
     taskkill.unref()
+
     return
   }
 
@@ -687,6 +777,7 @@ function terminateChild(signal) {
     process.kill(-child.pid, signal)
   } catch (error) {
     const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+
     if (code !== 'ESRCH') {
       throw error
     }
@@ -697,6 +788,7 @@ function beginShutdown(signal) {
   if (isShuttingDown) {
     return
   }
+
   isShuttingDown = true
 
   terminateChild(signal)
@@ -717,6 +809,7 @@ child.on('error', (error) => {
   if (forcedKillTimer) {
     clearTimeout(forcedKillTimer)
   }
+
   console.error(error)
   process.exit(1)
 })
@@ -728,11 +821,13 @@ child.on('exit', (code, signal) => {
 
   if (isShuttingDown) {
     process.exit(signalExitCode(signal ?? 'SIGINT'))
+
     return
   }
 
   if (signal) {
     process.exit(signalExitCode(signal))
+
     return
   }
 

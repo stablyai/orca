@@ -35,11 +35,13 @@ export async function readUnstagedLeftBlob(
   options: GitRuntimeOptions = {}
 ): Promise<GitBlobReadResult> {
   const indexBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
+
   if (indexBlob.exists) {
     return indexBlob
   }
 
   const headBlob = await readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
+
   // Why: if the index read never got an answer, falling back to HEAD is a guess, not a proof.
   return indexBlob.failed ? { ...headBlob, failed: true } : headBlob
 }
@@ -51,6 +53,7 @@ export async function readGitBlobAtIndexPath(
 ): Promise<GitBlobReadResult> {
   // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+
   try {
     const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
       ...gitReadOptionsForWorktree(worktreePath, options),
@@ -62,6 +65,7 @@ export async function readGitBlobAtIndexPath(
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: true, exists: true }
     }
+
     return { content: '', isBinary: false, exists: false, failed: !isProvenAbsentError(error) }
   }
 }
@@ -74,6 +78,7 @@ export async function readGitBlobAtOidPath(
 ): Promise<GitBlobReadResult> {
   // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
       ['show', '--end-of-options', `${oid}:${gitPath}`],
@@ -88,28 +93,35 @@ export async function readGitBlobAtOidPath(
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: true, exists: true }
     }
+
     return { content: '', isBinary: false, exists: false, failed: !isProvenAbsentError(error) }
   }
 }
 
 export async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
   let fileStat
+
   try {
     fileStat = await stat(filePath)
   } catch (error) {
     // Why: only ENOENT is a real deletion; other stat errors are read failures, not absence.
     const missing = (error as NodeJS.ErrnoException)?.code === 'ENOENT'
+
     return { content: '', isBinary: false, exists: !missing, ...(missing ? {} : { failed: true }) }
   }
+
   if (!fileStat.isFile()) {
     return { content: '', isBinary: false, exists: false }
   }
+
   if (fileStat.size > MAX_GIT_SHOW_BYTES) {
     // Why: mirror git's maxBuffer cap for working-tree reads so readFile can't pull in huge assets.
     return { content: '', isBinary: true, exists: true }
   }
+
   try {
     const buffer = await readFile(filePath)
+
     return bufferToBlob(buffer, filePath)
   } catch {
     // Why: the file exists but could not be read — a read failure, not a deletion.
@@ -119,10 +131,12 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
 
 function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
   const isBinary = isBinaryBuffer(buffer)
+
   // Return base64 for recognized image formats so the renderer can display them
   const isPreviewableBinary = filePath
     ? !!PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
     : false
+
   return {
     content: isBinary
       ? isPreviewableBinary

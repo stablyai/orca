@@ -22,7 +22,9 @@ vi.mock('./ssh-git-dispatch', () => ({
 }))
 
 const CONNECTION_ID = 'conn-1'
+
 const REPO_PATH = '/home/user/repo'
+
 const WORKTREE_PATH = '/home/user/feature'
 
 const repo: Repo = {
@@ -38,6 +40,7 @@ function createStore(): Store {
   const meta: Record<string, { hostId?: string; instanceId?: string }> = {
     [worktreeId]: { instanceId: 'instance-1' }
   }
+
   return {
     getRepos: () => [repo],
     getRepo: () => repo,

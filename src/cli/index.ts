@@ -22,6 +22,7 @@ import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
 
 export { COMMAND_SPECS } from './specs'
+
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
@@ -57,6 +58,7 @@ async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
 // `--worktree active` resolve against the caller's directory.
 function resolveInvocationCwd(): string {
   const override = process.env.ORCA_CLI_CWD
+
   return typeof override === 'string' && override.length > 0 ? override : process.cwd()
 }
 
@@ -67,26 +69,37 @@ export async function main(
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
     const version = readOrcaCliVersion()
+
     if (!version) {
       process.stderr.write('Could not determine the Orca version for this build.\n')
       process.exitCode = 1
+
       return
     }
+
     process.stdout.write(`${version}\n`)
+
     return
   }
+
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
+
     return
   }
+
   if (argv[0] === 'claude-teams') {
     await runClaudeTeams(argv.slice(1), cwd)
+
     return
   }
+
   const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
   const helpPath = resolveHelpPath(parsed)
+
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)
+
     if (
       helpPath.length > 0 &&
       !findCommandSpec(COMMAND_SPECS, helpPath) &&
@@ -94,12 +107,16 @@ export async function main(
     ) {
       process.exitCode = 1
     }
+
     return
   }
+
   if (parsed.commandPath.length === 0) {
     printHelp(COMMAND_SPECS, [])
+
     return
   }
+
   const json = parsed.flags.has('json')
 
   try {
@@ -111,15 +128,18 @@ export async function main(
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+
     // Why: only the explicit flag is asserted eagerly. An ambient ORCA_ENVIRONMENT is background
     // config, and failing local-only commands because of a stale one would be a regression; the
     // explicit flag means the caller named that machine, so a bad name should fail immediately
     // with the cross-kind hint rather than a bare store error at first use.
     const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
       listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
+
     if (typeof environmentSelector === 'string') {
       await assertEnvironmentSelectorResolvable(environmentSelector, listSshTargetsForSuggestion)
     }
+
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
     // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
@@ -140,23 +160,28 @@ export async function main(
                 ? { value: process.env.ORCA_ENVIRONMENT, label: 'ORCA_ENVIRONMENT' }
                 : null
         })
+
     // Why: --host runtime:<name> is canonicalized to the environment's id so downstream host-id
     // comparisons against stored rows still match; rewrite the flag once, here, rather than
     // resolving the name again at every consumer.
     if (hostEnvironmentId !== null) {
       parsed.flags.set('host', `runtime:${hostEnvironmentId}`)
     }
+
     // Why: pass `null` (not `undefined`) when remote selection is suppressed
     // so the RuntimeClient default parameter does not re-activate the
     // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands
     // that must run locally (environment / serve).
     const suppressed = ignoreRemoteSelection ? null : undefined
+
     // An explicit --host runtime:<id> outranks an ambient pairing code or environment.
     const remotePairingCode =
       hostEnvironmentId !== null ? null : typeof pairingCode === 'string' ? pairingCode : suppressed
+
     const remoteEnvironment =
       hostEnvironmentId ??
       (typeof environmentSelector === 'string' ? environmentSelector : suppressed)
+
     let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
@@ -170,6 +195,7 @@ export async function main(
           resolveOrchestrationCliExecutable(),
           argv
         )
+
         return client
       },
       cwd,
@@ -206,6 +232,7 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
 async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
   try {
     const client = new (await loadRuntimeClientClass())(undefined, 10_000)
+
     const response = await client.call<{
       tmux: { stdout: string; stderr: string; exitCode: number }
     }>(
@@ -219,6 +246,7 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
       },
       { timeoutMs: 10_000 }
     )
+
     process.stdout.write(response.result.tmux.stdout)
     process.stderr.write(response.result.tmux.stderr)
     process.exitCode = response.result.tmux.exitCode

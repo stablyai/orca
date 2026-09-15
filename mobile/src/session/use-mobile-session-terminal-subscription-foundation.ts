@@ -26,6 +26,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     clearNativeChatInputLease,
     showNativeChatRef
   } = scope
+
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
   }, [])
@@ -50,6 +51,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       // double-render this whole route on every chat open.
       const leaseWasOnScreen = nativeChatInputLeaseReadyRef.current
       const leaseDropped = clearNativeChatInputLease(handle)
+
       if (
         (!leaseDropped || !leaseWasOnScreen) &&
         showNativeChatRef.current &&
@@ -60,6 +62,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     },
     [clearNativeChatInputLease, nativeChatInputLeaseReadyRef, showNativeChatRef]
   )
+
   const unsubscribeTerminalRef = useRef(unsubscribeTerminal)
   // PTY event callbacks fire before passive effects flush, so they need the current unsubscribe.
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
@@ -79,6 +82,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     layoutSeqRef.current.clear()
     terminalCwdRef.current.clear()
     setTerminalKeyboardMetrics(new Map())
+
     for (const term of terminalRefs.current.values()) {
       term.clear()
     }
@@ -90,10 +94,13 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       if (viewportMeasuredRef.current) {
         return
       }
+
       const dims = await getTerminalRef(handle)?.measureFitDimensions(
         terminalFrameHeightRef.current || undefined
       )
+
       terminalDiagnosticsRef.current.viewportMeasured(handle, dims, terminalFrameHeightRef.current)
+
       if (dims) {
         viewportRef.current = dims
         viewportMeasuredRef.current = true
@@ -101,6 +108,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     },
     [getTerminalRef]
   )
+
   return {
     getTerminalRef,
     unsubscribeTerminal,

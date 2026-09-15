@@ -18,7 +18,9 @@ import {
 } from './worktree-delete-request'
 
 const SHARED_ID = 'repo-1::/work/orca'
+
 const LOCAL: ExecutionHostId = 'local'
+
 const SSH: ExecutionHostId = 'ssh:build-box'
 
 function row(hostId: ExecutionHostId | undefined, overrides: Partial<Worktree> = {}): Worktree {
@@ -37,6 +39,7 @@ function row(hostId: ExecutionHostId | undefined, overrides: Partial<Worktree> =
 function lookupFrom(rows: readonly Worktree[]) {
   return (worktreeId: string, hostId: ExecutionHostId | undefined): Worktree | undefined => {
     const matches = rows.filter((entry) => entry.id === worktreeId)
+
     return hostId ? matches.find((entry) => entry.hostId === hostId) : matches[0]
   }
 }

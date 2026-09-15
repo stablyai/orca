@@ -11,8 +11,11 @@ import { createPaneForegroundProcessReader } from './pane-foreground-process-rea
 // Why: settle after exec, then place the final generic retry beyond sequential
 // 3s PowerShell and WMIC enrichment scans.
 const COMMAND_SETTLE_MS = 350
+
 const VISIBLE_PTY_SETTLE_MS = 350
+
 const WRAPPER_RESOLVE_RETRY_DELAYS_MS = [1200, 6000] as const
+
 type ForegroundReadReason = 'command' | 'visible-pty' | 'command-finished'
 
 type PaneForegroundAgentTrackerDeps = {
@@ -79,15 +82,18 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
 
   const trackablePtyId = (): string | null => {
     const ptyId = deps.getPtyId()
+
     return ptyId && deps.isTrackablePtyId(ptyId) ? ptyId : null
   }
 
   const cancelPendingRead = (): void => {
     readGeneration += 1
+
     if (readTimer !== null) {
       clearTimeout(readTimer)
       readTimer = null
     }
+
     scheduledReadReason = null
     activeReadReason = null
   }
@@ -134,19 +140,24 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     reason: ForegroundReadReason
   ): Promise<void> {
     const ptyId = trackablePtyId()
+
     if (disposed || generation !== readGeneration || !ptyId) {
       settleAbortedRead(generation)
+
       return
     }
+
     const requiresRoutingConfirmation =
       reason === 'command-finished' ||
       hasForegroundAgentEvidence ||
       hasKnownAgentEvidence ||
       hasAgentExpectation
+
     const { processName, remoteEvidenceVerdict, expectedIncarnationId, remote } = await readProcess(
       ptyId,
       requiresRoutingConfirmation
     )
+
     // Why: a pane key can be rebound while process inspection is pending; the
     // old PTY's identity must never publish into its replacement session.
     if (
@@ -156,14 +167,17 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       (remote && deps.getExpectedIncarnationId?.() !== expectedIncarnationId)
     ) {
       settleAbortedRead(generation)
+
       return
     }
+
     const recognized =
       remoteEvidenceVerdict === 'live'
         ? recognizeAgentProcess(processName)
         : remoteEvidenceVerdict !== null
           ? null
           : recognizeAgentProcess(processName)
+
     if (recognized) {
       hasForegroundAgentEvidence = true
       hasAgentExpectation = false
@@ -172,40 +186,53 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         shellForeground: false,
         ...(requiresRoutingConfirmation ? { routingTrusted: true } : {})
       })
+
       if (reason === 'visible-pty') {
         deps.onVisibleForegroundSettled?.('agent')
       }
+
       return
     }
+
     // Why: a shell seen here is NOT prompt proof — 133;D cancels pending reads,
     // so a still-live generation means the command is running and the shell is
     // a nested one (sh/bash without integration); marking shell-foreground
     // would suppress live title identity. Only 133;D proves the prompt.
     const retryDelay = WRAPPER_RESOLVE_RETRY_DELAYS_MS[retryIndex]
+
     const hasConfirmationExpectation =
       hasForegroundAgentEvidence || hasKnownAgentEvidence || hasAgentExpectation
+
     const shouldRetryExpectedIdentity =
       hasConfirmationExpectation && (reason !== 'command-finished' || processName === null)
+
     const shouldRetry =
       retryDelay !== undefined &&
       (shouldRetryExpectedIdentity ||
         (processName !== null &&
           (reason === 'command' || isAgentForegroundWrapperProcess(processName))))
+
     if (shouldRetry) {
       // Why: provisional PowerShell may hide a live agent; the bounded ladder
       // spans PowerShell-to-WMIC enrichment without becoming a polling loop.
       scheduleRead(retryDelay, retryIndex + 1, reason)
+
       return
     }
+
     if (reason === 'command') {
       if (remoteEvidenceVerdict !== null && remoteEvidenceVerdict !== 'live') {
         hasAgentExpectation = false
+
         return
       }
+
       hasAgentExpectation = false
       deps.publish({ agent: null, shellForeground: false })
+
       return
     }
+
     if (reason === 'visible-pty') {
       if (
         (hasForegroundAgentEvidence || hasKnownAgentEvidence) &&
@@ -221,14 +248,18 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       } else {
         deps.onVisibleForegroundSettled?.('inconclusive')
       }
+
       return
     }
+
     if (reason === 'command-finished') {
       if (processName === null) {
         if (remoteEvidenceVerdict !== null && remoteEvidenceVerdict !== 'live') {
           deps.onCommandFinishedUnavailable?.()
+
           return
         }
+
         // Why: client-only unverifiable inspection is not confirmed shell evidence; retire
         // stale routing after the bounded D ladder without asserting shell truth.
         hasForegroundAgentEvidence = false
@@ -236,15 +267,19 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         hasAgentExpectation = false
         deps.publish({ agent: null, shellForeground: false })
         deps.onCommandFinishedUnavailable?.()
+
         return
       }
+
       if ((hasForegroundAgentEvidence || hasKnownAgentEvidence) && !isShellProcess(processName)) {
         // Why: this read may have replaced a cancelled visible-pty confirmation.
         // It publishes nothing, so without settling here the capability it was
         // asked to revalidate would be retained with no read left to clear it.
         deps.onVisibleForegroundSettled?.('inconclusive')
+
         return
       }
+
       // Why: the 133;D fired AND the foreground shows no agent — together that is
       // real prompt proof, so the agent truly exited. Reset the evidence so the
       // pane's ordinary shell commands go back to the no-RPC finished path.
@@ -276,33 +311,44 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       ) {
         return false
       }
+
       const hadReadBeforeVisibleBind = hasPendingRead()
       cancelPendingRead()
+
       if (!trackablePtyId()) {
         releaseRetainedCapability(hadReadBeforeVisibleBind)
+
         return false
       }
+
       if (expectsAgent || deps.hasKnownAgentIdentity?.() === true) {
         hasKnownAgentEvidence = true
       }
+
       // Why: restored/manual agent panes can become visible while Codex is
       // already foreground, so no OSC 133 command-start event will seed the tab icon.
       scheduleRead(VISIBLE_PTY_SETTLE_MS, 0, 'visible-pty')
+
       return true
     },
     onCommandStarted(expectedAgent = null) {
       const hadReadBeforeCommandStart = hasPendingRead()
       cancelPendingRead()
       const ptyId = trackablePtyId()
+
       if (!ptyId) {
         releaseRetainedCapability(hadReadBeforeCommandStart)
+
         return
       }
+
       const alreadyHasKnownIdentity = deps.hasKnownAgentIdentity?.() === true
       hasAgentExpectation = expectedAgent !== null
+
       if (alreadyHasKnownIdentity) {
         hasKnownAgentEvidence = true
       }
+
       // Why: every new command invalidates the previous byte-routing authority.
       // Launch/hook identity remains only an expectation until fresh evidence.
       // Remote marker bytes are turn boundaries only; do not mutate a remote
@@ -310,12 +356,14 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       if (deps.isRemotePtyId?.(ptyId) !== true) {
         deps.publish({ agent: null, shellForeground: false })
       }
+
       scheduleRead(COMMAND_SETTLE_MS, 0, 'command')
     },
     onCommandFinished() {
       if (deps.hasKnownAgentIdentity?.() === true) {
         hasKnownAgentEvidence = true
       }
+
       // Why: a rapid 133;C→133;D pair cancels the command-start read before it
       // can identify the foreground — that pair is exactly a leaked nested-shell
       // command under a full-screen agent (or a fast real shell command), so on a
@@ -328,11 +376,15 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // an idle reattached agent's icon (the "codex reattached at rest" bug).
       const hadReadBeforeCommandFinish = hasPendingRead()
       cancelPendingRead()
+
       if (!trackablePtyId()) {
         releaseRetainedCapability(hadReadBeforeCommandFinish)
+
         return false
       }
+
       const ptyId = trackablePtyId()!
+
       // Why: trust the 133;D and mark shell without an RPC only when nothing hints
       // at an agent — no prior agent evidence, no launch/hook identity, and no
       // identity read racing this finish.
@@ -340,11 +392,14 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         if (deps.isRemotePtyId?.(ptyId) !== true) {
           deps.publish({ agent: null, shellForeground: true })
         }
+
         return false
       }
+
       // Why: confirm the foreground before clearing — if the agent still owns it,
       // the read republishes its identity; only a genuine shell result clears it.
       scheduleRead(COMMAND_SETTLE_MS, 0, 'command-finished')
+
       return true
     },
     dispose() {

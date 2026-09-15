@@ -9,14 +9,18 @@ export function replaceConversationInSnapshot(
   if (snapshot.worktree !== replacement.workspaceId) {
     return snapshot
   }
+
   const source = snapshot.tabs.find(
     (tab) => tab.type === 'agent-session' && tab.sessionId === replacement.sourceSessionId
   )
+
   if (!source) {
     return snapshot
   }
+
   const id = `agent-session:${replacement.sessionId}`
   const rename = (value: string | null) => (value === source.id ? id : value)
+
   return {
     ...snapshot,
     snapshotVersion: snapshot.snapshotVersion + 1,

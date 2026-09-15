@@ -68,6 +68,7 @@ describe('external automation scope gating', () => {
       owner: null,
       stableKey: 'host:desktop:orphan'
     })
+
     expect(resolveExternalAutomationScopeGate(orphan).status).toBe('not-listed')
   })
 
@@ -103,6 +104,7 @@ describe('engine scope errors', () => {
     const gate = externalAutomationScopeGateFromError(
       new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
     )
+
     expect(gate?.status).toBe('not-listed')
   })
 

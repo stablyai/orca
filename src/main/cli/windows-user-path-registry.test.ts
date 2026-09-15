@@ -18,6 +18,7 @@ function registryModule(pathValue?: string, type = 2) {
 describe('WindowsUserPathRegistryReader', () => {
   it('reads Unicode REG_EXPAND_SZ values without expanding the stored text', async () => {
     const registry = registryModule('%LOCALAPPDATA%\\Orca;C:\\工具\\bin;C:\\Développement')
+
     const reader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader: async () => registry
@@ -36,6 +37,7 @@ describe('WindowsUserPathRegistryReader', () => {
       platform: 'win32',
       registryLoader: async () => registryModule()
     })
+
     const failedReader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader: async () => {
@@ -54,12 +56,14 @@ describe('WindowsUserPathRegistryReader', () => {
   it('coalesces concurrent reads, caches status reads, and bypasses the cache when fresh', async () => {
     let now = 100
     let resolveRegistry!: (value: ReturnType<typeof registryModule>) => void
+
     const registryLoader = vi.fn(
       () =>
         new Promise<ReturnType<typeof registryModule>>((resolve) => {
           resolveRegistry = resolve
         })
     )
+
     const reader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader,
@@ -108,6 +112,7 @@ describe('WindowsUserPathRegistryReader', () => {
 
   it('does not load the Windows-only dependency on other platforms', async () => {
     const registryLoader = vi.fn(async () => registryModule('C:\\Tools'))
+
     const reader = new WindowsUserPathRegistryReader({
       platform: 'linux',
       registryLoader

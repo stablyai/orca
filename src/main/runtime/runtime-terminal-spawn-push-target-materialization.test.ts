@@ -14,13 +14,16 @@ const {
   getSshGitProviderMock: vi.fn(),
   getLocalProjectWorktreeGitOptionsMock: vi.fn()
 }))
+
 vi.mock('../ipc/worktree-remote', () => ({
   materializeWorktreePushTargetRemote: materializeLocalMock,
   materializeWorktreePushTargetRemoteSsh: materializeSshMock
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
+
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
@@ -28,10 +31,15 @@ vi.mock('../project-runtime-git-options', () => ({
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 
 const WORKTREE_PATH = '/repo/worktree'
+
 const FORK_URL = 'git@github.com:contributor/orca.git'
+
 const REPO_ID = 'repo-1'
+
 const STORE = {} as Store
+
 const LOCAL_REPO = { id: REPO_ID, path: '/repo', connectionId: null } as unknown as Repo
+
 const SSH_REPO = { id: REPO_ID, path: '/repo', connectionId: 'conn-1' } as unknown as Repo
 
 function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
@@ -90,6 +98,7 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
   it('materializes over the local transport with resolved WSL git options, repoId and worktreeId, fire-and-forget', () => {
     getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
     const target = forkTarget()
+
     const result = triggerTerminalSpawnPushTargetMaterialization(
       WORKTREE_PATH,
       target,
@@ -98,6 +107,7 @@ describe('triggerTerminalSpawnPushTargetMaterialization', () => {
       REPO_ID,
       'worktree-1'
     )
+
     expect(result).toBeUndefined()
     expect(getLocalProjectWorktreeGitOptionsMock).toHaveBeenCalledWith(STORE, LOCAL_REPO)
     expect(materializeLocalMock).toHaveBeenCalledWith(

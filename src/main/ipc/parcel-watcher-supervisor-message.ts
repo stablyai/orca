@@ -36,6 +36,7 @@ export function handleWatcherSupervisorMessage(
   context: WatcherSupervisorMessageContext
 ): void {
   const record = context.records.get(message.id)
+
   if (message.op === 'subscribe-started') {
     if (record) {
       startPendingSubscribeTimeout(record, (error) => context.cancelPendingSubscribe(record, error))
@@ -43,23 +44,30 @@ export function handleWatcherSupervisorMessage(
         context.cancelInterruptedSubscribe(record, error)
       )
     }
+
     return
   }
+
   if (message.op === 'watch-error' && record) {
     const error = new WatcherProcessFailure(message.message, 'subscription', 'subscribe_failed')
+
     if (record.pendingSubscribe) {
       // Why: an error before readiness means native setup failed. Cancel the
       // physical crawl so a later subscribed ack cannot expose a dead root.
       context.cancelPendingSubscribe(record, error)
+
       return
     }
+
     if (record.interrupted && record.crawlStarted) {
       // Why: crash recovery has no pending caller promise, but its replacement
       // crawl is equally unready and must not accept a later subscribed ack.
       context.cancelInterruptedSubscribe(record, error)
+
       return
     }
   }
+
   if (message.op === 'watch-error') {
     handleWatcherHostMessage(
       message,
@@ -68,18 +76,24 @@ export function handleWatcherSupervisorMessage(
       reportWatcherTerminalError,
       context.killWatcherChildIfIdle
     )
+
     return
   }
+
   if (message.op === 'cancel-requires-restart') {
     if (context.cancelledSubscribes.has(message.id)) {
       context.restartAfterCancelledSubscribe(context.child)
     }
+
     return
   }
+
   if (message.op === 'unsubscribe-failed') {
     context.terminateUnavailableChild(context.child)
+
     return
   }
+
   if (message.op === 'unsubscribed') {
     const completedCancellation = context.cancelledSubscribes.complete(message.id)
     handleWatcherHostMessage(
@@ -89,11 +103,14 @@ export function handleWatcherSupervisorMessage(
       reportWatcherTerminalError,
       context.killWatcherChildIfIdle
     )
+
     if (completedCancellation) {
       context.killWatcherChildIfIdle()
     }
+
     return
   }
+
   handleWatcherHostMessage(
     message,
     context.records,

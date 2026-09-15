@@ -51,10 +51,13 @@ function makeHarness(settings: NotificationSettings, windowVisible = false): Har
   const order: string[] = []
   const setTrayAttention = vi.fn(() => order.push('tray'))
   const dispatchMobileNotification = vi.fn(() => order.push('mobile'))
+
   const deliverNative = vi.fn(() => {
     order.push('native')
+
     return { delivered: true } as const
   })
+
   return {
     order,
     setTrayAttention,
@@ -124,6 +127,7 @@ describe('createNotificationDeliveryService', () => {
     const harness = makeHarness(makeSettings({ suppressWhenFocused: true }))
     const focusedWindow = makeFocusedWindowStub()
     harness.deps.findActiveWindow = () => focusedWindow
+
     const result = createNotificationDeliveryService(harness.deps).dispatch(
       makeRequest({ isActiveWorktree: true })
     )

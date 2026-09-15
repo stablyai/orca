@@ -37,6 +37,7 @@ function isRuntimeEnvironmentActive(): boolean {
 
 function remountTerminalTabsAwaitingHostHydration(): void {
   const store = useAppStore.getState()
+
   for (const tabId of getTabIdsAwaitingHostHydrationRemount(store)) {
     store.remountTerminalTabForRecovery(tabId)
   }
@@ -65,10 +66,12 @@ export function installAppLifetimeIpcEvents(
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
   const statusApi = window.api.runtimeEnvironments
+
   if (statusApi?.onStatusChanged) {
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
     }
+
     let stopped = false
     unsubs.push(statusApi.onStatusChanged(apply), () => {
       stopped = true
@@ -82,6 +85,7 @@ export function installAppLifetimeIpcEvents(
       })
       .catch((error) => console.error('Failed to read runtime status snapshots:', error))
   }
+
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerProjectCatalogIpcBridge(
     unsubs,
@@ -127,6 +131,7 @@ export function installAppLifetimeIpcEvents(
   registerRemoteWorkspaceIpcBridge(unsubs, directSshRuntime)
   registerZoomIpcBridge(unsubs)
   const agentStatusBridge = registerAgentStatusIpcBridge(unsubs)
+
   const disposeMobileDriverHydration = registerMobileDriverIpcBridge(
     unsubs,
     isRuntimeEnvironmentActive

@@ -17,6 +17,7 @@ afterEach(async () => {
 
 async function openIndex(): Promise<SyncDatabase> {
   index = await openSessionSearchIndexFile('ss-row-filter')
+
   return index.db
 }
 
@@ -43,6 +44,7 @@ function addSession(
 function selected(db: SyncDatabase, filters: SessionSearchFilters = {}): number[] {
   const filter = sessionRowFilter(filters)
   const where = filter.conditions.length > 0 ? `WHERE ${filter.conditions.join(' AND ')}` : ''
+
   return (
     db.prepare(`SELECT id FROM sessions ${where} ORDER BY id`).all(...filter.values) as {
       id: number
@@ -123,9 +125,11 @@ describe('caller filters', () => {
       "INSERT INTO files(path,byte_offset,mtime_ms,session_row_id) VALUES ('b',0,500,2)"
     ).run()
     const filter = sessionRowFilter({}, 300)
+
     const rows = db
       .prepare(`SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')}`)
       .all(...filter.values) as { id: number }[]
+
     expect(rows.map((row) => row.id)).toEqual([2])
   })
 })
@@ -133,6 +137,7 @@ describe('caller filters', () => {
 it('plans a cwd scope as a seek on sessions_cwd_key, never a scan', async () => {
   const db = await openIndex()
   const filter = sessionRowFilter({ scopePaths: ['/work/app'] })
+
   const plan = (
     db
       .prepare(

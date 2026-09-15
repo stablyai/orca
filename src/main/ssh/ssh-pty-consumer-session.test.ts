@@ -7,6 +7,7 @@ function muxReturning(result: unknown): {
   request: ReturnType<typeof vi.fn>
 } {
   const request = vi.fn().mockResolvedValue(result)
+
   return { mux: { request } as unknown as SshChannelMultiplexer, request }
 }
 
@@ -57,6 +58,7 @@ describe('openSshPtyConsumerSession', () => {
     const { mux, request } = muxReturning(
       legacyOwnerGrant({ ownerGeneration: 8, ownerLease: 'lease-a', resumed: true })
     )
+
     const admission = await openSshPtyConsumerSession(mux, {
       clientInstanceId: 'client-a',
       expectedServerBuildId: 'build-a',
@@ -73,12 +75,14 @@ describe('openSshPtyConsumerSession', () => {
     'rejects an owner grant that does not state whether the claim was resumed',
     async (resumed) => {
       const grant = legacyOwnerGrant()
+
       // Why not a legacy peer: the build id already matched, and client and relay ship together.
       if (resumed === undefined) {
         delete grant.resumed
       } else {
         grant.resumed = resumed
       }
+
       const { mux } = muxReturning(grant)
 
       await expect(

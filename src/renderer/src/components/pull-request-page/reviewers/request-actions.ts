@@ -53,14 +53,18 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
     if (args.submittingRef.current) {
       return
     }
+
     const logins = normalizeGitHubReviewerLogins(
       requestedLogins ?? parseGitHubReviewerInputLogins(args.reviewerInput),
       args.selectedReviewerLogins
     )
+
     if (logins.length === 0) {
       toast.error(translate('auto.components.PullRequestPage.dace0d1a9f', 'Enter a reviewer'))
+
       return
     }
+
     if (args.localReviewRequests.length + logins.length > MAX_REQUESTED_REVIEWERS) {
       toast.error(
         translate(
@@ -68,9 +72,12 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
           'You can request up to 15 reviewers'
         )
       )
+
       return
     }
+
     const target = getActiveRuntimeTarget(args.sourceSettings)
+
     if (target.kind !== 'environment' && !args.repoPath) {
       toast.error(
         translate(
@@ -78,12 +85,16 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
           'No repo context available for this pull request.'
         )
       )
+
       return
     }
+
     args.submittingRef.current = true
     args.setSubmitting(true)
+
     try {
       const runtimeRepo = getGitHubRuntimeRepoId(args.sourceContext, args.item.repoId)
+
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
@@ -105,26 +116,32 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
               reviewers: logins,
               prRepo: args.reviewRepo
             })
+
       if (!args.reviewerPanelMountedRef.current) {
         return
       }
+
       if (!result.ok) {
         toast.error(
           result.error ??
             translate('auto.components.PullRequestPage.2560588245', 'Failed to request reviewer')
         )
+
         return
       }
+
       const nextReviewRequests = buildRequestedReviewUsers(
         logins,
         args.reviewerCandidates,
         args.localReviewRequests
       )
+
       args.setLocalReviewRequests(nextReviewRequests)
       args.patchWorkItem(args.item.id, { reviewRequests: nextReviewRequests }, args.item.repoId, {
         sourceContext: args.sourceContext
       })
       args.onReviewersRequested(nextReviewRequests)
+
       if (target.kind === 'environment') {
         notifyWorkItemDetailsMutation(
           {
@@ -137,6 +154,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
           { local: false }
         )
       }
+
       args.setReviewerInput('')
       toast.success(
         logins.length === 1
@@ -145,6 +163,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       )
     } catch (err) {
       console.error('Failed to request pull request reviewer', err)
+
       if (args.reviewerPanelMountedRef.current) {
         toast.error(
           translate('auto.components.PullRequestPage.2560588245', 'Failed to request reviewer')
@@ -152,6 +171,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       }
     } finally {
       args.submittingRef.current = false
+
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
@@ -162,16 +182,21 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
     if (args.submittingRef.current) {
       return
     }
+
     const selected = new Set(
       args.localReviewRequests.map((reviewer) => reviewer.login.toLowerCase())
     )
+
     const logins = reviewersToRemove
       .map((reviewer) => reviewer.trim().replace(/^@/, ''))
       .filter((reviewer) => reviewer.length > 0 && selected.has(reviewer.toLowerCase()))
+
     if (logins.length === 0) {
       return
     }
+
     const target = getActiveRuntimeTarget(args.sourceSettings)
+
     if (target.kind !== 'environment' && !args.repoPath) {
       toast.error(
         translate(
@@ -179,12 +204,16 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
           'No repo context available for this pull request.'
         )
       )
+
       return
     }
+
     args.submittingRef.current = true
     args.setSubmitting(true)
+
     try {
       const runtimeRepo = getGitHubRuntimeRepoId(args.sourceContext, args.item.repoId)
+
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
@@ -206,25 +235,32 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
               reviewers: logins,
               prRepo: args.reviewRepo
             })
+
       if (!args.reviewerPanelMountedRef.current) {
         return
       }
+
       if (!result.ok) {
         toast.error(
           result.error ??
             translate('auto.components.PullRequestPage.c798fa0ec7', 'Failed to remove reviewer')
         )
+
         return
       }
+
       const removed = new Set(logins.map((login) => login.toLowerCase()))
+
       const nextReviewRequests = args.localReviewRequests.filter(
         (reviewer) => !removed.has(reviewer.login.toLowerCase())
       )
+
       args.setLocalReviewRequests(nextReviewRequests)
       args.patchWorkItem(args.item.id, { reviewRequests: nextReviewRequests }, args.item.repoId, {
         sourceContext: args.sourceContext
       })
       args.onReviewersRequested(nextReviewRequests)
+
       if (target.kind === 'environment') {
         notifyWorkItemDetailsMutation(
           {
@@ -237,6 +273,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
           { local: false }
         )
       }
+
       args.setReviewerInput('')
       toast.success(
         logins.length === 1
@@ -245,6 +282,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       )
     } catch (err) {
       console.error('Failed to remove pull request reviewer', err)
+
       if (args.reviewerPanelMountedRef.current) {
         toast.error(
           translate('auto.components.PullRequestPage.c798fa0ec7', 'Failed to remove reviewer')
@@ -252,6 +290,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       }
     } finally {
       args.submittingRef.current = false
+
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }

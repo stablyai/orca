@@ -28,9 +28,11 @@ const LARGE_RECONCILE_SESSION_COUNT = 150_000
 
 function buildSessionIds(prefix: string, count: number): string[] {
   const ids: string[] = []
+
   for (let index = 0; index < count; index += 1) {
     ids.push(`${prefix}-${index}`)
   }
+
   return ids
 }
 
@@ -41,13 +43,18 @@ function createAdapter(
   protocolVersion = GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
 ): AdapterMock {
   const writes: { id: string; data: string }[] = []
+
   const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
     []
+
   const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
+
   const exitListeners: ((payload: { id: string; code: number; incarnationId?: string }) => void)[] =
     []
+
   const identityChangeListeners: (() => void)[] = []
+
   return {
     protocolVersion,
     supportsGitCredentialGuardHost: () =>
@@ -63,6 +70,7 @@ function createAdapter(
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
+
       return { id }
     }),
     listProcesses: vi.fn(async () =>
@@ -83,6 +91,7 @@ function createAdapter(
     getBufferSnapshot: vi.fn(async () => null),
     shutdown: vi.fn(async (id: string) => {
       const idx = sessions.indexOf(id)
+
       if (idx !== -1) {
         sessions.splice(idx, 1)
       }
@@ -104,8 +113,10 @@ function createAdapter(
     onData: vi.fn(
       (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
         dataListeners.push(callback)
+
         return () => {
           const idx = dataListeners.indexOf(callback)
+
           if (idx !== -1) {
             dataListeners.splice(idx, 1)
           }
@@ -114,8 +125,10 @@ function createAdapter(
     ),
     onBackgroundStreamEvent: vi.fn((callback: (payload: PtyBackgroundStreamEvent) => void) => {
       backgroundListeners.push(callback)
+
       return () => {
         const idx = backgroundListeners.indexOf(callback)
+
         if (idx !== -1) {
           backgroundListeners.splice(idx, 1)
         }
@@ -123,8 +136,10 @@ function createAdapter(
     }),
     onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
       writeUnavailableListeners.push(callback)
+
       return () => {
         const idx = writeUnavailableListeners.indexOf(callback)
+
         if (idx !== -1) {
           writeUnavailableListeners.splice(idx, 1)
         }
@@ -133,8 +148,10 @@ function createAdapter(
     onExit: vi.fn(
       (callback: (payload: { id: string; code: number; incarnationId?: string }) => void) => {
         exitListeners.push(callback)
+
         return () => {
           const idx = exitListeners.indexOf(callback)
+
           if (idx !== -1) {
             exitListeners.splice(idx, 1)
           }
@@ -143,8 +160,10 @@ function createAdapter(
     ),
     onDaemonIdentityChanged: vi.fn((callback: () => void) => {
       identityChangeListeners.push(callback)
+
       return () => {
         const idx = identityChangeListeners.indexOf(callback)
+
         if (idx !== -1) {
           identityChangeListeners.splice(idx, 1)
         }
@@ -219,10 +238,12 @@ it('preserves client-only unverifiable inspection from the owning legacy daemon'
     verdict: 'unverifiable',
     reason: 'old_host'
   })
+
   const router = new DaemonPtyRouter({
     current: createAdapter('current'),
     legacy: [legacy]
   })
+
   await router.discoverLegacySessions()
 
   await expect(router.inspectProcess('legacy-session')).resolves.toEqual({
@@ -237,10 +258,12 @@ it('forwards the owning legacy daemon sequence from attach', async () => {
   const legacy = createAdapter('legacy', ['legacy-session'])
   const providerSequence = { value: 204, generation: 'continued' as const }
   vi.mocked(legacy.attach).mockResolvedValueOnce({ providerSequence })
+
   const router = new DaemonPtyRouter({
     current: createAdapter('current'),
     legacy: [legacy]
   })
+
   await router.discoverLegacySessions()
 
   await expect(router.attach('legacy-session')).resolves.toEqual({ providerSequence })
@@ -254,12 +277,14 @@ describe('DaemonPtyRouter', () => {
       undefined,
       AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
     )
+
     const legacy = createAdapter(
       'legacy',
       [],
       undefined,
       AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION - 1
     )
+
     const mixed = new DaemonPtyRouter({ current, legacy: [legacy] })
     const old = new DaemonPtyRouter({ current: legacy, legacy: [] })
 
@@ -276,12 +301,14 @@ describe('DaemonPtyRouter', () => {
       undefined,
       AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
     )
+
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
       undefined,
       AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
     )
+
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
     const created = await router.spawn({ cols: 80, rows: 24 })
@@ -313,6 +340,7 @@ describe('DaemonPtyRouter', () => {
     const internals = router as unknown as {
       sessionAdapters: Map<string, DaemonPtyAdapter>
     }
+
     expect(internals.sessionAdapters.has('raced-session')).toBe(false)
   })
 
@@ -335,6 +363,7 @@ describe('DaemonPtyRouter', () => {
     const internals = router as unknown as {
       sessionAdapters: Map<string, DaemonPtyAdapter>
     }
+
     expect(internals.sessionAdapters.get('reused-session')).toBe(current)
   })
 
@@ -355,6 +384,7 @@ describe('DaemonPtyRouter', () => {
       sessionId: 'requested-session',
       agentSessionEnsure: {} as never
     })
+
     finishSpawn?.({
       id: 'canonical-session',
       incarnationId: 'canonical-incarnation',
@@ -365,20 +395,24 @@ describe('DaemonPtyRouter', () => {
       id: 'canonical-session',
       exitedBeforeSpawnReply: true
     })
+
     const internals = router as unknown as {
       sessionAdapters: Map<string, DaemonPtyAdapter>
     }
+
     expect(internals.sessionAdapters.has('canonical-session')).toBe(false)
   })
 
   it('reports snapshot capability for the adapter that owns each session', async () => {
     const current = createAdapter('current', ['current-session'], undefined, PROTOCOL_VERSION)
+
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
       undefined,
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
+
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
@@ -414,21 +448,25 @@ describe('DaemonPtyRouter', () => {
 
   it('preserves older session owners and routes new sessions to v35', async () => {
     const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+
     const legacyV30 = createAdapter(
       'v30',
       ['v30-session'],
       undefined,
       HISTORY_SEED_TRANSFER_PROTOCOL_VERSION
     )
+
     const legacyV31 = createAdapter(
       'v31',
       ['v31-session'],
       undefined,
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
+
     const legacyV32 = createAdapter('v32', ['v32-session'], undefined, 32)
     const legacyV33 = createAdapter('v33', ['v33-session'], undefined, 33)
     const legacyV34 = createAdapter('v34', ['v34-session'], undefined, 34)
+
     const router = new DaemonPtyRouter({
       current,
       legacy: [legacyV30, legacyV31, legacyV32, legacyV33, legacyV34]
@@ -480,6 +518,7 @@ describe('DaemonPtyRouter', () => {
   it('routes background hints and authoritative snapshots to the session owner', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
+
     const snapshot = {
       data: 'legacy frame',
       cols: 80,
@@ -487,6 +526,7 @@ describe('DaemonPtyRouter', () => {
       seq: 42,
       source: 'headless' as const
     }
+
     vi.mocked(legacy.getBufferSnapshot).mockResolvedValue(snapshot)
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
@@ -691,12 +731,14 @@ describe('DaemonPtyRouter', () => {
 
   it('hands a checkpointed pre-v30 session to the current daemon on wake', async () => {
     const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
+
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
       undefined,
       HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
     )
+
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
@@ -715,12 +757,14 @@ describe('DaemonPtyRouter', () => {
 
   it('keeps the legacy route when checkpointed shutdown fails', async () => {
     const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
+
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
       undefined,
       HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
     )
+
     vi.mocked(legacy.shutdown).mockRejectedValueOnce(new Error('checkpoint failed'))
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
@@ -778,10 +822,12 @@ describe('DaemonPtyRouter', () => {
       alive: ['current-alive'],
       killed: ['current-killed']
     })
+
     const legacy = createAdapter('legacy', [], {
       alive: ['legacy-alive'],
       killed: ['legacy-killed']
     })
+
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     const result = await router.reconcileOnStartup(new Set(['wt']))

@@ -11,16 +11,25 @@ import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/ca
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
+
 let hostedReviewCache: Record<string, unknown> = {}
+
 let issueCache: Record<string, unknown> = {}
+
 let prCache: Record<string, unknown> = {}
+
 let workspacePortScan: WorkspacePortScanResult | null = null
+
 let settings: Partial<GlobalSettings> | null = null
 
 vi.mock('@/store', () => ({
@@ -148,6 +157,7 @@ function countAutomationCreatedLabels(markup: string): number {
 function getInlineRenameTitleTag(markup: string): string {
   const match = markup.match(/<span[^>]*data-worktree-title-inline-rename=""[^>]*>/)
   expect(match).not.toBeNull()
+
   return match?.[0] ?? ''
 }
 
@@ -192,9 +202,11 @@ describe('WorktreeCard linked PR display', () => {
         isActive={false}
       />
     )
+
     const readMarkup = renderWorktreeCardMarkup(
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
+
     const readTitleTag = getInlineRenameTitleTag(readMarkup)
 
     expect(unreadMarkup).toContain('aria-label="Mark as read"')
@@ -222,6 +234,7 @@ describe('WorktreeCard linked PR display', () => {
         isActive={false}
       />
     )
+
     const readMarkup = renderWorktreeCardMarkup(
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )

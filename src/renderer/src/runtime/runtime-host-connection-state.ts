@@ -3,6 +3,7 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspace-window-availability'
 
 export type HostStatus = 'connected' | 'disconnected' | 'connecting'
+
 export type RuntimeHostTransportState = 'connected' | 'checking' | 'disconnected'
 
 // Why: 'workspace-window-closed' is a reachable host that cannot serve graph-backed
@@ -34,6 +35,7 @@ export function runtimeHostConnectionState({
   if (!hasStatusEntry) {
     return 'checking'
   }
+
   const transportState =
     remoteControl?.state === 'ready'
       ? 'connected'
@@ -44,32 +46,40 @@ export function runtimeHostConnectionState({
         : remoteControl?.state === 'closed'
           ? 'disconnected'
           : transportStatus
+
   const statusRemoteControl = status?.remoteControl ?? remoteControl
+
   if (statusRemoteControl?.state === 'reconnecting') {
     return 'reconnecting'
   }
+
   if (!status) {
     if (transportState === 'connected') {
       return 'runtime-unavailable'
     }
+
     // The control channel is still negotiating/reconnecting, so the host's
     // runtime outcome is not yet knowable.
     return transportState === 'checking' ? 'checking' : 'disconnected'
   }
+
   // Why no lastError requirement: a clean close (server restart, host sleep, network
   // blip) leaves lastError null, and demanding an error string painted those hosts green.
   if (statusRemoteControl?.state === 'closed') {
     return 'disconnected'
   }
+
   // Why: the socket is up but ready/auth has not completed, so nothing can run there yet.
   if (statusRemoteControl && statusRemoteControl.state !== 'ready') {
     return 'checking'
   }
+
   // Why: reachable but graph-less — the transport is fine, so this is not a network
   // disconnect, but calling it "Connected" hides that nothing will run there.
   if (isRuntimeWorkspaceWindowClosed(status)) {
     return 'workspace-window-closed'
   }
+
   // Why: "connected" means attached/reachable, NOT "is the active default host".
   // Both surfaces must agree on that single definition, or a reachable-but-not-active
   // host reads "Connected" in one place and "Available" in the other. Active/default is
@@ -120,19 +130,24 @@ export function runtimeHostConnectionStateForEntry(
 ): RuntimeHostConnectionState {
   if (entry?.snapshot) {
     const snapshot = entry.snapshot
+
     if (snapshot.retired || snapshot.verification === 'blocked') {
       return 'disconnected'
     }
+
     if (snapshot.transport === 'disconnected') {
       return 'reconnecting'
     }
+
     if (snapshot.verification === 'checking' && !entry.status) {
       return 'checking'
     }
+
     if (snapshot.transport === 'ready' && snapshot.verification !== 'verified') {
       return 'runtime-unavailable'
     }
   }
+
   return runtimeHostConnectionState({
     hasStatusEntry: Boolean(entry),
     status: entry?.status ?? null,

@@ -8,6 +8,7 @@ const {
   startSpanMock
 } = vi.hoisted(() => {
   const spanEndMock = vi.fn()
+
   return {
     listeners: new Map<string, (_event: unknown, args?: unknown) => void>(),
     recordCoalescedCrashBreadcrumbMock: vi.fn(),
@@ -176,6 +177,7 @@ describe('renderer breadcrumb IPC routing', () => {
     const [first, second] = recordCoalescedCrashBreadcrumbMock.mock.calls.map(
       ([args]) => args.coalesceKey
     )
+
     expect(first).not.toBe(second)
   })
 
@@ -192,6 +194,7 @@ describe('renderer breadcrumb IPC routing', () => {
     const [first, second] = recordCoalescedCrashBreadcrumbMock.mock.calls.map(
       ([args]) => args.coalesceKey
     )
+
     expect(first).not.toBe(second)
   })
 
@@ -264,6 +267,7 @@ describe('renderer breadcrumb IPC routing', () => {
 
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+
     for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
       expect(call[0]).toMatchObject({ coalesceKey: 'terminal_park_verdict_churn:window' })
     }
@@ -302,6 +306,7 @@ describe('renderer breadcrumb IPC routing', () => {
 
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+
     for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
       expect(call[0]).toMatchObject({ coalesceKey: 'terminal_safe_fit_retry_exhausted' })
     }
@@ -364,6 +369,7 @@ describe('renderer breadcrumb IPC routing', () => {
 
     expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
     expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+
     for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
       expect(call[0]).toMatchObject({
         coalesceKey: 'terminal_tab_id_owned_by_multiple_worktrees:true'
@@ -453,6 +459,7 @@ describe('renderer breadcrumb IPC routing', () => {
     const recorded = recordCoalescedCrashBreadcrumbMock.mock.calls[0]?.[0] as
       | { data: { driverStack: string } }
       | undefined
+
     expect(recorded?.data.driverStack.length).toBeGreaterThan(240)
   })
 

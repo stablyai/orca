@@ -61,6 +61,7 @@ describe('structuredAgentSessionOptionPicks', () => {
     const picks = structuredAgentSessionOptionPicks(liveState({ model: 'account-model' }), {
       effort: 'high'
     })
+
     expect(picks).toEqual([{ modelId: 'account-model', optionId: 'effort', value: 'high' }])
     // Without the model the launch resolves nothing at all, so the effort would be dead.
     expect(resolveStructuredLaunchSeedOptions(persist(picks), 'codex')).toEqual({
@@ -71,10 +72,12 @@ describe('structuredAgentSessionOptionPicks', () => {
 
   it('remembers the effort the provider reconciled, not the one in force before', () => {
     const state = liveState({ model: 'account-model', effort: 'high' })
+
     const picks = structuredAgentSessionOptionPicks(state, {
       model: 'other-model',
       effort: 'low'
     })
+
     expect(picks).toEqual([
       { modelId: 'other-model', optionId: 'model', value: 'other-model' },
       { modelId: 'other-model', optionId: 'effort', value: 'low' }
@@ -103,6 +106,7 @@ describe('structuredAgentSessionOptionPicks', () => {
         effort: 'low'
       })
     ])
+
     const reselected = updateNativeChatSessionOptionDefaults({
       persisted,
       agent: 'codex',
@@ -110,6 +114,7 @@ describe('structuredAgentSessionOptionPicks', () => {
       optionId: 'model',
       value: 'account-model'
     })
+
     expect(resolveStructuredLaunchSeedOptions(reselected, 'codex')).toEqual({
       model: 'account-model',
       effort: 'high'
@@ -153,6 +158,7 @@ describe('applyNativeChatSessionOptionPicks', () => {
         { modelId: 'gpt-fast', optionId: 'effort', value: 'low' }
       ]
     })
+
     expect(resolveStructuredLaunchSeedOptions(persisted, 'codex')).toEqual({
       model: 'gpt-fast',
       effort: 'low'
@@ -165,6 +171,7 @@ describe('applyNativeChatSessionOptionPicks', () => {
       agent: 'codex',
       picks: [{ modelId: 'gpt-fast', optionId: 'effort', value: 'low' }]
     })
+
     expect(resolveStructuredLaunchSeedOptions(persisted, 'claude')).toEqual({
       model: 'opus',
       effort: 'high'

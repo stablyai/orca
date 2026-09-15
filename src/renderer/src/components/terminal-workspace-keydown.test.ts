@@ -24,12 +24,14 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
+
 vi.mock('../hooks/ipc-tab-switch', () => ({
   handleSwitchRecentTab: vi.fn(),
   handleSwitchTab: vi.fn(),
   handleSwitchTabAcrossAllTypes: vi.fn(),
   handleSwitchTerminalTab: vi.fn()
 }))
+
 vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   createFloatingWorkspaceBrowserTab: vi.fn(),
   createFloatingWorkspaceMarkdownTab: vi.fn(),
@@ -40,31 +42,40 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
   switchFloatingWorkspaceTab: vi.fn()
 }))
+
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
+
 vi.mock('./terminal-agent-tab-shortcut', () => ({
   resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
 }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+
 vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   getActiveRuntimeTarget: () => ({ kind: 'local' }),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
+
 vi.mock('@/lib/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({ getRuntimeEnvironmentIdForWorktree: () => null }))
+
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
+
 vi.mock('@/runtime/browser-workspace-tab-close', () => ({
   closeBrowserWorkspaceTabOnHosts: () => ({ closesLocally: true, removesVisibleTab: true })
 }))
+
 vi.mock('../store/slices/browser-webview-cleanup', () => ({ destroyWorkspaceWebviews: vi.fn() }))
 
 const controller = {
@@ -84,20 +95,24 @@ const controller = {
 
 function pressCmdS(): (EditorRequestCmdSaveDetail | undefined)[] {
   const details: (EditorRequestCmdSaveDetail | undefined)[] = []
+
   const listener = (event: Event): void => {
     details.push((event as CustomEvent<EditorRequestCmdSaveDetail>).detail ?? undefined)
   }
+
   window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, listener)
   const target = document.createElement('div')
   document.body.appendChild(target)
   const event = new KeyboardEvent('keydown', { key: 's', metaKey: true, cancelable: true })
   Object.defineProperty(event, 'target', { value: target })
+
   try {
     handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
   } finally {
     window.removeEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, listener)
     target.remove()
   }
+
   return details
 }
 
@@ -178,17 +193,21 @@ describe('tab.close uses the unified active tab', () => {
 
   function close(platform: NodeJS.Platform = 'darwin', terminalFocus = false): KeyboardEvent {
     const target = document.createElement('textarea')
+
     if (terminalFocus) {
       target.classList.add('xterm-helper-textarea')
     }
+
     const event = new KeyboardEvent('keydown', {
       key: 'w',
       metaKey: platform === 'darwin',
       ctrlKey: platform !== 'darwin',
       cancelable: true
     })
+
     Object.defineProperty(event, 'target', { value: target })
     handleTerminalWorkspaceKeyDown(event, controller, platform)
+
     return event
   }
 
@@ -245,8 +264,10 @@ describe('tab.close uses the unified active tab', () => {
     close()
     expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
     expect(closeUnifiedTab).not.toHaveBeenCalled()
+
     const request = vi.mocked(mocks.state.requestPinnedTabCloseConfirm as ReturnType<typeof vi.fn>)
       .mock.calls[0][0]
+
     request.onConfirm()
     await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
   })

@@ -47,6 +47,7 @@ describe('walkSessionFiles directory reader', () => {
   it('does not turn cancellation into an unreadable-directory miss', async () => {
     const controller = new AbortController()
     const cancelled = new Error('scan cancelled')
+
     const readDirectory = vi.fn(async () => {
       controller.abort(cancelled)
       throw cancelled

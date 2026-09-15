@@ -24,11 +24,14 @@ function readReaction(value: unknown): GitHubReaction | null {
   if (!isRecord(value)) {
     return null
   }
+
   const content = readString(value.content)
   const count = readNumber(value.count)
+
   if (content === undefined || !REACTION_CONTENTS.has(content) || count === undefined) {
     return null
   }
+
   return { content: content as GitHubReactionContent, count }
 }
 
@@ -36,10 +39,13 @@ function readReactions(value: unknown): GitHubReaction[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
   }
+
   const parsed = value.flatMap((entry): GitHubReaction[] => {
     const reaction = readReaction(entry)
+
     return reaction ? [reaction] : []
   })
+
   return parsed.length > 0 ? parsed : undefined
 }
 
@@ -47,10 +53,13 @@ function readPRComment(value: unknown): PRComment | null {
   if (!isRecord(value)) {
     return null
   }
+
   const id = readNumber(value.id)
+
   if (id === undefined) {
     return null
   }
+
   return {
     id,
     author: readString(value.author) ?? '',
@@ -74,8 +83,10 @@ export function readPRComments(value: unknown): PRComment[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.flatMap((entry): PRComment[] => {
     const parsed = readPRComment(entry)
+
     return parsed ? [parsed] : []
   })
 }

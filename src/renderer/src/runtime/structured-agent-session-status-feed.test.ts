@@ -25,6 +25,7 @@ import {
 } from './structured-agent-session-status-feed'
 
 const REMOTE = { kind: 'environment', environmentId: 'env-1' } as const
+
 const LOCAL = { kind: 'local' } as const
 
 function summary(
@@ -44,9 +45,11 @@ function summary(
 /** The event callback the feed handed to the most recent subscription. */
 function hostEmit(index = 0): (event: AgentSessionStatusEvent) => void {
   const call = mocks.subscribeStatus.mock.calls[index]
+
   if (!call) {
     throw new Error('status feed not subscribed')
   }
+
   return call[1] as (event: AgentSessionStatusEvent) => void
 }
 
@@ -164,11 +167,13 @@ describe('structured agent session status feed', () => {
       feed.activate()
       hostEmit()({ type: 'status', session: summary('one') })
       expect(feed.getSessionObservation('one')).toBe('live')
+
       if (failure === 'reject') {
         reject(new Error('disconnected'))
       } else {
         mocks.subscribeStatus.mock.calls[0][failure === 'error' ? 2 : 3]()
       }
+
       await vi.advanceTimersByTimeAsync(0)
       expect(feed.getSessionObservation('one')).toBe('unverifiable')
       hostEmit()({ type: 'status', session: summary('one') })

@@ -15,6 +15,7 @@ type PtyRecord = {
   tailBuffer: string[]
   tailWaitState?: TerminalTailWaitState
 }
+
 type RuntimeInternals = {
   recordPtyWorktree: (p: string, w: string, s?: { connected?: boolean }) => PtyRecord
   pruneDisconnectedPtyTranscript: (pty: PtyRecord) => void

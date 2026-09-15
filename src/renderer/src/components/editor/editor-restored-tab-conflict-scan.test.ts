@@ -14,9 +14,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-file-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: () => null
 }))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
@@ -79,6 +81,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
@@ -96,6 +99,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
@@ -125,6 +129,7 @@ describe('attachRestoredTabConflictScan', () => {
     store.getState().markFileDirty('/repo/dirty-no-baseline.ts', true)
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
@@ -142,6 +147,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       expect(store.getState().openFiles[0]?.externalMutation).toBeUndefined()
@@ -161,6 +167,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/match.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       // Why: the flag suspends autosave — leaving it set after a clean
@@ -195,6 +202,7 @@ describe('attachRestoredTabConflictScan', () => {
     store.getState().setLastKnownDiskSignature('/repo/live.ts', getDiskBaselineSignature('base'))
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       // Why: in-session drift is the live watcher's job; re-reading here would
@@ -215,6 +223,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/deleted.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       const tab = store.getState().openFiles[0]
@@ -238,6 +247,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/unreachable.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       await vi.advanceTimersByTimeAsync(2_100)
@@ -261,6 +271,7 @@ describe('attachRestoredTabConflictScan', () => {
     mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       await vi.advanceTimersByTimeAsync(10)
       expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
@@ -283,11 +294,13 @@ describe('attachRestoredTabConflictScan', () => {
         })
     )
     const store = createEditorStore()
+
     for (let i = 0; i < 6; i++) {
       openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'original baseline')
     }
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(3)
 
@@ -299,7 +312,9 @@ describe('attachRestoredTabConflictScan', () => {
         pendingReads.shift()!({ content: 'original baseline', isBinary: false })
         await vi.advanceTimersByTimeAsync(10)
       }
+
       expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(6)
+
       for (const file of store.getState().openFiles) {
         expect(file.pendingDiskBaselineVerification).toBeUndefined()
       }
@@ -310,6 +325,7 @@ describe('attachRestoredTabConflictScan', () => {
 
   it('does not mark a tab that was saved while the read was in flight', async () => {
     let resolveRead: (value: { content: string; isBinary: boolean }) => void = () => {}
+
     mocks.readRuntimeFileContent.mockReturnValue(
       new Promise((resolve) => {
         resolveRead = resolve
@@ -319,6 +335,7 @@ describe('attachRestoredTabConflictScan', () => {
     openRestoredDirtyTab(store, '/repo/file.ts', 'original baseline')
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       store.getState().markFileDirty('/repo/file.ts', false)
       resolveRead({ content: 'agent rewrote this offline', isBinary: false })
@@ -338,6 +355,7 @@ describe('attachRestoredTabConflictScan', () => {
       filePath: string
       resolve: (value: { content: string; isBinary: boolean }) => void
     }[] = []
+
     mocks.readRuntimeFileContent.mockImplementation(
       ({ filePath }: { filePath: string }) =>
         new Promise<{ content: string; isBinary: boolean }>((resolve) => {
@@ -345,12 +363,14 @@ describe('attachRestoredTabConflictScan', () => {
         })
     )
     const store = createEditorStore()
+
     // Three reads fill the concurrency cap; the fourth waits in the queue.
     for (let i = 0; i < 4; i++) {
       openRestoredDirtyTab(store, `/repo/file-${i}.ts`, 'stale baseline')
     }
 
     const detach = attachRestoredTabConflictScan(store)
+
     try {
       expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(3)
 

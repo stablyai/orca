@@ -20,25 +20,32 @@ export function activateLegacyBinarySubscription(
   const { params, runtime, emit, ptyId, clientId, isMobile, supportsDesktopViewportClaims } = args
   const lateRendererReady = state.lateRendererReadyPromise
   state.lateRendererReadyPromise = null
+
   if (lateRendererReady) {
     void lateRendererReady
       .then(async (rendererReady) => {
         if (!rendererReady || state.closed) {
           return
         }
+
         state.outputBatcher?.flush()
         const recovery = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+
         if (state.closed) {
           return
         }
+
         if (!recovery?.data.length) {
           return
         }
+
         // Why: late recovery has no buffered-output gate, so only an exact renderer high-water may reset mobile without erasing live bytes.
         if (recovery.seq !== runtime.getPtyOutputSequence(ptyId)) {
           return
         }
+
         runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(ptyId, recovery)
+
         // Why: shipped mobile clients apply resized snapshots in place, so a blank xterm recovers without resubscribe.
         const recoveryStats = sendSnapshotFrames(state.sendFrame, {
           kind: 'resized',
@@ -51,6 +58,7 @@ export function activateLegacyBinarySubscription(
           truncatedByByteBudget: recovery.truncatedByByteBudget,
           data: recovery.data
         })
+
         state.lastResizeCols = recovery.cols
         console.log('[mobile-terminal-stream] recovery snapshot', {
           terminal: params.terminal,
@@ -64,6 +72,7 @@ export function activateLegacyBinarySubscription(
       })
       .catch(() => {})
   }
+
   const sendResizedFrame = (event: {
     cols: number
     rows: number
@@ -83,12 +92,14 @@ export function activateLegacyBinarySubscription(
       })
     )
   }
+
   state.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
     state.outputBatcher?.flush()
     const eventGeneration = state.resizeGeneration + 1
     state.resizeGeneration = eventGeneration
     // Why: xterm only re-wraps soft-wrapped lines, so a width change needs a full re-serialize+replay to rewrap restored hard-wrapped scrollback.
     const widthChanged = isMobile && event.cols !== state.lastResizeCols
+
     if (widthChanged) {
       state.lastResizeCols = event.cols
       void sendMobileResizeRestream(
@@ -102,6 +113,7 @@ export function activateLegacyBinarySubscription(
           if (state.closed || state.resizeGeneration !== eventGeneration) {
             return
           }
+
           if (!restreamed) {
             sendResizedFrame(event)
           }
@@ -111,10 +123,13 @@ export function activateLegacyBinarySubscription(
           if (state.closed || state.resizeGeneration !== eventGeneration) {
             return
           }
+
           sendResizedFrame(event)
         })
+
       return
     }
+
     sendResizedFrame(event)
   })
 
@@ -147,6 +162,7 @@ export function activateLegacyBinarySubscription(
             ? event.mode
             : (runtime.getRemoteDesktopFitHold?.(ptyId, state.remoteDesktopSubscriptionKey).mode ??
               'desktop-fit')
+
         emit({
           type: 'fit-override-changed',
           mode,

@@ -17,16 +17,19 @@ type StagedBrowserTabSnapshotFields = Pick<
 export function withoutStagedBrowserTabs<T extends StagedBrowserTabSnapshotFields>(snapshot: T): T {
   const handles = snapshot.remoteBrowserPageHandlesByPageId ?? {}
   const stagedWorkspaceIds = new Set<string>()
+
   for (const [workspaceId, pages] of Object.entries(snapshot.browserPagesByWorkspace)) {
     if (pages.some((page) => handles[page.id]?.staged === true)) {
       stagedWorkspaceIds.add(workspaceId)
     }
   }
+
   if (stagedWorkspaceIds.size === 0) {
     return snapshot
   }
 
   const browserPagesByWorkspace = { ...snapshot.browserPagesByWorkspace }
+
   for (const workspaceId of stagedWorkspaceIds) {
     delete browserPagesByWorkspace[workspaceId]
   }

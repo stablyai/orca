@@ -24,6 +24,7 @@ export function createOpenFileMutations(
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
         const worktreeId = file?.worktreeId
+
         return {
           activeFileId: fileId,
           activeFileIdByWorktree: worktreeId
@@ -33,18 +34,23 @@ export function createOpenFileMutations(
       })
       const state = get()
       const worktreeId = state.activeWorktreeId
+
       if (!worktreeId) {
         return
       }
+
       const groupId =
         state.activeGroupIdByWorktree?.[worktreeId] ?? state.groupsByWorktree?.[worktreeId]?.[0]?.id
+
       if (!groupId) {
         return
       }
+
       const item =
         state.findTabForEntityInGroup?.(worktreeId, groupId, fileId, 'editor') ??
         state.findTabForEntityInGroup?.(worktreeId, groupId, fileId, 'diff') ??
         state.findTabForEntityInGroup?.(worktreeId, groupId, fileId, 'conflict-review')
+
       if (item) {
         state.activateTab?.(item.id)
       }
@@ -58,6 +64,7 @@ export function createOpenFileMutations(
         // Replace the reordered subset in-place: keep other-worktree files at their positions
         const result: OpenFile[] = []
         let ri = 0
+
         for (const f of s.openFiles) {
           if (reorderedSet.has(f.id)) {
             result.push(reordered[ri++])
@@ -65,6 +72,7 @@ export function createOpenFileMutations(
             result.push(f)
           }
         }
+
         return { openFiles: result }
       }),
 
@@ -72,22 +80,28 @@ export function createOpenFileMutations(
       set((s) => {
         // Why: this fires on every keystroke; rebuilding openFiles unconditionally thrashes subscribers and caused typing lag, so bail when nothing changes.
         const file = s.openFiles.find((f) => f.id === fileId)
+
         if (!file) {
           return s
         }
+
         // Why: read-only tabs can never become dirty; hard no-op any stray change/save callback that reached here.
         if (file.readOnly === true) {
           return s
         }
+
         const needsPreviewClear = dirty && file.isPreview
+
         if (file.isDirty === dirty && !needsPreviewClear) {
           return s
         }
+
         const nextOpenFiles = s.openFiles.map((f) =>
           f.id === fileId
             ? { ...f, isDirty: dirty, ...(needsPreviewClear ? { isPreview: undefined } : {}) }
             : f
         )
+
         return {
           openFiles: nextOpenFiles,
           ...(needsPreviewClear
@@ -110,13 +124,17 @@ export function createOpenFileMutations(
     setExternalMutation: (fileId, mutation) =>
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
+
         if (!file) {
           return s
         }
+
         const next = mutation ?? undefined
+
         if (file.externalMutation === next) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, externalMutation: next } : f
@@ -127,9 +145,11 @@ export function createOpenFileMutations(
     setLastKnownDiskSignature: (fileId, signature) =>
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
+
         if (!file || file.lastKnownDiskSignature === signature) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, lastKnownDiskSignature: signature } : f
@@ -140,9 +160,11 @@ export function createOpenFileMutations(
     clearPendingDiskBaselineVerification: (fileId) =>
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
+
         if (!file?.pendingDiskBaselineVerification) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, pendingDiskBaselineVerification: undefined } : f
@@ -154,9 +176,11 @@ export function createOpenFileMutations(
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
         const next = value || undefined
+
         if (!file || file.pendingDiskBaselineVerification === next) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, pendingDiskBaselineVerification: next } : f
@@ -168,9 +192,11 @@ export function createOpenFileMutations(
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
         const next = value || undefined
+
         if (!file || file.pendingLiveDiskVerification === next) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, pendingLiveDiskVerification: next } : f
@@ -181,9 +207,11 @@ export function createOpenFileMutations(
     clearSelfMoveEcho: (fileId) =>
       set((s) => {
         const file = s.openFiles.find((f) => f.id === fileId)
+
         if (!file?.pendingSelfMoveEcho) {
           return s
         }
+
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, pendingSelfMoveEcho: undefined } : f

@@ -15,6 +15,7 @@ import {
 
 function failure(err: unknown): WslFsFailure {
   const e = err as NodeJS.ErrnoException
+
   return { ok: false, errno: e?.code ?? 'EUNKNOWN', message: e?.message ?? String(err) }
 }
 
@@ -32,28 +33,36 @@ export function registerWslHookFsHandlers(
   // because the only caller is the host-owned stdio channel, never an
   // agent-reachable surface.
   const homeRoot = posix.resolve(home)
+
   const resolveRaw = (rawPath: unknown): string => {
     if (typeof rawPath !== 'string' || rawPath.length === 0) {
       throw Object.assign(new Error('invalid path'), { code: 'EINVAL' })
     }
+
     return posix.resolve(rawPath)
   }
+
   const scoped = (rawPath: unknown): string => {
     const resolved = resolveRaw(rawPath)
+
     if (resolved !== homeRoot && !resolved.startsWith(`${homeRoot}/`)) {
       throw Object.assign(new Error(`path outside home: ${resolved}`), { code: 'EACCES' })
     }
+
     return resolved
   }
+
   // Why: the installers' mkdir-p walks top-down from `/`, probing every
   // ancestor of home with readdir before it ever creates a dir. Allow
   // read-only existence probes on those ancestors; everything else stays
   // home-scoped.
   const scopedProbe = (rawPath: unknown): string => {
     const resolved = resolveRaw(rawPath)
+
     if (resolved === '/' || homeRoot === resolved || homeRoot.startsWith(`${resolved}/`)) {
       return resolved
     }
+
     return scoped(rawPath)
   }
 
@@ -69,6 +78,7 @@ export function registerWslHookFsHandlers(
     async (params): Promise<WslFsResult<{ content: string }>> => {
       try {
         const content = await fs.readFile(scoped(params.path), 'utf8')
+
         return { ok: true, content }
       } catch (err) {
         return failure(err)
@@ -83,6 +93,7 @@ export function registerWslHookFsHandlers(
         encoding: 'utf8',
         mode
       })
+
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -94,6 +105,7 @@ export function registerWslHookFsHandlers(
     async (params): Promise<WslFsResult<{ mode: number }>> => {
       try {
         const stats = await fs.stat(scoped(params.path))
+
         return { ok: true, mode: stats.mode }
       } catch (err) {
         return failure(err)
@@ -106,6 +118,7 @@ export function registerWslHookFsHandlers(
       // Why: POSIX rename overwrites atomically — exactly the OpenSSH
       // overwrite-rename semantics the installers prefer.
       await fs.rename(scoped(params.src), scoped(params.dst))
+
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -115,6 +128,7 @@ export function registerWslHookFsHandlers(
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.unlink, async (params): Promise<WslFsResult> => {
     try {
       await fs.unlink(scoped(params.path))
+
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -124,6 +138,7 @@ export function registerWslHookFsHandlers(
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.chmod, async (params): Promise<WslFsResult> => {
     try {
       await fs.chmod(scoped(params.path), Number(params.mode))
+
       return { ok: true }
     } catch (err) {
       return failure(err)
@@ -135,6 +150,7 @@ export function registerWslHookFsHandlers(
     async (params): Promise<WslFsResult<{ entries: { filename: string }[] }>> => {
       try {
         const names = await fs.readdir(scopedProbe(params.path))
+
         return { ok: true, entries: names.map((filename) => ({ filename })) }
       } catch (err) {
         return failure(err)
@@ -145,6 +161,7 @@ export function registerWslHookFsHandlers(
   dispatcher.onRequest(WSL_HOOK_FS_METHODS.mkdir, async (params): Promise<WslFsResult> => {
     try {
       await fs.mkdir(scoped(params.path))
+
       return { ok: true }
     } catch (err) {
       return failure(err)

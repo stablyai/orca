@@ -46,8 +46,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -68,6 +71,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -77,6 +81,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -97,6 +102,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -107,9 +113,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -119,9 +127,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -130,6 +140,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -186,9 +197,11 @@ describe('connectPanePty', () => {
     const deps = createDeps()
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: {
           state: 'done'
@@ -197,6 +210,7 @@ describe('connectPanePty', () => {
           lastAssistantMessage: string
         }) => void)
       | undefined
+
     if (!idleHandler || !statusHandler) {
       throw new Error('Expected idle and hook status handlers to be registered')
     }
@@ -246,9 +260,11 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: {
           state: 'done'
@@ -257,6 +273,7 @@ describe('connectPanePty', () => {
           lastAssistantMessage: string
         }) => void)
       | undefined
+
     if (!titleHandler || !idleHandler || !statusHandler) {
       throw new Error('Expected title, idle, and hook status handlers to be registered')
     }
@@ -326,6 +343,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: {
           state: 'working' | 'done'
@@ -334,6 +352,7 @@ describe('connectPanePty', () => {
           lastAssistantMessage?: string
         }) => void)
       | undefined
+
     if (!idleHandler || !statusHandler) {
       throw new Error('Expected idle and hook status handlers to be registered')
     }
@@ -388,6 +407,7 @@ describe('connectPanePty', () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-crashed-codex')
     transportFactoryQueue.push(transport)
@@ -396,8 +416,10 @@ describe('connectPanePty', () => {
     try {
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const crashedTurnStartedAt = Date.now()
+
       const initialAgentType =
         hookUpdateBeforeDispatch === 'same-turn-known-agent' ? 'unknown' : 'codex'
+
       mockStoreState.agentStatusByPaneKey[paneKey] = {
         state: 'working',
         prompt: 'crash before done hook',
@@ -415,9 +437,11 @@ describe('connectPanePty', () => {
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks()
+
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
         | undefined
+
       if (!titleHandler) {
         throw new Error('Expected onTitleChange to be registered')
       }
@@ -426,6 +450,7 @@ describe('connectPanePty', () => {
       await vi.advanceTimersByTimeAsync(2_500)
       getForegroundProcess.mockResolvedValue(null)
       await vi.advanceTimersByTimeAsync(1_800)
+
       if (hookUpdateBeforeDispatch !== 'none') {
         mockStoreState.agentStatusByPaneKey[paneKey] = {
           state: 'working',
@@ -442,6 +467,7 @@ describe('connectPanePty', () => {
         }
         notifyStoreSubscribers()
       }
+
       await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
 
       const expectedNotification = {
@@ -450,11 +476,13 @@ describe('connectPanePty', () => {
         paneKey,
         agentCompletionSource: 'process-exit'
       }
+
       if (hookUpdateBeforeDispatch === 'new-turn') {
         expect(deps.dispatchNotification).not.toHaveBeenCalledWith(expectedNotification)
       } else {
         expect(deps.dispatchNotification).toHaveBeenCalledWith(expectedNotification)
       }
+
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
@@ -484,9 +512,11 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -542,23 +572,29 @@ describe('connectPanePty', () => {
     vi.useFakeTimers()
     // Why: pin the ±10% poll jitter to nominal so the 2nd null sample can't confirm exit before the replacement owner is set.
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5)
+
     try {
       const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
       // Why: one timer advance can start multiple reads; gate the 2nd+ null sample until the replacement hook owner is installed.
       let idleMode = false
       let nullSamplesStarted = 0
       let releaseConfirmingNullSample: (() => void) | undefined
+
       const confirmingNullSampleGate = new Promise<void>((resolve) => {
         releaseConfirmingNullSample = resolve
       })
+
       getForegroundProcess.mockImplementation(async () => {
         if (!idleMode) {
           return 'codex'
         }
+
         nullSamplesStarted += 1
+
         if (nullSamplesStarted >= 2) {
           await confirmingNullSampleGate
         }
+
         return null
       })
       const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -568,12 +604,15 @@ describe('connectPanePty', () => {
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks()
+
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
         | undefined
+
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
         | undefined
+
       if (!titleHandler || !idleHandler) {
         throw new Error('Expected title and idle handlers to be registered')
       }
@@ -581,12 +620,15 @@ describe('connectPanePty', () => {
       titleHandler('Codex working', 'Codex working')
       await vi.advanceTimersByTimeAsync(2_500)
       idleMode = true
+
       for (let attempts = 0; nullSamplesStarted < 1; attempts += 1) {
         if (attempts >= 10) {
           throw new Error('Expected the first idle process inspection')
         }
+
         await vi.advanceTimersToNextTimerAsync()
       }
+
       // Why: let the first null sample apply pendingProcessExitAgent before the replacement owner is installed.
       await flushAsyncTicks()
 
@@ -634,12 +676,15 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!titleHandler || !idleHandler) {
       throw new Error('Expected title and idle handlers to be registered')
     }

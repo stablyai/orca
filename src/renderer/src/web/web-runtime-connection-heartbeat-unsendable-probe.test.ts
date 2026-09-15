@@ -9,6 +9,7 @@ describe('WebRuntimeConnectionHeartbeat when the probe cannot be sent', () => {
     let now = 0
     const socket = { readyState: 1, close: vi.fn() } as unknown as WebSocket
     const handleDeadSocket = vi.fn()
+
     const heartbeat = new WebRuntimeConnectionHeartbeat({
       now: () => now,
       isDocumentVisible: () => true,
@@ -21,6 +22,7 @@ describe('WebRuntimeConnectionHeartbeat when the probe cannot be sent', () => {
 
     heartbeat.lastInboundFrameAt = 0
     heartbeat.lastHeartbeatTickAt = 0
+
     for (const tickAt of [10_000, 20_000, 30_000, 40_000, 50_000]) {
       now = tickAt
       heartbeat.runTick()

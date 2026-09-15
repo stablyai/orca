@@ -42,6 +42,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
+
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
       setShouldMeasureHiddenStartup(false)
@@ -65,17 +66,21 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (consumeSuppressedPtyExit(ptyId)) {
           return
         }
+
         // A synthetic host-loss exit is not evidence that the user closed the tab.
         if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
           useAppStore.getState().markUnverifiedPtyLoss(terminalTabId)
+
           return
         }
+
         // Why: a parked multi-leaf tab has no PaneManager to promote split
         // siblings, so closing the tab here would kill them; the reveal
         // remount handles dead PTYs per leaf instead.
         if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
           return
         }
+
         closeTerminalTab(terminalTabId, {
           reason: 'pty-exit',
           lifecyclePtyId: ptyId,

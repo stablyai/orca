@@ -62,6 +62,7 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     if (!this.store?.getWorkspaceSession) {
       return
     }
+
     try {
       const registry = getRuntimeBrowserPageRegistry(this)
       const liveRepoIds = new Set((this.store.getRepos?.() ?? []).map((repo) => repo.id))
@@ -72,9 +73,11 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
         // surface a tab with no live workspace behind it. Unparseable keys are left alone.
         isKnownWorktree: (worktreeId) => {
           const ownerRepoId = splitWorktreeIdForFilesystem(worktreeId)?.repoId
+
           return !ownerRepoId || liveRepoIds.has(ownerRepoId)
         }
       })
+
       for (const page of registry.listPages()) {
         this.persistedClientHostedBrowserWorktreeIds.add(page.workspaceId)
       }
@@ -93,14 +96,17 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
   protected persistClientHostedBrowserPagesForWorktree(worktreeId: string): void {
     const registry = getRuntimeBrowserPageRegistry(this)
     const hasPages = registry.listPages(worktreeId).length > 0
+
     if (!hasPages && !this.persistedClientHostedBrowserWorktreeIds.has(worktreeId)) {
       return
     }
+
     if (hasPages) {
       this.persistedClientHostedBrowserWorktreeIds.add(worktreeId)
     } else {
       this.persistedClientHostedBrowserWorktreeIds.delete(worktreeId)
     }
+
     persistClientHostedBrowserPages(
       {
         getWorkspaceSession: (id) => this.getWorkspaceSessionForWorktree(id),
@@ -113,11 +119,14 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
 
   protected listWorkspaceSessionPartitions(): WorkspaceSessionState[] {
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+
     for (const repo of this.store?.getRepos?.() ?? []) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
+
     return [...hostIds].flatMap((hostId) => {
       const session = this.store?.getWorkspaceSession?.(hostId)
+
       return session ? [session] : []
     })
   }
@@ -132,9 +141,11 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
   ): Promise<void> {
     const { connectionId, allowUnverifiedStop } = options
     const provider = connectionId ? this.getSshProviderFn?.(connectionId) : this.getLocalProvider()
+
     if (!provider) {
       throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
     }
+
     const teardownResult = await killAllProcessesForWorktree(worktreeId, {
       runtime: this as RuntimeCommandSurfaceHost<this>,
       // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
@@ -149,14 +160,17 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
       ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
       ...(connectionId ? { includeLocalRegistry: false } : {})
     })
+
     // Structured sessions are counted here too, mirroring the IPC path: closing a user's chat is
     // now an ordinary outcome of this verb, and a removal that closed one but no PTY logged nothing.
     const structuredStopped = teardownResult.structuredStopped ?? 0
+
     const total =
       teardownResult.runtimeStopped +
       teardownResult.providerStopped +
       teardownResult.registryStopped +
       structuredStopped
+
     if (total > 0) {
       console.info(
         `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped} structured=${structuredStopped}`
@@ -172,6 +186,7 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     return collectMemorySnapshot(this.store)
   }
 
@@ -179,6 +194,7 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     if (!this.store?.getUI) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store.getUI()
   }
 
@@ -186,7 +202,9 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     if (!this.store?.getUI || !this.store.updateUI) {
       throw new Error('runtime_unavailable')
     }
+
     this.store.updateUI(updates)
+
     return this.store.getUI()
   }
 
@@ -194,6 +212,7 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     if (!this.store?.recordFeatureInteraction) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store.recordFeatureInteraction(id)
   }
 

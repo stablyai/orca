@@ -64,24 +64,31 @@ function applyLinearIssueLink(editor: Editor | null): void {
   if (!editor) {
     return
   }
+
   if (editor.isActive('link')) {
     editor.chain().focus().unsetLink().run()
+
     return
   }
 
   const previousHref = editor.getAttributes('link').href as string | undefined
+
   const href = window.prompt(
     translate('auto.components.LinearIssueMarkdownDescriptionEditor.5c16ec8f14', 'Link URL'),
     previousHref ?? ''
   )
+
   if (href === null) {
     editor.chain().focus().run()
+
     return
   }
 
   const trimmed = href.trim()
+
   if (!trimmed) {
     editor.chain().focus().unsetLink().run()
+
     return
   }
 
@@ -97,11 +104,13 @@ export function LinearIssueMarkdownToolbar({
 }): React.JSX.Element {
   // Why: this toolbar can outlive editor recreation, so subscribe directly to language changes.
   useTranslation()
+
   const runCommand = useCallback(
     (command: (editor: Editor) => void) => {
       if (!editor || disabled) {
         return
       }
+
       command(editor)
     },
     [disabled, editor]

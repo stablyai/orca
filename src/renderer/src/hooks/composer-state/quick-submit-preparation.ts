@@ -58,9 +58,11 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         requestedAgent,
         workspaceNameSeed
       )
+
       if (!source) {
         return null
       }
+
       const {
         submitLinkedWorkItem,
         agent,
@@ -83,21 +85,26 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         checkedHooksContextKey !== selectedRepoHookContextKey
       ) {
         let hookCheck: HookCheckResult
+
         try {
           const hookCheckSettlement = await settleComposerSubmit(
             loadHookCheckForRepo(repoId),
             isSubmissionCancelled
           )
+
           if (hookCheckSettlement.status === 'cancelled') {
             return null
           }
+
           hookCheck = hookCheckSettlement.value
         } catch {
           hookCheck = { hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
+
         if (!commitHookCheckIfCurrent(selectedRepoHookContextKey, hookCheck.hooks)) {
           return null
         }
+
         submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
         submitResolvedSetupDecision =
           setupDecision ??
@@ -110,6 +117,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
         setAdvancedOpen(true)
+
         return null
       }
 
@@ -167,9 +175,11 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
           ),
           isSubmissionCancelled
         )
+
         if (issueCommandSettlement.status === 'cancelled') {
           return null
         }
+
         const confirmedIssueCommand = issueCommandSettlement.value
         submitIssueCommandTemplate = confirmedIssueCommand.template
         issueCommandTrustDecision = confirmedIssueCommand.trustDecision

@@ -38,12 +38,15 @@ export function SkillInstallTargetFields(props: {
 
   useEffect(() => {
     let active = true
+
     if (props.environmentId.startsWith('ssh:')) {
       setWslDistros([])
+
       return () => {
         active = false
       }
     }
+
     void window.api.skills
       .listWslDistros(props.environmentId === 'local' ? undefined : props.environmentId)
       .then((distros) => {
@@ -56,6 +59,7 @@ export function SkillInstallTargetFields(props: {
           setWslDistros([])
         }
       })
+
     return () => {
       active = false
     }
@@ -88,12 +92,14 @@ export function SkillInstallTargetFields(props: {
               </SelectItem>
               {props.runtimeEnvironments.map((environment) => {
                 const status = props.runtimeStatus.get(environment.id)?.status
+
                 const unsupported =
                   status !== null &&
                   status !== undefined &&
                   status.capabilities?.includes(
                     props.requiredCapability ?? SKILL_INSTALL_CAPABILITY
                   ) !== true
+
                 return (
                   <SelectItem key={environment.id} value={environment.id} disabled={unsupported}>
                     {environment.name}{' '}

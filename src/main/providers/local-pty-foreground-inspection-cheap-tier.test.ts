@@ -10,10 +10,12 @@ const { cheapSnapshotMock, fullSnapshotMock, resolveMock } = vi.hoisted(() => ({
 vi.mock('../../shared/cheap-process-table-snapshot-reader', () => ({
   getCheapProcessTableSnapshot: cheapSnapshotMock
 }))
+
 vi.mock('../../shared/process-table-snapshot-reader', async (importOriginal) => ({
   ...(await importOriginal<typeof ProcessTableSnapshotReader>()),
   getProcessTableSnapshot: fullSnapshotMock
 }))
+
 vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveMock,
   confirmShellForegroundProcess: vi.fn()
@@ -23,14 +25,18 @@ import { getLocalPtyForegroundProcess } from './local-pty-foreground-inspection'
 import { ptyLastRecognizedForeground, ptyProcesses, ptyShellName } from './local-pty-provider-state'
 
 const SHELL_PID = 4242
+
 const AGENT_PID = 4300
+
 const ID = 'pty-1'
 
 type Table = 'agent' | 'shell-only'
+
 let table: Table = 'agent'
 
 function rows(): Record<string, unknown>[] {
   const tpgid = table === 'agent' ? AGENT_PID : SHELL_PID
+
   const out: Record<string, unknown>[] = [
     {
       pid: SHELL_PID,
@@ -43,6 +49,7 @@ function rows(): Record<string, unknown>[] {
       command: '-zsh'
     }
   ]
+
   if (table === 'agent') {
     out.push({
       pid: AGENT_PID,
@@ -55,6 +62,7 @@ function rows(): Record<string, unknown>[] {
       command: 'node /usr/local/bin/claude'
     })
   }
+
   return out
 }
 
@@ -85,6 +93,7 @@ describe('local POSIX provider cheap-tier revalidation', () => {
     ptyProcesses.delete(ID)
     ptyShellName.delete(ID)
     ptyLastRecognizedForeground.delete(ID)
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -93,9 +102,11 @@ describe('local POSIX provider cheap-tier revalidation', () => {
   it('a pane with NO recognized anchor never consults the cheap tier', async () => {
     table = 'shell-only'
     proc.process = 'zsh'
+
     for (let i = 0; i < 3; i += 1) {
       expect(await getLocalPtyForegroundProcess(ID)).toBe('zsh')
     }
+
     expect(cheapSnapshotMock).not.toHaveBeenCalled()
     expect(resolveMock).toHaveBeenCalledTimes(3)
     expect(ptyLastRecognizedForeground.get(ID)).toBeUndefined()
@@ -105,9 +116,11 @@ describe('local POSIX provider cheap-tier revalidation', () => {
     expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
     expect(resolveMock).toHaveBeenCalledTimes(1)
     expect(ptyLastRecognizedForeground.get(ID)?.steady?.fingerprint).toEqual(expect.any(String))
+
     for (let i = 0; i < 3; i += 1) {
       expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
     }
+
     expect(cheapSnapshotMock).toHaveBeenCalledTimes(3)
     expect(resolveMock).toHaveBeenCalledTimes(1)
   })

@@ -44,6 +44,7 @@ describe('DesktopScriptProviderClient actions', () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
     await client.snapshot({ app: 'Text Editor', restoreWindow: true })
+
     const result = await client.action('setValue', {
       app: 'Text Editor',
       elementIndex: 0,
@@ -81,6 +82,7 @@ describe('DesktopScriptProviderClient actions', () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
     await client.snapshot({ app: 'Text Editor' })
+
     const result = await client.action('setValue', {
       app: 'Text Editor',
       elementIndex: 0,
@@ -132,6 +134,7 @@ describe('DesktopScriptProviderClient actions', () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
     await client.snapshot({ app: 'Text Editor' })
+
     const result = await client.action('setValue', {
       app: 'Text Editor',
       elementIndex: 0,
@@ -202,6 +205,7 @@ describe('DesktopScriptProviderClient actions', () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
     await client.snapshot({ app: 'Text Editor' })
+
     const result = await client.action('click', {
       app: 'Text Editor',
       elementIndex: 0,

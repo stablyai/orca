@@ -9,11 +9,14 @@ const EXIT_DETAIL_MAX_CHARS = 400
 
 export function buildCodexAppServerExitError(stderrTail: string, cause?: Error): Error {
   const tail = stderrTail.trim().slice(0, EXIT_DETAIL_MAX_CHARS)
+
   if (stderrIndicatesMissingAppServer(stderrTail)) {
     return new CodexAppServerUnsupportedError(
       `codex CLI does not support the app-server subcommand: ${tail}`
     )
   }
+
   const detail = cause ? `: ${cause.message}` : tail ? `: ${tail}` : ''
+
   return new Error(`codex app-server connection ended${detail}`)
 }

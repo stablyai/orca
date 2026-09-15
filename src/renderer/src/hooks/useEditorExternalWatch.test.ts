@@ -7,11 +7,13 @@ vi.mock('@/store', () => ({
     getState: vi.fn()
   }
 }))
+
 // Why: editor-autosave calls window.dispatchEvent at module scope paths; the
 // vitest 'node' environment has no window. Stub the two exports we use so the
 // handler can run headlessly.
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
+
   return {
     ...actual,
     notifyEditorExternalFileChange: vi.fn(),
@@ -183,6 +185,7 @@ describe('getOverflowExternalReloadTargets', () => {
 
 describe('createExternalWatchEventHandler tombstone coalescing', () => {
   const setExternalMutation = vi.fn()
+
   const findTarget = (
     worktreePath: string,
     runtimeEnvironmentId: string | null = null
@@ -290,11 +293,13 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       isDirty: false,
       runtimeEnvironmentId: 'env-1'
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [file],
       setExternalMutation
     } as never)
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
+
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
       worktreeId: 'wt-win',
       worktreePath: 'C:\\Repo',
@@ -328,11 +333,13 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       isDirty: false,
       runtimeEnvironmentId: 'env-1'
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [file],
       setExternalMutation
     } as never)
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
+
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
       worktreeId: 'wt-unc',
       worktreePath: '//Server/Share/Repo',
@@ -401,6 +408,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       runtimeEnvironmentId: 'env-1'
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [runtimeFile],
       setExternalMutation
@@ -425,11 +433,13 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
 
   it('routes local and runtime watch events to the matching editor owner', () => {
     const localFile = fileNotes
+
     const runtimeFile = {
       ...fileNotes,
       id: 'runtime-notes',
       runtimeEnvironmentId: 'env-1'
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [localFile, runtimeFile],
       setExternalMutation
@@ -471,6 +481,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       diffSource: 'combined-uncommitted' as const,
       isDirty: false
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [combinedDiffTab],
       setExternalMutation
@@ -496,6 +507,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       isDirty: true
     }
+
     const combinedDiffTab = {
       id: 'wt-1::all-diffs::uncommitted',
       worktreeId: 'wt-1',
@@ -506,6 +518,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       diffSource: 'combined-uncommitted' as const,
       isDirty: false
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyFile, combinedDiffTab],
       setExternalMutation
@@ -530,6 +543,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       isDirty: true
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyFile],
       setExternalMutation
@@ -550,6 +564,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       isDirty: true
     }
+
     const cleanDiffTab = {
       id: 'diff-notes',
       worktreeId: 'wt-1',
@@ -560,6 +575,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       diffSource: 'unstaged' as const,
       isDirty: false
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyFile, cleanDiffTab],
       setExternalMutation
@@ -585,6 +601,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       isDirty: true
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyFile],
       setExternalMutation
@@ -607,6 +624,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       isDirty: true
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyFile],
       setExternalMutation
@@ -629,6 +647,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ...fileNotes,
       isDirty: true
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyFile],
       setExternalMutation
@@ -663,6 +682,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       diffSource: 'unstaged' as const,
       isDirty: true
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyDiffTab],
       setExternalMutation
@@ -684,6 +704,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       isDirty: true,
       externalMutation: 'changed' as const
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [dirtyChangedFile],
       setExternalMutation
@@ -709,6 +730,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       diffSource: 'combined-branch' as const,
       isDirty: false
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [branchDiffTab],
       setExternalMutation
@@ -725,11 +747,13 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
 
   it('tombstones only the matching owner for same-path delete events', () => {
     const localFile = fileNotes
+
     const runtimeFile = {
       ...fileNotes,
       id: 'runtime-notes',
       runtimeEnvironmentId: 'env-1'
     }
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [localFile, runtimeFile],
       setExternalMutation

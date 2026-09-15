@@ -27,10 +27,12 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
 }))
 
 const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
+
 createTabsSliceMockApi()
 
 const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
   await import('@/store/slices/store-test-helpers')
+
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))
@@ -38,7 +40,9 @@ vi.mock('@/store', () => ({ useAppStore: store }))
 const { closeTerminalTab } = await import('./terminal-tab-actions')
 
 const GIT_WT = 'repo1::/tmp/wt1'
+
 const FOLDER_WT = 'folder:folder-1'
+
 const GROUP = 'group-1'
 
 function seedWorktreeWithTabs(
@@ -62,6 +66,7 @@ function seedWorktreeWithTabs(
     contentType: 'agent-session',
     label: 'Codex Chat'
   })
+
   const unifiedByTabId = new Map(
     args.terminalIds.map((terminalId) => [
       `u-${terminalId}`,
@@ -74,14 +79,18 @@ function seedWorktreeWithTabs(
       })
     ])
   )
+
   if (args.includeChatTab !== false) {
     unifiedByTabId.set(chatTab.id, chatTab)
   }
+
   // Why: keep the unified array in group order so insertion-order assertions are real.
   const unifiedTabs = args.groupOrder.flatMap((tabId) => {
     const tab = unifiedByTabId.get(tabId)
+
     return tab ? [tab] : []
   })
+
   seedStore(store, {
     activeWorktreeId: worktreeId,
     worktreesByRepo: {

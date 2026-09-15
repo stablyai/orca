@@ -133,15 +133,19 @@ export class SshPtyProvider implements IPtyProvider {
     if (opts.agentSessionEnsure && opts.sessionId) {
       throw new Error('agent_session_claim_unavailable')
     }
+
     if (opts.agentSessionEnsure) {
       const supportsClaims = await this.supportsAgentSessionClaims({ signal: opts.signal })
+
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
+
       if (!supportsClaims) {
         throw new Error('agent_session_claim_unavailable')
       }
     }
+
     if (opts.sessionId) {
       return await reattachSshPtySessionForSpawn({
         mux: this.mux,
@@ -160,13 +164,16 @@ export class SshPtyProvider implements IPtyProvider {
     const supportsCreateOperation = opts.agentSessionCreateOperationId
       ? await this.supportsAgentSessionCreateOperations({ signal: opts.signal })
       : false
+
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
+
     if (opts.agentSessionCreateOperationId && !supportsCreateOperation) {
       // Why: host routing owns legacy selection; a changed relay must not downgrade after dispatch.
       throw new Error('execution_owner_unavailable')
     }
+
     return await spawnFreshSshPty({
       mux: this.mux,
       options: opts,
@@ -235,7 +242,9 @@ export class SshPtyProvider implements IPtyProvider {
       ...(expected?.paneKey ? { expectedPaneKey: expected.paneKey } : {}),
       ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
     }
+
     const relayPtyId = this.toRelayPtyId(id)
+
     return await requestSshPtyAttach({
       mux: this.mux,
       relayPtyId,
@@ -277,12 +286,15 @@ export class SshPtyProvider implements IPtyProvider {
         : { includeForegroundProcessEvidence: opts.includeForegroundProcessEvidence },
       relayTimeoutOptions(opts?.deadlineMs)
     )
+
     const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))
+
     for (const process of processes) {
       this.livePtyIds.add(process.id)
       const relayPtyId = this.toRelayPtyId(process.id)
       this.outputState.rememberPtyIncarnation(relayPtyId, process.incarnationId)
     }
+
     return processes
   }
 

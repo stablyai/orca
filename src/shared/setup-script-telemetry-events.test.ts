@@ -10,6 +10,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '2-3',
       has_shared_hooks: false
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -21,6 +22,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '0',
       has_shared_hooks: true
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -38,6 +40,7 @@ describe('setup script prompt schemas', () => {
       has_shared_hooks: false,
       edited_before_save: true
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -50,6 +53,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '0',
       has_shared_hooks: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -63,6 +67,7 @@ describe('setup script prompt schemas', () => {
       has_shared_hooks: false,
       edited_before_save: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -74,6 +79,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '0',
       has_shared_hooks: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -84,6 +90,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '0',
       has_shared_hooks: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -96,6 +103,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '0',
       has_shared_hooks: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -108,6 +116,7 @@ describe('setup script prompt schemas', () => {
       has_shared_hooks: false,
       edited_before_save: true
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -122,6 +131,7 @@ describe('setup script prompt schemas', () => {
       files: ['.codex/environments/environment.toml'],
       setup: 'npm install'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -133,6 +143,7 @@ describe('setup script prompt schemas', () => {
       unsupported_field_count_bucket: '0',
       has_shared_hooks: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -146,6 +157,7 @@ describe('setup script prompt schemas', () => {
       has_shared_hooks: false,
       edited_before_save: false
     })
+
     expect(parsed.success).toBe(false)
   })
 

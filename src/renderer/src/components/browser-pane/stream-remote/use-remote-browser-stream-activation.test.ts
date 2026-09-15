@@ -19,6 +19,7 @@ function renderActivation(isActive = true, stagedPage = false) {
   const open = vi.fn(() => closeStream)
   const lifecycle = { open }
   const clearPendingRemoteWheel = vi.fn()
+
   const hook = renderHook(
     ({ active, staged }) =>
       useRemoteBrowserStreamActivation({
@@ -33,6 +34,7 @@ function renderActivation(isActive = true, stagedPage = false) {
       }),
     { initialProps: { active: isActive, staged: stagedPage } }
   )
+
   return { ...hook, clearPendingRemoteWheel, closeStream, open }
 }
 

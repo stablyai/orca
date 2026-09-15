@@ -11,6 +11,7 @@ const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../git/runner', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     gitExecFileAsync: gitExecFileAsyncMock
@@ -26,10 +27,13 @@ function isFetchArgs(argv: unknown): argv is string[] {
   if (!Array.isArray(argv)) {
     return false
   }
+
   let commandIndex = 0
+
   while (argv[commandIndex] === '-c' && typeof argv[commandIndex + 1] === 'string') {
     commandIndex += 2
   }
+
   return argv[commandIndex] === 'fetch'
 }
 
@@ -72,7 +76,9 @@ function mockFetchResults(results: unknown[]): void {
     if (argv[0] === 'rev-parse') {
       return Promise.reject(new Error('not a repo in cache-key test'))
     }
+
     const result = results[fetchIndex++]
+
     return result instanceof Promise ? result : Promise.resolve(result)
   })
 }
@@ -123,9 +129,11 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     // dispatch an independent `git fetch`, tripling the network load in the
     // worst case (renderer create + dispatch probe + CLI create).
     let resolveFetch!: () => void
+
     const pending = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     mockFetchResults([pending])
 
     const runtime = new OrcaRuntimeService(null)
@@ -138,6 +146,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     for (let tick = 0; tick < 8; tick += 1) {
       await Promise.resolve()
     }
+
     expect(fetchCallCount()).toBe(1)
 
     resolveFetch()
@@ -161,6 +170,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   it('bounds process-lifetime fetch cache maps for churned repo paths', async () => {
     mockFetchResults(Array.from({ length: 520 }, () => ({ stdout: '', stderr: '' })))
     const runtime = new OrcaRuntimeService(null)
+
     const caches = runtime as unknown as {
       canonicalFetchKeyCache: Map<string, string>
       fetchLastCompletedAt: Map<string, number>
@@ -254,11 +264,14 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
 
   it('shares an in-flight remote-tracking base refresh and reuses exact-base freshness', async () => {
     let resolveFetch!: () => void
+
     const pending = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     mockFetchResults([pending, { stdout: '', stderr: '' }])
     const runtime = new OrcaRuntimeService(null)
+
     const base = {
       remote: 'origin',
       branch: 'main',
@@ -281,6 +294,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   it('does not advance exact-base freshness when a remote-tracking refresh fails', async () => {
     mockFetchResults([Promise.reject(new Error('network down')), { stdout: '', stderr: '' }])
     const runtime = new OrcaRuntimeService(null)
+
     const base = {
       remote: 'origin',
       branch: 'main',
@@ -307,6 +321,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       { stdout: '', stderr: '' }
     ])
     const runtime = new OrcaRuntimeService(null)
+
     const base = {
       remote: 'origin',
       branch: 'main',
@@ -325,14 +340,18 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   it('queues a full remote fetch behind an in-flight remote-tracking base refresh', async () => {
     let resolveBaseFetch!: () => void
     let resolveFullFetch!: () => void
+
     const pendingBaseFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveBaseFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     const pendingFullFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveFullFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     mockFetchResults([pendingBaseFetch, pendingFullFetch])
     const runtime = new OrcaRuntimeService(null)
+
     const base = {
       remote: 'origin',
       branch: 'main',
@@ -366,14 +385,18 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   it('runs a queued exact base refresh after an in-flight full remote fetch succeeds', async () => {
     let resolveFullFetch!: () => void
     let resolveBaseFetch!: () => void
+
     const pendingFullFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveFullFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     const pendingBaseFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveBaseFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     mockFetchResults([pendingFullFetch, pendingBaseFetch])
     const runtime = new OrcaRuntimeService(null)
+
     const base = {
       remote: 'origin',
       branch: 'main',
@@ -407,14 +430,18 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
   it('runs a queued exact base refresh when an in-flight full remote fetch fails', async () => {
     let rejectFullFetch!: () => void
     let resolveBaseFetch!: () => void
+
     const pendingFullFetch = new Promise<{ stdout: string; stderr: string }>((_resolve, reject) => {
       rejectFullFetch = () => reject(new Error('network unavailable'))
     })
+
     const pendingBaseFetch = new Promise<{ stdout: string; stderr: string }>((resolve) => {
       resolveBaseFetch = () => resolve({ stdout: '', stderr: '' })
     })
+
     mockFetchResults([pendingFullFetch, pendingBaseFetch])
     const runtime = new OrcaRuntimeService(null)
+
     const base = {
       remote: 'origin',
       branch: 'main',

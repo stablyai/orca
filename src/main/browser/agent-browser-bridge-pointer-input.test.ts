@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,7 +18,9 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: {
@@ -28,8 +31,10 @@ vi.mock('electron', () => {
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -38,12 +43,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -72,6 +79,7 @@ function recordDispatchedEvents(
     if (method === 'Input.dispatchMouseEvent' && typeof params === 'object' && params !== null) {
       sink.push({ ...params })
     }
+
     return {}
   })
 }
@@ -193,8 +201,10 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
   it('escalates clickCount for a repeat press at the same point', async () => {
     // Why: real wall-clock makes this flake — a >500ms stall under load resets the cadence.
     vi.useFakeTimers()
+
     try {
       await bridge.mouseMove(10, 20)
+
       for (let i = 0; i < 4; i += 1) {
         await bridge.mouseDown('left')
         await bridge.mouseUp('left')
@@ -212,6 +222,7 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
 
   it('restarts clickCount when the second press lands elsewhere', async () => {
     vi.useFakeTimers()
+
     try {
       await bridge.mouseMove(10, 20)
       await bridge.mouseDown('left')
@@ -230,6 +241,7 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
 
   it('restarts clickCount when the repeat press uses another button', async () => {
     vi.useFakeTimers()
+
     try {
       await bridge.mouseMove(10, 20)
       await bridge.mouseDown('left')
@@ -248,6 +260,7 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
 
   it('restarts clickCount once the repeat lands outside the double-click interval', async () => {
     vi.useFakeTimers()
+
     try {
       await bridge.mouseMove(10, 20)
       await bridge.mouseDown('left')
@@ -440,6 +453,7 @@ describe('AgentBrowserBridge coordinate pointer input', () => {
       commandQueues: Map<string, unknown[]>
       processingQueues: Set<string>
     }
+
     expect(internals.commandQueues.size).toBe(0)
     expect(internals.processingQueues.size).toBe(0)
   })

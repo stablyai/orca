@@ -38,6 +38,7 @@ export const FILE_METHODS = [
       if (params.mode !== 'quick-open') {
         return runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
       }
+
       const result = {
         ...(await runtime.searchQuickOpenFilePaths(
           params.worktree,
@@ -48,7 +49,9 @@ export const FILE_METHODS = [
         )),
         quickOpenSearchVersion: QUICK_OPEN_SEARCH_VERSION
       }
+
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+
       return maxContentBytes === undefined
         ? result
         : limitQuickOpenSearchReplyBySerializedBytes(result, maxContentBytes)
@@ -105,6 +108,7 @@ export const FILE_METHODS = [
     params: FileOpen,
     handler: async (params, { runtime, clientKind, requestId }) => {
       const budget = remoteFileContentBudget(clientKind, requestId)
+
       return budget === undefined
         ? runtime.readFileExplorerPreview(params.worktree, params.relativePath)
         : runtime.readFileExplorerPreview(params.worktree, params.relativePath, budget)
@@ -152,6 +156,7 @@ export const FILE_METHODS = [
     params: FileListAll,
     handler: async (params, { runtime, clientKind, requestId, signal }) => {
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+
       return runtime.listRuntimeFiles(params.worktree, {
         excludePaths: params.excludePaths,
         ...(params.maxResults === undefined ? {} : { maxResults: params.maxResults }),
@@ -198,6 +203,7 @@ export const FILE_METHODS = [
     params: FileUnwatch,
     handler: async (params, { runtime }) => {
       await runtime.cleanupSubscriptionAndWait(params.subscriptionId)
+
       return { unsubscribed: true }
     }
   })

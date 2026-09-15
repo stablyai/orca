@@ -36,8 +36,10 @@ export function WorktreeCardAutomationDetailSection({
 
   React.useEffect(() => {
     let cancelled = false
+
     async function resolveAvailability(): Promise<void> {
       setAvailability({ status: 'checking' })
+
       try {
         // Why not the workspace's host: the automation's host is recorded on the
         // provenance, and an automation can land a workspace somewhere else
@@ -45,15 +47,19 @@ export function WorktreeCardAutomationDetailSection({
         const target = getAutomationTargetFromHostId(provenance.hostId)
         const automations = await listAutomationsForTarget(target)
         const automation = automations.find((entry) => entry.id === provenance.automationId)
+
         if (!automation) {
           if (!cancelled) {
             // With no recorded host this read went to the desktop on no evidence,
             // so a miss here is "could not check", never "removed".
             setAvailability({ status: provenance.hostId ? 'automation-missing' : 'unavailable' })
           }
+
           return
         }
+
         const runs = await listAutomationRunsForTarget(target, provenance.automationId)
+
         if (!cancelled) {
           setAvailability({
             status: 'available',
@@ -68,6 +74,7 @@ export function WorktreeCardAutomationDetailSection({
     }
 
     void resolveAvailability()
+
     return () => {
       cancelled = true
     }

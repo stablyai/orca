@@ -69,11 +69,13 @@ async function removeProfile(userDataDir: string): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+
       return
     } catch (error) {
       if (attempt === 4) {
         throw error
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
     }
   }
@@ -87,9 +89,11 @@ export async function createRuntimeDesktopPairingOffer(
       address: '127.0.0.1',
       rotate: true
     })
+
     if (!offer.available || !offer.pairingUrl) {
       throw new Error('HUB runtime did not provide a desktop pairing URL')
     }
+
     return {
       pairingUrl: offer.pairingUrl,
       ...(offer.webClientUrl ? { webClientUrl: offer.webClientUrl } : {})
@@ -105,9 +109,11 @@ export async function launchPairedWebClient(
   if (!offer.webClientUrl) {
     throw new Error('HUB runtime did not provide a paired web client URL')
   }
+
   const clientUrl = createPairedWebClientUrl(offer.webClientUrl, options)
   let page: Page | undefined
   const pagePromise = hubApp.waitForEvent('window').then((candidate) => (page = candidate))
+
   try {
     await hubApp.evaluate(
       async ({ BrowserWindow }, { partition, url }) => {
@@ -122,6 +128,7 @@ export async function launchPairedWebClient(
             sandbox: true
           }
         })
+
         await clientWindow.loadURL(url).catch((error) => {
           clientWindow.destroy()
           throw error
@@ -133,9 +140,11 @@ export async function launchPairedWebClient(
       }
     )
     page = await pagePromise
+
     if (options.waitForWorkspace !== false) {
       await page.locator('[data-worktree-sidebar]').waitFor({ state: 'visible', timeout: 30_000 })
     }
+
     return { page, dispose: () => page?.close() ?? Promise.resolve() }
   } catch (error) {
     void pagePromise.catch(() => undefined)
@@ -153,24 +162,31 @@ export async function launchPairedElectronClient(
   options: { extraEnv?: Record<string, string>; reuseUserDataDir?: string } = {}
 ): Promise<PairedElectronClient> {
   const reusedProfile = options.reuseUserDataDir !== undefined
+
   const userDataDir =
     options.reuseUserDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
+
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
+
   if (!reusedProfile) {
     writeFileSync(
       path.join(userDataDir, 'orca-data.json'),
       `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
     )
   }
+
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
+
   const homeIsolation = createElectronHomeIsolation({
     inheritedEnv: cleanEnv,
     launchEnv: {},
     extraEnv: options.extraEnv ?? {},
     userDataDir
   })
+
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+
   const app = await electron.launch({
     args: getOrcaElectronLaunchArgs(mainPath, false),
     env: {
@@ -184,6 +200,7 @@ export async function launchPairedElectronClient(
   // Why before the home assert: forwarding starts here, so a client that fails during startup
   // otherwise reaches CI as a bare Playwright error with none of its own output attached.
   forwardElectronProcessLogs(app, testInfo)
+
   try {
     assertElectronResolvedIsolatedHome(
       await retryTransientMainEvaluate(() =>
@@ -199,14 +216,17 @@ export async function launchPairedElectronClient(
       null,
       { timeout: 30_000 }
     )
+
     const canaryBlocked = await page.evaluate(async (targetId) => {
       try {
         await window.api.ssh.connect({ targetId })
+
         return false
       } catch (error) {
         return String(error).includes('e2e_forbidden_local_ssh_connect')
       }
     }, DIRECT_SSH_PROBE_CANARY_TARGET_ID)
+
     if (
       !canaryBlocked ||
       !readDirectSshAttemptTargetIds(directSshProbePath).includes(DIRECT_SSH_PROBE_CANARY_TARGET_ID)
@@ -219,7 +239,9 @@ export async function launchPairedElectronClient(
       pairingUrl: offer.pairingUrl,
       reusedProfile
     })
+
     const captureDirectSshAttempts = async (): Promise<void> => {}
+
     const replacePairingInPlace = async (
       replacementOffer: RuntimeDesktopPairingOffer
     ): Promise<SameIdPairingReplacement> =>
@@ -249,6 +271,7 @@ export async function launchPairedElectronClient(
       replacePairingInPlace,
       userDataDir
     }
+
     return client
   } catch (error) {
     await closeElectronAppForE2E(app)

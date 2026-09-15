@@ -7,19 +7,33 @@ function readSource(fileName: string): string {
 }
 
 const MODEL_SOURCE = readSource('smart-workspace-name-field-model.ts')
+
 const CONTROLLER_SOURCE = readSource('use-smart-workspace-name-field-controller.ts')
+
 const FOUNDATION_SOURCE = readSource('use-smart-workspace-name-field-foundation.ts')
+
 const AVAILABILITY_SOURCE = readSource('use-smart-workspace-field-availability.ts')
+
 const FOCUS_SOURCE = readSource('use-smart-workspace-field-focus-controls.ts')
+
 const STATE_SOURCE = readSource('use-smart-workspace-name-field-state.ts')
+
 const GITHUB_SOURCE = readSource('use-smart-workspace-github-search.ts')
+
 const GITLAB_SOURCE = readSource('use-smart-workspace-gitlab-search.ts')
+
 const SECONDARY_SEARCH_SOURCE = readSource('use-smart-workspace-secondary-searches.ts')
+
 const ACTIONS_SOURCE = readSource('use-smart-workspace-name-field-actions.ts')
+
 const PRESENTATION_SOURCE = readSource('use-smart-workspace-name-field-presentation.ts')
+
 const COPY_SOURCE = readSource('smart-workspace-name-field-copy.ts')
+
 const INPUT_SOURCE = readSource('smart-workspace-name-input-surface.tsx')
+
 const SURFACE_SOURCE = readSource('smart-workspace-name-field-surface.tsx')
+
 const DIALOG_SOURCE = readSource('smart-workspace-cross-repo-dialog.tsx')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
@@ -27,6 +41,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -50,6 +65,7 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
       'const availableModes = getSmartWorkspaceNameModes().filter',
       'const mrStateFilters = getMrStateFilters()'
     )
+
     expect(availableModesSection).toContain('return !repoBackedSourcesDisabled')
     expect(availableModesSection).toContain('return gitlabSourceAvailable')
     expect(availableModesSection).toContain("item.id === 'jira'")
@@ -63,6 +79,7 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
       'const jiraSource = useJiraUrlSource({',
       'const jiraStatusId'
     )
+
     expect(jiraLookupSection).toContain("state.mode === 'smart' || state.mode === 'jira'")
     expect(jiraLookupSection).toContain('sourceContext: jiraSourceContext')
     expect(CONTROLLER_SOURCE).toContain('const shouldQueryJira =')
@@ -73,6 +90,7 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
       'const smartPlaceholder = repoBackedSourcesDisabled',
       'return {'
     )
+
     expect(placeholderSection).toContain('Type a name, Linear URL, or Jira URL')
     expect(placeholderSection).toContain('Type a workspace name')
     expect(placeholderSection).toContain(
@@ -122,11 +140,13 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
       'const shouldQueryGithub =',
       'const shouldQueryLinear ='
     )
+
     const branchGate = sourceBetween(
       SECONDARY_SEARCH_SOURCE,
       'const branchSearchRequest = useMemo',
       'useEffect(() => {\n    if (!branchSearchRequest)'
     )
+
     const gitlabGate = sourceBetween(
       CONTROLLER_SOURCE,
       'const shouldQueryGitlab =',

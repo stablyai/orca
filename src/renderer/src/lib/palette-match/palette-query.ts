@@ -4,12 +4,16 @@ import { normalizePaletteText } from './normalized-text'
 export const PALETTE_QUERY_MAX_TOKENS = 16
 
 const DIGIT = /\p{N}/u
+
 // Why symbols count as content: an emoji is \p{So} and an arrow is \p{Sm}, so a
 // letters-and-digits test would classify `🚀` as punctuation and drop the token —
 // and the palette input expands `:rocket:` into exactly that.
 const ALPHANUMERIC = /[\p{L}\p{N}\p{S}\p{Extended_Pictographic}]/u
+
 const LETTERS_ONLY = /^\p{L}+$/u
+
 const LATIN_OR_DIGIT = /^[\p{Script=Latin}\p{Nd}]$/u
+
 const IDENTIFIER_PUNCTUATION = /[./#!_-]/
 
 export type PaletteQueryToken = {
@@ -42,6 +46,7 @@ export type PreparedPaletteQuery =
 function splitComponents(text: string): string[] {
   const components: string[] = []
   let current = ''
+
   for (const character of text) {
     if (ALPHANUMERIC.test(character)) {
       current += character
@@ -50,23 +55,28 @@ function splitComponents(text: string): string[] {
       current = ''
     }
   }
+
   if (current) {
     components.push(current)
   }
+
   return components
 }
 
 function parseRepoBranch(text: string): { repo: string; branch: string } | null {
   const slashIndex = text.indexOf('/')
+
   if (slashIndex <= 0 || slashIndex >= text.length - 1) {
     return null
   }
+
   return { repo: text.slice(0, slashIndex), branch: text.slice(slashIndex + 1) }
 }
 
 export function createPaletteQueryToken(text: string, index: number): PaletteQueryToken {
   const components = splitComponents(text)
   const characters = [...text]
+
   return {
     index,
     text,
@@ -88,8 +98,10 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return { state: 'invalid', reason: 'too-large' }
   }
+
   // Field text is single-spaced, and this value has no source-offset mapping to preserve.
   const normalized = normalizePaletteText(query).normalized.replace(/ +/g, ' ').trim()
+
   if (!normalized) {
     return { state: 'empty' }
   }
@@ -97,12 +109,15 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   const seen = new Set<string>()
   const tokens: PaletteQueryToken[] = []
   const rawTokens = normalized.split(' ').filter(Boolean)
+
   for (const raw of rawTokens) {
     if (!raw || seen.has(raw)) {
       continue
     }
+
     seen.add(raw)
     tokens.push(createPaletteQueryToken(raw, tokens.length))
+
     if (tokens.length > PALETTE_QUERY_MAX_TOKENS) {
       return { state: 'invalid', reason: 'too-many-tokens' }
     }
@@ -111,6 +126,7 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (!tokens.length) {
     return { state: 'empty' }
   }
+
   return {
     state: 'ready',
     normalized,

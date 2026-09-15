@@ -46,6 +46,7 @@ vi.mock('../store', () => ({
     subscribe: mocks.subscribe
   }
 }))
+
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
@@ -53,21 +54,26 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
+
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
+
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
+
 vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
@@ -106,6 +112,7 @@ describe('web runtime browser client placement', () => {
       kind: 'client',
       browserHostClientId: 'browser-client-a'
     })
+
     const runtimeCall = successfulCreateCalls()
     stubRuntimeApi(preparePlacement, runtimeCall)
 
@@ -167,6 +174,7 @@ describe('web runtime browser client placement', () => {
       kind: 'client',
       browserHostClientId: 'browser-client-a'
     })
+
     const runtimeCall = successfulCreateCalls()
     stubRuntimeApi(preparePlacement, runtimeCall)
     let currentState = { ...mocks.getState(), materialized: false }
@@ -175,6 +183,7 @@ describe('web runtime browser client placement', () => {
     mocks.getState.mockImplementation(() => currentState)
     mocks.subscribe.mockImplementation((listener: (state: typeof currentState) => void) => {
       publishStoreState = listener
+
       return unsubscribe
     })
     mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
@@ -185,6 +194,7 @@ describe('web runtime browser client placement', () => {
       worktreeId: WORKTREE_ID,
       focusOnCreate: false
     })
+
     await vi.waitFor(() => expect(publishStoreState).toBeTypeOf('function'))
     currentState = { ...currentState, materialized: true }
     publishStoreState?.(currentState)

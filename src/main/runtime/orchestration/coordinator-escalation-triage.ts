@@ -10,6 +10,7 @@ export function applyEscalationToDispatch(
 ): string | null {
   let taskId: string | undefined
   let dispatchId: string | undefined
+
   if (msg.payload) {
     try {
       const payload = JSON.parse(msg.payload)
@@ -22,19 +23,24 @@ export function applyEscalationToDispatch(
 
   if (!taskId || !dispatchId) {
     onLog(`Rejected escalation from ${msg.from_handle}: missing exact Dispatch binding`)
+
     return null
   }
 
   const task = db.getTask(taskId)
+
   if (!task || task.status === 'completed' || task.status === 'failed') {
     return null
   }
 
   const dispatch = db.getDispatchContextById(dispatchId)
+
   if (!dispatch || dispatch.task_id !== taskId) {
     onLog(`Rejected escalation from ${msg.from_handle}: Dispatch does not own Task ${taskId}`)
+
     return null
   }
+
   if (
     !db.isDispatchMessageSender({
       dispatchId: dispatch.id,
@@ -44,24 +50,31 @@ export function applyEscalationToDispatch(
     })
   ) {
     onLog(`Rejected escalation from ${msg.from_handle}: it does not own Task ${taskId}`)
+
     return null
   }
 
   const worker = db.getWorkerDispatch(dispatch.id)
+
   if (worker && !['failed', 'succeeded', 'stopped', 'abandoned'].includes(worker.state)) {
     onLog(
       `Task ${taskId} remains dispatched until supervised worker ${dispatch.id} stops or reports.`
     )
+
     return null
   }
 
   // Why: fail the dispatch to increment the circuit breaker; under threshold the task returns to 'pending' for re-dispatch next tick.
   const updated = db.failDispatch(dispatch.id, msg.subject)
+
   if (updated?.status === 'circuit_broken') {
     onLog(`Task ${taskId} circuit broken after repeated failures`)
     db.updateTaskStatus(taskId, 'failed', `Circuit broken: ${msg.subject}`)
+
     return taskId
   }
+
   onLog(`Task ${taskId} will be retried (failure ${updated?.failure_count ?? 0}/3)`)
+
   return null
 }

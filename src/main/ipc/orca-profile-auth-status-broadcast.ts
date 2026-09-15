@@ -6,6 +6,7 @@ export function broadcastOrcaProfileAuthStatusChanged(): void {
     if (window.isDestroyed()) {
       continue
     }
+
     try {
       window.webContents.send(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL)
     } catch {

@@ -33,9 +33,11 @@ export function MobileAutoRestoreFitSection({
         value={autoRestoreValueFromMs(autoRestoreFitMs)}
         onValueChange={(v) => {
           const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === v)
+
           if (!opt) {
             return
           }
+
           onAutoRestoreFitChange(opt.ms)
         }}
       >

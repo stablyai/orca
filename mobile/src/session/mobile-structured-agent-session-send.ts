@@ -33,16 +33,21 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   onError: (message: string) => void
 }): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs = timeoutForDeadline(input.deadline)
+
   if (timeoutMs === null) {
     input.onError('Message not sent')
+
     return 'rejected'
   }
+
   const requestedBody = structuredAgentSessionSendBody(input.text, input.attachments)
+
   const requestedPayloadFingerprint = structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.send',
     sessionId: input.sessionId,
     fields: { body: requestedBody }
   })
+
   const intentFingerprint = structuredAgentSessionDomainFingerprint({
     domain: 'mobile.agentSession.send.intent',
     sessionId: input.sessionKey,
@@ -59,11 +64,14 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
       )
     }
   })
+
   const operationKey = mobileStructuredSendOperationKey({
     sessionKey: input.sessionKey,
     intentFingerprint
   })
+
   let operation: Awaited<ReturnType<typeof getOrCreateMobileStructuredSendOperation>>
+
   try {
     operation = await getOrCreateMobileStructuredSendOperation({
       operationKey,
@@ -74,21 +82,27 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     })
   } catch {
     input.onError('Message not sent')
+
     return 'rejected'
   }
+
   const body = structuredAgentSessionSendBody(
     input.text,
     operation.attachmentPaths.map((path) => ({ path, previewUri: '' }))
   )
+
   const payloadFingerprint = structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.send',
     sessionId: input.sessionId,
     fields: { body }
   })
+
   if (payloadFingerprint !== operation.payloadFingerprint) {
     input.onError('Message not sent')
+
     return 'rejected'
   }
+
   const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
     client: input.client,
     method: 'agentSession.send',
@@ -99,7 +113,9 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     clientOperationId: operation.operationId,
     timeoutMs
   })
+
   const delivery = mobileStructuredSendDelivery(result, operation.retained)
+
   if (delivery.operationIdSpent) {
     try {
       await clearMobileStructuredSendOperation({
@@ -111,8 +127,10 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
       // duplicate this one; the next replay gets another clear chance.
     }
   }
+
   if (delivery.error !== null) {
     input.onError(delivery.error)
   }
+
   return delivery.outcome
 }

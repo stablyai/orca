@@ -44,6 +44,7 @@ type ScannedLine = {
 function scanLines(text: string): ScannedLine[] {
   const lines: ScannedLine[] = []
   let offset = 0
+
   while (offset < text.length) {
     const newlineIndex = text.indexOf('\n', offset)
     const endOffset = newlineIndex === -1 ? text.length : newlineIndex + 1
@@ -54,6 +55,7 @@ function scanLines(text: string): ScannedLine[] {
     })
     offset = endOffset
   }
+
   return lines
 }
 
@@ -61,9 +63,11 @@ function scanLines(text: string): ScannedLine[] {
 // whitespace; overlapping runs are merged away by stripManagedTomlRegions.
 function startOffsetAbsorbingBlanksAbove(lines: readonly ScannedLine[], index: number): number {
   let startLine = index
+
   while (startLine > 0 && lines[startLine - 1].text.trim() === '') {
     startLine--
   }
+
   return lines[startLine].offset
 }
 
@@ -80,23 +84,28 @@ export function findManagedTomlBlocks(
   const isEnd = (index: number): boolean => lines[index].text.trim() === markers.endMarker
 
   const regions: ManagedTomlBlockRegion[] = []
+
   for (let index = 0; index < lines.length; index++) {
     if (!isStart(index)) {
       continue
     }
+
     let last = index
     let terminated = false
+
     for (let cursor = index + 1; cursor < lines.length; cursor++) {
       // A second start marker never belongs to the block already open.
       if (isStart(cursor)) {
         break
       }
+
       if (isEnd(cursor)) {
         last = cursor
         terminated = true
         break
       }
     }
+
     // Not terminated: `last` stays on the marker line, so the orphan owns only
     // the stray marker. Its body, if Orca wrote it, is reclaimed by recognition.
     regions.push({
@@ -107,6 +116,7 @@ export function findManagedTomlBlocks(
     })
     index = last
   }
+
   return regions
 }
 
@@ -122,11 +132,14 @@ export function findRecognizedManagedTables<T>(
   const lines = scanLines(text)
   const texts = lines.map((line) => line.text)
   const tables: RecognizedManagedTable<T>[] = []
+
   for (let index = 0; index < lines.length; index++) {
     const match = recognize(texts, index)
+
     if (!match || match.lineCount <= 0) {
       continue
     }
+
     const last = Math.min(index + match.lineCount, lines.length) - 1
     tables.push({
       startOffset: startOffsetAbsorbingBlanksAbove(lines, index),
@@ -135,6 +148,7 @@ export function findRecognizedManagedTables<T>(
     })
     index = last
   }
+
   return tables
 }
 
@@ -146,16 +160,21 @@ export function stripManagedTomlRegions(
   if (regions.length === 0) {
     return { text, changed: false }
   }
+
   const ordered = [...regions].sort((a, b) => a.startOffset - b.startOffset)
   let stripped = ''
   let cursor = 0
+
   for (const region of ordered) {
     if (region.endOffset <= cursor) {
       continue
     }
+
     stripped += text.slice(cursor, Math.max(cursor, region.startOffset))
     cursor = region.endOffset
   }
+
   stripped += text.slice(cursor)
+
   return { text: stripped, changed: stripped !== text }
 }

@@ -62,6 +62,7 @@ async function armMainProcessCrashProbe(electronApp: ElectronApplication): Promi
   await electronApp.evaluate(({ BrowserWindow }) => {
     const probe: CrashProbe = { processGone: null, recoveredLoads: 0 }
     globalThis.__crashProbe = probe
+
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.on('render-process-gone', (_event, details) => {
         probe.processGone = { reason: details.reason, exitCode: details.exitCode ?? -1 }
@@ -144,6 +145,7 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
       // transient unbound-transport window does not fail the test; a transport
       // still dead after the full budget is the real frozen-pane bug reported below.
       let transportAlive = false
+
       try {
         await expect
           .poll(
@@ -153,6 +155,7 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
                 `PASTE_POST_${cycle}_OK`,
                 5_000
               )
+
               return transportAlive
             },
             { timeout: RECOVERY_TIMEOUT_MS }
@@ -161,6 +164,7 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
       } catch {
         transportAlive = false
       }
+
       const directAlive =
         postPtyIds.length > 0 &&
         (await mainProbeDirectWrite(electronApp, postPtyIds[0], `DIRECT_POST_${cycle}_OK`))
@@ -173,8 +177,10 @@ test.describe('Renderer crash recovery keeps terminal input alive', () => {
             postPtyIds[0],
             `REVIVED_POST_${cycle}_OK`
           ))
+
         const crashReason =
           (await readMainProcessCrashProbe(electronApp)).processGone?.reason ?? 'unknown'
+
         throw new Error(
           buildFrozenPaneReport(
             `crash cycle ${cycle}, baseline ptyId ${baselinePtyId}, crash reason ${crashReason}`,

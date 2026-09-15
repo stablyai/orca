@@ -13,5 +13,6 @@
  */
 export function isDefinitiveAbsence(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
+
   return code === 'ENOENT' || code === 'ENOTDIR'
 }

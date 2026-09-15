@@ -44,6 +44,7 @@ export function applyAnchoredImageViewerZoomChange(
   const resolvedAnchor = surface
     ? (anchor ?? { x: surface.clientWidth / 2, y: surface.clientHeight / 2 })
     : null
+
   const scrollLeft = surface?.scrollLeft ?? 0
   const scrollTop = surface?.scrollTop ?? 0
   let currentZoom = 1
@@ -53,6 +54,7 @@ export function applyAnchoredImageViewerZoomChange(
     setZoom((current) => {
       currentZoom = current
       nextZoom = clampImageViewerZoom(getNextZoom(current))
+
       return nextZoom
     })
   })

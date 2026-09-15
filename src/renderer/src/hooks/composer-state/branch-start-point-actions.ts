@@ -136,9 +136,11 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       applyLinkedWorkItem(item, { preserveBranchNameOverride: Boolean(nextBranchNameOverride) })
       // Why: prefill the note from the PR (only when empty or still an auto-fill) so the sidebar surfaces it without clobbering user text.
       const identity = resolveGitHubWorkItemIdentity(item)
+
       if (identity.type === 'pr') {
         const suggestedNote = `PR #${identity.number} — ${item.title}`
         const currentNote = noteRef.current
+
         if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
           setNote(suggestedNote)
           lastAutoNoteRef.current = suggestedNote
@@ -175,9 +177,11 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       applyLinkedGitLabWorkItem(item)
+
       if (item.type === 'mr') {
         const suggestedNote = `MR !${item.number} — ${item.title}`
         const currentNote = noteRef.current
+
         if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
           setNote(suggestedNote)
           lastAutoNoteRef.current = suggestedNote

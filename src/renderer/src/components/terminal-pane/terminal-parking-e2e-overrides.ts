@@ -27,8 +27,10 @@ export function getTerminalParkingPolicyOverrides(): TerminalColdParkPolicyOverr
   if (!e2eConfig.exposeStore) {
     return {}
   }
+
   const delayMs = e2eConfig.terminalParkingDelayMs
   const retentionLimit = e2eConfig.terminalRetentionLimit
+
   return {
     // Why the retention TTL keeps production timing: it is absolute (the
     // last-active exemption does not spare it), so shrinking it here would
@@ -47,6 +49,7 @@ export function registerTerminalParkingDebugHandle(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
+
   window.__terminalParkingDebug = {
     parkDelayMs:
       getTerminalParkingPolicyOverrides().coldParkDelayMs ?? TERMINAL_TAB_COLD_PARK_DELAY_MS,

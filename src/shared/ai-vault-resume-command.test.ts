@@ -54,6 +54,7 @@ describe('buildAiVaultResumeCommand', () => {
       platform: 'darwin',
       codexHome: null
     })
+
     expect(command).toBe("cd '/repo/app' && codex resume 'session-1'")
     expect(command).not.toContain('CODEX_HOME')
   })

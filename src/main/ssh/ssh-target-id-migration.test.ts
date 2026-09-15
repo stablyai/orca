@@ -8,6 +8,7 @@ import {
 } from './ssh-target-id-migration'
 
 const OLD_ID = 'ssh-1783337351840-ohabf0'
+
 const NEW_ID = 'ssh-1783400000000-fresh1'
 
 const makeTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({

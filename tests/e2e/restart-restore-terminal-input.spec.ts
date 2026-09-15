@@ -55,21 +55,26 @@ function readDaemonPid(userDataDir: string): number {
     path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
     'utf8'
   )
+
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
       return false
     }
+
     throw error
   }
 }
@@ -78,6 +83,7 @@ async function terminateDaemonForColdRestart(pid: number): Promise<void> {
   if (!isProcessAlive(pid)) {
     return
   }
+
   if (process.platform === 'win32') {
     try {
       execFileSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
@@ -100,6 +106,7 @@ async function terminateDaemonForColdRestart(pid: number): Promise<void> {
       }
     }
   }
+
   await expect
     .poll(() => isProcessAlive(pid), {
       timeout: 10_000,
@@ -112,11 +119,15 @@ function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
     : ''
+
   const unavailable = !repoPath || !existsSync(repoPath)
+
   if (unavailable && REQUIRE_WINDOWS_TERMINAL_RESTART_E2E) {
     throw new Error('Required Windows restart E2E seeded repo is unavailable')
   }
+
   test.skip(unavailable, 'Global setup did not produce a seeded test repo')
+
   return repoPath
 }
 
@@ -137,6 +148,7 @@ async function bootstrapFirstLaunch(
   const marker = `RESTORE_INPUT_PRE_${Date.now()}`
   await execInTerminal(page, ptyId, `echo ${marker}`)
   await waitForTerminalOutput(page, marker)
+
   return { ptyId, marker }
 }
 
@@ -154,16 +166,22 @@ async function settleRestoredLaunch(page: Page): Promise<void> {
  */
 async function expectRestoredPaneAcceptsInput(page: Page, context: string): Promise<void> {
   const ptyIds = await getStorePtyIds(page)
+
   const readinessAlive =
     ptyIds.length > 0 && (await waitForRestoredTerminalInputReady(page, ptyIds[0], 15_000))
+
   const kbAlive = readinessAlive && (await probeKeyboardType(page, 'KB_RESTORED_OK', 15_000))
+
   const directAlive =
     ptyIds.length > 0 && (await probeDirectWrite(page, ptyIds[0], 'DIRECT_RESTORED_OK', 15_000))
+
   if (!readinessAlive || !kbAlive || !directAlive) {
     const ownershipRebuildAttempted = !directAlive && ptyIds.length > 0
+
     const revived =
       ownershipRebuildAttempted &&
       (await probeOwnershipRebuildRevival(page, ptyIds[0], 'REVIVED_RESTORED_OK'))
+
     throw new Error(
       buildFrozenPaneReport(context, {
         directAlive,
@@ -187,6 +205,7 @@ test('restored pane accepts typing after a clean restart with a live daemon sess
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
+
   try {
     const first = await session.launch()
     firstApp = first.app
@@ -207,9 +226,11 @@ test('restored pane accepts typing after a clean restart with a live daemon sess
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })
@@ -223,6 +244,7 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
   let stoppedDaemonPid: number | null = null
+
   try {
     const first = await session.launch()
     firstApp = first.app
@@ -250,11 +272,13 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
     // old sessions are gone. Both shapes must leave the pane typeable, so
     // record which one we're in and keep probing.
     let daemonReplacedWhileWedged = false
+
     try {
       process.kill(daemonPid, 'SIGCONT')
     } catch {
       daemonReplacedWhileWedged = true
     }
+
     stoppedDaemonPid = null
 
     // Session readiness requires a daemon response; resume it before waiting for restoration.
@@ -272,12 +296,15 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
         // daemon already gone
       }
     }
+
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })
@@ -289,6 +316,7 @@ test('cold-restored pane accepts typing after the daemon died between launches',
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
+
   try {
     const first = await session.launch()
     firstApp = first.app
@@ -311,9 +339,11 @@ test('cold-restored pane accepts typing after the daemon died between launches',
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

@@ -61,6 +61,7 @@ function renderRow(agent: DashboardAgentRowData): HTMLElement {
       </TooltipProvider>
     )
   })
+
   return container
 }
 
@@ -79,6 +80,7 @@ describe('CompactAgentRow stable assistant message', () => {
     const container = renderRow(
       makeAgent({ stateStartedAt: 1000, lastAssistantMessage: 'First reply' })
     )
+
     expect(container.textContent).toContain('First reply')
 
     rerenderRow(makeAgent({ stateStartedAt: 1000 }))
@@ -89,6 +91,7 @@ describe('CompactAgentRow stable assistant message', () => {
     const container = renderRow(
       makeAgent({ stateStartedAt: 1000, lastAssistantMessage: 'First reply' })
     )
+
     rerenderRow(makeAgent({ stateStartedAt: 3000 }))
     expect(container.textContent).not.toContain('First reply')
   })
@@ -105,6 +108,7 @@ describe('CompactAgentRow stable assistant message', () => {
     const container = renderRow(
       makeAgent({ stateStartedAt: 1000, lastAssistantMessage: 'First reply' })
     )
+
     rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'done' }))
     rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'working' }))
     expect(container.textContent).not.toContain('First reply')

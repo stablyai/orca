@@ -30,21 +30,26 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
     ): Promise<GitBranchCompareResult> => {
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return args.admissionTier
           ? provider.getBranchCompare(args.worktreePath, args.baseRef, {
               admissionTier: args.admissionTier
             })
           : provider.getBranchCompare(args.worktreePath, args.baseRef)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return getBranchCompare(worktreePath, args.baseRef, {
         ...gitOptions,
         ...(args.admissionTier ? { admissionTier: args.admissionTier } : {})
@@ -59,19 +64,25 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
       args: { worktreePath: string; commitId: string; connectionId?: string }
     ): Promise<GitCommitCompareResult> => {
       const commitId = validateFullGitObjectId(args.commitId, 'commitId')
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getCommitCompare(args.worktreePath, commitId)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return getCommitCompare(worktreePath, commitId, gitOptions)
     }
   )

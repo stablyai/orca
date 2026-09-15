@@ -55,6 +55,7 @@ function visibleWorktreeIds(
   desktop: WorkspaceViewSettings = {}
 ): string[] {
   const state = applyDesktopViewSettings(base, desktop)
+
   const sections = buildSections(
     worktrees,
     state.sortMode,
@@ -70,6 +71,7 @@ function visibleWorktreeIds(
     state.workspaceStatuses,
     new Set(state.collapsedGroups)
   )
+
   return sections.flatMap((section) => section.data.map((w) => w.worktreeId)).sort()
 }
 
@@ -81,6 +83,7 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
       worktree('orca-local', 'b'),
       worktree('orca-runtime', 'c')
     ]
+
     const repoIdsByName = new Map([['orca-runtime', 'orca-runtime']])
 
     expect(visibleWorktreeIds(worktrees, repoIdsByName)).toEqual(['a', 'b', 'c'])
@@ -94,6 +97,7 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
       worktree('orca-local', 'local-2', 'orca'),
       worktree('orca-runtime', 'runtime-1', 'orca')
     ]
+
     // Name-keyed map collapses "orca" to a single id, as the host screen builds it.
     const repoIdsByName = new Map([['orca', 'orca-runtime']])
 
@@ -107,6 +111,7 @@ describe('every worktree stays visible regardless of repo.list contents', () => 
   it('shows every worktree even when the desktop carries a host scope', () => {
     // Host scope must never reach the mobile list either (it has no mobile UI).
     const worktrees = [worktree('local-repo', 'x'), worktree('runtime-repo', 'y')]
+
     const repoIdsByName = new Map([
       ['local-repo', 'local-repo'],
       ['runtime-repo', 'runtime-repo']

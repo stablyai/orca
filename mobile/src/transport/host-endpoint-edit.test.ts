@@ -4,6 +4,7 @@ import { resolveHostEndpointEdit } from './host-endpoint-edit'
 
 function persistedAfterEdit(stored: string, input = displayHostEndpoint(stored)) {
   const edit = resolveHostEndpointEdit(stored, input)
+
   return edit.kind === 'changed' ? edit.endpoint : stored
 }
 

@@ -157,6 +157,7 @@ describe('pruneClosedBackgroundMountTabs', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([
       ['wt-1', new Set(['tab-1', 'tab-2'])]
     ])
+
     const mounted = new Set(['wt-1'])
 
     expect(
@@ -182,9 +183,11 @@ describe('pruneClosedBackgroundMountTabs', () => {
 
   it('keeps an activation mounted when its last allowed tab closes before deferred tabs', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-visible'])]])
+
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
       ['wt-1', new Set(['tab-deferred', 'tab-closed'])]
     ])
+
     const mounted = new Set(['wt-1'])
 
     expect(
@@ -227,6 +230,7 @@ describe('cold activation tab deferral', () => {
   it('mounts everything at once when few tabs would defer', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
     const deferring = planColdActivationTabDeferral({
       restrictions,
       deferredMountTabIdsByWorktree,
@@ -236,6 +240,7 @@ describe('cold activation tab deferral', () => {
       isTabDeferrable: () => true,
       immediateTabIds: new Set(['tab-1'])
     })
+
     expect(deferring).toBe(false)
     expect(restrictions.has('wt-1')).toBe(false)
     expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
@@ -244,6 +249,7 @@ describe('cold activation tab deferral', () => {
   it('restricts a cold activation with many tabs to the immediate set', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
     const deferring = planColdActivationTabDeferral({
       restrictions,
       deferredMountTabIdsByWorktree,
@@ -253,6 +259,7 @@ describe('cold activation tab deferral', () => {
       isTabDeferrable: () => true,
       immediateTabIds: new Set(['tab-3'])
     })
+
     expect(deferring).toBe(true)
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-3']))
     expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(
@@ -263,6 +270,7 @@ describe('cold activation tab deferral', () => {
   it('keeps live, previously allowed, and non-deferrable tabs mounted', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-2'])]])
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
     const deferring = planColdActivationTabDeferral({
       restrictions,
       deferredMountTabIdsByWorktree,
@@ -273,6 +281,7 @@ describe('cold activation tab deferral', () => {
       isTabDeferrable: (tabId) => tabId !== 'tab-9',
       immediateTabIds: new Set(['tab-1'])
     })
+
     expect(deferring).toBe(true)
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
   })
@@ -295,9 +304,11 @@ describe('cold activation tab deferral', () => {
   it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', async () => {
     const worktreeId = 'wt-1'
     const allTabIds = tabIds(7)
+
     const ptyIdByTabId = new Map(
       allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
     )
+
     const legacyPtyId = ptyIdByTabId.get('tab-2')!
     clearTerminalProviderSnapshotCapabilities()
     await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], async (ids) =>
@@ -314,6 +325,7 @@ describe('cold activation tab deferral', () => {
       isTabLive: () => false,
       isTabDeferrable: (tabId) => {
         const ptyId = ptyIdByTabId.get(tabId) ?? null
+
         return (
           isSnapshotBackedTerminalPty(ptyId, worktreeId) &&
           ptyId !== null &&
@@ -333,12 +345,15 @@ describe('cold activation tab deferral', () => {
   it('preserves cold-activation deferral for an all-current daemon worktree', async () => {
     const worktreeId = 'wt-current'
     const allTabIds = tabIds(7)
+
     const ptyIdByTabId = new Map(
       allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
     )
+
     const resolve = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true as boolean | null }))
     )
+
     clearTerminalProviderSnapshotCapabilities()
     await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
     const restrictions = new Map<string, ReadonlySet<string>>()
@@ -352,6 +367,7 @@ describe('cold activation tab deferral', () => {
       isTabLive: () => false,
       isTabDeferrable: (tabId) => {
         const ptyId = ptyIdByTabId.get(tabId) ?? null
+
         return (
           isSnapshotBackedTerminalPty(ptyId, worktreeId) &&
           ptyId !== null &&
@@ -372,6 +388,7 @@ describe('cold activation tab deferral', () => {
   it('does not defer when every tab must mount anyway', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
     const deferring = planColdActivationTabDeferral({
       restrictions,
       deferredMountTabIdsByWorktree,
@@ -381,6 +398,7 @@ describe('cold activation tab deferral', () => {
       isTabDeferrable: () => true,
       immediateTabIds: new Set()
     })
+
     expect(deferring).toBe(false)
     expect(restrictions.has('wt-1')).toBe(false)
   })
@@ -388,6 +406,7 @@ describe('cold activation tab deferral', () => {
   it('defers a single hidden tab so an ordinary switch mounts only what is visible', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
     const deferring = planColdActivationTabDeferral({
       restrictions,
       deferredMountTabIdsByWorktree,
@@ -397,6 +416,7 @@ describe('cold activation tab deferral', () => {
       isTabDeferrable: () => true,
       immediateTabIds: new Set(['tab-1'])
     })
+
     expect(deferring).toBe(true)
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1']))
     expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-2']))
@@ -405,6 +425,7 @@ describe('cold activation tab deferral', () => {
   it('reveals newly visible tabs and lifts the restriction once all are revealed', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
     const allTabIds = tabIds(3)
+
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
       ['wt-1', new Set(['tab-2', 'tab-3'])]
     ])
@@ -456,9 +477,11 @@ describe('cold activation tab deferral', () => {
 
   it('hands a targeted wake from activation watcher ownership to its pane', () => {
     const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
+
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
       ['wt-1', new Set(['tab-2', 'tab-3'])]
     ])
+
     const mounted = new Set(['wt-1'])
 
     applyBackgroundMountTabRestriction(restrictions, mounted, 'wt-1', ['tab-2'])

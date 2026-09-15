@@ -13,6 +13,7 @@ describe('SSH request outcome verdict', () => {
     const timedOut = Object.assign(new Error('Request "x" timed out after 30000ms'), {
       code: SSH_MUX_REQUEST_TIMEOUT_CODE
     })
+
     expect(isSshRequestOutcomeUnverifiable(timedOut)).toBe(true)
   })
 

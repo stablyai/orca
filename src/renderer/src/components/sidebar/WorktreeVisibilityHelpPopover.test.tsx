@@ -11,6 +11,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -28,12 +29,15 @@ afterEach(() => {
 async function renderPopover(): Promise<HTMLButtonElement> {
   const { default: WorktreeVisibilityHelpPopover } = await import('./WorktreeVisibilityHelpPopover')
   await act(async () => root.render(<WorktreeVisibilityHelpPopover />))
+
   const trigger = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Which worktrees are hidden by default?"]'
   )
+
   if (!trigger) {
     throw new Error('Missing worktree visibility help trigger')
   }
+
   return trigger
 }
 

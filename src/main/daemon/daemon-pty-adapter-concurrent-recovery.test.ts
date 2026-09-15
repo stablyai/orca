@@ -21,8 +21,10 @@ it('recovers concurrent spawns rejected by an adapter-initiated disconnect', asy
     options
   ) => {
     spawnedSessionIds.push(options.sessionId)
+
     return createMockSubprocess()
   }
+
   let server = new DaemonServer({
     socketPath,
     tokenPath,
@@ -30,16 +32,21 @@ it('recovers concurrent spawns rejected by an adapter-initiated disconnect', asy
     // Hold siblings until one retriable reply makes the adapter disconnect their shared socket.
     preparePtySpawn: async () => {
       const preparationNumber = ++preparationCount
+
       if (preparationCount === concurrentSpawnCount) {
         allPreparationsEntered.resolve()
       }
+
       await allPreparationsEntered.promise
+
       if (preparationNumber === 1) {
         throw new Error('Connection lost')
       }
+
       await releaseHeldPreparations.promise
     }
   })
+
   await server.start()
 
   const respawn = vi.fn(async () => {
@@ -48,6 +55,7 @@ it('recovers concurrent spawns rejected by an adapter-initiated disconnect', asy
     server = new DaemonServer({ socketPath, tokenPath, spawnSubprocess })
     await server.start()
   })
+
   const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
 
   try {
@@ -55,6 +63,7 @@ it('recovers concurrent spawns rejected by an adapter-initiated disconnect', asy
       { length: concurrentSpawnCount },
       (_, index) => `high-volume-${index}`
     )
+
     const results = await Promise.all(
       sessionIds.map((sessionId) => adapter.spawn({ sessionId, cols: 80, rows: 24 }))
     )

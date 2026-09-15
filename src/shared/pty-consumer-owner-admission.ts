@@ -39,6 +39,7 @@ export function refuseHeldPtyConsumerOwner(
   if (owner.state === 'pending') {
     refuse('Owner grant publication is still pending', PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR)
   }
+
   if (owner.state === 'active') {
     // Why identity without the lease: a client that lost its proof — a fresh process, a dropped
     // recovery record — still knows who it is. Against an incumbent carrying its own instance id
@@ -50,11 +51,13 @@ export function refuseHeldPtyConsumerOwner(
         PTY_CONSUMER_OWNER_HELD_SELF_ERROR
       )
     }
+
     refuse(
       'PTY session owner is held by an attached connection',
       PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR
     )
   }
+
   clampDisconnectedOwnerGrace(owner, options)
   refuse(
     'PTY session owner is held by a disconnected connection within its grace period',
@@ -75,10 +78,13 @@ function clampDisconnectedOwnerGrace(
   if (owner.disconnectCause !== 'peer-closed') {
     return
   }
+
   const floorStart =
     options.now - Math.max(options.ownerGraceMs - PTY_CONSUMER_OWNER_HELD_GRACE_FLOOR_MS, 0)
+
   if ((owner.disconnectedAt ?? 0) <= floorStart) {
     return
   }
+
   options.clampGraceTo(floorStart)
 }

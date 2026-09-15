@@ -46,6 +46,7 @@ export function sendPlan(params: {
   // The operation id IS the client message id: one send, one durable row, one
   // key the client reconciles its optimistic bubble against.
   const clientMessageId = params.envelope.clientOperationId
+
   return {
     method: 'agentSession.send',
     operationIdScope: 'global',
@@ -66,13 +67,17 @@ export function sendPlan(params: {
       const submission = ctx.journal
         .submissions()
         .find((entry) => entry.clientMessageId === clientMessageId)
+
       if (submission) {
         return { clientMessageId, submission }
       }
+
       if (outcome.status === 'failed') {
         return null
       }
+
       const resolvedAt = ctx.now()
+
       return {
         clientMessageId,
         submission: {
@@ -137,9 +142,11 @@ export function promptPlan(params: {
     replay: (ctx) => {
       const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === params.itemId)
       const body = item?.body
+
       if (!item || !body || (body.kind !== 'approval' && body.kind !== 'question')) {
         return null
       }
+
       return body.resolution.state === 'pending'
         ? null
         : { itemId: item.itemId, revision: item.revision, resolution: body.resolution }

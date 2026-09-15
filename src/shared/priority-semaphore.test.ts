@@ -20,8 +20,10 @@ describe('PrioritySemaphore', () => {
     const r1 = await sem.acquire(0)
 
     let acquired = false
+
     const p2 = sem.acquire(0).then((r) => {
       acquired = true
+
       return r
     })
 
@@ -44,10 +46,13 @@ describe('PrioritySemaphore', () => {
     // Queue a low-priority and then a high-priority waiter
     const pLow = sem.acquire(1).then((r) => {
       order.push('low')
+
       return r
     })
+
     const pHigh = sem.acquire(0).then((r) => {
       order.push('high')
+
       return r
     })
 
@@ -71,14 +76,19 @@ describe('PrioritySemaphore', () => {
 
     const p1 = sem.acquire(1).then((r) => {
       order.push(1)
+
       return r
     })
+
     const p2 = sem.acquire(1).then((r) => {
       order.push(2)
+
       return r
     })
+
     const p3 = sem.acquire(1).then((r) => {
       order.push(3)
+
       return r
     })
 
@@ -103,14 +113,19 @@ describe('PrioritySemaphore', () => {
 
     const pA = sem.acquire(1).then((r) => {
       order.push('A-low')
+
       return r
     })
+
     const pB = sem.acquire(0).then((r) => {
       order.push('B-high')
+
       return r
     })
+
     const pC = sem.acquire(1).then((r) => {
       order.push('C-low')
+
       return r
     })
 

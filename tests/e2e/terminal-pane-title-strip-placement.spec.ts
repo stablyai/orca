@@ -30,12 +30,16 @@ async function expectPaneTitleAttachedToLeaf(
             const titleBar = Array.from(
               document.querySelectorAll<HTMLElement>('.pane-title-bar')
             ).find((element) => element.textContent?.includes(title))
+
             const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${leafId}"]`)
+
             if (!titleBar || !pane) {
               return false
             }
+
             const titleRect = titleBar.getBoundingClientRect()
             const paneRect = pane.getBoundingClientRect()
+
             return (
               Math.abs(titleRect.left - paneRect.left) < 1 &&
               Math.abs(titleRect.top - paneRect.top) < 1 &&
@@ -55,6 +59,7 @@ async function expectPaneTitleAttachedToLeaf(
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
@@ -65,6 +70,7 @@ test.describe('Terminal Panes', () => {
     await setPaneTitleFromTerminalMenu(orcaPage, title)
     const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+
     if (!titledLeafId) {
       throw new Error('No titled pane leaf id found before split')
     }
@@ -73,6 +79,7 @@ test.describe('Terminal Panes', () => {
     await waitForPaneCount(orcaPage, 2)
     const splitSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const otherPane = splitSnapshot.panes.find((pane) => pane.leafId !== titledLeafId)
+
     if (!otherPane) {
       throw new Error('No inactive pane found for title-strip drop test')
     }
@@ -122,6 +129,7 @@ test.describe('Terminal Panes', () => {
     await setPaneTitleFromTerminalMenu(orcaPage, title)
     const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+
     if (!titledLeafId) {
       throw new Error('No titled pane leaf id found before move')
     }
@@ -130,9 +138,11 @@ test.describe('Terminal Panes', () => {
     await waitForPaneCount(orcaPage, 2)
     const beforeMove = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const target = beforeMove.panes.find((pane) => pane.leafId !== titledLeafId)
+
     if (!target) {
       throw new Error('No target pane found for titled pane move')
     }
+
     const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
 
     await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
@@ -155,6 +165,7 @@ test.describe('Terminal Panes', () => {
     await setPaneTitleFromTerminalMenu(orcaPage, title)
     const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+
     if (!titledLeafId) {
       throw new Error('No titled pane leaf id found before split')
     }
@@ -168,17 +179,23 @@ test.describe('Terminal Panes', () => {
         const titleBar = Array.from(document.querySelectorAll<HTMLElement>('.pane-title-bar')).find(
           (element) => element.textContent?.includes(title)
         )
+
         const titleDragHandle =
           titleBar.querySelector<HTMLElement>('.pane-title-drag-handle') ?? null
+
         const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${titledLeafId}"]`)
+
         if (!titleBar || !pane || !titleDragHandle) {
           return null
         }
+
         const titleRect = titleBar.getBoundingClientRect()
+
         const hitElement = document.elementFromPoint(
           titleRect.left + titleRect.width / 2,
           titleRect.top + 4
         )
+
         return {
           hitDragHandle:
             hitElement instanceof HTMLElement &&
@@ -208,6 +225,7 @@ test.describe('Terminal Panes', () => {
     await setPaneTitleFromTerminalMenu(orcaPage, title)
     const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
     const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
+
     if (!titledLeafId) {
       throw new Error('No titled pane leaf id found before drag')
     }
@@ -216,14 +234,17 @@ test.describe('Terminal Panes', () => {
     await waitForPaneCount(orcaPage, 2)
     const beforeDrag = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const target = beforeDrag.panes.find((pane) => pane.leafId !== titledLeafId)
+
     if (!target) {
       throw new Error('No target pane found for titled pane drag')
     }
+
     const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
 
     const titleDragHandle = orcaPage
       .locator('.pane-title-bar', { hasText: title })
       .locator('.pane-title-drag-handle')
+
     await expect(titleDragHandle).toBeVisible({ timeout: 3_000 })
     const sourceBox = await titleDragHandle.boundingBox()
     const targetBox = await orcaPage.locator(`.pane[data-leaf-id="${target.leafId}"]`).boundingBox()
@@ -231,6 +252,7 @@ test.describe('Terminal Panes', () => {
     expect(targetBox).not.toBeNull()
     const sourceIndex = beforeOrder.indexOf(titledLeafId)
     const targetIndex = beforeOrder.indexOf(target.leafId)
+
     const targetDropX =
       sourceIndex < targetIndex ? targetBox!.x + targetBox!.width - 8 : targetBox!.x + 8
 

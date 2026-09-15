@@ -86,14 +86,18 @@ export function startPreProfilePairing(args: {
     if (disposed) {
       return
     }
+
     disposed = true
+
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+
     for (const client of clients) {
       client.close()
     }
+
     clients.clear()
   }
 
@@ -107,6 +111,7 @@ export function startPreProfilePairing(args: {
       if (timedOut) {
         throw new Error('mobile pairing timed out')
       }
+
       throw error
     })
     .finally(() => {
@@ -114,9 +119,11 @@ export function startPreProfilePairing(args: {
         clearTimeout(timer)
         timer = null
       }
+
       for (const client of clients) {
         client.close()
       }
+
       clients.clear()
     })
 
@@ -137,14 +144,17 @@ async function runPairing(
   isDisposed: () => boolean
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
+
   // Why: every pairing artifact must share the preserved host id so re-pairing
   // updates one card instead of publishing a second identity (STA-1840).
   const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(
     offer.publicKeyB64,
     `host-${now}`
   )
+
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
+
   if (offer.relay && dependencies.platform !== 'web') {
     journal = createMobileRelayPairingJournal({
       offer: { ...offer, relay: offer.relay },
@@ -162,15 +172,18 @@ async function runPairing(
     offer.publicKeyB64,
     { ...connectOptions, onLog: attributePairingLogPath('direct', connectOptions?.onLog) }
   )
+
   clients.add(directClient)
   const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
   const log = createPairingRelayLogger(connectOptions?.onLog)
+
   if (journal) {
     log(
       'info',
       'Relay: pairing candidate started',
       redactSocketEndpoint(journal.metadata.relay.cellUrl)
     )
+
     const relayClient = createRecoveringPairingRelayCandidate({
       journal,
       connect: (relay, onLog) =>
@@ -198,15 +211,18 @@ async function runPairing(
       now: dependencies.now,
       onLog: attributePairingLogPath('relay', connectOptions?.onLog)
     })
+
     clients.add(relayClient)
     candidates.push({ path: 'relay', client: relayClient })
   }
+
   const winner = await racePairingCandidates(candidates)
   log('success', 'Pairing path selected', `winner: ${winner.path}`)
   assertActive(isDisposed)
 
   if (!journal) {
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+
     return { hostId }
   }
 
@@ -219,21 +235,27 @@ async function runPairing(
     }
   }
   await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
+
   const provision = await winner.client.sendRequest('pairing.provisionRelay', {
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
+
   if (isMethodNotFoundRefusal(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
+
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
+
     return { hostId }
   }
+
   const installed = DeviceCredentialInstalledSchema.parse(
     requireRpcResultOrThrowCodedError(provision)
   )
+
   const endpoints = PairingGetEndpointsResultSchema.parse(
     requireRpcResultOrThrowCodedError(
       await winner.client.sendRequest('pairing.getEndpoints', {
@@ -241,14 +263,18 @@ async function runPairing(
       })
     )
   )
+
   assertCommittedInstall(endpoints.installStatus, installed)
+
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')
   }
+
   assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
   await dependencies.saveHost(relayHost(journal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
+
   return { hostId }
 }
 
@@ -270,6 +296,7 @@ function baseHost(
 
 function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
   const host = journal.metadata.host
+
   return {
     ...host,
     deviceToken: journal.secrets.deviceToken,
@@ -286,6 +313,7 @@ function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
   const url = new URL(relay.cellUrl)
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
+
   return url.toString()
 }
 

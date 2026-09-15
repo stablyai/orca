@@ -24,6 +24,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
   it('answers primary DA1 with the default xterm-compatible response', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -45,6 +46,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
   it('keeps the ConPTY basic conformance response override', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -70,6 +72,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       background: '#ffffff'
     }
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -95,6 +98,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     term.options.theme = { background: '#ffffff' }
     const replies: string[] = []
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -103,6 +107,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       },
       isReplaying: () => false
     })
+
     const onData = term.onData((data) => replies.push(data))
 
     try {
@@ -123,6 +128,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       background: 'rgba(17, 34, 51, 0.5)'
     }
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -148,6 +154,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       background: '#ffffff'
     }
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -236,6 +243,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     }
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
     const returnValues: boolean[] = []
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: {
@@ -245,6 +253,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
           term.parser.registerOscHandler(id, (data) => {
             const value = cb(data) === true
             returnValues.push(value)
+
             return value
           })
       },
@@ -270,6 +279,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       background: '#ffffff'
     }
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: term.parser,
@@ -289,6 +299,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
 
   it('answers window and cell pixel-size reports from renderer geometry', () => {
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const observe = createTerminalPixelSizeQueryResponder(
       {
         cols: 100,
@@ -306,6 +317,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
 
   it('answers split pixel-size reports', () => {
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const observe = createTerminalPixelSizeQueryResponder(
       {
         cols: 100,
@@ -324,6 +336,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
   it('consumes replayed capability queries without sending input to the shell', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: { ...term, element: createElement(800, 480) } as never,
       parser: term.parser,
@@ -345,6 +358,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     const sendInput = vi.fn<(data: string) => boolean>(() => true)
     const returnValues: boolean[] = []
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: term as never,
       parser: {
@@ -352,6 +366,7 @@ describe('installTerminalCapabilityReplyHandlers', () => {
           term.parser.registerCsiHandler(id, (params) => {
             const value = cb(params) === true
             returnValues.push(value)
+
             return value
           }),
         registerOscHandler: (id, cb) =>

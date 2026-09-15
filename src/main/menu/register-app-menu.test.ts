@@ -68,6 +68,7 @@ function getSubmenu(
   label: string
 ): Electron.MenuItemConstructorOptions[] {
   const item = template.find((entry) => entry.label === label)
+
   return (item?.submenu ?? []) as Electron.MenuItemConstructorOptions[]
 }
 
@@ -150,6 +151,7 @@ describe('registerAppMenu', () => {
     const forceReloadItem = getSubmenu(getTemplate(), 'View').find((item) =>
       item.label?.startsWith('Force Reload\t')
     )
+
     forceReloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
@@ -165,6 +167,7 @@ describe('registerAppMenu', () => {
     // under Help on Windows/Linux. The click behavior must be identical
     // either way.
     const parentLabel = isMac ? 'Orca' : 'Help'
+
     const item = getSubmenu(getTemplate(), parentLabel).find(
       (entry) => entry.label === 'Check for Updates...'
     )
@@ -425,6 +428,7 @@ describe('registerAppMenu', () => {
     const setupGuideItem = getSubmenu(getTemplate(), 'Help').find(
       (entry) => entry.label === 'Getting Started with Orca'
     )
+
     expect(setupGuideItem?.accelerator).toBeUndefined()
 
     const targetWindow = {} as Electron.BaseWindow
@@ -441,6 +445,7 @@ describe('registerAppMenu', () => {
     const featureTourItem = getSubmenu(getTemplate(), 'Help').find(
       (entry) => entry.label === 'Explore Orca'
     )
+
     expect(featureTourItem?.accelerator).toBeUndefined()
 
     const targetWindow = {} as Electron.BaseWindow
@@ -482,6 +487,7 @@ describe('registerAppMenu', () => {
 
     const appearanceSubmenu = (appearanceEntry?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
+
     const tasksItem = appearanceSubmenu.find((item) => item.label === 'Show Tasks Button')
     expect(tasksItem?.type).toBe('checkbox')
     expect(tasksItem?.checked).toBe(false)
@@ -489,6 +495,7 @@ describe('registerAppMenu', () => {
     const automationsItem = appearanceSubmenu.find(
       (item) => item.label === 'Show Automations Button'
     )
+
     expect(automationsItem?.type).toBe('checkbox')
     expect(automationsItem?.checked).toBe(false)
 
@@ -508,6 +515,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(options)
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
+
     const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
 
@@ -535,6 +543,7 @@ describe('registerAppMenu', () => {
     registerAppMenu(options)
 
     const viewSubmenu = getSubmenu(getTemplate(), 'View')
+
     const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
       []) as Electron.MenuItemConstructorOptions[]
 

@@ -27,6 +27,7 @@ export function ensureShellReadyWrappersAt(root = getShellReadyWrapperRoot()): b
   // on the terminal-spawn path for no gain.
   if (!shellReadyWrappersExist(root)) {
     const written = writeShellWrapperFiles(buildLocalShellReadyWrapperFiles(root), '[shell-ready]')
+
     if (!written || !shellReadyWrappersExist(root)) {
       // Why no flag to reset: the next launch re-checks the files themselves, so
       // a half-written tree is retried without any extra bookkeeping.
@@ -41,5 +42,6 @@ export function ensureShellReadyWrappers(): boolean {
   if (process.platform === 'win32') {
     return false
   }
+
   return ensureShellReadyWrappersAt()
 }

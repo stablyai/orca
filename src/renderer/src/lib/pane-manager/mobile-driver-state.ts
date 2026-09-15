@@ -19,11 +19,14 @@ type DriverChangeEvent = {
   ptyId: string
   driver: DriverState
 }
+
 type DriverChangeListener = (event: DriverChangeEvent) => void
+
 const changeListeners = new Set<DriverChangeListener>()
 
 export function onDriverChange(listener: DriverChangeListener): () => void {
   changeListeners.add(listener)
+
   return () => changeListeners.delete(listener)
 }
 
@@ -39,19 +42,23 @@ export function setDriverForPty(ptyId: string, driver: DriverState): void {
   } else {
     driverByPtyId.set(ptyId, driver)
   }
+
   notifyChange({ ptyId, driver })
 }
 
 export function replaceDriverPtyId(replacedPtyId: string, ptyId: string): void {
   const replaced = driverByPtyId.get(replacedPtyId)
+
   if (!replaced) {
     return
   }
+
   // Why: keep the presence lock conservative across handle rotation while
   // removing the obsolete key that repeated reconnects would otherwise retain.
   if (!driverByPtyId.has(ptyId)) {
     setDriverForPty(ptyId, replaced)
   }
+
   setDriverForPty(replacedPtyId, { kind: 'idle' })
 }
 
@@ -73,6 +80,7 @@ export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]
 
   for (const { ptyId, driver } of drivers) {
     affectedPtyIds.add(ptyId)
+
     if (driver.kind !== 'idle') {
       driverByPtyId.set(ptyId, driver)
     }

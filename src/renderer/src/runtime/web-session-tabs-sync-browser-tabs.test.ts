@@ -203,6 +203,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('keeps mirrored browser tabs in a rendered web layout group', () => {
     const visibleGroupId = 'visible-web-group'
     const hostOnlyGroupId = 'host-group-1'
+
     const patch = applyWebSessionTabsSnapshot(
       makeState({
         activeGroupIdByWorktree: { [WT]: hostOnlyGroupId },
@@ -248,6 +249,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const browserUnifiedTab = patch.unifiedTabsByWorktree?.[WT]?.find(
       (tab) => tab.contentType === 'browser'
     )
+
     expect(browserUnifiedTab).toMatchObject({ groupId: visibleGroupId })
     expect(
       patch.groupsByWorktree?.[WT]?.find((group) => group.id === visibleGroupId)
@@ -338,6 +340,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const browserTab = patch.unifiedTabsByWorktree?.[WT]?.find(
       (tab) => tab.contentType === 'browser'
     )
+
     expect(browserTab).toMatchObject({ id: 'host-browser-tab', groupId: previewGroupId })
     expect(
       patch.groupsByWorktree?.[WT]?.find((group) => group.id === previewGroupId)
@@ -352,6 +355,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const editorGroupId = 'client-editor-group'
     const previewGroupId = 'client-preview-group'
     const editorFileId = '/srv/repo/example.html'
+
     const editorTab: Tab = {
       id: 'host-editor',
       worktreeId: WT,
@@ -366,6 +370,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       customLabel: null,
       color: null
     }
+
     const state = makeState({
       activeFileId: editorFileId,
       activeFileIdByWorktree: { [WT]: editorFileId },
@@ -399,6 +404,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       },
       unifiedTabsByWorktree: { [WT]: [editorTab] }
     })
+
     const snapshot = makeSnapshot(
       [
         {
@@ -426,6 +432,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ],
       { activeTabId: 'host-browser-tab', activeTabType: 'browser' }
     )
+
     recordWebSessionBrowserPlacement({
       environmentId: ENV,
       worktreeId: WT,
@@ -434,10 +441,12 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
 
     const subscriptionPatch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
+
     const afterSubscription = {
       ...state,
       ...(subscriptionPatch as Partial<WebSessionTabsSyncState>)
     }
+
     expect(afterSubscription.activeTabType).toBe('editor')
     expect(
       afterSubscription.unifiedTabsByWorktree[WT]?.find((tab) => tab.contentType === 'browser')
@@ -458,12 +467,14 @@ describe('applyWebSessionTabsSnapshot', () => {
       editorTab.id
     )
     acceptReplayedWebSessionTabsSnapshot(ENV, WT)
+
     const replayPatch = applyFreshWebSessionTabsSnapshot(
       afterSubscription,
       snapshot,
       ENV,
       NOW + 1
     ) as Partial<WebSessionTabsSyncState>
+
     const afterReplay = { ...afterSubscription, ...replayPatch }
 
     expect(
@@ -479,6 +490,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('keeps a reserved side-preview split across a pre-publication snapshot', () => {
     const editorGroupId = 'client-editor-group'
     const previewGroupId = 'client-preview-group'
+
     const initialLayout: TabGroupLayoutNode = {
       type: 'split',
       direction: 'horizontal',
@@ -486,6 +498,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       second: { type: 'leaf', groupId: previewGroupId },
       ratio: 0.5
     }
+
     recordWebSessionBrowserPlacement({
       environmentId: ENV,
       worktreeId: WT,
@@ -571,6 +584,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('creates a rendered web layout group when stale group records do not include it', () => {
     const visibleGroupId = 'visible-web-group'
     const hostOnlyGroupId = 'host-group-1'
+
     const patch = applyWebSessionTabsSnapshot(
       makeState({
         activeGroupIdByWorktree: { [WT]: hostOnlyGroupId },
@@ -610,6 +624,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const browserUnifiedTab = patch.unifiedTabsByWorktree?.[WT]?.find(
       (tab) => tab.contentType === 'browser'
     )
+
     expect(browserUnifiedTab).toMatchObject({ groupId: visibleGroupId })
     expect(patch.groupsByWorktree?.[WT]).toEqual([
       expect.objectContaining({
@@ -637,6 +652,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const page: BrowserPage = {
       id: 'local-browser-page',
       workspaceId: workspace.id,
@@ -650,6 +666,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const unifiedTab: Tab = {
       id: 'local-browser-unified',
       entityId: workspace.id,
@@ -751,6 +768,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const page: BrowserPage = {
       id: 'local-browser-page',
       workspaceId: workspace.id,
@@ -764,6 +782,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: workspace.createdAt
     }
+
     const unifiedTab: Tab = {
       id: 'local-browser-unified',
       entityId: workspace.id,

@@ -46,6 +46,7 @@ export function matchWorkspaceBoardWorktrees(args: {
   if (!args.query.trim()) {
     return null
   }
+
   // Why: searchWorktrees returns [] for an over-bound query, which downstream
   // reads as "matched nothing" and blanks the whole board on a paste accident.
   if (isWorktreePaletteQueryTooLarge(args.query)) {
@@ -53,9 +54,11 @@ export function matchWorkspaceBoardWorktrees(args: {
   }
 
   const matched = new Set<string>()
+
   const documents =
     args.documents ??
     buildWorkspaceBoardPaletteDocuments({ worktrees: args.worktrees, repoMap: args.repoMap })
+
   for (const result of searchWorktreeDocuments({
     worktrees: args.worktrees,
     query: args.query,
@@ -68,6 +71,7 @@ export function matchWorkspaceBoardWorktrees(args: {
       matched.add(composeWorktreeHostIdentity(result.worktreeHostId, result.worktreeId))
     }
   }
+
   return matched
 }
 
@@ -77,6 +81,7 @@ export function buildWorkspaceKanbanLaneViews(args: {
 }): Map<WorkspaceStatus, WorkspaceKanbanLaneView> {
   const matchingWorktreeIds = args.matchingWorktreeIds
   const views = new Map<WorkspaceStatus, WorkspaceKanbanLaneView>()
+
   for (const [status, items] of args.worktreesByStatus) {
     views.set(status, {
       // Why: the no-query path must not reallocate a lane array per keystroke.
@@ -86,5 +91,6 @@ export function buildWorkspaceKanbanLaneViews(args: {
       totalCount: items.length
     })
   }
+
   return views
 }

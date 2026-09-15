@@ -15,6 +15,7 @@ function negotiate(args: { reject: unknown; current?: boolean }): {
     onReady,
     onFailure
   })
+
   return { onReady, onFailure }
 }
 
@@ -23,6 +24,7 @@ describe('mobile runtime capability negotiation', () => {
     const timedOut = markRpcDeliveryUnknown(
       new Error('Request timed out: runtime.clientCapabilities.update')
     )
+
     const { onReady, onFailure } = negotiate({ reject: timedOut })
 
     await vi.waitFor(() => expect(onReady).toHaveBeenCalledTimes(1))

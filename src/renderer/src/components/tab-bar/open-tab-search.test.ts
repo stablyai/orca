@@ -44,7 +44,9 @@ const worktree: Worktree = {
 }
 
 const REPO_NAME = 'octo/rocket'
+
 const WORKTREE_NAME = worktree.displayName
+
 const BRANCH_NAME = 'main'
 
 function makeTab(id: string, contentType: TabContentType, sortOrder = 0): Tab {
@@ -90,6 +92,7 @@ function makeWorkspaceTab({
   const searchTexts = secondarySearchTexts ?? (secondaryText ? [secondaryText] : [])
   const tab = makeTab(id, contentType) as SearchableWorkspaceTab['tab']
   tab.createdAt = createdAt
+
   return {
     tab,
     worktree,
@@ -153,6 +156,7 @@ function makeBrowserPage({
     loadError: null,
     createdAt: 0
   }
+
   const workspace: BrowserWorkspace = {
     id: `${id}-ws`,
     worktreeId: worktree.id,
@@ -168,6 +172,7 @@ function makeBrowserPage({
     loadError: null,
     createdAt: 0
   }
+
   return {
     page,
     workspace,
@@ -195,6 +200,7 @@ function makeSimulatorTab({
   isCurrentTab?: boolean
 }): SearchableSimulatorTab {
   const tab = { ...makeTab(id, 'simulator'), label }
+
   return {
     tab,
     worktree,
@@ -231,6 +237,7 @@ describe('searchOpenTabs ranking', () => {
   it('uses the shared Atlas order before applying the four-row cap', () => {
     const now = 100 * 24 * 60 * 60 * 1000
     const age = (milliseconds: number): number => now - milliseconds
+
     const workspaceTabs = [
       makeWorkspaceTab({
         id: 'old-prefix-2d',
@@ -265,6 +272,7 @@ describe('searchOpenTabs ranking', () => {
         createdAt: age(19 * 60 * 60 * 1000)
       })
     ]
+
     const results = search({
       query: 'atlas',
       context: createPaletteSearchContext(now),
@@ -384,12 +392,15 @@ describe('searchOpenTabs ranking', () => {
         makeWorkspaceTab({ id: `tab-${index}`, title: `Zebra ${index}`, tabSortIndex: index })
       )
     }
+
     const uncappedSelection = searchOpenTabs({
       browserPages: [],
       simulatorTabs: [],
       ...input
     })[3]
+
     input.workspaceTabs[4].tab.createdAt = Date.now()
+
     const retained = searchOpenTabs({
       browserPages: [],
       simulatorTabs: [],
@@ -534,6 +545,7 @@ describe('searchOpenTabs result fields', () => {
         })
       ]
     })
+
     const [title] = search({
       query: 'notes',
       workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Notes' })]
@@ -571,20 +583,24 @@ describe('searchOpenTabs result fields', () => {
       contentType: 'editor',
       secondaryText: 'local/atlas.ts'
     })
+
     const remote = makeWorkspaceTab({
       id: 'same-tab',
       title: 'Atlas',
       contentType: 'editor',
       secondaryText: 'remote/atlas.ts'
     })
+
     remote.worktree = { ...worktree, hostId: 'ssh:remote' }
     remote.tab = { ...remote.tab, executionHostId: 'ssh:remote' }
+
     const sibling = makeWorkspaceTab({
       id: 'same-tab',
       title: 'Atlas',
       contentType: 'editor',
       secondaryText: 'sibling/atlas.ts'
     })
+
     sibling.worktree = { ...worktree, id: 'wt-2' }
     sibling.tab = { ...sibling.tab, worktreeId: 'wt-2' }
 
@@ -624,6 +640,7 @@ describe('searchOpenTabs result fields', () => {
 
   it('carries the activation identifiers each source needs', () => {
     const faviconUrl = 'https://example.com/favicon.ico'
+
     const results = search({
       query: 'zebra',
       workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Zebra tab' })],

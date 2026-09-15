@@ -56,27 +56,35 @@ async function readUriAsBase64(
   const file = createFile(uri)
   assertClipboardImageByteLengthWithinLimit(file.size)
   const handle = file.open()
+
   try {
     if (handle.size !== null) {
       assertClipboardImageByteLengthWithinLimit(handle.size)
     }
+
     const accumulator = new MobileImageBase64Accumulator()
     let bytesRead = 0
+
     while (bytesRead <= CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
       const requested = Math.min(
         MOBILE_IMAGE_READ_CHUNK_BYTES,
         CLIPBOARD_IMAGE_MAX_SOURCE_BYTES - bytesRead + 1
       )
+
       const bytes = handle.readBytes(requested)
+
       if (bytes.byteLength === 0) {
         break
       }
+
       bytesRead += bytes.byteLength
       assertClipboardImageByteLengthWithinLimit(bytesRead)
       accumulator.append(bytes)
     }
+
     const base64 = accumulator.finish()
     assertClipboardImageBase64LengthWithinLimit(base64.length)
+
     return base64
   } finally {
     handle.close()
@@ -90,10 +98,12 @@ async function* pickFromLibrary(
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory
 ): AsyncGenerator<PickedMobileImage> {
   const permission = await requestPermission()
+
   // Why: `granted` covers full + limited iOS access; only a hard denial blocks us.
   if (!permission.granted) {
     throw new ImageLibraryPermissionError()
   }
+
   const result = await launch({
     mediaTypes: ['images'],
     base64: false,
@@ -101,14 +111,18 @@ async function* pickFromLibrary(
     ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
     quality: 1
   })
+
   if (result.canceled) {
     return
   }
+
   for (const asset of result.assets) {
     if (!asset.uri) {
       continue
     }
+
     const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
+
     if (base64) {
       yield { base64, uri: asset.uri }
     }
@@ -125,14 +139,18 @@ async function* pickFromFiles(
     multiple,
     copyToCacheDirectory: true
   })
+
   if (result.canceled) {
     return
   }
+
   for (const asset of result.assets) {
     if (!asset.uri) {
       continue
     }
+
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
+
     if (base64) {
       yield { base64, uri: asset.uri }
     }
@@ -159,6 +177,7 @@ function pickMobileImagesWithMode(
       deps?.createFile
     )
   }
+
   return pickFromFiles(multiple, deps?.launchFiles, deps?.createFile)
 }
 
@@ -169,6 +188,7 @@ export async function pickMobileImage(
   for await (const image of pickMobileImagesWithMode(source, false, deps)) {
     return image
   }
+
   return null
 }
 

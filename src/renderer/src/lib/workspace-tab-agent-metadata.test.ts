@@ -121,13 +121,16 @@ describe('host-qualified agent metadata joins', () => {
       retainedAgentsByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {}
     })
+
     const ambiguous = new Set(['wt-1'])
+
     const local = collectAgentMetadataFromIndex(
       index,
       'shared-tab',
       { id: 'wt-1', hostId: 'local' },
       ambiguous
     )
+
     const remote = collectAgentMetadataFromIndex(
       index,
       'shared-tab',

@@ -39,6 +39,7 @@ function createPorts() {
     worktreeId: worktree.id,
     title: null
   })
+
   const ports: StartupArgs['ports'] = {
     canSpawn: true,
     markTrusted: vi.fn(),
@@ -48,6 +49,7 @@ function createPorts() {
     provision: vi.fn().mockResolvedValue({ setupSpawned: false, setupTerminalHandle: null }),
     activate: vi.fn()
   }
+
   return { createTerminal, ports }
 }
 
@@ -67,6 +69,7 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
     })
 
     expect(createTerminal).toHaveBeenCalledTimes(expectedCalls)
+
     if (expectedCalls > 0) {
       expect(createTerminal).toHaveBeenCalledWith(`id:${worktree.id}`, { surfaceOwner: false })
     }

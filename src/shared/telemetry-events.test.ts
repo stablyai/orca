@@ -26,6 +26,7 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
       bucket_source: 'crossed_now',
       nth_repo_added: 2
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -35,6 +36,7 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
 
   it('keeps the feature id enum in sync with the catalog', () => {
     const schema = eventSchemas.feature_interaction_usage_bucket_reached
+
     for (const feature_id of FEATURE_INTERACTION_IDS) {
       expect(
         schema.safeParse({
@@ -54,6 +56,7 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
       count_bucket: 'count_1',
       bucket_source: 'observed_existing'
     }
+
     expect(
       eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
         ...valid,
@@ -111,6 +114,7 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
       'device',
       'error_detail'
     ]
+
     for (const field of rawFields) {
       const parsed = eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
         feature_id: 'browser-annotations-sent-to-agent',
@@ -119,6 +123,7 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
         bucket_source: 'crossed_now',
         [field]: 'raw'
       })
+
       expect(parsed.success).toBe(false)
     }
   })
@@ -137,6 +142,7 @@ describe('app_starred_orca schema', () => {
       source: 'settings',
       nth_repo_added: 2
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -144,6 +150,7 @@ describe('app_starred_orca schema', () => {
     const parsed = eventSchemas.app_starred_orca.safeParse({
       source: 'github_website'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -152,6 +159,7 @@ describe('app_starred_orca schema', () => {
       source: 'landing',
       repo: 'stablyai/orca'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -285,6 +293,7 @@ describe('agent_error schema', () => {
       error_class: 'unknown',
       agent_kind: 'claude-code'
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -297,6 +306,7 @@ describe('agent_error schema', () => {
       agent_kind: 'claude-code',
       error_message: 'boom at /Users/alice/secret/path'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -306,6 +316,7 @@ describe('agent_error schema', () => {
       agent_kind: 'claude-code',
       error_stack: 'Error: boom\n    at /Users/alice/...'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -318,6 +329,7 @@ describe('agent_error schema', () => {
       agent_kind: 'claude-code',
       error_name: 'BinaryNotFound'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -326,6 +338,7 @@ describe('agent_error schema', () => {
       error_class: 'made_up_class',
       agent_kind: 'claude-code'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -334,6 +347,7 @@ describe('agent_error schema', () => {
       error_class: 'unknown',
       agent_kind: 'made_up_agent'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -345,6 +359,7 @@ describe('daemon_lifecycle schema', () => {
       reason: 'stale_bundle',
       live_session_count_bucket: '0'
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -354,6 +369,7 @@ describe('daemon_lifecycle schema', () => {
       reason: 'died_respawn',
       live_session_count_bucket: 'unknown'
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -365,6 +381,7 @@ describe('daemon_lifecycle schema', () => {
       { transition: 'replaced', reason: 'failed_health_check', live_session_count_bucket: '2-5' },
       { transition: 'retired', reason: 'died_respawn', live_session_count_bucket: 'unknown' }
     ]
+
     for (const base of bases) {
       for (const leak of [
         { daemon_path: '/Users/alice/Orca.app' },
@@ -374,6 +391,7 @@ describe('daemon_lifecycle schema', () => {
         const parsed = eventSchemas.daemon_lifecycle.safeParse({ ...base, ...leak })
         expect(parsed.success).toBe(false)
       }
+
       // Sanity: the base itself must be valid, so the rejections above are the leak, not the base.
       expect(eventSchemas.daemon_lifecycle.safeParse(base).success).toBe(true)
     }
@@ -420,6 +438,7 @@ describe('workspace_created schema', () => {
       source: 'carrier_pigeon',
       from_existing_branch: false
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -428,6 +447,7 @@ describe('workspace_created schema', () => {
       source: 'command_palette',
       from_existing_branch: true
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -437,6 +457,7 @@ describe('workspace_created schema', () => {
       from_existing_branch: true,
       branch: 'refs/heads/main' // raw branch name is UGC — rejected by .strict()
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -447,6 +468,7 @@ describe('agent_started schema', () => {
       agent_kind: 'claude-code',
       launch_source: 'sidebar'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -459,6 +481,7 @@ describe('agent_prompt_sent schema', () => {
       request_kind: 'followup',
       nth_repo_added: 1
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -469,6 +492,7 @@ describe('agent_prompt_sent schema', () => {
       request_kind: 'followup',
       prompt: 'please inspect /Users/alice/private-repo'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -485,6 +509,7 @@ describe('agent_hook_unattributed schema', () => {
       reason: 'unknown_tab_id',
       pane_key: 'tab-secret:1'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -501,6 +526,7 @@ describe('add_repo_setup_step_action schema', () => {
     const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
       action: 'export_to_pdf'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -509,6 +535,7 @@ describe('add_repo_setup_step_action schema', () => {
       action: 'skip',
       repo_name: 'orca' // raw repo names are UGC — must not cross the wire
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -521,6 +548,7 @@ describe('add_repo_default_checkout_handoff schema', () => {
       reason: 'detected_default_checkout',
       nth_repo_added: 1
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -532,6 +560,7 @@ describe('add_repo_default_checkout_handoff schema', () => {
       repo_name: 'secret-repo',
       path: '/Users/alice/secret-repo'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -542,6 +571,7 @@ describe('workspace_create_failed schema', () => {
       source: 'sidebar',
       error_class: 'git_failed'
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -550,6 +580,7 @@ describe('workspace_create_failed schema', () => {
       source: 'sidebar',
       error_class: 'cosmic_ray'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -562,6 +593,7 @@ describe('workspace_create_failed schema', () => {
       error_class: 'git_failed',
       error_message: 'fatal: cannot create work tree at /Users/alice/secret'
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -571,6 +603,7 @@ describe('workspace_create_failed schema', () => {
       error_class: 'git_failed',
       error_stack: 'Error: cannot create work tree\n    at /Users/alice/...'
     })
+
     expect(parsed.success).toBe(false)
   })
 })
@@ -591,6 +624,7 @@ describe('settings_changed schema', () => {
         setting_key: key,
         value_kind: 'bool'
       })
+
       expect(parsed.success).toBe(true)
     }
   })
@@ -600,6 +634,7 @@ describe('settings_changed schema', () => {
       setting_key: 'telemetryOptIn', // deliberately excluded from the whitelist
       value_kind: 'bool'
     })
+
     expect(parsed.success).toBe(false)
   })
 })

@@ -541,6 +541,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
         runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }],
         runtimeEnvironmentCatalogHydrated: true
       }
+
       expect(resolveWorktreeOperationRouteResult(state, FOLDER_KEY)).toEqual({
         kind: 'resolved',
         route: { executionHostId: 'local', runtimeEnvironmentId: null }

@@ -11,6 +11,7 @@ import {
 
 function makeThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   const worktree = makeWorktree()
+
   return {
     paneKey: PANE_KEY,
     paneTitle: 'low hanging issues',
@@ -46,6 +47,7 @@ describe('activityThreadRowCopy', () => {
         responsePreview: 'Filed 8 issues from the audit.'
       })
     )
+
     expect(copy.taskTitle).toBe('low hanging issues')
     expect(copy.statusLine).toBe('Filed 8 issues from the audit.')
     expect(copy.statusKind).toBe('message')
@@ -61,6 +63,7 @@ describe('activityThreadRowCopy', () => {
         responsePreview: 'Edit src/checkout/session.ts'
       })
     )
+
     expect(copy.statusKind).toBe('tool')
     expect(copy.statusLine).toBe('Edit src/checkout/session.ts')
   })
@@ -73,6 +76,7 @@ describe('activityThreadRowCopy', () => {
         responsePreview: ''
       })
     )
+
     expect(copy.statusKind).toBe('state')
     expect(copy.statusLine).toBe('Waiting for input')
     expect(copy.needsAttention).toBe(true)
@@ -91,6 +95,7 @@ describe('activityThreadRowCopy', () => {
         responsePreview: 'low hanging issues'
       })
     )
+
     expect(copy.statusKind).toBe('none')
     expect(copy.statusLine).toBe('')
   })

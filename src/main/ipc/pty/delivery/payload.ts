@@ -13,18 +13,23 @@ export function makePtyDataPayload(
   transformed = false
 ): PtyDataPayload {
   const payload: PtyDataPayload = { id, data }
+
   if (typeof startSeq === 'number') {
     payload.seq = startSeq + rawLength
   }
+
   if (typeof startSeq === 'number' || rawLength !== data.length || transformed) {
     payload.rawLength = rawLength
   }
+
   if (transformed) {
     payload.transformed = true
   }
+
   if (containsBackgroundOutput === true) {
     payload.background = true
   }
+
   return payload
 }
 
@@ -41,6 +46,7 @@ export function sendModelRestoreNeededMarker(
   if (session.mainWindow.isDestroyed()) {
     return false
   }
+
   try {
     session.mainWindow.webContents.send('pty:modelRestoreNeeded', {
       id,
@@ -50,8 +56,10 @@ export function sendModelRestoreNeededMarker(
   } catch (error) {
     // Why: a disposed render frame throws synchronously here, and this rides the data path.
     console.error('[pty] renderer model-restore marker send failed', error)
+
     return false
   }
+
   return true
 }
 
@@ -64,6 +72,7 @@ export function sendPtyDataToRenderer(
   const charCount = getPtyPayloadCharCount(payload)
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
   const hadAccounting = accounting !== undefined
+
   if (accounting) {
     accounting.sentChars += charCount
     accounting.lastSendAtMs = Date.now()
@@ -75,12 +84,15 @@ export function sendPtyDataToRenderer(
       lastAckAtMs: null
     })
   }
+
   session.rendererInFlightTotalChars += charCount
   recordPtyRendererDeliveryPressure(session, id)
+
   try {
     session.mainWindow.webContents.send('pty:data', payload)
   } catch (error) {
     const current = session.rendererDeliveryAccountingByPty.get(id)
+
     if (current) {
       const inFlightBeforeRollback = current.sentChars - current.ackedChars
       current.sentChars = Math.max(0, current.sentChars - charCount)
@@ -90,22 +102,29 @@ export function sendPtyDataToRenderer(
         0,
         session.rendererInFlightTotalChars - (inFlightBeforeRollback - inFlightAfterRollback)
       )
+
       if (!hadAccounting && current.sentChars === 0) {
         session.rendererDeliveryAccountingByPty.delete(id)
       }
     }
+
     session.rendererDeliveryRestoreNeededPtys.add(id)
+
     if (projectionAdmissionIds) {
       session.sshOutputIntake?.transferProjections(projectionAdmissionIds, 'renderer-send-failed')
     }
+
     mainDeliveryBreadcrumbs.record('pty-data-send-failed', {
       id: redactPtyIdForDiagnostics(id),
       chars: charCount
     })
     console.error('[pty] renderer data send failed; payload will not be retried', error)
+
     return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
   }
+
   let projectionsTransferred = false
+
   if (projectionAdmissionIds) {
     try {
       session.sshOutputIntake?.publishProjectionPrefix(
@@ -121,6 +140,7 @@ export function sendPtyDataToRenderer(
       projectionsTransferred = true
     }
   }
+
   if (
     session.rendererDeliveryRestoreNeededPtys.has(id) &&
     sendModelRestoreNeededMarker(
@@ -133,5 +153,6 @@ export function sendPtyDataToRenderer(
     // Why cleared only on a successful send: an unsent marker leaves the restore pending.
     session.rendererDeliveryRestoreNeededPtys.delete(id)
   }
+
   return { sent: true, projectionsTransferred }
 }

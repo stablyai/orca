@@ -36,6 +36,7 @@ const baseRenderState: ActiveTourRenderState = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -63,6 +64,7 @@ function renderSurface(
   } = {}
 ): ReactElement {
   const renderState = { ...baseRenderState, ...overrides }
+
   return (
     <ContextualTourOverlaySurface
       activeTourId="tasks"
@@ -91,17 +93,21 @@ function getButtonByText(text: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
     (element) => element.textContent?.includes(text)
   )
+
   if (!button) {
     throw new Error(`button not rendered: ${text}`)
   }
+
   return button
 }
 
 function getButtonByAriaLabel(label: string): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+
   if (!button) {
     throw new Error(`button not rendered: ${label}`)
   }
+
   return button
 }
 
@@ -223,6 +229,7 @@ describe('ContextualTourOverlaySurface', () => {
         title: 'Start another task in parallel'
       })
     )
+
     const defaultMarkup = renderToStaticMarkup(renderSurface())
 
     expect(pulsedMarkup).toContain('data-contextual-tour-target-rings')
@@ -266,9 +273,11 @@ describe('ContextualTourOverlaySurface', () => {
     const dismissContextualTour = vi.fn()
     const preventDefault = vi.fn()
     const stopImmediatePropagation = vi.fn()
+
     const panel = {
       querySelector: vi.fn(() => ({ click }))
     }
+
     const overlay = {}
 
     vi.spyOn(useAppStore, 'getState').mockReturnValue({
@@ -304,9 +313,11 @@ describe('ContextualTourOverlaySurface', () => {
     const dismissContextualTour = vi.fn()
     const preventDefault = vi.fn()
     const stopImmediatePropagation = vi.fn()
+
     const panel = {
       querySelector: vi.fn(() => null)
     }
+
     const overlay = {}
 
     vi.spyOn(useAppStore, 'getState').mockReturnValue({

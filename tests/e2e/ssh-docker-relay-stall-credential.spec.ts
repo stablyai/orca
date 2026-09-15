@@ -81,12 +81,14 @@ echo "CREDENTIAL=$(cat "$sock.credential")"
 echo "LOGLINES=$(wc -l < "$(dirname "$sock")/relay.log")"
 `
   )
+
   const field = (name: string): string =>
     output
       .split('\n')
       .find((line) => line.startsWith(`${name}=`))
       ?.slice(name.length + 1)
       .trim() ?? ''
+
   const snapshot = {
     daemonPid: field('DAEMON'),
     bridgePids: field('BRIDGES'),
@@ -94,6 +96,7 @@ echo "LOGLINES=$(wc -l < "$(dirname "$sock")/relay.log")"
     credential: field('CREDENTIAL'),
     logLines: Number(field('LOGLINES'))
   }
+
   if (
     !snapshot.daemonPid ||
     !snapshot.credentialInode ||
@@ -102,6 +105,7 @@ echo "LOGLINES=$(wc -l < "$(dirname "$sock")/relay.log")"
   ) {
     throw new Error(`Could not snapshot the relay endpoint on ${target.containerName}: ${output}`)
   }
+
   return snapshot
 }
 
@@ -132,6 +136,7 @@ test.describe('SSH relay stall does not rotate the endpoint credential', () => {
     test(title, async ({ orcaPage }, testInfo) => {
       test.slow()
       let target: DockerSshRelayTarget | null = null
+
       try {
         target = startDockerSshRelayTarget(testInfo)
         enableDockerSshRelayTargetShellTitle(target)
@@ -210,14 +215,17 @@ test.describe('SSH relay stall does not rotate the endpoint credential', () => {
         ).toBeGreaterThanOrEqual(before.logLines)
         expect(relayLog).not.toContain('Endpoint credential mismatch')
         expect(relayLog).not.toContain('Socket path already in use')
+
         // The daemon must have served a client after the freeze — this is the reattach, not a
         // vacuous pass on a relay nobody talked to.
         const acceptsBefore = logLines
           .slice(0, before.logLines)
           .filter((line) => line.includes('Socket client accepted')).length
+
         const acceptsAfter = logLines.filter((line) =>
           line.includes('Socket client accepted')
         ).length
+
         testInfo.annotations.push({
           type: 'socket-clients-accepted-before-after',
           description: `${acceptsBefore} -> ${acceptsAfter}`

@@ -28,9 +28,11 @@ export function TabStripScrollIndicator({
 
   const remeasureThumb = useCallback((): void => {
     const track = trackRef.current
+
     if (!track) {
       return
     }
+
     setThumbLayout(computeTabStripThumbLayout(track.clientWidth, metrics))
   }, [metrics])
 
@@ -40,31 +42,41 @@ export function TabStripScrollIndicator({
 
   useLayoutEffect(() => {
     const track = trackRef.current
+
     if (!track) {
       return
     }
+
     const resizeObserver = new ResizeObserver(remeasureThumb)
     resizeObserver.observe(track)
+
     return () => resizeObserver.disconnect()
   }, [remeasureThumb])
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef?.current
+
     if (!scrollContainer) {
       return
     }
+
     const handleScroll = (): void => {
       setIsScrolling(true)
+
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
       }
+
       scrollTimeoutRef.current = setTimeout(() => {
         setIsScrolling(false)
       }, 800)
     }
+
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
+
     return () => {
       scrollContainer.removeEventListener('scroll', handleScroll)
+
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
       }
@@ -88,11 +100,13 @@ export function TabStripScrollIndicator({
     if (e.button !== 0 || disabled) {
       return
     }
+
     e.preventDefault()
     e.stopPropagation()
 
     const scrollContainer = scrollContainerRef?.current
     const track = trackRef.current
+
     if (!scrollContainer || !track) {
       return
     }
@@ -142,14 +156,17 @@ export function TabStripScrollIndicator({
     if (e.button !== 0 || disabled) {
       return
     }
+
     if (e.target !== trackRef.current) {
       return
     }
+
     e.preventDefault()
     e.stopPropagation()
 
     const scrollContainer = scrollContainerRef?.current
     const track = trackRef.current
+
     if (!scrollContainer || !track) {
       return
     }
@@ -176,9 +193,11 @@ export function TabStripScrollIndicator({
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
     const scrollContainer = scrollContainerRef?.current
+
     if (!scrollContainer || disabled) {
       return
     }
+
     // Why: forward wheel events to tab container so scrolling over the indicator scrolls the strip.
     const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
     scrollContainer.scrollLeft += delta

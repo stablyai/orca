@@ -28,11 +28,14 @@ async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locat
   const dialog = page.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
   const hostPicker = dialog.getByRole('combobox')
+
   if (!(await hostPicker.textContent())?.includes(runtimeName)) {
     await hostPicker.click()
     await page.locator('[cmdk-item]').filter({ hasText: runtimeName }).click()
   }
+
   await expect(hostPicker).toContainText(runtimeName)
+
   return dialog
 }
 
@@ -47,6 +50,7 @@ async function selectRuntimeHostAndOpenManualPath(
   await browseDialog.getByRole('button', { name: /^Cancel$/i }).click()
   const manualDialog = page.getByRole('dialog', { name: /Open host project/i })
   await expect(manualDialog.locator('#server-project-path')).toBeVisible()
+
   return manualDialog
 }
 
@@ -60,6 +64,7 @@ async function listRuntimeInventory(client: RuntimeClient): Promise<{
     client.call<{ folderWorkspaces: FolderWorkspace[] }>('folderWorkspace.list'),
     client.call<{ groups: ProjectGroup[] }>('projectGroup.list')
   ])
+
   return {
     repos: repoResult.result.repos,
     folderWorkspaces: folderResult.result.folderWorkspaces,
@@ -72,9 +77,12 @@ async function setActiveRuntimePreference(page: Page, environmentId: string | nu
     const next = await window.api.settings.setActiveRuntimeEnvironmentPreference({
       environmentId: nextEnvironmentId
     })
+
     window.__store?.setState({ settings: next })
+
     return next.activeRuntimeEnvironmentId
   }, environmentId)
+
   expect(selected).toBe(environmentId)
 }
 
@@ -87,9 +95,11 @@ async function runSelectedRuntimeAddJourney(
   const runtimeName = `PR 11346 ${visible ? 'headed' : 'hidden-window'} runtime`
   const fixture = await createProjectFixtures()
   await waitForSessionReady(orcaPage)
+
   const serverVisible = await electronApp.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().some((window) => window.isVisible())
   )
+
   expect(serverVisible).toBe(visible)
   configureIsolatedGitIdentity(await electronApp.evaluate(({ app }) => app.getPath('home')))
 
@@ -127,11 +137,13 @@ async function runSelectedRuntimeAddJourney(
     const gitDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await gitDialog.locator('#server-project-path').fill(fixture.gitPath)
     await gitDialog.getByRole('button', { name: /Add Git Project/i }).click()
+
     const gitCollision = await injectSameIdLocalActivationCollision(
       client.page,
       fixture.gitPath,
       fixture.localCloneCollisionPath
     )
+
     await expect(gitDialog).toBeHidden({ timeout: 30_000 })
     measurements.gitAddMs = Date.now() - startedAt
 
@@ -140,11 +152,13 @@ async function runSelectedRuntimeAddJourney(
     const folderDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await folderDialog.locator('#server-project-path').fill(fixture.folderPath)
     await folderDialog.getByRole('button', { name: /Open as Folder/i }).click()
+
     const folderCollision = await injectSameIdLocalActivationCollision(
       client.page,
       fixture.folderPath,
       fixture.localCreateCollisionPath
     )
+
     await expect(folderDialog).toBeHidden({ timeout: 30_000 })
     measurements.folderAddMs = Date.now() - startedAt
 
@@ -156,11 +170,13 @@ async function runSelectedRuntimeAddJourney(
     await cloneStep.getByRole('textbox').nth(0).fill(fixture.gitPath)
     await cloneStep.getByRole('textbox').nth(1).fill(fixture.cloneParentPath)
     await cloneStep.getByRole('button', { name: /^Clone$/i }).click()
+
     const cloneCollision = await injectSameIdLocalActivationCollision(
       client.page,
       fixture.clonedRepoPath,
       fixture.localCloneCollisionPath
     )
+
     await expect(cloneStep).toBeHidden({ timeout: 30_000 })
     await expectRuntimeActivation(client.page, cloneCollision)
     measurements.cloneMs = Date.now() - startedAt
@@ -173,42 +189,52 @@ async function runSelectedRuntimeAddJourney(
     await createStep.locator('#create-project-name').fill('runtime-created-project')
     await createStep.getByPlaceholder('/home/user/projects').fill(fixture.createParentPath)
     await createStep.getByRole('button', { name: 'Create project', exact: true }).click()
+
     const createCollision = await injectSameIdLocalActivationCollision(
       client.page,
       fixture.createdRepoPath,
       fixture.localCreateCollisionPath
     )
+
     await expect(createStep).toBeHidden({ timeout: 30_000 })
     await expectRuntimeActivation(client.page, createCollision)
     measurements.createMs = Date.now() - startedAt
 
     startedAt = Date.now()
+
     const reconnectCatalog = await client.page.evaluate(
       async ({ environmentId, reconnectCatalogPath }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         const oldRequests = [
           store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId }),
           store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         ]
+
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
         store.getState().setRuntimeEnvironmentStatus(environmentId, {
           status: null,
           checkedAt: Date.now()
         })
+
         const response = await window.api.runtimeEnvironments.connect({
           selector: environmentId,
           timeoutMs: 15_000
         })
+
         if (!response.ok) {
           throw new Error(response.error.message)
         }
+
         store.getState().setRuntimeEnvironmentStatus(environmentId, {
           status: response.result,
           checkedAt: Date.now()
         })
+
         const groupResponse = await window.api.runtimeEnvironments.call({
           selector: environmentId,
           method: 'projectGroup.create',
@@ -219,10 +245,13 @@ async function runSelectedRuntimeAddJourney(
           },
           timeoutMs: 15_000
         })
+
         if (!groupResponse.ok) {
           throw new Error(groupResponse.error.message)
         }
+
         const group = (groupResponse.result as { group: ProjectGroup }).group
+
         const folderResponse = await window.api.runtimeEnvironments.call({
           selector: environmentId,
           method: 'folderWorkspace.create',
@@ -233,15 +262,19 @@ async function runSelectedRuntimeAddJourney(
           },
           timeoutMs: 15_000
         })
+
         if (!folderResponse.ok) {
           throw new Error(folderResponse.error.message)
         }
+
         await store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId })
         await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         await Promise.allSettled(oldRequests)
+
         if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
           throw new Error('Paired runtime did not recover after reconnect')
         }
+
         return {
           folder: store
             .getState()
@@ -256,6 +289,7 @@ async function runSelectedRuntimeAddJourney(
         reconnectCatalogPath: fixture.reconnectCatalogPath
       }
     )
+
     expect(reconnectCatalog).toEqual({
       folder: expect.objectContaining({
         executionHostId: `runtime:${client.environmentId}`,
@@ -274,9 +308,11 @@ async function runSelectedRuntimeAddJourney(
     const nestedDialog = await selectRuntimeHostAndOpenManualPath(client.page, runtimeName)
     await nestedDialog.locator('#server-project-path').fill(fixture.nestedParentPath)
     await nestedDialog.getByRole('button', { name: /Add Git Project/i }).click()
+
     const importDialog = client.page.getByRole('dialog', {
       name: /Import repositories from folder/i
     })
+
     await expect(importDialog.getByText('nested-api', { exact: true }).first()).toBeVisible({
       timeout: 30_000
     })
@@ -293,13 +329,16 @@ async function runSelectedRuntimeAddJourney(
           params: { path: rootPath },
           timeoutMs: 15_000
         })
+
         if (!response.ok) {
           throw new Error(response.error.message)
         }
+
         return response.result as { entries: { name: string; isDirectory: boolean }[] }
       },
       { environmentId: client.environmentId, rootPath: fixture.rootPath }
     )
+
     expect(remoteBrowse.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: path.basename(fixture.gitPath), isDirectory: true }),
@@ -314,6 +353,7 @@ async function runSelectedRuntimeAddJourney(
     await expect
       .poll(async () => {
         const inventory = await listRuntimeInventory(serverRuntime)
+
         return {
           groupParentPaths: inventory.projectGroups.map((group) => group.parentPath),
           repoPaths: inventory.repos.map((repo) => repo.path)
@@ -331,12 +371,15 @@ async function runSelectedRuntimeAddJourney(
       })
 
     const runtimeCatalog = await listRuntimeInventory(serverRuntime)
+
     const runtimeGroup = runtimeCatalog.projectGroups.find(
       (group) => group.parentPath === fixture.nestedParentPath
     )
+
     if (!runtimeGroup) {
       throw new Error('Runtime project group unavailable for folder catalog boundary')
     }
+
     await serverRuntime.call('folderWorkspace.create', {
       folderPath: fixture.catalogFolderPath,
       name: 'Runtime catalog workspace',
@@ -357,37 +400,45 @@ async function runSelectedRuntimeAddJourney(
         runtimeEnvironmentId
       }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         await store.getState().fetchProjectGroups({ runtimeEnvironmentId })
         await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId })
         const state = store.getState()
+
         const runtimeGroup = state.projectGroups.find(
           (group) =>
             group.parentPath === nestedParentPath &&
             group.executionHostId === `runtime:${runtimeEnvironmentId}`
         )
+
         const runtimeFolder = state.folderWorkspaces.find(
           (workspace) =>
             workspace.folderPath === catalogFolderPath &&
             workspace.executionHostId === `runtime:${runtimeEnvironmentId}`
         )
+
         if (!runtimeGroup || !runtimeFolder) {
           throw new Error('Runtime catalog unavailable for same-ID collision')
         }
+
         const localGroup = {
           ...runtimeGroup,
           name: 'Local same-ID group',
           parentPath: localGroupPath,
           executionHostId: 'local' as const
         }
+
         const localFolder = {
           ...runtimeFolder,
           name: 'Local same-ID folder',
           folderPath: localWorkspacePath,
           executionHostId: 'local' as const
         }
+
         store.setState({
           projectGroups: [localGroup, ...state.projectGroups],
           folderWorkspaces: [localFolder, ...state.folderWorkspaces]
@@ -395,6 +446,7 @@ async function runSelectedRuntimeAddJourney(
         await store.getState().fetchProjectGroups({ runtimeEnvironmentId })
         await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId })
         const collided = store.getState()
+
         const result = {
           folders: collided.folderWorkspaces
             .filter((workspace) => workspace.id === runtimeFolder.id)
@@ -409,6 +461,7 @@ async function runSelectedRuntimeAddJourney(
               parentPath: group.parentPath
             }))
         }
+
         return result
       },
       {
@@ -419,6 +472,7 @@ async function runSelectedRuntimeAddJourney(
         runtimeEnvironmentId: client.environmentId
       }
     )
+
     expect(sameIdCatalog).toEqual({
       folders: expect.arrayContaining([
         {
@@ -445,24 +499,31 @@ async function runSelectedRuntimeAddJourney(
     const reversedFolderActivation = await client.page.evaluate(
       ({ catalogFolderPath, runtimeEnvironmentId }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         const hostId = `runtime:${runtimeEnvironmentId}` as const
         const state = store.getState()
+
         const runtimeFolder = state.folderWorkspaces.find(
           (workspace) =>
             workspace.folderPath === catalogFolderPath && workspace.executionHostId === hostId
         )
+
         if (!runtimeFolder) {
           throw new Error('Runtime folder unavailable for reversed activation')
         }
+
         const sameFolders = state.folderWorkspaces
           .filter((workspace) => workspace.id === runtimeFolder.id)
           .toReversed()
+
         const sameGroups = state.projectGroups
           .filter((group) => group.id === runtimeFolder.projectGroupId)
           .toReversed()
+
         store.setState({
           folderWorkspaces: [
             ...state.folderWorkspaces.filter((workspace) => workspace.id !== runtimeFolder.id),
@@ -475,6 +536,7 @@ async function runSelectedRuntimeAddJourney(
         })
         store.getState().setActiveFolderWorkspace(runtimeFolder.id, hostId)
         const activated = store.getState()
+
         return {
           activeHostId: activated.activeWorkspaceExecutionHostId,
           activePath: activated.getKnownWorktreeById(`folder:${runtimeFolder.id}`, hostId)?.path,
@@ -489,6 +551,7 @@ async function runSelectedRuntimeAddJourney(
         runtimeEnvironmentId: client.environmentId
       }
     )
+
     expect(reversedFolderActivation).toEqual({
       activeHostId: `runtime:${client.environmentId}`,
       activePath: fixture.catalogFolderPath,
@@ -498,31 +561,39 @@ async function runSelectedRuntimeAddJourney(
     const collisionReconnect = await client.page.evaluate(
       async ({ catalogFolderPath, environmentId }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Renderer store unavailable')
         }
+
         const runtimeFolder = store
           .getState()
           .folderWorkspaces.find((workspace) => workspace.folderPath === catalogFolderPath)
+
         if (!runtimeFolder) {
           throw new Error('Runtime folder unavailable before collision reconnect')
         }
+
         const staleRequests = [
           store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId }),
           store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         ]
+
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
         store.getState().setRuntimeEnvironmentStatus(environmentId, {
           status: null,
           checkedAt: Date.now()
         })
+
         const response = await window.api.runtimeEnvironments.connect({
           selector: environmentId,
           timeoutMs: 15_000
         })
+
         if (!response.ok) {
           throw new Error(response.error.message)
         }
+
         store.getState().setRuntimeEnvironmentStatus(environmentId, {
           status: response.result,
           checkedAt: Date.now()
@@ -530,11 +601,14 @@ async function runSelectedRuntimeAddJourney(
         await store.getState().fetchProjectGroups({ runtimeEnvironmentId: environmentId })
         await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: environmentId })
         await Promise.allSettled(staleRequests)
+
         if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
           throw new Error('Paired runtime did not recover after collision reconnect')
         }
+
         store.getState().setActiveFolderWorkspace(runtimeFolder.id, `runtime:${environmentId}`)
         const state = store.getState()
+
         return {
           activeHostId: state.activeWorkspaceExecutionHostId,
           folderHosts: state.folderWorkspaces
@@ -552,6 +626,7 @@ async function runSelectedRuntimeAddJourney(
         environmentId: client.environmentId
       }
     )
+
     expect(collisionReconnect).toEqual({
       activeHostId: `runtime:${client.environmentId}`,
       folderHosts: ['local', `runtime:${client.environmentId}`],
@@ -560,16 +635,20 @@ async function runSelectedRuntimeAddJourney(
 
     const catalogAfterLocalRefresh = await client.page.evaluate(async () => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Renderer store unavailable')
       }
+
       await store.getState().fetchProjectGroups()
       await store.getState().fetchFolderWorkspaces()
+
       return {
         folderWorkspaces: store.getState().folderWorkspaces,
         projectGroups: store.getState().projectGroups
       }
     })
+
     expect(catalogAfterLocalRefresh.projectGroups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -600,10 +679,13 @@ async function runSelectedRuntimeAddJourney(
         nestedRepoPaths
       }) => {
         const state = window.__store?.getState()
+
         const nestedGroup = state?.projectGroups.find(
           (group) => group.parentPath === nestedParentPath
         )
+
         const nestedRepos = state?.repos.filter((repo) => nestedRepoPaths.includes(repo.path)) ?? []
+
         return {
           clonedOwner:
             state?.repos.find((repo) => repo.path === clonedRepoPath)?.executionHostId ?? null,
@@ -647,6 +729,7 @@ async function runSelectedRuntimeAddJourney(
         nestedRepoPaths: fixture.nestedRepoPaths
       }
     )
+
     expect(clientRegistration).toEqual({
       activeRuntimeEnvironmentId: null,
       clonedOwner: `runtime:${client.environmentId}`,
@@ -673,12 +756,16 @@ async function runSelectedRuntimeAddJourney(
             }
           }
         ).__webRuntimeSessionE2E
+
         const store = window.__store
+
         if (!bridge || !store) {
           throw new Error('Runtime terminal activation bridge unavailable')
         }
+
         const outcome = await bridge.createTerminal({ environmentId, worktreeId })
         const state = store.getState()
+
         return {
           activeHostId: state.activeWorkspaceExecutionHostId,
           activeWorktreeId: state.activeWorktreeId,
@@ -695,6 +782,7 @@ async function runSelectedRuntimeAddJourney(
         worktreeId: gitCollision.runtimeWorktreeId
       }
     )
+
     expect(terminalActivation).toEqual({
       activeHostId: `runtime:${client.environmentId}`,
       activeWorktreeId: gitCollision.runtimeWorktreeId,
@@ -720,6 +808,7 @@ async function runSelectedRuntimeAddJourney(
     expect(
       finalClientInventory.folderWorkspaces.map((workspace) => workspace.folderPath)
     ).not.toContain(fixture.catalogFolderPath)
+
     for (const projectName of [
       path.basename(fixture.gitPath),
       path.basename(fixture.folderPath),
@@ -730,6 +819,7 @@ async function runSelectedRuntimeAddJourney(
       // Why: duplicate checkout names are disambiguated with a parent path.
       await expectSidebarProjectVisible(client.page, projectName)
     }
+
     expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
     // Why: revealing the client must not leak into the HUB's window visibility.
     expect(

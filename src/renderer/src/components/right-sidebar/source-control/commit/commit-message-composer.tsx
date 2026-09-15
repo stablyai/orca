@@ -86,8 +86,10 @@ export function CommitMessageComposer({
                 onClick={(event) => {
                   if (isGenerateDisabled) {
                     event.preventDefault()
+
                     return
                   }
+
                   onGenerate()
                 }}
                 title={

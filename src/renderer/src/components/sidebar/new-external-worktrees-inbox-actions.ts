@@ -60,23 +60,30 @@ async function refreshAfterRepoInboxUpdate(
 ): Promise<boolean> {
   args.setInboxState(args.projectId, { pending: true, error: null })
   const updated = await args.updateRepo(args.projectId, updates)
+
   if (!updated) {
     args.setInboxState(args.projectId, {
       pending: false,
       error: newExternalWorktreeInboxImportError()
     })
+
     return false
   }
+
   const refreshed = await args.fetchWorktrees(args.projectId, { requireAuthoritative: true })
+
   if (!refreshed) {
     await args.updateRepo(args.projectId, rollbackUpdates)
     args.setInboxState(args.projectId, {
       pending: false,
       error: newExternalWorktreeInboxImportError()
     })
+
     return false
   }
+
   args.setInboxState(args.projectId, null)
+
   return true
 }
 
@@ -84,20 +91,25 @@ export async function keepNewExternalWorktreeInboxHidden(
   args: NewExternalWorktreesInboxActionDeps
 ): Promise<void> {
   args.setInboxState(args.projectId, { pending: true, error: null })
+
   const baseline = mergeExternalWorktreeInboxPaths(
     args.repo.externalWorktreeInboxBaselinePaths,
     args.worktreePaths
   )
+
   const updated = await args.updateRepo(args.projectId, {
     externalWorktreeInboxBaselinePaths: baseline
   })
+
   if (!updated) {
     args.setInboxState(args.projectId, {
       pending: false,
       error: newExternalWorktreeInboxKeepHiddenError()
     })
+
     return
   }
+
   args.setInboxState(args.projectId, null)
 }
 
@@ -108,10 +120,12 @@ export async function importNewExternalWorktreeInboxPaths(
     args.repo.importedExternalWorktreePaths,
     args.worktreePaths
   )
+
   const externalWorktreeInboxBaselinePaths = mergeExternalWorktreeInboxPaths(
     args.repo.externalWorktreeInboxBaselinePaths,
     args.worktreePaths
   )
+
   await refreshAfterRepoInboxUpdate(
     args,
     { importedExternalWorktreePaths, externalWorktreeInboxBaselinePaths },
@@ -128,21 +142,27 @@ export async function suppressNewExternalWorktreeInbox(
   args: Omit<NewExternalWorktreesInboxActionDeps, 'fetchWorktrees'>
 ): Promise<boolean> {
   args.setInboxState(args.projectId, { pending: true, error: null })
+
   const externalWorktreeInboxBaselinePaths = mergeExternalWorktreeInboxPaths(
     args.repo.externalWorktreeInboxBaselinePaths,
     args.worktreePaths
   )
+
   const updated = await args.updateRepo(args.projectId, {
     externalWorktreeDiscoverySuppressedAt: Date.now(),
     externalWorktreeInboxBaselinePaths
   })
+
   if (!updated) {
     args.setInboxState(args.projectId, {
       pending: false,
       error: newExternalWorktreeInboxSuppressError()
     })
+
     return false
   }
+
   args.setInboxState(args.projectId, null)
+
   return true
 }

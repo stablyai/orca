@@ -13,6 +13,7 @@ import {
 describe('terminal-stream-protocol', () => {
   it('round-trips fixed-width binary frame headers and payloads', () => {
     const payload = encodeTerminalStreamText('hello terminal')
+
     const encoded = encodeTerminalStreamFrame({
       opcode: TerminalStreamOpcode.Output,
       streamId: 42,
@@ -54,6 +55,7 @@ describe('terminal-stream-protocol', () => {
         payload: encodeTerminalStreamText('a')
       })
     )
+
     const resize = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Resize,
@@ -96,6 +98,7 @@ describe('terminal-stream-protocol', () => {
         })
       })
     )
+
     const unsubscribe = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Unsubscribe,
@@ -104,6 +107,7 @@ describe('terminal-stream-protocol', () => {
         payload: new Uint8Array()
       })
     )
+
     const snapshotRequest = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotRequest,
@@ -141,6 +145,7 @@ describe('terminal-stream-protocol', () => {
 
   it('rejects excessive JSON nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
+
     try {
       const depth = TERMINAL_STREAM_JSON_STRUCTURE_LIMITS.nestingDepth + 1
       const payload = new TextEncoder().encode(`${'['.repeat(depth)}0${']'.repeat(depth)}`)

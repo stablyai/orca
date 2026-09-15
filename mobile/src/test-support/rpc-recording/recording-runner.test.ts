@@ -49,12 +49,14 @@ describe('recording boundaries', () => {
     const clock = vitestRecordingScheduler()
     clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
+
     try {
       const result = transport.client.sendRequest(
         'worktree.ps',
         { omitted: undefined, nullable: null },
         { timeoutMs: 7 }
       )
+
       await clock.flush()
       expect(transport.requests[0].args).toEqual(
         captureArguments(['worktree.ps', { omitted: undefined, nullable: null }, { timeoutMs: 7 }])
@@ -82,6 +84,7 @@ describe('recording boundaries', () => {
     const clock = vitestRecordingScheduler()
     clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
+
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
       const right = transport.client.sendRequest('files.list', { worktree: 'B' })
@@ -108,6 +111,7 @@ describe('recording boundaries', () => {
     const clock = vitestRecordingScheduler()
     clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
+
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
       void transport.client.sendRequest('long', {}, { timeoutMs: 50 }).catch(() => {})
@@ -135,6 +139,7 @@ describe('recording boundaries', () => {
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
     const golden = sampleGolden('test')
     const previous = process.env.RPC_FOUNDATION_RECORD
+
     try {
       process.env.RPC_FOUNDATION_RECORD = '0'
       await expect(writeGolden(directory, golden, '--record')).rejects.toThrow('require')
@@ -159,6 +164,7 @@ describe('recording boundaries', () => {
       } else {
         process.env.RPC_FOUNDATION_RECORD = previous
       }
+
       rmSync(directory, { recursive: true })
     }
   })
@@ -180,6 +186,7 @@ describe('recording boundaries', () => {
     ])
     // Whichever checkpoint an entry was first seen in, every later reference resolves to it.
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
+
     try {
       writeFileSync(join(directory, 'pooled.json'), goldenBytes(golden))
       expect(readGolden(directory, 'pooled')).toEqual(golden)
@@ -194,6 +201,7 @@ describe('recording boundaries', () => {
     const file = goldenFile(golden)
     const hash = entryHash('a')
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
+
     try {
       writeFileSync(
         join(directory, 'tampered.json'),
@@ -265,15 +273,18 @@ describe('recording boundaries', () => {
         { checkpoint: 'settled' }
       ]
     }
+
     const variant = (id: string, reply: unknown): RecordingScenario => ({
       ...base,
       id,
       steps: base.steps.map((step) => ('complete' in step ? { ...step, reply } : step))
     })
+
     const hoisted = hoistPreludeCheckpoints(base, [
       { divergence: 2, scenario: variant('family.ok', { ok: true }) },
       { divergence: 2, scenario: variant('family.refused', { ok: false }) }
     ])
+
     expect(hoisted.map((scenario) => scenario.id)).toEqual([
       'family.prelude',
       'family.ok',
@@ -304,6 +315,7 @@ describe('recording boundaries', () => {
       schedules: [],
       steps: [{ action: 'mount', id: 'mount' }, { checkpoint: 'settled' }]
     }
+
     expect(() => replyMatrixSites(base)).toThrow('No scripted reply to drive a matrix over')
     expect(() =>
       replyMatrixSites({
@@ -330,12 +342,14 @@ describe('recording boundaries', () => {
       schedules: [],
       steps: [{ complete: 'a#1', params: {}, reply }, { checkpoint: 'settled' }]
     })
+
     // Absent and null are partitions of their own, so neither can stand in as the success control.
     for (const reply of [{ ok: true }, { ok: true, result: null }, { ok: false }]) {
       expect(() => replyMatrixNormalResult('op', [scenario(reply)], 'a#1')).toThrow(
         'No fulfilled reply recorded for matrix site'
       )
     }
+
     expect(
       replyMatrixNormalResult('op', [scenario({ ok: true, result: { n: 1 } })], 'a#1')
     ).toEqual({
@@ -384,10 +398,12 @@ describe('recording boundaries', () => {
       message: 'plain',
       isRpcDeliveryUnknown: false
     })
+
     const detailed = Object.assign(new TypeError('outer'), {
       code: 'refused',
       cause: new Error('inner')
     })
+
     expect(captureError(detailed)).toMatchObject({
       code: 'refused',
       cause: { category: 'Error', message: 'inner' }
@@ -396,6 +412,7 @@ describe('recording boundaries', () => {
 
   it('digests every executable recorder input and ignores prose', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-recorder-'))
+
     try {
       const directory = join(root, RECORDER_DIRECTORY)
       mkdirSync(directory, { recursive: true })
@@ -416,6 +433,7 @@ describe('recording boundaries', () => {
   // drivers are, because a golden's bytes come from them.
   it('digests the recording drivers and no other suite', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-drivers-'))
+
     try {
       const directory = join(root, RECORDER_DIRECTORY)
       mkdirSync(directory, { recursive: true })
@@ -433,24 +451,29 @@ describe('recording boundaries', () => {
   it('keeps every named driver real and unimported by the engine', () => {
     const directory = resolve(import.meta.dirname)
     const missing = RECORDING_DRIVERS.filter((driver) => !existsSync(join(directory, driver)))
+
     const imported = readdirSync(directory)
       .filter((file) => file.endsWith('.ts'))
       .filter((file) =>
         /(?:from|import\()\s*'\.[^']*\.test'/.test(readFileSync(join(directory, file), 'utf8'))
       )
+
     expect({ missing, imported }).toEqual({ missing: [], imported: [] })
   })
 
   it('refuses a mutation anchor that matches more than once', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-mutant-'))
+
     try {
       const anchor =
         "const overrides = settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')"
+
       mkdirSync(join(root, 'mod'), { recursive: true })
       writeFileSync(
         join(root, 'mod/settings-read-operations.ts'),
         `const raw = {} as { settings?: unknown }\nconst settings = raw.settings\nexport function first() {\n  ${anchor}\n  return overrides\n}\nexport function second() {\n  ${anchor}\n  return overrides\n}\n`
       )
+
       // Its own spec, not one borrowed from the mutant table: the guard is the loader's, and the
       // table is not an input to anything the loader does while recording.
       const loader = operationModuleLoader(root, {
@@ -459,6 +482,7 @@ describe('recording boundaries', () => {
         before: anchor,
         after: 'const overrides = undefined'
       })
+
       expect(() => loader.load('mod/settings-read-operations.ts')).toThrow(
         'matched 2 sites, expected 1'
       )

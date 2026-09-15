@@ -30,6 +30,7 @@ export function googleAuthUserAgent(): string {
       : process.platform === 'win32'
         ? 'Windows NT 10.0; Win64; x64'
         : 'X11; Linux x86_64'
+
   return `Mozilla/5.0 (${platform}; rv:140.0) Gecko/20100101 Firefox/140.0`
 }
 
@@ -55,5 +56,6 @@ export function setUserAgentHeader(headers: Record<string, string>, value: strin
 // auth document even when its destination host isn't an auth host.
 export function currentUserAgent(headers: Record<string, string>): string | undefined {
   const existing = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
+
   return existing ? headers[existing] : undefined
 }

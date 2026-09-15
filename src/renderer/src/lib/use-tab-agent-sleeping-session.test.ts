@@ -15,12 +15,16 @@ import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 let latestHookAgent: TuiAgent | null | undefined
+
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestHookAgent = useTabAgent(tab)
+
   return null
 }
 
@@ -40,6 +44,7 @@ async function renderHookProbe(tab: TerminalTab): Promise<Root> {
     root.render(createElement(HookProbe, { tab }))
   })
   await flushHookEffects()
+
   return root
 }
 
@@ -117,6 +122,7 @@ describe('useTabAgent sleeping-session', () => {
   const originalApi = window.api
   const getForegroundProcess = vi.fn()
   const clearTabLaunchAgent = vi.fn()
+
   const baseTab: TerminalTab = {
     id: 'tab-1',
     ptyId: 'pty-1',

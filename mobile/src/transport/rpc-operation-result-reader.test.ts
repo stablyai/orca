@@ -30,9 +30,11 @@ describe('a single-variant reader', () => {
     const result = workspaceRowsReader({ worktrees: [{ id: 1 }] })
 
     expect(result.compatible).toBe(false)
+
     if (result.compatible) {
       throw new Error('expected an incompatible read')
     }
+
     expect(result.issues).toEqual([{ path: 'worktrees.0.id', message: expect.any(String) }])
   })
 
@@ -65,6 +67,7 @@ describe('a single-variant reader', () => {
     if (result.compatible) {
       throw new Error('expected an incompatible read')
     }
+
     expect(result.issues).toHaveLength(21)
     expect(result.issues[20]).toEqual({ path: '', message: '5 further issues omitted' })
   })
@@ -80,9 +83,11 @@ describe('a single-variant reader', () => {
     const result = asyncReader({ id: 'w1' })
 
     expect(result.compatible).toBe(false)
+
     if (result.compatible) {
       throw new Error('expected an incompatible read')
     }
+
     expect(result.issues[0].message).toContain('synchronous parse')
   })
 })
@@ -110,6 +115,7 @@ describe('a multi-variant reader', () => {
     if (result.compatible) {
       throw new Error('expected an incompatible read')
     }
+
     expect(result.issues.map((issue) => issue.path)).toEqual(['rows', 'legacy-array'])
   })
 })

@@ -7,6 +7,7 @@ import {
 
 function createDeliverySink() {
   const delivered: string[] = []
+
   return {
     delivered,
     deliver: (data: string) => {
@@ -90,6 +91,7 @@ describe('terminal write coalescer', () => {
       expect(vi.getTimerCount()).toBeLessThanOrEqual(1)
       vi.advanceTimersByTime(5)
     }
+
     vi.runOnlyPendingTimers()
 
     const maxFlushes = Math.ceil((200 * 5) / TERMINAL_WRITE_FLUSH_WINDOW_MS) + 1

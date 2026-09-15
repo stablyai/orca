@@ -26,16 +26,21 @@ export function getSettingsProjectRepresentativeRepoId(
   const localSetup = setups.find(
     (setup) => setup.hostId === LOCAL_EXECUTION_HOST_ID && setup.repoId.trim().length > 0
   )
+
   if (localSetup) {
     return localSetup.repoId
   }
+
   let lowest = ''
+
   for (const setup of setups) {
     const repoId = setup.repoId.trim()
+
     if (repoId.length > 0 && (lowest === '' || repoId < lowest)) {
       lowest = repoId
     }
   }
+
   return lowest
 }
 
@@ -47,18 +52,22 @@ export function getSettingsProjectRepresentativeRepoId(
 export function buildSettingsProjectList(repos: readonly Repo[]): SettingsProject[] {
   const projection = projectHostSetupProjectionFromRepos(repos)
   const setupsByProjectId = new Map<string, ProjectHostSetup[]>()
+
   for (const setup of projection.setups) {
     const projectSetups = setupsByProjectId.get(setup.projectId)
+
     if (projectSetups) {
       projectSetups.push(setup)
     } else {
       setupsByProjectId.set(setup.projectId, [setup])
     }
   }
+
   return projection.projects.map((project) => {
     // Why: Settings metadata is rebuilt as repos refresh across hosts; index
     // setups once so many projects do not turn each refresh into an O(n²) scan.
     const setups = setupsByProjectId.get(project.id) ?? []
+
     return {
       projectId: project.id,
       project,
@@ -81,14 +90,19 @@ export function resolveEffectiveProjectHost(
   if (setups.length === 0) {
     return undefined
   }
+
   if (selectedHostId && setups.some((setup) => setup.hostId === selectedHostId)) {
     return selectedHostId
   }
+
   const localSetup = setups.find((setup) => setup.hostId === LOCAL_EXECUTION_HOST_ID)
+
   if (localSetup) {
     return localSetup.hostId
   }
+
   const readySetup = setups.find((setup) => setup.setupState === 'ready')
+
   return (readySetup ?? setups[0]).hostId
 }
 
@@ -98,6 +112,7 @@ export function buildRepoIdToRepresentative(
   projects: readonly SettingsProject[]
 ): Map<string, string> {
   const map = new Map<string, string>()
+
   for (const settingsProject of projects) {
     for (const setup of settingsProject.setups) {
       if (setup.repoId.trim().length > 0) {
@@ -105,6 +120,7 @@ export function buildRepoIdToRepresentative(
       }
     }
   }
+
   return map
 }
 
@@ -114,6 +130,7 @@ export function buildRepoIdToHostSelection(
   projects: readonly SettingsProject[]
 ): Map<string, { projectId: string; hostId: ExecutionHostId }> {
   const map = new Map<string, { projectId: string; hostId: ExecutionHostId }>()
+
   for (const settingsProject of projects) {
     for (const setup of settingsProject.setups) {
       if (setup.repoId.trim().length > 0 && !map.has(setup.repoId)) {
@@ -121,6 +138,7 @@ export function buildRepoIdToHostSelection(
       }
     }
   }
+
   return map
 }
 
@@ -133,10 +151,12 @@ export function getSettingsTargetHostSelection(
     const setup = settingsProject.setups.find(
       (candidate) => candidate.repoId === repoId && candidate.hostId === hostId
     )
+
     if (setup) {
       return { projectId: settingsProject.projectId, hostId, setupId: setup.id }
     }
   }
+
   return null
 }
 
@@ -152,11 +172,15 @@ export function resolveSettingsTargetRepoId(
   if (target.repoId) {
     return target.repoId
   }
+
   const sectionId = target.sectionId
+
   if (!sectionId || !sectionId.startsWith('repo-')) {
     return null
   }
+
   let best: string | null = null
+
   for (const repoId of repoIds) {
     if (sectionId === `repo-${repoId}` || sectionId.startsWith(`repo-${repoId}-`)) {
       if (best === null || repoId.length > best.length) {
@@ -164,6 +188,7 @@ export function resolveSettingsTargetRepoId(
       }
     }
   }
+
   return best
 }
 
@@ -199,15 +224,18 @@ export function getSettingsProjectHostRepo(
   selectedSetupId?: string
 ): Repo | undefined {
   const effectiveHostId = resolveEffectiveProjectHost(settingsProject.setups, selectedHostId)
+
   if (!effectiveHostId) {
     return undefined
   }
+
   const effectiveSetup =
     settingsProject.setups.find(
       (setup) => setup.id === selectedSetupId && setup.hostId === effectiveHostId
     ) ??
     settingsProject.setups.find((setup) => setup.hostId === effectiveHostId) ??
     settingsProject.setups[0]
+
   return (
     repos.find(
       (repo) =>

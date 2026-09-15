@@ -41,6 +41,7 @@ export function useWorktreeContextMenuCommands(args: {
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(args.worktree.path)
   }, [args])
+
   const handleToggleRead = useCallback(() => {
     args.updateWorktreeMeta(
       args.worktree.id,
@@ -48,16 +49,20 @@ export function useWorktreeContextMenuCommands(args: {
       { executionHostId: args.worktree.hostId ?? 'local' }
     )
   }, [args])
+
   const handleTogglePin = useCallback(() => {
     args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
   }, [args])
+
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {
       return
     }
+
     args.createGroupDialogActiveRef.current = true
     args.setCreateGroupDialogOpen(true)
   }, [args])
+
   const handleCreateGroupDialogOpenChange = useCallback(
     (open: boolean) => {
       args.createGroupDialogActiveRef.current = open
@@ -65,45 +70,56 @@ export function useWorktreeContextMenuCommands(args: {
     },
     [args]
   )
+
   const handleSubmitNewProjectGroup = useCallback(
     async (name: string) => {
       if (!args.repo) {
         return
       }
+
       const group = await args.createProjectGroup(name)
+
       if (group) {
         await args.moveProjectToGroup(args.repo.id, group.id)
       }
     },
     [args]
   )
+
   const handleMoveProjectToGroup = useCallback(
     (groupId: string) => {
       if (!args.repo || args.repo.projectGroupId === groupId) {
         return
       }
+
       void args.moveProjectToGroup(args.repo.id, groupId)
     },
     [args]
   )
+
   const handleRemoveProjectFromGroup = useCallback(() => {
     if (args.repo) {
       void args.moveProjectToGroup(args.repo.id, null)
     }
   }, [args])
+
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       args.setMenuOpenState(false)
+
       const plan = planWorkspaceStatusAssignment(
         args.activeContextWorktrees,
         status,
         args.workspaceStatuses,
         Boolean(args.onAssignWorkspaceStatus)
       )
+
       if (plan.kind === 'board-sync') {
         args.onAssignWorkspaceStatus?.(plan.worktreeIds, status)
+
         return
       }
+
       const localWriteIds = new Set(plan.localWriteIds)
       void Promise.all(
         args.activeContextWorktrees
@@ -119,6 +135,7 @@ export function useWorktreeContextMenuCommands(args: {
     },
     [args]
   )
+
   const handleRename = useCallback(() => {
     args.openModal('edit-meta', {
       worktreeId: args.worktree.id,
@@ -131,6 +148,7 @@ export function useWorktreeContextMenuCommands(args: {
       focus: 'displayName'
     })
   }, [args])
+
   const sleepWorktreesAfterMenuClose = useCallback(
     (worktreeIds: string[]) => {
       args.setMenuOpenState(false)
@@ -138,31 +156,38 @@ export function useWorktreeContextMenuCommands(args: {
     },
     [args]
   )
+
   const handleCloseTerminals = useCallback(() => {
     sleepWorktreesAfterMenuClose(args.sleepableWorktrees.map((item) => item.id))
   }, [args.sleepableWorktrees, sleepWorktreesAfterMenuClose])
+
   const handleSleepSubtree = useCallback(() => {
     sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees.map((item) => item.id))
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
+
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
     args.scopeRef.current
       ?.closest('[data-worktree-sidebar]')
       ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+
     const intent = createWorktreeContextMenuDeleteIntent({
       worktree: args.worktree,
       batchDeleteWorktrees: args.batchDeleteWorktrees,
       isMultiContext: args.isMultiContext,
       ...(args.folderWorkspaceId ? { folderWorkspaceId: args.folderWorkspaceId } : {})
     })
+
     deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
     args.setMenuOpenState(false)
   }, [args])
+
   const handleOpenParent = useCallback(() => {
     if (args.validParentWorktreeId) {
       activateAndRevealWorktree(args.validParentWorktreeId)
     }
   }, [args.validParentWorktreeId])
+
   return {
     handleAssignWorkspaceStatus,
     handleCloseTerminals,

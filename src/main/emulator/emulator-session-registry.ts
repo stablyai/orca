@@ -35,11 +35,15 @@ export class EmulatorSessionRegistry {
     if (!worktreeId) {
       return null
     }
+
     const key = this.activeByWorktree.get(worktreeId)
+
     if (!key) {
       return null
     }
+
     const session = this.sessions.get(key)
+
     return session ? toSessionInfo(session) : null
   }
 
@@ -65,6 +69,7 @@ export class EmulatorSessionRegistry {
 
   clearSessionAndWorktrees(key: string): void {
     this.sessions.delete(key)
+
     for (const [worktreeId, activeKey] of this.activeByWorktree.entries()) {
       if (activeKey === key) {
         this.activeByWorktree.delete(worktreeId)

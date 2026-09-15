@@ -23,6 +23,7 @@ let activeWorktreeRemovals: ReadonlyMap<string, WorktreeRemovalInFlight> | null 
 export function createWorktreeRemovalRegistry(): Map<string, WorktreeRemovalInFlight> {
   const registry = new Map<string, WorktreeRemovalInFlight>()
   activeWorktreeRemovals = registry
+
   return registry
 }
 

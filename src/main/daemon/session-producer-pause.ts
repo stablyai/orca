@@ -15,9 +15,11 @@ export class SessionProducerPause {
   pause(): void {
     this.paused = true
     this.subprocess.pause?.()
+
     if (this.failsafeTimer) {
       clearTimeout(this.failsafeTimer)
     }
+
     this.failsafeTimer = setTimeout(() => {
       this.failsafeTimer = null
       this.paused = false
@@ -30,10 +32,13 @@ export class SessionProducerPause {
       clearTimeout(this.failsafeTimer)
       this.failsafeTimer = null
     }
+
     if (!this.paused) {
       return
     }
+
     this.paused = false
+
     if (opts.resume) {
       this.subprocess.resume?.()
     }

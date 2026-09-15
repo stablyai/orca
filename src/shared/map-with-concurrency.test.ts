@@ -6,14 +6,17 @@ describe('mapWithConcurrency', () => {
     // Later items resolve sooner, so a naive push-on-resolve would reorder.
     const results = await mapWithConcurrency([30, 20, 10], 3, async (ms, index) => {
       await new Promise((resolve) => setTimeout(resolve, ms))
+
       return index
     })
+
     expect(results).toEqual([0, 1, 2])
   })
 
   it('starts every exact-limit callback synchronously like Promise.all', async () => {
     const started: number[] = []
     let release!: () => void
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
@@ -21,6 +24,7 @@ describe('mapWithConcurrency', () => {
     const result = mapWithConcurrency([0, 1, 2], 3, async (item) => {
       started.push(item)
       await gate
+
       return item
     })
 
@@ -31,11 +35,14 @@ describe('mapWithConcurrency', () => {
 
   it('starts every exact-limit callback before surfacing a failure', async () => {
     const started: number[] = []
+
     const result = mapWithConcurrency([0, 1, 2], 3, async (item) => {
       started.push(item)
+
       if (item === 0) {
         throw new Error('boom')
       }
+
       return item
     })
 
@@ -68,9 +75,11 @@ describe('mapWithConcurrency', () => {
 
   it('returns an empty array for no items without spawning workers', async () => {
     let calls = 0
+
     const results = await mapWithConcurrency([], 4, async () => {
       calls += 1
     })
+
     expect(results).toEqual([])
     expect(calls).toBe(0)
   })
@@ -82,8 +91,10 @@ describe('mapWithConcurrency', () => {
 
   it('clamps a NaN limit to one worker instead of skipping every item', async () => {
     const seen: number[] = []
+
     const results = await mapWithConcurrency([1, 2, 3], Number.NaN, async (item) => {
       seen.push(item)
+
       return item * 2
     })
 

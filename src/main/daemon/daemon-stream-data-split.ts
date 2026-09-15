@@ -43,13 +43,16 @@ export function clampToSafeSplitIndex(value: string, start: number, end: number)
   if (end <= start || end >= value.length) {
     return end
   }
+
   const prev = value.charCodeAt(end - 1)
   const next = value.charCodeAt(end)
+
   return isHighSurrogate(prev) && isLowSurrogate(next) ? end - 1 : end
 }
 
 function nextSafeSplitIndex(value: string, start: number): number {
   const next = Math.min(value.length, start + 1)
+
   if (
     next < value.length &&
     isHighSurrogate(value.charCodeAt(start)) &&
@@ -57,6 +60,7 @@ function nextSafeSplitIndex(value: string, start: number): number {
   ) {
     return next + 1
   }
+
   return next
 }
 
@@ -81,6 +85,7 @@ function splitOversizedStreamDataForNdjson(
 ): string[] {
   const chunks: string[] = []
   let start = 0
+
   while (start < data.length) {
     let low = start + 1
     let high = data.length
@@ -89,6 +94,7 @@ function splitOversizedStreamDataForNdjson(
     while (low <= high) {
       const rawMid = Math.floor((low + high) / 2)
       const mid = clampToSafeSplitIndex(data, start, rawMid)
+
       if (mid <= start) {
         low = rawMid + 1
         continue
@@ -122,18 +128,25 @@ export function writeStreamDataEvents(
   transformed = false
 ): void {
   const explicitRawLength = rawLength === data.length ? undefined : rawLength
+
   if (transformed) {
     streamSocket.write(encodeStreamDataEvent(sessionId, data, rawLength, seq, true))
+
     return
   }
+
   const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
   let chunks: string[]
+
   if (!carriesMetadata) {
     const line = encodeStreamDataEvent(sessionId, data)
+
     if (Buffer.byteLength(line, 'utf8') <= maxLineBytes) {
       streamSocket.write(line)
+
       return
     }
+
     chunks = splitOversizedStreamDataForNdjson(sessionId, data, maxLineBytes)
   } else {
     chunks = splitStreamDataForNdjson(
@@ -143,7 +156,9 @@ export function writeStreamDataEvents(
       explicitRawLength
     )
   }
+
   let consumed = 0
+
   for (const chunk of chunks) {
     consumed += chunk.length
     const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)

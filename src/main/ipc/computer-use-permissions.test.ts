@@ -35,6 +35,7 @@ describe('registerComputerUsePermissionHandlers', () => {
       openedSettings: false,
       launchedHelper: true
     }
+
     openComputerUsePermissionsMock.mockReturnValue(result)
 
     registerComputerUsePermissionHandlers()
@@ -42,6 +43,7 @@ describe('registerComputerUsePermissionHandlers', () => {
     const registration = handleMock.mock.calls.find(
       ([channel]) => channel === 'computerUsePermissions:openSetup'
     )
+
     expect(registration).toBeTruthy()
 
     await expect(registration![1](null, { id: 'accessibility' })).resolves.toBe(result)
@@ -56,6 +58,7 @@ describe('registerComputerUsePermissionHandlers', () => {
         { id: 'screenshots', status: 'not-granted' }
       ]
     }
+
     getComputerUsePermissionStatusMock.mockReturnValue(result)
 
     registerComputerUsePermissionHandlers()
@@ -63,6 +66,7 @@ describe('registerComputerUsePermissionHandlers', () => {
     const registration = handleMock.mock.calls.find(
       ([channel]) => channel === 'computerUsePermissions:getStatus'
     )
+
     expect(registration).toBeTruthy()
 
     await expect(registration![1]()).resolves.toBe(result)

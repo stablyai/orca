@@ -72,6 +72,7 @@ describe('AiVaultHandler', () => {
 
   it('discovers and parses sessions entirely on the relay host', async () => {
     const remoteHome = await makeTemporaryHome()
+
     const transcriptPath = join(
       remoteHome,
       '.codex',
@@ -81,6 +82,7 @@ describe('AiVaultHandler', () => {
       '26',
       'rollout-test.jsonl'
     )
+
     await mkdir(dirname(transcriptPath), { recursive: true })
     await writeFile(
       transcriptPath,
@@ -149,9 +151,11 @@ describe('AiVaultHandler', () => {
         scopePaths: scopePaths.slice(0, 64)
       })
     )
+
     const result = (await dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {
       scopePaths
     })) as AiVaultListResult
+
     expect(result.issues).toContainEqual(
       expect.objectContaining({
         kind: 'scope',
@@ -186,6 +190,7 @@ describe('AiVaultHandler', () => {
   it('coalesces identical in-flight scans without coupling caller cancellation', async () => {
     let resolveScan: ((result: AiVaultListResult) => void) | undefined
     let sharedSignal: AbortSignal | undefined
+
     const scanRemoteSessions = vi.fn(
       (args: { signal?: AbortSignal }) =>
         new Promise<AiVaultListResult>((resolve) => {
@@ -193,6 +198,7 @@ describe('AiVaultHandler', () => {
           resolveScan = resolve
         })
     )
+
     const dispatcher = createMockDispatcher()
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
@@ -204,11 +210,13 @@ describe('AiVaultHandler', () => {
       )
     })
     const firstController = new AbortController()
+
     const first = dispatcher.call(
       SSH_AI_VAULT_LIST_SESSIONS_METHOD,
       { limit: 20 },
       firstController.signal
     )
+
     const second = dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, { limit: 20 })
     await vi.waitFor(() => expect(scanRemoteSessions).toHaveBeenCalledTimes(1))
 
@@ -223,8 +231,10 @@ describe('AiVaultHandler', () => {
   it('re-joins a preempted relay caller onto the forced refresh', async () => {
     const signals: AbortSignal[] = []
     let resolveForced: ((result: AiVaultListResult) => void) | undefined
+
     const scanRemoteSessions = vi.fn((args: { signal: AbortSignal }) => {
       signals.push(args.signal)
+
       return new Promise<AiVaultListResult>((resolve) => {
         if (signals.length === 1) {
           args.signal.addEventListener('abort', () => resolve(emptyResult()), { once: true })
@@ -233,6 +243,7 @@ describe('AiVaultHandler', () => {
         }
       })
     })
+
     const dispatcher = createMockDispatcher()
     new AiVaultHandler(dispatcher.value, {
       remoteHome: '/home/ada',
@@ -250,6 +261,7 @@ describe('AiVaultHandler', () => {
       limit: 20,
       force: true
     })
+
     await vi.waitFor(() => expect(signals).toHaveLength(2))
 
     expect(signals[0]?.aborted).toBe(true)
@@ -262,6 +274,7 @@ describe('AiVaultHandler', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'freebsd', configurable: true })
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const dispatcher = createMockDispatcher()
 
@@ -270,6 +283,7 @@ describe('AiVaultHandler', () => {
       expect(() => dispatcher.call(SSH_AI_VAULT_LIST_SESSIONS_METHOD, {})).toThrow(/No handler/)
     } finally {
       stderr.mockRestore()
+
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -278,6 +292,7 @@ describe('AiVaultHandler', () => {
 
   it('soft-disables the method instead of aborting relay startup when the service is missing', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const dispatcher = createMockDispatcher()
 
@@ -331,6 +346,7 @@ describe('AiVaultHandler', () => {
 
   it('returns no titles instead of an RPC error when the sidecar is unavailable', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const dispatcher = createMockDispatcher()
       new AiVaultHandler(dispatcher.value, {
@@ -364,6 +380,7 @@ describe('AiVaultHandler', () => {
         resolveSessionTitles: () => {
           const error = new Error('The operation was aborted.')
           error.name = 'AbortError'
+
           return Promise.reject(error)
         }
       }
@@ -378,6 +395,7 @@ describe('AiVaultHandler', () => {
 async function makeTemporaryHome(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), 'orca-relay-ai-vault-'))
   temporaryHomes.push(path)
+
   return path
 }
 
@@ -412,18 +430,22 @@ function createMockDispatcher(): {
   call: (method: string, params: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>
 } {
   const handlers = new Map<string, RequestHandler>()
+
   const value = {
     onRequest(method: string, handler: RequestHandler) {
       handlers.set(method, handler)
     }
   } as RelayDispatcher
+
   return {
     value,
     call(method, params, signal) {
       const handler = handlers.get(method)
+
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
+
       return handler(params, {
         clientId: 1,
         isStale: () => signal?.aborted ?? false,

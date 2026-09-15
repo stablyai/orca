@@ -19,9 +19,11 @@ const ZSH_STARTUP_FILES = ['.zshenv', '.zshrc', '.zprofile', '.zlogin'] as const
 
 export function isOrcaOwnedZshWrapperDir(dir: string): boolean {
   const normalized = dir.replace(/\/+$/, '')
+
   if (!normalized) {
     return false
   }
+
   return (
     existsSync(`${normalized}/${ZSH_WRAPPER_DIR_MARKER_FILE}`) ||
     normalized.endsWith('/shell-ready/zsh')
@@ -33,13 +35,17 @@ function usableInheritedZdotdir(value: string | undefined): string | null {
   if (!value) {
     return null
   }
+
   const normalized = value.replace(/\/+$/, '')
+
   if (!normalized || isOrcaOwnedZshWrapperDir(normalized)) {
     return null
   }
+
   if (!ZSH_STARTUP_FILES.some((file) => existsSync(`${normalized}/${file}`))) {
     return null
   }
+
   return value
 }
 

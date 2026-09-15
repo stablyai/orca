@@ -92,6 +92,7 @@ describe('startDaemon', () => {
 
 function createMockSubprocess() {
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 99999,
     getForegroundProcess: vi.fn(() => null),

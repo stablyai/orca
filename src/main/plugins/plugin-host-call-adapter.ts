@@ -37,16 +37,21 @@ export async function executePluginHostCallRequest(input: {
   if (!isQualifiedPluginKey(input.pluginKey)) {
     return { ok: false, code: 'invalid_request', error: 'invalid qualified plugin key' }
   }
+
   const parsed = pluginHostCallRequestSchema.safeParse(input.request)
+
   if (!parsed.success) {
     return { ok: false, code: 'invalid_request', error: 'malformed plugin host call request' }
   }
+
   let policy: PluginHostCallPolicy
+
   try {
     policy = await input.resolvePolicy(input.pluginKey)
   } catch {
     return { ok: false, code: 'unavailable', error: 'plugin host policy is not available' }
   }
+
   return executePluginHostCall({
     pluginId: input.pluginKey,
     method: parsed.data.method,

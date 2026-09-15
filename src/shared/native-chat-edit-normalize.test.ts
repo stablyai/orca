@@ -40,6 +40,7 @@ describe('editLinesFromUnifiedPatch', () => {
     const parsed = editLinesFromUnifiedPatch(
       '@@ -1,2 +1,2 @@\n keep\n-old\n\\ No newline at end of file\n+new\n\\ No newline at end of file'
     )
+
     expect(parsed?.lines.map((line) => [line.kind, line.text])).toEqual([
       ['context', 'keep'],
       ['del', 'old'],
@@ -61,6 +62,7 @@ describe('editLinesFromUnifiedPatch', () => {
     const parsed = editLinesFromUnifiedPatch(
       'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,1 +1,1 @@\n-was\n+now'
     )
+
     expect(parsed?.lines.map((line) => [line.kind, line.text])).toEqual([
       ['del', 'was'],
       ['add', 'now']
@@ -81,6 +83,7 @@ describe('editLinesFromUnifiedPatch', () => {
     const parsed = editLinesFromUnifiedPatch(
       '@@ -40,2 +40,2 @@\n keep\n-was\n@@ -310,2 +310,2 @@\n+now\n tail'
     )
+
     expect(parsed?.lines.map((line) => [line.kind, unifiedLineNumber(line)])).toEqual([
       ['context', 40],
       ['del', 41],
@@ -138,6 +141,7 @@ describe('editFilesFromToolPair', () => {
         ]
       }
     })
+
     expect(files).toHaveLength(1)
     expect(files?.[0]?.path).toBe('src/a.ts')
     expect(files?.[0]?.changeKind).toBe('edited')
@@ -153,6 +157,7 @@ describe('editFilesFromToolPair', () => {
       input:
         "apply_patch <<'EOF'\n*** Begin Patch\n*** Add File: new.ts\n+one\n+two\n*** End Patch\nEOF"
     })
+
     expect(files?.[0]?.changeKind).toBe('added')
     expect(files?.[0]?.lineNumbersKnown).toBe(true)
     expect(gutter(files)).toEqual([1, 2])
@@ -166,6 +171,7 @@ describe('editFilesFromToolPair', () => {
           '*** Begin Patch\n*** Update File: first.ts\n ctx\n-was\n+now\n*** Update File: second.ts\n@@ -1,1 +1,1 @@\n-a\n+b\n*** End Patch'
       }
     })
+
     expect(files?.map((file) => file.path)).toEqual(['first.ts', 'second.ts'])
     expect(files?.[0]?.lines.map((line) => line.kind)).toEqual(['context', 'del', 'add'])
     expect(files?.[0]?.lineNumbersKnown).toBe(false)
@@ -179,6 +185,7 @@ describe('editFilesFromToolPair', () => {
           '*** Begin Patch\n*** Environment ID: abc123\n*** Update File: a.ts\n@@\n-was\n+now\n*** End of File\n*** End Patch'
       }
     })
+
     expect(files?.[0]?.lines.map((line) => line.text)).toEqual(['was', 'now'])
   })
 
@@ -187,6 +194,7 @@ describe('editFilesFromToolPair', () => {
       name: 'apply_patch',
       input: { input: '*** Begin Patch\n*** Delete File: gone.ts\n*** End Patch' }
     })
+
     expect(files).toHaveLength(1)
     expect(files?.[0]?.changeKind).toBe('deleted')
     expect(files?.[0]?.path).toBe('gone.ts')
@@ -201,6 +209,7 @@ describe('editFilesFromToolPair', () => {
           '*** Begin Patch\r\n*** Update File: a.ts\r\n@@ -1,2 +1,2 @@\r\n-was\r\n+now\r\n*** End Patch'
       }
     })
+
     expect(files).toHaveLength(1)
     expect(files?.[0]?.path).toBe('a.ts')
     expect(files?.[0]?.lines.map((line) => line.text)).toEqual(['was', 'now'])
@@ -220,6 +229,7 @@ describe('editFilesFromToolPair', () => {
         }
       }
     })
+
     expect(files?.[0]?.lines.map((line) => line.kind)).toEqual(['del', 'add', 'gap', 'del', 'add'])
     // A break marks nothing at either end, and counts no change of its own.
     expect(files?.[0]?.added).toBe(2)
@@ -233,6 +243,7 @@ describe('editFilesFromToolPair', () => {
       input:
         "apply_patch <<'EOF'\n*** Begin Patch\n*** Update File: old.ts\n*** Move to: new.ts\n@@\n-a\n+b\n*** End Patch\nEOF"
     })
+
     expect(files?.[0]?.changeKind).toBe('renamed')
     expect(files?.[0]?.oldPath).toBe('old.ts')
     expect(files?.[0]?.path).toBe('new.ts')
@@ -247,6 +258,7 @@ describe('editFilesFromToolPair', () => {
         new_string: 'keep\nnow\ntail'
       }
     })
+
     expect(files?.[0]?.lines.map((line) => line.kind)).toEqual(['context', 'del', 'add', 'context'])
     expect(files?.[0]?.lineNumbersKnown).toBe(false)
   })
@@ -270,6 +282,7 @@ describe('editFilesFromToolPair', () => {
         }
       }
     })
+
     expect(files?.[0]?.lineNumbersKnown).toBe(true)
     expect(gutter(files)).toEqual([12, 13, 13, 14])
   })
@@ -280,6 +293,7 @@ describe('editFilesFromToolPair', () => {
       input: { file_path: '/repo/new.ts', content: 'one\ntwo\n' },
       result: { output: 'File created successfully at: /repo/new.ts' }
     })
+
     expect(files?.[0]?.changeKind).toBe('added')
     expect(gutter(files)).toEqual([1, 2])
   })
@@ -290,12 +304,15 @@ describe('editFilesFromToolPair', () => {
       input: { file_path: '/repo/a.ts', content: 'one\ntwo\n' },
       result: { output: 'The file /repo/a.ts has been updated.' }
     })
+
     expect(overwrite?.[0]?.changeKind).toBe('edited')
+
     // With no result at all there is no evidence of a creation either.
     const unreported = settledFiles({
       name: 'Write',
       input: { file_path: '/repo/a.ts', content: 'one\n' }
     })
+
     expect(unreported?.[0]?.changeKind).toBe('edited')
   })
 
@@ -310,6 +327,7 @@ describe('editFilesFromToolPair', () => {
         ]
       }
     })
+
     expect(files).toHaveLength(1)
     expect(files?.[0]?.path).toBe('/repo/a.ts')
     // Each entry is its own region, so a break separates them.
@@ -333,6 +351,7 @@ describe('editFilesFromToolPair', () => {
       name: 'Edit',
       input: { file_path: '/repo/a.ts', old_string: 'keep\nwas', new_string: 'keep\nnow' }
     })
+
     expect(files?.[0]?.lineNumbersKnown).toBe(false)
     expect(gutter(files)).toEqual([null, null, null])
     expect(
@@ -370,12 +389,14 @@ describe('editFilesFromToolPair', () => {
         result: { output: patch }
       })
     ).toBeNull()
+
     // The structured journal's `Diff` item carries its patch only on the result.
     const diffed = settledFiles({
       name: 'Diff',
       input: { path: '/repo/a.ts' },
       result: { output: patch }
     })
+
     expect(diffed?.[0]?.path).toBe('/repo/a.ts')
     expect(diffed?.[0]?.added).toBe(1)
   })
@@ -385,6 +406,7 @@ describe('editFilesFromToolPair', () => {
       name: 'Write',
       input: { file_path: '/repo/a.ts', content: `${'x'.repeat(MAX_EDIT_CHARS)}\nlast\n` }
     })
+
     expect(files?.[0]?.truncated).toBe(true)
     // The clipped body ends mid-line, so its one row is real and must survive.
     expect(files?.[0]?.lines).toHaveLength(1)
@@ -403,6 +425,7 @@ describe('editFilesFromToolPair', () => {
         ]
       }
     })
+
     expect(files?.[0]?.changeKind).toBe('renamed')
     expect(files?.[0]?.lines.some((line) => line.text.includes('Moved to'))).toBe(false)
     expect(gutter(files)).toEqual([1, 1])
@@ -413,6 +436,7 @@ describe('editFilesFromToolPair', () => {
       name: 'apply_patch',
       input: { changes: [{ path: 'new.ts', kind: { type: 'add' }, diff: 'one\ntwo' }] }
     })
+
     expect(files?.[0]?.changeKind).toBe('added')
     expect(files?.[0]?.added).toBe(2)
   })
@@ -427,12 +451,14 @@ describe('editFilesFromToolPair', () => {
       },
       result: { output: 'File created successfully at: docs/patch-format.md' }
     })
+
     expect(files?.map((file) => file.path)).toEqual(['docs/patch-format.md'])
     expect(files?.[0]?.lines.some((line) => line.text.includes('Begin Patch'))).toBe(true)
   })
 
   it('finds an envelope in a command payload that arrived as JSON text', () => {
     const envelope = '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-was\n+now\n*** End Patch'
+
     const files = settledFiles({
       name: 'shell',
       input: JSON.stringify({
@@ -440,6 +466,7 @@ describe('editFilesFromToolPair', () => {
         workdir: '/repo'
       })
     })
+
     expect(files?.[0]?.path).toBe('src/a.ts')
     expect(files?.[0]?.added).toBe(1)
   })
@@ -462,6 +489,7 @@ describe('editFilesFromToolPair', () => {
           'diff --git a/two.ts b/two.ts\n--- a/two.ts\n+++ b/two.ts\n@@ -10,1 +10,1 @@\n-second\n+SECOND'
       }
     })
+
     expect(files?.map((file) => file.path)).toEqual(['one.ts', 'two.ts'])
     expect(files?.[0]?.lines.map((line) => line.text)).toEqual(['first', 'FIRST'])
     expect(gutter(files?.slice(1) ?? null)).toEqual([10, 10])
@@ -475,6 +503,7 @@ describe('editFilesFromToolPair', () => {
           '*** Begin Patch\n*** Update File: first.ts\n@@\n-a\n+b\n*** Update File: second.ts\n*** Update File: third.ts\n@@\n-c\n+d\n*** End Patch'
       }
     })
+
     expect(files?.map((file) => file.path)).toEqual(['first.ts', 'second.ts', 'third.ts'])
     expect(files?.[1]?.lines).toEqual([])
   })
@@ -489,6 +518,7 @@ describe('editFilesFromToolPair', () => {
           '--- a/two.ts\n+++ b/two.ts\n@@ -10,1 +10,1 @@\n-second\n+SECOND'
       }
     })
+
     expect(files?.map((file) => file.path)).toEqual(['one.ts', 'two.ts'])
     expect(gutter(files?.slice(1) ?? null)).toEqual([10, 10])
   })
@@ -509,6 +539,7 @@ describe('editFilesFromToolPair', () => {
       input: { path: 'src/a.ts' },
       result: { output: '@@ -1,3 +1,3 @@\n ctx\n-was\n+now\n… (48210 bytes)' }
     })
+
     expect(files?.[0]?.truncated).toBe(true)
     expect(files?.[0]?.lines.map((line) => line.text)).toEqual(['ctx', 'was', 'now'])
   })
@@ -519,6 +550,7 @@ describe('editFilesFromToolPair', () => {
       input: { path: 'src/old.ts' },
       result: { output: '@@ -1,1 +1,1 @@\n-a\n+b\n\nMoved to: src/new.ts' }
     })
+
     expect(files?.[0]?.changeKind).toBe('renamed')
     expect(files?.[0]?.path).toBe('src/new.ts')
     expect(files?.[0]?.oldPath).toBe('src/old.ts')
@@ -527,15 +559,18 @@ describe('editFilesFromToolPair', () => {
 
   it('does not read a row that merely mentions a move as one', () => {
     const body = '@@ -1,2 +1,2 @@\n ctx\n+See Moved to: docs/archive/index.md'
+
     const fromPatch = settledFiles({
       name: 'Diff',
       input: { path: 'docs/index.md' },
       result: { output: body }
     })
+
     const fromChanges = settledFiles({
       name: 'apply_patch',
       input: { changes: [{ path: 'docs/index.md', kind: { type: 'update' }, diff: body }] }
     })
+
     for (const files of [fromPatch, fromChanges]) {
       expect(files?.[0]?.changeKind).toBe('edited')
       expect(files?.[0]?.oldPath).toBeNull()
@@ -546,10 +581,12 @@ describe('editFilesFromToolPair', () => {
 
   it('accepts either spelling of the command that applies an envelope', () => {
     const envelope = '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-was\n+now\n*** End Patch'
+
     const files = settledFiles({
       name: 'shell',
       input: { command: ['bash', '-lc', `applypatch <<'EOF'\n${envelope}\nEOF`] }
     })
+
     expect(files?.[0]?.path).toBe('src/a.ts')
   })
 
@@ -562,6 +599,7 @@ describe('editFilesFromToolPair', () => {
           'diff --git a/old.txt b/new.txt\n--- a/old.txt\n+++ b/new.txt\n@@ -1,1 +1,1 @@\n-a\n+b'
       }
     })
+
     expect(files?.[0]?.path).toBe('new.txt')
     expect(files?.[0]?.oldPath).toBe('old.txt')
   })
@@ -582,6 +620,7 @@ describe('editFilesFromToolPair', () => {
       input: {},
       result: { output: '--- d1/x.ts\n+++ d2/x.ts\n@@ -1,1 +1,1 @@\n-a\n+b' }
     })
+
     expect(files?.[0]?.changeKind).toBe('edited')
     expect(files?.[0]?.oldPath).toBeNull()
     expect(files?.[0]?.path).toBe('d2/x.ts')
@@ -596,6 +635,7 @@ describe('editFilesFromToolPair', () => {
           'warning: something\ndiff --git a/one.ts b/one.ts\n--- a/one.ts\n+++ b/one.ts\n@@ -1,1 +1,1 @@\n-a\n+b'
       }
     })
+
     // The preamble is its own nameless section, and must not make this look
     // like a patch over several files.
     expect(files?.map((file) => file.path)).toEqual(['/repo/one.ts'])

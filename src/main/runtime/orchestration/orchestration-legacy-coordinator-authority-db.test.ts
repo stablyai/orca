@@ -14,6 +14,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -23,6 +24,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
   function createCutoverFixture(): LegacyStorageCutoverFixture {
     const created = createLegacyStorageCutoverFixture()
     tempDir = created.tempDir
+
     return created.fixture
   }
 
@@ -34,6 +36,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
     const fixture = createCutoverFixture()
     db = new OrchestrationDb(fixture.dbPath)
     const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
+
     const worker = db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       dispatchId: fixture.legacyDispatchId,
@@ -44,6 +47,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       launchTokenHash: 'legacy_launch_hash',
       processIncarnation: 'process_1'
     })
+
     return {
       fixture,
       adoptedRunId,
@@ -192,6 +196,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
     const fixture = createCutoverFixture()
     db = new OrchestrationDb(fixture.dbPath)
     const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
+
     const unacknowledged = db.insertMessage({
       runId: adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -199,7 +204,9 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       to: 'term_legacy_coord',
       subject: 'second recovered coordinator outcome'
     })
+
     db.markAsRead([unacknowledged.id])
+
     const coordinator = db.commitLegacyCompatibilityPrincipal({
       runId: adoptedRunId,
       role: 'coordinator',
@@ -209,6 +216,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       launchTokenHash: 'coord_launch_hash',
       processIncarnation: 'process_coord'
     }).principal
+
     const firstPage = db.getLegacyMailPage({ principalId: coordinator.id, limit: 1 })
     expect(firstPage.recovery).toBe(true)
     db.acknowledgeLegacyMail({
@@ -254,6 +262,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111',
       takeoverLegacy: true
     })!
+
     expect(db.getMessageById(recoveryMessageId)).toMatchObject({
       to_handle: `run:${adoptedRunId}`,
       delivery_contract: 'current_delivery',
@@ -264,10 +273,12 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       runId: adoptedRunId,
       consumerGeneration: run.consumer_generation
     })!
+
     const replay = db.getOrCreateRunDelivery({
       runId: adoptedRunId,
       consumerGeneration: run.consumer_generation
     })!
+
     expect(first.messages.map((message) => message.id)).toContain(recoveryMessageId)
     expect(replay).toMatchObject({ replayed: true, delivery: { id: first.delivery.id } })
 
@@ -288,6 +299,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
 
   it('promotes retained mail on an ordinary post-settlement coordinator replacement', () => {
     const state = openAdoptedFixture()
+
     const coordinator = db!.commitLegacyCompatibilityPrincipal({
       runId: state.adoptedRunId,
       role: 'coordinator',
@@ -297,6 +309,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       launchTokenHash: 'coord_launch_hash',
       processIncarnation: 'process_coord'
     }).principal
+
     const completion = db!.insertMessage({
       runId: state.adoptedRunId,
       deliveryContract: 'legacy_direct',
@@ -305,6 +318,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       subject: 'Completed before ordinary run-use',
       type: 'worker_done'
     })
+
     db!.settleWorkerReport({
       taskId: state.fixture.legacyTaskId,
       dispatchId: state.fixture.legacyDispatchId,
@@ -336,6 +350,7 @@ describe('OrchestrationDb legacy coordinator authority', () => {
 
   it('acknowledges the exact current Run answer to a legacy ask after takeover', () => {
     const state = openAdoptedFixture()
+
     const ask = db!.commitLegacyAskOperation({
       principalId: state.workerPrincipalId,
       operationKey: 'ask_before_takeover',
@@ -344,18 +359,21 @@ describe('OrchestrationDb legacy coordinator authority', () => {
       question: 'Continue after takeover?',
       recipientHandle: 'term_legacy_coord'
     })
+
     const run = db!.bindRun({
       runId: state.adoptedRunId,
       coordinatorHandle: 'term_current_coord',
       coordinatorPaneKey: 'tab_current:11111111-1111-4111-8111-111111111111',
       takeoverLegacy: true
     })!
+
     const answered = db!.answerQuestion({
       messageId: ask.question.message_id,
       runId: state.adoptedRunId,
       consumerGeneration: run.consumer_generation,
       body: 'continue'
     })
+
     expect(answered.message).toMatchObject({
       from_handle: `run:${state.adoptedRunId}`,
       to_handle: `dispatch:${state.fixture.legacyDispatchId}`,

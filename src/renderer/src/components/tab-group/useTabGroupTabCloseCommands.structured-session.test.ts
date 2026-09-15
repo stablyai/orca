@@ -31,6 +31,7 @@ const store = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
+
   return {
     ...actual,
     useCallback: <T>(callback: T) => callback,
@@ -121,10 +122,12 @@ describe('structured agent-session close ordering', () => {
     const order: string[] = []
     mocks.closeStructuredAgentSession.mockImplementation(async () => {
       order.push('agent-close')
+
       return 'closed'
     })
     mocks.callRuntimeRpc.mockImplementation(async () => {
       order.push('tab-close')
+
       return { ok: true }
     })
     mocks.closeUnifiedTab.mockImplementation(() => order.push('local-remove'))
@@ -133,6 +136,7 @@ describe('structured agent-session close ordering', () => {
       worktreeId: 'wt-1',
       groupTabs: [AGENT_TAB]
     })
+
     closeItem(AGENT_TAB.id)
 
     await vi.waitFor(() => expect(order).toEqual(['agent-close', 'tab-close', 'local-remove']))
@@ -144,6 +148,7 @@ describe('structured agent-session close ordering', () => {
       worktreeId: 'wt-1',
       groupTabs: [AGENT_TAB]
     })
+
     closeItem(AGENT_TAB.id)
 
     await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id))
@@ -159,6 +164,7 @@ describe('structured agent-session close ordering', () => {
       worktreeId: 'wt-1',
       groupTabs: [AGENT_TAB]
     })
+
     closeItem(AGENT_TAB.id)
     await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalled())
 
@@ -172,6 +178,7 @@ describe('structured agent-session close ordering', () => {
       worktreeId: 'wt-1',
       groupTabs: [AGENT_TAB]
     })
+
     closeItem(AGENT_TAB.id)
     await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalled())
 

@@ -24,11 +24,13 @@ export function useUnlinkGitHubPullRequest({
     if (!activeWorktreeId || !activeWorktree || activeReview?.provider !== 'github') {
       return
     }
+
     const result = await updateWorktreeMeta(
       activeWorktreeId,
       { linkedPR: null, suppressedGitHubPR: linkedPR ?? activeReview.number },
       { executionHostId: activeWorktree.hostId }
     )
+
     if (!result.ok) {
       toast.error(result.error)
     }

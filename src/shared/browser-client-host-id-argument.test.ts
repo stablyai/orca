@@ -5,6 +5,7 @@ import {
 } from './browser-client-host-id-argument'
 
 const HOST_ID = '6f0f6b1c-6c8e-4a5f-9a6b-8d3f2b1c4e5a'
+
 const OTHER_HOST_ID = '0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f'
 
 describe('browser client host id argument', () => {

@@ -9,12 +9,14 @@ import {
 } from './release-checkout-tree.ts'
 
 export const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
+
 const DEFAULT_CACHE_ROOT = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
 
 // Bump when extraction or the alias rewrite changes so cached trees are rebuilt.
 const CHECKOUT_FORMAT = 3
 
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
+
 const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
 
 export type ReleaseCheckout = {
@@ -48,6 +50,7 @@ export type CheckoutLockOptions = {
 }
 
 type CheckoutLockRelease = () => Promise<void>
+
 type AcquireCheckoutLock = (
   root: string,
   options: CheckoutLockOptions
@@ -93,14 +96,18 @@ function compareReleaseTags(a: string, b: string): number {
       .split('.')
       .map((part) => Number.parseInt(part, 10))
       .map((value) => (Number.isFinite(value) ? value : 0))
+
   const left = parts(a)
   const right = parts(b)
+
   for (let index = 0; index < Math.max(left.length, right.length); index++) {
     const diff = (left[index] ?? 0) - (right[index] ?? 0)
+
     if (diff !== 0) {
       return diff
     }
   }
+
   return 0
 }
 
@@ -113,10 +120,13 @@ function compareReleaseTags(a: string, b: string): number {
  */
 export function resolveBaselineReleaseRef(): string {
   const override = process.env[BASELINE_REF_ENV]?.trim()
+
   if (override) {
     return override
   }
+
   let tags: string[]
+
   try {
     tags = git(['tag', '--list', 'v[0-9]*']).split('\n').filter(Boolean)
   } catch (error) {
@@ -125,7 +135,9 @@ export function resolveBaselineReleaseRef(): string {
         `Run it inside a git checkout, or pin a ref with ${BASELINE_REF_ENV}.`
     )
   }
+
   const latest = selectLatestStableReleaseTag(tags)
+
   if (!latest) {
     throw new Error(
       `Cross-version harness found no stable desktop release tags matching vX.Y.Z (saw ${tags.length} tag(s) total). ` +
@@ -133,6 +145,7 @@ export function resolveBaselineReleaseRef(): string {
         `or pin a ref with ${BASELINE_REF_ENV}.`
     )
   }
+
   return latest
 }
 
@@ -168,6 +181,7 @@ async function readStamp(root: string): Promise<CheckoutStamp | null> {
 
 async function checkoutMatches(root: string, commit: string): Promise<boolean> {
   const stamp = await readStamp(root)
+
   return stamp?.commit === commit && stamp.format === CHECKOUT_FORMAT
 }
 
@@ -186,6 +200,7 @@ function checkoutModulePath(checkout: ReleaseCheckout, rootRelativePath: string)
   const fromRoot = rootRelativePath.replace(/^[/\\]+/, '')
   const absolute = resolve(checkout.root, fromRoot)
   const fromCheckout = relative(checkout.root, absolute)
+
   if (
     !fromRoot ||
     fromCheckout === '..' ||
@@ -196,6 +211,7 @@ function checkoutModulePath(checkout: ReleaseCheckout, rootRelativePath: string)
       `Cross-version module path must stay inside the release checkout: ${rootRelativePath}`
     )
   }
+
   return absolute.split('\\').join('/')
 }
 
@@ -228,6 +244,7 @@ export async function materializeReleaseCheckout(
   const label = ref.replace(/[^A-Za-z0-9._-]/g, '_')
   const cacheRoot = options.cacheRoot ?? DEFAULT_CACHE_ROOT
   const root = join(cacheRoot, label, `${commit}-format-${CHECKOUT_FORMAT}`)
+
   if (await checkoutMatches(root, commit)) {
     return { ref, commit, label, root }
   }
@@ -236,12 +253,16 @@ export async function materializeReleaseCheckout(
   const lifecycleContext = { root, stagingPrefix }
   const hooks = options.testHooks
   const lockOptions = hooks?.lockOptions ?? DEFAULT_LOCK_OPTIONS
+
   const acquireLock: AcquireCheckoutLock =
     hooks?.acquireLock ?? ((target, value) => lock(target, value))
+
   await mkdir(dirname(root), { recursive: true })
   let releaseLock: CheckoutLockRelease | undefined
+
   try {
     const acquiring = acquireLock(root, lockOptions)
+
     try {
       hooks?.onLockAttempt?.(lifecycleContext)
     } catch (error) {
@@ -251,20 +272,25 @@ export async function materializeReleaseCheckout(
       )
       throw error
     }
+
     releaseLock = await acquiring
   } catch (error) {
     if (await checkoutMatches(root, commit)) {
       return { ref, commit, label, root }
     }
+
     throw new Error(`Cross-version harness could not lock ${ref} (${commit}): ${String(error)}`)
   }
 
   let staging: string | undefined
+
   try {
     await hooks?.onLockAcquired?.(lifecycleContext)
+
     if (await checkoutMatches(root, commit)) {
       return { ref, commit, label, root }
     }
+
     await scavengeReleaseCheckoutStaging(dirname(root), stagingPrefix)
     staging = await mkdtemp(join(dirname(root), stagingPrefix))
     const stagingContext = { ...lifecycleContext, staging }
@@ -284,14 +310,17 @@ export async function materializeReleaseCheckout(
     if (await checkoutMatches(root, commit)) {
       return { ref, commit, label, root }
     }
+
     throw new Error(`Cross-version harness failed to extract ${ref} (${commit}): ${String(error)}`)
   } finally {
     if (staging) {
       await rm(staging, { recursive: true, force: true })
     }
+
     await releaseLock()
   }
 
   await assertCheckoutWireSurface(root, ref)
+
   return { ref, commit, label, root }
 }

@@ -15,6 +15,7 @@ export function useWorktreePointerDragAutoscroll(args: {
   scheduleWorktreePointerDragFrame: (drag: WorktreePointerDrag) => void
 }): () => void {
   const { session, runtime, scrollRef, markScrollMovement, scheduleWorktreePointerDragFrame } = args
+
   const {
     worktreePointerDragRef,
     pointerAutoscrollFrameIdRef,
@@ -29,13 +30,16 @@ export function useWorktreePointerDragAutoscroll(args: {
       const drag = worktreePointerDragRef.current
       const container = scrollRef.current
       const dragSession = session.worktreeDragSessionRef.current
+
       if (!drag?.active || !container || !dragSession) {
         cancelWorktreePointerAutoscroll()
+
         return
       }
 
       const previousFrameTime = pointerAutoscrollLastFrameTimeRef.current ?? frameTime
       pointerAutoscrollLastFrameTimeRef.current = frameTime
+
       const autoscroll = getWorktreeSidebarDragAutoscroll({
         point: { clientX: drag.currentX, clientY: drag.currentY },
         containerRect: container.getBoundingClientRect(),
@@ -44,13 +48,17 @@ export function useWorktreePointerDragAutoscroll(args: {
         clientHeight: container.clientHeight,
         elapsedMs: frameTime - previousFrameTime
       })
+
       if (autoscroll) {
         markScrollMovement()
         container.scrollTop = autoscroll.scrollTop
+
         if (!session.refreshWorktreeDragSession()) {
           clearWorktreeDrag()
+
           return
         }
+
         scheduleWorktreePointerDragFrame(drag)
       }
 
@@ -73,6 +81,7 @@ export function useWorktreePointerDragAutoscroll(args: {
     if (pointerAutoscrollFrameIdRef.current !== null) {
       return
     }
+
     pointerAutoscrollLastFrameTimeRef.current = null
     pointerAutoscrollFrameIdRef.current = window.requestAnimationFrame(runFrame)
   }, [pointerAutoscrollFrameIdRef, pointerAutoscrollLastFrameTimeRef, runFrame])

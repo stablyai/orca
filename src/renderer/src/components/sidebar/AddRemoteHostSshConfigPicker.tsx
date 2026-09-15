@@ -57,6 +57,7 @@ export function AddRemoteHostSshConfigPicker({
   // refresh (or a failed load the user can retry) is outstanding.
   const filterDisabled = isBulkImporting || isResolving
   const picksDisabled = isBulkImporting || isResolving
+
   const canAddAll =
     !isLoading && !isBulkImporting && !isResolving && loadError == null && newHostCount > 0
 
@@ -82,9 +83,11 @@ export function AddRemoteHostSshConfigPicker({
         onChange={(event) => {
           const value = event.target.value
           setQuery(value)
+
           if (queryTimer.current) {
             clearTimeout(queryTimer.current)
           }
+
           queryTimer.current = setTimeout(() => onQueryChange(value), 200)
         }}
         placeholder={translate(

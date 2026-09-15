@@ -171,7 +171,9 @@ export function AgentTerminalPanel({
         onOpenChange(false)
       }
     }
+
     document.addEventListener('keydown', handleKeyDown)
+
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onOpenChange])
 

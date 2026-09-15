@@ -21,18 +21,21 @@ function getCliActionLabel(status: CliInstallStatus | null, busy: boolean): stri
       'Registering...'
     )
   }
+
   if (isOrcaCliAvailableOnPath(status)) {
     return translate(
       'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.69fb2c2289',
       'Enabled'
     )
   }
+
   if (status?.state === 'installed') {
     return translate(
       'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.c6705092ba',
       'Fix PATH'
     )
   }
+
   return translate(
     'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.7c1b6bdb1e',
     'Enable'
@@ -64,6 +67,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
   const [cliBusy, setCliBusy] = useState(false)
   const [setupRechecking, setSetupRechecking] = useState(false)
   const mountedRef = useMountedRef()
+
   const {
     installed: cliSkillInstalled,
     loading: cliSkillLoading,
@@ -76,8 +80,10 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
 
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     setCliLoading(true)
+
     try {
       const status = await window.api.cli.getInstallStatus()
+
       if (mountedRef.current) {
         setCliInstallStatus(status)
       }
@@ -104,6 +110,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
     if (!enabled) {
       return
     }
+
     void refreshCliStatus()
   }, [enabled, refreshCliStatus])
 
@@ -111,13 +118,16 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
     if (!enabled) {
       return
     }
+
     // Why: users often register the CLI from Settings first; refresh on focus so
     // the emulator guide reflects the latest install/PATH state.
     const handleFocus = (): void => {
       void refreshCliStatus()
       void refreshCliSkill()
     }
+
     window.addEventListener('focus', handleFocus)
+
     return () => window.removeEventListener('focus', handleFocus)
   }, [enabled, refreshCliSkill, refreshCliStatus])
 
@@ -133,19 +143,25 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
     if (setupRechecking) {
       return
     }
+
     setSetupRechecking(true)
+
     try {
       const [cliStatus, skillInstalled] = await Promise.all([
         window.api.cli.getInstallStatus(),
         refreshCliSkill()
       ])
+
       if (mountedRef.current) {
         setCliInstallStatus(cliStatus)
       }
+
       const cliReady = isOrcaCliAvailableOnPath(cliStatus)
+
       if (!mountedRef.current) {
         return
       }
+
       if (cliReady && skillInstalled) {
         toast.success(
           translate(
@@ -153,8 +169,10 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
             'Agent control is ready.'
           )
         )
+
         return
       }
+
       if (skillInstalled) {
         toast.message(
           translate(
@@ -162,8 +180,10 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
             'Skill is installed. Enable the Orca CLI to finish setup.'
           )
         )
+
         return
       }
+
       if (cliReady) {
         toast.message(
           translate(
@@ -171,8 +191,10 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
             'Orca CLI is ready. Install the skill to finish setup.'
           )
         )
+
         return
       }
+
       toast.message(
         translate(
           'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.4c26913def',
@@ -199,10 +221,12 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
 
   const handleEnableCli = useCallback(async (): Promise<void> => {
     setCliBusy(true)
+
     try {
       const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
         onStatusChange: setCliInstallStatus
       })
+
       if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
         toast.success(
           translate(

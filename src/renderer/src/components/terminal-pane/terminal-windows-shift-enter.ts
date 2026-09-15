@@ -23,6 +23,7 @@ export function resolveWindowsShiftEnterEncoding(
   if (signals.foreground?.shellForeground) {
     return 'alt-enter'
   }
+
   // Why: a pending confirmation retains the last allowlisted byte capability;
   // CSI-u is inert in a shell, while Esc+CR can submit in Pi.
   const agent =
@@ -30,6 +31,7 @@ export function resolveWindowsShiftEnterEncoding(
     signals.foreground?.routingConfirmationPending === true
       ? signals.foreground.agent
       : null
+
   return agent ? (TUI_AGENT_CONFIG[agent].windowsShiftEnterEncoding ?? 'alt-enter') : 'alt-enter'
 }
 
@@ -40,10 +42,12 @@ export function resolveWindowsShiftEnterEncodingForPane(
   terminalTitle?: string
 ): WindowsShiftEnterEncoding {
   const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+
   const encoding = resolveWindowsShiftEnterEncoding({
     foreground: state.paneForegroundAgentByPaneKey[paneKey],
     launchAgentType: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType
   })
+
   if (
     encoding === 'csi-u' ||
     !terminalTitle ||
@@ -53,8 +57,10 @@ export function resolveWindowsShiftEnterEncodingForPane(
   ) {
     return encoding
   }
+
   // Why: strict pane-local titles recover Pi/Droid through process-scan gaps without overriding process or shell proof.
   const titleAgent = resolveCommittedTitleAgentType(terminalTitle)
+
   return titleAgent
     ? (TUI_AGENT_CONFIG[titleAgent].windowsShiftEnterEncoding ?? 'alt-enter')
     : 'alt-enter'

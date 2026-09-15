@@ -47,10 +47,13 @@ function transportReturning(
       calls.push(params)
       const requested = (params as { workspaceRelativePath: string }).workspaceRelativePath
       const queue = responses.get(requested)
+
       if (!queue?.length) {
         return { ok: false, error: { code: 'not_found', message: 'missing' }, _meta: {} } as never
       }
+
       const next = queue.shift()
+
       return {
         ok: true,
         result: { ...next, totalBytes: next?.bytesRead ?? 0 },
@@ -58,12 +61,14 @@ function transportReturning(
       } as never
     }
   })
+
   return { transport, calls }
 }
 
 describe('executeBrowserClientUploadCommand', () => {
   it('rewrites remote paths to staged copies that outlive the command until the page is released', async () => {
     const staging = new BrowserClientUploadStaging(stagingRoot)
+
     const { transport, calls } = transportReturning(
       new Map([
         [
@@ -72,6 +77,7 @@ describe('executeBrowserClientUploadCommand', () => {
         ]
       ])
     )
+
     const run = vi.fn().mockResolvedValue({ uploaded: true })
 
     const result = await executeBrowserClientUploadCommand({
@@ -118,6 +124,7 @@ describe('executeBrowserClientUploadCommand', () => {
 
   it('removes staged files when the upload itself fails', async () => {
     const staging = new BrowserClientUploadStaging(stagingRoot)
+
     const { transport } = transportReturning(
       new Map([['a.txt', [{ contentBase64: '', bytesRead: 0, eof: true }]]])
     )
@@ -146,6 +153,7 @@ describe('executeBrowserClientUploadCommand', () => {
         throw new Error('EBUSY: resource busy or locked')
       }
     })
+
     const { transport } = transportReturning(
       new Map([['a.txt', [{ contentBase64: '', bytesRead: 0, eof: true }]]])
     )

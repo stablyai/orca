@@ -11,21 +11,27 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'header') {
     return row.key
   }
+
   if (row.type === 'item') {
     return row.rowKey
   }
+
   if (row.type === 'folder-workspace') {
     return folderWorkspaceKey(row.folderWorkspace.id)
   }
+
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
   }
+
   if (row.type === 'imported-worktrees-card') {
     return row.key
   }
+
   if (row.type === 'new-external-worktrees-inbox') {
     return row.key
   }
+
   return null
 }
 
@@ -33,6 +39,7 @@ export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean 
   if (row.type === 'lineage-group') {
     return row.rows.some((item) => item.rowKey === rowKey)
   }
+
   return getRenderRowSidebarKey(row) === rowKey
 }
 
@@ -57,12 +64,15 @@ export function renderRowContainsWorktree(
   if (worktreeId === null) {
     return false
   }
+
   if (row.type === 'folder-workspace') {
     return folderWorkspaceKey(row.folderWorkspace.id) === worktreeId
   }
+
   if (row.type === 'lineage-group') {
     return row.rows.some((item) => itemMatchesWorktree(item, worktreeId, executionHostId))
   }
+
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId)
 }
 
@@ -74,6 +84,7 @@ export function getRenderRowWorktreeItem(
   if (row.type === 'lineage-group') {
     return row.rows.find((item) => itemMatchesWorktree(item, worktreeId, executionHostId)) ?? null
   }
+
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId) ? row : null
 }
 
@@ -84,19 +95,25 @@ export function findPreferredRenderRowIndexForWorktree(
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): number {
   let fallbackIndex = -1
+
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
+
     if (!renderRowContainsWorktree(row, worktreeId)) {
       continue
     }
+
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
+
     const itemRow = getRenderRowWorktreeItem(row, worktreeId)
+
     if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
       return index
     }
   }
+
   return fallbackIndex
 }
 
@@ -107,29 +124,38 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
 ): number {
   const identity = getWorktreeHostIdentity(worktree)
   let fallbackIndex = -1
+
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
+
     // Why: host-qualified reveals are emitted for folder workspaces too, and a
     // walker that only knows item rows returns -1 so the reveal never lands.
     if (row.type === 'folder-workspace') {
       if (folderWorkspaceKey(row.folderWorkspace.id) === worktree.id) {
         return index
       }
+
       continue
     }
+
     const itemRows = row.type === 'lineage-group' ? row.rows : row.type === 'item' ? [row] : []
+
     const itemRow = itemRows.find(
       (candidate) => getWorktreeHostIdentity(candidate.worktree) === identity
     )
+
     if (!itemRow) {
       continue
     }
+
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
+
     if (pinnedDisplayPolicy === 'duplicate-in-groups' && !isPinnedWorktreeRow(itemRow)) {
       return index
     }
   }
+
   return fallbackIndex
 }

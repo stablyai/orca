@@ -5,6 +5,7 @@ import type * as KeybindingsModule from '../../../shared/keybindings'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 
 const counters = vi.hoisted(() => ({ effective: 0, formatList: 0, formatBinding: 0 }))
+
 const platformRef = vi.hoisted(() => ({ current: 'darwin' as NodeJS.Platform }))
 
 vi.mock('../lib/shortcut-platform', () => ({
@@ -13,20 +14,24 @@ vi.mock('../lib/shortcut-platform', () => ({
 
 vi.mock('../../../shared/keybindings', async (importOriginal) => {
   const actual = await importOriginal<typeof KeybindingsModule>()
+
   return {
     ...actual,
     getEffectiveKeybindingsForAction: (
       ...args: Parameters<typeof actual.getEffectiveKeybindingsForAction>
     ) => {
       counters.effective++
+
       return actual.getEffectiveKeybindingsForAction(...args)
     },
     formatKeybindingList: (...args: Parameters<typeof actual.formatKeybindingList>) => {
       counters.formatList++
+
       return actual.formatKeybindingList(...args)
     },
     formatKeybinding: (...args: Parameters<typeof actual.formatKeybinding>) => {
       counters.formatBinding++
+
       return actual.formatKeybinding(...args)
     }
   }
@@ -39,6 +44,7 @@ const {
   formatShortcutLabel,
   useShortcutLabel
 } = await import('./useShortcutLabel')
+
 const { useAppStore } = await import('@/store')
 
 function resetCounters(): void {
@@ -62,9 +68,11 @@ describe('shortcut label memoization', () => {
     const overrides = overridesFor('Mod+Shift+K')
     const first = formatShortcutLabel('tab.close', overrides)
     resetCounters()
+
     for (let index = 0; index < 200; index++) {
       expect(formatShortcutLabel('tab.close', overrides)).toBe(first)
     }
+
     expect(counters.effective).toBe(0)
     expect(counters.formatList).toBe(0)
   })
@@ -144,9 +152,11 @@ describe('useShortcutLabel', () => {
     const { rerender } = render(<CloseLabel />)
     expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
     resetCounters()
+
     for (let index = 0; index < 25; index++) {
       rerender(<CloseLabel />)
     }
+
     expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
     expect(counters.effective).toBe(0)
     expect(counters.formatList).toBe(0)

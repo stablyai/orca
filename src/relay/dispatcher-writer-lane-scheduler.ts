@@ -5,6 +5,7 @@ import type {
 } from './dispatcher-writer-admission'
 
 const PRODUCER_WRITES_BEFORE_BULK = 4
+
 const INTERACTIVE_WRITES_BEFORE_ORDINARY = 4
 
 export class DispatcherWriterLaneScheduler {
@@ -17,18 +18,25 @@ export class DispatcherWriterLaneScheduler {
     canWriteProducer: (entry: DispatcherWriterEntry) => boolean
   ): DispatcherWriterEntry | undefined {
     const liveness = admission.shift('liveness')
+
     if (liveness) {
       return liveness
     }
+
     const control = admission.peek('control')
+
     if (control && canWriteControl(control)) {
       return admission.shift('control')
     }
+
     const legacyResponse = admission.peek('legacy-response')
+
     if (legacyResponse && canWriteControl(legacyResponse)) {
       return admission.shift('legacy-response')
     }
+
     const bulk = admission.peek('fixed-bulk') ?? admission.peek('bulk')
+
     if (
       bulk &&
       this.producerWritesSinceBulk >= PRODUCER_WRITES_BEFORE_BULK &&
@@ -36,7 +44,9 @@ export class DispatcherWriterLaneScheduler {
     ) {
       return admission.shift(bulk.lane)
     }
+
     const ordinary = admission.peek('ordinary')
+
     if (
       ordinary &&
       this.interactiveWritesSinceOrdinary >= INTERACTIVE_WRITES_BEFORE_ORDINARY &&
@@ -44,12 +54,15 @@ export class DispatcherWriterLaneScheduler {
     ) {
       return admission.shift('ordinary')
     }
+
     for (const lane of ['interactive', 'ordinary', 'fixed-bulk', 'bulk'] as const) {
       const candidate = admission.peek(lane)
+
       if (candidate && canWriteProducer(candidate)) {
         return admission.shift(lane)
       }
     }
+
     return undefined
   }
 
@@ -62,6 +75,7 @@ export class DispatcherWriterLaneScheduler {
         this.producerWritesSinceBulk + 1
       )
     }
+
     if (lane === 'ordinary') {
       this.interactiveWritesSinceOrdinary = 0
     } else if (lane === 'interactive') {

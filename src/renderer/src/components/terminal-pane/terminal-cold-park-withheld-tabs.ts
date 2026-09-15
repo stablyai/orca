@@ -32,14 +32,17 @@ export function withholdUnparkableTerminalTabs(args: {
     if (!parkedTabIds.has(terminalTab.id)) {
       continue
     }
+
     const parkVerdictPinUntilMs = getParkVerdictUnparkPinUntilMs({
       records: args.parkVerdictRecords,
       tabId: terminalTab.id,
       nowMs: args.nowMs
     })
+
     if (parkVerdictPinUntilMs !== null) {
       parkVerdictPinUntilMsByTabId.set(terminalTab.id, parkVerdictPinUntilMs)
     }
+
     // Why coverage matters: a parked tab the watchers cannot reach goes silent
     // for bells/titles/completions — the failure that sank the first attempt.
     if (

@@ -42,6 +42,7 @@ export function ArtifactPublishButton({
   const settings = useAppStore((state) => state.settings)
   const signedIn = authStatus?.state === 'connected'
   const sharingEnabled = settings?.artifactSharingEnabled === true
+
   const accountKey =
     authStatus?.state === 'connected'
       ? JSON.stringify([
@@ -51,20 +52,26 @@ export function ArtifactPublishButton({
           authStatus.cloud?.activeOrgId ?? null
         ])
       : null
+
   const lookupKey = accountKey ? JSON.stringify([accountKey, sourceKey]) : null
   const currentLookup = linkLookup?.key === lookupKey ? linkLookup : null
+
   const checkingLink =
     signedIn && currentLookup?.status !== 'loaded' && currentLookup?.status !== 'error'
+
   const publishedLink = currentLookup?.status === 'loaded' ? currentLookup.shareUrl : null
   const busy = publishing || connecting
   const blocked = disabled || busy
 
   useEffect(() => {
     const sequence = ++lookupSequence.current
+
     if (!open || !lookupKey) {
       setLinkLookup(null)
+
       return
     }
+
     setLinkLookup({ key: lookupKey, status: 'loading', shareUrl: null })
     void getPublishedArtifactLink(sourceKey)
       .then((shareUrl) => {
@@ -74,10 +81,12 @@ export function ArtifactPublishButton({
       })
       .catch((error: unknown) => {
         console.error('Failed to check published artifact link:', error)
+
         if (lookupSequence.current === sequence) {
           setLinkLookup({ key: lookupKey, status: 'error', shareUrl: null })
         }
       })
+
     return () => {
       lookupSequence.current += 1
     }
@@ -87,9 +96,12 @@ export function ArtifactPublishButton({
     if (blocked || !signedIn || !sharingEnabled) {
       return
     }
+
     setPublishing(true)
+
     try {
       const result = await publishArtifactFromSurface(createRequest)
+
       if (result) {
         if (lookupKey) {
           setLinkLookup({ key: lookupKey, status: 'loaded', shareUrl: result.item.shareUrl })
@@ -110,6 +122,7 @@ export function ArtifactPublishButton({
     'auto.components.artifacts.ArtifactPublishButton.a4a49da6af',
     'Share as artifact'
   )
+
   return (
     <Popover open={open} onOpenChange={(nextOpen) => !busy && setOpen(nextOpen)}>
       <Tooltip>

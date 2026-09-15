@@ -25,6 +25,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/lib/launch-structured-agent-session', () => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+
   return {
     createStructuredAgentSessionLaunchIntent: mocks.createIntent,
     abandonStructuredAgentSessionLaunchIntent: mocks.abandonIntent,
@@ -37,6 +38,7 @@ vi.mock('@/lib/structured-agent-session-launch-recovery', async () => {
   const actual = await vi.importActual<typeof RecoveryModule>(
     '@/lib/structured-agent-session-launch-recovery'
   )
+
   return { ...actual, launchAndReconcile: vi.fn(actual.launchAndReconcile) }
 })
 
@@ -59,6 +61,7 @@ vi.mock('@/store', () => ({
       listener: (state: { unifiedTabsByWorktree: Record<string, unknown[]> }) => void
     ) => {
       mocks.listeners.add(listener)
+
       return () => mocks.listeners.delete(listener)
     }
   }
@@ -145,6 +148,7 @@ describe('startStructuredAgentLaunch', () => {
     mocks.listeners.clear()
     mocks.createIntent.mockImplementation((worktreeId: string, agent: 'claude' | 'codex') => {
       const intent = launchIntent(worktreeId, `${agent}-session-${worktreeId}`)
+
       return { ...intent, agent, params: { ...intent.params, agent } }
     })
     mocks.callStructuredAgentSession.mockResolvedValue({
@@ -166,6 +170,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'PR #19423 — review this change',
       promptDelivery: 'draft'
     })
+
     await launch.launchResult
 
     expect(mocks.seedDraft).toHaveBeenCalledWith({
@@ -195,6 +200,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: sixtyLineDraft,
       promptDelivery: 'draft'
     })
+
     await launch.launchResult
 
     expect(mocks.seedDraft).toHaveBeenCalledWith({
@@ -216,6 +222,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'review this',
       promptDelivery: 'draft'
     })
+
     await expect(launch.launchResult).rejects.toBeInstanceOf(
       StructuredAgentSessionCreateRefusalError
     )
@@ -237,6 +244,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'review this',
       promptDelivery: 'draft'
     })
+
     await expect(launch.launchResult).rejects.toThrow()
     await flushLaunchSettlement()
 
@@ -297,6 +305,7 @@ describe('startStructuredAgentLaunch', () => {
         ...(mocks.rendererTabs[worktreeId] ?? []),
         { contentType: 'agent-session', entityId: intent.sessionId, worktreeId }
       ]
+
       return { sessionId: intent.sessionId, fence: 1 }
     })
 
@@ -334,9 +343,11 @@ describe('startStructuredAgentLaunch', () => {
       mocks.rendererTabs[worktreeId] = [
         { contentType: 'agent-session', entityId: intent.sessionId, worktreeId }
       ]
+
       for (const listener of mocks.listeners) {
         listener({ unifiedTabsByWorktree: mocks.rendererTabs })
       }
+
       return { sessionId: intent.sessionId, fence: 1 }
     })
 
@@ -352,6 +363,7 @@ describe('startStructuredAgentLaunch', () => {
     const worktreeId = 'wt-duplicate-click'
     const intent = launchIntent(worktreeId)
     let resolveLaunch: (receipt: { sessionId: string; fence: number }) => void = () => {}
+
     mocks.createIntent.mockReturnValueOnce(intent)
     mocks.launch.mockImplementation(
       () =>
@@ -379,6 +391,7 @@ describe('startStructuredAgentLaunch', () => {
     const worktreeId = 'wt-coalesced-prompt'
     const intent = launchIntent(worktreeId)
     let resolveLaunch: (receipt: { sessionId: string; fence: number }) => void = () => {}
+
     mocks.createIntent.mockReturnValueOnce(intent)
     mocks.launch.mockImplementation(
       () =>
@@ -417,10 +430,12 @@ describe('startStructuredAgentLaunch', () => {
     const worktreeId = 'wt-coalesced-prompt-reservation'
     const intent = launchIntent(worktreeId)
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
+
     let resolveDelivery!: (result: {
       ok: true
       value: { submission: { dispatchState: 'accepted' } }
     }) => void
+
     mocks.createIntent.mockReturnValue(intent)
     mocks.launch.mockImplementationOnce(() => new Promise((resolve) => (resolveLaunch = resolve)))
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
@@ -570,9 +585,11 @@ describe('startStructuredAgentLaunch', () => {
       mocks.rendererTabs[worktreeId] = [
         { contentType: 'agent-session', entityId: intent.sessionId, worktreeId }
       ]
+
       for (const listener of mocks.listeners) {
         listener({ unifiedTabsByWorktree: mocks.rendererTabs })
       }
+
       return { sessionId: intent.sessionId, fence: 1 }
     })
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValueOnce([]).mockResolvedValueOnce([])
@@ -702,6 +719,7 @@ describe('startStructuredAgentLaunch', () => {
     const intent = launchIntent(worktreeId)
     const fallback = vi.fn()
     mocks.createIntent.mockReturnValueOnce(intent)
+
     const storageFailure = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
       throw new Error('storage unavailable')
     })
@@ -729,14 +747,17 @@ describe('startStructuredAgentLaunch', () => {
 
     const first = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'first prompt' })
     const second = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'second prompt' })
+
     const firstFallback = vi.fn().mockResolvedValue({
       delivered: true,
       failureNotified: false
     })
+
     const secondFallback = vi.fn().mockResolvedValue({
       delivered: false,
       failureNotified: true
     })
+
     const firstFallbackResult = first.claimDefinitiveRefusalFallback(firstFallback)
     const secondFallbackResult = second.claimDefinitiveRefusalFallback(secondFallback)
     expect(readOutbox(intent.sessionId)).toHaveLength(2)
@@ -778,10 +799,12 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'PR #1 context',
       promptDelivery: 'draft'
     })
+
     const joiner = startStructuredAgentLaunch(worktreeId, 'codex', {
       prompt: 'PR #1 context',
       promptDelivery: 'auto-submit'
     })
+
     resolveLaunch({ sessionId: intent.sessionId, fence: 1 })
     await flushLaunchSettlement()
 
@@ -813,6 +836,7 @@ describe('startStructuredAgentLaunch', () => {
       prompt: 'first prompt',
       promptDelivery: 'draft'
     })
+
     // An unfinished fallback keeps the refused launch reserved, so the next caller coalesces onto it.
     void first.claimDefinitiveRefusalFallback(() => new Promise<void>(() => {}))
     rejectLaunch(new StructuredAgentSessionCreateRefusalError('unsupported'))

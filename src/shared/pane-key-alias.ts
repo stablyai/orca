@@ -19,13 +19,18 @@ export function canRegisterPaneKeyAlias(fromPaneKey: string, toPaneKey: string):
   ) {
     return false
   }
+
   const stable = parsePaneKey(toPaneKey)
+
   if (!stable) {
     return false
   }
+
   const legacy = parseLegacyNumericPaneKey(fromPaneKey)
+
   if (legacy) {
     return legacy.tabId === stable.tabId
   }
+
   return isOpaqueRemintedPaneKey(fromPaneKey)
 }

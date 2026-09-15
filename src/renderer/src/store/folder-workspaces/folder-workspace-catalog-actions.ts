@@ -23,18 +23,23 @@ export function createFolderWorkspaceCatalogActions(
     fetchFolderWorkspaces: async (options) => {
       try {
         const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
+
         const target = getActiveRuntimeTarget(
           settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
         )
+
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
         const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
+
         set((current) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return current
           }
+
           folderWorkspaceUpdates.recordCatalogReplacement(
             getFolderWorkspaceCatalogReplacementIdentities(
               catalog,
@@ -42,11 +47,13 @@ export function createFolderWorkspaceCatalogActions(
               current.projectGroups
             )
           )
+
           const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
           )
+
           return {
             folderWorkspaces,
             ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
@@ -61,6 +68,7 @@ export function createFolderWorkspaceCatalogActions(
 
     fetchFolderWorkspacesForAllHosts: async (options) => {
       const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
+
       // Why: folder workspaces are owned through their project groups; fetch groups first, then merge each host's folder slice.
       const applyCatalog = (
         catalog: FetchedFolderWorkspaceCatalog,
@@ -69,10 +77,12 @@ export function createFolderWorkspaceCatalogActions(
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
+
         set((current) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return current
           }
+
           folderWorkspaceUpdates.recordCatalogReplacement(
             getFolderWorkspaceCatalogReplacementIdentities(
               catalog,
@@ -80,11 +90,13 @@ export function createFolderWorkspaceCatalogActions(
               current.projectGroups
             )
           )
+
           const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
           )
+
           return {
             folderWorkspaces,
             ...(arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
@@ -95,6 +107,7 @@ export function createFolderWorkspaceCatalogActions(
       }
 
       let failed = false
+
       try {
         const target = { kind: 'local' as const }
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
@@ -103,6 +116,7 @@ export function createFolderWorkspaceCatalogActions(
         failed = true
         console.error('Failed to fetch local folder workspaces for all-host load:', err)
       }
+
       if (options?.remoteHosts === 'skip') {
         return
       }
@@ -114,7 +128,9 @@ export function createFolderWorkspaceCatalogActions(
             kind: 'environment' as const,
             environmentId: environment.id
           }
+
           const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
+
           try {
             applyCatalog(
               await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
@@ -129,6 +145,7 @@ export function createFolderWorkspaceCatalogActions(
           }
         })
       )
+
       if (!failed) {
         set((s) => ({
           restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(

@@ -22,7 +22,9 @@ const CLAUDE_MODEL_EFFORT =
 // Claude's startup frame. Chat text uses an em dash rather than these box
 // characters, so a leading corner is safe proof that a row is chrome.
 const FRAME_TOP = '╭'
+
 const FRAME_BOTTOM = '╰'
+
 const FRAME_COLUMN = '│'
 
 /** Rows of the visible screen, ANSI-stripped and whitespace-collapsed. */
@@ -38,6 +40,7 @@ function isClaudeHeaderRow(line: string): boolean {
   if (!/\bClaude Code/i.test(line)) {
     return false
   }
+
   // Why: panes under ~70 columns drop the version from the frame entirely, so
   // accept the frame corner as the alternative proof this is Claude's chrome.
   // xterm serialization also drops cursor-positioning cells between the product
@@ -52,8 +55,10 @@ function frameCell(line: string): string {
   if (line.startsWith(FRAME_COLUMN)) {
     const afterBorder = line.slice(FRAME_COLUMN.length)
     const columnEnd = afterBorder.indexOf(FRAME_COLUMN)
+
     return (columnEnd === -1 ? afterBorder : afterBorder.slice(0, columnEnd)).trim()
   }
+
   // Unframed buffers put the descriptor on the row directly, behind box art.
   return line.replace(/^[^A-Za-z0-9]+/, '').trim()
 }
@@ -83,20 +88,26 @@ function claudeModelDescriptorCell(lines: string[], headerIndex: number): string
   const frameBottom = lines.findIndex(
     (line, index) => index > headerIndex && line.startsWith(FRAME_BOTTOM)
   )
+
   // Why: an unframed buffer gives no bottom to bound the search, so keep the
   // original tight window rather than reaching into conversation text.
   const lastRow = frameBottom > 0 ? frameBottom - 1 : Math.min(headerIndex + 2, lines.length - 1)
+
   for (let index = lastRow; index > headerIndex; index -= 1) {
     const cell = frameCell(lines[index] ?? '')
+
     if (isModelDescriptorCell(cell)) {
       return cell
     }
   }
+
   // xterm serialization can join the descriptor onto the version row itself.
   const joined = frameCell((lines[headerIndex] ?? '').replace(/^.*?\bClaude Code\s*v?[\d.]*/i, ''))
+
   if (isModelDescriptorCell(joined)) {
     return joined
   }
+
   return frameBottom > 0 ? modelRowAboveWorkingDirectory(lines, headerIndex, frameBottom) : null
 }
 
@@ -112,25 +123,33 @@ function modelRowAboveWorkingDirectory(
   frameBottom: number
 ): string | null {
   let workingDirectory = -1
+
   for (let index = frameBottom - 1; index > headerIndex; index -= 1) {
     const cell = frameCell(lines[index] ?? '')
+
     if (isWorkingDirectoryCell(cell)) {
       workingDirectory = index
       break
     }
   }
+
   if (workingDirectory < 0) {
     return null
   }
+
   let top = workingDirectory
+
   while (top - 1 > headerIndex && frameCell(lines[top - 1] ?? '')) {
     top -= 1
   }
+
   // Anything taller than descriptor + billing is the welcome art, not a model.
   if (top >= workingDirectory || workingDirectory - top > 2) {
     return null
   }
+
   const cell = frameCell(lines[top] ?? '')
+
   return /^API Usage Billing$/i.test(cell) ? null : cell
 }
 
@@ -139,9 +158,11 @@ function parseClaudeModelName(cell: string): string | null {
   // split always yields a non-empty first segment for a non-empty cell.
   const beforeBilling = cell.split('·')[0]!
   const effort = beforeBilling.match(CLAUDE_MODEL_EFFORT)
+
   const name = (
     effort?.index === undefined ? beforeBilling : beforeBilling.slice(0, effort.index)
   ).trim()
+
   return name || null
 }
 
@@ -160,22 +181,30 @@ function modelNameTokens(value: string): string[] {
 function labelNamesReportedModel(reportedModel: string, label: string): boolean {
   const labelTokens = modelNameTokens(label)
   const family = labelTokens[0]
+
   if (!family) {
     return false
   }
+
   const name = reportedModel.toLowerCase()
+
   if (name !== family && !name.startsWith(`${family} `)) {
     return false
   }
+
   const nameTokens = modelNameTokens(name)
   let cursor = 1
+
   for (const token of labelTokens.slice(1)) {
     const found = nameTokens.indexOf(token, cursor)
+
     if (found === -1) {
       return false
     }
+
     cursor = found + 1
   }
+
   return true
 }
 
@@ -186,15 +215,19 @@ function findClaudeCatalogModel(
   models: readonly CatalogModel[] | undefined
 ): CatalogModel | undefined {
   const seeded = getAgentSessionOptionCatalog('claude')?.models ?? []
+
   for (const candidates of [models ?? [], seeded]) {
     const matches = candidates.filter(({ label }) => labelNamesReportedModel(reportedModel, label))
+
     const best = matches.sort(
       (left, right) => modelNameTokens(right.label).length - modelNameTokens(left.label).length
     )[0]
+
     if (best) {
       return best
     }
   }
+
   return undefined
 }
 
@@ -210,26 +243,35 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   if (!screen) {
     return null
   }
+
   const lines = normalizedScreenLines(screen)
   const headerIndex = lines.findIndex(isClaudeHeaderRow)
+
   if (headerIndex === -1) {
     return null
   }
+
   const descriptorCell = claudeModelDescriptorCell(lines, headerIndex)
   const reportedModel = descriptorCell ? parseClaudeModelName(descriptorCell) : null
+
   if (!reportedModel) {
     return null
   }
+
   const model = findClaudeCatalogModel(reportedModel, models)
+
   if (!model) {
     // A custom model carries no catalog options, so no effort is reported.
     return { model: reportedModel }
   }
+
   const result: Record<string, SessionOptionValue> = { model: model.id }
   const effortLabel = descriptorCell?.match(CLAUDE_MODEL_EFFORT)?.[1]
   const effort = effortLabel ? EFFORT_ID_BY_LABEL[effortLabel.toLowerCase()] : undefined
+
   if (effort && model.options.some((option) => option.id === 'effort')) {
     result.effort = effort
   }
+
   return result
 }

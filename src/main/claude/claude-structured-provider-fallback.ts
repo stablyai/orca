@@ -18,6 +18,7 @@ export function claudeProviderFrameKind(message: Record<string, unknown>): strin
   const type = claudeText(message.type) ?? 'unknown'
   const subtype = claudeText(message.subtype)
   const eventType = claudeText(claudeRecord(message.event)?.type)
+
   return ['message', type, subtype ?? eventType].filter(Boolean).join(':')
 }
 
@@ -47,20 +48,27 @@ export function claudeResultFailure(
   if (message.is_error !== true) {
     return null
   }
+
   const terminalReason = claudeText(message.terminal_reason)
+
   if (terminalReason === 'aborted_streaming' || terminalReason === 'aborted_tools') {
     return null
   }
+
   const result = claudeText(message.result)?.trim()
+
   if (result) {
     return { text: result }
   }
+
   const errors = Array.isArray(message.errors)
     ? message.errors.flatMap((entry) => {
         const text = claudeText(entry)?.trim()
+
         return text ? [text] : []
       })
     : []
+
   // Nothing readable to lead with, but a reported failure still gets its row.
   return { text: errors.length > 0 ? errors.join('\n') : null }
 }
@@ -76,27 +84,35 @@ export const CLAUDE_UNRENDERABLE_CONTENT_TEXT = 'Claude sent content Orca cannot
 
 export function isModeledClaudeContent(value: unknown): boolean {
   const part = claudeRecord(value)
+
   if (!part) {
     return false
   }
+
   if (part.type === 'text') {
     return claudeText(part.text) !== null
   }
+
   if (part.type === 'image') {
     const source = claudeRecord(part.source)
+
     if (source?.type === 'url') {
       return claudeText(source.url) !== null
     }
+
     // A local attachment is replayed as the base64 (or file) source Orca itself
     // sent, so it is content we recognise -- not an unknown part to surface.
     return source?.type === 'base64' || source?.type === 'file'
   }
+
   if (part.type === 'tool_use') {
     return claudeText(part.id) !== null && claudeText(part.name) !== null
   }
+
   if (part.type === 'tool_result') {
     return claudeText(part.tool_use_id) !== null
   }
+
   // Redacted thinking arrives as an empty string plus a signature.
   return part.type === 'thinking' || part.type === 'redacted_thinking'
 }
@@ -114,17 +130,22 @@ export function createClaudeProviderFrameFallback(
   ) => boolean
 } {
   let sequence = 0
+
   return {
     append: (kind, payload, displayText, beforeAppend) => {
       sequence += 1
       const translated = unhandledProviderFrameJournalItem('claude', kind, payload)
+
       if (!translated) {
         return false
       }
+
       beforeAppend?.()
+
       const bounded = displayText
         ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
         : null
+
       sink.appendItem(
         {
           provider: 'orca',
@@ -133,6 +154,7 @@ export function createClaudeProviderFrameFallback(
         bounded ? { ...translated.body, text: bounded } : translated.body
       )
       sink.publish()
+
       return true
     }
   }
@@ -150,6 +172,7 @@ export function appendUnmodeledContent(
   beforeAppend: () => void
 ): boolean {
   let changed = false
+
   for (const part of envelope.content.filter((part) => !isModeledClaudeContent(part))) {
     const partType = claudeText(claudeRecord(part)?.type) ?? 'unknown'
     changed =
@@ -160,10 +183,12 @@ export function appendUnmodeledContent(
         beforeAppend
       ) || changed
   }
+
   if (envelope.content.length === 0 && envelope.role === 'assistant') {
     // Empty provider placeholders do not prove work began, and may have no
     // later result capable of closing a turn.
     changed = fallback.append(`message:${envelope.role}:empty`, message) || changed
   }
+
   return changed
 }

@@ -15,6 +15,7 @@ import type { ExecutionHostScope } from '../../../../shared/execution-host'
 type HostScopeResult = ReturnType<typeof useAiVaultExecutionHostScope>
 
 let root: Root | null = null
+
 let latest: HostScopeResult | null = null
 
 function HookProbe(props: {
@@ -23,6 +24,7 @@ function HookProbe(props: {
   availableExecutionHostScopes?: readonly ExecutionHostScope[]
 }): null {
   latest = useAiVaultExecutionHostScope(props)
+
   return null
 }
 
@@ -36,6 +38,7 @@ async function renderHook(props: {
     document.body.appendChild(container)
     root = createRoot(container)
   }
+
   await act(async () => {
     root?.render(createElement(HookProbe, props))
   })
@@ -73,6 +76,7 @@ afterEach(() => {
   if (root) {
     act(() => root?.unmount())
   }
+
   root = null
   latest = null
   document.body.replaceChildren()
@@ -160,6 +164,7 @@ describe('useAiVaultExecutionHostScope', () => {
         hostId: 'ssh:dev-box'
       })
     }
+
     await renderHook(props)
 
     await act(async () => {
@@ -179,6 +184,7 @@ describe('useAiVaultExecutionHostScope', () => {
       }),
       availableExecutionHostScopes: ['runtime:remote-server'] as const
     }
+
     await renderHook(props)
 
     await act(async () => {

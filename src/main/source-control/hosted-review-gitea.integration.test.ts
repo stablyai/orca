@@ -9,6 +9,7 @@ import { _resetGiteaRepoRefCache } from '../gitea/repository-ref'
 import { getHostedReviewForBranch } from './hosted-review'
 
 const execFileAsync = promisify(execFile)
+
 const OLD_ENV = process.env
 
 type SeenRequest = {
@@ -36,6 +37,7 @@ describe('Gitea hosted review integration', () => {
 
   it('resolves a Gitea PR through real git remote parsing and HTTP API calls', async () => {
     const seen: SeenRequest[] = []
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
       seen.push({
@@ -56,22 +58,27 @@ describe('Gitea hosted review integration', () => {
             head: { ref: 'feature/gitea', label: 'team:feature/gitea', sha: 'abc123' }
           }
         ])
+
         return
       }
 
       if (url.pathname === '/api/v1/repos/team/repo/commits/abc123/status') {
         sendJson(res, { state: 'success' })
+
         return
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ message: 'not found' }))
     })
+
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-gitea-review-'))
+
     try {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }

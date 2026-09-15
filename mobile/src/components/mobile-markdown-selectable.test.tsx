@@ -29,10 +29,13 @@ function outermostTextNodes(
   if (typeof node === 'string') {
     return []
   }
+
   const children = node.children ?? []
+
   if (node.type === 'Text' && !insideText) {
     return [{ text: flattenText(node), selectable: node.props.selectable === true }]
   }
+
   return children.flatMap((child) => outermostTextNodes(child, insideText || node.type === 'Text'))
 }
 
@@ -40,6 +43,7 @@ function flattenText(node: TestNode | string): string {
   if (typeof node === 'string') {
     return node
   }
+
   return (node.children ?? []).map(flattenText).join('')
 }
 
@@ -50,14 +54,17 @@ function renderMarkdown(props: Parameters<typeof MobileMarkdown>[0]): TestNode {
   })
   const tree = renderer!.toJSON() as unknown as TestNode
   act(() => renderer!.unmount())
+
   return tree
 }
 
 function selectableFor(tree: TestNode, needle: string): boolean {
   const match = outermostTextNodes(tree).find((entry) => entry.text.includes(needle))
+
   if (!match) {
     throw new Error(`no Text rendered "${needle}"`)
   }
+
   return match.selectable
 }
 
@@ -92,6 +99,7 @@ describe('MobileMarkdown selection', () => {
       '| --- | --- |',
       '| Cell A | Cell B |'
     ].join('\n')
+
     expect(selectableFor(renderMarkdown({ content }), needle)).toBe(true)
   })
 

@@ -61,12 +61,16 @@ export function PluginInstallDialog({
 
   const submit = async (): Promise<void> => {
     const parsed = parsePluginInstallSource(kind, kind === 'git' ? gitUrl : localPath)
+
     if (!parsed.ok) {
       setError(installValidationMessage(parsed.reason))
+
       return
     }
+
     setError(null)
     setInstalling(true)
+
     try {
       await onInstall(parsed.source)
     } catch (cause) {

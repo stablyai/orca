@@ -19,10 +19,12 @@ export function restoredCodexSessionOptions(
       )
     })
   )
+
   if (!restored.has('fastMode') && restored.get('serviceTier') === 'default') {
     restored.delete('serviceTier')
     restored.set('fastMode', 'false')
   }
+
   return restored
 }
 
@@ -46,6 +48,7 @@ export function readLiveCodexSessionOptions(
 ): Promise<AgentSessionOptionsResult> {
   const model = session.options.get('model') ?? session.reportedOptions.model
   const effort = session.options.get('effort') ?? session.reportedOptions.effort
+
   return readCodexStructuredSessionOptionCatalog({
     connection: session.connection,
     current: {
@@ -72,6 +75,7 @@ export function readLiveCodexSessionOptions(
       )?.supportsFastMode
     })
     const fastMode = decodeCodexFastMode(session.options)
+
     return fastMode === undefined
       ? catalog.result
       : { ...catalog.result, current: { ...catalog.result.current, fastMode } }
@@ -103,12 +107,16 @@ async function applyValidatedCodexStructuredSessionOption(
   if (key === 'serviceTier') {
     throw new Error('codex service tier is derived from Fast mode and cannot be set directly')
   }
+
   if (key !== 'model' && key !== 'effort' && key !== 'fastMode') {
     session.options.set(key, value)
+
     return Object.fromEntries(session.options)
   }
+
   const priorModel = session.options.get('model') ?? session.reportedOptions.model
   const priorEffort = session.options.get('effort') ?? session.reportedOptions.effort
+
   const catalog = await readCodexStructuredSessionOptionCatalog({
     connection: session.connection,
     current: {
@@ -117,6 +125,7 @@ async function applyValidatedCodexStructuredSessionOption(
     },
     timeoutMs
   })
+
   reconcileCodexFastModeOption(session, {
     fastModeTierByModel: catalog.fastModeTierByModel,
     currentFastMode: catalog.result.current.fastMode,
@@ -125,44 +134,57 @@ async function applyValidatedCodexStructuredSessionOption(
       (entry) => entry.id === (priorModel ?? catalog.result.current.model)
     )?.supportsFastMode
   })
+
   if (key === 'model' && !catalog.result.models.some((entry) => entry.id === value)) {
     throw new Error(`codex app-server does not offer model ${value}`)
   }
+
   const modelId = key === 'model' ? value : catalog.result.current.model
   const model = catalog.result.models.find((entry) => entry.id === modelId)
+
   if (key === 'fastMode') {
     const requested = decodeStructuredAgentSessionOptionValue('fastMode', value)
+
     if (typeof requested !== 'boolean') {
       throw new Error('codex fast mode must be encoded as true or false')
     }
+
     if (
       requested &&
       (model?.supportsFastMode !== true || !catalog.fastModeTierByModel.has(modelId))
     ) {
       throw new Error(`codex app-server model ${modelId} does not support Fast mode`)
     }
+
     session.options.set('fastMode', value)
+
     return Object.fromEntries(session.options)
   }
+
   const requestedEffort = key === 'effort' ? value : priorEffort
+
   if (
     key === 'effort' &&
     (!model?.efforts.length || !model.efforts.some((effort) => effort.value === requestedEffort))
   ) {
     throw new Error(`codex app-server model ${modelId} does not support ${value}`)
   }
+
   const effort =
     model?.efforts.length === 0
       ? undefined
       : (model?.efforts.find((entry) => entry.value === requestedEffort)?.value ??
         model?.defaultEffort ??
         model?.efforts[0]?.value)
+
   session.options.set('model', modelId)
+
   if (effort) {
     session.options.set('effort', effort)
   } else {
     session.options.delete('effort')
   }
+
   if (
     key === 'model' &&
     session.options.get('fastMode') === 'true' &&
@@ -170,5 +192,6 @@ async function applyValidatedCodexStructuredSessionOption(
   ) {
     session.options.set('fastMode', 'false')
   }
+
   return Object.fromEntries(session.options)
 }

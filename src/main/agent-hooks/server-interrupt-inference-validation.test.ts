@@ -30,6 +30,7 @@ describe('AgentHookServer listener replay', () => {
   it('rejects malformed inferred interrupt requests without throwing', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -41,6 +42,7 @@ describe('AgentHookServer listener replay', () => {
         },
         'conn-1'
       )
+
       const malformed: unknown[] = [
         {
           paneKey: 'tab-1:0',
@@ -84,6 +86,7 @@ describe('AgentHookServer listener replay', () => {
           server.inferInterrupt(request as Parameters<AgentHookServer['inferInterrupt']>[0])
         ).toBe(false)
       }
+
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           state: 'working',
@@ -99,6 +102,7 @@ describe('AgentHookServer listener replay', () => {
   it('allows an immediate same-prompt retry that carries cached turn detail', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -164,6 +168,7 @@ describe('AgentHookServer listener replay', () => {
   it('suppresses replayed same-prompt working events after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -231,6 +236,7 @@ describe('AgentHookServer listener replay', () => {
   it('matches renderer unknown sentinel to an omitted hook agent type', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -271,6 +277,7 @@ describe('AgentHookServer listener replay', () => {
   it('rejects inferred interrupts for stale and non-working rows', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -323,6 +330,7 @@ describe('AgentHookServer listener replay', () => {
   it('applies inferred interrupts for arbitrary agent types and Ctrl+C intent', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(

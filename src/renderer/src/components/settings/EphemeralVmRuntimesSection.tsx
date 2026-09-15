@@ -44,30 +44,36 @@ export function getEphemeralVmRuntimeStatusLabel(runtime: EphemeralVmRuntimeReco
       'Cleanup stopped'
     )
   }
+
   if (hasCleanupFailed(runtime)) {
     return translate(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupFailed',
       'Cleanup failed'
     )
   }
+
   if (runtime.cleanupStatus === 'running' || runtime.status === 'cleanup_pending') {
     return translate(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupRunning',
       'Cleanup running'
     )
   }
+
   if (runtime.cleanupStatus === 'disabled') {
     return translate(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupDisabled',
       'Cleanup disabled'
     )
   }
+
   if (runtime.status === 'running') {
     return translate('auto.components.settings.EphemeralVmRuntimesSection.running', 'Running')
   }
+
   if (runtime.status === 'failed') {
     return translate('auto.components.settings.EphemeralVmRuntimesSection.failed', 'Failed')
   }
+
   return runtime.status
 }
 
@@ -88,8 +94,10 @@ export function EphemeralVmRuntimesSection({
       if (mountedRef.current && showLoading) {
         setIsLoading(true)
       }
+
       try {
         const nextRuntimes = await window.api.ephemeralVm.listRuntimes()
+
         if (mountedRef.current) {
           setRuntimes(getVisibleEphemeralVmRuntimes(nextRuntimes))
         }
@@ -124,17 +132,23 @@ export function EphemeralVmRuntimesSection({
     if (!active || !hasRunningCleanup) {
       return
     }
+
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
+
     const poll = async (): Promise<void> => {
       await refresh(false, false)
+
       if (!cancelled) {
         timer = setTimeout(() => void poll(), 1_000)
       }
     }
+
     timer = setTimeout(() => void poll(), 1_000)
+
     return () => {
       cancelled = true
+
       if (timer) {
         clearTimeout(timer)
       }
@@ -143,12 +157,16 @@ export function EphemeralVmRuntimesSection({
 
   const cleanupRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setCleaningId(runtime.id)
+
     try {
       const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+
       if (hasCleanupStopped(cleaned)) {
         await refresh(false)
+
         return
       }
+
       if (hasCleanupFailed(cleaned)) {
         throw new Error(
           cleaned.cleanupLastError ??
@@ -158,6 +176,7 @@ export function EphemeralVmRuntimesSection({
             )
         )
       }
+
       if (mountedRef.current) {
         toast.success(
           cleaned.cleanupStatus === 'disabled'
@@ -171,6 +190,7 @@ export function EphemeralVmRuntimesSection({
               )
         )
       }
+
       await refresh()
     } catch (error) {
       if (mountedRef.current) {
@@ -194,10 +214,13 @@ export function EphemeralVmRuntimesSection({
   const copyCleanupCommand = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     try {
       const result = await window.api.ephemeralVm.getCleanupCommand({ runtimeId: runtime.id })
+
       const text = result.command
         ? `${result.command}\n\n# Cleanup payload:\n${result.payloadJson}`
         : result.payloadJson
+
       await window.api.ui.writeClipboardText(text)
+
       if (mountedRef.current) {
         toast.success(
           result.command
@@ -227,8 +250,10 @@ export function EphemeralVmRuntimesSection({
 
   const stopCleanup = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setStoppingId(runtime.id)
+
     try {
       await window.api.ephemeralVm.stopCleanup({ runtimeId: runtime.id })
+
       if (mountedRef.current) {
         setPendingStop(null)
         await refresh(false)
@@ -253,6 +278,7 @@ export function EphemeralVmRuntimesSection({
   }
 
   const hasRuntimes = runtimes.length > 0
+
   return (
     <div className="space-y-3 pt-2" data-settings-section="temporary-vm-runtimes">
       <div className="flex items-center justify-between gap-3">

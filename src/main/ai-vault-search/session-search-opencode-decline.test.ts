@@ -5,10 +5,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 // Only the thread hop is replaced: both implementations below are the repo's
 // own in-process readers, which the worker entry calls on the other side.
 export const openCodeParseCalls: string[] = []
+
 vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
   const list = await import('../ai-vault/session-scanner-opencode-sqlite-list')
   const parse = await import('../ai-vault/session-scanner-opencode-sqlite')
   const own = await import('./session-search-opencode-decline.test')
+
   return {
     resolveOpenCodeSqliteWorkerEntryPath: () => null,
     listOpenCodeSqliteSessionsViaWorker: (
@@ -18,10 +20,12 @@ vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => 
       args: Parameters<typeof parse.parseOpenCodeSqliteSession>[0]
     ) => {
       own.openCodeParseCalls.push(args.sessionId)
+
       return parse.parseOpenCodeSqliteSession(args)
     }
   }
 })
+
 import Database from '../sqlite/sync-database'
 import { getSessionParseCacheEntry } from '../ai-vault/session-parse-cache-store'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
@@ -47,10 +51,13 @@ import {
  */
 
 const SESSION = 'ses_r12'
+
 const CLAUDE_SESSION = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 
 let harness: SessionSearchIndexerHarness
+
 let clock: FakeSessionSearchClock
+
 let indexer: SessionSearchIndexer | null = null
 
 beforeEach(async () => {
@@ -168,6 +175,7 @@ it('reads an OpenCode session once, not on every pass', async () => {
   const rows = harness.read((db) =>
     db.prepare('SELECT path, state, session_row_id FROM files ORDER BY path').all()
   ) as { path: string; state: string; session_row_id: number | null }[]
+
   expect(rows).toHaveLength(2)
   expect(rows.find((row) => row.path === syntheticPath)).toMatchObject({
     state: 'current',

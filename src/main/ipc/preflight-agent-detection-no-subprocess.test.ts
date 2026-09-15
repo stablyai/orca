@@ -40,6 +40,7 @@ vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(execFileMock, {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
   })
+
   return { execFile: execFileWithPromisify, spawn: vi.fn() }
 })
 
@@ -49,10 +50,13 @@ vi.mock('../startup/hydrate-shell-path', () => ({
 }))
 
 vi.mock('./ssh', () => ({ getActiveMultiplexer: getActiveMultiplexerMock }))
+
 vi.mock('../bitbucket/client', () => ({ getBitbucketAuthStatus: getBitbucketAuthStatusMock }))
+
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsAuthStatus: getAzureDevOpsAuthStatusMock
 }))
+
 vi.mock('../gitea/client', () => ({ getGiteaAuthStatus: getGiteaAuthStatusMock }))
 
 // Isolate the subprocess-spawn assertion from the fs-based install-dir fallback.
@@ -104,6 +108,7 @@ describe('#9297: local agent detection spawns zero where/which subprocesses', ()
         KNOWN_TUI_AGENT_DETECTION_COMMANDS,
         platform
       )
+
       // Guardrail: the candidate list is large, so the old one-spawn-per-probe
       // path multiplied a gated where.exe across dozens of startups.
       expect(probeCommands.length).toBeGreaterThanOrEqual(20)

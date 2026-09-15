@@ -108,6 +108,7 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
       reason: 'paths-too-large',
       target: 'rejected'
     })
+
     expect(message).toEqual({
       description: 'Drop fewer files or use a shorter path list.',
       title: 'Drop path list is too large.'

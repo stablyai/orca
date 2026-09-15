@@ -38,52 +38,65 @@ vi.mock('../github/client', () => ({
   getRepoSlug: getRepoSlugMock,
   getPRForBranch: vi.fn()
 }))
+
 vi.mock('../github/github-enterprise-repository', () => ({
   getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
+
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: vi.fn(),
   getMergeRequest: vi.fn()
 }))
+
 vi.mock('../gitlab/merge-request-creation', () => ({ createGitLabMergeRequest: vi.fn() }))
+
 vi.mock('../bitbucket/client', () => ({
   getBitbucketRepoSlug: getBitbucketRepoSlugMock,
   getBitbucketPullRequestForBranch: vi.fn(),
   getBitbucketPullRequest: vi.fn()
 }))
+
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranch: vi.fn(),
   getAzureDevOpsPullRequest: vi.fn()
 }))
+
 vi.mock('../azure-devops/pull-request-creation', () => ({
   createAzureDevOpsPullRequest: vi.fn(),
   isAzureDevOpsReviewCreationAuthenticated: vi.fn()
 }))
+
 vi.mock('../gitea/client', () => ({
   getGiteaRepoSlug: getGiteaRepoSlugMock,
   getGiteaPullRequestForBranch: vi.fn(),
   getGiteaPullRequest: vi.fn()
 }))
+
 vi.mock('../gitea/pull-request-creation', () => ({
   createGiteaPullRequest: vi.fn(),
   isGiteaReviewCreationAuthenticated: vi.fn()
 }))
+
 vi.mock('../github/gh-utils', () => ({
   acquire: vi.fn(),
   release: vi.fn(),
   ghExecFileAsync: ghExecFileAsyncMock,
   gitExecFileAsync: gitExecFileAsyncMock
 }))
+
 vi.mock('../gitlab/gl-utils', () => ({
   acquire: vi.fn(),
   release: vi.fn(),
   glabExecFileAsync: glabExecFileAsyncMock,
   glabRepoExecOptions: (repoPath: string) => ({ cwd: repoPath })
 }))
+
 vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitProviderMock }))
+
 vi.mock('./hosted-review', () => ({ getHostedReviewForBranch: getHostedReviewForBranchMock }))
 
 import { createHostedReview } from './hosted-review-creation'
@@ -153,15 +166,19 @@ describe('createHostedReview with shared symlinks', () => {
       if (args[0] === 'rev-parse') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'status') {
         return { stdout: statusOutput, stderr: '' }
       }
+
       if (args[0] === 'for-each-ref') {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: 'Feature title\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
   })

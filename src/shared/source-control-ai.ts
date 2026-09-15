@@ -85,18 +85,31 @@ export type ResolveSourceControlAiPrCreationDefaultsInput = {
 }
 
 export const normalizeRepoSourceControlAiOverrides = normalizeRepoOverrides
+
 export const getDefaultSourceControlAiSettings = getDefaultSettings
+
 export const sourceControlAiSettingsFromLegacy = settingsFromLegacy
+
 export const mergeLegacyCommitMessageAiIntoSourceControlAi = mergeLegacySettings
+
 export const normalizeSourceControlAiSettings = normalizeSettings
+
 export const readSourceControlAiModelChoiceForHost = readModelChoice
+
 export const selectSourceControlAiModelChoiceForHost = selectModelChoice
+
 export const clearSourceControlAiModelChoiceForHost = clearModelChoice
+
 export const projectSourceControlAiToLegacyCommitMessageAi = projectLegacySettings
+
 export const resolveSourceControlAiInstructions = resolveInstructions
+
 export const hasConfiguredSourceControlAiInstructions = hasConfiguredInstructions
+
 export const resolveSourceControlAiPrCreationDefaults = resolvePrDefaults
+
 export const resolveSourceControlAiEnabled = resolveEnabled
+
 export const resolveSourceControlActionRecipe = resolveActionRecipe
 
 const OPERATION_LABEL: Record<SourceControlAiOperation, string> = {
@@ -117,24 +130,30 @@ export function resolveSourceControlAiForOperation(
   const legacy = input.settings.commitMessageAi
   const source = normalizeSettings(input.settings.sourceControlAi, legacy)
   const repoOverrides = normalizeRepoOverrides(input.repo?.sourceControlAi)
+
   const prCreationDefaults = resolvePrCreationDefaults(
     source,
     repoOverrides,
     input.prCreationProductDefaults
   )
+
   const actionRecipe = resolveActionRecipeForTextOperation(source, repoOverrides, input.operation)
+
   if (!actionRecipe.commandInputTemplate.trim()) {
     return {
       ok: false,
       error: `Command template is empty for ${OPERATION_LABEL[input.operation]}.`
     }
   }
+
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
+
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
     input.settings.disabledTuiAgents
   )
+
   if (!agentChoice) {
     return {
       ok: false,
@@ -144,6 +163,7 @@ export function resolveSourceControlAiForOperation(
 
   const customAgentCommand =
     repoOverrides?.customAgentCommand?.trim() || source.customAgentCommand.trim()
+
   const commonParams = {
     customPrompt: resolveInstructionsFromNormalized(
       source,
@@ -154,6 +174,7 @@ export function resolveSourceControlAiForOperation(
     commandInputTemplate: actionRecipe.commandInputTemplate,
     ...(actionRecipe.agentArgs !== undefined ? { agentArgs: actionRecipe.agentArgs } : {})
   }
+
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {
       return {
@@ -161,6 +182,7 @@ export function resolveSourceControlAiForOperation(
         error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
       }
     }
+
     return {
       ok: true,
       value: {
@@ -177,6 +199,7 @@ export function resolveSourceControlAiForOperation(
   }
 
   const actionAgentId = actionRecipe.agentId ?? agentChoice
+
   const resolvedAgent =
     actionAgentId === agentChoice
       ? agentChoice
@@ -185,20 +208,25 @@ export function resolveSourceControlAiForOperation(
           input.settings.defaultTuiAgent,
           input.settings.disabledTuiAgents
         )
+
   if (!resolvedAgent || isCustomAgentId(resolvedAgent)) {
     return {
       ok: false,
       error: `Choose a supported Source Control AI agent for this action. ${supportedAgentSummary()}`
     }
   }
+
   const spec = getCommitMessageAgentSpec(resolvedAgent)
+
   if (!spec) {
     return {
       ok: false,
       error: `Agent "${resolvedAgent}" does not support Source Control AI ${OPERATION_LABEL[input.operation]}. ${supportedAgentSummary()}`
     }
   }
+
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
+
   const persistedModelId = selectPersistedModelId({
     source,
     legacy,
@@ -208,14 +236,18 @@ export function resolveSourceControlAiForOperation(
     agentId: resolvedAgent,
     defaultModelId: spec.defaultModelId
   })
+
   const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
+
   const model =
     spec.models.find((candidate) => candidate.id === persistedModelId) ??
     discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
     getCommitMessageModel(resolvedAgent, spec.defaultModelId)
+
   if (!model) {
     return { ok: false, error: `No model is available for ${spec.label}.` }
   }
+
   const thinkingLevel = resolveThinkingLevel({
     model,
     source,
@@ -223,7 +255,9 @@ export function resolveSourceControlAiForOperation(
     repoOverrides,
     operation: input.operation
   })
+
   const agentCommandOverride = input.settings.agentCmdOverrides?.[resolvedAgent]?.trim()
+
   return {
     ok: true,
     value: {

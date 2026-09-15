@@ -25,7 +25,9 @@ export function extractDroppedPtyQueryBytes(data: string): string {
   if (!data.includes('\x1b')) {
     return ''
   }
+
   const extracted = extractHiddenStartupRendererQueryData(data, '')
+
   return extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
 }
 
@@ -34,21 +36,26 @@ export function scanDroppedMode2031Data(
   previous: Mode2031ReplyScanState
 ): { data: string; state: Mode2031ReplyScanState } {
   const result = scanMode2031ReplyDecision(previous, data)
+
   const decisionData =
     result.decision === 'subscribed'
       ? '\x1b[?2031h'
       : result.decision === 'unsubscribed'
         ? '\x1b[?2031l'
         : ''
+
   return { data: decisionData, state: result.state }
 }
 
 export function getDroppedMode2031RendererData(pending: PendingPtyData): string {
   const state = pending.droppedMode2031ScanState
+
   if (!state) {
     return pending.droppedMode2031Data ?? ''
   }
+
   const pendingSubscribe = state.pendingSubscribe ? '\x1b[?2031h' : ''
+
   return (pending.droppedMode2031Data ?? '') + pendingSubscribe + state.tail
 }
 
@@ -66,9 +73,11 @@ export function updatePendingProjectionAdmissions(
 ): void {
   delete pending.projectionAdmissionIds
   delete pending.projectionAdmissionsTransferred
+
   if (state.projectionAdmissionIds) {
     pending.projectionAdmissionIds = state.projectionAdmissionIds
   }
+
   if (state.projectionAdmissionsTransferred) {
     pending.projectionAdmissionsTransferred = true
   }
@@ -81,6 +90,7 @@ export function compactPendingProjectionState(
 ): PendingProjectionAdmissions {
   const options = pendingProjectionAdmissionOptions(session)
   const compacted = compactPendingProjectionAdmissions(pending, options)
+
   return projectionSemanticsId
     ? appendPendingProjectionAdmission(compacted, projectionSemanticsId, options)
     : compacted
@@ -92,9 +102,11 @@ export function dropOversizedPendingPtyData(
   pending: PendingPtyData
 ): PendingPtyData {
   const capChars = pendingDataCapChars(session)
+
   if (pending.droppedOutput === true || pending.data.length <= capChars) {
     return pending
   }
+
   if (!session.pendingDataDropWarnedPtys.has(id)) {
     session.pendingDataDropWarnedPtys.add(id)
     console.error(
@@ -106,17 +118,22 @@ export function dropOversizedPendingPtyData(
       capChars
     })
   }
+
   if (
     isHiddenPtyDeliveryGateEnabled(session.getSettings?.()) &&
     !session.pendingOverflowMarkedPtys.has(id)
   ) {
     session.pendingOverflowMarkedPtys.add(id)
   }
+
   session.pendingDroppedChars += pending.data.length
+
   if (pending.projectionAdmissionIds) {
     session.sshOutputIntake?.transferProjections(pending.projectionAdmissionIds, 'pending-cap')
   }
+
   const mode2031 = scanDroppedMode2031Data(pending.data, INITIAL_MODE_2031_REPLY_SCAN_STATE)
+
   // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
   return {
     data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
@@ -143,15 +160,19 @@ export function appendPendingPtyData(
     if (projectionSemanticsId) {
       session.sshOutputIntake?.transferProjections([projectionSemanticsId], 'pending-cap')
     }
+
     const mode2031 = scanDroppedMode2031Data(
       data,
       existing.droppedMode2031ScanState ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
     )
+
     const remainingQueryCapacity = Math.max(
       0,
       DROPPED_QUERY_SALVAGE_MAX_CHARS - existing.data.length
     )
+
     const salvaged = extractDroppedPtyQueryBytes(data).slice(0, remainingQueryCapacity)
+
     return {
       ...existing,
       data: existing.data + salvaged,
@@ -159,13 +180,16 @@ export function appendPendingPtyData(
       droppedMode2031ScanState: mode2031.state
     }
   }
+
   const projectionState = compactPendingProjectionState(
     session,
     existing ?? {},
     projectionSemanticsId
   )
+
   const nextContainsBackgroundOutput =
     existing?.containsBackgroundOutput === true || containsBackgroundOutput
+
   if (!existing) {
     const pending: PendingPtyData = {
       data,
@@ -174,10 +198,14 @@ export function appendPendingPtyData(
       ...(transformed ? { transformed: true } : {}),
       ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
     }
+
     updatePendingProjectionAdmissions(pending, projectionState)
+
     return dropOversizedPendingPtyData(session, id, pending)
   }
+
   const existingRawLength = existing.rawLength ?? existing.data.length
+
   const next: PendingPtyData = {
     data: existing.data + data,
     ...(!preservesSeq || existing.transformed || transformed
@@ -185,9 +213,12 @@ export function appendPendingPtyData(
       : {}),
     ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
   }
+
   updatePendingProjectionAdmissions(next, projectionState)
+
   if (typeof existing.startSeq === 'number') {
     next.startSeq = existing.startSeq
   }
+
   return dropOversizedPendingPtyData(session, id, next)
 }

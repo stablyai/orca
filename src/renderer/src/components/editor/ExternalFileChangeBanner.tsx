@@ -26,9 +26,11 @@ export function reloadTabContentFromDisk(
 ): void {
   const state = useAppStore.getState()
   const discardedDraft = state.editorDrafts[file.id]
+
   const discardedDiskSignature = state.openFiles.find(
     (openFile) => openFile.id === file.id
   )?.lastKnownDiskSignature
+
   // Why: drop the draft before reloading — the buffer shadows loaded content
   // (editBuffers ?? fileContents), so a reload alone would keep showing the
   // stale unsaved text.
@@ -36,9 +38,11 @@ export function reloadTabContentFromDisk(
   state.markFileDirty(file.id, false)
   state.setExternalMutation(file.id, null)
   reloadContent(file)
+
   if (discardedDraft === undefined) {
     return
   }
+
   // Why: on diff tabs the reload rotates the Monaco model, destroying the undo
   // stack — without this toast a mistaken click is an unrecoverable discard.
   toast(
@@ -51,6 +55,7 @@ export function reloadTabContentFromDisk(
         onClick: () => {
           const current = useAppStore.getState()
           const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
+
           // Why: the tab may have closed while the toast was up; restoring a
           // draft for a dead fileId would strand an orphan buffer. And if the
           // user already typed after the reload (dirty), that newer work wins
@@ -60,17 +65,20 @@ export function reloadTabContentFromDisk(
           if (!liveFile || liveFile.isDirty) {
             return
           }
+
           current.setEditorDraft(file.id, discardedDraft)
           current.markFileDirty(file.id, true)
           // Why: the disk still differs from the restored draft, so the
           // conflict (and its autosave suspension) must come back with it.
           current.setExternalMutation(file.id, 'changed')
+
           if (discardedDiskSignature !== undefined) {
             // Why: the reload re-stamped the baseline to the new disk content;
             // restoring the pre-reload signature with the draft keeps the
             // restart scan re-deriving the conflict the undo just brought back.
             current.setLastKnownDiskSignature(file.id, discardedDiskSignature)
           }
+
           trackExternalChangeConflictAction(file, 'undo_reload')
         }
       }
@@ -98,13 +106,16 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
       if (result.isBinary) {
         return
       }
+
       const current = useAppStore.getState()
       const liveFile = current.openFiles.find((openFile) => openFile.id === file.id)
+
       // Why: only stamp while the dismissal still stands — a save or a newer
       // conflict marked in the interim owns the baseline.
       if (!liveFile || liveFile.externalMutation === 'changed') {
         return
       }
+
       current.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(result.content))
     })
     .catch(() => undefined)
@@ -128,10 +139,12 @@ export function ExternalFileChangeBanner({
     trackExternalChangeConflictAction(file, 'reload')
     reloadTabContentFromDisk(file, reloadContent)
   }
+
   const handleKeepEdits = (): void => {
     trackExternalChangeConflictAction(file, 'keep')
     keepTabEditsOverExternalChange(file)
   }
+
   const handleCompare = (): void => {
     trackExternalChangeConflictAction(file, 'compare')
     setCompareOpen(true)

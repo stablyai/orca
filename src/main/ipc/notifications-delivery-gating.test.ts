@@ -61,6 +61,7 @@ describe('registerNotificationHandlers', () => {
     const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     process.env.ORCA_DEV_MACOS_BUNDLE_ID = 'com.stablyai.orca.dev.fb5a47066f08'
+
     try {
       registerNotificationHandlers({
         getSettings: () => ({
@@ -81,6 +82,7 @@ describe('registerNotificationHandlers', () => {
       )
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+
       if (originalBundleId === undefined) {
         delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
       } else {
@@ -92,6 +94,7 @@ describe('registerNotificationHandlers', () => {
   it('opens Windows notification settings', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+
     try {
       registerNotificationHandlers({
         getSettings: () => ({
@@ -281,6 +284,7 @@ describe('registerNotificationHandlers', () => {
     } as never)
 
     const handler = getDispatchHandler()
+
     for (let i = 0; i < 75; i++) {
       expect(await handler({}, { source: 'terminal-bell', worktreeId: `repo::wt-${i}` })).toEqual({
         delivered: false,
@@ -326,6 +330,7 @@ describe('registerNotificationHandlers', () => {
   it('skips native delivery and reports blocked-by-system when macOS would swallow it', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+
     try {
       registerNotificationHandlers({
         getSettings: () => ({

@@ -31,7 +31,9 @@ async function getStartedAtMs(pid: number | undefined): Promise<number | null> {
   if (!pid) {
     return null
   }
+
   await new Promise((resolve) => setTimeout(resolve, 100))
+
   return getProcessStartedAtMs(pid)
 }
 
@@ -44,6 +46,7 @@ describe('parseDaemonPidFile spawnerExecPath', () => {
         spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
       })
     )
+
     expect(parsed?.spawnerExecPath).toBe('/Applications/Orca.app/Contents/MacOS/Orca')
   })
 
@@ -74,11 +77,14 @@ describe('macOS daemon TCC attribution health', () => {
     run: (writePidFile: (extra: Record<string, unknown>) => void) => Promise<void>
   ): Promise<void> {
     const child = spawnDaemonLikeProcess(socketPath, tokenPath)
+
     try {
       const startedAtMs = await getStartedAtMs(child.pid)
+
       if (startedAtMs === null || !child.pid) {
         return
       }
+
       const writePidFile = (extra: Record<string, unknown>): void => {
         writeFileSync(
           getDaemonPidPath(dir),
@@ -86,6 +92,7 @@ describe('macOS daemon TCC attribution health', () => {
           { mode: 0o600 }
         )
       }
+
       await run(writePidFile)
     } finally {
       child.kill('SIGKILL')
@@ -96,6 +103,7 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform !== 'darwin') {
       return
     }
+
     await withDaemonLikeProcess(async (writePidFile) => {
       writePidFile({ spawnerExecPath: join(dir, 'deleted-bundle', 'Orca') })
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
@@ -106,6 +114,7 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform !== 'darwin') {
       return
     }
+
     await withDaemonLikeProcess(async (writePidFile) => {
       const spawnerPath = join(dir, 'Orca')
       writeFileSync(spawnerPath, '', 'utf8')
@@ -118,6 +127,7 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform !== 'darwin') {
       return
     }
+
     await withDaemonLikeProcess(async (writePidFile) => {
       const spawnerPath = join(dir, 'Orca')
       writeFileSync(spawnerPath, '', 'utf8')
@@ -130,6 +140,7 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform !== 'darwin') {
       return
     }
+
     await withDaemonLikeProcess(async (writePidFile) => {
       writePidFile({})
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
@@ -144,6 +155,7 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform !== 'darwin') {
       return
     }
+
     expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
   })
 
@@ -151,6 +163,7 @@ describe('macOS daemon TCC attribution health', () => {
     if (process.platform === 'darwin') {
       return
     }
+
     expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
   })
 })

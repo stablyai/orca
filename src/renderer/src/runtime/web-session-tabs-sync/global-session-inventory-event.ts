@@ -52,9 +52,11 @@ export function handleGlobalSessionInventoryEvent({
 }: GlobalSessionInventoryEventArgs): void {
   const skipUnchangedResumeWork = awaitingVisibilityResumeInventory.value && !replayed
   awaitingVisibilityResumeInventory.value = false
+
   const unchanged = event.snapshots.map((snapshot) => {
     const key = `${environmentId}:${snapshot.worktree}`
     const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+
     return Boolean(
       skipUnchangedResumeWork &&
       !replayableSessionTabsSnapshotByWorktree.has(key) &&
@@ -62,6 +64,7 @@ export function handleGlobalSessionInventoryEvent({
       freshness.snapshotVersion === snapshot.snapshotVersion
     )
   })
+
   const receivedFrames = event.snapshots.map((snapshot) => {
     const frame = recordReceivedWebSessionTabsSnapshot(
       environmentId,
@@ -69,10 +72,14 @@ export function handleGlobalSessionInventoryEvent({
       undefined,
       runtimeId
     )
+
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
+
     return frame
   })
+
   const inventoryFrame = recordReceivedWebSessionTabsInventory(environmentId)
+
   const missing = coordinator.recordInventoryReceipt(
     environmentId,
     visibilityGeneration,
@@ -81,6 +88,7 @@ export function handleGlobalSessionInventoryEvent({
     event.authoritative === true,
     runtimeId
   )
+
   const finishRecoveries = event.snapshots.map((snapshot, index) =>
     unchanged[index]
       ? null
@@ -90,6 +98,7 @@ export function handleGlobalSessionInventoryEvent({
           receivedFrames[index]!
         )
   )
+
   let settleHydration: (() => void) | null = null
   void Promise.all(
     event.snapshots.map((snapshot, index) =>
@@ -111,6 +120,7 @@ export function handleGlobalSessionInventoryEvent({
       if (!isCurrent()) {
         return
       }
+
       const applicable = recovered.flatMap((snapshot, index) =>
         snapshot !== null &&
         shouldApplyRecoveredWebSessionTabsSnapshot(
@@ -123,6 +133,7 @@ export function handleGlobalSessionInventoryEvent({
           ? [{ index, snapshot }]
           : []
       )
+
       if (visibilityGeneration > 0 || replayed) {
         for (const { index, snapshot } of applicable) {
           if (!unchanged[index]) {
@@ -130,14 +141,17 @@ export function handleGlobalSessionInventoryEvent({
           }
         }
       }
+
       const decisions = applicable.map(({ index, snapshot }) =>
         unchanged[index]
           ? WEB_SESSION_TABS_FRAME_OUTRANKED
           : decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
       )
+
       const freshSnapshots = applicable.flatMap(({ snapshot }, index) =>
         decisions[index]!.apply ? [snapshot] : []
       )
+
       settleHydration = applyWebSessionTabsStorePatch(
         (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
         {
@@ -163,14 +177,17 @@ export function handleGlobalSessionInventoryEvent({
         freshSnapshots
       )
       const freshSet = new Set(freshSnapshots)
+
       for (const { index, snapshot } of applicable) {
         if (unchanged[index]) {
           queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
         }
+
         if (unchanged[index] || freshSet.has(snapshot)) {
           coordinator.recordSnapshot(environmentId, snapshot, receivedFrames[index]!, runtimeId)
         }
       }
+
       coordinator.recordInventory(environmentId, visibilityGeneration, inventoryFrame, missing)
     })
     .catch((error) => {
@@ -182,6 +199,7 @@ export function handleGlobalSessionInventoryEvent({
       for (const finishRecovery of finishRecoveries) {
         finishRecovery?.()
       }
+
       if (isCurrent()) {
         settleHydration?.()
       }

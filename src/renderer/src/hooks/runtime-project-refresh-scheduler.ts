@@ -21,8 +21,11 @@ type RefreshEntry = {
 }
 
 const DEFAULT_DEBOUNCE_MS = 250
+
 const DEFAULT_MIN_INTERVAL_MS = 5_000
+
 const DEFAULT_REFRESH_CONCURRENCY = 5
+
 /** Connect is one-shot and the user is waiting, so it cannot storm the way the coalesced event lane can. */
 export const INTERACTIVE_CONNECT_REFRESH_CONCURRENCY = 15
 
@@ -51,6 +54,7 @@ export async function refreshRuntimeProjectWorktrees(
         const index = nextIndex
         nextIndex += 1
         const repoId = repoIds[index]
+
         try {
           await fetchWorktrees(repoId, {
             executionHostId,
@@ -62,6 +66,7 @@ export async function refreshRuntimeProjectWorktrees(
       }
     })
   )
+
   if (failures.length > 0) {
     throw new AggregateError(
       failures.map((failure) => failure.error),
@@ -82,11 +87,13 @@ export async function refreshRuntimeProjectWorktreesAndLineage(
 ): Promise<void> {
   const executionHostId = toRuntimeExecutionHostId(environmentId)
   let worktreeFailure: { error: unknown } | null = null
+
   try {
     await refreshRuntimeProjectWorktrees(environmentId, repos, fetchWorktrees, concurrency)
   } catch (error) {
     worktreeFailure = { error }
   }
+
   // Why: a failed repo refresh must not strand the host-wide lineage snapshot.
   try {
     await fetchWorktreeLineage({ executionHostId })
@@ -94,11 +101,13 @@ export async function refreshRuntimeProjectWorktreesAndLineage(
     if (!worktreeFailure) {
       throw lineageError
     }
+
     throw new AggregateError(
       [worktreeFailure.error, lineageError],
       'Failed to refresh runtime project worktrees and lineage'
     )
   }
+
   if (worktreeFailure) {
     throw worktreeFailure.error
   }
@@ -115,6 +124,7 @@ export function createRuntimeProjectRefreshScheduler(
 
   const getEntry = (environmentId: string): RefreshEntry => {
     let entry = entries.get(environmentId)
+
     if (!entry) {
       entry = {
         inFlight: false,
@@ -124,6 +134,7 @@ export function createRuntimeProjectRefreshScheduler(
       }
       entries.set(environmentId, entry)
     }
+
     return entry
   }
 
@@ -131,6 +142,7 @@ export function createRuntimeProjectRefreshScheduler(
     if (stopped || entry.inFlight || entry.timer) {
       return
     }
+
     const elapsed = entry.lastStartedAt > 0 ? now() - entry.lastStartedAt : minIntervalMs
     const throttleDelay = Math.max(0, minIntervalMs - elapsed)
     const delay = Math.max(debounceMs, throttleDelay)
@@ -144,15 +156,18 @@ export function createRuntimeProjectRefreshScheduler(
     if (stopped || !entry.pending) {
       return
     }
+
     entry.pending = false
     entry.inFlight = true
     entry.lastStartedAt = now()
+
     try {
       await deps.refresh(environmentId)
     } catch (error) {
       deps.onError?.(error)
     } finally {
       entry.inFlight = false
+
       if (entry.pending) {
         // Why: runtime repo events can be noisy while a remote server is merely
         // connected; keep discovery live without letting it drive the renderer.
@@ -163,9 +178,11 @@ export function createRuntimeProjectRefreshScheduler(
 
   const request = (environmentId: string): void => {
     const trimmedEnvironmentId = environmentId.trim()
+
     if (!trimmedEnvironmentId || stopped) {
       return
     }
+
     const entry = getEntry(trimmedEnvironmentId)
     entry.pending = true
     schedule(trimmedEnvironmentId, entry)
@@ -173,11 +190,13 @@ export function createRuntimeProjectRefreshScheduler(
 
   const stop = (): void => {
     stopped = true
+
     for (const entry of entries.values()) {
       if (entry.timer) {
         clearTimeout(entry.timer)
       }
     }
+
     entries.clear()
   }
 

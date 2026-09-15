@@ -21,6 +21,7 @@ export function MobileFilePreviewSourceText({
 }) {
   const scrollRef = useRef<ScrollView>(null)
   const revealedRef = useRef(false)
+
   const syntax = useMemo(
     () => buildMobileFilePreviewSyntax(relativePath, content),
     [content, relativePath]
@@ -34,6 +35,7 @@ export function MobileFilePreviewSourceText({
     if (!initialLine || revealedRef.current) {
       return
     }
+
     revealedRef.current = true
     scrollRef.current?.scrollTo({
       y: scrollOffsetForPreviewLine(initialLine),

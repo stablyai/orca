@@ -72,16 +72,20 @@ function stubRuntimeEnvironmentApi({
       }
     }
   })
+
   return { getStatus, list }
 }
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
+
   let reject: (reason?: unknown) => void = () => {}
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -354,6 +358,7 @@ describe('runtime-status slice', () => {
       if (options?.id !== undefined) {
         visibleToastIds.add(options.id)
       }
+
       return options?.id ?? ''
     })
     const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
@@ -362,9 +367,11 @@ describe('runtime-status slice', () => {
     store.setState({ runtimeEnvironments: [makeEnvironment()] })
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: makeStatus(), checkedAt: 1 })
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 2 })
+
     const options = vi.mocked(toast.warning).mock.calls[0]?.[1] as unknown as {
       action: { onClick: (event: { preventDefault: () => void }) => void }
     }
+
     const clickAction = (): { defaultPrevented: boolean } => {
       const event = {
         defaultPrevented: false,
@@ -372,10 +379,13 @@ describe('runtime-status slice', () => {
           this.defaultPrevented = true
         }
       }
+
       options.action.onClick(event)
+
       if (!event.defaultPrevented) {
         setTimeout(() => visibleToastIds.delete(toastId), 200)
       }
+
       return event
     }
 
@@ -506,6 +516,7 @@ describe('runtime-status slice', () => {
 
       const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-a')
       store.getState().setRuntimeEnvironments([makeEnvironment({ pairingRevision: 2 })])
+
       if (outcome === 'success') {
         probe.resolve(createCompatibleRuntimeStatusResponse('runtime-old'))
       } else {
@@ -594,6 +605,7 @@ describe('runtime-status slice', () => {
   it('drops a recent compatibility failure once a status refresh succeeds', async () => {
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
+
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
       if (offline || method === 'status.get') {
         return Promise.resolve(
@@ -607,8 +619,10 @@ describe('runtime-status slice', () => {
             : createCompatibleRuntimeStatusResponse('runtime-a')
         )
       }
+
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
+
     const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
     vi.stubGlobal('window', { api: { runtimeEnvironments: { getStatus, call } } })
     const store = createSliceStore()
@@ -638,6 +652,7 @@ describe('runtime-status slice', () => {
     // that reuse-flagged catalog fetch re-probes the now-reachable host.
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
+
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
       if (offline || method === 'status.get') {
         return Promise.resolve(
@@ -651,8 +666,10 @@ describe('runtime-status slice', () => {
             : createCompatibleRuntimeStatusResponse('runtime-a')
         )
       }
+
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
@@ -676,6 +693,7 @@ describe('runtime-status slice', () => {
     // reusing the one recent failure instead of re-probing per repo.
     clearRuntimeCompatibilityCacheForTests()
     let offline = true
+
     const call = vi.fn().mockImplementation(({ method }: { method: string }) => {
       if (offline || method === 'status.get') {
         return Promise.resolve(
@@ -689,8 +707,10 @@ describe('runtime-status slice', () => {
             : createCompatibleRuntimeStatusResponse('runtime-a')
         )
       }
+
       return Promise.resolve({ id: method, ok: true, result: { ok: true }, _meta: {} })
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     const store = createSliceStore()
     const target = { kind: 'environment', environmentId: 'env-a' } as const
@@ -733,6 +753,7 @@ describe('runtime-status slice', () => {
         }
       }
     })
+
     try {
       const store = createSliceStore()
       expect(await store.getState().refreshRuntimeEnvironmentStatus('env-a')).toBe(true)
@@ -745,6 +766,7 @@ describe('runtime-status slice', () => {
 
   it('hydrates saved environments through the single-environment refresh path', async () => {
     const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
+
     const list = vi.fn().mockResolvedValue([
       {
         id: 'env-a',
@@ -757,6 +779,7 @@ describe('runtime-status slice', () => {
         preferredEndpointId: 'ws-a'
       }
     ])
+
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
 
@@ -775,13 +798,16 @@ describe('runtime-status slice', () => {
     const environments = [makeEnvironment(), makeEnvironment({ id: 'env-b', name: 'Build Box' })]
     const probeA = deferred<ReturnType<typeof createCompatibleRuntimeStatusResponse>>()
     const probeB = deferred<ReturnType<typeof createCompatibleRuntimeStatusResponse>>()
+
     const getStatus = vi.fn(({ selector }: { selector: string }) =>
       selector === 'env-a' ? probeA.promise : probeB.promise
     )
+
     const list = vi.fn().mockResolvedValue(environments)
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -812,10 +838,12 @@ describe('runtime-status slice', () => {
       .fn()
       .mockResolvedValueOnce(createCompatibleRuntimeStatusResponse('runtime-1'))
       .mockResolvedValueOnce(createCompatibleRuntimeStatusResponse('runtime-2'))
+
     const list = vi.fn().mockResolvedValue([makeEnvironment()])
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -851,13 +879,16 @@ describe('runtime-status slice', () => {
     const repairedEnvironmentA = makeEnvironment({ pairingRevision: 2 })
     const firstCatalog = deferred<PublicKnownRuntimeEnvironment[]>()
     const secondCatalog = deferred<PublicKnownRuntimeEnvironment[]>()
+
     const getStatus = vi
       .fn()
       .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-current'))
+
     const list = vi
       .fn()
       .mockReturnValueOnce(firstCatalog.promise)
       .mockReturnValueOnce(secondCatalog.promise)
+
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
     store.getState().setRuntimeEnvironments([environmentA])
@@ -882,14 +913,17 @@ describe('runtime-status slice', () => {
     const environmentA = makeEnvironment()
     const environmentB = makeEnvironment({ id: 'env-b', name: 'Build Box' })
     const firstProbe = deferred<ReturnType<typeof createCompatibleRuntimeStatusResponse>>()
+
     const getStatus = vi
       .fn()
       .mockImplementationOnce(() => firstProbe.promise)
       .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-current'))
+
     const list = vi
       .fn()
       .mockResolvedValueOnce([environmentA, environmentB])
       .mockResolvedValueOnce([environmentA])
+
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
 
@@ -917,6 +951,7 @@ describe('runtime-status slice', () => {
       .fn()
       .mockRejectedValueOnce(new Error('unreadable environments.json'))
       .mockResolvedValueOnce([])
+
     stubRuntimeEnvironmentApi({ getStatus: vi.fn(), list })
     const store = createSliceStore()
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)

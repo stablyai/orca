@@ -18,10 +18,12 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
       operationId: input.envelope.clientOperationId,
       outcome
     })
+
   try {
     if (input.plan.markUnknownBeforeRun) {
       await settle({ status: 'unknown' })
     }
+
     input.plan.beforeRun?.()
     const outcome = await input.plan.run(input.context)
     await settle(
@@ -36,6 +38,7 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
             ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
           }
     )
+
     return outcome
   } catch (error) {
     await settle({ status: 'unknown' })

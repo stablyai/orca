@@ -15,5 +15,6 @@ export async function validateGitPushTarget(
     cwd: repoPath,
     ...options
   })
+
   return target
 }

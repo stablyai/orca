@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -322,6 +323,7 @@ describe('restored folder workspace hydration', () => {
     const folderKey = folderWorkspaceKey('remote-folder')
     const groupId = 'group-folder'
     const editorFileId = '/srv/app/src/App.tsx'
+
     const session = {
       ...getDefaultWorkspaceSession(),
       activeWorkspaceKey: folderKey,
@@ -422,6 +424,7 @@ describe('restored folder workspace hydration', () => {
       },
       activeGroupIdByWorktree: { [folderKey]: groupId }
     }
+
     const options = {
       additionalValidWorkspaceKeys: [folderKey],
       runtimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' as const }
@@ -453,6 +456,7 @@ describe('restored folder workspace hydration', () => {
     const worktreeId = 'repo-a::/target'
     const retainedTab = makeTab({ id: 'tab-retained', worktreeId })
     const retiredTab = makeTab({ id: 'tab-retired', worktreeId })
+
     const authority = {
       targetId: 'target-a',
       providerEpoch: 'epoch-a' as SshProviderEpoch,

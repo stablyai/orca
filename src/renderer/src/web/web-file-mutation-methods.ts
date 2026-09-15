@@ -37,17 +37,21 @@ async function captureWebFileMutationProvenance(
   getSshState: WebFileMutationSession['getSshState']
 ): Promise<WebFileMutationProvenance> {
   const host = parseExecutionHostId(file.worktree.hostId)
+
   if (file.worktree.hostId !== undefined && !host) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   if (!host || host.kind === 'local' || host.kind === 'runtime') {
     return { expectedExecutionHostId: 'local' }
   }
 
   const state = await getSshState(host.targetId)
+
   if (state?.targetId !== host.targetId || state.connectionGeneration === undefined) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   return {
     expectedExecutionHostId: host.id,
     expectedSshTargetId: host.targetId,

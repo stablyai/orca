@@ -90,6 +90,7 @@ describe('getStatus', () => {
       if (target.endsWith('MERGE_HEAD')) {
         return undefined
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     gitExecFileAsyncMock.mockResolvedValueOnce({
@@ -310,18 +311,23 @@ describe('getStatus', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
         })
       }
+
       if (args[0] === 'symbolic-ref') {
         return Promise.resolve({ stdout: 'feature/prompts\n' })
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         return Promise.reject(new Error('fatal: no upstream configured'))
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature/prompts')) {
         return Promise.reject(new Error('missing remote branch'))
       }
+
       if (args[0] === 'config') {
         return Promise.reject(new Error(`missing ${args[2] ?? 'config'}`))
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
 
@@ -404,11 +410,13 @@ describe('getStatus', () => {
             '1 .M N... 100644 100644 100644 bbbb bbbb src/unstaged.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({
           stdout: args.includes('--cached') ? '10\t0\tsrc/staged.ts\n' : '3\t4\tsrc/unstaged.ts\n'
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -430,9 +438,11 @@ describe('getStatus', () => {
             '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -458,9 +468,11 @@ describe('getStatus', () => {
             '# branch.oid head-1\n' + '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -486,13 +498,17 @@ describe('getStatus', () => {
             '# branch.oid head-1\n' + '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         if (failNumstat) {
           failNumstat = false
+
           return Promise.reject(new Error('transient index.lock'))
         }
+
         return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -515,9 +531,11 @@ describe('getStatus', () => {
             `# branch.oid ${head}\n` + '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -540,9 +558,11 @@ describe('getStatus', () => {
           stdout: '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '3\t4\tsrc/unstaged.ts\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -563,9 +583,11 @@ describe('getStatus', () => {
           stdout: '1 .M N... 100644 100644 100644 aaaa aaaa docs/a => b.txt\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '1\t0\tdocs/a => b.txt\0' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -591,9 +613,11 @@ describe('getStatus', () => {
           stdout: '2 R. N... 100644 100644 100644 aaaa bbbb R100 src/new name.ts\tsrc/old name.ts\n'
         })
       }
+
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '2\t1\tsrc/old name.ts => src/new name.ts\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -641,10 +665,12 @@ describe('getStatus', () => {
           stdout: '1 .M N... 100644 100644 100644 cccc cccc assets/logo.png\n'
         })
       }
+
       // git reports binary files as '-' in both numstat columns.
       if (args.includes('--numstat')) {
         return Promise.resolve({ stdout: '-\t-\tassets/logo.png\n' })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -684,6 +710,7 @@ describe('getStatus', () => {
 
   it('caps unmerged conflicts and keeps the visible conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+
     const lines = [
       'u UU S... 160000 160000 160000 160000 aa bb cc vendor/submodule',
       ...Array.from(
@@ -691,6 +718,7 @@ describe('getStatus', () => {
         (_, i) => `u UU N... 100644 100644 100644 100644 aa bb cc conflict-${i}.ts`
       )
     ].join('\n')
+
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${lines}\n` })
 
@@ -706,11 +734,13 @@ describe('getStatus', () => {
 
   it('keeps an early conflict ahead of later ordinary rows at the cap', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+
     const lines = [
       '? before.ts',
       'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts',
       '? after.ts'
     ].join('\n')
+
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${lines}\n` })
 

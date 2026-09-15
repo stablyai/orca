@@ -17,6 +17,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from './local-runtime-capabilities'
+
 /** Read the prompt-cancel capability through the runtime's existing status cache.
  *  A failed/unknown probe is treated as legacy so strict prompt fields are never
  *  sent before the host has proved it understands them. */
@@ -27,8 +28,10 @@ export async function supportsStructuredAgentSessionPromptCancel(
     if (target.kind === 'local') {
       const known = readLocalRuntimeCapabilitiesOrUnknown()
       const capabilities = known ?? (await ensureLocalRuntimeCapabilities())
+
       return capabilities?.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY) === true
     }
+
     return await runtimeEnvironmentSupportsCapability(
       target.environmentId,
       AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY
@@ -53,6 +56,7 @@ export async function callStructuredAgentSession<TResult>(
   ) {
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
+
   return method === 'agentSession.conversationCommand'
     ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
     : callRuntimeRpc<TResult>(target, method, params)
@@ -69,13 +73,17 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   const onResponse = (response: RuntimeRpcResponse<unknown>): void => {
     if (!response.ok) {
       onError(response.error)
+
       return
     }
+
     onEvent(response.result as TEvent)
   }
+
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)
   }
+
   return window.api.runtimeEnvironments.subscribe(
     {
       selector: target.environmentId,

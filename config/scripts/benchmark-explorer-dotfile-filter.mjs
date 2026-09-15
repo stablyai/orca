@@ -7,9 +7,13 @@ import { build } from 'esbuild'
 
 // Pass the pre-change file-explorer-entries.ts snapshot as the only argument.
 const baselinePath = process.argv[2]
+
 assert.ok(baselinePath, 'Pass a pre-change file-explorer-entries.ts snapshot.')
+
 const entry = 'src/renderer/src/components/right-sidebar/file-explorer-entries.ts'
+
 const baseline = readFileSync(baselinePath, 'utf8')
+
 assert.notEqual(baseline, readFileSync(entry, 'utf8'), 'Do not compare the source to itself.')
 
 async function load(useBaseline) {
@@ -40,14 +44,18 @@ export { createNameFilteredFileExplorerProjection } from './src/renderer/src/com
         ]
       : []
   })
+
   const module = new Module(resolve('dotfile-benchmark.cjs'))
   module.paths = Module._nodeModulePaths(process.cwd())
   module._compile(result.outputFiles[0].text, module.id)
+
   return module.exports
 }
 
 const versions = [await load(true), await load(false)]
+
 let parityCases = 0
+
 function check(path, depth) {
   assert.equal(
     versions[0].isDotfileRelativePath(path),
@@ -55,27 +63,33 @@ function check(path, depth) {
     path
   )
   parityCases++
+
   if (depth > 0) {
     for (const character of ['.', '/', '\\', 'a', '\n']) {
       check(path + character, depth - 1)
     }
   }
 }
+
 check('', 8)
 
 function measure(functions, iterations = 1) {
   let sink = 0
+
   const run = (fn) => {
     for (let i = 0; i < iterations; i++) {
       sink += Number(fn())
     }
   }
+
   for (const fn of functions) {
     for (let warmup = 0; warmup < 3; warmup++) {
       run(fn)
     }
   }
+
   const samples = [[], []]
+
   for (let round = 0; round < 11; round++) {
     for (const variant of round % 2 ? [1, 0] : [0, 1]) {
       const start = performance.now()
@@ -83,6 +97,7 @@ function measure(functions, iterations = 1) {
       samples[variant].push(performance.now() - start)
     }
   }
+
   return {
     beforeMs: samples[0].sort((a, b) => a - b)[5],
     afterMs: samples[1].sort((a, b) => a - b)[5],
@@ -92,6 +107,7 @@ function measure(functions, iterations = 1) {
 }
 
 const predicates = []
+
 for (const path of [
   'a',
   '.env',
@@ -114,6 +130,7 @@ for (const path of [
 }
 
 const projections = []
+
 for (const count of [1000, 10_000, 100_000]) {
   for (const query of ['nonmatching-needle', 'file-42']) {
     const args = {
@@ -129,15 +146,19 @@ for (const count of [1000, 10_000, 100_000]) {
       showGitIgnoredFiles: false,
       worktreePath: '/workspace'
     }
+
     const functions = versions.map(
       (version) => () => version.createNameFilteredFileExplorerProjection(args)
     )
+
     const rows = functions.map((fn) => {
       const projection = fn()
+
       return Array.from({ length: projection.getVisibleCount() }, (_, i) =>
         projection.getRowAtIndex(i)
       )
     })
+
     assert.deepEqual(rows[0], rows[1])
     projections.push({
       count,
@@ -147,6 +168,7 @@ for (const count of [1000, 10_000, 100_000]) {
     })
   }
 }
+
 console.log(
   JSON.stringify(
     {

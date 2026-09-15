@@ -22,6 +22,7 @@ export type SectionKey = 'status' | 'author' | 'label' | 'reviewer' | 'assignee'
 
 function statusLabel(parsed: ParsedTaskQuery): string {
   const parts: string[] = []
+
   if (parsed.state === 'open') {
     parts.push('Open')
   } else if (parsed.state === 'closed') {
@@ -31,9 +32,11 @@ function statusLabel(parsed: ParsedTaskQuery): string {
   } else if (parsed.state === 'all') {
     parts.push('All')
   }
+
   if (parsed.draft) {
     parts.push('Draft')
   }
+
   return parts.join(' · ')
 }
 
@@ -80,10 +83,12 @@ function StatusSection({
             label: translate('auto.components.github.PRFilterSections.2b2f019091', 'Any state')
           }
         ]
+
   return (
     <div className="py-1 text-xs">
       {states.map((s) => {
         const active = parsed.state === s.key
+
         return (
           <button
             key={s.key}
@@ -168,6 +173,7 @@ export function SectionMenu({
   onClearAll: (() => void) | null
 }): React.JSX.Element {
   const status = statusLabel(parsed)
+
   const rows: { key: SectionKey; label: string; value: string | null }[] = [
     {
       key: 'status',
@@ -204,7 +210,9 @@ export function SectionMenu({
       value: parsed.assignee
     }
   ]
+
   const subject = kind === 'prs' ? 'pull requests' : 'issues'
+
   return (
     <div className="py-1 text-xs">
       <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

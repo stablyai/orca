@@ -73,25 +73,32 @@ export function TerminalQuickCommandDialog({
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
   const fallbackAgent: TuiAgent =
     getAgentCatalog().find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
+
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const wasOpenRef = useRef(open)
   const syncedCommandRef = useRef(command)
+
   const draftMemoryRef = useRef<ReturnType<typeof createTerminalQuickCommandDialogDraftMemory>>(
     undefined!
   )
+
   draftMemoryRef.current ??= createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
   const initialScope = getTerminalQuickCommandScope(command)
+
   const lastRepoScopeIdRef = useRef<string | null>(
     initialScope.type === 'repo' ? initialScope.repoId : null
   )
+
   const [advancedOpen, setAdvancedOpen] = useState(defaultAdvancedOpen)
   const selectedAction = getTerminalQuickCommandAction(draft)
   const selectedScope = getTerminalQuickCommandScope(draft)
   const isAgentAction = isTerminalAgentQuickCommand(draft)
+
   const selectedRepo =
     selectedScope.type === 'repo'
       ? (repos.find((repo) => repo.id === selectedScope.repoId) ?? null)
       : null
+
   const selectedRepoId = selectedRepo?.id ?? ''
   const selectedRepoMissing = selectedScope.type === 'repo' && selectedRepo === null
 
@@ -114,6 +121,7 @@ export function TerminalQuickCommandDialog({
     setDraft((current) => {
       const next = switchTerminalQuickCommandDialogAction(current, action, draftMemoryRef.current)
       draftMemoryRef.current = next.memory
+
       return next.draft
     })
   }
@@ -128,6 +136,7 @@ export function TerminalQuickCommandDialog({
               ...draftMemoryRef.current,
               terminalAppendEnter: appendEnter
             }
+
             return { ...current, appendEnter }
           })()
     )
@@ -151,6 +160,7 @@ export function TerminalQuickCommandDialog({
           appendEnter: draft.appendEnter,
           scope: selectedScope
         }
+
     if (
       !next.label ||
       (isTerminalAgentQuickCommand(next)
@@ -159,6 +169,7 @@ export function TerminalQuickCommandDialog({
     ) {
       return
     }
+
     onSave(next)
     onOpenChange(false)
   }
@@ -168,6 +179,7 @@ export function TerminalQuickCommandDialog({
     (isAgentAction
       ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
       : draft.command.trimEnd().length > 0)
+
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   return (
@@ -208,8 +220,10 @@ export function TerminalQuickCommandDialog({
               event.preventDefault()
               event.stopPropagation()
               event.target.select()
+
               return
             }
+
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
               saveDraft()

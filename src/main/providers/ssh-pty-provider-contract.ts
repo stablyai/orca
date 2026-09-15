@@ -30,7 +30,9 @@ export type SshPtyDataCallback = (payload: {
   sourceRejected?: boolean
   rejectedSourceRecovery?: 'confirm-existing' | 'fresh-activation' | 'reconnect-channel'
 }) => void
+
 export type SshPtyReplayCallback = (payload: { id: string; data: string }) => void
+
 export type SshPtyExitCallback = (payload: {
   id: string
   code: number

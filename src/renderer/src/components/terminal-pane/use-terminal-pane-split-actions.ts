@@ -53,9 +53,11 @@ export function useTerminalPaneSplitActions({
     ): void => {
       const pane = resolveMenuPane()
       const manager = managerRef.current
+
       if (!pane || !manager) {
         return
       }
+
       splitTerminalPaneWithInheritedCwd({
         worktreeId,
         tabId,
@@ -78,13 +80,17 @@ export function useTerminalPaneSplitActions({
   useEffect(() => {
     const onRequestSplit = (event: Event): void => {
       const detail = (event as CustomEvent<RequestActiveTerminalPaneSplitDetail>).detail
+
       if (detail?.tabId && detail.tabId !== tabId) {
         return
       }
+
       contextPaneIdRef.current = null
       splitWithInheritedCwd(detail?.direction ?? 'vertical', getRequestedSplitTelemetrySource())
     }
+
     window.addEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
+
     return () =>
       window.removeEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
     // splitWithInheritedCwd closes over live refs; re-registering keeps the

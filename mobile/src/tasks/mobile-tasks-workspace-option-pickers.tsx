@@ -28,6 +28,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
     workspaceBaseBranchResults,
     workspaceCreateDraft
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceBaseBranchPicker}
@@ -119,6 +120,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
     workspaceSparsePresetsLoaded,
     workspaceSparsePresetsLoading
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceSparsePicker}

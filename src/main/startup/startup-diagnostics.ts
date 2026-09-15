@@ -27,6 +27,7 @@ export function logStartupDiagnostic(
   const detailText = Object.entries(details)
     .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
     .join(' ')
+
   writeStartupDiagnosticLine(`[startup] ${event}${detailText ? ` ${detailText}` : ''}`, write)
 }
 

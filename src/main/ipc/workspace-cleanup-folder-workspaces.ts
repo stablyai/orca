@@ -15,6 +15,7 @@ export function listWorkspaceCleanupFolderWorkspaces(
   const rootId = `${repo.id}::${repo.path}`
   const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   const allMeta: Readonly<Record<string, WorktreeMeta>> = store.getAllWorktreeMeta()
+
   const worktreeIds = [
     rootId,
     ...Object.keys(allMeta).filter(
@@ -23,6 +24,7 @@ export function listWorkspaceCleanupFolderWorkspaces(
         getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount) !== undefined
     )
   ]
+
   const folderWorktree = createFolderWorktree(repo)
 
   return worktreeIds.map((worktreeId) => ({

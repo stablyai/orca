@@ -18,21 +18,27 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
     const conflictedCommitments = new Set<string>()
+
     for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
       authorityCommitments[paneKey] = { ...commitment }
     }
+
     for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
       // Why: never persist invalid keys (matches the hydrate-path invariant).
       if (!isValidPaneKey(paneKey)) {
         continue
       }
+
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
+
       // Why: the session journal is the durable truth for a structured row and the host republishes
       // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
       if (enrichedPayload.structuredHost) {
         continue
       }
+
       const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
+
       const {
         claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
         promptInteractionKey: _promptInteractionKey,
@@ -48,17 +54,21 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         launchToken,
         ...persistedPayload
       } = enrichedPayload
+
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+
       entries[paneKey] = {
         ...persistedPayload,
         ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
+
       if (commitment && !conflictedCommitments.has(paneKey)) {
         const existing = authorityCommitments[paneKey]
+
         if (existing && !authorityCommitmentsMatch(existing, commitment)) {
           delete authorityCommitments[paneKey]
           conflictedCommitments.add(paneKey)
@@ -67,11 +77,13 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         }
       }
     }
+
     const file: LastStatusFile = {
       version: LAST_STATUS_FILE_VERSION,
       entries,
       authorityCommitments
     }
+
     return JSON.stringify(file)
   }
 
@@ -79,14 +91,17 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     if (!this.lastStatusFilePath) {
       return
     }
+
     // Why: reset the timer each call so the write fires only after the last event in a burst.
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
     }
+
     this.statusPersistTimer = setTimeout(() => {
       this.statusPersistTimer = null
       this.runStatusPersist()
     }, STATUS_PERSIST_DEBOUNCE_MS)
+
     // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
@@ -98,9 +113,11 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       clearTimeout(this.statusPersistTimer)
       this.statusPersistTimer = null
     }
+
     if (!this.lastStatusFilePath) {
       return
     }
+
     this.runStatusPersist()
   }
 
@@ -108,14 +125,19 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     if (!this.lastStatusFilePath || !this.endpointDir) {
       return
     }
+
     const json = this.serializeStatusFile()
+
     if (json === this.lastWrittenJson) {
       return
     }
+
     const tmpPath = join(this.endpointDir, `.last-status-${process.pid}-${randomUUID()}.tmp`)
     let tmpWritten = false
+
     try {
       mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
+
       if (process.platform !== 'win32') {
         try {
           chmodSync(this.endpointDir, 0o700)
@@ -123,12 +145,14 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
           // best-effort
         }
       }
+
       writeFileSync(tmpPath, json, { mode: 0o600 })
       tmpWritten = true
       renameSync(tmpPath, this.lastStatusFilePath)
       this.lastWrittenJson = json
     } catch (err) {
       console.warn('[agent-hooks] failed to write last-status file:', err)
+
       if (tmpWritten) {
         try {
           unlinkSync(tmpPath)

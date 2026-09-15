@@ -7,10 +7,13 @@ export function useEmulatorPaneSize() {
 
   useEffect(() => {
     const node = paneRef.current
+
     if (!node) {
       return
     }
+
     let frameId: number | null = null
+
     const updateSize = (): void => {
       const rect = node.getBoundingClientRect()
       const width = Math.floor(rect.width)
@@ -19,10 +22,12 @@ export function useEmulatorPaneSize() {
         current?.width === width && current.height === height ? current : { width, height }
       )
     }
+
     const scheduleUpdate = (): void => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
+
       frameId = requestAnimationFrame(() => {
         frameId = null
         updateSize()
@@ -30,22 +35,27 @@ export function useEmulatorPaneSize() {
     }
 
     updateSize()
+
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', scheduleUpdate)
+
       return () => {
         if (frameId !== null) {
           cancelAnimationFrame(frameId)
         }
+
         window.removeEventListener('resize', scheduleUpdate)
       }
     }
 
     const observer = new ResizeObserver(scheduleUpdate)
     observer.observe(node)
+
     return () => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
+
       observer.disconnect()
     }
   }, [])

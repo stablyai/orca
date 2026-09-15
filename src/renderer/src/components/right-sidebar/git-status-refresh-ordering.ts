@@ -1,10 +1,14 @@
 const MAX_REFRESH_ORDERING_WORKTREES = 1024
+
 const strictUpstreamRefreshGenerationByWorktree = new Map<string, number>()
+
 const automaticRefreshGenerationByWorktree = new Map<string, number>()
+
 // Why: automatic ordering is latest-APPLIED-wins, not latest-started-wins. A
 // later-started refresh that fails (or never applies) must not veto an earlier
 // refresh's good result, so the fence only advances when a result is applied.
 const lastAppliedAutomaticGenerationByWorktree = new Map<string, number>()
+
 const automaticUpstreamRefreshInFlightByWorktree = new Map<string, number>()
 
 export type AutomaticRefreshOrder = {
@@ -17,9 +21,11 @@ function trimRefreshOrderingState(): void {
     if (strictUpstreamRefreshGenerationByWorktree.size <= MAX_REFRESH_ORDERING_WORKTREES) {
       break
     }
+
     if (automaticUpstreamRefreshInFlightByWorktree.has(worktreeId)) {
       continue
     }
+
     strictUpstreamRefreshGenerationByWorktree.delete(worktreeId)
   }
 }
@@ -31,6 +37,7 @@ export function beginAutomaticUpstreamRefresh(worktreeId: string): AutomaticRefr
   )
   const automaticGeneration = (automaticRefreshGenerationByWorktree.get(worktreeId) ?? 0) + 1
   automaticRefreshGenerationByWorktree.set(worktreeId, automaticGeneration)
+
   return {
     strictGeneration: strictUpstreamRefreshGenerationByWorktree.get(worktreeId) ?? 0,
     automaticGeneration
@@ -39,6 +46,7 @@ export function beginAutomaticUpstreamRefresh(worktreeId: string): AutomaticRefr
 
 export function finishAutomaticUpstreamRefresh(worktreeId: string): void {
   const count = automaticUpstreamRefreshInFlightByWorktree.get(worktreeId) ?? 0
+
   if (count <= 1) {
     automaticUpstreamRefreshInFlightByWorktree.delete(worktreeId)
     automaticRefreshGenerationByWorktree.delete(worktreeId)
@@ -46,6 +54,7 @@ export function finishAutomaticUpstreamRefresh(worktreeId: string): void {
   } else {
     automaticUpstreamRefreshInFlightByWorktree.set(worktreeId, count - 1)
   }
+
   trimRefreshOrderingState()
 }
 
@@ -74,6 +83,7 @@ export function claimAutomaticUpstreamRefreshApply(
   if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, order, shouldApply)) {
     return false
   }
+
   lastAppliedAutomaticGenerationByWorktree.set(
     worktreeId,
     Math.max(
@@ -81,6 +91,7 @@ export function claimAutomaticUpstreamRefreshApply(
       order.automaticGeneration
     )
   )
+
   return true
 }
 

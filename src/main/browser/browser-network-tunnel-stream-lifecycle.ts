@@ -31,6 +31,7 @@ export function createBrowserNetworkTunnelStream(options: {
       BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS
     )
   }
+
   return stream
 }
 
@@ -41,12 +42,15 @@ export function retireBrowserNetworkTunnelStream(
   if (stream.closed) {
     return
   }
+
   stream.closed = true
   clearTimeout(stream.connectTimeout)
   stream.releasePendingOpen()
+
   for (const release of stream.pendingDestinationWriteReleases) {
     release()
   }
+
   releaseRetainedBytes(stream.pendingToClientBytes)
   stream.pendingToClient = []
   stream.pendingToClientBytes = 0

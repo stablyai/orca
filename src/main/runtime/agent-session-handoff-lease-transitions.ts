@@ -20,6 +20,7 @@ export function recoverDeadTuiOwnerForHandoff(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
+
   if (
     record.lease.runtimeKind !== 'tui' ||
     record.lease.handoffStage !== null ||
@@ -28,7 +29,9 @@ export function recoverDeadTuiOwnerForHandoff(args: {
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   const evicted = evictAgentSessionOwner({ ...args, journalSettlement: 'required' })
+
   return withLease(evicted, {
     ...evicted.lease,
     handoffStage: 'old-owner-stopped',
@@ -44,6 +47,7 @@ export function stopAgentSessionOwnerForHandoff(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
+
   if (
     record.lease.handoffStage !== 'preparing' ||
     record.lease.handoffOperationId !== args.operationId ||
@@ -51,6 +55,7 @@ export function stopAgentSessionOwnerForHandoff(args: {
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   return withLease(record, {
     ...record.lease,
     runtimeFence: nextAgentSessionFence(record.lease),
@@ -76,6 +81,7 @@ export function rollbackAgentSessionHandoffPreparation(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
+
   if (
     record.lease.handoffStage !== 'preparing' ||
     record.lease.handoffOperationId !== args.operationId ||
@@ -84,6 +90,7 @@ export function rollbackAgentSessionHandoffPreparation(args: {
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   return withLease(record, {
     ...record.lease,
     handoffStage: null,
@@ -100,6 +107,7 @@ export function stopRecoveringTuiOwnerForHandoff(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
+
   if (
     (record.lease.handoffStage !== 'recovering' &&
       record.lease.handoffStage !== 'manual-recovery') ||
@@ -110,6 +118,7 @@ export function stopRecoveringTuiOwnerForHandoff(args: {
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   return withLease(record, {
     ...record.lease,
     runtimeFence: nextAgentSessionFence(record.lease),
@@ -162,12 +171,14 @@ export function abandonAgentSessionHandoffAttempt(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
+
   if (
     record.lease.handoffStage !== 'new-owner-proving' ||
     record.lease.handoffOperationId !== args.operationId
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   return withLease(record, {
     ...record.lease,
     runtimeKind: args.recoverableRuntimeKind,

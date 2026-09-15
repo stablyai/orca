@@ -10,12 +10,15 @@ export const SKILL_DELETE_BLOCK_REASONS = [
   'missing',
   'stale'
 ] as const
+
 export type SkillDeleteBlockReason = (typeof SKILL_DELETE_BLOCK_REASONS)[number]
 
 export const SKILL_DELETE_PLACEMENT_KINDS = ['canonical', 'alias-dir', 'alias-file'] as const
+
 export type SkillDeletePlacementKind = (typeof SKILL_DELETE_PLACEMENT_KINDS)[number]
 
 export const SKILL_DELETE_STATUSES = ['deleted', 'skipped', 'partial', 'failed', 'busy'] as const
+
 export type SkillDeleteStatus = (typeof SKILL_DELETE_STATUSES)[number]
 
 /** One page of rows; a selection larger than this is not a thing the UI offers. */
@@ -48,6 +51,7 @@ export const SkillDeleteRequestSchema = z
   .strict()
 
 export type SkillDeleteRequest = z.infer<typeof SkillDeleteRequestSchema>
+
 export type SkillDeleteTargetSkill = z.infer<typeof SkillDeleteTargetSkillSchema>
 
 export type SkillDeletePlacement = {

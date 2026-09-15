@@ -12,6 +12,7 @@ import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agen
 // Host clock sits an hour ahead of the client's so any leak of a host timestamp
 // into the local anchor shows up as a huge offset.
 const HOST_START = 3_600_000_000
+
 const CLIENT_NOW = 12_345_000
 
 function user(itemId: string, sequence: number): AgentJournalRenderItem {
@@ -40,6 +41,7 @@ function lifecycle(
 }
 
 type Timing = ReturnType<typeof useMobileStructuredAgentTurnTiming>
+
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
 // The submission the provider acknowledged under the key its lifecycle row cites.
@@ -72,6 +74,7 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     hostClock?: { hostNow: number; receivedAt: number }
   }): null {
     timing = useMobileStructuredAgentTurnTiming({ items, submissions, hostClock }, turnId)
+
     return null
   }
 
@@ -85,6 +88,7 @@ describe('useMobileStructuredAgentTurnTiming', () => {
   it('hands settled host durations through and anchors the live counter locally, once per turn', () => {
     vi.useFakeTimers()
     vi.setSystemTime(CLIENT_NOW)
+
     const items = [
       user('u1', 1),
       lifecycle(
@@ -107,6 +111,7 @@ describe('useMobileStructuredAgentTurnTiming', () => {
         HOST_START + 102_500
       )
     ]
+
     const submissions = SUBMISSIONS
     act(() => {
       renderer = create(createElement(Harness, { items, submissions, turnId: 't2' }))
@@ -130,6 +135,7 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     // With a host clock that said the turn was 35s old 5s ago, the anchor sits
     // 40s before first sight, wherever the client's absolute clock is.
     vi.setSystemTime(CLIENT_NOW + 60_000)
+
     const next = [
       ...items,
       user('u3', 5),
@@ -140,6 +146,7 @@ describe('useMobileStructuredAgentTurnTiming', () => {
         HOST_START + 150_100
       )
     ]
+
     act(() =>
       renderer?.update(
         createElement(Harness, {

@@ -28,6 +28,7 @@ function ownerForItem(
   if (item.selector.kind === 'orphan') {
     return null
   }
+
   return item.selector.kind === 'ssh'
     ? {
         authority,
@@ -46,11 +47,14 @@ export function toScopedAutomationHostRows(
 ): AutomationHostRow[] {
   const itemsById = new Map(result.items.map((item) => [item.automationId, item]))
   const rows: AutomationHostRow[] = []
+
   for (const automation of result.automations) {
     const item = itemsById.get(automation.id)
+
     if (!item) {
       continue
     }
+
     const usageSummary = item.usageSummary ?? null
     rows.push({
       automation,
@@ -61,6 +65,7 @@ export function toScopedAutomationHostRows(
       usageKnown: usageSummary !== null
     })
   }
+
   return rows
 }
 
@@ -76,6 +81,7 @@ function legacySelectorMatches(
   if (selector.kind !== ref.selector.kind) {
     return false
   }
+
   return selector.kind === 'ssh' && ref.selector.kind === 'ssh'
     ? selector.targetId === ref.selector.targetId
     : true
@@ -93,6 +99,7 @@ export function partitionLegacyAutomationHostRows(
 ): LegacyAutomationHostPartition {
   const partition = partitionLegacyAutomationList(automations, context)
   const rowsByStableKey = new Map<string, AutomationHostRow[]>()
+
   for (const ref of refs) {
     rowsByStableKey.set(
       keyOf(ref),
@@ -107,5 +114,6 @@ export function partitionLegacyAutomationHostRows(
         }))
     )
   }
+
   return { rowsByStableKey, orphanCount: partition.orphanCount }
 }

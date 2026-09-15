@@ -19,6 +19,7 @@ import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 
 let runtimeNotifierTokenCounter = 0
+
 let activeRuntimeNotifierToken: number | null = null
 
 export function registerRuntimeWindowLifecycle(
@@ -29,11 +30,13 @@ export function registerRuntimeWindowLifecycle(
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const mainWebContents = mainWindow.webContents
+
   const rendererNotifications = createRuntimeRendererNotificationSender({
     isWindowDestroyed: () => mainWindow.isDestroyed(),
     webContents: mainWebContents,
     onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
   })
+
   const send = rendererNotifications.send
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
@@ -72,30 +75,39 @@ export function registerRuntimeWindowLifecycle(
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
+
         const expectedIdentity = opts.expectedProcessIdentity
           ? opts.tabId && opts.leafId
             ? { worktreeId, tabId: opts.tabId, leafId: opts.leafId, ptyId: opts.ptyId }
             : null
           : undefined
+
         if (expectedIdentity === null) {
           reject(new Error('terminal_reveal_identity_required'))
+
           return
         }
+
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
+
         const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
+
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
+
           if (reply.error) {
             reject(new Error(reply.error))
+
             return
           }
+
           if (
             expectedIdentity &&
             (!reply.identity ||
@@ -105,15 +117,19 @@ export function registerRuntimeWindowLifecycle(
               reply.identity.ptyId !== expectedIdentity.ptyId)
           ) {
             reject(new Error('terminal_reveal_identity_mismatch'))
+
             return
           }
+
           resolve({
             tabId: reply.tabId!,
             title: reply.title,
             ...(reply.identity ? { identity: reply.identity } : {})
           })
         }
+
         ipcMain.on('terminal:tabCreateReply', handler)
+
         const sent = send('ui:createTerminal', {
           requestId,
           worktreeId,
@@ -137,6 +153,7 @@ export function registerRuntimeWindowLifecycle(
             : {}),
           ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
+
         if (!sent) {
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
@@ -218,6 +235,7 @@ export function registerRuntimeWindowLifecycle(
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
     const fence = runtime.markRendererReloading(mainWindow.id)
+
     return () => {
       if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
         rendererNotifications.onMainFrameReloadCancelled()
@@ -233,6 +251,7 @@ export function registerRuntimeWindowLifecycle(
   mainWindow.on('closed', () => {
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
+
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
       runtime.setNotifier(null)

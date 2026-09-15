@@ -25,7 +25,9 @@ function isHarnessSidecarToolMessage(message: NativeChatMessage): boolean {
   ) {
     return false
   }
+
   const textBlocks = message.blocks.filter((block) => block.type === 'text')
+
   return (
     textBlocks.length > 0 &&
     message.blocks.every(
@@ -54,8 +56,10 @@ function isInterruptionBoundary(message: NativeChatMessage): boolean {
 function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMessage | null {
   let blocks: NativeChatBlock[] | undefined
   let unansweredCalls = 0
+
   for (let index = 0; index < message.blocks.length; index++) {
     const block = message.blocks[index]
+
     if (isToolCallBlock(block)) {
       unansweredCalls += 1
     } else if (isToolResultBlock(block)) {
@@ -63,13 +67,17 @@ function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMe
         blocks ??= message.blocks.slice(0, index)
         continue
       }
+
       unansweredCalls -= 1
     }
+
     blocks?.push(block)
   }
+
   if (!blocks) {
     return message
   }
+
   return blocks.length > 0 ? { ...message, blocks } : null
 }
 
@@ -78,15 +86,18 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
   const output: NativeChatMessage[] = []
   let mutableAssistantIndex = -1
   let clonedAssistantIndex = -1
+
   for (const message of messages) {
     if (isHarnessSidecarToolMessage(message) && mutableAssistantIndex >= 0) {
       const index = mutableAssistantIndex
       const assistant = output[index]
+
       if (assistant?.role === 'assistant') {
         if (clonedAssistantIndex !== index) {
           output[index] = { ...assistant, blocks: [...assistant.blocks] }
           clonedAssistantIndex = index
         }
+
         output[index].blocks.push(...message.blocks.filter(isToolResultBlock))
         output.push({
           ...message,
@@ -95,22 +106,28 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         continue
       }
     }
+
     if (isToolOnlyMessage(message) && mutableAssistantIndex >= 0) {
       const index = mutableAssistantIndex
       const assistant = output[index]
+
       if (assistant?.role !== 'assistant') {
         output.push(message)
         mutableAssistantIndex = -1
         continue
       }
+
       if (clonedAssistantIndex !== index) {
         output[index] = { ...assistant, blocks: [...assistant.blocks] }
         clonedAssistantIndex = index
       }
+
       output[index]!.blocks.push(...message.blocks)
       continue
     }
+
     output.push(message)
+
     if (message.role === 'assistant') {
       mutableAssistantIndex = output.length - 1
       clonedAssistantIndex = -1
@@ -122,13 +139,17 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       clonedAssistantIndex = -1
     }
   }
+
   const attributedOutput: NativeChatMessage[] = []
+
   for (const message of output) {
     const attributed = dropUnattributableToolResults(message)
+
     if (attributed) {
       attributedOutput.push(attributed)
     }
   }
+
   return attributedOutput
 }
 
@@ -145,21 +166,27 @@ export function pairToolBlocks(
   const pairs: NativeChatToolPair[] = []
   const callSlots: number[] = []
   let resultOrdinal = 0
+
   for (const block of blocks) {
     if (pairs.length >= limit && resultOrdinal >= callSlots.length) {
       break
     }
+
     if (block.type === 'tool-call') {
       if (pairs.length < limit) {
         callSlots.push(pairs.length)
         pairs.push({ call: block })
       }
+
       continue
     }
+
     if (block.type !== 'tool-result') {
       continue
     }
+
     const slot = callSlots[resultOrdinal]
+
     if (slot === undefined) {
       if (pairs.length < limit) {
         pairs.push({ result: block })
@@ -169,6 +196,7 @@ export function pairToolBlocks(
       pairs[slot]!.result = block
     }
   }
+
   return pairs
 }
 
@@ -178,6 +206,7 @@ export function splitNativeChatBlocks(blocks: readonly NativeChatBlock[]): {
 } {
   const prose: NativeChatBlock[] = []
   const tools: NativeChatBlock[] = []
+
   for (const block of blocks) {
     if (isToolCallBlock(block) || isToolResultBlock(block)) {
       tools.push(block)
@@ -185,5 +214,6 @@ export function splitNativeChatBlocks(blocks: readonly NativeChatBlock[]): {
       prose.push(block)
     }
   }
+
   return { prose, tools }
 }

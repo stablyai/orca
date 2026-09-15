@@ -36,6 +36,7 @@ function seedClosedLastTerminal(worktreeId: string): void {
  *  remote-workspace-snapshot-apply does it. */
 function applyHostSnapshotOmitting(worktreeId: string): void {
   const state = useAppStore.getState()
+
   const merged = mergeDirectSshRemoteWorkspaceSession(
     buildWorkspaceSessionPayload(state),
     getDefaultWorkspaceSession(),
@@ -43,6 +44,7 @@ function applyHostSnapshotOmitting(worktreeId: string): void {
     state.tabsByWorktree,
     new Set()
   )
+
   const replaceWorkspaceKeys = [worktreeId]
   useAppStore.getState().hydrateWorkspaceSession(merged, { replaceWorkspaceKeys })
   useAppStore.getState().hydrateTabsSession(merged, { replaceWorkspaceKeys })

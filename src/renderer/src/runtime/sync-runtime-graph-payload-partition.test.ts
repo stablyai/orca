@@ -15,6 +15,7 @@ function leafIdFor(index: number): string {
 function makeState(prefix: string, worktreeCount: number, titles: string[] = []): AppState {
   const tabsByWorktree: Record<string, unknown[]> = {}
   const terminalLayoutsByTabId: Record<string, unknown> = {}
+
   for (let i = 0; i < worktreeCount; i++) {
     const tabId = `${prefix}-term-${i}`
     tabsByWorktree[`repo::/${prefix}-wt-${i}`] = [
@@ -26,6 +27,7 @@ function makeState(prefix: string, worktreeCount: number, titles: string[] = [])
       expandedLeafId: null
     }
   }
+
   return {
     tabsByWorktree,
     terminalLayoutsByTabId,
@@ -80,6 +82,7 @@ function startSync(
   vi.stubGlobal('HTMLElement', class HTMLElement {})
   setRuntimeGraphStoreStateGetter(() => current)
   setRuntimeGraphSyncEnabled(true)
+
   return {
     setState: (next: AppState) => {
       current = next

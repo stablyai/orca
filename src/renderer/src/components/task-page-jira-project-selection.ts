@@ -17,12 +17,16 @@ export function compareJiraProjectsByDisplayLabel(
   const siteComparison = includeSiteName
     ? jiraProjectLabelCollator.compare(a.siteName ?? '', b.siteName ?? '')
     : 0
+
   if (siteComparison !== 0) {
     return siteComparison
   }
+
   const nameComparison = jiraProjectLabelCollator.compare(a.name, b.name)
+
   if (nameComparison !== 0) {
     return nameComparison
   }
+
   return jiraProjectLabelCollator.compare(a.key, b.key)
 }

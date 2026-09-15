@@ -31,28 +31,36 @@ const publishFault = vi.hoisted(() => ({ failOnPublish: 0, publishCount: 0 }))
 
 vi.mock('../../durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
+
   return {
     ...actual,
     renameDurable: async (tmpPath: string, finalPath: string) => {
       if (finalPath.endsWith('agent-sessions.json')) {
         publishFault.publishCount += 1
       }
+
       if (
         finalPath.endsWith('agent-sessions.json') &&
         publishFault.publishCount === publishFault.failOnPublish
       ) {
         throw new Error('simulated crash before failed-settlement publish')
       }
+
       return actual.renameDurable(tmpPath, finalPath)
     }
   }
 })
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
+
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 function accepted(): AgentSessionDispatchOutcome {
@@ -131,6 +139,7 @@ describe('settled attach retry', () => {
       .fn<NonNullable<StructuredAgentSessionAdapter['historyFilePath']>>()
       .mockRejectedValueOnce(new Error('journal path unavailable'))
       .mockResolvedValue(null)
+
     host = new StructuredAgentSessionHost({
       store,
       adapter: { ...adapter(), historyFilePath },
@@ -168,9 +177,11 @@ describe('settled attach retry', () => {
     const spawnTokens: string[] = []
     acquire.mockImplementation(async ({ fence, spawnToken }) => {
       spawnTokens.push(spawnToken)
+
       if (spawnTokens.length === 1) {
         throw new Error('reply lost')
       }
+
       return {
         process: {
           hostId: 'local',
@@ -211,9 +222,11 @@ describe('settled attach retry', () => {
     const spawnTokens: string[] = []
     acquire.mockImplementation(async ({ fence, spawnToken }) => {
       spawnTokens.push(spawnToken)
+
       if (spawnTokens.length === 1) {
         throw new Error('reply lost')
       }
+
       return {
         process: {
           hostId: 'local',
@@ -276,9 +289,11 @@ describe('settled attach retry', () => {
     })
 
     const refused = await host.attach(CALLER, params)
+
     if (refused.ok) {
       throw new Error('expected the replayed reservation to stay fenced')
     }
+
     expect(refused.refusal.code).toBe('agent_session_ownership_unknown')
     expect(acquire).toHaveBeenCalledTimes(1)
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
@@ -316,10 +331,12 @@ describe('settled attach retry', () => {
     // restart below is the process fact that ends the wait, not a stopwatch.
     dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
     const body = hostTestMessage('written before the host died')
+
     const unknownParams = {
       envelope: envelope('agentSession.send', { body }),
       body
     }
+
     const first = await host.send(CALLER, unknownParams)
     expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
 
@@ -344,18 +361,23 @@ describe('settled attach retry', () => {
     expect(dispatch).toHaveBeenCalledTimes(1)
 
     const newBody = hostTestMessage('are you there?')
+
     const sent = await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body: newBody }),
       body: newBody
     })
+
     if (!sent.ok) {
       throw new Error(`unexpected restored send refusal: ${sent.refusal.message}`)
     }
+
     expect(dispatch).toHaveBeenCalledTimes(2)
     const restoredHistory = host.history({ sessionId: SESSION, direction: 'tail' })
+
     if (!restoredHistory.ok) {
       throw new Error(`unexpected restored history reset: ${restoredHistory.reset}`)
     }
+
     expect(
       restoredHistory.page.submissions.find(
         (submission) => submission.clientMessageId === unknownParams.envelope.clientOperationId
@@ -372,6 +394,7 @@ describe('settled attach retry', () => {
       },
       retryUnknown: true
     })
+
     expect(explicitRetry).toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }

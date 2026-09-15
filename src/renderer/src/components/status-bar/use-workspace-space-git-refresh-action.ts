@@ -27,15 +27,18 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
       const scanGeneration = analysis?.scannedAt ?? null
       const requestKey = `${String(scanGeneration)}:${identity}`
       const currentState = useAppStore.getState()
+
       if (
         gitStatusScanGenerationRef.current === scanGeneration &&
         gitStatusByWorktreeIdentityRef.current.has(identity)
       ) {
         return Promise.resolve()
       }
+
       if (inFlightGitStatusRefreshes.current.has(requestKey)) {
         return Promise.resolve()
       }
+
       inFlightGitStatusRefreshes.current.add(requestKey)
 
       setGitRefreshStateByWorktreeId((current) => ({
@@ -47,7 +50,9 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
         hostId: worktree.executionHostId,
         settings
       })
+
       const host = parseExecutionHostId(worktree.executionHostId)
+
       const ownerSettings = settings
         ? {
             ...settings,
@@ -69,6 +74,7 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
           if (gitStatusScanGenerationRef.current !== scanGeneration) {
             return
           }
+
           const nextStatus = new Map(gitStatusByWorktreeIdentityRef.current)
           nextStatus.set(identity, (status as GitStatusResult).entries)
           gitStatusByWorktreeIdentityRef.current = nextStatus
@@ -82,6 +88,7 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
           if (gitStatusScanGenerationRef.current !== scanGeneration) {
             return
           }
+
           setGitRefreshStateByWorktreeId((current) => ({
             ...current,
             [identity]: {

@@ -17,17 +17,23 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: ipcHandleMock } }))
+
 vi.mock('../cli/cli-installer', () => ({ CliInstaller: vi.fn() }))
+
 vi.mock('../cli/wsl-cli-installer', () => ({ WslCliInstaller: wslInstallerMock }))
+
 vi.mock('../cli/wsl-cli-registration-registry', () => ({
   recordWslCliRegistrationInstalled: recordInstalledMock,
   recordWslCliRegistrationRemoved: recordRemovedMock
 }))
+
 vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/canonical-user-data' }))
+
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: vi.fn(async () => ({ ok: false })),
   mergePathSegments: vi.fn()
 }))
+
 vi.mock('../wsl', () => ({ getDefaultWslDistro: getDefaultWslDistroMock }))
 
 import { registerCliHandlers } from './cli'
@@ -36,9 +42,11 @@ type WslHandler = (event: unknown, args?: { distro?: string | null }) => Promise
 
 function getWslHandler(channel: string): WslHandler {
   const handler = handlers.get(channel)
+
   if (!handler) {
     throw new Error(`Missing IPC handler: ${channel}`)
   }
+
   return handler as WslHandler
 }
 
@@ -114,12 +122,14 @@ describe('WSL CLI registration IPC', () => {
 
   it('serializes a concurrent removal after installation and ownership persistence', async () => {
     let finishInstall!: () => void
+
     const install = vi.fn(
       () =>
         new Promise<{ state: 'installed' }>((resolve) => {
           finishInstall = () => resolve({ state: 'installed' })
         })
     )
+
     const remove = vi.fn(async () => ({ state: 'not_installed' as const }))
     wslInstallerMock
       .mockImplementationOnce(function MockInstallWslCliInstaller() {

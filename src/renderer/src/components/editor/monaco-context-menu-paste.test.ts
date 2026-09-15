@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runOrcaContextMenuPaste, type OrcaContextMenuPasteDeps } from './monaco-context-menu-paste'
 
 const READ_ONLY_OPTION = 104
+
 const EMPTY_SELECTION_OPTION = 45
 
 type FakeEditorState = {
@@ -20,6 +21,7 @@ function makeEditor(state: FakeEditorState = {}) {
     readOnly = false,
     emptySelectionClipboard = false
   } = state
+
   let focused = hasTextFocus
   const trigger = vi.fn()
   const model = hasModel ? ({} as object) : null
@@ -27,6 +29,7 @@ function makeEditor(state: FakeEditorState = {}) {
   // each chunk, so these must be stable across calls.
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   const editor = {
     getModel: () => model,
     hasTextFocus: () => focused,
@@ -34,9 +37,11 @@ function makeEditor(state: FakeEditorState = {}) {
       if (id === READ_ONLY_OPTION) {
         return readOnly
       }
+
       if (id === EMPTY_SELECTION_OPTION) {
         return emptySelectionClipboard
       }
+
       return undefined
     },
     trigger,
@@ -52,6 +57,7 @@ function makeEditor(state: FakeEditorState = {}) {
     executeEdits: vi.fn(() => true),
     pushUndoStop: vi.fn(() => true)
   }
+
   return {
     editor,
     trigger,
@@ -65,6 +71,7 @@ function makeDeps(
   overrides: Partial<OrcaContextMenuPasteDeps> & { editor?: ReturnType<typeof makeEditor> }
 ): OrcaContextMenuPasteDeps {
   const editorHandle = overrides.editor ?? makeEditor()
+
   return {
     getFocusedEditor: () => editorHandle.editor as never,
     readClipboardText: vi.fn(async () => 'pasted text'),
@@ -125,6 +132,7 @@ describe('runOrcaContextMenuPaste', () => {
 
   it('applies in-app copy metadata (empty-selection + multicursor) when enabled', async () => {
     const handle = makeEditor({ emptySelectionClipboard: true })
+
     const deps = makeDeps({
       editor: handle,
       readClipboardText: vi.fn(async () => 'line text'),
@@ -146,6 +154,7 @@ describe('runOrcaContextMenuPaste', () => {
 
   it('ignores empty-selection metadata when the option is disabled', async () => {
     const handle = makeEditor({ emptySelectionClipboard: false })
+
     const deps = makeDeps({
       editor: handle,
       readClipboardText: vi.fn(async () => 'line text'),
@@ -173,6 +182,7 @@ describe('runOrcaContextMenuPaste', () => {
   it('surfaces a too-large toast and does not dispatch when the IPC read rejects', async () => {
     const handle = makeEditor()
     const onReadError = vi.fn()
+
     const deps = makeDeps({
       editor: handle,
       readClipboardText: vi.fn(async () => {
@@ -191,10 +201,12 @@ describe('runOrcaContextMenuPaste', () => {
 
   it('does not dispatch a native paste if focus is lost during the async read', async () => {
     const handle = makeEditor()
+
     const deps = makeDeps({
       editor: handle,
       readClipboardText: vi.fn(async () => {
         handle.setFocused(false)
+
         return 'late text'
       })
     })

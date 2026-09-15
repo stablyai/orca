@@ -18,10 +18,12 @@ type ControlledPromise<T> = {
 function controlledPromise<T>(): ControlledPromise<T> {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -47,6 +49,7 @@ function completeResult(request: ListDetectedWorktreesArgs): HostQualifiedDetect
   if (!('expectedAuthority' in request)) {
     throw new Error('Expected direct SSH request')
   }
+
   return {
     status: 'complete',
     providerRequestId: request.providerRequestId,
@@ -69,15 +72,18 @@ function createHarness() {
   const pending: ControlledPromise<HostQualifiedDetectedWorktreeResult>[] = []
   const starts: ListDetectedWorktreesArgs[] = []
   const cancelProviderRequest = vi.fn()
+
   const registry = createDetectedWorktreeRefreshLeaseRegistry({
     startProviderRequest: (request) => {
       starts.push(request)
       const provider = controlledPromise<HostQualifiedDetectedWorktreeResult>()
       pending.push(provider)
+
       return provider.promise
     },
     cancelProviderRequest
   })
+
   return { cancelProviderRequest, pending, registry, starts }
 }
 
@@ -158,10 +164,13 @@ describe('detected worktree refresh leases', () => {
   it('reports no cancellation start when the invocation throws before send', async () => {
     const pending = controlledPromise<HostQualifiedDetectedWorktreeResult>()
     let sends = 0
+
     const invokeCancellation = vi.fn(() => {
       throw new Error('before send')
     })
+
     const startProviderRequest = vi.fn(() => pending.promise)
+
     const registry = createDetectedWorktreeRefreshLeaseRegistry({
       startProviderRequest,
       cancelProviderRequest: () => {
@@ -169,6 +178,7 @@ describe('detected worktree refresh leases', () => {
         sends++
       }
     })
+
     const lease = registry.acquire('repo-a:ssh:ssh-a', directInput())
 
     expect(lease.release('invalidated')).toBe('cancel-failed')
@@ -198,10 +208,12 @@ describe('detected worktree refresh leases', () => {
 
   it('keeps asynchronous cancellation fire-and-forget', async () => {
     const pending = controlledPromise<HostQualifiedDetectedWorktreeResult>()
+
     const registry = createDetectedWorktreeRefreshLeaseRegistry({
       startProviderRequest: () => pending.promise,
       cancelProviderRequest: () => Promise.reject(new Error('async cancellation failure'))
     })
+
     const lease = registry.acquire('repo-a:ssh:ssh-a', directInput())
 
     expect(lease.release('invalidated')).toBe('cancel-started')

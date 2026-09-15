@@ -5,11 +5,17 @@ import type {
 } from './terminal-parked-watcher-registry'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const TAB_ID = 'tab-1'
+
 const FIRST_PTY_ID = `${WORKTREE_ID}@@session-1`
+
 const OLD_SECOND_PTY_ID = `${WORKTREE_ID}@@session-2`
+
 const NEW_SECOND_PTY_ID = `${WORKTREE_ID}@@session-3`
+
 const FIRST_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 const startedWatchers: {
@@ -26,6 +32,7 @@ vi.mock('./terminal-parked-pty-watcher', () => ({
     if (!args.pane.ptyId) {
       return
     }
+
     const dispose = vi.fn()
     startedWatchers.push({ pane: args.pane, dispose })
     args.entry.paneIdByPtyId.set(args.pane.ptyId, args.pane.paneId)

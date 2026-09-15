@@ -6,6 +6,7 @@ import { createPtySubprocess } from './pty-subprocess'
 import { Session } from './session'
 
 const SHELLS = process.platform === 'win32' ? [] : ['/bin/bash', '/bin/zsh'].filter(existsSync)
+
 const COMMAND = "printf 'AGENT_%s\\n' STARTED"
 
 async function launch(
@@ -29,6 +30,7 @@ async function launch(
   let legacyTimer: ReturnType<typeof setTimeout> | undefined
   const readinessEvents: string[] = []
   const started = performance.now()
+
   try {
     const subprocess = await createPtySubprocess({
       sessionId: 'startup-latency',
@@ -39,6 +41,7 @@ async function launch(
       command: COMMAND,
       env: { HOME: root, SHELL: shell, TERM: 'xterm-256color' }
     })
+
     session = new Session({
       sessionId: 'startup-latency',
       cols: 120,
@@ -48,6 +51,7 @@ async function launch(
       reportReadinessEvent: (event) => readinessEvents.push(event)
     })
     const active = session
+
     return await new Promise((resolve, reject) => {
       let output = ''
       timer = setTimeout(
@@ -58,11 +62,13 @@ async function launch(
         onExit: () => {},
         onData: (data) => {
           output += data
+
           if (output.includes('AGENT_STARTED')) {
             resolve({ output, ms: performance.now() - started })
           }
         }
       })
+
       if (legacy) {
         legacyTimer = setTimeout(() => active.write(`${COMMAND}\n`), 300)
       } else {
@@ -72,10 +78,12 @@ async function launch(
   } finally {
     clearTimeout(timer)
     clearTimeout(legacyTimer)
+
     if (session) {
       await session.forceKillAndWaitForExit(3000)
       session.dispose()
     }
+
     vi.unstubAllEnvs()
     rmSync(root, { recursive: true, force: true })
     expect(readinessEvents).toEqual([])
@@ -103,6 +111,7 @@ describe('agent startup at the rendered shell prompt', () => {
         for (const slow of [false, true]) {
           const legacy: number[] = []
           const current: number[] = []
+
           for (let i = 0; i < 5; i++) {
             legacy.push((await launch(shell, slow, true)).ms)
             const result = await launch(shell, slow)
@@ -110,10 +119,13 @@ describe('agent startup at the rendered shell prompt', () => {
             expect(result.output.split(COMMAND)).toHaveLength(2)
             current.push(result.ms)
           }
+
           const result = JSON.stringify({ shell, slow, legacy, current })
+
           if (process.env.ORCA_STARTUP_BENCH_OUTPUT) {
             appendFileSync(process.env.ORCA_STARTUP_BENCH_OUTPUT, `${result}\n`)
           }
+
           console.log(result)
         }
       }

@@ -4,13 +4,17 @@ import { test, expect } from './helpers/orca-app'
 // Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
 // E2E specs avoid importing renderer/shared modules into the Playwright runner.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
+
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
+
 const OPEN_PANEL_SELECTOR = `${PANEL_SELECTOR}[aria-hidden="false"]`
+
 const TOGGLE_EVENT = 'orca-toggle-floating-terminal'
 
 type SeededSimulatorTab = {
   id: string
 }
+
 type E2ESimulatorTab = {
   id: string
   contentType: string
@@ -39,6 +43,7 @@ type E2EWindow = typeof window & {
 async function seedFloatingSimulatorTab(page: Page): Promise<SeededSimulatorTab> {
   const tab = await page.evaluate((worktreeId) => {
     const store = (window as E2EWindow).__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
@@ -53,18 +58,23 @@ async function seedFloatingSimulatorTab(page: Page): Promise<SeededSimulatorTab>
     })
 
     const refreshedState = store.getState()
+
     const existingTab = (refreshedState.unifiedTabsByWorktree[worktreeId] ?? []).find(
       (tab) => tab.contentType === 'simulator'
     )
+
     const tab =
       existingTab ??
       refreshedState.createUnifiedTab(worktreeId, 'simulator', {
         label: 'Mobile Emulator',
         recordInteraction: false
       })
+
     refreshedState.activateTab(tab.id)
+
     return { id: tab.id }
   }, FLOATING_WORKTREE_ID)
+
   // Why: the toggle listener closes over floatingTerminalEnabled; wait for
   // React to commit the enabled floating panel before dispatching the event.
   await page.waitForFunction(
@@ -72,6 +82,7 @@ async function seedFloatingSimulatorTab(page: Page): Promise<SeededSimulatorTab>
     PANEL_SELECTOR,
     { timeout: 30_000 }
   )
+
   return tab
 }
 
@@ -81,6 +92,7 @@ async function openFloatingPanelIfNeeded(page: Page): Promise<void> {
       window.dispatchEvent(new Event(eventName))
     }, TOGGLE_EVENT)
   }
+
   await expect(page.locator(OPEN_PANEL_SELECTOR)).toBeVisible()
 }
 
@@ -112,6 +124,7 @@ test('floating Mobile Emulator tab renders content and closes from the tab strip
           ({ worktreeId, tabId }) => {
             const tabs =
               (window as E2EWindow).__store?.getState().unifiedTabsByWorktree[worktreeId] ?? []
+
             return tabs.some((candidate) => candidate.id === tabId)
           },
           { worktreeId: FLOATING_WORKTREE_ID, tabId: tab.id }

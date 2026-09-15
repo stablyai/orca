@@ -19,6 +19,7 @@ import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-sele
 
 export function useWorkspaceSpaceManagerPanel() {
   const bindings = useWorkspaceSpaceManagerBindings()
+
   const {
     cancelWorkspaceSpaceScan,
     refreshWorkspaceSpace,
@@ -31,6 +32,7 @@ export function useWorkspaceSpaceManagerPanel() {
     setTreemapZoomWorktreeId,
     sortKey
   } = bindings
+
   const refresh = useCallback((): void => {
     void refreshWorkspaceSpace().catch(() => {
       /* scanError is stored by the slice */
@@ -43,18 +45,22 @@ export function useWorkspaceSpaceManagerPanel() {
 
   const decision = useWorkspaceSpaceDecisionProjection(bindings)
   const refreshWorkspaceGitStatus = useWorkspaceSpaceGitRefreshAction(bindings)
+
   const projection = useWorkspaceSpaceManagerProjection({
     bindings,
     decision,
     refreshWorkspaceGitStatus
   })
+
   const { allVisibleSelected, selectedDeletableRows, visibleDeletableIdentities } = projection
 
   const toggleSort = (key: WorkspaceSpaceSortKey): void => {
     if (sortKey === key) {
       setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+
       return
     }
+
     setSortKey(key)
     setSortDirection(key === 'name' || key === 'repo' ? 'asc' : 'desc')
   }
@@ -68,11 +74,13 @@ export function useWorkspaceSpaceManagerPanel() {
     const identity = getWorkspaceSpaceWorktreeIdentity(worktree)
     setSelectedIds((current) => {
       const next = new Set(current)
+
       if (next.has(identity)) {
         next.delete(identity)
       } else {
         next.add(identity)
       }
+
       return next
     })
   }
@@ -80,6 +88,7 @@ export function useWorkspaceSpaceManagerPanel() {
   const toggleVisibleSelection = (): void => {
     setSelectedIds((current) => {
       const next = new Set(current)
+
       if (allVisibleSelected) {
         for (const identity of visibleDeletableIdentities) {
           next.delete(identity)
@@ -89,6 +98,7 @@ export function useWorkspaceSpaceManagerPanel() {
           next.add(identity)
         }
       }
+
       return next
     })
   }
@@ -98,12 +108,15 @@ export function useWorkspaceSpaceManagerPanel() {
       if (deletedTargets.length === 0) {
         return
       }
+
       removeWorkspaceSpaceWorktrees(deletedTargets)
+
       const deletedIdentities = new Set(
         deletedTargets.map((target) =>
           composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id)
         )
       )
+
       setInspectedWorktreeId((current) =>
         current && deletedIdentities.has(current) ? null : current
       )
@@ -112,9 +125,11 @@ export function useWorkspaceSpaceManagerPanel() {
       )
       setSelectedIds((current) => {
         const next = new Set(current)
+
         for (const identity of deletedIdentities) {
           next.delete(identity)
         }
+
         return next
       })
       toast.success(
@@ -148,10 +163,12 @@ export function useWorkspaceSpaceManagerPanel() {
       if (targets.length === 0) {
         return
       }
+
       // Why (STA-4343): the Space scan lists one row per host, so a bare id would
       // route the delete at whichever host the id-keyed lookup happens to hold.
       // Resolve each row on ITS host and hand over the store row's own identity.
       const state = useAppStore.getState()
+
       const identities = toWorktreeDeleteIdentities(
         targets.flatMap((target) => {
           const row = getWorktreeOnHostFromState(
@@ -159,13 +176,17 @@ export function useWorkspaceSpaceManagerPanel() {
             target.worktreeId,
             target.executionHostId ?? undefined
           )
+
           return row ? [row] : []
         })
       )
+
       if (identities.length !== targets.length) {
         showWorkspaceListChangedToast()
+
         return
       }
+
       runWorktreeBatchDelete(identities, {
         forceConfirm: true,
         forceOnConfirm: false,
@@ -195,8 +216,10 @@ export function useWorkspaceSpaceManagerPanel() {
               ),
               { description: result.error }
             )
+
             return
           }
+
           commitFocus()
           handleDeletedWorktrees([
             { id: worktree.worktreeId, executionHostId: worktree.executionHostId ?? null }
@@ -219,6 +242,7 @@ export function useWorkspaceSpaceManagerPanel() {
     if (selectedDeletableRows.length === 0) {
       return
     }
+
     deleteWorktrees(selectedDeletableRows)
   }
 

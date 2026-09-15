@@ -16,23 +16,29 @@ export function seedCommandCodeSubmittedPromptStatus(
 ): void {
   const state = useAppStore.getState()
   const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+
   if (!leafId || !(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)) {
     return
   }
+
   const paneKey = makePaneKey(tabId, leafId)
   const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+
   if (!ptyId) {
     return
   }
+
   const routing = resolveLiveAgentStatusConnectionRouting({
     state,
     paneKey,
     ptyId,
     expectedConnectionId: getConnectionIdFromState(state, worktreeId)
   })
+
   if (!routing) {
     return
   }
+
   try {
     state.setAgentStatus(
       paneKey,

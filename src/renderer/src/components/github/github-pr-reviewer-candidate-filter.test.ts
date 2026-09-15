@@ -50,6 +50,7 @@ describe('github-pr-reviewer-candidate-filter', () => {
 
   it('rejects oversized pasted reviewer queries before reading candidate metadata', () => {
     const oversizedQuery = 'secret-reviewer-query'.repeat(GITHUB_PR_REVIEWER_QUERY_MAX_BYTES)
+
     const candidate = {
       get login(): string {
         throw new Error('oversized reviewer queries must not scan logins')

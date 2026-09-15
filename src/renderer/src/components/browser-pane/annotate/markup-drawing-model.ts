@@ -14,29 +14,34 @@ export type MarkupPoint = { x: number; y: number }
 type MarkupShapeBase = { id: string; color: string }
 
 export type PenShape = MarkupShapeBase & { kind: 'pen'; points: MarkupPoint[]; width: number }
+
 export type HighlightShape = MarkupShapeBase & {
   kind: 'highlight'
   points: MarkupPoint[]
   width: number
 }
+
 export type ArrowShape = MarkupShapeBase & {
   kind: 'arrow'
   from: MarkupPoint
   to: MarkupPoint
   width: number
 }
+
 export type RectShape = MarkupShapeBase & {
   kind: 'rect'
   from: MarkupPoint
   to: MarkupPoint
   width: number
 }
+
 export type EllipseShape = MarkupShapeBase & {
   kind: 'ellipse'
   from: MarkupPoint
   to: MarkupPoint
   width: number
 }
+
 export type TextShape = MarkupShapeBase & {
   kind: 'text'
   at: MarkupPoint
@@ -63,15 +68,20 @@ export const MARKUP_COLORS = [
   '#111827',
   '#ffffff'
 ] as const
+
 export const DEFAULT_MARKUP_COLOR: string = MARKUP_COLORS[0]
 
 export const MARKUP_WIDTHS = [2, 4, 8] as const
+
 export const DEFAULT_MARKUP_WIDTH = 4
+
 export const MARKUP_FONT_SIZES = [14, 18, 24, 32, 48] as const
+
 export const DEFAULT_MARKUP_FONT_SIZE = 18
 
 // Highlight strokes are intentionally fat and translucent.
 export const HIGHLIGHT_WIDTH_MULTIPLIER = 4
+
 export const HIGHLIGHT_ALPHA = 0.35
 
 // ─── Document with undo/redo ────────────────────────────────────────────────
@@ -100,17 +110,21 @@ export function commitShape(doc: MarkupDocument, shape: MarkupShape): MarkupDocu
 
 export function undoShape(doc: MarkupDocument): MarkupDocument {
   const prev = doc.past.at(-1)
+
   if (!prev) {
     return doc
   }
+
   return { shapes: prev, past: doc.past.slice(0, -1), future: [doc.shapes, ...doc.future] }
 }
 
 export function redoShape(doc: MarkupDocument): MarkupDocument {
   const next = doc.future.at(0)
+
   if (!next) {
     return doc
   }
+
   return { shapes: next, past: [...doc.past, doc.shapes], future: doc.future.slice(1) }
 }
 
@@ -194,13 +208,16 @@ export function arrowHeadGeometry(
 ): ArrowHeadGeometry | null {
   const dx = to.x - from.x
   const dy = to.y - from.y
+
   if (dx === 0 && dy === 0) {
     return null
   }
+
   const angle = Math.atan2(dy, dx)
   const size = arrowHeadLength(width)
   const leftAngle = angle + Math.PI - ARROW_HEAD_ANGLE
   const rightAngle = angle + Math.PI + ARROW_HEAD_ANGLE
+
   return {
     tip: to,
     left: { x: to.x + size * Math.cos(leftAngle), y: to.y + size * Math.sin(leftAngle) },

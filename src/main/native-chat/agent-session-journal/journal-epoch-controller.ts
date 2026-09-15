@@ -50,6 +50,7 @@ export class JournalEpochController {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       this.start(reason, fence)
       this.deps.setReadOnly(false)
+
       return this.deps.cursor()
     })
   }
@@ -72,6 +73,7 @@ export class JournalEpochController {
         mintEpoch: this.deps.mintEpoch,
         onPublished: this.deps.adopt
       })
+
       return this.deps.cursor()
     })
   }

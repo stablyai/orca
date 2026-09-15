@@ -16,6 +16,7 @@ import type { OpenTabSearchResult } from './open-tab-search'
 import type { BrowserHistoryOmniboxRow } from './tab-create-entry-active-option'
 
 export const OMNIBOX_BROWSER_HISTORY_LIMIT = 3
+
 // One character substring-matches most of a 200-entry corpus and would push the
 // rows the omnibox exists for off the list.
 export const OMNIBOX_BROWSER_HISTORY_MIN_QUERY_LENGTH = 2
@@ -26,6 +27,7 @@ const NO_ROWS: readonly BrowserHistoryOmniboxRow[] = []
 // pressed in front of other people and must not become a browsing-history display.
 export function isOmniboxBrowserHistoryQueryEligible(query: string): boolean {
   const trimmed = query.trim()
+
   return (
     trimmed.length >= OMNIBOX_BROWSER_HISTORY_MIN_QUERY_LENGTH &&
     !isBrowserAddressBarQueryTooLarge(query) &&
@@ -42,6 +44,7 @@ function matchRows(
   if (!prepared || !isOmniboxBrowserHistoryQueryEligible(query)) {
     return NO_ROWS
   }
+
   // url-tail is dropped here: a query-string coincidence is not a destination.
   const matches = matchBrowserHistory({
     includeUrlTail: false,
@@ -49,6 +52,7 @@ function matchRows(
     prepared,
     query
   })
+
   return matches.length === 0
     ? NO_ROWS
     : matches.map((match) => ({ entry: match.entry, id: `history:${match.entry.normalizedUrl}` }))
@@ -68,11 +72,13 @@ export function retainBrowserHistoryRowsForQuery({
   if (rowsQuery.trim() === query.trim() || rows.length === 0) {
     return rows
   }
+
   // Re-checking only the rows on screen keeps retention free and stops Enter
   // from ever opening a page the visible text no longer matches.
   const onScreen = prepareBrowserHistoryEntries(rows.map((row) => row.entry))
   const liveIds = new Set(matchRows(onScreen, query).map((row) => row.id))
   const retained = rows.filter((row) => liveIds.has(row.id))
+
   return retained.length === rows.length ? rows : retained
 }
 
@@ -93,22 +99,27 @@ export function useOmniboxBrowserHistory({
     () => (enabled ? useAppStore.getState().browserUrlHistory : null),
     [enabled]
   )
+
   const prepared = useMemo(
     () => (history ? prepareBrowserHistoryEntries(history) : null),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Snapshot per menu open; a background navigation must not reshuffle rows mid-keystroke.
     [enabled]
   )
+
   const deferredQuery = useDeferredValue(query)
   const deferredRows = useMemo(() => matchRows(prepared, deferredQuery), [deferredQuery, prepared])
+
   return useMemo(() => {
     if (!enabled) {
       return NO_ROWS
     }
+
     const retained = retainBrowserHistoryRowsForQuery({
       query,
       rows: deferredRows,
       rowsQuery: deferredQuery
     })
+
     return dropHistoryRowsCoveredByBrowserPages(retained, tabResults)
   }, [deferredQuery, deferredRows, enabled, query, tabResults])
 }

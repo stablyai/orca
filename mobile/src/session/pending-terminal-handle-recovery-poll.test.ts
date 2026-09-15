@@ -31,6 +31,7 @@ vi.mock('react-native', () => ({
     },
     addEventListener(_event: string, listener: (state: string) => void) {
       lifecycle.listeners.add(listener)
+
       return { remove: () => lifecycle.listeners.delete(listener) }
     }
   }
@@ -38,6 +39,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
+
   return {
     useFocusEffect(effect: () => void | (() => void)): void {
       React.useEffect(() => (lifecycle.focused ? effect() : undefined), [effect, lifecycle.focused])
@@ -56,10 +58,13 @@ function makeHarness() {
   let otherRecoveryNeeded = false
   let connState: 'connected' | 'disconnected' = 'connected'
   let streamListener: ((payload: unknown) => void) | null = null
+
   let actions: ReturnType<typeof useMobileSessionTabsReconciliation<TestResult, string>> | null =
     null
+
   const sendRequest = vi.fn(async (): Promise<RpcSuccess> => {
     requestTimes.push(Date.now())
+
     return {
       id: `list-${requestTimes.length}`,
       ok: true,
@@ -67,18 +72,24 @@ function makeHarness() {
       _meta: { runtimeId: 'runtime-1' }
     }
   })
+
   const subscribe = vi.fn(
     (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
       streamListener = listener
+
       return () => {}
     }
   )
+
   const client = { sendRequest, subscribe } as unknown as RpcClient
   const consumeAcceptedSessionTabs = () => {}
+
   const fetchTerminals = async () => {}
+
   const getPendingTerminalRecoveryContextKey = () => contextKey
   const hasRecoveryNeed = () => otherRecoveryNeeded
   const onPendingTerminalRecoveryParked = (key: string | null) => parkedContexts.push(key)
+
   const applySessionTabs = (value: TestResult): SessionTabsApplyOutcome<string> => ({
     accepted: true,
     effectiveTabs: value.tabs
@@ -97,9 +108,11 @@ function makeHarness() {
       getPendingTerminalRecoveryContextKey,
       onPendingTerminalRecoveryParked: onParked
     })
+
     if (suspend) {
       throw suspend
     }
+
     return null
   }
 
@@ -183,6 +196,7 @@ describe('bounded pending-handle reconciliation cadence', () => {
       for (const listener of lifecycle.listeners) {
         listener(state)
       }
+
       await flush()
     })
   }

@@ -10,12 +10,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
+
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
+
 vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: mocks.activateStructuredAgentSessionTab
 }))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
@@ -26,6 +29,7 @@ const REMOTE_HOST = 'ssh:devbox' as const
 
 function makeRemoteThread(): AgentPaneThread {
   const worktree = { ...makeWorktree(), hostId: REMOTE_HOST }
+
   return {
     paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
     paneTitle: 'Remote agent',
@@ -116,6 +120,7 @@ describe('activity thread host routing', () => {
     state.tabsByWorktree = {}
     mocks.activateAndRevealWorkspace.mockImplementation(() => {
       state.tabsByWorktree = { [thread.worktree.id]: [thread.tab] }
+
       return { primaryTabId: thread.tab.id }
     })
 
@@ -186,6 +191,7 @@ describe('activity thread host routing', () => {
   it('marks all unread threads in the mark-all set, reading it at call time', () => {
     const readThread = { ...makeRemoteThread(), paneKey: 'tab-2:read', unread: false }
     let markAllSet = [readThread]
+
     const actions = createActivityThreadActions({
       getMarkAllReadThreads: () => markAllSet,
       acknowledgeAgents,

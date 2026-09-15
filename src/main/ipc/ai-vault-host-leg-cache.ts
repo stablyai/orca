@@ -18,6 +18,7 @@ type CachedHostLeg = {
 // open. Legs are cached individually and the failing host is the only one
 // rescanned.
 const cachedHostLegs = new Map<string, CachedHostLeg>()
+
 // Bumped on every invalidation. A leg scan that started before an invalidation
 // carries the old generation and must not write its (now stale) result back —
 // otherwise a delete's invalidation is silently undone by a scan that resolves
@@ -37,6 +38,7 @@ export async function scanHostLegWithCache(args: {
   const now = Date.now()
   const startGeneration = cacheGeneration
   const cached = cachedHostLegs.get(args.cacheKey)
+
   if (
     !args.force &&
     cached &&
@@ -45,21 +47,28 @@ export async function scanHostLegWithCache(args: {
   ) {
     return truncateAiVaultListResult(cached.result, args.depth, args.scopePaths)
   }
+
   const result = await args.scan()
+
   // A delete's invalidation landed while this leg was scanning; caching a
   // pre-delete result would resurrect the deleted session for the TTL.
   if (startGeneration !== cacheGeneration) {
     return result
   }
+
   if (result.issues.some((issue) => issue.kind === 'host')) {
     const current = cachedHostLegs.get(args.cacheKey)
+
     if (!current || current.expiresAt <= Date.now()) {
       cachedHostLegs.delete(args.cacheKey)
     }
+
     return result
   }
+
   pruneExpiredHostLegs(now)
   const current = cachedHostLegs.get(args.cacheKey)
+
   if (
     !args.force &&
     current &&
@@ -68,11 +77,13 @@ export async function scanHostLegWithCache(args: {
   ) {
     return result
   }
+
   cachedHostLegs.set(args.cacheKey, {
     depth: args.depth,
     result,
     expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
   })
+
   return result
 }
 

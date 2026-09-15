@@ -13,6 +13,7 @@ function createSender(
   const send = options.send ?? vi.fn<RendererSend>()
   const onFailure = vi.fn()
   const warn = vi.fn()
+
   const sender = createRuntimeRendererNotificationSender({
     isWindowDestroyed: () => options.windowDestroyed ?? false,
     webContents: {
@@ -22,12 +23,14 @@ function createSender(
     onFailure,
     warn
   })
+
   return { sender, send, onFailure, warn }
 }
 
 describe('runtime renderer notification sender', () => {
   it('contains a disposed frame and suppresses repeated sends and warnings', () => {
     const failure = new Error('Render frame was disposed before WebFrameMain could be accessed')
+
     const fixture = createSender({
       send: vi.fn(() => {
         throw failure

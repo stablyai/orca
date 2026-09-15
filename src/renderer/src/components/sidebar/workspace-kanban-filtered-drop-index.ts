@@ -17,6 +17,7 @@ export function serializeWorkspaceLaneFullIds(worktreeIds: readonly string[]): s
   if (worktreeIds.some((worktreeId) => worktreeId.includes(WORKSPACE_LANE_FULL_IDS_DELIMITER))) {
     return null
   }
+
   return worktreeIds.join(WORKSPACE_LANE_FULL_IDS_DELIMITER)
 }
 
@@ -25,6 +26,7 @@ export function parseWorkspaceLaneFullIds(value: string | undefined): string[] |
   if (value === undefined) {
     return null
   }
+
   return value === '' ? [] : value.split(WORKSPACE_LANE_FULL_IDS_DELIMITER)
 }
 
@@ -43,11 +45,13 @@ export function resolveFullLaneDropIndex(args: {
   filteredDropIndex: number
 }): number {
   const { fullLaneIds, renderedIds, filteredDropIndex } = args
+
   // Why: equal lengths alone would take this branch for a stale DOM lane that
   // holds the same card count but different membership, skipping translation.
   if (isSameLane(fullLaneIds, renderedIds)) {
     return filteredDropIndex
   }
+
   // Why: a lane filtered down to nothing reports drop index 0 for every pointer
   // position, so honouring it would silently prepend. Append instead, matching
   // dropWorktreesAtEndOfStatus for the same gesture on the document-drop path.
@@ -60,10 +64,13 @@ export function resolveFullLaneDropIndex(args: {
     // falls back to the lane head. Using the tail would invert the gesture.
     return indexInFullLane(fullLaneIds, renderedIds[0]!, 0)
   }
+
   if (filteredDropIndex >= renderedIds.length) {
     const lastIndex = indexInFullLane(fullLaneIds, renderedIds.at(-1)!, fullLaneIds.length - 1)
+
     return Math.min(fullLaneIds.length, lastIndex + 1)
   }
+
   return indexInFullLane(fullLaneIds, renderedIds[filteredDropIndex]!, fullLaneIds.length)
 }
 
@@ -83,5 +90,6 @@ function indexInFullLane(
   fallbackIndex: number
 ): number {
   const index = fullLaneIds.indexOf(worktreeId)
+
   return index === -1 ? fallbackIndex : index
 }

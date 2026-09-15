@@ -17,7 +17,9 @@ import {
 } from './details-markdown-html'
 
 const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
+
 const TOGGLE_TEXT_PLACEHOLDER = 'text'
+
 const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string, string]> = {
   'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
   'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
@@ -28,6 +30,7 @@ const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string
 
 function toggleHeadingPlaceholder(variant: ToggleHeadingVariant): string {
   const [key, fallback] = TOGGLE_HEADING_PLACEHOLDERS[variant]
+
   return translate(key, fallback)
 }
 
@@ -43,11 +46,13 @@ export function getRichMarkdownPlaceholder({
   }
 
   const parent = editor.state.doc.resolve(pos).parent
+
   if (parent.type.name !== 'details') {
     return TOGGLE_TEXT_PLACEHOLDER
   }
 
   const variant = parseToggleHeadingVariant(parent.attrs.variant)
+
   return variant ? toggleHeadingPlaceholder(variant) : TOGGLE_TEXT_PLACEHOLDER
 }
 
@@ -61,16 +66,19 @@ export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
   }
 
   const detailsDepth = $from.depth - 1
+
   if (detailsDepth < 1) {
     return false
   }
 
   const detailsNode = $from.node(detailsDepth)
+
   if (detailsNode.type.name !== 'details' || detailsNode.attrs.open === false) {
     return false
   }
 
   const detailsContent = detailsNode.child(1)
+
   if (detailsContent?.type.name !== 'detailsContent') {
     return false
   }
@@ -78,6 +86,7 @@ export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
   const detailsStart = $from.before(detailsDepth)
   const detailsContentStart = detailsStart + 1 + detailsNode.child(0).nodeSize
   const firstBodyNode = detailsContent.firstChild
+
   if (!firstBodyNode?.isTextblock) {
     return false
   }
@@ -104,11 +113,13 @@ export function moveFromEmptyDetailsBodyToSummary(editor: Editor): boolean {
   }
 
   const detailsContentDepth = $from.depth - 1
+
   if (detailsContentDepth < 1) {
     return false
   }
 
   const detailsContentNode = $from.node(detailsContentDepth)
+
   if (
     detailsContentNode.type.name !== 'detailsContent' ||
     detailsContentNode.childCount !== 1 ||
@@ -119,11 +130,13 @@ export function moveFromEmptyDetailsBodyToSummary(editor: Editor): boolean {
 
   const detailsDepth = detailsContentDepth - 1
   const detailsNode = $from.node(detailsDepth)
+
   if (detailsNode.type.name !== 'details' || detailsNode.childCount < 2) {
     return false
   }
 
   const summaryNode = detailsNode.child(0)
+
   if (summaryNode.type.name !== 'detailsSummary') {
     return false
   }
@@ -151,28 +164,33 @@ export function exitEmptyDetailsBody(editor: Editor): boolean {
   }
 
   const detailsContentDepth = $from.depth - 1
+
   if (detailsContentDepth < 1) {
     return false
   }
 
   const detailsContentNode = $from.node(detailsContentDepth)
+
   if (detailsContentNode.type.name !== 'detailsContent') {
     return false
   }
 
   const childIndex = $from.index(detailsContentDepth)
+
   if (childIndex !== detailsContentNode.childCount - 1) {
     return false
   }
 
   const detailsDepth = detailsContentDepth - 1
   const detailsNode = $from.node(detailsDepth)
+
   if (detailsNode.type.name !== 'details') {
     return false
   }
 
   const paragraphType = state.schema.nodes.paragraph
   const paragraph = paragraphType?.createAndFill()
+
   if (!paragraph) {
     return false
   }
@@ -211,6 +229,7 @@ const OrcaDetails = Details.extend({
         parseHTML: (element) => parseToggleHeadingVariant(element.getAttribute('data-orca-toggle')),
         renderHTML: ({ variant }) => {
           const parsed = parseToggleHeadingVariant(variant)
+
           return parsed ? { 'data-orca-toggle': parsed } : {}
         }
       }
@@ -231,11 +250,13 @@ const OrcaDetails = Details.extend({
     start: '<details',
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
+
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {
         return undefined
       }
 
       const summaryHtml = extractDetailsSummaryHtml(detailsBlock.inner)
+
       if (!summaryHtml) {
         return undefined
       }
@@ -255,6 +276,7 @@ const OrcaDetails = Details.extend({
   },
   parseMarkdown: (token, helpers) => {
     const detailsToken = token as DetailsHtmlToken
+
     if (detailsToken.type !== 'details') {
       return []
     }
@@ -264,7 +286,9 @@ const OrcaDetails = Details.extend({
       {},
       helpers.parseInline(detailsToken.summaryTokens ?? [])
     )
+
     const body = helpers.parseChildren(detailsToken.bodyTokens ?? [])
+
     const content = helpers.createNode(
       'detailsContent',
       {},
@@ -276,9 +300,11 @@ const OrcaDetails = Details.extend({
   renderMarkdown: (node, helpers) => {
     const summary = node.content?.find((child) => child.type === 'detailsSummary')
     const content = node.content?.find((child) => child.type === 'detailsContent')
+
     const summaryText = escapeDetailsHtml(
       decodeHtmlEntities(helpers.renderChildren(summary?.content ?? [], ''))
     )
+
     const body = helpers.renderChildren(content?.content ?? [], '\n\n').trim()
     const attrs = renderDetailsAttributes(node.attrs)
 

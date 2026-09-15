@@ -33,23 +33,30 @@ export class StartupDeviceAttributesQueryFilter {
 
     while (offset < input.length) {
       const candidate = input.indexOf('\x1b', offset)
+
       if (candidate === -1) {
         output += input.slice(offset)
         break
       }
+
       output += input.slice(offset, candidate)
+
       const query = PRIMARY_DEVICE_ATTRIBUTES_QUERIES.find((value) =>
         input.startsWith(value, candidate)
       )
+
       if (query) {
         offset = candidate + query.length
         continue
       }
+
       const tail = input.slice(candidate)
+
       if (PRIMARY_DEVICE_ATTRIBUTES_QUERIES.some((value) => value.startsWith(tail))) {
         this.pending = tail
         break
       }
+
       output += '\x1b'
       offset = candidate + 1
     }
@@ -60,6 +67,7 @@ export class StartupDeviceAttributesQueryFilter {
   release(): string {
     const pending = this.pending
     this.pending = ''
+
     return pending
   }
 }
@@ -75,11 +83,15 @@ export function installDeviceAttributesResponder(deps: {
     // Why the param check: only DA1 is answered here. Secondary/tertiary variants
     // carry a prefix and must fall through to the renderer.
     const isPrimaryQuery = params.length === 0 || (params.length === 1 && params[0] === 0)
+
     if (!isPrimaryQuery) {
       return false
     }
+
     deps.reply(deps.response)
+
     return true
   })
+
   return () => handler.dispose()
 }

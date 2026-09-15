@@ -10,10 +10,12 @@ import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 type SendWarning = { code: string; recipient: string; message: string }
+
 type SendResult = {
   message: { id: string; run_id: string; to_handle: string }
   warnings?: SendWarning[]
 }
+
 type GroupSendResult = {
   messages: { id: string; run_id: string; to_handle: string }[]
   recipients: number
@@ -85,6 +87,7 @@ describe('orchestration recipient routing oracle', () => {
       message: { run_id: senderRunId, to_handle: 'term_live' },
       warnings: [{ code: 'legacy_terminal_recipient', recipient: 'term_live' }]
     })
+
     const check = (await harness.call(
       'orchestration.check',
       { terminal: 'term_live', peek: true },
@@ -92,17 +95,20 @@ describe('orchestration recipient routing oracle', () => {
     )) as {
       messages: { id: string }[]
     }
+
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
   })
 
   it('normalizes a cross-Run coordinator handle to the recipient Run mailbox', async () => {
     setup()
     const recipientPane = 'tab_recipient:leaf_recipient'
+
     const recipientRun = db.createRun({
       objective: 'Recipient Run',
       coordinatorHandle: 'term_recipient',
       coordinatorPaneKey: recipientPane
     })
+
     mockTerminalPaneKeys((handle) =>
       handle === 'term_coord'
         ? harness.coordinatorPaneKey
@@ -121,26 +127,31 @@ describe('orchestration recipient routing oracle', () => {
       run_id: recipientRun.id,
       to_handle: `run:${recipientRun.id}`
     })
+
     const check = (await harness.call(
       'orchestration.check',
       { terminal: 'term_recipient', peek: true },
       ctx
     )) as { messages: { id: string }[] }
+
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
   })
 
   it('never lets a stale leaf handle adopt its replacement pane Run', async () => {
     setup()
+
     const staleOwner = db.createRun({
       objective: 'Original pane owner',
       coordinatorHandle: 'term_stale',
       coordinatorPaneKey: 'tab_original:leaf_shared'
     })
+
     const replacement = db.createRun({
       objective: 'Replacement pane owner',
       coordinatorHandle: 'term_replacement',
       coordinatorPaneKey: 'tab_replacement:leaf_shared'
     })
+
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_coord'
         ? harness.coordinatorPaneKey
@@ -189,11 +200,13 @@ describe('orchestration recipient routing oracle', () => {
 
   it('reports an explicit Run mismatch for one detached Dispatch owner', async () => {
     setup()
+
     const foreignRun = db.createRun({
       objective: 'Foreign worker Run',
       coordinatorHandle: 'term_foreign_coord',
       coordinatorPaneKey: 'tab_foreign:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'detached foreign worker', runId: foreignRun.id })
     createRootDispatch(db, task.id, 'term_detached_foreign', 'tab_gone:leaf_gone')
 
@@ -213,11 +226,13 @@ describe('orchestration recipient routing oracle', () => {
     const overlapPane = 'tab_overlap:leaf_overlap'
     const task = db.createTask({ spec: 'overlapped worker' })
     createRootDispatch(db, task.id, 'term_overlap', overlapPane)
+
     const recipientRun = db.createRun({
       objective: 'Overlapping coordinator',
       coordinatorHandle: 'term_overlap',
       coordinatorPaneKey: overlapPane
     })
+
     mockTerminalPaneKeys((handle) =>
       handle === 'term_coord'
         ? harness.coordinatorPaneKey
@@ -236,11 +251,13 @@ describe('orchestration recipient routing oracle', () => {
       run_id: recipientRun.id,
       to_handle: `run:${recipientRun.id}`
     })
+
     const check = (await harness.call(
       'orchestration.check',
       { terminal: 'term_overlap', peek: true },
       ctx
     )) as { messages: { id: string }[] }
+
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
   })
 
@@ -342,11 +359,13 @@ describe('orchestration recipient routing oracle', () => {
 
   it('does not reach a Dispatch of another Run through @all, whatever terminals the host lists', async () => {
     setup()
+
     const foreignRun = db.createRun({
       objective: 'Foreign Run',
       coordinatorHandle: 'term_foreign_coord',
       coordinatorPaneKey: 'tab_foreign:leaf_foreign'
     })
+
     const foreignTask = db.createTask({ spec: 'foreign work', runId: foreignRun.id })
     createRootDispatch(db, foreignTask.id, 'term_foreign_worker')
     const ownTask = db.createTask({ spec: 'own work' })
@@ -374,6 +393,7 @@ describe('orchestration recipient routing oracle', () => {
   it('skips a federated Dispatch with a warning naming the direct address', async () => {
     setup()
     const local = createRootDispatch(db, db.createTask({ spec: 'local' }).id, 'term_local')
+
     const federated = db.createStartingWorkerDispatch({
       taskSpec: 'remote work',
       taskRunId: senderRunId,
@@ -387,6 +407,7 @@ describe('orchestration recipient routing oracle', () => {
         protocolVersion: 3
       }
     })
+
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [terminal('term_coord'), terminal('term_local')],
       totalCount: 2,
@@ -466,16 +487,19 @@ describe('orchestration recipient routing oracle', () => {
       coordinatorHandle: 'term_ambiguous',
       coordinatorPaneKey: 'tab_second:leaf_second'
     })
+
     const foreignRun = db.createRun({
       objective: 'Foreign owner',
       coordinatorHandle: 'term_foreign',
       coordinatorPaneKey: 'tab_foreign:leaf_foreign'
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 
     const ambiguous = await dispatcher.dispatch(
       request('rpc_ambiguous', 'retry_ambiguous', 'term_ambiguous')
     )
+
     const mismatch = await dispatcher.dispatch(
       request('rpc_mismatch', 'retry_mismatch', 'term_foreign', { run: senderRunId })
     )

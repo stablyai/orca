@@ -75,9 +75,11 @@ export function createWorktreeJumpPaletteWorktreeHandler({
 }: WorktreeJumpPaletteCreateWorktreeInput): () => void {
   return () => {
     const trimmed = createWorktreeName.trim()
+
     if (liveQueryRef.current.trim() !== trimmed) {
       return
     }
+
     if (
       !isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: taskSourceUrl !== null,
@@ -87,8 +89,10 @@ export function createWorktreeJumpPaletteWorktreeHandler({
     ) {
       return
     }
+
     const ghLink = parseGitHubIssueOrPRLink(trimmed)
     const ghNumber = parseGitHubIssueOrPRNumber(trimmed)
+
     const openComposer = (data: Record<string, unknown>): void => {
       skipRestoreFocusRef.current = true
       prefetchCreateWorkspaceBaseForComposer(
@@ -103,10 +107,12 @@ export function createWorktreeJumpPaletteWorktreeHandler({
 
     if (linearIssueUrlIntent) {
       const lookup = linearLookupRef.current
+
       const resolve = async (): Promise<void> => {
         const preview = currentLinearIssuePreview?.loading
           ? await lookup?.promise
           : (currentLinearIssuePreview ?? (await lookup?.promise))
+
         // Recheck the live query after lookup settlement so stale results cannot open a composer.
         if (
           !preview ||
@@ -117,6 +123,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
         ) {
           return
         }
+
         const data = preview.issue
           ? (() => {
               const sourceContext = preview.sourceContext
@@ -132,6 +139,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
                     accountLabel: preview.issue.workspaceName ?? null
                   })
                 : null
+
               return {
                 prefilledName: getLinearIssueWorkspaceName(preview.issue),
                 linkedWorkItem: buildLinearIssueLinkedWorkItem(preview.issue),
@@ -142,18 +150,23 @@ export function createWorktreeJumpPaletteWorktreeHandler({
           : preview.initialRepoId
             ? { prefilledName: trimmed, initialRepoId: preview.initialRepoId }
             : { prefilledName: trimmed }
+
         openComposer(data)
       }
+
       void resolve()
+
       return
     }
 
     if (ghLink) {
       const lookup = githubLookupRef.current
+
       const resolve = async (): Promise<void> => {
         const preview = currentGitHubWorkItemPreview?.loading
           ? await lookup?.promise
           : (currentGitHubWorkItemPreview ?? (await lookup?.promise))
+
         if (
           !preview ||
           lookup?.query !== trimmed ||
@@ -163,7 +176,9 @@ export function createWorktreeJumpPaletteWorktreeHandler({
         ) {
           return
         }
+
         const item = preview.item
+
         if (item) {
           const linkedWorkItem: LinkedWorkItemSummary = {
             provider: 'github',
@@ -173,6 +188,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
             url: item.url,
             ...(item.repoId ? { repoId: item.repoId } : {})
           }
+
           openComposer({
             prefilledName:
               getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
@@ -189,58 +205,76 @@ export function createWorktreeJumpPaletteWorktreeHandler({
           })
         }
       }
+
       void resolve()
+
       return
     }
 
     if (taskUrlCreatePreview) {
       const state = useAppStore.getState()
       const eligibleRepos = state.repos.filter((repo) => isGitRepoKind(repo))
+
       const repo =
         (state.activeRepoId &&
           eligibleRepos.find((candidate) => candidate.id === state.activeRepoId)) ||
         eligibleRepos[0]
+
       openComposer(
         repo ? { prefilledName: trimmed, initialRepoId: repo.id } : { prefilledName: trimmed }
       )
+
       return
     }
 
     if (ghNumber !== null) {
       const state = useAppStore.getState()
+
       const matches = allWorktrees.filter(
         (worktree) =>
           !worktree.isArchived &&
           (worktree.linkedIssue === ghNumber || worktree.linkedPR === ghNumber)
       )
+
       const activeMatch =
         matches.find((worktree) => worktree.repoId === state.activeRepoId) ?? matches[0]
+
       if (activeMatch) {
         skipRestoreFocusRef.current = true
         closeModal()
+
         const activation = activateAndRevealWorktree(
           activeMatch.id,
           activeMatch.hostId ? { executionHostId: activeMatch.hostId } : {}
         )
+
         if (!queueWorkspaceActivationTerminalFocus(activeMatch.id, activation)) {
           focusFallbackSurface()
         }
+
         recordFeatureInteraction('cmd-j-workspace-open')
+
         return
       }
+
       const repo =
         (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
         [...getRepoMapFromState(state).values()].find((candidate) => isGitRepoKind(candidate))
+
       if (!repo || !isGitRepoKind(repo)) {
         openComposer({ prefilledName: trimmed })
+
         return
       }
+
       prefetchCreateWorkspaceBaseForComposer(repo.id)
+
       const sourceContext = buildTaskSourceContextFromRepo({
         provider: 'github',
         projectId: repo.id,
         repo
       })
+
       const token = createLookupGuard.start()
       preserveCreateLookupOnCloseRef.current = true
       skipRestoreFocusRef.current = true
@@ -256,9 +290,11 @@ export function createWorktreeJumpPaletteWorktreeHandler({
           if (!createLookupGuard.isCurrent(token)) {
             return
           }
+
           const linkedWorkItem = item
             ? { type: item.type, number: item.number, title: item.title, url: item.url }
             : null
+
           queueMicrotask(() =>
             openModal('new-workspace-composer', {
               initialRepoId: repo.id,
@@ -285,8 +321,10 @@ export function createWorktreeJumpPaletteWorktreeHandler({
             )
           }
         })
+
       return
     }
+
     openComposer(trimmed ? { prefilledName: trimmed } : {})
   }
 }

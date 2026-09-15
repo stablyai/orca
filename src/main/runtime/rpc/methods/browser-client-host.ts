@@ -28,9 +28,11 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       if (clientKind !== 'runtime' || !connectionId || !pairedDeviceId) {
         throw new Error('authenticated_browser_client_host_required')
       }
+
       if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
         throw new Error('browser_client_host_capability_required')
       }
+
       if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
         throw new BrowserError(
           BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
@@ -39,12 +41,14 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       }
 
       const registry = getBrowserHostLeaseRegistry(runtime)
+
       // Attach inventory cannot describe pages created or replaced after readiness is published.
       const pagePlacementsAtAttach = new Map(
         getRuntimeBrowserPageRegistry(runtime)
           .listPages()
           .map((page) => [page.browserPageId, page.placement])
       )
+
       const handle = registry.attach({
         browserHostClientId: params.browserHostClientId,
         connectionId,
@@ -57,29 +61,40 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion,
         fileChannelProtocolVersion: params.fileChannelProtocolVersion
       })
+
       let releaseCommandDelivery = (): void => {}
+
       let resolveDisconnected = (): void => {}
+
       const whenDisconnected = new Promise<void>((resolve) => {
         resolveDisconnected = resolve
       })
+
       let cleaned = false
+
       const cleanup = (): void => {
         if (cleaned) {
           return
         }
+
         cleaned = true
         releaseCommandDelivery()
         handle.disconnect()
         resolveDisconnected()
       }
+
       const subscriptionId = `browser-client-host:${params.browserHostClientId}`
+
       try {
         runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
         signal?.addEventListener('abort', cleanup, { once: true })
+
         if (signal?.aborted) {
           cleanup()
+
           return
         }
+
         emit({
           type: 'ready',
           authorityEpoch: handle.lease.authorityEpoch,
@@ -100,6 +115,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
             ? { fileChannelProtocolVersion: handle.lease.fileChannelProtocolVersion }
             : {})
         })
+
         if (params.pageCommandProtocolVersion) {
           releaseCommandDelivery = registry.attachCommandDelivery(
             {
@@ -111,6 +127,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
             emit
           )
         }
+
         // Before recovery, which only reconciles pages this runtime already knows: a restart left
         // the guests alive on the client but took the records with it.
         const adoption = await adoptRuntimeBrowserClientPagesFromInventory({
@@ -122,6 +139,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
             runtime.resolveBrowserExecutionHostKeyForWorkspace(workspaceId),
           ...(signal ? { signal } : {})
         })
+
         if (adoption.unadoptedPageIds.length === 0) {
           // This client's host has reported what it holds and the runtime has taken all of it back,
           // so snapshots stop warning that its client-hosted pages are unaccounted for. A page left
@@ -129,6 +147,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           // until a later attach settles it or the window's deadline expires.
           runtime.markClientHostedPagesReconciled(pairedDeviceId)
         }
+
         await recoverUnavailableRuntimeBrowserClientPages({
           lease: handle.lease,
           authority: registry,
@@ -142,14 +161,17 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           adoptedPageIds: new Set(adoption.adoptedPageIds),
           ...(signal ? { signal } : {})
         })
+
         const reason = await Promise.race([
           handle.whenFenced,
           whenDisconnected.then(() => undefined),
           handle.whenConnectionSuperseded.then(() => undefined)
         ])
+
         if (!reason) {
           return
         }
+
         emit({
           type: 'revoked',
           authorityEpoch: handle.lease.authorityEpoch,
@@ -172,15 +194,18 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
         throw new Error('authenticated_browser_client_host_required')
       }
+
       if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
         throw new Error('browser_client_host_capability_required')
       }
+
       if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
         throw new BrowserError(
           BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
           BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
         )
       }
+
       const accepted = getBrowserHostLeaseRegistry(runtime).settleClientPageCommand(
         {
           authorityEpoch: params.authorityEpoch,
@@ -191,6 +216,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         },
         params
       )
+
       return { accepted }
     }
   }),
@@ -204,18 +230,21 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
         throw new Error('authenticated_browser_client_host_required')
       }
+
       if (
         !clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY) ||
         !clientCapabilities.includes(BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY)
       ) {
         throw new Error('browser_client_page_metadata_capability_required')
       }
+
       const placement = {
         kind: 'client' as const,
         browserHostClientId: params.browserHostClientId,
         browserHostGeneration: params.browserHostGeneration,
         pageHostGeneration: params.pageHostGeneration
       }
+
       getBrowserHostLeaseRegistry(runtime).requireClientPageConnection({
         browserPageId: params.browserPageId,
         placement,
@@ -224,13 +253,17 @@ export const BROWSER_CLIENT_HOST_METHODS = [
       })
       const pages = getRuntimeBrowserPageRegistry(runtime)
       const page = pages.getPage(params.browserPageId)
+
       if (!page) {
         throw new Error('browser_runtime_page_required')
       }
+
       const accepted = pages.updatePageMetadata(params.browserPageId, placement, params)
+
       if (accepted) {
         runtime.notifyMobileSessionTabsChanged(page.workspaceId)
       }
+
       return { accepted }
     }
   })

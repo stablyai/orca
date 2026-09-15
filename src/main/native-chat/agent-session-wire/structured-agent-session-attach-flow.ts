@@ -71,6 +71,7 @@ export async function performAttach(
   input: AttachFlowInput
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { params, store } = input
+
   const unsupported = (): AgentSessionMutationResult<AgentSessionAttachResult> => ({
     ok: false,
     refusal: {
@@ -78,11 +79,14 @@ export async function performAttach(
       message: 'This execution host cannot create the requested structured agent session.'
     }
   })
+
   const sessionId = params.envelope.sessionId
   const admitted = admitAttachOrRefuse(params)
+
   if (!admitted.ok) {
     return admitted
   }
+
   // Ensure/recovery bypass create-intent, so recheck before reserving or spawning.
   if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
     return unsupported()
@@ -95,12 +99,15 @@ export async function performAttach(
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
   let providerHistoryWindow: ProviderHistoryWindow | null = null
+
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
     : await prepareAdoptedTranscript(params)
+
   if (!preparedTranscript.ok) {
     return preparedTranscript
   }
+
   try {
     const reserved = await store.reserveOwner(
       reserveRequestFor({
@@ -112,12 +119,14 @@ export async function performAttach(
         now: input.now()
       })
     )
+
     record = reserved.record
     replayed = reserved.disposition === 'replayed'
     // Capability can change while the durable reservation is in flight. Recheck
     // every reservation at its effect boundary so it cannot bypass the support
     // gate, and release a pending reservation that support drift invalidated.
     reservedRecord = record
+
     if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
       if (
         record.lease.claimStatus === 'reserved' &&
@@ -127,8 +136,10 @@ export async function performAttach(
         unsupportedReservationSettlementAttempted = true
         await settleUnsupportedReservation(input, record)
       }
+
       return unsupported()
     }
+
     if (
       replayed &&
       reserved.operationRow.outcome.status !== 'pending' &&
@@ -139,10 +150,12 @@ export async function performAttach(
         outcome: reserved.operationRow.outcome,
         reconstruct: () => null
       })
+
       if (replay.decision === 'refuse') {
         return { ok: false, refusal: replay.refusal }
       }
     }
+
     // Sample provider history before a new child is acquired. Once acquireOwner
     // starts the child, the adapter's liveness signal intentionally becomes
     // conservative and an absent prompt can no longer prove non-delivery.
@@ -152,6 +165,7 @@ export async function performAttach(
       accountHome: record.accountHome,
       ownerAlreadyAdmitted: agentSessionLeaseAdmitsWriter(record.lease)
     })
+
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
       const acquired = await acquireOwner(input, record)
       record = acquired.record
@@ -160,6 +174,7 @@ export async function performAttach(
     }
   } catch (error) {
     const spawnToken = reservedRecord?.lease.reservedSpawnToken
+
     if (reservedRecord && spawnToken && !unsupportedReservationSettlementAttempted) {
       // Settle processless proof and failed operation atomically.
       const exitProof = isAgentSessionPreSpawnError(error)
@@ -169,6 +184,7 @@ export async function performAttach(
           : error instanceof AgentSessionAcquisitionRootExitObservedError
             ? 'root-exit-observed'
             : 'exit-proven'
+
       const outcome =
         error instanceof AgentSessionAcquisitionExitUnprovenError
           ? {
@@ -187,6 +203,7 @@ export async function performAttach(
                 code: 'agent_session_operation_invalid',
                 message: error instanceof Error ? error.message : String(error)
               }
+
       try {
         await store.settleFailedAcquisition({
           sessionId,
@@ -205,12 +222,15 @@ export async function performAttach(
         )
       }
     }
+
     if (error instanceof AgentSessionRewindRefusal) {
       return rewindRefusal(error.rewindReason)
     }
+
     if (error instanceof AgentSessionAcquisitionRefusal) {
       return { ok: false, refusal: { code: error.code, message: error.message } }
     }
+
     return {
       ok: false,
       refusal: classifyStoreFailure(
@@ -222,6 +242,7 @@ export async function performAttach(
   }
 
   let attached: AttachedJournal
+
   try {
     await input.beforeJournalOpen?.()
     attached = await attachJournal({
@@ -243,6 +264,7 @@ export async function performAttach(
   }
 
   const fence = record.lease.runtimeFence
+
   return {
     ok: true,
     replayed,
@@ -264,15 +286,19 @@ async function readProviderHistoryWindow(input: {
   ownerAlreadyAdmitted: boolean
 }): Promise<ProviderHistoryWindow | null> {
   const read = input.adapter.providerHistoryWindow
+
   if (!read) {
     return null
   }
+
   let history: ProviderHistoryWindow | null
+
   try {
     history = await read({ identity: input.identity, accountHome: input.accountHome })
   } catch {
     return null
   }
+
   // A lease that was already live may belong to a provider child this process
   // has not indexed yet. Preserve the safe unknown outcome in that case.
   return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
@@ -283,9 +309,11 @@ async function settleUnsupportedReservation(
   record: AgentSessionRecord
 ): Promise<void> {
   const spawnToken = record.lease.reservedSpawnToken
+
   if (!spawnToken) {
     return
   }
+
   try {
     await input.store.settleFailedAcquisition({
       sessionId: record.sessionId,

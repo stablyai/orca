@@ -32,6 +32,7 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
 
   it('clears when no route resolves and no host was confirmed', () => {
     const clearWorktreeDeleteState = vi.fn()
+
     const start = beginHostQualifiedRemoval(
       makeGet(clearWorktreeDeleteState),
       WORKTREE_ID,
@@ -73,6 +74,7 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
   // single-runtime gate in resolveWorktreeOperationRouteResult, which returns `missing`.
   it('clears when a known worktree has no host and the legacy runtime is ambiguous', () => {
     const clearWorktreeDeleteState = vi.fn()
+
     const start = beginHostQualifiedRemoval(
       makeRoutedGet(clearWorktreeDeleteState, {
         repos: [{ id: 'repo1', connectionId: null, executionHostId: undefined }],
@@ -94,6 +96,7 @@ describe('beginHostQualifiedRemoval refusals clear the delete state', () => {
   it('clears when a folder workspace id no longer has an owner', () => {
     const clearWorktreeDeleteState = vi.fn()
     const folderId = folderWorkspaceKey('fw-removed')
+
     const start = beginHostQualifiedRemoval(
       makeRoutedGet(clearWorktreeDeleteState, {
         repos: [{ id: 'repo1', connectionId: null, executionHostId: 'local' }],

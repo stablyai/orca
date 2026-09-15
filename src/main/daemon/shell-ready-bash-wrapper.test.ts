@@ -18,6 +18,7 @@ import { getShellReadyWrapperRoot } from './shell-ready'
 async function importFreshShellReady() {
   vi.resetModules()
   const module = await import('./shell-ready')
+
   return {
     ...module,
     getShellReadyLaunchConfig: (shell: string) =>
@@ -29,11 +30,14 @@ async function importFreshShellReady() {
 
 async function importFreshDaemonBashRcfile(): Promise<typeof DaemonBashRcfileModule> {
   vi.resetModules()
+
   return import('./daemon-bash-shell-ready-rcfile')
 }
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
+
 const itWithBash = hasBash ? it : it.skip
 
 // Split out of shell-ready.test.ts, which sits at the max-lines cap for tests.
@@ -53,6 +57,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
   })

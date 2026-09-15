@@ -15,6 +15,7 @@ import { join } from 'node:path'
 // -c asks for clonefile(2). -P keeps Electron.framework's relative symlinks as symlinks; resolving
 // them breaks Chromium's bundle lookup.
 export const MACOS_CLONE_ARGS = Object.freeze(['-c', '-R', '-P'])
+
 // -a implies -d (no symlink following) and preserves mode. --reflink=always fails loudly on a
 // filesystem without reflinks rather than silently writing a second full copy.
 export const LINUX_REFLINK_ARGS = Object.freeze(['--reflink=always', '-a'])
@@ -33,9 +34,11 @@ export const LINUX_REFLINK_ARGS = Object.freeze(['--reflink=always', '-a'])
 export function shareTree(sourcePath, destinationPath, options = {}) {
   const platform = options.platform ?? process.platform
   const errors = []
+
   for (const mechanism of getShareMechanisms(platform)) {
     try {
       ;(options[mechanism] ?? shareMechanisms[mechanism])(sourcePath, destinationPath)
+
       return mechanism
     } catch (error) {
       errors.push(error)
@@ -43,6 +46,7 @@ export function shareTree(sourcePath, destinationPath, options = {}) {
       rmSync(destinationPath, { recursive: true, force: true })
     }
   }
+
   throw new AggregateError(errors, `Could not share storage for ${destinationPath}`)
 }
 
@@ -74,9 +78,11 @@ const shareMechanisms = {
 
 export function hardlinkTree(sourcePath, destinationPath) {
   mkdirSync(destinationPath, { recursive: true })
+
   for (const entry of readdirSync(sourcePath, { withFileTypes: true })) {
     const from = join(sourcePath, entry.name)
     const to = join(destinationPath, entry.name)
+
     if (entry.isDirectory()) {
       hardlinkTree(from, to)
     } else if (entry.isSymbolicLink()) {
@@ -98,6 +104,7 @@ export function hardlinkTree(sourcePath, destinationPath) {
 export function makeTreeReadOnly(targetPath, chmod = chmodSync) {
   for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
     const entryPath = join(targetPath, entry.name)
+
     if (entry.isDirectory()) {
       makeTreeReadOnly(entryPath, chmod)
     } else if (!entry.isSymbolicLink()) {
@@ -107,6 +114,7 @@ export function makeTreeReadOnly(targetPath, chmod = chmodSync) {
       chmod(entryPath, mode === undefined ? 0o555 : mode & ~0o222)
     }
   }
+
   chmod(targetPath, 0o755)
 }
 
@@ -121,6 +129,7 @@ export function makeTreeReadOnly(targetPath, chmod = chmodSync) {
 export function makeTreeWritable(targetPath, chmod = chmodSync) {
   for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
     const entryPath = join(targetPath, entry.name)
+
     if (entry.isDirectory()) {
       makeTreeWritable(entryPath, chmod)
     } else if (!entry.isSymbolicLink()) {
@@ -128,6 +137,7 @@ export function makeTreeWritable(targetPath, chmod = chmodSync) {
       chmod(entryPath, mode === undefined ? 0o644 : mode | 0o200)
     }
   }
+
   chmod(targetPath, 0o755)
 }
 
@@ -144,6 +154,7 @@ export function copyPrivateTree(sourcePath, destinationPath, options = {}) {
   const unprotect = options.unprotect ?? makeTreeWritable
   const privateMechanisms = new Set(['clone', 'reflink'])
   let result = { mechanism: null, copyError: null }
+
   if (getShareMechanisms(platform).some((mechanism) => privateMechanisms.has(mechanism))) {
     try {
       result = {
@@ -162,7 +173,9 @@ export function copyPrivateTree(sourcePath, destinationPath, options = {}) {
   } else {
     copy(sourcePath, destinationPath)
   }
+
   unprotect(destinationPath)
+
   return result
 }
 

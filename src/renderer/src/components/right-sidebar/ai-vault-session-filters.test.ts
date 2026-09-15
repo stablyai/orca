@@ -148,6 +148,7 @@ describe('filterAiVaultSessions', () => {
       queuedMessageCount: 4,
       subagentTranscriptCount: 2
     }
+
     const plainEmpty: AiVaultSession = {
       ...baseSession,
       id: 'claude:plain-empty',
@@ -316,6 +317,7 @@ describe('filterAiVaultSessions', () => {
   it('filters project scope by the resolved active project key', () => {
     const projectSession = { ...baseSession, id: 'claude:project', cwd: '/repo/project' }
     const otherSession = { ...baseSession, id: 'claude:other', cwd: '/repo/other' }
+
     const sessionProjectById = new Map([
       [projectSession.id, { kind: 'repo' as const, key: 'project:orca', label: 'Orca' }],
       [otherSession.id, { kind: 'repo' as const, key: 'project:other', label: 'Other' }]
@@ -353,6 +355,7 @@ describe('filterAiVaultSessions', () => {
     const sessionProjectById = new Map([
       [baseSession.id, { kind: 'repo' as const, key: 'project:orca', label: 'Canonical Orca' }]
     ])
+
     const projectLabelByKey = new Map([['project:orca', 'Canonical Orca']])
 
     expect(
@@ -677,12 +680,14 @@ describe('groupAiVaultSessions', () => {
       { ...baseSession, id: 'claude:1', cwd: '/repo/main' },
       { ...baseSession, id: 'codex:2', agent: 'codex', cwd: '/repo/worktree' }
     ]
+
     const sessionProjectById = new Map(
       sessions.map((session) => [
         session.id,
         { kind: 'repo' as const, key: 'project:orca', label: 'Orca' }
       ])
     )
+
     const projectLabelByKey = new Map([['project:orca', 'Canonical Orca']])
 
     expect(

@@ -35,13 +35,17 @@ export function waitForAgentDraftInputReady(
       if (settled) {
         return
       }
+
       settled = true
+
       if (hardTimer !== null) {
         window.clearTimeout(hardTimer)
       }
+
       if (quietTimer !== null) {
         window.clearTimeout(quietTimer)
       }
+
       unsubscribe?.()
       resolve(value)
     }
@@ -50,15 +54,19 @@ export function waitForAgentDraftInputReady(
       if (quietTimer !== null) {
         window.clearTimeout(quietTimer)
       }
+
       quietTimer = window.setTimeout(() => finish(true), BRACKETED_PASTE_QUIET_MS)
     }
 
     const observeData = (data: string): void => {
       const { ready, armQuietTimer: shouldArm } = scanner.observe(data)
+
       if (ready) {
         finish(true)
+
         return
       }
+
       if (shouldArm) {
         armQuietTimer()
       }
@@ -74,8 +82,10 @@ export function waitForAgentDraftInputReady(
         .then((remoteUnsubscribe) => {
           if (settled) {
             remoteUnsubscribe()
+
             return
           }
+
           unsubscribe = remoteUnsubscribe
         })
         .catch(() => finish(false))

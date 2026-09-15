@@ -27,11 +27,14 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
   } {
     const live = this.getLivePtyForHandle(handle)
     const ptyId = live?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+
     if (!ptyId) {
       throw new Error('terminal_not_writable')
     }
+
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(ptyId)?.incarnationId
+
     return {
       ptyId,
       processIncarnation: incarnationId ?? `${this.runtimeId}:${ptyId}:${generation}`,
@@ -46,14 +49,17 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
     signal?: AbortSignal
   ): Promise<RuntimeTerminalPromptDelivery> {
     const binding = this.getTerminalPromptRequestBinding(handle)
+
     if (
       binding.processIncarnation !== prompt.processIncarnation ||
       binding.generation !== prompt.generation
     ) {
       return { ...prompt, observation: 'incarnation_replaced' }
     }
+
     const waitTextCache: AgentPromptWaitTextCache = {}
     const baseline = this.getAgentPromptActivity(handle, binding.ptyId, waitTextCache)
+
     try {
       await verifyAgentPromptSubmission({
         baseline: {
@@ -83,15 +89,19 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
         timeoutMs
       })
       this.forgetAgentPromptRequest(binding.ptyId, binding.generation, prompt.requestId)
+
       return { ...prompt, stages: ['input_accepted', 'turn_started'], observation: 'supported' }
     } catch (error) {
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
         return prompt
       }
+
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(binding.ptyId, binding.generation, prompt.requestId)
+
         return { ...prompt, observation: 'permission' }
       }
+
       throw error
     }
   }

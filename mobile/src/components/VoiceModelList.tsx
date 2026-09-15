@@ -21,6 +21,7 @@ function formatSize(bytes: number | null): string {
   if (!bytes) {
     return ''
   }
+
   return `${Math.round(bytes / 1_000_000)} MB`
 }
 
@@ -28,13 +29,17 @@ function modelMeta(model: MobileSpeechModel): string {
   if (model.provider === 'openai') {
     return 'OpenAI API'
   }
+
   const inFlight = isModelInFlight(model)
+
   if (inFlight && model.progress != null) {
     return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
   }
+
   if (model.status === 'extracting') {
     return `${formatSize(model.sizeBytes)} · extracting…`
   }
+
   return formatSize(model.sizeBytes)
 }
 
@@ -58,6 +63,7 @@ export function VoiceModelList({
         const selectBusy = rowBusy && busyAction?.type === 'select'
         const downloadBusy = rowBusy && busyAction?.type === 'download'
         const deleteBusy = rowBusy && busyAction?.type === 'delete'
+
         return (
           <View key={model.id}>
             {idx > 0 && <View style={styles.separator} />}

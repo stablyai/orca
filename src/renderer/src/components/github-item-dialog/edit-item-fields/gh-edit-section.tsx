@@ -76,9 +76,11 @@ export function GHEditSection({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -89,13 +91,16 @@ export function GHEditSection({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const { isPending, run } = useImmediateMutation()
+
   // Why: from a Project view, keep projectViewCache in sync too — patchWorkItem only walks workItemsCache, so the table would render stale without this. See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
         return
       }
+
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, patch)
     },
     [projectOrigin, patchProjectRowContent]
@@ -104,24 +109,29 @@ export function GHEditSection({
   // Why: with projectOrigin set, read labels/assignees from the row's repo, not the workspace path, or popovers list a different repo than writes target.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
+
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
     sourceSettings
   )
+
   const repoLabelsBySlug = useRepoLabelsBySlug(
     slugOwner,
     slugRepo,
     sourceSettings,
     projectOrigin?.host
   )
+
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
+
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
     sourceSettings
   )
+
   const repoAssigneesBySlug = useRepoAssigneesBySlug(
     slugOwner,
     slugRepo,
@@ -129,41 +139,54 @@ export function GHEditSection({
     sourceSettings,
     projectOrigin?.host
   )
+
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
+
   const hasAttachedWorkspace =
     attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
+
   const filteredDuplicateCandidates = useMemo(
     () =>
       getTaskPageGitHubDuplicateCandidates(duplicateIssueCandidates, item.number, duplicateSearch),
     [duplicateIssueCandidates, duplicateSearch, item.number]
   )
+
   const directDuplicateTarget = useMemo(() => {
     const trimmed = duplicateSearch.trim()
     const validation = validateTaskPageGitHubDuplicateTarget(trimmed, item.number)
+
     if (!trimmed || !validation.ok) {
       return null
     }
+
     if (
       filteredDuplicateCandidates.some((candidate) => candidate.number === validation.duplicateOf)
     ) {
       return null
     }
+
     return validation.duplicateOf
   }, [duplicateSearch, filteredDuplicateCandidates, item.number])
+
   const duplicatePickerTitle = useMemo(() => {
     if (projectOrigin) {
       return `${projectOrigin.owner}/${projectOrigin.repo}`
     }
+
     const parsed = parseOwnerRepoFromItemUrl(item.url)
+
     return parsed
       ? `${parsed.owner}/${parsed.repo}`
       : translate('auto.components.TaskPage.repository', 'Repository')
   }, [item.url, projectOrigin])
+
   const handleOpenOrUseWorkspace = useCallback((): void => {
     if (onOpenOrUse) {
       onOpenOrUse(item)
+
       return
     }
+
     onUse(item)
   }, [item, onOpenOrUse, onUse])
 
@@ -172,6 +195,7 @@ export function GHEditSection({
     if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
     }
+
     setLocalAssignees(assignees)
   }, [assigneesItemKey, assignees])
 
@@ -226,15 +250,19 @@ export function GHEditSection({
 
   const handleDuplicateSearchSubmit = useCallback(() => {
     const validation = validateTaskPageGitHubDuplicateTarget(duplicateSearch, item.number)
+
     if (!validation.ok) {
       setDuplicateError(getTaskPageGitHubDuplicateTargetErrorMessage(validation, translate))
+
       return
     }
+
     closeAsDuplicate(validation.duplicateOf)
   }, [closeAsDuplicate, duplicateSearch, item.number])
 
   const handleStatusPopoverOpenChange = useCallback((nextOpen: boolean) => {
     setStatusPopoverOpen(nextOpen)
+
     if (!nextOpen) {
       setDuplicatePickerOpen(false)
       setDuplicateSearch('')

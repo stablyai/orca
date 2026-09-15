@@ -42,6 +42,7 @@ function postRaw(
     let res: IncomingMessage | null = null
     const chunks: Buffer[] = []
     let responseBytes = 0
+
     function cleanupListeners(): void {
       req?.off('error', onRequestError)
       req?.off('timeout', onRequestTimeout)
@@ -49,14 +50,17 @@ function postRaw(
       res?.off('end', onResponseEnd)
       res?.off('error', onResponseError)
     }
+
     function resolveOnce(value: unknown): void {
       if (settled) {
         return
       }
+
       settled = true
       cleanupListeners()
       resolve(value)
     }
+
     function rejectOnce(
       error: Error,
       options: { destroyRequest?: boolean; destroyResponse?: boolean } = {}
@@ -64,18 +68,24 @@ function postRaw(
       if (settled) {
         return
       }
+
       settled = true
+
       if (options.destroyRequest) {
         req?.destroy()
       }
+
       if (options.destroyResponse) {
         res?.destroy()
       }
+
       cleanupListeners()
       reject(error)
     }
+
     function onResponseData(chunk: Buffer): void {
       responseBytes += chunk.length
+
       if (responseBytes > MAX_RESPONSE_BYTES) {
         // Why: diagnostics endpoints should return tiny JSON envelopes.
         // Cap response buffering so a bad endpoint cannot grow main memory.
@@ -83,14 +93,19 @@ function postRaw(
           destroyRequest: true,
           destroyResponse: true
         })
+
         return
       }
+
       chunks.push(chunk)
     }
+
     function onResponseEnd(): void {
       const status = res?.statusCode ?? 0
+
       if (status >= 200 && status < 300) {
         const text = Buffer.concat(chunks).toString('utf8')
+
         try {
           resolveOnce(text.length > 0 ? JSON.parse(text) : {})
         } catch {
@@ -102,28 +117,37 @@ function postRaw(
         rejectOnce(new Error(`HTTP ${status}`))
       }
     }
+
     function onResponseError(): void {
       rejectOnce(new Error('diagnostic network request failed'))
     }
+
     function onRequestError(): void {
       // Why: request errors can include endpoint hostnames. The diagnostics
       // endpoint contract keeps infrastructure details out of renderer IPC.
       rejectOnce(new Error('diagnostic network request failed'))
     }
+
     function onRequestTimeout(): void {
       rejectOnce(new Error('diagnostic network request timed out'), { destroyRequest: true })
     }
+
     let parsed: URL
+
     try {
       parsed = new URL(url)
     } catch {
       rejectOnce(new Error('diagnostic endpoint configuration is invalid'))
+
       return
     }
+
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       rejectOnce(new Error('diagnostic endpoint must use http(s)'))
+
       return
     }
+
     const protocol = parsed.protocol === 'https:' ? httpsRequest : httpRequest
     req = protocol(
       {

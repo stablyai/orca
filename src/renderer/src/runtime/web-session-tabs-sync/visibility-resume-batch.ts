@@ -18,25 +18,33 @@ export function buildVisibilityResumeBatch(args: {
   activeRuntimeWorktreeKey: () => string | null
 }): VisibilityResumeBatch | null {
   const activeKey = args.activeRuntimeWorktreeKey()
+
   for (const [key, omission] of args.omissions) {
     if (key !== activeKey || omission.visibilityGeneration < args.visibilityGeneration - 1) {
       args.omissions.delete(key)
     }
   }
+
   const resumed = new Map<string, VisibilityResumeEnvironment>()
   const trackedWorktreeIds = new Set<string>()
+
   for (const index of args.restartingSpecIndexes) {
     const environmentId = args.environmentIdBySubscriptionSpec[index]
+
     if (!environmentId) {
       continue
     }
+
     const trackedWorktrees = getTrackedWebSessionTabsWorktrees(environmentId)
+
     if (trackedWorktrees.length === 0) {
       continue
     }
+
     for (const { worktree } of trackedWorktrees) {
       trackedWorktreeIds.add(worktree)
     }
+
     const descriptor = args.environments.find((entry) => entry.environmentId === environmentId)
     resumed.set(environmentId, {
       trackedWorktrees,
@@ -50,6 +58,7 @@ export function buildVisibilityResumeBatch(args: {
       expectedTrackingGeneration: getWebSessionTabsTrackingGeneration(environmentId)
     })
   }
+
   return resumed.size
     ? {
         visibilityGeneration: args.visibilityGeneration,

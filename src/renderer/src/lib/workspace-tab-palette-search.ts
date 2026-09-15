@@ -8,6 +8,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
 import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
+
 export {
   searchWorkspaceTabs,
   type WorkspaceTabPaletteSearchResult

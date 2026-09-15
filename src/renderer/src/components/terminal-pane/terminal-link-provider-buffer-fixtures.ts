@@ -28,6 +28,7 @@ export function makeBufferLine(
   options: { isWrapped?: boolean; columns?: number[] } = {}
 ): TestBufferLine {
   const columns = options.columns ?? defaultColumnsForText(text)
+
   return {
     isWrapped: options.isWrapped ?? false,
     length: text.length,
@@ -39,10 +40,12 @@ export function makeBufferLine(
     ) => {
       if (outColumns) {
         outColumns.length = 0
+
         for (let index = startColumn; index <= endColumn; index++) {
           outColumns.push(columns[index] ?? index)
         }
       }
+
       return text.slice(startColumn, endColumn)
     }
   }
@@ -73,10 +76,13 @@ export function createProviderSetup(
   depsOverrides: Partial<Parameters<typeof createFilePathLinkProvider>[1]> = {}
 ) {
   const pane = makePane(rows)
+
   const managerRef = {
     current: { getPanes: () => [pane] } as unknown as PaneManager
   }
+
   const linkTooltip = { textContent: '', style: { display: '' } } as unknown as HTMLElement
+
   const provider = createFilePathLinkProvider(
     1,
     {
@@ -91,6 +97,7 @@ export function createProviderSetup(
     linkTooltip,
     getTerminalFileOpenHint()
   )
+
   return { provider, linkTooltip }
 }
 
@@ -104,6 +111,7 @@ export function collectLinks(
 ): Promise<ILink[]> {
   const rows = typeof rowsOrText === 'string' ? [makeBufferLine(rowsOrText)] : rowsOrText
   const provider = createProvider(rows)
+
   return new Promise<ILink[]>((resolve) => {
     provider.provideLinks(bufferLineNumber, (links) => resolve(links ?? []))
   })
@@ -111,18 +119,23 @@ export function collectLinks(
 
 export function containsBufferPoint(link: ILink, x: number, y: number): boolean {
   const { start, end } = link.range
+
   if (y < start.y || y > end.y) {
     return false
   }
+
   if (start.y === end.y) {
     return x >= start.x && x <= end.x
   }
+
   if (y === start.y) {
     return x >= start.x
   }
+
   if (y === end.y) {
     return x <= end.x
   }
+
   return true
 }
 
@@ -152,11 +165,13 @@ export function makeFallbackTerminal(rows: TestBufferLine[]): {
       height: 400
     })
   }
+
   const element = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     querySelector: vi.fn(() => screen)
   }
+
   return {
     terminal: {
       cols: 80,
@@ -180,8 +195,10 @@ export function getRegisteredMouseUpHandler(element: {
   const registration = element.addEventListener.mock.calls.find(
     ([eventName]) => eventName === 'mouseup'
   )
+
   expect(registration, 'mouseup handler should be registered').toBeDefined()
   expect(registration![2]).toEqual({ capture: true })
+
   return registration![1] as (event: MouseEvent) => void
 }
 
@@ -191,6 +208,8 @@ export function getRegisteredBubbleMouseUpHandler(element: {
   const registration = element.addEventListener.mock.calls.find(
     ([eventName, _handler, options]) => eventName === 'mouseup' && options === undefined
   )
+
   expect(registration, 'bubble mouseup handler should be registered').toBeDefined()
+
   return registration![1] as (event: MouseEvent) => void
 }

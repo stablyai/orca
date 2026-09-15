@@ -25,7 +25,9 @@ import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/com
 // chrome flanks the pane (left sidebar, and a right sidebar that other startup
 // paths may re-open) varies between runs.
 const TARGET_TOOLBAR_WIDTH = 420
+
 const MIN_USABLE_TOOLBAR_WIDTH = BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH + 100
+
 const NARROW_WINDOW_HEIGHT = 800
 
 async function startDestinationServer(): Promise<{ url: string; close: () => Promise<void> }> {
@@ -35,7 +37,9 @@ async function startDestinationServer(): Promise<{ url: string; close: () => Pro
       '<!doctype html><html><head><title>Typed destination</title></head><body>ok</body></html>'
     )
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/typed`,
     close: () =>
@@ -59,9 +63,11 @@ async function setWindowWidth(electronApp: ElectronApplication, width: number): 
   await electronApp.evaluate(
     ({ BrowserWindow }, size) => {
       const window = BrowserWindow.getAllWindows()[0]
+
       if (!window) {
         throw new Error('No Electron window')
       }
+
       window.setSize(size.width, size.height)
     },
     { width: Math.round(width), height: NARROW_WINDOW_HEIGHT }
@@ -111,13 +117,16 @@ async function settleToSqueezedRestingState(
         await page.evaluate(() => {
           window.__store?.getState().setRightSidebarOpen(false)
         })
+
         const [innerWidth, toolbar] = await Promise.all([
           page.evaluate(() => window.innerWidth),
           toolbarWidth(page)
         ])
+
         // Chrome flanking the pane is everything the toolbar didn't get.
         await setWindowWidth(electronApp, innerWidth - toolbar + TARGET_TOOLBAR_WIDTH)
         await addressBarInput(page).evaluate((node) => node.blur())
+
         return {
           toolbar: (await toolbarWidth(page)) > MIN_USABLE_TOOLBAR_WIDTH,
           collapsed: (await addressBarOverlay(page).count()) === 0
@@ -140,6 +149,7 @@ test.describe('Browser address bar in a narrow toolbar', () => {
     electronApp
   }) => {
     const destination = await startDestinationServer()
+
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
       await createBlankBrowserTab(orcaPage, worktreeId)

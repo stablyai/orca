@@ -9,10 +9,12 @@ describe('workspace board close linger', () => {
 
   it('keeps drawer state through the close animation, then releases it at 300 ms', () => {
     vi.useFakeTimers()
+
     const { result, rerender } = renderHook(
       ({ open }: { open: boolean }) => useWorkspaceKanbanDrawerLingering(open),
       { initialProps: { open: true } }
     )
+
     act(() => rerender({ open: false }))
     act(() => vi.advanceTimersByTime(299))
     expect(result.current).toBe(true)
@@ -22,10 +24,12 @@ describe('workspace board close linger', () => {
 
   it('cancels the pending release when reopened', () => {
     vi.useFakeTimers()
+
     const { result, rerender } = renderHook(
       ({ open }: { open: boolean }) => useWorkspaceKanbanDrawerLingering(open),
       { initialProps: { open: true } }
     )
+
     act(() => rerender({ open: false }))
     act(() => vi.advanceTimersByTime(299))
     act(() => rerender({ open: true }))

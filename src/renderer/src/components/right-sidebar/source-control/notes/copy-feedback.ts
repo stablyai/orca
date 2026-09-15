@@ -15,6 +15,7 @@ export function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] 
   // Why: copy feedback timers are event-owned but still need unmount cleanup so delayed work can't update a destroyed component.
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
       clearResetTimer()
@@ -26,12 +27,14 @@ export function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] 
       if (!mountedRef.current) {
         return
       }
+
       clearResetTimer()
       setValue(nextValue)
       resetTimerRef.current = window.setTimeout(() => {
         if (!mountedRef.current) {
           return
         }
+
         setValue(resetValue)
         resetTimerRef.current = null
       }, 1500)

@@ -18,17 +18,21 @@ export function buildHeadlessMobileSessionTerminalTabs(
     .flatMap((tab, index) => {
       const layout = session.terminalLayoutsByTabId?.[tab.id]
       const leafIds = collectPersistedTerminalLeafIds(layout)
+
       if (leafIds.length === 0) {
         leafIds.push(deriveHeadlessLegacyTerminalLeafId(tab.id))
       }
+
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
+
         const title =
           tab.customTitle?.trim() ||
           tab.generatedTitle?.trim() ||
           tab.title?.trim() ||
           tab.defaultTitle?.trim() ||
           `Terminal ${index + 1}`
+
         return [
           {
             type: 'terminal' as const,

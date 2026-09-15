@@ -9,13 +9,16 @@ export async function transcriptWatcherPathIsInstallable(
   if (!(await transcriptWatcherPathIsRunning(filePath))) {
     return false
   }
+
   try {
     await wslGatedStat(filePath, 'exact', signal)
+
     return true
   } catch (error) {
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
+
     return false
   }
 }

@@ -23,6 +23,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
 
 const gitWorktree = (path: string): GitWorktreeInfo => ({

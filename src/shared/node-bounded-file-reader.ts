@@ -24,6 +24,7 @@ function validateSize(size: number, maxBytes: number): void {
   if (!Number.isSafeInteger(size) || size < 0) {
     throw new Error('File has an invalid byte size')
   }
+
   if (size > maxBytes) {
     throw new NodeFileReadTooLargeError(size, maxBytes)
   }
@@ -34,6 +35,7 @@ export async function readNodeFileWithinLimit(
   maxBytes: number
 ): Promise<BoundedNodeFileRead> {
   const handle = await open(filePath, 'r')
+
   try {
     return await readNodeFileHandleWithinLimit(handle, maxBytes)
   } finally {
@@ -54,20 +56,25 @@ export async function readNodeFileHandleWithinLimit(
 
   let buffer = Buffer.allocUnsafe(stats.size)
   let offset = 0
+
   while (true) {
     while (offset < buffer.length) {
       const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset)
+
       if (bytesRead === 0) {
         return { buffer: buffer.subarray(0, offset), stats }
       }
+
       offset += bytesRead
     }
 
     const probe = Buffer.allocUnsafe(1)
     const { bytesRead } = await handle.read(probe, 0, 1, offset)
+
     if (bytesRead === 0) {
       return { buffer: buffer.subarray(0, offset), stats }
     }
+
     if (offset >= maxBytes) {
       throw new NodeFileReadTooLargeError(offset + bytesRead, maxBytes)
     }
@@ -77,6 +84,7 @@ export async function readNodeFileHandleWithinLimit(
       maxBytes,
       Math.max(MIN_GROWTH_BYTES, buffer.length * 2, offset + bytesRead)
     )
+
     const expanded = Buffer.allocUnsafe(nextCapacity)
     buffer.copy(expanded, 0, 0, offset)
     expanded[offset] = probe[0]!
@@ -94,26 +102,32 @@ export function readNodeFileSyncWithinLimit(
   }
 
   const descriptor = openSync(filePath, 'r')
+
   try {
     const stats = fstatSync(descriptor)
     validateSize(stats.size, maxBytes)
 
     let buffer = Buffer.allocUnsafe(stats.size)
     let offset = 0
+
     while (true) {
       while (offset < buffer.length) {
         const bytesRead = readSync(descriptor, buffer, offset, buffer.length - offset, offset)
+
         if (bytesRead === 0) {
           return { buffer: buffer.subarray(0, offset), stats }
         }
+
         offset += bytesRead
       }
 
       const probe = Buffer.allocUnsafe(1)
       const bytesRead = readSync(descriptor, probe, 0, 1, offset)
+
       if (bytesRead === 0) {
         return { buffer: buffer.subarray(0, offset), stats }
       }
+
       if (offset >= maxBytes) {
         throw new NodeFileReadTooLargeError(offset + bytesRead, maxBytes)
       }
@@ -122,6 +136,7 @@ export function readNodeFileSyncWithinLimit(
         maxBytes,
         Math.max(MIN_GROWTH_BYTES, buffer.length * 2, offset + bytesRead)
       )
+
       const expanded = Buffer.allocUnsafe(nextCapacity)
       buffer.copy(expanded, 0, 0, offset)
       expanded[offset] = probe[0]!

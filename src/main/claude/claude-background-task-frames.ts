@@ -9,6 +9,7 @@ import type {
 } from '../../shared/agent-session-wire'
 
 const MAX_TASK_ID_LENGTH = 512
+
 const MAX_TASK_TEXT_LENGTH = 512
 
 export type ClaudeBackgroundTaskKind = AgentSessionBackgroundTask['kind']
@@ -26,6 +27,7 @@ export function isBoundedClaudeTaskId(value: string): boolean {
 
 export function taskId(message: Record<string, unknown>): string | null {
   const value = message.task_id
+
   return typeof value === 'string' && isBoundedClaudeTaskId(value) ? value : null
 }
 
@@ -33,7 +35,9 @@ function boundedTaskText(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
+
   const trimmed = value.trim().replace(/\s+/g, ' ')
+
   return trimmed.length > 0 ? trimmed.slice(0, MAX_TASK_TEXT_LENGTH) : undefined
 }
 
@@ -70,6 +74,7 @@ export function classifyClaudeBackgroundTaskKind(taskType: unknown): ClaudeBackg
 export function taskUsageTotalTokens(frame: Record<string, unknown>): number | undefined {
   const usage = record(frame.usage)
   const total = usage?.total_tokens
+
   return typeof total === 'number' && Number.isFinite(total) && total >= 0
     ? Math.floor(total)
     : undefined

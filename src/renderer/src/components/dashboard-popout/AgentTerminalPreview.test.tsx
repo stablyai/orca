@@ -26,6 +26,7 @@ const terminalHarness = vi.hoisted(() => ({
 }))
 
 const platformState = vi.hoisted(() => ({ value: 'linux' }))
+
 const storeState = vi.hoisted(() => ({
   settings: null,
   keybindings: {} as Record<string, string[]>
@@ -83,6 +84,7 @@ vi.mock('@xterm/xterm', () => ({
     })
     onData = vi.fn((listener: (data: string) => void) => {
       this.onDataListener = listener
+
       return { dispose: vi.fn() }
     })
 
@@ -91,22 +93,28 @@ vi.mock('@xterm/xterm', () => ({
     }
   }
 }))
+
 vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
+
 vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
     terminalHarness.userInputListener = listener
+
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
+
 vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
+
 vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
+
 vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: {
     sendInput: (data: string) => void
@@ -120,20 +128,26 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
       // forwarder, so the test reads what a real commit would read.
       getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
     }
+
     imeHarness.forwarders.push(forwarder)
+
     return forwarder
   }
 }))
+
 vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => {
     const tracker = { isActive: () => false, dispose: vi.fn() }
     imeHarness.trackers.push(tracker)
+
     return tracker
   }
 }))
+
 vi.mock('@/store', () => {
   const useAppStore = (selector: (s: typeof storeState) => unknown): unknown => selector(storeState)
   useAppStore.getState = (): typeof storeState => storeState
+
   return { useAppStore }
 })
 
@@ -174,6 +188,7 @@ describe('AgentTerminalPreview', () => {
           unsubscribe,
           onData: (listener: (payload: unknown) => void) => {
             emitData = listener
+
             return vi.fn()
           }
         },
@@ -232,18 +247,22 @@ describe('AgentTerminalPreview', () => {
     // A claimed native-text key bypasses xterm AND the clipboard chords.
     imeHarness.claimResult = true
     terminal.selectionText = 'selected text'
+
     const handled = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
     )
+
     expect(handled).toBe(false)
     expect(writeClipboardText).not.toHaveBeenCalled()
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
 
     // Unclaimed events still reach the chord handling.
     imeHarness.claimResult = false
+
     const copied = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', metaKey: true })
     )
+
     expect(copied).toBe(false)
     expect(writeTerminalClipboardText).toHaveBeenCalledWith('selected text')
     expect(writeClipboardText).not.toHaveBeenCalled()
@@ -312,6 +331,7 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
 
     terminal.selectionText = 'selected text'
+
     const keydown = new KeyboardEvent('keydown', {
       key: 'C',
       code: 'KeyC',
@@ -319,10 +339,13 @@ describe('AgentTerminalPreview', () => {
       shiftKey: true,
       cancelable: true
     })
+
     const handled = terminal.customKeyHandler!(keydown)
+
     const keyupHandled = terminal.customKeyHandler!(
       new KeyboardEvent('keyup', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
     )
+
     expect(handled).toBe(false)
     expect(keyupHandled).toBe(false)
     expect(keydown.defaultPrevented).toBe(true)
@@ -339,6 +362,7 @@ describe('AgentTerminalPreview', () => {
     const handled = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'C', code: 'KeyC', ctrlKey: true, shiftKey: true })
     )
+
     expect(handled).toBe(false)
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
   })
@@ -352,6 +376,7 @@ describe('AgentTerminalPreview', () => {
     const handled = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'c', code: 'KeyC', ctrlKey: true })
     )
+
     expect(handled).toBe(true)
     expect(writeTerminalClipboardText).not.toHaveBeenCalled()
   })
@@ -369,6 +394,7 @@ describe('AgentTerminalPreview', () => {
       metaKey: true,
       cancelable: true
     })
+
     expect(terminal.customKeyHandler!(keydown)).toBe(false)
     expect(keydown.defaultPrevented).toBe(true)
 
@@ -379,6 +405,7 @@ describe('AgentTerminalPreview', () => {
       repeat: true,
       cancelable: true
     })
+
     expect(terminal.customKeyHandler!(repeat)).toBe(false)
     expect(repeat.defaultPrevented).toBe(true)
     expect(terminal.selectAll).toHaveBeenCalledOnce()
@@ -396,6 +423,7 @@ describe('AgentTerminalPreview', () => {
       ctrlKey: true,
       cancelable: true
     })
+
     const handled = terminal.customKeyHandler!(keydown)
 
     expect(handled).toBe(false)
@@ -418,6 +446,7 @@ describe('AgentTerminalPreview', () => {
       shiftKey: true,
       cancelable: true
     })
+
     const handled = terminal.customKeyHandler!(keydown)
 
     expect(handled).toBe(false)
@@ -440,6 +469,7 @@ describe('AgentTerminalPreview', () => {
       bubbles: true,
       cancelable: true
     })
+
     expect(terminal.customKeyHandler!(keydown)).toBe(false)
     expect(keydown.defaultPrevented).toBe(false)
 
@@ -448,6 +478,7 @@ describe('AgentTerminalPreview', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(keypress)
     expect(keypress.defaultPrevented).toBe(true)
 
@@ -457,16 +488,19 @@ describe('AgentTerminalPreview', () => {
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(beforeInput)
     expect(beforeInput.defaultPrevented).toBe(true)
 
     window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }))
+
     const unarmedBeforeInput = new InputEvent('beforeinput', {
       data: ' ',
       inputType: 'insertText',
       bubbles: true,
       cancelable: true
     })
+
     window.dispatchEvent(unarmedBeforeInput)
     expect(unarmedBeforeInput.defaultPrevented).toBe(false)
     expect(terminal.input).not.toHaveBeenCalled()
@@ -483,6 +517,7 @@ describe('AgentTerminalPreview', () => {
 
     const altBackspace = (): KeyboardEvent =>
       new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', altKey: true })
+
     expect(terminal.customKeyHandler!(altBackspace())).toBe(false)
     expect(terminal.input).toHaveBeenCalledWith('\x1b\x7f')
 
@@ -512,6 +547,7 @@ describe('AgentTerminalPreview', () => {
 
     const altBackspace = (): KeyboardEvent =>
       new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', altKey: true })
+
     expect(terminal.customKeyHandler!(altBackspace())).toBe(true)
 
     // The TUI exits and pops once on the live stream.
@@ -558,6 +594,7 @@ describe('AgentTerminalPreview', () => {
       snapshot: { data: string; cols: number; rows: number; seq: number }
       replay: string[]
     }) => void
+
     connect
       .mockResolvedValueOnce({
         snapshot: { data: 'first', cols: 80, rows: 24, seq: 1 },

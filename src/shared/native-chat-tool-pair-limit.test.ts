@@ -6,6 +6,7 @@ function original(blocks: readonly NativeChatBlock[], limit: number): NativeChat
   const pairs: NativeChatToolPair[] = []
   const slots: (number | null)[] = []
   let ordinal = 0
+
   for (const block of blocks) {
     if (block.type === 'tool-call') {
       if (pairs.length < limit) {
@@ -16,35 +17,42 @@ function original(blocks: readonly NativeChatBlock[], limit: number): NativeChat
       }
     } else if (block.type === 'tool-result') {
       const slot = slots[ordinal]
+
       if (slot === undefined) {
         if (pairs.length < limit) {
           pairs.push({ result: block })
         }
       } else {
         ordinal++
+
         if (slot !== null) {
           pairs[slot].result = block
         }
       }
     }
   }
+
   return pairs
 }
 
 const call: NativeChatBlock = { type: 'tool-call', name: 'read', input: {} }
+
 const result: NativeChatBlock = { type: 'tool-result', output: 'done' }
 
 describe('tool pair limits', () => {
   it('stops visiting blocks once retained pairs are fully answered', () => {
     let reads = 0
+
     const tail = Array.from({ length: 10000 }, () => ({
       get type() {
         reads++
+
         return 'tool-call' as const
       },
       name: 'read',
       input: {}
     }))
+
     expect(pairToolBlocks([call, result, ...tail], 1)).toEqual([{ call, result }])
     expect(reads).toBe(0)
   })
@@ -58,10 +66,12 @@ describe('tool pair limits', () => {
             ? result
             : { type: 'text' as const, text: 'hi' }
       )
+
       for (const limit of [0, 1, 2, 5, 0.5, -1, Infinity, Number.NaN]) {
         expect(pairToolBlocks(blocks, limit)).toEqual(original(blocks, limit))
       }
     }
+
     expect(pairToolBlocks([call, call, result, result], 1)).toEqual(
       original([call, call, result, result], 1)
     )

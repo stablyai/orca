@@ -11,9 +11,11 @@ export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupB
   ) {
     return groupBy
   }
+
   if (groupBy === 'flat') {
     return 'none'
   }
+
   return getDefaultUIState().groupBy
 }
 
@@ -21,7 +23,9 @@ export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, 
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
+
   const out: Record<string, boolean> = {}
+
   for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
     if (
       !worktreeId ||
@@ -32,8 +36,10 @@ export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, 
     ) {
       continue
     }
+
     out[worktreeId] = showDotfiles
   }
+
   return out
 }
 
@@ -47,6 +53,7 @@ export function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy']
   ) {
     return sortBy
   }
+
   return getDefaultUIState().sortBy
 }
 
@@ -56,6 +63,7 @@ export function normalizeProjectOrderBy(
   if (projectOrderBy === 'manual' || projectOrderBy === 'recent') {
     return projectOrderBy
   }
+
   return getDefaultUIState().projectOrderBy
 }
 
@@ -72,11 +80,13 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
   ) {
     return tab
   }
+
   // Why: plugin tabs are open-ended `plugin:<publisher>.<id>/<panel>` keys; validate the
   // shape so a persisted plugin tab doesn't reset to Explorer on restart.
   if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     return tab
   }
+
   return getDefaultUIState().rightSidebarTab
 }
 
@@ -87,10 +97,12 @@ export function normalizeRightSidebarExplorerView(
   if (view === 'files' || view === 'search') {
     return view
   }
+
   // Why: older builds persisted Search as a standalone activity tab with no explorer view; 'search'
   // is still a live tab, so this fallback must not outrank an explicit view.
   if (tab === 'search') {
     return 'search'
   }
+
   return getDefaultUIState().rightSidebarExplorerView
 }

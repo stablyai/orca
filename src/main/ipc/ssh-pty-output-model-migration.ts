@@ -47,18 +47,24 @@ export class SshPtyOutputModelMigration {
     timeoutMs = SSH_PTY_MODEL_MIGRATION_TIMEOUT_MS
   ): SshPtyOutputGenerationMigration {
     const checkpoints = this.sourceObligations.acceptedCheckpoints(providerGeneration)
+
     const keys = checkpoints.map((checkpoint) => ({
       ptyId: checkpoint.id,
       providerGeneration
     }))
+
     for (const key of keys) {
       this.admission.beginMigration(key)
     }
+
     const byPty = new Map<string, Promise<SshPtyOutputMigrationResult>>()
+
     for (const key of keys) {
       byPty.set(key.ptyId, this.settlePty(key, timeoutMs))
     }
+
     const completion = Promise.allSettled(byPty.values()).then(() => {})
+
     return Object.freeze({ byPty, completion })
   }
 
@@ -69,14 +75,18 @@ export class SshPtyOutputModelMigration {
     const running = Array.from(this.pendingByPty.get(migrationKey(key)) ?? []).find(
       (record) => record.started
     )
+
     if (!running?.completion) {
       return this.settledCheckpoint(key)
     }
+
     let timer: ReturnType<typeof setTimeout> | undefined
+
     const timeout = new Promise<'timeout'>((resolve) => {
       timer = setTimeout(() => resolve('timeout'), normalizedTimeout(timeoutMs))
       timer.unref?.()
     })
+
     try {
       const outcome = await Promise.race([
         running.completion.then(
@@ -85,15 +95,19 @@ export class SshPtyOutputModelMigration {
         ),
         timeout
       ])
+
       if (outcome === 'settled') {
         return this.settledCheckpoint(key)
       }
+
       const reason = outcome === 'timeout' ? 'timeout' : 'completion-failed'
       this.resetModel(key.providerGeneration, key.ptyId)
       this.admission.cancelPty(key, `ssh_model_migration_${reason}`)
+
       if (outcome === 'timeout') {
         await running.completion.catch(() => {})
       }
+
       return Object.freeze({ status: 'checkpoint-unavailable', reason })
     } finally {
       if (timer) {
@@ -104,19 +118,23 @@ export class SshPtyOutputModelMigration {
 
   private settledCheckpoint(key: SshPtyModelAdmissionKey): SshPtyOutputMigrationResult {
     const checkpoint = this.sourceObligations.acceptedCheckpoint(key)
+
     if (!checkpoint) {
       this.resetModel(key.providerGeneration, key.ptyId)
+
       return Object.freeze({
         status: 'checkpoint-unavailable',
         reason: 'completion-failed'
       })
     }
+
     return Object.freeze({ status: 'settled', checkpoint })
   }
 
   private remove(id: string, record: SshPtyTrackedModelAdmission): void {
     const records = this.pendingByPty.get(id)
     records?.delete(record)
+
     if (records?.size === 0) {
       this.pendingByPty.delete(id)
     }

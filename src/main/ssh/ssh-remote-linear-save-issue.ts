@@ -54,12 +54,14 @@ export async function dispatchRemoteLinearSaveIssue(
   rejectAllWorkspaceForWrite(parsed.flags)
   const body = readRemoteBody(parsed.flags, false, stdin)
   const description = optionalString(parsed.flags, 'description')
+
   if (body !== undefined && description !== undefined) {
     throw new RemoteLinearWriteArgumentError(
       'invalid_argument',
       'Use either --description or --body, not both'
     )
   }
+
   return await call(dispatcher, 'linear.saveIssue', {
     ...buildOptionalRemoteTargetRequest(parsed, env),
     team: optionalString(parsed.flags, 'team'),
@@ -83,12 +85,14 @@ function buildOptionalRemoteTargetRequest(
 ): Record<string, unknown> {
   const input = optionalString(parsed.flags, 'id') ?? parsed.commandPath.slice(2).join(' ').trim()
   const current = parsed.flags.get('current') === true
+
   if (input && current) {
     throw new RemoteLinearWriteArgumentError(
       'invalid_argument',
       'Pass either <id> or --current, not both'
     )
   }
+
   return {
     input: input || undefined,
     current,
@@ -102,6 +106,7 @@ function nullableString(
   name: string
 ): string | null | undefined {
   const value = optionalString(flags, name)
+
   return value === 'null' ? null : value
 }
 
@@ -110,9 +115,11 @@ function nullableNonNegativeInteger(
   name: string
 ): number | null | undefined {
   const value = optionalString(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   return value === 'null' ? null : nonNegativeIntegerFlag(flags, name)
 }
 
@@ -121,8 +128,10 @@ function nullableDueDate(
   name: string
 ): string | null | undefined {
   const value = optionalString(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   return value === 'null' ? null : dueDateFlag(flags, name)
 }

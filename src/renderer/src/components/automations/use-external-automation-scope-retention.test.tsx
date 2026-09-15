@@ -11,6 +11,7 @@ const retainExternalScopes =
   vi.fn<(request: { owners: readonly AutomationOwnerRef[] }) => Promise<void>>()
 
 let container: HTMLDivElement
+
 let root: Root
 
 function entry(overrides: Partial<AutomationHostCatalogEntry> = {}): AutomationHostCatalogEntry {
@@ -54,6 +55,7 @@ const runtimeEntry = entry({
 
 function Harness({ entries }: { entries: readonly AutomationHostCatalogEntry[] }): null {
   useExternalAutomationScopeRetention(entries)
+
   return null
 }
 

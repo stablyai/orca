@@ -6,6 +6,7 @@ export function AgentSkillSetupFailureNotice(props: {
   if (props.exitCode === null) {
     return null
   }
+
   return (
     <p className="mt-2 text-[12px] leading-snug text-destructive">
       {translate(

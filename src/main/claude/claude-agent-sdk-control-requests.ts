@@ -24,6 +24,7 @@ type ClaudeQuerySettingsReader = { getSettings?: () => Promise<unknown> }
 
 export function claudeQuerySettingsReader(query: Query): (() => Promise<unknown>) | null {
   const reader = (query as unknown as ClaudeQuerySettingsReader).getSettings
+
   return typeof reader === 'function' ? reader.bind(query) : null
 }
 
@@ -38,6 +39,7 @@ export function claudeQueryAsyncCanceller(
   query: Query
 ): ((uuid: string) => Promise<unknown>) | null {
   const cancel = (query as unknown as ClaudeQueryAsyncCanceller).cancelAsyncMessage
+
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
@@ -57,18 +59,22 @@ export function runClaudeControl<T>(
   timeoutMs: number = CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null
+
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => reject(new Error(`claude ${subtype} request timed out`)), timeoutMs)
     timer.unref?.()
   })
+
   return Promise.race([
     Promise.resolve()
       .then(run)
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
+
         if (error instanceof ClaudeControlRequestError || message === QUERY_CLOSED_MESSAGE) {
           throw error
         }
+
         throw new ClaudeControlRequestError(subtype, message)
       }),
     deadline
@@ -116,6 +122,7 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       ),
     cancelAsyncMessage: (uuid, options) => {
       const cancel = claudeQueryAsyncCanceller(query)
+
       return cancel
         ? runClaudeControl('cancel_async_message', () => cancel(uuid), options?.timeoutMs).then(
             () => {}
@@ -146,6 +153,7 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       runClaudeControl('initialize', () => query.initializationResult(), options?.timeoutMs),
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
+
       return read
         ? runClaudeControl('get_settings', read, options?.timeoutMs)
         : Promise.reject(

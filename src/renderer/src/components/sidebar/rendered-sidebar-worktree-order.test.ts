@@ -223,6 +223,7 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     const remoteMain = makeMainWorktree('wt-remote-main', { repoId: 'repo-ssh', sortOrder: 2 })
     const localFeature = makeWorktree('wt-local-feature', { sortOrder: 1 })
     const remoteFeature = makeWorktree('wt-remote-feature', { repoId: 'repo-ssh', sortOrder: 0 })
+
     const storeOverrides = {
       repos: [localRepo, sshRepo],
       worktreesByRepo: {

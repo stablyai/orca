@@ -10,5 +10,6 @@ export function sendRemoteBrowserScreencastFrame(
   if (!isRemoteRuntimeBinaryFrameWithinLimit(bytes)) {
     return true
   }
+
   return sendBinary(bytes) !== false
 }

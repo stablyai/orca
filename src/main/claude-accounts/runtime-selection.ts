@@ -23,6 +23,7 @@ export function normalizeClaudeAccountSelectionTarget(
       wslDistro: normalizeWslDistro(target.wslDistro)
     }
   }
+
   return { runtime: 'host', wslDistro: null }
 }
 
@@ -50,13 +51,17 @@ export function getSelectedClaudeAccountIdForTarget(
 ): string | null {
   const selection = normalizeClaudeRuntimeSelection(settings)
   const normalizedTarget = normalizeClaudeAccountSelectionTarget(target)
+
   if (normalizedTarget.runtime === 'host') {
     return selection.host
   }
+
   if (normalizedTarget.wslDistro) {
     return selection.wsl[getClaudeWslSelectionKey(normalizedTarget.wslDistro)] ?? null
   }
+
   const selectedIds = Array.from(new Set(Object.values(selection.wsl).filter(Boolean)))
+
   return (
     selection.wsl[getClaudeWslSelectionKey(null)] ??
     (selectedIds.length === 1 ? selectedIds[0] : null)
@@ -69,15 +74,18 @@ export function setSelectedClaudeAccountIdForTarget(
   target?: ClaudeAccountSelectionTarget | null
 ): ClaudeManagedAccountRuntimeSelection {
   const normalizedTarget = normalizeClaudeAccountSelectionTarget(target)
+
   if (normalizedTarget.runtime === 'host') {
     return { host: accountId, wsl: { ...selection.wsl } }
   }
+
   if (accountId === null && normalizedTarget.wslDistro === null) {
     return {
       host: selection.host,
       wsl: Object.fromEntries(Object.keys(selection.wsl).map((key) => [key, null]))
     }
   }
+
   return {
     host: selection.host,
     wsl: {
@@ -92,9 +100,11 @@ export function removeClaudeAccountIdFromSelection(
   accountId: string
 ): ClaudeManagedAccountRuntimeSelection {
   const nextWsl: Record<string, string | null> = {}
+
   for (const [distro, selectedId] of Object.entries(selection.wsl)) {
     nextWsl[distro] = selectedId === accountId ? null : selectedId
   }
+
   return {
     host: selection.host === accountId ? null : selection.host,
     wsl: nextWsl
@@ -108,12 +118,15 @@ export function pruneInvalidClaudeRuntimeSelection(
   const hostAccount = selection.host
     ? accounts.find((account) => account.id === selection.host)
     : null
+
   const nextWsl: Record<string, string | null> = {}
+
   for (const [distroKey, accountId] of Object.entries(selection.wsl)) {
     if (!accountId) {
       nextWsl[distroKey] = null
       continue
     }
+
     const account = accounts.find((entry) => entry.id === accountId)
     nextWsl[distroKey] =
       account &&
@@ -122,6 +135,7 @@ export function pruneInvalidClaudeRuntimeSelection(
         ? accountId
         : null
   }
+
   return {
     host: hostAccount && hostAccount.managedAuthRuntime !== 'wsl' ? selection.host : null,
     wsl: nextWsl
@@ -134,6 +148,7 @@ export function getClaudeSelectionTargetForAccount(
   if (account.managedAuthRuntime === 'wsl') {
     return { runtime: 'wsl', wslDistro: account.wslDistro ?? null }
   }
+
   return { runtime: 'host' }
 }
 
@@ -143,5 +158,6 @@ export function getClaudeWslSelectionKey(wslDistro: string | null | undefined): 
 
 function normalizeWslDistro(wslDistro: string | null | undefined): string | null {
   const trimmed = wslDistro?.trim()
+
   return trimmed ? trimmed : null
 }

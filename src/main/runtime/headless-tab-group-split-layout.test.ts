@@ -22,6 +22,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'right',
       newGroupId: 'g2'
     })
+
     expect(result).not.toBeNull()
     expect(result!.groups).toHaveLength(2)
     expect(result!.groups.find((g) => g.id === 'g1')!.tabOrder).toEqual(['a'])
@@ -44,6 +45,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'left',
       newGroupId: 'g2'
     })
+
     expect(result!.layout).toMatchObject({
       type: 'split',
       direction: 'horizontal',
@@ -61,6 +63,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'down',
       newGroupId: 'g2'
     })
+
     expect(down!.layout).toMatchObject({ type: 'split', direction: 'vertical' })
   })
 
@@ -73,6 +76,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'right',
       newGroupId: 'g2'
     })
+
     expect(result).toBeNull()
   })
 
@@ -98,6 +102,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'right',
       newGroupId: 'g2'
     })
+
     expect(result!.groups.find((g) => g.id === 'g1')!.activeTabId).toBe('a')
     expect(result!.groups.find((g) => g.id === 'g2')!.activeTabId).toBe('b')
   })
@@ -117,6 +122,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'right',
       newGroupId: 'g3'
     })
+
     const ids = result!.groups.map((g) => g.id).sort()
     expect(ids).toEqual(['g1', 'g3'])
     // g2 must not survive in the layout tree.
@@ -132,6 +138,7 @@ describe('buildHeadlessTabGroupSplit', () => {
       splitDirection: 'right',
       newGroupId: 'g2'
     })
+
     expect(result!.layout).toMatchObject({ type: 'split' })
     expect([...collectTabGroupLayoutGroupIds(result!.layout)].sort()).toEqual(['g1', 'g2'])
   })
@@ -153,6 +160,7 @@ describe('buildHeadlessTabGroupMove', () => {
       targetGroupId: 'g2',
       index: 0
     })
+
     expect(result!.groups.find((g) => g.id === 'g1')!.tabOrder).toEqual(['a'])
     expect(result!.groups.find((g) => g.id === 'g2')!.tabOrder).toEqual(['b', 'c'])
     expect(result!.groups.find((g) => g.id === 'g2')!.activeTabId).toBe('b')
@@ -165,6 +173,7 @@ describe('buildHeadlessTabGroupMove', () => {
       tabId: 'a',
       targetGroupId: 'g2'
     })
+
     expect(result!.groups.map((g) => g.id)).toEqual(['g2'])
     expect(result!.layout).toEqual({ type: 'leaf', groupId: 'g2' })
   })

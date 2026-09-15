@@ -12,21 +12,28 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
   async openDevTools(browserTabId: string): Promise<boolean> {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
+
     if (!webContentsId) {
       return false
     }
+
     const guest = webContents.fromId(webContentsId)
+
     if (!guest || guest.isDestroyed()) {
       // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
       this.unregisterGuest(browserTabId)
+
       return false
     }
+
     // Offscreen guests have no visible window on this desktop; detaching DevTools would open it
     // on the host display with no route back to the remote client.
     if (this.offscreenGuestIds.has(webContentsId)) {
       return false
     }
+
     guest.openDevTools({ mode: 'detach' })
+
     return true
   }
 
@@ -37,6 +44,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
   ): Promise<boolean> {
     // Why: chain per-tab so rapid toggles don't interleave CDP commands and the last-requested override wins.
     const expectedWebContentsId = this.webContentsIdByTabId.get(browserTabId)
+
     if (expectedWebContentsId !== undefined) {
       // Keep host panning available while CDP applies the requested dimensions. The guest id fence
       // prevents this intent from leaking to a replacement guest; clearing the preset removes it.
@@ -45,14 +53,18 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         active: override !== null
       })
     }
+
     // The renderer resizes the host before CDP completes; discard the old geometry until it
     // reports the new pane bounds so a pending preset cannot route wheel input using stale limits.
     this.viewportScrollStateByTabId.delete(browserTabId)
     const prev = this.viewportOpsByTabId.get(browserTabId) ?? Promise.resolve()
+
     const next = prev
       .catch(() => {})
       .then(() => this.doSetViewportOverrideImpl(browserTabId, override, expectedWebContentsId))
+
     this.viewportOpsByTabId.set(browserTabId, next)
+
     try {
       return await next
     } finally {
@@ -69,10 +81,13 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     resolveGuest: () => Electron.WebContents | null
   ): Promise<boolean> {
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
+
     const next = prev
       .catch(() => {})
       .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
+
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
+
     try {
       return await next
     } finally {
@@ -97,6 +112,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     // case it uniquely leaves is an ownership mismatch on a healthy page — where tearing down would
     // cancel that page's in-flight downloads and grabs over a request that was merely misaddressed.
     const guest = resolveGuest()
+
     if (!guest || guest.isDestroyed()) {
       return false
     }
@@ -108,6 +124,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         [{ code: buildBrowserAnnotationViewportBridgeScript(options) }],
         false
       )
+
       return true
     } catch {
       return false
@@ -120,13 +137,17 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     expectedWebContentsId: number | undefined
   ): Promise<boolean> {
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
+
     if (!webContentsId || webContentsId !== expectedWebContentsId) {
       return false
     }
+
     const guest = webContents.fromId(webContentsId)
+
     if (!guest || guest.isDestroyed()) {
       // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
       this.unregisterGuest(browserTabId)
+
       return false
     }
 
@@ -141,10 +162,12 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         webContentsId,
         error: err instanceof Error ? err.message : String(err)
       })
+
       return false
     }
 
     const dbg = guest.debugger
+
     try {
       if (override) {
         await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
@@ -153,16 +176,19 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           deviceScaleFactor: override.deviceScaleFactor,
           mobile: override.mobile
         })
+
         if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
           this.viewportPresetActiveByTabId.set(browserTabId, {
             guestWebContentsId: webContentsId,
             active: true
           })
         }
+
         await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
           enabled: override.mobile,
           maxTouchPoints: override.mobile ? 5 : 0
         })
+
         // Why: viewport sizing must not override a profile's explicit native-UA identity.
         if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
           // Navigation must see the preset intent while the final CDP command is in flight.
@@ -172,12 +198,14 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         }
       } else {
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride', {})
+
         if (this.webContentsIdByTabId.get(browserTabId) === webContentsId) {
           this.viewportPresetActiveByTabId.set(browserTabId, {
             guestWebContentsId: webContentsId,
             active: false
           })
         }
+
         await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
           enabled: false,
           maxTouchPoints: 0
@@ -185,15 +213,18 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
         // A navigation after this point must not re-install the override behind the clear.
         this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+
         try {
           if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
             const url = this.resolveTabNavigationUrl(guest)
+
             const restored = await this.applyAuthUserAgentOverrideOverCdp(
               guest,
               false,
               url,
               isGoogleAuthUrl(url) ? googleAuthUserAgent() : guest.session.getUserAgent()
             )
+
             if (!restored) {
               throw new Error('Failed to preserve auth user agent')
             }
@@ -205,12 +236,15 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
           if (trackedMobile !== undefined) {
             this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
           }
+
           throw error
         }
       }
+
       if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
         return false
       }
+
       return true
     } catch {
       return false

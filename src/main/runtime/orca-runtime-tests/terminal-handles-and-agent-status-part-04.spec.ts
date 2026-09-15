@@ -12,6 +12,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('does not let the active browser webContents steal session focus from terminals', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const tabList = vi.fn(() => ({
       tabs: [
         {
@@ -23,6 +24,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }))
+
     runtime.setAgentBrowserBridge({ tabList } as never)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
@@ -173,11 +175,14 @@ describe('OrcaRuntimeService', () => {
     async ({ hookAgentType, hookOffset, rendererSessionId, expectedSessionId }) => {
       const leafId = '11111111-1111-4111-8111-111111111111'
       const paneKey = `codex-tab:${leafId}`
+
       const providerSession = {
         key: 'session_id' as const,
         id: 'hook-session'
       }
+
       const now = Date.now()
+
       const runtime = new OrcaRuntimeService(store, undefined, {
         getAgentStatusSnapshot: () => [
           {
@@ -194,6 +199,7 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -250,6 +256,7 @@ describe('OrcaRuntimeService', () => {
           })
         })
       )
+
       if (expectedSessionId) {
         expect(result.tabs[0]).toHaveProperty('agentStatus.providerSession', {
           key: 'session_id',
@@ -462,6 +469,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess
     })
+
     const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'typed-omp-tab',
       leafId: HEADLESS_LEAF_ID,
@@ -491,6 +499,7 @@ describe('OrcaRuntimeService', () => {
 
   it('preserves host metadata when terminal.create adopts a stable pane owner', async () => {
     const adoptStablePane = vi.fn().mockResolvedValue(null)
+
     const spawn = vi.fn(async (opts: { adoptedStablePane?: { owner: { handle?: string } } }) =>
       opts.adoptedStablePane
         ? {
@@ -504,6 +513,7 @@ describe('OrcaRuntimeService', () => {
           }
         : { id: 'pty-stable-owner' }
     )
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -511,6 +521,7 @@ describe('OrcaRuntimeService', () => {
         claudeAgentTeamsMode: 'in-process' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       adoptStablePane,
@@ -519,12 +530,14 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const first = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'stable-owner-tab',
       leafId: HEADLESS_LEAF_ID,
       title: 'Original owner',
       launchAgent: 'claude'
     })
+
     adoptStablePane.mockResolvedValueOnce({
       result: { id: 'pty-stable-owner', isReattach: true },
       owner: {
@@ -542,6 +555,7 @@ describe('OrcaRuntimeService', () => {
       command: "claude 'replacement'",
       launchAgent: 'claude'
     })
+
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
     expect(adopted).toMatchObject({

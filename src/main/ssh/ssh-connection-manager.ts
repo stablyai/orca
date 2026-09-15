@@ -19,6 +19,7 @@ export class SshConnectionManager {
 
   setCallbacks(callbacks: SshConnectionCallbacks): void {
     this.callbacks = callbacks
+
     for (const connection of this.connections.values()) {
       connection.setCallbacks(callbacks)
     }
@@ -26,6 +27,7 @@ export class SshConnectionManager {
 
   async connect(target: SshTarget): Promise<SshConnection> {
     const existing = this.connections.get(target.id)
+
     if (existing?.getState().status === 'connected') {
       return existing
     }
@@ -51,6 +53,7 @@ export class SshConnectionManager {
         if (this.connections.get(target.id) === conn) {
           this.connections.delete(target.id)
         }
+
         throw err
       }
 
@@ -67,10 +70,13 @@ export class SshConnectionManager {
     // need not wait for the cancelled socket's late completion.
     this.connectingTargets.delete(targetId)
     const conn = this.connections.get(targetId)
+
     if (!conn) {
       return
     }
+
     await conn.disconnect()
+
     if (this.connections.get(targetId) === conn) {
       this.connections.delete(targetId)
     }
@@ -83,6 +89,7 @@ export class SshConnectionManager {
    */
   async disconnectConnection(targetId: string, conn: SshConnection): Promise<void> {
     await conn.disconnect()
+
     if (this.connections.get(targetId) === conn) {
       this.connections.delete(targetId)
     }
@@ -90,9 +97,11 @@ export class SshConnectionManager {
 
   async reconnect(targetId: string): Promise<void> {
     const conn = this.connections.get(targetId)
+
     if (!conn) {
       return
     }
+
     await conn.reconnect()
   }
 
@@ -106,9 +115,11 @@ export class SshConnectionManager {
 
   getAllStates(): Map<string, SshConnectionState> {
     const states = new Map<string, SshConnectionState>()
+
     for (const [id, conn] of this.connections) {
       states.set(id, conn.getState())
     }
+
     return states
   }
 

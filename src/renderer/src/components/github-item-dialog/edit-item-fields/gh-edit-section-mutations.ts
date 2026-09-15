@@ -65,6 +65,7 @@ export function runGHEditStateChange({
   if (newState === localState && !closeAction) {
     return
   }
+
   const prevState = localState
   // Why: without registry authority a search-lagged Tasks refetch silently
   // reverts this row to its pre-mutation state (STA-3343).
@@ -126,10 +127,13 @@ export function closeGHEditAsDuplicate({
   setDuplicatePickerOpen: (value: boolean) => void
 }): void {
   const validation = validateTaskPageGitHubDuplicateTarget(String(targetIssueNumber), itemNumber)
+
   if (!validation.ok) {
     setDuplicateError(getTaskPageGitHubDuplicateTargetErrorMessage(validation, translate))
+
     return
   }
+
   setDuplicateError(null)
   handleStateChange('closed', { stateReason: 'duplicate', duplicateOf: validation.duplicateOf })
   setStatusPopoverOpen(false)
@@ -193,8 +197,10 @@ export function runGHEditLabelToggle({
       },
       onError: (err) => toast.error(err)
     })
+
     return
   }
+
   void run('labels', {
     mutate: () =>
       runIssueUpdate({
@@ -246,12 +252,14 @@ export function runGHEditAssigneeToggle({
 }): void {
   const isAssigned = localAssignees.includes(login)
   const prevAssignees = localAssignees
+
   const newAssignees = isAssigned
     ? prevAssignees.filter((l) => l !== login)
     : [...prevAssignees, login]
 
   // Why: scope the optimistic guard to this repo item so switching items doesn't suppress the next item's assignee sync.
   editedAssigneesItemKeyRef.current = assigneesItemKey
+
   if (isAssigned) {
     void run('assignees', {
       mutate: () =>
@@ -279,8 +287,10 @@ export function runGHEditAssigneeToggle({
       },
       onError: (err) => toast.error(err)
     })
+
     return
   }
+
   void run('assignees', {
     mutate: () =>
       runIssueUpdate({

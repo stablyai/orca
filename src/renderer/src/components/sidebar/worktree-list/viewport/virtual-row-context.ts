@@ -51,6 +51,7 @@ type BuildArgs = {
 // is either a prop, a memoised hook result, or a stable callback.
 export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtualRowContext {
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
+
   return {
     renderRows: args.renderRows,
     firstHeaderIndex: args.firstHeaderIndex,

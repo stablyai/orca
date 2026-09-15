@@ -3,6 +3,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { createAgentQuestionAnsweredInference } from './agent-question-answered-inference'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const SINGLE_SELECT_PROMPT = JSON.stringify({
   questions: [
     {
@@ -30,12 +31,14 @@ function makeWaitingQuestionEntry(overrides: Partial<AgentStatusEntry> = {}): Ag
 
 function makeInference(entry: AgentStatusEntry | undefined) {
   const inferQuestionAnswered = vi.fn()
+
   const inference = createAgentQuestionAnsweredInference({
     paneKey: PANE_KEY,
     getStatusEntry: () => entry,
     inferQuestionAnswered,
     now: () => 2_000
   })
+
   return { inference, inferQuestionAnswered }
 }
 
@@ -93,6 +96,7 @@ describe('agent question-answered inference', () => {
       const { inference, inferQuestionAnswered } = makeInference(
         makeWaitingQuestionEntry({ interactivePrompt })
       )
+
       inference.observeSentTerminalInput('1')
       inference.observeSentTerminalInput('\r')
       expect(inferQuestionAnswered).not.toHaveBeenCalled()
@@ -131,6 +135,7 @@ describe('agent question-answered inference', () => {
   it('does not read status for ordinary terminal input', () => {
     const getStatusEntry = vi.fn(() => makeWaitingQuestionEntry())
     const inferQuestionAnswered = vi.fn()
+
     const inference = createAgentQuestionAnsweredInference({
       paneKey: PANE_KEY,
       getStatusEntry,
@@ -166,6 +171,7 @@ describe('agent question-answered inference', () => {
       // so a keystroke must not synthesize activity for it.
       makeWaitingQuestionEntry({ updatedAt: -100_000_000, stateStartedAt: -100_000_000 })
     ]
+
     for (const entry of cases) {
       const { inference, inferQuestionAnswered } = makeInference(entry)
       inference.observeSentTerminalInput('\r')

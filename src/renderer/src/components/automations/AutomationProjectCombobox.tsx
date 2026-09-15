@@ -30,17 +30,21 @@ type AutomationProjectComboboxProps = {
 
 function getRepoDetail(repo: Repo, hostLabel?: string | null): string {
   const label = hostLabel?.trim()
+
   return label ? `${label} · ${repo.path}` : repo.path
 }
 
 function hasMultipleHosts(repos: readonly Repo[]): boolean {
   const hostIds = new Set<string>()
+
   for (const repo of repos) {
     hostIds.add(getRepoExecutionHostId(repo))
+
     if (hostIds.size > 1) {
       return true
     }
   }
+
   return false
 }
 
@@ -62,11 +66,13 @@ export default function AutomationProjectCombobox({
   const [commandValue, setCommandValue] = useState('')
   const [hostMenuProjectKey, setHostMenuProjectKey] = useState<string | null>(null)
   const hostMenuCloseTimerRef = useRef<number | null>(null)
+
   const hostMenuHoverRef = useRef<{
     projectKey: string | null
     row: boolean
     content: boolean
   }>({ projectKey: null, row: false, content: false })
+
   const addRepo = useAppStore((s) => s.addRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [isAdding, setIsAdding] = useState(false)
@@ -75,22 +81,29 @@ export default function AutomationProjectCombobox({
   const mountedRef = useMountedRef()
 
   const groups = useMemo(() => getAutomationProjectGroups(repos, value), [repos, value])
+
   const selectedGroup = useMemo(
     () => getAutomationProjectGroupForRepo(groups, value),
     [groups, value]
   )
+
   const selectedRepo = selectedGroup
     ? getAutomationProjectSelectedSource(selectedGroup, value)
     : null
+
   const showHostLabels = useMemo(() => hasMultipleHosts(repos), [repos])
+
   const filteredGroups = useMemo(() => {
     if (isRepoSearchQueryTooLarge(query)) {
       return []
     }
+
     const trimmed = query.trim()
+
     if (!trimmed) {
       return groups
     }
+
     return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
   }, [groups, query])
 
@@ -106,6 +119,7 @@ export default function AutomationProjectCombobox({
       if (node === null) {
         cancelFocusFrame()
       }
+
       inputRef.current = node
     },
     [cancelFocusFrame]
@@ -133,20 +147,27 @@ export default function AutomationProjectCombobox({
   const setHostMenuHover = useCallback(
     (projectKey: string, region: 'row' | 'content', hovered: boolean) => {
       clearHostMenuCloseTimer()
+
       if (hostMenuHoverRef.current.projectKey !== projectKey) {
         hostMenuHoverRef.current = { projectKey, row: false, content: false }
       }
+
       hostMenuHoverRef.current[region] = hovered
+
       if (hovered) {
         setHostMenuProjectKey(projectKey)
+
         return
       }
+
       hostMenuCloseTimerRef.current = window.setTimeout(() => {
         const hover = hostMenuHoverRef.current
+
         if (hover.projectKey === projectKey && !hover.row && !hover.content) {
           setHostMenuProjectKey((current) => (current === projectKey ? null : current))
           resetHostMenuHover()
         }
+
         hostMenuCloseTimerRef.current = null
       }, 100)
     },
@@ -158,10 +179,13 @@ export default function AutomationProjectCombobox({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (nextOpen) {
         setCommandValue(value)
+
         return
       }
+
       cancelFocusFrame()
       setQuery('')
       setHostMenuProjectKey(null)
@@ -185,16 +209,21 @@ export default function AutomationProjectCombobox({
     if (isAdding) {
       return
     }
+
     setIsAdding(true)
+
     try {
       const repo = await addRepo()
+
       if (repo) {
         if (isGitRepoKind(repo)) {
           await fetchWorktrees(repo.id)
         }
+
         if (!mountedRef.current) {
           return
         }
+
         handleSelect(repo.id)
       }
     } finally {
@@ -263,14 +292,17 @@ export default function AutomationProjectCombobox({
               const selectedProject = group.sources.some((source) => source.id === value)
               const hasHostMenu = hasMultipleHostsInGroup(group.sources)
               const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource) : null
+
               const detail = hasHostMenu
                 ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${group.sources.length} hosts`
                 : getRepoDetail(selectedSource, hostLabel)
+
               return (
                 <div
                   key={group.projectKey}
                   onMouseEnter={() => {
                     setCommandValue(group.repo.id)
+
                     if (hasHostMenu) {
                       setHostMenuHover(group.projectKey, 'row', true)
                     }
@@ -343,7 +375,9 @@ export default function AutomationProjectCombobox({
                             const sourceHostLabel = showHostLabels
                               ? getRepoHostLabel?.(source)
                               : null
+
                             const sourceSelected = source.id === selectedSource.id
+
                             return (
                               <button
                                 key={source.id}

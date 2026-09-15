@@ -33,6 +33,7 @@ describe('checksPanelAsyncResultKey', () => {
       repo: 'Widgets',
       host: 'github.com'
     })
+
     const enterpriseKey = checksPanelAsyncResultKey('repo-id', 'feature/test', 12, {
       owner: 'Acme',
       repo: 'Widgets',

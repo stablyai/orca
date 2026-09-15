@@ -14,16 +14,21 @@ import { installActiveSessionTabsSubscription } from './active-session-subscript
 export function useWebSessionTabsSync(): void {
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(null)
   const activeRuntimeWorktreeKeyRef = useRef<string | null>(null)
+
   const visibilityResumeOmissionsRef = useRef<
     GlobalSubscriptionRefs['visibilityResumeOmissions']['current']
   >(new Map())
+
   const ownerRevisionsRef = useRef<GlobalSubscriptionRefs['ownerRevisions']['current']>(new Map())
+
   const visibilitySnapshotReceiptRef = useRef<GlobalSubscriptionRefs['snapshotReceipt']['current']>(
     () => {}
   )
+
   const visibilitySnapshotApplyRef = useRef<GlobalSubscriptionRefs['snapshotApply']['current']>(
     () => true
   )
+
   const visibilitySnapshotAcceptedRef = useRef<
     GlobalSubscriptionRefs['snapshotAccepted']['current']
   >(() => {})
@@ -31,28 +36,36 @@ export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
   const runtimeSessionMirrorEnvironmentKey = useRuntimeSessionMirrorEnvironmentKey()
+
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )
+
   // Keep this subscription dependency: a runtime reconnect can retain the same environment id
   // while replacing its runtime instance, which must restart the scoped stream.
   const activeWorktreeRuntimeId = useAppStore((state) => {
     const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+
     return environmentId
       ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.status?.runtimeId ?? null)
       : null
   })
+
   const activeWorktreeRuntimeConnectionGeneration = useAppStore((state) => {
     const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+
     return environmentId
       ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
       : 0
   })
+
   const activeWorktreeRuntimePairingRevision = useAppStore((state) => {
     const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+
     const environment = state.runtimeEnvironments.find(
       (candidate) => candidate.id === environmentId
     )
+
     return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
   })
 
@@ -70,6 +83,7 @@ export function useWebSessionTabsSync(): void {
       for (const environmentId of ownerRevisionsRef.current.keys()) {
         clearWebSessionTabsTrackingForEnvironment(environmentId)
       }
+
       ownerRevisionsRef.current.clear()
       visibilityResumeOmissionsRef.current.clear()
     },

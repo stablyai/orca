@@ -51,6 +51,7 @@ describe('activity filter focus shortcut', () => {
     let stoppedImmediate = 0
     let focused = 0
     let selected = 0
+
     const input = {
       focus: () => {
         focused += 1
@@ -59,12 +60,15 @@ describe('activity filter focus shortcut', () => {
         selected += 1
       }
     } as Pick<HTMLInputElement, 'focus' | 'select'>
+
     const activeElement = {
       classList: { contains: () => false }
     } as unknown as Element
+
     const terminalElement = {
       classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
     } as unknown as Element
+
     const terminalPortalTarget = {
       contains: (target: Element) => target === terminalElement
     } as unknown as HTMLElement
@@ -132,6 +136,7 @@ describe('activity filter focus shortcut', () => {
 
   it('does not prevent default when the filter input is unavailable', () => {
     let prevented = 0
+
     const activeElement = {
       classList: { contains: () => false }
     } as unknown as Element
@@ -167,18 +172,23 @@ describe('activity filter focus shortcut', () => {
     const terminalTextarea = {
       classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
     } as unknown as Element
+
     const portalChild = {
       classList: { contains: () => false }
     } as unknown as Element
+
     const outside = {
       classList: { contains: () => false }
     } as unknown as Element
+
     const portalTarget = {
       contains: (target: Element) => target === portalChild || target === terminalTextarea
     } as unknown as HTMLElement
+
     const hiddenWorkbenchTerminal = {
       classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
     } as unknown as Element
+
     expect(shouldIgnoreActivityFilterFocusShortcutTarget(terminalTextarea, [portalTarget])).toBe(
       true
     )

@@ -25,6 +25,7 @@ function selectionKey(branch: PreservedBranchCleanup): string {
 
 function getRepositoryLabel(branch: PreservedBranchCleanup): string {
   const repoId = getRepoIdFromWorktreeId(branch.worktreeId)
+
   return useAppStore.getState().repos?.find((repo) => repo.id === repoId)?.displayName || repoId
 }
 
@@ -46,27 +47,33 @@ export function PreservedBranchBatchReviewDialog({
       ),
     [branches]
   )
+
   const actionableKeys = useMemo(
     () => actionableBranches.map((branch) => selectionKey(branch)),
     [actionableBranches]
   )
+
   const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
     () => new Set(actionableKeys)
   )
+
   const selectedBranches = actionableBranches.filter((branch) =>
     selectedKeys.has(selectionKey(branch))
   )
+
   const allSelected = selectedBranches.length === actionableBranches.length
   const someSelected = selectedBranches.length > 0 && !allSelected
 
   const setBranchSelected = (branch: ActionablePreservedBranch, selected: boolean): void => {
     setSelectedKeys((current) => {
       const next = new Set(current)
+
       if (selected) {
         next.add(selectionKey(branch))
       } else {
         next.delete(selectionKey(branch))
       }
+
       return next
     })
   }
@@ -118,8 +125,10 @@ export function PreservedBranchBatchReviewDialog({
               const actionableBranch = branch.expectedHead
                 ? (branch as ActionablePreservedBranch)
                 : null
+
               const branchKey = selectionKey(branch)
               const checkboxId = `preserved-branch-${index}`
+
               return (
                 <li
                   key={branchKey}

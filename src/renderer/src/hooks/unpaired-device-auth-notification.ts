@@ -12,8 +12,10 @@ export function subscribeToUnpairedDeviceAuthNotification(
       if (notifyIfUnavailable) {
         onNotification()
       }
+
       return
     }
+
     void api
       .consumePendingUnpairedDeviceAuthFailure()
       .then((pending) => {

@@ -43,9 +43,11 @@ const {
         if (event === 'exit') {
           queueMicrotask(() => callback(0))
         }
+
         return child
       })
     }
+
     return child
   }),
   resolveAuthorizedPathMock: vi.fn(),
@@ -125,11 +127,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   requireSshFilesystemProvider: (connectionId: string) => {
     const provider = getSshFilesystemProviderMock(connectionId)
+
     if (!provider) {
       throw new Error(
         'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
       )
     }
+
     return provider
   }
 }))
@@ -137,6 +141,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
+
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
 import {
@@ -151,12 +156,14 @@ const REMOTE_CLIPBOARD_STAGING_ROOT = join(
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
+
   for (const [channel, handler] of handleMock.mock.calls as [
     string,
     (...args: unknown[]) => unknown
   ][]) {
     handlers.set(channel, handler)
   }
+
   return handlers
 }
 
@@ -184,12 +191,14 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
       settled = true
     }
   )
+
   return () => settled
 }
 
 function shellIdListArray(childCount: number): Buffer {
   const value = Buffer.alloc(4 + 4 * (childCount + 1))
   value.writeUInt32LE(childCount)
+
   return value
 }
 
@@ -319,6 +328,7 @@ describe('registerClipboardHandlers', () => {
 
     expect(fsStatMock).toHaveBeenCalledWith('/tmp/copied-file.txt')
     expect(resolveAuthorizedPathMock).toHaveBeenCalledWith('/tmp/copied-file.txt', {})
+
     if (process.platform === 'darwin') {
       expect(clipboardWriteBufferMock).toHaveBeenCalledWith(
         'public.file-url',
@@ -334,14 +344,17 @@ describe('registerClipboardHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
       downloadFile: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
+
     const tempDir = join(
       REMOTE_CLIPBOARD_STAGING_ROOT,
       '1760000000000-00000000-0000-4000-8000-000000000000'
     )
+
     const tempPath = join(tempDir, 'report.pdf')
 
     await expect(
@@ -368,6 +381,7 @@ describe('registerClipboardHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFile: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     registerClipboardHandlers({} as never)
 
@@ -388,14 +402,17 @@ describe('registerClipboardHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 12, type: 'file', mtime: 123 }),
       downloadFile: vi.fn().mockRejectedValue(new Error('transfer failed'))
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
+
     const tempDir = join(
       REMOTE_CLIPBOARD_STAGING_ROOT,
       '1760000000000-00000000-0000-4000-8000-000000000000'
     )
+
     const tempPath = join(tempDir, 'report.pdf')
 
     await expect(
@@ -482,12 +499,15 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
+
     const result = handlers.get('clipboard:readText')?.(makeClipboardEvent(), {
       maxBytes: text.length * 3
     })
+
     if (!(result instanceof Promise)) {
       throw new Error('Expected clipboard read handler to return a Promise')
     }
+
     const isSettled = trackPromiseSettled(result)
 
     await Promise.resolve()
@@ -508,9 +528,11 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     const result = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), text)
+
     if (!(result instanceof Promise)) {
       throw new Error('Expected clipboard write handler to return a Promise')
     }
+
     const isSettled = trackPromiseSettled(result)
 
     await Promise.resolve()
@@ -592,6 +614,7 @@ describe('registerClipboardHandlers', () => {
       read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
         const bytesRead = Math.min(Math.max(source.byteLength - position, 0), length)
         source.copy(buffer, offset, position, position + bytesRead)
+
         return { buffer, bytesRead }
       })
     })
@@ -640,6 +663,7 @@ describe('registerClipboardHandlers', () => {
       if (method === 'clipboard.startImageUpload') {
         return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'runtime-1' } }
       }
+
       if (method === 'clipboard.appendImageUploadChunk') {
         return {
           ok: true,
@@ -647,6 +671,7 @@ describe('registerClipboardHandlers', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       if (method === 'clipboard.commitImageUpload') {
         return {
           ok: true,
@@ -654,6 +679,7 @@ describe('registerClipboardHandlers', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       throw new Error(`unexpected method: ${method}`)
     })
 
@@ -720,6 +746,7 @@ describe('registerClipboardHandlers', () => {
       if (method === 'clipboard.startImageUpload') {
         return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'runtime-1' } }
       }
+
       if (method === 'clipboard.appendImageUploadChunk') {
         return {
           ok: false,
@@ -727,9 +754,11 @@ describe('registerClipboardHandlers', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       if (method === 'clipboard.abortImageUpload') {
         return { ok: true, result: { aborted: true }, _meta: { runtimeId: 'runtime-1' } }
       }
+
       throw new Error(`unexpected method: ${method}`)
     })
 
@@ -850,10 +879,12 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
+
     const dataUrl = [
       'data:image/png;base64,',
       'A'.repeat(CLIPBOARD_IMAGE_MAX_BASE64_CHARS + 1)
     ].join('')
+
     handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), dataUrl)
 
     expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()

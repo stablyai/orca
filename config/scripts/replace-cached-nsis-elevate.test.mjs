@@ -23,9 +23,11 @@ import {
 // The probe is app-builder-lib asking itself where the packed elevate.exe lives; injected
 // here so no test needs the network or a warm toolset cache.
 const probeFound = (path) => async () => ({ path, error: null })
+
 const probeUnavailable = async () => ({ path: null, error: 'app-builder-lib not loadable' })
 
 const projectRoot = resolve(import.meta.dirname, '../..')
+
 const scriptPath = join(projectRoot, 'config/scripts/replace-cached-nsis-elevate.mjs')
 
 let scratch
@@ -40,12 +42,15 @@ afterEach(() => {
 
 function makeCache(...relativeFiles) {
   const cacheDir = join(scratch, 'Cache')
+
   for (const relative of relativeFiles) {
     const path = join(cacheDir, ...relative.split('/'))
     mkdirSync(join(path, '..'), { recursive: true })
     writeFileSync(path, 'unsigned-elevate')
   }
+
   mkdirSync(cacheDir, { recursive: true })
+
   return cacheDir
 }
 
@@ -71,6 +76,7 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
       'winCodeSign/winCodeSign-2.6.0-abc12/elevate.exe',
       'downloads/nsis/elevate.exe'
     )
+
     expect(findCachedElevatePaths(cacheDir, { env: {} })).toEqual([])
   })
 
@@ -99,6 +105,7 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
       'nsis-3.0.4.1/nsis-3.0.4.1-1mx3n/elevate.exe',
       'nsis@1.2.1/nsis-bundle-3.12-k4d9x/elevate.exe'
     )
+
     const signed = join(scratch, 'signed-elevate.exe')
     writeFileSync(signed, 'signpath-signed-elevate')
 
@@ -110,6 +117,7 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
     })
 
     expect(replaced).toHaveLength(2)
+
     for (const path of replaced) {
       expect(readFileSync(path, 'utf8')).toBe('signpath-signed-elevate')
     }
@@ -147,26 +155,35 @@ describe('cached elevate.exe swap covers the real electron-builder layouts', () 
   // Skipped only where no NSIS bundle has been downloaded into the cache yet.
   it('finds every elevate.exe the real electron-builder cache holds', (ctx) => {
     const cacheDir = resolveElectronBuilderCacheDir()
+
     if (!existsSync(cacheDir)) {
       // Reported as skipped, never as passed: this is the one test that checks the scan
       // against a layout nobody wrote down, and a silent no-op here is the suite
       // confirming itself. The Linux unit-test job has no electron-builder cache.
       ctx.skip()
+
       return
     }
+
     const walk = (dir) =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
         const path = join(dir, entry.name)
+
         if (entry.isDirectory()) {
           return walk(path)
         }
+
         return entry.name.toLowerCase() === 'elevate.exe' ? [path] : []
       })
+
     const onDisk = walk(cacheDir)
+
     if (onDisk.length === 0) {
       ctx.skip()
+
       return
     }
+
     expect(findCachedElevatePaths(cacheDir, { env: {} }).sort()).toEqual(onDisk.sort())
   })
 })
@@ -325,10 +342,13 @@ describe('release-cut.yml swaps the cached elevate.exe through the resolver', ()
     const workflow = parse(
       readFileSync(join(projectRoot, '.github/workflows/release-cut.yml'), 'utf8')
     )
+
     const step = workflow.jobs.build.steps.find(
       (candidate) => candidate.name === 'Replace cached elevate.exe with the signed copy'
     )
+
     expect(step).toBeDefined()
+
     return step
   }
 

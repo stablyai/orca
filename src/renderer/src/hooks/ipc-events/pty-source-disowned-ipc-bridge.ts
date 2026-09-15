@@ -19,8 +19,10 @@ export function registerPtySourceDisownedIpcBridge(unsubs: (() => void)[]): void
     if (payload.ptySourceDisowned !== true) {
       return
     }
+
     useAppStore.getState().markPtySourceDisowned(payload.id)
   })
+
   if (unsubscribe) {
     unsubs.push(unsubscribe)
   }

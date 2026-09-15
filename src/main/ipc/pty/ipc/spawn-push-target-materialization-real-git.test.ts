@@ -20,17 +20,24 @@ import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-ma
 const execFileAsync = promisify(execFile)
 
 const REPO_ID = 'repo-1'
+
 const FORK_REMOTE = 'pr-contributor-orca'
+
 const TRACKED_BRANCH = 'contributor/fix'
 
 let scratchDir = ''
+
 let repoPath = ''
+
 let forkPath = ''
+
 let worktreeId = ''
+
 let mainBranch = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
+
   return stdout
 }
 
@@ -79,12 +86,14 @@ function depsFor(
   meta: Record<string, WorktreeMeta>
 } {
   const meta: Record<string, WorktreeMeta> = { [worktreeId]: { pushTarget } as WorktreeMeta }
+
   const store = {
     getWorktreeMeta: (id: string) => meta[id],
     getRepo: (id: string) => ({ id, path: repoPath, connectionId: null }) as unknown as Repo,
     getAllWorktreeMeta: () => meta,
     ...(setWorktreeMeta ? { setWorktreeMeta } : {})
   } as unknown as Store
+
   return { deps: { store } as unknown as PtySpawnIpcDeps, meta }
 }
 
@@ -114,6 +123,7 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
           ['rev-parse', '--abbrev-ref', `${mainBranch}@{u}`],
           repoPath
         ).catch(() => '')
+
         expect(upstream.trim()).toBe(`${FORK_REMOTE}/${TRACKED_BRANCH}`)
       },
       { timeout: 5000, interval: 25 }
@@ -125,9 +135,11 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
     // The tracked branch's commit must actually be present -- confirms the narrow fetch ran,
     // not just that the remote config was written.
     const forkHead = (await git(['rev-parse', TRACKED_BRANCH], forkPath)).trim()
+
     const fetchedHead = (
       await git(['rev-parse', `${FORK_REMOTE}/${TRACKED_BRANCH}`], repoPath)
     ).trim()
+
     expect(fetchedHead).toBe(forkHead)
   })
 
@@ -141,9 +153,11 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
     // Give the fire-and-forget chain a tick; there is nothing to wait for since a
     // remoteCreated target must short-circuit before any git call.
     await new Promise((resolve) => setImmediate(resolve))
+
     const upstream = await git(['rev-parse', '--abbrev-ref', `${mainBranch}@{u}`], repoPath).catch(
       () => ''
     )
+
     expect(upstream.trim()).toBe('')
   })
 })

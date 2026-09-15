@@ -77,11 +77,13 @@ describe('watchForSettingsDeepLinkTarget', () => {
     const container = document.createElement('div')
     document.body.append(container)
     const onTargetPresent = vi.fn()
+
     const watch = watchForSettingsDeepLinkTarget({
       root: container,
       isTargetPresent: () => true,
       onTargetPresent
     })
+
     watch.cancel()
 
     container.append(document.createElement('div'))

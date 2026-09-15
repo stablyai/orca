@@ -19,7 +19,9 @@ export function detectSafari(): DetectedBrowser | null {
   if (process.platform !== 'darwin') {
     return null
   }
+
   const home = process.env.HOME ?? ''
+
   const candidates = [
     join(home, 'Library', 'Cookies', 'Cookies.binarycookies'),
     join(
@@ -33,6 +35,7 @@ export function detectSafari(): DetectedBrowser | null {
       'Cookies.binarycookies'
     )
   ]
+
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
       return {
@@ -44,21 +47,27 @@ export function detectSafari(): DetectedBrowser | null {
       }
     }
   }
+
   return null
 }
 
 export function detectInstalledBrowsers(): DetectedBrowser[] {
   const detected: DetectedBrowser[] = []
+
   for (const browser of CHROMIUM_BROWSERS) {
     const root = browserRootPath(browser)
+
     if (!root) {
       continue
     }
+
     const profiles = discoverProfiles(root)
+
     // Why: a browser counts as detected once a profile has a cookies DB; use the first such profile as default.
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
       const cookiesPath = resolveChromiumCookiesPath(profileDir)
+
       if (cookiesPath) {
         detected.push({
           family: browser.family,
@@ -75,11 +84,13 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
   }
 
   const firefox = detectFirefox()
+
   if (firefox) {
     detected.push(firefox)
   }
 
   const safari = detectSafari()
+
   if (safari) {
     detected.push(safari)
   }
@@ -94,31 +105,42 @@ export function selectBrowserProfile(
   if (!isSafeBrowserProfileDirectory(profileDirectory)) {
     return null
   }
+
   if (browser.family === 'firefox') {
     const profilesRoot = firefoxProfilesRoot()
+
     if (!profilesRoot) {
       return null
     }
+
     const cookiesPath = join(profilesRoot, profileDirectory, 'cookies.sqlite')
+
     if (!existsSync(cookiesPath)) {
       return null
     }
+
     return { ...browser, cookiesPath, selectedProfile: profileDirectory }
   }
 
   const browserDef = CHROMIUM_BROWSERS.find((b) => b.family === browser.family)
+
   if (!browserDef) {
     return null
   }
+
   const root = browserRootPath(browserDef)
+
   if (!root) {
     return null
   }
+
   const profileDir = join(root, profileDirectory)
   const cookiesPath = resolveChromiumCookiesPath(profileDir)
+
   if (!cookiesPath) {
     return null
   }
+
   return {
     ...browser,
     cookiesPath,

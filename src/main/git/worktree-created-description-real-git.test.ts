@@ -12,11 +12,14 @@ import { describeCreatedWorktree, listWorktreesStrict } from './worktree'
 const execFileAsync = promisify(execFile)
 
 let scratchDir = ''
+
 let repoPath = ''
+
 let worktreePath = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
+
   return stdout
 }
 
@@ -49,6 +52,7 @@ describe('describeCreatedWorktree against the real Git binary', () => {
     const listed = (await listWorktreesStrict(repoPath)).find(
       (worktree) => worktree.branch === 'refs/heads/feature'
     )
+
     expect(listed).toBeDefined()
 
     await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toEqual(
@@ -118,6 +122,7 @@ describe('describeCreatedWorktree against the real Git binary', () => {
       await mkdir(stalledRepo, { recursive: true })
       const stalledDotGit = join(stalledRepo, '.git')
       await execFileAsync('mkfifo', [stalledDotGit])
+
       try {
         await expect(
           describeCreatedWorktree(stalledRepo, worktreePath, 'feature', { timeout: 250 })
@@ -146,6 +151,7 @@ describe('describeCreatedWorktree against the real Git binary', () => {
     // Forces the no-`--path-format` fallback against the real binary: it answers with paths Git has
     // not made absolute, so the readings only agree once they are canonicalized.
     getLocalGitCapabilityCache({ cwd: repoPath }).rememberUnsupported('rev-parse-path-format')
+
     const listed = (await listWorktreesStrict(repoPath)).find(
       (worktree) => worktree.branch === 'refs/heads/feature'
     )

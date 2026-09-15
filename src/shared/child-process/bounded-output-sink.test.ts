@@ -14,6 +14,7 @@ describe('bounded process output', () => {
 
   it('decodes UTF-8 across every chunk boundary and byte limit', () => {
     const bytes = Buffer.from('a💻é\r\nb')
+
     for (let split = 0; split <= bytes.length; split += 1) {
       for (let cap = 0; cap <= bytes.length + 1; cap += 1) {
         const sink = createOutputSink(cap)

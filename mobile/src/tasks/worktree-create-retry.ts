@@ -73,18 +73,23 @@ export async function createWorktreeWithNameRetry(
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   let lastError: string | null = null
+
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
+
     const candidateParams = buildParams(candidateName)
+
     // Why: older hosts strip unknown fields, so only stamp and replay when the
     // host advertises idempotency. One key per candidate makes cutover retries
     // safe while a name-collision bump remains a genuinely new create.
     const params = worktreeCreateIdempotency
       ? { ...candidateParams, clientMutationId: mintMutationId() }
       : candidateParams
+
     const response = await sendWorktreeCreateResilient(client, params, worktreeCreateIdempotency)
+
     // Why the raw refusal: the retry decision below is `isRetryableWorktreeCreateConflict` over the
     // host's message, and no acceptance policy carries a refusal message through without throwing.
     if (response.ok) {
@@ -93,10 +98,12 @@ export async function createWorktreeWithNameRetry(
         worktree: { id: string; displayName?: string }
         warning?: string
       }
+
       const authoritativeName = result.worktree.displayName
       // Why: a create can succeed with the startup terminal failing (pty exhaustion); dropping
       // `warning` here is what lands the phone on an unexplained empty session.
       const warning = typeof result.warning === 'string' ? result.warning.trim() : ''
+
       return {
         worktreeId: result.worktree.id,
         name:
@@ -106,11 +113,14 @@ export async function createWorktreeWithNameRetry(
         ...(warning ? { warning } : {})
       }
     }
+
     lastError = response.error.message
+
     if (!isRetryableWorktreeCreateConflict(lastError ?? '')) {
       break
     }
   }
+
   return { error: lastError ?? 'Failed to create workspace' }
 }
 
@@ -128,6 +138,7 @@ async function sendWorktreeCreateResilient(
   let ambiguousRetry = 0
   const firstSentAt = Date.now()
   let replayDeadlineAt: number | null = null
+
   for (;;) {
     try {
       // `request` is the transport promise itself, so a delivery-unknown rejection reaches the
@@ -139,18 +150,22 @@ async function sendWorktreeCreateResilient(
       if (!worktreeCreateIdempotency) {
         throw error
       }
+
       if (isLogicalClientCutoverError(error)) {
         if (migrationRetry >= WORKTREE_CREATE_CUTOVER_MAX_RETRIES) {
           throw error
         }
+
         migrationRetry += 1
         // Why: LogicalClientCutoverError is raised only after migrateTo installs an
         // authenticated replacement, so retry immediately instead of adding UI lag.
         continue
       }
+
       if (!isRpcDeliveryUnknown(error) || ambiguousRetry >= WORKTREE_CREATE_AMBIGUOUS_MAX_RETRIES) {
         throw error
       }
+
       // Why: every transport path that reports a *drop* leaves 'connected' before the
       // rejection reaches us (rpc-client.ts:675/695/1213 set state first or reject via
       // queueMicrotask; the relay's fail() publishes synchronously). So still being
@@ -162,14 +177,18 @@ async function sendWorktreeCreateResilient(
       if (client.getState() === 'connected') {
         throw error
       }
+
       // Computed once: a later ambiguity reads a fresher lastInboundAt from the
       // replacement session, which would push the deadline past the record it respects.
       replayDeadlineAt ??= resolveReplayDeadline(client, firstSentAt, worktreeCreateIdempotency)
       const remainingWindowMs = replayDeadlineAt - Date.now()
+
       if (remainingWindowMs <= 0) {
         throw error
       }
+
       ambiguousRetry += 1
+
       // Why: unlike a cutover, no replacement session exists yet — resending now
       // would just hit the dead one, so wait for the transport to come back and
       // surface the original ambiguity if it does not. Clamped to the window so the
@@ -198,10 +217,12 @@ function resolveReplayDeadline(
 ): number {
   const lastInboundAt = client.getLastInboundAt?.() ?? null
   const anchor = lastInboundAt !== null && lastInboundAt > firstSentAt ? lastInboundAt : firstSentAt
+
   return anchor + getWorktreeCreateReplayWindowMs(support)
 }
 
 function defaultWorktreeCreateMutationId(): string {
   const randomPart = Math.random().toString(36).slice(2, 10)
+
   return `worktree-create:${Date.now().toString(36)}:${randomPart}`
 }

@@ -16,6 +16,7 @@ function createRepo(): string {
   git(['init', '-q', '-b', 'main'], repo)
   git(['config', 'user.email', 'test@example.com'], repo)
   git(['config', 'user.name', 'Test'], repo)
+
   return repo
 }
 

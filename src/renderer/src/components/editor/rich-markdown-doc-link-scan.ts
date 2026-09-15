@@ -1,4 +1,5 @@
 export const DOC_LINK_PATTERN = /\[\[([^[\]\r\n]+)\]\]/g
+
 const DOC_LINK_OPEN = '[['
 
 type DocLinkTextNodeContext = {

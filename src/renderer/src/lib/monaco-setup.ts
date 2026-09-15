@@ -56,7 +56,9 @@ const diagnosticsOptions = {
   noSuggestionDiagnostics: true,
   noSyntaxValidation: true
 }
+
 monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
+
 monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 
 // Why: .tsx/.jsx files share the base 'typescript'/'javascript' language ids
@@ -69,19 +71,28 @@ monacoTS.typescriptDefaults.setCompilerOptions({
   ...monacoTS.typescriptDefaults.getCompilerOptions(),
   jsx: monacoTS.JsxEmit.Preserve
 })
+
 monacoTS.javascriptDefaults.setCompilerOptions({
   ...monacoTS.javascriptDefaults.getCompilerOptions(),
   jsx: monacoTS.JsxEmit.Preserve
 })
 
 registerVueLanguage(monaco)
+
 registerSvelteLanguage(monaco)
+
 registerAstroLanguage(monaco)
+
 registerNimLanguage(monaco)
+
 registerJsonlLanguage(monaco)
+
 installMonacoDelayerCancellationGuard()
+
 installMonacoDiffEditorDisposalGuard(monaco)
+
 installMonacoPeekReferencesPreviewOptions()
+
 // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is
 // blocked in Orca's sandboxed renderer. Route it through the trusted IPC bridge
 // so right-click Paste works like Cmd+V (which already works via native events).

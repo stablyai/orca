@@ -71,6 +71,7 @@ export function journalDispatchRowBuilder(
 ): RowBuilder<JournalDispatchRow> {
   const providerItemId =
     input.state === 'accepted' ? agentJournalItemKey(input.providerIdentity) : null
+
   return (seq, ts) =>
     buildJournalDispatchRow({
       state: state(),
@@ -93,6 +94,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
     return null
   }
+
   return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
 }
 
@@ -110,22 +112,28 @@ export function journalLifecycleBatchRowBuilder(
     if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
       throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
     }
+
     const current = state()
     const revisions = new Map<string, number>()
+
     const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
       const itemId = agentJournalItemKey(mutation.identity)
       const resolved = current.aliases.get(itemId) ?? itemId
+
       const revision =
         (revisions.get(resolved) ??
           Math.max(
             current.items.get(resolved)?.revision ?? 0,
             current.tombstones.get(resolved) ?? 0
           )) + 1
+
       revisions.set(resolved, revision)
+
       return mutation.kind === 'item'
         ? { kind: 'item', itemId, revision, body: mutation.body }
         : { kind: 'tombstone', itemId, revision }
     })
+
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',
       settlementId,
@@ -139,9 +147,11 @@ export function journalLifecycleBatchRowBuilder(
       ),
       ...(options.recovered ? { recovered: options.recovered } : {})
     }
+
     if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
       throw new Error('journal_lifecycle_batch_byte_bound_exceeded')
     }
+
     return row
   }
 }
@@ -167,6 +177,7 @@ export function buildJournalItemRow(input: {
 }): JournalItemRow {
   const itemId = agentJournalItemKey(input.identity)
   const resolved = input.state.aliases.get(itemId) ?? itemId
+
   // A tombstoned row keeps its revision in `tombstones`, and the reducer drops
   // any item at or below it — so a re-add has to outrank the tombstone too.
   const revision =
@@ -174,6 +185,7 @@ export function buildJournalItemRow(input: {
       input.state.items.get(resolved)?.revision ?? 0,
       input.state.tombstones.get(resolved) ?? 0
     ) + 1
+
   return {
     kind: 'item',
     itemId,
@@ -192,6 +204,7 @@ export function buildJournalTombstoneRow(input: {
   ts: number
 }): JournalTombstoneRow {
   const resolved = input.state.aliases.get(input.itemId) ?? input.itemId
+
   return {
     kind: 'tombstone',
     itemId: input.itemId,

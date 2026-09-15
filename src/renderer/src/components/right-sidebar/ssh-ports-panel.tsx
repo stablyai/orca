@@ -16,10 +16,12 @@ import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-fo
 // Why: forwarded SSH ports and detected remote ports may report the same loopback
 // endpoint using different textual hosts. Normalize for deduping only.
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
+
 function normalizeHost(host: string | undefined): string {
   if (!host || LOOPBACK_HOSTS.has(host)) {
     return 'localhost'
   }
+
   return host
 }
 
@@ -43,14 +45,17 @@ export function SshPortsPanel(): React.JSX.Element {
     if (!activeConnectionId) {
       return []
     }
+
     return portForwardsByConnection[activeConnectionId] ?? []
   }, [portForwardsByConnection, activeConnectionId])
 
   const forwardedKeys = useMemo(() => {
     const set = new Set<string>()
+
     for (const f of allForwards) {
       set.add(`${normalizeHost(f.remoteHost)}:${f.remotePort}`)
     }
+
     return set
   }, [allForwards])
 
@@ -58,7 +63,9 @@ export function SshPortsPanel(): React.JSX.Element {
     if (!activeConnectionId) {
       return []
     }
+
     const ports = detectedPortsByConnection[activeConnectionId] ?? []
+
     return ports
       .filter((p) => !forwardedKeys.has(`${normalizeHost(p.host)}:${p.port}`))
       .map((p) => ({ ...p, targetId: activeConnectionId }))
@@ -88,6 +95,7 @@ export function SshPortsPanel(): React.JSX.Element {
   const handleOpenForwardInBrowser = useCallback(
     (entry: PortForwardEntry, event?: React.MouseEvent<HTMLButtonElement>) => {
       const url = browserUrlForPortForwardEntry(entry)
+
       if (
         !resolvePortOpenInOrcaBrowser({
           settings,
@@ -96,8 +104,10 @@ export function SshPortsPanel(): React.JSX.Element {
         })
       ) {
         void window.api.shell.openUrl(url)
+
         return
       }
+
       if (!activeWorktree?.id) {
         toast.error(
           translate(
@@ -105,8 +115,10 @@ export function SshPortsPanel(): React.JSX.Element {
             'No workspace selected for the browser.'
           )
         )
+
         return
       }
+
       void openWorkspaceBrowserTab({
         workspaceId: activeWorktree.id,
         url,

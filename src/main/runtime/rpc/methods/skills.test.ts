@@ -9,6 +9,7 @@ vi.mock('../../../skills/skill-discovery-target', () => ({
   resolveSkillDiscoveryTarget: vi.fn((target) => ({ kind: 'native-host', cwd: target?.cwd })),
   discoverSkillsOnTarget: vi.fn(async () => ({ skills: [], sources: [], scannedAt: 1 }))
 }))
+
 import { SKILL_METHODS } from './skills'
 import {
   discoverSkillsOnTarget,
@@ -42,25 +43,31 @@ function makeContext(overrides: {
 
 function discoverMethod() {
   const method = eraseRpcMethods(SKILL_METHODS).find((entry) => entry.name === 'skills.discover')
+
   if (!method) {
     throw new Error('skills.discover method not registered')
   }
+
   return method
 }
 
 function installMethod() {
   const method = eraseRpcMethods(SKILL_METHODS).find((entry) => entry.name === 'skills.install')
+
   if (!method) {
     throw new Error('skills.install method not registered')
   }
+
   return method
 }
 
 function method(name: string) {
   const value = eraseRpcMethods(SKILL_METHODS).find((entry) => entry.name === name)
+
   if (!value) {
     throw new Error(`${name} method not registered`)
   }
+
   return value
 }
 
@@ -130,6 +137,7 @@ describe('skills.discover RPC', () => {
 describe('skills.install RPC', () => {
   it('routes one bundle request without changing the single-skill method', async () => {
     const installSharedSkillBundleRequest = vi.fn(async () => ({ status: 'complete' }))
+
     const request = {
       operationId: 'operation_1',
       package: {
@@ -158,9 +166,11 @@ describe('skills.install RPC', () => {
 
   it('delegates installation to the executing runtime service', async () => {
     const installSharedSkillRequest = vi.fn(async () => ({ status: 'installed' }))
+
     const runtime = {
       installSharedSkillRequest
     }
+
     const request = {
       operationId: 'operation_1',
       package: {
@@ -177,6 +187,7 @@ describe('skills.install RPC', () => {
       },
       destination: { scope: 'global' as const }
     }
+
     await installMethod().handler(request, { runtime } as unknown as RpcContext)
     expect(installSharedSkillRequest).toHaveBeenCalledWith(request, undefined)
   })
@@ -194,7 +205,9 @@ describe('skills.install RPC', () => {
         retryable: true
       }
     }
+
     const runtime = { installSharedSkillRequest: vi.fn(async () => cancelled) }
+
     const request = {
       operationId: 'operation_1',
       package: {
@@ -225,9 +238,11 @@ describe('skills.install RPC', () => {
 
   it('routes cancellation to the destination runtime by operation ID', async () => {
     const cancelSharedSkillInstall = vi.fn(() => true)
+
     const result = await method('skills.cancelInstall').handler({ operationId: 'operation_1' }, {
       runtime: { cancelSharedSkillInstall }
     } as unknown as RpcContext)
+
     expect(result).toEqual({ cancelled: true })
     expect(cancelSharedSkillInstall).toHaveBeenCalledWith('operation_1')
   })
@@ -240,6 +255,7 @@ describe('skills.install RPC', () => {
       skillIndex: 1,
       skillCount: 2
     }
+
     const getSharedSkillInstallProgress = vi.fn(() => progress)
     expect(
       method('skills.getInstallProgress').handler({ operationId: 'operation_1' }, {
@@ -267,6 +283,7 @@ describe('skills.share RPC', () => {
 
   it('checks permission before discovery', async () => {
     const denial = new Error('denied')
+
     const assertAgentSkillSharingAllowed = vi.fn(() => {
       throw denial
     })
@@ -287,6 +304,7 @@ describe('skills.share RPC', () => {
       scannedAt: 1
     } as never)
     const publishDiscoveredSkillsFromAgent = vi.fn(async () => ({ status: 'ok' }))
+
     const runtime = {
       assertAgentSkillSharingAllowed: vi.fn(),
       resolveProjectRuntimeForWorktree: vi.fn(),
@@ -294,6 +312,7 @@ describe('skills.share RPC', () => {
       listRepos: vi.fn(() => []),
       publishDiscoveredSkillsFromAgent
     }
+
     const signal = new AbortController().signal
 
     await method('skills.share').handler(request, { runtime, signal } as unknown as RpcContext)
@@ -313,6 +332,7 @@ describe('skills.share RPC', () => {
       homeDir: '/home/alice',
       cwd: '/repo'
     })
+
     const runtime = {
       assertAgentSkillSharingAllowed: vi.fn(),
       resolveProjectRuntimeForWorktree: vi.fn()
@@ -345,6 +365,7 @@ describe('skill management RPC', () => {
     const removeSharedSkillInstallRequest = vi.fn(async () => ({ status: 'removed' }))
     const runtime = { previewSharedSkillInstallRequest, removeSharedSkillInstallRequest }
     const destination = { scope: 'global' as const }
+
     const packageIdentity = {
       packageId: 'package_1',
       versionId: 'version_1',

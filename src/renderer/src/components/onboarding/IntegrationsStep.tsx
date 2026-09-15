@@ -17,9 +17,11 @@ function getGitHubSetupState(
   if (!status) {
     return 'checking'
   }
+
   if (!status.gh.installed) {
     return 'not-installed'
   }
+
   return status.gh.authenticated ? 'connected' : 'not-authenticated'
 }
 
@@ -32,6 +34,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
   const state: GitHubSetupState = preflightStatusLoading
     ? 'checking'
     : getGitHubSetupState(preflightStatus)
+
   const [githubTerminalOpen, setGithubTerminalOpen] = useState(false)
 
   return (

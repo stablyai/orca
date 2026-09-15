@@ -72,22 +72,27 @@ function getAttachedWorktreesForFolderWorkspaceCard({
   'folderWorkspaceId' | 'workspaceLineageByChildKey' | 'worktreeLineageById' | 'worktreeMap'
 >): Worktree[] {
   const folderKey = folderWorkspaceKey(folderWorkspaceId)
+
   const directChildren = Object.values(workspaceLineageByChildKey ?? {})
     .filter((lineage) => lineage.parentWorkspaceKey === folderKey)
     .map((lineage) => getWorkspaceLineageChild(lineage, worktreeMap))
     .filter((worktree): worktree is Worktree => worktree !== null)
 
   const included = new Map(directChildren.map((worktree) => [worktree.id, worktree]))
+
   const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
     worktreeLineageById ?? {},
     worktreeMap
   )
+
   const queue = [...directChildren]
+
   for (let index = 0; index < queue.length; index += 1) {
     for (const child of childrenByParentId.get(queue[index].id) ?? []) {
       if (child.isArchived || included.has(child.id)) {
         continue
       }
+
       included.set(child.id, child)
       queue.push(child)
     }
@@ -100,6 +105,7 @@ function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrD
   if (!row.provider || row.provider === 'unsupported' || row.reviewNumber === null) {
     return null
   }
+
   return {
     provider: row.provider,
     number: row.reviewNumber,
@@ -115,16 +121,21 @@ function getWorkspaceLineageChild(
   worktreeMap: ReadonlyMap<string, Worktree>
 ): Worktree | null {
   const childScope = parseWorkspaceKey(lineage.childWorkspaceKey)
+
   if (childScope?.type !== 'worktree') {
     return null
   }
+
   const worktree = worktreeMap.get(childScope.worktreeId)
+
   if (!worktree || worktree.isArchived) {
     return null
   }
+
   if (lineage.childInstanceId && lineage.childInstanceId !== worktree.instanceId) {
     return null
   }
+
   return worktree
 }
 

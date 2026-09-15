@@ -4,6 +4,7 @@ export async function waitForPluginRefreshSettlement(
   while (true) {
     const pending = getCurrent()
     await pending.catch(() => undefined)
+
     if (pending === getCurrent()) {
       return
     }

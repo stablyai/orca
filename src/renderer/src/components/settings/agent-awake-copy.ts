@@ -3,8 +3,10 @@ import type { ComputerAwakeMode } from '../../../../shared/computer-awake-mode'
 import { searchKeywords } from './settings-search-keywords'
 
 const AGENT_AWAKE_TITLE_KEY = 'auto.components.settings.agent-awake-copy.modeTitle'
+
 const AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionWindows'
+
 const AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionDefault'
 
@@ -16,9 +18,11 @@ export function getAgentAwakeModeLabel(mode: ComputerAwakeMode): string {
   if (mode === 'on') {
     return translate('auto.components.settings.AgentAwakeSetting.on', 'On')
   }
+
   if (mode === 'auto') {
     return translate('auto.components.settings.AgentAwakeSetting.auto', 'Agent')
   }
+
   return translate('auto.components.settings.AgentAwakeSetting.off', 'Off')
 }
 

@@ -35,16 +35,21 @@ test.describe('Diff note delete', () => {
     // diff the modified Monaco editor will render against.
     const { relativePath } = await orcaPage.evaluate(async (wId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available — is the app in dev mode?')
       }
+
       const state = store.getState()
+
       const worktree = Object.values(state.worktreesByRepo)
         .flat()
         .find((entry) => entry.id === wId)
+
       if (!worktree) {
         throw new Error('active worktree not found')
       }
+
       const separator = worktree.path.includes('\\') ? '\\' : '/'
       const rel = `src${separator}index.ts`
       const absolutePath = `${worktree.path}${separator}${rel}`
@@ -52,6 +57,7 @@ test.describe('Diff note delete', () => {
         filePath: absolutePath,
         content: 'export const hello = "note-test"\n'
       })
+
       return { relativePath: rel }
     }, worktreeId)
 
@@ -61,9 +67,11 @@ test.describe('Diff note delete', () => {
     const addResult = await orcaPage.evaluate(
       async ({ wId, rel }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const comment = await store.getState().addDiffComment({
           worktreeId: wId,
           filePath: rel,
@@ -72,10 +80,12 @@ test.describe('Diff note delete', () => {
           body: 'delete-me note',
           side: 'modified'
         })
+
         return comment
       },
       { wId: worktreeId, rel: relativePath }
     )
+
     expect(addResult, 'addDiffComment returned null').not.toBeNull()
     const commentId = addResult!.id
 
@@ -84,16 +94,21 @@ test.describe('Diff note delete', () => {
     await orcaPage.evaluate(
       ({ wId, rel }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const state = store.getState()
+
         const worktree = Object.values(state.worktreesByRepo)
           .flat()
           .find((entry) => entry.id === wId)
+
         if (!worktree) {
           throw new Error('active worktree not found')
         }
+
         const separator = worktree.path.includes('\\') ? '\\' : '/'
         state.openDiff(wId, `${worktree.path}${separator}${rel}`, rel, 'typescript', false)
       },
@@ -114,12 +129,15 @@ test.describe('Diff note delete', () => {
         async () =>
           orcaPage.evaluate((id: string) => {
             const store = window.__store
+
             if (!store) {
               return null
             }
+
             const all = Object.values(store.getState().worktreesByRepo)
               .flat()
               .flatMap((w) => w.diffComments ?? [])
+
             return all.some((c) => c.id === id)
           }, commentId),
         {

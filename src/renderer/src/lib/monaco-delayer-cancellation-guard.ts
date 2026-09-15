@@ -21,6 +21,7 @@ function isMonacoCancellationError(error: unknown): boolean {
 
 export function installMonacoDelayerCancellationGuard(): void {
   const delayerPrototype = Delayer.prototype as GuardedDelayerPrototype
+
   if (delayerPrototype.__orcaDelayerCancellationGuardInstalled) {
     return
   }
@@ -28,6 +29,7 @@ export function installMonacoDelayerCancellationGuard(): void {
   const originalCancel = delayerPrototype.cancel
   delayerPrototype.cancel = function cancelWithHandledCancellation(this: MonacoDelayerInstance) {
     const completionPromise = this.completionPromise
+
     if (completionPromise) {
       // Why: Monaco Delayer cancellation is normal during DisposableStore
       // teardown, but ignored trigger promises surface as unhandled rejections.
@@ -37,7 +39,9 @@ export function installMonacoDelayerCancellationGuard(): void {
         }
       })
     }
+
     originalCancel.call(this)
   }
+
   delayerPrototype.__orcaDelayerCancellationGuardInstalled = true
 }

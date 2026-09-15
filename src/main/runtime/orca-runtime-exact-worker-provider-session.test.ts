@@ -3,6 +3,7 @@ import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { OrcaRuntimeWithGetTerminalInteractiveWait } from './orca-runtime-get-terminal-interactive-wait'
 
 const PANE_KEY = 'tab:worker'
+
 const PTY_ID = 'pty-wsl'
 
 type ExactWorkerProviderSessionHost = {
@@ -30,6 +31,7 @@ function selectThroughRuntime(statusConnectionId: string | null): unknown {
       }
     ]
   }
+
   return (
     OrcaRuntimeWithGetTerminalInteractiveWait.prototype as unknown as ExactWorkerProviderSessionHost
   ).getExactWorkerProviderSession.call(runtime as never, 'term_wsl', 0)

@@ -53,24 +53,31 @@ function detectedAgentsForWorktree(
   catalog: DashboardLaunchCatalog
 ): readonly TuiAgent[] {
   const workspaceScope = parseWorkspaceKey(worktreeId)
+
   if (workspaceScope?.type === 'folder') {
     const folder = catalog.foldersById.get(workspaceScope.folderWorkspaceId)
     const group = folder ? catalog.groupsById.get(folder.projectGroupId) : undefined
     const host = parseExecutionHostId(group?.executionHostId)
+
     if (host?.kind === 'runtime') {
       return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
     }
+
     const connectionId = folder?.connectionId ?? group?.connectionId
+
     return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
   }
 
   const worktree = catalog.worktreesByRepoAndId.get(repoId)?.get(worktreeId)
   const repo = catalog.reposById.get(worktree?.repoId ?? repoId)
   const host = parseExecutionHostId(worktree?.hostId ?? repo?.executionHostId)
+
   if (host?.kind === 'runtime') {
     return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
   }
+
   const connectionId = host?.kind === 'ssh' ? host.targetId : repo?.connectionId
+
   return connectionId
     ? (state.remoteDetectedAgentIds?.[connectionId] ?? [])
     : (state.detectedAgentIds ?? [])
@@ -84,12 +91,15 @@ export function buildDashboardWorktreeLaunchOptions(
 ): Record<string, TuiAgent[]> {
   const catalog = buildDashboardLaunchCatalog(state)
   const cardsByWorktreeId = new Map<string, DashboardCard[]>()
+
   const repoIdByWorktreeId = new Map(
     workspaces.map((workspace) => [workspace.worktreeId, workspace.repoId])
   )
+
   for (const card of cards) {
     repoIdByWorktreeId.set(card.worktreeId, card.repoId)
     const existing = cardsByWorktreeId.get(card.worktreeId)
+
     if (existing) {
       existing.push(card)
     } else {
@@ -98,30 +108,37 @@ export function buildDashboardWorktreeLaunchOptions(
   }
 
   const result: Record<string, TuiAgent[]> = {}
+
   for (const [worktreeId, repoId] of repoIdByWorktreeId) {
     // Past the validator's bound the snapshot itself would be rejected, so the
     // launcher goes quiet for the tail rather than taking the board down.
     if (Object.keys(result).length >= DASHBOARD_MAX_LAUNCH_WORKTREES) {
       break
     }
+
     const worktreeCards = cardsByWorktreeId.get(worktreeId) ?? []
+
     const available = new Set<TuiAgent>(
       detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
     )
+
     for (const card of worktreeCards) {
       if (isTuiAgent(card.agentType)) {
         available.add(card.agentType)
       }
     }
+
     const enabled = filterEnabledTuiAgents(
       TUI_AGENT_AUTO_PICK_ORDER.filter((agent) => available.has(agent)),
       state.settings?.disabledTuiAgents
     )
+
     const preferred = state.settings?.defaultTuiAgent
     result[worktreeId] =
       preferred && preferred !== 'blank' && enabled.includes(preferred)
         ? [preferred, ...enabled.filter((agent) => agent !== preferred)]
         : enabled
   }
+
   return result
 }

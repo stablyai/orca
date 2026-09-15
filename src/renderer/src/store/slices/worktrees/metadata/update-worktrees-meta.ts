@@ -17,14 +17,18 @@ function getKnownOwnerHostIds(
   worktreeId: string
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
+
   for (const worktree of getIndexedWorktreesById(state.worktreesByRepo, worktreeId)) {
     const hostId = parseExecutionHostId(worktree.hostId)?.id
+
     if (hostId) {
       hostIds.add(hostId)
     }
   }
+
   return [...hostIds]
 }
+
 export function createUpdateWorktreesMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -35,14 +39,18 @@ export function createUpdateWorktreesMeta(
     }
 
     const gitWorktreeUpdates: WorktreeMetaBatchUpdate[] = []
+
     const folderWorkspaceUpdates: {
       folderWorkspaceId: string
       updates: ReturnType<typeof getFolderWorkspaceMetaUpdates>
     }[] = []
+
     for (const entry of updates) {
       const scope = parseWorkspaceKey(entry.worktreeId)
+
       if (scope?.type === 'folder') {
         const folderUpdates = getFolderWorkspaceMetaUpdates(entry.updates)
+
         if (Object.keys(folderUpdates).length > 0) {
           folderWorkspaceUpdates.push({
             folderWorkspaceId: scope.folderWorkspaceId,
@@ -57,6 +65,7 @@ export function createUpdateWorktreesMeta(
     set((s) => {
       let nextWorktrees = s.worktreesByRepo
       let nextDetectedWorktrees = s.detectedWorktreesByRepo
+
       for (const entry of gitWorktreeUpdates) {
         nextWorktrees = applyWorktreeUpdates(
           nextWorktrees,
@@ -71,6 +80,7 @@ export function createUpdateWorktreesMeta(
           entry.executionHostId
         )
       }
+
       return nextWorktrees === s.worktreesByRepo &&
         nextDetectedWorktrees === s.detectedWorktreesByRepo
         ? s
@@ -91,9 +101,11 @@ export function createUpdateWorktreesMeta(
       ...gitWorktreeUpdates.map(async ({ worktreeId, updates, executionHostId }) => {
         try {
           const state = get()
+
           const ownerHostIds = executionHostId
             ? [executionHostId]
             : getKnownOwnerHostIds(state, worktreeId)
+
           await (ownerHostIds.length === 0
             ? persistWorktreeMeta(settingsForWorktreeOwner(state, worktreeId), worktreeId, updates)
             : Promise.all(
@@ -101,6 +113,7 @@ export function createUpdateWorktreesMeta(
                   const worktree = getIndexedWorktreesById(state.worktreesByRepo, worktreeId).find(
                     (candidate) => candidate.hostId === hostId
                   )
+
                   return persistWorktreeMeta(
                     settingsForWorktreeOwner(state, worktreeId, hostId),
                     worktreeId,
@@ -113,8 +126,10 @@ export function createUpdateWorktreesMeta(
         } catch (err) {
           if (isRuntimeSelectorNotFoundError(err)) {
             void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+
             return
           }
+
           console.error('Failed to update worktree meta:', err)
           void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
         }

@@ -29,6 +29,7 @@ describe('runtime RPC browser-host admission', () => {
   it('reserves wait capacity and releases host admission on socket close', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-admission-'))
     const aborted = vi.fn()
+
     const blockingMethod = (name: 'browser.clientHost.attach' | 'terminal.wait') =>
       defineStreamingMethod({
         name,
@@ -46,12 +47,14 @@ describe('runtime RPC browser-host admission', () => {
           })
         }
       })
+
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       longPollCap: 4,
       methods: [blockingMethod('browser.clientHost.attach'), blockingMethod('terminal.wait')]
     })
+
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const device = server['deviceRegistry'].addDevice('runtime-test', 'runtime')
     server['mobileSocketWiring'] = {
@@ -59,6 +62,7 @@ describe('runtime RPC browser-host admission', () => {
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const socket = new FakeWebSocket()
     const replies: Record<string, unknown>[] = []
+
     const dispatch = (id: string, method: string) =>
       server['handleWebSocketMessage'](
         JSON.stringify({ id, method, deviceToken: device.token }),
@@ -100,34 +104,40 @@ describe('runtime RPC browser-host admission', () => {
 
   it('reserves browser-host capacity for a second paired device', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-fairness-'))
+
     const blockingHost = defineStreamingMethod({
       name: 'browser.clientHost.attach',
       params: null,
       handler: async (_params, { signal }) =>
         await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
     })
+
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       longPollCap: 16,
       methods: [blockingHost]
     })
+
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const deviceA = server['deviceRegistry'].addDevice('runtime-a', 'runtime')
     const deviceB = server['deviceRegistry'].addDevice('runtime-b', 'runtime')
     const socketA = new FakeWebSocket()
     const socketB = new FakeWebSocket()
     const socketAReplacement = new FakeWebSocket()
+
     const connectionIds = new Map([
       [socketA, 'connection-a'],
       [socketB, 'connection-b'],
       [socketAReplacement, 'connection-a-replacement']
     ])
+
     server['mobileSocketWiring'] = {
       getConnectionId: (socket) => connectionIds.get(socket as unknown as FakeWebSocket)
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const repliesA: Record<string, unknown>[] = []
     const repliesB: Record<string, unknown>[] = []
+
     const dispatch = (
       id: string,
       deviceToken: string,
@@ -146,6 +156,7 @@ describe('runtime RPC browser-host admission', () => {
       const deviceAHosts = Array.from({ length: 4 }, (_, index) =>
         dispatch(`host-a-${index}`, deviceA.token, socketA, repliesA)
       )
+
       await vi.waitFor(() => expect(server['activeBrowserHostLongPolls']).toBe(4))
 
       await dispatch('host-a-overflow', deviceA.token, socketA, repliesA)
@@ -174,6 +185,7 @@ describe('runtime RPC browser-host admission', () => {
         socketAReplacement,
         repliesA
       )
+
       await vi.waitFor(() => expect(server['activeBrowserHostLongPolls']).toBe(2))
 
       socketAReplacement.readyState = 3
@@ -190,6 +202,7 @@ describe('runtime RPC browser-host admission', () => {
 
   it('keeps a wait slot when asks and browser hosts fill their shared budget', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-wait-reserve-'))
+
     const blockingMethod = (
       name: 'browser.clientHost.attach' | 'orchestration.ask' | 'terminal.wait'
     ) =>
@@ -199,6 +212,7 @@ describe('runtime RPC browser-host admission', () => {
         handler: async (_params, { signal }) =>
           await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
       })
+
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
@@ -209,12 +223,14 @@ describe('runtime RPC browser-host admission', () => {
         blockingMethod('terminal.wait')
       ]
     })
+
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const deviceA = server['deviceRegistry'].addDevice('runtime-a', 'runtime')
     const deviceB = server['deviceRegistry'].addDevice('runtime-b', 'runtime')
     const socketA = new FakeWebSocket()
     const socketB = new FakeWebSocket()
     const replies: Record<string, unknown>[] = []
+
     const dispatch = (id: string, method: string, token: string, socket: FakeWebSocket) =>
       server['handleWebSocketMessage'](
         JSON.stringify(withCurrentOrchestrationContract({ id, method, deviceToken: token })),
@@ -230,6 +246,7 @@ describe('runtime RPC browser-host admission', () => {
         dispatch('ask-b', 'orchestration.ask', deviceA.token, socketA),
         dispatch('host-a', 'browser.clientHost.attach', deviceA.token, socketA)
       ]
+
       await vi.waitFor(() => expect(server['activeLongPolls']).toBe(3))
 
       const hostB = dispatch('host-b', 'browser.clientHost.attach', deviceB.token, socketB)

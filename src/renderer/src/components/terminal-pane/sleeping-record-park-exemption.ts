@@ -18,24 +18,31 @@ export function selectSleepingRecordParkExemptTabIds(
   if (!sleepingAgentSessionsByPaneKey) {
     return EMPTY_TAB_IDS
   }
+
   let owned: Set<string> | null = null
+
   for (const paneKey in sleepingAgentSessionsByPaneKey) {
     const record = sleepingAgentSessionsByPaneKey[paneKey]
+
     if (!record || record.worktreeId !== worktreeId) {
       continue
     }
+
     if (isPassiveCompletedHibernationEvidence(record)) {
       continue
     }
+
     // Why: malformed pane keys must yield no owner instead of a truncated tab id.
     const tabId =
       record.tabId ??
       parsePaneKey(record.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(record.paneKey)?.tabId
+
     if (tabId) {
       owned ??= new Set()
       owned.add(tabId)
     }
   }
+
   return owned ?? EMPTY_TAB_IDS
 }

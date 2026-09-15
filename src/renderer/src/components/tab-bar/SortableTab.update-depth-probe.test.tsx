@@ -41,6 +41,7 @@ type StoreApiWithHook = {
 async function createProbeStore(): Promise<StoreApiWithHook> {
   const globalKey = '__sortableTabProbeStore'
   const globals = globalThis as Record<string, unknown>
+
   if (!globals[globalKey]) {
     const { create } = await import('zustand')
     globals[globalKey] = create<ProbeState>(() => ({
@@ -54,10 +55,12 @@ async function createProbeStore(): Promise<StoreApiWithHook> {
       keybindings: {}
     }))
   }
+
   return globals[globalKey] as StoreApiWithHook
 }
 
 vi.mock('@/store', async () => ({ useAppStore: await createProbeStore() }))
+
 vi.mock('../../store', async () => ({ useAppStore: await createProbeStore() }))
 
 vi.mock('@dnd-kit/sortable', () => ({
@@ -103,12 +106,15 @@ vi.mock('@/components/ui/input', () => ({
 vi.mock('./TerminalTabLeadingIcon', () => ({
   TerminalTabLeadingIcon: () => {
     tabRenderCount += 1
+
     return <span />
   }
 }))
 
 vi.mock('./shell-icons', () => ({ ShellIcon: () => <span /> }))
+
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => <span /> }))
+
 vi.mock('../sidebar/WorktreeCardHelpers', () => ({ FilledBellIcon: () => <span /> }))
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -133,10 +139,12 @@ const dragData: TabDragItemData = {
 const probeStore = useAppStore as unknown as StoreApiWithHook
 
 let renderCount = 0
+
 let tabRenderCount = 0
 
 function Harness({ tab }: { tab: TerminalTab }): ReactElement {
   renderCount += 1
+
   return (
     <SortableTab
       tab={tab}
@@ -172,6 +180,7 @@ function ChurningHarness({ titles }: { titles: string[] }): ReactElement {
       setIndex(index + 1)
     }
   }, [index, titles.length])
+
   return <Harness tab={makeTab({ title: titles[index] })} />
 }
 
@@ -240,6 +249,7 @@ describe('SortableTab update-depth probe', () => {
         <Harness tab={makeTab()} />
       </StrictMode>
     )
+
     act(() => requestTerminalTabRename('terminal-tab-1'))
     expect(container.querySelector('[data-tab-rename-input]')).not.toBeNull()
   })

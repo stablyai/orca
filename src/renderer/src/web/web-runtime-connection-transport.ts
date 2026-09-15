@@ -21,7 +21,9 @@ import { WebRuntimeRequestRegistry } from './web-runtime-request-registry'
 import { WebRuntimeConnectionWaiters } from './web-runtime-connection-waiters'
 
 const CONNECT_TIMEOUT_MS = 12_000
+
 const HANDSHAKE_TIMEOUT_MS = 10_000
+
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 
 export class WebRuntimeConnectionTransport {
@@ -97,10 +99,12 @@ export class WebRuntimeConnectionTransport {
     this.requestRegistry.rejectAll('Remote Orca runtime connection closed.')
     this.connectionWaiters.rejectAll(new Error('Remote Orca runtime connection closed.'))
     this.subscriptionRegistry.close(options.notifySubscriptions ?? true)
+
     if (this.ws) {
       this.ws.close()
       this.ws = null
     }
+
     this.sharedKey = null
     this.setState('disconnected')
   }
@@ -133,6 +137,7 @@ export class WebRuntimeConnectionTransport {
     if (this.ws !== closedWs) {
       return
     }
+
     this.ws = null
     this.sharedKey = null
     this.clearConnectTimer()
@@ -140,16 +145,20 @@ export class WebRuntimeConnectionTransport {
     this.heartbeat.clear()
     this.requestRegistry.rejectAll('Remote Orca runtime connection interrupted.')
     this.subscriptionRegistry.handleInterrupted()
+
     if (this.intentionallyClosed || this.state === 'auth-failed') {
       this.setState(this.state === 'auth-failed' ? 'auth-failed' : 'disconnected')
+
       return
     }
+
     this.setState('disconnected')
     this.scheduleReconnect()
   }
 
   setState(next: WebRuntimeConnectionState): void {
     this.state = next
+
     if (next === 'connected') {
       this.subscriptionRegistry.replayInterrupted()
       this.heartbeat.start()
@@ -157,6 +166,7 @@ export class WebRuntimeConnectionTransport {
     } else if (next === 'auth-failed') {
       this.connectionWaiters.rejectAll(createWebRuntimeUnauthorizedError())
     }
+
     this.lifecycle.onStateChanged?.(next)
   }
 
@@ -164,14 +174,18 @@ export class WebRuntimeConnectionTransport {
     if (this.intentionallyClosed) {
       return
     }
+
     let socket: WebSocket
+
     try {
       socket = new WebSocket(this.pairing.endpoint)
     } catch (error) {
       this.requestRegistry.rejectAll(error instanceof Error ? error.message : String(error))
       this.scheduleReconnect()
+
       return
     }
+
     socket.binaryType = 'arraybuffer'
     this.ws = socket
     this.sharedKey = null
@@ -186,6 +200,7 @@ export class WebRuntimeConnectionTransport {
       if (this.ws !== socket) {
         return
       }
+
       this.clearConnectTimer()
       this.setState('handshaking')
       const keyPair = generateKeyPair()
@@ -199,13 +214,16 @@ export class WebRuntimeConnectionTransport {
         }
       }, HANDSHAKE_TIMEOUT_MS)
     }
+
     socket.onmessage = (event) => {
       if (this.ws !== socket) {
         return
       }
+
       this.heartbeat.noteInboundFrame()
       void this.handleSocketMessage(event.data, socket)
     }
+
     socket.onclose = () => this.handleSocketClosed(socket)
     socket.onerror = () => {
       if (this.state === 'connecting') {
@@ -216,19 +234,25 @@ export class WebRuntimeConnectionTransport {
 
   sendEncrypted(message: unknown): boolean {
     const socket = this.ws
+
     if (!socket || socket.readyState !== WebSocket.OPEN || !this.sharedKey) {
       return false
     }
+
     socket.send(encrypt(JSON.stringify(message), this.sharedKey))
+
     return true
   }
 
   sendEncryptedBinary(bytes: Uint8Array<ArrayBufferLike>): boolean {
     const socket = this.ws
+
     if (!socket || socket.readyState !== WebSocket.OPEN || !this.sharedKey) {
       return false
     }
+
     socket.send(encryptBytes(bytes, this.sharedKey))
+
     return true
   }
 
@@ -240,9 +264,11 @@ export class WebRuntimeConnectionTransport {
     if (this.reconnectTimer || this.intentionallyClosed || this.lifecycle.reconnect === false) {
       return
     }
+
     const delay = withReconnectJitter(
       RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)]
     )
+
     this.reconnectAttempt += 1
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null
@@ -252,6 +278,7 @@ export class WebRuntimeConnectionTransport {
 
   nextId(): string {
     this.requestCounter += 1
+
     return `web-rpc-${this.requestCounter}-${Date.now()}`
   }
 
@@ -263,6 +290,7 @@ export class WebRuntimeConnectionTransport {
     this.clearConnectTimer()
     this.clearHandshakeTimer()
     this.heartbeat.clear()
+
     if (this.reconnectTimer) {
       window.clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -273,6 +301,7 @@ export class WebRuntimeConnectionTransport {
     if (!this.connectTimer) {
       return
     }
+
     window.clearTimeout(this.connectTimer)
     this.connectTimer = null
   }
@@ -281,6 +310,7 @@ export class WebRuntimeConnectionTransport {
     if (!this.handshakeTimer) {
       return
     }
+
     window.clearTimeout(this.handshakeTimer)
     this.handshakeTimer = null
   }

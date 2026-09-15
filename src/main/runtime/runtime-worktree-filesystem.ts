@@ -34,17 +34,22 @@ export async function isRuntimeWorktreePathMissing(
   localWorktreeGitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
   const route = resolveFilesystemRouteForHost(hostId)
+
   if (route.kind === 'runtime') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
+
   if (route.kind === 'local') {
     const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+
     return isWorktreePathMissing(
       toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
       access.statPath
     )
   }
+
   const fsProvider = route.provider
+
   return fsProvider ? isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path)) : false
 }
 
@@ -57,6 +62,7 @@ export async function isLocalRuntimeGitRepository(
       cwd: runtimeWorktreePath,
       ...localWorktreeGitOptions
     })
+
     return true
   } catch (error) {
     return !gitStatusErrorMeansNotRepository(error)
@@ -65,6 +71,7 @@ export async function isLocalRuntimeGitRepository(
 
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
   const prefix = `${getRuntimeFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
 }
 
@@ -76,18 +83,22 @@ export function listRuntimeFolderWorkspaces(
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
   const expectedHostId = getRepoExecutionHostId(repo)
+
   const ids = Object.keys(allMeta).filter(
     (worktreeId) =>
       isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
       (repoOwnerCount === 1 || allMeta[worktreeId]?.hostId === expectedHostId)
   )
+
   if (!ids.includes(rootId)) {
     ids.unshift(rootId)
   } else {
     ids.sort((left, right) => (left === rootId ? -1 : right === rootId ? 1 : 0))
   }
+
   return ids.map((worktreeId) => {
     const existing = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+
     const meta: Partial<WorktreeMeta> = existing?.instanceId
       ? existing
       : existing || repoOwnerCount === 1
@@ -96,6 +107,7 @@ export function listRuntimeFolderWorkspaces(
             ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
           })
         : {}
+
     return {
       ...mergeRuntimeFolderWorkspace(repo, worktreeId, meta),
       hostId: repoOwnerCount === 1 ? (meta.hostId ?? expectedHostId) : expectedHostId
@@ -106,11 +118,13 @@ export function listRuntimeFolderWorkspaces(
 export async function runtimePathExists(pathValue: string): Promise<boolean> {
   try {
     await stat(pathValue)
+
     return true
   } catch (error) {
     if (isENOENT(error)) {
       return false
     }
+
     throw error
   }
 }

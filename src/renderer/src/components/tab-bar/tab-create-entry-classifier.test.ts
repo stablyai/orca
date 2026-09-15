@@ -129,6 +129,7 @@ describe('tab create entry classification', () => {
         url: expect.stringMatching(/^http:\/\//)
       })
     }
+
     for (const input of ['8.8.8.8', '1.1.1.1:8080']) {
       expect(classifyTabEntryQuery(input, readyFiles([])), input).toMatchObject({
         kind: 'host-url',
@@ -268,6 +269,7 @@ describe('tab create entry classification', () => {
       'src/base/tone.ts',
       'src/bin/tune.ts'
     ]
+
     expect(getTabEntryOptions('btn', readyFiles(files)).map((o) => o.classification.kind)).toEqual([
       'existing-file',
       'existing-file',
@@ -295,12 +297,14 @@ describe('tab create entry classification', () => {
         (option) => option.classification.kind
       )
     ).toEqual(['new-file', 'search', 'existing-file'])
+
     for (const query of ['node.js tutorial', 'package.json docs', 'what is foo.bar']) {
       expect(classifyTabEntryQuery(query, readyFiles([]))).toMatchObject({
         kind: 'search',
         query
       })
     }
+
     for (const query of ['.env', '.gitignore']) {
       expect(
         getTabEntryOptions(query, readyFiles([])).map((option) => option.classification.kind)
@@ -312,9 +316,11 @@ describe('tab create entry classification', () => {
     for (const query of ['error: cannot connect', 'node:fs docs', 'site:github.com react']) {
       expect(classifyTabEntryQuery(query, readyFiles([]))).toMatchObject({ kind: 'search', query })
     }
+
     for (const query of ['ftp:example.com', 'ftp://example.com', 'custom:// bad input']) {
       expect(classifyTabEntryQuery(query, readyFiles([]))).toMatchObject({ kind: 'blocked' })
     }
+
     expect(classifyTabEntryQuery('foo.ts:123', readyFiles([]))).toMatchObject({
       kind: 'new-file',
       relativePath: 'foo.ts:123'
@@ -325,6 +331,7 @@ describe('tab create entry classification', () => {
     for (const query of ['https://', 'example.com:99999']) {
       expect(classifyTabEntryQuery(query, readyFiles([]))).toMatchObject({ kind: 'blocked' })
     }
+
     expect(classifyTabEntryQuery('example.com:99999', readyFiles(['example.com:99999']))).toEqual({
       kind: 'existing-file',
       matchKind: 'exact-path',
@@ -350,6 +357,7 @@ describe('tab create entry classification', () => {
 
   it('keeps file matches for path prefixes that cannot be created', () => {
     const files = ['src/main/index.ts', 'src/renderer/App.tsx']
+
     // A trailing separator is an ordinary keystroke on the way to a nested path,
     // so the matches it finds must survive the unusable-path verdict.
     for (const query of ['src/', 'src/renderer/']) {
@@ -358,6 +366,7 @@ describe('tab create entry classification', () => {
         query
       ).toEqual(expect.arrayContaining(['existing-file']))
     }
+
     expect(getTabEntryOptions('src/', readyFiles([]))).toMatchObject([
       { classification: { kind: 'blocked' } }
     ])
@@ -424,6 +433,7 @@ describe('tab create entry classification', () => {
         query: expectedQuery
       })
     }
+
     expect(classifyTabEntryQuery('?', readyFiles([]))).toMatchObject({ kind: 'empty' })
   })
 
@@ -437,6 +447,7 @@ describe('tab create entry classification', () => {
 
   it('blocks oversized pasted file-entry queries before reading listed files', () => {
     const oversizedQuery = `src/${'secret-tab-create'.repeat(QUICK_OPEN_QUERY_MAX_BYTES)}.ts`
+
     const fileList = {
       get files(): string[] {
         throw new Error('oversized queries must not read file lists')
@@ -509,6 +520,7 @@ describe('tab create entry classification', () => {
         filePath
       })
     }
+
     expect(
       classifyTabEntryQuery('/tmp/notes.md', readyFiles([]), {
         allowAbsolutePaths: true,

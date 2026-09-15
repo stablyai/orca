@@ -4,17 +4,21 @@ import type { CoordinatorRuntime } from './coordinator-runtime-contract'
 import { dispatchTaskToWorker } from './coordinator-task-dispatch'
 
 const WORKER_PANE_KEY = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 let db: OrchestrationDb
 
 function createRuntime(promptError: Error | null): CoordinatorRuntime & { prompts: string[] } {
   const prompts: string[] = []
+
   return {
     prompts,
     async sendTerminalAgentPrompt(_handle: string, prompt: string) {
       prompts.push(prompt)
+
       if (promptError) {
         throw promptError
       }
+
       return { accepted: true }
     },
     async listTerminals() {
@@ -91,6 +95,7 @@ describe('coordinator dispatch with an unobserved prompt', () => {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
     await dispatch(createRuntime(new Error('agent_prompt_stalled')), task.id, [])
     const dispatchId = db.getDispatchContext(task.id)!.id
+
     const minted = db.mintDispatchCapability({
       dispatchId,
       paneKey: WORKER_PANE_KEY,

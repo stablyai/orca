@@ -30,31 +30,43 @@ function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
 
 export function formatKeybinding(binding: string, platform: NodeJS.Platform): string[] {
   const parsed = parseKeybinding(binding)
+
   if (!parsed) {
     return [binding]
   }
+
   const isMac = platform === 'darwin'
+
   if (parsed.doubleTapModifier) {
     const glyph = formatModifierGlyph(parsed.doubleTapModifier, isMac)
+
     return [glyph, glyph]
   }
+
   const parts: string[] = []
+
   if (parsed.mod) {
     parts.push(isMac ? '⌘' : 'Ctrl')
   }
+
   if (parsed.meta) {
     parts.push(isMac ? '⌘' : 'Cmd')
   }
+
   if (parsed.control) {
     parts.push(isMac ? '⌃' : 'Ctrl')
   }
+
   if (parsed.alt) {
     parts.push(isMac ? '⌥' : 'Alt')
   }
+
   if (parsed.shift) {
     parts.push(isMac ? '⇧' : 'Shift')
   }
+
   parts.push(formatKeyToken(parsed.key, isMac))
+
   return parts
 }
 
@@ -65,9 +77,11 @@ export function formatKeybindingList(
   if (bindings.length === 0) {
     return 'Unassigned'
   }
+
   return bindings
     .map((binding) => {
       const separator = isDoubleTapBinding(binding) ? ' ' : platform === 'darwin' ? '' : '+'
+
       return formatKeybinding(binding, platform).join(separator)
     })
     .join(', ')
@@ -81,6 +95,7 @@ export function findKeybindingActionsForBinding(
 ): KeybindingActionId[] {
   const identity = getKeybindingConflictIdentity(binding, platform)
   const allowedScopes = new Set(scopes)
+
   return KEYBINDING_DEFINITIONS.filter(
     (definition) =>
       allowedScopes.has(definition.scope) &&
@@ -143,37 +158,45 @@ export function findKeybindingConflictsForDefinitions(
 ): KeybindingConflict[] {
   const owners = new Map<string, { binding: string; actionIds: Set<KeybindingActionId> }>()
   const ignoredActionIds = new Set(options.ignoredActionIds ?? [])
+
   const customizedActions = new Set(
     Object.keys(overrides ?? {}).filter(
       (actionId): actionId is KeybindingActionId =>
         isKeybindingActionId(actionId) && !ignoredActionIds.has(actionId)
     )
   )
+
   for (const actionId of options.relevantActionIds ?? []) {
     if (!ignoredActionIds.has(actionId)) {
       customizedActions.add(actionId)
     }
   }
+
   for (const definition of definitions) {
     if (ignoredActionIds.has(definition.id)) {
       continue
     }
+
     for (const binding of getEffectiveKeybindingsForDefinition(definition, platform, overrides)) {
       const groups = new Set([definition.conflictGroup ?? definition.scope])
+
       if (definition.conflictGroup) {
         // Why: native menu accelerators can consume global chords, so check custom bindings against both the menu bucket and scope.
         groups.add(definition.scope)
       }
+
       for (const group of groups) {
         for (const identity of keybindingConflictIdentities(definition.id, binding, platform)) {
           const conflictKey = `${group}\u0000${identity}`
           const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
+
           if (
             !isDigitIndexActionId(definition.id) &&
             Array.from(current.actionIds).some((actionId) => isDigitIndexActionId(actionId))
           ) {
             current.binding = binding
           }
+
           current.actionIds.add(definition.id)
           owners.set(conflictKey, current)
         }
@@ -182,6 +205,7 @@ export function findKeybindingConflictsForDefinitions(
   }
 
   const seenConflictKeys = new Set<string>()
+
   return Array.from(owners.values())
     .filter(({ actionIds }) => actionIds.size > 1 && setIntersects(actionIds, customizedActions))
     .map(({ binding, actionIds }) => ({
@@ -190,10 +214,13 @@ export function findKeybindingConflictsForDefinitions(
     }))
     .filter((conflict) => {
       const key = `${conflict.binding}\u0000${conflict.actionIds.join('\u0000')}`
+
       if (seenConflictKeys.has(key)) {
         return false
       }
+
       seenConflictKeys.add(key)
+
       return true
     })
 }
@@ -204,5 +231,6 @@ function setIntersects<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean 
       return true
     }
   }
+
   return false
 }

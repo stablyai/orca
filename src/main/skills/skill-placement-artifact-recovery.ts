@@ -8,6 +8,7 @@ import type {
 
 function normalizedPath(path: string): string {
   const normalized = resolve(path)
+
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
@@ -23,6 +24,7 @@ export async function placementIsAlias(
   if (filesystem.aliasTargets) {
     return filesystem.aliasTargets(canonicalPath, destinationPath).catch(() => false)
   }
+
   return Boolean((await lstat(destinationPath).catch(() => null))?.isSymbolicLink())
 }
 
@@ -46,9 +48,11 @@ export async function placementBackupMatchesPrevious(
   const previous = journal.previousReceipt?.placements.find(
     (placement) => normalizedPath(placement.path) === normalizedPath(action.destinationPath)
   )
+
   if (!previous || !journal.previousReceipt) {
     return false
   }
+
   if (previous.topology !== 'provider-alias') {
     return placementMatchesDigest(
       action.backupPath,
@@ -58,10 +62,13 @@ export async function placementBackupMatchesPrevious(
       journal.previousReceipt.fileModes ?? []
     )
   }
+
   if (filesystem.aliasTargets) {
     return filesystem.aliasTargets(journal.canonicalPath, action.backupPath).catch(() => false)
   }
+
   const target = await readlink(action.backupPath).catch(() => null)
+
   return Boolean(
     target &&
     normalizedPath(resolve(dirname(action.backupPath), target)) ===
@@ -79,10 +86,12 @@ export async function settleDesiredPlacementArtifacts(
     placementPathExists(action.stagingPath),
     placementPathExists(action.backupPath)
   ])
+
   if (backupExists) {
     if (!(await placementBackupMatchesPrevious(journal, action, filesystem))) {
       throw new Error('skill-placement-recovery-conflict')
     }
+
     if (destinationExists) {
       if (
         !(await placementMatchesDigest(
@@ -94,6 +103,7 @@ export async function settleDesiredPlacementArtifacts(
       ) {
         throw new Error('skill-placement-recovery-conflict')
       }
+
       await filesystem.remove(action.backupPath)
     } else if (
       stagingExists &&
@@ -101,14 +111,17 @@ export async function settleDesiredPlacementArtifacts(
     ) {
       await filesystem.rename(action.stagingPath, action.destinationPath)
       await filesystem.remove(action.backupPath)
+
       return true
     } else {
       if (stagingExists) {
         await filesystem.remove(action.stagingPath)
       }
+
       await filesystem.rename(action.backupPath, action.destinationPath)
     }
   }
+
   if (await placementPathExists(action.stagingPath)) {
     if (
       !(await placementMatchesDigest(
@@ -119,11 +132,14 @@ export async function settleDesiredPlacementArtifacts(
       ))
     ) {
       await filesystem.remove(action.stagingPath)
+
       return true
     }
+
     await ((await placementPathExists(action.destinationPath))
       ? filesystem.remove(action.stagingPath)
       : filesystem.rename(action.stagingPath, action.destinationPath))
   }
+
   return stagingExists || backupExists
 }

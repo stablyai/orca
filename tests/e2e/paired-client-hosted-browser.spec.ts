@@ -37,6 +37,7 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
       <a href="/next">next</a>
     </body></html>`)
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -45,6 +46,7 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
     })
   })
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     close: () => closeServer(server),
     clientUrl: `${origin}/client`,
@@ -84,9 +86,11 @@ async function findPairedWorktreeId(page: Page, repoPath: string): Promise<strin
         repoPath
       )
     )
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -106,13 +110,17 @@ async function selectPairedWorktree(
 async function createProductBrowserPage(page: Page, url: string): Promise<void> {
   await page.evaluate(async (url) => {
     const state = window.__store?.getState()
+
     if (!state?.activeWorktreeId) {
       throw new Error('Paired client has no active worktree')
     }
+
     const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId]
+
     if (!groupId) {
       throw new Error('Paired client has no active tab group')
     }
+
     state.setBrowserDefaultUrl(url)
     await state.openNewBrowserTabInActiveWorkspace(groupId)
   }, url)
@@ -126,12 +134,15 @@ async function findMirroredBrowserPage(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (!browserPage.url.startsWith(url)) {
             continue
           }
+
           const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
           return {
             localPageId: browserPage.id,
             placementKind: handle?.placement?.kind ?? null,
@@ -140,6 +151,7 @@ async function findMirroredBrowserPage(
           }
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -156,6 +168,7 @@ async function waitForMirroredBrowserPage(
     .poll(
       async () => {
         mirrored = await findMirroredBrowserPage(page, worktreeId, url)
+
         return mirrored
       },
       {
@@ -164,9 +177,11 @@ async function waitForMirroredBrowserPage(
       }
     )
     .not.toBeNull()
+
   if (!mirrored) {
     throw new Error(`Mirrored browser page disappeared for ${url}`)
   }
+
   return mirrored
 }
 
@@ -200,6 +215,7 @@ async function readClientWebviewMarker(page: Page, url: string): Promise<string 
   return page.evaluate(async (prefix) => {
     for (const candidate of document.querySelectorAll('webview')) {
       const webview = candidate as Electron.WebviewTag
+
       try {
         if (webview.getURL().startsWith(prefix)) {
           return (await webview.executeJavaScript(
@@ -210,6 +226,7 @@ async function readClientWebviewMarker(page: Page, url: string): Promise<string 
         // The guest may still be attaching.
       }
     }
+
     return null
   }, url)
 }
@@ -228,9 +245,11 @@ async function callBrowserSnapshot(
         params: { page: browserPageId, worktree: `id:${worktreeId}` },
         timeoutMs: 15_000
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return (response.result as { snapshot: string }).snapshot
     },
     { browserPageId, environmentId, worktreeId }
@@ -246,6 +265,7 @@ async function runClientHostedBrowserJourney(args: {
 }): Promise<void> {
   const fixture = await startBrowserFixture()
   let client: PairedElectronClient | null = null
+
   try {
     client = await launchPairedElectronClient(
       args.offer,
@@ -256,11 +276,13 @@ async function runClientHostedBrowserJourney(args: {
     await selectPairedWorktree(client.page, client.environmentId, worktreeId)
 
     await createProductBrowserPage(client.page, fixture.clientUrl)
+
     const clientHostedPage = await waitForMirroredBrowserPage(
       client.page,
       worktreeId,
       fixture.clientUrl
     )
+
     expect(clientHostedPage.placementKind).toBe('client')
     await focusMirroredBrowserPage(client.page, worktreeId, clientHostedPage.localPageId)
 
@@ -290,11 +312,13 @@ async function runClientHostedBrowserJourney(args: {
     expect(await readOwnedPageUrls(client.app, fixture.clientUrl)).toHaveLength(1)
 
     await createProductBrowserPage(client.page, fixture.serverUrl)
+
     const serverHostedPage = await waitForMirroredBrowserPage(
       client.page,
       worktreeId,
       fixture.serverUrl
     )
+
     expect(serverHostedPage.placementKind).not.toBe('client')
     await focusMirroredBrowserPage(client.page, worktreeId, serverHostedPage.localPageId)
     await expect(client.page.getByTestId('remote-browser-frame').first()).toBeVisible({
@@ -338,6 +362,7 @@ test('hosts a paired browser from a headless server and preserves server fallbac
 }, testInfo) => {
   test.setTimeout(300_000)
   const host = await launchHeadlessPairedRuntimeHost()
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     await host.client.call('terminal.create', {

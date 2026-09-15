@@ -139,6 +139,7 @@ describe('pane terminal output scheduler', () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -165,6 +166,7 @@ describe('pane terminal output scheduler', () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -191,6 +193,7 @@ describe('pane terminal output scheduler', () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -223,6 +226,7 @@ describe('pane terminal output scheduler', () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -254,6 +258,7 @@ describe('pane terminal output scheduler', () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())

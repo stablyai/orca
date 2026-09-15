@@ -20,6 +20,7 @@ export function createFileSearchActions(
     updateFileSearchState: (worktreeId, updates) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
+
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
@@ -30,6 +31,7 @@ export function createFileSearchActions(
     seedFileSearchQuery: (worktreeId, query) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
+
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
@@ -48,6 +50,7 @@ export function createFileSearchActions(
     seedFileSearchIncludePattern: (worktreeId, includePattern) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId] || defaultFileSearchState()
+
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
@@ -66,11 +69,14 @@ export function createFileSearchActions(
     consumeFileSearchSeedRequest: (worktreeId, seedRequestId) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
+
         if (!current || current.seedRequestId !== seedRequestId) {
           return s
         }
+
         const next = { ...current }
         delete next.seedRequestId
+
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
@@ -81,15 +87,19 @@ export function createFileSearchActions(
     toggleFileSearchCollapsedFile: (worktreeId, filePath) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
+
         if (!current) {
           return s
         }
+
         const nextCollapsed = new Set(current.collapsedFiles)
+
         if (nextCollapsed.has(filePath)) {
           nextCollapsed.delete(filePath)
         } else {
           nextCollapsed.add(filePath)
         }
+
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,
@@ -100,9 +110,11 @@ export function createFileSearchActions(
     clearFileSearch: (worktreeId) =>
       set((s) => {
         const current = s.fileSearchStateByWorktree[worktreeId]
+
         if (!current) {
           return s
         }
+
         return {
           fileSearchStateByWorktree: {
             ...s.fileSearchStateByWorktree,

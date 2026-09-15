@@ -6,6 +6,7 @@ import {
 } from './agent-session-operation-admission'
 
 const NOW = 1_900_000_000_000
+
 const OPERATION_ID = `${NOW}-${'a'.repeat(32)}`
 
 describe('global agent-session operation admission', () => {

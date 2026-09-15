@@ -130,6 +130,7 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
     )
   })
   mounted.push({ container, root })
+
   return { container, root, onActivate }
 }
 
@@ -137,17 +138,21 @@ function getButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
     candidate.textContent?.includes(label)
   )
+
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`Missing button: ${label}`)
   }
+
   return button
 }
 
 function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
   const event = spy.mock.calls.at(-1)?.[0]
+
   if (!(event instanceof CustomEvent)) {
     throw new Error('Expected a split request event')
   }
+
   return event
 }
 
@@ -190,6 +195,7 @@ afterEach(() => {
     act(() => root.unmount())
     container.remove()
   }
+
   vi.restoreAllMocks()
 })
 

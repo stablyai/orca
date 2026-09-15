@@ -27,11 +27,14 @@ export function getWorktreeIdsForConnection(
       .filter((repo) => repo.connectionId === connectionId)
       .map((repo) => repo.id)
   )
+
   if (matchingRepoIds.size === 0) {
     return []
   }
+
   return Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) => {
     const parsed = splitWorktreeId(worktreeId)
+
     return parsed ? matchingRepoIds.has(parsed.repoId) : false
   })
 }
@@ -41,17 +44,22 @@ export function getConnectionIdsForWorktree(
   worktreeId: string
 ): string[] {
   const parsed = splitWorktreeId(worktreeId)
+
   if (!parsed) {
     return []
   }
+
   const connectionId = store.getRepos().find((repo) => repo.id === parsed.repoId)?.connectionId
+
   return connectionId ? [connectionId] : []
 }
 
 type EnrichmentTarget = { advertisedUrl?: string; advertisedProtocol?: 'http' | 'https' }
+
 type SshDetectedPortEnrichmentOptions = {
   validatePid?: boolean
 }
+
 type PortPidState = { kind: 'single'; pid?: number } | { kind: 'ambiguous' }
 
 function applyAdvertisedUrl<T extends object>(
@@ -72,6 +80,7 @@ export function enrichSshDetectedPorts(
   if (worktreeIds.length === 0) {
     return [...ports]
   }
+
   if (options.validatePid !== false) {
     // Why: SSH scans are connection-scoped while URLs are worktree-scoped; use
     // the scan snapshot to invalidate stale same-port candidates before lookup.
@@ -80,15 +89,20 @@ export function enrichSshDetectedPorts(
       ports.map((port) => ({ port: port.port, pid: port.pid }))
     )
   }
+
   if (ports.length === 0) {
     return [...ports]
   }
+
   const pidStateByPort = options.validatePid === false ? undefined : getPidStateByPort(ports)
+
   return ports.map((port) => {
     const pidState = pidStateByPort?.get(port.port)
+
     if (pidState?.kind === 'ambiguous') {
       return port
     }
+
     // Why: pass the remote listener PID so the watcher can evict stale URLs
     // when the port has been reused by a different process. The relay-side
     // scanner reads /proc/net/tcp and includes the PID when available.
@@ -97,27 +111,33 @@ export function enrichSshDetectedPorts(
       port.port,
       options.validatePid === false ? undefined : pidState?.pid
     )
+
     return found ? applyAdvertisedUrl(port, found) : port
   })
 }
 
 function getPidStateByPort(ports: readonly DetectedPort[]): Map<number, PortPidState> {
   const states = new Map<number, PortPidState>()
+
   for (const port of ports) {
     const existing = states.get(port.port)
+
     if (!existing) {
       states.set(port.port, { kind: 'single', pid: port.pid })
       continue
     }
+
     if (existing.kind === 'ambiguous') {
       continue
     }
+
     if (existing.pid !== port.pid || existing.pid === undefined) {
       // Why: SSH scans can report several host-specific listeners for one
       // numeric port, but advertised URLs are cached only by port.
       states.set(port.port, { kind: 'ambiguous' })
     }
   }
+
   return states
 }
 
@@ -129,12 +149,14 @@ export function enrichSshForwardEntries(
   if (worktreeIds.length === 0 || entries.length === 0) {
     return [...entries]
   }
+
   // Why: forward entries are user-configured (persisted by remotePort), not
   // observed listeners — we cannot validate against a current listener PID
   // here. Detected-port enrichment is the eviction path; whatever survives
   // there is safe to surface for the matching forward.
   return entries.map((entry) => {
     const found = watcher.lookupBest(worktreeIds, entry.remotePort)
+
     return found ? applyAdvertisedUrl(entry, found) : entry
   })
 }

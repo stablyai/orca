@@ -152,6 +152,7 @@ function renderContextMenu(worktree: Worktree) {
     )
   })
   mounted.push({ container, root })
+
   return container
 }
 
@@ -161,6 +162,7 @@ describe('WorktreeContextMenu delete shortcut display', () => {
       if (action === 'workspace.delete') {
         return '⌘⇧⌫'
       }
+
       return null
     })
   })
@@ -172,6 +174,7 @@ describe('WorktreeContextMenu delete shortcut display', () => {
       })
       container.remove()
     }
+
     mounted.length = 0
   })
 
@@ -222,6 +225,7 @@ describe('WorktreeContextMenu delete shortcut display', () => {
 
   it('omits the shortcut badge when the action is unassigned', () => {
     shortcutLabelMock.mockReturnValue(null)
+
     const worktree = {
       id: 'repo::wt-1',
       repoId: 'repo',

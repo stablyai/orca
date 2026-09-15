@@ -24,6 +24,7 @@ describe('getUpstreamStatus with a deferred (not-yet-materialized) fork remote',
   it('reports the graceful "publish" state instead of 0 ahead/0 behind', async () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'orca-deferred-fork-remote-'))
     tempPaths.push(repoPath)
+
     const git = (...args: string[]): string =>
       execFileSync('git', args, { cwd: repoPath, encoding: 'utf8' })
 

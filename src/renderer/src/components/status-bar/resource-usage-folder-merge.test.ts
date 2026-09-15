@@ -9,7 +9,9 @@ const workspace = {
   repoId: 'folder-workspace:docs',
   displayName: 'Release notes'
 } as Worktree
+
 const secondWorkspace = { ...workspace, id: 'folder:research', displayName: 'Research' }
+
 const oldRow: WorktreeMemory = {
   worktreeId: workspace.id,
   worktreeName: workspace.id,
@@ -53,6 +55,7 @@ describe('folder Resource Manager rows', () => {
       ],
       context()
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({
       repoId: workspace.repoId,
@@ -92,6 +95,7 @@ describe('folder Resource Manager rows', () => {
       ],
       context()
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0]).toMatchObject({ repoName: 'Documentation', cpu: 2, memory: 2048 })
     expect(groups[0].worktrees).toHaveLength(2)
@@ -111,6 +115,7 @@ describe('folder Resource Manager rows', () => {
       [],
       context({ worktreeById: new Map() })
     )
+
     expect(groups[0].worktrees[0]).toMatchObject({
       worktreeId: workspace.id,
       worktreeName: workspace.id,
@@ -154,6 +159,7 @@ describe('folder Resource Manager rows', () => {
         worktreeById: new Map([[workspace.id, { ...workspace, hostId: 'ssh:ssh-target' }]])
       })
     )
+
     expect(groups[0]).toMatchObject({ hasRemoteChildren: true, memory: null })
     expect(groups[0].worktrees[0]).toMatchObject({ isRemote: true, memory: null })
   })

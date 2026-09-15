@@ -40,6 +40,7 @@ const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: 
     fallback: 'Untracked Files'
   }
 }
+
 const CONFLICTS_SECTION_LABEL = {
   key: 'auto.components.right.sidebar.SourceControl.conflictsSection',
   fallback: 'Conflicts'
@@ -103,6 +104,7 @@ export function SourceControlUncommittedSections(props: {
         const canRevertAll = !props.normalizedFilter && discardAllPaths.length > 0
         const sectionLabel = id === 'conflicts' ? CONFLICTS_SECTION_LABEL : SECTION_LABELS[area]
         const sectionViewAction = getSourceControlSectionViewAction(actionSection)
+
         return (
           <div key={id}>
             <SectionHeader

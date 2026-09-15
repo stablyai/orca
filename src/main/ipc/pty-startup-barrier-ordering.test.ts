@@ -17,6 +17,7 @@ describe('PTY startup barrier ordering', () => {
       readRepoSource('src/main/ipc/pty/ipc/spawn.ts') +
       readRepoSource('src/main/ipc/pty/ipc/spawn-begin.ts') +
       readRepoSource('src/main/ipc/pty/ipc/spawn-preflight.ts')
+
     const rendererSpawnStart = rendererSource.indexOf("ipcMain.handle('pty:spawn'")
     const rendererSpawn = rendererSource.slice(rendererSpawnStart)
 

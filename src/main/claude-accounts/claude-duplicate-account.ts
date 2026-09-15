@@ -10,11 +10,13 @@ export type ClaudeAccountIdentityCandidate = {
 
 function normalizeEmail(value: string | null | undefined): string | null {
   const trimmed = value?.trim().toLowerCase()
+
   return trimmed ? trimmed : null
 }
 
 function normalizeOrganizationUuid(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }
 
@@ -27,6 +29,7 @@ function runtimeScopeKey(
   // still matches them (#6616). WSL folds through the same distro-bucket key
   // runtime-selection.ts uses, so a distro compares equal to its own bucket.
   const normalizedRuntime = runtime ?? 'host'
+
   return normalizedRuntime === 'wsl' ? `wsl:${getClaudeWslSelectionKey(wslDistro)}` : 'host'
 }
 
@@ -39,11 +42,14 @@ export function findDuplicateClaudeAccount(
   candidate: ClaudeAccountIdentityCandidate
 ): ClaudeManagedAccount | null {
   const email = normalizeEmail(candidate.email)
+
   if (!email) {
     return null
   }
+
   const organizationUuid = normalizeOrganizationUuid(candidate.organizationUuid)
   const scope = runtimeScopeKey(candidate.managedAuthRuntime, candidate.wslDistro)
+
   return (
     accounts.find(
       (account) =>

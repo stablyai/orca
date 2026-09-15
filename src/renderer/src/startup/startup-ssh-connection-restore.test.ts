@@ -77,6 +77,7 @@ describe('restoreSshConnectionsForStartup', () => {
     )
 
     let settled = false
+
     const restore = restoreSshConnectionsForStartup({
       connectionIds: ['ssh-active', 'ssh-asleep'],
       blockingConnectionIds: ['ssh-active'],
@@ -107,6 +108,7 @@ describe('restoreSshConnectionsForStartup', () => {
     harness.connect.mockReturnValue(new Promise<SshConnectionState>(() => {}))
 
     let settled = false
+
     const restore = restoreSshConnectionsForStartup({
       connectionIds: ['ssh-active'],
       blockingConnectionIds: ['ssh-active'],
@@ -194,6 +196,7 @@ describe('restoreSshConnectionsForStartup', () => {
     harness.connect.mockReturnValue(new Promise<SshConnectionState>(() => {}))
 
     let settled = false
+
     const restore = restoreSshConnectionsForStartup({
       connectionIds: ['ssh-a', 'ssh-b'],
       setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,

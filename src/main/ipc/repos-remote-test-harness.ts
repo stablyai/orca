@@ -161,6 +161,7 @@ export function sshGitDispatchModuleMock(mocks: ReposIpcMocks): Record<string, u
       if (id === 'conn-1') {
         return mocks.mockGitProvider
       }
+
       return undefined
     })
   }
@@ -172,6 +173,7 @@ export function sshFilesystemDispatchModuleMock(mocks: ReposIpcMocks): Record<st
       if (id === 'conn-1') {
         return mocks.mockFilesystemProvider
       }
+
       return undefined
     })
   }
@@ -183,6 +185,7 @@ export function sshModuleMock(mocks: ReposIpcMocks): Record<string, unknown> {
       if (id === 'conn-1') {
         return mocks.mockMultiplexer
       }
+
       return undefined
     })
   }
@@ -197,10 +200,12 @@ export type RepoHandlerHarness = {
 /** Captures every `ipcMain.handle` registration so tests can invoke handlers directly. */
 export function createRepoHandlerHarness(): RepoHandlerHarness {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   }
+
   const captureHandlers = (handleMock: ReposIpcMocks['handleMock']): void => {
     handlers.clear()
     handleMock.mockReset()
@@ -208,6 +213,7 @@ export function createRepoHandlerHarness(): RepoHandlerHarness {
       handlers.set(channel, handler)
     })
   }
+
   return { handlers, mockWindow, captureHandlers }
 }
 
@@ -268,6 +274,7 @@ export function resetLocalRepoMocks(mocks: ReposIpcMocks): void {
   mocks.gitSpawnMock.mockImplementation(() => {
     const proc = createMockCloneProcess()
     setImmediate(() => proc.emit('close', 0, null))
+
     return proc
   })
 }
@@ -281,20 +288,24 @@ export function createMockCloneProcess(): MockCloneProcess {
   const proc = new EventEmitter() as MockCloneProcess
   proc.stderr = new EventEmitter()
   proc.kill = vi.fn().mockReturnValue(true)
+
   return proc
 }
 
 export async function waitForAssertion(assertion: () => void): Promise<void> {
   const deadline = Date.now() + 2_000
   let lastError: unknown
+
   while (Date.now() < deadline) {
     try {
       assertion()
+
       return
     } catch (error) {
       lastError = error
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
   }
+
   throw lastError
 }

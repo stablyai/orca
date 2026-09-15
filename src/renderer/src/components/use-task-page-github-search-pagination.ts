@@ -13,6 +13,7 @@ import { overlayPendingOnTaskPagePages } from '@/components/task-page-github-wor
 import { scopeGitHubTaskSearch } from '@/components/task-page-github-task-kind'
 import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
+
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,
@@ -41,23 +42,28 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     fetchWorkItemsNextPage,
     activeGithubTaskKind
   } = model
+
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
     async (targetPage?: number) => {
       if (paginationLoading || selectedRepos.length === 0) {
         return
       }
+
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
+
       const repoArgs = selectedRepos.map((r) => ({
         repoId: r.id,
         path: r.path,
         executionHostId: r.executionHostId,
         sourceContext: getTaskPageRepoSourceContext(r, 'github')
       }))
+
       const requestGeneration = paginationGenerationRef.current
       const target = targetPage ?? currentPage + 1
       setPaginationLoading(true)
       setLoadingTargetPage(target)
+
       try {
         const { items, failedCount, errorTypes } = await fetchWorkItemsNextPage(
           repoArgs,
@@ -66,9 +72,11 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
           q,
           taskPageToGitHubApiPage(target)
         )
+
         if (paginationGenerationRef.current !== requestGeneration) {
           return
         }
+
         if (items.length === 0) {
           // Why: see resolveEmptyPageOutcome — a dead click needs feedback only
           // when something actually failed; a clean empty probe is end-of-data.
@@ -80,6 +88,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
             errorTypes,
             countedTotalPages: null
           })
+
           if (reason === 'window-unreachable') {
             toast.error(
               translate(
@@ -113,6 +122,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
             // failed, so the copy stays neutral. The ref carries the committed
             // count, immune to the click-time closure race.
             const committedCount = countedTotalPagesRef.current
+
             if (committedCount !== null && committedCount > 0) {
               toast(
                 translate(
@@ -127,20 +137,26 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
                 }
               )
             }
+
             const next = applyEmptyPageClamp(committedCount, {
               target,
               failedCount,
               errorTypes
             })
+
             countedTotalPagesRef.current = next
             setCountedTotalPages(next)
           }
+
           return
         }
+
         const nextPages = [...pagesRef.current]
+
         while (nextPages.length <= target) {
           nextPages.push(null)
         }
+
         nextPages[target] = overlayPendingOnTaskPagePages([items])[0] ?? []
         pagesRef.current = nextPages
         currentPageRef.current = target
@@ -175,16 +191,20 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
       setPages
     ]
   )
+
   const commitTaskSearch = useCallback(
     (value: string): void => {
       const scoped = scopeGitHubTaskSearch(value, activeGithubTaskKind)
+
       if (scoped !== appliedTaskSearch) {
         setTasksFiltering(true)
       }
+
       setAppliedTaskSearch(scoped)
     },
     [activeGithubTaskKind, appliedTaskSearch, setTasksFiltering, setAppliedTaskSearch]
   )
+
   useGitHubTaskSearchCommit({
     enabled: taskResumeApplied,
     onCommit: commitTaskSearch,
@@ -194,10 +214,13 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     if (!taskResumeApplied) {
       return
     }
+
     if (!githubSearchPersistReadyRef.current) {
       githubSearchPersistReadyRef.current = true
+
       return
     }
+
     // Why: persist the applied query unconditionally to cover paths that change appliedTaskSearch outside the preset handler.
     setTaskResumeState({
       githubItemsPreset: activeTaskPreset,
@@ -210,14 +233,18 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     taskResumeApplied,
     githubSearchPersistReadyRef
   ])
+
   const nextModel = model as typeof model & {
     handleLoadNextPage: typeof handleLoadNextPage
     commitTaskSearch: typeof commitTaskSearch
   }
+
   nextModel.handleLoadNextPage = handleLoadNextPage
   nextModel.commitTaskSearch = commitTaskSearch
+
   return nextModel
 }
+
 export type TaskPageGitHubSearchPaginationModel = ReturnType<
   typeof useTaskPageGitHubSearchPagination
 >

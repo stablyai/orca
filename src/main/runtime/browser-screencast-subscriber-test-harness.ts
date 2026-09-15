@@ -3,6 +3,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeBrowserDriverState } from '../../shared/runtime-types'
 
 export const HARNESS_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
+
 export const HARNESS_PAGE_ID = 'page-1'
 
 const store = {
@@ -58,13 +59,17 @@ export type ScreencastHarness = {
 export function createScreencastHarness(): ScreencastHarness {
   const runtime = new OrcaRuntimeService(store as unknown as never)
   let seq = 0
+
   const browserScreencast = vi.fn(async () => {
     const subscriptionId = `browser-screencast:${HARNESS_PAGE_ID}:${++seq}`
     let settle!: () => void
+
     const done = new Promise<void>((resolve) => {
       settle = resolve
     })
+
     let stops = 0
+
     const session: Session = {
       stop: () => {
         stops += 1
@@ -73,6 +78,7 @@ export function createScreencastHarness(): ScreencastHarness {
       done,
       stops: () => stops
     }
+
     return {
       subscriptionId,
       ready: {
@@ -92,6 +98,7 @@ export function createScreencastHarness(): ScreencastHarness {
       session
     }
   })
+
   ;(runtime as unknown as { browserCommands: unknown }).browserCommands = { browserScreencast }
 
   const subscribe = (options: {
@@ -100,16 +107,20 @@ export function createScreencastHarness(): ScreencastHarness {
   }): ScreencastSubscriber => {
     const calls = browserScreencast.mock.results.length
     const emit = vi.fn()
+
     const done = runtime.browserScreencast(
       { worktree: `id:${HARNESS_WORKTREE_ID}`, page: HARNESS_PAGE_ID, format: 'jpeg' },
       { ...options, sendBinary: vi.fn(), emit }
     )
+
     const started = (): Promise<{ session: Session }> =>
       browserScreencast.mock.results[calls]?.value as Promise<{ session: Session }>
+
     let sessionRef: Session | null = null
     void started()?.then((value) => {
       sessionRef = value.session
     })
+
     return {
       done,
       stop: () => {

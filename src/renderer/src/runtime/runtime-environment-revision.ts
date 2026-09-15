@@ -4,6 +4,7 @@ export function replaceRuntimeEnvironmentRevisions(
   environments: readonly { id: string; createdAt: number; pairingRevision?: number }[]
 ): void {
   revisionByEnvironmentId.clear()
+
   for (const environment of environments) {
     revisionByEnvironmentId.set(
       environment.id,

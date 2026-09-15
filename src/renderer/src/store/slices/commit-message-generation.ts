@@ -46,6 +46,7 @@ export function getCommitMessageGenerationRecordKey(
   if (worktreeId) {
     return worktreeId
   }
+
   return worktreePath?.trim() ? worktreePath : null
 }
 
@@ -73,6 +74,7 @@ export function resolveCommitMessageGenerationSuccess({
   if (!record || record.context.requestId !== requestId || record.status !== 'running') {
     return null
   }
+
   return {
     ...record,
     status: 'succeeded',
@@ -96,6 +98,7 @@ export function resolveCommitMessageGenerationFailure({
   if (!record || record.context.requestId !== requestId || record.status !== 'running') {
     return null
   }
+
   return {
     ...record,
     status: canceled ? 'canceled' : 'failed',
@@ -111,6 +114,7 @@ export function resolveCommitMessageGenerationCancel(
   if (!record || record.status !== 'running') {
     return null
   }
+
   return {
     ...record,
     status: 'canceled',
@@ -125,6 +129,7 @@ export function markCommitMessageGenerationHydrated(
   if (!record || record.status !== 'succeeded') {
     return null
   }
+
   return {
     ...record,
     hydrated: true
@@ -143,10 +148,12 @@ export const createCommitMessageGenerationSlice: StateCreator<
     let nextRequestId = 0
     set((state) => {
       nextRequestId = state.commitMessageGenerationRequestSeq + 1
+
       return {
         commitMessageGenerationRequestSeq: nextRequestId
       }
     })
+
     return nextRequestId
   },
   setCommitMessageGenerationRecord: (key, record) =>
@@ -159,9 +166,11 @@ export const createCommitMessageGenerationSlice: StateCreator<
   updateCommitMessageGenerationRecord: (key, updater) =>
     set((state) => {
       const nextRecord = updater(state.commitMessageGenerationRecords[key] ?? null)
+
       if (!nextRecord) {
         return state
       }
+
       return {
         commitMessageGenerationRecords: {
           ...state.commitMessageGenerationRecords,
@@ -173,17 +182,20 @@ export const createCommitMessageGenerationSlice: StateCreator<
     set((state) => {
       let changed = false
       const nextRecords: CommitMessageGenerationRecords = {}
+
       for (const [key, record] of Object.entries(state.commitMessageGenerationRecords)) {
         const worktreeKey = getCommitMessageGenerationRecordKey(
           record.context.worktreeId,
           record.context.worktreePath
         )
+
         if (worktreeKey && liveWorktreeKeys.has(worktreeKey)) {
           nextRecords[key] = record
         } else {
           changed = true
         }
       }
+
       return changed ? { commitMessageGenerationRecords: nextRecords } : state
     })
 })

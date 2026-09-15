@@ -44,6 +44,7 @@ function deps(
   } = {}
 ) {
   const requests: LinkActionRequest[] = []
+
   return {
     requests,
     deps: {

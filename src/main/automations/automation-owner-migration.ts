@@ -50,18 +50,22 @@ export function classifyAutomationOwner(
   ) {
     return 'ambiguous'
   }
+
   if (automation.executionTargetType !== 'ssh') {
     // The pin is where the run goes, so a pin this authority cannot vouch for is the same
     // unrunnable record dispatch refuses — classifying it `owned` left it enabled and editable.
     if (!workspacePin) {
       return 'owned'
     }
+
     const captured = sanitizeSshTargetGeneration(automation.executionTargetGeneration)
+
     return knownSshTargetIds.has(workspacePin.targetId) &&
       (captured === undefined || captured === workspacePin.generation)
       ? 'owned'
       : 'orphan'
   }
+
   return automation.executionTargetId && knownSshTargetIds.has(automation.executionTargetId)
     ? 'owned'
     : 'orphan'
@@ -93,14 +97,18 @@ function stampTargetGenerations(
 ): StampedTargets {
   let counter = highWaterMark
   let changed = false
+
   const targets = sshTargets.map((target) => {
     if (sanitizeSshTargetGeneration(target.generation) !== undefined) {
       return target
     }
+
     counter = nextSshTargetGeneration(counter)
     changed = true
+
     return { ...target, generation: counter }
   })
+
   return { targets, counter, changed }
 }
 
@@ -117,12 +125,14 @@ function stampCapturedGeneration(
 ): Automation {
   const generation =
     ownerTargetId === undefined ? undefined : targetsById.get(ownerTargetId)?.generation
+
   if (
     generation === undefined ||
     sanitizeSshTargetGeneration(automation.executionTargetGeneration) !== undefined
   ) {
     return automation
   }
+
   return { ...automation, executionTargetGeneration: generation }
 }
 
@@ -138,7 +148,9 @@ function resolveWorkspacePin(
   if (automation.executionTargetType === 'ssh') {
     return undefined
   }
+
   const targetId = resolveAutomationWorkspaceSshTargetId(workspaceState, automation.workspaceId)
+
   return targetId === undefined
     ? undefined
     : { targetId, generation: targetsById.get(targetId)?.generation }
@@ -163,12 +175,15 @@ function indexTargetsByGeneration(
   targetsById: ReadonlyMap<string, SshTarget>
 ): SshTargetIdForGeneration {
   const owners = new Map<number, string>()
+
   for (const target of targetsById.values()) {
     const generation = sanitizeSshTargetGeneration(target.generation)
+
     if (generation !== undefined) {
       owners.set(generation, target.id)
     }
   }
+
   return (generation) => owners.get(generation)
 }
 
@@ -181,25 +196,33 @@ function migrateAutomations(
   const knownIds = new Set(targetsById.keys())
   const sshTargetIdForGeneration = indexTargetsByGeneration(targetsById)
   let changed = false
+
   const migrated = automations.map((automation) => {
     const pin = resolveWorkspacePin(automation, workspaceState, targetsById)
     // Before classification: a followed re-pin is a healthy record, not an orphan.
     const record = followWorkspaceRepin(automation, pin, sshTargetIdForGeneration)
     const classification = classifyAutomationOwner(record, knownIds, pin, storageAuthority)
+
     // Orphans and ambiguous records are never moved, rewritten to Self, stamped,
     // or deleted; dispatch refuses them live rather than this migration writing state.
     if (classification !== 'owned') {
       changed ||= record !== automation
+
       return record
     }
+
     const ownerTargetId =
       record.executionTargetType === 'ssh' ? record.executionTargetId : pin?.targetId
+
     const stamped = stampCapturedGeneration(record, ownerTargetId, targetsById)
+
     if (stamped !== automation) {
       changed = true
     }
+
     return stamped
   })
+
   return { automations: migrated, changed }
 }
 
@@ -211,8 +234,10 @@ export function migrateAutomationOwners(
     targetGenerations: input.sshTargets.map((target) => target.generation),
     capturedGenerations: input.automations.map((automation) => automation.executionTargetGeneration)
   })
+
   const stamped = stampTargetGenerations(input.sshTargets, highWaterMark)
   const targetsById = new Map(stamped.targets.map((target) => [target.id, target]))
+
   const migrated = migrateAutomations(
     input.automations,
     targetsById,
@@ -223,6 +248,7 @@ export function migrateAutomationOwners(
     },
     input.storageAuthority ?? 'desktop'
   )
+
   return {
     automations: migrated.automations,
     sshTargets: stamped.targets,

@@ -23,6 +23,7 @@ export function useAutomationsPageController() {
   const local = useAutomationsPageLocalState(store)
   const list = useAutomationsPageListState({ store, local })
   const destination = useAutomationsPageDestinationState({ store, local, list })
+
   const runsDashboard = useAutomationRunsDashboard({
     enabled: local.pageView === 'runs',
     rows: list.visibleRows,
@@ -31,15 +32,18 @@ export function useAutomationsPageController() {
     authorityForRow: destination.automationAuthorityForRow,
     reloadToken: local.runHistoryReloadToken
   })
+
   const destinationForm = useAutomationsPageDestinationForm({
     store,
     local,
     list,
     base: destination
   })
+
   const setup = useAutomationsPageSetupState({ store, local, list })
   const runPage = useAutomationRunPageState({ store, local, list, setup })
   const sourceAvailability = useAutomationSourceAvailability(list.visibleRows)
+
   const presentation = useAutomationsPagePresentationState({
     store,
     local,
@@ -48,12 +52,14 @@ export function useAutomationsPageController() {
     destinationForm,
     sourceAvailability
   })
+
   const pageRefresh = useAutomationsPageRefresh({
     store,
     local,
     list,
     destination
   })
+
   const draftEffects = useAutomationDraftEffects({
     store,
     local,
@@ -62,12 +68,14 @@ export function useAutomationsPageController() {
     destinationForm,
     pageRefresh
   })
+
   const editorActions = useAutomationEditorActions({
     store,
     local,
     destination,
     destinationForm
   })
+
   const saveAutomation = createAutomationSaveAction({
     store,
     local,
@@ -77,6 +85,7 @@ export function useAutomationsPageController() {
     destinationForm,
     pageRefresh
   })
+
   const actionContext = {
     store,
     local,
@@ -88,6 +97,7 @@ export function useAutomationsPageController() {
     presentation,
     pageRefresh
   }
+
   const managementActions = createAutomationManagementActions(actionContext)
   const runActions = createAutomationRunActions(actionContext)
   const externalActions = useExternalAutomationActions(actionContext)

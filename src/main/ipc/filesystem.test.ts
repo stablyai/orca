@@ -21,48 +21,61 @@ import {
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
+
 vi.mock(
   '../text-generation/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
+
 vi.mock(
   '../source-control/pull-request-template',
   async () => (await import('./filesystem-test-harness')).pullRequestTemplateMock
 )
+
 vi.mock(
   '../source-control/pull-request-linked-issue',
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
@@ -98,6 +111,7 @@ describe('registerFilesystemHandlers', () => {
       dirPath: '/remote/repo',
       connectionId: 'ssh-1'
     })) as { name: string }[]
+
     expect(result.map((e) => e.name)).toEqual([
       '10 - dir',
       '9 - c.txt',
@@ -186,6 +200,7 @@ describe('registerFilesystemHandlers', () => {
       if (targetPath === linkPath) {
         return path.resolve('/private/secret.txt')
       }
+
       return targetPath
     })
 
@@ -206,6 +221,7 @@ describe('registerFilesystemHandlers', () => {
       if (targetPath === aliasWorktreePath) {
         return canonicalWorktreePath
       }
+
       return targetPath
     })
     readdirMock.mockResolvedValue([dirEntry({ name: 'README.md', file: true })])
@@ -258,6 +274,7 @@ describe('registerFilesystemHandlers', () => {
     const provider = {
       stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
 
     registerFilesystemHandlers(store as never)
@@ -282,6 +299,7 @@ describe('registerFilesystemHandlers', () => {
       if (targetPath === aliasWorktreePath) {
         return canonicalWorktreePath
       }
+
       return targetPath
     })
 
@@ -302,9 +320,11 @@ describe('registerFilesystemHandlers', () => {
       if (targetPath === aliasWorktreePath) {
         return canonicalWorktreePath
       }
+
       if (targetPath === aliasLinkPath) {
         return path.resolve('/private/secret.txt')
       }
+
       return targetPath
     })
 
@@ -440,6 +460,7 @@ describe('registerFilesystemHandlers', () => {
     openMock.mockResolvedValue({
       read: vi.fn(async (buffer: Buffer) => {
         buffer[0] = 0x00
+
         return { bytesRead: 1, buffer }
       }),
       close: vi.fn()
@@ -485,6 +506,7 @@ describe('registerFilesystemHandlers', () => {
       'me',
       'repo'
     )
+
     const targetPath = path.join(wslUncRoot, 'file.txt')
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, wslUncRoot])
     tryDeleteWslUncPathMock.mockResolvedValue(true)
@@ -509,6 +531,7 @@ describe('registerFilesystemHandlers', () => {
       'me',
       'repo'
     )
+
     const targetPath = path.join(wslUncRoot, 'file.txt')
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, wslUncRoot])
     tryDeleteWslUncPathMock.mockRejectedValue(
@@ -610,6 +633,7 @@ describe('registerFilesystemHandlers', () => {
   // interactive fs.readDir/fs.stat starved past their 30s timeout.
   it('fs:cancelListFiles aborts an in-flight SSH listing by request token (#7721)', async () => {
     let capturedSignal: AbortSignal | undefined
+
     const listFilesMock = vi.fn(
       (_rootPath: string, options: { signal?: AbortSignal }) =>
         new Promise<string[]>((_resolve, reject) => {
@@ -619,6 +643,7 @@ describe('registerFilesystemHandlers', () => {
           })
         })
     )
+
     getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
 
     registerFilesystemHandlers(store as never)
@@ -626,6 +651,7 @@ describe('registerFilesystemHandlers', () => {
     // Why: cancellation keys are scoped to the issuing webContents, so the
     // cancel must come from the same sender as the listing request.
     const senderEvent = { sender: { id: 7 } }
+
     const pending = handlers.get('fs:listFiles')!(senderEvent, {
       rootPath: '/home/user/repo',
       connectionId: 'conn-1',

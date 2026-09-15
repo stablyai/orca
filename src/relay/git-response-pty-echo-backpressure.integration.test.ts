@@ -35,6 +35,7 @@ import { GIT_RESPONSE_CHUNK_SIZE } from './protocol'
 
 // One framed git.responseChunk: base64 (4/3) + JSON envelope + header slack.
 const FRAMED_CHUNK_BYTES = Math.ceil((GIT_RESPONSE_CHUNK_SIZE * 4) / 3) + 512
+
 const SINK_HIGH_WATER_MARK = 64 * 1024
 
 async function waitUntil(
@@ -43,10 +44,12 @@ async function waitUntil(
   timeoutMs = 10_000
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (!predicate()) {
     if (Date.now() > deadline) {
       throw new Error(`waitUntil timed out: ${what}`)
     }
+
     await new Promise((r) => setImmediate(r))
   }
 }
@@ -54,9 +57,11 @@ async function waitUntil(
 async function waitUntilSettled(read: () => number, stableTurns = 25): Promise<void> {
   let last = read()
   let stable = 0
+
   while (stable < stableTurns) {
     await new Promise((r) => setImmediate(r))
     const current = read()
+
     if (current === last) {
       stable += 1
     } else {
@@ -96,12 +101,15 @@ function createHarness(opts: { congested: boolean }): Harness {
     data: Buffer
     settle: (result: SinkWriteSettlement) => void
   }[] = []
+
   let queuedBytes = 0
   const drainWaiters = new Set<() => void>()
+
   const fireDrainIfIdle = (): void => {
     if (queuedBytes > 0) {
       return
     }
+
     for (const cb of Array.from(drainWaiters)) {
       drainWaiters.delete(cb)
       cb()
@@ -112,9 +120,11 @@ function createHarness(opts: { congested: boolean }): Harness {
     (data: Buffer, settle) => {
       outQueue.push({ data, settle })
       queuedBytes += data.length
+
       if (!opts.congested) {
         return true
       }
+
       return queuedBytes < SINK_HIGH_WATER_MARK
     },
     {
@@ -127,25 +137,31 @@ function createHarness(opts: { congested: boolean }): Harness {
       }
     }
   )
+
   relayFeed = (data: Buffer) => dispatcher.feed(data)
 
   const deliverAll = (): void => {
     while (outQueue.length > 0) {
       const { data, settle } = outQueue.shift()!
       queuedBytes -= data.length
+
       for (const cb of clientDataCallbacks) {
         cb(data)
       }
+
       settle({ ok: true })
     }
+
     fireDrainIfIdle()
   }
 
   let autoDeliverTimer: ReturnType<typeof setInterval> | null = null
+
   const startAutoDeliver = (): void => {
     if (autoDeliverTimer) {
       return
     }
+
     autoDeliverTimer = setInterval(deliverAll, 1)
   }
 
@@ -164,6 +180,7 @@ function createHarness(opts: { congested: boolean }): Harness {
       if (autoDeliverTimer) {
         clearInterval(autoDeliverTimer)
       }
+
       mux.dispose()
       dispatcher.dispose()
       gitHandler.dispose()
@@ -175,9 +192,11 @@ function createHarness(opts: { congested: boolean }): Harness {
 // returns a payload well over the stream threshold.
 function makeRepoWithLargeStagedDiff(dir: string): void {
   const env = { ...process.env }
+
   const run = (args: string[]): void => {
     execFileSync('git', args, { cwd: dir, stdio: 'pipe', env })
   }
+
   run(['init'])
   run(['config', 'user.email', 'test@test.com'])
   run(['config', 'user.name', 'Test'])
@@ -185,9 +204,11 @@ function makeRepoWithLargeStagedDiff(dir: string): void {
   // Stay under the render limits (120k lines / 6M chars) so the diff result
   // carries the full ~4MB content and exceeds the stream threshold.
   const lines: string[] = []
+
   for (let i = 0; i < 12_000; i += 1) {
     lines.push(`line ${i} ${'x'.repeat(100)}`)
   }
+
   writeFileSync(path.join(dir, 'big.txt'), lines.join('\n'))
   run(['add', 'big.txt'])
 }
@@ -209,6 +230,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
 
   it('WITHOUT opt-in: the whole diff queues ahead of a pty echo (single-frame HOL)', async () => {
     const harness = createHarness({ congested: true })
+
     try {
       let queuedBytesAheadOfEcho = -1
       harness.dispatcher.onNotification('pty.data', (params) => {
@@ -222,6 +244,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
         filePath: 'big.txt',
         staged: true
       })
+
       // Let the whole single JSON-RPC frame land in the congested pipe.
       await waitUntil(() => harness.queuedBytes() > SINK_HIGH_WATER_MARK, 'diff frame queued')
       await waitUntilSettled(() => harness.queuedBytes())
@@ -243,6 +266,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
 
   it('WITH opt-in: the diff streams on the bulk lane and the echo stays bounded', async () => {
     const harness = createHarness({ congested: true })
+
     try {
       let queuedBytesAheadOfEcho = -1
       harness.dispatcher.onNotification('pty.data', (params) => {
@@ -255,6 +279,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
         filePath: 'big.txt',
         staged: true
       })
+
       // Deliver the sentinel response, then let the pump run into congestion.
       await waitUntil(() => harness.queuedBytes() > 0, 'sentinel queued')
       harness.deliverAll()
@@ -279,9 +304,11 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
 
   it('streamed result equals the single-frame result', async () => {
     const harness = createHarness({ congested: false })
+
     try {
       harness.startAutoDeliver()
       const params = { worktreePath: repoDir, filePath: 'big.txt', staged: true }
+
       // Why: request both concurrently so the shared 1ms delivery pump drives
       // the plain frame and the streamed chunk/ack round-trips without either
       // starving the other on a slow CI event loop.
@@ -289,6 +316,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
         harness.mux.request('git.diff', params),
         requestGitStreamable(harness.mux, 'git.diff', params)
       ])
+
       expect(streamed).toEqual(plain)
     } finally {
       harness.dispose()
@@ -297,6 +325,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
 
   it('rejects with an inactivity timeout when the stream stalls after the sentinel', async () => {
     const harness = createHarness({ congested: false })
+
     try {
       // Deliver the sentinel so reassembly begins, then stop delivering chunks
       // to model a relay pump that wedged while the channel stayed up. Without
@@ -307,6 +336,7 @@ describe('large git response vs pty.data echo head-of-line blocking', () => {
         { worktreePath: repoDir, filePath: 'big.txt', staged: true },
         { inactivityTimeoutMs: 250 }
       )
+
       await waitUntil(() => harness.queuedBytes() > 0, 'sentinel queued')
       harness.deliverAll() // sentinel only; chunks stay undelivered
       await expect(streamedPromise).rejects.toThrow(/stalled/)

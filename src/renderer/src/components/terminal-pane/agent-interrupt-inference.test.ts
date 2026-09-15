@@ -45,6 +45,7 @@ describe('agent interrupt inference', () => {
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
       const inferInterrupt = vi.fn()
+
       const tracker = createAgentInterruptInference({
         paneKey: PANE_KEY,
         getStatusEntry: () => entry,
@@ -78,6 +79,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -103,6 +105,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'codex' })
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -129,6 +132,7 @@ describe('agent interrupt inference', () => {
   it('reports Escape while Claude is waiting on AskUserQuestion', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () =>
@@ -157,6 +161,7 @@ describe('agent interrupt inference', () => {
   ] as const)('does not dismiss a Claude wait from %s on %s', (intent, toolName) => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => makeEntry({ state: 'waiting', agentType: 'claude', toolName }),
@@ -175,6 +180,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: undefined })
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -201,6 +207,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'droid' })
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -222,6 +229,7 @@ describe('agent interrupt inference', () => {
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
       const inferInterrupt = vi.fn()
+
       const tracker = createAgentInterruptInference({
         paneKey: PANE_KEY,
         getStatusEntry: () => entry,
@@ -252,6 +260,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'opencode' })
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -275,6 +284,7 @@ describe('agent interrupt inference', () => {
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType })
       const inferInterrupt = vi.fn()
+
       const tracker = createAgentInterruptInference({
         paneKey: PANE_KEY,
         getStatusEntry: () => entry,
@@ -296,6 +306,7 @@ describe('agent interrupt inference', () => {
   it('does not emit again for a third OpenCode Escape after the row is already done', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'opencode' })
+
     const inferInterrupt = vi.fn((request) => {
       entry = makeEntry({
         state: 'done',
@@ -305,6 +316,7 @@ describe('agent interrupt inference', () => {
         stateStartedAt: 1_500
       })
     })
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -326,6 +338,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'opencode' })
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -356,6 +369,7 @@ describe('agent interrupt inference', () => {
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
       const inferInterrupt = vi.fn()
+
       const tracker = createAgentInterruptInference({
         paneKey: PANE_KEY,
         getStatusEntry: () => entry,
@@ -376,6 +390,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
     const inferInterrupt = vi.fn().mockReturnValue(true)
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -406,6 +421,7 @@ describe('agent interrupt inference', () => {
       vi.useFakeTimers()
       let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
       const inferInterrupt = vi.fn().mockReturnValue(true)
+
       const tracker = createAgentInterruptInference({
         paneKey: PANE_KEY,
         getStatusEntry: () => entry,
@@ -430,6 +446,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     // Why: an agent with no navigation-Escape rule, so the request actually reaches main.
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'custom-agent' })
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -448,6 +465,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
     let entry: AgentStatusEntry | undefined = makeEntry({ state: 'waiting', agentType: 'codex' })
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -466,6 +484,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
     let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'custom-agent' })
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -485,6 +504,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
     let entry: AgentStatusEntry | undefined = makeEntry()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -504,6 +524,7 @@ describe('agent interrupt inference', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
     let entry: AgentStatusEntry | undefined = makeEntry()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => entry,
@@ -529,6 +550,7 @@ describe('agent interrupt inference', () => {
   it('dispose cancels a pending inference timer', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => makeEntry(),
@@ -546,6 +568,7 @@ describe('agent interrupt inference', () => {
   it('does not rearm after disposal', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => makeEntry(),
@@ -563,6 +586,7 @@ describe('agent interrupt inference', () => {
   it('does not infer against a status created after the input baseline', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
+
     const tracker = createAgentInterruptInference({
       paneKey: PANE_KEY,
       getStatusEntry: () => makeEntry(),
@@ -583,13 +607,16 @@ describe('agent interrupt inference', () => {
     'does not let a delayed acknowledgment for %s cancel a newer turn after cleanup',
     (_label, olderEntry) => {
       vi.useFakeTimers()
+
       const newerEntry = makeEntry({
         prompt: 'newer task',
         updatedAt: 2_000,
         stateStartedAt: 1_900
       })
+
       let currentEntry: AgentStatusEntry | undefined = newerEntry
       const inferInterrupt = vi.fn()
+
       const tracker = createAgentInterruptInference({
         paneKey: PANE_KEY,
         getStatusEntry: () => currentEntry,
@@ -617,6 +644,7 @@ describe('agent interrupt inference', () => {
     expect(isPlainEscapeKeyEvent(keyEvent({ key: 'Escape' }))).toBe(true)
     expect(isCtrlCKeyEvent(keyEvent({ key: 'c', ctrlKey: true }))).toBe(true)
     expect(isCtrlCKeyEvent(keyEvent({ key: 'C', ctrlKey: true }))).toBe(true)
+
     for (const event of [
       keyEvent({ key: 'Escape', altKey: true }),
       keyEvent({ key: 'Escape', shiftKey: true }),

@@ -2,7 +2,9 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 
 const { lstatSync } = vi.hoisted(() => ({ lstatSync: vi.fn() }))
+
 vi.mock('node:fs', () => ({ lstatSync }))
+
 import { canSkipAgentBrowserSessionReset } from './agent-browser-session-reset'
 
 const owned = {
@@ -10,6 +12,7 @@ const owned = {
   socketDirectory: '/tmp/orca-ab-profile',
   sessionName: 'orca-tab-page'
 }
+
 const socketPath = join(owned.socketDirectory, 'orca-tab-page.sock')
 
 beforeEach(() => {

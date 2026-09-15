@@ -34,28 +34,37 @@ export async function startLocalStructuredSessionTabsSync(args: {
   setUnsubscribe: (unsubscribe: () => void) => void
 }): Promise<void> {
   const syncGeneration = localStructuredSessionGeneration()
+
   const isCurrent = (): boolean =>
     !args.isDisposed() && isCurrentLocalStructuredSessionGeneration(syncGeneration)
+
   const capabilities = await refreshLocalRuntimeCapabilities()
+
   if (!isCurrent()) {
     return
   }
+
   const supported = capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
   await restoreLocalStructuredSessionTabsOnce(syncGeneration)
+
   if (!isCurrent()) {
     return
   }
+
   if (!supported) {
     return
   }
+
   let subscriptionGeneration = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
   let activeHandle: { unsubscribe: () => void } | null = null
+
   const scheduleSubscribeRetry = (): void => {
     if (!isCurrent() || reconnectTimer !== null) {
       return
     }
+
     const reconnectDelay = Math.min(250 * 2 ** reconnectAttempt, 5000)
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
@@ -72,10 +81,12 @@ export async function startLocalStructuredSessionTabsSync(args: {
         })
     }, reconnectDelay)
   }
+
   const subscribeCurrent = async (): Promise<void> => {
     if (!isCurrent()) {
       return
     }
+
     const generation = ++subscriptionGeneration
     let handle: { unsubscribe: () => void } | null = null
     handle = await window.api.runtime.subscribe(
@@ -84,18 +95,24 @@ export async function startLocalStructuredSessionTabsSync(args: {
         if (!isCurrent() || generation !== subscriptionGeneration) {
           return
         }
+
         if (!response.ok) {
           // A streaming RPC can terminate with an error response before its
           // handle resolves; fence that generation and retry the subscription.
           subscriptionGeneration += 1
           handle?.unsubscribe()
+
           if (activeHandle === handle) {
             activeHandle = null
           }
+
           scheduleSubscribeRetry()
+
           return
         }
+
         const event = response.result as SessionTabsEvent
+
         if (event.type === 'snapshots') {
           applyStructuredSessionTabSnapshots(event.snapshots, undefined, REPAIR_DROPPED_EPOCHS)
         } else if (event.type === 'snapshot' || event.type === 'updated') {
@@ -104,27 +121,33 @@ export async function startLocalStructuredSessionTabsSync(args: {
           // Reattach with one refresh so a runtime-restart boundary cannot strand stale tabs.
           subscriptionGeneration += 1
           handle?.unsubscribe()
+
           if (activeHandle === handle) {
             activeHandle = null
           }
+
           if (reconnectTimer !== null) {
             clearTimeout(reconnectTimer)
           }
+
           scheduleSubscribeRetry()
         }
       }
     )
+
     if (!isCurrent() || generation !== subscriptionGeneration) {
       handle.unsubscribe()
     } else {
       activeHandle = handle
     }
   }
+
   args.setUnsubscribe(() => {
     if (reconnectTimer !== null) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
+
     activeHandle?.unsubscribe()
     activeHandle = null
   })

@@ -520,6 +520,7 @@ describe('createUISlice hydratePersistedUI', () => {
 
   it('keeps agents scope filter array identities stable across unchanged re-hydrations', () => {
     const store = createUIStore()
+
     const persisted = makePersistedUI({
       agentsVisibleHostIds: ['ssh:devbox'],
       agentsFilterRepoIds: ['repo-1']

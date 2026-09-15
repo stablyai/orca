@@ -25,7 +25,9 @@ function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
+
   return repoPath
 }
 
@@ -36,6 +38,7 @@ test('restores the active top-level view (Tasks) after an app restart', async (/
   const session = createRestartSession(testInfo)
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
+
   try {
     const first = await session.launch()
     firstApp = first.app
@@ -52,9 +55,11 @@ test('restores the active top-level view (Tasks) after an app restart', async (/
     // proves the outcome, per tests/e2e/AGENTS.md).
     await first.page.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.getState().openTaskPage()
     })
     await expect
@@ -96,12 +101,14 @@ test('restores the active top-level view (Tasks) after an app restart', async (/
       if (!app) {
         continue
       }
+
       try {
         await session.close(app)
       } catch {
         // best-effort cleanup
       }
     }
+
     await session.dispose()
   }
 })

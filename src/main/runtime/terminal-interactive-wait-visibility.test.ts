@@ -26,8 +26,11 @@ vi.mock('electron', () => ({
 function fixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
+
 const CURSOR_APPROVAL = fixture('cursor-agent-approval-prompt')
+
 const CURSOR_LONG_TOOL_CALL = fixture('cursor-agent-long-tool-call')
+
 const CURSOR_IDLE = fixture('cursor-agent-idle-after-approval')
 
 // Claude Code 2.1.234's own trust screen, which the runtime already matched by shape.
@@ -49,6 +52,7 @@ async function createPane(
   // Compose the same central hook-store wiring as desktop and orcad so OSC rows exercise the
   // production status path rather than silently disappearing in a bare runtime fixture.
   const statusWiring = makeAgentStatusStoreWiring()
+
   return createTranscriptPane(options, statusWiring.deps)
 }
 
@@ -163,6 +167,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
         foregroundProcess: 'cursor-agent',
         data: CURSOR_APPROVAL
       })
+
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.not.toBeNull()
 
       runtime.onPtyData(
@@ -324,6 +329,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       foregroundProcess: 'cursor-agent',
       data: ''
     })
+
     runtime.seedTerminalRestoreTail(PTY_ID, { text: CURSOR_APPROVAL, lastTitle: CURSOR_TITLE })
 
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
@@ -340,6 +346,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       foregroundProcess: 'claude',
       data: ''
     })
+
     runtime.seedTerminalRestoreTail(PTY_ID, { text: CLAUDE_TRUST })
 
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
@@ -353,6 +360,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       foregroundProcess: 'cursor-agent',
       data: CURSOR_APPROVAL
     })
+
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.not.toBeNull()
 
     runtime.onPtyExit(PTY_ID, 0)
@@ -364,6 +372,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
     // Why: the timeout abandons the wait, not the request. Without single-flighting, a
     // coordinator watching a wedged remote host adds one live probe on every poll.
     let probes = 0
+
     const { runtime, handle } = await createPane({
       paneTitle: '✻ Claude Code',
       foregroundProcess: 'claude',

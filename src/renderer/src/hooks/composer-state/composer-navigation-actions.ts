@@ -44,11 +44,13 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
     const runtimeEnvironmentId = getTaskSourceRuntimeSettings(
       smartNameJiraSourceContext
     ).activeRuntimeEnvironmentId
+
     const targetRuntimeEnvironmentId = runtimeEnvironmentId ?? null
     void setActiveRuntimeEnvironmentPreference(targetRuntimeEnvironmentId).then((selected) => {
       if (!selected) {
         return
       }
+
       openSettingsTarget({ pane: 'integrations', repoId: null })
       openSettingsPage()
       closeModal()
@@ -66,6 +68,7 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
       if (Object.keys(meta).length === 0) {
         return
       }
+
       try {
         await updateWorktreeMeta(worktreeId, meta)
       } catch {

@@ -14,8 +14,10 @@ const IMAGE_FORMATS: Record<string, string> = {
 export function classifyFile(src: string): { mimeType: string; ext: string } | null {
   const ext = extname(src).toLowerCase()
   const mime = IMAGE_FORMATS[ext]
+
   if (!mime) {
     return null
   }
+
   return { mimeType: mime, ext }
 }

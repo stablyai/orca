@@ -68,7 +68,9 @@ export function planOrcadUpdate(input: {
       reason: `${input.candidateVersion} is already the active version; nothing to restart.`
     }
   }
+
   const { liveSessions } = input.census
+
   if (liveSessions === null) {
     if (!input.force) {
       return {
@@ -80,6 +82,7 @@ export function planOrcadUpdate(input: {
           'may be mid-flight.'
       }
     }
+
     return {
       action: 'proceed',
       // Why true: an unverifiable census must be planned for as if sessions exist. Assuming
@@ -92,6 +95,7 @@ export function planOrcadUpdate(input: {
       ]
     }
   }
+
   if (liveSessions > 0 && !input.force) {
     return {
       action: 'defer',
@@ -104,6 +108,7 @@ export function planOrcadUpdate(input: {
         'host is idle, or force it.'
     }
   }
+
   if (liveSessions > 0) {
     return {
       action: 'proceed',
@@ -115,6 +120,7 @@ export function planOrcadUpdate(input: {
       ]
     }
   }
+
   return {
     action: 'proceed',
     // Zero live sessions is the one case where daemon-init's freshness branch replaces the
@@ -167,6 +173,7 @@ export function assessOrcadRollback(input: {
   stateWritesSinceActivation: boolean | null
 }): OrcadRollbackSafety {
   const target = input.record.previous
+
   if (!target) {
     return {
       safety: 'unsafe',
@@ -176,6 +183,7 @@ export function assessOrcadRollback(input: {
         'to. Deploy a known-good build instead.'
     }
   }
+
   if (!input.record.snapshot || !input.snapshotPresent) {
     return {
       safety: 'unsafe',
@@ -187,7 +195,9 @@ export function assessOrcadRollback(input: {
         `${target} a store it may not understand. Deploy forward instead.`
     }
   }
+
   const { startedSinceActivation } = input.census
+
   if (startedSinceActivation === null) {
     return {
       safety: 'unsafe',
@@ -198,6 +208,7 @@ export function assessOrcadRollback(input: {
         'reachable.'
     }
   }
+
   if (startedSinceActivation > 0) {
     return {
       safety: 'unsafe',
@@ -209,6 +220,7 @@ export function assessOrcadRollback(input: {
         'reattach. Close them (or let them exit) and roll back then.'
     }
   }
+
   if (input.stateWritesSinceActivation === false) {
     return {
       safety: 'clean',
@@ -219,6 +231,7 @@ export function assessOrcadRollback(input: {
       ]
     }
   }
+
   return {
     safety: 'lossy',
     target,

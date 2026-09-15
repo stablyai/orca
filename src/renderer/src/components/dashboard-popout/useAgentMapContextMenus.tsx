@@ -45,15 +45,20 @@ export function useAgentMapContextMenus({
   ) => void
 } {
   const requestIdRef = useRef(0)
+
   const [workspaceRequest, setWorkspaceRequest] =
     useState<AgentMapWorkspaceContextMenuRequest | null>(null)
+
   const [projectRequest, setProjectRequest] = useState<AgentMapProjectContextMenuRequest | null>(
     null
   )
+
   const [snapshotRequest, setSnapshotRequest] =
     useState<AgentMapSnapshotWorkspaceMenuRequest | null>(null)
+
   const snapshotMenuEnabled =
     !enabled && (onSpawnAgent !== undefined || onSleepWorkspace !== undefined)
+
   const openSnapshotWorkspaceMenu = useCallback(
     (event: React.MouseEvent<SVGCircleElement>, worktree: AgentMapWorktreeRing): void => {
       requestIdRef.current += 1
@@ -68,6 +73,7 @@ export function useAgentMapContextMenus({
     },
     [launchableAgentsByWorktreeId]
   )
+
   const openWorkspaceContextMenu = useCallback(
     (event: React.MouseEvent<SVGCircleElement>, worktree: AgentMapWorktreeRing): void => {
       requestIdRef.current += 1
@@ -83,6 +89,7 @@ export function useAgentMapContextMenus({
     },
     []
   )
+
   const openProjectContextMenu = useCallback(
     (event: React.MouseEvent<SVGCircleElement>, project: AgentMapProjectRing): void => {
       requestIdRef.current += 1
@@ -96,27 +103,33 @@ export function useAgentMapContextMenus({
     },
     []
   )
+
   const handleWorkspaceLifecycleComplete = useCallback((): void => {
     setWorkspaceRequest(null)
   }, [])
+
   const handleProjectOpenChange = useCallback(
     (open: boolean): void => {
       onOpenChange?.(open)
+
       if (!open) {
         setProjectRequest(null)
       }
     },
     [onOpenChange]
   )
+
   const handleSnapshotOpenChange = useCallback(
     (open: boolean): void => {
       onOpenChange?.(open)
+
       if (!open) {
         setSnapshotRequest(null)
       }
     },
     [onOpenChange]
   )
+
   const contextMenus = snapshotMenuEnabled ? (
     snapshotRequest ? (
       <AgentMapSnapshotWorkspaceMenu

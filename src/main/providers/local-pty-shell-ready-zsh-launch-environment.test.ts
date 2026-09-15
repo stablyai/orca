@@ -44,6 +44,7 @@ describePosix('live zsh subprocess tests', () => {
         TMUX: '/tmp/tmux-501/default,12345,0',
         TMUX_PANE: '%0'
       }
+
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR
@@ -72,6 +73,7 @@ describePosix('live zsh subprocess tests', () => {
         SSH_CLIENT: '10.0.0.1 12345 22',
         LC_CTYPE: 'C.UTF-8'
       }
+
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR
@@ -109,6 +111,7 @@ describePosix('live zsh subprocess tests', () => {
         } else {
           process.env.ZDOTDIR = previousZdotdir
         }
+
         if (previousHome === undefined) {
           delete process.env.HOME
         } else {
@@ -134,6 +137,7 @@ describePosix('live zsh subprocess tests', () => {
           HOME: testHome,
           ORCA_ORIG_ZDOTDIR: '/opt/orca-old/shell-ready/zsh'
         }
+
         delete cleanEnv.ZDOTDIR
         cleanEnv.ZDOTDIR = config.env.ZDOTDIR
 
@@ -172,6 +176,7 @@ describePosix('live zsh subprocess tests', () => {
           HOME: testHome,
           ORCA_ORIG_ZDOTDIR: oldZdotdir
         }
+
         delete cleanEnv.ZDOTDIR
         cleanEnv.ZDOTDIR = config.env.ZDOTDIR
 
@@ -243,6 +248,7 @@ describePosix('live zsh subprocess tests', () => {
         } else {
           process.env.ZDOTDIR = previousZdotdir
         }
+
         if (previousHome === undefined) {
           delete process.env.HOME
         } else {

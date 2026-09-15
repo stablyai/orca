@@ -8,6 +8,7 @@ import { slashCommands } from './rich-markdown-slash-commands'
 
 function roundTripMarkdown(content: string): string {
   const codec = createRichMarkdownEditorCodec()
+
   const editor = new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({ codec }),
@@ -20,6 +21,7 @@ function roundTripMarkdown(content: string): string {
     // NodeType.checkContent, so it emits byte-identical output from a
     // schema-invalid document that would crash on the user's next keystroke.
     editor.state.doc.check()
+
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -28,6 +30,7 @@ function roundTripMarkdown(content: string): string {
 
 function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
   const codec = createRichMarkdownEditorCodec()
+
   const editor = new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({ codec }),
@@ -41,15 +44,20 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
       if (from !== -1 || !node.isText || !node.text) {
         return
       }
+
       const index = node.text.indexOf(search)
+
       if (index !== -1) {
         from = pos + index
       }
     })
+
     if (from === -1) {
       throw new Error(`Missing text: ${search}`)
     }
+
     editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
+
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -58,6 +66,7 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
 
 function markdownAfterTypingBesideImage(content: string, typed: string): string {
   const codec = createRichMarkdownEditorCodec()
+
   const editor = new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({ codec }),
@@ -72,10 +81,13 @@ function markdownAfterTypingBesideImage(content: string, typed: string): string 
         after = pos + node.nodeSize
       }
     })
+
     if (after === -1) {
       throw new Error('Missing image node')
     }
+
     editor.view.dispatch(editor.state.tr.insertText(typed, after, after))
+
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -84,6 +96,7 @@ function markdownAfterTypingBesideImage(content: string, typed: string): string 
 
 function slashCommandMarkdown(commandId: SlashCommandId): string {
   const codec = createRichMarkdownEditorCodec()
+
   const editor = new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({ codec }),
@@ -93,11 +106,13 @@ function slashCommandMarkdown(commandId: SlashCommandId): string {
 
   try {
     const command = slashCommands.find((item) => item.id === commandId)
+
     if (!command) {
       throw new Error(`Missing slash command: ${commandId}`)
     }
 
     command.run(editor)
+
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -106,6 +121,7 @@ function slashCommandMarkdown(commandId: SlashCommandId): string {
 
 function slashCommandSelectionParent(commandId: SlashCommandId): string {
   const codec = createRichMarkdownEditorCodec()
+
   const editor = new Editor({
     element: null,
     extensions: createRichMarkdownExtensions({ codec }),
@@ -115,11 +131,13 @@ function slashCommandSelectionParent(commandId: SlashCommandId): string {
 
   try {
     const command = slashCommands.find((item) => item.id === commandId)
+
     if (!command) {
       throw new Error(`Missing slash command: ${commandId}`)
     }
 
     command.run(editor)
+
     return editor.state.selection.$from.parent.type.name
   } finally {
     editor.destroy()
@@ -215,12 +233,14 @@ describe('rich markdown round trip', () => {
   it('preserves details blocks with unsupported attributes as passthrough html', () => {
     const input =
       '<details id="x"><summary class="s">Toggle</summary><p data-x="1">Body</p></details>\n'
+
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
   it('preserves details blocks with unsupported toggle variants as passthrough html', () => {
     const input =
       '<details data-orca-toggle="heading-6"><summary>Toggle</summary><p>Body</p></details>\n'
+
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
@@ -235,6 +255,7 @@ describe('rich markdown round trip', () => {
       '</details>',
       ''
     ].join('\n')
+
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
@@ -278,6 +299,7 @@ describe('rich markdown round trip', () => {
       '</details>',
       ''
     ].join('\n')
+
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
@@ -300,12 +322,14 @@ describe('rich markdown round trip', () => {
       'Body',
       'Edited body'
     )
+
     expect(markdown).toContain('Edited body')
   })
 
   it('preserves a nested toggle that is not itself editable as passthrough html', () => {
     const input =
       '<details><summary>Outer</summary><details id="x"><summary>Inner</summary><p>Body</p></details></details>\n'
+
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 

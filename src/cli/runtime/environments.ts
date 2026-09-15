@@ -66,6 +66,7 @@ function translateStoreError<TResult>(fn: () => TResult): TResult {
     if (error instanceof RuntimeEnvironmentStoreError) {
       throw new RuntimeClientError(toRuntimeClientErrorCode(error.code), error.message)
     }
+
     throw error
   }
 }

@@ -20,23 +20,29 @@ export async function readNodeReadableTextWithinLimit(
 
   let buffer = Buffer.allocUnsafe(Math.min(INITIAL_READ_CAPACITY_BYTES, maxBytes))
   let bytes = 0
+
   for await (const value of readable) {
     const chunk = Buffer.isBuffer(value) ? value : Buffer.from(String(value))
     const observedBytes = bytes + chunk.byteLength
+
     if (!Number.isSafeInteger(observedBytes) || observedBytes > maxBytes) {
       throw new NodeReadableTextTooLargeError(observedBytes, maxBytes)
     }
+
     if (observedBytes > buffer.byteLength) {
       const nextCapacity = Math.min(
         maxBytes,
         Math.max(observedBytes, INITIAL_READ_CAPACITY_BYTES, buffer.byteLength * 2)
       )
+
       const expanded = Buffer.allocUnsafe(nextCapacity)
       buffer.copy(expanded, 0, 0, bytes)
       buffer = expanded
     }
+
     chunk.copy(buffer, bytes)
     bytes = observedBytes
   }
+
   return buffer.subarray(0, bytes).toString('utf8')
 }

@@ -16,9 +16,11 @@ async function setDictationVisualState(
   await page.evaluate(
     ({ dictationState, transcript }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Expected the E2E store to be exposed')
       }
+
       store.setState({
         dictationState,
         partialTranscript: transcript
@@ -61,6 +63,7 @@ test('dictation grapes react across the visible recording lifecycle', async ({ o
     isSpeaking: true,
     isClipping: false
   }
+
   await setDictationVisualState(orcaPage, 'listening', speaking)
   await expect(indicator.getByText('Speaking')).toBeVisible()
   await expect(status).toHaveText('Listening')

@@ -21,6 +21,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -35,9 +36,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -138,19 +141,24 @@ describe('Store', () => {
     const store = await createStore()
     const { agentHookServer } = await import('./agent-hooks/server')
     await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+
     try {
       const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+
       const firstLeafId =
         layout.root?.type === 'split' && layout.root.first.type === 'leaf'
           ? layout.root.first.leafId
           : null
+
       const secondLeafId =
         layout.root?.type === 'split' && layout.root.second.type === 'leaf'
           ? layout.root.second.leafId
           : null
+
       if (firstLeafId === null || secondLeafId === null) {
         throw new Error('Expected remapped split leaves')
       }
+
       const byPaneKey = new Map(
         agentHookServer.getStatusSnapshot().map((entry) => [entry.paneKey, entry])
       )
@@ -249,19 +257,24 @@ describe('Store', () => {
     const store = await createStore()
     const { agentHookServer } = await import('./agent-hooks/server')
     await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+
     try {
       const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+
       const firstLeafId =
         layout.root?.type === 'split' && layout.root.first.type === 'leaf'
           ? layout.root.first.leafId
           : null
+
       const secondLeafId =
         layout.root?.type === 'split' && layout.root.second.type === 'leaf'
           ? layout.root.second.leafId
           : null
+
       if (firstLeafId === null || secondLeafId === null) {
         throw new Error('Expected remapped split leaves')
       }
+
       const byPaneKey = new Map(
         agentHookServer.getStatusSnapshot().map((entry) => [entry.paneKey, entry])
       )
@@ -327,9 +340,11 @@ describe('Store', () => {
     const firstStore = await createStore()
     const root = firstStore.getWorkspaceSession().terminalLayoutsByTabId.tab1.root
     const stableLeafId = root?.type === 'leaf' ? root.leafId : null
+
     if (stableLeafId === null) {
       throw new Error('Expected remapped leaf id')
     }
+
     const stablePaneKey = makePaneKey('tab1', stableLeafId)
     firstStore.flush()
 
@@ -368,6 +383,7 @@ describe('Store', () => {
     await createStore()
     const { agentHookServer } = await import('./agent-hooks/server')
     await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+
     try {
       expect(agentHookServer.getStatusSnapshot()).toEqual([
         expect.objectContaining({
@@ -463,14 +479,17 @@ describe('Store', () => {
 
     const store = await createStore()
     const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+
     const firstLeafId =
       layout.root?.type === 'split' && layout.root.first.type === 'leaf'
         ? layout.root.first.leafId
         : null
+
     const secondLeafId =
       layout.root?.type === 'split' && layout.root.second.type === 'leaf'
         ? layout.root.second.leafId
         : null
+
     if (
       !firstLeafId ||
       !secondLeafId ||
@@ -479,6 +498,7 @@ describe('Store', () => {
     ) {
       throw new Error('Expected remapped split leaf ids')
     }
+
     const activePaneKey = makePaneKey('tab1', secondLeafId)
     const firstPaneKey = makePaneKey('tab1', firstLeafId)
     const secondPaneKey = makePaneKey('tab1', secondLeafId)

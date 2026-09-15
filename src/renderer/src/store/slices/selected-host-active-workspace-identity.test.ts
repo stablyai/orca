@@ -5,7 +5,9 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 
 const SAME_REPO_ID = 'same-repo'
+
 const SAME_WORKTREE_ID = 'same-worktree'
+
 const RUNTIME_HOST: ExecutionHostId = 'runtime:env-1'
 
 function worktree(path: string, hostId: ExecutionHostId): Worktree {

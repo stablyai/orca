@@ -15,6 +15,7 @@ import { SESSION_STORAGE_KEY, readJson, writeJson } from './web-storage'
 
 export function sessionStorageKeyForHost(hostId?: string | null): string {
   const resolved = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+
   return resolved === LOCAL_EXECUTION_HOST_ID
     ? SESSION_STORAGE_KEY
     : `${SESSION_STORAGE_KEY}.${resolved}`
@@ -22,18 +23,23 @@ export function sessionStorageKeyForHost(hostId?: string | null): string {
 
 export function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionState {
   const resolvedHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+
   if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
     return sanitizeWebRuntimeWorkspaceSession(
       readJson(sessionStorageKeyForHost(resolvedHostId), getDefaultWorkspaceSession())
     )
   }
+
   const localSession = sanitizeWebRuntimeWorkspaceSession(
     readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
   )
+
   if (!requireActiveEnvironmentOrNull()) {
     return localSession
   }
+
   const ui = readLocalWebUIState()
+
   // Why: replaying browser-local terminal handles first creates stale remote PTYs; mirror host session-tabs instead.
   return sanitizeWebRuntimeWorkspaceSession({
     ...getDefaultWorkspaceSession(),

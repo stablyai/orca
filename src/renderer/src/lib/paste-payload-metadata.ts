@@ -33,6 +33,7 @@ export function measurePastePayloadMetadata(
     const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     hasControlSequences ||= isPasteControlSequenceCodePoint(codePoint)
+
     if (codePoint === 0x0d) {
       lineCount += 1
       lineEndingByteLength += 1
@@ -40,12 +41,15 @@ export function measurePastePayloadMetadata(
     } else {
       if (codePoint === 0x0a) {
         lineEndingByteLength += 1
+
         if (!previousWasCarriageReturn) {
           lineCount += 1
         }
       }
+
       previousWasCarriageReturn = false
     }
+
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return {
         byteLength,
@@ -55,6 +59,7 @@ export function measurePastePayloadMetadata(
         lineCount
       }
     }
+
     if (codePoint > 0xffff) {
       index += 1
     }
@@ -76,10 +81,12 @@ export async function measurePastePayloadMetadataWithYield(
   }
 
   const stopAfterBytes = options.stopAfterBytes
+
   const yieldAfterCodeUnits = Math.max(
     1,
     options.yieldAfterCodeUnits ?? PASTE_PAYLOAD_METADATA_YIELD_CODE_UNITS
   )
+
   const yieldBetweenBatches = options.yieldToEventLoop ?? yieldToEventLoop
   let nextYieldAt = yieldAfterCodeUnits
   let byteLength = 0
@@ -92,6 +99,7 @@ export async function measurePastePayloadMetadataWithYield(
     const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     hasControlSequences ||= isPasteControlSequenceCodePoint(codePoint)
+
     if (codePoint === 0x0d) {
       lineCount += 1
       lineEndingByteLength += 1
@@ -99,12 +107,15 @@ export async function measurePastePayloadMetadataWithYield(
     } else {
       if (codePoint === 0x0a) {
         lineEndingByteLength += 1
+
         if (!previousWasCarriageReturn) {
           lineCount += 1
         }
       }
+
       previousWasCarriageReturn = false
     }
+
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return {
         byteLength,
@@ -114,9 +125,11 @@ export async function measurePastePayloadMetadataWithYield(
         lineCount
       }
     }
+
     if (codePoint > 0xffff) {
       index += 1
     }
+
     if (index >= nextYieldAt) {
       await yieldBetweenBatches()
       nextYieldAt = index + yieldAfterCodeUnits
@@ -137,13 +150,16 @@ export function countPastePayloadLines(text: string): number {
 export function hasPastePayloadControlSequence(text: string): boolean {
   for (let index = 0; index < text.length; index += 1) {
     const codePoint = readUtf8CodePointAt(text, index)
+
     if (isPasteControlSequenceCodePoint(codePoint)) {
       return true
     }
+
     if (codePoint > 0xffff) {
       index += 1
     }
   }
+
   return false
 }
 

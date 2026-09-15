@@ -25,6 +25,7 @@ export function loadStatsFile(statsFile: string): StatsFile {
   try {
     if (existsSync(statsFile)) {
       const parsed = JSON.parse(readFileSync(statsFile, 'utf-8')) as StatsFile
+
       return {
         ...defaultStatsFile(),
         ...parsed,
@@ -34,5 +35,6 @@ export function loadStatsFile(statsFile: string): StatsFile {
   } catch (err) {
     console.error('[stats] Failed to load stats, starting fresh:', err)
   }
+
   return defaultStatsFile()
 }

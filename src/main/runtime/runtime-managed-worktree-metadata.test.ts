@@ -13,9 +13,11 @@ describe('updateRuntimeManagedWorktreeMetadata', () => {
       path: '/workspace/app',
       instanceId: 'instance-1'
     } as unknown as ResolvedWorktree
+
     const setWorktreeMeta = vi.fn()
     const setWorktreeMetaForHost = vi.fn()
     const store = { setWorktreeMeta, setWorktreeMetaForHost } as unknown as RuntimeStore
+
     const ports = {
       resolveWorktree: vi.fn(async () => worktree),
       validateParent: vi.fn(),

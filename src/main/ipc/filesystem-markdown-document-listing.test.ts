@@ -11,48 +11,61 @@ import {
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
+
 vi.mock(
   '../text-generation/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
+
 vi.mock(
   '../source-control/pull-request-template',
   async () => (await import('./filesystem-test-harness')).pullRequestTemplateMock
 )
+
 vi.mock(
   '../source-control/pull-request-linked-issue',
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
@@ -78,12 +91,14 @@ describe('registerFilesystemHandlers', () => {
           dirEntry({ name: 'script.ts', file: true })
         ]
       }
+
       if (dirPath === path.join(WORKTREE_FEATURE_PATH, 'docs')) {
         return [
           dirEntry({ name: 'Guide.MDX', file: true }),
           dirEntry({ name: 'notes.markdown', file: true })
         ]
       }
+
       return []
     })
 
@@ -127,9 +142,11 @@ describe('registerFilesystemHandlers', () => {
           dirEntry({ name: 'visible.md', file: true })
         ]
       }
+
       if (dirPath === path.join(WORKTREE_FEATURE_PATH, '.github')) {
         return [dirEntry({ name: 'CONTRIBUTING.md', file: true })]
       }
+
       throw new Error(`Unexpected readdir: ${dirPath}`)
     })
 
@@ -173,6 +190,7 @@ describe('registerFilesystemHandlers', () => {
         .fn()
         .mockResolvedValue(['README.md', 'docs/guide.mdx', '../outside.md', 'src/app.ts'])
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
 
     registerFilesystemHandlers(store as never)

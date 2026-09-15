@@ -31,6 +31,7 @@ export async function listWorktreeGraph(
 ): Promise<GitWorktreeInfo[]> {
   try {
     const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
+
     return options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
@@ -38,7 +39,9 @@ export async function listWorktreeGraph(
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
+
     console.warn(`[git/worktree] listWorktreeGraph failed for ${repoPath}:`, err)
+
     return []
   }
 }
@@ -49,16 +52,20 @@ export async function listWorktreesUnshared(
 ): Promise<GitWorktreeInfo[]> {
   try {
     const worktrees = await readTranslatedWorktreeGraph(repoPath, options)
+
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
+
     return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
+
     // Why: don't swallow git-compat/repo-state failures — else they resurface as opaque "created but not found in listing" errors.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
+
     return []
   }
 }
@@ -74,10 +81,12 @@ async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promi
     } catch (statErr) {
       if (getErrorCode(statErr) === 'ENOENT') {
         console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+
         return true
       }
     }
   }
+
   return isNotGitRepositoryError(err)
 }
 
@@ -87,11 +96,14 @@ export async function listWorktreesStrict(
 ): Promise<GitWorktreeInfo[]> {
   const worktrees = (await readWorktreeList(repoPath, options)).map((worktree) => {
     const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+
     return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
   })
+
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
+
   return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
@@ -113,6 +125,7 @@ export async function listWorktreesStrictAllowingTrueEmpty(
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
+
     throw err
   }
 }
@@ -130,10 +143,13 @@ export async function annotateSparseCheckoutStatus(
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
+
       if (!worktree || worktree.isBare || worktree.isSparse) {
         continue
       }
+
       const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
+
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }
@@ -143,6 +159,7 @@ export async function annotateSparseCheckoutStatus(
   // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
   const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
   await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
+
   return annotated
 }
 
@@ -160,10 +177,12 @@ async function readRepoCommonDirFromDisk(
     const dotGit = join(repoPath, '.git')
     // A bare repo has no `.git`, and resolveGitDir would fabricate one; offer no candidate instead.
     await withDeadline(stat(dotGit), timeoutMs)
+
     const commonDir = await withDeadline(
       resolveGitDir(repoPath).then(resolveGitCommonDir),
       timeoutMs
     )
+
     // Node answers in the caller's space, Git in the distro's. Without this the WSL candidate is a UNC
     // path that can never equal Git's `/home/...`, leaving this witness inert on exactly the fallback
     // path that needs it (realpath cannot bridge the two: a Linux path has no local inode).
@@ -175,6 +194,7 @@ async function readRepoCommonDirFromDisk(
 
 async function withDeadline<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: NodeJS.Timeout | undefined
+
   try {
     return await Promise.race([
       work,
@@ -208,12 +228,15 @@ async function isSameRepoCommonDir(
   candidates: readonly (string | undefined)[]
 ): Promise<boolean> {
   const present = candidates.filter((candidate): candidate is string => Boolean(candidate))
+
   if (present.some((candidate) => isSameCommonDirPath(createdCommonDir, candidate))) {
     return true
   }
+
   const [canonicalCreated, ...canonicalCandidates] = await Promise.all(
     [createdCommonDir, ...present].map(canonicalizeLocalPath)
   )
+
   return canonicalCandidates.some((candidate) => isSameCommonDirPath(canonicalCreated, candidate))
 }
 
@@ -227,9 +250,11 @@ export function isSameCommonDirPath(
   platform = process.platform
 ): boolean {
   const leftIsPosix = isPosixAbsolutePath(left)
+
   if (leftIsPosix || isPosixAbsolutePath(right)) {
     return leftIsPosix && isPosixAbsolutePath(right) && posix.resolve(left) === posix.resolve(right)
   }
+
   return areWorktreePathsEqual(left, right, platform)
 }
 
@@ -250,21 +275,25 @@ export async function describeCreatedWorktree(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo | undefined> {
   const expectedRef = `refs/heads/${normalizeLocalBranchRef(branch)}`
+
   // Bound Git recovery after the bounded listing failed; filesystem canonicalization stays best effort.
   const deadlined: GitWorktreeExecOptions = {
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
+
   const [created, repoGitCommonDir, checkedOutRef, head] = await Promise.all([
     readRepoLocation(worktreePath, toWslExecutionSpace(worktreePath), deadlined),
     readRepoCommonDirFromGit(repoPath, deadlined),
     readCheckedOutBranchRef(worktreePath, deadlined),
     readWorktreeHeadOid(worktreePath, deadlined)
   ])
+
   // An unreadable HEAD means Git could not confirm the worktree, so report nothing rather than a blank OID.
   if (!created || checkedOutRef !== expectedRef || !head) {
     return undefined
   }
+
   if (!(await isSameRepoCommonDir(created.commonDir, [repoGitCommonDir]))) {
     // Only now read the second opinion from disk: a `.git` on a hung mount pins a threadpool thread
     // that no deadline can reclaim, so never pay that on the path where Git already agreed.
@@ -272,10 +301,12 @@ export async function describeCreatedWorktree(
       repoPath,
       deadlined.timeout ?? WORKTREE_LIST_TIMEOUT_MS
     )
+
     if (!(await isSameRepoCommonDir(created.commonDir, [repoDiskCommonDir]))) {
       return undefined
     }
   }
+
   const [described] = await annotateSparseCheckoutStatus(
     repoPath,
     [
@@ -290,5 +321,6 @@ export async function describeCreatedWorktree(
     ],
     options
   )
+
   return described
 }

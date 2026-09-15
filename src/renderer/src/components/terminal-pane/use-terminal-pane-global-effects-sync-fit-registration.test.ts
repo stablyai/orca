@@ -41,6 +41,7 @@ function resetHookRefs(): void {
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
@@ -50,9 +51,11 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
+
       if (!reactRefState.slots[index]) {
         reactRefState.slots[index] = { current: value }
       }
+
       return reactRefState.slots[index] as { current: T }
     }
   }
@@ -104,9 +107,12 @@ vi.mock('./terminal-input-activity', () => ({
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
+
   const testHook = ((selector?: (state: ReturnType<typeof realHook.getState>) => unknown) =>
     selector ? selector(realHook.getState()) : realHook.getState()) as typeof realHook
+
   Object.assign(testHook, realHook)
+
   return { ...actual, useAppStore: testHook }
 })
 
@@ -194,9 +200,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(syncFitListener).toBeDefined()
     const listener = syncFitListener?.[1]
+
     if (typeof listener !== 'function') {
       throw new Error('expected sync-fit listener')
     }
+
     listener(new Event(SYNC_FIT_PANES_EVENT))
     expect(manager.fitAllPanes).toHaveBeenCalledTimes(1)
   })

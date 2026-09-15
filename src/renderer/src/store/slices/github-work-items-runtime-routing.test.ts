@@ -41,6 +41,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
+
     const repos: AppState['repos'] = [
       {
         id: 'runtime-repo-id',
@@ -50,6 +51,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         addedAt: 1
       }
     ]
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       repos
@@ -142,6 +144,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'source-runtime' }
     })
     const store = createTestStore()
+
     const repos: AppState['repos'] = [
       {
         id: 'local-repo-id',
@@ -151,6 +154,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         addedAt: 1
       }
     ]
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
       repos
@@ -195,6 +199,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('keeps explicit GitHub source identities in separate work-item cache buckets', async () => {
     const store = createTestStore()
+
     const firstSourceContext = {
       kind: 'task-source' as const,
       provider: 'github' as const,
@@ -204,10 +209,12 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'github' as const, owner: 'acme', repo: 'orca' }
     }
+
     const secondSourceContext = {
       ...firstSourceContext,
       providerIdentity: { provider: 'github' as const, owner: 'stablyai', repo: 'orca' }
     }
+
     mockApi.gh.listWorkItems
       .mockResolvedValueOnce({
         items: [{ type: 'issue', number: 1, title: 'Acme', url: 'https://example.test/1' }],
@@ -333,11 +340,14 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('uses the request-start runtime repo snapshot and skips cache writes after a runtime switch', async () => {
     const store = createTestStore()
+
     type WorkItemsEnvelope = {
       items: GitHubWorkItem[]
       sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
     }
+
     const blockingResolvers: ((value: WorkItemsEnvelope) => void)[] = []
+
     for (let i = 0; i < 8; i++) {
       mockApi.gh.listWorkItems.mockImplementationOnce(
         () =>
@@ -350,6 +360,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const blockers = Array.from({ length: 8 }, (_, i) =>
       store.getState().fetchWorkItems(`blocker-${i}`, `/local/blocker-${i}`, 24, '')
     )
+
     await Promise.resolve()
     await Promise.resolve()
     expect(blockingResolvers).toHaveLength(8)
@@ -361,6 +372,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       url: 'https://example.test/42',
       updatedAt: '2026-05-22T00:00:00Z'
     } as GitHubWorkItem
+
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-work-items-started-before-switch',
       ok: true,
@@ -375,6 +387,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       settings: { activeRuntimeEnvironmentId: 'env-start' },
       repos: [{ id: 'repo-start', path: '/server/repo', name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
+
     const queued = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', { force: true })
@@ -384,6 +397,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       repos: [{ id: 'repo-switched', path: '/server/repo', name: 'repo', kind: 'git' }],
       workItemsCache: {}
     } as unknown as Partial<AppState>)
+
     for (const resolve of blockingResolvers) {
       resolve({
         items: [],
@@ -412,18 +426,23 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('does not reuse an old-runtime in-flight work-item fetch after a runtime switch', async () => {
     const store = createTestStore()
+
     type WorkItemsEnvelope = {
       items: GitHubWorkItem[]
       sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
     }
+
     type WorkItemsRpcResponse = {
       id: string
       ok: true
       result: WorkItemsEnvelope
       _meta: { runtimeId: string }
     }
+
     let resolveOldRuntime: (value: WorkItemsRpcResponse) => void = () => {}
+
     let resolveNewRuntime: (value: WorkItemsRpcResponse) => void = () => {}
+
     runtimeEnvironmentCall
       .mockImplementationOnce(
         () =>
@@ -442,9 +461,11 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       settings: { activeRuntimeEnvironmentId: 'env-old' },
       repos: [{ id: 'repo-old-runtime', path: '/server/repo', name: 'repo', kind: 'git' }]
     } as unknown as Partial<AppState>)
+
     const oldFetch = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+
     await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
 
     store.setState({
@@ -452,9 +473,11 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       repos: [{ id: 'repo-new-runtime', path: '/server/repo', name: 'repo', kind: 'git' }],
       workItemsCache: {}
     } as unknown as Partial<AppState>)
+
     const newFetch = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+
     await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2))
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
@@ -486,6 +509,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       url: 'https://example.test/new',
       updatedAt: '2026-05-22T00:00:00Z'
     } as GitHubWorkItem
+
     resolveNewRuntime({
       id: 'rpc-new-work-items',
       ok: true,
@@ -504,6 +528,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       url: 'https://example.test/old',
       updatedAt: '2026-05-21T00:00:00Z'
     } as GitHubWorkItem
+
     resolveOldRuntime({
       id: 'rpc-old-work-items',
       ok: true,

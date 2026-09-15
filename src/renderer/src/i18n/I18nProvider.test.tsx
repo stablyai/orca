@@ -16,12 +16,14 @@ import { I18nProvider } from './I18nProvider'
 // the persisted preference. These tests pin the fixed ordering.
 
 const initialAppState = useAppStore.getInitialState()
+
 const roots: Root[] = []
 
 // Why: the 'system' UI language resolves through navigator.language; stubbing it
 // lets these tests simulate a non-English OS locale (the #7188 repro) without
 // depending on the host machine's locale.
 const ORIGINAL_SYSTEM_LOCALE = navigator.language
+
 function stubSystemLocale(tag: string): void {
   Object.defineProperty(navigator, 'language', { value: tag, configurable: true })
 }
@@ -46,6 +48,7 @@ afterEach(async () => {
       root.unmount()
     })
   }
+
   roots.length = 0
   useAppStore.setState(initialAppState, true)
   stubSystemLocale(ORIGINAL_SYSTEM_LOCALE)

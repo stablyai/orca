@@ -130,6 +130,7 @@ export function ManageSessionsTable({
                 const dotClass = session.isAlive ? 'bg-emerald-500' : 'bg-muted-foreground/40'
                 const tabId = ptyIdToTabId.get(session.sessionId) ?? null
                 const rowClickable = tabId !== null
+
                 return (
                   <tr
                     key={session.sessionId}

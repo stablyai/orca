@@ -12,7 +12,9 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export const RICH_MARKDOWN_PASTE_DIRECT_MAX_BYTES = 64 * 1024
+
 export const RICH_MARKDOWN_PASTE_CHUNK_MAX_BYTES = 16 * 1024
+
 export const RICH_MARKDOWN_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
 type RichMarkdownLargeTextPasteOptions = {
@@ -75,6 +77,7 @@ function shouldHandleLargeRichMarkdownPaste({
   if (plainTextExceededLimit || plainTextByteLength > maxDirect) {
     return true
   }
+
   return !isUtf8ByteLengthWithinLimit(htmlText, maxDirect)
 }
 
@@ -113,14 +116,17 @@ async function executeRichMarkdownLargeTextPaste(
   options: RichMarkdownLargeTextPasteOptions
 ): Promise<RichMarkdownLargeTextPasteResult> {
   const maxBytes = options.maxBytes ?? RICH_MARKDOWN_PASTE_MAX_BYTES
+
   const byteLengthMeasurement = await measureTextControlPasteByteLengthWithYield(text, {
     stopAfterBytes: maxBytes,
     yieldAfterCodeUnits: options.measureYieldAfterCodeUnits,
     yieldToEventLoop: options.yieldToEventLoop
   })
+
   if (byteLengthMeasurement.exceededLimit) {
     return { status: 'rejected', reason: 'too-large', byteLength: byteLengthMeasurement.byteLength }
   }
+
   return insertRichMarkdownTextInChunks(editor, text, byteLengthMeasurement.byteLength, options)
 }
 
@@ -132,6 +138,7 @@ export function handleRichMarkdownLargeTextPaste(
   if (event.defaultPrevented) {
     return false
   }
+
   if (!editor) {
     return false
   }
@@ -140,9 +147,11 @@ export function handleRichMarkdownLargeTextPaste(
   const html = options.htmlTextOverride ?? readHtmlText(event)
   const directMaxBytes = options.directMaxBytes ?? RICH_MARKDOWN_PASTE_DIRECT_MAX_BYTES
   const maxBytes = options.maxBytes ?? RICH_MARKDOWN_PASTE_MAX_BYTES
+
   const ownershipMeasurement = measureTextControlPasteByteLength(text, {
     stopAfterBytes: Math.min(directMaxBytes, maxBytes)
   })
+
   if (
     !shouldHandleLargeRichMarkdownPaste({
       plainTextByteLength: ownershipMeasurement.byteLength,
@@ -155,17 +164,21 @@ export function handleRichMarkdownLargeTextPaste(
   }
 
   event.preventDefault()
+
   if (!text || (maxBytes <= directMaxBytes && ownershipMeasurement.exceededLimit)) {
     toast.error(
       translate('auto.components.editor.richMarkdownLargeTextPaste.tooLarge', 'Paste is too large.')
     )
+
     return true
   }
 
   if (!isEditorAvailable(editor, options.canContinue)) {
     return true
   }
+
   const targetDom = editor.view.dom
+
   const guardedOptions: RichMarkdownLargeTextPasteOptions = {
     ...options,
     canContinue: (candidate) =>

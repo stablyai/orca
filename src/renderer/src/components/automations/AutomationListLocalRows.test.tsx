@@ -124,6 +124,7 @@ function renderLocalRows(handlers: {
     hostLabel: 'Local',
     usageSummary: null
   }
+
   return render(
     <AutomationListLocalRows
       rows={[row]}
@@ -159,10 +160,12 @@ function renderExternalRows(handlers: {
 }) {
   const manager = makeExternalManager()
   const job = makeExternalJob()
+
   const scope: ExternalAutomationScope = {
     owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
     provider: 'hermes'
   }
+
   return render(
     <AutomationListExternalRows
       entries={[{ key: `${manager.id}:${job.id}`, scope, manager, job }]}

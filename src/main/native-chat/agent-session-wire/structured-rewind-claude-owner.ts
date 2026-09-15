@@ -17,24 +17,32 @@ export async function replaceClaudeRewindOwner(
 ): Promise<{ ok: true; items?: never } | ReturnType<typeof rewindRefusal>> {
   const sessionId = params.envelope.sessionId
   const session = context.sessions.get(sessionId)!
+
   if (!(await context.deps.adapter.closeSession?.(sessionId))) {
     return rewindRefusal('outcome-unknown')
   }
+
   session.hasProviderChild = false
   context.publishStatus?.(sessionId)
+
   const head = agentSessionProviderHandleChainHead(
     context.deps.store.getRecord(sessionId)!.providerHandleChain
   )?.handle
+
   if (head?.provider !== 'claude' || !head.leafUuid) {
     return rewindRefusal('invalid-target')
   }
+
   rewind = { ...rewind, previousLeafUuid: head.leafUuid }
+
   const attach = async (intent: typeof rewind | undefined, stage: string) => {
     const current = context.deps.store.getRecord(sessionId)!
+
     const operationId = `${params.envelope.clientOperationId.split('-')[0]}-${createHash('sha256')
       .update(JSON.stringify([callerKey, params.envelope.clientOperationId, stage]))
       .digest('hex')
       .slice(0, 32)}`
+
     const attachParams = {
       ...session.params,
       envelope: {
@@ -44,11 +52,13 @@ export async function replaceClaudeRewindOwner(
         payloadFingerprint: ''
       }
     }
+
     attachParams.envelope.payloadFingerprint = computeAgentSessionPayloadFingerprint({
       method: 'agentSession.attach',
       sessionId,
       fields: attachFingerprintFields(attachParams)
     })
+
     return attachStructuredAgentSession(
       {
         ...context,
@@ -60,19 +70,25 @@ export async function replaceClaudeRewindOwner(
       intent
     )
   }
+
   const result = await attach(rewind, 'rewind')
+
   if (result.ok) {
     return { ok: true } as const
   }
+
   if (
     result.refusal.rewindReason === 'provider-refused' ||
     result.refusal.rewindReason === 'proof-mismatch'
   ) {
     const recovered = await attach(undefined, 'resume')
+
     if (!recovered.ok) {
       return rewindRefusal('outcome-unknown')
     }
+
     return rewindRefusal(result.refusal.rewindReason)
   }
+
   return rewindRefusal(result.refusal.rewindReason ?? 'outcome-unknown')
 }

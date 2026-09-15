@@ -23,6 +23,7 @@ import { reattachSshPtySessionForSpawn } from './ssh-pty-session-reattach'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 
 const CONNECTION = 'conn-1'
+
 const SESSION = 'pty-1'
 
 function reattachAgainst(attach: () => Promise<unknown>): Promise<unknown> {
@@ -46,6 +47,7 @@ async function refusalFrom(attach: () => Promise<unknown>): Promise<Error> {
   } catch (error) {
     return error as Error
   }
+
   throw new Error('expected the reattach to be refused')
 }
 

@@ -24,14 +24,21 @@ import {
  */
 
 const INTERVAL_MS = 20_000
+
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
+
 const FIRST = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
 const SECOND = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
+
 const THIRD = 'cccccccc-dddd-4eee-8fff-000000000000'
 
 let harness: SessionSearchIndexerHarness
+
 let clock: FakeSessionSearchClock
+
 let indexer: SessionSearchIndexer | null
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -62,6 +69,7 @@ function newIndexer(
     onError: (error) => errors.push(error),
     ...overrides
   })
+
   return indexer
 }
 
@@ -187,8 +195,10 @@ it.skipIf(!CAN_DENY_READ)(
     const path = transcriptPath(FIRST)
     await writeClaudeTranscript(path, ['behind the wrong mode bits'], FIRST)
     await chmod(path, 0o000)
+
     try {
       await newIndexer().start()
+
       for (let cycle = 0; cycle < 4; cycle++) {
         await nextCycle()
       }
@@ -196,6 +206,7 @@ it.skipIf(!CAN_DENY_READ)(
       const row = harness.read((db: SyncDatabase) =>
         db.prepare('SELECT state, fail_count AS failCount FROM files WHERE path = ?').get(path)
       ) as { state: string; failCount: number }
+
       // Three, not four and not seven: the pass after the third costs nothing.
       expect(row).toEqual({ state: 'failed', failCount: 3 })
       expect(indexer?.status()).toMatchObject({ filesFailed: 1, phase: 'degraded' })
@@ -243,9 +254,11 @@ it('S5: leaves the store consistent when a close interrupts a pass', async () =>
     if (closed || fileTable().length === 0) {
       return
     }
+
     closed = true
     indexer?.close()
   }
+
   await indexer?.start()
   await indexer?.settled()
   clock.onNow = null

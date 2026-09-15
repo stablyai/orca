@@ -72,7 +72,9 @@ function registeredMethodNames(methods: readonly unknown[]): string[] {
       if (!method || typeof method !== 'object') {
         return []
       }
+
       const name = Reflect.get(method, 'name')
+
       return typeof name === 'string' ? [name] : []
     })
     .sort()
@@ -80,17 +82,21 @@ function registeredMethodNames(methods: readonly unknown[]): string[] {
 
 function applyStructuredHost(module: Record<string, unknown>, label: string, host: unknown): void {
   const install = module.setStructuredAgentSessionHost
+
   if (typeof install !== 'function') {
     throw new Error(`Build ${label} publishes no structured agent-session host registry`)
   }
+
   ;(install as (next: unknown) => void)(host)
 }
 
 function capabilityStrings(module: Record<string, unknown>): readonly string[] {
   const declared = module.RUNTIME_CAPABILITIES
+
   if (!Array.isArray(declared) || declared.length === 0) {
     throw new Error('Cross-version harness found no RUNTIME_CAPABILITIES to compare')
   }
+
   return declared as readonly string[]
 }
 
@@ -100,8 +106,10 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
     import('../../../src/main/runtime/rpc/dispatcher'),
     import('../../../src/main/runtime/rpc/methods')
   ])
+
   const module = dispatcher as unknown as DispatcherModule
   const methods = methodRegistry.ALL_RPC_METHODS as unknown[]
+
   return {
     label: WORKING_TREE,
     revision: WORKING_TREE,
@@ -116,6 +124,7 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
     installStructuredHost: async (host) => {
       const registry =
         await import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry')
+
       applyStructuredHost(registry as unknown as Record<string, unknown>, WORKING_TREE, host)
     }
   }
@@ -127,8 +136,10 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
     importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts'),
     importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/index.ts')
   ])
+
   const module = dispatcher as unknown as DispatcherModule
   const methods = methodRegistry.ALL_RPC_METHODS as unknown[]
+
   return {
     label: checkout.ref,
     revision: checkout.commit,
@@ -158,5 +169,6 @@ export async function loadAgentSessionWireBuild(ref: string): Promise<AgentSessi
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()
   }
+
   return loadReleaseBuild(await materializeReleaseCheckout(ref))
 }

@@ -28,23 +28,27 @@ import {
 describe('terminal multiplex RPC', () => {
   it('replaces UTF-8-expanded overflow ranges before publishing the trailing live range', async () => {
     let resolveRecovery: (snapshot: OverflowRecoverySnapshot) => void = () => {}
+
     const harness = startSourceRangeOverflowHarness({
       recover: () =>
         new Promise<OverflowRecoverySnapshot>((resolve) => {
           resolveRecovery = resolve
         })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopSourceRangeSubscribe(harness.handlers)
     await vi.waitFor(() => expect(harness.getDataListener()).toBeDefined())
 
     const flooded = '界'.repeat(1024 * 1024)
+
     const credit = await acknowledgeSourceRangeOverflow(
       harness,
       harness.getDataListener()!,
       flooded,
       'first'
     )
+
     await vi.waitFor(() => expect(harness.runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(2))
     const trailing = 'trailing-live'
     harness.getDataListener()!(trailing, {
@@ -68,15 +72,18 @@ describe('terminal multiplex RPC', () => {
     )
     expect(harness.lifecycle).toEqual(['reserve', 'commit'])
     const recoveryFrames = harness.binaryFrames.map(decodeTerminalStreamFrame)
+
     const snapshotEnd = recoveryFrames.findLastIndex(
       (frame) => frame?.opcode === TerminalStreamOpcode.SnapshotEnd
     )
+
     const trailingOutput = recoveryFrames.findIndex(
       (frame, index) =>
         index > snapshotEnd &&
         frame?.opcode === TerminalStreamOpcode.Output &&
         decodeTerminalStreamText(frame.payload) === trailing
     )
+
     expect(snapshotEnd).toBeGreaterThanOrEqual(0)
     expect(trailingOutput).toBeGreaterThan(snapshotEnd)
     expect(harness.rollback).not.toHaveBeenCalled()
@@ -105,6 +112,7 @@ describe('terminal multiplex RPC', () => {
 
   it('rolls back overflow replacement before detaching on partial frame publication', async () => {
     let recoveryStarted = false
+
     const harness = startSourceRangeOverflowHarness({
       recover: async () => ({
         data: 'authoritative snapshot',
@@ -119,12 +127,15 @@ describe('terminal multiplex RPC', () => {
             decodeTerminalStreamJson<{ reason?: string }>(frame.payload)?.reason ===
             'ack-pending-overflow'
         }
+
         if (recoveryStarted && frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
           return false
         }
+
         return undefined
       }
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopSourceRangeSubscribe(harness.handlers)
     await vi.waitFor(() => expect(harness.getDataListener()).toBeDefined())
@@ -140,6 +151,7 @@ describe('terminal multiplex RPC', () => {
 
   it('rolls back overflow replacement before generic detach when commit rejects', async () => {
     const flooded = 'x'.repeat(3 * 1024 * 1024)
+
     const harness = startSourceRangeOverflowHarness({
       recover: async () => ({
         data: 'authoritative snapshot',
@@ -150,6 +162,7 @@ describe('terminal multiplex RPC', () => {
       }),
       commit: () => false
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopSourceRangeSubscribe(harness.handlers)
     await vi.waitFor(() => expect(harness.getDataListener()).toBeDefined())
@@ -183,6 +196,7 @@ describe('terminal multiplex RPC', () => {
         ) {
           return
         }
+
         harness.handlers.get(7)?.(
           decodeTerminalStreamFrame(
             encodeTerminalStreamFrame({
@@ -228,6 +242,7 @@ describe('terminal multiplex RPC', () => {
         ) {
           return
         }
+
         harness.handlers.get(0)?.(
           decodeTerminalStreamFrame(
             encodeTerminalStreamFrame({
@@ -266,6 +281,7 @@ describe('terminal multiplex RPC', () => {
 
   it('does not publish or trim overflow output without serialized source identity', async () => {
     const flooded = 'x'.repeat(3 * 1024 * 1024)
+
     const harness = startSourceRangeOverflowHarness({
       recover: async () => ({
         data: 'unattributed snapshot',
@@ -274,6 +290,7 @@ describe('terminal multiplex RPC', () => {
         seq: flooded.length
       })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopSourceRangeSubscribe(harness.handlers)
     await vi.waitFor(() => expect(harness.getDataListener()).toBeDefined())
@@ -305,14 +322,18 @@ describe('terminal multiplex RPC', () => {
   it('caps stalled ACK output and snapshots before resuming retained tail frames', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const cleanups = new Map<string, () => void>()
+
     const dataListenerRef: {
       current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
     } = {}
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -329,6 +350,7 @@ describe('terminal multiplex RPC', () => {
           listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
         ) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }
       ),
@@ -349,6 +371,7 @@ describe('terminal multiplex RPC', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -361,6 +384,7 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -396,10 +420,12 @@ describe('terminal multiplex RPC', () => {
     const initialOutputFrames = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+
     const initialBytes = initialOutputFrames.reduce(
       (total, frame) => total + (frame?.payload.byteLength ?? 0),
       0
     )
+
     expect(initialBytes).toBeLessThanOrEqual(512 * 1024)
 
     handlers.get(17)?.(
@@ -440,22 +466,29 @@ describe('terminal multiplex RPC', () => {
             if (frame?.opcode !== TerminalStreamOpcode.SnapshotStart) {
               return false
             }
+
             const payload = decodeTerminalStreamJson<{ reason?: string }>(frame.payload)
+
             return payload?.reason === 'ack-pending-overflow'
           })
       ).toBe(true)
     )
     const drainFrames = binaryFrames.map((frame) => decodeTerminalStreamFrame(frame))
+
     const recoveryStartIndex = drainFrames.findIndex((frame) => {
       if (frame?.opcode !== TerminalStreamOpcode.SnapshotStart) {
         return false
       }
+
       const payload = decodeTerminalStreamJson<{ reason?: string }>(frame.payload)
+
       return payload?.reason === 'ack-pending-overflow'
     })
+
     const firstOutputAfterAckIndex = drainFrames.findIndex(
       (frame) => frame?.opcode === TerminalStreamOpcode.Output
     )
+
     expect(recoveryStartIndex).toBeGreaterThanOrEqual(0)
     // Why: clients discard truncated snapshots; a usable recovery snapshot
     // must not be marked truncated or the dropped output gap is permanent.
@@ -474,6 +507,7 @@ describe('terminal multiplex RPC', () => {
     const outputBytesAfterRecovery = drainFrames
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+
     expect(outputBytesAfterRecovery).toBeLessThanOrEqual(256 * 1024)
 
     runtime.cleanupSubscription('terminal-multiplex:conn-ack-overflow')
@@ -493,10 +527,12 @@ describe('terminal multiplex RPC', () => {
     const dataListenerRef: {
       current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
     } = {}
+
     const serializeTerminalBuffer = vi
       .fn()
       .mockResolvedValueOnce({ data: 'initial snapshot', cols: 120, rows: 40 })
       .mockImplementation(recover)
+
     const harness = startDesktopMultiplexSubscribe({
       serializeTerminalBuffer,
       subscribeToTerminalData: vi.fn(
@@ -505,6 +541,7 @@ describe('terminal multiplex RPC', () => {
           listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
         ) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }
       )
@@ -525,10 +562,12 @@ describe('terminal multiplex RPC', () => {
 
     const output = 'x'.repeat(3 * 1024 * 1024)
     dataListenerRef.current?.(output, { seq: output.length, rawLength: output.length })
+
     const inFlightBytes = harness.binaryFrames
       .map((bytes) => decodeTerminalStreamFrame(bytes))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+
     harness.handlers.get(7)?.(
       decodeTerminalStreamFrame(
         encodeTerminalStreamFrame({
@@ -558,15 +597,20 @@ describe('terminal multiplex RPC', () => {
   it('trims recovery-covered ACK pending output instead of replaying it', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const cleanups = new Map<string, () => void>()
+
     const dataListenerRef: {
       current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
     } = {}
+
     const floodedChars = 3 * 1024 * 1024
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -585,6 +629,7 @@ describe('terminal multiplex RPC', () => {
           listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
         ) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }
       ),
@@ -605,6 +650,7 @@ describe('terminal multiplex RPC', () => {
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -617,6 +663,7 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -648,10 +695,12 @@ describe('terminal multiplex RPC', () => {
 
     const output = 'x'.repeat(floodedChars)
     dataListenerRef.current?.(output, { seq: floodedChars, rawLength: floodedChars })
+
     const initialBytes = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+
     expect(initialBytes).toBeLessThanOrEqual(512 * 1024)
 
     binaryFrames.splice(0)
@@ -698,6 +747,7 @@ describe('terminal multiplex RPC', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
+
       expect(freshOutput).toBe(fresh)
     })
 

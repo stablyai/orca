@@ -17,6 +17,7 @@ import {
 } from './claude-structured-session-test-support'
 
 const SESSION_ID = 'orca-session-auth'
+
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
   ReturnType<typeof createClaudeStructuredLaunchResolver>
 >[0]['identity']
@@ -66,6 +67,7 @@ function realResolverAdapter(
       { handle: { provider: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null } }
     ]
   } as unknown as AgentSessionRecord
+
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store: { getRecord: () => resumable } as unknown as AgentSessionRecordStore,
@@ -84,6 +86,7 @@ function realResolverAdapter(
 function withAmbientAuth<T>(value: string, run: () => Promise<T>): Promise<T> {
   const restore = process.env.ANTHROPIC_API_KEY
   process.env.ANTHROPIC_API_KEY = value
+
   return run().finally(() => {
     if (restore === undefined) {
       delete process.env.ANTHROPIC_API_KEY
@@ -201,6 +204,7 @@ describe('claude structured auth parity with the terminal preflight', () => {
     live.close = async () => {
       beginClaudeAuthSwitch()
       setTimeout(() => endClaudeAuthSwitch(), 20)
+
       return closeWithSwitch()
     }
 
@@ -222,6 +226,7 @@ describe('claude structured auth parity with the terminal preflight', () => {
     const closeWithSwitch = live.close
     live.close = async () => {
       beginClaudeAuthSwitch()
+
       return closeWithSwitch()
     }
 

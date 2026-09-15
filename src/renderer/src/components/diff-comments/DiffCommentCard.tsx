@@ -39,6 +39,7 @@ function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
   const previousHeight = textarea.style.height
   textarea.style.height = 'auto'
   textarea.style.height = `${Math.min(textarea.scrollHeight, 240)}px`
+
   return textarea.style.height !== previousHeight
 }
 
@@ -75,20 +76,25 @@ export function DiffCommentCard({
 
   useLayoutEffect(() => {
     const card = cardRef.current
+
     if (!card || !observesRenderedSize) {
       return
     }
+
     onContentResizeRef.current?.()
     let frameId: number | null = null
+
     const notifyResize = (): void => {
       if (frameId !== null) {
         return
       }
+
       frameId = requestAnimationFrame(() => {
         frameId = null
         onContentResizeRef.current?.()
       })
     }
+
     if (typeof ResizeObserver === 'undefined') {
       return () => {
         if (frameId !== null) {
@@ -96,12 +102,15 @@ export function DiffCommentCard({
         }
       }
     }
+
     // Why: narrow diff panes can wrap body/header text after Monaco's initial
     // estimate; observe the real card height in either diff layout.
     const observer = new ResizeObserver(() => notifyResize())
     observer.observe(card)
+
     return () => {
       observer.disconnect()
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
@@ -117,12 +126,16 @@ export function DiffCommentCard({
         resizeAfterCloseRef.current = false
         onContentResizeRef.current?.()
       }
+
       return
     }
+
     const el = textareaRef.current
+
     if (!el) {
       return
     }
+
     resizeDiffCommentTextarea(el)
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
@@ -149,8 +162,10 @@ export function DiffCommentCard({
 
   const trimmedDraft = draft.trim()
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
+
   const lineLabel =
     label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
+
   const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
     .filter(Boolean)
     .join(' ')
@@ -159,9 +174,12 @@ export function DiffCommentCard({
     if (!canSubmit || !onSubmitEdit) {
       return
     }
+
     setSubmitting(true)
+
     try {
       const ok = await onSubmitEdit(trimmedDraft)
+
       if (ok && mountedRef.current) {
         scheduleContentResizeAfterClose()
         setEditing(false)
@@ -287,6 +305,7 @@ export function DiffCommentCard({
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value)
+
                 // Why: rich-review layout measures every note; skip it when this card stayed put.
                 if (resizeDiffCommentTextarea(e.currentTarget)) {
                   onContentResizeRef.current?.()
@@ -296,13 +315,17 @@ export function DiffCommentCard({
                 if (e.key === 'Escape') {
                   e.preventDefault()
                   handleCancel()
+
                   return
                 }
+
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
                   e.preventDefault()
+
                   if (!canSubmit) {
                     return
                   }
+
                   void handleSubmit()
                 }
               }}

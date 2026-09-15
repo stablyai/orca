@@ -22,8 +22,11 @@ import {
 import type { RequestContext } from './dispatcher'
 
 const RELAY_FS_CONCURRENCY = 48
+
 const DU_TIMEOUT_MS = 120_000
+
 const DU_MAX_BUFFER_BYTES = 16 * 1024 * 1024
+
 const execFileAsync = promisify(execFile)
 
 type ScanStats = WorkspaceSpaceEntryScan
@@ -43,22 +46,29 @@ function throwIfCancelled(context: RequestContext): void {
 
 function normalizeDuPath(pathValue: string): string {
   const trimmed = pathValue.replace(/\/+$/, '')
+
   return trimmed.length > 0 ? trimmed : pathValue
 }
 
 function parseDuDepthOneOutput(stdout: string): Map<string, number> {
   const sizes = new Map<string, number>()
+
   for (const line of stdout.split('\n')) {
     const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
+
     if (!normalizedLine) {
       continue
     }
+
     const match = /^(\d+)\s+(.+)$/.exec(normalizedLine)
+
     if (!match) {
       continue
     }
+
     sizes.set(normalizeDuPath(match[2]), Number(match[1]) * 1024)
   }
+
   return sizes
 }
 
@@ -67,13 +77,16 @@ async function readDuDepthOne(
   context: RequestContext
 ): Promise<Map<string, number>> {
   throwIfCancelled(context)
+
   const { stdout } = await execFileAsync('du', ['-k', '-d', '1', rootPath], {
     encoding: 'utf8',
     maxBuffer: DU_MAX_BUFFER_BYTES,
     signal: context.signal,
     timeout: DU_TIMEOUT_MS
   })
+
   throwIfCancelled(context)
+
   return parseDuDepthOneOutput(stdout)
 }
 
@@ -140,9 +153,11 @@ async function scanEntryAggregate(
     classifyEntry: async (path) => {
       const stats = await lstat(path)
       throwIfCancelled(context)
+
       if (stats.isSymbolicLink()) {
         return { kind: 'symlink', sizeBytes: stats.size }
       }
+
       return stats.isDirectory()
         ? { kind: 'directory', sizeBytes: stats.size }
         : { kind: 'file', sizeBytes: stats.size }
@@ -161,6 +176,7 @@ async function scanDirectoryWithDu(
   throwIfCancelled(context)
   const rootStats = await lstat(rootPath)
   throwIfCancelled(context)
+
   if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
     return scanDirectoryWithNode(rootPath, context)
   }
@@ -174,11 +190,14 @@ async function scanDirectoryWithDu(
         createWorkspaceSpaceScanBudget(),
         () => throwIfCancelled(context)
       )
+
       return admission.entries
     }),
     readDuDepthOne(rootPath, context)
   ])
+
   throwIfCancelled(context)
+
   const childStats = await mapWithConcurrency(
     entries,
     RELAY_FS_CONCURRENCY,
@@ -194,10 +213,12 @@ async function scanDirectoryWithDu(
         if (error instanceof RelayWorkspaceSpaceScanCancelledError) {
           throw error
         }
+
         return null
       }
     }
   )
+
   const children = childStats.filter((child): child is ScanStats => child !== null)
   const compact = compactWorkspaceSpaceItems(children.map(toWorkspaceSpaceItem))
 
@@ -241,5 +262,6 @@ export async function scanWorkspaceSpaceDirectory(
       }
     }
   }
+
   return scanDirectoryWithNode(rootPath, context)
 }

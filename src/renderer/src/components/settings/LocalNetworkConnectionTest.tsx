@@ -73,18 +73,21 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
     event.preventDefault()
     setRunning(true)
     setFailure(null)
+
     try {
       const result: LocalNetworkConnectionTestResult =
         await window.api.developerPermissions.testLocalNetworkConnection({
           host,
           port: Number(port)
         })
+
       if (result.ok) {
         const success = {
           host: result.host,
           port: result.port,
           testedAt: result.testedAt
         }
+
         saveLocalNetworkConnectionSuccess(success)
         setLastSuccess(success)
       } else {

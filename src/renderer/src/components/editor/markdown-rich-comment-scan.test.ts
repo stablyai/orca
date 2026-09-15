@@ -5,12 +5,14 @@ import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 vi.mock('./markdown-round-trip', () => ({
   getRichMarkdownRoundTripOutput: vi.fn((content: string) => content)
 }))
+
 beforeEach(() =>
   vi
     .mocked(getRichMarkdownRoundTripOutput)
     .mockReset()
     .mockImplementation((text) => text)
 )
+
 afterEach(() => vi.restoreAllMocks())
 
 describe('rich Markdown comment scanning', () => {
@@ -35,9 +37,11 @@ describe('rich Markdown comment scanning', () => {
     const input = '<!--x'.repeat(8000)
     const matchAll = vi.spyOn(String.prototype, 'matchAll')
     const result = getMarkdownRichModeUnsupportedReason(input)
+
     const commentScans = matchAll.mock.calls.filter(
       ([pattern]) => pattern instanceof RegExp && pattern.source.includes('<!--')
     ).length
+
     expect(result).toBeNull()
     expect(commentScans).toBe(0)
     expect(getRichMarkdownRoundTripOutput).not.toHaveBeenCalled()
@@ -48,9 +52,11 @@ describe('rich Markdown comment scanning', () => {
     const indexOf = vi.spyOn(String.prototype, 'indexOf')
     const includes = vi.spyOn(String.prototype, 'includes')
     const result = getMarkdownRichModeUnsupportedReason(input)
+
     const closerSearches = [...indexOf.mock.calls, ...includes.mock.calls].filter(
       ([needle]) => needle === '-->'
     ).length
+
     expect(result).toBeNull()
     expect(closerSearches).toBeLessThanOrEqual(1)
     vi.mocked(getRichMarkdownRoundTripOutput).mockReturnValue(

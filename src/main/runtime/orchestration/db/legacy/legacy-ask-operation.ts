@@ -23,25 +23,31 @@ export function commitLegacyAskOperation(
   duplicate: boolean
 } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const principal = this.requireCommittedLegacyPrincipal(params.principalId, 'worker')
     const receipt = this.requireMatchingLegacyOperationReceipt(params)
+
     if (receipt) {
       const response = JSON.parse(receipt.response_json) as { questionId: string }
       const question = this.getQuestion(response.questionId)
       const message = this.getMessageById(response.questionId)
+
       if (!question || !message) {
         throw new OrchestrationError(
           'operation_unknown',
           `Legacy ask ${params.operationKey} lost its durable question.`
         )
       }
+
       this.db.exec('COMMIT')
+
       return { receipt, question, message, duplicate: true }
     }
 
     const dispatchId = principal.dispatch_id as string
     const dispatch = this.getDispatchContextById(dispatchId)
+
     if (
       !dispatch ||
       dispatch.run_id !== principal.run_id ||
@@ -65,15 +71,19 @@ export function commitLegacyAskOperation(
         .get(principal.id, params.existingQuestionId)
         ? params.existingQuestionId
         : undefined
+
     let question: QuestionRow
     let message: MessageRow
+
     const delivery = this.resolveLegacyWorkerCoordinatorDelivery(
       principal.run_id,
       params.recipientHandle
     )
+
     if (existingQuestionId) {
       const existingQuestion = this.getQuestion(existingQuestionId)
       const existingMessage = this.getMessageById(existingQuestionId)
+
       if (
         !existingQuestion ||
         !existingMessage ||
@@ -90,6 +100,7 @@ export function commitLegacyAskOperation(
           `Question ${params.existingQuestionId} is not a pending ask for this principal.`
         )
       }
+
       question = existingQuestion
       message = existingMessage
     } else {
@@ -129,7 +140,9 @@ export function commitLegacyAskOperation(
       effectId: question.message_id,
       responseJson: JSON.stringify({ questionId: question.message_id })
     })
+
     this.db.exec('COMMIT')
+
     return { receipt: committedReceipt, question, message, duplicate: false }
   } catch (error) {
     this.db.exec('ROLLBACK')

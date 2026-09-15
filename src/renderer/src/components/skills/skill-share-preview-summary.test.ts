@@ -48,6 +48,7 @@ describe('sensitiveShareFiles', () => {
     const files = sensitiveShareFiles(
       preview({ scriptPaths: ['scripts/setup.sh'], executablePaths: ['scripts/setup.sh'] })
     )
+
     expect(files).toEqual([{ path: 'scripts/setup.sh', script: true, executable: true }])
   })
 
@@ -55,6 +56,7 @@ describe('sensitiveShareFiles', () => {
     const files = sensitiveShareFiles(
       preview({ scriptPaths: ['scripts/b.sh', 'scripts/a.sh'], executablePaths: ['bin/tool'] })
     )
+
     expect(files.map((file) => file.path)).toEqual(['bin/tool', 'scripts/a.sh', 'scripts/b.sh'])
   })
 })

@@ -42,11 +42,14 @@ export async function signInCodexAccount(
     setAccountsExpanded,
     setReauthenticatingAccountId
   } = dependencies
+
   if (isSwitching || reauthenticatingAccountId !== null) {
     return
   }
+
   const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
   setReauthenticatingAccountId(accountId)
+
   try {
     const next = await window.api.codexAccounts.reauthenticate({
       accountId,
@@ -54,12 +57,16 @@ export async function signInCodexAccount(
       // usable; the main process still refuses to steal an existing selection.
       activateIfSelectionWasEmpty: true
     })
+
     recordFeatureInteraction('codex-account-switching')
+
     if (mountedRef.current) {
       setAccounts(next)
     }
+
     await fetchSettings()
     const nextActiveAccountId = getCodexStatusActiveId(next, target)
+
     if (previousActiveAccountId !== nextActiveAccountId) {
       // Why: sign-in that lands on a new active account changes pane credentials
       // exactly like an explicit switch, so it owes the same restart prompt.
@@ -73,12 +80,14 @@ export async function signInCodexAccount(
         nextAccountId: nextActiveAccountId ?? null,
         target
       })
+
       if (mountedRef.current) {
         setAccountsExpanded(false)
       }
     } else if (mountedRef.current && accountsExpandedRef.current) {
       await fetchInactiveCodexAccountUsage()
     }
+
     toast.success(
       translate('auto.components.status.bar.StatusBar.codexSignInSuccess', 'Signed in to Codex')
     )

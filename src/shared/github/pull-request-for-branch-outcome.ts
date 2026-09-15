@@ -11,5 +11,6 @@ export function normalizeGitHubPRForBranchOutcome(
   if (response && typeof response === 'object' && 'kind' in response) {
     return response
   }
+
   return response ? { kind: 'found', pr: response, fetchedAt } : { kind: 'no-pr', fetchedAt }
 }

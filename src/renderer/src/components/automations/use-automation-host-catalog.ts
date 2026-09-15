@@ -96,11 +96,13 @@ export function useAutomationHostCatalog(
     () => getHostDisplayLabelOverrides(settings).get('local') ?? getLocalExecutionHostLabel(),
     [settings]
   )
+
   // Why a ref: the controller outlives every render, so its legacy-partition
   // callback must read the latest repo tables, not the ones it was created with.
   const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])
   const repoTablesRef = useRef(repoTables)
   repoTablesRef.current = repoTables
+
   const makeController = useCallback(
     () =>
       createAutomationHostQueryController({
@@ -115,6 +117,7 @@ export function useAutomationHostCatalog(
       }),
     []
   )
+
   const [controller, setController] = useState<AutomationHostQueryController>(makeController)
   // Create-in-render, dispose-in-cleanup is asymmetric under StrictMode's
   // simulated unmount: the cleanup disposes the only controller, and a disposed
@@ -124,9 +127,12 @@ export function useAutomationHostCatalog(
   useEffect(() => {
     if (controller.isDisposed()) {
       setController(makeController())
+
       return
     }
+
     const unsubscribe = subscribeAutomationHostInvalidation(controller.handleAuthorityEvent)
+
     return () => {
       unsubscribe()
       controller.dispose()
@@ -142,11 +148,14 @@ export function useAutomationHostCatalog(
     (authority: StableAutomationAuthorityRef) => controller.authorityOrphanCount(authority),
     [controller]
   )
+
   const sourceState = useAutomationHostCatalogSourceState({
     desktopSshGenerations,
     runtimeEnvironments
   })
+
   const selectedStableKey = automationHostFilterStableKey(automationHostFilter)
+
   // The saved selection references itself: without this the catalog would omit a
   // removed host the user is still filtered to, and absence would read as removal.
   const referencedStableKeys = useMemo(
@@ -157,6 +166,7 @@ export function useAutomationHostCatalog(
       ]),
     [options.referencedStableKeys, selectedStableKey]
   )
+
   const queryCatalog = useMemo(
     () =>
       buildAutomationHostCatalog(
@@ -189,6 +199,7 @@ export function useAutomationHostCatalog(
       ].join('\n'),
     [queryCatalog, selectedStableKey]
   )
+
   useEffect(() => {
     void controller.applyCatalog(queryCatalog, { selectedStableKey })
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- applySignature is the apply policy: it covers the generation fingerprint plus every other field the scheduler reads, and keying off the catalog object would re-apply (and cancel in-flight work) on a label or health change.
@@ -203,6 +214,7 @@ export function useAutomationHostCatalog(
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal; the cache object itself never changes identity.
     [cacheVersion, controller, options.failedAuthorityKeys, queryCatalog]
   )
+
   const resolution = useMemo(
     () =>
       resolveAutomationHostFilter({
@@ -221,6 +233,7 @@ export function useAutomationHostCatalog(
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal; the cache object itself never changes identity.
     [automationHostFilter, cacheVersion, catalog, controller, options.referencedStableKeys]
   )
+
   const rows = useMemo(
     () =>
       resolveAutomationHostListRows({
@@ -236,6 +249,7 @@ export function useAutomationHostCatalog(
     (environmentId: string) => automationRuntimePairingRevision(runtimeEnvironments, environmentId),
     [runtimeEnvironments]
   )
+
   const recoveryDeps = useMemo(
     (): AutomationHostRecoveryDeps => ({
       retry: (entry) => {
@@ -261,6 +275,7 @@ export function useAutomationHostCatalog(
     },
     [recoveryDeps, resolution.entry]
   )
+
   const refreshHosts = useCallback(() => {
     void controller.applyCatalog(queryCatalog, { selectedStableKey, force: true })
   }, [controller, queryCatalog, selectedStableKey])

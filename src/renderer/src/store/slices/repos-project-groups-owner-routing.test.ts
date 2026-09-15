@@ -47,8 +47,11 @@ const baseFolderWorkspace: FolderWorkspace = {
 }
 
 const projectGroupsUpdate = vi.fn()
+
 const projectGroupsDelete = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
@@ -197,12 +200,14 @@ describe('project group mutations route to the owning host', () => {
 describe('project group state cascades stay scoped to the owner host', () => {
   it('leaves another host rows intact when deleting a colliding local group', async () => {
     projectGroupsDelete.mockResolvedValue(true)
+
     const runtimeChild: ProjectGroup = {
       ...folderScanGroup,
       id: 'child',
       parentGroupId: folderScanGroup.id,
       executionHostId: 'runtime:env-1'
     }
+
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: null } as never,

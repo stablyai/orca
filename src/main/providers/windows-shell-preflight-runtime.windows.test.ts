@@ -19,11 +19,13 @@ import {
 } from './windows-shell-args'
 
 const describeWindows = process.platform === 'win32' ? describe : describe.skip
+
 const tempDirs: string[] = []
 
 function makeTempDir(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca shell preflight '))
   tempDirs.push(root)
+
   return root
 }
 
@@ -47,6 +49,7 @@ function writeFailingPreflight(root: string): string {
       'process.exit(7)'
     ].join('\n')
   )
+
   return executable
 }
 
@@ -54,10 +57,13 @@ function withPathEntry(env: NodeJS.ProcessEnv, entry: string): NodeJS.ProcessEnv
   const result = { ...env }
   const pathKey = Object.keys(result).find((key) => key.toLowerCase() === 'path')
   const inheritedPath = pathKey ? result[pathKey] : ''
+
   if (pathKey) {
     delete result[pathKey]
   }
+
   result.PATH = `${entry};${inheritedPath ?? ''}`
+
   return result
 }
 
@@ -76,18 +82,22 @@ async function runPty(options: {
     cwd: options.cwd,
     env: options.env
   })
+
   let output = ''
   proc.onData((data) => {
     output += data
   })
   let exited = false
+
   const exitPromise = new Promise<number>((resolve) => {
     proc.onExit(({ exitCode }) => {
       exited = true
       resolve(exitCode)
     })
   })
+
   let timeout: ReturnType<typeof setTimeout> | undefined
+
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeout = setTimeout(
       () => reject(new Error(`timed out waiting for Windows shell PTY:\n${output}`)),
@@ -99,13 +109,16 @@ async function runPty(options: {
     if (options.input) {
       proc.write(options.input.replaceAll('\n', '\r'))
     }
+
     const exitCode = await Promise.race([exitPromise, timeoutPromise])
     expect(exitCode, output).toBe(0)
+
     return output
   } finally {
     if (timeout) {
       clearTimeout(timeout)
     }
+
     if (!exited) {
       try {
         proc.kill()
@@ -128,6 +141,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
     const preflight = writeFailingPreflight(root)
     const preflightMarker = join(root, 'cmd-preflight-ran')
     const startupMarker = join(root, 'cmd-started')
+
     const resolved = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       root,
@@ -156,6 +170,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
   it('runs the typed-Codex wrapper through Git Bash without MSYS switch rewriting', async () => {
     const gitBash = resolveGitBashPath()
     expect(gitBash).not.toBeNull()
+
     if (!gitBash) {
       return
     }
@@ -182,6 +197,7 @@ describeWindows('Windows Codex shell preflight runtime', () => {
         undefined,
         preflight
       )
+
       await runPty({
         shellPath: gitBash,
         shellArgs: resolved.shellArgs,
@@ -211,10 +227,12 @@ describeWindows('Windows Codex shell preflight runtime', () => {
     }
 
     expect(existsSync(preflightMarker)).toBe(true)
+
     const resolvedCodexPath = readFileSync(codexPathMarker, 'utf8')
       .trim()
       .replaceAll('\\', '/')
       .toLowerCase()
+
     expect(resolvedCodexPath).toMatch(/\/bin\/codex(?:\.exe)?$/)
     expect(readFileSync(codexMarker, 'utf8')).toBe('ran')
   })

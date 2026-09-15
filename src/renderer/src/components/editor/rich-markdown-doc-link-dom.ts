@@ -7,6 +7,7 @@ export function renderRichMarkdownDocLinkHtml(
 ): DOMOutputSpec {
   const target = typeof node.attrs.target === 'string' ? node.attrs.target : ''
   const label = typeof node.attrs.label === 'string' ? node.attrs.label : null
+
   return [
     'span',
     mergeAttributes(htmlAttributes, {

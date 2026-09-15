@@ -31,6 +31,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       </View>
     )
   }
+
   if (preview.status === 'error' || preview.status === 'waiting') {
     return (
       <View style={styles.state}>
@@ -41,6 +42,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       </View>
     )
   }
+
   if (preview.status === 'empty') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
@@ -50,6 +52,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       </View>
     )
   }
+
   if (preview.kind === 'image') {
     return (
       <View style={styles.imageContainer}>
@@ -71,6 +74,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       </View>
     )
   }
+
   if (preview.kind === 'markdown') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
@@ -84,6 +88,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       />
     )
   }
+
   if (preview.kind === 'html') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
@@ -97,9 +102,11 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       />
     )
   }
+
   if (options.editable) {
     return <EditablePreviewSource {...options} />
   }
+
   return (
     <MobileFilePreviewSourceText
       relativePath={options.relativePath}

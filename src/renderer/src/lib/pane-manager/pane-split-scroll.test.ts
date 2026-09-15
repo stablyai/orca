@@ -3,6 +3,7 @@ import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const restoreScrollState = vi.hoisted(() => vi.fn())
+
 const releaseScrollStateMarker = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-scroll', () => ({
@@ -33,6 +34,7 @@ function createPane(bufferType: 'normal' | 'alternate'): {
 } {
   const bufferChangeHandlers: ((buffer: { type: 'normal' | 'alternate' }) => void)[] = []
   const bufferChangeDisposables: { dispose: ReturnType<typeof vi.fn> }[] = []
+
   const pane: ManagedPaneInternal = {
     id: 1,
     leafId: TEST_LEAF_ID,
@@ -49,6 +51,7 @@ function createPane(bufferType: 'normal' | 'alternate'): {
           const disposable = { dispose: vi.fn() }
           bufferChangeHandlers.push(handler)
           bufferChangeDisposables.push(disposable)
+
           return disposable
         })
       }
@@ -79,6 +82,7 @@ function createPane(bufferType: 'normal' | 'alternate'): {
     pendingSplitScrollBufferDisposable: null,
     debugLabel: null
   }
+
   return {
     pane,
     bufferChangeDisposables,
@@ -92,6 +96,7 @@ describe('scheduleSplitScrollRestore', () => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
     restoreScrollState.mockClear()

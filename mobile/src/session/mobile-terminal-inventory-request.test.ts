@@ -4,10 +4,12 @@ import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-requ
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, reject, resolve }
 }
 
@@ -18,10 +20,13 @@ describe('MobileTerminalInventoryRequest', () => {
 
   it('shares an in-flight request and upgrades its empty-list handling', async () => {
     const response = deferred<void>()
+
     const execute = vi.fn(async (allowsEmpty: () => boolean) => {
       await response.promise
+
       return allowsEmpty()
     })
+
     const requests = new MobileTerminalInventoryRequest()
     const startupStarted = vi.fn()
     const recoveryStarted = vi.fn()
@@ -58,27 +63,37 @@ describe('MobileTerminalInventoryRequest', () => {
     const applied: string[] = []
     const oldRequest = new MobileTerminalInventoryRequest()
     const deactivateOld = oldRequest.activate()
+
     const oldResult = oldRequest.run(true, async (_allowsEmpty, isCurrent) => {
       await oldResponse.promise
+
       if (!isCurrent()) {
         return false
       }
+
       applied.push('old')
+
       return true
     })
+
     await Promise.resolve()
 
     deactivateOld()
     const nextRequest = new MobileTerminalInventoryRequest()
     nextRequest.activate()
+
     const nextResult = nextRequest.run(true, async (_allowsEmpty, isCurrent) => {
       await nextResponse.promise
+
       if (!isCurrent()) {
         return false
       }
+
       applied.push('next')
+
       return true
     })
+
     await Promise.resolve()
 
     nextResponse.resolve()

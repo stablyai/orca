@@ -13,10 +13,12 @@ import { startSkillPhaseOperation } from './skill-operation-observability'
 import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-transfer-rpc-retry'
 
 const REMOTE_TRANSFER_TIMEOUT_MS = 5 * 60_000
+
 const REMOTE_TRANSFER_CLEANUP_TIMEOUT_MS = 15_000
 
 function allowedOrigins(allowConfiguredOrigins: boolean): string[] {
   const origins = ['https://storage.googleapis.com']
+
   if (allowConfiguredOrigins && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
     origins.push(
       ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
@@ -24,6 +26,7 @@ function allowedOrigins(allowConfiguredOrigins: boolean): string[] {
         .filter(Boolean)
     )
   }
+
   return [...new Set(origins)]
 }
 
@@ -40,12 +43,15 @@ async function remoteCall<T>(
   timeoutMs = REMOTE_TRANSFER_TIMEOUT_MS
 ): Promise<T> {
   const args = [userDataPath, environmentId, method, params, timeoutMs] as const
+
   const response = (await (signal
     ? callRuntimeEnvironment(...args, undefined, undefined, { signal })
     : callRuntimeEnvironment(...args))) as RuntimeRpcResponse<T>
+
   if (response.ok !== true) {
     throw new Error(`skill-transfer-remote-${response.error.code}`)
   }
+
   return response.result
 }
 
@@ -72,7 +78,9 @@ async function transferSkillPackageToRuntimeUnobserved(
     requireHttps: input.requireHttps,
     signal: input.signal
   })
+
   let uploadId: string | null = null
+
   try {
     const begun = SkillUploadBeginResultSchema.parse(
       await retrySkillTransferRpc({
@@ -92,24 +100,32 @@ async function transferSkillPackageToRuntimeUnobserved(
           )
       })
     )
+
     uploadId = begun.uploadId
     throwIfSkillTransferCancelled(input.signal)
     const chunkBytes = Math.min(begun.chunkBytes, SKILL_UPLOAD_CHUNK_MAX_BYTES)
+
     if (begun.acknowledgedOffset > input.package.compressedBytes) {
       throw new Error('skill-transfer-offset-invalid')
     }
+
     if (!Number.isInteger(chunkBytes) || chunkBytes < 1) {
       throw new Error('skill-transfer-chunk-size-invalid')
     }
+
     const handle = await open(downloaded.archivePath, 'r')
+
     try {
       let offset = begun.acknowledgedOffset
+
       while (offset < input.package.compressedBytes) {
         const bytes = Buffer.alloc(Math.min(chunkBytes, input.package.compressedBytes - offset))
         const read = await handle.read(bytes, 0, bytes.length, offset)
+
         if (read.bytesRead !== bytes.length) {
           throw new Error('skill-transfer-source-changed')
         }
+
         const acknowledged = await retrySkillTransferRpc({
           signal: input.signal,
           retryable: retryableRemoteTransferError,
@@ -122,14 +138,17 @@ async function transferSkillPackageToRuntimeUnobserved(
               input.signal
             )
         })
+
         if (acknowledged.acknowledgedOffset !== offset + bytes.length) {
           throw new Error('skill-transfer-ack-invalid')
         }
+
         offset = acknowledged.acknowledgedOffset
       }
     } finally {
       await handle.close()
     }
+
     await retrySkillTransferRpc({
       signal: input.signal,
       retryable: retryableRemoteTransferError,
@@ -144,6 +163,7 @@ async function transferSkillPackageToRuntimeUnobserved(
     })
     const committedId = uploadId
     uploadId = null
+
     return {
       uploadId: committedId,
       cleanup: () =>
@@ -158,6 +178,7 @@ async function transferSkillPackageToRuntimeUnobserved(
     }
   } finally {
     await downloaded.cleanup()
+
     if (uploadId) {
       await remoteCall(
         input.userDataPath,
@@ -180,9 +201,11 @@ export async function transferSkillPackageToRuntime(
     destination: 'remote-runtime',
     compressedBytes: input.package.compressedBytes
   })
+
   try {
     const transfer = await transferSkillPackageToRuntimeUnobserved(input)
     operation.complete({ status: 'complete', compressedBytes: input.package.compressedBytes })
+
     return transfer
   } catch (error) {
     operation.fail(error)

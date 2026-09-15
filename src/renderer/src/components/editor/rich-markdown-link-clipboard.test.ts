@@ -8,6 +8,7 @@ const { toastError, toastSuccess } = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 import { copyRichMarkdownLink } from './rich-markdown-link-clipboard'

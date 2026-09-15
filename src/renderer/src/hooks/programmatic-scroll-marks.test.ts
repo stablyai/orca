@@ -65,9 +65,11 @@ describe('createProgrammaticScrollMarks', () => {
 
   it('bounds the pending queue', () => {
     const marks = createProgrammaticScrollMarks()
+
     for (let i = 0; i < 40; i++) {
       marks.mark(i * 1_000)
     }
+
     // Oldest marks were evicted; only the most recent 16 remain matchable.
     expect(marks.consume(scrollEvent(), 0, 100_000)).toBe(false)
     expect(marks.consume(scrollEvent(), 39_000, 100_000)).toBe(true)

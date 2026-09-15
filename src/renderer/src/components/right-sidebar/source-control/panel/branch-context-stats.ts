@@ -44,10 +44,13 @@ export function resolveSourceControlDisplayedBaseRef(
   compareBaseRef: string | null | undefined
 ): string | null {
   const summaryRef = summary?.baseRef?.trim()
+
   if (summaryRef) {
     return summaryRef
   }
+
   const configuredRef = compareBaseRef?.trim()
+
   return configuredRef || null
 }
 
@@ -89,9 +92,11 @@ export function buildSourceControlCompareBaseStats(
   if (summary?.status !== 'ready') {
     return []
   }
+
   const baseLabel = formatSourceControlRefLabel(baseRef)
   const stats: SourceControlBranchContextStat[] = []
   const commitsAhead = summary.commitsAhead
+
   if (typeof commitsAhead === 'number' && commitsAhead > 0) {
     stats.push({
       key: 'compare-ahead',
@@ -99,7 +104,9 @@ export function buildSourceControlCompareBaseStats(
       title: formatAheadOfTitle(commitsAhead, baseLabel)
     })
   }
+
   const commitsBehind = summary.commitsBehind
+
   if (typeof commitsBehind === 'number' && commitsBehind > 0) {
     stats.push({
       key: 'compare-behind',
@@ -107,5 +114,6 @@ export function buildSourceControlCompareBaseStats(
       title: formatBehindOfTitle(commitsBehind, baseLabel)
     })
   }
+
   return stats
 }

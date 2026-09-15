@@ -48,6 +48,7 @@ describe('PendingTerminalHandleRecoveryContextCache', () => {
     Object.defineProperty(skippedTab, 'id', {
       get: () => {
         skippedTabIdReads += 1
+
         return 'terminal-b'
       }
     })

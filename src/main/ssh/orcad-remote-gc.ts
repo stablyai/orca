@@ -62,6 +62,7 @@ export async function gcOldOrcadVersions(options: OrcadGcOptions): Promise<void>
               signal: options.signal
             }
           )
+
           return orcadLivenessBlocksGc(parseOrcadLiveness(probe))
         } catch {
           // Why true: an unanswered probe is not evidence a tree is idle. Same rule the

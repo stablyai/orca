@@ -22,5 +22,6 @@ export function isSameCodexRestartNoticeAccount(
   if (a.id !== undefined && b.id !== undefined) {
     return a.id === b.id
   }
+
   return a.label === b.label
 }

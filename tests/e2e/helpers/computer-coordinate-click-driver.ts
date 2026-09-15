@@ -46,6 +46,7 @@ export async function doubleClickTextEditWord(): Promise<{
       ])
     ).stdout
   )
+
   const marker = `zz${Date.now()}zz`
   await runOrcaCli([
     'computer',
@@ -69,6 +70,7 @@ export async function doubleClickTextEditWord(): Promise<{
       ])
     ).stdout
   )
+
   return {
     action: clicked.result.action,
     replacedWord: new RegExp(`${marker}\\s+wordword`).test(after.result.snapshot.treeText)
@@ -83,6 +85,7 @@ export async function clickCapturedTextEditOpenDialog(): Promise<{
   const before = parseJsonOutput<{
     result: { windows: { id?: number | null }[] }
   }>((await runOrcaCli(['computer', 'list-windows', '--app', 'TextEdit', '--json'])).stdout)
+
   const existingWindowIds = new Set(before.result.windows.map((window) => window.id))
 
   const opened = parseJsonOutput<{ result: ComputerActionResult }>(
@@ -100,7 +103,9 @@ export async function clickCapturedTextEditOpenDialog(): Promise<{
       ])
     ).stdout
   )
+
   const dialog = opened.result.snapshot.window
+
   const clicked = parseJsonOutput<{ result: ComputerActionResult }>(
     (
       await runOrcaCli([
@@ -119,6 +124,7 @@ export async function clickCapturedTextEditOpenDialog(): Promise<{
       ])
     ).stdout
   )
+
   const after = parseJsonOutput<{
     result: { windows: { id?: number | null }[] }
   }>((await runOrcaCli(['computer', 'list-windows', '--app', 'TextEdit', '--json'])).stdout)

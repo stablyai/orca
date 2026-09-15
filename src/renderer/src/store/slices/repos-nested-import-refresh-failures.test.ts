@@ -2,8 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 
 const importNested = vi.fn()
+
 const listGroups = vi.fn()
+
 const listFolders = vi.fn()
+
 const listRepos = vi.fn()
 
 const result = {
@@ -38,27 +41,34 @@ describe('nested import partial catalog refresh failures', () => {
     const calls: string[] = []
     listGroups.mockImplementation(async () => {
       calls.push('groups')
+
       if (failingList === listGroups) {
         throw new Error('groups failed')
       }
+
       return []
     })
     listFolders.mockImplementation(async () => {
       calls.push('folders')
+
       if (failingList === listFolders) {
         throw new Error('folders failed')
       }
+
       return []
     })
     listRepos.mockImplementation(async () => {
       calls.push('repos')
+
       if (failingList === listRepos) {
         throw new Error('repos failed')
       }
+
       return []
     })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const store = createTestStore()
+
     try {
       await expect(
         store.getState().importNestedRepos({

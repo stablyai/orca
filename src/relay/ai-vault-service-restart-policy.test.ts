@@ -9,6 +9,7 @@ describe('RelayAiVaultRestartPolicy', () => {
     const policy = new RelayAiVaultRestartPolicy(() => now)
 
     expect(policy.startError(false)).toBeNull()
+
     for (let index = 0; index < 3; index += 1) {
       policy.recordFault()
       now += 1_000
@@ -38,6 +39,7 @@ describe('RelayAiVaultRestartPolicy', () => {
     for (let index = 0; index < 3; index += 1) {
       policy.recordFault()
     }
+
     expect(policy.startError(false)?.message).toContain('circuit is open')
 
     expect(policy.startError(true)).toBeNull()

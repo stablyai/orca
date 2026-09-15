@@ -24,6 +24,7 @@ function isSameDiffLineCounts(
   if (!current || !next) {
     return current === next
   }
+
   return current.original === next.original && current.modified === next.modified
 }
 
@@ -52,15 +53,19 @@ export function isUnchangedDiffSectionReload(
   if (current.error !== next.error) {
     return false
   }
+
   // Only text diffs compare by content; binary/image results carry data this can't see.
   if (current.diffResult?.kind !== 'text' || next.diffResult?.kind !== 'text') {
     return false
   }
+
   const currentLimit = current.largeDiffRenderLimit
   const nextLimit = next.largeDiffRenderLimit
+
   if ((currentLimit?.limited ?? false) !== (nextLimit?.limited ?? false)) {
     return false
   }
+
   // Why: limited sections prune their content to '', so the content compare below can't see a
   // refetch move. The fallback banner renders only this metadata, so it is both the sole change
   // signal and the full description of what's on screen.
@@ -74,6 +79,7 @@ export function isUnchangedDiffSectionReload(
       isSameLineCountMinimums(currentLimit, nextLimit)
     )
   }
+
   return (
     current.originalContent === next.originalContent &&
     current.modifiedContent === next.modifiedContent

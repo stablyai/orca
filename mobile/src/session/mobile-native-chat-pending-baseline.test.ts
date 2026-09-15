@@ -38,6 +38,7 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
         baselineResolved: true
       }
     ]
+
     expect(rebaseMobileNativeChatPendingBaselines(history, pending)).toBe(pending)
   })
 
@@ -86,10 +87,12 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
       baselineTailMessageId: 'm1',
       baselineResolved: true
     }
+
     const rebased = rebaseMobileNativeChatPendingBaselines(history, [
       resolved,
       unresolved('p2', 'run the tests', 2)
     ])
+
     expect(rebased[0]).toBe(resolved)
     expect(rebased[1]).toEqual({
       id: 'p2',
@@ -111,6 +114,7 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
       baselineTailMessageId: 'm1',
       baselineResolved: false
     }
+
     const rebased = rebaseMobileNativeChatPendingBaselines(history, [captured])
     expect(rebased[0]?.baselineTailMessageId).toBe('m1')
     expect(rebased[0]?.baselineResolved).toBe(true)
@@ -124,6 +128,7 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
       baselineTailMessageId: 'm1',
       images: ['file:///a.png']
     }
+
     const rebased = rebaseMobileNativeChatPendingBaselines(history, [images])
     expect(rebased[0]?.baselineTailMessageId).toBe('m1')
     expect(rebased[0]?.expectedOccurrence).toBe(1)
@@ -136,6 +141,7 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
     const rebased = rebaseMobileNativeChatPendingBaselines(history, [
       { ...unresolved('p1', 'here'), images: ['file:///a.png'] }
     ])
+
     expect(rebased[0]?.baselineTailMessageId).toBe(null)
     expect(rebased[0]?.expectedOccurrence).toBe(1)
     expect(rebased[0]?.baselineResolved).toBe(true)
@@ -149,6 +155,7 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
       { ...unresolved('p1', ''), images: ['file:///a.png'] },
       { ...unresolved('p2', '', 2), images: ['file:///b.png'] }
     ])
+
     expect(rebased.map((item) => item.baselineTailMessageId)).toEqual([null, null])
     expect(rebased.map((item) => item.expectedOccurrence)).toEqual([1, 2])
     expect(rebased.every((item) => item.baselineResolved)).toBe(true)

@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 
 const ringRender = vi.hoisted(() => vi.fn())
+
 vi.mock('./AgentMapWorktreeRingNode', () => ({
   AgentMapWorktreeRingNode: ({ worktree }: { worktree: { id: string } }) => {
     ringRender(worktree.id)
+
     return <circle data-testid="instrumented-worktree" />
   }
 }))
@@ -16,6 +18,7 @@ vi.mock('./AgentMapWorktreeRingNode', () => ({
 import { AgentMap } from './AgentMap'
 
 const NOW = 2_000_000_000
+
 const CARD: DashboardCard = {
   paneKey: 'pane-1',
   ptyId: 'pty-1',
@@ -43,6 +46,7 @@ describe('AgentMapCanvas pointer performance', () => {
     ringRender.mockClear()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frames.push(callback)
+
       return frames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())

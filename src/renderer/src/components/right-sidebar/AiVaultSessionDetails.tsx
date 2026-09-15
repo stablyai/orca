@@ -61,9 +61,11 @@ export function SessionInlineDetails({
   // resume affordances are withheld and a distinct "not saved" state is shown.
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
+
   const showResumeInNewTab =
     hasResumableContent &&
     (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
+
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const worktreeDisplay = worktreeInfo
@@ -296,8 +298,10 @@ function WorktreeMetadataLines({
   vaultScope: AiVaultScope
 }): React.JSX.Element {
   const compactPath = aiVaultWorktreeCompactPath(worktreeInfo.path)
+
   const pathLine =
     compactPath && compactPath !== worktreeInfo.label ? compactPath : worktreeInfo.path
+
   const showPathLine = Boolean(pathLine) && pathLine !== worktreeInfo.label
 
   return (
@@ -357,14 +361,18 @@ function conversationRoleLabel(role: AiVaultSession['previewMessages'][number]['
   if (role === 'user') {
     return translate('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')
   }
+
   if (role === 'assistant') {
     return translate('auto.components.right.sidebar.AiVaultSessionDetails.agentRole', 'Agent')
   }
+
   if (role === 'tool') {
     return translate('auto.components.right.sidebar.AiVaultSessionDetails.toolRole', 'Tool')
   }
+
   if (role === 'system') {
     return translate('auto.components.right.sidebar.AiVaultSessionDetails.systemRole', 'System')
   }
+
   return translate('auto.components.right.sidebar.AiVaultSessionDetails.sessionRole', 'Session')
 }

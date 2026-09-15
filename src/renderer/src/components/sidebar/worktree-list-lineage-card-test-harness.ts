@@ -37,13 +37,16 @@ export function createAppStoreModuleMock(): Record<string, unknown> {
     detectedWorktreesByRepo: {},
     ...mockStore.state
   })
+
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
     selector(getMockState())) as ((
     selector: (state: Record<string, unknown>) => unknown
   ) => unknown) & {
     getState: () => Record<string, unknown>
   }
+
   useAppStore.getState = () => getMockState()
+
   return { useAppStore }
 }
 
@@ -111,13 +114,17 @@ export function createWorktreeCardModuleMock(): Record<string, unknown> {
           string,
           { isDeleting?: boolean } | undefined
         >) ?? {}
+
       const cardProps = (mockStore.state.worktreeCardProperties as string[] | undefined) ?? []
+
       const sshState =
         repo?.connectionId && mockStore.state.sshConnectionStates instanceof Map
           ? mockStore.state.sshConnectionStates.get(repo.connectionId)
           : null
+
       const isDeleting = deleteStateByWorktreeId[worktree.id]?.isDeleting === true
       const showSshDialog = isActive && repo?.connectionId && sshState?.status !== 'connected'
+
       // Why: the real WorktreeCard owns the inline-rename surface and decides
       // begin-editing from renameRowKey + renamingWorktreeId, so mirror that here
       // to verify WorktreeList hands each row its row-scoped rename key.
@@ -125,6 +132,7 @@ export function createWorktreeCardModuleMock(): Record<string, unknown> {
         worktreeId: string
         rowKey?: string
       } | null
+
       const beginEditing =
         renamingRequest?.worktreeId === worktree.id &&
         (renamingRequest.rowKey === undefined || renamingRequest.rowKey === renameRowKey)

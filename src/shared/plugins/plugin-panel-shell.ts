@@ -25,6 +25,7 @@ export const PLUGIN_PANEL_CSP =
  *  or token values; the renderer replaces these with a color-scheme class and
  *  CSS custom-property declarations before mounting the srcdoc. */
 export const PANEL_SHELL_TOKENS_PLACEHOLDER = '/*__ORCA_PANEL_TOKENS__*/'
+
 export const PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER = '__ORCA_COLOR_SCHEME__'
 
 /** Curated design-token subset injected into panel documents. Deliberately
@@ -97,5 +98,6 @@ export function buildPluginPanelShellHtml(pluginHtml: string): string {
     '})\n' +
     '</script>\n' +
     '</head>\n'
+
   return prelude + pluginHtml
 }

@@ -10,7 +10,9 @@ import { launchPairedWebClient } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
+
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-headless-stalled-stream-'))
+
 const fixturePath = path.join(scratch, 'headless-stalled-stream.mjs')
 
 writeFileSync(
@@ -46,6 +48,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(): string {
   const command = [process.execPath, fixturePath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -55,9 +58,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -69,15 +74,19 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
 }) => {
   test.setTimeout(180_000)
   const host = await launchHeadlessPairedRuntimeHost()
+
   const client = await launchPairedWebClient(host.app, host.offer, {
     waitForWorkspace: false
   }).catch(async (error) => {
     await host.dispose()
     throw error
   })
+
   let terminal: string | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
+
     try {
       await client.page.locator('[data-worktree-sidebar]').waitFor({
         state: 'visible',
@@ -93,24 +102,30 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
         readyState: document.readyState,
         title: document.title
       }))
+
       throw new Error(`Headless paired web client did not boot: ${JSON.stringify(boot)}`)
     }
+
     await expect
       .poll(
         () =>
           client.page.evaluate(() => {
             const worktrees = window.__store?.getState().allWorktrees() ?? []
+
             return worktrees[0]?.id ?? null
           }),
         { timeout: 30_000 }
       )
       .not.toBeNull()
+
     const worktreeId = await client.page.evaluate(
       () => window.__store?.getState().allWorktrees()[0]?.id ?? null
     )
+
     if (!worktreeId) {
       throw new Error('Headless paired client did not receive the host worktree')
     }
+
     const created = await callRuntime<{
       tab: { parentTabId: string; terminal: string | null }
     }>(client.page, 'session.tabs.createTerminal', {
@@ -120,10 +135,13 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
       select: false,
       navigation: 'caller'
     })
+
     terminal = created.tab.terminal
+
     if (!terminal) {
       throw new Error('Headless paired host did not publish the fixture terminal')
     }
+
     const webTabId = toWebTerminalSurfaceTabId(created.tab.parentTabId)
     await client.page.evaluate((id) => window.__store?.getState().setActiveWorktree(id), worktreeId)
     const tab = client.page.locator(`[data-testid="sortable-tab"][data-tab-id="${webTabId}"]`)
@@ -140,9 +158,11 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
           __remoteTerminalMultiplexAckGate?: { hold: (terminals: string[]) => void }
         }
       ).__remoteTerminalMultiplexAckGate
+
       if (!gate) {
         throw new Error('Remote terminal multiplex ACK gate is unavailable')
       }
+
       gate.hold([target])
     }, terminal)
     const textarea = client.page.locator('.xterm-helper-textarea:visible').first()
@@ -160,6 +180,7 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
                 }
               }
             ).__remoteTerminalMultiplexAckGate
+
             return gate?.snapshot().heldAckChars ?? 0
           }),
         { timeout: 30_000 }
@@ -173,6 +194,7 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
             'terminal.read',
             { terminal }
           )
+
           return result.terminal.tail.join('\n')
         },
         { timeout: 30_000 }
@@ -197,6 +219,7 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
               }
             }
           ).__remoteTerminalMultiplexAckGate
+
           return gate?.sendInput(target, '\r') ?? 0
         },
         { target: terminal }
@@ -217,9 +240,11 @@ test('recovers an ACK-starved stream from an isolated headless Orca host @headfu
         ).__remoteTerminalMultiplexAckGate?.release()
       })
       .catch(() => undefined)
+
     if (terminal) {
       await callRuntime(client.page, 'terminal.closeTab', { terminal }).catch(() => undefined)
     }
+
     await client.dispose()
     await host.dispose()
   }

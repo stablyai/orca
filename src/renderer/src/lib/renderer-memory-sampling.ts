@@ -14,8 +14,10 @@ import { compactBreadcrumbData, toMegabytes } from './crash-breadcrumb-data'
 import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 
 const BYTES_PER_KILOBYTE = 1024
+
 // Why: one detailed breadcrumb per threshold names what grew before an OOM.
 const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
+
 /**
  * Private-footprint marks that arm the same profile when the growth is NOT in
  * the JS heap. Windows crash 36048e26 reported a 618MB private renderer whose
@@ -42,10 +44,15 @@ type HeapMetrics = BrowserPerformanceMemory & {
 }
 
 const emittedHighwaterRatios = new Set<number>()
+
 const emittedPrivateHighwaterMarks = new Set<number>()
+
 let lastProcessFootprint: RendererProcessMemory | null = null
+
 let processFootprintReadGeneration = 0
+
 let processFootprintReadInFlight = false
+
 let rendererSurface: RendererSurface = 'main'
 
 export function setRendererMemorySamplingSurface(surface: RendererSurface): void {
@@ -63,9 +70,11 @@ export function resetRendererMemorySampling(): void {
 
 export function recordRendererMemorySample(reason: string): void {
   const memory = readHeapMetrics()
+
   if (!memory) {
     return
   }
+
   const browserWebviews = getBrowserWebviewMemoryProfile()
   // Why the previous read: the footprint bridge is async, and awaiting it here
   // would make every sample (and its highwater arming) reentrant. Refresh in the
@@ -96,18 +105,23 @@ export function recordRendererMemorySample(reason: string): void {
 /** Stays null on shells without the bridge, or when the runtime withholds it. */
 function refreshProcessFootprint(): void {
   const read = window.api?.crashReports?.readProcessMemory
+
   if (!read || processFootprintReadInFlight) {
     return
   }
+
   const generation = processFootprintReadGeneration
   processFootprintReadInFlight = true
+
   const settle = (footprint: RendererProcessMemory | null): void => {
     if (generation !== processFootprintReadGeneration) {
       return
     }
+
     lastProcessFootprint = footprint
     processFootprintReadInFlight = false
   }
+
   try {
     void read().then(
       (footprint) => settle(footprint ?? null),
@@ -130,9 +144,12 @@ function describeProcessFootprint(
   if (!footprint) {
     return {}
   }
+
   const privateMB = toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE)
+
   const accountedBytes =
     (memory.usedJSHeapSize ?? 0) + (memory.mallocedBytes ?? 0) + (memory.blinkAllocatedBytes ?? 0)
+
   return {
     privateMB,
     residentMB:
@@ -153,13 +170,17 @@ function recordRendererMemoryHighwater(
 ): void {
   const used = memory.usedJSHeapSize
   const limit = memory.jsHeapSizeLimit
+
   // Why: NaN would satisfy `ratio < threshold` for nothing, emitting both
   // levels spuriously and disarming the one-shot for the session.
   const ratio =
     isFiniteHeapBytes(used) && isFiniteHeapBytes(limit) && limit > 0 ? used / limit : null
+
   const privateMB =
     footprint === null ? null : (toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE) ?? null)
+
   let crossedThreshold = false
+
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
       if (ratio >= threshold && !emittedHighwaterRatios.has(threshold)) {
@@ -168,6 +189,7 @@ function recordRendererMemoryHighwater(
       }
     }
   }
+
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
       if (privateMB >= mark && !emittedPrivateHighwaterMarks.has(mark)) {
@@ -176,9 +198,11 @@ function recordRendererMemoryHighwater(
       }
     }
   }
+
   if (!crossedThreshold) {
     return
   }
+
   // Why: a single sample can cross both thresholds; profile the large heap once.
   const profile = compactBreadcrumbData({
     rendererSurface,
@@ -195,11 +219,13 @@ function recordRendererMemoryHighwater(
     registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
     ...collectRendererMemoryProfileCounts()
   })
+
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
       if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {
         continue
       }
+
       emittedHighwaterRatios.add(threshold)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
@@ -207,11 +233,13 @@ function recordRendererMemoryHighwater(
       })
     }
   }
+
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
       if (privateMB < mark || emittedPrivateHighwaterMarks.has(mark)) {
         continue
       }
+
       emittedPrivateHighwaterMarks.add(mark)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
@@ -229,6 +257,7 @@ function getPerformanceMemory(): BrowserPerformanceMemory | undefined {
   if (typeof window === 'undefined') {
     return undefined
   }
+
   return (window.performance as Performance & { memory?: BrowserPerformanceMemory }).memory
 }
 
@@ -243,7 +272,9 @@ export function readHeapMetrics(): HeapMetrics | undefined {
   if (typeof window === 'undefined') {
     return undefined
   }
+
   const exact = window.api?.crashReports?.readHeapStatistics?.()
+
   if (exact) {
     return {
       usedJSHeapSize: exact.usedHeapKB * BYTES_PER_KILOBYTE,
@@ -258,6 +289,8 @@ export function readHeapMetrics(): HeapMetrics | undefined {
       exact: true
     }
   }
+
   const fallback = getPerformanceMemory()
+
   return fallback ? { ...fallback, exact: false } : undefined
 }

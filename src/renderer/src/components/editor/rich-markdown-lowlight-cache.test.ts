@@ -84,6 +84,7 @@ describe('createCachedLowlight', () => {
   it('evicts least-recently-used results by entry count', () => {
     const lowlight = createLowlight(common)
     const highlight = vi.spyOn(lowlight, 'highlight')
+
     const cached = createCachedLowlight(lowlight, {
       maxEntries: 2,
       maxSourceCharacters: 100
@@ -101,6 +102,7 @@ describe('createCachedLowlight', () => {
   it('bounds retained source text and does not retain oversized blocks', () => {
     const lowlight = createLowlight(common)
     const highlight = vi.spyOn(lowlight, 'highlight')
+
     const cached = createCachedLowlight(lowlight, {
       maxEntries: 10,
       maxSourceCharacters: 5

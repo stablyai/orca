@@ -112,6 +112,7 @@ export function BrowserAgentVerificationPane(props: {
 
 function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
   const { entry } = props
+
   if (entry.kind === 'prompt') {
     return (
       <span className="text-card-foreground">
@@ -122,6 +123,7 @@ function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
       </span>
     )
   }
+
   if (entry.kind === 'working') {
     return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -130,9 +132,11 @@ function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
       </span>
     )
   }
+
   if (entry.kind === 'ok') {
     return <span className="text-emerald-600 dark:text-emerald-400">{entry.content}</span>
   }
+
   if (entry.kind === 'tool') {
     return (
       <span>
@@ -141,6 +145,7 @@ function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
       </span>
     )
   }
+
   return (
     <span>
       <span className="text-violet-600 dark:text-violet-400">{entry.tool}</span>{' '}

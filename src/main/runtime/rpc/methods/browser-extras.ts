@@ -124,6 +124,7 @@ export const BROWSER_EXTRA_METHODS = [
     params: ClipboardWrite,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.text)
+
       return runtime.browserClipboardWrite(params)
     }
   }),

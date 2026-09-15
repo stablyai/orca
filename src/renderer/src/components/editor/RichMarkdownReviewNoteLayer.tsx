@@ -14,6 +14,7 @@ function isRichMarkdownReviewNoteNavigationClick(target: EventTarget | null): bo
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   return !target.closest('button,input,textarea,select,a,[contenteditable="true"]')
 }
 
@@ -69,6 +70,7 @@ export function RichMarkdownReviewNoteLayer({
             if (!isRichMarkdownReviewNoteNavigationClick(event.target)) {
               return
             }
+
             onScrollSourceIntoView(comment)
           }}
         >

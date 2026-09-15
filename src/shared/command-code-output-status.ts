@@ -19,8 +19,11 @@ type CommandCodeOutputStatusDetector = {
 }
 
 const RECENT_TEXT_LIMIT = 300
+
 const STATUS_SCAN_TEXT_LIMIT = 4096
+
 const COMMAND_CODE_STATUS_GLYPH_RE_SOURCE = '[·○◇☆✧⌘✻⎿]'
+
 // Why: Command Code 0.27.3 randomizes its in-flight LLM status from this
 // package-local list, so checking only a few examples misses real active turns.
 const COMMAND_CODE_LLM_STATUS_WORDS = [
@@ -102,16 +105,23 @@ const COMMAND_CODE_LLM_STATUS_WORDS = [
 ] as const
 
 const LLM_STATUS_WORDS_RE_SOURCE = COMMAND_CODE_LLM_STATUS_WORDS.map(escapeRegex).join('|')
+
 const ACTIVE_LLM_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:${LLM_STATUS_WORDS_RE_SOURCE})\\b(?:…|\\.\\.\\.)`
 )
+
 const ACTIVE_EXECUTION_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:Executing:\\s+\\S|Running\\s*\\()`
 )
+
 const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[❯>]\s+Ask your question\.\.\./
+
 const SEMVER_NUMBER_RE_SOURCE = '(?:0|[1-9]\\d*)'
+
 const SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE = '(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)'
+
 const SEMVER_BUILD_IDENTIFIER_RE_SOURCE = '[0-9A-Za-z-]+'
+
 const COMMAND_CODE_BANNER_RE = new RegExp(
   `(?:^|[\\r\\n])[ \\t]*#[ \\t]+Command Code[ \\t]+v` +
     `${SEMVER_NUMBER_RE_SOURCE}\\.${SEMVER_NUMBER_RE_SOURCE}\\.${SEMVER_NUMBER_RE_SOURCE}` +
@@ -132,6 +142,7 @@ function isCommandCodeLaunchCommand(command: string | null | undefined): boolean
   if (!command) {
     return false
   }
+
   return /(?:^|[\s;&|])(?:command-code|commandcode|cmdc)(?:\s|$)/.test(command)
 }
 
@@ -161,17 +172,20 @@ function appendRecentRawText(previousRawText: string, data: string): string {
   if (data.length >= RECENT_TEXT_LIMIT) {
     return data.slice(-RECENT_TEXT_LIMIT)
   }
+
   return (previousRawText + data).slice(-RECENT_TEXT_LIMIT)
 }
 
 function buildStatusScanRawText(prefix: string, data: string): string {
   const boundedPrefix =
     prefix.length > RECENT_TEXT_LIMIT + 1 ? prefix.slice(-(RECENT_TEXT_LIMIT + 1)) : prefix
+
   const dataBudget = STATUS_SCAN_TEXT_LIMIT - boundedPrefix.length
 
   if (dataBudget <= 0) {
     return boundedPrefix.slice(-STATUS_SCAN_TEXT_LIMIT)
   }
+
   if (data.length <= dataBudget) {
     return boundedPrefix + data
   }
@@ -180,6 +194,7 @@ function buildStatusScanRawText(prefix: string, data: string): string {
   const tailBudget = Math.max(0, dataBudget - headBudget - 1)
   const head = headBudget > 0 ? data.slice(0, headBudget) : ''
   const tail = tailBudget > 0 ? data.slice(-tailBudget) : ''
+
   // Why: pasted terminal echoes can produce megabyte-sized chunks. Status
   // detection only needs chunk-boundary context plus recent output, so scan the
   // start and end windows instead of regex-stripping the full PTY payload.
@@ -192,12 +207,15 @@ function patternOverlapsSanitizedText(
   combinedText: string
 ): boolean {
   const re = new RegExp(pattern.source, 'g')
+
   for (const match of combinedText.matchAll(re)) {
     const start = match.index ?? 0
+
     if (start + match[0].length > previousTextLength) {
       return true
     }
   }
+
   return false
 }
 
@@ -241,6 +259,7 @@ export function createCommandCodeOutputStatusDetector(args: {
 }): CommandCodeOutputStatusDetector {
   let hasSeenCommandCodeUi =
     isCommandCodeLaunchCommand(args.startupCommand) || Boolean(args.inFlightTurn)
+
   let lastSubmittedPrompt = args.inFlightTurn?.prompt ?? ''
   let recentRawText = ''
 
@@ -248,12 +267,15 @@ export function createCommandCodeOutputStatusDetector(args: {
     observe(data: string): boolean {
       const previousRawText = recentRawText
       recentRawText = appendRecentRawText(previousRawText, data)
+
       // Why before the windows: a non-Command-Code pane pays two ~4KB string builds per chunk
       // otherwise, only to fail the same prefilter a few lines later.
       if (!hasSeenCommandCodeUi && !rawChunkMayContainCommandCodeBanner(previousRawText, data)) {
         return false
       }
+
       const scanRawText = buildStatusScanRawText(previousRawText, data)
+
       const scanRawTextWithChunkBoundary = previousRawText
         ? buildStatusScanRawText(`${previousRawText}\n`, data)
         : scanRawText
@@ -262,11 +284,14 @@ export function createCommandCodeOutputStatusDetector(args: {
         if (!rawTextMayContainCommandCodeBanner(scanRawText)) {
           return false
         }
+
         const scanText = stripTerminalControl(scanRawText)
         const scanTextWithChunkBoundary = stripTerminalControl(scanRawTextWithChunkBoundary)
+
         const previousTextWithChunkBoundaryLength = previousRawText
           ? stripTerminalControl(`${previousRawText}\n`).length
           : 0
+
         if (
           !COMMAND_CODE_BANNER_RE.test(scanText) &&
           !COMMAND_CODE_BANNER_RE.test(
@@ -275,41 +300,51 @@ export function createCommandCodeOutputStatusDetector(args: {
         ) {
           return false
         }
+
         hasSeenCommandCodeUi = true
       }
 
       const scanText = stripTerminalControl(scanRawText)
       const scanTextWithChunkBoundary = stripTerminalControl(scanRawTextWithChunkBoundary)
       const previousTextLength = previousRawText ? stripTerminalControl(previousRawText).length : 0
+
       const previousTextWithChunkBoundaryLength = previousRawText
         ? stripTerminalControl(`${previousRawText}\n`).length
         : 0
+
       const statusContext: StatusScanContext = {
         combinedText: scanText,
         previousTextLength,
         combinedTextWithChunkBoundary: scanTextWithChunkBoundary,
         previousTextWithChunkBoundaryLength
       }
+
       for (const promptMatch of scanText.matchAll(/(?:^|[\r\n])\s*[❯>]\s+([^\r\n]+)(?=[\r\n])/g)) {
         const prompt = cleanPromptCandidate(promptMatch[1] ?? '')
+
         if (prompt && !isIdlePromptCandidate(prompt)) {
           lastSubmittedPrompt = prompt
         }
       }
+
       // Why: Command Code lacks a prompt-start hook. Its TUI prints these
       // status words while a submitted prompt is actively running, including
       // no-tool turns that would otherwise jump straight from idle to done.
       if (isActiveStatusText(statusContext)) {
         args.onWorking(lastSubmittedPrompt)
+
         return true
       }
+
       // Why: Command Code does not reliably emit a Stop hook for no-tool turns.
       // When a submitted prompt has returned to the idle composer, let the pane
       // connection settle-check the current row and mark that turn done.
       if (lastSubmittedPrompt && isIdlePromptText(statusContext)) {
         args.onDone?.(lastSubmittedPrompt)
+
         return true
       }
+
       return false
     }
   }

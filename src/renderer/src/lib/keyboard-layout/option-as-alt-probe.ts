@@ -33,6 +33,7 @@ type NavigatorWithKeyboard = Navigator & {
 type Listener = (category: DetectedLayoutCategory) => void
 
 type InputSourceIdReader = () => Promise<string | null>
+
 type KeyboardLayoutChangeSubscriber = (
   callback: (event?: KeyboardLayoutChangeEvent) => void
 ) => () => void
@@ -82,10 +83,13 @@ function defaultInputSourceIdReader(): InputSourceIdReader {
         }
       }
     ).window?.api
+
     const snapshotReader = api?.app?.getKeyboardLayoutSnapshot
+
     if (snapshotReader) {
       try {
         const snapshot = await snapshotReader()
+
         if (snapshot?.inputSourceId) {
           return snapshot.inputSourceId
         }
@@ -93,10 +97,13 @@ function defaultInputSourceIdReader(): InputSourceIdReader {
         // Fall through to the preference-backed reader.
       }
     }
+
     const reader = api?.app?.getKeyboardInputSourceId
+
     if (!reader) {
       return null
     }
+
     try {
       return await reader()
     } catch {
@@ -119,6 +126,7 @@ export function createOptionAsAltProbe(
   let layoutChangeGeneration = 0
   let layoutRefreshBlocked = false
   const readInputSourceId = options.readInputSourceId ?? defaultInputSourceIdReader()
+
   const subscribeKeyboardLayoutChanged =
     options.subscribeKeyboardLayoutChanged ?? defaultKeyboardLayoutChangeSubscriber()
 
@@ -126,7 +134,9 @@ export function createOptionAsAltProbe(
     if (next === current) {
       return
     }
+
     current = next
+
     for (const listener of listeners) {
       try {
         listener(next)
@@ -140,6 +150,7 @@ export function createOptionAsAltProbe(
     if (disposed || layoutRefreshBlocked) {
       return
     }
+
     const generation = ++probeGeneration
     const nav = win.navigator as NavigatorWithKeyboard
     const keyboard = nav?.keyboard
@@ -148,6 +159,7 @@ export function createOptionAsAltProbe(
     // concrete ID (e.g. com.apple.keylayout.ABC); on every other platform
     // it resolves to null and we fall through to the fingerprint.
     let inputSourceId: string | null = null
+
     try {
       inputSourceId = await readInputSourceId()
     } catch {
@@ -167,12 +179,16 @@ export function createOptionAsAltProbe(
     // Only the two known Option-as-Meta layouts are allowed; every other
     // concrete input source keeps Option available for composition.
     const override = classifyInputSourceId(inputSourceId)
+
     if (override === 'meta') {
       notify('us')
+
       return
     }
+
     if (override === 'compose') {
       notify('non-us')
+
       return
     }
 
@@ -180,13 +196,17 @@ export function createOptionAsAltProbe(
       // Non-Chromium or Electron stripped of the Keyboard API. Stay at
       // 'unknown' → terminal defaults to 'false' (safe for non-US).
       notify('unknown')
+
       return
     }
+
     try {
       const map = await keyboard.getLayoutMap()
+
       if (disposed || generation !== probeGeneration) {
         return
       }
+
       notify(detectOptionAsAltFromLayoutMap(map))
     } catch (err) {
       // getLayoutMap can reject in some Chromium corner cases (unavailable
@@ -204,16 +224,21 @@ export function createOptionAsAltProbe(
     if (event && event.generation < layoutChangeGeneration) {
       return
     }
+
     notify('unknown')
+
     if (event?.phase === 'invalidated') {
       layoutChangeGeneration = event.generation
       layoutRefreshBlocked = true
       ++probeGeneration
+
       return
     }
+
     if (event) {
       layoutChangeGeneration = event.generation
     }
+
     layoutRefreshBlocked = false
     void probe()
   }
@@ -229,6 +254,7 @@ export function createOptionAsAltProbe(
     getCurrent: () => current,
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => {
         listeners.delete(listener)
       }
@@ -252,5 +278,6 @@ export function getOptionAsAltProbe(): OptionAsAltProbe {
   if (!_singleton) {
     _singleton = createOptionAsAltProbe()
   }
+
   return _singleton
 }

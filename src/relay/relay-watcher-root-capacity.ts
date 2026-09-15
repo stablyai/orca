@@ -11,6 +11,7 @@ export function exceedsRelayWatcherRootCapacity(
 ): boolean {
   const physicalRoots = new Set([...activeRoots, ...pendingRoots, ...teardownRoots])
   physicalRoots.add(prospectiveRoot)
+
   return physicalRoots.size > MAX_RELAY_WATCH_ROOTS
 }
 

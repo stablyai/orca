@@ -49,15 +49,18 @@ describe('resolveSpawn', () => {
       // Every `&`/`|`/`<`/`>` must sit inside a quoted run. Walking the parity
       // is the same thing cmd does, so this is the property that matters.
       let quoted = false
+
       for (const char of body) {
         if (char === '"') {
           quoted = !quoted
           continue
         }
+
         if ('&|<>'.includes(char)) {
           expect(quoted, `${name}: bare ${char} would parse as a cmd operator`).toBe(true)
         }
       }
+
       expect(quoted, `${name}: line ends mid-quote`).toBe(false)
     }
   })
@@ -70,6 +73,7 @@ describe('runProcessSync', () => {
       args: ['-e', 'setTimeout(() => {}, 5000)'],
       timeoutMs: 300
     })
+
     expect(result.timedOut).toBe(true)
   })
 
@@ -82,6 +86,7 @@ describe('runProcessSync', () => {
       args: ['-e', 'process.kill(process.pid, "SIGTERM")'],
       timeoutMs: 30_000
     })
+
     // Why not assert the signal: Windows has no signals, so the same deliberate
     // kill reports an exit code there and a signal on POSIX. What must hold on
     // both is that neither shape reads as a timeout.
@@ -94,6 +99,7 @@ describe('runProcessSync', () => {
       program: process.execPath,
       args: ['-e', 'process.stdout.write("hi"); process.exit(3)']
     })
+
     expect(result.stdout).toBe('hi')
     expect(result.code).toBe(3)
   })
@@ -106,6 +112,7 @@ describe('bounded output', () => {
       args: ['-e', 'process.stdout.write("x".repeat(64))'],
       maxOutputBytes: 8
     })
+
     expect(result.stdout).toBe('xxxxxxxx')
     expect(result.outputTruncated).toBe(true)
   })
@@ -116,6 +123,7 @@ describe('bounded output', () => {
       args: ['-e', 'process.stdout.write("x".repeat(8))'],
       maxOutputBytes: 8
     })
+
     expect(result.outputTruncated).toBe(false)
   })
 })
@@ -130,6 +138,7 @@ describe('unkillable children', () => {
       args: ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'],
       timeoutMs: 300
     })
+
     expect(result.timedOut).toBe(true)
   }, 20_000)
 })
@@ -139,12 +148,14 @@ describe('abort', () => {
     // An aborted caller has stopped waiting; an unkillable child must not keep
     // the promise alive on their behalf either.
     const controller = new AbortController()
+
     const pending = runProcess({
       program: process.execPath,
       args: ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'],
       timeoutMs: 60_000,
       signal: controller.signal
     })
+
     setTimeout(() => controller.abort(), 300)
     const result = await pending
     // Not a timeout: the caller asked it to stop.
@@ -156,9 +167,12 @@ describe('abort', () => {
     async () => {
       const root = await mkdtemp(path.join(tmpdir(), 'run-process-barrier-'))
       const marker = path.join(root, 'descendant-state')
+
       const descendantScript =
         `printf ready > "$1";trap 'printf signaled > "$1"' TERM;` + `while :;do sleep 1;done`
+
       const controller = new AbortController()
+
       const pending = runProcess({
         program: process.execPath,
         args: [
@@ -171,6 +185,7 @@ describe('abort', () => {
         signal: controller.signal,
         terminationBarrier: true
       })
+
       try {
         await expect
           .poll(() => readFile(marker, 'utf8').catch(() => ''), { timeout: 10_000 })
@@ -198,6 +213,7 @@ describe('stdin delivery failures', () => {
       input: 'x'.repeat(1024 * 1024),
       timeoutMs: 15_000
     })
+
     expect(result.code).toBe(7)
     expect(result.timedOut).toBe(false)
   }, 20_000)
@@ -211,12 +227,14 @@ describe('a signal that is already aborted', () => {
     controller.abort()
     const startedAt = Date.now()
     const onChildTerminated = vi.fn()
+
     const result = await runProcess({
       program: path.join(tmpdir(), 'orca-must-not-spawn'),
       timeoutMs: 30_000,
       signal: controller.signal,
       onChildTerminated
     })
+
     expect(result.timedOut).toBe(false)
     expect(onChildTerminated).toHaveBeenCalledOnce()
     expect(Date.now() - startedAt).toBeLessThan(10_000)
@@ -233,6 +251,7 @@ describe('output truncation', () => {
       args: ['-e', emit(200)],
       maxOutputBytes: 64
     })
+
     expect(result.stderr).not.toContain('FAILED')
     expect(result.stderr).toBe('n'.repeat(64))
   })

@@ -8,8 +8,11 @@ import type {
 import { hasSufficientWindowsFirewallRemoteScope } from './windows-firewall-remote-scope'
 
 const FIREWALL_RULE_NAME = 'Orca.MobilePairing'
+
 const FIREWALL_RULE_DISPLAY_NAME = 'Orca Mobile Pairing'
+
 const POWERSHELL_TIMEOUT_MS = 10_000
+
 const ELEVATION_TIMEOUT_MS = 5 * 60_000
 
 type PowerShellRunner = (script: string, timeoutMs: number) => Promise<string>
@@ -51,10 +54,12 @@ export async function inspectWindowsMobileFirewall(
       buildInspectionScript(port, environment.executablePath, address),
       POWERSHELL_TIMEOUT_MS
     )
+
     const result = JSON.parse(stdout.trim()) as FirewallInspection
     // Why: the phone address is unknown before pairing, so any matching Block
     // rule must fail this advisory check closed instead of risking false success.
     const blockingRuleDetected = result.blockingRuleDetected === true
+
     return {
       supported: true,
       port,
@@ -88,12 +93,15 @@ export async function repairWindowsMobileFirewall(
   const powershellPath = getWindowsPowerShellPath(environment.systemRoot)
   const elevatedScript = buildRepairScript(port, environment.executablePath)
   const outerScript = buildElevationScript(powershellPath, encodePowerShell(elevatedScript))
+
   try {
     const stdout = await getRunner(environment)(outerScript, ELEVATION_TIMEOUT_MS)
     const result = JSON.parse(stdout.trim()) as ElevationResult
+
     if (!result.launched && result.nativeErrorCode === 1223) {
       return { ok: false, reason: 'cancelled' }
     }
+
     return result.launched && result.exitCode === 0 ? { ok: true } : { ok: false, reason: 'failed' }
   } catch {
     return { ok: false, reason: 'failed' }
@@ -104,9 +112,11 @@ export function getWebSocketPort(endpoint: string | null): number | null {
   if (!endpoint) {
     return null
   }
+
   try {
     const parsed = new URL(endpoint)
     const port = Number(parsed.port)
+
     return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : null
   } catch {
     return null
@@ -149,12 +159,15 @@ function parseNetworkCategory(value: string): WindowsNetworkCategory {
   if (value === 'Private') {
     return 'private'
   }
+
   if (value === 'Public') {
     return 'public'
   }
+
   if (value === 'DomainAuthenticated') {
     return 'domain'
   }
+
   return 'unknown'
 }
 
@@ -173,6 +186,7 @@ try {
   if ($profile) { $networkCategory = [string]$profile.NetworkCategory }
 } catch {}`
     : ''
+
   // Why: NetSecurity filter properties are stable across localized Windows
   // display output and keep every rule's address scope independent. ActiveStore
   // includes GPO-applied rules the default persistent store hides, so managed
@@ -258,6 +272,7 @@ function getRunner(environment: WindowsMobileFirewallEnvironment): PowerShellRun
 
 function createPowerShellRunner(systemRoot?: string): PowerShellRunner {
   const powershellPath = getWindowsPowerShellPath(systemRoot)
+
   return (script, timeoutMs) =>
     new Promise((resolve, reject) => {
       execFile(
@@ -269,8 +284,10 @@ function createPowerShellRunner(systemRoot?: string): PowerShellRunner {
         (error, stdout) => {
           if (error) {
             reject(error)
+
             return
           }
+
           resolve(stdout)
         }
       )

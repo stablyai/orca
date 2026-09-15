@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 
 let root: Root | null = null
+
 let container: HTMLDivElement
 
 /** happy-dom reports 0 for layout, so scroll geometry has to be defined per element. */
@@ -25,6 +26,7 @@ function wheel(el: HTMLElement, deltaY: number): WheelEvent {
   act(() => {
     el.dispatchEvent(event)
   })
+
   return event
 }
 
@@ -85,6 +87,7 @@ describe('PopoverContent wheel shim', () => {
     if (root) {
       act(() => root!.unmount())
     }
+
     document.body.replaceChildren()
     vi.unstubAllGlobals()
   })
@@ -186,6 +189,7 @@ describe('PopoverContent wheel shim', () => {
       Object.defineProperty(event.nativeEvent, 'preventDefault', { value: vi.fn() })
       event.preventDefault()
     })
+
     const portalContainer = document.createElement('div')
     document.body.appendChild(portalContainer)
     renderPopover('popover-wheel-scroll', true, { onWheel, portalContainer })
@@ -205,6 +209,7 @@ describe('PopoverContent wheel shim', () => {
       Object.defineProperty(event.nativeEvent, 'preventDefault', { value: vi.fn() })
       event.preventDefault()
     })
+
     renderPopover('popover-wheel-scroll', true, { onWheelCapture })
     const viewport = document.querySelector<HTMLElement>('[data-testid="viewport"]')!
     viewport.style.overflowY = 'auto'
@@ -224,6 +229,7 @@ describe('PopoverContent wheel shim', () => {
       Object.defineProperty(event.nativeEvent, 'preventDefault', { value: vi.fn() })
       event.preventDefault()
     })
+
     renderPopover('popover-wheel-scroll', true, { innerOnWheel })
     const viewport = document.querySelector<HTMLElement>('[data-testid="viewport"]')!
     viewport.style.overflowY = 'auto'

@@ -32,6 +32,7 @@ function shouldCloseFallbackDialog(args: {
   const matches = args.lookupSlug(`${args.owner}/${args.repo}`, args.host)
   const selectedMatchCount = matches.filter((match) => args.selectedRepoIds.has(match.id)).length
   const unselectedMatchCount = matches.length - selectedMatchCount
+
   return selectedMatchCount > 0 || unselectedMatchCount > 0
 }
 
@@ -43,6 +44,7 @@ export function resolveRepoBackedProjectDialogState<T extends RepoBackedProjectD
   if (dialog && (!liveRepoIds.has(dialog.repoId) || !selectedRepoIds.has(dialog.repoId))) {
     return null
   }
+
   return dialog
 }
 
@@ -60,9 +62,11 @@ export function resolveMissingRepoProjectDialogState<
   repoNotInOrca: TRepoNotInOrca | null
 } {
   const { lookupSlug, repoNotInOrca, selectedRepoIds, slugDialog, slugIndexReady } = args
+
   if (!slugIndexReady) {
     return { slugDialog: null, repoNotInOrca: null }
   }
+
   return {
     slugDialog:
       slugDialog &&

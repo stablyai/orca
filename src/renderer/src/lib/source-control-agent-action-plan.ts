@@ -45,6 +45,7 @@ export function planSourceControlAgentActionLaunch(args: {
   isRemote?: boolean
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
+
   if (!agent) {
     return {
       ok: false,
@@ -54,6 +55,7 @@ export function planSourceControlAgentActionLaunch(args: {
       )
     }
   }
+
   if (!isTuiAgentEnabled(agent, args.disabledAgents)) {
     return {
       ok: false,
@@ -63,6 +65,7 @@ export function planSourceControlAgentActionLaunch(args: {
       )
     }
   }
+
   if (!args.detectedAgents.includes(agent)) {
     return {
       ok: false,
@@ -74,6 +77,7 @@ export function planSourceControlAgentActionLaunch(args: {
   }
 
   const trimmedInput = args.commandInput.trim()
+
   if (!trimmedInput) {
     return {
       ok: false,
@@ -87,16 +91,20 @@ export function planSourceControlAgentActionLaunch(args: {
   const cmdOverrides = args.cmdOverrides ?? {}
   const platform = args.platform ?? CLIENT_PLATFORM
   const isRemote = args.isRemote ?? false
+
   const shell =
     resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
       terminalWindowsShell: args.terminalWindowsShell
     }) ?? (platform === 'win32' ? 'powershell' : 'posix')
+
   const plannedArgs = planAgentCliArgsSuffix(args.agentArgs, shell)
+
   if (!plannedArgs.ok) {
     return { ok: false, error: plannedArgs.error }
   }
+
   let startupPlan: AgentStartupPlan | null = null
   let delivery: SourceControlLaunchPlanDelivery
 
@@ -124,6 +132,7 @@ export function planSourceControlAgentActionLaunch(args: {
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions
     })
+
     if (draftLaunchPlan) {
       startupPlan = {
         agent: draftLaunchPlan.agent,

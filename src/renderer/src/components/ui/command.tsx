@@ -139,23 +139,29 @@ function CommandList({
   // of whether a scroll-lock is active.
   React.useEffect(() => {
     const el = internalRef.current
+
     if (!el) {
       return
     }
+
     const onWheel = (e: WheelEvent): void => {
       if (el.scrollHeight <= el.clientHeight) {
         return
       }
+
       e.preventDefault()
       el.scrollTop += e.deltaY
     }
+
     el.addEventListener('wheel', onWheel, { passive: false })
+
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
   const mergedRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       internalRef.current = node
+
       if (typeof ref === 'function') {
         ref(node)
       } else if (ref) {

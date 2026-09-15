@@ -10,6 +10,7 @@ afterEach(async () => {
   if (!server) {
     return
   }
+
   await new Promise<void>((resolve) => server?.close(() => resolve()))
   server = null
 })
@@ -18,9 +19,11 @@ function listen(serverToStart: Server): Promise<number> {
   return new Promise((resolve) => {
     serverToStart.listen(0, '127.0.0.1', () => {
       const address = serverToStart.address()
+
       if (!address || typeof address === 'string') {
         throw new Error('Expected TCP server address')
       }
+
       resolve(address.port)
     })
   })
@@ -29,6 +32,7 @@ function listen(serverToStart: Server): Promise<number> {
 describe('MjpegFrameStream', () => {
   it('reads raw MJPEG frames through Node HTTP', async () => {
     let requestUrl = ''
+
     const framePromise = new Promise<Buffer>((resolve, reject) => {
       const httpServer = createServer((req, res) => {
         requestUrl = req.url ?? ''
@@ -36,6 +40,7 @@ describe('MjpegFrameStream', () => {
         res.write(Buffer.concat([Buffer.from('--frame\r\n'), JPEG]))
         res.end()
       })
+
       server = httpServer
 
       void listen(httpServer).then((port) => {
@@ -50,6 +55,7 @@ describe('MjpegFrameStream', () => {
           },
           'test-key'
         )
+
         stream.start()
       })
     })

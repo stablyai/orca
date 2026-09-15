@@ -14,9 +14,11 @@ import {
 import { forceDeleteLocalBranch } from './worktree-branch-removal'
 
 const roots: string[] = []
+
 // Large enough that the deferral ladder (1x, 2x, 4x ... capped at 8x) outlasts
 // three real `pack-refs` runs before the deferral budget is spent.
 const QUIET_MS = 25
+
 const THRESHOLD = 20
 
 function git(cwd: string, args: string[]): string {
@@ -43,9 +45,11 @@ async function createRepo(looseRefs: number): Promise<{ repoPath: string; refsDi
   // Written directly: `update-ref` for thousands of refs is the slow part of the fixture.
   const namespace = join(repoPath, '.git', 'refs', 'remotes', 'origin')
   await mkdir(namespace, { recursive: true })
+
   for (let index = 0; index < looseRefs; index += 1) {
     await writeFile(join(namespace, `branch-${index}`), `${head}\n`)
   }
+
   return { repoPath, refsDir: join(repoPath, '.git', 'refs') }
 }
 
@@ -57,6 +61,7 @@ function createMaintenance(onPackRefs: () => void = () => {}): {
     quietPeriodMs: QUIET_MS,
     looseRefThreshold: THRESHOLD
   })
+
   return {
     maintenance,
     arm: (repoPath: string) => {
@@ -64,6 +69,7 @@ function createMaintenance(onPackRefs: () => void = () => {}): {
         key: `local::${repoPath}`,
         repoPath
       })
+
       maintenance.arm({
         ...target,
         packRefs: async (signal) => {
@@ -89,6 +95,7 @@ async function settleUntil(
     if (await done()) {
       return
     }
+
     await settle(maintenance)
   }
 }
@@ -124,6 +131,7 @@ describe('idle ref maintenance against real Git', () => {
   it('leaves a healthy repository untouched', async () => {
     const { repoPath, refsDir } = await createRepo(2)
     let packed = 0
+
     const { maintenance, arm } = createMaintenance(() => {
       packed += 1
     })
@@ -140,6 +148,7 @@ describe('idle ref maintenance against real Git', () => {
     const { repoPath, refsDir } = await createRepo(THRESHOLD + 30)
     git(repoPath, ['config', 'maintenance.auto', 'false'])
     let packed = 0
+
     const { maintenance, arm } = createMaintenance(() => {
       packed += 1
     })
@@ -160,22 +169,27 @@ describe('idle ref maintenance against real Git', () => {
       createRepo(THRESHOLD + 5),
       createRepo(THRESHOLD + 5)
     ])
+
     let concurrent = 0
     let peak = 0
+
     const maintenance = new RepoRefMaintenance({
       quietPeriodMs: QUIET_MS,
       looseRefThreshold: THRESHOLD
     })
+
     for (const { repoPath } of repos) {
       const target = createLocalRepoRefMaintenanceTarget({
         key: `local::${repoPath}`,
         repoPath
       })
+
       maintenance.arm({
         ...target,
         packRefs: async (signal) => {
           concurrent += 1
           peak = Math.max(peak, concurrent)
+
           try {
             await target.packRefs(signal)
           } finally {
@@ -187,12 +201,15 @@ describe('idle ref maintenance against real Git', () => {
 
     const allPacked = async (): Promise<boolean> => {
       const counts = await Promise.all(repos.map(({ refsDir }) => countLooseRefs(refsDir, 10_000)))
+
       return counts.every((scan) => scan.count === 0)
     }
+
     await settleUntil(maintenance, allPacked)
     maintenance.dispose()
 
     expect(peak).toBe(1)
+
     for (const { refsDir } of repos) {
       await expect(countLooseRefs(refsDir, 10_000)).resolves.toEqual({
         count: 0,
@@ -231,13 +248,16 @@ describe('yielding the repository to work that deletes refs', () => {
         })
       }
     })
+
     for (let attempt = 0; attempt < 200 && !packing; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
     }
+
     expect(packing).toBe(true)
 
     // The real deletion path, which routes through withRepoRefMaintenancePaused.
     let deleted = false
+
     const deletion = forceDeleteLocalBranch(repoPath, 'doomed', head).then(() => {
       deleted = true
     })
@@ -277,6 +297,7 @@ describe('yielding the repository to work that deletes refs', () => {
         })
       }
     })
+
     for (let attempt = 0; attempt < 200 && !pruning; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, QUIET_MS))
     }

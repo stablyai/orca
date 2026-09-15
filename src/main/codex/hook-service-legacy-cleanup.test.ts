@@ -23,6 +23,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -50,6 +51,7 @@ function legacyManagedHookCommand(): string {
     'agent-hooks',
     process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
   )
+
   return process.platform === 'win32' ? legacyScriptPath : wrapPosixHookCommand(legacyScriptPath)
 }
 
@@ -108,6 +110,7 @@ describe('CodexHookService', () => {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
       _managed?: unknown
     }
+
     expect(systemHooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
     expect(systemHooks.hooks.SessionStart).toBeUndefined()
     expect(systemHooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
@@ -145,9 +148,11 @@ describe('CodexHookService', () => {
     } finally {
       warnSpy.mockRestore()
     }
+
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, unknown>
     }
+
     expect(systemHooks.hooks.Stop).toBeUndefined()
   }, 30_000)
 
@@ -213,9 +218,11 @@ describe('CodexHookService', () => {
 
     expect(status.state).toBe('error')
     expect(status.detail).toBe('Could not parse Codex hooks.json')
+
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     expect(systemHooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
     expect(systemHooks.hooks.SessionStart).toBeUndefined()
     expect(existsSync(profilePath)).toBe(false)
@@ -247,10 +254,12 @@ describe('CodexHookService', () => {
     const status = await new CodexHookService().remove()
 
     expect(status.state).toBe('not_installed')
+
     const hooksConfig = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, unknown>
       _managed?: unknown
     }
+
     expect(hooksConfig._managed).toBeUndefined()
     expect(Object.keys(hooksConfig)).toEqual(['hooks'])
     expect(hooksConfig.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
@@ -311,13 +320,16 @@ describe('CodexHookService', () => {
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
+
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     const stopCommands =
       runtimeHooks.hooks.Stop?.flatMap(
         (definition) => definition.hooks?.map((hook) => hook.command ?? '') ?? []
       ) ?? []
+
     expect(stopCommands).toContain(userCommand)
     expect(stopCommands.some((command) => isCodexManagedCommand(command))).toBe(true)
     expect(
@@ -333,6 +345,7 @@ describe('CodexHookService', () => {
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     expect(systemHooks.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: userCommand }] }])
     expect(systemHooks.hooks.SessionStart).toBeUndefined()
     const systemToml = readFileSync(systemTomlPath, 'utf-8')

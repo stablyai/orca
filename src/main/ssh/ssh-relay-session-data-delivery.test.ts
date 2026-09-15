@@ -30,9 +30,11 @@ const {
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: acceptOutputDataMock,
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -70,6 +72,7 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockImplementation((handler) => {
       ptyDataHandlerRef.current = handler
+
       return () => {}
     })
     onReplay = vi.fn().mockReturnValue(() => {})
@@ -123,12 +126,18 @@ const {
   registerSshPtyProvider,
   setPtyOwnership
 } = await import('../ipc/pty')
+
 const { closeSshPtyOutputGeneration } = await import('../ipc/ssh-pty-output-intake-registry')
+
 const { applySshPtySourceCancellationProof } = await import('../ipc/ssh-pty-output-intake-registry')
+
 const { applySshPtySourceRecoveryCancellationProof } =
   await import('../ipc/ssh-pty-output-intake-registry')
+
 const { getSshPtyAcceptedSourceCheckpoints } = await import('../ipc/ssh-pty-output-intake-registry')
+
 const { installSshPtySourceAckPublisher } = await import('../ipc/ssh-pty-output-intake-registry')
+
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 
 describe('SshRelaySession data delivery', () => {
@@ -197,12 +206,14 @@ describe('SshRelaySession data delivery', () => {
       }
     ])
     const deps = createMockDeps()
+
     const session = new SshRelaySession(
       args.targetId,
       deps.getMainWindow,
       deps.mockStore,
       deps.mockPortForward
     )
+
     await session.establish(deps.mockConn)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([`ssh:${args.targetId}@@pty-1`])
     vi.mocked(getSshPtyProvider).mockImplementation(
@@ -229,9 +240,11 @@ describe('SshRelaySession data delivery', () => {
             }
           })
         }
+
         const complete = onNotificationByMethodMock.mock.calls.findLast(
           ([method]) => method === 'pty.recoveryComplete'
         )?.[1] as ((params: Record<string, unknown>) => void) | undefined
+
         complete?.({
           id: 'pty-1',
           clientGeneration: 2,
@@ -241,6 +254,7 @@ describe('SshRelaySession data delivery', () => {
           checkpointSourceEndSu: 4,
           recoveryEndSu: args.recoveryEndSu
         })
+
         if (args.liveFrame) {
           const [sourceStartSu, sourceEndSu] = args.liveFrame
           ptyDataHandlerRef.current?.({
@@ -261,6 +275,7 @@ describe('SshRelaySession data delivery', () => {
           })
         }
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: {
@@ -275,6 +290,7 @@ describe('SshRelaySession data delivery', () => {
       }
     })
     await session.reconnect(deps.mockConn)
+
     return { ...deps, session }
   }
 
@@ -397,6 +413,7 @@ describe('SshRelaySession data delivery', () => {
     const retryCalls = openConsumerSessionMock.mock.calls
       .slice(openCallCountBeforeRetry)
       .map(([, options]) => options)
+
     // Why one call: the relay answers a proof it cannot match with a fresh claim, so the client never
     // needs a second, resume-less request to get owner authority back.
     expect(retryCalls).toHaveLength(1)
@@ -412,6 +429,7 @@ describe('SshRelaySession data delivery', () => {
   it('delivers empty transformed relay spans with raw sequence metadata', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(() => 17), onPtyExit: vi.fn() }
+
     const session = new SshRelaySession(
       'target-1',
       getMainWindow,
@@ -419,10 +437,13 @@ describe('SshRelaySession data delivery', () => {
       mockPortForward,
       runtime as never
     )
+
     await session.establish(mockConn)
+
     const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onData: ReturnType<typeof vi.fn>
     }
+
     const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
       id: string
       data: string
@@ -440,6 +461,7 @@ describe('SshRelaySession data delivery', () => {
         sourceEndSu: number
       }
     }) => void
+
     const source = {
       relayPtyId: 'pty-1',
       spanId: 'token-1:0:9',
@@ -477,9 +499,11 @@ describe('SshRelaySession data delivery', () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
+
     const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onData: ReturnType<typeof vi.fn>
     }
+
     const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
       id: string
       data: string
@@ -495,6 +519,7 @@ describe('SshRelaySession data delivery', () => {
         sourceEndSu: number
       }
     }) => void
+
     const source = {
       relayPtyId: 'pty-1',
       spanId: 'token-1:0:4',
@@ -523,9 +548,11 @@ describe('SshRelaySession data delivery', () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
+
     const provider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onData: ReturnType<typeof vi.fn>
     }
+
     const onData = provider.onData.mock.calls[0]?.[0] as (payload: Record<string, unknown>) => void
 
     onData({
@@ -549,9 +576,11 @@ describe('SshRelaySession data delivery', () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
+
     const provider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onData: ReturnType<typeof vi.fn>
     }
+
     const onData = provider.onData.mock.calls[0]?.[0] as (payload: Record<string, unknown>) => void
 
     onData({
@@ -598,6 +627,7 @@ describe('SshRelaySession data delivery', () => {
     await session.establish(mockConn)
     const publish = vi.mocked(installSshPtySourceAckPublisher).mock.calls[0]?.[1]
     const settled = vi.fn()
+
     const batch = {
       acknowledgements: [
         {
@@ -652,6 +682,7 @@ describe('SshRelaySession data delivery', () => {
     let generation = 0
     openConsumerSessionMock.mockImplementation(async (_mux, options) => {
       generation++
+
       return {
         state: {
           mode: 'negotiated',
@@ -683,6 +714,7 @@ describe('SshRelaySession data delivery', () => {
       () => vi.mocked(registerSshPtyProvider).mock.calls.at(-1)?.[1]
     )
     let transferDisposedMux = false
+
     const publishHeldRecovery = (sink: (payload: unknown) => void): void => {
       for (const [data, sourceStartSu, sourceEndSu] of [
         ['re', 4, 6],
@@ -707,22 +739,27 @@ describe('SshRelaySession data delivery', () => {
         })
       }
     }
+
     const recoveryActivationLease = {
       commit: vi.fn(),
       retire: vi.fn()
     }
+
     const sourceActivationLease = {
       commit: vi.fn(),
       rollback: vi.fn(async () => true),
       transferToRecovery: vi.fn((sink: (payload: unknown) => void) => {
         publishHeldRecovery(sink)
+
         return recoveryActivationLease
       })
     }
+
     attachForReconnectMock.mockImplementation(async () => {
       const canceled = onNotificationByMethodMock.mock.calls.findLast(
         ([method]) => method === 'pty.deliveryCanceled'
       )?.[1] as ((params: Record<string, unknown>) => void) | undefined
+
       const disposeCount = muxDisposeMock.mock.calls.length
       canceled?.({
         id: 'pty-1',
@@ -737,6 +774,7 @@ describe('SshRelaySession data delivery', () => {
         const complete = onNotificationByMethodMock.mock.calls.findLast(
           ([method]) => method === 'pty.recoveryComplete'
         )?.[1] as ((params: Record<string, unknown>) => void) | undefined
+
         complete?.({
           id: 'pty-1',
           clientGeneration: 2,
@@ -747,6 +785,7 @@ describe('SshRelaySession data delivery', () => {
           recoveryEndSu: 8
         })
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: {
@@ -787,9 +826,11 @@ describe('SshRelaySession data delivery', () => {
     expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:replay', expect.anything())
 
     const closeCount = vi.mocked(closeSshPtyOutputGeneration).mock.calls.length
+
     const canceled = onNotificationByMethodMock.mock.calls.findLast(
       ([method]) => method === 'pty.deliveryCanceled'
     )?.[1] as ((params: Record<string, unknown>) => void) | undefined
+
     canceled?.({
       id: 'pty-1',
       clientGeneration: 1,
@@ -807,6 +848,7 @@ describe('SshRelaySession data delivery', () => {
     ['missing body', undefined]
   ])('rejects %s recovery without destroying the physical PTY or lease', async (label, frame) => {
     const targetId = `invalid-recovery-${label.replace(' ', '-')}`
+
     const { mockStore, mockWindow } = await runRecoverySequence({
       targetId,
       recoveryEndSu: 8,

@@ -18,6 +18,7 @@ export function getHostedReviewLocalGitOptions(
 ): HostedReviewLocalGitOptions {
   const wslDistro = options.localGitExecOptions?.wslDistro
   const admissionTier = options.localGitExecOptions?.admissionTier
+
   return {
     ...(wslDistro ? { wslDistro } : {}),
     ...(admissionTier ? { admissionTier } : {})

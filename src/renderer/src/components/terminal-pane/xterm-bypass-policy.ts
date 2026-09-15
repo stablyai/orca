@@ -70,7 +70,9 @@ export type XtermImeKeyboardOptions = {
 }
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
+
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
+
 const TERMINAL_IME_OWNED_KEYS = new Set([
   'ArrowDown',
   'ArrowLeft',
@@ -88,10 +90,13 @@ const TERMINAL_IME_OWNED_KEYS = new Set([
 
 function isSingleNonAsciiPrintableText(key: string): boolean {
   const chars = Array.from(key)
+
   if (chars.length !== 1) {
     return false
   }
+
   const codePoint = chars[0].codePointAt(0)
+
   return codePoint !== undefined && codePoint >= 0x80
 }
 
@@ -114,14 +119,17 @@ export function shouldBypassXtermForIosTextEdit(
   if (!isIosWeb || event.ctrlKey || event.metaKey || event.altKey) {
     return false
   }
+
   if (event.isComposing === true) {
     // Why: input sources that do run a composition session stay with xterm's
     // CompositionHelper, which already commits them correctly.
     return false
   }
+
   if (!isXtermHandledKeyEvent(event.type) && event.type !== 'keypress') {
     return false
   }
+
   // Why jamo and not every non-ASCII key: nothing downstream re-sends a key
   // this claims. A Cyrillic or kana key would lose its keydown, its keypress,
   // and then its `input` too — xterm drops a composed insert while a key is
@@ -155,20 +163,24 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     isMac,
     isLinux
   } = options
+
   const suppressCandidateKey =
     isLinux &&
     (pendingCandidateKeyReleaseActive ||
       (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
       claimsOrphanCandidateDigit(event, options))
+
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
     // literal Space/digit to the PTY.
     return suppressCandidateKey
   }
+
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
+
   // Why: IMEs own Process-key / composing keystrokes — letting xterm translate
   // them corrupts committed CJK text. Bare macOS/Linux keydown 229 is exempt:
   // it must reach xterm's CompositionHelper so it can schedule its textarea
@@ -176,6 +188,7 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   // candidate commits outside a composition session). Windows keeps full
   // suppression until verified against its preedit-diff race.
   const passesStandalone229Keydown = isMac || isLinux
+
   return (
     event.isComposing === true ||
     (event.keyCode === 229 &&
@@ -212,9 +225,11 @@ function isLatinLetterKey(normalizedKey: string): boolean {
 
 function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {
   const normalizedKey = event.key.toLowerCase()
+
   if (isLatinLetterKey(normalizedKey)) {
     return normalizedKey === 'c'
   }
+
   // A non-Latin input source reports its own glyph here — a Hangul jamo on Korean 2-Set,
   // Cyrillic es on Russian — and cannot express a control chord in `key` at all. Ask the
   // layout map what this physical key produces unmodified: for an IME layered over a Latin
@@ -222,9 +237,11 @@ function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {
   const layoutBaseKey = event.code
     ? getLayoutBaseCharacterForCode(event.code)?.toLowerCase()
     : undefined
+
   if (layoutBaseKey !== undefined && isLatinLetterKey(layoutBaseKey)) {
     return layoutBaseKey === 'c'
   }
+
   // Why the physical fallback: on a true non-Latin *layout* the map is non-Latin too, so it
   // cannot answer the question either. Terminals resolve control chords by physical position,
   // so KeyC is the interrupt. Empty and Unidentified land here as they always did.
@@ -294,11 +311,13 @@ export function shouldBypassXtermKeyboardEvent(
   if (shouldBypassXtermForIosTextEdit(event, options.isIosWeb === true)) {
     return true
   }
+
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }
 
   const { isMac, hasSelection } = options
+
   const platformModifierHeld = isMac
     ? event.metaKey && !event.ctrlKey
     : event.ctrlKey && !event.metaKey
@@ -338,15 +357,18 @@ export function shouldBypassXtermKeyboardEvent(
   if (matchesClipboardBinding('Ctrl+Shift+C', event, 'linux')) {
     return true
   }
+
   if (matchesClipboardBinding('Ctrl+C', event, 'linux') && hasSelection) {
     return true
   }
+
   if (
     matchesClipboardBinding('Ctrl+V', event, 'linux') ||
     matchesClipboardBinding('Ctrl+Shift+V', event, 'linux')
   ) {
     return true
   }
+
   if (matchesClipboardBinding('Shift+Insert', event, 'linux')) {
     return true
   }

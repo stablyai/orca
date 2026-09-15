@@ -21,9 +21,11 @@ export function formatTokens(value: number): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
+
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
+
   return value.toLocaleString()
 }
 
@@ -31,21 +33,27 @@ export function formatCost(value: number | null): string {
   if (value === null) {
     return 'n/a'
   }
+
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }
 
 export function formatDateRange(range: string): string {
   const now = new Date()
   const end = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+
   if (range === 'all') {
     return `Through ${end}`
   }
+
   const days = Number.parseInt(range)
+
   if (Number.isNaN(days)) {
     return end
   }
+
   const start = new Date(now.getTime() - days * 86_400_000)
   const startStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
   return `${startStr} – ${end}`
 }
 
@@ -60,6 +68,7 @@ export function getDailyTotal(entry: ClaudeUsageDailyPoint | CodexUsageDailyPoin
   if ('cacheReadTokens' in entry) {
     return entry.inputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens
   }
+
   return entry.totalTokens
 }
 
@@ -78,6 +87,7 @@ export function getDailySegments(
       { key: 'input', value: entry.inputTokens, color: 'rgba(56, 189, 248, 0.8)' }
     ]
   }
+
   return [
     { key: 'input', value: entry.inputTokens, color: 'rgba(56, 189, 248, 0.8)' },
     { key: 'output', value: entry.outputTokens, color: 'rgba(52, 211, 153, 0.8)' },
@@ -107,6 +117,7 @@ export function getLegendItems(provider: 'claude' | 'codex') {
       }
     ]
   }
+
   return [
     {
       label: translate('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),

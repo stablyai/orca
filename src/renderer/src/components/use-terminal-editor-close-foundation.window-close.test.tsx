@@ -17,9 +17,11 @@ const { assessWindowCloseRunningWorkMock, confirmWindowCloseMock } = vi.hoisted(
 vi.mock('./terminal/window-close-running-work', () => ({
   assessWindowCloseRunningWork: assessWindowCloseRunningWorkMock
 }))
+
 vi.mock('./window-close-request-coordinator', () => ({
   runWithWindowCloseCheckpointScope: (fn: () => unknown) => fn()
 }))
+
 vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
   showShutdownCheckpointFailureToast: vi.fn()
 }))

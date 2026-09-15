@@ -61,6 +61,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     claude.connections[0]!.send = async () => {
       throw claudeUnwrittenUserMessageError(new Error('broken pipe'))
     }
+
     await expect(
       adapter.dispatch({
         sessionId: 'session-1',
@@ -91,6 +92,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     claude.routes.interrupt = () => {
       throw new ClaudeControlRequestError('interrupt', 'not running')
     }
+
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-2', fence: 7 })
     ).resolves.toEqual({ cancelled: false })
@@ -98,6 +100,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     claude.routes.interrupt = () => {
       throw new Error('claude interrupt request timed out')
     }
+
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-3', fence: 7 })
     ).rejects.toThrow('timed out')
@@ -183,6 +186,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         }
       }
     })
+
     const adapter = await acquired(claude)
 
     await expect(
@@ -191,6 +195,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     claude.routes.set_model = () => {
       throw new Error('claude set_model request timed out')
     }
+
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'opus', fence: 7 })
     ).rejects.toThrow('timed out')
@@ -217,6 +222,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         ]
       }
     })
+
     const adapter = await acquired(claude)
 
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
@@ -245,6 +251,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         }
       }
     })
+
     const adapter = await acquired(claude)
     const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
 

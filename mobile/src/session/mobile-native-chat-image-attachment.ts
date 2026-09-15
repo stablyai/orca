@@ -33,6 +33,7 @@ export function appendPendingNativeChatImages(
     ...current,
     ...uploaded.map((image) => {
       idCounter.current += 1
+
       return { id: `img-${idCounter.current}`, ...image }
     })
   ]
@@ -73,22 +74,27 @@ export async function uploadMobileNativeChatImages(
   const picked = await pickImages(source)
   const uploaded: Omit<PendingNativeChatImage, 'id'>[] = []
   let connectionId: string | null = null
+
   for await (const image of picked) {
     if (uploaded.length === 0) {
       onUploadStart?.()
       connectionId = await getConnectionId()
     }
+
     const path = await saveMobileClipboardImageAsTempFile(client, image.base64, { connectionId })
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
+
     const result = {
       path,
       previewUri,
       contentFingerprint: mobileNativeChatImageContentFingerprint(image.base64)
     }
+
     uploaded.push(result)
     onImageUploaded?.(result)
   }
+
   return uploaded
 }

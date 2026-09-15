@@ -39,6 +39,7 @@ describe('terminal send RPC', () => {
     const runtime = stubRuntime({
       isTerminalRunningAgent: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -48,9 +49,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({ isRunningAgent: true })
     expect(runtime.isTerminalRunningAgent).toHaveBeenCalledWith('terminal-1')
   })
@@ -63,6 +66,7 @@ describe('terminal send RPC', () => {
         status: 'permission'
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -72,9 +76,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({
       agentStatus: {
         handle: 'terminal-1',
@@ -92,6 +98,7 @@ describe('terminal send RPC', () => {
       }),
       sendTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -103,9 +110,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(false)
+
     if (response.ok) {
       throw new Error('expected stale handle error')
     }
+
     expect(response.error.message).toContain('terminal_handle_stale')
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
   })
@@ -117,6 +126,7 @@ describe('terminal send RPC', () => {
       sendTerminal: vi.fn(),
       mobileTookFloor: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -128,9 +138,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({
       send: {
         handle: 'terminal-1',
@@ -144,22 +156,27 @@ describe('terminal send RPC', () => {
 
   it('awaits a desktop viewport claim before acknowledged input', async () => {
     let releaseClaim = (): void => {}
+
     const refreshRemoteDesktopViewer = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           releaseClaim = () => resolve(true)
         })
     )
+
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
       await options.beforeWrite?.('pty-1')
+
       return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
     })
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       refreshRemoteDesktopViewer,
       sendTerminal
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = dispatcher.dispatch(
@@ -183,6 +200,7 @@ describe('terminal send RPC', () => {
 
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
     const write = vi.fn()
+
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
       await options.beforeWrite?.('pty-1')
       options.reserveWrite?.('pty-1')
@@ -192,17 +210,21 @@ describe('terminal send RPC', () => {
       options.reserveWrite?.('pty-1')
       write()
       await options.afterWrite?.('pty-1')
+
       return {
         handle: 'terminal-1',
         accepted: true,
         bytesWritten: 1
       }
     })
+
     const mobileTookFloor = vi.fn().mockResolvedValue(undefined)
+
     const beginMobileInputFloor = vi.fn(() => ({
       commit: async () => mobileTookFloor('pty-1', 'mobile-1'),
       rollback: vi.fn()
     }))
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
@@ -210,6 +232,7 @@ describe('terminal send RPC', () => {
       beginMobileInputFloor,
       mobileTookFloor
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -220,9 +243,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toMatchObject({ send: { accepted: true, bytesWritten: 1 } })
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
@@ -260,17 +285,21 @@ describe('terminal send RPC', () => {
     const commit = vi.fn()
     const rollback = vi.fn()
     const beginMobileInputFloor = vi.fn(() => ({ commit, rollback }))
+
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {
       await options.beforeWrite?.('pty-1')
       options.reserveWrite?.('pty-1')
+
       return finishWrite()
     })
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       sendTerminal,
       beginMobileInputFloor
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatch(
@@ -289,6 +318,7 @@ describe('terminal send RPC', () => {
 
   it('writes zero bytes when the mobile subscriber disappeared before reservation', async () => {
     const write = vi.fn()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
@@ -296,9 +326,11 @@ describe('terminal send RPC', () => {
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         options.reserveWrite('pty-1')
         write()
+
         return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -313,6 +345,7 @@ describe('terminal send RPC', () => {
     const commit = vi.fn()
     const rollback = vi.fn()
     const beginMobileInputFloor = vi.fn(() => ({ commit: async () => commit(), rollback }))
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -326,6 +359,7 @@ describe('terminal send RPC', () => {
         throw new Error('suffix failed')
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatch(
@@ -354,6 +388,7 @@ describe('terminal send RPC', () => {
       isMobileTerminalQueryReplyAuthority: vi.fn().mockReturnValue(true),
       mobileTookFloor: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -389,6 +424,7 @@ describe('terminal send RPC', () => {
       }),
       mobileTookFloor: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const makeReply = (clientId: string) =>
@@ -400,6 +436,7 @@ describe('terminal send RPC', () => {
           client: { id: clientId, type: 'mobile' }
         })
       )
+
     const [winner, peer] = await Promise.all([makeReply('mobile-1'), makeReply('mobile-2')])
 
     expect(winner).toMatchObject({ ok: true, result: { send: { accepted: true } } })
@@ -414,6 +451,7 @@ describe('terminal send RPC', () => {
       sendTerminal: vi.fn(),
       mobileTookFloor: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -440,6 +478,7 @@ describe('terminal send RPC', () => {
       resolveLiveLeafForHandle: vi.fn(),
       sendTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -459,10 +498,12 @@ describe('terminal send RPC', () => {
 
   it('rejects query replies that spoof a different authenticated mobile client', async () => {
     const replies: string[] = []
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn(),
       sendTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -486,9 +527,11 @@ describe('terminal send RPC', () => {
 
   it('rejects oversized terminal send text before runtime dispatch', async () => {
     const secret = 'terminal-send-secret'
+
     const runtime = stubRuntime({
       sendTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -513,6 +556,7 @@ describe('terminal send RPC', () => {
     const runtime = stubRuntime({
       sendTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const text = '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1)
 
@@ -537,6 +581,7 @@ describe('terminal send RPC', () => {
   it('yields while validating large accepted terminal send text before runtime dispatch', async () => {
     vi.useFakeTimers()
     const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -546,6 +591,7 @@ describe('terminal send RPC', () => {
         bytesWritten: text.length
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const responsePromise = dispatcher.dispatch(
@@ -554,6 +600,7 @@ describe('terminal send RPC', () => {
         text
       })
     )
+
     await Promise.resolve()
 
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
@@ -576,6 +623,7 @@ describe('terminal send RPC', () => {
 
   it('refuses guarded terminal sends when the agent needs permission', async () => {
     const beginMobileInputFloor = vi.fn()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -587,6 +635,7 @@ describe('terminal send RPC', () => {
       sendTerminal: vi.fn(),
       beginMobileInputFloor
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -599,9 +648,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({
       send: {
         handle: 'terminal-1',
@@ -630,6 +681,7 @@ describe('terminal send RPC', () => {
         bytesWritten: 1
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -642,9 +694,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toMatchObject({ send: { accepted: true, bytesWritten: 1 } })
     expect(runtime.sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
@@ -661,14 +715,17 @@ describe('terminal send RPC', () => {
     let boundPtyId = 'pty-1'
     let statusCalls = 0
     const write = vi.fn()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: boundPtyId })),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
       getTerminalAgentStatus: vi.fn().mockImplementation(async () => {
         statusCalls += 1
+
         if (statusCalls === 2) {
           boundPtyId = 'pty-2'
         }
+
         return {
           handle: 'terminal-1',
           isRunningAgent: true,
@@ -678,9 +735,11 @@ describe('terminal send RPC', () => {
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         await options.beforeWrite('pty-1')
         write('pty-1', '\r')
+
         return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -702,6 +761,7 @@ describe('terminal send RPC', () => {
 
   it('rejects a guarded callback whose actual write PTY differs from the handle binding', async () => {
     const write = vi.fn()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: 'pty-1' })),
       getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
@@ -713,9 +773,11 @@ describe('terminal send RPC', () => {
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         await options.beforeWrite('pty-2')
         write('pty-2', '\r')
+
         return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -742,6 +804,7 @@ describe('terminal send RPC', () => {
       getTerminalAgentStatus: vi.fn(),
       sendTerminal: vi.fn()
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -755,9 +818,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({
       send: {
         handle: 'terminal-1',
@@ -784,9 +849,11 @@ describe('terminal send RPC', () => {
       }),
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         await options.beforeWrite('pty-1')
+
         return { handle: 'terminal-1', accepted: true, bytesWritten: 1 }
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -799,9 +866,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({
       send: {
         handle: 'terminal-1',
@@ -816,6 +885,7 @@ describe('terminal send RPC', () => {
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       reclaimTerminalForDesktop: vi.fn().mockResolvedValue(true)
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -825,9 +895,11 @@ describe('terminal send RPC', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({ restored: true })
     expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
   })

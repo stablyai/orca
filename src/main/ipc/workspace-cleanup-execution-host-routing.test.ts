@@ -36,6 +36,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 vi.mock('../git/status', () => ({ getStatus: getStatusMock }))
+
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -50,9 +51,13 @@ vi.mock('../project-runtime-git-options', () => ({
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
 
 const NOW = 1_700_000_000_000
+
 const INACTIVE_AT = NOW - 90 * 24 * 60 * 60 * 1000
+
 const REPO_ID = 'repo-1'
+
 const WORKTREE_PATH = '/remote/repo-feature'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 const CLEAN_STATUS: GitStatusResult = {
@@ -172,6 +177,7 @@ describe('workspace cleanup execution-host routing', () => {
     const store = makeStore([makeRepo({ executionHostId: 'ssh:alpha' })], {
       [WORKTREE_ID]: makeMeta()
     })
+
     getStatusMock.mockResolvedValue({
       ...CLEAN_STATUS,
       upstreamStatus: { hasUpstream: false }
@@ -269,6 +275,7 @@ describe('workspace cleanup execution-host routing', () => {
 
   it('synthesizes disconnected rows for an executionHostId-only SSH host that is not connected', async () => {
     sshProviders.delete('alpha')
+
     const store = makeStore([makeRepo({ executionHostId: 'ssh:alpha' })], {
       [WORKTREE_ID]: makeMeta({ hostId: 'ssh:alpha' })
     })

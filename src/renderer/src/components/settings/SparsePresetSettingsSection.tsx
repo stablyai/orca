@@ -47,6 +47,7 @@ export function SparsePresetSettingsSection({
   const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
   const trimmedName = draft?.name.trim() ?? ''
   const lowerName = trimmedName.toLowerCase()
+
   const collidingPreset =
     draft && trimmedName
       ? (sortedPresets.find(
@@ -62,8 +63,10 @@ export function SparsePresetSettingsSection({
         : collidingPreset
           ? `"${collidingPreset.name}" already exists.`
           : null
+
   const canSaveDraft =
     !!draft && !submitting && !nameError && parsedDirectories !== null && !parsedDirectories.error
+
   const visibleError = operationError ?? loadError ?? null
 
   const startNewPreset = (): void => {
@@ -91,8 +94,10 @@ export function SparsePresetSettingsSection({
     if (!draft || !canSaveDraft || !parsedDirectories) {
       return
     }
+
     setSubmitting(true)
     setOperationError(null)
+
     try {
       const saved = await saveSparsePreset({
         repoId,
@@ -100,6 +105,7 @@ export function SparsePresetSettingsSection({
         name: trimmedName,
         directories: parsedDirectories.directories
       })
+
       if (saved && mountedRef.current) {
         setDraft(null)
       } else if (mountedRef.current) {
@@ -126,18 +132,23 @@ export function SparsePresetSettingsSection({
   const handleDeletePreset = async (preset: SparsePreset): Promise<void> => {
     if (confirmingDeleteId !== preset.id) {
       setConfirmingDeleteId(preset.id)
+
       return
     }
+
     setDeletingPresetId(preset.id)
     setOperationError(null)
+
     try {
       // Why: SSH-backed settings can fail after confirmation; keep local edit
       // state intact until persistence actually reports success.
       await removeSparsePreset({ repoId, presetId: preset.id })
+
       if (mountedRef.current) {
         if (draft?.presetId === preset.id) {
           setDraft(null)
         }
+
         setConfirmingDeleteId(null)
       }
     } catch (error) {

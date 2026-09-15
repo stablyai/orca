@@ -13,6 +13,7 @@ import {
 function createChild(pid: number | undefined): ChildProcess {
   const child = new EventEmitter() as ChildProcess
   Object.defineProperty(child, 'pid', { value: pid })
+
   return child
 }
 
@@ -26,6 +27,7 @@ describe('ripgrep process availability', () => {
     for (const code of [0, 1, 2, 127]) {
       expect(isRipgrepUnavailableExit(createChild(1), code, null)).toBe(false)
     }
+
     expect(isRipgrepUnavailableExit(createChild(1), null, 'SIGTERM')).toBe(false)
   })
 
@@ -37,6 +39,7 @@ describe('ripgrep process availability', () => {
         })
       ).toBe(false)
     }
+
     for (const code of [3, 126, 127, 9009]) {
       expect(
         isRipgrepUnavailableExit(createChild(1), code, null, {
@@ -95,6 +98,7 @@ describe('ripgrep process availability', () => {
         true
       )
     }
+
     for (const error of [
       Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' }),
       Object.assign(new Error('spawn rg EACCES'), { code: 'EACCES' }),

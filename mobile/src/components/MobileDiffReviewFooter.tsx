@@ -34,6 +34,7 @@ export function MobileDiffReviewFooter({
   onMoveFile
 }: Props) {
   const insets = useSafeAreaInsets()
+
   return (
     <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
       <View style={styles.fileActionRow}>

@@ -27,6 +27,7 @@ type FakeLaunch = {
  *  with whether it ran; a non-refusal settlement resolves it false without running it. */
 function fakeLaunch(args: FakeLaunch) {
   const releaseCallerAfterUnknownOutcome = vi.fn(() => true)
+
   const claimDefinitiveRefusalFallback = vi.fn((fallback: () => Promise<void>) =>
     args.launchResult.then(
       () => false,
@@ -38,6 +39,7 @@ function fakeLaunch(args: FakeLaunch) {
           : false
     )
   )
+
   mocks.startStructuredAgentLaunch.mockReturnValue({
     sessionId: 'session-1',
     launchResult: args.launchResult,
@@ -46,6 +48,7 @@ function fakeLaunch(args: FakeLaunch) {
     releaseCallerAfterUnknownOutcome,
     claimDefinitiveRefusalFallback
   })
+
   return { releaseCallerAfterUnknownOutcome, claimDefinitiveRefusalFallback }
 }
 
@@ -57,10 +60,13 @@ const fallbackResult = {
 /** A caller-side cancel signal: `fire` is what the caller's store subscription would abort on. */
 function fakeCancellation(initiallyCancelled = false) {
   const controller = new AbortController()
+
   if (initiallyCancelled) {
     controller.abort()
   }
+
   const removeEventListener = vi.spyOn(controller.signal, 'removeEventListener')
+
   return {
     /** The loop must drop its listener on settle, not leave the signal holding the closure. */
     removeEventListener,
@@ -118,6 +124,7 @@ describe('settleStructuredAgentLaunch', () => {
       launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
     })
     const promptDeliveryResult = Promise.resolve({ delivered: true, failureNotified: false })
+
     const legacyFallback = vi
       .fn()
       .mockResolvedValue({ primaryTabId: 'new-tab', promptDeliveryResult })
@@ -149,6 +156,7 @@ describe('settleStructuredAgentLaunch', () => {
     })
     const cancellation = fakeCancellation()
     let finishFallback!: () => void
+
     const legacyFallback = vi.fn(
       () =>
         new Promise<typeof fallbackResult>((resolve) => {
@@ -162,6 +170,7 @@ describe('settleStructuredAgentLaunch', () => {
       {},
       { legacyFallback, signal: cancellation.signal }
     )
+
     await vi.waitFor(() => expect(legacyFallback).toHaveBeenCalledOnce())
     cancellation.fire()
     finishFallback()
@@ -195,6 +204,7 @@ describe('settleStructuredAgentLaunch', () => {
       launchResult: Promise.reject(new Error('connection lost')),
       visibilityUnknown: true
     })
+
     const legacyFallback = vi.fn()
 
     await expect(
@@ -270,6 +280,7 @@ describe('settleStructuredAgentLaunch', () => {
       {},
       { onStructuredReady, signal: cancellation.signal }
     )
+
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
     cancellation.fire()
     cancellation.fire()
@@ -295,6 +306,7 @@ describe('settleStructuredAgentLaunch', () => {
       {},
       { signal: cancellation.signal }
     )
+
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
       'worktree-1',
       'session-1'

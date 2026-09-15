@@ -24,9 +24,11 @@ export function replaceWorktreeInRepoLists(
 ): Record<string, Worktree[]> {
   const repoId = getRepoIdFromWorktreeId(updatedWorktree.id)
   const current = worktreesByRepo[repoId]
+
   if (!current) {
     return worktreesByRepo
   }
+
   return {
     ...worktreesByRepo,
     [repoId]: current.map((worktree) =>
@@ -42,20 +44,25 @@ export function settingsForRepoOwner(
   honorMissingHostId = false
 ) {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
+
   if (repo) {
     return settingsForKnownRepoOwner(state.settings, repo)
   }
+
   const parsedHost = honorMissingHostId && hostId ? parseExecutionHostId(hostId) : null
+
   if (parsedHost?.kind === 'runtime') {
     return state.settings
       ? { ...state.settings, activeRuntimeEnvironmentId: parsedHost.environmentId }
       : ({ activeRuntimeEnvironmentId: parsedHost.environmentId } as AppState['settings'])
   }
+
   if (parsedHost?.kind === 'local' || parsedHost?.kind === 'ssh') {
     return state.settings
       ? { ...state.settings, activeRuntimeEnvironmentId: null }
       : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
   }
+
   return state.settings
 }
 
@@ -66,18 +73,23 @@ export function settingsForKnownRepoOwner(
   if (!repo.executionHostId && !repo.connectionId) {
     return settings
   }
+
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   if (parsed?.kind === 'runtime') {
     return settings
       ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
+
   if (parsed?.kind === 'local' && settings?.activeRuntimeEnvironmentId) {
     return { ...settings, activeRuntimeEnvironmentId: null }
   }
+
   if (parsed?.kind !== 'ssh') {
     return settings
   }
+
   // Why: SSH repos are owned by the desktop client/SSH provider, not the focused runtime server.
   return settings
     ? { ...settings, activeRuntimeEnvironmentId: null }
@@ -104,9 +116,11 @@ export function trySettingsForWorktreeOwner(
   const route = executionHostId
     ? resolveWorktreeOperationRouteForHost(state, worktreeId, executionHostId)
     : resolveWorktreeOperationRoute(state, worktreeId)
+
   if (!route) {
     return null
   }
+
   return settingsForWorktreeOperationRoute(state.settings, route)
 }
 
@@ -116,9 +130,11 @@ export function settingsForWorktreeOwner(
   executionHostId?: ExecutionHostId
 ) {
   const settings = trySettingsForWorktreeOwner(state, worktreeId, executionHostId)
+
   if (!settings) {
     throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
   }
+
   return settings
 }
 
@@ -137,6 +153,7 @@ export function warnAmbiguousOwnerOnce(worktreeId: string, errorLabel: string): 
   if (ambiguousOwnerWarnedWorktreeIds.has(worktreeId)) {
     return
   }
+
   ambiguousOwnerWarnedWorktreeIds.add(worktreeId)
   console.warn(`Skipped ${errorLabel}: workspace identity is ambiguous across hosts`, worktreeId)
 }
@@ -148,15 +165,20 @@ export function persistPassiveWorktreeMetaForOwner(
   errorLabel: string
 ): void {
   const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
+
   if (!ownerSettings) {
     warnAmbiguousOwnerOnce(worktreeId, errorLabel)
+
     return
   }
+
   void persistWorktreeMeta(ownerSettings, worktreeId, updates).catch((err) => {
     if (isRuntimeSelectorNotFoundError(err)) {
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+
       return
     }
+
     console.error(`Failed to ${errorLabel}:`, err)
     void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
   })

@@ -48,8 +48,10 @@ export function createGitBranchCompareActions(
         if (s.gitBranchCompareRequestKeyByWorktree[worktreeId] !== requestKey) {
           return s
         }
+
         const statusHead = getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId])
         const requestStatusHead = s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId]
+
         // Why: never let a compare result computed before a status change overwrite a newer status snapshot.
         if (
           result.summary.status !== 'loading' &&
@@ -59,8 +61,10 @@ export function createGitBranchCompareActions(
         ) {
           return s
         }
+
         const prevEntries = s.gitBranchChangesByWorktree[worktreeId]
         const prevSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+
         const entriesUnchanged =
           prevEntries &&
           prevEntries.length === result.entries.length &&
@@ -70,15 +74,18 @@ export function createGitBranchCompareActions(
               e.status === result.entries[i].status &&
               e.oldPath === result.entries[i].oldPath
           )
+
         const summaryUnchanged =
           prevSummary &&
           prevSummary.status === result.summary.status &&
           prevSummary.baseOid === result.summary.baseOid &&
           prevSummary.headOid === result.summary.headOid &&
           prevSummary.changedFiles === result.summary.changedFiles
+
         if (entriesUnchanged && summaryUnchanged) {
           return s
         }
+
         return {
           gitBranchChangesByWorktree: entriesUnchanged
             ? s.gitBranchChangesByWorktree
@@ -99,6 +106,7 @@ export function createGitBranchCompareActions(
         ) {
           return s
         }
+
         const nextSummary = { ...s.gitBranchCompareSummaryByWorktree }
         const nextChanges = { ...s.gitBranchChangesByWorktree }
         const nextRequestKey = { ...s.gitBranchCompareRequestKeyByWorktree }
@@ -107,6 +115,7 @@ export function createGitBranchCompareActions(
         delete nextChanges[worktreeId]
         delete nextRequestKey[worktreeId]
         delete nextRequestHead[worktreeId]
+
         return {
           gitBranchCompareSummaryByWorktree: nextSummary,
           gitBranchChangesByWorktree: nextChanges,

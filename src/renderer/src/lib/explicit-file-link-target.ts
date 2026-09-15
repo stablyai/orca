@@ -27,6 +27,7 @@ function canKeepTrailingSeparator(pathText: string): boolean {
   if (/^[\\/]+$/.test(pathText) || /^~[\\/]$/.test(pathText) || /^[A-Za-z]:[\\/]$/.test(pathText)) {
     return false
   }
+
   return /^(?:~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(pathText)
 }
 
@@ -35,16 +36,21 @@ export function parseExplicitFileLinkTarget(
   options: ParseExplicitFileLinkTargetOptions = {}
 ): ParsedExplicitFileLinkTarget | null {
   const parsed = parseFileLinkLocation(value)
+
   if (!parsed) {
     return null
   }
+
   const { pathText, line, column } = parsed
   const hasLineOrColumn = line !== null || column !== null
+
   if (/^[\\/]\s/.test(pathText)) {
     return null
   }
+
   if (/[\\/]$/.test(pathText)) {
     const canKeepRelativeDirectory = options.allowRelativeDirectoryPath === true && !hasLineOrColumn
+
     if (hasLineOrColumn || (!canKeepRelativeDirectory && !canKeepTrailingSeparator(pathText))) {
       return null
     }
@@ -61,6 +67,7 @@ export function resolveExplicitFileLinkTargetPath(
   if (/^~[\\/]/.test(pathText)) {
     return resolveTildePath(pathText, cwd, homePath)
   }
+
   return normalizeAbsolutePath(pathText)?.normalized ?? joinAbsolutePath(cwd, pathText)
 }
 
@@ -70,6 +77,7 @@ export function resolveExplicitFileLinkTarget(
   homePath?: string | null
 ): ResolvedExplicitFileLinkTarget | null {
   const absolutePath = resolveExplicitFileLinkTargetPath(parsed.pathText, cwd, homePath)
+
   if (!absolutePath) {
     return null
   }

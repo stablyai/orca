@@ -10,6 +10,7 @@ export function newTabAgentMountAdapters(
       const load = modules.load<typeof import('../../../session/mobile-new-tab-agent-loader')>(
         'mobile/src/session/mobile-new-tab-agent-loader.ts'
       ).loadMobileNewTabAgentOptions
+
       return {
         action: (_name, args) =>
           load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }),

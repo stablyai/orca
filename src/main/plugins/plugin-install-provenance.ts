@@ -12,12 +12,14 @@ import { writePluginFileAtomically } from './plugin-atomic-file-write'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
 
 const PROVENANCE_DIRECTORY = '.install-provenance'
+
 const PROVENANCE_MAX_BYTES = 64 * 1024
 
 function provenancePath(pluginDir: string, contentHash: string): string {
   if (!PLUGIN_CONTENT_HASH_PATTERN.test(contentHash)) {
     throw new Error('invalid plugin content hash')
   }
+
   return join(pluginDir, PROVENANCE_DIRECTORY, `${contentHash}.json`)
 }
 
@@ -43,22 +45,29 @@ export async function readPluginInstallProvenance(
   try {
     const chunks: Buffer[] = []
     let totalBytes = 0
+
     for await (const chunk of createReadStream(provenancePath(pluginDir, contentHash))) {
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
       totalBytes += bytes.byteLength
+
       if (totalBytes > PROVENANCE_MAX_BYTES) {
         return null
       }
+
       chunks.push(bytes)
     }
+
     const raw = JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf8')) as {
       version?: unknown
       entry?: unknown
     }
+
     if (raw.version !== 1) {
       return null
     }
+
     const parsed = pluginLockEntrySchema.safeParse(raw.entry)
+
     return parsed.success ? parsed.data : null
   } catch {
     return null
@@ -73,16 +82,21 @@ export async function recoverPluginLockfile(
   const plugins = { ...lock.plugins }
   let changed = false
   const directories = await readdir(pluginsDir, { withFileTypes: true }).catch(() => [])
+
   for (const directory of directories) {
     if (!directory.isDirectory() || !isQualifiedPluginKey(directory.name)) {
       continue
     }
+
     const pluginDir = join(pluginsDir, directory.name)
     const contentHash = await readPluginCurrentPointer(pluginDir).catch(() => null)
+
     if (!contentHash || !PLUGIN_CONTENT_HASH_PATTERN.test(contentHash)) {
       continue
     }
+
     const provenance = await readPluginInstallProvenance(pluginDir, contentHash)
+
     if (
       !provenance ||
       provenance.pluginKey !== directory.name ||
@@ -90,11 +104,13 @@ export async function recoverPluginLockfile(
     ) {
       continue
     }
+
     if (JSON.stringify(plugins[directory.name]) !== JSON.stringify(provenance)) {
       plugins[directory.name] = provenance
       changed = true
     }
   }
+
   return { lock: { version: 1, plugins }, changed }
 }
 

@@ -26,6 +26,7 @@ function markdownCommandItem(
         ...point,
         ...(tableTargetId ? { tableTargetId } : {})
       }
+
       webContents.send(richMarkdownContextMenuCommandChannel, payload)
     }
   }
@@ -202,6 +203,7 @@ export function buildEditableContextMenuTemplate(
 
   const suggestions = params.dictionarySuggestions.slice(0, 5)
   const isRichMarkdownSurface = params.formControlType === 'none'
+
   const template: Electron.MenuItemConstructorOptions[] = suggestions.map((suggestion) => ({
     label: suggestion,
     click: () => webContents.replaceMisspelling(suggestion)
@@ -211,6 +213,7 @@ export function buildEditableContextMenuTemplate(
     if (template.length > 0) {
       template.push({ type: 'separator' })
     }
+
     template.push({
       label: 'Add to dictionary',
       click: () => {
@@ -222,6 +225,7 @@ export function buildEditableContextMenuTemplate(
   if (template.length > 0) {
     template.push({ type: 'separator' })
   }
+
   template.push(
     ...(isRichMarkdownSurface
       ? buildMarkdownMenuTemplate(
@@ -241,7 +245,9 @@ export function parseRichMarkdownContextMenuTableTarget(
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const target = value as Partial<RichMarkdownContextMenuTableTarget>
+
   if (
     (target.cellType !== 'body' && target.cellType !== 'header') ||
     typeof target.targetId !== 'string' ||
@@ -253,6 +259,7 @@ export function parseRichMarkdownContextMenuTableTarget(
   ) {
     return null
   }
+
   return {
     cellType: target.cellType,
     targetId: target.targetId,
@@ -274,5 +281,6 @@ export function matchingRichMarkdownContextMenuTableTarget(
   ) {
     return null
   }
+
   return target
 }

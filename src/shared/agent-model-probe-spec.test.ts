@@ -22,6 +22,7 @@ describe('getAgentModelProbeSpec', () => {
     const parsed = getAgentModelProbeSpec('grok')!.modelDiscovery!.parse(
       'You are logged in with grok.com.\n\nDefault model: grok-4.5\n\nAvailable models:\n  * grok-4.5 (default)\n'
     )
+
     expect(parsed).toEqual([{ id: 'grok-4.5', label: 'Grok 4.5', isDefault: true }])
   })
 

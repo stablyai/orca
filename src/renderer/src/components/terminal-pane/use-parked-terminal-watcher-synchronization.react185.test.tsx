@@ -7,11 +7,17 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const WORKTREE_ID = 'repo::/parked-watcher-sync'
+
 const TAB_ID = 'tab-1'
+
 const FIRST_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const FIRST_PTY_ID = `${WORKTREE_ID}@@session-1`
+
 const OLD_SECOND_PTY_ID = `${WORKTREE_ID}@@session-2`
+
 const NEW_SECOND_PTY_ID = `${WORKTREE_ID}@@session-3`
 
 const harness = vi.hoisted(() => ({
@@ -23,16 +29,19 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     ptyIdsByTabId: {} as Record<string, string[]>,
     runtimePaneTitlesByTabId: {} as Record<string, Record<number, string>>,
     terminalLayoutsByTabId: {} as Record<string, TerminalLayoutSnapshot>
   }))
+
   return { useAppStore }
 })
 
 vi.mock('./terminal-parked-tab-watchers', async () => {
   const { useAppStore } = await import('../../store')
+
   return {
     disposeParkedTerminalWatchersForWorktree: () => {
       harness.disposeCalls += 1
@@ -45,13 +54,16 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
       harness.syncCalls += 1
       const state = useAppStore.getState()
       harness.watchedPtyIds.clear()
+
       for (const tab of args.tabs) {
         if (!args.parkedTabIds.has(tab.id)) {
           continue
         }
+
         const layoutPtyIds = Object.values(
           state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
         )
+
         for (const ptyId of layoutPtyIds.length > 0 ? layoutPtyIds : [tab.ptyId]) {
           if (ptyId) {
             harness.watchedPtyIds.add(ptyId)
@@ -71,11 +83,15 @@ import {
 import { useParkedTerminalWatcherSynchronization } from './use-parked-terminal-watcher-synchronization'
 
 const terminalTabs = [{ id: TAB_ID, ptyId: FIRST_PTY_ID }] as TerminalTab[]
+
 const parkedTabIds = new Set([TAB_ID])
+
 const EMPTY_PARKED_TAB_IDS = new Set<string>()
+
 const firstUnparkedTabs = ['tab-a', 'tab-b', 'tab-c'].map(
   (id) => ({ id, ptyId: `${WORKTREE_ID}@@${id}` }) as TerminalTab
 )
+
 const secondUnparkedTabs = ['tab-d', 'tab-e', 'tab-f'].map(
   (id) => ({ id, ptyId: `${WORKTREE_ID}@@${id}` }) as TerminalTab
 )
@@ -107,6 +123,7 @@ function WatcherSynchronizationHarness(): null {
   })
   // Models the pre-fix sibling disposal effect that StrictMode replays after synchronization.
   useEffect(() => () => disposeParkedTerminalWatchersForWorktree(WORKTREE_ID), [])
+
   return null
 }
 
@@ -124,6 +141,7 @@ function UnparkedWatcherSynchronizationHarness({
     assignmentsKey: worktreeId,
     parkedTabIds: EMPTY_PARKED_TAB_IDS
   })
+
   return null
 }
 
@@ -213,14 +231,17 @@ describe('parked terminal watcher synchronization', () => {
 
   it('does not scan unparked worktrees on an unrelated store write', () => {
     const capturedPaneGet = vi.spyOn(capturedPanesByTabId, 'get')
+
     const ptyIdsByTabId = new Proxy({} as Record<string, string[]>, {
       get(target, property, receiver) {
         if (typeof property === 'string') {
           harness.reconciliationPtyReads += 1
         }
+
         return Reflect.get(target, property, receiver)
       }
     })
+
     useAppStore.setState({ ptyIdsByTabId })
     root = createRoot(container)
     act(() => {
@@ -267,6 +288,7 @@ function ConfigurableWatcherSynchronizationHarness({
     parkedTabIds,
     activationDeferredMountTabIds
   })
+
   return null
 }
 

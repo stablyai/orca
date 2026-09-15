@@ -7,8 +7,11 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { getTerminalContent } from './helpers/terminal'
 
 const ISSUE_NUMBER = 6613
+
 const ISSUE_TITLE = 'Start a newly created issue without losing its context'
+
 const ISSUE_URL = `https://github.com/acme/repo/issues/${ISSUE_NUMBER}`
+
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-created-issue-prefill-'))
 
 const fakeGhSource = `
@@ -84,14 +87,17 @@ function installFakeCli(name: 'gh' | 'claude', source: string): void {
       path.join(fakeCliDir, `${name}.cmd`),
       `@echo off\r\nnode "%~dp0\\fake-${name}.js" %*\r\n`
     )
+
     return
   }
+
   const executable = path.join(fakeCliDir, name)
   writeFileSync(executable, `#!/usr/bin/env node\n${source}`)
   chmodSync(executable, 0o755)
 }
 
 installFakeCli('gh', fakeGhSource)
+
 installFakeCli('claude', fakeClaudeSource)
 
 const test = base.extend({
@@ -113,6 +119,7 @@ function configureGitHubRemote(repoPath: string): void {
   } catch {
     // The disposable E2E repo does not have an origin on its first run.
   }
+
   execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/repo.git'], {
     cwd: repoPath,
     stdio: 'pipe'
@@ -135,16 +142,21 @@ test('starting a just-created GitHub issue launches Claude with its URL prefille
 
   await orcaPage.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
+
     const preparedWorkspace = state
       .allWorktrees()
       .find((worktree) => worktree.branch?.endsWith('e2e-secondary'))
+
     if (!preparedWorkspace) {
       throw new Error('Seeded secondary E2E worktree is not available')
     }
+
     // Why: this regression owns renderer-to-PTY command propagation, while the shared fixture already covers Git worktree creation.
     store.setState({
       createWorktree: async () => ({ worktree: preparedWorkspace })
@@ -177,9 +189,11 @@ test('starting a just-created GitHub issue launches Claude with its URL prefille
   // which carries the linked issue URL into the agent launch command on submit.
   const composer = orcaPage.getByRole('dialog', { name: /Create (workspace|worktree)/i })
   await expect(composer).toBeVisible({ timeout: 15_000 })
+
   const createWorkspaceButton = composer.getByRole('button', {
     name: /Create (workspace|worktree)/i
   })
+
   await expect(createWorkspaceButton).toBeEnabled({ timeout: 15_000 })
   await createWorkspaceButton.click()
   await expect(composer).toBeHidden({ timeout: 20_000 })
@@ -189,6 +203,7 @@ test('starting a just-created GitHub issue launches Claude with its URL prefille
     .poll(
       async () => {
         terminalText = await getTerminalContent(orcaPage, 12_000)
+
         return terminalText
       },
       {

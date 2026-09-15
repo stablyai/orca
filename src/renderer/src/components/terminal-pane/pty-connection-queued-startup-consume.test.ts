@@ -32,8 +32,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
@@ -50,6 +53,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -59,6 +63,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -70,6 +75,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSwe
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -80,15 +86,18 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
 
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
 })
 
@@ -96,6 +105,7 @@ function spawnOnConnect(transport: MockTransport, ptyId: string): void {
   transport.connect.mockImplementation(async () => {
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
     onPtySpawn?.(ptyId)
+
     return ptyId
   })
 }
@@ -127,6 +137,7 @@ describe('connectPanePty queued startup consume', () => {
     transportFactoryQueue.push(transport)
 
     const callOrder: string[] = []
+
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
       startup: { command: 'echo queued' },
       updateTabPtyId: vi.fn(() => {
@@ -155,6 +166,7 @@ describe('connectPanePty queued startup consume', () => {
     transportFactoryQueue.push(transport)
 
     const onQueuedStartupSpawned = vi.fn()
+
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
       startup: { command: 'echo queued' },
       onQueuedStartupSpawned
@@ -178,17 +190,21 @@ describe('connectPanePty queued startup consume', () => {
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((id: string) => void)
         | undefined
+
       try {
         onPtySpawn?.('fresh-pty')
       } catch {
         escapedIntoSpawn = true
+
         return undefined
       }
+
       return 'fresh-pty'
     })
     transportFactoryQueue.push(transport)
 
     const updateTabPtyId = vi.fn()
+
     const deps = buildPaneConnectionDeps(() => mockStoreState, {
       startup: { command: 'echo queued' },
       updateTabPtyId,

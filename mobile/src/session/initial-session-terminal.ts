@@ -36,11 +36,14 @@ export function shouldAutoCreateInitialSessionTerminal(
   if (!input.newlyCreatedWorkspace || !input.connected || !input.tabsLoaded) {
     return false
   }
+
   if (input.visibleTabCount > 0 || input.hasActiveTerminalHandle) {
     return false
   }
+
   if (input.createInFlight || input.autoCreatedForWorktree) {
     return false
   }
+
   return !input.sawSessionTabs
 }

@@ -18,9 +18,11 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
 
     const handleFocusIn = (event: FocusEvent): void => {
       const target = event.target
+
       if (!(target instanceof HTMLElement) || target.tagName !== 'WEBVIEW') {
         return
       }
+
       dismissSuggestions()
     }
 
@@ -28,6 +30,7 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
       if (event.key !== 'Escape') {
         return
       }
+
       dismissSuggestions()
       event.preventDefault()
       event.stopImmediatePropagation()
@@ -36,6 +39,7 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
     window.addEventListener('blur', handleWindowBlur)
     document.addEventListener('focusin', handleFocusIn, true)
     window.addEventListener('keydown', handleEscape, true)
+
     return () => {
       window.removeEventListener('blur', handleWindowBlur)
       document.removeEventListener('focusin', handleFocusIn, true)

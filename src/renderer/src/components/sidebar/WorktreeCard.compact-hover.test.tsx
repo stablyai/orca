@@ -10,25 +10,41 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const openTaskPage = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
+
 const recordFeatureInteraction = vi.fn()
+
 const replaceWorkspacePortScans = vi.fn()
+
 const setWorkspacePortScanRefreshing = vi.fn()
+
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
 }))
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'ports']
+
 let hostedReviewCache: Record<string, unknown> = {}
+
 let issueCache: Record<string, unknown> = {}
+
 let projectGroups: unknown[] = []
+
 let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null = null
+
 let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
+
 let agentActivityDisplayMode: 'compact' | 'full' | undefined
+
 let mockInlineAgentRows: DashboardAgentRowData[] = []
 
 vi.mock('@/store', () => ({
@@ -249,12 +265,14 @@ describe('WorktreeCard compact hover details', () => {
   it('shows hidden task, notes, and port details from the compact worktree card hover', async () => {
     settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
     worktreeCardProperties = ['status']
+
     const worktree = makeWorktree({
       linkedIssue: 123,
       linkedLinearIssue: 'ENG-123',
       linkedPR: 456,
       comment: 'Reviewer handoff note'
     })
+
     workspacePortScan = {
       key: 'repo-1',
       result: {
@@ -368,6 +386,7 @@ describe('WorktreeCard compact hover details', () => {
         isActive={false}
       />
     )
+
     const issueIndex = markup.indexOf('Linked issue #123')
     const branchRowIndex = markup.indexOf('data-worktree-card-meta-row=""')
 
@@ -449,8 +468,10 @@ describe('WorktreeCard compact hover details', () => {
   it('repeats a long workspace title inside the identity hover when branch is already visible', async () => {
     settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
     worktreeCardProperties = ['status', 'branch', 'comment']
+
     const longTitle =
       'Investigate why the worktree hover card title disappears behind single-line truncation'
+
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderToStaticMarkup(
@@ -545,6 +566,7 @@ describe('WorktreeCard compact hover details', () => {
         lineageChildren={<div data-lineage-child-card="">Child card</div>}
       />
     )
+
     const childIndex = markup.indexOf('data-lineage-child-card=""')
 
     const surfaceTag = markup.match(/<div[^>]*data-worktree-card-surface="true"[^>]*>/)?.[0]
@@ -635,6 +657,7 @@ describe('WorktreeCard compact hover details', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
     )
+
     const statusIndex = markup.indexOf('data-worktree-card-status-slot=""')
     const triggerIndex = markup.indexOf('data-worktree-card-hover-trigger=""')
     const hoverContentIndex = markup.indexOf('data-hover-card-content=""')
@@ -680,6 +703,7 @@ describe('WorktreeCard compact hover details', () => {
         lineageChildren={<div data-lineage-child-card="">Child card</div>}
       />
     )
+
     const surfaceIndex = markup.indexOf('data-worktree-card-surface="true"')
     const triggerIndex = markup.indexOf('data-worktree-card-hover-trigger=""')
     const hoverContentIndex = markup.indexOf('data-hover-card-content=""')

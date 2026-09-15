@@ -22,8 +22,11 @@ import {
 } from './remote-workspace-snapshot-placement'
 
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
+
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
+
 let snapshotApplyDepth = 0
+
 let snapshotWriteSuppressUntil = 0
 
 export function isDirectSshRemoteWorkspaceApplyInProgress(): boolean {
@@ -38,6 +41,7 @@ const applyWindowCloseListeners = new Set<() => void>()
  */
 export function onDirectSshRemoteWorkspaceApplyWindowClosed(listener: () => void): () => void {
   applyWindowCloseListeners.add(listener)
+
   return () => {
     applyWindowCloseListeners.delete(listener)
   }
@@ -55,13 +59,16 @@ function scheduleApplyWindowClosedNotice(): void {
     if (snapshotApplyDepth > 0) {
       return
     }
+
     // Why re-arm rather than return: `delayMs` is wall-clock arithmetic handed to a monotonic
     // timer, so a clock step back (NTP) can leave the deadline in the future when this fires.
     // Dropping the notice there would strand every write deferred in this window.
     if (Date.now() < snapshotWriteSuppressUntil) {
       scheduleApplyWindowClosedNotice()
+
       return
     }
+
     // Safe to iterate live: Set iteration tolerates a listener unsubscribing itself.
     for (const listener of applyWindowCloseListeners) {
       listener()
@@ -99,6 +106,7 @@ function currentRecoveryTabIds(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
     )
   )
+
   return new Set(
     [
       ...Object.entries(state.directSshPaneRetryByTabId),
@@ -125,15 +133,18 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   onUnplacedTabWorktreePaths
 }: RemoteWorkspaceSnapshotApplyInput): Promise<RemoteWorkspaceSnapshotApplyResult> {
   const { authority } = token
+
   if (!isArrivalCurrent(authority.targetId, arrival)) {
     return 'stale'
   }
+
   if (
     !isPreparationTokenCurrent(token) ||
     !admitDirectSshSnapshotApplyToken(token, authority, snapshot.revision)
   ) {
     return 'stale'
   }
+
   if (!(await waitForWorkspaceSessionReady(arrivalSignal))) {
     if (isArrivalCurrent(authority.targetId, arrival) && isPreparationTokenCurrent(token)) {
       store.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
@@ -145,16 +156,20 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         )
       })
     }
+
     return 'failed'
   }
+
   let state = store.getState()
   let worktreeIds = resolveDirectSshSnapshotWorktreeIds(state, authority)
   let unplacedTabWorktreePaths: string[] = []
+
   let remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds),
     executionHostId: toSshExecutionHostId(authority.targetId),
     onUnplacedTerminalTabs: (worktreePath) => unplacedTabWorktreePaths.push(worktreePath)
   })
+
   if (unplacedTabWorktreePaths.length > 0) {
     await waitForSnapshotWorktreePlacement(
       store,
@@ -175,6 +190,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       onUnplacedTerminalTabs: (worktreePath) => unplacedTabWorktreePaths.push(worktreePath)
     })
   }
+
   const merged = mergeDirectSshRemoteWorkspaceSession(
     buildWorkspaceSessionPayload(state),
     remoteSession,
@@ -184,12 +200,15 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     toSshExecutionHostId(authority.targetId),
     snapshot.revision
   )
+
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return 'stale'
   }
+
   const hasUnplacedTerminalTabs = unplacedTabWorktreePaths.length > 0
   onUnplacedTabWorktreePaths?.([...unplacedTabWorktreePaths])
   snapshotApplyDepth += 1
+
   try {
     const currentStore = store.getState()
     const replaceWorkspaceKeys = [...worktreeIds]
@@ -198,6 +217,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       replaceWorkspaceKeys
     })
     currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
+
     // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
     if (!hasUnplacedTerminalTabs) {
       currentStore.markRemoteWorkspaceHydrated(authority.targetId)
@@ -231,6 +251,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         hostObservationToken: snapshot.hostObservationToken
       })
     }
+
     const reconnectAbort = new AbortController()
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     await Promise.race([
@@ -249,9 +270,11 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         }, SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS)
       })
     ])
+
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
     }
+
     if (isArrivalCurrent(authority.targetId, arrival) && isPreparationTokenCurrent(token)) {
       finalizeHydratedTerminals(authority)
     }
@@ -260,5 +283,6 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     snapshotApplyDepth -= 1
     scheduleApplyWindowClosedNotice()
   }
+
   return 'applied'
 }

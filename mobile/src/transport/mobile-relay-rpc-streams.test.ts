@@ -15,16 +15,19 @@ describe('MobileRelayRpcStreams failure parity', () => {
   it('emits an RPC failure exactly once before removing the stream', async () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
       waitForConnected: async () => {}
     })
+
     const cancel = streams.subscribe(
       'session.tabs.subscribe',
       { worktree: 'id:worktree-1' },
       listener
     )
+
     await Promise.resolve()
 
     expect(streams.handleResponse(rpcFailure('stream-1'))).toBe(true)
@@ -42,16 +45,19 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)
     const waitError = new Error('relay session closed')
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
       waitForConnected: () => Promise.reject(waitError)
     })
+
     const cancel = streams.subscribe(
       'session.tabs.subscribe',
       { worktree: 'id:worktree-1' },
       listener
     )
+
     await Promise.resolve()
     await Promise.resolve()
 
@@ -68,16 +74,19 @@ describe('MobileRelayRpcStreams failure parity', () => {
   it('emits a send failure exactly once and fences cancellation and late frames', async () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => false)
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
       waitForConnected: async () => {}
     })
+
     const cancel = streams.subscribe(
       'session.tabs.subscribe',
       { worktree: 'id:worktree-1' },
       listener
     )
+
     await Promise.resolve()
     await Promise.resolve()
 
@@ -95,16 +104,19 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)
     const connection = Promise.withResolvers<void>()
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
       waitForConnected: () => connection.promise
     })
+
     const cancel = streams.subscribe(
       'session.tabs.subscribe',
       { worktree: 'id:worktree-1' },
       listener
     )
+
     cancel()
     connection.reject(new Error('late failure'))
     await Promise.resolve()
@@ -118,11 +130,13 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)
     const connection = Promise.withResolvers<void>()
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
       waitForConnected: () => connection.promise
     })
+
     streams.subscribe('session.tabs.subscribe', { worktree: 'id:worktree-1' }, listener)
     streams.clear()
     connection.resolve()
@@ -137,11 +151,13 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const listener = vi.fn(() => {
       throw new Error('listener failed')
     })
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame: () => true,
       waitForConnected: async () => {}
     })
+
     streams.subscribe('session.tabs.subscribe', { worktree: 'id:worktree-1' }, listener)
     await Promise.resolve()
 

@@ -43,6 +43,7 @@ describe('selectConnectableHostProfiles', () => {
       { ...profile, id: 'newest', lastConnected: 3 },
       { ...profile, id: 'middle', lastConnected: 2 }
     ]
+
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toSorted')
     Reflect.deleteProperty(Array.prototype, 'toSorted')
 

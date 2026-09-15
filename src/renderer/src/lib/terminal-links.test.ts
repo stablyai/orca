@@ -28,6 +28,7 @@ describe('terminal path helpers', () => {
         testCase.lineText,
         columnForTerminalFileLinkTap(testCase)
       )
+
       expect(
         link ? { pathText: link.pathText, line: link.line, column: link.column } : null
       ).toEqual(testCase.expected)
@@ -146,6 +147,7 @@ describe('terminal path helpers', () => {
       const links = extractTerminalFileLinks(
         'Open /Users/Path/FolderName with Space/content.js for details'
       )
+
       expect(links).toHaveLength(1)
       expect(links[0]).toMatchObject({
         pathText: '/Users/Path/FolderName with Space/content.js',
@@ -207,6 +209,7 @@ describe('terminal path helpers', () => {
       const links = extractTerminalFileLinks(
         'Error in app/(shop)/products/[productId]/page.tsx:42:7'
       )
+
       expect(links).toHaveLength(1)
       expect(links[0]).toMatchObject({
         pathText: 'app/(shop)/products/[productId]/page.tsx',
@@ -339,9 +342,11 @@ describe('terminal path helpers', () => {
   describe('plain-text file:// URIs', () => {
     it('extracts a printed file:// URI as a file link resolving to its path', () => {
       const line = 'Report: file:///Users/dev/orca/report.html'
+
       const link = extractTerminalFileLinks(line).find(
         (candidate) => candidate.displayText === 'file:///Users/dev/orca/report.html'
       )
+
       expect(link).toMatchObject({ pathText: '/Users/dev/orca/report.html' })
       expect(resolveTerminalFileLink(link!, '/Users/dev/orca')).toEqual({
         absolutePath: '/Users/dev/orca/report.html',

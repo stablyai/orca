@@ -6,14 +6,17 @@ export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 
 function createProjectGroupId(): string {
   const randomUUID = globalThis.crypto?.randomUUID
+
   if (randomUUID) {
     return randomUUID.call(globalThis.crypto)
   }
+
   return `project-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 export function normalizeProjectGroupName(name: string, fallback = 'Untitled group'): string {
   const trimmed = name.trim()
+
   return trimmed.length > 0 ? trimmed : fallback
 }
 
@@ -27,6 +30,7 @@ export function createProjectGroup(input: {
   now?: number
 }): ProjectGroup {
   const now = input.now ?? Date.now()
+
   return {
     id: createProjectGroupId(),
     name: normalizeProjectGroupName(input.name),
@@ -46,16 +50,21 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   const groups: ProjectGroup[] = []
   const seen = new Set<string>()
+
   for (const candidate of value) {
     if (!candidate || typeof candidate !== 'object') {
       continue
     }
+
     const raw = candidate as Partial<ProjectGroup>
+
     if (typeof raw.id !== 'string' || seen.has(raw.id)) {
       continue
     }
+
     seen.add(raw.id)
     const now = Date.now()
     const executionHostId = normalizeExecutionHostId(raw.executionHostId)
@@ -88,19 +97,23 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       ...(executionHostId ? { executionHostId } : {})
     })
   }
+
   groups.sort(
     (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
   )
+
   for (const group of groups) {
     if (group.parentGroupId === group.id || !seen.has(group.parentGroupId ?? '')) {
       group.parentGroupId = null
     }
   }
+
   return groups
 }
 
 export function clearMissingProjectGroupMemberships(repos: Repo[], groups: ProjectGroup[]): Repo[] {
   const groupIds = new Set(groups.map((group) => group.id))
+
   return repos.map((repo) =>
     repo.projectGroupId && !groupIds.has(repo.projectGroupId)
       ? { ...repo, projectGroupId: null }
@@ -115,14 +128,17 @@ export function buildProjectGroupChildIndex(
   groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[]
 ): ProjectGroupChildIndex {
   const childGroupsByParentId = new Map<string, string[]>()
+
   for (const group of groups) {
     if (!group.parentGroupId) {
       continue
     }
+
     const children = childGroupsByParentId.get(group.parentGroupId) ?? []
     children.push(group.id)
     childGroupsByParentId.set(group.parentGroupId, children)
   }
+
   return childGroupsByParentId
 }
 
@@ -139,18 +155,23 @@ export function collectProjectGroupSubtreeIds(
 ): Set<string> {
   const subtreeIds = new Set<string>()
   const pending = [rootGroupId]
+
   while (pending.length > 0) {
     const groupId = pending.pop()!
+
     if (subtreeIds.has(groupId)) {
       continue
     }
+
     subtreeIds.add(groupId)
+
     // Why: imported project-group trees can be very wide; `push(...children)`
     // can exceed V8's argument limit while collecting descendants.
     for (const childGroupId of childGroupsByParentId.get(groupId) ?? []) {
       pending.push(childGroupId)
     }
   }
+
   return subtreeIds
 }
 
@@ -165,30 +186,40 @@ export function getEffectiveProjectGroupManualRank(
   if (!repo) {
     return Number.POSITIVE_INFINITY
   }
+
   const order = repo.projectGroupOrder
+
   if (typeof order === 'number' && Number.isFinite(order)) {
     return order
   }
+
   const repoRank = repoOrderRankById?.get(repo.id)
+
   if (repoRank !== undefined) {
     return repoRank * 1000
   }
+
   if (siblingFallbackIndex !== undefined) {
     return siblingFallbackIndex * 1000
   }
+
   return Number.POSITIVE_INFINITY
 }
 
 export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string | null): number {
   let max = -1
+
   for (const repo of repos) {
     if ((repo.projectGroupId ?? null) !== groupId) {
       continue
     }
+
     const order = repo.projectGroupOrder
+
     if (typeof order === 'number' && Number.isFinite(order)) {
       max = Math.max(max, order)
     }
   }
+
   return max + 1
 }

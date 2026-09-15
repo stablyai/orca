@@ -7,6 +7,7 @@ import type { TerminalOwner } from '../../shared/terminal-owner'
 // Why bounded: a pause only bridges one process proof (~100ms measured p95); a
 // flood or hang means the trigger misfired, so bail out and flush unmodified.
 const MAX_QUEUED_BYTES = 262_144
+
 const MAX_PENDING_MS = 750
 
 export type TerminalShellRecoveryBarrierOptions = {
@@ -70,10 +71,13 @@ export class TerminalShellRecoveryBarrier {
     if (this.disposed) {
       return
     }
+
     if (this.pending) {
       this.enqueue(emission)
+
       return
     }
+
     this.scanAndRelease(emission)
   }
 
@@ -89,7 +93,9 @@ export class TerminalShellRecoveryBarrier {
     if (this.scanner.owner === 'shell') {
       return true
     }
+
     await this.awaitProofSettled()
+
     return this.scanner.owner === 'shell'
   }
 
@@ -101,9 +107,11 @@ export class TerminalShellRecoveryBarrier {
     for (let guard = 0; this.pending && guard < 16; guard += 1) {
       this.finishPending(this.pendingEpisode, false)
     }
+
     if (!this.pending) {
       return
     }
+
     // Pathological episode storm: stop rescanning but never drop bytes. The
     // scanner's model is stale from here on — a checkpoint after this may
     // publish a stale owner, acceptable only past a >16-nested-episode storm.
@@ -111,10 +119,12 @@ export class TerminalShellRecoveryBarrier {
     this.queue = []
     this.queuedBytes = 0
     this.pending = false
+
     if (this.bailTimer) {
       clearTimeout(this.bailTimer)
       this.bailTimer = null
     }
+
     for (const emission of queued) {
       try {
         this.releaseDownstream(emission)
@@ -122,6 +132,7 @@ export class TerminalShellRecoveryBarrier {
         // One throwing client must not cost the rest of the queue its delivery.
       }
     }
+
     this.resolveIdleWaiters()
   }
 
@@ -132,6 +143,7 @@ export class TerminalShellRecoveryBarrier {
     if (!this.pending) {
       return Promise.resolve()
     }
+
     return new Promise((resolve) => this.idleWaiters.push(resolve))
   }
 
@@ -143,12 +155,15 @@ export class TerminalShellRecoveryBarrier {
   async awaitProofSettled(): Promise<void> {
     const target = this.scanner.generation
     let deadlineHit = false
+
     const deadline = setTimeout(() => {
       deadlineHit = true
       this.resolveIdleWaiters()
       this.cleanExit.drainWaiters()
     }, this.maxPendingMs)
+
     deadline.unref?.()
+
     try {
       while (
         (this.pending || this.cleanExit.inFlight) &&
@@ -165,10 +180,12 @@ export class TerminalShellRecoveryBarrier {
 
   dispose(): void {
     this.disposed = true
+
     if (this.bailTimer) {
       clearTimeout(this.bailTimer)
       this.bailTimer = null
     }
+
     // Callers flush first (exit, dispose, prepareForFinalSnapshot); anything
     // still queued here has no live downstream left to receive it.
     this.queue = []
@@ -180,16 +197,22 @@ export class TerminalShellRecoveryBarrier {
 
   private scanAndRelease(emission: PtyIngressEmission): void {
     const events = this.scanner.scan(emission.data)
+
     if (events.cleanExitCandidate) {
       this.cleanExit.start(events.cleanExitCandidate.generation)
     }
+
     const end = events.uncleanDeathTriggerEnd
+
     if (end === undefined) {
       this.releaseDownstream(emission)
+
       return
     }
+
     const splittable =
       !emission.transformed && emission.rawEndSeq - emission.rawStartSeq === emission.data.length
+
     if (!splittable) {
       // Why skip the episode: the raw-seq boundary inside a transformed emission
       // cannot be reconstructed, so release everything and keep the scanner
@@ -200,10 +223,14 @@ export class TerminalShellRecoveryBarrier {
         // Why swallowed: emit already wrote and recorded before a client threw;
         // the scanner must still advance past the remainder below.
       }
+
       this.consumeForStateOnly(emission.data.slice(end))
+
       return
     }
+
     const splitSeq = emission.rawStartSeq + end
+
     try {
       this.releaseDownstream({
         data: emission.data.slice(0, end),
@@ -216,7 +243,9 @@ export class TerminalShellRecoveryBarrier {
       // emit before a client's broadcast threw; aborting here would cost the
       // post-boundary prompt its entire recovery episode.
     }
+
     this.enterPending(splitSeq)
+
     if (end < emission.data.length) {
       this.enqueue({
         data: emission.data.slice(end),
@@ -229,14 +258,18 @@ export class TerminalShellRecoveryBarrier {
 
   private consumeForStateOnly(data: string): void {
     let rest = data
+
     while (rest.length > 0) {
       const events = this.scanner.scan(rest)
+
       if (events.cleanExitCandidate) {
         this.cleanExit.start(events.cleanExitCandidate.generation)
       }
+
       if (events.uncleanDeathTriggerEnd === undefined) {
         return
       }
+
       rest = rest.slice(events.uncleanDeathTriggerEnd)
     }
   }
@@ -252,11 +285,13 @@ export class TerminalShellRecoveryBarrier {
     // Why the guard: the callback is injected; a synchronous throw must not
     // escape after pending flipped true and strand the episode until the bail.
     let proof: Promise<boolean>
+
     try {
       proof = this.confirmShellForeground()
     } catch {
       proof = Promise.resolve(false)
     }
+
     // Why the two-step then: a throw escaping finishPending must not re-enter
     // it through a catch arm as a phantom refutation.
     void proof
@@ -271,19 +306,24 @@ export class TerminalShellRecoveryBarrier {
     if (!this.pending || this.disposed || episode !== this.pendingEpisode) {
       return
     }
+
     this.pending = false
+
     if (this.bailTimer) {
       clearTimeout(this.bailTimer)
       this.bailTimer = null
     }
+
     const queued = this.queue
     this.queue = []
     this.queuedBytes = 0
+
     try {
       if (confirmed && this.isAlive()) {
         // Scanned before release so alt-state stays honest; the reset bytes are
         // deliberately inert for ownership (no OSC 133, no TUI mode enables).
         this.scanner.scan(POST_REPLAY_DEAD_TUI_RESET)
+
         try {
           this.releaseDownstream({
             data: POST_REPLAY_DEAD_TUI_RESET,
@@ -295,17 +335,21 @@ export class TerminalShellRecoveryBarrier {
           // Why swallowed: a throwing downstream client must not strand the
           // queued prompt bytes below.
         }
+
         this.scanner.trySetOwner(this.pendingGeneration)
       }
+
       for (let index = 0; index < queued.length; index += 1) {
         if (this.disposed) {
           break
         }
+
         if (this.pending) {
           // A nested trigger inside the queue re-entered pending; requeue the rest.
           this.enqueue(queued[index]!)
           continue
         }
+
         try {
           this.scanAndRelease(queued[index]!)
         } catch {
@@ -323,6 +367,7 @@ export class TerminalShellRecoveryBarrier {
   private enqueue(emission: PtyIngressEmission): void {
     this.queue.push(emission)
     this.queuedBytes += emission.data.length
+
     if (this.queuedBytes > this.maxQueuedBytes) {
       this.finishPending(this.pendingEpisode, false)
     }
@@ -331,6 +376,7 @@ export class TerminalShellRecoveryBarrier {
   private resolveIdleWaiters(): void {
     const waiters = this.idleWaiters
     this.idleWaiters = []
+
     for (const waiter of waiters) {
       waiter()
     }

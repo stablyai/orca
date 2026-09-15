@@ -44,6 +44,7 @@ export function createHostTerminalRuntimeStub(
   const rows = options.rows ?? 40
   const dataListeners = new Set<(data: string, meta?: HostTerminalDataMeta) => void>()
   const cleanups = new Map<string, { connectionId: string | undefined; run: () => void }>()
+
   const stub: HostTerminalRuntimeStub = {
     runtime: null,
     ptyId,
@@ -58,12 +59,14 @@ export function createHostTerminalRuntimeStub(
 
   stub.closeConnection = (connectionId) => {
     const pending: (() => void)[] = []
+
     for (const [id, entry] of cleanups) {
       if (entry.connectionId === connectionId) {
         cleanups.delete(id)
         pending.push(entry.run)
       }
     }
+
     for (const run of pending) {
       run()
     }
@@ -73,11 +76,13 @@ export function createHostTerminalRuntimeStub(
   stub.emitOutput = (data, meta) => {
     stub.buffer += data
     outputSequence += data.length
+
     const resolved: HostTerminalDataMeta = {
       seq: outputSequence,
       rawLength: data.length,
       ...meta
     }
+
     // Snapshot: a listener may unsubscribe while the host fans this out.
     for (const listener of Array.from(dataListeners)) {
       listener(data, resolved)
@@ -94,6 +99,7 @@ export function createHostTerminalRuntimeStub(
     terminalOwner: 'shell'
   }> => {
     stub.serializeCount++
+
     const snapshot = {
       data: stub.buffer,
       cols,
@@ -103,13 +109,16 @@ export function createHostTerminalRuntimeStub(
       alternateScreen: false as const,
       terminalOwner: 'shell' as const
     }
+
     if (options.overflowInitialSnapshots && stub.serializeCount <= 2) {
       const data = 'x'.repeat(300 * 1024)
       outputSequence += data.length
+
       for (const listener of Array.from(dataListeners)) {
         listener(data, { seq: outputSequence, rawLength: data.length })
       }
     }
+
     return snapshot
   }
 
@@ -140,6 +149,7 @@ export function createHostTerminalRuntimeStub(
       listener: (d: string, m?: HostTerminalDataMeta) => void
     ) => {
       dataListeners.add(listener)
+
       return () => dataListeners.delete(listener)
     },
     subscribeToTerminalResize: () => () => {},
@@ -159,6 +169,7 @@ export function createHostTerminalRuntimeStub(
       if (typeof action?.text === 'string') {
         stub.writtenInput.push(action.text)
       }
+
       return { accepted: true }
     },
     beginMobileInputFloor: () => ({ commit: () => {}, rollback: () => {} }),
@@ -196,8 +207,10 @@ export function createHostTerminalRuntimeStub(
         if (!stub.missingRuntimeMethods.includes(property)) {
           stub.missingRuntimeMethods.push(property)
         }
+
         return () => undefined
       }
+
       return Reflect.get(target, property, receiver)
     }
   })

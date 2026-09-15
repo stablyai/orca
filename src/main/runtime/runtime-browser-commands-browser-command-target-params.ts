@@ -88,9 +88,11 @@ export async function applySharedScreencastFrameBudget(
   const merged = mergeBrowserScreencastFrameBudgets(
     Array.from(active.subscribers.values(), (subscriber) => subscriber.budget)
   )
+
   if (!merged || browserScreencastFrameBudgetsEqual(merged, active.appliedBudget)) {
     return
   }
+
   active.appliedBudget = merged
   await session.updateFrameBudget(merged)
 }
@@ -131,6 +133,7 @@ export function clampInteger(
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback
   }
+
   return Math.min(max, Math.max(min, Math.round(value)))
 }
 
@@ -142,6 +145,7 @@ export function clampOptionalInteger(
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined
   }
+
   return Math.min(max, Math.max(min, Math.round(value)))
 }
 
@@ -153,6 +157,7 @@ export function clampOptionalNumber(
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return undefined
   }
+
   return Math.min(max, Math.max(min, value))
 }
 

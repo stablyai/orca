@@ -101,5 +101,7 @@ export type SmartWorkspaceNameFieldSearchState = {
 export type CachedRepoSlug = RepoSlug
 
 export const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
+
 export const SEARCH_DEBOUNCE_MS = 200
+
 export const RESULT_LIMIT = 12

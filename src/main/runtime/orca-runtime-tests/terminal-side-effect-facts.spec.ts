@@ -13,11 +13,13 @@ import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emi
 describe('terminal side-effect fact channel', () => {
   it('defers desktop-only output scanners until a headless runtime is promoted', () => {
     const { runtime, batches } = createSideEffectRuntime()
+
     const trackerEntries = (
       runtime as unknown as {
         ptyTitleTrackersByPtyId: Map<string, { commandCodeDetector: unknown }>
       }
     ).ptyTitleTrackersByPtyId
+
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
     runtime.onPtyData('pty-1', '\x07', 100)
@@ -75,6 +77,7 @@ describe('terminal side-effect fact channel', () => {
     // Why the clock steps: main throttles decorative repeats on the local fact stream, so each
     // round must clear that heartbeat for the per-client gate to be what collapses them here.
     vi.useFakeTimers({ toFake: ['Date'] })
+
     try {
       const { runtime, batches } = createSideEffectRuntime()
       const firstClientEvents: RuntimeClientEvent[] = []
@@ -84,16 +87,20 @@ describe('terminal side-effect fact channel', () => {
 
       const ptyIds = Array.from({ length: 64 }, (_, index) => `pty-remote-${index}`)
       const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
       const stepPastHeartbeat = (): void => {
         vi.setSystemTime(new Date(Date.now() + DECORATIVE_TITLE_FACT_HEARTBEAT_MS))
       }
+
       for (const ptyId of ptyIds) {
         runtime.ingestSyntheticTitleFrame(ptyId, `\x1b]0;${frames[0]} Cursor Agent\x07`)
       }
+
       firstClientEvents.length = 0
 
       for (const frame of frames.slice(1)) {
         stepPastHeartbeat()
+
         for (const ptyId of ptyIds) {
           runtime.ingestSyntheticTitleFrame(ptyId, `\x1b]0;${frame} Cursor Agent\x07`)
         }
@@ -115,6 +122,7 @@ describe('terminal side-effect fact channel', () => {
       const secondClientEvents: RuntimeClientEvent[] = []
       runtime.onClientEvent((event) => secondClientEvents.push(event))
       stepPastHeartbeat()
+
       for (const ptyId of ptyIds) {
         runtime.ingestSyntheticTitleFrame(ptyId, `\x1b]0;${frames[0]} Cursor Agent\x07`)
       }
@@ -126,6 +134,7 @@ describe('terminal side-effect fact channel', () => {
       for (const ptyId of ptyIds) {
         runtime.ingestSyntheticTitleFrame(ptyId, '\x1b]0;Cursor ready\x07')
       }
+
       expect(firstClientEvents).toHaveLength(ptyIds.length)
       expect(secondClientEvents).toHaveLength(ptyIds.length * 2)
     } finally {
@@ -155,15 +164,18 @@ describe('terminal side-effect fact channel', () => {
 
   it('keeps a phone-only host producing title state without emitting batches to it', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-a`
       const runtime = new OrcaRuntimeService(store)
       const mobileEvents: RuntimeClientEvent[] = []
+
       const trackerEntries = (
         runtime as unknown as {
           ptyTitleTrackersByPtyId: Map<string, { commandCodeDetector: unknown }>
         }
       ).ptyTitleTrackersByPtyId
+
       runtime.setPtyController({
         write: () => true,
         kill: () => true,
@@ -265,6 +277,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('emits the stale-working-title rewrite as between-chunk fact batches', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)
@@ -384,12 +397,15 @@ describe('terminal side-effect fact channel', () => {
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`)
 
     runtime.onPtyData('pty-1', '\x1b]0;Cursor Agent\x07', 100)
+
     const mobileTerminal = (
       await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     ).tabs.find((tab) => tab.type === 'terminal')
+
     if (mobileTerminal?.type !== 'terminal' || !mobileTerminal.terminal) {
       throw new Error('expected mobile terminal handle')
     }
+
     expect(mobileTerminal.terminal).toBe(created.handle)
 
     await runtime.renameTerminal(mobileTerminal.terminal, 'Pinned Cursor')
@@ -452,9 +468,11 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
     let resolveStaleRead!: (process: string) => void
+
     const staleRead = new Promise<string>((resolve) => {
       resolveStaleRead = resolve
     })
+
     const getForegroundProcess = vi.fn().mockReturnValueOnce(staleRead).mockResolvedValueOnce('zsh')
     runtime.setPtyController({
       write: () => true,
@@ -478,9 +496,11 @@ describe('terminal side-effect fact channel', () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
     runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;Codex ready\x07')
+
     const getForegroundProcess = vi.fn(() => {
       throw new TypeError('getForegroundProcess is unavailable')
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

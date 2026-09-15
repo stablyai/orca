@@ -36,18 +36,24 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
         if (args.pushTarget) {
           assertGitPushTargetShape(args.pushTarget)
         }
+
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.getUpstreamStatus(args.worktreePath, args.pushTarget)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return getUpstreamStatus(worktreePath, args.pushTarget, gitOptions)
     }
   )
@@ -67,10 +73,13 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
         if (args.pushTarget) {
           assertGitPushTargetShape(args.pushTarget)
         }
+
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         const materializedPushTarget = args.pushTarget
           ? await materializeWorktreePushTargetRemoteSsh(
               provider,
@@ -81,14 +90,18 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
               args.worktreeId
             )
           : undefined
+
         return provider.fetchRemote(args.worktreePath, materializedPushTarget)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       const materializedPushTarget = args.pushTarget
         ? await materializeWorktreePushTargetRemote(
             worktreePath,
@@ -99,12 +112,14 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
             args.worktreeId
           )
         : undefined
+
       if (materializedPushTarget) {
         await validateGitPushTarget(worktreePath, materializedPushTarget, {
           ...gitOptions,
           admissionTier: 'interactive'
         })
       }
+
       await gitFetch(worktreePath, materializedPushTarget, {
         ...gitOptions,
         admissionTier: 'interactive'
@@ -125,19 +140,25 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
       const expectedUpstream = validateGitForkSyncExpectedUpstream(args.expectedUpstream, {
         required: true
       })
+
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
+
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
+
         return provider.syncForkDefaultBranch(args.worktreePath, expectedUpstream)
       }
+
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,
         worktreePath
       )
+
       return gitSyncForkDefaultBranch(worktreePath, expectedUpstream, {
         ...gitOptions,
         admissionTier: 'interactive'

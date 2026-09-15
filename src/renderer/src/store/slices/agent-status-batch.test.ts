@@ -13,8 +13,11 @@ import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 const BASE_TIME = 2_000_000
+
 const FIRST_PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const SECOND_PANE = 'tab-1:22222222-2222-4222-8222-222222222222'
+
 const PROVIDER_SESSION = {
   key: 'session_id' as const,
   id: 'pi-session-1',
@@ -28,6 +31,7 @@ function flushMicrotasks(): Promise<void> {
 function seedBatchStore() {
   const store = createTestStore()
   const tab = makeTab({ id: 'tab-1', worktreeId: 'wt-1', title: 'pi' })
+
   const retainedEntry: AgentStatusEntry = {
     paneKey: FIRST_PANE,
     state: 'done',
@@ -37,6 +41,7 @@ function seedBatchStore() {
     stateStartedAt: BASE_TIME - 200,
     stateHistory: []
   }
+
   const retained: RetainedAgentEntry = {
     entry: retainedEntry,
     worktreeId: 'wt-1',
@@ -44,12 +49,14 @@ function seedBatchStore() {
     agentType: 'pi',
     startedAt: BASE_TIME - 200
   }
+
   store.setState({
     tabsByWorktree: { 'wt-1': [tab] },
     retainedAgentsByPaneKey: { [FIRST_PANE]: retained },
     retentionSuppressedPaneKeys: { [FIRST_PANE]: true },
     refreshGitHubForWorktreeIfStale: vi.fn().mockResolvedValue(undefined)
   } as Partial<AppState>)
+
   return store
 }
 
@@ -137,6 +144,7 @@ describe('setAgentStatuses', () => {
     const batchStore = seedBatchStore()
     const sequentialTitleGeneration = vi.fn()
     const batchTitleGeneration = vi.fn()
+
     const batchTitleGenerationBulk = vi.fn((updates: readonly GeneratedTabTitleUpdate[]) => {
       for (const update of updates) {
         if (update.options) {
@@ -146,6 +154,7 @@ describe('setAgentStatuses', () => {
         }
       }
     })
+
     sequentialStore.setState({
       setGeneratedTabTitleFromAgentPrompt: sequentialTitleGeneration
     } as Partial<AppState>)
@@ -179,6 +188,7 @@ describe('setAgentStatuses', () => {
           )
       }
     }
+
     const outcomes = batchStore.getState().setAgentStatuses(updates)
 
     expect(outcomes).toEqual([true, true, true, true, false, true, true])
@@ -210,6 +220,7 @@ describe('setAgentStatuses', () => {
     vi.setSystemTime(BASE_TIME + 10)
     const store = seedBatchStore()
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -228,16 +239,20 @@ describe('setAgentStatuses', () => {
     vi.setSystemTime(BASE_TIME + 10)
     const store = createTestStore()
     const paneCount = 100
+
     const tabsByWorktree = Object.fromEntries(
       Array.from({ length: paneCount }, (_, index) => {
         const worktreeId = `wt-${index}`
+
         return [worktreeId, [makeTab({ id: `tab-${index}`, worktreeId })]]
       })
     )
+
     store.setState({
       settings: { ...store.getState().settings, tabAutoGenerateTitle: true },
       tabsByWorktree
     } as Partial<AppState>)
+
     const updates: AgentStatusBatchUpdate[] = Array.from({ length: paneCount }, (_, index) => ({
       paneKey: `tab-${index}:11111111-1111-4111-8111-111111111111`,
       payload: {
@@ -248,7 +263,9 @@ describe('setAgentStatuses', () => {
       timing: { updatedAt: BASE_TIME + index, stateStartedAt: BASE_TIME + index },
       routing: { tabId: `tab-${index}`, worktreeId: `wt-${index}` }
     }))
+
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -268,6 +285,7 @@ describe('setAgentStatuses', () => {
     vi.setSystemTime(BASE_TIME + 10)
     const store = seedBatchStore()
     const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask')
+
     const workingUpdate = (updatedAt: number, prompt: string): AgentStatusBatchUpdate => ({
       paneKey: FIRST_PANE,
       payload: { state: 'working', prompt, agentType: 'pi' },
@@ -316,13 +334,16 @@ describe('setAgentStatuses', () => {
     vi.setSystemTime(BASE_TIME + 10)
     const store = seedBatchStore()
     const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask')
+
     const update = (paneKey: string, updatedAt: number): AgentStatusBatchUpdate => ({
       paneKey,
       payload: { state: 'working', prompt: paneKey, agentType: 'pi' },
       timing: { updatedAt, stateStartedAt: updatedAt },
       routing: { tabId: 'tab-1', worktreeId: 'wt-1' }
     })
+
     let publications = 0
+
     const unsubscribeNested = store.subscribe(() => {
       publications += 1
     })
@@ -345,8 +366,10 @@ describe('setAgentStatuses', () => {
 
     queueMicrotaskSpy.mockClear()
     let reentered = false
+
     const unsubscribeReentrant = store.subscribe(() => {
       publications += 1
+
       if (!reentered) {
         reentered = true
         store.getState().setAgentStatuses([update(SECOND_PANE, BASE_TIME + 3)])
@@ -366,9 +389,11 @@ describe('setAgentStatuses', () => {
   it('exposes cap evictions to later updates in the same transaction', () => {
     const store = seedBatchStore()
     const firstPane = 'orphan-tab:orphan-0'
+
     const entries = Object.fromEntries(
       Array.from({ length: MAX_LIVE_AGENT_STATUSES }, (_, index) => {
         const paneKey = `orphan-tab:orphan-${index}`
+
         return [
           paneKey,
           {
@@ -383,8 +408,10 @@ describe('setAgentStatuses', () => {
         ]
       })
     )
+
     store.setState({ agentStatusByPaneKey: entries } as Partial<AppState>)
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -395,12 +422,15 @@ describe('setAgentStatuses', () => {
         payload: { state: 'working', prompt: 'new turn', agentType: 'pi' },
         timing: { updatedAt: BASE_TIME + 1, stateStartedAt: BASE_TIME + 1 }
       })
+
       expect(transaction.getState().agentStatusByPaneKey[firstPane]).toBeUndefined()
+
       const completed = transaction.apply({
         paneKey: firstPane,
         payload: { state: 'done', prompt: 'different agent', agentType: 'claude' },
         timing: { updatedAt: BASE_TIME + 2, stateStartedAt: BASE_TIME + 2 }
       })
+
       return [added, completed]
     })
 
@@ -422,9 +452,11 @@ describe('setAgentStatuses', () => {
         payload: { state: 'working', prompt: 'first turn', agentType: 'pi' },
         timing: { updatedAt: BASE_TIME, stateStartedAt: BASE_TIME }
       })
+
       // Any slice action reached through get() writes straight to the real store — a
       // REPLACE commit of the fold's snapshot would silently revert it.
       store.setState({ worktreesByRepo: { 'repo-late': [] } } as Partial<AppState>)
+
       return applied
     })
 
@@ -436,6 +468,7 @@ describe('setAgentStatuses', () => {
   it('keeps one completed-turn message per entry instead of one per history row', () => {
     const store = seedBatchStore()
     const turns: AgentStatusBatchUpdate[] = []
+
     for (let turn = 0; turn < 5; turn += 1) {
       turns.push({
         paneKey: FIRST_PANE,
@@ -453,6 +486,7 @@ describe('setAgentStatuses', () => {
         timing: { updatedAt: BASE_TIME + turn * 2 + 1, stateStartedAt: BASE_TIME + turn * 2 + 1 }
       })
     }
+
     store.getState().setAgentStatuses(turns)
 
     const entry = store.getState().agentStatusByPaneKey[FIRST_PANE]

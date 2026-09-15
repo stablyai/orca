@@ -50,6 +50,7 @@ export async function upgradeDirectMobileRelay(args: {
   if (args.host.relay) {
     return null
   }
+
   const dependencies: Dependencies = {
     readJournal: readMobileRelayDirectUpgradeJournal,
     writeJournal: writeMobileRelayDirectUpgradeJournal,
@@ -60,7 +61,9 @@ export async function upgradeDirectMobileRelay(args: {
     randomBytes: ExpoCrypto.getRandomBytes,
     ...args.dependencies
   }
+
   let journal = await dependencies.readJournal(args.host.id)
+
   if (!journal) {
     journal = createMobileRelayDirectUpgradeJournal(args.host.id, dependencies.randomBytes)
     // Why: the stable reqId and pending secret must survive a lost install response.
@@ -68,13 +71,17 @@ export async function upgradeDirectMobileRelay(args: {
   }
 
   const initial = await getEndpoints(args.client, journal.reqId)
+
   if (initial === 'method-not-found') {
     await dependencies.clearJournal(args.host.id)
+
     return null
   }
+
   if (initial.installStatus?.state === 'committed') {
     return publishCommitted(args.host, journal, initial, dependencies)
   }
+
   if (!initial.relay) {
     throw new Error('relay endpoint unavailable for direct pairing upgrade')
   }
@@ -83,19 +90,26 @@ export async function upgradeDirectMobileRelay(args: {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
+
   if (isMethodNotFoundRefusal(provisionResponse)) {
     await dependencies.clearJournal(args.host.id)
+
     return null
   }
+
   const installed = DeviceCredentialInstalledSchema.parse(
     requireRpcResultOrThrowCodedError(provisionResponse)
   )
+
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
+
   if (reconciled === 'method-not-found') {
     throw new Error('relay endpoint reconciliation became unavailable')
   }
+
   assertCommitted(reconciled, installed)
+
   return publishCommitted(args.host, journal, reconciled, dependencies)
 }
 
@@ -108,8 +122,10 @@ async function publishCommitted(
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
     throw new Error('direct pairing upgrade was not authoritatively committed')
   }
+
   const installed = endpoints.installStatus.result
   assertDirectInstall(journal, installed)
+
   const bundle = MobileRelayCredentialBundleSchema.parse({
     v: 1,
     hostId: host.id,
@@ -121,9 +137,11 @@ async function publishCommitted(
       expiresAt: installed.resumeExpiresAt
     }
   })
+
   // Why: the overlay must never advertise relay without its matching credential.
   await dependencies.writeBundle(bundle)
   let updatedHost: HostProfile
+
   try {
     updatedHost = await persistRelayHost(host, endpoints.relay, dependencies.saveHost)
   } catch (error) {
@@ -131,9 +149,12 @@ async function publishCommitted(
       await dependencies.deleteBundle(host.id)
       await dependencies.clearJournal(host.id)
     }
+
     throw error
   }
+
   await dependencies.clearJournal(host.id)
+
   return { host: updatedHost, bundle }
 }
 
@@ -142,9 +163,11 @@ async function getEndpoints(
   installReqId: string
 ): Promise<PairingGetEndpointsResult | 'method-not-found'> {
   const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
+
   if (isMethodNotFoundRefusal(response)) {
     return 'method-not-found'
   }
+
   return PairingGetEndpointsResultSchema.parse(requireRpcResultOrThrowCodedError(response))
 }
 

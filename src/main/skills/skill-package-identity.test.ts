@@ -14,11 +14,13 @@ import {
 } from './skill-package-identity'
 
 const temporaryDirectories: string[] = []
+
 const execFileAsync = promisify(execFile)
 
 async function temporarySkill(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-freshness-'))
   temporaryDirectories.push(root)
+
   return root
 }
 
@@ -26,6 +28,7 @@ async function temporarySkill(): Promise<string> {
 async function copyOf(source: string): Promise<string> {
   const target = await temporarySkill()
   await cp(source, target, { recursive: true })
+
   return target
 }
 
@@ -107,11 +110,13 @@ describe('skill package identity', () => {
   it('rejects links and bounded-observation overflows', async () => {
     const root = await temporarySkill()
     await writeFile(join(root, 'SKILL.md'), 'skill')
+
     if (process.platform !== 'win32') {
       await symlink(join(root, 'SKILL.md'), join(root, 'linked.md'))
       await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-link')
       await rm(join(root, 'linked.md'))
     }
+
     await expect(
       observeSkillPackage(root, {
         maximumDepth: 1,
@@ -142,6 +147,7 @@ describe('skill package identity', () => {
       server.once('error', reject)
       server.listen(socket, resolve)
     })
+
     try {
       await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
     } finally {
@@ -230,6 +236,7 @@ describe('skill package identity', () => {
         files: official.files
       }
     ]
+
     const official1 = new Set(['SKILL.md'])
     expect(matchingKnownSnapshot(await observeSkillPackage(edited), snapshot, official1)).toBeNull()
     expect(
@@ -260,6 +267,7 @@ describe('skill package identity', () => {
         files: revisionOne.files
       }
     ]
+
     const observed = await observeSkillPackage(tampered)
 
     expect(

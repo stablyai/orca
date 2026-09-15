@@ -11,6 +11,7 @@ export function resolvePnpmCliInvocation({
     if (JS_CLI_EXTENSION.test(npmExecPath)) {
       return { command: nodeExecPath, prefixArgs: [npmExecPath], shell: false }
     }
+
     return {
       command: npmExecPath,
       prefixArgs: [],

@@ -13,6 +13,7 @@
 import { remoteInstallDirName, ORCAD_INSTALL_MODEL } from './remote-install-model'
 
 export const ORCAD_ACTIVATION_FILENAME = 'orcad-active.json'
+
 export const ORCAD_ACTIVATION_SCHEMA_VERSION = 1
 
 /** Where a pre-activation copy of the shared data root lives, relative to `.orca-remote/`. */
@@ -64,7 +65,9 @@ export function parseOrcadActivationRecord(raw: string | null): OrcadActivationR
   if (raw === null || raw.trim() === '') {
     return { state: 'absent' }
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(raw)
   } catch (error) {
@@ -73,10 +76,13 @@ export function parseOrcadActivationRecord(raw: string | null): OrcadActivationR
       reason: `activation record is not JSON: ${error instanceof Error ? error.message : String(error)}`
     }
   }
+
   if (typeof parsed !== 'object' || parsed === null) {
     return { state: 'unreadable', reason: 'activation record is not an object' }
   }
+
   const record = parsed as Partial<OrcadActivationRecord>
+
   if (record.schemaVersion !== ORCAD_ACTIVATION_SCHEMA_VERSION) {
     return {
       state: 'unreadable',
@@ -85,6 +91,7 @@ export function parseOrcadActivationRecord(raw: string | null): OrcadActivationR
         `${ORCAD_ACTIVATION_SCHEMA_VERSION}; this client cannot safely interpret it`
     }
   }
+
   return {
     state: 'ok',
     record: {
@@ -101,10 +108,13 @@ function parseSnapshot(value: unknown): OrcadStateSnapshot | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
+
   const snapshot = value as Partial<OrcadStateSnapshot>
+
   if (typeof snapshot.dirName !== 'string' || typeof snapshot.takenBeforeVersion !== 'string') {
     return null
   }
+
   return {
     dirName: snapshot.dirName,
     takenBeforeVersion: snapshot.takenBeforeVersion,
@@ -169,5 +179,6 @@ export function orcadGcPinnedDirNames(
   const versions = [record.active, record.previous, daemonEntryVersion ?? null].filter(
     (v): v is string => typeof v === 'string' && v.length > 0
   )
+
   return [...new Set(versions)].map((version) => remoteInstallDirName(ORCAD_INSTALL_MODEL, version))
 }

@@ -104,6 +104,7 @@ describe('createUISlice new workspace draft', () => {
 
   it('preserves serializable Jira identity and bound source context in drafts', () => {
     const store = createUIStore()
+
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
       provider: 'jira' as const,

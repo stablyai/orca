@@ -23,13 +23,17 @@ export async function dispatchWorktreeRemoval(args: {
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
   const { worktreeId, hostId, force, skipArchive, forgetLocalOnly, target, options } = args
+
   const snapshotPruneBatch = options?.snapshotPruneBatchId
     ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
     : {}
+
   if (forgetLocalOnly) {
     return window.api.worktrees.forgetLocal({ worktreeId, hostId, ...snapshotPruneBatch })
   }
+
   args.assertCurrent()
+
   if (target.kind === 'local') {
     return window.api.worktrees.remove({
       worktreeId,
@@ -40,8 +44,10 @@ export async function dispatchWorktreeRemoval(args: {
       ...snapshotPruneBatch
     })
   }
+
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)
+
   return callRuntimeRpc<RemoveWorktreeResult>(
     target,
     'worktree.rm',
@@ -61,6 +67,7 @@ function qualifyRuntimeCallHost(
   hostId: ExecutionHostId | undefined
 ): ExecutionHostId | undefined {
   const parsedHost = parseExecutionHostId(hostId)
+
   if (
     target.kind === 'environment' &&
     parsedHost?.kind === 'runtime' &&
@@ -68,5 +75,6 @@ function qualifyRuntimeCallHost(
   ) {
     return undefined
   }
+
   return hostId
 }

@@ -12,19 +12,24 @@ export function acknowledgeLegacyQuestionAnswer(
   }
 ): { receipt: LegacyMailReceiptRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const principal = this.requireLegacyMailPrincipal(params.principalId, 'worker')
     const question = this.getQuestionRaw(params.questionId)
     const source = this.getMessageById(params.questionId)
     const answer = this.getMessageById(params.answerMessageId)
+
     const dispatch = principal.dispatch_id
       ? this.getDispatchContextById(principal.dispatch_id)
       : undefined
+
     const exactLegacyAnswer =
       answer?.delivery_contract === 'legacy_direct' &&
       (answer.to_handle === principal.terminal_handle ||
         answer.to_handle === `dispatch:${principal.dispatch_id}`)
+
     const adoption = this.getLegacyAdoption()
+
     const exactTakenOverAnswer =
       adoption?.adopted_run_id === principal.run_id &&
       dispatch?.run_id === principal.run_id &&
@@ -38,6 +43,7 @@ export function acknowledgeLegacyQuestionAnswer(
       answer.from_handle === `run:${principal.run_id}` &&
       answer.to_handle === `dispatch:${principal.dispatch_id}` &&
       answer.thread_id === question?.message_id
+
     if (
       !question ||
       !answer ||
@@ -51,12 +57,14 @@ export function acknowledgeLegacyQuestionAnswer(
         'Legacy answer acknowledgment does not match this principal question.'
       )
     }
+
     const existing = this.db
       .prepare(
         `SELECT * FROM legacy_mail_receipts
          WHERE principal_id = ? AND message_id = ?`
       )
       .get(params.principalId, params.answerMessageId) as LegacyMailReceiptRow | undefined
+
     this.db
       .prepare(
         `UPDATE messages
@@ -75,13 +83,16 @@ export function acknowledgeLegacyQuestionAnswer(
          )`
       )
       .run(params.principalId, params.answerMessageId)
+
     const receipt = this.db
       .prepare(
         `SELECT * FROM legacy_mail_receipts
          WHERE principal_id = ? AND message_id = ?`
       )
       .get(params.principalId, params.answerMessageId) as LegacyMailReceiptRow
+
     this.db.exec('COMMIT')
+
     return { receipt, duplicate: Boolean(existing?.acknowledged_at) }
   } catch (error) {
     this.db.exec('ROLLBACK')

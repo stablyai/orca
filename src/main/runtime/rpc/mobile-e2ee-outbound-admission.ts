@@ -14,6 +14,7 @@ import type {
 
 export function mobileE2EETextPayloadAdmissionBytes(value: string): number {
   const bytes = Buffer.byteLength(value, 'utf8')
+
   return bytes <= REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES ? bytes : Number.POSITIVE_INFINITY
 }
 

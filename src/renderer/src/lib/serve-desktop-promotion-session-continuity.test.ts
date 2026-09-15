@@ -33,13 +33,16 @@ import {
 } from '../../../main/startup/single-instance-lock'
 
 const WORKTREE_ID = 'wt-serve-promotion'
+
 const AGENT_PANES = [
   { tabId: 'tab-codex-1', leafId: '11111111-1111-4111-8111-111111111111', ptyId: 'daemon-pty-1' },
   { tabId: 'tab-codex-2', leafId: '22222222-2222-4222-8222-222222222222', ptyId: 'daemon-pty-2' },
   { tabId: 'tab-codex-3', leafId: '33333333-3333-4333-8333-333333333333', ptyId: 'daemon-pty-3' }
 ] as const
+
 /** Argv macOS delivers for `open -n -a Orca` / Finder / Dock relaunch. */
 const DESKTOP_RELAUNCH_ARGV = ['/Applications/Orca.app/Contents/MacOS/Orca'] as const
+
 const DUPLICATE_SERVE_ARGV = [
   '/Applications/Orca.app/Contents/MacOS/Orca',
   '--serve',
@@ -81,11 +84,15 @@ function bootHeadlessServeOwner(): {
   settle: (options: { hasPersistentPtyProvider: boolean }) => void
 } {
   let mainWindow: BrowserWindow | null = null
+
   const openMainWindow = vi.fn(() => {
     mainWindow = createFakeWindow()
+
     return mainWindow
   })
+
   const blockedReasons: string[] = []
+
   const gate = createServeDesktopActivationGate({
     initialState: 'initializing',
     activateWindow: () => {
@@ -98,13 +105,17 @@ function bootHeadlessServeOwner(): {
     },
     onBlocked: (reason) => blockedReasons.push(reason)
   })
+
   const requestDesktopActivation = (argv: readonly string[] = []): void => {
     if (!shouldActivateDesktopForSecondInstance(argv)) {
       return
     }
+
     gate.requestActivation()
   }
+
   const secondInstanceHandlers: ((argv: readonly string[]) => void)[] = []
+
   const lockApp = {
     requestSingleInstanceLock: () => true,
     on: (event: string, listener: (event: unknown, argv: readonly string[]) => void) => {
@@ -113,6 +124,7 @@ function bootHeadlessServeOwner(): {
       }
     }
   } as unknown as App
+
   expect(acquireSingleInstanceLock(lockApp, requestDesktopActivation)).toBe(true)
   expect(secondInstanceHandlers).toHaveLength(1)
 
@@ -120,6 +132,7 @@ function bootHeadlessServeOwner(): {
     openMainWindowCalls: () => openMainWindow.mock.calls.length,
     desktopWindowStatus: () => {
       const state = gate.getState()
+
       return state === 'ready' ? 'openable' : state
     },
     blockedReasons,
@@ -151,6 +164,7 @@ function makeTerminalTab(id: string): Record<string, unknown> {
 
 function makeSurvivingAgentRecord(index: number): SleepingAgentSessionRecord {
   const pane = AGENT_PANES[index]
+
   return {
     paneKey: makePaneKey(pane.tabId, pane.leafId),
     tabId: pane.tabId,
@@ -202,6 +216,7 @@ function hydratePromotedRenderer(options: { reattached: boolean }): SleepingAgen
     } as never,
     false
   )
+
   return records
 }
 
@@ -210,6 +225,7 @@ function expectNoAgentWasResumed(records: readonly SleepingAgentSessionRecord[])
   expect(state.tabsByWorktree[WORKTREE_ID]).toHaveLength(AGENT_PANES.length)
   expect(Object.keys(state.pendingStartupByTabId)).toEqual([])
   expect(Object.keys(state.automaticAgentResumeClaimsByTabId)).toEqual([])
+
   for (const record of records) {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   }

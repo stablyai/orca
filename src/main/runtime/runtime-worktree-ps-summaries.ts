@@ -12,23 +12,29 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const repoById = new Map((args.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const ghCache = args.store?.getGitHubCache?.()
+
   for (const worktree of args.resolvedWorktrees) {
     const meta =
       args.store?.getWorktreeMeta?.(worktree.id) ?? args.store?.getAllWorktreeMeta()[worktree.id]
+
     const repo = repoById.get(worktree.repoId)
     let linkedPR: { number: number; state: string } | null = null
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
+
     if (branch && ghCache) {
       const cached =
         (repo?.id ? ghCache.pr[`${repo.id}::${branch}`] : undefined) ??
         (repo?.path ? ghCache.pr[`${repo.path}::${branch}`] : undefined)
+
       if (cached?.data) {
         linkedPR = { number: cached.data.number, state: cached.data.state }
       }
     }
+
     if (!linkedPR && meta?.linkedPR != null) {
       linkedPR = { number: meta.linkedPR, state: 'unknown' }
     }
+
     const lineage = worktree.lineage
     summaries.set(worktree.id, {
       workspaceKind: 'git',
@@ -75,14 +81,18 @@ export function buildRuntimeWorktreePsSummaries(args: {
       agents: []
     })
   }
+
   const projectGroupById = new Map(
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
+
   for (const folderWorkspace of args.store?.getFolderWorkspaces?.() ?? []) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
+
     if (!projectGroup?.parentPath) {
       continue
     }
+
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
     summaries.set(worktree.id, {
       workspaceKind: 'folder-workspace',
@@ -121,5 +131,6 @@ export function buildRuntimeWorktreePsSummaries(args: {
       agents: []
     })
   }
+
   return summaries
 }

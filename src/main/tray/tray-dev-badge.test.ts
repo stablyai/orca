@@ -20,6 +20,7 @@ function fakeTemplate(width: number, height: number) {
     getSize: () => ({ width, height }),
     toBitmap: vi.fn((options?: { scaleFactor?: number }) => {
       const scale = options?.scaleFactor ?? 1
+
       return Buffer.alloc(width * scale * height * scale * 4, 0)
     })
   }
@@ -46,9 +47,11 @@ describe('stampTrayDevBadge', () => {
     let stamped = 0
     let maxX = 0
     let maxY = 0
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const o = (y * width + x) * 4
+
         if (bitmap[o + 3] === 0xff) {
           expect([bitmap[o], bitmap[o + 1], bitmap[o + 2]]).toEqual([0x00, 0x00, 0x00])
           stamped++
@@ -57,6 +60,7 @@ describe('stampTrayDevBadge', () => {
         }
       }
     }
+
     expect(stamped).toBeGreaterThan(0)
     // The badge occupies the lower-left area and never spills off canvas.
     expect(maxX).toBeLessThan(width)
@@ -66,11 +70,13 @@ describe('stampTrayDevBadge', () => {
   it('reads and scales the requested Retina representation', () => {
     const opaque = (buffer: Buffer): number => {
       let count = 0
+
       for (let o = 3; o < buffer.length; o += 4) {
         if (buffer[o] === 0xff) {
           count++
         }
       }
+
       return count
     }
 

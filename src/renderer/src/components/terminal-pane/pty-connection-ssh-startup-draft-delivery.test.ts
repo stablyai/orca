@@ -38,8 +38,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -60,6 +63,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -69,6 +73,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -89,6 +94,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -99,9 +105,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -111,9 +119,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -122,6 +132,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -153,6 +164,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-id')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-ssh-1'
     })
     transportFactoryQueue.push(transport)
@@ -188,6 +200,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-droid')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-ssh-droid'
     })
     transportFactoryQueue.push(transport)
@@ -233,6 +246,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-codex')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-codex'
     })
     transportFactoryQueue.push(transport)
@@ -245,6 +259,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'codex',
@@ -254,6 +269,7 @@ describe('connectPanePty', () => {
         draftPrompt: 'https://github.com/stablyai/orca/issues/42'
       }
     })
+
     vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -293,18 +309,21 @@ describe('connectPanePty', () => {
 
   it('keeps startup draft ownership while deferred connect waits through setup', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
       await import('@/lib/agent-startup-delayed-delivery')
 
     const deferredFrames: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       deferredFrames.push(callback)
+
       return 1
     })
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     const transport = createMockTransport('pty-codex')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-codex'
     })
     transportFactoryQueue.push(transport)
@@ -317,6 +336,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'wait-for-setup-then-codex',
@@ -334,16 +354,20 @@ describe('connectPanePty', () => {
       tabId: 'tab-1',
       launchToken: 'launch-token-setup'
     })
+
     expect(sidecarClaimed).toBe(false)
 
     let frameCount = 0
+
     while (deferredFrames.length > 0 && transport.connect.mock.calls.length === 0) {
       if (frameCount >= 20) {
         throw new Error('startup did not connect after the deferred setup handoff')
       }
+
       frameCount += 1
       deferredFrames.shift()?.(frameCount * 16)
     }
+
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
     capturedDataCallback.current?.('\x1b[?2004hWaiting for setup to finish...')
@@ -401,6 +425,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -410,10 +435,12 @@ describe('connectPanePty', () => {
       const capturedDataCallback: { current: ((data: string) => void) | null } = {
         current: null
       }
+
       const transport = createMockTransport('pty-id')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-ssh-1'
         }
       )
@@ -429,6 +456,7 @@ describe('connectPanePty', () => {
 
       const pane = createPane(1)
       const manager = createManager(1)
+
       const deps = createDeps({
         startup: {
           command: "codex 'linked issue context'",
@@ -440,9 +468,11 @@ describe('connectPanePty', () => {
       capturedDataCallback.current?.('fish prompt> ')
 
       expect(transport.sendInput).not.toHaveBeenCalled()
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
@@ -459,6 +489,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -468,10 +499,12 @@ describe('connectPanePty', () => {
       const capturedDataCallback: { current: ((data: string) => void) | null } = {
         current: null
       }
+
       const transport = createMockTransport('pty-id')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-ssh-1'
         }
       )
@@ -487,6 +520,7 @@ describe('connectPanePty', () => {
 
       const pane = createPane(1)
       const manager = createManager(1)
+
       const deps = createDeps({
         startup: {
           command: "codex 'linked issue context'",
@@ -502,6 +536,7 @@ describe('connectPanePty', () => {
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
@@ -518,6 +553,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -527,10 +563,12 @@ describe('connectPanePty', () => {
       const capturedDataCallback: { current: ((data: string) => void) | null } = {
         current: null
       }
+
       const transport = createMockTransport('pty-id')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-ssh-1'
         }
       )
@@ -545,18 +583,22 @@ describe('connectPanePty', () => {
 
       const pane = createPane(1)
       const manager = createManager(1)
+
       const deps = createDeps({
         startup: { command: "codex --prefill 'linked issue context'" }
       })
 
       connectPanePty(pane as never, manager as never, deps as never)
       capturedDataCallback.current?.('user@remote $ ')
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
+
       expect(transport.sendInput).not.toHaveBeenCalled()
 
       capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
@@ -575,6 +617,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -584,10 +627,12 @@ describe('connectPanePty', () => {
       const capturedDataCallback: { current: ((data: string) => void) | null } = {
         current: null
       }
+
       const transport = createMockTransport('pty-id')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-ssh-1'
         }
       )
@@ -603,6 +648,7 @@ describe('connectPanePty', () => {
       const wrapperCommand = 'bash -lc wait-for-setup-wrapper'
       const pane = createPane(1)
       const manager = createManager(1)
+
       const deps = createDeps({
         startup: {
           command: wrapperCommand,
@@ -614,12 +660,15 @@ describe('connectPanePty', () => {
 
       connectPanePty(pane as never, manager as never, deps as never)
       capturedDataCallback.current?.('user@remote $ ')
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
+
       expect(transport.sendInput).not.toHaveBeenCalled()
 
       capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }

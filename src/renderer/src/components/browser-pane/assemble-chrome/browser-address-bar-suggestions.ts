@@ -16,6 +16,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipbo
 import { translate } from '@/i18n/i18n'
 
 export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8
+
 export const BROWSER_ADDRESS_BAR_QUERY_MAX_BYTES = 2 * 1024
 
 export type BrowserAddressBarSuggestion = {
@@ -66,17 +67,22 @@ export function buildBrowserAddressBarSuggestions({
   if (isBrowserAddressBarQueryTooLarge(value)) {
     return []
   }
+
   const trimmed = value.trim()
+
   if (trimmed === '' || trimmed === 'about:blank' || trimmed.startsWith('data:')) {
     const recents: BrowserAddressBarSuggestion[] = [
       ...browserUrlHistory.map((entry) => ({ ...entry, subtitle: entry.url, isSearch: false })),
       ...workspaceDocHistory.map(toWorkspaceDocSuggestion)
     ]
+
     return recents
       .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
       .slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
   }
+
   const documentRows = workspaceDocHistory.map(toWorkspaceDocSuggestion)
+
   const documentEntries: BrowserHistoryEntry[] = documentRows.map((row) => ({
     url: row.url,
     normalizedUrl: row.url,
@@ -84,18 +90,23 @@ export function buildBrowserAddressBarSuggestions({
     lastVisitedAt: row.lastVisitedAt,
     visitCount: row.visitCount
   }))
+
   const rowByEntry = new Map<BrowserHistoryEntry, BrowserAddressBarSuggestion>()
+
   for (const entry of browserUrlHistory) {
     rowByEntry.set(entry, { ...entry, subtitle: entry.url, isSearch: false })
   }
+
   documentEntries.forEach((entry, index) => rowByEntry.set(entry, documentRows[index]))
   // Why prepare the caller's array as-is: it is the stable `browserUrlHistory`
   // identity, so the prepare cache hits instead of re-lowercasing every keystroke.
   const preparedHistory = prepareBrowserHistoryEntries(browserUrlHistory)
+
   const prepared =
     documentEntries.length === 0
       ? preparedHistory
       : [...preparedHistory, ...prepareBrowserHistoryEntries(documentEntries)]
+
   // Why url-tail is kept here: the address bar is a navigation surface, so a
   // path-only recall is still a destination — it just never outranks a real one.
   const historySuggestions: BrowserAddressBarSuggestion[] = matchBrowserHistory({
@@ -108,6 +119,7 @@ export function buildBrowserAddressBarSuggestions({
 
   const isQuery = looksLikeSearchQuery(trimmed)
   let topAction: BrowserAddressBarSuggestion | null
+
   if (isQuery) {
     topAction = {
       url: buildSearchUrl(trimmed, searchEngine, { kagiSessionLink }),
@@ -125,6 +137,7 @@ export function buildBrowserAddressBarSuggestions({
     const normalizedUrl = normalizeBrowserNavigationUrl(trimmed, searchEngine, {
       kagiSessionLink
     })
+
     // Why: rejected schemes must use the submit path's validation error;
     // a synthetic row would pass the raw string straight to webview.src.
     topAction = normalizedUrl
@@ -145,6 +158,7 @@ export function buildBrowserAddressBarSuggestions({
 
   // Why: the history row gives Enter the same target while showing real page metadata.
   const duplicateIdx = historySuggestions.findIndex((h) => h.url === topAction.url)
+
   if (duplicateIdx !== -1) {
     return historySuggestions.slice(0, MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS)
   }

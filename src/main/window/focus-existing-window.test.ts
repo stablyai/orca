@@ -19,6 +19,7 @@ function makeFakeWindow(options: FakeWindowOptions = {}): BrowserWindow & {
   }
 } {
   let alwaysOnTop = options.alwaysOnTop ?? false
+
   const calls = {
     restore: vi.fn(),
     show: vi.fn(),
@@ -28,6 +29,7 @@ function makeFakeWindow(options: FakeWindowOptions = {}): BrowserWindow & {
       alwaysOnTop = value
     })
   }
+
   return {
     isDestroyed: vi.fn(() => options.destroyed ?? false),
     isMinimized: vi.fn(() => options.minimized ?? false),
@@ -57,9 +59,11 @@ function makeTimer(): {
   scheduledMs: () => number[]
 } {
   const callbacks: { callback: () => void; ms: number }[] = []
+
   return {
     setTimeout: (callback, ms) => {
       callbacks.push({ callback, ms })
+
       return callbacks.length
     },
     run: (ms) => {
@@ -67,9 +71,11 @@ function makeTimer(): {
       // once, and a retry callback here can schedule a fresh same-ms entry
       // that a later run() call must not confuse with one already fired.
       const due = callbacks.filter((entry) => entry.ms === ms)
+
       for (const entry of due) {
         callbacks.splice(callbacks.indexOf(entry), 1)
       }
+
       for (const entry of due) {
         entry.callback()
       }
@@ -84,6 +90,7 @@ beforeEach(() => {
   vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
   vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
 })
+
 afterEach(() => vi.unstubAllEnvs())
 
 describe('focusExistingMainWindow', () => {
@@ -103,9 +110,11 @@ describe('focusExistingMainWindow', () => {
         setTimeout: timer.setTimeout
       })
       expect(app.focus).not.toHaveBeenCalled()
+
       for (const call of Object.values(window.calls)) {
         expect(call).not.toHaveBeenCalled()
       }
+
       expect(timer.scheduledMs()).toEqual([])
     }
   )
@@ -211,8 +220,10 @@ describe('focusExistingMainWindow', () => {
     const timer = makeTimer()
     const openedWindow = makeFakeWindow()
     let currentWindow: BrowserWindow | null = null
+
     const openWindow = vi.fn(() => {
       currentWindow = openedWindow
+
       return openedWindow
     })
 
@@ -236,11 +247,14 @@ describe('focusExistingMainWindow', () => {
     const openedWindow = makeFakeWindow()
     const warn = vi.fn()
     let attempts = 0
+
     const openWindow = vi.fn(() => {
       attempts += 1
+
       if (attempts < 2) {
         throw new Error('transient failure')
       }
+
       return openedWindow
     })
 
@@ -273,6 +287,7 @@ describe('focusExistingMainWindow', () => {
     const raceWindow = makeFakeWindow()
     const warn = vi.fn()
     let liveWindow: BrowserWindow | null = null
+
     const openWindow = vi.fn(() => {
       // First attempt throws, but a concurrent path lands a window before retry.
       liveWindow = raceWindow
@@ -303,11 +318,14 @@ describe('focusExistingMainWindow', () => {
     const openedWindow = makeFakeWindow()
     const warn = vi.fn()
     let attempts = 0
+
     const openWindow = vi.fn(() => {
       attempts += 1
+
       if (attempts < 2) {
         throw new Error('transient failure')
       }
+
       return openedWindow
     })
 
@@ -337,6 +355,7 @@ describe('focusExistingMainWindow', () => {
   it('gives up after exhausting reopen retries', () => {
     const timer = makeTimer()
     const warn = vi.fn()
+
     const openWindow = vi.fn(() => {
       throw new Error('persistent failure')
     })

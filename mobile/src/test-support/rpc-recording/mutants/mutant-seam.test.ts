@@ -5,10 +5,14 @@ import { RECORDER_DIRECTORY } from '../recorder-digest'
 import { RECORDING_DRIVERS } from '../recording-drivers'
 
 const root = resolve(import.meta.dirname, '../../../../..')
+
 const recorder = join(root, RECORDER_DIRECTORY)
+
 const mutants = join(root, RECORDER_DIRECTORY, 'mutants')
+
 /** The one file allowed to name this directory: it names it in order to exclude it. */
 const EXCLUDER = 'recorder-digest.ts'
+
 /** Both spellings of the path, so a constant is no more usable than the literal. */
 const NAMES = ['mutants', 'MUTANT_DIRECTORY']
 
@@ -20,6 +24,7 @@ function sources(directory: string): string[] {
 
 function resolved(from: string, specifier: string): string | undefined {
   const base = resolve(dirname(from), specifier)
+
   return ['', '.ts', '.tsx', '/index.ts']
     .map((suffix) => base + suffix)
     .find((candidate) => existsSync(candidate) && /\.tsx?$/.test(candidate))
@@ -42,19 +47,25 @@ function suite(file: string): boolean {
 function reachable(entries: readonly string[]): Set<string> {
   const seen = new Set<string>()
   const pending = [...entries]
+
   while (pending.length > 0) {
     const file = pending.pop()!
+
     if (seen.has(file)) {
       continue
     }
+
     seen.add(file)
+
     for (const match of readFileSync(file, 'utf8').matchAll(/(?:from|import\()\s*'(\.[^']*)'/g)) {
       const target = resolved(file, match[1]!)
+
       if (target) {
         pending.push(target)
       }
     }
   }
+
   return seen
 }
 
@@ -71,17 +82,21 @@ describe('the mutant seam', () => {
 
   it('is unreachable from every recording driver', () => {
     const graph = reachable(RECORDING_DRIVERS.map((driver) => join(recorder, driver)))
+
     const reached = [...graph]
       .filter((file) => file.startsWith(`${mutants}${sep}`))
       .map(relative)
       .sort()
+
     expect(reached).toEqual([])
+
     // A walk that resolved nothing would pass by reaching nothing, so name what it missed: every
     // recording file is reachable today, and one that stops being reachable is an orphan.
     const missed = outside
       .filter((file) => !suite(file) && !graph.has(file))
       .map(relative)
       .sort()
+
     expect(missed).toEqual([])
     expect(sources(mutants).length).toBeGreaterThan(1)
   })
@@ -98,6 +113,7 @@ describe('the mutant seam', () => {
           NAMES.some((name) => readFileSync(file, 'utf8').includes(name))
       )
       .map(relative)
+
     expect(naming).toEqual([])
   })
 })

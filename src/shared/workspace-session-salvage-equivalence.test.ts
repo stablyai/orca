@@ -14,7 +14,9 @@ type LegacyParse = typeof parseWorkspaceSessionSalvaging
  *  re-walked them, and no explicit '__proto__'/symbol-key handling of its own. */
 function legacySalvageModule(): Record<string, unknown> {
   const MAX_REPORTED_SALVAGE_PATHS = 100
+
   type DropCollector = { paths: string[]; count: number }
+
   let dropCollector: DropCollector | null = null
   const dropPath: (string | number)[] = []
 
@@ -28,8 +30,10 @@ function legacySalvageModule(): Record<string, unknown> {
     const collector: DropCollector = { paths: [], count: 0 }
     dropCollector = collector
     dropPath.length = 0
+
     try {
       const value = parse()
+
       return { value, droppedPaths: collector.paths, droppedCount: collector.count }
     } finally {
       dropCollector = previousCollector
@@ -41,7 +45,9 @@ function legacySalvageModule(): Record<string, unknown> {
     if (!dropCollector) {
       return
     }
+
     dropCollector.count += 1
+
     if (dropCollector.paths.length < MAX_REPORTED_SALVAGE_PATHS) {
       dropCollector.paths.push([...dropPath, segment].join('.'))
     }
@@ -49,6 +55,7 @@ function legacySalvageModule(): Record<string, unknown> {
 
   function inEntry<T>(segment: string | number, parse: () => T): T {
     dropPath.push(segment)
+
     try {
       return parse()
     } finally {
@@ -62,6 +69,7 @@ function legacySalvageModule(): Record<string, unknown> {
   ): { success: true; data: unknown } | { success: false } {
     try {
       const parsed = schema.safeParse(raw)
+
       return parsed.success ? { success: true, data: parsed.data } : { success: false }
     } catch {
       return { success: false }
@@ -72,10 +80,13 @@ function legacySalvageModule(): Record<string, unknown> {
     return z.array(z.unknown()).transform((values) =>
       values.flatMap((value, index) => {
         const parsed = inEntry(index, () => parseEntry(item, value))
+
         if (parsed.success) {
           return [parsed.data]
         }
+
         reportDrop(index)
+
         return []
       })
     ) as z.ZodType
@@ -88,16 +99,20 @@ function legacySalvageModule(): Record<string, unknown> {
   ): z.ZodType {
     return z.record(z.string(), z.unknown()).transform((entries) => {
       const kept: Record<string, unknown> = Object.create(null)
+
       for (const [entryKey, entryValue] of Object.entries(entries)) {
         const parsed = parseEntry(key, entryKey).success
           ? inEntry(entryKey, () => parseEntry(value, entryValue))
           : null
+
         if (parsed?.success && (!accepts || accepts(entryKey, parsed.data))) {
           kept[entryKey] = parsed.data
           continue
         }
+
         reportDrop(entryKey)
       }
+
       return { ...kept }
     }) as z.ZodType
   }
@@ -106,13 +121,18 @@ function legacySalvageModule(): Record<string, unknown> {
     return z.unknown().transform((raw, ctx) => {
       if (raw === undefined) {
         ctx.addIssue({ code: 'custom', message: 'required', input: raw })
+
         return z.NEVER
       }
+
       const parsed = inEntry(name, () => parseEntry(schema, raw))
+
       if (parsed.success) {
         return parsed.data
       }
+
       reportDrop(name)
+
       return fallback()
     })
   }
@@ -188,6 +208,7 @@ const GROUP_SPLIT = {
 function sparseTabs(): unknown[] {
   const tabs: unknown[] = [terminalTab('a')]
   tabs[2] = terminalTab('b')
+
   return tabs
 }
 
@@ -429,12 +450,14 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     vi.doMock('./zod-salvage', () => legacySalvageModule())
     vi.doMock('zod', async () => {
       const actual = await vi.importActual<typeof ZodModule>('zod')
+
       return {
         ...actual,
         z: {
           ...actual.z,
           discriminatedUnion: (_key: string, options: z.ZodType[]) => {
             legacyUnionsBuilt += 1
+
             return actual.z.union(options)
           }
         }
@@ -460,9 +483,11 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     const current = parseWorkspaceSessionSalvaging(payload)
 
     expect(current.ok).toBe(legacy.ok)
+
     if (!legacy.ok || !current.ok) {
       return
     }
+
     expect(current.value).toStrictEqual(legacy.value)
     expect(current.droppedCount).toBe(legacy.droppedCount)
     expect(current.droppedPaths.toSorted()).toEqual(legacy.droppedPaths.toSorted())
@@ -471,6 +496,7 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
   it('rejects the same payloads the legacy parser rejects', () => {
     const rejected = CORPUS.filter(([, payload]) => !legacyParse(payload).ok)
     expect(rejected.length).toBeGreaterThan(0)
+
     for (const [, payload] of rejected) {
       expect(parseWorkspaceSessionSalvaging(payload).ok).toBe(false)
     }
@@ -484,6 +510,7 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     const current = parseWorkspaceSessionSalvaging(payload)
     expect(current.ok).toBe(true)
     expect(legacy.ok).toBe(true)
+
     if (current.ok && legacy.ok) {
       expect(current.value.terminalPtyIncarnationsByPaneKey).toStrictEqual(
         legacy.value.terminalPtyIncarnationsByPaneKey
@@ -499,6 +526,7 @@ describe('salvage equivalence with the pre-optimization implementation', () => {
     const legacy = legacyParse(payload)
     const current = parseWorkspaceSessionSalvaging(payload)
     expect(current.ok && legacy.ok).toBe(true)
+
     if (current.ok && legacy.ok) {
       expect(current.value.terminalPtyIncarnationsByPaneKey).toStrictEqual(
         legacy.value.terminalPtyIncarnationsByPaneKey

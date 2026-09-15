@@ -27,9 +27,11 @@ export function useWorktreeDragRuntime(args: {
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
   const [nativeLineageDropTargetId, setNativeLineageDropTargetId] = useState<string | null>(null)
+
   const [worktreeDragState, setWorktreeDragState] = useState<WorktreeRowDragState>(
     WORKTREE_ROW_DRAG_INITIAL_STATE
   )
+
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const pointerAutoscrollFrameIdRef = useRef<number | null>(null)
   const pointerAutoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -43,6 +45,7 @@ export function useWorktreeDragRuntime(args: {
       window.cancelAnimationFrame(pointerAutoscrollFrameIdRef.current)
       pointerAutoscrollFrameIdRef.current = null
     }
+
     pointerAutoscrollLastFrameTimeRef.current = null
   }, [])
 
@@ -51,6 +54,7 @@ export function useWorktreeDragRuntime(args: {
       window.cancelAnimationFrame(nativeAutoscrollFrameIdRef.current)
       nativeAutoscrollFrameIdRef.current = null
     }
+
     nativeAutoscrollLastFrameTimeRef.current = null
     nativeLatestPointRef.current = null
   }, [])
@@ -59,12 +63,15 @@ export function useWorktreeDragRuntime(args: {
     const drag = worktreePointerDragRef.current
     cancelWorktreePointerAutoscroll()
     setNativeLineageDropTargetId(null)
+
     if (!drag) {
       return
     }
+
     if (drag.frameId !== null) {
       window.cancelAnimationFrame(drag.frameId)
     }
+
     drag.preview?.remove()
     worktreePointerDragRef.current = null
     setSidebarPointerDragDocumentStyles(false)

@@ -8,6 +8,7 @@ export function previewSourceFromRoute(
     if (!params.absolutePath || !params.grantId) {
       return null
     }
+
     return {
       source: 'terminalArtifact',
       worktreeId: params.worktreeId,
@@ -27,9 +28,11 @@ export function previewSourceFromRoute(
         : {})
     }
   }
+
   if (!params.relativePath) {
     return null
   }
+
   return { source: 'worktree', worktreeId: params.worktreeId, relativePath: params.relativePath }
 }
 
@@ -37,12 +40,16 @@ export function sourceKeyForPreview(source: MobileFilePreviewSource | null): str
   if (!source) {
     return null
   }
+
   if (source.source !== 'terminalArtifact') {
     return JSON.stringify(['worktree', source.worktreeId, source.relativePath])
   }
+
   const key = ['terminal', source.worktreeId, source.absolutePath, source.terminalHandle ?? '']
+
   if (source.nativeChatContext) {
     key.push(source.nativeChatContext.tabId, source.nativeChatContext.sessionId)
   }
+
   return JSON.stringify(key)
 }

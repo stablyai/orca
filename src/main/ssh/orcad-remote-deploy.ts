@@ -84,7 +84,9 @@ export type OrcadDeployResult =
   | { outcome: 'installed-not-activated'; fullVersion: string; code: string; reason: string }
 
 const DEFAULT_READINESS_TIMEOUT_MS = 90_000
+
 const READINESS_POLL_MS = 500
+
 const STOP_WAIT_SECONDS = 20
 
 function exec(
@@ -115,7 +117,9 @@ async function installOrcadBundle(
   ) {
     return
   }
+
   await acquireInstallLock(options.conn, remoteDir, options.host, { signal: options.signal })
+
   try {
     // Re-probe under the lock: a sibling deploy may have finished while we waited.
     if (
@@ -125,6 +129,7 @@ async function installOrcadBundle(
     ) {
       return
     }
+
     await uploadRelayDirectory(options.conn, options.localOrcadDir, remoteDir, options.host, {
       signal: options.signal
     })
@@ -150,18 +155,21 @@ async function captureSnapshot(
   takenAt: Date
 ): Promise<OrcadStateSnapshot | null> {
   const dirName = orcadSnapshotDirName(fullVersion, takenAt.getTime())
+
   const snapshotDir = joinRemotePath(
     options.host,
     baseDir(options),
     ORCAD_STATE_SNAPSHOT_DIR,
     dirName
   )
+
   const capture = parseOrcadSnapshotCapture(
     await exec(
       options,
       captureOrcadStateSnapshotCommand(options.host, options.userDataDir, snapshotDir)
     )
   )
+
   if (capture === 'failed') {
     throw new Error(
       `Could not snapshot ${options.userDataDir} before activating ${fullVersion}. Orca's ` +
@@ -169,11 +177,13 @@ async function captureSnapshot(
         'way back. Refusing to activate.'
     )
   }
+
   if (capture === 'empty') {
     // Nothing on the host to lose: a first deployment. Rollback will correctly report that
     // it has no snapshot, rather than restoring an archive of nothing over a populated root.
     return null
   }
+
   return {
     dirName,
     takenBeforeVersion: fullVersion,
@@ -190,16 +200,20 @@ async function launchAndAwaitReadiness(
   const deadline = Date.now() + (options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS)
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   let last = parseOrcadReadinessOutput('')
+
   while (Date.now() < deadline) {
     options.signal?.throwIfAborted()
     last = parseOrcadReadinessOutput(
       await exec(options, readOrcadReadinessCommand(options.host, spec.remoteInstallDir))
     )
+
     if (last.state !== 'pending') {
       return last
     }
+
     await sleep(READINESS_POLL_MS)
   }
+
   return last
 }
 
@@ -223,17 +237,21 @@ async function restoreIncumbent(
       stopOrcadCommand(options.host, candidateDir, { waitSeconds: STOP_WAIT_SECONDS })
     )
   )
+
   if (!orcadStopFreedTheHost(stopped)) {
     return `The candidate itself did not stop (${stopped}); the host may still be serving the rejected build.`
   }
+
   if (!record.active) {
     return 'No previous version was active, so this host is now serving nothing.'
   }
+
   const incumbentDir = computeRemoteInstallDir(
     ORCAD_INSTALL_MODEL,
     options.remoteHome,
     record.active
   )
+
   const parsed = await launchAndAwaitReadiness(options, {
     remoteInstallDir: incumbentDir,
     nodePath: options.nodePath,
@@ -242,6 +260,7 @@ async function restoreIncumbent(
     bindHost: options.bindHost,
     port: options.port
   })
+
   return parsed.state === 'ready'
     ? `orcad ${record.active} was restarted and is serving again.`
     : `orcad ${record.active} was relaunched but has not published readiness; this host may be down.`
@@ -268,9 +287,11 @@ export async function deployOrcad(options: OrcadDeployOptions): Promise<OrcadDep
     census: options.census,
     ...(options.force !== undefined ? { force: options.force } : {})
   })
+
   if (plan.action === 'noop') {
     return { outcome: 'already-active', fullVersion }
   }
+
   if (plan.action === 'defer') {
     return {
       outcome: 'installed-not-activated',
@@ -290,6 +311,7 @@ export async function deployOrcad(options: OrcadDeployOptions): Promise<OrcadDep
       options.remoteHome,
       record.active
     )
+
     const stopped = parseOrcadStopOutcome(
       await exec(
         options,
@@ -298,6 +320,7 @@ export async function deployOrcad(options: OrcadDeployOptions): Promise<OrcadDep
         })
       )
     )
+
     if (!orcadStopFreedTheHost(stopped)) {
       return {
         outcome: 'installed-not-activated',
@@ -320,12 +343,15 @@ export async function deployOrcad(options: OrcadDeployOptions): Promise<OrcadDep
     bindHost: options.bindHost,
     port: options.port
   })
+
   const verdict = evaluateOrcadActivation(parsed.state === 'ready' ? parsed.readiness : null, {
     buildHash: computeLocalOrcadBuildHash(options.localOrcadDir),
     fullVersion
   })
+
   if (verdict.decision === 'reject') {
     const restored = await restoreIncumbent(options, record, remoteDir)
+
     return {
       outcome: 'installed-not-activated',
       fullVersion,
@@ -343,5 +369,6 @@ export async function deployOrcad(options: OrcadDeployOptions): Promise<OrcadDep
     serializeOrcadActivationRecord(withActivatedVersion(record, fullVersion, snapshot, now())),
     { signal: options.signal }
   )
+
   return { outcome: 'installed-and-activated', fullVersion, verdict }
 }

@@ -12,14 +12,18 @@ import {
 type ProcessRow = { pid: number; ppid: number; command: string; foreground: boolean }
 
 const STRUCTURED_TUI_PROCESS_WAIT_MS = 5_000
+
 const STRUCTURED_TUI_PROCESS_POLL_MS = 50
+
 // Why: every poll forks a whole-machine `ps` (~0.065 CPU-s at 1,460 processes),
 // and the 5s ceiling is only reached when the child never appears at all — so the
 // tight interval buys nothing there. Hold it for the window in which a spawning
 // child plausibly lands (detection latency byte-identical), then widen. Past the
 // window the added latency is bounded by one interval.
 const STRUCTURED_TUI_PROCESS_FAST_POLL_WINDOW_MS = 1_000
+
 const STRUCTURED_TUI_PROCESS_MAX_POLL_MS = 500
+
 // Why a floor and not just the deadline: the first capture races the spawn it is looking for,
 // so a null from it is absence of the child's arrival, not evidence the child is missing. The
 // budget above assumes a look is nearly free, but one whole-machine `ps` measured 6.2s on a
@@ -30,35 +34,45 @@ const STRUCTURED_TUI_PROCESS_MIN_CAPTURES = 2
 function descendants(rows: ProcessRow[], rootPid: number): (ProcessRow & { depth: number })[] {
   const children = new Map<number, ProcessRow[]>()
   const rowByPid = new Map<number, ProcessRow>()
+
   for (const row of rows) {
     const bucket = children.get(row.ppid)
+
     if (bucket) {
       bucket.push(row)
     } else {
       children.set(row.ppid, [row])
     }
+
     // Array#find below was first-match-wins for duplicate PIDs; retain that contract in the index.
     if (!rowByPid.has(row.pid)) {
       rowByPid.set(row.pid, row)
     }
   }
+
   const found: (ProcessRow & { depth: number })[] = []
   const pending = [{ pid: rootPid, depth: 0 }]
   const seen = new Set<number>()
+
   while (pending.length > 0) {
     const current = pending.pop()!
+
     if (seen.has(current.pid)) {
       continue
     }
+
     seen.add(current.pid)
     const row = rowByPid.get(current.pid)
+
     if (row) {
       found.push({ ...row, depth: current.depth })
     }
+
     for (const child of children.get(current.pid) ?? []) {
       pending.push({ pid: child.pid, depth: current.depth + 1 })
     }
   }
+
   return found
 }
 
@@ -69,17 +83,22 @@ function excludedProcessTreePids(
   if (!rootPids || rootPids.size === 0) {
     return new Set()
   }
+
   const excluded = new Set(rootPids)
   const children = new Map<number, number[]>()
+
   for (const row of rows) {
     const bucket = children.get(row.ppid)
+
     if (bucket) {
       bucket.push(row.pid)
     } else {
       children.set(row.ppid, [row.pid])
     }
   }
+
   const pending = [...rootPids]
+
   while (pending.length > 0) {
     for (const childPid of children.get(pending.pop()!) ?? []) {
       if (!excluded.has(childPid)) {
@@ -88,6 +107,7 @@ function excludedProcessTreePids(
       }
     }
   }
+
   return excluded
 }
 
@@ -100,21 +120,27 @@ async function resolveExcludedProcessTreePids(
   if (!identities || identities.length === 0) {
     return new Set()
   }
+
   const roots = new Set<number>()
   const pids = new Set<number>()
+
   for (const row of rows) {
     pids.add(row.pid)
   }
+
   for (const identity of identities) {
     if (!pids.has(identity.pid)) {
       continue
     }
+
     // Unavailable start time cannot prove PID reuse, so retain the conservative exclusion.
     if (identity.processStartTimeMs === null) {
       roots.add(identity.pid)
       continue
     }
+
     const observed = await readStartTime(identity.pid, platform)
+
     if (
       observed === null ||
       Math.abs(observed - identity.processStartTimeMs) <= PROCESS_START_TIME_TOLERANCE_MS
@@ -122,6 +148,7 @@ async function resolveExcludedProcessTreePids(
       roots.add(identity.pid)
     }
   }
+
   return excludedProcessTreePids(rows, roots)
 }
 
@@ -138,12 +165,15 @@ export function resolveStructuredTuiChildPid(
       recognizeAgentProcessFromCommandLine(row.command)?.agent === agent &&
       (processCommandMatches?.(row.command) ?? true)
   )
+
   const foreground = candidates.filter((row) => row.foreground)
   const eligible = foreground.length > 0 ? foreground : candidates
   eligible.sort((left, right) => left.depth - right.depth || left.pid - right.pid)
+
   if (eligible.length === 0 || eligible[1]?.depth === eligible[0]?.depth) {
     return null
   }
+
   return eligible[0]!.pid
 }
 
@@ -193,23 +223,28 @@ export async function readStructuredTuiProcessIdentity(input: {
             foreground: false
           }))
         : posixRows(await (input.readPosixRows ?? getFreshProcessTableSnapshot)())
+
     captures += 1
     let rootPresent = false
+
     for (const row of rows) {
       if (row.pid === input.rootPid) {
         rootPresent = true
         break
       }
     }
+
     if (!rootPresent) {
       throw new Error('The terminal root process was not present in the process snapshot.')
     }
+
     const excludedPids = await resolveExcludedProcessTreePids(
       rows,
       input.excludedProcessTreeRootIdentities,
       platform,
       input.readStartTime ?? readProcessStartTimeMs
     )
+
     const pid = resolveStructuredTuiChildPid(
       rows,
       input.rootPid,
@@ -217,6 +252,7 @@ export async function readStructuredTuiProcessIdentity(input: {
       input.processCommandMatches,
       excludedPids
     )
+
     if (pid !== null) {
       return {
         hostId: input.hostId,
@@ -225,12 +261,16 @@ export async function readStructuredTuiProcessIdentity(input: {
         spawnToken: input.spawnToken
       }
     }
+
     const remainingMs = deadline - now()
+
     if (remainingMs <= 0 && captures >= STRUCTURED_TUI_PROCESS_MIN_CAPTURES) {
       const label = input.agent === 'codex' ? 'Codex' : 'Claude'
       throw new Error(`The resumed terminal did not expose one exact ${label} child process.`)
     }
+
     await sleep(Math.max(0, Math.min(pollDelayMs, remainingMs)))
+
     if (now() - startedAtMs >= STRUCTURED_TUI_PROCESS_FAST_POLL_WINDOW_MS) {
       // Never below the caller's interval, so an explicitly slow poll stays slow.
       pollDelayMs = Math.max(

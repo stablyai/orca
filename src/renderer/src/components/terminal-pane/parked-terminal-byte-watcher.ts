@@ -100,15 +100,20 @@ export function startParkedTerminalByteWatcher(
     if (bellNotificationTimer !== null) {
       return
     }
+
     bellNotificationTimer = setTimeout(() => {
       bellNotificationTimer = null
+
       if (disposed) {
         pendingBellNotification = false
+
         return
       }
+
       if (hasPendingAgentTaskCompleteNotification()) {
         return
       }
+
       pendingBellNotification = false
       dispatchTerminalNotification(worktreeId, { source: 'terminal-bell', paneKey })
     }, PARKED_NOTIFICATION_GRACE_MS)
@@ -120,6 +125,7 @@ export function startParkedTerminalByteWatcher(
       const state = useAppStore.getState()
       wroteRuntimeTitleSlot = true
       state.setRuntimePaneTitle(tabId, paneId, title)
+
       if (drivesTabTitle) {
         state.updateTabTitle(tabId, title)
       }
@@ -128,11 +134,14 @@ export function startParkedTerminalByteWatcher(
       const state = useAppStore.getState()
       state.markWorktreeUnread(worktreeId)
       state.markTerminalTabUnread(tabId, 'terminal-bell')
+
       if (state.settings?.experimentalTerminalAttention === true) {
         state.markTerminalPaneUnread(paneKey, 'terminal-bell')
       }
+
       // Why: agents emit BEL in the same burst as working→idle, so delay only the OS notification to let the richer completion notification win.
       pendingBellNotification = true
+
       if (!hasPendingAgentTaskCompleteNotification()) {
         scheduleTerminalBellNotification()
       }
@@ -141,9 +150,12 @@ export function startParkedTerminalByteWatcher(
       // Why: stale-derived idles (main's 3s timer, not observed bytes) clear session state but must not schedule a completion a paused agent didn't earn.
       if (meta?.staleWorkingTitleClear) {
         useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+
         return
       }
+
       const state = useAppStore.getState()
+
       // Why: null settings means "not hydrated yet"; a spurious timestamp is harmless while a dropped one loses the timer.
       if (
         isClaudeAgent(title) &&
@@ -151,15 +163,19 @@ export function startParkedTerminalByteWatcher(
       ) {
         state.setCacheTimerStartedAt(paneKey, Date.now())
       }
+
       if (!isAgentTaskCompleteTrackingEnabled(state)) {
         return
       }
+
       clearAgentTaskCompleteTimer()
       agentTaskCompleteTimer = setTimeout(() => {
         agentTaskCompleteTimer = null
+
         if (disposed) {
           return
         }
+
         // Why: completion supersedes a concurrent BEL so each burst yields exactly one OS notification (live-path parity).
         pendingBellNotification = false
         clearBellNotificationTimer()
@@ -174,6 +190,7 @@ export function startParkedTerminalByteWatcher(
       // Why: a new API call refreshes the prompt-cache TTL, so clear the running countdown; it restarts when the agent next becomes idle.
       useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
       clearAgentTaskCompleteTimer()
+
       if (pendingBellNotification) {
         scheduleTerminalBellNotification()
       }
@@ -201,7 +218,9 @@ export function startParkedTerminalByteWatcher(
       settings: useAppStore.getState().settings,
       runtimeEnvironmentId: null
     })
+
   const factSideEffectAuthority = mainSideEffectAuthority || remoteRuntimePty
+
   const hiddenDeliveryGateActive =
     mainSideEffectAuthority &&
     isRendererHiddenPtyDeliveryGateEnabled(useAppStore.getState().settings)
@@ -214,15 +233,18 @@ export function startParkedTerminalByteWatcher(
         ...(options.initialTitle !== undefined ? { initialAgentTitle: options.initialTitle } : {}),
         ...sideEffectCallbacks
       })
+
   // Why (byte-parser mode only): under main authority, byte-scanning PR links too would observe every link twice (facts already carry them).
   const observeTerminalGitHubPRLink = factSideEffectAuthority
     ? null
     : createTerminalGitHubPRLinkDetector()
+
   // Why (byte-parser mode only): mode parity — main's tracker emits these as facts; the byte
   // path scans the same shared parsers the mounted kill-switch-off pane uses.
   const commandFinishedScanner = factSideEffectAuthority
     ? null
     : createOsc133CommandFinishedScanner(commandStatusPolicy.onCommandFinished)
+
   // Why the seed: this detector is recreated per park cycle with no startup command
   // to fast-arm it, and a Command Code TUI parked mid-turn is long past its banner —
   // unseeded it would never scrape the turn's return to the idle composer.
@@ -233,6 +255,7 @@ export function startParkedTerminalByteWatcher(
         onWorking: commandStatusPolicy.onCommandCodeWorking,
         onDone: commandStatusPolicy.onCommandCodeDone
       })
+
   const unregisterFactConsumer = factSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
         ptyId,
@@ -259,15 +282,18 @@ export function startParkedTerminalByteWatcher(
     if (!processor) {
       return
     }
+
     processor.processData(data, {})
     commandFinishedScanner?.scan(data)
     commandCodeOutputStatusDetector?.observe(data)
+
     if (observeTerminalGitHubPRLink) {
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
       }
     }
   }
+
   // Why: paired hosts forward derived facts over the one environment event
   // stream; parked PTYs never consume terminal multiplex slots or raw bytes.
   const unsubscribeByteParsers =
@@ -277,6 +303,7 @@ export function startParkedTerminalByteWatcher(
     if (disposed) {
       return
     }
+
     disposed = true
     // Why first: each park/reveal cycle owns a distinct processor gauge, and the store/IPC
     // teardown below must not be able to throw its way past the census drop.
@@ -292,15 +319,19 @@ export function startParkedTerminalByteWatcher(
     clearBellNotificationTimer()
     clearAgentTaskCompleteTimer()
     pendingBellNotification = false
+
     // Why: store merge never deletes title slots, so a watcher-written entry would strand after reveal and pin worktree status 'working'.
     if (wroteRuntimeTitleSlot) {
       wroteRuntimeTitleSlot = false
       useAppStore.getState().clearRuntimePaneTitle(tabId, paneId)
     }
+
     if (parkedWatcherDisposersByPtyId.get(ptyId) === dispose) {
       parkedWatcherDisposersByPtyId.delete(ptyId)
     }
   }
+
   parkedWatcherDisposersByPtyId.set(ptyId, dispose)
+
   return dispose
 }

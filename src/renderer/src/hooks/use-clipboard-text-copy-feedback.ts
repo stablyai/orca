@@ -24,6 +24,7 @@ export function useClipboardTextCopyFeedback(text: string): {
   const isMountedRef = useRef(true)
   const resetTimerRef = useRef<number | null>(null)
   const canCopy = text.trim().length > 0
+
   const status: ClipboardTextCopyStatus =
     feedback != null && feedback.text === text ? feedback.status : 'idle'
 
@@ -36,6 +37,7 @@ export function useClipboardTextCopyFeedback(text: string): {
 
   useEffect(() => {
     isMountedRef.current = true
+
     return () => {
       isMountedRef.current = false
       clearResetTimer()
@@ -51,6 +53,7 @@ export function useClipboardTextCopyFeedback(text: string): {
     clearResetTimer()
     resetTimerRef.current = window.setTimeout(() => {
       resetTimerRef.current = null
+
       if (isMountedRef.current) {
         setFeedback(null)
       }
@@ -61,20 +64,26 @@ export function useClipboardTextCopyFeedback(text: string): {
     if (!canCopy) {
       return false
     }
+
     try {
       await window.api.ui.writeClipboardText(text)
+
       if (!isMountedRef.current) {
         return true
       }
+
       setFeedback({ text, status: 'copied' })
       scheduleReset()
+
       return true
     } catch {
       if (!isMountedRef.current) {
         return false
       }
+
       setFeedback({ text, status: 'failed' })
       scheduleReset()
+
       return false
     }
   }, [canCopy, scheduleReset, text])

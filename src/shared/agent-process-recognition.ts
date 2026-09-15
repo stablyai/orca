@@ -8,7 +8,9 @@ import { getFirstCommandToken } from './command-token-scanner'
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
 const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
+
 const INTERPRETER_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
+
 const PYTHON_SCRIPT_EXTENSION_RE = /\.(?:py|pyw)$/i
 
 function normalizeProcessName(
@@ -18,12 +20,15 @@ function normalizeProcessName(
   if (!processName) {
     return ''
   }
+
   const unquoted = processName.trim().replace(/^["']|["']$/g, '')
   const basename = unquoted.split(/[\\/]/).pop() ?? unquoted
   const withoutProcessExtension = basename.toLowerCase().replace(PROCESS_EXTENSION_RE, '')
+
   if (options.stripInterpreterScriptExtension === true) {
     return withoutProcessExtension.replace(INTERPRETER_SCRIPT_EXTENSION_RE, '')
   }
+
   return withoutProcessExtension
 }
 
@@ -40,7 +45,9 @@ const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
 ])
 
 const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
+
 const PYTHON_PROCESS_RE = /^python(?:\d+(?:\.\d+)*)?$/
+
 const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
   '-r',
   '--require',
@@ -48,14 +55,18 @@ const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
   '--loader',
   '--experimental-loader'
 ])
+
 const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
+
 const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
   gemini: ['node_modules/@google/gemini-cli/']
 }
+
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
+
 const AGENT_TYPE_IDS = new Set<TuiAgent>()
 
 for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
@@ -63,12 +74,14 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   (typeof TUI_AGENT_CONFIG)[TuiAgent]
 ][]) {
   AGENT_TYPE_IDS.add(agent)
+
   for (const candidate of [
     config.expectedProcess,
     ...getTuiAgentDetectCommands(config),
     getFirstCommandToken(config.launchCmd)
   ]) {
     const normalized = normalizeProcessName(candidate)
+
     if (normalized) {
       // Why: claude-agent-teams is an Orca wrapper whose child process is the
       // real `claude` binary. Do not let wrapper configs overwrite canonical
@@ -82,22 +95,27 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
 
 function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   const exact = PROCESS_TO_AGENT.get(normalized)
+
   if (exact) {
     return exact
   }
+
   // Why: node-pty can report Codex's packaged platform binary
   // (for example codex-aarch64-ap) instead of the launch command.
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
+
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
+
   return undefined
 }
 
 function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess | null {
   const agent = agentForNormalizedProcess(normalized)
+
   return agent ? { agent, processName: normalized } : null
 }
 
@@ -106,40 +124,51 @@ function tokenizeCommandLine(commandLine: string): string[] {
   let current = ''
   let quote: '"' | "'" | null = null
   let escaped = false
+
   for (let index = 0; index < commandLine.length; index += 1) {
     const char = commandLine[index]
+
     if (escaped) {
       current += char
       escaped = false
       continue
     }
+
     if (char === '\\' && quote !== "'") {
       const next = commandLine[index + 1]
+
       if (next && (/\s/.test(next) || next === '"' || next === "'" || next === '\\')) {
         escaped = true
         continue
       }
     }
+
     if ((char === '"' || char === "'") && quote === null) {
       quote = char
       continue
     }
+
     if (quote === char) {
       quote = null
       continue
     }
+
     if (/\s/.test(char) && quote === null) {
       if (current) {
         tokens.push(current)
         current = ''
       }
+
       continue
     }
+
     current += char
   }
+
   if (current) {
     tokens.push(current)
   }
+
   return tokens
 }
 
@@ -147,9 +176,11 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
   if (index === 0) {
     return true
   }
+
   if (!isInterpreterProcessName(firstNormalized)) {
     return false
   }
+
   // Why: only inspect interpreter script paths. Prompt text can mention other
   // agents ("compare opencode vs orca"), and treating every argv token as an
   // executable would reintroduce the substring-style false identity class that
@@ -169,28 +200,37 @@ function findInterpreterEntrypointToken(tokens: string[], firstNormalized: strin
   if (!isInterpreterProcessName(firstNormalized)) {
     return null
   }
+
   for (let index = 1; index < tokens.length; index += 1) {
     const token = tokens[index]
+
     if (token === '--') {
       continue
     }
+
     if (isPythonProcessName(firstNormalized) && token === '-m') {
       return tokens[index + 1] ?? null
     }
+
     if (token.startsWith('-')) {
       const name = optionName(token)
+
       if (INTERPRETER_OPTIONS_WITH_INLINE_SOURCE.has(name)) {
         return null
       }
+
       if (INTERPRETER_OPTIONS_WITH_VALUE.has(name) && name === token) {
         index += 1
       }
+
       continue
     }
+
     if (tokenLooksExecutable(token, index, firstNormalized)) {
       return token
     }
   }
+
   return null
 }
 
@@ -204,19 +244,24 @@ function comparablePath(token: string): string {
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
   const path = comparablePath(token)
+
   for (const identity of EXACT_NODE_ENTRYPOINT_IDENTITIES) {
     if (identity.pattern.test(path)) {
       return { agent: identity.agent, processName: identity.processName }
     }
   }
+
   const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
   const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]
+
   if (!markers) {
     return null
   }
+
   if (!markers.some((marker) => path.includes(marker))) {
     return null
   }
+
   return recognizedAgentForProcess(normalized)
 }
 
@@ -226,20 +271,26 @@ function recognizePythonModule(
   if (!moduleName || moduleName.startsWith('-')) {
     return null
   }
+
   const normalized = moduleName.split('.', 1)[0]?.toLowerCase() ?? ''
+
   return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess | null {
   const path = comparablePath(token)
+
   if (!PYTHON_SCRIPT_EXTENSION_RE.test(path)) {
     return null
   }
+
   if (!PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES.some((marker) => path.includes(marker))) {
     return null
   }
+
   const basename = path.split('/').pop() ?? ''
   const normalized = basename.replace(PYTHON_SCRIPT_EXTENSION_RE, '')
+
   return recognizedAgentForProcess(normalized)
 }
 
@@ -248,9 +299,11 @@ function recognizePythonEntrypoint(
   entrypoint: string
 ): RecognizedAgentProcess | null {
   const moduleFlagIndex = tokens.indexOf('-m')
+
   if (moduleFlagIndex > 0) {
     return recognizePythonModule(tokens[moduleFlagIndex + 1])
   }
+
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
@@ -260,9 +313,11 @@ export function isExpectedAgentProcess(
 ): boolean {
   const normalizedProcess = normalizeProcessName(processName)
   const normalizedExpected = normalizeProcessName(expectedProcess)
+
   if (!normalizedProcess || !normalizedExpected) {
     return false
   }
+
   return (
     normalizedProcess === normalizedExpected ||
     normalizedProcess.startsWith(`${normalizedExpected}.`)
@@ -273,6 +328,7 @@ export function recognizeAgentProcess(
   processName: string | null | undefined
 ): RecognizedAgentProcess | null {
   const normalized = normalizeProcessName(processName)
+
   return recognizedAgentForProcess(normalized)
 }
 
@@ -286,35 +342,46 @@ export function recognizeAgentProcessFromCommandLine(
   if (!commandLine) {
     return null
   }
+
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizedAgentForProcess(firstNormalized)
+
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null
   }
+
   const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
+
   if (directRecognition) {
     return directRecognition
   }
+
   const entrypoint = findInterpreterEntrypointToken(tokens, firstNormalized)
+
   if (!entrypoint) {
     return null
   }
+
   const viaEntrypoint = isPythonProcessName(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
+
   if (
     viaEntrypoint?.agent === 'claude-agent-teams' &&
     tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'
   ) {
     return null
   }
+
   return keep ? viaEntrypoint : filterHeadlessOneShotAgentCommand(viaEntrypoint, tokens)
 }
+
 export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
   const normalized = normalizeProcessName(processName)
+
   return (
     FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
   )
@@ -324,6 +391,7 @@ export function isRecognizedAgentType(agentType: AgentType | null | undefined): 
   if (typeof agentType !== 'string') {
     return false
   }
+
   return (
     AGENT_TYPE_IDS.has(agentType as TuiAgent) ||
     agentForNormalizedProcess(normalizeProcessName(agentType)) !== undefined

@@ -19,12 +19,14 @@ describe('PtyProcessListAdmission', () => {
 
   it('preserves and clones optional foreground evidence', () => {
     const admission = new PtyProcessListAdmission()
+
     const admitted = admission.admit({
       id: 'pty-1',
       cwd: '/repo',
       title: 'shell',
       foregroundProcessEvidence: evidence
     })
+
     expect(admitted.foregroundProcessEvidence).toEqual(evidence)
     expect(admitted.foregroundProcessEvidence).not.toBe(evidence)
   })
@@ -55,9 +57,11 @@ describe('PtyProcessListAdmission', () => {
 
   it('rejects aggregate entry and byte amplification', () => {
     const entryAdmission = new PtyProcessListAdmission()
+
     for (let index = 0; index < MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES; index += 1) {
       entryAdmission.admit({ id: `pty-${index}`, cwd: '', title: 'shell' })
     }
+
     expect(() => entryAdmission.admit({ id: 'one-more', cwd: '', title: 'shell' })).toThrow(
       'pty_process_list_capacity'
     )
@@ -90,6 +94,7 @@ describe('visitPtyProcessListingsInBatches', () => {
     let active = 0
     let peak = 0
     const finishes: (() => void)[] = []
+
     const load = vi.fn(
       async (source: number) =>
         await new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
@@ -101,6 +106,7 @@ describe('visitPtyProcessListingsInBatches', () => {
           })
         })
     )
+
     const visiting = visitPtyProcessListingsInBatches(
       Array.from({ length: PTY_PROCESS_LIST_PROVIDER_BATCH_SIZE + 1 }, (_, index) => index),
       load,

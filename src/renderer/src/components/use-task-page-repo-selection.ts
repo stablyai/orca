@@ -29,6 +29,7 @@ import type { TaskProvider } from '../../../shared/task-providers'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
+
 export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   const {
     settings,
@@ -41,25 +42,33 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     preflightStatusCurrent,
     linearConnected
   } = model
+
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
   // Why: initial selection precedence — explicit preselection > persisted defaultRepoSelection > all eligible; preselection wins so "open tasks for this repo" lands single-repo.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
     const preferred = pageData.preselectedRepoId
+
     if (preferred && eligibleRepos.some((repo) => repo.id === preferred)) {
       return new Set([preferred])
     }
+
     const persisted = settings?.defaultRepoSelection
+
     if (Array.isArray(persisted)) {
       return normalizeTaskRepoSelection(eligibleRepos, new Set(persisted))
     }
+
     return getDefaultTaskRepoSelection(eligibleRepos)
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
+
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
+
   const taskPickerGroups = useMemo(
     () => getTaskProjectPickerGroups(eligibleRepos, repoSelection),
     [eligibleRepos, repoSelection]
   )
+
   const taskPickerRepos = useMemo(
     () => taskPickerGroups.map((group) => group.repo),
     [taskPickerGroups]
@@ -73,26 +82,34 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
     const wasAll = repoSelection.size === prevCount && prevCount > 0
     const pruned = new Set<string>()
+
     for (const id of repoSelection) {
       if (eligibleIds.has(id)) {
         pruned.add(id)
       }
     }
+
     if (wasAll) {
       const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
+
       if (!areStringSetsEqual(allNow, repoSelection)) {
         setRepoSelection(allNow)
       }
+
       return
     }
+
     if (pruned.size === 0 && eligibleIds.size === 0) {
       return
     }
+
     const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
+
     if (!areStringSetsEqual(normalized, repoSelection)) {
       setRepoSelection(normalized)
     }
   }, [eligibleRepos, repoSelection, taskPickerRepos])
+
   const selectedRepos = useMemo(
     () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
     [eligibleRepos, repoSelection]
@@ -113,27 +130,35 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
   const linearWorkspaces = linearStatus.workspaces ?? []
+
   const selectedLinearWorkspaceId =
     linearStatus.selectedWorkspaceId ??
     linearStatus.activeWorkspaceId ??
     linearWorkspaces[0]?.id ??
     null
+
   const selectedLinearWorkspace =
     selectedLinearWorkspaceId && selectedLinearWorkspaceId !== 'all'
       ? (linearWorkspaces.find((workspace) => workspace.id === selectedLinearWorkspaceId) ?? null)
       : null
+
   const jiraSites = useMemo(() => jiraStatus.sites ?? [], [jiraStatus.sites])
+
   const selectedJiraSiteId =
     jiraStatus.selectedSiteId ?? jiraStatus.activeSiteId ?? jiraSites[0]?.id ?? null
+
   const selectedJiraSite =
     selectedJiraSiteId && selectedJiraSiteId !== 'all'
       ? (jiraSites.find((site) => site.id === selectedJiraSiteId) ?? null)
       : null
+
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
   )
+
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+
   const visibleTaskProviders = useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
@@ -152,6 +177,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
       preflightStatus?.glab?.installed
     ]
   )
+
   const sourceOptions = getSourceOptions()
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
@@ -162,22 +188,27 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   const linearGroupOptions = getLinearGroupOptions()
   const linearOrderOptions = getLinearOrderOptions()
   const linearDisplayPropertyOptions = getLinearDisplayProperties()
+
   const visibleSourceOptions = useMemo(
     () => sourceOptions.filter((source) => visibleTaskProviders.includes(source.id)),
     [sourceOptions, visibleTaskProviders]
   )
+
   const hideTaskSource = useCallback(
     (provider: TaskProvider, label: string) => {
       const visibleWithoutProvider = preferredVisibleTaskProviders.filter(
         (visibleProvider) => visibleProvider !== provider
       )
+
       // Why: an empty provider list normalizes to "all providers", so keep one other source visible or hiding this one has no effect.
       const nextVisibleTaskProviders: TaskProvider[] =
         visibleWithoutProvider.length > 0 ? visibleWithoutProvider : ['github']
+
       const nextDefaultTaskSource = resolveVisibleTaskProvider(
         defaultTaskSource,
         nextVisibleTaskProviders
       )
+
       void updateSettings({
         visibleTaskProviders: nextVisibleTaskProviders,
         defaultTaskSource: nextDefaultTaskSource
@@ -226,6 +257,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     visibleSourceOptions: typeof visibleSourceOptions
     hideTaskSource: typeof hideTaskSource
   }
+
   nextModel.eligibleRepos = eligibleRepos
   nextModel.resolvedInitialSelection = resolvedInitialSelection
   nextModel.repoSelection = repoSelection
@@ -257,6 +289,8 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   nextModel.linearDisplayPropertyOptions = linearDisplayPropertyOptions
   nextModel.visibleSourceOptions = visibleSourceOptions
   nextModel.hideTaskSource = hideTaskSource
+
   return nextModel
 }
+
 export type TaskPageRepoSelectionModel = ReturnType<typeof useTaskPageRepoSelection>

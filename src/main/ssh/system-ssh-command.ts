@@ -34,6 +34,7 @@ export function spawnSystemSsh(
   options?: SystemSshBuildArgsOptions
 ): SystemSshProcess {
   const sshPath = findSystemSsh()
+
   if (!sshPath) {
     throw new Error(
       'No system ssh binary found. Install OpenSSH to use FIDO2 keys or ControlMaster.'
@@ -41,6 +42,7 @@ export function spawnSystemSsh(
   }
 
   const args = buildSshArgs(target, options)
+
   const proc = spawn(sshPath, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
@@ -55,6 +57,7 @@ export function spawnSystemSshCommand(
   options?: SystemSshCommandOptions
 ): SystemSshCommandChannel {
   const sshPath = findSystemSsh()
+
   if (!sshPath) {
     throw new Error(
       'No system ssh binary found. Install OpenSSH to use ProxyUseFdpass, FIDO2 keys, or ControlMaster.'
@@ -63,10 +66,12 @@ export function spawnSystemSshCommand(
 
   const remoteCommand =
     options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+
   const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
+
   return wrapCommandProcess(proc)
 }
 
@@ -98,6 +103,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
       proc.stdin!.write(chunk, encoding, cb)
     }
   })
+
   const channel = duplex as unknown as SystemSshCommandChannel
 
   const mutableChannel = channel as unknown as {
@@ -107,11 +113,13 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     _closeRequested?: boolean
     close: () => void
   }
+
   mutableChannel.stdin = proc.stdin!
   mutableChannel.stderr = proc.stderr!
   mutableChannel._process = proc
   mutableChannel.close = () => {
     mutableChannel._closeRequested = true
+
     try {
       proc.kill('SIGTERM')
     } catch {
@@ -128,10 +136,12 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     proc.stdin!.off('error', onStreamError)
     proc.stdout!.off('error', onStreamError)
   }
+
   const fail = (err: Error): void => {
     cleanupProcessListeners()
     duplex.destroy(err)
   }
+
   const onStdoutData = (data: Buffer): void => {
     // Why: file downloads can outpace the local destination; pause OpenSSH
     // instead of buffering the producer-consumer lag in the main process.
@@ -139,19 +149,24 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
       proc.stdout!.pause()
     }
   }
+
   const onStdoutEnd = (): void => {
     duplex.push(null)
   }
+
   const onExit = (code: number | null, signal?: NodeJS.Signals | null): void => {
     channel.emit('exit', code, signal)
   }
+
   const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
     cleanupProcessListeners()
     channel.emit('close', code, signal)
   }
+
   const onProcessError = (err: Error): void => {
     fail(err)
   }
+
   const onStreamError = (err: Error): void => {
     fail(err)
   }

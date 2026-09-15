@@ -64,6 +64,7 @@ export abstract class CliInstallLocation {
       // Why: development builds must not claim the production shell command.
       return DEV_COMMAND_NAME
     }
+
     // Why: packaged Linux uses `orca-ide` to avoid shadowing GNOME Orca's /usr/bin/orca.
     return this.platform === 'linux' ? LINUX_CLI_COMMAND_NAME : 'orca'
   }
@@ -97,11 +98,13 @@ export abstract class CliInstallLocation {
       options.userPathCacheInvalidator ?? invalidateWindowsUserPathRegistryCache
     this.windowsEnvironment = options.windowsEnvironment ?? process.env
     const hasExplicitAppImagePath = Object.hasOwn(options, 'appImagePath')
+
     const runtimeAppImageIdentity = resolveAppImageRuntimeIdentity({
       platform: this.platform,
       execPath: this.execPathValue,
       resourcesPath: this.resourcesPath
     })
+
     this.hasUnverifiedAppImageRuntime =
       this.platform === 'linux' &&
       this.isPackaged &&
@@ -121,6 +124,7 @@ export abstract class CliInstallLocation {
 
   protected resolveInstallSpec(): InstallSpec | null {
     const commandPath = this.resolveCommandPath()
+
     if (!commandPath) {
       return null
     }
@@ -158,6 +162,7 @@ export abstract class CliInstallLocation {
       launcherPath,
       defaultSpec.commandPath
     )
+
     return activeCommandPath
       ? {
           commandPath: activeCommandPath,
@@ -171,6 +176,7 @@ export abstract class CliInstallLocation {
     defaultCommandPath: string
   ): Promise<string | null> {
     let reachedDefaultCommandPath = false
+
     for (const commandPath of this.getPathCommandCandidates(defaultCommandPath)) {
       const isDefaultCommandPath = samePathEntry(this.platform, commandPath, defaultCommandPath)
       reachedDefaultCommandPath ||= isDefaultCommandPath
@@ -180,23 +186,28 @@ export abstract class CliInstallLocation {
       }
 
       const status = await this.inspectSymlink(commandPath, launcherPath)
+
       if (status.state !== 'not_installed') {
         if (reachedDefaultCommandPath && !isDefaultCommandPath && status.state === 'conflict') {
           // Why: a non-Orca command after an empty default slot can be shadowed by installing there; no user file replaced.
           continue
         }
+
         // Why: PATH lookup is first-match-wins; return the command the shell will actually run, preserving shadowing conflicts.
         return commandPath
       }
     }
+
     return null
   }
 
   protected getPathCommandCandidates(defaultCommandPath: string): string[] {
     const commandName = basename(defaultCommandPath)
+
     const pathCandidates = splitPathEntries(this.platform, this.processPathEnv ?? '').map((entry) =>
       join(entry, commandName)
     )
+
     return uniquePathEntries(this.platform, pathCandidates)
   }
 
@@ -210,9 +221,11 @@ export abstract class CliInstallLocation {
       if (this.platform === 'darwin') {
         return `/usr/local/bin/${DEV_COMMAND_NAME}`
       }
+
       if (this.platform === 'linux') {
         return join(this.homePath, '.local', 'bin', DEV_COMMAND_NAME)
       }
+
       if (this.platform === 'win32') {
         return join(this.localAppDataPath, 'Programs', 'Orca Dev', 'bin', `${DEV_COMMAND_NAME}.cmd`)
       }
@@ -249,7 +262,9 @@ export abstract class CliInstallLocation {
       if (!this.appImagePath || !existsSync(this.appImagePath)) {
         return null
       }
+
       const extractionOptions = this.appImageExtractionOptions()
+
       return extractionOptions
         ? (resolveAppImageExtractedRoot(extractionOptions)?.stableLauncherPath ?? null)
         : null
@@ -257,6 +272,7 @@ export abstract class CliInstallLocation {
 
     if (this.isPackaged) {
       const bundledPath = getBundledLauncherPath(this.platform, this.resourcesPath)
+
       return bundledPath && existsSync(bundledPath) ? bundledPath : null
     }
 

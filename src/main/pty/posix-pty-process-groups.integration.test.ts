@@ -11,16 +11,21 @@ function findTaggedProcesses(token: string): TaggedProcess[] {
   const output = execFileSync('ps', ['-axo', 'pid=,pgid=,state=,command='], {
     encoding: 'utf8'
   })
+
   const matches: TaggedProcess[] = []
+
   for (const line of output.split(/\r?\n/)) {
     if (!line.includes(token)) {
       continue
     }
+
     const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+/.exec(line)
+
     if (match && !match[3].includes('Z')) {
       matches.push({ pid: Number(match[1]), pgid: Number(match[2]) })
     }
   }
+
   return matches
 }
 
@@ -30,10 +35,12 @@ async function waitFor(
   intervalMs = 25
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (!predicate()) {
     if (Date.now() >= deadline) {
       throw new Error('Timed out waiting for PTY process state')
     }
+
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
 }
@@ -56,6 +63,7 @@ itOnPosix(
   'reaps a foreground job that ignores terminal shutdown signals',
   async () => {
     const token = `ORCA_PTY_GROUP_TEST_${process.pid}_${Date.now()}`
+
     const proc = pty.spawn('/bin/sh', [], {
       name: 'xterm-256color',
       cols: 80,
@@ -63,6 +71,7 @@ itOnPosix(
       cwd: process.cwd(),
       env: process.env as Record<string, string>
     })
+
     const exited = new Promise<void>((resolve) => proc.onExit(() => resolve()))
 
     try {
@@ -83,6 +92,7 @@ itOnPosix(
       await waitFor(() => findTaggedProcesses(token).length === 0)
     } finally {
       cleanupTaggedProcesses(token)
+
       try {
         proc.kill('SIGKILL')
       } catch {

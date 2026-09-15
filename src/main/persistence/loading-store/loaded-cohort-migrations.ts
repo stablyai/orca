@@ -10,11 +10,14 @@ export class LoadedCohortMigrationOperations {
 
   migrateTabSwitchKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.tabSwitchKeybindingSeed
+
     if (existing === 'pending' || existing === 'done') {
       return state
     }
+
     // Why: mark dirty so the frozen cohort persists; else a fresh install re-reads as "existing" after its file lands.
     this.runtime.loadNeedsSave = true
+
     return {
       ...state,
       settings: {
@@ -27,6 +30,7 @@ export class LoadedCohortMigrationOperations {
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
+
     // Why: require all three invariants; keying on existedBeforeTelemetryRelease alone lets a partial block skip migration.
     if (
       typeof existing?.existedBeforeTelemetryRelease === 'boolean' &&
@@ -36,11 +40,13 @@ export class LoadedCohortMigrationOperations {
     ) {
       return state
     }
+
     // Why: resolve cohort once; re-inferring it in the optedIn fallback could misclassify a partially-written new user.
     const resolvedExistedBefore =
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
         : fileExistedOnLoad
+
     return {
       ...state,
       settings: {

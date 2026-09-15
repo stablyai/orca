@@ -3,7 +3,9 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_C = '33333333-3333-4333-8333-333333333333'
 
 const SPLIT: TerminalLayoutSnapshot = {
@@ -24,6 +26,7 @@ describe('resolveAgentRowPaneLiveTitle', () => {
       activeLeafId: LEAF_A,
       expandedLeafId: null
     }
+
     expect(resolveAgentRowPaneLiveTitle(single, { 1: '✳ Redis cache' }, LEAF_A)).toBeUndefined()
     expect(resolveAgentRowPaneLiveTitle(undefined, { 1: '✳ Redis cache' }, LEAF_A)).toBeUndefined()
   })
@@ -60,6 +63,7 @@ describe('resolveAgentRowPaneLiveTitle', () => {
       activeLeafId: LEAF_A,
       expandedLeafId: null
     }
+
     const titles = { 1: 'first', 2: 'second', 3: 'third' }
     expect(resolveAgentRowPaneLiveTitle(nested, titles, LEAF_A)).toBe('first')
     expect(resolveAgentRowPaneLiveTitle(nested, titles, LEAF_B)).toBe('second')

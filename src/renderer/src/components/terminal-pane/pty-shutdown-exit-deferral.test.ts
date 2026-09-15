@@ -54,6 +54,7 @@ it('clears a committed guard when its deferred exit is replayed', () => {
 it('preserves another client binding through host sleep until the host reports wake', () => {
   const callback = vi.fn()
   const remotePtyId = toRemoteRuntimePtyId('terminal-handle-observer', 'env-a')
+
   const started = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::C:\\worktree',
@@ -62,6 +63,7 @@ it('preserves another client binding through host sleep until the host reports w
     ptyIds: ['pty-observer'],
     terminalHandles: ['terminal-handle-observer']
   }
+
   applyHostWorktreeTerminalSleepState('env-a', started)
   expect(isHostPtySleepPending(remotePtyId, 'env-a')).toBe(true)
   expect(isHostPtySleepPending(remotePtyId, 'env-b')).toBe(false)
@@ -90,6 +92,7 @@ it('suspends passive-client output until the host sleep disposition settles', ()
   ptyDataHandlers.set(remotePtyId, dataHandler)
   ptyReplayHandlers.set(remotePtyId, replayHandler)
   ptyShutdownLifecycleHandlers.set(remotePtyId, lifecycle)
+
   const event = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::worktree',
@@ -115,9 +118,11 @@ it('suspends passive-client output until the host sleep disposition settles', ()
 
 it('expires a committed host disposition when a disconnected client misses wake', () => {
   vi.useFakeTimers()
+
   try {
     vi.setSystemTime(new Date('2026-07-21T00:00:00Z'))
     const remotePtyId = toRemoteRuntimePtyId('terminal-reused', 'env-expiry')
+
     const event = {
       type: 'worktreeTerminalSleepState' as const,
       worktreeId: 'repo::worktree',
@@ -126,6 +131,7 @@ it('expires a committed host disposition when a disconnected client misses wake'
       ptyIds: ['pty-reused'],
       terminalHandles: ['terminal-reused']
     }
+
     applyHostWorktreeTerminalSleepState('env-expiry', event)
     expect(consumeCommittedPtyShutdownExit(remotePtyId, 'env-expiry')).toBe(true)
 
@@ -144,6 +150,7 @@ it('autonomously rolls back a pending host sleep when its outcome is missed', ()
   const replayHandler = vi.fn()
   const lifecycle = { pause: vi.fn(), rollback: vi.fn(), commit: vi.fn() }
   const exitHandler = vi.fn()
+
   try {
     vi.setSystemTime(new Date('2026-07-21T00:00:00Z'))
     ptyDataHandlers.set(remotePtyId, dataHandler)
@@ -179,9 +186,11 @@ it('autonomously rolls back a pending host sleep when its outcome is missed', ()
 
 it('rearms pending expiry for a duplicate host started event', () => {
   vi.useFakeTimers()
+
   try {
     vi.setSystemTime(new Date('2026-07-21T00:00:00Z'))
     const remotePtyId = toRemoteRuntimePtyId('terminal-duplicate', 'env-duplicate')
+
     const event = {
       type: 'worktreeTerminalSleepState' as const,
       worktreeId: 'repo::worktree',
@@ -190,6 +199,7 @@ it('rearms pending expiry for a duplicate host started event', () => {
       ptyIds: ['pty-duplicate'],
       terminalHandles: ['terminal-duplicate']
     }
+
     applyHostWorktreeTerminalSleepState('env-duplicate', event)
     vi.advanceTimersByTime(20_000)
     applyHostWorktreeTerminalSleepState('env-duplicate', event)
@@ -205,6 +215,7 @@ it('rearms pending expiry for a duplicate host started event', () => {
 
 it('ignores an older commit after a newer sleep generation starts', () => {
   const remotePtyId = toRemoteRuntimePtyId('terminal-generation', 'env-generation')
+
   const event = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::worktree',
@@ -212,6 +223,7 @@ it('ignores an older commit after a newer sleep generation starts', () => {
     ptyIds: ['pty-generation'],
     terminalHandles: ['terminal-generation']
   }
+
   applyHostWorktreeTerminalSleepState('env-generation', { ...event, generation: 72 })
 
   applyHostWorktreeTerminalSleepState('env-generation', {
@@ -231,12 +243,14 @@ it('ignores an older commit after a newer sleep generation starts', () => {
 
 it('retains a cancelled generation barrier against an older commit', () => {
   const remotePtyId = toRemoteRuntimePtyId('terminal-cancelled-order', 'env-order')
+
   const event = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::worktree',
     ptyIds: ['pty-cancelled-order'],
     terminalHandles: ['terminal-cancelled-order']
   }
+
   applyHostWorktreeTerminalSleepState('env-order', {
     ...event,
     generation: 82,
@@ -259,12 +273,14 @@ it('retains a cancelled generation barrier against an older commit', () => {
 
 it('retains a woken generation barrier against an older start', () => {
   const remotePtyId = toRemoteRuntimePtyId('terminal-woken-order', 'env-order')
+
   const event = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::worktree',
     ptyIds: ['pty-woken-order'],
     terminalHandles: ['terminal-woken-order']
   }
+
   applyHostWorktreeTerminalSleepState('env-order', {
     ...event,
     generation: 92,
@@ -288,6 +304,7 @@ it('retains a woken generation barrier against an older start', () => {
 
 it('does not regress a committed generation back to started', () => {
   const remotePtyId = toRemoteRuntimePtyId('terminal-committed-order', 'env-order')
+
   const event = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::worktree',
@@ -295,6 +312,7 @@ it('does not regress a committed generation back to started', () => {
     ptyIds: ['pty-committed-order'],
     terminalHandles: ['terminal-committed-order']
   }
+
   applyHostWorktreeTerminalSleepState('env-order', { ...event, phase: 'committed' })
 
   applyHostWorktreeTerminalSleepState('env-order', { ...event, phase: 'started' })
@@ -309,6 +327,7 @@ it('commits a pending exit when wake proves the sleep completed', () => {
   const lifecycle = { pause: vi.fn(), rollback: vi.fn(), commit: vi.fn() }
   const exitHandler = vi.fn()
   ptyShutdownLifecycleHandlers.set(remotePtyId, lifecycle)
+
   const event = {
     type: 'worktreeTerminalSleepState' as const,
     worktreeId: 'repo::worktree',
@@ -316,6 +335,7 @@ it('commits a pending exit when wake proves the sleep completed', () => {
     ptyIds: ['pty-missed-commit'],
     terminalHandles: ['terminal-missed-commit']
   }
+
   applyHostWorktreeTerminalSleepState('env-missed-commit', { ...event, phase: 'started' })
   deferPtyShutdownExit(remotePtyId, exitHandler)
 
@@ -330,6 +350,7 @@ it('commits a pending exit when wake proves the sleep completed', () => {
 
 it('retains every active host guard above the former count cap', () => {
   const ptyIds: string[] = []
+
   for (let index = 0; index < 513; index += 1) {
     const handle = `terminal-large-${index}`
     const remotePtyId = toRemoteRuntimePtyId(handle, 'env-large')

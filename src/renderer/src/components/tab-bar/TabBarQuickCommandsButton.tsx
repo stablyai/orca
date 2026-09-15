@@ -38,9 +38,12 @@ export function TabBarQuickCommandsButton({
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const repos = useAppStore((s) => s.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
+
   const { executionHostId, hosts, refreshRemoteHost, remoteHostLoadFailed, remoteHostPending } =
     useTerminalQuickCommandHosts(worktreeId)
+
   const confirm = useConfirmationDialog()
+
   // Why: floating terminals share a synthetic worktree id (`global-floating-terminal`)
   // that has no separator, so naive `getRepoIdFromWorktreeId` would return that
   // sentinel as a "repo id" and the button would point at a repo that doesn't
@@ -49,19 +52,25 @@ export function TabBarQuickCommandsButton({
     if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
       return null
     }
+
     const candidate = getRepoIdFromWorktreeId(worktreeId)
+
     return repos.some((r) => r.id === candidate) ? candidate : null
   }, [worktreeId, repos])
 
   const { repoCommands, globalCommands } = useMemo(() => {
     const repoList: HostedTerminalQuickCommand[] = []
     const globalList: HostedTerminalQuickCommand[] = []
+
     for (const entry of flattenTerminalQuickCommandHosts(hosts)) {
       const { command } = entry
+
       if (!isTerminalQuickCommandComplete(command)) {
         continue
       }
+
       const scope = getTerminalQuickCommandScope(command)
+
       if (scope.type === 'global') {
         globalList.push(entry)
       } else if (
@@ -76,10 +85,12 @@ export function TabBarQuickCommandsButton({
         repoList.push(entry)
       }
     }
+
     return { repoCommands: repoList, globalCommands: globalList }
   }, [executionHostId, hosts, projectHostSetupProjection.setups, repoId])
 
   const recentId = recentByGroup[groupId] ?? null
+
   // Why: split-button label prefers the most recently used command for this
   // group regardless of scope, then falls back to the first repo command (so
   // repo-scoped is preferred over global on first run), then to the first
@@ -91,10 +102,12 @@ export function TabBarQuickCommandsButton({
         globalCommands.find((entry) => entry.key === recentId) ??
         repoCommands.find((entry) => entry.command.id === recentId) ??
         globalCommands.find((entry) => entry.command.id === recentId)
+
       if (match) {
         return match
       }
     }
+
     return repoCommands[0] ?? globalCommands[0] ?? null
   }, [repoCommands, globalCommands, recentId])
 
@@ -106,6 +119,7 @@ export function TabBarQuickCommandsButton({
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
+
   const defaultHostId = hosts.some((host) => host.hostId === executionHostId)
     ? executionHostId
     : hosts[0].hostId
@@ -126,6 +140,7 @@ export function TabBarQuickCommandsButton({
 
   const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
     const { command } = entry
+
     const confirmed = await confirm({
       title: translate(
         'auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb',
@@ -142,9 +157,11 @@ export function TabBarQuickCommandsButton({
       ),
       confirmVariant: 'destructive'
     })
+
     if (!confirmed) {
       return
     }
+
     void useAppStore.getState().deleteTerminalQuickCommand(entry.hostId, command.id)
   }
 
@@ -156,6 +173,7 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
+
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)
     : repos

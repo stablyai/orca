@@ -18,7 +18,9 @@ import {
 import type { TaskPageGitHubPatchWorkItem } from './task-page-github-work-item-mutation-types'
 
 export const MAX_LAG_TRAILS = 5
+
 export const LAG_WALL_BUDGET_MS = 90_000
+
 export const LAG_BACKOFF_MS = [500, 1000, 2000, 4000, 8000] as const
 
 function hasPendingForFamily(
@@ -31,10 +33,12 @@ function hasPendingForFamily(
     if (op.listOp?.family === family) {
       return true
     }
+
     if (!op.listOp && familiesFromPendingOp(op).includes(family)) {
       return true
     }
   }
+
   return false
 }
 
@@ -54,6 +58,7 @@ export function adoptQuietSearchFieldsForItem(args: {
   const itemKey = taskPageGitHubItemKey(args.item.repoId, args.item.id)
   let needTrailing = false
   const G0 = args.fetchStartedAtGeneration
+
   const tryFamily = (
     family: string,
     adopt: () => void,
@@ -64,29 +69,40 @@ export function adoptQuietSearchFieldsForItem(args: {
     if (hasPendingForFamily(args.sourceScope, args.item.repoId, args.item.id, family)) {
       return
     }
+
     const dirtyAt = state.familyDirtyAt.get(taskPageGitHubFamilyDirtyKey(itemKey, family)) ?? 0
+
     if (dirtyAt > G0) {
       needTrailing = true
+
       return
     }
+
     const hasAuthority = hasClientAuthority()
+
     if (hasAuthority && !matches()) {
       const lagKey = taskPageGitHubFamilyDirtyKey(itemKey, family)
       const attempts = (state.lagSkipAttempts.get(lagKey) ?? 0) + 1
       state.lagSkipAttempts.set(lagKey, attempts)
       const wallExceeded = Date.now() - state.lastConfirmAt > LAG_WALL_BUDGET_MS
+
       if (attempts < MAX_LAG_TRAILS && !wallExceeded) {
         needTrailing = true
       }
+
       // K21: never force-accept lagging search.
       return
     }
+
     adopt()
+
     if (hasAuthority) {
       releaseClientAuthority()
     }
+
     state.lagSkipAttempts.delete(taskPageGitHubFamilyDirtyKey(itemKey, family))
   }
+
   tryFamily(
     'state',
     () => {
@@ -101,6 +117,7 @@ export function adoptQuietSearchFieldsForItem(args: {
         args.item.id,
         'state'
       )
+
       return last === undefined || args.serverItem.state === last
     },
     () =>
@@ -125,6 +142,7 @@ export function adoptQuietSearchFieldsForItem(args: {
         args.item.id,
         'autoMerge'
       )
+
       return last === undefined || args.serverItem.autoMergeEnabled === last
     },
     () =>
@@ -133,12 +151,15 @@ export function adoptQuietSearchFieldsForItem(args: {
     () =>
       deleteLastConfirmedClientValue(args.sourceScope, args.item.repoId, args.item.id, 'autoMerge')
   )
+
   for (const family of ['assignees', 'reviewRequests'] as const) {
     const serverListValue =
       family === 'assignees' ? args.serverItem.assignees : args.serverItem.reviewRequests
+
     if (serverListValue === undefined) {
       continue
     }
+
     tryFamily(
       family,
       () => {
@@ -157,9 +178,11 @@ export function adoptQuietSearchFieldsForItem(args: {
           args.item.id,
           family
         )
+
         if (!snapshot) {
           return true
         }
+
         return loginSetsEqual(loginSetOfUsers(snapshot), loginSetOfUsers(serverListValue))
       },
       () =>
@@ -168,5 +191,6 @@ export function adoptQuietSearchFieldsForItem(args: {
       () => deleteConfirmedListSnapshot(args.sourceScope, args.item.repoId, args.item.id, family)
     )
   }
+
   return { needTrailing }
 }

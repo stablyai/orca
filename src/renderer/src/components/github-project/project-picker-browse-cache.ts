@@ -1,6 +1,7 @@
 import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
 
 export const PROJECT_PICKER_BROWSE_CACHE_TTL_MS = 5 * 60_000
+
 export const PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES = 32
 
 type ProjectPickerBrowseCacheEntry = {
@@ -22,9 +23,11 @@ function pruneExpiredProjectPickerBrowseCache(now: number): void {
 function trimProjectPickerBrowseCache(): void {
   while (browseCacheByRuntimeScope.size > PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES) {
     const oldestKey = browseCacheByRuntimeScope.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     browseCacheByRuntimeScope.delete(oldestKey)
   }
 }
@@ -34,9 +37,11 @@ export function peekProjectPickerBrowseCacheEntry(
   now = Date.now()
 ): ProjectPickerBrowseCacheEntry | null {
   const entry = browseCacheByRuntimeScope.get(cacheKey)
+
   if (!entry || now - entry.fetchedAt >= PROJECT_PICKER_BROWSE_CACHE_TTL_MS) {
     return null
   }
+
   return entry
 }
 
@@ -46,14 +51,18 @@ export function getProjectPickerBrowseCacheEntry(
 ): ProjectPickerBrowseCacheEntry | null {
   pruneExpiredProjectPickerBrowseCache(now)
   const entry = peekProjectPickerBrowseCacheEntry(cacheKey, now)
+
   if (!entry) {
     browseCacheByRuntimeScope.delete(cacheKey)
+
     return null
   }
+
   // Why: cache keys are runtime scopes; refresh recency so active runtimes do
   // not get evicted just because a user briefly tries many other runtimes.
   browseCacheByRuntimeScope.delete(cacheKey)
   browseCacheByRuntimeScope.set(cacheKey, entry)
+
   return entry
 }
 

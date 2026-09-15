@@ -71,5 +71,6 @@ export function agentKindToTuiAgent(kind: AgentKind | null | undefined): TuiAgen
   if (!kind) {
     return null
   }
+
   return AGENT_BY_TUI_AGENT_KIND[kind] ?? null
 }

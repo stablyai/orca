@@ -32,6 +32,7 @@ export function getWorktreeDragUnitGroups(
       })
       continue
     }
+
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
@@ -41,9 +42,11 @@ export function getWorktreeDragUnitGroups(
     ) {
       continue
     }
+
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
       continue
     }
+
     if (!current) {
       current = { key: ALL_GROUP_KEY, units: [] }
       groups.push({
@@ -52,10 +55,12 @@ export function getWorktreeDragUnitGroups(
         worktreeIds: current.units.map((unit) => unit.worktreeId)
       })
     }
+
     if (row.depth > 0 && current.units.length > 0) {
       current.units.at(-1)!.worktreeIds.push(row.worktree.id)
       continue
     }
+
     current.units.push({ worktreeId: row.worktree.id, worktreeIds: [row.worktree.id] })
   }
 
@@ -73,13 +78,17 @@ export function getFullDropIndexForWorktreeDragUnit(args: {
   dropIndex: number
 }): number {
   const group = args.groups.find((candidate) => candidate.key === args.sourceGroupKey)
+
   if (!group) {
     return args.dropIndex
   }
+
   const boundedDropIndex = Math.max(0, Math.min(group.units.length, args.dropIndex))
   let fullDropIndex = 0
+
   for (let index = 0; index < boundedDropIndex; index++) {
     fullDropIndex += group.units[index]?.worktreeIds.length ?? 0
   }
+
   return fullDropIndex
 }

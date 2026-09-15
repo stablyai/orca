@@ -31,6 +31,7 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
 
 function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
+
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
     : ''
@@ -49,8 +50,10 @@ function readSessionRows(db: SyncDatabase, limit: number): SessionRow[] {
   if (!canReadOpenCodeSessions(db)) {
     return []
   }
+
   const limited = Number.isFinite(limit)
   const statement = db.prepare(buildSessionListQuery(db, limited))
+
   return (limited ? statement.all(limit) : statement.all()) as SessionRow[]
 }
 
@@ -59,6 +62,7 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
     typeof row.time_updated === 'number' && row.time_updated > 0
       ? row.time_updated
       : row.time_created
+
   return {
     agent: 'opencode' as AiVaultAgent,
     file: {
@@ -72,16 +76,21 @@ function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
 
 function dedupeAndSortSqliteCandidates(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
   const candidatesBySessionId = new Map<string, SessionFileCandidate>()
+
   for (const candidate of candidates) {
     const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
+
     if (!parsed) {
       continue
     }
+
     const previous = candidatesBySessionId.get(parsed.sessionId)
+
     if (!previous || candidate.file.mtimeMs > previous.file.mtimeMs) {
       candidatesBySessionId.set(parsed.sessionId, candidate)
     }
   }
+
   return [...candidatesBySessionId.values()].sort((left, right) => {
     return right.file.mtimeMs - left.file.mtimeMs
   })
@@ -104,12 +113,14 @@ export async function listOpenCodeSqliteSessions(args: {
   issues: AiVaultScanIssue[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
+
   for (const dbPath of args.dbPaths) {
     try {
       const rows = readOpenCodeDatabase({
         dbPath,
         read: (db) => readSessionRows(db, args.limit)
       })
+
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath))
       }
@@ -118,5 +129,6 @@ export async function listOpenCodeSqliteSessions(args: {
       args.issues.push(openCodeDatabaseScanIssue(dbPath, err))
     }
   }
+
   return dedupeAndSortSqliteCandidates(candidates)
 }

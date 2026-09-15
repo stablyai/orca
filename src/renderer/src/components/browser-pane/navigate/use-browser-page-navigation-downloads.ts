@@ -74,10 +74,12 @@ export function useBrowserPageNavigationDownloads({
   handleInternalFileDropRef: MutableRefObject<(event: DragEvent<HTMLDivElement>) => void>
 } {
   const [addressBarValue, setAddressBarValue] = useState(() => toDisplayUrl(browserTabUrl))
+
   const { downloadStates, setDownloadStates } = useBrowserPageDownloadEvents({
     browserTabId,
     setResourceNotice
   })
+
   const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
 
@@ -86,6 +88,7 @@ export function useBrowserPageNavigationDownloads({
     if (document.activeElement === addressBarInputRef.current) {
       return
     }
+
     setAddressBarValue(toDisplayUrl(browserTabUrl))
   }, [addressBarInputRef, browserTabUrl])
 
@@ -128,20 +131,26 @@ export function useBrowserPageNavigationDownloads({
 
   const submitAddressBar = (): void => {
     keepAddressBarFocusRef.current = false
+
     const consumedAsWorkspaceDoc = routeWorkspaceDocAddressSubmission({
       worktreeId,
       pageId: browserTabId,
       value: addressBarValue,
       onLoadError: (loadError) => onUpdatePageStateRef.current(browserTabId, { loadError })
     })
+
     if (consumedAsWorkspaceDoc) {
       return
     }
+
     const submission = resolveBrowserAddressBarSubmission(addressBarValue)
+
     if (submission.status === 'invalid') {
       onUpdatePageStateRef.current(browserTabId, { loadError: submission.loadError })
+
       return
     }
+
     navigateToUrl(submission.url)
   }
 
@@ -149,6 +158,7 @@ export function useBrowserPageNavigationDownloads({
     if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     event.dataTransfer.dropEffect = 'copy'
@@ -159,28 +169,36 @@ export function useBrowserPageNavigationDownloads({
       if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
 
       // Why: a browser opens one URL, so reject multi-path drags rather than silently opening the lead file.
       const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
+
       if (dragPaths.status === 'rejected') {
         setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+
         return
       }
+
       const filePath = dragPaths.paths[0]
+
       if (!filePath) {
         return
       }
 
       const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
+
       if (target.status === 'unsupported') {
         setResourceNotice(target.message)
+
         return
       }
 
       const webview = webviewRef.current
       const rect = webview?.getBoundingClientRect()
+
       if (!webview || !rect) {
         setResourceNotice(
           translate(
@@ -188,10 +206,13 @@ export function useBrowserPageNavigationDownloads({
             'Browser page is not ready for file drops.'
           )
         )
+
         return
       }
+
       const pageX = event.clientX - rect.left
       const pageY = event.clientY - rect.top
+
       if (pageX < 0 || pageY < 0 || pageX > rect.width || pageY > rect.height) {
         setResourceNotice(
           translate(
@@ -199,6 +220,7 @@ export function useBrowserPageNavigationDownloads({
             'Drop files over the browser page, not the toolbar.'
           )
         )
+
         return
       }
 
@@ -230,9 +252,12 @@ export function useBrowserPageNavigationDownloads({
             'The downloaded file path is unavailable.'
           )
         )
+
         return
       }
+
       const opened = await window.api.shell.openFilePath(download.savePath)
+
       if (!opened) {
         setResourceNotice(
           translate(
@@ -254,9 +279,12 @@ export function useBrowserPageNavigationDownloads({
             'The downloaded file path is unavailable.'
           )
         )
+
         return
       }
+
       const result = await window.api.shell.openInFileManager(download.savePath)
+
       if (!result.ok) {
         setResourceNotice(
           translate(
@@ -271,10 +299,12 @@ export function useBrowserPageNavigationDownloads({
 
   const visibleDownloads = (() => {
     const active = downloadStates.filter((download) => download.status === 'downloading')
+
     const recent = downloadStates
       .filter((download) => download.status !== 'downloading')
       .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0))
       .slice(0, 3)
+
     return [...active, ...recent]
   })()
 

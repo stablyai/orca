@@ -26,9 +26,11 @@ export function ArtifactPublishedLinkPanel({
       copiedResetTimerRef.current = null
     }
   }, [])
+
   const setPanelRef = useCallback(
     (node: HTMLDivElement | null) => {
       mountedRef.current = node !== null
+
       if (!node) {
         clearCopiedResetTimer()
       }
@@ -40,9 +42,11 @@ export function ArtifactPublishedLinkPanel({
     if (!(await copyArtifactLink(shareUrl, { showSuccessToast: false }))) {
       return
     }
+
     if (!mountedRef.current) {
       return
     }
+
     setCopied(true)
     clearCopiedResetTimer()
     copiedResetTimerRef.current = window.setTimeout(() => {

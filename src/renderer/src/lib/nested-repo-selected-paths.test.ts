@@ -8,6 +8,7 @@ describe('getSelectedNestedRepoPathsInScanOrder', () => {
       '/workspace/platform/worker',
       '/workspace/platform/api'
     ])
+
     selectedPaths.delete('/workspace/platform/worker')
     selectedPaths.add('/workspace/platform/worker')
 

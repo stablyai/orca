@@ -20,10 +20,12 @@ const mocks = vi.hoisted(() => ({
   planSourceControlAgentActionLaunch: vi.fn(),
   toastError: vi.fn()
 }))
+
 vi.mock('@/components/agent/AgentCombobox', () => ({
   default: ({ value }: { value: string | null }) =>
     React.createElement('div', { 'data-agent-value': value ?? '' })
 }))
+
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
     open ? React.createElement('div', { 'data-dialog-open': 'true' }, children) : null,
@@ -37,6 +39,7 @@ vi.mock('@/components/ui/dialog', () => ({
     React.createElement('div', null, children),
   DialogTitle: ({ children }: { children?: ReactNode }) => React.createElement('h2', null, children)
 }))
+
 vi.mock('@/components/ui/select', () => ({
   Select: ({ children }: { children?: ReactNode }) => React.createElement('div', null, children),
   SelectContent: ({ children }: { children?: ReactNode }) =>
@@ -47,20 +50,28 @@ vi.mock('@/components/ui/select', () => ({
     React.createElement('button', null, children),
   SelectValue: () => React.createElement('span')
 }))
+
 vi.mock('../source-control/SourceControlActionVariableChips', () => ({
   SourceControlActionVariableChips: () => React.createElement('div')
 }))
+
 vi.mock('@/lib/source-control-agent-action-plan', () => ({
   planSourceControlAgentActionLaunch: mocks.planSourceControlAgentActionLaunch
 }))
+
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
+
 import { useAppStore, type AppState } from '@/store'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
+
 let container: HTMLDivElement
+
 let root: Root
+
 let initialState: AppState
+
 function settingsWithGlobalRecipe(
   recipe: SourceControlActionRecipe | null = {
     agentId: 'codex',
@@ -70,6 +81,7 @@ function settingsWithGlobalRecipe(
   disabledTuiAgents: GlobalSettings['disabledTuiAgents'] = []
 ): GlobalSettings {
   const base = getDefaultSettings(path.resolve('tmp'))
+
   return {
     ...base,
     defaultTuiAgent: 'codex',
@@ -83,6 +95,7 @@ function settingsWithGlobalRecipe(
     }
   }
 }
+
 function repoWithSavedRecipe(): Repo {
   return {
     id: 'repo-1',
@@ -98,6 +111,7 @@ function repoWithSavedRecipe(): Repo {
     }
   } as Repo
 }
+
 function resetStore(settings: GlobalSettings, repos: Repo[] = []): void {
   useAppStore.setState(
     {
@@ -110,12 +124,14 @@ function resetStore(settings: GlobalSettings, repos: Repo[] = []): void {
     true
   )
 }
+
 function renderControlledDialog(
   overrides: Partial<React.ComponentProps<typeof SourceControlAgentActionDialog>> = {},
   options: { strictMode?: boolean } = {}
 ): void {
   function Harness(): React.JSX.Element {
     const [open, setOpen] = useState(true)
+
     return (
       <SourceControlAgentActionDialog
         open={open}
@@ -158,6 +174,7 @@ async function flushEffects(): Promise<void> {
     await Promise.resolve()
   })
 }
+
 describe('SourceControlAgentActionDialog', () => {
   beforeEach(() => {
     ;(
@@ -251,6 +268,7 @@ describe('SourceControlAgentActionDialog', () => {
   it('keeps prompt editing available when async auto-start delivery fails', async () => {
     mocks.onStart.mockImplementation(async () => {
       await Promise.resolve()
+
       return false
     })
     renderControlledDialog({
@@ -273,6 +291,7 @@ describe('SourceControlAgentActionDialog', () => {
     function Harness(): React.JSX.Element {
       const [savedAgentId, setNextSavedAgentId] = useState<TuiAgent | null>(null)
       setSavedAgentId = setNextSavedAgentId
+
       return (
         <SourceControlAgentActionDialog
           open
@@ -291,6 +310,7 @@ describe('SourceControlAgentActionDialog', () => {
         />
       )
     }
+
     act(() => {
       root.render(<Harness />)
     })

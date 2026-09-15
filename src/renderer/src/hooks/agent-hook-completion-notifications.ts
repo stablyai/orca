@@ -22,20 +22,27 @@ type CoordinatorEntry = {
 }
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+
 type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
+
 // Why: a paneKey resolves to a tab by id. Prebuilding this index once per prune
 // pass avoids re-flattening tabsByWorktree per coordinator (O(coordinators x
 // tabs)) when a liveness or notification-setting update requires a prune.
 type TabIndex = ReadonlyMap<string, WorktreeTab>
+
 type PaneCoordinatorLivenessSnapshot = Pick<
   StoreSnapshot,
   'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
 >
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
+
 const paneKeysRequiringFreshWorking = new Set<string>()
+
 let wasAgentTaskCompleteTrackingEnabled: boolean | undefined
+
 let requireFreshWorkingForNewTrackingCoordinators = false
+
 let lastPrunedLivenessSnapshot: PaneCoordinatorLivenessSnapshot | null = null
 
 function disposeCoordinatorForPaneKey(paneKey: string): void {
@@ -46,6 +53,7 @@ function disposeCoordinatorForPaneKey(paneKey: string): void {
 
 function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
   const index = new Map<string, WorktreeTab>()
+
   for (const tabs of Object.values(tabsByWorktree ?? {})) {
     for (const tab of tabs) {
       // Why: first-wins to match the previous Array.flat().find() semantics
@@ -55,6 +63,7 @@ function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabInde
       }
     }
   }
+
   return index
 }
 
@@ -63,15 +72,19 @@ function pruneClosedPaneCoordinators(): void {
   // unless liveness changes from close/sleep paths evict them here.
   if (coordinatorsByPaneKey.size === 0 && paneKeysRequiringFreshWorking.size === 0) {
     lastPrunedLivenessSnapshot = null
+
     return
   }
+
   const state = useAppStore.getState()
+
   const livenessSnapshot: PaneCoordinatorLivenessSnapshot = {
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     suppressedPtyExitIds: state.suppressedPtyExitIds
   }
+
   if (
     lastPrunedLivenessSnapshot?.tabsByWorktree === livenessSnapshot.tabsByWorktree &&
     lastPrunedLivenessSnapshot.ptyIdsByTabId === livenessSnapshot.ptyIdsByTabId &&
@@ -80,20 +93,24 @@ function pruneClosedPaneCoordinators(): void {
   ) {
     return
   }
+
   lastPrunedLivenessSnapshot = livenessSnapshot
   // Why: build the paneKey->tab index once for the whole pass instead of
   // re-flattening tabsByWorktree inside paneCanReceiveHookCompletion per entry.
   const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
+
   for (const paneKey of coordinatorsByPaneKey.keys()) {
     if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
+
   for (const paneKey of paneKeysRequiringFreshWorking) {
     if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
       paneKeysRequiringFreshWorking.delete(paneKey)
     }
   }
+
   if (coordinatorsByPaneKey.size === 0 && paneKeysRequiringFreshWorking.size === 0) {
     lastPrunedLivenessSnapshot = null
   }
@@ -107,14 +124,18 @@ function syncAgentTaskCompleteTrackingEnabled(enabled: boolean): void {
   if (wasAgentTaskCompleteTrackingEnabled === undefined) {
     wasAgentTaskCompleteTrackingEnabled = enabled
     requireFreshWorkingForNewTrackingCoordinators = !enabled
+
     return
   }
+
   if (enabled !== wasAgentTaskCompleteTrackingEnabled) {
     requireFreshWorkingForNewTrackingCoordinators = true
+
     for (const paneKey of coordinatorsByPaneKey.keys()) {
       paneKeysRequiringFreshWorking.add(paneKey)
     }
   }
+
   wasAgentTaskCompleteTrackingEnabled = enabled
 }
 
@@ -122,6 +143,7 @@ export function syncAgentHookCompletionNotificationSettings(): boolean {
   pruneClosedPaneCoordinators()
   const enabled = isAgentTaskCompleteTrackingEnabled()
   syncAgentTaskCompleteTrackingEnabled(enabled)
+
   return enabled
 }
 
@@ -134,23 +156,30 @@ export function syncAgentHookCompletionNotificationsForStoreUpdate(
   if (!shouldSyncAgentHookCompletionForStoreUpdate(current, previous)) {
     return false
   }
+
   if (wasAgentTaskCompleteTrackingEnabled === undefined) {
     syncAgentTaskCompleteTrackingEnabled(isAgentHookCompletionTrackingEnabled(previous))
   }
+
   syncAgentHookCompletionNotificationSettings()
+
   return true
 }
 
 function getPtyIdForPaneKey(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return null
   }
+
   const state = useAppStore.getState()
   const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
+
   if (!tabPtyIds || tabPtyIds.length === 0) {
     return null
   }
+
   // Why: split-pane leaves share one tab-level pty list, so a tab-level lookup
   // would return a sibling's pty for an already-closed leaf and let a late
   // 'done' hook event fire a spurious notification. Resolve liveness through
@@ -158,17 +187,21 @@ function getPtyIdForPaneKey(paneKey: string): string | null {
   // deletes the entry when the leaf closes.
   const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
   const ptyIdsByLeafId = layout?.ptyIdsByLeafId
+
   if (ptyIdsByLeafId) {
     const leafPtyId = ptyIdsByLeafId[parsed.leafId]
+
     if (leafPtyId && tabPtyIds.includes(leafPtyId)) {
       return leafPtyId
     }
+
     if (!layout?.root) {
       // Why: inactive worktree switches can temporarily preserve only tab-level
       // PTY liveness; do not drop hook completions just because layout metadata
       // is at the empty snapshot.
       return tabPtyIds[0] ?? null
     }
+
     // Why: switching worktrees can unmount the terminal pane and clear the
     // leaf binding before the hook completion arrives, while the tab PTY is
     // still live. Keep closed leaves suppressed by requiring the leaf in layout.
@@ -176,6 +209,7 @@ function getPtyIdForPaneKey(paneKey: string): string | null {
       ? (tabPtyIds[0] ?? null)
       : null
   }
+
   return tabPtyIds[0] ?? null
 }
 
@@ -191,12 +225,15 @@ function resolveTabById(
   if (tabIndex) {
     return tabIndex.get(tabId)
   }
+
   for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
     const found = tabs.find((candidate) => candidate.id === tabId)
+
     if (found) {
       return found
     }
   }
+
   return undefined
 }
 
@@ -206,27 +243,35 @@ function paneKeyHasUnsuppressedPtyHint(
   tabIndex?: TabIndex
 ): boolean {
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return false
   }
+
   const tab = resolveTabById(state, parsed.tabId, tabIndex)
+
   if (!tab) {
     return false
   }
+
   const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
+
   if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
     return false
   }
+
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
   // Why: sleep/shutdown preserves tab records while marking their PTYs
   // suppressed. Missing hints are allowed because inactive-worktree hydration
   // can accept hook status before the renderer restores tab PTY metadata.
   const ptyHints = [tab.ptyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
+
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
 }
 
 function paneCanReceiveHookCompletion(paneKey: string, tabIndex?: TabIndex): boolean {
   const state = useAppStore.getState()
+
   // Why: native hook IPC is itself a live status signal. Inactive worktrees can
   // have accepted hook updates before their renderer PTY map catches up.
   return paneKeyHasUnsuppressedPtyHint(state, paneKey, tabIndex) || paneHasLivePty(paneKey)
@@ -247,6 +292,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
       if (!isAgentTaskCompleteTrackingEnabled() || paneKeysRequiringFreshWorking.has(paneKey)) {
         return
       }
+
       dispatchTerminalNotification(worktreeId, {
         source: 'agent-task-complete',
         terminalTitle: title,
@@ -258,6 +304,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
       if (!isAgentTaskCompleteTrackingEnabled() || paneKeysRequiringFreshWorking.has(paneKey)) {
         return
       }
+
       // Why: native notification settings still label this channel as "agent
       // task complete"; the snapshot state makes the banner read "needs input".
       dispatchTerminalNotification(worktreeId, {
@@ -286,12 +333,14 @@ export function observeAgentHookCompletionForNotification({
   // Why: replay seeds already passed indexed snapshot ownership; re-resolving every row makes startup batches quadratic.
   if (seedOnly !== true) {
     pruneClosedPaneCoordinators()
+
     if (!paneCanReceiveHookCompletion(paneKey)) {
       return
     }
   }
 
   const trackingEnabled = isAgentTaskCompleteTrackingEnabled()
+
   if (seedOnly === true) {
     syncAgentTaskCompleteTrackingEnabled(trackingEnabled)
   } else {
@@ -299,6 +348,7 @@ export function observeAgentHookCompletionForNotification({
   }
 
   let entry = coordinatorsByPaneKey.get(paneKey)
+
   if (!entry || entry.worktreeId !== worktreeId) {
     entry?.coordinator.dispose()
     entry = {
@@ -306,15 +356,18 @@ export function observeAgentHookCompletionForNotification({
       coordinator: createCoordinator(paneKey, worktreeId)
     }
     coordinatorsByPaneKey.set(paneKey, entry)
+
     if (requireFreshWorkingForNewTrackingCoordinators) {
       paneKeysRequiringFreshWorking.add(paneKey)
     }
   }
+
   // Why: notification preferences may suppress alerts, but accepted hooks must
   // still release pane-owned cursor/cache effects after the quiet window.
   if (payload.state === 'working' && payload.turnCompletedAt === undefined && trackingEnabled) {
     paneKeysRequiringFreshWorking.delete(paneKey)
   }
+
   if (seedOnly === true) {
     entry.coordinator.seedHookStatus(payload)
   } else {
@@ -326,6 +379,7 @@ export function resetAgentHookCompletionNotificationCoordinators(): void {
   for (const entry of coordinatorsByPaneKey.values()) {
     entry.coordinator.dispose()
   }
+
   coordinatorsByPaneKey.clear()
   paneKeysRequiringFreshWorking.clear()
   lastPrunedLivenessSnapshot = null

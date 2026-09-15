@@ -41,6 +41,7 @@ export class DirectReturnProbe {
     if (this.stopped || !this.hooks.canSchedule() || this.timer) {
       return
     }
+
     this.timer = this.deps.setTimer(() => {
       this.timer = null
       void this.probe()
@@ -64,14 +65,18 @@ export class DirectReturnProbe {
     if (this.stopped) {
       return
     }
+
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
       this.schedule()
+
       return
     }
+
     const controller = new AbortController()
     this.activeProbe = controller
     this.hooks.beginOperation()
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
+
     try {
       successful = await openAuthenticatedDirectEndpoint(
         this.hooks.host(),
@@ -79,31 +84,41 @@ export class DirectReturnProbe {
         12_000,
         controller.signal
       )
+
       if (this.stopped) {
         return
       }
+
       if (!successful) {
         this.hooks.hysteresis.recordDirectFailure(this.deps.now())
+
         return
       }
+
       if (!this.hooks.hysteresis.recordDirectSuccess(this.deps.now())) {
         successful.client.close()
+
         return
       }
+
       const candidate = successful
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
+
       try {
         await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
       } catch (error) {
         if (this.stopped) {
           return
         }
+
         throw error
       }
+
       if (this.stopped) {
         return
       }
+
       this.hooks.hysteresis.recordMigration(this.deps.now())
       await this.hooks.onDirectMigrated()
     } finally {

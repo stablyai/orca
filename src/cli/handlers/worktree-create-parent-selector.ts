@@ -14,7 +14,9 @@ export function assertCreateParentFlagsCompatible(flags: Map<string, string | bo
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
     throw new RuntimeClientError('invalid_argument', CREATE_PARENT_CONFLICT_MESSAGE)
   }
+
   const parentWorktree = flags.get('parent-worktree')
+
   if (
     flags.has('parent-worktree') &&
     (typeof parentWorktree !== 'string' || parentWorktree === '')
@@ -25,6 +27,7 @@ export function assertCreateParentFlagsCompatible(flags: Map<string, string | bo
 
 function getWorkspaceKeyParentSelector(selector: string): string | undefined {
   const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
+
   return isWorkspaceKey(rawSelector) ? rawSelector : undefined
 }
 
@@ -34,11 +37,13 @@ export async function resolveCreateParentSelector(
   client: RuntimeClient
 ): Promise<CreateParentSelector> {
   const rawParentWorktree = getOptionalStringFlag(flags, 'parent-worktree')
+
   if (!rawParentWorktree) {
     return {}
   }
 
   const parentWorkspace = getWorkspaceKeyParentSelector(rawParentWorktree)
+
   if (parentWorkspace) {
     // Why: create exposes one public parent flag, while the runtime still needs
     // workspace keys to preserve folder/worktree lineage accurately.
@@ -46,9 +51,11 @@ export async function resolveCreateParentSelector(
   }
 
   const parentWorktree = await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
+
   const resolvedParentWorkspace = parentWorktree
     ? getWorkspaceKeyParentSelector(parentWorktree)
     : undefined
+
   if (resolvedParentWorkspace) {
     // Why: active/current may resolve to a folder workspace pseudo-worktree id.
     return { parentWorkspace: resolvedParentWorkspace }

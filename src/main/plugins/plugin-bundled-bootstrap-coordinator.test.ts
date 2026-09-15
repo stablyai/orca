@@ -11,6 +11,7 @@ const unchanged: PluginBundledBootstrapResult = {
 describe('PluginBundledBootstrapCoordinator', () => {
   it('skips disabled requests and refreshes discovery only after publication', async () => {
     let enabled = false
+
     const bootstrap = vi
       .fn()
       .mockResolvedValueOnce(unchanged)
@@ -19,7 +20,9 @@ describe('PluginBundledBootstrapCoordinator', () => {
         unchanged: [],
         errors: []
       })
+
     const refreshPlugins = vi.fn().mockResolvedValue(undefined)
+
     const coordinator = new PluginBundledBootstrapCoordinator({
       root: 'resources',
       userDataPath: 'user-data',
@@ -41,18 +44,24 @@ describe('PluginBundledBootstrapCoordinator', () => {
     let active = 0
     let maximumActive = 0
     let releaseFirst: (() => void) | undefined
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     const bootstrap = vi.fn(async (): Promise<PluginBundledBootstrapResult> => {
       active += 1
       maximumActive = Math.max(maximumActive, active)
+
       if (bootstrap.mock.calls.length === 1) {
         await firstGate
       }
+
       active -= 1
+
       return unchanged
     })
+
     const coordinator = new PluginBundledBootstrapCoordinator({
       root: 'resources',
       userDataPath: 'user-data',

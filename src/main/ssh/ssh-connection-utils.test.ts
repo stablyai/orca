@@ -7,7 +7,9 @@ vi.mock('os', () => ({
 }))
 
 const mockExistsSync = vi.fn().mockReturnValue(false)
+
 const mockReadFileSync = vi.fn()
+
 const TEST_HOME = '/home/testuser'
 
 function testHomePath(...parts: string[]): string {
@@ -312,6 +314,7 @@ describe('findDefaultKeyFile', () => {
     const checkedPaths: string[] = []
     mockExistsSync.mockImplementation((path: unknown) => {
       checkedPaths.push(String(path))
+
       return false
     })
 
@@ -336,6 +339,7 @@ describe('findDefaultKeyFile', () => {
       if (String(path) === testHomePath('.ssh', 'id_ed25519_sk')) {
         throw new Error('malformed FIDO2 key')
       }
+
       return Buffer.from('rsa-key')
     })
 
@@ -362,6 +366,7 @@ describe('findDefaultKeyFile', () => {
       if (String(path) === testHomePath('.ssh', 'id_ed25519')) {
         throw new Error('permission denied')
       }
+
       return Buffer.from('rsa-key')
     })
 
@@ -415,6 +420,7 @@ describe('buildConnectConfig', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+
     if (originalEnv !== undefined) {
       process.env.SSH_AUTH_SOCK = originalEnv
     } else {
@@ -434,6 +440,7 @@ describe('buildConnectConfig', () => {
       makeTarget({ host: '', port: 0, username: '' }),
       makeResolved({ hostname: '10.0.0.1', port: 2222, user: 'admin' })
     )
+
     expect(config.host).toBe('10.0.0.1')
     expect(config.port).toBe(2222)
     expect(config.username).toBe('admin')
@@ -544,6 +551,7 @@ describe('buildConnectConfig', () => {
       makeTarget(),
       makeResolved({ identityAgent: '/tmp/one-password.sock' })
     )
+
     expect(config.agent).toBe('/tmp/one-password.sock')
   })
 
@@ -552,6 +560,7 @@ describe('buildConnectConfig', () => {
       makeTarget({ configHost: 'work', identityAgent: '%d/.1password/agent.sock' }),
       makeResolved({ identityAgent: testHomePath('.1password', 'agent.sock') })
     )
+
     expect(config.agent).toBe(testHomePath('.1password', 'agent.sock'))
   })
 
@@ -585,8 +594,10 @@ describe('buildConnectConfig', () => {
       if (String(path) === '/home/user/.ssh/work_key.pub') {
         return 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILI4wa2zRZoB26D015dsafYmu3jDCI7rh26bFXZrUiAp test-key'
       }
+
       throw new Error('unexpected read')
     })
+
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'], identitiesOnly: true })
@@ -600,6 +611,7 @@ describe('buildConnectConfig', () => {
 
   it('does not offer broad agent auth when IdentitiesOnly keys cannot be parsed', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('not-a-key'))
+
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'], identitiesOnly: true })
@@ -635,11 +647,13 @@ describe('buildConnectConfig', () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     delete process.env.SSH_AUTH_SOCK
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
+
     try {
       const config = buildConnectConfig(
         makeTarget({ identityFile: '/home/user/.ssh/custom' }),
         null
       )
+
       expect(config.privateKey).toEqual(Buffer.from('key'))
       expect(config.agent).toBeUndefined()
     } finally {
@@ -649,6 +663,7 @@ describe('buildConnectConfig', () => {
 
   it('uses fresh OpenSSH IdentityFile authority for imported config targets', () => {
     mockReadFileSync.mockImplementation((path: unknown) => Buffer.from(String(path)))
+
     const config = buildConnectConfig(
       makeTarget({
         source: 'ssh-config',
@@ -665,10 +680,12 @@ describe('buildConnectConfig', () => {
 
   it('expands Windows-style target.identityFile before reading private key', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
+
     const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
       includeAgent: false,
       includePrivateKey: true
     })
+
     expect(config.privateKey).toEqual(Buffer.from('key'))
     expect(mockReadFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'custom'))
   })
@@ -678,10 +695,12 @@ describe('buildConnectConfig', () => {
       isPrivateKey: () => true
     } as ParsedKey)
     mockReadFileSync.mockReturnValue(Buffer.from('custom-key'))
+
     const config = buildConnectConfig(
       makeTarget(),
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'] })
     )
+
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toEqual(Buffer.from('custom-key'))
   })
@@ -691,6 +710,7 @@ describe('buildConnectConfig', () => {
       makeTarget(),
       makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
+
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
     expect(mockReadFileSync).not.toHaveBeenCalled()
@@ -713,6 +733,7 @@ describe('buildConnectConfig', () => {
       (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     mockReadFileSync.mockReturnValue(Buffer.from('fallback'))
+
     try {
       const config = buildConnectConfig(makeTarget(), null)
       expect(config.agent).toBeUndefined()
@@ -724,11 +745,13 @@ describe('buildConnectConfig', () => {
 
   it('can force private key inclusion for the post-agent fallback path', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
+
     const config = buildConnectConfig(
       makeTarget({ identityFile: '/home/user/.ssh/custom' }),
       null,
       { includeAgent: false, includePrivateKey: true }
     )
+
     expect(config.agent).toBeUndefined()
     expect(config.privateKey).toEqual(Buffer.from('key'))
   })

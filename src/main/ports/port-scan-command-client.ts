@@ -26,16 +26,21 @@ import {
 // user-blocking localhost-label allowlist path (src/main/ipc/
 // localhost-worktree-labels.ts).
 export const WORKER_STALL_GRACE_MS = 26_000
+
 export const CALL_DEADLINE_MS = PORT_SCAN_COMMAND_TIMEOUT_MS + WORKER_STALL_GRACE_MS
+
 // Deliberately far longer than the 30s scan cadence so a visible window does not
 // re-create the worker every tick; the renderer stops the interval when hidden,
 // so this is effectively the hidden-window teardown.
 export const IDLE_TEARDOWN_MS = 5 * 60_000
+
 export const MAX_CONSECUTIVE_DEATHS = 3
+
 // One scan issues at most three commands; anything beyond this is pile-up.
 export const MAX_QUEUED_CALLS = 8
 
 export type PortScanCommandResult = { stdout: string; spawnMs: number }
+
 export type PortScanWorkerFactory = WorkerThreadFactory
 
 // Distinguishes "no worker at all" from a timeout or crash so the scanner can
@@ -95,13 +100,16 @@ export class PortScanCommandClient {
     return new Promise((resolve, reject) => {
       if (this.queue.length >= MAX_QUEUED_CALLS) {
         reject(new Error(`Port scan command queue is full; dropped ${command}.`))
+
         return
       }
+
       // A fresh burst from full idle starts a new scan: clear any death count
       // carried from a prior scan so the respawn cap can't drain this scan early.
       if (!this.active && this.queue.length === 0) {
         this.consecutiveDeaths = 0
       }
+
       this.queue.push({
         request: { id: this.nextId++, command, args },
         resolve,
@@ -116,15 +124,21 @@ export class PortScanCommandClient {
     if (this.active || this.queue.length === 0) {
       return
     }
+
     const worker = this.host.ensure()
+
     if (!worker) {
       this.failQueuedAsUnavailable()
+
       return
     }
+
     const call = this.queue.shift()
+
     if (!call) {
       return
     }
+
     this.active = call
     this.host.clearIdleTimer()
     // Why (#11161): one at a time. uv_spawn blocks the worker's own loop, so a
@@ -137,18 +151,23 @@ export class PortScanCommandClient {
 
   private onMessage(response: PortScanCommandResponse): void {
     const call = this.active
+
     if (!call || call.request.id !== response.id) {
       return
     }
+
     this.consecutiveDeaths = 0
+
     if (response.ok) {
       this.settle(call, () => call.resolve({ stdout: response.stdout, spawnMs: response.spawnMs }))
     } else {
       const error = response.timedOut
         ? new PortScanCommandTimeoutError(response.error)
         : new Error(response.error)
+
       this.settle(call, () => call.reject(error))
     }
+
     this.afterSettle()
   }
 
@@ -156,6 +175,7 @@ export class PortScanCommandClient {
     if (this.active !== call) {
       return
     }
+
     // Plain Error on purpose: a wedged worker is not a command timeout and must
     // never feed the scanner's timeout backoff.
     this.onWorkerFault(new Error(`Port scan probe worker stalled after ${CALL_DEADLINE_MS}ms`))
@@ -166,8 +186,10 @@ export class PortScanCommandClient {
     // the next dispatch would post into a dead worker and stall to its deadline.
     if (code === 0 && !this.active && this.queue.length === 0) {
       this.host.destroy()
+
       return
     }
+
     this.onWorkerFault(new Error(`Port scan probe worker exited with code ${code}`))
   }
 
@@ -175,13 +197,17 @@ export class PortScanCommandClient {
     const failed = this.active
     this.host.destroy()
     this.consecutiveDeaths++
+
     if (failed) {
       this.settle(failed, () => failed.reject(error))
     }
+
     if (this.consecutiveDeaths >= MAX_CONSECUTIVE_DEATHS) {
       this.drainQueueAfterCrashLoop(error)
+
       return
     }
+
     if (this.queue.length > 0) {
       this.pump()
     }
@@ -192,6 +218,7 @@ export class PortScanCommandClient {
     this.queue = []
     this.consecutiveDeaths = 0
     const drainError = new Error(`Port scan probe worker crashed repeatedly (${error.message})`)
+
     for (const call of pending) {
       this.settle(call, () => call.reject(drainError))
     }
@@ -200,6 +227,7 @@ export class PortScanCommandClient {
   private failQueuedAsUnavailable(): void {
     const pending = this.queue
     this.queue = []
+
     for (const call of pending) {
       this.settle(call, () =>
         call.reject(new PortScanWorkerUnavailableError('port scan probe worker spawn failed'))
@@ -212,9 +240,11 @@ export class PortScanCommandClient {
       clearTimeout(call.timer)
       call.timer = null
     }
+
     if (this.active === call) {
       this.active = null
     }
+
     run()
   }
 
@@ -262,6 +292,7 @@ export function resolveWorkerEntryPath(layout: WorkerEntryLayout): string {
   if (layout.isPackaged && layout.resourcesPath) {
     return join(layout.resourcesPath, 'app.asar', 'out', 'main', WORKER_ENTRY_FILENAME)
   }
+
   return join(layout.moduleDir, WORKER_ENTRY_FILENAME)
 }
 
@@ -275,11 +306,13 @@ function currentWorkerEntryLayout(): WorkerEntryLayout {
 
 function defaultWorkerFactory(): Worker {
   const workerPath = resolveWorkerEntryPath(currentWorkerEntryLayout())
+
   // Why: a missing built entry must throw synchronously so the client can fail
   // closed before it waits on a worker that can never post a result.
   if (!existsSync(workerPath)) {
     throw new Error(`Port scan command worker entry not found: ${workerPath}`)
   }
+
   return new Worker(workerPath)
 }
 
@@ -296,5 +329,6 @@ export function runPortScanCommand(
   args: string[]
 ): Promise<PortScanCommandResult> {
   sharedClient ??= new PortScanCommandClient({ workerFactory: defaultWorkerFactory })
+
   return sharedClient.run(command, args)
 }

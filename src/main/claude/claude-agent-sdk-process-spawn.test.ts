@@ -22,10 +22,13 @@ function fakeSpawn() {
   child.stderr = new PassThrough()
   child.kill = vi.fn(() => true)
   const specs: ProcessSpec[] = []
+
   const spawnImpl = ((spec: ProcessSpec) => {
     specs.push(spec)
+
     return child
   }) as unknown as typeof spawnProcess
+
   return { child, spawnImpl, specs }
 }
 

@@ -51,6 +51,7 @@ export class DaemonEndpointLifecycle {
     if (process.platform === 'win32') {
       return
     }
+
     try {
       unlinkSync(bindPath)
     } catch {
@@ -64,13 +65,16 @@ export class DaemonEndpointLifecycle {
       this.options.socketPath,
       probeSocketConnect
     )
+
     if (outcome.status !== 'published') {
       this.options.log.log('endpoint-publish-declined', { reason: outcome.status })
       console.warn(`[daemon] Endpoint unavailable at startup: reason=${outcome.status}`)
       throw new DaemonEndpointUnavailableError(outcome.status)
     }
+
     this.ownedSocketIdentity = outcome.identity
     let publishedOwnership = false
+
     try {
       this.options.publishEndpointOwnership()
       publishedOwnership = true
@@ -79,6 +83,7 @@ export class DaemonEndpointLifecycle {
       if (publishedOwnership && this.options.pidPath && this.options.launchNonce) {
         unlinkOwnedDaemonPidFile(this.options.pidPath, process.pid, this.options.launchNonce)
       }
+
       this.ownedSocketIdentity = null
       throw error
     }
@@ -91,9 +96,11 @@ export class DaemonEndpointLifecycle {
 
   unlinkOwnedArtifacts(): void {
     unlinkOwnedDaemonTokenFile(this.options.tokenPath, this.options.token)
+
     if (this.options.pidPath && this.options.launchNonce) {
       unlinkOwnedDaemonPidFile(this.options.pidPath, process.pid, this.options.launchNonce)
     }
+
     // The canonical endpoint stays: removing it could delete a replacement's name.
     this.ownedSocketIdentity = null
   }
@@ -102,6 +109,7 @@ export class DaemonEndpointLifecycle {
     if (this.ownershipTimer === null) {
       return
     }
+
     clearInterval(this.ownershipTimer)
     this.ownershipTimer = null
   }
@@ -110,6 +118,7 @@ export class DaemonEndpointLifecycle {
     if (this.ownershipLost) {
       return true
     }
+
     return this.observeOwnership() === 'lost'
   }
 
@@ -121,6 +130,7 @@ export class DaemonEndpointLifecycle {
     const alreadyLost = this.ownershipLost
     this.ownershipLost = true
     this.ownedSocketIdentity = null
+
     if (!alreadyLost) {
       this.options.log.log('endpoint-ownership-lost', {
         socketPath: this.options.socketPath
@@ -129,6 +139,7 @@ export class DaemonEndpointLifecycle {
         '[daemon] Endpoint ownership lost to another daemon — retiring once existing sessions end'
       )
     }
+
     this.stopOwnershipWatch()
     this.options.onOwnershipLost()
   }
@@ -137,6 +148,7 @@ export class DaemonEndpointLifecycle {
     if (process.platform === 'win32' || !this.ownedSocketIdentity) {
       return
     }
+
     this.ownershipTimer = setInterval(
       () => this.checkOwnership(),
       DaemonEndpointLifecycle.OWNERSHIP_POLL_MS
@@ -148,10 +160,13 @@ export class DaemonEndpointLifecycle {
     if (process.platform === 'win32' || !this.ownedSocketIdentity) {
       return
     }
+
     if (this.observeOwnership() !== 'lost') {
       return
     }
+
     this.ownershipLossStreak++
+
     if (this.ownershipLossStreak >= DaemonEndpointLifecycle.LOSS_CONFIRMATIONS) {
       this.requestRetirementForLoss()
     }
@@ -161,13 +176,16 @@ export class DaemonEndpointLifecycle {
     if (process.platform === 'win32' || !this.ownedSocketIdentity || !this.options.isServing()) {
       return 'indeterminate'
     }
+
     const state = readDaemonEndpointOwnershipState(
       this.options.socketPath,
       this.ownedSocketIdentity
     )
+
     if (state !== 'lost') {
       this.ownershipLossStreak = 0
     }
+
     return state
   }
 }

@@ -19,20 +19,25 @@ function ownedWorktreeRoots(
   currentWorktreeId: string
 ): { worktreeId: string; root: string }[] {
   const roots: { worktreeId: string; root: string }[] = []
+
   for (const worktree of state.allWorktrees()) {
     if (worktree.id !== currentWorktreeId && worktree.path) {
       roots.push({ worktreeId: worktree.id, root: worktree.path })
     }
   }
+
   for (const folder of state.folderWorkspaces) {
     const worktreeId = folderWorkspaceKey(folder.id)
+
     if (worktreeId !== currentWorktreeId && folder.folderPath) {
       roots.push({ worktreeId, root: folder.folderPath })
     }
   }
+
   // Most-specific root first (after the current worktree), so a file inside a nested workspace is
   // attributed to that workspace and not to the outer one that lexically contains it too.
   roots.sort((a, b) => b.root.length - a.root.length)
+
   return roots
 }
 
@@ -42,15 +47,18 @@ function planToTarget(
   filePath: string
 ): WorkspaceDocAddressTarget {
   const plan = getWorkspaceFilePreviewPlan(state, worktreeId, filePath)
+
   if (plan.status === 'doc-preview') {
     return {
       status: 'workspace-doc',
       docLocation: { kind: 'workspace-doc', worktreeId, filePath }
     }
   }
+
   if (plan.status === 'unsupported') {
     return { status: 'unsupported', message: plan.message }
   }
+
   // A local file keeps today's file:// tab; the URL pipeline handles it.
   return { status: 'not-a-workspace-doc' }
 }
@@ -69,6 +77,7 @@ export function resolveWorkspaceDocAddressTarget(
   rawInput: string
 ): WorkspaceDocAddressTarget {
   const input = rawInput.trim()
+
   if (!PREVIEWABLE_PATH_PATTERN.test(input)) {
     return { status: 'not-a-workspace-doc' }
   }
@@ -79,33 +88,42 @@ export function resolveWorkspaceDocAddressTarget(
     if (input.split(/[\\/]+/).some((segment) => segment === '..' || segment === '.')) {
       return { status: 'not-a-workspace-doc' }
     }
+
     const currentPath = state.getKnownWorktreeById(currentWorktreeId)?.path
+
     if (currentPath && getRelativePathInsideRoot(input, currentPath)) {
       return planToTarget(state, currentWorktreeId, input)
     }
+
     for (const { worktreeId, root } of ownedWorktreeRoots(state, currentWorktreeId)) {
       if (getRelativePathInsideRoot(input, root)) {
         return planToTarget(state, worktreeId, input)
       }
     }
+
     return { status: 'not-a-workspace-doc' }
   }
 
   if (input.startsWith('./')) {
     const relative = input.slice(2)
     const root = state.getKnownWorktreeById(currentWorktreeId)?.path ?? null
+
     if (!root || relative.length === 0) {
       return { status: 'not-a-workspace-doc' }
     }
+
     // Why refused outright: joinPath does not resolve dot segments and the containment check is
     // lexical, so "./a/../../x.html" would pass while naming a file outside the worktree.
     if (relative.split(/[\\/]+/).some((segment) => segment === '..' || segment === '.')) {
       return { status: 'not-a-workspace-doc' }
     }
+
     const filePath = joinPath(root, relative)
+
     if (!getRelativePathInsideRoot(filePath, root)) {
       return { status: 'not-a-workspace-doc' }
     }
+
     return planToTarget(state, currentWorktreeId, filePath)
   }
 

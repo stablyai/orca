@@ -91,6 +91,7 @@ export function buildHostedReviewDropdownItems(
     supportsHostedReviewCreation(hostedReviewCreation?.provider) &&
     (hostedReviewCreation.blockedReason === 'needs_push' ||
       (hostedReviewCreation.blockedReason === 'needs_sync' && shouldForcePushWithLease))
+
   const pushCreatePR: DropdownItem = {
     kind: 'push_create_pr',
     label: shouldForcePushWithLease

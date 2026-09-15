@@ -56,6 +56,7 @@ export class BrowserClientHostCommandDispatcher {
     if (options.authority.pageCommandProtocolVersion !== 1) {
       throw new Error('browser_host_command_protocol_required')
     }
+
     this.authority = snapshotBrowserClientHostLeaseAuthority(options.authority)
     this.handler = options.handler
     const limits = resolveDispatcherLimits(options)
@@ -77,32 +78,42 @@ export class BrowserClientHostCommandDispatcher {
     if (this.closed) {
       throw new Error('browser_host_command_dispatcher_closed')
     }
+
     assertBrowserClientHostCommandAuthority(this.authority, command)
     const acceptedCommand = snapshotCommandEvent(command)
+
     const admission = selectCommandPage(
       this.pages,
       this.maxPages,
       this.retiredGenerationFloor,
       acceptedCommand
     )
+
     const { page } = admission
     const existing = findExistingCommand(page, acceptedCommand)
+
     if (existing) {
       return existing.promise
     }
+
     assertNewPageCommand(page, acceptedCommand)
+
     if (this.activeCommands >= this.maxActiveCommands) {
       throw new Error('browser_host_command_capacity')
     }
+
     if (page.queue.length >= this.maxQueuedCommandsPerPage) {
       throw new Error('browser_host_page_command_capacity')
     }
+
     const previousPage = this.pages.get(acceptedCommand.browserPageId)
     admission.commit()
     recordNewPageCommand(page, acceptedCommand)
+
     if (previousPage && previousPage !== page) {
       this.resultCache.releasePage(previousPage)
     }
+
     const record = createCommandRecord(acceptedCommand)
     page.records.set(acceptedCommand.commandSequence, record)
     page.sequencesByCommandId.set(acceptedCommand.commandId, acceptedCommand.commandSequence)
@@ -110,24 +121,31 @@ export class BrowserClientHostCommandDispatcher {
     page.nextSequence += 1
     this.activeCommands += 1
     this.schedulePage(page)
+
     return record.promise
   }
 
   async retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean> {
     const page = this.pages.get(browserPageId)
+
     if (!page || page.generation !== pageHostGeneration) {
       throw new Error('browser_host_page_generation_stale')
     }
+
     if (page.retired) {
       return true
     }
+
     if (page.retirementPromise) {
       return page.retirementPromise
     }
+
     let resolveRetirement = (_settled: boolean): void => {}
+
     const retirement = new Promise<boolean>((resolve) => {
       resolveRetirement = resolve
     })
+
     page.retirementPromise = retirement
     page.retiring = true
     removeScheduledCommandPage(this.readyPages, this.readyPageIds, page)
@@ -138,18 +156,23 @@ export class BrowserClientHostCommandDispatcher {
       } else if (page.retirementPromise === retirement) {
         page.retirementPromise = undefined
       }
+
       resolveRetirement(settled)
     })
+
     return retirement
   }
 
   forgetPage(browserPageId: string, pageHostGeneration: number): boolean {
     const page = this.pages.get(browserPageId)
+
     if (!page || page.generation !== pageHostGeneration || !page.retired) {
       return false
     }
+
     this.retiredGenerationFloor = Math.max(this.retiredGenerationFloor, pageHostGeneration)
     this.resultCache.releasePage(page)
+
     return this.pages.delete(browserPageId)
   }
 
@@ -157,24 +180,30 @@ export class BrowserClientHostCommandDispatcher {
     if (this.closed) {
       return this.runningHandlers === 0
     }
+
     this.closed = true
     this.readyPages.length = 0
     this.readyPageIds.clear()
+
     for (const page of this.pages.values()) {
       page.retiring = true
       this.cancelPage(page, 'browser_host_command_cancelled')
     }
+
     const settled = await joinBrowserClientHostCommands(
       [...this.pages.values()].flatMap((page) =>
         page.queue.flatMap((record) => (record.handlerPromise ? [record.handlerPromise] : []))
       ),
       this.joinTimeoutMs
     )
+
     if (settled) {
       this.pages.clear()
       this.resultCache.clear()
     }
+
     this.settleClosedHandlers()
+
     return settled
   }
 
@@ -192,6 +221,7 @@ export class BrowserClientHostCommandDispatcher {
     ) {
       return
     }
+
     this.readyPageIds.add(page.browserPageId)
     this.readyPages.push(page)
     this.drain()
@@ -200,11 +230,14 @@ export class BrowserClientHostCommandDispatcher {
   private drain(): void {
     while (!this.closed && this.runningHandlers < this.maxConcurrentHandlers) {
       const page = this.readyPages.shift()
+
       if (!page) {
         return
       }
+
       this.readyPageIds.delete(page.browserPageId)
       const record = page.queue[0]
+
       if (!page.retiring && record?.status === 'queued') {
         this.startHandler(page, record)
       }
@@ -216,15 +249,18 @@ export class BrowserClientHostCommandDispatcher {
     record.controller = new AbortController()
     this.runningHandlers += 1
     let finishJoin = (): void => {}
+
     record.handlerPromise = new Promise<void>((resolve) => {
       finishJoin = resolve
     })
     let handled: BrowserClientHostCommandResult | Promise<BrowserClientHostCommandResult>
+
     try {
       handled = this.handler(record.event, record.controller.signal)
     } catch {
       handled = Promise.reject(new Error('handler failed'))
     }
+
     void Promise.resolve(handled)
       .then((result) => {
         const parsed = CommandResultSchema.safeParse(result)
@@ -248,23 +284,29 @@ export class BrowserClientHostCommandDispatcher {
     result: BrowserClientHostCommandResult
   ): void {
     this.runningHandlers -= 1
+
     if (record.status === 'running') {
       resolveCommandRecord(record, result)
       recordBrowserClientPageCommandResult(page, record.event.command, result)
     }
+
     record.status = 'settled'
     record.controller = undefined
     record.handlerPromise = undefined
     this.removeActiveRecord(page, record)
+
     if (isBrowserClientPageBootstrapCommand(record.event.command) && !page.created) {
       this.cancelPage(page, 'browser_host_command_dependency_failed')
     }
+
     if (page.retiring && page.queue.length === 0) {
       this.finishRetirement(page)
     } else {
       this.schedulePage(page)
     }
+
     this.drain()
+
     if (this.closed && this.runningHandlers === 0) {
       this.pages.clear()
       this.resultCache.clear()
@@ -276,6 +318,7 @@ export class BrowserClientHostCommandDispatcher {
     if (!this.closed || this.runningHandlers !== 0 || this.closedSettlementResolved) {
       return
     }
+
     this.closedSettlementResolved = true
     this.resolveClosedSettlement()
   }

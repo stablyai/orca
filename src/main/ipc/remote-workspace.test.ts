@@ -25,12 +25,14 @@ const {
 // Counts ownership resolutions without changing any of them.
 vi.mock('../../shared/worktree-execution-host-resolution', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof WorktreeExecutionHostResolution
+
   return {
     ...actual,
     resolveWorktreeExecutionHost: (
       ...args: Parameters<typeof actual.resolveWorktreeExecutionHost>
     ) => {
       resolveWorktreeExecutionHostCalls.count += 1
+
       return actual.resolveWorktreeExecutionHost(...args)
     }
   }
@@ -172,6 +174,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
   // Ownership resolution reads the catalog, not one id-keyed row, so the fake has to project one.
   const getReposMock = vi.fn(() => [getRepoMock('repo-target-1')].filter(Boolean))
+
   const store = {
     getRepo: getRepoMock,
     getRepos: getReposMock,
@@ -212,6 +215,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     getActiveMultiplexerMock.mockReset()
     getActiveMultiplexerMock.mockImplementation((targetId: string) => {
       let mux = muxByTargetId.get(targetId)
+
       if (!mux) {
         const request = vi.fn().mockImplementation((method: string) => {
           if (method === 'workspace.get') {
@@ -224,6 +228,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
               })
             )
           }
+
           return Promise.resolve({
             ok: true,
             snapshot: snapshot({
@@ -234,10 +239,12 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
             })
           })
         })
+
         mux = { request }
         muxByTargetId.set(targetId, mux)
         requestByTargetId.set(targetId, request)
       }
+
       return mux
     })
     registerRemoteWorkspaceNotificationHandlerMock.mockClear()
@@ -252,21 +259,27 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     expectedHostObservationTokensByTargetId?: unknown
   }): Promise<unknown> {
     const handler = handlers.get('remoteWorkspace:setForConnectedTargets')
+
     if (!handler) {
       throw new Error('remoteWorkspace:setForConnectedTargets handler was never registered')
     }
+
     return handler(null, args)
   }
 
   async function observeTarget(targetId: string): Promise<RemoteWorkspaceObservedSnapshot> {
     const handler = handlers.get('remoteWorkspace:get')
+
     if (!handler) {
       throw new Error('remoteWorkspace:get handler was never registered')
     }
+
     const observed = await handler(null, { targetId })
+
     if (!observed || typeof observed !== 'object' || !('hostObservationToken' in observed)) {
       throw new Error(`remoteWorkspace:get did not observe ${targetId}`)
     }
+
     return observed as RemoteWorkspaceObservedSnapshot
   }
 
@@ -277,6 +290,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     const worktrees = Object.fromEntries(
       Array.from({ length: 12 }, (_, index) => [`repo-target-1::/remote/repo-${index}`, []])
     )
+
     getWorkspaceSessionMock.mockReturnValue({
       ...baseSession,
       tabsByWorktree: worktrees
@@ -301,6 +315,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     const worktrees = Object.fromEntries(
       Array.from({ length: 6 }, (_, index) => [`repo-target-1::/remote/repo-${index}`, []])
     )
+
     getWorkspaceSessionMock.mockReturnValue({
       ...baseSession,
       tabsByWorktree: worktrees
@@ -368,6 +383,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
 
   it('writes only to explicitly hydrated connected targets', async () => {
     const observation = await observeTarget('target-1')
+
     const result = await callSetForConnectedTargets({
       session: baseSession,
       hydratedTargetIds: ['target-1', 'missing-target'],

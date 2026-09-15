@@ -21,9 +21,11 @@ async function sendRaw(
 ): Promise<RawResult> {
   try {
     const response = await client.sendRequest(method, params)
+
     if (!response.ok) {
       return { ok: false, error: response.error?.message || `Request failed: ${method}` }
     }
+
     return { ok: true, result: response.result }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
@@ -37,12 +39,15 @@ function extractMutationError(error: unknown, method: string): string {
   if (typeof error === 'string') {
     return error
   }
+
   if (error && typeof error === 'object' && 'message' in error) {
     const message = (error as { message?: unknown }).message
+
     if (typeof message === 'string' && message.length > 0) {
       return message
     }
   }
+
   return `Request failed: ${method}`
 }
 
@@ -56,17 +61,23 @@ async function sendGithubPrMutation(
 ): Promise<GitHubPrMutationOutcome> {
   try {
     const response = await client.sendRequest(method, params)
+
     if (!response.ok) {
       return { ok: false, error: response.error?.message || `Request failed: ${method}` }
     }
+
     const result = response.result
+
     if (result && typeof result === 'object' && 'ok' in result) {
       const r = result as { ok: boolean; error?: unknown }
+
       if (r.ok === true) {
         return { ok: true }
       }
+
       return { ok: false, error: extractMutationError(r.error, method) }
     }
+
     // No structured status (host returned void/undefined) — treat as success.
     return { ok: true }
   } catch (err) {
@@ -82,9 +93,11 @@ export async function fetchMergePR(
   args: { prNumber: number; method?: GitHubPRMergeMethod; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber }
+
   if (args.method) {
     params.method = args.method
   }
+
   return sendGithubPrMutation(
     client,
     'github.mergePR',
@@ -101,19 +114,23 @@ export async function fetchUpdatePRTitle(
   args: { prNumber: number; title: string; prRepo?: GitHubPrRepoSlug | null }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber, title: args.title }
+
   const response = await sendRaw(
     client,
     'github.updatePRTitle',
     buildGithubPrParams('github.updatePRTitle', worktreeId, params, { prRepo: args.prRepo })
   )
+
   if (!response.ok) {
     return { ok: false, error: response.error || 'Request failed: github.updatePRTitle' }
   }
+
   // Why: the host returns a bare `true` on success; a missing/undefined result is
   // not a confirmed success, so require an explicit `=== true` rather than `!== false`.
   if (response.result !== true) {
     return { ok: false, error: 'Failed to update title.' }
   }
+
   return { ok: true }
 }
 
@@ -128,9 +145,11 @@ export async function fetchSetPRAutoMerge(
   }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber, enabled: args.enabled }
+
   if (args.method) {
     params.method = args.method
   }
+
   return sendGithubPrMutation(
     client,
     'github.setPRAutoMerge',
@@ -210,15 +229,19 @@ export async function fetchAddPRReviewCommentReply(
     commentId: args.commentId,
     body: args.body
   }
+
   if (args.threadId) {
     params.threadId = args.threadId
   }
+
   if (args.path) {
     params.path = args.path
   }
+
   if (typeof args.line === 'number') {
     params.line = args.line
   }
+
   return sendGithubPrMutation(
     client,
     'github.addPRReviewCommentReply',
@@ -239,6 +262,7 @@ export async function fetchAddIssueComment(
     body: args.body,
     type: 'pr'
   }
+
   return sendGithubPrMutation(
     client,
     'github.addIssueComment',
@@ -264,17 +288,20 @@ export async function fetchResolveReviewThread(
       { prRepo: args.prRepo }
     )
   )
+
   if (!response.ok) {
     return {
       ok: false,
       error: response.error || 'Request failed: github.resolveReviewThread'
     }
   }
+
   // Why: the host returns a bare `true` on success; a missing/undefined result is
   // not a confirmed success, so require an explicit `=== true` rather than `!== false`.
   if (response.result !== true) {
     return { ok: false, error: 'Failed to update review thread.' }
   }
+
   return { ok: true }
 }
 
@@ -315,12 +342,15 @@ export async function fetchRerunPRChecks(
   }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber }
+
   if (args.failedOnly !== undefined) {
     params.failedOnly = args.failedOnly
   }
+
   if (args.headSha) {
     params.headSha = args.headSha
   }
+
   return sendGithubPrMutation(
     client,
     'github.rerunPRChecks',

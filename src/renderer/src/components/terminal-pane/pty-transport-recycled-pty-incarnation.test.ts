@@ -14,7 +14,9 @@ import {
 } from './pty-transport-test-harness'
 
 const RECYCLED_PTY_ID = 'ssh:target@@pty-1'
+
 const PRIOR_INCARNATION_ID = 'incarnation-before-the-relay-restarted'
+
 const FRESH_INCARNATION_ID = 'incarnation-of-the-shell-now-attaching'
 
 describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
@@ -49,12 +51,14 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     spawn.mockImplementationOnce(() => {
       onExit?.(exit)
+
       return Promise.resolve(spawnResponse)
     })
     const paneExit = vi.fn()
     const transport = createIpcPtyTransport({})
 
     const result = await transport.connect({ url: '', callbacks: { onExit: paneExit } })
+
     return { result, paneExit }
   }
 

@@ -36,6 +36,7 @@ export function createOrchestrationRpcHarness() {
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       handle.startsWith('term_') ? `runtime_test:${handle}:1` : null
     )
+
     if (withBoundRun) {
       activeRunId = db.createRun({
         objective: 'Test Run',
@@ -51,6 +52,7 @@ export function createOrchestrationRpcHarness() {
     } else {
       activeRunId = undefined
     }
+
     return { db, runtime, ctx: { runtime }, activeRunId }
   }
 
@@ -58,6 +60,7 @@ export function createOrchestrationRpcHarness() {
     if (!dbOpen) {
       return
     }
+
     const currentDb = db
     // Why: parser-only tests do not call setup(), so cleanup must not reuse
     // the previous test's already-closed in-memory DB.
@@ -67,9 +70,11 @@ export function createOrchestrationRpcHarness() {
 
   function findMethod(name: string) {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method
   }
 
@@ -77,6 +82,7 @@ export function createOrchestrationRpcHarness() {
   async function call(name: string, params: Record<string, unknown>, ctx: RpcContext) {
     const method = findMethod(name)
     const scopedParams = { ...params }
+
     if (activeRunId) {
       if (name === 'orchestration.taskCreate' || name === 'orchestration.taskUpdate') {
         scopedParams.run ??= activeRunId
@@ -95,7 +101,9 @@ export function createOrchestrationRpcHarness() {
         scopedParams.from ??= 'term_coord'
       }
     }
+
     const parsed = method.params ? method.params.parse(scopedParams) : undefined
+
     return method.handler(parsed, ctx)
   }
 

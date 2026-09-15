@@ -6,6 +6,7 @@ import lintStaged from 'lint-staged'
 import { expect, it } from 'vitest'
 
 const BACKUP_REFS = 'refs/worktree/lint-staged-backups'
+
 const silentLogger = { error() {}, log() {}, warn() {} }
 
 it('keeps lint-staged backups isolated to the current worktree', async () => {
@@ -39,6 +40,7 @@ it('keeps lint-staged backups isolated to the current worktree', async () => {
     writeProbe(probe)
 
     const task = [process.execPath, probe, expectedStash, observation].map(quote).join(' ')
+
     const passed = await lintStaged(
       { config: { '*.txt': task }, cwd: worktree, quiet: true },
       silentLogger

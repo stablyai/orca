@@ -24,6 +24,7 @@ describe('automation RPC methods', () => {
       runAutomationNow: vi.fn().mockResolvedValue({ id: 'run-1', automationId: 'auto-1' }),
       listAutomationRuns: vi.fn().mockReturnValue([{ id: 'run-1', automationId: 'auto-1' }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
 
     await dispatcher.dispatch(makeRequest('automation.list'))
@@ -113,6 +114,7 @@ describe('automation RPC methods', () => {
         nextCursor: '100'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
 
     await expect(
@@ -129,6 +131,7 @@ describe('automation RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       createAutomation: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
 
     await expect(
@@ -163,6 +166,7 @@ describe('automation RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', baseBranch: null })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
 
     await dispatcher.dispatch(

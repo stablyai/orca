@@ -13,15 +13,19 @@ async function settleRejections(): Promise<void> {
 
 async function collectUnhandledRejections(run: () => Promise<void>): Promise<unknown[]> {
   const unhandled: unknown[] = []
+
   const onUnhandledRejection = (reason: unknown): void => {
     unhandled.push(reason)
   }
+
   process.on('unhandledRejection', onUnhandledRejection)
+
   try {
     await run()
   } finally {
     process.off('unhandledRejection', onUnhandledRejection)
   }
+
   return unhandled
 }
 
@@ -50,6 +54,7 @@ describe('agent process inspection queue rejection containment', () => {
 
   it('keeps draining the queue after a rejecting inspection', async () => {
     const ran: string[] = []
+
     const unhandled = await collectUnhandledRejections(async () => {
       enqueueAgentProcessInspection({
         priority: 'cadence',

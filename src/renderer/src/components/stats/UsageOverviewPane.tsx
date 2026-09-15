@@ -16,6 +16,7 @@ function formatPercent(value: number | null): string {
   if (value === null) {
     return 'n/a'
   }
+
   return `${Math.round(value * 100)}%`
 }
 
@@ -23,6 +24,7 @@ function formatUpdatedAt(timestamp: number | null): string {
   if (!timestamp) {
     return 'Not scanned yet'
   }
+
   return `Updated ${new Date(timestamp).toLocaleString()}`
 }
 
@@ -84,10 +86,12 @@ export function UsageOverviewPane(): React.JSX.Element {
       openCodeSummary
     ]
   )
+
   const recentDays = useMemo(
     () => getRecentUsageDays(overview.daily, RECENT_DAY_COUNT),
     [overview.daily]
   )
+
   const isScanning = overview.providers.some((provider) => provider.isScanning)
 
   const handleRefresh = (): void => {
@@ -268,6 +272,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               totalTokens={overview.totalTokens}
               onEnable={() => {
                 recordFeatureInteraction('usage-tracking')
+
                 if (provider.id === 'claude') {
                   void enableClaudeUsage()
                 } else if (provider.id === 'codex') {

@@ -36,6 +36,7 @@ export function abortWhenRendererGone(sender: RendererLifetimeSender): {
       if (disposed) {
         return
       }
+
       disposed = true
       sender.removeListener('destroyed', abort)
       sender.removeListener('render-process-gone', abort)

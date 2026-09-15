@@ -46,17 +46,22 @@ function isExpectedRuntimeBrowserRoute(
   if (availability.state !== 'enabled' || workspaceId === FLOATING_TERMINAL_WORKTREE_ID || !route) {
     return false
   }
+
   const expectedEnvironmentId = expectedRuntimeEnvironmentId.trim()
   const environmentId = route.runtimeEnvironmentId?.trim() || null
+
   const capabilities =
     state.runtimeStatusByEnvironmentId?.get(expectedEnvironmentId)?.status?.capabilities
+
   if (
     environmentId !== expectedEnvironmentId ||
     !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
   ) {
     return false
   }
+
   const host = parseExecutionHostId(route.executionHostId)
+
   return (
     !route.executionHostId ||
     Boolean(host && (host.kind !== 'runtime' || host.environmentId === environmentId))
@@ -70,6 +75,7 @@ export function canOpenWorkspaceBrowserTabOnRuntime(
 ): boolean {
   const availability = getClientCreationActionPolicy(state, workspaceId)['managed-browser']
   const route = resolveWorktreeOperationRoute(state, workspaceId)
+
   return isExpectedRuntimeBrowserRoute(
     state,
     availability,
@@ -89,12 +95,16 @@ function isExpectedSshBrowserRoute(
   if (availability.state !== 'enabled' || workspaceId === FLOATING_TERMINAL_WORKTREE_ID || !route) {
     return false
   }
+
   const expectedTargetId = expectedSshConnectionId.trim()
+
   const eligibility = resolveSshWorkspaceBrowserRouteEligibility(
     getExecutionHostIdForWorktree(state, workspaceId),
     state.settings
   )
+
   const host = parseExecutionHostId(route.executionHostId)
+
   return (
     Boolean(expectedTargetId) &&
     route.runtimeEnvironmentId === null &&
@@ -112,6 +122,7 @@ export function canOpenWorkspaceBrowserTabOnSsh(
 ): boolean {
   const availability = getClientCreationActionPolicy(state, workspaceId)['managed-browser']
   const route = resolveWorktreeOperationRoute(state, workspaceId)
+
   return isExpectedSshBrowserRoute(state, availability, route, workspaceId, expectedSshConnectionId)
 }
 
@@ -122,6 +133,7 @@ function urlTabTitle(url: string): string | null {
   try {
     // host, not hostname: localhost:3000 and localhost:5173 are different tabs.
     const parsed = new URL(url)
+
     return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}`
   } catch {
     return null
@@ -143,7 +155,9 @@ function intentPresentation(
         translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL')
     }
   }
+
   const engine = SEARCH_ENGINE_LABELS[intent.engine]
+
   return {
     error: translate(
       'auto.lib.workspace.browser.tab.open.searchFailed',
@@ -165,6 +179,7 @@ function openFailure(message: string, reason: string, cause?: unknown): Error {
   // leaves no trace at all. The reason alone — never `cause` — keeps the typed
   // URL and search query out of the console.
   console.warn(`[workspace-browser-tab-open] ${reason}`)
+
   return new Error(message, {
     cause: new Error(reason, cause === undefined ? undefined : { cause })
   })
@@ -173,6 +188,7 @@ function openFailure(message: string, reason: string, cause?: unknown): Error {
 function validateTarget(url: string): boolean {
   try {
     const parsed = new URL(url)
+
     return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !!parsed.hostname
   } catch {
     return false
@@ -214,26 +230,34 @@ export async function openWorkspaceBrowserTab(
   request: OpenWorkspaceBrowserTabRequest
 ): Promise<void> {
   const presentation = intentPresentation(request.intent, request.url)
+
   if (!validateTarget(request.url)) {
     throw openFailure(presentation.error, 'target is not an http(s) URL')
   }
+
   const state = useAppStore.getState()
   const availability = getClientCreationActionPolicy(state, request.workspaceId)['managed-browser']
   assertManagedBrowserEnabled(availability, presentation)
   const route = resolveWorktreeOperationRoute(state, request.workspaceId)
+
   if (!route) {
     throw openFailure(presentation.error, 'no active worktree route')
   }
+
   const environmentId = route.runtimeEnvironmentId?.trim() || null
+
   const expectedEnvironmentId =
     request.expectedRuntimeEnvironmentId === undefined
       ? null
       : request.expectedRuntimeEnvironmentId.trim()
+
   const expectedSshConnectionId =
     request.expectedSshConnectionId === undefined ? null : request.expectedSshConnectionId.trim()
+
   if (expectedEnvironmentId !== null && expectedSshConnectionId !== null) {
     throw openFailure(presentation.error, 'browser owner assertion is ambiguous')
   }
+
   if (
     expectedEnvironmentId !== null &&
     !isExpectedRuntimeBrowserRoute(
@@ -246,6 +270,7 @@ export async function openWorkspaceBrowserTab(
   ) {
     throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
   }
+
   if (
     expectedSshConnectionId !== null &&
     !isExpectedSshBrowserRoute(
@@ -258,14 +283,19 @@ export async function openWorkspaceBrowserTab(
   ) {
     throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
   }
+
   const host = parseExecutionHostId(route.executionHostId)
+
   if (!environmentId) {
     if (!host || host.kind === 'runtime') {
       throw openFailure(presentation.error, `unresolved client host: ${route.executionHostId}`)
     }
+
     createClientBrowserTab(state, request, host.id, presentation)
+
     return
   }
+
   if (
     route.executionHostId &&
     (!host || (host.kind === 'runtime' && host.environmentId !== environmentId))
@@ -275,14 +305,18 @@ export async function openWorkspaceBrowserTab(
       `host ${route.executionHostId} does not own runtime ${environmentId}`
     )
   }
+
   // An asserted runtime owns links opened from remote panes; provider policy may describe the
   // viewing client's generic browser surface rather than that pane's execution host.
   if (expectedEnvironmentId === null && availability.provider === 'local-client') {
     const localHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
     createClientBrowserTab(state, request, localHostId, presentation)
+
     return
   }
+
   let created = false
+
   try {
     created = await createWebRuntimeSessionBrowserTab({
       worktreeId: request.workspaceId,
@@ -305,6 +339,7 @@ export async function openWorkspaceBrowserTab(
   } catch (error) {
     throw openFailure(presentation.error, 'runtime browser tab creation failed', error)
   }
+
   if (!created) {
     throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
   }

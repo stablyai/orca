@@ -7,6 +7,7 @@ vi.mock('electron', () => ({
     getAppPath: () => '/host/app'
   }
 }))
+
 vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
@@ -25,6 +26,7 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
   userDataPath: '/host/user-data',
   entryExists: () => false
 }
+
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -38,6 +40,7 @@ function createFakeChild(): FakeChild {
   child.stderr = new EventEmitter()
   child.stdin = { end: vi.fn(), on: vi.fn() }
   child.kill = vi.fn()
+
   return child
 }
 
@@ -51,7 +54,9 @@ describe('runRemoteOrcaCli', () => {
       body?: string
       read_at: string | null
     }[] = []
+
     let nextMessage = 1
+
     const db = {
       insertMessage: vi.fn(
         (message: { from: string; to: string; subject: string; body?: string }) => {
@@ -63,7 +68,9 @@ describe('runRemoteOrcaCli', () => {
             body: message.body,
             read_at: null
           }
+
           messages.push(row)
+
           return row
         }
       ),
@@ -87,6 +94,7 @@ describe('runRemoteOrcaCli', () => {
       getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
+
     const runtime = {
       getRuntimeId: () => 'runtime-test',
       getStatus: () => ({
@@ -141,6 +149,7 @@ describe('runRemoteOrcaCli', () => {
         meta: { query: 'auth bug', limit: 5, returned: 0, limitReached: false }
       }))
     } as unknown as OrcaRuntimeService
+
     return { runtime, db }
   }
 
@@ -159,6 +168,7 @@ describe('runRemoteOrcaCli', () => {
     'requests terminal layouts according to the legacy SSH output mode',
     async ({ argv, includeVisualLayouts }) => {
       const runtime = new OrcaRuntimeService()
+
       const listTerminals = vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
         terminals: [],
         totalCount: 0,
@@ -236,11 +246,13 @@ describe('runRemoteOrcaCli', () => {
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
     const run = db.createRun({
       objective: 'Remote lifecycle rejection',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_ssh', 'tab_owner:leaf_owner')
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_foreign:leaf_foreign')
@@ -294,11 +306,13 @@ describe('runRemoteOrcaCli', () => {
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
     const run = db.createRun({
       objective: 'Remote lifecycle success',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_ssh', 'tab_owner:leaf_owner')
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_owner:leaf_owner')
@@ -353,18 +367,22 @@ describe('runRemoteOrcaCli', () => {
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_ssh:leaf_ssh')
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('ssh_runtime:pty:1')
+
     const run = db.createRun({
       objective: 'SSH capability transport',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     const capability = db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_ssh',
@@ -374,6 +392,7 @@ describe('runRemoteOrcaCli', () => {
       setupState: 'not_applicable',
       effects: []
     })
+
     db.markWorkerDispatchReady(started.dispatch.id)
 
     try {
@@ -528,10 +547,12 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(0)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       result: { count: number; messages: { subject: string }[] }
     }
+
     expect(payload.ok).toBe(true)
     expect(payload.result.count).toBe(1)
     expect(payload.result.messages[0]?.subject).toBe('pong')
@@ -654,6 +675,7 @@ describe('runRemoteOrcaCli', () => {
 
     const child = createFakeChild()
     spawn.mockReturnValueOnce(child)
+
     const listPromise = runRemoteOrcaCli(
       runtime,
       { argv: ['account', 'list'], cwd: '/home/alice', env: {} },
@@ -663,6 +685,7 @@ describe('runRemoteOrcaCli', () => {
         spawn: spawn as never
       }
     )
+
     await Promise.resolve()
     child.stdout.emit('data', Buffer.from('Managed Claude accounts\n'))
     child.emit('close', 0)
@@ -689,6 +712,7 @@ describe('runRemoteOrcaCli', () => {
         spawn: spawn as never
       }
     )
+
     await Promise.resolve()
     child.stdout.emit('data', Buffer.from('Usage: orca account add\n'))
     child.emit('close', 0)
@@ -711,10 +735,12 @@ describe('runRemoteOrcaCli', () => {
     )
 
     expect(result.exitCode).toBe(1)
+
     const payload = JSON.parse(result.stdout) as {
       ok: boolean
       error: { code: string }
     }
+
     expect(payload.ok).toBe(false)
     expect(payload.error.code).toBe('unsupported_over_ssh')
   })

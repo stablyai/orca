@@ -6,6 +6,7 @@ import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -135,6 +136,7 @@ describe('Session', () => {
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
         : {})
     })
+
     return session
   }
 
@@ -228,6 +230,7 @@ describe('Session', () => {
     it('does not deliver data to detached clients', () => {
       createSession()
       const received: string[] = []
+
       const token = session.attachClient({
         onData: (data) => received.push(data),
         onExit: () => {}
@@ -307,12 +310,14 @@ describe('Session', () => {
       createSession({ ownerBackend: 'posix-pty' })
       session.closeStartupQueryAuthority()
       const legacyReplyProducers: string[] = []
+
       const legacyOnData = vi.fn((data: string) => {
         if (data === query) {
           legacyReplyProducers.push('remote-visible-renderer')
           session.write(reply)
         }
       })
+
       session.attachClient({ onData: legacyOnData, onExit: () => {} })
 
       subprocess.simulateData(query)
@@ -333,12 +338,14 @@ describe('Session', () => {
       createSession({ ownerBackend: 'windows-conpty' })
       session.closeStartupQueryAuthority()
       const fixedReplyProducers: string[] = []
+
       const fixedOnData = vi.fn((data: string) => {
         if (data === query) {
           fixedReplyProducers.push('remote-visible-renderer')
           session.write(reply)
         }
       })
+
       session.attachClient({ onData: fixedOnData, onExit: () => {} })
 
       subprocess.simulateData(query)
@@ -691,10 +698,12 @@ describe('Session', () => {
       let attempts = 0
       subprocess.kill = () => {
         attempts++
+
         if (attempts === 1) {
           throw new Error('graceful kill rejected')
         }
       }
+
       createSession()
 
       expect(() => session.kill()).toThrow('graceful kill rejected')
@@ -732,9 +741,11 @@ describe('Session', () => {
       // the pid walk behind the sweep's fallback cannot see it. Only the job can.
       createSession({ launchAgent: 'claude' })
       session.kill()
+
       const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
         terminateOwnedTree?: () => string
       }
+
       expect(deps.terminateOwnedTree?.()).toBe('terminated')
     })
 
@@ -767,6 +778,7 @@ describe('Session', () => {
       createSession()
       // Override kill to NOT trigger exit
       subprocess.kill = () => {}
+
       const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
 
       session.kill()
@@ -785,10 +797,12 @@ describe('Session', () => {
       let forceKillAttempts = 0
       subprocess.forceKill = () => {
         forceKillAttempts++
+
         if (forceKillAttempts === 1) {
           throw new Error('force kill rejected')
         }
       }
+
       createSession()
 
       const shutdown = session.forceKillAndWaitForExit()
@@ -803,13 +817,16 @@ describe('Session', () => {
 
     it('retries a rejected graceful-deadline force kill', async () => {
       subprocess.kill = () => {}
+
       let forceKillAttempts = 0
       subprocess.forceKill = () => {
         forceKillAttempts++
+
         if (forceKillAttempts === 1) {
           throw new Error('transient graceful fallback failure')
         }
       }
+
       createSession()
 
       session.kill()
@@ -827,6 +844,7 @@ describe('Session', () => {
     it('keeps late data and the real exit code until physical exit', () => {
       createSession()
       subprocess.kill = () => {}
+
       const onData = vi.fn()
       const onExit = vi.fn()
       session.attachClient({ onData, onExit })
@@ -904,6 +922,7 @@ describe('Session', () => {
     it('ignores stale detach with wrong token', () => {
       createSession()
       const received: string[] = []
+
       const token1 = session.attachClient({
         onData: (d) => received.push(d),
         onExit: () => {}

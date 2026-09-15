@@ -33,10 +33,12 @@ import { skillDirectoryMaxDepth } from '../../shared/skill-discovery-depth'
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
+
 // Why: the fixed home roots are identical for every target, so one worktree pane
 // per open workspace used to re-walk the same directories once per pane. Sharing
 // them for a few seconds is what bounds that fan-out.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
+
 // Why: sized off the root formula, not a round number. One scan builds
 // `17 fixed home roots + 7 per local repo (+ cwd) + plugin roots`, so a bound
 // smaller than a single scan's root count makes that scan evict its own earlier
@@ -48,10 +50,12 @@ export const SKILL_ROOT_SCAN_TTL_MS = 10_000
 // breaks. Most repo roots do not exist, and a missing root caches as
 // `{exists: false, skills: []}`.
 const MAX_CACHED_SKILL_ROOTS = 1_024
+
 // Why: roots grow with the repo count, so an uncapped id list would make one log
 // line grow with the install. Root *ids* are safe to log where labels and paths
 // are not — a repo/plugin id is already a hash.
 export const MAX_LOGGED_ROOT_IDS = 12
+
 // Why: a root that did not answer holds unknown skills, not zero, so serving what
 // it last held is what stops an installed skill flipping to "Install" while a
 // mount is wedged. Bounded rather than forever: it covers a stall
@@ -62,6 +66,7 @@ export const LAST_KNOWN_ROOT_SCAN_RETENTION_MS = 5 * 60_000
 type RootScan = { exists: boolean; skills: ScannedSkill[]; unavailable?: boolean }
 
 const rootScans = new SkillScanCoalescer<RootScan>(MAX_CACHED_SKILL_ROOTS)
+
 /** Last answered scan per root key, read only when a later scan goes unavailable. */
 const lastKnownRootScans = new Map<string, { skills: ScannedSkill[]; recordedAt: number }>()
 
@@ -77,35 +82,45 @@ function recordLastKnownRootScan(key: string, scan: RootScan): void {
     // Why: a root that scanned as absent is known-empty, so keeping an older copy
     // would resurrect skills the user actually removed the next time it stalls.
     lastKnownRootScans.delete(key)
+
     return
   }
+
   // Delete first so re-insert refreshes recency under the LRU bound below.
   lastKnownRootScans.delete(key)
   lastKnownRootScans.set(key, { skills: scan.skills, recordedAt: Date.now() })
+
   while (lastKnownRootScans.size > MAX_CACHED_SKILL_ROOTS) {
     const oldestKey = lastKnownRootScans.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     lastKnownRootScans.delete(oldestKey)
   }
 }
 
 function readLastKnownRootScan(key: string): ScannedSkill[] {
   const retained = lastKnownRootScans.get(key)
+
   if (!retained) {
     return []
   }
+
   if (Date.now() - retained.recordedAt > LAST_KNOWN_ROOT_SCAN_RETENTION_MS) {
     lastKnownRootScans.delete(key)
+
     return []
   }
+
   return retained.skills
 }
 
 async function pathExists(pathValue: string): Promise<boolean> {
   try {
     await stat(pathValue)
+
     return true
   } catch {
     return false
@@ -121,6 +136,7 @@ async function readSkillSummary(skillFilePath: string): Promise<{
     const fileStat = await stat(skillFilePath)
     const file = await open(skillFilePath, 'r')
     let content = ''
+
     try {
       const buffer = Buffer.alloc(Math.min(fileStat.size, MAX_MARKDOWN_BYTES))
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
@@ -128,6 +144,7 @@ async function readSkillSummary(skillFilePath: string): Promise<{
     } finally {
       await file.close()
     }
+
     return {
       ...summarizeSkillMarkdown(content),
       updatedAt: fileStat.mtimeMs
@@ -142,6 +159,7 @@ type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
   const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
   const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
+
   // Why: a root can hold many packages and each one costs a summary read plus a
   // package walk. Unbounded fan-out here is what turned one scan into a burst of
   // filesystem-metadata work across every core.
@@ -155,10 +173,13 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
       const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
       const directoryPath = dirname(skillFilePath)
       const summary = await readSkillSummary(skillFilePath)
+
       if (!summary) {
         return null
       }
+
       const sourceKind = sourceKindForSkill(root, skillFilePath, { relative, sep })
+
       return {
         id: stablePathId(canonicalSkillFilePath),
         name: summary.name ?? basename(directoryPath),
@@ -177,6 +198,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
       } satisfies ScannedSkill
     })
   )
+
   return skills.filter((skill): skill is ScannedSkill => skill !== null)
 }
 
@@ -192,21 +214,26 @@ async function scanRootShared(
   refresh: boolean
 ): Promise<SkillScanOutcome<RootScan>> {
   const key = rootScanKey(root)
+
   try {
     const outcome = await rootScans.run(
       key,
       { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
       async (signal) => {
         const exists = await pathExists(root.path)
+
         return { exists, skills: exists ? await scanRoot(root, signal) : [] }
       }
     )
+
     recordLastKnownRootScan(key, outcome.value)
+
     return outcome
   } catch (error) {
     if (!isSkillRootUnavailableError(error)) {
       throw error
     }
+
     // Why degrade instead of rejecting: one unreachable root must not fail the
     // whole discovery and empty the picker for every healthy root beside it.
     // `unavailable` keeps that distinct from a root that genuinely is not there.
@@ -231,6 +258,7 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
   // the same file. Keep the first source's higher-level scope identity, but
   // record every contributing root so per-agent visibility survives dedup.
   const existing = seen.get(skill.canonicalSkillFilePath)
+
   if (!existing) {
     const { canonicalSkillFilePath, ...publicSkill } = skill
     // Copy: a shared root scan hands the same skill object to every caller, so the
@@ -240,22 +268,27 @@ function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSki
       providers: [...publicSkill.providers],
       rootPaths: [skill.rootPath]
     })
+
     return
   }
+
   if (existing.rootPaths && !existing.rootPaths.includes(skill.rootPath)) {
     existing.rootPaths.push(skill.rootPath)
   }
+
   // Why: providers is per-agent visibility just like rootPaths; keeping only
   // the first root's tags makes a shared/symlinked skill under-report which
   // agents can see it on the Settings provider badges/filter. Reassign a
   // fresh array — `providers` aliases the scan root's array, so pushing in
   // place would mutate the root and every sibling skill/source sharing it.
   const mergedProviders = [...existing.providers]
+
   for (const provider of skill.providers) {
     if (!mergedProviders.includes(provider)) {
       mergedProviders.push(provider)
     }
   }
+
   existing.providers = mergedProviders
 }
 
@@ -272,6 +305,7 @@ export async function discoverSkills(args: {
   const startedAt = Date.now()
   const homeDir = args.homeDir ?? homedir()
   const refresh = args.refresh === true
+
   const roots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     // Why: plugin discovery is native-chat data keyed to an explicit workspace.
@@ -282,7 +316,9 @@ export async function discoverSkills(args: {
       ? await discoverClaudePluginSkillSources({ homeDir, cwd: args.cwd })
       : [])
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+
   const scans = await Promise.all(roots.map((root) => scanRootShared(root, refresh)))
+
   const sources: SkillDiscoverySource[] = roots.map((root, index) => ({
     ...root,
     providers: [...root.providers],
@@ -293,14 +329,17 @@ export async function discoverSkills(args: {
         ? undefined
         : 'missing'
   }))
+
   const normalizedNames = args.names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const seen = new Map<string, DiscoveredSkill>()
+
   for (const { value } of scans) {
     for (const skill of value.skills) {
       if (args.sourceKinds?.length && !args.sourceKinds.includes(skill.sourceKind)) {
         continue
       }
+
       if (
         expectedNames &&
         !expectedNames.has(skill.name.trim().toLowerCase()) &&
@@ -308,15 +347,18 @@ export async function discoverSkills(args: {
       ) {
         continue
       }
+
       mergeScannedSkill(seen, skill)
     }
   }
+
   const skills = sortDiscoveredSkills(Array.from(seen.values()))
   // Why: root *ids* — a repo/plugin id is already a hash, while its label carries
   // the repo or plugin name and its path carries the user's directory names. A
   // fully cached scan did no filesystem work, so it stays silent rather than
   // burying the bursts this line exists to make visible.
   const walked = roots.filter((_, index) => !scans[index].cached).map((root) => root.id)
+
   if (walked.length > 0) {
     // `present` is not derivable from the rest: "walked 500 roots, 3 existed" is
     // the shape that says the root set, not the tree, is what costs. The id list
@@ -326,6 +368,7 @@ export async function discoverSkills(args: {
       `[skills] scan roots=${roots.length} present=${present} walked=${walked.length} skills=${skills.length} ms=${Date.now() - startedAt} ids=${walked.slice(0, MAX_LOGGED_ROOT_IDS).join(',')}`
     )
   }
+
   return {
     skills,
     sources: sortSkillDiscoverySources(sources),

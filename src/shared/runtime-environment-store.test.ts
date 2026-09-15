@@ -36,6 +36,7 @@ describe('runtime environment store', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -62,6 +63,7 @@ describe('runtime environment store', () => {
   it('advances pairing revisions across equal and backward clock readings', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
+
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
       pairingCode: pairingCode(),
@@ -72,10 +74,12 @@ describe('runtime environment store', () => {
       pairingCode: pairingCode('ws://192.0.2.10:6768'),
       now: 100
     })
+
     const backwardClock = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
       pairingCode: pairingCode('ws://192.0.2.11:6768'),
       now: 50
     })
+
     const laterClock = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
       pairingCode: pairingCode('ws://192.0.2.12:6768'),
       now: 200
@@ -91,16 +95,19 @@ describe('runtime environment store', () => {
   it('keeps SSH-tunnel metadata only while the pairing endpoint is loopback', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
+
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'tunneled box',
       pairingCode: pairingCode(),
       connectionDependency: 'ssh-tunnel'
     })
+
     expect(environment.connectionDependency).toBe('ssh-tunnel')
 
     const updated = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
       pairingCode: pairingCode('ws://192.0.2.10:6768')
     })
+
     expect(updated).not.toHaveProperty('connectionDependency')
 
     const direct = addEnvironmentFromPairingCode(userDataPath, {
@@ -108,12 +115,14 @@ describe('runtime environment store', () => {
       pairingCode: pairingCode('ws://192.0.2.11:6768'),
       connectionDependency: 'ssh-tunnel'
     })
+
     expect(direct).not.toHaveProperty('connectionDependency')
   })
 
   it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
+
     const env = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
       pairingCode: pairingCode()
@@ -138,6 +147,7 @@ describe('runtime environment store', () => {
   it('persists immediately when the runtimeId changes within the throttle window', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
+
     const env = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
       pairingCode: pairingCode()
@@ -155,11 +165,13 @@ describe('runtime environment store', () => {
   it('persists paired device identity from pairing and status backfill', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
+
     const paired = addEnvironmentFromPairingCode(userDataPath, {
       name: 'paired box',
       pairingCode: pairingCode('ws://127.0.0.1:6768', 'device-from-offer'),
       now: 1_000
     })
+
     const legacy = addEnvironmentFromPairingCode(userDataPath, {
       name: 'legacy box',
       pairingCode: pairingCode('ws://192.0.2.10:6768'),
@@ -190,6 +202,7 @@ describe('runtime environment store', () => {
   it('rejects an oversized write without replacing the durable environment list', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-write-bound-'))
     tempDirs.push(userDataPath)
+
     const first = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
       pairingCode: pairingCode()

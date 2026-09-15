@@ -1,9 +1,11 @@
 function stripInlineComment(value: string): string {
   let inSingle = false
   let inDouble = false
+
   for (let i = 0; i < value.length; i++) {
     const ch = value[i]
     const prev = i > 0 ? value[i - 1] : ''
+
     if (ch === "'" && !inDouble) {
       inSingle = !inSingle
     } else if (ch === '"' && !inSingle) {
@@ -12,6 +14,7 @@ function stripInlineComment(value: string): string {
       return value.slice(0, i).trim()
     }
   }
+
   return value.trim()
 }
 
@@ -20,11 +23,13 @@ export function parseGhosttyConfig(content: string): Record<string, string | str
 
   for (const rawLine of content.split('\n')) {
     const line = rawLine.trim()
+
     if (!line || line.startsWith('#')) {
       continue
     }
 
     const eqIndex = line.indexOf('=')
+
     if (eqIndex === -1) {
       continue
     }
@@ -50,6 +55,7 @@ export function parseGhosttyConfig(content: string): Record<string, string | str
     }
 
     const existing = result[key]
+
     if (existing === undefined) {
       result[key] = value
     } else if (Array.isArray(existing)) {

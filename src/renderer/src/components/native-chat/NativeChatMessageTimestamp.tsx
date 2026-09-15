@@ -10,6 +10,7 @@ let cached: {
 
 function getTimestampFormatters(): NonNullable<typeof cached> {
   const locale = getIntlLocale()
+
   if (!cached || cached.locale !== locale) {
     cached = {
       locale,
@@ -17,6 +18,7 @@ function getTimestampFormatters(): NonNullable<typeof cached> {
       full: new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long' })
     }
   }
+
   return cached
 }
 
@@ -30,13 +32,17 @@ export function NativeChatMessageTimestamp({
   className?: string
 }): React.JSX.Element | null {
   useTranslation()
+
   if (timestamp === null) {
     return null
   }
+
   const date = new Date(timestamp)
+
   if (Number.isNaN(date.getTime())) {
     return null
   }
+
   const formatters = getTimestampFormatters()
 
   return (

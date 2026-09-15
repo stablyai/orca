@@ -32,24 +32,31 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     taskUiReady,
     tasksSupported
   } = model
+
   const createTask = useCallback(async (): Promise<void> => {
     if (!client || !tasksSupported || !taskStateHydrated || creatingTask) {
       return
     }
+
     const title = createTitle.trim()
+
     if (!title) {
       return
     }
+
     setCreatingTask(true)
     setError('')
+
     try {
       if (provider === 'github' || provider === 'gitlab') {
         const repo = hostedRepos.find((entry) => entry.id === createRepoId) ?? hostedRepos[0]
+
         if (!repo) {
           throw new Error(
             `Add a Git repository before creating a ${provider === 'github' ? 'GitHub' : 'GitLab'} issue.`
           )
         }
+
         const response = await client.sendRequest(
           provider === 'github' ? 'github.createIssue' : 'gitlab.createIssue',
           {
@@ -58,22 +65,27 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
             body: createBody
           }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as {
           ok?: boolean
           number?: number
           url?: string
           error?: string
         }
+
         if (result.ok === false) {
           throw new Error(
             result.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
           )
         }
+
         if (typeof result.number === 'number') {
           const createdAt = new Date().toISOString()
+
           if (provider === 'github') {
             setActionItem(
               createGitHubTask(repo, {
@@ -106,18 +118,22 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         }
       } else {
         const team = linearTeams.find((entry) => entry.id === createTeamId) ?? linearTeams[0]
+
         if (!team) {
           throw new Error('Select a Linear team first.')
         }
+
         const response = await client.sendRequest('linear.createIssue', {
           teamId: team.id,
           title,
           description: createBody.trim() || undefined,
           workspaceId: team.workspaceId
         })
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as {
           ok?: boolean
           id?: string
@@ -126,9 +142,11 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           url?: string
           error?: string
         }
+
         if (result.ok === false || !result.id || !result.identifier) {
           throw new Error(result.error ?? 'Failed to create Linear issue')
         }
+
         setActionItem(
           createLinearTask({
             id: result.id,
@@ -146,6 +164,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           }) as Extract<TaskItem, { provider: 'linear' }>
         )
       }
+
       setShowCreateTask(false)
       setCreateTitle('')
       setCreateBody('')
@@ -175,7 +194,9 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
       if (!client || !taskUiReady) {
         return
       }
+
       setError('')
+
       try {
         const response = await client.sendRequest(
           'repo.update',
@@ -185,9 +206,11 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
           },
           { timeoutMs: 15_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         // Why: the host owns issueSourcePreference, so re-read the list instead of
         // patching the cached copy and hoping the two stay in step.
         await repoListReload().catch(() => {})
@@ -198,6 +221,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     },
     [client, loadTasks, repoListReload, taskUiReady]
   )
+
   return Object.assign(model, { createTask, setGitHubIssueSourcePreference })
 }
 

@@ -39,19 +39,25 @@ describe('stats pipeline independence from OSC title detection', () => {
 
   it('no stats source imports a title-based agent detector', () => {
     const offenders: string[] = []
+
     for (const name of statsSourceFiles()) {
       const source = readFileSync(join(STATS_DIR, name), 'utf8')
+
       for (const line of source.split('\n')) {
         const specifier = /^\s*import\s[\s\S]*?from\s+['"]([^'"]+)['"]/.exec(line)?.[1]
+
         if (!specifier) {
           continue
         }
+
         const moduleName = specifier.slice(specifier.lastIndexOf('/') + 1)
+
         if (TITLE_DETECTION_MODULES.includes(moduleName)) {
           offenders.push(`${name} -> ${specifier}`)
         }
       }
     }
+
     expect(offenders).toEqual([])
   })
 })

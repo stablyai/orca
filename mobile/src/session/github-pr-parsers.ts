@@ -43,17 +43,21 @@ export function readForBranch(value: unknown): HostedReviewInfo | null {
   if (!isRecord(value)) {
     return null
   }
+
   const provider = readProvider(value.provider)
   const number = readNumber(value.number)
   const title = readString(value.title)
   const url = readString(value.url)
   const updatedAt = readString(value.updatedAt)
+
   // Why: the gate decides on provider/number; bail only when the core identity
   // is unparseable rather than throwing on partial payloads.
   if (provider === undefined || number === undefined) {
     return null
   }
+
   const state = value.state
+
   return {
     provider,
     number,
@@ -79,11 +83,14 @@ export function readPRForBranch(value: unknown): PRInfo | null {
   if (!isRecord(value)) {
     return null
   }
+
   const number = readNumber(value.number)
   const state = readPRState(value.state)
+
   if (number === undefined || state === null) {
     return null
   }
+
   return {
     number,
     title: readString(value.title) ?? '',
@@ -113,13 +120,16 @@ function readWorkItem(value: unknown): Omit<GitHubWorkItem, 'repoId'> | null {
   if (!isRecord(value)) {
     return null
   }
+
   const id = readString(value.id)
   const number = readNumber(value.number)
   const type = value.type === 'issue' || value.type === 'pr' ? value.type : null
   const state = readPRState(value.state)
+
   if (id === undefined || number === undefined || type === null || state === null) {
     return null
   }
+
   return {
     id,
     type,
@@ -138,6 +148,7 @@ function readWorkItem(value: unknown): Omit<GitHubWorkItem, 'repoId'> | null {
     latestReviews: Array.isArray(value.latestReviews)
       ? value.latestReviews.flatMap((entry): GitHubPRReviewSummary[] => {
           const parsed = readReviewSummary(entry)
+
           return parsed ? [parsed] : []
         })
       : undefined,
@@ -153,10 +164,13 @@ export function readWorkItemDetails(value: unknown): GitHubWorkItemDetails | nul
   if (!isRecord(value)) {
     return null
   }
+
   const item = readWorkItem(value.item)
+
   if (!item) {
     return null
   }
+
   return {
     item,
     body: readString(value.body) ?? '',
@@ -174,11 +188,14 @@ function readCheckDetail(value: unknown): PRCheckDetail | null {
   if (!isRecord(value)) {
     return null
   }
+
   const name = readString(value.name)
   const status = readCheckRunStatus(value.status)
+
   if (name === undefined || status === null) {
     return null
   }
+
   return {
     name,
     status,
@@ -193,8 +210,10 @@ export function readPRChecks(value: unknown): PRCheckDetail[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   return value.flatMap((entry): PRCheckDetail[] => {
     const parsed = readCheckDetail(entry)
+
     return parsed ? [parsed] : []
   })
 }
@@ -203,6 +222,7 @@ function readCheckAnnotation(value: unknown): PRCheckAnnotation | null {
   if (!isRecord(value)) {
     return null
   }
+
   return {
     path: readString(value.path) ?? null,
     startLine: readNumber(value.startLine) ?? null,
@@ -218,6 +238,7 @@ function readCheckStep(value: unknown): PRCheckStep | null {
   if (!isRecord(value)) {
     return null
   }
+
   return {
     name: readString(value.name) ?? '',
     status: readString(value.status) ?? null,
@@ -231,6 +252,7 @@ function readCheckJob(value: unknown): PRCheckJob | null {
   if (!isRecord(value)) {
     return null
   }
+
   return {
     id: readNumber(value.id) ?? null,
     name: readString(value.name) ?? '',
@@ -243,6 +265,7 @@ function readCheckJob(value: unknown): PRCheckJob | null {
     steps: Array.isArray(value.steps)
       ? value.steps.flatMap((entry): PRCheckStep[] => {
           const parsed = readCheckStep(entry)
+
           return parsed ? [parsed] : []
         })
       : []
@@ -253,10 +276,13 @@ export function readPRCheckDetails(value: unknown): PRCheckRunDetails | null {
   if (!isRecord(value)) {
     return null
   }
+
   const name = readString(value.name)
+
   if (name === undefined) {
     return null
   }
+
   return {
     name,
     status: readString(value.status) ?? null,
@@ -271,12 +297,14 @@ export function readPRCheckDetails(value: unknown): PRCheckRunDetails | null {
     annotations: Array.isArray(value.annotations)
       ? value.annotations.flatMap((entry): PRCheckAnnotation[] => {
           const parsed = readCheckAnnotation(entry)
+
           return parsed ? [parsed] : []
         })
       : [],
     jobs: Array.isArray(value.jobs)
       ? value.jobs.flatMap((entry): PRCheckJob[] => {
           const parsed = readCheckJob(entry)
+
           return parsed ? [parsed] : []
         })
       : []

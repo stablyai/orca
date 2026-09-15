@@ -29,16 +29,19 @@ export function setCommentReaction(
 ): PRComment {
   const reactions = comment.reactions ?? []
   const current = reactions.find((reaction) => reaction.content === content)
+
   if (Boolean(current?.viewerHasReacted) === reacted) {
     return comment
   }
 
   const nextCount = Math.max(0, (current?.count ?? 0) + (reacted ? 1 : -1))
+
   const nextReaction: GitHubReaction = {
     content,
     count: nextCount,
     viewerHasReacted: reacted
   }
+
   const nextReactions = sortReactions(
     reactions
       .filter((reaction) => reaction.content !== content)
@@ -57,6 +60,7 @@ export function restoreCommentReaction(
     ...(comment.reactions ?? []).filter((reaction) => reaction.content !== content),
     ...(previousReaction ? [previousReaction] : [])
   ])
+
   return { ...comment, reactions: reactions.length > 0 ? reactions : undefined }
 }
 

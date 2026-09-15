@@ -8,6 +8,7 @@ const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof childProcess>()
+
   return {
     ...actual,
     execFile: execFileMock,
@@ -36,6 +37,7 @@ import {
 function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value })
+
   try {
     return fn()
   } finally {
@@ -46,6 +48,7 @@ function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
 async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value })
+
   try {
     return await fn()
   } finally {
@@ -263,6 +266,7 @@ describe('WSL distro discovery cache', () => {
           vi.advanceTimersByTime(delayMs)
           listWslDistros()
         }
+
         expect(execFileSyncMock).toHaveBeenCalledTimes(6)
         vi.advanceTimersByTime(300_000)
         listWslDistros()
@@ -716,9 +720,11 @@ describe('wslUncDirectoryExists', () => {
 
   it('returns true when the distro reports the directory exists', () => {
     execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
+
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
     )
+
     expect(result).toBe(true)
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'wsl.exe',
@@ -738,9 +744,11 @@ describe('wslUncDirectoryExists', () => {
 
   it('returns false when the guest reports the directory missing', () => {
     execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_MISSING__')
+
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing')
     )
+
     expect(result).toBe(false)
   })
 
@@ -750,9 +758,11 @@ describe('wslUncDirectoryExists', () => {
       error.status = 4294967295
       throw error
     })
+
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
     )
+
     expect(result).toBeNull()
   })
 

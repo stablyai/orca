@@ -1,7 +1,9 @@
 import os from 'node:os'
 
 const maxOldSpaceSizeMb = 4096
+
 const minOldSpaceSizeMb = 2048
+
 const reservedSystemMemoryMb = 1024
 
 export function getBuildOldSpaceSizeMb(totalMemoryBytes = os.totalmem()) {

@@ -19,6 +19,7 @@ import {
 } from './workspace-snapshot-prune-index'
 
 const SNAPSHOT_FILE_NAME = 'orca-workspace-space-analysis.json'
+
 const SNAPSHOT_VERSION = 2
 
 export type WorkspaceSpaceAnalysisSnapshotPruneTarget = WorkspaceSnapshotPruneTarget
@@ -38,6 +39,7 @@ function isPersistableWorktreeRow(value: unknown): value is WorkspaceSpaceWorktr
   if (!isRecord(value)) {
     return false
   }
+
   return (
     typeof value.worktreeId === 'string' &&
     typeof value.repoId === 'string' &&
@@ -54,10 +56,13 @@ function parseSnapshot(parsed: unknown): WorkspaceSpaceAnalysis | null {
   if (!isRecord(parsed) || parsed.version !== SNAPSHOT_VERSION) {
     return null
   }
+
   const analysis = parsed.analysis
+
   if (!isRecord(analysis)) {
     return null
   }
+
   if (
     typeof analysis.scannedAt !== 'number' ||
     typeof analysis.totalSizeBytes !== 'number' ||
@@ -67,6 +72,7 @@ function parseSnapshot(parsed: unknown): WorkspaceSpaceAnalysis | null {
   ) {
     return null
   }
+
   return analysis as unknown as WorkspaceSpaceAnalysis
 }
 
@@ -111,6 +117,7 @@ export async function persistWorkspaceSpaceAnalysisSnapshot(
   analysis: WorkspaceSpaceAnalysis
 ): Promise<void> {
   const file = sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME)
+
   try {
     await withSidecarSnapshotQueue(file, async () => {
       await writeSnapshot(file, stripTopLevelItems(excludeRowsPrunedDuringScan(file, analysis)))
@@ -126,6 +133,7 @@ function withoutWorktreeRows(
   shouldRemove: (row: WorkspaceSpaceWorktree) => boolean
 ): WorkspaceSpaceAnalysis {
   const worktrees: WorkspaceSpaceWorktree[] = []
+
   const removedByRepo = new Map<
     string,
     {
@@ -136,6 +144,7 @@ function withoutWorktreeRows(
       reclaimableBytes: number
     }
   >()
+
   let removedCount = 0
   let scannedDelta = 0
   let unavailableDelta = 0
@@ -147,6 +156,7 @@ function withoutWorktreeRows(
       worktrees.push(row)
       continue
     }
+
     const scanned = row.status === 'ok' ? 1 : 0
     const unavailable = row.status === 'ok' ? 0 : 1
     removedCount += 1
@@ -155,6 +165,7 @@ function withoutWorktreeRows(
     totalSizeDelta += row.sizeBytes
     reclaimableDelta += row.reclaimableBytes
     const key = analysisRepoKey(row)
+
     const delta = removedByRepo.get(key) ?? {
       worktreeCount: 0,
       scannedWorktreeCount: 0,
@@ -162,6 +173,7 @@ function withoutWorktreeRows(
       totalSizeBytes: 0,
       reclaimableBytes: 0
     }
+
     delta.worktreeCount += 1
     delta.scannedWorktreeCount += scanned
     delta.unavailableWorktreeCount += unavailable
@@ -169,9 +181,11 @@ function withoutWorktreeRows(
     delta.reclaimableBytes += row.reclaimableBytes
     removedByRepo.set(key, delta)
   }
+
   if (removedCount === 0) {
     return analysis
   }
+
   return {
     ...analysis,
     worktrees,
@@ -182,6 +196,7 @@ function withoutWorktreeRows(
     reclaimableBytes: Math.max(0, analysis.reclaimableBytes - reclaimableDelta),
     repos: analysis.repos.map((repo) => {
       const delta = removedByRepo.get(analysisRepoKey(repo))
+
       return delta
         ? {
             ...repo,
@@ -214,6 +229,7 @@ export function registerWorkspaceSpaceAnalysisSnapshotPruneTombstones(
   if (targets.length === 0) {
     return
   }
+
   registerWorkspaceSnapshotPrunesForFile(
     prunedWorkspacesByFile,
     sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME),
@@ -229,6 +245,7 @@ function excludeRowsPrunedDuringScan(
     prunedWorkspacesByFile.get(file),
     analysis.scannedAt
   )
+
   return withoutWorktreeRows(
     analysis,
     (row) =>
@@ -239,14 +256,17 @@ function excludeRowsPrunedDuringScan(
 
 function clearSupersededPrunes(file: string, analysis: WorkspaceSpaceAnalysis): void {
   const pruned = prunedWorkspacesByFile.get(file)
+
   if (!pruned) {
     return
   }
+
   for (const [key, entry] of pruned) {
     if (entry.prunedAt < analysis.scannedAt) {
       pruned.delete(key)
     }
   }
+
   if (pruned.size === 0) {
     prunedWorkspacesByFile.delete(file)
   }
@@ -260,33 +280,43 @@ async function pruneWorkspaceSpaceAnalysisSnapshotsWithRegisteredTombstones(
   if (targets.length === 0) {
     return
   }
+
   const file = sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME)
   const targetKeys = workspaceSnapshotPruneTargetKeys(targets)
+
   if (registerTombstones) {
     registerWorkspaceSnapshotPrunesForFile(prunedWorkspacesByFile, file, targets)
   }
+
   try {
     await withSidecarSnapshotQueue(file, async () => {
       const registered = prunedWorkspacesByFile.get(file)
+
       const coalescedTargetKeys = registerTombstones
         ? targetKeys
         : new Set([...targetKeys].filter((key) => registered?.has(key)))
+
       if (coalescedTargetKeys.size === 0) {
         return
       }
+
       const existing = await readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
+
       if (!existing) {
         return
       }
+
       const next = withoutWorktreeRows(
         existing,
         (row) =>
           coalescedTargetKeys.has(workspaceSnapshotPruneKey(row.worktreeId, row.executionHostId)) ||
           coalescedTargetKeys.has(workspaceSnapshotPruneKey(row.worktreeId))
       )
+
       if (next === existing) {
         return
       }
+
       await writeSnapshot(file, next)
     })
   } catch (error) {

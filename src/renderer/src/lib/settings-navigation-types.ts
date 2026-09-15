@@ -4,6 +4,7 @@ import type { SettingsSearchEntry } from '@/components/settings/settings-search'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export type SettingsNavIcon = ComponentType<LucideProps>
+
 export type SettingsNavInstallStatus =
   | 'install'
   | 'installed'
@@ -57,13 +58,19 @@ const SETTINGS_NAV_INTENTS = [
 ] as const
 
 const SETTINGS_NAV_TARGET_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_TARGETS)
+
 const SETTINGS_NAV_INTENT_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_INTENTS)
 
 export type SettingsNavTarget = (typeof SETTINGS_NAV_TARGETS)[number]
+
 export const FULL_DISK_ACCESS_SETTINGS_TARGET_ID = 'developer-permissions-full-disk-access'
+
 export const BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID = 'browser-terminal-link-actions'
+
 export const BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID = 'browser-client-hosted-remote'
+
 export const BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID = 'browser-ssh-workspace-routing'
+
 export const GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID = 'general-global-worktree-visibility'
 
 export type SettingsNavigationTarget = {
@@ -78,7 +85,9 @@ export function isSettingsNavigationTarget(value: unknown): value is SettingsNav
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const target = value as Record<string, unknown>
+
   return (
     typeof target.pane === 'string' &&
     SETTINGS_NAV_TARGET_SET.has(target.pane) &&

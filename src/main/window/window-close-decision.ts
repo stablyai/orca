@@ -27,8 +27,10 @@ export function resolveWindowCloseAction(state: WindowCloseState): WindowCloseAc
   if (state.windowCloseConfirmed) {
     return 'allow-confirmed'
   }
+
   if (state.rendererProcessGone || state.isRendererCrashed) {
     return 'bypass-gone'
   }
+
   return 'request-confirmation'
 }

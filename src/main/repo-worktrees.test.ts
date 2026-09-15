@@ -283,6 +283,7 @@ it('keeps an upgraded linked folder locator in every local listing, including re
     kind: 'git' as const,
     folderUpgradeGitRootPath: 'C:/projects/draft'
   }
+
   const raw = [
     { path: 'C:/projects/main', head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
     {
@@ -293,9 +294,11 @@ it('keeps an upgraded linked folder locator in every local listing, including re
       isMainWorktree: false
     }
   ]
+
   listWorktreesMock.mockResolvedValue(raw)
   listWorktreeGraphMock.mockResolvedValue(raw)
   listWorktreesStrictMock.mockResolvedValue(raw)
+
   for (const list of [
     listRepoWorktrees,
     listRepoWorktreesForDetectedScan,
@@ -304,5 +307,6 @@ it('keeps an upgraded linked folder locator in every local listing, including re
   ]) {
     expect(await list(repo)).toEqual([raw[0], { ...raw[1], path: repo.path }])
   }
+
   expect(raw[1].path).toBe('C:/projects/draft')
 })

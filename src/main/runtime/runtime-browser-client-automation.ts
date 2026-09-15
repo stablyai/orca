@@ -12,13 +12,17 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   resolveWorkspace(selector: string): Promise<{ id: string }>
 }): Promise<ClientHostedBrowserRpcRoute> {
   const method = BrowserClientAutomationMethod.safeParse(options.method)
+
   if (!method.success || !isRecord(options.params)) {
     return { handled: false }
   }
+
   const page = await resolveTargetPage(options.params, options.pages, options.resolveWorkspace)
+
   if (!page) {
     return { handled: false }
   }
+
   const issued = options.leases.issueClientPageCommand(
     {
       authorityRuntimeId: options.leases.authorityRuntimeId,
@@ -34,10 +38,13 @@ export async function routeRuntimeBrowserClientAutomation(options: {
       params: options.params
     }
   )
+
   const result = await issued.result
+
   if (result.status === 'failed') {
     throw new Error(result.errorCode)
   }
+
   return { handled: true, result: result.value }
 }
 
@@ -49,10 +56,13 @@ async function resolveTargetPage(
   if (typeof params.page === 'string' && params.page.length > 0) {
     return pages.getPage(params.page)
   }
+
   if (typeof params.worktree !== 'string' || params.worktree.length === 0) {
     return undefined
   }
+
   const workspace = await resolveWorkspace(params.worktree)
+
   return pages.listPages(workspace.id).find((page) => page.active)
 }
 

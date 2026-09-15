@@ -3,6 +3,7 @@
 // timeouts would compose (two close passes x two drains), so one removal shares one absolute deadline.
 
 export const WATCHER_REMOVAL_DRAIN_BUDGET_MS = 60_000
+
 // Why: the final live unsubscribe is the drain that actually releases the native handle. Earlier drains
 // leave it this slice so a slow-but-finishing unsubscribe on Windows/WSL isn't abandoned at ~0ms left.
 export const WATCHER_REMOVAL_FINAL_DRAIN_RESERVE_MS = 10_000
@@ -15,6 +16,7 @@ export function createWatcherRemovalDeadline(
   budgetMs: number = WATCHER_REMOVAL_DRAIN_BUDGET_MS
 ): WatcherRemovalDeadline {
   const expiresAt = Date.now() + budgetMs
+
   return {
     remainingMs: (reserveMs = 0) => Math.max(0, expiresAt - Date.now() - reserveMs)
   }
@@ -38,16 +40,20 @@ export async function drainBeforeWatcherRemoval(
   if (!promise) {
     return 'skipped'
   }
+
   const waitMs = deadline.remainingMs(options.reserveMs)
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     const settled = promise.then(() => 'settled' as const)
+
     const outcome = await Promise.race([
       settled,
       new Promise<'timeout'>((resolve) => {
         timer = setTimeout(() => resolve('timeout'), waitMs)
       })
     ])
+
     if (outcome === 'timeout') {
       // Why: nobody awaits the abandoned promise anymore, so a late rejection (an aborted native
       // subscribe finally reporting) would be an unhandled rejection — fatal in the main process.
@@ -58,6 +64,7 @@ export async function drainBeforeWatcherRemoval(
           `(${deadline.remainingMs()}ms of the removal budget left); continuing removal`
       )
     }
+
     return outcome
   } finally {
     if (timer !== undefined) {

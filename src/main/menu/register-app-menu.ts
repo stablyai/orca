@@ -63,17 +63,20 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const isMac = process.platform === 'darwin'
   const appearance = getAppearanceState()
+
   const shortcutLabel = (actionId: KeybindingActionId): string => {
     const bindings = getEffectiveKeybindingsForAction(
       actionId,
       process.platform,
       getKeybindings?.()
     )
+
     return formatKeybindingList(bindings, process.platform)
   }
 
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
+
     if (!webContents) {
       return
     }
@@ -82,6 +85,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
     if (ignoreCache) {
       webContents.reloadIgnoringCache()
+
       return
     }
 
@@ -98,8 +102,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   ) => {
     const modifierClick = !event.triggeredByAccelerator
     const localBuild = isMac && modifierClick && event.altKey === true
+
     const includePerfPrerelease =
       !localBuild && modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
+
     const includePrerelease = !localBuild && modifierClick && event.shiftKey === true
     onCheckForUpdates({
       includePrerelease,
@@ -171,6 +177,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const undoRedoOptions: Electron.MenuItemConstructorOptions = isMac
     ? {}
     : { registerAccelerator: false }
+
   const editMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.edit', 'Edit'),
     submenu: [
@@ -190,8 +197,10 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
           // Why: a focused terminal/native-chat pane is not a native editable
           // control, so raw Electron paste cannot know which Orca surface owns it.
           const focusedWindow = BrowserWindow.getFocusedWindow()
+
           if (focusedWindow) {
             focusedWindow.webContents.send('ui:appMenuPaste')
+
             return
           }
 

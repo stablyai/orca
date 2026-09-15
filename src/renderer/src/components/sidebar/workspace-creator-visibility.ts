@@ -14,13 +14,16 @@ export function getPairedDeviceIdsByEnvironment(
   statuses: ReadonlyMap<string, RuntimeStatusEntry>
 ): ReadonlyMap<string, string> {
   const result = new Map<string, string>()
+
   for (const environment of environments) {
     const deviceId =
       statuses.get(environment.id)?.status?.pairedDeviceId ?? environment.pairedDeviceId
+
     if (deviceId) {
       result.set(environment.id, deviceId)
     }
   }
+
   return result
 }
 
@@ -29,17 +32,23 @@ export function isWorkspaceFromOtherDevice(
   pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
 ): boolean {
   const creator = normalizeWorkspaceCreatorProvenance(worktree.creatorProvenance)
+
   if (!creator) {
     return false
   }
+
   const environmentId = worktree.runtimeOwnerEnvironmentId
+
   if (!environmentId) {
     return creator.kind !== 'host'
   }
+
   const pairedDeviceId = pairedDeviceIdsByEnvironment.get(environmentId)
+
   if (!pairedDeviceId) {
     return false
   }
+
   return creator.kind !== 'paired-device' || creator.deviceId !== pairedDeviceId
 }
 

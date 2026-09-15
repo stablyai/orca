@@ -40,9 +40,11 @@ const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
 
 export async function initializeReadyRuntimeServices(): Promise<void> {
   const store = state.store
+
   if (!store) {
     throw new Error('Store must be initialized before ready services')
   }
+
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
@@ -67,9 +69,11 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
         { id: randomUUID(), authToken: 'local-browser-client-automation', method, params },
         { signal }
       )
+
       if (!response.ok) {
         throw new BrowserClientPageCommandError(response.error.code)
       }
+
       return response.result
     }
   })
@@ -94,9 +98,11 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // and complete the legacy real-home sweep first — but awaiting it inline
   // stalled app init behind that session, so chain instead of blocking.
   const startupManagedHookSettings = store.getSettings()
+
   const shouldReconcileStartupManagedHooks =
     shouldInstallManagedHooks(is.dev) &&
     resolveStartupManagedHookAction(startupManagedHookSettings) === 'install'
+
   const realHomeCodexHookState =
     shouldReconcileStartupManagedHooks &&
     shouldInstallStartupManagedAgentHook(startupManagedHookSettings, 'codex') &&
@@ -108,6 +114,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
           console.warn('[codex-real-home-hooks] startup ensure failed:', error)
         })
       : Promise.resolve()
+
   // Why skip rather than remove when the off switch is set: the hook files are user-global but this
   // decision reads only THIS profile's settings, so removing here deletes the hooks every other Orca
   // instance depends on (STA-5679). Skipping already keeps removed hooks from reappearing on launch.
@@ -130,6 +137,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
       )
   }
+
   // Why: process-gone metrics only see survivors, and the gone-time host memory
   // read lands after the corpse released its pages; both need a live pre-gone
   // sample to compare against in crash reports.
@@ -140,6 +148,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       serviceName: details.serviceName,
       type: details.type
     })
+
     if (
       isGpuFallbackCrashCandidate({
         platform: process.platform,

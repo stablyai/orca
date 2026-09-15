@@ -16,6 +16,7 @@ import type { SendParams } from '../schemas'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
+
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
 
 type GroupAgentSnapshot = OrchestrationAddressableAgent & { tabId?: string; leafId?: string }
@@ -32,16 +33,21 @@ function listRunGroupCandidates(args: {
   warnings: SendRecipientWarning[]
 }): GroupCandidate[] {
   const { db, runtime, senderRunId, groupAddress, agents, warnings } = args
+
   const live = db
     .listWorkerTerminalResources({ runId: senderRunId })
     .filter((row) => row.dispatchStatus === 'pending' || row.dispatchStatus === 'dispatched')
+
   // A federated worker reads relayed control mail, not this database's Dispatch mailbox.
   const federated = new Set(
     db.listFederatedDispatchesByIds(live.map((row) => row.dispatchId)).map((row) => row.dispatch_id)
   )
+
   const identityByHandle = new Map(agents.map((agent) => [agent.handle, agent.agentIdentity]))
+
   return live.flatMap((row) => {
     const to = `dispatch:${row.dispatchId}`
+
     if (federated.has(row.dispatchId)) {
       // Remote identity and status are unknown, so only @all establishes membership.
       if (groupAddress.toLowerCase() === '@all') {
@@ -51,20 +57,26 @@ function listRunGroupCandidates(args: {
           message: `${to} runs on a remote Orca server; group fan-out does not relay there. Send --to ${to} instead.`
         })
       }
+
       return []
     }
+
     const paneKey =
       row.paneKey ??
       (row.agentTerminalHandle ? runtime.getLiveTerminalPaneKey(row.agentTerminalHandle) : null)
+
     const handle =
       (paneKey ? runtime.getTerminalHandleForPaneKey(paneKey) : null) ??
       row.agentTerminalHandle ??
       to
+
     // Nested coordinators consume their child Run mailbox, not their parent Dispatch mailbox.
     const coordinated = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+
     if (coordinated?.id === row.runId) {
       return []
     }
+
     // Discovery can precede a handle remint; the pane still owns the captured identity.
     const agentIdentity =
       identityByHandle.get(handle) ??
@@ -75,6 +87,7 @@ function listRunGroupCandidates(args: {
           agent.leafId &&
           isEquivalentPaneKey(`${agent.tabId}:${agent.leafId}`, paneKey)
       )?.agentIdentity
+
     return [
       {
         handle,
@@ -115,25 +128,30 @@ export async function sendGroupMessage(args: {
     revalidateLegacyCoordinator,
     recordMutationReceipt
   } = args
+
   // Audience follows the sender's binding, never a caller-supplied message Run or payload.
   function resolveAudienceRunId(): string {
     const coordinated = senderPaneKey ? db.getCurrentRunForPane(senderPaneKey) : undefined
+
     const runId =
       coordinated?.id ??
       db.getActiveDispatchForIdentity(from, senderPaneKey)?.run_id ??
       legacyCoordinatorRunId
+
     if (!runId) {
       throw new OrchestrationError(
         'invalid_argument',
         `${groupAddress} addresses the sender's Run, and ${from} is not bound to one. Send to run:<id> or dispatch:<id> instead.`
       )
     }
+
     if (explicitRunId && explicitRunId !== runId) {
       throw new OrchestrationError(
         'invalid_argument',
         `${groupAddress} addresses Run ${runId}, not explicitly requested Run ${explicitRunId}.`
       )
     }
+
     return runId
   }
 
@@ -141,18 +159,24 @@ export async function sendGroupMessage(args: {
   const worktreeGroup = groupAddress.toLowerCase().startsWith('@worktree:')
   let audienceRunId = worktreeGroup ? undefined : resolveAudienceRunId()
   let agents: GroupAgentSnapshot[] = []
+
   if (worktreeGroup || !['@all', '@idle'].includes(groupAddress.toLowerCase())) {
     const { terminals } = await runtime.listTerminals(undefined, undefined, {
       includeVisualLayouts: false
     })
+
     agents = [...terminals, ...listAddressableStructuredWorkers()]
   }
+
   // Revalidate after discovery before selecting recipients or writing mail.
   revalidateLegacyCoordinator?.()
+
   if (!worktreeGroup) {
     audienceRunId = resolveAudienceRunId()
   }
+
   const groupWarnings: SendRecipientWarning[] = []
+
   const candidates: GroupCandidate[] =
     worktreeGroup || !audienceRunId
       ? agents
@@ -164,9 +188,11 @@ export async function sendGroupMessage(args: {
           agents,
           warnings: groupWarnings
         })
+
   const handles = resolveGroupAddress(groupAddress, from, candidates, (handle: string) =>
     runtime.getAgentStatusForHandle(handle)
   )
+
   if (handles.length === 0) {
     // Preserve the recovery addresses even when every worker was skipped.
     const skipped = groupWarnings.map((warning) => warning.message).join(' ')
@@ -177,8 +203,10 @@ export async function sendGroupMessage(args: {
   }
 
   const legacyAdoptedMailboxOwner = db.getLegacyAdoptedRunMailboxOwner()
+
   const resolvedRecipients = handles.map((handle): BareRecipientResolution => {
     const mailbox = candidates.find((candidate) => candidate.handle === handle)?.mailbox
+
     return mailbox
       ? { ok: true, to: mailbox.to, runId: mailbox.runId }
       : resolveBareOrchestrationRecipient({
@@ -190,9 +218,11 @@ export async function sendGroupMessage(args: {
           legacyAdoptedMailboxOwner
         })
   })
+
   const deliverableRecipients = resolvedRecipients.filter(
     (recipient): recipient is BareRecipientResolution & { ok: true } => recipient.ok
   )
+
   const senderRecipient = resolveBareOrchestrationRecipient({
     runtime,
     db,
@@ -200,18 +230,25 @@ export async function sendGroupMessage(args: {
     senderRunId,
     legacyAdoptedMailboxOwner
   })
+
   const senderMailboxKey = senderRecipient.ok
     ? `${senderRecipient.runId ?? ''}\u0000${senderRecipient.to}`
     : undefined
+
   const seenMailboxes = new Set<string>()
+
   const uniqueRecipients = deliverableRecipients.filter((resolution) => {
     const mailboxKey = `${resolution.runId ?? ''}\u0000${resolution.to}`
+
     if (mailboxKey === senderMailboxKey || seenMailboxes.has(mailboxKey)) {
       return false
     }
+
     seenMailboxes.add(mailboxKey)
+
     return true
   })
+
   if (uniqueRecipients.length === 0) {
     throw new OrchestrationError(
       'terminal_not_found',
@@ -220,6 +257,7 @@ export async function sendGroupMessage(args: {
   }
 
   const threadId = params.threadId ?? `thread_${Date.now()}`
+
   const messages = db.insertMessages(
     uniqueRecipients.map((resolution) => ({
       from,
@@ -239,16 +277,19 @@ export async function sendGroupMessage(args: {
       )
     }))
   )
+
   groupWarnings.push(
     ...resolvedRecipients.flatMap((resolution) =>
       resolution.ok ? (resolution.warning ? [resolution.warning] : []) : [resolution.warning]
     )
   )
+
   const receipt = {
     messages: exposeMessages(messages),
     recipients: messages.length,
     ...(groupWarnings.length > 0 ? { warnings: groupWarnings } : {})
   }
+
   return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () => {
     for (const message of messages) {
       runtime.notifyMessageArrived(message.to_handle, message.type)

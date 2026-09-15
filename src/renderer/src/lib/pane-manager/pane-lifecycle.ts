@@ -104,6 +104,7 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
   if (ligaturesEnabled) {
     attachLigatures(pane)
   }
+
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
   }
@@ -114,6 +115,7 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
   if (pane.pendingInitialFitRafId != null) {
     cancelAnimationFrame(pane.pendingInitialFitRafId)
   }
+
   pane.pendingInitialFitRafId = requestAnimationFrame(() => {
     pane.pendingInitialFitRafId = null
     safeFit(pane)
@@ -127,6 +129,7 @@ export function disposeLigatures(pane: ManagedPaneInternal): void {
     } catch {
       /* ignore */
     }
+
     pane.ligaturesAddon = null
   }
 }
@@ -135,15 +138,18 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
   if (pane.ligaturesAddon) {
     return
   }
+
   try {
     const ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
+
     // Why: ligatures can be enabled after rows already rendered, especially
     // from Settings. Force existing glyph runs to be recomputed immediately.
     if (!pane.webglAttachmentDeferred) {
       pane.terminal.refresh(0, pane.terminal.rows - 1)
     }
+
     // Why: the WebGL renderer builds its glyph texture atlas at activation
     // time, so `font-feature-settings` applied after WebGL loaded won't
     // reach the GPU-rendered cells until the atlas is rebuilt. The upstream
@@ -178,16 +184,20 @@ export function disposePane(
     cancelAnimationFrame(pane.pendingInitialFitRafId)
     pane.pendingInitialFitRafId = null
   }
+
   cancelPendingWebglRefresh(pane)
   detachPaneFitResizeObserver(pane)
+
   if (pane.panePointerDownHandler) {
     pane.container.removeEventListener('pointerdown', pane.panePointerDownHandler)
     pane.panePointerDownHandler = null
   }
+
   if (pane.paneMouseEnterHandler) {
     pane.container.removeEventListener('mouseenter', pane.paneMouseEnterHandler)
     pane.paneMouseEnterHandler = null
   }
+
   pane.paneDragCleanup?.()
   pane.paneDragCleanup = null
   pane.focusClassSyncCleanup?.()
@@ -200,23 +210,28 @@ export function disposePane(
   pane.linkifierMouseLeaveResetDisposable = null
   pane.linkifierWindowBlurResetDisposable?.dispose()
   pane.linkifierWindowBlurResetDisposable = null
+
   // Deregister the RTL shaping joiner: terminal.dispose() below does not.
   try {
     pane.arabicShapingJoinerCleanup?.()
   } catch {
     /* ignore */
   }
+
   pane.arabicShapingJoinerCleanup = null
+
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
     pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
     pane.compositionHandler = null
   }
+
   try {
     clearPendingSplitScrollRestore(pane)
   } catch {
     /* ignore */
   }
+
   try {
     // Why: fit retries own xterm markers and frame callbacks independently of
     // split restoration; both must be released before terminal disposal.
@@ -224,47 +239,57 @@ export function disposePane(
   } catch {
     /* ignore */
   }
+
   try {
     pane.ligaturesAddon?.dispose()
   } catch {
     /* ignore */
   }
+
   disposeWebgl(pane)
+
   try {
     pane.searchAddon.dispose()
   } catch {
     /* ignore */
   }
+
   try {
     pane.serializeAddon.dispose()
   } catch {
     /* ignore */
   }
+
   try {
     pane.unicode11Addon.dispose()
   } catch {
     /* ignore */
   }
+
   try {
     pane.webLinksAddon.dispose()
   } catch {
     /* ignore */
   }
+
   try {
     pane.fitAddon.dispose()
   } catch {
     /* ignore */
   }
+
   try {
     // Drop renderer selection state before a recovery remount replaces the surface.
     pane.terminal.clearSelection()
   } catch {
     /* ignore */
   }
+
   try {
     pane.terminal.dispose()
   } catch {
     /* ignore */
   }
+
   panes.delete(pane.id)
 }

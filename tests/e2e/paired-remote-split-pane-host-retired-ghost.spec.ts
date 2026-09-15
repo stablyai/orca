@@ -52,6 +52,7 @@ async function mountedLeafPtyIds(
 async function hostLayoutLeafIds(page: Page, webTabId: string): Promise<string[]> {
   return page.evaluate((tabId) => {
     const layout = window.__store?.getState().terminalLayoutsByTabId[tabId]
+
     return layout ? Object.keys(layout.ptyIdsByLeafId ?? {}) : []
   }, webTabId)
 }
@@ -62,12 +63,15 @@ test('removes the pane a paired remote host retired instead of leaving a dead gh
   test.setTimeout(240_000)
   const host = await launchHeadlessPairedRuntimeHost()
   let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
+
     const created = await host.client.call<{ terminal: { handle: string } }>('terminal.create', {
       worktree: `path:${testRepoPath}`,
       title: 'Ghost Repro'
     })
+
     const firstHandle = created.result.terminal.handle
 
     client = await launchPairedElectronClient(host.offer, testInfo, '#17770 host-retired ghost')
@@ -84,6 +88,7 @@ test('removes the pane a paired remote host retired instead of leaving a dead gh
       'terminal.split',
       { terminal: firstHandle, direction: 'horizontal' }
     )
+
     const secondHandle = split.result.split.handle
     const webTabId = toWebTerminalSurfaceTabId(split.result.split.tabId)
 
@@ -126,9 +131,11 @@ test('removes the pane a paired remote host retired instead of leaving a dead gh
       .toBe(1)
 
     const afterExit = await mountedLeafPtyIds(client.page, webTabId)
+
     const exitedLeafId = beforeExit.find(
       (p) => !afterExit.some((a) => a.leafId === p.leafId)
     )?.leafId
+
     expect(afterExit).toHaveLength(1)
     expect(afterExit[0]?.leafId).toBeTruthy()
     expect(afterExit[0]?.ptyId).toBeTruthy()

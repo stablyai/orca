@@ -65,18 +65,23 @@ export function resolveEmptyPageOutcome(args: {
   countedTotalPages: number | null
 }): EmptyPageOutcome {
   const clamp = Math.max(1, Math.floor(args.target))
+
   // Why: every error must be the window 422 — a sibling repo's envelope
   // 403/404 alongside it means a repo that may still have pages, so the
   // transient-failure branch must win the toast and block the clamp.
   const onlyWindowErrors =
     args.errorTypes.length > 0 && args.errorTypes.every((type) => type === 'validation_error')
+
   if (onlyWindowErrors && args.failedCount === 0) {
     return { reason: 'window-unreachable', clampTotalPagesTo: clamp }
   }
+
   if (args.failedCount > 0 || args.errorTypes.length > 0) {
     return { reason: 'load-failed', clampTotalPagesTo: null }
   }
+
   const countUnknown = args.countedTotalPages === null || args.countedTotalPages === 0
+
   return { reason: 'end-of-data', clampTotalPagesTo: countUnknown ? clamp : null }
 }
 
@@ -98,15 +103,18 @@ export function applyEmptyPageClamp(
   }
 ): number | null {
   const outcome = resolveEmptyPageOutcome({ ...args, countedTotalPages: previous })
+
   if (outcome.reason !== 'end-of-data' || outcome.clampTotalPagesTo === null) {
     return previous
   }
+
   return outcome.clampTotalPagesTo
 }
 
 /** Proven window 422 limit: set once, only ever lowered, reset per generation. */
 export function applyWindowPageLimit(previous: number | null, target: number): number {
   const clamp = Math.max(1, Math.floor(target))
+
   return previous === null ? clamp : Math.min(previous, clamp)
 }
 
@@ -126,7 +134,9 @@ export function deriveAdvertisedTotalPages(args: {
     args.countedTotalPages && args.countedTotalPages > 0
       ? Math.max(args.loadedPages, args.countedTotalPages)
       : args.fallbackTotalPages
+
   const capped = args.provenPageLimit === null ? uncapped : Math.min(uncapped, args.provenPageLimit)
+
   return Math.max(args.loadedPages, capped)
 }
 
@@ -163,6 +173,7 @@ export function getTaskPagePerRepoLimit(
   displayLimit: number
 ): number {
   const normalizedRepoCount = Math.max(1, Math.floor(repoCount))
+
   return Math.max(1, Math.min(maxPerRepo, Math.floor(displayLimit / normalizedRepoCount)))
 }
 
@@ -205,6 +216,7 @@ export async function accumulateWorkItemPages(
   const { existingPages, initialCursor, targetPage, pageSize, fetchPage, isCancelled } = args
 
   const seen = new Set<string>()
+
   for (const page of existingPages) {
     for (const item of page) {
       seen.add(workItemIdentity(item))
@@ -227,24 +239,30 @@ export async function accumulateWorkItemPages(
 
   while (loadedPages <= targetPage) {
     const { items } = await fetchPage(cursor)
+
     if (isCancelled()) {
       return { cancelled: true }
     }
+
     if (items.length === 0) {
       break
     }
+
     const fresh = items.filter((item) => !seen.has(workItemIdentity(item)))
     // Advance from the raw fetch, not the deduped rows, so the cursor tracks
     // real data. If a full page yields nothing new the cursor can't move past
     // this timestamp (a rare >pageSize same-timestamp run), so stop rather than
     // re-fetch the same window forever.
     cursor = items.at(-1)!.updatedAt
+
     if (fresh.length === 0) {
       break
     }
+
     for (const item of fresh) {
       seen.add(workItemIdentity(item))
     }
+
     buffer.push(...fresh)
     emitFullPages()
   }

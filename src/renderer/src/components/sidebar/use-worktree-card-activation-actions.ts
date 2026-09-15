@@ -9,6 +9,7 @@ import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
+
 type LinkedDetails = ReturnType<typeof useWorktreeCardLinkedDetails>
 
 export function useWorktreeCardActivationActions({
@@ -41,38 +42,49 @@ export function useWorktreeCardActivationActions({
   useLayoutEffect(() => {
     worktreeRef.current = worktree
   }, [worktree])
+
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
         return
       }
+
       const selection = window.getSelection()
+
       // Why: only suppress the click for a selection inside this card; a foreign selection must not block worktree switching.
       if (selection && selection.toString().length > 0) {
         const card = event.currentTarget
         const anchor = selection.anchorNode
         const focus = selection.focusNode
+
         const selectionInsideCard =
           (anchor instanceof Node && card.contains(anchor)) ||
           (focus instanceof Node && card.contains(focus))
+
         if (selectionInsideCard) {
           return
         }
       }
+
       const selectionOnly = affiliateListMode
         ? false
         : (onSelectionGesture?.(event, worktreeRef.current) ?? false)
+
       if (selectionOnly) {
         event.preventDefault()
         event.stopPropagation()
+
         return
       }
+
       if (isDeleting) {
         event.preventDefault()
         event.stopPropagation()
+
         return
       }
+
       // Why: route sidebar clicks through the shared activation path so the back/forward stack stays complete.
       recordRendererCrashBreadcrumb('sidebar_worktree_activate', {
         worktreeId: worktree.id,
@@ -121,9 +133,11 @@ export function useWorktreeCardActivationActions({
       if (affiliateListMode) {
         return
       }
+
       if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
         return
       }
+
       openModal('edit-meta', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,

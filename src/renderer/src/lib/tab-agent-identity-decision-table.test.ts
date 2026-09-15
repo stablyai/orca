@@ -10,8 +10,11 @@ import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 const AGENTS: readonly TuiAgent[] = ['claude', 'codex']
+
 const SLOT_COUNT = 7
+
 const SHAPE_COUNT = 3 ** SLOT_COUNT * 4 * 2
+
 const TITLES: readonly string[] = ['', 'zsh', 'Task - claude', 'Task - codex']
 
 type Breakdown = Record<
@@ -21,9 +24,11 @@ type Breakdown = Record<
 
 function slotValues(mask: number): (TuiAgent | null)[] {
   let remaining = mask
+
   return Array.from({ length: SLOT_COUNT }, () => {
     const value = remaining % 3
     remaining = Math.floor(remaining / 3)
+
     return value === 0 ? null : AGENTS[value - 1]
   })
 }
@@ -34,6 +39,7 @@ function canonicalResult(
   withProof: boolean
 ): CanonicalPaneAgentIdentity {
   const [hook, siblingHook, completed, siblingCompleted, process, sleeping, launch] = values
+
   return resolveCanonicalPaneAgentIdentity({
     hookAgent: hook,
     hookIsLive: hook !== null,
@@ -61,6 +67,7 @@ function canonicalResult(
 
 function realResult(values: readonly (TuiAgent | null)[], title: string, remote: boolean) {
   const [hook, siblingHook, completed, siblingCompleted, process, sleeping, launch] = values
+
   // The seven slots model steady-state observations; this runtime memory bit is intentionally
   // held true instead of adding an eighth dimension to the approved 17,496-shape table.
   return resolveTabAgentFromSignals({
@@ -81,6 +88,7 @@ function realResult(values: readonly (TuiAgent | null)[], title: string, remote:
 function runDecisionTable(withProof: boolean) {
   let disagreements = 0
   let flipped = 0
+
   const breakdown: Breakdown = {
     launch: 0,
     'completed-hook': 0,
@@ -89,20 +97,26 @@ function runDecisionTable(withProof: boolean) {
     sibling: 0,
     title: 0
   }
+
   for (let mask = 0; mask < 3 ** SLOT_COUNT; mask += 1) {
     const values = slotValues(mask)
+
     for (const title of TITLES) {
       for (const remote of [false, true]) {
         const real = realResult(values, title, remote)
         const canonical = canonicalResult(values, title, withProof)
+
         if (real !== canonical.agent) {
           disagreements += 1
+
           if (canonical.source !== null) {
             breakdown[canonical.source] += 1
           }
         }
+
         if (!withProof) {
           const proven = canonicalResult(values, title, true)
+
           if (
             canonical.agent !== proven.agent &&
             proven.source === 'process' &&
@@ -116,6 +130,7 @@ function runDecisionTable(withProof: boolean) {
       }
     }
   }
+
   return { disagreements, flipped, breakdown }
 }
 
@@ -123,12 +138,14 @@ describe('renderer ladder decision table', () => {
   it('replays the real shipping ladder and records all rung disagreements', () => {
     const proofFree = runDecisionTable(false)
     const freshProof = runDecisionTable(true)
+
     const result = {
       shapes: SHAPE_COUNT,
       proofOmitted: proofFree,
       freshProof,
       flippedByAddingProof: proofFree.flipped
     }
+
     writeFileSync(
       join(tmpdir(), 'orca-pane-agent-identity-decision-table-real.json'),
       `${JSON.stringify(result, null, 2)}\n`

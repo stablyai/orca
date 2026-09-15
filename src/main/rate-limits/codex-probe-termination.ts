@@ -6,6 +6,7 @@ import { terminateWindowsProcessTree, type WindowsTreeKiller } from '../windows-
 // first and only escalates after a bounded drain window.
 
 export const CODEX_PROBE_SHUTDOWN_DRAIN_MS = 5_000
+
 const HARD_KILL_EXIT_WAIT_MS = 1_000
 
 export type TerminatableProbeChild = {
@@ -35,22 +36,28 @@ function waitForExit(child: TerminatableProbeChild, timeoutMs: number): Promise<
   if (hasExited(child)) {
     return Promise.resolve(true)
   }
+
   return new Promise((resolve) => {
     let timer: ReturnType<typeof setTimeout> | null = null
+
     const settle = (exited: boolean): void => {
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
+
       child.off('exit', onGone)
       child.off('close', onGone)
       child.off('error', onError)
       resolve(exited)
     }
+
     const onGone = (): void => settle(true)
+
     const onError = (): void => {
       // Keep ChildProcess errors observed, but only exit/close proves it is gone.
     }
+
     // Node emits 'close' after both exit and spawn failure. A later 'error'
     // alone does not prove a successfully spawned child released auth.json.
     child.once('exit', onGone)
@@ -67,7 +74,9 @@ export async function terminateCodexProbeChild(
   if (hasExited(child)) {
     return
   }
+
   const platform = options?.platform ?? process.platform
+
   // Why: stdin EOF is the graceful stop for a stdio JSON-RPC server and the
   // only non-forceful request Windows has; SIGTERM backs it up where signals
   // are real (Node's kill() on Windows is always TerminateProcess).
@@ -76,6 +85,7 @@ export async function terminateCodexProbeChild(
   } catch {
     // stdin may already be destroyed; the signal/kill path still applies.
   }
+
   if (platform !== 'win32') {
     try {
       child.kill('SIGTERM')
@@ -83,9 +93,11 @@ export async function terminateCodexProbeChild(
       // Already-exited children can race the kill; the exit wait handles it.
     }
   }
+
   if (await waitForExit(child, options?.drainMs ?? CODEX_PROBE_SHUTDOWN_DRAIN_MS)) {
     return
   }
+
   if (platform === 'win32' && child.pid) {
     try {
       // npm-installed Codex runs beneath cmd.exe; killing only that wrapper can
@@ -97,9 +109,11 @@ export async function terminateCodexProbeChild(
       // The direct-child fallback still applies if an injected killer rejects.
     }
   }
+
   if (hasExited(child)) {
     return
   }
+
   try {
     if (platform === 'win32') {
       child.kill()
@@ -109,5 +123,6 @@ export async function terminateCodexProbeChild(
   } catch {
     // Already-exited children can race the kill; the exit wait handles it.
   }
+
   await waitForExit(child, options?.hardKillWaitMs ?? HARD_KILL_EXIT_WAIT_MS)
 }

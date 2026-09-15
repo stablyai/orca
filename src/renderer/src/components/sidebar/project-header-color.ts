@@ -2,10 +2,12 @@ import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../shared/consta
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 
 const PROJECT_GROUP_HEADER_KEY_PREFIX = 'repo:'
+
 const PROVIDER_PROJECT_HEADER_KEY_PREFIX = 'project:'
 
 export function resolveRepoHeaderColor(badgeColor: string | null | undefined): string {
   const normalizedBadgeColor = normalizeRepoBadgeColor(badgeColor)
+
   if (!normalizedBadgeColor) {
     return DEFAULT_REPO_BADGE_COLOR
   }
@@ -29,5 +31,6 @@ export function resolveProjectGroupHeaderColor(args: {
   ) {
     return undefined
   }
+
   return resolveRepoHeaderColor(args.badgeColor)
 }

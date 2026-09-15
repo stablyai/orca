@@ -18,11 +18,14 @@ import { getTaskSourceCacheScope } from '../../../../../shared/task-source-conte
 
 // Why: bounded LRU so opening many PRs with many files doesn't grow this module-level map unboundedly until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
+
 type PRFileContentCacheEntry = {
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
   byteCount: number
 }
+
 const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+
 let prFileContentCacheBytes = 0
 
 function touchPRFileContentCache(
@@ -30,10 +33,12 @@ function touchPRFileContentCache(
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
   const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+
   if (retainedByteCount === null) {
     const existing = prFileContentCache.get(key)
     prFileContentCacheBytes -= existing?.byteCount ?? 0
     prFileContentCache.delete(key)
+
     return
   }
 
@@ -44,14 +49,17 @@ function touchPRFileContentCache(
   const byteCount = retainedByteCount
   prFileContentCache.set(key, { value, byteCount })
   prFileContentCacheBytes += byteCount
+
   while (
     prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
     prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
   ) {
     const oldest = prFileContentCache.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     const evicted = prFileContentCache.get(oldest)
     prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
@@ -69,10 +77,12 @@ export function getPRFileContentCacheKey(args: {
   baseSha: string
 }): string {
   const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
+
   const sourceKey =
     args.sourceContext?.provider === 'github'
       ? `source:${getTaskSourceCacheScope(args.sourceContext)}`
       : 'source:local'
+
   return [
     repositoryKey,
     sourceKey,
@@ -98,10 +108,13 @@ export function loadPRFileContents(args: {
 }): Promise<GitHubPRFileContents> {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
+
   if (cached) {
     touchPRFileContentCache(cacheKey, cached.value)
+
     return Promise.resolve(cached.value)
   }
+
   let request: Promise<GitHubPRFileContents>
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
   request = (
@@ -138,16 +151,20 @@ export function loadPRFileContents(args: {
       if (prFileContentCache.get(cacheKey)?.value === request) {
         touchPRFileContentCache(cacheKey, contents)
       }
+
       return contents
     })
     .catch((err) => {
       const cachedRequest = prFileContentCache.get(cacheKey)
+
       if (cachedRequest?.value === request) {
         prFileContentCacheBytes -= cachedRequest.byteCount
         prFileContentCache.delete(cacheKey)
       }
+
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
+
   return request
 }

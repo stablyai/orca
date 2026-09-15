@@ -7,13 +7,18 @@ import {
 } from './task-page-source-family.test-support'
 
 const TASK_PAGE_SOURCE = readTaskPageSourceFamily()
+
 const WORKSPACE_ACTIONS_SOURCE = readTaskPageSource('use-task-page-workspace-actions.ts')
+
 const COMPOSER_ACTIONS_SOURCE = readTaskPageSource('use-task-page-composer-actions.ts')
+
 const PROJECT_VIEW_SOURCE = readFileSync(
   join(__dirname, 'github-project', 'ProjectViewWrapper.tsx'),
   'utf8'
 )
+
 const COMPOSER_MODAL_SOURCE = readFileSync(join(__dirname, 'NewWorkspaceComposerModal.tsx'), 'utf8')
+
 const QUICK_SUBMIT_PREPARATION_SOURCE =
   readFileSync(join(__dirname, '../hooks/composer-state/quick-submit-preparation.ts'), 'utf8') +
   readFileSync(join(__dirname, '../hooks/composer-state/quick-creation-execution.ts'), 'utf8') +
@@ -24,6 +29,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -85,6 +91,7 @@ describe('TaskPage workspace creation source boundaries', () => {
       'const openComposerForLinearItem = useCallback(',
       'const handleUseLinearItem = useCallback('
     )
+
     const handlerSection = sourceBetween(
       COMPOSER_ACTIONS_SOURCE,
       'const handleUseLinearItem = useCallback(',
@@ -124,9 +131,11 @@ describe('TaskPage workspace creation source boundaries', () => {
     const startAnchor = PROJECT_VIEW_SOURCE.includes('const handleStartWork')
       ? 'const handleStartWork = useCallback('
       : '// Why: issue #4756 keeps project-view actions on the direct'
+
     const endAnchor = PROJECT_VIEW_SOURCE.includes('const handleStartWork')
       ? 'const closeDialogRepoItem'
       : 'openModalFallback: () => {'
+
     const section = sourceBetween(PROJECT_VIEW_SOURCE, startAnchor, endAnchor)
 
     expect(section).toContain('void launchWorkItemDirect({')

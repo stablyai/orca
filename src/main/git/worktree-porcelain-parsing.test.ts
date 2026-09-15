@@ -158,6 +158,7 @@ bare
 HEAD aaa111
 branch refs/heads/main
 `
+
     expect(parseWorktreeList(output)).toEqual([
       {
         path: '/single-repo',
@@ -174,6 +175,7 @@ branch refs/heads/main
 HEAD abc123
 detached
 `
+
     expect(parseWorktreeList(output)).toEqual([
       {
         path: '/repo-detached',
@@ -195,6 +197,7 @@ worktree /repo-b
 HEAD bbb222
 branch refs/heads/dev
 `
+
     expect(parseWorktreeList(output)).toEqual([
       {
         path: '/repo-a',
@@ -217,6 +220,7 @@ branch refs/heads/dev
     const output = `worktree /repo-no-head
 branch refs/heads/main
 `
+
     expect(parseWorktreeList(output)).toEqual([
       {
         path: '/repo-no-head',
@@ -233,6 +237,7 @@ branch refs/heads/main
 HEAD ccc333
 branch refs/heads/main
 `
+
     expect(parseWorktreeList(output)).toEqual([
       {
         path: '/path/to/my worktree',
@@ -287,6 +292,7 @@ worktree /bare-two
 HEAD 1111111
 bare
 `
+
     expect(parseWorktreeList(output)).toEqual([
       {
         path: '/bare-one',

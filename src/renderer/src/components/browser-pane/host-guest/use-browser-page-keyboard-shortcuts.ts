@@ -52,12 +52,15 @@ export function useBrowserPageKeyboardShortcuts({
     if (!isActive) {
       return
     }
+
     const shortcutPlatform = getShortcutPlatform()
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       // Why: don't intercept in editable targets so native Cmd+C still copies in inputs/contentEditable.
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
+
       // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
       if (
         !markupIsActive &&
@@ -67,7 +70,9 @@ export function useBrowserPageKeyboardShortcuts({
         startGrabIntent('copy')
       }
     }
+
     window.addEventListener('keydown', handleKeyDown)
+
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isActive, keybindings, markupIsActive, startGrabIntent])
 
@@ -84,23 +89,30 @@ export function useBrowserPageKeyboardShortcuts({
     if (!grabIsInteractive) {
       return
     }
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
+
       // Ignore if modifier keys are held — user may be doing Cmd+C etc.
       if (e.metaKey || e.ctrlKey || e.altKey) {
         return
       }
+
       const key = e.key.toLowerCase()
+
       if (key !== 'c' && key !== 's') {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
       handleGrabActionShortcut(key as 'c' | 's')
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [grabIsInteractive, handleGrabActionShortcut])
 
@@ -108,10 +120,12 @@ export function useBrowserPageKeyboardShortcuts({
     if (!grabIsInteractive) {
       return
     }
+
     return window.api.browser.onGrabActionShortcut(({ browserPageId, key }) => {
       if (browserPageId !== browserTabId) {
         return
       }
+
       handleGrabActionShortcut(key)
     })
   }, [browserTabId, grabIsInteractive, handleGrabActionShortcut])

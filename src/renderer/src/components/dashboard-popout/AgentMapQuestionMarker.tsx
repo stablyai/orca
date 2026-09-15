@@ -16,6 +16,7 @@ export function AgentMapQuestionMarker({
   const iconSize = radius * 0.74 * markerScale
   // Mirrors the unread dot across the node so the two never stack.
   const offset = radius * Math.SQRT1_2
+
   return (
     <g transform={`translate(${offset} ${-offset})`} aria-hidden="true">
       {/* Cuts the node ring out from behind the glyph. */}

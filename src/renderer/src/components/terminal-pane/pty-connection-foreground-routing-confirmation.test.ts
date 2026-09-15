@@ -43,8 +43,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -65,6 +68,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -74,6 +78,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -94,6 +99,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -104,9 +110,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -116,9 +124,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -127,6 +137,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -185,6 +196,7 @@ describe('connectPanePty', () => {
       transport.getPtyId.mockImplementation(() => connectedPtyId)
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         connectedPtyId = sessionId ?? null
+
         return sessionId
           ? {
               id: sessionId,
@@ -194,12 +206,14 @@ describe('connectPanePty', () => {
           : null
       })
       transportFactoryQueue.push(transport)
+
       const deps = createDeps({
         tabId,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
         ...(args.isVisibleRef ? { isVisibleRef: args.isVisibleRef } : {})
       })
+
       const binding = connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
@@ -209,8 +223,10 @@ describe('connectPanePty', () => {
         sampleForegroundAgentOnFocus: () => void
         requestWindowsShiftEnterReconfirmation: () => void
       }
+
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
+
       return { binding, deps, transport, cacheKey: makePaneKey(tabId, LEAF_1) }
     }
 
@@ -224,11 +240,13 @@ describe('connectPanePty', () => {
       const isVisibleRef = { current: false }
       const ptyId = 'pty-pi-hidden-no-read'
       const tabId = `tab-${ptyId}`
+
       const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
         ptyId,
         tabId,
         isVisibleRef
       })
+
       mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
         agent: 'pi',
         routingTrusted: true,
@@ -304,6 +322,7 @@ describe('connectPanePty', () => {
       'drops pending routing after an inconclusive %s',
       async (outcome) => {
         vi.useFakeTimers()
+
         if (outcome === 'provider rejection') {
           vi.mocked(window.api.pty.confirmForegroundProcess).mockRejectedValue(
             new Error('inspection unavailable')
@@ -311,12 +330,15 @@ describe('connectPanePty', () => {
         } else {
           vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
         }
+
         const ptyId = `pty-pi-reconfirm-${outcome.replace(' ', '-')}`
         const tabId = `tab-${ptyId}`
+
         const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
           ptyId,
           tabId
         })
+
         mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'pi',
           routingTrusted: true,

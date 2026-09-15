@@ -21,6 +21,7 @@ export function BrowserFavicon({
   // Retry after navigation settles, when cookies and connectivity may have recovered.
   if (previousLoading !== loading) {
     setPreviousLoading(loading)
+
     if (!loading) {
       setFailedUrl(null)
     }

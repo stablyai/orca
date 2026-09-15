@@ -8,6 +8,8 @@ export function takeHistoryRecoveryFreeze(
 ): HistoryRecoveryFreeze | undefined {
   const freeze =
     historyRecovery.freeze?.sessionId === sessionId ? historyRecovery.freeze : undefined
+
   historyRecovery.freeze = null
+
   return freeze
 }

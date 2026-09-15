@@ -25,8 +25,11 @@ function writeTerminal(terminal: Terminal, data: string): Promise<void> {
 }
 
 const NORMAL_BUFFER_PROLOGUE_FROM_ALT = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: false, paneOnAlternateScreen: true })}`
+
 const NORMAL_BUFFER_PROLOGUE = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: false, paneOnAlternateScreen: false })}`
+
 const ALT_BUFFER_PROLOGUE = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: false })}`
+
 // A pane already in alt screen is the production case for an alt snapshot, and
 // it is NOT the same bytes: no switch, so none of `?1049h`'s side effects run.
 const ALT_BUFFER_PROLOGUE_FROM_ALT = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue({ targetAlternateScreen: true, paneOnAlternateScreen: true })}`
@@ -42,6 +45,7 @@ describe('RESET_AFTER_BYTE_GAP', () => {
   // the gap reset carries none of the pen the gap stranded (STA-4042).
   it('grounds the SGR pen so post-gap cells are not bold', async () => {
     const terminal = new Terminal({ cols: 40, rows: 2, allowProposedApi: true })
+
     try {
       // Bold opened and never closed — exactly what a dropped `ESC[22m` leaves.
       await writeTerminal(terminal, '\x1b[1mBOLD')
@@ -68,6 +72,7 @@ describe('RESET_AFTER_BYTE_GAP', () => {
     terminal.onTitleChange((next) => {
       title = next
     })
+
     try {
       await writeTerminal(terminal, '\x1b]0;real-title-TRUNCA')
       await writeTerminal(terminal, `${RESET_AFTER_BYTE_GAP}after`)
@@ -116,6 +121,7 @@ describe('replay convergence with a production-composed snapshot', () => {
     const branch = alternateScreen ? 'alt-screen' : 'normal-buffer'
     it(`lands on the same ${branch} frame from any stranded state`, async () => {
       const model = createRendererParityTerminal({ cols: 20, rows: 5 })
+
       try {
         const enterAlt = alternateScreen ? '\x1b[?1049h' : ''
         // The DECSC makes readSavedCursorRegister return a real register, so the
@@ -142,6 +148,7 @@ describe('replay convergence with a production-composed snapshot', () => {
 
         const clean = createRendererParityTerminal({ cols: 20, rows: 5 })
         let expected: string
+
         try {
           await writeToTerminal(clean.terminal, enterAlt)
           await replay(clean.terminal)
@@ -152,6 +159,7 @@ describe('replay convergence with a production-composed snapshot', () => {
 
         for (const [label, stranded] of Object.entries(strandedByTheGap)) {
           const dirty = createRendererParityTerminal({ cols: 20, rows: 5 })
+
           try {
             await writeToTerminal(dirty.terminal, enterAlt)
             await writeToTerminal(dirty.terminal, stranded)
@@ -182,6 +190,7 @@ describe('replay baseline grounding', () => {
   for (const [label, stranded] of Object.entries(strandedState)) {
     it(`replays a normal-buffer snapshot unchanged despite a stranded ${label}`, async () => {
       const terminal = new Terminal({ cols: 10, rows: 6, allowProposedApi: true })
+
       try {
         await writeTerminal(terminal, stranded)
         await writeTerminal(terminal, `${NORMAL_BUFFER_PROLOGUE}qqq\r\nB\r\nC\r\nD\r\nE\r\nF`)
@@ -199,6 +208,7 @@ describe('replay baseline grounding', () => {
   // scrollback from the alt frame. This is the branch STA-4042 was reported on.
   it('replays a split alt-screen snapshot clean when the TUI entered alt with a pen set', async () => {
     const terminal = new Terminal({ cols: 24, rows: 4, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[1m\x1b(0')
       // ?1049h saves that pen and charset into the register ?1049l restores from.
@@ -229,6 +239,7 @@ describe('replay baseline grounding', () => {
   // and the exact bold-bleed this whole path exists to prevent comes back.
   it('grounds after the buffer switch, not before, so ?1049l cannot restore the stale pen', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[1m\x1b(0\x1b[?7l')
       // ?1049h saves that pen, charset and wraparound into the restore register.
@@ -249,6 +260,7 @@ describe('replay baseline grounding', () => {
   // the switch neutralises the lot — this is the guard on adding `?1049l` at all.
   it('neutralises every field ?1049l restores, even with the saved register poisoned', async () => {
     const terminal = new Terminal({ cols: 20, rows: 6, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[1;31;44m') // pen: bold + fg + bg
       await writeTerminal(terminal, '\x1b(0\x1b)0\x1b*0\x1b+0') // G0..G3 -> line drawing
@@ -284,11 +296,14 @@ describe('replay baseline grounding', () => {
       allowProposedApi: true,
       vtExtensions: { kittyKeyboard: true }
     }
+
     const readKittyFlags = (term: Terminal): unknown => {
       const flags = (term as unknown as { _core: { coreService: { kittyKeyboard: unknown } } })
         ._core.coreService.kittyKeyboard
+
       // Without this the assertion passes vacuously if xterm renames the field.
       expect(flags).toBeDefined()
+
       return flags
     }
 
@@ -296,11 +311,13 @@ describe('replay baseline grounding', () => {
     const model = new Terminal(options)
     // The renderer missed the exit and is still on alt with the agent's flags.
     const renderer = new Terminal(options)
+
     try {
       await writeTerminal(model, '\x1b[?1049h\x1b[>1u')
       await writeTerminal(model, '\x1b[?1049l')
 
       await writeTerminal(renderer, '\x1b[?1049h\x1b[>1u')
+
       for (const write of buildMainModelSnapshotReplayWrites(
         { data: 'shell prompt $' },
         { paneOnAlternateScreen: true }
@@ -322,6 +339,7 @@ describe('replay baseline grounding', () => {
   // looks clean and the shell prompt comes back bold whenever the agent exits.
   it('grounds before the switch too, so the alt-exit later cannot restore the gap state', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[1m\x1b(0\x1b[?7l')
       await writeTerminal(terminal, `${ALT_BUFFER_PROLOGUE}alt frame`)
@@ -349,16 +367,20 @@ describe('replay baseline grounding', () => {
       allowProposedApi: true,
       vtExtensions: { kittyKeyboard: true }
     }
+
     const readKittyFlags = (term: Terminal): unknown => {
       const flags = (term as unknown as { _core: { coreService: { kittyKeyboard: unknown } } })
         ._core.coreService.kittyKeyboard
+
       // Without this the assertion passes vacuously if xterm renames the field.
       expect(flags).toBeDefined()
+
       return flags
     }
 
     const model = new Terminal(options)
     const renderer = new Terminal(options)
+
     try {
       await writeTerminal(model, '\x1b[>1u')
       await writeTerminal(renderer, '\x1b[>1u')
@@ -367,6 +389,7 @@ describe('replay baseline grounding', () => {
         { data: 'restored' },
         { paneOnAlternateScreen: false }
       )
+
       for (const write of writes) {
         await writeTerminal(renderer, write)
       }
@@ -385,6 +408,7 @@ describe('replay baseline grounding', () => {
   // above instead of staying put.
   it('leaves reverse wraparound off so a later backspace cannot chew the row above', async () => {
     const terminal = new Terminal({ cols: 8, rows: 3, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[?45h')
       // 12 columns into 8 makes row 1 a SOFT wrap of row 0 — the only kind
@@ -411,15 +435,19 @@ describe('replay baseline grounding', () => {
       allowProposedApi: true,
       vtExtensions: { kittyKeyboard: true }
     }
+
     const readKittyFlags = (term: Terminal): unknown => {
       const flags = (term as unknown as { _core: { coreService: { kittyKeyboard: unknown } } })
         ._core.coreService.kittyKeyboard
+
       // Without this the assertion passes vacuously if xterm renames the field.
       expect(flags).toBeDefined()
+
       return flags
     }
 
     const renderer = new Terminal(options)
+
     try {
       await writeTerminal(renderer, '\x1b[?1049h\x1b[>1u')
       const before = JSON.stringify(readKittyFlags(renderer))
@@ -428,10 +456,13 @@ describe('replay baseline grounding', () => {
         { data: 'alt-frame', alternateScreen: true },
         { paneOnAlternateScreen: true }
       )
+
       expect(writes[0]).not.toContain('\x1b[?1049')
+
       for (const write of writes) {
         await writeTerminal(renderer, write)
       }
+
       // Nothing in the prologue moved them; only a payload `?1049h` could.
       expect(JSON.stringify(readKittyFlags(renderer))).toBe(before)
     } finally {
@@ -444,14 +475,17 @@ describe('replay baseline grounding', () => {
   // otherwise the stale region resurfaces the moment the TUI exits to normal.
   it('grounds the source buffer margins when switching to the alt screen', async () => {
     const terminal = new Terminal({ cols: 20, rows: 6, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[2;3r')
+
       for (const write of buildMainModelSnapshotReplayWrites(
         { data: 'alt-frame', alternateScreen: true },
         { paneOnAlternateScreen: false }
       )) {
         await writeTerminal(terminal, write)
       }
+
       await writeTerminal(terminal, '\x1b[?1049l')
       await writeTerminal(terminal, 'AAAA\r\nBBBB\r\nCCCC\r\nDDDD\r\nEEEE\r\nFFFF')
 
@@ -469,6 +503,7 @@ describe('replay baseline grounding', () => {
   // there is nothing to complete the reset. Leave the app's G-sets alone.
   it('leaves an app-designated G1 intact so its later shift-out still draws boxes', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
+
     try {
       // enacs: G0 = ASCII, G1 = DEC line drawing. Runs once, at init.
       await writeTerminal(terminal, '\x1b(B\x1b)0')
@@ -487,6 +522,7 @@ describe('replay baseline grounding', () => {
   // straight over the repaint. The prologue's trailing DECSC closes that door.
   it('grounds the saved-cursor register so a later ESC 8 cannot restore the stale pen', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
+
     try {
       // The gap strands a DECSC taken while bold + line-drawing were set.
       await writeTerminal(terminal, '\x1b[1m\x1b(0\x1b7')
@@ -507,6 +543,7 @@ describe('replay baseline grounding', () => {
   // overwrites the last cell and the restored history silently loses text.
   it('replays a row wider than the grid instead of dropping it at the margin', async () => {
     const terminal = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[?7l')
       await writeTerminal(terminal, `${NORMAL_BUFFER_PROLOGUE}ABCDEFGHIJKLMNO`)
@@ -523,6 +560,7 @@ describe('replay baseline grounding', () => {
   // the live TUI sets makes all of its cursor addressing margin-relative.
   it('leaves origin mode off so later cursor addressing stays absolute', async () => {
     const terminal = new Terminal({ cols: 10, rows: 6, allowProposedApi: true })
+
     try {
       // Alt branch: `?1049h` on an already-alt pane is a no-op, so unlike the
       // normal branch's `?1049l` it restores nothing on its own.
@@ -544,6 +582,7 @@ describe('replay baseline grounding', () => {
   // shifts existing cells right instead of overwriting them.
   it('leaves insert mode off so later repaints overwrite rather than shift', async () => {
     const terminal = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[4h')
       await writeTerminal(terminal, `${NORMAL_BUFFER_PROLOGUE}OLDTEXT`)
@@ -567,6 +606,7 @@ describe('replay baseline grounding', () => {
   ] as const) {
     it(`grounds a stranded ${label} on the alt-screen branch`, async () => {
       const terminal = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
+
       try {
         await writeTerminal(terminal, '\x1b[?1049h')
         await writeTerminal(terminal, stranded)
@@ -583,6 +623,7 @@ describe('replay baseline grounding', () => {
   // switches, so a pane already in alt screen keeps the stale region.
   it('grounds the alt buffer margins even when already on the alt screen', async () => {
     const terminal = new Terminal({ cols: 10, rows: 6, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[?1049h')
       await writeTerminal(terminal, '\x1b[2;3r')
@@ -600,6 +641,7 @@ describe('replay baseline grounding', () => {
   // content vanishes on the next buffer switch.
   it('returns to the normal buffer before replaying a normal-buffer snapshot', async () => {
     const terminal = new Terminal({ cols: 20, rows: 3, allowProposedApi: true })
+
     try {
       await writeTerminal(terminal, '\x1b[?1049hSTALE TUI FRAME')
       await writeTerminal(terminal, `${NORMAL_BUFFER_PROLOGUE_FROM_ALT}shell prompt $`)
@@ -696,6 +738,7 @@ describe('shouldSkipAltFrameForWidthMismatch', () => {
 describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
   it('restores the exact capture-grid alt frame while the target grid is unknown', async () => {
     const terminal = new Terminal({ cols: 12, rows: 5, scrollback: 20 })
+
     const snapshot = {
       data: '\x1b[1;1HTOP---------\x1b[2;1HMIDDLE------\x1b[3;1HBOTTOM------',
       frameRestoreAnsi: '\x1b[?25l',
@@ -705,6 +748,7 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
 
     try {
       const skipAltFrame = shouldSkipAltFrameForWidthMismatch(12, undefined)
+
       for (const chunk of buildMainModelSnapshotReplayWrites(snapshot, {
         skipAltFrame,
         paneOnAlternateScreen: false
@@ -725,6 +769,7 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
 
   it('keeps normal history and a clean alt grid through the real resize path', async () => {
     const terminal = new Terminal({ cols: 12, rows: 5, scrollback: 20 })
+
     const snapshot = {
       data: '\x1b[1;1HWIDE-FRAME',
       frameRestoreAnsi: '\x1b[?25l',
@@ -739,6 +784,7 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
       })) {
         await writeTerminal(terminal, chunk)
       }
+
       terminal.resize(4, 5)
 
       expect(terminal.buffer.active.type).toBe('alternate')
@@ -823,6 +869,7 @@ describe('buildMainModelSnapshotReplayWrites alt-frame skip', () => {
         { paneOnAlternateScreen: false }
       )
     ]
+
     for (const writes of branches) {
       // CAN leads, so a truncated control string is aborted rather than
       // committed by the first ESC that follows.

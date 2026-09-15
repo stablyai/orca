@@ -27,11 +27,13 @@ function setup() {
   vi.spyOn(performance, 'now').mockImplementation(() => time)
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
     nextFrame = callback
+
     return 1
   })
   let state = WORKTREE_ROW_DRAG_INITIAL_STATE
   let target = NO_WORKTREE_SIDEBAR_DROP_TARGET
   const offsets = new Map([['parent', 56]])
+
   const args: WorktreePointerDragFrameArgs = {
     drag: {
       pointerId: 1,
@@ -88,6 +90,7 @@ function setup() {
       state = typeof update === 'function' ? update(state) : update
     }
   }
+
   return {
     args,
     offsets,
@@ -174,17 +177,20 @@ describe('stationary pointer autoscroll', () => {
       previewOffsetsByWorktreeId: offsets
     })
     flushWorktreePointerDragFrame(t.args)
+
     for (let frame = 1; frame <= 6; frame++) {
       index += direction
       container.scrollTop += direction * 56
       offsets = new Map([[`row-${index}`, direction * 56]])
       t.tick(80)
       flushWorktreePointerDragFrame(t.args)
+
       if (frame >= 2) {
         expect(t.state().previewOffsetsByWorktreeId).toBe(offsets)
         expect(t.state().dropIndicatorY).toBe(300 - container.scrollTop)
       }
     }
+
     expect(t.args.drag.currentY).toBe(300)
   })
 })
@@ -193,12 +199,14 @@ describe('Escape during pointer dragging', () => {
   function renderDrag() {
     const t = setup()
     const cancelBoard = vi.fn()
+
     const { result, unmount } = renderHook(() => {
       const runtime = useWorktreeDragRuntime({
         worktreeDragSessionRef: { current: null },
         statusDropAnchorsRef: { current: new Map() },
         onWorkspaceBoardDragPreviewCancel: cancelBoard
       })
+
       useWorktreePointerDragWindowEvents({
         ctx: t.args.ctx,
         runtime,
@@ -207,12 +215,16 @@ describe('Escape during pointer dragging', () => {
         onWorkspaceBoardDragPreviewCommit: vi.fn(),
         onDropWorktreesOnWorkspaceBoard: vi.fn()
       })
+
       return runtime
     })
+
     result.current.worktreePointerDragRef.current = t.args.drag
+
     if (t.args.drag.preview) {
       document.body.append(t.args.drag.preview)
     }
+
     return { ...t, result, unmount, cancelBoard }
   }
 

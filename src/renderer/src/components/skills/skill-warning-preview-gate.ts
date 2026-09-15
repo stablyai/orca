@@ -15,7 +15,9 @@ export async function skillWarningPreviewVersionForShare(
   if (!isSkillWarningPreviewEnabled() || shareId !== SKILL_WARNING_PREVIEW_SHARE_ID) {
     return null
   }
+
   const { skillWarningPreviewVersion } = await import('./skill-warning-preview-version')
+
   return skillWarningPreviewVersion()
 }
 
@@ -23,6 +25,7 @@ type SkillShareResolution = Awaited<ReturnType<typeof window.api.skills.resolveS
 
 export async function resolveSkillShareForInstall(shareId: string): Promise<SkillShareResolution> {
   const previewVersion = await skillWarningPreviewVersionForShare(shareId)
+
   return previewVersion
     ? { status: 'ok', value: { id: shareId, version: previewVersion } }
     : window.api.skills.resolveShare(shareId)

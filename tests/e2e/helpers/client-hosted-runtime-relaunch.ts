@@ -9,6 +9,7 @@ export async function refreshAuthorityRuntimeId(
     client.page.evaluate(async (environmentId) => {
       await window.api.runtimeEnvironments.connect({ selector: environmentId })
       await window.__store?.getState().refreshRuntimeEnvironmentStatus(environmentId)
+
       return (
         window.__store?.getState().runtimeStatusByEnvironmentId.get(environmentId)?.status
           ?.runtimeId ?? null
@@ -23,10 +24,12 @@ export async function readRelaunchedRuntimeId(
   previousRuntimeId: string
 ): Promise<string | null> {
   const current = await refreshAuthorityRuntimeId(client)
+
   // Why: `expect(null).toEqual(expect.not.stringMatching(prev))` passes; null must stay pending.
   if (current == null || current === previousRuntimeId) {
     return null
   }
+
   return current
 }
 

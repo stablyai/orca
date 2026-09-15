@@ -7,6 +7,7 @@ export function getWorkspaceCleanupCandidateHostLabel(
   candidate: WorkspaceCleanupCandidate
 ): string {
   const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+
   return hostId
     ? getExecutionHostLabel(hostId)
     : translate('components.workspace.cleanup.host.unknown', 'Unknown host')

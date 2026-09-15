@@ -134,12 +134,14 @@ describe('RelayReconnectController cadence', () => {
   // often as one that never hears the reason.
   it('keeps the host-offline retry delay for a 4404', () => {
     const delays: number[] = []
+
     const controller = new RelayReconnectController(
       {
         now: () => 0,
         randomBytes: () => new Uint8Array([0, 0]),
         setTimer: ((callback: () => void, delay: number) => {
           delays.push(delay)
+
           return 1 as unknown as ReturnType<typeof setTimeout>
         }) as unknown as typeof setTimeout,
         clearTimer: (() => {}) as unknown as typeof clearTimeout

@@ -16,8 +16,11 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const TAB_ID = 'removed-parked-tab'
+
 const PTY_ID = 'removed-worktree@@parked-pty'
+
 const FLOATING_TAB_ID = 'floating-parked-tab'
+
 const FLOATING_PTY_ID = `${FLOATING_TERMINAL_WORKTREE_ID}@@parked-pty`
 
 describe('terminal parked watcher registry removal', () => {

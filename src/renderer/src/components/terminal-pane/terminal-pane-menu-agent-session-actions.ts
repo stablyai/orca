@@ -25,8 +25,10 @@ export const forkAgentSessionFromMenuPane = async (
   if (!pane) {
     return
   }
+
   const { tabId, worktreeId, groupId } = context
   const fork = prepareAgentSessionForkFromPane({ pane, tabId, worktreeId, groupId })
+
   if (fork) {
     context.onAgentSessionForkReady(fork)
   }
@@ -39,8 +41,10 @@ export const continueAgentSessionFromMenuPane = (
   if (!pane) {
     return
   }
+
   const { tabId, worktreeId, groupId, fallbackCwd } = context
   const initialCwd = context.paneCwdRef.current.get(pane.id)?.cwd || fallbackCwd
+
   const request = prepareAgentSessionContinuationFromPane({
     pane,
     tabId,
@@ -49,6 +53,7 @@ export const continueAgentSessionFromMenuPane = (
     workspacePath: fallbackCwd,
     initialCwd
   })
+
   if (request) {
     context.onAgentSessionContinuationReady(request)
   }
@@ -63,5 +68,6 @@ export const copyAgentSessionContextFromMenuPane = async (
   if (!pane) {
     return
   }
+
   await copyAgentSessionContextFromPane(pane)
 }

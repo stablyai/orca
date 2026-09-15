@@ -35,6 +35,7 @@ describe('DesktopScriptProviderClient paste validation', () => {
       text,
       noScreenshot: true
     })
+
     await Promise.resolve()
 
     expectDesktopProviderSubprocessStartCount(0)

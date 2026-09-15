@@ -31,18 +31,23 @@ export type BootAvdOptions = {
 // flags in a stable, documented order.
 export function bootAvdArgs(name: string, options: BootAvdOptions = {}): string[] {
   const args = ['-avd', name]
+
   if (options.noSnapshot) {
     args.push('-no-snapshot')
   }
+
   if (options.noWindow) {
     args.push('-no-window')
   }
+
   if (options.noBootAnim) {
     args.push('-no-boot-anim')
   }
+
   if (options.gpu) {
     args.push('-gpu', options.gpu)
   }
+
   return args
 }
 

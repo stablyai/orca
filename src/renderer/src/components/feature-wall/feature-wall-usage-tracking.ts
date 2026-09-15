@@ -10,6 +10,7 @@ export function hasFeatureWallProviderUsageTracking(provider: ProviderRateLimits
   if (!provider) {
     return false
   }
+
   return (
     provider.status === 'ok' ||
     provider.session !== null ||
@@ -23,6 +24,7 @@ export function getFeatureWallUsageProviderConnection(args: {
   provider: ProviderRateLimits | null
 }): FeatureWallUsageProviderConnection {
   const { managedAccountCount } = args
+
   if (managedAccountCount !== undefined && managedAccountCount > 0) {
     return {
       connected: true,
@@ -33,6 +35,7 @@ export function getFeatureWallUsageProviderConnection(args: {
       )
     }
   }
+
   if (hasFeatureWallProviderUsageTracking(args.provider)) {
     return {
       connected: true,
@@ -42,6 +45,7 @@ export function getFeatureWallUsageProviderConnection(args: {
       )
     }
   }
+
   if (managedAccountCount === undefined) {
     return {
       connected: false,
@@ -51,6 +55,7 @@ export function getFeatureWallUsageProviderConnection(args: {
       )
     }
   }
+
   return {
     connected: false,
     label: translate(

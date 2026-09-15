@@ -36,10 +36,12 @@ const asyncPrimaryWriteFailure = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     open: async (...args: Parameters<typeof actual.open>) => {
       const target = args[0]
+
       if (
         asyncPrimaryWriteFailure.error &&
         typeof target === 'string' &&
@@ -47,6 +49,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       ) {
         throw asyncPrimaryWriteFailure.error
       }
+
       return actual.open(...args)
     }
   }
@@ -56,6 +59,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -70,9 +74,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -105,10 +111,12 @@ describe('Store', () => {
 
   it('get/set GitHub cache round-trips', async () => {
     const store = await createStore()
+
     const cache = {
       pr: { 'owner/repo#1': { data: null, fetchedAt: 1000 } },
       issue: {}
     }
+
     store.setGitHubCache(cache)
     expect(store.getGitHubCache()).toEqual(cache)
   })
@@ -117,6 +125,7 @@ describe('Store', () => {
 
   it('get/set workspace session round-trips', async () => {
     const store = await createStore()
+
     const session = {
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -124,18 +133,22 @@ describe('Store', () => {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {}
     }
+
     store.setWorkspaceSession(session)
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
   it('patches workspace session without replacing unchanged slices', async () => {
     const store = await createStore()
+
     const tabsByWorktree = {
       wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
     }
+
     const terminalLayoutsByTabId = {
       tab1: { root: null, activeLeafId: null, expandedLeafId: null }
     }
+
     store.setWorkspaceSession({
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -235,6 +248,7 @@ describe('Store', () => {
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
         TEST_LEAF_2
       ]
+
     expect(ref).toEqual(expect.stringMatching(/^v1-[0-9a-f]{32}$/))
     expect(existsSync(join(profileDataDirectory, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
@@ -306,10 +320,12 @@ describe('Store', () => {
     ).toEqual({
       [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+
     const ref =
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
         TEST_LEAF_2
       ]
+
     expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('maybe-remote-scrollback')
   })
 
@@ -322,14 +338,18 @@ describe('Store', () => {
       tabsByWorktree: { 'remote-repo::/remote': session.tabsByWorktree['remote-repo::/remote'] },
       terminalLayoutsByTabId: { 'remote-tab': session.terminalLayoutsByTabId['remote-tab'] }
     })
+
     const ref =
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
         TEST_LEAF_2
       ]
+
     expect(ref).toEqual(expect.stringMatching(/^v1-[0-9a-f]{32}$/))
+
     if (!ref) {
       throw new Error('expected scrollback snapshot ref')
     }
+
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
     store.flushOrThrow()
 
@@ -342,11 +362,13 @@ describe('Store', () => {
     })
 
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+
     const stillPublished = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
       workspaceSession: {
         terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
       }
     }
+
     expect(
       stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
         ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]
@@ -366,13 +388,16 @@ describe('Store', () => {
         'remote-tab': session.terminalLayoutsByTabId['remote-tab']
       }
     })
+
     const ref =
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
         TEST_LEAF_2
       ]
+
     if (!ref) {
       throw new Error('expected scrollback snapshot ref')
     }
+
     const snapshotPath = join(testState.dir, 'terminal-scrollback', `${ref}.bin`)
     store.flushOrThrow()
     const durableBeforeRemoval = readFileSync(dataFile(), 'utf-8')
@@ -381,9 +406,11 @@ describe('Store', () => {
     const writeError = Object.assign(new Error('profile mount rejected replacement write'), {
       code: 'EIO'
     })
+
     asyncPrimaryWriteFailure.error = writeError
     asyncPrimaryWriteFailure.targetPrefix = `${dataFile()}.`
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       store.setWorkspaceSession({
         activeRepoId: null,
@@ -401,11 +428,13 @@ describe('Store', () => {
     }
 
     expect(readFileSync(dataFile(), 'utf-8')).toBe(durableBeforeRemoval)
+
     const stillPublished = JSON.parse(durableBeforeRemoval) as {
       workspaceSession: {
         terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
       }
     }
+
     expect(
       stillPublished.workspaceSession.terminalLayoutsByTabId['remote-tab']
         ?.scrollbackRefsByLeafId?.[TEST_LEAF_2]
@@ -524,9 +553,11 @@ describe('Store', () => {
     const store = await createStore()
     const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
     const leafId = layout.root?.type === 'leaf' ? layout.root.leafId : null
+
     if (leafId === null) {
       throw new Error('Expected remapped leaf id')
     }
+
     expect(isTerminalLeafId(leafId)).toBe(true)
     expect(layout.ptyIdsByLeafId).toEqual({ [leafId]: 'remote-pty' })
     expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(leafId)
@@ -592,12 +623,15 @@ describe('Store', () => {
     const store = await createStore()
     const { agentHookServer } = await import('./agent-hooks/server')
     await agentHookServer.start({ env: 'production', userDataPath: testState.dir })
+
     try {
       const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
       const leafId = layout.root?.type === 'leaf' ? layout.root.leafId : null
+
       if (leafId === null) {
         throw new Error('Expected remapped leaf id')
       }
+
       const stablePaneKey = makePaneKey('tab1', leafId)
       expect(agentHookServer.getStatusSnapshot()).toEqual([
         expect.objectContaining({

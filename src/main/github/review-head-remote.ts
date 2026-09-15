@@ -15,16 +15,20 @@ export async function resolveGitHubReviewHeadRemote(args: {
   gitExec: GitExec
 }): Promise<string> {
   const { stdout } = await args.gitExec(['remote'])
+
   const remotes = stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+
   if (args.issueSourcePreference === 'origin') {
     if (remotes.includes('origin')) {
       return 'origin'
     }
+
     throw new Error('Repo has no configured origin remote.')
   }
+
   // Why: identity probes cost a `remote get-url` (plus a possible gh auth
   // lookup) each; only multi-remote clones are ambiguous enough to need them.
   if (remotes.length > 1) {
@@ -32,21 +36,25 @@ export async function resolveGitHubReviewHeadRemote(args: {
       if (!remotes.includes(remote)) {
         continue
       }
+
       const repository = await getGitHubApiRepositoryForRemote(
         args.repoPath,
         remote,
         args.connectionId ?? null,
         args.localGitOptions ?? {}
       )
+
       if (repository) {
         return remote
       }
     }
   }
+
   // Why: when no remote maps to a GitHub project the hosting identity cannot
   // guide the choice; keep the legacy per-transport fallback.
   if (args.connectionId) {
     return pickPreferredGitRemote(remotes)
   }
+
   return getDefaultRemote(args.repoPath, args.localGitOptions ?? {})
 }

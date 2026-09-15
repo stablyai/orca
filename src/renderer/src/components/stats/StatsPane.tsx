@@ -16,6 +16,7 @@ import {
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
@@ -32,9 +33,11 @@ function formatDuration(ms: number): string {
   if (totalDays > 0) {
     return `${totalDays}d ${remainingHours}h`
   }
+
   if (totalHours > 0) {
     return `${totalHours}h ${remainingMinutes}m`
   }
+
   return `${totalMinutes}m`
 }
 
@@ -42,7 +45,9 @@ function formatTrackingSince(timestamp: number | null): string {
   if (!timestamp) {
     return ''
   }
+
   const date = new Date(timestamp)
+
   return translate('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
     value0: date.toLocaleDateString(getIntlLocale(), {
       month: 'short',
@@ -91,6 +96,7 @@ function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element
   if (tab === 'overview') {
     return <BarChart3 className="size-3.5 text-muted-foreground" />
   }
+
   return <AgentIcon agent={tab} size={14} />
 }
 
@@ -99,6 +105,7 @@ export function StatsPane(): React.JSX.Element {
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
+
   const activeUsageOption =
     USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
     USAGE_ANALYTICS_OPTIONS[0]

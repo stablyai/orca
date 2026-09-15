@@ -22,15 +22,18 @@ import { translate } from '@/i18n/i18n'
 
 function getRuntimeTarget(settings: Parameters<typeof getActiveRuntimeTarget>[0]) {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment' ? target : null
 }
 
 function useRuntimeSettingsForSlug(owner: string, repo: string, host?: string) {
   const { lookupSlug } = useRepoSlugIndex()
+
   const matchedRepo = useMemo(
     () => lookupSlug(`${owner}/${repo}`, host)[0] ?? null,
     [lookupSlug, owner, repo, host]
   )
+
   return useAppStore(
     useShallow((s) =>
       matchedRepo ? getSettingsForRepoRuntimeOwner(s, matchedRepo.id) : s.settings
@@ -55,6 +58,7 @@ export function CommentsList({
 }): React.JSX.Element {
   const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo, host)
   const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
+
   return (
     <div className="flex flex-col gap-3">
       {comments.length === 0 ? (
@@ -73,12 +77,14 @@ export function CommentsList({
             comment={c}
             onDelete={async () => {
               const target = getRuntimeTarget(runtimeSettings)
+
               const args = {
                 owner,
                 repo,
                 ...(host ? { host } : {}),
                 commentId: c.id
               }
+
               const res = target
                 ? await callRuntimeRpc<GitHubProjectMutationResult>(
                     target,
@@ -87,14 +93,18 @@ export function CommentsList({
                     { timeoutMs: 30_000 }
                   )
                 : await window.api.gh.deleteIssueCommentBySlug(args)
+
               if (!res.ok) {
                 toast.error(res.error.message)
+
                 return
               }
+
               onChange(comments.filter((x) => x.id !== c.id))
             }}
             onEdit={async (next) => {
               const target = getRuntimeTarget(runtimeSettings)
+
               const args = {
                 owner,
                 repo,
@@ -102,6 +112,7 @@ export function CommentsList({
                 commentId: c.id,
                 body: next
               }
+
               const res = target
                 ? await callRuntimeRpc<GitHubProjectMutationResult>(
                     target,
@@ -110,10 +121,13 @@ export function CommentsList({
                     { timeoutMs: 30_000 }
                   )
                 : await window.api.gh.updateIssueCommentBySlug(args)
+
               if (!res.ok) {
                 toast.error(res.error.message)
+
                 return
               }
+
               onChange(comments.map((x) => (x.id === c.id ? { ...x, body: next } : x)))
             }}
           />
@@ -136,6 +150,7 @@ function CommentRow({
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
+
   return (
     <div className="rounded border border-border/50 bg-muted/20 p-3">
       <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -209,6 +224,7 @@ export function NewCommentForm({
   const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo, host)
   const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
   const canSubmitComment = hasBoundedCommentBodyText(draft)
+
   return (
     <div className="flex flex-col gap-2">
       <textarea
@@ -226,9 +242,11 @@ export function NewCommentForm({
           disabled={!canSubmitComment || submitting}
           onClick={async () => {
             const bodyState = getCommentBodySubmitState(draft)
+
             if (bodyState.status === 'empty') {
               return
             }
+
             if (bodyState.status === 'too-large-leading-whitespace') {
               toast.error(
                 translate(
@@ -236,11 +254,15 @@ export function NewCommentForm({
                   'Comment is too large to submit safely.'
                 )
               )
+
               return
             }
+
             setSubmitting(true)
+
             try {
               const target = getRuntimeTarget(runtimeSettings)
+
               const args = {
                 owner,
                 repo,
@@ -248,6 +270,7 @@ export function NewCommentForm({
                 number,
                 body: bodyState.body
               }
+
               const res = target
                 ? await callRuntimeRpc<GitHubProjectCommentMutationResult>(
                     target,
@@ -256,10 +279,13 @@ export function NewCommentForm({
                     { timeoutMs: 30_000 }
                   )
                 : await window.api.gh.addIssueCommentBySlug(args)
+
               if (!res.ok) {
                 toast.error(res.error.message)
+
                 return
               }
+
               onAdded(res.comment)
               setDraft('')
             } finally {

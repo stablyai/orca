@@ -55,6 +55,7 @@ export function getShortcutsPaneSearchEntries(options?: {
 }): SettingsSearchEntry[] {
   const includeManagedBrowser = options?.includeManagedBrowser !== false
   const includeMobileEmulator = options?.includeMobileEmulator !== false
+
   return [
     ...getShortcutDefinitionSearchEntries()
       .filter(

@@ -7,6 +7,7 @@ function createTarget(matchingSelectorFragment: string | null): EventTarget {
       if (matchingSelectorFragment && selector.includes(matchingSelectorFragment)) {
         return {}
       }
+
       return null
     })
   } as unknown as EventTarget

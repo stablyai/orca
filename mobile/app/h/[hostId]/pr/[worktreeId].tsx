@@ -12,6 +12,7 @@ export default function PrRedirect() {
     name?: string | string[]
     origin?: string | string[]
   }>()
+
   return (
     <Redirect
       href={{

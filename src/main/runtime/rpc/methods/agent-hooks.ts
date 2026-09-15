@@ -10,7 +10,9 @@ export const AGENT_HOOK_METHODS = [
       if (clientKind !== undefined) {
         throw new Error('Codex hook preparation is only available to the local Orca CLI.')
       }
+
       const settings = runtime.getClientSettings()
+
       return await prepareManagedWslCodexHomeBeforeShellLaunch({
         env: {
           CODEX_HOME: params.codexHome,

@@ -3,6 +3,7 @@ import { isPluginCommandAliasActionId } from './plugin-command-actions'
 import { getKeybindingConflictIdentity } from '../keybindings'
 
 type IdentifiedContribution = { id: string }
+
 type PathContribution = { path: string }
 
 type ContributionValidationManifest = {
@@ -27,8 +28,10 @@ function rejectDuplicateValues(
   ctx: RefinementCtx
 ): void {
   const seen = new Set<string>()
+
   for (const [index, entry] of entries.entries()) {
     const value = valueOf(entry)
+
     if (seen.has(value)) {
       ctx.addIssue({
         code: 'custom',
@@ -36,6 +39,7 @@ function rejectDuplicateValues(
         message: `duplicate ${label}: ${value}`
       })
     }
+
     seen.add(value)
   }
 }
@@ -53,6 +57,7 @@ export function validatePluginManifestContributions(
       ctx
     )
   }
+
   rejectDuplicateValues(
     manifest.contributes.languagePacks,
     (entry) => (entry as { locale: string }).locale.toLowerCase(),
@@ -60,6 +65,7 @@ export function validatePluginManifestContributions(
     'language pack locale',
     ctx
   )
+
   for (const path of ['vmRecipes', 'agents'] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
@@ -69,11 +75,14 @@ export function validatePluginManifestContributions(
       ctx
     )
   }
+
   const keybindingIdentities = new Set<string>()
+
   for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
     const identities = (['darwin', 'linux', 'win32'] as const).map((platform) =>
       getKeybindingConflictIdentity(keybinding.key, platform)
     )
+
     if (identities.some((identity) => keybindingIdentities.has(identity))) {
       ctx.addIssue({
         code: 'custom',
@@ -81,10 +90,12 @@ export function validatePluginManifestContributions(
         message: `duplicate keybinding: ${keybinding.key.toLowerCase()}`
       })
     }
+
     identities.forEach((identity) => keybindingIdentities.add(identity))
   }
 
   const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
+
   for (const [index, command] of manifest.contributes.commands.entries()) {
     if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {
       ctx.addIssue({
@@ -94,8 +105,10 @@ export function validatePluginManifestContributions(
       })
     }
   }
+
   for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
     const command = commands.get(keybinding.command)
+
     if (!command) {
       ctx.addIssue({
         code: 'custom',
@@ -104,7 +117,9 @@ export function validatePluginManifestContributions(
       })
       continue
     }
+
     const commandContext = command.context ?? 'global'
+
     if (keybinding.when !== undefined && keybinding.when !== commandContext) {
       ctx.addIssue({
         code: 'custom',
@@ -124,6 +139,7 @@ export function validatePluginManifestContributions(
       message: 'required when contributes.commands contains a worker command'
     })
   }
+
   if (!manifest.main && manifest.contributes.events.length > 0) {
     ctx.addIssue({
       code: 'custom',
@@ -131,6 +147,7 @@ export function validatePluginManifestContributions(
       message: 'required when contributes.events is non-empty'
     })
   }
+
   if (
     manifest.contributes.events.length > 0 &&
     !manifest.capabilities.some((capability) => capability.kind === 'events:subscribe')

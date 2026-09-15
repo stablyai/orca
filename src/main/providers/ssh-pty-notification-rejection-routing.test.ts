@@ -8,11 +8,14 @@ it('routes malformed and unadmitted source frames only to rejection diagnostics'
       if (params.deliveryToken !== 'token-1') {
         throw new Error('Unknown or stale PTY source delivery cancellation')
       }
+
       return { canceled: true, sentEndSu: 0, creditedEndSu: 0 }
     })
   }
+
   const dataListeners = new Set()
   const rejectedDataListeners = new Set()
+
   const subscription = subscribeSshPtyNotifications({
     mux: mux as never,
     toAppPtyId: (id) => `ssh:conn@@${id}`,
@@ -26,10 +29,12 @@ it('routes malformed and unadmitted source frames only to rejection diagnostics'
     resolvePtyIncarnation: (id) => `incarnation:${id}`,
     peekPtyIncarnation: () => undefined
   })
+
   const handler = mux.onNotification.mock.calls[0]?.[0] as (
     method: string,
     params: Record<string, unknown>
   ) => void
+
   const onData = vi.fn()
   const onRejectedData = vi.fn()
   dataListeners.add(onData)
@@ -92,6 +97,7 @@ it('never resolves an incarnation for a rejected frame', async () => {
     onNotification: vi.fn(),
     request: vi.fn(async () => ({ canceled: true, sentEndSu: 0, creditedEndSu: 0 }))
   }
+
   const rejectedDataListeners = new Set()
   const resolvePtyIncarnation = vi.fn((id: string) => `incarnation:${id}`)
   subscribeSshPtyNotifications({
@@ -107,10 +113,12 @@ it('never resolves an incarnation for a rejected frame', async () => {
     resolvePtyIncarnation,
     peekPtyIncarnation: () => undefined
   })
+
   const handler = mux.onNotification.mock.calls[0]?.[0] as (
     method: string,
     params: Record<string, unknown>
   ) => void
+
   const onRejectedData = vi.fn()
   rejectedDataListeners.add(onRejectedData)
 
@@ -131,7 +139,9 @@ it('coalesces repeated exact rejections into one fresh-activation recovery', asy
     onNotification: vi.fn(),
     request: vi.fn(async () => ({ canceled: true, sentEndSu: 3, creditedEndSu: 0 }))
   }
+
   const rejectedDataListeners = new Set()
+
   const subscription = subscribeSshPtyNotifications({
     mux: mux as never,
     toAppPtyId: (id) => `ssh:conn@@${id}`,
@@ -145,6 +155,7 @@ it('coalesces repeated exact rejections into one fresh-activation recovery', asy
     resolvePtyIncarnation: (id) => `incarnation:${id}`,
     peekPtyIncarnation: () => 'incarnation-1'
   })
+
   subscription
     .installReceivingActivation('pty-1', {
       status: 'pending',
@@ -156,12 +167,15 @@ it('coalesces repeated exact rejections into one fresh-activation recovery', asy
       recoveryEndSu: 0
     })
     .commit()
+
   const handler = mux.onNotification.mock.calls[0]?.[0] as (
     method: string,
     params: Record<string, unknown>
   ) => void
+
   const onRejectedData = vi.fn()
   rejectedDataListeners.add(onRejectedData)
+
   const rejected = {
     id: 'pty-1',
     data: 'gap',

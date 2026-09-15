@@ -109,6 +109,7 @@ describe('web search results', () => {
         url: `https://example.com/${i}`
       }))
     )
+
     expect(results).toHaveLength(MAX_TOOL_SEARCH_RESULTS)
     expect(results[0]!.title).toHaveLength(200)
     expect(toolWebSearchResults([{ url: `https://example.com/${'x'.repeat(3000)}` }])).toEqual([])

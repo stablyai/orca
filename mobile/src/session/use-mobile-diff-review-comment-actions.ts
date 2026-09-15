@@ -66,11 +66,13 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
+
       const response = await client.sendRequest('worktree.set', {
         worktree: `id:${worktreeId}`,
         diffComments: comments,
         mobileDiffReview: reviewState
       })
+
       if (!response.ok) {
         throw new Error(response.error?.message || 'Failed to save review state')
       }
@@ -89,6 +91,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     async (comments: DiffComment[], reviewState: MobileDiffReviewState) => {
       const previous = screenState
       updateReadyState((state) => ({ ...state, comments, reviewState }))
+
       try {
         await persistMetadata(comments, reviewState)
         triggerSuccess()
@@ -96,6 +99,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
         if (previous.kind === 'ready') {
           setScreenState(previous)
         }
+
         triggerError()
         setActionError(err instanceof Error ? err.message : 'Failed to save review')
         throw err
@@ -129,7 +133,9 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (!composer || !currentItem || screenState.kind !== 'ready') {
       return
     }
+
     const now = Date.now()
+
     const result =
       composer.mode === 'edit'
         ? updateMobileDiffComment(screenState.comments, {
@@ -148,9 +154,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
             scope: currentItem.scope,
             diffIdentity: currentItem.diffIdentity
           })
+
     if (!result.comment) {
       return
     }
+
     await saveCommentsAndReviewState(result.comments, screenState.reviewState)
     closeComposer()
   }, [
@@ -167,10 +175,12 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (!composer || composer.mode !== 'edit' || screenState.kind !== 'ready') {
       return
     }
+
     const nextComments = removeMobileDiffComments(
       screenState.comments,
       new Set([composer.comment.id])
     )
+
     await saveCommentsAndReviewState(nextComments, screenState.reviewState)
     closeComposer()
   }, [closeComposer, composer, saveCommentsAndReviewState, screenState])
@@ -179,22 +189,28 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (!currentItem || screenState.kind !== 'ready') {
       return
     }
+
     const now = Date.now()
+
     let nextReviewState = markMobileDiffReviewFileReviewed(
       screenState.reviewState,
       reviewDescriptorFromItem(currentItem),
       now
     )
+
     if (queue.every((item) => item.key === currentItem.key || item.isReviewed)) {
       nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
     }
+
     await saveCommentsAndReviewState(screenState.comments, nextReviewState)
+
     const nextIndex = nextReviewIndexAfterMarkReviewed({
       currentIndex,
       currentItemKey: currentItem.key,
       filter,
       filteredQueue
     })
+
     if (nextIndex !== null) {
       setCurrentIndex(nextIndex)
     } else {
@@ -216,12 +232,15 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (!currentItem || screenState.kind !== 'ready') {
       return
     }
+
     const now = Date.now()
+
     const nextReviewState = clearMobileDiffReviewFileReviewed(
       screenState.reviewState,
       currentItem.key,
       now
     )
+
     await saveCommentsAndReviewState(screenState.comments, {
       ...nextReviewState,
       completedAt: undefined

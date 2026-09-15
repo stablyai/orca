@@ -32,13 +32,19 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../ipc/repos', () => ({ registerRepoHandlers: vi.fn() }))
+
 vi.mock('../ipc/worktrees', () => ({ registerWorktreeHandlers: vi.fn() }))
+
 vi.mock('../ipc/worktree-change-invalidators', () => ({ runWorktreeChangeInvalidators: vi.fn() }))
+
 vi.mock('../ipc/pty', () => ({ getLocalPtyProvider: vi.fn(), registerPtyHandlers: vi.fn() }))
+
 vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: vi.fn()
 }))
+
 vi.mock('../browser/browser-manager', () => ({ browserManager: { unregisterAll: vi.fn() } }))
+
 vi.mock('../macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: vi.fn(),
   consumePendingTccPromptNotice: vi.fn(),
@@ -74,6 +80,7 @@ const RECOVERY_CHANNELS = [
 ] as const
 
 const TRUSTED_ID = 7
+
 const UNAUTHORIZED = 'Unauthorized updater package recovery sender'
 
 type InvokeHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
@@ -84,9 +91,11 @@ function getHandler(channel: string): InvokeHandler {
   const handler = handleMock.mock.calls.find(([name]) => name === channel)?.[1] as
     | InvokeHandler
     | undefined
+
   if (!handler) {
     throw new Error(`no handler registered for ${channel}`)
   }
+
   return handler
 }
 
@@ -106,9 +115,11 @@ function senderEvent(sender: Partial<WebContents>): IpcMainInvokeEvent {
 
 function expectBothChannelsRejected(sender: Partial<WebContents>): void {
   const event = senderEvent(sender)
+
   for (const channel of RECOVERY_CHANNELS) {
     expect(() => getHandler(channel)(event)).toThrow(UNAUTHORIZED)
   }
+
   expect(getLinuxPackageInstallInstructionsMock).not.toHaveBeenCalled()
   expect(showLinuxPackageMock).not.toHaveBeenCalled()
 }

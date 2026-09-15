@@ -11,6 +11,7 @@ export function registerProjectCatalogIpcBridge(
   unsubs.push(
     window.api.repos.onChanged(() => {
       const state = useAppStore.getState()
+
       if (isRuntimeEnvironmentActive()) {
         // Why: the all-host sidebar shows local repos even under a runtime; refresh the local slice, keep runtime slices.
         void (async () => {
@@ -20,8 +21,10 @@ export function registerProjectCatalogIpcBridge(
           await state.fetchFolderWorkspaces(localOwner)
           remountTerminalTabsAwaitingHostHydration()
         })()
+
         return
       }
+
       void state.fetchProjectGroups()
       void state.fetchFolderWorkspaces()
       void state.fetchRepos().then(remountTerminalTabsAwaitingHostHydration)
@@ -54,6 +57,7 @@ export function registerProjectCatalogIpcBridge(
           // refresh (onChanged) covers local rows while a runtime is active.
           return
         }
+
         const state = useAppStore.getState()
         applyWorktreeHeadIdentities(data, {
           getWorktreesForRepo: (repoId) => state.worktreesByRepo[repoId],
@@ -68,6 +72,7 @@ export function registerProjectCatalogIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       useAppStore.getState().updateWorktreeBaseStatus(event)
     })
   )
@@ -77,6 +82,7 @@ export function registerProjectCatalogIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       useAppStore.getState().updateWorktreeRemoteBranchConflict(event)
     })
   )
@@ -87,6 +93,7 @@ export function registerProjectCatalogIpcBridge(
       if (!data.creationId) {
         return
       }
+
       useAppStore.getState().updatePendingWorktreeCreation(data.creationId, { phase: data.phase })
     }) ?? (() => {})
   )

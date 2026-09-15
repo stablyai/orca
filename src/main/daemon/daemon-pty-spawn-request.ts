@@ -103,9 +103,11 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       historySeedTransferId: string | undefined
     ) => {
       const { opts } = context
+
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
+
       const payload = {
         sessionId: context.sessionId,
         cols: context.effectiveCols,
@@ -135,6 +137,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
           ? { agentSessionEnsure: opts.agentSessionEnsure }
           : {})
       }
+
       return opts.signal
         ? this.client.request<CreateOrAttachResult>(
             'createOrAttach',
@@ -146,11 +149,14 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     }
 
     let historySeedUnavailable = false
+
     const deliverSeedAndCreate = async (): Promise<CreateOrAttachResult> => {
       if (!historySeedSegments || historySeedSegments.length === 0) {
         return requestCreateOrAttach(undefined, undefined)
       }
+
       const metrics = measureTerminalHistorySeed(historySeedSegments)
+
       if (metrics.codeUnits <= TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS) {
         try {
           return await requestCreateOrAttach(historySeedSegments.join(''), undefined)
@@ -158,41 +164,55 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
           if (!(error instanceof NdjsonLineTooLongError)) {
             throw error
           }
+
           historySeedUnavailable = true
+
           return requestCreateOrAttach(undefined, undefined)
         }
       }
+
       if (this.protocolVersion < HISTORY_SEED_TRANSFER_PROTOCOL_VERSION) {
         historySeedUnavailable = true
+
         return requestCreateOrAttach(undefined, undefined)
       }
 
       let transferId: string | undefined
+
       try {
         const started = await this.client.request<{ transferId: string }>(
           'startHistorySeedTransfer',
           metrics
         )
+
         transferId = started.transferId
         let index = 0
+
         for (const data of iterateTerminalHistorySeedChunks(historySeedSegments)) {
           await this.client.request('appendHistorySeedTransfer', { transferId, index, data })
           index += 1
         }
+
         await this.client.request('finishHistorySeedTransfer', { transferId })
       } catch (error) {
         if (transferId) {
           await this.client.request('abortHistorySeedTransfer', { transferId }).catch(() => {})
         }
+
         if (isDaemonGoneError(error)) {
           throw error
         }
+
         historySeedUnavailable = true
+
         return requestCreateOrAttach(undefined, undefined)
       }
+
       return requestCreateOrAttach(undefined, transferId)
     }
+
     const result = await deliverSeedAndCreate()
+
     return historySeedUnavailable && result.historySeeded === undefined
       ? { ...result, historySeeded: false }
       : result

@@ -52,6 +52,7 @@ function createRuntime(deviceNames: Record<string, string> = {}): {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {}
   }
+
   const runtime = new OrcaRuntimeService(
     {
       ...storeBase,
@@ -63,10 +64,12 @@ function createRuntime(deviceNames: Record<string, string> = {}): {
     undefined,
     { getPairedDeviceName: (pairedDeviceId) => deviceNames[pairedDeviceId] ?? null }
   )
+
   const events: ClientHostedBrowserRowsEvent[] = []
   runtime.setNotifier({
     clientHostedBrowserRowsChanged: (event) => events.push(event)
   } as never)
+
   return { runtime, events }
 }
 
@@ -88,9 +91,11 @@ function placeAndPublish(
     browserPageId,
     browserHostClientId
   )
+
   if (placement.kind !== 'client') {
     throw new Error('expected client placement')
   }
+
   getRuntimeBrowserPageRegistry(runtime).publishClientPage({
     browserPageId,
     workspaceId: WT,
@@ -103,6 +108,7 @@ function placeAndPublish(
     loading: false,
     active: true
   })
+
   return placement
 }
 

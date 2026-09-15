@@ -15,6 +15,7 @@ describe('AgentMap ring hover', () => {
       card(),
       card({ paneKey: 'pane-2', conversationName: 'Agent beta' })
     ])
+
     expect(container.querySelector('[data-agent-map-hover-label]')).not.toBeInTheDocument()
 
     fireEvent.pointerOver(container.querySelector('.agent-map-worktree-group')!)

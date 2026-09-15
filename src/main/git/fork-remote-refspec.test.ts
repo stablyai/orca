@@ -19,33 +19,45 @@ function makeConfigExec(fetchByRemote: Record<string, string[]> = {}): {
   tagOptByRemote: Record<string, string>
 } {
   const tagOptByRemote: Record<string, string> = {}
+
   const exec = vi.fn<GitExecFn>(async (args: string[]) => {
     const key = args[2]
+
     if (args[0] === 'config' && args[1] === '--get-all' && key?.endsWith('.fetch')) {
       const remoteName = key.slice('remote.'.length, -'.fetch'.length)
       const values = fetchByRemote[remoteName] ?? []
+
       if (values.length === 0) {
         throw new Error('key not found')
       }
+
       return { stdout: `${values.join('\n')}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--unset-all' && key?.endsWith('.fetch')) {
       const remoteName = key.slice('remote.'.length, -'.fetch'.length)
       fetchByRemote[remoteName] = []
+
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--add' && key?.endsWith('.fetch')) {
       const remoteName = key.slice('remote.'.length, -'.fetch'.length)
       fetchByRemote[remoteName] = [...(fetchByRemote[remoteName] ?? []), args[3]!]
+
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'config' && args[1]?.endsWith('.tagOpt')) {
       const remoteName = args[1].slice('remote.'.length, -'.tagOpt'.length)
       tagOptByRemote[remoteName] = args[2]!
+
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
+
   return { exec, tagOptByRemote }
 }
 
@@ -68,6 +80,7 @@ describe('getRemoteFetchRefspecs', () => {
     const { exec } = makeConfigExec({
       fork: ['+refs/heads/a:refs/remotes/fork/a', '+refs/heads/b:refs/remotes/fork/b']
     })
+
     await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
       '+refs/heads/a:refs/remotes/fork/a',
       '+refs/heads/b:refs/remotes/fork/b'
@@ -159,24 +172,31 @@ describe('removeStaleForkFetchRefspec', () => {
 describe('pruneUntrackedForkRemoteRefs', () => {
   function makeRefsExec(refs: string[]): { exec: Mock<GitExecFn>; refs: string[] } {
     const state = [...refs]
+
     const exec = vi.fn<GitExecFn>(async (args: string[]) => {
       if (args[0] === 'for-each-ref') {
         const prefix = args[2]!
+
         return {
           stdout: state.map((r) => `${prefix}${r}`).join('\n') + (state.length ? '\n' : ''),
           stderr: ''
         }
       }
+
       if (args[0] === 'update-ref' && args[1] === '-d') {
         const refname = args[2]!
         const idx = state.findIndex((r) => refname.endsWith(`/${r}`))
+
         if (idx !== -1) {
           state.splice(idx, 1)
         }
+
         return { stdout: '', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     return { exec, refs: state }
   }
 

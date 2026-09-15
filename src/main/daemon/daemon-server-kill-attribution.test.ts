@@ -37,9 +37,11 @@ describe('daemon kill attribution', () => {
     })
     const daemon = server as unknown as DaemonServerPrivate
     let finishKill!: () => void
+
     const killFinished = new Promise<void>((resolve) => {
       finishKill = resolve
     })
+
     vi.spyOn(daemon.host, 'kill').mockReturnValue(killFinished)
 
     const request = daemon.requestRouter.route('control-42', {
@@ -104,11 +106,13 @@ describe('daemon kill attribution', () => {
       }
     })
     const daemon = server as unknown as DaemonServerPrivate
+
     const pendingPreparation = {
       canceled: false,
       controller: new AbortController(),
       clientId: 'control-42'
     }
+
     daemon.preparations.pending.set('agent-session', new Set([pendingPreparation]))
     vi.spyOn(daemon.host, 'kill').mockRejectedValue(new SessionNotFoundError('agent-session'))
 

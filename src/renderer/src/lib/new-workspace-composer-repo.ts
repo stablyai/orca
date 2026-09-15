@@ -25,12 +25,16 @@ export function resolveComposerActiveRepoId(
   if (!activeRepoId) {
     return activeRepoId ?? null
   }
+
   const activeRepo = repos.find((repo) => repo.id === activeRepoId)
+
   if (!activeRepo || !isRuntimeOwnedSshTargetId(activeRepo.connectionId)) {
     return activeRepoId
   }
+
   const projectKey = getProjectIdentityKey(activeRepo)
   const sibling = eligibleRepos.find((repo) => getProjectIdentityKey(repo) === projectKey)
+
   return sibling?.id ?? activeRepoId
 }
 

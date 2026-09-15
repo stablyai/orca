@@ -18,6 +18,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 const SHARED_WORKTREE_ID = 'repo-shared::/work/orca-feature'
 
 const localRepo: Repo = { ...repo, id: 'repo-shared', path: '/work/orca' }
+
 const sshRepo: Repo = {
   ...repo,
   id: 'repo-shared',
@@ -34,6 +35,7 @@ const localWorktree: Worktree = {
   hostId: 'local',
   displayName: 'orca-feature'
 }
+
 const sshWorktree: Worktree = { ...localWorktree, hostId: 'ssh:build-box' }
 
 function buildCollidingRows(

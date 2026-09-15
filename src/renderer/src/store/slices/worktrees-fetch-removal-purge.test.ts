@@ -43,11 +43,13 @@ describe('fetchWorktrees', () => {
 
   it('purges remembered right sidebar tabs for worktrees removed by a committed refresh', async () => {
     const store = createTestStore()
+
     const removed = makeWorktree({
       id: 'repo1::/path/removed',
       repoId: 'repo1',
       path: '/path/removed'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/surviving',
       repoId: 'repo1',
@@ -80,11 +82,13 @@ describe('fetchWorktrees', () => {
 
   it('keeps pr-checks and plugin panel tabs for surviving worktrees after an authoritative purge', async () => {
     const store = createTestStore()
+
     const removed = makeWorktree({
       id: 'repo1::/path/removed',
       repoId: 'repo1',
       path: '/path/removed'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/surviving',
       repoId: 'repo1',
@@ -124,11 +128,13 @@ describe('fetchWorktrees', () => {
 
   it('purges hosted review link mutation bookkeeping for worktrees removed by refresh', async () => {
     const store = createTestStore()
+
     const removed = makeWorktree({
       id: 'repo1::/path/removed',
       repoId: 'repo1',
       path: '/path/removed'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/surviving',
       repoId: 'repo1',
@@ -151,17 +157,20 @@ describe('fetchWorktrees', () => {
 
   it('retains hidden state until an authoritative refresh removes the worktree', async () => {
     const store = createTestStore()
+
     const visible = makeWorktree({
       id: 'repo1::/path/visible',
       repoId: 'repo1',
       path: '/path/visible'
     })
+
     const hidden = makeWorktree({
       id: 'repo1::/path/hidden',
       instanceId: 'persisted-hidden-instance',
       repoId: 'repo1',
       path: '/path/hidden'
     })
+
     const previousDetected = makeDetectedResult('repo1', [visible, hidden])
     previousDetected.worktrees[1] = {
       ...previousDetected.worktrees[1],
@@ -205,16 +214,19 @@ describe('fetchWorktrees', () => {
 
   it('awaits missing-worktree terminal teardown before purging renderer state', async () => {
     const store = createTestStore()
+
     const deleted = makeWorktree({
       id: 'repo1::/path/deleted',
       repoId: 'repo1',
       path: '/path/deleted'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/surviving',
       repoId: 'repo1',
       path: '/path/surviving'
     })
+
     let finishTeardown!: () => void
     mockApi.runtime.call.mockImplementationOnce(
       () =>
@@ -267,17 +279,20 @@ describe('fetchWorktrees', () => {
 
   it('clears a hidden dismissal across hydrated fetch-all delete and recreation', async () => {
     const store = createTestStore()
+
     const visible = makeWorktree({
       id: 'repo1::/path/visible',
       repoId: 'repo1',
       path: '/path/visible'
     })
+
     const hidden = makeWorktree({
       id: 'repo1::/path/reused',
       instanceId: 'persisted-reused-instance',
       repoId: 'repo1',
       path: '/path/reused'
     })
+
     const hiddenDetected = makeDetectedResult('repo1', [visible, hidden])
     hiddenDetected.worktrees[1] = {
       ...hiddenDetected.worktrees[1],
@@ -347,11 +362,13 @@ describe('fetchWorktrees', () => {
 
   it('purges session-only tab keys after an authoritative refresh', async () => {
     const store = createTestStore()
+
     const deleted = makeWorktree({
       id: 'repo1::/path/deleted',
       repoId: 'repo1',
       path: '/path/deleted'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/surviving',
       repoId: 'repo1',
@@ -398,11 +415,13 @@ describe('fetchWorktrees', () => {
 
   it('does not purge remembered state from a non-authoritative partial refresh', async () => {
     const store = createTestStore()
+
     const missingFromFallback = makeWorktree({
       id: 'repo1::/path/missing-from-fallback',
       repoId: 'repo1',
       path: '/path/missing-from-fallback'
     })
+
     const fallback = makeWorktree({
       id: 'repo1::/path/fallback',
       repoId: 'repo1',

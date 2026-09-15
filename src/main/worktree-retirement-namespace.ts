@@ -33,10 +33,13 @@ export const UNKNOWN_SSH_HOST_IDENTITY = 'ssh:?'
 export function retirementHostIdentity(repo: RepoHostFields, lookup?: SshTargetLookup): string {
   const hostId = getRepoExecutionHostId(repo)
   const parsed = parseExecutionHostId(hostId)
+
   if (parsed?.kind !== 'ssh') {
     return hostId
   }
+
   const target = lookup?.(parsed.targetId)
+
   return target ? sshHostIdentity(target) : UNKNOWN_SSH_HOST_IDENTITY
 }
 
@@ -56,6 +59,7 @@ function swapRetirementNamespaceHost(
   toIdentity: string
 ): string | null {
   const prefix = `${fromIdentity}:`
+
   return fromIdentity !== toIdentity && namespaceKey.startsWith(prefix)
     ? `${toIdentity}:${namespaceKey.slice(prefix.length)}`
     : null
@@ -73,6 +77,7 @@ export function retirementNamespaceKeysToRead(
     retirementHostIdentity(repo, lookup),
     getRepoExecutionHostId(repo)
   )
+
   return legacyKey ? [namespaceKey, legacyKey] : [namespaceKey]
 }
 
@@ -104,6 +109,7 @@ function trimRetirementNamespaces(namespaces: Record<string, RetiredNameRegistry
   // Why the clamp: a negative `end` makes slice count back from the tail, so an under-full map
   // would evict almost everything it holds instead of nothing.
   const overflow = Math.max(0, keys.length - MAX_RETIREMENT_NAMESPACES)
+
   for (const stale of keys.slice(0, overflow)) {
     delete namespaces[stale]
   }
@@ -130,8 +136,10 @@ export function migrateRetirementNamespaceHostIdentity(
   if (!namespaces) {
     return false
   }
+
   const visited = new Set<string>()
   let changed = false
+
   for (const group of [
     { identities: migration.moveFrom ?? [], retainSource: false },
     { identities: migration.copyFrom ?? [], retainSource: true }
@@ -140,16 +148,20 @@ export function migrateRetirementNamespaceHostIdentity(
       if (!oldIdentity || oldIdentity === migration.to || visited.has(oldIdentity)) {
         continue
       }
+
       visited.add(oldIdentity)
+
       if (rekeyRetirementNamespaceHost(namespaces, oldIdentity, migration.to, group.retainSource)) {
         changed = true
       }
     }
   }
+
   if (changed) {
     // A retained source bucket grows the map, so migration has to respect the cap too.
     trimRetirementNamespaces(namespaces)
   }
+
   return changed
 }
 
@@ -157,7 +169,9 @@ function retiredNameRegistriesEqual(a: RetiredNameRegistry, b: RetiredNameRegist
   if (a.exhaustedTiers !== b.exhaustedTiers || a.names.length !== b.names.length) {
     return false
   }
+
   const names = new Set(a.names)
+
   return b.names.every((name) => names.has(name))
 }
 
@@ -169,10 +183,12 @@ function rekeyRetirementNamespaceHost(
 ): boolean {
   const prefix = `${fromIdentity}:`
   let changed = false
+
   for (const key of Object.keys(namespaces)) {
     if (!key.startsWith(prefix)) {
       continue
     }
+
     const registry = namespaces[key]
     const nextKey = `${toIdentity}:${key.slice(prefix.length)}`
     const existing = namespaces[nextKey]
@@ -182,6 +198,7 @@ function rekeyRetirementNamespaceHost(
     // as unchanged.
     const merged = existing ? mergeRetiredNameRegistries(existing, registry) : registry
     const wrote = !existing || !retiredNameRegistriesEqual(merged, existing)
+
     if (!retainSource) {
       delete namespaces[key]
       changed = true
@@ -193,6 +210,7 @@ function rekeyRetirementNamespaceHost(
       delete namespaces[key]
       namespaces[key] = registry
     }
+
     if (wrote) {
       // Re-insert rather than assign: assigning to an existing key leaves it in its original slot,
       // so a destination that was just written would sit at the front of the eviction queue and the
@@ -207,5 +225,6 @@ function rekeyRetirementNamespaceHost(
       namespaces[nextKey] = existing
     }
   }
+
   return changed
 }

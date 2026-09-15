@@ -8,7 +8,9 @@ import {
 } from './browser-slice-test-harness'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
@@ -137,6 +139,7 @@ describe('createBrowserSlice runtime guard', () => {
 
   it('stores a runtime-resolved partition when switching browser tab profiles', () => {
     const store = createTestStore()
+
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       sessionProfileId: null,
       sessionPartition: 'persist:orca-browser'

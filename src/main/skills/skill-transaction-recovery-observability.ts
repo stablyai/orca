@@ -5,6 +5,7 @@ export async function settleObservedSkillTransactionRecovery(input: {
   recover(): Promise<void>
 }): Promise<void> {
   const operation = startSkillPhaseOperation({ phase: 'recovery', destination: 'transaction' })
+
   try {
     await input.recover()
     operation.complete({

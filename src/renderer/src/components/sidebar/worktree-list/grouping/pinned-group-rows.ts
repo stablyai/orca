@@ -33,16 +33,19 @@ export function emitPinnedGroup(
   if (pinnedSectionWorktrees.length === 0) {
     return
   }
+
   const hostWorktreeCounts = new Map<ExecutionHostId, number>()
   const hostWorktreeIds = new Map<ExecutionHostId, string[]>()
   const pinnedRepoOrder: string[] = []
   const seenPinnedRepoIds = new Set<string>()
+
   for (const worktree of pinnedSectionWorktrees) {
     const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     hostWorktreeCounts.set(hostId, (hostWorktreeCounts.get(hostId) ?? 0) + 1)
     const hostIds = hostWorktreeIds.get(hostId) ?? []
     hostIds.push(worktree.id)
     hostWorktreeIds.set(hostId, hostIds)
+
     if (!seenPinnedRepoIds.has(worktree.repoId)) {
       pinnedRepoOrder.push(worktree.repoId)
       seenPinnedRepoIds.add(worktree.repoId)
@@ -60,9 +63,11 @@ export function emitPinnedGroup(
     hostWorktreeIds,
     worktreeIds: pinnedSectionWorktrees.map((worktree) => worktree.id)
   })
+
   if (collapsedGroups.has(PINNED_GROUP_KEY)) {
     for (const repoId of pinnedRepoOrder) {
       const candidate = importedWorktreesByRepo.get(repoId)
+
       if (allowImportedFallback && candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
         result.push(
           buildImportedWorktreesCardRow(
@@ -73,6 +78,7 @@ export function emitPinnedGroup(
         )
       }
     }
+
     return
   }
 
@@ -85,21 +91,28 @@ export function emitPinnedGroup(
     hostContextLabelByWorktreeIdentity,
     cyclicLineageIds
   })
+
   if (!allowImportedFallback) {
     return
   }
+
   // Why: imported fallback sits after the last row of that repo; splice from the
   // end so earlier inserts do not shift later targets.
   const lastResultIndexByRepoId = new Map<string, number>()
+
   for (let index = firstItemIndex; index < result.length; index++) {
     const row = result[index]
+
     if (row?.type === 'item') {
       lastResultIndexByRepoId.set(row.worktree.repoId, index)
     }
   }
+
   const inserts = [...lastResultIndexByRepoId.entries()].sort((left, right) => right[1] - left[1])
+
   for (const [repoId, index] of inserts) {
     const candidate = importedWorktreesByRepo.get(repoId)
+
     if (candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
       result.splice(
         index + 1,

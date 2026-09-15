@@ -74,6 +74,7 @@ describe('unionLinearMetadataById', () => {
       ],
       [{ id: 'ops-blocked', name: 'Blocked' }]
     ])
+
     expect(unioned.map((row) => row.id)).toEqual([
       'be-todo',
       'be-done',
@@ -88,6 +89,7 @@ describe('unionLinearMetadataById', () => {
       [{ id: 'shared', name: 'From BE' }],
       [{ id: 'shared', name: 'From FE' }]
     ])
+
     expect(unioned).toEqual([{ id: 'shared', name: 'From BE' }])
   })
 })
@@ -190,6 +192,7 @@ describe('capLinearMetadataIdsAcrossGroups over-subscribed rows', () => {
       { key: 'beta', ids: ['b-1'] },
       { key: 'gamma', ids: ['c-1'] }
     ]
+
     const capped = capLinearMetadataIdsAcrossGroups(groups, ['a-1', 'a-2', 'b-1', 'c-1'], 3)
     expect(new Set(capped)).toEqual(new Set(['a-1', 'b-1', 'c-1']))
   })
@@ -213,10 +216,12 @@ describe('capLinearMetadataIdsAcrossGroups over-subscribed rows', () => {
   it('stops applying a recorded trim once the facet carries different ids', () => {
     const groups = singleIdGroups(101)
     const ids = groups.flatMap((group) => group.ids)
+
     const record = recordLinearMetadataTruncation(
       ids,
       capLinearMetadataIdsAcrossGroups(groups, ids, 100)
     )
+
     expect(isLinearMetadataTruncated(record, ids.slice(0, 99))).toBe(false)
     expect(isLinearMetadataTruncated(record, [])).toBe(false)
     expect(isLinearMetadataTruncated(null, ids.slice(0, 100))).toBe(false)
@@ -257,6 +262,7 @@ describe('capLinearMetadataIdsAcrossGroups over-subscribed rows', () => {
       { key: 'y', ids: ['y-1'] },
       { key: 'z', ids: ['z-1'] }
     ]
+
     const ids = groups.flatMap((group) => group.ids)
     const capped = capLinearMetadataIdsAcrossGroups(groups, ids, 5)
     expect(capped).toHaveLength(5)
@@ -272,6 +278,7 @@ describe('capLinearMetadataIdsAcrossGroups over-subscribed rows', () => {
       { key: 'beta', ids: ['b-1', 'b-2'] },
       { key: 'gamma', ids: ['c-1'] }
     ]
+
     const alphaFirst = ['a-1', 'a-2', 'a-3', 'b-1', 'b-2', 'c-1']
     const gammaFirst = ['c-1', 'b-1', 'b-2', 'a-1', 'a-2', 'a-3']
     expect(capLinearMetadataIdsAcrossGroups(groups, gammaFirst, 4)).toEqual(

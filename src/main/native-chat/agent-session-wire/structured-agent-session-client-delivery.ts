@@ -39,6 +39,7 @@ export class StructuredAgentSessionClientDelivery {
   publishStatusAndSettlement = (sessionId: string): void => {
     this.statusFeed.publish(sessionId)
     const journal = this.sessions.get(sessionId)?.journal
+
     if (journal) {
       this.sendSettlement.publish(sessionId, journal)
     }
@@ -67,9 +68,11 @@ export class StructuredAgentSessionClientDelivery {
 
   private requireJournal(sessionId: string): AgentSessionJournal {
     const journal = this.sessions.get(sessionId)?.journal
+
     if (!journal) {
       throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
     }
+
     return journal
   }
 }

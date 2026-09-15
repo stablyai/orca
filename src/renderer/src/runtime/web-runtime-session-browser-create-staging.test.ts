@@ -51,6 +51,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -92,10 +93,13 @@ function advertiseKnownPageId(): void {
 /** The strip's cleanup close, as the store leaves things: workspace, pages and handles all gone. */
 function closeStagedWorkspace(workspaceId: string): void {
   const state = mocks.getState()
+
   for (const page of state.browserPagesByWorkspace[workspaceId] ?? []) {
     delete state.remoteBrowserPageHandlesByPageId[page.id]
   }
+
   delete state.browserPagesByWorkspace[workspaceId]
+
   for (const worktreeId of Object.keys(state.browserTabsByWorktree)) {
     state.browserTabsByWorktree[worktreeId] = state.browserTabsByWorktree[worktreeId].filter(
       (workspace: { id: string }) => workspace.id !== workspaceId
@@ -219,6 +223,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         result: { browserPageId: 'host-minted-page' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -260,6 +265,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
           environmentId: ENVIRONMENT_ID,
           remotePageId: 'host-minted-page'
         }
+
         return Promise.resolve({
           id: 'create',
           ok: true,
@@ -267,6 +273,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         })
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -317,6 +324,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
           environmentId: ENVIRONMENT_ID,
           remotePageId: 'host-minted-page'
         }
+
         return Promise.resolve({
           id: 'create',
           ok: true,
@@ -324,6 +332,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         })
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -345,20 +354,25 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   // the user just closed, and the host keeps a page nobody can see.
   it('retires the host page when the staged tab is closed before the create answers', async () => {
     mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+
     const runtimeCall = vi.fn((request: { method: string; params: { page?: string } }) => {
       if (request.method === 'browser.tabCreate') {
         closeStagedWorkspace('staged-workspace-1')
+
         return Promise.resolve({
           id: 'create',
           ok: true,
           result: { browserPageId: 'host-page-1' }
         })
       }
+
       if (request.method === 'browser.tabClose') {
         return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
       }
+
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -391,16 +405,21 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
     const { hasMaterializedWebRuntimeBrowserPage: realPredicate } = await vi.importActual<
       typeof BrowserMaterializationModule
     >('./web-runtime-browser-materialization')
+
     mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(realPredicate)
     let cancelled = false
+
     const runtimeCall = vi.fn((request: { method: string; params: { page?: string } }) => {
       if (request.method === 'browser.tabCreate') {
         return Promise.resolve({ id: 'create', ok: true, result: { browserPageId: 'host-page-1' } })
       }
+
       if (request.method === 'browser.tabClose') {
         forgetHostPage('host-workspace-9', 'host-page-1')
+
         return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
       }
+
       // The X lands after the pre-wait check has already passed, and the host's own snapshot row
       // arrives in the same window — exactly the state the materialization wait sits in.
       if (!cancelled) {
@@ -408,8 +427,10 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         closeStagedWorkspace('staged-workspace-1')
         mirrorHostPage('host-workspace-9', 'host-page-1')
       }
+
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -475,10 +496,13 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
           environmentId: ENVIRONMENT_ID,
           remotePageId: pageId
         }
+
         return Promise.resolve({ id: 'create', ok: true, result: { browserPageId: pageId } })
       }
+
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -498,17 +522,21 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
   // that is the path where a mixed-up mapping would silently rekey one click's tab onto another's.
   it('keeps three rapid creates distinct when the host mints every page id', async () => {
     let hostPageCounter = 0
+
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method !== 'browser.tabCreate') {
         return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
       }
+
       hostPageCounter += 1
+
       return Promise.resolve({
         id: 'create',
         ok: true,
         result: { browserPageId: `host-page-${hostPageCounter}` }
       })
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const creates = [1, 2, 3].map(() =>
@@ -517,6 +545,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         environmentId: ENVIRONMENT_ID
       })
     )
+
     await expect(Promise.all(creates)).resolves.toEqual([true, true, true])
 
     const workspaces = stagedBrowserWorkspaces(mocks)
@@ -526,15 +555,18 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
       'staged-workspace-3'
     ])
     const state = mocks.getState()
+
     const rehomedTo = workspaces.map(
       (entry) => state.remoteBrowserPageHandlesByPageId[entry.pageId]?.remotePageId
     )
+
     expect(new Set(rehomedTo)).toEqual(new Set(['host-page-1', 'host-page-2', 'host-page-3']))
     expect(stagedBrowserTabMocks.closeBrowserTab).not.toHaveBeenCalled()
   })
 
   it('keeps three rapid creates as three distinct staged tabs', async () => {
     advertiseKnownPageId()
+
     const runtimeCall = vi.fn((request: { method: string; params: { page?: string } }) =>
       request.method === 'browser.tabCreate'
         ? Promise.resolve({
@@ -544,6 +576,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
           })
         : Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     )
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const creates = [1, 2, 3].map(() =>
@@ -552,6 +585,7 @@ describe('createWebRuntimeSessionBrowserTab optimistic staging', () => {
         environmentId: ENVIRONMENT_ID
       })
     )
+
     await expect(Promise.all(creates)).resolves.toEqual([true, true, true])
 
     const workspaces = stagedBrowserWorkspaces(mocks)

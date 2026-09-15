@@ -36,6 +36,7 @@ function recordE2eScreencastSubscribe(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
+
   e2eScreencastSubscribeCount += 1
   const target = window as E2eRemoteBrowserScreencastWindow
   target.__remoteBrowserScreencastObserver ??= {
@@ -65,6 +66,7 @@ export async function openRemoteBrowserScreencastStream(
   events: RemoteBrowserScreencastEvents
 ): Promise<{ unsubscribe: () => void }> {
   recordE2eScreencastSubscribe()
+
   return subscribe(
     {
       selector: request.environmentId,
@@ -90,10 +92,13 @@ export async function openRemoteBrowserScreencastStream(
         if (!events.isCurrent()) {
           return
         }
+
         if (isRemoteBrowserPageMissingCode(error.code)) {
           events.onPageMissing()
+
           return
         }
+
         events.onTransportError(error.message)
       },
       onClose: () => events.onClosed()
@@ -108,18 +113,25 @@ function dispatchScreencastResponse(
   if (!events.isCurrent()) {
     return
   }
+
   if (response.ok === false) {
     if (isRemoteBrowserPageMissingCode(response.error.code)) {
       events.onPageMissing()
+
       return
     }
+
     events.onFailed(response.error.message)
+
     return
   }
+
   if (!response.result || typeof response.result !== 'object' || !('type' in response.result)) {
     return
   }
+
   const event = response.result as BrowserScreencastResult
+
   if (event.type === 'ready') {
     events.onReady(event)
   } else if (event.type === 'end') {

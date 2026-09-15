@@ -14,18 +14,23 @@ function belongsToEnvironment(
   repo?: Repo
 ): boolean {
   const folder = 'folderPath' in value
+
   const hostId = folder
     ? value.executionHostId
     : (value.hostId ??
       repo?.executionHostId ??
       (repo?.connectionId ? (`ssh:${repo.connectionId}` as const) : undefined))
+
   const runtimeOwner = folder ? null : value.runtimeOwnerEnvironmentId
+
   if (machineId.startsWith('ssh:')) {
     return hostId === machineId
   }
+
   if (machineId !== 'local') {
     return runtimeOwner === machineId || hostId === `runtime:${machineId}`
   }
+
   return !runtimeOwner && (!hostId || hostId === 'local')
 }
 
@@ -36,12 +41,15 @@ export function skillInstallWorkspaceChoices(input: {
   repos: readonly Repo[]
 }): SkillInstallWorkspaceChoice[] {
   const repos = new Map(input.repos.map((repo) => [repo.id, repo]))
+
   const worktrees = Object.values(input.worktreesByRepo)
     .flat()
     .filter((value) => belongsToEnvironment(value, input.environmentId, repos.get(value.repoId)))
     .map((value) => ({ id: value.id, label: value.displayName, kind: 'worktree' as const }))
+
   const folders = input.folderWorkspaces
     .filter((value) => belongsToEnvironment(value, input.environmentId))
     .map((value) => ({ id: value.id, label: value.name, kind: 'folder' as const }))
+
   return [...worktrees, ...folders].sort((left, right) => left.label.localeCompare(right.label))
 }

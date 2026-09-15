@@ -24,9 +24,11 @@ describe('acquireInstallLock', () => {
 
   it('propagates an unconfirmed lock-create termination so deploy can retain the lock fence', async () => {
     const controller = new AbortController()
+
     const termination = Object.assign(new Error('lock creation termination was not confirmed'), {
       sshChannelCloseConfirmed: false
     })
+
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
       if (command.includes('.install-lock')) {
         controller.abort(
@@ -34,6 +36,7 @@ describe('acquireInstallLock', () => {
         )
         throw termination
       }
+
       return ''
     })
 

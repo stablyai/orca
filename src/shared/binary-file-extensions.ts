@@ -79,12 +79,15 @@ export function hasBinaryFileExtension(filePath: string | undefined): boolean {
   if (filePath === undefined) {
     return false
   }
+
   const lowerPath = filePath.toLowerCase()
   const dotIndex = lowerPath.lastIndexOf('.')
   const separatorIndex = Math.max(lowerPath.lastIndexOf('/'), lowerPath.lastIndexOf('\\'))
+
   // A leading dot is a dotfile (.gitignore), not an extension.
   if (dotIndex <= separatorIndex + 1) {
     return false
   }
+
   return BINARY_FILE_EXTENSION_SET.has(lowerPath.slice(dotIndex))
 }

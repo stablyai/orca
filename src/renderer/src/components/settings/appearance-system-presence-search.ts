@@ -91,6 +91,7 @@ export function getSystemTrayEntries(
     options.showSystemTray ??
     // Why: a Windows web client can report win32, but it has no local tray.
     (getRendererAppPlatform() === 'win32' && !isWebClientLocation())
+
   return show ? getSystemTrayEntryCatalog() : []
 }
 
@@ -99,5 +100,6 @@ export function getMenuBarIconEntries(
 ): SettingsSearchEntry[] {
   const show =
     options.showMenuBarIcon ?? (getRendererAppPlatform() === 'darwin' && !isWebClientLocation())
+
   return show ? getMenuBarIconEntryCatalog() : []
 }

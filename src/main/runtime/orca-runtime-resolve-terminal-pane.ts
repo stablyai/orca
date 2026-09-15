@@ -20,17 +20,22 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.
     const handle = this.getTerminalHandleForPaneKey(paneKey)
+
     if (!handle) {
       throw new Error('terminal_not_found')
     }
+
     const record = this.handles.get(handle)
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null
     const pty = this.getPtyRecordForPaneKey(paneKey)
+
     const candidateWorktreeIds = [leaf?.worktreeId, pty?.worktreeId].filter(
       (worktreeId): worktreeId is string => Boolean(worktreeId)
     )
+
     const worktreeId = candidateWorktreeIds[0] ?? null
+
     if (
       (candidateWorktreeIds.length > 1 && new Set(candidateWorktreeIds).size > 1) ||
       (expectedWorktreeId && candidateWorktreeIds.some((id) => id !== expectedWorktreeId)) ||
@@ -39,6 +44,7 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       // Why: pane coordinates restored by a paired client must not cross workspace ownership.
       throw new Error('terminal_not_found')
     }
+
     return {
       handle,
       tabId: parsed?.tabId ?? record?.tabId ?? '',
@@ -57,6 +63,7 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
   ): Promise<RuntimeTerminalResolvePane> {
     const parsed = parsePaneKey(paneKey)
     const pty = this.getPtyRecordForPaneKey(paneKey)
+
     if (
       !parsed ||
       !pty ||
@@ -66,24 +73,31 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     ) {
       throw new Error('terminal_not_found')
     }
+
     const recoveryKey = `${expectedWorktreeId}\0${paneKey}`
     const pending = this.terminalPaneRecoveryByIdentity.get(recoveryKey)
+
     if (pending) {
       return pending
     }
+
     if (pty?.connected) {
       const current = this.resolveTerminalPane(paneKey, expectedWorktreeId)
+
       if (expectedHandle === undefined || current.handle !== expectedHandle) {
         return current
       }
+
       throw new Error('terminal_not_recoverable')
     }
+
     const expiredLease = this.getRecentExpiredSshLease(
       expectedWorktreeId,
       parsed.tabId,
       parsed.leafId,
       pty.ptyId
     )
+
     if (!expiredLease) {
       // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell
       // recreation. `getRecentExpiredSshLease` also refuses a superseded or relay-id-recycled
@@ -92,6 +106,7 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       // process or re-race a pane that already moved on.
       throw new Error('terminal_not_recoverable')
     }
+
     // Why an `expired` lease is not on its own authority to spawn a replacement: every writer of
     // that state records that the CLIENT lost its route — a superseded sibling, a recycled relay
     // id, a persistPtyBinding refusal, a failed reattach, a relay reset — and each says in-place
@@ -109,9 +124,11 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     // an unrecoverable pane is its own failure (docs/reference/ssh-execution-boundary.md,
     // shared/pty-liveness-verdict.ts).
     const liveness = this.getPtyLivenessVerdict(pty.ptyId)
+
     if (liveness?.status === 'unverifiable' || liveness?.status === 'live') {
       throw new Error('terminal_not_recoverable')
     }
+
     // Why: disconnected PTYs can reissue handles during graph cleanup; only a connected replacement satisfies the pane CAS.
     const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
       tabId: parsed.tabId,
@@ -125,24 +142,30 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       worktreeId: expectedWorktreeId,
       ...(terminal.incarnationId ? { incarnationId: terminal.incarnationId } : {})
     }))
+
     this.terminalPaneRecoveryByIdentity.set(recoveryKey, recovery)
+
     const clearRecovery = (): void => {
       if (this.terminalPaneRecoveryByIdentity.get(recoveryKey) === recovery) {
         this.terminalPaneRecoveryByIdentity.delete(recoveryKey)
       }
     }
+
     void recovery.then(clearRecovery, clearRecovery)
+
     return recovery
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
     const pty = this.getLivePtyForHandle(handle)
+
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
       const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
       const preview = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       const agentWait = await this.getTerminalInteractiveWait(handle)
+
       return {
         ...summary,
         preview,
@@ -154,19 +177,25 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
         ...(agentWait !== undefined ? { agentWait } : {})
       }
     }
+
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktreesById = await this.getResolvedWorktreeMap()
     this.assertStableReadyGraph(graphEpoch)
     const { leaf } = this.getLiveLeafForHandle(handle)
     const summary = this.buildTerminalSummary(leaf, worktreesById)
+
     const preview = leaf.ptyId
       ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
       : summary.preview
+
     this.assertStableReadyGraph(graphEpoch)
+
     if (leaf.ptyId) {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     }
+
     const agentWait = await this.getTerminalInteractiveWait(handle)
+
     return {
       ...summary,
       preview,
@@ -190,21 +219,28 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),
       ...(opts.limit === undefined ? {} : { limit: opts.limit })
     })
+
     if (structured) {
       // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
       return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
+
     const pty = this.getLivePtyForHandle(handle)
+
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
+
       const visibleRead = opts.screen
         ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
         : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerSnapshot)
+
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
+
       return labelTerminalReadSource(visibleRead)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
+
     const read = readTerminalTail({
       handle,
       status: getTerminalState(leaf),
@@ -216,13 +252,17 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
       cursor: opts.cursor,
       limit: opts.limit
     })
+
     if (!leaf.ptyId) {
       return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
+
     const visibleRead = opts.screen
       ? await this.readRenderedScreen(leaf.ptyId, read, opts)
       : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerSnapshot)
+
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
+
     return labelTerminalReadSource(visibleRead)
   }
 
@@ -233,9 +273,11 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
   ): Promise<RuntimeTerminalRead> {
     const visibleState = await this.readVisibleTerminalState(ptyId)
     const projection = visibleState ?? (await this.readProviderTerminalTailLines(ptyId, opts.limit))
+
     if (projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }
+
     return buildVisibleSnapshotReadFallback(read, projection.lines, opts.limit, projection.draft)
   }
 }

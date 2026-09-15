@@ -24,12 +24,14 @@ export class PortScanHandler {
           platform: process.platform
         }
       }
+
       if (process.platform === 'win32') {
         return {
           ports: await scanWindowsListeningPorts(context.signal),
           platform: process.platform
         }
       }
+
       return {
         ports: [],
         platform: process.platform
@@ -39,13 +41,16 @@ export class PortScanHandler {
 
   private async scanLinuxListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
     signal?.throwIfAborted()
+
     const [tcp4, tcp6] = await Promise.all([
       this.readProcNet('/proc/net/tcp', signal),
       this.readProcNet('/proc/net/tcp6', signal)
     ])
+
     signal?.throwIfAborted()
 
     const listeningSockets = [...tcp4, ...tcp6]
+
     if (listeningSockets.length === 0) {
       return []
     }
@@ -61,9 +66,11 @@ export class PortScanHandler {
     for (const socket of listeningSockets) {
       signal?.throwIfAborted()
       const key = `${socket.host}:${socket.port}`
+
       if (seen.has(key)) {
         continue
       }
+
       seen.add(key)
 
       if (SYSTEM_PORTS_TO_EXCLUDE.has(socket.port)) {
@@ -71,6 +78,7 @@ export class PortScanHandler {
       }
 
       const pid = inodeToPid.get(socket.inode)
+
       if (pid === relayPid || pid === relayParentPid) {
         continue
       }
@@ -92,6 +100,7 @@ export class PortScanHandler {
     // Why: sort before capping so the visible set is deterministic (lowest
     // port numbers first) regardless of /proc enumeration order.
     results.sort((a, b) => a.port - b.port)
+
     return results.slice(0, MAX_DETECTED_PORTS)
   }
 
@@ -101,12 +110,15 @@ export class PortScanHandler {
   ): Promise<{ port: number; host: string; inode: number }[]> {
     signal?.throwIfAborted()
     let content: string
+
     try {
       content = await readFile(path, 'utf-8')
     } catch {
       signal?.throwIfAborted()
+
       return []
     }
+
     signal?.throwIfAborted()
 
     const lines = content.split('\n')
@@ -114,6 +126,7 @@ export class PortScanHandler {
 
     for (let i = 1; i < lines.length; i++) {
       const fields = getProcessOutputFields(lines[i], 10)
+
       if (fields.length < 10) {
         continue
       }
@@ -125,11 +138,13 @@ export class PortScanHandler {
 
       const localAddress = fields[1]
       const parsed = parseHexAddress(localAddress)
+
       if (!parsed) {
         continue
       }
 
       const inode = Number.parseInt(fields[9], 10)
+
       if (Number.isNaN(inode) || inode === 0) {
         continue
       }
@@ -146,21 +161,26 @@ export class PortScanHandler {
   ): Promise<Map<number, number>> {
     signal?.throwIfAborted()
     const result = new Map<number, number>()
+
     if (inodes.size === 0) {
       return result
     }
 
     let pids: string[]
+
     try {
       pids = (await readdir('/proc')).filter((name) => /^\d+$/.test(name))
     } catch {
       signal?.throwIfAborted()
+
       return result
     }
+
     signal?.throwIfAborted()
 
     for (const pidStr of pids) {
       signal?.throwIfAborted()
+
       // Why: every remaining pid costs a readdir plus one readlink per fd, and this scan repeats for
       // the life of the session. Without this the walk was O(all host processes x all fds) even once
       // every listener was already attributed, so its cost grew with the remote's process count and
@@ -168,14 +188,17 @@ export class PortScanHandler {
       if (result.size === inodes.size) {
         return result
       }
+
       const fdDir = `/proc/${pidStr}/fd`
       let fds: string[]
+
       try {
         fds = await readdir(fdDir)
       } catch {
         signal?.throwIfAborted()
         continue
       }
+
       signal?.throwIfAborted()
 
       const pid = Number.parseInt(pidStr, 10)
@@ -183,22 +206,27 @@ export class PortScanHandler {
       for (const fd of fds) {
         signal?.throwIfAborted()
         let link: string
+
         try {
           link = await readlink(`${fdDir}/${fd}`)
         } catch {
           signal?.throwIfAborted()
           continue
         }
+
         signal?.throwIfAborted()
 
         const match = link.match(/^socket:\[(\d+)\]$/)
+
         if (!match) {
           continue
         }
 
         const inode = Number.parseInt(match[1], 10)
+
         if (inodes.has(inode)) {
           result.set(inode, pid)
+
           if (result.size === inodes.size) {
             return result
           }
@@ -211,22 +239,27 @@ export class PortScanHandler {
 
   private async getProcessName(pid: number, signal?: AbortSignal): Promise<string | undefined> {
     signal?.throwIfAborted()
+
     try {
       const cmdline = await readFile(`/proc/${pid}/cmdline`, 'utf-8')
       signal?.throwIfAborted()
+
       if (!cmdline) {
         return undefined
       }
 
       const exe = cmdline.split('\0')[0]
+
       if (!exe) {
         return undefined
       }
 
       const parts = exe.split('/')
+
       return parts.at(-1)
     } catch {
       signal?.throwIfAborted()
+
       return undefined
     }
   }
@@ -237,11 +270,13 @@ export class PortScanHandler {
 // IPv6: 32 hex chars for address + ':' + 4 hex chars for port.
 export function parseHexAddress(hexAddr: string): { host: string; port: number } | null {
   const parts = hexAddr.split(':')
+
   if (parts.length !== 2) {
     return null
   }
 
   const port = Number.parseInt(parts[1], 16)
+
   if (Number.isNaN(port) || port === 0) {
     return null
   }
@@ -254,6 +289,7 @@ export function parseHexAddress(hexAddr: string): { host: string; port: number }
     const b3 = Number.parseInt(addrHex.substring(2, 4), 16)
     const b4 = Number.parseInt(addrHex.substring(0, 2), 16)
     const host = `${b1}.${b2}.${b3}.${b4}`
+
     return { host, port }
   }
 
@@ -261,9 +297,11 @@ export function parseHexAddress(hexAddr: string): { host: string; port: number }
     if (addrHex === '00000000000000000000000000000000') {
       return { host: '::', port }
     }
+
     if (addrHex === '00000000000000000000000001000000') {
       return { host: '::1', port }
     }
+
     return { host: formatIPv6(addrHex), port }
   }
 
@@ -272,12 +310,16 @@ export function parseHexAddress(hexAddr: string): { host: string; port: number }
 
 function formatIPv6(hex: string): string {
   const groups: string[] = []
+
   for (let i = 0; i < 32; i += 8) {
     const chunk = hex.substring(i, i + 8)
+
     const reversed =
       chunk.substring(6, 8) + chunk.substring(4, 6) + chunk.substring(2, 4) + chunk.substring(0, 2)
+
     groups.push(reversed.substring(0, 4))
     groups.push(reversed.substring(4, 8))
   }
+
   return groups.map((g) => g.replace(/^0+/, '') || '0').join(':')
 }

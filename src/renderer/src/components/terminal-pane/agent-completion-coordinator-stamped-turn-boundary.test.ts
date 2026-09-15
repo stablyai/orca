@@ -10,6 +10,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
   it('ignores a turn end time that cannot name a turn', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -38,6 +39,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
   it('does not announce a gated Stop for a turn it never saw start', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -60,6 +62,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
   it('does not announce the all-clear after first seeing a stamped turn tail', () => {
     const dispatchCompletion = vi.fn()
+
     const firstCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -86,6 +89,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     remounted.observeHookStatus({
       state: 'done',
       prompt: 'review the PR',
@@ -101,6 +105,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
   it('announces a gated Stop immediately and treats the later all-clear as the same turn', () => {
     const dispatchCompletion = vi.fn()
     const dispatchHookLifecycle = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -164,6 +169,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
     'does not let a sibling OSC all-clear arriving %s the host stamp duplicate it',
     (allClearOrder) => {
       const dispatchCompletion = vi.fn()
+
       const localCoordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         getPtyId: () => 'pty-1',
@@ -172,6 +178,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
         dispatchCompletion,
         isLive: () => true
       })
+
       const hostCoordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         getPtyId: () => 'pty-1',
@@ -193,6 +200,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
         agentType: 'claude',
         stateStartedAt: 2_000
       })
+
       if (allClearOrder === 'before') {
         localCoordinator.observeHookStatus({
           state: 'done',
@@ -201,6 +209,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
           stateStartedAt: 5_500
         })
       }
+
       hostCoordinator.observeHookStatus({
         state: 'working',
         prompt: 'review the PR',
@@ -219,6 +228,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
           stateStartedAt: 5_500
         })
       }
+
       vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
       expect(dispatchCompletion).toHaveBeenCalledTimes(1)
@@ -227,6 +237,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
   it('does not consume a fresh turn as the all-clear for an earlier stamped tail', () => {
     const dispatchCompletion = vi.fn()
+
     const localCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -235,6 +246,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     const hostCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -284,6 +296,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
   it('keeps sibling tail suppression after the host stamped all-clear arrives first', () => {
     const dispatchCompletion = vi.fn()
+
     const localCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -292,6 +305,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     const hostCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -346,6 +360,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
   it('releases a stamped tail when its host reports a new same-state turn', () => {
     const dispatchCompletion = vi.fn()
+
     const localCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -354,6 +369,7 @@ describe('agent completion coordinator stamped turn boundary', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     const hostCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',

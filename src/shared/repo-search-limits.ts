@@ -25,6 +25,7 @@ export function clampRepoSearchRefsLimit(limit: number): number {
   if (!isRepoSearchRefsRequestLimit(limit)) {
     throw new Error('invalid_limit')
   }
+
   return Math.min(limit, REPO_SEARCH_REFS_MAX_LIMIT)
 }
 
@@ -33,6 +34,7 @@ export function clampRepoSearchRefsScanLimit(limit: number): number {
   if (!isRepoSearchRefsRequestLimit(limit)) {
     throw new Error('invalid_limit')
   }
+
   return Math.min(limit, REPO_SEARCH_REFS_MAX_SCAN_LIMIT)
 }
 
@@ -40,6 +42,7 @@ export function getRepoSearchRefsProbeLimit(limit: number): number {
   if (!isRepoSearchRefsRequestLimit(limit)) {
     throw new Error('invalid_limit')
   }
+
   // Avoid `limit + 1` at MAX_SAFE_INTEGER; the capped sentinel is all callers need.
   return limit >= REPO_SEARCH_REFS_MAX_LIMIT ? REPO_SEARCH_REFS_MAX_SCAN_LIMIT : limit + 1
 }

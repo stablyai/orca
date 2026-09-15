@@ -39,6 +39,7 @@ export function agentResumeHostAuthorityCapability(
   if (!agent) {
     return undefined
   }
+
   return (
     RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT as Partial<Record<TuiAgent, RuntimeCapability>>
   )[agent]

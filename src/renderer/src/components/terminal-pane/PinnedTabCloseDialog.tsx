@@ -31,6 +31,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   // paint while keeping a cancelled request's state inert until the next open.
   if (request !== previousRequest) {
     setPreviousRequest(request)
+
     if (request !== null) {
       setDontAskAgain(false)
     }
@@ -40,6 +41,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
     if (dontAskAgain) {
       void updateSettings({ confirmClosePinnedTab: false })
     }
+
     confirmPinnedTabClose()
   }
 

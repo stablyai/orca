@@ -11,12 +11,19 @@ import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 const originalUserAgent = navigator.userAgent
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let dictationStateRef: MutableRefObject<DictationState>
+
 let holdGestureActiveRef: MutableRefObject<boolean>
+
 let insertionTargetRef: MutableRefObject<DictationInsertionTarget | null>
+
 let intentionalTargetCancellationRef: MutableRefObject<boolean>
+
 let startDictation: ReturnType<typeof vi.fn<() => void>>
+
 let stopDictation: ReturnType<typeof vi.fn<() => void>>
 
 function setUserAgent(userAgent: string): void {
@@ -47,18 +54,21 @@ function Probe(): null {
     startDictation,
     stopDictation
   })
+
   return null
 }
 
 function dispatchKeyDown(init: KeyboardEventInit): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
   window.dispatchEvent(event)
+
   return event
 }
 
 function dispatchKeyUp(init: KeyboardEventInit): KeyboardEvent {
   const event = new KeyboardEvent('keyup', { bubbles: true, cancelable: true, ...init })
   window.dispatchEvent(event)
+
   return event
 }
 
@@ -98,6 +108,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null

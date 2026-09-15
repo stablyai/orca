@@ -54,18 +54,24 @@ export function settleCodexJournalSession(input: {
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
+
   for (const active of input.activeItems.values()) {
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
+
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
       : codexJournalItem(active.item)
+
     const body = interruptedBody(translated.body)
+
     if (body) {
       mutations.push({ kind: 'item', identity: active.identity, body })
     }
   }
+
   for (const prompt of input.pendingPrompts.values()) {
     const body = cancelledJournalPromptBody(prompt.body)
+
     if (body) {
       mutations.push({
         kind: 'item',
@@ -74,10 +80,12 @@ export function settleCodexJournalSession(input: {
       })
     }
   }
+
   for (const [threadId, turnIds] of input.currentTurnIds) {
     if (input.primaryThreadId !== threadId) {
       continue
     }
+
     for (const turnId of turnIds) {
       mutations.push({
         kind: 'item',
@@ -87,17 +95,21 @@ export function settleCodexJournalSession(input: {
       turnOrdinalsToForget.push({ threadId, turnId })
     }
   }
+
   const admission = appendCodexLifecycleMutations(
     input.sink,
     exitSettlementId(input.event),
     mutations
   )
+
   if (!admission.accepted) {
     return admission
   }
+
   for (const { threadId, turnId } of turnOrdinalsToForget) {
     input.ordinals.forgetTurn(threadId, turnId)
   }
+
   return ADMITTED
 }
 
@@ -117,33 +129,45 @@ export function settleCodexJournalTurn(input: {
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
   const pendingPromptsToForget: string[] = []
   const pendingPrompts = input.pendingPrompts ?? new Map<string, CodexPendingJournalPrompt>()
+
   for (const [key, active] of input.activeItems) {
     if (active.threadId !== input.threadId || active.turnId !== input.turnId) {
       continue
     }
+
     if (codexCommandOutlivesTurn(active.item)) {
       continue
     }
+
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
+
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
       : codexJournalItem(active.item)
+
     const body = interruptedBody(translated.body)
+
     if (body) {
       mutations.push({ kind: 'item', identity: active.identity, body })
     }
+
     activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
   }
+
   for (const [key, prompt] of pendingPrompts) {
     if (prompt.threadId !== input.threadId || prompt.turnId !== input.turnId) {
       continue
     }
+
     const body = cancelledJournalPromptBody(prompt.body)
+
     if (body) {
       mutations.push({ kind: 'item', identity: prompt.identity, body })
     }
+
     pendingPromptsToForget.push(key)
   }
+
   // Revised, never tombstoned: the terminal row keeps the turn's duration durable.
   if (input.turnLifecycle) {
     mutations.push({
@@ -152,22 +176,28 @@ export function settleCodexJournalTurn(input: {
       body: codexTurnLifecycleBody(input.turnLifecycle)
     })
   }
+
   const admission = appendCodexLifecycleMutations(
     input.sink,
     `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,
     mutations
   )
+
   if (!admission.accepted) {
     return admission
   }
+
   for (const active of activeItemsToForget) {
     input.streams.forget(active.threadId, active.itemId)
     input.activeItems.delete(active.key)
   }
+
   for (const key of pendingPromptsToForget) {
     pendingPrompts.delete(key)
   }
+
   input.clearPromptTurn?.(input.threadId, input.turnId)
+
   return ADMITTED
 }
 
@@ -181,40 +211,53 @@ export function settleCodexOversizedNotification(input: {
   activeItems: Map<string, CodexActiveJournalItem>
 }): StructuredAgentSessionSinkAdmission {
   const itemType = oversizedStreamItemType(input.method)
+
   if (!itemType) {
     return ADMITTED
   }
+
   const mutations: JournalLifecycleMutationInput[] = []
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
+
   for (const [key, active] of input.activeItems) {
     if (active.threadId !== input.threadId || active.item.type !== itemType) {
       continue
     }
+
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
+
     const translated = streamed
       ? codexStreamingJournalItem(active.item, streamed.text)
       : codexJournalItem(active.item)
+
     const body = interruptedBody(translated.body)
+
     if (body) {
       mutations.push({ kind: 'item', identity: active.identity, body })
     }
+
     activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
   }
+
   if (mutations.length === 0) {
     return ADMITTED
   }
+
   const admission = appendCodexLifecycleMutations(
     input.sink,
     `oversized-notification:${input.sessionId}:${input.threadId}:${input.method}`,
     mutations
   )
+
   if (!admission.accepted) {
     return admission
   }
+
   for (const active of activeItemsToForget) {
     input.streams.forget(active.threadId, active.itemId)
     input.activeItems.delete(active.key)
   }
+
   return ADMITTED
 }
 
@@ -222,9 +265,11 @@ function oversizedStreamItemType(method: string): CodexThreadItem['type'] | null
   if (method === 'item/agentMessage/delta') {
     return 'agentMessage'
   }
+
   if (method === 'item/plan/delta') {
     return 'plan'
   }
+
   if (
     method === 'command/exec/outputDelta' ||
     method === 'process/outputDelta' ||
@@ -233,9 +278,11 @@ function oversizedStreamItemType(method: string): CodexThreadItem['type'] | null
   ) {
     return 'commandExecution'
   }
+
   if (method === 'item/fileChange/outputDelta' || method === 'item/fileChange/patchUpdated') {
     return 'fileChange'
   }
+
   if (
     method === 'item/reasoning/summaryTextDelta' ||
     method === 'item/reasoning/summaryPartAdded' ||
@@ -243,6 +290,7 @@ function oversizedStreamItemType(method: string): CodexThreadItem['type'] | null
   ) {
     return 'reasoning'
   }
+
   return null
 }
 
@@ -250,12 +298,15 @@ function interruptedBody(body: AgentJournalItemBody | null): AgentJournalItemBod
   if (!body) {
     return null
   }
+
   if (body.kind === 'tool-call') {
     return { ...body, state: 'failed' }
   }
+
   if (body.kind === 'message') {
     return body
   }
+
   return body.kind === 'diff'
     ? { kind: 'status', text: 'File changes were interrupted before completion.' }
     : body
@@ -264,5 +315,6 @@ function interruptedBody(body: AgentJournalItemBody | null): AgentJournalItemBod
 function exitSettlementId(event: Extract<CodexStructuredSessionEvent, { type: 'ended' }>): string {
   const fence = 'fence' in event ? event.fence : 0
   const generation = 'acquisitionGeneration' in event ? event.acquisitionGeneration : 'legacy'
+
   return `provider-exit:${event.sessionId}:${fence}:${generation}`
 }

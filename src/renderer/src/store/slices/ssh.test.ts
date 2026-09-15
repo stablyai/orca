@@ -13,11 +13,13 @@ describe('createSshSlice', () => {
     const removedPtyId = toAppSshPtyId(targetId, 'pty-live')
     const staleLastKnownPtyId = toAppSshPtyId(targetId, 'pty-last-known')
     const otherPtyId = toAppSshPtyId(otherTargetId, 'pty-other')
+
     const removedAuthority = {
       targetId,
       providerEpoch: 'removed-epoch' as SshProviderEpoch,
       connectionGeneration: 1
     } as const
+
     const otherAuthority = {
       targetId: otherTargetId,
       providerEpoch: 'other-epoch' as SshProviderEpoch,
@@ -225,27 +227,32 @@ describe('createSshSlice', () => {
     const survivingWorktreeId = 'shared::/srv/b/work'
     const removedPtyId = toAppSshPtyId(removedTargetId, 'pty-a')
     const survivingPtyId = toAppSshPtyId(survivingTargetId, 'pty-b')
+
     const removedAuthority = {
       targetId: removedTargetId,
       providerEpoch: 'epoch-a' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     const survivingAuthority = {
       targetId: survivingTargetId,
       providerEpoch: 'epoch-b' as SshProviderEpoch,
       connectionGeneration: 2
     }
+
     const survivingAttempt = {
       attemptId: 'attempt-b',
       authority: survivingAuthority,
       tabGeneration: 4,
       startedAt: 20
     }
+
     const survivingBinding = {
       authority: survivingAuthority,
       tabGeneration: 4,
       ptyId: survivingPtyId
     }
+
     const survivingHistory = { authority: survivingAuthority, attemptedAt: [20] }
 
     store.setState({
@@ -426,12 +433,14 @@ describe('createSshSlice', () => {
 
   it('keeps SSH connection state references stable when duplicate state arrives', () => {
     const store = createTestStore()
+
     const sshConnectionStates = new Map([
       [
         'ssh-1',
         { targetId: 'ssh-1', status: 'connected' as const, error: null, reconnectAttempt: 0 }
       ]
     ])
+
     store.setState({ sshConnectionStates, sshConnectedGeneration: 1 })
     const previousState = store.getState()
 
@@ -539,23 +548,28 @@ describe('createSshSlice', () => {
 
   it('preserves untouched cleanup slice references while removing deferred target metadata', () => {
     const store = createTestStore()
+
     const sshConnectionStates = new Map([
       [
         'ssh-2',
         { targetId: 'ssh-2', status: 'connected' as const, error: null, reconnectAttempt: 0 }
       ]
     ])
+
     const sshTargetLabels = new Map([['ssh-2', 'Other']])
     const remoteWorkspaceHydratedTargetIds = new Set(['ssh-2'])
     const remoteWorkspaceSyncStatusByTargetId = { 'ssh-2': { phase: 'synced' as const } }
     const portForwardsByConnection = { 'ssh-2': [] }
     const detectedPortsByConnection = { 'ssh-2': [] }
+
     const sshCredentialQueue = [
       { requestId: 'req-2', targetId: 'ssh-2', kind: 'password' as const, detail: 'password' }
     ]
+
     const deferredSshSessionIdsByTabId = {
       'tab-other': toAppSshPtyId('ssh-2', 'pty-2')
     }
+
     store.setState({
       sshConnectionStates,
       sshTargetLabels,

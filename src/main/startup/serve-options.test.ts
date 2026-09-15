@@ -100,6 +100,7 @@ describe('getServeOptions', () => {
       '--no-pairing',
       '--mobile-pairing'
     ])
+
     expect(() => getServeOptions(argv)).toThrow(/either --mobile-pairing or --no-pairing/i)
   })
 

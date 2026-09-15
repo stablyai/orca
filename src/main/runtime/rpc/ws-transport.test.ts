@@ -12,6 +12,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 function makeTls() {
   const userDataPath = mkdtempSync(join(tmpdir(), 'ws-transport-test-'))
+
   return loadOrCreateTlsCertificate(userDataPath)
 }
 
@@ -52,6 +53,7 @@ describe('WebSocketTransport', () => {
     options: { preAuthTimeoutMs?: number } = {}
   ) {
     const tls = makeTls()
+
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       // Why: random "free" ports can still collide before listen() binds.
@@ -61,19 +63,24 @@ describe('WebSocketTransport', () => {
       tlsKey: tls.key,
       preAuthTimeoutMs: options.preAuthTimeoutMs
     })
+
     if (handler) {
       transport.onMessage(handler)
     }
+
     transports.push(transport)
+
     return { transport, tls }
   }
 
   function connectWs(target: number | WebSocketTransport): Promise<WebSocket> {
     const port = typeof target === 'number' ? target : target.resolvedPort
+
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`wss://127.0.0.1:${port}`, {
         rejectUnauthorized: false
       })
+
       ws.once('open', () => resolve(ws))
       ws.once('error', reject)
     })
@@ -133,6 +140,7 @@ describe('WebSocketTransport', () => {
     const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
     transports.push(transport)
     const lifecycle = heartbeatLifecycle(transport)
+
     const socket = Object.assign(new EventEmitter(), {
       OPEN: WebSocket.OPEN,
       readyState: WebSocket.OPEN,
@@ -140,6 +148,7 @@ describe('WebSocketTransport', () => {
       ping: vi.fn(),
       terminate: vi.fn()
     }) as unknown as WebSocket
+
     const closeHandler = vi.fn()
     transport.onConnectionClose(closeHandler)
 
@@ -165,6 +174,7 @@ describe('WebSocketTransport', () => {
     await transport.start()
 
     const ws = await connectWs(transport)
+
     const response = await sendAndReceive(
       ws,
       JSON.stringify({ id: 'req-1', method: 'test', deviceToken: 'tok' })
@@ -243,6 +253,7 @@ describe('WebSocketTransport', () => {
     await new Promise<void>((resolve) => {
       ws.on('message', (data) => {
         messages.push(typeof data === 'string' ? data : data.toString('utf-8'))
+
         if (messages.length === 3) {
           resolve()
         }
@@ -317,6 +328,7 @@ describe('WebSocketTransport', () => {
     ws.close()
 
     const start = Date.now()
+
     while (calls.length === 0 && Date.now() - start < 2_000) {
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
@@ -342,6 +354,7 @@ describe('WebSocketTransport', () => {
     client.close()
 
     const start = Date.now()
+
     while (!cleanupSeen && Date.now() - start < 2_000) {
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
@@ -363,6 +376,7 @@ describe('WebSocketTransport', () => {
 
     const clients = await Promise.all([connectWs(transport), connectWs(transport)])
     const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+
     for (const client of wss.clients) {
       transport.setClientId(client, 'device-token')
     }
@@ -375,14 +389,17 @@ describe('WebSocketTransport', () => {
           new Promise<void>((resolve) => {
             if (client.readyState === client.CLOSED) {
               resolve()
+
               return
             }
+
             client.once('close', () => resolve())
           })
       )
     )
 
     const start = Date.now()
+
     while (closedClientIds.length < 2 && Date.now() - start < 2_000) {
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
@@ -401,8 +418,10 @@ describe('WebSocketTransport', () => {
           new Promise<void>((resolve) => {
             if (client.readyState === client.CLOSED) {
               resolve()
+
               return
             }
+
             client.once('close', () => resolve())
           })
       )
@@ -421,6 +440,7 @@ describe('WebSocketTransport', () => {
 
     const httpServer = (transport as unknown as { httpServer: { maxConnections: number } })
       .httpServer
+
     expect(httpServer.maxConnections).toBe(256)
   })
 
@@ -439,6 +459,7 @@ describe('WebSocketTransport', () => {
     const terminateSpy = vi.spyOn(serverSocket!, 'terminate')
 
     vi.useFakeTimers()
+
     try {
       ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
         serverSocket!
@@ -475,6 +496,7 @@ describe('WebSocketTransport', () => {
     underlying.pause()
 
     const stopPromise = transport.stop()
+
     const outcome = await Promise.race([
       stopPromise.then(() => 'stopped' as const),
       new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 100))
@@ -496,12 +518,14 @@ describe('WebSocketTransport', () => {
     // Why: second transport requests the same port, which is now occupied.
     // It should silently fall back to an OS-assigned port instead of throwing.
     const tls = makeTls()
+
     const second = new WebSocketTransport({
       host: '127.0.0.1',
       port: occupiedPort,
       tlsCert: tls.cert,
       tlsKey: tls.key
     })
+
     transports.push(second)
 
     await second.start()
@@ -515,17 +539,20 @@ describe('WebSocketTransport', () => {
 
   it('falls back to OS-assigned port when preferred port is reserved', async () => {
     const tls = makeTls()
+
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       port: 6769,
       tlsCert: tls.cert,
       tlsKey: tls.key
     })
+
     transports.push(transport)
 
     const privateTransport = transport as unknown as {
       tryListen: (port: number) => Promise<void>
     }
+
     const originalTryListen = privateTransport.tryListen.bind(transport)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const tryListenSpy = vi.spyOn(privateTransport, 'tryListen')
@@ -562,6 +589,7 @@ describe('WebSocketTransport', () => {
     // slot. Verifying via the server's connection-close handler, which
     // is what frees up the MAX_WS_CONNECTIONS budget in production.
     const tls = makeTls()
+
     const transport = new WebSocketTransport({
       host: '127.0.0.1',
       port: 0,
@@ -569,6 +597,7 @@ describe('WebSocketTransport', () => {
       tlsKey: tls.key,
       heartbeatIntervalMs: 50
     })
+
     transport.onMessage(() => {})
     transports.push(transport)
 
@@ -595,12 +624,14 @@ describe('WebSocketTransport', () => {
     // fires. The transport sets it lazily via setClientId in production
     // (after auth); in this test we don't run auth, so reach in.
     const wss = (transport as unknown as { wss: { clients: Set<{ readyState: number }> } }).wss
+
     for (const c of wss.clients) {
       transport.setClientId(c as never, 'test-client')
     }
 
     // Wait long enough for two heartbeat ticks (50ms each) plus slack.
     const start = Date.now()
+
     while (!serverClosed && Date.now() - start < 2_000) {
       await new Promise((r) => setTimeout(r, 25))
     }
@@ -618,6 +649,7 @@ describe('WebSocketTransport', () => {
       await scratch.start()
       const port = scratch.resolvedPort
       await scratch.stop()
+
       return port
     }
 
@@ -634,6 +666,7 @@ describe('WebSocketTransport', () => {
         port: preferredPort,
         fallbackPort
       })
+
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).toBe(fallbackPort)
@@ -651,6 +684,7 @@ describe('WebSocketTransport', () => {
         fallbackPort,
         preferPinnedPort: true
       })
+
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).toBe(preferredPort)
@@ -671,6 +705,7 @@ describe('WebSocketTransport', () => {
         fallbackPort,
         preferPinnedPort: true
       })
+
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).toBe(fallbackPort)
@@ -688,6 +723,7 @@ describe('WebSocketTransport', () => {
         port: preferredPort,
         fallbackPort: takenFallbackPort
       })
+
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).toBe(preferredPort)
@@ -699,11 +735,13 @@ describe('WebSocketTransport', () => {
       // the preferred port instead of disabling the transport for the session.
       const preferredPort = await reserveFreePort()
       const fallbackPort = await reserveFreePort()
+
       const transport = new WebSocketTransport({
         host: '127.0.0.1',
         port: preferredPort,
         fallbackPort
       })
+
       transports.push(transport)
       const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
       const realTryListen = withListen.tryListen.bind(transport)
@@ -718,10 +756,12 @@ describe('WebSocketTransport', () => {
 
     it('still throws when EACCES did not come from listening on the preferred port', async () => {
       const preferredPort = await reserveFreePort()
+
       const transport = new WebSocketTransport({
         host: '127.0.0.1',
         port: preferredPort
       })
+
       transports.push(transport)
       const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
       withListen.tryListen = () =>
@@ -748,6 +788,7 @@ describe('WebSocketTransport', () => {
         port: takenPort,
         fallbackPort
       })
+
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).toBe(fallbackPort)
@@ -767,6 +808,7 @@ describe('WebSocketTransport', () => {
         port: takenPort,
         fallbackPort: takenFallbackPort
       })
+
       transports.push(transport)
       await transport.start()
       expect(transport.resolvedPort).not.toBe(takenPort)

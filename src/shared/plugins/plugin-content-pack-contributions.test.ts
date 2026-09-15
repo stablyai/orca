@@ -143,6 +143,7 @@ describe('content-pack manifest contributions', () => {
     )
 
     expect(parsed.success).toBe(false)
+
     if (!parsed.success) {
       expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
         expect.arrayContaining([

@@ -12,16 +12,20 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     if (status === 'permission') {
       this.recordAgentPromptPermissionObservation(ptyId)
     }
+
     const current = this.agentPromptLifecycleByPtyId.get(ptyId)
     const updatedAt = Date.now()
+
     if (!current) {
       this.agentPromptLifecycleByPtyId.set(ptyId, {
         status,
         workingSequence: status === 'working' ? 1 : 0,
         updatedAt
       })
+
       return
     }
+
     this.agentPromptLifecycleByPtyId.set(ptyId, {
       status,
       workingSequence:
@@ -45,19 +49,26 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     if (lastPayloadTitleOffset === null) {
       return
     }
+
     const titleRange = findLastCompleteOscTitleRange(titleInput)
+
     if (!titleRange || titleRange.end <= lastPayloadTitleOffset) {
       return
     }
+
     const title = extractLastOscTitle(titleInput)
+
     if (title === null) {
       return
     }
+
     const status = detectAgentStatusFromTitle(title)
     const current = this.agentPromptLifecycleByPtyId.get(ptyId)
+
     if (!current || current.status === status) {
       return
     }
+
     this.agentPromptLifecycleByPtyId.set(ptyId, {
       status,
       workingSequence:
@@ -72,11 +83,14 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
 
   protected getPtyLifecycleGeneration(ptyId: string): number {
     const existing = this.ptyLifecycleGenerationById.get(ptyId)
+
     if (existing !== undefined) {
       return existing
     }
+
     const generation = this.nextPtyLifecycleGeneration++
     this.ptyLifecycleGenerationById.set(ptyId, generation)
+
     return generation
   }
 
@@ -112,33 +126,40 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     ) {
       return this.getPtyOutputSequence(ptyId)
     }
+
     const baseline = Math.floor(providerSequence.value)
     const currentSequence = this.getPtyOutputSequence(ptyId)
     const sequenceAtSpawnStart = Math.min(currentSequence, Math.floor(runtimeSequenceAtSpawnStart))
     const postSpawnSequence = currentSequence - sequenceAtSpawnStart
     const wasInitialized = this.providerSequenceInitializedPtys.has(ptyId)
     const replacesExistingRuntimeGeneration = wasInitialized || sequenceAtSpawnStart > 0
+
     const providerOffset =
       providerSequence.generation === 'reset'
         ? sequenceAtSpawnStart
         : (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0)
+
     const providerBaseline = providerOffset + baseline
 
     if (providerSequence.generation === 'reset') {
       this.advancePtyLifecycleGeneration(ptyId)
+
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {
         this.disposeHeadlessTerminal(ptyId)
       }
+
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.wslDistroByPtyId.delete(ptyId)
       this.terminalCwdByPtyId.delete(ptyId)
       this.terminalFileUriHostnameByPtyId.delete(ptyId)
       const pty = this.ptysById.get(ptyId)
+
       if (pty) {
         pty.wslDistro = null
       }
+
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
         this.resetTrackedTerminalStateForProviderGeneration(ptyId)
       }
@@ -150,6 +171,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
         : wasInitialized
           ? currentSequence
           : providerBaseline + postSpawnSequence
+
     this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
     this.providerSequenceInitializedPtys.add(ptyId)
     this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
@@ -162,6 +184,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
       (providerSequence.generation === 'continued' &&
         wasInitialized &&
         providerBaseline > currentSequence)
+
     if (snapshotMayCoverMissingState) {
       // Why: bytes can cross the control/stream sockets around attach. Until a
       // full renderer/provider snapshot is available, a partial model is unsafe.
@@ -171,6 +194,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     }
 
     const headless = this.headlessTerminals.get(ptyId)
+
     if (headless && !wasInitialized && providerSequence.generation === 'continued') {
       // Why: daemon bytes can reach main just before spawn resolves. Queue the
       // baseline behind those writes so their emulator sequence is rebased too.
@@ -178,6 +202,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
         headless.outputSequence = synchronizedSequence
       })
     }
+
     return synchronizedSequence
   }
 

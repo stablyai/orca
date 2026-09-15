@@ -20,9 +20,11 @@ export function createBrowserTabFocusActions(
       set((s) => {
         const recentlyClosed = s.recentlyClosedBrowserTabsByWorktree[worktreeId] ?? []
         entryToRestore = recentlyClosed[0]
+
         if (!entryToRestore) {
           return s
         }
+
         return {
           recentlyClosedBrowserTabsByWorktree: {
             ...s.recentlyClosedBrowserTabsByWorktree,
@@ -49,7 +51,9 @@ export function createBrowserTabFocusActions(
           ...(snap.docLocation ? { docLocation: snap.docLocation } : {}),
           targetGroupId: entryToRestore.position?.groupId
         })
+
         restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
+
         return (
           get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
         )
@@ -57,6 +61,7 @@ export function createBrowserTabFocusActions(
 
       // Why: append remaining pages in original order so multi-page workspaces preserve their page sequence.
       const [firstPage, ...restPages] = pages
+
       const restored = get().createBrowserTab(worktreeId, firstPage.url, {
         title: firstPage.title,
         activate: true,
@@ -78,10 +83,12 @@ export function createBrowserTabFocusActions(
 
       // Why: duplicate URLs are valid, so matching by URL can pick the wrong copy; restore preserves order, so map by index.
       const activePageId = snap.activePageId
+
       if (activePageId) {
         const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
         const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
         const targetPage = activePageIndex !== -1 ? restoredPages[activePageIndex] : null
+
         if (targetPage && targetPage.id !== restoredPages[0]?.id) {
           get().setActiveBrowserPage(restored.id, targetPage.id)
         }
@@ -95,9 +102,11 @@ export function createBrowserTabFocusActions(
     setActiveBrowserTab: (tabId) => {
       set((s) => {
         const browserTab = findWorkspace(s.browserTabsByWorktree, tabId)
+
         if (!browserTab) {
           return s
         }
+
         return {
           activeBrowserTabId: tabId,
           activeBrowserTabIdByWorktree: {
@@ -114,11 +123,13 @@ export function createBrowserTabFocusActions(
 
       // Why: notify the CDP bridge of the active guest; it keys on page IDs not workspace IDs, so resolve the workspace's active page.
       const workspace = findWorkspace(get().browserTabsByWorktree, tabId)
+
       const activePage = workspace?.activePageId
         ? (get().browserPagesByWorkspace[workspace.id] ?? []).find(
             (page) => page.id === workspace.activePageId
           )
         : undefined
+
       if (
         workspace?.activePageId &&
         isLocalBrowserPageOwner(
@@ -137,6 +148,7 @@ export function createBrowserTabFocusActions(
       const item = Object.values(get().unifiedTabsByWorktree)
         .flat()
         .find((entry) => entry.contentType === 'browser' && entry.entityId === tabId)
+
       if (item) {
         get().activateTab(item.id)
       }

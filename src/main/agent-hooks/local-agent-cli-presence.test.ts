@@ -29,6 +29,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
 
   it('scans a deduped PATH once for all agent candidates', async () => {
     const probe = vi.fn(async (filePath: string) => filePath.endsWith('/bin/codex'))
+
     const result = await detectLocalManagedAgentCliPresence(
       [codexTarget, claudeTarget],
       { agentCmdOverrides: {} },
@@ -52,6 +53,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
 
   it('uses executable override paths as positive evidence', async () => {
     const probe = vi.fn(async (filePath: string) => filePath === '/custom/bin/codex')
+
     const result = await detectLocalManagedAgentCliPresence(
       [codexTarget],
       { agentCmdOverrides: { codex: '/custom/bin/codex --profile work' } },
@@ -71,6 +73,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
   it('preserves Windows override separators', async () => {
     const overridePath = 'C:\\My Tools\\claude.cmd'
     const probe = vi.fn(async (filePath: string) => filePath === overridePath)
+
     const result = await detectLocalManagedAgentCliPresence(
       [claudeTarget],
       { agentCmdOverrides: { claude: `"${overridePath}" --flag` } },
@@ -90,6 +93,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
   it('expands Windows home-relative override paths with Windows separators', async () => {
     const overridePath = 'C:\\Users\\orca\\bin\\claude.cmd'
     const probe = vi.fn(async (filePath: string) => filePath === overridePath)
+
     const result = await detectLocalManagedAgentCliPresence(
       [claudeTarget],
       { agentCmdOverrides: { claude: '~\\bin\\claude.cmd --flag' } },
@@ -107,6 +111,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
 
   it('expands home-relative override paths', async () => {
     const probe = vi.fn(async (filePath: string) => filePath === '/home/orca/bin/codex')
+
     const result = await detectLocalManagedAgentCliPresence(
       [codexTarget],
       { agentCmdOverrides: { codex: '~/bin/codex --profile work' } },
@@ -125,6 +130,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
 
   it('reports relative override paths as unknown', async () => {
     const probe = vi.fn(async () => true)
+
     const result = await detectLocalManagedAgentCliPresence(
       [codexTarget],
       { agentCmdOverrides: { codex: 'bin/codex --profile work' } },
@@ -142,6 +148,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
 
   it('honors PATHEXT for Windows PATH candidates', async () => {
     const probe = vi.fn(async (filePath: string) => filePath === 'C:\\Tools\\codex.CMD')
+
     const result = await detectLocalManagedAgentCliPresence(
       [codexTarget],
       { agentCmdOverrides: {} },
@@ -164,6 +171,7 @@ describe('detectLocalManagedAgentCliPresence', () => {
 
   it('warns and uses the inherited PATH when shell hydration throws', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const result = await detectLocalManagedAgentCliPresence(
         [codexTarget],

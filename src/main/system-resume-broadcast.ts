@@ -52,10 +52,13 @@ export function registerSystemResumeBroadcast(
   const onResume = (): void => {
     const suspendedForMs = suspendedAt === null ? null : Math.max(0, now() - suspendedAt)
     suspendedAt = null
+
     if (suspendedForMs !== null && suspendedForMs >= MIN_REPORTABLE_SUSPEND_MS) {
       recordCrashBreadcrumb('system_slept', { suspendedForMs })
     }
+
     publishSystemResume()
+
     for (const window of getWindows()) {
       if (!window.isDestroyed()) {
         window.webContents.send(SYSTEM_RESUMED_CHANNEL)
@@ -65,6 +68,7 @@ export function registerSystemResumeBroadcast(
 
   resumeSource.on('suspend', onSuspend)
   resumeSource.on('resume', onResume)
+
   return () => {
     resumeSource.off('suspend', onSuspend)
     resumeSource.off('resume', onResume)

@@ -117,6 +117,7 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
         pattern.global &&
         pattern.source.startsWith('<!--[\\s\\S]*?-->')
     )
+
     expect(usedGlobalHtmlFragmentMatch).toBe(false)
   })
 

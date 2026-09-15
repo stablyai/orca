@@ -96,9 +96,11 @@ let tempRoots: string[] = []
 
 afterEach(() => {
   vi.restoreAllMocks()
+
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
+
   tempRoots = []
 })
 
@@ -122,6 +124,7 @@ function createStubRequest(options: {
   writeFileSync(stubPath, STUB_SERVER_SOURCE)
   const recordFile = join(root, 'batch-write-params.json')
   const pidFile = join(root, 'app-server.pid')
+
   return {
     recordFile,
     pidFile,
@@ -160,6 +163,7 @@ describe('killCodexAppServerProcessTree', () => {
       pid: 1234,
       kill: vi.fn(() => true) as ChildProcess['kill']
     }
+
     const killer = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
     killer.unref = vi.fn()
     const spawnImpl = vi.fn(() => killer) as unknown as typeof spawn
@@ -182,6 +186,7 @@ describe('killCodexAppServerProcessTree', () => {
       pid: 1234,
       kill: vi.fn(() => true) as ChildProcess['kill']
     }
+
     const killer = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
     killer.unref = vi.fn()
     const spawnImpl = vi.fn(() => killer) as unknown as typeof spawn
@@ -197,6 +202,7 @@ describe('killCodexAppServerProcessTree', () => {
       pid: 1234,
       kill: vi.fn(() => true) as ChildProcess['kill']
     }
+
     const descendants = { unref: vi.fn(), on: vi.fn() }
     const spawnImpl = vi.fn(() => descendants) as unknown as typeof spawn
 
@@ -215,16 +221,19 @@ describe('runCodexHookTrustGrantSession', () => {
   it('grants and verifies exactly the expected managed entries', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+
     const keys = [
       '/home/a/.codex/hooks.json:session_start:0:0',
       '/home/a/.codex/hooks.json:stop:0:0'
     ]
+
     const userHook: StubHook = {
       key: '/home/a/.codex/hooks.json:stop:1:0',
       command: 'echo user-hook',
       currentHash: 'sha256:user-hash',
       trustStatus: 'untrusted'
     }
+
     const { request, recordFile } = createStubRequest({
       scenario: 'happy',
       hooks: [...keys.map((key) => managedHook(key)), userHook],
@@ -234,9 +243,11 @@ describe('runCodexHookTrustGrantSession', () => {
 
     const result = await runCodexHookTrustGrantSession(request)
     expect(result.outcome).toBe('granted')
+
     if (result.outcome !== 'granted') {
       return
     }
+
     expect(result.wroteTrust).toBe(true)
     expect(result.entries.map((entry) => entry.key).sort()).toEqual([...keys].sort())
     expect(result.entries.map((entry) => entry.trustedHash).sort()).toEqual(
@@ -252,6 +263,7 @@ describe('runCodexHookTrustGrantSession', () => {
       }[]
       reloadUserConfig: boolean
     }
+
     expect(written.edits).toHaveLength(1)
     expect(written.edits[0].keyPath).toBe('hooks.state')
     expect(written.edits[0].mergeStrategy).toBe('upsert')
@@ -268,6 +280,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
   it('skips config/batchWrite when every expected entry is already trusted', async () => {
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
+
     // Why: the stub exits(9) on batchWrite in this scenario, so a write would
     // fail the session instead of silently passing.
     const { request, recordFile } = createStubRequest({
@@ -299,6 +312,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
   it('rejects duplicate normalized aliases that conceal a missing expected key', async () => {
     const aliasedKey = 'C:\\Users\\Ada\\.codex\\hooks.json:session_start:0:0'
+
     const { request, recordFile } = createStubRequest({
       scenario: 'happy',
       hooks: [
@@ -319,6 +333,7 @@ describe('runCodexHookTrustGrantSession', () => {
   it('decodes JSONL when a non-ASCII hook path is split across stdout chunks', async () => {
     const command = "/bin/sh '/tmp/rené/codex-hook.sh'"
     const key = '/home/rené/.codex/hooks.json:session_start:0:0'
+
     const { request } = createStubRequest({
       scenario: 'split-unicode',
       hooks: [{ ...managedHook(key), command }],
@@ -335,6 +350,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
   it('throws the unsupported error class for unknown JSON-RPC methods', async () => {
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
+
     const { request } = createStubRequest({
       scenario: 'unknown-method',
       hooks: keys.map((key) => managedHook(key)),
@@ -349,6 +365,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
   it('throws the unsupported error class when the CLI lacks the app-server subcommand', async () => {
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
+
     const { request } = createStubRequest({
       scenario: 'no-subcommand',
       hooks: [],
@@ -388,6 +405,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
   it('kills a hung server at the session deadline', async () => {
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
+
     const { request, pidFile } = createStubRequest({
       scenario: 'hang',
       hooks: keys.map((key) => managedHook(key)),
@@ -437,6 +455,7 @@ describe('runCodexHookTrustGrantSession', () => {
       expectedTrustKeys: ['k'],
       managedCommand: MANAGED_COMMAND
     }
+
     const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(Error)
     expect(isCodexAppServerUnsupportedError(error)).toBe(false)

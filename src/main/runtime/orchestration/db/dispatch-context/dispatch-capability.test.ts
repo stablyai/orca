@@ -19,14 +19,17 @@ describe('verifyDispatchCapability', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const task = db.createTask({ spec: 'work', runId: run.id })
     const paneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     const dispatch = createRootDispatch(db, task.id, 'term_worker', paneKey)
+
     const capability = db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey,
       processIncarnation: 'worker:1'
     })
+
     return { dispatchId: dispatch.id, paneKey, capability }
   }
 

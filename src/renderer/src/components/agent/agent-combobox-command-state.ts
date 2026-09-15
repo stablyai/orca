@@ -18,6 +18,7 @@ export function resolveAgentComboboxCommandState(
   if (!open || state.activeCommandValue === activeCommandValue) {
     return state
   }
+
   return {
     commandValue: activeCommandValue,
     activeCommandValue
@@ -31,6 +32,7 @@ export function updateAgentComboboxCommandValue(
   if (state.commandValue === commandValue) {
     return state
   }
+
   return {
     ...state,
     commandValue

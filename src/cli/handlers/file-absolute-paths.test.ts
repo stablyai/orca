@@ -56,14 +56,17 @@ describe('absolute file CLI paths', () => {
       if (method === 'worktree.list') {
         return worktreeListFixture([buildWorktree('/root/orca/workspaces/xxx', 'feature')])
       }
+
       if (method === 'worktree.show') {
         return okFixture('req_show', {
           worktree: buildWorktree('/root/orca/workspaces/xxx', 'feature')
         })
       }
+
       if (method === 'files.open' && params.relativePath?.startsWith('/')) {
         throw new Error('invalid_relative_path')
       }
+
       return okFixture('req_open', {
         worktree: 'wt-1',
         relativePath: params.relativePath,

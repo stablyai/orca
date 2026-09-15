@@ -28,10 +28,13 @@ export function getSourceControlFileFilterState(query: string): SourceControlFil
   if (isSourceControlFileFilterQueryTooLarge(query)) {
     return { normalizedFilter: '', tooLarge: true }
   }
+
   const trimmed = query.trim()
+
   if (!trimmed) {
     return { normalizedFilter: '', tooLarge: false }
   }
+
   return { normalizedFilter: trimmed.toLowerCase(), tooLarge: false }
 }
 
@@ -42,9 +45,11 @@ export function filterSourceControlPathEntries<T extends SourceControlPathEntry>
   if (filter.tooLarge) {
     return []
   }
+
   if (!filter.normalizedFilter) {
     return entries
   }
+
   return entries.filter((entry) => entry.path.toLowerCase().includes(filter.normalizedFilter))
 }
 
@@ -55,9 +60,11 @@ export function filterSourceControlGroupedPathEntries<T extends SourceControlPat
   if (filter.tooLarge) {
     return { staged: [], unstaged: [], untracked: [] }
   }
+
   if (!filter.normalizedFilter) {
     return grouped
   }
+
   return {
     staged: filterSourceControlPathEntries(grouped.staged, filter),
     unstaged: filterSourceControlPathEntries(grouped.unstaged, filter),

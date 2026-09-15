@@ -23,15 +23,18 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
 vi.mock('expo-router', async () => {
   const react = await import('react')
+
   return {
     // Run the focus callback once on mount, mirroring a focus.
     useFocusEffect: (cb: () => undefined | (() => void)) => {
@@ -75,10 +78,13 @@ describe('useMobileSessionViewMode', () => {
       overrides: args.overrides ?? new Map(),
       loaded: true
     })
+
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()
@@ -153,10 +159,13 @@ describe('useMobileSessionViewMode', () => {
           })
         : nextScopeLoad.promise.then((overrides) => ({ overrides, loaded: true }))
     )
+
     function Harness(props: { hostId: string; worktreeId: string }): null {
       controller = useMobileSessionViewMode(props)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness, { hostId: 'h1', worktreeId: 'w1' }))
       await Promise.resolve()
@@ -181,10 +190,13 @@ describe('useMobileSessionViewMode', () => {
     vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
       overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
     )
+
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()
@@ -210,10 +222,13 @@ describe('useMobileSessionViewMode', () => {
     vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
       overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
     )
+
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()
@@ -323,10 +338,13 @@ describe('useMobileSessionViewMode', () => {
     vi.mocked(readSessionViewOverridesPreference).mockReturnValue(
       overridesLoad.promise.then((overrides) => ({ overrides, loaded: true }))
     )
+
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()
@@ -370,8 +388,10 @@ describe('useMobileSessionViewMode', () => {
 
     function Harness(): null {
       controller = useMobileSessionViewMode({ hostId: 'h', worktreeId: 'w' })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()

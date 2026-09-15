@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   verifyPackagedNodePtyJobOwnership
 } = require('./verify-packaged-node-pty-job-ownership.cjs')

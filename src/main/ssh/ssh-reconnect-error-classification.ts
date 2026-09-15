@@ -60,13 +60,17 @@ export function isTransientReconnectError(err: Error): boolean {
   if (isHostKeyVerificationError(err)) {
     return false
   }
+
   if (isAuthError(err) || isPassphraseError(err)) {
     return false
   }
+
   if (isTransientError(err)) {
     return true
   }
+
   const message = err.message.toLowerCase()
+
   return (
     EMPTY_SYSTEM_SSH_PROBE_EXIT_255.test(message) ||
     NETWORK_LIKE_ERROR_FRAGMENTS.some((fragment) => message.includes(fragment))
@@ -78,11 +82,15 @@ export function isDefiniteSystemSshHostFailure(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false
   }
+
   const code = (err as NodeJS.ErrnoException).code
+
   if (code && DEFINITE_HOST_FAILURE_CODES.has(code)) {
     return true
   }
+
   const message = err.message.toLowerCase()
+
   return (
     DEFINITE_HOST_FAILURE_FRAGMENTS.some((fragment) => message.includes(fragment)) ||
     OPENSSH_HOST_CONNECT_FAILURE.test(err.message)

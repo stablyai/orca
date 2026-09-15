@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../worktree-create-base-prefetch', () => ({
   prefetchWorktreeCreateBase: mocks.prefetchWorktreeCreateBase
 }))
+
 vi.mock('../worktree-create-preparation', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeCreatePreparation>()),
   prepareWorktreeCreateForRepo: mocks.prepareWorktreeCreateForRepo
@@ -109,6 +110,7 @@ describe('prefetchManagedWorktreeCreateBase (orca-runtime-get-worktree-terminal-
     setPlatform('win32')
     mocks.prefetchWorktreeCreateBase.mockImplementation(async ({ prepareCheckout }) => {
       await prepareCheckout('origin/main')
+
       return 'origin/main'
     })
     const runtime = new OrcaRuntimeService(makeStore() as never)

@@ -14,7 +14,9 @@ import type {
 } from './automation-host-catalog-types'
 
 const DESKTOP: StableAutomationAuthorityRef = { kind: 'desktop' }
+
 const ENV_A: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-a' }
+
 const ENV_B: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-b' }
 
 function mirror(
@@ -78,11 +80,13 @@ describe('automation catalog generation', () => {
         })
       )
     )
+
     const before = {
       desktop: registry.get(DESKTOP),
       a: registry.get(ENV_A),
       b: registry.get(ENV_B)
     }
+
     const advanced = registry.sync(
       buildAutomationHostCatalog(
         input({
@@ -95,6 +99,7 @@ describe('automation catalog generation', () => {
         })
       )
     )
+
     expect(advanced.advancedAuthorityKeys).toEqual(['authority:runtime:env-a'])
     expect(registry.get(ENV_A)).toBe(before.a + 1)
     expect(registry.get(ENV_B)).toBe(before.b)
@@ -116,6 +121,7 @@ describe('automation catalog generation', () => {
       )
     )
     const before = registry.get(ENV_A)
+
     const advanced = registry.sync(
       buildAutomationHostCatalog(
         input({
@@ -129,6 +135,7 @@ describe('automation catalog generation', () => {
         })
       )
     )
+
     expect(advanced.advancedAuthorityKeys).toEqual([])
     expect(registry.get(ENV_A)).toBe(before)
   })
@@ -147,11 +154,13 @@ describe('automation catalog generation', () => {
   it('advances on a same-id re-pair', () => {
     registry.sync(buildAutomationHostCatalog(input()))
     const before = registry.get(ENV_A)
+
     const advanced = registry.sync(
       buildAutomationHostCatalog(
         input({ runtimes: [runtime('env-a', { pairingRevision: 2 }), runtime('env-b')] })
       )
     )
+
     expect(registry.get(ENV_A)).toBe(before + 1)
     expect(registry.get(ENV_B)).toBe(1)
     expect(advanced.reincarnatedStableKeys).toEqual(['host:runtime:env-a:self'])
@@ -167,6 +176,7 @@ describe('automation catalog generation', () => {
           ssh: mirror({ targets: [{ targetId: 'ssh-1', label, generation }] })
         }
       })
+
     const first = registry.sync(buildAutomationHostCatalog(desktopAt(4)))
     expect(first.reincarnatedStableKeys).toEqual([])
 
@@ -191,6 +201,7 @@ describe('automation catalog generation', () => {
           })
         ]
       })
+
     registry.sync(buildAutomationHostCatalog(withSupport('scoped')))
 
     const degraded = registry.sync(buildAutomationHostCatalog(withSupport('legacy-unscoped')))

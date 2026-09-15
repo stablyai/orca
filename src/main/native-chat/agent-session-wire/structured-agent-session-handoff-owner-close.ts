@@ -12,13 +12,17 @@ export async function closeRetainedTuiOwner(input: {
   releaseOwner: (sessionId: string) => void
 }): Promise<boolean> {
   const owner = input.owner(input.sessionId)
+
   if (!owner) {
     return false
   }
+
   const close = input.deps.transport?.closeTuiOwner ?? input.deps.transport?.waitForTuiExit
+
   if (!close) {
     throw new Error('The owning agent terminal could not be stopped.')
   }
+
   await close(owner)
   const record = input.requireRecord(input.sessionId)
   await input.deps.store.transitionHandoff(input.sessionId, (current) =>
@@ -31,5 +35,6 @@ export async function closeRetainedTuiOwner(input: {
     })
   )
   input.releaseOwner(input.sessionId)
+
   return true
 }

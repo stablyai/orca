@@ -15,9 +15,11 @@ test.describe('floating Markdown filesystem aliases', () => {
       async ({ directory, originalPath, renamedPath, renamedName }) => {
         await window.api.fs.createFile({ filePath: originalPath })
         await window.api.fs.writeFile({ filePath: originalPath, content: 'same entry\n' })
+
         const settled = await Promise.allSettled([
           window.api.fs.rename({ oldPath: originalPath, newPath: renamedPath })
         ])
+
         return {
           status: settled[0].status,
           reason: settled[0].status === 'rejected' ? String(settled[0].reason) : null,
@@ -57,6 +59,7 @@ test.describe('floating Markdown filesystem aliases', () => {
           window.api.fs.rename({ oldPath: firstPath, newPath: dotlessDestination }),
           window.api.fs.rename({ oldPath: secondPath, newPath: asciiDestination })
         ])
+
         return {
           statuses: settled.map(({ status }) => status),
           dotlessContent: (await window.api.fs.readFile({ filePath: dotlessDestination })).content,

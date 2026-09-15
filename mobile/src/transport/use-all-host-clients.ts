@@ -14,6 +14,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
   const ctx = useRpcClientContext()
   const autoConnectHostIds = options?.autoConnectHostIds ?? hostIds
   const closeUnusedOnRelease = options?.closeUnusedOnRelease ?? false
+
   const key = useMemo(
     () =>
       [
@@ -23,6 +24,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       ].join('|'),
     [autoConnectHostIds, closeUnusedOnRelease, hostIds]
   )
+
   const [tick, setTick] = useState(0)
   const acquiredHostIdsRef = useRef<Set<string>>(new Set())
   const acquisitionsRef = useRef<Map<string, HostClientAcquisition>>(new Map())
@@ -35,28 +37,36 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
 
   useEffect(() => {
     const unsubscribeAllHosts = ctx.subscribeAllHosts(() => setTick((value) => value + 1))
+
     return () => {
       unsubscribeAllHosts()
       const trackedHostIds = [...hostUnsubscribesRef.current.keys()]
       const acquiredHostIds = new Set(acquiredHostIdsRef.current)
+
       for (const unsubscribe of hostUnsubscribesRef.current.values()) {
         unsubscribe()
       }
+
       hostUnsubscribesRef.current.clear()
+
       for (const id of acquiredHostIds) {
         const acquisition = acquisitionsRef.current.get(id)
+
         if (!acquisition) {
           if (closeUnusedRef.current) {
             ctx.closeIfUnused(id)
           }
+
           continue
         }
+
         if (closeUnusedRef.current) {
           ctx.releaseAndCloseIfUnused(id, acquisition)
         } else {
           ctx.release(id, acquisition)
         }
       }
+
       if (closeUnusedRef.current) {
         for (const id of trackedHostIds) {
           if (!acquiredHostIds.has(id)) {
@@ -64,6 +74,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
           }
         }
       }
+
       acquiredHostIdsRef.current.clear()
       acquisitionsRef.current.clear()
     }
@@ -81,6 +92,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
         removedTrackedHostIds.push(id)
       }
     }
+
     for (const id of trackedHostIds) {
       if (!hostUnsubscribesRef.current.has(id)) {
         hostUnsubscribesRef.current.set(
@@ -93,20 +105,25 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
     for (const id of acquiredHostIdsRef.current) {
       if (!nextAcquiredHostIds.has(id)) {
         const acquisition = acquisitionsRef.current.get(id)
+
         if (!acquisition) {
           if (closeUnusedOnRelease) {
             ctx.closeIfUnused(id)
           }
+
           continue
         }
+
         if (closeUnusedOnRelease) {
           ctx.releaseAndCloseIfUnused(id, acquisition)
         } else {
           ctx.release(id, acquisition)
         }
+
         acquisitionsRef.current.delete(id)
       }
     }
+
     for (const id of nextAcquiredHostIds) {
       if (!acquiredHostIdsRef.current.has(id)) {
         const acquisition = {}
@@ -114,16 +131,19 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
         ctx.acquire(id, acquisition)
       }
     }
+
     if (closeUnusedOnRelease) {
       for (const id of removedTrackedHostIds) {
         ctx.closeIfUnused(id)
       }
+
       for (const id of trackedHostIds) {
         if (!nextAcquiredHostIds.has(id)) {
           ctx.closeIfUnused(id)
         }
       }
     }
+
     acquiredHostIdsRef.current = nextAcquiredHostIds
   }, [ctx, key])
 
@@ -131,6 +151,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
     const clientsByHostId = new Map(
       ctx.getAllClients().map((entry) => [entry.hostId, entry.client])
     )
+
     return hostIds.flatMap<{
       hostId: string
       client: RpcClient
@@ -141,6 +162,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       hostSignedOut: boolean
     }>((hostId) => {
       const client = clientsByHostId.get(hostId)
+
       return client
         ? [
             {

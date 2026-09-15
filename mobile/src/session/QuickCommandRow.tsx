@@ -41,13 +41,16 @@ export function QuickCommandRow({
   const [feedback, setFeedback] = useState<CopyFeedback | null>(null)
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
+
   const copyStatus: 'idle' | 'copied' | 'failed' =
     feedback != null && feedback.body === body ? feedback.status : 'idle'
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
+
       if (copyResetTimerRef.current) {
         clearTimeout(copyResetTimerRef.current)
       }
@@ -66,23 +69,30 @@ export function QuickCommandRow({
     if (!canCopy || disabled) {
       return
     }
+
     try {
       await Clipboard.setStringAsync(body)
+
       if (!mountedRef.current) {
         return
       }
+
       setFeedback({ body, status: 'copied' })
     } catch {
       if (!mountedRef.current) {
         return
       }
+
       setFeedback({ body, status: 'failed' })
     }
+
     if (copyResetTimerRef.current) {
       clearTimeout(copyResetTimerRef.current)
     }
+
     copyResetTimerRef.current = setTimeout(() => {
       copyResetTimerRef.current = null
+
       if (mountedRef.current) {
         setFeedback(null)
       }
@@ -90,6 +100,7 @@ export function QuickCommandRow({
   }
 
   const copyDisabled = disabled || !canCopy
+
   const copyLabel =
     copyStatus === 'copied'
       ? 'Copied'
@@ -98,6 +109,7 @@ export function QuickCommandRow({
         : canCopy
           ? `Copy ${command.label}`
           : 'Nothing to copy'
+
   const copyIconColor =
     copyStatus === 'copied'
       ? colors.statusGreen

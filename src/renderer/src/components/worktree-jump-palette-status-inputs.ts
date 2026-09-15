@@ -45,6 +45,7 @@ export function selectPaletteIndexStatusSnapshot(
   if (!active) {
     return EMPTY_PALETTE_INDEX_STATUS
   }
+
   return {
     agentStatusByPaneKey: s.agentStatusByPaneKey,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
@@ -73,6 +74,7 @@ export function selectPaletteStatusInputs(
   if (!active) {
     return EMPTY_PALETTE_STATUS_INPUTS
   }
+
   return {
     ptyIdsByTabId: s.ptyIdsByTabId,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,

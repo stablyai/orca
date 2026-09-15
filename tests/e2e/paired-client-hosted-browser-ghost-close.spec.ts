@@ -51,6 +51,7 @@ function forgetPersistedClientHostedPages(userDataDir: string): number {
 function listOrcaDataFiles(userDataDir: string): string[] {
   const profilesDir = path.join(userDataDir, 'profiles')
   let profileFiles: string[] = []
+
   try {
     profileFiles = readdirSync(profilesDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -58,9 +59,11 @@ function listOrcaDataFiles(userDataDir: string): string[] {
   } catch {
     // No profile directory yet; only the harness seed exists.
   }
+
   return [path.join(userDataDir, 'orca-data.json'), ...profileFiles].filter((file) => {
     try {
       readFileSync(file, 'utf8')
+
       return true
     } catch {
       return false
@@ -76,19 +79,25 @@ function forgetPersistedClientHostedPagesIn(dataFile: string): number {
       { clientHostedBrowserPagesByWorktree?: Record<string, unknown[]> }
     >
   }
+
   let forgotten = 0
+
   for (const session of [
     state.workspaceSession,
     ...Object.values(state.workspaceSessionsByHostId ?? {})
   ]) {
     const rows = session?.clientHostedBrowserPagesByWorktree
+
     if (!rows) {
       continue
     }
+
     forgotten += Object.values(rows).reduce((total, list) => total + list.length, 0)
     delete session.clientHostedBrowserPagesByWorktree
   }
+
   writeFileSync(dataFile, `${JSON.stringify(state, null, 2)}\n`)
+
   return forgotten
 }
 
@@ -114,6 +123,7 @@ test('closes a restored client-hosted row whose runtime has no record of it', as
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   let client: PairedElectronClient | null = null
   let abandonedProfile: string | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     client = await launchPairedElectronClient(host.offer, testInfo, CLIENT_NAME)
@@ -205,9 +215,11 @@ test('closes a restored client-hosted row whose runtime has no record of it', as
       await cleanupE2EDaemons(client.userDataDir).catch(() => undefined)
       await client.dispose()
     }
+
     if (abandonedProfile) {
       await cleanupE2EDaemons(abandonedProfile).catch(() => undefined)
     }
+
     await host.dispose()
     await fixture.close()
   }

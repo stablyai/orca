@@ -13,34 +13,45 @@ export function getPreferredWorktreeRows(
   // Prefer its natural-group copy, falling back to Pinned when that copy is hidden.
   if (pinnedDisplayPolicy === 'single-location') {
     const seen = new Set<string>()
+
     return rows.filter((row) => {
       const identity = getWorktreeHostIdentity(row.worktree)
+
       if (seen.has(identity)) {
         return false
       }
+
       seen.add(identity)
+
       return true
     })
   }
 
   const preferredRows: WorktreeRow[] = []
   const seen = new Set<string>()
+
   for (const row of rows) {
     const identity = getWorktreeHostIdentity(row.worktree)
+
     if (row.sectionKey === PINNED_GROUP_KEY || seen.has(identity)) {
       continue
     }
+
     preferredRows.push(row)
     seen.add(identity)
   }
+
   for (const row of rows) {
     const identity = getWorktreeHostIdentity(row.worktree)
+
     if (seen.has(identity)) {
       continue
     }
+
     preferredRows.push(row)
     seen.add(identity)
   }
+
   return preferredRows
 }
 
@@ -49,9 +60,11 @@ export function getRenderedWorktreesInSidebarOrder(
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): Worktree[] {
   const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
+
   const preferredRowKeys = new Set(
     getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
   )
+
   const renderedWorktrees: Worktree[] = []
 
   for (const row of rows) {
@@ -61,5 +74,6 @@ export function getRenderedWorktreesInSidebarOrder(
       renderedWorktrees.push(folderWorkspaceToWorktree(row.folderWorkspace))
     }
   }
+
   return renderedWorktrees
 }

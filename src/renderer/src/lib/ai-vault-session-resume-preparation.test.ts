@@ -10,6 +10,7 @@ describe('prepareAiVaultSessionForResume', () => {
   it('returns a real-home launch identity only after targeted materialization succeeds', async () => {
     const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
     stubPreparation(prepareSessionResume)
+
     const legacy = session({
       codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
     })
@@ -48,6 +49,7 @@ describe('prepareAiVaultSessionForResume', () => {
       useRealCodexHome: false,
       substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
     })
+
     stubPreparation(prepareSessionResume)
     const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
 
@@ -73,6 +75,7 @@ describe('prepareAiVaultSessionForResume', () => {
   it('does not ask a remote host to repin a per-account session', async () => {
     const prepareSessionResume = vi.fn()
     stubPreparation(prepareSessionResume)
+
     const current = session({
       codexHome: '/home/user/.orca/codex-accounts/account-1/home',
       executionHostId: 'ssh:server-1' as AiVaultSession['executionHostId']

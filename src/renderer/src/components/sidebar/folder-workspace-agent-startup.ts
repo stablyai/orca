@@ -16,9 +16,11 @@ export function getFolderWorkspaceAgentLaunchPlatform(
   projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
 ): NodeJS.Platform {
   const parentPath = projectGroup.parentPath?.trim() ?? ''
+
   if (projectGroup.connectionId) {
     return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
   }
+
   return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
 }
 
@@ -28,6 +30,7 @@ export function resolveFolderWorkspaceLaunchDraft(
   note: string
 ): string | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
+
   return (draftPrompt ?? prompt.trim()) || null
 }
 
@@ -44,6 +47,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   isRemote: boolean
 }): AgentStartupPlan | null {
   const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
+
   const draftLaunchPlan = linkedDraftPrompt
     ? buildAgentDraftLaunchPlan({
         agent: args.agent,
@@ -57,6 +61,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
         isRemote: args.isRemote
       })
     : null
+
   if (draftLaunchPlan) {
     return {
       agent: draftLaunchPlan.agent,
@@ -85,8 +90,10 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
     isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
+
   if (startupPlan && linkedDraftPrompt) {
     startupPlan.draftPrompt = linkedDraftPrompt
   }
+
   return startupPlan
 }

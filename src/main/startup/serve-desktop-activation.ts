@@ -22,8 +22,10 @@ export function settleServeDesktopActivation(
 ): void {
   if (!options.hasPersistentPtyProvider) {
     gate.markBlocked(SERVE_DESKTOP_ACTIVATION_BLOCKED_REASON)
+
     return
   }
+
   gate.markReady()
 }
 
@@ -41,19 +43,25 @@ export function createServeDesktopActivationGate(options: {
     requestActivation: () => {
       if (state === 'ready') {
         options.activateWindow()
+
         return
       }
+
       if (state === 'initializing') {
         pendingActivation = true
+
         return
       }
+
       options.onBlocked?.(blockedReason)
     },
     markReady: () => {
       if (state !== 'initializing') {
         return
       }
+
       state = 'ready'
+
       if (pendingActivation) {
         pendingActivation = false
         options.activateWindow()
@@ -63,8 +71,10 @@ export function createServeDesktopActivationGate(options: {
       if (state !== 'initializing') {
         return
       }
+
       state = 'blocked'
       blockedReason = reason
+
       if (pendingActivation) {
         pendingActivation = false
         options.onBlocked?.(blockedReason)

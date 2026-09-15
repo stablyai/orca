@@ -21,6 +21,7 @@ function currentOpenFdCount(): number {
 function getExistingSpawnHelper(): string {
   const helperPath = getNodePtySpawnHelperCandidates().find((candidate) => existsSync(candidate))
   expect(helperPath).toBeTruthy()
+
   return helperPath as string
 }
 
@@ -62,12 +63,15 @@ describeOnDarwin('node-pty macOS spawn fd handling', () => {
 
     const before = currentOpenFdCount()
     renameSync(helperPath, hiddenHelperPath)
+
     const restoreHelper = (): void => {
       if (existsSync(hiddenHelperPath) && !existsSync(helperPath)) {
         renameSync(hiddenHelperPath, helperPath)
       }
     }
+
     process.on('exit', restoreHelper)
+
     try {
       for (let i = 0; i < 20; i++) {
         expect(() =>
@@ -107,6 +111,7 @@ function ptyMasterFd(term: pty.IPty): number {
 function isCloseOnExec(fd: number): boolean {
   const flags = /flags:\s*(\d+)/.exec(readFileSync(`/proc/self/fdinfo/${fd}`, 'utf8'))
   expect(flags).toBeTruthy()
+
   return (Number.parseInt(flags![1]!, 8) & O_CLOEXEC) !== 0
 }
 
@@ -124,6 +129,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
   it('marks pty masters close-on-exec so later children cannot inherit them', async () => {
     const terms: pty.IPty[] = []
     let child: ReturnType<typeof spawn> | null = null
+
     try {
       for (let i = 0; i < 3; i++) {
         terms.push(
@@ -146,6 +152,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
       expect(inherited).toEqual([])
     } finally {
       child?.kill()
+
       for (const term of terms) {
         term.kill()
       }
@@ -160,6 +167,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
       cwd: process.cwd(),
       env: { ...process.env }
     })
+
     try {
       // Why the read: the child must not be able to run its listing before onData is armed, or an
       // empty capture would satisfy the negative assertion without inspecting a single fd.
@@ -174,6 +182,7 @@ describeOnLinux('node-pty Linux forkpty fd handling', () => {
           env: { ...process.env }
         }
       )
+
       let output = ''
       second.onData((data) => {
         output += data

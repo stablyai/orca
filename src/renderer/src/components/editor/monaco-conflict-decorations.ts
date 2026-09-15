@@ -92,19 +92,24 @@ export function getGitConflictMarkerLineLength(content: string, lineNumber: numb
   if (!Number.isInteger(lineNumber) || lineNumber < 1) {
     return 0
   }
+
   let foundLength = 0
   forEachLine(content, (lineStart, lineEnd, currentLineNumber) => {
     if (currentLineNumber !== lineNumber) {
       return
     }
+
     foundLength = lineEnd - lineStart
+
     return false
   })
+
   return foundLength
 }
 
 function parseGitConflictBlocks(content: string): ParsedConflictBlock[] {
   const blocks: ParsedConflictBlock[] = []
+
   let current: {
     startLine: number
     startText: string
@@ -117,6 +122,7 @@ function parseGitConflictBlocks(content: string): ParsedConflictBlock[] {
   forEachLine(content, (lineStart, lineEnd, lineNumber) => {
     if (lineStartsWith(content, lineStart, lineEnd, '<<<<<<<')) {
       current = { startLine: lineNumber, startText: content.slice(lineStart, lineEnd) }
+
       return
     }
 
@@ -127,12 +133,14 @@ function parseGitConflictBlocks(content: string): ParsedConflictBlock[] {
     if (lineStartsWith(content, lineStart, lineEnd, '|||||||')) {
       current.baseLine = lineNumber
       current.baseText = content.slice(lineStart, lineEnd)
+
       return
     }
 
     if (lineEquals(content, lineStart, lineEnd, '=======')) {
       current.separatorLine = lineNumber
       current.separatorText = '======='
+
       return
     }
 
@@ -149,6 +157,7 @@ function parseGitConflictBlocks(content: string): ParsedConflictBlock[] {
           endText: content.slice(lineStart, lineEnd)
         })
       }
+
       current = null
     }
   })
@@ -164,8 +173,10 @@ export function hasGitConflictMarkers(content: string): boolean {
       lineStartsWith(content, lineStart, lineEnd, '|||||||') ||
       lineEquals(content, lineStart, lineEnd, '=======') ||
       lineStartsWith(content, lineStart, lineEnd, '>>>>>>>')
+
     return found ? false : undefined
   })
+
   return found
 }
 
@@ -175,6 +186,7 @@ export function buildGitConflictDecorations(content: string): editor.IModelDelta
   for (const block of parseGitConflictBlocks(content)) {
     const currentEndLine = (block.baseLine ?? block.separatorLine) - 1
     const baseStartLine = block.baseLine ? block.baseLine + 1 : null
+
     const sectionDecorations = [
       makeSectionDecoration(block.startLine + 1, currentEndLine, 'current'),
       baseStartLine ? makeSectionDecoration(baseStartLine, block.separatorLine - 1, 'base') : null,

@@ -6,11 +6,13 @@ import { HIGHLIGHT_ALPHA, type MarkupShape } from './markup-drawing-model'
 // this subset, so we can assert the dispatch without a real canvas.
 function makeRecordingCtx() {
   const calls: { method: string; args: unknown[] }[] = []
+
   const record =
     (method: string) =>
     (...args: unknown[]) => {
       calls.push({ method, args })
     }
+
   const ctx = {
     save: record('save'),
     restore: record('restore'),
@@ -33,13 +35,16 @@ function makeRecordingCtx() {
     font: '',
     textBaseline: ''
   }
+
   const methods = (name: string) => calls.filter((c) => c.method === name)
+
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, methods }
 }
 
 describe('drawShape dispatch', () => {
   it('strokes a multi-point pen as a polyline', () => {
     const { ctx, methods } = makeRecordingCtx()
+
     const shape: MarkupShape = {
       id: 'p',
       kind: 'pen',
@@ -51,6 +56,7 @@ describe('drawShape dispatch', () => {
         { x: 9, y: 1 }
       ]
     }
+
     drawShape(ctx, shape)
     expect(methods('moveTo')).toHaveLength(1)
     expect(methods('lineTo')).toHaveLength(2)

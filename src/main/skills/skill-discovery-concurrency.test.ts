@@ -10,10 +10,12 @@ const { readdirPaths } = vi.hoisted(() => ({ readdirPaths: [] as string[] }))
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+
   return {
     ...actual,
     readdir: (path: Parameters<typeof actual.readdir>[0], ...rest: unknown[]) => {
       readdirPaths.push(String(path))
+
       return (actual.readdir as (...args: unknown[]) => unknown)(path, ...rest)
     }
   }
@@ -36,11 +38,13 @@ async function buildFixture(
   await writeSkill(join(home, '.claude', 'skills', 'review'), 'review')
   await writeSkill(join(home, '.codex', 'skills', 'plan'), 'plan')
   const panes: string[] = []
+
   for (let index = 0; index < paneCount; index += 1) {
     const pane = join(root, `pane-${index}`)
     await writeSkill(join(pane, '.agents', 'skills', `pane-${index}`), `pane-${index}`)
     panes.push(pane)
   }
+
   // Why: with no cwd the source builder falls back to process.cwd(), which would
   // drag this repo's own skills into every count below.
   return { home, panes, noWorkspace: join(root, 'no-workspace') }
@@ -85,9 +89,11 @@ describe('bounded concurrent skill discovery', () => {
     )
 
     expect(results).toHaveLength(32)
+
     for (const result of results) {
       expect(result.skills.map((skill) => skill.name).sort()).toEqual(['plan', 'review', 'shared'])
     }
+
     expect(readdirCountUnder(claudeRoot)).toBe(READDIR_CALLS_PER_POPULATED_ROOT)
   })
 
@@ -101,6 +107,7 @@ describe('bounded concurrent skill discovery', () => {
     )
 
     expect(results).toHaveLength(32)
+
     // Every pane still sees the shared home skills plus its own workspace skill.
     for (const [index, result] of results.entries()) {
       const paneIndex = Math.floor(index / 4)
@@ -111,6 +118,7 @@ describe('bounded concurrent skill discovery', () => {
         'shared'
       ])
     }
+
     // The home roots are walked once for all 32 scans; only the per-pane roots repeat.
     expect(readdirCountUnder(join(home, '.agents', 'skills'))).toBe(
       READDIR_CALLS_PER_POPULATED_ROOT
@@ -119,6 +127,7 @@ describe('bounded concurrent skill discovery', () => {
       READDIR_CALLS_PER_POPULATED_ROOT
     )
     expect(readdirCountUnder(join(home, '.codex', 'skills'))).toBe(READDIR_CALLS_PER_POPULATED_ROOT)
+
     for (const pane of panes) {
       expect(readdirCountUnder(join(pane, '.agents', 'skills'))).toBe(
         READDIR_CALLS_PER_POPULATED_ROOT
@@ -151,6 +160,7 @@ describe('bounded concurrent skill discovery', () => {
       cwd: noWorkspace,
       refresh: true
     })
+
     expect(refreshed.skills.map((skill) => skill.name)).toContain('added-later')
 
     // Why: asserting only that the skill is present would pass with no caching at

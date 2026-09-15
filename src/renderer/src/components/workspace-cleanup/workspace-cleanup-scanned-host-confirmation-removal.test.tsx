@@ -32,14 +32,19 @@ vi.mock('../../../../main/repo-worktrees', () => ({
   listRepoWorktrees: listRepoWorktreesMock,
   createFolderWorktree: vi.fn()
 }))
+
 vi.mock('../../../../main/git/status', () => ({ getStatus: getStatusMock }))
+
 vi.mock('../../../../main/git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+
 vi.mock('../../../../main/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
+
 vi.mock('../../../../main/providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 
 import { useAppStore } from '@/store'
@@ -48,12 +53,19 @@ import { resetAuthoritativelyRemovedWorktreeMemoryForTests } from '@/store/slice
 import { useWorkspaceCleanupRemoval } from './use-workspace-cleanup-removal'
 
 const SSH_CONNECTION_ID = 'host-b'
+
 const HOST_A_ID = 'local'
+
 const HOST_B_ID = `ssh:${SSH_CONNECTION_ID}` as const
+
 const REPO_ID = 'colliding-repo'
+
 const DAY_MS = 24 * 60 * 60 * 1000
+
 const SCANNER_MODULE_PATH = ['../../../../main/ipc/', 'workspace-cleanup-scan'].join('')
+
 const initialState = useAppStore.getInitialState()
+
 const temporaryRoots: string[] = []
 
 type ScanWorkspaceCleanup = (
@@ -74,6 +86,7 @@ function makeRepo(overrides: Partial<Repo>): Repo {
 
 function toHostRelativePath(worktreeId: string): string {
   const workspacePath = worktreeId.slice(worktreeId.indexOf('::') + 2)
+
   return workspacePath
     .replace(/^[a-zA-Z]:/, '')
     .split(/[/\\]+/)
@@ -86,6 +99,7 @@ function createMarker(root: string, worktreeId: string, name: string): string {
   fs.mkdirSync(worktreePath, { recursive: true })
   const markerPath = path.join(worktreePath, name)
   fs.writeFileSync(markerPath, name)
+
   return markerPath
 }
 
@@ -105,6 +119,7 @@ describe('workspace cleanup scanned host confirmation removal', () => {
     useAppStore.setState(initialState, true)
     Reflect.deleteProperty(window, 'api')
     vi.clearAllMocks()
+
     for (const root of temporaryRoots.splice(0)) {
       fs.rmSync(root, { recursive: true, force: true })
     }
@@ -125,11 +140,13 @@ describe('workspace cleanup scanned host confirmation removal', () => {
     const hostAMarker = createMarker(hostARoot, worktreeId, 'HOST_A_MARKER')
     const hostBMarker = createMarker(hostBRoot, worktreeId, 'HOST_B_MARKER')
     const localRepo = makeRepo({ executionHostId: HOST_A_ID })
+
     const sshRepo = makeRepo({
       path: '/remote/repo',
       connectionId: SSH_CONNECTION_ID,
       executionHostId: HOST_B_ID
     })
+
     const gitWorktree: GitWorktreeInfo = {
       path: sharedPath,
       head: 'abc123',
@@ -137,6 +154,7 @@ describe('workspace cleanup scanned host confirmation removal', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const sshProvider = {
       listWorktrees: vi.fn().mockResolvedValue([gitWorktree]),
       getStatus: vi.fn().mockResolvedValue({
@@ -146,31 +164,40 @@ describe('workspace cleanup scanned host confirmation removal', () => {
       } satisfies GitStatusResult),
       exec: vi.fn().mockResolvedValue({ stdout: '0\n', stderr: '' })
     }
+
     listRepoWorktreesMock.mockResolvedValue([gitWorktree])
     getSshGitProviderMock.mockReturnValue(sshProvider)
+
     const scanStore = {
       getRepos: () => [localRepo, sshRepo],
       getWorktreeMeta: () => undefined,
       getAllWorktreeMeta: () => ({}),
       getGitHubCache: () => ({ pr: {}, issue: {} })
     }
+
     const { scanWorkspaceCleanup } = await vi.importActual<{
       scanWorkspaceCleanup: ScanWorkspaceCleanup
     }>(SCANNER_MODULE_PATH)
+
     const scan = vi.fn((args) => scanWorkspaceCleanup(scanStore, args))
     const routedHostIds: string[] = []
+
     const remove = vi.fn(async (args: { worktreeId: string; hostId?: string }) => {
       routedHostIds.push(args.hostId ?? '<missing>')
+
       const root =
         args.hostId === HOST_A_ID ? hostARoot : args.hostId === HOST_B_ID ? hostBRoot : null
+
       if (root) {
         fs.rmSync(path.join(root, toHostRelativePath(args.worktreeId)), {
           recursive: true,
           force: true
         })
       }
+
       return { ok: true as const }
     })
+
     Object.assign(window, {
       api: {
         worktrees: { remove, forgetLocal: vi.fn() },
@@ -202,14 +229,17 @@ describe('workspace cleanup scanned host confirmation removal', () => {
     expect(fs.existsSync(hostAMarker)).toBe(true)
     expect(fs.existsSync(hostBMarker)).toBe(true)
     const scanned = await useAppStore.getState().scanWorkspaceCleanup()
+
     const hostBCandidate = scanned.candidates.find(
       (candidate) => candidate.executionHostId === HOST_B_ID
     )
+
     expect(hostBCandidate).toMatchObject({ worktreeId, executionHostId: HOST_B_ID })
     expect(
       scanned.candidates.filter((candidate) => candidate.worktreeId === worktreeId)
     ).toHaveLength(2)
     const onDeselect = vi.fn()
+
     const removal = renderHook(() =>
       useWorkspaceCleanupRemoval({ onDeselect, closeModal: vi.fn() })
     )

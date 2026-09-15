@@ -7,6 +7,7 @@ import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { ChecksPanelReviewHeader } from '../ChecksPanel'
 
 vi.mock('../HostedReviewActions', () => ({ default: () => null }))
+
 vi.mock('../SourceControlAgentActionDialog', () => ({ SourceControlAgentActionDialog: () => null }))
 
 import { ChecksPanelActiveContent } from './active-content'
@@ -39,6 +40,7 @@ describe('checks panel concrete content', () => {
 
   it('renders a durable unlinked state that can relink before PR data refetches', () => {
     const handleLinkSuppressedPullRequest = vi.fn<() => void>()
+
     const model = {
       activeReview: null,
       activeWorktree: { id: 'worktree-1' },

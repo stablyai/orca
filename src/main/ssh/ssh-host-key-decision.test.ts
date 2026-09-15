@@ -97,6 +97,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsOutcome: 'revoked', strictHostKeyChecking: 'no' })
       )
+
       expect(decision.action).toBe('reject')
     })
 
@@ -104,6 +105,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsOutcome: 'mismatch', strictHostKeyChecking: 'off' })
       )
+
       expect(decision.action).toBe('reject')
     })
 
@@ -144,6 +146,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsOutcome: 'unknown-type-known-host', port: 2222 })
       )
+
       expect(decision.reason).toContain("ssh-keygen -R '[build-01]:2222'")
     })
 
@@ -191,6 +194,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsOutcome: 'ca-only', storeOutcome: 'mismatch' })
       )
+
       expect(decision.action).toBe('reject')
     })
   })
@@ -292,6 +296,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsUnreadable: true, knownHostsOutcome: 'mismatch' })
       )
+
       expect(decision.action).toBe('reject')
     })
 
@@ -299,6 +304,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsUnreadable: true, knownHostsOutcome: 'revoked' })
       )
+
       expect(decision.action).toBe('reject')
     })
 
@@ -307,6 +313,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ knownHostsUnreadable: true, strictHostKeyChecking: 'true' })
       )
+
       expect(decision.action).toBe('reject')
     })
   })
@@ -322,6 +329,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ isEphemeralRuntimeTarget: true, knownHostsOutcome: 'mismatch' })
       )
+
       expect(decision.action).toBe('reject')
     })
 
@@ -337,6 +345,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ siteConfigSuppressed: true, knownHostsOutcome: 'match' })
       )
+
       expect(decision.action).toBe('accept')
     })
 
@@ -347,6 +356,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ isEphemeralRuntimeTarget: true, siteConfigSuppressed: true })
       )
+
       expect(decision.action).toBe('accept')
     })
 
@@ -356,6 +366,7 @@ describe('deciding what to do with a presented host key', () => {
       const decision = decideHostKey(
         input({ isEphemeralRuntimeTarget: true, strictHostKeyChecking: 'yes' })
       )
+
       expect(decision.action).toBe('reject')
     })
 
@@ -368,6 +379,7 @@ describe('deciding what to do with a presented host key', () => {
           storeOutcome: 'mismatch'
         })
       )
+
       expect(decision.action).toBe('reject')
     })
   })
@@ -390,6 +402,7 @@ describe('deciding what to do with a presented host key', () => {
       { siteConfigSuppressed: true },
       { knownHostsUnreadable: true }
     ]
+
     for (const overrides of cases) {
       expect(decideHostKey(input(overrides)).action).not.toBe('prompt')
     }

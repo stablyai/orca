@@ -56,6 +56,7 @@ function mockPullRequestDetail(payload: Record<string, unknown>): void {
     if (args[0] !== 'pr' || args[1] !== 'view') {
       throw new Error('unexpected gh call')
     }
+
     return { stdout: JSON.stringify(payload) }
   })
 }

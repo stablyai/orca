@@ -6,6 +6,7 @@ import { readCodexThreadItem } from './codex-structured-item-translation'
 import { MAX_CODEX_ITEM_STREAM_METADATA_BYTES } from './codex-item-stream-retention'
 
 const MAX_SETTLED_COMMANDS = 128
+
 const MAX_DESCRIPTION_CHARS = 512
 
 type Command = { threadId: string; task: AgentSessionBackgroundTask; bytes: number }
@@ -27,15 +28,18 @@ function boundText(value: string, max: number): string {
   if (value.length <= max) {
     return value
   }
+
   const keep = max - 1
   const last = value.charCodeAt(keep - 1)
   const end = last >= 0xd800 && last <= 0xdbff ? keep - 1 : keep
+
   return `${value.slice(0, end)}…`
 }
 
 /** Resolved on read, and capped at the bound the admitted description already respects. */
 function qualifiedDescription(label: string, description: string | undefined): string {
   const name = boundText(label, MAX_LABEL_CHARS)
+
   return boundText(description ? `${name} — ${description}` : name, MAX_DESCRIPTION_CHARS)
 }
 
@@ -56,6 +60,7 @@ export class CodexBackgroundCommandTracker {
 
   canObserve(event: CodexBackgroundTaskEvent): boolean {
     const parsed = this.parse(event)
+
     return (
       !parsed ||
       parsed.completed ||
@@ -67,30 +72,40 @@ export class CodexBackgroundCommandTracker {
 
   observe(event: CodexBackgroundTaskEvent): void {
     const parsed = this.parse(event)
+
     if (!parsed || this.settled.has(parsed.key)) {
       return
     }
+
     const { key, command, completed } = parsed
     const existing = this.commands.get(key)
+
     if (completed) {
       if (existing) {
         this.liveBytes -= existing.bytes
         this.commands.delete(key)
       }
+
       const bytes = Buffer.byteLength(key, 'utf8') + 256
+
       if (this.liveBytes + bytes <= this.maxMetadataBytes) {
         this.settled.set(key, bytes)
         this.settledBytes += bytes
       }
+
       this.trimSettled()
+
       return
     }
+
     if (existing) {
       return
     }
+
     if (this.liveBytes + command.bytes > this.maxMetadataBytes) {
       throw new Error('Codex command metadata was not admitted before observation')
     }
+
     this.commands.set(key, command)
     this.liveBytes += command.bytes
     this.trimSettled()
@@ -107,6 +122,7 @@ export class CodexBackgroundCommandTracker {
         // unqualified it reads as a bare shell string with no owner. Resolved on read so
         // a label registered after the command still lands.
         const label = threadId === this.primaryThreadId ? null : childLabel?.(threadId)
+
         return label
           ? { ...task, description: qualifiedDescription(label, task.description) }
           : task
@@ -126,9 +142,11 @@ export class CodexBackgroundCommandTracker {
       this.retainedMetadataBytes > this.maxMetadataBytes
     ) {
       const oldest = this.settled.entries().next().value
+
       if (!oldest) {
         break
       }
+
       this.settled.delete(oldest[0])
       this.settledBytes -= oldest[1]
     }
@@ -140,15 +158,20 @@ export class CodexBackgroundCommandTracker {
     if (event.method !== 'item/started' && event.method !== 'item/completed') {
       return null
     }
+
     const item = readCodexThreadItem(readRecord(event.params).item)
+
     if (!item || !codexCommandOutlivesTurn(item)) {
       return null
     }
+
     const key = JSON.stringify([event.threadId, item.id])
     const completed = event.method === 'item/completed' || item.status !== 'inProgress'
+
     const description = boundText(readString(item, 'command') ?? '', MAX_DESCRIPTION_CHARS)
       .replace(/\s+/g, ' ')
       .trim()
+
     const value = {
       threadId: event.threadId,
       task: {
@@ -160,6 +183,7 @@ export class CodexBackgroundCommandTracker {
         ...(description ? { description } : {})
       }
     }
+
     return {
       key,
       completed,

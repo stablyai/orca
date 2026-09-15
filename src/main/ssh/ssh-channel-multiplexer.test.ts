@@ -31,6 +31,7 @@ function makeResponseFrame(requestId: number, result: unknown, seq: number): Buf
       result
     })
   )
+
   return encodeFrame(MessageType.Regular, seq, 0, payload)
 }
 
@@ -47,6 +48,7 @@ function makeErrorResponseFrame(
       error: { code, message }
     })
   )
+
   return encodeFrame(MessageType.Regular, seq, 0, payload)
 }
 
@@ -62,6 +64,7 @@ function makeNotificationFrame(
       params
     })
   )
+
   return encodeFrame(MessageType.Regular, seq, 0, payload)
 }
 
@@ -102,9 +105,11 @@ describe('SshChannelMultiplexer', () => {
       expect(frame[0]).toBe(MessageType.Regular)
 
       const payloadLen = frame.readUInt32BE(9)
+
       const payload = JSON.parse(
         frame.subarray(HEADER_LENGTH, HEADER_LENGTH + payloadLen).toString()
       )
+
       expect(payload.method).toBe('pty.spawn')
       expect(payload.id).toBe(1)
 
@@ -128,6 +133,7 @@ describe('SshChannelMultiplexer', () => {
     it('runs beforeResolve before an adjacent notification in the same decoder turn', async () => {
       const order: string[] = []
       mux.onNotification(() => order.push('notification'))
+
       const promise = mux.request(
         'pty.attach',
         { id: 'pty-1' },
@@ -156,15 +162,18 @@ describe('SshChannelMultiplexer', () => {
         vi.advanceTimersByTime(5_000)
         transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
       }
+
       vi.advanceTimersByTime(1_000)
 
       await expect(promise).rejects.toThrow('timed out')
+
       const cancelPayload = JSON.parse(
         transport.written
           .at(-1)!
           .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written.at(-1)!.readUInt32BE(9))
           .toString()
       )
+
       expect(cancelPayload).toMatchObject({
         method: 'rpc.cancel',
         params: { id: 1 }
@@ -178,6 +187,7 @@ describe('SshChannelMultiplexer', () => {
         vi.advanceTimersByTime(5_000)
         transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
       }
+
       await Promise.resolve()
       const requestWrites = transport.written.filter((frame) => frame[0] === MessageType.Regular)
       expect(requestWrites).toHaveLength(1)
@@ -186,6 +196,7 @@ describe('SshChannelMultiplexer', () => {
         vi.advanceTimersByTime(5_000)
         transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
       }
+
       await expect(promise).rejects.toThrow('timed out after 60000ms')
     })
 
@@ -194,16 +205,19 @@ describe('SshChannelMultiplexer', () => {
       void mux.request('method2').catch(() => {})
 
       expect(transport.written.length).toBe(2)
+
       const id1 = JSON.parse(
         transport.written[0]
           .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written[0].readUInt32BE(9))
           .toString()
       ).id
+
       const id2 = JSON.parse(
         transport.written[1]
           .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written[1].readUInt32BE(9))
           .toString()
       ).id
+
       expect(id1).not.toBe(id2)
     })
   })
@@ -213,11 +227,13 @@ describe('SshChannelMultiplexer', () => {
       mux.notify('pty.data', { id: 'pty-1', data: 'hello' })
 
       expect(transport.written.length).toBe(1)
+
       const payload = JSON.parse(
         transport.written[0]
           .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written[0].readUInt32BE(9))
           .toString()
       )
+
       expect(payload.method).toBe('pty.data')
       expect(payload.id).toBeUndefined()
     })
@@ -268,9 +284,11 @@ describe('SshChannelMultiplexer', () => {
 
     it('contains generic notification handler failures', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
       const badHandler = vi.fn(() => {
         throw new Error('subscriber exploded')
       })
+
       const goodHandler = vi.fn()
       mux.onNotification(badHandler)
       mux.onNotification(goodHandler)
@@ -289,9 +307,11 @@ describe('SshChannelMultiplexer', () => {
 
     it('contains method notification handler failures', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
       const badHandler = vi.fn(() => {
         throw new Error('stream consumer exploded')
       })
+
       const goodHandler = vi.fn()
       mux.onNotificationByMethod('fs.streamChunk', badHandler)
       mux.onNotificationByMethod('fs.streamChunk', goodHandler)
@@ -356,11 +376,15 @@ describe('SshChannelMultiplexer', () => {
     it('survives local saturation while the peer keeps talking, and rebases both clocks on drain', () => {
       mux.dispose()
       let drain = (): void => {}
+
       let feed: (chunk: Buffer) => void = () => {}
+
       const written: Buffer[] = []
+
       const saturatedTransport: MultiplexerTransport = {
         write: (data) => {
           written.push(data)
+
           return false
         },
         supportsWriteSettlement: true,
@@ -372,11 +396,13 @@ describe('SshChannelMultiplexer', () => {
         },
         onClose: vi.fn()
       }
+
       mux = new SshChannelMultiplexer(saturatedTransport)
 
       vi.advanceTimersByTime(5_000)
       // The writer parked after its first frame: that is the saturation this test is about.
       expect(written).toHaveLength(1)
+
       // Why: backpressure on our uplink is not evidence of death. The relay's own keepalive is,
       // and only that inbound traffic may keep the link alive — suppressing the check on
       // saturation alone wedged a half-open link forever (see the saturation-wedge suite).
@@ -384,6 +410,7 @@ describe('SshChannelMultiplexer', () => {
         feed(encodeKeepAliveFrame(0, 0))
         vi.advanceTimersByTime(5_000)
       }
+
       expect(mux.isDisposed()).toBe(false)
       expect(written).toHaveLength(1)
 
@@ -446,10 +473,12 @@ describe('SshChannelMultiplexer', () => {
 
       // The relay answers the post-wake probe; the link must stay up.
       let seq = 1
+
       for (let i = 0; i < 8; i++) {
         vi.advanceTimersByTime(5_000)
         transport.dataCallbacks[0](encodeKeepAliveFrame(seq++, 0))
       }
+
       expect(mux.isDisposed()).toBe(false)
     })
 
@@ -516,6 +545,7 @@ describe('SshChannelMultiplexer', () => {
       const error = (await mux.request('pty.spawn').catch((e: unknown) => e)) as Error & {
         code?: string
       }
+
       expect(error.code).toBe('DISPOSED')
     })
 
@@ -525,6 +555,7 @@ describe('SshChannelMultiplexer', () => {
       const error = (await mux
         .request('fs.readDir', { path: '/home/me' })
         .catch((e: unknown) => e)) as Error & { code?: string }
+
       expect(error.message).toBe('SSH connection lost, reconnecting...')
       expect(error.code).toBe('CONNECTION_LOST')
     })

@@ -24,9 +24,11 @@ async function dragBefore(page: Page, sourceId: string, targetId: string): Promi
   await expect(target).toBeVisible()
   const sourceBox = await source.boundingBox()
   const targetBox = await target.boundingBox()
+
   if (!sourceBox || !targetBox) {
     throw new Error('Manual-order drag geometry was unavailable')
   }
+
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 3, { steps: 8 })
@@ -49,22 +51,28 @@ test('manual drag survives activity and persisted-profile reload', async ({
     await attachRepoAndOpenTerminal(first.page, testRepoPath)
     createdIds = await first.page.evaluate(async () => {
       const store = window.__store
+
       if (!store) {
         throw new Error('store unavailable')
       }
+
       const state = store.getState()
       state.setGroupBy('none')
       state.setSortBy('smart')
       state.setShowSleepingWorkspaces(true)
       const repoId = state.allWorktrees()[0]?.repoId
+
       if (!repoId) {
         throw new Error('seed repo was not loaded')
       }
+
       const names = ['manual-order-a', 'manual-order-b', 'manual-order-c']
       const created: string[] = []
+
       for (const name of names) {
         created.push((await state.createWorktree(repoId, name, undefined, 'skip')).worktree.id)
       }
+
       return created
     })
 
@@ -83,18 +91,22 @@ test('manual drag survives activity and persisted-profile reload', async ({
         { timeout: 30_000 }
       )
       .toBe(true)
+
     const initialOrder = (await visibleWorktreeIds(first.page)).filter((id) =>
       createdIds.includes(id)
     )
+
     const sourceId = createdIds.at(-1)!
     const targetId = initialOrder.find((id) => id !== sourceId)!
     await dragBefore(first.page, sourceId, targetId)
 
     const manualOrderAfterDrag = await first.page.evaluate((ids) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('store unavailable')
       }
+
       return {
         sortBy: state.sortBy,
         rows: state
@@ -107,11 +119,14 @@ test('manual drag survives activity and persisted-profile reload', async ({
           .filter((row) => ids.includes(row.id))
       }
     }, createdIds)
+
     expect(manualOrderAfterDrag.sortBy).toBe('manual')
     expect(manualOrderAfterDrag.rows.every((row) => Number.isFinite(row.manualOrder))).toBe(true)
+
     const expectedOrder = [...manualOrderAfterDrag.rows]
       .sort((left, right) => (right.manualOrder ?? 0) - (left.manualOrder ?? 0))
       .map((row) => row.id)
+
     expect((await visibleWorktreeIds(first.page)).filter((id) => createdIds.includes(id))).toEqual(
       expectedOrder
     )
@@ -119,17 +134,22 @@ test('manual drag survives activity and persisted-profile reload', async ({
     const sortOrdersBeforeActivity = new Map(
       manualOrderAfterDrag.rows.map((row) => [row.id, row.sortOrder])
     )
+
     await first.page.evaluate(async (activityId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('store unavailable')
       }
+
       store.getState().bumpWorktreeActivity(activityId)
+
       const orderedIds = store
         .getState()
         .allWorktrees()
         .map((worktree) => worktree.id)
         .filter((id) => id !== activityId)
+
       await window.api.worktrees.persistSortOrder({ orderedIds: [activityId, ...orderedIds] })
       await store.getState().fetchAllWorktrees()
     }, targetId)
@@ -140,6 +160,7 @@ test('manual drag survives activity and persisted-profile reload', async ({
             ?.getState()
             .allWorktrees()
             .find((worktree) => worktree.id === activityId)
+
           return row?.sortOrder
         }, targetId)
       )
@@ -157,6 +178,7 @@ test('manual drag survives activity and persisted-profile reload', async ({
             window.api.ui.get(),
             window.api.worktrees.listAll()
           ])
+
           return [
             persistedUi,
             persistedWorktrees
@@ -164,6 +186,7 @@ test('manual drag survives activity and persisted-profile reload', async ({
               .map((worktree) => ({ id: worktree.id, manualOrder: worktree.manualOrder }))
           ] as const
         }, createdIds)
+
         return {
           sortBy: ui.sortBy,
           ranks: Object.fromEntries(worktrees.map((row) => [row.id, row.manualOrder]))
@@ -179,11 +202,14 @@ test('manual drag survives activity and persisted-profile reload', async ({
     const second = await session.launch()
     secondApp = second.app
     await waitForSessionReady(second.page)
+
     const reloadedState = await second.page.evaluate((ids) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('store unavailable')
       }
+
       return {
         sortBy: state.sortBy,
         rows: state
@@ -192,6 +218,7 @@ test('manual drag survives activity and persisted-profile reload', async ({
           .map((worktree) => ({ id: worktree.id, manualOrder: worktree.manualOrder }))
       }
     }, createdIds)
+
     expect(reloadedState.sortBy).toBe('manual')
     const reloadedRows = reloadedState.rows
     expect(reloadedRows.every((row) => Number.isFinite(row.manualOrder))).toBe(true)
@@ -221,11 +248,13 @@ test('manual drag survives activity and persisted-profile reload', async ({
         )
         .catch(() => undefined)
     }
+
     for (const app of [secondApp, firstApp]) {
       if (app) {
         await session.close(app).catch(() => undefined)
       }
     }
+
     await session.dispose()
   }
 })

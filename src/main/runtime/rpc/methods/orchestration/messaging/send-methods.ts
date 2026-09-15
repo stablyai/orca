@@ -39,30 +39,39 @@ export const ORCHESTRATION_SEND_METHODS = [
       }
     ) => {
       const db = runtime.getOrchestrationDb()
+
       const legacyReplayNudge = readWorkerDoneReplayNudge(
         'orchestration.send',
         params,
         replayedMutationReceipt
       )
+
       const replayNudge =
         readMutationReplayNudge(replayedMutationReceipt) ??
         (legacyReplayNudge
           ? { kind: 'messages' as const, targets: [legacyReplayNudge] }
           : undefined)
+
       if (replayNudge) {
         replayMutationNudge(runtime, replayNudge)
+
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
+
       const from = params.from ?? 'unknown'
+
       const attestedCaller =
         orchestrationCompatibilityCallerAuthority?.terminalHandle === from
           ? orchestrationCompatibilityCallerAuthority
           : undefined
+
       // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
       const senderPaneKey = attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
+
       const remoteAttachment = senderPaneKey
         ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
         : undefined
+
       if (remoteAttachment && senderPaneKey) {
         return sendRemoteMessage({
           params,
@@ -82,6 +91,7 @@ export const ORCHESTRATION_SEND_METHODS = [
 
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
+
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
       const routing = resolveMessageRun(runtime, {
         from,
@@ -90,6 +100,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         runId: runGroup ? undefined : params.run,
         payload: runGroup ? undefined : params.payload
       })
+
       if (
         params.type === 'worker_done' &&
         !isWorkerReportOutcome(parseRemoteWorkerPayload(params.payload).outcome)
@@ -99,6 +110,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           'worker_done requires outcome=succeeded|failed for a current Dispatch.'
         )
       }
+
       if (params.to?.startsWith('task:')) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -107,6 +119,7 @@ export const ORCHESTRATION_SEND_METHODS = [
       }
 
       let to = params.to
+
       if (
         routing.run &&
         (!to ||
@@ -114,6 +127,7 @@ export const ORCHESTRATION_SEND_METHODS = [
       ) {
         to = `run:${routing.run.id}`
       }
+
       if (!to) {
         throw new OrchestrationError(
           'run_required',
@@ -124,6 +138,7 @@ export const ORCHESTRATION_SEND_METHODS = [
 
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id
+
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
         const recipient = resolveBareOrchestrationRecipient({
           runtime,
@@ -132,15 +147,19 @@ export const ORCHESTRATION_SEND_METHODS = [
           senderRunId: routing.run?.id,
           explicitRunId: params.run
         })
+
         if (!recipient.ok) {
           throw new OrchestrationError(recipient.code, recipient.message)
         }
+
         to = recipient.to
         messageRunId = recipient.runId
+
         if (recipient.warning) {
           sendWarnings.push(recipient.warning)
         }
       }
+
       const withSendWarnings = <T extends object>(
         receipt: T
       ): T & { warnings?: SendRecipientWarning[] } =>
@@ -150,14 +169,17 @@ export const ORCHESTRATION_SEND_METHODS = [
         const addressedDispatchId = to.startsWith('dispatch:')
           ? to.slice('dispatch:'.length)
           : undefined
+
         const federatedTarget =
           addressedDispatchId && to === `dispatch:${addressedDispatchId}`
             ? db.getFederatedDispatch(addressedDispatchId)
             : undefined
+
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
           assertDispatchMailboxDeliverable(db, addressedDispatchId)
         }
+
         const federatedControl = sendFederatedControlMail({
           params,
           runtime,
@@ -169,9 +191,11 @@ export const ORCHESTRATION_SEND_METHODS = [
           recordMutationReceipt,
           withSendWarnings
         })
+
         if (federatedControl !== undefined) {
           return federatedControl
         }
+
         return sendPointToPointMessage({
           params,
           runtime,
@@ -193,6 +217,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           withSendWarnings
         })
       }
+
       return sendGroupMessage({
         params,
         runtime,

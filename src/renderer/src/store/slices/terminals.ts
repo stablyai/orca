@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { TerminalSlice } from '../terminals/terminal-state'
 
 export type { TerminalSlice } from '../terminals/terminal-state'
+
 import { createTerminalEphemeralActions } from '../terminals/terminal-ephemeral-state'
 import { createTerminalTabCreationActions } from '../terminals/terminal-tab-creation'
 import { createActiveWorkspaceTerminalActions } from '../terminals/terminal-active-workspace-creation'

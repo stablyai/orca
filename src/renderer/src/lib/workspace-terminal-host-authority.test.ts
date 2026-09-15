@@ -9,17 +9,23 @@ import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-termina
 import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 type TestStore = ReturnType<typeof createTestStore>
 
 const LOCAL_WORKTREE_ID = 'repoLocal::/home/dev/proj/feature'
+
 const SSH_WORKTREE_ID = 'repoSsh::/srv/proj/feature'
+
 const PAIRED_WORKTREE_ID = 'repoPaired::/srv/proj/paired'
+
 const TARGET_ID = 'ssh-target-1'
+
 const ENVIRONMENT_ID = 'runtime-env-1'
 
 function repo(id: string, path: string, connectionId?: string): never {

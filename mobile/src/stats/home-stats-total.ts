@@ -18,24 +18,29 @@ export function totalHomeStats(
   hostIds: readonly string[]
 ): HomeStatsSummary | null {
   const hosts = hostIds.filter((id) => id in byHost).map((id) => byHost[id])
+
   if (hosts.length === 0) {
     return null
   }
+
   const total: HomeStatsSummary = {
     totalAgentsSpawned: 0,
     totalPRsCreated: 0,
     totalAgentTimeMs: 0,
     firstEventAt: null
   }
+
   for (const host of hosts) {
     // The rows come straight off the wire unvalidated; a malformed desktop reply must not
     // NaN out or crash the header for every other host.
     if (!host || typeof host !== 'object') {
       continue
     }
+
     total.totalAgentsSpawned += finiteOrZero(host.totalAgentsSpawned)
     total.totalPRsCreated += finiteOrZero(host.totalPRsCreated)
     total.totalAgentTimeMs += finiteOrZero(host.totalAgentTimeMs)
+
     if (typeof host.firstEventAt === 'number' && Number.isFinite(host.firstEventAt)) {
       total.firstEventAt =
         total.firstEventAt === null
@@ -43,6 +48,7 @@ export function totalHomeStats(
           : Math.min(total.firstEventAt, host.firstEventAt)
     }
   }
+
   return total
 }
 

@@ -16,6 +16,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   plan: LocalPtyLaunchPlan
 }): Record<string, string> | Promise<Record<string, string>> {
   const { id, spawn, getOptions, plan } = args
+
   const spawnEnv: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), spawn.env),
     TERM: 'xterm-256color',
@@ -26,13 +27,16 @@ export function buildLocalPtySpawnEnvironment(args: {
     // Why: supports-hyperlinks rejects TERM_PROGRAM=Orca, so tools drop OSC 8 links; force it since xterm.js parses them.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+
   // Why: Orca can be launched from an Orca terminal; pane identity belongs to the child PTY, not the parent shell.
   removeUnspecifiedPaneIdentityEnv(spawnEnv, spawn.env)
   removeAppImageRuntimeEnv(spawnEnv)
   removeInheritedNoColor(spawnEnv)
+
   for (const key of spawn.envToDelete ?? []) {
     delete spawnEnv[key]
   }
+
   if (spawn.env?.TERM) {
     spawnEnv.TERM = spawn.env.TERM
   }
@@ -42,6 +46,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   // Why: on Windows LANG doesn't set the console code page; PYTHONUTF8=1 forces Python UTF-8 stdio to avoid garbled CJK.
   if (process.platform === 'win32') {
     spawnEnv.PYTHONUTF8 ??= '1'
+
     if (isWindowsGitBashShellPath(plan.shellPath)) {
       // Why: Git for Windows login files otherwise cd to $HOME, ignoring node-pty's cwd for repo-scoped terminals.
       spawnEnv.CHERE_INVOKING ??= '1'
@@ -51,6 +56,7 @@ export function buildLocalPtySpawnEnvironment(args: {
   if (!getOptions().buildSpawnEnv) {
     return spawnEnv
   }
+
   // Why (#16441): building the env now awaits Codex hook installs and trust
   // grants, so shutdown must be able to cancel this session id here too.
   return awaitCancelableLocalPtySpawn(
@@ -75,6 +81,7 @@ export function enforceLocalPtySpawnEnvironmentOverrides(
   for (const key of spawn.envToDelete ?? []) {
     delete finalEnv[key]
   }
+
   if (spawn.env?.TERM) {
     finalEnv.TERM = spawn.env.TERM
   }

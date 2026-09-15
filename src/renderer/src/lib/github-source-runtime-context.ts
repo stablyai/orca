@@ -18,7 +18,9 @@ export function getGitHubSourceRuntimeHost(
   if (sourceContext?.provider !== 'github') {
     return null
   }
+
   const parsedHost = parseExecutionHostId(sourceContext.hostId)
+
   return parsedHost?.kind === 'runtime' ? parsedHost : null
 }
 
@@ -40,6 +42,7 @@ export function getGitHubMutationRoutingSettings(
   sourceContext: TaskSourceContext | null | undefined
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
   const sourceHost = getGitHubSourceRuntimeHost(sourceContext)
+
   return {
     activeRuntimeEnvironmentId:
       sourceHost?.environmentId ?? getExplicitRuntimeOwnerEnvironmentId(state, repoId)
@@ -66,5 +69,6 @@ export function getGitHubRuntimeRepoId(
   fallbackRepoId: string | null | undefined
 ): string | undefined {
   const fallback = fallbackRepoId ?? undefined
+
   return sourceContext?.provider === 'github' ? (sourceContext.repoId ?? fallback) : fallback
 }

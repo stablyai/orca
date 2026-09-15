@@ -134,6 +134,7 @@ describe('parseManualNetworkAddress', () => {
         'foo.123:8080',
         'foo.0x1'
       ]
+
       for (const value of bad) {
         expect(parseManualNetworkAddress(value).ok).toBe(false)
       }

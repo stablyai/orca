@@ -47,6 +47,7 @@ vi.mock('@/components/activity/useActivityUnreadCount', () => ({
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
   useAgentBucketCounts: () => {
     mocks.getAgentBucketCounts()
+
     return mocks.agentBucketCounts
   }
 }))
@@ -164,6 +165,7 @@ async function renderSidebarNav(): Promise<HTMLDivElement> {
       </TooltipProvider>
     )
   })
+
   return container
 }
 
@@ -177,9 +179,11 @@ function queryButtonByText(container: ParentNode, text: string): HTMLButtonEleme
 
 function getButtonByText(container: ParentNode, text: string): HTMLButtonElement {
   const button = queryButtonByText(container, text)
+
   if (!button) {
     throw new Error(`Button not found: ${text}`)
   }
+
   return button
 }
 
@@ -188,9 +192,11 @@ function getHideButton(menu: Element): HTMLButtonElement {
     Array.from(menu.querySelectorAll<HTMLButtonElement>('button')).find((candidate) =>
       candidate.textContent?.includes('Hide from sidebar')
     ) ?? null
+
   if (!button) {
     throw new Error('Hide from sidebar button not found')
   }
+
   return button
 }
 
@@ -337,6 +343,7 @@ describe('SidebarNav', () => {
 
     mocks.hasPairedMobileDevice = true
     const container = await renderSidebarNav()
+
     const hideButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Hide from sidebar"]'
     )
@@ -379,6 +386,7 @@ describe('SidebarNav', () => {
     const automationsMenu = getButtonByText(container, 'Automations').closest(
       '[data-testid="context-menu"]'
     )
+
     expect(automationsMenu).not.toBeNull()
 
     await clickButton(getHideButton(automationsMenu as HTMLElement))
@@ -392,6 +400,7 @@ describe('SidebarNav', () => {
     const mobileMenu = getButtonByText(container, 'Orca Mobile').closest(
       '[data-testid="context-menu"]'
     )
+
     expect(mobileMenu).not.toBeNull()
 
     await clickButton(getHideButton(mobileMenu as HTMLElement))
@@ -402,15 +411,19 @@ describe('SidebarNav', () => {
   it('places the worktree palette search above the sidebar nav rows', async () => {
     const container = await renderSidebarNav()
     const nav = container.querySelector('[data-contextual-tour-target="sidebar-navigation"]')
+
     const searchButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Search worktrees and browser tabs"]'
     )
+
     const tasksButton = getButtonByText(container, 'Tasks')
 
     expect(nav?.firstElementChild).toBe(searchButton)
+
     if (!searchButton) {
       throw new Error('worktree palette search button not rendered')
     }
+
     expect(
       searchButton.compareDocumentPosition(tasksButton) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
@@ -422,6 +435,7 @@ describe('SidebarNav', () => {
     const searchButton = container.querySelector(
       'button[aria-label="Search worktrees and browser tabs"]'
     )
+
     expect(searchButton).not.toBeNull()
     expect(searchButton?.className).toContain('bg-worktree-sidebar-foreground/5')
 
@@ -438,9 +452,11 @@ describe('SidebarNav', () => {
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
+
     const githubShortcut = tasksButton.parentElement?.querySelector<HTMLButtonElement>(
       'button[aria-label="Open GitHub tasks"]'
     )
+
     expect(githubShortcut).not.toBeNull()
     expect(githubShortcut?.tabIndex).toBe(0)
     expect(tasksButton.contains(githubShortcut ?? null)).toBe(false)

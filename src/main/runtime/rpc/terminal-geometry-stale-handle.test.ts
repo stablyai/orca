@@ -35,19 +35,24 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 
 async function expectStale(method: string, params: unknown, mutators: string[]): Promise<void> {
   const spies: Record<string, ReturnType<typeof vi.fn>> = {}
+
   for (const name of mutators) {
     spies[name] = vi.fn()
   }
+
   const runtime = stubStaleHandleRuntime(spies as Partial<OrcaRuntimeService>)
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   const response = await dispatcher.dispatch(makeRequest(method, params))
 
   expect(response.ok).toBe(false)
+
   if (response.ok) {
     throw new Error(`expected ${method} to reject a stale handle`)
   }
+
   expect(response.error.message).toContain('terminal_handle_stale')
+
   // The wrong (replacement) PTY must never be mutated.
   for (const name of mutators) {
     expect(spies[name]).not.toHaveBeenCalled()
@@ -103,11 +108,13 @@ describe('terminal geometry family rejects stale handles instead of mutating the
 describe('terminal geometry family still mutates the live PTY for a fresh handle', () => {
   it('terminal.restoreFit reclaims the resolved PTY when the handle is live', async () => {
     const reclaimTerminalForDesktop = vi.fn().mockResolvedValue(true)
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-a' }),
       reclaimTerminalForDesktop
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -115,20 +122,24 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({ restored: true })
     expect(reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-a')
   })
 
   it('terminal.resizeForClient resizes the resolved PTY when the handle is live', async () => {
     const resizeForClient = vi.fn().mockResolvedValue({ cols: 80, rows: 24 })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-a' }),
       resizeForClient
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -140,9 +151,11 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(resizeForClient).toHaveBeenCalledWith(
       'pty-a',
       'restore',
@@ -157,6 +170,7 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
     const applyMobileDisplayMode = vi.fn().mockResolvedValue(undefined)
     const updateMobileSubscriberViewport = vi.fn()
     const markMobileActor = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-a' }),
@@ -166,6 +180,7 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
       markMobileActor,
       getLayout: vi.fn().mockReturnValue({ seq: 42 })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -178,9 +193,11 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(updateMobileSubscriberViewport).toHaveBeenCalledWith('pty-a', 'client-1', {
       cols: 80,
       rows: 24
@@ -193,12 +210,14 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
 
   it('terminal.updateViewport updates the resolved PTY when the handle is live', async () => {
     const updateMobileViewport = vi.fn().mockResolvedValue({ updated: true, applied: true })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-a' }),
       updateMobileViewport,
       getLayout: vi.fn().mockReturnValue({ seq: 7 })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -210,9 +229,11 @@ describe('terminal geometry family still mutates the live PTY for a fresh handle
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(updateMobileViewport).toHaveBeenCalledWith('pty-a', 'client-1', {
       cols: 80,
       rows: 24

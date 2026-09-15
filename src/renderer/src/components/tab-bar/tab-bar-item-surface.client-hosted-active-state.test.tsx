@@ -108,6 +108,7 @@ function activeFlags(
     activeClientHostedBrowserRowId,
     togglePinned: () => {}
   })
+
   return rendered.map(
     (node) => (node as React.ReactElement<{ isActive: boolean }>).props.isActive === true
   )
@@ -147,6 +148,7 @@ describe('client-hosted row while a real tab is activated', () => {
         groupId: 'group-1',
         groupActiveTabIdAtSelection: 'unified-terminal-1'
       })
+
       const rendered = renderTabBarItems({
         items: ITEMS,
         props: makeProps('terminal'),
@@ -160,6 +162,7 @@ describe('client-hosted row while a real tab is activated', () => {
       const clicked = rendered[index] as React.ReactElement<{
         onActivate: (id: string) => void
       }>
+
       clicked.props.onActivate('terminal-1')
 
       expect(getClientHostedBrowserRowSelection()).toBeNull()
@@ -177,6 +180,7 @@ describe('tab-bar active-state census', () => {
     const decisions = source.match(/isActive=\{[^}]*\}/g) ?? []
 
     expect(decisions.length).toBeGreaterThan(0)
+
     for (const decision of decisions) {
       expect(decision, 'a row kind underlines itself past a client-hosted row').toContain(
         '!clientHostedRowOwnsActiveState'

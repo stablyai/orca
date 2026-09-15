@@ -162,6 +162,7 @@ describe('OrcaRuntimeService', () => {
 
   it('passes the selected Windows setup shell into runtime runner generation', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -169,6 +170,7 @@ describe('OrcaRuntimeService', () => {
         terminalWindowsShell: 'git-bash'
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const activateWorktree = vi.fn()
     runtime.setNotifier({
@@ -244,10 +246,12 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-created-worktree' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-primary' })
       .mockResolvedValueOnce({ id: 'pty-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -343,8 +347,10 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
+
     const setupSpawnEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+
     expectStablePaneKeyEnv(setupSpawnEnv)
     const setupLeafId = setupSpawnEnv.ORCA_PANE_KEY.slice(`${setupSpawnEnv.ORCA_TAB_ID}:`.length)
     // Why: a background CLI create adopts its tabs silently — surfaceOwner:false
@@ -363,10 +369,12 @@ describe('OrcaRuntimeService', () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-created-worktree' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-primary' })
       .mockResolvedValueOnce({ id: 'pty-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -445,10 +453,12 @@ describe('OrcaRuntimeService', () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-windowless' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-primary' })
       .mockResolvedValueOnce({ id: 'pty-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,

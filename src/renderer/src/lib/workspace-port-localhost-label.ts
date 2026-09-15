@@ -19,7 +19,9 @@ export function localhostWorktreeLabelRouteForPort({
   if (settings?.localhostWorktreeLabelsEnabled !== true || port.kind !== 'workspace' || !repo) {
     return null
   }
+
   const projectSource = project ?? repo
+
   return {
     targetUrl: browserUrlForPort(port),
     projectName: projectSource.displayName,

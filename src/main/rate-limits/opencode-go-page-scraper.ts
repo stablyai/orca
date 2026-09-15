@@ -28,6 +28,7 @@ function extractUsageBlock(text: string, key: string): string | null {
     const searchStart = keyMatch.index + keyMatch[0].length
     const searchWindow = text.slice(searchStart, searchStart + 30)
     const braceOffset = searchWindow.indexOf('{')
+
     if (braceOffset === -1) {
       // This occurrence has no object (e.g. `monthlyUsage:null`) — skip.
       continue
@@ -40,11 +41,13 @@ function extractUsageBlock(text: string, key: string): string | null {
     // against HTML we don't control — treat as fragile.
     let depth = 0
     let block: string | null = null
+
     for (let i = openBrace; i < text.length; i++) {
       if (text[i] === '{') {
         depth++
       } else if (text[i] === '}') {
         depth--
+
         if (depth === 0) {
           block = text.slice(openBrace, i + 1)
           break
@@ -93,10 +96,12 @@ function extractTopLevelNumber(objText: string, fieldName: string): number | nul
 
   for (let i = 0; i < objText.length; i++) {
     const ch = objText[i]
+
     if (ch === '{') {
       depth++
       continue
     }
+
     if (ch === '}') {
       depth--
       continue
@@ -106,12 +111,15 @@ function extractTopLevelNumber(objText: string, fieldName: string): number | nul
     if (depth === 1) {
       const slice = objText.slice(i, i + fieldName.length + 30)
       const m = fieldRegex.exec(slice)
+
       if (m && m.index === 0) {
         const n = Number.parseFloat(m[1])
+
         return Number.isFinite(n) ? n : null
       }
     }
   }
+
   return null
 }
 
@@ -140,10 +148,13 @@ export function parseSubscriptionFromPageText(text: string): ParsedSubscription 
 
   const rollingPercent =
     rollingBlock !== null ? extractTopLevelNumber(rollingBlock, 'usagePercent') : null
+
   const rollingReset =
     rollingBlock !== null ? extractTopLevelNumber(rollingBlock, 'resetInSec') : null
+
   const weeklyPercent =
     weeklyBlock !== null ? extractTopLevelNumber(weeklyBlock, 'usagePercent') : null
+
   const weeklyReset = weeklyBlock !== null ? extractTopLevelNumber(weeklyBlock, 'resetInSec') : null
 
   if (
@@ -157,6 +168,7 @@ export function parseSubscriptionFromPageText(text: string): ParsedSubscription 
 
   const monthlyPercent =
     monthlyBlock !== null ? extractTopLevelNumber(monthlyBlock, 'usagePercent') : null
+
   const monthlyReset =
     monthlyBlock !== null ? extractTopLevelNumber(monthlyBlock, 'resetInSec') : null
 

@@ -4,6 +4,7 @@ import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-aut
 describe('subscribeToUnpairedDeviceAuthNotification', () => {
   it('delivers a notification retained before the renderer subscribed', async () => {
     const onNotification = vi.fn()
+
     const unsubscribe = subscribeToUnpairedDeviceAuthNotification(
       {
         consumePendingUnpairedDeviceAuthFailure: vi.fn().mockResolvedValue(true),
@@ -21,15 +22,18 @@ describe('subscribeToUnpairedDeviceAuthNotification', () => {
   it('consumes concurrent mount and live signals only once', async () => {
     const onNotification = vi.fn()
     const listenerState: { liveListener?: () => void } = {}
+
     const consumePendingUnpairedDeviceAuthFailure = vi
       .fn()
       .mockResolvedValueOnce(true)
       .mockResolvedValue(false)
+
     const unsubscribe = subscribeToUnpairedDeviceAuthNotification(
       {
         consumePendingUnpairedDeviceAuthFailure,
         onUnpairedDeviceAuthFailure: (listener) => {
           listenerState.liveListener = listener
+
           return vi.fn()
         }
       },
@@ -47,10 +51,12 @@ describe('subscribeToUnpairedDeviceAuthNotification', () => {
   it('keeps live delivery with an older preload that has no consume API', () => {
     const onNotification = vi.fn()
     const listenerState: { liveListener?: () => void } = {}
+
     const unsubscribe = subscribeToUnpairedDeviceAuthNotification(
       {
         onUnpairedDeviceAuthFailure: (listener) => {
           listenerState.liveListener = listener
+
           return vi.fn()
         }
       },
@@ -66,6 +72,7 @@ describe('subscribeToUnpairedDeviceAuthNotification', () => {
   it('finishes an in-flight one-shot claim across StrictMode cleanup', async () => {
     const pendingState: { resolve?: (pending: boolean) => void } = {}
     const onNotification = vi.fn()
+
     const unsubscribe = subscribeToUnpairedDeviceAuthNotification(
       {
         consumePendingUnpairedDeviceAuthFailure: () =>

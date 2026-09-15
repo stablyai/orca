@@ -20,6 +20,7 @@ const PATH_SHAPED_PTY_ID = [
 
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
+
   return join(userDataDir, rootDir, ptyId)
 }
 
@@ -30,6 +31,7 @@ describe('PiTitlebarExtensionService legacy overlay paths', () => {
         if (name === 'userData') {
           return userDataDir
         }
+
         throw new Error(`unexpected app.getPath(${name})`)
       }
     })

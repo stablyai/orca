@@ -21,6 +21,7 @@ function createMockScutilProcess(): ChildProcessWithoutNullStreams {
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.kill = vi.fn(() => true) as ChildProcessWithoutNullStreams['kill']
+
   return child
 }
 
@@ -72,8 +73,10 @@ describe('readCurrentProcessMacSystemResolverHealth', () => {
 
     const healthPromise = readCurrentProcessMacSystemResolverHealth().then((health) => {
       settled = true
+
       return health
     })
+
     const timerFired = new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 0))
 
     await expect(timerFired).resolves.toBe(true)

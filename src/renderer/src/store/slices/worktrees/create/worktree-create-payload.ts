@@ -43,6 +43,7 @@ function sharedCreateFields(
   attempt: WorktreeCreateAttempt
 ): Omit<CreateWorktreeArgs, 'repoId' | 'startup' | 'creationId'> {
   const { options } = request
+
   return {
     name: attempt.name,
     ...(options?.nameWasGenerated ? { nameWasGenerated: true } : {}),
@@ -115,6 +116,7 @@ export function buildRuntimeWorktreeCreateParams(
   attempt: WorktreeCreateAttempt
 ): Record<string, unknown> {
   const { startup, options } = request
+
   return {
     repo: request.repoId,
     ...sharedCreateFields(request, attempt),

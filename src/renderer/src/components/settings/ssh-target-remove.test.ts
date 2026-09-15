@@ -34,6 +34,7 @@ describe('removeSshTargetWithBestEffortCleanup', () => {
       .fn()
       .mockRejectedValueOnce(new Error(`${SSH_TERMINATE_RECONNECT_REQUIRED}: relay detached`))
       .mockResolvedValueOnce(undefined)
+
     const api = createApi({ terminateSessions })
 
     await removeSshTargetWithBestEffortCleanup(api, 'ssh-1')
@@ -49,6 +50,7 @@ describe('removeSshTargetWithBestEffortCleanup', () => {
     const terminateSessions = vi
       .fn()
       .mockRejectedValueOnce(new Error(`${SSH_TERMINATE_RECONNECT_REQUIRED}: relay detached`))
+
     const connect = vi
       .fn()
       .mockRejectedValue(
@@ -56,6 +58,7 @@ describe('removeSshTargetWithBestEffortCleanup', () => {
           "Error invoking remote method 'ssh:connect': Timed out while waiting for handshake"
         )
       )
+
     const api = createApi({ terminateSessions, connect })
 
     await removeSshTargetWithBestEffortCleanup(api, 'ssh-1')
@@ -70,6 +73,7 @@ describe('removeSshTargetWithBestEffortCleanup', () => {
       .fn()
       .mockRejectedValueOnce(new Error(`${SSH_TERMINATE_RECONNECT_REQUIRED}: relay detached`))
       .mockRejectedValueOnce(new Error('shutdown failed after reconnect'))
+
     const api = createApi({ terminateSessions })
 
     await removeSshTargetWithBestEffortCleanup(api, 'ssh-1')

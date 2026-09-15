@@ -43,10 +43,12 @@ export async function listDetectedWorktreesForCapturedRepo(
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
+
   const allMeta = isFolderRepo(repo) ? undefined : readAllWorktreeMetaForRepo(store, repo)
   // Why: only the disconnected fallbacks read this, so keep parseWorktreeId over the whole host snapshot
   // off the connected path entirely.
   let cachedSshWorktreeMetaIndex: SshWorktreeMetaIndex | undefined
+
   const sshWorktreeMetaIndex = (): SshWorktreeMetaIndex =>
     (cachedSshWorktreeMetaIndex ??= createSshWorktreeMetaIndex(Object.entries(allMeta ?? {})))
 
@@ -56,13 +58,16 @@ export async function listDetectedWorktreesForCapturedRepo(
     let sideEffectToken: DetectedWorktreeSideEffectToken | undefined
     let metadataPrune: DetectedWorktreeMetadataPrune | undefined
     let hygieneDue: boolean | undefined
+
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
       }
+
       const folderWorkspaceIds = Object.keys(store.getAllWorktreeMeta()).filter((worktreeId) =>
         isFolderWorkspaceIdForRepo(repo, worktreeId)
       )
+
       if (hasConflictingStoredWorktreeOwner(store, repo, folderWorkspaceIds)) {
         return {
           repoId: repo.id,
@@ -71,6 +76,7 @@ export async function listDetectedWorktreesForCapturedRepo(
           worktrees: []
         }
       }
+
       return {
         repoId: repo.id,
         authoritative: true,
@@ -81,16 +87,21 @@ export async function listDetectedWorktreesForCapturedRepo(
         )
       }
     }
+
     if (repo.connectionId) {
       if (!capturedProvider) {
         const aborted = abortedResult()
+
         if (aborted) {
           return aborted
         }
+
         if (!isCurrent()) {
           return null
         }
+
         const worktrees = listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex())
+
         return {
           repoId: repo.id,
           authoritative: false,
@@ -98,6 +109,7 @@ export async function listDetectedWorktreesForCapturedRepo(
           worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees)
         }
       }
+
       gitWorktrees = await capturedProvider.listWorktrees(repo.path, {
         signal: providerAbort?.signal
       })
@@ -109,14 +121,19 @@ export async function listDetectedWorktreesForCapturedRepo(
       metadataPrune = scan.metadataPrune
       hygieneDue = scan.hygieneDue
     }
+
     const aborted = abortedResult()
+
     if (aborted) {
       return aborted
     }
+
     if (!isCurrent()) {
       return null
     }
+
     const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
+
     if (hasConflictingStoredWorktreeOwner(store, repo, listedWorktreeIds)) {
       return {
         repoId: repo.id,
@@ -125,6 +142,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         worktrees: []
       }
     }
+
     if (freshScan) {
       await applyFreshDetectedWorktreeScanSideEffects(store, repo, gitWorktrees, metadataPrune, {
         isCurrent: () => isCurrent() && !providerAbort?.signal.aborted,
@@ -133,14 +151,18 @@ export async function listDetectedWorktreesForCapturedRepo(
         ...(hygieneDue === undefined ? {} : { hygieneDue })
       })
       const aborted = abortedResult()
+
       if (aborted) {
         return aborted
       }
+
       if (!isCurrent()) {
         return null
       }
     }
+
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+
     return {
       repoId: repo.id,
       authoritative: true,
@@ -149,12 +171,15 @@ export async function listDetectedWorktreesForCapturedRepo(
     }
   } catch (err) {
     const aborted = abortedResult()
+
     if (aborted) {
       return aborted
     }
+
     if (!isCurrent()) {
       return null
     }
+
     warnOnce(
       loggedWorktreeListFailures,
       `${repo.id}:${repo.path}`,
@@ -163,8 +188,10 @@ export async function listDetectedWorktreesForCapturedRepo(
     )
     // Why: retention alone leaves inert rows with no explanation; the cause rides with the listing.
     const unavailableReason = describeWorktreeScanFailure(err)
+
     if (repo.connectionId) {
       const worktrees = listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex())
+
       return {
         repoId: repo.id,
         authoritative: false,
@@ -173,6 +200,7 @@ export async function listDetectedWorktreesForCapturedRepo(
         unavailableReason
       }
     }
+
     return {
       repoId: repo.id,
       authoritative: false,
@@ -195,5 +223,6 @@ export function hasValidLineageSshAuthority(
   if (!('expectedAuthority' in args)) {
     return false
   }
+
   return isAdmissibleDirectSshAuthority(args.expectedAuthority)
 }

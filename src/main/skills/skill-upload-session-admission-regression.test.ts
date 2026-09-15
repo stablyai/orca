@@ -15,16 +15,19 @@ const openGate = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     open: async (path: string, flags: string, mode?: number) => {
       const handle = await actual.open(path, flags, mode)
+
       if (openGate.release) {
         const release = openGate.release
         openGate.release = null
         openGate.started?.()
         await release
       }
+
       return handle
     }
   }
@@ -57,6 +60,7 @@ function retainedPathCleanup(service: SkillUploadSessionService): RetainedPathCl
 
 async function stagedArchiveCount(uploads: string): Promise<number> {
   const owners = await readdir(uploads, { withFileTypes: true })
+
   const archives = await Promise.all(
     owners
       .filter((entry) => entry.isDirectory())
@@ -64,6 +68,7 @@ async function stagedArchiveCount(uploads: string): Promise<number> {
         (await readdir(join(uploads, entry.name))).filter((name) => name.endsWith('.tar.gz'))
       )
   )
+
   return archives.flat().length
 }
 
@@ -77,23 +82,29 @@ describe('SkillUploadSessionService admission regressions', () => {
     const service = new SkillUploadSessionService(uploads, { idleMs: 10 })
     await service.begin({ package: identity(Buffer.from('expired')) })
     vi.setSystemTime(new Date('2026-08-23T00:00:00.005Z'))
+
     const activeRequest = {
       package: identity(Buffer.from('active')),
       transferId: 'active-transfer'
     }
+
     await service.begin(activeRequest)
     vi.setSystemTime(new Date('2026-08-23T00:00:00.011Z'))
 
     const retainedPaths = retainedPathCleanup(service)
     const removeFailedCleanup = retainedPaths.removeFailedCleanup.bind(retainedPaths)
     let releaseCleanup!: () => void
+
     const cleanupReleased = new Promise<void>((resolve) => {
       releaseCleanup = resolve
     })
+
     let markCleanupStarted!: () => void
+
     const cleanupStarted = new Promise<void>((resolve) => {
       markCleanupStarted = resolve
     })
+
     vi.spyOn(retainedPaths, 'removeFailedCleanup').mockImplementation(async (path) => {
       markCleanupStarted()
       await cleanupReleased
@@ -127,6 +138,7 @@ describe('SkillUploadSessionService admission regressions', () => {
         failuresRemaining -= 1
         throw new Error('injected-transient-rm-failure')
       }
+
       await removeFailedCleanup(path)
     })
 
@@ -135,11 +147,13 @@ describe('SkillUploadSessionService admission regressions', () => {
         service.begin({ package: identity(Buffer.from(`failed-cleanup-${index}`)) })
       )
     )
+
     for (const session of sessions) {
       await expect(service.cancel(session.uploadId)).rejects.toThrow(
         'injected-transient-rm-failure'
       )
     }
+
     expect(await stagedArchiveCount(uploads)).toBe(4)
 
     await expect(
@@ -159,9 +173,11 @@ describe('SkillUploadSessionService admission regressions', () => {
       releaseOpen = resolve
     })
     let markOpenStarted!: () => void
+
     const openStarted = new Promise<void>((resolve) => {
       markOpenStarted = resolve
     })
+
     openGate.started = markOpenStarted
 
     const begin = service.begin({ package: identity(Buffer.from('opened-during-disposal')) })

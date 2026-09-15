@@ -5,6 +5,7 @@ import {
   type FrameDecoderOptions
 } from './relay-frame-decoder-contract'
 import { RelayFrameBuffer } from './relay-frame-buffer'
+
 export {
   FrameDecoderContinuationError,
   type DecodedFrame,
@@ -12,9 +13,13 @@ export {
 } from './relay-frame-decoder-contract'
 
 export const HEADER_LENGTH = 13
+
 export const MAX_MESSAGE_SIZE = 16 * 1024 * 1024
+
 export const FRAME_DECODER_MAX_FRAMES_PER_TURN = 64
+
 export const FRAME_DECODER_MAX_BYTES_PER_TURN = MAX_MESSAGE_SIZE + HEADER_LENGTH
+
 export const FRAME_DECODER_MAX_TURN_MS = 4,
   FRAME_DECODER_MAX_RETAINED_BYTES = MAX_MESSAGE_SIZE + HEADER_LENGTH + 1024 * 1024
 
@@ -63,18 +68,23 @@ export class FrameDecoder {
     const buf = Buffer.isBuffer(chunk)
       ? chunk
       : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
+
     const retained = this.buffer.length + buf.length
+
     if (retained > FRAME_DECODER_MAX_RETAINED_BYTES) {
       this.reset()
       publishFrameDecoderError(
         this.onError,
         new Error(`Frame decoder retained-input limit exceeded: ${retained}`)
       )
+
       return
     }
+
     if (buf.length > 0) {
       this.buffer.append(buf)
     }
+
     if (!this.draining && !this.continuationScheduled) {
       this.drainTurn()
     }
@@ -91,6 +101,7 @@ export class FrameDecoder {
   drain(): Buffer {
     const out = this.buffer.drain()
     this.reset()
+
     return out
   }
 
@@ -98,6 +109,7 @@ export class FrameDecoder {
     if (this.draining) {
       return
     }
+
     this.draining = true
     const generation = this.generation
     const startedAt = this.now()
@@ -113,16 +125,21 @@ export class FrameDecoder {
         ) {
           break
         }
+
         const discarded = this.discardOversizedPayload(bytes)
+
         if (discarded > 0) {
           bytes += discarded
           continue
         }
+
         if (this.buffer.length < HEADER_LENGTH) {
           break
         }
+
         const header = this.buffer.peek(HEADER_LENGTH)
         const length = header.readUInt32BE(9)
+
         if (length > MAX_MESSAGE_SIZE) {
           this.buffer.discard(HEADER_LENGTH)
           this.oversizedPayloadBytesRemaining = length
@@ -133,13 +150,17 @@ export class FrameDecoder {
           )
           continue
         }
+
         const totalLength = HEADER_LENGTH + length
+
         if (this.buffer.length < totalLength) {
           break
         }
+
         if (frames > 0 && bytes + totalLength > this.maxBytesPerTurn) {
           break
         }
+
         const framed = this.buffer.take(totalLength)
         frames += 1
         bytes += totalLength
@@ -157,6 +178,7 @@ export class FrameDecoder {
     if (generation !== this.generation) {
       return
     }
+
     if (this.hasRunnableWork()) {
       this.scheduleContinuation()
     } else {
@@ -168,13 +190,16 @@ export class FrameDecoder {
     if (this.oversizedPayloadBytesRemaining === 0 || this.buffer.length === 0) {
       return 0
     }
+
     const discarded = Math.min(
       this.oversizedPayloadBytesRemaining,
       this.buffer.length,
       Math.max(1, this.maxBytesPerTurn - bytes)
     )
+
     this.buffer.discard(discarded)
     this.oversizedPayloadBytesRemaining -= discarded
+
     return discarded
   }
 
@@ -182,10 +207,13 @@ export class FrameDecoder {
     if (this.oversizedPayloadBytesRemaining > 0) {
       return this.buffer.length > 0
     }
+
     if (this.buffer.length < HEADER_LENGTH) {
       return false
     }
+
     const length = this.buffer.peek(HEADER_LENGTH).readUInt32BE(9)
+
     return length > MAX_MESSAGE_SIZE || this.buffer.length >= HEADER_LENGTH + length
   }
 
@@ -193,26 +221,33 @@ export class FrameDecoder {
     if (this.continuationScheduled) {
       return
     }
+
     const generation = this.generation
     this.continuationScheduled = true
+
     try {
       this.acquirePause()
     } catch (error) {
       this.continuationScheduled = false
       throw error
     }
+
     if (generation !== this.generation) {
       this.continuationScheduled = false
+
       return
     }
+
     try {
       this.continuationHandle = this.schedule(() => {
         if (!this.continuationScheduled || generation !== this.generation) {
           return
         }
+
         this.continuationScheduled = false
         this.continuationHandleAssigned = false
         this.continuationHandle = undefined
+
         try {
           this.drainTurn()
         } catch (error) {
@@ -232,10 +267,13 @@ export class FrameDecoder {
     if (!this.continuationScheduled) {
       return
     }
+
     this.continuationScheduled = false
+
     if (this.continuationHandleAssigned) {
       this.cancelScheduled(this.continuationHandle)
     }
+
     this.continuationHandleAssigned = false
     this.continuationHandle = undefined
   }
@@ -243,6 +281,7 @@ export class FrameDecoder {
   private acquirePause(): void {
     if (!this.paused) {
       this.paused = true
+
       try {
         this.pause?.()
       } catch (error) {

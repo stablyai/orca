@@ -90,17 +90,21 @@ export function ClientHostedBrowserPagePane({
   const setUrlFromGuest = useEffectEvent(onSetUrl)
   const addBrowserHistoryEntry = useAppStore((s) => s.addBrowserHistoryEntry)
   const recordHistoryFromGuest = useEffectEvent(addBrowserHistoryEntry)
+
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
+
   const browserHostClientId = placement?.browserHostClientId ?? null
   const browserHostGeneration = placement?.browserHostGeneration ?? null
   const pageHostGeneration = placement?.pageHostGeneration ?? null
+
   const restoredPageUnrecovered = useRestoredClientHostedRecoveryWindow({
     browserPageId: browserTab.id,
     environmentId: runtimeEnvironmentId,
     placementPending: placement === null
   })
+
   // Why: a client-hosted guest is created by main's host runtime, so there is no local guest to
   // recreate — a lost one is page unavailability, whose panel offers the reopen-on-server escape.
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
@@ -114,6 +118,7 @@ export function ClientHostedBrowserPagePane({
   }, [browserTab.id, isActive, onUpdatePageState])
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
+
   const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
     workspaceId,
@@ -122,6 +127,7 @@ export function ClientHostedBrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
+
   // Why the order matters: this resumes an interrupted edit in a layout effect, and the attach
   // effect below syncs the bar to the guest's URL through the setter it hands back. Called after
   // the attach effect, the resume would land on a bar that has already been overwritten.
@@ -132,7 +138,9 @@ export function ClientHostedBrowserPagePane({
       addressBarInputRef,
       startAddressBarFocusGrab
     })
+
   const zoom = useBrowserPageZoomFeedback(browserTab.id)
+
   const reload = useBrowserPageReloadActions({
     browserTab,
     webviewRef,
@@ -172,10 +180,12 @@ export function ClientHostedBrowserPagePane({
     onUpdatePageState,
     setAddressBarValue
   })
+
   const runDeferredNavigation = useEffectEvent(navigateToUrl)
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
+
     // Wait for host adoption before attaching an optimistic page the registry has not seen.
     if (
       !viewport ||
@@ -185,7 +195,9 @@ export function ClientHostedBrowserPagePane({
     ) {
       return
     }
+
     let attachment: ReturnType<typeof attachBrowserClientPageToViewport>
+
     try {
       attachment = attachBrowserClientPageToViewport(
         { browserPageId: browserTab.id, pageHostGeneration },
@@ -193,15 +205,20 @@ export function ClientHostedBrowserPagePane({
       )
     } catch (error) {
       setAttachmentError(error instanceof Error ? error.message : 'browser_client_page_unavailable')
+
       return
     }
+
     if (!attachment) {
       setAttachmentError('browser_client_page_renderer_unavailable')
+
       return
     }
+
     const webview = attachment.webview
     // Guest loss uses the existing recovery notice and clears pending loading state.
     let releaseGuest = (): void => attachment.detach()
+
     const guestLoss = watchBrowserClientPageGuestLoss({
       webview,
       webviewRef,
@@ -212,12 +229,16 @@ export function ClientHostedBrowserPagePane({
         retryGuestRecoveryRef.current()
       }
     })
+
     // Main can destroy the guest while its tag still holds the stale id.
     const attachedMetadata = readBrowserClientPageGuestMetadataIfLive(webview)
+
     if (!attachedMetadata) {
       guestLoss.lose('unreadable')
+
       return guestLoss.dispose()
     }
+
     const publisher = startBrowserClientPageMetadataPublisher({
       browserPageId: browserTab.id,
       environmentId: runtimeEnvironmentId,
@@ -229,6 +250,7 @@ export function ClientHostedBrowserPagePane({
       },
       nextRevision: attachment.nextMetadataRevision
     })
+
     webviewRef.current = webview
     setAttachmentError(null)
     // Reconcile restored failures once; failed navigations this session may never commit a URL.
@@ -236,21 +258,27 @@ export function ClientHostedBrowserPagePane({
       activeLoadFailureRef.current,
       attachedMetadata.url
     )
+
     const syncNavigation = (event?: Event): void => {
       const eventUrl = (event as (Event & { url?: string }) | undefined)?.url
       const metadata = readBrowserClientPageGuestMetadataIfLive(webview, eventUrl)
+
       if (!metadata) {
         guestLoss.lose('unreadable')
+
         return
       }
+
       // did-stop-loading must preserve the preceding did-fail-load overlay.
       const activeLoadFailure = activeLoadFailureRef.current
+
       // URL writes clear certificate challenges, so preserve them while a failure stands.
       if (!activeLoadFailure) {
         setUrlFromGuest(browserTab.id, metadata.url, {
           preserveLoadError: true
         })
       }
+
       updatePageStateFromGuest(browserTab.id, {
         title: metadata.title,
         loading: metadata.loading,
@@ -263,16 +291,21 @@ export function ClientHostedBrowserPagePane({
       recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
       setAddressBarValueFromPage(toDisplayUrl(metadata.url))
     }
+
     const onStart = (): void => {
       activeLoadFailureRef.current = null
       updatePageStateFromGuest(browserTab.id, { loading: true, loadError: null })
       const startMetadata = readBrowserClientPageGuestMetadataIfLive(webview, undefined, true)
+
       if (!startMetadata) {
         guestLoss.lose('unreadable')
+
         return
       }
+
       publisher.publish(startMetadata)
     }
+
     const onFailLoad = createBrowserClientPageLoadFailureHandler(
       webview,
       () => guestLoss.lose('unreadable'),
@@ -281,6 +314,7 @@ export function ClientHostedBrowserPagePane({
         updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
       }
     )
+
     const cleanupGuest = (): void => {
       webview.removeEventListener('did-start-loading', onStart)
       webview.removeEventListener('did-stop-loading', syncNavigation)
@@ -293,6 +327,7 @@ export function ClientHostedBrowserPagePane({
       forgetBrowserClientPageMetadataReports(browserTab.id)
       attachment.detach()
     }
+
     releaseGuest = cleanupGuest
     webview.addEventListener('did-start-loading', onStart)
     webview.addEventListener('did-stop-loading', syncNavigation)
@@ -303,9 +338,11 @@ export function ClientHostedBrowserPagePane({
     syncNavigation()
     // Resume navigation submitted before host adoption.
     const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
+
     if (deferredUrl) {
       runDeferredNavigation(deferredUrl)
     }
+
     return cleanupGuest
   }, [
     browserTab.id,
@@ -322,6 +359,7 @@ export function ClientHostedBrowserPagePane({
   // Why: the failure is about the URL that failed, not whatever page is still loaded — feeding
   // browserTab.url here named the previous page and offered it an HTTPS retry it never needed.
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? toDisplayUrl(browserTab.url)
+
   const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
     feedbackVisible: zoom.browserZoomFeedbackVisible,
     isDefaultZoom: zoom.browserZoomPercent === zoom.browserDefaultZoomPercent
@@ -329,9 +367,11 @@ export function ClientHostedBrowserPagePane({
 
   useEffect(() => {
     const webview = webviewRef.current
+
     if (!webview) {
       return
     }
+
     // Why: the retained guest is a body-level fixed host painted over this pane's viewport, so a
     // React overlay inside the viewport cannot cover it — drop the guest from layout instead.
     webview.style.display = showFailureOverlay || attachmentError ? 'none' : 'flex'

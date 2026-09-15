@@ -9,5 +9,6 @@
 // blinding the instrumentation.
 export function isXtermInstanceDisposed(terminal: unknown): boolean {
   const core = (terminal as { _core?: { _store?: { _isDisposed?: unknown } } } | null)?._core
+
   return core?._store?._isDisposed === true
 }

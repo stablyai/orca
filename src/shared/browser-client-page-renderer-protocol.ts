@@ -1,12 +1,16 @@
 import { z } from 'zod'
 
 const Identity = z.string().min(1).max(256)
+
 const Partition = z.string().min(1).max(512)
+
 const Generation = z.number().int().min(1).max(0xffff_ffff)
+
 const WebContentsId = z.number().int().positive()
 
 export const BROWSER_CLIENT_PAGE_RENDERER_REQUEST_CHANNEL =
   'browser:clientPageRendererRequest' as const
+
 export const BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL = 'browser:clientPageRendererReply' as const
 
 export const BrowserClientPageRendererIdentity = z.object({
@@ -14,6 +18,7 @@ export const BrowserClientPageRendererIdentity = z.object({
   browserPageId: Identity,
   pageHostGeneration: Generation
 })
+
 export type BrowserClientPageRendererIdentity = z.infer<typeof BrowserClientPageRendererIdentity>
 
 const RendererRequestBase = z.object({
@@ -29,6 +34,7 @@ export const BrowserClientPageRendererRequest = z.discriminatedUnion('type', [
     nextPage: BrowserClientPageRendererIdentity
   })
 ])
+
 export type BrowserClientPageRendererRequest = z.infer<typeof BrowserClientPageRendererRequest>
 
 export const BrowserClientPageRendererOutcome = z.discriminatedUnion('type', [
@@ -37,6 +43,7 @@ export const BrowserClientPageRendererOutcome = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rekeyed') }),
   z.object({ type: z.literal('failed'), errorCode: Identity })
 ])
+
 export type BrowserClientPageRendererOutcome = z.infer<typeof BrowserClientPageRendererOutcome>
 
 const RendererReplyBase = RendererRequestBase.pick({ requestId: true, page: true })
@@ -57,4 +64,5 @@ export const BrowserClientPageRendererReply = z.discriminatedUnion('type', [
     errorCode: Identity
   })
 ])
+
 export type BrowserClientPageRendererReply = z.infer<typeof BrowserClientPageRendererReply>

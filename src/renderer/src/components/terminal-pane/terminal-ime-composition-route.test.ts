@@ -30,22 +30,28 @@ function sessionEvent(
 function createHarness(ptyId = 'pty-original') {
   const element = document.createElement('div')
   const original = createTransport(ptyId)
+
   const state: {
     currentTransport: PtyTransport | undefined
   } = {
     currentTransport: original
   }
+
   const input = vi.fn()
+
   const route = installTerminalImeCompositionRoute({
     terminalElement: element,
     terminal: { input },
     capturedTransport: original,
     getCurrentTransport: () => state.currentTransport
   })
+
   const start = (id: number) =>
     element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, id))
+
   const end = (id: number, data: string) =>
     element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, id, data))
+
   return { element, original, state, input, route, start, end }
 }
 
@@ -162,6 +168,7 @@ describe('installTerminalImeCompositionRoute', () => {
     const element = document.createElement('div')
     const transport = createTransport('pty-original')
     const input = vi.fn()
+
     const install = () =>
       installTerminalImeCompositionRoute({
         terminalElement: element,
@@ -169,6 +176,7 @@ describe('installTerminalImeCompositionRoute', () => {
         capturedTransport: transport,
         getCurrentTransport: () => transport
       })
+
     const firstRoute = install()
 
     element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
@@ -198,12 +206,14 @@ describe('installTerminalImeCompositionRoute', () => {
     const element = document.createElement('div')
     const firstTransport = createTransport('pty-first')
     const secondTransport = createTransport('pty-second')
+
     const firstRoute = installTerminalImeCompositionRoute({
       terminalElement: element,
       terminal: { input: vi.fn() },
       capturedTransport: firstTransport,
       getCurrentTransport: () => firstTransport
     })
+
     const secondRoute = installTerminalImeCompositionRoute({
       terminalElement: element,
       terminal: { input: vi.fn() },

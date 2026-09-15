@@ -32,19 +32,24 @@ export class RelayWatcherRemovalFence {
     if ([...this.roots].some((rootKey) => isPathInsideOrEqual(rootKey, operationPath))) {
       throw new Error('Remote worktree deletion already in progress')
     }
+
     this.operations.set(operationPath, (this.operations.get(operationPath) ?? 0) + 1)
     let finished = false
+
     return () => {
       if (finished) {
         return
       }
+
       finished = true
       const remaining = (this.operations.get(operationPath) ?? 1) - 1
+
       if (remaining > 0) {
         this.operations.set(operationPath, remaining)
       } else {
         this.operations.delete(operationPath)
       }
+
       this.resolveOperationWaiters()
     }
   }
@@ -58,11 +63,14 @@ export class RelayWatcherRemovalFence {
     ) {
       throw new Error('Remote worktree deletion already in progress')
     }
+
     this.roots.add(rootKey)
+
     try {
       await this.waitForOperations(rootKey)
       await this.closeRoot(rootKey)
       await this.beforeRemove?.(rootKey)
+
       return await operation()
     } finally {
       this.roots.delete(rootKey)
@@ -79,6 +87,7 @@ export class RelayWatcherRemovalFence {
     if (!this.hasOperationInside(rootKey)) {
       return Promise.resolve()
     }
+
     return new Promise((resolve) => {
       const waiters = this.operationWaiters.get(rootKey) ?? new Set<() => void>()
       waiters.add(resolve)
@@ -91,7 +100,9 @@ export class RelayWatcherRemovalFence {
       if (this.hasOperationInside(rootKey)) {
         continue
       }
+
       this.operationWaiters.delete(rootKey)
+
       for (const resolve of waiters) {
         resolve()
       }
@@ -102,19 +113,25 @@ export class RelayWatcherRemovalFence {
     const pending = [...this.pendingSetups.entries()].filter(([setupRoot]) =>
       isPathInsideOrEqual(rootKey, setupRoot)
     )
+
     await Promise.all(pending.map(([, setup]) => setup.promise.catch(() => undefined)))
+
     const states = [...this.watches.entries()]
       .filter(([watchRoot]) => isPathInsideOrEqual(rootKey, watchRoot))
       .map(([, state]) => state)
+
     for (const state of states) {
       emitRelayWatcherTerminalFailure(this.dispatcher, state, 'Remote worktree is being removed')
       state.clients.clear()
       state.clientWatchIds.clear()
     }
+
     await Promise.all(states.map((state) => this.closeWatch(state)))
+
     const trackedRoots = this.teardownTracker
       .rootPaths()
       .filter((trackedRoot) => isPathInsideOrEqual(rootKey, trackedRoot))
+
     for (const trackedRoot of trackedRoots) {
       const failed = this.teardownTracker.failedState(trackedRoot)
       await (failed ? this.closeWatch(failed) : this.teardownTracker.join(trackedRoot))

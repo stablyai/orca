@@ -15,20 +15,25 @@ import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 
 const readDirectoryMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./file-explorer-directory-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readFileExplorerDirectory: readDirectoryMock
 }))
+
 vi.mock('./file-explorer-operation-owner', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getFileExplorerOperationOwner: () => ({ kind: 'local' as const })
 }))
+
 vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitIgnoredPaths: vi.fn().mockResolvedValue([])
 }))
 
 const initialAppState = useAppStore.getInitialState()
+
 const WORKTREE_PATH = '/repo'
+
 const SRC_DIR = '/repo/src'
 
 function entry(name: string, isDirectory = false): DirEntry {
@@ -41,6 +46,7 @@ function listing(...entries: DirEntry[]) {
 
 function useTreeWithProjection(expanded: Set<string>) {
   const tree = useFileExplorerTree(WORKTREE_PATH, expanded, 'wt-1')
+
   const projection = useFileExplorerVisibleRowProjection(
     'wt-1',
     WORKTREE_PATH,
@@ -50,6 +56,7 @@ function useTreeWithProjection(expanded: Set<string>) {
     true,
     null
   )
+
   return { tree, rowProjection: projection.rowProjection }
 }
 
@@ -59,21 +66,27 @@ function renderTreeWithProjectionRebuildCounter(expanded: Set<string>): {
   rebuilds: () => number
 } {
   const seen = new Set<unknown>()
+
   const hook = renderHook(() => {
     const value = useTreeWithProjection(expanded)
     seen.add(value.rowProjection)
+
     return value
   })
+
   return { result: hook.result, rebuilds: () => seen.size }
 }
 
 /** Holds the next directory read open so the loading commit lands in its own render. */
 function gateNextRead(): { resolve: (value: ReturnType<typeof listing>) => void } {
   let resolve!: (value: ReturnType<typeof listing>) => void
+
   const gate = new Promise<ReturnType<typeof listing>>((nextResolve) => {
     resolve = nextResolve
   })
+
   readDirectoryMock.mockImplementationOnce(() => gate)
+
   return { resolve }
 }
 
@@ -84,9 +97,11 @@ function findFileExplorerRow(node: unknown): ReactElementLike {
       found = candidate
     }
   })
+
   if (!found) {
     throw new Error('file explorer row not found')
   }
+
   return found
 }
 
@@ -162,6 +177,7 @@ describe('file explorer directory refresh churn', () => {
 
   it('does not stack a second read on an expanded dir the loading set already owns', () => {
     const loadDir = vi.fn().mockResolvedValue(true)
+
     const params = {
       visibleFilesWorktreePath: WORKTREE_PATH,
       expanded: new Set([SRC_DIR]),
@@ -174,9 +190,11 @@ describe('file explorer directory refresh churn', () => {
       resetSelection: vi.fn(),
       setNameFilterQuery: vi.fn()
     }
+
     const hook = renderHook((props: typeof params) => useFileExplorerTreeLoadEffects(props), {
       initialProps: params
     })
+
     // Why this matters: a refresh wave marks every dir it owns before its first read lands, and the
     // effect re-runs on any `expanded` change — without the guard it fans out an unbounded loadDir.
     expect(loadDir).not.toHaveBeenCalled()
@@ -240,6 +258,7 @@ describe('file explorer directory refresh churn', () => {
       ...rowProps,
       loadingDirPaths: new Set([directoryNode.path])
     })
+
     const idle = FileExplorerVirtualRows({ ...rowProps, loadingDirPaths: new Set<string>() })
 
     expect(findFileExplorerRow(loading).props.isLoading).toBe(true)

@@ -14,11 +14,14 @@ async function loadNodeOniguruma(): Promise<IOnigLib> {
   nodeOnigurumaPromise ??= (async () => {
     const wasmPath = require.resolve('vscode-oniguruma/release/onig.wasm')
     const wasmBytes = await readFile(wasmPath)
+
     const wasmBuffer = wasmBytes.buffer.slice(
       wasmBytes.byteOffset,
       wasmBytes.byteOffset + wasmBytes.byteLength
     )
+
     await loadWASM(wasmBuffer)
+
     return { createOnigScanner, createOnigString }
   })()
 

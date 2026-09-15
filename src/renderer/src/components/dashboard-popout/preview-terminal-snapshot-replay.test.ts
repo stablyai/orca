@@ -18,6 +18,7 @@ function apply(
     kittyKeyboardModes,
     write: (chunk, live) => {
       written.push(chunk)
+
       if (live) {
         kittyKeyboardModes.scan(chunk)
       } else {
@@ -25,6 +26,7 @@ function apply(
       }
     }
   })
+
   return { modes: kittyKeyboardModes, written }
 }
 
@@ -104,6 +106,7 @@ describe('replayPreviewConnectionSnapshot', () => {
       // landing on a stale frame.
       { data: '\x1b[>8u', mode: 'replay' }
     ])
+
     expect(modes.flags).toBe(8)
     modes.scan('\x1b[<u')
     expect(modes.flags).toBe(0)
@@ -119,6 +122,7 @@ describe('replayPreviewConnectionSnapshot', () => {
       },
       [{ data: 'tail', mode: 'live' }]
     )
+
     expect(written).toEqual(['history', 'frame', '\x1b[', 'tail'])
   })
 })

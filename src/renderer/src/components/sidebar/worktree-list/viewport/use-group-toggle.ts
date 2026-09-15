@@ -9,9 +9,11 @@ export function useGroupToggleWithScrollAnchor(args: {
   toggleGroup: (key: string) => void
 }) {
   const { scrollRef, toggleGroup } = args
+
   const recordCurrentScrollAnchor = useCallback(() => {
     scrollRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
   }, [scrollRef])
+
   const toggleGroupWithScrollAnchor = useCallback(
     (groupKey: string) => {
       recordCurrentScrollAnchor()
@@ -19,6 +21,7 @@ export function useGroupToggleWithScrollAnchor(args: {
     },
     [recordCurrentScrollAnchor, toggleGroup]
   )
+
   // Why: memo'd WorktreeCard needs a per-group-key stable onLineageToggle
   // identity to bail out of re-renders; see worktree-lineage-toggle-handler-cache.
   const getLineageToggleHandler = useMemo(

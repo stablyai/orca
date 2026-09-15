@@ -19,10 +19,15 @@ import { isPassiveCompletedHibernationEvidence } from './sleeping-agent-pane-own
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const WORKTREE_ID = 'wt-local'
+
 const TAB_ID = 'tab-reviewer'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const SESSION_ID = 'ses_fdc9b294effeBRR2JwiALSLpwy'
 
 afterEach(() => {

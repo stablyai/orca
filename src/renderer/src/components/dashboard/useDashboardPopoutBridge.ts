@@ -30,10 +30,13 @@ export function repoIconsUnchanged(
   if (!previous) {
     return false
   }
+
   const nextIds = Object.keys(next)
+
   if (nextIds.length !== Object.keys(previous).length) {
     return false
   }
+
   return nextIds.every((id) => id in previous && next[id] === previous[id])
 }
 
@@ -114,6 +117,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
+
     return window.api.dashboard.onSpawnAgent?.(launchDashboardAgent)
   }, [enabled])
 
@@ -123,6 +127,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
+
     return window.api.dashboard.onSleepWorkspace?.(({ worktreeId }) => {
       void runSleepWorktree(worktreeId)
     })
@@ -132,6 +137,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
+
     return window.api.dashboard.onRevealAgent((args) => {
       revealDashboardAgent(args)
     })
@@ -145,6 +151,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
+
     return window.api.dashboard.onAckAgent?.((paneKey) => {
       useAppStore.getState().acknowledgeAgents([paneKey])
     })
@@ -154,6 +161,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
+
     let open = false
     let disposed = false
     let unsubscribeStore: (() => void) | null = null
@@ -167,19 +175,25 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     // Why effect-scoped: one cache per popout-bridge lifecycle; unchanged worktrees
     // reuse their row pipeline across the up-to-4Hz republish stream.
     const rowsCache = createWorktreeAgentRowsCache()
+
     const publishNow = (withIcons: boolean): void => {
       lastPublishAt = Date.now()
       const state = useAppStore.getState()
+
       const snapshot = buildDashboardSnapshot(state, lastPublishAt, {
         rowsCache,
         rowsGeneration: state.agentStatusEpoch
       })
+
       const icons = snapshot.repoIconsByRepoId ?? {}
+
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {
         const { repoIconsByRepoId: _omitted, ...withoutIcons } = snapshot
         void window.api.dashboard.publishSnapshot(withoutIcons)
+
         return
       }
+
       lastPublishedRepoIcons = icons
       void window.api.dashboard.publishSnapshot(snapshot)
     }
@@ -190,18 +204,24 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       if (!open || disposed) {
         return
       }
+
       const elapsed = Date.now() - lastPublishAt
+
       if (elapsed >= PUBLISH_THROTTLE_MS) {
         if (trailingTimer) {
           clearTimeout(trailingTimer)
           trailingTimer = null
         }
+
         publishNow(false)
+
         return
       }
+
       if (!trailingTimer) {
         trailingTimer = setTimeout(() => {
           trailingTimer = null
+
           if (open && !disposed) {
             publishNow(false)
           }
@@ -213,15 +233,19 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       if (next === open || disposed) {
         return
       }
+
       open = next
+
       if (open) {
         if (!unsubscribeStore) {
           unsubscribeStore = watchSnapshotInputs(publishThrottled)
         }
+
         publishNow(true)
       } else {
         unsubscribeStore?.()
         unsubscribeStore = null
+
         if (trailingTimer) {
           clearTimeout(trailingTimer)
           trailingTimer = null
@@ -230,12 +254,14 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     }
 
     const offOpenChanged = window.api.dashboard.onPopoutOpenChanged((next) => setOpen(next))
+
     // Popout mount asks for a fresh snapshot (its cached one may be stale).
     const offRequested = window.api.dashboard.onSnapshotRequested(() => {
       if (open) {
         publishNow(true)
       }
     })
+
     // Recover the open state when the main window (re)mounts while a pop-out is
     // already open — e.g. after a renderer reload.
     void window.api.dashboard.getPopoutOpen().then((isOpen) => {
@@ -249,6 +275,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       offOpenChanged?.()
       offRequested?.()
       unsubscribeStore?.()
+
       if (trailingTimer) {
         clearTimeout(trailingTimer)
       }

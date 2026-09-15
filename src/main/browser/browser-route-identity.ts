@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 
 const MAX_IDENTITY_LENGTH = 512
+
 const PARTITION_IDENTITY_VERSION = 1
+
 const BROWSER_ROUTE_PARTITION_RE = /^persist:orca-browser-v1-[a-f0-9]{64}$/
 
 export type BrowserRoutePartitionIdentity = Readonly<{
@@ -25,6 +27,7 @@ export function deriveBrowserRoutePartition(
     ['authority-connection', identity.authorityConnectionIdentity],
     ['execution-host', identity.executionHostIdentity]
   ] as const
+
   for (const [, value] of components) {
     if (
       typeof value !== 'string' ||

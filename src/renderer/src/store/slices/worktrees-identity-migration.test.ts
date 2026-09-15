@@ -240,6 +240,7 @@ describe('migrateWorktreeIdentity', () => {
 
   it('re-keys hosted review link generation and clear tombstones', async () => {
     const store = createTestStore()
+
     const oldWorktree = makeWorktree({
       id: OLD,
       repoId: 'repo1',
@@ -292,6 +293,7 @@ describe('migrateWorktreeIdentity', () => {
 
   it('sanitizes lagging old-id worktree refresh rows after hosted review bookkeeping migrates', async () => {
     const store = createTestStore()
+
     const oldWorktree = makeWorktree({
       id: OLD,
       repoId: 'repo1',
@@ -338,6 +340,7 @@ describe('migrateWorktreeIdentity', () => {
 
   it('prunes hosted review aliases when manual hosted-review updates supersede a migrated clear', async () => {
     const store = createTestStore()
+
     const oldWorktree = makeWorktree({
       id: OLD,
       repoId: 'repo1',
@@ -366,6 +369,7 @@ describe('migrateWorktreeIdentity', () => {
 
   it('persists a queued branch-switch clear after worktree id migration', async () => {
     const store = createTestStore()
+
     const oldWorktree = makeWorktree({
       id: OLD,
       repoId: 'repo1',
@@ -408,6 +412,7 @@ describe('migrateWorktreeIdentity', () => {
 
   it('persists a queued branch-switch clear when migration happens during the old-id write', async () => {
     const store = createTestStore()
+
     const oldWorktree = makeWorktree({
       id: OLD,
       repoId: 'repo1',
@@ -416,14 +421,18 @@ describe('migrateWorktreeIdentity', () => {
       linkedPR: 101,
       pushTarget: { remoteName: 'fork', branchName: 'old/review-head' }
     })
+
     let releaseOldPersist!: () => void
     let oldPersistStarted!: () => void
+
     const oldPersistReleased = new Promise<void>((resolve) => {
       releaseOldPersist = resolve
     })
+
     const oldPersistStartedPromise = new Promise<void>((resolve) => {
       oldPersistStarted = resolve
     })
+
     mockApi.worktrees.updateMeta.mockImplementation(async ({ worktreeId, updates }) => {
       if (worktreeId === OLD && updates.linkedPR === null) {
         oldPersistStarted()

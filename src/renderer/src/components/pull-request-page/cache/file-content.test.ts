@@ -22,9 +22,11 @@ function deferredContents(): {
   resolve: (contents: GitHubPRFileContents) => void
 } {
   let resolve!: (contents: GitHubPRFileContents) => void
+
   const promise = new Promise<GitHubPRFileContents>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 

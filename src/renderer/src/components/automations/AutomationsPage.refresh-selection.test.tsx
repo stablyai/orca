@@ -31,6 +31,7 @@ async function openAutomationRow(container: HTMLElement, name: string): Promise<
   const row = [
     ...container.querySelectorAll<HTMLButtonElement>('[data-testid="automation-row"]')
   ].find((candidate) => candidate.textContent === name)
+
   expect(row).toBeTruthy()
   await act(async () => row?.click())
   await settleHostQueries()
@@ -62,6 +63,7 @@ describe('AutomationsPage refresh', () => {
       totalTokens: 1234,
       estimatedCostUsd: 0.5
     }
+
     api.automations.listScoped.mockResolvedValue({
       automations: [makeAutomation({ id: 'a-1' })],
       items: [{ automationId: 'a-1', selector: { kind: 'self' }, usageSummary }],
@@ -169,9 +171,11 @@ describe('AutomationsPage multi-host selection', () => {
     const desktop = makeAutomation({ id: 'a-desktop', name: 'Desktop nightly' })
     scopedList([desktop])
     api.automations.list.mockResolvedValue([desktop])
+
     const setSelectedAutomationId = vi.fn((id: string | null) => {
       mocks.state.selectedAutomationId = id
     })
+
     mocks.state.selectedAutomationId = 'a-remote'
     mocks.state.setSelectedAutomationId = setSelectedAutomationId
 

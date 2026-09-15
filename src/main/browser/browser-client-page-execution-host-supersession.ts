@@ -23,6 +23,7 @@ export async function retireSupersededExecutionHostPages(
   const failures: unknown[] = []
   // Retirement mutates the caller's page index, so decide the set before touching any of it.
   const retained = Array.from(pages)
+
   for (const page of retained) {
     if (
       page.route.executionHostIdentity !== route.executionHostIdentity ||
@@ -30,12 +31,14 @@ export async function retireSupersededExecutionHostPages(
     ) {
       continue
     }
+
     try {
       await retirePage(page.inventory.browserPageId, page.generation)
     } catch (error) {
       failures.push(error)
     }
   }
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Browser client page execution host supersession failed')
   }

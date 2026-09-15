@@ -15,15 +15,18 @@ export const LINEAGE_HYDRATION_TIMEOUT_MS = 5_000
 
 export async function hydrateLineageWithinDeadline(runtime: OrcaRuntimeService): Promise<boolean> {
   let timeout: ReturnType<typeof setTimeout> | undefined
+
   const hydration = Promise.resolve()
     .then(() => runtime.hydrateInferredWorktreeLineage())
     .then(
       () => true,
       () => false
     )
+
   const deadline = new Promise<false>((resolve) => {
     timeout = setTimeout(() => resolve(false), LINEAGE_HYDRATION_TIMEOUT_MS)
   })
+
   try {
     return await Promise.race([hydration, deadline])
   } finally {
@@ -39,6 +42,7 @@ export async function listDesktopLineageForHost(
   args: ListDesktopLineageForHostArgs
 ): Promise<HostLineageSnapshot> {
   const parsedHost = parseExecutionHostId(args?.executionHostId)
+
   const rejected = (
     reason: Extract<HostLineageSnapshot, { authoritative: false }>['reason']
   ): HostLineageSnapshot => ({
@@ -46,13 +50,17 @@ export async function listDesktopLineageForHost(
     executionHostId: args.executionHostId,
     reason
   })
+
   if (!parsedHost || parsedHost.kind === 'runtime') {
     return rejected('rejected')
   }
+
   let provider: SshGitProvider | undefined
+
   let authority:
     | Extract<ListDesktopLineageForHostArgs, { expectedAuthority: unknown }>['expectedAuthority']
     | null = null
+
   if (parsedHost.kind === 'local') {
     if ('expectedAuthority' in args) {
       return rejected('rejected')
@@ -64,18 +72,24 @@ export async function listDesktopLineageForHost(
     ) {
       return rejected('rejected')
     }
+
     authority = { ...args.expectedAuthority }
+
     if (!isCurrentSshProviderAuthority(authority)) {
       return rejected('stale')
     }
+
     provider = getSshGitProvider(parsedHost.targetId)
+
     if (!provider) {
       return rejected('unavailable')
     }
   }
+
   if (!(await hydrateLineageWithinDeadline(runtime))) {
     return rejected('unavailable')
   }
+
   if (
     parsedHost.kind === 'ssh' &&
     (!authority ||
@@ -84,10 +98,13 @@ export async function listDesktopLineageForHost(
   ) {
     return rejected('stale')
   }
+
   const lineage = filterLineageForHost(store, parsedHost.id)
+
   if (!lineage) {
     return rejected('ambiguous-owner')
   }
+
   if (parsedHost.kind === 'local') {
     return {
       authoritative: true,
@@ -95,9 +112,11 @@ export async function listDesktopLineageForHost(
       ...lineage
     }
   }
+
   if (!authority) {
     return rejected('authority-unknown')
   }
+
   return {
     authoritative: true,
     authority: {

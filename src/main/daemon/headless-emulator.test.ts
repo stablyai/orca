@@ -101,6 +101,7 @@ describe('HeadlessEmulator', () => {
 
     it('serializes split synchronized rich TUI frames for model-backed replay', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 12 })
+
       const richFrame = [
         '\x1b[?2026h',
         '\x1b[?1049h',
@@ -130,6 +131,7 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.snapshotAnsi).not.toContain('\x1b[?2026h')
 
       const replay = new HeadlessEmulator({ cols: snapshot.cols, rows: snapshot.rows })
+
       try {
         await replay.write(snapshot.rehydrateSequences + snapshot.snapshotAnsi)
         const replayed = replay.getSnapshot()
@@ -153,6 +155,7 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.snapshotAnsi).not.toContain('shell history one')
 
       const replay = new HeadlessEmulator({ cols: snapshot.cols, rows: snapshot.rows })
+
       try {
         await replay.write(
           snapshot.scrollbackAnsi + snapshot.rehydrateSequences + snapshot.snapshotAnsi
@@ -267,6 +270,7 @@ describe('HeadlessEmulator', () => {
     it('keeps split WSL OSC-7 parsing scoped to each emulator distro', async () => {
       const ubuntu = new HeadlessEmulator({ cols: 80, rows: 24, wslDistro: 'Ubuntu' })
       const debian = new HeadlessEmulator({ cols: 80, rows: 24, wslDistro: 'Debian' })
+
       try {
         await ubuntu.write('\x1b]7;file://machine/home/jin')
         await debian.write('\x1b]7;file://machine/home/jin/repo\x07')

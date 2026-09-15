@@ -1,4 +1,5 @@
 export const DEFAULT_PTY_SOURCE_WINDOW_SU = 256 * 1024
+
 export const MAX_PTY_ACK_ENTRIES = 64
 
 export type PtySourceDeliveryIdentity = Readonly<{

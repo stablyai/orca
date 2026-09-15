@@ -1,7 +1,9 @@
 import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
+
 vi.mock('./desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: vi.fn(async () => {})
 }))
+
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   attachPushRegistration,
@@ -17,10 +19,13 @@ import type { MobilePushToken } from './push-token'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { removeHost } from '../transport/host-store'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
+
 vi.mock('../transport/host-store', () => ({ removeHost: vi.fn() }))
+
 vi.mock('./mobile-push-lease-renewal', () => ({ startMobilePushLeaseRenewal: () => () => {} }))
 
 const storage = new Map<string, string>()
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: async (key: string) => storage.get(key) ?? null,
@@ -29,21 +34,29 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
+
 vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))
+
 vi.mock('./push-token', () => ({ getDevicePushToken: vi.fn(), addPushTokenListener: vi.fn() }))
+
 const token: MobilePushToken = {
   platform: 'ios',
   token: 'a'.repeat(64),
   apnsEnvironment: 'sandbox'
 }
+
 const records = () => JSON.parse(storage.get('orca:remotePushHostRegistrations') ?? '{}')
+
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
+
 function client(
   register: () => Promise<unknown> = async () => ({ ok: true, result: { registered: true } })
 ) {
@@ -52,13 +65,16 @@ function client(
       if (method === 'status.get') {
         return { ok: true, result: { capabilities: [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY] } }
       }
+
       if (method === 'notifications.registerPush') {
         return register()
       }
+
       return { ok: true, result: { unregistered: true } }
     })
   }
 }
+
 beforeEach(() => {
   vi.clearAllMocks()
   resetPushRegistrationForTests()
@@ -212,9 +228,11 @@ it('does not revive a connection detached while metadata removal was pending', a
     await commit.promise
     throw new Error('metadata failure')
   })
+
   const removal = expect(removeHostAndCloseClient('host', vi.fn())).rejects.toThrow(
     'metadata failure'
   )
+
   await vi.waitFor(() => expect(removeHost).toHaveBeenCalled())
   detach()
   connection.sendRequest.mockClear()
@@ -228,17 +246,21 @@ it('does not revive a connection detached while metadata removal was pending', a
 it('retires late registration ownership before a failed removal restores a fresh registration', async () => {
   const oldRegister = deferred<unknown>()
   const newRegister = deferred<unknown>()
+
   const register = vi
     .fn()
     .mockReturnValueOnce(oldRegister.promise)
     .mockReturnValue(newRegister.promise)
+
   const connection = client(register)
   attachPushRegistration('host', connection as never)
   await vi.waitFor(() => expect(register).toHaveBeenCalledOnce())
   vi.mocked(removeHost).mockRejectedValueOnce(new Error('metadata failure'))
+
   const removal = expect(removeHostAndCloseClient('host', vi.fn())).rejects.toThrow(
     'metadata failure'
   )
+
   expect(connection.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
     'notifications.unregisterPush'
   )

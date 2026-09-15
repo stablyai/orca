@@ -32,6 +32,7 @@ export function useOnboardingAndFeatureTips() {
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
+
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
@@ -60,6 +61,7 @@ export function useOnboardingAndFeatureTips() {
     if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
       return
     }
+
     // Why: rollout targets first-run onboarding users; existing profiles are classified once and never auto-toured.
     actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
   }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
@@ -76,6 +78,7 @@ export function useOnboardingAndFeatureTips() {
         if (cancelled) {
           return
         }
+
         setFeatureTipCliInstalled(isCliFeatureTipCompleted(status))
       })
       .catch(() => {
@@ -105,6 +108,7 @@ export function useOnboardingAndFeatureTips() {
     if (featureTipsDecision.kind === 'suppress-for-onboarding') {
       // Why: first-run users should finish onboarding without a second education modal in the same session.
       suppressedByOnboardingThisSessionRef.current = true
+
       return
     }
 
@@ -113,11 +117,13 @@ export function useOnboardingAndFeatureTips() {
     }
 
     promptedThisSessionRef.current = true
+
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
     } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
       trackCmdJPaletteFeatureTipShown('app_open')
     }
+
     // Why: mark seen on show so a quit/crash before dismiss doesn't reappear it next launch.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
     actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })

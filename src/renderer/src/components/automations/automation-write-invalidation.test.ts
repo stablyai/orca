@@ -13,6 +13,7 @@ import {
 } from './automation-write-invalidation'
 
 const DESKTOP: AutomationAuthorityRef = { kind: 'desktop' }
+
 const RUNTIME: AutomationAuthorityRef = {
   kind: 'runtime',
   environmentId: 'env-1',

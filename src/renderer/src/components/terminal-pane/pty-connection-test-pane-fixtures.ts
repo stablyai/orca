@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
+
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
 
 export function leafIdForPane(paneId: number): string {
@@ -46,6 +47,7 @@ export type MockTransport = {
 
 export function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
+
   const transport = {
     attach: vi.fn(({ existingPtyId }: { existingPtyId: string }) => {
       ptyId = existingPtyId
@@ -53,8 +55,10 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     connect: vi.fn().mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
         ptyId = opts.sessionId
+
         return { id: opts.sessionId }
       }
+
       return ptyId
     }),
     disconnect: vi.fn(() => {
@@ -67,10 +71,12 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
+
   return transport
 }
 
@@ -80,6 +86,7 @@ export function createPaneContainer(): HTMLElement {
     configurable: true,
     value: {}
   })
+
   return container
 }
 
@@ -136,6 +143,7 @@ export type MockPane = {
 
 export function createPane(paneId: number): MockPane {
   const leafId = leafIdForPane(paneId)
+
   const activeBuffer = {
     // Mutable so a test can put the pane on the alt screen: the replay prologue
     // only switches buffers when this disagrees with the snapshot.
@@ -145,6 +153,7 @@ export function createPane(paneId: number): MockPane {
     cursorY: 0,
     cursorX: 0
   }
+
   const terminal = {
     cols: 120,
     rows: 40,
@@ -166,6 +175,7 @@ export function createPane(paneId: number): MockPane {
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args
+
       if (data === '' || callback?.name === 'runParsedSteps') {
         callback?.()
       }
@@ -195,6 +205,7 @@ export function createPane(paneId: number): MockPane {
       registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
     }
   }
+
   return {
     id: paneId,
     leafId,
@@ -216,10 +227,12 @@ export function captureCallbackTerminalWrites(pane: MockPane): {
   const parseCallbacks: (() => void)[] = []
   pane.terminal.write = function write(data: string, callback?: () => void): void {
     writes.push(data)
+
     if (callback) {
       parseCallbacks.push(callback)
     }
   } as typeof pane.terminal.write
+
   return { writes, parseCallbacks }
 }
 
@@ -242,10 +255,12 @@ export function createManager(
   initialActivePaneId: number | null = null
 ): MockPaneManager {
   let activePaneId = initialActivePaneId
+
   const panes = Array.from({ length: paneCount }, (_, index) => ({
     id: index + 1,
     leafId: leafIdForPane(index + 1)
   }))
+
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),

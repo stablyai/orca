@@ -17,17 +17,23 @@ export function getWorktreeHostId(
   worktreeId: string
 ): ExecutionHostId | null {
   const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+
   if (worktree?.hostId) {
     return worktree.hostId
   }
+
   const repoId = getRepoIdFromWorktreeId(worktreeId)
+
   const detected = state.detectedWorktreesByRepo[repoId]?.worktrees.find(
     (entry) => entry.id === worktreeId
   )
+
   if (detected?.hostId) {
     return detected.hostId
   }
+
   const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
+
   return repo ? getRepoExecutionHostId(repo) : null
 }
 
@@ -45,17 +51,21 @@ export function mergeLineageForHost(
   const writtenSinceRequestStart = (worktreeId: string): boolean =>
     lineageAtRequestStart !== undefined &&
     lineageAtRequestStart[worktreeId] !== state.worktreeLineageById[worktreeId]
+
   const next: Record<string, WorktreeLineage> = {}
+
   for (const [worktreeId, existing] of Object.entries(state.worktreeLineageById)) {
     if (getWorktreeHostId(state, worktreeId) !== hostId || writtenSinceRequestStart(worktreeId)) {
       next[worktreeId] = existing
     }
   }
+
   for (const [worktreeId, incoming] of Object.entries(lineage)) {
     if (!writtenSinceRequestStart(worktreeId)) {
       next[worktreeId] = incoming
     }
   }
+
   return reuseEqualRecordMap(state.worktreeLineageById, next)
 }
 
@@ -75,11 +85,15 @@ export function mergeWorkspaceLineageForHost(
   const writtenSinceRequestStart = (childKey: string): boolean =>
     lineageAtRequestStart !== undefined &&
     lineageAtRequestStart[childKey] !== state.workspaceLineageByChildKey[childKey]
+
   const next: Record<string, WorkspaceLineage> = {}
+
   for (const [childKey, existing] of Object.entries(state.workspaceLineageByChildKey)) {
     const childScope = parseWorkspaceKey(existing.childWorkspaceKey)
+
     const childHostId =
       childScope?.type === 'worktree' ? getWorktreeHostId(state, childScope.worktreeId) : null
+
     // A focused host refresh can no longer prove unknown-host child rows are current.
     if (
       childScope?.type !== 'worktree' ||
@@ -89,10 +103,12 @@ export function mergeWorkspaceLineageForHost(
       next[childKey] = existing
     }
   }
+
   for (const [childKey, incoming] of Object.entries(lineage)) {
     if (!writtenSinceRequestStart(childKey)) {
       next[childKey] = incoming
     }
   }
+
   return reuseEqualRecordMap(state.workspaceLineageByChildKey, next)
 }

@@ -19,23 +19,30 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
     }
 
     const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+
     if (!handle) {
       return
     }
+
     const mailboxHandle = options.mailboxHandle ?? handle
 
     if (leaf.ptyId && this.messageDeliveryFlightsByPtyId.has(leaf.ptyId)) {
       let parked = this.parkedMessageRedeliveriesByPtyId.get(leaf.ptyId)
+
       if (!parked) {
         parked = new Map()
         this.parkedMessageRedeliveriesByPtyId.set(leaf.ptyId, parked)
       }
+
       const priorReservedTypes = parked.get(mailboxHandle)?.reservedTypes
+
       const reservedTypes =
         priorReservedTypes || options.reservedTypes
           ? new Set([...(priorReservedTypes ?? []), ...(options.reservedTypes ?? [])])
           : undefined
+
       parked.set(mailboxHandle, { leaf, reservedTypes })
+
       return
     }
 
@@ -51,12 +58,14 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
           !options.reservedTypes?.has(message.type) &&
           !this.messageWaiters.typeHasLiveWaiter(mailboxHandle, message.type)
       )
+
     if (unread.length === 0) {
       return
     }
 
     const watermark = this.lastPointedMessageSequenceByHandle.get(mailboxHandle) ?? -1
     const priorPointedIds = this.pointedMessageIdsByHandle.get(mailboxHandle)
+
     if (
       !unread.some(
         (message) => message.sequence > watermark || priorPointedIds?.has(message.id) !== true
@@ -68,7 +77,9 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
     if (!leaf.writable || !leaf.ptyId) {
       return
     }
+
     const newestSequence = unread.at(-1)?.sequence
+
     if (newestSequence === undefined) {
       return
     }
@@ -82,16 +93,19 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
       // and would mark these delivered while losing them. Proven absence keeps
       // them queued for a future surface; unknown liveness still delivers.
       const probedPtyId = leaf.ptyId
+
       // Why: triggers arriving mid-probe must not each arm a continuation — the
       // Every continuation would re-read the same unread rows. The single armed
       // continuation re-reads fresh rows when it fires, so nothing is lost.
       if (this.probeDeferredDeliveryPtyIds.has(probedPtyId)) {
         return
       }
+
       this.probeDeferredDeliveryPtyIds.add(probedPtyId)
       void this.isLeafPtyProvenAbsent(probedPtyId)
         .then((absent) => {
           this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
+
           if (!absent && leaf.ptyId === probedPtyId) {
             // Why a macrotask and not the stale reservation snapshot: a `remote:`
             // pty answers the probe null before its first await, so this chain can
@@ -108,6 +122,7 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
               // an id-only check would type the pointer plus Enter into a process
               // whose idle was never observed. Re-read the live-idle gate.
               const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+
               if (
                 currentLeaf?.ptyId === probedPtyId &&
                 currentLeaf.lastAgentStatus === 'idle' &&
@@ -125,6 +140,7 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
         .catch(() => {
           this.probeDeferredDeliveryPtyIds.delete(probedPtyId)
         })
+
       return
     }
 
@@ -135,24 +151,31 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
     // must end the flight here, or a leaked flag parks this pty's deliveries
     // forever. Only an armed Enter hands settling to its own callback.
     let settlesInEnterCallback = false
+
     try {
       const payload = formatMessagePointer(unread.length, mailboxHandle)
       const wrote = this.ptyController?.write(deliveryPtyId, payload) ?? false
+
       if (!wrote) {
         return
       }
+
       this.lastPointedMessageSequenceByHandle.set(
         mailboxHandle,
         Math.max(watermark, newestSequence)
       )
+
       const pointedIdsAfterWrite =
         this.pointedMessageIdsByHandle.get(mailboxHandle) ?? new Set<string>()
+
       for (const message of unread) {
         pointedIdsAfterWrite.add(message.id)
       }
+
       this.pointedMessageIdsByHandle.set(mailboxHandle, pointedIdsAfterWrite)
 
       const tabTitle = this.tabs.get(leaf.tabId)?.title
+
       if (isCursorAgentOrchestrationTarget(leaf, tabTitle)) {
         // Why: Cursor Agent treats injected PTY text as editable prompt input, so submitting must stay under user control.
         return
@@ -167,10 +190,13 @@ export class OrcaRuntimeWithDeliverPendingMessages extends OrcaRuntimeWithResolv
           if (this.messageDeliveryFlightsByPtyId.get(deliveryPtyId) !== flight) {
             return
           }
+
           const currentLeaf = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+
           if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
             return
           }
+
           this.ptyController?.write(deliveryPtyId, '\r')
         } catch {
           // Terminal may have closed during the delay; mail remains queued for check.

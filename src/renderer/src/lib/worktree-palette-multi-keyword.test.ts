@@ -31,6 +31,7 @@ describe('cmd-j evaluation gate', () => {
   it.each(CMD_J_FIXTURE_CASES)('$query', ({ query, expected }) => {
     const matched = ids(query)
     expect(matched.slice().sort()).toEqual([...expected].sort())
+
     if (expected.length) {
       expect(matched[0]).toBe(expected[0])
     }
@@ -41,12 +42,14 @@ describe('cmd-j evaluation gate', () => {
       if (!expected.length) {
         continue
       }
+
       for (const result of search(query)) {
         const hasVisible =
           result.displayNameRanges.length > 0 ||
           result.branchRanges.length > 0 ||
           result.repoRanges.length > 0 ||
           result.hostRanges.length > 0
+
         expect(hasVisible || result.supportingText !== null).toBe(true)
       }
     }
@@ -147,6 +150,7 @@ describe('kanban board profile', () => {
       CMD_J_FIXTURE_REPO_MAP,
       { evidencePolicy: 'board' }
     )
+
     expect(matched.map((result) => result.worktreeId)).toEqual(['wt-reconnect'])
   })
 })
@@ -154,9 +158,11 @@ describe('kanban board profile', () => {
 describe('document invalidation inputs', () => {
   it('indexes the rendered host label only when one is supplied', () => {
     expect(ids('bastion')).toEqual([])
+
     const withHost = searchWorktrees(CMD_J_FIXTURE_WORKTREES, 'bastion', CMD_J_FIXTURE_REPO_MAP, {
       hostLabelByWorktreeId: new Map([['wt-docs', 'bastion']])
     })
+
     expect(withHost.map((result) => result.worktreeId)).toEqual(['wt-docs'])
     expect(withHost[0].hostRanges).toHaveLength(1)
   })
@@ -165,10 +171,12 @@ describe('document invalidation inputs', () => {
     const before = buildWorktreePaletteDocuments(CMD_J_FIXTURE_WORKTREES, {
       repoMap: CMD_J_FIXTURE_REPO_MAP
     })
+
     const after = buildWorktreePaletteDocuments(CMD_J_FIXTURE_WORKTREES, {
       repoMap: CMD_J_FIXTURE_REPO_MAP,
       workspacePortsByWorktreeId: CMD_J_FIXTURE_PORTS
     })
+
     // Documents are keyed by host identity so two same-id workspaces on different hosts
     // keep separate entries.
     const key = documentKey('wt-main-orca')
@@ -180,9 +188,11 @@ describe('document invalidation inputs', () => {
     const documents = buildWorktreePaletteDocuments(CMD_J_FIXTURE_WORKTREES, {
       repoMap: CMD_J_FIXTURE_REPO_MAP
     })
+
     const fieldIds = [...(documents.get(documentKey('wt-docs'))?.fields ?? [])].map(
       (field) => field.id
     )
+
     // Guard the guard: a missing document would make the assertions below vacuous.
     expect(fieldIds.length).toBeGreaterThan(0)
     expect(fieldIds).not.toContain('recency')

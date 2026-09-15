@@ -85,6 +85,7 @@ export function createHostSessionMirrorSettle(
   verdict: HostSessionMirrorPatchVerdict
 ): HostSessionMirrorSettle {
   const fenceByEnvironment = new Map<string, HostSessionMirrorSettleFence>()
+
   for (const frame of verdict.frames) {
     fenceByEnvironment.set(
       frame.environmentId,
@@ -95,6 +96,7 @@ export function createHostSessionMirrorSettle(
       })
     )
   }
+
   if (verdict.fullInventory) {
     fenceByEnvironment.set(
       verdict.fullInventory.environmentId,
@@ -105,27 +107,36 @@ export function createHostSessionMirrorSettle(
       })
     )
   }
+
   return () => {
     const { frames, fullInventory } = verdict
     const settles = frames.filter(({ decision }) => decision.settlesHostMirror)
+
     if (fullInventory && settles.length === fullInventory.publishedSnapshotCount) {
       const fence = fenceByEnvironment.get(fullInventory.environmentId)
+
       if (!fence || !hostSessionMirrorSettleFenceIsCurrent(fence)) {
         return
       }
+
       if (fullInventory.publishedSnapshotCount === 0) {
         if (fullInventory.authoritative) {
           markHostSessionMirrorHydrated(fullInventory.environmentId)
         } else {
           settleEmptyHostInventoryOnlyIfHostHasNoTerminals(fence)
         }
+
         return
       }
+
       markHostSessionMirrorHydrated(fullInventory.environmentId)
+
       return
     }
+
     for (const { environmentId, worktreeId } of settles) {
       const fence = fenceByEnvironment.get(environmentId)
+
       if (fence && hostSessionMirrorSettleFenceIsCurrent(fence)) {
         markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
       }
@@ -146,7 +157,9 @@ export function hostSessionMirrorSettleForPatchlessFrame(
   if (!decision.settlesHostMirror) {
     return null
   }
+
   const fence = captureHostSessionMirrorSettleFence(environmentId, expected)
+
   return () => {
     if (hostSessionMirrorSettleFenceIsCurrent(fence)) {
       markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)

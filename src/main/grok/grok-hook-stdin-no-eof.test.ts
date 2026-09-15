@@ -7,6 +7,7 @@ import { getGrokManagedScript } from './grok-hook-script'
 
 // Grok's own hook timeout; the budget these cases have to stay well inside.
 const GROK_HOOK_TIMEOUT_MS = 10_000
+
 const SESSION_START_BUDGET_MS = 1_500
 
 describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF', () => {
@@ -27,6 +28,7 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
     writeFileSync(scriptPath, getGrokManagedScript('posix'), { mode: 0o755 })
 
     const startedAt = Date.now()
+
     const child = spawn('/bin/sh', [scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
@@ -37,6 +39,7 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
         ORCA_AGENT_HOOK_ENDPOINT: ''
       }
     })
+
     let stderr = ''
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString()
@@ -48,6 +51,7 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
         child.kill('SIGKILL')
         reject(new Error(`hook still blocked on stdin after ${GROK_HOOK_TIMEOUT_MS}ms`))
       }, GROK_HOOK_TIMEOUT_MS)
+
       child.on('error', (error) => {
         clearTimeout(timeout)
         reject(error)
@@ -83,6 +87,7 @@ describe.skipIf(process.platform === 'win32')('Grok POSIX hook stdin without EOF
       '{"hook_event_name":"session_start","cwd":"/tmp/漢字","tool":"🚀"}\n',
       'utf8'
     )
+
     const result = await runHookWithoutEof([...bytes].map((byte) => Buffer.from([byte])))
 
     expect(result.stderr).toBe('')

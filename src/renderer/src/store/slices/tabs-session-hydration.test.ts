@@ -11,6 +11,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -195,6 +196,7 @@ describe('TabsSlice', () => {
       })
 
       const groupId = 'g-1'
+
       const tabs: Tab[] = [
         {
           id: 't-1',
@@ -221,6 +223,7 @@ describe('TabsSlice', () => {
           createdAt: 2000
         }
       ]
+
       const groups: TabGroup[] = [
         { id: groupId, worktreeId: WT, activeTabId: '/file.ts', tabOrder: ['t-1', '/file.ts'] }
       ]
@@ -270,6 +273,7 @@ describe('TabsSlice', () => {
       })
 
       const groupId = 'g-1'
+
       const tabs: Tab[] = [
         {
           id: 't-1',
@@ -296,6 +300,7 @@ describe('TabsSlice', () => {
           createdAt: 2000
         }
       ]
+
       const groups: TabGroup[] = [
         {
           id: groupId,
@@ -347,18 +352,21 @@ describe('TabsSlice', () => {
 
     it('replaces only explicitly scoped worktree tab chrome', () => {
       const siblingWorktreeId = 'repo2::/tmp/sibling'
+
       const targetGroup = makeTabGroup({
         id: 'group-target',
         worktreeId: WT,
         activeTabId: 'target-old',
         tabOrder: ['target-old']
       })
+
       const siblingGroup = makeTabGroup({
         id: 'group-sibling',
         worktreeId: siblingWorktreeId,
         activeTabId: 'sibling-tab',
         tabOrder: ['sibling-tab']
       })
+
       const siblingTabs = [
         makeUnifiedTab({
           id: 'sibling-tab',
@@ -366,6 +374,7 @@ describe('TabsSlice', () => {
           groupId: siblingGroup.id
         })
       ]
+
       const siblingGroups = [siblingGroup]
       store.setState({
         worktreesByRepo: {
@@ -389,6 +398,7 @@ describe('TabsSlice', () => {
           [siblingWorktreeId]: { type: 'leaf', groupId: siblingGroup.id }
         }
       })
+
       const targetNew = makeUnifiedTab({
         id: 'target-new',
         worktreeId: WT,
@@ -430,18 +440,21 @@ describe('TabsSlice', () => {
 
     it('deletes omitted target chrome while preserving sibling references', () => {
       const siblingWorktreeId = 'repo2::/tmp/sibling'
+
       const targetGroup = makeTabGroup({
         id: 'group-target',
         worktreeId: WT,
         activeTabId: 'target-tab',
         tabOrder: ['target-tab']
       })
+
       const siblingGroup = makeTabGroup({
         id: 'group-sibling',
         worktreeId: siblingWorktreeId,
         activeTabId: 'sibling-tab',
         tabOrder: ['sibling-tab']
       })
+
       const siblingTabs = [
         makeUnifiedTab({
           id: 'sibling-tab',
@@ -449,6 +462,7 @@ describe('TabsSlice', () => {
           groupId: siblingGroup.id
         })
       ]
+
       const siblingGroups = [siblingGroup]
       const siblingLayout = { type: 'leaf' as const, groupId: siblingGroup.id }
       store.setState({

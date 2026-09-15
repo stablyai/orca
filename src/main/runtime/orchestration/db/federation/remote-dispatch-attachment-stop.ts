@@ -10,21 +10,25 @@ export function beginRemoteAttachmentStop(
   dispatchId: string
 ): RemoteDispatchAttachmentRow {
   const attachment = this.getRemoteDispatchAttachment(dispatchId)
+
   if (!attachment) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Remote Dispatch ${dispatchId} was not found.`
     )
   }
+
   if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(attachment.state)) {
     return attachment
   }
+
   if (!['ready', 'start_unknown'].includes(attachment.state)) {
     throw new OrchestrationError(
       'dispatch_inactive',
       `Remote Dispatch ${dispatchId} cannot stop from ${attachment.state}.`
     )
   }
+
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
@@ -33,6 +37,7 @@ export function beginRemoteAttachmentStop(
        WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
     )
     .run(dispatchId)
+
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
 }
 
@@ -47,6 +52,7 @@ export function settleRemoteAttachmentStop(
        WHERE dispatch_id = ? AND state = 'stopping'`
     )
     .run(dispatchId)
+
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
 }
 
@@ -63,6 +69,7 @@ export function markRemoteAttachmentStopUnknown(
        WHERE dispatch_id = ? AND state = 'stopping'`
     )
     .run(reason, dispatchId)
+
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
 }
 
@@ -79,6 +86,7 @@ export function findActiveRemoteAttachmentForPane(
       )
       .get(paneKey) as RemoteDispatchAttachmentRow | undefined
   }
+
   return this.db
     .prepare(
       `SELECT * FROM remote_dispatch_attachments

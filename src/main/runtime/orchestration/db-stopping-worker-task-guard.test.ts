@@ -13,12 +13,14 @@ describe('a Task whose supervised worker is stopping', () => {
 
   function localWorker() {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'local work' })
+
     const { dispatch } = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: {},
       creator: { kind: 'system' },
       maxDepth: 9
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle: 'term_w',
@@ -29,6 +31,7 @@ describe('a Task whose supervised worker is stopping', () => {
       setupState: 'not_configured'
     })
     db.markWorkerDispatchReady(dispatch.id)
+
     return { task, dispatch }
   }
 

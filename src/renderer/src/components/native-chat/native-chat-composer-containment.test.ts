@@ -5,6 +5,7 @@ const composerField = fs.readFileSync(
   new URL('./NativeChatComposerField.tsx', import.meta.url),
   'utf8'
 )
+
 const autocompleteMenus = fs.readFileSync(
   new URL('./NativeChatAutocompleteMenus.tsx', import.meta.url),
   'utf8'

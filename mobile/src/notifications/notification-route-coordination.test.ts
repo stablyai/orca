@@ -12,18 +12,22 @@ const rootLayoutSource = readFileSync(new URL('../../app/_layout.tsx', import.me
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
+
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
       stateListeners.add(listener)
+
       return () => stateListeners.delete(listener)
     }),
     dispatch: vi.fn(),
     getState: () => state
   }
+
   return {
     navigation,
     setState(nextState: HostStackNavigationState | undefined) {
       state = nextState
+
       for (const listener of stateListeners) {
         listener()
       }
@@ -43,6 +47,7 @@ describe('notification route coordination', () => {
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
     })
+
     // Cold start: the tap is handled before the root navigator has committed any state.
     const harness = navigationHarness(undefined)
     const push = vi.fn()
@@ -122,6 +127,7 @@ it('reuses the current workspace screen and targets the notification pane withou
     worktreeId: 'folder::/workspace',
     paneKey: 'agent-tab:leaf'
   })!
+
   const harness = navigationHarness(
     rootLayoutScopedState({
       index: 1,
@@ -144,13 +150,16 @@ it('reuses the current workspace screen and targets the notification pane withou
       ]
     })
   )
+
   const router = { push: vi.fn(), replace: vi.fn() }
+
   const controller = navigateToHostStackRoute(
     harness.navigation,
     router,
     target.hostId,
     target.sessionTarget!
   )
+
   expect(router.push).not.toHaveBeenCalled()
   expect(router.replace).not.toHaveBeenCalled()
   expect(harness.navigation.dispatch).toHaveBeenCalledExactlyOnceWith({
@@ -164,6 +173,7 @@ it('reuses the current workspace screen and targets the notification pane withou
 
 it('does not reuse a different workspace on the same host', () => {
   const target = getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'workspace-b' })!
+
   const harness = navigationHarness(
     rootLayoutScopedState({
       index: 0,
@@ -185,6 +195,7 @@ it('does not reuse a different workspace on the same host', () => {
       ]
     })
   )
+
   const router = { push: vi.fn(), replace: vi.fn() }
   navigateToHostStackRoute(harness.navigation, router, target.hostId, target.sessionTarget!)
   expect(router.push).toHaveBeenCalledOnce()

@@ -9,13 +9,17 @@ export function renderSnapshot(
   const bounds = snapshot.windowBounds
   const treeText = renderTreeText(snapshot)
   const focusedElementId = normalizedFocusedElementId(snapshot)
+
   // Why: Linux/Windows providers may downscale screenshots to cap IPC payloads,
   // while window bounds remain the unscaled coordinate space for actions.
   const screenshotWidth =
     positiveRoundedNumber(snapshot.screenshotWidth) ?? Math.max(1, Math.round(bounds?.width ?? 1))
+
   const screenshotHeight =
     positiveRoundedNumber(snapshot.screenshotHeight) ?? Math.max(1, Math.round(bounds?.height ?? 1))
+
   const screenshotScale = positiveNumber(snapshot.screenshotScale) ?? 1
+
   const screenshot = snapshot.screenshotPngBase64
     ? {
         data: snapshot.screenshotPngBase64,
@@ -25,6 +29,7 @@ export function renderSnapshot(
         scale: screenshotScale
       }
     : null
+
   return {
     snapshot: {
       // Why: bridge elements can be large; keep them cached internally for actions
@@ -80,6 +85,7 @@ function desktopScreenshotFailureStatus(
       message: snapshot.screenshotError.message
     }
   }
+
   return {
     state: 'failed',
     code: 'screenshot_failed',
@@ -94,9 +100,11 @@ export function snapshotWithoutScreenshot(snapshot: BridgeSnapshot): BridgeSnaps
 
 function normalizedFocusedElementId(snapshot: BridgeSnapshot): number | null {
   const focusedElementId = snapshot.focusedElementId
+
   if (focusedElementId === null || focusedElementId === undefined) {
     return null
   }
+
   return snapshot.elements?.some((element) => element.index === focusedElementId) === true
     ? focusedElementId
     : null
@@ -108,33 +116,39 @@ function positiveNumber(value: number | null | undefined): number | null {
 
 function positiveRoundedNumber(value: number | null | undefined): number | null {
   const numberValue = positiveNumber(value)
+
   return numberValue === null ? null : Math.max(1, Math.round(numberValue))
 }
 
 function fallbackSnapshotId(snapshot: BridgeSnapshot): string {
   const appRef = snapshot.app.bundleId ?? snapshot.app.bundleIdentifier ?? snapshot.app.name
+
   const windowRef =
     snapshot.windowId !== null && snapshot.windowId !== undefined
       ? String(snapshot.windowId)
       : snapshot.windowIndex !== null && snapshot.windowIndex !== undefined
         ? `window-index:${snapshot.windowIndex}`
         : 'window'
+
   return `${appRef}:${snapshot.app.pid}:${windowRef}`
 }
 
 function renderTreeText(snapshot: BridgeSnapshot): string {
   const appRef = snapshot.app.bundleId ?? snapshot.app.bundleIdentifier ?? snapshot.app.name
+
   const lines = [
     `App=${appRef} (pid ${snapshot.app.pid})`,
     `Window: "${sanitize(snapshot.windowTitle ?? snapshot.app.name)}", App: ${sanitize(snapshot.app.name)}.`,
     '',
     ...(snapshot.treeLines ?? [])
   ]
+
   if (snapshot.selectedText) {
     lines.push('', `Selected text: [${sanitize(snapshot.selectedText)}]`)
   } else if (snapshot.focusedSummary) {
     lines.push('', `The focused UI element is ${sanitize(snapshot.focusedSummary)}.`)
   }
+
   return lines.join('\n')
 }
 
@@ -142,6 +156,7 @@ export function normalizeBridgeApp(app: BridgeResponse['app'] | BridgeWindow['ap
   if (!app) {
     throw new RuntimeClientError('accessibility_error', 'desktop provider returned no app')
   }
+
   return {
     name: app.name,
     bundleId: app.bundleId ?? app.bundleIdentifier ?? null,

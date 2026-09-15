@@ -6,14 +6,18 @@ import { parseInline } from './pr-sidebar/markdown-blocks'
 
 const ORIGINAL_CHAT =
   /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
+
 const CHAT_OTHER =
   /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g
+
 const ORIGINAL_REVIEW =
   /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[^\]]+\]\([^)]+\))/g
+
 const REVIEW_OTHER = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
 function tokens(text: string, chat: boolean, original: boolean) {
   const pattern = new RegExp(chat ? ORIGINAL_CHAT : ORIGINAL_REVIEW)
+
   const matcher = original
     ? {
         get lastIndex() {
@@ -25,15 +29,19 @@ function tokens(text: string, chat: boolean, original: boolean) {
         exec: () => pattern.exec(text)
       }
     : createMarkdownInlineMatcher(text, new RegExp(chat ? CHAT_OTHER : REVIEW_OTHER), chat)
+
   const result: Array<{ text: string; index: number; end: number }> = []
   let match
+
   while ((match = matcher.exec())) {
     if (chat && isIntrawordUnderscoreToken(text, match.index, match[0])) {
       matcher.lastIndex = match.index + 1
       continue
     }
+
     result.push({ text: match[0], index: match.index, end: matcher.lastIndex })
   }
+
   return result
 }
 
@@ -61,16 +69,21 @@ describe('mobile inline link scanning', () => {
       'foo_bar',
       '[[nested](url)'
     ]
+
     let seed = 12345
+
     const random = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
       return seed
     }
+
     for (let i = 0; i < 5000; i++) {
       const text = Array.from(
         { length: 1 + (random() % 40) },
         () => fragments[random() % fragments.length]
       ).join('')
+
       expect(tokens(text, chat, false), text).toEqual(tokens(text, chat, true))
     }
   })
@@ -90,13 +103,17 @@ describe('mobile inline link scanning', () => {
     let calls = 0
     pattern.exec = (value) => {
       calls++
+
       return originalExec(value)
     }
+
     const matcher = createMarkdownInlineMatcher(text, pattern)
     let count = 0
+
     while (matcher.exec()) {
       count++
     }
+
     expect(count).toBe(10_000)
     expect(calls).toBe(1)
   })

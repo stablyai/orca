@@ -41,6 +41,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const searchState = useAppStore((s) =>
     activeWorktreeId ? s.fileSearchStateByWorktree[activeWorktreeId] : null
   )
+
   const fileSearchQuery = searchState?.query ?? ''
   const fileSearchCaseSensitive = searchState?.caseSensitive ?? false
   const fileSearchWholeWord = searchState?.wholeWord ?? false
@@ -72,6 +73,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       if (!activeWorktreeId) {
         return
       }
+
       updateFileSearchState(activeWorktreeId, updates)
     },
     [activeWorktreeId, updateFileSearchState]
@@ -81,6 +83,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     if (!activeWorktreeId) {
       return
     }
+
     clearFileSearch(activeWorktreeId)
   }, [activeWorktreeId, clearFileSearch])
 
@@ -89,12 +92,14 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       if (!activeWorktreeId) {
         return
       }
+
       toggleFileSearchCollapsedFile(activeWorktreeId, filePath)
     },
     [activeWorktreeId, toggleFileSearchCollapsedFile]
   )
 
   const worktreePath = activeWorktree?.path ?? null
+
   const { executeSearch, cancelPendingSearch } = useFileSearchRunner({
     activeWorktreeId,
     worktreePath,
@@ -140,7 +145,9 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     () => ({ results: fileSearchResults, owner: fileSearchResultOwner }),
     [fileSearchResultOwner, fileSearchResults]
   )
+
   const deferredSearchResults = useDeferredValue(committedSearchResults)
+
   const searchRows = useMemo(
     () =>
       buildSearchRows(
@@ -158,6 +165,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     if (fileSearchQuery.trim()) {
       executeSearch(fileSearchQuery)
     }
+
     scheduleSeededInputSelection()
     consumeFileSearchSeedRequest(activeWorktreeId, fileSearchSeedRequestId)
   }, [
@@ -173,6 +181,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     if (!activeWorktreeId || fileSearchFocusRequestId === undefined) {
       return
     }
+
     inputRef.current?.focus()
   }, [activeWorktreeId, fileSearchFocusRequestId])
 
@@ -181,6 +190,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     if (previousExplorerViewRef.current !== 'search' && explorerView === 'search') {
       focusQueryInput()
     }
+
     previousExplorerViewRef.current = explorerView
   }, [explorerView, focusQueryInput])
 
@@ -193,7 +203,9 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
     if (!activeWorktreeId) {
       return
     }
+
     const q = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId]?.query ?? ''
+
     if (q.trim()) {
       executeSearch(q)
     }
@@ -213,11 +225,13 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       if (e.nativeEvent.isComposing) {
         return
       }
+
       if (e.key === 'Escape') {
         if (fileSearchQuery) {
           handleClearSearch()
         }
       }
+
       if (e.key === 'Enter') {
         executeSearch(fileSearchQuery)
       }

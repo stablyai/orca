@@ -36,12 +36,15 @@ export async function prepareLegacySharedCodexSessionResume(
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const substituteCodexHome = await resolveSelectedAccountCodexHomeForResume(args, options)
+
   if (substituteCodexHome) {
     return { useRealCodexHome: false, substituteCodexHome }
   }
+
   const paths = resolveCodexSessionBackfillPaths(options.systemCodexHomePath)
   const legacyCodexHomePath = options.legacyCodexHomePath ?? dirname(paths.managedSessionsRoot)
   const managedSessionsRoot = join(legacyCodexHomePath, 'sessions')
+
   if (
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
@@ -54,12 +57,15 @@ export async function prepareLegacySharedCodexSessionResume(
 
   const sourcePath = resolve(args.filePath)
   const relativePath = relative(resolve(managedSessionsRoot), sourcePath)
+
   if (!isDatedRolloutRelativePath(relativePath)) {
     throw new Error(RETRYABLE_RESUME_ERROR)
   }
+
   const targetPath = join(paths.systemSessionsRoot, relativePath)
   const key = `${normalizeRuntimePathForComparison(sourcePath)}\0${normalizeRuntimePathForComparison(targetPath)}`
   let task = materializations.get(key)
+
   if (!task) {
     task = materializeLegacyRollout(sourcePath, targetPath, paths.auditLogPath)
     materializations.set(key, task)
@@ -83,6 +89,7 @@ export async function prepareLegacySharedCodexSessionResume(
     console.warn('[codex-legacy-session-resume] Targeted session migration failed:', error)
     throw new Error(RETRYABLE_RESUME_ERROR, { cause: error })
   }
+
   return { useRealCodexHome: true }
 }
 
@@ -110,24 +117,33 @@ async function resolveSelectedAccountCodexHomeForResume(
   ) {
     return null
   }
+
   const selectedCodexHome = options.getSelectedHostAccountCodexHomePath?.() ?? null
+
   if (!selectedCodexHome || sameRuntimePath(selectedCodexHome, args.codexHome)) {
     return null
   }
+
   const relativePath = relative(resolve(join(args.codexHome, 'sessions')), resolve(args.filePath))
+
   if (!isDatedRolloutRelativePath(relativePath)) {
     return null
   }
+
   const candidatePath = join(selectedCodexHome, 'sessions', relativePath)
+
   try {
     const candidateStat = await lstat(candidatePath)
+
     // Why: the bridge is async, so an unbridged rollout is a real state — decline rather than pin a home codex cannot resume from.
     return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code
+
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return null
     }
+
     // Why: a blanket catch here declined the SELECTED account on a briefly
     // locked file and kept the source per-account home, resuming under another
     // account's credentials while the UI still showed the selected one. Only a
@@ -142,10 +158,13 @@ async function materializeLegacyRollout(
   auditLogPath: string
 ): Promise<void> {
   const sourceStat = await lstat(sourcePath)
+
   if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
     throw new Error('Legacy rollout source is not a regular file.')
   }
+
   await mkdir(dirname(targetPath), { recursive: true })
+
   try {
     await link(sourcePath, targetPath)
   } catch (linkError) {
@@ -163,6 +182,7 @@ async function materializeLegacyRollout(
               cause: copyError
             })
           }
+
           throw copyError
         }
       }
@@ -182,6 +202,7 @@ async function materializeLegacyRollout(
     failedFiles: 0,
     failedHealAuditRecords: 0
   }
+
   await appendCodexSessionHealAuditRecord(
     createCodexSessionBackfillAuditWriter(auditLogPath),
     summary,
@@ -191,6 +212,7 @@ async function materializeLegacyRollout(
 
 async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {
   const [sourceStat, targetStat] = await Promise.all([lstat(sourcePath), lstat(targetPath)])
+
   if (
     !targetStat.isFile() ||
     targetStat.isSymbolicLink() ||
@@ -204,9 +226,11 @@ async function assertMatchingExistingTarget(sourcePath: string, targetPath: stri
 
 async function fileDigest(filePath: string): Promise<string> {
   const hash = createHash('sha256')
+
   for await (const chunk of createReadStream(filePath)) {
     hash.update(chunk as Buffer)
   }
+
   return hash.digest('hex')
 }
 
@@ -214,7 +238,9 @@ function isDatedRolloutRelativePath(relativePath: string): boolean {
   if (!relativePath || relativePath.startsWith('..') || resolve(relativePath) === relativePath) {
     return false
   }
+
   const parts = relativePath.split(sep)
+
   return (
     parts.length === 4 &&
     /^\d{4}$/.test(parts[0] ?? '') &&

@@ -11,12 +11,14 @@ import { deleteBundle, uploadBundle, validateUploadUrl } from './diagnostic-bund
 import { MAX_RESPONSE_BYTES } from './diagnostic-upload-http'
 
 let dir: string
+
 let traceFile: string
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-bundle-'))
   traceFile = join(dir, 'main.trace.ndjson')
 })
+
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
@@ -27,6 +29,7 @@ function makeNDJSON(records: unknown[]): string {
 
 function makeSpan(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   const now = BigInt(Date.now()) * 1_000_000n
+
   return {
     type: 'effect-span',
     name: 'test',
@@ -50,9 +53,11 @@ describe('bundle — submission ID', () => {
   })
   it('is unique across many calls', () => {
     const ids = new Set<string>()
+
     for (let i = 0; i < 100; i++) {
       ids.add(generateBundleSubmissionId())
     }
+
     expect(ids.size).toBe(100)
   })
 })
@@ -65,6 +70,7 @@ describe('bundle — collection', () => {
     { kind: 'capped', names: Array.from({ length: 600 }, () => '漢字🙂'.repeat(1000)) }
   ])('reports the exact UTF-8 payload size for $kind records', ({ names }) => {
     writeFileSync(traceFile, makeNDJSON(names.map((name) => makeSpan({ name }))))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 1,
@@ -74,11 +80,13 @@ describe('bundle — collection', () => {
       osRelease: 'test',
       orcaChannel: 'dev'
     })
+
     expect(bundle.bytes).toBe(Buffer.byteLength(bundle.payload))
   })
 
   it('emits a header line with bundle_submission_id, app_version, platform', () => {
     writeFileSync(traceFile, makeNDJSON([makeSpan()]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -88,6 +96,7 @@ describe('bundle — collection', () => {
       osRelease: '24.0.0',
       orcaChannel: 'dev'
     })
+
     const header = JSON.parse(bundle.payload.split('\n').find(Boolean) ?? '')
     expect(header.type).toBe('bundle-header')
     expect(header.bundle_submission_id).toBe(bundle.bundleSubmissionId)
@@ -100,6 +109,7 @@ describe('bundle — collection', () => {
 
   it('NEVER carries install_id in the header (Issue 8)', () => {
     writeFileSync(traceFile, makeNDJSON([makeSpan()]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -109,6 +119,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     const header = JSON.parse(bundle.payload.split('\n')[0])
     expect(header).not.toHaveProperty('install_id')
     expect(header).not.toHaveProperty('installId')
@@ -118,6 +129,7 @@ describe('bundle — collection', () => {
   it('reads spans from the rotated family', () => {
     writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'a' })]))
     writeFileSync(`${traceFile}.1`, makeNDJSON([makeSpan({ name: 'b' })]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -127,6 +139,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.spanCount).toBe(2)
   })
 
@@ -143,6 +156,7 @@ describe('bundle — collection', () => {
         })
       ])
     )
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -153,6 +167,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     // Header + recent only.
     expect(bundle.spanCount).toBe(1)
     expect(bundle.payload).toContain('"name":"recent"')
@@ -175,6 +190,7 @@ describe('bundle — collection', () => {
         }
       ])
     )
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -187,6 +203,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).toContain('"event":"startup"')
     expect(bundle.payload).toContain('"name":"recent"')
     expect(bundle.payload).not.toContain('"event":"session-exited"')
@@ -194,6 +211,7 @@ describe('bundle — collection', () => {
 
   it('collects no daemon log lines when no daemon log path is given', () => {
     writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'recent' })]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -203,6 +221,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).not.toContain('"src":"daemon"')
   })
 
@@ -215,7 +234,9 @@ describe('bundle — collection', () => {
         leaked: `sk-ant-api03-${'a'.repeat(50)}`
       }
     })
+
     writeFileSync(traceFile, makeNDJSON([span]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -225,6 +246,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).not.toContain('sk-ant-api03-aaaaa')
     expect(bundle.payload).toContain('[redacted:anthropic-key]')
   })
@@ -247,6 +269,7 @@ describe('bundle — collection', () => {
         })
       ])
     )
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -256,6 +279,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).not.toContain('posthog-install-id')
     expect(bundle.payload).not.toContain('plain-secret')
     expect(bundle.payload).not.toContain('authorization')
@@ -269,7 +293,9 @@ describe('bundle — collection', () => {
         message: 'x'.repeat(_internalsForTests.MAX_BUNDLE_BYTES)
       }
     })
+
     writeFileSync(traceFile, makeNDJSON([giantSpan]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -279,6 +305,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.bytes).toBeLessThanOrEqual(_internalsForTests.MAX_BUNDLE_BYTES)
     expect(bundle.spanCount).toBe(0)
   })
@@ -288,8 +315,10 @@ describe('bundle — collection', () => {
       name: 'oldest',
       attributes: { message: 'x'.repeat(_internalsForTests.MAX_BUNDLE_BYTES) }
     })
+
     const newSpan = makeSpan({ name: 'newest', attributes: { message: 'recent crash' } })
     writeFileSync(traceFile, makeNDJSON([oldSpan, newSpan]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -299,6 +328,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).toContain('"name":"newest"')
     expect(bundle.payload).not.toContain('"name":"oldest"')
   })
@@ -308,11 +338,14 @@ describe('bundle — collection', () => {
       name: 'oversized',
       attributes: { message: 'x'.repeat(_internalsForTests.MAX_BUNDLE_BYTES) }
     })
+
     const usefulSpan = makeSpan({
       name: 'useful',
       attributes: { message: 'still useful' }
     })
+
     writeFileSync(traceFile, makeNDJSON([usefulSpan, tooLargeSpan]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -322,18 +355,22 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).toContain('"name":"useful"')
     expect(bundle.payload).not.toContain('"name":"oversized"')
   })
 
   it('skips oversized middle spans after accepting newer context', () => {
     const olderUseful = makeSpan({ name: 'older-useful', attributes: { message: 'older context' } })
+
     const oversizedMiddle = makeSpan({
       name: 'oversized-middle',
       attributes: { message: 'x'.repeat(_internalsForTests.MAX_BUNDLE_BYTES) }
     })
+
     const newestUseful = makeSpan({ name: 'newest-useful', attributes: { message: 'new context' } })
     writeFileSync(traceFile, makeNDJSON([olderUseful, oversizedMiddle, newestUseful]))
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -343,6 +380,7 @@ describe('bundle — collection', () => {
       osRelease: '24',
       orcaChannel: 'dev'
     })
+
     expect(bundle.payload).toContain('"name":"newest-useful"')
     expect(bundle.payload).toContain('"name":"older-useful"')
     expect(bundle.payload).not.toContain('"name":"oversized-middle"')
@@ -368,6 +406,7 @@ describe('bundle — collection', () => {
       traceFile,
       [JSON.stringify(makeSpan({ name: 'valid' })), 'null', '"string"', '42', '[1]', ''].join('\n')
     )
+
     const bundle = collectBundle({
       traceFilePath: traceFile,
       maxFiles: 10,
@@ -429,8 +468,10 @@ describe('uploadBundle and deleteBundle', () => {
       new Promise<void>((resolve) => {
         if (!server) {
           resolve()
+
           return
         }
+
         server.close(() => {
           server = null
           resolve()
@@ -440,9 +481,11 @@ describe('uploadBundle and deleteBundle', () => {
 
   function listen(handler: RequestListener): Promise<string> {
     server = createServer(handler)
+
     return new Promise((resolve) => {
       server?.listen(0, '127.0.0.1', () => {
         const address = server?.address()
+
         if (address && typeof address === 'object') {
           resolve(`http://127.0.0.1:${address.port}`)
         }
@@ -452,10 +495,12 @@ describe('uploadBundle and deleteBundle', () => {
 
   it('does not include token endpoint response bodies in thrown errors', async () => {
     const secretBody = 'internal token service detail: sk-ant-api03-secret'
+
     const baseUrl = await listen((_req, res) => {
       res.statusCode = 500
       res.end(secretBody)
     })
+
     await expect(
       uploadBundle({
         tokenEndpoint: `${baseUrl}/token`,
@@ -467,6 +512,7 @@ describe('uploadBundle and deleteBundle', () => {
 
   it('does not include upload endpoint response bodies in thrown errors', async () => {
     const secretBody = 'internal upload detail: ghp_secret'
+
     const baseUrl = await listen((req, res) => {
       if (req.url === '/token') {
         res.setHeader('content-type', 'application/json')
@@ -478,11 +524,14 @@ describe('uploadBundle and deleteBundle', () => {
             max_bytes: _internalsForTests.MAX_BUNDLE_BYTES
           })
         )
+
         return
       }
+
       res.statusCode = 500
       res.end(secretBody)
     })
+
     await expect(
       uploadBundle({
         tokenEndpoint: `${baseUrl}/token`,
@@ -494,6 +543,7 @@ describe('uploadBundle and deleteBundle', () => {
 
   it('does not include malformed upload_url values in thrown errors', async () => {
     const secretUrl = 'not a url with sk-ant-api03-secret'
+
     const baseUrl = await listen((_req, res) => {
       res.setHeader('content-type', 'application/json')
       res.end(
@@ -505,6 +555,7 @@ describe('uploadBundle and deleteBundle', () => {
         })
       )
     })
+
     await expect(
       uploadBundle({
         tokenEndpoint: `${baseUrl}/token`,
@@ -520,6 +571,7 @@ describe('uploadBundle and deleteBundle', () => {
       // socket exercises the same transport-error redaction path deterministically.
       req.socket.destroy(new Error('transport detail with sk-ant-api03-secret'))
     })
+
     await expect(
       uploadBundle({
         tokenEndpoint: `${baseUrl}/diagnostics/token`,
@@ -557,6 +609,7 @@ describe('uploadBundle and deleteBundle', () => {
   it('returns only the diagnostic ticket from successful uploads', async () => {
     const baseUrl = await listen((req, res) => {
       res.setHeader('content-type', 'application/json')
+
       if (req.url === '/token') {
         res.end(
           JSON.stringify({
@@ -566,8 +619,10 @@ describe('uploadBundle and deleteBundle', () => {
             max_bytes: _internalsForTests.MAX_BUNDLE_BYTES
           })
         )
+
         return
       }
+
       res.statusCode = 201
       res.end(
         JSON.stringify({
@@ -590,11 +645,13 @@ describe('uploadBundle and deleteBundle', () => {
   it('posts deletion requests to the diagnostics delete endpoint for a ticket', async () => {
     const ticketId = generateBundleSubmissionId()
     const seen: string[] = []
+
     const baseUrl = await listen((req, res) => {
       seen.push(req.url ?? '')
       res.setHeader('content-type', 'application/json')
       res.end('{}')
     })
+
     await deleteBundle({ tokenEndpoint: `${baseUrl}/diagnostics/token`, ticketId })
     expect(seen).toEqual([`/diagnostics/delete/${ticketId}`])
   })

@@ -15,6 +15,7 @@ function createCallbackRecorder(): {
   events: unknown[][]
 } {
   const events: unknown[][] = []
+
   return {
     events,
     callbacks: {
@@ -45,6 +46,7 @@ describe('isMainTerminalSideEffectAuthorityForPty', () => {
 
   afterEach(() => {
     _resetTerminalSideEffectFactConsumersForTest()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -124,6 +126,7 @@ describe('isMainTerminalSideEffectAuthorityForPty', () => {
 
   it('caches the sync read so panes do not re-block per bind', () => {
     const getSync = vi.fn(() => ({ terminalMainSideEffectAuthority: false }))
+
     ;(globalThis as { window: unknown }).window = { api: { settings: { getSync } } }
 
     isMainTerminalSideEffectAuthorityForPty({ settings: null, runtimeEnvironmentId: null })
@@ -143,6 +146,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   afterEach(() => {
     _resetTerminalSideEffectFactConsumersForTest()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -415,10 +419,12 @@ describe('registerTerminalSideEffectFactConsumer', () => {
   it('keeps exactly one consumer per PTY: a new registration replaces the old', () => {
     const first = createCallbackRecorder()
     const second = createCallbackRecorder()
+
     const disposeFirst = registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
       callbacks: first.callbacks
     })
+
     registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks: second.callbacks })
 
     _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
@@ -445,10 +451,12 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     // effect flush, the pane registers only after its async reattach resolves,
     // and replay is title-only, so an unbuffered bell/command-code-done is lost.
     const watcher = createCallbackRecorder()
+
     const disposeWatcher = registerTerminalSideEffectFactConsumer({
       ptyId: PTY_ID,
       callbacks: watcher.callbacks
     })
+
     disposeWatcher()
 
     const events: unknown[][] = []
@@ -502,6 +510,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       ptyId: PTY_ID,
       callbacks: createCallbackRecorder().callbacks
     })
+
     dispose()
 
     _dispatchTerminalSideEffectBatchForTest(
@@ -524,6 +533,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       replay: true,
       seq: 20
     })
+
     ;(globalThis as { window: unknown }).window = {
       api: { pty: { getSideEffectSnapshot: vi.fn(async () => snapshot) } }
     }
@@ -532,6 +542,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       ptyId: PTY_ID,
       callbacks: createCallbackRecorder().callbacks
     })
+
     dispose()
     _dispatchTerminalSideEffectBatchForTest(
       batch([{ kind: 'title', normalizedTitle: 'live', rawTitle: 'live' }], { seq: 20 })
@@ -551,11 +562,13 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   it('drops a handoff-buffered batch once the buffer TTL expires', () => {
     vi.useFakeTimers()
+
     try {
       const dispose = registerTerminalSideEffectFactConsumer({
         ptyId: PTY_ID,
         callbacks: createCallbackRecorder().callbacks
       })
+
       dispose()
       _dispatchTerminalSideEffectBatchForTest(batch([{ kind: 'bell' }]))
       expect(vi.getTimerCount()).toBe(1)
@@ -574,12 +587,15 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   it('subscribes to the channel once and routes IPC batches', () => {
     let channelCallback: ((batch: TerminalSideEffectBatch) => void) | null = null
+
     const onSideEffect = vi.fn((callback: (batch: TerminalSideEffectBatch) => void) => {
       channelCallback = callback
+
       return () => {
         channelCallback = null
       }
     })
+
     ;(globalThis as { window: unknown }).window = {
       api: { pty: { onSideEffect } }
     }
@@ -595,12 +611,14 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   it('applies the title snapshot on register unless the registration was replaced', async () => {
     let resolveSnapshot: (value: TerminalSideEffectBatch | null) => void = () => {}
+
     const getSideEffectSnapshot = vi.fn(
       () =>
         new Promise<TerminalSideEffectBatch | null>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     ;(globalThis as { window: unknown }).window = {
       api: { pty: { getSideEffectSnapshot } }
     }
@@ -634,6 +652,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       replay: true,
       seq: 5
     })
+
     ;(globalThis as { window: unknown }).window = {
       api: { pty: { getSideEffectSnapshot: vi.fn(async () => snapshot) } }
     }

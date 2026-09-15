@@ -7,6 +7,7 @@ import {
 } from './session-owner-fields'
 
 const REMOVED_OWNER_KEY = 'repo-1::/tmp/worktree-a'
+
 const RETAINED_OWNER_KEY = 'repo-1::/tmp/worktree-b'
 
 function sessionSeededWith(field: keyof WorkspaceSessionState): WorkspaceSessionState {
@@ -15,6 +16,7 @@ function sessionSeededWith(field: keyof WorkspaceSessionState): WorkspaceSession
     [REMOVED_OWNER_KEY]: 'removed-value',
     [RETAINED_OWNER_KEY]: 'retained-value'
   }
+
   return session as WorkspaceSessionState
 }
 

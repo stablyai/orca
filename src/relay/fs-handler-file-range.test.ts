@@ -24,6 +24,7 @@ async function fileWith(contents: Buffer | string): Promise<string> {
   roots.push(root)
   const path = join(root, 'data.bin')
   await writeFile(path, contents)
+
   return path
 }
 
@@ -73,9 +74,11 @@ describe('readRelayFileRange', () => {
   it('assembles a many-page window without misplacing any byte', async () => {
     const size = MAX_FILE_RANGE_READ_BYTES
     const contents = Buffer.allocUnsafe(size)
+
     for (let i = 0; i < size; i++) {
       contents[i] = i % 251
     }
+
     const path = await fileWith(contents)
     const result = await readRelayFileRange(path, 1024, size - 1024)
     expect(result.bytesRead).toBe(size - 1024)
@@ -111,14 +114,18 @@ describe('readRelayFileRange', () => {
   // fail as ResponseOverCapacity on load that has nothing to do with them.
   it('leaves control-queue headroom for a second full-cap window', async () => {
     const contents = Buffer.allocUnsafe(MAX_FILE_RANGE_READ_BYTES)
+
     for (let i = 0; i < contents.length; i++) {
       contents[i] = (i * 37) % 256
     }
+
     const path = await fileWith(contents)
     const result = await readRelayFileRange(path, 0, MAX_FILE_RANGE_READ_BYTES)
     expect(result.bytesRead).toBe(MAX_FILE_RANGE_READ_BYTES)
+
     const frameBytes =
       HEADER_LENGTH + prepareJsonRpcPayload({ jsonrpc: '2.0', id: 4294967295, result }).byteLength
+
     expect(frameBytes).toBeLessThanOrEqual(DISPATCHER_CONTROL_QUEUE_MAX_BYTES)
     expect(frameBytes * 2).toBeLessThanOrEqual(DISPATCHER_CONTROL_QUEUE_MAX_BYTES)
   })
@@ -185,12 +192,14 @@ describe('readRelayFileRange', () => {
 describe('readFullStreamChunk', () => {
   function partialReader(source: Buffer, perCall: number) {
     const calls: { offset: number; length: number; position: number }[] = []
+
     return {
       calls,
       read(buffer: Buffer, offset: number, length: number, position: number) {
         calls.push({ offset, length, position })
         const slice = source.subarray(position, position + Math.min(length, perCall))
         slice.copy(buffer, offset)
+
         return Promise.resolve({ bytesRead: slice.length })
       }
     }
@@ -212,13 +221,16 @@ describe('readFullStreamChunk', () => {
   it('keeps every partial-read offset safe at the upper boundary', async () => {
     const { position: start, length } = validateFileRangeRequest(Number.MAX_SAFE_INTEGER - 2, 3)
     const calls: number[] = []
+
     const reader = {
       read(buffer: Buffer, offset: number, _length: number, position: number) {
         calls.push(position)
         buffer[offset] = 1
+
         return Promise.resolve({ bytesRead: 1 })
       }
     }
+
     const bytesRead = await readFullStreamChunk(reader, Buffer.alloc(length), length, start)
     expect(bytesRead).toBe(length)
     expect(calls).toEqual([start, start + 1, Number.MAX_SAFE_INTEGER])

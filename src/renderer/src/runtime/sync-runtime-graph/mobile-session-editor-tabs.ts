@@ -19,16 +19,20 @@ export function buildMobileMarkdownTab(
   if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
     return null
   }
+
   if (file.language !== 'markdown' && file.mode !== 'markdown-preview') {
     return null
   }
+
   const sourceFile =
     file.mode === 'markdown-preview' && file.markdownPreviewSourceFileId
       ? (inputs.openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
       : file
+
   const draftVersion = inputs.editorDraftVersionByFileId.get(sourceFile.id)
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
   const unifiedTabId = unifiedTab?.id
+
   return {
     type: 'markdown',
     id: unifiedTabId ?? file.id,
@@ -58,6 +62,7 @@ export function buildMobileFileTab(
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
   const diffSource = isMobileFileDiffSource(file.diffSource) ? file.diffSource : undefined
   const unifiedTabId = unifiedTab?.id
+
   return {
     type: 'file',
     id: unifiedTabId ?? file.id,

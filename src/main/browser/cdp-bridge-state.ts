@@ -46,20 +46,24 @@ export class CdpBridgeState {
   getActiveGuest(): Electron.WebContents {
     if (this.activeWebContentsId !== null) {
       const guest = webContents.fromId(this.activeWebContentsId)
+
       if (guest && !guest.isDestroyed()) {
         return guest
       }
+
       // Why: webContentsId goes stale after a process swap; fall through to auto-select since the tab may have a new id.
       this.activeWebContentsId = null
     }
 
     const tabs = [...this.getRegisteredTabs()]
+
     if (tabs.length === 0) {
       throw new BrowserError(
         'browser_no_tab',
         'No browser tab is open. Use the Orca UI to open a browser tab first.'
       )
     }
+
     if (tabs.length === 1) {
       this.activeWebContentsId = tabs[0][1]
     } else {
@@ -70,6 +74,7 @@ export class CdpBridgeState {
     }
 
     const guest = webContents.fromId(this.activeWebContentsId!)
+
     if (!guest || guest.isDestroyed()) {
       this.activeWebContentsId = null
       throw new BrowserError(
@@ -77,6 +82,7 @@ export class CdpBridgeState {
         "The active browser tab was closed. Run 'orca tab list' to find remaining tabs."
       )
     }
+
     return guest
   }
 
@@ -86,9 +92,11 @@ export class CdpBridgeState {
 
   resolveTabId(webContentsId: number): string {
     const tabId = this.bindings.getTabIdForWebContentsId(webContentsId)
+
     if (tabId !== null) {
       return tabId
     }
+
     throw new BrowserError('browser_debugger_detached', 'Tab is no longer registered.')
   }
 
@@ -98,6 +106,7 @@ export class CdpBridgeState {
 
   getOrCreateTabState(tabId: string): CdpTabState {
     let state = this.tabState.get(tabId)
+
     if (!state) {
       state = {
         navigationId: null,
@@ -116,13 +125,16 @@ export class CdpBridgeState {
       }
       this.tabState.set(tabId, state)
     }
+
     return state
   }
 
   invalidateRefMap(webContentsId: number): void {
     const tabId = this.resolveTabIdSafe(webContentsId)
+
     if (tabId) {
       const state = this.tabState.get(tabId)
+
       if (state) {
         state.snapshotResult = null
         state.navigationId = null
@@ -136,10 +148,12 @@ export class CdpBridgeState {
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(tabId)
+
       if (!queue) {
         queue = []
         this.commandQueues.set(tabId, queue)
       }
+
       queue.push({
         execute: execute as () => Promise<unknown>,
         resolve: resolve as (value: unknown) => void,
@@ -153,11 +167,14 @@ export class CdpBridgeState {
     if (this.processingQueues.has(tabId)) {
       return
     }
+
     this.processingQueues.add(tabId)
 
     const queue = this.commandQueues.get(tabId)
+
     while (queue && queue.length > 0) {
       const cmd = queue.shift()!
+
       try {
         const result = await cmd.execute()
         cmd.resolve(result)

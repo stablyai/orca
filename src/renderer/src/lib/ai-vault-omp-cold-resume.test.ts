@@ -80,6 +80,7 @@ describe('AI Vault OMP cold resume', () => {
     store.getState().captureAllSleepingAgentSessions('quit')
 
     const record = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']!
+
     const coldStartup = buildAgentResumeStartupPlan({
       agent: record.agent,
       providerSession: record.providerSession,

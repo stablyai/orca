@@ -5,6 +5,7 @@ export function selectPullRequestDiffBase(requestedBase, headParents, eventName)
   if (eventName === 'pull_request' && headParents.length >= 2) {
     return headParents[0]
   }
+
   return requestedBase
 }
 
@@ -19,5 +20,6 @@ export function resolvePullRequestDiffBase(
   })
     .trim()
     .split(/\s+/)
+
   return selectPullRequestDiffBase(requestedBase, headParents, eventName)
 }

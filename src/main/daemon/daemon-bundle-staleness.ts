@@ -16,6 +16,7 @@ export async function isDaemonStaleForCurrentBundle(
   protocolVersion = PROTOCOL_VERSION
 ): Promise<boolean> {
   let cacheKey: string | null = null
+
   try {
     cacheKey = JSON.stringify([
       runtimeDir,
@@ -40,6 +41,7 @@ export async function isDaemonStaleForCurrentBundle(
       tokenPath,
       protocolVersion
     )
+
     if (!parsedPid) {
       return null
     }
@@ -53,10 +55,13 @@ export async function isDaemonStaleForCurrentBundle(
     // reusing stale native modules across the first metadata-aware upgrade.
     return true
   })()
+
   if (cacheKey) {
     cachedDaemonBundleStaleness = { key: cacheKey, pending }
   }
+
   const stale = await pending
+
   if (
     stale === null &&
     cachedDaemonBundleStaleness?.key === cacheKey &&
@@ -64,5 +69,6 @@ export async function isDaemonStaleForCurrentBundle(
   ) {
     cachedDaemonBundleStaleness = null
   }
+
   return stale ?? false
 }

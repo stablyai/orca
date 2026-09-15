@@ -28,6 +28,7 @@ function createMockStore() {
   return {
     allocateSshTargetGeneration: vi.fn(() => {
       generationCounter += 1
+
       return generationCounter
     }),
     getSshTargets: vi.fn(() => [...targets]),
@@ -35,14 +36,18 @@ function createMockStore() {
     addSshTarget: vi.fn((target: SshTarget) => targets.push(target)),
     updateSshTarget: vi.fn((id: string, updates: Partial<Omit<SshTarget, 'id'>>) => {
       const target = targets.find((t) => t.id === id)
+
       if (!target) {
         return null
       }
+
       Object.assign(target, updates)
+
       return { ...target }
     }),
     removeSshTarget: vi.fn((id: string) => {
       const idx = targets.findIndex((t) => t.id === id)
+
       if (idx !== -1) {
         targets.splice(idx, 1)
       }
@@ -72,6 +77,7 @@ function createMockStore() {
     releaseRemovedSshTargetTombstone: vi.fn(dropTombstone),
     reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
       reassignments.push({ oldTargetId, newTargetId })
+
       // Pretend one repo referenced the old id.
       return ['repo-1']
     })
@@ -135,6 +141,7 @@ describe('SshConnectionStore', () => {
       port: 22,
       username: 'deploy'
     })
+
     expect(target.source).toBe('manual')
   })
 
@@ -146,6 +153,7 @@ describe('SshConnectionStore', () => {
       username: 'deploy',
       source: 'ssh-config'
     })
+
     expect(target.source).toBe('ssh-config')
   })
 
@@ -156,6 +164,7 @@ describe('SshConnectionStore', () => {
       port: 22,
       username: 'deploy'
     })
+
     sshStore.upsertRuntimeOwnedTarget('runtime-1', {
       label: 'Sandbox',
       host: 'sandbox.example.com',
@@ -174,6 +183,7 @@ describe('SshConnectionStore', () => {
       port: 22,
       username: 'user'
     }
+
     mockStore.addSshTarget(original)
 
     const result = sshStore.updateTarget('ssh-1', { label: 'New Name' })
@@ -411,6 +421,7 @@ describe('SshConnectionStore', () => {
         port: 22,
         username: 'me'
       })
+
       sshStore.removeTarget(added.id)
       loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }])
       sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'prod' })])
@@ -429,6 +440,7 @@ describe('SshConnectionStore', () => {
         port: 22,
         username: 'me'
       })
+
       sshStore.removeTarget(added.id)
       sshStore.addTarget({
         label: 'prod',
@@ -681,6 +693,7 @@ describe('SshConnectionStore', () => {
         port: 22,
         username: 'tim'
       })
+
       sshStore.removeTarget(added.id)
       // The tombstone was built from the real target (configHost defaulted to host).
       const tombstones = mockStore.getRemovedSshTargetTombstones()
@@ -688,6 +701,7 @@ describe('SshConnectionStore', () => {
       expect(tombstones[0]).toMatchObject({ oldTargetId: added.id, configHost: 'dev.example.com' })
 
       mockStore.reassignSshTargetId.mockClear()
+
       const readded = sshStore.addTarget({
         label: 'Dev',
         host: 'dev.example.com',
@@ -710,6 +724,7 @@ describe('SshConnectionStore', () => {
         port: 22,
         username: 'alice'
       })
+
       sshStore.removeTarget(alice.id)
       mockStore.reassignSshTargetId.mockClear()
 

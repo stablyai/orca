@@ -46,6 +46,7 @@ function packageManifest(input: {
     sha256: file.exactSha256,
     identitySha256: file.identitySha256
   }))
+
   return parseSkillPackageManifest({
     schemaVersion: 1,
     packageId: input.packageId,
@@ -69,14 +70,17 @@ async function createSkillPackageArchiveUnobserved(
   dependencies: SkillPackageCreationDependencies = {}
 ): Promise<CreatedSkillPackage> {
   const sourceObservation = await observeSkillPackage(input.sourceDirectory)
+
   if (!sourceObservation.files.some((file) => file.path === 'SKILL.md')) {
     throw new Error('skill-package-skill-markdown-required')
   }
+
   await dependencies.afterSourceObserved?.()
   const workDirectory = await mkdtemp(join(tmpdir(), 'orca-skill-package-'))
   const stagedSkill = join(workDirectory, 'skill')
   const verificationDirectory = join(workDirectory, 'verification')
   const temporaryArchive = `${input.archivePath}.${process.pid}.${randomUUID()}.tmp`
+
   try {
     await cp(input.sourceDirectory, stagedSkill, {
       recursive: true,
@@ -85,14 +89,19 @@ async function createSkillPackageArchiveUnobserved(
       errorOnExist: true
     })
     const stagedObservation = await observeSkillPackage(stagedSkill)
+
     if (!observedSkillPackagesMatch(sourceObservation, stagedObservation)) {
       throw new Error('skill-package-source-changed-during-staging')
     }
+
     const summary = summarizeSkillMarkdown(await readFile(join(stagedSkill, 'SKILL.md'), 'utf8'))
+
     if (!summary.name) {
       throw new Error('skill-package-skill-name-required')
     }
+
     validateSkillPackageName(summary.name)
+
     const manifest = packageManifest({
       packageId: input.packageId,
       versionId: input.versionId,
@@ -101,7 +110,9 @@ async function createSkillPackageArchiveUnobserved(
       description: summary.description ?? '',
       observed: stagedObservation
     })
+
     const manifestBytes = Buffer.from(JSON.stringify(manifest), 'utf8')
+
     const entries: SkillTarWriteEntry[] = [
       {
         path: 'manifest.json',
@@ -116,6 +127,7 @@ async function createSkillPackageArchiveUnobserved(
         sourcePath: join(stagedSkill, ...file.path.split('/'))
       }))
     ]
+
     await mkdir(dirname(input.archivePath), { recursive: true })
     const archiveIdentity = await writeSkillTarGzip(temporaryArchive, entries)
     await extractSkillPackageArchive({
@@ -127,6 +139,7 @@ async function createSkillPackageArchiveUnobserved(
       expectedVersionId: manifest.versionId
     })
     await renameSkillPathWithWindowsRetry(temporaryArchive, input.archivePath)
+
     return { manifest, archivePath: input.archivePath, ...archiveIdentity }
   } finally {
     await rm(workDirectory, { recursive: true, force: true })
@@ -149,6 +162,7 @@ export async function createSkillPackageArchive(
     packageKind: 'single',
     skillCount: 1
   })
+
   try {
     const created = await createSkillPackageArchiveUnobserved(input, dependencies)
     operation.complete({
@@ -157,6 +171,7 @@ export async function createSkillPackageArchive(
       totalBytes: created.manifest.files.reduce((total, file) => total + file.size, 0),
       compressedBytes: created.compressedBytes
     })
+
     return created
   } catch (error) {
     operation.fail(error)

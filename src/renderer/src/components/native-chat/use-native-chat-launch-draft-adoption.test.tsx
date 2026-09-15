@@ -21,11 +21,13 @@ vi.mock('../../store', () => {
     (selector: (state: unknown) => unknown): unknown
     getState: () => unknown
   }
+
   useAppStore.getState = () => ({
     ...mocks.storeState,
     markNativeChatLaunchDraftAdopted: mocks.markNativeChatLaunchDraftAdopted,
     clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft
   })
+
   return { useAppStore }
 })
 
@@ -62,6 +64,7 @@ function setup(args: {
       ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft ?? true
     })
   )
+
   return { setDraft, setCaret }
 }
 
@@ -78,6 +81,7 @@ type SignalProps = {
 
 function renderSignal(messages: NativeChatMessage[], transcriptLoading = false) {
   const initialProps: SignalProps = { messages, transcriptLoading }
+
   return renderHook(
     (props: SignalProps) =>
       useNativeChatLaunchDraftSignal({
@@ -251,6 +255,7 @@ describe('useNativeChatLaunchDraftAdoption', () => {
 
   it('clears an untouched adopted copy once the transcript resolves the draft', () => {
     const entry = launchDraft({ adopted: true })
+
     const { setDraft, setCaret } = setup({
       launchDraft: entry,
       launchDraftResolved: true,
@@ -319,6 +324,7 @@ describe('launch draft adoption across a split', () => {
         messages: args.messages ?? [],
         transcriptLoading: false
       })
+
       useNativeChatLaunchDraftAdoption({
         terminalTabId: 'tab-1',
         agent: 'claude',
@@ -330,6 +336,7 @@ describe('launch draft adoption across a split', () => {
         ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft
       })
     })
+
     return { setDraft, setCaret }
   }
 

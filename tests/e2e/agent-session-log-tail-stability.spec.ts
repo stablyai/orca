@@ -5,15 +5,20 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 
 const ANCHOR_TOKEN = 'E2E_LIVE_LOG_STABLE_ANCHOR'
+
 const INITIAL_PAYLOAD_BYTES = 9 * 1024 * 1024
+
 const APPEND_CADENCE_MS = 5_000
+
 const SETTLEMENT_MS = 500
+
 // Why: peak deltas are single pre-GC samples, so they swing with runner GC
 // timing on OS-level counters; allow the same ~20MB noise floor the settled
 // retention budget already tolerates before the append-vs-replace ordering fails.
 const PEAK_MEMORY_NOISE_ALLOWANCE_MB = 25
 
 type CrashProbe = { processGone: { reason: string; exitCode: number } | null }
+
 type MemorySample = {
   jsHeapMb: number
   privateMb: number
@@ -73,6 +78,7 @@ test.describe('Agent Session History live log', () => {
     expect(baseline.find.activeMatch).not.toBe('')
 
     const suffixMemory: { before: MemorySample; after: MemorySample; settled: MemorySample }[] = []
+
     const replacementMemory: {
       before: MemorySample
       after: MemorySample
@@ -114,6 +120,7 @@ test.describe('Agent Session History live log', () => {
       expect(await orcaPage.evaluate(() => 2 + 2)).toBe(4)
       expect((await readMainProcessCrashProbe(electronApp)).processGone).toBeNull()
       baseline = current
+
       if (batch === 0) {
         await orcaPage.keyboard.press('Escape')
         await expect(orcaPage.locator('.monaco-editor .find-widget')).toHaveAttribute(
@@ -143,6 +150,7 @@ async function seedSyntheticSession(
   const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const title = `Synthetic live log ${Date.now()}`
   const sessionId = `e2e-live-log-${Date.now()}`
+
   const sessionsDir = path.join(
     userData,
     'codex-runtime-home',
@@ -152,8 +160,10 @@ async function seedSyntheticSession(
     '07',
     '12'
   )
+
   mkdirSync(sessionsDir, { recursive: true })
   const filePath = path.join(sessionsDir, `rollout-${sessionId}.jsonl`)
+
   const records = [
     JSON.stringify({
       timestamp: '2026-07-12T12:00:00.000Z',
@@ -169,8 +179,10 @@ async function seedSyntheticSession(
     JSON.stringify({ type: 'anchor', text: ANCHOR_TOKEN }),
     JSON.stringify({ type: 'synthetic', text: 'y'.repeat(INITIAL_PAYLOAD_BYTES / 2) })
   ]
+
   const content = `${records.join('\n')}\n`
   writeFileSync(filePath, content)
+
   return { filePath, initialLength: content.length, title }
 }
 
@@ -202,6 +214,7 @@ async function restoreAnchorState(
     .poll(
       async () => {
         const snapshot = await readProbe(page)
+
         return (snapshot.selection as { startLineNumber?: number } | null)?.startLineNumber
       },
       { timeout: 60_000 }
@@ -213,19 +226,23 @@ async function restoreAnchorState(
         startLineNumber?: number
         endLineNumber?: number
       }
+
       return (range.startLineNumber ?? 0) <= 4 && (range.endLineNumber ?? 0) >= 4
     })
     .toBe(true)
+
   if (!findOpen) {
     await page.keyboard.press('Escape')
     await expect(page.locator('.monaco-editor .find-widget')).toHaveAttribute('aria-hidden', 'true')
   }
+
   if (targetScrollTop !== undefined) {
     await page.evaluate((scrollTop) => {
       window.__monacoEditorE2E?.restoreScrollTop(scrollTop)
     }, targetScrollTop)
     await expect.poll(async () => (await readProbe(page)).scrollTop).toBe(targetScrollTop)
   }
+
   return readProbe(page)
 }
 
@@ -242,9 +259,11 @@ async function readProbe(page: Page): Promise<{
 }> {
   return page.evaluate(() => {
     const probe = window.__monacoEditorE2E
+
     if (!probe) {
       throw new Error('Monaco E2E probe unavailable')
     }
+
     return { filePath: probe.filePath, ...probe.snapshot() }
   })
 }
@@ -253,6 +272,7 @@ async function armMainProcessCrashProbe(electronApp: ElectronApplication): Promi
   await electronApp.evaluate(({ BrowserWindow }) => {
     const probe: CrashProbe = { processGone: null }
     globalThis.__liveLogCrashProbe = probe
+
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.on('render-process-gone', (_event, details) => {
         probe.processGone = { reason: details.reason, exitCode: details.exitCode ?? -1 }
@@ -268,9 +288,11 @@ async function readMainProcessCrashProbe(electronApp: ElectronApplication): Prom
 async function forceGcAndSettle(page: Page): Promise<void> {
   await page.evaluate(() => {
     const gc = (window as unknown as { gc?: () => void }).gc
+
     if (!gc) {
       throw new Error('Forced GC unavailable; launch must include --js-flags=--expose-gc')
     }
+
     gc()
     gc()
   })
@@ -281,17 +303,22 @@ async function readMemory(electronApp: ElectronApplication, page: Page): Promise
   const jsHeapMb = await page.evaluate(() => {
     const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
       ?.usedJSHeapSize
+
     if (!memory) {
       throw new Error('Precise renderer JS heap metrics unavailable')
     }
+
     return memory / 1024 / 1024
   })
+
   const metric = await electronApp.evaluate(({ app, BrowserWindow }) => {
     const rendererPid = BrowserWindow.getAllWindows()[0]?.webContents.getOSProcessId()
     const rendererMetric = app.getAppMetrics().find((candidate) => candidate.pid === rendererPid)
+
     if (!rendererMetric) {
       throw new Error(`Renderer app metric unavailable for pid ${rendererPid ?? 'unknown'}`)
     }
+
     return {
       pid: rendererMetric.pid,
       privateMb: rendererMetric.memory.privateBytes
@@ -300,7 +327,9 @@ async function readMemory(electronApp: ElectronApplication, page: Page): Promise
       workingSetMb: rendererMetric.memory.workingSetSize / 1024
     }
   })
+
   const privateMb = metric.privateMb ?? readPrivateMemoryMb(metric.pid)
+
   return { jsHeapMb, privateMb, workingSetMb: metric.workingSetMb }
 }
 
@@ -308,23 +337,30 @@ function readPrivateMemoryMb(pid: number): number {
   if (process.platform === 'linux') {
     const status = readFileSync(`/proc/${pid}/status`, 'utf8')
     const privateKb = /RssAnon:\s+(\d+) kB/.exec(status)?.[1]
+
     if (!privateKb) {
       throw new Error(`Unable to parse renderer RssAnon for pid ${pid}`)
     }
+
     return Number(privateKb) / 1024
   }
+
   if (process.platform !== 'darwin') {
     throw new Error('app.getAppMetrics privateBytes unavailable on Windows')
   }
+
   // Electron omits MemoryInfo.privateBytes on macOS; footprint's
   // phys_footprint is the OS private-memory equivalent for the same renderer PID.
   const output = execFileSync('footprint', ['-p', String(pid), '-f', 'bytes', '--noCategories'], {
     encoding: 'utf8'
   })
+
   const bytes = /phys_footprint:\s+(\d+) B/.exec(output)?.[1]
+
   if (!bytes) {
     throw new Error(`Unable to parse renderer private footprint for pid ${pid}`)
   }
+
   return Number(bytes) / 1024 / 1024
 }
 
@@ -353,6 +389,7 @@ async function measureLegacyControl(
   await page.evaluate(() => window.__monacoEditorE2E?.restoreLegacySetValueControl())
   await expect.poll(() => readProbe(page)).toMatchObject({ valueLength: baseline.valueLength })
   expect((await readMainProcessCrashProbe(electronApp)).processGone).toBeNull()
+
   return { before, after, settled }
 }
 
@@ -374,15 +411,18 @@ function assertMemoryBudget(
 ): void {
   expect(suffix).toHaveLength(replacement.length)
   expect(suffix.length).toBeGreaterThan(0)
+
   for (const sample of suffix) {
     for (const field of ['jsHeapMb', 'workingSetMb', 'privateMb'] as const) {
       const retainedAllowance = Math.max(20, sample.before[field] * 0.1)
       expect(sample.settled[field] - sample.before[field]).toBeLessThanOrEqual(retainedAllowance)
     }
   }
+
   for (const [index, sample] of suffix.entries()) {
     const pairedReplacement = replacement[index]
     expect(pairedReplacement).toBeDefined()
+
     for (const field of ['jsHeapMb', 'workingSetMb', 'privateMb'] as const) {
       const suffixPeak = sample.after[field] - sample.before[field]
       const replacementPeak = pairedReplacement.after[field] - pairedReplacement.before[field]
@@ -397,6 +437,7 @@ function assertMemoryBudget(
 async function readProbeOrNull(page: Page): Promise<Awaited<ReturnType<typeof readProbe>> | null> {
   return page.evaluate(() => {
     const probe = window.__monacoEditorE2E
+
     return probe ? { filePath: probe.filePath, ...probe.snapshot() } : null
   })
 }

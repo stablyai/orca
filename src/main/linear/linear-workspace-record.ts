@@ -11,10 +11,13 @@ export function normalizeWorkspace(input: unknown): LinearWorkspace | null {
   if (!input || typeof input !== 'object') {
     return null
   }
+
   const record = input as Record<string, unknown>
+
   if (typeof record.id !== 'string' || typeof record.organizationName !== 'string') {
     return null
   }
+
   if (typeof record.displayName !== 'string') {
     return null
   }

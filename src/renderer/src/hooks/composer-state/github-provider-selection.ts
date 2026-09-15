@@ -76,11 +76,13 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
       const identity = resolveGitHubWorkItemIdentity(item)
+
       const normalizedItem: GitHubWorkItem = {
         ...item,
         type: identity.type,
         number: identity.number
       }
+
       if (isProjectGroupTarget) {
         const linkedItem = toGitHubLinkedWorkItem(normalizedItem)
         setLinkedIssue(identity.type === 'issue' ? String(identity.number) : '')
@@ -90,6 +92,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
         setLinkedWorkItem(linkedItem)
         setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
         const nextName = getLinkedItemDisplayName(linkedItem)
+
         if (
           nextName &&
           shouldApplyWorkspaceSourceAutoName({
@@ -100,8 +103,10 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
           setName(nextName)
           lastAutoNameRef.current = nextName
         }
+
         return
       }
+
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
       setBranchNameOverridePreservesNameEdits(false)
@@ -111,24 +116,31 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       // Why: provider items can come from a different source host than the run host — resolve refs against the run repo, keep item metadata for provider identity.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(normalizedItem)
+
       if (identity.type !== 'pr' || !runRepo) {
         setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
+
         return
       }
+
       setBaseBranch(undefined)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
+
       const startPointSelection: SmartGitHubPrStartPointSelection = {
         repoId: runRepo.id,
         item: normalizedItem
       }
+
       smartGitHubPrStartPointSelectionRef.current = startPointSelection
+
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },
         runRepo.id
       )
+
       const resolvePrBase = resolveGitHubPrStartPointForRepo({
         repoId: runRepo.id,
         prNumber: identity.number,
@@ -139,11 +151,13 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
           ? { isCrossRepository: normalizedItem.isCrossRepository }
           : {})
       })
+
       void resolvePrBase
         .then((result) => {
           if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
             return
           }
+
           startPointSelection.resolved = result
           handleBaseBranchPrSelect(
             result.baseBranch,
@@ -159,6 +173,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
           if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
             return
           }
+
           setBaseBranch(undefined)
           setCompareBaseRef(undefined)
           setPushTarget(undefined)

@@ -59,11 +59,13 @@ describe('relay launch options', () => {
     const credentialFile = join(directory, 'endpoint.credential')
     const credential = 'a'.repeat(32)
     writeFileSync(credentialFile, `${credential}\n`)
+
     if (process.platform !== 'win32') {
       chmodSync(credentialFile, 0o644)
     }
 
     expect(readRelayEndpointCredential(credentialFile)).toBe(credential)
+
     if (process.platform !== 'win32') {
       expect(statSync(credentialFile).mode & 0o777).toBe(0o600)
     }

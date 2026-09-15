@@ -395,6 +395,7 @@ describe('buildWorkspaceSessionPayload', () => {
 
   it('drops local terminal scrollback buffers from session payloads', () => {
     const localWorktreeId = 'repo-1::/local/worktree'
+
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
         tabsByWorktree: {
@@ -436,6 +437,7 @@ describe('buildWorkspaceSessionPayload', () => {
 
   it('preserves SSH terminal scrollback buffers because relay teardown has no local history', () => {
     const sshWorktreeId = 'repo-ssh::/remote/worktree'
+
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
         tabsByWorktree: {

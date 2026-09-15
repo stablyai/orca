@@ -12,6 +12,7 @@ export function worktreeVisibilityUpdateError(
       "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting."
     )
   }
+
   return translate(
     'auto.components.sidebar.WorktreeVisibilityDialog.d40d436fc2',
     'Could not update worktree visibility. Try again.'

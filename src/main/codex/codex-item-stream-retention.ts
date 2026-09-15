@@ -48,6 +48,7 @@ export class CodexItemStreamRetention {
 
   canRetain(key: string, state: CodexItemStreamState): boolean {
     const previous = this.states.get(key)
+
     return (
       this.persistentBytes -
         (previous?.persistent ? previous.bytes : 0) +
@@ -60,15 +61,18 @@ export class CodexItemStreamRetention {
     if (!this.canRetain(key, state)) {
       return false
     }
+
     this.forget(key)
     const bytes = this.stateBytes(key, state)
     const persistent = codexCommandOutlivesTurn(state.item)
     this.states.set(key, { state, bytes, persistent })
     this.bytes += bytes
+
     if (persistent) {
       this.persistentBytes += bytes
       this.persistentCount += 1
     }
+
     return true
   }
 
@@ -78,19 +82,24 @@ export class CodexItemStreamRetention {
         return key
       }
     }
+
     return undefined
   }
 
   forget(key: string): void {
     const entry = this.states.get(key)
+
     if (!entry) {
       return
     }
+
     this.bytes -= entry.bytes
+
     if (entry.persistent) {
       this.persistentBytes -= entry.bytes
       this.persistentCount -= 1
     }
+
     this.states.delete(key)
   }
 

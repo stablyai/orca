@@ -6,6 +6,7 @@ export function getSttWorkerPath(): string {
   if (getAppEnvironment().isPackaged()) {
     return join(process.resourcesPath, 'app.asar', 'out', 'main', 'stt-worker.js')
   }
+
   return join(__dirname, 'stt-worker.js')
 }
 
@@ -17,12 +18,15 @@ export function getSherpaModulePath(): string {
 
   if (getAppEnvironment().isPackaged()) {
     const resourcesNodeModule = join(process.resourcesPath, 'node_modules', nativePackage)
+
     if (existsSync(resourcesNodeModule)) {
       return resourcesNodeModule
     }
+
     return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', nativePackage)
   }
 
   const resolved = require.resolve(nativePackage)
+
   return join(resolved, '..')
 }

@@ -18,12 +18,15 @@ export function createRichMarkdownSearchMatchesCache(): typeof findRichMarkdownS
       previousDoc = doc
       entries = []
     }
+
     const matchCase = options.matchCase ?? false
     const wholeWord = options.wholeWord ?? false
+
     const existing = entries.find(
       (entry) =>
         entry.query === query && entry.matchCase === matchCase && entry.wholeWord === wholeWord
     )
+
     if (existing) {
       return existing.matches
     }
@@ -31,6 +34,7 @@ export function createRichMarkdownSearchMatchesCache(): typeof findRichMarkdownS
     const matches = findRichMarkdownSearchMatches(doc, query, options, stats)
     // The live replacement guard and debounced highlights can have different queries.
     entries = [...entries.slice(-1), { query, matchCase, wholeWord, matches }]
+
     return matches
   }
 }

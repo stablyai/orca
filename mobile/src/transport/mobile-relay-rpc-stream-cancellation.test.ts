@@ -5,11 +5,13 @@ import type { RpcResponse } from './types'
 function createStreams(waitForConnected = async () => {}) {
   let sequence = 0
   const sendFrame = vi.fn((_request: { id: string; method: string; params?: unknown }) => true)
+
   const streams = new MobileRelayRpcStreams({
     nextId: () => `request-${++sequence}`,
     sendFrame,
     waitForConnected
   })
+
   return { streams, sendFrame }
 }
 
@@ -70,6 +72,7 @@ describe('mobile relay subscription cancellation', () => {
       const cancel = streams.subscribe('browser.screencast', {}, vi.fn())
       await Promise.resolve()
       cancel()
+
       if (ending === 'disconnect') {
         streams.clear()
       } else if (ending === 'completed') {
@@ -89,6 +92,7 @@ describe('mobile relay subscription cancellation', () => {
       } else {
         streams.handleResponse(response('request-1', { type: 'end', subscriptionId: 'server-1' }))
       }
+
       expect(
         streams.handleResponse(response('request-1', { type: 'ready', subscriptionId: 'server-1' }))
       ).toBe(false)
@@ -121,9 +125,11 @@ describe('mobile relay subscription cancellation', () => {
       const { streams, sendFrame } = createStreams()
       const cancel = streams.subscribe(method as string, params, vi.fn())
       await Promise.resolve()
+
       if (method === 'session.tabs.subscribe') {
         streams.handleResponse(response('request-1', { type: 'snapshot' }))
       }
+
       cancel()
       expect(sendFrame).toHaveBeenLastCalledWith({
         id: 'request-2',
@@ -142,11 +148,13 @@ describe('mobile relay subscription cancellation', () => {
   ])('does not unsubscribe an unsent %s', async (method) => {
     const wait = Promise.withResolvers<void>()
     const { streams, sendFrame } = createStreams(() => wait.promise)
+
     const cancel = streams.subscribe(
       method,
       { terminal: 'term', worktree: 'id:workspace', subscriptionId: 'chat' },
       vi.fn()
     )
+
     cancel()
     wait.resolve()
     await Promise.resolve()
@@ -162,21 +170,27 @@ describe('mobile relay subscription cancellation', () => {
       const { streams, sendFrame } = createStreams()
       const first = vi.fn()
       const second = vi.fn()
+
       const cancel = streams.subscribe(
         'session.tabs.subscribe',
         { worktree: 'id:workspace' },
         first
       )
+
       streams.subscribe('session.tabs.subscribe', { worktree: 'id:workspace' }, second)
       await Promise.resolve()
+
       if (early) {
         cancel()
       }
+
       expect(sendFrame).toHaveBeenCalledTimes(2)
       streams.handleResponse(response('request-1', { type: 'snapshot' }))
+
       if (!early) {
         cancel()
       }
+
       expect(sendFrame).toHaveBeenLastCalledWith({
         id: 'request-3',
         method: 'session.tabs.unsubscribe',
@@ -221,9 +235,11 @@ describe('mobile relay subscription cancellation', () => {
   it('still unsubscribes a shared-token nativeChat stream when the sibling is unsent', async () => {
     const wait = Promise.withResolvers<void>()
     let connected = false
+
     const { streams, sendFrame } = createStreams(() =>
       connected ? Promise.resolve() : wait.promise
     )
+
     const params = { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' }
     connected = true
     const cancelOlder = streams.subscribe('nativeChat.subscribe', params, vi.fn())
@@ -242,6 +258,7 @@ describe('mobile relay subscription cancellation', () => {
   it('cleans up every cancelled server subscription across repeated late-ready cycles', async () => {
     const { streams, sendFrame } = createStreams()
     const listener = vi.fn()
+
     for (let i = 0; i < 100; i++) {
       const cancel = streams.subscribe('runtime.clientEvents.subscribe', {}, listener)
       await Promise.resolve()
@@ -249,6 +266,7 @@ describe('mobile relay subscription cancellation', () => {
       cancel()
       streams.handleResponse(response(requestId, { type: 'ready', subscriptionId: `server-${i}` }))
     }
+
     expect(
       sendFrame.mock.calls.filter(
         ([request]) => (request as { method: string }).method === 'runtime.clientEvents.unsubscribe'

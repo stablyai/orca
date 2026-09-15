@@ -1,7 +1,9 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
 
 type ReplayPayload = { id: string; length: number; preview: string; source: 'spawn-reply' }
+
 type SpawnHandler = (event: unknown, args: Record<string, unknown>) => Promise<unknown>
+
 type ReplayReplyScope = typeof globalThis & {
   __orcaSshCodexReplayReplies?: ReplayPayload[]
 }
@@ -12,20 +14,26 @@ export async function installSshReplayReplyProbe(
 ): Promise<void> {
   await app.evaluate(({ ipcMain }, expectedPtyId) => {
     const scope = globalThis as ReplayReplyScope
+
     if (scope.__orcaSshCodexReplayReplies) {
       throw new Error('SSH replay reply probe already installed')
     }
+
     const handlers = (ipcMain as unknown as { _invokeHandlers?: Map<string, SpawnHandler> })
       ._invokeHandlers
+
     const original = handlers?.get('pty:spawn')
+
     if (!handlers || !original) {
       throw new Error('PTY spawn handler unavailable')
     }
+
     const payloads: ReplayPayload[] = []
     scope.__orcaSshCodexReplayReplies = payloads
     // SSH reconnect returns its replay with the reattach reply, without a pty:replay push.
     handlers.set('pty:spawn', async (event, args) => {
       const result = await original(event, args)
+
       if (
         args.sessionId === expectedPtyId &&
         result &&
@@ -45,6 +53,7 @@ export async function installSshReplayReplyProbe(
           source: 'spawn-reply'
         })
       }
+
       return result
     })
   }, ptyId)

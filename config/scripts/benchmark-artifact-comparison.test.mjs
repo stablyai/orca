@@ -10,17 +10,20 @@ import {
 } from './compare-benchmark-artifacts.mjs'
 
 const scriptPath = 'config/scripts/compare-benchmark-artifacts.mjs'
+
 const tempDirs = []
 
 function makeTempDir() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-benchmark-comparison-'))
   tempDirs.push(dir)
+
   return dir
 }
 
 function writeArtifact(dir, name, artifact) {
   const artifactPath = join(dir, name)
   writeFileSync(artifactPath, JSON.stringify(artifact))
+
   return artifactPath
 }
 
@@ -53,6 +56,7 @@ describe('benchmark artifact comparison', () => {
 
   it('compares startup-style summary median metrics and skips null candidates', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'baseline.json', {
       label: 'baseline',
       summaryMedianMs: {
@@ -61,6 +65,7 @@ describe('benchmark artifact comparison', () => {
         totalToDidFinishLoad: 100
       }
     })
+
     const candidatePath = writeArtifact(dir, 'candidate.json', {
       label: 'candidate',
       summaryMedianMs: {
@@ -97,6 +102,7 @@ describe('benchmark artifact comparison', () => {
 
   it('compares terminal split headline metrics in milliseconds', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'split-baseline.json', {
       label: 'split baseline',
       headlineMs: {
@@ -104,6 +110,7 @@ describe('benchmark artifact comparison', () => {
         shortcutToFocusP95: 676.3
       }
     })
+
     const candidatePath = writeArtifact(dir, 'split-candidate.json', {
       label: 'split candidate',
       headlineMs: {
@@ -137,12 +144,14 @@ describe('benchmark artifact comparison', () => {
 
   it('rejects invalid benchmark artifacts before comparing partial metrics', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'split-invalid.json', {
       label: 'invalid split',
       status: 'failed',
       valid: false,
       headlineMs: { shortcutToFocusP50: 0 }
     })
+
     const candidatePath = writeArtifact(dir, 'split-valid.json', {
       label: 'valid split',
       status: 'passed',
@@ -157,6 +166,7 @@ describe('benchmark artifact comparison', () => {
 
   it('compares numeric Playwright annotation metrics and omits metadata fields', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'baseline-playwright.json', {
       suites: [
         {
@@ -182,6 +192,7 @@ describe('benchmark artifact comparison', () => {
         }
       ]
     })
+
     const candidatePath = writeArtifact(dir, 'candidate-playwright.json', {
       suites: [
         {
@@ -219,6 +230,7 @@ describe('benchmark artifact comparison', () => {
 
   it('aggregates duplicate Playwright scenario metrics before comparison', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'baseline-playwright-duplicates.json', {
       suites: [
         {
@@ -243,6 +255,7 @@ describe('benchmark artifact comparison', () => {
         }
       ]
     })
+
     const candidatePath = writeArtifact(dir, 'candidate-playwright-duplicates.json', {
       suites: [
         {
@@ -269,6 +282,7 @@ describe('benchmark artifact comparison', () => {
     })
 
     const comparison = comparePaths(baselinePath, candidatePath)
+
     const duplicateMedianMetrics = comparison.metrics.filter(
       (metric) => metric.key === 'opencode-duplicate.median'
     )
@@ -289,6 +303,7 @@ describe('benchmark artifact comparison', () => {
 
   it('skips unit mismatches instead of comparing incompatible metrics', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'baseline-playwright-units.json', {
       suites: [
         {
@@ -309,6 +324,7 @@ describe('benchmark artifact comparison', () => {
         }
       ]
     })
+
     const candidatePath = writeArtifact(dir, 'candidate-playwright-units.json', {
       suites: [
         {
@@ -343,6 +359,7 @@ describe('benchmark artifact comparison', () => {
 
   it('supports higher-is-better metrics for generic summary artifacts', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'generic-baseline.json', {
       summary: {
         totalBytes: 2048,
@@ -350,6 +367,7 @@ describe('benchmark artifact comparison', () => {
         throughput: 10
       }
     })
+
     const candidatePath = writeArtifact(dir, 'generic-candidate.json', {
       summary: {
         totalBytes: 1024,
@@ -378,14 +396,17 @@ describe('benchmark artifact comparison', () => {
 
   it('writes Markdown and JSON reports from the CLI while printing Markdown', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'baseline.json', {
       label: 'baseline',
       summaryMedianMs: { totalToDidFinishLoad: 100 }
     })
+
     const candidatePath = writeArtifact(dir, 'candidate.json', {
       label: 'candidate',
       summaryMedianMs: { totalToDidFinishLoad: 40 }
     })
+
     const markdownPath = join(dir, 'nested', 'comparison.md')
     const jsonPath = join(dir, 'nested', 'comparison.json')
 
@@ -419,14 +440,17 @@ describe('benchmark artifact comparison', () => {
 
   it('redacts absolute input paths from generated reports', () => {
     const dir = makeTempDir()
+
     const baselinePath = writeArtifact(dir, 'absolute-baseline.json', {
       label: 'baseline',
       summaryMedianMs: { totalToDidFinishLoad: 100 }
     })
+
     const candidatePath = writeArtifact(dir, 'absolute-candidate.json', {
       label: 'candidate',
       summaryMedianMs: { totalToDidFinishLoad: 40 }
     })
+
     const markdownPath = join(dir, 'comparison.md')
     const jsonPath = join(dir, 'comparison.json')
 
@@ -445,6 +469,7 @@ describe('benchmark artifact comparison', () => {
       ],
       { cwd: process.cwd(), encoding: 'utf8' }
     )
+
     const json = JSON.parse(readFileSync(jsonPath, 'utf8'))
     const markdown = readFileSync(markdownPath, 'utf8')
 

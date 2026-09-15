@@ -25,6 +25,7 @@ function tabIdFromPaneKey(paneKey: string, tabId?: string): string | null {
 
 function activePaneKey(state: AppState, tabId: string): string | null {
   const activeLeafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
+
   return activeLeafId ? `${tabId}:${activeLeafId}` : null
 }
 
@@ -45,16 +46,21 @@ function registerCandidate(
   if (!isAiVaultTitleAgent(args.agent) || !args.providerSession?.id) {
     return
   }
+
   const tabId = tabIdFromPaneKey(args.paneKey, args.tabId)
   const tab = tabId ? tabsById.get(tabId) : undefined
   const worktreeId = args.worktreeId ?? tab?.worktreeId
+
   if (!tabId || !tab || !worktreeId) {
     return
   }
+
   const priority = args.priority + (activePaneKey(state, tabId) === args.paneKey ? 100 : 0)
+
   if ((candidates.get(tabId)?.priority ?? -1) >= priority) {
     return
   }
+
   const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
   candidates.set(tabId, {
     agent: args.agent,
@@ -73,6 +79,7 @@ export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleReques
       .flat()
       .map((tab) => [tab.id, tab] as const)
   )
+
   const candidates = new Map<string, RequestCandidate>()
 
   for (const entry of Object.values(state.retainedAgentsByPaneKey)) {
@@ -86,6 +93,7 @@ export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleReques
       worktreeId: entry.worktreeId
     })
   }
+
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
     registerCandidate(state, tabsById, candidates, {
       agent: record.agent,
@@ -97,6 +105,7 @@ export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleReques
       worktreeId: record.worktreeId
     })
   }
+
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
     registerCandidate(state, tabsById, candidates, {
       agent: entry.agentType,

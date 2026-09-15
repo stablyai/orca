@@ -12,6 +12,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     const prepareScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => eligible,
       isQuitting: () => false,
@@ -38,6 +39,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     const finishScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -71,6 +73,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('covers both launch and run dates when a delayed pass crosses midnight', async () => {
     vi.setSystemTime(new Date('2026-08-05T23:59:59.500Z'))
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -98,6 +101,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
     const prepareScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -123,6 +127,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('hands preparation every date a cross-midnight launch spanned', async () => {
     vi.setSystemTime(new Date('2026-08-05T23:59:59Z'))
     const prepareScheduledRun = vi.fn()
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -147,6 +152,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('keeps launch passes full when no completed baseline can cover older failures', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -167,6 +173,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('upgrades a bounded pass when its target changed before the timer fired', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -190,6 +197,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     const prepareScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -217,6 +225,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     let releaseFirstIndexHeal: (() => void) | undefined
     const prepareScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const startIndexHeal = vi
       .fn()
       .mockImplementationOnce(
@@ -226,6 +235,7 @@ describe('createCodexSessionMigrationScheduler', () => {
           })
       )
       .mockResolvedValueOnce(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -256,9 +266,11 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('prepares a delayed launch pass after an earlier migration settles before the timer', async () => {
     let releaseFirstBackfill: (() => void) | undefined
     let markerPresent = false
+
     const prepareScheduledRun = vi.fn(() => {
       markerPresent = false
     })
+
     const startBackfill = vi
       .fn()
       .mockImplementationOnce(
@@ -273,7 +285,9 @@ describe('createCodexSessionMigrationScheduler', () => {
       .mockImplementationOnce(async () => {
         expect(markerPresent).toBe(false)
       })
+
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -301,13 +315,16 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('coalesces concurrent run requests and stops before index heal after opt-out', async () => {
     let eligible = true
     let releaseBackfill: (() => void) | undefined
+
     const startBackfill = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           releaseBackfill = resolve
         })
     )
+
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => eligible,
       isQuitting: () => false,
@@ -331,6 +348,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('reruns after a stopping migration becomes eligible again', async () => {
     let eligible = true
     let releaseFirstBackfill: ((result: { stopped: boolean }) => void) | undefined
+
     const startBackfill = vi
       .fn()
       .mockImplementationOnce(
@@ -340,7 +358,9 @@ describe('createCodexSessionMigrationScheduler', () => {
           })
       )
       .mockResolvedValueOnce({ stopped: false })
+
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => eligible,
       isQuitting: () => false,
@@ -367,6 +387,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     let releaseFirstBackfill: ((result: { stopped: boolean }) => void) | undefined
     const prepareScheduledRun = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
     const finishScheduledRun = vi.fn()
+
     const startBackfill = vi
       .fn()
       .mockImplementationOnce(
@@ -376,6 +397,7 @@ describe('createCodexSessionMigrationScheduler', () => {
           })
       )
       .mockResolvedValueOnce({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => eligible,
       isQuitting: () => false,
@@ -411,6 +433,7 @@ describe('createCodexSessionMigrationScheduler', () => {
     vi.setSystemTime(new Date('2026-08-05T23:59:59Z'))
     const finishScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -453,10 +476,12 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('keeps a failed full scan required for the final launch pass', async () => {
     const finishScheduledRun = vi.fn()
+
     const startBackfill = vi
       .fn()
       .mockResolvedValueOnce({ stopped: false, failedFiles: 1 })
       .mockResolvedValueOnce({ stopped: false, failedFiles: 0 })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -488,13 +513,16 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('blocks marker publication when a newer launch pass is pending', async () => {
     let releaseBackfill: ((result: { stopped: boolean }) => void) | undefined
+
     const startBackfill = vi.fn(
       (_options: CodexSessionBackfillOptions) =>
         new Promise<{ stopped: boolean }>((resolve) => {
           releaseBackfill = resolve
         })
     )
+
     const startIndexHeal = vi.fn().mockResolvedValue(null)
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -521,6 +549,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('turns an exit-before-begin race into a full recovery pass', async () => {
     const finishScheduledRun = vi.fn()
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -544,6 +573,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('keeps an ignored reattach exit from poisoning a same-ID launch already starting', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -570,6 +600,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('matches an ignored reattach exit that arrived before its lifecycle callback', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -596,6 +627,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('keeps a newer same-ID launch active while the ignored incarnation exits', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -625,6 +657,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('releases a stranded active launch once the ignored incarnation ages out', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -653,6 +686,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('keeps late duplicate ignored callbacks from poisoning reuse', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -681,6 +715,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('keeps three exit-before-callback reattaches from stranding a reused ID', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -712,6 +747,7 @@ describe('createCodexSessionMigrationScheduler', () => {
 
   it('does not consume an exit from an earlier stable-id incarnation', async () => {
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,
@@ -734,6 +770,7 @@ describe('createCodexSessionMigrationScheduler', () => {
   it('preserves the pre-spawn UTC date when launch setup crosses midnight', async () => {
     vi.setSystemTime(new Date('2026-08-06T00:00:01Z'))
     const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+
     const scheduler = createCodexSessionMigrationScheduler({
       isEligible: () => true,
       isQuitting: () => false,

@@ -205,13 +205,16 @@ export function getWorkspaceStatusVisualMeta(status: WorkspaceStatus | Workspace
   const visual = typeof status === 'string' ? DEFAULT_STATUS_VISUALS[status] : status
   const colorId = visual?.color ?? DEFAULT_STATUS_VISUALS[statusId]?.color
   const iconId = visual?.icon ?? DEFAULT_STATUS_VISUALS[statusId]?.icon
+
   const color =
     getWorkspaceStatusColorOptions().find((option) => option.id === colorId) ??
     getWorkspaceStatusColorOptions().find(
       (option) => option.id === DEFAULT_WORKSPACE_STATUS_COLOR_ID
     ) ??
     getFallbackColorOption()
+
   const iconOptions = getWorkspaceStatusIconOptions()
+
   const icon =
     iconOptions.find((option) => option.id === iconId) ??
     iconOptions.find((option) => option.id === DEFAULT_WORKSPACE_STATUS_ICON_ID) ??

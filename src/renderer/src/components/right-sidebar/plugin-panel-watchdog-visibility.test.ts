@@ -22,6 +22,7 @@ describe('createPanelWatchdog visibility parking', () => {
 
   it('parks pings while hidden and resumes on the becoming-visible pass, not the next interval', () => {
     const sendPing = vi.fn()
+
     const watchdog = createPanelWatchdog({
       sendPing,
       onUnresponsive: vi.fn(),
@@ -46,6 +47,7 @@ describe('createPanelWatchdog visibility parking', () => {
 
   it('does not park forever when macOS wedges visibilityState at hidden', () => {
     const sendPing = vi.fn()
+
     const watchdog = createPanelWatchdog({
       sendPing,
       onUnresponsive: vi.fn(),
@@ -69,6 +71,7 @@ describe('createPanelWatchdog visibility parking', () => {
 
   it('removes its visibility listener on stop', () => {
     const sendPing = vi.fn()
+
     const watchdog = createPanelWatchdog({
       sendPing,
       onUnresponsive: vi.fn(),

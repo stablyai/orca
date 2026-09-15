@@ -9,26 +9,33 @@ import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs
 import path from 'node:path'
 
 const require = createRequire(import.meta.url)
+
 const pty = require('node-pty')
 
 const scriptDir = import.meta.dirname
+
 const repoRoot = path.resolve(scriptDir, '..', '..')
 
 function readOption(name, fallback) {
   const index = process.argv.indexOf(name)
+
   if (index === -1) {
     return fallback
   }
+
   const value = process.argv[index + 1]
+
   if (!value || value.startsWith('--')) {
     throw new Error(`Missing value for ${name}`)
   }
+
   return value
 }
 
 const opencodePackagePath = path.resolve(
   readOption('--opencode-path', path.join(repoRoot, '.tmp', 'opencode', 'packages', 'opencode'))
 )
+
 const outputPath = path.resolve(
   readOption('--output', path.join(repoRoot, '.tmp', 'opencode-tui-capture.txt'))
 )
@@ -118,10 +125,13 @@ setTimeout(() => {
 `
 
 mkdirSync(path.dirname(outputPath), { recursive: true })
+
 writeFileSync(harnessPath, harnessSource)
 
 const out = createWriteStream(outputPath)
+
 const command = process.platform === 'win32' ? 'bun.exe' : 'bun'
+
 const child = pty.spawn(command, ['run', './orca-opencode-tui-repro.tsx'], {
   cwd: opencodePackagePath,
   cols: 120,

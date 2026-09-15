@@ -28,16 +28,20 @@ const statFaults = vi.hoisted(() => {
       if (typeof target !== 'string' || !state.held.has(target)) {
         return
       }
+
       state.reads.set(target, (state.reads.get(target) ?? 0) + 1)
+
       const error: NodeJS.ErrnoException = new Error(
         `EBUSY: resource busy or locked, stat '${target}'`
       )
+
       error.code = 'EBUSY'
       error.syscall = 'stat'
       error.path = target
       throw error
     }
   }
+
   return state
 })
 
@@ -54,18 +58,22 @@ const listingFaults = vi.hoisted(() => ({
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const originalStat = actual.statSync as (...args: unknown[]) => unknown
+
   const patched: Record<string, unknown> = {
     ...actual,
     statSync: Object.assign((...args: unknown[]): unknown => {
       statFaults.consume(args[0])
+
       return originalStat(...args)
     }, originalStat)
   }
+
   return { ...patched, default: patched }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     opendir: async (...args: Parameters<typeof actual.opendir>) => {
@@ -73,21 +81,25 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         const error: NodeJS.ErrnoException = new Error(
           `EBUSY: resource busy or locked, opendir '${args[0]}'`
         )
+
         error.code = 'EBUSY'
         error.syscall = 'opendir'
         error.path = args[0]
         throw error
       }
+
       return actual.opendir(...args)
     }
   }
 })
 
 const { findTrustedCodexSessionResume } = await import('./codex-session-resume-home')
+
 const { ManagedCodexHomeTemporarilyUnavailableError } =
   await import('../codex-accounts/host-codex-managed-home-ownership')
 
 const tempRoots: string[] = []
+
 const SESSION_ID = '11111111-2222-3333-4444-555555555555'
 
 function makeHomeWithRollout(root: string, name: string): string {
@@ -95,6 +107,7 @@ function makeHomeWithRollout(root: string, name: string): string {
   const datedDir = join(homePath, 'sessions', '2026', '07', '20')
   mkdirSync(datedDir, { recursive: true })
   writeFileSync(join(datedDir, `rollout-${SESSION_ID}.jsonl`), '{}\n', 'utf-8')
+
   return homePath
 }
 
@@ -106,6 +119,7 @@ beforeEach(() => {
 afterEach(() => {
   statFaults.reset()
   listingFaults.reset()
+
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }

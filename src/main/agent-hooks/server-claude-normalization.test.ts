@@ -41,6 +41,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Edit')
     expect(result?.payload.toolInput).toBe('/src/config.ts')
@@ -57,6 +58,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('Bash')
     expect(result?.payload.toolInput).toBe('pnpm test --run')
     expect(result?.payload.lastAssistantMessage).toBe('tests passed')
@@ -75,6 +77,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.lastAssistantMessage).toBe('Exit code 1\nimport { Foo }')
     expect(result?.payload.lastAssistantMessageIsToolOutput).toBe(true)
   })
@@ -89,6 +92,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.lastAssistantMessage).toBe('file is read-only')
     expect(result?.payload.lastAssistantMessageIsToolOutput).toBe(true)
   })
@@ -104,6 +108,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     // The prose turn must not inherit the previous tool result's flag.
     const stopped = _internals.normalizeHookPayload(
       'claude',
@@ -113,6 +118,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(stopped?.payload.lastAssistantMessage).toBe('Here are the files.')
     expect(stopped?.payload.lastAssistantMessageIsToolOutput).toBeUndefined()
   })
@@ -127,6 +133,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('Grep')
     expect(result?.payload.toolInput).toBe('foo.*bar')
   })
@@ -142,6 +149,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('BespokeTool')
     expect(result?.payload.toolInput).toBeUndefined()
   })
@@ -157,6 +165,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('TaskUpdate')
     expect(result?.payload.toolInput).toBeUndefined()
   })
@@ -171,6 +180,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     const failed = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -181,6 +191,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(failed?.payload).toMatchObject({
       state: 'working',
       lastAssistantMessage: 'file is read-only'
@@ -197,6 +208,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(retry?.payload).toMatchObject({
       state: 'working',
       toolName: 'Read',
@@ -214,6 +226,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Read')
     expect(result?.payload.toolInput).toBe('/src/index.ts')
@@ -229,6 +242,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('waiting')
     expect(result?.payload.toolName).toBe('Bash')
     expect(result?.payload.toolInput).toBe('rm -rf build')
@@ -321,6 +335,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -329,6 +344,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('Do the next thing')
     expect(result?.payload.toolName).toBeUndefined()
@@ -344,6 +360,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.lastAssistantMessage).toBe('what is up my dude')
   })
@@ -397,6 +414,7 @@ describe('Claude hook normalization', () => {
           message: { role: 'assistant', content: [{ type: 'text', text: 'final reply' }] }
         }
       ]
+
       writeFileSync(transcriptPath, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`)
 
       const result = _internals.normalizeHookPayload(
@@ -404,6 +422,7 @@ describe('Claude hook normalization', () => {
         buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath }),
         'production'
       )
+
       expect(result?.payload.lastAssistantMessage).toBe('final reply')
     })
 
@@ -418,6 +437,7 @@ describe('Claude hook normalization', () => {
           }
         }
       ]
+
       writeFileSync(transcriptPath, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`)
 
       const result = _internals.normalizeHookPayload(
@@ -425,12 +445,14 @@ describe('Claude hook normalization', () => {
         buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath }),
         'production'
       )
+
       expect(result?.payload.lastAssistantMessage).toBe('the answer is 42')
     })
 
     it('finds an assistant reply that sits past the first chunk boundary', () => {
       // Why: large tool_result entries push the final reply past the first 64 KB chunk; the scan must keep reading backward to find it.
       const filler = 'x'.repeat(70_000)
+
       const lines = [
         { role: 'assistant', message: { role: 'assistant', content: 'deeply buried reply' } },
         // 70 KB of tool_result content straddling the first chunk boundary.
@@ -449,6 +471,7 @@ describe('Claude hook normalization', () => {
           }
         }
       ]
+
       writeFileSync(transcriptPath, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`)
 
       const result = _internals.normalizeHookPayload(
@@ -456,6 +479,7 @@ describe('Claude hook normalization', () => {
         buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath }),
         'production'
       )
+
       expect(result?.payload.lastAssistantMessage).toBe('deeply buried reply')
     })
 
@@ -470,6 +494,7 @@ describe('Claude hook normalization', () => {
           }
         }
       ]
+
       writeFileSync(transcriptPath, `${lines.map((l) => JSON.stringify(l)).join('\n')}\n`)
 
       const result = _internals.normalizeHookPayload(
@@ -477,6 +502,7 @@ describe('Claude hook normalization', () => {
         buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath }),
         'production'
       )
+
       expect(result?.payload.lastAssistantMessage).toBeUndefined()
     })
   })
@@ -491,12 +517,14 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
+
     // Stop event has no tool fields, so the merged snapshot must keep the earlier PreToolUse values.
     const stop = _internals.normalizeHookPayload(
       'claude',
       buildBody({ hook_event_name: 'Stop' }),
       'production'
     )
+
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.toolName).toBe('Bash')
     expect(stop?.payload.toolInput).toBe('ls -la')

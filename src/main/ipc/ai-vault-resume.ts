@@ -29,15 +29,19 @@ export async function prepareAiVaultSessionResume(
   await options.ensureStructuredSessionOwnership?.()
   assertLegacyAiVaultResumeAllowed(args)
   const executionHost = parseExecutionHostId(args.executionHostId)
+
   if (executionHost?.kind === 'runtime') {
     if (!options.prepareRuntimeSessionResume) {
       throw new Error('The session host is unavailable. Reconnect it and retry resume.')
     }
+
     return options.prepareRuntimeSessionResume(executionHost.environmentId, args)
   }
+
   // Why: the desktop process must never materialize transcript paths owned by an SSH host.
   if (executionHost?.kind === 'ssh') {
     return { useRealCodexHome: false }
   }
+
   return options.prepareSessionResume?.(args) ?? { useRealCodexHome: false }
 }

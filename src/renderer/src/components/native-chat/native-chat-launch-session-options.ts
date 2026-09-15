@@ -28,6 +28,7 @@ export function resolveInitialNativeChatSessionOptions(
     openAgentTabsInChatByDefault: settings?.openAgentTabsInChatByDefault,
     ...args
   })
+
   return viewMode === 'chat'
     ? resolveNativeChatLaunchSessionOptions(settings?.nativeChatSessionOptions, args.agent)
     : undefined

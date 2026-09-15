@@ -23,11 +23,14 @@ export function resolveLocalhostLabelRouteForPort(
   if (port.kind !== 'workspace') {
     return null
   }
+
   const repo = (state.repos ?? []).find((entry) => entry.id === port.owner.repoId) ?? null
   const worktree = state.getKnownWorktreeById?.(port.owner.worktreeId) ?? null
+
   const project = worktree?.projectId
     ? ((state.projects ?? []).find((entry) => entry.id === worktree.projectId) ?? null)
     : null
+
   return localhostWorktreeLabelRouteForPort({ port, repo, project, settings: state.settings })
 }
 
@@ -37,16 +40,20 @@ export function useLocalhostLabelRouteForPort(
   const settings = useAppStore((s) => s.settings)
   const portWorktreeId = port.kind === 'workspace' ? port.owner.worktreeId : null
   const portRepoId = port.kind === 'workspace' ? port.owner.repoId : null
+
   const repo = useAppStore((s) =>
     portRepoId ? ((s.repos ?? []).find((entry) => entry.id === portRepoId) ?? null) : null
   )
+
   const worktree = useAppStore((s) =>
     portWorktreeId ? (s.getKnownWorktreeById?.(portWorktreeId) ?? null) : null
   )
+
   const project = useAppStore((s) =>
     worktree?.projectId
       ? ((s.projects ?? []).find((entry) => entry.id === worktree.projectId) ?? null)
       : null
   )
+
   return localhostWorktreeLabelRouteForPort({ port, repo, project, settings })
 }

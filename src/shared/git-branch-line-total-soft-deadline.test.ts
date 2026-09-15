@@ -7,12 +7,15 @@ import {
 } from './git-status-line-stats-cache'
 
 const MERGE_BASE = 'a'.repeat(40)
+
 const CACHE_KEY = 'native\0/repo'
+
 const entries = [{ path: 'a.txt', area: 'unstaged', status: 'M', added: 1, removed: 0 }]
 
 async function runPass(diffDelayMs: number): Promise<{ elapsed: number; total: unknown }> {
   const cacheKey = CACHE_KEY
   const started = Date.now()
+
   const result = await reuseOrRecomputeGitStatusLineStats({
     cacheKey,
     head: 'head-1',
@@ -29,6 +32,7 @@ async function runPass(diffDelayMs: number): Promise<{ elapsed: number; total: u
         )
     }
   })
+
   return { elapsed: Date.now() - started, total: result.branchLineTotal }
 }
 

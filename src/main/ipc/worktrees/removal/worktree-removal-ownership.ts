@@ -22,9 +22,11 @@ export async function stopPtysForDestructiveWorktreeRemoval(
 ): Promise<void> {
   const { connectionId, allowUnverifiedStop } = options
   const provider = connectionId ? getSshPtyProvider(connectionId) : getLocalPtyProvider()
+
   if (!provider) {
     throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
   }
+
   const teardownResult = await killAllProcessesForWorktree(worktreeId, {
     runtime,
     // Why: `repoId::path` ids repeat across hosts, so an unfenced sweep stops a same-id
@@ -40,14 +42,17 @@ export async function stopPtysForDestructiveWorktreeRemoval(
     ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
     ...(connectionId ? { includeLocalRegistry: false } : {})
   })
+
   // Structured sessions are counted here too: closing a user's chat is now an ordinary outcome
   // of this verb, and a removal that closed one but no PTY would otherwise log nothing at all.
   const structuredStopped = teardownResult.structuredStopped ?? 0
+
   const total =
     teardownResult.runtimeStopped +
     teardownResult.providerStopped +
     teardownResult.registryStopped +
     structuredStopped
+
   if (total > 0) {
     console.info(
       `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped} structured=${structuredStopped}`
@@ -77,17 +82,20 @@ export function removeWorktreeMetadataAndTransientState(
 ): void {
   const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
+
   const preservesSameIdOwner = Boolean(
     hostId &&
     ((persistedHostId && persistedHostId !== hostId) ||
       hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
   )
+
   // Why: worktree IDs are path-derived and reusable; drop process-local caches before the same ID can map to a new workspace.
   if (hostId) {
     store.removeWorktreeMeta(worktreeId, hostId)
   } else {
     store.removeWorktreeMeta(worktreeId)
   }
+
   if (!preservesSameIdOwner) {
     advertisedUrlWatcher.forgetWorktree(worktreeId)
     // Why: drop this worktree's localhost label routes so they don't accumulate in the proxy's route maps all session.
@@ -97,16 +105,20 @@ export function removeWorktreeMetadataAndTransientState(
     // Why: release the removed worktree's PR-refresh aliases so coalesced queue entries don't retain it all session (memory creep).
     pruneWorktreePRRefreshAliases(worktreeId)
   }
+
   // Why: removed workspaces must never resurrect from the persisted cleanup/space scan snapshots.
   const snapshotDirectory = store.getProfileStorageDirectory()
+
   if (snapshotPruneBatchId) {
     recordWorkspaceCleanupRemovalSnapshotPrune(snapshotDirectory, {
       batchId: snapshotPruneBatchId,
       worktreeId,
       executionHostId: hostId
     })
+
     return
   }
+
   void pruneWorkspaceCleanupScanSnapshot(snapshotDirectory, worktreeId, hostId)
   void pruneWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, worktreeId, hostId)
 }

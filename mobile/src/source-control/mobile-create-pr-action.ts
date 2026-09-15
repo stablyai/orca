@@ -46,9 +46,11 @@ export function buildMobileCreatePrAction({
   onCreatePr
 }: BuildMobileCreatePrActionArgs): MobileCreatePrAction {
   const noop = () => {}
+
   if (!branch || eligibilityState.kind === 'idle') {
     return hiddenAction(noop)
   }
+
   if (eligibilityState.kind === 'error') {
     return {
       visible: true,
@@ -59,7 +61,9 @@ export function buildMobileCreatePrAction({
       onPress: noop
     }
   }
+
   const eligibility = eligibilityState.eligibility
+
   if (!eligibility) {
     return {
       visible: true,
@@ -70,6 +74,7 @@ export function buildMobileCreatePrAction({
       onPress: noop
     }
   }
+
   // Why: mirror desktop's structural provider gate (supportsHostedReviewCreation)
   // instead of relying on the host always emitting a hidden blockedReason for
   // non-creatable providers.
@@ -83,6 +88,7 @@ export function buildMobileCreatePrAction({
       onPress: noop
     }
   }
+
   const copy = hostedReviewCopy(eligibility.provider)
   const label = `Create ${copy.titleLabel}`
   // Any in-flight git work blocks the action: runGitWorkflow no-ops while
@@ -97,6 +103,7 @@ export function buildMobileCreatePrAction({
 
   if (eligibility.canCreate || pushFirst) {
     const disabled = busy || stale
+
     return {
       visible: true,
       label,

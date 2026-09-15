@@ -76,22 +76,27 @@ export function normalizeFeatureTipIds(value: unknown): FeatureTipId[] {
   }
 
   const seen = new Set<FeatureTipId>()
+
   for (const item of value) {
     if (isFeatureTipId(item)) {
       seen.add(item)
     }
   }
+
   return [...seen]
 }
 
 export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<FeatureTipId> {
   const completedIds = new Set<FeatureTipId>()
+
   if (state.cliInstalled) {
     completedIds.add('orca-cli')
   }
+
   if (state.voiceDictationEnabled) {
     completedIds.add('voice-dictation')
   }
+
   for (const tip of FEATURE_TIPS) {
     if (
       tip.completedByFeatureInteractions?.some((id) =>
@@ -101,6 +106,7 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
       completedIds.add(tip.id)
     }
   }
+
   return completedIds
 }
 
@@ -109,9 +115,11 @@ export function getOrderedUnseenFeatureTips(args: {
   completedTipIds?: ReadonlySet<FeatureTipId>
 }): FeatureTip[] {
   const completedTipIds = args.completedTipIds ?? new Set<FeatureTipId>()
+
   const unseenTips = FEATURE_TIPS.filter(
     (tip) => !args.seenTipIds.has(tip.id) && !completedTipIds.has(tip.id)
   )
+
   return [
     ...unseenTips.filter((tip) => tip.priority === 'new'),
     ...unseenTips.filter((tip) => tip.priority !== 'new')

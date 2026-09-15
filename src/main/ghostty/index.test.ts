@@ -23,6 +23,7 @@ const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
 
 afterEach(() => {
   vi.clearAllMocks()
+
   if (originalXdgConfigHome !== undefined) {
     process.env.XDG_CONFIG_HOME = originalXdgConfigHome
   } else {
@@ -50,6 +51,7 @@ describe('previewGhosttyImport', () => {
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
         return { isFile: () => true }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue(`
@@ -86,15 +88,18 @@ background = #1a1a1a
       ) {
         return { isFile: () => true }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockImplementation(async (p: string) => {
       if (p === '/Users/alice/.config/ghostty/config.ghostty') {
         return 'font-size = 22\nbackground = #1a1a1a\n'
       }
+
       if (p === '/Users/alice/.config/ghostty/config') {
         return 'font-family = JetBrains Mono\nfont-size = 18\n'
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
 
@@ -122,12 +127,14 @@ background = #1a1a1a
       if (p === firstPath || p === unreadablePath) {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockImplementation(async (p: string) => {
       if (p === firstPath) {
         return 'font-size = 22\n'
       }
+
       throw new Error('EACCES')
     })
 
@@ -149,9 +156,11 @@ background = #1a1a1a
       if (p === firstPath) {
         return { isFile: () => true, size: 128 }
       }
+
       if (p === oversizedPath) {
         return { isFile: () => true, size: 1_000_001 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('font-size = 22\n')
@@ -174,11 +183,14 @@ background = #1a1a1a
     statMock.mockImplementation(async (p: string) => {
       if (p === configPath) {
         configPathStatCalls += 1
+
         if (configPathStatCalls === 1) {
           return { isFile: () => true, size: 128 }
         }
+
         throw new Error('EACCES')
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
 
@@ -197,6 +209,7 @@ background = #1a1a1a
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
         return { isFile: () => true }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('font-family = Menlo\nfont-size = 12\n')
@@ -218,6 +231,7 @@ background = #1a1a1a
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
         return { isFile: () => true }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
@@ -238,6 +252,7 @@ background = #1a1a1a
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
         return { isFile: () => true }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
@@ -268,6 +283,7 @@ background = #1a1a1a
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
         return { isFile: () => true }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('font-family = JetBrains Mono\n')

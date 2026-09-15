@@ -47,6 +47,7 @@ export function useWorkspaceSections(args: {
 
   const uniqueRepos = useMemo(() => {
     const repos = new Map<string, { id: string; color: string }>()
+
     for (const w of displayWorktrees) {
       if (!repos.has(w.repo)) {
         repos.set(w.repo, {
@@ -55,6 +56,7 @@ export function useWorkspaceSections(args: {
         })
       }
     }
+
     return [...repos.entries()].map(([name, { id, color }]) => ({ name, id, color }))
   }, [displayWorktrees, repoColorsByName, repoIdsByName])
 

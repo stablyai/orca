@@ -19,9 +19,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -32,13 +34,16 @@ function successfulHydration(segments: string[]): HydrationResult {
 function resolveProbe(pathValue: string): string {
   const env: NodeJS.ProcessEnv = { ...process.env, PATH: pathValue, PATHEXT: '.CMD;.EXE' }
   delete env.Path
+
   const result = spawnSync(
     process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe',
     ['/d', '/s', '/c', 'orca-path-probe.cmd'],
     { encoding: 'utf8', env }
   )
+
   expect(result.error).toBeUndefined()
   expect(result.status).toBe(0)
+
   return result.stdout.trim()
 }
 
@@ -64,11 +69,13 @@ describe.runIf(process.platform === 'win32')('Windows shell PATH restoration', (
 
   afterEach(() => {
     _resetHydrateShellPathCache()
+
     if (originalPath === undefined) {
       delete process.env.PATH
     } else {
       process.env.PATH = originalPath
     }
+
     rmSync(fixtureRoot, { force: true, recursive: true })
   })
 
@@ -155,6 +162,7 @@ describe.runIf(process.platform === 'win32')('Windows shell PATH restoration', (
       force: true,
       spawner: async () => {
         inheritedPath = process.env.PATH ?? ''
+
         return { segments: [], ok: false, failureReason: 'empty_path' }
       }
     })

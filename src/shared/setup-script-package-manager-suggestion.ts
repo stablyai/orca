@@ -6,6 +6,7 @@ import type {
 import { isSetupScriptImportFieldWithinLimit } from './setup-script-import-limits'
 
 const PACKAGE_JSON_PATH = 'package.json'
+
 type PackageManagerName = 'pnpm' | 'bun' | 'yarn' | 'npm'
 
 const PACKAGE_MANAGER_LOCKFILES = [
@@ -23,12 +24,14 @@ export async function inspectPackageManagerSetupCandidate(
 ): Promise<SetupScriptImportCandidate | null> {
   const packageJsonContent = await readFile(PACKAGE_JSON_PATH)
   const packageJson = parsePackageJson(packageJsonContent)
+
   if (!packageJson) {
     return null
   }
 
   const packageManager = getPackageManagerName(packageJson.packageManager)
   const packageManagerSetup = packageManager ? getPackageManagerSetup(packageManager) : null
+
   if (packageManagerSetup) {
     return {
       provider: 'package-manager',
@@ -40,18 +43,22 @@ export async function inspectPackageManagerSetupCandidate(
   }
 
   const checkFileExists = fileExists ?? fallbackFileExists(readFile)
+
   const lockfileReads = await Promise.all(
     PACKAGE_MANAGER_LOCKFILES.map(async (entry) => ({
       ...entry,
       exists: await checkFileExists(entry.path)
     }))
   )
+
   const lockfiles = lockfileReads.filter((entry) => entry.exists)
   const lockfileManagers = new Set(lockfiles.map((entry) => entry.manager))
   const selectedLockfile = lockfileManagers.size === 1 ? lockfiles[0] : null
+
   if (lockfileManagers.size > 1) {
     return null
   }
+
   const setup = selectedLockfile?.setup ?? 'npm install'
 
   return {
@@ -71,8 +78,10 @@ function parsePackageJson(content: string | null): Record<string, unknown> | nul
   if (!content) {
     return null
   }
+
   try {
     const parsed = JSON.parse(content)
+
     return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null
@@ -85,19 +94,25 @@ function getPackageManagerName(value: unknown): PackageManagerName | null {
   if (typeof value !== 'string' || !isSetupScriptImportFieldWithinLimit(value)) {
     return null
   }
+
   const packageManager = value.trim().toLowerCase()
+
   if (packageManager.startsWith('pnpm@')) {
     return 'pnpm'
   }
+
   if (packageManager.startsWith('bun@')) {
     return 'bun'
   }
+
   if (packageManager.startsWith('yarn@')) {
     return 'yarn'
   }
+
   if (packageManager.startsWith('npm@')) {
     return 'npm'
   }
+
   return null
 }
 

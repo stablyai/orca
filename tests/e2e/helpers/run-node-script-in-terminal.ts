@@ -32,6 +32,7 @@ export function stageNodeScriptForTerminal(
   // Why: forward slashes are valid for node on Windows and parse identically in
   // PowerShell, cmd, and POSIX shells; raw backslashes would be eaten by bash.
   const command = `node "${scriptPath.replaceAll('\\', '/')}"`
+
   return {
     command,
     scriptPath,
@@ -47,5 +48,6 @@ export async function runNodeScriptInTerminal(
 ): Promise<StagedTerminalNodeScript> {
   const staged = stageNodeScriptForTerminal(source, options)
   await sendToTerminal(page, ptyId, `${staged.command}\r`)
+
   return staged
 }

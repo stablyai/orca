@@ -86,6 +86,7 @@ export function UpdateErrorCardContent({
   const isCompatibility = variant === 'http1Compatibility'
   const isSecurity = variant === 'security'
   const Icon = isCompatibility ? Network : isSecurity ? ShieldAlert : AlertCircle
+
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">

@@ -46,17 +46,21 @@ export class CodexConfigMirror {
 
   readForManagedHome(managedHomePath: string): CanonicalCodexConfig | null {
     const wslInfo = parseWslUncPath(managedHomePath)
+
     if (!wslInfo) {
       return this.readHostConfig()
     }
 
     const managedRootMarker = '/.local/share/orca/codex-accounts/'
     const markerIndex = wslInfo.linuxPath.indexOf(managedRootMarker)
+
     if (markerIndex === -1) {
       return null
     }
+
     const wslHome = wslInfo.linuxPath.slice(0, markerIndex)
     const configPath = toWindowsWslPath(`${wslHome}/.codex/config.toml`, wslInfo.distro)
+
     if (!existsSync(configPath)) {
       return null
     }
@@ -71,6 +75,7 @@ export class CodexConfigMirror {
       }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
+
       return null
     }
   }
@@ -79,6 +84,7 @@ export class CodexConfigMirror {
     const modelProvider = canonicalConfig
       ? readCodexTopLevelModelProvider(canonicalConfig.contents)
       : null
+
     if (!modelProvider || modelProvider === 'openai') {
       return
     }
@@ -108,6 +114,7 @@ export class CodexConfigMirror {
     if (canonicalConfig === null) {
       return
     }
+
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
     // granted there while refreshing ordinary settings from the lane's source.
@@ -121,13 +128,16 @@ export class CodexConfigMirror {
   private readHostConfig(): CanonicalCodexConfig | null {
     const sourceHomePath = join(homedir(), '.codex')
     const primaryConfigPath = join(sourceHomePath, 'config.toml')
+
     if (!existsSync(primaryConfigPath)) {
       return null
     }
+
     try {
       return { contents: readFileSync(primaryConfigPath, 'utf-8'), sourceHomePath }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
+
       return null
     }
   }

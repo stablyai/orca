@@ -9,11 +9,13 @@ import { assertOwnedHostCodexManagedHomePath } from '../codex-accounts/host-code
  *  account homes live inside their distro and are scanned by their own lane. */
 export function getCodexAccountHomeSessionDirectories(): string[] {
   const accountsRoot = join(getOrcaUserDataPath(), 'codex-accounts')
+
   try {
     return readdirSync(accountsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .flatMap((entry) => {
         const accountHome = join(accountsRoot, entry.name, 'home')
+
         try {
           assertOwnedHostCodexManagedHomePath({
             candidatePath: accountHome,
@@ -22,6 +24,7 @@ export function getCodexAccountHomeSessionDirectories(): string[] {
             expectedAccountId: entry.name
           })
           const sessionsPath = join(accountHome, 'sessions')
+
           // Why: a redirected sessions root could make usage scan unrelated, unbounded trees.
           return lstatSync(sessionsPath).isDirectory() ? [sessionsPath] : []
         } catch {

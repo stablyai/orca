@@ -66,8 +66,10 @@ export async function startGitCommonPrimaryWatch(
         // so its presence is not evidence that primary metadata is covered.
         if (disposed || watcher) {
           await nextFallback.unsubscribe()
+
           return
         }
+
         void stopWatcherSidePolling()
         fallback = nextFallback
       })
@@ -97,6 +99,7 @@ export async function startGitCommonPrimaryWatch(
     if (!next) {
       return
     }
+
     if (
       generation !== statusRefGeneration ||
       disposed ||
@@ -105,8 +108,10 @@ export async function startGitCommonPrimaryWatch(
       getStatusRefPaths().length === 0
     ) {
       await next.unsubscribe().catch(() => {})
+
       return
     }
+
     statusRefPolling = next
   }
 
@@ -114,17 +119,22 @@ export async function startGitCommonPrimaryWatch(
     if (disposed || !watcher) {
       return
     }
+
     const generation = ++statusRefGeneration
     const selected = getStatusRefPaths().length > 0
+
     if (selected === (statusRefPolling !== null)) {
       return
     }
+
     if (!selected) {
       const current = statusRefPolling
       statusRefPolling = null
       await current?.unsubscribe().catch(() => {})
+
       return
     }
+
     await adoptStatusRefPolling(generation, await startStatusRefPollingIfSelected())
   }
 
@@ -148,15 +158,20 @@ export async function startGitCommonPrimaryWatch(
     if (disposed) {
       return
     }
+
     onWatchError?.(error)
+
     if (!onWatchError) {
       onEvents(primaryMetadataEvents(commonDirPath))
     }
+
     const current = watcher
     watcher = null
+
     if (current) {
       void current.unsubscribe().catch(() => {})
     }
+
     void stopWatcherSidePolling()
       .then(() => startFallback())
       .catch(() => {})
@@ -168,8 +183,10 @@ export async function startGitCommonPrimaryWatch(
       (error, events) => {
         if (error) {
           handleWatcherError(error)
+
           return
         }
+
         if (events.length > 0) {
           onEvents(events.map((event) => ({ type: event.type, path: event.path })))
         }
@@ -179,6 +196,7 @@ export async function startGitCommonPrimaryWatch(
         onInterruption: () => {
           if (!disposed) {
             const error = new Error('Git primary metadata watcher interrupted')
+
             if (onWatchError) {
               onWatchError(error)
             } else {
@@ -188,8 +206,10 @@ export async function startGitCommonPrimaryWatch(
         }
       }
     )
+
     if (watcher && !disposed && !fallbackFlight.pending()) {
       const generation = ++statusRefGeneration
+
       const [nextStatusRefPolling, nextBackstop] = await Promise.all([
         startStatusRefPollingIfSelected(),
         startGitCommonPrimaryPolling(
@@ -202,6 +222,7 @@ export async function startGitCommonPrimaryWatch(
           true
         )
       ])
+
       // Why: a terminal watch error can land while the two polls above are still
       // starting. handleWatcherError already ran its teardown against nulls, so
       // adopting these now would strand the repo with status-ref coverage only.
@@ -210,6 +231,7 @@ export async function startGitCommonPrimaryWatch(
           nextStatusRefPolling?.unsubscribe().catch(() => {}),
           nextBackstop.unsubscribe().catch(() => {})
         ])
+
         if (!disposed) {
           await startFallback()
         }
@@ -228,11 +250,14 @@ export async function startGitCommonPrimaryWatch(
       unsubscribeBindingChanges()
       const current = watcher
       watcher = null
+
       if (current) {
         await current.unsubscribe().catch(() => {})
       }
+
       await stopWatcherSidePolling()
       await fallbackFlight.pending()?.catch(() => {})
+
       if (fallback) {
         await fallback.unsubscribe().catch(() => {})
         fallback = null

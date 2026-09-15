@@ -52,16 +52,19 @@ describe('GitHandler', () => {
     it('reports ahead/behind counts against a real upstream remote', async () => {
       // Why: exercise the configured-upstream happy path (rev-parse HEAD@{u} + rev-list --left-right) the no-upstream test misses.
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
 
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
         gitCommit(tmpDir, 'initial')
+
         const firstSha = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
@@ -103,6 +106,7 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
+
       const baseRef = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
@@ -128,16 +132,19 @@ describe('GitHandler', () => {
 
     it('fetches from a configured remote without throwing', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
 
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
         gitCommit(tmpDir, 'initial')
+
         const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], {
           cwd: tmpDir,
           stdio: 'pipe'
@@ -162,19 +169,23 @@ describe('GitHandler', () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-rebase-bare-'))
       const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-rebase-producer-'))
       const producerDir = path.join(producerParent, 'repo')
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
         gitCommit(tmpDir, 'base')
+
         const branch = execFileSync('git', ['branch', '--show-current'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         const forkPoint = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
         execFileSync('git', ['push', '--set-upstream', 'origin', branch], {
           cwd: tmpDir,
@@ -247,15 +258,18 @@ describe('GitHandler', () => {
       const producerDir = path.join(producerParent, 'repo')
       const targetParent = mkdtempSync(path.join(tmpdir(), 'relay-git-linked-rebase-target-'))
       const targetDir = path.join(targetParent, 'feature')
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
         gitCommit(tmpDir, 'base')
+
         const baseBranch = execFileSync('git', ['branch', '--show-current'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
         execFileSync('git', ['push', '--set-upstream', 'origin', baseBranch], {
           cwd: tmpDir,
@@ -268,10 +282,12 @@ describe('GitHandler', () => {
         writeFileSync(path.join(targetDir, 'topic.txt'), 'topic')
         gitCommit(targetDir, 'topic')
         writeFileSync(path.join(tmpDir, 'source-dirty.txt'), 'leave me alone')
+
         const sourceHeadBefore = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         const sourceStatusBefore = execFileSync('git', ['status', '--short'], {
           cwd: tmpDir,
           encoding: 'utf-8'
@@ -286,10 +302,12 @@ describe('GitHandler', () => {
         execFileSync('git', ['checkout', baseBranch], { cwd: producerDir, stdio: 'pipe' })
         writeFileSync(path.join(producerDir, 'latest.txt'), 'latest')
         gitCommit(producerDir, 'latest base')
+
         const latestBaseOid = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: producerDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['push', 'origin', baseBranch], { cwd: producerDir, stdio: 'pipe' })
 
         await dispatcher.callRequest('git.rebaseFromBase', {
@@ -330,15 +348,18 @@ describe('GitHandler', () => {
     it('fast-forwards an unborn branch from the selected remote base', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-unborn-bare-'))
       const producerDir = mkdtempSync(path.join(tmpdir(), 'relay-git-unborn-producer-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
         gitInit(producerDir)
         writeFileSync(path.join(producerDir, 'base.txt'), 'base')
         gitCommit(producerDir, 'base')
+
         const branch = execFileSync('git', ['branch', '--show-current'], {
           cwd: producerDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], {
           cwd: producerDir,
           stdio: 'pipe'
@@ -366,16 +387,20 @@ describe('GitHandler', () => {
     it('cancels the active rebase fetch and still removes its private ref', async () => {
       const controller = new AbortController()
       let rejectFetch!: (error: Error) => void
+
       const fetchStarted = new Promise<void>((resolve) => {
         vi.spyOn(gitTarget, 'git').mockImplementation(async (args, _cwd, options) => {
           if (args[0] === 'remote') {
             return { stdout: 'origin\n', stderr: '' }
           }
+
           if (args[0] === 'merge-base') {
             return { stdout: 'fork-point\n', stderr: '' }
           }
+
           if (args[0] === 'fetch') {
             resolve()
+
             return new Promise((_resolve, reject) => {
               rejectFetch = reject
               options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
@@ -383,6 +408,7 @@ describe('GitHandler', () => {
               })
             })
           }
+
           return { stdout: '', stderr: '' }
         })
       })
@@ -392,6 +418,7 @@ describe('GitHandler', () => {
         { worktreePath: tmpDir, baseRef: 'origin/main' },
         { isStale: () => false, signal: controller.signal }
       )
+
       await fetchStarted
       controller.abort()
       await expect(request).rejects.toThrow('aborted')
@@ -406,6 +433,7 @@ describe('GitHandler', () => {
 
     it('fetches the explicit publish target remote', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-fork-bare-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
 
@@ -438,16 +466,19 @@ describe('GitHandler', () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
       const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-producer-'))
       const producerDir = path.join(producerParent, 'repo')
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
 
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
         gitCommit(tmpDir, 'initial')
+
         const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], {
           cwd: tmpDir,
           stdio: 'pipe'
@@ -517,16 +548,19 @@ describe('GitHandler', () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-bare-'))
       const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-producer-'))
       const producerDir = path.join(producerParent, 'repo')
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
 
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
         gitCommit(tmpDir, 'initial')
+
         const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], {
           cwd: tmpDir,
           stdio: 'pipe'
@@ -548,6 +582,7 @@ describe('GitHandler', () => {
         writeFileSync(path.join(producerDir, 'base.txt'), 'updated')
         gitCommit(producerDir, 'remote update')
         execFileSync('git', ['push', 'origin', branch], { cwd: producerDir, stdio: 'pipe' })
+
         const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: producerDir,
           encoding: 'utf-8'
@@ -564,6 +599,7 @@ describe('GitHandler', () => {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         expect(actual).toBe(expected)
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
@@ -587,15 +623,18 @@ describe('GitHandler', () => {
 
     it('fetches GitHub pull request heads through the narrow fetch RPC', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-github-pr-bare-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'pr.txt'), 'head')
         gitCommit(tmpDir, 'pr head')
+
         const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
         execFileSync('git', ['push', 'origin', 'HEAD:refs/pull/42/head'], {
           cwd: tmpDir,
@@ -612,10 +651,12 @@ describe('GitHandler', () => {
         // another project's PR #42 out of the same object database.
         const component = reviewHeadRemoteRefComponent('origin', bareDir)
         expect(result.localRef).toBe(`refs/orca/pull/${component}/42`)
+
         const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         expect(actual).toBe(expected)
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
@@ -641,15 +682,18 @@ describe('GitHandler', () => {
 
     it('fetches GitLab merge request heads through the narrow fetch RPC', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-bare-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'mr.txt'), 'head')
         gitCommit(tmpDir, 'mr head')
+
         const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
         execFileSync('git', ['push', 'origin', 'HEAD:refs/merge-requests/42/head'], {
           cwd: tmpDir,
@@ -666,17 +710,21 @@ describe('GitHandler', () => {
         // concurrent fetch can't retarget the caller's rev-parse of the checkout.
         const component = reviewHeadRemoteRefComponent('origin', bareDir)
         expect(result.localRef).toBe(`refs/orca/merge-requests/${component}/42`)
+
         const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         expect(actual).toBe(expected)
+
         // Legacy contract: pre-durable-ref desktop clients call this method name
         // and then resolve FETCH_HEAD, which a refspec fetch still writes.
         const fetchHead = execFileSync('git', ['rev-parse', '--verify', 'FETCH_HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         expect(fetchHead).toBe(expected)
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
@@ -685,15 +733,18 @@ describe('GitHandler', () => {
 
     it('fetches GitLab merge request heads through the versioned durable-ref RPC', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-ref-bare-'))
+
       try {
         execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
         gitInit(tmpDir)
         writeFileSync(path.join(tmpDir, 'mr.txt'), 'head')
         gitCommit(tmpDir, 'mr head')
+
         const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
         execFileSync('git', ['push', 'origin', 'HEAD:refs/merge-requests/77/head'], {
           cwd: tmpDir,
@@ -709,10 +760,12 @@ describe('GitHandler', () => {
 
         const component = reviewHeadRemoteRefComponent('origin', bareDir)
         expect(result.localRef).toBe(`refs/orca/merge-requests/${component}/77`)
+
         const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()
+
         expect(actual).toBe(expected)
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })

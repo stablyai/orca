@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 const originalCliCommand = process.env.ORCA_CLI_COMMAND
+
 const originalPackagedLauncher = process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER
+
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+
 const originalExitCode = process.exitCode
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'

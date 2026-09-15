@@ -15,6 +15,7 @@ describe('RelayControlClient close reason', () => {
     for (const client of clients.splice(0)) {
       client.closeNow()
     }
+
     await Promise.all(
       servers.splice(0).map(
         (server) =>
@@ -22,6 +23,7 @@ describe('RelayControlClient close reason', () => {
             for (const socket of server.clients) {
               socket.terminate()
             }
+
             server.close(() => resolve())
           })
       )
@@ -36,11 +38,14 @@ describe('RelayControlClient close reason', () => {
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('expected TCP relay test server')
     }
+
     const accepted = new Promise<WebSocket>((resolve) => server.once('connection', resolve))
     const keypair = nacl.box.keyPair()
+
     const client = new RelayControlClient({
       cellUrl: `http://127.0.0.1:${address.port}`,
       relayJwt: 'scoped-token',
@@ -53,6 +58,7 @@ describe('RelayControlClient close reason', () => {
       onDrain: vi.fn(),
       onClose: vi.fn()
     })
+
     clients.push(client)
     // The handshake never completes here; only the transport close matters.
     void client.connect().catch(() => {})
@@ -63,9 +69,11 @@ describe('RelayControlClient close reason', () => {
       socket.once('pong', () => resolve())
       socket.ping()
     })
+
     const closed = new Promise<ObservedClose>((resolve) => {
       socket.once('close', (code, reason) => resolve({ code, reason: reason.toString() }))
     })
+
     return { client, closed }
   }
 

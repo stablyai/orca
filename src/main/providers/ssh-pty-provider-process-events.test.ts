@@ -39,6 +39,7 @@ describe('SshPtyProvider process listings and events', () => {
     expect(mux.request).toHaveBeenLastCalledWith('pty.listProcesses', undefined, undefined)
 
     vi.useFakeTimers()
+
     try {
       mux.request.mockResolvedValue([])
       await provider.listProcesses({ deadlineMs: Date.now() + 4321 })

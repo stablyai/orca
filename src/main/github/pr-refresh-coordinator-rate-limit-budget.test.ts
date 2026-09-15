@@ -2,15 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate } from './pr-refresh-coordinator-test-harness'
@@ -51,9 +56,11 @@ describe('pr-refresh-coordinator', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+
     const pausedEvents = sendMock.mock.calls
       .map(([, event]) => event)
       .filter((event) => event.status === 'paused' && event.skippedReason === 'rate-limit')
+
     expect(pausedEvents).toHaveLength(0)
   })
 
@@ -83,6 +90,7 @@ describe('pr-refresh-coordinator', () => {
       kind: 'no-pr',
       fetchedAt: Date.now()
     })
+
     const executionOptions = {
       cwd: testCase.repoPath,
       ...testCase.localGitOptions
@@ -125,6 +133,7 @@ describe('pr-refresh-coordinator', () => {
     let drainedItems = 0
     getRateLimitMock.mockImplementation(async () => {
       drainedItems += 1
+
       return { ok: true }
     })
     repositoryRateLimitGuardMock.mockImplementation(() =>
@@ -157,6 +166,7 @@ describe('pr-refresh-coordinator', () => {
     const pausedEvents = sendMock.mock.calls
       .map(([, event]) => event)
       .filter((event) => event.status === 'paused' && event.skippedReason === 'rate-limit')
+
     expect(pausedEvents).toHaveLength(3)
     expect(getPRForBranchOutcomeMock.mock.calls.map((call) => call[1])).toEqual([
       'feature/2',
@@ -173,6 +183,7 @@ describe('pr-refresh-coordinator', () => {
     async ({ primaryResetAt, retryDisabledUntil, expectedGateUntil }) => {
       const { refreshPRNow, reportVisiblePRRefreshCandidates } =
         await import('./pr-refresh-coordinator')
+
       const candidate = makeCandidate()
       getPRForBranchOutcomeMock.mockResolvedValueOnce({
         kind: 'upstream-error',

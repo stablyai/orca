@@ -18,6 +18,7 @@ function installGlobalStaleTagForegroundDrain(): void {
   if (globalStaleTagDrainInstalled) {
     return
   }
+
   globalStaleTagDrainInstalled = true
   AppState.addEventListener('change', (state) => {
     if (state === 'active') {
@@ -32,22 +33,27 @@ export function useMobileDictationForegroundKeepAwake(
 ): void {
   useEffect(() => {
     installGlobalStaleTagForegroundDrain()
+
     // Android keeps FLAG_KEEP_SCREEN_ON on the Activity window, so Activity
     // recreation silently drops it mid-dictation; refresh on return to
     // active. iOS re-applies natively on foreground.
     if (Platform.OS !== 'android') {
       return
     }
+
     // A retry from an earlier foreground event can outlive a newer reacquire and
     // deactivate the recovered tag; a run token invalidated on each AppState
     // change and on unmount drops superseded retry chains.
     let reacquireRun = 0
+
     const reacquireWithRetry = (dictationId: string, attempt: number, run: number): void => {
       void keepAwakeOwner.reacquire(dictationId).catch(() => {
         const delay = REACQUIRE_RETRY_DELAYS_MS[attempt]
+
         if (delay === undefined) {
           return
         }
+
         setTimeout(() => {
           if (reacquireRun === run && activeIdRef.current === dictationId) {
             reacquireWithRetry(dictationId, attempt + 1, run)
@@ -55,13 +61,16 @@ export function useMobileDictationForegroundKeepAwake(
         }, delay)
       })
     }
+
     const sub = AppState.addEventListener('change', (state) => {
       const run = ++reacquireRun
       const dictationId = activeIdRef.current
+
       if (state === 'active' && dictationId) {
         reacquireWithRetry(dictationId, 0, run)
       }
     })
+
     return () => {
       reacquireRun += 1
       sub.remove()

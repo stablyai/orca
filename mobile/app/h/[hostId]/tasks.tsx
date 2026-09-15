@@ -73,5 +73,6 @@ export default function MobileTasksScreen() {
   const stage34 = useMobileTasksPickerProjection(stage33)
   const stage35 = useMobileTasksProviderViewProjection(stage34)
   const stage36 = useMobileTasksConnectionPresentation(stage35)
+
   return MobileTasksLegacySurface({ model: stage36 })
 }

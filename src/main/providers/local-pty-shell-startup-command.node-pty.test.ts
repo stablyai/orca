@@ -14,13 +14,16 @@ import { setTestUserDataPath } from './local-pty-shell-ready-test-harness'
 const SHELLS = ['bash', 'zsh', 'fish'].filter(
   (shell) => process.platform !== 'win32' && spawnSync(shell, ['--version']).status === 0
 )
+
 const STARTUP_COMMAND = `bash -c 'read -r line; printf "__STARTUP_INPUT__:%s\\n" "$line"'`
+
 const BLACK: TerminalViewRgb = [0, 0, 0]
 
 function afterCommand(shell: string): string {
   if (shell === 'fish') {
     return `if set -q ${POSIX_SHELL_STARTUP_COMMAND_ENV}; echo __AFTER_ENV__:present; else; echo __AFTER_ENV__:missing; end; exit\n`
   }
+
   return `printf '__AFTER_ENV__:%s\\n' "\${${POSIX_SHELL_STARTUP_COMMAND_ENV}-missing}"; exit\n`
 }
 
@@ -39,15 +42,18 @@ describe('local POSIX shell startup-command delivery', () => {
     async (shell) => {
       testHome = mkdtempSync(join(tmpdir(), `orca-${shell}-startup-command-`))
       setTestUserDataPath(testHome)
+
       const launch = getShellLaunchConfig(
         shell,
         ['overlay', 'markers', 'ready', 'identity'],
         STARTUP_COMMAND
       )
+
       expect(launch.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(STARTUP_COMMAND)
 
       const output = await new Promise<string>((resolve, reject) => {
         let proc!: pty.IPty
+
         const emulator = new HeadlessEmulator({
           cols: 120,
           rows: 30,
@@ -57,6 +63,7 @@ describe('local POSIX shell startup-command delivery', () => {
             }
           }
         })
+
         emulator.installViewAttributeResponder(() => ({
           foreground: [255, 255, 255],
           background: BLACK,
@@ -82,22 +89,26 @@ describe('local POSIX shell startup-command delivery', () => {
         let transcript = ''
         let sentInput = false
         let sentAfter = false
+
         const ingress = new PtyStartupIngress({
           ownerBackend: 'posix-pty',
           write: (data) => proc.write(data),
           onEmission: (emission) => {
             transcript += emission.data
             void emulator.write(emission.data, { forwardQueryReplies: true })
+
             if (!sentInput && transcript.includes(STARTUP_COMMAND)) {
               sentInput = true
               proc.write('hello\n')
             }
+
             if (!sentAfter && transcript.includes('__STARTUP_INPUT__:hello')) {
               sentAfter = true
               proc.write(afterCommand(shell))
             }
           }
         })
+
         const timeout = setTimeout(() => {
           proc.kill()
           emulator.dispose()

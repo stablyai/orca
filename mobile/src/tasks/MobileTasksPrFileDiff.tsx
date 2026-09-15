@@ -24,9 +24,11 @@ export function diffLinePrefix(kind: GitHubPrFileDiffLine['kind']): string {
   if (kind === 'added') {
     return '+'
   }
+
   if (kind === 'removed') {
     return '-'
   }
+
   return ' '
 }
 
@@ -54,11 +56,14 @@ export function GitHubPrFileDiff({
       ),
     [contents.modified, contents.original]
   )
+
   const syntaxLanguage = useMemo(() => resolveMobileSyntaxLanguage(filePath), [filePath])
+
   const visibleDiffLines = useMemo(
     () => highlightMobileDiffLines(diffPreview.lines, syntaxLanguage),
     [diffPreview.lines, syntaxLanguage]
   )
+
   const hiddenDiffLineCount = Math.max(0, diffPreview.totalLineCount - visibleDiffLines.length)
 
   if (diffPreview.totalLineCount === 0) {
@@ -75,6 +80,7 @@ export function GitHubPrFileDiff({
       {visibleDiffLines.map((line) => {
         const commentLine = line.kind === 'removed' ? undefined : line.newLineNumber
         const draftKey = commentLine === undefined ? '' : `${filePath}:${commentLine}`
+
         return (
           <View
             key={line.key}

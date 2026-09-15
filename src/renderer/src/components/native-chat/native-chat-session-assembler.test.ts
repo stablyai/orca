@@ -23,6 +23,7 @@ describe('assembleNativeChatSession', () => {
       blocks: [{ type: 'text', text: 'partial...' }],
       timestamp: 100
     })
+
     const transcript = msg({
       id: 'transcript-1',
       source: 'transcript',
@@ -66,6 +67,7 @@ describe('assembleNativeChatSession', () => {
       blocks: [{ type: 'text', text: 'Run the tests' }],
       timestamp: null
     })
+
     const transcript = msg({
       id: 'transcript-1',
       source: 'transcript',
@@ -91,6 +93,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image: source: /Users/me/Downloads/3d.png]' }]
     })
+
     const prompt = msg({
       id: 'u-prompt',
       role: 'user',
@@ -119,6 +122,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] what do you see' }]
     })
+
     const companion = msg({
       id: 'z-companion',
       role: 'user',
@@ -148,18 +152,21 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] inspect the first' }]
     })
+
     const firstCompanion = msg({
       id: 'z-first-companion',
       role: 'user',
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image: source: /tmp/first.png]' }]
     })
+
     const secondPrompt = msg({
       id: 'b-second-prompt',
       role: 'user',
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] inspect the second' }]
     })
+
     const secondCompanion = msg({
       id: 'y-second-companion',
       role: 'user',
@@ -200,11 +207,13 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] inspect this' }]
     })
+
     const unrelated = msg({
       id: 'm-answer',
       timestamp: 100,
       blocks: [{ type: 'text', text: 'unrelated' }]
     })
+
     const companion = msg({
       id: 'z-companion',
       role: 'user',
@@ -234,6 +243,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image: source: /Users/me/Downloads/3d.png]' }]
     })
+
     const prompt = msg({
       id: 'u-prompt',
       role: 'user',
@@ -262,6 +272,7 @@ describe('assembleNativeChatSession', () => {
       turnId: 't9',
       timestamp: 10
     })
+
     const transcript = msg({
       id: 'shared-id',
       source: 'transcript',
@@ -298,6 +309,7 @@ describe('assembleNativeChatSession', () => {
       agent: 'claude',
       status: 'loading'
     })
+
     expect(session.status).toBe('loading')
   })
 
@@ -308,6 +320,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'tool-call', name: 'read', input: { path: 'a.txt' } }]
     })
+
     const second = msg({
       id: 'tc-2',
       role: 'assistant',
@@ -335,6 +348,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: 'run the tests' }]
     })
+
     const second = msg({
       id: 'u-2',
       role: 'user',
@@ -358,6 +372,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: 'go' }]
     })
+
     const second = msg({
       id: 'u-2',
       role: 'user',
@@ -383,6 +398,7 @@ describe('assembleNativeChatSession', () => {
       timestamp: 100,
       blocks: [{ type: 'text', text: 'the answer' }]
     })
+
     const transcript = msg({
       id: 'transcript-1',
       source: 'transcript',
@@ -409,6 +425,7 @@ describe('assembleNativeChatSession', () => {
       status: 'error',
       error: 'transcript unreadable'
     })
+
     expect(session.status).toBe('error')
     expect(session.error).toBe('transcript unreadable')
   })

@@ -41,6 +41,7 @@ export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): S
   if (input.textOnly) {
     return ['text']
   }
+
   return SMART_MODE_OPTIONS.filter((option) => {
     switch (option.id) {
       case 'smart':
@@ -64,9 +65,11 @@ export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): S
 // 'text' for non-git).
 export function resolveDefaultSmartMode(input: SmartModeAvailabilityInput): SmartNameMode {
   const available = resolveAvailableSmartModes(input)
+
   if (available.includes('smart')) {
     return 'smart'
   }
+
   return available[0] ?? 'text'
 }
 
@@ -77,6 +80,7 @@ export function normalizeSmartMode(
   input: SmartModeAvailabilityInput
 ): SmartNameMode {
   const available = resolveAvailableSmartModes(input)
+
   return available.includes(mode) ? mode : resolveDefaultSmartMode(input)
 }
 

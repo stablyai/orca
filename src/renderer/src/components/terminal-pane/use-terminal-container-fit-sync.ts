@@ -29,10 +29,13 @@ export function useTerminalContainerFitSync({
     if (!isSyncFitEnabled) {
       return
     }
+
     const onSyncFit = (): void => {
       managerRef.current?.fitAllPanes()
     }
+
     window.addEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
+
     return () => {
       window.removeEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
     }
@@ -42,10 +45,13 @@ export function useTerminalContainerFitSync({
     if (!isVisible) {
       return
     }
+
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     // Why: ResizeObserver fires on every incremental size change during
     // continuous window resizes or layout animations.  Each fitPanes() call
     // triggers fitAddon.fit() -> terminal.resize() which, when the column
@@ -55,21 +61,27 @@ export function useTerminalContainerFitSync({
     // UI while a sidebar opens or a window resizes.
     const RESIZE_DEBOUNCE_MS = 150
     let timerId: ReturnType<typeof setTimeout> | null = null
+
     const resizeObserver = new ResizeObserver(() => {
       if (timerId !== null) {
         clearTimeout(timerId)
       }
+
       timerId = setTimeout(() => {
         timerId = null
         const manager = managerRef.current
+
         if (manager) {
           fitPanes(manager)
         }
       }, RESIZE_DEBOUNCE_MS)
     })
+
     resizeObserver.observe(container)
+
     return () => {
       resizeObserver.disconnect()
+
       if (timerId !== null) {
         clearTimeout(timerId)
       }

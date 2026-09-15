@@ -46,8 +46,10 @@ export function SourceControlEntryContextMenu({
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
+
   const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
+
   const openInEntries = React.useMemo(
     () => getWorktreeOpenInEntries(openInApplications, fileManagerLabel),
     [fileManagerLabel, openInApplications]
@@ -57,6 +59,7 @@ export function SourceControlEntryContextMenu({
     if (!absolutePath) {
       return
     }
+
     void window.api.ui.writeClipboardText(absolutePath)
   }, [absolutePath])
 
@@ -64,6 +67,7 @@ export function SourceControlEntryContextMenu({
     if (!relativePath) {
       return
     }
+
     void window.api.ui.writeClipboardText(relativePath)
   }, [relativePath])
 
@@ -71,6 +75,7 @@ export function SourceControlEntryContextMenu({
     if (!absolutePath) {
       return
     }
+
     onRevealInExplorer(currentWorktreeId, absolutePath)
   }, [absolutePath, currentWorktreeId, onRevealInExplorer])
 
@@ -79,6 +84,7 @@ export function SourceControlEntryContextMenu({
       if (!absolutePath) {
         return
       }
+
       void openWorktreePath({
         target,
         worktreePath: absolutePath,
@@ -121,6 +127,7 @@ export function SourceControlEntryContextMenu({
           <ContextMenuSubContent className="w-52">
             {openInEntries.map((entry) => {
               const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+
               return (
                 <ContextMenuItem
                   key={entry.id}

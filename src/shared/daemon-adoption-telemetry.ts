@@ -5,6 +5,7 @@
 
 /** How the adopted daemon's recorded app version compares to the running app. */
 export const DAEMON_ADOPTED_APP_VERSION_MATCH = ['same', 'different', 'unknown'] as const
+
 export type DaemonAdoptedAppVersionMatch = (typeof DAEMON_ADOPTED_APP_VERSION_MATCH)[number]
 
 /**
@@ -18,6 +19,7 @@ export const DAEMON_SPAWNER_PATH_CLASSES = [
   'missing',
   'unknown'
 ] as const
+
 export type DaemonSpawnerPathClass = (typeof DAEMON_SPAWNER_PATH_CLASSES)[number]
 
 export const DAEMON_TCC_ATTRIBUTION_VALUES = ['intact', 'severed', 'unknown'] as const
@@ -30,6 +32,7 @@ export const DAEMON_PTY_CWD_CLASSES = [
   'other-home',
   'outside-home'
 ] as const
+
 export type DaemonPtyCwdClass = (typeof DAEMON_PTY_CWD_CLASSES)[number]
 
 export function classifyDaemonSpawnerPath(
@@ -39,21 +42,27 @@ export function classifyDaemonSpawnerPath(
   if (!spawnerExecPath) {
     return 'unknown'
   }
+
   if (!exists(spawnerExecPath)) {
     return 'missing'
   }
+
   if (/\/Library\/Caches\/[^/]*ShipIt\//.test(spawnerExecPath)) {
     return 'updater-cache'
   }
+
   return /^(?:\/private)?\/Applications\//.test(spawnerExecPath) ? 'applications' : 'other'
 }
 
 export function classifyDaemonPtyCwd(cwd: string, homeDir: string): DaemonPtyCwdClass {
   const home = homeDir.replace(/\/+$/, '')
+
   if (!home || !(cwd === home || cwd.startsWith(`${home}/`))) {
     return 'outside-home'
   }
+
   const topLevel = cwd.slice(home.length + 1).split('/')[0]
+
   switch (topLevel) {
     case 'Documents':
       return 'documents'

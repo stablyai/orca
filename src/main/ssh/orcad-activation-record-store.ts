@@ -27,19 +27,24 @@ export async function readOrcadActivationRecord(options: {
   signal?: AbortSignal
 }): Promise<OrcadActivationRecord> {
   const path = orcadActivationPath(options.host, options.remoteHome)
+
   const raw = await execCommand(options.conn, `cat ${shellQuote(path)} 2>/dev/null || true`, {
     wrapCommand: options.host.commandDialect !== 'powershell',
     signal: options.signal
   }).catch(() => '')
+
   const parsed = parseOrcadActivationRecord(raw)
+
   if (parsed.state === 'ok') {
     return parsed.record
   }
+
   if (parsed.state === 'unreadable') {
     // Why throw: an unreadable record is not an empty one. Treating it as empty would
     // activate over a live install and orphan its rollback target.
     throw new Error(`Cannot read this host's orcad activation record: ${parsed.reason}`)
   }
+
   return emptyOrcadActivationRecord()
 }
 

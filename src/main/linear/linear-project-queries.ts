@@ -38,16 +38,20 @@ export async function listProjects(
   const first = clampLimit(limit)
   const trimmed = query?.trim()
   const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${first}`
+
   return readCollection(
     key,
     workspaceId,
     async (entry) => {
       const variables = trimmed ? { term: trimmed, first } : { first, orderBy: 'updatedAt' }
+
       const result = await entry.client.client.rawRequest<
         ProjectConnectionResponse,
         LinearRawVariables
       >(trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY, variables)
+
       const connection = trimmed ? result.data?.searchProjects : result.data?.projects
+
       return {
         items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
         hasMore: !!connection?.pageInfo?.hasNextPage
@@ -63,24 +67,31 @@ export async function listProjectsByExactName(
   force = false
 ): Promise<LinearProjectSummary[]> {
   const projectName = name.trim()
+
   if (!projectName) {
     throw new Error('Project name is required')
   }
+
   const normalized = projectName.toLowerCase()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   const key = `listProjectsByExactName:${concreteWorkspaceId}:${normalized}`
+
   return coalesce(
     key,
     async () => {
       const entries = getClients(concreteWorkspaceId)
       const entry = entries[0]
+
       if (!entry) {
         return []
       }
+
       await acquire()
+
       try {
         const matches: LinearProjectSummary[] = []
         let after: string | undefined
+
         while (true) {
           const result = await entry.client.client.rawRequest<
             ProjectConnectionResponse,
@@ -90,13 +101,17 @@ export async function listProjectsByExactName(
             first: LINEAR_PROJECT_API_PAGE_SIZE_MAX,
             ...(after ? { after } : {})
           })
+
           const connection = result.data?.searchProjects
+
           for (const project of connection?.nodes ?? []) {
             if (project.name.trim().toLowerCase() === normalized) {
               matches.push(mapProjectForWorkspace(entry, project))
             }
           }
+
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
           if (
             connection?.pageInfo?.hasNextPage !== true ||
             !nextCursor ||
@@ -105,13 +120,16 @@ export async function listProjectsByExactName(
           ) {
             break
           }
+
           after = nextCursor
         }
+
         return matches
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
         }
+
         throw error
       } finally {
         release()
@@ -128,24 +146,31 @@ export async function getProject(
 ): Promise<LinearProjectDetail | null> {
   const projectId = id.trim()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+
   if (!projectId) {
     throw new Error('Project ID is required')
   }
+
   const key = `getProject:${concreteWorkspaceId}:${projectId}`
+
   return coalesce(
     key,
     async () => {
       const entries = getClients(concreteWorkspaceId)
       const entry = entries[0]
+
       if (!entry) {
         return null
       }
+
       await acquire()
+
       try {
         const result = await entry.client.client.rawRequest<
           ProjectConnectionResponse,
           LinearRawVariables
         >(PROJECT_QUERY, { id: projectId })
+
         return result.data?.project
           ? mapProjectDetailForWorkspace(entry, result.data.project)
           : null
@@ -153,6 +178,7 @@ export async function getProject(
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
         }
+
         throw error
       } finally {
         release()
@@ -167,28 +193,35 @@ export async function createProject(
   workspaceId?: string | null
 ): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> {
   const entry = getClients(workspaceId)[0]
+
   if (!entry) {
     return { ok: false, error: 'Not connected to Linear' }
   }
 
   await acquire()
+
   try {
     const result = await entry.client.client.rawRequest<
       ProjectMutationResponse,
       LinearRawVariables
     >(CREATE_PROJECT_MUTATION, { input })
+
     const payload = result.data?.projectCreate
     const project = payload?.project
+
     if (!payload?.success || !project) {
       return { ok: false, error: 'Linear project create failed' }
     }
+
     return { ok: true, project: mapProjectDetailForWorkspace(entry, project) }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
       throw error
     }
+
     const message = error instanceof Error ? error.message : String(error)
+
     return { ok: false, error: message }
   } finally {
     release()

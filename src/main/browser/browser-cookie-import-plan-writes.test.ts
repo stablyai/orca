@@ -3,6 +3,7 @@ import { planImportWrites, type SourceCookieToWrite } from './browser-cookie-imp
 
 function cookie(domain: string, name: string, partition: SourceCookieToWrite['partition']) {
   const host = domain.startsWith('.') ? domain.slice(1) : domain
+
   return {
     url: `https://${host}/`,
     domain,
@@ -18,6 +19,7 @@ function cookie(domain: string, name: string, partition: SourceCookieToWrite['pa
 }
 
 const READABLE = { status: 'unpartitioned' } as const
+
 const UNREADABLE = {
   status: 'unreadable',
   reason: 'schema has no has_cross_site_ancestor'

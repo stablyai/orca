@@ -30,6 +30,7 @@ export function shouldShowRemoteDownloadAction(
   const hasDownloadCapability = node.isDirectory
     ? Boolean(connectionId && supportsFolderDownload)
     : Boolean(connectionId || runtimeDownloadContext)
+
   return (
     hasDownloadCapability &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true

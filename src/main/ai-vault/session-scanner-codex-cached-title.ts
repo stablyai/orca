@@ -17,6 +17,7 @@ export async function refreshCodexTitleFromIndex(
   readIndexedTitle: (sessionId: string) => Promise<string | null>
 ): Promise<AiVaultSession> {
   const title = await readIndexedTitle(session.sessionId)
+
   return title && title !== session.title ? { ...session, title } : session
 }
 

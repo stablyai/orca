@@ -6,6 +6,7 @@ import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from '../..
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { REVIEW_THREADS_QUERY } from './pr-review-threads-query'
+
 /**
  * Get all comments on a PR — both top-level conversation comments and inline
  * review comments (including suggestions). Uses GraphQL for review threads
@@ -24,13 +25,17 @@ export async function getPRComments(
     connectionId,
     localGitOptions
   )
+
   if (connectionId && !ownerRepo) {
     throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
   }
+
   if (ownerRepo) {
     await assertRateLimitBudget('core', ownerRepo, ghOptions)
   }
+
   await acquire()
+
   try {
     if (ownerRepo) {
       // Why: --cache 60s saves rate-limit budget on normal loads; explicit refresh skips it for fresh data.
@@ -40,6 +45,7 @@ export async function getPRComments(
       // Why: allSettled so one failing endpoint doesn't blank out all comments; failed sources contribute zero.
       const reviewThreadsGuard = repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions)
       let reviewThreadsFetch: Promise<{ stdout: string; stderr: string } | null>
+
       if (reviewThreadsGuard.blocked) {
         reviewThreadsFetch = Promise.resolve(null)
       } else {
@@ -60,6 +66,7 @@ export async function getPRComments(
           ghOptions
         )
       }
+
       const [issueResult, threadsResult, reviewsResult] = await Promise.allSettled([
         ghExecFileAsync(
           ['api', ...cacheArgs, `${base}/issues/${prNumber}/comments?per_page=100`],
@@ -72,6 +79,7 @@ export async function getPRComments(
           ghOptions
         )
       ])
+
       noteRepositoryRateLimitSpend(ownerRepo, 'core', 2, ghOptions)
 
       // Parse issue comments (REST)
@@ -82,7 +90,9 @@ export async function getPRComments(
         created_at: string
         html_url: string
       }
+
       let issueComments: PRComment[] = []
+
       if (issueResult.status === 'fulfilled') {
         issueComments = (JSON.parse(issueResult.value.stdout) as RESTComment[]).map(
           (c): PRComment => ({
@@ -120,6 +130,7 @@ export async function getPRComments(
           }[]
         }
       }
+
       type GQLIssueComment = {
         id: string
         databaseId: number
@@ -129,8 +140,10 @@ export async function getPRComments(
         url: string
         reactionGroups?: GitHubGraphQLReactionGroup[] | null
       }
+
       let graphQLReviewSummaries: PRComment[] | undefined
       const reviewComments: PRComment[] = []
+
       if (threadsResult.status === 'fulfilled' && threadsResult.value) {
         const threadsData = JSON.parse(threadsResult.value.stdout) as {
           data?: {
@@ -143,12 +156,15 @@ export async function getPRComments(
             } | null
           } | null
         }
+
         // Why: graphql can exit 0 with data.repository null plus an errors array (scopes, field-level denial);
         // dereferencing it would throw and drop the REST halves fetched alongside it.
         const pullRequest = threadsData.data?.repository?.pullRequest
+
         if (!pullRequest) {
           console.warn('Review threads response missing pullRequest; keeping REST results')
         }
+
         const graphQLIssueComments = (pullRequest?.comments?.nodes ?? []).map((c): PRComment => ({
           id: c.databaseId,
           author: c.author?.login ?? 'ghost',
@@ -160,9 +176,11 @@ export async function getPRComments(
           reactionSubjectId: c.id,
           reactions: mapGraphQLReactionGroups(c.reactionGroups)
         }))
+
         if (graphQLIssueComments.length > 0) {
           issueComments = graphQLIssueComments
         }
+
         // Why: leave undefined when the payload is incomplete so the REST review summaries stay in use.
         graphQLReviewSummaries = pullRequest
           ? (pullRequest.reviews?.nodes ?? [])
@@ -181,6 +199,7 @@ export async function getPRComments(
           : undefined
 
         const threads = pullRequest?.reviewThreads?.nodes ?? []
+
         for (const thread of threads) {
           for (const c of thread.comments.nodes) {
             reviewComments.push({
@@ -218,7 +237,9 @@ export async function getPRComments(
         submitted_at: string
         html_url: string
       }
+
       let reviewSummaries: PRComment[] = []
+
       if (graphQLReviewSummaries) {
         reviewSummaries = graphQLReviewSummaries
       } else if (reviewsResult.status === 'fulfilled') {
@@ -239,6 +260,7 @@ export async function getPRComments(
 
       const all = [...issueComments, ...reviewComments, ...reviewSummaries]
       all.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
       return all
     }
 
@@ -247,7 +269,9 @@ export async function getPRComments(
       ['pr', 'view', String(prNumber), '--json', 'comments'],
       ghOptions
     )
+
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
+
     const data = JSON.parse(stdout) as {
       comments: {
         author: { login: string }
@@ -256,6 +280,7 @@ export async function getPRComments(
         url: string
       }[]
     }
+
     return (data.comments ?? []).map((c, i) => ({
       id: i,
       author: c.author?.login ?? 'ghost',
@@ -266,6 +291,7 @@ export async function getPRComments(
     }))
   } catch (err) {
     console.warn('getPRComments failed:', err)
+
     return []
   } finally {
     release()

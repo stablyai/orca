@@ -48,27 +48,32 @@ export const FIXTURE_COMMENTS: PRComment[] = [
 export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommentsSidebarSeed> {
   return page.evaluate(async (fixtureComments: PRComment[]) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
+
     const worktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+
     if (!worktree) {
       throw new Error('seeded e2e-secondary worktree not found')
     }
 
     state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+
     if (!repo) {
       throw new Error('active repo not found')
     }
 
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
     const prNumber = 73
+
     const pr: PRInfo = {
       number: prNumber,
       title: 'E2E PR comments sidebar',
@@ -79,6 +84,7 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       mergeable: 'MERGEABLE',
       prRepo: { owner: 'acme', repo: 'orca' }
     }
+
     const prCacheEntries = {
       [`${repo.id}::${branch}`]: {
         data: pr,
@@ -126,12 +132,14 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
         if (targetBranch !== branch) {
           return null
         }
+
         store.setState((next) => ({
           prCache: {
             ...next.prCache,
             ...prCacheEntries
           }
         }))
+
         return pr
       },
       fetchPRChecks: async () => [],

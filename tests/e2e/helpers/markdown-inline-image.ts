@@ -4,6 +4,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
 const ERROR_BOUNDARY_TEXT = 'The rich markdown editor hit an unexpected error'
+
 const SCHEMA_ERROR_SIGNATURE = 'Invalid content for node'
 
 // A 22x22 PNG dot, small enough to keep inline with the surrounding text.
@@ -53,6 +54,7 @@ export function collectRichMarkdownPageErrors(page: Page): string[] {
       pageErrors.push(message.text())
     }
   })
+
   return pageErrors
 }
 

@@ -70,10 +70,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     ledger.open(identity)
     expect(consumers.hooks.attach(stream)).toBe(true)
     const sourceSpan = span('span-1')
+
     const reservation = ledger.reserve(identity, sourceSpan, [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', sourceSpan.spanId, reservation.requiredConsumers, 4)
 
@@ -92,10 +94,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
       const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
       ledger.open(identity)
       consumers.hooks.attach(stream)
+
       const reservation = ledger.reserve(identity, span('span-1'), [
         'model',
         ...consumers.requiredConsumers('pty-1')
       ])
+
       ledger.commit(reservation)
       consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
 
@@ -123,12 +127,15 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const covered = ledger.reserve(identity, span('span-covered'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(covered)
     consumers.trackSpan('pty-1', 'span-covered', covered.requiredConsumers, 4)
+
     const trailingSpan = {
       ...span('span-trailing'),
       sourceStartSu: 4,
@@ -136,10 +143,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
       displayStart: 4,
       displayEnd: 8
     }
+
     const trailing = ledger.reserve(identity, trailingSpan, [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(trailing)
     consumers.trackSpan('pty-1', 'span-trailing', trailing.requiredConsumers, 8)
 
@@ -160,10 +169,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
 
@@ -181,22 +192,27 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const first = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(first)
     consumers.trackSpan('pty-1', 'span-1', first.requiredConsumers, 4)
+
     const secondSpan = span('span-2', {
       sourceStartSu: 4,
       sourceEndSu: 8,
       displayStart: 4,
       displayEnd: 8
     })
+
     const second = ledger.reserve(identity, secondSpan, [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(second)
     consumers.trackSpan('pty-1', 'span-2', second.requiredConsumers, 8)
     const beginTransfer = ledger.beginTransfer.bind(ledger)
@@ -204,6 +220,7 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
       if (transition.spanId === 'span-2') {
         throw new Error('injected partial reserve failure')
       }
+
       return beginTransfer(transition, replacement)
     })
 
@@ -221,19 +238,23 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     ledger.open(identity)
     consumers.hooks.attach(stream)
     const sourceSpan = span('span-1')
+
     const admission = ledger.reserve(identity, sourceSpan, [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(admission)
     consumers.trackSpan('pty-1', 'span-1', admission.requiredConsumers, 4)
     const replacement = consumers.hooks.reserveReplacement(stream, 4, 'initial-snapshot')!
+
     const transition = {
       identity: sourceSpan,
       spanId: sourceSpan.spanId,
       consumer: 'remote:consumer-1' as const,
       reason: 'concurrent-replacement'
     }
+
     expect(ledger.rollbackTransfer(transition)).toBe(true)
     expect(ledger.beginTransfer(transition, 'remote:snapshot:consumer-1')).toBe(true)
 
@@ -253,10 +274,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
 
@@ -287,10 +310,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
 
@@ -309,10 +334,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
     const replacement = consumers.hooks.reserveReplacement(stream, 4, 'initial-snapshot')
@@ -334,10 +361,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
 
@@ -357,10 +386,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
     const replacement = consumers.hooks.reserveReplacement(stream, 4, 'initial-snapshot')
@@ -379,10 +410,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
     ledger.seal(identity)
@@ -400,19 +433,24 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     const stream = { ptyId: 'pty-1', consumerId: 'consumer-1', streamGeneration: 'stream-1' }
     ledger.open(identity)
     consumers.hooks.attach(stream)
+
     const reservation = ledger.reserve(identity, span('span-1'), [
       'model',
       ...consumers.requiredConsumers('pty-1')
     ])
+
     ledger.commit(reservation)
     consumers.trackSpan('pty-1', 'span-1', reservation.requiredConsumers, 4)
+
     const recoveredIdentity = {
       ...identity,
       clientGeneration: 3,
       ownerGeneration: 4,
       deliveryToken: 'token-2'
     }
+
     ledger.open(recoveredIdentity, 4)
+
     const recovered = ledger.reserve(
       recoveredIdentity,
       span('span-2', {
@@ -424,6 +462,7 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
       }),
       ['model', ...consumers.requiredConsumers('pty-1')]
     )
+
     ledger.commit(recovered)
     consumers.trackSpan('pty-1', 'span-2', recovered.requiredConsumers, 8)
     const replacement = consumers.hooks.reserveReplacement(stream, 8, 'initial-snapshot')
@@ -432,10 +471,12 @@ describe('SshPtyRemoteSourceRangeConsumers', () => {
     ledger.applyCancellationProof(identity, { sentEndSu: 4, creditedEndSu: 0 })
 
     const queuedOutput = ['covered-output', 'surviving-output']
+
     const committed = consumers.hooks.commitReplacement(replacement!, {
       source: 'headless',
       seq: 8
     })
+
     if (committed) {
       queuedOutput.splice(0)
     }

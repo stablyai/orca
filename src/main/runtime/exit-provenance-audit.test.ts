@@ -10,10 +10,15 @@ import type { DispatchContextRow } from './orchestration/types'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 const TAB_ID = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 const PTY_ID = 'pty-exit-provenance'
+
 const HANDLE = 'term_exit_provenance'
+
 const WORKTREE_ID = 'repo-audit::/tmp/audit'
 
 const directories: string[] = []
@@ -27,6 +32,7 @@ afterEach(() => {
 function createDb(): OrchestrationDb {
   const directory = mkdtempSync(join(tmpdir(), 'exit-provenance-'))
   directories.push(directory)
+
   return new OrchestrationDb(join(directory, 'orchestration.db'))
 }
 
@@ -59,6 +65,7 @@ function createRuntime(db: OrchestrationDb): OrcaRuntimeService {
       { tabId: TAB_ID, worktreeId: WORKTREE_ID, leafId: LEAF_ID, paneRuntimeId: 1, ptyId: PTY_ID }
     ]
   })
+
   return runtime
 }
 
@@ -71,7 +78,9 @@ function dispatchOnHandle(
     coordinatorHandle: 'term_coordinator',
     coordinatorPaneKey: '99999999-9999-4999-8999-999999999999:88888888-8888-4888-8888-888888888888'
   })
+
   const task = db.createTask({ spec, runId: run.id })
+
   return {
     ...createRootDispatch(db, task.id, HANDLE, PANE_KEY),
     runId: run.id
@@ -85,6 +94,7 @@ function escalations(db: OrchestrationDb, runId: string) {
 
 function observe(db: OrchestrationDb, ctxId: string) {
   const row = db.getDispatchContextById(ctxId)!
+
   return {
     status: row.status,
     last_failure: row.last_failure,
@@ -229,12 +239,14 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     const db = createDb()
     const runtime = createRuntime(db)
     const ctx = dispatchOnHandle(db, 'worker_done then exit')
+
     const settlement = db.settleWorkerReport({
       taskId: ctx.task_id,
       dispatchId: ctx.id,
       outcome: 'succeeded',
       result: JSON.stringify({ provenance: 'worker_report', outcome: 'succeeded' })
     })
+
     expect(settlement.action).toBe('settled')
     runtime.onPtyExit(PTY_ID, 0)
     expect(observe(db, ctx.id)).toMatchObject({ status: 'completed', last_failure: null })
@@ -253,6 +265,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
       getForegroundProcess: async () => null,
       stopAndWait: async (ptyId: string) => {
         runtime.onPtyExit(ptyId, 0)
+
         return true
       }
     })

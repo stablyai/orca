@@ -52,6 +52,7 @@ import type { StructuredAgentSessionStatusSubscriber } from './structured-agent-
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
@@ -212,6 +213,7 @@ export class StructuredAgentSessionHost {
 
   reconcileRestartLeases = async (): Promise<void> => {
     const refusal = await this.reconcileLeases('startup')
+
     if (refusal) {
       throw new Error(refusal.code)
     }
@@ -304,6 +306,7 @@ export class StructuredAgentSessionHost {
 
   async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
     this.requireSession(sessionId)
+
     return this.serialize(sessionId, () =>
       refreshRecoverableStructuredHandoffStatus(this.handoffs, this.deps.store, sessionId)
     )
@@ -333,9 +336,11 @@ export class StructuredAgentSessionHost {
 
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)
+
     if (!session) {
       throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
     }
+
     return session
   }
 }

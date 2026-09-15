@@ -14,6 +14,7 @@ export type BitbucketAuthConfig = {
 
 export function envValue(name: string): string | null {
   const value = process.env[name]?.trim() ?? ''
+
   return value.length > 0 ? value : null
 }
 
@@ -34,9 +35,12 @@ export function authHeaders(config: BitbucketAuthConfig): Record<string, string>
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
+
   if (config.email && config.apiToken) {
     const encoded = Buffer.from(`${config.email}:${config.apiToken}`).toString('base64')
+
     return { Authorization: `Basic ${encoded}` }
   }
+
   return {}
 }

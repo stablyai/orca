@@ -4,6 +4,7 @@ import { focusActiveTerminalInput } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+
 const guestModifier: 'meta' | 'control' = process.platform === 'darwin' ? 'meta' : 'control'
 
 type TerminalBrowserSplitFixture = {
@@ -21,35 +22,46 @@ type BrowserSplitFixture = {
 async function createTerminalBrowserSplit(page: Page): Promise<TerminalBrowserSplitFixture> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('Active worktree unavailable')
     }
+
     const terminalTabId = state.activeTabIdByWorktree[worktreeId] ?? state.activeTabId ?? undefined
+
     if (
       !terminalTabId ||
       !(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === terminalTabId)
     ) {
       throw new Error('Active terminal tab unavailable')
     }
+
     const terminalGroupId = state.ensureWorktreeRootGroup(worktreeId)
     const browserGroupId = state.createEmptySplitGroup(worktreeId, terminalGroupId, 'right')
+
     if (!browserGroupId) {
       throw new Error('Browser split unavailable')
     }
+
     const browserTab = state.createBrowserTab(worktreeId, 'about:blank', {
       activate: true,
       focusAddressBar: false,
       targetGroupId: browserGroupId
     })
+
     const browserPageId = browserTab.activePageId
+
     if (!browserPageId) {
       throw new Error('Active browser page unavailable')
     }
+
     return {
       browserGroupId,
       browserTabId: browserTab.id,
@@ -61,41 +73,53 @@ async function createTerminalBrowserSplit(page: Page): Promise<TerminalBrowserSp
 async function createBrowserSplit(page: Page): Promise<BrowserSplitFixture> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('Active worktree unavailable')
     }
+
     const terminalGroupId = state.ensureWorktreeRootGroup(worktreeId)
     const firstBrowserGroupId = state.createEmptySplitGroup(worktreeId, terminalGroupId, 'right')
+
     if (!firstBrowserGroupId) {
       throw new Error('First browser split unavailable')
     }
+
     const firstBrowserTab = state.createBrowserTab(worktreeId, 'about:blank', {
       activate: true,
       focusAddressBar: false,
       targetGroupId: firstBrowserGroupId
     })
+
     const secondBrowserGroupId = state.createEmptySplitGroup(
       worktreeId,
       firstBrowserGroupId,
       'right'
     )
+
     if (!secondBrowserGroupId) {
       throw new Error('Second browser split unavailable')
     }
+
     const secondBrowserTab = state.createBrowserTab(worktreeId, 'about:blank', {
       activate: true,
       focusAddressBar: false,
       targetGroupId: secondBrowserGroupId
     })
+
     const firstBrowserPageId = firstBrowserTab.activePageId
+
     if (!firstBrowserPageId) {
       throw new Error('First active browser page unavailable')
     }
+
     return {
       firstBrowserPageId,
       firstBrowserTabId: firstBrowserTab.id,
@@ -113,9 +137,11 @@ function browserAddressBar(page: Page, browserTabId: string) {
 async function focusBrowserAddressBar(page: Page, browserTabId: string): Promise<void> {
   const browserOverlay = page.locator(`[data-browser-overlay-tab-id="${browserTabId}"]`)
   const addressBar = browserAddressBar(page, browserTabId)
+
   const addressBarForm = browserOverlay.locator(
     'form:has(> [data-orca-browser-address-bar="true"])'
   )
+
   await expect(addressBarForm).toBeVisible()
   await addressBar.focus()
   await expect(addressBar).toBeFocused()
@@ -147,19 +173,25 @@ async function waitForBrowserGuestRegistration(
           const overlay = document.querySelector(
             `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
           )
+
           const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+
           try {
             if (!webview) {
               return false
             }
+
             const webContentsId = webview.getWebContentsId()
+
             const registered = await window.api.browser.isGuestRegistered({
               browserPageId: targetBrowserPageId,
               webContentsId
             })
+
             if (!registered) {
               return false
             }
+
             return true
           } catch {
             return false
@@ -185,10 +217,13 @@ async function pressFindInBrowserGuest(
       const overlay = document.querySelector(
         `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
       )
+
       const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+
       if (!webview) {
         throw new Error('Registered browser guest unavailable')
       }
+
       webview.focus()
       await webview.sendInputEvent({
         type: 'keyDown',
@@ -215,6 +250,7 @@ async function waitForFocusedGroup(page: Page, groupId: string): Promise<void> {
       page.evaluate(() => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         return worktreeId ? state.activeGroupIdByWorktree[worktreeId] : null
       })
     )
@@ -231,6 +267,7 @@ async function focusBrowserGroup(page: Page, groupId: string): Promise<void> {
   await page.evaluate((targetGroupId) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     if (state && worktreeId) {
       state.focusGroup(worktreeId, targetGroupId)
     }
@@ -253,6 +290,7 @@ test.describe('browser split shortcuts', () => {
     await orcaPage.evaluate(({ terminalGroupId }) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       if (state && worktreeId) {
         state.focusGroup(worktreeId, terminalGroupId)
       }
@@ -326,12 +364,15 @@ test.describe('browser split shortcuts', () => {
     await orcaPage.evaluate(() => {
       const store = window.__store
       const worktreeId = store?.getState().activeWorktreeId
+
       if (!store || !worktreeId) {
         throw new Error('Active worktree unavailable')
       }
+
       store.setState((state) => {
         const activeGroupIdByWorktree = { ...state.activeGroupIdByWorktree }
         delete activeGroupIdByWorktree[worktreeId]
+
         return { activeGroupIdByWorktree }
       })
     })
@@ -351,9 +392,11 @@ test.describe('browser split shortcuts', () => {
     await orcaPage.evaluate(() => {
       const store = window.__store
       const worktreeId = store?.getState().activeWorktreeId
+
       if (!store || !worktreeId) {
         throw new Error('Active worktree unavailable')
       }
+
       store.setState((state) => ({
         activeGroupIdByWorktree: {
           ...state.activeGroupIdByWorktree,

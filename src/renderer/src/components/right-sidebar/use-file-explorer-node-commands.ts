@@ -98,6 +98,7 @@ export function useFileExplorerNodeCommands({
     },
     [handleClick]
   )
+
   // Why: a rename can start while a name click is still holding back its
   // directory toggle; drop it so the tree doesn't shift under the input.
   const handleStartRename = useCallback(
@@ -141,30 +142,36 @@ export function useFileExplorerNodeCommands({
   )
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
+
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
       const dirToggle = resolveDirToggleTiming({
         fromRenameHotspot: isRenameHotspotTarget(event.target),
         clickCount: event.detail
       })
+
       selectRowWithModifiers(node, event, (target) => handleClick(target, dirToggle))
     },
     [handleClick, selectRowWithModifiers]
   )
+
   const handleCollapseFolderSubtree = useCallback(
     (node: TreeNode) => {
       if (!activeWorktreeId || !node.isDirectory) {
         return
       }
+
       collapseDirSubtree(activeWorktreeId, node.path)
     },
     [activeWorktreeId, collapseDirSubtree]
   )
+
   const handleFindInFolder = useCallback(
     (node: TreeNode) => {
       if (!activeWorktreeId || !node.isDirectory) {
         return
       }
+
       showRightSidebarSearch({
         includePattern: folderRelativePathToIncludeGlob(node.relativePath)
       })
@@ -177,6 +184,7 @@ export function useFileExplorerNodeCommands({
       if (!activeRepo || !canShowAddAsProjectAction(node, activeRepo)) {
         return
       }
+
       openModal(
         'confirm-add-project-from-folder',
         buildAddProjectFromFolderModalData(node, activeRepo)
@@ -184,11 +192,13 @@ export function useFileExplorerNodeCommands({
     },
     [activeRepo, openModal]
   )
+
   const handleOpenInTerminal = useCallback(
     (node: TreeNode) => {
       if (!activeWorktreeId || !node.isDirectory) {
         return
       }
+
       createNewTerminalTab(activeWorktreeId, undefined, { startupCwd: node.path })
     },
     [activeWorktreeId]

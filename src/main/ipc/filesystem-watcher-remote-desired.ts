@@ -11,12 +11,15 @@ export function rememberDesiredRemoteWatcher(
   if (sender.isDestroyed()) {
     return
   }
+
   const key = getRemoteWatcherKey(connectionId, worktreePath)
+
   const desired = watcherLifecycleState.desiredRemoteWatchers.get(key) ?? {
     connectionId,
     worktreePath,
     listeners: new Map<number, WebContents>()
   }
+
   desired.listeners.set(sender.id, sender)
   watcherLifecycleState.desiredRemoteWatchers.set(key, desired)
   registerWatcherSenderCleanup(sender)

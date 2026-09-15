@@ -44,6 +44,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         }
       })
     )
+
     expect(result.kind).toBe('create_pr_intent')
     expect(result.disabled).toBe(false)
   })
@@ -69,6 +70,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         }
       })
     )
+
     expect(result.kind).toBe('create_pr_intent')
     expect(result.disabled).toBe(false)
   })
@@ -90,6 +92,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         reviewLookupOutcome: 'not_found'
       }
     })
+
     const result = resolvePrimaryAction(input)
     expect(result.kind).toBe('create_pr_intent')
     expect(result.disabled).toBe(false)
@@ -113,6 +116,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         reviewLookupOutcome: 'not_found'
       }
     })
+
     const result = resolvePrimaryAction(input)
     expect(result.kind).toBe('create_pr_intent')
     expect(result.disabled).toBe(false)
@@ -146,6 +150,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         }
       })
     )
+
     expect(result).toEqual({
       kind: 'create_pr_intent',
       label: 'Create PR',
@@ -217,6 +222,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         reviewLookupOutcome: 'not_found'
       }
     })
+
     const result = resolvePrimaryAction(input)
     expect(result.kind).toBe('create_pr_intent')
     expect(result.disabled).toBe(false)
@@ -268,6 +274,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
         }
       })
     )
+
     expect(result.kind).toBe('create_pr_intent')
     expect(result.label).toBe('Create MR')
     expect(result.title).toBe('Prepare this branch and create a merge request')
@@ -341,6 +348,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
           }
         })
       )
+
       expect(result).toEqual({
         kind: 'create_pr_intent',
         label: 'Create PR',

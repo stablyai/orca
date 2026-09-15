@@ -23,6 +23,7 @@ import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolu
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 
 type Runtime = ReturnType<typeof createTerminalKeyboardRuntime>
+
 type EventContext = KeyboardHandlersDeps & {
   isMac: boolean
   isWindows: boolean
@@ -91,6 +92,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     // Why: replace stale state only for this physical key so rollover cannot
     // disarm a still-held native-only chord before its Kitty keyup arrives.
     nativeOnlyShortcutTracker.prepareKeyDown(e)
+
     // Record before early returns so every observed Enter disqualifies keyup synthesis.
     if (
       isWindows &&
@@ -98,6 +100,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
         (e.keyCode === 229 && (e.code === 'Enter' || e.code === 'NumpadEnter')))
     ) {
       const observed = observedEnterKeydownTimeStamps.get(e.code)
+
       if (!observed) {
         observedEnterKeydownTimeStamps.set(e.code, [e.timeStamp])
       } else if (!e.repeat && observed.length < MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE) {
@@ -105,11 +108,15 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
         observed.push(e.timeStamp)
       }
     }
+
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     const keyboardScope = keyboardScopeRef.current
+
     if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
       return
     }
@@ -120,6 +127,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     const keyboardPane = synchronizeTerminalKeyboardPane(manager, e.target)
 
     const modifiedEnterChord = isWindows ? getModifiedEnterChord(e) : null
+
     if (
       e.key === 'Enter' &&
       e.keyCode === 13 &&
@@ -132,27 +140,34 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       reconcileHeldImeEnterModifiers(e)
       e.preventDefault()
       e.stopImmediatePropagation()
+
       return
     }
 
     const terminalPaneForImeShortcut = keyboardPane
+
     const hasPendingImeComposition = hasPendingTerminalImeComposition(
       terminalPaneForImeShortcut?.terminal.element
     )
+
     const imeProcessEnter = isWindows && hasPendingImeComposition && isTerminalImeProcessEnter(e)
+
     if (isWindows && hasPendingImeComposition && !imeProcessEnter && isTerminalImeConsumedKey(e)) {
       // Process has no logical key, so shortcut matching would fall back to its physical code.
       e.stopImmediatePropagation()
+
       return
     }
 
     if (matchFileSearchShortcut(e, shortcutPlatform, keybindings, terminalShortcutPolicy)) {
       const pane = keyboardPane
       const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
+
       if (selectedText) {
         e.preventDefault()
         e.stopImmediatePropagation()
         onSearchSelectedText(selectedText)
+
         return
       }
     }
@@ -162,18 +177,23 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     // editable-target guard would otherwise bypass all terminal shortcuts.
     // stopImmediatePropagation prevents App.tsx's Cmd+Shift+G (source-control sidebar) from also firing.
     const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
+
     if (direction !== null) {
       if (e.repeat) {
         return
       }
+
       e.preventDefault()
       e.stopImmediatePropagation()
       const pane = keyboardPane
+
       if (!pane) {
         return
       }
+
       runTerminalSearchNavigation(pane, direction, searchStateRef.current)
       pane.terminal.focus()
+
       return
     }
 
@@ -197,7 +217,9 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       keyCode: e.keyCode,
       getModifierState: (key: string) => e.getModifierState(key)
     }
+
     const action = resolveShortcutEvent(shortcutEvent)
+
     if (!action) {
       return
     }
@@ -207,11 +229,13 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       // none of the keydown, keypress, or keyup sequence.
       nativeOnlyShortcutTracker.armKeyDown(e)
       e.stopImmediatePropagation()
+
       return
     }
 
     if (action.type === 'trackNativeOptionDeadKey') {
       optionKittyReleases.armNativeDeadKey(e)
+
       return
     }
 
@@ -219,10 +243,13 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       e.preventDefault()
       e.stopImmediatePropagation()
       const pane = keyboardPane
+
       if (!pane) {
         return
       }
+
       const sendResolvedInput = createCapturedInputSender(pane, action.data)
+
       if (action.consumeOptionKeyUp) {
         optionKittyReleases.armNativeDeadKey(e)
       } else if (action.optionKittyRelease) {
@@ -234,22 +261,28 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
           getLayoutCharacterForCode
         )
       }
+
       if ((e.isComposing || hasPendingImeComposition) && (e.key === 'Enter' || imeProcessEnter)) {
         if (isWindows) {
           const chord = getModifiedEnterChord(e)
+
           const claimedChord = chord
             ? {
                 ...chord,
                 terminalModifierKeyDownObserved: terminalImeEnterModifierKeydowns.has(chord.kind)
               }
             : null
+
           if (claimedChord && !modifiedEnterChordOwner.claim(claimedChord)) {
             return
           }
         }
+
         deferredNewlineSender.defer(e, pane.terminal.element, sendResolvedInput)
+
         return
       }
+
       // Why: the composed glyph reaches the pty from the composition session-end handler, which
       // runs after this keydown. Sending now puts a cursor chord ahead of the text it was typed
       // after — `가나다` then Cmd+Left leaves `다가나` (#12871). Enter is handled above, where a
@@ -258,9 +291,12 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       // deadline. The sender owns the wait so blur and teardown can drop it.
       if (e.isComposing || hasPendingImeComposition) {
         deferredChordSender.defer(pane.terminal.element, sendResolvedInput)
+
         return
       }
+
       sendResolvedInput()
+
       return
     }
 

@@ -6,8 +6,10 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
+
   return {
     ActivityIndicator: 'ActivityIndicator',
     Animated: {
@@ -27,7 +29,9 @@ vi.mock('react-native', async () => {
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
+
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
+
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronDown: 'ChevronDown',
@@ -37,6 +41,7 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench',
   ChevronRight: 'ChevronRight'
 }))
+
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
@@ -75,6 +80,7 @@ describe('MobileNativeChatMessage', () => {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message, ...props }))
     })
+
     return renderer!
   }
 
@@ -92,6 +98,7 @@ describe('MobileNativeChatMessage', () => {
     const tree = render(
       userMessage([{ type: 'image-ref', url: 'file:///local.jpg', path: '/tmp/host.png' }])
     )
+
     expect(tree.root.findByType('Image' as never).props.source).toEqual({
       uri: 'file:///local.jpg'
     })
@@ -101,17 +108,21 @@ describe('MobileNativeChatMessage', () => {
     // A host temp path (e.g. on an SSH host) is not loadable on the device.
     const tree = render(userMessage([{ type: 'image-ref', path: '/tmp/host.png' }]))
     expect(tree.root.findAllByType('Image' as never)).toHaveLength(0)
+
     const texts = tree.root
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
+
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
   })
 
   it('makes user message text selectable', () => {
     const tree = render(userMessage([{ type: 'text', text: 'Prompt I typed' }]))
+
     const text = tree.root
       .findAllByType('Text' as never)
       .find((node) => String(node.children.join('')) === 'Prompt I typed')
+
     expect(text?.props.selectable).toBe(true)
   })
 
@@ -127,6 +138,7 @@ describe('MobileNativeChatMessage', () => {
       toolMessage([{ type: 'tool-call', name: 'Read', input: { file_path: 'src/index.ts' } }]),
       { toolsExpanded: true }
     )
+
     const texts = textIn(tree.root)
     expect(texts).toContain('src/index.ts')
     expect(texts.some((text) => text.includes('"file_path":"src/index.ts"'))).toBe(false)
@@ -139,6 +151,7 @@ describe('MobileNativeChatMessage', () => {
       ]),
       { toolsExpanded: true }
     )
+
     const detail = textIn(tree.root).find((text) => text.startsWith('{\n'))
     expect(detail).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(detail?.endsWith('…')).toBe(true)
@@ -154,6 +167,7 @@ describe('MobileNativeChatMessage', () => {
         }
       ])
     )
+
     const pressableWith = (label: string): ReactTestInstance =>
       tree.root.findAllByType('Pressable' as never).find((node) => textIn(node).includes(label))!
 
@@ -175,6 +189,7 @@ describe('MobileNativeChatMessage', () => {
     const tree = render(toolMessage([{ type: 'tool-call', name: 'ListTodos', input: '{}' }]), {
       toolsExpanded: true
     })
+
     expect(textIn(tree.root).filter((text) => text === '{}')).toHaveLength(1)
     // The chevron has to agree with the panel, or the row claims to be open over
     // nothing and the tap that would close it is guarded off. Only the run header
@@ -185,9 +200,11 @@ describe('MobileNativeChatMessage', () => {
 
   it('does not expand a plain input that already fits in the row label', () => {
     const input = 'x'.repeat(60)
+
     const tree = render(toolMessage([{ type: 'tool-call', name: 'CustomTool', input }]), {
       toolsExpanded: true
     })
+
     expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
@@ -200,6 +217,7 @@ describe('MobileNativeChatMessage', () => {
       input: { command: 'npm test' },
       state: 'running' as const
     }
+
     const settledCall = {
       type: 'tool-call' as const,
       name: 'Read',
@@ -212,6 +230,7 @@ describe('MobileNativeChatMessage', () => {
         structuredActivityUi: true,
         activeTurnIsWorking: true
       })
+
       expect(textIn(tree.root)).toContain('Running npm test')
       expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(1)
       expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
@@ -224,6 +243,7 @@ describe('MobileNativeChatMessage', () => {
         ]),
         { structuredActivityUi: true, activeTurnIsWorking: true }
       )
+
       expect(textIn(tree.root)).toContain('Running Read a/b.ts')
       expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(1)
     })
@@ -233,6 +253,7 @@ describe('MobileNativeChatMessage', () => {
         structuredActivityUi: true,
         activeTurnIsWorking: true
       })
+
       expect(textIn(tree.root)).not.toContain('Running Read a/b.ts')
       expect(textIn(tree.root)).toContain('1×')
     })
@@ -242,6 +263,7 @@ describe('MobileNativeChatMessage', () => {
         structuredActivityUi: true,
         activeTurnIsWorking: false
       })
+
       expect(textIn(collapsed.root)).not.toContain('1×')
       act(() => collapsed.unmount())
 
@@ -250,6 +272,7 @@ describe('MobileNativeChatMessage', () => {
         activeTurnIsWorking: false,
         turnExpanded: true
       })
+
       expect(textIn(disclosed.root)).toContain('1×')
     })
 
@@ -260,6 +283,7 @@ describe('MobileNativeChatMessage', () => {
         activeTurnIsWorking: false,
         toolsExpanded: true
       })
+
       expect(textIn(tree.root)).toContain('1\u00d7')
     })
 
@@ -274,6 +298,7 @@ describe('MobileNativeChatMessage', () => {
         structuredActivityUi: true,
         turnStatus: { startedAt: Date.now() - 3_000, thinking: false, workedSeconds: 3 }
       })
+
       expect(textIn(tree.root)).toContain('Worked for 3s')
     })
 
@@ -281,6 +306,7 @@ describe('MobileNativeChatMessage', () => {
       const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
         structuredActivityUi: true
       })
+
       expect(textIn(tree.root)).toEqual(['go'])
     })
   })

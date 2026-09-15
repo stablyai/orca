@@ -75,6 +75,7 @@ describe('submitFeedback', () => {
       anonymousEmail: 'trusted@example.com',
       anonymousX: 'trusted'
     }
+
     await submitFeedback(anonymousArgs)
 
     const body = postedBody()
@@ -132,6 +133,7 @@ describe('submitFeedback', () => {
       bytes: 25,
       spanCount: 1
     }
+
     await submitFeedback({
       feedback: '[Crash Report]',
       submissionType: 'crash',
@@ -292,6 +294,7 @@ describe('submitFeedback', () => {
       githubLogin: 'trusted-user',
       githubEmail: 'trusted@example.com'
     })
+
     await vi.advanceTimersByTimeAsync(10_000)
 
     await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toEqual({ ok: true })
@@ -332,6 +335,7 @@ describe('submitFeedback', () => {
       githubLogin: 'trusted-user',
       githubEmail: 'trusted@example.com'
     })
+
     await vi.advanceTimersByTimeAsync(10_000)
 
     await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toEqual({
@@ -531,6 +535,7 @@ describe('submitFeedback', () => {
     // renderer invoking the channel directly — the case the handler guards.
     it('rejects a prototype member posing as a content type over IPC', async () => {
       registerFeedbackHandlers()
+
       const result = (await handlers.get('feedback:submit')?.(null, {
         feedback: 'images attached',
         githubLogin: null,
@@ -544,6 +549,7 @@ describe('submitFeedback', () => {
 
     it('rejects malformed IPC bytes before typed-array normalization', async () => {
       registerFeedbackHandlers()
+
       const result = (await handlers.get('feedback:submit')?.(null, {
         feedback: 'images attached',
         githubLogin: null,
@@ -557,6 +563,7 @@ describe('submitFeedback', () => {
 
     it('rejects oversized IPC batches before normalizing their entries', async () => {
       registerFeedbackHandlers()
+
       const result = (await handlers.get('feedback:submit')?.(null, {
         feedback: 'images attached',
         githubLogin: null,

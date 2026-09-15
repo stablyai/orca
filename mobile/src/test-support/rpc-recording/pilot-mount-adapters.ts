@@ -20,19 +20,24 @@ export function pilotMountAdapters(
     module,
     modules: operationModuleLoader(root, options.mutation, module.exposes ?? [])
   }))
+
   const adapters: Record<string, MountAdapter> = {}
+
   for (const { module, modules } of loaders) {
     for (const [operation, adapter] of Object.entries(module.mounts(modules, options))) {
       if (operation in adapters) {
         throw new Error(`Two adapter modules mount ${operation}`)
       }
+
       adapters[operation] = adapter
     }
   }
+
   return {
     adapters,
     assertMutationApplied: () => {
       const applied = loaders.reduce((total, { modules }) => total + modules.mutationsApplied(), 0)
+
       if (options.mutation && applied !== 1) {
         throw new Error(`Expected one mutation, applied ${applied}`)
       }

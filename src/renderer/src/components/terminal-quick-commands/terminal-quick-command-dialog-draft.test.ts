@@ -68,25 +68,30 @@ describe('terminal quick command dialog draft transitions', () => {
       appendEnter: false,
       scope: { type: 'global' }
     }
+
     const initialMemory = createTerminalQuickCommandDialogDraftMemory(initial, 'claude')
     const toAgent = switchTerminalQuickCommandDialogAction(initial, 'agent-prompt', initialMemory)
+
     const editedAgent: TerminalQuickCommand = {
       ...toAgent.draft,
       action: 'agent-prompt',
       agent: 'codex',
       prompt: 'Investigate failures'
     }
+
     const backToTerminal = switchTerminalQuickCommandDialogAction(
       editedAgent,
       'terminal-command',
       toAgent.memory
     )
+
     const editedTerminal: TerminalQuickCommand = {
       ...backToTerminal.draft,
       action: 'terminal-command',
       command: 'pnpm vitest',
       appendEnter: true
     }
+
     const backToAgent = switchTerminalQuickCommandDialogAction(
       editedTerminal,
       'agent-prompt',
@@ -109,6 +114,7 @@ describe('terminal quick command dialog draft transitions', () => {
       'terminal-command',
       backToAgent.memory
     )
+
     expect(finalTerminal.draft).toMatchObject({
       action: 'terminal-command',
       command: 'pnpm vitest',

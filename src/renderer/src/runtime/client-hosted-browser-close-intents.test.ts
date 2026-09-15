@@ -64,6 +64,7 @@ describe('client-hosted browser close intent lifecycle', () => {
 
   it('evicts the oldest once one environment exceeds the cap', () => {
     let current: ClientHostedBrowserCloseIntentsByEnvironment = {}
+
     for (let index = 0; index <= MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS; index += 1) {
       current = recordClientHostedBrowserCloseIntents(current, [close(`remote-${index}`)], NOW)!
     }

@@ -3,10 +3,12 @@
 import { pathToFileURL } from 'node:url'
 
 const API_VERSION = '2022-11-28'
+
 const DESKTOP_STABLE_TAG_PATTERN = /^v([0-9]+)\.([0-9]+)\.([0-9]+)$/
 
 export function parseDesktopStableTag(tag) {
   const match = DESKTOP_STABLE_TAG_PATTERN.exec(tag)
+
   if (!match) {
     return null
   }
@@ -37,10 +39,12 @@ async function githubJson(fetchImpl, url, token) {
       'X-GitHub-Api-Version': API_VERSION
     }
   })
+
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw new Error(`GitHub request failed ${res.status} ${res.statusText}: ${body.slice(0, 300)}`)
   }
+
   return res.json()
 }
 
@@ -48,22 +52,26 @@ export async function fetchReleases(repo, token, fetchImpl = fetch) {
   if (!repo) {
     throw new Error('repo is required')
   }
+
   if (!token) {
     throw new Error('token is required')
   }
 
   const releases = []
+
   for (let page = 1; ; page += 1) {
     const pageReleases = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`,
       token
     )
+
     if (!Array.isArray(pageReleases)) {
       throw new Error(`GitHub releases response page ${page} for ${repo} was not an array`)
     }
 
     releases.push(...pageReleases)
+
     if (pageReleases.length < 100) {
       break
     }

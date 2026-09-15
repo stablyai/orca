@@ -67,9 +67,13 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -93,9 +97,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -166,6 +172,7 @@ describe('LocalPtyProvider', () => {
         buildSpawnEnv: (_id, env) => {
           env.CODEX_HOME = 'C:\\Users\\jin\\.codex'
           env.ORCA_CODEX_HOME = 'C:\\Users\\jin\\.codex'
+
           return env
         }
       })
@@ -190,6 +197,7 @@ describe('LocalPtyProvider', () => {
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
           env.ORCA_CODEX_HOME =
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
           return env
         }
       })
@@ -210,6 +218,7 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
           env.CODEX_HOME = '/home/jin/.codex-alt'
+
           return env
         }
       })
@@ -234,6 +243,7 @@ describe('LocalPtyProvider', () => {
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
           env.ORCA_CODEX_HOME =
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
           return env
         }
       })
@@ -262,6 +272,7 @@ describe('LocalPtyProvider', () => {
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
           env.ORCA_CODEX_HOME =
             '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
           return env
         }
       })
@@ -352,6 +363,7 @@ describe('LocalPtyProvider', () => {
 
     it('resolves and persists the default distro for Windows cwd WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       const buildSpawnEnv = vi.fn(
         (
           _id: string,
@@ -359,6 +371,7 @@ describe('LocalPtyProvider', () => {
           _ctx?: { isWsl?: boolean; wslDistro?: string | null }
         ) => env
       )
+
       provider.configure({ buildSpawnEnv })
 
       const result = await provider.spawn({
@@ -413,12 +426,14 @@ describe('LocalPtyProvider', () => {
     it('awaits PowerShell availability before resolving an automatic Windows shell', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       let resolveAvailability!: (available: boolean) => void
+
       const pwshAvailable = vi.fn(
         () =>
           new Promise<boolean>((resolve) => {
             resolveAvailability = resolve
           })
       )
+
       provider.configure({
         getWindowsShell: () => 'powershell.exe',
         getWindowsPowerShellImplementation: () => 'auto',
@@ -446,6 +461,7 @@ describe('LocalPtyProvider', () => {
             getWindowsPowerShellImplementation: () => 'auto',
             pwshAvailable: configuredPwshAvailable
           })
+
           return 'powershell.exe'
         },
         getWindowsPowerShellImplementation: initialPowerShellImplementation
@@ -466,15 +482,18 @@ describe('LocalPtyProvider', () => {
         pwshAvailable: () => false
       })
       const callsBeforeSpawn = spawnMock.mock.calls.length
+
       const spawn = provider.spawn({
         cols: 80,
         rows: 24,
         cwd: 'C:\\Users\\jin\\repo',
         sessionId: 'probe-shutdown-session'
       })
+
       const canceledSpawn = expect(spawn).rejects.toThrow(
         'PTY spawn canceled: probe-shutdown-session'
       )
+
       const shutdown = new Promise<void>((resolve, reject) => {
         queueMicrotask(() => {
           provider.shutdown('probe-shutdown-session', { immediate: true }).then(resolve, reject)
@@ -495,9 +514,11 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         buildSpawnEnv: (_id, env, ctx) => {
           env.ORCA_TERMINAL_HANDLE = 'term_wsl'
+
           if (ctx?.isWsl) {
             env.WSLENV = 'ORCA_TERMINAL_HANDLE/u'
           }
+
           return env
         }
       })
@@ -515,6 +536,7 @@ describe('LocalPtyProvider', () => {
         } else {
           process.env.CODEX_HOME = savedCodexHome
         }
+
         if (savedOrcaCodexHome === undefined) {
           delete process.env.ORCA_CODEX_HOME
         } else {
@@ -605,6 +627,7 @@ describe('LocalPtyProvider', () => {
         if (platform) {
           Object.defineProperty(process, 'platform', platform)
         }
+
         if (originalProgramFiles === undefined) {
           delete process.env.ProgramFiles
         } else {

@@ -65,34 +65,42 @@ export function mergeSplitLatencyMainProbeEvents(
     stamps.keydownAtMs === null
       ? Number.NEGATIVE_INFINITY
       : stamps.rendererTimeOriginEpochMs + stamps.keydownAtMs
+
   const afterKeydown = events.filter((event) => event.atEpochMs >= keydownEpochMs - 2)
+
   const cwdRequest = afterKeydown.find(
     (event) => event.kind === 'cwd-request' && event.ptyId === stamps.sourcePtyId
   )
+
   const cwdSettled = cwdRequest
     ? afterKeydown.find(
         (event) => event.kind === 'cwd-settled' && event.operationId === cwdRequest.operationId
       )
     : undefined
+
   const spawnResult = afterKeydown.find(
     (event) => event.kind === 'pty-spawn-result' && event.ptyId === stamps.newPtyId
   )
+
   const spawnRequest = spawnResult
     ? afterKeydown.find(
         (event) =>
           event.kind === 'pty-spawn-request' && event.operationId === spawnResult.operationId
       )
     : undefined
+
   const unlockRequestEpochMs =
     stamps.fixtureUnlockRequestedAtMs === null
       ? Number.NEGATIVE_INFINITY
       : stamps.rendererTimeOriginEpochMs + stamps.fixtureUnlockRequestedAtMs
+
   const fixtureUnlockWrite = afterKeydown.find(
     (event) =>
       event.kind === 'pty-write-cr' &&
       event.ptyId === stamps.newPtyId &&
       event.atEpochMs >= unlockRequestEpochMs - 2
   )
+
   const toRendererTime = (event: SplitLatencyMainProbeEvent | undefined): number | null =>
     event ? event.atEpochMs - stamps.rendererTimeOriginEpochMs : null
 
@@ -117,6 +125,7 @@ export function createSplitLatencySample(args: {
   cleanupError: string | null
 }): SplitLatencySample {
   const { stamps } = args
+
   const missing = [
     ...(stamps.keydownAtMs === null ? ['keydown'] : []),
     ...(stamps.focusAtMs === null ? ['focus'] : []),
@@ -135,6 +144,7 @@ export function createSplitLatencySample(args: {
     ...(!args.ptyExitObserved ? ['pty-exit'] : []),
     ...(args.cleanupError ? ['cleanup'] : [])
   ]
+
   return {
     ...stamps,
     phase: args.phase,

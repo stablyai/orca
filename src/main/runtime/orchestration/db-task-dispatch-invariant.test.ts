@@ -17,9 +17,11 @@ const harnesses: DatabaseHarness[] = []
 afterEach(() => {
   vi.restoreAllMocks()
   const closed = harnesses.splice(0)
+
   for (const harness of closed) {
     harness.db.close()
   }
+
   for (const dir of new Set(closed.map((harness) => harness.dir))) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -31,11 +33,13 @@ describe('Task/Dispatch invariant transactions', () => {
     (status) => {
       const { db } = createDatabase()
       const dependency = db.createTask({ runId: 'run_legacy_local', spec: 'unresolved dependency' })
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'manual resolution',
         deps: [dependency.id]
       })
+
       const dependent = db.createTask({
         runId: 'run_legacy_local',
         spec: 'downstream work',
@@ -76,17 +80,21 @@ describe('Task/Dispatch invariant transactions', () => {
     (status) => {
       const { db } = createDatabase()
       const task = db.createTask({ runId: 'run_legacy_local', spec: 'atomic work' })
+
       const dependent = db.createTask({
         runId: 'run_legacy_local',
         spec: 'dependent work',
         deps: [task.id]
       })
+
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
+
       const capability = db.mintDispatchCapability({
         dispatchId: dispatch.id,
         paneKey: 'tab_worker:leaf_worker',
         processIncarnation: 'worker:1'
       })
+
       sqliteFor(db).exec(`
         CREATE TRIGGER reject_dispatch_settlement
         BEFORE UPDATE OF status ON dispatch_contexts
@@ -123,10 +131,12 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('does not commit a caller-owned transaction', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'outer transaction work'
     })
+
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     const sqlite = sqliteFor(db)
 
@@ -150,10 +160,12 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('keeps Dispatch creation inside a caller-owned transaction', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'outer transaction dispatch'
     })
+
     const sqlite = sqliteFor(db)
 
     sqlite.exec('BEGIN IMMEDIATE')
@@ -170,10 +182,12 @@ describe('Task/Dispatch invariant transactions', () => {
     'settles every active Dispatch left by a pre-fix split when the Task becomes %s',
     (status) => {
       const { db } = createDatabase()
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'legacy split work'
       })
+
       const first = createRootDispatch(db, task.id, 'term_first')
       sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       const second = createRootDispatch(db, task.id, 'term_second')
@@ -187,6 +201,7 @@ describe('Task/Dispatch invariant transactions', () => {
           capability_revoked_at: expect.any(String)
         })
       }
+
       expect(db.getActiveDispatchForTerminal('term_first')).toBeUndefined()
       expect(db.getActiveDispatchForTerminal('term_second')).toBeUndefined()
       expect(() =>
@@ -211,10 +226,12 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('does not requeue a legacy split Task while another Dispatch remains active', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'legacy split retry'
     })
+
     const first = createRootDispatch(db, task.id, 'term_first')
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const second = createRootDispatch(db, task.id, 'term_second')
@@ -228,10 +245,12 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('does not block a legacy split Task while another Dispatch remains active', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'legacy split release'
     })
+
     const first = createRootDispatch(db, task.id, 'term_first')
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const second = createRootDispatch(db, task.id, 'term_second')
@@ -249,10 +268,12 @@ describe('Task/Dispatch invariant transactions', () => {
     'rejects moving a Task to %s while a Dispatch remains active',
     (status) => {
       const { db } = createDatabase()
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'guarded work'
       })
+
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
 
       expect(() => db.updateTaskStatus(task.id, status, 'must not persist')).toThrowError(
@@ -268,6 +289,7 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('rejects moving a Task to dispatched without an active Dispatch', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'unassigned work'
@@ -285,10 +307,12 @@ describe('Task/Dispatch invariant transactions', () => {
   it('rejects a Dispatch when failure wins after readiness was observed', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
+
     const task = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'interleaved work'
     })
+
     const sqlite = sqliteFor(first.db)
     const prepare = sqlite.prepare.bind(sqlite)
     let injected = false
@@ -297,6 +321,7 @@ describe('Task/Dispatch invariant transactions', () => {
         injected = true
         concurrent.db.updateTaskStatus(task.id, 'failed', 'failure won')
       }
+
       return prepare(sql)
     })
 
@@ -311,14 +336,17 @@ describe('Task/Dispatch invariant transactions', () => {
   it('atomically rejects a same-pane Dispatch that loses the occupancy race', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
+
     const firstTask = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'first terminal claimant'
     })
+
     const secondTask = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'second terminal claimant'
     })
+
     const sqlite = sqliteFor(first.db)
     const prepare = sqlite.prepare.bind(sqlite)
     let winnerId: string | undefined
@@ -331,6 +359,7 @@ describe('Task/Dispatch invariant transactions', () => {
           'tab_new:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
         ).id
       }
+
       return prepare(sql)
     })
 
@@ -356,20 +385,24 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('rejects worker authority when another Dispatch owns the pane', () => {
     const { db } = createDatabase()
+
     const ownerTask = db.createTask({
       runId: 'run_legacy_local',
       spec: 'current pane owner'
     })
+
     const owner = createRootDispatch(
       db,
       ownerTask.id,
       'term_owner',
       'tab_old:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     )
+
     const workerTask = db.createTask({
       runId: 'run_legacy_local',
       spec: 'competing supervised worker'
     })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -405,16 +438,19 @@ describe('Task/Dispatch invariant transactions', () => {
     'rejects a %s Task update while its supervised worker remains active',
     (status) => {
       const { db } = createDatabase()
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'supervised lifecycle'
       })
+
       const started = db.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: {}
       })
+
       const capability = db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
         handle: 'term_worker',
@@ -456,10 +492,12 @@ describe('Task/Dispatch invariant transactions', () => {
 
   it('keeps a federated late start authoritative after rejecting Task failure', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'federated lifecycle'
     })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -494,6 +532,7 @@ function createDatabase(path?: string): DatabaseHarness {
   const dbPath = path ?? join(ownedDir, 'orchestration.db')
   const harness = { db: new OrchestrationDb(dbPath), dir: ownedDir, path: dbPath }
   harnesses.push(harness)
+
   return harness
 }
 

@@ -6,12 +6,18 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-error'
 
 // Why: a refused WSL read is the one build failure that must not be cached.
 let failNextChatsReaddir = false
+
 let failNextChatsRootReaddir = false
+
 let failMetaJsonReads = false
+
 let failMetaJsonStats: false | true | 'eacces' = false
+
 let chatsRootReads = 0
+
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
   const actual = await importOriginal<typeof WslTranscriptFsAccess>()
+
   return {
     ...actual,
     wslGatedReaddir: (
@@ -19,15 +25,20 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
     ): ReturnType<typeof actual.wslGatedReaddir> => {
       if (args[0].endsWith('chats')) {
         chatsRootReads += 1
+
         if (failNextChatsRootReaddir) {
           failNextChatsRootReaddir = false
+
           return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
         }
       }
+
       if (failNextChatsReaddir && args[0].includes('workspace-hash')) {
         failNextChatsReaddir = false
+
         return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
       }
+
       return actual.wslGatedReaddir(...args)
     },
     wslGatedReadFile: (
@@ -36,6 +47,7 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
       if (failMetaJsonReads && String(args[0]).endsWith('meta.json')) {
         return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
       }
+
       return actual.wslGatedReadFile(...args)
     },
     wslGatedStat: (
@@ -48,10 +60,12 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
             : new WslTranscriptFsError('timeout', 'wsl fs timed out')
         )
       }
+
       return actual.wslGatedStat(...args)
     }
   }
 })
+
 import type * as WslTranscriptFsAccess from '../native-chat/wsl-transcript-fs-access'
 import {
   cursorChatMetaPath,
@@ -91,6 +105,7 @@ type CursorMetaFixture = {
 }
 
 const CREATED_AT_MS = 1_787_039_612_017
+
 const UPDATED_AT_MS = 1_787_039_640_532
 
 let tempRoots: string[] = []
@@ -110,6 +125,7 @@ async function createCursorHome(): Promise<string> {
   tempRoots.push(root)
   const cursorHome = join(root, '.cursor')
   await mkdir(cursorHome, { recursive: true })
+
   return cursorHome
 }
 
@@ -123,6 +139,7 @@ async function writeTranscript(
   await mkdir(chatDir, { recursive: true })
   const transcriptPath = join(chatDir, `${chatId}.jsonl`)
   await writeFile(transcriptPath, lines.map((line) => `${line}\n`).join(''))
+
   return transcriptPath
 }
 
@@ -146,6 +163,7 @@ async function writeChatMeta(
       ...meta
     } satisfies CursorMetaFixture)
   )
+
   return metaPath
 }
 
@@ -157,9 +175,11 @@ describe('cursor chat meta', () => {
   it('resolves the meta.json under the workspace hash that holds the chat id', async () => {
     const cursorHome = await createCursorHome()
     await writeChatMeta(cursorHome, 'aa37220647fb7ce5eb044aa4bda60807', 'other-chat')
+
     const metaPath = await writeChatMeta(cursorHome, '96fa26ac0f433670ebec73ecef20b47b', 'chat-1', {
       title: 'Shell Command Hostname'
     })
+
     const transcriptPath = await writeTranscript(cursorHome, 'private-tmp-workspace', 'chat-1', [])
 
     expect(await cursorChatMetaPath(transcriptPath)).toBe(metaPath)
@@ -198,15 +218,18 @@ describe('cursor chat meta', () => {
   it('validates the index once per scan, not once per transcript', async () => {
     const cursorHome = await createCursorHome()
     const transcripts: string[] = []
+
     for (const chatId of ['chat-a', 'chat-b', 'chat-c']) {
       await writeChatMeta(cursorHome, 'workspace-hash', chatId)
       transcripts.push(await writeTranscript(cursorHome, 'slug', chatId, []))
     }
+
     chatsRootReads = 0
 
     const inScan = await withCursorChatMetaScan(() =>
       Promise.all(transcripts.map((path) => cursorChatMetaPath(path)))
     )
+
     expect(inScan.every(Boolean)).toBe(true)
     expect(chatsRootReads).toBe(1)
 
@@ -238,6 +261,7 @@ describe('cursor chat meta', () => {
 
 async function cursorCandidate(cursorHome: string): Promise<FileWithMtime> {
   const issues: AiVaultScanIssue[] = []
+
   const discovery = await discoverFiles({
     rootDir: join(cursorHome, 'projects'),
     limit: 10,
@@ -247,6 +271,7 @@ async function cursorCandidate(cursorHome: string): Promise<FileWithMtime> {
     filePredicate: AI_VAULT_AGENT_SOURCES.cursor.filePredicate,
     contentDependencyPath: AI_VAULT_AGENT_SOURCES.cursor.contentDependencyPath
   })
+
   return discovery.files[0]
 }
 
@@ -261,6 +286,7 @@ function parseCursorCached(
       'darwin',
       stats
     )
+
     return { session, stats }
   })
 }
@@ -270,13 +296,16 @@ async function writeCursorScanFixture(chatIds: string[]): Promise<{
   scanOptions: ReturnType<typeof isolatedScanRoots> & { cursorProjectsDir: string }
 }> {
   const cursorHome = await createCursorHome()
+
   for (const chatId of chatIds) {
     await writeChatMeta(cursorHome, 'workspace-hash', chatId, { cwd: `/tmp/ws-${chatId}` })
     await writeTranscript(cursorHome, 'slug', chatId, [
       JSON.stringify({ role: 'user', message: { content: [{ type: 'text', text: chatId }] } })
     ])
   }
+
   const root = join(cursorHome, '..')
+
   return {
     cursorHome,
     scanOptions: {
@@ -414,9 +443,11 @@ describe('cursor sidecar enrichment', () => {
     const persisted = snapshotSessionParseCacheForPersistence().map(
       ([path, entry]): [string, PersistedSessionParseCacheEntry] => {
         const { sidecar: _sidecar, ...rest } = entry
+
         return [path, rest]
       }
     )
+
     resetSessionParseCacheForTests()
     seedSessionParseCache(persisted)
 
@@ -529,9 +560,11 @@ describe('cursor chat meta scan failures', () => {
   it('resumes an appended transcript after a refused sidecar scan', async () => {
     const cursorHome = await createCursorHome()
     await writeChatMeta(cursorHome, 'workspace-hash', 'chat-r', { cwd: '/repo/resume' })
+
     const transcriptPath = await writeTranscript(cursorHome, 'slug', 'chat-r', [
       JSON.stringify({ role: 'user', message: { content: 'one' } })
     ])
+
     resetSessionParseCacheForTests()
     await parseCursorCached(await cursorCandidate(cursorHome))
 

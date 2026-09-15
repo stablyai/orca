@@ -92,6 +92,7 @@ describe('terminal live input', () => {
     expect([...firstPass.defaultedHandles]).toEqual(['pty-1'])
 
     const manuallyDisabled = new Set<string>()
+
     const secondPass = defaultTerminalLiveInputHandles(
       manuallyDisabled,
       firstPass.defaultedHandles,

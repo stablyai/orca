@@ -27,8 +27,10 @@ export function createRichMarkdownVisibleTextMap(
     const visibleFrom = text.length
     text += segment.text
     segments.push({ ...segment, visibleFrom, visibleTo: text.length })
+
     return true
   })
+
   return { text, segments }
 }
 
@@ -60,6 +62,7 @@ export function forEachRichMarkdownVisibleTextSegment(
 ): void {
   let stopped = false
   let sawVisibleBlock = false
+
   const inspect = (
     node: ProseMirrorNode,
     pos: number,
@@ -69,30 +72,39 @@ export function forEachRichMarkdownVisibleTextSegment(
     if (stopped) {
       return false
     }
+
     const startsVisibleBlock = isRichMarkdownVisibleBlockStart(node)
+
     if (startsVisibleBlock) {
       if (sawVisibleBlock) {
         stopped = !visit({ kind: 'separator', text: '\n', from: pos, to: pos })
+
         if (stopped) {
           return false
         }
       }
+
       sawVisibleBlock = true
+
       if (node.isTextblock) {
         return true
       }
     }
+
     let visible = ''
     let segmentFrom = pos
     let segmentTo = pos + node.nodeSize
     let kind: RichMarkdownVisibleTextSegment['kind'] = 'text'
+
     if (node.isText) {
       const source = node.text ?? ''
       const startOffset = Math.max(0, from - pos)
       const endOffset = Math.min(source.length, to - pos)
+
       if (endOffset <= startOffset) {
         return
       }
+
       visible = source.slice(startOffset, endOffset)
       segmentFrom = pos + startOffset
       segmentTo = pos + endOffset
@@ -102,17 +114,21 @@ export function forEachRichMarkdownVisibleTextSegment(
     } else {
       return
     }
+
     if (!visible) {
       return
     }
+
     stopped = !visit({
       kind,
       text: visible,
       from: segmentFrom,
       to: segmentTo
     })
+
     return !stopped
   }
+
   doc.nodesBetween(from, to, inspect)
 }
 

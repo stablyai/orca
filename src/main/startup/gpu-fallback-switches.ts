@@ -28,8 +28,10 @@ export function applyGpuFallbackCommandLineSwitches(
   platform: NodeJS.Platform
 ): readonly string[] {
   const switches = resolveGpuFallbackSwitches(platform)
+
   for (const name of switches) {
     commandLine.appendSwitch(name)
   }
+
   return switches
 }

@@ -7,13 +7,16 @@ import {
 } from './attachment-image-cache'
 
 type Image = { dataUrl: string; byteSize: number } | null
+
 function deferredImage() {
   let resolve!: (image: Image) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<Image>((done, fail) => {
     resolve = done
     reject = fail
   })
+
   return { promise, resolve, reject }
 }
 
@@ -26,10 +29,13 @@ describe.each(['site', 'all'] as const)('attachment download after clearing %s',
       const old = deferredImage()
       const replacement = deferredImage()
       let downloads = 0
+
       const load = () => {
         downloads += 1
+
         return downloads === 1 ? old.promise : replacement.promise
       }
+
       const args = { siteId: 'site-a', attachmentId: 'image-1', load }
       const first = loadAttachmentDataUrlWithCache(args).catch(() => 'old failure')
       clearAttachmentImagesForSite(scope === 'site' ? 'site-a' : undefined)
@@ -41,6 +47,7 @@ describe.each(['site', 'all'] as const)('attachment download after clearing %s',
       } else {
         old.resolve(outcome === 'empty' ? null : { dataUrl: 'old image', byteSize: 3 })
       }
+
       expect(await first).toBe(
         outcome === 'failure' ? 'old failure' : outcome === 'empty' ? null : 'old image'
       )

@@ -60,6 +60,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     let resolveRemoval: (
       result: Awaited<ReturnType<WorkspaceCleanupBackgroundRemovalArgs['removeCandidates']>>
     ) => void
+
     const removeCandidates = vi.fn(
       () =>
         new Promise<Awaited<ReturnType<WorkspaceCleanupBackgroundRemovalArgs['removeCandidates']>>>(
@@ -68,6 +69,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
           }
         )
     )
+
     const onProgress = vi.fn()
     const onResult = vi.fn()
     const candidate = makeCandidate()
@@ -113,12 +115,14 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
 
   it('removes candidates one at a time for per-row progress', async () => {
     const first = makeCandidate()
+
     const second = makeCandidate({
       worktreeId: 'repo-1::/repo/beta',
       displayName: 'beta',
       branch: 'beta',
       path: '/repo/beta'
     })
+
     const removeCandidates = vi
       .fn()
       .mockResolvedValueOnce({
@@ -131,6 +135,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
         removedIdentities: [second.worktreeId],
         failures: []
       })
+
     const onProgress = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -156,22 +161,26 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
 
   it('reports all preserved branches in one cleanup result', async () => {
     const first = makeCandidate()
+
     const second = makeCandidate({
       worktreeId: 'repo-1::/repo/beta',
       displayName: 'beta',
       branch: 'beta',
       path: '/repo/beta'
     })
+
     const firstBranch = {
       worktreeId: first.worktreeId,
       branchName: 'feature/alpha',
       expectedHead: 'alpha-head'
     }
+
     const secondBranch = {
       worktreeId: second.worktreeId,
       branchName: 'feature/beta',
       expectedHead: 'beta-head'
     }
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -212,12 +221,14 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       branch: 'parent',
       path: '/repo/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',
       displayName: 'child',
       branch: 'child',
       path: '/repo/parent/child'
     })
+
     const removeCandidates = vi.fn(async (worktreeIds: readonly string[]) => ({
       removedIds: [...worktreeIds],
       removedIdentities: [...worktreeIds],
@@ -246,17 +257,20 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       branch: 'parent',
       path: 'C:\\repo\\parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::C:\\repo\\parent\\child',
       displayName: 'child',
       branch: 'child',
       path: 'C:\\repo\\parent\\child'
     })
+
     const removeCandidates = vi.fn().mockResolvedValueOnce({
       removedIds: [],
       removedIdentities: [],
       failures: [{ worktreeId: child.worktreeId, displayName: child.displayName, message: 'busy' }]
     })
+
     const onProgress = vi.fn()
     const onResult = vi.fn()
 
@@ -300,17 +314,20 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       branch: 'parent',
       path: '/repo/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',
       displayName: 'child',
       branch: 'child',
       path: '/repo/parent/child'
     })
+
     const removeCandidates = vi.fn().mockResolvedValueOnce({
       removedIds: [],
       removedIdentities: [],
       failures: [{ worktreeId: child.worktreeId, displayName: child.displayName, message: 'busy' }]
     })
+
     const onRowFailed = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -337,6 +354,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       path: '/repo/parent/child',
       connectionId: 'ssh-a'
     })
+
     const unrelatedParent = makeCandidate({
       worktreeId: 'repo-2::/repo/parent',
       repoId: 'repo-2',
@@ -346,6 +364,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       path: '/repo/parent',
       connectionId: 'ssh-b'
     })
+
     const removeCandidates = vi
       .fn()
       .mockResolvedValueOnce({
@@ -365,6 +384,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
         removedIdentities: [unrelatedParent.worktreeId],
         failures: []
       })
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -403,6 +423,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       path: '/repo/parent/child',
       executionHostId: 'runtime:hub-a'
     })
+
     const unrelatedParent = makeCandidate({
       worktreeId: 'repo-2::/repo/parent',
       repoId: 'repo-2',
@@ -412,6 +433,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       path: '/repo/parent',
       executionHostId: 'runtime:hub-b'
     })
+
     const removeCandidates = vi
       .fn()
       .mockResolvedValueOnce({
@@ -498,6 +520,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
 
   it('shows every failure message in the failure toast description', async () => {
     const first = makeCandidate()
+
     const second = makeCandidate({
       worktreeId: 'repo-1::/repo/beta',
       displayName: 'beta',

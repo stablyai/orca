@@ -30,6 +30,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -52,6 +53,7 @@ const authFaults = vi.hoisted(() => {
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, ${syscall} '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = syscall
@@ -59,6 +61,7 @@ const authFaults = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
@@ -66,12 +69,14 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const originalRead = actual.readFileSync as (...args: unknown[]) => unknown
   const originalExists = actual.existsSync as (...args: unknown[]) => boolean
+
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: Object.assign((...args: unknown[]): unknown => {
       if (authFaults.isDenied(args[0])) {
         authFaults.throwDenial(args[0] as string, 'read')
       }
+
       return originalRead(...args)
     }, originalRead),
     existsSync: Object.assign((...args: unknown[]): boolean => {
@@ -81,6 +86,7 @@ vi.mock('node:fs', async (importOriginal) => {
       return authFaults.isDenied(args[0]) ? false : originalExists(...args)
     }, originalExists)
   }
+
   return { ...patched, default: patched }
 })
 
@@ -113,23 +119,28 @@ function makeLoginChild(): EventEmitter & {
     stderr: PassThrough
     kill: () => void
   }
+
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.kill = vi.fn()
+
   return child
 }
 
 function authJsonFor(email: string): string {
   const payload = Buffer.from(JSON.stringify({ email })).toString('base64url')
+
   return JSON.stringify({ tokens: { id_token: `header.${payload}.signature` } })
 }
 
 /** Every managed home the add path created, whether or not it survived. */
 function listManagedHomes(): string[] {
   const root = join(testState.userDataDir, 'codex-accounts')
+
   if (!realExistsSync(root)) {
     return []
   }
+
   return realReaddirSync(root).map((accountId) => join(root, accountId, 'home'))
 }
 
@@ -141,6 +152,7 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
     authFaults.reset()
 
     let deniedAuthPath = ''
+
     const spawnMock = vi.fn(
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const child = makeLoginChild()
@@ -151,15 +163,18 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
         // Only now does the scanner take the file.
         authFaults.deny(deniedAuthPath)
         queueMicrotask(() => child.emit('close', 0))
+
         return child
       }
     )
+
     vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: spawnMock }))
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 
     try {
       const store = createStore(createSettings())
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         createRateLimits() as never,
@@ -193,13 +208,16 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
     const spawnMock = vi.fn(() => {
       const child = makeLoginChild()
       queueMicrotask(() => child.emit('close', 1))
+
       return child
     })
+
     vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: spawnMock }))
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,
@@ -226,6 +244,7 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
       exitCode: number | null
       signalCode: string | null
     }
+
     child.pid = 5150
     child.exitCode = null
     child.signalCode = null
@@ -234,11 +253,13 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,
         createRuntimeHome() as never
       )
+
       const loginPromise = (
         service as unknown as { runCodexLogin(managedHomePath: string): Promise<void> }
       ).runCodexLogin(testState.fakeHomeDir)
@@ -277,6 +298,7 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
       exitCode: number | null
       signalCode: string | null
     }
+
     child.pid = 5151
     child.exitCode = null
     child.signalCode = null
@@ -285,11 +307,13 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,
         createRuntimeHome() as never
       )
+
       const loginPromise = (
         service as unknown as { runCodexLogin(managedHomePath: string): Promise<void> }
       ).runCodexLogin(testState.fakeHomeDir)
@@ -322,6 +346,7 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,
@@ -351,6 +376,7 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         createStore(createSettings()) as never,
         createRateLimits() as never,

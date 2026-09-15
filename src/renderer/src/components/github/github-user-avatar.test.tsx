@@ -12,6 +12,7 @@ function render(node: React.JSX.Element): { root: Root; container: HTMLDivElemen
   act(() => {
     root.render(node)
   })
+
   return { root, container }
 }
 
@@ -28,6 +29,7 @@ describe('GitHubUserAvatar', () => {
 
   it('renders the API avatar_url when provided (works for github.com and GHE)', () => {
     const url = 'https://avatars.example.com/u/42?u=hash&v=4'
+
     ;({ root, container } = render(<GitHubUserAvatar login="enterprise-user" avatarUrl={url} />))
     const img = container.querySelector('img')
     expect(img?.getAttribute('src')).toBe(url)

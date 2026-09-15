@@ -40,6 +40,7 @@ const BOUNDED_TEXT_MARKERS = [
  *  in the file — and reports the body as complete. */
 export function stripBoundedTextMarker(text: string): { text: string; truncated: boolean } {
   const stripped = BOUNDED_TEXT_MARKERS.reduce((value, marker) => value.replace(marker, ''), text)
+
   return { text: stripped, truncated: stripped.length !== text.length }
 }
 
@@ -48,9 +49,11 @@ function itemBlocks(item: AgentJournalRenderItem): {
   blocks: NativeChatBlock[]
 } | null {
   const body = item.body
+
   if (body.kind === 'message') {
     return { role: body.role, blocks: body.blocks }
   }
+
   if (body.kind === 'tool-call') {
     return {
       role: 'assistant',
@@ -80,6 +83,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
       ]
     }
   }
+
   if (body.kind === 'diff') {
     return {
       role: 'assistant',
@@ -89,10 +93,12 @@ function itemBlocks(item: AgentJournalRenderItem): {
       ]
     }
   }
+
   if (body.kind === 'approval') {
     if (body.resolution.state === 'pending') {
       return null
     }
+
     return {
       role: 'system',
       blocks: [
@@ -103,21 +109,26 @@ function itemBlocks(item: AgentJournalRenderItem): {
       ]
     }
   }
+
   if (body.kind === 'question') {
     if (body.resolution.state === 'pending') {
       return null
     }
+
     const choices = body.options.map((option) => option.label).join(' · ')
+
     return {
       role: 'system',
       blocks: [{ type: 'text', text: `${body.question}\n${choices}`.trim() }]
     }
   }
+
   // A turn record is timing, not content; a kind this build does not know is
   // never painted as text either, so a newer host can add kinds freely.
   if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
+
   return {
     role: 'system',
     blocks: [
@@ -140,10 +151,12 @@ export function projectStructuredItemsToNativeChat(
   const messages: NativeChatMessage[] = []
   items.forEach((item) => {
     const projected = projectStructuredItemToNativeChat(item)
+
     if (projected) {
       messages.push(projected)
     }
   })
+
   return messages
 }
 
@@ -151,11 +164,14 @@ export function projectStructuredItemToNativeChat(
   item: AgentJournalRenderItem
 ): NativeChatMessage | null {
   const cached = projectedItems.get(item)
+
   if (cached !== undefined) {
     return cached
   }
+
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
   const projected = itemBlocks(item)
+
   const message: NativeChatMessage | null = projected
     ? {
         id: item.itemId,
@@ -165,7 +181,9 @@ export function projectStructuredItemToNativeChat(
         source: 'transcript'
       }
     : null
+
   projectedItems.set(item, message)
+
   return message
 }
 
@@ -225,6 +243,7 @@ export function projectStructuredAgentSessionStatus(
   ) {
     return 'attention'
   }
+
   return activeStructuredAgentSessionTurnId(items) ||
     hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
     ? 'working'
@@ -241,10 +260,12 @@ export function latestStructuredAgentSessionPrompt(
 ): string {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
+
     if (body?.kind === 'message' && body.role === 'user') {
       return messageProse(body.blocks)
     }
   }
+
   return ''
 }
 
@@ -255,16 +276,20 @@ export function latestStructuredAgentSessionAssistantMessage(
 ): string {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
+
     if (body?.kind === 'message' && body.role === 'user') {
       return ''
     }
+
     if (body?.kind === 'message' && body.role === 'assistant') {
       const prose = messageProse(body.blocks)
+
       if (prose.trim()) {
         return prose
       }
     }
   }
+
   return ''
 }
 
@@ -299,21 +324,26 @@ export function projectStructuredAgentSessionStatusSummary(
   ) {
     return { status: null, latestPrompt: '' }
   }
+
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
   const activeToolCall = status === 'working' ? activeStructuredAgentSessionToolCall(items) : null
+
   const toolName = activeToolCall
     ? normalizeOptionalField(activeToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
     : undefined
+
   const toolInput = activeToolCall
     ? normalizeOptionalField(
         describeToolInput(activeToolCall.input),
         AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
       )
     : undefined
+
   const lastAssistantMessage = normalizeOptionalField(
     latestStructuredAgentSessionAssistantMessage(items),
     AGENT_STATUS_MAX_FIELD_LENGTH
   )
+
   return {
     status,
     latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
@@ -335,5 +365,6 @@ export function structuredAgentSessionPaneKey(tabId: string, sessionId: string):
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   const leaf = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+
   return `${tabId}:${leaf}`
 }

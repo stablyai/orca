@@ -75,6 +75,7 @@ type LocalhostLinkWorktree = {
 // the break, several renderer test files that load this module first see
 // `createEditorSlice` as undefined at store/index.ts initialization.
 let storeAccessor: StoreAccessor | null = null
+
 let workspaceHttpLinkBrowserOpener: WorkspaceHttpLinkBrowserOpener | null = null
 
 export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
@@ -107,9 +108,11 @@ export function resolveModifierRouting(
   if (!modifierHeld) {
     return { wantsOrca: false, wantsSystemBrowser: false }
   }
+
   if (!modifierInverts) {
     return { wantsOrca: false, wantsSystemBrowser: true }
   }
+
   return { wantsOrca: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
 }
 
@@ -122,21 +125,27 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     modifierHeld,
     sourceOwner
   } = opts
+
   if (sourceOwner?.kind === 'unknown') {
     return
   }
+
   const state = storeAccessor?.()
   const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const effectiveSourceOwner = sourceOwner
+
   const sourceIsLocal = effectiveSourceOwner
     ? effectiveSourceOwner.kind === 'local'
     : !remoteRuntimeActive
+
   const openLinksInApp = state?.settings?.openLinksInApp === true
+
   const modifier = resolveModifierRouting(
     Boolean(modifierHeld),
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
+
   const wantsOrca =
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
@@ -169,6 +178,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         )
       })
     }
+
     return
   }
 
@@ -182,22 +192,30 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       // to the global activeWorktreeId deselects the real repo workspace.
       state.setActiveWorktree(worktreeId)
     }
+
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
+
     if (!localhostRoute) {
       state.createBrowserTab(worktreeId, url, { activate: true })
+
       return
     }
+
     void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
       state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
     })
+
     return
   }
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
+
   if (!localhostRoute) {
     void window.api.shell.openUrl(url)
+
     return
   }
+
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
     void window.api.shell.openUrl(labeledUrl)
   })
@@ -211,13 +229,16 @@ function localhostLabelRouteForHttpLink(
   if (sourceOwner && sourceOwner.kind !== 'local') {
     return null
   }
+
   if (!sourceOwner && state.settings?.activeRuntimeEnvironmentId?.trim()) {
     return null
   }
+
   const sourceScan =
     sourceOwner?.kind === 'local'
       ? (state.workspacePortScansByKey?.['local:all'] ?? null)
       : undefined
+
   return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
 }
 
@@ -226,17 +247,22 @@ export async function resolveLocalhostHttpLinkDisplayUrl(
   sourceOwner?: HttpLinkSourceOwner
 ): Promise<string | null> {
   const state = storeAccessor?.()
+
   if (!state) {
     return null
   }
+
   // Why: the hover label must resolve the same route the click will take, or a
   // remote pane's loopback URL gets shown with a local worktree's label.
   const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
+
   if (!localhostRoute) {
     return null
   }
+
   try {
     const result = await window.api.localhostWorktreeLabels.register(localhostRoute)
+
     return result.url
   } catch {
     return null
@@ -268,27 +294,37 @@ function localhostLabelRouteForTerminalLink(
   ) {
     return null
   }
+
   // Why: only loopback links we can attribute to a scanned workspace port
   // should get a worktree label; everything else must stay as-is.
   const parsed = parseLoopbackUrlWithPort(rawUrl)
+
   if (!parsed) {
     return null
   }
+
   const scan = sourceScan === undefined ? state.workspacePortScan?.result : sourceScan
   const port = findWorkspacePortByNumber(scan, Number(parsed.port))
+
   if (!port) {
     return null
   }
+
   const repo = state.repos?.find((entry) => entry.id === port.owner.repoId) ?? null
+
   if (!repo) {
     return null
   }
+
   const worktree = findWorktreeById(state, port.owner.worktreeId)
+
   const project =
     worktree?.projectId && state.projects
       ? (state.projects.find((entry) => entry.id === worktree.projectId) ?? null)
       : null
+
   const projectSource = project ?? repo
+
   return {
     targetUrl: parsed.toString(),
     projectName: projectSource.displayName,
@@ -308,6 +344,7 @@ function findWorkspacePortByNumber(
       (candidate): candidate is WorkspacePort & { kind: 'workspace' } =>
         candidate.kind === 'workspace' && candidate.port === portNumber
     ) ?? null
+
   return port
 }
 
@@ -316,15 +353,20 @@ function findWorktreeById(
   worktreeId: string
 ): LocalhostLinkWorktree | null {
   const fromAllWorktrees = state.allWorktrees?.().find((worktree) => worktree.id === worktreeId)
+
   if (fromAllWorktrees) {
     return fromAllWorktrees
   }
+
   const worktreesByRepo = state.worktreesByRepo ?? {}
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     const worktree = worktrees.find((entry) => entry.id === worktreeId)
+
     if (worktree) {
       return worktree
     }
   }
+
   return null
 }

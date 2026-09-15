@@ -94,10 +94,12 @@ export function VaultScopeSwitch({
     'auto.components.right.sidebar.AiVaultPanelControls.workspaceScope',
     'Workspace'
   )
+
   const projectLabel = translate(
     'auto.components.right.sidebar.AiVaultPanelControls.projectScope',
     'Project'
   )
+
   const allLabel = translate('auto.components.right.sidebar.AiVaultPanelControls.allScope', 'All')
 
   return (

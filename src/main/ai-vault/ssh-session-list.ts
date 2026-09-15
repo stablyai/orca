@@ -36,6 +36,7 @@ export async function scanSshAiVaultSessions(
   options: SshAiVaultScanBudget = {}
 ): Promise<AiVaultListResult> {
   const executionHostId = toSshExecutionHostId(targetId)
+
   // Why: in `all` scope every host leg is awaited together, so an unexpected
   // throw here (not a caller cancellation) would discard the local results too.
   try {
@@ -44,6 +45,7 @@ export async function scanSshAiVaultSessions(
     if (isAbortError(error)) {
       throw error
     }
+
     return sshScanIssueResult(executionHostId, targetId, errorMessage(error))
   }
 }
@@ -61,6 +63,7 @@ async function scanOneSshHost(
   const scopePathsTruncated = (args?.scopePaths?.length ?? 0) > AI_VAULT_SCOPE_PATHS_MAX_COUNT
   let relayError: unknown
   const relayTimeoutMs = options.relayTimeoutMs ?? options.timeoutMs
+
   try {
     const params = {
       limit: args?.limit,
@@ -69,6 +72,7 @@ async function scanOneSshHost(
       scopePaths,
       ...(scopePathsTruncated ? { scopePathsTruncated: true } : {})
     }
+
     const relayResult =
       options.signal || relayTimeoutMs !== undefined
         ? await requestActiveSshAiVaultSessionList(targetId, params, {
@@ -76,6 +80,7 @@ async function scanOneSshHost(
             timeoutMs: relayTimeoutMs
           })
         : await requestActiveSshAiVaultSessionList(targetId, params)
+
     if (relayResult !== null) {
       return restampAiVaultListResult(parseAiVaultListResult(relayResult), executionHostId)
     }
@@ -83,16 +88,20 @@ async function scanOneSshHost(
     if (isAbortError(error)) {
       throw error
     }
+
     if (
       isSshRequestOutcomeUnverifiable(error) &&
       (relayTimeoutMs === undefined || relayTimeoutMs >= MEANINGFUL_RELAY_SCAN_ATTEMPT_MS)
     ) {
       return sshScanIssueResult(executionHostId, targetId, errorMessage(error))
     }
+
     relayError = error
   }
+
   const hostInfo = getActiveSshAiVaultHostInfo(targetId)
   const provider = getSshFilesystemProvider(targetId)
+
   if (!hostInfo || !provider) {
     return sshScanIssueResult(
       executionHostId,
@@ -100,6 +109,7 @@ async function scanOneSshHost(
       relayError ? errorMessage(relayError) : SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
     )
   }
+
   // Why: `timeoutMs` bounded only the relay round trip, so a host on a relay
   // without the list method fell through to the unbounded desktop crawl and one
   // stalled SSH file stream could hold every other host's results hostage.
@@ -118,6 +128,7 @@ async function scanOneSshHost(
     signal: options.signal,
     remainingMs: remainingScanBudgetMs(options.timeoutMs, startedAt)
   })
+
   if (!fallbackResult) {
     return sshScanIssueResult(
       executionHostId,
@@ -125,15 +136,18 @@ async function scanOneSshHost(
       `Agent Session History scan timed out after ${options.timeoutMs}ms on this SSH host.`
     )
   }
+
   const scopeIssues = scopePathsTruncated
     ? [scopeTruncationIssue(executionHostId, hostInfo.remoteHome)]
     : []
+
   // An empty remote home and "the relay method failed and the crawl found
   // nothing" look identical, so a fallback that recovered nothing still reports
   // the relay error instead of presenting a broken relay as an empty host.
   if (!relayError || fallbackResult.sessions.length > 0) {
     return { ...fallbackResult, issues: [...fallbackResult.issues, ...scopeIssues] }
   }
+
   return {
     ...fallbackResult,
     issues: [
@@ -149,6 +163,7 @@ function remainingScanBudgetMs(timeoutMs: number | undefined, startedAt: number)
   if (timeoutMs === undefined) {
     return null
   }
+
   return Math.max(0, timeoutMs - (Date.now() - startedAt))
 }
 
@@ -160,40 +175,53 @@ async function scanRemoteSessionsWithinBudget(args: {
   remainingMs: number | null
 }): Promise<AiVaultListResult | null> {
   const remainingMs = args.remainingMs
+
   if (remainingMs === null) {
     return args.scan(args.signal)
   }
+
   if (args.signal?.aborted) {
     throw createAiVaultScanCancelledError()
   }
+
   if (remainingMs === 0) {
     return null
   }
+
   const controller = new AbortController()
+
   return new Promise<AiVaultListResult | null>((resolve, reject) => {
     let settled = false
+
     const finish = (settle: () => void): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       args.signal?.removeEventListener('abort', onCallerAbort)
       settle()
     }
+
     const onCallerAbort = (): void => {
       controller.abort()
       finish(() => reject(createAiVaultScanCancelledError()))
     }
+
     const timer = setTimeout(() => {
       controller.abort()
       finish(() => resolve(null))
     }, remainingMs)
+
     args.signal?.addEventListener('abort', onCallerAbort, { once: true })
+
     if (args.signal?.aborted) {
       onCallerAbort()
+
       return
     }
+
     try {
       const scan = args.scan(controller.signal)
       // The SSH provider may ignore abort; observe any eventual rejection after

@@ -15,11 +15,13 @@ export function resolveChecksPanelHostedReviewBaseRef(input: {
   repoBaseRef?: string | null
 }): string | null {
   const worktreeBaseRef = normalizeChecksPanelHostedReviewBaseRef(input.worktreeBaseRef)
+
   return worktreeBaseRef || normalizeChecksPanelHostedReviewBaseRef(input.repoBaseRef)
 }
 
 function normalizeChecksPanelHostedReviewBaseRef(ref: string | null | undefined): string | null {
   const normalizedRef = ref ? normalizeHostedReviewBaseRef(ref) : ''
+
   return normalizedRef || null
 }
 
@@ -41,18 +43,22 @@ export function isChecksPanelCreateEligibilityConfirmable(input: {
   hasHardRefreshError: boolean
 }): boolean {
   const eligibility = input.eligibility
+
   if (!eligibility || eligibility.blockedReason === 'existing_review') {
     return false
   }
+
   if (input.reviewLookup === 'positive_unresolved' || input.hasHardRefreshError) {
     return false
   }
+
   // An `unavailable` existing-review lookup could be hiding a real PR. Block even
   // the Push & Create (needs_push) path, which would otherwise slip through the
   // canCreate check below with review existence unproven.
   if (eligibility.reviewLookupOutcome === 'unavailable') {
     return false
   }
+
   return eligibility.canCreate === true || eligibility.blockedReason === 'needs_push'
 }
 
@@ -73,6 +79,7 @@ export function shouldOpenChecksPanelCreateComposer(input: {
   if (input.activeReview || input.isFolder || !input.branch) {
     return false
   }
+
   return isChecksPanelCreateEligibilityConfirmable({
     eligibility: input.hostedReviewCreation,
     reviewLookup: input.reviewLookup ?? 'unknown',
@@ -133,14 +140,19 @@ export function isChecksPanelHardErrorCleared(input: ChecksPanelConfirmedReadine
   if (input.hardErrorObservedAt === undefined) {
     return true
   }
+
   const startedAt = input.eligibilityRequestStartedAt
+
   if (startedAt === undefined || !(startedAt > input.hardErrorObservedAt)) {
     return false
   }
+
   if (!input.contextKeyMatches) {
     return false
   }
+
   const outcome: HostedReviewLookupOutcome | undefined = input.eligibility?.reviewLookupOutcome
+
   return outcome === 'found' || outcome === 'not_found'
 }
 
@@ -153,9 +165,11 @@ export function computeChecksPanelConfirmedReadiness(
   input: ChecksPanelConfirmedReadinessInput
 ): ChecksPanelConfirmedReadiness {
   const eligibility = input.eligibility
+
   if (!input.contextKeyMatches) {
     return NOT_CONFIRMED
   }
+
   // Share the hard-block floor with the mobile-shared gate; an uncleared hard
   // error is folded in as the `hasHardRefreshError` input so the two cannot drift.
   if (
@@ -167,6 +181,7 @@ export function computeChecksPanelConfirmedReadiness(
   ) {
     return NOT_CONFIRMED
   }
+
   // Freshness: eligibility must be recent and its Git snapshot must still match.
   if (
     input.eligibilityCompletedAt === undefined ||
@@ -175,6 +190,7 @@ export function computeChecksPanelConfirmedReadiness(
   ) {
     return NOT_CONFIRMED
   }
+
   return { confirmed: true, needsPush: eligibility?.blockedReason === 'needs_push' }
 }
 

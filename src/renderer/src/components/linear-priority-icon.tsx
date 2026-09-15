@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 // Why: Linear priority glyphs are provider-brand signals, so their fills match
 // Linear's lower-contrast icon colors instead of Orca's generic state tokens.
 const LINEAR_PRIORITY_URGENT_FILL = 'lch(66 80 48)'
+
 const LINEAR_PRIORITY_BAR_FILL = 'lch(39.576 1.25 282)'
 
 const LINEAR_PRIORITY_ICON_LABELS: Record<number, string> = {
@@ -20,12 +21,15 @@ function getLinearPriorityBarCount(priority: number): number {
   if (priority === 2) {
     return 3
   }
+
   if (priority === 3) {
     return 2
   }
+
   if (priority === 4) {
     return 1
   }
+
   return 0
 }
 
@@ -78,6 +82,7 @@ export function LinearPriorityIcon({
   }
 
   const activeBars = getLinearPriorityBarCount(priority)
+
   return (
     <span
       className={cn(
@@ -90,6 +95,7 @@ export function LinearPriorityIcon({
         {[1, 2, 3].map((bar) => {
           const height = bar === 1 ? 5 : bar === 2 ? 8 : 11
           const x = bar === 1 ? 2.25 : bar === 2 ? 6.5 : 10.75
+
           return (
             <rect
               key={bar}

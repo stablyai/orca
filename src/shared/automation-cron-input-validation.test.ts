@@ -81,6 +81,7 @@ describe.skipIf(process.platform === 'win32')('cron occurrence local-time contro
       new Date(2026, 0, 1).getTime(),
       new Date(2026, 10, 1, 0, 0).getTime()
     )
+
     const second = nextAutomationOccurrenceAfter(
       '30 1 * * *',
       new Date(2026, 0, 1).getTime(),

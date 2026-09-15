@@ -3,16 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+
 vi.mock('../browser/browser-route-session-runtime', async () => ({
   browserRouteSessionRegistry: {
     isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
@@ -21,8 +26,10 @@ vi.mock('../browser/browser-route-session-runtime', async () => ({
     attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
   }
 }))
+
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
+
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
     retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
@@ -68,6 +75,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -81,6 +89,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -100,15 +109,19 @@ describe('createMainWindow', () => {
     // Why every handler and not the last one: two modules register `will-navigate` on this
     // webContents, and keeping one slot per event let whichever registered last stand in for both.
     const windowHandlers: Record<string, ((...args: any[]) => void)[]> = {}
+
     const fire = (event: string, ...args: any[]): void => {
       for (const handler of windowHandlers[event] ?? []) {
         handler(...args)
       }
     }
+
     let windowOpenHandler: (...args: any[]) => unknown = () => undefined
+
     const record = (event: string, handler: (...args: any[]) => void): void => {
       ;(windowHandlers[event] ??= []).push(handler)
     }
+
     const webContents = {
       getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
       isDestroyed: vi.fn(() => false),
@@ -130,6 +143,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -143,6 +157,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -158,6 +173,7 @@ describe('createMainWindow', () => {
     // Why: macOS swallows the app-activating click unless the window accepts
     // first mouse, forcing a second click to focus the floating workspace.
     expect(browserWindowOptions.acceptFirstMouse).toBe(true)
+
     if (process.platform === 'darwin') {
       expect(browserWindowOptions).toMatchObject({
         titleBarStyle: 'hiddenInset'
@@ -265,10 +281,12 @@ describe('createMainWindow', () => {
       src: 'data:text/html,',
       preload: 'file:///tmp/untrusted-preload.js'
     }
+
     const hardenedPrefs = {
       partition: 'persist:orca-browser',
       preload: '/tmp/untrusted-preload.js'
     }
+
     fire(
       'will-attach-webview',
       { preventDefault: vi.fn() } as never,
@@ -290,6 +308,7 @@ describe('createMainWindow', () => {
   // Electron never answers a sendSync that lands before its listener exists.
   it('stamps the browser host id into the renderer that owns the guests, and strips it from a guest that carries one', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
       isDestroyed: vi.fn(() => false),
@@ -309,6 +328,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     browserWindowMock.mockImplementation(function () {
       return {
         webContents,
@@ -338,6 +358,7 @@ describe('createMainWindow', () => {
       partition: 'persist:orca-browser',
       additionalArguments: [...(stamped ?? [])]
     }
+
     windowHandlers['will-attach-webview'](
       { preventDefault: vi.fn() } as never,
       guestPreferences as never,
@@ -357,6 +378,7 @@ describe('createMainWindow', () => {
       { titleBarStyle: string | undefined; frame: boolean | undefined }
     ][]) {
       browserWindowMock.mockReset()
+
       const webContents = {
         on: vi.fn(),
         setZoomLevel: vi.fn(),
@@ -368,6 +390,7 @@ describe('createMainWindow', () => {
         openDevTools: vi.fn(),
         closeDevTools: vi.fn()
       }
+
       const browserWindowInstance = {
         webContents,
         on: vi.fn(),
@@ -382,6 +405,7 @@ describe('createMainWindow', () => {
         loadFile: vi.fn(() => Promise.resolve()),
         loadURL: vi.fn(() => Promise.resolve())
       }
+
       browserWindowMock.mockImplementation(function () {
         return browserWindowInstance
       })
@@ -401,6 +425,7 @@ describe('createMainWindow', () => {
       ['linux', { backgroundMaterial: undefined }]
     ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
       browserWindowMock.mockReset()
+
       const webContents = {
         on: vi.fn(),
         setZoomLevel: vi.fn(),
@@ -412,6 +437,7 @@ describe('createMainWindow', () => {
         openDevTools: vi.fn(),
         closeDevTools: vi.fn()
       }
+
       const browserWindowInstance = {
         webContents,
         on: vi.fn(),
@@ -427,6 +453,7 @@ describe('createMainWindow', () => {
         loadFile: vi.fn(() => Promise.resolve()),
         loadURL: vi.fn(() => Promise.resolve())
       }
+
       browserWindowMock.mockImplementation(function () {
         return browserWindowInstance
       })
@@ -451,6 +478,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
     let windowSize: [number, number] = [1200, 800]
+
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -463,6 +491,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
@@ -482,6 +511,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -526,6 +556,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
     let windowSize: [number, number] = [1200, 800]
+
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -538,6 +569,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
@@ -557,6 +589,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -566,6 +599,7 @@ describe('createMainWindow', () => {
     const revealHandler = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:window-revealed')?.[1]
+
     expect(revealHandler).toBeTypeOf('function')
 
     // Why: a reveal relayed by another window's webContents must not repaint this one.
@@ -604,6 +638,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
     macosTahoeMock.value = true
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -616,6 +651,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
@@ -633,6 +669,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -652,6 +689,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
     macosTahoeMock.value = true
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -664,6 +702,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
@@ -681,6 +720,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -698,6 +738,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
     macosTahoeMock.value = true
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -712,6 +753,7 @@ describe('createMainWindow', () => {
       enableDeviceEmulation: vi.fn(),
       disableDeviceEmulation: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event: string, handler: (...args: any[]) => void) => {
@@ -729,6 +771,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -738,6 +781,7 @@ describe('createMainWindow', () => {
     const resumeHandler = powerMonitorOnMock.mock.calls.find(
       ([event]) => event === 'resume'
     )?.[1] as (() => void) | undefined
+
     expect(resumeHandler).toBeDefined()
     resumeHandler?.()
 

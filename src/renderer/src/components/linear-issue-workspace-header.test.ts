@@ -9,6 +9,7 @@ function headerSource(): string {
   const end = source.indexOf('</header>', start)
   expect(start).toBeGreaterThanOrEqual(0)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 

@@ -20,9 +20,12 @@ export function renderMermaidFence(
 // diagram), so detect the mermaid fence from that child's className and unwrap.
 export function isMermaidPre(children: React.ReactNode): boolean {
   const child = React.Children.toArray(children)[0]
+
   if (!React.isValidElement(child)) {
     return false
   }
+
   const className = (child.props as { className?: string } | null)?.className
+
   return isMermaidFence(className)
 }

@@ -17,9 +17,11 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
     setProjectFieldDrafts,
     setProjectRowDetailError
   } = model
+
   if (!projectRowItem) {
     return null
   }
+
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS &&
     editableProjectFields(githubProjectTable).length > 0 ? (
     <View style={styles.detailSection}>
@@ -27,33 +29,45 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
       {editableProjectFields(githubProjectTable).map((field) => {
         const currentLabel = projectFieldValueLabel(projectRowItem, field)
         const draftValue = projectFieldDrafts[field.id] ?? ''
+
         const saveTextField = (): void => {
           if (field.dataType === 'NUMBER') {
             const number = Number(draftValue)
+
             if (!Number.isFinite(number)) {
               setProjectRowDetailError('Enter a valid number.')
+
               return
             }
+
             void mutateProjectRowField(projectRowItem, field, {
               kind: 'number',
               number
             })
+
             return
           }
+
           if (field.dataType === 'DATE') {
             const date = draftValue.trim()
+
             if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
               setProjectRowDetailError('Enter a date as YYYY-MM-DD.')
+
               return
             }
+
             void mutateProjectRowField(projectRowItem, field, { kind: 'date', date })
+
             return
           }
+
           void mutateProjectRowField(projectRowItem, field, {
             kind: 'text',
             text: draftValue
           })
         }
+
         return (
           <View key={field.id} style={styles.projectFieldCard}>
             <View style={styles.detailSectionHeader}>
@@ -66,8 +80,10 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
               <View style={styles.chipRow}>
                 {field.options.map((option) => {
                   const fieldValue = projectRowItem.fieldValuesByFieldId?.[field.id]
+
                   const selected =
                     fieldValue?.kind === 'single-select' && fieldValue.optionId === option.id
+
                   return (
                     <Pressable
                       key={option.id}
@@ -96,8 +112,10 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                 ) : (
                   field.iterations.map((iteration) => {
                     const fieldValue = projectRowItem.fieldValuesByFieldId?.[field.id]
+
                     const selected =
                       fieldValue?.kind === 'iteration' && fieldValue.iterationId === iteration.id
+
                     return (
                       <Pressable
                         key={iteration.id}

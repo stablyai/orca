@@ -15,12 +15,14 @@ export type CodexSessionBackfillAuditCoverage = {
 }
 
 const HEAL_AUDIT_ACTIONS = new Set(['hardlink', 'copy', 'existing'])
+
 const DIAGNOSTIC_AUDIT_ACTIONS = new Set(['copy-unsupported', 'failed'])
 
 export function createCodexSessionBackfillAuditWriter(
   auditLogPath: string
 ): CodexSessionBackfillAuditWriter {
   let auditDirectoryReady: Promise<string | undefined> | undefined
+
   const appendRecord = async (serializedRecord: string): Promise<void> => {
     auditDirectoryReady ??= mkdir(dirname(auditLogPath), { recursive: true }).catch(
       (error: unknown) => {
@@ -31,6 +33,7 @@ export function createCodexSessionBackfillAuditWriter(
     await auditDirectoryReady
     await appendFile(auditLogPath, serializedRecord, { encoding: 'utf-8' })
   }
+
   return async (record): Promise<boolean> => {
     // Why: a crash can leave a partial final JSON object. A leading newline
     // quarantines that torn tail so this recovery record remains parseable.
@@ -41,20 +44,25 @@ export function createCodexSessionBackfillAuditWriter(
       // terminal heal outcome must identify this particular publication event.
       recordId: randomUUID()
     })}\n`
+
     try {
       await appendRecord(serializedRecord)
+
       return true
     } catch {
       // Why: the heal consumes this ledger as its work queue. Retry the same
       // record once so a transient mkdir/write failure cannot omit a session.
     }
+
     try {
       await appendRecord(serializedRecord)
+
       return true
     } catch (error) {
       // Why: a published hardlink/copy may already be in use, so persistent
       // ledger failure is reported but cannot safely roll back the backfill.
       console.warn('[codex-session-backfill] Failed to append audit record:', error)
+
       return false
     }
   }
@@ -68,10 +76,12 @@ export async function readCodexSessionBackfillAuditCoverage(
     diagnosticEventIds: new Set<string>(),
     hasRunSummary: false
   }
+
   for await (const record of streamCodexSessionLedgerRecords(auditLogPath, {
     throwOnReadFailure: true
   })) {
     coverage.hasRunSummary ||= record.action === 'run-summary'
+
     if (
       typeof record.action === 'string' &&
       HEAL_AUDIT_ACTIONS.has(record.action) &&
@@ -79,6 +89,7 @@ export async function readCodexSessionBackfillAuditCoverage(
     ) {
       coverage.fileEventIds.add(record.fileEventId)
     }
+
     if (
       typeof record.action === 'string' &&
       DIAGNOSTIC_AUDIT_ACTIONS.has(record.action) &&
@@ -87,6 +98,7 @@ export async function readCodexSessionBackfillAuditCoverage(
       coverage.diagnosticEventIds.add(record.diagnosticEventId)
     }
   }
+
   return coverage
 }
 
@@ -99,6 +111,7 @@ export function createCodexSessionBackfillFileEventId(targetPath: string, stat: 
     stat.mtimeMs,
     stat.ctimeMs
   ].join('\0')
+
   return createHash('sha256')
     .update(normalizeRuntimePathForComparison(targetPath))
     .update('\0')
@@ -124,6 +137,7 @@ export function createCodexSessionBackfillDiagnosticEventId(args: {
         args.sourceStat.ctimeMs
       ].join('\0')
     : 'unavailable'
+
   return createHash('sha256')
     .update(args.action)
     .update('\0')
@@ -141,6 +155,7 @@ export function createCodexSessionBackfillDiagnosticEventId(args: {
 
 export function describeCodexSessionBackfillErrorCode(error: unknown): string {
   const code = (error as NodeJS.ErrnoException | null)?.code
+
   return typeof code === 'string' && code
     ? code
     : error instanceof Error
@@ -154,9 +169,11 @@ export async function appendCodexSessionHealAuditRecord(
   record: Record<string, unknown>
 ): Promise<boolean> {
   const appended = await writer(record)
+
   if (!appended) {
     summary.failedHealAuditRecords += 1
   }
+
   return appended
 }
 
@@ -168,6 +185,7 @@ export async function recordExistingCodexSessionForHeal(
   fileEventId?: string
 ): Promise<boolean> {
   summary.skippedExistingFiles += 1
+
   // Why: this also recovers a rollout installed before a crash or audit
   // failure; thread/read is idempotent for a pre-existing real-home file.
   return appendCodexSessionHealAuditRecord(writer, summary, {

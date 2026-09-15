@@ -37,19 +37,25 @@ export function resolveAutomationRunOpenTarget({
   livePtyIds: readonly string[]
 }): AutomationRunPaneTarget | null {
   const parsed = parsePaneKey(run.terminalPaneKey ?? '')
+
   if (!terminalTabExists || !parsed || !run.terminalPtyId || !currentLayout?.root) {
     return null
   }
+
   if (!terminalLayoutContainsLeaf(currentLayout.root, parsed.leafId)) {
     return null
   }
+
   if (!livePtyIds.includes(run.terminalPtyId)) {
     return null
   }
+
   const layoutPtyId = currentLayout.ptyIdsByLeafId?.[parsed.leafId]
+
   if (layoutPtyId !== undefined && layoutPtyId !== run.terminalPtyId) {
     return null
   }
+
   return {
     tabId: parsed.tabId,
     paneKey: run.terminalPaneKey!,
@@ -89,6 +95,7 @@ function terminalLayoutContainsLeaf(node: TerminalPaneLayoutNode, leafId: string
   if (node.type === 'leaf') {
     return node.leafId === leafId
   }
+
   return (
     terminalLayoutContainsLeaf(node.first, leafId) ||
     terminalLayoutContainsLeaf(node.second, leafId)

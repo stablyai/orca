@@ -58,10 +58,12 @@ function projectRuleQualityClass(rule: number): PaletteResultQualityClass {
   if (rule === 1) {
     return 'exact-intent'
   }
+
   return rule <= 4 ? 'visible-prefix' : 'partial-evidence'
 }
 
 const PROJECT_GROUP_ALIASES = ['group', 'repo group']
+
 const PROJECT_ALIASES = ['project', 'repo']
 
 function buildCmdJProjectSearchCandidates({
@@ -101,10 +103,13 @@ function buildCmdJProjectSearchCandidates({
     if (renderableRepoIds && !renderableRepoIds.has(repo.id)) {
       return
     }
+
     const target = getProjectHeaderRevealTarget(repo.id, repoMap, projectGrouping)
+
     if (!target.repo || seenRowKeys.has(target.key)) {
       return
     }
+
     seenRowKeys.add(target.key)
     candidates.push({
       id: `project:${target.key}`,
@@ -155,20 +160,27 @@ function projectRankingForCandidate(
   candidate: CmdJProjectSearchResult
 ): RankedProjectResult | null {
   const title = normalizeCmdJPaletteQuery(candidate.title)
+
   if (query === title) {
     return { result: candidate, rule: 1, score: 0 }
   }
+
   if (title.startsWith(query)) {
     return { result: candidate, rule: 2, score: 0 }
   }
+
   const aliasKeywords = candidate.kind === 'project-group' ? PROJECT_GROUP_ALIASES : PROJECT_ALIASES
+
   if (aliasKeywords.map(normalizeCmdJPaletteQuery).includes(query)) {
     return { result: candidate, rule: 3, score: 0 }
   }
+
   if (candidate.keywords.some((keyword) => keyword.startsWith(query))) {
     return { result: candidate, rule: 4, score: 0 }
   }
+
   const score = cmdJPaletteTokenScore(queryTokens, [candidate.title, ...candidate.keywords])
+
   return score > 0 ? { result: candidate, rule: 5, score } : null
 }
 
@@ -176,12 +188,15 @@ function compareProjectRanked(a: RankedProjectResult, b: RankedProjectResult): n
   if (a.rule !== b.rule) {
     return a.rule - b.rule
   }
+
   if (a.score !== b.score) {
     return b.score - a.score
   }
+
   if (a.result.order !== b.result.order) {
     return a.result.order - b.result.order
   }
+
   return a.result.id.localeCompare(b.result.id)
 }
 
@@ -205,13 +220,17 @@ export function searchCmdJProjectResults({
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
   }
+
   const normalizedQuery = normalizeCmdJPaletteQuery(query)
+
   // Why: project/group rows sit after worktree matches, so one-character
   // searches would add broad noisy navigation targets before intent is clear.
   if (normalizedQuery.length < 2 || isCmdJPaletteQueryOverTokenLimit(normalizedQuery)) {
     return []
   }
+
   const queryTokens = uniqueCmdJPaletteQueryTokens(normalizedQuery)
+
   return buildCmdJProjectSearchCandidates({
     projectGroups,
     repos,

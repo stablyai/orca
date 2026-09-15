@@ -53,14 +53,17 @@ const desktopSsh = (targetId: string): StableAutomationCatalogRef => ({
   authority: { kind: 'desktop' },
   selector: { kind: 'ssh', targetId }
 })
+
 const runtimeSelf: StableAutomationCatalogRef = {
   authority: { kind: 'runtime', environmentId: 'env-1' },
   selector: { kind: 'self' }
 }
+
 const runtimeSsh: StableAutomationCatalogRef = {
   authority: { kind: 'runtime', environmentId: 'env-1' },
   selector: { kind: 'ssh', targetId: 'nested' }
 }
+
 const desktopOrphan: StableAutomationCatalogRef = {
   authority: { kind: 'desktop' },
   selector: { kind: 'orphan' }
@@ -86,12 +89,14 @@ describe('resolveAutomationHostFilter', () => {
 
   it('retains a desktop SSH selection until the target list hydrates', () => {
     const filter = filterFor(desktopSsh('pending'))
+
     const resolution = resolveAutomationHostFilter({
       filter,
       catalog: catalogOf({
         desktop: { label: 'Local Mac', ssh: mirror({ targetsHydrated: false }) }
       })
     })
+
     expect(resolution).toMatchObject({ status: 'loading', announceFallback: false })
     expect(resolution.effective).toBe(filter)
   })
@@ -101,6 +106,7 @@ describe('resolveAutomationHostFilter', () => {
       filter: filterFor(desktopSsh('gone')),
       catalog: catalogOf()
     })
+
     expect(resolution).toEqual({
       effective: { kind: 'all' },
       entry: null,
@@ -112,6 +118,7 @@ describe('resolveAutomationHostFilter', () => {
   it('keeps a removed host as a ghost while automations still reference it', () => {
     const host = desktopSsh('gone')
     const key = hostStableKey(host)
+
     const resolution = resolveAutomationHostFilter({
       filter: filterFor(host),
       catalog: catalogOf({
@@ -123,6 +130,7 @@ describe('resolveAutomationHostFilter', () => {
       }),
       referencedStableKeys: new Set([key])
     })
+
     expect(resolution.status).toBe('ghost')
     expect(resolution.announceFallback).toBe(false)
     expect(resolution.entry?.label).toBe('Old box')
@@ -130,6 +138,7 @@ describe('resolveAutomationHostFilter', () => {
 
   it('drops a tombstoned host that nothing else references', () => {
     const host = desktopSsh('gone')
+
     const resolution = resolveAutomationHostFilter({
       filter: filterFor(host),
       catalog: catalogOf({
@@ -139,6 +148,7 @@ describe('resolveAutomationHostFilter', () => {
         }
       })
     })
+
     expect(resolution.status).toBe('removed')
     expect(resolution.announceFallback).toBe(true)
   })
@@ -182,6 +192,7 @@ describe('resolveAutomationHostFilter', () => {
         ]
       })
     })
+
     expect(resolution.status).toBe('removed')
     expect(resolution.announceFallback).toBe(true)
   })
@@ -195,6 +206,7 @@ describe('resolveAutomationHostFilter', () => {
         })
       ]
     })
+
     expect(
       resolveAutomationHostFilter({ filter: filterFor(runtimeSsh), catalog: offline })
     ).toMatchObject({ status: 'unavailable', announceFallback: false })
@@ -234,19 +246,23 @@ describe('resolveAutomationHostFilter', () => {
       }),
       catalog: catalogOf({ runtimes: [runtime({ authorityHealth: 'unavailable' })] })
     })
+
     expect(resolution).toMatchObject({ status: 'unavailable', announceFallback: false })
   })
 
   it('retains the display selection through a same-id re-pair', () => {
     const filter = filterFor(runtimeSelf)
+
     const before = resolveAutomationHostFilter({
       filter,
       catalog: catalogOf({ runtimes: [runtime({ pairingRevision: 3 })] })
     })
+
     const after = resolveAutomationHostFilter({
       filter,
       catalog: catalogOf({ runtimes: [runtime({ pairingRevision: 4 })] })
     })
+
     expect(after.status).toBe('ready')
     expect(after.entry?.stableKey).toBe(before.entry?.stableKey)
     // The display slot survives; the captured incarnation does not.
@@ -255,10 +271,12 @@ describe('resolveAutomationHostFilter', () => {
 
   it('retains the selection through a rename', () => {
     const filter = filterFor(runtimeSelf)
+
     const resolution = resolveAutomationHostFilter({
       filter,
       catalog: catalogOf({ runtimes: [runtime({ label: 'Renamed server' })] })
     })
+
     expect(resolution.status).toBe('ready')
     expect(resolution.entry?.label).toBe('Renamed server')
     expect(resolution.entry?.stableKey).toBe(hostStableKey(runtimeSelf))

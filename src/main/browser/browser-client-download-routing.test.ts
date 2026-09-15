@@ -11,7 +11,9 @@ import {
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 
 const ENV_A_GUEST_ID = 21
+
 const ENV_B_GUEST_ID = 22
+
 const SERVER_GUEST_ID = 23
 
 function pageOf(environment: string): BrowserClientHostedPageInventory {
@@ -49,6 +51,7 @@ function environment(input: {
         browserPageId: (params as { browserPageId: string }).browserPageId,
         hostLabel: input.environmentId
       })
+
       return {
         ok: true,
         result: {
@@ -60,6 +63,7 @@ function environment(input: {
     }
   })
   const page = pageOf(input.environmentId)
+
   const relay = new BrowserClientDownloadRelay({
     stagingRoot: `/tmp/${input.environmentId}`,
     hostLabel: input.environmentId,
@@ -74,7 +78,9 @@ function environment(input: {
       removeDirectory: async () => {}
     }
   })
+
   registerBrowserClientDownloadRouter(input.environmentId, relay)
+
   return { relay, writes }
 }
 
@@ -93,9 +99,11 @@ describe('client-hosted download routing', () => {
 
     expect(decisionA.kind).toBe('remote')
     expect(decisionB.kind).toBe('remote')
+
     if (decisionA.kind !== 'remote' || decisionB.kind !== 'remote') {
       return
     }
+
     expect(decisionA.route.browserPageId).toBe('page-env-a')
     expect(decisionB.route.browserPageId).toBe('page-env-b')
 

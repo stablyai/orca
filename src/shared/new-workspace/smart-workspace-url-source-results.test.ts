@@ -4,6 +4,7 @@ import { buildSmartWorkspaceUrlSourceRows } from './smart-workspace-url-source-r
 describe('smart workspace URL-owned source rows', () => {
   it('hides unrelated held results while a full GitHub URL resolves', () => {
     const targetUrl = 'https://github.com/acme/widgets/issues/42'
+
     const staleItem = {
       id: 'issue-17',
       type: 'issue' as const,
@@ -54,6 +55,7 @@ describe('smart workspace URL-owned source rows', () => {
 
   it('shows only the exact GitHub URL result after lookup settles', () => {
     const targetUrl = 'https://github.com/acme/widgets/issues/42'
+
     const exactItem = {
       id: 'issue-42',
       type: 'issue' as const,
@@ -95,6 +97,7 @@ describe('smart workspace URL-owned source rows', () => {
 
   it('hides unrelated held results while a full GitLab URL resolves', () => {
     const targetUrl = 'https://gitlab.example.test/acme/widgets/-/issues/42'
+
     const staleItem = {
       id: 'mr-17',
       type: 'mr' as const,
@@ -146,6 +149,7 @@ describe('smart workspace URL-owned source rows', () => {
 
   it('shows only the exact GitLab URL result after lookup settles', () => {
     const targetUrl = 'https://gitlab.example.test/acme/widgets/-/issues/42'
+
     const exactItem = {
       id: 'issue-42',
       type: 'issue' as const,

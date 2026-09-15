@@ -12,6 +12,7 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -40,9 +41,11 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('uses a strengthened sticky policy when an inventory retry starts', async () => {
     vi.useFakeTimers()
+
     try {
       resolvedPaneHandle = 'terminal-old'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -58,24 +61,31 @@ describe('createRemoteRuntimePtyTransport', () => {
       emitSnapshot(oldStreamId, 'old handle')
 
       let resolveOldSend: (response: unknown) => void = () => {}
+
       const oldSendResponse = new Promise((resolve) => {
         resolveOldSend = resolve
       })
+
       let hostListCalls = 0
       runtimeCall.mockImplementation((args: { method: string }) => {
         if (args.method === 'terminal.send') {
           return oldSendResponse
         }
+
         if (args.method === 'session.tabs.list') {
           hostListCalls += 1
+
           return Promise.reject(new Error('runtime reconnect in progress'))
         }
+
         return Promise.resolve({ ok: true, result: {} })
       })
       const sendInputAccepted = transport.sendInputAccepted
+
       if (!sendInputAccepted) {
         throw new Error('Expected acknowledged remote terminal input')
       }
+
       const pendingSend = sendInputAccepted('sent-before-stream-end')
       await vi.waitFor(() =>
         expect(runtimeCall).toHaveBeenCalledWith(
@@ -109,10 +119,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('requires replacement after repeated same-handle stream-end flaps', async () => {
     vi.useFakeTimers()
+
     try {
       resolvedPaneHandle = 'terminal-flapping'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onPtyExit = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -172,9 +184,11 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('reuses prior ready evidence when the trailing inventory poll fails', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       resolvedPaneHandle = 'terminal-stable'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -194,10 +208,13 @@ describe('createRemoteRuntimePtyTransport', () => {
           if (args.method !== 'session.tabs.list') {
             return { ok: true, result: {} }
           }
+
           hostListCalls += 1
+
           if ((args.timeoutMs ?? 15_000) <= 1_000) {
             throw new Error('final inventory poll failed')
           }
+
           return readyHostSessionInventoryResponse('terminal-stable')
         }
       )
@@ -222,14 +239,18 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not carry a stale-handle requirement onto the replacement stream', async () => {
     vi.useFakeTimers()
+
     try {
       let rejectedReplacement = false
       subscriptionSendBinary.mockImplementation((bytes: Uint8Array<ArrayBufferLike>) => {
         const frame = decodeTerminalStreamFrame(bytes)
+
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         if (payload?.terminal === 'terminal-replacement' && !rejectedReplacement) {
           rejectedReplacement = true
           throw new Error('Remote runtime connection closed.')
@@ -237,6 +258,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('hub-env', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -257,6 +279,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         if (args.method !== 'session.tabs.activate' && args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
+
         return {
           ok: true,
           result: {
@@ -300,9 +323,12 @@ describe('createRemoteRuntimePtyTransport', () => {
           if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
             return []
           }
+
           const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
           return payload ? [payload.terminal] : []
         })
+
       expect(subscribedTerminals).toEqual([
         'terminal-stale',
         'terminal-replacement',
@@ -322,6 +348,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('coalesces concurrent stale errors for the handle that was replaced', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -339,9 +366,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
 
     let resolveHostList: (response: unknown) => void = () => {}
+
     const hostListResponse = new Promise((resolve) => {
       resolveHostList = resolve
     })
+
     let hostListCalls = 0
     runtimeCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.send') {
@@ -350,17 +379,22 @@ describe('createRemoteRuntimePtyTransport', () => {
           error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
         })
       }
+
       if (args.method === 'session.tabs.list') {
         hostListCalls += 1
+
         return hostListResponse
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
 
     const sendInputAccepted = transport.sendInputAccepted
+
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
+
     const sends = Promise.all([sendInputAccepted('first'), sendInputAccepted('second')])
     await vi.waitFor(() => expect(hostListCalls).toBe(1))
     await expect(sends).resolves.toEqual([false, false])

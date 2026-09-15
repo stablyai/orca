@@ -59,6 +59,7 @@ export class StructuredTuiTranscriptCatchup {
     this.stop(sessionId)
     const record = this.input.store.getRecord(sessionId)
     const head = record?.providerHandleChain.at(-1)
+
     if (
       !record ||
       !head ||
@@ -66,23 +67,29 @@ export class StructuredTuiTranscriptCatchup {
     ) {
       return
     }
+
     const agent = head.handle.provider
     const providerSessionId = agent === 'claude' ? head.handle.sessionId : head.handle.threadId
     const journal = this.input.session(sessionId).journal
+
     const transcriptOptions =
       agent === 'claude'
         ? { claudeProjectsDir: join(record.accountHome.path, 'projects') }
         : { codexSessionsDirs: [join(record.accountHome.path, 'sessions')] }
+
     const boundary = recovering
       ? await readStructuredTuiTranscriptBoundary(journal.directory)
       : null
+
     const filePath = await resolveSessionFilePath(agent, providerSessionId, {
       ...transcriptOptions,
       ...(boundary?.filePath ? { transcriptPath: boundary.filePath } : {})
     })
+
     let initialReady: (() => void) | null = null
     let baselineOffset = 0
     const ready = filePath ? new Promise<void>((resolve) => (initialReady = resolve)) : null
+
     const state: CatchupState = {
       active: false,
       fence,
@@ -92,8 +99,10 @@ export class StructuredTuiTranscriptCatchup {
       seen: new Set(),
       subscription: null
     }
+
     const receive = (messages: NativeChatMessage[]) => this.receive(sessionId, state, messages)
     this.states.set(sessionId, state)
+
     try {
       state.subscription = await subscribeNativeChatTranscript({
         agent,
@@ -109,6 +118,7 @@ export class StructuredTuiTranscriptCatchup {
         onAppend: receive
       })
       await ready
+
       if (!recovering) {
         await writeStructuredTuiTranscriptBoundary(journal.directory, {
           providerSessionId,
@@ -131,15 +141,18 @@ export class StructuredTuiTranscriptCatchup {
           fence,
           options: { filePath, decodedMessageIdentities: true }
         })
+
         if (!imported.ok) {
           throw new Error(imported.error)
         }
+
         this.input.reset(sessionId, fence)
       }
     } catch (error) {
       if (this.states.get(sessionId) === state) {
         this.states.delete(sessionId)
       }
+
       state.subscription?.unsubscribe()
       throw error
     }
@@ -152,15 +165,19 @@ export class StructuredTuiTranscriptCatchup {
     offset: number
   ): Promise<void> {
     let size: number
+
     try {
       size = (await stat(filePath)).size
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return
       }
+
       throw error
     }
+
     const start = offset <= size ? offset : 0
+
     const incremental: IncrementalTranscriptState = {
       offset: start,
       pendingChunks: [],
@@ -168,27 +185,35 @@ export class StructuredTuiTranscriptCatchup {
       pendingBytes: 0,
       droppingOversizedRecord: false
     }
+
     const decode = nativeChatLineDecoderForAgent(state.agent)
+
     if (!decode) {
       throw new Error('Transcript unavailable')
     }
+
     let messages: NativeChatMessage[]
+
     try {
       messages = await readIncrementalTranscriptMessages(filePath, incremental, decode)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return
       }
+
       throw error
     }
+
     this.receive(sessionId, state, messages)
   }
 
   async activate(sessionId: string): Promise<void> {
     const state = this.states.get(sessionId)
+
     if (!state) {
       return
     }
+
     state.active = true
     const pending = state.pending.splice(0)
     await this.append(sessionId, state, pending)
@@ -210,10 +235,13 @@ export class StructuredTuiTranscriptCatchup {
     if (this.states.get(sessionId) !== state) {
       return
     }
+
     if (!state.active) {
       state.pending.push(...messages)
+
       return
     }
+
     void this.input
       .schedule(sessionId, () => this.append(sessionId, state, messages))
       .catch((error) => this.input.onError?.({ sessionId, error }))
@@ -227,7 +255,9 @@ export class StructuredTuiTranscriptCatchup {
     if (this.states.get(sessionId) !== state) {
       return
     }
+
     const record = this.input.store.getRecord(sessionId)
+
     if (
       !record ||
       record.lease.runtimeKind !== 'tui' ||
@@ -236,17 +266,23 @@ export class StructuredTuiTranscriptCatchup {
     ) {
       return
     }
+
     const ids = new Set(state.seen)
+
     const fresh = messages.filter((message) => {
       if (ids.has(message.id)) {
         return false
       }
+
       ids.add(message.id)
+
       return true
     })
+
     if (fresh.length === 0) {
       return
     }
+
     try {
       await appendLegacyTranscriptMessages({
         journal: this.input.session(sessionId).journal,
@@ -255,9 +291,11 @@ export class StructuredTuiTranscriptCatchup {
         fence: state.fence,
         messages: fresh
       })
+
       for (const message of fresh) {
         state.seen.add(message.id)
       }
+
       this.input.publish(sessionId)
     } catch (error) {
       this.input.onError?.({ sessionId, error })

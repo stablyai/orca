@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { parseMobilePushRegistration } from './mobile-push-contract'
+
 it('rejects malformed known preferences', () => {
   expect(
     parseMobilePushRegistration({

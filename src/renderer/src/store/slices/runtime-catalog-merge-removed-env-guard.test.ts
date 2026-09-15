@@ -28,6 +28,7 @@ const rpcResult = vi.hoisted(() => ({ current: { repos: [] as Repo[], projects: 
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+
   return { ...actual, callRuntimeRpc: vi.fn(async () => rpcResult.current) }
 })
 

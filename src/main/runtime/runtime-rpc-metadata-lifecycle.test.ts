@@ -19,6 +19,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -71,6 +72,7 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('leaves runtime metadata owned by a live sibling runtime untouched', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+
     // Why: a synthetic owned pid frees the always-alive process.pid to stand in for
     // the sibling — Windows never assigns pid 1, so hardcoding it there reads as dead.
     const server = new OrcaRuntimeRpcServer({
@@ -78,6 +80,7 @@ describe('OrcaRuntimeRpcServer', () => {
       userDataPath,
       pid: 4242
     })
+
     await server.start()
 
     writeRuntimeMetadata(userDataPath, {
@@ -99,9 +102,11 @@ describe('OrcaRuntimeRpcServer', () => {
     const server = new OrcaRuntimeRpcServer({ runtime: new OrcaRuntimeService(), userDataPath })
     await server.start()
     const watch = server['metadataOwnershipWatch']
+
     if (!watch) {
       throw new Error('start() must arm the metadata ownership watch')
     }
+
     // Why: the republish guard alone would keep this test green, so assert the timer teardown itself.
     const watchStop = vi.spyOn(watch, 'stop')
     await server.stop()
@@ -129,6 +134,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     let releaseRead: (record: RuntimeMetadata | null) => void = () => {}
+
     vi.spyOn(runtimeMetadataModule, 'readRuntimeMetadataAsync').mockImplementationOnce(
       () =>
         new Promise<RuntimeMetadata | null>((resolve) => {
@@ -159,6 +165,7 @@ describe('OrcaRuntimeRpcServer', () => {
       userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
       enableWebSocket: false
     })
+
     let pending = false
     const timeline: string[] = []
     server['deviceRegistry'] = {
@@ -168,9 +175,11 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     } as unknown as DeviceRegistry
     let finishSecondStop: () => void = () => {}
+
     const secondStop = new Promise<void>((resolve) => {
       finishSecondStop = resolve
     })
+
     server['activeTransports'] = [
       {
         start: vi.fn(async () => {}),
@@ -208,6 +217,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('leaves the last published metadata in place when a runtime stops', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -229,11 +239,13 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+
     const writeMetadataSpy = vi
       .spyOn(runtimeMetadataModule, 'writeRuntimeMetadata')
       .mockImplementationOnce(() => {
         throw new Error('write failed')
       })
+
     const endpoint = createRuntimeTransportMetadata(
       userDataPath,
       process.pid,

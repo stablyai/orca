@@ -28,31 +28,40 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
           '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
         )
       }
+
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
+
       const coordinatorPane = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
         callerEvidence: orchestrationCompatibilityEvidence
       })
+
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
+
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
           'consumer_fenced',
           'worker-start requires the coordinator terminal currently bound to the Task Run.'
         )
       }
+
       const existingTask = params.task ? db.getTask(params.task) : undefined
+
       if (params.task && (!existingTask || existingTask.run_id !== run.id)) {
         throw new OrchestrationError(
           'task_not_found',
           `Task ${params.task} was not found in Run ${run.id}.`
         )
       }
+
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
+
       const mode = decideWorkerStartMode({
         params,
         settings: readWorkerStartModeSettings(runtime)
       })
+
       if (params.on) {
         // A remote worker is always a terminal agent; the mode receipt rides along so the
         // coordinator still learns why its structured default did not apply.
@@ -64,8 +73,10 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
           task: existingTask,
           orchestrationMutation
         })
+
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
+
       return startLocalWorker({
         params: { ...params, timeoutMs: readinessTimeoutMs },
         runtime,

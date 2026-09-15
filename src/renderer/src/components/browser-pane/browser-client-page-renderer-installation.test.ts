@@ -36,10 +36,13 @@ describe('browser client page renderer installation', () => {
   it('routes mount, rekey, and idempotent retirement through one subscriber', async () => {
     let callback: RequestCallback | null = null
     const unsubscribe = vi.fn()
+
     const subscribe = vi.fn((next: typeof callback) => {
       callback = next
+
       return unsubscribe
     })
+
     const registry = {
       dispose: vi.fn(),
       getMemoryProfile: vi.fn(() => ({
@@ -53,6 +56,7 @@ describe('browser client page renderer installation', () => {
       rekeyPage: vi.fn(),
       retirePage: vi.fn()
     }
+
     const installation = installBrowserClientPageRenderer({ registry, subscribe })!
 
     await expect(
@@ -78,6 +82,7 @@ describe('browser client page renderer installation', () => {
 
   it('returns only stable renderer failure codes', async () => {
     let callback: RequestCallback | null = null
+
     const registry = {
       dispose: vi.fn(),
       getMemoryProfile: vi.fn(),
@@ -89,10 +94,12 @@ describe('browser client page renderer installation', () => {
         throw new Error('sensitive renderer detail')
       })
     }
+
     installBrowserClientPageRenderer({
       registry,
       subscribe: (next) => {
         callback = next
+
         return () => {}
       }
     })

@@ -19,6 +19,7 @@ afterEach(() => {
 
 function createOutputDir(): string {
   outputDir = mkdtempSync(join(tmpdir(), 'orca-plain-node-entry-guard-'))
+
   return outputDir
 }
 
@@ -38,9 +39,11 @@ function createBundle(code = ''): Rollup.OutputBundle {
 
 function runWriteBundle(plugin: Plugin, dir: string, code = ''): void {
   const hook = plugin.writeBundle
+
   if (typeof hook !== 'function') {
     throw new Error('Expected writeBundle hook')
   }
+
   hook.call(
     { meta: { watchMode: false } } as never,
     { dir } as Rollup.NormalizedOutputOptions,
@@ -50,9 +53,11 @@ function runWriteBundle(plugin: Plugin, dir: string, code = ''): void {
 
 async function runCloseBundle(plugin: Plugin): Promise<void> {
   const hook = plugin.closeBundle
+
   if (typeof hook !== 'function') {
     throw new Error('Expected closeBundle hook')
   }
+
   await hook.call({} as never)
 }
 
@@ -127,14 +132,17 @@ describe('plain Node entry guard', () => {
 describe('guarded entry names', () => {
   function runBuildStart(plugin: Plugin, input: unknown): void {
     const hook = plugin.buildStart
+
     if (typeof hook !== 'function') {
       throw new Error('Expected buildStart hook')
     }
+
     hook.call({} as never, { input } as Rollup.NormalizedInputOptions)
   }
 
   it('rejects a guarded name that is no longer a rollup input', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
+
     const input = Object.fromEntries(
       GUARDED_ENTRY_NAMES.filter((name) => name !== 'stt-worker').map((name) => [
         name,
@@ -161,9 +169,11 @@ describe('guarded entry names', () => {
 describe('worker thread entry guard', () => {
   function runWorkerWriteBundle(plugin: Plugin, bundle: Rollup.OutputBundle): void {
     const hook = plugin.writeBundle
+
     if (typeof hook !== 'function') {
       throw new Error('Expected writeBundle hook')
     }
+
     hook.call(
       { meta: { watchMode: false } } as never,
       { dir: createOutputDir() } as Rollup.NormalizedOutputOptions,
@@ -185,6 +195,7 @@ describe('worker thread entry guard', () => {
 
   it('rejects an Electron require reachable from a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
+
     const bundle = {
       'port-scan-command-worker-entry.js': workerChunk(
         'port-scan-command-worker-entry',
@@ -197,6 +208,7 @@ describe('worker thread entry guard', () => {
 
   it('names the worker-thread runtime so the failure is actionable', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
+
     const bundle = {
       'stt-worker.js': workerChunk('stt-worker', 'require("electron")')
     } as Rollup.OutputBundle
@@ -208,6 +220,7 @@ describe('worker thread entry guard', () => {
   // reaches the electron-requiring client, not a direct import anyone would spot.
   it('follows shared chunks out of a worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
+
     const bundle = {
       'session-scanner-opencode-sqlite-worker-entry.js': workerChunk(
         'session-scanner-opencode-sqlite-worker-entry',
@@ -230,6 +243,7 @@ describe('worker thread entry guard', () => {
 
   it('passes a clean worker entry', () => {
     const plugin = createPlainNodeEntryGuardPlugin()
+
     const bundle = {
       'warp-theme-parser-worker.js': workerChunk(
         'warp-theme-parser-worker',

@@ -20,15 +20,19 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
       args: { repoId: string; id?: string; name: string; directories: string[] }
     ): SparsePreset => {
       const repo = store.getRepo(args.repoId)
+
       if (!repo) {
         throw new Error(`Repo "${args.repoId}" not found`)
       }
+
       const name = normalizeSparsePresetName(args.name)
       const directories = normalizeSparsePresetDirectories(args.directories)
       const now = Date.now()
+
       const existing = args.id
         ? store.getSparsePresets(args.repoId).find((preset) => preset.id === args.id)
         : undefined
+
       const preset: SparsePreset = {
         id: existing?.id ?? randomUUID(),
         repoId: args.repoId,
@@ -37,17 +41,21 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
         createdAt: existing?.createdAt ?? now,
         updatedAt: now
       }
+
       const saved = store.saveSparsePreset(preset)
       notifySparsePresetsChanged(mainWindow, args.repoId)
+
       return saved
     }
   )
 
   ipcMain.handle('sparsePresets:remove', (_event, args: { repoId: string; presetId: string }) => {
     const repo = store.getRepo(args.repoId)
+
     if (!repo) {
       throw new Error(`Repo "${args.repoId}" not found`)
     }
+
     store.removeSparsePreset(args.repoId, args.presetId)
     notifySparsePresetsChanged(mainWindow, args.repoId)
   })
@@ -61,17 +69,21 @@ function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): 
 
 function normalizeSparsePresetName(name: string): string {
   const trimmed = name.trim()
+
   if (!trimmed) {
     throw new Error('Preset name is required.')
   }
+
   if (trimmed.length > 80) {
     throw new Error('Preset name is too long.')
   }
+
   return trimmed
 }
 
 function normalizeSparsePresetDirectories(directories: string[]): string[] {
   let normalized: string[]
+
   try {
     normalized = normalizeSparseDirectories(directories)
   } catch (err) {
@@ -81,10 +93,13 @@ function normalizeSparsePresetDirectories(directories: string[]): string[] {
     ) {
       throw new Error('Preset directories must be repo-relative paths.')
     }
+
     throw err
   }
+
   if (normalized.length === 0) {
     throw new Error('Preset must have at least one directory.')
   }
+
   return normalized
 }

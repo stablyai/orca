@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -55,6 +59,7 @@ describe('createMainWindow', () => {
 
     function setupCloseWindow(): CloseFixture {
       const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
       const webContents = {
         on: vi.fn((event, handler) => {
           windowHandlers[event] = handler
@@ -67,6 +72,7 @@ describe('createMainWindow', () => {
         isCrashed: vi.fn(() => false),
         id: 1
       }
+
       const instance = {
         webContents,
         on: vi.fn((event, handler) => {
@@ -84,9 +90,11 @@ describe('createMainWindow', () => {
         loadFile: vi.fn(() => Promise.resolve()),
         loadURL: vi.fn(() => Promise.resolve())
       }
+
       browserWindowMock.mockImplementation(function () {
         return instance
       })
+
       return { windowHandlers, webContents, instance }
     }
 
@@ -277,8 +285,10 @@ describe('createMainWindow', () => {
       const ipcHandlers: Record<string, (...args: any[]) => void> = {}
       vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
         ipcHandlers[channel] = handler as (...args: any[]) => void
+
         return ipcMain
       })
+
       return ipcHandlers
     }
 

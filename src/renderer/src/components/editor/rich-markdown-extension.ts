@@ -5,6 +5,7 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 export const RichMarkdownExtension = Markdown.extend({
   onBeforeCreate(event) {
     this.parent?.(event)
+
     // Empty Markdown must initialize without routing through the HTML DOM parser.
     if (
       this.editor.options.contentType === 'markdown' &&

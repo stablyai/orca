@@ -8,12 +8,19 @@ import type { Mock } from 'vitest'
 export type NotificationSpy = Mock<(...args: never[]) => unknown>
 
 export const removeHandlerMock: NotificationSpy = vi.fn()
+
 export const handleMock: NotificationSpy = vi.fn()
+
 export const notificationShowMock: NotificationSpy = vi.fn()
+
 export const notificationCloseMock: NotificationSpy = vi.fn()
+
 export const notificationOnMock: NotificationSpy = vi.fn()
+
 export const notificationOnceMock: NotificationSpy = vi.fn()
+
 export const notificationRemoveListenerMock: NotificationSpy = vi.fn()
+
 export const notificationCtorMock: NotificationSpy = vi.fn(function () {
   return {
     show: notificationShowMock,
@@ -23,11 +30,17 @@ export const notificationCtorMock: NotificationSpy = vi.fn(function () {
     removeListener: notificationRemoveListenerMock
   }
 })
+
 export const notificationIsSupportedMock = vi.fn(() => true)
+
 export const getAllWindowsMock = vi.fn(() => [])
+
 export const getTrustedUIRendererWindowMock: NotificationSpy = vi.fn()
+
 export const shellOpenExternalMock: NotificationSpy = vi.fn()
+
 export const setTrayAttentionMock: NotificationSpy = vi.fn()
+
 export const readAuthorizationStatusMock = vi.fn(
   (): Promise<'authorized' | 'denied' | 'not-determined' | 'unknown' | null> =>
     Promise.resolve(null)
@@ -92,9 +105,11 @@ export function resetNotificationDispatchMocks(): void {
 
 function findRegisteredHandler(channel: string): unknown {
   const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === channel)
+
   if (!call) {
     throw new Error(`${channel} handler not registered`)
   }
+
   return call[1]
 }
 
@@ -126,16 +141,20 @@ export function getResolveSoundPathHandler(): (event: unknown) => unknown {
 
 export function getNotificationEventHandler(eventName: string): (...args: unknown[]) => void {
   const call = notificationOnMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
+
   if (!call) {
     throw new Error(`Notification ${eventName} handler not registered`)
   }
+
   return call[1] as (...args: unknown[]) => void
 }
 
 export function getNotificationOnceEventHandler(eventName: string): () => void {
   const call = notificationOnceMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
+
   if (!call) {
     throw new Error(`Notification ${eventName} once handler not registered`)
   }
+
   return call[1] as () => void
 }

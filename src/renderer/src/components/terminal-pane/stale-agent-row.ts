@@ -9,6 +9,7 @@ export function dismissStaleAgentRowByKey(paneKey: string): void {
   const retainedExisted = paneKey in store.retainedAgentsByPaneKey
   store.dropAgentStatus(paneKey, { paneRemoved: true })
   store.dismissRetainedAgent(paneKey)
+
   if (liveExisted || retainedExisted) {
     toast.info(
       translate(

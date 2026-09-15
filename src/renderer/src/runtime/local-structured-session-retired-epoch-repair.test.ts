@@ -21,9 +21,13 @@ import type { WebSessionTabsSyncState } from './web-session-tabs-sync'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 
 const WORKTREE = 'folder:ws-1'
+
 const ROOT_GROUP = 'local-root-group'
+
 const RENDERER_EPOCH = 'renderer:53c8f87d'
+
 const HEADLESS_EPOCH = 'headless:pty-backed:mtovsn3x'
+
 const REMOVED_EPOCH = 'removed:mtovryl4'
 
 afterEach(() => {
@@ -48,6 +52,7 @@ function stateWithCoordinatorTerminal(): WebSessionTabsSyncState {
     sortOrder: 0,
     createdAt: 1
   }
+
   return {
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
@@ -89,6 +94,7 @@ function frame(
   sessionId: string | null
 ): RuntimeMobileSessionTabsResult {
   const id = sessionId ? `agent-session:${sessionId}` : null
+
   return {
     worktree: WORKTREE,
     publicationEpoch,
@@ -126,6 +132,7 @@ function replayUntilDrop(
   state = applyLocalStructuredSessionTabSnapshots(state, [frame(RENDERER_EPOCH, 6, null)])
   state = applyLocalStructuredSessionTabSnapshots(state, [frame(REMOVED_EPOCH, 0, null)])
   state = applyLocalStructuredSessionTabSnapshots(state, [frame(HEADLESS_EPOCH, 1, null)])
+
   return applyLocalStructuredSessionTabSnapshots(
     state,
     [frame(RENDERER_EPOCH, 7, 'claude-1')],

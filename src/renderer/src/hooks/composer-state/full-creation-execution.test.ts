@@ -10,9 +10,11 @@ import type { PreparedFullSubmit } from './composer-submit-model'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -21,6 +23,7 @@ describe('useFullCreationExecution cancellation', () => {
     const startupPolicy = deferred<boolean>()
     let cancelled = false
     const createWorktree = vi.fn<FullCreationExecutionInput['createWorktree']>()
+
     const prepared = {
       submitLinkedWorkItem: null,
       submitLinkedIssueNumber: null,
@@ -58,7 +61,9 @@ describe('useFullCreationExecution cancellation', () => {
       },
       backendStartup: undefined
     } satisfies PreparedFullSubmit
+
     const persistSetupAgentStartupPolicy = vi.fn(() => startupPolicy.promise)
+
     const state = {
       applyWorktreeMeta: vi
         .fn<FullCreationExecutionInput['applyWorktreeMeta']>()
@@ -87,6 +92,7 @@ describe('useFullCreationExecution cancellation', () => {
       telemetrySource: undefined,
       tuiAgent: 'claude'
     } satisfies FullCreationExecutionInput
+
     const hook = renderHook(() => useFullCreationExecution(state))
 
     let creation!: Promise<void>

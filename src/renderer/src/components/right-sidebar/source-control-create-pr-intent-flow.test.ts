@@ -18,6 +18,7 @@ import type { GitStatusEntry } from '../../../../shared/git-status-types'
 describe('source-control Create PR intent flow helpers', () => {
   it('matches async completions only to the original repo, worktree, path, branch, and base', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(123)
+
     try {
       const token = createCreatePrIntentRunToken({
         repoId: 'repo-1',
@@ -93,6 +94,7 @@ describe('source-control Create PR intent flow helpers', () => {
 
   it('treats same-worktree base changes as intent conflicts', () => {
     const worktreePath = join(sep, 'repo', 'wt-1')
+
     const token = createCreatePrIntentRunToken({
       repoId: 'repo-1',
       worktreeId: 'wt-1',
@@ -300,6 +302,7 @@ describe('source-control Create PR intent flow helpers', () => {
       reviewLookupOutcome: 'unavailable' as const,
       head: 'feature-branch'
     }
+
     expect(shouldAttemptCreateHostedReviewForIntent(unavailable)).toBe(true)
     // Loading placeholders share the unavailable/null-reason shape but carry no branch.
     expect(shouldAttemptCreateHostedReviewForIntent({ ...unavailable, head: undefined })).toBe(

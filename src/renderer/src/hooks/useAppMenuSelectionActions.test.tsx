@@ -6,10 +6,12 @@ import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-action
 import { useAppMenuSelectionActions } from './useAppMenuSelectionActions'
 
 let listener: ((action: 'copy' | 'select-all') => void) | null = null
+
 const performNativeSelectionAction = vi.fn()
 
 function Harness(): null {
   useAppMenuSelectionActions()
+
   return null
 }
 
@@ -22,6 +24,7 @@ beforeEach(() => {
       ui: {
         onAppMenuSelectionAction: vi.fn((callback) => {
           listener = callback
+
           return () => {
             listener = null
           }

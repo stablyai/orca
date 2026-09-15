@@ -14,7 +14,9 @@ import {
 type ExecMock = Mock<GitRemoteExec>
 
 const REPO_PATH = '/repo-root'
+
 const FORK_URL = 'git@github.com:contributor/orca.git'
+
 const FORK_REMOTE = 'pr-contributor-orca'
 
 function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
@@ -34,9 +36,11 @@ function metaWith(pushTarget: GitPushTarget | undefined): WorktreeMeta {
 
 function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
   const meta: Record<string, WorktreeMeta> = {}
+
   for (const [id, pushTarget] of Object.entries(entries)) {
     meta[id] = metaWith(pushTarget)
   }
+
   return { getAllWorktreeMeta: () => meta }
 }
 
@@ -48,19 +52,24 @@ type ExecScript = {
 
 function makeExec(script: ExecScript = {}): ExecMock {
   const { branchConfig = '', getUrl = FORK_URL, getUrlThrows = false } = script
+
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
     if (args[0] === 'config') {
       return { stdout: branchConfig, stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       if (getUrlThrows) {
         throw new Error('No such remote')
       }
+
       return { stdout: `${getUrl}\n`, stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'remove') {
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
 }
@@ -93,6 +102,7 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
       storeOf({ 'repo-1::/wt/a': forkTarget() }),
       exec
     )
+
     for (const [args] of exec.mock.calls) {
       expect(() => validateGitExecArgs(args)).not.toThrow()
     }
@@ -196,6 +206,7 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
     const exec = makeExec({
       branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`
     })
+
     await cleanupUnusedWorktreePushTargetRemoteWithExec(
       REPO_PATH,
       'repo-1::/wt/a',
@@ -213,7 +224,9 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
         `  branch.contributor/fix.remote    ${FORK_REMOTE}  `
       ].join('\r\n')
     })
+
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     try {
       await cleanupUnusedWorktreePushTargetRemoteWithExec(
         REPO_PATH,
@@ -222,12 +235,14 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
         storeOf({ 'repo-1::/wt/a': forkTarget() }),
         exec
       )
+
       const usedUnboundedOutputSplit = splitSpy.mock.calls.some(([separator]) => {
         return (
           separator instanceof RegExp &&
           (separator.source === '\\r?\\n' || separator.source === '\\s+')
         )
       })
+
       expect(removeCalls(exec)).toEqual([])
       expect(usedUnboundedOutputSplit).toBe(false)
     } finally {
@@ -285,11 +300,14 @@ describe('hasBranchConfigUsingRemote', () => {
       if (args[0] === 'config') {
         return { stdout: `branch.contributor/fix.remote ${FORK_REMOTE}`, stderr: '' }
       }
+
       if (args[0] === 'for-each-ref') {
         return { stdout: 'main\ncontributor/fix\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     await expect(
       hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget(), { requireExistingBranch: true })
     ).resolves.toBe(true)
@@ -300,11 +318,14 @@ describe('hasBranchConfigUsingRemote', () => {
       if (args[0] === 'config') {
         return { stdout: `branch.contributor/fix.remote ${FORK_REMOTE}`, stderr: '' }
       }
+
       if (args[0] === 'for-each-ref') {
         return { stdout: 'main\n', stderr: '' } // contributor/fix no longer exists
       }
+
       return { stdout: '', stderr: '' }
     })
+
     await expect(
       hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget(), { requireExistingBranch: true })
     ).resolves.toBe(false)
@@ -315,11 +336,14 @@ describe('hasBranchConfigUsingRemote', () => {
       if (args[0] === 'config') {
         return { stdout: `branch.release/1.2.3.remote ${FORK_REMOTE}`, stderr: '' }
       }
+
       if (args[0] === 'for-each-ref') {
         return { stdout: 'release/1.2.3\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     await expect(
       hasBranchConfigUsingRemote(exec, REPO_PATH, forkTarget(), { requireExistingBranch: true })
     ).resolves.toBe(true)
@@ -333,6 +357,7 @@ describe('findWorktreeMetaReferencingRemote', () => {
       'repo-1::/wt/b': undefined,
       'repo-2::/wt/c': forkTarget()
     })
+
     const matches = findWorktreeMetaReferencingRemote(store, 'repo-1', forkTarget())
     expect(matches.map((match) => match.worktreeId)).toEqual(['repo-1::/wt/a'])
   })

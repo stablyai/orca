@@ -32,9 +32,11 @@ describe('setWithLRU', () => {
 
   it('evicts the oldest entry when exceeding the default limit', () => {
     const map = new Map<string, number>()
+
     for (let i = 0; i <= 20; i++) {
       setWithLRU(map, `key-${i}`, i)
     }
+
     // 21 inserts with default limit of 20 → oldest (key-0) evicted
     expect(map.size).toBe(20)
     expect(map.has('key-0')).toBe(false)
@@ -90,10 +92,12 @@ describe('setWithLRU', () => {
 
   it('evicts only one entry per insert even when far over limit', () => {
     const map = new Map<string, number>()
+
     // Pre-fill with 5 entries
     for (let i = 0; i < 5; i++) {
       map.set(`key-${i}`, i)
     }
+
     // Insert with a limit of 3 — only evicts one, leaving 5 entries
     // (LRU eviction is per-insert, not bulk)
     setWithLRU(map, 'new', 99, 3)
@@ -128,6 +132,7 @@ describe('editorSelectionCache', () => {
       positionLineNumber: 4,
       positionColumn: 5
     }
+
     const secondSelection = {
       selectionStartLineNumber: 8,
       selectionStartColumn: 2,
@@ -169,6 +174,7 @@ describe('pdfViewPositionCache', () => {
     for (let i = 0; i <= 20; i++) {
       setWithLRU(pdfViewPositionCache, `/doc-${i}.pdf:pdf`, { pageNumber: i, top: 0, left: 0 })
     }
+
     expect(pdfViewPositionCache.size).toBe(20)
     expect(pdfViewPositionCache.has('/doc-0.pdf:pdf')).toBe(false)
     expect(pdfViewPositionCache.has('/doc-20.pdf:pdf')).toBe(true)
@@ -178,6 +184,7 @@ describe('pdfViewPositionCache', () => {
     for (let i = 0; i < 20; i++) {
       setWithLRU(pdfViewPositionCache, `/doc-${i}.pdf:pdf`, { pageNumber: i, top: 0, left: 0 })
     }
+
     setWithLRU(pdfViewPositionCache, '/doc-0.pdf:pdf', { pageNumber: 99, top: 0, left: 0 })
     setWithLRU(pdfViewPositionCache, '/doc-new.pdf:pdf', { pageNumber: 1, top: 0, left: 0 })
     expect(pdfViewPositionCache.get('/doc-0.pdf:pdf')?.pageNumber).toBe(99)

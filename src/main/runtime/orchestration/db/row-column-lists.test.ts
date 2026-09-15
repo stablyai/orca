@@ -17,6 +17,7 @@ afterEach(() => {
 
 function tableColumns(table: string): string[] {
   const rows = (db as OrchestrationDb).db.pragma(`table_info(${table})`) as { name: string }[]
+
   return rows.map((row) => row.name).sort()
 }
 
@@ -43,11 +44,13 @@ describe('row column lists', () => {
   // the `t.*` it replaced did — otherwise every lineage consumer reads undefined.
   it('returns bare column names for an alias-qualified projection', () => {
     db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'demo',
       coordinatorHandle: 'term_c',
       coordinatorPaneKey: 'tab_c:leaf_c'
     })
+
     const task = db.createTask({ spec: 'work', runId: run.id })
 
     const row = db.db

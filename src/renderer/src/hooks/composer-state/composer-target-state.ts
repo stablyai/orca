@@ -16,6 +16,7 @@ export function useComposerTargetState(
   decisions: ComposerDecisions
 ): ComposerTargetState {
   const composerTargetStore = useComposerTargetStore(options, decisions)
+
   const initialTargetState = useComposerInitialTargetState({
     actionableHostIds: composerTargetStore.actionableHostIds,
     decisions: composerTargetStore.decisions,
@@ -34,6 +35,7 @@ export function useComposerTargetState(
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     workspaceStatuses: composerTargetStore.workspaceStatuses
   })
+
   const runtimeTargetSelection = useComposerRuntimeTargetSelection({
     actionableHostIds: composerTargetStore.actionableHostIds,
     activeRepoId: composerTargetStore.activeRepoId,
@@ -52,6 +54,7 @@ export function useComposerTargetState(
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     worktreesByRepo: composerTargetStore.worktreesByRepo
   })
+
   const sourceContextState = useComposerSourceContextState({
     folderSourceRepos: runtimeTargetSelection.folderSourceRepos,
     decisions: composerTargetStore.decisions,
@@ -73,6 +76,7 @@ export function useComposerTargetState(
     setInternalRepoId: initialTargetState.setInternalRepoId,
     selectedWorkspaceTarget: runtimeTargetSelection.selectedWorkspaceTarget
   })
+
   const workspaceIdentityState = useWorkspaceIdentityState({
     initialBaseBranch: composerTargetStore.initialBaseBranch,
     initialLinearBranchName: sourceContextState.initialLinearBranchName,
@@ -86,6 +90,7 @@ export function useComposerTargetState(
     selectedRepoSettings: runtimeTargetSelection.selectedRepoSettings,
     settings: composerTargetStore.settings
   })
+
   const asyncComposerState = useComposerAsyncState({
     agentPrompt: sourceContextState.agentPrompt,
     connectionId: workspaceIdentityState.connectionId,
@@ -107,6 +112,7 @@ export function useComposerTargetState(
     selectedRepoSettings: runtimeTargetSelection.selectedRepoSettings,
     setName: sourceContextState.setName
   })
+
   const providerRuntimeSync = useComposerProviderRuntimeSync({
     promptCaretFrameRef: asyncComposerState.promptCaretFrameRef,
     repoId: initialTargetState.repoId,
@@ -126,6 +132,7 @@ export function useComposerTargetState(
     setupAgentStartupPolicySaveRef: asyncComposerState.setupAgentStartupPolicySaveRef,
     updateRepo: composerTargetStore.updateRepo
   })
+
   const derivedComposerState = useDerivedComposerState({
     agentPrompt: sourceContextState.agentPrompt,
     checkedHooksContextKey: asyncComposerState.checkedHooksContextKey,
@@ -152,6 +159,7 @@ export function useComposerTargetState(
     worktreesByRepo: composerTargetStore.worktreesByRepo,
     yamlHooks: asyncComposerState.yamlHooks
   })
+
   useDraftTargetSync({
     agentPrompt: sourceContextState.agentPrompt,
     attachmentPaths: sourceContextState.attachmentPaths,
@@ -180,6 +188,7 @@ export function useComposerTargetState(
     taskSourceContext: sourceContextState.taskSourceContext,
     tuiAgent: workspaceIdentityState.tuiAgent
   })
+
   return {
     composerTargetStore,
     initialTargetState,

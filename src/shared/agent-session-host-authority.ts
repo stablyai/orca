@@ -31,10 +31,13 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
 export const AGENT_SESSION_CLAIM_DIGEST_VERSION = 1 as const
 
 export const AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION = 2 as const
+
 export const AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION = 1 as const
 
 export const AGENT_SESSION_OPERATION_FUTURE_SKEW_MS = 5 * 60 * 1000
+
 export const AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS = 24 * 60 * 60 * 1000
+
 /** Oldest an operation can be when admitted, plus the host tombstone lifetime after admission. */
 export const AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS =
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS * 2 + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
@@ -43,14 +46,18 @@ const AGENT_SESSION_OPERATION_ID_PATTERN = /^(\d{13})-[0-9a-f]{32}$/
 
 export function parseAgentSessionOperationTimestamp(operationId: string): number | null {
   const match = AGENT_SESSION_OPERATION_ID_PATTERN.exec(operationId)
+
   if (!match) {
     return null
   }
+
   const timestamp = Number(match[1])
+
   return Number.isSafeInteger(timestamp) ? timestamp : null
 }
 
 const BASE64URL_RE = /^[A-Za-z0-9_-]+$/
+
 const SHA256_BASE64URL_LENGTH = 43
 
 function isBoundedWireString(value: unknown, maxLength: number): value is string {
@@ -152,7 +159,9 @@ export function isAgentSessionExecutionClaim(value: unknown): value is AgentSess
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const claim = value as Partial<AgentSessionExecutionClaim>
+
   return (
     claim.digestVersion === AGENT_SESSION_CLAIM_DIGEST_VERSION &&
     isBoundedWireString(claim.keyId, 128) &&
@@ -171,7 +180,9 @@ export function isAgentSessionSurfaceBinding(value: unknown): value is AgentSess
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const surface = value as Partial<AgentSessionSurfaceBinding>
+
   return (
     isBoundedWireString(surface.worktreeId, 4096) &&
     isBoundedWireString(surface.tabId, 512) &&
@@ -188,7 +199,9 @@ export function isAgentSessionOwnerBinding(value: unknown): value is AgentSessio
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const owner = value as Partial<AgentSessionOwnerBinding>
+
   return (
     isAgentSessionExecutionClaim(owner.claim) &&
     isBoundedWireString(owner.generation, 128) &&
@@ -204,7 +217,9 @@ export function isAgentSessionClaimedSpawnResult(
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const result = value as Partial<AgentSessionClaimedSpawnResult>
+
   return (
     (result.disposition === 'created' || result.disposition === 'adopted') &&
     isAgentSessionOwnerBinding(result.owner) &&

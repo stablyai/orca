@@ -8,23 +8,38 @@ import type {
 import { createTestStore, deferred, issue } from './linear-slice-test-harness'
 
 const linearStatus = vi.fn()
+
 const linearConnect = vi.fn()
+
 const linearDisconnect = vi.fn()
+
 const linearListIssues = vi.fn()
+
 const linearSearchIssues = vi.fn()
+
 const linearListTeams = vi.fn()
+
 const linearGetIssue = vi.fn()
+
 const linearListProjects = vi.fn()
+
 const linearGetCustomView = vi.fn()
+
 const linearGetProject = vi.fn()
+
 const linearListProjectIssues = vi.fn()
+
 const linearListCustomViews = vi.fn()
+
 const linearListCustomViewIssues = vi.fn()
+
 const linearListCustomViewProjects = vi.fn()
+
 const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     linearConnect: (...args: unknown[]) => linearConnect(...args),
@@ -88,6 +103,7 @@ describe('createLinearSlice', () => {
 
   it('preserves status identity when a connection probe leaves its scope unchanged', async () => {
     const store = createTestStore()
+
     const currentStatus: LinearConnectionStatus = {
       connected: true,
       viewer: {
@@ -107,6 +123,7 @@ describe('createLinearSlice', () => {
         }
       ]
     }
+
     store.setState({
       linearStatus: currentStatus,
       linearStatusChecked: true,
@@ -123,11 +140,13 @@ describe('createLinearSlice', () => {
   it('ignores stale forced connection checks when a newer forced check finishes first', async () => {
     const staleCheck = deferred<LinearConnectionStatus>()
     const freshCheck = deferred<LinearConnectionStatus>()
+
     const viewer = {
       displayName: 'Test User',
       email: 'test@example.com',
       organizationName: 'Test Org'
     }
+
     linearStatus.mockReturnValueOnce(staleCheck.promise).mockReturnValueOnce(freshCheck.promise)
     const store = createTestStore()
 
@@ -146,16 +165,19 @@ describe('createLinearSlice', () => {
   it('ignores stale status responses after the active runtime changes', async () => {
     const localStatus = deferred<LinearConnectionStatus>()
     const remoteStatus = deferred<LinearConnectionStatus>()
+
     const localViewer = {
       displayName: 'Local User',
       email: 'local@example.com',
       organizationName: 'Local Org'
     }
+
     const remoteViewer = {
       displayName: 'Remote User',
       email: 'remote@example.com',
       organizationName: 'Remote Org'
     }
+
     linearStatus.mockReturnValueOnce(localStatus.promise).mockReturnValueOnce(remoteStatus.promise)
     const store = createTestStore()
 
@@ -184,7 +206,9 @@ describe('createLinearSlice', () => {
     const localRequest = store
       .getState()
       .listLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+
     store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+
     const remoteRequest = store
       .getState()
       .listLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
@@ -205,11 +229,13 @@ describe('createLinearSlice', () => {
   it('ignores stale status checks after a successful connect', async () => {
     const staleMountCheck = deferred<LinearConnectionStatus>()
     const freshConnectCheck = deferred<LinearConnectionStatus>()
+
     const viewer = {
       displayName: 'Test User',
       email: 'test@example.com',
       organizationName: 'Test Org'
     }
+
     linearStatus
       .mockReturnValueOnce(staleMountCheck.promise)
       .mockReturnValueOnce(freshConnectCheck.promise)
@@ -234,11 +260,13 @@ describe('createLinearSlice', () => {
 
   it('ignores stale connect results after the active runtime changes', async () => {
     const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
+
     const viewer = {
       displayName: 'Local User',
       email: 'local@example.com',
       organizationName: 'Local Org'
     }
+
     linearConnect.mockReturnValueOnce(connectResult.promise)
     const store = createTestStore()
 
@@ -259,11 +287,13 @@ describe('createLinearSlice', () => {
     const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
     const backgroundStatus = deferred<LinearConnectionStatus>()
     const connectStatus = deferred<LinearConnectionStatus>()
+
     const viewer = {
       displayName: 'Test User',
       email: 'test@example.com',
       organizationName: 'Test Org'
     }
+
     linearConnect.mockReturnValueOnce(connectResult.promise)
     linearStatus
       .mockReturnValueOnce(backgroundStatus.promise)
@@ -290,11 +320,13 @@ describe('createLinearSlice', () => {
   it('ignores stale direct status writes after a newer mutation', async () => {
     const testResult = deferred<{ ok: true; viewer: LinearViewer }>()
     const staleStatus = deferred<LinearConnectionStatus>()
+
     const viewer = {
       displayName: 'Test User',
       email: 'test@example.com',
       organizationName: 'Test Org'
     }
+
     linearTestConnection.mockReturnValueOnce(testResult.promise)
     linearStatus.mockReturnValueOnce(staleStatus.promise)
     linearDisconnect.mockResolvedValueOnce(undefined)

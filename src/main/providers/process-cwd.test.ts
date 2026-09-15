@@ -22,6 +22,7 @@ describe('resolveProcessCwd', () => {
     vi.spyOn(Date, 'now').mockReturnValue(10_000)
     readlinkMock.mockImplementation(async (procPath: string) => {
       const pid = procPath.match(/\/proc\/(\d+)\/cwd$/)?.[1] ?? 'unknown'
+
       return `/cwd/${pid}`
     })
   })
@@ -54,8 +55,10 @@ describe('resolveProcessCwd', () => {
     const { resolveProcessCwd } = await import('./process-cwd')
 
     let settled = false
+
     const cwdPromise = resolveProcessCwd(42).then((cwd) => {
       settled = true
+
       return cwd
     })
 

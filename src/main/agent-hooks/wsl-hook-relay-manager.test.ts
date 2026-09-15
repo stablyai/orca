@@ -35,6 +35,7 @@ function createGuestHarness(): GuestHarness {
   let relayFeed: ((data: Buffer) => void) | undefined
   const clientDataCallbacks: ((data: Buffer) => void)[] = []
   const closeCallbacks: (() => void)[] = []
+
   const transport: MultiplexerTransport = {
     write: (data, onSettled) => {
       setImmediate(() => {
@@ -50,19 +51,23 @@ function createGuestHarness(): GuestHarness {
       closeCallbacks.push(cb)
     }
   }
+
   const guestDispatcher = new RelayDispatcher(
     (data: Buffer, onSettled) => {
       setImmediate(() => {
         for (const cb of clientDataCallbacks) {
           cb(data)
         }
+
         onSettled({ ok: true })
       })
     },
     { supportsWriteCallback: true }
   )
+
   relayFeed = (data) => guestDispatcher.feed(data)
   const mux = new SshChannelMultiplexer(transport)
+
   return { transport, guestDispatcher, mux }
 }
 
@@ -88,9 +93,11 @@ describe.skipIf(process.platform === 'win32')(
 
     it('maps guest ENOENT onto ssh2 status code 2', async () => {
       const adapter = createWslHookSftpAdapter(harness.mux)
+
       const err = await new Promise<Error & { code?: number }>((resolve) => {
         adapter.readFile(`${home}/missing.json`, 'utf8', ((e: Error) => resolve(e)) as never)
       })
+
       expect(err).toBeInstanceOf(Error)
       expect(err.code).toBe(2)
     })
@@ -105,10 +112,12 @@ describe.skipIf(process.platform === 'win32')(
           ((e: Error | null) => (e ? reject(e) : resolve())) as never
         )
       })
+
       const content = await new Promise<string>((resolve, reject) => {
         adapter.readFile(`${home}/a.txt`, 'utf8', ((e: Error | null, value: string) =>
           e ? reject(e) : resolve(value)) as never)
       })
+
       expect(content).toBe('hello')
 
       await new Promise<void>((resolve, reject) => {
@@ -120,11 +129,13 @@ describe.skipIf(process.platform === 'win32')(
       const outside = await new Promise<Error & { code?: number }>((resolve) => {
         adapter.readFile('/etc/passwd', 'utf8', ((e: Error) => resolve(e)) as never)
       })
+
       expect(outside).toBeInstanceOf(Error)
     })
 
     it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {
       const adapter = createWslHookSftpAdapter(harness.mux)
+
       const results = await installRemoteManagedAgentHooks(adapter, home, {
         agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
       })
@@ -135,6 +146,7 @@ describe.skipIf(process.platform === 'win32')(
       const claudeSettings = JSON.parse(
         readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
       )
+
       expect(claudeSettings.hooks).toBeTruthy()
       const script = readFileSync(join(home, '.orca', 'agent-hooks', 'claude-hook.sh'), 'utf8')
       expect(script).toContain('/hook/claude')
@@ -147,8 +159,10 @@ describe('WslHookRelayManager', () => {
   // hosts — installHooks is mocked here, so the fs bridge only ever serves
   // the wslfs.home request and never touches the real filesystem.
   const home = '/home/wsl-test-user'
+
   const codexHome =
     '\\\\wsl.localhost\\Ubuntu\\home\\wsl-test-user\\.local\\share\\orca\\codex-runtime-home\\home'
+
   const opencodeOverlayDir = `${home}/.orca-relay/opencode-overlays/deadbeefcafe`
   let harnesses: GuestHarness[]
 
@@ -171,11 +185,14 @@ describe('WslHookRelayManager', () => {
       kill: () => void
       emitClose: () => void
     }
+
     child.stdout = new EventEmitter()
     child.stderr = new EventEmitter()
     child.stdin = { write: () => true, end: () => {}, on: () => {} }
     child.kill = () => {}
+
     child.emitClose = () => child.emit('close', 0)
+
     return child as unknown as ChildProcessWithoutNullStreams & { emitClose: () => void }
   }
 
@@ -197,6 +214,7 @@ describe('WslHookRelayManager', () => {
       agents: detectedAgents,
       ...(claudeVersion ? { versions: { claude: claudeVersion } } : {})
     }))
+
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
       harness.guestDispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => ({
@@ -204,6 +222,7 @@ describe('WslHookRelayManager', () => {
         overlayDirs: { opencode: opencodeOverlayDir }
       }))
     }
+
     return harness.transport
   }
 
@@ -249,6 +268,7 @@ describe('WslHookRelayManager', () => {
       transientRetryDelayMs: 1,
       ...overrides
     }
+
     return { manager: new WslHookRelayManager(deps), deps }
   }
 
@@ -290,6 +310,7 @@ describe('WslHookRelayManager', () => {
     const waitForSentinel = vi.fn(async () =>
       guestTransport({ detectedAgents: ['claude'], claudeVersion: '2.1.261 (Claude Code)' })
     )
+
     const { manager, deps } = createManager({ waitForSentinel })
 
     manager.ensureForDistro('Ubuntu')
@@ -365,6 +386,7 @@ describe('WslHookRelayManager', () => {
       .fn()
       .mockRejectedValueOnce(startupError(42))
       .mockImplementationOnce(async () => guestTransport())
+
     const { manager, deps } = createManager({ waitForSentinel })
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
@@ -394,6 +416,7 @@ describe('WslHookRelayManager', () => {
       .mockRejectedValueOnce(startupError(1, 'Catastrophic failure (E_UNEXPECTED)'))
       .mockRejectedValueOnce(startupError(1, 'Catastrophic failure (E_UNEXPECTED)'))
       .mockImplementationOnce(async () => guestTransport())
+
     const { manager, deps } = createManager({ waitForSentinel })
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
@@ -404,11 +427,14 @@ describe('WslHookRelayManager', () => {
 
   it('marks the distro failed when the relay exits and re-ensures only after cooldown', async () => {
     const children: ReturnType<typeof fakeChild>[] = []
+
     const spawnRelay = vi.fn(() => {
       const child = fakeChild()
       children.push(child)
+
       return child
     })
+
     const { manager, deps } = createManager({ spawnRelay })
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
@@ -428,9 +454,11 @@ describe('WslHookRelayManager', () => {
     offPlatform.manager.ensureForDistro('Ubuntu')
     const disabled = createManager({ remoteHooksEnabled: () => false })
     disabled.manager.ensureForDistro('Ubuntu')
+
     const hooksOff = createManager({
       managedHookSettings: () => ({ agentStatusHooksEnabled: false })
     })
+
     hooksOff.manager.ensureForDistro('Ubuntu')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(offPlatform.deps.spawnRelay).not.toHaveBeenCalled()
@@ -466,10 +494,12 @@ describe('WslHookRelayManager', () => {
   it('does not resume a relay whose distro the user shut down while hooks were off', async () => {
     const settings = { agentStatusHooksEnabled: true }
     const isDistroRunning = vi.fn(async () => true)
+
     const { manager, deps } = createManager({
       isDistroRunning,
       managedHookSettings: () => settings
     })
+
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
 
@@ -492,6 +522,7 @@ describe('WslHookRelayManager', () => {
 
   it('abandons a launch that was still in flight when hooks were switched off', async () => {
     let failSentinel: ((error: unknown) => void) | undefined
+
     const { manager, deps } = createManager({
       waitForSentinel: vi.fn(
         () =>
@@ -500,6 +531,7 @@ describe('WslHookRelayManager', () => {
           })
       )
     })
+
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
 
@@ -526,18 +558,22 @@ describe('WslHookRelayManager', () => {
         await Promise.resolve()
       }
     }
+
     let resolveProbe: ((running: boolean) => void) | undefined
     const isDistroRunning = vi.fn(() => new Promise<boolean>((resolve) => (resolveProbe = resolve)))
     const spawnRelay = vi.fn(() => fakeChild())
+
     // First launch fails outright; the replacement launch never reaches the
     // sentinel, so its state stays 'starting' with no live mux to clean up.
     const waitForSentinel = vi
       .fn()
       .mockRejectedValueOnce(new Error('relay died before sentinel'))
       .mockReturnValueOnce(new Promise<never>(() => {}))
+
     const { manager, deps } = createManager({ isDistroRunning, spawnRelay, waitForSentinel })
 
     vi.useFakeTimers()
+
     try {
       manager.ensureForDistro('Ubuntu')
       await flush()

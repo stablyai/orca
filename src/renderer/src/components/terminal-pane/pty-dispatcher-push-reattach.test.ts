@@ -14,6 +14,7 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
   let dataCallbacks: DataCallback[] = []
   let dataUnsubscribes: ReturnType<typeof vi.fn>[] = []
   const ackDataMock = vi.fn()
+
   const reportMock = vi.fn(() =>
     Promise.resolve({
       inFlightTotalChars: 0,
@@ -41,6 +42,7 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
             dataCallbacks.push(cb)
             const unsubscribe = vi.fn()
             dataUnsubscribes.push(unsubscribe)
+
             return unsubscribe
           }),
           onReplay: vi.fn(() => () => {}),
@@ -57,6 +59,7 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
     // stop it so no tick outlives this file's mocked window.
     const { stopTerminalDeliveryWatchdog } = await import('./terminal-delivery-watchdog')
     stopTerminalDeliveryWatchdog()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -79,6 +82,7 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
         __terminalDeliveryWatchdog?: { blackhole: (on: boolean) => void }
       }
     ).__terminalDeliveryWatchdog
+
     expect(blackhole).toBeDefined()
     blackhole!.blackhole(true)
 
@@ -94,6 +98,7 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
   it('reattach drops stale push subscriptions and binds fresh ones', async () => {
     const { ensurePtyDispatcher, ptyDataHandlers, reattachPtyDispatcherPushListeners } =
       await import('./pty-dispatcher')
+
     ensurePtyDispatcher()
     const received: string[] = []
     ptyDataHandlers.set('pty-1', (data) => received.push(data))

@@ -27,21 +27,27 @@ export type StructuredAgentTurnTiming = {
 
 function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | null {
   const turn = readAgentJournalTurn(item.body)
+
   if (!turn) {
     return null
   }
+
   const { state, startedAt, completedAt, durationMs } = turn
+
   if (startedAt === undefined || !Number.isFinite(startedAt) || startedAt <= 0) {
     return null
   }
+
   const end =
     completedAt !== undefined && Number.isFinite(completedAt) && completedAt >= startedAt
       ? completedAt
       : undefined
+
   const measured =
     durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0
       ? durationMs
       : undefined
+
   return {
     state,
     startedAt,
@@ -63,6 +69,7 @@ export function selectStructuredAgentTurnTimings(
 ): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
   const itemIds = new Set(items.map((item) => item.itemId))
   const aliases = new Map<string, string>()
+
   // Codex folds a send issued mid-turn into the running turn under the SAME provider
   // key, so the earliest submission that names a key is the prompt that opened the turn.
   for (const submission of submissions) {
@@ -70,25 +77,33 @@ export function selectStructuredAgentTurnTimings(
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
+
   const timings = new Map<string, StructuredAgentTurnTiming | null>()
   let precedingUserItemId: string | null = null
+
   for (const item of items) {
     if (item.body.kind === 'message' && item.body.role === 'user') {
       precedingUserItemId = item.itemId
       continue
     }
+
     const turn = readAgentJournalTurn(item.body)
     const timing = readTiming(item)
+
     if (!timing && turn?.state !== 'unverifiable') {
       continue
     }
+
     const key = turn?.userItemId
+
     const userItemId =
       key === undefined ? precedingUserItemId : itemIds.has(key) ? key : (aliases.get(key) ?? null)
+
     if (userItemId !== null) {
       timings.set(userItemId, timing)
     }
   }
+
   return timings
 }
 
@@ -100,10 +115,12 @@ export function selectStructuredAgentRunningTurnTiming(
 ): StructuredAgentTurnTiming | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
+
     if (item && readAgentJournalTurn(item.body)?.turnId === turnId) {
       return readTiming(item)
     }
   }
+
   return null
 }
 
@@ -114,9 +131,11 @@ export function completedStructuredAgentTurnSeconds(
   if (!timing || (timing.state !== 'completed' && timing.state !== 'interrupted')) {
     return null
   }
+
   if (timing.durationMs !== undefined) {
     return Math.floor(timing.durationMs / 1000)
   }
+
   return timing.completedAt !== undefined
     ? Math.floor((timing.completedAt - timing.startedAt) / 1000)
     : null
@@ -137,6 +156,7 @@ export function structuredAgentTurnLocalStartedAt(
     hostNow !== undefined && Number.isFinite(hostNow)
       ? hostNow - timing.startedAt
       : timing.observedAt - timing.startedAt
+
   return firstSeenAt - Math.max(0, hostElapsed)
 }
 
@@ -149,6 +169,7 @@ export function selectStructuredAgentSettledTurns(
   submissions: readonly AgentJournalSubmission[] = []
 ): NativeChatSettledTurns {
   const settled = new Map<string, NativeChatSettledTurn | null>()
+
   for (const [userItemId, timing] of selectStructuredAgentTurnTimings(items, submissions)) {
     const workedSeconds = completedStructuredAgentTurnSeconds(timing)
     settled.set(
@@ -158,5 +179,6 @@ export function selectStructuredAgentSettledTurns(
         : { startedAt: timing.startedAt, workedSeconds }
     )
   }
+
   return settled
 }

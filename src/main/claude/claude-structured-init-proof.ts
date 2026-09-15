@@ -16,20 +16,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function readClaudeFrameString(source: Record<string, unknown>, key: string): string | null {
   const value = source[key]
+
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 export function readClaudeInit(message: Record<string, unknown>): ClaudeInitObservation | null {
   const hookName = readClaudeFrameString(message, 'hook_name')
   const isInit = message.type === 'system' && message.subtype === 'init'
+
   const isSessionStart =
     message.type === 'system' &&
     (message.subtype === 'hook_started' || message.subtype === 'hook_response') &&
     hookName?.startsWith('SessionStart:') === true
+
   if (!isInit && !isSessionStart) {
     return null
   }
+
   const providerSessionId = readClaudeFrameString(message, 'session_id')
+
   return providerSessionId
     ? {
         providerSessionId,
@@ -54,6 +59,7 @@ export function readClaudeCapabilities(
   const fromResult = isRecord(initialization) ? initialization.capabilities : undefined
   const fromFrame = init.message.capabilities
   const source = Array.isArray(fromResult) ? fromResult : Array.isArray(fromFrame) ? fromFrame : []
+
   return source.filter((value): value is string => typeof value === 'string')
 }
 
@@ -62,6 +68,7 @@ export function claudeInitializationAuthError(
 ): AgentSessionAcquisitionRefusal | null {
   const account =
     isRecord(initialization) && isRecord(initialization.account) ? initialization.account : null
+
   return readClaudeFrameString(account ?? {}, 'tokenSource') === 'none'
     ? new AgentSessionAcquisitionRefusal(
         'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.'
@@ -75,9 +82,11 @@ export function claudeAuthDiagnostic(
 ): ClaudeAuthDiagnostic {
   const env = isRecord(settings) && isRecord(settings.env) ? settings.env : {}
   const apiKeySource = readClaudeFrameString(init.message, 'apiKeySource')
+
   const configured = (key: string): boolean =>
     (typeof env[key] === 'string' && (env[key] as string).trim().length > 0) ||
     Boolean(process.env[key]?.trim())
+
   return {
     apiKeySourceConfigured: apiKeySource !== null && apiKeySource !== 'none',
     baseUrlConfigured: configured('ANTHROPIC_BASE_URL'),

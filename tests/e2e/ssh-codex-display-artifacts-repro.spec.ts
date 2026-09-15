@@ -47,15 +47,23 @@ import { persistReproEvidence } from './terminal-repro-evidence'
 import { resetWebglAndCaptureGraySlabAnalysis } from './terminal-webgl-reset-capture'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const RUN_REAL_REMOTE_CODEX = process.env.ORCA_E2E_REAL_REMOTE_CODEX === '1'
+
 const EXPECT_NO_ARTIFACTS = process.env.ORCA_E2E_EXPECT_NO_CODEX_ARTIFACTS !== '0'
+
 const CAPTURE_WHILE_REMOTE_TUI_RUNNING =
   process.env.ORCA_E2E_CAPTURE_WHILE_REMOTE_TUI_RUNNING === '1'
+
 const HIDE_UNTIL_REMOTE_TUI_DONE = process.env.ORCA_E2E_HIDE_UNTIL_REMOTE_TUI_DONE === '1'
+
 const CAPTURE_SCROLLBACK_ARTIFACT_REGION =
   process.env.ORCA_E2E_CAPTURE_SCROLLBACK_ARTIFACT_REGION === '1'
+
 const reconnectOverride = process.env.ORCA_E2E_FORCE_SSH_RECONNECT_DURING_TUI
+
 const reconnectModes = reconnectOverride === undefined ? [false, true] : [reconnectOverride === '1']
+
 const KEEP_SSH_REPRO_TARGET = process.env.ORCA_E2E_KEEP_SSH_REPRO_TARGET === '1'
 
 test.describe('Remote SSH Codex display artifacts repro', () => {
@@ -69,14 +77,17 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
     }, testInfo: TestInfo) => {
       test.slow()
       let target: DockerSshRelayTarget | null = null
+
       try {
         target = startDockerSshRelayTarget(testInfo)
         installRemoteCodexArtifactTui(target)
+
         if (RUN_REAL_REMOTE_CODEX) {
           installRemoteRealCodex(target)
         } else {
           installRemoteCodexFixture(target)
         }
+
         await waitForSessionReady(orcaPage)
         await waitForActiveWorktree(orcaPage)
         const remote = await connectDockerRemote(orcaPage, target)
@@ -88,12 +99,15 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
 
         const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
         await installPtyReplayProbe(orcaPage, electronApp, ptyId)
+
         const doneMarker = RUN_REAL_REMOTE_CODEX
           ? `ORCA_REAL_REMOTE_CODEX_DONE_${Date.now()}`
           : REMOTE_TUI_DONE
+
         const cleanMarker = RUN_REAL_REMOTE_CODEX
           ? `ORCA_REAL_REMOTE_CODEX_CLEAN_${Date.now()}`
           : doneMarker
+
         await execInTerminal(
           orcaPage,
           ptyId,
@@ -104,11 +118,13 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
               )}`
         )
         await orcaPage.waitForTimeout(1_200)
+
         if (forceReconnect) {
           dropDockerSshClientSessions(target)
           await waitForDockerRemoteReconnected(orcaPage, remote.targetId)
           await orcaPage.waitForTimeout(2_000)
         }
+
         await (RUN_REAL_REMOTE_CODEX
           ? (async () => {
               await stressRestoreRemoteTerminalDuringCodex(orcaPage, remote.worktreeId)
@@ -123,10 +139,13 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
                   ? waitForRemoteFixtureCleanFinalInHiddenPane(orcaPage, remote.worktreeId)
                   : orcaPage.waitForTimeout(10_000))
               }
+
               if (CAPTURE_WHILE_REMOTE_TUI_RUNNING) {
                 await orcaPage.waitForTimeout(900)
+
                 return
               }
+
               await switchToWorktree(orcaPage, remote.worktreeId)
               await ensureTerminalVisible(orcaPage, 45_000)
               await waitForActiveTerminalManager(orcaPage, 60_000)
@@ -138,6 +157,7 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
               )
             })())
         await orcaPage.waitForTimeout(600)
+
         if (CAPTURE_SCROLLBACK_ARTIFACT_REGION) {
           await scrollActiveTerminalToArtifactHistory(orcaPage)
         }
@@ -145,9 +165,11 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
         const { analysis, screenshot } = await captureGraySlabAnalysis(orcaPage)
         analysis.replayDebug = await readReplayProbeSnapshot(orcaPage, electronApp)
         analysis.duplicateStatusRows = await readDuplicateStatusRows(orcaPage)
+
         const evidenceLabel = RUN_REAL_REMOTE_CODEX
           ? 'real-remote-codex-reconnect-replay'
           : 'fixture-codex-reconnect-replay'
+
         persistReproEvidence(evidenceLabel, analysis, screenshot)
         const resetEvidence = await resetWebglAndCaptureGraySlabAnalysis(orcaPage)
         resetEvidence.analysis.replayDebug = await readReplayProbeSnapshot(orcaPage, electronApp)
@@ -183,10 +205,12 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
         } else {
           expect(analysis.rawSlabCount + analysis.staleStatusGlyphRowCount).toBeGreaterThan(0)
         }
+
         if (forceReconnect) {
           expect(await waitForActivePanePtyId(orcaPage, 60_000)).toBe(ptyId)
           expect(Number(analysis.replayDebug?.replayCount ?? 0)).toBeGreaterThan(0)
         }
+
         if (RUN_REAL_REMOTE_CODEX) {
           await clearRemoteTerminalAfterCodex(orcaPage, ptyId, cleanMarker)
         }

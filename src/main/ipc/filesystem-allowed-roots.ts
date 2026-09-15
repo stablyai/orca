@@ -37,8 +37,10 @@ function isRemoteOnlyFolderScope(
   if (connectionId) {
     return true
   }
+
   const groupIds = collectProjectGroupSubtreeIds(childGroupIndex, projectGroupId)
   let hasRemoteCandidate = false
+
   for (const repo of repos) {
     if (
       (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
@@ -48,9 +50,11 @@ function isRemoteOnlyFolderScope(
       if (!repo.connectionId) {
         return false
       }
+
       hasRemoteCandidate = true
     }
   }
+
   return hasRemoteCandidate
 }
 
@@ -71,6 +75,7 @@ function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[
   const projectGroups = scopeStore.getProjectGroups?.() ?? []
   const childGroupIndex = buildProjectGroupChildIndex(projectGroups)
   const roots: string[] = []
+
   for (const group of projectGroups) {
     if (
       group.parentPath &&
@@ -85,6 +90,7 @@ function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[
       roots.push(resolve(group.parentPath))
     }
   }
+
   for (const workspace of scopeStore.getFolderWorkspaces?.() ?? []) {
     if (
       !isRemoteOnlyFolderScope(
@@ -98,6 +104,7 @@ function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[
       roots.push(resolve(workspace.folderPath))
     }
   }
+
   return roots
 }
 
@@ -106,15 +113,18 @@ export function getAllowedRoots(store: Store): string[] {
   const repos = store.getRepos()
   const localRepos = filterLocalRepos(repos)
   const settings = store.getSettings()
+
   const roots = [
     ...localRepos.map((repo) => resolve(repo.path)),
     ...getLocalFolderScopeRoots(store, repos)
   ]
+
   if (settings.workspaceDir) {
     if (localRepos.length === 0) {
       roots.push(resolve(settings.workspaceDir))
     } else {
       const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, localRepos)
+
       for (const repo of localRepos) {
         roots.push(
           resolve(
@@ -134,5 +144,6 @@ export function getAllowedRoots(store: Store): string[] {
       }
     }
   }
+
   return roots
 }

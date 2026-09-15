@@ -14,6 +14,7 @@ type StoreState = {
 
 const mocks = vi.hoisted(() => {
   const holder: { state: StoreState } = { state: {} as StoreState }
+
   return {
     holder,
     useAppStore: (selector: (state: StoreState) => unknown) => selector(holder.state)
@@ -25,12 +26,15 @@ vi.mock('@/store', () => ({ useAppStore: mocks.useAppStore }))
 import { useMobilePairingAddressPreference } from './use-mobile-pairing-address-preference'
 
 const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
+
 const OTHER: MobileNetworkInterface = { name: 'en1', address: '10.0.0.5' }
+
 const EXTERNAL_SWITCH: MobileNetworkInterface = {
   name: 'vEthernet (Lab)',
   address: '192.168.1.30',
   hasDefaultRoute: true
 }
+
 const BRIDGE: MobileNetworkInterface = { name: 'docker0', address: '172.17.0.1' }
 
 function renderPreference(networkInterfaces: readonly MobileNetworkInterface[] = []) {
@@ -39,12 +43,14 @@ function renderPreference(networkInterfaces: readonly MobileNetworkInterface[] =
     updateSettings: vi.fn().mockResolvedValue(undefined)
   }
   const onSelectionInvalidated = vi.fn()
+
   const { result } = renderHook(() =>
     useMobilePairingAddressPreference({
       networkInterfaces,
       onSelectionInvalidated
     })
   )
+
   return { result, onSelectionInvalidated }
 }
 

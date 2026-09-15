@@ -20,6 +20,7 @@ import { getAutomationSetupDecisionDraftValue } from './automation-setup-decisio
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
   const schedule = tryParseAutomationRrule(automation.rrule)
   const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
+
   return {
     name: automation.name,
     prompt: automation.prompt,
@@ -54,6 +55,7 @@ export function buildExternalAutomationEditDraft(
 ): AutomationDraft {
   const rawSchedule = job.rawSchedule?.trim() ?? ''
   const hasCustomSchedule = isRunnableAutomationCronSchedule(rawSchedule)
+
   return {
     name: job.name,
     prompt: job.prompt ?? job.promptPreview,

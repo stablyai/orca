@@ -12,7 +12,9 @@ export function buildInlineReviewComments(
     if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
       return []
     }
+
     const createdAtMs = new Date(comment.createdAt).getTime()
+
     return [
       {
         id: `github-pr-comment:${comment.id}`,

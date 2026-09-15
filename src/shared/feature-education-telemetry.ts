@@ -26,6 +26,7 @@ export const FEATURE_EDUCATION_SOURCES = [
 ] as const
 
 export const CONTEXTUAL_TOUR_OUTCOMES = ['completed', 'skipped', 'cancelled'] as const
+
 export const SETUP_GUIDE_SOURCES = [
   'sidebar',
   'contextual_tour',
@@ -34,7 +35,9 @@ export const SETUP_GUIDE_SOURCES = [
   'help_menu',
   'unknown'
 ] as const
+
 export const SETUP_GUIDE_CLOSE_OUTCOMES = ['completed', 'dismissed', 'interrupted'] as const
+
 export const TERMINAL_PANE_SPLIT_SOURCES = [
   'contextual_tour',
   'keyboard',
@@ -44,9 +47,13 @@ export const TERMINAL_PANE_SPLIT_SOURCES = [
 ] as const
 
 export type FeatureEducationSource = (typeof FEATURE_EDUCATION_SOURCES)[number]
+
 export type ContextualTourOutcome = (typeof CONTEXTUAL_TOUR_OUTCOMES)[number]
+
 export type SetupGuideSource = (typeof SETUP_GUIDE_SOURCES)[number]
+
 export type SetupGuideCloseOutcome = (typeof SETUP_GUIDE_CLOSE_OUTCOMES)[number]
+
 export type TerminalPaneSplitSource = (typeof TERMINAL_PANE_SPLIT_SOURCES)[number]
 
 export function normalizeFeatureEducationSource(

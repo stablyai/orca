@@ -53,6 +53,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
     sortedItems,
     taskUiReady
   } = model
+
   return loading ? (
     <View style={styles.centered}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -106,6 +107,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                 if (!taskUiReady) {
                   return
                 }
+
                 setShowGitHubPagePicker(true)
               }}
             >
@@ -155,21 +157,26 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
             </View>
           )
         }
+
         const item = entry.item
         const repo = taskRepositoryMeta(item, reposById)
         const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
         const branchSummary = hostedBranchSummary(item)
+
         return (
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
             onPress={() => {
               triggerMediumImpact()
+
               if (item.provider === 'gitlabTodo') {
                 void Linking.openURL(item.source.targetUrl)
+
                 return
               }
+
               setActionItem(item)
             }}
           >

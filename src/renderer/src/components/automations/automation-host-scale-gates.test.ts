@@ -37,6 +37,7 @@ import { AUTOMATION_HOST_REQUEST_CONCURRENCY } from './automation-host-scheduler
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 
 const callRuntimeRpc = vi.fn()
+
 const getRuntimeEnvironmentStatus = vi.fn()
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
@@ -49,12 +50,19 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 // Half the authorities are old servers, because the legacy fan-out is where the
 // per-authority call budget is easiest to lose.
 const AUTHORITY_COUNT = 10
+
 const ENTRIES_PER_AUTHORITY = 5
+
 const AUTOMATIONS_PER_HOST = 20
+
 const SCOPED_AUTHORITIES = AUTHORITY_COUNT / 2
+
 const HOST_COUNT = AUTHORITY_COUNT * ENTRIES_PER_AUTHORITY
+
 const AUTOMATION_COUNT = HOST_COUNT * AUTOMATIONS_PER_HOST
+
 const SSH_TARGET_GENERATION = 3
+
 // Doc 417: a refresh at this size must not block the renderer for a frame budget's worth of work.
 const LONG_TASK_BUDGET_MS = 50
 
@@ -83,6 +91,7 @@ function sshTargetId(authorityIndex: number, slot: number): string {
 // separate them from Self without any help from the server.
 function refsForAuthority(authorityIndex: number): StableAutomationCatalogRef[] {
   const authority = stableAuthorityAt(authorityIndex)
+
   return [
     { authority, selector: { kind: 'self' } },
     { authority, selector: { kind: 'orphan' } },
@@ -103,9 +112,11 @@ function refForSelector(
   selector: AutomationListScopeSelector
 ): StableAutomationCatalogRef {
   const authority = stableAuthorityAt(index)
+
   if (selector.kind === 'ssh') {
     return { authority, selector: { kind: 'ssh', targetId: selector.targetId } }
   }
+
   return selector.kind === 'orphan'
     ? { authority, selector: { kind: 'orphan' } }
     : { authority, selector: { kind: 'self' } }
@@ -120,7 +131,9 @@ function targetFor(ref: StableAutomationCatalogRef): AutomationHostFetchTarget {
   const index = environmentIndex(
     ref.authority.kind === 'runtime' ? ref.authority.environmentId : 'env-0'
   )
+
   const authority = authorityAt(index)
+
   return {
     ref,
     authority,
@@ -151,6 +164,7 @@ function automationsForHost(ref: StableAutomationCatalogRef, index: number): Aut
       name: `automation ${n}`,
       projectId: 'repo-1'
     }
+
     if (ref.selector.kind === 'ssh') {
       return {
         ...base,
@@ -158,6 +172,7 @@ function automationsForHost(ref: StableAutomationCatalogRef, index: number): Aut
         executionTargetId: ref.selector.targetId
       } as Automation
     }
+
     // What an old server's orphan looks like on the wire: a record it admits is
     // scheduled somewhere it cannot speak for.
     return (
@@ -176,12 +191,14 @@ function respondingSelector(selector: AutomationListScopeSelector): unknown {
       targetGeneration: selector.expectedTargetGeneration
     }
   }
+
   return selector.kind === 'orphan' ? { kind: 'orphan', issue: '' } : { kind: 'self' }
 }
 
 function scopedPayload(environmentId: string, selector: AutomationListScopeSelector): unknown {
   const index = environmentIndex(environmentId)
   const automations = automationsForHost(refForSelector(index, selector), index)
+
   return {
     automations,
     // Echoing the requested selector is what a correct host does; the client
@@ -197,6 +214,7 @@ function scopedPayload(environmentId: string, selector: AutomationListScopeSelec
 /** One old server's whole authority in a single answer, exactly as it would arrive. */
 function legacyPayload(environmentId: string): unknown {
   const index = environmentIndex(environmentId)
+
   return {
     automations: refsForAuthority(index).flatMap((ref) => automationsForHost(ref, index))
   }
@@ -211,6 +229,7 @@ type WireActivity = {
 }
 
 let wire: WireActivity
+
 let onWireCall: ((environmentId: string) => void) | null
 
 function beginWireCall(environmentId: string): void {
@@ -222,8 +241,10 @@ function beginWireCall(environmentId: string): void {
 /** A relay round trip yields; without that nothing overlaps and the ceiling is trivially met. */
 async function roundTrip<T>(environmentId: string, value: () => T): Promise<T> {
   beginWireCall(environmentId)
+
   try {
     await new Promise((resolve) => setTimeout(resolve, 0))
+
     return value()
   } finally {
     wire.inFlight -= 1
@@ -239,18 +260,23 @@ function watchLongTasks(): () => number {
   let worst = 0
   let last = performance.now()
   let running = true
+
   const tick = (): void => {
     if (!running) {
       return
     }
+
     const at = performance.now()
     worst = Math.max(worst, at - last)
     last = at
     setTimeout(tick, 0)
   }
+
   setTimeout(tick, 0)
+
   return () => {
     running = false
+
     return worst
   }
 }
@@ -263,12 +289,14 @@ function harness(): {
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
   })
+
   const scheduler = createAutomationHostScheduler({
     cache,
     legacyPartitionContext: () => ({ repoConnectionId: () => null, projectsAuthoritative: true }),
     isVisible: () => true,
     scheduleRetry: () => () => {}
   })
+
   return { cache, refresh: (options) => scheduler.refresh(ALL_REFS.map(targetFor), options) }
 }
 
@@ -296,21 +324,26 @@ beforeEach(() => {
   getRuntimeEnvironmentStatus.mockReset()
   getRuntimeEnvironmentStatus.mockImplementation((environmentId: string) => {
     wire.probes += 1
+
     return roundTrip(environmentId, () => ({
       capabilities: [AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY]
     }))
   })
   callRuntimeRpc.mockImplementation((target: unknown, _method: unknown, params: unknown) => {
     const environmentId = (target as { environmentId: string }).environmentId
+
     if (params === null) {
       wire.legacyCallsByEnvironment.set(
         environmentId,
         (wire.legacyCallsByEnvironment.get(environmentId) ?? 0) + 1
       )
+
       return roundTrip(environmentId, () => legacyPayload(environmentId))
     }
+
     wire.scopedCalls += 1
     const selector = (params as { selector: AutomationListScopeSelector }).selector
+
     return roundTrip(environmentId, () => scopedPayload(environmentId, selector))
   })
 })
@@ -341,6 +374,7 @@ describe('one refresh of 50 hosts carrying 1,000 automations', () => {
       scopedRequests: SCOPED_AUTHORITIES * ENTRIES_PER_AUTHORITY,
       legacyRequests: AUTHORITY_COUNT - SCOPED_AUTHORITIES
     })
+
     for (let index = SCOPED_AUTHORITIES; index < AUTHORITY_COUNT; index += 1) {
       expect(authorityCounters(snap, index).legacyRequests).toBe(1)
     }
@@ -352,17 +386,21 @@ describe('one refresh of 50 hosts carrying 1,000 automations', () => {
     await refresh()
 
     let landed = 0
+
     for (const ref of ALL_REFS) {
       const rows = cache.get(ref)?.data ?? []
+
       const index = environmentIndex(
         ref.authority.kind === 'runtime' ? ref.authority.environmentId : 'env-0'
       )
+
       const prefix = `auto-${index}-${hostLabel(ref)}-`
       expect(rows).toHaveLength(AUTOMATIONS_PER_HOST)
       // A row carrying another host's prefix is a misattribution, not a miscount.
       expect(rows.every((row) => row.automation.id.startsWith(prefix))).toBe(true)
       landed += rows.length
     }
+
     expect(landed).toBe(AUTOMATION_COUNT)
   })
 
@@ -403,9 +441,11 @@ describe('relay cost the request pool cannot see', () => {
     const scopedEntries = SCOPED_AUTHORITIES * ENTRIES_PER_AUTHORITY
     expect(wire.probes).toBe(SCOPED_AUTHORITIES)
     expect(snap.totals.capabilityProbes).toBe(SCOPED_AUTHORITIES)
+
     for (let index = 0; index < AUTHORITY_COUNT; index += 1) {
       expect(authorityCounters(snap, index).capabilityProbes).toBe(isLegacyAuthority(index) ? 0 : 1)
     }
+
     expect(snap.totals.requests + snap.totals.capabilityProbes).toBe(
       scopedEntries + SCOPED_AUTHORITIES + (AUTHORITY_COUNT - SCOPED_AUTHORITIES)
     )
@@ -438,6 +478,7 @@ describe('the commit fence under real concurrency', () => {
       if (!stale.has(environmentId) || invalidated.has(environmentId)) {
         return
       }
+
       invalidated.add(environmentId)
       cache.invalidateAuthority(stableAuthorityAt(environmentIndex(environmentId)))
     }
@@ -445,20 +486,26 @@ describe('the commit fence under real concurrency', () => {
     await refresh()
 
     const snap = snapshot()
+
     for (const environmentId of stale) {
       const index = environmentIndex(environmentId)
+
       for (const ref of refsForAuthority(index)) {
         expect(cache.get(ref)?.data ?? []).toEqual([])
       }
+
       // The answer arrived and was thrown away, which is the gate's whole point.
       expect(authorityCounters(snap, index).discardedCommits).toBeGreaterThanOrEqual(1)
     }
+
     // Everything else still landed: a fence that rejected the innocent would
     // satisfy the stale-response gate and lose the user's rows doing it.
     const survivors = ALL_REFS.filter(
       (ref) => !stale.has(ref.authority.kind === 'runtime' ? ref.authority.environmentId : '')
     )
+
     expect(survivors).toHaveLength(HOST_COUNT - stale.size * ENTRIES_PER_AUTHORITY)
+
     for (const ref of survivors) {
       expect(cache.get(ref)?.data ?? []).toHaveLength(AUTOMATIONS_PER_HOST)
     }
@@ -471,6 +518,7 @@ describe('the commit fence under real concurrency', () => {
       if (environmentId !== 'env-0' || invalidated.has(environmentId)) {
         return
       }
+
       invalidated.add(environmentId)
       cache.invalidateAuthority(stableAuthorityAt(0))
     }
@@ -481,6 +529,7 @@ describe('the commit fence under real concurrency', () => {
       const rows = cache.get(ref)?.data ?? []
       expect(rows.some((row) => row.automation.id.startsWith('auto-0-'))).toBe(false)
     }
+
     expect(snapshot().byStableKey[hostStableKey(ALL_REFS[0])].rows).toBeGreaterThan(0)
   })
 })

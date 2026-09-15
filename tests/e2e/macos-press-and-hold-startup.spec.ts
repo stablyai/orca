@@ -33,6 +33,7 @@ async function readPressAndHoldStartupState(
     const nodeFs = process.getBuiltinModule('node:fs')
     const nodePath = process.getBuiltinModule('node:path')
     const recordPath = nodePath.join(app.getPath('userData'), 'macos-press-and-hold-default.json')
+
     const read = (file: string): string | null => {
       try {
         return nodeFs.readFileSync(file, 'utf8')
@@ -40,14 +41,17 @@ async function readPressAndHoldStartupState(
         return null
       }
     }
+
     // Why resolved here rather than hardcoded: this is the independent half of the cross-check —
     // the spec derives the identifier from the launched bundle without reusing product code.
     const plist = read(
       nodePath.join(nodePath.dirname(nodePath.dirname(process.execPath)), 'Info.plist')
     )
+
     const match = plist
       ? /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(plist)
       : null
+
     return {
       recordRaw: read(recordPath),
       bundleIdentifier: match ? match[1].trim() : null,
@@ -63,6 +67,7 @@ test.describe('macOS press-and-hold default', () => {
     const state = await readPressAndHoldStartupState(electronApp)
 
     expect(state.recordRaw, 'startup must leave a decision record').not.toBeNull()
+
     const record = JSON.parse(state.recordRaw!) as {
       version: number
       decision: string
@@ -75,6 +80,7 @@ test.describe('macOS press-and-hold default', () => {
 
     const ownsDomain =
       record.domain === 'com.stablyai.orca' || record.domain!.startsWith('com.stablyai.orca.')
+
     if (ownsDomain) {
       // A packaged or dev-identity bundle: the write path is live and must have settled.
       expect(['applied', 'kept-user-preference']).toContain(record.decision)

@@ -31,13 +31,16 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
   const hydrate = options.hydrate ?? hydrateShellPath
   const merge = options.merge ?? mergePathSegments
   const resolveGitBashPath = options.resolveGitBashPath ?? resolveWindowsGitBashShellPath
+
   const resolvePowerShellChain =
     options.resolvePowerShellChain ?? resolveWindowsPowerShellSpawnChain
+
   const warn =
     options.warn ??
     ((error: unknown) => {
       console.warn('[shell-path] Windows profile hydration failed; using inherited PATH:', error)
     })
+
   let generation = 0
   let ready = Promise.resolve()
 
@@ -47,23 +50,31 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
   ): void => {
     const requestedShell = shell?.trim() || 'powershell.exe'
     const basename = pathWin32.basename(requestedShell).toLowerCase()
+
     const shellFamily: WindowsPowerShellShellFamily =
       basename === 'powershell.exe' || basename === 'pwsh.exe' ? basename : undefined
+
     const effectivePowerShell = resolveEffectiveWindowsPowerShell({
       shellFamily,
       implementation,
       pwshAvailable: true
     })
+
     if (!effectivePowerShell) {
       configure(requestedShell, resolveGitBashPath(requestedShell), null)
+
       return
     }
+
     const spawnChain = resolvePowerShellChain(effectivePowerShell)
     const profileShell = spawnChain[0] ?? 'cmd.exe'
+
     const fallbackShell = spawnChain.slice(1).find((candidate) => {
       const candidateBasename = pathWin32.basename(candidate).toLowerCase()
+
       return candidateBasename === 'powershell.exe' || candidateBasename === 'pwsh.exe'
     })
+
     configure(profileShell, null, fallbackShell ?? null)
   }
 
@@ -80,8 +91,10 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
         if (requestGeneration !== generation) {
           return
         }
+
         try {
           const result = await hydrate()
+
           if (requestGeneration === generation && result.ok) {
             merge(result.segments)
           }
@@ -91,15 +104,19 @@ export function createWindowsShellPathHydration(options: WindowsShellPathHydrati
           }
         }
       })
+
       return ready
     },
     whenReady: async () => {
       let pending = ready
+
       while (true) {
         await pending
+
         if (pending === ready) {
           return
         }
+
         pending = ready
       }
     }

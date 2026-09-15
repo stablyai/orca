@@ -5,21 +5,25 @@ import { XTERM_HTML } from './terminal-webview-html'
 function iifeSource(): string {
   const start = XTERM_HTML.indexOf('(function() {')
   const end = XTERM_HTML.lastIndexOf('})();')
+
   return XTERM_HTML.slice(start, end + '})();'.length)
 }
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
   const end = XTERM_HTML.indexOf('<script>', start)
+
   return XTERM_HTML.slice(start, end)
 }
 
 type TerminalStub = ReturnType<typeof makeTerminal>
+
 type TerminalOptions = {
   cursorInactiveStyle?: string
   cursorStyle?: string
   showCursorImmediately?: boolean
 }
+
 type RegisteredWindowListener = {
   listener: EventListenerOrEventListenerObject
   options?: boolean | AddEventListenerOptions
@@ -47,6 +51,7 @@ function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
     },
     write(data: string, callback?: () => void) {
       writes.push(data)
+
       if (callback) {
         writeCallbacks.push(callback)
       }
@@ -77,6 +82,7 @@ function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
       terminal.disposed = true
     }
   }
+
   return terminal
 }
 
@@ -114,18 +120,22 @@ describe('terminal WebView init surface replacement', () => {
     }) as typeof window.addEventListener)
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
       animationFrames.push(callback)
+
       return animationFrames.length
     })
     Object.defineProperty(window, 'innerWidth', { value: 381, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 612, configurable: true })
+
     const webWindow = window as unknown as {
       Terminal: new (options: TerminalOptions) => TerminalStub
       ReactNativeWebView: { postMessage: (data: string) => void }
     }
+
     webWindow.Terminal = function (options: TerminalOptions) {
       terminalOptions.push(options)
       const terminal = makeTerminal(writeCallbacks, writes)
       terminals.push(terminal)
+
       return terminal
     } as unknown as new (options: TerminalOptions) => TerminalStub
     webWindow.ReactNativeWebView = { postMessage: vi.fn() }
@@ -138,6 +148,7 @@ describe('terminal WebView init surface replacement', () => {
     for (const { type, listener, options } of registeredWindowListeners) {
       window.removeEventListener(type, listener as EventListener, options)
     }
+
     vi.restoreAllMocks()
   })
 
@@ -147,6 +158,7 @@ describe('terminal WebView init surface replacement', () => {
     dispatchInit(51, 'phone-scrollback')
 
     expect(terminalOptions).toHaveLength(3)
+
     for (const options of terminalOptions) {
       expect(options).toMatchObject({
         cursorStyle: 'bar',

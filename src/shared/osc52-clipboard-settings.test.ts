@@ -47,6 +47,7 @@ describe('normalizeOsc52ClipboardDefaultOn', () => {
       terminalAllowOsc52Clipboard: false,
       terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
     })
+
     expect(normalizeOsc52ClipboardDefaultOn(optedOut)).toEqual(optedOut)
   })
 })

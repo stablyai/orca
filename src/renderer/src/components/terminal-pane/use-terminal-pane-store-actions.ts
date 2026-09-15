@@ -13,6 +13,7 @@ import { useAppStore } from '../../store'
 export function useTerminalPaneStoreActions() {
   return useMemo(() => {
     const state = useAppStore.getState()
+
     return {
       clearCodexRestartNotice: state.clearCodexRestartNotice,
       clearRuntimePaneTitle: state.clearRuntimePaneTitle,

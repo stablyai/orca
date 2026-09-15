@@ -11,6 +11,7 @@ import {
 } from './useGitStatusPolling'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
+
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
 
 type PollState = {
@@ -43,6 +44,7 @@ function GitStatusPollingHarness({
   } else {
     runPolling({ enabled })
   }
+
   return null
 }
 
@@ -77,12 +79,14 @@ async function usePollingOnce(
     rightSidebarTab: 'source-control',
     openFiles: []
   }
+
   Object.assign(state, options.stateOverrides)
   const mockedRepo = { ...repo, connectionId: options.connectionId ?? null }
   const gitStatus = vi.fn().mockResolvedValue(status)
 
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof React>('react')
+
     return {
       ...actual,
       useCallback: (callback: unknown) => callback,
@@ -225,6 +229,7 @@ describe('useGitStatusPolling', () => {
 
   it('passes the explicit push target to upstream refreshes', async () => {
     const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
     const { state } = await usePollingOnce(
       {
         entries: [],
@@ -337,17 +342,20 @@ describe('useGitStatusPolling', () => {
     vi.resetModules()
     vi.useFakeTimers()
     const windowListeners = new Map<string, EventListener[]>()
+
     const emitWorktreeFileChange = (payload: FsChangedPayload): void => {
       for (const listener of windowListeners.get('orca:worktree-file-change') ?? []) {
         listener({ detail: { payload, runtimeEnvironmentId: null } } as CustomEvent)
       }
     }
+
     const status: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
       branch: 'refs/heads/main'
     }
+
     const state: PollState = {
       activeWorktreeId: worktree.id,
       updateWorktreeGitIdentity: vi.fn(),
@@ -361,10 +369,12 @@ describe('useGitStatusPolling', () => {
       rightSidebarTab: 'source-control',
       openFiles: []
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof React>('react')
+
       return {
         ...actual,
         useCallback: (callback: unknown) => callback,
@@ -450,17 +460,20 @@ describe('useGitStatusPolling', () => {
     vi.resetModules()
     vi.useFakeTimers()
     const windowListeners = new Map<string, EventListener[]>()
+
     const emitWorktreeFileChange = (payload: FsChangedPayload): void => {
       for (const listener of windowListeners.get('orca:worktree-file-change') ?? []) {
         listener({ detail: { payload, runtimeEnvironmentId: null } } as CustomEvent)
       }
     }
+
     const status: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
       branch: 'refs/heads/main'
     }
+
     const state: PollState = {
       activeWorktreeId: worktree.id,
       updateWorktreeGitIdentity: vi.fn(),
@@ -474,10 +487,12 @@ describe('useGitStatusPolling', () => {
       rightSidebarTab: 'source-control',
       openFiles: []
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof React>('react')
+
       return {
         ...actual,
         useCallback: (callback: unknown) => callback,
@@ -549,17 +564,20 @@ describe('useGitStatusPolling', () => {
     vi.resetModules()
     vi.useFakeTimers()
     const windowListeners = new Map<string, EventListener[]>()
+
     const emitWorktreeFileChange = (payload: FsChangedPayload): void => {
       for (const listener of windowListeners.get('orca:worktree-file-change') ?? []) {
         listener({ detail: { payload, runtimeEnvironmentId: null } } as CustomEvent)
       }
     }
+
     const status: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
       branch: 'refs/heads/main'
     }
+
     const state: PollState = {
       activeWorktreeId: worktree.id,
       updateWorktreeGitIdentity: vi.fn(),
@@ -573,14 +591,18 @@ describe('useGitStatusPolling', () => {
       rightSidebarTab: 'source-control',
       openFiles: []
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
+
     const effectSlots: {
       deps: unknown[] | undefined
       cleanup: void | (() => void)
     }[] = []
+
     const refSlots: { current: unknown }[] = []
     let effectIndex = 0
     let refIndex = 0
+
     const depsChanged = (prev: unknown[] | undefined, next: unknown[] | undefined): boolean =>
       !prev ||
       !next ||
@@ -589,6 +611,7 @@ describe('useGitStatusPolling', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof React>('react')
+
       return {
         ...actual,
         useCallback: (callback: unknown) => callback,
@@ -596,6 +619,7 @@ describe('useGitStatusPolling', () => {
           const index = effectIndex
           effectIndex += 1
           const previous = effectSlots[index]
+
           if (!previous || depsChanged(previous.deps, deps)) {
             previous?.cleanup?.()
             effectSlots[index] = { deps, cleanup: effect() }
@@ -605,9 +629,11 @@ describe('useGitStatusPolling', () => {
         useRef: <T>(initial: T) => {
           const index = refIndex
           refIndex += 1
+
           if (!refSlots[index]) {
             refSlots[index] = { current: initial }
           }
+
           return refSlots[index] as { current: T }
         }
       }
@@ -655,11 +681,13 @@ describe('useGitStatusPolling', () => {
     })
 
     const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
+
     const renderPolling = (): void => {
       effectIndex = 0
       refIndex = 0
       GitStatusPollingHarness({ runPolling })
     }
+
     renderPolling()
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
 
@@ -718,6 +746,7 @@ describe('useGitStatusPolling', () => {
 
   it('catches up on becoming visible while the huge flag is set', async () => {
     const documentListeners = new Map<string, EventListener[]>()
+
     const visibilityDocument = {
       visibilityState: 'hidden',
       hasFocus: () => false,
@@ -726,6 +755,7 @@ describe('useGitStatusPolling', () => {
       }),
       removeEventListener: vi.fn()
     }
+
     const { gitStatus } = await usePollingOnce(
       {
         entries: [],
@@ -741,11 +771,13 @@ describe('useGitStatusPolling', () => {
         }
       }
     )
+
     // Signals dropped while the window was hidden must be caught up on
     // reveal so the huge flag can still clear.
     expect(gitStatus).not.toHaveBeenCalled()
 
     visibilityDocument.visibilityState = 'visible'
+
     for (const listener of documentListeners.get('visibilitychange') ?? []) {
       listener(new Event('visibilitychange'))
     }
@@ -757,9 +789,11 @@ describe('useGitStatusPolling', () => {
     vi.resetModules()
     vi.useFakeTimers()
     let resolveFirst!: (value: GitStatusResult) => void
+
     const firstStatus = new Promise<GitStatusResult>((resolve) => {
       resolveFirst = resolve
     })
+
     const state: PollState = {
       activeWorktreeId: worktree.id,
       updateWorktreeGitIdentity: vi.fn(),
@@ -773,16 +807,19 @@ describe('useGitStatusPolling', () => {
       rightSidebarTab: 'source-control',
       openFiles: []
     }
+
     const status: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
       branch: 'refs/heads/main'
     }
+
     const gitStatus = vi.fn().mockReturnValueOnce(firstStatus).mockResolvedValue(status)
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof React>('react')
+
       return {
         ...actual,
         useCallback: (callback: unknown) => callback,

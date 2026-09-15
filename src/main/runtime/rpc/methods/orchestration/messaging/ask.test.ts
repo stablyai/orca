@@ -29,6 +29,7 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.reply', () => {
     it('replies to a message', async () => {
       setup()
+
       const original = db.insertMessage({
         from: 'a',
         to: 'b',
@@ -61,12 +62,14 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'question work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker')
+
       const created = db.createQuestion({
         runId: activeRunId!,
         dispatchId: dispatch.id,
         askerHandle: 'term_worker',
         question: 'Proceed?'
       })
+
       const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
 
       const first = (await call('orchestration.reply', {
@@ -74,6 +77,7 @@ describe('orchestration RPC methods', () => {
         body: 'Yes',
         from: 'term_coord'
       })) as { message: { id: string; to_handle: string }; duplicate: boolean }
+
       const repeated = (await call('orchestration.reply', {
         id: created.message.id,
         body: 'Yes',
@@ -105,6 +109,7 @@ describe('orchestration RPC methods', () => {
     function createAskingDispatch(handle = 'term_worker') {
       const task = db.createTask({ spec: 'question work' })
       const dispatch = createRootDispatch(db, task.id, handle)
+
       return { task, dispatch }
     }
 
@@ -114,6 +119,7 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
         const outbound = db.getInbox(10).find((message) => message.type === 'question')
+
         if (outbound) {
           db.answerQuestion({
             messageId: outbound.id,
@@ -122,6 +128,7 @@ describe('orchestration RPC methods', () => {
             body: 'go ahead'
           })
         }
+
         return 'notified'
       })
 
@@ -167,11 +174,13 @@ describe('orchestration RPC methods', () => {
     it('requires the Dispatch capability before creating a question', async () => {
       setup()
       const { dispatch } = createAskingDispatch()
+
       const capability = db.mintDispatchCapability({
         dispatchId: dispatch.id,
         paneKey: 'tab_worker:leaf_worker',
         processIncarnation: 'runtime_test:term_worker:1'
       })
+
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
       )
@@ -187,11 +196,13 @@ describe('orchestration RPC methods', () => {
 
       ctx = { runtime, orchestrationCapability: capability }
       vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
+
       const accepted = (await call('orchestration.ask', {
         from: 'term_worker',
         question: 'authorized',
         timeoutMs: 1
       })) as { messageId: string; timedOut: boolean }
+
       expect(accepted.messageId).toMatch(/^msg_/)
       expect(accepted.timedOut).toBe(true)
     })
@@ -219,12 +230,14 @@ describe('orchestration RPC methods', () => {
     it('resumes the original question without creating a duplicate', async () => {
       setup()
       const { dispatch } = createAskingDispatch()
+
       const created = db.createQuestion({
         runId: activeRunId!,
         dispatchId: dispatch.id,
         askerHandle: 'term_worker',
         question: 'Resume me'
       })
+
       db.answerQuestion({
         messageId: created.message.id,
         runId: activeRunId!,
@@ -253,6 +266,7 @@ describe('orchestration RPC methods', () => {
       vi.useFakeTimers()
       const controller = new AbortController()
       const method = findMethod('orchestration.ask')
+
       const parsed = method.params!.parse({
         from: 'term_worker',
         question: 'still there?',
@@ -266,10 +280,12 @@ describe('orchestration RPC methods', () => {
         }) as Promise<{ timedOut: boolean; cancelled: boolean }>
 
         controller.abort()
+
         const outcomePromise = Promise.race([
           promise.then((result) => (result.cancelled ? 'cancelled' : 'answered')),
           new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
         ])
+
         await vi.advanceTimersByTimeAsync(0)
         const outcome = await outcomePromise
 
@@ -301,6 +317,7 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
         wakeCount++
         const outbound = db.getInbox(20).find((message) => message.type === 'question')
+
         if (wakeCount === 1 && outbound) {
           db.insertMessage({
             from: 'unrelated',
@@ -317,6 +334,7 @@ describe('orchestration RPC methods', () => {
             body: 'correct answer'
           })
         }
+
         return 'notified'
       })
 
@@ -351,6 +369,7 @@ describe('orchestration RPC methods', () => {
           consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
           body: 'ok'
         })
+
         return 'notified'
       })
 

@@ -133,17 +133,22 @@ export function ShellIcon({
 }): React.JSX.Element {
   const normalized = (shell ?? '').toLowerCase()
   const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
+
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
     return <PowerShellIcon size={size} />
   }
+
   if (normalized === 'cmd.exe') {
     return <CmdIcon size={size} />
   }
+
   if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
     return <WslIcon size={size} />
   }
+
   if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
     return <GitBashIcon size={size} />
   }
+
   return <GenericTerminalIcon size={size} />
 }

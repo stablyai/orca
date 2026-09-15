@@ -52,15 +52,19 @@ function LinearIssueWorkspaceIssue({
   const providerSettings = sourceContext ?? settings
   const allWorktrees = useAllWorktrees()
   const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
+
   const attachmentWorkspaces = useMemo(
     () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
     [allWorktrees, folderWorkspaces]
   )
+
   const detail = useLinearIssueWorkspaceDetail({ issue, providerSettings, requestKey })
+
   const attachedWorkspace = useMemo(
     () => findLinearIssueWorkspaceAttachment(attachmentWorkspaces, detail.displayed),
     [attachmentWorkspaces, detail.displayed]
   )
+
   const attachedWorkspaceLabel = attachedWorkspace
     ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
@@ -169,15 +173,19 @@ export default function LinearIssueWorkspace({
   sourceContext
 }: LinearIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
+
   if (!issue) {
     if (variant === 'page') {
       return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm" />
       )
     }
+
     return <Sheet open={false} onOpenChange={(open) => !open && onClose()} />
   }
+
   const requestKey = `${sourceContext?.hostId ?? settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
+
   return (
     <LinearIssueWorkspaceIssue
       key={requestKey}

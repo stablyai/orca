@@ -7,6 +7,7 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -34,9 +35,11 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('caps unavailable host inventory at two recovery windows', async () => {
     vi.useFakeTimers()
+
     try {
       resolvedPaneHandle = 'terminal-stable'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('hub-env', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -57,6 +60,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           hostListCalls += 1
           throw new Error('runtime reconnect in progress')
         }
+
         return { ok: true, result: {} }
       })
 
@@ -84,10 +88,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('reattaches from prior ready evidence when the trailing inventory poll fails', async () => {
     vi.useFakeTimers()
+
     try {
       resolvedPaneHandle = 'terminal-stable'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onPtyExit = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('hub-env', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -108,10 +114,13 @@ describe('createRemoteRuntimePtyTransport', () => {
         if (args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
+
         hostListCalls += 1
+
         if (hostListCalls === 1) {
           return readyHostSessionInventoryResponse('terminal-stable')
         }
+
         throw new Error('final inventory poll failed')
       })
 
@@ -136,9 +145,11 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('strengthens repeated same-handle end recovery until it disconnects', async () => {
     vi.useFakeTimers()
+
     try {
       resolvedPaneHandle = 'terminal-flapping'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('hub-env', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -192,12 +203,15 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('ignores a delayed stale send after the pane has rebound to a healthy handle', async () => {
     resolvedPaneHandle = 'terminal-old'
     let resolveOldSend: (response: unknown) => void = () => {}
+
     const oldSendResponse = new Promise((resolve) => {
       resolveOldSend = resolve
     })
+
     let hostListCalls = 0
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -216,16 +230,21 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'terminal.send') {
         return oldSendResponse
       }
+
       if (args.method === 'session.tabs.list') {
         hostListCalls += 1
+
         return Promise.resolve(readyHostSessionInventoryResponse('terminal-new'))
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const sendInputAccepted = transport.sendInputAccepted
+
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
+
     const pendingSend = sendInputAccepted('sent-before-rebind')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
@@ -258,6 +277,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     resolvedPaneHandle = 'terminal-old'
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -273,26 +293,34 @@ describe('createRemoteRuntimePtyTransport', () => {
     emitSnapshot(latestSubscribePayload().streamId, 'old handle')
 
     let resolveOldSend: (response: unknown) => void = () => {}
+
     const oldSendResponse = new Promise((resolve) => {
       resolveOldSend = resolve
     })
+
     let resolvePane: (response: unknown) => void = () => {}
+
     const paneResponse = new Promise((resolve) => {
       resolvePane = resolve
     })
+
     runtimeCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'terminal.send') {
         return oldSendResponse
       }
+
       if (args.method === 'terminal.resolvePane') {
         return paneResponse
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const sendInputAccepted = transport.sendInputAccepted
+
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
+
     const pendingSend = sendInputAccepted('sent-before-close')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
@@ -330,10 +358,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not subscribe a same handle condemned after its inventory wait returns', async () => {
     vi.useFakeTimers()
+
     try {
       resolvedPaneHandle = 'terminal-old'
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -350,23 +380,29 @@ describe('createRemoteRuntimePtyTransport', () => {
       emitSnapshot(oldStreamId, 'old handle')
 
       let resolveOldSend: (response: unknown) => void = () => {}
+
       const oldSendResponse = new Promise((resolve) => {
         resolveOldSend = resolve
       })
+
       let hostListCalls = 0
       runtimeCall.mockImplementation(
         (args: { method: string; timeoutMs?: number }): Promise<unknown> => {
           if (args.method === 'terminal.send') {
             return oldSendResponse
           }
+
           if (args.method !== 'session.tabs.list') {
             return Promise.resolve({ ok: true, result: {} })
           }
+
           hostListCalls += 1
           const response = readyHostSessionInventoryResponse('terminal-old')
+
           if ((args.timeoutMs ?? 15_000) > 1_000) {
             return Promise.resolve(response)
           }
+
           return new Promise((resolve) => {
             setTimeout(() => {
               // Why: settle the stale send between the inner wait and its caller's continuation.
@@ -387,9 +423,11 @@ describe('createRemoteRuntimePtyTransport', () => {
         }
       )
       const sendInputAccepted = transport.sendInputAccepted
+
       if (!sendInputAccepted) {
         throw new Error('Expected acknowledged remote terminal input')
       }
+
       const pendingSend = sendInputAccepted('sent-before-stream-end')
       await vi.waitFor(() =>
         expect(runtimeCall).toHaveBeenCalledWith(

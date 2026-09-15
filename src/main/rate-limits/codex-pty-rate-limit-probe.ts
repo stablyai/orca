@@ -11,9 +11,13 @@ import {
 } from './codex-pty-status-parser'
 
 const PTY_TIMEOUT_MS = 15_000
+
 const PTY_STATUS_NUDGE_MS = 2_500
+
 const PTY_STATUS_ENTER_DELAY_MS = 350
+
 const PTY_STATUS_ENTER_RETRY_MS = 3_000
+
 const MAX_DIAGNOSTIC_OUTPUT_LENGTH = 100_000
 
 export type CodexPtyRateLimitCommand = {
@@ -30,10 +34,13 @@ export async function fetchCodexRateLimitsViaPty(
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
+
   const pty = await import('node-pty')
+
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
+
   const command = resolveCommand()
 
   return new Promise<ProviderRateLimits>((resolve) => {
@@ -50,22 +57,27 @@ export async function fetchCodexRateLimitsViaPty(
       cwd: command.cwd,
       env: command.env
     })
+
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
 
     let statusEnter: ReturnType<typeof setTimeout> | null = null
     let statusNudge: ReturnType<typeof setTimeout> | null = null
+
     function sendStatusCommand(): void {
       sentStatus = true
+
       if (statusNudge) {
         clearTimeout(statusNudge)
         statusNudge = null
       }
+
       term.write('/status')
       statusEnter = setTimeout(() => {
         statusEnter = null
         term.write('\r')
         statusEnter = setTimeout(() => {
           statusEnter = null
+
           if (!resolved && !settleTimer) {
             term.write('\r')
           }
@@ -77,19 +89,23 @@ export async function fetchCodexRateLimitsViaPty(
       if (statusNudge || sentStatus || resolved) {
         return
       }
+
       statusNudge = setTimeout(() => {
         statusNudge = null
+
         if (!resolved && !sentStatus) {
           sendStatusCommand()
         }
       }, PTY_STATUS_NUDGE_MS)
     }
+
     termDisposables.push({
       dispose: () => {
         if (statusNudge) {
           clearTimeout(statusNudge)
           statusNudge = null
         }
+
         if (statusEnter) {
           clearTimeout(statusEnter)
           statusEnter = null
@@ -102,6 +118,7 @@ export async function fetchCodexRateLimitsViaPty(
         clearTimeout(timeout)
         timeout = null
       }
+
       if (settleTimer) {
         clearTimeout(settleTimer)
         settleTimer = null
@@ -112,6 +129,7 @@ export async function fetchCodexRateLimitsViaPty(
       if (resolved) {
         return
       }
+
       resolved = true
       clearSettleTimers()
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
@@ -121,8 +139,10 @@ export async function fetchCodexRateLimitsViaPty(
     if (options?.signal) {
       if (options.signal.aborted) {
         settleAborted()
+
         return
       }
+
       options.signal.addEventListener('abort', settleAborted, { once: true })
       termDisposables.push({
         dispose: () => options.signal?.removeEventListener('abort', settleAborted)
@@ -147,11 +167,13 @@ export async function fetchCodexRateLimitsViaPty(
 
     const onDataDisposable = term.onData((data) => {
       output += data
+
       if (output.length > MAX_DIAGNOSTIC_OUTPUT_LENGTH) {
         output = output.slice(-MAX_DIAGNOSTIC_OUTPUT_LENGTH)
       }
 
       const authError = extractCodexAuthError(output)
+
       if (authError) {
         resolved = true
         clearSettleTimers()
@@ -164,21 +186,28 @@ export async function fetchCodexRateLimitsViaPty(
           error: authError,
           status: 'error'
         })
+
         return
       }
 
       armStatusNudge()
+
       if (!sentStatus && /[>›]\s*$/.test(data)) {
         sendStatusCommand()
+
         return
       }
+
       const probe = sentStatus && !settleTimer ? stripCodexPtyControlSequences(output) : null
+
       if (probe !== null && hasCodexPtyRateLimit(probe)) {
         settleTimer = setTimeout(() => {
           settleTimer = null
+
           if (resolved) {
             return
           }
+
           resolved = true
           clearSettleTimers()
           cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
@@ -198,21 +227,26 @@ export async function fetchCodexRateLimitsViaPty(
         }, 500)
       }
     })
+
     if (onDataDisposable) {
       termDisposables.push(onDataDisposable)
     }
 
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
+
       if (settleTimer) {
         clearTimeout(settleTimer)
         settleTimer = null
       }
+
       if (!resolved) {
         resolved = true
+
         if (timeout) {
           clearTimeout(timeout)
         }
+
         const clean = stripCodexPtyControlSequences(output)
         const { session, weekly } = parseCodexPtyStatus(clean)
         resolve({
@@ -229,6 +263,7 @@ export async function fetchCodexRateLimitsViaPty(
         })
       }
     })
+
     if (onExitDisposable) {
       termDisposables.push(onExitDisposable)
     }

@@ -8,6 +8,7 @@ import { AutomationHostLabel, AutomationHostStatusBadges } from './AutomationHos
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -45,6 +46,7 @@ function render(node: React.ReactNode): void {
 
 function statusIds(axis?: string): string[] {
   const selector = axis ? `[data-status-axis="${axis}"]` : '[data-status-id]'
+
   return [...container.querySelectorAll(selector)].map(
     (node) => node.getAttribute('data-status-id') ?? ''
   )

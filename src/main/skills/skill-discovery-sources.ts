@@ -18,6 +18,7 @@ import {
 } from './skill-provider-runtime-roots'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
+
 type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
 
 export function stablePathId(pathValue: string): string {
@@ -40,6 +41,7 @@ export function sourceKindForSkill(
   ) {
     return 'bundled'
   }
+
   return root.sourceKind
 }
 
@@ -51,7 +53,9 @@ export function sortDiscoveredSkills(skills: DiscoveredSkill[]): DiscoveredSkill
   if (skills.length < 2) {
     return skills
   }
+
   const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+
   return skills.sort(
     (a, b) =>
       compare(a.name, b.name) ||
@@ -64,7 +68,9 @@ export function sortSkillDiscoverySources(sources: SkillDiscoverySource[]): Skil
   if (sources.length < 2) {
     return sources
   }
+
   const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+
   return sources.sort((a, b) => compare(a.label, b.label))
 }
 
@@ -92,8 +98,10 @@ export function buildSkillDiscoverySources(
   const pathApi = args.pathApi ?? { basename, join }
   const home = args.homeDir ?? homedir()
   const cwd = args.cwd ?? process.cwd()
+
   const providerRootOverrides =
     args.providerRootOverrides ?? (args.pathApi ? {} : resolveEnvironmentSkillProviderRoots())
+
   // Why: HERMES_HOME moves the whole profile tree, so the default home path
   // finds nothing for `hermes -p <profile>`. Only this process's own host can
   // read it — a custom pathApi means the home belongs to another host, whose
@@ -101,6 +109,7 @@ export function buildSkillDiscoverySources(
   const hermesSkillsRoot = args.pathApi
     ? pathApi.join(home, '.hermes', 'skills')
     : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
+
   const roots: SkillScanRoot[] = [
     source(
       'home-codex',
@@ -236,14 +245,17 @@ export function buildSkillDiscoverySources(
   ]
 
   const projectPaths = new Set<string>()
+
   for (const repo of args.repos ?? []) {
     // Why: runtime-owned repos can have no legacy connectionId while their
     // paths are meaningful only on a remote host.
     if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       continue
     }
+
     projectPaths.add(repo.path)
   }
+
   if (args.includeCwd !== false) {
     projectPaths.add(cwd)
   }

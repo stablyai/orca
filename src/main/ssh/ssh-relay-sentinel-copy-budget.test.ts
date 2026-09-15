@@ -12,15 +12,18 @@ it.each([1, 256])('copies each startup prefix once across %i chunks', async (chu
     pause: vi.fn(),
     resume: vi.fn()
   })
+
   const pending = waitForSentinel(channel as unknown as ClientChannel)
   const chunk = Buffer.alloc((64 * 1024) / chunks, 120)
   const concat = vi.spyOn(Buffer, 'concat')
   let calls = 0
   let copied = 0
+
   try {
     for (let i = 0; i < chunks; i++) {
       channel.emit('data', chunk)
     }
+
     calls = concat.mock.calls.length
     copied = concat.mock.calls.reduce(
       (sum, [buffers]) => sum + buffers.reduce((bytes, buffer) => bytes + buffer.length, 0),
@@ -29,6 +32,7 @@ it.each([1, 256])('copies each startup prefix once across %i chunks', async (chu
   } finally {
     concat.mockRestore()
   }
+
   channel.emit('data', Buffer.from(`${RELAY_SENTINEL}first-frame`))
   const transport = await pending
   const received: string[] = []
@@ -47,6 +51,7 @@ it.each(Array.from({ length: RELAY_SENTINEL.length + 1 }, (_, i) => i))(
       stdin: { write: vi.fn(() => true) },
       close: vi.fn()
     })
+
     const pending = waitForSentinel(channel as unknown as ClientChannel)
     const marker = Buffer.from(RELAY_SENTINEL)
     const payload = Buffer.from([0, 255, 128, 10, 13, 1])

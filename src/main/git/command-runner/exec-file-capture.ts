@@ -31,6 +31,7 @@ export async function execFileCaptureToTermination(
   // synchronously, so this brackets exactly the main-thread block execFileCapture
   // reports for its own spawns.
   const spawnStartedAt = performance.now()
+
   const pending = runProcess({
     program: command,
     args,
@@ -43,11 +44,13 @@ export async function execFileCaptureToTermination(
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
+
   recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
   const result = await pending
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
   const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
+
   if (
     result.code === 0 &&
     !result.timedOut &&
@@ -56,9 +59,11 @@ export async function execFileCaptureToTermination(
   ) {
     return { stdout, stderr }
   }
+
   if (result.timedOut && !options.signal?.aborted) {
     options.onDeadlineKill?.()
   }
+
   const error = result.timedOut
     ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
     : new Error(
@@ -71,9 +76,11 @@ export async function execFileCaptureToTermination(
               `${command} produced more than ${options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER} bytes of output.`
             : cleanStderr.trim() || `${command} exited with ${result.code}.`
       )
+
   if (options.signal?.aborted) {
     error.name = 'AbortError'
   }
+
   throw Object.assign(error, {
     code: result.code,
     killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
@@ -108,6 +115,7 @@ export function execFileCapture(
     if (options.signal?.aborted) {
       options.onChildTerminated?.()
       reject(createAbortError())
+
       return
     }
 
@@ -116,20 +124,25 @@ export function execFileCapture(
     let child: ChildProcess | null = null
     let timer: NodeJS.Timeout | null = null
     let terminationReported = false
+
     const reportChildTerminated = (): void => {
       if (terminationReported) {
         return
       }
+
       terminationReported = true
       options.onChildTerminated?.()
     }
+
     const cleanup = (): void => {
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
+
       options.signal?.removeEventListener('abort', onAbort)
     }
+
     const finish = (
       error: Error | null,
       stdout: string | Buffer = emptyExecFileOutput(options),
@@ -138,28 +151,37 @@ export function execFileCapture(
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
+
       if (error) {
         const enriched = error as Error & { stdout?: string | Buffer; stderr?: string | Buffer }
         enriched.stdout ??= stdout
         enriched.stderr ??= stderr
         reject(enriched)
+
         return
       }
+
       resolve({ stdout, stderr })
     }
+
     const onAbort = (): void => {
       if (settled || terminating) {
         return
       }
+
       terminating = true
       const abortError = createAbortError()
+
       if (!child) {
         terminating = false
         finish(abortError)
+
         return
       }
+
       void killSpawnedCommandTree(child).then(() => {
         terminating = false
         finish(abortError)
@@ -186,10 +208,13 @@ export function execFileCapture(
           if (terminating) {
             return
           }
+
           if (!error && stderr === undefined && isExecFileResultObject(stdout)) {
             finish(null, stdout.stdout, stdout.stderr)
+
             return
           }
+
           finish(error, stdout, stderr)
         }
       )
@@ -197,6 +222,7 @@ export function execFileCapture(
     } catch (error) {
       reportChildTerminated()
       finish(error instanceof Error ? error : new Error(String(error)))
+
       return
     }
 
@@ -204,6 +230,7 @@ export function execFileCapture(
       if (!child?.pid) {
         reportChildTerminated()
       }
+
       if (!terminating) {
         finish(error)
       }
@@ -220,19 +247,24 @@ export function execFileCapture(
         if (settled || terminating) {
           return
         }
+
         terminating = true
         const timeoutError = options.createTimeoutError?.() ?? new Error(`${command} timed out.`)
+
         if (!child) {
           terminating = false
           finish(timeoutError)
+
           return
         }
+
         void killSpawnedCommandTree(child).then(() => {
           terminating = false
           finish(timeoutError)
         })
       }, options.timeout)
     }
+
     options.signal?.addEventListener('abort', onAbort, { once: true })
   })
 }

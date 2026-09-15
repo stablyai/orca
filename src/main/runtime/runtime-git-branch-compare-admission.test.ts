@@ -13,8 +13,11 @@ vi.mock('../git/status', () => ({
   getCommitDiff: vi.fn(),
   getDiff: vi.fn()
 }))
+
 vi.mock('../git/repo', () => ({ getRemoteCommitUrl: vi.fn(), getRemoteFileUrl: vi.fn() }))
+
 vi.mock('../git/runner', () => ({ awaitWindowsHostGitEnvironmentReady: vi.fn() }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: mocks.getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'provider unavailable'
@@ -40,10 +43,12 @@ function makeCommands(overrides: Partial<RuntimeGitTarget> = {}): RuntimeGitDiff
     localGitOptions: { wslDistro: 'Ubuntu' },
     ...overrides
   } as RuntimeGitTarget
+
   const host = {
     resolveRuntimeGitTarget: async () => target,
     getRuntimeSettings: () => ({})
   } as unknown as RuntimeGitCommandHost
+
   return new RuntimeGitDiffCommands(host)
 }
 

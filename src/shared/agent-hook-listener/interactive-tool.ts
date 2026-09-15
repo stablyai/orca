@@ -15,6 +15,7 @@ export function clearActiveToolFieldsUpdate(): ToolSnapshot {
 /** Drop the hook envelope keys a plugin merges into event properties so the serialized prompt holds only the question structure. */
 export function stripHookEnvelopeKeys(record: Record<string, unknown>): Record<string, unknown> {
   const { hook_event_name: _h, hookEventName: _he, ...rest } = record
+
   return rest
 }
 
@@ -23,12 +24,15 @@ export function summarizeApprovalInput(toolInput: unknown): string {
   if (toolInput && typeof toolInput === 'object') {
     const obj = toolInput as Record<string, unknown>
     const direct = obj.command ?? obj.file_path ?? obj.path ?? obj.url ?? obj.pattern
+
     if (typeof direct === 'string' && direct.length > 0) {
       return direct.length > 200 ? `${direct.slice(0, 200)}…` : direct
     }
   }
+
   try {
     const json = JSON.stringify(toolInput) ?? ''
+
     return json.length > 200 ? `${json.slice(0, 200)}…` : json
   } catch {
     return ''
@@ -43,8 +47,10 @@ export function deriveInteractivePrompt(
 ): string | undefined {
   // Why: providers vary casing; any post-tool event means the question is no longer pending — don't recreate its answered card.
   const normalizedEventName = normalizeHookEventName(eventName)
+
   const isPostToolEvent =
     normalizedEventName === 'post_tool_use' || normalizedEventName === 'post_tool_use_failure'
+
   if (
     isAskUserQuestionTool(toolName) &&
     !isPostToolEvent &&
@@ -58,6 +64,7 @@ export function deriveInteractivePrompt(
       return undefined
     }
   }
+
   if (eventName === 'PermissionRequest' && typeof toolName === 'string' && toolName.length > 0) {
     try {
       return JSON.stringify({
@@ -67,6 +74,7 @@ export function deriveInteractivePrompt(
       return undefined
     }
   }
+
   return undefined
 }
 
@@ -76,10 +84,12 @@ export function readFirstString(
 ): string | undefined {
   for (const key of keys) {
     const value = readString(record, key)
+
     if (value) {
       return value
     }
   }
+
   return undefined
 }
 
@@ -87,8 +97,10 @@ export function parseJsonObjectString(value: unknown): Record<string, unknown> |
   if (typeof value !== 'string' || value.trim().length === 0) {
     return undefined
   }
+
   try {
     const parsed = parseAgentHookJson(value)
+
     return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : undefined
@@ -101,24 +113,31 @@ export function extractToolResponseText(toolResponse: unknown): string | undefin
   if (typeof toolResponse === 'string' && toolResponse.length > 0) {
     return toolResponse
   }
+
   if (typeof toolResponse !== 'object' || toolResponse === null) {
     return undefined
   }
+
   const record = toolResponse as Record<string, unknown>
   const directText = readFirstString(record, ['text_result_for_llm', 'textResultForLlm', 'text'])
+
   if (directText) {
     return directText
   }
+
   const content = record.content
+
   if (Array.isArray(content)) {
     for (const part of content) {
       if (typeof part === 'object' && part !== null) {
         const text = (part as Record<string, unknown>).text
+
         if (typeof text === 'string' && text.trim().length > 0) {
           return text
         }
       }
     }
   }
+
   return undefined
 }

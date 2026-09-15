@@ -12,6 +12,7 @@ describe('diffFromToolCall', () => {
       old_string: 'a\nb',
       new_string: 'a\nc'
     })
+
     expect(diff).toEqual([
       { kind: 'meta', text: '/app.ts' },
       { kind: 'del', text: 'a' },
@@ -69,13 +70,16 @@ describe('diffFromToolCall', () => {
       const header = '--- a\n+++ a\n'
       const diff = '@@ -1 +1 @@\n-old\n+new\n'
       const first = diff + 'x'.repeat(length - header.length - diff.length)
+
       const changes = [
         { path: 'a', diff: first },
         null,
         { path: 'ignored' },
         { path: 'b', kind: { move_path: 'c' }, diff: '@@ -1 +1 @@\n-b\n+c' }
       ]
+
       const text = `${header}${first}\n--- b\n+++ c\n@@ -1 +1 @@\n-b\n+c`
+
       for (const maxLines of [2, 120, 40_000]) {
         expect(diffFromToolCall('apply_patch', { changes }, maxLines)).toEqual(
           diffFromText(text, maxLines)
@@ -119,6 +123,7 @@ describe('diffFromText', () => {
     const diff = diffFromText(
       '@@ -1,4 +1,1 @@\n SELECT 1;\n--- legacy comment\n-SELECT 2;\n-SELECT 3;'
     )
+
     expect(diff).toEqual([
       { kind: 'meta', text: '@@ -1,4 +1,1 @@' },
       { kind: 'context', text: ' SELECT 1;' },
@@ -151,6 +156,7 @@ describe('diffFromText', () => {
         ' SELECT 2;'
       ].join('\n')
     )
+
     expect(diff?.filter((l) => l.kind === 'meta').map((l) => l.text)).toEqual([
       'diff --git a/a.sql b/a.sql',
       'index 9eff25c..33791bf 100644',
@@ -178,6 +184,7 @@ describe('diffFromText', () => {
         ' print(1)'
       ].join('\n')
     )
+
     expect(diff?.filter((l) => l.kind === 'del').map((l) => l.text)).toEqual([
       '-- legacy comment',
       '-- lua comment'

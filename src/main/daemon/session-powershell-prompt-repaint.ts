@@ -16,16 +16,20 @@ export function nudgePowerShellPromptRepaint(deps: PowerShellPromptRepaintDeps):
   if (process.platform !== 'win32') {
     return
   }
+
   // Why: before shell-ready, write() would queue this form feed behind the startup command and
   // fire it later when the gates below are stale; the nudge is cosmetic, so skip rather than defer.
   if (deps.isGatingWrites) {
     return
   }
+
   if (!isPowerShellProcess(deps.subprocess.getForegroundProcess())) {
     return
   }
+
   if (!deps.isCursorOnEmptyPromptLine()) {
     return
   }
+
   deps.subprocess.write('\x0c')
 }

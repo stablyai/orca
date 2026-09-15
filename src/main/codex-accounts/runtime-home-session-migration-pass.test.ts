@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -66,9 +67,11 @@ describe('host system default session migration pass preparation', () => {
 
   it('records the launch date and keeps the baseline instead of deleting it', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
+
     const store = createStore(
       createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -80,11 +83,14 @@ describe('host system default session migration pass preparation', () => {
 
   it('persists every date a scheduled pass reports so a force-quit stays bounded', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
+
     const store = createStore(
       createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
+
     const spannedDates: CodexSessionBackfillDate[] = [
       ['2026', '08', '05'],
       ['2026', '08', '06']
@@ -97,9 +103,11 @@ describe('host system default session migration pass preparation', () => {
 
   it('does not demand a full scan when the same history home is spelled differently', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
+
     const store = createStore(
       createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
@@ -115,9 +123,11 @@ describe('host system default session migration pass preparation', () => {
 
   it('carries a full-scan demand persisted by an earlier launch into this pass', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME, true)
+
     const store = createStore(
       createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -131,9 +141,11 @@ describe('host system default session migration pass preparation', () => {
 
   it('still demands a full scan when the history home really moves', async () => {
     writeBaselineMarker(CUSTOM_HISTORY_HOME)
+
     const store = createStore(
       createSettings({ codexSessionSourceHome: { host: CUSTOM_HISTORY_HOME, wsl: {} } })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(

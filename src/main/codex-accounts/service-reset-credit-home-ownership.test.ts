@@ -21,6 +21,7 @@ const fsFaults = vi.hoisted(() => {
   const held = new Set<string>()
   let heldReads = 0
   let mkdirCalls = 0
+
   return {
     hold(path: string): void {
       held.add(path)
@@ -46,6 +47,7 @@ const fsFaults = vi.hoisted(() => {
       if (typeof path !== 'string' || !held.has(path)) {
         return
       }
+
       heldReads += 1
       const error: NodeJS.ErrnoException = new Error(`EPERM: lstat '${path}'`)
       error.code = 'EPERM'
@@ -56,17 +58,21 @@ const fsFaults = vi.hoisted(() => {
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   const patched = {
     ...actual,
     lstatSync: (...args: Parameters<typeof actual.lstatSync>) => {
       fsFaults.consumeLstat(args[0])
+
       return actual.lstatSync(...args)
     },
     mkdirSync: (...args: Parameters<typeof actual.mkdirSync>) => {
       fsFaults.noteMkdir()
+
       return actual.mkdirSync(...args)
     }
   }
+
   return { ...patched, default: patched }
 })
 
@@ -78,6 +84,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -135,6 +142,7 @@ describe('Codex reset-credit managed-home ownership', () => {
     'rechecks ownership for a durable providerPending retry when the home is $homeState',
     async ({ expectedError, makeHomeUnsafe }) => {
       const fixture = await createFixture()
+
       const pendingLedger = {
         version: 1 as const,
         attempts: [
@@ -145,6 +153,7 @@ describe('Codex reset-credit managed-home ownership', () => {
           }
         ]
       }
+
       fixture.store.replaceCodexResetCreditAttemptLedgerAndFlush(pendingLedger)
       makeHomeUnsafe(fixture.managedHomePath)
 
@@ -206,6 +215,7 @@ describe('Codex reset-credit managed-home ownership', () => {
   async function createFixture() {
     fsFaults.reset()
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1', '', 'auth-before')
+
     const account = {
       id: 'account-1',
       email: 'user@example.com',
@@ -216,28 +226,35 @@ describe('Codex reset-credit managed-home ownership', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountId: account.id,
       activeCodexManagedAccountIdsByRuntime: { host: account.id, wsl: {} }
     })
+
     const store = createStore(settings)
     const limits = createResetCreditLimits()
     const state = createResetRateLimitState(limits)
     const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
+
     const rateLimits = {
       ...createRateLimits(),
       getState: vi.fn(() => state),
       consumeCodexRateLimitResetCredit: consume
     }
+
     const expectedScope = buildCodexResetCreditExpectedScope({
       target: state.codexTarget,
       account,
       limits
     })!
+
     const { CodexAccountService } = await import('./service')
+
     const createService = () =>
       new CodexAccountService(store as never, rateLimits as never, createRuntimeHome() as never)
+
     return {
       service: createService(),
       createService,

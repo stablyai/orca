@@ -53,14 +53,17 @@ export function buildFontFamily(fontFamily: string): string {
   const trimmed = fontFamily.trim()
   const parts = trimmed ? [`"${trimmed}"`] : []
   const lowerParts = parts.map((p) => p.toLowerCase())
+
   // Append each fallback unless already present (case-insensitive) to avoid duplicates.
   for (const fallback of FALLBACK_FONTS) {
     const lower = fallback.toLowerCase()
+
     if (!lowerParts.some((p) => p.includes(lower))) {
       // Generic keywords like "monospace" are unquoted; named fonts are quoted.
       parts.push(fallback === 'monospace' ? fallback : `"${fallback}"`)
     }
   }
+
   return parts.join(', ')
 }
 
@@ -79,30 +82,37 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
 
   if (node.classList.contains('pane')) {
     const leafId = node.dataset.leafId
+
     if (!leafId || !isTerminalLeafId(leafId)) {
       return null
     }
+
     return { type: 'leaf', leafId }
   }
 
   if (!node.classList.contains('pane-split')) {
     return null
   }
+
   const [first, second] = getLayoutChildNodes(node)
   const firstNode = serializePaneTree(first ?? null)
   const secondNode = serializePaneTree(second ?? null)
+
   if (!firstNode || !secondNode) {
     return null
   }
 
   // Capture the flex ratio so resized panes survive serialization round-trips.
   let ratio: number | undefined
+
   if (first && second) {
     const firstGrow = Number.parseFloat(first.style.flex) || 1
     const secondGrow = Number.parseFloat(second.style.flex) || 1
     const total = firstGrow + secondGrow
+
     if (total > 0) {
       const r = firstGrow / total
+
       // Only store if meaningfully different from 0.5 (default equal split)
       if (Math.abs(r - 0.5) > 0.005) {
         ratio = Math.round(r * 1000) / 1000
@@ -128,8 +138,10 @@ export function serializeTerminalLayout(
   const rootNode = serializePaneTree(
     root?.firstElementChild instanceof HTMLElement ? root.firstElementChild : null
   )
+
   const activeLeafId = activePaneId === null ? null : leafIdByPaneId?.get(activePaneId)
   const expandedLeafId = expandedPaneId === null ? null : leafIdByPaneId?.get(expandedPaneId)
+
   return {
     root: rootNode,
     activeLeafId: activeLeafId && isTerminalLeafId(activeLeafId) ? activeLeafId : null,
@@ -151,17 +163,23 @@ export function restoreScrollbackBuffers(
   if (!savedBuffers) {
     return
   }
+
   const ALT_SCREEN_ON = '\x1b[?1049h'
   const ALT_SCREEN_OFF = '\x1b[?1049l'
+
   for (const [oldLeafId, buffer] of Object.entries(savedBuffers)) {
     const newPaneId = restoredPaneByLeafId.get(oldLeafId)
+
     if (newPaneId == null || !buffer) {
       continue
     }
+
     const pane = manager.getPanes().find((p) => p.id === newPaneId)
+
     if (!pane) {
       continue
     }
+
     // Breadcrumb: writes into a disposed xterm are silent (no throw), the suspected source of startup zombie panes.
     if (isXtermInstanceDisposed(pane.terminal)) {
       recordRendererCrashBreadcrumb('terminal_restore_write_target_disposed', {
@@ -169,17 +187,21 @@ export function restoreScrollbackBuffers(
       })
       continue
     }
+
     try {
       const renderOptions = {
         shouldRefreshViewportSynchronously: () => !manager.hasWebglRenderer(pane.id)
       }
+
       let buf = buffer
       // If the buffer ends in alt-screen (agent TUI at shutdown), exit it so the terminal is usable.
       const lastOn = buf.lastIndexOf(ALT_SCREEN_ON)
       const lastOff = buf.lastIndexOf(ALT_SCREEN_OFF)
+
       if (lastOn > lastOff) {
         buf = buf.slice(0, lastOn)
       }
+
       if (buf.length > 0) {
         // replayIntoTerminal: buffer queries (DA1/DECRQM/CPR) would auto-reply into the new shell's stdin. See replay-guard.ts.
         replayIntoTerminal(
@@ -214,18 +236,23 @@ export function replayTerminalLayout(
 
   const normalized = normalizeTerminalLayoutSnapshot(snapshot)
   snapshot = normalized.snapshot
+
   const initialLeafId = snapshot.root
     ? getLeftmostLeafId(snapshot.root)
     : (resolveRootlessTerminalLayoutLeafId(snapshot) ?? undefined)
+
   const initialPane = manager.createInitialPane({ focus: focusInitialPane, leafId: initialLeafId })
+
   if (!snapshot?.root) {
     paneByLeafId.set(initialPane.leafId, initialPane.id)
+
     return paneByLeafId
   }
 
   const restoreNode = (node: TerminalPaneLayoutNode, paneId: number): void => {
     if (node.type === 'leaf') {
       paneByLeafId.set(node.leafId, paneId)
+
       return
     }
 
@@ -233,8 +260,10 @@ export function replayTerminalLayout(
       ratio: node.ratio,
       leafId: getLeftmostLeafId(node.second)
     })
+
     if (!createdPane) {
       restoreNode(node.first, paneId)
+
       return
     }
 
@@ -243,5 +272,6 @@ export function replayTerminalLayout(
   }
 
   restoreNode(snapshot.root, initialPane.id)
+
   return paneByLeafId
 }

@@ -14,7 +14,9 @@ import {
 // Spawn owns the startup contract — ingress version, env scrubbing, execution ownership, and the
 // reconnect races — so it reads as its own unit rather than as an overflow file.
 let mux: MockMultiplexer
+
 let provider: SshPtyProvider
+
 const scopedPty1 = 'ssh:conn-1@@pty-1'
 
 beforeEach(() => {
@@ -30,6 +32,7 @@ describe('spawn', () => {
     worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     agent: 'codex' as const
   }
+
   const surface = {
     worktreeId: 'worktree',
     tabId: 'tab',
@@ -44,6 +47,7 @@ describe('spawn', () => {
           agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
         }
       }
+
       if (method === 'pty.spawn') {
         return {
           id: 'pty-1',
@@ -60,6 +64,7 @@ describe('spawn', () => {
           }
         }
       }
+
       return undefined
     })
 
@@ -92,9 +97,11 @@ describe('spawn', () => {
           agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
         }
       }
+
       if (method === 'pty.spawn') {
         return { id: 'pty-unclaimed' }
       }
+
       return undefined
     })
 
@@ -130,6 +137,7 @@ describe('spawn', () => {
           agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
         }
       }
+
       if (method === 'pty.spawn') {
         return {
           id: 'pty-malformed',
@@ -146,6 +154,7 @@ describe('spawn', () => {
           }
         }
       }
+
       return undefined
     })
 
@@ -165,6 +174,7 @@ describe('spawn', () => {
           agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
         }
       }
+
       if (method === 'pty.spawn') {
         return {
           id: 'pty-canonical',
@@ -181,6 +191,7 @@ describe('spawn', () => {
           }
         }
       }
+
       return undefined
     })
 
@@ -197,6 +208,7 @@ describe('spawn', () => {
           agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION
         }
       }
+
       if (method === 'pty.spawn') {
         return {
           id: 'pty-malformed',
@@ -213,9 +225,11 @@ describe('spawn', () => {
           }
         }
       }
+
       if (method === 'pty.shutdown') {
         throw new Error('Timed out waiting for PTY process exit')
       }
+
       return undefined
     })
 
@@ -250,6 +264,7 @@ describe('spawn', () => {
 
   it('gates fresh startup intent with the relay ingress capability version', async () => {
     mux.request.mockResolvedValue({ id: 'pty-1' })
+
     const startupIngress = {
       colors: { foreground: '#eeeeee', background: '#111111' },
       deadlineMs: 5_000

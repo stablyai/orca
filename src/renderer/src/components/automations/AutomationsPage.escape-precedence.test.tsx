@@ -20,6 +20,7 @@ installAutomationsPageHarness()
 function pressEscape(target: EventTarget): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -28,6 +29,7 @@ async function renderWithCloseSpy(): Promise<ReturnType<typeof vi.fn>> {
   mocks.state.closeAutomationsPage = closeAutomationsPage
   await renderPage()
   await settleHostQueries()
+
   return closeAutomationsPage
 }
 

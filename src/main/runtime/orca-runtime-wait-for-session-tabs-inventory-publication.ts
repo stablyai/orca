@@ -7,21 +7,26 @@ export class OrcaRuntimeWithWaitForSessionTabsInventoryPublication extends OrcaR
     if (this.getAuthoritativeSessionTabsInventoryEpoch() !== null) {
       return Promise.resolve()
     }
+
     return new Promise<void>((resolve, reject) => {
       const cleanup = (): void => {
         this.sessionTabsInventoryWaiters.delete(onPublished)
         signal?.removeEventListener('abort', onAbort)
       }
+
       const onPublished = (): void => {
         cleanup()
         resolve()
       }
+
       const onAbort = (): void => {
         cleanup()
         reject(new Error('client_disconnected'))
       }
+
       this.sessionTabsInventoryWaiters.add(onPublished)
       signal?.addEventListener('abort', onAbort, { once: true })
+
       if (signal?.aborted) {
         onAbort()
       } else if (this.getAuthoritativeSessionTabsInventoryEpoch() !== null) {
@@ -41,7 +46,9 @@ export class OrcaRuntimeWithWaitForSessionTabsInventoryPublication extends OrcaR
     if (this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch) {
       return
     }
+
     this.sessionTabsInventoryPublicationEpoch = this.rendererGraphEpoch
+
     for (const publish of [...this.sessionTabsInventoryWaiters]) {
       publish()
     }

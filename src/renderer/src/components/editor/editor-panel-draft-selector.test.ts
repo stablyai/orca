@@ -28,16 +28,21 @@ describe('createEditorPanelDraftSelector', () => {
     for (let edit = 0; edit < 200; edit += 1) {
       const previousDrafts = editorDrafts
       editorDrafts = { ...editorDrafts, 'file-0': `edit-${edit}` }
+
       for (let panelIndex = 0; panelIndex < files.length; panelIndex += 1) {
         if (previousDrafts !== editorDrafts) {
           wholeMapInvalidations += 1
         }
+
         const nextSelection = selectors[panelIndex]({ editorDrafts })
+
         if (previousSelections[panelIndex] !== nextSelection) {
           scopedInvalidations += 1
+
           if (panelIndex !== 0) {
             unrelatedPanelInvalidations += 1
           }
+
           previousSelections[panelIndex] = nextSelection
         }
       }
@@ -50,10 +55,12 @@ describe('createEditorPanelDraftSelector', () => {
 
   it('includes preview and selected conflict-review drafts but excludes unrelated files', () => {
     const preview = makeFile('preview', { markdownPreviewSourceFileId: 'source' })
+
     const conflictReview = makeFile('review', {
       mode: 'conflict-review',
       conflictReview: { selectedFileId: 'selected' } as NonNullable<OpenFile['conflictReview']>
     })
+
     const editorDrafts = {
       preview: 'preview draft',
       source: '',
@@ -61,6 +68,7 @@ describe('createEditorPanelDraftSelector', () => {
       selected: 'selected draft',
       unrelated: 'other draft'
     }
+
     const selectPreviewDrafts = createEditorPanelDraftSelector(preview)
     const selectConflictDrafts = createEditorPanelDraftSelector(conflictReview)
     const selectNoDrafts = createEditorPanelDraftSelector(null)
@@ -89,7 +97,9 @@ describe('createEditorPanelDraftSelector', () => {
         ]
       }
     })
+
     const selectDrafts = createEditorPanelDraftSelector(conflictReview)
+
     const editorDrafts = {
       'C:\\repo\\src\\a.ts': 'draft a',
       'C:\\repo\\src\\b.ts': '',

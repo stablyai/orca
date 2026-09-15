@@ -3,6 +3,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
 export const AGENT_PROMPT_TEST_WORKTREE_PATH = '/tmp/worktree-a'
+
 export const AGENT_PROMPT_TEST_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 
 export async function createAgentPromptSubmissionRuntime(
@@ -16,13 +17,16 @@ export async function createAgentPromptSubmissionRuntime(
     write: (_ptyId, data) => {
       writes.push(data)
       onWrite(runtime, data, writes.length)
+
       return true
     },
     kill: () => true,
     getForegroundProcess: async () => null
   })
+
   const terminal = await runtime.createTerminal(`path:${AGENT_PROMPT_TEST_WORKTREE_PATH}`, {
     launchAgent
   })
+
   return { runtime, handle: terminal.handle, writes }
 }

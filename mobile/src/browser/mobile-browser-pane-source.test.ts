@@ -8,6 +8,7 @@ function sliceBetween(startPattern: string, endPattern: string): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 

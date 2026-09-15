@@ -39,20 +39,24 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const worktreesForRepo = useAppStore((state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES)
+
   const sshConnectionStatus = useAppStore((state) =>
     repo.connectionId ? state.sshConnectionStates.get(repo.connectionId)?.status : null
   )
+
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
   const [createConfirm, setCreateConfirm] = useState(false)
   const createConfirmResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
+
   const [inspectionUnavailableMessage, setInspectionUnavailableMessage] = useState<string | null>(
     null
   )
 
   const connectionId = repo.connectionId ?? undefined
   const isWindows = isWindowsUserAgent()
+
   const targetWorktree = useMemo(() => {
     if (activeWorktreeId && getRepoIdFromWorktreeId(activeWorktreeId) === repo.id) {
       return (
@@ -62,16 +66,19 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         }
       )
     }
+
     return (
       worktreesForRepo.find((worktree) => worktree.isMainWorktree) ??
       worktreesForRepo.find((worktree) => worktree.path === repo.path) ??
       worktreesForRepo[0] ?? { id: `${repo.id}::${repo.path}`, path: repo.path }
     )
   }, [activeWorktreeId, repo.id, repo.path, worktreesForRepo])
+
   const targetWorktreeId = targetWorktree.id
   const targetRootPath = targetWorktree.path
   const detectedCount = useMemo(() => configs.filter((config) => config.exists).length, [configs])
   const inspectionUnavailable = inspectionUnavailableMessage !== null
+
   const visibleConfigs = useMemo(
     () =>
       inspectionUnavailable
@@ -81,6 +88,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           ),
     [configs, inspectionUnavailable]
   )
+
   const missingConfigs = useMemo(
     () =>
       configs.filter(
@@ -88,6 +96,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       ),
     [configs]
   )
+
   const missingInspections = useMemo(
     () =>
       MCP_CONFIG_CANDIDATES.map((candidate): LoadedMcpConfigInspection => ({
@@ -96,6 +105,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       })),
     [targetRootPath]
   )
+
   const serverCount = useMemo(() => countServers(configs), [configs])
   const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
 
@@ -103,6 +113,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     if (!mountedRef.current) {
       return
     }
+
     setLoading(true)
     setInspectionUnavailableMessage(null)
 
@@ -112,6 +123,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           setConfigs(missingInspections)
           setInspectionUnavailableMessage('Connect this SSH repo to inspect or add MCP configs.')
         }
+
         return
       }
 
@@ -120,6 +132,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           setConfigs(missingInspections)
           setInspectionUnavailableMessage('This workspace path is not available from this host.')
         }
+
         return
       }
 
@@ -128,10 +141,12 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           setConfigs(missingInspections)
           setInspectionUnavailableMessage('This workspace path is not available on disk.')
         }
+
         return
       }
 
       const next = await loadMcpConfigInspections(targetRootPath, connectionId)
+
       if (mountedRef.current) {
         setConfigs(next)
       }
@@ -158,6 +173,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   useEffect(() => {
     void loadConfigs()
+
     return clearCreateConfirmResetTimer
   }, [clearCreateConfirmResetTimer, loadConfigs])
 
@@ -183,18 +199,22 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       setCreateConfirm(true)
       createConfirmResetTimerRef.current = window.setTimeout(() => {
         createConfirmResetTimerRef.current = null
+
         if (mountedRef.current) {
           setCreateConfirm(false)
         }
       }, 3000)
+
       return
     }
 
     const target = joinPath(targetRootPath, '.mcp.json')
+
     try {
       const sshExpectation = connectionId
         ? captureDirectSshMutationExpectation(useAppStore.getState(), connectionId)
         : {}
+
       // Why: v1 only creates the root workspace config so we do not need to
       // guess per-agent directory layouts or mutate agent-specific files.
       await window.api.fs.writeFile({
@@ -204,9 +224,11 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         ...sshExpectation
       })
       clearCreateConfirmResetTimer()
+
       if (mountedRef.current) {
         setCreateConfirm(false)
       }
+
       await loadConfigs()
       setActiveWorktree(targetWorktreeId)
       const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)

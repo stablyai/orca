@@ -17,6 +17,7 @@ export function getRenderRowOptionId(
   if (!row) {
     return undefined
   }
+
   if (row.type === 'lineage-group') {
     // Hostless legacy state cannot disambiguate, but an aria pointer should still target a row.
     const targetRow = worktreeId
@@ -27,14 +28,18 @@ export function getRenderRowOptionId(
               getWorktreeExecutionHostId(item.worktree, item.repo) === executionHostId)
         )
       : null
+
     return getWorktreeOptionId((targetRow ?? row.rows[0])?.rowKey ?? row.key)
   }
+
   if (row.type === 'item') {
     return getWorktreeOptionId(row.rowKey)
   }
+
   if (row.type === 'folder-workspace') {
     return getWorktreeOptionId(folderWorkspaceKey(row.folderWorkspace.id))
   }
+
   return undefined
 }
 
@@ -49,10 +54,13 @@ export function getActiveDescendantOptionId(args: {
   if (args.activeWorktreeId === null) {
     return undefined
   }
+
   if (args.primaryActiveRowKey) {
     const primaryOptionId = getWorktreeOptionId(args.primaryActiveRowKey)
+
     for (const item of args.virtualItems) {
       const row = args.renderRows[item.index]
+
       if (
         row &&
         getRenderRowOptionId(
@@ -65,9 +73,12 @@ export function getActiveDescendantOptionId(args: {
       }
     }
   }
+
   let fallbackOptionId: string | undefined
+
   for (const item of args.virtualItems) {
     const row = args.renderRows[item.index]
+
     if (
       row &&
       renderRowContainsWorktree(
@@ -81,14 +92,17 @@ export function getActiveDescendantOptionId(args: {
         args.activeWorktreeId,
         args.activeWorkspaceExecutionHostId ?? undefined
       )
+
       if (!optionId) {
         continue
       }
+
       const itemRow = getRenderRowWorktreeItem(
         row,
         args.activeWorktreeId,
         args.activeWorkspaceExecutionHostId ?? undefined
       )
+
       if (
         args.pinnedDisplayPolicy === 'duplicate-in-groups' &&
         itemRow &&
@@ -96,8 +110,10 @@ export function getActiveDescendantOptionId(args: {
       ) {
         return optionId
       }
+
       fallbackOptionId ??= optionId
     }
   }
+
   return fallbackOptionId
 }

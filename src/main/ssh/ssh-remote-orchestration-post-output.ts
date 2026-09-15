@@ -21,9 +21,11 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
   }
 ): Promise<void> {
   const inheritedEvidence = readOrchestrationCompatibilityEvidence(args.env)
+
   const orchestrationCompatibilityEvidence = args.runtimeAuthority
     ? { ...inheritedEvidence, host: args.runtimeAuthority }
     : inheritedEvidence
+
   const params =
     args.postOutput.kind === 'legacy_check_ack'
       ? {
@@ -40,6 +42,7 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
             answerMessageId: args.postOutput.answerMessageId
           })
         }
+
   const response = await new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch({
     id: `remote-cli-post-output-${randomUUID()}`,
     authToken: 'remote-cli',
@@ -49,6 +52,7 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
     compatibilityInvocationId: randomUUID(),
     orchestrationCompatibilityEvidence
   })
+
   if (!response.ok) {
     throw new Error(response.error.message)
   }
@@ -58,6 +62,7 @@ export function parseRemoteOrcaCliPostOutput(value: unknown): RemoteOrcaCliPostO
   if (!isRecord(value) || typeof value.kind !== 'string' || typeof value.terminal !== 'string') {
     throw invalidPostOutput()
   }
+
   if (
     value.kind === 'legacy_check_ack' &&
     Array.isArray(value.messageIds) &&
@@ -72,6 +77,7 @@ export function parseRemoteOrcaCliPostOutput(value: unknown): RemoteOrcaCliPostO
       ...(value.types === undefined ? {} : { types: value.types })
     }
   }
+
   if (
     value.kind === 'legacy_question_ack' &&
     typeof value.questionId === 'string' &&
@@ -84,6 +90,7 @@ export function parseRemoteOrcaCliPostOutput(value: unknown): RemoteOrcaCliPostO
       answerMessageId: value.answerMessageId
     }
   }
+
   throw invalidPostOutput()
 }
 
@@ -95,11 +102,15 @@ export function getRemoteCliPostOutput(
   if (!response.ok || !isRecord(response.result)) {
     return undefined
   }
+
   const compatibility = response.result.legacyCompatibility
+
   if (!isRecord(compatibility)) {
     return undefined
   }
+
   const command = parsed.commandPath.join(' ')
+
   if (
     command === 'orchestration check' &&
     Array.isArray(compatibility.ackMessageIds) &&
@@ -110,6 +121,7 @@ export function getRemoteCliPostOutput(
       ?.split(',')
       .map((type) => type.trim())
       .filter(Boolean)
+
     return {
       kind: 'legacy_check_ack',
       terminal: resolveRemoteCliHandle(parsed.flags, env, 'terminal'),
@@ -117,7 +129,9 @@ export function getRemoteCliPostOutput(
       ...(types ? { types } : {})
     }
   }
+
   const acknowledgement = compatibility.answerAcknowledgement
+
   if (
     command === 'orchestration ask' &&
     response.result.answer !== null &&
@@ -132,6 +146,7 @@ export function getRemoteCliPostOutput(
       answerMessageId: acknowledgement.answerMessageId
     }
   }
+
   return undefined
 }
 

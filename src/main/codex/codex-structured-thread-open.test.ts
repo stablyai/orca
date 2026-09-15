@@ -18,6 +18,7 @@ describe('openCodexThread', () => {
       thread: { id: 'thread-fast' },
       serviceTier: 'priority-live'
     }))
+
     await expect(
       openCodexThread(connectionFor(priority), { cwd: '/workspace', resumeThreadId: null }, 2_000)
     ).resolves.toMatchObject({ threadId: 'thread-fast', serviceTier: 'priority-live' })
@@ -68,8 +69,10 @@ describe('openCodexThread', () => {
           'codex app-server thread/resume failed: unknown field `excludeTurns`'
         )
       }
+
       return { thread: { id: 'thread-1', turns: [{ id: 'turn-1', items: [] }] } }
     })
+
     const connection = connectionFor(request)
 
     const first = await openCodexThread(
@@ -77,6 +80,7 @@ describe('openCodexThread', () => {
       { cwd: '/workspace', resumeThreadId: 'thread-1' },
       2_000
     )
+
     const second = await openCodexThread(
       connection,
       { cwd: '/workspace', resumeThreadId: 'thread-1' },
@@ -98,9 +102,11 @@ describe('openCodexThread', () => {
       -32602,
       'codex app-server thread/resume failed: invalid params'
     )
+
     const invalidRequest = vi.fn(async () => {
       throw invalid
     })
+
     await expect(
       openCodexThread(
         connectionFor(invalidRequest),
@@ -111,9 +117,11 @@ describe('openCodexThread', () => {
     expect(invalidRequest).toHaveBeenCalledOnce()
 
     const oversized = new CodexAppServerFrameSizeError('thread/resume', 16_777_217, 16_777_216)
+
     const oversizedRequest = vi.fn(async () => {
       throw oversized
     })
+
     await expect(
       openCodexThread(
         connectionFor(oversizedRequest),
@@ -133,6 +141,7 @@ describe('openCodexThread', () => {
           'codex app-server thread/resume failed: unsupported excludeTurns parameter'
         )
       }
+
       return {
         thread: {
           id: 'thread-1',

@@ -26,6 +26,7 @@ async function packageVersion(root: string, versionId: string, body: string) {
     join(source, 'SKILL.md'),
     `---\nname: recovery-skill\ndescription: Recovery\n---\n\n${body}\n`
   )
+
   return createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, `${versionId}.tar.gz`),
@@ -46,6 +47,7 @@ async function interruptedUpdate(phase: SkillInstallJournalV1['phase']): Promise
   const second = await packageVersion(root, 'version_2', '# Second')
   const destinationRoot = join(root, 'skills')
   const stateDirectory = join(root, 'state')
+
   const input = {
     operationId: 'install-first',
     archivePath: first.archivePath,
@@ -56,12 +58,15 @@ async function interruptedUpdate(phase: SkillInstallJournalV1['phase']): Promise
     hostIdentity: 'test',
     expectedPackageDigest: first.manifest.packageDigest
   }
+
   await installLocalSkillPackage(input)
   const canonicalPath = join(destinationRoot, 'recovery-skill')
   const previous = await readSkillInstallReceipt(stateDirectory, canonicalPath)
+
   if (!previous) {
     throw new Error('fixture receipt missing')
   }
+
   const extractionPath = join(destinationRoot, '.orca-skill-extract-recovery')
   const stagingPath = join(destinationRoot, '.recovery-skill.orca-staging-recovery')
   const backupPath = join(destinationRoot, '.recovery-skill.orca-backup-recovery')
@@ -73,6 +78,7 @@ async function interruptedUpdate(phase: SkillInstallJournalV1['phase']): Promise
   await rename(join(extractionPath, 'skill'), stagingPath)
   await rename(canonicalPath, backupPath)
   await rename(stagingPath, canonicalPath)
+
   const receipt: SkillInstallReceiptV1 = {
     ...previous,
     versionId: second.manifest.versionId,
@@ -85,6 +91,7 @@ async function interruptedUpdate(phase: SkillInstallJournalV1['phase']): Promise
       executable: file.executable
     }))
   }
+
   const journal: SkillInstallJournalV1 = {
     schemaVersion: 1,
     operation: 'install',
@@ -98,7 +105,9 @@ async function interruptedUpdate(phase: SkillInstallJournalV1['phase']): Promise
     backupFileModes: first.manifest.files,
     receipt
   }
+
   await writeSkillStateFile(skillInstallJournalPath(stateDirectory, canonicalPath), journal)
+
   return { root, canonicalPath, stateDirectory, journal }
 }
 

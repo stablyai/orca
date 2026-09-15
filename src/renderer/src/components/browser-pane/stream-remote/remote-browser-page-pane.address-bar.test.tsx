@@ -138,6 +138,7 @@ function flushFrames(cycles = 8): void {
   for (let index = 0; index < cycles; index += 1) {
     const pending = frameCallbacks
     frameCallbacks = []
+
     for (const callback of pending) {
       callback(0)
     }
@@ -180,6 +181,7 @@ function paneElement(isActive = true): React.JSX.Element {
 function renderPane(isActive = true): ReturnType<typeof render> {
   const view = render(paneElement(isActive))
   act(() => flushFrames())
+
   return view
 }
 
@@ -194,6 +196,7 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     mocks.addressBarValue.current = 'about:blank'
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', () => {})

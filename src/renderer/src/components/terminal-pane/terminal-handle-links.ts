@@ -22,6 +22,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
+
 export type { ParsedOrchestrationTaskLink } from './terminal-orchestration-task-links'
 
 export type ParsedTerminalHandleLink = {
@@ -49,7 +50,9 @@ type TerminalHandleLinkProviderDeps = {
 }
 
 const TERMINAL_HANDLE_PREFIX = 'term_'
+
 const MAX_TERMINAL_HANDLE_BODY_LENGTH = 128
+
 const TERMINAL_HANDLE_BOUNDARY_CHAR = /[A-Za-z0-9_-]/
 
 export function extractTerminalHandleLinks(lineText: string): ParsedTerminalHandleLink[] {
@@ -70,8 +73,10 @@ function extractPrefixedTokenLinks(
 
   const links: { token: string; startIndex: number; endIndex: number }[] = []
   let searchStart = 0
+
   while (searchStart < lineText.length) {
     const startIndex = lineText.indexOf(prefix, searchStart)
+
     if (startIndex === -1) {
       break
     }
@@ -80,27 +85,33 @@ function extractPrefixedTokenLinks(
     const tokenEnd = findPrefixedTokenEnd(lineText, bodyStart)
     searchStart = Math.max(tokenEnd, bodyStart + 1)
     const bodyLength = tokenEnd - bodyStart
+
     if (bodyLength === 0 || bodyLength > MAX_TERMINAL_HANDLE_BODY_LENGTH) {
       continue
     }
 
     const token = lineText.slice(startIndex, tokenEnd)
+
     if (
       TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[startIndex - 1] ?? '') ||
       TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[tokenEnd] ?? '')
     ) {
       continue
     }
+
     links.push({ token, startIndex, endIndex: tokenEnd })
   }
+
   return links
 }
 
 function findPrefixedTokenEnd(lineText: string, startIndex: number): number {
   let index = startIndex
+
   while (index < lineText.length && TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[index])) {
     index += 1
   }
+
   return index
 }
 
@@ -112,6 +123,7 @@ export function findTerminalHandleTarget(
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       const layout = state.terminalLayoutsByTabId[tab.id]
+
       for (const [leafId, ptyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
         if (ptyIdMatchesTerminalHandle(ptyId, handle, runtimeEnvironmentId)) {
           return { worktreeId, tabId: tab.id, leafId }
@@ -121,6 +133,7 @@ export function findTerminalHandleTarget(
       const tabPtyIds = [tab.ptyId, ...(state.ptyIdsByTabId[tab.id] ?? [])].filter(
         (ptyId): ptyId is string => Boolean(ptyId)
       )
+
       if (
         tabPtyIds.some((ptyId) => ptyIdMatchesTerminalHandle(ptyId, handle, runtimeEnvironmentId))
       ) {
@@ -128,6 +141,7 @@ export function findTerminalHandleTarget(
       }
     }
   }
+
   return null
 }
 
@@ -137,6 +151,7 @@ export function focusRendererTerminalHandle(
 ): boolean {
   const store = useAppStore.getState()
   const target = findTerminalHandleTarget(handle, store, runtimeEnvironmentId)
+
   if (!target) {
     return false
   }
@@ -146,12 +161,14 @@ export function focusRendererTerminalHandle(
   store.setActiveView('terminal')
   store.setActiveTabType('terminal')
   store.revealWorktreeInSidebar(target.worktreeId)
+
   if (target.leafId) {
     activateTabAndFocusPane(target.tabId, target.leafId)
   } else {
     store.setActiveTab(target.tabId)
     focusTerminalTabSurface(target.tabId)
   }
+
   return true
 }
 
@@ -161,17 +178,22 @@ export function createTerminalHandleLinkProvider(
   return {
     provideLinks: (bufferLineNumber, callback) => {
       const terminal = deps.getTerminal()
+
       if (!terminal) {
         callback(undefined)
+
         return
       }
+
       const logicalLine = buildWrappedLogicalLine(terminal.buffer.active, bufferLineNumber)
+
       if (
         !logicalLine ||
         (!logicalLine.text.includes(TERMINAL_HANDLE_PREFIX) &&
           !logicalLine.text.includes(ORCHESTRATION_TASK_PREFIX))
       ) {
         callback(undefined)
+
         return
       }
 
@@ -181,29 +203,36 @@ export function createTerminalHandleLinkProvider(
         startIndex: parsed.startIndex,
         endIndex: parsed.endIndex
       }))
+
       const taskLinks = extractOrchestrationTaskLinks(logicalLine.text).map((parsed) => ({
         kind: 'task' as const,
         text: parsed.taskId,
         startIndex: parsed.startIndex,
         endIndex: parsed.endIndex
       }))
+
       const links = [...terminalLinks, ...taskLinks]
         .sort((a, b) => a.startIndex - b.startIndex)
         .map((parsed): ILink | null => {
           const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+
           if (!range) {
             return null
           }
+
           return {
             range,
             text: parsed.text,
             activate: (event) => {
               const directActivation = isTerminalLinkDirectActivation(event)
               const actionActivation = isTerminalLinkActionActivation(event)
+
               if (!directActivation && !actionActivation) {
                 return
               }
+
               let handled = false
+
               if (directActivation) {
                 event?.preventDefault()
                 void activateParsedLink(parsed, deps.getRuntimeEnvironmentId())
@@ -227,6 +256,7 @@ export function createTerminalHandleLinkProvider(
                   }
                 })
               }
+
               if (handled) {
                 terminal.clearSelection()
               }
@@ -235,6 +265,7 @@ export function createTerminalHandleLinkProvider(
               const showActions = deps.getLinkActionContext
                 ? deps.getLinkActionContext() !== null
                 : true
+
               deps.linkTooltip.textContent = `${parsed.text} (${getTerminalHandleFocusHint(showActions)})`
               deps.linkTooltip.style.display = ''
             },
@@ -259,8 +290,10 @@ async function activateParsedLink(
       if (!focusRendererTerminalHandle(parsed.text, runtimeEnvironmentId)) {
         await focusRuntimeTerminalHandle(parsed.text, runtimeEnvironmentId)
       }
+
       return
     }
+
     // Why: a task can be retried onto a new dispatch; runtime DB is the
     // authority for the latest terminal assigned to a stable task ID.
     await focusRuntimeOrchestrationTask(parsed.text, runtimeEnvironmentId, (handle) =>
@@ -277,22 +310,29 @@ function ptyIdMatchesTerminalHandle(
   runtimeEnvironmentId?: string | null
 ): boolean {
   const targetEnvironmentId = runtimeEnvironmentId?.trim() || null
+
   if (ptyId === handle) {
     return targetEnvironmentId === null
   }
+
   const remotePty = parseRemoteRuntimePtyId(ptyId)
+
   if (!remotePty || remotePty.handle !== handle) {
     return false
   }
+
   const ptyEnvironmentId = remotePty.environmentId?.trim() || null
+
   if (runtimeEnvironmentId === undefined) {
     return true
   }
+
   return ptyEnvironmentId === targetEnvironmentId
 }
 
 function getTerminalHandleFocusHint(showActions: boolean): string {
   const prefix = showActions ? 'Click for actions or ' : ''
+
   return navigator.userAgent.includes('Mac')
     ? `${prefix}⌘+click to switch terminal`
     : `${prefix}Ctrl+click to switch terminal`
@@ -303,9 +343,11 @@ async function focusRuntimeTerminalHandle(
   runtimeEnvironmentId: string | null
 ): Promise<void> {
   const environmentId = runtimeEnvironmentId?.trim()
+
   const target = environmentId
     ? ({ kind: 'environment', environmentId } as const)
     : ({ kind: 'local' } as const)
+
   // Why: main owns the `term_*` mapping. Defer to terminal.focus on click
   // instead of mirroring that state in renderer hover parsing.
   await callRuntimeRpc(target, 'terminal.focus', { terminal: handle, navigation: 'host' })

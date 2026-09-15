@@ -35,14 +35,17 @@ export async function getIssue(
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue | null> {
   const entries = getClients(workspaceId)
+
   if (entries.length === 0) {
     return null
   }
 
   for (const entry of entries) {
     await acquire()
+
     try {
       const issue = await entry.client.issue(id)
+
       return await mapIssueForWorkspace(entry, issue, {
         includeChildren: true,
         includeProject: true
@@ -50,6 +53,7 @@ export async function getIssue(
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)
+
         if (shouldThrowAuthError(workspaceId)) {
           throw error
         }
@@ -60,6 +64,7 @@ export async function getIssue(
       release()
     }
   }
+
   return null
 }
 
@@ -68,6 +73,7 @@ export async function getIssueByUuidForAgent(
   workspaceId?: string | null
 ): Promise<LinearIssueWriteRecord | null> {
   const entry = getClients(workspaceId)[0]
+
   if (!entry) {
     return null
   }
@@ -77,7 +83,9 @@ export async function getIssueByUuidForAgent(
       LinearIssueByUuidResponse,
       LinearRawVariables
     >(ISSUE_BY_UUID_QUERY, { id })
+
     const issue = result.data?.issue ?? null
+
     return issue ? mapRawIssueWriteRecord(issue) : null
   })
 }
@@ -87,6 +95,7 @@ export async function getCommentByUuidForAgent(
   workspaceId?: string | null
 ): Promise<LinearCommentWriteRecord | null> {
   const entry = getClients(workspaceId)[0]
+
   if (!entry) {
     return null
   }
@@ -96,7 +105,9 @@ export async function getCommentByUuidForAgent(
       LinearCommentByUuidResponse,
       LinearRawVariables
     >(COMMENT_BY_UUID_QUERY, { id })
+
     const comment = result.data?.comment
+
     return comment ? mapRawCommentWriteRecord(comment) : null
   })
 }
@@ -106,6 +117,7 @@ export async function getAttachmentByUuidForAgent(
   workspaceId?: string | null
 ): Promise<LinearAttachmentWriteRecord | null> {
   const entry = getClients(workspaceId)[0]
+
   if (!entry) {
     return null
   }
@@ -115,7 +127,9 @@ export async function getAttachmentByUuidForAgent(
       LinearAttachmentByUuidResponse,
       LinearRawVariables
     >(ATTACHMENT_BY_UUID_QUERY, { id })
+
     const attachment = result.data?.attachment
+
     return attachment ? mapRawAttachmentWriteRecord(attachment) : null
   })
 }
@@ -126,9 +140,11 @@ export async function getIssueCommentThreadRoot(
   workspaceId?: string | null
 ): Promise<{ id: string; parentId: string | null } | null> {
   const comment = await getCommentByUuidForAgent(commentId, workspaceId)
+
   if (!comment || comment.issue.id !== issueId) {
     return null
   }
+
   return { id: comment.threadRootId ?? comment.id, parentId: comment.parentId }
 }
 
@@ -138,6 +154,7 @@ export async function searchIssues(
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
   const entries = getClients(workspaceId)
+
   if (entries.length === 0) {
     return []
   }
@@ -145,33 +162,40 @@ export async function searchIssues(
   const results = await Promise.all(
     entries.map(async (entry) => {
       await acquire()
+
       try {
         const result = await entry.client.client.rawRequest<
           LinearIssueConnectionResponse,
           LinearRawVariables
         >(SEARCH_ISSUES_QUERY, { term: query, first: limit })
+
         const nodes = result.data?.searchIssues?.nodes ?? []
+
         return nodes.map((issue) => mapRawIssueForWorkspace(entry, issue))
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
+
           if (shouldThrowAuthError(workspaceId)) {
             throw error
           }
         } else {
           console.warn('[linear] searchIssues failed:', error)
         }
+
         return []
       } finally {
         release()
       }
     })
   )
+
   // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
   // updatedAt would discard relevance order for single-workspace results,
   // diverging from Linear's web UI and pre-PR behavior.
   if (entries.length === 1) {
     return results.flat().slice(0, limit)
   }
+
   return sortAndLimitIssues(results.flat(), limit)
 }

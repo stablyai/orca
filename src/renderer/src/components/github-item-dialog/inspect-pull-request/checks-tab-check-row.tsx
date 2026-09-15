@@ -24,6 +24,7 @@ export function renderCheckRow({
   requestCheckDetails: (check: PRCheckDetail, key: string) => void
 }): React.JSX.Element {
   const key = getCheckDetailsKey(check)
+
   return (
     <ChecksTabCheckRow
       key={key}
@@ -56,6 +57,7 @@ export function ChecksTabCheckRow({
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
   const statusLabel = getCheckStatusLabel(check)
+
   return (
     <div className="min-w-0">
       <button

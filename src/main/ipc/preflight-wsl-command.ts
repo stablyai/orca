@@ -20,6 +20,7 @@ export async function runPreflightCommandInWsl(
     script: `${buildPosixFallbackPathPrelude()}\n${command}`,
     timeoutMs
   })
+
   // runWslProcess resolves on a timeout and on a non-zero exit; the caller's
   // try/catch (isCommandAvailable/isCommandOnPath, and isGhAuthenticated's
   // stdout/stderr marker fallback) expects a rejection carrying stdout/stderr,
@@ -32,5 +33,6 @@ export async function runPreflightCommandInWsl(
       timedOut: result.timedOut
     })
   }
+
   return { stdout: result.stdout, stderr: result.stderr }
 }

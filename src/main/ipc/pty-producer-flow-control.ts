@@ -6,7 +6,9 @@
 // pause/resume once per flush slice.
 
 export const PRODUCER_FLOW_HIGH_WATERMARK_CHARS = 256 * 1024
+
 export const PRODUCER_FLOW_LOW_WATERMARK_CHARS = 32 * 1024
+
 // Why: the daemon auto-resumes a pause after its 5s lost-resume failsafe. If
 // pending is still above HIGH after that window, the pause must be re-asserted
 // or a sustained flood would run unthrottled after the first failsafe fires.
@@ -43,18 +45,23 @@ export class PtyProducerFlowController {
    *  resume exactly once when pending drains below LOW. */
   update(id: string, pendingChars: number): void {
     const pausedAt = this.pausedAtByPty.get(id)
+
     if (pausedAt === undefined) {
       if (pendingChars > this.highWatermarkChars) {
         this.pausedAtByPty.set(id, Date.now())
         this.safePause(id)
       }
+
       return
     }
+
     if (pendingChars < this.lowWatermarkChars) {
       this.pausedAtByPty.delete(id)
       this.safeResume(id)
+
       return
     }
+
     if (
       pendingChars > this.highWatermarkChars &&
       Date.now() - pausedAt >= this.reassertIntervalMs

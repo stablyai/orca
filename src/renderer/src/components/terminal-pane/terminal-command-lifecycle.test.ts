@@ -54,9 +54,11 @@ describe('createTerminalCommandLifecycle', () => {
   it('registers an xterm OSC consumer without emitting lifecycle events', () => {
     const onCommandFinished = vi.fn()
     const dispose = vi.fn()
+
     const registerOscHandler = vi.fn((_code: number, _handler: (payload: string) => boolean) => ({
       dispose
     }))
+
     const lifecycle = createTerminalCommandLifecycle({ onCommandFinished })
 
     const disposable = lifecycle.attachXtermConsumer({

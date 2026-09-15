@@ -63,17 +63,21 @@ export function readProposedPaneFitDimensions(
   const ptyId = pane.container?.dataset?.ptyId
   const override = ptyId ? getFitOverrideForPty(ptyId) : null
   const measurable = canMeasurePaneForFit(pane)
+
   if (!measurable && !override) {
     return null
   }
+
   // Re-check after the metric flush: larger cells can push a narrow pane below
   // the fit floor even though it was measurable with the old metrics.
   if (measurable && flushDeferredPaneMetricOptions(pane) && !canMeasurePaneForFit(pane)) {
     return null
   }
+
   if (override) {
     return { cols: override.cols, rows: override.rows }
   }
+
   return getProposedPaneDimensions(pane)
 }
 
@@ -88,17 +92,21 @@ function performSafeFit(pane: ManagedPane): boolean {
   if (deferTerminalGeometryMutationDuringRebuild(pane.terminal, 'safe-fit', () => safeFit(pane))) {
     return false
   }
+
   if (!canMeasurePaneForFit(pane)) {
     return false
   }
+
   // Why here: metric options deferred while the pane was unmeasurable must land
   // before this fit reads dimensions, then the fit floor must be checked again.
   if (flushDeferredPaneMetricOptions(pane) && !canMeasurePaneForFit(pane)) {
     return false
   }
+
   let scrollIntent = null as ReturnType<typeof captureTerminalStructuralScrollIntent>
   let pinnedScrollState: ScrollState | null = null
   let shouldRestoreScroll = false
+
   const captureScrollForFit = (): void => {
     scrollIntent = captureTerminalStructuralScrollIntent(pane.terminal)
     // Why: fit can reflow and renumber every buffer row; a marker tracks the
@@ -107,32 +115,41 @@ function performSafeFit(pane: ManagedPane): boolean {
       scrollIntent?.kind === 'pinnedViewport' ? captureScrollState(pane.terminal) : null
     shouldRestoreScroll = true
   }
+
   try {
     // Why: a mobile-owned PTY must stay at its phone grid on passive desktop panes.
     const ptyId = pane.container?.dataset?.ptyId
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
+
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
         if (canPreserveScrollIntentForFit(pane)) {
           captureScrollForFit()
         }
+
         pane.terminal.resize(override.cols, override.rows)
       } else {
         resumePendingFitScrollRestoreAfterFit(pane.terminal)
       }
+
       return true
     }
 
     const dims = getProposedPaneDimensions(pane)
+
     if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
       // Why: divider drags often stay within one cell; avoid needless clear/refresh churn.
       resumePendingFitScrollRestoreAfterFit(pane.terminal)
+
       return true
     }
+
     if (canPreserveScrollIntentForFit(pane)) {
       captureScrollForFit()
     }
+
     pane.fitAddon.fit()
+
     return true
   } catch {
     // Container may not have dimensions yet.
@@ -172,6 +189,7 @@ function performSafeFit(pane: ManagedPane): boolean {
 
 export function safeFit(pane: ManagedPane): boolean {
   const completed = performSafeFit(pane)
+
   if (completed) {
     // A completed fit proves measurability — the reattach moment for a DOM-stuck pane.
     notifyPaneFitSucceeded(pane)
@@ -182,6 +200,7 @@ export function safeFit(pane: ManagedPane): boolean {
     flushPendingSafeFitContinuations(pane)
     clearPaneFitContinuationRetry(pane)
   }
+
   return completed
 }
 
@@ -189,9 +208,11 @@ function armSafeFitContinuationRetry(pane: ManagedPane): void {
   armPaneFitContinuationRetry(pane, {
     retry: () => {
       pruneStaleSafeFitContinuations(pane)
+
       if (!hasPendingSafeFitContinuations(pane)) {
         return true
       }
+
       return safeFit(pane)
     },
     onExhausted: () => {
@@ -215,23 +236,30 @@ export function safeFitAndThen(
   } = {}
 ): SafeFitContinuationHandle {
   let resolveCompletion = (_completed: boolean): void => {}
+
   const completion = new Promise<boolean>((resolve) => {
     resolveCompletion = resolve
   })
+
   const pending: PendingSafeFitContinuation = {
     continuation,
     shouldContinue: options.shouldContinue ?? (() => true),
     resolve: resolveCompletion,
     deferIfHidden: options.deferIfHidden === true
   }
+
   registerPendingSafeFitContinuation(pane, operationKey, pending)
+
   const cancel = (): void => {
     cancelPendingSafeFitContinuation(pane, operationKey, pending)
   }
+
   if (!pending.shouldContinue()) {
     cancel()
+
     return { completion, cancel }
   }
+
   if (
     deferTerminalGeometryMutationDuringRebuild(
       pane.terminal,
@@ -253,6 +281,7 @@ export function safeFitAndThen(
   ) {
     return { completion, cancel }
   }
+
   if (!safeFit(pane) && options.retryIfUnmeasurable) {
     if (isManagedPaneDisplayNone(pane)) {
       releaseSafeFitContinuationUntilMeasurable(pane, operationKey, pending)
@@ -260,5 +289,6 @@ export function safeFitAndThen(
       armSafeFitContinuationRetry(pane)
     }
   }
+
   return { completion, cancel }
 }

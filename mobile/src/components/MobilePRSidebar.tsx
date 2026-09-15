@@ -64,6 +64,7 @@ export function MobilePRSidebar({
   // Prefer the stable PRInfo.prRepo reference — cloning owner/repo each render
   // reallocates and thrash-updates the mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
+
   const actions = useMobilePrActions({
     client,
     connState,
@@ -73,6 +74,7 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+
   const commentActions = useMobilePrCommentActions({
     client,
     connState,
@@ -81,6 +83,7 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+
   const titleAction = useMobilePrTitleAction({
     client,
     connState,
@@ -89,7 +92,9 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+
   const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+
   // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
   // instead of staying a stale one-shot snapshot for the whole session.
   const botAuthorOverrides = usePRBotAuthorOverrides(
@@ -170,8 +175,10 @@ function PrSidebarContent({
       </View>
     )
   }
+
   if (branch === 'error') {
     const message = state.kind === 'error' ? state.message : 'Something went wrong.'
+
     return (
       <View style={styles.stateArea}>
         <Text style={styles.stateText}>{message}</Text>
@@ -187,6 +194,7 @@ function PrSidebarContent({
       </View>
     )
   }
+
   if (branch === 'blocked' || actions.blocked) {
     // Permanent failure (R9): explanatory, no retry-encouragement styling. A
     // mutation-time block (actions.blocked) routes here even from a ready state.
@@ -195,12 +203,14 @@ function PrSidebarContent({
       (state.kind === 'blocked'
         ? state.message
         : 'Not permitted — your GitHub account is not connected.')
+
     return (
       <View style={styles.stateArea}>
         <Text style={styles.blockedText}>{message}</Text>
       </View>
     )
   }
+
   if (branch === 'none') {
     // GitHub repo, but the current branch has no open PR — offer to create one
     // (desktop parity) rather than showing a dead-end message.
@@ -215,6 +225,7 @@ function PrSidebarContent({
       />
     )
   }
+
   if (branch === 'ready' && state.kind === 'ready') {
     return (
       <PrSidebarSections
@@ -231,6 +242,7 @@ function PrSidebarContent({
       />
     )
   }
+
   return null
 }
 
@@ -258,6 +270,7 @@ function PrSidebarSections({
   botAuthorOverrides: ReadonlySet<string>
 }) {
   const pr = data.pr
+
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
   // building lazily inside launch() keeps a stale capture from leaking in.
   const checksTriage = {
@@ -273,6 +286,7 @@ function PrSidebarSections({
     isBusy: triage.isBusy('fix-checks'),
     error: triage.error
   }
+
   const conflictsTriage = {
     resolveConflicts: () =>
       void triage.launch('resolve-conflicts', () =>
@@ -285,6 +299,7 @@ function PrSidebarSections({
     isBusy: triage.isBusy('resolve-conflicts'),
     error: triage.error
   }
+
   // One card for identity + actions so the ready PR isn't a stack of thin
   // duplicate blocks (badge row, title, branches, then another action band).
   return (

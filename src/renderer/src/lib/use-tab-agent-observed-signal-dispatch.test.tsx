@@ -28,10 +28,15 @@ import { useTabAgent } from './use-tab-agent'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const initialAppState = useAppStore.getInitialState()
+
 const WORKTREE_ID = 'repo::/tab-agent-observed-signal'
+
 const TAB_ID = 'terminal-tab-observed-signal'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const TITLE_PUBLICATIONS = 10
 
 function paneLayout(ptyId: string): TerminalLayoutSnapshot {
@@ -79,6 +84,7 @@ function publishRuntimeTitle(revision: number): void {
 }
 
 let probeRenders = 0
+
 let latestAgent: TuiAgent | null = null
 
 /** Stands in for SortableTab, useTabAgent's only production caller. */
@@ -86,6 +92,7 @@ function TabAgentProbe(): null {
   probeRenders += 1
   const tab = useAppStore((state) => state.tabsByWorktree[WORKTREE_ID]?.[0]) as TerminalTab
   latestAgent = useTabAgent(tab)
+
   return null
 }
 
@@ -117,9 +124,11 @@ describe('useTabAgent observed-signal dispatch', () => {
 
   it('schedules no extra commit for a title publication that changes no agent signal', () => {
     probeRenders = 0
+
     for (let revision = 1; revision <= TITLE_PUBLICATIONS; revision += 1) {
       act(() => publishRuntimeTitle(revision))
     }
+
     // One commit per publication. Re-dispatching the unchanged observed-signal
     // flag doubled this, and put SortableTab's fiber in every #185 stack.
     expect(probeRenders).toBe(TITLE_PUBLICATIONS)

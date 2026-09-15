@@ -20,25 +20,30 @@ export class RuntimeBrowserDriverController {
 
   set(browserPageId: string, next: RuntimeBrowserDriverState): void {
     const prev = this.get(browserPageId)
+
     if (prev.kind === next.kind) {
       if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
         return
       }
+
       if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
         return
       }
     }
+
     if (next.kind === 'idle') {
       this.drivers.delete(browserPageId)
     } else {
       this.drivers.set(browserPageId, next)
     }
+
     this.deps.notifyChanged(browserPageId, next)
   }
 
   reclaimForDesktop(browserPageId: string): boolean {
     this.set(browserPageId, { kind: 'desktop' })
     this.deps.cancelScreencast(browserPageId)
+
     return true
   }
 }

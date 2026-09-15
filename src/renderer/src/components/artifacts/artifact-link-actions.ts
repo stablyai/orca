@@ -7,12 +7,15 @@ export async function copyArtifactLink(
 ): Promise<boolean> {
   try {
     await window.api.ui.writeClipboardText(shareUrl)
+
     if (options.showSuccessToast !== false) {
       toast.success(translate('auto.components.artifacts.copySuccess', 'Artifact link copied'))
     }
+
     return true
   } catch {
     toast.error(translate('auto.components.artifacts.copyFailed', 'Could not copy artifact link'))
+
     return false
   }
 }

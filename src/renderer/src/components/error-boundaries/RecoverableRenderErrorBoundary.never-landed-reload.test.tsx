@@ -47,6 +47,7 @@ describe('RecoverableRenderErrorBoundary after a recovery reload never lands', (
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -62,6 +63,7 @@ describe('RecoverableRenderErrorBoundary after a recovery reload never lands', (
       () => Promise.reject(new SyntaxError("Unexpected token '}'")),
       { retries: 0, reloadKey: 'right-sidebar' }
     )
+
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)

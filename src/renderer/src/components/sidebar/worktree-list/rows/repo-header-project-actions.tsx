@@ -53,6 +53,7 @@ function getWorktreeVisibilityMenuLabel(
     isLegacyRepoForExternalWorktreeVisibility(repo),
     visibilityDefaults
   )
+
   return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
@@ -190,6 +191,7 @@ export function RepoHeaderCreateWorkspaceButton({
     'Create workspace for {{value0}}',
     { value0: label }
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

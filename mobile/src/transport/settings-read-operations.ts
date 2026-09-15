@@ -3,6 +3,7 @@ import type { RpcCompatibleReader } from './rpc-operation-contract'
 
 function settingsMember(raw: unknown): unknown {
   const boxed: { readonly settings?: unknown } | null | undefined = raw == null ? raw : Object(raw)
+
   // Preserve the native engine's existing property-read exception on null/undefined.
   return boxed!.settings
 }
@@ -26,8 +27,10 @@ const optionalSettingsReader: RpcCompatibleReader<unknown, 'optional-settings-me
 
 const botOverridesReader: RpcCompatibleReader<unknown, 'bot-logins', string[]> = (raw) => {
   const settings = raw == null ? undefined : settingsMember(raw)
+
   const overrides: unknown =
     settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')
+
   return {
     compatible: true,
     variant: 'bot-logins',
@@ -84,8 +87,10 @@ export const newTabSettingsRead = bindDeferredRpcOperation(
 
 const copyTrimsGutterReader: RpcCompatibleReader<unknown, 'copy-trims-gutter', boolean> = (raw) => {
   const settings = raw == null ? undefined : settingsMember(raw)
+
   const trims: unknown =
     settings == null ? undefined : Reflect.get(Object(settings), 'terminalCopyTrimsGutter')
+
   return {
     compatible: true,
     variant: 'copy-trims-gutter',

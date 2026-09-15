@@ -14,8 +14,10 @@ afterEach(() => {
 
 it('keeps the runtime target identity stable across unrelated store writes', () => {
   let renders = 0
+
   const { result } = renderHook(() => {
     renders += 1
+
     return useWorktreeRuntimeTarget('worktree-1')
   })
 

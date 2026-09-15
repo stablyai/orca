@@ -8,9 +8,11 @@ import {
 
 function deferredValue<T>(value: T): { promise: Promise<T>; resolve: () => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve: () => resolve(value) }
 }
 
@@ -179,6 +181,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     const pendingDiff = deferredValue(diff)
     mux.request.mockReturnValue(pendingDiff.promise)
 
@@ -247,6 +250,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     mux.request.mockResolvedValueOnce(diff)
 
     await expect(provider.getDiff('/home/user/repo', 'src/file.ts', false, true)).resolves.toBe(
@@ -263,6 +267,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     const pendingDiff = deferredValue(diff)
     mux.request.mockReturnValueOnce(pendingDiff.promise)
 
@@ -288,6 +293,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     const pendingDiff = deferredValue(diff)
     mux.request.mockReturnValueOnce(pendingDiff.promise)
 
@@ -313,6 +319,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     const pendingDiff = deferredValue(diff)
     mux.request.mockReturnValueOnce(pendingDiff.promise)
 
@@ -349,6 +356,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     const pendingDiff = deferredValue(diff)
     mux.request.mockReturnValueOnce(pendingDiff.promise)
 
@@ -374,6 +382,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     const pendingDiff = deferredValue([diff])
     mux.request.mockReturnValueOnce(pendingDiff.promise)
 
@@ -381,6 +390,7 @@ describe('SshGitProvider', () => {
       includePatch: true,
       filePath: 'src/file.ts'
     })
+
     await waitForRequestCount(mux.request, 1)
 
     mux.request.mockResolvedValueOnce(undefined)
@@ -392,6 +402,7 @@ describe('SshGitProvider', () => {
     )
 
     mux.request.mockResolvedValueOnce([diff])
+
     const second = provider.getBranchDiff('/home/user/repo', 'origin/main', {
       includePatch: true,
       filePath: 'src/file.ts'
@@ -410,6 +421,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     mux.request.mockResolvedValue([diff])
 
     await Promise.all([
@@ -456,6 +468,7 @@ describe('SshGitProvider', () => {
       originalIsBinary: false,
       modifiedIsBinary: false
     }
+
     mux.request.mockResolvedValue(diff)
 
     await Promise.all([

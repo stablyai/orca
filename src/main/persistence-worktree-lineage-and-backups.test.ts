@@ -25,6 +25,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -39,9 +40,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -135,18 +138,22 @@ describe('Store', () => {
 
   it('removeFolderWorkspace deletes child workspace lineage for that folder parent', async () => {
     const store = await createStore()
+
     const group = store.createProjectGroup({
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
     })
+
     const workspace = store.createFolderWorkspace({
       projectGroupId: group.id,
       name: 'Folder parent'
     })
+
     const folderLineage = makeWorkspaceLineage({
       parentWorkspaceKey: folderWorkspaceKey(workspace.id)
     })
+
     const unrelatedLineage = makeWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey('r2::/other-child'),
       parentWorkspaceKey: folderWorkspaceKey('other-folder')
@@ -228,24 +235,29 @@ describe('Store', () => {
 
     it('prunes selections when a folder workspace is removed directly or with its group', async () => {
       const store = await createStore()
+
       const directGroup = store.createProjectGroup({
         name: 'Direct',
         parentPath: '/tmp/direct',
         createdFrom: 'manual'
       })
+
       const directWorkspace = store.createFolderWorkspace({
         projectGroupId: directGroup.id,
         name: 'Direct workspace'
       })
+
       const cascadeGroup = store.createProjectGroup({
         name: 'Cascade',
         parentPath: '/tmp/cascade',
         createdFrom: 'manual'
       })
+
       const cascadeWorkspace = store.createFolderWorkspace({
         projectGroupId: cascadeGroup.id,
         name: 'Cascade workspace'
       })
+
       store.setMobileClientTabSelections({
         'device-a': {
           [folderWorkspaceKey(directWorkspace.id)]: {
@@ -320,6 +332,7 @@ describe('Store', () => {
 
     it('caps the persisted id list', async () => {
       const store = await createStore()
+
       for (let index = 0; index < 205; index += 1) {
         store.addClaudeLivePtySessionId(`claude-session-${index}`)
       }
@@ -358,6 +371,7 @@ describe('Store', () => {
 
     it('rotates older .bak.0 to .bak.1 when the interval elapses', async () => {
       vi.useFakeTimers()
+
       try {
         const first = await createStore()
         first.addRepo(makeRepo({ id: 'r1' }))
@@ -385,6 +399,7 @@ describe('Store', () => {
 
     it('keeps at most 5 rotating backups', async () => {
       vi.useFakeTimers()
+
       try {
         writeDataFile({
           schemaVersion: 1,
@@ -406,6 +421,7 @@ describe('Store', () => {
         for (let i = 0; i < 5; i++) {
           expect(existsSync(backupFile(i))).toBe(true)
         }
+
         expect(existsSync(backupFile(5))).toBe(false)
       } finally {
         vi.useRealTimers()
@@ -414,6 +430,7 @@ describe('Store', () => {
 
     it('does not rotate more than once per hour', async () => {
       vi.useFakeTimers()
+
       try {
         writeDataFile({
           schemaVersion: 1,
@@ -449,6 +466,7 @@ describe('Store', () => {
 
     it('does not rotate on the async write path within the 1-hour window', async () => {
       vi.useFakeTimers()
+
       try {
         writeDataFile({
           schemaVersion: 1,
@@ -482,6 +500,7 @@ describe('Store', () => {
 
     it('rotates on the async write path after the 1-hour window elapses', async () => {
       vi.useFakeTimers()
+
       try {
         writeDataFile({
           schemaVersion: 1,
@@ -568,6 +587,7 @@ describe('Store', () => {
     it('falls back to defaults only when every backup is also unusable', async () => {
       mkdirSync(testState.dir, { recursive: true })
       writeFileSync(dataFile(), '{{{corrupt', 'utf-8')
+
       for (let i = 0; i < 5; i++) {
         writeFileSync(backupFile(i), `{{slot-${i}-corrupt`, 'utf-8')
       }
@@ -616,6 +636,7 @@ describe('Store', () => {
   describe('concurrent write serialization', () => {
     it('chains debounced writes via pendingWrite so they run sequentially', async () => {
       vi.useFakeTimers()
+
       try {
         const store = await createStore()
         store.addRepo(makeRepo({ id: 'first' }))

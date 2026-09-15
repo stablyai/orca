@@ -23,6 +23,7 @@ function StepOutcomeIcon({ outcome }: { outcome: StepOutcome }): React.JSX.Eleme
 
 function StepRow({ step }: { step: PRCheckStep }): React.JSX.Element {
   const outcome = resolveStepOutcome(step)
+
   return (
     <div className="flex min-w-0 items-center gap-2 py-1 text-xs">
       <StepOutcomeIcon outcome={outcome} />
@@ -46,15 +47,18 @@ function JobCard({ job, index }: { job: PRCheckJob; index: number }): React.JSX.
   // behind a one-line summary. With no failures there is nothing to prioritize,
   // so expand by default rather than hiding the job's only content.
   const collapsible = [...breakdown.succeeded, ...breakdown.skipped, ...breakdown.pending]
+
   const failedStepKey = breakdown.failed
     .map((step) => `${step.name}:${step.status ?? ''}:${step.conclusion ?? ''}`)
     .join('\0')
+
   const [showRest, setShowRest] = React.useState(breakdown.failed.length === 0)
   React.useEffect(() => {
     setShowRest(breakdown.failed.length === 0)
   }, [breakdown.failed.length, failedStepKey])
 
   const summaryParts: string[] = []
+
   if (breakdown.succeeded.length > 0) {
     summaryParts.push(
       `${breakdown.succeeded.length} ${translate(
@@ -63,6 +67,7 @@ function JobCard({ job, index }: { job: PRCheckJob; index: number }): React.JSX.
       )}`
     )
   }
+
   if (breakdown.skipped.length > 0) {
     summaryParts.push(
       `${breakdown.skipped.length} ${translate(
@@ -71,6 +76,7 @@ function JobCard({ job, index }: { job: PRCheckJob; index: number }): React.JSX.
       )}`
     )
   }
+
   if (breakdown.pending.length > 0) {
     summaryParts.push(
       `${breakdown.pending.length} ${translate(

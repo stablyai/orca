@@ -9,6 +9,7 @@ import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
 } from '../../../../../shared/rpc-contract/orchestration-params'
+
 export {
   AskParams,
   CheckParams,
@@ -20,6 +21,7 @@ export {
   TaskCreateParams,
   TaskListParams
 } from '../../../../../shared/rpc-contract/orchestration-params'
+
 export { getLifecycleGroupRecipientError, isDispatchMutationMessageType }
 
 export const TASK_STATUSES: TaskStatus[] = [
@@ -39,11 +41,15 @@ export async function routeAllMailboxPages(
     if (signal?.aborted) {
       throw new OrchestrationError('request_aborted', 'Mailbox routing was cancelled.')
     }
+
     const page = routePage()
+
     if (!page.hasMore) {
       return
     }
+
     await yieldToEventLoop()
+
     if (signal?.aborted) {
       throw new OrchestrationError('request_aborted', 'Mailbox routing was cancelled.')
     }
@@ -59,8 +65,10 @@ export function parseRemoteWorkerPayload(payload: string | undefined): Record<st
   if (!payload) {
     return {}
   }
+
   try {
     const parsed: unknown = JSON.parse(payload)
+
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : {}
@@ -73,8 +81,10 @@ export function parseMessageTaskId(payload: string | undefined): string | undefi
   if (!payload) {
     return undefined
   }
+
   try {
     const parsed: unknown = JSON.parse(payload)
+
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? typeof (parsed as { taskId?: unknown }).taskId === 'string'
         ? (parsed as { taskId: string }).taskId
@@ -113,6 +123,7 @@ export const SendParams = z
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }
+
     // Why: dispatch lifecycle messages are authority/liveness signals for one coordinator; fanout would create lifecycle mail in unrelated terminals.
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -129,6 +140,7 @@ export const TaskUpdateParams = z.object({
       if (typeof v === 'string' && TASK_STATUSES.includes(v as TaskStatus)) {
         return v as TaskStatus
       }
+
       return ''
     })
     .pipe(
@@ -140,4 +152,5 @@ export const TaskUpdateParams = z.object({
   run: OptionalString,
   callerTerminalHandle: OptionalString
 })
+
 export type { DispatchMutationMessageType } from '../../../../../shared/rpc-contract/orchestration-params'

@@ -28,16 +28,20 @@ export function useEmulatorPaneShutdown({
       if (loading) {
         return
       }
+
       setLoading(true)
       setError(null)
+
       if (tabId) {
         useAppStore.getState().setTabLabel(tabId, 'Shutting down…')
       }
+
       try {
         const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.shutdown', {
           ...(deviceTarget ? { device: deviceTarget } : {}),
           worktree: worktreeId
         })) as { deviceUdid?: string }
+
         const shutdownTarget = res?.deviceUdid || deviceTarget
         window.dispatchEvent(
           new CustomEvent(EMULATOR_LOCAL_SHUTDOWN_EVENT, {
@@ -50,6 +54,7 @@ export function useEmulatorPaneShutdown({
           e,
           'Could not shut down the emulator. Try again, or stop it from your emulator manager.'
         )
+
         setError(msg)
       } finally {
         if (mountedRef.current) {

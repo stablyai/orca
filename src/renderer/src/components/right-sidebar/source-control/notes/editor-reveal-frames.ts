@@ -6,6 +6,7 @@ export function cancelSourceControlEditorRevealFrames(
   for (const frameId of frameIds.current) {
     cancelAnimationFrame(frameId)
   }
+
   frameIds.current = []
 }
 
@@ -17,11 +18,14 @@ export function requestSourceControlEditorRevealFrame(
   let frameId: number | undefined
   frameId = requestAnimationFrame((timestamp) => {
     completed = true
+
     if (frameId !== undefined) {
       frameIds.current = frameIds.current.filter((pendingFrameId) => pendingFrameId !== frameId)
     }
+
     callback(timestamp)
   })
+
   if (!completed) {
     frameIds.current.push(frameId)
   }

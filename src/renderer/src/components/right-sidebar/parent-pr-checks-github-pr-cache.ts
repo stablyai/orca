@@ -20,24 +20,32 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
   data: NonNullable<ParentPrChecksCacheEntry<PRInfo>['data']>
 } {
   const pr = prEntry?.data
+
   if (!pr) {
     return false
   }
+
   if (isGitHubPRSuppressed(worktree, pr.number)) {
     return false
   }
+
   const prFetchedAt = prEntry.fetchedAt
   const hasLinkedGitHubPR = worktree.linkedPR !== null
+
   if (hasLinkedGitHubPR && pr.number !== worktree.linkedPR) {
     return false
   }
+
   if (!hasLinkedGitHubPR && hasNonGitHubLinkedReview(worktree)) {
     return false
   }
+
   const mergedPrMatchesCurrentHead = isCachedMergedBranchPRCurrentForWorktree(pr, worktree)
+
   if (pr.state === 'merged' && !mergedPrMatchesCurrentHead) {
     return false
   }
+
   // Why: a newer hosted-review miss should suppress older branch PR cache unless
   // a merged PR is proven to still describe the checked-out worktree head.
   if (
@@ -47,6 +55,7 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
   ) {
     return false
   }
+
   return true
 }
 
@@ -70,15 +79,20 @@ export function getParentPrChecksGitHubPRCacheEntry({
     repo.executionHostId,
     true
   )
+
   const executionHostId = normalizeExecutionHostId(repo.executionHostId)
+
   const canUseLegacyPRCache =
     !repo.connectionId && (!executionHostId || executionHostId === LOCAL_EXECUTION_HOST_ID)
+
   const legacyRepoKey = canUseLegacyPRCache
     ? getLegacyGitHubPRCacheKey(repo.path, repo.id, branch)
     : ''
+
   const legacyPathKey = canUseLegacyPRCache
     ? getLegacyGitHubPRCacheKey(repo.path, undefined, branch)
     : ''
+
   return (
     prCache[currentKey] ??
     (legacyRepoKey ? prCache[legacyRepoKey] : undefined) ??

@@ -30,6 +30,7 @@ const REPO_ICON_FILE_STEMS = [
 ] as const
 
 const REPO_ICON_FILE_EXTENSIONS = ['.png', '.webp'] as const
+
 const REPO_ICON_FILE_PROBE_CONCURRENCY = 6
 
 export const REPO_ICON_FILE_CANDIDATES = REPO_ICON_FILE_STEMS.flatMap((stem) =>
@@ -88,21 +89,27 @@ function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
   if (isPngBuffer(buffer)) {
     return { mimeType: 'image/png' }
   }
+
   if (isWebpBuffer(buffer)) {
     return { mimeType: 'image/webp' }
   }
+
   return null
 }
 
 function repoIconFromImageBuffer(buffer: Buffer, relativePath: string): RepoIcon | null {
   const format = detectImageFormat(buffer)
+
   if (!format) {
     return null
   }
+
   const src = buildImageDataUri(format.mimeType, buffer.toString('base64'))
+
   if (!src) {
     return null
   }
+
   return {
     type: 'image',
     src,
@@ -117,10 +124,13 @@ async function readLocalImageIcon(
 ): Promise<RepoIcon | null> {
   const filePath = joinWorktreeRelativePath(repoPath, relativePath)
   const info = await stat(filePath)
+
   if (!info.isFile() || info.size > MAX_REPO_ICON_UPLOAD_BYTES) {
     return null
   }
+
   const buffer = await readFile(filePath)
+
   return repoIconFromImageBuffer(buffer, relativePath)
 }
 
@@ -131,17 +141,22 @@ async function readRemoteImageIcon(
 ): Promise<RepoIcon | null> {
   const filePath = joinWorktreeRelativePath(repoPath, relativePath)
   const info = await fsProvider.stat(filePath)
+
   if (info.type !== 'file' || info.size > MAX_REPO_ICON_UPLOAD_BYTES) {
     return null
   }
+
   const result = await fsProvider.readFile(filePath)
+
   if (!result.content) {
     return null
   }
+
   // Why: detect the binary format after decoding remote file content.
   const buffer = result.isBinary
     ? Buffer.from(result.content, 'base64')
     : Buffer.from(result.content, 'utf8')
+
   return repoIconFromImageBuffer(buffer, relativePath)
 }
 
@@ -156,6 +171,7 @@ async function detectConventionalImageIcon(
     offset += REPO_ICON_FILE_PROBE_CONCURRENCY
   ) {
     const batch = REPO_ICON_FILE_CANDIDATES.slice(offset, offset + REPO_ICON_FILE_PROBE_CONCURRENCY)
+
     const icons = await Promise.all(
       batch.map(async (relativePath) => {
         try {
@@ -165,11 +181,14 @@ async function detectConventionalImageIcon(
         }
       })
     )
+
     const icon = icons.find((candidate): candidate is RepoIcon => candidate !== null)
+
     if (icon) {
       return icon
     }
   }
+
   return null
 }
 
@@ -177,24 +196,31 @@ async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> 
   const conventionalIcon = await detectConventionalImageIcon((relativePath) =>
     readLocalImageIcon(repoPath, relativePath)
   )
+
   if (conventionalIcon) {
     return conventionalIcon
   }
+
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
       const sourcePath = joinWorktreeRelativePath(repoPath, sourceFile)
       const sourceInfo = await stat(sourcePath)
+
       if (!sourceInfo.isFile() || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
         continue
       }
+
       const source = await readFile(sourcePath, 'utf8')
       const href = extractIconHref(source)
+
       if (!href) {
         continue
       }
+
       for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
           const icon = await readLocalImageIcon(repoPath, relativePath)
+
           if (icon) {
             return icon
           }
@@ -206,6 +232,7 @@ async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> 
       // Try the next source file.
     }
   }
+
   return null
 }
 
@@ -216,27 +243,36 @@ async function detectRemoteImageIcon(
   const conventionalIcon = await detectConventionalImageIcon((relativePath) =>
     readRemoteImageIcon(repoPath, fsProvider, relativePath)
   )
+
   if (conventionalIcon) {
     return conventionalIcon
   }
+
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
       const sourcePath = joinWorktreeRelativePath(repoPath, sourceFile)
       const sourceInfo = await fsProvider.stat(sourcePath)
+
       if (sourceInfo.type !== 'file' || sourceInfo.size > MAX_REPO_ICON_SOURCE_BYTES) {
         continue
       }
+
       const result = await fsProvider.readFile(sourcePath)
+
       if (result.isBinary) {
         continue
       }
+
       const href = extractIconHref(result.content)
+
       if (!href) {
         continue
       }
+
       for (const relativePath of iconHrefCandidates(href, sourceFile)) {
         try {
           const icon = await readRemoteImageIcon(repoPath, fsProvider, relativePath)
+
           if (icon) {
             return icon
           }
@@ -248,6 +284,7 @@ async function detectRemoteImageIcon(
       // Try the next source file.
     }
   }
+
   return null
 }
 

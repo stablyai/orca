@@ -7,12 +7,15 @@ function createTrackedPathSpecMatcher(
 ): (filePath: string) => boolean {
   // Normalize lazily so selecting a directory still stops at its first tracked descendant.
   const normalizedTrackedPaths: string[] = []
+
   return (filePath) => {
     const normalized = normalizeGitPathForCompare(filePath)
     const descendantPrefix = `${normalized}/`
+
     return trackedPaths.some((trackedPath, index) => {
       const normalizedTracked = (normalizedTrackedPaths[index] ??=
         normalizeGitPathForCompare(trackedPath))
+
       return normalizedTracked === normalized || normalizedTracked.startsWith(descendantPrefix)
     })
   }
@@ -29,9 +32,11 @@ export function partitionTrackedPathSpecs(
   const isTracked = createTrackedPathSpecMatcher(trackedPathSpecs)
   const trackedPaths: string[] = []
   const untrackedPaths: string[] = []
+
   // Keep original spellings, duplicates and order: these arrays select restore versus clean.
   for (const filePath of filePaths) {
     ;(isTracked(filePath) ? trackedPaths : untrackedPaths).push(filePath)
   }
+
   return { trackedPaths, untrackedPaths }
 }

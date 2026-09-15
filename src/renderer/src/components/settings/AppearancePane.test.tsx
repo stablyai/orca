@@ -66,6 +66,7 @@ vi.mock('../ui/select', async () => {
       children: React.ReactNode
     }) => {
       const contextValue = React.useMemo(() => ({ onValueChange }), [onValueChange])
+
       return (
         <SelectContext.Provider value={contextValue}>
           <div data-slot="language-select" data-value={value}>
@@ -85,6 +86,7 @@ vi.mock('../ui/select', async () => {
     ),
     SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
       const { onValueChange } = React.useContext(SelectContext)
+
       return (
         <button
           type="button"
@@ -173,9 +175,11 @@ async function rerenderAppearancePane(
   settings: GlobalSettings = getDefaultSettings('/tmp')
 ): Promise<void> {
   const root = mountedRoots.at(-1)
+
   if (!root) {
     throw new Error('expected a mounted AppearancePane root')
   }
+
   await act(async () => {
     root.render(
       <I18nextProvider i18n={i18n}>
@@ -245,9 +249,11 @@ describe('AppearancePane', () => {
   it('shows language as a primary interface control without opening Advanced', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
     const languageTrigger = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-trigger"][aria-label="Language"]'
     )
+
     const advancedTrigger = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')
     ).find((button) => button.textContent?.includes('Advanced'))
@@ -263,6 +269,7 @@ describe('AppearancePane', () => {
   it('keeps Advanced closed when searching for language', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
     const languageTrigger = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-trigger"][aria-label="Language"]'
     )
@@ -277,15 +284,18 @@ describe('AppearancePane', () => {
   it('renders the language dropdown with system, english, chinese, korean, japanese, and spanish options', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       uiLanguage: 'system' as const
     }
 
     const container = await renderAppearancePane(settings, updateSettings)
+
     const languageTrigger = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-trigger"][aria-label="Language"]'
     )
+
     const chineseOption = container.querySelector<HTMLButtonElement>(
       '[data-slot="select-item"][data-value="zh"]'
     )
@@ -309,18 +319,22 @@ describe('AppearancePane', () => {
 
   it('includes the selected language in the collapsed Interface summary', async () => {
     mocks.state.settingsSearchQuery = ''
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       uiLanguage: 'zh' as const,
       theme: 'dark' as const,
       appFontFamily: 'Inter'
     }
+
     const container = await renderAppearancePane(settings)
+
     const interfaceToggle = Array.from(
       container.querySelectorAll<HTMLButtonElement>(
         'button[aria-controls="appearance-section-interface"]'
       )
     )[0]
+
     expect(interfaceToggle).toBeDefined()
     await act(async () => {
       interfaceToggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -337,6 +351,7 @@ describe('AppearancePane', () => {
     const settings = getDefaultSettings('/tmp')
 
     const container = await renderAppearancePane(settings, updateSettings)
+
     const matchTerminalButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
     ).find((button) => button.textContent === 'Match Terminal')
@@ -354,12 +369,14 @@ describe('AppearancePane', () => {
 
   it('restores the Automations sidebar button from the sidebar settings switch', async () => {
     const updateSettings = vi.fn()
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       showAutomationsButton: false
     }
 
     const container = await renderAppearancePane(settings, updateSettings)
+
     const switchControl = container.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Show Automations Button"]'
     )
@@ -376,12 +393,14 @@ describe('AppearancePane', () => {
 
   it('changes workspace card layout from the Appearance sidebar controls', async () => {
     mocks.state.settingsSearchQuery = 'workspace card layout'
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       compactWorktreeCards: false
     }
 
     const container = await renderAppearancePane(settings)
+
     const compactButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
     ).find((button) => button.textContent === 'Compact')
@@ -410,6 +429,7 @@ describe('AppearancePane', () => {
   it('requests installed font suggestions only after the IDE font picker is used', async () => {
     mocks.state.settingsSearchQuery = ''
     const requestFontSuggestions = vi.fn()
+
     const container = await renderAppearancePane(getDefaultSettings('/tmp'), vi.fn(), {
       onRequestFontSuggestions: requestFontSuggestions
     })
@@ -466,6 +486,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'menu bar'
     const updateSettings = vi.fn()
     const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+
     const toggle = container.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Show Menu Bar Icon"]'
     )
@@ -514,6 +535,7 @@ describe('AppearancePane', () => {
   it('updates the usage percentage display from the latest status bar settings section', async () => {
     mocks.state.settingsSearchQuery = 'remaining'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
     const remainingButton = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
     ).find((button) => button.textContent === 'Remaining')
@@ -540,6 +562,7 @@ describe('AppearancePane', () => {
     ]
     mocks.state.settingsSearchQuery = 'minimax'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
     const miniMaxSwitch = container.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="MiniMax Usage"]'
     )
@@ -565,6 +588,7 @@ describe('AppearancePane', () => {
     ]
     mocks.state.settingsSearchQuery = 'antigravity'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
     const antigravitySwitch = container.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Antigravity Usage"]'
     )

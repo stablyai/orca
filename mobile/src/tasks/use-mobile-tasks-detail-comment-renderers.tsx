@@ -36,6 +36,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     setItemReplyDrafts,
     toggleGitHubReviewThread
   } = model
+
   const renderCommentComposer = (args: {
     value: string
     onChangeText: (next: string) => void
@@ -43,6 +44,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     disabled?: boolean
   }): ReactNode => {
     const hasText = args.value.trim().length > 0
+
     return (
       <View style={styles.commentComposer}>
         <TextInput
@@ -147,6 +149,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     const id = detailCommentGroupId(group)
     const root = detailCommentGroupRoot(group)
     const count = detailCommentGroupCount(group)
+
     const isCollapsedResolved =
       isResolvedDetailCommentGroup(group) && !expandedResolvedCommentGroups.has(id)
 
@@ -159,6 +162,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
             setExpandedResolvedCommentGroups((current) => {
               const next = new Set(current)
               next.add(id)
+
               return next
             })
           }
@@ -182,6 +186,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       </View>
     )
   }
+
   return Object.assign(model, {
     renderCommentComposer,
     renderDetailComment,

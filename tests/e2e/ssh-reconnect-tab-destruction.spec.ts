@@ -64,6 +64,7 @@ test.describe('SSH reconnect tab destruction', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -83,13 +84,16 @@ test.describe('SSH reconnect tab destruction', () => {
       // is dropped from the session write rather than deferred. This is the ordinary thing a user
       // does; the timing is not contrived.
       await openTerminalTabInActiveGroup(orcaPage)
+
       // Only that the tab exists in the store — no waiting for its manager or PTY. Every wait here
       // is time the debounced upload can use to land, which is what made this spec miss the bug.
       const tabIdsBefore = await orcaPage.evaluate(() => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         return worktreeId ? (state?.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id) : []
       })
+
       expect(tabIdsBefore.length).toBeGreaterThanOrEqual(2)
 
       // Deliberately NOTHING between creating the tab and reconnecting. The destruction only fires
@@ -104,6 +108,7 @@ test.describe('SSH reconnect tab destruction', () => {
       const tabState = await orcaPage.evaluate(() => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         return {
           tabIds: worktreeId
             ? (state?.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
@@ -113,6 +118,7 @@ test.describe('SSH reconnect tab destruction', () => {
           paneManagers: window.__paneManagers?.size ?? 0
         }
       })
+
       // The exact set, not a lower bound: `>= 2` passes just as happily on a reconnect that ADDS a
       // tab as on one that keeps it, so it could never fail on the accumulation half of this bug.
       expect(

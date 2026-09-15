@@ -9,9 +9,11 @@ function buildFallbackManualOrderUpdates(
   now: number
 ): Map<string, WorktreeManualOrderUpdate> {
   const updates = new Map<string, WorktreeManualOrderUpdate>()
+
   for (let index = 0; index < orderedIds.length; index++) {
     updates.set(orderedIds[index]!, { manualOrder: now - index * MANUAL_ORDER_STRIDE })
   }
+
   return updates
 }
 
@@ -27,15 +29,19 @@ function mergeVisibleOrderIntoKnownOrder(
 
   const merged: string[] = []
   let visibleIndex = 0
+
   for (const id of uniqueKnownIds) {
     if (visibleSet.has(id)) {
       merged.push(knownVisibleOrder[visibleIndex] ?? id)
       visibleIndex++
       continue
     }
+
     merged.push(id)
   }
+
   merged.push(...uniqueVisibleOrder.filter((id) => !knownSet.has(id)))
+
   return merged
 }
 
@@ -46,7 +52,9 @@ function getManualOrderRank(
   if (!worktreeId) {
     return null
   }
+
   const rank = rankByWorktreeId.get(worktreeId)
+
   return typeof rank === 'number' && Number.isFinite(rank) ? rank : null
 }
 
@@ -60,9 +68,11 @@ export function buildSparseManualOrderUpdates(args: {
 }): Map<string, WorktreeManualOrderUpdate> {
   const movedSet = new Set(args.movedIds)
   const orderedMovedIds = args.orderedIds.filter((id) => movedSet.has(id))
+
   if (orderedMovedIds.length === 0) {
     return new Map()
   }
+
   if (!args.rankByWorktreeId) {
     return buildFallbackManualOrderUpdates(
       mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
@@ -94,6 +104,7 @@ export function buildSparseManualOrderUpdates(args: {
       args.now
     )
   }
+
   if (afterId !== undefined && afterRank === null) {
     return buildFallbackManualOrderUpdates(
       mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
@@ -107,6 +118,7 @@ export function buildSparseManualOrderUpdates(args: {
     }
   } else if (beforeRank === null) {
     const start = Math.max(args.now, afterRank! + orderedMovedIds.length * MANUAL_ORDER_STRIDE)
+
     for (let index = 0; index < orderedMovedIds.length; index++) {
       nextRanks.push(start - index * MANUAL_ORDER_STRIDE)
     }
@@ -116,6 +128,7 @@ export function buildSparseManualOrderUpdates(args: {
     }
   } else {
     const gap = beforeRank - afterRank
+
     // Why: repeated sparse inserts can eventually exhaust the numeric gap.
     // Re-index only in that rare dense case; ordinary drags persist moved rows.
     if (gap <= orderedMovedIds.length) {
@@ -124,7 +137,9 @@ export function buildSparseManualOrderUpdates(args: {
         args.now
       )
     }
+
     const step = gap / (orderedMovedIds.length + 1)
+
     for (let index = 0; index < orderedMovedIds.length; index++) {
       nextRanks.push(beforeRank - step * (index + 1))
     }
@@ -133,9 +148,11 @@ export function buildSparseManualOrderUpdates(args: {
   const updates = new Map<string, WorktreeManualOrderUpdate>()
   orderedMovedIds.forEach((id, index) => {
     const manualOrder = nextRanks[index]
+
     if (manualOrder !== undefined && Number.isFinite(manualOrder)) {
       updates.set(id, { manualOrder })
     }
   })
+
   return updates
 }

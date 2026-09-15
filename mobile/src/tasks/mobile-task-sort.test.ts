@@ -18,11 +18,14 @@ function task(
       : provider === 'gitlabTodo'
         ? { projectPath: label }
         : { repoId: label, repoName: label }
+
   return { provider, source, updatedAt, key, title: key, subtitle: '', status: '' } as TaskItem
 }
+
 const repos = new Map<string, RepoSummary>([
   ['alias', { id: 'alias', displayName: 'Álpha', path: '/repo' }]
 ])
+
 const items = [
   task('github', 'alias', '2026-01-01', 'a'),
   task('gitlab', 'alpha', '2026-02-01', 'b'),
@@ -45,8 +48,10 @@ describe('mobile task sorting', () => {
                 { sensitivity: 'base' }
               )
             : 0
+
         return labelOrder || taskTime(b.updatedAt) - taskTime(a.updatedAt)
       }
+
       const expected = [...items].sort(compareBefore)
       const input = Object.freeze([...items])
       const actual = sortMobileTaskItems(input, sort, repos)
@@ -54,6 +59,7 @@ describe('mobile task sorting', () => {
       actual.forEach((item, index) => expect(item).toBe(expected[index]))
       expect(input).toEqual(items)
       repos.set('alias', { id: 'alias', displayName: 'zzzz', path: '/repo' })
+
       try {
         expect(sortMobileTaskItems(input, sort, repos)).toEqual([...items].sort(compareBefore))
       } finally {
@@ -66,6 +72,7 @@ describe('mobile task sorting', () => {
     const parse = vi.spyOn(Date, 'parse')
     const getRepo = vi.spyOn(repos, 'get')
     const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
     try {
       sortMobileTaskItems(items, sort, repos)
       expect(parse).toHaveBeenCalledTimes(items.length)
@@ -81,6 +88,7 @@ describe('mobile task sorting', () => {
   it('skips setup for empty/singleton arrays while returning a fresh array', () => {
     const parse = vi.spyOn(Date, 'parse')
     const collator = vi.spyOn(Intl, 'Collator')
+
     try {
       expect(sortMobileTaskItems([], 'repository', repos)).toEqual([])
       const one = [items[0]]

@@ -42,20 +42,27 @@ export function normalizeTaskProviderIdentity(
   if (!identity || typeof identity !== 'object') {
     return null
   }
+
   const raw = identity as Record<string, unknown>
+
   if (raw.provider !== provider) {
     return null
   }
+
   switch (provider) {
     case 'github': {
       const owner = normalizeNonEmptyString(raw.owner)
       const repo = normalizeNonEmptyString(raw.repo)
+
       if (!owner || !repo) {
         return null
       }
+
       const host = normalizeNonEmptyString(raw.host)
+
       return { provider, owner, repo, ...(host ? { host } : {}) }
     }
+
     case 'gitlab':
       return {
         provider,
@@ -86,13 +93,17 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
   if (identity === undefined || identity === null) {
     return true
   }
+
   if (typeof identity !== 'object') {
     return false
   }
+
   const raw = identity as Record<string, unknown>
+
   if (raw.provider !== provider) {
     return false
   }
+
   switch (provider) {
     case 'github':
       return (
@@ -129,14 +140,18 @@ export function areTaskProviderIdentitiesEqual(
   if (a === b) {
     return true
   }
+
   if (!a || !b) {
     return !a && !b
   }
+
   if (a.provider !== b.provider) {
     return false
   }
+
   const left = a as unknown as Record<string, unknown>
   const right = b as unknown as Record<string, unknown>
+
   return TASK_PROVIDER_IDENTITY_FIELDS[a.provider].every(
     (field) => (left[field] ?? null) === (right[field] ?? null)
   )
@@ -148,6 +163,7 @@ export function taskProviderIdentityCachePart(
   if (!identity) {
     return ''
   }
+
   switch (identity.provider) {
     case 'github':
       return githubRepoIdentityKey(identity)
@@ -162,6 +178,7 @@ export function taskProviderIdentityCachePart(
 
 function normalizeNonEmptyString(value: unknown): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
+
   return trimmed ? trimmed : null
 }
 

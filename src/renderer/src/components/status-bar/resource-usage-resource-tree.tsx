@@ -20,17 +20,21 @@ function compareMetricDesc(a: Metric, b: Metric): number {
   if (a === null && b === null) {
     return 0
   }
+
   if (a === null) {
     return 1
   }
+
   if (b === null) {
     return -1
   }
+
   return b - a
 }
 
 function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWorktreeRow[] {
   const copy = [...list]
+
   if (sort === 'memory') {
     copy.sort((a, b) => compareMetricDesc(a.memory, b.memory))
   } else if (sort === 'cpu') {
@@ -38,11 +42,13 @@ function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWor
   } else {
     copy.sort((a, b) => a.worktreeName.localeCompare(b.worktreeName))
   }
+
   return copy
 }
 
 function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): UnifiedProjectGroup[] {
   const copy = [...groups]
+
   if (sort === 'memory') {
     copy.sort((a, b) => compareMetricDesc(a.memory, b.memory))
   } else if (sort === 'cpu') {
@@ -50,6 +56,7 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
   } else {
     copy.sort((a, b) => a.repoName.localeCompare(b.repoName))
   }
+
   return copy
 }
 
@@ -84,6 +91,7 @@ export function ResourceTree({
 
   const sortedRepos = useMemo(() => {
     const grouped = sortProjectGroups(repos, sortOption)
+
     return grouped.map((repo) => ({
       ...repo,
       worktrees: sortWorktrees(repo.worktrees, sortOption)
@@ -92,6 +100,7 @@ export function ResourceTree({
 
   const renderWorktree = (wt: UnifiedWorktreeRow): React.JSX.Element => {
     const storeRecord = worktreeById.get(wt.worktreeId) ?? null
+
     return (
       <WorktreeRow
         key={wt.worktreeId}
@@ -116,6 +125,7 @@ export function ResourceTree({
     <>
       {sortedRepos.map((group) => {
         const repoCollapsed = collapsedRepos.has(group.repoId)
+
         return (
           <div key={group.repoId} className="border-b border-border/50 last:border-b-0">
             <div className="flex items-center">

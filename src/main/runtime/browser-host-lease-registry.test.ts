@@ -15,6 +15,7 @@ afterEach(() => {
 describe('BrowserHostLeaseRegistry', () => {
   it('requires reconciliation dependencies before retaining the negotiated lease', () => {
     const leases = registry()
+
     const attach = (overrides: Record<string, unknown>) =>
       leases.attach({
         browserHostClientId: 'host-a',
@@ -40,6 +41,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('rejects incomplete, duplicate, and foreign-client inventory before replacing a lease', () => {
     const leases = registry()
+
     const attach = (overrides: Record<string, unknown>) =>
       leases.attach({
         browserHostClientId: 'host-a',
@@ -48,6 +50,7 @@ describe('BrowserHostLeaseRegistry', () => {
         hostCapabilities: ['webview'],
         ...overrides
       })
+
     const page = inventoryPage()
 
     expect(() => attach({ pageInventoryProtocolVersion: 1 })).toThrow(
@@ -80,6 +83,7 @@ describe('BrowserHostLeaseRegistry', () => {
     const leases = registry()
     const page = inventoryPage()
     const pageInventory = [page]
+
     const lease = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -102,6 +106,7 @@ describe('BrowserHostLeaseRegistry', () => {
   it('keeps a negotiated lease unavailable during grace and restores its exact authority', async () => {
     vi.useFakeTimers()
     const leases = registry(1_000)
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -111,7 +116,9 @@ describe('BrowserHostLeaseRegistry', () => {
       pageInventory: [inventoryPage()],
       leaseReconnectProtocolVersion: 1
     })
+
     const placement = leases.placeClientPage('page-a', 'host-a')
+
     const route = leases.openTunnel({
       authorityEpoch: first.lease.authorityEpoch,
       browserHostClientId: first.lease.browserHostClientId,
@@ -133,6 +140,7 @@ describe('BrowserHostLeaseRegistry', () => {
     expect(fenced).toBe(false)
 
     const replacementInventory = [{ ...inventoryPage(), currentUrl: 'https://reconnected/' }]
+
     const replacement = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-b',
@@ -156,6 +164,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('replaces instead of restoring a lease when reconciliation negotiation changes', async () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -167,6 +176,7 @@ describe('BrowserHostLeaseRegistry', () => {
       pageReconciliationProtocolVersion: 1,
       leaseReconnectProtocolVersion: 1
     })
+
     first.disconnect()
 
     const replacement = leases.attach({
@@ -187,6 +197,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('never emits reconciliation commands to a legacy page-command lease', () => {
     const leases = registry()
+
     const host = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -194,18 +205,22 @@ describe('BrowserHostLeaseRegistry', () => {
       hostCapabilities: ['webview'],
       pageCommandProtocolVersion: 1
     })
+
     const identity = {
       authorityEpoch: host.lease.authorityEpoch,
       browserHostClientId: host.lease.browserHostClientId,
       browserHostGeneration: host.lease.browserHostGeneration,
       pairedDeviceId: host.lease.pairedDeviceId
     }
+
     const delivery = vi.fn()
     leases.attachCommandDelivery(identity, delivery)
     const placement = leases.placeClientPage('page-a', 'host-a')
+
     if (placement.kind !== 'client') {
       throw new Error('expected client placement')
     }
+
     const authority = {
       authorityRuntimeId: host.lease.authorityRuntimeId,
       authorityEpoch: host.lease.authorityEpoch,
@@ -225,17 +240,20 @@ describe('BrowserHostLeaseRegistry', () => {
     expect(delivery).not.toHaveBeenCalled()
 
     leases.grantExecutionHost(identity, 'host-key-a')
+
     const legacy = leases.issueClientPageCommand(authority, {
       type: 'createPage',
       browserProfileId: 'default',
       executionHostKey: 'host-key-a'
     })
+
     expect(legacy.event).not.toHaveProperty('pageReconciliationProtocolVersion')
     expect(delivery).toHaveBeenCalledWith(legacy.event)
   })
 
   it('restores exact authority when reattach arrives before old connection cleanup', async () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -246,7 +264,9 @@ describe('BrowserHostLeaseRegistry', () => {
       pageInventory: [],
       leaseReconnectProtocolVersion: 1
     })
+
     const placement = leases.placeClientPage('page-a', 'host-a')
+
     const route = leases.openTunnel({
       authorityEpoch: first.lease.authorityEpoch,
       browserHostClientId: first.lease.browserHostClientId,
@@ -254,6 +274,7 @@ describe('BrowserHostLeaseRegistry', () => {
       pairedDeviceId: first.lease.pairedDeviceId,
       executionHostKey: 'native:runtime-a:1'
     })
+
     const releaseOldDelivery = leases.attachCommandDelivery(
       {
         authorityEpoch: first.lease.authorityEpoch,
@@ -298,6 +319,7 @@ describe('BrowserHostLeaseRegistry', () => {
   it('expires negotiated grace and keeps legacy disconnect behavior immediate', async () => {
     vi.useFakeTimers()
     const leases = registry(1_000)
+
     const reconnecting = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -307,6 +329,7 @@ describe('BrowserHostLeaseRegistry', () => {
       pageInventory: [],
       leaseReconnectProtocolVersion: 1
     })
+
     reconnecting.disconnect()
 
     await vi.advanceTimersByTimeAsync(999)
@@ -325,12 +348,14 @@ describe('BrowserHostLeaseRegistry', () => {
       pairedDeviceId: 'device-b',
       hostCapabilities: ['webview']
     })
+
     legacy.disconnect()
     await expect(legacy.whenFenced).resolves.toBe('released')
   })
 
   it('keeps foreign devices out and makes explicit grace revocation terminal', async () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -340,6 +365,7 @@ describe('BrowserHostLeaseRegistry', () => {
       pageInventory: [],
       leaseReconnectProtocolVersion: 1
     })
+
     first.disconnect()
 
     expect(() =>
@@ -365,11 +391,13 @@ describe('BrowserHostLeaseRegistry', () => {
       pageInventory: [],
       leaseReconnectProtocolVersion: 1
     })
+
     expect(late.lease.browserHostGeneration).toBe(first.lease.browserHostGeneration + 1)
   })
 
   it('restores a lease whose reconnect renegotiates the file channel', async () => {
     const leases = registry()
+
     const attach = (connectionId: string, fileChannel: boolean) =>
       leases.attach({
         browserHostClientId: 'host-a',
@@ -382,6 +410,7 @@ describe('BrowserHostLeaseRegistry', () => {
         leaseReconnectProtocolVersion: 1,
         ...(fileChannel ? { fileChannelProtocolVersion: 1 as const } : {})
       })
+
     const first = attach('connection-a', true)
     expect(first.lease.fileChannelProtocolVersion).toBe(1)
     first.disconnect()
@@ -398,6 +427,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('replaces reconnecting authority on a capability mismatch', async () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -407,6 +437,7 @@ describe('BrowserHostLeaseRegistry', () => {
       pageInventory: [],
       leaseReconnectProtocolVersion: 1
     })
+
     first.disconnect()
 
     const mismatch = leases.attach({
@@ -449,12 +480,14 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('fences a same-device replacement without letting old cleanup remove it', async () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
       pairedDeviceId: 'device-a',
       hostCapabilities: ['webview']
     })
+
     const replacement = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-b',
@@ -478,6 +511,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('admits only one distinct browser host per authenticated connection', () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -506,6 +540,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('bounds distinct browser hosts per paired device without starving another device', () => {
     const leases = registry()
+
     const handles = Array.from({ length: 4 }, (_, index) =>
       leases.attach({
         browserHostClientId: `host-${index}`,
@@ -544,6 +579,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('allocates monotonic page generations and rejects a stale host generation', () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -606,6 +642,7 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('fences outstanding outcomes at exact placement retirement', async () => {
     const leases = registry()
+
     const host = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
@@ -613,18 +650,22 @@ describe('BrowserHostLeaseRegistry', () => {
       hostCapabilities: ['webview'],
       pageCommandProtocolVersion: 1
     })
+
     const identity = {
       authorityEpoch: 'epoch-a',
       browserHostClientId: 'host-a',
       browserHostGeneration: 1,
       pairedDeviceId: 'device-a'
     }
+
     leases.attachCommandDelivery(identity, () => {})
     leases.grantExecutionHost(identity, 'host-key-a')
     const placement = leases.placeClientPage('page-a', 'host-a')
+
     if (placement.kind !== 'client') {
       throw new Error('expected client placement')
     }
+
     const authority = {
       authorityRuntimeId: 'runtime-a',
       authorityEpoch: 'epoch-a',
@@ -633,11 +674,13 @@ describe('BrowserHostLeaseRegistry', () => {
       browserHostGeneration: 1,
       pageHostGeneration: placement.pageHostGeneration
     }
+
     const issued = leases.issueClientPageCommand(authority, {
       type: 'createPage',
       browserProfileId: 'default',
       executionHostKey: 'host-key-a'
     })
+
     const firstRetirement = leases.beginPageRetirement('page-a', placement)
 
     expect(leases.completePageRetirement(firstRetirement)).toBe(true)
@@ -672,12 +715,14 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('binds tunnel generations to the lease and fences replaced routes', async () => {
     const leases = registry()
+
     const host = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
       pairedDeviceId: 'device-a',
       hostCapabilities: ['webview']
     })
+
     const identity = {
       authorityEpoch: 'epoch-a',
       browserHostClientId: 'host-a',
@@ -685,6 +730,7 @@ describe('BrowserHostLeaseRegistry', () => {
       pairedDeviceId: 'device-a',
       executionHostKey: 'native:runtime-a'
     }
+
     const firstRoute = leases.openTunnel(identity)
     const replacementRoute = leases.openTunnel(identity)
 
@@ -698,20 +744,24 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('grants one exact execution host without letting old cleanup remove a replacement', async () => {
     const leases = registry()
+
     const host = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
       pairedDeviceId: 'device-a',
       hostCapabilities: ['webview']
     })
+
     const identity = {
       authorityEpoch: 'epoch-a',
       browserHostClientId: 'host-a',
       browserHostGeneration: 1,
       pairedDeviceId: 'device-a'
     }
+
     const first = leases.grantExecutionHost(identity, 'ssh:target-a')
     const replacement = leases.grantExecutionHost(identity, 'ssh:target-a')
+
     const route = leases.openTunnel(
       { ...identity, executionHostKey: 'ssh:target-a' },
       { requireExecutionHostGrant: true }
@@ -732,18 +782,21 @@ describe('BrowserHostLeaseRegistry', () => {
 
   it('invalidates execution-host grants with their exact lease generation', () => {
     const leases = registry()
+
     const first = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-a',
       pairedDeviceId: 'device-a',
       hostCapabilities: ['webview']
     })
+
     const firstIdentity = {
       authorityEpoch: 'epoch-a',
       browserHostClientId: 'host-a',
       browserHostGeneration: 1,
       pairedDeviceId: 'device-a'
     }
+
     const oldGrant = leases.grantExecutionHost(firstIdentity, 'ssh:target-a')
 
     leases.attach({

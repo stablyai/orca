@@ -25,6 +25,7 @@ export function useMultipleCreateReset(input: MultipleCreateResetInput) {
     setName,
     setNote
   } = input
+
   const resetForNextCreate = useCallback(() => {
     // Clear the checkout source too, so a PR's resolved SHA cannot become the next selection.
     handleClearSmartNameSelection()

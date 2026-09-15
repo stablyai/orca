@@ -23,6 +23,7 @@ vi.mock('../../runtime/web-runtime-session', () => ({
 }))
 
 const WT = 'wt-1'
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function dragData(): TabDragItemData {
@@ -52,18 +53,23 @@ function dragEndEvent(): DragEndEvent {
 
 function renderDragHook(): ReturnType<typeof useTabDragSplit> {
   let result: ReturnType<typeof useTabDragSplit> | null = null
+
   function Probe(): null {
     result = useTabDragSplit({ worktreeId: WT })
+
     return null
   }
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => root.render(createElement(Probe)))
   mounted.push({ container, root })
+
   if (!result) {
     throw new Error('useTabDragSplit did not render')
   }
+
   return result
 }
 
@@ -71,6 +77,7 @@ async function retainedGuest(): Promise<RetainedHostFixture> {
   const rig = createRetainedHostFixture()
   await rig.mount()
   rig.attach()
+
   return rig
 }
 
@@ -83,6 +90,7 @@ afterEach(() => {
     act(() => root.unmount())
     container.remove()
   }
+
   disposeRetainedHostFixtures()
   document.body.replaceChildren()
   vi.useRealTimers()

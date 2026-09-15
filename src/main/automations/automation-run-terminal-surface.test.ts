@@ -15,8 +15,11 @@ const repo: Repo = {
 }
 
 const TAB_ID = 'tab-1'
+
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 const WORKTREE_ID = '/tmp/orca::wt1'
 
 function makeStore() {

@@ -18,6 +18,7 @@ const {
 }))
 
 vi.mock('../daemon/daemon-health', () => ({ checkDaemonHealth: checkDaemonHealthMock }))
+
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonEndpointFacts: getDaemonEndpointFactsMock,
   readDaemonPidRecord: readDaemonPidRecordMock,

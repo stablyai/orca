@@ -6,6 +6,7 @@ import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import { linearListProjects } from '@/runtime/runtime-linear-project-client'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from './task-page-draft-storage'
+
 export function useTaskPageLinearCreationState(model: TaskPageJiraListProjectionModel) {
   const {
     settings,
@@ -20,6 +21,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     selectedLinearProject,
     availableTeams
   } = model
+
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
   const [newLinearProjectName, setNewLinearProjectName] = useState('')
@@ -33,26 +35,31 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   const [newLinearProjectStartDate, setNewLinearProjectStartDate] = useState('')
   const [newLinearProjectTargetDate, setNewLinearProjectTargetDate] = useState('')
   const [newLinearProjectSubmitting, setNewLinearProjectSubmitting] = useState(false)
+
   const newLinearProjectTargetTeam = useMemo(
     () => availableTeams.find((t) => t.id === newLinearProjectTeamId) ?? availableTeams[0] ?? null,
     [availableTeams, newLinearProjectTeamId]
   )
+
   const newLinearProjectMembers = useTeamMembers(
     newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
     settings,
     newLinearProjectTargetTeam?.workspaceId
   )
+
   const newLinearProjectLabels = useTeamLabels(
     newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
     settings,
     newLinearProjectTargetTeam?.workspaceId
   )
+
   const setNewLinearProjectTeamId = (id: string | null): void => {
     setNewLinearProjectTeamIdState(id)
     setNewLinearProjectLeadId(null)
     setNewLinearProjectMemberIds([])
     setNewLinearProjectLabelIds([])
   }
+
   const discardNewLinearProjectDraft = useTaskCreationDraftRetention({
     open: newLinearProjectOpen,
     draft: {
@@ -74,6 +81,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   const [newLinearIssuePriority, setNewLinearIssuePriority] = useState<number>(0)
   const [newLinearIssueProjectId, setNewLinearIssueProjectId] = useState<string | null>(null)
   const [newLinearIssueLabelIds, setNewLinearIssueLabelIds] = useState<string[]>([])
+
   const discardNewLinearIssueDraft = useTaskCreationDraftRetention({
     open: newLinearIssueOpen,
     draft: {
@@ -82,23 +90,30 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     },
     writeDraft: writeNewLinearIssueDraft
   })
+
   const newLinearIssueTargetTeam = useMemo(
     () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
     [availableTeams, newLinearIssueTeamId]
   )
+
   const [newLinearIssueProjects, setNewLinearIssueProjects] = useState<LinearProjectSummary[]>([])
   const [newLinearIssueProjectsLoading, setNewLinearIssueProjectsLoading] = useState(false)
   useEffect(() => {
     let cancelled = false
+
     if (!newLinearIssueOpen || !linearConnected || !newLinearIssueTargetTeam) {
       setNewLinearIssueProjects([])
       setNewLinearIssueProjectsLoading(false)
+
       return
     }
+
     setNewLinearIssueProjectsLoading(true)
+
     const targetWorkspaceId =
       newLinearIssueTargetTeam.workspaceId ||
       (selectedLinearWorkspaceId !== 'all' ? selectedLinearWorkspaceId : null)
+
     linearListProjects(linearTaskSourceContext ?? settings, undefined, 100, targetWorkspaceId)
       .then((p) => {
         if (!cancelled) {
@@ -111,6 +126,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
           setNewLinearIssueProjectsLoading(false)
         }
       })
+
     return () => {
       // Why: project lists are workspace-scoped; stale responses must not populate the composer after a team/workspace switch.
       cancelled = true
@@ -123,6 +139,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     settings,
     selectedLinearWorkspaceId
   ])
+
   const setNewLinearIssueTeamId = (value: SetStateAction<string | null>): void => {
     const id = typeof value === 'function' ? value(newLinearIssueTeamId) : value
     setNewLinearIssueTeamIdState(id)
@@ -137,25 +154,30 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     )
     setNewLinearIssueLabelIds([])
   }
+
   const newLinearStates = useTeamStates(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
+
   const newLinearMembers = useTeamMembers(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
+
   const newLinearLabels = useTeamLabels(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
     settings,
     newLinearIssueTargetTeam?.workspaceId
   )
+
   useEffect(() => {
     if (newLinearStates.data.length > 0 && !newLinearIssueStateId) {
       const defaultState =
         newLinearStates.data.find((s) => s.type === 'unstarted') || newLinearStates.data[0]
+
       if (defaultState) {
         setNewLinearIssueStateId(defaultState.id)
       }
@@ -176,6 +198,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
       activeModal === 'none',
     'tasks_open'
   )
+
   const nextModel = model as typeof model & {
     newLinearProjectOpen: typeof newLinearProjectOpen
     setNewLinearProjectOpen: typeof setNewLinearProjectOpen
@@ -239,6 +262,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     jiraConnectOpen: typeof jiraConnectOpen
     setJiraConnectOpen: typeof setJiraConnectOpen
   }
+
   nextModel.newLinearProjectOpen = newLinearProjectOpen
   nextModel.setNewLinearProjectOpen = setNewLinearProjectOpen
   nextModel.newLinearProjectName = newLinearProjectName
@@ -299,6 +323,8 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   nextModel.linearConnectOpen = linearConnectOpen
   nextModel.setLinearConnectOpen = setLinearConnectOpen
   Object.assign(nextModel, { jiraConnectOpen, setJiraConnectOpen })
+
   return nextModel
 }
+
 export type TaskPageLinearCreationStateModel = ReturnType<typeof useTaskPageLinearCreationState>

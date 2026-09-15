@@ -59,6 +59,7 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     const fsProvider = makeFsProvider({
       realpath: vi.fn(async () => 'C:/Users/alice/platform')
     })
+
     mocks.getActiveMultiplexer.mockReturnValue({
       request: vi.fn(async () => ({ resolvedPath: 'C:\\Users\\alice\\' }))
     })
@@ -98,6 +99,7 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     const fsProvider = makeFsProvider({
       realpath: vi.fn(async () => 'C:/Users/alice/platform')
     })
+
     mocks.getActiveMultiplexer.mockReturnValue({
       request: vi.fn(async () => ({ resolvedPath: 'C:/Users/alice/' }))
     })
@@ -120,6 +122,7 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
 
   it('appends Copilot trusted folder remotely without clobbering config keys', async () => {
     const writeFile = vi.fn(async (_filePath: string, _content: string) => undefined)
+
     const fsProvider = makeFsProvider({
       readFile: vi.fn(async () => ({
         content: JSON.stringify({ firstLaunchAt: '2026-01-01', trustedFolders: ['/old'] }),
@@ -127,6 +130,7 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
       })),
       writeFile
     })
+
     mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
 
     await markRemoteAgentWorkspaceTrusted({

@@ -15,6 +15,7 @@ import { TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
 describe('OrcaRuntimeService', () => {
   it('creates a same-repo PR branch override from a resolved head SHA and matching push target', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title',
       head: 'abc123',
@@ -22,6 +23,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
@@ -35,6 +37,7 @@ describe('OrcaRuntimeService', () => {
       updatedAt: '2026-05-21T00:00:00Z',
       mergeable: 'UNKNOWN'
     })
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
@@ -81,6 +84,7 @@ describe('OrcaRuntimeService', () => {
   it('skips broad remote fetch for an existing full-SHA PR base', async () => {
     const runtime = new OrcaRuntimeService(store)
     const sha = 'c'.repeat(40)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title',
       head: sha,
@@ -88,20 +92,25 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('branch not found')
       }
+
       if (args[0] === 'rev-parse' && args.includes(`${sha}^{commit}`)) {
         return { stdout: `${sha}\n`, stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -132,6 +141,7 @@ describe('OrcaRuntimeService', () => {
 
   it('creates a selected Bitbucket PR branch override from a matching remote branch', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/bitbucket-title',
       head: 'abc123',
@@ -139,6 +149,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
@@ -153,6 +164,7 @@ describe('OrcaRuntimeService', () => {
       updatedAt: '2026-05-21T00:00:00Z',
       mergeable: 'UNKNOWN'
     })
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
@@ -202,6 +214,7 @@ describe('OrcaRuntimeService', () => {
 
   it('suffixes an existing PR when a matching push target lacks selected PR metadata', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title-2',
       head: 'abc123',
@@ -209,6 +222,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockImplementation(
       (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
     )
@@ -224,13 +238,16 @@ describe('OrcaRuntimeService', () => {
       updatedAt: '2026-05-21T00:00:00Z',
       mergeable: 'UNKNOWN'
     })
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
         throw new Error('missing local branch')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -258,6 +275,7 @@ describe('OrcaRuntimeService', () => {
 
   it('suffixes a matching push target branch when selected PR metadata has no PR number', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title-2',
       head: 'abc123',
@@ -265,19 +283,23 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockImplementation(
       (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
     )
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
         throw new Error('missing local branch')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -305,6 +327,7 @@ describe('OrcaRuntimeService', () => {
 
   it('suffixes a matching push target branch when the existing PR is different', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title-2',
       head: 'abc123',
@@ -312,6 +335,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockImplementation(
       (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
     )
@@ -327,13 +351,16 @@ describe('OrcaRuntimeService', () => {
       updatedAt: '2026-05-21T00:00:00Z',
       mergeable: 'UNKNOWN'
     })
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
         throw new Error('missing local branch')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -362,6 +389,7 @@ describe('OrcaRuntimeService', () => {
 
   it('suffixes a selected PR remote conflict when the PR lookup fails', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title-2',
       head: 'abc123',
@@ -369,6 +397,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockImplementation(
       (sanitizedName: string) => `/tmp/workspaces/${sanitizedName}`
     )
@@ -376,13 +405,16 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
     getPRForBranchMock.mockRejectedValueOnce(new Error('gh unavailable'))
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix-2^{commit}')) {
         throw new Error('missing local branch')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -411,6 +443,7 @@ describe('OrcaRuntimeService', () => {
 
   it('checks out an unused runtime PR branch only when it is at the resolved head SHA', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title',
       head: 'abc123',
@@ -418,6 +451,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(getBranchConflictKind).mockClear()
@@ -432,13 +466,16 @@ describe('OrcaRuntimeService', () => {
         }
       ])
       .mockResolvedValueOnce([createdWorktree])
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('abc123^{commit}')) {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -467,6 +504,7 @@ describe('OrcaRuntimeService', () => {
 
   it('suffixes only the runtime worktree path when an exact PR branch checkout path exists', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const createdWorktree = {
       path: '/tmp/workspaces/fix-title-2',
       head: 'abc123',
@@ -474,6 +512,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockImplementation((sanitizedName: string) =>
       sanitizedName === 'fix-title' ? process.cwd() : `/tmp/workspaces/${sanitizedName}`
     )
@@ -499,13 +538,16 @@ describe('OrcaRuntimeService', () => {
         }
       ])
       .mockResolvedValueOnce([createdWorktree])
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('abc123^{commit}')) {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 

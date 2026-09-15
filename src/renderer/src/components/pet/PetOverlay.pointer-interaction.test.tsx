@@ -49,6 +49,7 @@ function renderPetOverlay(): { container: HTMLDivElement; root: Root } {
   act(() => {
     root.render(<PetOverlay />)
   })
+
   return { container, root }
 }
 
@@ -69,9 +70,11 @@ function spriteDiv(container: HTMLElement): HTMLDivElement {
   const div = Array.from(container.querySelectorAll('div')).find(
     (candidate) => candidate.style.backgroundImage !== ''
   )
+
   if (!div) {
     throw new Error('sprite div not found')
   }
+
   return div
 }
 
@@ -102,6 +105,7 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -110,6 +114,7 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
   it('freezes on a stationary grab, then animates once dragged past the deadzone', () => {
     ;({ container, root } = renderPetOverlay())
     const wrapper = container.querySelector('.pointer-events-auto')
+
     if (!wrapper) {
       throw new Error('draggable wrapper not found')
     }
@@ -156,9 +161,11 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
   it('does not restart the idle track when hover falls back to the same row', () => {
     ;({ container, root } = renderPetOverlay())
     const wrapper = container.querySelector('.pointer-events-auto')
+
     if (!wrapper) {
       throw new Error('draggable wrapper not found')
     }
+
     // The mocked sprite has no jumping row, so hover (→ jumping) resolves back to
     // idle. Keying the keyframes on the resolved row means the name must not
     // change — otherwise the unchanged idle animation restarts on hover. React

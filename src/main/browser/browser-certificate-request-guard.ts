@@ -44,13 +44,16 @@ export class BrowserCertificateRequestGuard {
     if (this.guardedSessions.has(session)) {
       return
     }
+
     // Why: Chromium caches certificate continuations at session scope. This
     // request gate restores the narrower per-WebContents approval boundary.
     session.webRequest.onBeforeRequest((details, callback) => {
       const readiness = getProxySessionApplicationReadiness(session)
+
       const answer = (ready: boolean): void => {
         callback(!ready || this.shouldBlockRequest(session, details) ? { cancel: true } : {})
       }
+
       if (typeof readiness === 'boolean') {
         answer(readiness)
       } else {
@@ -64,8 +67,10 @@ export class BrowserCertificateRequestGuard {
     if (!this.guardedSessions.delete(session)) {
       return
     }
+
     session.webRequest.onBeforeRequest(null)
     this.acceptedIdentityBySession.delete(session)
+
     for (const [webContentsId, grantSession] of this.grantSessionByGuestId) {
       if (grantSession === session) {
         this.revokeGuest(webContentsId)
@@ -77,7 +82,9 @@ export class BrowserCertificateRequestGuard {
     if (!this.guardedSessions.has(session)) {
       return false
     }
+
     const accepted = this.acceptedIdentityBySession.get(session)?.get(identity.secureEndpoint)
+
     // Why: the request gate cannot inspect TLS after Chromium caches a decision.
     // Never accept a second bad leaf for one endpoint in the same app process.
     return !accepted || certificateIdentitiesMatch(accepted, identity)
@@ -87,20 +94,24 @@ export class BrowserCertificateRequestGuard {
     if (!this.guardedSessions.has(session)) {
       return false
     }
+
     let acceptedByEndpoint = this.acceptedIdentityBySession.get(session)
     const accepted = acceptedByEndpoint?.get(grant.secureEndpoint)
+
     // Why: once one leaf is accepted for an endpoint in this session, Chromium
     // caches the TLS decision. Refuse a conflicting pending leaf so proceed()
     // cannot report success when the next certificate-error will still fail.
     if (accepted && !certificateIdentitiesMatch(accepted, grant)) {
       return false
     }
+
     // Why: pin the identity at grant time, not only on the later certificate
     // callback, so a concurrent sibling proceed cannot race in a second leaf.
     if (!acceptedByEndpoint) {
       acceptedByEndpoint = new Map()
       this.acceptedIdentityBySession.set(session, acceptedByEndpoint)
     }
+
     acceptedByEndpoint.set(grant.secureEndpoint, {
       secureEndpoint: grant.secureEndpoint,
       leafCertificateSha256: grant.leafCertificateSha256,
@@ -110,6 +121,7 @@ export class BrowserCertificateRequestGuard {
     this.grantsByGuestId.set(grant.guestWebContentsId, grant)
     this.grantSessionByGuestId.set(grant.guestWebContentsId, session)
     this.enforceGrantBound()
+
     return true
   }
 
@@ -125,16 +137,22 @@ export class BrowserCertificateRequestGuard {
     ) {
       return false
     }
+
     let acceptedByEndpoint = this.acceptedIdentityBySession.get(session)
+
     if (!acceptedByEndpoint) {
       acceptedByEndpoint = new Map()
       this.acceptedIdentityBySession.set(session, acceptedByEndpoint)
     }
+
     const accepted = acceptedByEndpoint.get(identity.secureEndpoint)
+
     if (accepted && !certificateIdentitiesMatch(accepted, identity)) {
       return false
     }
+
     acceptedByEndpoint.set(identity.secureEndpoint, identity)
+
     return true
   }
 
@@ -145,6 +163,7 @@ export class BrowserCertificateRequestGuard {
 
   revokeForCommittedNavigation(webContentsId: number, url: string): void {
     const grant = this.grantsByGuestId.get(webContentsId)
+
     if (grant && toSecureCertificateEndpoint(url) !== grant.secureEndpoint) {
       this.revokeGuest(webContentsId)
     }
@@ -155,15 +174,20 @@ export class BrowserCertificateRequestGuard {
     details: Electron.OnBeforeRequestListenerDetails
   ): boolean {
     const secureEndpoint = toSecureCertificateEndpoint(details.url)
+
     if (!secureEndpoint) {
       return false
     }
+
     const accepted = this.acceptedIdentityBySession.get(session)?.get(secureEndpoint)
+
     if (!accepted) {
       return false
     }
+
     const webContentsId = details.webContentsId ?? details.webContents?.id
     const grant = webContentsId === undefined ? undefined : this.grantsByGuestId.get(webContentsId)
+
     if (
       webContentsId !== undefined &&
       grant &&
@@ -172,9 +196,11 @@ export class BrowserCertificateRequestGuard {
     ) {
       return false
     }
+
     if (details.resourceType === 'mainFrame' && webContentsId !== undefined) {
       this.reportBlockedMainFrame(webContentsId, details.url, accepted)
     }
+
     return true
   }
 
@@ -185,9 +211,11 @@ export class BrowserCertificateRequestGuard {
   ): void {
     try {
       const parsed = new URL(navigationUrl)
+
       if (parsed.protocol !== 'https:') {
         return
       }
+
       this.dependencies.onBlockedMainFrame({
         webContentsId,
         navigationUrl,
@@ -203,9 +231,11 @@ export class BrowserCertificateRequestGuard {
   private enforceGrantBound(): void {
     while (this.grantsByGuestId.size > MAX_CERTIFICATE_GRANTS) {
       const oldest = this.grantsByGuestId.keys().next().value as number | undefined
+
       if (oldest === undefined) {
         return
       }
+
       this.revokeGuest(oldest)
     }
   }

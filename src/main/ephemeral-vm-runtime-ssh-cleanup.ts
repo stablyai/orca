@@ -10,23 +10,29 @@ export async function removeEphemeralVmRuntimeSshTarget(args: {
   removeTarget: (targetId: string) => Promise<void>
 }): Promise<EphemeralVmRuntimeRecord> {
   const current = getCurrentRuntime(args.userDataPath, args.runtime)
+
   if (!current.sshTargetId) {
     return finishCompletedCleanup(args.userDataPath, current)
   }
+
   try {
     await args.removeTarget(current.sshTargetId)
   } catch {
     const latest = getCurrentRuntime(args.userDataPath, current)
+
     if (!latest.sshTargetId) {
       return finishCompletedCleanup(args.userDataPath, latest)
     }
+
     return updateEphemeralVmRuntimeStatus(args.userDataPath, latest.id, {
       status: 'cleanup_failed',
       cleanupLastError: 'Failed to remove the hidden SSH target.'
     })
   }
+
   const latest = getCurrentRuntime(args.userDataPath, current)
   const status = latest.cleanupStatus === 'succeeded' ? 'cleaned' : latest.status
+
   return updateEphemeralVmRuntimeStatus(args.userDataPath, latest.id, {
     status,
     ...(status === 'cleaned' ? { cleanupLastError: null } : {}),
@@ -49,6 +55,7 @@ function finishCompletedCleanup(
   if (runtime.cleanupStatus !== 'succeeded' || runtime.status === 'cleaned') {
     return runtime
   }
+
   return updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
     status: 'cleaned',
     cleanupLastError: null,

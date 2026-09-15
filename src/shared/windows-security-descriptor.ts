@@ -67,15 +67,20 @@ export type WindowsDacl = {
 export function parseSddlDacl(sddl: string, localDomainSid?: string): WindowsDacl | null {
   // ACE bodies never contain parentheses, so the group stops cleanly at a following `S:` SACL.
   const dacl = /D:([A-Z]*)((?:\([^()]*\))*)/.exec(sddl)
+
   if (!dacl) {
     return null
   }
+
   const aces: WindowsAce[] = []
+
   for (const group of dacl[2]!.matchAll(/\(([^()]*)\)/g)) {
     const fields = group[1]!.split(';')
+
     if (fields.length < 6) {
       return null
     }
+
     aces.push({
       type: fields[0]!.toUpperCase(),
       flags: splitAceFlags(fields[1]!),
@@ -83,6 +88,7 @@ export function parseSddlDacl(sddl: string, localDomainSid?: string): WindowsDac
       sid: resolveSddlSid(fields[5]!, localDomainSid)
     })
   }
+
   return { isProtected: dacl[1]!.includes('P'), aces }
 }
 
@@ -92,17 +98,21 @@ export function parseSddlDacl(sddl: string, localDomainSid?: string): WindowsDac
  */
 function splitAceFlags(flags: string): string[] {
   const tokens: string[] = []
+
   for (let index = 0; index + 1 < flags.length; index += 2) {
     tokens.push(flags.slice(index, index + 2).toUpperCase())
   }
+
   return tokens
 }
 
 export function resolveSddlSid(token: string, localDomainSid?: string): string {
   const upper = token.toUpperCase()
   const rid = LOCAL_DOMAIN_RELATIVE_RIDS[upper]
+
   if (rid !== undefined) {
     return localDomainSid ? `${localDomainSid}-${rid}` : upper
   }
+
   return SDDL_SID_ALIASES[upper] ?? upper
 }

@@ -69,6 +69,7 @@ export async function parseAgentSessionFile(
       // <dbPath>#<sessionId> candidate path. Legacy file-based sessions use
       // real filesystem paths and fall through to the JSON parser.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
+
       if (sqliteCandidate) {
         return parseOpenCodeSqliteSessionViaWorker({
           dbPath: sqliteCandidate.dbPath,
@@ -76,8 +77,10 @@ export async function parseAgentSessionFile(
           platform
         })
       }
+
       return parseOpenCodeSessionFile(candidate.file, platform, messages)
     }
+
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)
     case 'hermes':

@@ -20,6 +20,7 @@ async function plugin(): Promise<ValidDiscoveredPlugin> {
   const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-worker-controller-'))
   roots.push(rootDir)
   await writeFile(join(rootDir, 'main.mjs'), 'export default function activate() {}')
+
   return {
     pluginKey: 'orca-samples.demo',
     rootDir,
@@ -83,9 +84,11 @@ describe('PluginWorkerController activation authority', () => {
     const subjectPlugin = await plugin()
     let approved = true
     let finishVerification!: () => void
+
     const verification = new Promise<void>((resolve) => {
       finishVerification = resolve
     })
+
     const factory = vi.fn<PluginWorkerFactory>()
     const subject = controller({ factory, verify: () => verification, isApproved: () => approved })
 
@@ -102,14 +105,17 @@ describe('PluginWorkerController activation authority', () => {
     const subjectPlugin = await plugin()
     let approved = true
     let finishStart!: (handle: PluginWorkerHandle) => void
+
     const factory = vi.fn<PluginWorkerFactory>(
       () => new Promise<PluginWorkerHandle>((resolve) => (finishStart = resolve))
     )
+
     const subject = controller({
       factory,
       verify: async () => undefined,
       isApproved: () => approved
     })
+
     const startedWorker = worker(['run'])
 
     const activation = subject.ensure(subjectPlugin)
@@ -125,6 +131,7 @@ describe('PluginWorkerController activation authority', () => {
   it('rejects and stops workers that register undeclared commands', async () => {
     const subjectPlugin = await plugin()
     const startedWorker = worker(['run', 'undeclared'])
+
     const subject = controller({
       factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(startedWorker),
       verify: async () => undefined,
@@ -140,6 +147,7 @@ describe('PluginWorkerController activation authority', () => {
 
   it('rejects workers that register declarative action aliases', async () => {
     const base = await plugin()
+
     const subjectPlugin: ValidDiscoveredPlugin = {
       ...base,
       manifest: pluginManifestSchema.parse({
@@ -150,7 +158,9 @@ describe('PluginWorkerController activation authority', () => {
         }
       })
     }
+
     const startedWorker = worker(['tasks'])
+
     const subject = controller({
       factory: vi.fn<PluginWorkerFactory>().mockResolvedValue(startedWorker),
       verify: async () => undefined,

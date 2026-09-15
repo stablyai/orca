@@ -11,6 +11,7 @@ export function SshDetectedPortRow({
   onForward: () => void
 }): React.JSX.Element {
   const advertisedBrowserUrl = advertisedBrowserUrlForDetectedPort(port)
+
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
       <div className="flex-1 min-w-0">

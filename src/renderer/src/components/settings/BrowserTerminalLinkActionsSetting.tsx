@@ -21,6 +21,7 @@ export function BrowserTerminalLinkActionsSetting({
     'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
     'Show link actions'
   )
+
   const description = getTerminalLinkActionsDescription({ isMac })
 
   return (

@@ -64,6 +64,7 @@ describe('resolveTabInsertion', () => {
       activeData: null,
       overData: makeDragData({ unifiedTabId: 'tab-over', visibleTabId: 'tab-over' })
     })
+
     expect(resolveTabInsertion(event, isTabDragData, () => ({ x: 50, y: 10 }))).toBeNull()
   })
 
@@ -73,6 +74,7 @@ describe('resolveTabInsertion', () => {
       over: { data: { current: { kind: 'pane-body' } }, rect: { left: 0, width: 100 } },
       delta: { x: 0, y: 0 }
     } as unknown as Parameters<typeof resolveTabInsertion>[0]
+
     expect(resolveTabInsertion(event, isTabDragData, () => ({ x: 50, y: 10 }))).toBeNull()
   })
 
@@ -87,6 +89,7 @@ describe('resolveTabInsertion', () => {
       activeData: makeDragData({ unifiedTabId: 'tab-a' }),
       overData: makeDragData({ unifiedTabId: 'tab-b', visibleTabId: 'tab-b', groupId: 'group-2' })
     })
+
     expect(resolveTabInsertion(event, isTabDragData, () => null)).toBeNull()
   })
 
@@ -96,12 +99,14 @@ describe('resolveTabInsertion', () => {
       visibleTabId: 'tab-over',
       groupId: 'group-2'
     })
+
     // Over rect: left=100, width=100 → left edge ends at 130
     const event = makeDragEvent({
       activeData: makeDragData({ unifiedTabId: 'tab-active' }),
       overData,
       overRect: { left: 100, width: 100 }
     })
+
     const result = resolveTabInsertion(event, isTabDragData, () => ({ x: 120, y: 10 }))
     expect(result).toEqual({
       groupId: 'group-2',
@@ -116,12 +121,14 @@ describe('resolveTabInsertion', () => {
       visibleTabId: 'tab-over',
       groupId: 'group-2'
     })
+
     // Over rect: left=100, width=100 → right edge starts at 170
     const event = makeDragEvent({
       activeData: makeDragData({ unifiedTabId: 'tab-active' }),
       overData,
       overRect: { left: 100, width: 100 }
     })
+
     const result = resolveTabInsertion(event, isTabDragData, () => ({ x: 180, y: 10 }))
     expect(result).toEqual({
       groupId: 'group-2',
@@ -136,11 +143,13 @@ describe('resolveTabInsertion', () => {
       visibleTabId: 'tab-over',
       groupId: 'group-1'
     })
+
     const event = makeDragEvent({
       activeData: makeDragData({ unifiedTabId: 'tab-active', groupId: 'group-1' }),
       overData,
       overRect: { left: 0, width: 200 }
     })
+
     expect(resolveTabInsertion(event, isTabDragData, () => ({ x: 100, y: 10 }))).toEqual({
       groupId: 'group-1',
       visibleTabId: 'tab-over',
@@ -154,11 +163,13 @@ describe('resolveTabInsertion', () => {
       visibleTabId: 'tab-over',
       groupId: 'group-2'
     })
+
     const event = makeDragEvent({
       activeData: makeDragData({ unifiedTabId: 'tab-active', groupId: 'group-1' }),
       overData,
       overRect: { left: 0, width: 200 }
     })
+
     expect(resolveTabInsertion(event, isTabDragData, () => ({ x: 80, y: 10 }))).toEqual({
       groupId: 'group-2',
       visibleTabId: 'tab-over',

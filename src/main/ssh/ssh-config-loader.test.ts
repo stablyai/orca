@@ -13,6 +13,7 @@ const { homedirMock, hostnameMock, userInfoMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = await vi.importActual<typeof OsModule>('os')
+
   return {
     ...actual,
     homedir: homedirMock,
@@ -22,7 +23,9 @@ vi.mock('os', async () => {
 })
 
 const originalEnv = { ...process.env }
+
 const tempDirs: string[] = []
+
 const LARGE_INCLUDE_LINE_COUNT = 150_000
 
 afterEach(() => {
@@ -31,6 +34,7 @@ afterEach(() => {
       delete process.env[key]
     }
   }
+
   Object.assign(process.env, originalEnv)
   homedirMock.mockImplementation(() => '/home/testuser')
   hostnameMock.mockImplementation(() => 'workstation.example.com')
@@ -46,6 +50,7 @@ function makeHome(prefix = 'orca-ssh-config-'): string {
   tempDirs.push(home)
   homedirMock.mockReturnValue(home)
   mkdirSync(join(home, '.ssh'), { recursive: true })
+
   return home
 }
 
@@ -53,6 +58,7 @@ function writeFile(root: string, relativePath: string, content: string): string 
   const fullPath = join(root, relativePath)
   mkdirSync(dirname(fullPath), { recursive: true })
   writeFileSync(fullPath, content, 'utf-8')
+
   return fullPath
 }
 

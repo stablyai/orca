@@ -21,15 +21,18 @@ const { concurrency, markerStatGate } = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     stat: async (...args: Parameters<typeof actual.stat>) => {
       concurrency.current += 1
       concurrency.peak = Math.max(concurrency.peak, concurrency.current)
+
       try {
         if (markerStatGate.hold && String(args[0]).endsWith('.git')) {
           await new Promise<void>((resolve) => markerStatGate.parked.push(resolve))
         }
+
         return await actual.stat(...args)
       } finally {
         concurrency.current -= 1
@@ -44,6 +47,7 @@ function makeTarget(path: string): WorktreeBaseWatchTarget {
     repoName: 'project',
     nestWorkspaces: false
   }
+
   return {
     key: `base:local:${path}`,
     kind: 'base',
@@ -64,9 +68,11 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
 
   afterEach(async () => {
     markerStatGate.hold = false
+
     for (const resume of markerStatGate.parked.splice(0)) {
       resume()
     }
+
     await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
   })
 
@@ -74,6 +80,7 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     for (let attempt = 0; attempt < 2_000 && !predicate(); attempt++) {
       await new Promise((resolve) => setTimeout(resolve, 5))
     }
+
     if (!predicate()) {
       throw new Error('timed out waiting for the poller')
     }
@@ -83,6 +90,7 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-base-poller-fanout-')))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
     const candidateCount = 200
+
     for (let i = 0; i < candidateCount; i++) {
       const worktree = join(root, `wt-${i}`)
       await mkdir(worktree)
@@ -90,12 +98,14 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     }
 
     const target = makeTarget(root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
       () => {},
       { pollIntervalMs: 100_000 }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     // 200 candidates stated unbounded would peak near 200 concurrent `stat`
@@ -109,6 +119,7 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-base-poller-pending-')))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
     const pendingCount = MARKER_PROBE_CONCURRENCY * 4
+
     for (let i = 0; i < pendingCount; i++) {
       // No `.git`: every dir stays a pending-marker candidate for the whole test.
       await mkdir(join(root, `pending-${i}`))
@@ -117,6 +128,7 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
     const probed: string[] = []
     let parkFirstBatch = true
     const target = makeTarget(root)
+
     const poller = await startWorktreeBaseDirectoryPoller(
       target,
       () => target.repos,
@@ -130,6 +142,7 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
         }
       }
     )
+
     cleanups.push(() => poller.unsubscribe())
 
     await waitUntil(() => markerStatGate.parked.length > 0)
@@ -139,9 +152,11 @@ describe('worktree base directory poller marker fan-out (#17828)', () => {
 
     parkFirstBatch = false
     markerStatGate.hold = false
+
     for (const resume of markerStatGate.parked.splice(0)) {
       resume()
     }
+
     await waitUntil(() => probed.length >= pendingCount)
 
     // The first tick still probes every due dir exactly once.

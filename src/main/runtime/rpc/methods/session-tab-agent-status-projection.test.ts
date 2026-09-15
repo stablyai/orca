@@ -87,6 +87,7 @@ describe('projectSessionTabAgentStatus', () => {
         }
       ]
     }
+
     // A paired client that never negotiated the capability, with the setting on: mobile keeps an
     // unrenderable row under a fallback title, so only a non-mobile old client still loses them.
     const oldClient = projectSessionTabAgentStatus(snapshot, 'runtime', [], true)
@@ -113,6 +114,7 @@ describe('projectSessionTabAgentStatus', () => {
       [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
       true
     )
+
     expect(capableMobile).toBe(snapshot)
 
     const capable = projectSessionTabAgentStatus(
@@ -121,6 +123,7 @@ describe('projectSessionTabAgentStatus', () => {
       [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
       true
     )
+
     expect(capable).toBe(snapshot)
 
     // The host setting is policy for every caller, so a capable desktop client with the
@@ -261,6 +264,7 @@ describe('projectSessionTabAgentStatus', () => {
   it('never emits an empty structured tab title', () => {
     for (const capabilities of [[], [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]]) {
       const projected = projectSessionTabAgentStatus(claudeSnapshot, 'mobile', capabilities, true)
+
       for (const tab of projected.tabs) {
         expect(tab.title.length).toBeGreaterThan(0)
       }
@@ -309,6 +313,7 @@ describe('projectSessionTabAgentStatus', () => {
         )
       }
     }
+
     expect(projectSessionTabAgentStatus(codexOnly, undefined, undefined, true)).toBe(codexOnly)
   })
 

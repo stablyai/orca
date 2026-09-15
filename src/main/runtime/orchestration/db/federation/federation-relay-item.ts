@@ -29,23 +29,28 @@ export function settleRemoteAttachmentInRelayTransaction(
   if (!outcome) {
     return
   }
+
   const attachment = this.getRemoteDispatchAttachment(dispatchId)
   const state = outcome === 'succeeded' ? 'succeeded' : 'failed'
+
   if (!attachment) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Remote Dispatch ${dispatchId} was not found.`
     )
   }
+
   if (attachment.state === state) {
     return
   }
+
   if (attachment.state !== 'ready') {
     throw new OrchestrationError(
       'request_mismatch',
       `Remote Dispatch ${dispatchId} cannot settle as ${state} from ${attachment.state}.`
     )
   }
+
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments

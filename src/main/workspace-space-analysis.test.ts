@@ -49,6 +49,7 @@ function createStore(repos: Repo[], worktreeHostId?: `runtime:${string}`): Store
       if (worktreeId.endsWith('feature')) {
         return { displayName: 'Feature Workspace', lastActivityAt: 200, hostId: worktreeHostId }
       }
+
       return worktreeHostId ? { hostId: worktreeHostId } : undefined
     }
   } as Store
@@ -73,6 +74,7 @@ describe('analyzeWorkspaceSpace', () => {
 
   afterEach(async () => {
     vi.useRealTimers()
+
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true })
       tempDir = null
@@ -97,6 +99,7 @@ describe('analyzeWorkspaceSpace', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: mainPath,
@@ -149,6 +152,7 @@ describe('analyzeWorkspaceSpace', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: mainPath,
@@ -181,6 +185,7 @@ describe('analyzeWorkspaceSpace', () => {
     const repoPath = join(root, 'repo')
     await mkdir(repoPath, { recursive: true })
     await writeSizedFile(join(repoPath, 'file.txt'), 128)
+
     const repo: Repo = {
       id: 'repo-1',
       path: repoPath,
@@ -188,6 +193,7 @@ describe('analyzeWorkspaceSpace', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: repoPath,
@@ -243,6 +249,7 @@ describe('analyzeWorkspaceSpace', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     const controller = new AbortController()
     controller.abort()
 
@@ -269,20 +276,27 @@ describe('analyzeWorkspaceSpace', () => {
         addedAt: 0
       }
     ]
+
     const capturedSignals: AbortSignal[] = []
     let markBothStarted!: () => void
+
     const bothStarted = new Promise<void>((resolve) => {
       markBothStarted = resolve
     })
+
     listRepoWorktreesMock.mockImplementation((_repo: Repo, options?: { signal?: AbortSignal }) => {
       const signal = options?.signal
+
       if (!signal) {
         throw new Error('expected cancellation signal')
       }
+
       capturedSignals.push(signal)
+
       if (capturedSignals.length === repos.length) {
         markBothStarted()
       }
+
       return new Promise<never>((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true })
       })
@@ -306,6 +320,7 @@ describe('analyzeWorkspaceSpace', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
     listRepoWorktreesMock.mockResolvedValue([])
 
@@ -330,6 +345,7 @@ describe('analyzeWorkspaceSpace', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     listRepoWorktreesMock.mockResolvedValue([
       {
         path: missingPath,
@@ -358,6 +374,7 @@ describe('analyzeWorkspaceSpace', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     getSshGitProviderMock.mockReturnValue({
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -376,6 +393,7 @@ describe('analyzeWorkspaceSpace', () => {
       ['/remote/feature/node_modules/pkg.js', { size: 1000, type: 'file' as const, mtime: 0 }],
       ['/remote/feature/file.log', { size: 200, type: 'file' as const, mtime: 0 }]
     ])
+
     const readDirMock = vi.fn(async (dirPath: string) => {
       if (dirPath === '/remote/feature') {
         return [
@@ -384,18 +402,24 @@ describe('analyzeWorkspaceSpace', () => {
           { name: 'file.log', isDirectory: false, isSymlink: false }
         ]
       }
+
       if (dirPath === '/remote/feature/node_modules') {
         return [{ name: 'pkg.js', isDirectory: false, isSymlink: false }]
       }
+
       return []
     })
+
     const statMock = vi.fn(async (filePath: string) => {
       const stat = statByPath.get(filePath)
+
       if (!stat) {
         throw Object.assign(new Error(`missing ${filePath}`), { code: 'ENOENT' })
       }
+
       return stat
     })
+
     getSshFilesystemProviderMock.mockReturnValue({
       readDir: readDirMock,
       stat: statMock
@@ -422,6 +446,7 @@ describe('analyzeWorkspaceSpace', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     getSshGitProviderMock.mockReturnValue({
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -433,6 +458,7 @@ describe('analyzeWorkspaceSpace', () => {
         }
       ])
     })
+
     const scanWorkspaceSpace = vi.fn().mockResolvedValue({
       sizeBytes: 4096,
       skippedEntryCount: 0,
@@ -447,6 +473,7 @@ describe('analyzeWorkspaceSpace', () => {
       omittedTopLevelItemCount: 0,
       omittedTopLevelSizeBytes: 0
     })
+
     const readDir = vi.fn().mockResolvedValue([])
     const stat = vi.fn()
     getSshFilesystemProviderMock.mockReturnValue({ scanWorkspaceSpace, readDir, stat })
@@ -473,6 +500,7 @@ describe('analyzeWorkspaceSpace', () => {
       addedAt: 0,
       connectionId
     }))
+
     getSshGitProviderMock.mockReturnValue({
       listWorktrees: vi.fn(async (repoPath: string) =>
         [0, 1, 2].map((index) => ({
@@ -488,16 +516,20 @@ describe('analyzeWorkspaceSpace', () => {
     const releases: (() => void)[] = []
     let active = 0
     let peak = 0
+
     const stat = vi.fn(async () => {
       active += 1
       peak = Math.max(peak, active)
       await new Promise<void>((resolve) => releases.push(resolve))
       active -= 1
+
       return { size: 0, type: 'directory' as const, mtime: 0 }
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ readDir: vi.fn(async () => []), stat })
 
     const scan = analyzeWorkspaceSpace(createStore(repos))
+
     for (let index = 0; index < 6; index += 1) {
       await vi.waitFor(() => expect(releases.length).toBeGreaterThan(index))
       releases[index]!()
@@ -516,6 +548,7 @@ describe('analyzeWorkspaceSpace', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     getSshGitProviderMock.mockReturnValue(undefined)
 
     const result = await analyzeWorkspaceSpace(createStore([repo]))

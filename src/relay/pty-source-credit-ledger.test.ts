@@ -12,9 +12,11 @@ function getDeliveryRecord(
 ): DeliveryRecord {
   const internals = ledger as unknown as { deliveries: Map<string, DeliveryRecord> }
   const record = internals.deliveries.get(ptySourceDeliveryKey(owner))
+
   if (!record) {
     throw new Error('test delivery record missing')
   }
+
   return record
 }
 
@@ -60,9 +62,11 @@ function drainOne(
   maxSourceSu = 16 * 1024
 ) {
   const reservation = ledger.reserveNextSend(owner, maxSourceSu)
+
   if (reservation) {
     ledger.commitSend(reservation)
   }
+
   return reservation
 }
 
@@ -71,17 +75,20 @@ function drainOne(
 function expectRetentionMatchesRecords(ledger: RelayPtySourceCreditLedger): void {
   const internals = ledger as unknown as { deliveries: Map<string, DeliveryRecord> }
   const expected = { sourceSu: 0, dataBytes: 0, spans: 0 }
+
   for (const record of internals.deliveries.values()) {
     expected.sourceSu += record.receivedEndSu - record.creditedEndSu
     expected.dataBytes += record.retainedDataBytes
     expected.spans += record.spans.length
   }
+
   expect(ledger.retentionSnapshot()).toEqual(expected)
 }
 
 describe('RelayPtySourceCreditLedger', () => {
   it('keeps send-span lookup near-linear across a retained-frame burst', () => {
     const spanCount = 1_024
+
     const ledger = new RelayPtySourceCreditLedger({
       maxRetainedSourceSu: spanCount * 2,
       maxAggregateRetainedSourceSu: spanCount * 2,
@@ -90,8 +97,10 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedSpans: spanCount,
       maxAggregateRetainedSpans: spanCount
     })
+
     const owner = identity()
     ledger.open(owner, spanCount * 2)
+
     for (let index = 0; index < spanCount; index += 1) {
       append(ledger, owner, 'x', `span-${index}`)
     }
@@ -104,16 +113,20 @@ describe('RelayPtySourceCreditLedger', () => {
         if (typeof property === 'string' && /^\d+$/.test(property)) {
           indexedReads += 1
         }
+
         return Reflect.get(target, property, receiver)
       }
     })
 
     let sends = 0
+
     while (true) {
       const reservation = ledger.reserveNextSend(owner, 1)
+
       if (!reservation) {
         break
       }
+
       ledger.commitSend(reservation)
       sends += 1
     }
@@ -148,10 +161,12 @@ describe('RelayPtySourceCreditLedger', () => {
   it('keeps the cursor correct across ACK reclaim, rollback, rotation, and close', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const oldOwner = identity()
+
     const replacement = identity('token-replacement', {
       clientGeneration: 4,
       ownerGeneration: 5
     })
+
     ledger.open(oldOwner, 16)
     append(ledger, oldOwner, 'ab', 'span-a')
     append(ledger, oldOwner, 'cd', 'span-b')
@@ -236,12 +251,15 @@ describe('RelayPtySourceCreditLedger', () => {
   it('reclaims every credited boundary across a long sequential ACK drain', () => {
     const boundaryCount = 1_024
     const spanCount = boundaryCount - 1
+
     const ledger = new RelayPtySourceCreditLedger({
       maxRetainedSpans: boundaryCount,
       maxAggregateRetainedSpans: boundaryCount
     })
+
     const owner = identity()
     ledger.open(owner, boundaryCount)
+
     for (let index = 0; index < spanCount; index += 1) {
       append(ledger, owner, 'x', `span-${index}`)
       const reservation = ledger.reserveNextSend(owner, 1)
@@ -280,9 +298,11 @@ describe('RelayPtySourceCreditLedger', () => {
     const owner = identity()
     ledger.open(owner, 16)
     append(ledger, owner, 'abcdefgh')
+
     for (let index = 0; index < 8; index += 1) {
       ledger.commitSend(ledger.reserveNextSend(owner, 1)!)
     }
+
     const record = getDeliveryRecord(ledger, owner)
     expect([...record.sentBoundaries]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
@@ -304,6 +324,7 @@ describe('RelayPtySourceCreditLedger', () => {
       const owner = identity(`token-${seed}`)
       const windowSu = 7 + (seed % 17)
       ledger.open(owner, windowSu)
+
       for (let part = 0; part < 20; part += 1) {
         append(ledger, owner, 'x'.repeat(5), `span-${seed}-${part}`)
       }
@@ -313,14 +334,17 @@ describe('RelayPtySourceCreditLedger', () => {
         const snapshot = ledger.snapshot(owner)
         expect(snapshot.sentEndSu - snapshot.creditedEndSu).toBeLessThanOrEqual(windowSu)
         const record = getDeliveryRecord(ledger, owner)
+
         const containingIndex = record.spans.findIndex(
           (span) =>
             span.sourceStartSu <= snapshot.sentEndSu && span.sourceEndSu > snapshot.sentEndSu
         )
+
         // Cursor may lag (advancement is lazy) but must never overshoot the containing span.
         if (containingIndex !== -1) {
           expect(record.sendSpanIndex).toBeLessThanOrEqual(containingIndex)
         }
+
         if (snapshot.sentEndSu > snapshot.creditedEndSu && (turn + seed) % 3 === 0) {
           ledger.acknowledge(owner, {
             id: owner.id,
@@ -330,7 +354,9 @@ describe('RelayPtySourceCreditLedger', () => {
             creditedEndSu: snapshot.sentEndSu
           })
         }
+
         expectRetentionMatchesRecords(ledger)
+
         if (!reservation && snapshot.creditedEndSu === 100) {
           break
         }
@@ -518,10 +544,12 @@ describe('RelayPtySourceCreditLedger', () => {
   it('rotates tokens with exact recovery and rejects the stale delivery', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const oldOwner = identity()
+
     const replacement = identity('token-2', {
       clientGeneration: 4,
       ownerGeneration: 5
     })
+
     ledger.open(oldOwner, 16)
     append(ledger, oldOwner, 'abcdefgh')
     drainOne(ledger, oldOwner, 3)
@@ -558,10 +586,12 @@ describe('RelayPtySourceCreditLedger', () => {
   it('rejects non-boundary and pending-send recovery with zero mutation', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const oldOwner = identity()
+
     const replacement = identity('token-2', {
       clientGeneration: 4,
       ownerGeneration: 5
     })
+
     ledger.open(oldOwner, 16)
     append(ledger, oldOwner, 'abcdefgh')
     drainOne(ledger, oldOwner, 4)
@@ -580,10 +610,12 @@ describe('RelayPtySourceCreditLedger', () => {
   it('rejects a recovery checkpoint beyond source accepted by the sink', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const oldOwner = identity()
+
     const replacement = identity('token-2', {
       clientGeneration: 4,
       ownerGeneration: 5
     })
+
     ledger.open(oldOwner, 16)
     append(ledger, oldOwner, 'abcdefgh')
     drainOne(ledger, oldOwner, 4)
@@ -599,10 +631,12 @@ describe('RelayPtySourceCreditLedger', () => {
   it('accepts an exact receiver checkpoint for a rolled-back send attempt', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const oldOwner = identity()
+
     const replacement = identity('token-2', {
       clientGeneration: 4,
       ownerGeneration: 5
     })
+
     ledger.open(oldOwner, 16)
     append(ledger, oldOwner, 'abcdefgh')
     const attempted = ledger.reserveNextSend(oldOwner, 4)!
@@ -636,11 +670,14 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedSourceSu: 8,
       maxAggregateRetainedSourceSu: 6
     })
+
     const first = identity('token-a')
+
     const second = identity('token-b', {
       id: 'pty-2',
       ptyIncarnation: 'incarnation-2'
     })
+
     ledger.open(first, 8)
     ledger.open(second, 8)
     append(ledger, first, 'abcd')
@@ -654,6 +691,7 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedDataBytes: 7,
       maxAggregateRetainedDataBytes: 7
     })
+
     const owner = identity()
     ledger.open(owner, 8)
 
@@ -675,6 +713,7 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedDataBytes: 391,
       maxAggregateRetainedDataBytes: 391
     })
+
     const owner = identity()
     ledger.open(owner, 8)
     append(ledger, owner, '\u0000'.repeat(64), 'utf16-heavy')
@@ -693,11 +732,14 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedSpans: 2,
       maxAggregateRetainedSpans: 3
     }
+
     const first = identity('token-a')
+
     const second = identity('token-b', {
       id: 'pty-2',
       ptyIncarnation: 'incarnation-2'
     })
+
     const ledger = new RelayPtySourceCreditLedger(limits)
     ledger.open(first, 8)
     ledger.open(second, 8)
@@ -721,6 +763,7 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedSpans: 10,
       maxAggregateRetainedDataBytes: 650
     })
+
     byteLimited.open(first, 8)
     byteLimited.open(second, 8)
     append(byteLimited, first, '\u0000'.repeat(64), 'first-utf16')
@@ -735,6 +778,7 @@ describe('RelayPtySourceCreditLedger', () => {
       maxRetainedSpans: 2,
       maxAggregateRetainedSpans: 2
     })
+
     const owner = identity()
     ledger.open(owner, 8)
     append(ledger, owner, 'a', 'span-a')
@@ -746,12 +790,14 @@ describe('RelayPtySourceCreditLedger', () => {
 
   it('bounds closed token tombstones', () => {
     const ledger = new RelayPtySourceCreditLedger()
+
     const owners = Array.from({ length: 300 }, (_, index) =>
       identity(`token-${index}`, {
         id: `pty-${index}`,
         ptyIncarnation: `incarnation-${index}`
       })
     )
+
     for (const owner of owners) {
       ledger.open(owner, 8)
       ledger.cancel(owner, 'test')
@@ -792,6 +838,7 @@ describe('RelayPtySourceCreditLedger', () => {
       ledger.open(evicting, 8)
       ledger.cancel(evicting, 'test')
     }
+
     expect(ledger.snapshotIfKnown(canceled)).toBeNull()
   })
 

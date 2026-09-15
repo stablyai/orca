@@ -19,83 +19,107 @@ import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -210,6 +234,7 @@ describe('registerWorktreeHandlers', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
+
     const repo = {
       id: 'repo-1',
       path: repoPath,
@@ -218,6 +243,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       worktreeBaseRef: null
     }
+
     store.getRepo.mockReturnValue(repo)
     store.getRepos.mockReturnValue([repo])
     mockKnownFeatureWorktree(join(parentDir, 'real-feature'), repoPath)
@@ -256,6 +282,7 @@ describe('registerWorktreeHandlers', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
+
     const repo = {
       id: 'repo-1',
       path: repoPath,
@@ -264,6 +291,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       worktreeBaseRef: null
     }
+
     store.getRepo.mockReturnValue(repo)
     store.getRepos.mockReturnValue([repo])
     mockKnownFeatureWorktree(join(parentDir, 'real-feature'), repoPath)
@@ -309,6 +337,7 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'status') {
         throw new Error('fatal: not a git repository')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -378,6 +407,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('does not inspect or delete a local path when SSH orphan cleanup has no filesystem provider', async () => {
     const localPath = await mkdtemp(join(tmpdir(), 'orca-ipc-ssh-missing-fs-'))
+
     const repo = {
       id: 'repo-ssh-missing-fs',
       path: '/remote/repo',
@@ -386,6 +416,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-missing-fs'
     }
+
     const provider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -398,6 +429,7 @@ describe('registerWorktreeHandlers', () => {
       ]),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
+
     store.getRepo.mockReturnValue(repo)
     store.getWorktreeMeta.mockReturnValue(
       makeWorktreeMeta({ orcaCreatedAt: Date.now(), orcaCreationSource: 'ssh' })
@@ -430,7 +462,9 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-symlink-git'
     }
+
     const worktreePath = '/remote/orphan'
+
     const provider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -443,12 +477,14 @@ describe('registerWorktreeHandlers', () => {
       ]),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
+
     const fsProvider = {
       lstat: vi.fn().mockResolvedValue({ type: 'symlink' }),
       stat: vi.fn().mockResolvedValue({ type: 'directory' }),
       readFile: vi.fn(),
       deletePath: vi.fn()
     }
+
     store.getRepo.mockReturnValue(repo)
     store.getWorktreeMeta.mockReturnValue(
       makeWorktreeMeta({ orcaCreatedAt: Date.now(), orcaCreationSource: 'ssh' })

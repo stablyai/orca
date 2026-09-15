@@ -16,6 +16,7 @@ export function headlessMobileSnapshotContentUnchanged(
   ) {
     return false
   }
+
   // Why: this runs per persisted worktree on EVERY graph sync whenever a
   // serve PTY exists, so compare structurally instead of stable-stringifying
   // both sides (which allocated six full serialized trees per worktree).
@@ -32,30 +33,38 @@ export function mobileSnapshotValueEqual(a: unknown, b: unknown): boolean {
   if (a === b) {
     return true
   }
+
   if (Array.isArray(a) || Array.isArray(b)) {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
       return false
     }
+
     for (let index = 0; index < a.length; index++) {
       if (!mobileSnapshotValueEqual(a[index], b[index])) {
         return false
       }
     }
+
     return true
   }
+
   if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
     const aRecord = a as Record<string, unknown>
     const bRecord = b as Record<string, unknown>
     const aKeys = Object.keys(aRecord)
+
     if (aKeys.length !== Object.keys(bRecord).length) {
       return false
     }
+
     for (const key of aKeys) {
       if (!Object.hasOwn(bRecord, key) || !mobileSnapshotValueEqual(aRecord[key], bRecord[key])) {
         return false
       }
     }
+
     return true
   }
+
   return false
 }

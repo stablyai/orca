@@ -173,6 +173,7 @@ function expectTrackedFeatureEducationTelemetry(
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>()
+
   return {
     get length() {
       return values.size

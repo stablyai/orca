@@ -24,9 +24,11 @@ export function WorktreeJumpPaletteProjectRow({
 }): React.JSX.Element {
   const result = entry.result
   const isProject = result.kind === 'project'
+
   const hostBadge = isProject
     ? getPaletteHostBadge(result.repo, controller.hostOptions, controller.hostFilterActive)
     : null
+
   const badgeLabel = isProject
     ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')
     : translate('auto.components.WorktreeJumpPalette.repoGroupBadge', 'Repo group')
@@ -81,6 +83,7 @@ export function WorktreeJumpPaletteActionRow({
 }): React.JSX.Element {
   const result = entry.result
   const Icon = result.icon
+
   const kindLabel =
     entry.type === 'settings'
       ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')

@@ -16,13 +16,16 @@ export async function importCookiesFromSafari(
   diag(`importCookiesFromSafari: partition="${targetPartition}"`)
 
   let data: Buffer
+
   try {
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
     diag(`  Safari read failed: ${String(err)}`)
+
     // Why: Safari's Cookies.binarycookies is in a sandbox container; reading it needs Full Disk Access.
     const isPermError =
       err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
+
     if (isPermError) {
       return {
         ok: false,
@@ -30,6 +33,7 @@ export async function importCookiesFromSafari(
           'macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.'
       }
     }
+
     return { ok: false, reason: 'Could not read Safari cookies.' }
   }
 
@@ -56,6 +60,7 @@ export async function importCookiesFromSafari(
     )
   } catch (err) {
     diag(`  Safari import failed: ${String(err)}`)
+
     return { ok: false, reason: 'Could not import cookies from Safari.' }
   }
 }

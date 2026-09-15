@@ -4,6 +4,7 @@ import { scrollTabStripByStep } from './tab-strip-overflow-navigation'
 describe('scrollTabStripByStep', () => {
   it('scrolls instantly when requested for drag-hover navigation', () => {
     const scrollBy = vi.fn()
+
     const el = {
       clientWidth: 200,
       scrollBy

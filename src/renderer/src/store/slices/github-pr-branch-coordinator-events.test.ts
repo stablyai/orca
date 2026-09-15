@@ -34,6 +34,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/coordinator-diverged'
     const worktreeId = 'wt-coordinator-diverged'
     const cacheKey = `${repoId}::${branch}`
+
     const worktree = makePRRefreshWorktree({
       id: worktreeId,
       repoId,
@@ -41,6 +42,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       head: 'current-head',
       linkedPR: 12
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -89,6 +91,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/current'
     const worktreeId = 'wt-coordinator-open-mismatch'
     const cacheKey = `${repoId}::${branch}`
+
     const worktree = makePRRefreshWorktree({
       id: worktreeId,
       repoId,
@@ -96,6 +99,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       head: 'current-head',
       linkedPR: 12
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -138,6 +142,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/unlinked'
     let worktreeIdReads = 0
+
     const worktrees = Array.from({ length: 100 }, (_, index) => {
       const worktree = makePRRefreshWorktree({
         id: `wt-${index}`,
@@ -146,15 +151,19 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         head: `head-${index}`,
         linkedPR: null
       })
+
       Object.defineProperty(worktree, 'id', {
         enumerable: true,
         get: () => {
           worktreeIdReads += 1
+
           return `wt-${index}`
         }
       })
+
       return worktree
     })
+
     store.setState({
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: { [repoId]: worktrees }
@@ -191,6 +200,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/shared'
     let worktreeIdReads = 0
+
     const worktrees = Array.from({ length: 100 }, (_, index) => {
       const worktree = makePRRefreshWorktree({
         id: `wt-${index}`,
@@ -199,15 +209,19 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         head: 'shared-head',
         linkedPR: 12
       })
+
       Object.defineProperty(worktree, 'id', {
         enumerable: true,
         get: () => {
           worktreeIdReads += 1
+
           return `wt-${index}`
         }
       })
+
       return worktree
     })
+
     store.setState({
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: { [repoId]: worktrees }
@@ -244,6 +258,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/current'
     const worktreeId = 'wt-coordinator-stale-sequence'
     const cacheKey = `${repoId}::${branch}`
+
     const worktree = makePRRefreshWorktree({
       id: worktreeId,
       repoId,
@@ -251,12 +266,14 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       head: 'current-head',
       linkedPR: 12
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
       branch,
       worktree
     })
+
     const aliases = [
       {
         cacheKey,
@@ -422,6 +439,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/coordinator-no-head'
     const worktreeId = 'wt-coordinator-no-head'
     const cacheKey = `${repoId}::${branch}`
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -461,6 +479,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const repoId = 'repo-1'
+
     const worktreeA = makePRRefreshWorktree({
       id: 'wt-a',
       repoId,
@@ -468,6 +487,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       head: 'head-a',
       linkedPR: 12
     })
+
     const worktreeB = makePRRefreshWorktree({
       id: 'wt-b',
       repoId,
@@ -475,6 +495,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       head: 'head-b',
       linkedPR: 12
     })
+
     const updateWorktreeMeta = vi.fn(
       async (
         worktreeId: string,
@@ -484,9 +505,11 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         const current = store
           .getState()
           .worktreesByRepo[repoId]?.find((worktree) => worktree.id === worktreeId)
+
         if (options?.shouldApply && !options.shouldApply(current)) {
           return
         }
+
         store.setState((state) => ({
           worktreesByRepo: {
             ...state.worktreesByRepo,
@@ -497,6 +520,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         }))
       }
     )
+
     store.setState({
       repos: [{ id: repoId, path: repoPath, name: 'repo', kind: 'git' }],
       worktreesByRepo: { [repoId]: [worktreeA, worktreeB] },
@@ -606,6 +630,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/event-merged-pr-head-match'
     const cacheKey = `${repoId}::${branch}`
     const worktreeId = 'wt-merged-event-match'
+
     const cachedPR = makePR({
       number: 12,
       title: 'Merged event PR still checked out',
@@ -706,6 +731,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/event-merged-pr-stale'
     const cacheKey = `${repoId}::${branch}`
+
     const cachedPR = makePR({
       number: 12,
       title: 'Stale merged event PR',

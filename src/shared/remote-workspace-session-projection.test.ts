@@ -299,6 +299,7 @@ describe('remote workspace session projection', () => {
       sortOrder: 0,
       createdAt: 1
     }
+
     const session = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {

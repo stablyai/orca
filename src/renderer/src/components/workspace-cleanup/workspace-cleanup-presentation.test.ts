@@ -21,6 +21,7 @@ import type { Repo } from '../../../../shared/repo-types'
 describe('workspace cleanup presentation', () => {
   it('finds hosted review details from renderer state', () => {
     const cacheKey = getHostedReviewCacheKey('/repo', 'alpha', {}, 'repo-1', undefined)
+
     const state = makeState({
       hostedReviewCache: {
         [cacheKey]: { data: makeReview(), fetchedAt: NOW }
@@ -37,6 +38,7 @@ describe('workspace cleanup presentation', () => {
 
   it('hides only the matching suppressed GitHub review', () => {
     const cacheKey = getHostedReviewCacheKey('/repo', 'alpha', {}, 'repo-1', undefined)
+
     const matching = makeState({
       worktreesByRepo: {
         'repo-1': [
@@ -51,6 +53,7 @@ describe('workspace cleanup presentation', () => {
         [cacheKey]: { data: makeReview({ number: 42 }), fetchedAt: NOW }
       }
     })
+
     const different = makeState({
       ...matching,
       hostedReviewCache: {
@@ -67,6 +70,7 @@ describe('workspace cleanup presentation', () => {
 
   it('preserves explicit GitHub links and non-GitHub reviews despite stale suppression', () => {
     const cacheKey = getHostedReviewCacheKey('/repo', 'alpha', {}, 'repo-1', undefined)
+
     const explicit = makeState({
       worktreesByRepo: {
         'repo-1': [
@@ -81,6 +85,7 @@ describe('workspace cleanup presentation', () => {
         [cacheKey]: { data: makeReview({ number: 42 }), fetchedAt: NOW }
       }
     })
+
     const gitLab = makeState({
       worktreesByRepo: {
         'repo-1': [
@@ -110,23 +115,29 @@ describe('workspace cleanup presentation', () => {
   it('host-qualifies same-id repo, worktree, and review cache joins', () => {
     const base = makeState()
     const localRepo = { ...base.repos[0]!, executionHostId: 'local' as const }
+
     const remoteRepo: Repo = {
       ...localRepo,
       connectionId: 'builder',
       executionHostId: 'ssh:builder'
     }
+
     const worktreeId = 'repo-1::/repo/alpha'
+
     const localWorktree = {
       ...base.worktreesByRepo['repo-1']![0]!,
       hostId: 'local' as const,
       linkedPR: 11
     }
+
     const remoteWorktree = {
       ...localWorktree,
       hostId: 'ssh:builder' as const,
       linkedPR: 22
     }
+
     const localKey = getHostedReviewCacheKey('/repo', 'alpha', {}, 'repo-1', null, 'local', true)
+
     const remoteKey = getHostedReviewCacheKey(
       '/repo',
       'alpha',
@@ -136,6 +147,7 @@ describe('workspace cleanup presentation', () => {
       'ssh:builder',
       true
     )
+
     const state = makeState({
       repos: [localRepo, remoteRepo],
       worktreesByRepo: { 'repo-1': [localWorktree, remoteWorktree] },
@@ -159,11 +171,13 @@ describe('workspace cleanup presentation', () => {
 
   it('does not guess a host for legacy same-id review joins', () => {
     const base = makeState()
+
     const duplicateRepo = {
       ...base.repos[0]!,
       connectionId: 'builder',
       executionHostId: 'ssh:builder' as const
     }
+
     const state = makeState({
       repos: [base.repos[0]!, duplicateRepo],
       worktreesByRepo: {
@@ -185,6 +199,7 @@ describe('workspace cleanup presentation', () => {
       provider: 'github',
       title: 'Review row'
     }
+
     const rows = [
       makeCandidate({ worktreeId: 'repo-1::/repo/clean', displayName: 'clean' }),
       makeCandidate({
@@ -208,6 +223,7 @@ describe('workspace cleanup presentation', () => {
         blockers: ['git-status-error']
       })
     ]
+
     const reviewInfo = new Map<string, WorkspaceCleanupReviewInfo>([
       ['repo-1::/repo/dirty-review', openReview]
     ])
@@ -277,6 +293,7 @@ describe('workspace cleanup presentation', () => {
         retainedDoneAgentCount: 0
       }
     })
+
     const reviewInfo: WorkspaceCleanupReviewInfo = {
       hasReview: true,
       label: 'MR #9',
@@ -284,6 +301,7 @@ describe('workspace cleanup presentation', () => {
       provider: 'gitlab',
       title: 'Searchable review'
     }
+
     const text = getWorkspaceCleanupSearchText(candidate, reviewInfo)
 
     expect(text).toContain('search repo')
@@ -319,6 +337,7 @@ describe('workspace cleanup presentation', () => {
         blockers: ['unpushed-commits']
       })
     ]
+
     const reviewInfo = new Map<string, WorkspaceCleanupReviewInfo>([
       [
         'repo-1::/repo/charlie',

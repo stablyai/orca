@@ -12,6 +12,7 @@ import {
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -27,6 +28,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -488,9 +490,11 @@ describe('setActiveWorktree', () => {
       .createBrowserTab(backgroundWt, 'https://previous.example.com', {
         activate: false
       })
+
     const closing = store.getState().createBrowserTab(backgroundWt, 'https://closing.example.com', {
       activate: false
     })
+
     store.setState({ activeBrowserTabIdByWorktree: { [backgroundWt]: closing.id } })
 
     store.getState().closeBrowserTab(closing.id)
@@ -512,9 +516,11 @@ describe('setActiveWorktree', () => {
     const previous = store.getState().createBrowserTab(wt, 'https://previous.example.com', {
       activate: false
     })
+
     const closing = store.getState().createBrowserTab(wt, 'https://closing.example.com', {
       activate: false
     })
+
     store.setState({
       unifiedTabsByWorktree: {},
       activeBrowserTabId: closing.id,
@@ -571,6 +577,7 @@ describe('setActiveWorktree', () => {
     const backgroundBlankTab = store
       .getState()
       .createBrowserTab(backgroundWt, 'about:blank', { activate: true })
+
     const activeNavigatedTab = store
       .getState()
       .createBrowserTab(activeWt, 'https://example.com', { activate: true })

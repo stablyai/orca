@@ -26,6 +26,7 @@ function command(
           browserHostGeneration: 3,
           pageHostGeneration: type === 'closePage' ? 7 : 8
         }
+
   const previousAuthority = {
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-old',
@@ -33,6 +34,7 @@ function command(
     browserHostGeneration: 2,
     pageHostGeneration: 7
   }
+
   const commands = {
     createPage: {
       type: 'createPage' as const,
@@ -54,6 +56,7 @@ function command(
       url: 'https://restored.internal/'
     }
   }
+
   return {
     type: 'command',
     pageCommandProtocolVersion: 1,
@@ -87,7 +90,9 @@ function createHarness() {
     proxyEndpoint: { host: '127.0.0.1' as const, port: 43123 },
     release: vi.fn()
   }
+
   const routeSession = { partition, release: vi.fn() }
+
   const renderer = {
     rendererWebContentsId: 11,
     isCurrent: vi.fn(() => true),
@@ -95,6 +100,7 @@ function createHarness() {
     rekeyPage: vi.fn(async () => {}),
     retirePage: vi.fn()
   }
+
   const routeWebContents = {
     claimGuestLifecycle: vi.fn((registration: BrowserRoutePageGuestIdentity) =>
       lifecycleClaim(registration)
@@ -112,6 +118,7 @@ function createHarness() {
       })
     )
   }
+
   const dependencies = {
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-record-a',
@@ -125,6 +132,7 @@ function createHarness() {
     guestBinding: { bind: vi.fn(), release: vi.fn() },
     routeWebContents
   }
+
   return {
     dependencies,
     executor: new BrowserClientPageCommandExecutor(dependencies),

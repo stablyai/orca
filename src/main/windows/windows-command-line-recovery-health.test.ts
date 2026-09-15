@@ -34,6 +34,7 @@ describe('windows command line recovery health', () => {
     for (let i = 0; i < 5; i++) {
       reportWindowsCommandLineRecoveryHealth([selfRow('')])
     }
+
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
@@ -43,6 +44,7 @@ describe('windows command line recovery health', () => {
       pid: index + 1,
       commandLine: ''
     }))
+
     reportWindowsCommandLineRecoveryHealth([selfRow('node.exe --run'), ...denied])
     expect(warn).not.toHaveBeenCalled()
   })

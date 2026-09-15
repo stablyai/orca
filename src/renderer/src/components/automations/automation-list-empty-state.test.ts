@@ -31,6 +31,7 @@ function hostResolution(
   overrides: Partial<AutomationHostFilterResolution> = {}
 ): AutomationHostFilterResolution {
   const resolved = overrides.entry === undefined ? entry() : overrides.entry
+
   return {
     effective: { kind: 'host', host: (resolved ?? entry()).stableRef },
     entry: resolved,
@@ -93,6 +94,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationListEmptyState(
       input({ searchActive: true, hostRowCount: 5, visibleRowCount: 0 })
     )
+
     expect(state.kind).toBe('search-no-match')
     expect(state.title).toBe('No automations match your search')
   })
@@ -101,6 +103,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationListEmptyState(
       input({ searchActive: true, hostRowCount: 0, visibleRowCount: 0 })
     )
+
     expect(state.kind).toBe('host-empty')
   })
 
@@ -113,6 +116,7 @@ describe('automation list empty state', () => {
         })
       })
     )
+
     expect(state.kind).toBe('host-unavailable')
     expect(state.title).toBe('Automations could not be loaded from web-01')
     expect(state.recovery).toBe('reconnect')
@@ -122,6 +126,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationListEmptyState(
       input({ resolution: hostResolution({ entry: entry({ authorityHealth: 'stale-error' }) }) })
     )
+
     expect(state.kind).toBe('host-error')
     expect(state.title).toBe('Automations could not be loaded from web-01')
     expect(state.recovery).toBe('retry')
@@ -131,6 +136,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationListEmptyState(
       input({ resolution: hostResolution({ entry: entry({ authorityHealth: 'incompatible' }) }) })
     )
+
     expect(state.kind).toBe('host-error')
     expect(state.recovery).toBe('update-server')
   })
@@ -142,10 +148,12 @@ describe('automation list empty state', () => {
     'unavailable',
     'unknown'
   ]
+
   it.each(NOT_CONNECTED)('never calls a %s host empty', (executionHealth) => {
     const state = resolveAutomationListEmptyState(
       input({ resolution: hostResolution({ entry: entry({ executionHealth }) }) })
     )
+
     expect(state.kind).toBe('host-not-connected')
     expect(state.title).not.toContain('No automations')
     expect(state.title).toBe('web-01 is not connected')
@@ -160,6 +168,7 @@ describe('automation list empty state', () => {
         })
       })
     )
+
     expect(state.kind).toBe('host-loading')
     expect(state.title).toBe('Loading host…')
     expect(state.title).not.toContain('No automations')
@@ -169,6 +178,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationHostGroupEmptyState(
       groupInput({ entry: entry({ authorityHealth: 'unavailable' }) })
     )
+
     expect(state.kind).toBe('host-unavailable')
     expect(state.title).toBe('Automations could not be loaded from web-01')
     expect(state.recovery).toBe('reconnect')
@@ -178,6 +188,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationHostGroupEmptyState(
       groupInput({ entry: entry({ executionHealth }) })
     )
+
     expect(state.kind).toBe('host-not-connected')
     expect(state.title).not.toContain('No automations')
   })
@@ -186,6 +197,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationHostGroupEmptyState(
       groupInput({ entry: entry({ catalogState: 'unhydrated' }) })
     )
+
     expect(state.kind).toBe('host-loading')
     expect(state.title).not.toContain('No automations')
   })
@@ -194,6 +206,7 @@ describe('automation list empty state', () => {
     const state = resolveAutomationHostGroupEmptyState(
       groupInput({ searchActive: true, hostRowCount: 3, visibleRowCount: 0 })
     )
+
     expect(state.kind).toBe('search-no-match')
     expect(state.title).toBe('No automations match your search')
   })
@@ -219,6 +232,7 @@ describe('automation list empty state', () => {
         input({ resolution: hostResolution({ entry: entry({ authorityHealth: 'stale-error' }) }) })
       ).title
     ]
+
     expect(new Set(titles).size).toBe(4)
   })
 })

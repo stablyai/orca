@@ -13,6 +13,7 @@ import {
 
 describe('cloud session mutation fence', () => {
   let userDataPath: string
+
   const identity: CloudSessionIdentity = {
     localProfileId: 'local-1',
     cloudUserId: 'user-1',
@@ -45,10 +46,12 @@ describe('cloud session mutation fence', () => {
 
   it('invalidates old work when the expected org changes without tombstoning either identity', () => {
     const old = captureCloudSessionMutation(identity, userDataPath)
+
     const next = recordCloudSessionIdentityMutation(
       { ...identity, organizationId: 'org-2' },
       userDataPath
     )
+
     expect(isCloudSessionMutationCurrent(identity.localProfileId, userDataPath, old)).toBe(false)
     expect(isCloudSessionMutationCurrent(identity.localProfileId, userDataPath, next)).toBe(true)
   })

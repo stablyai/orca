@@ -22,6 +22,7 @@ export async function retryBrowserNetworkRouteReconnect(options: {
   options.signal.addEventListener('abort', abort, { once: true })
   let attempt = 0
   let lastError: unknown
+
   try {
     while (!options.signal.aborted) {
       try {
@@ -29,13 +30,17 @@ export async function retryBrowserNetworkRouteReconnect(options: {
       } catch (error) {
         lastError = error
       }
+
       if (options.signal.aborted) {
         throw new Error('browser_client_network_route_recovery_superseded')
       }
+
       const remainingMs = options.deadline - Date.now()
+
       if (remainingMs <= 0) {
         throw lastError
       }
+
       await delay.wait(
         nextBrowserHostReconnectDelay({
           baseDelayMs: options.retryDelayMs,
@@ -46,6 +51,7 @@ export async function retryBrowserNetworkRouteReconnect(options: {
       )
       attempt += 1
     }
+
     throw new Error('browser_client_network_route_recovery_superseded')
   } finally {
     options.signal.removeEventListener('abort', abort)

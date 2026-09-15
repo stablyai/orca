@@ -8,6 +8,7 @@ describe('createPanelWatchdog', () => {
   it('can start again after StrictMode-style setup cleanup', () => {
     const sendPing = vi.fn()
     const onUnresponsive = vi.fn()
+
     const watchdog = createPanelWatchdog({
       sendPing,
       onUnresponsive,
@@ -33,6 +34,7 @@ describe('createPanelWatchdog', () => {
   it('clears its interval when a pong deadline expires', () => {
     const sendPing = vi.fn()
     const onUnresponsive = vi.fn()
+
     const watchdog = createPanelWatchdog({
       sendPing,
       onUnresponsive,

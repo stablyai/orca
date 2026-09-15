@@ -6,22 +6,27 @@ import {
 } from './task-page-source-family.test-support'
 
 const taskPageSource = readTaskPageSourceFamily()
+
 const linearCreateDialogsSource = readFileSync(
   new URL('./use-task-page-linear-creation-state.ts', import.meta.url),
   'utf8'
 )
+
 const jiraCreateDialogSource = readFileSync(
   new URL('./use-task-page-jira-creation-state.ts', import.meta.url),
   'utf8'
 )
+
 const jiraCreateSubmitSource = readFileSync(
   new URL('./use-task-page-jira-issue-creation.ts', import.meta.url),
   'utf8'
 )
+
 const draftWriterSource = readFileSync(
   new URL('./task-page-draft-storage.tsx', import.meta.url),
   'utf8'
 )
+
 const draftRetentionSource = [linearCreateDialogsSource, jiraCreateDialogSource].join('\n')
 
 function sectionBetween(source: string, startAnchor: string, endAnchor: string): string {
@@ -29,6 +34,7 @@ function sectionBetween(source: string, startAnchor: string, endAnchor: string):
   expect(start, `missing anchor: ${startAnchor}`).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endAnchor, start)
   expect(end, `missing anchor: ${endAnchor}`).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -52,10 +58,12 @@ describe('TaskPage Linear/Jira creation drafts', () => {
       new URL('./task-page/linear/Filters.tsx', import.meta.url),
       'utf8'
     )
+
     const jiraFilters = readFileSync(
       new URL('./task-page/jira/Filters.tsx', import.meta.url),
       'utf8'
     )
+
     expect(linearFilters).toContain("setNewLinearProjectName(draft?.name ?? '')")
     expect(linearFilters).toContain("setNewLinearProjectDescription(draft?.description ?? '')")
     expect(linearFilters).toContain("setNewLinearProjectContent(draft?.content ?? '')")
@@ -71,6 +79,7 @@ describe('TaskPage Linear/Jira creation drafts', () => {
       'const handleCreateNewLinearProject',
       'const nextModel'
     )
+
     expect(linearProjectSection).toContain('discardNewLinearProjectDraft()')
 
     const linearIssueSection = sectionBetween(
@@ -78,6 +87,7 @@ describe('TaskPage Linear/Jira creation drafts', () => {
       'const handleCreateNewLinearIssue',
       'const nextModel'
     )
+
     expect(linearIssueSection).toContain('discardNewLinearIssueDraft()')
 
     const jiraIssueSection = sectionBetween(
@@ -85,6 +95,7 @@ describe('TaskPage Linear/Jira creation drafts', () => {
       'const handleCreateNewJiraIssue',
       'const nextModel'
     )
+
     expect(jiraIssueSection).toContain('discardNewJiraIssueDraft()')
   })
 
@@ -94,6 +105,7 @@ describe('TaskPage Linear/Jira creation drafts', () => {
       'const handleCreateNewJiraIssue',
       'const nextModel'
     )
+
     expect(jiraIssueSection).toContain('} catch (error) {')
     expect(jiraIssueSection).toContain(
       'submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current'

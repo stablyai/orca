@@ -28,5 +28,6 @@ export const DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN = 'provider_write_outcome_unkn
 
 export function dispatchWriteOutcomeUnknownReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
+
   return `${DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN}: ${detail}`
 }

@@ -6,8 +6,11 @@ type PendingBrowserPlacement = {
 }
 
 const placementByPendingPage = new Map<string, PendingBrowserPlacement>()
+
 const materializedGroupKeys = new Set<string>()
+
 const pendingCleanupClaimsByGroup = new Map<string, number>()
+
 const MAX_PENDING_PLACEMENTS = 128
 
 function pageKey(environmentId: string, worktreeId: string, remotePageId: string): string {
@@ -24,16 +27,19 @@ function worktreeGroupKey(worktreeId: string, groupId: string): string {
 
 function hasPlacementForGroup(worktreeId: string, groupId: string): boolean {
   const worktreeMarker = `\0${worktreeId}\0`
+
   for (const [key, placement] of placementByPendingPage) {
     if (key.includes(worktreeMarker) && placement.groupId === groupId) {
       return true
     }
   }
+
   return false
 }
 
 function forgetSettledMaterializedGroup(worktreeId: string, groupId: string): void {
   const key = worktreeGroupKey(worktreeId, groupId)
+
   if (!hasPlacementForGroup(worktreeId, groupId) && !pendingCleanupClaimsByGroup.has(key)) {
     materializedGroupKeys.delete(key)
   }
@@ -48,9 +54,11 @@ export function recordWebSessionBrowserPlacement(args: {
 }): void {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const existing = placementByPendingPage.get(key)
+
   if (!existing && placementByPendingPage.size >= MAX_PENDING_PLACEMENTS) {
     throw new Error('Too many paired browser placements are pending.')
   }
+
   placementByPendingPage.set(key, {
     groupId: args.groupId,
     ownsGroupCleanup: args.callerCreatedGroup === true || existing?.ownsGroupCleanup === true,
@@ -69,6 +77,7 @@ export function moveWebSessionBrowserPlacement(args: {
   const fromKey = pageKey(args.environmentId, args.worktreeId, args.fromRemotePageId)
   const placement = placementByPendingPage.get(fromKey)
   placementByPendingPage.delete(fromKey)
+
   if (placement) {
     recordWebSessionBrowserPlacement({
       environmentId: args.environmentId,
@@ -77,6 +86,7 @@ export function moveWebSessionBrowserPlacement(args: {
       groupId: placement.groupId,
       callerCreatedGroup: placement.ownsGroupCleanup
     })
+
     if (placement.adopted) {
       markWebSessionBrowserPlacementAdopted({
         environmentId: args.environmentId,
@@ -95,6 +105,7 @@ export function forgetWebSessionBrowserPlacement(args: {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const placement = placementByPendingPage.get(key)
   placementByPendingPage.delete(key)
+
   if (placement) {
     forgetSettledMaterializedGroup(args.worktreeId, placement.groupId)
   }
@@ -108,9 +119,11 @@ export function takeWebSessionBrowserPlacementGroup(args: {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const placement = placementByPendingPage.get(key)
   placementByPendingPage.delete(key)
+
   if (placement) {
     forgetSettledMaterializedGroup(args.worktreeId, placement.groupId)
   }
+
   return placement?.groupId
 }
 
@@ -127,6 +140,7 @@ export function markWebSessionBrowserPlacementAdopted(args: {
 }): void {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const placement = placementByPendingPage.get(key)
+
   if (placement && !placement.adopted) {
     placementByPendingPage.set(key, { ...placement, adopted: true })
   }
@@ -140,6 +154,7 @@ export function peekWebSessionBrowserPlacementGroup(args: {
   const placement = placementByPendingPage.get(
     pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   )
+
   return placement?.adopted ? undefined : placement?.groupId
 }
 
@@ -148,11 +163,13 @@ export function isWebSessionBrowserPlacementGroupReserved(args: {
   groupId: string
 }): boolean {
   const worktreeMarker = `\0${args.worktreeId}\0`
+
   for (const [key, placement] of placementByPendingPage) {
     if (key.includes(worktreeMarker) && placement.groupId === args.groupId) {
       return true
     }
   }
+
   return false
 }
 
@@ -169,12 +186,16 @@ export function releaseWebSessionBrowserPlacementGroup(args: {
   const groupKey = worktreeGroupKey(args.worktreeId, groupId)
   const materialized = materializedGroupKeys.has(groupKey)
   placementByPendingPage.delete(key)
+
   const ownsCleanup =
     !materialized && (args.callerCreatedGroup || placement?.ownsGroupCleanup === true)
+
   if (ownsCleanup) {
     pendingCleanupClaimsByGroup.set(groupKey, (pendingCleanupClaimsByGroup.get(groupKey) ?? 0) + 1)
   }
+
   forgetSettledMaterializedGroup(args.worktreeId, groupId)
+
   return ownsCleanup
 }
 
@@ -195,25 +216,32 @@ export function claimWebSessionBrowserPlacementGroupCleanup(args: {
   if (!args.ownsGroupCleanup) {
     return false
   }
+
   const groupKey = worktreeGroupKey(args.worktreeId, args.groupId)
   const pendingClaims = pendingCleanupClaimsByGroup.get(groupKey) ?? 0
+
   if (pendingClaims <= 1) {
     pendingCleanupClaimsByGroup.delete(groupKey)
   } else {
     pendingCleanupClaimsByGroup.set(groupKey, pendingClaims - 1)
   }
+
   if (materializedGroupKeys.has(groupKey)) {
     forgetSettledMaterializedGroup(args.worktreeId, args.groupId)
+
     return false
   }
+
   const worktreeMarker = `\0${args.worktreeId}\0`
   let transferred = false
+
   for (const [key, placement] of placementByPendingPage) {
     if (key.includes(worktreeMarker) && placement.groupId === args.groupId) {
       placementByPendingPage.set(key, { ...placement, ownsGroupCleanup: true })
       transferred = true
     }
   }
+
   return !transferred
 }
 
@@ -222,6 +250,7 @@ export function clearWebSessionBrowserPlacementsForWorktree(
   worktreeId: string
 ): void {
   const prefix = worktreePrefix(environmentId, worktreeId)
+
   for (const key of placementByPendingPage.keys()) {
     if (key.startsWith(prefix) && !placementByPendingPage.get(key)?.ownsGroupCleanup) {
       placementByPendingPage.delete(key)
@@ -231,6 +260,7 @@ export function clearWebSessionBrowserPlacementsForWorktree(
 
 export function clearWebSessionBrowserPlacementsForEnvironment(environmentId: string): void {
   const prefix = `${environmentId}\0`
+
   for (const key of placementByPendingPage.keys()) {
     if (key.startsWith(prefix) && !placementByPendingPage.get(key)?.ownsGroupCleanup) {
       placementByPendingPage.delete(key)

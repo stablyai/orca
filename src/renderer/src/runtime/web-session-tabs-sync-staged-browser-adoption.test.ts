@@ -175,6 +175,7 @@ describe('staged browser tab adoption', () => {
 
   it('adopts a staged browser tab in place instead of appending the host tab', () => {
     const state = makeBrowserState([MIRRORED, STAGED], STAGED.unifiedTabId)
+
     // Reversed on purpose: host order must not reorder tabs this client already placed.
     const next = applyPatch(
       state,
@@ -221,7 +222,9 @@ describe('staged browser tab adoption', () => {
       remotePageId: `staged-page-${index}`,
       staged: true
     }))
+
     const state = makeBrowserState(rows, rows[2].unifiedTabId)
+
     const next = applyPatch(
       state,
       makeSnapshot(rows.toReversed().map((row) => hostBrowserTab(row.remotePageId)))
@@ -230,6 +233,7 @@ describe('staged browser tab adoption', () => {
     expect(browserTabIds(next)).toEqual(rows.map((row) => row.unifiedTabId).sort())
     expect(stripOrder(next)).toEqual(rows.map((row) => row.unifiedTabId))
     expect(next.groupsByWorktree[WT]?.[0]?.activeTabId).toBe(rows[2].unifiedTabId)
+
     for (const row of rows) {
       expect(next.remoteBrowserPageHandlesByPageId[row.pageId]?.staged).toBeUndefined()
     }

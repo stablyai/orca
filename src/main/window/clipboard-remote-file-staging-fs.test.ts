@@ -11,7 +11,9 @@ import {
 } from './clipboard-remote-file-staging'
 
 const FIXTURE_PREFIX = 'orca-clipboard-staging-test-'
+
 const NOW_MS = 1_760_000_000_000
+
 const fixtures: string[] = []
 
 afterEach(async () => {
@@ -29,16 +31,19 @@ describe('remote clipboard staging filesystem contract', () => {
     const tempRoot = await makeFixture()
     const foreignDirectory = join(tempRoot, 'foreign-directory')
     await mkdir(foreignDirectory)
+
     const expiredTransfer = await createRemoteClipboardTransferDirectory(
       tempRoot,
       NOW_MS - 2 * 60 * 60 * 1000,
       '00000000-0000-4000-8000-000000000000'
     )
+
     const freshTransfer = await createRemoteClipboardTransferDirectory(
       tempRoot,
       NOW_MS,
       '00000000-0000-4000-8000-000000000001'
     )
+
     const expiredAt = new Date(NOW_MS - 2 * 60 * 60 * 1000)
     await utimes(expiredTransfer, expiredAt, expiredAt)
 
@@ -47,6 +52,7 @@ describe('remote clipboard staging filesystem contract', () => {
     await expect(access(expiredTransfer)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(access(freshTransfer)).resolves.toBeUndefined()
     await expect(access(foreignDirectory)).resolves.toBeUndefined()
+
     if (typeof process.getuid === 'function') {
       const rootStats = await lstat(getRemoteClipboardStagingRoot(tempRoot))
       expect(rootStats.uid).toBe(process.getuid())
@@ -76,5 +82,6 @@ describe('remote clipboard staging filesystem contract', () => {
 async function makeFixture(): Promise<string> {
   const fixture = await mkdtemp(join(tmpdir(), FIXTURE_PREFIX))
   fixtures.push(fixture)
+
   return fixture
 }

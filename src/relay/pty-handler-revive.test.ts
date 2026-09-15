@@ -94,6 +94,7 @@ describe('PtyHandler', () => {
     // relay process's own environment.
     const oldShellFeatures = process.env.ORCA_SHELL_FEATURES
     process.env.ORCA_SHELL_FEATURES = 'ready,identity,markers,overlay'
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -102,6 +103,7 @@ describe('PtyHandler', () => {
       } else {
         process.env.ORCA_SHELL_FEATURES = oldShellFeatures
       }
+
       killSpy.mockRestore()
     }
 
@@ -120,13 +122,17 @@ describe('PtyHandler', () => {
 
   it('fences both revived worktree identity and cwd with rollback', async () => {
     const finishSiblingAdmission = vi.fn()
+
     const beginWorktreePtySpawn = vi.fn((operationPath: string) => {
       if (operationPath === '/repo/removing/nested') {
         throw new Error('Remote worktree deletion already in progress')
       }
+
       return finishSiblingAdmission
     })
+
     handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
+
     const state = JSON.stringify([
       {
         id: 'pty-7',
@@ -137,7 +143,9 @@ describe('PtyHandler', () => {
         worktreeId: 'repo-id::/repo/sibling'
       }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await expect(dispatcher.callRequest('pty.revive', { state })).rejects.toThrow(
         'Remote worktree deletion already in progress'
@@ -165,7 +173,9 @@ describe('PtyHandler', () => {
         worktreeId: 'repo-id::/repo'
       }))
     )
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await expect(dispatcher.callRequest('pty.revive', { state })).rejects.toThrow(
         'Maximum number of PTY sessions reached (50)'
@@ -189,7 +199,9 @@ describe('PtyHandler', () => {
         worktreeId: 'repo-id::/repo'
       }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await Promise.all([
         dispatcher.callRequest('pty.revive', { state }),
@@ -215,6 +227,7 @@ describe('PtyHandler', () => {
     dispatcher = createMockDispatcher()
     handler = createTestPtyHandler(dispatcher)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -233,6 +246,7 @@ describe('PtyHandler', () => {
     const savedGcmInteractive = process.env.GCM_INTERACTIVE
     delete process.env.GIT_TERMINAL_PROMPT
     delete process.env.GCM_INTERACTIVE
+
     const state = JSON.stringify([
       {
         id: 'pty-legacy',
@@ -242,6 +256,7 @@ describe('PtyHandler', () => {
         cwd: process.cwd()
       }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
 
     try {
@@ -251,11 +266,13 @@ describe('PtyHandler', () => {
       expect(revivedEnv.GCM_INTERACTIVE).toBeUndefined()
     } finally {
       killSpy.mockRestore()
+
       if (savedTerminalPrompt === undefined) {
         delete process.env.GIT_TERMINAL_PROMPT
       } else {
         process.env.GIT_TERMINAL_PROMPT = savedTerminalPrompt
       }
+
       if (savedGcmInteractive === undefined) {
         delete process.env.GCM_INTERACTIVE
       } else {
@@ -274,14 +291,17 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(initialEnv.name).toBe('xterm-256color')
     expect(initialEnv.env.TERM).toBe('xterm-256color')
 
     const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
+
     const [serialized] = JSON.parse(state) as {
       explicitTerm?: string
       envToDelete?: string[]
     }[]
+
     expect(serialized.explicitTerm).toBeUndefined()
     expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
 
@@ -293,6 +313,7 @@ describe('PtyHandler', () => {
       ORCA_STALE_TEST_ENV: '/tmp/revived-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -303,6 +324,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
     expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
@@ -320,10 +342,12 @@ describe('PtyHandler', () => {
         envToDelete: ['ORCA_STALE_TEST_ENV']
       }
     ])
+
     handler.addEnvAugmenter(() => ({
       ORCA_STALE_TEST_ENV: '/tmp/legacy-empty-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -334,6 +358,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
     expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
@@ -341,10 +366,12 @@ describe('PtyHandler', () => {
     const serializedState = (await dispatcher.callRequest('pty.serialize', {
       ids: ['pty-8']
     })) as string
+
     const [serialized] = JSON.parse(serializedState) as {
       explicitTerm?: string
       envToDelete?: string[]
     }[]
+
     expect(serialized.explicitTerm).toBeUndefined()
     expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
   })
@@ -357,6 +384,7 @@ describe('PtyHandler', () => {
     let state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
@@ -371,6 +399,7 @@ describe('PtyHandler', () => {
         name: string
         env: Record<string, string>
       }
+
       expect(firstRevivedEnv.name).toBe('screen-256color')
       expect(firstRevivedEnv.env.TERM).toBe('screen-256color')
       expect(firstRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
@@ -398,6 +427,7 @@ describe('PtyHandler', () => {
       name: string
       env: Record<string, string>
     }
+
     expect(secondRevivedEnv.name).toBe('screen-256color')
     expect(secondRevivedEnv.env.TERM).toBe('screen-256color')
     expect(secondRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
@@ -407,6 +437,7 @@ describe('PtyHandler', () => {
     handler.addEnvAugmenter(() => ({
       ORCA_STALE_TEST_ENV: '/tmp/legacy-stale'
     }))
+
     const state = JSON.stringify([
       {
         id: 'pty-7',
@@ -416,7 +447,9 @@ describe('PtyHandler', () => {
         cwd: process.cwd()
       }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -433,6 +466,7 @@ describe('PtyHandler', () => {
     const oldTabId = process.env.ORCA_TAB_ID
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_TAB_ID
+
     try {
       await dispatcher.callRequest('pty.spawn', {
         cols: 90,
@@ -448,12 +482,14 @@ describe('PtyHandler', () => {
       } else {
         process.env.ORCA_PANE_KEY = oldPaneKey
       }
+
       if (oldTabId === undefined) {
         delete process.env.ORCA_TAB_ID
       } else {
         process.env.ORCA_TAB_ID = oldTabId
       }
     }
+
     const state = (await dispatcher.callRequest('pty.serialize', { ids: [PTY_1] })) as string
 
     await handler.dispose({ waitForPhysicalExit: false })
@@ -463,15 +499,18 @@ describe('PtyHandler', () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_TAB_ID
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
       killSpy.mockRestore()
+
       if (oldPaneKey === undefined) {
         delete process.env.ORCA_PANE_KEY
       } else {
         process.env.ORCA_PANE_KEY = oldPaneKey
       }
+
       if (oldTabId === undefined) {
         delete process.env.ORCA_TAB_ID
       } else {
@@ -498,11 +537,14 @@ describe('PtyHandler', () => {
   it('skips a pane whose serialized cwd is gone from this host, keeping the batch', async () => {
     const removedCwd = join(tmpdir(), `orca-revive-removed-${process.pid}`)
     rmSync(removedCwd, { force: true, recursive: true })
+
     const state = JSON.stringify([
       { id: 'pty-20', pid: process.pid, cols: 80, rows: 24, cwd: removedCwd },
       { id: 'pty-21', pid: process.pid, cols: 80, rows: 24, cwd: LIVE_CWD }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -512,20 +554,24 @@ describe('PtyHandler', () => {
     // The later entry still revived, and no other directory stood in for the first.
     expect(mockPtySpawn).toHaveBeenCalledTimes(1)
     expect((mockPtySpawn.mock.calls[0][2] as { cwd: string }).cwd).toBe(LIVE_CWD)
+
     const live = (await dispatcher.callRequest('pty.serialize', {
       ids: ['pty-20', 'pty-21']
     })) as string
+
     expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-21'])
   })
 
   describe('a Windows relay reviving a WSL pane', () => {
     const worktreeId = 'r::/remote/wsl-worktree'
+
     const historyFile = join(
       homedir(),
       '.orca-remote',
       'terminal-history',
       `${hashWorktreeId(worktreeId)}-bash_history`
     )
+
     let previousPlatform: PropertyDescriptor | undefined
 
     beforeEach(() => {
@@ -537,6 +583,7 @@ describe('PtyHandler', () => {
       if (previousPlatform) {
         Object.defineProperty(process, 'platform', previousPlatform)
       }
+
       rmSync(historyFile, { force: true })
     })
 
@@ -559,6 +606,7 @@ describe('PtyHandler', () => {
       handler = createTestPtyHandler(dispatcher)
 
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {
@@ -614,7 +662,9 @@ describe('PtyHandler', () => {
           terminalWindowsWslDistro: 'U'.repeat(257)
         }
       ])
+
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {
@@ -640,10 +690,12 @@ describe('PtyHandler', () => {
         },
         { id: 'pty-13', pid: process.pid, cols: 80, rows: 24, cwd: LIVE_CWD }
       ])
+
       mockPtySpawn.mockImplementationOnce(() => {
         throw new Error('spawn wsl.exe ENOENT')
       })
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {
@@ -652,9 +704,11 @@ describe('PtyHandler', () => {
 
       // The second entry still revived, and no other shell stood in for the first.
       expect(mockPtySpawn).toHaveBeenCalledTimes(2)
+
       const live = (await dispatcher.callRequest('pty.serialize', {
         ids: ['pty-12', 'pty-13']
       })) as string
+
       expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-13'])
     })
 
@@ -672,7 +726,9 @@ describe('PtyHandler', () => {
           terminalWindowsWslDistro: 'Ubuntu'
         }
       ])
+
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {
@@ -697,7 +753,9 @@ describe('PtyHandler', () => {
         },
         { id: 'pty-10', pid: process.pid, cols: 80, rows: 24, cwd: LIVE_CWD }
       ])
+
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {

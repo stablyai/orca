@@ -91,11 +91,14 @@ describe('discovered skill ordering', () => {
     const skills = Array.from({ length: 2_000 }, (_, index) => skill(index))
     const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
     const expected = [...skills].sort(compareOriginal)
+
     const optionedCalls = (): number =>
       localeCompare.mock.calls.filter((args) => args[2] !== undefined).length
+
     expect(optionedCalls()).toBeGreaterThan(10_000)
     localeCompare.mockClear()
     const NativeCollator = Intl.Collator
+
     const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
@@ -117,6 +120,7 @@ describe('discovered skill ordering', () => {
         sourceLabel
       }))
     )
+
     expect(skills.length).toBe(COLLATION_CORPUS.length ** 2)
     const expected = [...skills].sort(compareOriginal)
     expect(sortDiscoveredSkills([...skills]).map(({ id }) => id)).toEqual(
@@ -126,14 +130,18 @@ describe('discovered skill ordering', () => {
 
   it('sorts discovery sources like the per-call label comparator', () => {
     const sources = Array.from({ length: 400 }, (_, index) => discoverySource(index))
+
     const expected = [...sources].sort((a, b) =>
       // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Parity oracle.
       a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
     )
+
     const NativeCollator = Intl.Collator
+
     const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
+
     expect(sortSkillDiscoverySources(sources).map(({ id }) => id)).toEqual(
       expected.map(({ id }) => id)
     )
@@ -142,12 +150,15 @@ describe('discovered skill ordering', () => {
 
   it('does no comparison setup for empty or singleton discovery results', () => {
     const construct = vi.spyOn(Intl, 'Collator')
+
     for (const skills of [[], [skill(0)]]) {
       expect(sortDiscoveredSkills(skills)).toBe(skills)
     }
+
     for (const sources of [[], [discoverySource(0)]]) {
       expect(sortSkillDiscoverySources(sources)).toBe(sources)
     }
+
     expect(construct).not.toHaveBeenCalled()
   })
 })

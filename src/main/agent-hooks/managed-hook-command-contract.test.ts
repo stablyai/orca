@@ -162,7 +162,9 @@ describe('managed hook command contract', () => {
         `${agent} needs exactly one command builder or documented native-plugin exemption`
       ).toBe(1)
     }
+
     const registered = new Set<string>(agents)
+
     for (const agent of [...buildersByAgent.keys(), ...exemptionsByAgent.keys()]) {
       expect(registered.has(agent), `${agent} is absent from the installer registry`).toBe(true)
     }
@@ -172,14 +174,19 @@ describe('managed hook command contract', () => {
     it.each([...buildersByAgent])('%s emits no bare variable references', (agent, builders) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
       const extension = platform === 'win32' && agent !== 'kimi' ? 'cmd' : 'sh'
+
       const homes =
         platform === 'win32' ? ['C:/Users/test', 'C:/Users/test user'] : ['/home/test user']
+
       const paths = homes.map((home) => `${home}/.orca/agent-hooks/${agent}-hook.${extension}`)
+
       const commands = [
         ...paths.flatMap((path) => builders.local(path)),
         ...builders.remote(`/home/remote user/.orca/agent-hooks/${agent}-hook.sh`)
       ]
+
       expect(commands.length).toBeGreaterThan(0)
+
       for (const command of commands) {
         expect(command.length).toBeGreaterThan(0)
         expect(findBareHookCommandVariables(command), command).toEqual([])

@@ -25,30 +25,39 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
     if (!this.ptyController?.spawn) {
       throw new Error('runtime_unavailable')
     }
+
     if (!pty.connected) {
       throw new Error('terminal_exited')
     }
+
     const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
     const parentTabId = pty.tabId?.trim()
+
     if (!parentTabId || !parsedPaneKey) {
       throw new Error('terminal_handle_stale')
     }
+
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
+
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,
       parentTabId,
       parsedPaneKey.leafId,
       pty.ptyId
     )
+
     if (!sourceAuthority) {
       throw new Error('terminal_split_source_not_found')
     }
+
     const sourceIncarnationId =
       sourceAuthority.liveIncarnationId ?? sourceAuthority.persistedIncarnationId
+
     const leafId = randomUUID()
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
+
     const result = await this.ptyController.spawn({
       cols: 120,
       rows: 40,
@@ -82,12 +91,16 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           }
         : {})
     })
+
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+
     if (result.wslDistro) {
       this.preparePtyExecutionContext(result.id, result.wslDistro)
     }
+
     this.registerPty(result.id, workspace.id, workspace.connectionId)
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
+
     if (createdPty) {
       createdPty.tabId = parentTabId
       createdPty.paneKey = paneKey
@@ -120,6 +133,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           parsedPaneKey.leafId,
           pty.ptyId
         )
+
         if (
           !current ||
           (sourceAuthority.persisted && !current.persisted) ||
@@ -129,7 +143,9 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           throw new Error('terminal_split_source_not_found')
         }
       }
+
       revalidateSourceAuthority()
+
       if (!sourceAuthority.persisted) {
         await revealSplit()
         // Why: rejecting here unmounts the pane the reveal just added only because the retire
@@ -137,6 +153,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
         // exit handler closes non-final panes. Never close it by tabId: that drops the whole tab.
         revalidateSourceAuthority()
       }
+
       if (createdPty) {
         const persisted = this.persistHeadlessTerminalSplit({
           worktreeId: workspace.id,
@@ -146,9 +163,11 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           splitFromLeafId: parsedPaneKey.leafId,
           direction
         })
+
         if (sourceAuthority.persisted && !persisted) {
           throw new Error('workspace_session_unavailable')
         }
+
         this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
           tabId: parentTabId,
           leafId,
@@ -160,6 +179,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
     } catch (error) {
       this.setPairedRendererSessionOwnership(result.id, false)
       let stopped = false
+
       try {
         stopped =
           (await this.ptyController.stopAndWait?.(result.id, {
@@ -168,6 +188,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       } catch {
         // Best-effort fallback below preserves the original split authority error.
       }
+
       if (!stopped) {
         try {
           this.ptyController.kill(result.id)
@@ -175,13 +196,16 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           // Best-effort cleanup; retirement below still runs and the original error still throws.
         }
       }
+
       try {
         this.ptyController.retireRejectedPty?.(result.id, stopped)
       } catch {
         // Best-effort cleanup; preserve the original split authority error.
       }
+
       throw error
     }
+
     const committedSourceAuthority = sourceAuthority.persisted
       ? this.resolveTerminalSplitSourceAuthority(
           workspace.id,
@@ -190,6 +214,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
           pty.ptyId
         )
       : null
+
     if (sourceAuthority.persisted && committedSourceAuthority?.rendererMounted) {
       // Why: renderer adoption is a projection after the durable main commit; rejection cannot undo it.
       void revealSplit().catch(() => undefined)

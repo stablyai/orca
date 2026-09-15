@@ -21,6 +21,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     await assertClipboardTextWriteWithinLimitWithYield(text, {
       maxBytes: AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES
     })
+
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'write', text])
     })
@@ -31,9 +32,11 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
   async dialogAccept(text?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['dialog', 'accept']
+
       if (text) {
         args.push(text)
       }
+
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -137,9 +140,11 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     // Why: reload can trigger an Electron process swap that destroys the session mid-command — reload via webContents directly instead.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
+
       if (!wc) {
         throw new BrowserError('browser_no_tab', 'Tab is no longer available')
       }
+
       wc.reload()
       await new Promise<void>((resolve) => {
         let settled = false
@@ -149,15 +154,19 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           if (settled) {
             return
           }
+
           settled = true
           wc.removeListener('did-finish-load', onFinish)
           wc.removeListener('did-fail-load', onFail)
+
           if (fallbackTimer) {
             clearTimeout(fallbackTimer)
             fallbackTimer = null
           }
+
           resolve()
         }
+
         const onFinish = (): void => finish()
         const onFail = (): void => finish()
 
@@ -165,10 +174,12 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
         wc.on('did-fail-load', onFail)
         // Why: clear the fallback timer on load; otherwise each reload leaks the webContents + listeners until the 10s timeout.
         fallbackTimer = setTimeout(finish, 10_000)
+
         if (typeof fallbackTimer.unref === 'function') {
           fallbackTimer.unref()
         }
       })
+
       return { url: wc.getURL(), title: wc.getTitle() }
     })
   }

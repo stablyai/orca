@@ -16,13 +16,18 @@ vi.mock('./pane-tree-ops', () => ({
   safeFit: vi.fn(),
   wrapInSplit: vi.fn()
 }))
+
 vi.mock('./pane-lifecycle', () => ({ disposePane, openTerminal: vi.fn() }))
+
 vi.mock('./pane-webgl-renderer', () => ({ disposeWebgl: vi.fn() }))
+
 vi.mock('./pane-split-scroll', () => ({
   clearPendingSplitScrollRestore: vi.fn(),
   scheduleSplitScrollRestore: vi.fn()
 }))
+
 vi.mock('./pane-drag-reorder', () => ({ updateMultiPaneState: vi.fn() }))
+
 vi.mock('./pane-divider', () => ({ applyDividerStyles: vi.fn(), applyPaneOpacity: vi.fn() }))
 
 import {
@@ -60,6 +65,7 @@ function createPane(id: number, leafId: TerminalLeafId): ManagedPaneInternal {
     parentElement: null,
     remove: vi.fn()
   }
+
   return {
     id,
     leafId,
@@ -93,6 +99,7 @@ function openPane(id: number, leafId: TerminalLeafId): ManagedPaneInternal {
   const terminal = createPinnedTerminal()
   bindTerminalScrollIntentKey(terminal, leafId)
   markTerminalPinnedViewport(terminal)
+
   return pane
 }
 
@@ -143,6 +150,7 @@ describe('terminal scroll intent key retention', () => {
       const leafId = leafIdAt(9000 + Number(teardown === retireManagedPanePreservingPty))
       const pane = openPane(9000, leafId)
       const survivor = createPane(9001, leafIdAt(9001))
+
       const panes = new Map([
         [pane.id, pane],
         [survivor.id, survivor]

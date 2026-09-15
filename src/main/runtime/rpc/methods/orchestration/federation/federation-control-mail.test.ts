@@ -57,6 +57,7 @@ describe('orchestration federation control mail', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
+
         const response = (await workerDispatcher.dispatch(
           {
             id: `remote_${method}`,
@@ -68,9 +69,11 @@ describe('orchestration federation control mail', () => {
           },
           { authenticatedCallerFingerprint: homeFingerprint }
         )) as RuntimeRpcResponse<unknown>
+
         return response
       }
     }
+
     homeDb = new OrchestrationDb(':memory:')
     homeRuntime = new OrcaRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
@@ -89,8 +92,10 @@ describe('orchestration federation control mail', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey
     })
+
     runId = run.id
     const task = homeDb.createTask({ spec: 'Wait for coordinator guidance', runId })
+
     const started = homeDb.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -103,6 +108,7 @@ describe('orchestration federation control mail', () => {
         protocolVersion: 2
       }
     })
+
     dispatchId = started.dispatch.id
     homeDb.markWorkerDispatchReady(dispatchId)
 
@@ -141,6 +147,7 @@ describe('orchestration federation control mail', () => {
 
   it('routes an exact Dispatch message through the durable relay', async () => {
     vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+
     const sent = await homeDispatcher.dispatch({
       id: 'send-control',
       authToken: 'coordinator-token',
@@ -204,6 +211,7 @@ describe('orchestration federation control mail', () => {
 
   it('accepts a repeated import after a lost acknowledgment without duplicating mail', async () => {
     const first = await dispatchImport(importRequest('first-import', 1, 'relay-control'))
+
     const repeated = await dispatchImport(
       importRequest('repeated-import', 1, 'different-message-id')
     )
@@ -278,6 +286,7 @@ describe('orchestration federation control mail', () => {
     const escalationWaiter = workerDispatcher.dispatch(
       checkRequest('wait-escalation', true, 1_000, 'escalation')
     )
+
     const statusWaiter = workerDispatcher.dispatch(checkRequest('wait-status', true, 30, 'status'))
     await waitForDispatchWaiterCount(2)
 
@@ -361,13 +370,17 @@ describe('orchestration federation control mail', () => {
     const internals = workerRuntime as unknown as {
       messageWaitersByHandle: Map<string, Set<unknown>>
     }
+
     const address = `dispatch:${dispatchId}`
+
     for (let attempt = 0; attempt < 20; attempt += 1) {
       if (internals.messageWaitersByHandle.get(address)?.size === expected) {
         return
       }
+
       await Promise.resolve()
     }
+
     expect(internals.messageWaitersByHandle.get(address)?.size).toBe(expected)
   }
 })

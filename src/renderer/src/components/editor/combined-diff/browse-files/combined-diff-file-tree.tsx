@@ -28,9 +28,13 @@ import {
 // of building and flattening the whole tree behind a hidden panel. Expanding rebuilds them, which
 // an expand already costs today.
 const EMPTY_TREE_ENTRIES: readonly CombinedDiffFileTreeEntry[] = Object.freeze([])
+
 const EMPTY_TREE_EXTENSIONS: readonly string[] = Object.freeze([])
+
 const EMPTY_UNCOMMITTED_TREE_GROUPS: CombinedDiffTreeGroup[] = []
+
 const EMPTY_TREE_ROOTS: CombinedDiffTreeNode[] = []
+
 const EMPTY_TREE_ROWS: CombinedDiffTreeNode[] = []
 
 export function CombinedDiffFileTree({
@@ -59,21 +63,26 @@ export function CombinedDiffFileTree({
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
   )
+
   const [query, setQuery] = React.useState('')
   const [excludedExtensions, setExcludedExtensions] = React.useState<Set<string>>(() => new Set())
   const [includeViewed, setIncludeViewed] = React.useState(true)
   // Why: state, not a ref — the virtualized row lists need the scroller on their own mount pass.
   const [listScrollElement, setListScrollElement] = React.useState<HTMLDivElement | null>(null)
+
   const { handleResizeKeyDown, handleResizeStart, maxWidth, minWidth, treeRef, width } =
     useCombinedDiffFileTreeResize(collapsed)
+
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {
       const next = new Set(prev)
+
       if (next.has(key)) {
         next.delete(key)
       } else {
         next.add(key)
       }
+
       return next
     })
   }, [])
@@ -85,6 +94,7 @@ export function CombinedDiffFileTree({
         : Array.from(new Set(entries.map(getEntryExtension))).sort(),
     [collapsed, entries]
   )
+
   // Why: viewed/loading state changes for one section must not invalidate the path filter or tree
   // construction. It is applied below as a visibility overlay.
   const structurallyFilteredEntries = React.useMemo(
@@ -98,22 +108,27 @@ export function CombinedDiffFileTree({
           }),
     [collapsed, entries, excludedExtensions, query]
   )
+
   const toggleExtension = React.useCallback((extension: string) => {
     setExcludedExtensions((prev) => {
       const next = new Set(prev)
+
       if (next.has(extension)) {
         next.delete(extension)
       } else {
         next.add(extension)
       }
+
       return next
     })
   }, [])
+
   const resetFilters = React.useCallback(() => {
     setQuery('')
     setExcludedExtensions(new Set())
     setIncludeViewed(true)
   }, [])
+
   const activeFilterCount =
     excludedExtensions.size + (includeViewed ? 0 : 1) + (query.trim().length > 0 ? 1 : 0)
 
@@ -124,6 +139,7 @@ export function CombinedDiffFileTree({
         : EMPTY_UNCOMMITTED_TREE_GROUPS,
     [collapsed, mode, structurallyFilteredEntries]
   )
+
   const branchTreeRoots = React.useMemo(
     () =>
       !collapsed && (mode === 'all' || mode === 'branch' || mode === 'commit')
@@ -131,18 +147,23 @@ export function CombinedDiffFileTree({
         : EMPTY_TREE_ROOTS,
     [collapsed, mode, structurallyFilteredEntries]
   )
+
   // Why: the viewed overlay below replaces these rows entirely when viewed files are hidden, so
   // flattening the unfiltered tree there is pure dead work.
   const uncommittedRowsByArea = React.useMemo(() => {
     const rowsByArea = new Map<string, CombinedDiffTreeNode[]>()
+
     if (collapsed || !includeViewed) {
       return rowsByArea
     }
+
     for (const group of uncommittedTreeGroups) {
       rowsByArea.set(group.area, flattenCombinedDiffTreeRoots(group.roots, collapsedDirectoryKeys))
     }
+
     return rowsByArea
   }, [collapsed, collapsedDirectoryKeys, includeViewed, uncommittedTreeGroups])
+
   const branchRows = React.useMemo(
     () =>
       !collapsed && includeViewed
@@ -150,11 +171,14 @@ export function CombinedDiffFileTree({
         : EMPTY_TREE_ROWS,
     [branchTreeRoots, collapsed, collapsedDirectoryKeys, includeViewed]
   )
+
   const uncommittedVisibleRowsByArea = React.useMemo(() => {
     if (collapsed || includeViewed) {
       return null
     }
+
     const rowsByArea = new Map<string, ReturnType<typeof getViewedCombinedDiffTreeVisibility>>()
+
     for (const group of uncommittedTreeGroups) {
       rowsByArea.set(
         group.area,
@@ -166,6 +190,7 @@ export function CombinedDiffFileTree({
         })
       )
     }
+
     return rowsByArea
   }, [
     collapsed,
@@ -175,6 +200,7 @@ export function CombinedDiffFileTree({
     uncommittedTreeGroups,
     viewedSectionKeys
   ])
+
   const branchVisibleRows = React.useMemo(
     () =>
       collapsed || includeViewed
@@ -187,6 +213,7 @@ export function CombinedDiffFileTree({
           }),
     [branchTreeRoots, collapsed, collapsedDirectoryKeys, includeViewed, mode, viewedSectionKeys]
   )
+
   const visibleEntryCount = includeViewed
     ? structurallyFilteredEntries.length
     : (branchVisibleRows?.visibleFileCount ?? 0) +
@@ -275,6 +302,7 @@ export function CombinedDiffFileTree({
               <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
                 {availableExtensions.map((extension) => {
                   const checked = !excludedExtensions.has(extension)
+
                   return (
                     <button
                       key={extension}
@@ -338,12 +366,15 @@ export function CombinedDiffFileTree({
                 uncommittedVisibleRowsByArea?.get(group.area)?.rows ??
                 uncommittedRowsByArea.get(group.area) ??
                 []
+
               const visibleFileCounts = uncommittedVisibleRowsByArea?.get(
                 group.area
               )?.visibleFileCounts
+
               if (rows.length === 0) {
                 return null
               }
+
               return (
                 <div key={group.area} className="py-1">
                   <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

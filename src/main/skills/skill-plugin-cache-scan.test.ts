@@ -13,6 +13,7 @@ import {
 } from './skill-plugin-cache-scan'
 
 const temporaryDirectories: string[] = []
+
 const execFileAsync = promisify(execFile)
 
 afterEach(async () => {
@@ -64,6 +65,7 @@ describe('plugin skill candidate scan', () => {
   it('stops walking the directory whose read crossed the entry budget', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-entry-limit-stop-'))
     temporaryDirectories.push(root)
+
     // Why: read off the depth bound rather than hardcoded. The deepest directory has to
     // sit exactly at it, so its children are the first thing a walk that failed to stop
     // would reject on depth — one level shallower and the mutant walks them silently.
@@ -71,6 +73,7 @@ describe('plugin skill candidate scan', () => {
       { length: MAXIMUM_PLUGIN_SCAN_DEPTH },
       (_, index) => `level-${index}`
     )
+
     await Promise.all(
       ['a', 'b'].map((name) => mkdir(join(root, ...segments, name), { recursive: true }))
     )
@@ -109,6 +112,7 @@ describe('plugin skill candidate scan', () => {
       '{"skills":["./a-skills","./missing-one","./missing-two"]}\n'
     )
     await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
+
     return { root, candidate }
   }
 
@@ -237,9 +241,11 @@ describe('plugin skill candidate scan', () => {
       await writeFile(join(hostSkill, 'SKILL.md'), '# Host skill\n')
 
       let parent = hostSkill
+
       for (let level = 1; level <= intermediateDepth; level += 1) {
         parent = join(parent, `nested-${level}`)
       }
+
       const candidate = join(parent, 'orca-cli')
       await mkdir(candidate, { recursive: true })
       await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
@@ -505,11 +511,13 @@ describe('plugin skill candidate scan', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-nested-manifests-'))
     temporaryDirectories.push(root)
     let pluginRoot = join(root, 'vendor', 'plugin', '1.0.0')
+
     for (let index = 0; index < 8; index += 1) {
       await mkdir(join(pluginRoot, '.codex-plugin'), { recursive: true })
       await writeFile(join(pluginRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
       pluginRoot = join(pluginRoot, 'skills', `nested-${index}`)
     }
+
     const hiddenCandidate = join(pluginRoot, 'orca-cli')
     await mkdir(hiddenCandidate, { recursive: true })
     await writeFile(join(hiddenCandidate, 'SKILL.md'), '# Orca CLI\n')
@@ -636,9 +644,11 @@ describe('plugin skill candidate scan', () => {
     await Promise.all(
       Array.from({ length: loopCount }, (_, index) => {
         const name = `zz-loop-${index.toString().padStart(2, '0')}`
+
         return symlink(name, join(root, name), 'dir')
       })
     )
+
     return root
   }
 
@@ -657,11 +667,13 @@ describe('plugin skill candidate scan', () => {
         reason: 'io-error',
         errorCode: 'ELOOP'
       })
+
       const inventoryIssues = result.issues.map((issue) => ({
         rootId: 'plugin-cache',
         sourceLabel: 'Plugin cache',
         ...issue
       }))
+
       expect(inventoryIssues.some(isSkillScanIssueNeedingAttention)).toBe(true)
     }
   )

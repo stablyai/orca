@@ -19,6 +19,7 @@ const {
 
 vi.mock('./gh-utils', async () => {
   const actual = await vi.importActual<typeof GhUtils>('./gh-utils')
+
   return {
     ...actual,
     ghExecFileAsync: ghExecFileAsyncMock,
@@ -36,8 +37,10 @@ vi.mock('./github-enterprise-repository', async (importOriginal) => ({
 
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+
   const withDotComHost = <T extends { host?: string } | null | undefined>(repo: T) =>
     repo ? { host: 'github.com' as const, ...repo } : repo
+
   return {
     ...actual,
     // Why: these suites drive source resolution through the legacy gh-utils
@@ -60,6 +63,7 @@ vi.mock('./github-api-repository', async (importOriginal) => {
         connectionId,
         localGitOptions
       )
+
       return {
         ...result,
         source: withDotComHost(result?.source)

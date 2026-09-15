@@ -5,31 +5,42 @@ import { Button } from '@/components/ui/button'
 import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
 
 const SSH_PREFIX = 'SSH connection is not active'
+
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
 const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
+
 // Matched with includes(): this arrives IPC-wrapped ("Error invoking remote method 'pty:…': Error: …").
 const SSH_RELAY_LOST_MARKER = 'SSH connection lost, reconnecting'
+
 const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
 ]
+
 const STALE_DAEMON_CWD_MARKERS = [
   "Daemon's working directory is gone",
   'node-pty: daemon_cwd failed: ENOENT'
 ]
+
 // Thrown by ipc/pty.ts when a persisted pane owner can't be proven alive or dead (STA-3536).
 const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
+
 // remote-runtime-pty-transport.ts surfaces this English literal as a wire-level marker, so it is
 // translated here rather than at the source -- otherwise the banner mixes English with the
 // localized chrome around it (#9194).
 const REMOTE_TERMINAL_CLOSED_MARKER = 'Remote terminal was closed.'
+
 // Why one source: the test and replace forms must match the same token, and a lone /g regex carries
 // lastIndex state across .test() calls. Capture the leading boundary so replacement can restore it.
 const TERMINAL_HOST_GONE_SOURCE = '(^|[^a-z0-9_])terminal_host_gone(?=$|[^a-z0-9_])'
+
 const TERMINAL_HOST_GONE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE)
+
 const TERMINAL_HOST_GONE_REPLACE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE, 'g')
+
 const LEGACY_TERMINAL_HOST_GONE_PATTERN =
   /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*orca-terminal-host-v[^\r\n]*/i
+
 // A reattach the host answered "no such session" for: the SSH provider's expiry token, the relay's
 // raw not-found string when nothing mapped it, or a daemon generation old enough to still refuse a
 // pane respawning onto an id it is tearing down (#18046). None proves the shell died — the copy
@@ -39,16 +50,21 @@ const UNREATTACHABLE_SESSION_SOURCES = [
   'PTY "[^"\\r\\n]*" not found(?: \\(identity mismatch\\))?',
   '(?:SessionNotFoundError: )?Session not found: \\S+'
 ]
+
 // The relay answered and proved the shell is still running — only its output delivery was retired.
 // Deliberately NOT one of the sources above: that copy says to open a new terminal, which here
 // abandons a live agent. Same lastIndex hazard, so keep the test and replace forms separate.
 const SOURCE_RESTORE_REQUIRED_SOURCE =
   'SSH_PTY_SOURCE_RESTORE_REQUIRED(?::[ \\t]*\\S*(?:[ \\t]+\\S+)?)?'
+
 const SOURCE_RESTORE_REQUIRED_PATTERN = new RegExp(SOURCE_RESTORE_REQUIRED_SOURCE)
+
 const SOURCE_RESTORE_REQUIRED_REPLACE_PATTERN = new RegExp(SOURCE_RESTORE_REQUIRED_SOURCE, 'g')
+
 const UNREATTACHABLE_SESSION_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
   (source) => new RegExp(source)
 )
+
 const UNREATTACHABLE_SESSION_REPLACE_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
   (source) => new RegExp(source, 'g')
 )
@@ -72,6 +88,7 @@ export function stripSshReconnectOwnedErrorLines(error: string): string | null {
     .split('\n')
     .filter((line) => !isSshReconnectOwnedTerminalError(line))
     .join('\n')
+
   return kept.length > 0 ? kept : null
 }
 
@@ -95,6 +112,7 @@ export function isExplainedTerminalError(error: string): boolean {
 
 export function isPaneOwnerUnverifiedError(error: string): boolean {
   const lines = error.split('\n').filter((line) => line.length > 0)
+
   return lines.length > 0 && lines.every((line) => line.includes(PANE_OWNER_UNVERIFIED_MARKER))
 }
 
@@ -103,6 +121,7 @@ function humanizeUnreattachableSession(error: string): string {
     'auto.components.terminal.pane.TerminalErrorToast.sessionUnavailable',
     "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
   )
+
   // Why a replacer: a translation containing `$&` or `$1` would otherwise be read as a substitution.
   return UNREATTACHABLE_SESSION_REPLACE_PATTERNS.reduce(
     (message, pattern) => message.replace(pattern, () => explanation),
@@ -113,6 +132,7 @@ function humanizeUnreattachableSession(error: string): string {
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string): string {
   let humanized = error
+
   if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
     const explanation = isPaneOwnerUnverifiedError(humanized)
       ? translate(
@@ -123,14 +143,17 @@ export function humanizeTerminalError(error: string): string {
           'auto.components.terminal.pane.TerminalErrorToast.ownerUnknown',
           "Orca couldn't verify this terminal's owner."
         )
+
     humanized = humanized.replaceAll(PANE_OWNER_UNVERIFIED_MARKER, () => explanation)
   }
+
   humanized = humanized.replace(SOURCE_RESTORE_REQUIRED_REPLACE_PATTERN, () =>
     translate(
       'auto.components.terminal.pane.TerminalErrorToast.sourceRestoring',
       'Reconnecting this terminal — its output is being re-established. The session is still running.'
     )
   )
+
   if (humanized.includes(REMOTE_TERMINAL_CLOSED_MARKER)) {
     humanized = humanized.replaceAll(REMOTE_TERMINAL_CLOSED_MARKER, () =>
       translate(
@@ -139,14 +162,18 @@ export function humanizeTerminalError(error: string): string {
       )
     )
   }
+
   humanized = humanizeUnreattachableSession(humanized)
+
   if (!isExplainedTerminalError(humanized)) {
     return humanized
   }
+
   const explanation = translate(
     'auto.components.terminal.pane.TerminalErrorToast.e16012e31e',
     'The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.'
   )
+
   return humanized
     .split('\n')
     .map((line) =>
@@ -175,17 +202,22 @@ export function TerminalErrorToast({
   const ssh = isSshError(error)
   const paneOwnerUnverified = isPaneOwnerUnverifiedError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink =
     !ssh && !paneOwnerUnverified && !showDaemonRestart && !isExplainedTerminalError(error)
+
   const displayError = humanizeTerminalError(error)
+
   const tint = paneOwnerUnverified
     ? null
     : ssh
       ? 'color-mix(in srgb, var(--color-amber-500) 20%, var(--popover))'
       : 'color-mix(in srgb, var(--destructive) 20%, var(--popover))'
+
   const [retrying, setRetrying] = useState(false)
   const [retryFailed, setRetryFailed] = useState(false)
+
   const [environmentFooter, setEnvironmentFooter] = useState<{
     error: string
     footer: string
@@ -196,24 +228,29 @@ export function TerminalErrorToast({
     if (ssh || hasClientEnvironmentFooter(displayError)) {
       return
     }
+
     let cancelled = false
     void resolveClientEnvironmentFooter().then((footer) => {
       if (!cancelled) {
         setEnvironmentFooter({ error: displayError, footer })
       }
     })
+
     return () => {
       cancelled = true
     }
   }, [displayError, ssh])
 
   const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
+
   const handleRetry = async (): Promise<void> => {
     if (!onRetry || retrying) {
       return
     }
+
     setRetrying(true)
     setRetryFailed(false)
+
     try {
       setRetryFailed(!(await onRetry()))
     } catch {

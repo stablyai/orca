@@ -23,8 +23,10 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
         if (import.meta.env.DEV) {
           throw new TypeError('openSettingsTarget received an invalid navigation target')
         }
+
         return
       }
+
       set({ settingsNavigationTarget: target })
     },
     clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
@@ -34,17 +36,20 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
     setSettingsProjectHostSelection: (projectId, hostId, setupId) =>
       set((s) => {
         const nextSetupSelections = { ...s.settingsProjectSetupSelection }
+
         if (setupId) {
           nextSetupSelections[projectId] = setupId
         } else {
           delete nextSetupSelections[projectId]
         }
+
         if (
           s.settingsProjectHostSelection[projectId] === hostId &&
           s.settingsProjectSetupSelection[projectId] === setupId
         ) {
           return s
         }
+
         return {
           settingsProjectHostSelection: {
             ...s.settingsProjectHostSelection,

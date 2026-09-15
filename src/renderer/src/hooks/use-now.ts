@@ -31,6 +31,7 @@ export function createSharedNowClock(
 
   const tick = (): void => {
     now = deps.now()
+
     for (const listener of listeners) {
       listener()
     }
@@ -40,6 +41,7 @@ export function createSharedNowClock(
     getSnapshot: () => now,
     subscribe: (listener) => {
       listeners.add(listener)
+
       if (!stopInterval) {
         // Why: all mounted relative-time labels at this cadence share one
         // visibility-gated timer. installWindowVisibilityInterval runs tick
@@ -53,8 +55,10 @@ export function createSharedNowClock(
           clearIntervalFn: deps.clearInterval
         })
       }
+
       return () => {
         listeners.delete(listener)
+
         if (listeners.size === 0 && stopInterval) {
           stopInterval()
           stopInterval = null
@@ -66,10 +70,12 @@ export function createSharedNowClock(
 
 function getSharedNowClock(intervalMs: number): SharedNowClock {
   let clock = nowClocks.get(intervalMs)
+
   if (!clock) {
     clock = createSharedNowClock(intervalMs)
     nowClocks.set(intervalMs, clock)
   }
+
   return clock
 }
 
@@ -95,6 +101,7 @@ const subscribeWhileDisabled = (): (() => void) => () => {}
 // `Date.now()` in the effect that acts on them instead.
 export function useNow(intervalMs: number, enabled = true): number {
   const clock = getSharedNowClock(intervalMs)
+
   return useSyncExternalStore(
     enabled ? clock.subscribe : subscribeWhileDisabled,
     clock.getSnapshot,

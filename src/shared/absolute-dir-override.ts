@@ -15,5 +15,6 @@ export function resolveAbsoluteDirOverride(
 ): string {
   const trimmed = value?.trim() ?? ''
   const isAbsolutePath = platform === 'win32' ? win32.isAbsolute : posix.isAbsolute
+
   return trimmed && isAbsolutePath(trimmed) ? trimmed : fallback
 }

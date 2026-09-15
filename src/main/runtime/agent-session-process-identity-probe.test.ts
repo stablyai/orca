@@ -37,6 +37,7 @@ describe('owner identity probe', () => {
           [4243, START_TIME + PROCESS_START_TIME_TOLERANCE_MS + 1]
         ])
     )
+
     const probes = await probeAgentSessionProcessIdentities({
       identities: [IDENTITY, { ...IDENTITY, pid: 4243, spawnToken: 'spawn-b' }],
       deps: {
@@ -82,11 +83,13 @@ describe('owner identity probe', () => {
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('host probe unavailable'), { code: 'EIO' })
     })
+
     try {
       const probe = await probeAgentSessionProcessIdentity({
         identity: { ...IDENTITY, processStartTimeMs: null },
         deps: { readEchoedSpawnToken: async () => null }
       })
+
       expect(probe.outcome).toBe('indeterminate')
     } finally {
       kill.mockRestore()
@@ -157,6 +160,7 @@ describe('owner identity probe', () => {
       identity: { ...IDENTITY, processStartTimeMs: null },
       deps: deps({ readEchoedSpawnToken: async () => null, platform: 'win32' })
     })
+
     expect(probe.outcome).toBe('indeterminate')
   })
 
@@ -169,6 +173,7 @@ describe('owner identity probe', () => {
         }
       })
     })
+
     expect(probe.outcome).toBe('indeterminate')
   })
 
@@ -188,6 +193,7 @@ describe('owner identity probe', () => {
 
   it('reads a start time for the current process on this platform', async () => {
     const observed = await readProcessStartTimeMs(process.pid)
+
     if (
       process.platform === 'linux' ||
       process.platform === 'darwin' ||
@@ -225,6 +231,7 @@ describe('reservation probe', () => {
       findProcessesWithSpawnToken: findProcesses,
       hasProviderActivitySinceReservation: hasActivity
     })
+
     expect(probe.outcome).toBe('indeterminate')
   })
 
@@ -236,6 +243,7 @@ describe('reservation probe', () => {
       },
       hasProviderActivitySinceReservation: async () => false
     })
+
     expect(probe.outcome).toBe('indeterminate')
   })
 })

@@ -38,16 +38,19 @@ export async function checkRunMailbox(args: {
     orchestrationCompatibilityEvidence,
     recordMutationReceipt
   } = args
+
   const routeDirectSnapshot = async (
     runId: string,
     directHandle: string,
     routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
   ): Promise<void> => {
     const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
+
     if (throughSequence !== undefined) {
       await routeAllMailboxPages(() => routePage(throughSequence), signal)
     }
   }
+
   const run = resolveRunScope(runtime, {
     runId: params.run,
     callerTerminalHandle: handle,
@@ -56,6 +59,7 @@ export async function checkRunMailbox(args: {
     legacyCoordinatorRunId,
     callerEvidence: orchestrationCompatibilityEvidence
   })
+
   const generation = run.consumer_generation
   const address = `run:${run.id}`
   runtime.ensureOrchestrationFederationRelay(run.id)
@@ -63,12 +67,15 @@ export async function checkRunMailbox(args: {
     db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
   )
   const coordinatorHandle = run.coordinator_handle
+
   if (coordinatorHandle && coordinatorHandle !== handle) {
     await routeDirectSnapshot(run.id, coordinatorHandle, (throughSequence) =>
       db.routeUnreadDirectMessagesToRunMailbox(run.id, coordinatorHandle, throughSequence)
     )
   }
+
   revalidateLegacyCoordinator?.()
+
   const currentRun = resolveRunScope(runtime, {
     runId: run.id,
     callerTerminalHandle: handle,
@@ -77,6 +84,7 @@ export async function checkRunMailbox(args: {
     legacyCoordinatorRunId,
     callerEvidence: orchestrationCompatibilityEvidence
   })
+
   if (currentRun.consumer_generation !== generation) {
     throw new OrchestrationError(
       'consumer_fenced',
@@ -91,18 +99,22 @@ export async function checkRunMailbox(args: {
         deliveryId: params.ack
       })
     : undefined
+
   if (acknowledged) {
     recordMutationReceipt?.(
       interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'outcome_unknown')
     )
   }
+
   if (params.all || (params.unread === false && !params.peek)) {
     const messages = db.getRunMailboxHistory(run.id, 100, typeFilter)
+
     const result = {
       messages: exposeMessages(messages),
       count: messages.length,
       acknowledged: acknowledged?.delivery.id ?? null
     }
+
     if (params.format || params.inject) {
       return {
         ...result,
@@ -110,6 +122,7 @@ export async function checkRunMailbox(args: {
         runId: run.id
       }
     }
+
     return { ...result, runId: run.id }
   }
 
@@ -122,14 +135,20 @@ export async function checkRunMailbox(args: {
       ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
       : {})
   })
+
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
+
   const readDelivery = (wakeTypes?: MessageType[]) =>
     db.getOrCreateRunDelivery({ runId: run.id, consumerGeneration: generation, wakeTypes })
+
   let peeked = params.peek ? readPeek() : []
+
   if (params.peek && peeked.length > 0) {
     return peekResult(peeked)
   }
+
   let current = params.peek ? undefined : readDelivery(params.wait ? typeFilter : undefined)
+
   if (current) {
     return {
       runId: run.id,
@@ -146,10 +165,12 @@ export async function checkRunMailbox(args: {
         : {})
     }
   }
+
   if (!params.wait) {
     if (params.peek) {
       return peekResult([])
     }
+
     return {
       runId: run.id,
       deliveryId: null,
@@ -168,37 +189,46 @@ export async function checkRunMailbox(args: {
     signal,
     exclusive: true
   })
+
   try {
     revalidateLegacyCoordinator?.()
   } catch (error) {
     if (!acknowledged) {
       throw error
     }
+
     return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
   }
+
   const latestRun = db.getRun(run.id)
+
   if (!latestRun || latestRun.consumer_generation !== generation) {
     if (acknowledged) {
       return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
     }
+
     throw new OrchestrationError(
       'consumer_fenced',
       'This mailbox consumer was replaced while waiting.'
     )
   }
+
   if (waitResult === 'waiter_exists') {
     if (acknowledged) {
       return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'waiter_exists')
     }
+
     throw new OrchestrationError(
       'waiter_exists',
       `Run ${run.id} already has an active actionable waiter.`
     )
   }
+
   if (waitResult === 'timed_out') {
     if (params.peek) {
       return { ...peekResult([]), timedOut: true, cancelled: false, connectionLost: false }
     }
+
     return {
       runId: run.id,
       deliveryId: null,
@@ -210,6 +240,7 @@ export async function checkRunMailbox(args: {
       connectionLost: false
     }
   }
+
   if (waitResult === 'cancelled') {
     if (params.peek) {
       return {
@@ -219,6 +250,7 @@ export async function checkRunMailbox(args: {
         connectionLost: signal?.aborted === true
       }
     }
+
     return {
       runId: run.id,
       deliveryId: null,
@@ -230,11 +262,15 @@ export async function checkRunMailbox(args: {
       connectionLost: signal?.aborted === true
     }
   }
+
   if (params.peek) {
     peeked = readPeek()
+
     return { ...peekResult(peeked), timedOut: false, cancelled: false, connectionLost: false }
   }
+
   current = readDelivery(typeFilter)
+
   return {
     runId: run.id,
     deliveryId: current?.delivery.id ?? null,

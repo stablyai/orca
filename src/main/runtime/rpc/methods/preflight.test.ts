@@ -38,6 +38,7 @@ describe('preflight RPC methods', () => {
       glab: { installed: false, authenticated: false },
       bitbucket: { configured: false, authenticated: false, account: null }
     }
+
     runPreflightCheckMock.mockResolvedValueOnce(status)
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })

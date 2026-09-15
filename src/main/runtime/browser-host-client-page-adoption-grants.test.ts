@@ -6,6 +6,7 @@ import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconciliation-plan'
 
 const HOST_CLIENT_ID = 'client-a'
+
 const HOST_GENERATION = 9
 
 const intent = (
@@ -38,15 +39,20 @@ function harness(options: {
   existingGrants?: Map<string, BrowserClientPageExecutionHostGrant>
 }) {
   const releases: { executionHostKey: string; release: ReturnType<typeof vi.fn> }[] = []
+
   const retain = vi.fn((executionHostKey: string) => {
     const release = vi.fn()
     releases.push({ executionHostKey, release })
+
     return { release }
   })
+
   const adopt = vi.fn(options.adopt ?? (() => Promise.resolve(undefined)))
   const getPlacement = vi.fn((browserPageId: string) => options.placements[browserPageId])
+
   const executionHostGrants =
     options.existingGrants ?? new Map<string, BrowserClientPageExecutionHostGrant>()
+
   const state = { executionHostGrants: { retain } } as unknown as BrowserHostLeaseState
 
   return {
@@ -68,6 +74,7 @@ describe('adoptBrowserHostClientPages', () => {
   it('returns the pages whose committed placement matches the intent and stores their grants', async () => {
     const first = intent({ browserPageId: 'page-a', pageHostGeneration: 11 })
     const second = intent({ browserPageId: 'page-b', pageHostGeneration: 12 })
+
     const fake = harness({
       placements: { 'page-a': clientPlacement(11), 'page-b': clientPlacement(12) }
     })
@@ -117,11 +124,13 @@ describe('adoptBrowserHostClientPages', () => {
 
   it('keeps an existing grant for the page id and releases the newly taken one', async () => {
     const existingRelease = vi.fn()
+
     const existing = {
       placement: clientPlacement(11),
       executionHostKey: 'native:runtime-old:1',
       release: existingRelease
     } as BrowserClientPageExecutionHostGrant
+
     const fake = harness({
       placements: { 'page-a': clientPlacement(11) },
       existingGrants: new Map([['page-a', existing]])
@@ -138,6 +147,7 @@ describe('adoptBrowserHostClientPages', () => {
   it('settles grants and keeps the placed pages when the reconcile rejects', async () => {
     const placed = intent({ browserPageId: 'page-placed', pageHostGeneration: 11 })
     const unplaced = intent({ browserPageId: 'page-unplaced', pageHostGeneration: 12 })
+
     const fake = harness({
       placements: { 'page-placed': clientPlacement(11), 'page-unplaced': undefined },
       adopt: () => Promise.reject(new Error('browser_host_reconcile_failed'))
@@ -164,11 +174,13 @@ describe('adoptBrowserHostClientPages', () => {
 
   it('retains exactly one grant per intent under that intent execution host key', async () => {
     const first = intent({ browserPageId: 'page-a', executionHostKey: 'native:runtime-new:1' })
+
     const second = intent({
       browserPageId: 'page-b',
       pageHostGeneration: 12,
       executionHostKey: 'ssh:host-b:2'
     })
+
     const fake = harness({
       placements: { 'page-a': clientPlacement(11), 'page-b': clientPlacement(12) }
     })

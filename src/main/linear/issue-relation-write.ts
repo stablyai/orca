@@ -31,31 +31,42 @@ export async function writeIssueRelation(params: {
   signal?: AbortSignal
 }): Promise<LinearIssueRelationWriteResult> {
   const entry = getClients(params.workspaceId)[0]
+
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
+
   await acquire()
+
   try {
     const client = params.signal
       ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal: params.signal })
       : entry.client
+
     const existing = await findExistingRelation(client, params)
+
     if (params.operation === 'add' && existing) {
       return result(params, existing, true)
     }
+
     if (params.operation === 'remove' && !existing) {
       return result(params, absentRelation(params), true)
     }
+
     if (params.operation === 'remove' && existing) {
       await deleteLinearIssueRelation(client, existing.id)
+
       return result(params, existing, false)
     }
+
     const created = await createLinearIssueRelation(client, relationCreateInput(params))
+
     return result(params, normalizeRelation(created, params.issue.id), false)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
     }
+
     throw error
   } finally {
     release()
@@ -72,9 +83,11 @@ async function findExistingRelation(
 ): Promise<LinearIssueRelationWriteResult['relation'] | null> {
   for (const direction of relationDirections(params.relationship)) {
     const scan = await findRelationInDirection(client, params, direction)
+
     if (scan.relation) {
       return scan.relation
     }
+
     if (scan.hasMore) {
       throw linearError(
         'linear_write_failed',
@@ -88,6 +101,7 @@ async function findExistingRelation(
       )
     }
   }
+
   return null
 }
 
@@ -105,13 +119,17 @@ async function findRelationInDirection(
 
   while (inspected < RELATION_WRITE_READ_CAP) {
     const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, RELATION_WRITE_READ_CAP - inspected)
+
     const raw = await client.client.rawRequest<RawRelationsResponse, Record<string, unknown>>(
       direction === 'outbound' ? RELATIONS_QUERY : INVERSE_RELATIONS_QUERY,
       { id: params.issue.id, first, ...(after ? { after } : {}) }
     )
+
     const connection =
       direction === 'outbound' ? raw.data?.issue?.relations : raw.data?.issue?.inverseRelations
+
     const nodes = (connection?.nodes ?? []).slice(0, first)
+
     const relation = nodes
       .map((node) => normalizeRelation(node, params.issue.id, direction))
       .find(
@@ -119,6 +137,7 @@ async function findRelationInDirection(
           candidate.relationship === params.relationship &&
           candidate.relatedIssue?.id === params.relatedIssue.id
       )
+
     if (relation) {
       return { relation, hasMore: false }
     }
@@ -126,12 +145,15 @@ async function findRelationInDirection(
     inspected += nodes.length
     const hasMore = connection?.pageInfo?.hasNextPage === true
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
     if (!hasMore) {
       return { relation: null, hasMore: false }
     }
+
     if (!nextCursor || nextCursor === after || nodes.length === 0) {
       return { relation: null, hasMore: true }
     }
+
     after = nextCursor
   }
 
@@ -142,9 +164,11 @@ function relationDirections(relationship: LinearIssueRelationship): RelationDire
   if (relationship === 'blockedBy') {
     return ['inbound']
   }
+
   if (relationship === 'relatedTo') {
     return ['outbound', 'inbound']
   }
+
   return ['outbound']
 }
 
@@ -156,8 +180,10 @@ function normalizeRelation(
   const outbound = knownDirection
     ? knownDirection === 'outbound'
     : node.issue?.id === issueId || node.relatedIssue?.id !== issueId
+
   const neighbor = outbound ? node.relatedIssue : node.issue
   const type = node.type ?? null
+
   return {
     id: node.id,
     type,
@@ -181,12 +207,15 @@ function relationPerspective(
   if (type === 'blocks') {
     return outbound ? 'blocks' : 'blockedBy'
   }
+
   if (type === 'duplicate') {
     return outbound ? 'duplicateOf' : 'duplicatedBy'
   }
+
   if (type === 'similar') {
     return 'similar'
   }
+
   return 'relatedTo'
 }
 
@@ -202,6 +231,7 @@ function relationCreateInput(params: {
       type: 'blocks'
     }
   }
+
   return {
     issueId: params.issue.id,
     relatedIssueId: params.relatedIssue.id,
@@ -231,9 +261,11 @@ function linearRelationType(relationship: LinearIssueRelationship): string {
   if (relationship === 'relatedTo') {
     return 'related'
   }
+
   if (relationship === 'duplicateOf') {
     return 'duplicate'
   }
+
   return 'blocks'
 }
 

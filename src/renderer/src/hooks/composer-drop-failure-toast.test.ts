@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { toastError } = vi.hoisted(() => ({
   toastError: vi.fn<(title: string, options?: { id?: string; description?: string }) => void>()
 }))
+
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 import { showComposerDropFailureToast } from './composer-drop-failure-toast'
@@ -17,6 +18,7 @@ const SKIP_REASON_COPY = [
 
 function lastToast(): { title: string; id?: string; description?: string } {
   const call = toastError.mock.calls.at(-1)
+
   return {
     title: String(call?.[0]),
     id: call?.[1]?.id,

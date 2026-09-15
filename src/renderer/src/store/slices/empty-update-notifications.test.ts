@@ -5,6 +5,7 @@ import { browserImportStateForHostUpdate } from './browser/browser-host-state'
 import { mutateDiffComments } from './diff-comment-persistence'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 createTabsSliceMockApi()
 
 describe('empty store updates', () => {
@@ -30,9 +31,11 @@ describe('empty store updates', () => {
 
   it('does not notify for unchanged labels but publishes changed labels', () => {
     const store = createTestStore()
+
     const tab = store
       .getState()
       .createUnifiedTab('folder-workspace', 'terminal', { label: 'label' })
+
     const before = store.getState()
     const listener = vi.fn()
     store.subscribe(listener)

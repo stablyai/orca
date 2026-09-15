@@ -62,15 +62,18 @@ export function openIosTerminal(
 ): IosHangulRig {
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   const terminal = new Terminal({
     cols: 40,
     rows: 8,
     screenReaderMode: options.screenReaderMode
   })
+
   openTerminals.push(terminal)
   terminal.open(container)
   const textarea = terminal.textarea
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!textarea || !compositionView) {
     throw new Error('xterm did not create the helper textarea and composition view')
   }
@@ -79,6 +82,7 @@ export function openIosTerminal(
   // real gate rather than a flag the test set.
   const isIosWeb = options.isIosWeb ?? isCurrentPlatformIosWeb()
   const tracker = installTerminalImeCompositionTracker(terminal.element)
+
   const preedit = isIosWeb
     ? installTerminalIosHangulPreedit({
         terminalElement: terminal.element,
@@ -102,6 +106,7 @@ export function openIosTerminal(
     ) {
       return false
     }
+
     return !shouldBypassXtermKeyboardEvent(event, {
       isMac: true,
       isIosWeb,
@@ -111,6 +116,7 @@ export function openIosTerminal(
 
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { compositionView, emitted, preedit, terminal, textarea }
 }
 
@@ -133,11 +139,13 @@ export function dispatchKey(
     bubbles: true,
     cancelable: true
   })
+
   // happy-dom drops the legacy numeric fields from KeyboardEventInit; xterm's key paths read them.
   Object.defineProperty(event, 'keyCode', { value: init.keyCode ?? init.key.charCodeAt(0) })
   Object.defineProperty(event, 'charCode', { value: init.charCode ?? 0 })
   Object.defineProperty(event, 'isComposing', { value: init.isComposing ?? false })
   textarea.dispatchEvent(event)
+
   return event.defaultPrevented
 }
 
@@ -162,9 +170,11 @@ export function dispatchComposition(
   data?: string
 ): void {
   const event = new CompositionEvent(type, { bubbles: true })
+
   if (data !== undefined) {
     Object.defineProperty(event, 'data', { value: data })
   }
+
   textarea.dispatchEvent(event)
 }
 
@@ -190,13 +200,17 @@ export async function typePrintable(
 ): Promise<void> {
   if (dispatchKey(rig, 'keydown', { key, keyCode, shiftKey })) {
     await nextEventLoop()
+
     return
   }
+
   dispatchKey(rig, 'keypress', { key, keyCode, charCode: key.charCodeAt(0), shiftKey })
+
   if (replaces) {
     rig.textarea.value = rig.textarea.value.slice(0, -1)
     dispatchInput(rig, 'deleteContentBackward', null)
   }
+
   rig.textarea.value += written
   dispatchInput(rig, 'insertText', written)
   await nextEventLoop()
@@ -260,6 +274,7 @@ export function loadIosDeviceTrace(fileName: string): IosDeviceTrace {
     'src/renderer/src/components/terminal-pane/__fixtures__',
     fileName
   )
+
   return JSON.parse(readFileSync(path, 'utf8')) as IosDeviceTrace
 }
 
@@ -280,18 +295,22 @@ export async function replayIosDeviceTrace(
   trace: IosDeviceTrace
 ): Promise<FieldDrift[]> {
   const drift: FieldDrift[] = []
+
   for (const [index, event] of trace.events.entries()) {
     if (event.type === 'keydown') {
       if (rig.textarea.value !== event.value) {
         drift.push({ index, recorded: event.value, actual: rig.textarea.value })
       }
+
       dispatchKey(rig, 'keydown', { key: event.key, keyCode: event.keyCode ?? 0 })
     } else {
       rig.textarea.value = event.value
       dispatchInput(rig, event.inputType ?? 'insertText', event.data || null)
     }
+
     await nextEventLoop()
   }
+
   return drift
 }
 
@@ -311,12 +330,14 @@ export type DeviceTraceKeystroke = {
 export function deviceTraceKeystrokes(trace: IosDeviceTrace): DeviceTraceKeystroke[] {
   const steps: DeviceTraceKeystroke[] = []
   let shiftKey = false
+
   for (const event of trace.events) {
     if (event.type === 'keydown') {
       if (event.key === 'Shift') {
         shiftKey = true
         continue
       }
+
       steps.push({
         key: event.key,
         keyCode: event.keyCode ?? 0,
@@ -327,15 +348,19 @@ export function deviceTraceKeystrokes(trace: IosDeviceTrace): DeviceTraceKeystro
       shiftKey = false
       continue
     }
+
     const step = steps.at(-1)
+
     if (!step) {
       throw new Error('trace opens with an input event, which no keystroke owns')
     }
+
     if (event.inputType?.startsWith('delete')) {
       step.replaces = true
     } else {
       step.written = event.data
     }
   }
+
   return steps
 }

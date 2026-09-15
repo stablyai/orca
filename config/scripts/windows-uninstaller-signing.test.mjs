@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   EMBEDDED_RECEIPT_SUFFIX,
   isNsisUninstallerArtifact,
@@ -31,6 +32,7 @@ describe('relayNsisUninstaller', () => {
   const writeUninstaller = (dir, contents) => {
     const filePath = join(dir, 'orca-windows-setup.__uninstaller.exe')
     writeFileSync(filePath, contents)
+
     return filePath
   }
 
@@ -118,6 +120,7 @@ describe('relayNsisUninstaller', () => {
   it('swallows filesystem errors instead of failing the build', () => {
     const dir = makeDir()
     const filePath = writeUninstaller(dir, 'unsigned-uninstaller')
+
     const fs = {
       existsSync: () => true,
       mkdirSync: () => {},
@@ -149,6 +152,7 @@ describe('signWindowsUninstallerViaSignPath', () => {
 
   const withEnv = (env, run) => {
     const saved = Object.fromEntries(RELAY_VARS.map((key) => [key, process.env[key]]))
+
     const apply = (values) => {
       for (const key of RELAY_VARS) {
         if (values[key] === undefined) {
@@ -158,7 +162,9 @@ describe('signWindowsUninstallerViaSignPath', () => {
         }
       }
     }
+
     apply({ ...Object.fromEntries(RELAY_VARS.map((key) => [key, undefined])), ...env })
+
     try {
       return run()
     } finally {
@@ -169,6 +175,7 @@ describe('signWindowsUninstallerViaSignPath', () => {
   const writeBuiltUninstaller = (dir) => {
     const filePath = join(dir, 'orca-windows-setup.__uninstaller.exe')
     writeFileSync(filePath, 'built-by-makensis')
+
     return filePath
   }
 

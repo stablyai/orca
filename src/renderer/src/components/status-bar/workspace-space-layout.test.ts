@@ -11,12 +11,14 @@ describe('buildTreemapLayout', () => {
     ])
 
     expect(rects.map((rect) => rect.id)).toEqual(['a', 'b', 'c'])
+
     for (const rect of rects) {
       expect(rect.x).toBeGreaterThanOrEqual(0)
       expect(rect.y).toBeGreaterThanOrEqual(0)
       expect(rect.x + rect.width).toBeLessThanOrEqual(100)
       expect(rect.y + rect.height).toBeLessThanOrEqual(100)
     }
+
     const area = rects.reduce((sum, rect) => sum + rect.width * rect.height, 0)
     expect(area).toBeCloseTo(10_000, 5)
     expect(rects[0].width * rects[0].height).toBeGreaterThan(rects[1].width * rects[1].height)

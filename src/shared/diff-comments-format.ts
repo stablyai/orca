@@ -12,15 +12,18 @@ export function formatDiffComment(c: DiffComment): string {
     .replace(/"/g, '\\"')
     .replace(/\r/g, '\\r')
     .replace(/\n/g, '\\n')
+
   const locationLabel =
     c.lineNumber === 0
       ? 'Scope: file'
       : c.startLine !== undefined && c.startLine !== c.lineNumber
         ? `Lines: ${c.startLine}-${c.lineNumber}`
         : `Line: ${c.lineNumber}`
+
   if (!isMarkdownComment(c)) {
     return [`File: ${c.filePath}`, locationLabel, `User comment: "${escaped}"`].join('\n')
   }
+
   return [
     `File: ${c.filePath}`,
     'Source: markdown',

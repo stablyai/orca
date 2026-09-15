@@ -91,6 +91,7 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     const cwd = createDeferred<string>()
     const createdPane = { id: 2 }
     const staleSplitPane = vi.fn()
+
     const liveSplitPane = vi.fn(
       (
         _paneId: number,
@@ -98,6 +99,7 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
         _opts?: { cwdPromise?: Promise<string> }
       ) => createdPane
     )
+
     let cwdSettled = false
     void cwd.promise.then(() => {
       cwdSettled = true
@@ -134,6 +136,7 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     const spawnHints = liveSplitPane.mock.calls[0]?.[2] as
       | { cwdPromise?: Promise<string> }
       | undefined
+
     cwd.resolve('/resolved')
 
     await expect(spawnHints?.cwdPromise).resolves.toBe('/resolved')
@@ -143,10 +146,12 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     const cwd = createDeferred<string>()
     const firstCreatedPane = { id: 2, leafId: 'leaf-2' } as ManagedPane
     const secondCreatedPane = { id: 3, leafId: 'leaf-3' } as ManagedPane
+
     const splitPane = vi
       .fn()
       .mockReturnValueOnce(firstCreatedPane)
       .mockReturnValueOnce(secondCreatedPane)
+
     const manager = makeManager(splitPane)
     const paneCwdMap: PaneCwdMap = new Map()
     mocks.resolveSplitCwd.mockReturnValue(cwd.promise)

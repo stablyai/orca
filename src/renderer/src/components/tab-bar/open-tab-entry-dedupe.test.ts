@@ -30,7 +30,9 @@ function editorTab(
 }
 
 const POSIX_ROOT = '/tmp/wt-1'
+
 const WINDOWS_ROOT = 'C:\\repos\\wt-1'
+
 const WSL_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\wt-1'
 
 describe('dropFileEntriesCoveredByTabResults', () => {

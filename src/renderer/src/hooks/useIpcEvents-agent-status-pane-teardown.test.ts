@@ -26,9 +26,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       updateTabTitle,
@@ -66,6 +68,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -78,6 +81,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
+
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       tabId: 'tab-future',
@@ -97,11 +101,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('keeps auto-approved Codex done statuses on the completion path', async () => {
     const setAgentStatus = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
+
     const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
       metadata.launchToken === 'launch-yolo'
         ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
         : undefined
     )
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -135,6 +141,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -175,6 +182,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('drops late push events for a recently closed terminal tab', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -201,6 +209,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -229,6 +238,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('keeps missing-tab runtime attribution for tabs that were never explicitly closed', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -257,6 +267,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -298,9 +309,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('clears a worktree-attributed live row when main reports pane teardown', async () => {
     const setAgentStatus = vi.fn()
     const removeAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const onClearListenerRef: {
       current: ((data: AgentStatusClearIpcPayload) => void) | null
     } = {
@@ -343,10 +356,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         },
         onClear: (cb) => {
           onClearListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -360,6 +375,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
+
     if (typeof onClearListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onClear listener to be registered')
     }
@@ -396,21 +412,27 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('blocks cleared snapshots across remount and accepts newer reconnect replay', async () => {
     let resolveOldSnapshot!: (entries: AgentStatusSetData[]) => void
     let resolveCurrentSnapshot!: (entries: AgentStatusSetData[]) => void
+
     const oldSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
       resolveOldSnapshot = resolve
     })
+
     const currentSnapshot = new Promise<AgentStatusSetData[]>((resolve) => {
       resolveCurrentSnapshot = resolve
     })
+
     const effectCleanups: (() => void)[] = []
     const setAgentStatus = vi.fn()
     const clearTransientAgentStatuses = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const onClearListenerRef: {
       current: ((data: AgentStatusClearIpcPayload) => void) | null
     } = { current: null }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       clearTransientAgentStatuses,
@@ -428,6 +450,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -448,10 +471,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (callback) => {
           onSetListenerRef.current = callback
+
           return () => {}
         },
         onClear: (callback) => {
           onClearListenerRef.current = callback
+
           return () => {}
         },
         getSnapshot: vi.fn().mockReturnValueOnce(oldSnapshot).mockReturnValueOnce(currentSnapshot)
@@ -464,6 +489,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     effectCleanups[0]?.()
     useIpcEvents()
     await Promise.resolve()
+
     if (!onSetListenerRef.current || !onClearListenerRef.current) {
       throw new Error('Expected agent status listeners to be registered')
     }
@@ -478,6 +504,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       connectionId: 'ssh-a',
       clearedAt: 100
     })
+
     const staleEntry: AgentStatusSetData = {
       paneKey: FUTURE_PANE_KEY,
       state: 'working',
@@ -488,6 +515,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       receivedAt: 100,
       stateStartedAt: 90
     }
+
     resolveOldSnapshot([staleEntry])
     resolveCurrentSnapshot([staleEntry])
     await Promise.resolve()
@@ -520,6 +548,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
     const removeAgentStatus = vi.fn()
+
     const onClearListenerRef: {
       current: ((data: AgentStatusClearIpcPayload) => void) | null
     } = {
@@ -557,6 +586,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         onSet: () => () => {},
         onClear: (cb) => {
           onClearListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -578,6 +608,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('does not retain a Cursor spinner terminal title when the hook reports done', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -619,6 +650,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })

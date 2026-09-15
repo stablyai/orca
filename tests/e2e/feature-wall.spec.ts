@@ -77,9 +77,11 @@ test.describe('Feature tour modal', () => {
   test('shows unified task copy without leaving the walkthrough', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.setState({
         preflightStatus: {
           git: { installed: true },
@@ -129,9 +131,11 @@ test.describe('Feature tour modal', () => {
   }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.getState().openModal('feature-wall', { source: 'help_menu' })
     })
 
@@ -225,10 +229,13 @@ test.describe('Feature tour modal', () => {
       ]) {
         localStorage.removeItem(key)
       }
+
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       // Seed through the status actions so each result gets the current execution context.
       await Promise.all([
         store.getState().refreshPreflightStatus({ force: true }),
@@ -261,9 +268,11 @@ test.describe('Feature tour modal', () => {
         JSON.stringify(['browser'])
       )
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.getState().openModal('feature-wall', { source: 'help_menu' })
     })
 

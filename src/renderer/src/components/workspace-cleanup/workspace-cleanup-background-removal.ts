@@ -24,6 +24,7 @@ import { showWorkspaceCleanupRemovalResultToasts } from './workspace-cleanup-rem
 import { reclassifySkippedWorkspaceCleanupAncestors } from './workspace-cleanup-skipped-ancestor-reclassification'
 
 const DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS = 120_000
+
 const DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS = 5_000
 
 export type WorkspaceCleanupRemovalProgress = {
@@ -78,6 +79,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
     } catch (callbackError) {
       console.error('Workspace cleanup result callback failed', callbackError)
     }
+
     return
   }
 
@@ -106,6 +108,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
   const reportFailures = (rowFailures: readonly WorkspaceCleanupFailure[]): void => {
     for (const failure of rowFailures) {
       failures.push(failure)
+
       try {
         onRowFailed?.(failure)
       } catch (callbackError) {
@@ -142,15 +145,18 @@ export function startWorkspaceCleanupBackgroundRemoval({
     blockers: readonly WorkspaceCleanupCandidate[]
   ): void => {
     const provisional = blockers.every((blocker) => provisionallyBlocked.has(blocker))
+
     const failure: WorkspaceCleanupFailure = {
       worktreeId: candidate.worktreeId,
       executionHostId: getWorkspaceCleanupCandidateHostId(candidate),
       displayName: candidate.displayName,
       message: getSkippedAncestorMessage(provisional)
     }
+
     if (provisional) {
       provisionallyBlocked.add(candidate)
     }
+
     failedCandidates.push(candidate)
     skippedAncestors.push({ candidate, failure, provisional })
     reportFailures([failure])
@@ -169,6 +175,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
       failedCandidates,
       failures
     })
+
     for (const candidate of unblocked) {
       processedCount -= 1
       queue.push(candidate)
@@ -177,6 +184,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
 
   void (async () => {
     let snapshotPruneBatchActive = false
+
     if (snapshotPruneBatch) {
       try {
         await snapshotPruneBatch.begin()
@@ -185,17 +193,22 @@ export function startWorkspaceCleanupBackgroundRemoval({
         console.warn('Failed to begin workspace cleanup snapshot prune batch:', error)
       }
     }
+
     try {
       while (queue.length > 0) {
         const candidate = queue.shift()
+
         if (!candidate) {
           break
         }
+
         const blockers = findBlockingDescendants(candidate)
+
         if (blockers.length > 0) {
           skipBlockedAncestor(candidate, blockers)
           continue
         }
+
         try {
           const outcome = await waitForWorkspaceCleanupRemovalWithTimeout(
             removeCandidates([candidate.worktreeId], {
@@ -208,9 +221,11 @@ export function startWorkspaceCleanupBackgroundRemoval({
             removalTimeoutMs,
             removalSettlementGraceMs
           )
+
           if (outcome.status === 'rejected') {
             throw outcome.error
           }
+
           if (outcome.status === 'unresolved') {
             const timeoutFailure = getWorkspaceCleanupTimeoutFailure(candidate)
             failedCandidates.push(candidate)
@@ -230,20 +245,24 @@ export function startWorkspaceCleanupBackgroundRemoval({
                 removedIdentities.push(...(lateResult.removedIdentities ?? []))
                 preservedBranches.push(...(lateResult.preservedBranches ?? []))
                 reportFailures(lateResult.failures)
+
                 if (lateResult.failures.length === 0) {
                   removeArrayEntry(failedCandidates, candidate)
                 }
+
                 resettleSkippedAncestors()
                 emitProgress()
               })
             )
             continue
           }
+
           const result = outcome.result
           removedIds.push(...result.removedIds)
           removedIdentities.push(...(result.removedIdentities ?? []))
           preservedBranches.push(...(result.preservedBranches ?? []))
           reportFailures(result.failures)
+
           if (result.failures.length > 0) {
             failedCandidates.push(candidate)
           }
@@ -285,12 +304,14 @@ export function startWorkspaceCleanupBackgroundRemoval({
         }
       })
     )
+
     const result: WorkspaceCleanupRemoveResult = {
       removedIds,
       removedIdentities,
       failures,
       ...(preservedBranches.length > 0 ? { preservedBranches } : {})
     }
+
     try {
       onResult?.(result)
     } catch (callbackError) {
@@ -323,11 +344,13 @@ function reportLateWorkspaceCleanupResult(
   } catch (callbackError) {
     console.error('Workspace cleanup late result callback failed', callbackError)
   }
+
   showWorkspaceCleanupRemovalResultToasts(result, pendingSettlementFailures)
 }
 
 function removeArrayEntry<T>(entries: T[], entry: T): void {
   const index = entries.indexOf(entry)
+
   if (index !== -1) {
     entries.splice(index, 1)
   }

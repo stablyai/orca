@@ -10,9 +10,11 @@ it('restores pointer input when a drag ends after attaching a document preview',
   const append = vi.spyOn(container, 'appendChild')
   append.mockImplementation((node) => {
     expect((node as HTMLElement).style.pointerEvents).toBe('none')
+
     return Node.prototype.appendChild.call(container, node)
   })
   const release = acquireWebviewsDragPassthrough()
+
   const attached = attachDocPreviewWebview({
     previewId: 'preview-drag',
     container,
@@ -36,5 +38,6 @@ it('restores pointer input when a drag ends after attaching a document preview',
     container.remove()
     append.mockRestore()
   }
+
   expect(webviewRegistry.has('preview-drag')).toBe(false)
 })

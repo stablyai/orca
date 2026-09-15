@@ -109,7 +109,9 @@ export async function classifyDaemonAuditFailure(
 ): Promise<DaemonAuditObservation> {
   const probeProcessIdentity =
     options.dependencies?.probeProcessIdentity ?? probeDaemonProcessIdentity
+
   const inspectEndpoint = options.dependencies?.inspectEndpointState ?? inspectDaemonEndpointState
+
   const [processEvidence, endpointState] = await Promise.all([
     probeProcessIdentity(exactIncarnation, {
       socketPath: context.endpoint,
@@ -117,16 +119,21 @@ export async function classifyDaemonAuditFailure(
     }),
     inspectEndpoint(context)
   ])
+
   const reachability = reachabilityForTrigger(trigger)
+
   const evidenceSources = combineEvidenceSources(
     processEvidence.evidenceSources,
     context.endpointKind === 'unix-socket' ? ['endpoint_stat'] : [],
     options.additionalEvidenceSources ?? []
   )
+
   const windowsNamedPipeMissing =
     options.endpointGoneProof === 'windows_named_pipe_missing' &&
     context.endpointKind === 'windows-named-pipe'
+
   const observedEndpointState = windowsNamedPipeMissing ? 'missing' : endpointState
+
   if (windowsNamedPipeMissing && exactIncarnation && processEvidence.state !== 'present') {
     return {
       state: 'gone',
@@ -143,6 +150,7 @@ export async function classifyDaemonAuditFailure(
       observedAtMs: Date.now()
     }
   }
+
   if (processEvidence.state === 'gone') {
     return {
       state: 'gone',
@@ -159,6 +167,7 @@ export async function classifyDaemonAuditFailure(
       observedAtMs: Date.now()
     }
   }
+
   return {
     state: 'unknown',
     reason: trigger,
@@ -181,8 +190,10 @@ async function inspectDaemonEndpointState(
   if (context.endpointKind === 'windows-named-pipe') {
     return 'named-pipe'
   }
+
   try {
     const stats = await lstat(context.endpoint)
+
     return stats.isSocket() ? 'socket' : 'non-socket'
   } catch (error) {
     return hasErrorCode(error, 'ENOENT') ? 'missing' : 'unknown'
@@ -198,6 +209,7 @@ function reachabilityForTrigger(
   ) {
     return 'disconnected'
   }
+
   return 'unknown'
 }
 

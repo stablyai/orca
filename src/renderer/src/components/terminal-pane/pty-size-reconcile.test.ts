@@ -15,10 +15,12 @@ import {
 function createFrameScheduler() {
   const queue = new Map<number, () => void>()
   let nextHandle = 1
+
   return {
     requestFrame: (callback: () => void): number => {
       const handle = nextHandle++
       queue.set(handle, callback)
+
       return handle
     },
     cancelFrame: (handle: number): void => {
@@ -27,12 +29,14 @@ function createFrameScheduler() {
     /** Run up to `maxFrames` queued frames, one per tick. Returns frames run. */
     run(maxFrames = 1000): number {
       let ran = 0
+
       while (queue.size > 0 && ran < maxFrames) {
         const [handle, callback] = queue.entries().next().value as [number, () => void]
         queue.delete(handle)
         callback()
         ran += 1
       }
+
       return ran
     },
     pending: () => queue.size
@@ -42,10 +46,12 @@ function createFrameScheduler() {
 /** A pane whose measured grid follows a frame-indexed timeline; `measure()` is called once per reconcile frame, so call count = frames elapsed. */
 function createTimelinePane(timeline: (frame: number) => PtySizeReconcileDimensions | null) {
   let frame = 0
+
   return {
     measure: vi.fn((): PtySizeReconcileDimensions | null => {
       const dims = timeline(frame)
       frame += 1
+
       return dims
     })
   }
@@ -70,6 +76,7 @@ function runReconcile(
     ...overrides
   })
   const framesRun = scheduler.run(maxFrames)
+
   return { resize, framesRun }
 }
 
@@ -77,9 +84,11 @@ describe('reconcilePtySizeAcrossFrames', () => {
   it('forwards a narrow settle that lands AFTER a fixed 12-frame budget — while hidden', () => {
     // Golden repro: hidden pane spawned wide, narrows at frame 15 — a 12-frame budget stops still-wide; the convergent loop keeps watching.
     const NARROW_AT = 15
+
     const pane = createTimelinePane((frame) =>
       frame < NARROW_AT ? { cols: 203, rows: 50 } : { cols: 79, rows: 50 }
     )
+
     const { resize } = runReconcile({ measure: pane.measure, isAuthoritative: () => false })
 
     expect(resize).toHaveBeenCalled()
@@ -89,9 +98,11 @@ describe('reconcilePtySizeAcrossFrames', () => {
   it('forwards a narrow settle that lands LATE while hidden — no fixed frame floor', () => {
     // A fixed MIN-frames floor would falsely settle on the wide spawn before a late narrowing lands — watch until authoritative or the cap.
     const NARROW_AT = 40
+
     const pane = createTimelinePane((frame) =>
       frame < NARROW_AT ? { cols: 203, rows: 50 } : { cols: 79, rows: 50 }
     )
+
     const { resize } = runReconcile({ measure: pane.measure, isAuthoritative: () => false })
 
     expect(resize).toHaveBeenCalled()
@@ -103,10 +114,13 @@ describe('reconcilePtySizeAcrossFrames', () => {
     const NARROW_AT = 40
     const AUTHORITATIVE_AT = 45
     let frameSeen = 0
+
     const pane = createTimelinePane((frame) => {
       frameSeen = frame
+
       return frame < NARROW_AT ? { cols: 203, rows: 50 } : { cols: 79, rows: 50 }
     })
+
     const { resize } = runReconcile({
       measure: pane.measure,
       isAuthoritative: () => frameSeen >= AUTHORITATIVE_AT
@@ -148,10 +162,12 @@ describe('reconcilePtySizeAcrossFrames', () => {
   it('does NOT hand off while hidden — keeps watching until the hard cap', () => {
     // While never authoritative, a stable grid is no safe stop (onResize can't back us up), so it runs to the hard cap.
     const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
+
     const { framesRun } = runReconcile({
       measure: pane.measure,
       isAuthoritative: () => false
     })
+
     expect(framesRun).toBe(180)
   })
 
@@ -167,6 +183,7 @@ describe('reconcilePtySizeAcrossFrames', () => {
     const pane = createTimelinePane((frame) =>
       frame % 2 === 0 ? { cols: 100, rows: 30 } : { cols: 101, rows: 30 }
     )
+
     const { framesRun } = runReconcile({ measure: pane.measure }, 10_000)
     expect(framesRun).toBe(180)
   })
@@ -177,11 +194,14 @@ describe('reconcilePtySizeAcrossFrames', () => {
       if (frame < 5) {
         return { cols: 203, rows: 50 }
       }
+
       if (frame < 10) {
         return { cols: 120, rows: 50 }
       }
+
       return { cols: 79, rows: 50 }
     })
+
     const { resize } = runReconcile({ measure: pane.measure })
     expect(resize.mock.calls.length).toBeLessThanOrEqual(3)
     expect(resize).toHaveBeenLastCalledWith(79, 50)
@@ -189,10 +209,12 @@ describe('reconcilePtySizeAcrossFrames', () => {
 
   it('skips parked (mobile-fit) frames without forwarding a desktop resize', () => {
     const pane = createTimelinePane(() => ({ cols: 79, rows: 50 }))
+
     const { resize, framesRun } = runReconcile({
       measure: pane.measure,
       isParked: () => true
     })
+
     expect(resize).not.toHaveBeenCalled()
     expect(pane.measure).not.toHaveBeenCalled()
     // Parked frames still count toward the cap so a parked PTY can't loop forever.
@@ -226,9 +248,11 @@ describe('reconcilePtySizeAcrossFrames', () => {
   it('stops promptly once cancelled (pane disposed mid-reconcile)', () => {
     const scheduler = createFrameScheduler()
     const resize = vi.fn()
+
     const pane = createTimelinePane((frame) =>
       frame < 30 ? { cols: 203, rows: 50 } : { cols: 79, rows: 50 }
     )
+
     const handle = reconcilePtySizeAcrossFrames({
       spawnCols: 203,
       spawnRows: 50,
@@ -240,6 +264,7 @@ describe('reconcilePtySizeAcrossFrames', () => {
       requestFrame: scheduler.requestFrame,
       cancelFrame: scheduler.cancelFrame
     })
+
     // Run a few frames, then cancel — no further frames should be scheduled.
     scheduler.run(3)
     handle.cancel()
@@ -281,6 +306,7 @@ describe('reconcilePtySizeAcrossFrames', () => {
       maxFrames = 1000
     ): Promise<void> {
       let ran = 0
+
       while (scheduler.pending() > 0 && ran < maxFrames) {
         scheduler.run(1)
         ran += 1
@@ -404,6 +430,7 @@ describe('reconcilePtySizeAcrossFrames', () => {
         getAppliedSize: async () => {
           // Park the PTY while this read is in flight.
           parked = true
+
           return { cols: 203, rows: 50 }
         },
         requestFrame: scheduler.requestFrame,

@@ -18,14 +18,17 @@ const { lstatPaths, untrackedFiles } = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
+
   return {
     ...actual,
     lstat: async (target: string) => {
       lstatPaths.push(target)
       const contents = untrackedFiles.get(target)
+
       if (contents === undefined) {
         throw Object.assign(new Error(`ENOENT: ${target}`), { code: 'ENOENT' })
       }
+
       return {
         size: Buffer.byteLength(contents),
         // Distinct per read so the stat-keyed untracked cache never serves another case's entry.
@@ -40,13 +43,16 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 vi.mock('../../shared/node-bounded-file-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof BoundedFileReader>()
+
   return {
     ...actual,
     readNodeFileWithinLimit: async (target: string) => {
       const contents = untrackedFiles.get(target)
+
       if (contents === undefined) {
         throw Object.assign(new Error(`ENOENT: ${target}`), { code: 'ENOENT' })
       }
+
       return { buffer: Buffer.from(contents) }
     }
   }
@@ -65,7 +71,9 @@ import { attachLineStats } from './source-control/status-line-stats'
 import { createBranchLineTotalInput } from './source-control/status-branch-line-total-input'
 
 const GUEST_WORKTREE = '/home/me/repo'
+
 const UNC_WORKTREE = String.raw`\\wsl.localhost\Ubuntu\home\me\repo`
+
 const MERGE_BASE = 'a'.repeat(40)
 
 function untrackedEntry(entryPath: string): GitStatusEntry {
@@ -101,6 +109,7 @@ describe('untracked line stats on a WSL worktree read by a Windows host', () => 
   it('adds untracked lines to the branch total through the same spelling', async () => {
     const target = path.join(UNC_WORKTREE, 'fresh.txt')
     untrackedFiles.set(target, 'one\ntwo\nthree\n')
+
     const input = createBranchLineTotalInput(
       GUEST_WORKTREE,
       [untrackedEntry('fresh.txt')],

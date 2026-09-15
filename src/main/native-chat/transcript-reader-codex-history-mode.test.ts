@@ -19,6 +19,7 @@ async function writeCodexFixture(records: unknown[]): Promise<string> {
   tempRoots.push(root)
   const filePath = join(root, 'rollout.jsonl')
   await writeFile(filePath, records.map((record) => JSON.stringify(record)).join('\n'))
+
   return filePath
 }
 
@@ -70,6 +71,7 @@ describe('Codex transcript history modes', () => {
     ])
 
     const result = await readNativeChatTranscript('codex', 'session-1', { filePath })
+
     const tail = await readNativeChatTranscriptTail({
       agent: 'codex',
       sessionId: 'session-1',
@@ -154,6 +156,7 @@ describe('Codex transcript history modes', () => {
     ])
 
     const result = await readNativeChatTranscript('codex', 'session-1', { filePath })
+
     const tail = await readNativeChatTranscriptTail({
       agent: 'codex',
       sessionId: 'session-1',
@@ -229,6 +232,7 @@ describe('Codex transcript history modes', () => {
       }),
       'fallback-call'
     )
+
     const output = decodeCodexTranscriptLine(
       JSON.stringify({
         type: 'response_item',

@@ -67,6 +67,7 @@ describe('browser reconciliation command ordering', () => {
   it('deduplicates exact reclaim bootstrap and rejects changed prior authority', async () => {
     const handler = vi.fn().mockResolvedValue({ status: 'completed' })
     const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
+
     const reclaim = event({
       type: 'reclaimPage',
       previousAuthority,
@@ -94,6 +95,7 @@ describe('browser reconciliation command ordering', () => {
     const handler = vi.fn().mockResolvedValue({ status: 'completed' })
     const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
     const clientAuthority = { ...previousAuthority }
+
     const clientEvent = event({
       type: 'reclaimPage',
       previousAuthority: clientAuthority,
@@ -142,7 +144,9 @@ describe('browser reconciliation command ordering', () => {
       const handler = vi
         .fn()
         .mockResolvedValueOnce({ status: 'failed', errorCode: 'bootstrap_failed' })
+
       const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
+
       const bootstrap =
         type === 'reclaimPage'
           ? {
@@ -156,7 +160,9 @@ describe('browser reconciliation command ordering', () => {
               browserProfileId: 'profile-a',
               executionHostKey: 'host-key-a'
             }
+
       const first = dispatcher.dispatch(event(bootstrap))
+
       const navigate = dispatcher.dispatch(
         event(
           { type: 'navigate', url: 'https://remote.internal/' },
@@ -181,6 +187,7 @@ describe('browser reconciliation command ordering', () => {
       authority,
       handler: vi.fn().mockResolvedValue({ status: 'completed' })
     })
+
     await dispatcher.dispatch(
       event({
         type: 'reclaimPage',
@@ -202,6 +209,7 @@ describe('browser reconciliation command ordering', () => {
       authority,
       handler: vi.fn().mockResolvedValue({ status: 'completed' })
     })
+
     await closing.dispatch(event({ type: 'closePage', targetAuthority: previousAuthority }))
     expect(() =>
       closing.dispatch(
@@ -218,6 +226,7 @@ describe('browser reconciliation command ordering', () => {
       .fn()
       .mockResolvedValueOnce({ status: 'failed', errorCode: 'authority_stale' })
       .mockResolvedValueOnce({ status: 'completed' })
+
     const dispatcher = new BrowserClientHostCommandDispatcher({ authority, handler })
 
     await expect(
@@ -248,11 +257,13 @@ describe('browser reconciliation command ordering', () => {
         executionHostKey: 'host-key-a'
       }
     })
+
     const navigate = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 8,
       command: { type: 'navigate', url: 'https://remote.internal/' }
     })
+
     const close = ledger.issue({
       browserPageId: 'page-b',
       pageHostGeneration: 9,

@@ -21,13 +21,16 @@ export function omitUnverifiedPtyLossTabIds(
   tabIds: Iterable<string>
 ): Record<string, true> {
   let next: Record<string, true> | null = null
+
   for (const tabId of tabIds) {
     if (!markers[tabId]) {
       continue
     }
+
     next ??= { ...markers }
     delete next[tabId]
   }
+
   return next ?? markers
 }
 
@@ -37,12 +40,15 @@ export function retainUnverifiedPtyLossTabIds(
   validTabIds: ReadonlySet<string>
 ): Record<string, true> {
   let next: Record<string, true> | null = null
+
   for (const tabId of Object.keys(markers)) {
     if (validTabIds.has(tabId)) {
       continue
     }
+
     next ??= { ...markers }
     delete next[tabId]
   }
+
   return next ?? markers
 }

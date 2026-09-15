@@ -41,6 +41,7 @@ type DragState = {
 }
 
 export { resolveWorkspaceKanbanPointerDragSelection } from './workspace-kanban-pointer-drag-selection'
+
 import {
   resolveWorkspaceKanbanPointerDragSelection,
   type UseWorkspaceKanbanCardPointerDragParams
@@ -89,9 +90,11 @@ export function useWorkspaceKanbanCardPointerDrag({
   const stopPointerDrag = useCallback(
     (commit: boolean) => {
       const state = dragRef.current
+
       if (!state) {
         return
       }
+
       const commitTarget =
         commit && state.started && boardRef.current
           ? resolveWorkspaceKanbanCardDropCommitTarget({
@@ -101,10 +104,13 @@ export function useWorkspaceKanbanCardPointerDrag({
               y: state.currentY
             })
           : null
+
       dragRef.current = null
+
       if (state.frameId !== null) {
         window.cancelAnimationFrame(state.frameId)
       }
+
       setDraggedCardsDragging({
         board: boardRef.current,
         worktreeIdentities: state.worktreeIdentities,
@@ -121,6 +127,7 @@ export function useWorkspaceKanbanCardPointerDrag({
 
       isPointerDragActiveRef.current = false
       suppressClickUntilRef.current = performance.now() + 250
+
       if (!commit || !commitTarget) {
         return
       }
@@ -156,11 +163,14 @@ export function useWorkspaceKanbanCardPointerDrag({
   const updatePointerDragTarget = useCallback(
     (state: DragState) => {
       const board = boardRef.current
+
       if (!board) {
         clearDragTarget()
         removeCardDropIndicator()
+
         return
       }
+
       const dropTarget = getCardDropTarget(board, state.currentX, state.currentY)
       state.latestDropTarget = {
         target: dropTarget,
@@ -169,6 +179,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
       pinDragTargetChangeRef.current(dropTarget.isPinDrop)
       dragTargetChangeRef.current(dropTarget.status)
+
       if (
         dropTarget.status &&
         shouldShowDropIndicatorRef.current(state.worktreeIds, dropTarget.status)
@@ -183,13 +194,17 @@ export function useWorkspaceKanbanCardPointerDrag({
 
   const flushPointerDragFrame = useCallback(() => {
     const state = dragRef.current
+
     if (!state) {
       return
     }
+
     state.frameId = null
+
     if (!state.started) {
       return
     }
+
     updateDragPreviewPosition(state)
     updatePointerDragTarget(state)
   }, [updatePointerDragTarget])
@@ -199,6 +214,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       if (state.frameId !== null) {
         return
       }
+
       state.frameId = window.requestAnimationFrame(flushPointerDragFrame)
     },
     [flushPointerDragFrame]
@@ -207,37 +223,47 @@ export function useWorkspaceKanbanCardPointerDrag({
   useEffect(() => {
     if (!open) {
       stopPointerDrag(false)
+
       return
     }
 
     const handlePointerMove = (event: PointerEvent): void => {
       const state = dragRef.current
+
       if (!state || event.pointerId !== state.pointerId) {
         return
       }
+
       state.currentX = event.clientX
       state.currentY = event.clientY
       const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
+
       if (!state.started && distance >= POINTER_DRAG_THRESHOLD) {
         startPointerDrag(state)
       }
+
       if (!state.started) {
         return
       }
+
       event.preventDefault()
       schedulePointerDragFrame(state)
     }
 
     const handlePointerUp = (event: PointerEvent): void => {
       const state = dragRef.current
+
       if (!state || event.pointerId !== state.pointerId) {
         return
       }
+
       state.currentX = event.clientX
       state.currentY = event.clientY
+
       if (state.started) {
         event.preventDefault()
       }
+
       stopPointerDrag(true)
     }
 
@@ -245,6 +271,7 @@ export function useWorkspaceKanbanCardPointerDrag({
       if (performance.now() > suppressClickUntilRef.current) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
@@ -257,6 +284,7 @@ export function useWorkspaceKanbanCardPointerDrag({
     document.addEventListener('pointercancel', handlePointerUp, true)
     document.addEventListener('click', handleClick, true)
     window.addEventListener('blur', handleBlur)
+
     return () => {
       document.removeEventListener('pointermove', handlePointerMove, true)
       document.removeEventListener('pointerup', handlePointerUp, true)
@@ -272,14 +300,18 @@ export function useWorkspaceKanbanCardPointerDrag({
       if (!open || !shouldStartWorkspaceKanbanCardPointerDrag(event.nativeEvent)) {
         return
       }
+
       const target = event.target
+
       if (!(target instanceof Element)) {
         return
       }
+
       const card = target.closest<HTMLElement>(CARD_SELECTOR)
       const worktreeIdentity = card?.dataset.workspaceBoardCardId
       const worktreeId = card?.dataset.workspaceBoardWorktreeId
       const board = boardRef.current
+
       if (
         !card ||
         !worktreeIdentity ||
@@ -291,12 +323,14 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
 
       const selectedWorktrees = selectedWorktreesRef.current
+
       const { worktreeIds, worktreeIdentities } = resolveWorkspaceKanbanPointerDragSelection({
         sourceWorktreeId: worktreeId,
         sourceWorktreeIdentity: worktreeIdentity,
         selectedWorktreeIds: selectedWorktreeIdsRef.current,
         selectedWorktrees
       })
+
       dragRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,

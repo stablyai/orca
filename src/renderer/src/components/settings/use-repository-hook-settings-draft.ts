@@ -26,6 +26,7 @@ export function useRepositoryHookSettingsDraft({
   const [hookSettingsDraft, setHookSettingsDraft] = useState(() =>
     getHookSettingsDraft(repo.hookSettings)
   )
+
   const hookSettingsDraftRef = useRef(hookSettingsDraft)
   const localCommandsRepoIdentityRef = useRef(repoHostIdentity)
   const localCommandsDraftDirtyRef = useRef(false)
@@ -54,9 +55,11 @@ export function useRepositoryHookSettingsDraft({
   const flushScriptDraft = useCallback(
     (persistHookSettings?: (settings: RepoHookSettings) => void) => {
       clearLocalCommandsAutosaveTimer()
+
       if (!localCommandsDraftDirtyRef.current) {
         return
       }
+
       localCommandsDraftDirtyRef.current = false
       ;(persistHookSettings ?? persistRef.current)(hookSettingsDraftRef.current)
     },
@@ -73,10 +76,12 @@ export function useRepositoryHookSettingsDraft({
   const updateScriptDraft = useCallback(
     (hookName: LocalHookName, nextScript: string) => {
       const current = hookSettingsDraftRef.current
+
       const next: RepoHookSettings = {
         ...current,
         scripts: { ...current.scripts, [hookName]: nextScript }
       }
+
       hookSettingsDraftRef.current = next
       setHookSettingsDraft(next)
       queueScriptDraftPersist()
@@ -85,6 +90,7 @@ export function useRepositoryHookSettingsDraft({
   )
 
   const commitScriptDraft = useCallback(() => flushScriptDraft(), [flushScriptDraft])
+
   const flushScriptDraftOnUnmount = useCallback(
     (node: HTMLElement | null): void => {
       if (node === null) {
@@ -93,6 +99,7 @@ export function useRepositoryHookSettingsDraft({
     },
     [flushScriptDraft]
   )
+
   const updateHookSettingsPolicyDraft = useCallback((updates: HookSettingsPolicyDraft) => {
     const next = { ...hookSettingsDraftRef.current, ...updates }
     hookSettingsDraftRef.current = next
@@ -103,13 +110,17 @@ export function useRepositoryHookSettingsDraft({
 
   useEffect(() => {
     const next = getHookSettingsDraft(repo.hookSettings)
+
     if (localCommandsRepoIdentityRef.current === repoHostIdentity) {
       localCommandsPersistForRepoRef.current = onUpdateHookSettings
+
       if (!localCommandsDraftDirtyRef.current) {
         syncHookSettingsDraft(next)
       }
+
       return
     }
+
     flushScriptDraft(localCommandsPersistForRepoRef.current)
     localCommandsRepoIdentityRef.current = repoHostIdentity
     localCommandsPersistForRepoRef.current = onUpdateHookSettings

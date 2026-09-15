@@ -10,10 +10,12 @@ export function resolveRuntimeNavigationTarget(args: {
   if (args.navigation) {
     return args.navigation
   }
+
   if (args.clientKind) {
     // Why: legacy paired clients sent notifyClients:true; treating that as navigation lets one device steer every UI.
     return 'caller'
   }
+
   return args.notifyClients === false ? 'caller' : 'all'
 }
 

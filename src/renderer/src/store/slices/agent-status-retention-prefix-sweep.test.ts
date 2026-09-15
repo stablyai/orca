@@ -32,6 +32,7 @@ describe('agent status retention + prefix sweep', () => {
   it('setAgentStatus clears a retained snapshot for the same paneKey', () => {
     vi.useFakeTimers()
     const store = createTestStore()
+
     const oldEntry: AgentStatusEntry = {
       state: 'done',
       prompt: 'old turn',
@@ -41,6 +42,7 @@ describe('agent status retention + prefix sweep', () => {
       stateHistory: [],
       agentType: 'claude'
     }
+
     const siblingEntry: AgentStatusEntry = {
       state: 'done',
       prompt: 'sibling turn',
@@ -50,6 +52,7 @@ describe('agent status retention + prefix sweep', () => {
       stateHistory: [],
       agentType: 'claude'
     }
+
     const retainedA: RetainedAgentEntry = {
       entry: oldEntry,
       worktreeId: 'wt-a',
@@ -57,6 +60,7 @@ describe('agent status retention + prefix sweep', () => {
       agentType: 'claude',
       startedAt: 1_000
     }
+
     const retainedSibling: RetainedAgentEntry = {
       entry: siblingEntry,
       worktreeId: 'wt-a',
@@ -88,6 +92,7 @@ describe('agent status retention + prefix sweep', () => {
   it('dismissRetainedAgentsByWorktree removes only entries for the given worktreeId', () => {
     const store = createTestStore()
     const now = Date.now()
+
     const entryA: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -96,6 +101,7 @@ describe('agent status retention + prefix sweep', () => {
       paneKey: 'tab-a:0',
       stateHistory: []
     }
+
     const entryB: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -104,6 +110,7 @@ describe('agent status retention + prefix sweep', () => {
       paneKey: 'tab-b:0',
       stateHistory: []
     }
+
     const retainedA: RetainedAgentEntry = {
       entry: entryA,
       worktreeId: 'wt-a',
@@ -111,6 +118,7 @@ describe('agent status retention + prefix sweep', () => {
       agentType: 'claude',
       startedAt: now
     }
+
     const retainedB: RetainedAgentEntry = {
       entry: entryB,
       worktreeId: 'wt-b',
@@ -138,6 +146,7 @@ describe('agent status retention + prefix sweep', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const now = Date.now()
+
     const entryA: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -146,6 +155,7 @@ describe('agent status retention + prefix sweep', () => {
       paneKey: 'tab-a:0',
       stateHistory: []
     }
+
     const entryB: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -154,6 +164,7 @@ describe('agent status retention + prefix sweep', () => {
       paneKey: 'tab-a:1',
       stateHistory: []
     }
+
     const retainedA: RetainedAgentEntry = {
       entry: entryA,
       worktreeId: 'wt-a',
@@ -161,6 +172,7 @@ describe('agent status retention + prefix sweep', () => {
       agentType: 'claude',
       startedAt: now
     }
+
     const retainedB: RetainedAgentEntry = {
       entry: entryB,
       worktreeId: 'wt-a',
@@ -216,6 +228,7 @@ describe('agent status retention + prefix sweep', () => {
   it('pruneRetainedAgents keeps only entries whose worktreeId is in the valid set', () => {
     const store = createTestStore()
     const now = Date.now()
+
     const entryA: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -224,6 +237,7 @@ describe('agent status retention + prefix sweep', () => {
       paneKey: 'tab-a:0',
       stateHistory: []
     }
+
     const entryB: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -232,6 +246,7 @@ describe('agent status retention + prefix sweep', () => {
       paneKey: 'tab-b:0',
       stateHistory: []
     }
+
     const retainedA: RetainedAgentEntry = {
       entry: entryA,
       worktreeId: 'wt-a',
@@ -239,6 +254,7 @@ describe('agent status retention + prefix sweep', () => {
       agentType: 'claude',
       startedAt: now
     }
+
     const retainedB: RetainedAgentEntry = {
       entry: entryB,
       worktreeId: 'wt-b',

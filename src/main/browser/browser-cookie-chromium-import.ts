@@ -20,8 +20,10 @@ export async function importChromiumCookies(
   options: CookieImportOptions = {}
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromBrowser: browser=${browser.family} partition="${targetPartition}"`)
+
   if (!existsSync(browser.cookiesPath)) {
     diag(`  cookies DB not found: ${browser.cookiesPath}`)
+
     return { ok: false, reason: `${browser.label} cookies database not found.` }
   }
 
@@ -30,12 +32,14 @@ export async function importChromiumCookies(
   // Why: CookieMonster can reject otherwise valid imported bytes, so stage a populated copy whose
   // imported-domain rows can be merged into the live DB on the next cold start.
   const targetSession = session.fromPartition(targetPartition)
+
   // Why (STA-4601): native imports mutate the live jar and their staged image before the old
   // clear/write lock was reached. Hold the per-partition lock from the first flush through staging,
   // live replacement, pending-image bookkeeping, and cleanup so an older image cannot race a newer
   // import on the same partition.
   return withCookieMutationLock(targetSession, async () => {
     let context: ChromiumImportContext | null = null
+
     try {
       const preparation = await prepareChromiumCookieImport(
         browser,
@@ -43,14 +47,18 @@ export async function importChromiumCookies(
         options,
         targetSession
       )
+
       if ('result' in preparation) {
         return preparation.result
       }
+
       context = preparation.context
       const scanResult = scanChromiumCookieRows(context)
+
       if (scanResult) {
         return scanResult
       }
+
       return await finalizeChromiumCookieImport(context)
     } catch (err) {
       if (context) {
@@ -59,11 +67,14 @@ export async function importChromiumCookies(
         } catch {
           /* may already be closed */
         }
+
         context.closeStagingDb()
         // Why: drop the staging DB so a stale staged import isn't applied on the next cold start.
         context.discardStagingFile()
       }
+
       diag(`  SQLite import failed: ${String(err)}`)
+
       return {
         ok: false,
         reason: reasonWithDiagLog(

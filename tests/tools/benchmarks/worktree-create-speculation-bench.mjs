@@ -8,9 +8,11 @@ import { performance } from 'node:perf_hooks'
 function parseArgs(argv) {
   const options = { repo: process.cwd(), base: 'HEAD', iterations: 5 }
   const firstFlag = argv.findIndex((value, index) => index > 0 && value.startsWith('--'))
+
   for (let index = firstFlag === -1 ? argv.length : firstFlag; index < argv.length; index += 1) {
     const flag = argv[index]
     const value = argv[index + 1]
+
     if (flag === '--repo' && value) {
       options.repo = path.resolve(value)
     } else if (flag === '--base' && value) {
@@ -20,11 +22,14 @@ function parseArgs(argv) {
     } else {
       throw new Error(`Unknown or incomplete argument: ${flag}`)
     }
+
     index += 1
   }
+
   if (options.iterations < 1) {
     throw new Error('--iterations must be positive')
   }
+
   return options
 }
 
@@ -34,21 +39,25 @@ function git(repo, args) {
     maxBuffer: 64 * 1024 * 1024,
     windowsHide: true
   })
+
   if (result.status !== 0) {
     throw new Error(`git ${args.join(' ')} failed\n${result.stderr || result.stdout}`)
   }
+
   return result.stdout.trim()
 }
 
 function time(operation) {
   const startedAt = performance.now()
   operation()
+
   return performance.now() - startedAt
 }
 
 function median(values) {
   const sorted = [...values].sort((left, right) => left - right)
   const middle = Math.floor(sorted.length / 2)
+
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
@@ -65,7 +74,9 @@ function removeWorktree(repo, worktreePath, branch, locked = false) {
   if (locked) {
     git(repo, ['worktree', 'unlock', worktreePath])
   }
+
   git(repo, ['worktree', 'remove', '--force', worktreePath])
+
   if (branch) {
     git(repo, ['branch', '-D', branch])
   }

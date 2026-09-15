@@ -9,10 +9,13 @@
 import { eventSchemas, type EventName } from '../../shared/telemetry-events'
 
 const PER_EVENT_DEFAULT_CAPACITY = 30
+
 const PER_EVENT_AGENT_ERROR_CAPACITY = 20
+
 const WINDOW_MS = 60_000
 
 const PER_SESSION_CEILING = 1_000
+
 const CONSENT_MUTATION_CEILING = 5
 
 type TokenBucket = {
@@ -24,9 +27,13 @@ type TokenBucket = {
 
 // Module-level singleton state — one telemetry session per main process, no multi-tenant reuse.
 const perEventBuckets = new Map<string, TokenBucket>()
+
 let perSessionCount = 0
+
 let perSessionWarned = false
+
 let consentMutationCount = 0
+
 let consentMutationWarned = false
 
 function capacityFor(name: string): number {
@@ -35,19 +42,24 @@ function capacityFor(name: string): number {
 
 function getOrCreateBucket(name: string, now: number): TokenBucket {
   let bucket = perEventBuckets.get(name)
+
   if (!bucket) {
     const capacity = capacityFor(name)
     bucket = { tokens: capacity, capacity, lastRefill: now, warned: false }
     perEventBuckets.set(name, bucket)
+
     return bucket
   }
+
   // Lazy refill on access (avoids a timer): `capacity` tokens per `WINDOW_MS`.
   const elapsed = now - bucket.lastRefill
+
   if (elapsed > 0) {
     const refill = (elapsed / WINDOW_MS) * bucket.capacity
     bucket.tokens = Math.min(bucket.capacity, bucket.tokens + refill)
     bucket.lastRefill = now
   }
+
   return bucket
 }
 
@@ -62,15 +74,19 @@ export function consumeBurstToken(name: EventName): boolean {
   if (!Object.hasOwn(eventSchemas, name)) {
     return false
   }
+
   const now = Date.now()
   const bucket = getOrCreateBucket(name, now)
+
   if (bucket.tokens < 1) {
     if (!bucket.warned) {
       bucket.warned = true
       console.warn(`[telemetry] per-event burst cap hit for '${name}'; dropping further events`)
     }
+
     return false
   }
+
   if (perSessionCount >= PER_SESSION_CEILING) {
     if (!perSessionWarned) {
       perSessionWarned = true
@@ -78,10 +94,13 @@ export function consumeBurstToken(name: EventName): boolean {
         `[telemetry] per-session event ceiling (${PER_SESSION_CEILING}) hit; dropping further events`
       )
     }
+
     return false
   }
+
   bucket.tokens -= 1
   perSessionCount += 1
+
   return true
 }
 
@@ -97,9 +116,12 @@ export function consumeConsentMutationToken(): boolean {
         `[telemetry] consent-mutation rate limit (${CONSENT_MUTATION_CEILING}/session) hit; dropping further mutations`
       )
     }
+
     return false
   }
+
   consentMutationCount += 1
+
   return true
 }
 

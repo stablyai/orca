@@ -18,19 +18,23 @@ export function isHostHeaderActionTarget(
   if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
+
   return currentTarget.contains(target) && target.closest(HOST_HEADER_ACTION_SELECTOR) !== null
 }
 
 export function readHostHeaderRects(container: HTMLElement): HostHeaderRect[] {
   const containerRect = container.getBoundingClientRect()
   const headerRects: HostHeaderRect[] = []
+
   for (const header of Array.from(
     container.querySelectorAll<HTMLElement>('[data-host-header-drag-id]')
   )) {
     const hostId = normalizeExecutionHostId(header.dataset.hostHeaderDragId)
+
     if (!hostId) {
       continue
     }
+
     const rect = header.getBoundingClientRect()
     headerRects.push({
       hostId,
@@ -38,5 +42,6 @@ export function readHostHeaderRects(container: HTMLElement): HostHeaderRect[] {
       bottom: rect.bottom - containerRect.top + container.scrollTop
     })
   }
+
   return headerRects
 }

@@ -43,6 +43,7 @@ export function replaceBacklogWithWarning(
   warning: string = BACKGROUND_BACKLOG_WARNING
 ): void {
   const shouldNotify = !entry.backgroundBacklogDropped
+
   if (shouldNotify) {
     // Why: field visibility for cap tuning — drop frequency and size decide whether the cap is too small (issue #2836 / #7017).
     recordRendererCrashBreadcrumb('terminal_output_backlog_dropped', {
@@ -51,13 +52,16 @@ export function replaceBacklogWithWarning(
       capChars: getTerminalOutputMaxQueueChars()
     })
   }
+
   let beforeWrite: TerminalOutputBeforeWrite | undefined
+
   for (let index = entry.chunks.length - 1; index >= entry.chunkIndex; index--) {
     if (entry.chunks[index]?.beforeWrite) {
       beforeWrite = entry.chunks[index].beforeWrite
       break
     }
   }
+
   clearForegroundHoldSafety(entry)
   fireQueuedAckCredits(entry)
   entry.chunks = [
@@ -77,11 +81,14 @@ export function replaceBacklogWithWarning(
   entry.backgroundBacklogDropped = true
   entry.highPriority = true
   entry.foregroundHold = false
+
   if (debugEnabled && shouldNotify) {
     debugState.droppedBacklogCount++
   }
+
   clearForegroundRelease(entry)
   recordQueueDebugPressure()
+
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }
@@ -100,5 +107,6 @@ export function hasHighPriorityBacklog(): boolean {
       return true
     }
   }
+
   return false
 }

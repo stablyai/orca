@@ -49,11 +49,14 @@ export function useEffectiveCollapsedGroups(args: {
     folderWorkspaces,
     defaultHostId
   } = args
+
   return useMemo(() => {
     if (!agentSendTargetWorktreeId) {
       return collapsedGroups
     }
+
     const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
+
     if (!targetWorktree) {
       // Why: folder workspaces are absent from worktreeMap, so without this the
       // agent-send picker could never open the section hiding one (#15362).
@@ -63,16 +66,22 @@ export function useEffectiveCollapsedGroups(args: {
         projectGroups,
         { groupBy, workspaceStatuses, defaultHostId }
       )
+
       if (folderKeys.length === 0) {
         return collapsedGroups
       }
+
       const nextForFolder = new Set(collapsedGroups)
+
       for (const groupKey of folderKeys) {
         nextForFolder.delete(groupKey)
       }
+
       return nextForFolder
     }
+
     const next = new Set(collapsedGroups)
+
     if (
       pinnedDisplayPolicy === 'single-location' &&
       isPinnedSectionWorktree(targetWorktree, visibleWorktrees, worktreeLineageById, worktreeMap)
@@ -100,6 +109,7 @@ export function useEffectiveCollapsedGroups(args: {
     )) {
       next.delete(getLineageGroupKey(parent.id))
     }
+
     return next
   }, [
     agentSendTargetWorktreeId,

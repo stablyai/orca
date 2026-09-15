@@ -26,14 +26,23 @@ import { setLineageFixtureState } from './worktree-list-lineage-store-state'
 import { setPinnedFixtureState } from './worktree-list-pinned-store-state'
 
 vi.mock('@/store', () => createAppStoreModuleMock())
+
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
+
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
+
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
+
 vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
+
 vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+
 vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
+
 vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
+
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
+
 vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
 
 // Why: describe title is shared across the split files so test full names stay stable.
@@ -88,6 +97,7 @@ describe('WorktreeList lineage child card renderer', () => {
     const markup = await renderWorktreeListMarkup()
     const childCard = getCardOpeningTag(markup, 'child')
     const childIndex = markup.indexOf('data-worktree-card-id="child"')
+
     const childMarkup = markup.slice(
       childIndex,
       markup.indexOf('data-worktree-card-id="grandchild"')
@@ -102,6 +112,7 @@ describe('WorktreeList lineage child card renderer', () => {
     mockStore.state.worktreeCardProperties = ['status', 'inline-agents']
     const markup = await renderWorktreeListMarkup()
     const childIndex = markup.indexOf('data-worktree-card-id="child"')
+
     const childMarkup = markup.slice(
       childIndex,
       markup.indexOf('data-worktree-card-id="grandchild"')
@@ -164,6 +175,7 @@ describe('WorktreeList lineage child card renderer', () => {
       markup.match(
         /<div id="worktree-list-option-all%3A%7Cchild"[\s\S]*?lineage child with agent/
       )?.[0] ?? ''
+
     const parentCard =
       markup.match(/<div id="worktree-list-option-all%3A%7Cparent"[\s\S]*?lineage parent/)?.[0] ??
       ''

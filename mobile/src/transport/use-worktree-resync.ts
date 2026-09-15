@@ -20,6 +20,7 @@ export function useWorktreeResync(args: {
   useEffect(() => {
     const prev = prevConnStateRef.current
     prevConnStateRef.current = connState
+
     if (prev !== 'connected' && connState === 'connected' && client) {
       void fetchWorktrees({ allowDuringModal: true })
     }
@@ -29,12 +30,15 @@ export function useWorktreeResync(args: {
   }, [connState, client, fetchWorktrees])
 
   const [refreshing, setRefreshing] = useState(false)
+
   // Why (#8498): let the user force a fresh snapshot instead of the possibly-poisoned cache.
   const onRefresh = useCallback(async () => {
     if (!client || connState !== 'connected') {
       return
     }
+
     setRefreshing(true)
+
     try {
       await fetchWorktrees({ allowDuringModal: true })
       await fetchRepoMetadata({ force: true })

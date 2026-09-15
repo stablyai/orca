@@ -6,9 +6,11 @@ import {
 } from '../../../../shared/terminal-custom-themes'
 
 const mockStateValues: unknown[] = []
+
 let mockStateIndex = 0
 
 const toastSuccess = vi.fn()
+
 vi.mock('sonner', () => ({ toast: { success: (msg: string) => toastSuccess(msg) } }))
 
 const baseSettings: GlobalSettings = {
@@ -30,6 +32,7 @@ function resetMockState() {
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {
@@ -38,12 +41,15 @@ vi.mock('react', async () => {
     useRef: (initial: unknown) => ({ current: initial }),
     useState: (initial: unknown) => {
       const i = mockStateIndex++
+
       if (mockStateValues[i] === undefined) {
         mockStateValues[i] = typeof initial === 'function' ? initial() : initial
       }
+
       const setter = (v: unknown) => {
         mockStateValues[i] = typeof v === 'function' ? v(mockStateValues[i]) : v
       }
+
       return [mockStateValues[i], setter]
     }
   }
@@ -88,6 +94,7 @@ describe('useWarpThemeImport', () => {
         }
       ]
     }
+
     const previewMock = vi.fn().mockResolvedValue(previewResponse)
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: previewMock } }
@@ -135,6 +142,7 @@ describe('useWarpThemeImport', () => {
       ],
       skippedFiles: []
     }
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
     })
@@ -177,6 +185,7 @@ describe('useWarpThemeImport', () => {
       ],
       skippedFiles: []
     }
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
     })
@@ -207,6 +216,7 @@ describe('useWarpThemeImport', () => {
       skippedFiles: [],
       error: 'Warp theme import is available in the desktop app.'
     }
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
     })
@@ -226,6 +236,7 @@ describe('useWarpThemeImport', () => {
       skippedFiles: [],
       themes: []
     }
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
     })
@@ -258,6 +269,7 @@ describe('useWarpThemeImport', () => {
         }
       ]
     }
+
     const previewMock = vi.fn().mockResolvedValue(previewResponse)
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: previewMock } }
@@ -278,6 +290,7 @@ describe('useWarpThemeImport', () => {
     const previewMock = vi
       .fn()
       .mockResolvedValue({ found: false, canceled: true, themes: [], skippedFiles: [] })
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: previewMock } }
     })
@@ -309,10 +322,12 @@ describe('useWarpThemeImport', () => {
         }
       ]
     }
+
     const previewMock = vi
       .fn()
       .mockResolvedValueOnce(autoResponse)
       .mockResolvedValueOnce({ found: false, canceled: true, themes: [], skippedFiles: [] })
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: previewMock } }
     })
@@ -341,6 +356,7 @@ describe('useWarpThemeImport', () => {
         importedAt: '2026-06-01T00:00:00.000Z'
       }))
     } as GlobalSettings
+
     const previewResponse: WarpThemeImportPreview = {
       found: true,
       skippedFiles: [],
@@ -356,6 +372,7 @@ describe('useWarpThemeImport', () => {
         }
       ]
     }
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
     })
@@ -385,6 +402,7 @@ describe('useWarpThemeImport', () => {
         importedAt: '2026-06-01T00:00:00.000Z'
       }))
     } as GlobalSettings
+
     const previewResponse: WarpThemeImportPreview = {
       found: true,
       skippedFiles: [],
@@ -400,6 +418,7 @@ describe('useWarpThemeImport', () => {
         }
       ]
     }
+
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
     })

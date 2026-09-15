@@ -55,8 +55,11 @@ vi.mock('../store', () => ({
 }))
 
 const WT = 'repo1::/path/wt1'
+
 const ENV = 'remote-env-1'
+
 const HOST_EPOCH = 'host-epoch-1'
+
 const T0 = 1_700_000_000_000
 
 /** The pane this renderer streams and therefore claims (pty-connection claims
@@ -65,6 +68,7 @@ const OWNED = {
   hostTabId: 'host-tab-1',
   leafId: '11111111-1111-4111-8111-111111111111'
 } as const
+
 /** A pane mirrored from the same host that this renderer never wrote status for,
  *  so the host stays authoritative for it. */
 const CEDED = {
@@ -97,6 +101,7 @@ function makeHostSnapshot(args: {
   statusByHostTabId: Record<string, HostPaneStatus>
 }): RuntimeMobileSessionTabsResult {
   const panes: PaneRef[] = [OWNED, CEDED]
+
   return {
     worktree: WT,
     publicationEpoch: HOST_EPOCH,
@@ -106,6 +111,7 @@ function makeHostSnapshot(args: {
     activeTabType: 'terminal',
     tabs: panes.map((pane, index) => {
       const status = args.statusByHostTabId[pane.hostTabId]
+
       return {
         type: 'terminal' as const,
         id: `${pane.hostTabId}::${pane.leafId}`,
@@ -153,6 +159,7 @@ function applyHostSnapshot(
   const state = store.getState()
   const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, ENV, now)
   store.setState(patch as Partial<AppState>)
+
   return patch !== state
 }
 
@@ -187,6 +194,7 @@ function seedPairedClientStore(): TestStore {
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
   } as Partial<AppState>)
+
   return store
 }
 
@@ -195,6 +203,7 @@ function seedPairedClientStore(): TestStore {
 function observeRowMessages(store: TestStore, now: number): Record<string, string | undefined> {
   const state = store.getState()
   const tabs = state.tabsByWorktree[WT] ?? []
+
   const rows = buildWorktreeAgentRows({
     tabs,
     entries: selectLiveAgentStatusEntriesForWorktree(state, WT),
@@ -206,12 +215,15 @@ function observeRowMessages(store: TestStore, now: number): Record<string, strin
     ),
     now
   })
+
   const byPaneKey: Record<string, string | undefined> = {}
+
   for (const row of rows) {
     if (row.rowSource !== 'subagent') {
       byPaneKey[row.paneKey] = row.entry.lastAssistantMessage
     }
   }
+
   return byPaneKey
 }
 
@@ -230,6 +242,7 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
 
   it('shows the message on a pane this renderer owns from the byte stream', () => {
     const store = seedPairedClientStore()
+
     // The agent finished its turn: the host hook has the completion text, and
     // this renderer's OSC pipeline independently saw the pane go idle.
     const mirrored = applyHostSnapshot(
@@ -247,6 +260,7 @@ describe('#12906: remote agent rows keep the host-published last assistant messa
       }),
       T0
     )
+
     expect(mirrored, 'harness must reach the mirror, not stop at the freshness gate').toBe(true)
     replayClientByteStatus(store, OWNED, 'done', T0)
     // Republication is where the loss happens: the client now owns the key.

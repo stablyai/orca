@@ -11,6 +11,7 @@ export function resolvePinnedTabLabel(
   const tab = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
     (candidate) => candidate.id === visibleId || candidate.entityId === visibleId
   )
+
   return resolveUnifiedTabLabel(tab, state.settings?.tabAutoGenerateTitle === true)
 }
 
@@ -41,14 +42,18 @@ export function guardPinnedTabClose(params: {
   onCancel?: () => void
 }): (() => void) | undefined {
   const { isPinned, tabLabel, onClose, onCancel } = params
+
   if (!isPinned) {
     onClose()
+
     return undefined
   }
 
   const state = useAppStore.getState()
+
   if (!shouldConfirmPinnedTabClose(state)) {
     onClose()
+
     return undefined
   }
 
@@ -57,6 +62,8 @@ export function guardPinnedTabClose(params: {
     onConfirm: onClose,
     ...(onCancel ? { onCancel } : {})
   }
+
   state.requestPinnedTabCloseConfirm(request)
+
   return () => state.cancelPinnedTabCloseRequest(request)
 }

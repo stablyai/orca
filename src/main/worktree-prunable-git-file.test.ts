@@ -7,10 +7,12 @@ const { statPath, pathAccess, runtimePath } = vi.hoisted(() => ({
   pathAccess: vi.fn(),
   runtimePath: vi.fn()
 }))
+
 vi.mock('./local-worktree-filesystem', () => ({
   getLocalWorktreePathAccess: pathAccess,
   toLocalWorktreeRuntimePath: runtimePath
 }))
+
 const worktree: GitWorktreeInfo = {
   path: '/workspaces/feature/.git',
   branch: 'refs/heads/feature',
@@ -19,12 +21,14 @@ const worktree: GitWorktreeInfo = {
   isBare: false,
   prunable: true
 }
+
 beforeEach(() => {
   vi.resetAllMocks()
   statPath.mockResolvedValue({ isFile: () => true })
   pathAccess.mockReturnValue({ statPath })
   runtimePath.mockImplementation((path) => path)
 })
+
 describe('prunable Git-file registration proof', () => {
   it('accepts an attested named-branch file without reading or changing its parent', async () => {
     await expect(isPrunableGitFileWorktree(worktree)).resolves.toBe(true)

@@ -16,11 +16,14 @@ export function acknowledgeLegacyMail(
   if (params.messageIds.length === 0) {
     return { receipts: [], duplicate: true }
   }
+
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const principal = this.requireLegacyMailPrincipal(params.principalId)
     const uniqueIds = [...new Set(params.messageIds)]
     const placeholders = uniqueIds.map(() => '?').join(',')
+
     const prior = this.db
       .prepare(
         `SELECT COUNT(*) AS count FROM legacy_mail_receipts
@@ -28,12 +31,14 @@ export function acknowledgeLegacyMail(
            AND acknowledged_at IS NOT NULL`
       )
       .get(params.principalId, ...uniqueIds) as { count: number }
+
     if (prior.count !== uniqueIds.length) {
       const actionable = this.getLegacyMailPage({
         principalId: params.principalId,
         limit: uniqueIds.length,
         types: params.types
       }).messages
+
       if (
         actionable.length !== uniqueIds.length ||
         actionable.some((message, index) => message.id !== uniqueIds[index])
@@ -44,6 +49,7 @@ export function acknowledgeLegacyMail(
         )
       }
     }
+
     const rows = this.db
       .prepare(
         `SELECT * FROM messages
@@ -51,6 +57,7 @@ export function acknowledgeLegacyMail(
            AND delivery_contract = 'legacy_direct'`
       )
       .all(...uniqueIds, principal.run_id) as MessageRow[]
+
     const validIds = new Set(
       rows
         .filter(
@@ -61,6 +68,7 @@ export function acknowledgeLegacyMail(
         )
         .map((message) => message.id)
     )
+
     if (validIds.size !== uniqueIds.length || uniqueIds.some((id) => !validIds.has(id))) {
       throw new OrchestrationError(
         'request_mismatch',
@@ -75,6 +83,7 @@ export function acknowledgeLegacyMail(
          WHERE id IN (${placeholders})`
       )
       .run(...uniqueIds)
+
     const insert = this.db.prepare(
       `INSERT INTO legacy_mail_receipts (
          principal_id, message_id, acknowledged_at
@@ -84,9 +93,11 @@ export function acknowledgeLegacyMail(
          legacy_mail_receipts.acknowledged_at, excluded.acknowledged_at
        )`
     )
+
     for (const messageId of uniqueIds) {
       insert.run(params.principalId, messageId)
     }
+
     const receipts = this.db
       .prepare(
         `SELECT * FROM legacy_mail_receipts
@@ -94,7 +105,9 @@ export function acknowledgeLegacyMail(
          ORDER BY message_id`
       )
       .all(params.principalId, ...uniqueIds) as LegacyMailReceiptRow[]
+
     this.db.exec('COMMIT')
+
     return { receipts, duplicate: prior.count === uniqueIds.length }
   } catch (error) {
     this.db.exec('ROLLBACK')

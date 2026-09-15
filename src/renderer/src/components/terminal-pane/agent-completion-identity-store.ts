@@ -16,11 +16,17 @@ type PendingStampedTail = {
 }
 
 const lastCompletionByPane = new Map<string, LastCompletionIdentity>()
+
 const handledTurnCompletedAtsByPane = new Map<string, number[]>()
+
 const pendingStampedTailByPane = new Map<string, PendingStampedTail>()
+
 const workingBoundaryByPane = new Map<string, Map<string, number>>()
+
 const coordinatorCountByPane = new Map<string, number>()
+
 const HANDLED_TURN_STAMP_LIMIT = 16
+
 let nextCoordinatorId = 1
 
 export type AgentCompletionIdentityScope = {
@@ -50,24 +56,31 @@ export function createAgentCompletionIdentityScope(
   statusLane?: 'hook' | 'pty'
 ): AgentCompletionIdentityScope {
   const lane = statusLane ?? `coordinator:${nextCoordinatorId++}`
+
   let inheritedWorkingBoundary = pendingStampedTailByPane
     .get(paneKey)
     ?.eligibleWorkingBoundaryByLane.get(lane)
+
   coordinatorCountByPane.set(paneKey, (coordinatorCountByPane.get(paneKey) ?? 0) + 1)
 
   function recordWorkingBoundary(stateStartedAt: number | undefined): void {
     let boundaries = workingBoundaryByPane.get(paneKey)
+
     if (typeof stateStartedAt !== 'number' || !Number.isFinite(stateStartedAt)) {
       boundaries?.delete(lane)
+
       if (boundaries?.size === 0) {
         workingBoundaryByPane.delete(paneKey)
       }
+
       return
     }
+
     if (!boundaries) {
       boundaries = new Map()
       workingBoundaryByPane.set(paneKey, boundaries)
     }
+
     inheritedWorkingBoundary = undefined
     boundaries.set(lane, stateStartedAt)
   }
@@ -76,6 +89,7 @@ export function createAgentCompletionIdentityScope(
     inheritedWorkingBoundary = undefined
     const boundaries = workingBoundaryByPane.get(paneKey)
     boundaries?.delete(lane)
+
     if (boundaries?.size === 0) {
       workingBoundaryByPane.delete(paneKey)
     }
@@ -92,6 +106,7 @@ export function createAgentCompletionIdentityScope(
     if (wasTurnCompletedAtHandled(turnCompletedAt)) {
       return true
     }
+
     const eligibleWorkingBoundaryByLane = new Map(workingBoundaryByPane.get(paneKey))
     eligibleWorkingBoundaryByLane.delete(lane)
     pendingStampedTailByPane.set(paneKey, {
@@ -101,6 +116,7 @@ export function createAgentCompletionIdentityScope(
       consumedIdentityByLane: new Map(),
       tailOpen: true
     })
+
     return false
   }
 
@@ -112,6 +128,7 @@ export function createAgentCompletionIdentityScope(
     const stampedCompletion = lastCompletionByPane.get(paneKey)
     const currentWorkingBoundary = workingBoundaryByPane.get(paneKey)?.get(lane)
     const eligibleWorkingBoundary = pending?.eligibleWorkingBoundaryByLane.get(lane)
+
     if (
       !pending ||
       stampedCompletion?.lastTurnCompletedAtNotified !== pending.turnCompletedAt ||
@@ -123,12 +140,16 @@ export function createAgentCompletionIdentityScope(
     ) {
       return false
     }
+
     pending.eligibleWorkingBoundaryByLane.delete(lane)
     inheritedWorkingBoundary = undefined
+
     if (completionIdentity) {
       pending.consumedIdentityByLane.set(lane, completionIdentity)
     }
+
     pending.tailOpen = pending.eligibleWorkingBoundaryByLane.size > 0
+
     return true
   }
 
@@ -142,13 +163,17 @@ export function createAgentCompletionIdentityScope(
       lastCompletionByPane.get(paneKey)?.lastTurnCompletedAtNotified === turnCompletedAt,
     rememberTurnCompletedAt: (turnCompletedAt) => {
       const handled = handledTurnCompletedAtsByPane.get(paneKey) ?? []
+
       if (handled.includes(turnCompletedAt)) {
         return
       }
+
       handled.push(turnCompletedAt)
+
       if (handled.length > HANDLED_TURN_STAMP_LIMIT) {
         handled.shift()
       }
+
       handledTurnCompletedAtsByPane.set(paneKey, handled)
     },
     recordWorkingBoundary,
@@ -157,9 +182,11 @@ export function createAgentCompletionIdentityScope(
     consumePendingStampedTailForAgent,
     consumeStampedTail: (turnCompletedAt) => {
       const pending = pendingStampedTailByPane.get(paneKey)
+
       if (pending?.turnCompletedAt !== turnCompletedAt) {
         return
       }
+
       pending.eligibleWorkingBoundaryByLane.delete(lane)
       pending.tailOpen = pending.eligibleWorkingBoundaryByLane.size > 0
     },
@@ -168,8 +195,10 @@ export function createAgentCompletionIdentityScope(
       pendingStampedTailByPane.get(paneKey)?.consumedIdentityByLane.get(lane) === identity,
     clearOriginStampedTail: () => {
       const pending = pendingStampedTailByPane.get(paneKey)
+
       if (pending?.originLane === lane) {
         pendingStampedTailByPane.delete(paneKey)
+
         if (
           lastCompletionByPane.get(paneKey)?.lastTurnCompletedAtNotified === pending.turnCompletedAt
         ) {
@@ -182,11 +211,13 @@ export function createAgentCompletionIdentityScope(
     },
     dispose: (isLive) => {
       const remaining = (coordinatorCountByPane.get(paneKey) ?? 1) - 1
+
       if (remaining > 0) {
         coordinatorCountByPane.set(paneKey, remaining)
       } else {
         coordinatorCountByPane.delete(paneKey)
       }
+
       if (remaining <= 0 && !isLive) {
         lastCompletionByPane.delete(paneKey)
         handledTurnCompletedAtsByPane.delete(paneKey)
@@ -217,5 +248,6 @@ export function getAgentCompletionIdentityStoreSizeForTest(): number {
 
 export const resetAgentCompletionCoordinatorIdentitiesForTest =
   resetAgentCompletionIdentityStoreForTest
+
 export const getAgentCompletionCoordinatorIdentityCountForTest =
   getAgentCompletionIdentityStoreSizeForTest

@@ -14,8 +14,11 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const hooksCheckMock = vi.fn()
+
 const readIssueCommandMock = vi.fn()
+
 const runtimeEnvironmentCallMock = vi.fn()
+
 const runtimeEnvironmentTransportCallMock = vi.fn()
 
 function installHooksApiMock(): void {
@@ -44,6 +47,7 @@ function createTestState(overrides?: Partial<AppState>): {
 } {
   const pending: PendingPrompt[] = []
   const trust: PersistedTrustedOrcaHooks = {}
+
   const state = {
     trustedOrcaHooks: trust,
     repos: [{ id: 'repo-1', displayName: 'Repo One' }],
@@ -52,6 +56,7 @@ function createTestState(overrides?: Partial<AppState>): {
     },
     ...overrides
   } as unknown as AppState
+
   return { state, pending }
 }
 
@@ -134,8 +139,10 @@ describe('ensureHooksConfirmed', () => {
     const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
 
     await vi.waitFor(() => expect(pending).toHaveLength(1))
+
     const expectedContent =
       'pnpm install\n\n# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+
     expect(pending[0].data.scriptContent).toBe(expectedContent)
     expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
 
@@ -216,6 +223,7 @@ describe('ensureHooksConfirmed', () => {
         }
       ]
     } as unknown as Partial<AppState>)
+
     hooksCheckMock.mockResolvedValue({
       hasHooks: true,
       hooks: { scripts: {} },
@@ -238,6 +246,7 @@ describe('ensureHooksConfirmed', () => {
         { id: 'repo-1', displayName: 'SSH', connectionId: 'ssh-1' }
       ]
     } as unknown as Partial<AppState>)
+
     hooksCheckMock.mockResolvedValue({
       hasHooks: true,
       hooks: { scripts: {} },
@@ -262,6 +271,7 @@ describe('ensureHooksConfirmed', () => {
         }
       ]
     } as unknown as Partial<AppState>)
+
     runtimeEnvironmentCallMock.mockResolvedValue({
       id: 'rpc-hooks',
       ok: true,
@@ -303,6 +313,7 @@ describe('ensureHooksConfirmed', () => {
         }
       ]
     } as Partial<AppState>)
+
     hooksCheckMock.mockResolvedValue({
       hasHooks: true,
       hooks: { scripts: { setup: 'echo shared' } },
@@ -332,6 +343,7 @@ describe('ensureHooksConfirmed', () => {
         }
       ]
     } as Partial<AppState>)
+
     hooksCheckMock.mockResolvedValue({
       hasHooks: true,
       hooks: { scripts: { setup: 'echo shared' } },
@@ -385,6 +397,7 @@ describe('ensureHooksConfirmed', () => {
         { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
       ]
     } as unknown as Partial<AppState>)
+
     readIssueCommandMock.mockResolvedValue({
       source: 'local',
       sharedContent: null,
@@ -405,6 +418,7 @@ describe('ensureHooksConfirmed', () => {
         { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
       ]
     } as unknown as Partial<AppState>)
+
     readIssueCommandMock
       .mockResolvedValueOnce({
         status: 'ok',
@@ -448,6 +462,7 @@ describe('ensureHooksConfirmed', () => {
         { id: 'repo-1', displayName: 'SSH', connectionId: 'server' }
       ]
     } as unknown as Partial<AppState>)
+
     readIssueCommandMock.mockResolvedValue({
       status: 'ok',
       source: 'shared',

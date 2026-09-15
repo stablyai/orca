@@ -1,4 +1,5 @@
 export const GENERATED_TAB_TITLE_MAX_LENGTH = 40
+
 export const GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT = 512
 
 const LEADING_FILLER_PATTERNS: RegExp[] = [
@@ -20,15 +21,20 @@ function truncateAtWordBoundary(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
     return value
   }
+
   const rawSlice = value.slice(0, maxLength)
   const sliced = rawSlice.trim()
+
   if (sliced.length < rawSlice.length) {
     return sliced
   }
+
   const lastSpace = sliced.lastIndexOf(' ')
+
   if (lastSpace >= Math.floor(maxLength * 0.55)) {
     return sliced.slice(0, lastSpace).trim()
   }
+
   return sliced
 }
 
@@ -37,18 +43,23 @@ function truncateAtWordBoundary(value: string, maxLength: number): string {
 function foldGeneratedTabTitleWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isGeneratedTabTitleWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index)
   }
+
   return normalized
 }
 
@@ -72,6 +83,7 @@ export function deriveGeneratedTabTitle(prompt: string): string | null {
   // Why: agent prompts can be paste-sized. Generated tab titles are previews,
   // so title cleanup must not scan the full prompt on the renderer state path.
   const promptPreview = prompt.slice(0, GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT)
+
   const firstClause = promptPreview
     .trim()
     // Strip URLs before markdown punctuation: a GitLab URL like
@@ -90,12 +102,16 @@ export function deriveGeneratedTabTitle(prompt: string): string | null {
   }
 
   let candidate = firstClause
+
   for (let i = 0; i < 3; i += 1) {
     const before = candidate
+
     for (const pattern of LEADING_FILLER_PATTERNS) {
       candidate = candidate.replace(pattern, '')
     }
+
     candidate = candidate.trim()
+
     if (candidate === before.trim()) {
       break
     }

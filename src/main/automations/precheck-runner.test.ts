@@ -71,6 +71,7 @@ describe('runAutomationPrecheck', () => {
       stderr: new PassThrough(),
       close: vi.fn()
     })
+
     sshManagerState.manager = {
       getConnection: vi.fn(() => ({
         getState: () => ({ status: 'connected' }),
@@ -89,6 +90,7 @@ describe('runAutomationPrecheck', () => {
         connectionId: 'ssh-1'
       }
     })
+
     await Promise.resolve()
     channel.emit('data', Buffer.from('ready\n'))
     channel.emit('exit', 0)

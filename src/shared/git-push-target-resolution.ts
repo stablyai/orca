@@ -11,6 +11,7 @@ async function getConfigValue(runGit: GitCommandRunner, key: string): Promise<st
   try {
     const { stdout } = await runGit(['config', '--get', key])
     const value = stdout.trim()
+
     return value || null
   } catch {
     return null
@@ -34,6 +35,7 @@ async function findRemoteNameForUrl(
 ): Promise<string | null> {
   try {
     const { stdout } = await runGit(['remote', '-v'])
+
     return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
   } catch {
     return null
@@ -44,6 +46,7 @@ async function normalizePushRemote(runGit: GitCommandRunner, remote: string): Pr
   if (!isUrlValuedRemote(remote)) {
     return remote
   }
+
   return (await findRemoteNameForUrl(runGit, remote)) ?? remote
 }
 
@@ -52,18 +55,23 @@ async function getConfiguredPushRemote(
   branch: string
 ): Promise<ConfiguredPushRemote | null> {
   const branchRemote = await getConfigValue(runGit, `branch.${branch}.remote`)
+
   const remote =
     (await getConfigValue(runGit, `branch.${branch}.pushRemote`)) ??
     (await getConfigValue(runGit, 'remote.pushDefault')) ??
     branchRemote
+
   if (!remote) {
     return null
   }
+
   const normalizedRemote = await normalizePushRemote(runGit, remote)
+
   // The two usually name the same URL; resolving it twice reads the remote table twice.
   if (!branchRemote) {
     return { remote: normalizedRemote, branchRemote: null }
   }
+
   return {
     remote: normalizedRemote,
     branchRemote:
@@ -92,9 +100,11 @@ function canPushConfiguredMergeBranch(
   if (!pushRemote) {
     return false
   }
+
   if (branchRef === branch) {
     return true
   }
+
   // Why: branch.merge belongs to branch.remote. A pushDefault fork must not
   // inherit origin/main as its destination branch.
   return pushRemote.remote !== 'origin' && pushRemote.branchRemote === pushRemote.remote
@@ -114,25 +124,32 @@ export async function resolveConfiguredGitPushTarget(
   try {
     const { stdout: branchStdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
     const branch = branchStdout.trim()
+
     if (!branch) {
       return null
     }
+
     const [pushRemote, { stdout: mergeStdout }] = await Promise.all([
       getConfiguredPushRemote(runGit, branch),
       runGit(['config', '--get', `branch.${branch}.merge`])
     ])
+
     const remote = pushRemote?.remote
     const mergeRef = mergeStdout.trim()
     const branchRef = mergeRef.replace(/^refs\/heads\//, '')
+
     if (!remote || !branchRef || remote === '.' || branchRef === mergeRef) {
       return null
     }
+
     if (await branchMergeTargetsConfiguredBase(runGit, branch, remote, branchRef)) {
       return null
     }
+
     if (!canPushConfiguredMergeBranch(pushRemote, branch, branchRef)) {
       return null
     }
+
     return { remote, refspec: `HEAD:${branchRef}` }
   } catch {
     return null

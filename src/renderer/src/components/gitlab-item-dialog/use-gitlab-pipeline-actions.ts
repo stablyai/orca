@@ -22,29 +22,37 @@ export function useGitLabPipelineActions(
     setJobTraceById,
     setRetryingJobId
   } = state
+
   const handleToggleJobTrace = useCallback(
     async (job: GitLabPipelineJob): Promise<void> => {
       if (expandedJobId === job.id) {
         setExpandedJobId(null)
+
         return
       }
+
       setExpandedJobId(job.id)
+
       if (!repoSelector || !item || jobTraceById[job.id]?.trace || jobTraceById[job.id]?.error) {
         return
       }
+
       setJobTraceById((current) => ({
         ...current,
         [job.id]: { loading: true }
       }))
+
       try {
         const result = await window.api.gl.jobTrace({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
         })
+
         if (!mountedRef.current) {
           return
         }
+
         setJobTraceById((current) => ({
           ...current,
           [job.id]: result.ok
@@ -80,22 +88,27 @@ export function useGitLabPipelineActions(
       if (!repoSelector || !item) {
         return
       }
+
       setRetryingJobId(job.id)
+
       try {
         const result = await window.api.gl.retryJob({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
         })
+
         if (!mountedRef.current) {
           return
         }
+
         if (result.ok) {
           toast.success(
             translate('auto.components.GitLabItemDialog.f7cb495a12', 'Retried {{value0}}', {
               value0: job.name
             })
           )
+
           if (result.job) {
             setDetails((current) =>
               current
@@ -108,6 +121,7 @@ export function useGitLabPipelineActions(
                 : current
             )
           }
+
           handleRefresh()
         } else {
           toast.error(result.error)

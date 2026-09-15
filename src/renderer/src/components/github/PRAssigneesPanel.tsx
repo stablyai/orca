@@ -36,19 +36,24 @@ export function PRAssigneesPanel({
   onMutated: () => void
 }): React.JSX.Element {
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
+
   const [localAssignees, setLocalAssignees] = useState<GitHubAssignableUser[]>(
     () => item.assignees ?? []
   )
+
   const [assigneesSource, setAssigneesSource] = useState(() => ({
     itemId: item.id,
     repoId: item.repoId,
     assignees: item.assignees
   }))
+
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -59,6 +64,7 @@ export function PRAssigneesPanel({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const { isPending, run } = useImmediateMutation()
 
   // Why: a background refetch can change PR assignees; sync before paint so the right rail never shows a stale reviewer/assignee split.
@@ -76,14 +82,17 @@ export function PRAssigneesPanel({
       if (!projectOrigin) {
         return
       }
+
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { assignees })
     },
     [patchProjectRowContent, projectOrigin]
   )
+
   const assigneeLogins = useMemo(() => localAssignees.map((user) => user.login), [localAssignees])
   const assigneeSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const slugOwner = projectOrigin?.owner ?? assigneeSlug?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? assigneeSlug?.repo ?? null
+
   const repoAssigneesBySlug = useRepoAssigneesBySlug(
     slugOwner,
     slugRepo,
@@ -91,9 +100,11 @@ export function PRAssigneesPanel({
     sourceSettings,
     projectOrigin?.host ?? assigneeSlug?.host
   )
+
   const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
   const canEditAssignees = Boolean(projectOrigin || repoPath)
+
   const assigneesByLogin = useMemo(
     () => new Map(repoAssignees.data.map((user) => [user.login.toLowerCase(), user])),
     [repoAssignees.data]
@@ -105,9 +116,11 @@ export function PRAssigneesPanel({
       const isAssigned = localAssignees.some((user) => user.login.toLowerCase() === lowerLogin)
       const prevAssignees = localAssignees
       const candidate = assigneesByLogin.get(lowerLogin) ?? { login, name: null, avatarUrl: '' }
+
       const nextAssignees = isAssigned
         ? prevAssignees.filter((user) => user.login.toLowerCase() !== lowerLogin)
         : [...prevAssignees, candidate]
+
       const nextLogins = nextAssignees.map((user) => user.login)
       const prevLogins = prevAssignees.map((user) => user.login)
 
@@ -199,6 +212,7 @@ export function PRAssigneesPanel({
                   const selected = localAssignees.some(
                     (assignee) => assignee.login.toLowerCase() === user.login.toLowerCase()
                   )
+
                   return (
                     <button
                       key={user.login}

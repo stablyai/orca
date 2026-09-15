@@ -19,6 +19,7 @@ function createTerminal(viewportY: number, baseY: number, type: BufferType = 'no
       terminal.buffer.active.viewportY = line
     })
   }
+
   return terminal
 }
 
@@ -64,6 +65,7 @@ describe('terminal structural scroll-intent transitions', () => {
     const key = `structural-${storedKind}-${live.type}-${live.viewportY}-${live.baseY}`
     const original = createTerminal(76, 100)
     bindTerminalScrollIntentKey(original, key)
+
     if (storedKind === 'pinnedViewport') {
       markTerminalPinnedViewport(original)
     } else {

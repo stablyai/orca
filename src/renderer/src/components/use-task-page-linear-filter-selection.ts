@@ -19,6 +19,7 @@ import {
   collectLinkedLinearIssueRefsFromWorktrees,
   linkedLinearIssueRefsSignature
 } from '@/components/task-page-linear-in-orca-issues'
+
 export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelectionPreludeModel) {
   const {
     allWorktrees,
@@ -40,6 +41,7 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
     activeLinearIssueContextLabel,
     linearTeamOptions
   } = model
+
   const linearAttributePrimaryTeam = useMemo(
     () =>
       resolveLinearIssueAttributeFilterPrimaryTeam({
@@ -48,6 +50,7 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
       }),
     [linearTeamOptions, linearTeamSelection]
   )
+
   const applyLinearAttributeFilter = useCallback(
     (next: LinearIssueAttributeFilter) => {
       if (linearAttributeFilterWorkspaceId) {
@@ -55,6 +58,7 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
           setLinearWorkspaceIssueFilter(previous, linearAttributeFilterWorkspaceId, next)
         )
       }
+
       setLinearIssueLimit(LINEAR_ITEM_LIMIT)
       setLinearIssuePage(0)
       setLinearIssueLoadingTargetPage(null)
@@ -67,17 +71,23 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
       setLinearIssueLimit
     ]
   )
+
   useEffect(() => {
     const nextTeamId = availableTeams.length > 0 ? (linearAttributePrimaryTeam?.id ?? null) : null
+
     if (!nextTeamId) {
       return
     }
+
     const previous = linearPrimaryTeamRef.current
+
     const next: LinearPrimaryTeamObservation = {
       workspaceId: linearAttributeFilterWorkspaceId,
       teamId: nextTeamId
     }
+
     linearPrimaryTeamRef.current = next
+
     if (
       !shouldClearTeamDerivedFacets({
         previous,
@@ -86,14 +96,17 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
     ) {
       return
     }
+
     // Why: team-scoped facets; clearing them is a filter change, so reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
     const cleared = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
+
     if (
       linearIssueAttributeFilterSignature(linearAttributeFilter) ===
       linearIssueAttributeFilterSignature(cleared)
     ) {
       return
     }
+
     applyLinearAttributeFilter(cleared)
   }, [
     applyLinearAttributeFilter,
@@ -104,6 +117,7 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
     linearPrimaryTeamRef
   ])
   const linearSearchActive = isLinearIssueSearchActive(linearSearchInput, appliedLinearSearch)
+
   const showLinearAttributeFilters =
     linearMode === 'issues' && !activeLinearIssueContextLabel && !linearSearchActive
 
@@ -112,10 +126,12 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
     () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
     [allWorktrees, folderWorkspaces]
   )
+
   const linearIssueAttachmentIndex = useMemo(
     () => buildLinearIssueWorkspaceAttachmentIndex(linearAttachmentWorkspaces),
     [linearAttachmentWorkspaces]
   )
+
   const inOrcaLinkedLinearRefs = useMemo(
     () =>
       collectLinkedLinearIssueRefsFromWorktrees(linearAttachmentWorkspaces, {
@@ -124,15 +140,18 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
       }),
     [linearAttachmentWorkspaces, linearStatus.workspaces, selectedLinearWorkspaceId]
   )
+
   const inOrcaLinkedLinearRefsSignature = useMemo(
     () => linkedLinearIssueRefsSignature(inOrcaLinkedLinearRefs),
     [inOrcaLinkedLinearRefs]
   )
+
   const inOrcaLinkedLinearRefsRef = useRef(inOrcaLinkedLinearRefs)
   // Keep latest linked refs for the in-orca loader without re-running it on identity churn.
   useEffect(() => {
     inOrcaLinkedLinearRefsRef.current = inOrcaLinkedLinearRefs
   }, [inOrcaLinkedLinearRefs])
+
   const nextModel = model as typeof model & {
     linearAttributePrimaryTeam: typeof linearAttributePrimaryTeam
     applyLinearAttributeFilter: typeof applyLinearAttributeFilter
@@ -144,6 +163,7 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
     inOrcaLinkedLinearRefsSignature: typeof inOrcaLinkedLinearRefsSignature
     inOrcaLinkedLinearRefsRef: typeof inOrcaLinkedLinearRefsRef
   }
+
   nextModel.linearAttributePrimaryTeam = linearAttributePrimaryTeam
   nextModel.applyLinearAttributeFilter = applyLinearAttributeFilter
   nextModel.linearSearchActive = linearSearchActive
@@ -153,6 +173,8 @@ export function useTaskPageLinearFilterSelection(model: TaskPageLinearListSelect
   nextModel.inOrcaLinkedLinearRefs = inOrcaLinkedLinearRefs
   nextModel.inOrcaLinkedLinearRefsSignature = inOrcaLinkedLinearRefsSignature
   nextModel.inOrcaLinkedLinearRefsRef = inOrcaLinkedLinearRefsRef
+
   return nextModel
 }
+
 export type TaskPageLinearFilterSelectionModel = ReturnType<typeof useTaskPageLinearFilterSelection>

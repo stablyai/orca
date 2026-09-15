@@ -64,12 +64,14 @@ export function AgentSessionContinuationDialog({
       ),
     [detectedAgents, disabledAgents]
   )
+
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
   useEffect(() => {
     if (!open || !request) {
       return
     }
+
     let cancelled = false
     setDetecting(true)
     setDetectionFailed(false)
@@ -81,6 +83,7 @@ export function AgentSessionContinuationDialog({
         if (cancelled) {
           return
         }
+
         const enabled = detected.filter((agent) => isTuiAgentEnabled(agent, disabledAgents))
         setDetectedAgents(enabled)
         setSelectedAgent(
@@ -93,6 +96,7 @@ export function AgentSessionContinuationDialog({
       })
       .catch((error) => {
         console.error('Agent detection failed for continuation dialog', error)
+
         if (!cancelled) {
           setDetectedAgents([])
           setSelectedAgent(null)
@@ -113,10 +117,13 @@ export function AgentSessionContinuationDialog({
   useEffect(() => {
     if (!starting) {
       setShowStarting(false)
+
       return
     }
+
     // Why: local launches are often instant; defer the spinner so fast paths do not flicker.
     const timer = window.setTimeout(() => setShowStarting(true), 200)
+
     return () => window.clearTimeout(timer)
   }, [starting])
 
@@ -124,11 +131,15 @@ export function AgentSessionContinuationDialog({
     if (!request || !selectedAgent || starting) {
       return
     }
+
     const prompt = buildAgentSessionContinuationPrompt(request.source, contextMode)
+
     if (!prompt) {
       return
     }
+
     setStarting(true)
+
     const launched = await launchAgentSessionContinuation({
       agent: selectedAgent,
       prompt,
@@ -138,16 +149,20 @@ export function AgentSessionContinuationDialog({
       initialCwd: request.initialCwd,
       launchSource: request.launchSource
     })
+
     setStarting(false)
+
     if (launched) {
       onOpenChange(false)
     }
   }
 
   const sourceName = request?.source.sourceTitle?.trim()
+
   const sourceAgentLabel = request?.source.sourceAgent
     ? getAgentLabel(request.source.sourceAgent)
     : null
+
   const startDisabled = detecting || starting || agents.length === 0 || !selectedAgent
 
   return (

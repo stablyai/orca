@@ -19,12 +19,14 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
 
 const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
+
 vi.mock('@/lib/http-link-routing', () => ({
   openHttpLink: openHttpLinkMock
 }))
@@ -49,9 +51,11 @@ describe('createEditorSlice activateMarkdownLink', () => {
     fsStatMock.mockReset()
     fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
       const exists = await pathExistsMock(filePath)
+
       if (!exists) {
         throw new Error('File not found')
       }
+
       return { size: 1, isDirectory: false, mtime: 1 }
     })
     runtimeEnvironmentCallMock.mockReset()
@@ -88,6 +92,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).requestAnimationFrame = (cb: (t: number) => void) => {
       cb(0)
+
       return 0
     }
   })
@@ -339,6 +344,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       const frameId = nextFrameId++
       pendingFrames.set(frameId, callback)
+
       return frameId
     })
     vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
@@ -358,15 +364,19 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
 
     expect(canceledFrameIds).toContain(1)
+
     while (pendingFrames.size > 0) {
       const nextPendingFrame = pendingFrames.entries().next()
+
       if (nextPendingFrame.done) {
         break
       }
+
       const [frameId, callback] = nextPendingFrame.value
       pendingFrames.delete(frameId)
       callback(0)
     }
+
     expect(store.getState().pendingEditorReveal).toEqual({
       filePath: '/repo/docs/second.md',
       fileId: '/repo/docs/second.md',
@@ -434,6 +444,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
+
     const floatingFileId = ownedEditorFileId(
       '/repo/docs/note.md',
       FLOATING_TERMINAL_WORKTREE_ID,
@@ -475,6 +486,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
 
   it('does not rescan legacy owner state when the source owner is explicit', async () => {
     const store = createEditorStore()
+
     for (const key of ['openFiles', 'repos', 'worktreesByRepo', 'folderWorkspaces'] as const) {
       Object.defineProperty(store.getState(), key, {
         configurable: true,

@@ -13,6 +13,7 @@ type DividerFlexFrameScheduler = {
 }
 
 const MIN_PANE_SIZE = 50
+
 const dividerDragCleanups = new WeakMap<HTMLElement, () => void>()
 
 export function createDividerFlexFrameScheduler({
@@ -31,18 +32,22 @@ export function createDividerFlexFrameScheduler({
     frameId = null
     const next = pending
     pending = null
+
     if (!next) {
       return
     }
+
     apply(next.prevFlex, next.nextFlex)
   }
 
   return {
     schedule(prevFlex, nextFlex) {
       pending = { prevFlex, nextFlex }
+
       if (frameId !== null) {
         return
       }
+
       frameId = requestFrame(applyPending)
     },
     flush() {
@@ -50,6 +55,7 @@ export function createDividerFlexFrameScheduler({
         cancelFrame(frameId)
         frameId = null
       }
+
       applyPending()
     },
     cancel() {
@@ -57,6 +63,7 @@ export function createDividerFlexFrameScheduler({
         cancelFrame(frameId)
         frameId = null
       }
+
       pending = null
     }
   }
@@ -80,11 +87,13 @@ export function attachDividerDrag(
   let activePointerType: string | null = null
   let releasePtyResizeHold: { flush: () => void; cancel: () => void } | null = null
   let windowListenersAttached = false
+
   const flexScheduler = createDividerFlexFrameScheduler({
     apply: (newPrev, newNext) => {
       if (!prevEl || !nextEl) {
         return
       }
+
       prevEl.style.flex = `${newPrev} 1 0%`
       nextEl.style.flex = `${newNext} 1 0%`
     }
@@ -94,6 +103,7 @@ export function attachDividerDrag(
     if (windowListenersAttached || typeof window === 'undefined') {
       return
     }
+
     // Why: Chromium can transiently lose capture while the button remains held,
     // so window events keep ownership until pointerup, pointercancel, or blur.
     windowListenersAttached = true
@@ -107,6 +117,7 @@ export function attachDividerDrag(
     if (!windowListenersAttached || typeof window === 'undefined') {
       return
     }
+
     windowListenersAttached = false
     window.removeEventListener('pointermove', onPointerMove, true)
     window.removeEventListener('pointerup', onPointerUp, true)
@@ -118,6 +129,7 @@ export function attachDividerDrag(
     if (pointerId === null) {
       return
     }
+
     try {
       if (divider.hasPointerCapture(pointerId)) {
         divider.releasePointerCapture(pointerId)
@@ -133,6 +145,7 @@ export function attachDividerDrag(
       releasePointerCaptureIfHeld(activePointerId)
       activePointerId = null
       activePointerType = null
+
       return
     }
 
@@ -146,6 +159,7 @@ export function attachDividerDrag(
       flexScheduler.flush()
     } else {
       flexScheduler.cancel()
+
       if (didMove && prevEl && nextEl) {
         prevEl.style.flex = prevInitialFlex
         nextEl.style.flex = nextInitialFlex
@@ -157,17 +171,21 @@ export function attachDividerDrag(
     callbacks.onDragActiveChange?.(false)
 
     const shouldRefit = didMove || commitLayout
+
     if (shouldRefit && prevEl) {
       callbacks.refitPanesUnder(prevEl)
     }
+
     if (shouldRefit && nextEl) {
       callbacks.refitPanesUnder(nextEl)
     }
+
     if (commitLayout && shouldRefit) {
       releasePtyResizeHold?.flush()
     } else {
       releasePtyResizeHold?.cancel()
     }
+
     releasePtyResizeHold = null
     prevEl = null
     nextEl = null
@@ -177,6 +195,7 @@ export function attachDividerDrag(
     if (didMove && commitLayout) {
       callbacks.onLayoutChanged?.()
     }
+
     didMove = false
   }
 
@@ -186,6 +205,7 @@ export function attachDividerDrag(
     finishActiveDrag(false)
     const previousPane = divider.previousElementSibling as HTMLElement | null
     const nextPane = divider.nextElementSibling as HTMLElement | null
+
     if (!previousPane || !nextPane) {
       return
     }
@@ -195,6 +215,7 @@ export function attachDividerDrag(
     const prevSize = isVertical ? prevRect.width : prevRect.height
     const nextSize = isVertical ? nextRect.width : nextRect.height
     const measuredTotalSize = prevSize + nextSize
+
     if (!Number.isFinite(measuredTotalSize) || measuredTotalSize <= 0) {
       return
     }
@@ -236,6 +257,7 @@ export function attachDividerDrag(
     if (!dragging || !isActiveDragPointer(e) || !prevEl || !nextEl) {
       return
     }
+
     didMove = true
 
     const currentPos = isVertical ? e.clientX : e.clientY
@@ -262,6 +284,7 @@ export function attachDividerDrag(
   const onDoubleClick = (): void => {
     const prev = divider.previousElementSibling as HTMLElement | null
     const next = divider.nextElementSibling as HTMLElement | null
+
     if (!prev || !next) {
       return
     }
@@ -301,9 +324,11 @@ export function attachDividerDrag(
 
 export function disposeDividerDrag(divider: HTMLElement): void {
   const cleanup = dividerDragCleanups.get(divider)
+
   if (!cleanup) {
     return
   }
+
   cleanup()
   dividerDragCleanups.delete(divider)
 }

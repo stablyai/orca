@@ -42,6 +42,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return { ...actual, stat: statMock, readFile: readFileMock }
 })
 
@@ -55,6 +56,7 @@ import {
 import { listWorktrees, WORKTREE_LIST_TIMEOUT_MS } from './worktree'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
+
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
 beforeEach(() => {
@@ -206,6 +208,7 @@ describe('listWorktrees', () => {
           stderr: ''
         }
       }
+
       throw new Error(`Unexpected git call: ${args.join(' ')}`)
     })
     translateWslOutputPathsMock.mockImplementation((output: string) =>
@@ -221,6 +224,7 @@ describe('listWorktrees', () => {
       if (filePath.includes('repo-feature') && filePath.includes('sparse-checkout')) {
         return { isFile: () => true, size: 32 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
 
@@ -243,11 +247,13 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
+
     // The second argument is what carries the distro when the caller has one; this listing has
     // none, and the UNC repo path names the distro on its own.
     const gitDirCall = resolveGitDirMock.mock.calls.find(
       ([probed]) => probed === featureWorktreePath
     )
+
     expect(gitDirCall).toBeDefined()
     expect(gitDirCall?.[1]?.wslDistro).toBeUndefined()
     // Why: the detection path must not spawn a git subprocess per worktree —
@@ -283,10 +289,12 @@ describe('listWorktrees', () => {
       if (filePath.replaceAll('\\', '/').includes(sparseWorktreePath)) {
         return { isFile: () => true, size: 32 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
 
     let completed = false
+
     const listPromise = listWorktrees('/repo').finally(() => {
       completed = true
     })
@@ -294,6 +302,7 @@ describe('listWorktrees', () => {
     for (let attempt = 0; pendingProbeResolves.length < 8 && attempt < 50; attempt += 1) {
       await Promise.resolve()
     }
+
     expect(pendingProbeResolves).toHaveLength(8)
 
     // Why: each probe may chain extra microtasks after stat (e.g. core.sparseCheckout
@@ -303,6 +312,7 @@ describe('listWorktrees', () => {
       await Promise.resolve()
       await Promise.resolve()
     }
+
     expect(completed).toBe(true)
 
     const worktrees = await listPromise
@@ -335,6 +345,7 @@ describe('listWorktrees', () => {
       if (String(targetPath).endsWith('sparse-checkout')) {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
+
       return {}
     })
 

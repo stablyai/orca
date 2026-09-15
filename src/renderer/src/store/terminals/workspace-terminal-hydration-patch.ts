@@ -62,15 +62,19 @@ export function transferNormalizedTerminalLayoutPtyOwnership(
   if (transfers.length === 0) {
     return
   }
+
   const ptyIdsOwnedByOtherTabs = new Set<string>()
+
   for (const [candidateTabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
     if (candidateTabId === tabId) {
       continue
     }
+
     for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
       ptyIdsOwnedByOtherTabs.add(ptyId)
     }
   }
+
   for (const { removedLeafId, retainedLeafId, ptyId } of transfers) {
     if (
       !isTerminalLeafId(removedLeafId) ||
@@ -79,11 +83,14 @@ export function transferNormalizedTerminalLayoutPtyOwnership(
     ) {
       continue
     }
+
     const fromPaneKey = makePaneKey(tabId, removedLeafId)
     const currentOwner = parsePaneKey(resolveAgentPaneAuthorityKey(fromPaneKey))
+
     if (currentOwner && currentOwner.tabId !== tabId) {
       continue
     }
+
     state.transferAgentPaneAuthority({
       fromPaneKey,
       toPaneKey: makePaneKey(tabId, retainedLeafId),
@@ -99,53 +106,65 @@ export function targetScopedWorkspaceHydrationPatch(
   options: HydrateWorkspaceSessionOptions
 ): Partial<AppState> {
   const workspaceKeys = new Set(options.replaceWorkspaceKeys)
+
   const targetTabIds = new Set(
     [...workspaceKeys].flatMap((workspaceKey) => [
       ...(state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id),
       ...(session.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
     ])
   )
+
   const retainedTargetTabIds = new Set(
     [...workspaceKeys].flatMap((workspaceKey) =>
       (hydrated.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id)
     )
   )
+
   const deletedTargetTabIds = new Set(
     [...workspaceKeys]
       .flatMap((workspaceKey) => (state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id))
       .filter((tabId) => !retainedTargetTabIds.has(tabId))
   )
+
   // The reprieve is session-scoped, so a target snapshot that retires or
   // replaces a row must not leave its old id protected in a later orphan sweep.
   const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
     state.unverifiedPtyLossTabIds,
     deletedTargetTabIds
   )
+
   const pendingReconnectPtyIdByTabId = replaceHydratedRecordKeys(
     state.pendingReconnectPtyIdByTabId,
     {},
     targetTabIds
   )
+
   const authority = options.directSshAuthority
+
   if (authority) {
     for (const workspaceKey of hydrated.pendingReconnectWorktreeIds) {
       if (!workspaceKeys.has(workspaceKey)) {
         continue
       }
+
       for (const tab of session.tabsByWorktree[workspaceKey] ?? []) {
         // Why: rows hydration dropped (invalid id, canonical duplicate) would leak reconnect keys nothing owns.
         if (!retainedTargetTabIds.has(tab.id)) {
           continue
         }
+
         const ptyId = session.remoteSessionIdsByTabId?.[tab.id] ?? tab.ptyId
+
         if (ptyId && parseAppSshPtyId(ptyId)?.connectionId === authority.targetId) {
           pendingReconnectPtyIdByTabId[tab.id] = ptyId
         }
       }
     }
   }
+
   const activeOutsideScope =
     state.activeWorktreeId != null && !workspaceKeys.has(state.activeWorktreeId)
+
   const sleepingAgentSessionsByPaneKey = Object.fromEntries([
     ...Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
       ([, record]) => !workspaceKeys.has(record.worktreeId)
@@ -154,12 +173,15 @@ export function targetScopedWorkspaceHydrationPatch(
       workspaceKeys.has(record.worktreeId)
     )
   ])
+
   const everActivatedWorktreeIds = new Set(state.everActivatedWorktreeIds)
+
   for (const workspaceKey of hydrated.everActivatedWorktreeIds) {
     if (workspaceKeys.has(workspaceKey)) {
       everActivatedWorktreeIds.add(workspaceKey)
     }
   }
+
   return {
     activeRepoId: activeOutsideScope ? state.activeRepoId : hydrated.activeRepoId,
     activeWorktreeId: activeOutsideScope ? state.activeWorktreeId : hydrated.activeWorktreeId,

@@ -136,17 +136,20 @@ test.describe('Terminal CJK IME committed text', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
+
     try {
       await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
       await expectPreeditHidden(orcaPage, 'before composing')
       await dispatchImeProcessKey(arena.session, { key: 'Process', code: 'KeyN' })
 
       const widthByFrame = new Map<string, number>()
+
       for (const frame of JAPANESE_FRAMES) {
         await setImeComposition(arena.session, frame)
         const sample = await expectPreeditRendered(orcaPage, frame, `composing ${frame}`)
         widthByFrame.set(frame, sample.rect.width)
       }
+
       // A phrase-level preedit must widen as it grows. An overlay pinned to one cell renders only
       // the first character, which is a shape every non-geometric assertion reports as correct.
       expect(widthByFrame.get('にほんご')!).toBeGreaterThan(widthByFrame.get('に')!)
@@ -176,21 +179,26 @@ test.describe('Terminal CJK IME committed text', () => {
         const reader = createTerminalImeByteReader(testRepoPath, 1)
         const expected = group.keystrokes.map((keystroke) => keystroke.glyph).join('')
         let completed = false
+
         try {
           await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
+
           for (const keystroke of group.keystrokes) {
             await shape.dispatch(arena.session, keystroke)
             await orcaPage.waitForTimeout(60)
           }
+
           await dispatchPlainEnter(arena.session)
 
           const sent = (await readTerminalImeBoundaryTrace(orcaPage)).onData.join('')
+
           for (const keystroke of group.keystrokes) {
             expect(
               sent,
               `${keystroke.glyph} reached the PTY as ASCII ${keystroke.ascii}`
             ).not.toContain(keystroke.ascii)
           }
+
           expect(sent).toBe(`${expected}\r`)
 
           const received = await waitForTerminalImeBytes(orcaPage, reader)
@@ -217,15 +225,18 @@ test.describe('Terminal CJK IME committed text', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
+
     try {
       await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
       await dispatchImeProcessKey(arena.session, { key: 'Process', code: 'KeyN' })
       const widthByFrame = new Map<string, number>()
+
       for (const frame of ['n', 'ni', 'niha', 'nihao', '你好']) {
         await setImeComposition(arena.session, frame)
         const sample = await expectPreeditRendered(orcaPage, frame, `composing ${frame}`)
         widthByFrame.set(frame, sample.rect.width)
       }
+
       // Pinyin spends most of its life as a multi-letter romanisation before any Chinese appears,
       // so an overlay pinned to a single cell shows the user only the first letter of what they
       // typed. Width is the only property that catches that; text content looks correct.
@@ -276,8 +287,10 @@ test.describe('Terminal CJK IME committed text', () => {
       const reader = createTerminalImeByteReader(testRepoPath, 1)
       const expected = FULL_WIDTH_SESSION_PUNCTUATION.map((entry) => entry.glyph).join('')
       let completed = false
+
       try {
         await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
+
         for (const entry of FULL_WIDTH_SESSION_PUNCTUATION) {
           await dispatchImeProcessKey(arena.session, { key: 'Process', code: entry.code })
           await setImeComposition(arena.session, entry.glyph)
@@ -285,14 +298,17 @@ test.describe('Terminal CJK IME committed text', () => {
           await commitImeText(arena.session, entry.glyph)
           await expectPreeditHidden(orcaPage, `after committing ${entry.glyph}`)
         }
+
         await dispatchPlainEnter(arena.session)
 
         const sent = (await readTerminalImeBoundaryTrace(orcaPage)).onData.join('')
+
         for (const entry of FULL_WIDTH_SESSION_PUNCTUATION) {
           expect(sent, `${entry.glyph} reached the PTY as ASCII ${entry.ascii}`).not.toContain(
             entry.ascii
           )
         }
+
         expect(sent).toBe(`${expected}\r`)
 
         const received = await waitForTerminalImeBytes(orcaPage, reader)

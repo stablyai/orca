@@ -14,7 +14,9 @@ import {
 import { detectNativeHostAbi } from './native-host-abi'
 
 const require = createRequire(import.meta.url)
+
 const REAL_NODE_PTY = dirname(require.resolve('node-pty/package.json'))
+
 const REAL_PTY_NODE = join(REAL_NODE_PTY, 'build', 'Release', 'pty.node')
 
 /**
@@ -31,16 +33,19 @@ const realNodePtyLoads = ((): boolean => {
   if (!existsSync(REAL_PTY_NODE)) {
     return false
   }
+
   // Why spawn-helper too: on macOS a slot without it is legitimately 'degraded', so a
   // test that expects 'ok' has an unsatisfiable premise on a host that lacks it. Only
   // macOS builds the helper, so gating other platforms on it never lets them run.
   if (process.platform === 'darwin' && !existsSync(REAL_SPAWN_HELPER)) {
     return false
   }
+
   const probe = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(REAL_PTY_NODE)})`], {
     encoding: 'utf8',
     timeout: 30_000
   })
+
   return !probe.error && probe.status === 0
 })()
 
@@ -143,6 +148,7 @@ describe('classifyNodePtyProbeResult', () => {
       stderr:
         '[eval]:1\nprocess.dlopen({exports:{}},f);\n        ^\n\nError: something specific went wrong\n'
     })
+
     expect(failure?.detail).toBe('Error: something specific went wrong')
   })
 
@@ -173,6 +179,7 @@ describe('buildNodePtyLoadProbeScript', () => {
 
 describe('checkNodePtyPrecondition', () => {
   const temporaryDirs: string[] = []
+
   const stageNodePty = (): string => {
     const root = mkdtempSync(join(tmpdir(), 'orcad-node-pty-'))
     temporaryDirs.push(root)
@@ -180,6 +187,7 @@ describe('checkNodePtyPrecondition', () => {
     mkdirSync(join(dir, 'build', 'Release'), { recursive: true })
     cpSync(join(REAL_NODE_PTY, 'lib'), join(dir, 'lib'), { recursive: true })
     cpSync(join(REAL_NODE_PTY, 'package.json'), join(dir, 'package.json'))
+
     return dir
   }
 
@@ -227,10 +235,12 @@ describe('checkNodePtyPrecondition', () => {
     // invariant is that anything other than 'ok' names an established cause, so the
     // host can never decline a terminal for a reason it did not work out.
     expect(['ok', 'degraded', 'blocked', 'unverifiable']).toContain(verdict.status)
+
     if (verdict.status !== 'ok') {
       expect(verdict.reason).toBeDefined()
       expect(verdict.reason).not.toBe('unknown')
     }
+
     expect(verdict.slot).toBe(
       process.platform === 'linux'
         ? `linux-${process.arch}-${verdict.abi.libc}`
@@ -290,14 +300,17 @@ describe('checkNodePtyPrecondition', () => {
   it('places the matching slot even when the payload is not loadable', () => {
     const dir = stageNodePty()
     const abi = detectNativeHostAbi()
+
     const slot =
       abi.libc === 'none'
         ? `${abi.platform}-${abi.arch}`
         : `${abi.platform}-${abi.arch}-${abi.libc}`
+
     const prebuildsDir = mkdtempSync(join(tmpdir(), 'orcad-prebuilds-'))
     temporaryDirs.push(prebuildsDir)
     mkdirSync(join(prebuildsDir, slot), { recursive: true })
     writeFileSync(join(prebuildsDir, slot, 'pty.node'), 'not a real binding')
+
     if (process.platform !== 'win32') {
       writeFileSync(join(prebuildsDir, slot, 'spawn-helper'), '#!/bin/sh\nexit 0\n')
     }
@@ -315,15 +328,18 @@ describe('checkNodePtyPrecondition', () => {
     () => {
       const dir = stageNodePty()
       const abi = detectNativeHostAbi()
+
       const slot =
         abi.libc === 'none'
           ? `${abi.platform}-${abi.arch}`
           : `${abi.platform}-${abi.arch}-${abi.libc}`
+
       const prebuildsDir = mkdtempSync(join(tmpdir(), 'orcad-prebuilds-'))
       temporaryDirs.push(prebuildsDir)
       mkdirSync(join(prebuildsDir, slot), { recursive: true })
       cpSync(REAL_PTY_NODE, join(prebuildsDir, slot, 'pty.node'))
       const helper = REAL_SPAWN_HELPER
+
       if (process.platform !== 'win32' && existsSync(helper)) {
         cpSync(helper, join(prebuildsDir, slot, 'spawn-helper'))
       }

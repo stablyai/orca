@@ -16,17 +16,20 @@ type PendingWorktreeHookCommandDelivery = {
 // have both setup/issue commands and an agent-tab seed waiting on the same
 // first mirrored tab, and neither may evict the other.
 const pendingHookCommandDeliveries = new Map<string, PendingWorktreeHookCommandDelivery[]>()
+
 let unsubscribePendingHookCommandDeliveries: (() => void) | null = null
 
 export function queueHookCommandsForFirstWorktreeTab(
   delivery: PendingWorktreeHookCommandDelivery
 ): void {
   const queued = pendingHookCommandDeliveries.get(delivery.worktreeId)
+
   if (queued) {
     queued.push(delivery)
   } else {
     pendingHookCommandDeliveries.set(delivery.worktreeId, [delivery])
   }
+
   ensurePendingHookCommandSubscription()
   flushPendingHookCommandDeliveries()
 }
@@ -41,6 +44,7 @@ function ensurePendingHookCommandSubscription(): void {
   if (unsubscribePendingHookCommandDeliveries) {
     return
   }
+
   const initial = useAppStore.getState()
   // Capture references so unrelated PTY/status updates do not rescan every
   // runtime worktree waiting for its first mirrored terminal tab.
@@ -61,6 +65,7 @@ function ensurePendingHookCommandSubscription(): void {
     ) {
       return
     }
+
     previousTabsByWorktree = state.tabsByWorktree
     previousWorktreesByRepo = state.worktreesByRepo
     previousDetectedWorktreesByRepo = state.detectedWorktreesByRepo
@@ -74,28 +79,35 @@ function stopPendingHookCommandSubscriptionIfIdle(): void {
   if (pendingHookCommandDeliveries.size > 0 || !unsubscribePendingHookCommandDeliveries) {
     return
   }
+
   unsubscribePendingHookCommandDeliveries()
   unsubscribePendingHookCommandDeliveries = null
 }
 
 function flushPendingHookCommandDeliveries(): void {
   const state = useAppStore.getState()
+
   for (const [worktreeId, deliveries] of pendingHookCommandDeliveries) {
     const firstTerminalTabId = state.tabsByWorktree[worktreeId]?.[0]?.id
+
     if (!firstTerminalTabId) {
       // Why: a worktree can be removed before its tabs ever mirror; drop the
       // entry so the subscription does not stay armed forever.
       if (!state.getKnownWorktreeById(worktreeId)) {
         pendingHookCommandDeliveries.delete(worktreeId)
       }
+
       continue
     }
+
     // Delete before delivering so store writes inside deliver cannot re-enter
     // these entries through the subscription.
     pendingHookCommandDeliveries.delete(worktreeId)
+
     for (const delivery of deliveries) {
       delivery.deliver(state, firstTerminalTabId)
     }
   }
+
   stopPendingHookCommandSubscriptionIfIdle()
 }

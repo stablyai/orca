@@ -220,6 +220,7 @@ describe('terminal accessory layout', () => {
 
   it('keeps hidden built-ins hidden across v2 round-trips', () => {
     const visibleBuiltInIds = getDefaultTerminalAccessoryBuiltInIds().filter((id) => id !== 'space')
+
     const persisted = createTerminalAccessoryLayoutPreference({
       orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
       visibleBuiltInIds

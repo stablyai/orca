@@ -9,10 +9,13 @@ function referenceWeight(el: HTMLElement, direction: Direction): number {
   if (!el.classList.contains('pane-split')) {
     return 1
   }
+
   const own = el.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
+
   if (own !== direction) {
     return 1
   }
+
   return Math.max(
     1,
     findPaneChildren(el).reduce((sum, child) => sum + referenceWeight(child, direction), 0)
@@ -24,13 +27,16 @@ function referenceEqualize(el: HTMLElement): void {
   if (!el.classList.contains('pane-split')) {
     return
   }
+
   const direction: Direction = el.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
   const children = findPaneChildren(el)
+
   if (children.length >= 2) {
     for (const child of children) {
       child.dataset.expectedFlex = `${referenceWeight(child, direction)} 1 0%`
     }
   }
+
   for (const child of children) {
     referenceEqualize(child)
   }
@@ -38,8 +44,10 @@ function referenceEqualize(el: HTMLElement): void {
 
 function makeRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state * 1664525 + 1013904223) >>> 0
+
     return state / 0x100000000
   }
 }
@@ -47,12 +55,14 @@ function makeRandom(seed: number): () => number {
 function makePane(): HTMLElement {
   const element = document.createElement('div')
   element.className = 'pane'
+
   return element
 }
 
 function makeDivider(): HTMLElement {
   const element = document.createElement('div')
   element.className = 'pane-divider'
+
   return element
 }
 
@@ -61,15 +71,19 @@ function makeTree(random: () => number, depth: number): HTMLElement {
   if (depth <= 0 || random() < 0.35) {
     return makePane()
   }
+
   const split = document.createElement('div')
   split.className = random() < 0.5 ? 'pane-split is-horizontal' : 'pane-split'
   const childCount = 2 + Math.floor(random() * 3)
+
   for (let i = 0; i < childCount; i += 1) {
     if (i > 0) {
       split.append(makeDivider())
     }
+
     split.append(makeTree(random, depth - 1))
   }
+
   return split
 }
 
@@ -79,18 +93,22 @@ function allElements(root: HTMLElement): HTMLElement[] {
 
 it('produces the same flex on every element as the uncached weight walk', () => {
   let splitCases = 0
+
   for (let seed = 1; seed <= 400; seed += 1) {
     const random = makeRandom(seed)
     const root = makeTree(random, 5)
     referenceEqualize(root)
     equalizePaneSplitSizes(root)
+
     for (const element of allElements(root)) {
       expect(element.style.flex || undefined, `seed ${seed}`).toEqual(element.dataset.expectedFlex)
+
       if (element.dataset.expectedFlex) {
         splitCases += 1
       }
     }
   }
+
   expect(splitCases).toBeGreaterThan(1000)
 })
 
@@ -98,21 +116,27 @@ it('keeps every split weight equal to the integer sum of its same-axis children'
   for (let seed = 1; seed <= 200; seed += 1) {
     const root = makeTree(makeRandom(seed), 5)
     equalizePaneSplitSizes(root)
+
     for (const split of allElements(root).filter((el) => el.classList.contains('pane-split'))) {
       const children = findPaneChildren(split)
+
       if (children.length < 2) {
         continue
       }
+
       const direction: Direction = split.classList.contains('is-horizontal')
         ? 'horizontal'
         : 'vertical'
+
       const total = children.reduce((sum, child) => {
         const grow = Number(child.style.flex.split(' ')[0])
         // Integer weights only: no float drift can make the row fail to fill.
         expect(Number.isInteger(grow)).toBe(true)
         expect(grow).toBeGreaterThanOrEqual(1)
+
         return sum + grow
       }, 0)
+
       expect(total, `seed ${seed}`).toBe(referenceWeight(split, direction))
     }
   }

@@ -10,12 +10,14 @@ import { AgentSessionRecordStore } from '../../runtime/agent-session-record-stor
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 
 const NOW = 1_800_000_000_000
+
 const roots: string[] = []
 
 async function liveStore(): Promise<AgentSessionRecordStore> {
   const root = await mkdtemp(join(tmpdir(), 'orca-lease-renewer-'))
   roots.push(root)
   const store = await AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+
   const reserved = await store.reserveOwner({
     sessionId: 'session-renewal',
     location: {
@@ -39,6 +41,7 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
     },
     now: NOW
   })
+
   await store.commitProcessIdentity({
     sessionId: 'session-renewal',
     fence: reserved.record.lease.runtimeFence,
@@ -62,6 +65,7 @@ async function liveStore(): Promise<AgentSessionRecordStore> {
     },
     now: NOW
   })
+
   return store
 }
 
@@ -73,6 +77,7 @@ describe('structured agent-session lease renewal', () => {
   it('isolates renewal failures per live record', async () => {
     const records = ['a', 'b'].map((suffix, index) => {
       const sessionId = `session-${suffix}`
+
       return agentSessionRecordFixture(
         agentSessionLeaseFixture({
           sessionId,
@@ -90,9 +95,11 @@ describe('structured agent-session lease renewal', () => {
         })
       )
     })
+
     const renewLeases = vi.fn(async (renewals: readonly { sessionId: string }[]) =>
       renewals.map((renewal) => records.find((record) => record.sessionId === renewal.sessionId)!)
     )
+
     const probeMany = vi.fn(
       async () =>
         new Map(
@@ -102,6 +109,7 @@ describe('structured agent-session lease renewal', () => {
           ])
         )
     )
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store: { listRecords: () => records, renewLeases } as unknown as AgentSessionRecordStore,
       probe: vi.fn(),
@@ -135,17 +143,22 @@ describe('structured agent-session lease renewal', () => {
         })
       )
     )
+
     const renewLeases = vi.fn(async () => {
       throw new Error('agent_session_checkpoint_stale')
     })
+
     const renewLease = vi.fn(async (renewal: { sessionId: string }) => {
       if (renewal.sessionId === 'session-b') {
         throw new Error('agent_session_checkpoint_stale')
       }
+
       return records[0]!
     })
+
     const onRenewed = vi.fn()
     const onError = vi.fn()
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store: {
         listRecords: () => records,
@@ -177,6 +190,7 @@ describe('structured agent-session lease renewal', () => {
     vi.useFakeTimers()
     const store = await liveStore()
     let now = NOW
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store,
       probe: async () => ({
@@ -185,6 +199,7 @@ describe('structured agent-session lease renewal', () => {
       }),
       now: () => now
     })
+
     try {
       renewer.start()
       now += 10_000
@@ -200,11 +215,14 @@ describe('structured agent-session lease renewal', () => {
 
   it('renews every live owner only after re-proving its child identity', async () => {
     const store = await liveStore()
+
     const probe = vi.fn(async () => ({
       outcome: 'identity-matched' as const,
       matchedOn: ['process-start-time' as const]
     }))
+
     const onRenewed = vi.fn()
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store,
       probe,
@@ -224,6 +242,7 @@ describe('structured agent-session lease renewal', () => {
   it('stops extending the lease when child proof is no longer sufficient', async () => {
     const store = await liveStore()
     const onError = vi.fn()
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store,
       probe: async () => ({ outcome: 'indeterminate', reason: 'probe unavailable' }),
@@ -248,10 +267,12 @@ describe('structured agent-session lease renewal', () => {
       ...record,
       lease: { ...record.lease, handoffStage: 'recovering' }
     }))
+
     const probe = vi.fn(async () => ({
       outcome: 'identity-matched' as const,
       matchedOn: ['process-start-time' as const]
     }))
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store,
       probe,
@@ -272,6 +293,7 @@ describe('structured agent-session lease renewal', () => {
     }))
     const onDeadTuiOwner = vi.fn(async () => undefined)
     const onError = vi.fn()
+
     const renewer = new StructuredAgentSessionLeaseRenewer({
       store,
       probe: async () => ({ outcome: 'pid-absent' }),

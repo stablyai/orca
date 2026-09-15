@@ -15,6 +15,7 @@ import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
 let container: HTMLDivElement
+
 let root: Root
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
@@ -103,6 +104,7 @@ function typeIntoInput(input: HTMLInputElement, value: string): void {
 
 function findButton(label: string): HTMLButtonElement | undefined {
   const buttons = Array.from(container.querySelectorAll('button'))
+
   return (
     buttons.find((button) => button.textContent?.trim() === label) ??
     buttons.find((button) => button.textContent?.includes(label))
@@ -124,12 +126,14 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     const remoteRepo = makeRepo({
       id: 'remote-repo',
       displayName: 'Orca',
       path: '/home/alice/orca',
       connectionId: 'openclaw 2'
     })
+
     useAppStore.setState({
       repos: [localRepo, remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -162,17 +166,20 @@ describe('RepositoryHostSetupsSection', () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
     const setSettingsProjectHostSelection = vi.fn()
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     const remoteRepo = makeRepo({
       id: 'remote-repo',
       displayName: 'Orca',
       path: '/home/alice/orca',
       connectionId: 'openclaw 2'
     })
+
     useAppStore.setState({
       repos: [localRepo, remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -200,9 +207,11 @@ describe('RepositoryHostSetupsSection', () => {
     renderSection(localRepo)
 
     expect(container.textContent).toContain('openclaw 2')
+
     const openButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Open'
     )
+
     expect(openButton).toBeTruthy()
 
     act(() => {
@@ -226,6 +235,7 @@ describe('RepositoryHostSetupsSection', () => {
       path: '/srv/orca',
       executionHostId: 'runtime:hub'
     })
+
     useAppStore.setState({
       repos: [remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
@@ -326,6 +336,7 @@ describe('RepositoryHostSetupsSection', () => {
       path: '/srv/orca',
       executionHostId: 'runtime:hub'
     })
+
     useAppStore.setState({
       repos: [remoteRepo],
       projects: [makeProject({ id: 'github:stablyai/orca', sourceRepoIds: ['remote-repo'] })],
@@ -360,13 +371,16 @@ describe('RepositoryHostSetupsSection', () => {
         path: ''
       })
     })
+
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -396,9 +410,11 @@ describe('RepositoryHostSetupsSection', () => {
     renderSection(localRepo)
 
     expect(container.textContent).toContain('Path pending')
+
     const removeButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Remove'
     )
+
     expect(removeButton).toBeTruthy()
 
     await act(async () => {
@@ -414,6 +430,7 @@ describe('RepositoryHostSetupsSection', () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
     const setSettingsProjectHostSelection = vi.fn()
+
     const setupProjectExistingFolder = vi.fn().mockResolvedValue({
       project: makeProject({ id: 'github:stablyai/orca' }),
       setup: makeSetup({
@@ -430,11 +447,13 @@ describe('RepositoryHostSetupsSection', () => {
         connectionId: 'openclaw 2'
       })
     })
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -462,6 +481,7 @@ describe('RepositoryHostSetupsSection', () => {
     const pathInput = container.querySelector<HTMLInputElement>(
       'input[placeholder="/path/to/project/on/host"]'
     )
+
     expect(pathInput).toBeTruthy()
     typeIntoInput(pathInput!, '/home/alice/orca')
 
@@ -491,6 +511,7 @@ describe('RepositoryHostSetupsSection', () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
     const setSettingsProjectHostSelection = vi.fn()
+
     const setupProjectClone = vi.fn().mockResolvedValue({
       project: makeProject({ id: 'github:stablyai/orca' }),
       setup: makeSetup({
@@ -507,11 +528,13 @@ describe('RepositoryHostSetupsSection', () => {
         connectionId: 'openclaw 2'
       })
     })
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -539,9 +562,11 @@ describe('RepositoryHostSetupsSection', () => {
     const urlInput = container.querySelector<HTMLInputElement>(
       'input[placeholder="Repository URL"]'
     )
+
     const destinationInput = container.querySelector<HTMLInputElement>(
       'input[placeholder="/destination/on/host"]'
     )
+
     expect(urlInput).toBeTruthy()
     expect(destinationInput).toBeTruthy()
     typeIntoInput(urlInput!, 'https://github.com/stablyai/orca.git')
@@ -575,6 +600,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -621,11 +647,13 @@ describe('RepositoryHostSetupsSection', () => {
         setupMethod: 'provisioned'
       })
     })
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -690,11 +718,13 @@ describe('RepositoryHostSetupsSection', () => {
     const createProjectHostSetup = vi.fn()
     const setupProjectClone = vi.fn()
     const setupProjectExistingFolder = vi.fn()
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],
@@ -764,11 +794,13 @@ describe('RepositoryHostSetupsSection', () => {
         setupMethod: 'provisioned'
       })
     })
+
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
       path: '/Users/alice/orca'
     })
+
     useAppStore.setState({
       repos: [localRepo],
       projects: [makeProject({ id: 'github:stablyai/orca' })],

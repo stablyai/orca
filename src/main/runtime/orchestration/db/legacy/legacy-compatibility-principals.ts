@@ -30,18 +30,23 @@ export function commitLegacyCompatibilityPrincipal(
   }
 ): { principal: LegacyCompatibilityPrincipalRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const adoption = this.getLegacyAdoption()
+
     if (!adoption || adoption.adopted_run_id !== params.runId) {
       throw new OrchestrationError(
         'request_mismatch',
         `Run ${params.runId} is not the adopted legacy Run.`
       )
     }
+
     const dispatchId = params.role === 'worker' ? (params.dispatchId ?? null) : null
     let initialStatus: 'committed' | 'settled' = 'committed'
+
     if (params.role === 'worker') {
       const dispatch = dispatchId ? this.getDispatchContextById(dispatchId) : undefined
+
       if (
         !dispatch ||
         dispatch.run_id !== params.runId ||
@@ -52,6 +57,7 @@ export function commitLegacyCompatibilityPrincipal(
           `Dispatch ${dispatchId ?? '(missing)'} is not a legacy attempt in this Run.`
         )
       }
+
       initialStatus = ['pending', 'dispatched'].includes(dispatch.status) ? 'committed' : 'settled'
     } else if (params.dispatchId) {
       throw new OrchestrationError(
@@ -66,6 +72,7 @@ export function commitLegacyCompatibilityPrincipal(
          WHERE role = ? AND run_id = ? AND dispatch_id IS ?`
       )
       .get(params.role, params.runId, dispatchId) as LegacyCompatibilityPrincipalRow | undefined
+
     if (existing) {
       const same =
         existing.host_scope === params.hostScope &&
@@ -73,12 +80,14 @@ export function commitLegacyCompatibilityPrincipal(
         existing.pane_key === params.paneKey &&
         existing.launch_token_hash === params.launchTokenHash &&
         existing.process_incarnation === (params.processIncarnation ?? null)
+
       if (!same) {
         throw new OrchestrationError(
           'request_mismatch',
           `The ${params.role} compatibility principal is already committed to different proof.`
         )
       }
+
       if (existing.status === 'revoked') {
         throw new OrchestrationError(
           'legacy_read_only',
@@ -86,9 +95,12 @@ export function commitLegacyCompatibilityPrincipal(
           { effectsApplied: false }
         )
       }
+
       this.db.exec('COMMIT')
+
       return { principal: existing, duplicate: true }
     }
+
     if (
       params.role === 'coordinator' &&
       !this.resolveLegacyCoordinatorCandidate({
@@ -125,10 +137,13 @@ export function commitLegacyCompatibilityPrincipal(
         initialStatus
       )
     const principal = this.getLegacyCompatibilityPrincipal(id) as LegacyCompatibilityPrincipalRow
+
     if (principal.status === 'committed') {
       this.initializeLegacyRecoveryCohort(principal)
     }
+
     this.db.exec('COMMIT')
+
     return { principal, duplicate: false }
   } catch (error) {
     this.db.exec('ROLLBACK')

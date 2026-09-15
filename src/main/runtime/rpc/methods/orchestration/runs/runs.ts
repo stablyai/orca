@@ -20,17 +20,22 @@ export const ORCHESTRATION_RUN_METHODS = [
         callerEvidence: orchestrationCompatibilityEvidence,
         requireStablePane: true
       })
+
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
+
       const run = db.createRun({
         objective: params.objective,
         coordinatorHandle: params.from,
         coordinatorPaneKey: paneKey
       })
+
       runtime.cancelMessageWaiters(params.from)
+
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
+
       return { run: exposeRun(run) }
     }
   }),
@@ -53,6 +58,7 @@ export const ORCHESTRATION_RUN_METHODS = [
         requireStablePane: true,
         evidenceAssertedByCaller: true
       })
+
       if (
         params.takeoverLegacy &&
         (callerAuthority?.terminalHandle !== params.from || callerAuthority.paneKey !== paneKey)
@@ -63,9 +69,11 @@ export const ORCHESTRATION_RUN_METHODS = [
           { effectsApplied: false }
         )
       }
+
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
+
       const run = db.bindRun({
         runId: params.id,
         coordinatorHandle: params.from,
@@ -73,17 +81,21 @@ export const ORCHESTRATION_RUN_METHODS = [
         takeoverLegacy: params.takeoverLegacy,
         legacyCoordinatorAuthority
       })
+
       if (!run) {
         throw new OrchestrationError(
           'run_not_found',
           `Run ${params.id} was not found or is inspect-only.`
         )
       }
+
       runtime.cancelMessageWaiters(params.from)
       runtime.cancelMessageWaiters(`run:${params.id}`)
+
       if (priorRun && priorRun.id !== params.id) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
+
       return { run: exposeRun(run) }
     }
   }),
@@ -96,7 +108,9 @@ export const ORCHESTRATION_RUN_METHODS = [
         callerEvidence: orchestrationCompatibilityEvidence,
         requireStablePane: true
       })
+
       const run = runtime.getOrchestrationDb().getCurrentRunForPane(paneKey)
+
       return { run: run ? exposeRun(run) : null }
     }
   }),
@@ -105,6 +119,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     params: RunListParams,
     handler: (params, { runtime }) => {
       const listed = runtime.getOrchestrationDb().listRuns(params)
+
       return { ...listed, runs: listed.runs.map(exposeRun) }
     }
   }),
@@ -113,9 +128,11 @@ export const ORCHESTRATION_RUN_METHODS = [
     params: RunShowParams,
     handler: (params, { runtime }) => {
       const run = runtime.getOrchestrationDb().getRun(params.id)
+
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
+
       return { run: exposeRun(run) }
     }
   })

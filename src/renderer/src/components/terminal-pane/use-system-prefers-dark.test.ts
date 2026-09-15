@@ -17,6 +17,7 @@ function installMatchMedia(initialMatches: boolean): {
 } {
   let matches = initialMatches
   const listeners = new Set<MediaChangeListener>()
+
   const media = {
     get matches() {
       return matches
@@ -33,13 +34,16 @@ function installMatchMedia(initialMatches: boolean): {
     }),
     emit(nextMatches: boolean): void {
       matches = nextMatches
+
       for (const listener of listeners) {
         listener({ matches: nextMatches } as MediaQueryListEvent)
       }
     }
   }
+
   const matchMedia = vi.fn(() => media as unknown as MediaQueryList)
   vi.stubGlobal('window', { matchMedia })
+
   return { media, matchMedia }
 }
 

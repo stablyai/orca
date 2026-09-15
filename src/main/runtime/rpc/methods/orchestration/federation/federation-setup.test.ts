@@ -12,6 +12,7 @@ describe('orchestration federated setup evidence', () => {
     for (const runtime of runtimes.splice(0)) {
       runtime.stopOrchestrationFederationRelay()
     }
+
     for (const db of databases.splice(0)) {
       db.close()
     }
@@ -23,12 +24,14 @@ describe('orchestration federated setup evidence', () => {
     runtime.setOrchestrationDb(db)
     databases.push(db)
     runtimes.push(runtime)
+
     return { db, runtime }
   }
 
   it('records remote setup evidence once without changing attachment lifecycle', async () => {
     const { db, runtime } = createRuntime()
     const dispatchId = 'ctx_remote_setup'
+
     const effects = [
       {
         kind: 'terminal' as const,
@@ -48,6 +51,7 @@ describe('orchestration federated setup evidence', () => {
         state: 'accepted'
       }
     ]
+
     db.createRemoteDispatchAttachment({
       runId: 'run-home',
       dispatchId,
@@ -73,6 +77,7 @@ describe('orchestration federated setup evidence', () => {
     })
     db.markRemoteAttachmentReady(dispatchId)
     vi.spyOn(runtime, 'waitForSetupTerminalCompletion').mockResolvedValue({ exitCode: 1 })
+
     const monitorArgs = {
       runtime,
       db,
@@ -112,12 +117,15 @@ describe('orchestration federated setup evidence', () => {
 
   it('refreshes home setup evidence without changing a ready Dispatch lifecycle', async () => {
     const { db, runtime } = createRuntime()
+
     const run = db.createRun({
       objective: 'Observe remote setup',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote setup', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -131,6 +139,7 @@ describe('orchestration federated setup evidence', () => {
         protocolVersion: 1
       }
     })
+
     db.recordWorkerStage({
       dispatchId: started.dispatch.id,
       stage: 'terminal_readying',
@@ -174,9 +183,11 @@ describe('orchestration federated setup evidence', () => {
       terminal: { handle: 'term_remote_worker', connected: true },
       observation: { status: 'running', exactWorker: true }
     })
+
     const workerShow = ORCHESTRATION_METHODS.find(
       (method) => method.name === 'orchestration.workerShow'
     )
+
     if (!workerShow) {
       throw new Error('workerShow method is not registered')
     }

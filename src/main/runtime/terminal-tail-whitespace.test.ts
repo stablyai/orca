@@ -16,14 +16,18 @@ describe('terminal redraw whitespace', () => {
 
   it.each([2, 20])('handles padded redraws across %i retained rows without stalling', (rows) => {
     const padded = `${' '.repeat(32_000)}marker \t`
+
     const previousLines = Array.from({ length: rows }, (_, index) =>
       index === 0 ? padded : `row ${index}`
     )
+
     const start = performance.now()
     let result: ReturnType<typeof appendNormalizedToTailBuffer> | undefined
+
     for (let frame = 0; frame < 4; frame += 1) {
       result = appendNormalizedToTailBuffer(previousLines, 'footer', '\x1b[1A\rupdated')
     }
+
     const elapsedMs = performance.now() - start
     expect(result?.lines[0]).toBe(`${' '.repeat(32_000)}marker`)
     // Interior padding made the trailing-whitespace regex backtrack quadratically.

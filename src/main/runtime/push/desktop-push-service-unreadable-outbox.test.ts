@@ -10,12 +10,14 @@ import { PushUnregisterOutbox } from './push-unregister-outbox'
 
 vi.mock('node:fs', async (importOriginal) => {
   const original = await importOriginal<typeof fs>()
+
   return { ...original, readFileSync: vi.fn(original.readFileSync) }
 })
 
 it('refuses registration until unreadable cleanup is recovered and settled on restart', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'orca-push-unreadable-'))
   let service: DesktopPushService | null = null
+
   try {
     let registry = new DeviceRegistry(dir)
     const { deviceId } = registry.addDevice('phone', 'mobile')
@@ -28,18 +30,22 @@ it('refuses registration until unreadable cleanup is recovered and settled on re
     const unreadable = new PushUnregisterOutbox(dir)
     let gatewayLive = true
     const calls: string[] = []
+
     const client = {
       registerDevice: vi.fn(async () => {
         calls.push('register')
         gatewayLive = true
+
         return { ok: true, registrationId: 'stable-id' } as const
       }),
       deleteDevice: vi.fn(async () => {
         calls.push('delete')
         gatewayLive = false
+
         return true
       })
     }
+
     const createService = (outbox: PushUnregisterOutbox): DesktopPushService =>
       DesktopPushService.create({
         runtime: {
@@ -56,6 +62,7 @@ it('refuses registration until unreadable cleanup is recovered and settled on re
         gatewayUrl: 'https://push.invalid',
         scheduleRetry: vi.fn()
       })!
+
     const input = { deviceId, platform: 'android' as const, token: 'synthetic', filter: {} }
     service = createService(unreadable)
     service.start()

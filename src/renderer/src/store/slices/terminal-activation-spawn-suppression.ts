@@ -7,9 +7,11 @@ function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefin
   if (!node) {
     return 0
   }
+
   if (node.type === 'leaf') {
     return 1
   }
+
   return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
 }
 
@@ -21,5 +23,6 @@ export function getTerminalActivationSpawnSuppression(
     countTerminalLayoutLeaves(layout?.root),
     Object.keys(layout?.ptyIdsByLeafId ?? {}).length
   )
+
   return paneCount === 1 ? true : paneCount
 }

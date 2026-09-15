@@ -4,6 +4,7 @@ import type { BrowserRoutePageGuestIdentity } from './browser-route-page-authori
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 
 const partition = `persist:orca-browser-v1-${'a'.repeat(64)}`
+
 const registration = {
   partition,
   browserPageId: 'page-a',
@@ -56,16 +57,20 @@ describe('browser client page unavailability', () => {
 function harness() {
   let rendererCurrent = true
   let availabilityListener: ((page: BrowserRoutePageGuestIdentity) => void) | null = null
+
   const releaseAvailabilityWatch = vi.fn(() => {
     availabilityListener = null
   })
+
   const renderer = {
     rendererWebContentsId: 11,
     isCurrent: vi.fn(() => rendererCurrent),
     mountPage: vi.fn(async () => ({ webContentsId: 41 })),
     retirePage: vi.fn(async () => {})
   }
+
   const onPageUnavailable = vi.fn()
+
   const executor = new BrowserClientPageCommandExecutor({
     orcaProfileId: 'profile-a',
     authorityConnectionIdentity: 'authority-a',
@@ -96,6 +101,7 @@ function harness() {
       beginGuestRetirement: vi.fn(() => Promise.resolve()),
       watchPageAvailability: vi.fn((_browserPageId, listener) => {
         availabilityListener = listener
+
         return releaseAvailabilityWatch
       })
     },
@@ -104,6 +110,7 @@ function harness() {
     guestBinding: { bind: vi.fn(), release: vi.fn() },
     onPageUnavailable
   })
+
   return {
     executor,
     onPageUnavailable,

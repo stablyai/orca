@@ -8,8 +8,11 @@ type Clock = () => number
 
 // Windows performance.now is monotonic and includes time spent suspended.
 const monotonicNow = (): number => performance.now()
+
 let now: Clock = monotonicNow
+
 let systemSessionEndedAt: number | null = null
+
 let systemSessionEnded = false
 
 export function markSystemSessionEnding(): void {
@@ -27,15 +30,21 @@ function isRecentSystemSessionEnd(): boolean {
   if (systemSessionEndedAt === null) {
     return false
   }
+
   const elapsed = now() - systemSessionEndedAt
+
   if (elapsed < 0) {
     systemSessionEndedAt = null
+
     return false
   }
+
   if (elapsed >= WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS) {
     systemSessionEndedAt = null
+
     return false
   }
+
   return true
 }
 
@@ -57,6 +66,7 @@ export function resolveExpectedTeardownScope({
   ) {
     return 'app-shutdown'
   }
+
   return isExpectedRendererReload ? 'renderer-reload' : 'none'
 }
 

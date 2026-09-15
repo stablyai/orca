@@ -18,6 +18,7 @@ import { errorMessage } from './session-scanner-values'
 // Match the Claude subagent lister's deliberate parse batching: opening every
 // read stream at once stalls over WSL UNC paths.
 const OMP_SUBAGENT_PARSE_CONCURRENCY = 8
+
 // Bulk directory work, so 'scan' — same reasoning as the Claude lister.
 const OMP_SUBAGENT_FS_PRIORITY = 'scan'
 
@@ -38,6 +39,7 @@ export async function listOmpSubagentSessions(args: {
   const artifactDir = ompArtifactDirFor(args.parentFilePath)
 
   let entries
+
   try {
     entries = await wslGatedReaddir(artifactDir, OMP_SUBAGENT_FS_PRIORITY)
   } catch (err) {
@@ -46,12 +48,14 @@ export async function listOmpSubagentSessions(args: {
     if (err instanceof WslTranscriptFsError) {
       recordSessionScanIssue(issues, { agent: 'omp', path: artifactDir, message: err.message })
     }
+
     return { sessions: [], issues }
   }
 
   const transcriptNames = entries
     .filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
     .map((entry) => entry.name)
+
   if (transcriptNames.length === 0) {
     return { sessions: [], issues }
   }
@@ -61,13 +65,16 @@ export async function listOmpSubagentSessions(args: {
   // when the child transcript carries its own distinct session record.
   const parentSessionId = sessionIdFromFileName(args.parentFilePath)
   const parsed: (AiVaultSession | null)[] = []
+
   for (let index = 0; index < transcriptNames.length; index += OMP_SUBAGENT_PARSE_CONCURRENCY) {
     const batch = transcriptNames.slice(index, index + OMP_SUBAGENT_PARSE_CONCURRENCY)
+
     const batchResults = await Promise.all(
       batch.map((name) =>
         parseOmpSubagentTranscript({ artifactDir, name, parentSessionId, platform, issues })
       )
     )
+
     parsed.push(...batchResults)
   }
 
@@ -87,17 +94,21 @@ async function parseOmpSubagentTranscript(args: {
   issues: AiVaultScanIssue[]
 }): Promise<AiVaultSession | null> {
   const filePath = join(args.artifactDir, args.name)
+
   try {
     const fileStat = await wslGatedStat(filePath, OMP_SUBAGENT_FS_PRIORITY)
+
     // Each child carries its own count for on-demand nested expansion.
     const session = await parseMessageGraphSessionFile(
       'omp',
       { path: filePath, mtimeMs: fileStat.mtimeMs, modifiedAt: fileStat.mtime.toISOString() },
       args.platform
     )
+
     if (!session) {
       return null
     }
+
     return {
       ...session,
       // Why: OMP names each child transcript after the task's label — the name
@@ -118,6 +129,7 @@ async function parseOmpSubagentTranscript(args: {
       path: filePath,
       message: errorMessage(err)
     })
+
     return null
   }
 }

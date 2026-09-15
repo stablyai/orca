@@ -9,6 +9,7 @@ import { tryDeleteWslUncPath } from './wsl-unc-delete'
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {

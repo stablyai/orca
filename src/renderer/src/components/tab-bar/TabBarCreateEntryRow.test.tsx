@@ -45,13 +45,16 @@ function renderRow(option: ActiveOption): HTMLButtonElement {
   })
 
   const button = container.querySelector('button')
+
   if (!button) {
     throw new Error('row did not render a button')
   }
+
   return button
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {

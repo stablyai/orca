@@ -63,7 +63,9 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
       ptySpawnHealthCheck: vi.fn(async () => {}),
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
+
     try {
       await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('healthy')
     } finally {
@@ -83,7 +85,9 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
       }),
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
+
     try {
       // -> #6830 marks this daemon degraded and routes fresh spawns to the
       //    local provider instead of the no-cursor daemon pane.
@@ -104,7 +108,9 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
       ptySpawnHealthCheck: vi.fn(() => new Promise<void>(() => {})),
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
+
     try {
       const health = await checkDaemonHealth(socketPath, tokenPath)
       // This is the key finding: wedged != degraded. #6830's degraded fallback
@@ -126,9 +132,11 @@ describe('issue #6814 repro: daemon failure-mode classification', () => {
       // Swallow the hello bytes but never write a response — the exact wedge.
       sock.on('data', () => {})
     })
+
     await new Promise<void>((resolve) => wedged.listen(socketPath, () => resolve()))
     // The health check reads the token before connecting, so it must exist.
     writeFileSync(tokenPath, 'wedged-token')
+
     try {
       const health = await checkDaemonHealth(socketPath, tokenPath)
       expect(health).toBe('unreachable')

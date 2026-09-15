@@ -5,6 +5,7 @@ import { requestEditorFileSave, type EditorSaveFileTarget } from './editor-autos
 export async function attemptEditorFileSave(target: EditorSaveFileTarget): Promise<boolean> {
   try {
     await requestEditorFileSave(target)
+
     return true
   } catch (error) {
     // Why: shortcut handlers need a non-throwing result, while dependent actions must not treat a rejected write as success.
@@ -15,6 +16,7 @@ export async function attemptEditorFileSave(target: EditorSaveFileTarget): Promi
         'Failed to save the file. Please try again.'
       )
     )
+
     return false
   }
 }

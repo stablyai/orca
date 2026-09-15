@@ -13,19 +13,24 @@ export function setupGuestContextMenu(args: {
   resolveRenderer: ResolveRenderer
 }): () => void {
   const { browserTabId, guest, resolveRenderer } = args
+
   const handler = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const renderer = resolveRenderer(browserTabId)
+
     if (!renderer) {
       return
     }
+
     // Why: redact the Kagi session token before pageUrl leaves main — the renderer pipes it into clipboard and shell.openExternal.
     const pageUrl = redactKagiSessionToken(guest.getURL())
     // Why: empty linkURL normalized would yield the truthy blank-page constant, showing "Open Link…" on every non-link right-click.
     const rawLinkUrl = params.linkURL || ''
+
     const linkUrl =
       rawLinkUrl.length > 0
         ? (normalizeExternalBrowserUrl(rawLinkUrl) ?? normalizeBrowserNavigationUrl(rawLinkUrl))
         : null
+
     // Why: send both viewport and screen-cursor coords; screen cursor avoids coordinate-space mismatch, guest coords are the fallback.
     const cursor = screen.getCursorScreenPoint()
     const navigationState = readGuestNavigationState(guest)
@@ -54,6 +59,7 @@ export function setupGuestContextMenu(args: {
       } catch {
         /* guest may already be destroyed */
       }
+
       dismissHandler = null
     }
   }
@@ -66,16 +72,21 @@ export function setupGuestContextMenu(args: {
       if (mouse.type !== 'mouseDown') {
         return
       }
+
       // Why: a right-click mouseDown precedes a new context-menu event; dismissing here flashes the menu closed then reopens it at 0,0.
       if (mouse.button === 'right') {
         return
       }
+
       const renderer = resolveRenderer(browserTabId)
+
       if (renderer) {
         renderer.send('browser:context-menu-dismissed', { browserPageId: browserTabId })
       }
+
       removeDismissListener()
     }
+
     guest.on('before-mouse-event', dismissHandler)
   }
 

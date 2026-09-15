@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
 const AUTOMATIC_PUSH_TARGET_UPSTREAM_REFRESH_TTL_MS = 60_000
+
 const MAX_AUTOMATIC_PUSH_TARGET_UPSTREAM_CACHE_ENTRIES = 1024
 
 type PushTargetUpstreamRefreshCacheEntry = {
@@ -86,6 +87,7 @@ function trimAutomaticPushTargetUpstreamRefreshCache(): void {
     ) {
       break
     }
+
     automaticPushTargetUpstreamRefreshCache.delete(key)
   }
 }
@@ -100,13 +102,17 @@ export function getCachedAutomaticPushTargetUpstreamStatus(input: {
 }): GitUpstreamStatus | null {
   const key = getCacheKey(input)
   const entry = automaticPushTargetUpstreamRefreshCache.get(key)
+
   if (!entry) {
     return null
   }
+
   if (Date.now() - entry.refreshedAt >= AUTOMATIC_PUSH_TARGET_UPSTREAM_REFRESH_TTL_MS) {
     automaticPushTargetUpstreamRefreshCache.delete(key)
+
     return null
   }
+
   return entry.status
 }
 
@@ -137,6 +143,7 @@ export function invalidateAutomaticPushTargetUpstreamStatusCache(input: {
   pushTarget: GitPushTarget
 }): void {
   const scopeKey = getCacheScopeKey(input)
+
   for (const [key, entry] of automaticPushTargetUpstreamRefreshCache) {
     if (entry.scopeKey === scopeKey) {
       automaticPushTargetUpstreamRefreshCache.delete(key)

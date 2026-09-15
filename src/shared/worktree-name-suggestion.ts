@@ -24,6 +24,7 @@ function stripTrailingSeparators(path: string): string {
 export function suggestionPathBasename(path: string): string {
   const normalized = stripTrailingSeparators(path)
   const index = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
+
   return index === -1 ? normalized : normalized.slice(index + 1)
 }
 
@@ -48,18 +49,22 @@ export function selectSuggestedCreatureName(
   exhaustedTiers = 0
 ): string {
   const used = new Set<string>()
+
   for (const name of usedNames) {
     used.add(normalizeSuggestedName(name))
   }
 
   let tier = clampExhaustedTiers(exhaustedTiers) + 1
+
   while (true) {
     const available = MARINE_CREATURES.map((name) =>
       creatureNameAtTier(normalizeSuggestedName(name), tier)
     ).filter((name) => !used.has(name))
+
     if (available.length > 0) {
       return pickRandom(available, random)
     }
+
     tier += 1
   }
 }

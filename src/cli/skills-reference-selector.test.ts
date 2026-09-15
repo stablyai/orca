@@ -26,11 +26,13 @@ vi.mock('./bundled-skill-guides.js', () => ({
 
 vi.mock('./runtime-client', async () => {
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('./runtime/types.js')
+
   class RuntimeClient {
     constructor() {
       throw new Error('skills get constructed a RuntimeClient')
     }
   }
+
   return {
     RuntimeClient,
     RuntimeClientError,

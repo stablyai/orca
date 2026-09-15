@@ -22,6 +22,7 @@ describe('terminal lease-only subscription', () => {
     const messages: string[] = []
     const registry = createSubscriptionRegistryDouble()
     const unsubscribeExit = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -38,6 +39,7 @@ describe('terminal lease-only subscription', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       subscribeToPtyExit: vi.fn(() => unsubscribeExit)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(

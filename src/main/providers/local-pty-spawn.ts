@@ -23,34 +23,44 @@ export async function spawnLocalPty(
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
+
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
+
     if (pendingShutdown) {
       await pendingShutdown.promise
     }
+
     const existing = reattachLocalPty(reattachId, args.cols, args.rows)
+
     if (existing) {
       return existing
     }
   }
+
   if (args.attachOnly) {
     throw new SessionNotFoundError(args.sessionId ?? '')
   }
+
   const id = allocatePtyId(reattachId ?? undefined)
   const incarnationId = randomUUID()
   const planResult = createLocalPtyLaunchPlan(args, getOptions)
+
   const plan =
     planResult instanceof DeferredLocalPtyLaunchPlan
       ? planResult.finish(await planResult.availability)
       : planResult
+
   const envResult = buildLocalPtySpawnEnvironment({
     id,
     spawn: args,
     getOptions,
     plan
   })
+
   const finalEnv = envResult instanceof Promise ? await envResult : envResult
   enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv)
+
   const historyResult = finalizeLocalPtySpawnEnvironment({
     spawn: args,
     getOptions,
@@ -60,14 +70,18 @@ export async function spawnLocalPty(
 
   // Why: the async macOS capability probe runs before node-pty exists.
   await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell())
+
   if (args.signal?.aborted) {
     throw new Error('client_disconnected')
   }
+
   // Why: another same-id request can win while this one awaits preflight; attach before launching a redundant shell.
   const concurrentWinner = reattachId ? reattachLocalPty(id, args.cols, args.rows) : null
+
   if (concurrentWinner) {
     return concurrentWinner
   }
+
   const spawnResult = spawnShellWithFallback({
     shellPath: plan.shellPath,
     shellArgs: plan.shellArgs,
@@ -86,12 +100,15 @@ export async function spawnLocalPty(
       : undefined,
     windowsFallbackAttempts: plan.windowsFallbackAttempts
   })
+
   args.onPtySpawnCommitted?.()
   plan.shellPath = spawnResult.shellPath
+
   // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
   if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
     plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
   }
+
   if (args.command && plan.getFallbackShellReadyConfig) {
     plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
   }
@@ -101,13 +118,16 @@ export async function spawnLocalPty(
   }
 
   const proc = spawnResult.process
+
   const spawnedShellIsWsl =
     process.platform === 'win32' && pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
+
   const spawnedWslDistro = spawnedShellIsWsl
     ? (plan.launchWslDistro ?? undefined)
     : process.platform === 'win32'
       ? null
       : undefined
+
   return activateLocalPtySession({
     id,
     incarnationId,

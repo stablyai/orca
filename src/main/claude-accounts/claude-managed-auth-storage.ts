@@ -42,15 +42,18 @@ export class ClaudeManagedAuthStorage {
     target?: ClaudeManagedAuthTarget
   ): Promise<ClaudeManagedAuthLocation> {
     const wslAuth = await this.tryCreateWsl(accountId, target)
+
     if (wslAuth) {
       return wslAuth
     }
+
     const managedAuthPath = join(this.getRoot(), accountId, 'auth')
     mkdirSync(managedAuthPath, { recursive: true, mode: 0o700 })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), `${accountId}\n`, {
       encoding: 'utf-8',
       mode: 0o600
     })
+
     return {
       managedAuthPath: await this.assertOwned(managedAuthPath, accountId),
       managedAuthRuntime: 'host',
@@ -74,6 +77,7 @@ export class ClaudeManagedAuthStorage {
     credentialsJson: string
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
+
     if (process.platform === 'darwin') {
       await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
     } else {
@@ -99,6 +103,7 @@ export class ClaudeManagedAuthStorage {
     managedAuthPath: string
   ): Promise<ClaudeManagedAuthSnapshot> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
+
     return {
       credentialsJson:
         process.platform === 'darwin'
@@ -114,6 +119,7 @@ export class ClaudeManagedAuthStorage {
     snapshot: ClaudeManagedAuthSnapshot
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
+
     if (process.platform === 'darwin') {
       await (snapshot.credentialsJson !== null
         ? writeManagedClaudeKeychainCredentials(accountId, snapshot.credentialsJson)
@@ -131,6 +137,7 @@ export class ClaudeManagedAuthStorage {
     snapshot: ClaudeManagedAuthSnapshot
   ): Promise<void> {
     const trustedPath = await this.assertOwned(managedAuthPath, accountId)
+
     if (snapshot.oauthAccountJson !== null) {
       writeClaudeManagedAuthFile(trustedPath, 'oauth-account.json', snapshot.oauthAccountJson)
     } else {
@@ -145,25 +152,32 @@ export class ClaudeManagedAuthStorage {
     } catch (error) {
       console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)
     }
+
     await deleteManagedClaudeKeychainCredentials(accountId)
   }
 
   async assertOwned(candidatePath: string, expectedAccountId?: string): Promise<string> {
     const wslInfo = parseWslUncPath(candidatePath)
+
     if (wslInfo) {
       return this.assertOwnedWsl(candidatePath, wslInfo, expectedAccountId)
     }
+
     this.getRoot()
     const accountId = expectedAccountId ?? this.readAccountId(candidatePath)
+
     if (!accountId || (expectedAccountId && accountId !== expectedAccountId)) {
       throw new Error('Managed Claude auth directory does not exist on disk.')
     }
+
     const trustedPath = resolveOwnedClaudeManagedAuthPath(accountId, candidatePath, {
       adoptLegacyMarker: true
     })
+
     if (!trustedPath) {
       throw new Error('Managed Claude auth storage is not owned by Orca.')
     }
+
     return trustedPath
   }
 
@@ -174,7 +188,9 @@ export class ClaudeManagedAuthStorage {
     if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
       return null
     }
+
     const requestedDistro = target.wslDistro?.trim() || undefined
+
     const info = await runWslProcess({
       distro: requestedDistro,
       loginPath: 'none',
@@ -182,6 +198,7 @@ export class ClaudeManagedAuthStorage {
       script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
       timeoutMs: 5000
     })
+
     const [rawDistro, rawHome] =
       info.code === 0 && !info.timedOut
         ? info.stdout
@@ -189,12 +206,16 @@ export class ClaudeManagedAuthStorage {
             .split(/\r?\n/)
             .map((line) => line.trim())
         : []
+
     const distro = requestedDistro || rawDistro
     const home = rawHome
+
     if (!distro || !home?.startsWith('/')) {
       throw new Error('Could not resolve the active WSL home directory for Claude login.')
     }
+
     const linuxPath = `${home.replace(/\/$/, '')}/.local/share/orca/claude-accounts/${accountId}/auth`
+
     const created = await runWslProcess({
       distro,
       loginPath: 'none',
@@ -203,10 +224,13 @@ export class ClaudeManagedAuthStorage {
       args: [linuxPath, accountId],
       timeoutMs: 5000
     })
+
     if (created.code !== 0 || created.timedOut) {
       throw new Error('Could not create the managed WSL Claude auth directory.')
     }
+
     const managedAuthPath = toWindowsWslPath(linuxPath, distro)
+
     return {
       managedAuthPath: await this.assertOwned(managedAuthPath, accountId),
       managedAuthRuntime: 'wsl',
@@ -226,6 +250,7 @@ export class ClaudeManagedAuthStorage {
     ) {
       throw new Error('Managed WSL Claude auth storage is outside Orca account storage.')
     }
+
     if (process.platform !== 'win32') {
       if (
         !existsSync(candidatePath) ||
@@ -233,12 +258,15 @@ export class ClaudeManagedAuthStorage {
       ) {
         throw new Error('Managed Claude auth storage is not owned by Orca.')
       }
+
       return candidatePath
     }
+
     try {
       const expected = expectedAccountId
         ? `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(expectedAccountId)}`
         : 'test -n "$(cat "$candidate_real/.orca-managed-claude-auth")"'
+
       const owned = await runWslProcess({
         distro: wslInfo.distro,
         loginPath: 'none',
@@ -255,10 +283,13 @@ export class ClaudeManagedAuthStorage {
         ].join('\n'),
         timeoutMs: 5000
       })
+
       const canonicalPath = owned.stdout.trim()
+
       if (owned.code !== 0 || owned.timedOut || !canonicalPath) {
         throw new Error('Managed Claude auth directory does not exist on disk.')
       }
+
       return toWindowsWslPath(canonicalPath, wslInfo.distro)
     } catch (error) {
       throw new Error('Managed WSL Claude auth storage is outside Orca account storage.', {
@@ -270,12 +301,14 @@ export class ClaudeManagedAuthStorage {
   private getRoot(): string {
     const root = getClaudeManagedAccountsRoot()
     mkdirSync(root, { recursive: true, mode: 0o700 })
+
     return root
   }
 
   private readAccountId(candidatePath: string): string | null {
     const relativePath = relative(resolve(this.getRoot()), resolve(candidatePath))
     const parts = relativePath.split(sep)
+
     return parts.length === 2 && parts[1] === 'auth' ? parts[0] : null
   }
 }

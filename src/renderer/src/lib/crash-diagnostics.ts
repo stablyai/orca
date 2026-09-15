@@ -11,6 +11,7 @@ import {
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 
 let rendererCrashDiagnosticsInstalled = false
+
 let rendererMemoryInterval: number | null = null
 
 // Why re-exported from a leaf module: terminal modules and their e2e-visible
@@ -41,13 +42,16 @@ function disposeRendererCrashDiagnostics(): void {
   if (!rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
     return
   }
+
   rendererCrashDiagnosticsInstalled = false
   window.removeEventListener('error', recordRendererError)
   window.removeEventListener('unhandledrejection', recordRendererUnhandledRejection)
+
   if (rendererMemoryInterval !== null) {
     window.clearInterval(rendererMemoryInterval)
     rendererMemoryInterval = null
   }
+
   resetRendererMemorySampling()
 }
 
@@ -67,8 +71,10 @@ function recordRendererError(event: ErrorEvent): void {
     )
   ) {
     event.preventDefault()
+
     return
   }
+
   recordRendererCrashBreadcrumb(
     'renderer_error',
     compactBreadcrumbData({

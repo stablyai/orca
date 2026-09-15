@@ -32,6 +32,7 @@ import type {
 } from './worktree-base-directory-event-filter'
 
 const missingRootWarnings = new Set<string>()
+
 const skippedWslWarnings = new Set<string>()
 
 // Why: match existing worktree probe caps while bounding aggregate SSH filesystem RPC pressure.
@@ -47,15 +48,18 @@ async function canonicalizeExistingPath(
 ): Promise<string> {
   if (connectionId) {
     const provider = getSshFilesystemProvider(connectionId)
+
     if (!provider) {
       return normalize(pathValue)
     }
+
     try {
       return await provider.realpath(pathValue)
     } catch {
       return normalize(pathValue)
     }
   }
+
   try {
     return await realpath(pathValue)
   } catch {
@@ -67,6 +71,7 @@ function isDirectoryStat(value: Stats | FileStat | undefined): boolean {
   if (!value) {
     return false
   }
+
   return 'type' in value ? value.type === 'directory' : value.isDirectory()
 }
 
@@ -80,10 +85,13 @@ async function addTarget(
   const watchedPath = await canonicalizeExistingPath(pathValue, connectionId)
   const key = `${kind}:${connectionId ?? 'local'}:${normalizeWatchKey(watchedPath)}`
   const existing = targets.get(key)
+
   if (existing) {
     existing.repos.set(config.repoId, config)
+
     return
   }
+
   targets.set(key, {
     key,
     kind,
@@ -102,6 +110,7 @@ function isRuntimePathAbsoluteForRepo(repoPath: string, pathValue: string): bool
     isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(pathValue)
       ? 'windows'
       : 'posix'
+
   return isRuntimePathAbsolute(pathValue, pathFlavor)
 }
 
@@ -141,22 +150,28 @@ async function maybeAddBaseTarget(
 ): Promise<void> {
   const pathSettings = getWorktreePathSettings(repo, settings, mirrorDistro)
   const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
+
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
     nestWorkspaces
   }
+
   const remoteProvider = getRemoteProvider(connectionId)
+
   if (connectionId && !remoteProvider) {
     return
   }
+
   // Why: WSL UNC paths are unreliable for native watching. A repo inside the
   // distro has nothing watchable at all; a Windows-drive repo whose worktrees
   // are mirrored into the distro still has its gitdir on the Windows side.
   if (isWslUncPath(repo.path)) {
     warnSkippedWslRoot(repo.id, workspaceRoot)
+
     return
   }
+
   if (isWslUncPath(workspaceRoot)) {
     warnSkippedWslRoot(repo.id, workspaceRoot)
   } else {
@@ -164,11 +179,13 @@ async function maybeAddBaseTarget(
       const rootStat = remoteProvider
         ? await remoteProvider.stat(workspaceRoot)
         : await stat(workspaceRoot)
+
       if (isDirectoryStat(rootStat)) {
         await addTarget(targets, 'base', workspaceRoot, config, connectionId)
       }
     } catch {
       const key = normalizeWatchKey(workspaceRoot)
+
       if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
         console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
       }
@@ -184,6 +201,7 @@ async function maybeAddBaseTarget(
         }
       : undefined
   )
+
   if (commonDir && !isWslUncPath(commonDir)) {
     await addTarget(targets, 'git-common', commonDir, config, connectionId)
   }
@@ -195,15 +213,19 @@ async function resolveRepoTargets(
   mirrorDistro: string | undefined
 ): Promise<Map<string, WorktreeBaseWatchTarget>> {
   const targets = new Map<string, WorktreeBaseWatchTarget>()
+
   if (isFolderRepo(repo)) {
     return targets
   }
+
   const executionHostId = getRepoExecutionHostId(repo)
+
   if (executionHostId === LOCAL_EXECUTION_HOST_ID) {
     await maybeAddBaseTarget(targets, repo, settings, mirrorDistro)
   } else if (repo.connectionId) {
     await maybeAddBaseTarget(targets, repo, settings, mirrorDistro, repo.connectionId)
   }
+
   return targets
 }
 
@@ -213,10 +235,12 @@ function mergeRepoTargets(
 ): void {
   for (const [key, target] of repoTargets) {
     const existing = targets.get(key)
+
     if (!existing) {
       targets.set(key, target)
       continue
     }
+
     for (const [repoId, config] of target.repos) {
       existing.repos.set(repoId, config)
     }
@@ -227,15 +251,19 @@ export async function buildWorktreeBaseDirectoryWatchTargets(
   store: Store
 ): Promise<Map<string, WorktreeBaseWatchTarget>> {
   const settings = store.getSettings()
+
   const resolvedRepoTargets = await mapWithConcurrency(
     store.getRepos(),
     WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY,
     (repo) => resolveRepoTargets(repo, settings, getWorktreeMirrorDistro(store, repo))
   )
+
   const targets = new Map<string, WorktreeBaseWatchTarget>()
+
   for (const repoTargets of resolvedRepoTargets) {
     mergeRepoTargets(targets, repoTargets)
   }
+
   return targets
 }
 

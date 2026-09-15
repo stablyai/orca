@@ -18,15 +18,19 @@ export function completeBrowserHostPageRetirement(
   const completed = dependencies.pagePlacements.completePageRetirement(retirement, () =>
     retireClientPageCommandLedger(dependencies.leasesByClientId, retirement)
   )
+
   if (completed) {
     const grant = dependencies.executionHostGrants.get(retirement.browserPageId)
+
     if (grant?.placement === retirement.placement) {
       dependencies.executionHostGrants.delete(retirement.browserPageId)
       grant.release()
     }
+
     if (retirement.placement.kind === 'client') {
       dependencies.onClientPageReleased?.(retirement.browserPageId)
     }
   }
+
   return completed
 }

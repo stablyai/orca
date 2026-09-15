@@ -72,13 +72,17 @@ export class HistoryReader {
     if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
       return { status: 'unreadable', sessionId }
     }
+
     const metaRead = this.readMetaState(sessionId)
+
     if (metaRead.status === 'unreadable') {
       return { status: 'unreadable', sessionId }
     }
+
     if (metaRead.status === 'missing' || metaRead.meta.endedAt !== null) {
       return { status: 'none' }
     }
+
     return { status: 'restorable', sessionId }
   }
 
@@ -91,6 +95,7 @@ export class HistoryReader {
     opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
   ): Promise<ColdRestoreInfo | null> {
     const detection = await this.detectColdRestoreState(sessionId, opts)
+
     return detection.status === 'restored' ? detection.restoreInfo : null
   }
 
@@ -101,14 +106,19 @@ export class HistoryReader {
     if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
       return { status: 'unreadable', sessionId }
     }
+
     const metaRead = this.readMetaState(sessionId)
+
     if (metaRead.status === 'missing') {
       return { status: 'none' }
     }
+
     if (metaRead.status === 'unreadable') {
       return { status: 'unreadable', sessionId }
     }
+
     const meta = metaRead.meta
+
     // Why ignoreCleanEnd: in the spawn probe race, the dying session's exit
     // event can write endedAt between the aliveness probe and the post-spawn
     // fallback detect. The caller established restore eligibility before the
@@ -133,6 +143,7 @@ export class HistoryReader {
       checkpoint,
       opts?.wslDistro
     )
+
     if (logRestore.restoreInfo) {
       return {
         status: 'restored',
@@ -147,11 +158,13 @@ export class HistoryReader {
       // checkpoints — the old scrollback.bin is the best remaining data.
       const legacyPath = join(sessionDir, 'scrollback.bin')
       const legacyExists = existsSync(legacyPath)
+
       const legacyRestore = await detectColdRestoreFromLegacyScrollback(
         this.basePath,
         sessionId,
         meta
       )
+
       if (legacyRestore) {
         return {
           status: 'restored',
@@ -160,6 +173,7 @@ export class HistoryReader {
           hasUnreadableRecovery: checkpointReadFailed || logRestore.readFailed
         }
       }
+
       return checkpointReadFailed || logRestore.readFailed || legacyExists
         ? { status: 'unreadable', sessionId }
         : { status: 'none' }
@@ -179,6 +193,7 @@ export class HistoryReader {
     }
 
     let directory: ReturnType<typeof opendirSync>
+
     try {
       directory = opendirSync(this.basePath)
     } catch {
@@ -189,27 +204,35 @@ export class HistoryReader {
       reader: HistoryReader
     ): Generator<RestorableTerminalHistorySession> {
       let order = 0
+
       while (true) {
         const entry = directory.readSync()
+
         if (!entry) {
           return
         }
+
         if (!entry.isDirectory()) {
           continue
         }
+
         if (
           isTerminalHistoryQuarantineEntry(entry.name) ||
           isTerminalHistoryPendingDeleteEntry(entry.name)
         ) {
           continue
         }
+
         let sessionId: string
+
         try {
           sessionId = decodeURIComponent(entry.name)
         } catch {
           continue
         }
+
         const meta = reader.readMeta(sessionId)
+
         if (meta && meta.endedAt === null) {
           const parsedStartedAt = Date.parse(meta.startedAt)
           yield {
@@ -246,6 +269,7 @@ export class HistoryReader {
     wslDistro?: string
   ): Promise<IncrementalLogRestore> {
     const logPath = join(sessionDir, 'output.log')
+
     try {
       // Why: final checkpoints leave a header-only log; they need no scarce replay slot and must not queue sleep teardown behind startup restores.
       if ((await stat(logPath)).size <= LOG_HEADER_BYTES) {
@@ -254,18 +278,24 @@ export class HistoryReader {
     } catch {
       return { restoreInfo: null, readFailed: existsSync(logPath) }
     }
+
     const release = await coldRestoreReplaySemaphore.acquire(0)
+
     try {
       let logBuffer: Buffer
+
       try {
         logBuffer = await readTerminalHistoryBufferAsync(logPath, TERMINAL_HISTORY_LOG_MAX_BYTES)
       } catch {
         return { restoreInfo: null, readFailed: true }
       }
+
       const log = decodeTerminalHistoryLog(logBuffer)
+
       if (!log || log.batches.length === 0) {
         return { restoreInfo: null, readFailed: true }
       }
+
       // Generation mismatch means the log does not continue this checkpoint
       // (e.g. crash between checkpoint rename and log reset, or a pre-log
       // checkpoint without a generation field). Replaying it would duplicate or
@@ -284,7 +314,9 @@ export class HistoryReader {
         scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
         wslDistro
       })
+
       const replay = new ColdRestoreReplayWriter(emulator)
+
       try {
         if (checkpoint) {
           if (
@@ -295,11 +327,14 @@ export class HistoryReader {
           ) {
             return { restoreInfo: null, readFailed: true }
           }
+
           emulator.setRestoredOscLinks(checkpoint.oscLinks)
+
           if (checkpoint.lastTitle) {
             emulator.setLastTitle(checkpoint.lastTitle)
           }
         }
+
         for (const batch of log.batches) {
           for (const record of batch.records) {
             if (record.kind === 'output') {
@@ -310,14 +345,17 @@ export class HistoryReader {
               if (!isValidTerminalHistorySize(record.cols, record.rows)) {
                 return { restoreInfo: null, readFailed: true }
               }
+
               await replay.resize(record.cols, record.rows)
             } else {
               await replay.clearScrollback()
             }
           }
         }
+
         const snapshot = emulator.getSnapshot()
         const lastBatch = log.batches.at(-1)!
+
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(
             { ...snapshot, pendingOutputSeq: lastBatch.seq },
@@ -340,6 +378,7 @@ export class HistoryReader {
 
   private readMeta(sessionId: string): SessionMeta | null {
     const metaRead = this.readMetaState(sessionId)
+
     return metaRead.status === 'readable' ? metaRead.meta : null
   }
 

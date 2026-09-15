@@ -9,14 +9,17 @@ import { resolveAgentTypeFromTerminalTitle } from './worktree-title-derived-agen
  */
 export function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
   const launchOwner = { ownerIsLaunch: Boolean(tab?.launchAgent) }
+
   const entryAgentType = resolveCompatibleAgentTypeForOwner(
     entry.agentType,
     tab?.launchAgent,
     launchOwner
   )
+
   if (entryAgentType && entryAgentType !== 'unknown') {
     return entryAgentType
   }
+
   return (
     resolveAgentTypeFromTerminalTitle(
       entry.terminalTitle ?? tab?.title,

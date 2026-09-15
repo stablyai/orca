@@ -19,9 +19,11 @@ export function buildPartialRepositoryNotice(failedCount: number, totalCount: nu
 export function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
+
   for (let i = 0; i < name.length; i += 1) {
     hash = (hash * 31 + name.charCodeAt(i)) | 0
   }
+
   return palette[Math.abs(hash) % palette.length]!
 }
 
@@ -33,9 +35,11 @@ export function setupSourceLabel(source: string | null): string {
   if (source === 'orca.yaml') {
     return 'orca.yaml'
   }
+
   if (source === 'legacy') {
     return 'local hooks'
   }
+
   return 'repository hooks'
 }
 
@@ -45,12 +49,14 @@ export function taskRepositoryMeta(
 ): { key: string; label: string; color: string } {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     const repo = reposById.get(item.source.repoId)
+
     return {
       key: item.source.repoId,
       label: repo?.displayName ?? item.source.repoName,
       color: getRepoBadgeColor(repo, item.source.repoName)
     }
   }
+
   if (item.provider === 'gitlabTodo') {
     return {
       key: item.source.projectPath,
@@ -58,6 +64,7 @@ export function taskRepositoryMeta(
       color: repoColor(item.source.projectPath)
     }
   }
+
   return {
     key: item.source.team.id,
     label: item.source.team.name,
@@ -73,8 +80,10 @@ export function sortMobileTaskItems(
   if (items.length < 2) {
     return [...items]
   }
+
   const byRepository = sort === 'repository'
   const collator = byRepository ? new Intl.Collator(undefined, { sensitivity: 'base' }) : null
+
   return items
     .map((item) => ({
       item,

@@ -45,6 +45,7 @@ export type CodexTurnHost = {
 
 function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] {
   const input: Record<string, unknown>[] = []
+
   for (const block of body.blocks as NativeChatBlock[]) {
     if (block.type === 'text' && block.text.length > 0) {
       input.push({ type: 'text', text: block.text })
@@ -54,6 +55,7 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
       input.push({ type: 'image', url: block.url })
     }
   }
+
   return input
 }
 
@@ -61,19 +63,26 @@ function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
   const options = Object.fromEntries(
     [...host.options].filter(([key]) => key !== 'fastMode' && key !== 'serviceTier')
   )
+
   const encodedFastMode = host.options.get('fastMode')
+
   if (encodedFastMode === undefined) {
     return options
   }
+
   const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encodedFastMode)
+
   if (typeof fastMode !== 'boolean') {
     throw new Error('codex fast mode must be encoded as true or false')
   }
+
   if (!fastMode) {
     return { ...options, serviceTier: 'default' }
   }
+
   const model = host.options.get('model') ?? host.reportedOptions?.model
   const tierId = model ? host.fastModeTierByModel.get(model) : undefined
+
   // Fast is on but nothing has named the tier for this model yet, so there is no
   // value to route to. Deliberately Standard rather than an omission: the tier
   // persists on the thread, so omitting would silently keep routing a paid tier we
@@ -81,6 +90,7 @@ function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
   if (!tierId) {
     return { ...options, serviceTier: 'default' }
   }
+
   return { ...options, serviceTier: tierId }
 }
 
@@ -96,6 +106,7 @@ export async function startCodexTurn(
   if (!host.dispatchEchoes.arm(input.clientMessageId)) {
     return false
   }
+
   await host.connection.request(
     'turn/start',
     {
@@ -106,6 +117,7 @@ export async function startCodexTurn(
     },
     { timeoutMs: input.timeoutMs }
   )
+
   return true
 }
 
@@ -128,11 +140,14 @@ export async function dispatchCodexTurn(
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       // Codex answered and declined, so no echo for this write can arrive.
       session.dispatchEchoes.disarm(input.clientMessageId)
+
       return { state: 'rejected', reason: (error as Error).message }
     }
+
     // A timeout or transport failure can happen after the frame was written.
     // Keep the correlation armed so a later echo can prove delivery.
     throw error
   }
+
   return { state: 'admitted' }
 }

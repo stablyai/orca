@@ -17,9 +17,11 @@ export function assertFolderWorkspacePtyPathUsable(
   worktreeId: string | undefined
 ): Promise<void> | void {
   const workspaceScope = typeof worktreeId === 'string' ? parseWorkspaceKey(worktreeId) : null
+
   if (!store || workspaceScope?.type !== 'folder') {
     return
   }
+
   return getFolderWorkspacePathStatus(
     store,
     { scope: 'folder-workspace', folderWorkspaceId: workspaceScope.folderWorkspaceId },
@@ -47,6 +49,7 @@ export function localStartupCwdDirectoryExists(path: string): boolean {
   if (isWslUncPath(path)) {
     return true
   }
+
   try {
     return statSync(path).isDirectory()
   } catch {

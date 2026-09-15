@@ -8,6 +8,7 @@ import {
 } from './recent-tab-switching'
 
 const WT = 'wt-1'
+
 const GROUP = 'group-1'
 
 function tab(id: string, entityId: string, label: string): Tab {
@@ -51,6 +52,7 @@ function stateWithTabs(
     tab('tab-b', 'file-b', 'B'),
     tab('tab-c', 'file-c', 'C')
   ].filter((entry) => tabOrder.includes(entry.id) || hydratingTabIds.includes(entry.id))
+
   return {
     activeBrowserTabId: null,
     activeFileId: tabs.find((entry) => entry.id === activeTabId)?.entityId ?? null,

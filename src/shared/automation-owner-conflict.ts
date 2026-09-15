@@ -73,6 +73,7 @@ export function matchAutomationOwnerConflict(error: unknown): AutomationOwnerCon
       return code
     }
   }
+
   return null
 }
 
@@ -80,9 +81,11 @@ export function matchAutomationOwnerConflict(error: unknown): AutomationOwnerCon
 export function stripAutomationOwnerConflictCode(message: string): string {
   for (const code of CODE_VALUES) {
     const suffix = `: ${code}`
+
     if (message.trimEnd().endsWith(suffix)) {
       return message.trimEnd().slice(0, -suffix.length)
     }
   }
+
   return message
 }

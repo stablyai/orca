@@ -21,6 +21,7 @@ export function hasSleepableWorkspaceActivity(
   { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree }: WorkspaceActivityMaps
 ): boolean {
   const tabs = tabsByWorktree[worktreeId] ?? []
+
   return (
     tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id)) ||
     (browserTabsByWorktree[worktreeId] ?? []).length > 0
@@ -35,6 +36,7 @@ export function getWorkspaceLineageMenuActions(args: {
 }): WorkspaceLineageMenuActions {
   const { descendants } = getWorkspaceDeleteLineage(args.parent, args.worktrees, args.lineageById)
   const targets = [args.parent, ...descendants]
+
   return {
     descendants,
     targets,
@@ -55,6 +57,7 @@ export function useWorkspaceLineageMenuActions(
 ): WorkspaceLineageMenuActions {
   const { enabled, parent, worktrees, lineageById, activity } = args
   const { tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree } = activity
+
   return useMemo(
     () =>
       enabled

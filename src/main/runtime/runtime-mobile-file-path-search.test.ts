@@ -19,16 +19,21 @@ describe('rankRuntimeMobileFilePaths', () => {
       '.hidden',
       'a/./b.ts'
     ]
+
     for (const query of ['', ' ', 'b', '.ts', '😀', '/', 'a\\', 'missing']) {
       for (const limit of [0, 1, 3, 100]) {
         const q = query.trim().toLowerCase()
+
         const prefix = paths.filter((path) => {
           const lower = path.toLowerCase()
+
           return lower.startsWith(q) || (lower.split('/').pop() ?? lower).startsWith(q)
         })
+
         const other = paths.filter(
           (path) => !prefix.includes(path) && path.toLowerCase().includes(q)
         )
+
         expect(rankRuntimeMobileFilePaths(paths, query, limit)).toEqual({
           paths: [...prefix, ...other].slice(0, limit),
           totalCount: prefix.length + other.length
@@ -54,6 +59,7 @@ describe('rankRuntimeMobileFilePaths', () => {
 describe('RuntimeMobileFilePathSearchCache', () => {
   it('reuses a live entry, reloads after expiry, and evicts the oldest key', async () => {
     const cache = new RuntimeMobileFilePathSearchCache(2, 100)
+
     const load = vi.fn(async (path: string) => ({
       paths: [path],
       totalCount: 1,
@@ -85,6 +91,7 @@ describe('RuntimeMobileFilePathSearchCache', () => {
   it('coalesces concurrent cold loads for the same worktree', async () => {
     const cache = new RuntimeMobileFilePathSearchCache(2, 100)
     let resolveLoad: (value: RuntimeMobileFilePathInventory) => void = () => {}
+
     const load = vi.fn(
       () =>
         new Promise<RuntimeMobileFilePathInventory>((resolve) => {
@@ -105,16 +112,19 @@ describe('RuntimeMobileFilePathSearchCache', () => {
 
   it('starts the TTL when a slow inventory becomes usable', async () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(0)
       const cache = new RuntimeMobileFilePathSearchCache(2, 100)
       let resolveLoad: (value: RuntimeMobileFilePathInventory) => void = () => {}
+
       const load = vi.fn(
         () =>
           new Promise<RuntimeMobileFilePathInventory>((resolve) => {
             resolveLoad = resolve
           })
       )
+
       const first = cache.get('slow-ssh', load)
       vi.setSystemTime(200)
       resolveLoad({ paths: ['a'], totalCount: 1, truncated: false })

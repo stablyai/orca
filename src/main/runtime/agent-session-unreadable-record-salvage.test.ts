@@ -11,11 +11,14 @@ import { agentSessionStorePath } from './agent-session-record-store-file'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
+
 let directory: string
+
 let counter = 0
 
 function operationId(): string {
   counter += 1
+
   return `${NOW}-${String(counter)
     .padStart(32, '0')
     .replaceAll(/[^0-9a-f]/g, '0')}`
@@ -65,6 +68,7 @@ async function establishOwner(store: AgentSessionRecordStore): Promise<AgentSess
     },
     now: NOW
   })
+
   return store.proveOwner({
     sessionId: 'session-alpha',
     fence,
@@ -84,6 +88,7 @@ async function corruptPrimaryRecord(): Promise<string> {
   const raw = JSON.parse(await readFile(filePath, 'utf-8'))
   raw.records['session-alpha'].lease.runtimeFence = 'not-a-number'
   await writeFile(filePath, JSON.stringify(raw))
+
   return filePath
 }
 
@@ -150,6 +155,7 @@ describe('unreadable session records', () => {
     const reserved = await reopened.reserveOwner(
       reserveRequest({ expectedFence: 2, spawnToken: 'spawn-b' })
     )
+
     expect(reserved.record.lease.claimStatus).toBe('reserved')
     const persisted = JSON.parse(await readFile(filePath, 'utf-8'))
     expect(persisted.records['session-alpha'].lease.claimStatus).toBe('reserved')

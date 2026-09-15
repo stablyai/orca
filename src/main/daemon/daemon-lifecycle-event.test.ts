@@ -3,6 +3,7 @@ import { bucketDaemonLiveSessionCount } from '../../shared/daemon-lifecycle-tele
 import { validate } from '../telemetry/validator'
 
 const { trackMock } = vi.hoisted(() => ({ trackMock: vi.fn() }))
+
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
 
 import { trackDaemonReplaced, trackDaemonRetired } from './daemon-lifecycle-event'

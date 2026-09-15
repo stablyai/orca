@@ -27,9 +27,13 @@ type PreGoneSystemMemorySample = {
 }
 
 let preGoneSample: PreGoneSystemMemorySample | null = null
+
 let preGoneTimer: ReturnType<typeof setInterval> | null = null
+
 let swapVolumeReadInFlight = false
+
 let samplingGeneration = 0
+
 let sampleTick = 0
 
 const PRESSURE_SIGNAL_KEY = `${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`
@@ -44,14 +48,18 @@ const PRESSURE_SIGNAL_KEY = `${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`
  */
 function withCarriedSwapVolume(sample: PreGoneSystemMemorySample): PreGoneSystemMemorySample {
   const previous = preGoneSample
+
   if (!previous || previous.swapVolumeSampledAtMs === undefined) {
     return sample
   }
+
   const freeMB = previous.details[`${SYSTEM_MEMORY_KEY_PREFIX}SwapVolumeFreeMB`]
   const volume = previous.details[`${SYSTEM_MEMORY_KEY_PREFIX}SwapVolume`]
+
   if (typeof freeMB !== 'number' || typeof volume !== 'string') {
     return sample
   }
+
   return {
     ...sample,
     details: withSwapVolumeFreeSpace(sample.details, { freeMB, volume }, process.platform, false),
@@ -62,12 +70,15 @@ function withCarriedSwapVolume(sample: PreGoneSystemMemorySample): PreGoneSystem
 function commitHostMemorySample(nowMs: number): boolean {
   try {
     const details = getSystemMemoryDetails()
+
     // Why not `length === 0`: the signal label is appended unconditionally, so a
     // reading that resolved no memory field at all still arrives with one key.
     if (!Object.keys(details).some((key) => key !== PRESSURE_SIGNAL_KEY)) {
       return false
     }
+
     preGoneSample = withCarriedSwapVolume({ details, sampledAtMs: nowMs })
+
     return true
   } catch {
     // Why: a failed read must not erase the previous good sample.
@@ -79,11 +90,14 @@ async function mergeSwapVolumeFreeSpace(issuedOnTick: number): Promise<void> {
   if (swapVolumeReadInFlight) {
     return
   }
+
   swapVolumeReadInFlight = true
   const generation = samplingGeneration
   const issuedFor = preGoneSample
+
   try {
     const volume = await readSwapVolumeFreeSpace()
+
     if (volume && preGoneSample && generation === samplingGeneration) {
       // Why only its own tick qualifies: a statfs that outlived its tick carries a
       // pre-storm volume number, and the latch makes that lag unbounded. It still
@@ -109,9 +123,11 @@ export async function samplePreGoneSystemMemory(nowMs: number = Date.now()): Pro
   // paging storm this targets it is slowest — it must never delay, or (via an
   // in-flight latch) skip, the cheap synchronous host reading.
   const tick = ++sampleTick
+
   if (!commitHostMemorySample(nowMs)) {
     return
   }
+
   await mergeSwapVolumeFreeSpace(tick)
 }
 
@@ -121,6 +137,7 @@ export function startPreGoneSystemMemorySampling(
   if (preGoneTimer) {
     return
   }
+
   void samplePreGoneSystemMemory()
   preGoneTimer = setInterval(() => void samplePreGoneSystemMemory(), intervalMs)
   preGoneTimer.unref?.()
@@ -130,6 +147,7 @@ export function resetPreGoneSystemMemorySamplingForTest(): void {
   if (preGoneTimer) {
     clearInterval(preGoneTimer)
   }
+
   preGoneTimer = null
   preGoneSample = null
   swapVolumeReadInFlight = false
@@ -142,12 +160,14 @@ export function preGoneSystemMemoryDetails(nowMs: number): CrashReportDetails {
   if (!preGoneSample) {
     return {}
   }
+
   const details: CrashReportDetails = {
     [`${SYSTEM_MEMORY_KEY_PREFIX}PreGoneSampleAgeMs`]: Math.max(
       0,
       nowMs - preGoneSample.sampledAtMs
     )
   }
+
   // Why its own age: the volume read resolves out of band, so it can be older
   // than the memory reading printed beside it, and that gap must be readable.
   if (preGoneSample.swapVolumeSampledAtMs !== undefined) {
@@ -156,9 +176,11 @@ export function preGoneSystemMemoryDetails(nowMs: number): CrashReportDetails {
       nowMs - preGoneSample.swapVolumeSampledAtMs
     )
   }
+
   for (const [key, value] of Object.entries(preGoneSample.details)) {
     details[`${SYSTEM_MEMORY_KEY_PREFIX}PreGone${key.slice(SYSTEM_MEMORY_KEY_PREFIX.length)}`] =
       value
   }
+
   return details
 }

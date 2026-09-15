@@ -8,6 +8,7 @@ import { useTerminalParkMountIntent } from './use-terminal-park-mount-intent'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const TAB_ID = 'strict-park-reveal'
+
 const observations: boolean[] = []
 
 function Child(): null {
@@ -15,6 +16,7 @@ function Child(): null {
   useEffect(() => {
     observations.push(mountFollowsTerminalPark)
   }, [mountFollowsTerminalPark])
+
   return null
 }
 
@@ -22,6 +24,7 @@ function Parent() {
   useEffect(() => {
     disposeParkedTabWatchers(TAB_ID)
   }, [])
+
   return <Child />
 }
 

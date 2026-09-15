@@ -49,22 +49,30 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     awaitingVisibilityResumeInventory,
     coordinator
   } = args
+
   if (!isCurrent()) {
     return
   }
+
   if (response.ok === false) {
     console.warn('[web-session-tabs-sync] global subscription failed:', response.error.message)
+
     return
   }
+
   const runtimeId = getSessionTabsRuntimeIdFromResponse(response)
+
   if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
     return
   }
+
   const event = args.event as
     | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
     | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
     | { type: 'end' }
+
   const replayed = isRuntimeSubscriptionReplayResponse(response)
+
   if (event.type === 'snapshots') {
     handleGlobalSessionInventoryEvent({
       environmentId,
@@ -79,23 +87,29 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       awaitingVisibilityResumeInventory,
       coordinator
     })
+
     return
   }
+
   if (event.type !== 'snapshot' && event.type !== 'updated') {
     return
   }
+
   const receivedFrame = recordReceivedWebSessionTabsSnapshot(
     environmentId,
     event,
     undefined,
     runtimeId
   )
+
   coordinator.recordSnapshotReceipt(environmentId, event, receivedFrame, runtimeId)
+
   const finishRecovery = beginWebSessionTabsSnapshotRecovery(
     environmentId,
     event.worktree,
     receivedFrame
   )
+
   let settleHydration: HostSessionMirrorSettle | null = null
   void recoverWebSessionTerminalOrphansBeforeApply(useAppStore.getState(), event, environmentId, {
     expectedEnvironmentPairingRevision,
@@ -116,10 +130,13 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
       ) {
         return
       }
+
       if (replayed) {
         acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
       }
+
       const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
+
       if (decision.apply) {
         settleHydration = applyWebSessionTabsStorePatch(
           (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
@@ -159,6 +176,7 @@ export function handleGlobalSessionEvent(args: GlobalSessionEventArgs): void {
     })
     .finally(() => {
       finishRecovery()
+
       if (isCurrent()) {
         settleHydration?.()
       }

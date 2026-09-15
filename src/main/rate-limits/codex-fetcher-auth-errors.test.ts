@@ -38,20 +38,25 @@ function makeRpcChild() {
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   // Why: like the real app-server, the fake dies on stdin EOF or a signal —
   // the graceful shutdown path resolves only once the child reports exit.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
   }
+
   child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
   child.exitCode = null
   child.kill = vi.fn(() => {
     exitNow()
+
     return true
   })
+
   return child
 }
 
@@ -64,12 +69,14 @@ describe('fetchCodexRateLimits auth errors', () => {
 
   it('returns Codex RPC auth refresh errors without masking them behind PTY fallback', async () => {
     const rpcChild = makeRpcChild()
+
     const authError =
       'Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.'
 
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -78,6 +85,7 @@ describe('fetchCodexRateLimits auth errors', () => {
           )
         }, 0)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -115,6 +123,7 @@ describe('fetchCodexRateLimits auth errors', () => {
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
+
       if (msg.method === 'initialize') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -123,6 +132,7 @@ describe('fetchCodexRateLimits auth errors', () => {
           )
         }, 0)
       }
+
       if (msg.method === 'account/rateLimits/read') {
         setTimeout(() => {
           rpcChild.stdout.emit(
@@ -155,6 +165,7 @@ describe('fetchCodexRateLimits auth errors', () => {
 
   it('preserves Codex PTY auth errors when the CLI exits before status is available', async () => {
     const ptyHandlers: { onData?: (data: string) => void; onExit?: () => void } = {}
+
     const authError =
       'Error loading configuration: Your authentication session could not be refreshed automatically.'
 
@@ -164,10 +175,12 @@ describe('fetchCodexRateLimits auth errors', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn((callback) => {
         ptyHandlers.onExit = callback
+
         return makeDisposable()
       }),
       write: vi.fn(),
@@ -200,6 +213,7 @@ describe('fetchCodexRateLimits auth errors', () => {
     ptySpawnMock.mockReturnValue({
       onData: vi.fn((callback) => {
         ptyHandlers.onData = callback
+
         return makeDisposable()
       }),
       onExit: vi.fn(() => makeDisposable()),

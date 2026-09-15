@@ -50,8 +50,10 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
     // Why: the shared listWorktrees stub keeps call history across this file's
     // tests; absolute counts need a clean baseline.
     vi.mocked(listWorktrees).mockClear()
+
     try {
       const scratchPath = '/tmp/.codex-tmp/capsule-a'
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getRepos: () => [
@@ -65,7 +67,9 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
           }
         ]
       } as never)
+
       const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
+
       const scanCallsFor = (path: string): number =>
         vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
 
@@ -92,11 +96,14 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
     // workspace through it turned that gap into `skill-install-workspace-not-found`.
     vi.mocked(listWorktrees).mockClear()
     const addedPath = '/tmp/repo-registered-later'
+
     const repos = [
       { id: 'repo-1', path: '/tmp/repo', displayName: 'repo', badgeColor: 'blue', addedAt: 1 }
     ]
+
     const runtime = new OrcaRuntimeService({ ...store, getRepos: () => repos } as never)
     const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
+
     const scanCallsFor = (path: string): number =>
       vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
 

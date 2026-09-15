@@ -18,6 +18,7 @@ export function createCodexAppServerRecordReader(input: {
   onFatal: (error: Error) => void
 }): CodexAppServerRecordReader {
   let paused = false
+
   const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
     // The provider owns this local stdio stream, so valid agent payloads keep full fidelity.
     maxLineBytes: Number.POSITIVE_INFINITY,
@@ -41,8 +42,10 @@ export function createCodexAppServerRecordReader(input: {
       if (!paused) {
         return
       }
+
       paused = false
       framer.resume()
+
       if (!paused) {
         input.stdout.resume()
       }

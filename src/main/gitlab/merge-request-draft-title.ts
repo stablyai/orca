@@ -3,5 +3,6 @@ const GITLAB_DRAFT_TITLE_PREFIX =
 
 export function stripGitLabDraftTitlePrefix(title: string): string | null {
   const readyTitle = title.replace(GITLAB_DRAFT_TITLE_PREFIX, '')
+
   return readyTitle === title ? null : readyTitle
 }

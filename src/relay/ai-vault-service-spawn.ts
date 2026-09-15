@@ -14,7 +14,9 @@ export function spawnRelayAiVaultService(): ChildProcess {
     env: buildRelayAiVaultServiceEnv(),
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })
+
   lowerAiVaultServicePriority(child.pid)
   child.unref()
+
   return child
 }

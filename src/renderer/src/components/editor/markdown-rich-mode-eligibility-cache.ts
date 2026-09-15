@@ -38,6 +38,7 @@ export function getCachedMarkdownRichModeEligibility(params: {
   sizeOverridden: boolean
 }): MarkdownRichModeEligibility {
   const decision = getCachedMarkdownRichModeEligibilityDecision(params)
+
   return {
     exceedsSizeLimit: decision.exceedsSizeLimit,
     unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
@@ -49,23 +50,29 @@ function getCachedMarkdownRichModeEligibilityDecision(params: {
   sizeOverridden: boolean
 }): MarkdownRichModeEligibilityDecision {
   const { content, sizeOverridden } = params
+
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
+
     if (entry.sizeOverridden !== sizeOverridden || entry.content !== content) {
       continue
     }
+
     if (index > 0) {
       entries.splice(index, 1)
       entries.unshift(entry)
     }
+
     return entry.decision
   }
 
   const decision = getMarkdownRichModeEligibilityDecision({ content, sizeOverridden })
   entries.unshift({ content, sizeOverridden, decision })
+
   if (entries.length > MAX_ENTRIES) {
     entries.length = MAX_ENTRIES
   }
+
   return decision
 }
 

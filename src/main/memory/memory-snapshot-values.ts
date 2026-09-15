@@ -8,6 +8,7 @@ export function clampMemoryMetric(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 0
   }
+
   return Math.max(0, value)
 }
 
@@ -37,6 +38,7 @@ export function snapshotCommitFields(
 
 export function emptyMemorySnapshot(): MemorySnapshot {
   const zero = { cpu: 0, memory: 0 }
+
   return {
     app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
     worktrees: [],

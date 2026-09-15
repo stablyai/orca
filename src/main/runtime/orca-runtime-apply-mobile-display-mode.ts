@@ -29,10 +29,13 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
       const clearedFitSubscribers = inner
         ? [...inner.values()].filter((sub) => sub.wasResizedToPhone)
         : []
+
       for (const sub of clearedFitSubscribers) {
         sub.wasResizedToPhone = false
       }
+
       const anyWasResized = clearedFitSubscribers.length > 0
+
       // Why (#7588): also restore when a fit-override is still held but no
       // subscriber carries wasResizedToPhone — e.g. a null-viewport resubscribe
       // after an indefinite hold resets the flag yet leaves the override,
@@ -41,11 +44,13 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
       // restore paths can never resolve to different dims for the same state.
       if (anyWasResized || this.terminalFitOverrides.has(ptyId)) {
         const restore = this.resolveDesktopRestoreTarget(ptyId)
+
         const result = await this.enqueueLayout(ptyId, {
           kind: 'desktop',
           cols: restore.cols,
           rows: restore.rows
         })
+
         // Why (#7588): a failed resize rolls the override back (still held), so
         // re-arm the flags we cleared. Otherwise a later unsubscribe under a
         // finite mobileAutoRestoreFitMs would see wasResizedToPhone=false, skip
@@ -73,14 +78,17 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
       // viewport and we haven't already applied it.
       if (subscriberRecord && !subscriberRecord.wasResizedToPhone) {
         const viewport = subscriberRecord.viewport
+
         if (viewport) {
           await this.handleMobileSubscribe(ptyId, subscriberRecord.clientId, viewport)
+
           // After a phone-fit an override IS held, so this reports false. The
           // auto branch is never reached from reclaim (it sets 'desktop'
           // first); computed here only to keep the post-condition uniform.
           return !this.terminalFitOverrides.has(ptyId)
         }
       }
+
       // Why: always emit the mode change even when no resize occurred — the
       // mobile client needs to learn the toggle landed even if dims didn't
       // actually change. Carry the current seq (or undefined if no layout
@@ -94,6 +102,7 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
         seq: this.layouts.get(ptyId)?.seq
       })
     }
+
     return !this.terminalFitOverrides.has(ptyId)
   }
 
@@ -106,6 +115,7 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
     if (this.isResizeSuppressed()) {
       return
     }
+
     // Why: while a mobile-fit override is in place, the desktop renderer's
     // safeFit echoes pty:resize(override.cols, override.rows). Treating that
     // echo as legitimate geometry would overwrite each subscriber's
@@ -116,9 +126,11 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
     // hidden tab on desktop, container went 0×0 → 1782×1195) reports
     // different dims and is the right baseline to remember.
     const activeOverride = this.terminalFitOverrides.get(ptyId)
+
     if (activeOverride && activeOverride.cols === cols && activeOverride.rows === rows) {
       return
     }
+
     // Why: a successful host resize supersedes any target retained after a
     // failed viewer reclaim; a later viewer cycle must capture this new truth.
     this.remoteDesktopFloor.clearStaleHostReclaimTarget(ptyId)
@@ -142,6 +154,7 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
     if (cols <= 0 || rows <= 0) {
       return
     }
+
     // Why: a viewer may leave while phone-fit still owns the PTY. Keep its
     // deferred host reclaim cache aligned with later trusted pane measurements.
     this.remoteDesktopFloor.updateHostReclaimTarget(ptyId, cols, rows)
@@ -158,9 +171,11 @@ export class OrcaRuntimeWithApplyMobileDisplayMode extends OrcaRuntimeWithHandle
   protected refreshRendererGeometry(ptyId: string, cols: number, rows: number): void {
     this.lastRendererSizes.set(ptyId, { cols, rows })
     const inner = this.mobileSubscribers.get(ptyId)
+
     if (!inner) {
       return
     }
+
     // Refresh the renderer-current size as the next-restore target on every
     // subscriber that already has a non-null baseline. Subscribers with null
     // baselines (joined while a peer had already phone-fitted) stay null.

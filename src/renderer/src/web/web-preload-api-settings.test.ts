@@ -25,6 +25,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       autoRenameBranchFromWork?: boolean
       autoRenameBranchFromWorkDefaultedOn?: boolean
@@ -43,6 +44,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       terminalCursorStyle?: string
       terminalCursorStyleDefaultedToBlock?: boolean
@@ -77,6 +79,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -111,10 +114,12 @@ describe('web settings preload API', () => {
     const { api, storage } = await installApi('Linux')
 
     const invalid = await api.settings.set({ terminalCursorStyle: 'beam' as never })
+
     const invalidStored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
       terminalCursorStyle?: string
       terminalCursorStyleDefaultedToBlock?: boolean
     }
+
     expect(invalid.terminalCursorStyle).toBe('block')
     expect(invalid.terminalCursorStyleDefaultedToBlock).toBe(true)
     expect(invalidStored.terminalCursorStyle).toBe('block')
@@ -139,6 +144,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       terminalAllowOsc52Clipboard?: boolean
       terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
@@ -160,6 +166,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     await globals.window.api.settings.get()
+
     const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
       osc52ClipboardDefaultOnNoticePending?: boolean
     }
@@ -174,6 +181,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     await globals.window.api.settings.get()
+
     const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
       osc52ClipboardDefaultOnNoticePending?: boolean
     }
@@ -230,6 +238,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       autoRenameBranchFromWork?: boolean
       autoRenameBranchFromWorkDefaultedOn?: boolean
@@ -245,6 +254,7 @@ describe('web settings preload API', () => {
     const { api, storage } = await installApi('Linux')
 
     const settings = await api.settings.set({ autoRenameBranchFromWork: false })
+
     const stored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
       autoRenameBranchFromWork?: boolean
       autoRenameBranchFromWorkDefaultedOn?: boolean
@@ -262,6 +272,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -285,6 +296,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       compactWorktreeCards?: boolean
     }
@@ -298,9 +310,11 @@ describe('web settings preload API', () => {
 
   it('keeps a completed settings merge when the paired host is removed mid-read', async () => {
     let resolveSettings!: (value: RuntimeRpcResponse<unknown>) => void
+
     const settingsRead = new Promise<RuntimeRpcResponse<unknown>>(
       (resolve) => (resolveSettings = resolve)
     )
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(): Promise<RuntimeRpcResponse<unknown>> {
@@ -351,10 +365,12 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           const sourcePreferences =
             method === 'settings.update'
               ? { builtIn: { claude: 'show' as const } }
               : { builtIn: { claude: 'hide' as const } }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -483,6 +499,7 @@ describe('web settings preload API', () => {
           if (method === 'settings.update') {
             return Promise.reject(new Error('offline'))
           }
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -526,6 +543,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -544,6 +562,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     expect((await globals.window.api.settings.get()).worktreeVisibilityDefaults).toBeUndefined()
+
     const settings = await globals.window.api.settings.set({
       worktreeVisibilityDefaults: { external: 'show' }
     })
@@ -558,6 +577,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -576,6 +596,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       experimentalNewWorktreeCardStyle?: boolean
     }
@@ -591,6 +612,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -615,6 +637,7 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.get()
+
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       minimaxGroupId?: string
       minimaxUsageModels?: string
@@ -636,6 +659,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: 'call-1',
             ok: true,
@@ -665,6 +689,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -708,6 +733,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -741,6 +767,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -800,6 +827,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: 'call-1',
             ok: true,
@@ -833,6 +861,7 @@ describe('web settings preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: 'call-1',
             ok: true,
@@ -890,6 +919,7 @@ describe('web settings preload API', () => {
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       prBotAuthorOverrides?: string[]
     }
+
     expect(stored.prBotAuthorOverrides).toBeUndefined()
   })
 })

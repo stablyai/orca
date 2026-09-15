@@ -30,6 +30,7 @@ vi.mock('electron', () => ({
 
 function completionFixture(delayMs = 0) {
   const db = createDatabase('orca-codex-completion-title-')
+
   const hook: AgentStatusIpcPayload = {
     paneKey: PANE_KEY,
     terminalHandle: TERMINAL_HANDLE,
@@ -40,14 +41,18 @@ function completionFixture(delayMs = 0) {
     receivedAt: Date.now(),
     stateStartedAt: Date.now()
   }
+
   const { runtime } = createRuntime(db, { getAgentStatusSnapshot: () => [hook] })
   const write = vi.fn((_ptyId: string, _data: string) => true)
+
   const getForegroundProcess = vi.fn(async (): Promise<string | null> => {
     if (delayMs) {
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
+
     return 'codex'
   })
+
   runtime.setPtyController({
     write,
     writeWithSettlement: settledWriteStub(write),
@@ -55,17 +60,20 @@ function completionFixture(delayMs = 0) {
     getForegroundProcess
   })
   const run = createBoundRun(db, 'Completion title Run')
+
   function completeWithNativeTitles(): void {
     runtime.ingestSyntheticTitleFrame(PTY_ID, '\x1b]0;Codex ready\x07')
     runtime.onPtyData(PTY_ID, '\x1b]0;⠋ mobile-rearch\x07', 1)
     runtime.onPtyData(PTY_ID, '\x1b]0;mobile-rearch\x07', 2)
   }
+
   return { db, runtime, write, run, hook, getForegroundProcess, completeWithNativeTitles }
 }
 
 describe('Codex completion title mailbox delivery', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -82,19 +90,25 @@ describe('Codex completion title mailbox delivery', () => {
       vi.useFakeTimers()
       const { db, runtime, write, run, completeWithNativeTitles } = completionFixture(delay)
       await runtime.listTerminals()
+
       if (arrival === 'before') {
         insertDirectRunMessage(db, run.id, 'Worker progress')
       }
+
       completeWithNativeTitles()
       await vi.advanceTimersByTimeAsync(100)
+
       if (arrival === 'after') {
         insertDirectRunMessage(db, run.id, 'Worker progress')
         runtime.notifyMessageArrived(`run:${run.id}`, 'status')
       }
+
       await vi.advanceTimersByTimeAsync(500)
+
       if (delay) {
         expect(write).not.toHaveBeenCalledWith(PTY_ID, '\r')
       }
+
       await vi.advanceTimersByTimeAsync(1000)
       expect(write.mock.calls.map(([, data]) => data)).toEqual([
         expect.stringContaining('You have 1 orchestration message'),
@@ -114,20 +128,26 @@ describe('Codex completion title mailbox delivery', () => {
     { name: 'stale hook', age: AGENT_STATUS_STALE_AFTER_MS + 1 }
   ])('does not recover idle from $name', async (scenario) => {
     vi.useFakeTimers()
+
     const { db, runtime, write, run, hook, getForegroundProcess, completeWithNativeTitles } =
       completionFixture()
+
     if (scenario.process !== undefined) {
       getForegroundProcess.mockResolvedValue(scenario.process)
     }
+
     if (scenario.state !== undefined) {
       hook.state = scenario.state
     }
+
     if ('restoredUnconfirmed' in scenario) {
       hook.restoredUnconfirmed = true
     }
+
     if (scenario.age !== undefined) {
       hook.receivedAt -= scenario.age
     }
+
     await runtime.listTerminals()
     completeWithNativeTitles()
     await vi.advanceTimersByTimeAsync(100)
@@ -154,8 +174,10 @@ describe('Codex completion title mailbox delivery', () => {
 
   it('keeps an unverified staged pointer pending and submits it once readiness returns', async () => {
     vi.useFakeTimers()
+
     const { db, runtime, write, run, getForegroundProcess, completeWithNativeTitles } =
       completionFixture()
+
     getForegroundProcess.mockResolvedValue(null)
     await runtime.listTerminals()
     const message = insertDirectRunMessage(db, run.id, 'Worker progress')

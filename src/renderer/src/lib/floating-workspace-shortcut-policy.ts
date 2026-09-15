@@ -15,6 +15,7 @@ type FloatingWorkspaceShortcutEvent = Partial<
   Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: PhysicalModifierToken }
 
 const FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
+
 const FLOATING_WORKSPACE_PANEL_SHORTCUT_ACTIONS = [
   'tab.newTerminal',
   'tab.newBrowser',
@@ -37,6 +38,7 @@ export function isFloatingWorkspacePanelShortcutTarget(
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   return (
     target === panelRoot ||
     target.getAttribute('data-floating-terminal-panel') !== null ||
@@ -71,8 +73,10 @@ export function isFloatingWorkspacePanelShortcut(
   if (!isFloatingWorkspacePanelShortcutTarget(event.target, panelRoot)) {
     return false
   }
+
   const platform: NodeJS.Platform =
     typeof platformOrIsMac === 'boolean' ? (platformOrIsMac ? 'darwin' : 'linux') : platformOrIsMac
+
   return matchFloatingWorkspacePanelOwnedAction(event, platform, keybindings, options) !== null
 }
 
@@ -95,12 +99,15 @@ export function matchFloatingWorkspacePanelShortcut(
   if (keybindingMatchesAction('tab.rename', event, platform, keybindings, chromeOptions)) {
     return { kind: 'action', action: 'tab.rename' }
   }
+
   const index =
     matchKeybindingDigitIndex('workspace.selectByIndex', event, platform, keybindings, options) ??
     matchKeybindingDigitIndex('tab.selectByIndex', event, platform, keybindings, options)
+
   if (index !== null) {
     return { kind: 'index', index }
   }
+
   if (
     keybindingMatchesAction(
       'floatingWorkspace.maximize',
@@ -112,6 +119,7 @@ export function matchFloatingWorkspacePanelShortcut(
   ) {
     return { kind: 'action', action: 'floatingWorkspace.maximize' }
   }
+
   if (
     keybindingMatchesAction(
       'floatingWorkspace.minimize',
@@ -123,6 +131,7 @@ export function matchFloatingWorkspacePanelShortcut(
   ) {
     return { kind: 'action', action: 'floatingWorkspace.minimize' }
   }
+
   return null
 }
 
@@ -140,8 +149,10 @@ export function matchFloatingWorkspacePanelChord(
   const ownedAction = isFloatingWorkspacePanelShortcutTarget(event.target, panelRoot)
     ? matchFloatingWorkspacePanelOwnedAction(event, platform, keybindings, options)
     : null
+
   if (ownedAction) {
     return { kind: 'action', action: ownedAction }
   }
+
   return matchFloatingWorkspacePanelShortcut(event, platform, keybindings, options, chromeOptions)
 }

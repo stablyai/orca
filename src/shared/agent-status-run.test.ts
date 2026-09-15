@@ -49,6 +49,7 @@ describe('agent status PTY run records', () => {
       role: 'unresolved',
       verdict: 'unverifiable'
     })
+
     delete record.continuityOf
 
     expect(deserializeAgentStatusPtyRunRecord(serializeAgentStatusPtyRunRecord(record))).toEqual(
@@ -62,6 +63,7 @@ describe('agent status PTY run records', () => {
       sessionKeyKind: 'session_id' as const,
       providerId: 'session-a'
     }
+
     const record = runRecord({
       providerSessions: [alias, { ...alias, resetBoundary: true }]
     })

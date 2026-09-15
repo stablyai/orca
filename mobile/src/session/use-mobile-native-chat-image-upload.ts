@@ -13,7 +13,9 @@ import {
 } from './mobile-native-chat-image-attachment'
 
 type CurrentRef<T> = { readonly current: T }
+
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
+
 type ShowToast = (message: string, durationMs?: number) => void
 
 export function useMobileNativeChatImageUpload(args: {
@@ -43,6 +45,7 @@ export function useMobileNativeChatImageUpload(args: {
     showToast,
     structuredNativeChat
   } = args
+
   const [isAttaching, setIsAttaching] = useState(false)
   const attachingCount = useRef(0)
   const connStateRef = useRef(connState)
@@ -53,6 +56,7 @@ export function useMobileNativeChatImageUpload(args: {
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
       const scope = scopeKey
+
       if (
         !client ||
         !scope ||
@@ -61,9 +65,11 @@ export function useMobileNativeChatImageUpload(args: {
       ) {
         return
       }
+
       let started = false
       const uploadedImages: UploadedNativeChatImage[] = []
       let uploadError: unknown = null
+
       try {
         await uploadMobileNativeChatImages(source, {
           client,
@@ -81,30 +87,40 @@ export function useMobileNativeChatImageUpload(args: {
       } finally {
         if (started) {
           attachingCount.current -= 1
+
           if (attachingCount.current === 0) {
             setIsAttaching(false)
           }
         }
       }
+
       if (uploadedImages.length > 0) {
         onImagesUploaded(scope, uploadedImages)
         onAttachSuccess?.()
       }
+
       if (uploadError !== null) {
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()
+
         if (connStateRef.current !== 'connected') {
           showToast('Attach failed (disconnected)', 1500)
+
           return
         }
+
         if (uploadError instanceof ImageLibraryPermissionError) {
           showToast('Photo permission denied', 1500)
+
           return
         }
+
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
           showToast('Image too large to attach', 1500)
+
           return
         }
+
         showToast('Attach failed', 1500)
       }
     },

@@ -280,11 +280,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('persists activity for hidden detected worktrees', async () => {
     const store = createTestStore()
+
     const hidden = makeWorktree({
       id: 'repo1::/path/hidden',
       repoId: 'repo1',
       path: '/path/hidden'
     })
+
     const detected = makeDetectedResult('repo1', [hidden])
     detected.worktrees[0] = { ...detected.worktrees[0], ownership: 'external', visible: false }
     store.setState({

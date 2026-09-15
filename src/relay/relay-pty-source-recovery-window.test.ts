@@ -26,6 +26,7 @@ function decode(buffer: Buffer): Frame | null {
 }
 
 const flushRequests = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
 let dispatcher: RelayDispatcher | undefined
 
 afterEach(() => dispatcher?.dispose())
@@ -37,10 +38,13 @@ it.each([0, 4])(
     dispatcher = new RelayDispatcher(
       (data, settled) => {
         const frame = decode(data)
+
         if (frame) {
           original.push(frame)
         }
+
         settled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -48,10 +52,13 @@ it.each([0, 4])(
     )
     const mux = dispatcher
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(mux, 'build', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(mux, adapter, () => {})
+
     const open = (clientId: number, id: number, resume?: Record<string, unknown>): void => {
       mux.feedClient(
         clientId,
@@ -73,6 +80,7 @@ it.each([0, 4])(
         )
       )
     }
+
     open(1, 1)
     await flushRequests()
     publication.activate('pty', 'incarnation', {
@@ -87,20 +95,26 @@ it.each([0, 4])(
     const grant = original.find((frame) => frame.id === 1)!.result!
     mux.invalidateClient()
     const replacement: Frame[] = []
+
     const clientId = mux.attachClient(
       (data, settled) => {
         const frame = decode(data)
+
         if (frame) {
           replacement.push(frame)
         }
+
         settled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     open(clientId, 2, { ownerGeneration: grant.ownerGeneration, ownerLease: grant.ownerLease })
     await flushRequests()
+
     const recovery = publication.activate(
       'pty',
       'incarnation',
@@ -119,6 +133,7 @@ it.each([0, 4])(
         acceptedSourceEndSu: checkpoint
       }
     )
+
     // The fence lands on the checkpoint itself: the tail drains live rather than behind it.
     expect(recovery).toMatchObject({
       status: 'pending',
@@ -130,17 +145,21 @@ it.each([0, 4])(
     expect(replacement.filter((frame) => frame.method === 'pty.recoveryComplete')).toHaveLength(1)
     let accepted = checkpoint
     let output = ''
+
     for (let turn = 0; accepted < 12 && turn < 4; turn++) {
       const frames = replacement.filter(
         (frame) => frame.method === 'pty.data' && Number(frame.params!.sourceEndSu) > accepted
       )
+
       expect(frames.length).toBeGreaterThan(0)
+
       for (const frame of frames) {
         const params = frame.params!
         expect(Number(params.sourceEndSu) - Number(params.sourceLengthSu)).toBe(accepted)
         accepted = Number(params.sourceEndSu)
         output += String(params.data)
       }
+
       expect(publication.getDebugSnapshot().outstandingSourceUnits).toBeLessThanOrEqual(4)
       const params = frames.at(-1)!.params!
       mux.feedClient(
@@ -167,6 +186,7 @@ it.each([0, 4])(
       )
       await flushRequests()
     }
+
     expect(accepted).toBe(12)
     expect(output).toBe('abcdefghijkl'.slice(checkpoint))
     expect(publication.getDebugSnapshot().outstandingSourceUnits).toBe(0)

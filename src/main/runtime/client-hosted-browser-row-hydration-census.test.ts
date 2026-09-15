@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { glob } from 'tinyglobby'
 
 const REPO_ROOT = join(import.meta.dirname, '../../..')
+
 const CENSUS_FILE = 'src/main/runtime/client-hosted-browser-row-hydration-census.test.ts'
 
 /**
@@ -19,20 +20,25 @@ async function countCallSites(pattern: RegExp): Promise<Record<string, number>> 
     cwd: REPO_ROOT,
     ignore: ['**/node_modules/**', '**/*.test.ts', '**/*.test.tsx', CENSUS_FILE]
   })
+
   const counts: Record<string, number> = {}
+
   for (const file of files) {
     // Counted per file, not merely detected: two call sites in one file mask each other.
     const hits = readFileSync(join(REPO_ROOT, file), 'utf8').match(pattern)?.length ?? 0
+
     if (hits > 0) {
       counts[file] = hits
     }
   }
+
   return counts
 }
 
 // Anchored on the member-call shape rather than the bare name, so the declaration does not count
 // itself and prose about the method does not have to be kept out of the file.
 const DELIVER_CALL = /\.deliverHydrationSnapshot\(/g
+
 const LIST_CALL = /\.listClientHostedBrowserRows\(/g
 
 describe('client-hosted row hydration caller census', () => {
@@ -57,6 +63,7 @@ describe('client-hosted row hydration caller census', () => {
       const a = runtime.deliverHydrationSnapshot()
       const b = other.deliverHydrationSnapshot()
     `
+
     expect(source.match(DELIVER_CALL)?.length).toBe(2)
     expect('runtime.listClientHostedBrowserRows()'.match(LIST_CALL)?.length).toBe(1)
   })

@@ -11,6 +11,7 @@ import {
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 
 export const FACET_NOW = 1_700_000_000_000
+
 export const DAY = 24 * 60 * 60 * 1000
 
 export function makeFacetCandidate(
@@ -86,6 +87,7 @@ export type FacetFixtureInput = {
 export function makeFacets(input: FacetFixtureInput = {}): WorkspaceCleanupFacets {
   const candidate = makeFacetCandidate(input.candidate)
   const id = candidate.worktreeId
+
   const sources: WorkspaceCleanupFacetSources = {
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     worktreeById:
@@ -106,6 +108,7 @@ export function makeFacets(input: FacetFixtureInput = {}): WorkspaceCleanupFacet
       input.dismissed ? [getWorkspaceCleanupCandidateIdentity(candidate)] : []
     )
   }
+
   return buildWorkspaceCleanupFacets(candidate, sources)
 }
 

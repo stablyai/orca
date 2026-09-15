@@ -13,11 +13,13 @@ import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolut
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
+
 export {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
 } from './floating-workspace-tab-creation'
+
 export {
   isFloatingWorkspacePanelShortcut,
   isFloatingWorkspacePanelShortcutTarget,
@@ -40,6 +42,7 @@ type FloatingWorkspaceTabSwitchStore = Pick<
 >
 
 const FLOATING_WORKSPACE_PANEL_SELECTOR = '[data-floating-terminal-panel]'
+
 const EMPTY_FLOATING_WORKSPACE_PANEL_SELECTOR =
   '[data-floating-terminal-panel][aria-hidden="false"] [data-floating-terminal-empty-state]'
 
@@ -60,12 +63,15 @@ type EmptyFloatingWorkspaceCloseShortcutEvent = Pick<
 function getActiveFloatingWorkspaceGroup(store: FloatingWorkspaceTabSwitchStore): TabGroup | null {
   const groups = store.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
   const activeGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+
   if (activeGroupId) {
     const activeGroup = groups.find((group) => group.id === activeGroupId)
+
     if (activeGroup) {
       return activeGroup
     }
   }
+
   return groups.find((group) => group.activeTabId != null) ?? groups[0] ?? null
 }
 
@@ -76,6 +82,7 @@ function getFloatingWorkspaceVisibleTabs(
   const groupTabs = (store.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
     (tab) => tab.groupId === group.id
   )
+
   return getGroupVisibleTabOrder(
     group,
     groupTabs,
@@ -94,6 +101,7 @@ function getFloatingWorkspaceVisibleTabs(
 // pre-close render snapshot that a concurrent create/no-op close can invalidate.
 export function countVisibleFloatingWorkspaceItems(store: FloatingWorkspaceTabSwitchStore): number {
   const group = getActiveFloatingWorkspaceGroup(store)
+
   return group ? getFloatingWorkspaceVisibleTabs(store, group).length : 0
 }
 
@@ -103,10 +111,12 @@ function getFloatingWorkspaceActiveEntry(
 ): TypeCyclableTab | null {
   if (group.activeTabId) {
     const active = visibleTabs.find((tab) => tab.tabId === group.activeTabId)
+
     if (active) {
       return active
     }
   }
+
   return visibleTabs[0] ?? null
 }
 
@@ -161,11 +171,13 @@ function activateFloatingWorkspaceCyclableTab(
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
     focusTerminalTabSurface(next.id)
+
     return
   }
 
   if (next.type === 'browser') {
     const workspace = getFloatingWorkspaceBrowserTab(store, next.id)
+
     if (workspace?.activePageId && typeof window !== 'undefined' && window.api?.browser) {
       void window.api.browser.notifyActiveTabChanged({ browserPageId: workspace.activePageId })
     }
@@ -178,15 +190,20 @@ function getNextFloatingWorkspaceTerminalTab(
   direction: number
 ): TypeCyclableTab | null {
   const terminalTabs = visibleTabs.filter((tab) => tab.type === 'terminal')
+
   if (terminalTabs.length === 0) {
     return null
   }
+
   const currentIndex = terminalTabs.findIndex((tab) => tab.id === active.id)
+
   if (terminalTabs.length === 1 && currentIndex === 0 && active.type === 'terminal') {
     return null
   }
+
   const normalizedCurrentIndex =
     currentIndex === -1 && direction > 0 ? -1 : currentIndex === -1 ? 0 : currentIndex
+
   return terminalTabs[
     (normalizedCurrentIndex + direction + terminalTabs.length) % terminalTabs.length
   ]
@@ -208,6 +225,7 @@ export function isFloatingWorkspacePanelFocused(
   doc: Pick<Document, 'activeElement'> | null = typeof document === 'undefined' ? null : document
 ): boolean {
   const active = doc?.activeElement
+
   return active instanceof HTMLElement && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }
 
@@ -221,9 +239,11 @@ export function isFloatingWorkspaceTerminalInputTarget(target: EventTarget | nul
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   if (target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) === null) {
     return false
   }
+
   return (
     target.classList?.contains('xterm-helper-textarea') === true ||
     target.closest('.xterm') !== null
@@ -257,6 +277,7 @@ export function handleEmptyFloatingWorkspacePanelCloseShortcut(
   event.stopPropagation()
   event.stopImmediatePropagation()
   window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+
   return true
 }
 
@@ -266,17 +287,23 @@ export function switchFloatingWorkspaceTab(
   mode: FloatingWorkspaceTabSwitchMode
 ): boolean {
   const group = getActiveFloatingWorkspaceGroup(store)
+
   if (!group) {
     return false
   }
+
   const visibleTabs = getFloatingWorkspaceVisibleTabs(store, group)
+
   if (visibleTabs.length <= 1) {
     return false
   }
+
   const active = getFloatingWorkspaceActiveEntry(visibleTabs, group)
+
   if (!active) {
     return false
   }
+
   const groupTabIdInNav =
     group.activeTabId && visibleTabs.some((entry) => entry.tabId === group.activeTabId)
       ? group.activeTabId
@@ -304,5 +331,6 @@ export function switchFloatingWorkspaceTab(
   }
 
   activateFloatingWorkspaceCyclableTab(store, next)
+
   return true
 }

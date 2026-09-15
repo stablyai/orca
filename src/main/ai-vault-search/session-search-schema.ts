@@ -103,14 +103,17 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
   if (path !== ':memory:') {
     mkdirSync(dirname(path), { recursive: true })
   }
+
   try {
     return openExisting(path)
   } catch (error) {
     if (!isUnusableDatabaseError(error)) {
       throw error
     }
+
     // One retry only: a second failure on a file we just created is not corruption.
     removeSessionSearchDatabase(path)
+
     return openExisting(path)
   }
 }
@@ -121,6 +124,7 @@ function openExisting(path: string): SyncDatabase {
   // an unlink refused by a virus scanner or a second Orca holding the file —
   // with an error nothing classifies as worth rebuilding for.
   let db: SyncDatabase | null = openWithPragmas(path)
+
   try {
     if (isStaleSchema(db)) {
       // Why: DROP TABLE on a multi-GB FTS index takes minutes and runs inside the
@@ -130,11 +134,13 @@ function openExisting(path: string): SyncDatabase {
       removeSessionSearchDatabase(path)
       db = openWithPragmas(path)
     }
+
     db.exec(SCHEMA_SQL)
     db.prepare('INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)').run(
       'schema_version',
       String(SESSION_SEARCH_SCHEMA_VERSION)
     )
+
     return db
   } catch (error) {
     db?.close()
@@ -151,7 +157,9 @@ function isUnusableDatabaseError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   const code = (error as { code?: unknown }).code
+
   return (
     (typeof code === 'string' && UNUSABLE_DATABASE.test(code)) ||
     UNUSABLE_DATABASE.test(error.message)
@@ -160,6 +168,7 @@ function isUnusableDatabaseError(error: unknown): boolean {
 
 function openWithPragmas(path: string): SyncDatabase {
   const db = new SyncDatabase(path)
+
   try {
     // Why: only takes effect on an empty file; it is what lets a purge hand pages
     // back in bounded steps instead of a full VACUUM. Set before any table exists.
@@ -171,6 +180,7 @@ function openWithPragmas(path: string): SyncDatabase {
     db.pragma('synchronous = NORMAL')
     db.pragma('journal_size_limit = 8388608')
     db.pragma('busy_timeout = 5000')
+
     return db
   } catch (error) {
     db?.close()
@@ -182,6 +192,7 @@ export function removeSessionSearchDatabase(path: string): void {
   if (path === ':memory:') {
     return
   }
+
   for (const suffix of ['', '-wal', '-shm', '-journal']) {
     removeTreeSync(`${path}${suffix}`)
   }
@@ -199,11 +210,14 @@ function isStaleSchema(db: SyncDatabase): boolean {
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'")
     .get()
+
   if (!table) {
     return false
   }
+
   const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
     | { value: string }
     | undefined
+
   return (row ? Number(row.value) : Number.NaN) !== SESSION_SEARCH_SCHEMA_VERSION
 }

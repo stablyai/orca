@@ -26,8 +26,10 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       this.offscreenBrowserBackend && this.agentBrowserBridge?.tabList
         ? this.agentBrowserBridge.tabList(worktreeId).tabs
         : []
+
     const publishedServerTabs = serverTabs.map((tab) => {
       const persistedProps = this.getPersistedUnifiedSessionTabProps(worktreeId, tab.browserPageId)
+
       return {
         type: 'browser' as const,
         // Why: an offscreen page has no separate workspace identity, so the page id
@@ -47,6 +49,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         isActive: tab.active === true
       }
     })
+
     const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
       .listPages(worktreeId)
       .map((page) => ({
@@ -64,6 +67,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         canGoForward: page.canGoForward,
         isActive: page.active
       }))
+
     return [...publishedServerTabs, ...publishedClientTabs]
   }
 
@@ -75,6 +79,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
         (candidate) => candidate.id === tabId || candidate.entityId === tabId
       ) ?? null
+
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
@@ -84,57 +89,73 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     options: { allowMissing?: boolean; force?: boolean } = {}
   ): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
       throw new Error('workspace_session_unavailable')
     }
+
     const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
       force: options.force
     })
+
     if (result.pinned) {
       throw new Error('terminal_tab_pinned')
     }
+
     if (!result.closed) {
       if (!options.allowMissing) {
         throw new Error('tab_not_found')
       }
     }
+
     const persisted = result.closed
       ? advanceTerminalTopologyRevision(result.session, worktreeId)
       : session
+
     this.setWorkspaceSessionForWorktree(worktreeId, persisted)
     const staged = this.getWorkspaceSessionForWorktree(worktreeId)
+
     try {
       this.store.flushOrThrow()
     } catch (error) {
       const current = this.getWorkspaceSessionForWorktree(worktreeId)
+
       if (staged && current) {
         const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
+
         if (rolledBack !== current) {
           this.setWorkspaceSessionForWorktree(worktreeId, rolledBack)
         }
       }
+
       throw error
     }
+
     return result.ptyIdsToKill
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+
     const orderIndexByTabId = new Map(tabOrder.map((tabId, index) => [tabId, index]))
     const tabs = session.tabsByWorktree[worktreeId] ?? []
+
     const reordered = [...tabs]
       .sort((a, b) => {
         const aIndex = orderIndexByTabId.get(a.id) ?? Number.MAX_SAFE_INTEGER
         const bIndex = orderIndexByTabId.get(b.id) ?? Number.MAX_SAFE_INTEGER
+
         return aIndex - bIndex || a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
       })
       .map((tab, index) => ({
         ...tab,
         sortOrder: index
       }))
+
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
       tabsByWorktree: {
@@ -148,8 +169,10 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+
     const result = this.toMobileSessionTabsResult(snapshot)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
+
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(
         this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
@@ -186,6 +209,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     targetWorktreeId: string | null = null
   ): Promise<Set<string> | null> {
     const inventory = await this.refreshMobileSessionPtyInventory(targetWorktreeId)
+
     return inventory ? new Set(inventory.livePtyIds) : null
   }
 
@@ -197,12 +221,15 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     if (targetWorktreeId !== null && targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       return this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
     }
+
     if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
       // Fleet-wide refreshes share one aggregate controller inventory.
       const pending = this.pendingMobileSessionPtyAggregateInventoryRefresh
+
       if (pending) {
         return pending
       }
+
       // Why: reconnect exit bursts share one authoritative daemon inventory
       // instead of multiplying a full cross-generation list RPC per stale tab.
       const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
@@ -210,9 +237,12 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
           this.pendingMobileSessionPtyAggregateInventoryRefresh = null
         }
       })
+
       this.pendingMobileSessionPtyAggregateInventoryRefresh = refresh
+
       return refresh
     }
+
     return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
   }
 }

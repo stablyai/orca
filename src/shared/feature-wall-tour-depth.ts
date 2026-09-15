@@ -71,13 +71,16 @@ function getFurthestDepthStep(
 ): FeatureWallTourDepthStep | undefined {
   let furthest: FeatureWallTourDepthStep | undefined
   let furthestRank = -1
+
   for (const step of steps) {
     const rank = DEPTH_STEP_RANK.get(step) ?? -1
+
     if (rank > furthestRank) {
       furthest = step
       furthestRank = rank
     }
   }
+
   return furthest
 }
 
@@ -90,12 +93,15 @@ export function getFeatureWallTourDepthStep(input: {
   if (input.workflowId === 'agents-orchestration') {
     return AGENT_DEPTH_STEP[input.agentStepId ?? 'statuses']
   }
+
   if (input.workflowId === 'workbench') {
     return WORKBENCH_DEPTH_STEP[input.workbenchStepId ?? 'terminal']
   }
+
   if (input.workflowId === 'review') {
     return REVIEW_DEPTH_STEP[input.reviewStepId ?? 'notes']
   }
+
   return input.workflowId
 }
 
@@ -109,7 +115,9 @@ export function buildFeatureWallTourDepthSummary(
     ...[...input.visitedWorkbenchSteps].map((step) => WORKBENCH_DEPTH_STEP[step]),
     ...[...input.visitedReviewSteps].map((step) => REVIEW_DEPTH_STEP[step])
   ]
+
   const furthestStep = getFurthestDepthStep(visitedDepthSteps)
+
   return {
     ...(furthestStep ? { furthest_step: furthestStep } : {}),
     ...(input.lastGroupId ? { last_group_id: input.lastGroupId } : {}),

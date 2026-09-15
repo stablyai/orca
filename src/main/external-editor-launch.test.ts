@@ -24,6 +24,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     const spec = resolveExternalEditorLaunchSpec('cursor', '/tmp/workspace', {
       platform: 'darwin'
     })
+
     expect(spec).toEqual({
       kind: 'executable',
       hideWindowsConsole: true,

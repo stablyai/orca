@@ -73,6 +73,7 @@ vi.mock('../settings/CliSkillRuntimeSetup', () => ({
 vi.mock('../settings/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown> & { children?: ReactNode }) => {
     mocks.panelProps.push(props)
+
     return (
       <section data-testid="linear-skill-inline-panel">
         <h2>{String(props.title)}</h2>
@@ -90,6 +91,7 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function cliStatus(overrides: Partial<CliInstallStatus>): CliInstallStatus {
@@ -129,6 +131,7 @@ async function unmountPrompt(): Promise<void> {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -270,6 +273,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
         activeRuntimeEnvironmentId: null
       }
     } satisfies ComponentProps<typeof LinearAgentSkillSetupPrompt>
+
     await snoozeInitialModal(wslProps)
     await renderPrompt(wslProps)
 
@@ -289,6 +293,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as
       | ReminderToastAction
       | undefined
+
     await act(async () => {
       action?.onClick?.()
     })
@@ -311,6 +316,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
       const callbacks = vi.mocked(toast.warning).mock.calls.at(-1)?.[1] as
         | ReminderToastCallbacks
         | undefined
+
       callbacks?.[callbackName]?.()
 
       expect(
@@ -341,6 +347,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as
       | ReminderToastAction
       | undefined
+
     await act(async () => {
       action?.onClick?.()
     })

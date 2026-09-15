@@ -29,14 +29,17 @@ export function withoutErasedRequiredWorktreeFields(
   const erased = Object.keys(ERASURE_PROTECTED_KEYS).filter(
     (key) => updates[key as keyof WorktreeMeta] === undefined && Object.hasOwn(updates, key)
   )
+
   if (erased.length === 0) {
     return updates
   }
 
   const next = { ...updates }
+
   for (const key of erased) {
     delete next[key as keyof WorktreeMeta]
   }
+
   return next
 }
 
@@ -49,11 +52,13 @@ export function applyWorktreeUpdates(
   const updates = withoutErasedRequiredWorktreeFields(rawUpdates)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const worktrees = worktreesByRepo[repoId]
+
   if (!worktrees) {
     return worktreesByRepo
   }
 
   let changed = false
+
   const nextWorktrees = worktrees.map((worktree) => {
     if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
       return worktree
@@ -61,8 +66,10 @@ export function applyWorktreeUpdates(
 
     changed = true
     const next = { ...worktree, ...updates }
+
     if (updates.displayNameIsPinned !== undefined) {
       next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
+
       if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
         const automaticName = branchName(next.branch)
         // A detached worktree has no branch-derived label; keep the old text until the host
@@ -70,8 +77,10 @@ export function applyWorktreeUpdates(
         next.displayName = automaticName || worktree.displayName
       }
     }
+
     return next
   })
+
   if (!changed) {
     return worktreesByRepo
   }

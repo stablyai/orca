@@ -15,9 +15,11 @@ function nonEmptyString(value: unknown): string | null {
 /** `thread/start`, `thread/resume`, and `thread/started` all name the thread. */
 export function readCodexThreadId(payload: unknown): string | null {
   const root = record(payload)
+
   if (!root) {
     return null
   }
+
   return nonEmptyString(record(root.thread)?.id) ?? nonEmptyString(root.threadId)
 }
 
@@ -25,6 +27,7 @@ export function readCodexThreadId(payload: unknown): string | null {
  *  it; a null just falls back to the existing session-file resolver. */
 export function readCodexThreadPath(payload: unknown): string | null {
   const root = record(payload)
+
   return root ? nonEmptyString(record(root.thread)?.path) : null
 }
 
@@ -32,27 +35,34 @@ export function readCodexThreadPath(payload: unknown): string | null {
  *  the same under `turn`, and older builds put `turnId` on the envelope. */
 export function readCodexTurnId(payload: unknown): string | null {
   const root = record(payload)
+
   if (!root) {
     return null
   }
+
   return nonEmptyString(record(root.turn)?.id) ?? nonEmptyString(root.turnId)
 }
 
 /** `turn/completed` carries `turn.status`; thread history puts `status` on the turn record itself. */
 export function readCodexTurnStatus(payload: unknown): string | null {
   const root = record(payload)
+
   if (!root) {
     return null
   }
+
   return nonEmptyString(record(root.turn)?.status) ?? nonEmptyString(root.status)
 }
 
 /** Codex's own turn duration, already in milliseconds; absent or malformed reads as null. */
 export function readCodexTurnDurationMs(payload: unknown): number | null {
   const root = record(payload)
+
   if (!root) {
     return null
   }
+
   const value = record(root.turn)?.durationMs ?? root.durationMs
+
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }

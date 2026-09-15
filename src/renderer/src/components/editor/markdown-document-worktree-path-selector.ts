@@ -8,5 +8,6 @@ export function selectMarkdownDocumentWorktreePath(
   if (!worktreeId) {
     return null
   }
+
   return getWorktreeMapFromState(state).get(worktreeId)?.path ?? null
 }

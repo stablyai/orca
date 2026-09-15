@@ -13,6 +13,7 @@ export function doctorEphemeralVmRecipe(args: {
   localExecutionSupported?: boolean
 }): EphemeralVmRecipeDoctorResult {
   const checks: EphemeralVmRecipeDoctorCheck[] = []
+
   if (!args.localExecutionSupported) {
     checks.push({
       id: 'recipe.execution_target',
@@ -20,8 +21,10 @@ export function doctorEphemeralVmRecipe(args: {
       message: 'Ephemeral VM recipes run on the local desktop host in v1.',
       remediation: 'Use a local repo checkout for the recipe, or add remote recipe execution later.'
     })
+
     return buildDoctorResult(args.recipeId, args.repoPath, checks)
   }
+
   if (!existsSync(args.repoPath) || !statSync(args.repoPath).isDirectory()) {
     checks.push({
       id: 'repo.path',
@@ -29,6 +32,7 @@ export function doctorEphemeralVmRecipe(args: {
       message: `Repo path does not exist or is not a directory: ${args.repoPath}`,
       remediation: 'Pass the local repo that contains orca.yaml.'
     })
+
     return buildDoctorResult(args.recipeId, args.repoPath, checks)
   }
 
@@ -41,11 +45,13 @@ export function doctorEphemeralVmRecipe(args: {
       : `Recipe "${args.recipeId}" was not found in environmentRecipes.`,
     ...(recipe ? {} : { remediation: 'Check the recipe id or add it to environmentRecipes.' })
   })
+
   if (!recipe) {
     return buildDoctorResult(args.recipeId, args.repoPath, checks)
   }
 
   checks.push(checkCommandPath(args.repoPath, recipe.create, 'recipe.create'))
+
   if (recipe.destroyDisabled) {
     checks.push({
       id: 'recipe.destroy',
@@ -67,9 +73,11 @@ export function doctorEphemeralVmRecipe(args: {
   if (recipe.suspend) {
     checks.push(checkCommandPath(args.repoPath, recipe.suspend, 'recipe.suspend'))
   }
+
   if (recipe.resume) {
     checks.push(checkCommandPath(args.repoPath, recipe.resume, 'recipe.resume'))
   }
+
   // Why: a workspace suspended by `suspend` can only be woken if `resume` exists;
   // defining one without the other strands the workspace asleep.
   if (Boolean(recipe.suspend) !== Boolean(recipe.resume)) {
@@ -86,13 +94,17 @@ export function doctorEphemeralVmRecipe(args: {
 
 export function firstRecipeCommandToken(command: string): string | null {
   const trimmed = command.trim()
+
   if (!trimmed) {
     return null
   }
+
   const quoted = trimmed.match(/^"([^"]+)"/) ?? trimmed.match(/^'([^']+)'/)
+
   if (quoted) {
     return quoted[1] ?? null
   }
+
   return trimmed.split(/\s+/)[0] ?? null
 }
 
@@ -102,6 +114,7 @@ function checkCommandPath(
   id: string
 ): EphemeralVmRecipeDoctorCheck {
   const executable = firstRecipeCommandToken(command)
+
   if (!executable) {
     return {
       id,
@@ -110,6 +123,7 @@ function checkCommandPath(
       remediation: 'Set a repo-relative command path.'
     }
   }
+
   if (isAbsolute(executable)) {
     return {
       id,
@@ -118,6 +132,7 @@ function checkCommandPath(
       remediation: 'Prefer a repo-relative script so the recipe works across machines.'
     }
   }
+
   if (!executable.startsWith('./') && !executable.startsWith('.\\')) {
     return {
       id,
@@ -126,7 +141,9 @@ function checkCommandPath(
       remediation: 'Use a repo-relative script such as ./scripts/orca-vm/start.sh.'
     }
   }
+
   const scriptPath = join(repoPath, normalize(executable))
+
   if (!existsSync(scriptPath)) {
     return {
       id,
@@ -135,6 +152,7 @@ function checkCommandPath(
       remediation: 'Create the script or update the recipe command path.'
     }
   }
+
   // Why: a non-executable script fails create with a confusing EACCES. The exec
   // bit is a POSIX concept — skip on Windows, where it does not apply.
   if (process.platform !== 'win32') {
@@ -149,6 +167,7 @@ function checkCommandPath(
       }
     }
   }
+
   return {
     id,
     status: 'pass',

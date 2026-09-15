@@ -102,6 +102,7 @@ export function normalizeSourceControlActionRecipe(
 
   const normalized: SourceControlActionRecipe = {}
   const agentId = value.agentId
+
   if (
     agentId === null ||
     isTuiAgent(agentId) ||
@@ -109,12 +110,15 @@ export function normalizeSourceControlActionRecipe(
   ) {
     normalized.agentId = agentId
   }
+
   if (typeof value.commandInputTemplate === 'string') {
     normalized.commandInputTemplate = value.commandInputTemplate
   }
+
   if (typeof value.agentArgs === 'string') {
     normalized.agentArgs = value.agentArgs
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -126,15 +130,19 @@ export function normalizeSourceControlAiActionDefaults(
   }
 
   const normalized: SourceControlAiActionDefaults = {}
+
   for (const [key, item] of Object.entries(value)) {
     if (!isSafeRecordKey(key) || !isSourceControlActionId(key)) {
       continue
     }
+
     const defaultValue = normalizeSourceControlActionRecipe(item)
+
     if (defaultValue) {
       normalized[key] = defaultValue
     }
   }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -143,6 +151,7 @@ export function readSourceControlActionDefault(
   actionId: SourceControlActionId
 ): SourceControlActionRecipe {
   const value = defaults?.[actionId]
+
   return {
     ...(value?.agentId !== undefined ? { agentId: value.agentId } : {}),
     ...(typeof value?.commandInputTemplate === 'string'
@@ -157,6 +166,7 @@ export function resolveSourceControlActionCommandTemplate(
   actionId: SourceControlActionId
 ): string {
   const template = readSourceControlActionDefault(defaults, actionId).commandInputTemplate
+
   return template !== undefined
     ? template
     : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
@@ -192,13 +202,16 @@ export function renderSourceControlActionCommandTemplate(
     /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}|\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}/g,
     (match, doubleName, singleName) => {
       const name = (doubleName ?? singleName) as string
+
       // Why: placeholder names may start with letters or underscores.
       // Why: only own keys are real variables; inherited Object.prototype names
       // (e.g. `constructor`) must stay visible instead of rendering their value.
       if (!Object.hasOwn(variables, name)) {
         return match
       }
+
       const value = variables[name]
+
       return value === undefined || value === null ? match : value
     }
   )

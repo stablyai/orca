@@ -40,6 +40,7 @@ export function useSidebarProjectDrop(): {
   useEffect(() => {
     document.addEventListener('drop', clearDragState, true)
     document.addEventListener('dragend', clearDragState, true)
+
     return () => {
       document.removeEventListener('drop', clearDragState, true)
       document.removeEventListener('dragend', clearDragState, true)
@@ -49,9 +50,11 @@ export function useSidebarProjectDrop(): {
   const handleProjectDropPaths = useCallback(
     async (paths: readonly string[]) => {
       const pathResolution = resolveSidebarProjectDropPath(paths)
+
       if (pathResolution.status === 'empty') {
         return
       }
+
       if (pathResolution.status === 'multiple') {
         toast.warning(
           translate(
@@ -59,8 +62,10 @@ export function useSidebarProjectDrop(): {
             'Drop one folder at a time.'
           )
         )
+
         return
       }
+
       if (remoteRuntimeActive) {
         toast.error(
           translate(
@@ -74,16 +79,20 @@ export function useSidebarProjectDrop(): {
             )
           }
         )
+
         return
       }
 
       setIsHandlingDrop(true)
+
       try {
         await window.api.fs.authorizeExternalPath({ targetPath: pathResolution.path })
         const stat = await window.api.fs.stat({ filePath: pathResolution.path })
+
         if (!mountedRef.current) {
           return
         }
+
         if (!stat.isDirectory) {
           toast.error(
             translate(
@@ -91,8 +100,10 @@ export function useSidebarProjectDrop(): {
               'Drop a folder to add it as a project.'
             )
           )
+
           return
         }
+
         openModal('add-repo', { droppedLocalPath: pathResolution.path })
       } catch (error) {
         if (mountedRef.current) {
@@ -120,6 +131,7 @@ export function useSidebarProjectDrop(): {
       if (data.target !== NATIVE_FILE_DROP_TARGET.projectSidebar) {
         return
       }
+
       void handleProjectDropPaths(data.paths)
     })
   }, [handleProjectDropPaths])
@@ -130,6 +142,7 @@ export function useSidebarProjectDrop(): {
         if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
           return
         }
+
         dragDepthRef.current += 1
         setIsDragOver(true)
       },
@@ -137,6 +150,7 @@ export function useSidebarProjectDrop(): {
         if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
           return
         }
+
         event.preventDefault()
         event.dataTransfer.dropEffect = remoteRuntimeActive ? 'none' : 'copy'
         setIsDragOver(true)
@@ -145,7 +159,9 @@ export function useSidebarProjectDrop(): {
         if (!hasNativeFileDragTypes(event.dataTransfer.types)) {
           return
         }
+
         dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+
         if (dragDepthRef.current === 0) {
           setIsDragOver(false)
         }

@@ -24,6 +24,7 @@ const { homedirMock, promotionTestState } = vi.hoisted(() => ({
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -32,13 +33,16 @@ vi.mock('node:os', async (importOriginal) => {
 
 vi.mock('../codex-accounts/fs-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexFsUtils>()
+
   return {
     ...actual,
     writeFileAtomically: (...args: Parameters<typeof actual.writeFileAtomically>) => {
       promotionTestState.atomicWritePaths.push(args[0])
+
       if (promotionTestState.failAtomicWrite) {
         throw new Error('injected atomic write failure')
       }
+
       return actual.writeFileAtomically(...args)
     }
   }
@@ -56,7 +60,9 @@ const CODEX_TUI_BLOCK =
   '[tui]\nstatus_line = ["model-with-reasoning", "task-progress"]\nstatus_line_use_colors = true\nterminal_title = ["model"]\ntheme = "dark-photon"\n'
 
 let tmpHome: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -67,6 +73,7 @@ beforeEach(() => {
   homedirMock.mockReturnValue(tmpHome)
   promotionTestState.failAtomicWrite = false
   promotionTestState.atomicWritePaths.length = 0
+
   // Why: promotion writes into homedir()/.codex — if the mock ever fails to
   // intercept, these tests would rewrite the developer's real Codex config.
   if (homedir() !== tmpHome) {
@@ -77,11 +84,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -121,9 +130,11 @@ function simulateCodexSettingWrite(key: string, rawValue: string): void {
   const existing = existsSync(runtimeConfigPath()) ? readFileSync(runtimeConfigPath(), 'utf-8') : ''
   const linePattern = new RegExp(`^${key}[ \\t]*=.*$`, 'm')
   const rendered = `${key} = ${rawValue}`
+
   const next = linePattern.test(existing)
     ? existing.replace(linePattern, rendered)
     : `${rendered}\n${existing}`
+
   writeFileSync(runtimeConfigPath(), next, 'utf-8')
 }
 

@@ -10,6 +10,7 @@ import {
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
   const { id, ...rest } = overrides
+
   return {
     id,
     worktreeId: 'wt-1',

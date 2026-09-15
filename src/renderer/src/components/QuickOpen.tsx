@@ -37,16 +37,20 @@ export default function QuickOpen(): React.JSX.Element | null {
   useEffect(() => {
     if (visible) {
       setLingering(true)
+
       return
     }
+
     // Why: keep scan cancellation and the dialog exit animation mounted before releasing remote file state.
     const timer = window.setTimeout(() => setLingering(false), QUICK_OPEN_CLOSE_LINGER_MS)
+
     return () => window.clearTimeout(timer)
   }, [visible])
 
   if (!visible && !lingering) {
     return null
   }
+
   return <QuickOpenContent visible={visible} />
 }
 
@@ -58,6 +62,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
+
   const { files, loading, loadError, truncated } = useRuntimeFileListForWorktree({
     enabled: visible,
     worktreeId: activeWorktreeId,
@@ -75,14 +80,17 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   // prevents unrelated store updates (which can produce a new excludePaths
   // array reference) from wiping a query the user is currently typing.
   const [previousVisible, setPreviousVisible] = useState(visible)
+
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
+
     if (visible && query !== '') {
       setQuery('')
     }
   }
 
   const indexedFiles = useMemo(() => prepareQuickOpenFiles(files), [files])
+
   const filtered = useMemo(
     () => rankQuickOpenFiles(deferredQuery, indexedFiles),
     [deferredQuery, indexedFiles]
@@ -93,6 +101,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+
       // Why: opening a file moves focus into the editor; don't restore focus to
       // the surface that was active before QuickOpen opened.
       skipReturnFocus()
@@ -150,6 +159,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
         ) : loadError ? (
           (() => {
             const guidance = parseQuickOpenInstallRgGuidance(loadError)
+
             return guidance ? (
               <QuickOpenInstallRgGuidance
                 reason={guidance.reason}

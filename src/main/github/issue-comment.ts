@@ -30,10 +30,13 @@ export async function addIssueComment(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
+
   await acquire()
+
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -46,6 +49,7 @@ export async function addIssueComment(
       ],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as {
       id?: number
       node_id?: string | null
@@ -54,9 +58,11 @@ export async function addIssueComment(
       created_at?: string
       html_url?: string
     }
+
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
+
     const comment: PRComment = {
       id: data.id,
       reactionSubjectId: data.node_id?.trim() || undefined,
@@ -67,9 +73,11 @@ export async function addIssueComment(
       url: data.html_url ?? '',
       isBot: data.user?.type === 'Bot'
     }
+
     return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
+
     return { ok: false, error: classifyGhError(stderr).message }
   } finally {
     release()

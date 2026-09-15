@@ -7,6 +7,7 @@ vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveForegroundMock,
   confirmShellForegroundProcess: vi.fn()
 }))
+
 import {
   hasLocalPtyChildProcesses,
   inspectLocalPtyChildProcesses
@@ -33,7 +34,9 @@ function registerPane(id: string, foreground: string | (() => string), shell?: s
     pause() {},
     resume() {}
   }
+
   ptyProcesses.set(id, pane)
+
   if (shell) {
     ptyShellName.set(id, shell)
   }
@@ -100,9 +103,11 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
       'pty-closing',
       () => {
         reads += 1
+
         if (reads > 1) {
           throw new Error('EBADF: bad file descriptor')
         }
+
         return '/bin/zsh'
       },
       '/bin/zsh'

@@ -25,6 +25,7 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: MarkupShape): vo
   ctx.lineJoin = 'round'
   ctx.strokeStyle = shape.color
   ctx.fillStyle = shape.color
+
   switch (shape.kind) {
     case 'pen':
       drawStroke(ctx, shape)
@@ -45,6 +46,7 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: MarkupShape): vo
       drawText(ctx, shape)
       break
   }
+
   ctx.restore()
 }
 
@@ -76,19 +78,24 @@ function strokePolyline(
   if (points.length === 0) {
     return
   }
+
   if (points.length === 1) {
     // Why: a tap (single point) still leaves a visible dot.
     const point = points[0]
     ctx.beginPath()
     ctx.arc(point.x, point.y, Math.max(width / 2, 1), 0, Math.PI * 2)
     ctx.fill()
+
     return
   }
+
   ctx.beginPath()
   ctx.moveTo(points[0].x, points[0].y)
+
   for (let i = 1; i < points.length; i += 1) {
     ctx.lineTo(points[i].x, points[i].y)
   }
+
   ctx.stroke()
 }
 
@@ -99,9 +106,11 @@ function drawArrow(ctx: CanvasRenderingContext2D, shape: ArrowShape): void {
   ctx.lineTo(shape.to.x, shape.to.y)
   ctx.stroke()
   const head = arrowHeadGeometry(shape.from, shape.to, shape.width)
+
   if (!head) {
     return
   }
+
   ctx.beginPath()
   ctx.moveTo(head.left.x, head.left.y)
   ctx.lineTo(head.tip.x, head.tip.y)

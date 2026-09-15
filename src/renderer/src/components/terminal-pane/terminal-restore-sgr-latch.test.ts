@@ -11,12 +11,15 @@ import {
 import { restoreScrollbackBuffers } from './layout-serialization'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const UNCLOSED_BOLD_FIXTURE = 'ORCA-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'
+
 const terminals: Terminal[] = []
 
 function createTerminal(): Terminal {
   const terminal = new Terminal({ cols: 40, rows: 6, scrollback: 20, allowProposedApi: true })
   terminals.push(terminal)
+
   return terminal
 }
 
@@ -26,25 +29,31 @@ function writeTerminal(terminal: Terminal, data: string): Promise<void> {
 
 function boldAtText(terminal: Terminal, text: string): number {
   const buffer = terminal.buffer.normal
+
   for (let row = 0; row < buffer.length; row += 1) {
     const line = buffer.getLine(row)
     const column = line?.translateToString(true).indexOf(text) ?? -1
+
     if (line && column >= 0) {
       return line.getCell(column)?.isBold() ?? 0
     }
   }
+
   throw new Error(`Missing terminal text: ${text}`)
 }
 
 function foregroundAtText(terminal: Terminal, text: string): number {
   const buffer = terminal.buffer.normal
+
   for (let row = 0; row < buffer.length; row += 1) {
     const line = buffer.getLine(row)
     const column = line?.translateToString(true).indexOf(text) ?? -1
+
     if (line && column >= 0) {
       return line.getCell(column)?.getFgColor() ?? -1
     }
   }
+
   throw new Error(`Missing terminal text: ${text}`)
 }
 
@@ -53,14 +62,18 @@ async function restoreBuffer(
   options: { initialState?: string; followingOutput?: string } = {}
 ): Promise<Terminal> {
   const terminal = createTerminal()
+
   if (options.initialState) {
     await writeTerminal(terminal, options.initialState)
   }
+
   const pane = { id: 1, terminal }
+
   const manager = {
     getPanes: () => [pane],
     hasWebglRenderer: () => true
   }
+
   restoreScrollbackBuffers(
     manager as unknown as Parameters<typeof restoreScrollbackBuffers>[0],
     { [LEAF_ID]: buffer },
@@ -68,6 +81,7 @@ async function restoreBuffer(
     { current: new Map() }
   )
   await writeTerminal(terminal, options.followingOutput ?? 'fresh-shell')
+
   return terminal
 }
 
@@ -75,6 +89,7 @@ function serialize(data: string): { terminal: Terminal; addon: SerializeAddon; d
   const terminal = createTerminal()
   const addon = new SerializeAddon()
   terminal.loadAddon(addon)
+
   return { terminal, addon, data }
 }
 
@@ -153,6 +168,7 @@ describe('fresh-shell terminal restore SGR state', () => {
   it('keeps the synthetic saved-cursor register from restoring bold', async () => {
     const source = serialize('\x1b[1mBOLD')
     await writeTerminal(source.terminal, source.data)
+
     const snapshot = serializeWithAbsoluteCursor(source.addon, source.terminal, undefined, {
       x: 10,
       y: 0,
@@ -167,11 +183,13 @@ describe('fresh-shell terminal restore SGR state', () => {
   it('grounds the synthetic saved cursor after normal-buffer daemon reattach', async () => {
     const source = serialize('\x1b[1mBOLD')
     await writeTerminal(source.terminal, source.data)
+
     const snapshot = serializeWithAbsoluteCursor(source.addon, source.terminal, undefined, {
       x: 10,
       y: 0,
       originMode: false
     })
+
     const restored = createTerminal()
 
     await writeTerminal(restored, snapshot)

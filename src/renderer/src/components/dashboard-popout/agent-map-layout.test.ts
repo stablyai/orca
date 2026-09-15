@@ -12,12 +12,15 @@ import {
 import type * as WorktreePackingModule from './agent-map-worktree-packing'
 
 const packWorktrees = vi.hoisted(() => vi.fn())
+
 vi.mock('./agent-map-worktree-packing', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreePackingModule>()
+
   return {
     ...actual,
     packAgentMapWorktrees: (...args: Parameters<typeof actual.packAgentMapWorktrees>) => {
       packWorktrees()
+
       return actual.packAgentMapWorktrees(...args)
     }
   }
@@ -70,6 +73,7 @@ describe('agent map layout', () => {
         parentWorktreeId: 'parent'
       })
     ])
+
     const project = layout.projects[0]
     const parent = project.worktrees.find((item) => item.worktreeId === 'parent')!
     const child = project.worktrees.find((item) => item.worktreeId === 'child')!
@@ -92,6 +96,7 @@ describe('agent map layout', () => {
         worktreeId: 'wt-c'
       })
     ]
+
     const layout = deriveAgentMapLayout(cards, NOW)
 
     expect(layout.projects.map((project) => project.id)).toEqual(['repo-a', 'repo-b'])
@@ -110,6 +115,7 @@ describe('agent map layout', () => {
         expect(
           Math.hypot(worktree.x - project.x, worktree.y - project.y) + worktree.radius
         ).toBeLessThan(project.radius)
+
         for (const agent of worktree.agents) {
           expect(
             Math.hypot(agent.x - worktree.x, agent.y - worktree.y) + agent.radius
@@ -168,6 +174,7 @@ describe('agent map layout', () => {
       ),
       NOW
     )
+
     const project = layout.projects[0]
     const worktree = project.worktrees[0]
     const projectTop = project.y - project.radius
@@ -180,6 +187,7 @@ describe('agent map layout', () => {
 
   it('keeps sparse project and workspace rings compact around their header bands', () => {
     const single = deriveAgentMapLayout([card()], NOW).projects[0]
+
     const four = deriveAgentMapLayout(
       Array.from({ length: 4 }, (_unused, index) => card({ paneKey: `agent-${index}` })),
       NOW
@@ -222,6 +230,7 @@ describe('agent map layout', () => {
       ],
       NOW
     )
+
     const worktree = layout.projects[0].worktrees[0]
     const agents = new Map(worktree.agents.map((agent) => [agent.card.paneKey, agent]))
     const parent = agents.get('parent')!
@@ -232,6 +241,7 @@ describe('agent map layout', () => {
     expect(childA.y).toBeGreaterThan(parent.y)
     expect(childB.y).toBeGreaterThan(parent.y)
     expect(grandchild.y).toBeGreaterThan(childA.y)
+
     for (const agent of worktree.agents) {
       expect(Math.hypot(agent.x - worktree.x, agent.y - worktree.y) + agent.radius).toBeLessThan(
         worktree.radius
@@ -249,6 +259,7 @@ describe('agent map layout', () => {
         })
       )
     ]
+
     const first = deriveAgentMapLayout(cards, NOW).projects[0].worktrees[0]
     const second = deriveAgentMapLayout(cards, NOW).projects[0].worktrees[0]
     const parent = first.agents.find((agent) => agent.card.paneKey === 'parent')!
@@ -260,6 +271,7 @@ describe('agent map layout', () => {
       Math.max(...children.map((child) => child.x)) - Math.min(...children.map((child) => child.x))
     ).toBeLessThan(500)
     expect(first.radius).toBeLessThan(350)
+
     for (const [index, child] of children.entries()) {
       for (const other of children.slice(index + 1)) {
         expect(Math.hypot(child.x - other.x, child.y - other.y)).toBeGreaterThanOrEqual(
@@ -267,6 +279,7 @@ describe('agent map layout', () => {
         )
       }
     }
+
     expect(first.agents.map(({ card, x, y }) => ({ paneKey: card.paneKey, x, y }))).toEqual(
       second.agents.map(({ card, x, y }) => ({ paneKey: card.paneKey, x, y }))
     )
@@ -294,9 +307,11 @@ describe('agent map layout', () => {
       ],
       NOW
     )
+
     const worktrees = new Map(
       layout.projects[0].worktrees.map((worktree) => [worktree.worktreeId, worktree])
     )
+
     const parent = worktrees.get('parent-worktree')!
     const childA = worktrees.get('child-a-worktree')!
     const childB = worktrees.get('child-b-worktree')!
@@ -305,6 +320,7 @@ describe('agent map layout', () => {
     expect(childA.y).toBeGreaterThan(parent.y)
     expect(childB.y).toBeGreaterThan(parent.y)
     expect(grandchild.y).toBeGreaterThan(childA.y)
+
     for (const [index, worktree] of layout.projects[0].worktrees.entries()) {
       for (const other of layout.projects[0].worktrees.slice(index + 1)) {
         expect(Math.hypot(worktree.x - other.x, worktree.y - other.y)).toBeGreaterThanOrEqual(
@@ -327,9 +343,11 @@ describe('agent map layout', () => {
       ],
       NOW
     )
+
     const worktrees = new Map(
       layout.projects[0].worktrees.map((worktree) => [worktree.worktreeId, worktree])
     )
+
     const parent = worktrees.get('parent-worktree')!
     const child = worktrees.get('child-worktree')!
 
@@ -355,6 +373,7 @@ describe('agent map layout', () => {
       ],
       NOW
     )
+
     const projects = new Map(layout.projects.map((project) => [project.id, project]))
     const parent = projects.get('repo-parent')!
     const child = projects.get('repo-child')!
@@ -371,7 +390,9 @@ describe('agent map layout', () => {
       card({ paneKey: 'parent-b', worktreeId: 'parent-b' }),
       card({ paneKey: 'child', worktreeId: 'child', parentWorktreeId: 'parent-a' })
     ]
+
     const initial = updateAgentMapLayout(null, cards, NOW)
+
     const updated = updateAgentMapLayout(
       initial.cache,
       cards.map((candidate) =>
@@ -392,7 +413,9 @@ describe('agent map layout', () => {
       card({ paneKey: 'parent-b' }),
       card({ paneKey: 'child', parentPaneKey: 'parent-a' })
     ]
+
     const initial = updateAgentMapLayout(null, cards, NOW)
+
     const updated = updateAgentMapLayout(
       initial.cache,
       cards.map((candidate) =>
@@ -412,7 +435,9 @@ describe('agent map layout', () => {
       card({ paneKey: 'b', worktreeId: 'wt-a', startedAt: NOW - 2 * 60_000 }),
       card({ paneKey: 'c', worktreeId: 'wt-b' })
     ]
+
     const initial = deriveAgentMapLayout(initialCards, NOW)
+
     const updated = deriveAgentMapLayout(
       [
         { ...initialCards[0], bucket: 'attention', dotState: 'waiting' },
@@ -421,6 +446,7 @@ describe('agent map layout', () => {
       ],
       NOW
     )
+
     const initialAgents = initial.projects[0].worktrees[0].agents
     const updatedAgents = updated.projects[0].worktrees[0].agents
     const initialWorktrees = initial.projects[0].worktrees
@@ -441,12 +467,15 @@ describe('agent map layout', () => {
       card({ paneKey: 'a', worktreeId: 'wt-a' }),
       card({ paneKey: 'b', worktreeId: 'wt-b' })
     ]
+
     const initial = updateAgentMapLayout(null, initialCards, NOW)
     packWorktrees.mockClear()
+
     const updatedCards = [
       { ...initialCards[0], dotState: 'waiting' as const, worktreeName: 'Renamed' },
       { ...initialCards[1], startedAt: NOW - 60 * 60_000 }
     ]
+
     const updated = updateAgentMapLayout(initial.cache, updatedCards, NOW + 60_000)
 
     expect(updated.cache).toBe(initial.cache)
@@ -462,6 +491,7 @@ describe('agent map layout', () => {
       [...updatedCards, card({ paneKey: 'c', worktreeId: 'wt-c' })],
       NOW
     )
+
     expect(topologyChanged.cache).not.toBe(updated.cache)
     expect(packWorktrees).toHaveBeenCalled()
     expect(topologyChanged.cache.packingGeneration).toBe(2)
@@ -475,6 +505,7 @@ describe('agent map layout', () => {
         hostLabel: 'Builder'
       })
     ]
+
     const workspaces = [
       workspace({
         worktreeId: 'worktree-1',
@@ -483,6 +514,7 @@ describe('agent map layout', () => {
         hostLabel: 'Builder'
       })
     ]
+
     const initial = updateAgentMapLayout(null, cards, NOW, workspaces)
     packWorktrees.mockClear()
 
@@ -509,6 +541,7 @@ describe('agent map layout', () => {
       ),
       NOW
     )
+
     const project = layout.projects[0]
 
     expect(project.radius).toBeLessThan(700)
@@ -518,6 +551,7 @@ describe('agent map layout', () => {
     expect(
       new Set(project.worktrees.map((worktree) => worktree.y.toFixed(3))).size
     ).toBeGreaterThan(12)
+
     for (const [index, worktree] of project.worktrees.entries()) {
       for (const other of project.worktrees.slice(index + 1)) {
         expect(Math.hypot(worktree.x - other.x, worktree.y - other.y)).toBeGreaterThanOrEqual(
@@ -532,6 +566,7 @@ describe('agent map layout', () => {
       startedAt: NOW - 30 * 60_000,
       finishedAt: NOW - 20 * 60_000
     })
+
     const layout = deriveAgentMapLayout(
       [
         card({ paneKey: 'just-started', startedAt: NOW }),
@@ -551,6 +586,7 @@ describe('agent map layout', () => {
     for (const dotState of ['working', 'blocked', 'waiting', 'idle'] as const) {
       expect(agentMapNodeStatus(card({ dotState }))).toBe(dotState)
     }
+
     expect(agentMapNodeStatus(card({ dotState: 'working', workingMode: 'monitoring' }))).toBe(
       'monitoring'
     )
@@ -568,7 +604,9 @@ describe('agent map layout', () => {
       ),
       NOW
     )
+
     const active = deriveAgentMapLayout([card({ paneKey: 'active', dotState: 'working' })], NOW)
+
     const unseenDone = deriveAgentMapLayout(
       Array.from({ length: 5 }, (_, index) =>
         card({ paneKey: `done-${index}`, dotState: 'done', unseen: true })
@@ -586,14 +624,17 @@ describe('agent map layout', () => {
       Array.from({ length: 400 }, (_, index) => card({ paneKey: `agent-${index}` })),
       NOW
     )
+
     const worktree = layout.projects[0].worktrees[0]
 
     expect(worktree.agents).toHaveLength(400)
     let minimumDistance = Number.POSITIVE_INFINITY
+
     for (const [index, agent] of worktree.agents.entries()) {
       expect(Math.hypot(agent.x - worktree.x, agent.y - worktree.y) + agent.radius).toBeLessThan(
         worktree.radius
       )
+
       for (const other of worktree.agents.slice(index + 1)) {
         minimumDistance = Math.min(
           minimumDistance,
@@ -601,6 +642,7 @@ describe('agent map layout', () => {
         )
       }
     }
+
     expect(minimumDistance).toBeGreaterThanOrEqual(AGENT_MAP_AGENT_RADIUS * 2)
   })
 
@@ -615,12 +657,14 @@ describe('agent map layout', () => {
       ),
       NOW
     )
+
     const worktree = layout.projects[0].worktrees[0]
     const agents = new Map(worktree.agents.map((agent) => [agent.card.paneKey, agent]))
 
     expect(worktree.agents).toHaveLength(5_000)
     expect(Number.isFinite(worktree.radius)).toBe(true)
     expect(worktree.radius).toBeLessThan(1_000_000)
+
     for (const agent of worktree.agents) {
       if (agent.card.parentPaneKey) {
         expect(agent.y).toBeGreaterThan(agents.get(agent.card.parentPaneKey)!.y)
@@ -638,6 +682,7 @@ describe('agent map layout', () => {
       ],
       NOW
     )
+
     const worktree = layout.projects[0].worktrees[0]
     const parent = worktree.agents.find((agent) => agent.card.paneKey === 'parent')!
     const children = worktree.agents.filter((agent) => agent.card.parentPaneKey === 'parent')
@@ -645,6 +690,7 @@ describe('agent map layout', () => {
 
     expect(children.every((child) => child.y > parent.y)).toBe(true)
     expect(worktree.radius).toBeLessThan(1_000)
+
     for (const [index, child] of children.entries()) {
       for (const other of children.slice(index + 1)) {
         minimumDistance = Math.min(
@@ -653,6 +699,7 @@ describe('agent map layout', () => {
         )
       }
     }
+
     expect(minimumDistance).toBeGreaterThanOrEqual(AGENT_MAP_AGENT_RADIUS * 2)
   })
 })

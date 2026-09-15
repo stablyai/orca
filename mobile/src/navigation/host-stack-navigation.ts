@@ -79,9 +79,11 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
   }
+
   if (param === expectedHostId) {
     return true
   }
+
   try {
     return decodeURIComponent(param) === expectedHostId
   } catch {
@@ -94,16 +96,21 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
  *  Expo Router's internal navigator, so from there the root stack is one level down. */
 function focusedHostRoute(state: HostStackNavigationState): HostStackNavigationRoute | null {
   let current: HostStackNavigationState | undefined = state
+
   while (current) {
     const route: HostStackNavigationRoute | undefined = current.routes[current.index]
+
     if (!route) {
       return null
     }
+
     if (route.name === 'h') {
       return route
     }
+
     current = route.state
   }
+
   return null
 }
 
@@ -113,6 +120,7 @@ function mountedHostStack(
 ): { key: string; routeKey: string } | null {
   const hostState = hostContainer.state
   const hostRoute = hostState?.routes[hostState.index]
+
   if (
     !hostState?.key ||
     hostRoute?.name !== '[hostId]/index' ||
@@ -121,6 +129,7 @@ function mountedHostStack(
   ) {
     return null
   }
+
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
@@ -136,6 +145,7 @@ export function navigateToHostStackRoute(
   const state = navigation.getState()
   const hostState = state && focusedHostRoute(state)?.state
   const focused = hostState?.routes[hostState.index]
+
   if (
     hostState?.key &&
     focused?.key &&
@@ -149,6 +159,7 @@ export function navigateToHostStackRoute(
       source: focused.key,
       payload: { params: target.params }
     })
+
     return { cancel: () => {}, isActive: () => false, retarget: () => {} }
   }
 
@@ -156,10 +167,12 @@ export function navigateToHostStackRoute(
   let hostRouteSeen = false
   let selectedTarget = target
   let unsubscribeState = () => {}
+
   const dispose = () => {
     if (!active) {
       return
     }
+
     active = false
     unsubscribeState()
   }
@@ -169,25 +182,34 @@ export function navigateToHostStackRoute(
     if (!active) {
       return
     }
+
     const state = navigation.getState()
+
     if (!state) {
       return
     }
+
     const hostContainer = focusedHostRoute(state)
+
     if (hostContainer) {
       hostRouteSeen = true
     } else if (hostRouteSeen) {
       dispose()
+
       return
     }
+
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
+
     if (!hostStack) {
       if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
         router.replace(hostStackRouteHref(selectedTarget))
       }
+
       return
     }
+
     dispose()
     navigation.dispatch({
       type: 'REPLACE',
@@ -204,6 +226,7 @@ export function navigateToHostStackRoute(
     dispose()
     throw error
   }
+
   return {
     cancel: dispose,
     isActive: () => active,
@@ -224,9 +247,12 @@ export function coordinateHostStackNavigation(
 ): PendingHostStackNavigation {
   if (current?.hostId === hostId && current.controller.isActive()) {
     current.controller.retarget(target)
+
     return current
   }
+
   current?.controller.cancel()
+
   return {
     hostId,
     controller: navigateToHostStackRoute(navigation, router, hostId, target)

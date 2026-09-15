@@ -35,15 +35,20 @@ export function useNativeChatSessionOptionCommand(args: {
     mountedRef.current = true
     const observers = activeObserversRef.current
     const sends = activeSendsRef.current
+
     return () => {
       mountedRef.current = false
+
       for (const send of sends) {
         send.abort()
       }
+
       sends.clear()
+
       for (const observer of observers) {
         observer.dispose()
       }
+
       observers.clear()
     }
   }, [])
@@ -51,14 +56,17 @@ export function useNativeChatSessionOptionCommand(args: {
   const dispatch = useCallback(
     async (command, options) => {
       const target = resolveTarget()
+
       if (!target || disabled) {
         throw new Error('No live terminal is available.')
       }
+
       const sendController = new AbortController()
       activeSendsRef.current.add(sendController)
       // Why: block composer chat sends for the whole drain+observe+verify window.
       setIsDispatching(true)
       let observer: ClaudeModelSwitchConfirmationObserver | null = null
+
       try {
         // Why: chat sends keep a delayed Enter for 500ms. Drain them *before*
         // arming the model-switch observer so (a) that Enter cannot hit Claude's
@@ -66,11 +74,14 @@ export function useNativeChatSessionOptionCommand(args: {
         // window (Ctrl+U mid-observe can miss "Set model to …" markers).
         cancelNativeChatPtySends(target.ptyId)
         await waitForNativeChatPtyIdle(target.ptyId)
+
         if (!mountedRef.current || sendController.signal.aborted) {
           throw new Error('Chat UI command was canceled because the composer closed.')
         }
+
         const detectClaudeConfirmation =
           options?.detectAgentInteraction === 'claude-model-switch-confirmation'
+
         if (detectClaudeConfirmation) {
           observer = createClaudeModelSwitchConfirmationObserver({
             ptyId: target.ptyId,
@@ -79,13 +90,16 @@ export function useNativeChatSessionOptionCommand(args: {
           })
           activeObserversRef.current.add(observer)
           await observer.ready
+
           if (!mountedRef.current || sendController.signal.aborted) {
             throw new Error('Chat UI command was canceled because the composer closed.')
           }
+
           // Why: arm only after the observer reaches the live PTY tail, then
           // submit immediately so historical output cannot satisfy the match.
           observer.arm()
         }
+
         const accepted =
           agent === 'codex'
             ? await typeNativeChatCommand(
@@ -100,9 +114,11 @@ export function useNativeChatSessionOptionCommand(args: {
                 command,
                 sendController.signal
               )
+
         if (!accepted) {
           throw new Error('The terminal did not accept the command.')
         }
+
         // Why: start the model-switch detection clock only now that the command
         // has been accepted, so SSH/remote send latency doesn't eat the window
         // before the agent has responded.
@@ -114,10 +130,12 @@ export function useNativeChatSessionOptionCommand(args: {
         })
         setHistory((previous) => pushHistory(previous, command))
         const outcome = observer ? await observer.result : undefined
+
         return { outcome }
       } finally {
         activeSendsRef.current.delete(sendController)
         setIsDispatching(activeSendsRef.current.size > 0)
+
         if (observer) {
           activeObserversRef.current.delete(observer)
           observer.dispose()

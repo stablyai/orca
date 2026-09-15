@@ -35,11 +35,14 @@ afterEach(() => {
 describe('AgentHookServer listener replay', () => {
   it('preserves Codex sibling and lead state across relay listener restarts', () => {
     const server = new AgentHookServer()
+
     const send = (state: HookListenerState, payload: Record<string, unknown>): void => {
       const event = normalizeHookPayload(state, 'codex', buildBody(payload), 'production')
+
       if (!event) {
         throw new Error('normalizeHookPayload rejected a known-good Codex fixture')
       }
+
       server.ingestRemote(event, 'conn-1')
     }
 
@@ -50,6 +53,7 @@ describe('AgentHookServer listener replay', () => {
       prompt: 'coordinate reviewers',
       model: 'gpt-5.4'
     })
+
     for (const id of ['child-a', 'child-b']) {
       send(initialRelay, {
         hook_event_name: 'SubagentStart',
@@ -86,11 +90,13 @@ describe('AgentHookServer listener replay', () => {
 
   it('does not carry a remote Codex roster across connection cleanup', () => {
     const server = new AgentHookServer()
+
     const child = (id: string) => ({
       id,
       state: 'working' as const,
       startedAt: 1
     })
+
     server.ingestRemote(
       {
         paneKey: PANE,
@@ -127,9 +133,11 @@ describe('AgentHookServer listener replay', () => {
 
   it('restores a subagent roster the relay shed to fit the frame', () => {
     const server = new AgentHookServer()
+
     const roster = [
       { id: 'reviewer-1', agentType: 'reviewer', state: 'working' as const, startedAt: 1 }
     ]
+
     server.ingestRemote(
       {
         paneKey: PANE,
@@ -173,6 +181,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not carry Claude background work across connection cleanup', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(

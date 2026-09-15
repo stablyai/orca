@@ -52,6 +52,7 @@ function getRepoHostId(
   if (repo?.connectionId || repo?.executionHostId) {
     return getRepoExecutionHostId(repo)
   }
+
   return defaultHostId
 }
 
@@ -72,6 +73,7 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
 
 function getFallbackHost(hostId: ExecutionHostId): HostSectionOption {
   const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
+
   return {
     id: hostId,
     kind: isLocal ? 'local' : hostId.startsWith('ssh:') ? 'ssh' : 'runtime',
@@ -89,45 +91,55 @@ function countWorkspaceRows(rows: readonly Row[]): number {
   const seenWorktreeIds = new Set<string>()
   let pendingHeader: Extract<Row, { type: 'header' }> | null = null
   let pendingHeaderHadWorkspaces = false
+
   const flushHeader = (): void => {
     if (pendingHeader && !pendingHeaderHadWorkspaces) {
       if (pendingHeader.worktreeIds) {
         const headerWorktreeIds = new Set(pendingHeader.worktreeIds)
+
         for (const worktreeId of pendingHeader.worktreeIds) {
           if (!seenWorktreeIds.has(worktreeId)) {
             count += 1
             seenWorktreeIds.add(worktreeId)
           }
         }
+
         // Folder workspaces contribute to the header count but have no worktree id.
         count += Math.max(0, pendingHeader.count - headerWorktreeIds.size)
       } else {
         count += pendingHeader.count
       }
     }
+
     pendingHeader = null
     pendingHeaderHadWorkspaces = false
   }
+
   for (const row of rows) {
     if (row.type === 'header') {
       flushHeader()
       pendingHeader = row
       continue
     }
+
     if (row.type === 'item') {
       if (!seenWorktreeIds.has(row.worktree.id)) {
         count += 1
         seenWorktreeIds.add(row.worktree.id)
       }
+
       pendingHeaderHadWorkspaces = pendingHeader !== null
       continue
     }
+
     if (row.type === 'folder-workspace') {
       count += 1
       pendingHeaderHadWorkspaces = pendingHeader !== null
     }
   }
+
   flushHeader()
+
   return count
 }
 
@@ -136,12 +148,15 @@ function localizePendingRowsForHost(
   hostId: ExecutionHostId
 ): Extract<Row, { type: 'header' }>[] {
   const localized: Extract<Row, { type: 'header' }>[] = []
+
   for (const row of rows) {
     if (!row.hostWorktreeCounts) {
       localized.push(row)
       continue
     }
+
     const count = row.hostWorktreeCounts.get(hostId)
+
     if (count !== undefined && count > 0) {
       localized.push({
         ...row,
@@ -151,6 +166,7 @@ function localizePendingRowsForHost(
       })
     }
   }
+
   return localized
 }
 
@@ -181,6 +197,7 @@ export function addHostSectionRows(args: {
   const visibleHostIds =
     args.visibleWorkspaceHostIds ??
     (args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [args.workspaceHostScope])
+
   if (
     args.preferProjectGrouping &&
     args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE &&
@@ -188,6 +205,7 @@ export function addHostSectionRows(args: {
   ) {
     return [...args.rows]
   }
+
   if ((visibleHostIds && visibleHostIds.length <= 1) || args.hostOptions.length <= 1) {
     return [...args.rows]
   }
@@ -198,20 +216,26 @@ export function addHostSectionRows(args: {
   let pendingRows: Extract<Row, { type: 'header' }>[] = []
   let pendingRowsWereUsed = false
   const pendingRowsKeyByHostId = new Map<ExecutionHostId, string>()
+
   const flushUnusedPendingRows = (): void => {
     if (pendingRows.length === 0 || pendingRowsWereUsed) {
       return
     }
+
     const hostScopedRow = pendingRows.some((row) => row.hostWorktreeCounts)
+
     if (!hostScopedRow) {
       globalRows.push(...pendingRows)
+
       return
     }
+
     for (const row of pendingRows) {
       for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
         if (count <= 0) {
           continue
         }
+
         const hostRows = rowsByHostId.get(hostId) ?? []
         const hostIds = row.hostWorktreeIds?.get(hostId)
         hostRows.push({
@@ -227,11 +251,14 @@ export function addHostSectionRows(args: {
 
   for (const row of args.rows) {
     const rowHostId = getRowHostId(row, args.defaultHostId)
+
     if (rowHostId) {
       const hostRows = rowsByHostId.get(rowHostId) ?? []
+
       if (pendingRows.length > 0) {
         const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
         const pendingRowsKey = getPendingRowsKey(localizedPendingRows)
+
         if (
           localizedPendingRows.length > 0 &&
           pendingRowsKeyByHostId.get(rowHostId) !== pendingRowsKey
@@ -239,12 +266,15 @@ export function addHostSectionRows(args: {
           hostRows.push(...localizedPendingRows)
           pendingRowsKeyByHostId.set(rowHostId, pendingRowsKey)
         }
+
         pendingRowsWereUsed = pendingRowsWereUsed || localizedPendingRows.length > 0
       }
+
       hostRows.push(row)
       rowsByHostId.set(rowHostId, hostRows)
       continue
     }
+
     // Why: status/"All" headers describe the rows that follow. Buffer them
     // for every host-owned run so host remains above the existing grouping.
     if (row.type === 'header') {
@@ -259,11 +289,13 @@ export function addHostSectionRows(args: {
   flushUnusedPendingRows()
 
   const hostOrder: ExecutionHostId[] = []
+
   for (const host of args.hostOptions) {
     if (rowsByHostId.has(host.id)) {
       hostOrder.push(host.id)
     }
   }
+
   for (const hostId of rowsByHostId.keys()) {
     if (!hostOptionsById.has(hostId)) {
       hostOrder.push(hostId)
@@ -278,14 +310,19 @@ export function addHostSectionRows(args: {
   }
 
   const result: HostSectionRow[] = [...globalRows]
+
   for (const hostId of hostOrder) {
     const hostRows = rowsByHostId.get(hostId)
+
     if (!hostRows || hostRows.length === 0) {
       continue
     }
+
     const host = hostOptionsById.get(hostId) ?? getFallbackHost(hostId)
+
     const collapsed =
       args.forceCollapseHosts || (args.collapsedHostKeys?.has(`host:${host.id}`) ?? false)
+
     result.push({
       type: 'host-header',
       key: `host:${host.id}`,
@@ -299,6 +336,7 @@ export function addHostSectionRows(args: {
       collapsed,
       count: countWorkspaceRows(hostRows)
     })
+
     if (!collapsed) {
       result.push(...hostRows)
     }

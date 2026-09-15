@@ -26,10 +26,12 @@ const agentProviderSessionSchema = z.preprocess(
 function hasUnsafeLaunchEnvChars(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i)
+
     if (code <= 0x1f || code === 0x7f) {
       return true
     }
   }
+
   return false
 }
 
@@ -42,9 +44,12 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
     if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
       return undefined
     }
+
     const cleaned: Record<string, string> = Object.create(null)
+
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       const trimmedKey = key.trim()
+
       if (
         trimmedKey.length === 0 ||
         isUnsafeObjectKey(trimmedKey) ||
@@ -55,8 +60,10 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
       ) {
         return undefined
       }
+
       cleaned[trimmedKey] = value
     }
+
     return { ...cleaned }
   },
   z.record(z.string(), z.string())
@@ -79,6 +86,7 @@ const sleepingAgentLaunchConfigBaseSchema = z.object({
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
   const parsed = sleepingAgentLaunchConfigBaseSchema.safeParse(raw)
+
   return parsed.success ? parsed.data : undefined
 }, sleepingAgentLaunchConfigBaseSchema.optional())
 

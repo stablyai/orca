@@ -34,14 +34,17 @@ export function computeWorktreeSidebarHeaderDropPreview<
   }
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
+
   // Why: every preview branch, including estimated edge slots, must stay
   // inside the measured list content rather than fabricate a reorder below it.
   if (args.contentBottom !== undefined && localY > args.contentBottom) {
     return null
   }
+
   const first = args.rects[0]!
   const last = args.rects.at(-1)!
   const lastBoundaryBottom = Math.max(last.bottom, last.sectionBottom ?? last.bottom)
+
   const boundaryDrop = getWorktreeSidebarBoundaryDrop({
     localY,
     firstRect: {
@@ -58,9 +61,11 @@ export function computeWorktreeSidebarHeaderDropPreview<
     },
     sourceGroupSize: args.headerCount
   })
+
   if (boundaryDrop.kind === 'outside') {
     return null
   }
+
   if (boundaryDrop.kind === 'drop') {
     return {
       dropIndex: boundaryDrop.dropIndex,
@@ -69,11 +74,14 @@ export function computeWorktreeSidebarHeaderDropPreview<
   }
 
   const hoveredRect = args.rects.find((rect) => localY >= rect.top && localY <= rect.bottom)
+
   if (hoveredRect) {
     const mid = (hoveredRect.top + hoveredRect.bottom) / 2
     const dropIndex = localY < mid ? hoveredRect.headerIndex : hoveredRect.headerIndex + 1
+
     const nextRect =
       localY < mid ? hoveredRect : args.rects.find((rect) => rect.headerIndex >= dropIndex)
+
     const indicatorY = nextRect
       ? Math.max(0, nextRect.top - INDICATOR_GAP_PX)
       : Math.max(hoveredRect.bottom, hoveredRect.sectionBottom ?? hoveredRect.bottom) +
@@ -90,9 +98,11 @@ export function computeWorktreeSidebarHeaderDropPreview<
   // accidental scope of 22d5989ed (#6609 only required correct reorder indices),
   // and vanishing here makes the drop a silent no-op.
   const boundary = pickNearestHeaderBoundarySlot(args.rects, localY)
+
   if (!boundary) {
     return null
   }
+
   return {
     dropIndex: boundary.dropIndex,
     dropIndicatorY: Math.max(args.scrollTop, boundary.indicatorY)
@@ -110,6 +120,7 @@ function pickNearestHeaderBoundarySlot(
 ): WorktreeSidebarHeaderBoundarySlot | null {
   let prevRect: WorktreeSidebarHeaderDragRect | undefined
   let nextRect: WorktreeSidebarHeaderDragRect | undefined
+
   for (const rect of rects) {
     if (rect.top <= localY) {
       prevRect = rect
@@ -125,6 +136,7 @@ function pickNearestHeaderBoundarySlot(
           Math.max(prevRect.bottom, prevRect.sectionBottom ?? prevRect.bottom) + INDICATOR_GAP_PX
       }
     : null
+
   const beforeNext: WorktreeSidebarHeaderBoundarySlot | null = nextRect
     ? { dropIndex: nextRect.headerIndex, indicatorY: Math.max(0, nextRect.top - INDICATOR_GAP_PX) }
     : null
@@ -132,9 +144,11 @@ function pickNearestHeaderBoundarySlot(
   if (!afterPrev) {
     return beforeNext
   }
+
   if (!beforeNext) {
     return afterPrev
   }
+
   // Ties (localY at the span midpoint) resolve to the next header's boundary.
   return Math.abs(localY - beforeNext.indicatorY) <= Math.abs(localY - afterPrev.indicatorY)
     ? beforeNext

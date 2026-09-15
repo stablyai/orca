@@ -28,14 +28,17 @@ export class TerminalSessionTeardown {
 
   requestImmediate(sessionId: string): Promise<void> | undefined {
     const pending = this.operations.get(sessionId)
+
     if (pending) {
       pending.immediate = true
+
       if (pending.rootSignalled && pending.session.isAlive) {
         // Why: the snapshot callback may have already sent the graceful root
         // signal in this turn; an immediate join must still escalate and wait.
         pending.rootCompletion = pending.session.forceKillAndWaitForExit()
       }
     }
+
     return pending?.promise
   }
 
@@ -43,6 +46,7 @@ export class TerminalSessionTeardown {
     if (session.launchAgent) {
       return this.killAgentSession(sessionId, session, immediate)
     }
+
     if (immediate) {
       // Why tracked like the agent path: this claims termination on the Session and then awaits
       // an OS probe and taskkill, and a create landing inside that window must be able to wait it
@@ -51,6 +55,7 @@ export class TerminalSessionTeardown {
         this.forceKillPlainShellSession(sessionId, session)
       )
     }
+
     session.kill()
   }
 
@@ -68,15 +73,19 @@ export class TerminalSessionTeardown {
       rootCompletion: Promise.resolve(),
       session
     }
+
     const operation = run(entry)
     entry.promise = operation
     this.operations.set(sessionId, entry)
+
     const clearOperation = (): void => {
       if (this.operations.get(sessionId) === entry) {
         this.operations.delete(sessionId)
       }
     }
+
     void operation.then(clearOperation, clearOperation)
+
     return operation
   }
 
@@ -101,6 +110,7 @@ export class TerminalSessionTeardown {
         terminateOwnedTree: () => session.terminateOwnedTree()
       })
     }
+
     await session.forceKillAndWaitForExit()
   }
 
@@ -110,10 +120,12 @@ export class TerminalSessionTeardown {
     immediate: boolean
   ): void | Promise<void> {
     const pending = this.operations.get(sessionId)
+
     if (pending) {
       // Why: an immediate caller is a stronger teardown request and must not
       // acknowledge a still-graceful root kill while capture is pending.
       pending.immediate ||= immediate
+
       return pending.promise
     }
 
@@ -123,8 +135,10 @@ export class TerminalSessionTeardown {
       if (immediate && session.isAlive && session.isTerminating) {
         return session.forceKillAndWaitForExit()
       }
+
       return
     }
+
     if (!immediate) {
       session.scheduleForceDisposeFallback()
     }
@@ -139,7 +153,9 @@ export class TerminalSessionTeardown {
             if (!session.isAlive) {
               return
             }
+
             entry.rootSignalled = true
+
             if (entry.immediate) {
               entry.rootCompletion = session.forceKillAndWaitForExit()
             } else {
@@ -154,6 +170,7 @@ export class TerminalSessionTeardown {
           }
         )
       )
+
       // Why: descendant capture completion only proves signals were requested;
       // destructive callers must retain the native owner until OS-confirmed exit.
       return sweep.then(() => entry.rootCompletion)

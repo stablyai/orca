@@ -40,6 +40,7 @@ export function useLinearAgentSkillSetup(): {
   onBeforeOpenTerminal: () => Promise<void>
 } {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const {
     installed: skillInstalled,
     loading: skillLoading,
@@ -60,10 +61,12 @@ export function useLinearAgentSkillSetup(): {
         ORCA_LINEAR_SKILL_INSTALL_COMMAND,
         activeSkillRuntime.agentRuntime
       )
+
   const updateTarget = useMemo(
     () => getLinearAgentSkillUpdateTarget(linearSkills, skillInstalled),
     [linearSkills, skillInstalled]
   )
+
   const updateCommand = activeSkillRuntime.installDisabledReason
     ? updateTarget.command
     : buildSkillCommandForRuntime(updateTarget.command, activeSkillRuntime.agentRuntime)

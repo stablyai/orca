@@ -77,7 +77,9 @@ describe('getCachedMarkdownRichModeEligibility', () => {
     const expected = CORPUS.map(({ content }) =>
       getMarkdownRichModeEligibility({ content, sizeOverridden: false })
     )
+
     resetMarkdownRichModeEligibilityCache()
+
     for (let pass = 0; pass < 3; pass += 1) {
       CORPUS.forEach(({ content }, index) => {
         expect(getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })).toEqual(
@@ -95,6 +97,7 @@ describe('getCachedMarkdownRichModeEligibility', () => {
     )
 
     await i18n.changeLanguage('ja')
+
     try {
       const japanese = getCachedMarkdownRichModeEligibility({ content, sizeOverridden: false })
       expect(japanese.unsupportedMessage).not.toBeNull()

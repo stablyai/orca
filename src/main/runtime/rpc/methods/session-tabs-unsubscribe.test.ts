@@ -45,11 +45,13 @@ describe('session tab unsubscribe RPC methods', () => {
   it('unsubscribes one shared-control all-tabs stream by subscription id', async () => {
     const cleanupSubscription = vi.fn()
     const cleanupSubscriptionsByPrefix = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       cleanupSubscription,
       cleanupSubscriptionsByPrefix
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(

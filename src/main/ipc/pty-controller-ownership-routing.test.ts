@@ -23,45 +23,61 @@ type SettledControllerDouble = {
 }
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -106,15 +122,18 @@ describe('registerPtyHandlers', () => {
   it('routes settled pointer writes through the installed SSH controller and preserves uncertainty', async () => {
     const connectionId = 'ssh-settled'
     const ptyId = `ssh:${connectionId}@@remote-pty`
+
     const provider = {
       ...createAgentClaimProvider({}),
       writeWithSettlement: vi
         .fn()
         .mockResolvedValue(writeUnverifiable('transport_settlement_lost', true))
     }
+
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
     const controller = registerAgentClaimController() as unknown as SettledControllerDouble
+
     try {
       expect(controller.writeWithSettlement).toBeTypeOf('function')
       await expect(controller.writeWithSettlement(ptyId, 'pointer')).resolves.toEqual(
@@ -137,6 +156,7 @@ describe('registerPtyHandlers', () => {
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
     const controller = registerAgentClaimController() as unknown as SettledControllerDouble
+
     try {
       // Synchronous by construction: the refusal happens before any effect is attempted.
       expect(await controller.writeWithSettlement(ptyId, 'pointer')).toEqual(
@@ -171,6 +191,7 @@ describe('registerPtyHandlers', () => {
         ...createAgentClaimProvider({}),
         probePtyLiveness: vi.fn(async () => true)
       }
+
       setLocalPtyProvider(provider as never)
       const controller = registerAgentClaimController()
 
@@ -194,6 +215,7 @@ describe('registerPtyHandlers', () => {
       registerSshPtyProvider(connectionId, createAgentClaimProvider({}) as never)
       setPtyOwnership(ptyId, connectionId)
       const controller = registerAgentClaimController()
+
       try {
         await expect(controller.probePtyLiveness(ptyId)).resolves.toBeNull()
 
@@ -223,6 +245,7 @@ describe('registerPtyHandlers', () => {
           throw new Error('probe transport down')
         })
       }
+
       setLocalPtyProvider(provider as never)
       const controller = registerAgentClaimController()
 
@@ -238,6 +261,7 @@ describe('registerPtyHandlers', () => {
     const daemonPtyId = 'repo-1::/tmp/wt@@1a2b3c4d'
     const ownedSshPtyId = 'owned-remote-pty'
     setPtyOwnership(ownedSshPtyId, 'ssh-attach')
+
     try {
       // Local daemon session: attach flows to the provider.
       await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
@@ -272,6 +296,7 @@ describe('registerPtyHandlers', () => {
     setLocalPtyProvider(localProvider as never)
     const getPtyOutputSequence = vi.fn(() => 0)
     const synchronizePtyOutputSequenceFromProvider = vi.fn()
+
     const controller = registerAgentClaimController({
       getPtyOutputSequence,
       synchronizePtyOutputSequenceFromProvider
@@ -303,6 +328,7 @@ describe('registerPtyHandlers', () => {
       ...recoveredAgentClaim,
       identityDigest: 'ededededededededededededededededededededede'
     }
+
     const canonicalOwner: AgentSessionOwnerBinding = {
       claim,
       generation: 'generation-canonical-exited',
@@ -310,15 +336,18 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-canonical-exited',
       surface: recoveredAgentSurface
     }
+
     const physicalSpawn = vi.fn(async () => ({
       id: canonicalOwner.ptyId,
       incarnationId: 'incarnation-canonical-exited',
       exitedBeforeSpawnReply: true as const,
       agentSessionEnsure: { disposition: 'adopted' as const, owner: canonicalOwner }
     }))
+
     const provider = createAgentClaimProvider({ spawn: physicalSpawn })
     setLocalPtyProvider(provider as never)
     let controller: { spawn(args: Record<string, unknown>): Promise<unknown> } | undefined
+
     const runtime = {
       setPtyController: vi.fn((next) => {
         controller = next
@@ -328,6 +357,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await expect(
@@ -351,6 +381,7 @@ describe('registerPtyHandlers', () => {
   it('rejects renderer spawn publication when the provider reply proves exit', async () => {
     const connectionId = 'ssh-renderer-exited-reply'
     const appPtyId = `ssh:${connectionId}@@relay-pty`
+
     const provider = {
       spawn: vi.fn(async () => ({
         id: appPtyId,
@@ -377,6 +408,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     }
+
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
@@ -385,6 +417,7 @@ describe('registerPtyHandlers', () => {
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_renderer_exited'),
@@ -395,7 +428,9 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     registerSshPtyProvider(connectionId, provider as never)
+
     try {
       registerPtyHandlers(
         mainWindow as never,

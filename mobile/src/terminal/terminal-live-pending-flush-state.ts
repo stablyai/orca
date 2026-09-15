@@ -35,10 +35,12 @@ export function waitForTerminalLivePendingFlush(
 
 export function cancelTerminalLivePendingFlush(state: TerminalLivePendingFlushState): void {
   state.generation += 1
+
   const requests = [
     ...state.activeRequests,
     ...state.pendingBatches.flatMap((batch) => batch.requests)
   ]
+
   state.activeRequests = []
   state.pendingBatches = []
   state.current = null
@@ -50,15 +52,19 @@ async function drainTerminalLiveMirrorSends(
   generation: number
 ): Promise<boolean> {
   let allSent = true
+
   while (state.generation === generation) {
     const batch = state.pendingBatches.shift()
+
     if (!batch) {
       state.current = null
+
       return allSent
     }
 
     state.activeRequests = batch.requests
     const sent = await batch.sender(batch.handle, batch.payload).catch(() => false)
+
     if (state.generation !== generation) {
       return false
     }
@@ -67,6 +73,7 @@ async function drainTerminalLiveMirrorSends(
     batch.requests.forEach(({ resolve }) => resolve(sent))
     allSent &&= sent
   }
+
   return false
 }
 
@@ -78,10 +85,13 @@ export function queueTerminalLiveMirrorSend(
   sender: TerminalLiveMirrorSender
 ): Promise<boolean> {
   let resolveRequest: (sent: boolean) => void = () => {}
+
   const request = new Promise<boolean>((resolve) => {
     resolveRequest = resolve
   })
+
   const pendingTail = state.pendingBatches.at(-1)
+
   if (pendingTail?.handle === handle && pendingTail.sender === sender) {
     pendingTail.payload += payload
     pendingTail.requests.push({ resolve: resolveRequest })
@@ -104,5 +114,6 @@ export function queueTerminalLiveMirrorSend(
       }
     })
   }
+
   return request
 }

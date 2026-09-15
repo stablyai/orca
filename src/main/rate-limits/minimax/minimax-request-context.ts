@@ -2,13 +2,16 @@ import { net, session, type Session } from 'electron'
 import type { MiniMaxEndpoint } from '../../../shared/global-settings-types'
 
 const MINIMAX_USAGE_PATH = '/v1/api/openplatform/coding_plan/remains'
+
 const MINIMAX_OVERSEAS_BASE = 'https://platform.minimax.io'
+
 const MINIMAX_CN_BASE = 'https://www.minimaxi.com'
 
 export function getMiniMaxEndpointUrl(endpoint: MiniMaxEndpoint): string {
   if (endpoint === 'cn') {
     return `${MINIMAX_CN_BASE}${MINIMAX_USAGE_PATH}`
   }
+
   return `${MINIMAX_OVERSEAS_BASE}${MINIMAX_USAGE_PATH}`
 }
 
@@ -30,10 +33,12 @@ function getMiniMaxOrigin(endpoint: MiniMaxEndpoint): string {
 
 function getMiniMaxReferer(endpoint: MiniMaxEndpoint): string {
   const consoleOrigin = endpoint === 'cn' ? 'https://platform.minimaxi.com' : MINIMAX_OVERSEAS_BASE
+
   return `${consoleOrigin}/console/usage`
 }
 
 const MINIMAX_SESSION_PARTITION = 'orca-minimax-rate-limit-fetch'
+
 const SENSITIVE_COOKIE_NAMES = new Set([
   '_token',
   '_twpid',
@@ -62,9 +67,11 @@ function getMiniMaxBrowserUserAgent(): string {
   if (process.platform === 'win32') {
     return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0'
   }
+
   if (process.platform === 'darwin') {
     return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 Firefox/152.0'
   }
+
   return 'Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0'
 }
 
@@ -75,24 +82,30 @@ function parseCookiePairs(cookie: string): { name: string; value: string }[] {
     .map((part) => {
       const normalizedPart = part.replace(/^Cookie:\s*/i, '')
       const eq = normalizedPart.indexOf('=')
+
       if (eq === -1) {
         return null
       }
+
       return {
         name: normalizedPart.slice(0, eq).trim(),
         value: normalizedPart.slice(eq + 1).trim()
       }
     })
     .filter((pair): pair is { name: string; value: string } => Boolean(pair?.name && pair.value))
+
   // Why: Chromium cookie storage exports are often copied as `name:"value"`,
   // not as an HTTP `Cookie` header. Accept both formats to avoid credential UX traps.
   const quotedCookiePairPattern = /(?:^|[;\s])([A-Za-z0-9_.-]+)\s*:\s*["']([^"']+)["']/g
+
   const quotedPairs = [...cookie.matchAll(quotedCookiePairPattern)]
     .map((match) => {
       const [, name = '', value = ''] = match
+
       return { name: name.trim(), value: value.trim() }
     })
     .filter((pair) => pair.name && pair.value)
+
   return [...headerPairs, ...quotedPairs]
 }
 
@@ -112,12 +125,14 @@ export function getUniqueMiniMaxCookieNames(cookie: string): string[] {
 
 export function redactMiniMaxSecret(value: string): string {
   let redacted = value.replace(/Cookie:\s*[^\n\r]+/gi, 'Cookie: [REDACTED]')
+
   for (const name of SENSITIVE_COOKIE_NAMES) {
     redacted = redacted
       .replace(new RegExp(`${name}=([^;\\s]+)`, 'g'), `${name}=[REDACTED]`)
       // Match parseCookiePairs' `\s*:\s*` tolerance so `name : "secret"` is redacted too.
       .replace(new RegExp(`${name}\\s*:\\s*["'][^"']+["']`, 'g'), `${name}:[REDACTED]`)
   }
+
   return redacted
 }
 
@@ -131,9 +146,11 @@ export function makeMiniMaxRequestHeaders(
     Referer: getMiniMaxReferer(endpoint),
     'User-Agent': getMiniMaxBrowserUserAgent()
   }
+
   if (groupId) {
     headers['X-Group-Id'] = groupId
   }
+
   return headers
 }
 
@@ -165,6 +182,7 @@ export async function fetchMiniMaxWithSessionCookieJar(args: {
   const miniMaxSession = session.fromPartition(MINIMAX_SESSION_PARTITION)
   const cookiePairs = parseCookiePairs(args.cookie)
   const origin = getMiniMaxOrigin(args.endpointMode)
+
   try {
     await clearMiniMaxSessionCookieJarForSession(miniMaxSession, origin)
     await Promise.all(
@@ -179,6 +197,7 @@ export async function fetchMiniMaxWithSessionCookieJar(args: {
       )
     )
     const headers = makeMiniMaxRequestHeaders(args.groupId, args.endpointMode)
+
     return {
       response: await miniMaxSession.fetch(args.endpoint, {
         method: 'GET',
@@ -205,12 +224,15 @@ export async function fetchMiniMaxWithManualCookieHeader(args: {
 }): Promise<MiniMaxFetchResponse> {
   const miniMaxSession = session.fromPartition(MINIMAX_SESSION_PARTITION)
   const origin = getMiniMaxOrigin(args.endpointMode)
+
   try {
     await clearMiniMaxSessionCookieJarForSession(miniMaxSession, origin)
+
     const headers = {
       ...makeMiniMaxRequestHeaders(args.groupId, args.endpointMode),
       Cookie: normalizeMiniMaxCookieHeader(args.cookie)
     }
+
     return {
       response: await miniMaxSession.fetch(args.endpoint, {
         method: 'GET',
@@ -239,11 +261,13 @@ export async function fetchMiniMaxWithApiKey(args: {
     Authorization: `Bearer ${args.apiKey}`,
     Accept: 'application/json'
   }
+
   const response = await net.fetch(args.endpoint, {
     method: 'GET',
     headers,
     signal: args.signal
   })
+
   return {
     response,
     requestHeaderNames: Object.keys(headers),

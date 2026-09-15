@@ -36,6 +36,7 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     const find = vi.fn(() => {
       throw positiveIntegerError()
     })
+
     // Before the fix this threw straight through TerminalSearch's effect into the
     // error boundary. Now it is contained and reported as "no match this frame".
     expect(() => safeFind(find, 'query')).not.toThrow()
@@ -54,6 +55,7 @@ describe('safeFind (TerminalSearch decoration crash guard)', () => {
     const find = vi.fn(() => {
       throw new TypeError('something genuinely broken')
     })
+
     expect(() => safeFind(find, 'q')).toThrow('something genuinely broken')
   })
 })

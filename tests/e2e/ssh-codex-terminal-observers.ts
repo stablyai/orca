@@ -23,6 +23,7 @@ export async function waitForRemoteFixtureCleanFinalInHiddenPane(
             const tabId = state?.activeTabIdByWorktree?.[remoteWorktreeId] ?? null
             const manager = tabId ? window.__paneManagers?.get(tabId) : null
             const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
             return pane?.serializeAddon?.serialize?.().includes(cleanFinalText) === true
           },
           { remoteWorktreeId, cleanFinalText: REMOTE_CODEX_FIXTURE_CLEAN_FINAL_TEXT }
@@ -45,16 +46,20 @@ export async function waitForRealRemoteCodexCompletion(
         const content = await page.evaluate(() => {
           const state = window.__store?.getState()
           const worktreeId = state?.activeWorktreeId
+
           const tabId =
             state?.activeTabType === 'terminal'
               ? state.activeTabId
               : worktreeId
                 ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                 : null
+
           const manager = tabId ? window.__paneManagers?.get(tabId) : null
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return pane?.serializeAddon?.serialize?.() ?? ''
         })
+
         return content.split(doneMarker).length - 1
       },
       {
@@ -87,16 +92,20 @@ export async function waitForRealRemoteCodexBackgroundStatus(page: Page): Promis
         const content = await page.evaluate(() => {
           const state = window.__store?.getState()
           const worktreeId = state?.activeWorktreeId
+
           const tabId =
             state?.activeTabType === 'terminal'
               ? state.activeTabId
               : worktreeId
                 ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                 : null
+
           const manager = tabId ? window.__paneManagers?.get(tabId) : null
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return pane?.serializeAddon?.serialize?.() ?? ''
         })
+
         return /background terminal|Working for background terminal|REMOTE_CODEX_PHASE/i.test(
           content
         )
@@ -113,17 +122,21 @@ export async function scrollActiveTerminalToArtifactHistory(page: Page): Promise
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane to scroll')
     }
+
     const historyDepth = pane.terminal.buffer.active.baseY
     pane.terminal.scrollToLine(Math.max(0, historyDepth - pane.terminal.rows * 3))
     pane.terminal.refresh(0, pane.terminal.rows - 1)

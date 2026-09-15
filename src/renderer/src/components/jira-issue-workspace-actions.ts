@@ -10,6 +10,7 @@ function buildJiraBranchName(issue: JiraIssue): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 52)
+
   return `${issue.key.toLowerCase()}${slug ? `-${slug}` : ''}`
 }
 

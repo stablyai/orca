@@ -1,4 +1,5 @@
 const SCROLL_MARK_MATCH_EPSILON = 2
+
 // Why: a bounded queue is the staleness limit. Wall-clock expiry would
 // reintroduce the timing assumptions this module exists to remove. Known
 // accepted window: a marked no-op write emits no scroll event, so its target
@@ -36,6 +37,7 @@ export function createProgrammaticScrollMarks(): ProgrammaticScrollMarks {
     if (Math.abs(scrollOffset - targetOffset) <= SCROLL_MARK_MATCH_EPSILON) {
       return true
     }
+
     // Why: a write past the scrollable range lands at the clamped max, not at
     // its target; that landing is still our scroll, not the user's.
     return (
@@ -47,25 +49,31 @@ export function createProgrammaticScrollMarks(): ProgrammaticScrollMarks {
   return {
     mark: (targetOffset: number): void => {
       pendingTargets.push(targetOffset)
+
       if (pendingTargets.length > MAX_PENDING_SCROLL_MARKS) {
         pendingTargets.shift()
       }
     },
     consume: (event: Event, scrollOffset: number, maxScrollOffset: number): boolean => {
       const cached = classifiedEvents.get(event)
+
       if (cached !== undefined) {
         return cached
       }
+
       const matchedIndex = pendingTargets.findIndex((targetOffset) =>
         matchesTarget(targetOffset, scrollOffset, maxScrollOffset)
       )
+
       if (matchedIndex !== -1) {
         // Why: scroll events arrive in write order; older marks whose events
         // were coalesced away must not linger to claim a later user scroll.
         pendingTargets.splice(0, matchedIndex + 1)
       }
+
       const isProgrammatic = matchedIndex !== -1
       classifiedEvents.set(event, isProgrammatic)
+
       return isProgrammatic
     }
   }

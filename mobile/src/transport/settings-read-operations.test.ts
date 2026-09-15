@@ -29,16 +29,19 @@ function refusal(message = 'settings refused'): RpcResponse {
 function deferred() {
   let resolve!: (response: RpcResponse) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<RpcResponse>((done, fail) => {
     resolve = done
     reject = fail
   })
+
   return { promise, resolve, reject }
 }
 
 function replyWith(response: RpcResponse) {
   const client = new FakeSession('connected')
   client.sendRequest.mockResolvedValue(response)
+
   return client
 }
 
@@ -85,6 +88,7 @@ describe('settings historical acceptance', () => {
     const reply = await botOverridesRead.request(
       replyWith(success({ settings: { prBotAuthorOverrides: ['bot', 3, null, ''] } }))
     )
+
     expect(botOverridesRead.interpret(reply)).toEqual({ accepted: true, value: ['bot', ''] })
     const refused = await botOverridesRead.request(replyWith(refusal()))
     expect(botOverridesRead.interpret(refused)).toEqual({ accepted: false })
@@ -96,10 +100,13 @@ describe('settings historical acceptance', () => {
     const off = await terminalCopyTrimsGutterRead.request(
       replyWith(success({ settings: { terminalCopyTrimsGutter: false } }))
     )
+
     expect(terminalCopyTrimsGutterRead.interpret(off)).toEqual({ accepted: true, value: false })
+
     const on = await terminalCopyTrimsGutterRead.request(
       replyWith(success({ settings: { terminalCopyTrimsGutter: true } }))
     )
+
     expect(terminalCopyTrimsGutterRead.interpret(on)).toEqual({ accepted: true, value: true })
     // A host predating the setting sends no key; the desktop default is on.
     const absent = await terminalCopyTrimsGutterRead.request(replyWith(success({ settings: {} })))
@@ -112,6 +119,7 @@ describe('settings historical acceptance', () => {
 
   it('does not read a stale payload until its caller permits interpretation', async () => {
     const read = vi.fn(() => ({}))
+
     const reply = await settingsRead.request(
       replyWith(
         success({
@@ -121,6 +129,7 @@ describe('settings historical acceptance', () => {
         })
       )
     )
+
     expect(read).not.toHaveBeenCalled()
     settingsRead.interpret(reply)
     expect(read).toHaveBeenCalledOnce()
@@ -166,10 +175,13 @@ describe('new-tab settlement barriers', () => {
       method === 'settings.get' ? Promise.resolve(refusal()) : peer.promise
     )
     let settled = false
+
     const outcome = load(client).catch((error: unknown) => {
       settled = true
+
       return error
     })
+
     await drain()
     expect(settled).toBe(false)
     peer.resolve(success([]))
@@ -197,9 +209,11 @@ describe('new-tab settlement barriers', () => {
       method === 'settings.get' ? Promise.reject(error) : peer.promise
     )
     let caught: unknown
+
     const outcome = load(client).catch((value: unknown) => {
       caught = value
     })
+
     await drain()
     expect(caught).toBe(error)
     peer.resolve(success([]))

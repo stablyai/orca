@@ -43,14 +43,17 @@ export function useRightSidebarTabRouting({
     installedPluginTabKeys:
       pluginSystemEnabled && pluginFetchStatus === 'ready' ? installedPluginTabKeys : undefined
   }).rightSidebarTab
+
   const rememberedFolderTab = activeFolderWorkspaceKey
     ? rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey]
     : null
+
   const requestedFolderTab =
     activeFolderWorkspaceKey &&
     rightSidebarRouteRequestId !== lastRightSidebarRouteRequestIdRef.current
       ? normalizedActiveTab
       : null
+
   const effectiveTab = resolveRightSidebarEffectiveTab({
     normalizedActiveTab,
     visibleItems,
@@ -74,16 +77,21 @@ export function useRightSidebarTabRouting({
     if (!activeFolderWorkspaceKey || !visibleItems.some((item) => item.id === effectiveTab)) {
       return
     }
+
     rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = effectiveTab
   }, [activeFolderWorkspaceKey, effectiveTab, visibleItems])
+
   const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
     if (activeFolderWorkspaceKey) {
       rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
     }
+
     if (tab === 'explorer') {
       showRightSidebarFiles()
+
       return
     }
+
     setRightSidebarTab(tab)
   }
 

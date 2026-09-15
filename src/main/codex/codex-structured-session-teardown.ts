@@ -37,6 +37,7 @@ export class CodexStructuredSessionTeardown {
       this.deps.acquisitions,
       this.deps.onEvent
     )
+
     return this.settled(sessionId, closed)
   }
 
@@ -47,6 +48,7 @@ export class CodexStructuredSessionTeardown {
       this.deps.onEvent,
       { allowFailedSettlement: true, requestedClose: false }
     )
+
     return this.settled(sessionId, closed)
   }
 
@@ -59,6 +61,7 @@ export class CodexStructuredSessionTeardown {
     reason: Error
   ): Promise<boolean> => {
     const session = this.deps.sessions.get(sessionId)
+
     if (
       !session ||
       session.ended ||
@@ -67,6 +70,7 @@ export class CodexStructuredSessionTeardown {
     ) {
       return Promise.resolve(false)
     }
+
     return closeCodexPublishedSession(this.deps.sessions, sessionId, this.deps.onEvent, {
       allowFailedSettlement: true,
       requestedClose: false,
@@ -89,6 +93,7 @@ export class CodexStructuredSessionTeardown {
       // and would leave the last roster on screen.
       this.deps.onBackgroundTasksChanged?.(sessionId, null)
     }
+
     return closed
   }
 }

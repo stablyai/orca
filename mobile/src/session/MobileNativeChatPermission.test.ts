@@ -22,6 +22,7 @@ describe('MobileNativeChatPermission', () => {
 
   it('accepts only one response when two presses land in the same render batch', async () => {
     let resolveResponse: (accepted: boolean) => void = () => {}
+
     const response = new Promise<boolean>((resolve) => (resolveResponse = resolve))
     const onRespond = vi.fn(() => response)
     await act(async () => {

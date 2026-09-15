@@ -8,6 +8,7 @@ import type { RequestContext } from './dispatcher'
 
 vi.mock('node:process', async () => {
   const actual = await vi.importActual<typeof NodeProcess>('node:process')
+
   return { ...actual, platform: 'win32' }
 })
 
@@ -15,6 +16,7 @@ vi.mock('../shared/workspace-space-scan-budget', async () => {
   const actual = await vi.importActual<typeof WorkspaceSpaceScanBudgetModule>(
     '../shared/workspace-space-scan-budget'
   )
+
   return {
     ...actual,
     createWorkspaceSpaceScanBudget: () => actual.createWorkspaceSpaceScanBudget({ maxEntries: 2 })

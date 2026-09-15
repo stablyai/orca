@@ -12,8 +12,10 @@ export async function copySessionFileWithoutOverwrite(
   // Why: stage cross-volume copies away from the rollout filename so a failed
   // copy cannot strand a truncated session that a later retry would skip.
   await writeFile(temporaryPath, '', { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+
   try {
     await copyFile(sourcePath, temporaryPath)
+
     try {
       // Why: this same-volume hardlink atomically installs the staged copy
       // without risking a collision overwrite after an EXDEV fallback.
@@ -22,9 +24,11 @@ export async function copySessionFileWithoutOverwrite(
       if (isExistsError(installLinkError)) {
         throw installLinkError
       }
+
       if (!isHardlinkUnsupportedError(installLinkError)) {
         throw installLinkError
       }
+
       // Why: Node has no portable atomic rename-if-absent. Fail closed on a
       // hardlink-less target instead of risking replacement of a concurrent file.
       throw makeAtomicNoReplaceUnsupportedError(targetPath, installLinkError)
@@ -46,6 +50,7 @@ function isExistsError(error: unknown): boolean {
 
 function isHardlinkUnsupportedError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
+
   return (
     code === 'EPERM' ||
     code === 'EACCES' ||
@@ -63,7 +68,9 @@ function makeAtomicNoReplaceUnsupportedError(
     `Cannot atomically install backfill without overwrite on this filesystem: ${targetPath}`,
     { cause }
   ) as NodeJS.ErrnoException
+
   error.code = ATOMIC_NO_REPLACE_UNSUPPORTED_CODE
+
   return error
 }
 

@@ -11,6 +11,7 @@ function createFile(contents: string): string {
   roots.push(root)
   const filePath = join(root, 'owned-launcher')
   writeFileSync(filePath, contents)
+
   return filePath
 }
 

@@ -11,6 +11,7 @@ const openedPaths = vi.hoisted(
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     openSync: (path: NodeFs.PathLike, flags: string | number, mode?: NodeFs.Mode) => {
@@ -19,6 +20,7 @@ vi.mock('node:fs', async () => {
         flags,
         ownerWritable: Boolean(actual.statSync(path).mode & 0o200)
       })
+
       return actual.openSync(path, flags, mode)
     }
   }
@@ -34,6 +36,7 @@ const createdPaths: string[] = []
 
 afterEach(() => {
   openedPaths.length = 0
+
   for (const path of createdPaths.splice(0)) {
     removeTreeSync(path)
   }

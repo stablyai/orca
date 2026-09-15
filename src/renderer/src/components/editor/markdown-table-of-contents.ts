@@ -32,18 +32,23 @@ function isMarkdownTocLevel(value: number): value is MarkdownTocLevel {
 function decodeTocHtmlEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi, (match, entity: string) => {
     const normalized = entity.toLowerCase()
+
     if (normalized.startsWith('#x')) {
       const codePoint = Number.parseInt(normalized.slice(2), 16)
+
       return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
         ? String.fromCodePoint(codePoint)
         : match
     }
+
     if (normalized.startsWith('#')) {
       const codePoint = Number.parseInt(normalized.slice(1), 10)
+
       return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
         ? String.fromCodePoint(codePoint)
         : match
     }
+
     return htmlEntitiesForToc.get(normalized) ?? match
   })
 }
@@ -56,6 +61,7 @@ export function stripInlineMarkdownForToc(text: string): string {
     .replace(/\[\[([^\]]+)\]\]/g, '$1')
     .replace(/<[^>]+>/g, '')
     .replace(/[*_`~]/g, '')
+
   return foldMarkdownTocWhitespace(stripped)
 }
 
@@ -64,18 +70,23 @@ export function stripInlineMarkdownForToc(text: string): string {
 function foldMarkdownTocWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isMarkdownTocWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index)
   }
+
   return normalized
 }
 
@@ -98,10 +109,12 @@ function isMarkdownTocWhitespace(code: number): boolean {
 function nearestParent(stack: MarkdownTocItem[], level: MarkdownTocLevel): MarkdownTocItem {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const item = stack.at(index)
+
     if (item && item.level < level) {
       return item
     }
   }
+
   return stack[0]
 }
 
@@ -126,9 +139,11 @@ function markdownAstNodeToText(node: MarkdownAstNode): string {
   if (typeof node.value === 'string') {
     return node.value
   }
+
   if (typeof node.alt === 'string') {
     return node.alt
   }
+
   return (node.children ?? []).map(markdownAstNodeToText).join('')
 }
 
@@ -152,6 +167,7 @@ export function buildMarkdownTableOfContents(markdown: string): MarkdownTocItem[
       isMarkdownTocLevel(node.depth)
     ) {
       const title = foldMarkdownTocWhitespace(markdownAstNodeToText(node))
+
       if (title) {
         appendTocItem(stack, {
           children: [],
@@ -161,6 +177,7 @@ export function buildMarkdownTableOfContents(markdown: string): MarkdownTocItem[
         })
       }
     }
+
     for (const child of node.children ?? []) {
       visit(child)
     }

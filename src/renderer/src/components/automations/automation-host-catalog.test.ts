@@ -52,9 +52,11 @@ function buildInput(
 
 function entryAt(catalog: AutomationHostCatalog, key: string): AutomationHostCatalogEntry {
   const entry = catalog.byStableKey.get(key)
+
   if (!entry) {
     throw new Error(`missing catalog entry: ${key}`)
   }
+
   return entry
 }
 
@@ -115,6 +117,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const desktop = entryAt(catalog, desktopSshKey('shared'))
     const nested = entryAt(catalog, runtimeSshKey('env-1', 'shared'))
     expect(desktop.stableKey).not.toBe(nested.stableKey)
@@ -146,6 +149,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     expect(entryAt(catalog, runtimeSshKey('env-a', 'shared')).label).toBe('A box')
     expect(entryAt(catalog, runtimeSshKey('env-b', 'shared')).label).toBe('B box')
     expect(catalog.entries.filter((entry) => entry.kind === 'ssh')).toHaveLength(2)
@@ -155,6 +159,7 @@ describe('buildAutomationHostCatalog', () => {
     const catalog = buildAutomationHostCatalog(
       buildInput({ runtimes: [runtime({ authorityHealth: 'unavailable' })] })
     )
+
     const self = entryAt(catalog, runtimeSelfKey('env-1'))
     expect(self).toMatchObject({
       catalogState: 'authoritative',
@@ -179,6 +184,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const nested = entryAt(catalog, runtimeSshKey('env-1', 'nested'))
     expect(nested.label).toBe('Nested box')
     expect(nested.catalogState).toBe('unhydrated')
@@ -197,6 +203,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     expect(catalog.byStableKey.has(desktopSshKey('only-nested'))).toBe(false)
     expect(
       catalog.entries.filter((entry) => entry.stableRef.authority.kind === 'desktop')
@@ -205,6 +212,7 @@ describe('buildAutomationHostCatalog', () => {
 
   it('hides runtime-owned ephemeral SSH targets from both authorities', () => {
     const ephemeral = `${RUNTIME_OWNED_SSH_TARGET_ID_PREFIX}vm-1`
+
     const catalog = buildAutomationHostCatalog(
       buildInput({
         desktop: {
@@ -222,6 +230,7 @@ describe('buildAutomationHostCatalog', () => {
         referencedStableKeys: [desktopSshKey(ephemeral), runtimeSshKey('env-1', ephemeral)]
       })
     )
+
     expect(catalog.entries.some((entry) => entry.kind === 'ssh')).toBe(false)
   })
 
@@ -234,6 +243,7 @@ describe('buildAutomationHostCatalog', () => {
         }
       })
     )
+
     const ghost = entryAt(catalog, desktopSshKey('gone'))
     expect(ghost).toMatchObject({
       label: 'Old box',
@@ -254,6 +264,7 @@ describe('buildAutomationHostCatalog', () => {
         referencedStableKeys: referenced
       })
     )
+
     const entry = entryAt(unhydrated, desktopSshKey('referenced'))
     expect(entry.catalogState).toBe('unhydrated')
     expect(entry.executionHealth).toBe('unknown')
@@ -270,6 +281,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const nested = entryAt(catalog, runtimeSshKey('env-1', 'legacy'))
     expect(nested.querySupport).toBe('legacy-unscoped')
     expect(nested.owner).toBeNull()
@@ -283,6 +295,7 @@ describe('buildAutomationHostCatalog', () => {
         runtimes: [runtime({ ssh: mirror({ targets: [{ targetId: 'ungenerated', label: 'U' }] }) })]
       })
     )
+
     const nested = entryAt(catalog, runtimeSshKey('env-1', 'ungenerated'))
     expect(nested.querySupport).toBe('legacy-unscoped')
     expect(nested.owner).toBeNull()
@@ -298,6 +311,7 @@ describe('buildAutomationHostCatalog', () => {
         referencedStableKeys: [desktopSshKey('gone')]
       })
     )
+
     const ghost = entryAt(catalog, desktopSshKey('gone'))
     expect({ catalogState: ghost.catalogState, scopeGap: ghost.scopeGap }).toEqual({
       catalogState: 'removed',
@@ -317,6 +331,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const nested = entryAt(catalog, runtimeSshKey('env-1', 'box'))
     expect(nested.scopeGap).toBe('target-unverified')
     expect(nested.owner).toBeNull()
@@ -335,6 +350,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const nested = entryAt(catalog, runtimeSshKey('env-1', 'down'))
     expect(nested.executionHealth).toBe('disconnected')
     expect(nested.authorityHealth).toBe('fresh')
@@ -354,6 +370,7 @@ describe('buildAutomationHostCatalog', () => {
     const catalog = buildAutomationHostCatalog(
       buildInput({ desktop: { label: 'Local Mac', ssh: mirror(), orphanCount: 2 } })
     )
+
     const orphan = catalog.entries.find((entry) => entry.kind === 'orphan')
     expect(orphan).toMatchObject({
       label: AUTOMATION_ORPHAN_ENTRY_LABEL,
@@ -379,6 +396,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const after = buildAutomationHostCatalog(
       buildInput({
         runtimes: [
@@ -389,6 +407,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     const key = runtimeSshKey('env-1', 't1')
     expect(entryAt(after, key).stableKey).toBe(entryAt(before, key).stableKey)
     expect(ownerKey(entryAt(after, key).owner!)).toBe(ownerKey(entryAt(before, key).owner!))
@@ -406,6 +425,7 @@ describe('buildAutomationHostCatalog', () => {
         ]
       })
     )
+
     expect(catalog.hydration.runtimeCatalogSettled).toBe(false)
     expect(catalog.hydration.desktopSshHydrated).toBe(false)
     expect(catalog.hydration.savedRuntimeEnvironmentIds).toEqual(new Set(['env-1', 'env-2']))
@@ -436,6 +456,7 @@ describe('buildAutomationHostCatalog', () => {
         }
       }
     )
+
     try {
       const catalog = buildAutomationHostCatalog(
         buildInput({
@@ -447,12 +468,14 @@ describe('buildAutomationHostCatalog', () => {
           ]
         })
       )
+
       expect(catalog.entries.length).toBeGreaterThan(0)
     } finally {
       globals.fetch = previous.fetch
       globals.WebSocket = previous.WebSocket
       globals.window = previous.window
     }
+
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(socketSpy).not.toHaveBeenCalled()
   })

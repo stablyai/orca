@@ -21,6 +21,7 @@ import {
 } from './running-terminal-close-guard'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 function setState(overrides: Record<string, unknown> = {}): void {
@@ -87,6 +88,7 @@ describe('guardRunningTerminalClose', () => {
 
   afterEach(() => {
     const store = useRunningTerminalCloseConfirmStore.getState()
+
     while (visibleRequest()) {
       store.dismissRunningTerminalClose()
     }
@@ -312,6 +314,7 @@ describe('guardRunningTerminalClose', () => {
       .mockImplementation(() => {
         throw new Error('subscriber blew up')
       })
+
     const onClose = vi.fn()
 
     guard(onClose)
@@ -367,6 +370,7 @@ describe('guardRunningTerminalClose', () => {
       .mockImplementation(() => {
         throw new Error('subscriber blew up')
       })
+
     vi.useFakeTimers()
     inspectRuntimeTerminalProcessMock.mockReturnValue(new Promise(() => {}))
     const onClose = vi.fn()

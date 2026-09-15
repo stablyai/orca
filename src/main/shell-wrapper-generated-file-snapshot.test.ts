@@ -83,14 +83,17 @@ const CONTRACT_GLOBALS = new Set([
 // `local`/`local -a` declarations are function-scoped and cannot collide.
 const LINE_START_ASSIGNMENT =
   /^[ \t]*(?:builtin[ \t]+)?(?:export[ \t]+|typeset[ \t]+-[a-zA-Z]+[ \t]+|declare[ \t]+-[a-zA-Z]+[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)\+?=/
+
 const INLINE_EXPORT = /\bexport[ \t]+([A-Za-z_][A-Za-z0-9_]*)\+?=/g
 
 function foreignGlobalsWritten(content: string): string[] {
   const names = new Set<string>()
+
   for (const line of content.split('\n')) {
     if (/^[ \t]*#/.test(line) || /^[ \t]*local\b/.test(line)) {
       continue
     }
+
     for (const name of [
       LINE_START_ASSIGNMENT.exec(line)?.[1],
       ...[...line.matchAll(INLINE_EXPORT)].map((match) => match[1])
@@ -100,6 +103,7 @@ function foreignGlobalsWritten(content: string): string[] {
       }
     }
   }
+
   return [...names].sort()
 }
 
@@ -122,6 +126,7 @@ describePosix('generated shell wrapper files', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(root, { recursive: true, force: true })
   })
 

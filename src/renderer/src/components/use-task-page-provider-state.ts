@@ -5,6 +5,7 @@ import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page
 import type { GitLabWorkItem, GitLabTodo } from '../../../shared/gitlab-types'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
+
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
   const {
     settings,
@@ -15,6 +16,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     taskSource,
     setTaskSource
   } = model
+
   const taskSourceManuallyChangedRef = useRef(false)
   const lastPageTaskSourceRef = useRef(pageData.taskSource)
   const taskResumeAppliedRef = useRef(false)
@@ -28,12 +30,14 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   useEffect(() => {
     const pageTaskSourceChanged = lastPageTaskSourceRef.current !== pageData.taskSource
     lastPageTaskSourceRef.current = pageData.taskSource
+
     if (pageData.taskSource) {
       if (pageTaskSourceChanged) {
         taskSourceManuallyChangedRef.current = false
       } else if (taskSourceManuallyChangedRef.current) {
         return
       }
+
       setTaskSource(resolveVisibleTaskProvider(pageData.taskSource, visibleTaskProviders))
     }
   }, [pageData.taskSource, visibleTaskProviders, setTaskSource])
@@ -41,6 +45,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     if (taskSourceManuallyChangedRef.current) {
       return
     }
+
     // Why: GitLab/Linear availability hydrates after mount; restore the saved default once its provider check proves it can be shown.
     if (visibleTaskProviders.includes(preferredTaskSource) && taskSource !== preferredTaskSource) {
       setTaskSource(preferredTaskSource)
@@ -70,6 +75,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
+
   const gitlabEmptyState = useMemo(
     () =>
       getRepoBackedTaskEmptyState({
@@ -79,26 +85,33 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
       }),
     [gitlabView, selectedRepos.length]
   )
+
   const gitlabFilterIsValid =
     gitlabView === 'issues'
       ? isGitLabIssueFilter(gitlabFilter)
       : gitlabView === 'mrs'
         ? isGitLabMRFilter(gitlabFilter)
         : true
+
   const activeGitlabFilter = gitlabFilterIsValid ? gitlabFilter : 'opened'
+
   // Why: Issues and MRs expose different filter sets; repair before commit so fetch effects never run glab with a stale filter from the other view.
   if (!gitlabFilterIsValid) {
     setGitlabFilter('opened')
   }
+
   const displayedGitLabItems = useMemo(() => {
     if (gitlabView === 'issues') {
       return gitlabItems.filter((item) => item.type === 'issue')
     }
+
     if (gitlabView === 'mrs') {
       return gitlabItems.filter((item) => item.type === 'mr')
     }
+
     return gitlabItems
   }, [gitlabItems, gitlabView])
+
   const nextModel = model as typeof model & {
     taskSourceManuallyChangedRef: typeof taskSourceManuallyChangedRef
     lastPageTaskSourceRef: typeof lastPageTaskSourceRef
@@ -135,6 +148,7 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     activeGitlabFilter: typeof activeGitlabFilter
     displayedGitLabItems: typeof displayedGitLabItems
   }
+
   nextModel.taskSourceManuallyChangedRef = taskSourceManuallyChangedRef
   nextModel.lastPageTaskSourceRef = lastPageTaskSourceRef
   nextModel.taskResumeAppliedRef = taskResumeAppliedRef
@@ -169,6 +183,8 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.gitlabFilterIsValid = gitlabFilterIsValid
   nextModel.activeGitlabFilter = activeGitlabFilter
   nextModel.displayedGitLabItems = displayedGitLabItems
+
   return nextModel
 }
+
 export type TaskPageProviderStateModel = ReturnType<typeof useTaskPageProviderState>

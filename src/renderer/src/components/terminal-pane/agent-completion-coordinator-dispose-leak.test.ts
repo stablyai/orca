@@ -55,6 +55,7 @@ function driveCompletion(
     stateStartedAt: 2000
   } as AgentCompletionStatusSnapshot)
   vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
   return coordinator
 }
 
@@ -88,6 +89,7 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
       live.value = false
       coordinator.dispose()
     }
+
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
   })
 
@@ -104,9 +106,11 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
 
   it('clears per-coordinator working boundaries on reset and dispose', () => {
     const live = { value: true }
+
     const coordinator = createAgentCompletionCoordinator(
       makeOptions('tab-1:leaf-working-boundary', live)
     )
+
     const working = {
       state: 'working' as const,
       prompt: '',
@@ -130,10 +134,12 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
     const dispatchCompletion = vi.fn()
     const hookLive = { value: true }
     const paneLive = { value: true }
+
     const hookCoordinator = createAgentCompletionCoordinator({
       ...makeOptions(paneKey, hookLive),
       dispatchCompletion
     })
+
     const paneCoordinator = createAgentCompletionCoordinator({
       ...makeOptions(paneKey, paneLive),
       dispatchCompletion
@@ -157,10 +163,12 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
     paneLive.value = false
     paneCoordinator.dispose()
     const remountedLive = { value: true }
+
     const remounted = createAgentCompletionCoordinator({
       ...makeOptions(paneKey, remountedLive),
       dispatchCompletion
     })
+
     vi.advanceTimersByTime(2_000)
     remounted.observeTitleWorking()
     remounted.observeClassifiedTitleCompletion('Claude done')

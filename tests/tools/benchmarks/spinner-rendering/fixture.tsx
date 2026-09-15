@@ -9,6 +9,7 @@ type FixtureOptions = { count: number; baseline?: boolean; offset?: number; pair
 
 function anchorBaseline(event: React.AnimationEvent<HTMLSpanElement>): void {
   const animation = event.currentTarget.getAnimations()[0]
+
   if (animation) {
     animation.startTime = 0
   }
@@ -21,6 +22,7 @@ function Fixture({ count, baseline = false, offset = 0, paired = false }: Fixtur
       <div id="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(20, 32px)' }}>
         {Array.from({ length: count }, (_, index) => {
           const size = index % 4 < 2 ? 'size-2' : 'size-1.5'
+
           return (
             <div
               className="spinner-cell"
@@ -60,7 +62,9 @@ function Fixture({ count, baseline = false, offset = 0, paired = false }: Fixtur
 }
 
 const root = createRoot(document.getElementById('root')!)
+
 let generation = 0
+
 Object.assign(window, {
   spinnerBenchmark: {
     zoomExtremes: [1.2 ** UI_ZOOM_MIN, 1.2 ** UI_ZOOM_MAX],

@@ -3,7 +3,9 @@ type ImmediateGlobal = typeof globalThis & {
 }
 
 const pendingRendererYields = new Map<number, () => void>()
+
 let nextRendererYieldId = 0
+
 let rendererYieldChannel: MessageChannel | null = null
 
 function isVitestEnvironment(): boolean {
@@ -16,13 +18,16 @@ function getRendererYieldChannel(): MessageChannel {
     rendererYieldChannel.port1.onmessage = (event) => {
       const yieldId = event.data
       const resolve = typeof yieldId === 'number' ? pendingRendererYields.get(yieldId) : undefined
+
       if (!resolve) {
         return
       }
+
       pendingRendererYields.delete(yieldId)
       resolve()
     }
   }
+
   return rendererYieldChannel
 }
 
@@ -37,12 +42,15 @@ export function yieldToEventLoop(): Promise<void> {
     // Vitest fake timers cannot advance MessageChannel tasks.
     if (isVitestEnvironment()) {
       globalThis.setTimeout(resolve, 0)
+
       return
     }
 
     const setImmediate = (globalThis as ImmediateGlobal).setImmediate
+
     if (typeof window === 'undefined' && setImmediate) {
       setImmediate(resolve)
+
       return
     }
 
@@ -52,6 +60,7 @@ export function yieldToEventLoop(): Promise<void> {
       nextRendererYieldId += 1
       pendingRendererYields.set(yieldId, resolve)
       getRendererYieldChannel().port2.postMessage(yieldId)
+
       return
     }
 

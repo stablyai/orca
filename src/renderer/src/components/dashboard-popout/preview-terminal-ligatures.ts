@@ -18,19 +18,25 @@ export function syncPreviewTerminalLigatures(
     settings?.terminalLigatures,
     settings?.terminalFontFamily
   )
+
   const attached = ligatureAddonsByTerminal.get(terminal)
+
   if (enabled === Boolean(attached)) {
     return
   }
+
   if (!enabled) {
     try {
       attached?.dispose()
     } catch {
       /* ignore */
     }
+
     ligatureAddonsByTerminal.delete(terminal)
+
     return
   }
+
   try {
     const addon = new TerminalLigaturesAddon()
     terminal.loadAddon(addon)

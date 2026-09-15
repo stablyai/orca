@@ -5,12 +5,17 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const { verifyStaticAppImagePackage } = require('./static-appimage-package-contract.cjs')
 
 const RUNTIME_SOURCE = Buffer.from('https://github.com/AppImage/type2-runtime')
+
 const LOAD_HEADER = 64
+
 const DYNAMIC_HEADER = 120
+
 const DYNAMIC_OFFSET = 320
+
 const FIXTURE_BYTES = 384
 
 describe('static AppImage package contract', () => {
@@ -194,6 +199,7 @@ function createRuntime({ machine = 0x3e } = {}) {
     alignment: 8
   })
   RUNTIME_SOURCE.copy(runtime, 192)
+
   return runtime
 }
 
@@ -214,6 +220,7 @@ function writeProgramHeader(
 
 async function withFixture(filename, contents, check, { mode = 0o755 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-static-appimage-contract-'))
+
   try {
     const path = join(root, filename)
     await writeFile(path, contents)

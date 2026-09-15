@@ -8,6 +8,7 @@ import {
 import type { SessionSearchFileRow } from './session-search-store'
 
 const PATH = '/transcripts/one.jsonl'
+
 const MTIME = 1_740_000_000_000
 
 function candidate(overrides: Partial<SessionFileCandidate['file']> = {}): SessionFileCandidate {
@@ -94,6 +95,7 @@ it('retries a failed read until it has failed enough times at one stat', () => {
       decide({ row: row({ state: 'failed', failCount: failures, failedMtimeMs: MTIME }) })
     ).toBe('any')
   }
+
   expect(
     decide({
       row: row({

@@ -292,6 +292,7 @@ export function registerSvelteLanguage(monaco: MonacoModule): void {
   const svelteAlreadyRegistered = monaco.languages
     .getLanguages()
     .some((language) => language.id === 'svelte')
+
   if (svelteAlreadyRegistered) {
     return
   }

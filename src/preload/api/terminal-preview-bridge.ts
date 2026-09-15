@@ -28,7 +28,9 @@ export const terminalPreviewApi = {
       _event: Electron.IpcRendererEvent,
       payload: TerminalPreviewDataPayload
     ): void => callback(payload)
+
     ipcRenderer.on('terminalPreview:data', listener)
+
     return () => ipcRenderer.removeListener('terminalPreview:data', listener)
   }
 } satisfies PreloadApi['terminalPreview']

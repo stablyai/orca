@@ -89,12 +89,14 @@ describe('orca profile auth actions slice', () => {
         cloud: connectedAuthStatus.cloud
       }
     ]
+
     const result: ConnectCurrentOrcaProfileResult = {
       status: 'connected',
       auth: connectedAuthStatus,
       activeProfileId: 'local-default',
       profiles: connectedProfiles
     }
+
     orcaProfilesApi.connectCurrent.mockResolvedValue(result)
     const store = createTestStore()
 
@@ -115,6 +117,7 @@ describe('orca profile auth actions slice', () => {
         refreshedAt: 8
       }
     }
+
     const result: RefreshCurrentOrcaProfileAuthResult = {
       status: 'refreshed',
       auth: refreshedAuthStatus,
@@ -127,6 +130,7 @@ describe('orca profile auth actions slice', () => {
         }
       ]
     }
+
     orcaProfilesApi.refreshAuth.mockResolvedValue(result)
     const store = createTestStore()
 
@@ -152,6 +156,7 @@ describe('orca profile auth actions slice', () => {
         activeOrgName: 'Acme'
       }
     }
+
     const result: CreateCloudLinkedOrcaProfileResult = {
       status: 'created',
       auth: connectedAuthStatus,
@@ -159,6 +164,7 @@ describe('orca profile auth actions slice', () => {
       profiles: [...listState.profiles, cloudProfile],
       profile: cloudProfile
     }
+
     orcaProfilesApi.createCloudLinked.mockResolvedValue(result)
     const store = createTestStore()
 
@@ -179,6 +185,7 @@ describe('orca profile auth actions slice', () => {
       activeProfileId: 'local-default',
       profiles: listState.profiles
     }
+
     orcaProfilesApi.signOutCurrent.mockResolvedValue(result)
     const store = createTestStore()
 
@@ -196,6 +203,7 @@ describe('orca profile auth actions slice', () => {
         activeOrgName: 'Acme'
       }
     }
+
     const result: SelectOrcaProfileOrgResult = {
       status: 'selected',
       auth: selectedAuthStatus,
@@ -208,6 +216,7 @@ describe('orca profile auth actions slice', () => {
         }
       ]
     }
+
     orcaProfilesApi.selectOrg.mockResolvedValue(result)
     const store = createTestStore()
 

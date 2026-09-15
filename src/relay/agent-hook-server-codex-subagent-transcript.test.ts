@@ -8,6 +8,7 @@ import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
 
 function line(record: unknown): string {
@@ -21,6 +22,7 @@ describe('RelayAgentHookServer Codex subagent transcript polling', () => {
     for (const dir of dirs) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     dirs.length = 0
   })
 
@@ -46,8 +48,10 @@ describe('RelayAgentHookServer Codex subagent transcript polling', () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
+
     try {
       const { port, token } = server.getCoordinates()
+
       const response = await fetch(`http://127.0.0.1:${port}/hook/codex`, {
         method: 'POST',
         headers: {

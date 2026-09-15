@@ -28,14 +28,18 @@ export class AgentStatusObservedPaneIdentities {
     if (identity.kind === 'unobserved') {
       return
     }
+
     // Delete-then-set keeps insertion order most-recent, so eviction sheds the oldest pane.
     this.byPaneKey.delete(paneKey)
     this.byPaneKey.set(paneKey, identity)
+
     while (this.byPaneKey.size > MAX_OBSERVED_PANES) {
       const oldest = this.byPaneKey.keys().next().value
+
       if (typeof oldest !== 'string') {
         break
       }
+
       this.byPaneKey.delete(oldest)
     }
   }
@@ -55,16 +59,20 @@ export class AgentStatusObservedPaneIdentityCapture {
   observe(enriched: EnrichedAgentHookEventPayload): void {
     if (this.runtime) {
       recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, this.runtime)
+
       return
     }
+
     this.pending.set(enriched.paneKey, enriched)
   }
 
   attach(runtime: AgentStatusRuntimeEnrichment): void {
     this.runtime = runtime
+
     for (const enriched of this.pending.values()) {
       recordObservedAgentStatusPaneIdentity(this.identities, enriched.paneKey, runtime)
     }
+
     this.pending.clear()
   }
 }

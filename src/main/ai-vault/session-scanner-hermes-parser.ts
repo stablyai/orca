@@ -56,25 +56,31 @@ async function parseHermesSessionRecord(
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(content) as unknown)
+
   if (!record) {
     return null
   }
+
   const accumulator = createAccumulator({
     agent: 'hermes',
     file,
     sessionId: extractString(record.session_id) ?? sessionIdFromFileName(file.path),
     messages
   })
+
   accumulator.model = extractString(record.model)
   accumulator.cwd = extractString(record.cwd)
   updateTimeline(accumulator, extractString(record.session_start))
   updateTimeline(accumulator, extractString(record.last_updated))
+
   for (const message of arrayValue(record.messages)) {
     consumeHermesSessionMessage(accumulator, message)
   }
+
   if (accumulator.messageCount === 0) {
     accumulator.messageCount = numberValue(record.message_count)
   }
+
   return finalizeSession(accumulator, platform, options)
 }
 
@@ -84,11 +90,14 @@ export function consumeHermesSessionMessage(
 ): void {
   const messageRecord = asRecord(message)
   const role = extractString(messageRecord?.role)
+
   if (role === 'user' || role === 'assistant') {
     accumulator.messageCount++
+
     if (role === 'user') {
       accumulator.title ??= extractContentText(messageRecord?.content)
     }
+
     addPreviewContent(accumulator, role, messageRecord?.content)
   }
 }
@@ -109,17 +118,21 @@ export async function parseHermesSessionDocument(
     consume: consumeHermesSessionMessage,
     signal
   })
+
   if (!parsed) {
     return null
   }
+
   const { record, state: accumulator } = parsed
   accumulator.sessionId = extractString(record.session_id) ?? sessionIdFromFileName(file.path)
   accumulator.model = extractString(record.model)
   accumulator.cwd = extractString(record.cwd)
   updateTimeline(accumulator, extractString(record.session_start))
   updateTimeline(accumulator, extractString(record.last_updated))
+
   if (accumulator.messageCount === 0) {
     accumulator.messageCount = numberValue(record.message_count)
   }
+
   return finalizeSession(accumulator, platform, options)
 }

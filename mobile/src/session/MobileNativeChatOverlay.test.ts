@@ -40,6 +40,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     chatComposerText: '',
     setChatComposerText: vi.fn()
   } as unknown as MobileNativeChatController
+
   return createElement(MobileNativeChatOverlay, {
     controller,
     images: {} as never,
@@ -80,6 +81,7 @@ describe('MobileNativeChatOverlay streaming gate', () => {
   /** The bubble text handed to the chat list, or `'hidden'` when chat is off. */
   function streaming(): string | null | 'hidden' {
     const views = renderer!.root.findAll((node) => node.type === 'ChatView')
+
     return views.length === 0 ? 'hidden' : (views[0].props.streaming as string | null)
   }
 

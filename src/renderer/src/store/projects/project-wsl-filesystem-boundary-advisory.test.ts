@@ -6,6 +6,7 @@ import type { Repo } from '../../../../shared/repo-types'
 const { warningMock } = vi.hoisted(() => ({ warningMock: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: { warning: warningMock } }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, vars?: Record<string, string>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => vars?.[name] ?? '')

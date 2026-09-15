@@ -15,11 +15,14 @@ export function resolveNativeChatSessionOptionDefaults(
   // Why: untouched settings must preserve the agent CLI's configured defaults;
   // only a model explicitly selected by the user authorizes launch flags.
   const modelId = typeof entry?.model === 'string' && entry.model.trim() ? entry.model : undefined
+
   if (!modelId) {
     return undefined
   }
+
   const values: Record<string, SessionOptionValue> = { model: modelId }
   const storedValues = entry?.valuesByModel?.[modelId]
+
   if (storedValues && typeof storedValues === 'object') {
     for (const [id, value] of Object.entries(storedValues)) {
       if (sessionOptionValueIsValid(value)) {
@@ -27,6 +30,7 @@ export function resolveNativeChatSessionOptionDefaults(
       }
     }
   }
+
   return values
 }
 
@@ -45,18 +49,23 @@ export function narrowStructuredLaunchSeedOptions(
   values: Readonly<Record<string, unknown>> | null | undefined
 ): Record<string, string> | undefined {
   const seeded: Record<string, string> = {}
+
   for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const value = values?.[id]
+
     if ((id === 'model' || id === 'effort') && !(typeof value === 'string' && value.trim())) {
       continue
     }
+
     if (typeof value === 'string' || typeof value === 'boolean') {
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+
       if (encoded !== null) {
         seeded[id] = encoded
       }
     }
   }
+
   return Object.keys(seeded).length > 0 ? seeded : undefined
 }
 
@@ -77,9 +86,11 @@ export function applyNativeChatSessionOptionPicks(args: {
   picks: Extract<NativeChatSessionOptionSettingsMutation, { type: 'apply-picks' }>['picks']
 }): PersistedNativeChatSessionOptions {
   let persisted = args.persisted ?? {}
+
   for (const pick of args.picks) {
     persisted = updateNativeChatSessionOptionDefaults({ persisted, agent: args.agent, ...pick })
   }
+
   return persisted
 }
 
@@ -96,10 +107,13 @@ export function applyNativeChatSessionOptionSettingsMutation(
       picks: mutation.picks
     })
   }
+
   const modelId = persisted?.[mutation.agent]?.model
+
   if (!modelId || mutation.availableModelIds.includes(modelId)) {
     return null
   }
+
   return clearNativeChatSessionOptionModel(persisted, mutation.agent)
 }
 
@@ -111,10 +125,13 @@ export function clearNativeChatSessionOptionModel(
   agent: AgentType
 ): PersistedNativeChatSessionOptions {
   const currentAgent = persisted?.[agent]
+
   if (!currentAgent?.model) {
     return { ...persisted }
   }
+
   const { model: _dropped, ...rest } = currentAgent
+
   return { ...persisted, [agent]: rest }
 }
 
@@ -132,6 +149,7 @@ export function updateNativeChatSessionOptionDefaults(args: {
 }): PersistedNativeChatSessionOptions {
   const currentAgent = args.persisted?.[args.agent]
   const currentModelValues = currentAgent?.valuesByModel?.[args.modelId] ?? {}
+
   const valuesByModel = {
     ...currentAgent?.valuesByModel,
     ...(args.optionId === 'model'
@@ -140,6 +158,7 @@ export function updateNativeChatSessionOptionDefaults(args: {
           [args.modelId]: { ...currentModelValues, [args.optionId]: args.value }
         })
   }
+
   return {
     ...args.persisted,
     [args.agent]: {

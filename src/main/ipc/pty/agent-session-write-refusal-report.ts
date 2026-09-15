@@ -16,5 +16,6 @@ export function reportAgentSessionWriteRefusal(
   ) {
     return
   }
+
   mainWindow.webContents.send('pty:writeUnavailable', { id, agentSessionRefusal: refusal })
 }

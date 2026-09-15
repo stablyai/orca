@@ -14,31 +14,39 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { awaitRuntimeFileWatcherUnsubscribes } from './orca-runtime-files'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -58,6 +66,7 @@ describe('RuntimeFileCommands', () => {
     let listener: (() => void) | null = null
     watchMock.mockImplementation((_rootPath, _options, callback) => {
       listener = callback
+
       return watcher
     })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
@@ -129,12 +138,14 @@ describe('RuntimeFileCommands', () => {
 
   it('indexes SSH runtime watches so remote deletion can await them', async () => {
     let resolveDispose: () => void = () => {}
+
     const remoteDispose = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveDispose = resolve
         })
     )
+
     vi.mocked(getSshFilesystemProvider).mockReturnValue({
       watch: vi.fn(() => remoteDispose)
     } as never)
@@ -143,9 +154,11 @@ describe('RuntimeFileCommands', () => {
     await commands.watchFileExplorer('id:wt-1', vi.fn())
 
     let closed = false
+
     const close = commands.closeFileExplorerWatchersForPath('/remote/repo', 'ssh-1').then(() => {
       closed = true
     })
+
     await Promise.resolve()
     expect(remoteDispose).toHaveBeenCalledTimes(1)
     expect(closed).toBe(false)

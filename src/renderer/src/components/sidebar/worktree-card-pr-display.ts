@@ -71,6 +71,7 @@ function makeLinkedReviewFallback(
   review: HostedReviewInfo | null | undefined
 ): WorktreeCardPrDisplay {
   const label = provider === 'gitlab' ? 'MR' : 'PR'
+
   return {
     provider,
     number,
@@ -96,12 +97,14 @@ export function getWorktreeCardPrDisplay(
     linkedAzureDevOpsPR,
     linkedGiteaPR
   }
+
   const hasLinkedReview =
     linkedPR !== null ||
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||
     linkedAzureDevOpsPR !== null ||
     linkedGiteaPR !== null
+
   if (
     review?.provider === 'github' &&
     isGitHubPRSuppressed(
@@ -111,15 +114,19 @@ export function getWorktreeCardPrDisplay(
   ) {
     return null
   }
+
   if (review) {
     if (review.provider === 'unsupported') {
       return review
     }
+
     const linkedReviewNumber = getLinkedReviewNumber(review.provider, links)
+
     if (linkedReviewNumber === null) {
       if (review.provider !== 'github' && review.provider !== 'gitlab') {
         return review
       }
+
       // Why: GitHub refreshes retain a linked-style request hint; trust only the separately recorded branch-lookup provenance.
       if (
         !hasLinkedReview &&
@@ -129,13 +136,16 @@ export function getWorktreeCardPrDisplay(
       ) {
         return review
       }
+
       // Why: GitHub/GitLab linked lookups can outlive the worktree metadata
       // that requested them. A neutral branch lookup is safe to show unlinked.
       return options.reviewHintKey === '' ? review : null
     }
+
     if (review.number === linkedReviewNumber) {
       return review
     }
+
     return makeLinkedReviewFallback(review.provider, linkedReviewNumber, undefined)
   }
 

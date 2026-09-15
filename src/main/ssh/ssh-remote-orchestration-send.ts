@@ -6,7 +6,9 @@ export function hasRemoteLifecycleRejection(result: unknown): boolean {
   if (!result || typeof result !== 'object') {
     return false
   }
+
   const lifecycle = (result as { lifecycle?: unknown }).lifecycle
+
   return (
     lifecycle !== null &&
     typeof lifecycle === 'object' &&
@@ -21,6 +23,7 @@ export function resolveRemoteOrchestrationSender(
 ): string {
   const explicit = optionalString(flags, 'from')
   const envHandle = env.ORCA_TERMINAL_HANDLE || undefined
+
   if ((type === 'worker_done' || type === 'heartbeat') && !explicit && !envHandle) {
     // Why: the fallback must not turn missing remote identity into the
     // synthetic "unknown" handle for lifecycle authority decisions.
@@ -30,6 +33,7 @@ export function resolveRemoteOrchestrationSender(
         'Pass --from <terminal-handle> or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
     )
   }
+
   return explicit ?? envHandle ?? 'unknown'
 }
 
@@ -41,12 +45,15 @@ export function getRemoteOrchestrationPayload(flags: RemoteFlags): string | unde
   const filesModified = optionalString(flags, 'files-modified')
   const reportPath = optionalString(flags, 'report-path')
   const phase = optionalString(flags, 'phase')
+
   const hasStructuredPayload = [taskId, dispatchId, outcome, filesModified, reportPath, phase].some(
     (value) => value !== undefined
   )
+
   if (!hasStructuredPayload) {
     return rawPayload
   }
+
   if (rawPayload !== undefined) {
     throw new RemoteCliArgumentError(
       'invalid_argument',
@@ -57,12 +64,15 @@ export function getRemoteOrchestrationPayload(flags: RemoteFlags): string | unde
   // Why: the fallback receives the same preamble commands as the full CLI;
   // preserving these flags keeps lifecycle payloads valid over broken installs.
   const payload: Record<string, string | string[]> = {}
+
   if (taskId) {
     payload.taskId = taskId
   }
+
   if (dispatchId) {
     payload.dispatchId = dispatchId
   }
+
   if (outcome) {
     if (outcome !== 'succeeded' && outcome !== 'failed') {
       throw new RemoteCliArgumentError(
@@ -70,24 +80,30 @@ export function getRemoteOrchestrationPayload(flags: RemoteFlags): string | unde
         'Invalid --outcome. Expected succeeded or failed.'
       )
     }
+
     payload.outcome = outcome
   }
+
   if (filesModified) {
     payload.filesModified = filesModified
       .split(',')
       .map((file) => file.trim())
       .filter(Boolean)
   }
+
   if (reportPath) {
     payload.reportPath = reportPath
   }
+
   if (phase) {
     payload.phase = phase
   }
+
   return JSON.stringify(payload)
 }
 
 function optionalString(flags: RemoteFlags, name: string): string | undefined {
   const value = flags.get(name)
+
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }

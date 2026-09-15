@@ -9,6 +9,7 @@ import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
 // `/-/work_items/<iid>`; treat that as an issue work item, same as the
 // legacy `/-/issues/<iid>` form.
 const GL_ITEM_PATH_RE = /\/(?:issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
+
 const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
 
 export type ProjectSlug = {
@@ -33,6 +34,7 @@ export type GitLabLinkQuery = {
  */
 export function parseGitLabIssueOrMRNumber(input: string): number | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
@@ -41,11 +43,13 @@ export function parseGitLabIssueOrMRNumber(input: string): number | null {
   // and copy-paste contexts. Accept both prefixes so users can drop in
   // either form.
   const numeric = trimmed.startsWith('#') || trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
+
   if (/^\d+$/.test(numeric)) {
     return Number.parseInt(numeric, 10)
   }
 
   let url: URL
+
   try {
     url = new URL(trimmed)
   } catch {
@@ -53,15 +57,18 @@ export function parseGitLabIssueOrMRNumber(input: string): number | null {
   }
 
   const match = GL_ITEM_PATH_RE.exec(url.pathname)
+
   if (!match) {
     return null
   }
+
   // Why: the basic pattern matches plain GitHub URLs too (e.g.
   // /owner/repo/issues/123). Require the `/-/` separator that's
   // unique to GitLab to avoid mis-classifying a GitHub URL.
   if (!url.pathname.includes('/-/')) {
     return null
   }
+
   return Number.parseInt(match[1], 10)
 }
 
@@ -75,11 +82,13 @@ export function parseGitLabIssueOrMRLink(input: string): {
   type: 'issue' | 'mr'
 } | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
 
   let url: URL
+
   try {
     url = new URL(trimmed)
   } catch {
@@ -87,11 +96,13 @@ export function parseGitLabIssueOrMRLink(input: string): {
   }
 
   const match = GL_ITEM_PATH_FULL_RE.exec(url.pathname)
+
   if (!match) {
     return null
   }
 
   const path = match[1]
+
   // Why: a project path needs at least one slash (group/project). A
   // single-segment path is the user/group root, not a project.
   if (!path.includes('/')) {
@@ -113,17 +124,21 @@ export function normalizeGitLabLinkQuery(raw: string): GitLabLinkQuery {
   if (isWorkItemLinkQueryTooLarge(raw)) {
     return { query: '', directNumber: null, tooLarge: true }
   }
+
   const trimmed = raw.trim()
+
   if (!trimmed) {
     return { query: '', directNumber: null }
   }
 
   const direct = parseGitLabIssueOrMRNumber(trimmed)
+
   if (direct !== null && !trimmed.startsWith('http')) {
     return { query: trimmed, directNumber: direct }
   }
 
   const link = parseGitLabIssueOrMRLink(trimmed)
+
   if (!link) {
     return { query: trimmed, directNumber: null }
   }

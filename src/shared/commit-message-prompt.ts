@@ -28,9 +28,11 @@ export {
 export function buildCommitPrompt(diff: string, customSuffix: string): string {
   const base = COMMIT_MESSAGE_BASE_PROMPT.replace('{{DIFF}}', diff)
   const trimmedSuffix = customSuffix.trim()
+
   if (!trimmedSuffix) {
     return base
   }
+
   return `${base}\n\nAdditional user prompt:\n${trimmedSuffix}`
 }
 
@@ -44,6 +46,7 @@ function splitDiffIntoFileSections(diff: string): string[] {
   const sections: string[] = []
   let start = 0
   let next = diff.indexOf(boundary)
+
   while (next !== -1) {
     // Include the boundary newline in the current section; the next section
     // starts at the `diff --git` header itself.
@@ -51,7 +54,9 @@ function splitDiffIntoFileSections(diff: string): string[] {
     start = next + 1
     next = diff.indexOf(boundary, start)
   }
+
   sections.push(diff.slice(start))
+
   return sections
 }
 
@@ -61,12 +66,14 @@ function clipSectionOnLineBoundary(section: string, limit: number): string {
   if (section.length <= limit) {
     return section
   }
+
   if (limit <= 0) {
     return ''
   }
 
   const markerFor = (omitted: number): string => `\n...(diff truncated, ${omitted} bytes omitted)\n`
   let marker = markerFor(section.length)
+
   if (marker.length >= limit) {
     return marker.slice(0, limit)
   }
@@ -78,6 +85,7 @@ function clipSectionOnLineBoundary(section: string, limit: number): string {
   const cut = lineBreak > target / 2 ? lineBreak : target
   const omitted = section.length - cut
   marker = markerFor(omitted)
+
   return `${section.slice(0, Math.min(cut, Math.max(0, limit - marker.length)))}${marker}`
 }
 
@@ -89,23 +97,30 @@ function allocateBudgetFairly(sizes: number[], budget: number): number[] {
   const alloc: number[] = Array.from({ length: sizes.length }, () => 0)
   let active = sizes.map((_, i) => i)
   let remaining = budget
+
   while (active.length > 0 && remaining > 0) {
     const share = Math.floor(remaining / active.length)
+
     if (share === 0) {
       break
     }
+
     const stillActive: number[] = []
+
     for (const i of active) {
       const need = sizes[i] - alloc[i]
       const grant = Math.min(need, share)
       alloc[i] += grant
       remaining -= grant
+
       if (grant < need) {
         stillActive.push(i)
       }
     }
+
     active = stillActive
   }
+
   return alloc
 }
 
@@ -119,14 +134,18 @@ export function truncateDiffForPrompt(
   if (diff.length <= budget) {
     return diff
   }
+
   const sections = splitDiffIntoFileSections(diff)
+
   if (sections.length <= 1) {
     return clipSectionOnLineBoundary(diff, budget)
   }
+
   const allocations = allocateBudgetFairly(
     sections.map((section) => section.length),
     budget
   )
+
   return sections.map((section, i) => clipSectionOnLineBoundary(section, allocations[i])).join('')
 }
 
@@ -178,6 +197,7 @@ export function tokenizeCustomCommandTemplate(
 
   while (i < template.length) {
     const ch = template[i]
+
     if (quote) {
       if (backslashEscapes && ch === '\\' && quote === '"' && i + 1 < template.length) {
         // Why: inside double quotes the shell only consumes the backslash
@@ -187,10 +207,12 @@ export function tokenizeCustomCommandTemplate(
         i += 2
         continue
       }
+
       // Why: a `"` inside $(…) or `…` re-opens a nested quoting context in the
       // real shell, so this tokenizer's word boundaries stop matching it.
       divergesFromShell ||=
         quote === '"' && (ch === '`' || (ch === '$' && '({'.includes(template[i + 1] ?? '\0')))
+
       if (ch === quote) {
         quote = null
         i++
@@ -199,6 +221,7 @@ export function tokenizeCustomCommandTemplate(
         inToken = true
         continue
       }
+
       current += ch
       i++
       continue
@@ -206,9 +229,11 @@ export function tokenizeCustomCommandTemplate(
 
     if (ch === '"' || ch === "'") {
       quote = ch
+
       if (!inToken) {
         tokenStart = i
       }
+
       inToken = true
       i++
       continue
@@ -219,9 +244,11 @@ export function tokenizeCustomCommandTemplate(
       // selector can hide inside the joined token and skip the gap check.
       divergesFromShell ||= template[i + 1] === '\n'
       current += template[i + 1]
+
       if (!inToken) {
         tokenStart = i
       }
+
       inToken = true
       i += 2
       continue
@@ -235,6 +262,7 @@ export function tokenizeCustomCommandTemplate(
         inToken = false
         divergesFromShell = false
       }
+
       i++
       continue
     }
@@ -242,6 +270,7 @@ export function tokenizeCustomCommandTemplate(
     if (!inToken) {
       tokenStart = i
     }
+
     // Why: a trailing unpaired escape swallows whatever a consumer appends
     // after the base, so the base is not safe to build on.
     divergesFromShell ||= backslashEscapes && ch === '\\' && i + 1 >= template.length
@@ -257,10 +286,12 @@ export function tokenizeCustomCommandTemplate(
   if (quote) {
     return { ok: false, error: 'Unclosed quote in command template.' }
   }
+
   if (inToken) {
     tokens.push(current)
     spans.push({ start: tokenStart, end: template.length, divergesFromShell })
   }
+
   return { ok: true, tokens, spans }
 }
 
@@ -283,13 +314,17 @@ export function planCustomCommand(
   backslash: CommandTemplateBackslash = 'escape'
 ): CustomCommandPlan {
   const tokenized = tokenizeCustomCommandTemplate(template, backslash)
+
   if (!tokenized.ok) {
     return { ok: false, error: tokenized.error }
   }
+
   if (tokenized.tokens.length === 0) {
     return { ok: false, error: 'Custom command is empty.' }
   }
+
   const [binary, ...rest] = tokenized.tokens
+
   if (!binary) {
     return { ok: false, error: 'Custom command must start with a binary name.' }
   }
@@ -298,7 +333,9 @@ export function planCustomCommand(
     token.includes(CUSTOM_PROMPT_PLACEHOLDER)
       ? token.split(CUSTOM_PROMPT_PLACEHOLDER).join(prompt)
       : token
+
   const usesPlaceholder = tokenized.tokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
+
   if (usesPlaceholder) {
     return {
       ok: true,
@@ -307,5 +344,6 @@ export function planCustomCommand(
       stdinPayload: null
     }
   }
+
   return { ok: true, binary, args: rest, stdinPayload: prompt }
 }

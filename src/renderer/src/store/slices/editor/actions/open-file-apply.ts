@@ -48,6 +48,7 @@ export function applyOpenFileToState(
 ): Partial<AppState> | AppState {
   const worktreeId = file.worktreeId
   let operationProvenance = file.operationProvenance
+
   if (!operationProvenance && file.mode === 'edit' && file.readOnly !== true) {
     try {
       operationProvenance = captureEditorFileOperationProvenance(
@@ -61,6 +62,7 @@ export function applyOpenFileToState(
       // Why: mirrored tabs can arrive before their graph row; allow convergence while mutation paths still fail closed without provenance.
     }
   }
+
   const runtimeEnvironmentId = operationProvenance
     ? operationProvenance.generation.route.runtimeEnvironmentId
     : file.runtimeEnvironmentId === null
@@ -69,13 +71,16 @@ export function applyOpenFileToState(
         (options?.suppressActiveRuntimeFallback
           ? null
           : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+
   const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
+
   const existing = s.openFiles.find(
     (f) =>
       matchesEditorMode(f, reusableOpenFileModes) &&
       isSameEditorOwner(f, worktreeId, runtimeEnvironmentId) &&
       (f.filePath === file.filePath || canReuseLocalWslAlias(s, f, file, runtimeEnvironmentId))
   )
+
   // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
   const id = existing
     ? existing.id
@@ -88,19 +93,24 @@ export function applyOpenFileToState(
           runtimeEnvironmentId,
           reusableOpenFileModes
         )
+
   scratch.editorItemFileId = id
   const isPreview = options?.preview ?? false
   const recordReplacedPreview = options?.recordReplacedPreview ?? false
+
   // Why: resolve the target group up-front so preview replacement is scoped to it (group B open must not evict group A's preview).
   const targetGroupId =
     resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult = buildEditorActiveResult(s, worktreeId, id)
+
   if (existing) {
     // If opening as non-preview, also pin the existing tab
     const updatedPreview = isPreview ? existing.isPreview : false
     const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
     const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
+
     const fileContentReloadNonce = shouldRequestExistingFileContentReload(
       existing,
       file.mode,
@@ -108,6 +118,7 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
+
     const needsExistingUpdate =
       existing.mode !== file.mode ||
       existing.diffSource !== file.diffSource ||
@@ -125,9 +136,11 @@ export function applyOpenFileToState(
       existing.externalSshTargetId !== nextExternalSshTargetId ||
       refreshExternalSshProvenance ||
       existing.fileContentReloadNonce !== fileContentReloadNonce
+
     if (!needsExistingUpdate) {
       return activeResult
     }
+
     // Why: `readOnly` is intentionally NOT in this override map — it's sticky, so `...f` preserves the tab's own read-only state.
     return {
       openFiles: s.openFiles.map((f) =>
@@ -164,11 +177,14 @@ export function applyOpenFileToState(
 
   // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
   let newFiles = s.openFiles
+
   if (isPreview) {
     const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
     const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
+
     if (existingPreviewIdx !== -1) {
       const replacedPreview = s.openFiles[existingPreviewIdx]
+
       // Why: reuse the shared eviction helper so per-file cursor/draft/visibility cleanup stays in one place.
       const {
         editorDrafts: nextEditorDrafts,
@@ -179,6 +195,7 @@ export function applyOpenFileToState(
         markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
         markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible
       } = removeEditorStateForReplacedPreview(s, replacedPreview, id)
+
       // Replace in-place to preserve tab position
       newFiles = s.openFiles.map((f, i) =>
         i === existingPreviewIdx
@@ -194,6 +211,7 @@ export function applyOpenFileToState(
       )
       // Swap the old preview ID for the new one in the stored tab bar order
       const prevOrder = s.tabBarOrderByWorktree?.[worktreeId]
+
       const previewTabBarUpdate = prevOrder
         ? {
             tabBarOrderByWorktree: {
@@ -202,9 +220,11 @@ export function applyOpenFileToState(
             }
           }
         : {}
+
       // Why: push the evicted preview onto the recently-closed stack so Cmd/Ctrl+Shift+T can reopen it; gated to keep file-explorer clicks silent.
       let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
       let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
+
       if (recordReplacedPreview && replacedPreview.id !== id) {
         const {
           id: _rid,
@@ -212,6 +232,7 @@ export function applyOpenFileToState(
           mirroredFromRuntimeSession: _rmirrored,
           ...snap
         } = replacedPreview
+
         const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
         const position = getRecentlyClosedTabPosition(s, worktreeId, replacedPreview.id)
         nextRecentlyClosed = {
@@ -231,6 +252,7 @@ export function applyOpenFileToState(
           'editor'
         )
       }
+
       return {
         openFiles: newFiles,
         editorDrafts: nextEditorDrafts,
@@ -250,6 +272,7 @@ export function applyOpenFileToState(
 
   // Why: append to the persisted tab bar order, else TabBar's reconcileOrder falls back to type-grouped ordering (terminals first).
   const tabBarUpdate: Record<string, unknown> = {}
+
   if (s.tabBarOrderByWorktree) {
     const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
     const terminalIds = (s.tabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
@@ -258,12 +281,14 @@ export function applyOpenFileToState(
     const allExisting = new Set([...terminalIds, ...editorFileIds, ...browserIds])
     const base = currentOrder.filter((eid) => allExisting.has(eid))
     const inBase = new Set(base)
+
     for (const eid of [...terminalIds, ...editorFileIds, ...browserIds]) {
       if (!inBase.has(eid)) {
         base.push(eid)
         inBase.add(eid)
       }
     }
+
     base.push(id)
     tabBarUpdate.tabBarOrderByWorktree = { ...s.tabBarOrderByWorktree, [worktreeId]: base }
   }

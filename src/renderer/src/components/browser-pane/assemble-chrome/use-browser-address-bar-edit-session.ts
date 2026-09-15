@@ -65,6 +65,7 @@ export function useBrowserAddressBarEditSession({
       if (document.activeElement === addressBarInputRef.current) {
         return
       }
+
       setAddressBarValue(next)
     },
     [addressBarInputRef]
@@ -85,16 +86,20 @@ export function useBrowserAddressBarEditSession({
       // Why cleared rather than left standing: a page id that arrives with nothing parked must not
       // inherit the previous one's caret. Today's deps make that unreachable; a future one need not.
       resumedSelectionRef.current = session?.selection ?? null
+
       if (session) {
         pendingCaretRef.current = session
         setAddressBarValue(session.draft)
         setResumed({ suggestionsOpen: session.suggestionsOpen, preview: session.preview })
       }
     }
+
     const selection = resumedSelectionRef.current
+
     if (!selection) {
       return
     }
+
     // Why the grab sits outside that branch: the teardown on the way through a rebuild cancels
     // whatever grab is in flight, so a grab fired only on the consume leaves the rebuilt pane with
     // nothing holding the bar, and its guest-attach effect takes focus to the page. Re-firing needs
@@ -107,14 +112,18 @@ export function useBrowserAddressBarEditSession({
   // commit that lands it — and the only one, so nothing keeps re-aiming a bar the user is typing in.
   useLayoutEffect(() => {
     const pending = pendingCaretRef.current
+
     if (!pending || pending.draft !== addressBarValue) {
       return
     }
+
     pendingCaretRef.current = null
     const input = addressBarInputRef.current
+
     if (!input || document.activeElement !== input) {
       return
     }
+
     input.setSelectionRange(
       pending.selection.start,
       pending.selection.end,

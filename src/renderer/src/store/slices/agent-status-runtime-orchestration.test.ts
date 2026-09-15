@@ -44,6 +44,7 @@ describe('agent status runtime orchestration metadata', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const paneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+
     const draft = {
       repoId: null,
       name: 'keep me',
@@ -55,6 +56,7 @@ describe('agent status runtime orchestration metadata', () => {
       linkedIssue: '',
       linkedPR: null
     }
+
     store.getState().setAgentStatus(paneKey, {
       state: 'waiting',
       prompt: 'worker prompt',
@@ -363,6 +365,7 @@ describe('agent status runtime orchestration metadata', () => {
     const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
     const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
     const now = Date.now()
+
     const entry: AgentStatusEntry = {
       state: 'done',
       prompt: 'child agent',
@@ -371,6 +374,7 @@ describe('agent status runtime orchestration metadata', () => {
       paneKey: childPaneKey,
       stateHistory: []
     }
+
     const retained: RetainedAgentEntry = {
       entry,
       worktreeId: 'wt-1',

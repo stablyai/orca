@@ -20,6 +20,7 @@ type ProseMirrorViewWithDomObserver = Editor['view'] & {
 
 export function flushPendingProseMirrorSelection(editor: Editor): void {
   let observer: ProseMirrorDomObserver | undefined
+
   try {
     observer = (editor.view as ProseMirrorViewWithDomObserver).domObserver
   } catch {

@@ -15,9 +15,13 @@ export type { FeedbackImageAttachment }
 // subject to CORS, so we proxy the submission through IPC. This mirrors the
 // same pattern used by updater-changelog.ts and updater-nudge.ts.
 const FEEDBACK_API_URL = 'https://www.onorca.dev/v1/feedback'
+
 const FEEDBACK_REQUEST_TIMEOUT_MS = 10_000
+
 const FEEDBACK_ATTACHMENT_REQUEST_TIMEOUT_MS = 60_000
+
 const DIAGNOSTIC_BUNDLE_CONTENT_TYPE = 'application/x-ndjson'
+
 // Why: corporate filters can reject multipart with 403 while allowing the
 // small JSON report, so content-shaped failures should shed the attachment.
 const DIAGNOSTIC_BUNDLE_JSON_RETRY_STATUSES = new Set([400, 403, 408, 413, 415, 422])
@@ -112,27 +116,33 @@ async function postFeedback(
   const controller = new AbortController()
   // Why: a silent endpoint must not leave feedback IPC pending forever.
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
   try {
     const init: RequestInit = {
       method: 'POST',
       ...feedbackRequestBodyInit(body),
       signal: controller.signal
     }
+
     const response = await net.fetch(url, init)
+
     if (readResponse) {
       await readResponse(response)
     }
+
     // Why: a response parser may tolerate malformed legacy bodies, but it must
     // not turn the deadline's aborted body into a confirmed delivery.
     if (controller.signal.aborted) {
       throw new Error(`request timed out after ${timeoutMs / 1000} seconds`)
     }
+
     return response
   } catch (error) {
     // Why: Electron and Node report AbortError differently; keep deadline logs stable.
     if (controller.signal.aborted) {
       throw new Error(`request timed out after ${timeoutMs / 1000} seconds`)
     }
+
     throw error
   } finally {
     clearTimeout(timeout)
@@ -156,6 +166,7 @@ function feedbackRequestBodyInit(body: FeedbackSubmitBody): Pick<RequestInit, 'b
   appendFeedbackFormField(formData, 'platform', body.platform)
   appendFeedbackFormField(formData, 'osRelease', body.osRelease)
   appendFeedbackFormField(formData, 'arch', body.arch)
+
   if (body.diagnosticBundle) {
     appendFeedbackFormField(
       formData,
@@ -174,6 +185,7 @@ function feedbackRequestBodyInit(body: FeedbackSubmitBody): Pick<RequestInit, 'b
       `orca-diagnostics-${body.diagnosticBundle.bundleSubmissionId}.ndjson`
     )
   }
+
   appendFeedbackImagesToFormData(formData, body.images ?? [])
 
   // Why: multipart avoids JSON-escaping a near-cap NDJSON bundle over the
@@ -205,13 +217,17 @@ async function retryFeedbackOnPrimary(
 ): Promise<FeedbackSubmitResult> {
   try {
     const retry = await postFeedback(FEEDBACK_API_URL, body)
+
     if (retry.ok) {
       return { ok: true }
     }
+
     const retryMessage = `status ${retry.status}`
+
     if (primaryError === undefined) {
       return { ok: false, status: retry.status, error: retryMessage }
     }
+
     // Why: keep the first failure visible so support can see 5xx → retry outcome,
     // not only the last error in a same-host retry chain.
     return {
@@ -221,9 +237,11 @@ async function retryFeedbackOnPrimary(
     }
   } catch (retryError) {
     const message = messageFromError(retryError)
+
     if (primaryError === undefined) {
       return { ok: false, status: null, error: message }
     }
+
     return {
       ok: false,
       status: null,
@@ -242,9 +260,11 @@ async function submitFeedbackWithoutDiagnosticBundle(
 ): Promise<FeedbackSubmitResult> {
   try {
     const response = await postFeedback(FEEDBACK_API_URL, body)
+
     if (response.ok) {
       return { ok: true, diagnosticBundleFailure }
     }
+
     return { ok: false, ...responseFailure(response), diagnosticBundleFailure }
   } catch (error) {
     return { ok: false, ...errorFailure(error), diagnosticBundleFailure }
@@ -263,16 +283,21 @@ async function submitFeedbackWithDiagnosticBundle(
       body,
       FEEDBACK_ATTACHMENT_REQUEST_TIMEOUT_MS
     )
+
     if (response.ok) {
       return { ok: true }
     }
+
     const failure = responseFailure(response)
+
     if (bodyWithoutDiagnosticBundle && shouldRetryWithoutDiagnosticBundle(response.status)) {
       return submitFeedbackWithoutDiagnosticBundle(bodyWithoutDiagnosticBundle, failure)
     }
+
     return { ok: false, ...failure }
   } catch (error) {
     const failure = errorFailure(error)
+
     return bodyWithoutDiagnosticBundle
       ? submitFeedbackWithoutDiagnosticBundle(bodyWithoutDiagnosticBundle, failure)
       : { ok: false, ...failure }
@@ -286,14 +311,18 @@ export async function submitFeedback(
   // there would abort a crash report over attachments it never meant to send.
   if (args.submissionType !== 'crash' && args.images !== undefined) {
     const imageError = validateFeedbackImages(args.images)
+
     if (imageError) {
       return { ok: false, status: null, error: imageError }
     }
   }
+
   const body = buildSubmitBody(args)
+
   if (body.images?.length) {
     try {
       let imagesDelivered = true
+
       const response = await postFeedback(
         FEEDBACK_API_URL,
         body,
@@ -302,9 +331,11 @@ export async function submitFeedback(
           imagesDelivered = nextResponse.ok ? await readFeedbackImagesDelivered(nextResponse) : true
         }
       )
+
       if (response.ok) {
         return { ok: true, imagesDelivered }
       }
+
       // Why: the text lane retries 5xx, this one does not. Replaying up to
       // 32 MiB of attachments on a flaky link costs more than it saves, and the
       // dialog keeps the draft and thumbnails so the user can resend.
@@ -313,6 +344,7 @@ export async function submitFeedback(
       return { ok: false, ...errorFailure(error) }
     }
   }
+
   if (body.diagnosticBundle) {
     const bodyWithoutDiagnosticBundle =
       args.feedbackWithoutDiagnosticBundle !== undefined
@@ -322,18 +354,23 @@ export async function submitFeedback(
             diagnosticBundle: undefined
           })
         : null
+
     return submitFeedbackWithDiagnosticBundle(body, bodyWithoutDiagnosticBundle)
   }
+
   try {
     const res = await postFeedback(FEEDBACK_API_URL, body)
+
     if (res.ok) {
       return { ok: true }
     }
+
     // Why: api.onorca.dev serves a different product, so transient failures
     // retry the endpoint that owns feedback and crash delivery.
     if (res.status >= 500) {
       return retryFeedbackOnPrimary(body, new Error(`status ${res.status}`))
     }
+
     return { ok: false, status: res.status, error: `status ${res.status}` }
   } catch (error) {
     return retryFeedbackOnPrimary(body, error)
@@ -347,10 +384,12 @@ export function registerFeedbackHandlers(): void {
     // cannot become a large main-process typed-array allocation.
     if (args.images !== undefined) {
       const imageError = validateFeedbackImages(args.images)
+
       if (imageError) {
         return { ok: false, status: null, error: imageError }
       }
     }
+
     // Why: crash submissions are main-only. A compromised renderer can invoke
     // this channel directly, so force the public feedback lane at the boundary.
     return submitFeedback({

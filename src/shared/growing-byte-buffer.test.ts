@@ -33,6 +33,7 @@ describe('GrowingByteBuffer', () => {
 
   it('consumes delimited prefixes and retains a bounded suffix', () => {
     const buffer = new GrowingByteBuffer()
+
     for (const byte of Buffer.from('first\nsecond-tail')) {
       buffer.append(Uint8Array.of(byte))
     }

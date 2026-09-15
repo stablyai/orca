@@ -20,6 +20,7 @@ const DISMISSAL = {
 
 function createStore(uiSet: ReturnType<typeof vi.fn>) {
   ;(globalThis as { window: unknown }).window = { api: { ui: { set: uiSet } } }
+
   return create<AppState>()(
     (...a) =>
       ({
@@ -75,6 +76,7 @@ describe('workspace cleanup browse slice', () => {
       store.getState().updateWorkspaceCleanupBrowseState(next)
       await vi.advanceTimersByTimeAsync(WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS - 1)
     }
+
     await vi.advanceTimersByTimeAsync(WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS)
 
     expect(uiSet).toHaveBeenCalledTimes(1)

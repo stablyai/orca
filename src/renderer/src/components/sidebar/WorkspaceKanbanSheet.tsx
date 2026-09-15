@@ -29,27 +29,35 @@ export default function WorkspaceKanbanSheet({
   statusBarVisible
 }: WorkspaceKanbanSheetProps): React.JSX.Element {
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
+
   const drawerLeftCss = sidebarOpen
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
     : '0px'
+
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
+
   const keepOpenForOutsideEvent = (event: {
     preventDefault: () => void
     detail: { originalEvent: Event }
   }): void => {
     const originalEvent = event.detail.originalEvent
     const target = originalEvent.target
+
     if (preserveOpenForMenu || isWorkspaceBoardKeepOpenTarget(target)) {
       event.preventDefault()
+
       return
     }
+
     const liveDrawerLeft =
       boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')?.getBoundingClientRect()
         .left ?? drawerLeft
+
     const pointerX =
       'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
         ? originalEvent.clientX
         : null
+
     if (pointerX !== null && pointerX < liveDrawerLeft) {
       event.preventDefault()
     }

@@ -29,6 +29,7 @@ export function parsedViewportShowsParkedCursorAgentScreen(
   terminal: TerminalWithInspectableBuffer
 ): boolean | null {
   const buffer = terminal.buffer?.active
+
   if (
     !buffer ||
     typeof buffer.getLine !== 'function' ||
@@ -37,6 +38,7 @@ export function parsedViewportShowsParkedCursorAgentScreen(
   ) {
     return null
   }
+
   return (
     resolveCursorAgentImeAnchor({
       buffer,
@@ -56,12 +58,16 @@ export function terminalOwnsDomFocus(terminal: TerminalWithFocusMode): boolean {
   if (typeof document === 'undefined' || !terminal.textarea) {
     return false
   }
+
   return document.activeElement === terminal.textarea
 }
 
 export const CURSOR_AGENT_REATTACH_HEADER = 'Cursor Agent'
+
 const CURSOR_AGENT_REATTACH_INPUT_MARKER = '→'
+
 const CURSOR_AGENT_REATTACH_SCREEN_SIGNAL_MAX_CHARS = 5000
+
 // Why bounded: reattach payloads reach multiple MB, but every replay puts the current screen last
 // and only the header nearest the end matters. 256KB clears even a fully SGR-styled frame by ~2x,
 // so the cut only ever drops stale scrollback — which would have been rejected anyway.
@@ -72,18 +78,22 @@ export function hasCursorAgentReattachPayloadScreenSignal(data: string): boolean
     data.length > CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS
       ? data.slice(-CURSOR_AGENT_REATTACH_SCAN_TAIL_LIMIT_CHARS)
       : data
+
   // Why CSI only: OSC-carried titles must keep counting as a header occurrence, as they did when
   // this stripped CSI by hand.
   const normalized = tail.replace(CSI_SEQUENCE_PATTERN, '')
   // Why: anchor on the LAST header occurrence — replay buffers keep scrollback,
   // and an earlier finished run must not classify the current screen.
   const headerIndex = normalized.lastIndexOf(CURSOR_AGENT_REATTACH_HEADER)
+
   if (headerIndex === -1) {
     return false
   }
+
   const screenTail = normalized.slice(
     headerIndex + CURSOR_AGENT_REATTACH_HEADER.length,
     headerIndex + CURSOR_AGENT_REATTACH_SCREEN_SIGNAL_MAX_CHARS
   )
+
   return screenTail.includes(`${CURSOR_AGENT_REATTACH_INPUT_MARKER} `)
 }

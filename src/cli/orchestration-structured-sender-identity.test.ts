@@ -30,6 +30,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -47,6 +48,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -90,6 +92,7 @@ describe('a structured worker running orchestration commands as itself', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       return { id: 'req', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
     })
   }
@@ -135,6 +138,7 @@ describe('a structured worker running orchestration commands as itself', () => {
           _meta: { runtimeId: 'runtime-1' }
         }
       }
+
       return { id: 'req', ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } }
     })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

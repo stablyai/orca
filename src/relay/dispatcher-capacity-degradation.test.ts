@@ -13,10 +13,12 @@ const preparationCalls = vi.hoisted(() => ({ count: 0 }))
 
 vi.mock('./protocol', async (importOriginal) => {
   const actual = await importOriginal<typeof ProtocolModule>()
+
   return {
     ...actual,
     prepareJsonRpcPayload: (...args: Parameters<typeof actual.prepareJsonRpcPayload>) => {
       preparationCalls.count++
+
       return actual.prepareJsonRpcPayload(...args)
     }
   }
@@ -35,8 +37,10 @@ function makeSaturatingClient(highWaterMark: number): BoundedClient {
   const client = makeBoundedClient(highWaterMark)
   client.write = (data: Buffer) => {
     client.frames.push(Buffer.from(data))
+
     return false
   }
+
   return client
 }
 
@@ -46,6 +50,7 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
     closes: 0,
     write: (data: Buffer) => {
       client.frames.push(Buffer.from(data))
+
       return true
     },
     options: {
@@ -56,6 +61,7 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
       }
     }
   }
+
   return client
 }
 
@@ -64,11 +70,13 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
 function makeUnsettledWriteClient(highWaterMark: number): BoundedClient {
   const client = makeBoundedClient(highWaterMark)
   client.options = { ...client.options, supportsWriteCallback: true }
+
   return client
 }
 
 function decodePayload(frame: Buffer): Record<string, unknown> {
   const length = frame.readUInt32BE(9)
+
   return JSON.parse(frame.subarray(13, 13 + length).toString('utf-8'))
 }
 
@@ -84,6 +92,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('producerEnvelopeBudget returns a negative budget for an over-cap envelope', () => {
     const primary = makeBoundedClient(16384)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       expect(
         bounded.producerEnvelopeBudget('fs.changed', { events: ['x'.repeat(64)] })
@@ -100,9 +109,11 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(65536)
     const secondary = makeBoundedClient(16384)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const secondaryId = bounded.attachClient(secondary.write, secondary.options)
       const params = { events: ['x'.repeat(64)] }
+
       const envelopeBytes = encodeJsonRpcFrame(
         { jsonrpc: '2.0', method: 'fs.changed', params },
         0,
@@ -129,6 +140,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(65536)
     const secondary = makeBoundedClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const secondaryId = bounded.attachClient(secondary.write, secondary.options)
       const params = { events: ['x'.repeat(64)] }
@@ -148,6 +160,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('producerDataBudget keeps its pre-delegation value for a pty.data envelope', () => {
     const primary = makeBoundedClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       // Snapshot of the shipped formula: 49152-byte producer capacity minus the 96-byte empty-data frame.
       expect(bounded.producerDataBudget('pty.data', { ptyId: 'pty-7', seq: 42 })).toBe(49056)
@@ -161,6 +174,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('producerDataBudget floors at zero when the envelope alone exceeds capacity', () => {
     const primary = makeBoundedClient(1030)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       expect(bounded.producerDataBudget('pty.data', { ptyId: 'x'.repeat(4096) })).toBe(0)
     } finally {
@@ -172,6 +186,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       bounded.notify('fs.changed', { events: ['x'.repeat(20_000)] })
 
@@ -195,6 +210,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const flood = { events: ['x'.repeat(20_000)] }
       bounded.notify('fs.changed', flood)
@@ -215,6 +231,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeSaturatingClient(4 * 1024 * 1024)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       // The first 1.5MB frame is retained by the stalled sink; the second exceeds the 2MB producer queue.
       bounded.notify('fs.changed', { events: ['x'.repeat(1_500_000)] })
@@ -245,6 +262,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const flood = { events: ['x'.repeat(20_000)] }
       bounded.notify('fs.changed', flood)
@@ -265,6 +283,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(65536)
     const secondary = makeBoundedClient(16384)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const secondaryId = bounded.attachClient(secondary.write, secondary.options)
 
@@ -292,11 +311,14 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeSaturatingClient(65536)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const clientId = bounded.activeClientIds()[0]
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         bounded.notifyClient(clientId, `control.${index}`)
       }
+
       expect(primary.closes).toBe(0)
 
       bounded.notifyClient(clientId, 'control.overflow')
@@ -311,11 +333,14 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeSaturatingClient(65536)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const clientId = bounded.activeClientIds()[0]
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         bounded.notifyClient(clientId, `control.${index}`)
       }
+
       expect(primary.closes).toBe(0)
 
       // Replay is never retried, so an unnoticed drop would strand the pane on a short buffer.
@@ -332,6 +357,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const secondary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const secondaryId = bounded.attachClient(secondary.write, secondary.options)
       const flood = { events: ['x'.repeat(20_000)] }
@@ -355,6 +381,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const primary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const flood = { events: ['x'.repeat(20_000)] }
       bounded.notify('fs.changed', flood)
@@ -373,6 +400,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('sendResponse substitutes a JSON-RPC error instead of closing when the legacy lane rejects', async () => {
     const primary = makeBoundedClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       bounded.onRequest('fs.listFiles', async () => ({ paths: 'x'.repeat(3 * 1024 * 1024) }))
       bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 77, method: 'fs.listFiles' }, 1, 0))
@@ -380,10 +408,12 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
 
       expect(primary.closes).toBe(0)
       expect(primary.frames).toHaveLength(1)
+
       const response = decodePayload(primary.frames[0]) as unknown as {
         id: number
         error: { code: number; message: string }
       }
+
       expect(response.id).toBe(77)
       expect(response.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
       expect(response.error.message).toBe('Relay response exceeded the bounded transport capacity')
@@ -395,10 +425,12 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('settles the response fence as failed when the substitute error replaces the result', async () => {
     const primary = makeBoundedClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const settlements: SinkWriteSettlement[] = []
       bounded.onRequest('fs.listFiles', async (_params, context) => {
         context.onResponseSettled?.((result) => settlements.push(result))
+
         return { paths: 'x'.repeat(3 * 1024 * 1024) }
       })
       bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 79, method: 'fs.listFiles' }, 1, 0))
@@ -420,10 +452,12 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
     const stalled = makeSaturatingClient(65536)
     const healthy = makeBoundedClient(65536)
     const bounded = new RelayDispatcher(stalled.write, stalled.options)
+
     try {
       const stalledId = bounded.activeClientIds()[0]
       const healthyId = bounded.attachClient(healthy.write, healthy.options)
       let parked = 0
+
       while (
         parked <= LEGACY_CLIENT_RETAINED_BYTES_LOW &&
         bounded.publishProducerNotification(stalledId, 'pty.data', {
@@ -433,6 +467,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       ) {
         parked += 40_000
       }
+
       expect(parked).toBeGreaterThan(LEGACY_CLIENT_RETAINED_BYTES_LOW)
 
       expect(bounded.producerRetentionBelowLowWater(stalledId)).toBe(false)
@@ -452,6 +487,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('sendResponse settles an already-failed oversized response without closing', async () => {
     const primary = makeBoundedClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       bounded.onRequest('fs.listFiles', async () => {
         throw new Error('x'.repeat(3 * 1024 * 1024))
@@ -461,10 +497,12 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
 
       expect(primary.closes).toBe(0)
       expect(primary.frames).toHaveLength(1)
+
       const response = decodePayload(primary.frames[0]) as unknown as {
         id: number
         error: { code: number; message: string }
       }
+
       expect(response.id).toBe(78)
       expect(response.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
       expect(response.error.message).toBe('Relay response exceeded the bounded transport capacity')
@@ -476,6 +514,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('answers an over-budget response with a capacity error instead of closing the connection', async () => {
     const primary = makeUnsettledWriteClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const clientId = bounded.activeClientIds()[0]
       bounded.onRequest('fs.listFiles', async () => ({ paths: 'x'.repeat(700 * 1024) }))
@@ -492,10 +531,12 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       expect(primary.closes).toBe(0)
       expect(bounded.isClientAttached(clientId)).toBe(true)
       expect(primary.frames).toHaveLength(2)
+
       const rejected = decodePayload(primary.frames[1]) as unknown as {
         id: number
         error: { code: number; message: string }
       }
+
       expect(rejected.id).toBe(92)
       expect(rejected.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
       expect(rejected.error.message).toBe('Relay response exceeded the bounded transport capacity')
@@ -519,6 +560,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('still closes the client when a protocol-critical control frame overflows', () => {
     const primary = makeUnsettledWriteClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const clientId = bounded.activeClientIds()[0]
       bounded.notifyClient(clientId, 'workspace.stale', { blob: 'x'.repeat(700 * 1024) })
@@ -535,16 +577,20 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
   it('drops an unsendable response without closing when even the capacity error will not fit', async () => {
     const primary = makeUnsettledWriteClient(65536)
     const bounded = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const clientId = bounded.activeClientIds()[0]
       const settlements: SinkWriteSettlement[] = []
       bounded.onRequest('workspace.get', async (_params, context) => {
         context.onResponseSettled?.((result) => settlements.push(result))
+
         return { name: 'workspace' }
       })
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         bounded.notifyClient(clientId, `control.${index}`)
       }
+
       const framesBefore = primary.frames.length
 
       bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 94, method: 'workspace.get' }, 1, 0))

@@ -82,6 +82,7 @@ describe('FsHandler', () => {
 
   it('readDir returns entries directories-first in natural name order', async () => {
     mkdirSync(path.join(tmpDir, 'subdir'))
+
     for (const name of ['file.txt', '100 - b.txt', '99 - a.txt', '9 - c.txt']) {
       writeFileSync(path.join(tmpDir, name), 'x')
     }
@@ -90,6 +91,7 @@ describe('FsHandler', () => {
       name: string
       isDirectory: boolean
     }[]
+
     expect(result[0]).toMatchObject({ name: 'subdir', isDirectory: true })
     expect(result.slice(1).map((e) => e.name)).toEqual([
       '9 - c.txt',
@@ -126,6 +128,7 @@ describe('FsHandler', () => {
       content: string
       isBinary: boolean
     }
+
     expect(result.content).toBe('hello world')
     expect(result.isBinary).toBe(false)
   })
@@ -139,6 +142,7 @@ describe('FsHandler', () => {
       content: string
       isBinary: boolean
     }
+
     expect(result.content).toBe(content)
     expect(result.isBinary).toBe(false)
   })
@@ -153,6 +157,7 @@ describe('FsHandler', () => {
       content: string
       isBinary: boolean
     }
+
     expect(result.content).toBe('')
     expect(result.isBinary).toBe(true)
   })
@@ -167,6 +172,7 @@ describe('FsHandler', () => {
       isImage: boolean
       mimeType: string
     }
+
     expect(result.isBinary).toBe(true)
     expect(result.isImage).toBe(true)
     expect(result.mimeType).toBe('image/png')
@@ -350,6 +356,7 @@ describe('FsHandler', () => {
       type: string
       mtime: number
     }
+
     expect(result.type).toBe('file')
     expect(result.size).toBe(4)
     expect(typeof result.mtime).toBe('number')
@@ -359,6 +366,7 @@ describe('FsHandler', () => {
     const result = (await dispatcher.callRequest('fs.stat', { filePath: tmpDir })) as {
       type: string
     }
+
     expect(result.type).toBe('directory')
   })
 
@@ -562,9 +570,11 @@ describe('FsHandler', () => {
       { rootPath: tmpDir },
       { isStale: () => true }
     )
+
     while (mockSubscribe.mock.calls.length === 0) {
       await Promise.resolve()
     }
+
     await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => false })
     resolveFirst()
     await firstWatch
@@ -602,6 +612,7 @@ describe('FsHandler', () => {
 
     let stale = false
     await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => stale })
+
     for (let index = 0; index < 19; index++) {
       await dispatcher.callRequest('fs.watch', {
         rootPath: path.join(tmpDir, `watched-${index}`)
@@ -629,6 +640,7 @@ describe('FsHandler', () => {
         isStale: () => stale
       }
     )
+
     for (let index = 0; index < 19; index += 1) {
       await dispatcher.callRequest('fs.watch', {
         rootPath: path.join(tmpDir, `watched-${index}`)
@@ -680,19 +692,23 @@ describe('FsHandler', () => {
 
   it('settles acknowledged unwatch only after native unsubscribe completes', async () => {
     let resolveUnsubscribe: () => void = () => {}
+
     const unsubscribe = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveUnsubscribe = resolve
         })
     )
+
     mockSubscribe.mockResolvedValue({ unsubscribe })
     await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
 
     let settled = false
+
     const unwatch = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
       settled = true
     })
+
     await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
     expect(settled).toBe(false)
 
@@ -704,13 +720,16 @@ describe('FsHandler', () => {
   it('waits for in-flight native setup before acknowledging teardown', async () => {
     handler.dispose()
     let resolveSubscribe: (value: { unsubscribe: () => Promise<void> }) => void = () => {}
+
     const unsubscribe = vi.fn(async () => undefined)
+
     const subscribe = vi.fn(
       () =>
         new Promise<{ unsubscribe: () => Promise<void> }>((resolve) => {
           resolveSubscribe = resolve
         })
     )
+
     handler = new FsHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
       dispose: vi.fn(),
       forgetRoot: vi.fn(),
@@ -719,9 +738,11 @@ describe('FsHandler', () => {
 
     const watch = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
     let unwatchSettled = false
+
     const unwatch = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
       unwatchSettled = true
     })
+
     await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1))
     expect(unwatchSettled).toBe(false)
 
@@ -732,20 +753,24 @@ describe('FsHandler', () => {
 
   it('joins a physical unsubscribe already started by the notification path', async () => {
     let resolveUnsubscribe: () => void = () => {}
+
     const unsubscribe = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveUnsubscribe = resolve
         })
     )
+
     mockSubscribe.mockResolvedValue({ unsubscribe })
     await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
     dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
 
     let settled = false
+
     const joined = dispatcher.callRequest('fs.unwatchAndWait', { rootPath: tmpDir }).then(() => {
       settled = true
     })
+
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -758,6 +783,7 @@ describe('FsHandler', () => {
       .fn()
       .mockRejectedValueOnce(new Error('native handle still active'))
       .mockResolvedValueOnce(undefined)
+
     mockSubscribe.mockResolvedValue({ unsubscribe })
     await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
 

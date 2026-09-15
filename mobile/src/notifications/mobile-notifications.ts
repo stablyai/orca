@@ -25,20 +25,27 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   }
 
   const params = { includeDesktopSuppressed: true }
+
   const unsubscribeStream = client.subscribe('notifications.subscribe', params, (data: unknown) => {
     const event = data as DismissNotificationEvent | SubscribeResult | { type: string }
+
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
+
       if (disposed) {
         unsubscribeServer(subscriptionId)
         unsubscribeStream()
+
         return
       }
+
       // A max watermark asks only which delivered pushes are stale; socket history
       // never becomes a second OS-notification delivery route.
       void requestNotificationCatchup(client, hostId, () => disposed).catch(() => {})
+
       return
     }
+
     if (!disposed && event.type === 'dismiss') {
       void dismissHostPushNotification(event as DismissNotificationEvent, hostId).catch(() => {})
     }
@@ -47,6 +54,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   return () => {
     disposed = true
     unsubscribeStream()
+
     if (subscriptionId) {
       unsubscribeServer(subscriptionId)
     }

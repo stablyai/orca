@@ -3,18 +3,24 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
+
 const installFindShortcut = vi.hoisted(() => vi.fn(() => vi.fn()))
+
 const syncContentOnMount = vi.hoisted(() => vi.fn(() => false))
+
 const syncContentUpdate = vi.hoisted(() => vi.fn())
 
 vi.mock('@monaco-editor/react', () => ({
   default: (props: Record<string, unknown>) => {
     editorProps.current = props
+
     return <div data-testid="monaco-editor-stub" />
   },
   loader: { config: vi.fn() }
 }))
+
 vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -22,9 +28,11 @@ vi.mock('@/store', () => ({
       editorFontZoomLevel: 0
     })
 }))
+
 vi.mock('@/components/editor/editor-shortcuts', () => ({
   installMonacoEditorFindShortcut: installFindShortcut
 }))
+
 vi.mock('@/components/editor/monaco-content-sync', () => ({
   syncContentOnMount,
   syncContentUpdate
@@ -69,6 +77,7 @@ describe('AutomationEditorPromptEditor', () => {
       getContainerDomNode: () => document.createElement('div'),
       onDidDispose: vi.fn()
     }
+
     const { rerender } = render(
       <AutomationEditorPromptEditor
         value="original"
@@ -99,10 +108,12 @@ describe('AutomationEditorPromptEditor', () => {
   it('dismisses on Escape only when find is closed', () => {
     const onDismiss = vi.fn()
     const editorDom = document.createElement('div')
+
     const editorInstance = {
       getContainerDomNode: () => editorDom,
       onDidDispose: vi.fn()
     }
+
     render(
       <AutomationEditorPromptEditor
         value="prompt"

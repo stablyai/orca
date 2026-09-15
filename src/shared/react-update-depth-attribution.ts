@@ -12,9 +12,11 @@
 export const REACT_NESTED_UPDATE_LIMIT = 50
 
 export const UNRELIABLE_BOUNDARY_ATTRIBUTION = 'unreliable'
+
 export type CrashReportAttribution = typeof UNRELIABLE_BOUNDARY_ATTRIBUTION
 
 export const CRASH_REPORT_ATTRIBUTION_DETAIL_KEY = 'attribution'
+
 export const CRASH_REPORT_ATTRIBUTION_NOTE_DETAIL_KEY = 'attribution_note'
 
 // Keep under the 240-char detail cap so the note is never truncated mid-sentence.
@@ -29,12 +31,15 @@ function messageOf(error: unknown): string {
   if (typeof error === 'string') {
     return error
   }
+
   if (error instanceof Error) {
     return error.message
   }
+
   if (error && typeof error === 'object' && typeof (error as Error).message === 'string') {
     return (error as Error).message
   }
+
   return ''
 }
 

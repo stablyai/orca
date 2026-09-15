@@ -178,6 +178,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('keeps same-named github.com and GHES project cache entries separate', async () => {
     const store = createTestStore()
+
     const makeTable = (host: string, id: string) => ({
       project: {
         id,
@@ -202,6 +203,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       totalCount: 0,
       parentFieldDropped: false
     })
+
     mockApi.gh.getProjectViewTable
       .mockResolvedValueOnce({ ok: true, data: makeTable('github.com', 'dotcom-project') })
       .mockResolvedValueOnce({ ok: true, data: makeTable('ghe.example', 'enterprise-project') })
@@ -234,6 +236,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('routes project field mutations through the source encoded in the cache key', async () => {
     const store = createTestStore()
+
     const cacheKey = projectViewCacheKey(
       'organization',
       'acme',
@@ -243,6 +246,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       'runtime:env-project',
       'ghe.example:8443'
     )
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-focused' },
       projectViewCache: {
@@ -322,6 +326,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('routes slug-only project row mutations through the source encoded in the cache key', async () => {
     const store = createTestStore()
+
     const cacheKey = projectViewCacheKey(
       'organization',
       'acme',
@@ -330,6 +335,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       undefined,
       'runtime:env-project'
     )
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-focused' },
       repos: [],
@@ -466,6 +472,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const mutation = store
       .getState()
       .updateProjectFieldValue(cacheKey, 'row-1', 'field-1', { kind: 'text', text: 'after' })
+
     expect(
       store.getState().projectViewCache[cacheKey]?.data?.rows[0]?.fieldValuesByFieldId['field-1']
     ).toEqual({ kind: 'text', fieldId: 'field-1', text: 'after' })

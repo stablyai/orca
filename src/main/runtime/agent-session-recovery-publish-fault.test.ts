@@ -15,6 +15,7 @@ const publishFault = vi.hoisted(() => ({ armed: false }))
 
 vi.mock('../durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
+
   return {
     ...actual,
     renameDurable: async (tmpPath: string, finalPath: string) => {
@@ -22,12 +23,14 @@ vi.mock('../durable-file-write', async (importOriginal) => {
         publishFault.armed = false
         throw new Error('simulated death before primary publish')
       }
+
       return actual.renameDurable(tmpPath, finalPath)
     }
   }
 })
 
 let root: string
+
 let storePath: string
 
 beforeEach(async () => {
@@ -65,6 +68,7 @@ describe('backup recovery publication', () => {
     const recovered = await loadAgentSessionStore(storePath, 'local')
     expect(recovered.recoveredFromBackup).toBe(true)
     expect(recovered.state.retiredClaimKeys[0]?.keyId).toBe('generation-1')
+
     const queue = AgentSessionStoreTransactionQueue.fromLoadedStore(
       storePath,
       'local',

@@ -4,45 +4,61 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -64,6 +80,7 @@ describe('registerPtyHandlers', () => {
     const bulkProcs = Array.from({ length: 16 }, () => createMockProc())
     const hiddenProc = createMockProc()
     const heldProc = createMockProc()
+
     for (const proc of [...bulkProcs, hiddenProc, heldProc]) {
       spawnMock.mockReturnValueOnce(proc.proc)
     }
@@ -71,6 +88,7 @@ describe('registerPtyHandlers', () => {
     try {
       registerPtyHandlers(mainWindow as never)
       const bulkSpawns: { id: string }[] = []
+
       for (const _proc of bulkProcs) {
         bulkSpawns.push(
           (await handlers.get('pty:spawn')!(null, {
@@ -80,11 +98,13 @@ describe('registerPtyHandlers', () => {
           })) as { id: string }
         )
       }
+
       const hiddenSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -94,10 +114,13 @@ describe('registerPtyHandlers', () => {
       for (const proc of bulkProcs) {
         proc.emitData('x'.repeat(600 * 1024))
       }
+
       vi.advanceTimersByTime(2)
+
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
+
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 8 * 1024 * 1024,
         flushScheduled: false
@@ -126,6 +149,7 @@ describe('registerPtyHandlers', () => {
       const exitIndex = mainWindow.webContents.send.mock.calls.findIndex(
         (call) => call[0] === 'pty:exit'
       )
+
       expect(exitIndex).toBeGreaterThanOrEqual(0)
       expect(getPtyRendererDeliveryDebugSnapshot().flushScheduled).toBe(true)
       vi.advanceTimersByTime(1)
@@ -147,12 +171,14 @@ describe('registerPtyHandlers', () => {
     const bulkProcs = Array.from({ length: 16 }, () => createMockProc())
     const finalProc = createMockProc()
     const heldProc = createMockProc()
+
     for (const proc of [...bulkProcs, finalProc, heldProc]) {
       spawnMock.mockReturnValueOnce(proc.proc)
     }
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       for (const _proc of bulkProcs) {
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
@@ -160,11 +186,13 @@ describe('registerPtyHandlers', () => {
           cwd: '/tmp'
         })
       }
+
       const finalSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string; incarnationId: string }
+
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -174,10 +202,13 @@ describe('registerPtyHandlers', () => {
       for (const proc of bulkProcs) {
         proc.emitData('x'.repeat(600 * 1024))
       }
+
       vi.advanceTimersByTime(2)
+
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
+
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         rendererInFlightChars: 8 * 1024 * 1024,
         flushScheduled: false
@@ -212,17 +243,21 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const spawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       getPtySetActiveRendererPtyListener()(null, { id: spawn.id, active: true })
       proc.emitData('x'.repeat(1200 * 1024))
       vi.advanceTimersByTime(2)
+
       for (let index = 0; index < 80; index++) {
         vi.advanceTimersByTime(1)
       }
+
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         flushScheduled: false
@@ -243,6 +278,7 @@ describe('registerPtyHandlers', () => {
   it('prioritizes active PTY pending output during renderer backpressure', async () => {
     vi.useFakeTimers()
     const procs = Array.from({ length: 18 }, () => createMockProc())
+
     for (const proc of procs) {
       spawnMock.mockReturnValueOnce(proc.proc)
     }
@@ -250,6 +286,7 @@ describe('registerPtyHandlers', () => {
     try {
       registerPtyHandlers(mainWindow as never)
       const spawns: { id: string }[] = []
+
       for (const _proc of procs) {
         spawns.push(
           (await handlers.get('pty:spawn')!(null, {
@@ -259,6 +296,7 @@ describe('registerPtyHandlers', () => {
           })) as { id: string }
         )
       }
+
       const ackData = getPtyAckDataListener()
       const setActiveRendererPty = getPtySetActiveRendererPtyListener()
       mainWindow.webContents.send.mockClear()
@@ -266,10 +304,13 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < procs.length - 1; index++) {
         procs[index]!.emitData('x'.repeat(600 * 1024))
       }
+
       vi.advanceTimersByTime(2)
+
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
+
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
 
       const activeIndex = procs.length - 1
@@ -303,16 +344,19 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const activeSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const setActiveRendererPty = getPtySetActiveRendererPtyListener()
       mainWindow.webContents.send.mockClear()
 
       activeProc.emitData('x'.repeat(768 * 1024))
       vi.advanceTimersByTime(2)
+
       for (let index = 0; index < 31; index++) {
         vi.advanceTimersByTime(1)
       }

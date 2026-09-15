@@ -10,6 +10,7 @@ import { getHostedReviewForBranch } from './hosted-review'
 import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
 
 const execFileAsync = promisify(execFile)
+
 const OLD_ENV = process.env
 
 type SeenRequest = {
@@ -41,6 +42,7 @@ describe('Bitbucket hosted review integration', () => {
 
   it('resolves a Bitbucket PR through real git remote parsing and HTTP API calls', async () => {
     const seen: SeenRequest[] = []
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
       seen.push({
@@ -67,22 +69,27 @@ describe('Bitbucket hosted review integration', () => {
             }
           ]
         })
+
         return
       }
 
       if (url.pathname === '/2.0/repositories/team/repo/commit/abc123/statuses/build') {
         sendJson(res, { values: [{ state: 'SUCCESSFUL' }] })
+
         return
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ message: 'not found' }))
     })
+
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-review-'))
+
     try {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }
@@ -131,15 +138,20 @@ describe('Bitbucket hosted review integration', () => {
     vi.useFakeTimers({ now: Date.now() })
     let pullRequestCalls = 0
     let buildStatusCalls = 0
+
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+
       if (url.pathname === '/2.0/repositories/team/repo/pullrequests') {
         pullRequestCalls += 1
+
         if (pullRequestCalls === 1) {
           res.writeHead(503, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ message: 'temporary outage' }))
+
           return
         }
+
         sendJson(res, {
           values: [
             {
@@ -152,23 +164,28 @@ describe('Bitbucket hosted review integration', () => {
             }
           ]
         })
+
         return
       }
 
       if (url.pathname === '/2.0/repositories/team/repo/commit/def456/statuses/build') {
         buildStatusCalls += 1
         sendJson(res, { values: [{ state: 'SUCCESSFUL' }] })
+
         return
       }
 
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ message: 'not found' }))
     })
+
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-review-recovery-'))
+
     try {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         throw new Error('expected TCP server address')
       }

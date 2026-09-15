@@ -91,6 +91,7 @@ describe('workspace pane normalization tab index', () => {
   it('reads each tab id once regardless of the number of layouts', () => {
     const tabCount = 256
     let idReads = 0
+
     const tabs = Array.from({ length: tabCount }, (_, index) => {
       const id = `tab-${index}`
       const tab = terminalTab(id, 'worktree', null)
@@ -98,11 +99,14 @@ describe('workspace pane normalization tab index', () => {
         enumerable: true,
         get: () => {
           idReads += 1
+
           return id
         }
       })
+
       return tab
     })
+
     const layouts = Object.fromEntries(
       Array.from({ length: tabCount }, (_, index) => [`tab-${index}`, stableLayout()])
     )
@@ -129,17 +133,21 @@ describe('workspace pane normalization tab index', () => {
 
   it('resumes scanning and makes later misses constant-time', () => {
     const reads: string[] = []
+
     const tabs = ['first', 'second', 'third'].map((id) => {
       const tab = terminalTab(id, 'worktree', null)
       Object.defineProperty(tab, 'id', {
         enumerable: true,
         get: () => {
           reads.push(id)
+
           return id
         }
       })
+
       return tab
     })
+
     const lookup = createLazyTerminalTabLookup(workspaceSession({ worktree: tabs }, {}))
 
     expect(lookup.get('first')).toBe(tabs[0])
@@ -169,6 +177,7 @@ describe('workspace pane normalization tab index', () => {
       enumerable: true,
       get: () => {
         idReads += 1
+
         return 'skipped'
       }
     })

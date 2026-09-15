@@ -13,6 +13,7 @@ import {
 
 vi.mock('../../../shared/cross-platform-path', async (importOriginal) => {
   const actual = await importOriginal<typeof crossPlatformPath>()
+
   return {
     ...actual,
     normalizeRuntimePathForComparison: vi.fn(actual.normalizeRuntimePathForComparison)
@@ -92,8 +93,10 @@ describe('workspace file drag payloads', () => {
     const normalizePathForComparison = vi.mocked(
       crossPlatformPath.normalizeRuntimePathForComparison
     )
+
     normalizePathForComparison.mockClear()
     const transfer = new FakeDataTransfer()
+
     const paths = [
       'C:\\Repo\\src',
       'c:/repo/src/index.ts',
@@ -101,6 +104,7 @@ describe('workspace file drag payloads', () => {
       'C:/Repo/src-other/file.ts',
       'C:/Repo/src-other/file.ts'
     ]
+
     transfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
 
     const result = readWorkspaceFileDragPaths(transfer)

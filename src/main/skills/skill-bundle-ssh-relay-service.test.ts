@@ -23,6 +23,7 @@ afterEach(async () => {
 async function userDataPath(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-bundle-ssh-client-test-'))
   roots.push(root)
+
   return root
 }
 
@@ -81,15 +82,19 @@ describe('installSkillBundleOnSshHost', () => {
     const secondRpc = vi.fn(async (method: string) =>
       method === 'relay.status' ? { capabilities: ['skills.install.bundle.v1'] } : result()
     )
+
     const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
     let currentProvider: IPtyProvider
+
     const firstRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.bundle.v1'] }
       }
+
       currentProvider = secondProvider
       throw new Error('disconnected-provider-generation')
     })
+
     currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
 
     await expect(
@@ -115,15 +120,19 @@ describe('installSkillBundleOnSshHost', () => {
     const secondRpc = vi.fn(async (_method: string) => ({
       capabilities: ['skills.install.v1']
     }))
+
     const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
     let currentProvider: IPtyProvider
+
     const firstRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.bundle.v1'] }
       }
+
       currentProvider = secondProvider
       throw new Error('disconnected-provider-generation')
     })
+
     currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
 
     await expect(
@@ -139,13 +148,16 @@ describe('installSkillBundleOnSshHost', () => {
 
   it('uses the additive method only when advertised by the SSH host', async () => {
     const bytes = Buffer.from('private bundle archive')
+
     const requestHostRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.bundle.v1'] }
       }
+
       if (method === 'skills.installBundle') {
         return result()
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -176,6 +188,7 @@ describe('installSkillBundleOnSshHost', () => {
   it('polls current-skill progress only when the SSH host advertises it', async () => {
     const bytes = Buffer.from('private bundle archive')
     const onProgress = vi.fn()
+
     const progress = {
       operationId: 'bundle-operation',
       skillId: 'skill-1',
@@ -183,19 +196,24 @@ describe('installSkillBundleOnSshHost', () => {
       skillIndex: 1,
       skillCount: 30
     }
+
     const requestHostRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return {
           capabilities: ['skills.install.bundle.v1', 'skills.install-progress.v1']
         }
       }
+
       if (method === 'skills.getInstallProgress') {
         return progress
       }
+
       if (method === 'skills.installBundle') {
         await new Promise((resolve) => setTimeout(resolve, 0))
+
         return result()
       }
+
       throw new Error(`unexpected method ${method}`)
     })
 
@@ -217,26 +235,34 @@ describe('installSkillBundleOnSshHost', () => {
 
   it('falls back to client-mediated transfer after direct download fails', async () => {
     const bytes = Buffer.from('private bundle archive')
+
     const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.bundle.v1', 'skills.upload.v1'] }
       }
+
       if (method === 'skills.installBundle') {
         const ingress = (params as { request: SkillBundleInstallRequest }).request.ingress
+
         if (ingress.kind === 'download-grant') {
           throw Object.assign(new Error('skill-download-transport-failed'), { code: -32000 })
         }
+
         return result()
       }
+
       if (method === 'skills.beginUpload') {
         return { uploadId: 'upload_1', chunkBytes: 256 * 1024 }
       }
+
       if (method === 'skills.uploadChunk') {
         const chunk = params as { offset: number; bytesBase64: string }
+
         return {
           acknowledgedOffset: chunk.offset + Buffer.from(chunk.bytesBase64, 'base64').length
         }
       }
+
       return { ok: true }
     })
 
@@ -268,6 +294,7 @@ describe('installSkillBundleOnSshHost', () => {
 describe('previewSkillBundleInstallOnSshHost', () => {
   it('previews the complete bundle with one capability check and one RPC', async () => {
     const request = previewRequest()
+
     const response = {
       packageId: request.package.packageId,
       versionId: request.package.versionId,
@@ -275,6 +302,7 @@ describe('previewSkillBundleInstallOnSshHost', () => {
       destinationIdentity: 'global:ssh-host',
       skills: request.selectedSkills.map((skill) => ({ ...skill, currentState: 'missing' }))
     }
+
     const requestHostRpc = vi.fn(async (method: string) =>
       method === 'relay.status' ? { capabilities: ['skills.preview.bundle.v1'] } : response
     )
@@ -295,18 +323,22 @@ describe('previewSkillBundleInstallOnSshHost', () => {
     const request = previewRequest()
     let active = 0
     let maximumActive = 0
+
     const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.manage.v1'] }
       }
+
       if (method !== 'skills.previewInstall') {
         throw new Error(`unexpected method ${method}`)
       }
+
       active += 1
       maximumActive = Math.max(maximumActive, active)
       await Promise.resolve()
       active -= 1
       const input = params as { request: { name: string; package: { packageDigest: string } } }
+
       return {
         packageDigest: input.request.package.packageDigest,
         name: input.request.name,
@@ -339,18 +371,22 @@ describe('previewSkillBundleInstallOnSshHost', () => {
     let active = 0
     let cancelled = 0
     let maximumActive = 0
+
     const requestHostRpc = vi.fn(
       async (method: string, params: unknown, options?: { signal?: AbortSignal }) => {
         if (method === 'relay.status') {
           return { capabilities: ['skills.manage.v1'] }
         }
+
         const input = params as { request: { name: string; package: { packageDigest: string } } }
         active += 1
         maximumActive = Math.max(maximumActive, active)
+
         try {
           if (input.request.name === 'skill-0') {
             throw new Error('preview transport failed')
           }
+
           await new Promise<void>((_resolve, reject) => {
             const timeout = setTimeout(() => reject(new Error('preview cancellation timeout')), 250)
             options?.signal?.addEventListener(
@@ -365,6 +401,7 @@ describe('previewSkillBundleInstallOnSshHost', () => {
               { once: true }
             )
           })
+
           return {
             packageDigest: input.request.package.packageDigest,
             name: input.request.name,
@@ -407,15 +444,19 @@ describe('previewSkillBundleInstallOnSshHost', () => {
 
   it('preserves first-rejection retry semantics while settling a legacy batch', async () => {
     const nonRetryable = Object.assign(new Error('preview rejected'), { code: 400 })
+
     const requestHostRpc = vi.fn(async (method: string, params: unknown) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.manage.v1'] }
       }
+
       const input = params as { request: { name: string } }
+
       if (input.request.name === 'skill-0') {
         await new Promise((resolve) => setTimeout(resolve, 5))
         throw new Error('later transport failure')
       }
+
       throw nonRetryable
     })
 
@@ -443,6 +484,7 @@ describe('previewSkillBundleInstallOnSshHost', () => {
 
   it('adopts the current provider generation when preview retries after reconnect', async () => {
     const request = previewRequest()
+
     const response = {
       packageId: request.package.packageId,
       versionId: request.package.versionId,
@@ -453,18 +495,23 @@ describe('previewSkillBundleInstallOnSshHost', () => {
         currentState: 'missing' as const
       }))
     }
+
     const secondRpc = vi.fn(async (method: string) =>
       method === 'relay.status' ? { capabilities: ['skills.preview.bundle.v1'] } : response
     )
+
     const secondProvider = { requestHostRpc: secondRpc } as unknown as IPtyProvider
     let currentProvider: IPtyProvider
+
     const firstRpc = vi.fn(async (method: string) => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.preview.bundle.v1'] }
       }
+
       currentProvider = secondProvider
       throw new Error('disconnected-provider-generation')
     })
+
     currentProvider = { requestHostRpc: firstRpc } as unknown as IPtyProvider
 
     await expect(

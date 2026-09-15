@@ -51,11 +51,14 @@ async function serializePluginMutation<T>(
 ): Promise<T> {
   const previous = pluginMutationChains.get(pluginsDir) ?? Promise.resolve()
   const run = previous.catch(() => undefined).then(operation)
+
   const settled = run.then(
     () => undefined,
     () => undefined
   )
+
   pluginMutationChains.set(pluginsDir, settled)
+
   try {
     return await run
   } finally {
@@ -75,6 +78,7 @@ export async function installPluginFromLocalPath(input: {
     if (!existsSync(join(input.sourcePath, PLUGIN_MANIFEST_FILENAME))) {
       return { ok: false, error: `no ${PLUGIN_MANIFEST_FILENAME} found in ${input.sourcePath}` }
     }
+
     return installStagedPluginTree({
       pluginsDir: input.pluginsDir,
       stagingDir: input.sourcePath,
@@ -118,16 +122,20 @@ export async function installPluginFromGit(input: {
   if (!isAllowedPluginGitUrl(input.url)) {
     return { ok: false, error: 'plugin Git URL must use HTTPS or SSH' }
   }
+
   return serializePluginMutation(input.pluginsDir, async () => {
     const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-install-'))
+
     try {
       const ref = input.ref.trim()
+
       const resolvedCommit = await checkoutPluginGitSource({
         url: input.url,
         ref,
         destination: stagingDir,
         workingDirectory: tmpdir()
       })
+
       return await installStagedPluginTree({
         pluginsDir: input.pluginsDir,
         stagingDir,
@@ -158,14 +166,18 @@ export async function installPluginFromMarketplace(input: {
     marketplace: input.marketplace,
     plugin: input.plugin
   })
+
   if (!isQualifiedPluginKey(input.expectedPluginKey)) {
     return { ok: false, error: 'invalid marketplace plugin identity' }
   }
+
   if (!PLUGIN_COMMIT_PATTERN.test(input.expectedResolvedCommit)) {
     return { ok: false, error: 'invalid previewed plugin commit' }
   }
+
   return serializePluginMutation(input.pluginsDir, async () => {
     const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-install-'))
+
     try {
       const resolvedCommit = await checkoutPluginGitSource({
         url: input.plugin.url,
@@ -173,9 +185,11 @@ export async function installPluginFromMarketplace(input: {
         destination: stagingDir,
         workingDirectory: tmpdir()
       })
+
       if (resolvedCommit !== input.expectedResolvedCommit) {
         return { ok: false, error: 'plugin source changed after preview; review the update again' }
       }
+
       return await installStagedPluginTree({
         pluginsDir: input.pluginsDir,
         stagingDir,
@@ -205,16 +219,21 @@ export async function rollbackInstalledPlugin(input: {
   if (!isQualifiedPluginKey(input.pluginKey)) {
     return { ok: false, error: 'invalid qualified plugin key' }
   }
+
   const blockedReason = input.blockedPluginReason?.(input.pluginKey)
+
   if (blockedReason) {
     return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
   }
+
   return serializePluginMutation(input.pluginsDir, async () => {
     const pluginDir = join(input.pluginsDir, input.pluginKey)
     const currentContentHash = await readPluginCurrentPointer(pluginDir).catch(() => null)
+
     if (!currentContentHash) {
       return { ok: false, error: 'installed plugin has no current version' }
     }
+
     const candidates = (await readdir(pluginDir, { withFileTypes: true }).catch(() => []))
       .filter(
         (entry) =>
@@ -223,6 +242,7 @@ export async function rollbackInstalledPlugin(input: {
           entry.name !== currentContentHash
       )
       .map((entry) => entry.name)
+
     if (candidates.length !== 1) {
       return {
         ok: false,
@@ -232,8 +252,10 @@ export async function rollbackInstalledPlugin(input: {
             : 'rollback state is ambiguous'
       }
     }
+
     const contentHash = candidates[0]!
     const provenance = await readPluginInstallProvenance(pluginDir, contentHash)
+
     if (
       !provenance ||
       provenance.pluginKey !== input.pluginKey ||
@@ -241,22 +263,26 @@ export async function rollbackInstalledPlugin(input: {
     ) {
       return { ok: false, error: 'rollback version has no valid install provenance' }
     }
+
     const inspection = await inspectPluginInstallTree({
       rootDir: join(pluginDir, contentHash),
       hostVersion: input.hostVersion,
       expectedPluginKey: input.pluginKey
     })
+
     if (!inspection.ok || inspection.contentHash !== contentHash) {
       return {
         ok: false,
         error: inspection.ok ? 'rollback version failed integrity verification' : inspection.error
       }
     }
+
     try {
       await publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry: provenance })
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
+
     return {
       ok: true,
       pluginKey: input.pluginKey,
@@ -278,6 +304,7 @@ export async function removeInstalledPlugin(input: {
     if (!isQualifiedPluginKey(input.pluginKey)) {
       throw new Error(`invalid qualified plugin key: ${input.pluginKey}`)
     }
+
     await removeResolvedPluginDirectory(input.pluginsDir, input.pluginKey)
     await removeResolvedPluginDirectory(input.pluginsDataDir, input.pluginKey)
     await writePluginLockfile(
@@ -290,23 +317,29 @@ export async function removeInstalledPlugin(input: {
 async function removeResolvedPluginDirectory(rootDir: string, pluginKey: string): Promise<void> {
   let rootReal: string
   let targetReal: string
+
   try {
     rootReal = await realpath(resolve(rootDir))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return
     }
+
     throw error
   }
+
   try {
     targetReal = await realpath(resolve(rootDir, pluginKey))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return
     }
+
     throw error
   }
+
   const fromRoot = relative(rootReal, targetReal)
+
   if (
     fromRoot.length === 0 ||
     isAbsolute(fromRoot) ||
@@ -315,5 +348,6 @@ async function removeResolvedPluginDirectory(rootDir: string, pluginKey: string)
   ) {
     throw new Error(`refusing to remove plugin path outside ${rootReal}`)
   }
+
   await rm(resolve(rootDir, pluginKey), { recursive: true, force: true })
 }

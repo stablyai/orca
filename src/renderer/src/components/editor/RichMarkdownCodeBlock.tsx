@@ -29,6 +29,7 @@ export function RichMarkdownCodeBlock({
   // starting a reset timer that will outlive the component.
   const isMountedRef = useRef(false)
   const settings = useAppStore((s) => s.settings)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -45,6 +46,7 @@ export function RichMarkdownCodeBlock({
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -56,6 +58,7 @@ export function RichMarkdownCodeBlock({
     if (languageListMounted) {
       return
     }
+
     // Why: the native popup opens as this same discrete event's default action,
     // so the list must be in the DOM before React's normal flush would land.
     flushSync(() => setLanguageListMounted(true))
@@ -78,6 +81,7 @@ export function RichMarkdownCodeBlock({
           if (!isMountedRef.current) {
             return
           }
+
           clearCopiedResetTimer()
           setCopied(true)
           copiedResetTimerRef.current = window.setTimeout(() => {

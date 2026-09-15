@@ -17,17 +17,22 @@ vi.mock('@/lib/app-menu-paste', () => ({
 }))
 
 type AppMenuPasteCallback = () => void
+
 type EditableContextPasteCallback = (data: { plainTextOnly: boolean }) => void
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let appMenuPasteCallback: AppMenuPasteCallback | null = null
+
 let editableContextPasteCallback: EditableContextPasteCallback | null = null
 
 const handleAppMenuPasteRequestMock = vi.mocked(handleAppMenuPasteRequest)
 
 function Probe(): null {
   useAppMenuPaste()
+
   return null
 }
 
@@ -53,10 +58,12 @@ function installApi(): { performNativePaste: ReturnType<typeof vi.fn> } {
       ui: {
         onAppMenuPaste: vi.fn((callback: AppMenuPasteCallback) => {
           appMenuPasteCallback = callback
+
           return vi.fn()
         }),
         onEditableContextPaste: vi.fn((callback: EditableContextPasteCallback) => {
           editableContextPasteCallback = callback
+
           return vi.fn()
         }),
         performNativePaste,
@@ -64,6 +71,7 @@ function installApi(): { performNativePaste: ReturnType<typeof vi.fn> } {
       }
     }
   })
+
   return { performNativePaste }
 }
 
@@ -73,6 +81,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null

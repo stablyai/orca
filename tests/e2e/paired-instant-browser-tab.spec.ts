@@ -40,12 +40,15 @@ async function createAndWatch(
     async ({ groupId, url, worktreeId }) => {
       const store = window.__store
       const state = store?.getState()
+
       if (!store || !state) {
         throw new Error('Paired client store unavailable')
       }
+
       state.setBrowserDefaultUrl(url)
       const startedAt = performance.now()
       let settledAfterMs: number | null = null
+
       const create = state
         .openNewBrowserTabInActiveWorkspace(groupId)
         .catch(() => undefined)
@@ -57,22 +60,29 @@ async function createAndWatch(
         (store.getState().unifiedTabsByWorktree[worktreeId] ?? []).filter(
           (tab) => tab.contentType === 'browser'
         )
+
       let appearedAfterMs: number | null = null
       let tabIdAtFirstSight: string | null = null
+
       while (performance.now() - startedAt < 30_000) {
         const tabs = browserTabs()
+
         if (tabs.length > 0) {
           appearedAfterMs = performance.now() - startedAt
           tabIdAtFirstSight = tabs[0].id
           break
         }
+
         if (settledAfterMs !== null) {
           break
         }
+
         await new Promise((resolve) => setTimeout(resolve, 2))
       }
+
       const appearedBeforeSettle = appearedAfterMs !== null && settledAfterMs === null
       await create
+
       return { appearedAfterMs, appearedBeforeSettle, settledAfterMs, tabIdAtFirstSight }
     },
     { groupId, url: fixture.url, worktreeId: fixture.worktreeId }
@@ -85,19 +95,24 @@ async function recordBrowserTabTransitions(
 ): Promise<void> {
   await fixture.client.page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Paired client store unavailable')
     }
+
     const transitions: string[] = []
+
     const record = (): void => {
       const key = (store.getState().unifiedTabsByWorktree[worktreeId] ?? [])
         .filter((tab) => tab.contentType === 'browser')
         .map((tab) => tab.id)
         .join(',')
+
       if (transitions.at(-1) !== key) {
         transitions.push(key)
       }
     }
+
     record()
     ;(window as unknown as { __browserTabTransitions: string[] }).__browserTabTransitions =
       transitions
@@ -112,6 +127,7 @@ async function readEmptyWorktreeState(
 ): Promise<{ activeWorktreeId: string | null; browserTabs: number; browserWorkspaces: number }> {
   return page.evaluate((id) => {
     const state = window.__store?.getState()
+
     return {
       activeWorktreeId: state?.activeWorktreeId ?? null,
       browserTabs: (state?.unifiedTabsByWorktree[id] ?? []).filter(
@@ -137,6 +153,7 @@ async function readAddressBarState(
   return page.evaluate(() => {
     const bars = document.querySelectorAll('[data-orca-browser-address-bar]')
     const input = bars[0] as HTMLInputElement | undefined
+
     return {
       bars: bars.length,
       focused: input !== undefined && document.activeElement === input,
@@ -151,12 +168,15 @@ async function readActiveBrowserPlacementKind(
 ): Promise<string | null> {
   return page.evaluate((id) => {
     const state = window.__store?.getState()
+
     for (const workspace of state?.browserTabsByWorktree[id] ?? []) {
       for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
         const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
         return handle?.staged === true ? 'staged' : (handle?.placement?.kind ?? 'server')
       }
     }
+
     return null
   }, worktreeId)
 }
@@ -169,24 +189,31 @@ test('keeps an address typed into the staged tab when the paired create is adopt
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
 
     await client.page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser creation E2E fault seam unavailable')
       }
+
       fault.arm()
     })
     await client.page.evaluate(
       ({ groupId, url }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Paired client store unavailable')
         }
+
         state.setBrowserDefaultUrl(url)
+
         const create = state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
+
         ;(window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate = create
       },
       { groupId: rootGroupId, url: fixture.url }
@@ -246,6 +273,7 @@ test('shows a paired browser tab before its create RPC resolves, then keeps it a
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const before = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
@@ -269,6 +297,7 @@ test('shows a paired browser tab before its create RPC resolves, then keeps it a
       before.tabOrder.length + 1,
       'paired client lost the optimistic browser tab'
     )
+
     const group = requireGroup(after, rootGroupId)
     expect(group.tabOrder.slice(0, before.tabOrder.length)).toEqual(before.tabOrder)
     expect(group.tabOrder.at(-1)).toBe(timings.tabIdAtFirstSight)
@@ -282,10 +311,12 @@ test('shows a paired browser tab before its create RPC resolves, then keeps it a
     expect(
       await client.page.evaluate((entityId) => {
         const state = window.__store?.getState()
+
         const workspaceId =
           (state?.unifiedTabsByWorktree[Object.keys(state.unifiedTabsByWorktree)[0]] ?? []).find(
             (tab) => tab.id === entityId
           )?.entityId ?? ''
+
         return (state?.browserPagesByWorkspace[workspaceId] ?? []).map(
           (page) => state?.remoteBrowserPageHandlesByPageId[page.id]?.staged ?? false
         )
@@ -301,6 +332,7 @@ test('keeps three rapid paired browser creates as three ordered tabs', async ({
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const before = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
@@ -310,27 +342,36 @@ test('keeps three rapid paired browser creates as three ordered tabs', async ({
       async ({ groupId, url, worktreeId }) => {
         const store = window.__store
         const state = store?.getState()
+
         if (!store || !state) {
           throw new Error('Paired client store unavailable')
         }
+
         state.setBrowserDefaultUrl(url)
+
         const creates = [1, 2, 3].map(() =>
           state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
         )
+
         const browserTabCount = (): number =>
           (store.getState().unifiedTabsByWorktree[worktreeId] ?? []).filter(
             (tab) => tab.contentType === 'browser'
           ).length
+
         const startedAt = performance.now()
+
         while (performance.now() - startedAt < 30_000 && browserTabCount() < 3) {
           await new Promise((resolve) => setTimeout(resolve, 2))
         }
+
         const staged = browserTabCount()
         await Promise.all(creates)
+
         return staged
       },
       { groupId: rootGroupId, url: fixture.url, worktreeId }
     )
+
     expect(stagedImmediately).toBe(3)
 
     const after = await waitForGroupTabCount(
@@ -340,6 +381,7 @@ test('keeps three rapid paired browser creates as three ordered tabs', async ({
       before.tabOrder.length + 3,
       'paired client did not settle on exactly three browser tabs'
     )
+
     const group = requireGroup(after, rootGroupId)
     expect(group.tabOrder.slice(0, before.tabOrder.length)).toEqual(before.tabOrder)
     const browserTabIds = group.tabOrder.slice(before.tabOrder.length)
@@ -368,25 +410,32 @@ test('takes back the optimistic tab when the paired create fails to reconcile', 
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const before = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
 
     await client.page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser creation E2E fault seam unavailable')
       }
+
       fault.arm()
     })
     await client.page.evaluate(
       ({ groupId, url }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Paired client store unavailable')
         }
+
         state.setBrowserDefaultUrl(url)
+
         const create = state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
+
         ;(window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate = create
       },
       { groupId: rootGroupId, url: fixture.url }
@@ -400,6 +449,7 @@ test('takes back the optimistic tab when the paired create fails to reconcile', 
       before.tabOrder.length + 1,
       'paired client never staged the optimistic browser tab'
     )
+
     const stagedTabId = requireGroup(held, rootGroupId).tabOrder.at(-1)
     expect(held.tabs.find((tab) => tab.id === stagedTabId)?.contentType).toBe('browser')
 
@@ -429,6 +479,7 @@ test('takes back the optimistic tab when the paired create fails to reconcile', 
       before.tabOrder.length,
       'failed browser create left its optimistic tab behind'
     )
+
     expect(requireGroup(settled, rootGroupId).tabOrder).toEqual(before.tabOrder)
     expect(requireGroup(settled, rootGroupId).activeTabId).toBe(before.activeTabId)
     expect(settled.tabs.filter((tab) => tab.contentType === 'browser')).toEqual([])
@@ -456,6 +507,7 @@ test('cancels a held paired browser create when its staged tab is closed from th
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const before = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
@@ -463,19 +515,25 @@ test('cancels a held paired browser create when its staged tab is closed from th
 
     await client.page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser creation E2E fault seam unavailable')
       }
+
       fault.arm()
     })
     await client.page.evaluate(
       ({ groupId, url }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Paired client store unavailable')
         }
+
         state.setBrowserDefaultUrl(url)
+
         const create = state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
+
         ;(window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate = create
       },
       { groupId: rootGroupId, url: fixture.url }
@@ -488,9 +546,11 @@ test('cancels a held paired browser create when its staged tab is closed from th
       before.tabOrder.length + 1,
       'paired client never staged the optimistic browser tab'
     )
+
     const stagedTab = held.tabs.find(
       (tab) => tab.id === requireGroup(held, rootGroupId).tabOrder.at(-1)
     )
+
     expect(stagedTab?.contentType).toBe('browser')
     // The host really did mint a page, so an unhandled cancel would leave a real orphan.
     await expect
@@ -509,6 +569,7 @@ test('cancels a held paired browser create when its staged tab is closed from th
         `[data-tab-group-strip-id="${rootGroupId}"] [data-tab-id="${stagedTab?.entityId}"] button`
       )
       .click()
+
     const cancelled = await waitForGroupTabCount(
       client.page,
       worktreeId,
@@ -516,6 +577,7 @@ test('cancels a held paired browser create when its staged tab is closed from th
       before.tabOrder.length,
       'the strip X left the staged browser tab standing'
     )
+
     expect(cancelled.tabs.filter((tab) => tab.contentType === 'browser')).toEqual([])
 
     // Why reset and not release: release also arms a reconciliation failure, and that failure
@@ -568,6 +630,7 @@ test('leaves the user on an empty worktree when its first browser create fails',
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
 
@@ -576,17 +639,22 @@ test('leaves the user on an empty worktree when its first browser create fails',
       ({ groupId, worktreeId }) => {
         const store = window.__store
         const state = store?.getState()
+
         if (!store || !state) {
           throw new Error('Paired client store unavailable')
         }
+
         const group = (state.groupsByWorktree[worktreeId] ?? []).find(
           (candidate) => candidate.id === groupId
         )
+
         // Safe to iterate while closing: the store replaces tabOrder rather than mutating it.
         const tabOrder = group?.tabOrder ?? []
+
         for (const tabId of tabOrder) {
           store.getState().closeUnifiedTab(tabId)
         }
+
         store.getState().setActiveWorktree(worktreeId)
       },
       { groupId: rootGroupId, worktreeId }
@@ -607,19 +675,25 @@ test('leaves the user on an empty worktree when its first browser create fails',
 
     await client.page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser creation E2E fault seam unavailable')
       }
+
       fault.arm()
     })
     await client.page.evaluate(
       ({ groupId, url }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Paired client store unavailable')
         }
+
         state.setBrowserDefaultUrl(url)
+
         const create = state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
+
         ;(window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate = create
       },
       { groupId: rootGroupId, url: fixture.url }
@@ -674,19 +748,25 @@ async function startHeldCreate(
   const { client, worktreeId } = fixture
   await client.page.evaluate(() => {
     const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
     if (!fault) {
       throw new Error('Browser creation E2E fault seam unavailable')
     }
+
     fault.arm()
   })
   await client.page.evaluate(
     ({ groupId, url }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Paired client store unavailable')
       }
+
       state.setBrowserDefaultUrl(url)
+
       const create = state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
+
       ;(window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate = create
     },
     { groupId, url: fixture.url }
@@ -752,6 +832,7 @@ test('keeps a split made while the paired create is still staged', async ({
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     await startHeldCreate(fixture, rootGroupId)
@@ -765,9 +846,11 @@ test('keeps a split made while the paired create is still staged', async ({
       { groupId: rootGroupId, tabId: stagedTabId as string }
     )
     const split = await readPanes(client.page, worktreeId)
+
     const splitGroupId = split.groups.find((group) =>
       group.tabOrder.includes(stagedTabId as string)
     )?.id
+
     expect(splitGroupId).toBeDefined()
     expect(splitGroupId).not.toBe(rootGroupId)
     expect(split.layoutGroupIds).toContain(splitGroupId)
@@ -791,6 +874,7 @@ test('leaves the user on the tab they switched to during client-host preparation
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const before = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
@@ -799,19 +883,25 @@ test('leaves the user on the tab they switched to during client-host preparation
 
     await client.page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
+
       if (!fault) {
         throw new Error('Browser creation E2E fault seam unavailable')
       }
+
       fault.armPreparation()
     })
     await client.page.evaluate(
       ({ groupId, url }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Paired client store unavailable')
         }
+
         state.setBrowserDefaultUrl(url)
+
         const create = state.openNewBrowserTabInActiveWorkspace(groupId).catch(() => undefined)
+
         ;(window as unknown as { __heldBrowserCreate: Promise<void> }).__heldBrowserCreate = create
       },
       { groupId: rootGroupId, url: fixture.url }
@@ -876,6 +966,7 @@ test('adopts a paired browser tab without rebuilding its chrome', async ({
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     await startHeldCreate(fixture, rootGroupId)
@@ -884,12 +975,16 @@ test('adopts a paired browser tab without rebuilding its chrome', async ({
     // Mark the live node. A remount builds a new input, which cannot carry this.
     const marked = await client.page.evaluate(() => {
       const input = document.querySelector('[data-orca-browser-address-bar]')
+
       if (!input) {
         return false
       }
+
       input.setAttribute('data-e2e-staged-address-bar', 'marked')
+
       return true
     })
+
     expect(marked).toBe(true)
 
     await releaseHeldCreateAndAdopt(fixture)

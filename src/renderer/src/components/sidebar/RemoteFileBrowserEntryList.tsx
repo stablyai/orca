@@ -44,10 +44,13 @@ export function RemoteFileBrowserEntryList({
 
   // Render the preview listing (own filter/error) during path mode, the committed listing otherwise.
   const displayEntries = isPreviewActive ? previewFilteredEntries : filteredEntries
+
   const displayEmptyDirCopy = isPreviewActive
     ? `${preview!.resolvedPath} is empty`
     : 'Empty directory'
+
   const noMatchesFilter = isPreviewActive ? preview!.filter : filter
+
   const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
     ? translate(
         'auto.components.sidebar.RemoteFileBrowser.largeInputNoMatches',
@@ -92,6 +95,7 @@ export function RemoteFileBrowserEntryList({
         ) : (
           displayEntries.map((entry) => {
             const FileIcon = getFileTypeIcon(entry.name)
+
             return (
               <button
                 key={entry.name}

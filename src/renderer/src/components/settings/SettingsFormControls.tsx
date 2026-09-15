@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
 export { FontAutocomplete } from './FontAutocomplete'
+
 export { ThemePicker } from './TerminalThemePicker'
 
 type SettingsSwitchProps = {
@@ -153,6 +154,7 @@ export function SettingsSegmentedControl<T extends string | number>({
     >
       {options.map((opt) => {
         const active = opt.value === value
+
         const button = (
           <button
             key={String(opt.value)}
@@ -183,9 +185,11 @@ export function SettingsSegmentedControl<T extends string | number>({
             {opt.label}
           </button>
         )
+
         if (opt.tooltip == null) {
           return button
         }
+
         return (
           <Tooltip key={String(opt.value)}>
             <TooltipTrigger asChild>{button}</TooltipTrigger>
@@ -336,17 +340,23 @@ export function NumberField({
 
   const commit = (): void => {
     const trimmed = draft.trim()
+
     if (trimmed === '') {
       if (onClear) {
         // Clearable fields treat empty as "unset" so the caller can fall back to its automatic value.
         onClear()
+
         return
       }
+
       // Empty input — reset to current value rather than committing 0
       setDraft(Number.isFinite(value) ? String(value) : '')
+
       return
     }
+
     const next = Number(trimmed)
+
     if (Number.isFinite(next) && (!integer || Number.isSafeInteger(next))) {
       const clamped = max === undefined ? Math.max(min, next) : Math.min(max, Math.max(min, next))
       onChange(clamped)

@@ -21,36 +21,45 @@ export async function writeNotifyWithSettlement(
 ): Promise<WriteSettlement> {
   const { socket, message, timeoutMs, onUndeliverable } = request
   let encoded: string
+
   try {
     encoded = encodeNdjson(message)
   } catch {
     return writeRefused('encode_failed')
   }
+
   return await new Promise<WriteSettlement>((resolve) => {
     let settled = false
+
     const settle = (settlement: WriteSettlement): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       resolve(settlement)
     }
+
     const disconnectAndSettle = (settlement: WriteSettlement): void => {
       if (settled) {
         return
       }
+
       settle(settlement)
+
       try {
         onUndeliverable()
       } catch (error) {
         console.warn('[daemon] Write recovery notification failed:', error)
       }
     }
+
     const timer = setTimeout(
       () => disconnectAndSettle(writeUnverifiable('settlement_timeout', true)),
       timeoutMs
     )
+
     try {
       socket.write(encoded, (error) =>
         error

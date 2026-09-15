@@ -25,7 +25,9 @@ import {
 } from './structured-agent-session-host-test-data'
 
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 beforeEach(() => {
@@ -36,13 +38,16 @@ describe('send', () => {
   it('writes the submission before dispatching and resolves it accepted', async () => {
     await attach()
     const body = hostTestMessage('add a retry')
+
     const result = await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body }),
       body
     })
+
     if (!result.ok) {
       throw new Error(`expected a send, got ${result.refusal.code}`)
     }
+
     expect(result.value.submission.dispatchState).toBe('accepted')
     expect(dispatch).toHaveBeenCalledTimes(1)
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
@@ -54,9 +59,11 @@ describe('send', () => {
 
   it('settles a submission write failure as rejected before provider dispatch', async () => {
     await attach()
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     vi.spyOn(journal, 'appendSubmission').mockRejectedValueOnce(new Error('disk full'))
     const body = hostTestMessage('not durably recorded')
     const params = { envelope: envelope('agentSession.send', { body }), body }
@@ -75,10 +82,12 @@ describe('send', () => {
     await attach()
     dispatch.mockRejectedValueOnce(new Error('socket closed'))
     const body = hostTestMessage('add a retry')
+
     const result = await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body }),
       body
     })
+
     expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
   })
 
@@ -203,9 +212,11 @@ describe('send', () => {
     const body = hostTestMessage('settled for good')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 1
 
     // Every later signal that could assert doubt: the attach sweep, and a
@@ -233,9 +244,11 @@ describe('send', () => {
       ok: true,
       value: { submission: { dispatchState: 'pending', reason: null, resolvedAt: null } }
     })
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     expect(journal.pendingSubmissions()).toHaveLength(1)
   })
 
@@ -245,6 +258,7 @@ describe('send', () => {
     const body = hostTestMessage('written, never acknowledged')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
@@ -275,6 +289,7 @@ describe('send', () => {
         failSettlement = false
         throw new Error('operation settlement failed')
       }
+
       return persist(input)
     })
     const body = hostTestMessage('accepted before settlement failed')
@@ -291,9 +306,11 @@ describe('send', () => {
 
   it('never reruns an admission-only send after the caller changes', async () => {
     await attach()
+
     const settlement = vi
       .spyOn(store, 'recordOperationOutcome')
       .mockRejectedValue(new Error('operation settlement failed'))
+
     const body = hostTestMessage('first delivery after caller recovery')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
@@ -320,22 +337,27 @@ describe('send', () => {
   it('never redelivers after admission survives without its journal submission', async () => {
     await attach()
     const persist = store.recordOperationOutcome.bind(store)
+
     const settlement = vi
       .spyOn(store, 'recordOperationOutcome')
       .mockImplementation(async (input) => {
         if (input.outcome.status === 'succeeded') {
           throw new Error('operation settlement failed')
         }
+
         return persist(input)
       })
+
     const body = hostTestMessage('delivered before epoch recovery')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     await expect(host.send(CALLER, params)).rejects.toThrow('operation settlement failed')
     settlement.mockRestore()
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
     expect(journal.submissions()).toHaveLength(0)
 
@@ -372,6 +394,7 @@ describe('send', () => {
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     await journal.rollEpoch('schema_unreadable', store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
 
     await expect(host.send({ callerKey: 'client-after-recovery' }, params)).resolves.toMatchObject({
@@ -393,6 +416,7 @@ describe('send', () => {
     const body = hostTestMessage('written, then the child died')
     const params = { envelope: envelope('agentSession.send', { body }), body }
     await host.send(CALLER, params)
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
@@ -411,9 +435,11 @@ describe('send', () => {
 
   it('advances an explicit retry after a ledger-unknown send is reconciled in the journal', async () => {
     await attach()
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     vi.spyOn(journal, 'resolveDispatch').mockRejectedValueOnce(new Error('journal resolve failed'))
     const body = hostTestMessage('possibly delivered before persistence failed')
     const params = { envelope: envelope('agentSession.send', { body }), body }
@@ -449,6 +475,7 @@ describe('send', () => {
   it('refuses a stale fence and hands back the current one', async () => {
     const record = await attach()
     const body = hostTestMessage('add a retry')
+
     const result = await host.send(CALLER, {
       envelope: envelope(
         'agentSession.send',
@@ -457,6 +484,7 @@ describe('send', () => {
       ),
       body
     })
+
     expect(result).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_checkpoint_stale', currentFence: record?.lease.runtimeFence }
@@ -466,6 +494,7 @@ describe('send', () => {
   it('reuses a pending send admission after the client refreshes its fence', async () => {
     const record = await attach()
     const body = hostTestMessage('add a retry')
+
     const params = {
       envelope: envelope(
         'agentSession.send',
@@ -474,6 +503,7 @@ describe('send', () => {
       ),
       body
     }
+
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_checkpoint_stale' }
@@ -483,6 +513,7 @@ describe('send', () => {
         .listOperationRows()
         .filter((row) => row.operationId === params.envelope.clientOperationId)
     ).toEqual([])
+
     const retry = {
       ...params,
       envelope: {
@@ -490,6 +521,7 @@ describe('send', () => {
         expectedRuntimeFence: record?.lease.runtimeFence ?? 1
       }
     }
+
     expect(await host.send(CALLER, retry)).toMatchObject({
       ok: true,
       replayed: false,

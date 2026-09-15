@@ -26,6 +26,7 @@ export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'recordAgentProviderSession'> {
   const { get, set, requestFreshness } = runtime
+
   return {
     recordAgentProviderSession: (
       paneKey: string,
@@ -37,6 +38,7 @@ export function createAgentStatusProviderSessionActions(
     ) => {
       paneKey = resolveAgentPaneAuthorityKey(paneKey)
       const updatedAt = timing?.updatedAt ?? Date.now()
+
       if (
         paneKey in get().recentlyRetiredAgentStatusPaneKeys ||
         isRecentlyClosedAgentStatusTab(
@@ -47,26 +49,33 @@ export function createAgentStatusProviderSessionActions(
       ) {
         return
       }
+
       let removedLiveStatus = false
       set((s) => {
         const existingStatus = s.agentStatusByPaneKey[paneKey]
         const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+
         if (
           (existingStatus && updatedAt < existingStatus.updatedAt) ||
           (existingRecord && updatedAt < existingRecord.updatedAt)
         ) {
           return s
         }
+
         const tabId = routing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? existingRecord?.tabId
+
         const worktreeId =
           routing?.worktreeId ??
           existingStatus?.worktreeId ??
           existingRecord?.worktreeId ??
           findAgentPaneWorktreeId(s, paneKey)
+
         if (!worktreeId) {
           return s
         }
+
         const registryEntry = s.agentLaunchConfigByPaneKey[paneKey]
+
         const registryMatches = registryEntryMatchesStatus({
           entry: registryEntry,
           paneKey,
@@ -78,19 +87,24 @@ export function createAgentStatusProviderSessionActions(
           existingProviderSession: existingRecord?.providerSession,
           providerSessionChanged: false
         })
+
         const existingRecordMatchesProviderSession =
           existingRecord?.agent === agent &&
           agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
+
         // Why: provider-session heartbeats can arrive after the turn is complete; preserve the
         // completed checkpoint so a late heartbeat cannot make it eligible for ghost resume.
         const preservesCompletedRecoveryRecord =
           existingRecordMatchesProviderSession && existingRecord?.state === 'done'
+
         // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
         const preservesQuitOrigin =
           existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'
+
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
           (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
+
         const record: SleepingAgentSessionRecord = {
           paneKey,
           ...(tabId ? { tabId } : {}),
@@ -118,22 +132,28 @@ export function createAgentStatusProviderSessionActions(
             : {}),
           origin: preservesQuitOrigin ? 'quit' : 'live'
         }
+
         removedLiveStatus = existingStatus !== undefined
         const nextLive = removedLiveStatus ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+
         if (removedLiveStatus) {
           delete nextLive[paneKey]
         }
+
         const nextRetained =
           paneKey in s.retainedAgentsByPaneKey
             ? { ...s.retainedAgentsByPaneKey }
             : s.retainedAgentsByPaneKey
+
         if (nextRetained !== s.retainedAgentsByPaneKey) {
           delete nextRetained[paneKey]
         }
+
         const retiredPaneKeys = new Set([paneKey])
         // Why: on identity mismatch the sleeping record drops its launch config, so clear the stale
         // registry entry too, else a later return to the old identity reuses stale args/env.
         let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
+
         if (registryMatches && registryEntry) {
           nextLaunchConfigs = {
             ...nextLaunchConfigs,
@@ -146,6 +166,7 @@ export function createAgentStatusProviderSessionActions(
           nextLaunchConfigs = { ...nextLaunchConfigs }
           delete nextLaunchConfigs[paneKey]
         }
+
         return {
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
@@ -165,6 +186,7 @@ export function createAgentStatusProviderSessionActions(
           sortEpoch: removedLiveStatus ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
+
       if (removedLiveStatus) {
         requestFreshness(true)
       }

@@ -18,14 +18,18 @@ export async function refreshCurrentOrcaProfileAuth(
 ): Promise<RefreshCurrentOrcaProfileAuthResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   const auth = () => getOrcaProfileAuthStatusFromProfile(active, userDataPath)
+
   if (!active.profile.cloud) {
     return { status: 'local', auth: auth() }
   }
+
   if (isOrcaCloudDevAuthEnabled()) {
     const result = refreshDevOrcaCloudProfile(active, userDataPath)
+
     if (result.status !== 'updated') {
       return { status: 'reconnect-required', auth: auth() }
     }
+
     return {
       status: 'refreshed',
       auth: auth(),
@@ -33,47 +37,61 @@ export async function refreshCurrentOrcaProfileAuth(
       profiles: result.list.profiles
     }
   }
+
   const configState = getOrcaCloudAuthConfig()
+
   if (!configState.configured) {
     return { status: 'unconfigured', auth: auth() }
   }
+
   try {
     const identity = cloudSessionIdentity(active.profile.id, active.profile.cloud)
     let mutationSnapshot = captureCloudSessionMutation(identity, userDataPath)
+
     const operation = await runWithFreshOrcaCloudSession(
       configState.config,
       active,
       userDataPath,
       (session) => refreshOrcaCloudCapabilities(configState.config, session)
     )
+
     if (operation.status !== 'ok') {
       return { status: 'reconnect-required', auth: auth() }
     }
+
     const refresh = operation.value
+
     if (refresh.cloud) {
       const refreshedIdentity = cloudSessionIdentity(active.profile.id, refresh.cloud)
+
       if (
         refreshedIdentity.cloudUserId !== identity.cloudUserId ||
         refreshedIdentity.cloudProfileId !== identity.cloudProfileId
       ) {
         throw new Error('orca_cloud_identity_changed_during_capability_refresh')
       }
+
       if (refreshedIdentity.organizationId !== identity.organizationId) {
         const advanced = recordCloudSessionIdentityMutationIfCurrent(
           refreshedIdentity,
           userDataPath,
           mutationSnapshot
         )
+
         if (!advanced) {
           return { status: 'reconnect-required', auth: auth() }
         }
+
         mutationSnapshot = advanced
       }
     }
+
     const session = readOrcaCloudSession(active.profile.id, userDataPath)
+
     if (session.status !== 'found') {
       return { status: 'reconnect-required', auth: auth() }
     }
+
     if (
       saveOrcaCloudSessionIfCurrent(
         active.profile.id,
@@ -88,9 +106,11 @@ export async function refreshCurrentOrcaProfileAuth(
     ) {
       return { status: 'reconnect-required', auth: auth() }
     }
+
     const list = refresh.cloud
       ? linkOrcaProfileToCloud(active.profile.id, refresh.cloud, userDataPath)
       : getOrcaProfileListState(userDataPath)
+
     return {
       status: 'refreshed',
       auth: getOrcaProfileAuthStatusFromProfile(

@@ -147,6 +147,7 @@ describe('buildConnectionDiagnosticsReport', () => {
     const prefix = `${new Date(NOW).toISOString()} [error] `
     const marker = ' … [truncated]'
     const message = 'a'.repeat(bytes - prefix.length)
+
     const report = buildConnectionDiagnosticsReport({
       hostName: 'fixture',
       endpoint: 'ws://192.168.1.2:6768',
@@ -158,6 +159,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       entries: [{ id: 'boundary', ts: NOW, level: 'error', message }],
       nowMs: NOW
     })
+
     const available = 2048 - prefix.length - new TextEncoder().encode(marker).byteLength
     expect(report.split('\n').at(-1)).toBe(
       bytes <= 2048 ? `${prefix}${message}` : `${prefix}${'a'.repeat(available)}${marker}`
@@ -168,14 +170,17 @@ describe('buildConnectionDiagnosticsReport', () => {
     'truncates %j without per-character encoding',
     (token) => {
       const encode = vi.spyOn(TextEncoder.prototype, 'encode')
+
       const entry = Object.freeze({
         id: 'bounded',
         ts: NOW,
         level: 'error' as const,
         message: token.repeat(3000)
       })
+
       let report: string
       let calls: number
+
       try {
         report = buildConnectionDiagnosticsReport({
           hostName: 'fixture',
@@ -192,6 +197,7 @@ describe('buildConnectionDiagnosticsReport', () => {
       } finally {
         encode.mockRestore()
       }
+
       const prefix = `${new Date(NOW).toISOString()} [error] `
       const marker = ' … [truncated]'
       const available = 2048 - new TextEncoder().encode(prefix + marker).byteLength

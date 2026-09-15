@@ -17,8 +17,10 @@ export class BrowserNetworkDeferredSocket
   attach(source: DeferredSocketSource): void {
     if (this.destroyed || this.source) {
       source.destroy()
+
       return
     }
+
     this.source = source
     source.setNoDelay?.(this.noDelay)
     source.on('data', (bytes) => this.emit('data', bytes))
@@ -28,11 +30,13 @@ export class BrowserNetworkDeferredSocket
       this.emitClose()
     })
     source.on('error', (error) => this.emit('error', error))
+
     if (this.paused) {
       source.pause()
     } else {
       source.resume()
     }
+
     queueMicrotask(() => {
       if (!this.destroyed && this.source === source) {
         this.emit('connect')
@@ -44,6 +48,7 @@ export class BrowserNetworkDeferredSocket
     if (this.destroyed) {
       return
     }
+
     this.destroyed = true
     this.emit('error', error)
     this.emitClose()
@@ -52,31 +57,37 @@ export class BrowserNetworkDeferredSocket
   setNoDelay(noDelay = true): this {
     this.noDelay = noDelay
     this.source?.setNoDelay?.(noDelay)
+
     return this
   }
 
   pause(): this {
     this.paused = true
     this.source?.pause()
+
     return this
   }
 
   resume(): this {
     this.paused = false
     this.source?.resume()
+
     return this
   }
 
   write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
     if (!this.source || this.destroyed) {
       callback?.()
+
       return false
     }
+
     return this.source.write(bytes, callback)
   }
 
   end(): this {
     this.source?.end()
+
     return this
   }
 
@@ -84,9 +95,11 @@ export class BrowserNetworkDeferredSocket
     if (this.destroyed) {
       return this
     }
+
     this.destroyed = true
     this.source?.destroy()
     this.emitClose()
+
     return this
   }
 
@@ -94,6 +107,7 @@ export class BrowserNetworkDeferredSocket
     if (this.closeEmitted) {
       return
     }
+
     this.closeEmitted = true
     this.emit('close')
   }

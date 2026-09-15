@@ -9,6 +9,7 @@ import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 
 type FileOpenMode = 'edit' | 'diff'
+
 type OpenChangedMode = FileOpenMode | 'both'
 
 type FileOpenRecord = {
@@ -31,19 +32,24 @@ type FileOpenChangedResult = {
 
 async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): Promise<string> {
   const worktree = flags.get('worktree')
+
   if (flags.has('worktree') && (typeof worktree !== 'string' || worktree.length === 0)) {
     throw new RuntimeClientError('invalid_argument', 'Missing value for --worktree.')
   }
+
   const explicit = await getOptionalWorktreeSelector(flags, 'worktree', cwd, client)
+
   if (explicit) {
     return explicit
   }
+
   if (client.isRemote) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Remote file commands require --worktree because the client cwd cannot identify a server worktree.'
     )
   }
+
   return await resolveCurrentWorktreeSelector(cwd, client)
 }
 
@@ -62,6 +68,7 @@ function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): 
   // Why: WSL_DISTRO_NAME reaches this process only if interop forwards it, but the
   // WSL launcher always sets ORCA_CLI_CWD, and its UNC form names the distro itself.
   const distro = process.env.WSL_DISTRO_NAME || parseWslUncPath(cwd)?.distro
+
   if (
     !distro ||
     !path.startsWith('/') ||
@@ -71,6 +78,7 @@ function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): 
   ) {
     return path
   }
+
   return toWindowsWslPath(path, distro)
 }
 
@@ -82,37 +90,45 @@ async function resolveFilePath(
   if (!isRuntimePathAbsolute(path)) {
     return path
   }
+
   // Why: only in-worktree absolute paths should be relativized here; outside paths must reach the runtime guard unchanged.
   const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
     worktree
   })
 
   const rootPath = result.result.worktree.path
+
   const relativePath = relativePathInsideRoot(
     rootPath,
     toWorktreeRootPathFlavor(rootPath, ctx.cwd, path)
   )
+
   if (relativePath === '') {
     throw new RuntimeClientError(
       'invalid_argument',
       'The selected worktree root is a directory, not a file-open target.'
     )
   }
+
   return relativePath ?? path
 }
 
 function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMode {
   const value = flags.get('mode')
+
   if (flags.has('mode') && (typeof value !== 'string' || value.length === 0)) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Missing value for --mode. Use edit, diff, or both.'
     )
   }
+
   const mode = getOptionalStringFlag(flags, 'mode') ?? 'diff'
+
   if (mode === 'edit' || mode === 'diff' || mode === 'both') {
     return mode
   }
+
   throw new RuntimeClientError('invalid_argument', 'Invalid --mode. Use edit, diff, or both.')
 }
 
@@ -120,9 +136,11 @@ function canOpenEntryForEdit(entry: GitStatusEntry): string | null {
   if (entry.status === 'deleted') {
     return 'deleted file has no edit target'
   }
+
   if (entry.conflictStatus === 'unresolved') {
     return 'unresolved conflict may not have a single editable file'
   }
+
   return null
 }
 
@@ -135,6 +153,7 @@ async function openFileEdit(
     worktree,
     relativePath: path
   })
+
   return {
     path,
     mode: 'edit',
@@ -155,6 +174,7 @@ async function openFileDiff(
     relativePath: path,
     staged
   })
+
   return {
     path,
     mode: 'diff',
@@ -169,13 +189,17 @@ function formatOpenChangedResult(result: FileOpenChangedResult): string {
   if (result.totalChanged === 0) {
     return 'No changed files.'
   }
+
   const lines = [`Opened ${result.opened.length} changed file targets.`]
+
   if (result.skipped.length > 0) {
     lines.push(`Skipped ${result.skipped.length} changed file targets:`)
+
     for (const skipped of result.skipped) {
       lines.push(`- ${skipped.path}: ${skipped.reason ?? 'not opened'}`)
     }
   }
+
   return lines.join('\n')
 }
 
@@ -196,10 +220,12 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const path = getRequiredStringFlag(ctx.flags, 'path')
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
+
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
       worktree,
       relativePath
     })
+
     printResult(result, ctx.json, formatFileOpen)
   },
   'file diff': async (ctx) => {
@@ -207,11 +233,13 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     const staged = ctx.flags.get('staged') === true
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
+
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
       worktree,
       relativePath,
       staged
     })
+
     printResult(result, ctx.json, formatFileDiff)
   },
   'file open-changed': async (ctx) => {
@@ -225,6 +253,7 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     for (const entry of status.result.entries) {
       if (mode === 'edit' || mode === 'both') {
         const editSkipReason = canOpenEntryForEdit(entry)
+
         if (editSkipReason) {
           skipped.push({
             path: entry.path,
@@ -243,6 +272,7 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
 
       if (mode === 'diff' || mode === 'both') {
         const staged = entry.area === 'staged'
+
         if (entry.conflictStatus === 'unresolved') {
           skipped.push({
             path: entry.path,

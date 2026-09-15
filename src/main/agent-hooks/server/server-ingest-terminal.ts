@@ -20,51 +20,67 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     const legacyPaneKey = parseLegacyNumericPaneKey(paneKey)
+
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+
       return
     }
+
     const reportedTabId =
       event.tabId !== undefined && event.tabId.trim().length > 0 ? event.tabId.trim() : undefined
+
     const runtimeOwnedLegacyPane = Boolean(
       legacyPaneKey &&
       event.ptyId?.trim() &&
       event.terminalHandle?.trim() &&
       reportedTabId === legacyPaneKey.tabId
     )
+
     // Legacy rows are accepted only from the in-process PTY ingress with both runtime identities;
     // HTTP and relay paths still require a stable pane key or a registered alias.
     if (paneKey.length > MAX_PANE_KEY_LEN || (!parsedPaneKey && !runtimeOwnedLegacyPane)) {
       return
     }
+
     const paneTabId = parsedPaneKey?.tabId ?? legacyPaneKey?.tabId
+
     if (paneKey === physicalPaneKey && reportedTabId !== undefined && reportedTabId !== paneTabId) {
       return
     }
+
     const tabId = paneKey !== physicalPaneKey ? parsedPaneKey?.tabId : reportedTabId
+
     if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }
+
     const worktreeId =
       event.worktreeId !== undefined && event.worktreeId.trim().length > 0
         ? event.worktreeId.trim()
         : undefined
+
     const connectionId =
       typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
         ? event.connectionId.trim()
         : null
+
     const terminalHandle =
       typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
         ? event.terminalHandle.trim()
         : undefined
+
     let mutationBefore: EnrichedAgentHookEventPayload | undefined
+
     const indexedPaneKey = terminalHandle
       ? this.getStatusPaneKeyForTerminalHandle(terminalHandle)
       : undefined
+
     if (indexedPaneKey && indexedPaneKey !== paneKey) {
       const indexedStatus = this.state.lastStatusByPaneKey.get(indexedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+
       if (
         indexedStatus &&
         indexedStatus.terminalHandle === terminalHandle &&
@@ -78,9 +94,11 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         paneKey = this.resolvePaneKeyAlias(paneKey)
       }
     }
+
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     if (
       previous?.claudeLeadBoundaryChildOnly === true &&
       previous.payload.agentType === 'claude' &&
@@ -91,12 +109,15 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
       }
+
       return
     }
+
     // Why: preserve the hook-completed turn stamp while OSC repaints the current state.
     const preserveActiveTurnStamp =
       previous?.payload.turnCompletedAt !== undefined &&
       previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
+
     if (
       !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
@@ -110,8 +131,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       // A handle-authority transfer is a new pane observation even when its payload is a
       // duplicate; enriched subscribers must capture the replacement pane identity.
       this.refreshTerminalStatusEvidence(previous, mutationBefore, mutationBefore !== undefined)
+
       return
     }
+
     // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
     // never evidence that the session ended — yet overwriting the row dropped the cached identity.
     // That erased it from persisted rows (lost across restart) and from headless `orca serve`, which
@@ -124,12 +147,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.payload.agentType && event.payload.agentType !== 'unknown'
         ? event.payload.agentType
         : undefined
+
     const preservedProviderSession =
       previous?.providerSession &&
       (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
       (previous.payload.state !== 'done' || event.payload.state === 'done')
         ? previous.providerSession
         : undefined
+
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
       {

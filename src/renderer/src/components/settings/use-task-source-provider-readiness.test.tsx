@@ -48,11 +48,14 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
 const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
+
 let latest: Record<TaskProvider, TaskProviderReadiness> | null = null
 
 function Probe({ visibleProviders }: { visibleProviders: readonly TaskProvider[] }): null {
   latest = useTaskSourceProviderReadiness(visibleProviders)
+
   return null
 }
 
@@ -64,6 +67,7 @@ async function renderProbe(
     document.body.appendChild(container)
     root = createRoot(container)
   }
+
   await act(async () => {
     root?.render(<Probe visibleProviders={visibleProviders} />)
   })
@@ -103,6 +107,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null

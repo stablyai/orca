@@ -21,9 +21,12 @@ export function useLazyModalMounts(): {
         clearTimeout(unmountAddRepoDialogTimerRef.current)
         unmountAddRepoDialogTimerRef.current = null
       }
+
       setShouldMountAddRepoDialog(true)
+
       return
     }
+
     if (shouldMountAddRepoDialog && !unmountAddRepoDialogTimerRef.current) {
       // Why: AddRepoDialog's close effect aborts in-flight clone work; keep one closed render before unmounting hidden SSH/remote subscriptions.
       unmountAddRepoDialogTimerRef.current = setTimeout(() => {
@@ -31,6 +34,7 @@ export function useLazyModalMounts(): {
         unmountAddRepoDialogTimerRef.current = null
       }, 0)
     }
+
     return () => {
       if (unmountAddRepoDialogTimerRef.current) {
         clearTimeout(unmountAddRepoDialogTimerRef.current)
@@ -40,6 +44,7 @@ export function useLazyModalMounts(): {
   }, [activeModal, shouldMountAddRepoDialog])
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
+
   if (resolvedMountedLazyModalIds !== mountedLazyModalIds) {
     setMountedLazyModalIds(new Set(resolvedMountedLazyModalIds))
   }

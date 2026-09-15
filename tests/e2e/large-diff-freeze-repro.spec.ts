@@ -13,11 +13,13 @@ import {
 async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<string> {
   const repoId = await orcaPage.evaluate(async (pathToRepo: string) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const addedRepo = await store.getState().addRepoPath(pathToRepo)
+
     if (!addedRepo) {
       throw new Error(`isolated repo not found: ${pathToRepo}`)
     }
@@ -32,10 +34,13 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
       () =>
         orcaPage.evaluate(async (targetRepoId: string) => {
           const store = window.__store
+
           if (!store) {
             return 0
           }
+
           await store.getState().fetchWorktrees(targetRepoId)
+
           return store.getState().worktreesByRepo[targetRepoId]?.length ?? 0
         }, repoId),
       {
@@ -48,6 +53,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
   const worktreeId = await orcaPage.evaluate(
     ({ targetRepoId, pathToRepo }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
@@ -55,11 +61,14 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
       const state = store.getState()
       const worktrees = state.worktreesByRepo[targetRepoId] ?? []
       const worktree = worktrees.find((entry) => entry.path === pathToRepo) ?? worktrees[0]
+
       if (!worktree) {
         throw new Error(`isolated worktree not found: ${pathToRepo}`)
       }
+
       state.setActiveRepo(targetRepoId)
       state.setActiveWorktree(worktree.id)
+
       return worktree.id
     },
     { targetRepoId: repoId, pathToRepo: repoPath }
@@ -90,15 +99,20 @@ test.describe('Large diff freeze repro', () => {
     await orcaPage.evaluate(
       async ({ wId, repoPath, relativePath }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         let status = await window.api.git.status({ worktreePath: repoPath })
+
         let entry = status.entries.find(
           (candidate) => candidate.path === relativePath && candidate.area === 'unstaged'
         )
+
         // Why: the app may still be settling the just-added worktree's first status read.
         const statusDeadline = performance.now() + 5_000
+
         while (!entry && performance.now() < statusDeadline) {
           await new Promise((resolve) => window.setTimeout(resolve, 100))
           status = await window.api.git.status({ worktreePath: repoPath })
@@ -106,9 +120,11 @@ test.describe('Large diff freeze repro', () => {
             (candidate) => candidate.path === relativePath && candidate.area === 'unstaged'
           )
         }
+
         if (!entry) {
           throw new Error(`large diff status entry not found: ${relativePath}`)
         }
+
         store.getState().setGitStatus(wId, status)
         store.getState().openAllDiffs(wId, repoPath, undefined, 'unstaged', [entry])
       },
@@ -130,12 +146,15 @@ test.describe('Large diff freeze repro', () => {
     await waitForSessionReady(orcaPage)
     const fixture = createIsolatedLargeDiffRepo()
     const lineCount = Number(process.env.ORCA_LARGE_DIFF_REPRO_LINES ?? '60000')
+
     if (!Number.isFinite(lineCount) || lineCount < 0) {
       throw new Error(
         `Invalid ORCA_LARGE_DIFF_REPRO_LINES: ${process.env.ORCA_LARGE_DIFF_REPRO_LINES}`
       )
     }
+
     const modifiedContent = buildLargeTypeScriptFile(lineCount)
+
     const expectFallback = getLargeDiffRenderLimit({
       originalContent: 'export const seed = 1\n',
       modifiedContent
@@ -144,17 +163,21 @@ test.describe('Large diff freeze repro', () => {
     try {
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
       writeFileSync(fixture.absolutePath, modifiedContent)
+
       const measurement = await orcaPage.evaluate(
         async ({ wId, absolutePath, relativePath, expectFallback }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is not available')
           }
+
           const state = store.getState()
           const samples: number[] = []
           const intervalMs = 50
           let last = performance.now()
           let maxLagMs = 0
+
           const timer = window.setInterval(() => {
             const now = performance.now()
             const lag = Math.max(0, now - last - intervalMs)
@@ -169,10 +192,12 @@ test.describe('Large diff freeze repro', () => {
           let rendered = false
           let fallbackVisible = false
           let editorCount = 0
+
           while (performance.now() - startedAt < 30_000) {
             await new Promise((resolve) => window.setTimeout(resolve, 50))
             editorCount = document.querySelectorAll('.monaco-diff-editor').length
             fallbackVisible = Boolean(document.querySelector('[data-testid="large-diff-fallback"]'))
+
             if ((!expectFallback && editorCount > 0) || (expectFallback && fallbackVisible)) {
               await new Promise((resolve) => window.setTimeout(resolve, 1_000))
               rendered = true
@@ -182,6 +207,7 @@ test.describe('Large diff freeze repro', () => {
 
           window.clearInterval(timer)
           const elapsedMs = performance.now() - startedAt
+
           return {
             rendered,
             elapsedMs,
@@ -205,11 +231,13 @@ test.describe('Large diff freeze repro', () => {
       console.log(`large diff measurement ${JSON.stringify(measurement)}`)
       expect(measurement.rendered).toBe(true)
       expect(measurement.fallbackVisible).toBe(expectFallback)
+
       if (expectFallback) {
         expect(measurement.editorCount).toBe(0)
       } else {
         expect(measurement.editorCount).toBeGreaterThan(0)
       }
+
       expect(measurement.maxLagMs).toBeLessThan(1_000)
     } finally {
       rmSync(fixture.repoPath, { recursive: true, force: true })
@@ -224,9 +252,11 @@ test.describe('Large diff freeze repro', () => {
 
     try {
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+
       const measurement = await orcaPage.evaluate(
         async ({ wId, repoPath, expectedPaths }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is not available')
           }
@@ -236,6 +266,7 @@ test.describe('Large diff freeze repro', () => {
           const entries = status.entries.filter((entry) => entry.area === 'staged')
           const entryPaths = entries.map((entry) => entry.path)
           const missing = expectedPaths.filter((path) => !entryPaths.includes(path))
+
           if (missing.length > 0) {
             throw new Error(`staged locale fixture missing entries: ${missing.join(', ')}`)
           }
@@ -247,6 +278,7 @@ test.describe('Large diff freeze repro', () => {
           const samples: number[] = []
           let last = performance.now()
           let maxLagMs = 0
+
           const timer = window.setInterval(() => {
             const now = performance.now()
             const lag = Math.max(0, now - last - intervalMs)
@@ -260,6 +292,7 @@ test.describe('Large diff freeze repro', () => {
 
           let editorCount = 0
           let fallbackCount = 0
+
           try {
             while (performance.now() - startedAt < 30_000) {
               await new Promise((resolve) => window.setTimeout(resolve, 50))
@@ -267,6 +300,7 @@ test.describe('Large diff freeze repro', () => {
               fallbackCount = document.querySelectorAll(
                 '[data-testid="large-diff-fallback"]'
               ).length
+
               if (editorCount + fallbackCount >= Math.min(entries.length, 5)) {
                 await new Promise((resolve) => window.setTimeout(resolve, 1_000))
                 break
@@ -281,6 +315,7 @@ test.describe('Large diff freeze repro', () => {
               '.monaco-diff-editor .line-insert, .monaco-diff-editor .line-delete, .monaco-diff-editor .char-insert, .monaco-diff-editor .char-delete'
             )
           ).length
+
           return {
             editorCount,
             fallbackCount,

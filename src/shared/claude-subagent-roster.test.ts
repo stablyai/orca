@@ -116,9 +116,11 @@ describe('claude-subagent-roster', () => {
 
   it('drops new spawns at the cap rather than evicting working children', () => {
     const roster: ClaudeSubagentRoster = new Map()
+
     for (let i = 0; i < AGENT_STATUS_MAX_SUBAGENTS; i++) {
       upsertWorkingClaudeSubagent(roster, `a${i}`, {}, i)
     }
+
     // Why: every tracked entry is working — nothing is safe to evict, so the
     // overflow spawn is dropped (it would be invisible past the wire cap).
     upsertWorkingClaudeSubagent(roster, 'overflow', {}, 999)
@@ -138,9 +140,11 @@ describe('claude-subagent-roster', () => {
     upsertWorkingClaudeSubagent(roster, 'anew-teammate-6d3cb5b5', {}, 2)
     stopClaudeSubagent(roster, 'aold-teammate-6d3cb5b5')
     stopClaudeSubagent(roster, 'anew-teammate-6d3cb5b5')
+
     for (let i = 2; i < AGENT_STATUS_MAX_SUBAGENTS; i++) {
       upsertWorkingClaudeSubagent(roster, `a${i}`, {}, 10 + i)
     }
+
     // Why: a parked idle row is the only thing safe to displace — a working
     // spawn must never be dropped just because idle teammates fill the cap.
     upsertWorkingClaudeSubagent(roster, 'overflow', {}, 999)
@@ -152,9 +156,11 @@ describe('claude-subagent-roster', () => {
 
   it('reconciles stale entries before adding replacement tasks at the cap', () => {
     const roster: ClaudeSubagentRoster = new Map()
+
     for (let i = 0; i < AGENT_STATUS_MAX_SUBAGENTS; i++) {
       upsertWorkingClaudeSubagent(roster, `a${i}`, {}, i)
     }
+
     const tasks = Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS }, (_, index) =>
       task({ id: index === 0 ? 'replacement' : `a${index}` })
     )
@@ -184,6 +190,7 @@ describe('claude-subagent-roster', () => {
         'garbage'
       ]
     })
+
     expect(present).toBe(true)
     expect(tasks).toEqual([
       {
@@ -214,6 +221,7 @@ describe('claude-subagent-roster', () => {
       type: 'subagent',
       status: 'running'
     }))
+
     const result = readClaudeBackgroundAgentTasks({ background_tasks: tasks })
     expect(result.tasks).toHaveLength(AGENT_STATUS_MAX_SUBAGENTS)
     expect(result.truncated).toBe(true)
@@ -320,6 +328,7 @@ describe('claude-subagent-roster', () => {
   it('retains an unlisted live child when the background task inventory was truncated', () => {
     const roster: ClaudeSubagentRoster = new Map()
     upsertWorkingClaudeSubagent(roster, 'alive-after-cap', {}, 100)
+
     const parsed = readClaudeBackgroundAgentTasks({
       background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
         id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,

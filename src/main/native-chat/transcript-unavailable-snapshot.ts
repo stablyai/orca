@@ -9,6 +9,8 @@ export function emitTranscriptUnavailableSnapshot(
   if (!onInitialSnapshot) {
     return false
   }
+
   onInitialSnapshot([], false, 0, message)
+
   return true
 }

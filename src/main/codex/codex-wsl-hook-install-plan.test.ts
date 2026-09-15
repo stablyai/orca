@@ -128,20 +128,24 @@ describe('canonicalizeWslLinuxPath', () => {
   it('keeps the last known-good cache when revalidation later fails', () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
+
     const firstCallback = execFileMock.mock.calls[0][3] as (
       error: Error | null,
       stdout: string
     ) => void
+
     firstCallback(null, '/home/alice\n')
 
     const settled = vi.fn()
     expect(
       _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
     ).toBe('/home/alice')
+
     const secondCallback = execFileMock.mock.calls[1][3] as (
       error: Error | null,
       stdout: string
     ) => void
+
     secondCallback(new Error('path disappeared'), '')
 
     // Why: a cold or wedged distro times out without proving the path changed.
@@ -154,20 +158,24 @@ describe('canonicalizeWslLinuxPath', () => {
   it('drops the cached identity when WSL confirms the path is missing', () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
+
     const firstCallback = execFileMock.mock.calls[0][3] as (
       error: Error | null,
       stdout: string
     ) => void
+
     firstCallback(null, '/home/alice\n')
 
     const settled = vi.fn()
     expect(
       _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
     ).toBe('/home/alice')
+
     const secondCallback = execFileMock.mock.calls[1][3] as (
       error: Error | null,
       stdout: string
     ) => void
+
     secondCallback(null, '__ORCA_WSL_PATH_MISSING__\n')
 
     expect(settled).toHaveBeenCalledWith({ status: 'missing' })
@@ -177,20 +185,24 @@ describe('canonicalizeWslLinuxPath', () => {
   it('replaces a cached path when its canonical identity changes', () => {
     setPlatform('win32')
     _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias')
+
     const firstCallback = execFileMock.mock.calls[0][3] as (
       error: Error | null,
       stdout: string
     ) => void
+
     firstCallback(null, '/home/alice-old\n')
 
     const settled = vi.fn()
     expect(
       _internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alias', '/home/alias', settled)
     ).toBe('/home/alice-old')
+
     const secondCallback = execFileMock.mock.calls[1][3] as (
       error: Error | null,
       stdout: string
     ) => void
+
     secondCallback(null, '/home/alice-new\n')
 
     expect(settled).toHaveBeenCalledWith({

@@ -53,6 +53,7 @@ describe('SshPtySourceCreditAdapter cleanup', () => {
     const adapter = new SshPtySourceCreditAdapter()
     const detached = adapter.open(ownerGrant(1, 1), 'pty-1', 'incarnation-1')!
     const active = adapter.open(ownerGrant(2, 2), 'pty-2', 'incarnation-2')!
+
     const subscriber: Readonly<PtyConsumerSessionGrant> = Object.freeze({
       protocolVersion: PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
       serverBuildId: 'build-a',
@@ -161,10 +162,12 @@ describe('SshPtySourceCreditAdapter cleanup', () => {
   it('swallows a throwing credit-available callback in cancel and in the grace timer', () => {
     vi.useFakeTimers()
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const adapter = new SshPtySourceCreditAdapter(undefined, () => {
         throw new Error('publication faulted')
       })
+
       const grant = ownerGrant(1, 1)
       const canceled = adapter.open(grant, 'pty-1', 'incarnation-1')!
 
@@ -202,6 +205,7 @@ describe('SshPtySourceCreditAdapter cleanup', () => {
     const adapter = new SshPtySourceCreditAdapter()
     const grant = ownerGrant(1, 1)
     const identity = adapter.open(grant, 'pty-1', 'incarnation-1')!
+
     const params = {
       id: identity.id,
       deliveryToken: identity.deliveryToken,

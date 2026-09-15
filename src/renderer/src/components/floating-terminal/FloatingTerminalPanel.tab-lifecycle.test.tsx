@@ -25,6 +25,7 @@ import {
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
+
   return { ...actual, ...createReactHookOverrides() }
 })
 
@@ -168,7 +169,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onNewTerminalTab as () => void)()
     await flushAsyncWork()
 
@@ -207,7 +210,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(true)
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onNewBrowserTab as () => void)()
     ;(tabBar.props.onDuplicateBrowserTab as (browserTabId: string) => void)('browser-1')
 
@@ -275,7 +280,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
     const element = await renderPanel(true, onOpenChange)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
     // Terminals route through closeTerminalTab (its own pin guard + F9 force-reenter), not the raw store close.
@@ -295,7 +302,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     ])
 
     const element = await renderPanel(true, onOpenChange)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-2')
 
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
@@ -313,6 +322,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
     await Promise.resolve()
     const element = await renderPanel(true, onOpenChange)
+
     const terminalPane = findByTypeName(element, 'TerminalPane')
 
     ;(terminalPane.props.onPtyExit as (ptyId: string) => void)('pty-1')
@@ -343,6 +353,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
     await Promise.resolve()
     const element = await renderPanel(true)
+
     const terminalPane = findByTypeName(element, 'TerminalPane')
 
     ;(terminalPane.props.onPtyExit as (ptyId: string) => void)('split-pty')
@@ -357,7 +368,9 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     const element = await renderPanel(true)
     const tabBar = findByTypeName(element, 'TabBar')
+
     const emulatorPane = findByTypeName(element, 'EmulatorPane')
+
     ;(tabBar.props.onCloseFile as (tabId: string) => void)(tab.id)
 
     expect(tabBar.props.activeTabType).toBe('simulator')
@@ -371,6 +384,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const state = storeBox.state as FloatingPanelStoreState
     const groupId = 'floating-group'
     const file = makeFile({ id: 'file-a' })
+
     const editorTab: Tab = {
       id: 'tab-file-a',
       entityId: file.id,
@@ -383,6 +397,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       sortOrder: 0,
       createdAt: 0
     }
+
     const simulatorTab: Tab = {
       id: 'simulator-tab',
       entityId: 'simulator-tab',
@@ -395,6 +410,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       sortOrder: 1,
       createdAt: 1
     }
+
     state.openFiles = [file]
     state.unifiedTabsByWorktree = {
       [FLOATING_TERMINAL_WORKTREE_ID]: [editorTab, simulatorTab]
@@ -416,7 +432,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onCloseAllFiles as () => void)()
 
     expect(mocks.closeFile).toHaveBeenCalledWith(file.id)
@@ -431,7 +449,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue(true)
 
     const element = await renderPanel(true, onOpenChange)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onNewTerminalTab as () => void)()
     await flushAsyncWork()
 
@@ -491,7 +511,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     ][0].tabOrder = ['tab-c', 'tab-a', 'tab-b']
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onCloseToRight as (tabId: string) => void)('tab-c')
 
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-a', { reason: 'cleanup' })

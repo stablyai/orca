@@ -18,12 +18,15 @@ export function admitPluginPanelCall(
   message: unknown
 ): PluginPanelActionOutcome | null {
   const refusal = admission.admit(pluginKey, message)
+
   if (refusal === 'oversized') {
     return { ok: false, code: 'invalid_request', error: 'panel message exceeds the size limit' }
   }
+
   if (refusal === 'rate_limited') {
     return { ok: false, code: 'rate_limited', error: 'too many panel requests' }
   }
+
   return null
 }
 
@@ -39,17 +42,22 @@ export function createPluginPanelCallAdmission(
 ): PluginPanelCallAdmission {
   const budgets = new Map<string, PanelMessageBudget>()
   const now = options.now ?? (() => Date.now())
+
   const budgetFor = (pluginKey: string): PanelMessageBudget => {
     let budget = budgets.get(pluginKey)
+
     if (!budget) {
       budget = createPanelMessageBudget(options.limits)
       budgets.set(pluginKey, budget)
     }
+
     return budget
   }
+
   return {
     admit(pluginKey, message) {
       const budget = budgetFor(pluginKey)
+
       return budget.admit(now(), structuredCloneMessageBytes(message, budget.maxBytes))
     },
     clear(pluginKey) {

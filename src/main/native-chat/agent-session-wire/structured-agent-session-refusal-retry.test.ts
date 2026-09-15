@@ -29,8 +29,11 @@ import {
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
 
 const CALLER = { callerKey: 'client-1' }
+
 const METHODS = ['agentSession.setOption', 'agentSession.send'] as const
+
 type Method = (typeof METHODS)[number]
+
 type Pair = `${Method}:${AgentSessionWireRefusalCode}`
 
 type CallSpec = {
@@ -48,10 +51,12 @@ type Harness = {
 }
 
 const harnesses: Harness[] = []
+
 let operationSequence = 1_000
 
 function operationId(timestamp = NOW): string {
   operationSequence += 1
+
   return `${timestamp}-${operationSequence.toString(16).padStart(32, '0')}`
 }
 
@@ -59,6 +64,7 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
   const unused = async (): Promise<never> => {
     throw new Error('unused handoff transport')
   }
+
   return {
     hostLabel: 'test-host',
     launchTui: unused,
@@ -73,11 +79,14 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
 
 async function createHarness(options: { attached?: boolean; transport?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
+
   const store = await AgentSessionRecordStore.open({
     directory: join(root, 'store'),
     hostId: 'local'
   })
+
   const setOption = vi.fn<StructuredAgentSessionAdapter['setOption']>(async () => undefined)
+
   const adapter: StructuredAgentSessionAdapter = {
     acquire: async ({ fence }) => ({
       process: {
@@ -102,6 +111,7 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
     answerPrompt: async () => undefined,
     setOption
   }
+
   const host = new StructuredAgentSessionHost({
     store,
     adapter,
@@ -111,11 +121,14 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
     now: () => NOW,
     ...(options.transport ? { handoffTransport: handoffTransport() } : {})
   })
+
   const harness = { root, store, host, setOption }
   harnesses.push(harness)
+
   if (options.attached !== false) {
     expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   }
+
   return harness
 }
 
@@ -136,11 +149,13 @@ function callFields(spec: CallSpec): Record<string, unknown> {
   if (spec.method === 'agentSession.send') {
     return { body: hostTestMessage('host oracle') }
   }
+
   return { key: 'model', value: 'gpt-5' }
 }
 
 function envelope(harness: Harness, spec: CallSpec): AgentSessionMutationEnvelope {
   const fields = callFields(spec)
+
   return {
     sessionId: SESSION,
     clientOperationId: spec.operationId,
@@ -155,12 +170,14 @@ function envelope(harness: Harness, spec: CallSpec): AgentSessionMutationEnvelop
 function invoke(harness: Harness, spec: CallSpec): Promise<AgentSessionMutationResult<unknown>> {
   const fields = callFields(spec)
   const mutationEnvelope = envelope(harness, spec)
+
   if (spec.method === 'agentSession.send') {
     return harness.host.send(CALLER, {
       envelope: mutationEnvelope,
       body: fields.body as ReturnType<typeof hostTestMessage>
     })
   }
+
   return harness.host.setOption(CALLER, {
     envelope: mutationEnvelope,
     key: fields.key as string,
@@ -186,8 +203,10 @@ async function assertHostAgreement(
   } catch (error) {
     expect(error).toMatchObject({ message: code })
   }
+
   const outcome = operationState(harness, spec.operationId)
   let oracle: AgentSessionRefusalOperationState
+
   if (outcome?.status === 'failed') {
     oracle = 'settled-rejected'
   } else if (outcome?.status === 'unknown') {
@@ -204,9 +223,11 @@ async function assertHostAgreement(
   } else {
     oracle = 'settled-rejected'
   }
+
   expect(agentSessionRefusalOperationState(spec.method, code), `${spec.method}:${code}`).toBe(
     oracle
   )
+
   return `${spec.method}:${code}`
 }
 
@@ -257,12 +278,14 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     const record = (pair: Pair) => produced.add(pair)
 
     const stale = await createHarness()
+
     for (const method of METHODS) {
       const spec = {
         method,
         operationId: operationId(),
         expectedRuntimeFence: 99
       }
+
       record(
         await assertHostAgreement(stale, spec, 'agent_session_checkpoint_stale', async () => ({
           harness: stale,
@@ -273,9 +296,11 @@ describe('agentSessionRefusalOperationState host oracle', () => {
         }))
       )
     }
+
     expect(stale.setOption).toHaveBeenCalledTimes(1)
 
     const conflict = await createHarness({ transport: true })
+
     for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
       await setLease(conflict, (current) => ({
         ...current,
@@ -288,12 +313,14 @@ describe('agentSessionRefusalOperationState host oracle', () => {
             ...current,
             lease: { ...current.lease, runtimeKind: 'native' }
           }))
+
           return { harness: conflict, spec }
         })
       )
     }
 
     const absent = await createHarness({ attached: false })
+
     for (const method of METHODS) {
       const spec = { method, operationId: operationId() }
       record(
@@ -305,6 +332,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     }
 
     const operationConflict = await createHarness()
+
     for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
       record(
         await assertHostAgreement(
@@ -318,7 +346,9 @@ describe('agentSessionRefusalOperationState host oracle', () => {
         )
       )
     }
+
     const ledgerRefusals = await createHarness()
+
     for (const [code, timestamp] of [
       ['agent_session_operation_expired', NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1],
       ['agent_session_operation_invalid', null]
@@ -339,6 +369,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
 
     const capacity = await createHarness()
     await fillOperationLedger(capacity)
+
     for (const method of METHODS) {
       const spec = { method, operationId: operationId() }
       record(
@@ -356,6 +387,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     record(await assertHostAgreement(unknown, optionUnknown, 'agent_session_operation_unknown'))
 
     const reconciling = await createHarness()
+
     for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
       await setLease(reconciling, (current) => ({
         ...current,
@@ -368,6 +400,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
             ...current,
             lease: { ...current.lease, unreconciled: false }
           }))
+
           return { harness: reconciling, spec }
         })
       )
@@ -376,6 +409,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     const allPairs = METHODS.flatMap((method) =>
       AGENT_SESSION_WIRE_REFUSAL_CODES.map((code) => `${method}:${code}` as Pair)
     )
+
     expect(new Set([...produced, ...UNREACHABLE])).toEqual(new Set(allPairs))
     expect([...produced].filter((pair) => UNREACHABLE.has(pair))).toEqual([])
   })

@@ -13,6 +13,7 @@ export function projectSourceControlAiToLegacyCommitMessageAi(
 ): CommitMessageAiSettings {
   const commitMessageChoice = sourceControlAi.modelOverridesByOperation?.commitMessage
   const commitRecipe = readSourceControlActionDefault(sourceControlAi.actions, 'commitMessage')
+
   return {
     enabled: sourceControlAi.enabled,
     agentId: hasActionAgentRecipe(commitRecipe) ? commitRecipe.agentId : sourceControlAi.agentId,

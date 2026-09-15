@@ -3,6 +3,7 @@ import { isMacAppDataPath, shouldPollActiveGitStatus } from './passive-macos-app
 import type { ActiveRightSidebarTab, OpenFile } from '@/store/slices/editor'
 
 const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+
 const LINUX = 'Mozilla/5.0 (X11; Linux x86_64)'
 
 function pollArgs(

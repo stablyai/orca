@@ -23,6 +23,7 @@ describe('rich markdown range bounds', () => {
       from: index + 10,
       to: index + 11
     }))
+
     ranges.push({ from: 3, to: 2 })
     ranges.push({ from: 200_000, to: 199_999 })
 

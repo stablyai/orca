@@ -8,11 +8,13 @@ export async function settleComposerSubmit<T>(
 ): Promise<ComposerSubmitSettlement<T>> {
   try {
     const value = await promise
+
     return isCancelled() ? { status: 'cancelled' } : { status: 'completed', value }
   } catch (error) {
     if (isCancelled()) {
       return { status: 'cancelled' }
     }
+
     throw error
   }
 }

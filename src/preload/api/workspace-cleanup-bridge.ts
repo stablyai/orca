@@ -7,7 +7,9 @@ export const workspaceCleanupApi = {
     if (!onProgress) {
       return ipcRenderer.invoke('workspaceCleanup:scan', args)
     }
+
     const scanId = args?.scanId ?? crypto.randomUUID()
+
     const listener = (
       _event: Electron.IpcRendererEvent,
       progress: WorkspaceCleanupScanProgress
@@ -16,7 +18,9 @@ export const workspaceCleanupApi = {
         onProgress(progress)
       }
     }
+
     ipcRenderer.on('workspaceCleanup:scanProgress', listener)
+
     return ipcRenderer
       .invoke('workspaceCleanup:scan', { ...args, scanId })
       .finally(() => ipcRenderer.removeListener('workspaceCleanup:scanProgress', listener))

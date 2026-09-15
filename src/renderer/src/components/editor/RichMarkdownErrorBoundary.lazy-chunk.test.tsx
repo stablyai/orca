@@ -11,6 +11,7 @@ import {
 } from './RichMarkdownErrorBoundary'
 
 const reportCrashMock = vi.hoisted(() => vi.fn())
+
 const recordBreadcrumbMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/react-error-boundary-reporting', () => ({
@@ -22,6 +23,7 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 }))
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+
 const LANDED_RELOAD_GUARD_VALUE = 'doc-before-the-reload'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -29,6 +31,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 function createContainer(): { container: HTMLDivElement; root: Root } {
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   return { container, root: createRoot(container) }
 }
 
@@ -73,6 +76,7 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -82,10 +86,12 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
 
   it('renders the fallback without reporting after guarded dynamic import exhaustion', async () => {
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
+
     const LazyRejectingImport = lazyWithRetry(
       () => Promise.reject(new SyntaxError(CORRUPT_CHUNK_PARSE_ERROR)),
       { retries: 0, reloadKey: 'rich-markdown-editor' }
     )
+
     ;({ container, root } = createContainer())
 
     await act(async () => {
@@ -109,10 +115,12 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
 
   it('records the degraded breadcrumb once across repeated Retry clicks', async () => {
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
+
     const LazyRejectingImport = lazyWithRetry(
       () => Promise.reject(new SyntaxError(CORRUPT_CHUNK_PARSE_ERROR)),
       { retries: 0 }
     )
+
     ;({ container, root } = createContainer())
 
     await act(async () => {
@@ -140,10 +148,12 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
 
   it('records the degraded breadcrumb once across boundary remounts', async () => {
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
+
     const LazyRejectingImport = lazyWithRetry(
       () => Promise.reject(new SyntaxError("Unexpected token '<'")),
       { retries: 0 }
     )
+
     ;({ container, root } = createContainer())
 
     for (const boundaryKey of ['pane-a', 'pane-b', 'pane-c']) {
@@ -164,9 +174,11 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
 
   it('still reports ordinary render errors', async () => {
     const error = new Error('ordinary render failure')
+
     function BrokenEditor(): ReactElement {
       throw error
     }
+
     ;({ container, root } = createContainer())
 
     await act(async () => {

@@ -50,13 +50,17 @@ export function EditorMarkdownFileSurface({
   if (activeFile.conflict?.conflictStatus === 'unresolved') {
     return <div className="h-full min-h-0">{monacoEditor}</div>
   }
+
   if (!inlineMarkdownRenderState) {
     return <div className="h-full min-h-0">{monacoEditor}</div>
   }
+
   const { renderMode, richModeUnsupportedMessage } = inlineMarkdownRenderState
+
   if (renderMode === 'source' && mdViewMode === 'rich') {
     // Why: only a size fallback is recoverable — unsupported syntax would round-trip badly, so it gets no override.
     const isSizeFallback = richModeUnsupportedMessage === null
+
     const richFallbackMessage =
       richModeUnsupportedMessage ??
       translate(
@@ -64,6 +68,7 @@ export function EditorMarkdownFileSurface({
         'File is larger than the {{limit}} rich editing limit. Showing source mode instead.',
         { limit: formatBytes(RICH_MARKDOWN_MAX_SIZE_BYTES) }
       )
+
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center gap-3 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -84,12 +89,15 @@ export function EditorMarkdownFileSurface({
       </div>
     )
   }
+
   if (renderMode === 'rich-editor') {
     const frontMatter = extractFrontMatter(currentContent)
     const editorContent = frontMatter ? frontMatter.body : currentContent
+
     const onContentChange = frontMatter
       ? (body: string): void => handleContentChange(prependFrontMatter(frontMatter.raw, body))
       : handleContentChange
+
     const onSave = frontMatter
       ? (body: string): Promise<boolean> =>
           markdownDocuments.mdSave(prependFrontMatter(frontMatter.raw, body))
@@ -134,8 +142,10 @@ export function EditorMarkdownFileSurface({
       </div>
     )
   }
+
   if (renderMode === 'preview') {
     const shouldExplainRichFallback = mdViewMode === 'rich' && richModeUnsupportedMessage
+
     return (
       <div className="flex h-full min-h-0 flex-col">
         {shouldExplainRichFallback ? (
@@ -162,6 +172,7 @@ export function EditorMarkdownFileSurface({
       </div>
     )
   }
+
   return <div className="h-full min-h-0">{monacoEditor}</div>
 }
 

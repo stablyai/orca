@@ -36,10 +36,12 @@ import {
 function createFrameScheduler() {
   const queue = new Map<number, () => void>()
   let nextHandle = 1
+
   return {
     requestFrame: (callback: () => void): number => {
       const handle = nextHandle++
       queue.set(handle, callback)
+
       return handle
     },
     cancelFrame: (handle: number): void => {
@@ -47,12 +49,14 @@ function createFrameScheduler() {
     },
     run(maxFrames = 5000): number {
       let ran = 0
+
       while (queue.size > 0 && ran < maxFrames) {
         const [handle, callback] = queue.entries().next().value as [number, () => void]
         queue.delete(handle)
         callback()
         ran += 1
       }
+
       return ran
     },
     pending: () => queue.size
@@ -84,6 +88,7 @@ function runReconcile(
     ...overrides
   })
   scheduler.run()
+
   return { resize, lastSent }
 }
 
@@ -95,10 +100,12 @@ describe('split-right white screen: post-spawn PTY size reconcile', () => {
     // the PTY leaves 0x0; otherwise the shell renders into a 0-row buffer (blank).
     let frame = 0
     const SETTLE_AT = 3
+
     const { resize, lastSent } = runReconcile({
       measure: vi.fn((): PtySizeReconcileDimensions | null => {
         const dims = frame < SETTLE_AT ? null : { cols: 120, rows: 40 }
         frame += 1
+
         return dims
       }),
       // Local PTY: applied size readback reflects what was actually forwarded.
@@ -115,6 +122,7 @@ describe('split-right white screen: post-spawn PTY size reconcile', () => {
     // reconcile window (0-size container: the documented split-mount race where
     // layout has not settled). measure() returns null on every frame.
     const measure = vi.fn((): PtySizeReconcileDimensions | null => null)
+
     const { resize, lastSent } = runReconcile({
       measure,
       getAppliedSize: vi.fn(async () => ({ cols: 0, rows: 0 }))

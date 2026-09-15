@@ -126,6 +126,7 @@ describe('watchdog worker entry', () => {
         checkIntervalMs: 25
       })
     ).toBe(true)
+
     for (const value of [
       null,
       {},
@@ -141,6 +142,7 @@ describe('watchdog worker entry', () => {
   it('routes heartbeats and shuts down its timer and port', () => {
     const markerPath = join(tmpdir(), `hang-watchdog-entry-${process.pid}.json`)
     let onMessage: ((message: { type: 'heartbeat' | 'shutdown' }) => void) | undefined
+
     const port = {
       on: vi.fn(
         (_event: 'message', listener: (message: { type: 'heartbeat' | 'shutdown' }) => void) => {
@@ -149,6 +151,7 @@ describe('watchdog worker entry', () => {
       ),
       close: vi.fn()
     }
+
     try {
       runWatchdog(
         {

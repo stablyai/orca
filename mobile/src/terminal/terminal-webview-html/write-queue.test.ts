@@ -6,6 +6,7 @@ import { TERMINAL_HTML_WRITE_QUEUE } from './write-queue'
 // on the source string. The pre-change source is derived from the shipped one and kept as the
 // differential oracle so the two cannot drift apart.
 const CLEARED_SLOT_STATEMENT = '    writeQueue[writeQueueHead] = undefined;\n'
+
 const PREVIOUS_WRITE_QUEUE_SOURCE = TERMINAL_HTML_WRITE_QUEUE.replace(CLEARED_SLOT_STATEMENT, '')
 
 type QueueSnapshot = { slots: unknown[]; head: number }
@@ -31,6 +32,7 @@ type WriteQueueHarness = WriteQueueRuntime & {
 function createWriteQueue(source: string): WriteQueueHarness {
   const writes: string[] = []
   const pendingWrites: Array<() => void> = []
+
   const factory = new Function(
     'recordWrite',
     // Mirrors document-shell.ts and runtime-state-and-text-scaling.ts.
@@ -62,10 +64,12 @@ function createWriteQueue(source: string): WriteQueueHarness {
         snapshot: function() { return { slots: writeQueue.slice(), head: writeQueueHead }; }
       };`
   ) as (recordWrite: (data: string, done: () => void) => void) => WriteQueueRuntime
+
   const runtime = factory((data, done) => {
     writes.push(data)
     pendingWrites.push(done)
   })
+
   return {
     ...runtime,
     writes,
@@ -88,8 +92,10 @@ function createWriteQueue(source: string): WriteQueueHarness {
 function drain(queue: WriteQueueHarness): void {
   queue.pump()
   let guard = 0
+
   while (queue.pendingWrites.length > 0) {
     queue.flushWrite()
+
     if (++guard > 10_000) {
       throw new Error('write queue did not drain')
     }
@@ -115,6 +121,7 @@ describe('terminal WebView write queue', () => {
   function distinctChunks(count: number, codeUnits: number): string[] {
     return Array.from({ length: count }, (_v, i) => {
       const marker = `chunk-${i}:`
+
       return marker + String.fromCharCode(0x61 + (i % 26)).repeat(codeUnits - marker.length)
     })
   }
@@ -131,14 +138,18 @@ describe('terminal WebView write queue', () => {
     const CHUNK_CODE_UNITS = 65_536
     const CHUNK_COUNT = 128
     const chunks = distinctChunks(CHUNK_COUNT, CHUNK_CODE_UNITS)
+
     const measure = (source: string): number => {
       const queue = createWriteQueue(source)
+
       for (const chunk of chunks) {
         queue.enqueue(chunk)
       }
+
       for (let i = 0; i < CHUNK_COUNT - 1; i++) {
         queue.next()
       }
+
       return queue.queuedCodeUnits()
     }
 
@@ -153,15 +164,20 @@ describe('terminal WebView write queue', () => {
     [10_000, 5_000]
   ])('at backlog %i the head reaches %i before any compaction', (backlog, dequeues) => {
     const chunks = distinctChunks(backlog, 64)
+
     const measure = (source: string): { codeUnits: number; head: number; slots: number } => {
       const queue = createWriteQueue(source)
+
       for (const chunk of chunks) {
         queue.enqueue(chunk)
       }
+
       for (let i = 0; i < dequeues; i++) {
         queue.next()
       }
+
       const { head, slots } = queue.snapshot()
+
       return { codeUnits: queue.queuedCodeUnits(), head, slots: slots.length }
     }
 
@@ -260,10 +276,13 @@ describe('terminal WebView write queue', () => {
     const queue = createWriteQueue(source)
     const total = 200
     const consumed = 129
+
     for (let i = 0; i < total; i++) {
       queue.enqueue(`chunk-${i}`)
     }
+
     const taken: unknown[] = []
+
     for (let i = 0; i < consumed; i++) {
       taken.push(queue.next())
     }
@@ -286,14 +305,18 @@ describe('terminal WebView write queue', () => {
 
   it('once compaction does fire, both implementations retain only pending chunks', () => {
     const chunks = distinctChunks(200, 1_024)
+
     const measure = (source: string): number => {
       const queue = createWriteQueue(source)
+
       for (const chunk of chunks) {
         queue.enqueue(chunk)
       }
+
       for (let i = 0; i < 129; i++) {
         queue.next()
       }
+
       return queue.queuedCodeUnits()
     }
 

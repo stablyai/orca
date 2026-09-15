@@ -12,17 +12,29 @@ const {
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 warmUpdaterModule()
@@ -40,6 +52,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.resolve(undefined)
     })
 
@@ -93,6 +106,7 @@ describe('updater', () => {
 
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.resolve(undefined)
     })
 
@@ -126,6 +140,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       // Stay in 'checking' state — don't resolve
       return new Promise(() => {})
     })
@@ -188,6 +203,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.resolve(undefined)
     })
 
@@ -219,9 +235,11 @@ describe('updater', () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
     let pendingNudgeId: string | null = null
+
     const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
       pendingNudgeId = id
     })
+
     const setDismissedUpdateNudgeId = vi.fn()
 
     fetchNudgeMock.mockResolvedValue({ id: 'campaign-1', minVersion: '1.0.0' })
@@ -262,6 +280,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.resolve(undefined)
     })
 
@@ -292,6 +311,7 @@ describe('updater', () => {
     const mainWindow = { webContents: { send: sendMock } }
     const setPendingUpdateNudgeId = vi.fn()
     const setDismissedUpdateNudgeId = vi.fn()
+
     const missingManifest = new Error(
       'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
     )
@@ -300,6 +320,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.reject(missingManifest)
     })
 
@@ -330,6 +351,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.resolve(undefined)
     })
 

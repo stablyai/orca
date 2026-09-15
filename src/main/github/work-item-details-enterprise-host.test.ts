@@ -96,6 +96,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
       repo: 'orca',
       host: 'github.acme-corp.com'
     }
+
     getWorkItemMock.mockResolvedValueOnce({
       id: 'issue:7',
       type: 'issue',
@@ -111,6 +112,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterpriseRepository)
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('comments(first: 100)')) {
         return {
           stdout: JSON.stringify({
@@ -127,10 +129,13 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           })
         }
       }
+
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/team/orca/issues/7/timeline?per_page=100&page=1') {
         return { stdout: '' }
       }
+
       throw new Error(`unexpected gh call: ${args.join(' ')}`)
     })
 
@@ -178,6 +183,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/team/orca/pulls/7') {
         return {
           stdout: JSON.stringify({
@@ -187,6 +193,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           })
         }
       }
+
       if (endpoint === 'repos/team/orca/pulls/7/files?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -201,7 +208,9 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           ])
         }
       }
+
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('viewerViewedState')) {
         return {
           stdout: JSON.stringify({
@@ -219,6 +228,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           })
         }
       }
+
       if (query.includes('participants(first: 100)')) {
         return {
           stdout: JSON.stringify({
@@ -226,6 +236,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           })
         }
       }
+
       throw new Error(`unexpected gh call: ${args.join(' ')}`)
     })
 
@@ -263,9 +274,11 @@ describe('getWorkItemDetails Enterprise host routing', () => {
       undefined,
       'ssh-1'
     )
+
     const apiCalls = ghExecFileAsyncMock.mock.calls
       .map(([args]) => args as string[])
       .filter((args) => args[0] === 'api')
+
     expect(apiCalls.length).toBeGreaterThan(0)
     expect(apiCalls.every((args) => !args.includes('--hostname'))).toBe(true)
     expect(

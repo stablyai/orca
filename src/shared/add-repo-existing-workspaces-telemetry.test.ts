@@ -14,6 +14,7 @@ describe('add_repo_existing_workspaces_detected schema', () => {
       sparse_workspace_count: 0,
       nth_repo_added: 1
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -30,6 +31,7 @@ describe('add_repo_existing_workspaces_detected schema', () => {
       nth_repo_added: 1,
       workspace_names: ['secret-customer-branch']
     })
+
     expect(parsed.success).toBe(false)
   })
 
@@ -42,6 +44,7 @@ describe('add_repo_existing_workspaces_detected schema', () => {
         existing_linked_workspace_count: 3,
         nth_repo_added: 1
       })
+
       expect(parsed.success).toBe(true)
     }
   })

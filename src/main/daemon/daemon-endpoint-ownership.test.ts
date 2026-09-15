@@ -58,6 +58,7 @@ describe('endpoint ownership identity rules', () => {
       const socketPath = join(dir, 'daemon.sock')
       const ours = createServer((socket) => socket.end())
       const usurper = createServer((socket) => socket.end())
+
       try {
         const ourBind = getDaemonSocketBindPath(socketPath)
         await new Promise<void>((resolve) => ours.listen(ourBind, resolve))
@@ -99,12 +100,14 @@ describe('daemon endpoint ownership publication', () => {
 
   it('does not publish an adoptable endpoint before durable ownership succeeds', async () => {
     writeFileSync(tokenPath, 'previous-token')
+
     const publishEndpointOwnership = vi.fn(() => {
       expect(readFileSync(tokenPath, 'utf8')).toBe('previous-token')
       throw Object.assign(new Error('PID record already owned'), {
         code: 'EEXIST'
       })
     })
+
     server = new DaemonServer({
       socketPath,
       tokenPath,
@@ -147,6 +150,7 @@ describe('daemon endpoint ownership publication', () => {
     'keeps a replacement endpoint when the daemon it replaced closes late',
     async () => {
       const replacedPidPath = join(dir, 'replaced.pid')
+
       const replaced = new DaemonServer({
         socketPath,
         tokenPath,
@@ -160,7 +164,9 @@ describe('daemon endpoint ownership publication', () => {
           }),
         spawnSubprocess: () => createMockSubprocess()
       })
+
       const replacement = createServer((socket) => socket.end())
+
       try {
         await replaced.start()
         const replacementBind = getDaemonSocketBindPath(socketPath)
@@ -177,8 +183,10 @@ describe('daemon endpoint ownership publication', () => {
         await new Promise<void>((resolve) => {
           if (!replacement.listening) {
             resolve()
+
             return
           }
+
           replacement.close(() => resolve())
         })
       }
@@ -208,6 +216,7 @@ describe('daemon endpoint ownership publication', () => {
         endpoint: { checkOwnership: () => void }
         lifecycle: { retirementRequested: boolean }
       }
+
       // An inconclusive or matching probe must never retire a healthy daemon, however often it runs.
       daemon.endpoint.checkOwnership()
       daemon.endpoint.checkOwnership()
@@ -233,6 +242,7 @@ describe('daemon endpoint ownership publication', () => {
         expect(daemon.lifecycle.retirementRequested).toBe(true)
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
+
         try {
           unlinkSync(socketPath)
         } catch {
@@ -279,6 +289,7 @@ describe('daemon endpoint ownership publication', () => {
           }),
         spawnSubprocess: () => createMockSubprocess()
       })
+
       try {
         await expect(duplicate.start()).rejects.toMatchObject({
           code: 'EEXIST'

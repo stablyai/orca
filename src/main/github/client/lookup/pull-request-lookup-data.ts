@@ -17,6 +17,7 @@ import {
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
+
 export type PullRequestLookupData = {
   number: number
   title: string
@@ -76,20 +77,25 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {
   const mergeableState = pr.mergeable_state?.toLowerCase()
+
   if (mergeableState === 'dirty') {
     return 'CONFLICTING'
   }
+
   if (mergeableState === 'clean' || pr.mergeable === true) {
     return 'MERGEABLE'
   }
+
   return 'UNKNOWN'
 }
 
 export function derivePullRequestMergeable(data: PullRequestLookupData): PRMergeableState {
   const mergeable = normalizePRMergeable(data.mergeable)
+
   if (mergeable === 'CONFLICTING' || data.mergeStateStatus === 'DIRTY') {
     return 'CONFLICTING'
   }
+
   return mergeable ?? 'UNKNOWN'
 }
 
@@ -107,6 +113,7 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
           ...(typeof pr.stack.base.sha === 'string' ? { baseSha: pr.stack.base.sha } : {})
         }
       : undefined
+
   return {
     number: pr.number,
     title: pr.title,
@@ -141,6 +148,7 @@ export function shouldHideMergedImplicitPR(
   if (!data || !isMergedImplicitPR(data, linkedPRNumber)) {
     return false
   }
+
   // Why: keep hiding historical merged branch matches, but preserve the merged PR for the exact commit currently checked out.
   return !currentHeadOid || data.headRefOid !== currentHeadOid
 }
@@ -162,19 +170,24 @@ export async function getCurrentHeadOid(
   localGitOptions: { wslDistro?: string; admissionTier?: GitAdmissionTier } = {}
 ): Promise<string | null> {
   const provider = connectionId ? getSshGitProvider(connectionId) : null
+
   if (connectionId && !provider) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   if (provider) {
     const result = await provider.exec(['rev-parse', 'HEAD'], repoPath)
+
     return result.stdout.trim() || null
   }
+
   try {
     const result = await gitExecFileAsync(['rev-parse', 'HEAD'], {
       cwd: repoPath,
       ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
       ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
+
     return result.stdout.trim() || null
   } catch {
     return null

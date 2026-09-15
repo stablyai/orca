@@ -5,8 +5,11 @@ import type {
 } from './browser-host-page-reconciliation-plan'
 
 const DEFAULT_MAX_CONCURRENCY = 4
+
 const MAX_CONCURRENCY = 16
+
 const DEFAULT_ACTION_TIMEOUT_MS = 15_000
+
 const MAX_ACTION_TIMEOUT_MS = 60_000
 
 type ReconciliationPair = BrowserHostPageReconciliationPlan['reclaim'][number]
@@ -45,12 +48,14 @@ export async function executeBrowserHostPageReconciliation(
     MAX_CONCURRENCY,
     'concurrency'
   )
+
   const actionTimeoutMs = boundedInteger(
     options.actionTimeoutMs,
     DEFAULT_ACTION_TIMEOUT_MS,
     MAX_ACTION_TIMEOUT_MS,
     'timeout'
   )
+
   const reclaimAndClose = createReclaimAndCloseActions(plan, actions)
   await executePhase(
     reclaimAndClose,
@@ -62,6 +67,7 @@ export async function executeBrowserHostPageReconciliation(
   // Ambiguous authority or destruction outcomes require a fresh plan, never an in-place restore.
   const restore = createRestoreActions(plan, actions)
   await executePhase(restore, maxConcurrency, actionTimeoutMs, options.signal, 'restore')
+
   return Object.freeze({
     retained: plan.retain.length,
     reclaimed: plan.reclaim.length,
@@ -124,14 +130,17 @@ async function executePhase(
 ): Promise<void> {
   const failures: (Error | undefined)[] = []
   let nextIndex = 0
+
   const worker = async (): Promise<void> => {
     while (!signal?.aborted) {
       const index = nextIndex
       nextIndex += 1
       const action = actions[index]
+
       if (!action) {
         return
       }
+
       try {
         await runReconciliationAction(action, actionTimeoutMs, signal)
       } catch (error) {
@@ -141,12 +150,16 @@ async function executePhase(
       }
     }
   }
+
   const workers = Math.min(maxConcurrency, actions.length)
   await Promise.all(Array.from({ length: workers }, worker))
+
   if (signal?.aborted) {
     failures.push(reconciliationAbortError(signal))
   }
+
   const exactFailures = failures.filter((failure): failure is Error => Boolean(failure))
+
   if (exactFailures.length > 0) {
     throw new AggregateError(
       exactFailures,
@@ -163,9 +176,11 @@ async function runReconciliationAction(
   if (parentSignal?.aborted) {
     throw reconciliationAbortError(parentSignal)
   }
+
   const controller = new AbortController()
   let timeout: ReturnType<typeof setTimeout> | undefined
   let removeParentAbort = (): void => {}
+
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeout = setTimeout(() => {
       const error = new Error('browser_host_page_reconciliation_action_timeout')
@@ -173,30 +188,37 @@ async function runReconciliationAction(
       controller.abort(error)
     }, timeoutMs)
   })
+
   const parentAbortPromise = new Promise<never>((_resolve, reject) => {
     if (!parentSignal) {
       return
     }
+
     const abort = (): void => {
       const error = reconciliationAbortError(parentSignal)
       reject(error)
       controller.abort(error)
     }
+
     parentSignal.addEventListener('abort', abort, { once: true })
     removeParentAbort = () => parentSignal.removeEventListener('abort', abort)
   })
+
   let actionResult: void | Promise<void>
+
   try {
     actionResult = action.run(controller.signal)
   } catch (error) {
     actionResult = Promise.reject(error)
   }
+
   try {
     await Promise.race([Promise.resolve(actionResult), timeoutPromise, parentAbortPromise])
   } finally {
     if (timeout !== undefined) {
       clearTimeout(timeout)
     }
+
     removeParentAbort()
   }
 }
@@ -212,8 +234,10 @@ function boundedInteger(
   errorKind: 'concurrency' | 'timeout'
 ): number {
   const resolved = value ?? fallback
+
   if (!Number.isInteger(resolved) || resolved < 1 || resolved > maximum) {
     throw new Error(`browser_host_page_reconciliation_${errorKind}_invalid`)
   }
+
   return resolved
 }

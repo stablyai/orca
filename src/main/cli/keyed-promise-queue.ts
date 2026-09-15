@@ -10,10 +10,12 @@ export function runKeyedSerializedOperation<T>(
 ): Promise<T> {
   const previous = queues.get(key) ?? Promise.resolve()
   const current = previous.then(operation)
+
   const queued = current.then(
     () => undefined,
     () => undefined
   )
+
   queues.set(key, queued)
 
   const clear = (): void => {
@@ -21,7 +23,9 @@ export function runKeyedSerializedOperation<T>(
       queues.delete(key)
     }
   }
+
   queued.then(clear, clear)
+
   return current
 }
 

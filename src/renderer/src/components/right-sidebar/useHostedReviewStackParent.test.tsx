@@ -36,6 +36,7 @@ describe('useHostedReviewStackParent', () => {
   it('debounces the active branch lookup and preserves repo routing context', async () => {
     vi.useFakeTimers()
     const fetchHostedReviewForBranch = vi.fn(async () => makeReview())
+
     const { result } = renderHook(() =>
       useHostedReviewStackParent({ ...baseOptions, fetchHostedReviewForBranch })
     )
@@ -58,6 +59,7 @@ describe('useHostedReviewStackParent', () => {
   it('looks up the worktree base branch a child forked from', async () => {
     vi.useFakeTimers()
     const fetchHostedReviewForBranch = vi.fn(async () => makeReview())
+
     const { result } = renderHook(() =>
       useHostedReviewStackParent({
         ...baseOptions,
@@ -102,6 +104,7 @@ describe('useHostedReviewStackParent', () => {
   ])('rejects a non-open GitHub review', async (review) => {
     vi.useFakeTimers()
     const fetchHostedReviewForBranch = vi.fn(async () => review)
+
     const { result } = renderHook(() =>
       useHostedReviewStackParent({ ...baseOptions, fetchHostedReviewForBranch })
     )
@@ -114,6 +117,7 @@ describe('useHostedReviewStackParent', () => {
   it.each(['open', 'draft'] as const)('accepts a %s GitHub review', async (state) => {
     vi.useFakeTimers()
     const fetchHostedReviewForBranch = vi.fn(async () => makeReview({ state }))
+
     const { result } = renderHook(() =>
       useHostedReviewStackParent({ ...baseOptions, fetchHostedReviewForBranch })
     )
@@ -127,15 +131,19 @@ describe('useHostedReviewStackParent', () => {
     vi.useFakeTimers()
     let resolveFirst: (review: HostedReviewInfo) => void = () => undefined
     let resolveSecond: (review: HostedReviewInfo) => void = () => undefined
+
     const first = new Promise<HostedReviewInfo>((resolve) => {
       resolveFirst = resolve
     })
+
     const second = new Promise<HostedReviewInfo>((resolve) => {
       resolveSecond = resolve
     })
+
     const fetchHostedReviewForBranch = vi.fn((_repoPath: string, branch: string) =>
       branch === 'feature/first' ? first : second
     )
+
     const { result, rerender } = renderHook(
       ({ base }) =>
         useHostedReviewStackParent({ ...baseOptions, base, fetchHostedReviewForBranch }),

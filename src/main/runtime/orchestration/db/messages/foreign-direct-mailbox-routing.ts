@@ -20,9 +20,11 @@ export function findActiveDispatchForDirectMessageOwner(
        ORDER BY rowid DESC LIMIT 1`
     )
     .get(runId, directHandle) as DispatchContextRow | undefined
+
   if (exact || !paneKey || !parsePaneKey(paneKey)) {
     return exact
   }
+
   return this.db
     .prepare(
       `SELECT * FROM dispatch_contexts
@@ -41,10 +43,12 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
   paneKey?: string
 ): ForeignDirectMailboxRoutingPage {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const runExclusion = currentRunId === undefined ? '' : ' AND candidate.run_id <> ?'
     const paneSuffix = paneKey && parsePaneKey(paneKey) ? paneKeyMatchSuffix(paneKey) : undefined
     const exclusionParams = currentRunId === undefined ? [] : [currentRunId]
+
     const branches = [
       `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence
        FROM run_coordinator_handles AS coordinator
@@ -72,10 +76,12 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
          AND candidate.read = 0 AND candidate.delivered_at IS NULL
          AND candidate.delivery_contract = 'current_delivery'`
     ]
+
     const branchParams: (string | number)[][] = [
       [directHandle, ...exclusionParams, ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1],
       [directHandle, directHandle, ...exclusionParams, ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1]
     ]
+
     if (paneSuffix !== undefined) {
       branches.push(
         `SELECT candidate.id, candidate.run_id, candidate.type, candidate.sequence
@@ -103,9 +109,11 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
         ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1
       ])
     }
+
     const limitedBranches = branches.map(
       (branch) => `SELECT * FROM (${branch} ORDER BY candidate.sequence LIMIT ?)`
     )
+
     const rows = this.db
       .prepare(
         `SELECT id, run_id, type FROM (${limitedBranches.join(' UNION ')})
@@ -116,21 +124,29 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
       run_id: string
       type: MessageType
     }[]
+
     const page = rows.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+
     if (page.length === 0) {
       this.db.exec('COMMIT')
+
       return { routedCount: 0, hasMore: false, types: [], mailboxes: [] }
     }
+
     const runIds = [...new Set(page.map((row) => row.run_id))]
     const dispatchByRun = new Map<string, DispatchContextRow>()
+
     for (const runId of runIds) {
       const dispatch = this.findActiveDispatchForDirectMessageOwner(runId, directHandle, paneKey)
+
       if (dispatch) {
         dispatchByRun.set(runId, dispatch)
       }
     }
+
     const idsByMailbox = new Map<string, string[]>()
     const byMailbox = new Map<string, Set<MessageType>>()
+
     for (const row of page) {
       const dispatch = dispatchByRun.get(row.run_id)
       const mailboxHandle = dispatch ? `dispatch:${dispatch.id}` : `run:${row.run_id}`
@@ -141,6 +157,7 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
       types.add(row.type)
       byMailbox.set(mailboxHandle, types)
     }
+
     for (const [mailboxHandle, ids] of idsByMailbox) {
       const placeholders = ids.map(() => '?').join(',')
       this.db
@@ -151,7 +168,9 @@ export function routeForeignDirectMessagesToOwnedMailboxes(
         )
         .run(mailboxHandle, directHandle, ...ids)
     }
+
     this.db.exec('COMMIT')
+
     return {
       routedCount: page.length,
       hasMore: rows.length > ORCHESTRATION_DELIVERY_BATCH_LIMIT,

@@ -54,6 +54,7 @@ describe('getWorkItemDetails', () => {
   it('caps MR detail discussions, jobs, and file diffs to one API page', async () => {
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.at(-1)
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12') {
         return {
           stdout: JSON.stringify({
@@ -72,6 +73,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -89,6 +91,7 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+
       if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -103,18 +106,23 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+
       if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
         return { stdout: '[]' }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
         return { stdout: '[]' }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
         return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
         return { stdout: JSON.stringify({ rules: [] }) }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -126,6 +134,7 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+
       throw new Error(`unexpected glab call: ${args.join(' ')}`)
     })
 
@@ -149,6 +158,7 @@ describe('getWorkItemDetails', () => {
   it('expands bridge child-pipeline jobs into the checks list', async () => {
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.at(-1)
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12') {
         return {
           stdout: JSON.stringify({
@@ -166,9 +176,11 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
         return { stdout: '[]' }
       }
+
       if (endpoint === 'projects/g%2Fp/pipelines/99/jobs?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -183,6 +195,7 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+
       if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -201,6 +214,7 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+
       if (endpoint === 'projects/g%2Fp/pipelines/200/jobs?per_page=100') {
         return {
           stdout: JSON.stringify([
@@ -223,18 +237,23 @@ describe('getWorkItemDetails', () => {
           ])
         }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
         return { stdout: '[]' }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
         return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
         return { stdout: JSON.stringify({ rules: [] }) }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
         return { stdout: '[]' }
       }
+
       throw new Error(`unexpected glab call: ${args.join(' ')}`)
     })
 
@@ -262,6 +281,7 @@ describe('getWorkItemDetails', () => {
 
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.at(-1) as string
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12') {
         return {
           stdout: JSON.stringify({
@@ -277,6 +297,7 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       if (endpoint === 'projects/g%2Fp/pipelines/99/bridges?per_page=100') {
         return {
           stdout: JSON.stringify(
@@ -294,19 +315,24 @@ describe('getWorkItemDetails', () => {
           )
         }
       }
+
       if (/pipelines\/\d+\/jobs/.test(endpoint)) {
         inFlightJobPages += 1
         peakJobPages = Math.max(peakJobPages, inFlightJobPages)
         await new Promise((resolve) => setTimeout(resolve, 2))
         inFlightJobPages -= 1
+
         return { stdout: '[]' }
       }
+
       if (endpoint.endsWith('/approvals')) {
         return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
       }
+
       if (endpoint.endsWith('/approval_state')) {
         return { stdout: JSON.stringify({ rules: [] }) }
       }
+
       return { stdout: '[]' }
     })
 
@@ -321,6 +347,7 @@ describe('getWorkItemDetails', () => {
     const localGitOptions = { wslDistro: 'Ubuntu' }
     glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.at(-1)
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12') {
         return {
           stdout: JSON.stringify({
@@ -337,21 +364,27 @@ describe('getWorkItemDetails', () => {
           })
         }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
         return { stdout: '[]' }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
         return { stdout: '[]' }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
         return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
         return { stdout: JSON.stringify({ rules: [] }) }
       }
+
       if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
         return { stdout: '[]' }
       }
+
       throw new Error(`unexpected glab call: ${args.join(' ')}`)
     })
 
@@ -489,6 +522,7 @@ describe('countDiffLines', () => {
   it('counts large diff prefixes without allocating a string array for every line', () => {
     const diff = `--- a/file\n+++ b/file\n@@ -1 +1 @@\n${'-old\n+new\n context\n'.repeat(10000)}`
     const split = vi.spyOn(String.prototype, 'split')
+
     try {
       expect(countDiffLines(diff)).toEqual({ additions: 10000, deletions: 10000 })
       expect(split.mock.calls.length).toBe(0)

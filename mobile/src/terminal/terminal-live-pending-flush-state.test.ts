@@ -20,9 +20,11 @@ describe('terminal live pending flush state', () => {
     // Given
     const events: string[] = []
     let resolveFlush: (value: boolean) => void = () => {}
+
     const flushPromise = new Promise<boolean>((resolve) => {
       resolveFlush = resolve
     })
+
     const state = createTerminalLivePendingFlushState()
     state.current = flushPromise
 
@@ -31,9 +33,11 @@ describe('terminal live pending flush state', () => {
       () => waitForTerminalLivePendingFlush(state),
       async () => {
         events.push('control')
+
         return true
       }
     )
+
     await Promise.resolve()
 
     // Then
@@ -47,9 +51,11 @@ describe('terminal live pending flush state', () => {
     // Given
     const events: string[] = []
     let resolveFlush: (value: boolean) => void = () => {}
+
     const flushPromise = new Promise<boolean>((resolve) => {
       resolveFlush = resolve
     })
+
     const state = createTerminalLivePendingFlushState()
     state.current = flushPromise
 
@@ -58,9 +64,11 @@ describe('terminal live pending flush state', () => {
       () => waitForTerminalLivePendingFlush(state),
       async () => {
         events.push('control')
+
         return true
       }
     )
+
     resolveFlush(false)
 
     // Then
@@ -75,13 +83,16 @@ describe('terminal live mirror send queue', () => {
     const state = createTerminalLivePendingFlushState()
     const payloads: string[] = []
     let resolveFirstSend: (value: boolean) => void = () => {}
+
     const sender = async (_handle: string, payload: string): Promise<boolean> => {
       payloads.push(payload)
+
       if (payloads.length === 1) {
         return new Promise<boolean>((resolve) => {
           resolveFirstSend = resolve
         })
       }
+
       return true
     }
 
@@ -102,14 +113,17 @@ describe('terminal live mirror send queue', () => {
     // Given
     const state = createTerminalLivePendingFlushState()
     const order: string[] = []
+
     const first = queueTerminalLiveMirrorSend(state, 'terminal-1', 'first', async () => {
       order.push('first')
+
       return false
     })
 
     // When
     const second = queueTerminalLiveMirrorSend(state, 'terminal-1', 'second', async () => {
       order.push('second')
+
       return true
     })
 
@@ -122,6 +136,7 @@ describe('terminal live mirror send queue', () => {
   it('Given a throwing send When a mirror send queues Then the promise resolves false and the chain continues', async () => {
     // Given
     const state = createTerminalLivePendingFlushState()
+
     const first = queueTerminalLiveMirrorSend(state, 'terminal-1', 'first', async () => {
       throw new Error('boom')
     })
@@ -150,10 +165,12 @@ describe('terminal live mirror send queue', () => {
     // Given
     const state = createTerminalLivePendingFlushState()
     let resolveSend: (value: boolean) => void = () => {}
+
     const sender = async (): Promise<boolean> =>
       new Promise((resolve) => {
         resolveSend = resolve
       })
+
     const active = queueTerminalLiveMirrorSend(state, 'terminal-1', 'a', sender)
     const pending = queueTerminalLiveMirrorSend(state, 'terminal-1', 'b', sender)
 

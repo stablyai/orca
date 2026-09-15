@@ -46,8 +46,10 @@ export function applyBrowserPageZoom(
     if (!webview || webview.isDestroyed?.()) {
       return null
     }
+
     const next = nextBrowserPageZoomLevel(webview.getZoomLevel(), direction, resetLevel)
     webview.setZoomLevel(next)
+
     return next
   } catch {
     return null
@@ -62,14 +64,18 @@ export function setBrowserPageZoomLevel(
     if (!webview || webview.isDestroyed?.()) {
       return null
     }
+
     const next = normalizeBrowserPageZoomLevel(level)
+
     // Why compare first: Chromium's HostZoomMap is keyed by host per partition,
     // so a no-op write still overwrites the host-wide zoom a sibling tab on the
     // same hostname set. Only write when this pane actually needs to move.
     if (normalizeBrowserPageZoomLevel(webview.getZoomLevel()) === next) {
       return next
     }
+
     webview.setZoomLevel(next)
+
     return next
   } catch {
     return null
@@ -113,6 +119,8 @@ export function addBrowserPageZoomEventListener(
   const listener = (event: Event): void => {
     callback((event as CustomEvent<BrowserPageZoomEventDetail>).detail)
   }
+
   window.addEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
+
   return () => window.removeEventListener(ORCA_BROWSER_PAGE_ZOOM_EVENT, listener)
 }

@@ -48,19 +48,23 @@ export function sshTargetGenerationForConnection(
 ): number | undefined {
   const targetId = connectionId?.trim()
   const target = targetId ? state.sshTargets?.find((entry) => entry.id === targetId) : undefined
+
   return sanitizeSshTargetGeneration(target?.generation)
 }
 
 function automationUsageSummaries(state: PersistedState) {
   const runsByAutomation = new Map<string, AutomationRun[]>()
+
   for (const run of state.automationRuns ?? []) {
     const runs = runsByAutomation.get(run.automationId)
+
     if (runs) {
       runs.push(run)
     } else {
       runsByAutomation.set(run.automationId, [run])
     }
   }
+
   return new Map([...runsByAutomation].map(([id, runs]) => [id, summarizeAutomationRunUsage(runs)]))
 }
 
@@ -77,6 +81,7 @@ export function automationIdsPinnedToSshTarget(
   targetId: string
 ): Set<string> {
   const hostState = folderWorkspaceHostState(state)
+
   return new Set(
     (state.automations ?? [])
       .filter(
@@ -95,6 +100,7 @@ export function automationWorkspaceSshPin(
     folderWorkspaceHostState(state),
     workspaceId
   )
+
   return targetId === undefined
     ? undefined
     : { targetId, generation: sshTargetGenerationForConnection(state, targetId) }
@@ -107,17 +113,20 @@ export function automationProjectionContext(
 ): AutomationProjectionContext {
   const usage = withUsage ? automationUsageSummaries(state) : null
   const reposById = new Map(state.repos.map((repo) => [repo.id, repo]))
+
   const targetIdByGeneration = new Map(
     (state.sshTargets ?? []).flatMap((target) =>
       target.generation === undefined ? [] : [[target.generation, target.id] as const]
     )
   )
+
   return {
     storageAuthority,
     sshTargetGeneration: (targetId) => sshTargetGenerationForConnection(state, targetId),
     sshTargetIdForGeneration: (generation) => targetIdByGeneration.get(generation),
     repoConnectionId: (repoId) => {
       const repo = reposById.get(repoId)
+
       return repo ? repo.connectionId?.trim() || null : undefined
     },
     workspaceHost: (automation) =>
@@ -145,16 +154,21 @@ export function listAutomationsForScope(input: {
   cache: AutomationListProjectionCache | null
 }): { result: AutomationListResult; cache: AutomationListProjectionCache } {
   const scope = input.params?.selector
+
   if (scope?.kind === 'ssh') {
     const current = sshTargetGenerationForConnection(input.state, scope.targetId)
+
     if (current === undefined) {
       throw new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved)
     }
+
     if (current !== scope.expectedTargetGeneration) {
       throw new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
     }
   }
+
   const inputs = projectionInputs(input.state)
+
   const complete =
     input.cache && inputs.every((entry, index) => entry === input.cache?.inputs[index])
       ? input.cache
@@ -165,13 +179,17 @@ export function listAutomationsForScope(input: {
             automationProjectionContext(input.state, input.storageAuthority, true)
           )
         }
+
   if (!scope) {
     return { result: complete.result, cache: complete }
   }
+
   const items = complete.result.items.filter((item) =>
     automationSelectorMatchesScope(item.selector, scope)
   )
+
   const ids = new Set(items.map((item) => item.automationId))
+
   return {
     result: {
       automations: complete.result.automations.filter((automation) => ids.has(automation.id)),
@@ -188,6 +206,7 @@ export function automationOwnerPrecondition(
   id: string
 ): AutomationOwnerPrecondition | null {
   const automation = (state.automations ?? []).find((entry) => entry.id === id)
+
   return automation
     ? toAutomationOwnerPrecondition(
         projectAutomationSelector(
@@ -204,6 +223,7 @@ export function automationChangeSelector(
   id: string
 ): AutomationChangeSelector | null {
   const automation = (state.automations ?? []).find((entry) => entry.id === id)
+
   return automation
     ? toAutomationChangeSelector(
         projectAutomationSelector(
@@ -233,15 +253,18 @@ export function assertAutomationOwnerFence(input: {
   operation: AutomationOwnerFenceOperation
 }): Automation {
   const automation = (input.state.automations ?? []).find((entry) => entry.id === input.id)
+
   if (!automation) {
     throw new Error('Automation not found.')
   }
+
   enforceAutomationOwnerFence({
     automation,
     expectedOwner: input.expectedOwner,
     operation: input.operation,
     context: automationProjectionContext(input.state, input.storageAuthority, false)
   })
+
   return automation
 }
 
@@ -258,7 +281,9 @@ export function allocateSshTargetGeneration(
       )
     })
   )
+
   state.sshTargetGenerationCounter = next
   scheduleSave()
+
   return next
 }

@@ -21,6 +21,7 @@ export function RichMarkdownDocLinkMenu({
   selectedIndex
 }: RichMarkdownDocLinkMenuProps): React.JSX.Element {
   const overflow = totalMatches > rows.length
+
   return (
     <div
       className="rich-markdown-doc-link-menu"
@@ -41,6 +42,7 @@ export function RichMarkdownDocLinkMenu({
       ) : (
         rows.map((row, index) => {
           const rowKey = row.kind === 'document' ? row.document.filePath : row.id
+
           return (
             <button
               key={rowKey}

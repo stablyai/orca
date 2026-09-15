@@ -64,14 +64,17 @@ export default function RichMarkdownEditor({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
+
   const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
     filePath,
     runtimeEnvironmentId,
     worktreeId
   })
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
@@ -106,6 +109,7 @@ export default function RichMarkdownEditor({
   const [isEditingLink, setIsEditingLink] = useState(false)
   const isEditingLinkRef = useRef(false)
   const typedEmptyOrderedListMarkerRef = useRef(false)
+
   const review = useRichMarkdownReviewController({
     addDiffComment,
     allDiffComments,
@@ -121,6 +125,7 @@ export default function RichMarkdownEditor({
     worktreeId,
     worktreeRoot
   })
+
   const { tableOfContentsItems, navigateToTableOfContentsItem } = useRichMarkdownTableOfContents(
     showTableOfContents,
     content,
@@ -136,6 +141,7 @@ export default function RichMarkdownEditor({
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
   openAnnotationPopoverRef.current = review.openAnnotationPopover
+
   const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
     htmlSuperscriptLinkContext,
     filePath,
@@ -149,14 +155,17 @@ export default function RichMarkdownEditor({
     if (serializeTimerRef.current === null) {
       return
     }
+
     window.clearTimeout(serializeTimerRef.current)
     serializeTimerRef.current = null
+
     try {
       const { markdown, didSerialize } = commitRichMarkdownSerialization(
         editorRef.current,
         { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
         reconcileRoundTripRef.current
       )
+
       if (didSerialize) {
         onContentChangeRef.current(markdown)
       }
@@ -174,6 +183,7 @@ export default function RichMarkdownEditor({
   }, [fileId, flushPendingSerialization])
 
   const { clearTransientReviewState } = review
+
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null) {
@@ -184,6 +194,7 @@ export default function RichMarkdownEditor({
         cancelAutoFocusRef.current = null
         window.api.ui.setMarkdownEditorFocused(false)
       }
+
       rootRef.current = node
     },
     [clearTransientReviewState]
@@ -258,6 +269,7 @@ export default function RichMarkdownEditor({
     selector: (snapshot) =>
       getSelectedHtmlSuperscriptLinkStatus(snapshot.editor, htmlSuperscriptLinkContext)
   })
+
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
@@ -324,6 +336,7 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     return window.api.ui.onRichMarkdownContextCommand((payload) => {
       const ed = editorRef.current
+
       if (
         !ed ||
         isRichMarkdownTableContextCommand(payload.command) ||
@@ -346,6 +359,7 @@ export default function RichMarkdownEditor({
     rootRef,
     scrollContainerRef
   })
+
   openSearchRef.current = openSearch
 
   return (

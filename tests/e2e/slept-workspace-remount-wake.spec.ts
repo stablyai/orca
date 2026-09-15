@@ -17,18 +17,21 @@ import {
 } from './helpers/slept-workspace-probe'
 
 const OBSERVATION_MS = 8_000
+
 const SAMPLE_INTERVAL_MS = 200
 
 async function assertStaysCold(page: Page, worktreeId: string): Promise<void> {
   let peakLivePty = 0
   let peakTabs = 0
   const deadline = Date.now() + OBSERVATION_MS
+
   while (Date.now() < deadline) {
     const sample = await readWorkspaceSample(page, worktreeId)
     peakLivePty = Math.max(peakLivePty, sample.livePtyCount)
     peakTabs = Math.max(peakTabs, sample.tabCount)
     await page.waitForTimeout(SAMPLE_INTERVAL_MS)
   }
+
   const hostLive = await readHostLiveTerminalCount(page, worktreeId)
   const diag = await readConnectDiagnostics(page, worktreeId)
   console.error(`[#10205] ${JSON.stringify({ peakLivePty, peakTabs, hostLive, diag })}`)
@@ -69,6 +72,7 @@ test('remounting a slept hidden pane does not respawn its PTY', async ({ orcaPag
     (tabId) => window.__store?.getState().remountTerminalTabForRecovery(tabId).remounted ?? false,
     sleptTabId
   )
+
   expect(remounted, 'remountTerminalTabForRecovery did not find the slept tab').toBe(true)
   await assertStaysCold(orcaPage, slept)
 

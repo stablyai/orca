@@ -17,6 +17,7 @@ export function useTerminalProviderSnapshotCapability(enabled: boolean): number 
   // frames and active-leaf moves never reach the collector at all.
   const selectBoundPtyIds = useMemo(() => createTerminalProviderSnapshotBoundPtyIdsSelector(), [])
   const boundPtyIds = useAppStore(selectBoundPtyIds)
+
   const capabilityRevision = useSyncExternalStore(
     subscribeTerminalProviderSnapshotCapability,
     getTerminalProviderSnapshotCapabilityRevision,
@@ -28,6 +29,7 @@ export function useTerminalProviderSnapshotCapability(enabled: boolean): number 
     if (!enabled && boundPtyIds.length === 0) {
       return
     }
+
     return startTerminalProviderSnapshotCapabilitySynchronization(boundPtyIds)
   }, [boundPtyIds, enabled])
 

@@ -77,11 +77,14 @@ describe('browser WebAuthn profile deletion', () => {
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockImplementation((partition: string) => {
       const existing = sessionsByPartition.get(partition)
+
       if (existing) {
         return existing
       }
+
       const created = mockSession()
       sessionsByPartition.set(partition, created)
+
       return created
     })
     fromFrameMock.mockReset()
@@ -90,6 +93,7 @@ describe('browser WebAuthn profile deletion', () => {
 
   afterEach(async () => {
     cancelAllBrowserWebAuthnAccountRequests()
+
     for (const profile of browserSessionRegistry.listProfiles()) {
       if (profile.scope !== 'default') {
         await browserSessionRegistry.deleteProfile(profile.id)

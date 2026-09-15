@@ -28,6 +28,7 @@ export function checkRgAvailable(
     // Why: pass cwd plus project-runtime distro so WSL projects are checked
     // inside their distro even when the search root is a Windows path.
     let child: ReturnType<typeof wslAwareSpawn>
+
     try {
       child = wslAwareSpawn('rg', ['--version'], {
         ...(searchPath ? { cwd: searchPath } : {}),
@@ -44,8 +45,10 @@ export function checkRgAvailable(
       } else {
         resolve(false)
       }
+
       return
     }
+
     let timeout: ReturnType<typeof setTimeout>
 
     const cleanup = (): void => {
@@ -58,11 +61,14 @@ export function checkRgAvailable(
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
+
       if (options?.kill) {
         child.kill()
       }
+
       resolve(available)
     }
 
@@ -70,6 +76,7 @@ export function checkRgAvailable(
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       reject(new RipgrepLaunchFailureError(`rg availability check failed to start (${error.code})`))
@@ -78,15 +85,19 @@ export function checkRgAvailable(
     const onError = (error: NodeJS.ErrnoException): void => {
       if (options.rejectTransientLaunchFailure && isTransientRipgrepSpawnError(error)) {
         rejectLaunchFailure(error)
+
         return
       }
+
       settle(false)
     }
+
     const onClose = (code: number | null): void => settle(code === 0)
 
     child.once('error', onError)
     child.once('close', onClose)
     timeout = setTimeout(() => settle(false, { kill: true }), RG_AVAILABILITY_TIMEOUT_MS)
+
     if (typeof timeout.unref === 'function') {
       timeout.unref()
     }

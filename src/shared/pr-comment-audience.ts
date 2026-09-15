@@ -4,6 +4,7 @@ import { normalizePRCommentAuthorLogin } from './pr-bot-author-overrides'
 export type PRCommentAudienceFilter = 'all' | 'human' | 'bot'
 
 const BOT_LOGIN_SUFFIX = '[bot]'
+
 const AUTOMATION_LOGIN_PATTERNS = [
   /bot$/i,
   /\bbot\b/i,
@@ -39,15 +40,19 @@ export function isBotPRComment(
 ): boolean {
   const author = comment.author.trim()
   const normalized = normalizePRCommentAuthorLogin(author)
+
   if (botAuthorOverrides?.has(normalized) || comment.isBot === true) {
     return true
   }
+
   if (normalized.endsWith(BOT_LOGIN_SUFFIX)) {
     return true
   }
+
   if (KNOWN_AUTOMATION_LOGIN_SUBSTRINGS.some((needle) => normalized.includes(needle))) {
     return true
   }
+
   return AUTOMATION_LOGIN_PATTERNS.some((pattern) => pattern.test(author))
 }
 
@@ -61,6 +66,7 @@ export function getPRCommentAudienceCounts(
       bot += 1
     }
   })
+
   return { all: comments.length, human: comments.length - bot, bot }
 }
 
@@ -72,8 +78,10 @@ export function filterPRCommentsByAudience(
   if (filter === 'bot') {
     return comments.filter((comment) => isBotPRComment(comment, botAuthorOverrides))
   }
+
   if (filter === 'human') {
     return comments.filter((comment) => !isBotPRComment(comment, botAuthorOverrides))
   }
+
   return comments
 }

@@ -41,9 +41,11 @@ export function CloneStep({
   const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
   const canBrowseRemoteDestination = isRemoteClone
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
       e.preventDefault()
+
       if (canClone) {
         onClone()
       }
@@ -158,8 +160,10 @@ export function CloneStep({
               onClick={() => {
                 if (canBrowseRemoteDestination) {
                   setBrowsingDestination(true)
+
                   return
                 }
+
                 onPickDestination()
               }}
               disabled={isCloning || (disableDestinationPicker && !canBrowseRemoteDestination)}

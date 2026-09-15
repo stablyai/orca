@@ -24,6 +24,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserClearResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().clear(
       params.element,
       target.worktreeId,
@@ -35,6 +36,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserSelectAllResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().selectAll(
       params.element,
       target.worktreeId,
@@ -46,6 +48,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: { key: string } & BrowserCommandTargetParams
   ): Promise<BrowserKeypressResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().keypress(
       params.key,
       target.worktreeId,
@@ -55,6 +58,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
 
   async browserPdf(params: BrowserCommandTargetParams): Promise<BrowserPdfResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().pdf(target.worktreeId, target.browserPageId)
   }
 
@@ -64,6 +68,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserScreenshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().fullPageScreenshot(
       params.format,
       target.worktreeId,
@@ -77,6 +82,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: { url?: string } & BrowserCommandTargetParams
   ): Promise<BrowserCookieGetResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().cookieGet(
       params.url,
       target.worktreeId,
@@ -97,6 +103,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserCookieSetResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().cookieSet(
       params,
       target.worktreeId,
@@ -112,6 +119,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserCookieDeleteResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().cookieDelete(
       params.name,
       params.domain,
@@ -132,6 +140,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserViewportResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setViewport(
       params.width,
       params.height,
@@ -152,6 +161,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserGeolocationResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().setGeolocation(
       params.latitude,
       params.longitude,
@@ -169,6 +179,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     } & BrowserCommandTargetParams
   ): Promise<BrowserInterceptEnableResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().interceptEnable(
       params.patterns,
       target.worktreeId,
@@ -180,6 +191,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: BrowserCommandTargetParams
   ): Promise<BrowserInterceptDisableResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().interceptDisable(
       target.worktreeId,
       target.browserPageId
@@ -188,6 +200,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
 
   async browserInterceptList(params: BrowserCommandTargetParams): Promise<{ requests: unknown[] }> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().interceptList(target.worktreeId, target.browserPageId)
   }
 
@@ -197,11 +210,13 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: BrowserCommandTargetParams
   ): Promise<BrowserCaptureStartResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().captureStart(target.worktreeId, target.browserPageId)
   }
 
   async browserCaptureStop(params: BrowserCommandTargetParams): Promise<BrowserCaptureStopResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().captureStop(target.worktreeId, target.browserPageId)
   }
 
@@ -209,6 +224,7 @@ export class RuntimeBrowserCommandsWithBrowserClear extends RuntimeBrowserComman
     params: { limit?: number } & BrowserCommandTargetParams
   ): Promise<BrowserConsoleResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().consoleLog(
       params.limit,
       target.worktreeId,

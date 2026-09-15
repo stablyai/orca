@@ -10,11 +10,14 @@ export function setupGrabShortcutForwarding(args: {
   getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
+
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     if (input.type !== 'keyDown') {
       return
     }
+
     const bareKey = input.key.toLowerCase()
+
     if (
       !input.meta &&
       !input.control &&
@@ -24,12 +27,15 @@ export function setupGrabShortcutForwarding(args: {
       hasActiveGrabOp(browserTabId)
     ) {
       const renderer = resolveRenderer(browserTabId)
+
       if (!renderer) {
         return
       }
+
       // Why: a focused guest swallows bare keys; during an active grab pick, plain C/S are Orca's copy/screenshot, not page typing.
       event.preventDefault()
       renderer.send('browser:grabActionShortcut', { browserPageId: browserTabId, key: bareKey })
+
       return
     }
 
@@ -61,11 +67,14 @@ export function setupGrabShortcutForwarding(args: {
         if (!shouldToggle) {
           return
         }
+
         event.preventDefault()
         const renderer = resolveRenderer(browserTabId)
+
         if (!renderer) {
           return
         }
+
         renderer.send('browser:grabModeToggle', browserTabId)
       })
       .catch(() => {
@@ -74,6 +83,7 @@ export function setupGrabShortcutForwarding(args: {
   }
 
   guest.on('before-input-event', handler)
+
   return () => {
     try {
       guest.off('before-input-event', handler)

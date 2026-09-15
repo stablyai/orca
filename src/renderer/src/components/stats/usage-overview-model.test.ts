@@ -68,6 +68,7 @@ describe('usage overview model', () => {
       topProject: 'orca-main',
       hasAnyClaudeData: true
     }
+
     const codexSummary: CodexUsageSummary = {
       scope: 'orca',
       range: '30d',
@@ -83,6 +84,7 @@ describe('usage overview model', () => {
       topProject: 'orca-secondary',
       hasAnyCodexData: true
     }
+
     const openCodeSummary: OpenCodeUsageSummary = {
       scope: 'orca',
       range: '30d',
@@ -98,6 +100,7 @@ describe('usage overview model', () => {
       topProject: 'orca-third',
       hasAnyOpenCodeData: true
     }
+
     const claudeDaily: ClaudeUsageDailyPoint[] = [
       {
         day: '2026-05-13',
@@ -114,6 +117,7 @@ describe('usage overview model', () => {
         cacheWriteTokens: 500
       }
     ]
+
     const codexDaily: CodexUsageDailyPoint[] = [
       {
         day: '2026-05-14',
@@ -132,6 +136,7 @@ describe('usage overview model', () => {
         totalTokens: 1_200
       }
     ]
+
     const openCodeDaily: OpenCodeUsageDailyPoint[] = [
       {
         day: '2026-05-15',
@@ -252,6 +257,7 @@ describe('usage overview model', () => {
   it('aggregates very large daily histories without spreading every day into Math.max', () => {
     const codexDaily: CodexUsageDailyPoint[] = Array.from({ length: 130_000 }, (_, index) => {
       const date = new Date(Date.UTC(2026, 0, 1 + index))
+
       return {
         day: date.toISOString().slice(0, 10),
         inputTokens: index + 1,

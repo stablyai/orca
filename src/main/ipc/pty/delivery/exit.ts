@@ -11,36 +11,45 @@ import type { PtyIpcSession } from '../session'
 
 export function rememberSyntheticKillExit(session: PtyIpcSession, id: string): void {
   const existing = session.syntheticKillExitPtyIds.get(id)
+
   if (existing) {
     clearTimeout(existing)
   }
+
   // Why a timed window: providers may report the real exit after kill completes; skip only that late duplicate, not a future reused id forever.
   const cleanupTimer = setTimeout(() => {
     session.syntheticKillExitPtyIds.delete(id)
   }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
+
   cleanupTimer.unref?.()
   session.syntheticKillExitPtyIds.set(id, cleanupTimer)
 }
 
 export function rememberRetiredRejectedPty(session: PtyIpcSession, id: string): void {
   const existing = session.retiredRejectedPtyIds.get(id)
+
   if (existing) {
     clearTimeout(existing)
   }
+
   const cleanupTimer = setTimeout(() => {
     session.retiredRejectedPtyIds.delete(id)
   }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
+
   cleanupTimer.unref?.()
   session.retiredRejectedPtyIds.set(id, cleanupTimer)
 }
 
 export function consumeSyntheticKillExit(session: PtyIpcSession, id: string): boolean {
   const cleanupTimer = session.syntheticKillExitPtyIds.get(id)
+
   if (!cleanupTimer) {
     return false
   }
+
   clearTimeout(cleanupTimer)
   session.syntheticKillExitPtyIds.delete(id)
+
   return true
 }
 
@@ -50,20 +59,26 @@ export function preparePtyExitForRenderer(
 ): (() => void) | null {
   if (session.mainWindow.isDestroyed()) {
     session.sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
+
     return () => {}
   }
+
   if (session.rendererExitingPtyIds.has(payload.id)) {
     return null
   }
+
   session.rendererExitingPtyIds.add(payload.id)
   let released = false
+
   const release = (): void => {
     if (released) {
       return
     }
+
     released = true
     session.rendererExitingPtyIds.delete(payload.id)
   }
+
   try {
     if (!session.rendererCreditBeforeExitByPty.has(payload.id)) {
       session.rendererCreditBeforeExitByPty.set(
@@ -71,9 +86,11 @@ export function preparePtyExitForRenderer(
         getRendererInFlightCharsForPty(session, payload.id) > 0
       )
     }
+
     // Why flush before exit: the renderer tears down the terminal on pty:exit, so any batched output not yet flushed would be silently lost.
     const remaining = session.pendingData.delete(payload.id)
     clearFlushTimerIfIdle(session)
+
     if (remaining) {
       if (remaining.droppedOutput === true) {
         // Sentinel entry: only salvaged query bytes remain; keep the flag so the renderer knows the span was dropped.
@@ -103,6 +120,7 @@ export function preparePtyExitForRenderer(
         )
       }
     }
+
     return release
   } catch (error) {
     release()
@@ -116,11 +134,14 @@ export function finalizePtyExitForRenderer(
 ): void {
   if (session.mainWindow.isDestroyed()) {
     session.rendererCreditBeforeExitByPty.delete(payload.id)
+
     return
   }
+
   const hadReleasableRendererCredit =
     session.rendererCreditBeforeExitByPty.get(payload.id) ??
     getRendererInFlightCharsForPty(session, payload.id) > 0
+
   session.rendererCreditBeforeExitByPty.delete(payload.id)
   // Why resume a dead PTY (no-op): avoid leaving a stale paused mark behind for a reused id.
   session.producerFlowControl.release(payload.id)
@@ -136,6 +157,7 @@ export function finalizePtyExitForRenderer(
   )
   // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
   session.rendererDeliveryAccountingByPty.delete(payload.id)
+
   if (hadReleasableRendererCredit) {
     if (session.pendingDataFlushActive) {
       // Why: let the open round coalesce this wake into its one post-round continuation.
@@ -145,6 +167,7 @@ export function finalizePtyExitForRenderer(
       session.schedulePendingDataAfterCreditReport(true)
     }
   }
+
   session.mainWindow.webContents.send('pty:exit', {
     ...payload,
     ...(session.reversibleStopOwnersByPtyId.has(payload.id)
@@ -159,9 +182,11 @@ export function sendPtyExitToRenderer(
 ): void {
   session.options?.onPtyExit?.(payload.id, allocatePtyLifecycleSequence())
   const release = preparePtyExitForRenderer(session, payload)
+
   if (!release) {
     return
   }
+
   try {
     session.sshOutputIntake?.transferPtyProjections(payload.id, 'legacy-pty-exit')
     finalizePtyExitForRenderer(session, payload)

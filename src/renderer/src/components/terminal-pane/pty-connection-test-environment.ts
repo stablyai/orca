@@ -3,13 +3,16 @@ import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-de
 import { drainFakeTimerWork, flushAsyncTicks } from './pty-connection-test-async'
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+
 const originalDocument = globalThis.document
 
 export function buildAgentStatusModuleMock(
   actual: Record<string, unknown>
 ): Record<string, unknown> {
   const isGeminiTerminalTitle = actual.isGeminiTerminalTitle as (title: string) => boolean
+
   return {
     ...actual,
     isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title)),
@@ -18,12 +21,15 @@ export function buildAgentStatusModuleMock(
       if (/Claude (working|done)/.test(title)) {
         return /working/.test(title) ? 'working' : 'idle'
       }
+
       if (/Codex( working)?/.test(title)) {
         return /working/.test(title) ? 'working' : 'idle'
       }
+
       if (/^\s*(?:[\u2800-\u28ff]\s+)?(?:Pi|OMP)(?: ready| idle)?\s*$/i.test(title)) {
         return /[\u2800-\u28ff]/u.test(title) ? 'working' : 'idle'
       }
+
       return null
     })
   }
@@ -86,10 +92,12 @@ export function installTerminalTestGlobals(): void {
   vi.mocked(window.api.pty.inspectProcess).mockImplementation(async (id) => {
     const foregroundProcess = await window.api.pty.getForegroundProcess(id)
     const hasChildProcesses = await window.api.pty.hasChildProcesses(id)
+
     return { foregroundProcess, hasChildProcesses }
   })
   globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
     callback(0)
+
     return 1
   })
   globalThis.cancelAnimationFrame = vi.fn()
@@ -106,23 +114,27 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // whole file (orca#14728, CI-only because it needs a slow enough tick).
   await flushAsyncTicks(20)
   vi.restoreAllMocks()
+
   if (originalRequestAnimationFrame) {
     globalThis.requestAnimationFrame = originalRequestAnimationFrame
   } else {
     delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
       .requestAnimationFrame
   }
+
   if (originalCancelAnimationFrame) {
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame
   } else {
     delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
       .cancelAnimationFrame
   }
+
   if (originalDocument) {
     globalThis.document = originalDocument
   } else {
     delete (globalThis as { document?: Document }).document
   }
+
   // Why: an in-flight reattach/settle chain can resolve after teardown and call
   // `window.api.pty.*`. Deleting `window` turned that into a ReferenceError that
   // failed the whole file (orca#14728). A real renderer never loses `window`, so

@@ -47,15 +47,18 @@ export function GHStatusCell({
   const [statusStateDraft, setStatusStateDraft] = useState(() =>
     createTaskPageGitHubStatusStateDraft(item)
   )
+
   const [open, setOpen] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [duplicatePickerOpen, setDuplicatePickerOpen] = useState(false)
   const [duplicateSearch, setDuplicateSearch] = useState('')
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -66,34 +69,45 @@ export function GHStatusCell({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const parsedIssueLink = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
+
   const filteredDuplicateCandidates = useMemo(
     () =>
       getTaskPageGitHubDuplicateCandidates(duplicateIssueCandidates, item.number, duplicateSearch),
     [duplicateIssueCandidates, duplicateSearch, item.number]
   )
+
   const directDuplicateTarget = useMemo(() => {
     const trimmed = duplicateSearch.trim()
     const validation = validateTaskPageGitHubDuplicateTarget(trimmed, item.number)
+
     if (!trimmed || !validation.ok) {
       return null
     }
+
     if (
       filteredDuplicateCandidates.some((candidate) => candidate.number === validation.duplicateOf)
     ) {
       return null
     }
+
     return validation.duplicateOf
   }, [duplicateSearch, filteredDuplicateCandidates, item.number])
+
   const duplicatePickerTitle = parsedIssueLink?.slug
     ? `${parsedIssueLink.slug.owner}/${parsedIssueLink.slug.repo}`
     : (repo?.displayName ?? translate('auto.components.TaskPage.repository', 'Repository'))
+
   const resolvedStatusStateDraft = resolveTaskPageGitHubStatusStateDraft(statusStateDraft, item)
+
   if (resolvedStatusStateDraft !== statusStateDraft) {
     // Why: item rows can refresh from the cache while this cell is mounted; reconcile before paint to avoid one stale status frame.
     setStatusStateDraft(resolvedStatusStateDraft)
   }
+
   const localState = resolvedStatusStateDraft.localState
+
   const stateMutationPending = workItemMutation.isIntentPending({
     item,
     intent: {
@@ -102,6 +116,7 @@ export function GHStatusCell({
     },
     sourceContext
   })
+
   const updateLocalState = useCallback(
     (nextState: GitHubWorkItem['state']) => {
       setStatusStateDraft((current) =>
@@ -110,6 +125,7 @@ export function GHStatusCell({
     },
     [item]
   )
+
   const handleStateChange = useCallback(
     async (newState: 'open' | 'closed', closeAction?: TaskPageGitHubCloseAction) => {
       if (
@@ -120,20 +136,25 @@ export function GHStatusCell({
       ) {
         return
       }
+
       const parsedOwnerRepo = parsedIssueLink?.slug
+
       if (!repo && !parsedOwnerRepo) {
         return
       }
+
       const updates: GitHubIssueUpdate =
         newState === 'closed' && closeAction
           ? buildTaskPageGitHubCloseUpdate(closeAction)
           : {
               state: newState
             }
+
       updateLocalState(newState)
       // Why: coordinator owns durable patch + soft-hide + quiet revalidate; keep
       // the status draft so one-frame flash is still covered until proven safe.
       setStatusUpdating(true)
+
       try {
         await workItemMutation.run({
           item,
@@ -146,6 +167,7 @@ export function GHStatusCell({
           errorToast: translate('auto.components.TaskPage.1c893195ac', 'Failed to update state'),
           mutate: async () => {
             const target = getActiveRuntimeTarget(sourceSettings)
+
             // Why: issue rows can be sourced by owner/repo URL instead of the local
             // repo context; slug-aware writes preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
@@ -179,11 +201,14 @@ export function GHStatusCell({
                     updates
                   })
             }
+
             if (!repo) {
               throw new Error('No GitHub repository context available for this issue.')
             }
+
             const runtimeRepoId =
               sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+
             return target.kind === 'environment'
               ? callRuntimeRpc<{
                   ok?: boolean
@@ -228,16 +253,20 @@ export function GHStatusCell({
       workItemMutation
     ]
   )
+
   const closeAsDuplicate = useCallback(
     (targetIssueNumber: number | string) => {
       const validation = validateTaskPageGitHubDuplicateTarget(
         String(targetIssueNumber),
         item.number
       )
+
       if (!validation.ok) {
         setDuplicateError(getTaskPageGitHubDuplicateTargetErrorMessage(validation, translate))
+
         return
       }
+
       setDuplicateError(null)
       handleStateChange('closed', {
         stateReason: 'duplicate',
@@ -248,25 +277,33 @@ export function GHStatusCell({
     },
     [handleStateChange, item.number]
   )
+
   const handleDuplicateSearchSubmit = useCallback(() => {
     const validation = validateTaskPageGitHubDuplicateTarget(duplicateSearch, item.number)
+
     if (!validation.ok) {
       setDuplicateError(getTaskPageGitHubDuplicateTargetErrorMessage(validation, translate))
+
       return
     }
+
     closeAsDuplicate(validation.duplicateOf)
   }, [closeAsDuplicate, duplicateSearch, item.number])
+
   const handlePopoverOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
+
     if (!nextOpen) {
       setDuplicatePickerOpen(false)
       setDuplicateSearch('')
       setDuplicateError(null)
     }
   }, [])
+
   if (item.type !== 'issue' || (!repo && !parsedIssueLink?.slug)) {
     return <TaskPageGitHubWorkItemStateBadge item={item} />
   }
+
   return (
     <Popover open={open} onOpenChange={handlePopoverOpenChange}>
       <PopoverTrigger asChild>

@@ -53,21 +53,27 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   if (!/^skill-[a-z0-9-]+$/.test(code)) {
     return null
   }
+
   if (code.includes('cancelled')) {
     return { category: 'cancelled', code, retryable: true }
   }
+
   if (code.includes('recovery') || code.includes('journal') || code.includes('receipt')) {
     return { category: 'recovery', code, retryable: retryableCode(code) }
   }
+
   if (code.startsWith('skill-placement-') || code.startsWith('skill-discovery-')) {
     return { category: 'provider-placement', code, retryable: retryableCode(code) }
   }
+
   if (code.includes('conflict') || code.includes('modified') || code.includes('unowned')) {
     return { category: 'conflict', code, retryable: false }
   }
+
   if (code.startsWith('skill-package-')) {
     return { category: 'archive', code, retryable: false }
   }
+
   if (
     code.startsWith('skill-download-') ||
     code.startsWith('skill-transfer-') ||
@@ -75,6 +81,7 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   ) {
     return { category: 'transport', code, retryable: retryableCode(code) }
   }
+
   if (
     code.includes('update-required') ||
     code.includes('unsupported') ||
@@ -83,6 +90,7 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   ) {
     return { category: 'compatibility', code, retryable: false }
   }
+
   if (
     code.includes('destination') ||
     code.includes('workspace') ||
@@ -94,6 +102,7 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   ) {
     return { category: 'admission', code, retryable: false }
   }
+
   if (
     code.startsWith('skill-install-') ||
     code.startsWith('skill-remove-') ||
@@ -101,5 +110,6 @@ export function classifySkillInstallFailureCode(code: string): SkillInstallFailu
   ) {
     return { category: 'filesystem', code, retryable: retryableCode(code) }
   }
+
   return null
 }

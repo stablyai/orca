@@ -4,8 +4,10 @@ export type HandlerMap = Record<string, (_event: unknown, args: unknown) => unkn
 
 /** Loose signature: one mock stands in for many unrelated store methods. */
 type StoreMock = Mock<(...args: unknown[]) => unknown>
+
 /** Store lookups tests re-implement per id, so the first arg stays narrowed. */
 type KeyedStoreMock = Mock<(id: string, ...rest: unknown[]) => unknown>
+
 /** Store writers tests re-implement by merging the patch they receive. */
 type KeyedStoreWriteMock = Mock<(id: string, patch: object) => unknown>
 
@@ -43,13 +45,16 @@ export type TestStore = {
 
 /** Channel handlers captured from the mocked ipcMain.handle during registration. */
 export const handlers: HandlerMap = {}
+
 export const mainWindow: TestMainWindow = {
   isDestroyed: () => false,
   webContents: {
     send: vi.fn()
   }
 }
+
 export const ipcEvent = { sender: { id: 1 } }
+
 export const store: TestStore = {
   getProfileStorageDirectory: vi.fn(() => '/profile-a'),
   getRepos: vi.fn(),

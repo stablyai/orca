@@ -24,6 +24,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
   const React = await import('react')
   const SelectContext = React.createContext<(value: string) => void>(() => {})
   const Passthrough = ({ children }: { children?: ReactNode }) => <>{children}</>
+
   return {
     DropdownMenu: Passthrough,
     DropdownMenuTrigger: Passthrough,
@@ -43,6 +44,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     ),
     DropdownMenuRadioItem: ({ value, children }: { value: string; children?: ReactNode }) => {
       const onSelect = React.useContext(SelectContext)
+
       return (
         <button type="button" role="menuitemradio" onClick={() => onSelect(value)}>
           {children}
@@ -55,9 +57,11 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 import WorktreeMetaDialog from './WorktreeMetaDialog'
 
 const REPO_ID = 'repo-1'
+
 const WORKTREE_ID = 'repo-1::/repo/worktrees/feature'
 
 const initialState = useAppStore.getInitialState()
+
 const updateWorktreeMeta =
   vi.fn<
     (
@@ -66,7 +70,9 @@ const updateWorktreeMeta =
       options?: WorktreeMetaUpdateOptions
     ) => Promise<{ ok: true } | { ok: false; error: string }>
   >()
+
 const fetchLinearIssue = vi.fn<(...args: never[]) => Promise<LinearIssue | null>>()
+
 const openUrl = vi.fn<(url: string) => void>()
 
 /** Only `url` is read by the open-issue path. */

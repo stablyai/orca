@@ -62,16 +62,20 @@ function getTerminalTabActivityFlags(
 
   const flagsByTabId = new Map<string, TerminalTabActivityFlags>()
   const now = Date.now()
+
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey ?? {})) {
     const identity = parseAgentStatusPaneKey(entry.paneKey || paneKey)
+
     if (!identity) {
       continue
     }
+
     if (entry.restoredUnconfirmed) {
       const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
       flags.paneIds.add(identity.paneId)
       continue
     }
+
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
@@ -84,6 +88,7 @@ function getTerminalTabActivityFlags(
 
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
+
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       flags.hasPermission = true
     } else if (entry.state === 'working') {
@@ -101,6 +106,7 @@ function getTerminalTabActivityFlags(
   }
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
+
   return flagsByTabId
 }
 
@@ -109,6 +115,7 @@ function getOrCreateTerminalTabActivityFlags(
   tabId: string
 ): TerminalTabActivityFlags {
   let flags = flagsByTabId.get(tabId)
+
   if (!flags) {
     flags = {
       hasPermission: false,
@@ -121,6 +128,7 @@ function getOrCreateTerminalTabActivityFlags(
     }
     flagsByTabId.set(tabId, flags)
   }
+
   return flags
 }
 
@@ -129,10 +137,13 @@ function getOrCreateTerminalTabActivityFlags(
 // so the title-heuristic dedup in resolveWorktreeStatus can still match them.
 function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: string } | null {
   const parsed = parsePaneKey(paneKey)
+
   if (parsed) {
     return { tabId: parsed.tabId, paneId: parsed.leafId }
   }
+
   const legacy = parseLegacyNumericPaneKey(paneKey)
+
   return legacy ? { tabId: legacy.tabId, paneId: legacy.numericPaneId } : null
 }
 
@@ -167,6 +178,7 @@ export function resolveTerminalTabActivityStatus({
   terminalLayout
 }: TerminalTabActivityInput): TerminalTabActivityStatus {
   const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
+
   return resolveWorktreeStatus({
     tabs: [tab],
     browserTabs: [],
@@ -217,21 +229,27 @@ export function resolveTerminalTabAttentionBadge({
   if (status === 'working') {
     return 'working'
   }
+
   if (status === 'permission') {
     return 'permission'
   }
+
   if (status === 'monitoring') {
     return 'monitoring'
   }
+
   if (hasUnread) {
     return 'unread'
   }
+
   if (status === 'done') {
     return 'done'
   }
+
   if (status === 'interrupted') {
     return 'interrupted'
   }
+
   return null
 }
 
@@ -278,20 +296,25 @@ function getUnreadAgentCompletionTabIds(
   unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread>
 ): ReadonlySet<string> {
   const cached = unreadAgentCompletionTabIdsBySnapshot.get(unreadAgentCompletionPanes)
+
   if (cached) {
     return cached
   }
 
   // Why: every mounted tab runs this selector per store write; index each immutable marker snapshot once.
   const tabIds = new Set<string>()
+
   for (const paneKey of Object.keys(unreadAgentCompletionPanes)) {
     if (!unreadAgentCompletionPanes[paneKey]) {
       continue
     }
+
     const separatorIndex = paneKey.indexOf(':')
     tabIds.add(separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex))
   }
+
   unreadAgentCompletionTabIdsBySnapshot.set(unreadAgentCompletionPanes, tabIds)
+
   return tabIds
 }
 

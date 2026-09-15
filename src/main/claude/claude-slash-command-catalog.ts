@@ -2,8 +2,11 @@ import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
 
 // Stream init carries name arrays; control initialization and reloads carry descriptors.
 const MAX_COMMANDS = 512
+
 const MAX_NAME_LENGTH = 200
+
 const MAX_DESCRIPTION_LENGTH = 200
+
 const MAX_ARGUMENT_HINT_LENGTH = 100
 
 /** The provider's own row text for one command, absent when it reported none. */
@@ -11,6 +14,7 @@ type CommandDetail = Pick<AgentSessionSlashCommand, 'description' | 'argumentHin
 
 function commandName(value: unknown): string | undefined {
   const name = typeof value === 'string' ? value.trim() : ''
+
   return name.length > 0 && name.length <= MAX_NAME_LENGTH && !/\s/u.test(name) ? name : undefined
 }
 
@@ -18,16 +22,21 @@ function names(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   const seen = new Set<string>()
+
   for (const entry of value) {
     if (seen.size >= MAX_COMMANDS) {
       break
     }
+
     const name = commandName(entry)
+
     if (name !== undefined) {
       seen.add(name)
     }
   }
+
   return [...seen]
 }
 
@@ -36,7 +45,9 @@ function rowText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string' || value.length > maxLength) {
     return undefined
   }
+
   const collapsed = value.replace(/\s+/gu, ' ').trim()
+
   return collapsed.length > 0 && collapsed.length <= maxLength ? collapsed : undefined
 }
 
@@ -47,36 +58,47 @@ function descriptorCatalog(value: unknown): {
   const names: string[] = []
   const seen = new Set<string>()
   const details = new Map<string, CommandDetail>()
+
   if (!Array.isArray(value)) {
     return { names, details }
   }
+
   for (const entry of value) {
     if (seen.size >= MAX_COMMANDS) {
       break
     }
+
     if (entry === null || typeof entry !== 'object') {
       continue
     }
+
     const name = commandName(entry.name)
+
     if (name === undefined) {
       continue
     }
+
     if (!seen.has(name)) {
       seen.add(name)
       names.push(name)
     }
+
     const previous = details.get(name)
     const description = previous?.description ?? rowText(entry.description, MAX_DESCRIPTION_LENGTH)
+
     const argumentHint =
       previous?.argumentHint ?? rowText(entry.argumentHint, MAX_ARGUMENT_HINT_LENGTH)
+
     if (description === undefined && argumentHint === undefined) {
       continue
     }
+
     details.set(name, {
       ...(description === undefined ? {} : { description }),
       ...(argumentHint === undefined ? {} : { argumentHint })
     })
   }
+
   return { names, details }
 }
 
@@ -96,6 +118,7 @@ export function readClaudeSlashCommands(
   // command that only means something inside the CLI's own TUI.
   const hidden = new Set(names(message.terminal_slash_commands))
   const skills = new Set(names(message.skills))
+
   return names(message.slash_commands)
     .filter((name) => !hidden.has(name))
     .map((name) => ({ name, kind: skills.has(name) ? ('skill' as const) : ('command' as const) }))
@@ -127,6 +150,7 @@ export class ClaudeSlashCommandCatalog {
         }))
       )
     }
+
     if (initMessage) {
       this.observe(initMessage)
     }
@@ -144,6 +168,7 @@ export class ClaudeSlashCommandCatalog {
   /** True when this frame replaced the catalog with a different one. */
   observe(message: Record<string, unknown>): boolean {
     let next: AgentSessionSlashCommand[]
+
     if (carriesCommandCatalog(message)) {
       this.hasSkillClassification = true
       this.hidden = new Set(names(message.terminal_slash_commands))
@@ -170,6 +195,7 @@ export class ClaudeSlashCommandCatalog {
     } else {
       return false
     }
+
     if (
       this.entries !== undefined &&
       next.length === this.entries.length &&
@@ -184,7 +210,9 @@ export class ClaudeSlashCommandCatalog {
     ) {
       return false
     }
+
     this.entries = next
+
     return true
   }
 }

@@ -61,6 +61,7 @@ describe('task page cache selectors', () => {
         neutral: 0
       }
     }
+
     const refreshed = {
       ...current,
       checksSummary: {
@@ -72,15 +73,18 @@ describe('task page cache selectors', () => {
         neutral: 1
       }
     }
+
     expect(reconcileTaskPageItemsAfterLandingRefresh([current], [refreshed])).toEqual([refreshed])
   })
 
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
+
     const firstCache = {
       [workItemsCacheKey(repo.id, 20, '')]: selectedEntry
     }
+
     const secondCache = {
       ...firstCache,
       [workItemsCacheKey('repo-2', 20, '')]: entry<GitHubWorkItem[]>([
@@ -122,6 +126,7 @@ describe('task page cache selectors', () => {
       { id: 'no-name', path: '/repos/no-name' },
       { id: 'not-fetched', path: '/repos/not-fetched', displayName: 'pending-repo' }
     ]
+
     const entries = [
       sourcesEntry({ issues: null, prs: null }),
       sourcesEntry({ issues: { owner: 'acme', repo: 'issues-ok' }, prs: null }),
@@ -129,6 +134,7 @@ describe('task page cache selectors', () => {
       sourcesEntry({ issues: null, prs: null }),
       sourcesEntry(null)
     ]
+
     const sourceState = buildTaskPageRepoSourceState(repos, entries)
 
     // Only both-null fetched repos are flagged; label falls back to path when displayName is absent.
@@ -140,12 +146,14 @@ describe('task page cache selectors', () => {
 
   it('does not flag an unresolved-source repo that already carries a per-repo error', () => {
     const repos = [{ id: 'errored', path: '/repos/errored', displayName: 'errored-repo' }]
+
     const erroredEntry = {
       data: [],
       fetchedAt: 1,
       sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null },
       error: { type: 'rate_limited', message: 'slow down', source: { owner: 'acme', repo: 'x' } }
     } as unknown as CacheEntry<GitHubWorkItem[]>
+
     const sourceState = buildTaskPageRepoSourceState(repos, [erroredEntry])
 
     expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([])
@@ -157,6 +165,7 @@ describe('task page cache selectors', () => {
       path: '/same/path',
       sourceCacheScope: 'source:local:github:stablyai/orca'
     }
+
     const sshRepo = {
       id: 'repo-1',
       path: '/same/path',
@@ -177,6 +186,7 @@ describe('task page cache selectors', () => {
     const repo = { id: 'repo-1', path: '/same/path' }
     const repoEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
     const pathEntry = entry<GitHubWorkItem[]>([workItem('stale', 'legacy')])
+
     const cache = {
       [workItemsCacheKey(repo.id, 20, '')]: repoEntry,
       [workItemsCacheKey(repo.path, 20, '')]: pathEntry
@@ -189,6 +199,7 @@ describe('task page cache selectors', () => {
     const repo = { id: 'repo-1', path: '/same/path', executionHostId: 'runtime:env-1' }
     const remoteEntry = entry<GitHubWorkItem[]>([workItem('issue-remote', 'repo-1')])
     const localEntry = entry<GitHubWorkItem[]>([workItem('issue-local', 'repo-1')])
+
     const cache = {
       [workItemsCacheKey(repo.id, 20, '')]: localEntry,
       [workItemsCacheKey(repo.id, 20, '', repo.executionHostId)]: remoteEntry
@@ -199,6 +210,7 @@ describe('task page cache selectors', () => {
 
   it('returns null while the GitHub dialog is closed so cache writes do not re-render it', () => {
     const item = workItem('issue-1', 'repo-1')
+
     const cache = {
       [workItemsCacheKey('/repo/one', 20, '')]: entry<GitHubWorkItem[]>([item])
     }
@@ -213,10 +225,12 @@ describe('task page cache selectors', () => {
       ...workItem('pr-1', 'repo-1'),
       reviewRequests: []
     }
+
     const patched = {
       ...stale,
       reviewRequests: [{ login: 'AmethystLiang', name: null, avatarUrl: '' }]
     }
+
     const otherRepoSameId = workItem('pr-1', 'repo-2')
     const pages = [[stale, otherRepoSameId]]
 
@@ -234,11 +248,13 @@ describe('task page cache selectors', () => {
       state: 'open' as const,
       updatedAt: '2026-01-01'
     }
+
     const second = {
       ...workItem('issue-2', 'repo-1'),
       state: 'open' as const,
       updatedAt: '2026-01-02'
     }
+
     const refreshedSecond = { ...second, updatedAt: '2026-01-04' }
     const refreshedFirst = { ...first, state: 'closed' as const, updatedAt: '2026-01-03' }
 
@@ -263,6 +279,7 @@ describe('task page cache selectors', () => {
       mergeQueueRequired: null,
       updatedAt: '2026-01-01'
     }
+
     const refreshedFirst = {
       ...first,
       autoMergeEnabled: true,
@@ -333,6 +350,7 @@ describe('task page cache selectors', () => {
       priority: 2,
       updatedAt: '2026-01-01'
     } as LinearIssue
+
     const second = {
       ...first,
       id: 'LIN-2',
@@ -340,11 +358,13 @@ describe('task page cache selectors', () => {
       title: 'LIN-2',
       updatedAt: '2026-01-02'
     }
+
     const refreshedFirst = {
       ...first,
       state: { name: 'Done', type: 'completed', color: '#222222' },
       updatedAt: '2026-01-03'
     }
+
     const refreshedSecond = { ...second, updatedAt: '2026-01-04' }
 
     const next = reconcileTaskPageLinearIssuesAfterLandingRefresh(
@@ -358,13 +378,17 @@ describe('task page cache selectors', () => {
   it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {
     const issue = linearIssue('LIN-1')
     const searchIssue = linearIssue('LIN-2')
+
     const issueCache = {
       'LIN-1': entry(issue)
     }
+
     const searchCache = {
       assigned: entry<LinearIssue[]>([searchIssue])
     }
+
     const listIssue = linearIssue('LIN-3')
+
     const listCache = {
       all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
     }

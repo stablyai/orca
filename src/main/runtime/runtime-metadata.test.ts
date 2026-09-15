@@ -195,6 +195,7 @@ describe('runtime metadata', () => {
       ]) {
         expect(statSync(path).mode & 0o777).toBe(0o600)
       }
+
       expect(statSync(userDataPath).mode & 0o777).toBe(0o700)
       expect(readdirSync(userDataPath).some((entry) => entry.endsWith('.tmp'))).toBe(false)
     }
@@ -206,12 +207,14 @@ describe('runtime metadata', () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-existing-secure-files-'))
       tempDirs.push(userDataPath)
       const keyMaterial = Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+
       const pairingCode = encodePairingOffer({
         v: 2,
         endpoint: 'ws://127.0.0.1:6768',
         deviceToken: 'device-token',
         publicKeyB64: keyMaterial
       })
+
       const environment = addEnvironmentFromPairingCode(userDataPath, {
         name: 'desk',
         pairingCode
@@ -236,9 +239,11 @@ describe('runtime metadata', () => {
         keypairPath,
         JSON.stringify({ v: 1, publicKeyB64: keyMaterial, secretKeyB64: keyMaterial })
       )
+
       for (const path of [devicesPath, keypairPath, environmentsPath]) {
         chmodSync(path, 0o644)
       }
+
       chmodSync(userDataPath, 0o755)
 
       expect(new DeviceRegistry(userDataPath).getDevice('device-1')).toMatchObject({
@@ -251,6 +256,7 @@ describe('runtime metadata', () => {
       for (const path of [devicesPath, keypairPath, environmentsPath]) {
         expect(statSync(path).mode & 0o777).toBe(0o600)
       }
+
       expect(statSync(userDataPath).mode & 0o777).toBe(0o700)
     }
   )

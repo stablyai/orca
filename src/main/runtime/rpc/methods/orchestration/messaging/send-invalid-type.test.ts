@@ -15,6 +15,7 @@ describe('orchestration.send invalid message type', () => {
   it('explains valid message types and the question reply path', async () => {
     const { runtime, ctx } = h.setup()
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+
     const request: RpcRequest = {
       id: 'req_1',
       authToken: 'token',

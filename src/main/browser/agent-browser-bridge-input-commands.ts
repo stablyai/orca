@@ -15,6 +15,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     browserPageId?: string
   ): Promise<BrowserTypeResult> {
     await assertClipboardTextWriteWithinLimitWithYield(input)
+
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
@@ -25,6 +26,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
         )) {
           await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
         }
+
         return { typed: true } as BrowserTypeResult
       },
       { requireScopedTarget: true }
@@ -54,9 +56,11 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
   ): Promise<BrowserScrollResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['scroll', direction]
+
       if (amount != null) {
         args.push(String(amount))
       }
+
       return (await this.execAgentBrowser(sessionName, args)) as BrowserScrollResult
     })
   }
@@ -79,9 +83,11 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
   ): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['get', what]
+
       if (selector) {
         args.push(selector)
       }
+
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -105,17 +111,20 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     browserPageId?: string
   ): Promise<unknown> {
     await assertClipboardTextWriteWithinLimitWithYield(text)
+
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
       async (sessionName) => {
         let result: unknown = { inserted: true }
+
         for (const chunk of iterateBrowserTextInsertionChunks(
           text,
           AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
         )) {
           result = await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', chunk])
         }
+
         return result
       },
       { requireScopedTarget: true }

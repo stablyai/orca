@@ -16,8 +16,11 @@ import { selectRepoByIdForActiveWorkspace } from './selectors'
 
 // The user scale that motivated this: 10 repos, 423 worktrees, 382 open tabs.
 const REPO_COUNT = 10
+
 const WORKTREES_PER_REPO = 42
+
 const TABS_PER_WORKTREE = 1
+
 const STORE_WRITES = 200
 
 type ReadCounter = { count: number }
@@ -25,9 +28,11 @@ type ReadCounter = { count: number }
 function makeRepoRows(counter: ReadCounter): Repo[] {
   return Array.from({ length: REPO_COUNT }, (_unused, index) => {
     const id = `repo-${index}`
+
     return {
       get id() {
         counter.count += 1
+
         return id
       },
       path: `/tmp/repo-${index}`,
@@ -41,14 +46,17 @@ function makeRepoRows(counter: ReadCounter): Repo[] {
 
 function makeWorktreesByRepo(counter: ReadCounter): AppState['worktreesByRepo'] {
   const worktreesByRepo: Record<string, Worktree[]> = {}
+
   for (let repoIndex = 0; repoIndex < REPO_COUNT; repoIndex += 1) {
     const repoId = `repo-${repoIndex}`
     worktreesByRepo[repoId] = Array.from({ length: WORKTREES_PER_REPO }, (_unused, index) => {
       const path = String.raw`\\wsl.localhost\Ubuntu\home\alice\wt-${repoIndex}-${index}`
       const id = `${repoId}${WORKTREE_ID_SEPARATOR}${path}`
+
       return {
         get id() {
           counter.count += 1
+
           return id
         },
         repoId,
@@ -56,12 +64,14 @@ function makeWorktreesByRepo(counter: ReadCounter): AppState['worktreesByRepo'] 
       } as Worktree
     })
   }
+
   return worktreesByRepo
 }
 
 /** The worst case for a first-wins linear scan: the last row of the last repo. */
 function lastWorktreeId(worktreesByRepo: AppState['worktreesByRepo']): string {
   const lastBucket = Object.values(worktreesByRepo).at(-1) ?? []
+
   return (lastBucket.at(-1) as Worktree).id
 }
 
@@ -71,6 +81,7 @@ describe('local preflight context worktree lookup', () => {
     const repoReads: ReadCounter = { count: 0 }
     const worktreesByRepo = makeWorktreesByRepo(worktreeReads)
     const activeWorktreeId = lastWorktreeId(worktreesByRepo)
+
     const state = {
       activeRepoId: `repo-${REPO_COUNT - 1}`,
       activeWorktreeId,
@@ -78,6 +89,7 @@ describe('local preflight context worktree lookup', () => {
       worktreesByRepo,
       projects: []
     } as unknown as AppState
+
     const rowCount = REPO_COUNT * WORKTREES_PER_REPO
     worktreeReads.count = 0
     repoReads.count = 0
@@ -98,6 +110,7 @@ describe('local preflight context worktree lookup', () => {
     const worktreesByRepo = makeWorktreesByRepo(counter)
     const repos = makeRepoRows({ count: 0 })
     const activeWorktreeId = lastWorktreeId(worktreesByRepo)
+
     const before = getLocalPreflightContext(
       {
         activeRepoId: 'repo-0',
@@ -107,6 +120,7 @@ describe('local preflight context worktree lookup', () => {
       } as unknown as AppState,
       'darwin'
     )
+
     expect(before).toEqual({ wslDistro: 'Ubuntu' })
 
     const movedWorktree = {
@@ -114,6 +128,7 @@ describe('local preflight context worktree lookup', () => {
       repoId: `repo-${REPO_COUNT - 1}`,
       path: String.raw`\\wsl.localhost\Debian\home\alice\moved`
     } as Worktree
+
     const after = getLocalPreflightContext(
       {
         activeRepoId: 'repo-0',
@@ -157,12 +172,14 @@ describe('selectRepoByIdForActiveWorkspace', () => {
       path: '/tmp/a',
       displayName: 'a'
     } as Repo
+
     const sshRepo = {
       id: 'repo-0',
       path: '/tmp/a',
       displayName: 'a',
       connectionId: 'host-a'
     } as Repo
+
     const state = {
       repos: [localRepo, sshRepo],
       activeRepoId: 'repo-0',
@@ -187,6 +204,7 @@ describe('selectRepoByIdForActiveWorkspace', () => {
 describe('project runtime session summary', () => {
   function makeRuntimeSessionState(counter: ReadCounter): AppState {
     const tabsByWorktree: Record<string, TerminalTab[]> = {}
+
     for (let repoIndex = 0; repoIndex < REPO_COUNT; repoIndex += 1) {
       for (let index = 0; index < WORKTREES_PER_REPO; index += 1) {
         const worktreeId = `repo-${repoIndex}${WORKTREE_ID_SEPARATOR}/tmp/wt-${repoIndex}-${index}`
@@ -194,9 +212,11 @@ describe('project runtime session summary', () => {
           { length: TABS_PER_WORKTREE },
           (_unused, tabIndex) => {
             const id = `tab-${repoIndex}-${index}-${tabIndex}`
+
             return {
               get id() {
                 counter.count += 1
+
                 return id
               },
               ptyId: `pty-${id}`,
@@ -206,6 +226,7 @@ describe('project runtime session summary', () => {
         )
       }
     }
+
     return {
       tabsByWorktree,
       ptyIdsByTabId: {},
@@ -244,6 +265,7 @@ describe('project runtime session summary', () => {
     const state = makeRuntimeSessionState({ count: 0 })
     const first = getProjectRuntimeSessionSummary(state, 'repo-0')
     const worktreeId = `repo-0${WORKTREE_ID_SEPARATOR}/tmp/wt-0-0`
+
     const next = getProjectRuntimeSessionSummary(
       {
         ...state,
@@ -260,6 +282,7 @@ describe('project runtime session summary', () => {
 
   it('counts running agents against the owning project only', () => {
     const state = makeRuntimeSessionState({ count: 0 })
+
     const summary = getProjectRuntimeSessionSummary(
       {
         ...state,

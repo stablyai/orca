@@ -10,6 +10,7 @@ describe('retryTransientMainEvaluate', () => {
     await expect(
       retryTransientMainEvaluate(async () => {
         calls += 1
+
         return '/isolated/home'
       })
     ).resolves.toBe('/isolated/home')
@@ -21,9 +22,11 @@ describe('retryTransientMainEvaluate', () => {
     await expect(
       retryTransientMainEvaluate(async () => {
         calls += 1
+
         if (calls < 3) {
           throw transient()
         }
+
         return '/isolated/home'
       })
     ).resolves.toBe('/isolated/home')

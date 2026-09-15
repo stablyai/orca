@@ -12,10 +12,12 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 type WorktreeWithEmbeddedLineage = Worktree & { lineage?: WorktreeLineage | null }
+
 function getProjectedLineage(get: WorktreeSliceGet, worktree: Worktree): WorktreeLineage | null {
   if (Object.hasOwn(get().worktreeLineageById, worktree.id)) {
     return get().worktreeLineageById[worktree.id] ?? null
   }
+
   return (worktree as WorktreeWithEmbeddedLineage).lineage ?? null
 }
 
@@ -27,29 +29,38 @@ function hasChangedLineageAncestor(
   const seen = new Set<string>()
   const validLineageByChildId = new Map<string, WorktreeLineage>()
   let child = get().getKnownWorktreeById(worktreeId)
+
   while (child && !seen.has(child.id)) {
     seen.add(child.id)
     const lineage = getProjectedLineage(get, child)
     const parent = lineage ? get().getKnownWorktreeById(lineage.parentWorktreeId) : null
+
     if (!lineage || !parent || !isValidResolvedWorktreeLineageEdge(child, parent, lineage)) {
       break
     }
+
     validLineageByChildId.set(child.id, lineage)
     child = parent
   }
+
   const cyclicIds = getCyclicWorktreeLineageChildIds(validLineageByChildId)
   child = get().getKnownWorktreeById(worktreeId)
+
   while (child && !cyclicIds.has(child.id)) {
     const lineage = getProjectedLineage(get, child)
     const parent = lineage ? get().getKnownWorktreeById(lineage.parentWorktreeId) : null
+
     if (!lineage || !parent || !isValidResolvedWorktreeLineageEdge(child, parent, lineage)) {
       return false
     }
+
     if (changedWorktreeIds.has(parent.id)) {
       return true
     }
+
     child = parent
   }
+
   return false
 }
 
@@ -63,19 +74,24 @@ export function createSetWorktreesPinnedAndReveal(
       get().activeWorkspaceKey,
       get().activeWorktreeId
     )
+
     // Skip worktrees already in the target state so a no-op toggle doesn't scroll the viewport away.
     const updates: WorktreeMetaBatchUpdate[] = []
     const changedWorktreeIds = new Set<string>()
     let didChange = false
     let revealWorktreeId: string | null = null
+
     for (const worktreeId of worktreeIds) {
       const current = get().getKnownWorktreeById(worktreeId)
+
       if (!current || current.isPinned === isPinned) {
         continue
       }
+
       didChange = true
       changedWorktreeIds.add(worktreeId)
       const workspaceScope = parseWorkspaceKey(worktreeId)
+
       if (workspaceScope?.type === 'folder') {
         void get().updateWorktreeMeta(
           worktreeId,
@@ -89,13 +105,16 @@ export function createSetWorktreesPinnedAndReveal(
           executionHostId: current.hostId ?? 'local'
         })
       }
+
       if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {
         revealWorktreeId = worktreeId
       }
     }
+
     if (!didChange) {
       return
     }
+
     if (
       revealWorktreeId === null &&
       activeSidebarWorktreeId !== null &&
@@ -104,10 +123,12 @@ export function createSetWorktreesPinnedAndReveal(
     ) {
       revealWorktreeId = activeSidebarWorktreeId
     }
+
     // updateWorktreesMeta applies the store update synchronously, so the reveal below sees the row already rendered.
     if (updates.length > 0) {
       void get().updateWorktreesMeta(updates)
     }
+
     if (revealWorktreeId !== null) {
       get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
     }

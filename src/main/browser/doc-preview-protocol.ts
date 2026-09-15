@@ -30,6 +30,7 @@ let docPreviewSession: Electron.Session | null = null
 /** Non-persistent session, so preview bytes never land in a browsing profile's storage. */
 export function getDocPreviewSession(): Electron.Session {
   docPreviewSession ??= session.fromPartition(DOC_PREVIEW_PARTITION)
+
   return docPreviewSession
 }
 
@@ -71,10 +72,13 @@ function notFound(message: string): Response {
 
 export async function handleDocPreviewRequest(request: Request): Promise<Response> {
   const target = parseDocPreviewUrl(request.url)
+
   if (!target) {
     return notFound('Not found')
   }
+
   const grant = getDocPreviewGrant(target.grantId)
+
   if (!grant) {
     // Why: a revoked or unknown grant is indistinguishable from a missing file by design — but the
     // shell still needs to know, or the guest paints this body where the document should be.
@@ -83,17 +87,22 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
       relativePath: target.relativePath,
       reason: 'unreadable'
     })
+
     return notFound('Not found')
   }
+
   const relativePath = target.relativePath || grant.entryRelativePath
   const outcome = await readDocPreviewFile(grant, relativePath)
+
   if (!outcome.ok) {
     publishDocPreviewFailure({ grantId: target.grantId, relativePath, reason: outcome.reason })
+
     return new Response(outcome.message, {
       status: outcome.status,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     })
   }
+
   return new Response(new Uint8Array(outcome.bytes), {
     status: 200,
     headers: {
@@ -117,9 +126,11 @@ export function isAllowedDocPreviewRequestUrl(url: string): boolean {
 
 export function installDocPreviewProtocolHandler(): void {
   const previewSession = getDocPreviewSession()
+
   if (previewSession.protocol.isProtocolHandled(DOC_PREVIEW_SCHEME)) {
     return
   }
+
   previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   // Why: the response CSP is the document's own promise to obey; this is the session refusing to
   // carry network requests even if an element bypasses CSP. DNS-prefetch does not reach this hook.

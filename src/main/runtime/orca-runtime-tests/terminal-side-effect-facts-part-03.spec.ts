@@ -6,14 +6,17 @@ import '../orca-runtime-test-mocks.spec'
 describe('terminal side-effect fact channel', () => {
   it('arms the stale-title timer for a seeded working title', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, batches } = createSideEffectRuntime()
+
       const serializeBuffer = vi.fn().mockResolvedValue({
         data: 'restored scrollback\n',
         cols: 80,
         rows: 24,
         lastTitle: 'Codex working'
       })
+
       runtime.setPtyController({
         write: () => true,
         kill: () => true,
@@ -98,6 +101,7 @@ describe('terminal side-effect fact channel', () => {
 
   it('prefers the tracked title over a stale renderer lastTitle in the hydration seed', async () => {
     const { runtime } = createSideEffectRuntime()
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: 'renderer scrollback\n',
       cols: 80,
@@ -105,6 +109,7 @@ describe('terminal side-effect fact channel', () => {
       // Renderer xterm never saw the synthetic hook frame (no longer rides pty:data), so its serializer reports the pre-agent title.
       lastTitle: 'stale shell title'
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -122,6 +127,7 @@ describe('terminal side-effect fact channel', () => {
 
     const leaves = (runtime as unknown as { leaves: Map<string, { lastOscTitle: string | null }> })
       .leaves
+
     // The seed must not stomp the leaf record (worktree ps status source) back to the renderer's stale title.
     expect([...leaves.values()][0]?.lastOscTitle).toBe('⠋ Claude working')
   })

@@ -53,12 +53,14 @@ export function FloatingTerminalWindowControls({
   const disabledTuiAgents = useAppStore(
     (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
+
   const defaultAgent =
     defaultTuiAgent &&
     defaultTuiAgent !== 'blank' &&
     isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
       ? defaultTuiAgent
       : null
+
   const defaultAgentLabel = useMemo(
     () =>
       defaultAgent
@@ -71,7 +73,9 @@ export function FloatingTerminalWindowControls({
     if (!defaultAgent) {
       return
     }
+
     const state = useAppStore.getState()
+
     const startupPlan = buildAgentStartupPlan({
       agent: defaultAgent,
       prompt: '',
@@ -81,6 +85,7 @@ export function FloatingTerminalWindowControls({
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
+
     if (!startupPlan) {
       toast.error(
         translate(
@@ -89,8 +94,10 @@ export function FloatingTerminalWindowControls({
           { value0: defaultAgentLabel ?? defaultAgent }
         )
       )
+
       return
     }
+
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
     state.queueTabStartupCommand(tab.id, {
       command: startupPlan.launchCommand,
@@ -117,11 +124,13 @@ export function FloatingTerminalWindowControls({
     const stored = fresh.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     const validIds = new Set(currentTabs.map((entry) => entry.id))
     const order = stored.filter((id) => validIds.has(id) && id !== tab.id)
+
     for (const entry of currentTabs) {
       if (entry.id !== tab.id && !order.includes(entry.id)) {
         order.push(entry.id)
       }
     }
+
     order.push(tab.id)
     fresh.setTabBarOrder(FLOATING_TERMINAL_WORKTREE_ID, order)
     focusTerminalTabSurface(tab.id)

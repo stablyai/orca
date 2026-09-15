@@ -1,7 +1,11 @@
 const LENGTH_BYTES = 4
+
 const DEFAULT_MAX_FRAME_BYTES = 64 * 1024 + 16
+
 const DEFAULT_MAX_RETAINED_BYTES = 2 * 1024 * 1024
+
 const DEFAULT_MAX_QUEUED_BYTES = 1024 * 1024
+
 const DEFAULT_MAX_QUEUED_FRAMES = 512
 
 // Single source of truth so writer admission reserves exactly what encoding allocates.
@@ -13,9 +17,11 @@ export function encodeBrowserNetworkTunnelStreamFrame(frame: Uint8Array): Uint8A
   if (frame.byteLength === 0 || frame.byteLength > DEFAULT_MAX_FRAME_BYTES) {
     throw new Error('browser_tunnel_stream_frame_invalid')
   }
+
   const encoded = new Uint8Array(encodedFrameByteLength(frame))
   new DataView(encoded.buffer).setUint32(0, frame.byteLength, false)
   encoded.set(frame, LENGTH_BYTES)
+
   return encoded
 }
 
@@ -37,14 +43,19 @@ export class BrowserNetworkTunnelStreamFrameDecoder {
     if (this.closed || chunk.byteLength === 0) {
       return
     }
+
     if (this.headerBytes + this.frameBytes + chunk.byteLength > this.maxRetainedBytes) {
       this.fail(new Error('browser_tunnel_stream_buffer_overflow'))
+
       return
     }
+
     let offset = 0
+
     while (offset < chunk.byteLength) {
       if (this.headerBytes < LENGTH_BYTES) {
         let length: number
+
         if (this.headerBytes === 0 && chunk.byteLength - offset >= LENGTH_BYTES) {
           length = new DataView(chunk.buffer, chunk.byteOffset + offset, LENGTH_BYTES).getUint32(
             0,
@@ -57,34 +68,45 @@ export class BrowserNetworkTunnelStreamFrameDecoder {
           this.header.set(chunk.subarray(offset, offset + count), this.headerBytes)
           this.headerBytes += count
           offset += count
+
           if (this.headerBytes < LENGTH_BYTES) {
             return
           }
+
           length = new DataView(this.header.buffer).getUint32(0, false)
         }
+
         if (length === 0 || length > this.maxFrameBytes) {
           this.fail(new Error('browser_tunnel_stream_frame_invalid'))
+
           return
         }
+
         this.frame = new Uint8Array(length)
       }
+
       const frame = this.frame!
       const count = Math.min(frame.byteLength - this.frameBytes, chunk.byteLength - offset)
       frame.set(chunk.subarray(offset, offset + count), this.frameBytes)
       this.frameBytes += count
       offset += count
+
       if (this.frameBytes < frame.byteLength) {
         return
       }
+
       this.frame = null
       this.frameBytes = 0
       this.headerBytes = 0
+
       try {
         this.onFrame(frame)
       } catch (error) {
         this.fail(error instanceof Error ? error : new Error(String(error)))
+
         return
       }
+
       if (this.closed) {
         return
       }
@@ -102,6 +124,7 @@ export class BrowserNetworkTunnelStreamFrameDecoder {
     if (this.closed) {
       return
     }
+
     this.close()
     this.onError(error)
   }
@@ -139,21 +162,26 @@ export class BrowserNetworkTunnelStreamFrameWriter {
     if (this.closed) {
       return false
     }
+
     if (
       this.retainedBytes + encodedFrameByteLength(frame) > this.maxQueuedBytes ||
       this.frames.length + (this.writing ? 1 : 0) >= this.maxQueuedFrames
     ) {
       return false
     }
+
     let encoded: Uint8Array
+
     try {
       encoded = encodeBrowserNetworkTunnelStreamFrame(frame)
     } catch {
       return false
     }
+
     this.frames.push(encoded)
     this.retainedBytes += encoded.byteLength
     this.pump()
+
     return true
   }
 
@@ -168,23 +196,32 @@ export class BrowserNetworkTunnelStreamFrameWriter {
     if (this.closed || this.writing) {
       return
     }
+
     const frame = this.frames.shift()
+
     if (!frame) {
       return
     }
+
     this.writing = true
+
     const settled = (error?: Error | null): void => {
       if (!this.writing) {
         return
       }
+
       this.writing = false
       this.retainedBytes -= frame.byteLength
+
       if (error) {
         this.fail(error)
+
         return
       }
+
       this.pump()
     }
+
     try {
       this.write(frame, settled)
     } catch (error) {
@@ -196,6 +233,7 @@ export class BrowserNetworkTunnelStreamFrameWriter {
     if (this.closed) {
       return
     }
+
     this.close()
     this.onError(error)
   }

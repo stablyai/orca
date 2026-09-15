@@ -20,6 +20,7 @@ export async function jiraCreateIssue(
   args: JiraCreateIssueArgs
 ): Promise<JiraCreateIssueResult> {
   const target = getJiraRuntimeTarget(settings)
+
   if (target.kind === 'environment' && (args.userFieldKeys?.length ?? 0) > 0) {
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
@@ -28,6 +29,7 @@ export async function jiraCreateIssue(
       30_000
     )
   }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraCreateIssueResult>(target, 'jira.createIssue', args, { timeoutMs: 30_000 })
     : window.api.jira.createIssue(args)
@@ -42,8 +44,10 @@ export async function jiraListAssignableUsers(
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
+
   const target = getJiraRuntimeTarget(settings)
   const args = { key, query, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraUser[]>(target, 'jira.listAssignableUsers', args, { timeoutMs: 30_000 })
     : window.api.jira.listAssignableUsers(args)
@@ -57,7 +61,9 @@ export async function jiraSearchUsers(
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
+
   const target = getJiraRuntimeTarget(settings)
+
   if (
     target.kind === 'environment' &&
     !(await runtimeEnvironmentSupportsCapability(
@@ -68,7 +74,9 @@ export async function jiraSearchUsers(
   ) {
     return []
   }
+
   const args = { query, siteId: siteId ?? undefined }
+
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraUser[]>(target, 'jira.searchUsers', args, { timeoutMs: 30_000 })
     : window.api.jira.searchUsers(args)

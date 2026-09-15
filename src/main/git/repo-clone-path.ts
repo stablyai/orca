@@ -20,12 +20,15 @@ export function deriveCloneRepoNameFromUrl(url: string): string {
   const source = url.replace(/\.git\/?$/, '')
   const isWindowsLocalSource = /^[A-Za-z]:[\\/]/.test(source) || source.startsWith('\\\\')
   const repoName = isWindowsLocalSource ? win32.basename(source) : posix.basename(source)
+
   if (!repoName || repoName === '.' || repoName === '..') {
     throw new Error('Invalid repository name derived from URL')
   }
+
   if (repoName.includes('/') || repoName.includes('\\')) {
     throw new Error('Invalid repository name derived from URL')
   }
+
   return repoName
 }
 
@@ -44,6 +47,7 @@ export function deriveValidatedClonePath(args: { url: string; destination: strin
   const resolvedDestination = resolve(args.destination)
   const resolvedClonePath = resolve(clonePath)
   const pathFromDestination = relative(resolvedDestination, resolvedClonePath)
+
   if (
     pathFromDestination === '' ||
     pathFromDestination === '..' ||
@@ -60,18 +64,22 @@ export function getClonePathComparisonKey(clonePath: string): string {
   const resolvedClonePath = isWindowsAbsolutePathLike(clonePath) ? clonePath : resolve(clonePath)
   const normalized = normalizeRuntimePathSeparators(resolvedClonePath)
   const wslUncMatch = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
+
   if (wslUncMatch) {
     // Why: WSL UNC paths cross into a case-sensitive Linux filesystem, so only
     // the Windows UNC server alias and distro segment should be case-folded.
     const linuxPath = (wslUncMatch[2] ?? '').replace(/\/+$/, '')
+
     return `//wsl/${wslUncMatch[1].toLowerCase()}${linuxPath}`
   }
+
   return normalizeRuntimePathForComparison(resolvedClonePath)
 }
 
 export async function claimCloneTarget(clonePath: string): Promise<ClaimedCloneTarget> {
   try {
     await mkdir(clonePath, { recursive: false })
+
     return {
       canCleanup: true,
       ownedDirectoryIdentity: cloneDirectoryIdentity(await lstat(clonePath))
@@ -80,6 +88,7 @@ export async function claimCloneTarget(clonePath: string): Promise<ClaimedCloneT
     if (isErrnoCode(error, 'EEXIST')) {
       return { canCleanup: false, ownedDirectoryIdentity: null }
     }
+
     throw error
   }
 }
@@ -94,9 +103,11 @@ export async function cleanupClaimedCloneTarget(
 
   try {
     const currentStats = await lstat(clonePath)
+
     if (!currentStats.isDirectory()) {
       return
     }
+
     if (
       !isSameCloneDirectoryIdentity(
         claimedTarget.ownedDirectoryIdentity,

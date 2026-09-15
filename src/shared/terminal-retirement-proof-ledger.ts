@@ -17,11 +17,13 @@ export function dropRetirementProofsForLiveSurfaces(
   tabs: readonly SurfaceTab[]
 ): RuntimeMobileSessionRetiredTerminalSurface[] {
   const live = new Set<string>()
+
   for (const tab of tabs) {
     if (tab.type === 'terminal' && tab.parentTabId !== undefined && tab.leafId !== undefined) {
       live.add(surfaceKey({ parentTabId: tab.parentTabId, leafId: tab.leafId }))
     }
   }
+
   return retired.filter((surface) => !live.has(surfaceKey(surface)))
 }
 
@@ -31,17 +33,22 @@ export function appendRetiredTerminalSurfaceProofs(
   retired: readonly RuntimeMobileSessionRetiredTerminalSurface[]
 ): RuntimeMobileSessionRetiredTerminalSurface[] {
   const next = new Map((existing ?? []).map((surface) => [retirementProofKey(surface), surface]))
+
   for (const evidence of retired) {
     const key = retirementProofKey(evidence)
     next.delete(key)
     next.set(key, evidence)
   }
+
   while (next.size > MAX_RETIRED_TERMINAL_SURFACE_PROOFS) {
     const oldest = next.keys().next().value
+
     if (typeof oldest !== 'string') {
       break
     }
+
     next.delete(oldest)
   }
+
   return [...next.values()]
 }

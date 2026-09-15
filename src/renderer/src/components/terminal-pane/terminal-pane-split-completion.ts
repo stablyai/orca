@@ -15,12 +15,15 @@ export function recordCreatedTerminalPaneSplit(
   if (!createdPane) {
     return false
   }
+
   useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+
   if (!completion.telemetrySuppressed) {
     trackTerminalPaneSplit({
       source: completion.source,
       direction: completion.direction
     })
   }
+
   return true
 }

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const workflow = parse(
   readFileSync(join(projectDir, '.github/workflows/skill-update-roundtrip.yml'), 'utf8')
 )

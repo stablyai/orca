@@ -62,12 +62,14 @@ describe('palette repo and current-worktree resolution', () => {
       hostId: 'local' as const,
       displayName: 'Local workspace'
     }
+
     const pairedWorktree = {
       ...worktree,
       hostId: 'ssh:private-target' as const,
       runtimeOwnerEnvironmentId: 'paired-host',
       displayName: 'Remote workspace'
     }
+
     const index = buildPaletteWorktreeIndex([localWorktree, pairedWorktree])
 
     expect(resolvePaletteWorktree(index, worktree.id, 'runtime:paired-host')).toBe(pairedWorktree)

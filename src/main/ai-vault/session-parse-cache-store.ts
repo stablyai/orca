@@ -74,16 +74,19 @@ export function seedSessionParseCache(
   entries: Iterable<[string, PersistedSessionParseCacheEntry]>
 ): void {
   const list = [...entries]
+
   // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
   // tail rather than seeding the oldest entries and dropping the tail.
   for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
     if (cache.size >= MAX_CACHE_ENTRIES) {
       return
     }
+
     // In-process entries are always fresher than persisted ones; never clobber.
     if (cache.has(path)) {
       continue
     }
+
     cache.set(path, {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
@@ -104,8 +107,10 @@ export function getSessionParseCacheEntry(path: string): SessionParseCacheEntry 
 export function storeSessionParseCacheEntry(path: string, entry: SessionParseCacheEntry): void {
   cache.delete(path)
   cache.set(path, entry)
+
   if (cache.size > MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next()
+
     if (!oldest.done) {
       cache.delete(oldest.value)
     }

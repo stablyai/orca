@@ -44,11 +44,13 @@ async function sampleOpenComposition(
     .poll(
       async () => {
         const overlay = await samplePreeditOverlay(page)
+
         return overlay.active && overlay.rect.width > 0 && overlay.text.startsWith(expectedPreedit)
       },
       { message: 'the preedit never reached the overlay at a non-zero size' }
     )
     .toBe(true)
+
   return sampleMidlinePreeditOcclusion(page)
 }
 
@@ -73,6 +75,7 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
   }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       const placeholder = 'Ask Codex to do anything'
       await writeToActiveTerminal(
@@ -113,6 +116,7 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
   }, testInfo) => {
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       // The issue's repro: 안녕하세요, then CUB 6. Each Hangul syllable is two cells, so the
       // cursor lands on 하.
@@ -155,6 +159,7 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
     // rendering a tail where the row has none.
     const arena = await openTerminalImePaneArena(orcaPage)
     let completed = false
+
     try {
       await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요')
       await setImeComposition(arena.session, '가')

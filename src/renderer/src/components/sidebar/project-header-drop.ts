@@ -32,15 +32,18 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
   rows: readonly Row[]
 ): Map<ProjectHeaderDragBucketKey, string[]> {
   const buckets = new Map<ProjectHeaderDragBucketKey, string[]>()
+
   for (const row of rows) {
     if (row.type !== 'header' || !row.repo) {
       continue
     }
+
     const bucketKey = getProjectHeaderDragBucketKey(row.repo)
     const list = buckets.get(bucketKey) ?? []
     list.push(row.repo.id)
     buckets.set(bucketKey, list)
   }
+
   return buckets
 }
 
@@ -55,6 +58,7 @@ export function getLogicalRepoOrderRankById(
       rankById.set(repoId, index)
     }
   })
+
   return rankById
 }
 
@@ -64,29 +68,38 @@ export function getProjectGroupOrderForSidebarDrop(args: {
   repoOrderRankById?: ReadonlyMap<string, number>
 }): number {
   const ordered = args.siblings.slice()
+
   if (ordered.length === 0) {
     return 0
   }
+
   const getEffectiveOrder = (repo: Repo | undefined, fallbackIndex: number): number | undefined => {
     if (!repo) {
       return undefined
     }
+
     return getEffectiveProjectGroupManualRank(repo, args.repoOrderRankById, fallbackIndex)
   }
+
   const before = getEffectiveOrder(ordered[args.dropIndex - 1], args.dropIndex - 1)
   const after = getEffectiveOrder(ordered[args.dropIndex], args.dropIndex)
+
   if (before === undefined && after === undefined) {
     return 0
   }
+
   if (before === undefined) {
     return after !== undefined ? after - 1 : 0
   }
+
   if (after === undefined) {
     return before + 1
   }
+
   if (after > before) {
     return before + (after - before) / 2
   }
+
   // Why: duplicate legacy ranks leave no numeric slot between neighbors; choose
   // a deterministic finite value so the next drag has a persisted anchor.
   return before + 1
@@ -103,6 +116,7 @@ export function mapSidebarProjectHeaderDropIndexToSiblingInsertIndex(args: {
     args.sourceIndex >= 0 && args.sidebarDropIndex > args.sourceIndex
       ? args.sidebarDropIndex - 1
       : args.sidebarDropIndex
+
   return Math.max(0, Math.min(args.siblingCount, adjustedDropIndex))
 }
 
@@ -110,20 +124,27 @@ function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
   if (!virtualRow) {
     return null
   }
+
   const rawStart = virtualRow.getAttribute('data-worktree-virtual-row-start')
+
   if (rawStart === null) {
     return null
   }
+
   const start = Number(rawStart)
+
   return Number.isFinite(start) ? start : null
 }
 
 function getOptionalNumberAttribute(element: HTMLElement, attribute: string): number | undefined {
   const rawValue = element.getAttribute(attribute)
+
   if (rawValue === null) {
     return undefined
   }
+
   const value = Number(rawValue)
+
   return Number.isFinite(value) ? value : undefined
 }
 
@@ -138,19 +159,24 @@ export function measureProjectHeaderDragRects(
     const elementBucketKey = element.getAttribute('data-repo-header-bucket')
     const rawHeaderIndex = element.getAttribute('data-repo-header-index')
     const headerIndex = rawHeaderIndex === null ? Number.NaN : Number(rawHeaderIndex)
+
     if (!repoId || !elementBucketKey || !Number.isFinite(headerIndex)) {
       return
     }
+
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
+
     const rect = element.getBoundingClientRect()
     const virtualRow = element.closest<HTMLElement>('[data-worktree-virtual-row]')
     const virtualRowStart = getVirtualRowStart(virtualRow)
+
     const top =
       virtualRow && virtualRowStart !== null
         ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
         : rect.top - containerRect.top + container.scrollTop
+
     rects.push({
       repoId,
       bucketKey: elementBucketKey,
@@ -161,6 +187,7 @@ export function measureProjectHeaderDragRects(
     })
   })
   rects.sort((left, right) => left.top - right.top)
+
   return rects
 }
 
@@ -172,13 +199,17 @@ export function mapSidebarRepoDropIndexToAllRepoInsertAt(
   if (sidebarRepoHeaderIds.length === 0) {
     return 0
   }
+
   if (sidebarDropIndex <= 0) {
     return allRepoIds.indexOf(sidebarRepoHeaderIds[0]!)
   }
+
   if (sidebarDropIndex >= sidebarRepoHeaderIds.length) {
     const lastId = sidebarRepoHeaderIds.at(-1)!
+
     return allRepoIds.indexOf(lastId) + 1
   }
+
   return allRepoIds.indexOf(sidebarRepoHeaderIds[sidebarDropIndex]!)
 }
 
@@ -191,6 +222,7 @@ export function computeProjectHeaderDropPreview(args: {
   contentBottom?: number
 }): ProjectHeaderDropPreview | null {
   const { rects, sidebarRepoHeaderIds } = args
+
   return computeWorktreeSidebarHeaderDropPreview({
     pointerY: args.pointerY,
     containerTop: args.containerTop,
@@ -210,17 +242,22 @@ export function applyAllRepoInsertAt(
   if (!allRepoIds.includes(draggedRepoId) || insertAt < 0 || insertAt > allRepoIds.length) {
     return null
   }
+
   // Why: one merged header controls every host-qualified occurrence; moving
   // them together prevents a drag from persisting a cross-host split project.
   const draggedBlock = allRepoIds.filter((repoId) => repoId === draggedRepoId)
+
   const removedBeforeInsert = allRepoIds
     .slice(0, insertAt)
     .filter((repoId) => repoId === draggedRepoId).length
+
   const adjustedInsertAt = insertAt - removedBeforeInsert
   const next = allRepoIds.filter((repoId) => repoId !== draggedRepoId)
   next.splice(adjustedInsertAt, 0, ...draggedBlock)
+
   if (next.every((repoId, index) => repoId === allRepoIds[index])) {
     return null
   }
+
   return next
 }

@@ -14,45 +14,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -70,6 +86,7 @@ describe('registerPtyHandlers', () => {
     const completion = makeDeferred()
     let sequence = 0
     let captures = 0
+
     const runtime = {
       setPtyController: vi.fn(),
       setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
@@ -77,30 +94,35 @@ describe('registerPtyHandlers', () => {
       acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
         sequence += rawLength
         captures++
+
         return {
           sequence,
           completion: captures === 1 ? completion.promise : Promise.resolve()
         }
       })
     }
+
     const original = {
       providerGeneration: 41,
       hasPtyDeliveryPauseAdapter: () => true,
       pauseProducer: vi.fn(),
       resumeProducer: vi.fn()
     }
+
     const replacement = {
       providerGeneration: 42,
       hasPtyDeliveryPauseAdapter: () => true,
       pauseProducer: vi.fn(),
       resumeProducer: vi.fn()
     }
+
     const id = 'ssh:ssh-generation-replacement@@relay-pty'
     const receipts: Promise<unknown>[] = []
 
     try {
       registerPtyHandlers(mainWindow as never, runtime as never)
       registerSshPtyProvider('ssh-generation-replacement', original as never)
+
       const running = acceptSshPtyOutputData({
         id,
         data: 'a'.repeat(256 * 1024),
@@ -109,8 +131,10 @@ describe('registerPtyHandlers', () => {
         rawLength: 256 * 1024,
         transformed: false
       })
+
       receipts.push(running)
       registerSshPtyProvider('ssh-generation-replacement', replacement as never)
+
       const pressured = acceptSshPtyOutputData({
         id,
         data: 'b',
@@ -119,6 +143,7 @@ describe('registerPtyHandlers', () => {
         rawLength: 1,
         transformed: false
       })
+
       receipts.push(pressured)
 
       expect(original.pauseProducer).toHaveBeenCalledWith(id)
@@ -138,17 +163,20 @@ describe('registerPtyHandlers', () => {
   it('rejects local data while an SSH renderer exit waits for projection settlement', async () => {
     const provider = installObservableDaemonTestProvider()
     let sequence = 0
+
     const runtime = {
       setPtyController: vi.fn(),
       setRemoteTerminalSourceRangeConsumerHooks: vi.fn(),
       getPtyOutputSequence: vi.fn(() => sequence),
       acceptPtyDataBounded: vi.fn((_id: string, _data: string, _at: number, rawLength: number) => {
         sequence += rawLength
+
         return { sequence, completion: Promise.resolve() }
       }),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     const id = 'ssh:exit-data-race@@relay-pty'
 
     registerPtyHandlers(mainWindow as never, runtime as never)
@@ -161,12 +189,14 @@ describe('registerPtyHandlers', () => {
       rawLength: 'before-exit'.length,
       transformed: false
     })
+
     const exit = acceptSshPtyOutputExit({
       id,
       code: 0,
       providerGeneration: 51,
       ptyIncarnation: 'incarnation-51'
     })
+
     await Promise.resolve()
 
     provider.emitData(id, 'must-not-follow-exit')
@@ -189,6 +219,7 @@ describe('registerPtyHandlers', () => {
   })
   it('resumes a paused producer when the PTY exits before draining', async () => {
     vi.useFakeTimers()
+
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
@@ -208,6 +239,7 @@ describe('registerPtyHandlers', () => {
   })
   it('releases a paused producer when handlers re-register for a replacement window', () => {
     vi.useFakeTimers()
+
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
@@ -226,6 +258,7 @@ describe('registerPtyHandlers', () => {
   })
   it('fences synchronous producer data and duplicate exit while releasing an exiting PTY', () => {
     vi.useFakeTimers()
+
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
@@ -268,6 +301,7 @@ describe('registerPtyHandlers', () => {
   it('does not retry a complete payload after a synchronous renderer send failure', () => {
     vi.useFakeTimers()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
@@ -280,6 +314,7 @@ describe('registerPtyHandlers', () => {
             failed = true
             throw new Error('synthetic send failure')
           }
+
           if (channel === 'pty:modelRestoreNeeded' && !markerFailed) {
             markerFailed = true
             throw new Error('synthetic marker failure')

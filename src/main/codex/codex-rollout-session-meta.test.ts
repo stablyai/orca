@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({ readTranscriptSlice: vi.fn() }))
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
   const original = await importOriginal<typeof WslFsAccessModule>()
   mocks.readTranscriptSlice.mockImplementation(original.readTranscriptSlice)
+
   return { ...original, readTranscriptSlice: mocks.readTranscriptSlice }
 })
 

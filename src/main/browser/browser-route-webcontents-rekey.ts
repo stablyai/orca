@@ -35,6 +35,7 @@ export function rekeyBrowserRouteGuest(input: {
 }): BrowserRouteGuestLifecycleRekey | null {
   const { claim, next, state } = input
   const previous = claim.registration
+
   if (
     !state?.registration ||
     state.guestAuthority !== claim.guestAuthority ||
@@ -52,14 +53,18 @@ export function rekeyBrowserRouteGuest(input: {
   ) {
     return null
   }
+
   const nextKey = browserRoutePageKey(next)
   const conflicting = input.guestsByPage.get(nextKey)
   const rekeyPreparedPage = input.dependencies.rekeyPreparedPage
+
   if ((conflicting && conflicting !== state) || !rekeyPreparedPage) {
     return null
   }
+
   const previousAuthority = { ...previous, pageAuthority: state.pageAuthority }
   const rekeyed = rekeyPreparedPage(previousAuthority, next)
+
   if (
     !rekeyed ||
     rekeyed.page.pageAuthority !== state.pageAuthority ||
@@ -70,22 +75,27 @@ export function rekeyBrowserRouteGuest(input: {
     if (rekeyed) {
       rekeyPreparedPage(rekeyed.page, previous)
     }
+
     return null
   }
+
   const previousKey = browserRoutePageKey(previous)
   input.guestsByPage.delete(previousKey)
   state.registration = { ...next }
   state.pageAuthority = rekeyed.page.pageAuthority
   input.guestsByPage.set(nextKey, state)
   const lifecycleClaim = input.claimGuestLifecycle(next)
+
   if (!lifecycleClaim) {
     input.guestsByPage.delete(nextKey)
     state.registration = { ...previous }
     state.pageAuthority = previousAuthority.pageAuthority
     input.guestsByPage.set(previousKey, state)
     rekeyPreparedPage(rekeyed.page, previous)
+
     return null
   }
+
   return { lifecycleClaim, routeSession: rekeyed.routeSession }
 }
 
@@ -97,6 +107,7 @@ export function grantReconciledBrowserRouteGuestNavigation(input: {
 }): boolean {
   const { claim, state } = input
   const registration = claim.registration
+
   if (
     !state?.registration ||
     state.guestAuthority !== claim.guestAuthority ||
@@ -106,6 +117,8 @@ export function grantReconciledBrowserRouteGuestNavigation(input: {
   ) {
     return false
   }
+
   state.navigationGranted = true
+
   return true
 }

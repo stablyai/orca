@@ -58,6 +58,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     worktreeId,
     worktreeName
   } = options
+
   const router = useRouter()
   const routerRef = useRef(router)
   const optionsRef = useRef(options)
@@ -104,9 +105,11 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   const handleFileTap = useCallback(
     (handle: string, pathText: string, line: number | null, column: number | null) => {
       const current = optionsRef.current
+
       if (handle !== current.activeHandleRef.current || !current.client) {
         return
       }
+
       const activationSeq = ++activationSeqRef.current
       openMobileFileTap<T>({
         client: current.client,
@@ -144,9 +147,11 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     const sourceTerminalHandle = current.activeHandleRef.current
     const nativeChatSessionId = current.nativeChatSessionId
     const nativeChatTabId = current.getActiveSessionTabId()
+
     if (!current.client || (!sourceTerminalHandle && !(nativeChatSessionId && nativeChatTabId))) {
       return
     }
+
     const activationSeq = ++activationSeqRef.current
     openMobileNativeChatFileTap<T>({
       client: current.client,

@@ -6,14 +6,21 @@ import { quoteFtsTerm, scopedExpression } from './session-search-query-planner'
 // vocabulary (fts5vocab) is the dictionary, so repair needs no model and can
 // never suggest a word the index does not contain. Measured MRR 0.553 → 0.566.
 const MIN_TERM_LENGTH = 4
+
 const MAX_TERM_LENGTH = 40
+
 const LENGTH_SLACK = 2
+
 const MIN_DOC_FREQUENCY = 2
+
 const MIN_SIMILARITY = 0.82
+
 const MAX_CANDIDATES = 4000
+
 // Candidates counted against live rows per prefix before giving up on it. Only
 // reached for a term the scope has no posting for, which is the rare case.
 const MAX_VISIBILITY_PROBES = 8
+
 // How far a live count walks before it stops caring. It exists to break ties
 // between candidates of equal similarity, and the difference between a term in
 // sixty-four rows and one in six thousand does not change which is the better
@@ -24,6 +31,7 @@ const MAX_COUNTED_ROWS = 64
 function commonSubsequenceLength(a: string, b: string): number {
   let previous = Array.from<number>({ length: b.length + 1 }).fill(0)
   let current = Array.from<number>({ length: b.length + 1 }).fill(0)
+
   for (let i = 1; i <= a.length; i += 1) {
     for (let j = 1; j <= b.length; j += 1) {
       current[j] =
@@ -31,14 +39,17 @@ function commonSubsequenceLength(a: string, b: string): number {
           ? previous[j - 1] + 1
           : Math.max(previous[j], current[j - 1])
     }
+
     ;[previous, current] = [current, previous]
   }
+
   return previous[b.length]
 }
 
 /** Normalized indel similarity in [0, 1], the scale rapidfuzz's `fuzz.ratio` uses. */
 function similarity(a: string, b: string): number {
   const total = a.length + b.length
+
   return total === 0 ? 1 : (2 * commonSubsequenceLength(a, b)) / total
 }
 
@@ -89,6 +100,7 @@ export class SessionSearchTypoRepair {
   /** Live rows carrying this term inside `scope`, counted no further than it matters. */
   private countRows(term: string, scope: SessionSearchScope): number {
     const row = this.liveRows.get(scopedExpression(scope, quoteFtsTerm(term))) as { rows: number }
+
     return row.rows
   }
 
@@ -100,21 +112,27 @@ export class SessionSearchTypoRepair {
   /** Returns the closest indexed term, or null when `term` exists or nothing is close enough. */
   correct(term: string, scope: SessionSearchScope): string | null {
     const lowered = term.toLowerCase()
+
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
+
     if (this.hasPostings(lowered, scope)) {
       return null
     }
+
     // Two-letter prefix first (a typo rarely hits both), then the transposed
     // pair, then the bare first letter as the wide fallback.
     const prefixes = [lowered.slice(0, 2), lowered[1] + lowered[0], lowered[0]]
+
     for (const prefix of prefixes) {
       const best = this.bestVisible(lowered, prefix, scope)
+
       if (best) {
         return best
       }
     }
+
     return null
   }
 
@@ -133,9 +151,11 @@ export class SessionSearchTypoRepair {
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({ ...candidate, rows: this.countRows(candidate.term, scope) }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
+
     if (counted.length === 0) {
       return null
     }
+
     // Already sorted by similarity; a stable sort keeps that and orders the ties.
     return counted.sort((left, right) => right.score - left.score || right.rows - left.rows)[0]!
       .term
@@ -152,6 +172,7 @@ export class SessionSearchTypoRepair {
   private candidates(prefix: string, length: number): { term: string }[] {
     const last = prefix.charCodeAt(prefix.length - 1)
     const upper = prefix.slice(0, -1) + String.fromCharCode(last + 1)
+
     return this.candidatesByPrefix.all(
       prefix,
       upper,

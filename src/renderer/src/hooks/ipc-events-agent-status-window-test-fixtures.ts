@@ -147,6 +147,7 @@ export function buildWindowApi(args: {
 export function stubReactSyncEffect(): void {
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
+
     return {
       ...actual,
       useEffect: (effect: () => void | (() => void)) => {

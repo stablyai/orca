@@ -5,11 +5,13 @@ const { clearStorageDataMock, cookiesSetMock, netFetchMock, sessionFromPartition
     const netFetchMock = vi.fn()
     const cookiesSetMock = vi.fn(() => Promise.resolve())
     const clearStorageDataMock = vi.fn(() => Promise.resolve())
+
     const sessionFromPartitionMock = vi.fn(() => ({
       clearStorageData: clearStorageDataMock,
       cookies: { set: cookiesSetMock },
       fetch: netFetchMock
     }))
+
     return { clearStorageDataMock, cookiesSetMock, netFetchMock, sessionFromPartitionMock }
   }
 )
@@ -38,6 +40,7 @@ function makeResponse(body: unknown, status = 200): Response {
 
 function makeOkPayload(remainingPercent: number): unknown {
   const now = Date.now()
+
   return {
     base_resp: { status_code: 0, status_msg: 'ok' },
     model_remains: [
@@ -58,6 +61,7 @@ const FULL_COOKIE =
 function getCookieJarSetNames(): string[] {
   return cookiesSetMock.mock.calls.map((call) => {
     const [details] = call as unknown as [{ name: string }]
+
     return details.name
   })
 }
@@ -134,6 +138,7 @@ describe('fetchMiniMaxRateLimits', () => {
     const result = await fetchMiniMaxRateLimits({
       cookie: '_twpid=tw.123; minimax_group_id_v2=12345'
     })
+
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/MiniMax auth cookie not found/)
     expect(netFetchMock).not.toHaveBeenCalled()
@@ -176,12 +181,15 @@ describe('fetchMiniMaxRateLimits', () => {
           error.name = 'TimeoutError'
           reject(error)
         }
+
         // Both the session-cookie-jar and manual-cookie-header fetches receive
         // the already-aborted timeout signal.
         if (init.signal.aborted) {
           abort()
+
           return
         }
+
         init.signal.addEventListener('abort', abort)
       })
     })
@@ -303,6 +311,7 @@ describe('fetchMiniMaxRateLimits', () => {
 
   it('preserves the complete browser Cookie header', async () => {
     netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(80)))
+
     const fullBrowserCookie = [
       'platform_cookie_consent=3',
       '_ga=analytics',
@@ -315,6 +324,7 @@ describe('fetchMiniMaxRateLimits', () => {
       'minimax_group_id_v2=42',
       'sensorsdata2015jssdkcross=analytics'
     ].join('; ')
+
     await fetchMiniMaxRateLimits({
       cookie: fullBrowserCookie
     })
@@ -410,26 +420,31 @@ describe('fetchMiniMaxRateLimits', () => {
     netFetchMock.mockResolvedValueOnce(
       makeResponse({ base_resp: { status_code: 0 }, model_remains: [] })
     )
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       models: 'unrelated-model'
     })
+
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/configured model was not found/i)
   })
 
   it('falls back to the lone snapshot when no configured model matches', async () => {
     netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(40)))
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       models: 'unrelated-model'
     })
+
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(60)
   })
 
   it('selects the first configured model when multiple are listed', async () => {
     const payload = makeOkPayload(40)
+
     ;(payload as { model_remains: unknown[] }).model_remains = [
       {
         model_name: 'unrelated',
@@ -447,16 +462,19 @@ describe('fetchMiniMaxRateLimits', () => {
       }
     ]
     netFetchMock.mockResolvedValueOnce(makeResponse(payload))
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       models: 'general'
     })
+
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(60)
   })
 
   it('treats a blank model list as the default general model', async () => {
     const payload = makeOkPayload(25)
+
     ;(payload as { model_remains: unknown[] }).model_remains = [
       {
         model_name: 'unrelated',
@@ -474,10 +492,12 @@ describe('fetchMiniMaxRateLimits', () => {
       }
     ]
     netFetchMock.mockResolvedValueOnce(makeResponse(payload))
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       models: '   '
     })
+
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(75)
   })
@@ -508,11 +528,13 @@ describe('fetchMiniMaxRateLimits', () => {
 
   it('routes CN + API key to the bearer transport and hits www.minimaxi.com', async () => {
     netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(72)))
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       apiKey: 'sk-test-1234567890',
       endpointMode: 'cn'
     })
+
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(28)
     const [url, init] = netFetchMock.mock.calls[0]
@@ -532,10 +554,12 @@ describe('fetchMiniMaxRateLimits', () => {
 
   it('falls back to the cookie transport when no API key is provided', async () => {
     netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(60)))
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       endpointMode: 'cn'
     })
+
     expect(result.status).toBe('ok')
     const [url, init] = netFetchMock.mock.calls[0]
     expect(url).toBe('https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains')
@@ -550,11 +574,13 @@ describe('fetchMiniMaxRateLimits', () => {
     // Why: the API key path is a Bearer header — endpoint-agnostic, the
     // endpoint only picks the host URL. Either auth works on either endpoint.
     netFetchMock.mockResolvedValueOnce(makeResponse(makeOkPayload(50)))
+
     const result = await fetchMiniMaxRateLimits({
       cookie: FULL_COOKIE,
       apiKey: 'sk-overseas-key',
       endpointMode: 'overseas'
     })
+
     expect(result.status).toBe('ok')
     const [url, init] = netFetchMock.mock.calls[0]
     expect(url).toBe('https://platform.minimax.io/v1/api/openplatform/coding_plan/remains')
@@ -565,10 +591,12 @@ describe('fetchMiniMaxRateLimits', () => {
 
   it('classifies a 401 on the API key path as a stale API key error', async () => {
     netFetchMock.mockResolvedValueOnce(makeResponse({}, 401))
+
     const result = await fetchMiniMaxRateLimits({
       apiKey: 'sk-stale',
       endpointMode: 'cn'
     })
+
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('stale-token')
     expect(result.error).toMatch(/API key expired/i)
@@ -652,6 +680,7 @@ describe('normalizeMiniMaxCookieHeader', () => {
     const normalized = normalizeMiniMaxCookieHeader(
       '_token=tok; session=other; ak_bmsc=ak; minimax_group_id_v2=42; random=xyz'
     )
+
     expect(normalized).toBe(
       '_token=tok; session=other; ak_bmsc=ak; minimax_group_id_v2=42; random=xyz'
     )

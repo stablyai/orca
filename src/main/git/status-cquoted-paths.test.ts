@@ -13,11 +13,13 @@ async function createRepo(): Promise<string> {
   execFileSync('git', ['init', '-q'], { cwd: repo })
   execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })
   execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo })
+
   return repo
 }
 
 function gitNames(repo: string, args: string[]): string[] {
   const stdout = execFileSync('git', args, { cwd: repo, encoding: 'utf8' })
+
   return stdout.split('\0').filter(Boolean)
 }
 

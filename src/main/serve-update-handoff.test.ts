@@ -15,6 +15,7 @@ const { appMock, getCanonicalUserDataPathMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: appMock }))
+
 vi.mock('./persistence', () => ({ getCanonicalUserDataPath: getCanonicalUserDataPathMock }))
 
 describe('serve update handoff', () => {
@@ -74,6 +75,7 @@ describe('serve update handoff', () => {
 
   it('rejects a handoff path outside the canonical user-data directory', async () => {
     process.env[SERVE_UPDATE_HANDOFF_PATH_ENV] = join(root, '..', 'untrusted.json')
+
     const { hasServeUpdateSupervisor, requestServeUpdateHandoff } =
       await import('./serve-update-handoff')
 

@@ -13,6 +13,7 @@ describe('terminal wait results', () => {
       lastExitCode: 0,
       lastExitCause: { kind: 'operator_close' as const }
     }
+
     const results = [
       buildTerminalWaitResult('terminal', 'exit', terminal),
       buildTerminalWaitBlockedResult('terminal', 'exit', terminal, 'agent-approval-prompt'),

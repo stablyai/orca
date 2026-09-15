@@ -14,8 +14,11 @@ import {
 } from './restored-subagent-liveness-sweep'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = makePaneKey('tab-1', LEAF)
+
 const PTY = 'wt-1__pty-1'
+
 const WORKING_CHILD: AgentSubagentSnapshot = {
   id: 'areview-loop-c237a4c577493352',
   state: 'working',
@@ -56,6 +59,7 @@ async function restartWithInFlightSubagent(options?: {
       subagents: options?.subagents ?? [WORKING_CHILD]
     }
   })
+
   if (options?.additionalPaneKey) {
     first.ingestTerminalStatus({
       paneKey: options.additionalPaneKey,
@@ -70,11 +74,13 @@ async function restartWithInFlightSubagent(options?: {
       }
     })
   }
+
   first.flushStatusPersistSync()
   first.stop()
 
   const restarted = new AgentHookServer()
   await restarted.start({ env: 'production', userDataPath: dir })
+
   return restarted
 }
 
@@ -110,12 +116,14 @@ function paneStatus(
   paneKey = PANE
 ): { state: string; subagents?: AgentSubagentSnapshot[] } {
   const entry = server.getStatusSnapshotForPane(paneKey)[0]
+
   return { state: entry?.state ?? 'missing', subagents: entry?.subagents }
 }
 
 describe('restored subagent liveness sweep', () => {
   it('reaps the phantom seed so a slept-through pane reaches done', async () => {
     const server = await restartWithInFlightSubagent()
+
     try {
       expect(paneStatus(server)).toEqual({ state: 'working', subagents: [WORKING_CHILD] })
       const previous = server.getStatusSnapshotForPane(PANE)[0]
@@ -141,6 +149,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('keeps a seed whose pane still has a live local PTY', async () => {
     const server = await restartWithInFlightSubagent()
+
     try {
       expect(
         await sweepWith(server, {
@@ -157,6 +166,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('preserves timing when reaping rows does not change the lead state', async () => {
     const server = await restartWithInFlightSubagent({ state: 'waiting' })
+
     try {
       const previous = server.getStatusSnapshotForPane(PANE)[0]
 
@@ -177,6 +187,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('uses targeted liveness for a PTY bound in this runtime', async () => {
     const server = await restartWithInFlightSubagent()
+
     try {
       const probeLiveLocalPty = vi.fn((ptyId: string) => ptyId === PTY)
       expect(
@@ -197,6 +208,7 @@ describe('restored subagent liveness sweep', () => {
     const otherPane = makePaneKey('tab-2', LEAF)
     const server = await restartWithInFlightSubagent({ additionalPaneKey: otherPane })
     const probeLiveLocalPty = vi.fn(() => false)
+
     try {
       expect(
         await sweepWith(server, {
@@ -217,6 +229,7 @@ describe('restored subagent liveness sweep', () => {
     // the pane working for good and locks its agent out of hibernation.
     const server = await restartWithInFlightSubagent({ subagents: [] })
     const probeLiveLocalPty = vi.fn(() => false)
+
     try {
       expect(
         await sweepWith(server, {
@@ -234,6 +247,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('keeps a hydrated non-terminal row with no roster when its PTY is still live', async () => {
     const server = await restartWithInFlightSubagent({ subagents: [] })
+
     try {
       expect(
         await sweepWith(server, {
@@ -250,6 +264,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('keeps a hydrated non-terminal row with no roster when the probe cannot prove either state', async () => {
     const server = await restartWithInFlightSubagent({ subagents: [] })
+
     try {
       expect(
         await sweepWith(server, {
@@ -267,6 +282,7 @@ describe('restored subagent liveness sweep', () => {
   it('never reaps an SSH-launched pane, whose agent cannot appear in a local scan', async () => {
     const sshPtyId = toAppSshPtyId('conn-1', PTY)
     const server = await restartWithInFlightSubagent()
+
     try {
       expect(
         await sweepWith(server, {
@@ -283,6 +299,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('never reaps a relay-owned pane even with no local PTY at all', async () => {
     const server = await restartWithInFlightSubagent({ connectionId: 'conn-1' })
+
     try {
       expect(await sweepWith(server)).toBe(0)
 
@@ -295,6 +312,7 @@ describe('restored subagent liveness sweep', () => {
   it('never reaps a runtime-hosted pane from the desktop local provider', async () => {
     const server = await restartWithInFlightSubagent()
     const probeLiveLocalPty = vi.fn(() => false)
+
     try {
       expect(
         await sweepWith(server, {
@@ -313,6 +331,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('does nothing when targeted PTY liveness is unknown', async () => {
     const server = await restartWithInFlightSubagent()
+
     try {
       expect(
         await sweepWith(server, {
@@ -330,6 +349,7 @@ describe('restored subagent liveness sweep', () => {
   it('does nothing without an exact pane PTY binding', async () => {
     const server = await restartWithInFlightSubagent()
     const probeLiveLocalPty = vi.fn(() => false)
+
     try {
       expect(await sweepWith(server, { probeLiveLocalPty })).toBe(0)
 
@@ -342,6 +362,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('skips panes that have reported to this runtime', async () => {
     const server = await restartWithInFlightSubagent()
+
     try {
       server.ingestTerminalStatus({
         paneKey: PANE,
@@ -365,17 +386,20 @@ describe('restored subagent liveness sweep', () => {
   it('keeps a pane that reports while its liveness probe is pending', async () => {
     const server = await restartWithInFlightSubagent()
     let resolveProbe!: (live: boolean | null) => void
+
     const probeLiveLocalPty = vi.fn(
       () =>
         new Promise<boolean | null>((resolve) => {
           resolveProbe = resolve
         })
     )
+
     try {
       const sweep = sweepWith(server, {
         probeLiveLocalPty,
         persistedPtyIdByPaneKey: { [PANE]: PTY }
       })
+
       await vi.waitFor(() => expect(probeLiveLocalPty).toHaveBeenCalledOnce())
       server.ingestTerminalStatus({
         paneKey: PANE,
@@ -401,12 +425,14 @@ describe('restored subagent liveness sweep', () => {
     const server = await restartWithInFlightSubagent()
     const boundPtyIdByPaneKey = { [PANE]: PTY }
     let resolveProbe!: (live: boolean | null) => void
+
     const probeLiveLocalPty = vi.fn(
       () =>
         new Promise<boolean | null>((resolve) => {
           resolveProbe = resolve
         })
     )
+
     try {
       const sweep = sweepWith(server, { probeLiveLocalPty, boundPtyIdByPaneKey })
       await vi.waitFor(() => expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY))
@@ -424,18 +450,21 @@ describe('restored subagent liveness sweep', () => {
     const server = await restartWithInFlightSubagent()
     const boundPtyIdByPaneKey: Record<string, string> = {}
     let resolveProbe!: (live: boolean | null) => void
+
     const probeLiveLocalPty = vi.fn(
       () =>
         new Promise<boolean | null>((resolve) => {
           resolveProbe = resolve
         })
     )
+
     try {
       const sweep = sweepWith(server, {
         probeLiveLocalPty,
         boundPtyIdByPaneKey,
         persistedPtyIdByPaneKey: { [PANE]: PTY }
       })
+
       await vi.waitFor(() => expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY))
       boundPtyIdByPaneKey[PANE] = PTY
       resolveProbe(false)
@@ -453,6 +482,7 @@ describe('restored subagent liveness sweep', () => {
     const server = await restartWithInFlightSubagent({ additionalPaneKey: otherPane })
     const boundPtyIdByPaneKey: Record<string, string> = {}
     let resolveOtherProbe!: (live: boolean | null) => void
+
     const probeLiveLocalPty = vi.fn((ptyId: string) =>
       ptyId === PTY
         ? Promise.resolve(false)
@@ -460,12 +490,14 @@ describe('restored subagent liveness sweep', () => {
             resolveOtherProbe = resolve
           })
     )
+
     try {
       const sweep = sweepWith(server, {
         probeLiveLocalPty,
         boundPtyIdByPaneKey,
         persistedPtyIdByPaneKey: { [PANE]: PTY, [otherPane]: otherPty }
       })
+
       await vi.waitFor(() => expect(probeLiveLocalPty).toHaveBeenCalledTimes(2))
       boundPtyIdByPaneKey[PANE] = PTY
       resolveOtherProbe(false)
@@ -480,6 +512,7 @@ describe('restored subagent liveness sweep', () => {
 
   it('leaves a pane whose lead is genuinely mid-turn at working', async () => {
     const server = await restartWithInFlightSubagent()
+
     try {
       // Why: the lead's own tool event proves the process is alive; only the
       // child-gated 'working' may be re-derived, so the state must survive.
@@ -500,9 +533,11 @@ describe('restored subagent liveness sweep', () => {
 
   it('reports zero and leaves state alone when targeted liveness throws', async () => {
     const server = await restartWithInFlightSubagent()
+
     const probeLiveLocalPty = vi.fn(() => {
       throw new Error('daemon unreachable')
     })
+
     try {
       expect(
         await sweepWith(server, {
@@ -536,16 +571,19 @@ describe('resolveAgentWorkspaceExecutionHostId', () => {
     connectionId: null,
     executionHostId: 'local' as const
   }
+
   const runtimeRepo = {
     id: 'runtime-repo',
     connectionId: null,
     executionHostId: 'runtime:ephemeral-vm-1' as const
   }
+
   const futureHostRepo = {
     id: 'future-repo',
     connectionId: null,
     executionHostId: 'container:future-host'
   }
+
   const deps = {
     getRepo: (repoId: string) =>
       [localRepo, runtimeRepo, futureHostRepo].find((candidate) => candidate.id === repoId),
@@ -553,12 +591,15 @@ describe('resolveAgentWorkspaceExecutionHostId', () => {
       if (worktreeId === 'local-repo::/runtime-worktree') {
         return { hostId: 'runtime:worktree-owner' }
       }
+
       if (worktreeId === 'runtime-repo::/local-worktree') {
         return { hostId: 'local' }
       }
+
       if (worktreeId === 'local-repo::/future-worktree') {
         return { hostId: 'container:future-host' }
       }
+
       return undefined
     },
     getFolderWorkspace: (id: string) =>

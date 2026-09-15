@@ -88,7 +88,9 @@ import {
 // Stdout of the relay-side pty-master cloexec patch, which runs on Linux hosts once a
 // freshly installed node-pty loads (#17915).
 const NPTY_CLOEXEC_PATCHED = 'ORCA-NPTY-CLOEXEC:patched\n'
+
 const NODE_PTY_RESET = "rm -rf 'node_modules/node-pty'"
+
 const WATCHER_RESET = "rm -rf 'node_modules/@parcel/watcher'"
 
 describe('native-deps repair probe verdicts', () => {
@@ -100,12 +102,15 @@ describe('native-deps repair probe verdicts', () => {
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
+
     for (const key of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[key]
     }
+
     for (const key of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[key]
     }
+
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -113,6 +118,7 @@ describe('native-deps repair probe verdicts', () => {
 
   function feed(execResponses: ExecResponse[]): void {
     const mockExec = vi.mocked(execCommand)
+
     for (const response of execResponses) {
       if (typeof response === 'string') {
         mockExec.mockResolvedValueOnce(response)
@@ -207,6 +213,7 @@ describe('native-deps repair probe verdicts', () => {
       .mockResolvedValueOnce('/home/u')
       .mockImplementationOnce((_conn, _command, options) => {
         options?.onStderr?.('node: --inspect-brk is not allowed in NODE_OPTIONS')
+
         return Promise.resolve('MISSING')
       })
     feed(['', 'DEAD', '', 'READY'])

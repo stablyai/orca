@@ -19,10 +19,13 @@ export function selectProjectGroupRemovalTargets(
 ): ProjectGroupRemovalTargets {
   const ownsRowHost = (rowHostId: string): boolean =>
     hostId ? catalogOwnsHost(hostId, rowHostId) : true
+
   const ownerGroups = hostId
     ? projectGroups.filter((group) => ownsRowHost(getProjectGroupHostId(group)))
     : projectGroups
+
   const groupExists = ownerGroups.some((group) => group.id === groupId)
+
   if (!groupExists) {
     return {
       groupExists: false,
@@ -33,6 +36,7 @@ export function selectProjectGroupRemovalTargets(
 
   const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
   const projectIds: string[] = []
+
   for (const repo of repos) {
     if (
       repo.projectGroupId &&

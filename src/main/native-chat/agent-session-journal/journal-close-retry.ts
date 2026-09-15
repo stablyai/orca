@@ -38,9 +38,11 @@ export class JournalCloseRetryRegistry {
     try {
       await journal.close()
       this.retained.delete(journal)
+
       return { closed: true }
     } catch (error) {
       this.retained.add(journal)
+
       return { closed: false, error }
     }
   }
@@ -50,12 +52,15 @@ export class JournalCloseRetryRegistry {
   async retryAll(): Promise<unknown[]> {
     const entries = [...this.retained]
     const failures: unknown[] = []
+
     for (const journal of entries) {
       const result = await this.closeOrRetain(journal)
+
       if (!result.closed) {
         failures.push(result.error)
       }
     }
+
     return failures
   }
 }

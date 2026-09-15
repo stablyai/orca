@@ -9,22 +9,26 @@ import {
 } from './helpers/computer-driver'
 
 const isWindows = process.platform === 'win32'
+
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)', () => {
   test('Calculator windows are discoverable by title and clickable', async () => {
     await ensureOrcaRuntimeLaunched()
     await launchCalculator()
+
     try {
       const apps = parseJsonOutput<{ result: ComputerListAppsResult }>(
         (await runOrcaCli(['computer', 'list-apps', '--json'])).stdout
       )
+
       // Windows 2025 hosts Calculator as win32calc; older images use ApplicationFrameHost.
       const calculatorApp = apps.result.apps.find(
         (app) =>
           (app.name === 'Calculator' && app.bundleId === 'ApplicationFrameHost') ||
           (app.name === 'win32calc' && app.bundleId === 'win32calc')
       )
+
       expect(calculatorApp).toMatchObject({ isRunning: true })
 
       const state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
@@ -39,16 +43,20 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)'
           ])
         ).stdout
       )
+
       const buttonIndex = findRoleIndex(
         state.result.snapshot.treeText,
         /^\s*(\d+)\s+button(?:\s|$)/m
       )
+
       // Classic Calculator exposes only pane nodes; clicking one still proves title routing.
       const clickIndex =
         buttonIndex >= 0
           ? buttonIndex
           : findRoleIndex(state.result.snapshot.treeText, /^\s*(\d+)\s+pane(?:\s|$)/m)
+
       expect(clickIndex, state.result.snapshot.treeText).toBeGreaterThanOrEqual(0)
+
       const clicked = parseJsonOutput<{ result: ComputerSnapshotResult }>(
         (
           await runOrcaCli([
@@ -63,6 +71,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)'
           ])
         ).stdout
       )
+
       expect(clicked.result.snapshot.elementCount).toBeGreaterThan(0)
     } finally {
       await killCalculator()
@@ -111,8 +120,10 @@ async function runPowerShell(script: string): Promise<void> {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], (error) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve()
     })
   })

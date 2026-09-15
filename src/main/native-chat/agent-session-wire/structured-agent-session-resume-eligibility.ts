@@ -28,6 +28,7 @@ export function structuredAgentSessionResumeParams(
   if (!isResumableStructuredAgentSessionRecord(record)) {
     return null
   }
+
   return attachParamsForRecord(record, {
     clientOperationId,
     expectedRuntimeFence: record.lease.runtimeFence,

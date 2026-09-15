@@ -44,19 +44,23 @@ export type MarkdownDocLinkResolution =
 
 export function stripMarkdownExtension(value: string): string {
   const lower = value.toLowerCase()
+
   for (const extension of ['.markdown', '.mdx', '.md']) {
     if (lower.endsWith(extension)) {
       return value.slice(0, -extension.length)
     }
   }
+
   return value
 }
 
 function getMarkdownDocLinkDocumentTarget(target: string): string {
   const hashIndex = target.indexOf('#')
+
   if (hashIndex <= 0) {
     return target
   }
+
   // Why: Obsidian-style [[note#Heading]] links resolve the document first;
   // the heading fragment is applied only after the file target is known.
   return target.slice(0, hashIndex)
@@ -64,18 +68,23 @@ function getMarkdownDocLinkDocumentTarget(target: string): string {
 
 export function getMarkdownDocLinkAnchor(target: string): string | null {
   const hashIndex = target.indexOf('#')
+
   if (hashIndex === -1 || hashIndex === target.length - 1) {
     return null
   }
+
   const anchor = target.slice(hashIndex + 1).trim()
+
   return anchor ? slugMarkdownHeading(anchor) : null
 }
 
 function normalizeDocLinkKey(value: string): string {
   let normalized = value.trim().replaceAll('\\', '/')
+
   while (normalized.startsWith('./')) {
     normalized = normalized.slice(2)
   }
+
   return normalized.toLowerCase()
 }
 
@@ -85,6 +94,7 @@ function addIndexedDocument(
   document: MarkdownDocument
 ): void {
   const existing = map.get(key)
+
   if (existing) {
     existing.push(document)
   } else {
@@ -96,6 +106,7 @@ function resolveMatches(matches: MarkdownDocument[] | undefined): MarkdownDocLin
   if (!matches) {
     return null
   }
+
   return matches.length === 1
     ? { status: 'resolved', document: matches[0] }
     : { status: 'ambiguous', matches }
@@ -130,6 +141,7 @@ export function resolveMarkdownDocLink(
   // so that [[docs/guide.md]] resolves uniquely even when docs/guide.mdx also
   // exists (both share the extensionless key "docs/guide").
   const relativeWithExtension = resolveMatches(index.byRelativePath.get(normalizedTarget))
+
   if (relativeWithExtension) {
     return relativeWithExtension
   }
@@ -137,12 +149,14 @@ export function resolveMarkdownDocLink(
   const relativeWithoutExtension = resolveMatches(
     index.byRelativePathWithoutExtension.get(extensionlessTarget)
   )
+
   if (relativeWithoutExtension) {
     return relativeWithoutExtension
   }
 
   if (!normalizedTarget.includes('/')) {
     const byName = resolveMatches(index.byName.get(extensionlessTarget))
+
     if (byName) {
       return byName
     }
@@ -153,13 +167,16 @@ export function resolveMarkdownDocLink(
 
 export function parseMarkdownDocLink(rawTarget: string): ParsedMarkdownDocLink | null {
   const separatorIndex = rawTarget.indexOf('|')
+
   const target =
     separatorIndex === -1 ? rawTarget.trim() : rawTarget.slice(0, separatorIndex).trim()
+
   const alias = separatorIndex === -1 ? null : rawTarget.slice(separatorIndex + 1).trim() || null
 
   if (!target || /[\r\n[\]]/.test(target) || (alias !== null && /[\r\n[\]]/.test(alias))) {
     return null
   }
+
   if (separatorIndex !== -1 && alias === null) {
     return null
   }
@@ -189,18 +206,21 @@ export function splitMarkdownDocLinkText(value: string): MarkdownDocLinkTextPart
 
   while (position < value.length) {
     const start = value.indexOf('[[', position)
+
     if (start === -1) {
       parts.push({ type: 'text', value: value.slice(position) })
       break
     }
 
     const end = value.indexOf(']]', start + 2)
+
     if (end === -1) {
       parts.push({ type: 'text', value: value.slice(position) })
       break
     }
 
     const link = parseMarkdownDocLink(value.slice(start + 2, end))
+
     if (!link) {
       parts.push({ type: 'text', value: value.slice(position, end + 2) })
       position = end + 2
@@ -210,6 +230,7 @@ export function splitMarkdownDocLinkText(value: string): MarkdownDocLinkTextPart
     if (start > position) {
       parts.push({ type: 'text', value: value.slice(position, start) })
     }
+
     parts.push({ type: 'docLink', target: link.target, label: link.label })
     position = end + 2
   }
@@ -225,6 +246,7 @@ export function parseMarkdownDocLinkHref(href: string | undefined): string | nul
   if (!href?.startsWith(MARKDOWN_DOC_LINK_PREFIX)) {
     return null
   }
+
   try {
     return decodeURIComponent(href.slice(MARKDOWN_DOC_LINK_PREFIX.length))
   } catch {
@@ -247,6 +269,7 @@ function transformChildren(node: MarkdownNode): void {
   }
 
   const nextChildren: MarkdownNode[] = []
+
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
       for (const part of splitMarkdownDocLinkText(child.value)) {

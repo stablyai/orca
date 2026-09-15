@@ -76,10 +76,12 @@ export function AutomationListExternalRow({
   const providerLabel = getExternalProviderLabel(entry.manager)
   const targetKindLabel = getExternalTargetKindLabel(entry.manager)
   const isSelected = selectedExternalKey === entry.key
+
   const sshStatus =
     entry.manager.target.type === 'ssh'
       ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
       : undefined
+
   const disabledMessage = getExternalAutomationActionDisabledMessage({
     manager: entry.manager,
     providerLabel,
@@ -87,13 +89,16 @@ export function AutomationListExternalRow({
     sshStatus,
     actionInProgress: externalActionKey !== null
   })
+
   const actionDisabled = disabledMessage !== null
   const scheduleLabel = getExternalAutomationScheduleDisplay(entry.manager, entry.job).label
   const hostLabel = entry.manager.targetLabel || entry.manager.label || 'Local'
   const projectLabel = entry.job.workdir ?? providerLabel
+
   const nextRunLabel = entry.job.enabled
     ? formatExternalDate(entry.job.nextRunAt, relativeNow)
     : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
+
   const lastRunSnapshot = getExternalAutomationLastRunSnapshot(entry.job)
 
   return (
@@ -109,12 +114,14 @@ export function AutomationListExternalRow({
             if (isPortaledRowMenuClick(event)) {
               return
             }
+
             onSelect(entry.key)
           }}
           onKeyDown={(event) => {
             if (!isRowActivationKey(event)) {
               return
             }
+
             event.preventDefault()
             onSelect(entry.key)
           }}

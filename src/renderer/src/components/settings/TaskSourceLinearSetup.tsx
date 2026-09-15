@@ -31,12 +31,14 @@ export function TaskSourceLinearSetup({
   const skillSetup = useLinearAgentSkillSetup()
 
   const connectState = checking ? 'in-progress' : connected ? 'done' : 'pending'
+
   // Skill install is independent of API connection; only gate the first-time install CTA.
   const skillState = skillSetup.skillChecking
     ? 'in-progress'
     : skillSetup.skillInstalled
       ? 'done'
       : 'pending'
+
   // Keep the panel visible while scanning so we don't flash "connect first" over an installed skill.
   const skillInstallBlocked = !connected && !skillSetup.skillInstalled && !skillSetup.skillChecking
 

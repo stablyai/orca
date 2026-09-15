@@ -83,6 +83,7 @@ describe('NotificationsPane', () => {
       openSystemSettings: vi.fn(),
       requestPermission: vi.fn()
     }
+
     vi.stubGlobal('window', {
       Notification: { permission: 'denied' },
       api: {
@@ -112,6 +113,7 @@ describe('NotificationsPane', () => {
     const toastOptions = toastMessage.mock.calls[0]?.[1] as
       | { action?: { onClick?: () => void } }
       | undefined
+
     toastOptions?.action?.onClick?.()
     expect(notifications.openSystemSettings).toHaveBeenCalledTimes(1)
   })
@@ -128,6 +130,7 @@ describe('NotificationsPane', () => {
       openSystemSettings: vi.fn(),
       requestPermission: vi.fn()
     }
+
     vi.stubGlobal('window', {
       Notification: { permission: 'granted' },
       api: {
@@ -158,6 +161,7 @@ describe('NotificationsPane', () => {
       openSystemSettings: vi.fn(),
       requestPermission: vi.fn()
     }
+
     vi.stubGlobal('window', {
       Notification: { permission: 'granted' },
       api: {
@@ -179,6 +183,7 @@ describe('NotificationsPane', () => {
     const toastOptions = toastError.mock.calls[0]?.[1] as
       | { action?: { onClick?: () => void } }
       | undefined
+
     toastOptions?.action?.onClick?.()
     expect(notifications.openSystemSettings).toHaveBeenCalledTimes(1)
   })
@@ -198,6 +203,7 @@ describe('NotificationsPane', () => {
       openSystemSettings: vi.fn(),
       requestPermission: vi.fn()
     }
+
     vi.stubGlobal('window', {
       Notification: { permission: 'granted' },
       api: {
@@ -233,6 +239,7 @@ describe('NotificationsPane', () => {
       openSystemSettings: vi.fn(),
       requestPermission: vi.fn()
     }
+
     vi.stubGlobal('window', {
       Notification: { permission: 'granted' },
       api: {

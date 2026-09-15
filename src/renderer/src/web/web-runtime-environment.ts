@@ -19,11 +19,14 @@ const ENVIRONMENT_STORAGE_KEY = 'orca.web.runtimeEnvironment.v1'
 
 export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment | null {
   const raw = window.localStorage.getItem(ENVIRONMENT_STORAGE_KEY)
+
   if (!raw) {
     return null
   }
+
   try {
     const parsed = JSON.parse(raw) as StoredWebRuntimeEnvironment
+
     if (
       !parsed.id ||
       !parsed.name ||
@@ -32,20 +35,24 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
     ) {
       return null
     }
+
     const compatibleEnvironmentIds = Array.isArray(parsed.compatibleEnvironmentIds)
       ? parsed.compatibleEnvironmentIds.filter(
           (environmentId): environmentId is string => typeof environmentId === 'string'
         )
       : []
+
     const pairedDeviceId =
       typeof parsed.pairedDeviceId === 'string' && parsed.pairedDeviceId.trim().length > 0
         ? parsed.pairedDeviceId.trim()
         : null
+
     const {
       compatibleEnvironmentIds: _unvalidatedIds,
       pairedDeviceId: _unvalidatedDeviceId,
       ...environment
     } = parsed
+
     return {
       ...environment,
       ...(pairedDeviceId ? { pairedDeviceId } : {}),
@@ -73,6 +80,7 @@ export function createStoredWebRuntimeEnvironment(args: {
   const id = `web-${createBrowserUuid()}`
   const now = Date.now()
   const compatibleEnvironmentIds = getCompatibleEnvironmentIds(args.previousEnvironment, args.offer)
+
   return {
     id,
     name: args.name.trim() || 'Orca Server',
@@ -104,6 +112,7 @@ function getCompatibleEnvironmentIds(
   if (!previous?.endpoints.some((endpoint) => endpoint.publicKeyB64 === offer.publicKeyB64)) {
     return []
   }
+
   return [...new Set([...(previous.compatibleEnvironmentIds ?? []), previous.id])]
 }
 
@@ -111,6 +120,7 @@ export function redactStoredWebRuntimeEnvironment(
   environment: StoredWebRuntimeEnvironment
 ): PublicKnownRuntimeEnvironment {
   const { compatibleEnvironmentIds: _compatibleEnvironmentIds, ...publicEnvironment } = environment
+
   return {
     ...publicEnvironment,
     endpoints: environment.endpoints.map(
@@ -127,9 +137,11 @@ export function getPreferredWebPairingOffer(
   const endpoint =
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
     environment.endpoints[0]
+
   if (!endpoint) {
     throw new Error('No runtime endpoint is stored for this web client.')
   }
+
   return {
     v: 2,
     endpoint: endpoint.endpoint,
@@ -151,7 +163,9 @@ export function updateStoredEnvironmentRuntimeId(
     updatedAt: Date.now(),
     lastUsedAt: Date.now()
   }
+
   saveStoredWebRuntimeEnvironment(next)
+
   return next
 }
 

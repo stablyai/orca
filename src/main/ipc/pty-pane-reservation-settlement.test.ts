@@ -14,45 +14,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -69,14 +85,17 @@ describe('registerPtyHandlers', () => {
     const worktreeId = 'repo-ssh::/remote/dead-stable-pane'
     const deadPtyId = `ssh:${connectionId}@@dead-relay-pty`
     const freshPtyId = `ssh:${connectionId}@@fresh-relay-pty`
+
     const remoteSpawn = vi.fn(async (options: { attachOnly?: boolean; command?: string }) => {
       if (options.attachOnly) {
         // The relay's raw wire text never reaches a pane untyped; the SSH reattach path mints the
         // proven-exit class for the one refusal the relay backed with a pid probe.
         throw new SshPtyProvenExitedOnRelayError(`${SSH_SESSION_EXPIRED_ERROR}: dead-relay-pty`)
       }
+
       return { id: freshPtyId, incarnationId: 'inc-fresh-ssh-owner' }
     })
+
     registerSshPtyProvider(connectionId, {
       spawn: remoteSpawn,
       write: vi.fn(),
@@ -98,6 +117,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     let session = {
       tabsByWorktree: {
         [worktreeId]: [{ id: tabId, worktreeId, ptyId: deadPtyId }]
@@ -112,9 +132,11 @@ describe('registerPtyHandlers', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-dead-ssh-owner' }
     }
+
     const store = {
       getWorkspaceSession: vi.fn((requestedHostId?: string) => {
         expect(requestedHostId).toBe(hostId)
+
         return session
       }),
       setWorkspaceSession: vi.fn((next, requestedHostId?: string) => {
@@ -129,6 +151,7 @@ describe('registerPtyHandlers', () => {
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => {
@@ -157,6 +180,7 @@ describe('registerPtyHandlers', () => {
         undefined,
         store as never
       )
+
       const mounted = await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -226,6 +250,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       resolveTerminalPane: vi.fn(() => ({
@@ -237,6 +262,7 @@ describe('registerPtyHandlers', () => {
       })),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term-provisional')
     }
+
     const store = {
       getWorkspaceSession: vi.fn(() => ({
         tabsByWorktree: {
@@ -302,6 +328,7 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never)
     const leafId = '77777777-7777-4777-8777-777777777777'
     const paneKey = makePaneKey('tab-host-scope', leafId)
+
     const spawn = (worktreeId: string) =>
       handlers.get('pty:spawn')!(null, {
         cols: 80,
@@ -336,6 +363,7 @@ describe('registerPtyHandlers', () => {
     // A second spawn for the same pane must run a fresh spawn rather than await the leaked (never-settled) reservation promise.
     let hangTimer: ReturnType<typeof setTimeout> | undefined
     const second = handlers.get('pty:spawn')!(null, spawnArgs) as Promise<{ id: string }>
+
     const result = await Promise.race([
       second,
       new Promise<never>((_, reject) => {
@@ -363,6 +391,7 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     let spawnCount = 0
     const providerSpawn = vi.fn(async () => ({ id: `pty-${++spawnCount}` }))
     setLocalPtyProvider({
@@ -388,10 +417,13 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const store = {
       persistPtyBinding: vi.fn()
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -418,6 +450,7 @@ describe('registerPtyHandlers', () => {
     const spawnController = controller as unknown as RuntimeSpawnController
     const leafId = '55555555-5555-4555-8555-555555555555'
     const paneKey = makePaneKey('tab-runtime-reservation', leafId)
+
     const spawnArgs = {
       cols: 80,
       rows: 24,
@@ -434,6 +467,7 @@ describe('registerPtyHandlers', () => {
     // The reservation must be gone, so a second materialization runs a fresh provider.spawn instead of awaiting the leaked promise.
     let hangTimer: ReturnType<typeof setTimeout> | undefined
     const second = spawnController.spawn(spawnArgs)
+
     const result = await Promise.race([
       second,
       new Promise<never>((_, reject) => {
@@ -443,6 +477,7 @@ describe('registerPtyHandlers', () => {
         )
       })
     ]).finally(() => clearTimeout(hangTimer))
+
     expect(result.id).toEqual(expect.any(String))
     expect(providerSpawn).toHaveBeenCalledTimes(2)
   })
@@ -459,6 +494,7 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     const remoteSpawn = vi.fn(async () => ({ id: 'ssh:ssh-1@@relay-pty' }))
     registerSshPtyProvider('ssh-1', {
       spawn: remoteSpawn,
@@ -481,6 +517,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
@@ -489,7 +526,9 @@ describe('registerPtyHandlers', () => {
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
     }
+
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value

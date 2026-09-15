@@ -29,6 +29,7 @@ vi.mock('@/components/ui/popover', () => ({
 vi.mock('./use-recent-project-ids', () => ({ useRecentProjectIds: () => [] }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 const projects: NewWorkspaceProjectOption[] = [
@@ -64,9 +65,11 @@ function field(): HTMLInputElement {
   const node = container.querySelector<HTMLInputElement>(
     'input[data-project-combobox-root="true"][role="combobox"]'
   )
+
   if (!node) {
     throw new Error('project combobox field not found')
   }
+
   return node
 }
 
@@ -80,9 +83,11 @@ function rowFor(optionId: string): HTMLElement {
   const row = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find((node) =>
     node.textContent?.includes(optionId)
   )
+
   if (!row) {
     throw new Error(`row not found for ${optionId}`)
   }
+
   return row
 }
 
@@ -129,6 +134,7 @@ describe('ProjectCombobox', () => {
     const trigger = container.querySelector<HTMLElement>(
       '[data-project-combobox-root="true"][role="combobox"]'
     )
+
     expect(trigger).toBeTruthy()
     act(() => {
       trigger?.focus()
@@ -199,6 +205,7 @@ describe('ProjectCombobox', () => {
     const addRow = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find(
       (node) => node.textContent?.includes('Add project')
     )
+
     expect(addRow).toBeTruthy()
 
     act(() => {
@@ -225,9 +232,11 @@ describe('ProjectCombobox', () => {
     type('zzzznomatch')
 
     expect(container.textContent).toContain('No projects match your search.')
+
     const addRow = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find(
       (node) => node.textContent?.includes('Add project')
     )
+
     expect(addRow).toBeTruthy()
 
     act(() => {
@@ -494,8 +503,10 @@ describe('ProjectCombobox', () => {
     expect(listbox).toBeTruthy()
     const options = Array.from(listbox?.querySelectorAll('[role="option"]') ?? [])
     expect(options.length).toBeGreaterThan(0)
+
     for (const option of options) {
       let parent = option.parentElement
+
       while (parent && parent !== listbox) {
         // A bare wrapper here breaks the listbox → option relationship for AT.
         expect(parent.getAttribute('role')).toBeTruthy()

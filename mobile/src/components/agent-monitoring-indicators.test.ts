@@ -20,6 +20,7 @@ const { animationLoop, animationTiming, setValue } = vi.hoisted(() => ({
 }))
 
 vi.mock('lucide-react-native', () => ({ Activity: 'Activity' }))
+
 vi.mock('react-native', () => ({
   Animated: {
     Value: function Value() {

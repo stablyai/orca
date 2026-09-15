@@ -9,21 +9,26 @@ export function mergeByIdentity<T>(
   const merged = [...base]
   const indexById = new Map(merged.map((entry, index) => [getIdentity(entry), index]))
   let changed = false
+
   for (const entry of overlay) {
     const identity = getIdentity(entry)
     const index = indexById.get(identity)
+
     if (index === undefined) {
       indexById.set(identity, merged.length)
       merged.push(entry)
       changed = true
       continue
     }
+
     if (structuralValuesEqual(merged[index], entry)) {
       continue
     }
+
     merged[index] = entry
     changed = true
   }
+
   return changed ? merged : base
 }
 
@@ -35,6 +40,7 @@ export function unchangedMergeSource<T>(
   if (merged === preserved && preserved.length === previous.length) {
     return previous
   }
+
   return merged
 }
 

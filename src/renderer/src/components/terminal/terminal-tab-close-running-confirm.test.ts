@@ -109,6 +109,7 @@ describe('closeTerminalTab running-process confirmation', () => {
 
   afterEach(() => {
     const store = useRunningTerminalCloseConfirmStore.getState()
+
     while (visibleRequest()) {
       store.dismissRunningTerminalClose()
     }
@@ -178,6 +179,7 @@ describe('closeTerminalTab running-process confirmation', () => {
 
   it('shows only the pinned dialog for a pinned busy tab, and its confirm does not probe', () => {
     const state = busyTabState()
+
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
       'wt-1'
     ]![0]!.isPinned = true
@@ -201,6 +203,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     const state = busyTabState({
       settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false }
     })
+
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
       'wt-1'
     ]![0]!.isPinned = true
@@ -222,6 +225,7 @@ describe('closeTerminalTab running-process confirmation', () => {
     const state = busyTabState({
       settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: false }
     })
+
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
       'wt-1'
     ]![0]!.isPinned = true

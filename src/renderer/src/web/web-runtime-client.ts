@@ -55,6 +55,7 @@ export class WebRuntimeClient {
           if (state === 'auth-failed') {
             this.statusOwner?.authenticationRejected()
           }
+
           this.statusOwner?.connectionChanged(
             state === 'connected'
               ? 'ready'
@@ -65,6 +66,7 @@ export class WebRuntimeClient {
         }
       }
     )
+
     if (options.status) {
       const status = options.status
       this.statusOwner = new RuntimeHostStatusOwner({
@@ -77,6 +79,7 @@ export class WebRuntimeClient {
           }) as Promise<RuntimeHostStatusResponse>,
         verified: (response) => {
           status.verified(response)
+
           return true
         }
       })
@@ -114,12 +117,15 @@ export class WebRuntimeClient {
         teardownRetries: this.fileWatchTeardownRetries
       })
     }
+
     const client = new WebRuntimeClient(this.pairing)
     this.childClients.add(client)
+
     const closeChild = (notifySubscriptions = false): void => {
       this.childClients.delete(client)
       client.close({ notifySubscriptions })
     }
+
     try {
       const wrappedCallbacks: WebRuntimeSubscriptionCallbacks = {
         ...callbacks,
@@ -132,12 +138,14 @@ export class WebRuntimeClient {
           closeChild()
         }
       }
+
       const handle = await client.subscribeOnCurrentConnection(
         method,
         params,
         wrappedCallbacks,
         options
       )
+
       return {
         unsubscribe: () => {
           handle.unsubscribe()
@@ -154,9 +162,11 @@ export class WebRuntimeClient {
   close(options: { notifySubscriptions?: boolean } = {}): void {
     this.statusOwner?.dispose()
     const shouldNotifySubscriptions = options.notifySubscriptions ?? true
+
     for (const child of Array.from(this.childClients)) {
       child.close({ notifySubscriptions: shouldNotifySubscriptions })
     }
+
     this.childClients.clear()
     this.fileWatchTeardownRetries.clear()
     this.transport.close(options)
@@ -172,14 +182,17 @@ export class WebRuntimeClient {
     const id = this.nextId()
     const subscription = { id, method, params, callbacks, needsReplay: false }
     this.subscriptions.set(id, subscription)
+
     if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
       this.subscriptions.delete(id)
       throw new Error('Remote Orca runtime is not connected.')
     }
+
     return {
       unsubscribe: () => {
         this.subscriptions.delete(subscription.id)
         const teardown = options?.buildUnsubscribe?.(params)
+
         if (teardown) {
           this.sendEncrypted({
             id: this.nextId(),

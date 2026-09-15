@@ -390,6 +390,7 @@ describe('Branch source results', () => {
       siteId: 'site-1',
       title: 'Link Jira'
     } as never
+
     const rows = buildSmartWorkspaceSourceRows({
       mode: 'smart',
       value: 'https://company.atlassian.net/browse/ORCA-123',
@@ -430,6 +431,7 @@ describe('Branch source results', () => {
       key: 'ORCA-123',
       siteId: 'site-1'
     } as never
+
     expect(
       buildSmartWorkspaceSourceRows({
         mode: 'smart',
@@ -563,6 +565,7 @@ describe('Linear issue source input', () => {
       identifier: 'STA-4084',
       url: issueUrl
     } as never
+
     const rows = buildSmartWorkspaceSourceRows({
       mode: 'smart',
       value: issueUrl,
@@ -627,11 +630,13 @@ describe('Linear issue source input', () => {
       identifier: 'STA-4084',
       url: 'https://linear.app/other/issue/STA-4084'
     } as never
+
     const exactIssue = {
       id: 'stably-issue',
       identifier: 'STA-4084',
       url: issueUrl
     } as never
+
     const unrelatedIssue = {
       id: 'unrelated-issue',
       identifier: 'STA-9999',
@@ -659,6 +664,7 @@ describe('Linear issue source input', () => {
       identifier: 'STA-4084',
       url: issueUrl
     } as never
+
     const other = {
       id: 'other-issue',
       identifier: 'STA-9999',
@@ -744,6 +750,7 @@ describe('Jira issue search', () => {
       siteId: 'site-1',
       title: 'Search Jira'
     } as never
+
     const rows = buildSmartWorkspaceSourceRows({
       mode: 'jira',
       value: 'search',

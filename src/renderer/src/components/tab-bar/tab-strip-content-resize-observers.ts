@@ -7,6 +7,7 @@ export function bindTabStripContentResizeObservers(
   const observeTargets = (): void => {
     resizeObserver.disconnect()
     resizeObserver.observe(strip)
+
     for (const child of strip.children) {
       if (child instanceof HTMLElement) {
         resizeObserver.observe(child)
@@ -20,6 +21,7 @@ export function bindTabStripContentResizeObservers(
     observeTargets()
     onResize()
   })
+
   mutationObserver.observe(strip, { childList: true })
 
   return () => {

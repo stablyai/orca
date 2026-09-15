@@ -26,12 +26,15 @@ function decode(buffer: Buffer): Record<string, unknown> | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
+
   return JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
 }
 
 function notification(buffer: Buffer): Notification | null {
   const message = decode(buffer)
+
   return typeof message?.method === 'string' && message.id === undefined
     ? (message as Notification)
     : null
@@ -39,6 +42,7 @@ function notification(buffer: Buffer): Notification | null {
 
 function responseResult(buffer: Buffer): Record<string, unknown> | null {
   const message = decode(buffer)
+
   return !message || message.id === undefined
     ? null
     : ((message.result as Record<string, unknown>) ?? null)
@@ -64,13 +68,17 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         const frame = notification(data)
+
         if (frame?.method === 'pty.exit') {
           exitSettlements.push(onSettled)
+
           if (holdExitSettlement) {
             return true
           }
         }
+
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -78,11 +86,13 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
     )
     let publication: RelayPtySourcePublication
     let creditNoticeEnabled = true
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) => {
       if (creditNoticeEnabled) {
         publication.onCreditAvailable(id)
       }
     })
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, (id) => capacityIds.push(id))
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -103,6 +113,7 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       })
     ).toBe('opened')
     activationSettlements[0]({ ok: true })
+
     return {
       adapter,
       publication,
@@ -195,6 +206,7 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
 
   it('retires the record when the reconnect grace expires', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] })
+
     try {
       const harness = await createHarness()
       harness.publication.publish('pty-1', { data: 'data' }, false)

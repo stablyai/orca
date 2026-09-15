@@ -37,6 +37,7 @@ describe('Gemini hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('read_file')
     expect(result?.payload.toolInput).toBe('/src/index.ts')
@@ -52,6 +53,7 @@ describe('Gemini hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('run_shell_command')
     expect(result?.payload.toolInput).toBe('git status')
   })
@@ -66,11 +68,13 @@ describe('Gemini hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'gemini',
       buildBody({ hook_event_name: 'BeforeAgent' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBeUndefined()
     expect(result?.payload.toolInput).toBeUndefined()
@@ -82,6 +86,7 @@ describe('Gemini hook normalization', () => {
       buildBody({ hook_event_name: 'AfterAgent' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.toolName).toBeUndefined()
   })
@@ -97,6 +102,7 @@ describe('Gemini hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.lastAssistantMessage).toBe('I ran the tests and they passed.')
   })

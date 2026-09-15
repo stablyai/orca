@@ -30,6 +30,7 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
 
   it('uses an explicit runtime owner without scanning ambiguous child SSH repos', () => {
     let projectGroupReads = 0
+
     const repos: readonly Repo[] = Array.from({ length: 100 }, (_, index) => {
       const repo: Repo = {
         id: `repo-${index}`,
@@ -40,15 +41,19 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
         badgeColor: 'blue',
         addedAt: 1
       }
+
       Object.defineProperty(repo, 'projectGroupId', {
         enumerable: true,
         get: () => {
           projectGroupReads += 1
+
           return 'runtime-group'
         }
       })
+
       return repo
     })
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'focused-env' },
       folderWorkspaces: [
@@ -122,34 +127,43 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
   it('builds one owner index per cold worktree and repo snapshot', () => {
     let worktreeIdReads = 0
     let repoIdReads = 0
+
     const repos = Array.from({ length: 100 }, (_, index) => {
       const repo = {
         connectionId: null,
         executionHostId: 'local'
       }
+
       Object.defineProperty(repo, 'id', {
         enumerable: true,
         get: () => {
           repoIdReads += 1
+
           return `repo-${index}`
         }
       })
+
       return repo
     })
+
     const worktrees = Array.from({ length: 100 }, (_, index) => {
       const worktree = {
         repoId: `repo-${index}`,
         hostId: undefined
       }
+
       Object.defineProperty(worktree, 'id', {
         enumerable: true,
         get: () => {
           worktreeIdReads += 1
+
           return `worktree-${index}`
         }
       })
+
       return worktree
     })
+
     const state = {
       settings: { activeRuntimeEnvironmentId: null },
       folderWorkspaces: [],

@@ -41,9 +41,11 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
   if (installation.status === 'inaccessible') {
     return 'inaccessible'
   }
+
   if (!isOwnerManagedSkillScope(installation.topology) && installation.status === 'unrecognized') {
     return 'unrecognized'
   }
+
   switch (installation.topology) {
     case 'independent-copy':
       return 'duplicate'
@@ -66,6 +68,7 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
       if (installation.status === 'current') {
         return 'current'
       }
+
       return installation.status === 'newer-known' ? 'newer' : null
   }
 }
@@ -95,12 +98,15 @@ export function groupSkillFreshness(
   const eligible = new Set(eligibleUpdateNames)
   const pinned = new Set(alwaysIncludeNames)
   const byName = new Map<string, SkillFreshnessInstallation[]>()
+
   for (const installation of installations) {
     const entries = byName.get(installation.name) ?? []
     entries.push(installation)
     byName.set(installation.name, entries)
   }
+
   const groups: SkillFreshnessGroupModel[] = []
+
   for (const [name, entries] of byName) {
     // Why: the inclusion test only consults placements the global update can reach, so a
     // skill whose only finding is a project-owned copy raises no row at all — a "Skipped"
@@ -115,6 +121,7 @@ export function groupSkillFreshness(
     ) {
       continue
     }
+
     const locations = entries
       .map((entry) => ({
         id: entry.id,
@@ -123,11 +130,13 @@ export function groupSkillFreshness(
         participatesInGlobalFreshness: skillPlacementParticipatesInGlobalFreshness(entry)
       }))
       .sort((left, right) => left.path.localeCompare(right.path, 'en'))
+
     groups.push({
       name,
       status: eligible.has(name) ? 'update-available' : 'cannot-update',
       locations
     })
   }
+
   return groups.sort((left, right) => left.name.localeCompare(right.name, 'en'))
 }

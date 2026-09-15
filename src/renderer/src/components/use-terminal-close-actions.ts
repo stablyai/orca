@@ -8,6 +8,7 @@ import type { TerminalCreateController } from './use-terminal-create-actions'
 
 export function useTerminalCloseActions(controller: TerminalCreateController) {
   const { consumeSuppressedPtyExit } = controller
+
   const handleCloseTab = useCallback((tabId: string) => {
     closeTerminalTab(tabId)
   }, [])
@@ -24,16 +25,20 @@ export function useTerminalCloseActions(controller: TerminalCreateController) {
       if (consumeSuppressedPtyExit(ptyId)) {
         return
       }
+
       // A negative code is the host-loss sentinel, not proof that the remote
       // process exited. Keep the mounted tab for reconnect/reveal to recover.
       if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
         useAppStore.getState().markUnverifiedPtyLoss(tabId)
+
         return
       }
+
       // Why: a parked multi-leaf tab has no PaneManager to promote split siblings, so closing here would kill them; reveal-remount handles dead PTYs per leaf.
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }
+
       closeTerminalTab(tabId, { reason: 'pty-exit', lifecyclePtyId: ptyId })
     },
     [consumeSuppressedPtyExit]

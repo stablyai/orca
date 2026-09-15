@@ -11,6 +11,7 @@ import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(length)
 }))
@@ -27,11 +28,13 @@ describe('served relay pairing recovery', () => {
   it('uses the configured director after an HTTP 502 WebSocket upgrade response', async () => {
     const cellUrl = await serveUpgradeFailure(502)
     const journal = createJournal(cellUrl)
+
     const resolvedRelay = {
       ...relayFromJournal(journal),
       cellUrl: 'https://c2.relay-staging.onorca.dev',
       assignmentEpoch: 8
     }
+
     const resolveDirector = vi.fn(async () => resolvedRelay)
     const persistMove = vi.fn(async () => {})
     const target = successfulClient()
@@ -55,6 +58,7 @@ describe('served relay pairing recovery', () => {
     const cellUrl = await serveCloseCode(4404)
     const journal = createJournal(cellUrl)
     const resolveDirector = vi.fn()
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: servedPhysicalClient,
@@ -98,6 +102,7 @@ async function serveUpgradeFailure(status: number): Promise<string> {
   server.on('upgrade', (_request, socket) => {
     socket.end(`HTTP/1.1 ${status} Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
   })
+
   return listen(server)
 }
 
@@ -105,6 +110,7 @@ async function serveCloseCode(code: number): Promise<string> {
   const server = createServer()
   const sockets = new WebSocketServer({ server })
   sockets.on('connection', (socket) => socket.close(code, 'host offline'))
+
   return listen(server)
 }
 
@@ -112,6 +118,7 @@ async function listen(server: Server): Promise<string> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   servers.push(server)
   const address = server.address() as AddressInfo
+
   return `http://127.0.0.1:${address.port}`
 }
 

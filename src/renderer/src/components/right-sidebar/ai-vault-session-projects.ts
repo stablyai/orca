@@ -1,5 +1,7 @@
 import { resolveActiveProjectKey, toAiVaultProjectKey } from './ai-vault-project-key'
+
 export { toAiVaultProjectKey } from './ai-vault-project-key'
+
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -86,31 +88,40 @@ export function buildAiVaultSessionProjectById({
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const setupByRepoId = buildSetupByRepoId(projectHostSetupProjection.setups)
   const projectLabelByKey = buildProjectLabelByKey(repos, projectHostSetupProjection)
+
   const candidates = buildProjectCandidates(
     worktrees,
     projectHostSetupProjection,
     repoById,
     setupByRepoId
   )
+
   const sessionProjectById = new Map<string, AiVaultSessionProject>()
+
   const projectsByHostAndCwd = new Map<
     ExecutionHostId | null,
     Map<string | null, AiVaultSessionProject>
   >()
+
   for (const session of sessions) {
     const host = normalizeExecutionHostId(session.executionHostId)
     let projectsByCwd = projectsByHostAndCwd.get(host)
+
     if (!projectsByCwd) {
       projectsByCwd = new Map()
       projectsByHostAndCwd.set(host, projectsByCwd)
     }
+
     let project = projectsByCwd.get(session.cwd)
+
     if (!project) {
       project = resolveSessionProject(session, candidates, projectLabelByKey)
       projectsByCwd.set(session.cwd, project)
     }
+
     sessionProjectById.set(session.id, { ...project })
   }
+
   return sessionProjectById
 }
 
@@ -118,11 +129,13 @@ function buildSetupByRepoId(
   setups: readonly ProjectHostSetup[]
 ): ReadonlyMap<string, ProjectHostSetup> {
   const setupByRepoId = new Map<string, ProjectHostSetup>()
+
   for (const setup of setups) {
     if (setup.repoId && !setupByRepoId.has(setup.repoId)) {
       setupByRepoId.set(setup.repoId, setup)
     }
   }
+
   return setupByRepoId
 }
 
@@ -131,12 +144,14 @@ function buildProjectLabelByKey(
   projection: ProjectHostSetupProjection
 ): Map<string, string> {
   const labels = new Map<string, string>()
+
   const projectLabelById = new Map(
     projection.projects.map((project) => [project.id, project.displayName])
   )
 
   for (const project of projection.projects) {
     const key = toAiVaultProjectKey(project.id, project.sourceRepoIds[0])
+
     if (key && !key.startsWith('repo:')) {
       labels.set(key, project.displayName)
     }
@@ -148,6 +163,7 @@ function buildProjectLabelByKey(
 
   for (const setup of projection.setups) {
     const key = toAiVaultProjectKey(setup.projectId, setup.repoId)
+
     if (key && !labels.has(key)) {
       labels.set(key, projectLabelById.get(setup.projectId) ?? setup.displayName)
     }
@@ -169,6 +185,7 @@ function buildProjectCandidates(
     if (!hasCandidatePath(worktree.path)) {
       continue
     }
+
     const repo = repoById.get(worktree.repoId)
     const setup = setupByRepoId.get(worktree.repoId)
     candidates.push(
@@ -192,9 +209,11 @@ function buildProjectCandidates(
         setupRepoIds.add(setup.repoId)
       }
     }
+
     if (!hasCandidatePath(setup.path)) {
       continue
     }
+
     candidates.push(
       makeProjectCandidate({
         source: 'setup',
@@ -210,9 +229,11 @@ function buildProjectCandidates(
     if (setupRepoIds.has(repo.id)) {
       continue
     }
+
     if (!hasCandidatePath(repo.path)) {
       continue
     }
+
     candidates.push(
       makeProjectCandidate({
         source: 'setup',
@@ -232,6 +253,7 @@ function makeProjectCandidate(
 ): SessionProjectCandidate {
   const { path, ...rest } = fields
   const normalizedPath = normalizeRuntimePathForComparison(path)
+
   return {
     ...rest,
     normalizedPath,
@@ -244,10 +266,12 @@ function resolveCandidateHostId(
 ): ExecutionHostId {
   for (const value of values) {
     const hostId = normalizeExecutionHostId(value)
+
     if (hostId) {
       return hostId
     }
   }
+
   return LOCAL_EXECUTION_HOST_ID
 }
 
@@ -261,6 +285,7 @@ function resolveSessionProject(
   projectLabelByKey: ReadonlyMap<string, string>
 ): AiVaultSessionProject {
   const cwd = session.cwd
+
   if (!cwd) {
     return { kind: 'unknown', key: 'unknown', label: '' }
   }
@@ -268,9 +293,11 @@ function resolveSessionProject(
   const normalizedCwd = normalizeRuntimePathForComparison(cwd)
   const matches = candidates.filter((candidate) => candidate.ownsNormalizedCwd(normalizedCwd))
   const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+
   const hostMatches = sessionHostId
     ? matches.filter((candidate) => candidate.hostKey === sessionHostId)
     : matches
+
   if (sessionHostId && matches.length > 0 && hostMatches.length === 0) {
     // Why: same-path projects can exist on several hosts; a tagged transcript
     // should never be attributed to a project on a different machine.
@@ -278,16 +305,19 @@ function resolveSessionProject(
   }
 
   const hostBuckets = new Set(hostMatches.map((candidate) => candidate.hostKey))
+
   if (!sessionHostId && hostBuckets.size > 1) {
     return folderProject(cwd)
   }
 
   const bestCandidate = hostMatches.sort(compareCandidates)[0]
+
   if (!bestCandidate) {
     return folderProject(cwd)
   }
 
   const key = toAiVaultProjectKey(bestCandidate.projectId, bestCandidate.repoId)
+
   if (!key) {
     return folderProject(cwd)
   }
@@ -304,12 +334,15 @@ function resolveSessionProject(
 
 function compareCandidates(left: SessionProjectCandidate, right: SessionProjectCandidate): number {
   const lengthDifference = right.normalizedPath.length - left.normalizedPath.length
+
   if (lengthDifference !== 0) {
     return lengthDifference
   }
+
   if (left.source === right.source) {
     return 0
   }
+
   return left.source === 'worktree' ? -1 : 1
 }
 

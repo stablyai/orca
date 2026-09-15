@@ -16,15 +16,18 @@ export type PtyIpcSuiteFixtures = ReturnType<typeof createPtyIpcSuiteEnvironment
 export function setupPtyIpcSuite(): PtyIpcSuiteFixtures {
   const environment = createPtyIpcSuiteEnvironment()
   const providers = createPtyIpcProviderFixtures({ mainWindow: environment.mainWindow })
+
   const listeners = createPtyIpcListenerAccessors({
     handlers: environment.handlers,
     mainWindow: environment.mainWindow as never,
     mainWindowIpcEvent: environment.mainWindowIpcEvent
   })
+
   const spawns = createPtyIpcSpawnDrivers({
     handlers: environment.handlers,
     mainWindow: environment.mainWindow,
     createMockProc: providers.createMockProc as never
   })
+
   return { ...environment, ...providers, ...listeners, ...spawns }
 }

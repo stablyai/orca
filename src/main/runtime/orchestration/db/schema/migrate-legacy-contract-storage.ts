@@ -13,9 +13,11 @@ export function migrateLegacyContractStorage(this: OrchestrationDb): void {
        ADD COLUMN contract_version INTEGER NOT NULL DEFAULT ${CURRENT_CONTRACT_VERSION}`
     )
   }
+
   if (!this.hasColumn('dispatch_contexts', 'launch_token_hash')) {
     this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN launch_token_hash TEXT')
   }
+
   if (!this.hasColumn('messages', 'delivery_contract')) {
     this.db.exec(
       `ALTER TABLE messages
@@ -23,6 +25,7 @@ export function migrateLegacyContractStorage(this: OrchestrationDb): void {
        CHECK(delivery_contract IN ('legacy_direct', 'current_delivery', 'audit_only'))`
     )
   }
+
   this.db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_delivery_contract
       ON messages(run_id, delivery_contract, to_handle, read, sequence);
@@ -99,18 +102,22 @@ export function classifyLegacyMessageContracts(
   const contractFilter = adoptedOnly
     ? " AND delivery_contract IN ('legacy_direct', 'audit_only')"
     : ''
+
   this.db
     .prepare(
       `UPDATE messages SET delivery_contract = 'legacy_direct'
        WHERE run_id = ?${contractFilter}`
     )
     .run(runId)
+
   const rows = this.db
     .prepare(`SELECT id, payload FROM messages WHERE run_id = ?${contractFilter}`)
     .all(runId) as { id: string; payload: string | null }[]
+
   const markAuditOnly = this.db.prepare(
     "UPDATE messages SET delivery_contract = 'audit_only' WHERE id = ? AND run_id = ?"
   )
+
   for (const row of rows) {
     if (hasLifecycleRejectionMarker(row.payload)) {
       markAuditOnly.run(row.id, runId)
@@ -122,6 +129,7 @@ export function migrateLegacySchedulerLossProvenance(this: OrchestrationDb): voi
   this.ensureLegacySchedulerLossColumn()
   this.adoptLegacyRunIfNeeded()
   const adoption = this.getLegacyAdoption()
+
   if (adoption) {
     this.classifyLegacyMessageContracts(adoption.adopted_run_id, true)
   }

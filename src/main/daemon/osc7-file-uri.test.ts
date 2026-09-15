@@ -16,6 +16,7 @@ describe('parseFileUriPath', () => {
   it('keeps remote OSC7 authorities as POSIX paths for SSH PTYs on Windows', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       expect(
         parseFileUriPathParts('file://remote-host/home/me/repo', {
@@ -36,6 +37,7 @@ describe('parseFileUriPath', () => {
   it('parses Windows SSH OSC7 drive paths independent of the desktop platform', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+
     try {
       expect(parseFileUriPathParts('file:///C:/Users/me/repo', { pathFlavor: 'win32' })).toEqual({
         path: 'C:/Users/me/repo',

@@ -14,12 +14,15 @@ type DiffEditorWithPanes = {
 
 function getHorizontalWheelPixels(event: WheelEvent, pageWidth: number): number {
   const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
     return delta * WHEEL_LINE_PIXELS
   }
+
   if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
     return delta * pageWidth
   }
+
   return delta
 }
 
@@ -29,6 +32,7 @@ function canScrollHorizontally(editor: HorizontalScrollEditor): boolean {
 
 function installPaneShiftWheelScroll(editor: HorizontalScrollEditor): () => void {
   const container = editor.getContainerDomNode()
+
   const handleWheel = (event: WheelEvent): void => {
     if (event.defaultPrevented || !event.shiftKey) {
       return
@@ -40,6 +44,7 @@ function installPaneShiftWheelScroll(editor: HorizontalScrollEditor): () => void
     }
 
     const delta = getHorizontalWheelPixels(event, container.clientWidth)
+
     if (delta === 0) {
       return
     }
@@ -51,12 +56,14 @@ function installPaneShiftWheelScroll(editor: HorizontalScrollEditor): () => void
   }
 
   container.addEventListener('wheel', handleWheel, { capture: true, passive: false })
+
   return () => container.removeEventListener('wheel', handleWheel, true)
 }
 
 export function installDiffEditorShiftWheelScroll(editor: DiffEditorWithPanes): () => void {
   const cleanupOriginal = installPaneShiftWheelScroll(editor.getOriginalEditor())
   const cleanupModified = installPaneShiftWheelScroll(editor.getModifiedEditor())
+
   return () => {
     cleanupOriginal()
     cleanupModified()

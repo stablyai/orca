@@ -45,6 +45,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
       postDaemonAlive: true,
       reattachProven: true
     }
+
     expect(buildCrashAssertions(base).every((entry) => entry.pass)).toBe(true)
     expect(
       buildCrashAssertions({ ...base, postDaemonPid: 202 }).find((entry) =>
@@ -72,6 +73,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
     expect(() =>
       scanPwshFailFast(1234, (received) => {
         command = received
+
         return { code: 1, stdout: '', stderr: 'access denied', error: null }
       })
     ).toThrow('pwsh-failfast scan failed (exit 1): access denied')
@@ -173,12 +175,14 @@ describe('win-crash-survival-e2e proof contracts', () => {
         process: () => ({ pid: 111 })
       })
     ).toBe(222)
+
     const unavailableApp = {
       evaluate: async () => {
         throw new Error('main unavailable')
       },
       process: () => ({ pid: 111 })
     }
+
     expect(
       await resolveElectronMainPid(unavailableApp, { allowLauncherFallback: false })
     ).toBeNull()
@@ -187,6 +191,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
 
   it('bounds main PID resolution when the Electron connection is wedged', async () => {
     vi.useFakeTimers()
+
     try {
       const result = resolveElectronMainPid(
         {
@@ -195,6 +200,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
         },
         { timeoutMs: 20 }
       )
+
       await vi.advanceTimersByTimeAsync(20)
       await expect(result).resolves.toBe(333)
     } finally {
@@ -204,6 +210,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
 
   it('releases the close deadline after a successful app close', async () => {
     vi.useFakeTimers()
+
     try {
       await closeApp({
         evaluate: async () => 444,

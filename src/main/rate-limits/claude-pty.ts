@@ -23,6 +23,7 @@ import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
 import { CLAUDE_USAGE_STOP_SUBSTRINGS } from './claude-pty-stop-markers'
 
 const PTY_TIMEOUT_MS = 25_000
+
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
 
 // ---------------------------------------------------------------------------
@@ -35,9 +36,13 @@ const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
 // for the CLI to initialize, then send `/usage\r` directly. Command
 // palette prompts ("Show plan usage limits") are auto-confirmed with Enter.
 const COMMAND_PALETTE_RE = /show plan|usage limits/i
+
 const TRUST_PROMPT_RE = /do you trust|trust the files|safety check/i
+
 const STARTUP_DELAY_MS = 2_000
+
 const SETTLE_AFTER_STOP_MS = 2_000
+
 const SETTLE_AFTER_CLAUDE_21_USAGE_MS = 8_000
 
 export async function fetchViaPty(options?: {
@@ -48,7 +53,9 @@ export async function fetchViaPty(options?: {
   if (options?.signal?.aborted) {
     return abortedClaudeUsageResult()
   }
+
   const pty = await import('node-pty')
+
   if (options?.signal?.aborted) {
     return abortedClaudeUsageResult()
   }
@@ -69,11 +76,13 @@ export async function fetchViaPty(options?: {
     // those need cmd.exe as an interpreter. Always route through cmd.exe on win32
     // and ensure the command path is properly quoted if it contains spaces.
     const isWin32 = process.platform === 'win32'
+
     const spawnEnv = applyClaudeEnvPatch(
       { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
       options?.authPreparation?.envPatch ?? {},
       { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
     )
+
     // Why: this hidden usage PTY spawns `claude` directly, not the user's shell
     // wrapper, so without the configured proxy it would reach api.anthropic.com
     // from the app's own IP — bypassing the proxy the user set for Claude and
@@ -81,6 +90,7 @@ export async function fetchViaPty(options?: {
     const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
     Object.assign(spawnEnv, proxyEnv)
     const authPreparation = options?.authPreparation
+
     const wslConfig =
       authPreparation?.runtime === 'wsl' &&
       authPreparation.wslDistro &&
@@ -90,7 +100,9 @@ export async function fetchViaPty(options?: {
             linuxConfigDir: authPreparation.wslLinuxConfigDir
           }
         : null
+
     const spawnFile = wslConfig ? 'wsl.exe' : isWin32 ? 'cmd.exe' : claudeCommand
+
     const spawnArgs = wslConfig
       ? [
           '-d',
@@ -124,6 +136,7 @@ export async function fetchViaPty(options?: {
       cwd: resolveHiddenRateLimitPtyCwd(),
       env: withCliRuntimeOnPath(claudeCommand, spawnEnv)
     })
+
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
     let enterInterval: ReturnType<typeof setInterval> | null = null
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -133,14 +146,17 @@ export async function fetchViaPty(options?: {
         clearTimeout(startupDelayTimer)
         startupDelayTimer = null
       }
+
       if (stopSettleTimer) {
         clearTimeout(stopSettleTimer)
         stopSettleTimer = null
       }
+
       if (claude21UsageSettleTimer) {
         clearTimeout(claude21UsageSettleTimer)
         claude21UsageSettleTimer = null
       }
+
       if (enterInterval) {
         clearInterval(enterInterval)
         enterInterval = null
@@ -151,11 +167,14 @@ export async function fetchViaPty(options?: {
       if (resolved) {
         return
       }
+
       resolved = true
+
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       clearFollowupTimers()
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
       resolve(abortedClaudeUsageResult())
@@ -164,8 +183,10 @@ export async function fetchViaPty(options?: {
     if (options?.signal) {
       if (options.signal.aborted) {
         settleAborted()
+
         return
       }
+
       options.signal.addEventListener('abort', settleAborted, { once: true })
       termDisposables.push({
         dispose: () => options.signal?.removeEventListener('abort', settleAborted)
@@ -180,6 +201,7 @@ export async function fetchViaPty(options?: {
         // Even on timeout, try to parse whatever we collected
         const clean = stripTerminalControlSequences(output)
         const { session, weekly, fableWeekly } = parseClaudePtyUsage(clean)
+
         if (session || weekly || fableWeekly) {
           resolve({
             provider: 'claude',
@@ -214,6 +236,7 @@ export async function fetchViaPty(options?: {
       if (enterInterval) {
         return
       }
+
       enterInterval = setInterval(() => {
         if (!resolved && !stopDetected) {
           term.write('\r')
@@ -225,11 +248,14 @@ export async function fetchViaPty(options?: {
       if (resolved) {
         return
       }
+
       resolved = true
+
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       clearFollowupTimers()
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
@@ -262,9 +288,11 @@ export async function fetchViaPty(options?: {
     // directly without detecting the prompt character (see comment above).
     startupDelayTimer = setTimeout(() => {
       startupDelayTimer = null
+
       if (resolved) {
         return
       }
+
       sentUsage = true
       term.write('/usage\r')
       startEnterPresses()
@@ -272,6 +300,7 @@ export async function fetchViaPty(options?: {
 
     const onDataDisposable = term.onData((data) => {
       output += data
+
       // Why: prevent memory exhaustion if the CLI process floods output
       if (output.length > MAX_OUTPUT_LENGTH) {
         output = output.slice(-MAX_OUTPUT_LENGTH)
@@ -283,6 +312,7 @@ export async function fetchViaPty(options?: {
       // workspace directory). Auto-accept so we can reach /usage.
       if (TRUST_PROMPT_RE.test(cleanChunk)) {
         term.write('y\r')
+
         return
       }
 
@@ -296,17 +326,21 @@ export async function fetchViaPty(options?: {
       // Check if we've hit a stop substring indicating the panel rendered
       if (sentUsage && !stopDetected) {
         const clean = stripTerminalControlSequences(output)
+
         if (!claude21UsageDetected && isClaude21UsagePanel(clean)) {
           claude21UsageDetected = true
+
           if (enterInterval) {
             clearInterval(enterInterval)
             enterInterval = null
           }
+
           // Why: Claude 2.1 may render session stats without subscription
           // plan windows. Give async usage loading a grace period, then finish
           // with a user-facing unavailable state instead of a false PTY timeout.
           claude21UsageSettleTimer = setTimeout(finalize, SETTLE_AFTER_CLAUDE_21_USAGE_MS)
         }
+
         for (const sub of CLAUDE_USAGE_STOP_SUBSTRINGS) {
           if (clean.includes(sub)) {
             stopDetected = true
@@ -318,6 +352,7 @@ export async function fetchViaPty(options?: {
         }
       }
     })
+
     if (onDataDisposable) {
       termDisposables.push(onDataDisposable)
     }
@@ -325,12 +360,15 @@ export async function fetchViaPty(options?: {
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
       clearFollowupTimers()
+
       if (!resolved) {
         resolved = true
+
         if (timeout) {
           clearTimeout(timeout)
           timeout = null
         }
+
         const clean = stripTerminalControlSequences(output)
         const { session, weekly, fableWeekly } = parseClaudePtyUsage(clean)
         resolve({
@@ -347,6 +385,7 @@ export async function fetchViaPty(options?: {
         })
       }
     })
+
     if (onExitDisposable) {
       termDisposables.push(onExitDisposable)
     }

@@ -12,12 +12,14 @@ export function pruneAutomationRuns(
   // Why: a dispatched run's completion can land hours later, and
   // updateAutomationRun throws if its row is gone — only final runs are evictable.
   const finalRuns = runs.filter((run) => isFinalAutomationRunStatus(run.status))
+
   for (const automationRuns of Map.groupBy(finalRuns, (run) => run.automationId).values()) {
     // Why: `createdAt` is the append time; `scheduledFor` breaks ties so runs
     // minted in the same millisecond drop in a stable, reproducible order.
     if (automationRuns.length > maxPerAutomation) {
       automationRuns.sort((a, b) => b.createdAt - a.createdAt || b.scheduledFor - a.scheduledFor)
     }
+
     // Why: clamp — a negative `slice` end drops from the tail instead of keeping nothing.
     for (const run of automationRuns.slice(0, Math.max(0, maxPerAutomation))) {
       kept.add(run.id)
@@ -39,18 +41,22 @@ export function pruneAutomationRuns(
  */
 export function backfillAutomationRunNumbers(runs: readonly AutomationRun[]): AutomationRun[] {
   const highestPerAutomation = new Map<string, number>()
+
   for (const run of runs) {
     if (run.runNumber !== undefined) {
       const highest = highestPerAutomation.get(run.automationId) ?? 0
       highestPerAutomation.set(run.automationId, Math.max(highest, run.runNumber))
     }
   }
+
   return runs.map((run) => {
     if (run.runNumber !== undefined) {
       return run
     }
+
     const runNumber = (highestPerAutomation.get(run.automationId) ?? 0) + 1
     highestPerAutomation.set(run.automationId, runNumber)
+
     return { ...run, runNumber }
   })
 }

@@ -26,10 +26,12 @@ export function useCombinedDiffNotesActions({
   worktreeId: string
 }): CombinedDiffNotesActions {
   const diffCommentCount = diffCommentsForWorktree.length
+
   const diffCommentsPrompt = React.useMemo(
     () => formatDiffComments(diffCommentsForWorktree),
     [diffCommentsForWorktree]
   )
+
   const previewDiffComments = React.useMemo(
     () =>
       [...diffCommentsForWorktree]
@@ -41,10 +43,12 @@ export function useCombinedDiffNotesActions({
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const clearNotesDialogVisible = clearNotesDialogOpen && (diffCommentCount > 0 || isClearingNotes)
+
   if (clearNotesDialogOpen && !clearNotesDialogVisible) {
     // Why: notes may be cleared outside this dialog; close it this render instead of flashing an empty confirmation.
     setClearNotesDialogOpen(false)
   }
+
   const [notesCopied, setNotesCopied] = useState(false)
   const mountedRef = useRef(true)
   // Why: the copy action owns its reset timer instead of repairing copied state after render.
@@ -54,6 +58,7 @@ export function useCombinedDiffNotesActions({
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }
@@ -69,6 +74,7 @@ export function useCombinedDiffNotesActions({
   const setScrollSurfaceMounted = useCallback(
     (mounted: boolean): void => {
       notesCopyMountedRef.current = mounted
+
       if (!mounted) {
         // Why: copied feedback is tied to the surface lifetime; the root-ref unmount is where stale feedback gets disabled.
         clearNotesCopiedResetTimer()
@@ -81,11 +87,14 @@ export function useCombinedDiffNotesActions({
     if (diffCommentCount === 0) {
       return
     }
+
     try {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
+
       if (!notesCopyMountedRef.current) {
         return
       }
+
       clearNotesCopiedResetTimer()
       setNotesCopied(true)
       notesCopiedResetTimerRef.current = window.setTimeout(() => {
@@ -101,12 +110,16 @@ export function useCombinedDiffNotesActions({
     if (diffCommentCount === 0 || isClearingNotes) {
       return
     }
+
     setIsClearingNotes(true)
+
     try {
       const ok = await clearDiffComments(worktreeId)
+
       if (!mountedRef.current) {
         return
       }
+
       if (ok) {
         setClearNotesDialogOpen(false)
       } else {

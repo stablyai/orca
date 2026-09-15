@@ -11,12 +11,15 @@ vi.mock('electron', () => ({
 describe('managed skill startup recovery', () => {
   it('waits for startup recovery before reading local managed installs', async () => {
     let finishRecovery!: () => void
+
     const recovery = new Promise<void>((resolve) => {
       finishRecovery = resolve
     })
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       skillTransactionRecovery: recovery
     })
+
     const listing = runtime.listManagedSkillInstalls()
     let settled = false
     void listing.finally(() => {
@@ -32,6 +35,7 @@ describe('managed skill startup recovery', () => {
 
   it('continues skill management after startup recovery fails', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const runtime = new OrcaRuntimeService(null, undefined, {
       skillTransactionRecovery: Promise.reject(new Error('transient-recovery-failure'))
     })

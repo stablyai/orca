@@ -30,6 +30,7 @@ export function clearReplayableTerminalHistorySessionFiles(dir: string): void {
  *  `mode` on writeFile only applies at creation, so files an older daemon left at umask stay open. */
 export function tightenTerminalHistorySessionDirMode(dir: string): void {
   tightenPathMode(dir, PRIVATE_DIR_MODE)
+
   for (const name of TERMINAL_HISTORY_SESSION_FILE_NAMES) {
     tightenPathMode(join(dir, name), PRIVATE_FILE_MODE)
   }

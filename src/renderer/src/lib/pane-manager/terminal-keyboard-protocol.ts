@@ -49,6 +49,7 @@ export function shouldDisableKittyKeyboardForTerminal(
   if (prefersKittyKeyboardDespiteWindowsConpty(context.tuiAgent)) {
     return false
   }
+
   return isLocalNativeWindowsConpty(context)
 }
 
@@ -63,5 +64,6 @@ export function buildTerminalKeyboardProtocolOptions(
   if (!shouldDisableKittyKeyboardForTerminal(context)) {
     return {}
   }
+
   return { vtExtensions: { kittyKeyboard: false } }
 }

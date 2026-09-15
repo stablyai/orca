@@ -29,7 +29,9 @@ export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Pro
   if (session.getState() === 'connected') {
     return Promise.resolve()
   }
+
   const stages = relayDialStageSource(session)
+
   return new Promise((resolve, reject) => {
     let settled = false
     let unsubscribe: (() => void) | null = null
@@ -47,6 +49,7 @@ export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Pro
         reject(new Error(`replacement session ${state}`))
       }
     })
+
     if (settled) {
       // Why: the notification fired inside onStateChange, before we held the handle.
       unsubscribe()
@@ -59,11 +62,14 @@ export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Pro
       if (settled) {
         return
       }
+
       if (timer) {
         clearTimeout(timer)
       }
+
       const budgetMs =
         stage === null || stage === 'opening' ? timeoutMs : relayDialStageBudgetMs(stage)
+
       timer = setTimeout(() => {
         finish()
         reject(new ReplacementAuthenticationTimeoutError(stage, budgetMs))
@@ -74,11 +80,14 @@ export function waitForAuthenticated(session: RpcClient, timeoutMs: number): Pro
       if (settled) {
         return
       }
+
       settled = true
+
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
+
       unsubscribe?.()
       unsubscribe = null
       unsubscribeStage?.()

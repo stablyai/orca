@@ -16,6 +16,7 @@ import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-matc
 const pendingFolderDeletes = new Set<string>()
 
 type DeleteWorktree = typeof runWorktreeDelete
+
 type HoveredWorkspaceDeleteState = Pick<
   AppState,
   | 'activeModal'
@@ -24,14 +25,17 @@ type HoveredWorkspaceDeleteState = Pick<
   | 'deleteStateByWorktreeId'
   | 'worktreesByRepo'
 >
+
 type CurrentWorkspaceState = Pick<
   AppState,
   'activeWorkspaceExecutionHostId' | 'activeWorktreeId' | 'setActiveWorktree'
 >
+
 type HoveredWorkspaceDeleteDependencies = {
   deleteWorktree: DeleteWorktree
   getCurrentState: () => CurrentWorkspaceState
 }
+
 type HoveredWorkspaceDocument = Pick<Document, 'activeElement' | 'querySelectorAll'>
 
 export type HoveredWorkspaceDeleteTarget =
@@ -49,9 +53,11 @@ export function getHoveredWorkspaceIdentity(
   const hoveredRows = doc.querySelectorAll<HTMLElement>(
     '[data-worktree-sidebar] [role="option"][data-worktree-id]:hover'
   )
+
   const row = hoveredRows.item(hoveredRows.length - 1)
   const workspaceId = row?.dataset.worktreeId
   const hostIdentity = row?.dataset.worktreeHostIdentity
+
   return workspaceId && hostIdentity ? { workspaceId, hostIdentity } : null
 }
 
@@ -62,16 +68,22 @@ export function resolveHoveredWorkspaceDeleteTarget(
   if (state.activeModal !== 'none' || (doc.activeElement && isEditableTarget(doc.activeElement))) {
     return null
   }
+
   const hovered = getHoveredWorkspaceIdentity(doc)
+
   if (!hovered) {
     return null
   }
+
   const workspaceScope = parseWorkspaceKey(hovered.workspaceId)
+
   if (workspaceScope?.type === 'folder') {
     const executionHostId = getExecutionHostIdFromWorktreeHostIdentity(hovered.hostIdentity)
+
     if (!executionHostId) {
       return null
     }
+
     return {
       kind: 'folder',
       executionHostId,
@@ -79,11 +91,13 @@ export function resolveHoveredWorkspaceDeleteTarget(
       workspaceKey: hovered.workspaceId
     }
   }
+
   const worktree = getAllWorktreesFromState(state).find(
     (candidate) =>
       candidate.id === hovered.workspaceId &&
       getWorktreeHostIdentity(candidate) === hovered.hostIdentity
   )
+
   return worktree &&
     !worktree.isMainWorktree &&
     !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting
@@ -102,11 +116,14 @@ export function deleteHoveredWorkspaceImmediately(
   if (!target) {
     return false
   }
+
   if (target.kind === 'folder') {
     const pendingIdentity = composeWorktreeHostIdentity(target.executionHostId, target.workspaceKey)
+
     if (pendingFolderDeletes.has(pendingIdentity)) {
       return false
     }
+
     pendingFolderDeletes.add(pendingIdentity)
     void state
       .deleteFolderWorkspace(target.folderWorkspaceId, {
@@ -114,6 +131,7 @@ export function deleteHoveredWorkspaceImmediately(
       })
       .then((deleted) => {
         const current = dependencies.getCurrentState()
+
         if (
           deleted &&
           current.activeWorktreeId === target.workspaceKey &&
@@ -123,11 +141,14 @@ export function deleteHoveredWorkspaceImmediately(
         }
       })
       .finally(() => pendingFolderDeletes.delete(pendingIdentity))
+
     return true
   }
+
   dependencies.deleteWorktree(target.worktree.id, {
     expectedInstanceId: target.worktree.instanceId,
     ...(target.worktree.hostId ? { expectedHostId: target.worktree.hostId } : {})
   })
+
   return true
 }

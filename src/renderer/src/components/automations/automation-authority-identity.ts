@@ -24,6 +24,7 @@ export function repoConnectionIdIn(
 ): (repoId: string) => string | null | undefined {
   return (repoId) => {
     const repo = repoTable.get(repoId)
+
     return repo ? repo.connectionId?.trim() || null : undefined
   }
 }
@@ -32,6 +33,7 @@ const EMPTY_REPO_TABLE: ReadonlyMap<string, RepoConnection> = new Map()
 
 function repoOwningAuthority(repo: Repo): StableAutomationAuthorityRef {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   // A desktop SSH repo is still desktop-stored; only a runtime host owns its own registry.
   return host?.kind === 'runtime'
     ? { kind: 'runtime', environmentId: host.environmentId }
@@ -43,15 +45,19 @@ export function groupReposByAutomationAuthority(
   repos: readonly Repo[]
 ): AutomationAuthorityRepoTables {
   const tables = new Map<string, Map<string, RepoConnection>>()
+
   for (const repo of repos) {
     const key = automationAuthorityCatalogKey(repoOwningAuthority(repo))
     let table = tables.get(key)
+
     if (!table) {
       table = new Map<string, RepoConnection>()
       tables.set(key, table)
     }
+
     table.set(repo.id, repo)
   }
+
   return tables
 }
 
@@ -85,5 +91,6 @@ export function automationRuntimePairingRevision(
   environmentId: string
 ): number {
   const environment = environments.find((candidate) => candidate.id === environmentId)
+
   return environment ? (environment.pairingRevision ?? environment.createdAt) : -1
 }

@@ -30,6 +30,7 @@ function buildMobileUserAgent(chromeMajor: string): string {
 
 function extractChromeMajor(ua: string): string {
   const match = ua.match(/Chrome\/(\d+)/)
+
   return match ? match[1] : '134'
 }
 
@@ -43,12 +44,15 @@ export function buildViewportUserAgentOverride(args: {
     // Firefox emits no client hints, so Chrome brands here would contradict the stripped headers.
     return { userAgent: googleAuthUserAgent() }
   }
+
   if (!args.mobile) {
     // Why: desktop presets republish the session's clean identity, or a preset would put the
     // Electron/app tokens back on the wire and a transplanted session gets revoked (STA-7147).
     return { userAgent: args.baseUserAgent }
   }
+
   const chromeMajor = extractChromeMajor(args.baseUserAgent)
+
   // Why: userAgentMetadata must accompany the mobile UA so client hints match, or bot-detection flags the desktop-hint leak.
   return {
     userAgent: buildMobileUserAgent(chromeMajor),

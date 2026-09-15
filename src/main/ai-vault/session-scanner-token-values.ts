@@ -3,11 +3,14 @@ import { asRecord } from './session-scanner-record-value'
 
 export function tokenTotal(value: unknown): number {
   const usage = asRecord(value)
+
   if (!usage) {
     return 0
   }
+
   const explicitTotal =
     numberValue(usage.total) || numberValue(usage.totalTokens) || numberValue(usage.total_tokens)
+
   if (explicitTotal > 0) {
     return explicitTotal
   }
@@ -32,31 +35,40 @@ export function tokenTotal(value: unknown): number {
     usage.reasoningOutputTokens,
     usage.reasoning_output_tokens
   ]
+
   return fields.reduce<number>((total, current) => total + numberValue(current), 0)
 }
 
 export function copilotModelMetricsTotal(value: unknown): number {
   const metrics = asRecord(value)
+
   if (!metrics) {
     return 0
   }
+
   let total = 0
+
   for (const metric of Object.values(metrics)) {
     const record = asRecord(metric)
     const usage = asRecord(record?.usage)
+
     if (!usage) {
       continue
     }
+
     total += tokenTotal(usage)
   }
+
   return total
 }
 
 export function claudeUsageTotal(value: unknown): number {
   const usage = asRecord(value)
+
   if (!usage) {
     return 0
   }
+
   return (
     numberValue(usage.input_tokens) +
     numberValue(usage.output_tokens) +
@@ -67,9 +79,11 @@ export function claudeUsageTotal(value: unknown): number {
 
 export function normalizeCodexUsage(value: unknown): CodexUsageSnapshot | null {
   const usage = asRecord(value)
+
   if (!usage) {
     return null
   }
+
   const inputTokens = numberValue(usage.input_tokens)
   const cachedInputTokens = numberValue(usage.cached_input_tokens ?? usage.cache_read_input_tokens)
   const outputTokens = numberValue(usage.output_tokens)

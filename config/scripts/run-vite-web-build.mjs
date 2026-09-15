@@ -4,7 +4,9 @@ import path from 'node:path'
 import { appendBuildOldSpaceOption } from './node-old-space-limit.mjs'
 
 const require = createRequire(import.meta.url)
+
 const vitePackageJson = require.resolve('vite/package.json')
+
 const viteCli = path.join(path.dirname(vitePackageJson), 'bin', 'vite.js')
 
 // Why: Raspberry Pi and release runners can hit Node's default old-space
@@ -26,6 +28,7 @@ const child = spawn(
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
+
     return
   }
 

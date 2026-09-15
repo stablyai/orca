@@ -21,21 +21,27 @@ export async function createTerminalAndSendPrompt(
     select: true,
     navigation: 'caller'
   })
+
   if (!created.ok) {
     throw new Error(created.error?.message || 'Failed to create terminal')
   }
+
   const terminalTab = readMobileReviewCreatedTerminal(created.result)
+
   if (!terminalTab) {
     throw new Error('Created terminal response was invalid')
   }
+
   const sent = await client.sendRequest('terminal.send', {
     terminal: terminalTab.terminal,
     text: prompt,
     enter: true
   })
+
   if (!sent.ok) {
     throw new Error(sent.error?.message || 'Failed to send prompt')
   }
+
   if (!readMobileReviewTerminalSendAccepted(sent.result)) {
     throw new Error('Terminal input is locked')
   }

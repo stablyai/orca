@@ -95,6 +95,7 @@ export function useFileExplorerTreePaneState({
     isDirStale,
     resetAndLoad
   } = tree
+
   const {
     setSingleSelectedPath,
     setSelectedPaths,
@@ -105,17 +106,22 @@ export function useFileExplorerTreePaneState({
   } = selection
 
   const scrollRef = useRef<HTMLDivElement>(null)
+
   const canOpenWorkspaceFileBrowserForPath =
     useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
+
   const supportsFolderDownload = useAppStore((s) => {
     const connectionId = activeRepo?.connectionId
+
     return connectionId
       ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
       : false
   })
+
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
   )
+
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
@@ -134,12 +140,14 @@ export function useFileExplorerTreePaneState({
         : null,
     [activeRepo?.connectionId, activeRuntimeEnvironmentId, activeWorktreeId, worktreePath]
   )
+
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
 
   const entries = useMemo(
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
   )
+
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 

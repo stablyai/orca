@@ -70,6 +70,7 @@ function readGrokHookConfigRawSync(configPath: string): string | null {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
 }
@@ -96,6 +97,7 @@ export class GrokHookService {
     const configPath = getConfigPath()
     const scriptPath = getGrokManagedScriptPath()
     const config = readHooksJson(configPath)
+
     if (!config) {
       return {
         agent: 'grok',
@@ -109,13 +111,16 @@ export class GrokHookService {
     const command = getGrokManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
+
     for (const event of GROK_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
+
       const hasCommand = definitions.some((definition) =>
         (definition.hooks ?? []).some((hook) => hook.command === command)
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
@@ -126,6 +131,7 @@ export class GrokHookService {
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0) {
       state = 'installed'
       detail = null
@@ -136,6 +142,7 @@ export class GrokHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return { agent: 'grok', state, configPath, managedHooksPresent, detail }
   }
 
@@ -144,6 +151,7 @@ export class GrokHookService {
     const scriptPath = getGrokManagedScriptPath()
     const snapshot = readHooksJsonWithRaw(configPath)
     const config = snapshot.config
+
     if (!config) {
       return {
         agent: 'grok',
@@ -161,10 +169,12 @@ export class GrokHookService {
     // A symlinked empty config is also respected unless its content and file identity match the
     // marker written by Orca's own prior cleanup.
     const configIsSymlink = isSymbolicLinkSync(configPath)
+
     const reinstallsOwnSymlinkCleanup =
       configIsSymlink &&
       snapshot.raw !== null &&
       matchesRecordedGrokSymlinkCleanup(configPath, snapshot.raw)
+
     if (
       options?.userInitiated !== true &&
       snapshot.raw !== null &&
@@ -181,23 +191,30 @@ export class GrokHookService {
     )
     writeManagedScript(scriptPath, getGrokManagedScript())
     mkdirSync(dirname(configPath), { recursive: true })
+
     if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
       return notInstalledStatus(configPath, 'Grok hook config changed during installation')
     }
+
     const ownsWindowsHook = process.platform === 'win32'
+
     try {
       if (ownsWindowsHook) {
         registerGrokHookOwner()
       }
+
       writeHooksJson(configPath, config)
+
       if (configIsSymlink) {
         clearGrokSymlinkCleanupMarker(configPath)
       }
+
       return this.getStatus()
     } catch (error) {
       if (ownsWindowsHook) {
         unregisterGrokHookOwnerSync()
       }
+
       throw error
     }
   }
@@ -217,25 +234,33 @@ export class GrokHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
+
     if (process.platform === 'win32') {
       unregisterGrokHookOwnerSync()
     }
+
     clearGrokSymlinkCleanupMarker(configPath)
     const snapshot = readHooksJsonWithRaw(configPath)
     const config = snapshot.config
+
     if (!config) {
       return notInstalledStatus(configPath, 'Could not parse Grok hook config')
     }
+
     if (snapshot.raw === null) {
       return notInstalledStatus(configPath)
     }
+
     const cleanup = removeManagedGrokHookEntries(config, getGrokManagedScriptFileName())
+
     if (!cleanup.removedAny) {
       return notInstalledStatus(configPath)
     }
+
     if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
       return notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
     }
+
     // Why the symlink check: unlinking would delete the user's link, not our file. A config they
     // symlinked into a dotfiles repo is theirs -- strip our entries and write through it instead.
     // writeHooksJson already resolves the link, so the file they version-control stays connected.
@@ -244,6 +269,7 @@ export class GrokHookService {
     } else {
       writeHooksJson(configPath, cleanup.config)
     }
+
     return notInstalledStatus(configPath)
   }
 
@@ -251,48 +277,64 @@ export class GrokHookService {
     const configPath = getConfigPath()
     const ownsWindowsHook = process.platform === 'win32'
     let peerOwnsWindowsHook = false
+
     const releaseOwner = async (): Promise<boolean> => {
       peerOwnsWindowsHook = await releaseGrokHookOwnerAndCheckForPeers()
+
       return !peerOwnsWindowsHook
     }
+
     const mutationOptions = ownsWindowsHook
       ? {
           beforeHold: releaseOwner,
           shouldCommit: async () => !(await hasRegisteredGrokHookOwner())
         }
       : undefined
+
     const snapshot = await readGrokHookConfigSnapshot(configPath)
+
     if (!snapshot.config) {
       if (ownsWindowsHook) {
         await releaseOwner()
       }
+
       return notInstalledStatus(configPath, 'Could not parse Grok hook config')
     }
+
     if (snapshot.raw === null) {
       if (ownsWindowsHook) {
         await releaseOwner()
       }
+
       return notInstalledStatus(configPath)
     }
+
     const cleanup = removeManagedGrokHookEntries(snapshot.config, getGrokManagedScriptFileName())
+
     if (!cleanup.removedAny) {
       if (ownsWindowsHook) {
         await releaseOwner()
       }
+
       return notInstalledStatus(configPath)
     }
+
     const configIsSymlink = await isGrokHookConfigSymlink(configPath)
     const unlinkable = isOrcaOwnedRemnant(cleanup.config) && !configIsSymlink
     const serialized = `${JSON.stringify(cleanup.config, null, 2)}\n`
+
     const updated = unlinkable
       ? await removeGrokHookConfigIfUnchanged(configPath, snapshot.raw, mutationOptions)
       : await writeGrokHookConfigIfUnchanged(configPath, snapshot.raw, serialized, mutationOptions)
+
     if (peerOwnsWindowsHook) {
       return this.getStatus()
     }
+
     if (updated && configIsSymlink) {
       await recordGrokSymlinkCleanup(configPath, serialized)
     }
+
     return updated
       ? notInstalledStatus(configPath)
       : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')

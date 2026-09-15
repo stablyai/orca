@@ -40,9 +40,11 @@ test.describe('Dead Terminal Reproduction @headful', () => {
 
     await orcaPage.evaluate(async () => {
       const state = window.__store?.getState()
+
       if (!state) {
         return
       }
+
       state.updateSettings({ setupScriptLaunchMode: 'split-vertical' })
     })
   })
@@ -51,6 +53,7 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     for (const id of createdWorktreeIds) {
       await removeWorktreeViaStore(orcaPage, id)
     }
+
     createdWorktreeIds.length = 0
   })
 
@@ -92,6 +95,7 @@ test.describe('Dead Terminal Reproduction @headful', () => {
         `switchback-${i}`,
         'vertical'
       )
+
       createdWorktreeIds.push(newId)
 
       await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
@@ -128,6 +132,7 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const worktreeIds = [homeWorktreeId]
+
     for (let i = 0; i < 4; i++) {
       const newId = await createAndActivateWorktreeWithSetup(orcaPage, `multi-${i}`, 'vertical')
       createdWorktreeIds.push(newId)

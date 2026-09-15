@@ -19,6 +19,7 @@ function seeded(): OrchestrationDb {
     { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'b', type: 'question' },
     { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'c', type: 'status' }
   ])
+
   return db
 }
 
@@ -29,6 +30,7 @@ function waiters(...filters: (string[] | undefined)[]): ReadonlySet<Orchestratio
 describe('selectOrchestrationPointerBatch', () => {
   it('excludes a waiter-claimed type', () => {
     const db = seeded()
+
     try {
       const batch = selectOrchestrationPointerBatch({
         db,
@@ -36,6 +38,7 @@ describe('selectOrchestrationPointerBatch', () => {
         waiters: waiters(['question']),
         reservedTypes: undefined
       })
+
       expect(batch.map((m) => m.type)).toEqual(['status', 'status'])
     } finally {
       db.close()
@@ -44,6 +47,7 @@ describe('selectOrchestrationPointerBatch', () => {
 
   it('excludes a reserved type', () => {
     const db = seeded()
+
     try {
       const batch = selectOrchestrationPointerBatch({
         db,
@@ -51,6 +55,7 @@ describe('selectOrchestrationPointerBatch', () => {
         waiters: undefined,
         reservedTypes: new Set(['status'])
       })
+
       expect(batch.map((m) => m.type)).toEqual(['question'])
     } finally {
       db.close()
@@ -59,6 +64,7 @@ describe('selectOrchestrationPointerBatch', () => {
 
   it('unions reserved types with every waiter filter', () => {
     const db = seeded()
+
     try {
       expect(
         selectOrchestrationPointerBatch({
@@ -76,6 +82,7 @@ describe('selectOrchestrationPointerBatch', () => {
   // An unfiltered waiter owns the mailbox: a caller blocked in `check --wait` preempts delivery.
   it('yields nothing when any waiter is unfiltered', () => {
     const db = seeded()
+
     try {
       expect(
         selectOrchestrationPointerBatch({

@@ -8,8 +8,10 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 
 const { OrcaRuntimeWithGetOrchestrationDispatchAuthority } =
   await import('./orca-runtime-get-orchestration-dispatch-authority')
+
 const { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } =
   await import('./orca-runtime-verify-orchestration-compatibility-caller')
+
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -21,6 +23,7 @@ const SESSION_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 const getAuthority =
   OrcaRuntimeWithGetOrchestrationDispatchAuthority.prototype.getOrchestrationDispatchAuthority
+
 // Both borrowed from the real prototype through their public surface: a stubbed copy of the
 // method under test would pin nothing.
 const verifyCaller =
@@ -48,6 +51,7 @@ function registerStructuredWorker(): string {
     worktreeId: 'wt_1',
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   return handle
 }
 
@@ -97,6 +101,7 @@ describe('structured worker hook attestation stays closed', () => {
   it('still refuses when a restored receipt exists under an empty pty id', () => {
     const handle = registerStructuredWorker()
     const identity = structuredWorkerIdentities.get(handle)!
+
     // Fabricate the exact receipt the fallback would accept, keyed by the empty pty id.
     const stub = runtimeStub({
       restoredOrchestrationAuthorityByPtyId: new Map([
@@ -115,6 +120,7 @@ describe('structured worker hook attestation stays closed', () => {
       orchestrationCompatibilityHostScopesEqual: () => true,
       attestAgentHookCompatibilityAuthorityFn: undefined
     })
+
     // Even then, attestation is required and there is no hook to provide it.
     expect(
       verifyCaller.call(stub, {

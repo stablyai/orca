@@ -27,10 +27,13 @@ describe('withGitHubCheckDetailsTimeout', () => {
 
   it('rejects a stalled renderer operation after the check-details budget', async () => {
     let operationSignal: AbortSignal | undefined
+
     const stalled = withGitHubCheckDetailsTimeout((signal) => {
       operationSignal = signal
+
       return new Promise(() => {})
     })
+
     const assertion = expect(stalled).rejects.toThrow('Localized timeout.')
 
     await vi.advanceTimersByTimeAsync(GITHUB_CHECK_DETAILS_TIMEOUT_MS)
@@ -44,6 +47,7 @@ describe('withGitHubCheckDetailsTimeout', () => {
 
     const result = withGitHubCheckDetailsTimeout(async () => {
       timerCountWhenStarted = vi.getTimerCount()
+
       return 'details'
     })
 
@@ -61,6 +65,7 @@ describe('withGitHubCheckDetailsTimeout', () => {
           })
         })
     )
+
     const assertion = expect(stalled).rejects.toThrow('Localized timeout.')
 
     await vi.advanceTimersByTimeAsync(GITHUB_CHECK_DETAILS_TIMEOUT_MS)

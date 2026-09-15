@@ -25,6 +25,7 @@ export type RepoKind = 'git' | 'folder'
  * - `'origin'`: explicit origin. Same precedence.
  */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
 export type BuiltInWorktreeVisibilitySourceId = 'claude' | 'gsd'

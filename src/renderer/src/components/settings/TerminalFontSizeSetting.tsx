@@ -53,6 +53,7 @@ export function TerminalFontSizeSetting({
               value={settings.terminalFontSize}
               onChange={(e) => {
                 const value = Number.parseInt(e.target.value, 10)
+
                 if (!Number.isNaN(value) && value >= 10 && value <= 24) {
                   updateSettings({ terminalFontSize: value })
                 }

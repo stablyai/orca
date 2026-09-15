@@ -24,6 +24,7 @@ export function createOpenFileState(
     setActiveTabType: (type, targetWorktreeId) =>
       set((s) => {
         const worktreeId = targetWorktreeId ?? s.activeWorktreeId
+
         return {
           ...(worktreeId === s.activeWorktreeId ? { activeTabType: type } : {}),
           activeTabTypeByWorktree: worktreeId

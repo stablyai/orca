@@ -29,12 +29,15 @@ function expectLegacyMessageParity(transcript: NativeChatMessage[]): NativeChatM
   const assembled = resetAssembler(createIncrementalAssembler(), transcript)
   const surfaced = surfaceSkillInvocationUserTurns(assembled, CLAUDE_COMMANDS)
   const direct = prepareNativeChatLiveMessages(assembled, 'claude')
+
   const legacy = assembleNativeChatSession({
     sources: { transcript: surfaced },
     sessionId: 'session-1',
     agent: 'claude'
   }).messages
+
   expect(direct).toEqual(legacy)
+
   return direct
 }
 
@@ -110,6 +113,7 @@ describe('preassembled native-chat live sessions', () => {
         timestamp: source === 'scrape' ? 1 : 2,
         source
       })
+
     const transcript = [
       skill('scrape-skill', 'plugin-a', 'scrape'),
       skill('skill', 'plugin-b', 'transcript')
@@ -169,6 +173,7 @@ describe('preassembled native-chat live sessions', () => {
       }),
       message('answer', { blocks: [{ type: 'text', text: 'done' }], timestamp: 2 })
     ]
+
     const assembled = resetAssembler(createIncrementalAssembler(), transcript)
     const prepared = prepareNativeChatLiveMessages(assembled, 'claude')
 
@@ -271,6 +276,7 @@ describe('preassembled native-chat live sessions', () => {
   it('preserves the preassembled array through every status-precedence path', () => {
     const messages = [message('answer', { timestamp: 10 })]
     const base = { messages, sessionId: 'session-1', agent: 'claude' as const }
+
     const sessions = [
       mergeNativeChatLiveSession({
         ...base,
@@ -308,9 +314,11 @@ describe('preassembled native-chat live sessions', () => {
       'loading',
       'error'
     ])
+
     for (const session of sessions) {
       expect(session.messages).toBe(messages)
     }
+
     expect(sessions.at(-1)?.error).toBe('unreadable')
   })
 
@@ -325,17 +333,21 @@ function randomTranscript(seed: number): NativeChatMessage[] {
   const random = mulberry32(seed)
   const count = 1 + Math.floor(random() * 48)
   const messages: NativeChatMessage[] = []
+
   for (let index = 0; index < count; index += 1) {
     const priorIndex = index > 0 ? Math.floor(random() * index) : index
     const idIndex = index > 0 && random() < 0.12 ? priorIndex : index
     const timestamp = random() < 0.18 ? null : Math.floor(random() * 24)
     const kind = Math.floor(random() * 7)
     const entry = randomMessage(seed, index, idIndex, timestamp, kind)
+
     if (random() < 0.2) {
       entry.turnId = `turn-${seed}-${index}`
     }
+
     messages.push(entry)
   }
+
   return messages
 }
 
@@ -349,6 +361,7 @@ function randomMessage(
   const id = `message-${seed}-${idIndex}`
   const source = (seed + index) % 4 === 0 ? ('scrape' as const) : ('transcript' as const)
   const base = { id, timestamp, source }
+
   switch (kind) {
     case 0:
       return { ...base, role: 'user', blocks: [{ type: 'text', text: ` prompt  ${index % 5} ` }] }
@@ -394,10 +407,12 @@ function randomMessage(
 
 function mulberry32(seed: number): () => number {
   let state = seed
+
   return () => {
     state = (state + 0x6d2b79f5) | 0
     let value = Math.imul(state ^ (state >>> 15), 1 | state)
     value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value
+
     return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
   }
 }

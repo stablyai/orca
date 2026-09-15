@@ -31,8 +31,10 @@ export async function runHeadlessAutomationDispatch(
   ctx: HeadlessAutomationDispatchContext
 ): Promise<AutomationRun> {
   const { automation, run, target, runs } = ctx
+
   const precheckResult =
     run.trigger === 'scheduled' && automation.precheck ? await ctx.runPrecheck() : null
+
   if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
     return runs.updateRun({
       runId: run.id,
@@ -42,8 +44,10 @@ export async function runHeadlessAutomationDispatch(
       error: formatAutomationPrecheckFailure(precheckResult)
     })
   }
+
   try {
     const launch = await ctx.dispatcher({ automation, run, target })
+
     const launchRunTarget = {
       workspaceId: launch.workspaceId,
       workspaceDisplayName: launch.workspaceDisplayName ?? null,
@@ -51,18 +55,22 @@ export async function runHeadlessAutomationDispatch(
       terminalPaneKey: launch.terminalPaneKey ?? null,
       terminalPtyId: launch.terminalPtyId ?? null
     }
+
     const updated = runs.updateRun({
       runId: run.id,
       status: 'dispatched',
       ...launchRunTarget,
       error: null
     })
+
     if (!launch.completion) {
       // Why: a dispatcher that reports no completion promise would otherwise
       // leave the run at 'dispatched' for the process lifetime.
       ctx.watchRun(updated)
+
       return updated
     }
+
     void launch.completion
       .then((completion) =>
         ctx.markDispatchResult({
@@ -82,6 +90,7 @@ export async function runHeadlessAutomationDispatch(
           error: describeDispatchError(error)
         })
       )
+
     return updated
   } catch (error) {
     return runs.updateRun({

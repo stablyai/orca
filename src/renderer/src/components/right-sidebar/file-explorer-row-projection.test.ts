@@ -21,6 +21,7 @@ describe('file explorer row projection', () => {
       row('/repo/src/nested/b.ts', 2),
       row('/repo/root.ts', 0)
     ]
+
     const projection = createFileExplorerRowProjection(rows)
 
     expect(projection.getVisibleCount()).toBe(5)
@@ -47,6 +48,7 @@ describe('file explorer row projection', () => {
       row('/repo/src/nested/b.ts', 2),
       row('/repo/root.ts', 0)
     ]
+
     const projection = createFileExplorerRowProjection(rows)
 
     expect(projection.getInsertIndexAfterSubtree('/repo', '/repo')).toBe(5)

@@ -19,10 +19,12 @@ export function parseSshPtySourceFrame(
   if (!SOURCE_KEYS.some((key) => params[key] !== undefined)) {
     return Object.freeze({ malformed: false })
   }
+
   const sourceEndSu = params.sourceEndSu
   const sourceLengthSu = params.sourceLengthSu
   const rawLength = params.rawLength
   const transformed = params.transformed === true
+
   if (
     typeof params.data !== 'string' ||
     typeof params.deliveryToken !== 'string' ||
@@ -40,7 +42,9 @@ export function parseSshPtySourceFrame(
   ) {
     return Object.freeze({ malformed: true })
   }
+
   const sourceStartSu = sourceEndSu - sourceLengthSu
+
   return Object.freeze({
     malformed: false,
     source: Object.freeze({

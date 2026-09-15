@@ -40,9 +40,11 @@ export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {
           operations: input.host.deps.store.listOperationRows()
         })
       : null
+
   if (!replay || !agentSessionExecutionLocationsEqual(replay.record.location, input.location)) {
     return null
   }
+
   return {
     envelope: {
       sessionId: input.envelope.sessionId,
@@ -76,9 +78,11 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
         ownership: listStructuredProviderSessionOwnership(input.host.deps.store.listRecords())
       })
     : null
+
   if (conflict) {
     throw structuredAdoptionConflictError(conflict)
   }
+
   return resolveStructuredAgentSessionAdoption({
     agent: input.agent,
     providerSessionId: input.providerSessionId,
@@ -103,6 +107,7 @@ function structuredAdoptionAccountHomeCandidates(input: {
   if (input.agent === 'claude') {
     return [input.selectedAccountHomePath, join(homedir(), '.claude')]
   }
+
   return [
     input.selectedAccountHomePath,
     ...(input.settings.codexManagedAccounts ?? []).map((account) => account.managedHomePath),

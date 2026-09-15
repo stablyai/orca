@@ -13,22 +13,28 @@ export function resolveLinearIssueAttributeFilterTeamIds(options: {
   const { selectedTeamIds, availableTeams, primaryTeamId } = options
   const availableIds = new Set(availableTeams.map((team) => team.id))
   const selected = selectedTeamIds.filter((id) => availableIds.has(id))
+
   if (selected.length > 0) {
     // Stable order: name/id of available teams, not click order — matches primary-team sort.
     const byId = new Map(availableTeams.map((team) => [team.id, team] as const))
+
     return [...selected].sort((a, b) => {
       const teamA = byId.get(a)
       const teamB = byId.get(b)
       const nameCmp = (teamA?.name ?? a).localeCompare(teamB?.name ?? b)
+
       if (nameCmp !== 0) {
         return nameCmp
       }
+
       return a.localeCompare(b)
     })
   }
+
   if (primaryTeamId && availableIds.has(primaryTeamId)) {
     return [primaryTeamId]
   }
+
   return []
 }
 
@@ -36,15 +42,18 @@ export function resolveLinearIssueAttributeFilterTeamIds(options: {
 export function unionLinearMetadataById<T extends { id: string }>(groups: readonly T[][]): T[] {
   const seen = new Set<string>()
   const out: T[] = []
+
   for (const group of groups) {
     for (const item of group) {
       if (seen.has(item.id)) {
         continue
       }
+
       seen.add(item.id)
       out.push(item)
     }
   }
+
   return out
 }
 
@@ -60,15 +69,19 @@ export function groupLinearMetadataByName<T extends { id: string; name: string }
   rows: readonly T[]
 ): LinearMetadataNameGroup[] {
   const byName = new Map<string, LinearMetadataNameGroup>()
+
   for (const row of rows) {
     const group = byName.get(row.name)
+
     if (group) {
       group.ids.push(row.id)
       continue
     }
+
     // First id doubles as the row key: unique, and stable while metadata is unchanged.
     byName.set(row.name, { key: row.id, name: row.name, ids: [row.id] })
   }
+
   return [...byName.values()]
 }
 
@@ -82,6 +95,7 @@ export function selectedLinearMetadataGroupKeys(
   selectedIds: readonly string[]
 ): string[] {
   const keyById = linearMetadataKeyById(groups)
+
   return [...new Set(selectedIds.map((id) => keyById.get(id) ?? id))]
 }
 
@@ -89,11 +103,13 @@ function linearMetadataKeyById(
   groups: readonly { key: string; ids: readonly string[] }[]
 ): Map<string, string> {
   const keyById = new Map<string, string>()
+
   for (const group of groups) {
     for (const id of group.ids) {
       keyById.set(id, group.key)
     }
   }
+
   return keyById
 }
 
@@ -103,6 +119,7 @@ export function linearMetadataGroupCoverage(
   selectedIds: readonly string[]
 ): { applied: number; intended: number } {
   const keys = selectedLinearMetadataGroupKeys(groups, selectedIds)
+
   return {
     applied: selectedIds.length,
     intended: expandLinearMetadataGroupKeys(groups, keys).length
@@ -134,8 +151,10 @@ export function isLinearMetadataTruncated(
   if (record === null || record.length === 0) {
     return false
   }
+
   const applied = new Set(appliedIds)
   const recorded = new Set(record)
+
   return recorded.size === applied.size && record.every((id) => applied.has(id))
 }
 
@@ -146,6 +165,7 @@ export function isLinearMetadataGroupSelectionPartial(
   truncated: boolean
 ): boolean {
   const { applied, intended } = linearMetadataGroupCoverage(groups, selectedIds)
+
   // Why: the value-derived shortfall stays as a fallback — a restored filter carries no record.
   return truncated || intended > applied
 }
@@ -165,12 +185,15 @@ export function capLinearMetadataIdsAcrossGroups(
   if (ids.length <= max) {
     return [...ids]
   }
+
   const selected = new Set(ids)
+
   // Why: the picker hands us click order, so bucket by metadata order instead — the same
   // visible selection must always cap to the same ids (#17342).
   const lists = groups
     .map((group) => group.ids.filter((id) => selected.has(id)))
     .filter((list) => list.length > 0)
+
   const grouped = new Set(lists.flat())
   // An id no loaded group covers is its own row; sorted so its slot is stable too (R12).
   lists.push(
@@ -180,24 +203,31 @@ export function capLinearMetadataIdsAcrossGroups(
       .map((id) => [id])
   )
   const capped: string[] = []
+
   // Round 0 gives every row one id before any row gets a second.
   for (let round = 0; capped.length < max; round += 1) {
     let advanced = false
+
     for (const list of lists) {
       const id = list[round]
+
       if (id === undefined) {
         continue
       }
+
       advanced = true
       capped.push(id)
+
       if (capped.length >= max) {
         break
       }
     }
+
     if (!advanced) {
       break
     }
   }
+
   return capped
 }
 
@@ -207,5 +237,6 @@ export function expandLinearMetadataGroupKeys(
   keys: readonly string[]
 ): string[] {
   const idsByKey = new Map(groups.map((group) => [group.key, group.ids] as const))
+
   return keys.flatMap((key) => [...(idsByKey.get(key) ?? [key])])
 }

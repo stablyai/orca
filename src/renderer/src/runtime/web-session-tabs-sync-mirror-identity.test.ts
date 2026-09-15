@@ -16,11 +16,17 @@ import {
 } from './web-session-tabs-sync'
 
 const ENVIRONMENT_ID = 'web-env-1'
+
 const NOW = 1_700_000_000_000
+
 const WORKTREE_A = 'repo::/worktree-a'
+
 const WORKTREE_B = 'repo::/worktree-b'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const HOST_TAB_ID = 'host-tab-1'
+
 const MIRRORED_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
 
 const SERVER_PLACEMENT: RuntimeBrowserPlacement = { kind: 'server' }
@@ -106,6 +112,7 @@ function makeTerminalSnapshot(
 ): RuntimeMobileSessionTabsResult {
   const worktree = options.worktree ?? WORKTREE_A
   const terminal = options.terminal === undefined ? 'terminal-1' : options.terminal
+
   return makeSnapshot(worktree, [
     {
       type: 'terminal',
@@ -136,12 +143,14 @@ function makeBrowserSnapshot(
 ): RuntimeMobileSessionTabsResult {
   const worktree = options.worktree ?? WORKTREE_A
   const pageId = options.pageId ?? 'host-browser-page-1'
+
   const certificateFailure =
     options.certificateFailure === undefined
       ? { ...CERTIFICATE_FAILURE, browserPageId: pageId }
       : options.certificateFailure
         ? { ...options.certificateFailure }
         : null
+
   return makeSnapshot(
     worktree,
     [
@@ -167,6 +176,7 @@ function makeBrowserSnapshot(
 // Stands in for the local guest webview recording a load failure straight into the store.
 function withLocalLoadFailure(state: WebSessionTabsSyncState): WebSessionTabsSyncState {
   const pages = state.browserPagesByWorkspace['host-browser-workspace'] ?? []
+
   return {
     ...state,
     browserPagesByWorkspace: {
@@ -182,6 +192,7 @@ function applySnapshot(
   now = NOW
 ): WebSessionTabsSyncState {
   const patch = applyWebSessionTabsSnapshot(state, snapshot, ENVIRONMENT_ID, now)
+
   return patch === state ? state : { ...state, ...patch }
 }
 
@@ -209,12 +220,14 @@ describe('remote mirror resource identity', () => {
 
   it('updates terminal metadata without replacing PTY arrays or layouts', () => {
     const state = applySnapshot(makeState(), makeTerminalSnapshot())
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       makeTerminalSnapshot({ title: 'renamed shell' }),
       ENVIRONMENT_ID,
       NOW + 1
     )
+
     const next = { ...state, ...patch }
 
     expect(next.tabsByWorktree[WORKTREE_A]?.[0]?.title).toBe('renamed shell')
@@ -224,10 +237,12 @@ describe('remote mirror resource identity', () => {
 
   it('clears unread state on replay without replacing PTY arrays or layouts', () => {
     const hydrated = applySnapshot(makeState(), makeTerminalSnapshot())
+
     const state = {
       ...hydrated,
       unreadTerminalTabs: { [MIRRORED_TAB_ID]: true as const }
     }
+
     const next = applySnapshot(state, makeTerminalSnapshot(), NOW + 1)
 
     expect(next.unreadTerminalTabs).not.toHaveProperty(MIRRORED_TAB_ID)
@@ -263,10 +278,12 @@ describe('remote mirror resource identity', () => {
 
   it('cleans up terminal resources and unread state when the host omits the tab', () => {
     const hydrated = applySnapshot(makeState(), makeTerminalSnapshot())
+
     const state = {
       ...hydrated,
       unreadTerminalTabs: { [MIRRORED_TAB_ID]: true as const }
     }
+
     const next = applySnapshot(state, makeSnapshot(WORKTREE_A, [], null), NOW + 1)
 
     expect(next.ptyIdsByTabId).not.toHaveProperty(MIRRORED_TAB_ID)
@@ -289,6 +306,7 @@ describe('remote mirror resource identity', () => {
 
   it('updates browser metadata without replacing handles or certificate failures', () => {
     const state = applySnapshot(makeState(), makeBrowserSnapshot())
+
     const next = applySnapshot(
       state,
       makeBrowserSnapshot({
@@ -325,6 +343,7 @@ describe('remote mirror resource identity', () => {
       }),
       makeBrowserSnapshot({ certificateFailure: null, placement: CLIENT_PLACEMENT })
     )
+
     const next = applySnapshot(
       state,
       makeBrowserSnapshot({
@@ -350,6 +369,7 @@ describe('remote mirror resource identity', () => {
         makeBrowserSnapshot({ certificateFailure: null, placement: CLIENT_PLACEMENT })
       )
     )
+
     const next = applySnapshot(
       state,
       makeBrowserSnapshot({
@@ -376,6 +396,7 @@ describe('remote mirror resource identity', () => {
     const state = withLocalLoadFailure(
       applySnapshot(makeState(), makeBrowserSnapshot({ certificateFailure: null, placement }))
     )
+
     const next = applySnapshot(
       state,
       makeBrowserSnapshot({ certificateFailure: null, placement, title: 'Changed title' }),
@@ -401,6 +422,7 @@ describe('remote mirror resource identity', () => {
 
   it('cleans up replaced browser page handles and certificate failures', () => {
     const state = applySnapshot(makeState(), makeBrowserSnapshot())
+
     const next = applySnapshot(
       state,
       makeBrowserSnapshot({
@@ -431,6 +453,7 @@ describe('remote mirror resource identity', () => {
         pageId: 'host-browser-page-2'
       })
     ]
+
     const initial = applyWebSessionTabsSnapshots(makeState(), snapshots, ENVIRONMENT_ID, NOW)
     const state = { ...makeState(), ...initial }
 
@@ -446,12 +469,14 @@ describe('remote mirror resource identity', () => {
       workspaceId: 'host-browser-workspace-2',
       pageId: 'host-browser-page-2'
     })
+
     const initial = applyWebSessionTabsSnapshots(
       makeState(),
       [makeBrowserSnapshot(), worktreeBSnapshot],
       ENVIRONMENT_ID,
       NOW
     )
+
     const state = { ...makeState(), ...initial }
     const pages = state.browserPagesByWorkspace['host-browser-workspace-2']
     const page = pages?.[0]
@@ -467,6 +492,7 @@ describe('remote mirror resource identity', () => {
       ENVIRONMENT_ID,
       NOW + 1
     )
+
     const next = { ...state, ...patch }
 
     expect(next.browserPagesByWorkspace['host-browser-workspace-2']).toBe(pages)
@@ -481,13 +507,16 @@ describe('remote mirror resource identity', () => {
       pageId: 'browser-page-a',
       tabId: 'browser-tab-a'
     })
+
     const firstPatch = applyWebSessionTabsSnapshot(makeState(), firstSnapshot, 'runtime-a', NOW)
     const first = { ...makeState(), ...firstPatch }
+
     const secondSnapshot = makeBrowserSnapshot({
       workspaceId: 'browser-workspace-b',
       pageId: 'browser-page-b',
       tabId: 'browser-tab-b'
     })
+
     const secondPatch = applyWebSessionTabsSnapshot(first, secondSnapshot, 'runtime-b', NOW + 1)
     const both = { ...first, ...secondPatch }
 
@@ -504,6 +533,7 @@ describe('remote mirror resource identity', () => {
       'runtime-b',
       NOW + 2
     )
+
     const afterRemoval = { ...both, ...removalPatch }
     expect(
       afterRemoval.unifiedTabsByWorktree[WORKTREE_A]?.map((tab) => [
@@ -516,10 +546,12 @@ describe('remote mirror resource identity', () => {
   it('emits no store updates for 128 accepted identical resource frames', () => {
     const terminal = makeTerminalSnapshot()
     const browser = makeBrowserSnapshot()
+
     const snapshot = {
       ...browser,
       tabs: [...terminal.tabs.map((tab) => ({ ...tab, isActive: false })), ...browser.tabs]
     }
+
     const store = createStore<WebSessionTabsSyncState>(() => makeState())
     let notifications = 0
     store.subscribe(() => {

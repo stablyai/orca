@@ -50,13 +50,16 @@ export function getCodexTrustGrantHomeKey(runtimeHomePath: string): string {
 function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | null {
   const empty: CodexTrustGrantLedgerFile = { version: 1, homes: {} }
   let rawLedger: string
+
   try {
     rawLedger = readFileSync(ledgerPath, 'utf-8')
   } catch (error) {
     return isDefinitiveAbsence(error) ? empty : null
   }
+
   try {
     const parsed: unknown = JSON.parse(rawLedger)
+
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -65,10 +68,13 @@ function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | n
     ) {
       return empty
     }
+
     const homes = (parsed as CodexTrustGrantLedgerFile).homes
+
     if (!homes || typeof homes !== 'object' || Array.isArray(homes)) {
       return empty
     }
+
     return { version: 1, homes }
   } catch {
     // Why: a corrupt ledger only costs one extra grant session; never let it
@@ -95,12 +101,15 @@ export function readCodexTrustGrantLedgerHome(
   ledgerPath = getCodexTrustGrantLedgerPath()
 ): CodexTrustGrantLedgerHome | null {
   const home = readLedgerFile(ledgerPath).homes[getCodexTrustGrantHomeKey(runtimeHomePath)]
+
   if (!home || typeof home !== 'object' || Array.isArray(home)) {
     return null
   }
+
   if (!home.entries || typeof home.entries !== 'object' || Array.isArray(home.entries)) {
     return null
   }
+
   return home
 }
 
@@ -110,12 +119,14 @@ export function writeCodexTrustGrantLedgerHome(
   ledgerPath = getCodexTrustGrantLedgerPath()
 ): void {
   const file = readLedgerFileOrNull(ledgerPath)
+
   if (!file) {
     // Why: writing a file derived from `empty` would drop every other home's
     // grants, and those homes would then be re-prompted for trust they had
     // already granted. Skip this write; the next grant retries.
     return
   }
+
   file.homes[getCodexTrustGrantHomeKey(runtimeHomePath)] = home
   persistLedgerFile(ledgerPath, file)
 }
@@ -126,9 +137,11 @@ export function removeCodexTrustGrantLedgerHome(
 ): void {
   const file = readLedgerFile(ledgerPath)
   const homeKey = getCodexTrustGrantHomeKey(runtimeHomePath)
+
   if (!(homeKey in file.homes)) {
     return
   }
+
   delete file.homes[homeKey]
   persistLedgerFile(ledgerPath, file)
 }
@@ -136,6 +149,7 @@ export function removeCodexTrustGrantLedgerHome(
 export function buildNativeCodexBinaryStamp(binaryPath: string): CodexTrustGrantBinaryStamp | null {
   try {
     const stat = statSync(binaryPath)
+
     return { kind: 'native', path: binaryPath, size: stat.size, mtimeMs: stat.mtimeMs }
   } catch {
     return null
@@ -151,6 +165,7 @@ export function binaryStampsMatch(
     // re-granting forever; the config/signature checks still gate the skip.
     return recorded === null && current === null
   }
+
   if (recorded.kind === 'wsl' || current.kind === 'wsl') {
     return (
       recorded.kind === 'wsl' &&
@@ -160,6 +175,7 @@ export function binaryStampsMatch(
       recorded.version === current.version
     )
   }
+
   return (
     recorded.path === current.path &&
     recorded.size === current.size &&

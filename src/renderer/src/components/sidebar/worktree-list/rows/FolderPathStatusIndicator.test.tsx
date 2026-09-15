@@ -14,6 +14,7 @@ function renderIndicator(reason: unknown): string {
     exists: false,
     reason
   } as unknown as FolderWorkspacePathStatus
+
   return renderToStaticMarkup(
     <TooltipProvider>
       <FolderPathStatusIndicator status={status} />

@@ -19,6 +19,7 @@ export type RelayDialStageSource = {
 
 export function relayDialStageSource(session: object): RelayDialStageSource | null {
   const candidate = session as Partial<RelayDialStageSource>
+
   return typeof candidate.getDialStage === 'function' &&
     typeof candidate.onDialStageChange === 'function'
     ? (candidate as RelayDialStageSource)
@@ -35,6 +36,7 @@ export class RelayDialStageTracker implements RelayDialStageSource {
 
   onDialStageChange(listener: (stage: RelayDialStage) => void): () => void {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
@@ -42,7 +44,9 @@ export class RelayDialStageTracker implements RelayDialStageSource {
     if (this.stage === stage) {
       return
     }
+
     this.stage = stage
+
     for (const listener of this.listeners) {
       listener(stage)
     }

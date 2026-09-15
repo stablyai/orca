@@ -20,6 +20,7 @@ class FakeDataTransfer {
     if (!this.types.includes(type)) {
       this.types.push(type)
     }
+
     this.data.set(type, value)
   }
 }

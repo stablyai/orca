@@ -18,10 +18,12 @@ function sshRoute(
 // fs entrypoints spied rather than stubbed.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromisesModule>()
+
   return { ...actual, stat: vi.fn(actual.stat), readFile: vi.fn(actual.readFile) }
 })
 
 const WEBP_BASE64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
+
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 
@@ -42,6 +44,7 @@ describe('detectRepoFileIcon remote probing', () => {
         if (!filePath.endsWith('/public/icon.webp')) {
           throw new Error('ENOENT')
         }
+
         return { type: 'file', size: 34, mtime: 0 }
       },
       readFile: async () => ({ content: WEBP_BASE64, isBinary: true, mimeType: 'image/webp' })
@@ -61,12 +64,14 @@ describe('detectRepoFileIcon remote probing', () => {
         if (filePath.endsWith('/favicon.png') || filePath.endsWith('/public/favicon.png')) {
           return { type: 'file', size: 8, mtime: 0 }
         }
+
         throw new Error('ENOENT')
       },
       readFile: async (filePath) => {
         if (filePath.endsWith('/favicon.png')) {
           await Promise.resolve()
         }
+
         return { content: PNG_BASE64, isBinary: true, mimeType: 'image/png' }
       }
     })
@@ -80,6 +85,7 @@ describe('detectRepoFileIcon remote probing', () => {
   it('bounds concurrent remote probes when no conventional icon exists', async () => {
     let activeStats = 0
     let maxActiveStats = 0
+
     const stat = vi.fn(async (): Promise<FileStat> => {
       activeStats += 1
       maxActiveStats = Math.max(maxActiveStats, activeStats)
@@ -87,6 +93,7 @@ describe('detectRepoFileIcon remote probing', () => {
       activeStats -= 1
       throw new Error('ENOENT')
     })
+
     const provider = remoteFilesystemProvider({
       stat,
       readFile: async () => {
@@ -147,16 +154,20 @@ describe('declared repo icons through production filesystem routes', () => {
     ['ssh', true]
   ] as const)('preserves declared icon detection on %s (no icon: %s)', async (kind, noIcon) => {
     const directory = await mkdtemp(join(tmpdir(), 'orca-icon-href-'))
+
     const source = noIcon
       ? 'a'.repeat(256 * 1024)
       : `${'a'.repeat(32768)}{ rel: "icon", href: "/first.png", href: "/chosen.png" }`
+
     try {
       await mkdir(join(directory, 'public'))
       await writeFile(join(directory, 'index.html'), source)
       await writeFile(join(directory, 'public', 'chosen.png'), Buffer.from(PNG_BASE64, 'base64'))
+
       const provider = remoteFilesystemProvider({
         stat: async (path) => {
           const info = await stat(path)
+
           return {
             type: info.isFile() ? 'file' : 'directory',
             size: info.size,
@@ -166,6 +177,7 @@ describe('declared repo icons through production filesystem routes', () => {
         readFile: async (path) => {
           const buffer = await readFile(path)
           const isBinary = path.endsWith('.png')
+
           return {
             content: buffer.toString(isBinary ? 'base64' : 'utf8'),
             isBinary,
@@ -173,8 +185,10 @@ describe('declared repo icons through production filesystem routes', () => {
           }
         }
       })
+
       const route: ExecutionHostFilesystemRoute =
         kind === 'local' ? { kind: 'local', hostId: 'local' } : sshRoute('icon-oracle', provider)
+
       await expect(detectRepoFileIcon(directory, route)).resolves.toEqual(
         noIcon
           ? null

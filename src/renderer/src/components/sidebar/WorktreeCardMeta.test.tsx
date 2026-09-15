@@ -100,6 +100,7 @@ describe('WorktreeCardDetailsHover', () => {
         <span>Fix stale GH PR</span>
       </WorktreeCardDetailsHover>
     )
+
     const identityHeaderTag =
       markup.match(/<div[^>]*data-worktree-hover-identity-header=""[^>]*>/)?.[0] ?? ''
 
@@ -307,6 +308,7 @@ describe('WorktreeCardDetailsHover', () => {
       title: 'Test Jira card icon',
       url: 'https://company.atlassian.net/browse/KAN-1'
     }
+
     const badgeMarkup = renderToStaticMarkup(
       <WorktreeCardMetaBadges
         issue={null}
@@ -316,6 +318,7 @@ describe('WorktreeCardDetailsHover', () => {
         comment={null}
       />
     )
+
     const hoverMarkup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         issue={null}

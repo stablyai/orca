@@ -50,11 +50,13 @@ function createHandler(): FsHandlerInternals {
     onNotification: vi.fn(),
     onClientDetached: vi.fn(() => () => undefined)
   }
+
   const watcherPool = {
     dispose: vi.fn(),
     forgetRoot: vi.fn(),
     subscribe: vi.fn()
   }
+
   return new FsHandler(dispatcher as never, new RelayContext(), watcherPool as never) as never
 }
 
@@ -86,6 +88,7 @@ describe('relay direct ripgrep admission', () => {
     listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
     execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
       callback(null)
+
       return undefined
     })
     listFilesWithGitMock.mockResolvedValueOnce(['src/index.ts'])

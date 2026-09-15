@@ -13,16 +13,20 @@ export function finalizeRuntimeMobileSessionTabsResult(
     tabs.find((tab) => tab.isActive && tab.id === snapshot.activeTabId) ??
     tabs.find((tab) => tab.isActive) ??
     (snapshot.activeTabId ? (tabs[0] ?? null) : null)
+
   const normalizedTabs =
     active && !tabs.some((tab) => tab.isActive)
       ? tabs.map((tab) => (tab.id === active.id ? { ...tab, isActive: true } : tab))
       : tabs
+
   const tabGroups = host.sanitizeGroups(snapshot.tabGroups, normalizedTabs)
   const validGroupIds = new Set(tabGroups?.map((group) => group.id) ?? [])
+
   const tabGroupLayout =
     snapshot.tabGroupLayout === undefined
       ? undefined
       : host.pruneGroupLayout(snapshot.tabGroupLayout, validGroupIds)
+
   const activeGroupId =
     snapshot.activeGroupId && validGroupIds.has(snapshot.activeGroupId)
       ? snapshot.activeGroupId
@@ -31,6 +35,7 @@ export function finalizeRuntimeMobileSessionTabsResult(
         )?.id ??
         tabGroups?.[0]?.id ??
         null)
+
   return {
     worktree: snapshot.worktree,
     publicationEpoch: snapshot.publicationEpoch,

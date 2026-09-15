@@ -22,14 +22,20 @@ import {
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
 
 const roots: string[] = []
+
 const zshAvailable = existsSync('/bin/zsh')
+
 const bashAvailable = existsSync('/bin/bash')
+
 // Why the shared lookup: it also finds a Homebrew fish that is off PATH, and it
 // carries the ORCA_REQUIRE_FISH contract asserted below.
 const fishLookup = resolveFishBinary()
+
 const fishAvailable = fishLookup.available
+
 const pwshAvailable =
   spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-Command', 'exit 0']).status === 0
+
 // Sandboxing needs an absolute path to symlink; the lookup may report a bare name.
 const fishBinary = fishLookup.available
   ? isAbsolute(fishLookup.path)
@@ -43,7 +49,9 @@ function resolveOnPath(name: string): string | null {
     if (!dir) {
       continue
     }
+
     const candidate = join(dir, name)
+
     try {
       if (statSync(candidate).isFile()) {
         return candidate
@@ -52,6 +60,7 @@ function resolveOnPath(name: string): string | null {
       // Not in this directory.
     }
   }
+
   return null
 }
 
@@ -64,6 +73,7 @@ function createFishSandbox(prefix: string): { bin: string; preflight: string; ma
   if (!fishBinary) {
     throw new Error('fish ran but could not be resolved to a file to symlink')
   }
+
   const root = mkdtempSync(join(tmpdir(), prefix))
   roots.push(root)
   const bin = join(root, 'bin')
@@ -72,6 +82,7 @@ function createFishSandbox(prefix: string): { bin: string; preflight: string; ma
   const marker = join(root, 'preflight-ran')
   const preflight = join(bin, 'orca-preflight')
   writeExecutable(preflight, `#!/bin/sh\nprintf ran > ${JSON.stringify(marker)}\n`)
+
   return { bin, preflight, marker }
 }
 
@@ -110,6 +121,7 @@ function runAliasLaunch(
       : '#!/bin/sh\nexit 7\n'
   )
   const isZsh = shell.endsWith('/zsh')
+
   return execFileSync(
     shell,
     [
@@ -420,6 +432,7 @@ describe('Codex shell launch preflight command', () => {
     const resourcesPath = join(root, 'resources')
     mkdirSync(join(userDataPath, 'cli', 'bin'), { recursive: true })
     mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
+
     return { root, userDataPath, resourcesPath }
   }
 
@@ -493,6 +506,7 @@ describe('Codex shell launch preflight command', () => {
         resourcesPath,
         platform: 'darwin'
       })
+
       expect(command).not.toBeNull()
       expect(isAbsolute(command as string)).toBe(true)
     }
@@ -504,6 +518,7 @@ describe('Codex shell launch preflight command', () => {
   ])('skips the preflight when $label', (config) => {
     const { userDataPath, resourcesPath } = makeCliRoot()
     const launcherPath = join(resourcesPath, 'bin', 'orca')
+
     if (config.create === 'directory') {
       mkdirSync(launcherPath)
     }
@@ -588,6 +603,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
       preflightPath,
       `#!/bin/sh\n[ "$1 $2 $3" = "agent hooks prepare-codex" ] || exit 2\nprintf ran > ${JSON.stringify(markerPath)}\n`
     )
+
     return { preflightPath, markerPath }
   }
 

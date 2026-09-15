@@ -34,6 +34,7 @@ describe('FirstPromptCard', () => {
       executionHostId: 'ssh:dev-box',
       firstUserPrompt: 'The authoritative opening ask'
     } as AiVaultSession
+
     stubApi(vi.fn().mockResolvedValue({ prompt: null }))
 
     render(
@@ -46,6 +47,7 @@ describe('FirstPromptCard', () => {
 
   it('labels a remote preview fallback as a recent prompt when no full read is available', () => {
     const getFirstUserPrompt = vi.fn().mockResolvedValue({ prompt: null })
+
     const remoteSession = {
       ...session,
       executionHostId: 'ssh:dev-box',
@@ -54,6 +56,7 @@ describe('FirstPromptCard', () => {
         { role: 'user', text: 'A recent ask from the sliding window', timestamp: null }
       ]
     } as AiVaultSession
+
     stubApi(getFirstUserPrompt)
 
     render(
@@ -73,6 +76,7 @@ describe('FirstPromptCard', () => {
         { role: 'user', text: 'A recent ask from the sliding window', timestamp: null }
       ]
     } as AiVaultSession
+
     stubApi(vi.fn().mockResolvedValue({ prompt: 'The authoritative opening ask' }))
 
     render(<FirstPromptCard session={localSession} preview={sessionPromptPreview(localSession)} />)

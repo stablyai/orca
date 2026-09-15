@@ -38,6 +38,7 @@ export function persistGatedSetupSpawnFailure(args: WorkerSetupStageArgs): boole
   if (args.setup.startupPolicy !== 'wait-for-setup' || args.setup.state !== 'spawn_failed') {
     return false
   }
+
   args.db.recordWorkerStage({
     dispatchId: args.dispatchId,
     stage: 'setup_start',
@@ -47,6 +48,7 @@ export function persistGatedSetupSpawnFailure(args: WorkerSetupStageArgs): boole
     effects: args.effects,
     residualResources: residualWorkerEffects(args.effects)
   })
+
   return true
 }
 
@@ -54,9 +56,11 @@ export function persistWorkerSetupWaitOutcome(
   args: WorkerSetupStageArgs & { wait: { satisfied: boolean; status: string } }
 ): void {
   applyWaitForSetupOutcome(args.setup, args.effects, args.wait)
+
   if (args.setup.startupPolicy !== 'wait-for-setup') {
     return
   }
+
   args.db.recordWorkerStage({
     dispatchId: args.dispatchId,
     stage: args.setup.state === 'failed' ? 'setup_failed' : 'setup_settled',

@@ -23,11 +23,13 @@ describe('searchBaseRefs git compatibility', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args.some((arg) => arg.startsWith('--exclude=refs/remotes/'))) {
         throw Object.assign(new Error("unknown option `exclude'"), {
           stderr: "error: unknown option `exclude'"
         })
       }
+
       return {
         stdout: [
           'refs/remotes/origin/main\0origin/main',
@@ -39,9 +41,11 @@ describe('searchBaseRefs git compatibility', () => {
 
     await expect(searchBaseRefs('/repo', '', 1)).resolves.toEqual(['origin/main'])
     await expect(searchBaseRefs('/repo', '', 1)).resolves.toEqual(['origin/main'])
+
     const forEachRefCalls = gitExecFileAsyncMock.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
+
     expect(forEachRefCalls).toHaveLength(3)
     expect(
       (forEachRefCalls[0][0] as string[]).some((arg) => arg.startsWith('--exclude=refs/remotes/'))

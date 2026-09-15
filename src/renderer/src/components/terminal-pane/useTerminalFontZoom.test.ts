@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => effect()
@@ -40,6 +41,7 @@ describe('useTerminalFontZoom', () => {
         ui: {
           onTerminalZoom: vi.fn((listener: (direction: 'in' | 'out' | 'reset') => void) => {
             terminalZoomListeners.push(listener)
+
             return () => {}
           })
         }
@@ -69,6 +71,7 @@ describe('useTerminalFontZoom', () => {
     })
     const listener = terminalZoomListeners.at(-1)
     expect(listener).toBeTypeOf('function')
+
     return { terminal, listener: listener as (direction: 'in' | 'out' | 'reset') => void }
   }
 

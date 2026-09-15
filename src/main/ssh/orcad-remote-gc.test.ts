@@ -4,15 +4,19 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: () => false
 }))
+
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+
 vi.mock('./ssh-relay-gc-claim', () => ({
   isRelayGcClaimOwned: vi.fn().mockResolvedValue(true),
   releaseRelayGcClaimWithRetry: vi.fn().mockResolvedValue('released'),
   tryAcquireRelayGcClaim: vi.fn().mockResolvedValue('token')
 }))
+
 vi.mock('./ssh-relay-gc-tombstone', () => ({
   cleanupRelayGcTombstones: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('./ssh-relay-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock',
   isRelayInstallLockStale: vi.fn().mockResolvedValue(false)
@@ -25,7 +29,9 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 
 const conn = {} as SshConnection
+
 const host = getRemoteHostPlatform('linux-x64')
+
 const mockExec = vi.mocked(execCommand)
 
 /**
@@ -42,23 +48,31 @@ function scriptHost(options: {
     if (command.includes('-mindepth 1 -maxdepth 1')) {
       return options.listing.join('\n')
     }
+
     if (command.includes('.install-lock')) {
       return 'OPEN'
     }
+
     if (command.includes('.install-complete')) {
       return 'COMPLETE'
     }
+
     if (command.includes('.orcad-pid')) {
       const dir = Object.keys(options.liveness ?? {}).find((name) => command.includes(name))
+
       return dir ? (options.liveness?.[dir] ?? 'DEAD') : 'DEAD'
     }
+
     if (command.startsWith('mv ')) {
       const match = command.match(/'([^']*)'/)
+
       if (match) {
         options.removed.push(match[1].split('/').pop() ?? '')
       }
+
       return 'MOVED'
     }
+
     return ''
   })
 }
@@ -78,9 +92,11 @@ describe('orcad GC', () => {
       currentDirAbsPath: '/home/u/.orca-remote/orcad-0.2.0+bb',
       record: emptyOrcadActivationRecord()
     })
+
     const listCommand = mockExec.mock.calls
       .map((call) => String(call[1]))
       .find((c) => c.includes('find'))
+
     expect(listCommand).toContain("-name 'orcad-*'")
     expect(listCommand).not.toContain("-name 'relay-*'")
   })

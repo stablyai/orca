@@ -41,6 +41,7 @@ export function BrowserPageContextMenu({
       if (event.browserPageId !== browserPageId) {
         return
       }
+
       // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
       const zoomFactor = 1.2 ** window.api.ui.getZoomLevel()
       const x = Math.round((event.screenX - window.screenX) / zoomFactor)
@@ -60,6 +61,7 @@ export function BrowserPageContextMenu({
       if (event.browserPageId !== browserPageId) {
         return
       }
+
       setContextMenu(null)
     })
   }, [browserPageId])
@@ -68,6 +70,7 @@ export function BrowserPageContextMenu({
   // otherwise dismissing leaves the page unable to receive keystrokes.
   const closeMenu = useCallback((): void => {
     setContextMenu(null)
+
     try {
       webviewRef.current?.focus()
     } catch {
@@ -77,9 +80,11 @@ export function BrowserPageContextMenu({
 
   const menuItems = useCallback((): HTMLButtonElement[] => {
     const el = contextMenuRef.current
+
     if (!el) {
       return []
     }
+
     return [...el.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')]
   }, [])
 
@@ -87,13 +92,16 @@ export function BrowserPageContextMenu({
     if (!contextMenu) {
       return
     }
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.preventDefault()
         closeMenu()
       }
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [closeMenu, contextMenu])
 
@@ -102,17 +110,21 @@ export function BrowserPageContextMenu({
     if (!contextMenu) {
       return
     }
+
     menuItems()[0]?.focus()
   }, [contextMenu, menuItems])
 
   const handleMenuKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>): void => {
       const items = menuItems()
+
       if (items.length === 0) {
         return
       }
+
       const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
       let nextIndex: number
+
       if (e.key === 'ArrowDown') {
         nextIndex = (currentIndex + 1) % items.length
       } else if (e.key === 'ArrowUp') {
@@ -124,6 +136,7 @@ export function BrowserPageContextMenu({
       } else {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
       items[nextIndex]?.focus()
@@ -134,9 +147,11 @@ export function BrowserPageContextMenu({
   // Why: ancestor CSS (transform/backdrop-filter) can shift position:fixed even via a body Portal, so measure/correct before paint; also flip on viewport overflow.
   useLayoutEffect(() => {
     const el = contextMenuRef.current
+
     if (!el || !contextMenu) {
       return
     }
+
     el.style.left = `${contextMenu.x}px`
     el.style.top = `${contextMenu.y}px`
     const rect = el.getBoundingClientRect()
@@ -152,6 +167,7 @@ export function BrowserPageContextMenu({
     if (rect.right > window.innerWidth) {
       renderX = contextMenu.x - rect.width
     }
+
     if (rect.bottom > window.innerHeight) {
       renderY = contextMenu.y - rect.height
     }
@@ -203,9 +219,11 @@ export function BrowserPageContextMenu({
               className={MENU_ITEM_CLASS}
               onClick={() => {
                 const targetUrl = normalizeExternalBrowserUrl(contextMenu.linkUrl!)
+
                 if (targetUrl) {
                   void window.api.shell.openUrl(targetUrl)
                 }
+
                 closeMenu()
               }}
             >
@@ -283,9 +301,11 @@ export function BrowserPageContextMenu({
           className={MENU_ITEM_CLASS}
           onClick={() => {
             const targetUrl = normalizeExternalBrowserUrl(contextMenu.pageUrl)
+
             if (targetUrl) {
               void window.api.shell.openUrl(targetUrl)
             }
+
             closeMenu()
           }}
         >

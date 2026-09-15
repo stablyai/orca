@@ -48,13 +48,17 @@ describe('runWithGitFetchHeadLock', () => {
       mkdir(path.join(otherRepo, '.git'), { recursive: true })
     ])
     let releaseFirst!: () => void
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     let markFirstStarted!: () => void
+
     const firstStarted = new Promise<void>((resolve) => {
       markFirstStarted = resolve
     })
+
     const order: string[] = []
 
     const first = runWithGitFetchHeadLock(repo, undefined, async () => {
@@ -63,10 +67,13 @@ describe('runWithGitFetchHeadLock', () => {
       await firstGate
       order.push('first:end')
     })
+
     await firstStarted
+
     const second = runWithGitFetchHeadLock(repo, undefined, async () => {
       order.push('second')
     })
+
     const other = runWithGitFetchHeadLock(otherRepo, undefined, async () => {
       order.push('other')
     })
@@ -89,17 +96,22 @@ describe('runWithGitFetchHeadLock', () => {
     const repo = path.join(root, 'repo')
     await mkdir(path.join(repo, '.git'), { recursive: true })
     let releaseFirst!: () => void
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     let markFirstStarted!: () => void
+
     const firstStarted = new Promise<void>((resolve) => {
       markFirstStarted = resolve
     })
+
     const first = runWithGitFetchHeadLock(repo, undefined, async () => {
       markFirstStarted()
       await firstGate
     })
+
     await firstStarted
     const controller = new AbortController()
     const queued = runWithGitFetchHeadLock(repo, controller.signal, async () => 'ran')
@@ -126,27 +138,36 @@ describe('runWithGitFetchHeadLock', () => {
       await mkdir(nested)
       await symlink(repo, alias)
       let release!: () => void
+
       const gate = new Promise<void>((resolve) => {
         release = resolve
       })
+
       let markFirstStarted!: () => void
+
       const firstStarted = new Promise<void>((resolve) => {
         markFirstStarted = resolve
       })
+
       const order: string[] = []
+
       try {
         const first = runWithGitFetchHeadLock(repo, undefined, async () => {
           order.push('root')
           markFirstStarted()
           await gate
         })
+
         await firstStarted
+
         const nestedRun = runWithGitFetchHeadLock(nested, undefined, async () => {
           order.push('nested')
         })
+
         const aliasRun = runWithGitFetchHeadLock(alias, undefined, async () => {
           order.push('alias')
         })
+
         await new Promise((resolve) => setTimeout(resolve, 20))
         expect(order).toEqual(['root'])
         release()
@@ -171,15 +192,20 @@ describe('runWithGitFetchHeadLock', () => {
       writeFile(path.join(linkedGitDir, 'commondir'), '../..\n')
     ])
     let release!: () => void
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const order: string[] = []
+
     const first = runWithGitFetchHeadLock(main, undefined, async () => {
       order.push('main')
       await gate
     })
+
     await vi.waitFor(() => expect(order).toEqual(['main']))
+
     const second = runWithGitFetchHeadLock(linked, undefined, async () => {
       order.push('linked')
     })

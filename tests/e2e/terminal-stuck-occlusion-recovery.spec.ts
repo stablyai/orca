@@ -32,6 +32,7 @@ type DeliverySnapshot = {
 async function getDeliverySnapshot(page: Page): Promise<DeliverySnapshot> {
   return page.evaluate(async () => {
     const snapshot = await window.api.pty.getRendererDeliveryDebugSnapshot()
+
     return {
       hiddenDeliveryGatedPtyCount: snapshot.hiddenDeliveryGatedPtyCount,
       hiddenDeliveryGatedVisiblePtyCount: snapshot.hiddenDeliveryGatedVisiblePtyCount,
@@ -132,9 +133,11 @@ test.describe('terminal stuck-occlusion recovery', () => {
         }
       ).__orcaTerminalFreezeReport?.()
     )
+
     if (!report) {
       throw new Error('freeze report global missing from prod-path renderer')
     }
+
     expect(report.renderer.documentVisibilityProvenStale).toBe(true)
     const rendererKinds = report.renderer.breadcrumbs.map((crumb) => crumb.kind)
     expect(rendererKinds).toContain('stale-visibility-latch')

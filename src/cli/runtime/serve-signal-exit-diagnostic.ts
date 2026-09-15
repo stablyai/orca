@@ -12,9 +12,11 @@ export function serveSignalExitError(
       'Orca serve exited without reporting an exit code or signal.'
     )
   }
+
   if (platform !== 'darwin' || signal !== 'SIGABRT') {
     return new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${signal}.`)
   }
+
   // Why: the startup abort happens inside +[NSApplication sharedApplication], before any of our JS
   // runs, so the parent CLI is the only place it can be explained. We only see the signal, never the
   // phase, so the cause is offered as the likely one rather than asserted.

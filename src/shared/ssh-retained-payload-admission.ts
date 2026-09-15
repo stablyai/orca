@@ -8,11 +8,17 @@ import type {
 import { clampUtf8TextPrefix, measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const SSH_RETAINED_IDENTIFIER_MAX_UTF8_BYTES = 1024
+
 export const SSH_CONNECTION_ERROR_MAX_UTF8_BYTES = 16 * 1024
+
 export const SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES = 128
+
 export const SSH_DETECTED_PORTS_MAX_ENTRIES = 50
+
 export const SSH_DETECTED_PORT_HOST_MAX_UTF8_BYTES = 1024
+
 export const SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES = 4 * 1024
+
 export const SSH_DETECTED_PORT_ADVERTISED_URL_MAX_UTF8_BYTES = 2048
 
 const CONNECTION_STATUSES = new Set<SshConnectionStatus>([
@@ -40,7 +46,9 @@ export function isAdmissibleDirectSshAuthority(value: unknown): value is DirectS
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const authority = value as Record<string, unknown>
+
   return (
     isSshRetainedIdentifier(authority.targetId) &&
     isSshProviderEpoch(authority.providerEpoch) &&
@@ -55,7 +63,9 @@ export function admitSshConnectionState(
   if (!value || typeof value !== 'object' || !isSshRetainedIdentifier(expectedTargetId)) {
     return null
   }
+
   const input = value as Record<string, unknown>
+
   if (
     (input.targetId !== undefined &&
       (!isSshRetainedIdentifier(input.targetId) || input.targetId !== expectedTargetId)) ||
@@ -70,6 +80,7 @@ export function admitSshConnectionState(
   const error = clampSshConnectionError(input.error)
   const hasProviderEpoch = input.providerEpoch !== undefined && input.providerEpoch !== null
   const hasConnectionGeneration = input.connectionGeneration !== undefined
+
   if (
     hasProviderEpoch !== hasConnectionGeneration ||
     (hasProviderEpoch &&
@@ -78,6 +89,7 @@ export function admitSshConnectionState(
   ) {
     return null
   }
+
   return {
     targetId: expectedTargetId,
     status: input.status as SshConnectionStatus,
@@ -101,15 +113,19 @@ export function admitSshConnectionStateForAuthorityReconciliation(
   expectedTargetId: string
 ): SshConnectionState | null {
   const admitted = admitSshConnectionState(value, expectedTargetId)
+
   if (admitted || !value || typeof value !== 'object') {
     return admitted
   }
+
   const input = value as Record<string, unknown>
   const hasProviderEpoch = input.providerEpoch !== undefined && input.providerEpoch !== null
   const hasConnectionGeneration = input.connectionGeneration !== undefined
+
   if (hasProviderEpoch === hasConnectionGeneration) {
     return null
   }
+
   return admitSshConnectionState(
     {
       targetId: input.targetId,
@@ -143,14 +159,18 @@ export function admitSshDetectedPorts(value: unknown): EnrichedDetectedPort[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   const retained: EnrichedDetectedPort[] = []
   const scanLimit = Math.min(value.length, SSH_DETECTED_PORTS_MAX_ENTRIES)
+
   for (let index = 0; index < scanLimit; index += 1) {
     const port = admitDetectedPort(value[index])
+
     if (port) {
       retained.push(port)
     }
   }
+
   return retained
 }
 
@@ -158,7 +178,9 @@ function admitDetectedPort(value: unknown): EnrichedDetectedPort | null {
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const input = value as Record<string, unknown>
+
   if (
     !Number.isSafeInteger(input.port) ||
     (input.port as number) < 1 ||
@@ -167,16 +189,19 @@ function admitDetectedPort(value: unknown): EnrichedDetectedPort | null {
   ) {
     return null
   }
+
   const processName =
     typeof input.processName === 'string'
       ? clampUtf8TextPrefix(input.processName, SSH_DETECTED_PORT_PROCESS_NAME_MAX_UTF8_BYTES)
       : undefined
+
   const advertisedUrl = isStringWithinLimit(
     input.advertisedUrl,
     SSH_DETECTED_PORT_ADVERTISED_URL_MAX_UTF8_BYTES
   )
     ? input.advertisedUrl
     : undefined
+
   return {
     port: input.port as number,
     host: input.host,

@@ -20,10 +20,15 @@ vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
 }))
 
 const FLOATING_TAB_ID = 'tab-floating'
+
 const MAIN_TAB_ID = 'tab-main'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const MAIN_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const FLOATING_PANE_KEY = makePaneKey(FLOATING_TAB_ID, LEAF_ID)
+
 const MAIN_PANE_KEY = makePaneKey(MAIN_TAB_ID, MAIN_LEAF_ID)
 
 function seedFloatingCompletion(): void {
@@ -121,6 +126,7 @@ it('does not acknowledge the regular workspace for a colliding floating tab', ()
     unreadAgentCompletionPanes: { [FLOATING_PANE_KEY]: true }
   })
   const cleared = vi.spyOn(useAppStore.getState(), 'clearWorktreeUnread')
+
   try {
     renderHook(() => useAutoAckViewedAgent(true))
     expect(cleared).not.toHaveBeenCalledWith('regular')

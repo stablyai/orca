@@ -16,6 +16,7 @@ afterEach(() => {
 describe('installDevParentDisconnectQuit', () => {
   it('quits the dev app when the supervising IPC channel disconnects', async () => {
     const { app } = await import('electron')
+
     const {
       installDevParentDisconnectQuit,
       isDevParentShutdownRequested,
@@ -33,6 +34,7 @@ describe('installDevParentDisconnectQuit', () => {
       if (event === 'disconnect') {
         disconnectHandlers.push(listener as () => void)
       }
+
       return process
     }) as NodeJS.Process['once']
 
@@ -80,6 +82,7 @@ describe('installDevParentDisconnectQuit', () => {
 describe('installDevParentWatchdog', () => {
   it('quits the dev app when the original parent pid disappears', async () => {
     const { app } = await import('electron')
+
     const {
       installDevParentWatchdog,
       isDevParentShutdownRequested,
@@ -101,6 +104,7 @@ describe('installDevParentWatchdog', () => {
         error.code = 'ESRCH'
         throw error
       }
+
       return true
     }) as typeof process.kill)
 
@@ -143,6 +147,7 @@ describe('installDevParentWatchdog', () => {
 describe('installDevParentSignalQuit', () => {
   it('quits the dev app when the supervisor forwards a terminal signal', async () => {
     const { app } = await import('electron')
+
     const {
       installDevParentSignalQuit,
       isDevParentShutdownRequested,
@@ -156,6 +161,7 @@ describe('installDevParentSignalQuit', () => {
 
     process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
       signalHandlers.set(event, listener as () => void)
+
       return process
     }) as NodeJS.Process['once']
 

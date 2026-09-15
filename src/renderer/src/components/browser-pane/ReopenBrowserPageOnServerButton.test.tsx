@@ -8,6 +8,7 @@ const reopenMocks = vi.hoisted(() => ({ reopenBrowserPageOnServer: vi.fn() }))
 vi.mock('./browser-reopen-on-server', () => ({
   reopenBrowserPageOnServer: reopenMocks.reopenBrowserPageOnServer
 }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 import { ReopenBrowserPageOnServerButton } from './ReopenBrowserPageOnServerButton'
@@ -26,6 +27,7 @@ function renderButton(): HTMLElement {
       lastCommittedUrl="https://example.internal/report"
     />
   )
+
   return screen.getByRole('button')
 }
 
@@ -33,6 +35,7 @@ function renderButton(): HTMLElement {
 // from the class and the accessibility flag both labels carry.
 function shown(text: string): boolean {
   const label = screen.getByText(text)
+
   return !label.className.includes('invisible') && label.getAttribute('aria-hidden') === 'false'
 }
 
@@ -40,6 +43,7 @@ describe('ReopenBrowserPageOnServerButton', () => {
   it('swaps in a spinner label once the remote round-trip outlasts the defer window', async () => {
     vi.useFakeTimers()
     let settle = (): void => {}
+
     reopenMocks.reopenBrowserPageOnServer.mockImplementation(
       () =>
         new Promise<boolean>((resolve) => {

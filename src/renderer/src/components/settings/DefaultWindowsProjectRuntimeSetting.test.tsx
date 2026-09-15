@@ -14,15 +14,20 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
+
   if (element.props?.control) {
     visit(element.props.control, cb)
   }
@@ -38,9 +43,11 @@ function findRuntimeControl(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('default project runtime control not found')
   }
+
   return found
 }
 
@@ -51,9 +58,11 @@ function findDistroSelect(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('default distro select not found')
   }
+
   return found
 }
 
@@ -82,6 +91,7 @@ describe('DefaultWindowsProjectRuntimeSetting', () => {
 
   it('updates the global default to WSL using the first available distro', () => {
     const updateSettings = vi.fn()
+
     const element = renderSetting({
       settings: getDefaultSettings('/tmp'),
       updateSettings,
@@ -90,6 +100,7 @@ describe('DefaultWindowsProjectRuntimeSetting', () => {
       wslDistros: ['Ubuntu-24.04'],
       wslCapabilitiesLoading: false
     })
+
     const control = findRuntimeControl(element)
     const onChange = control.props.onChange as (value: 'windows-host' | 'wsl') => void
 
@@ -102,6 +113,7 @@ describe('DefaultWindowsProjectRuntimeSetting', () => {
 
   it('updates the selected WSL distro for the global default', () => {
     const updateSettings = vi.fn()
+
     const element = renderSetting({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -113,6 +125,7 @@ describe('DefaultWindowsProjectRuntimeSetting', () => {
       wslDistros: ['Ubuntu-24.04', 'Debian'],
       wslCapabilitiesLoading: false
     })
+
     const select = findDistroSelect(element)
     const onValueChange = select.props.onValueChange as (value: string) => void
 

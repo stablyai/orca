@@ -3,6 +3,7 @@ import { identifierShadowTerms } from './session-search-identifier-split'
 
 // Tokens exactly as the unicode61 tokenizer with `_ . - / +` tokenchars emits them.
 const INDEX_TOKEN = /[\p{L}\p{N}\p{M}\p{Co}_./+-]+/gu
+
 const STOP_WORDS = new Set(
   (
     'a an and are as at be but by for from how i if in into is it its of on or that the this to ' +
@@ -11,7 +12,9 @@ const STOP_WORDS = new Set(
     "these those there's im ive dont"
   ).split(' ')
 )
+
 const MAX_BODY_TERMS = 48
+
 const MAX_TERMS = 64
 
 // A query that quotes something from a transcript: camelCase, SCREAMING_SNAKE,
@@ -19,6 +22,7 @@ const MAX_TERMS = 64
 // punctuation, or an error word.
 const LITERAL_SHAPE =
   /[A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*|\b[A-Z][A-Z0-9]{2,}(_[A-Z0-9]+)+\b|\b\w{2,}[._]\w{2,}\b|\b[\w.-]+\/[\w/.-]+\b|\b\w+\.(ts|tsx|js|jsx|py|rs|go|json|md|sh|yml|yaml|toml|c|cc|h|java|sql)\b|#\d{3,}|\b[A-Z]{2,6}-\d{2,}\b|[(){};=]|::|->|--\w|\b(Error|Exception|Traceback|error:|warning:)\b/
+
 const QUOTED = /"[^"]{3,}"|'[^']{3,}'/
 
 export type SessionSearchQueryPlan = {
@@ -47,16 +51,20 @@ export function isLiteralQuery(query: string): boolean {
  */
 export function indexTokens(query: string, limit = Number.POSITIVE_INFINITY): string[] {
   const out: string[] = []
+
   for (const match of query.matchAll(INDEX_TOKEN)) {
     const token = match[0]
+
     // Separators alone (`--`, `...`) are a token to FTS5 but never a search term.
     if (/[\p{L}\p{N}\p{Co}]/u.test(token)) {
       out.push(token)
+
       if (out.length >= limit) {
         break
       }
     }
   }
+
   return out
 }
 
@@ -79,11 +87,14 @@ export function planSessionSearchQuery(
   const truncated = overCap.length > MAX_BODY_TERMS
   const raw = overCap.slice(0, MAX_BODY_TERMS)
   let body = literal ? raw : raw.filter((token) => !STOP_WORDS.has(token.toLowerCase()))
+
   if (body.length < 2) {
     body = raw
   }
+
   const terms = [...new Set(body)]
   const extra: string[] = []
+
   for (const term of terms) {
     for (const piece of identifierShadowTerms(term, 12)) {
       if (!terms.includes(piece) && !STOP_WORDS.has(piece) && !extra.includes(piece)) {
@@ -91,6 +102,7 @@ export function planSessionSearchQuery(
       }
     }
   }
+
   return {
     literal,
     truncated,

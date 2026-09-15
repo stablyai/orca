@@ -18,15 +18,20 @@ export function narrowRecordByKeys<T>(
   if (!source || keys.length === 0) {
     return EMPTY_NARROWED_BY_KEY
   }
+
   let narrowed: Map<string, T> | null = null
+
   for (const key of keys) {
     const value = source[key]
+
     if (value === undefined) {
       continue
     }
+
     narrowed ??= new Map<string, T>()
     narrowed.set(key, value)
   }
+
   return narrowed ?? EMPTY_NARROWED_BY_KEY
 }
 
@@ -37,14 +42,18 @@ export function narrowMapByKeys<T>(
   if (source.size === 0 || keys.length === 0) {
     return EMPTY_NARROWED_BY_KEY
   }
+
   let narrowed: Map<string, T> | null = null
+
   for (const key of keys) {
     if (!source.has(key)) {
       continue
     }
+
     narrowed ??= new Map<string, T>()
     narrowed.set(key, source.get(key) as T)
   }
+
   return narrowed ?? EMPTY_NARROWED_BY_KEY
 }
 
@@ -54,14 +63,18 @@ export function captureMountedTerminalSurfaces(
   worktreeId: string
 ): ReadonlyMap<string, MountedTerminalSurfaceCapture> {
   let captures: Map<string, MountedTerminalSurfaceCapture> | null = null
+
   for (const tab of terminalTabs) {
     const registered = findRegisteredTerminalTab(tab.id, worktreeId)?.tab
+
     if (!registered) {
       continue
     }
+
     captures ??= new Map()
     captures.set(tab.id, captureMountedTerminalSurface(registered, terminalLayoutsByTabId[tab.id]))
   }
+
   return captures ?? EMPTY_NARROWED_BY_KEY
 }
 
@@ -73,20 +86,25 @@ function captureMountedTerminalSurface(
   const paneLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
   const activePane = manager?.getActivePane() ?? null
   const firstChild = registered.getContainer()?.firstElementChild
+
   // Mirrors getRuntimeLeafIdsForTerminal so captured pane ids cover every resolved leaf.
   const effectiveLeafIds =
     paneLeafIds.length > 0
       ? paneLeafIds
       : collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+
   const numericPaneIdByLeafId = new Map<string, number | null>()
   const ptyIdByNumericPaneId = new Map<number, string | null>()
+
   for (const leafId of effectiveLeafIds) {
     const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
     numericPaneIdByLeafId.set(leafId, numericPaneId)
+
     if (numericPaneId !== null) {
       ptyIdByNumericPaneId.set(numericPaneId, registered.getPtyIdForPane(numericPaneId))
     }
   }
+
   return {
     paneLeafIds,
     hasLiveActivePane: activePane !== null,
@@ -104,14 +122,17 @@ function narrowedEntriesEqual<K, T>(a: ReadonlyMap<K, T>, b: ReadonlyMap<K, T>):
   if (a === b) {
     return true
   }
+
   if (a.size !== b.size) {
     return false
   }
+
   for (const [key, value] of a) {
     if (b.get(key) !== value) {
       return false
     }
   }
+
   return true
 }
 
@@ -139,15 +160,19 @@ export function mountedSurfaceCapturesEqual(
   if (a === b) {
     return true
   }
+
   if (a.size !== b.size) {
     return false
   }
+
   for (const [tabId, capture] of a) {
     const other = b.get(tabId)
+
     if (!other || !mountedTerminalSurfaceCaptureEquals(capture, other)) {
       return false
     }
   }
+
   return true
 }
 

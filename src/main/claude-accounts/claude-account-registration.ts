@@ -60,8 +60,10 @@ export class ClaudeAccountRegistration {
     const accountId = randomUUID()
     const location = await this.dependencies.createManagedAuth(accountId, target)
     const previousSettings = this.dependencies.store.getSettings()
+
     try {
       const captured = await this.dependencies.login(location)
+
       return await this.persist(accountId, location, previousSettings, captured)
     } catch (error) {
       await this.cleanupFailedAdd(accountId, location.managedAuthPath, previousSettings, error)
@@ -76,11 +78,13 @@ export class ClaudeAccountRegistration {
     const accountId = randomUUID()
     const location = await this.dependencies.createManagedAuth(accountId, options)
     const previousSettings = this.dependencies.store.getSettings()
+
     try {
       const captured = await this.dependencies.captureExisting(
         configDir,
         options?.previousLegacyCredentialsSha256
       )
+
       return await this.persist(accountId, location, previousSettings, captured)
     } catch (error) {
       await this.cleanupFailedAdd(accountId, location.managedAuthPath, previousSettings, error)
@@ -90,24 +94,29 @@ export class ClaudeAccountRegistration {
 
   async reauthenticate(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.dependencies.selection.requireAccount(accountId)
+
     const managedAuthPath = await this.dependencies.assertManagedAuth(
       account.managedAuthPath,
       accountId
     )
+
     const previousSettings = this.dependencies.store.getSettings()
     const previousAuth = await this.dependencies.readSnapshot(accountId, managedAuthPath)
+
     const captured = await this.dependencies.login({
       managedAuthPath,
       managedAuthRuntime: account.managedAuthRuntime ?? 'host',
       wslDistro: account.wslDistro ?? null,
       wslLinuxAuthPath: account.wslLinuxAuthPath ?? null
     })
+
     if (!captured.identity.email) {
       throw new Error('Claude login completed, but Orca could not resolve the account email.')
     }
 
     const settings = this.dependencies.store.getSettings()
     const now = Date.now()
+
     const nextAccounts = settings.claudeManagedAccounts.map((entry) =>
       entry.id === accountId
         ? {
@@ -120,7 +129,9 @@ export class ClaudeAccountRegistration {
           }
         : entry
     )
+
     let wroteCredentials = false
+
     try {
       await this.dependencies.writeOauth(accountId, managedAuthPath, captured.oauthAccount)
       await this.dependencies.writeCredentials(accountId, managedAuthPath, captured.credentialsJson)
@@ -131,6 +142,7 @@ export class ClaudeAccountRegistration {
       const target = getClaudeSelectionTargetForAccount(account)
       await this.dependencies.selection.syncRuntimeAuth(target)
       await this.dependencies.rateLimits.refreshForClaudeAccountChange(undefined, target)
+
       return this.dependencies.selection.snapshot()
     } catch (error) {
       await this.rollbackReauthentication(
@@ -154,6 +166,7 @@ export class ClaudeAccountRegistration {
     if (!captured.identity.email) {
       throw new Error('Claude login completed, but Orca could not resolve the account email.')
     }
+
     if (
       findDuplicateClaudeAccount(previousSettings.claudeManagedAccounts, {
         email: captured.identity.email,
@@ -164,8 +177,10 @@ export class ClaudeAccountRegistration {
     ) {
       throw new DuplicateClaudeAccountError('This Claude account is already added.')
     }
+
     await this.dependencies.writeManagedAuth(accountId, location.managedAuthPath, captured)
     const now = Date.now()
+
     const account: ClaudeManagedAccount = {
       id: accountId,
       email: captured.identity.email,
@@ -180,6 +195,7 @@ export class ClaudeAccountRegistration {
       updatedAt: now,
       lastAuthenticatedAt: now
     }
+
     const selection = normalizeClaudeRuntimeSelection(previousSettings)
     this.dependencies.store.updateSettings({
       claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
@@ -188,6 +204,7 @@ export class ClaudeAccountRegistration {
     })
     this.dependencies.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
     this.dependencies.rateLimits.evictInactiveClaudeCache(accountId)
+
     return this.dependencies.selection.snapshot()
   }
 
@@ -199,14 +216,18 @@ export class ClaudeAccountRegistration {
   ): Promise<void> {
     if (error instanceof DuplicateClaudeAccountError) {
       await this.dependencies.removeManagedAuth(accountId, managedAuthPath)
+
       return
     }
+
     this.dependencies.selection.restoreSettings(previousSettings)
+
     try {
       await this.dependencies.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
     } catch (rollbackError) {
       console.warn('[claude-accounts] Rollback rematerialization failed:', rollbackError)
     }
+
     await this.dependencies.removeManagedAuth(accountId, managedAuthPath)
   }
 
@@ -219,6 +240,7 @@ export class ClaudeAccountRegistration {
     wroteCredentials: boolean
   ): Promise<void> {
     let restoredCredentials = false
+
     try {
       await this.dependencies.restoreCredentials(accountId, path, snapshot)
       restoredCredentials = true
@@ -228,6 +250,7 @@ export class ClaudeAccountRegistration {
         rollbackError
       )
     }
+
     if (restoredCredentials || !wroteCredentials) {
       try {
         await this.dependencies.restoreOauth(accountId, path, snapshot)
@@ -238,6 +261,7 @@ export class ClaudeAccountRegistration {
         )
       }
     }
+
     if (restoredCredentials) {
       this.dependencies.selection.restoreSettings(previousSettings)
       await this.dependencies.runtimeAuth.forceMaterializeCurrentSelectionForRollback()

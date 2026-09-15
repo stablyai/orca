@@ -15,6 +15,7 @@ import {
 import { getDevicePushToken } from './push-token'
 
 const mocks = vi.hoisted(() => ({ storage: new Map<string, string>(), replace: vi.fn() }))
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => mocks.storage.get(key) ?? null),
@@ -23,6 +24,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
+
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: vi.fn() }) },
   AccessibilityInfo: {
@@ -41,22 +43,32 @@ vi.mock('react-native', () => ({
   Linking: { openSettings: vi.fn() },
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
+
 vi.mock('expo-router', () => ({
   useFocusEffect: vi.fn(),
   useLocalSearchParams: () => ({ hostId: 'host', steps: 'notifications' }),
   useRouter: () => ({ replace: mocks.replace })
 }))
+
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'View',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
+
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon' }))
+
 vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'Logo' }))
+
 vi.mock('../onboarding/MobileOnboardingPage', () => ({ MobileOnboardingPage: 'Page' }))
+
 vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: () => [] }))
+
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: async () => [] }))
+
 vi.mock('./NotificationDeliverySection', () => ({ NotificationDeliverySection: 'Delivery' }))
+
 vi.mock('./use-remote-push-capable-hosts', () => ({ useRemotePushCapableHosts: () => [] }))
+
 vi.mock('./notification-permissions', () => ({
   ensureNotificationPermissions: async () => true,
   getNotificationPermissionState: async () => ({
@@ -66,6 +78,7 @@ vi.mock('./notification-permissions', () => ({
     authorizationReflectsUserChoice: true
   })
 }))
+
 vi.mock('./mobile-notifications', () => ({
   ensureNotificationPermissions: async () => true,
   getNotificationPermissionState: async () => ({
@@ -75,9 +88,11 @@ vi.mock('./mobile-notifications', () => ({
     authorizationReflectsUserChoice: true
   })
 }))
+
 vi.mock('./desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: async () => {}
 }))
+
 vi.mock('./push-token', () => ({
   getDevicePushToken: vi.fn(),
   addPushTokenListener: () => () => {}
@@ -88,17 +103,25 @@ const token = {
   token: 'a'.repeat(64),
   apnsEnvironment: 'sandbox' as const
 }
+
 let renderer: ReactTestRenderer | undefined
+
 let stopSync: () => void
+
 const records = () => JSON.parse(mocks.storage.get('orca:remotePushHostRegistrations') ?? '{}')
+
 const drain = () => vi.advanceTimersByTimeAsync(0)
+
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
+
 function connection() {
   return {
     sendRequest: vi.fn(async (method: string): Promise<unknown> => ({
@@ -110,13 +133,16 @@ function connection() {
     }))
   }
 }
+
 async function connectedHost() {
   const client = connection()
   attachPushRegistration('host', client as never)
   await drain()
   client.sendRequest.mockClear()
+
   return client
 }
+
 async function choose(entry: string) {
   await act(async () => {
     renderer = create(
@@ -131,18 +157,22 @@ async function choose(entry: string) {
     }
   })
 }
+
 function expectChoiceComplete(entry: string) {
   expect(mocks.storage.get('orca:pushServiceNotificationsEnabled')).toBe('true')
+
   if (entry === 'settings') {
     expect(renderer!.root.findByType('Switch').props).toMatchObject({
       value: true,
       disabled: false
     })
   }
+
   if (entry === 'onboarding') {
     expect(mocks.replace).toHaveBeenCalledExactlyOnceWith('/h/host')
   }
 }
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
@@ -151,6 +181,7 @@ beforeEach(() => {
   vi.mocked(getDevicePushToken).mockResolvedValue(token)
   stopSync = startPushTokenSync()
 })
+
 afterEach(async () => {
   await act(async () => renderer?.unmount())
   renderer = undefined

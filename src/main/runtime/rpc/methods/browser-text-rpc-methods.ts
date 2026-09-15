@@ -8,6 +8,7 @@ export const BROWSER_TEXT_METHODS = [
     params: Fill,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.value)
+
       return runtime.browserFill(params)
     }
   }),
@@ -16,6 +17,7 @@ export const BROWSER_TEXT_METHODS = [
     params: Type,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.input)
+
       return runtime.browserType(params)
     }
   }),
@@ -24,6 +26,7 @@ export const BROWSER_TEXT_METHODS = [
     params: KeyboardInsert,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.text)
+
       return runtime.browserKeyboardInsertText(params)
     }
   })

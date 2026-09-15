@@ -106,6 +106,7 @@ describe('buildPreviewTerminalOptions', () => {
         kittyKeyboardAdvertised: true
       }
     })
+
     expect(options.vtExtensions?.kittyKeyboard).toBe(true)
     expect(options.windowsPty).toBeUndefined()
     expect(options.cols).toBe(100)
@@ -123,6 +124,7 @@ describe('buildPreviewTerminalOptions', () => {
         kittyKeyboardAdvertised: false
       }
     })
+
     expect(options.windowsPty).toEqual({ backend: 'conpty', buildNumber: 22631 })
     expect(options.vtExtensions?.kittyKeyboard).toBe(false)
   })

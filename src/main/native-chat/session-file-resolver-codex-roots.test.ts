@@ -17,15 +17,18 @@ vi.mock('../wsl', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   listRunningWslHomeDirsAsync: vi.fn(async () => [])
 }))
+
 vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
   ...(await importOriginal<typeof WslRunningPathFilterModule>()),
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
 
 const scanned = vi.hoisted(() => ({ dirs: [] as string[] }))
+
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: async (dir: string) => {
     scanned.dirs.push(dir)
+
     return []
   }
 }))

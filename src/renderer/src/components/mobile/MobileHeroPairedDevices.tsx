@@ -38,6 +38,7 @@ export function HeroPaired({
       <ul className="mp-paired-list">
         {devices.map((device) => {
           const revoking = revokingDeviceIds.includes(device.deviceId)
+
           return (
             <li key={device.deviceId} className="mp-paired-row">
               <div className="mp-paired-icon">

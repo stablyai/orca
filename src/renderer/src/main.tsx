@@ -26,8 +26,11 @@ import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPre
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
+
 installRendererCrashDiagnostics()
+
 installTypingLatencyDiagnostic()
+
 installAutomationHostDiagnostic()
 
 if (
@@ -42,10 +45,13 @@ if (
 }
 
 applyDocumentTheme('system', { disableTransitions: false })
+
 const browserClientPageRenderer = installBrowserClientPageRenderer()
+
 import.meta.hot?.dispose(() => browserClientPageRenderer?.dispose())
 
 const rootElement = document.getElementById('root')
+
 if (!rootElement) {
   recordRendererCrashBreadcrumb('renderer_root_missing')
   throw new Error('Renderer root element not found.')
@@ -53,6 +59,7 @@ if (!rootElement) {
 
 function RendererRoot(): React.JSX.Element {
   useTranslation()
+
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="app.root"
@@ -76,6 +83,7 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
     </I18nProvider>
   </StrictMode>
 )
+
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')
 
 // Why here: the xterm WebGL addon is 243 KB, is only ever constructed once a

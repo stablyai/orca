@@ -87,6 +87,7 @@ describe('applyRefreshedToken', () => {
       { access_token: 'new-access', expires_in: 3600, refresh_token: 'new-refresh' },
       NOW
     )
+
     const oauth = parseClaudeOauthBlob(updated!)!
     expect(oauth.accessToken).toBe('new-access')
     expect(oauth.refreshToken).toBe('new-refresh')
@@ -99,6 +100,7 @@ describe('applyRefreshedToken', () => {
       { access_token: 'new-access', expires_in: 3600 },
       NOW
     )
+
     expect(parseClaudeOauthBlob(updated!)!.refreshToken).toBe('old-refresh')
   })
 
@@ -107,6 +109,7 @@ describe('applyRefreshedToken', () => {
       claudeAiOauth: { accessToken: 'a', refreshToken: 'r' },
       somethingElse: { keep: true }
     })
+
     const updated = applyRefreshedToken(raw, { access_token: 'b' }, NOW)
     expect(JSON.parse(updated!).somethingElse).toEqual({ keep: true })
   })
@@ -117,6 +120,7 @@ describe('applyRefreshedToken', () => {
       { access_token: 'b', scope: 'user:inference user:profile' },
       NOW
     )
+
     expect(parseClaudeOauthBlob(updated!)!.scopes).toEqual(['user:inference', 'user:profile'])
   })
 
@@ -140,6 +144,7 @@ describe('refreshClaudeOauthCredentials', () => {
       credentials({ refreshToken: undefined }),
       NOW
     )
+
     expect(result).toBeNull()
     expect(netFetchMock).not.toHaveBeenCalled()
   })

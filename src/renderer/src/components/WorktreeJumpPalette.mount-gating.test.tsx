@@ -16,6 +16,7 @@ const contentProbe = vi.hoisted(() => ({
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
+
   return {
     ...actual,
     useTranslation: () => ({
@@ -36,17 +37,20 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/hooks/useSettingsNavigationMetadata', async () => {
   const React = await import('react')
+
   return {
     useSettingsNavigationMetadata: () => {
       contentProbe.renders()
       React.useEffect(() => {
         contentProbe.subscriptions()
         const unsubscribe = useAppStore.subscribe(() => contentProbe.storeNotifications())
+
         return () => {
           contentProbe.unsubscriptions()
           unsubscribe()
         }
       }, [])
+
       return []
     }
   }
@@ -66,6 +70,7 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
+
   return {
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -91,7 +96,9 @@ vi.mock('@/components/ui/command', async () => {
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 let testContainer: HTMLDivElement
+
 let testRoot: Root
 
 async function flushEffects(): Promise<void> {

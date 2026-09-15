@@ -7,20 +7,25 @@ async function createIsolatedWorktree(
   page: Parameters<typeof waitForActiveWorktree>[0]
 ): Promise<string> {
   const name = `e2e-delete-shortcut-${Date.now()}`
+
   return page.evaluate(async (worktreeName) => {
     const state = window.__store?.getState()
+
     if (!state?.activeWorktreeId) {
       throw new Error('No active worktree to derive repo from')
     }
+
     const worktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((candidate) => candidate.id === state.activeWorktreeId)
+
     if (!worktree) {
       throw new Error('Active worktree was not found')
     }
 
     const result = await state.createWorktree(worktree.repoId, worktreeName)
     await state.fetchWorktrees(worktree.repoId)
+
     return result.worktree.id
   }, name)
 }
@@ -37,6 +42,7 @@ test.describe('Worktree Delete Shortcut', () => {
     if (!createdWorktreeId) {
       return
     }
+
     const worktreeId = createdWorktreeId
     createdWorktreeId = null
     await orcaPage

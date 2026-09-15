@@ -88,24 +88,33 @@ export function browserRootPath(def: ChromiumBrowserDef): string | null {
     if (!def.macRoot) {
       return null
     }
+
     const home = process.env.HOME ?? ''
+
     return join(home, 'Library', 'Application Support', def.macRoot)
   }
+
   if (process.platform === 'win32') {
     if (!def.winRoot) {
       return null
     }
+
     const localAppData = process.env.LOCALAPPDATA ?? ''
+
     if (!localAppData) {
       return null
     }
+
     return join(localAppData, def.winRoot)
   }
+
   // Linux
   if (!def.linuxRoot) {
     return null
   }
+
   const configHome = process.env.XDG_CONFIG_HOME ?? join(process.env.HOME ?? '', '.config')
+
   return join(configHome, def.linuxRoot)
 }
 
@@ -124,24 +133,31 @@ export function isSafeBrowserProfileDirectory(directory: string): boolean {
 export function discoverProfiles(browserRoot: string): BrowserProfile[] {
   try {
     const localStatePath = join(browserRoot, 'Local State')
+
     if (!existsSync(localStatePath)) {
       return [{ name: 'Default', directory: 'Default' }]
     }
+
     const raw = readFileSync(localStatePath, 'utf-8')
     const localState = JSON.parse(raw)
     const infoCache = localState?.profile?.info_cache
+
     if (!infoCache || typeof infoCache !== 'object') {
       return [{ name: 'Default', directory: 'Default' }]
     }
+
     const profiles: BrowserProfile[] = []
+
     for (const [dir, info] of Object.entries(infoCache)) {
       // Why: Local State is external metadata, but profile dirs become path segments.
       if (!isSafeBrowserProfileDirectory(dir)) {
         continue
       }
+
       const profileName = (info as { name?: string })?.name ?? dir
       profiles.push({ name: profileName, directory: dir })
     }
+
     return profiles.length > 0 ? profiles : [{ name: 'Default', directory: 'Default' }]
   } catch {
     return [{ name: 'Default', directory: 'Default' }]
@@ -155,46 +171,61 @@ export function discoverProfiles(browserRoot: string): BrowserProfile[] {
 export function firefoxProfilesRoot(): string | null {
   if (process.platform === 'darwin') {
     const home = process.env.HOME ?? ''
+
     return join(home, 'Library', 'Application Support', 'Firefox', 'Profiles')
   }
+
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA ?? ''
+
     return appData ? join(appData, 'Mozilla', 'Firefox', 'Profiles') : null
   }
+
   const home = process.env.HOME ?? ''
+
   return join(home, '.mozilla', 'firefox')
 }
 
 export function discoverFirefoxProfiles(): BrowserProfile[] {
   const profilesRoot = firefoxProfilesRoot()
+
   if (!profilesRoot) {
     return []
   }
+
   try {
     if (!existsSync(profilesRoot)) {
       return []
     }
+
     const entries = readdirSync(profilesRoot, { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
+
     // Why: Firefox dirs are named <random>.<name>; prefer 'default-release' as the primary profile on most installs.
     const sorted = entries.sort((a, b) => {
       if (a.includes('default-release')) {
         return -1
       }
+
       if (b.includes('default-release')) {
         return 1
       }
+
       if (a.includes('default')) {
         return -1
       }
+
       if (b.includes('default')) {
         return 1
       }
+
       return 0
     })
+
     return sorted.map((dir) => {
       const label = dir.includes('.') ? dir.split('.').slice(1).join('.') : dir
+
       return { name: label, directory: dir }
     })
   } catch {
@@ -204,12 +235,16 @@ export function discoverFirefoxProfiles(): BrowserProfile[] {
 
 export function detectFirefox(): DetectedBrowser | null {
   const profilesRoot = firefoxProfilesRoot()
+
   if (!profilesRoot) {
     return null
   }
+
   const profiles = discoverFirefoxProfiles()
+
   for (const profile of profiles) {
     const cookiesPath = join(profilesRoot, profile.directory, 'cookies.sqlite')
+
     if (existsSync(cookiesPath)) {
       return {
         family: 'firefox',
@@ -220,5 +255,6 @@ export function detectFirefox(): DetectedBrowser | null {
       }
     }
   }
+
   return null
 }

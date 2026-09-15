@@ -11,21 +11,28 @@ export async function observeBrowserLoadingSurface(
   crashGuest?: (id: number) => Promise<void>
 ) {
   const pendingResponses: (() => void)[] = []
+
   const release = (): void => {
     pendingResponses.splice(0).forEach((send) => send())
   }
+
   let requestCount = 0
   let flushPrefix: (() => void) | undefined
   let retryReady = false
+
   const server = createServer((request, response) => {
     if (request.url === '/fail' && !retryReady) {
       response.destroy()
+
       return
     }
+
     if (request.url !== '/held' && request.url !== '/fail') {
       response.writeHead(204).end()
+
       return
     }
+
     requestCount += 1
     let prefixSent = false
     flushPrefix = () => {
@@ -35,46 +42,57 @@ export async function observeBrowserLoadingSurface(
         `<!doctype html><head><title>Surface oracle</title></head><!--${'.'.repeat(4096)}-->`
       )
     }
+
     pendingResponses.push(() =>
       response.end(
         `${prefixSent ? '' : '<!doctype html><title>Surface oracle</title>'}<body><h1>Usable webpage</h1><input value="retained"></body>`
       )
     )
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/held`
   const observations: Record<string, unknown>[] = []
   // Freezing attachment for a screenshot must also freeze the missing-guest watchdog.
   await page.clock.pauseAt(new Date())
+
   const attachGate = await page.evaluateHandle((heldUrl) => {
     const original = Element.prototype.setAttribute
     const pending: (() => void)[] = []
     Element.prototype.setAttribute = function (name, value) {
       if (this.tagName === 'WEBVIEW' && name === 'src' && value === heldUrl) {
         pending.push(() => original.call(this, name, value))
+
         return
       }
+
       original.call(this, name, value)
     }
+
     return () => {
       Element.prototype.setAttribute = original
       pending.splice(0).forEach((release) => release())
     }
   }, url)
+
   try {
     await page.evaluate(async () => {
       await window.__store!.getState().updateSettingsOrThrow({ theme: 'dark' })
     })
     await expect(page.locator('html')).toHaveClass(/dark/)
+
     const tab = await page.evaluate((url) => {
       const s = window.__store!.getState()
+
       return s.createBrowserTab(s.activeWorktreeId!, url, {
         activate: true,
         title: 'Surface oracle'
       })
     }, url)
+
     let guest = page.locator(`[data-browser-overlay-tab-id="${tab.id}"] webview`)
     await expect(guest).toHaveCount(1)
+
     const capture = async (phase: string, expected: 'theme' | 'white', loading = false) => {
       const state = await guest.evaluate((element) => {
         const webview = element as Electron.WebviewTag
@@ -82,6 +100,7 @@ export async function observeBrowserLoadingSurface(
         let loading = false
         let url = ''
         let attached = false
+
         try {
           loading = webview.isLoading()
           url = webview.getURL()
@@ -89,6 +108,7 @@ export async function observeBrowserLoadingSurface(
         } catch {
           /* Guest creation is held by the oracle. */
         }
+
         return {
           attached,
           background: getComputedStyle(webview).backgroundColor,
@@ -101,9 +121,12 @@ export async function observeBrowserLoadingSurface(
           rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
         }
       })
+
       const target =
         expected === 'white' ? [255, 255, 255] : state.theme.match(/\d+/g)!.slice(0, 3).map(Number)
+
       let samples: number[][] = []
+
       const sampleSurface = async (): Promise<boolean> => {
         const screenshot = await page.screenshot({ path: outputPath(`${phase}.png`), scale: 'css' })
         const png = PNG.sync.read(screenshot)
@@ -113,22 +136,28 @@ export async function observeBrowserLoadingSurface(
               (Math.floor(state.rect.y + state.rect.height * y) * png.width +
                 Math.floor(state.rect.x + state.rect.width * x)) *
               4
+
             return [...png.data.subarray(offset, offset + 3)]
           })
         )
+
         return samples.every((rgb) => rgb.every((c, i) => Math.abs(c - target[i]) <= 2))
       }
+
       let pixelPass = await sampleSurface()
+
       if (expected === 'white' && !pixelPass) {
         // Loading can stop before the compositor presents the recovered guest's first frame.
         await expect.poll(async () => (pixelPass = await sampleSurface())).toBe(true)
       }
+
       const statePass =
         expected === 'theme'
           ? state.background === state.theme ||
             state.visibility === 'hidden' ||
             state.display === 'none'
           : state.url.startsWith('http://127.0.0.1:')
+
       expect(state.loading).toBe(loading)
       observations.push({
         phase,
@@ -139,11 +168,14 @@ export async function observeBrowserLoadingSurface(
         pass: pixelPass && statePass
       })
     }
+
     const dismissDrawHint = page.getByRole('button', { name: 'Got it', exact: true })
+
     if (await dismissDrawHint.isVisible()) {
       await dismissDrawHint.click()
       await expect(dismissDrawHint).not.toBeVisible()
     }
+
     await page.keyboard.press('Escape')
     await page.mouse.move(0, 0)
     await capture('pre-attach', 'theme')
@@ -223,6 +255,7 @@ export async function observeBrowserLoadingSurface(
     await expect(pane).toBeVisible()
     expect(await guest.evaluate((e) => (e as Electron.WebviewTag).getWebContentsId())).toBe(guestId)
     await capture('unpark-retained', 'white')
+
     if (crashGuest) {
       await crashGuest(guestId)
       await expect.poll(() => requestCount).toBe(3)
@@ -233,10 +266,13 @@ export async function observeBrowserLoadingSurface(
         .toBe(false)
       await capture('recovery-painted', 'white')
     }
+
     const blank = await page.evaluate(() => {
       const s = window.__store!.getState()
+
       return s.createBrowserTab(s.activeWorktreeId!, 'about:blank', { activate: true })
     })
+
     guest = page.locator(`[data-browser-overlay-tab-id="${blank.id}"] webview`)
     await expect
       .poll(() =>
@@ -267,10 +303,12 @@ export async function observeBrowserLoadingSurface(
     await capture('new-tab-painted', 'white')
     await address.fill(url.replace('/held', '/fail'))
     await address.press('Enter')
+
     const retry = page
       .locator(`[data-browser-overlay-tab-id="${blank.id}"]`)
       .getByRole('button', { name: 'Retry', exact: true })
       .filter({ hasText: 'Retry' })
+
     await expect(retry).toBeVisible()
     await expect
       .poll(() => guest.evaluate((e) => (e as Electron.WebviewTag).isLoading()))
@@ -288,6 +326,7 @@ export async function observeBrowserLoadingSurface(
       .toBe(false)
     await capture('network-retry-painted', 'white')
     await writeFile(outputPath('observations.json'), JSON.stringify(observations, null, 2))
+
     return observations
   } finally {
     await attachGate.evaluate((release) => release()).catch(() => {})

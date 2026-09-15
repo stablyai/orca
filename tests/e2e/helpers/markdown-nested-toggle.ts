@@ -95,9 +95,11 @@ async function selectionIsInsideNestedToggleBody(page: Page): Promise<boolean> {
     const editor = document.querySelector('.rich-markdown-editor') as
       | (Element & { editor?: { state?: { selection?: { from?: number; empty?: boolean } } } })
       | null
+
     const paragraph = editor?.querySelector(
       '[data-type="details"] [data-type="details"] [data-type="detailsContent"] p'
     ) as (Element & { pmViewDesc?: { posAtStart?: number; posAtEnd?: number } }) | null
+
     const selection = editor?.editor?.state?.selection
     const from = selection?.from
     const start = paragraph?.pmViewDesc?.posAtStart
@@ -139,6 +141,7 @@ export async function expectSentinelInsideNestedToggle(
   const nestedBody = page.locator(
     '.rich-markdown-editor [data-type="details"] [data-type="details"] [data-type="detailsContent"]'
   )
+
   await expect(nestedBody).toContainText(sentinel, { timeout: TOGGLE_RENDER_TIMEOUT_MS })
 }
 

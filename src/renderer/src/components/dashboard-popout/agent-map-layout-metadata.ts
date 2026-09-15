@@ -15,27 +15,35 @@ export function refreshAgentMapMetadata(
   now: number
 ): AgentMapLayout {
   const cardsByPaneKey = new Map(cards.map((card) => [card.paneKey, card]))
+
   const workspacesById = new Map(
     workspaces.map((workspace) => [agentMapWorkspaceIdentity(workspace), workspace])
   )
+
   const projects = geometry.projects.map((project) => {
     let projectName = project.name
     let agentCount = 0
+
     const worktrees = project.worktrees.map((worktree) => {
       const workspace = workspacesById.get(worktree.id)
+
       if (workspace) {
         projectName = workspace.repoName
       }
+
       let worktreeName = workspace?.worktreeName ?? worktree.name
       let workspaceKind = workspace?.workspaceKind ?? worktree.workspaceKind
       let hostKind = workspace?.hostKind ?? worktree.hostKind
       let hostLabel = workspace?.hostLabel ?? worktree.hostLabel
       const statusCounts = emptyAgentMapStatusCounts()
+
       const agents = worktree.agents.flatMap((agent) => {
         const card = cardsByPaneKey.get(agent.card.paneKey)
+
         if (!card) {
           return []
         }
+
         projectName = card.repoName
         worktreeName = card.worktreeName
         workspaceKind = card.workspaceKind ?? 'worktree'
@@ -43,6 +51,7 @@ export function refreshAgentMapMetadata(
         hostLabel = card.hostLabel ?? hostLabel
         agentCount += 1
         statusCounts[agentMapNodeStatus(card)] += 1
+
         return [
           {
             ...agent,
@@ -52,6 +61,7 @@ export function refreshAgentMapMetadata(
           }
         ]
       })
+
       return {
         ...worktree,
         name: worktreeName,
@@ -63,7 +73,9 @@ export function refreshAgentMapMetadata(
         quiet: agentMapQuietCount(statusCounts) === agents.length
       }
     })
+
     return { ...project, name: projectName, worktrees, agentCount }
   })
+
   return { ...geometry, projects }
 }

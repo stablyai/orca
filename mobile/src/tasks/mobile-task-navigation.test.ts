@@ -8,16 +8,20 @@ import {
 
 function navigationHarness(initialState: MobileTasksNavigationState) {
   let stateListener = () => {}
+
   let state = initialState
   const unsubscribeState = vi.fn()
+
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
       stateListener = listener
+
       return unsubscribeState
     }),
     dispatch: vi.fn(),
     getState: () => state
   }
+
   return {
     navigation,
     setState(nextState: MobileTasksNavigationState) {
@@ -97,6 +101,7 @@ describe('mobile task navigation', () => {
   it('cleanup prevents a stale navigation from replacing', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const replace = vi.fn()
+
     const controller = navigateToMobileTasks(
       harness.navigation,
       { push: vi.fn(), replace },
@@ -123,6 +128,7 @@ describe('mobile task navigation', () => {
       'host-1',
       'github'
     )
+
     const second = coordinateMobileTasksNavigation(
       first,
       harness.navigation,
@@ -130,6 +136,7 @@ describe('mobile task navigation', () => {
       'host-1',
       'linear'
     )
+
     harness.setState({
       index: 0,
       routes: [

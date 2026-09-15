@@ -12,6 +12,7 @@ export function mergeFeatureInteractions(
   const currentNormalized = normalizeFeatureInteractions(current)
   const incomingNormalized = normalizeFeatureInteractions(incoming)
   const merged = { ...currentNormalized }
+
   for (const [id, incomingRecord] of Object.entries(incomingNormalized)) {
     const currentRecord = currentNormalized[id as keyof typeof currentNormalized]
     merged[id as keyof typeof merged] = currentRecord
@@ -27,6 +28,7 @@ export function mergeFeatureInteractions(
         }
       : incomingRecord
   }
+
   return merged
 }
 
@@ -35,9 +37,11 @@ export function mergeContextualTourSeenIds(
   incoming: PersistedState['ui']['contextualToursSeenIds']
 ): PersistedState['ui']['contextualToursSeenIds'] {
   const merged = new Set(normalizeContextualTourIds(current))
+
   for (const id of normalizeContextualTourIds(incoming)) {
     merged.add(id)
   }
+
   return [...merged]
 }
 
@@ -47,12 +51,15 @@ export function stripMainOwnedTelemetryMarkerFromUI(
   if (!value || typeof value !== 'object') {
     return {}
   }
+
   const { featureInteractionTelemetryBuckets: _reserved, ...ui } = value as Partial<
     PersistedState['ui']
   > & {
     featureInteractionTelemetryBuckets?: unknown
   }
+
   void _reserved
+
   return ui
 }
 
@@ -62,17 +69,23 @@ export function normalizeWorkspaceLineageByChildKey(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
+
   const normalized: Record<WorkspaceKey, WorkspaceLineage> = {}
+
   for (const [key, entry] of Object.entries(value)) {
     if (!isWorkspaceKey(key) || !entry || typeof entry !== 'object') {
       continue
     }
+
     const lineage = entry as Partial<WorkspaceLineage>
+
     const childWorkspaceKey =
       typeof lineage.childWorkspaceKey === 'string' && isWorkspaceKey(lineage.childWorkspaceKey)
         ? lineage.childWorkspaceKey
         : key
+
     const parentWorkspaceKey = lineage.parentWorkspaceKey
+
     if (
       !isWorkspaceKey(childWorkspaceKey) ||
       typeof parentWorkspaceKey !== 'string' ||
@@ -82,6 +95,7 @@ export function normalizeWorkspaceLineageByChildKey(
     ) {
       continue
     }
+
     normalized[childWorkspaceKey] = {
       childWorkspaceKey,
       childInstanceId: lineage.childInstanceId ?? null,
@@ -98,5 +112,6 @@ export function normalizeWorkspaceLineageByChildKey(
       createdAt: Number.isFinite(lineage.createdAt) ? Number(lineage.createdAt) : Date.now()
     }
   }
+
   return normalized
 }

@@ -13,6 +13,7 @@ export type {
   ProviderKey,
   UsageBarState
 } from './account-usage-state'
+
 export {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
@@ -41,6 +42,7 @@ export function UsageBar({
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const barColor =
     used == null
@@ -50,6 +52,7 @@ export function UsageBar({
         : used >= 60
           ? colors.statusAmber
           : colors.statusGreen
+
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>

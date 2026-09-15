@@ -33,14 +33,17 @@ function migrateContextHostIds(
   newHostId: ExecutionHostId
 ): boolean {
   let changed = false
+
   if (record.runContext?.hostId === oldHostId) {
     record.runContext.hostId = newHostId
     changed = true
   }
+
   if (record.sourceContext?.hostId === oldHostId) {
     record.sourceContext.hostId = newHostId
     changed = true
   }
+
   return changed
 }
 
@@ -74,10 +77,12 @@ export function migrateAutomationsForSshReadoption(input: AutomationSshReadoptio
   const newHostId = toSshExecutionHostId(input.newTargetId)
   const generation = sanitizeSshTargetGeneration(input.newTargetGeneration)
   let changed = false
+
   for (const automation of input.automations) {
     if (migrateContextHostIds(automation, oldHostId, newHostId)) {
       changed = true
     }
+
     if (
       automation.executionTargetType !== 'ssh' ||
       automation.executionTargetId !== input.oldTargetId
@@ -87,17 +92,21 @@ export function migrateAutomationsForSshReadoption(input: AutomationSshReadoptio
         rewriteCapturedGeneration(automation, generation)
         changed = true
       }
+
       continue
     }
+
     automation.executionTargetId = input.newTargetId
     rewriteCapturedGeneration(automation, generation)
     changed = true
   }
+
   for (const run of input.automationRuns) {
     if (migrateContextHostIds(run, oldHostId, newHostId)) {
       changed = true
     }
   }
+
   return changed
 }
 
@@ -108,10 +117,13 @@ export function migrateAutomationHostFilterSshTargetId(
   newTargetId: string
 ): boolean {
   const filter = ui.automationHostFilter
+
   if (filter?.kind !== 'host') {
     return false
   }
+
   const host = parseHostStableKey(filter.hostKey)
+
   // Why: a target id is unique only inside one authority, so a runtime's identical id is a different host.
   if (
     host?.authority.kind !== 'desktop' ||
@@ -120,6 +132,7 @@ export function migrateAutomationHostFilterSshTargetId(
   ) {
     return false
   }
+
   ui.automationHostFilter = {
     kind: 'host',
     hostKey: hostStableKey({
@@ -127,5 +140,6 @@ export function migrateAutomationHostFilterSshTargetId(
       selector: { kind: 'ssh', targetId: newTargetId }
     })
   }
+
   return true
 }

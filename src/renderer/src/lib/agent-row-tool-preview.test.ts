@@ -4,6 +4,7 @@ import type { AgentRowState } from './agent-row-decay-state'
 import { formatAgentToolPreview, showsAgentToolPreview } from './agent-row-tool-preview'
 
 const TOOL = { toolName: 'bash', toolInput: 'rm -rf build/' }
+
 const ROW_STATES: readonly AgentRowState[] = [...AGENT_STATUS_STATES, 'idle', 'unverifiable']
 
 describe('showsAgentToolPreview', () => {

@@ -28,12 +28,14 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
 
 async function createStore() {
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -50,7 +52,9 @@ const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => (
 })
 
 const ENV_A = toRuntimeExecutionHostId('env-a')
+
 const STALE = 'repo-gone::/workspace/stale'
+
 const LIVE = 'repo-gone::/workspace/live'
 
 describe('worktree removal across host session partitions', () => {

@@ -53,6 +53,7 @@ export function ActivityThreadVirtualRow({
       </div>
     )
   }
+
   return (
     <div className="pb-0.5">
       <ActivityThreadRow

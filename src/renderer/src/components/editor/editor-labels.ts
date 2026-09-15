@@ -42,15 +42,19 @@ export function getEditorDisplayLabel(
   }
 
   const source = file.diffSource
+
   if (source === 'combined-all') {
     return 'All Changes'
   }
+
   if (source === 'combined-uncommitted') {
     return file.combinedAreaFilter ? getBaseLabel(file, variant) : 'Uncommitted Changes'
   }
+
   if (source === 'combined-branch') {
     return `Branch Changes (${file.branchCompare?.baseRef ?? 'base'})`
   }
+
   if (source === 'combined-commit') {
     return file.commitCompare?.subject
       ? `Commit ${file.commitCompare.compareRef}: ${file.commitCompare.subject}`
@@ -59,5 +63,6 @@ export function getEditorDisplayLabel(
 
   const baseLabel = getBaseLabel(file, variant)
   const suffix = (source && DIFF_SOURCE_LABELS[source]) ?? 'diff'
+
   return `${baseLabel} (${suffix})`
 }

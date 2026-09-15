@@ -21,6 +21,7 @@ export function buildCommitMessageGenerationParams(args: {
   if (!args.agentId) {
     return null
   }
+
   if (isCustomAgentId(args.agentId)) {
     return {
       agentId: CUSTOM_AGENT_ID,
@@ -31,23 +32,31 @@ export function buildCommitMessageGenerationParams(args: {
       customAgentCommand: args.baseParams?.customAgentCommand ?? args.customAgentCommand ?? ''
     }
   }
+
   const capability = getCommitMessageAgentCapability(args.agentId)
+
   if (!capability) {
     return null
   }
+
   const sameResolvedAgent = args.baseParams?.agentId === args.agentId
+
   const modelId =
     sameResolvedAgent && args.baseParams?.model
       ? args.baseParams.model
       : (capability.models.find((model) => model.id === capability.defaultModelId)?.id ??
         capability.defaultModelId)
+
   const model = capability.models.find((candidate) => candidate.id === modelId)
+
   const thinkingLevel =
     sameResolvedAgent && args.baseParams?.thinkingLevel
       ? args.baseParams.thinkingLevel
       : model?.defaultThinkingLevel
+
   const agentCommandOverride = args.settings?.agentCmdOverrides?.[args.agentId]?.trim()
   const customAgentCommand = args.baseParams?.customAgentCommand ?? args.customAgentCommand
+
   return {
     agentId: args.agentId,
     model: modelId,

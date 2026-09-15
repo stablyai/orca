@@ -57,6 +57,7 @@ export type CodexResetCreditSummary = {
 }
 
 const RESET_RPC_TIMEOUT_MS = 90_000
+
 const resetRequests = new Map<string, Promise<CodexResetCreditRequestResult>>()
 
 export function getCodexResetCreditSummary(
@@ -65,10 +66,13 @@ export function getCodexResetCreditSummary(
 ): CodexResetCreditSummary | null {
   const credits = limits?.rateLimitResetCredits
   const count = credits?.availableCount ?? 0
+
   if (!Number.isInteger(count) || count <= 0) {
     return null
   }
+
   const expiry = credits?.nextExpiresAt
+
   const expiryLabel =
     typeof expiry === 'number' && Number.isFinite(expiry)
       ? formatResetCountdown(expiry - now).replace(
@@ -76,6 +80,7 @@ export function getCodexResetCreditSummary(
           count === 1 ? 'Expires' : 'Next expires'
         )
       : null
+
   return {
     availableCount: count,
     availabilityLabel: `${count} ${count === 1 ? 'reset' : 'resets'} available`,
@@ -110,13 +115,17 @@ export function getActiveCodexAccountIdForRateLimitTarget(
 ): string | null {
   const target = snapshot.rateLimits.codexTarget
   const selection = snapshot.codex.activeAccountIdsByRuntime
+
   if (!selection) {
     return null
   }
+
   if (target.runtime === 'host') {
     return target.wslDistro === null ? selection.host : null
   }
+
   const distro = target.wslDistro?.trim()
+
   return distro ? (selection.wsl[distro] ?? null) : null
 }
 
@@ -124,18 +133,23 @@ export function getCodexResetCreditScope(
   snapshot: AccountsSnapshot
 ): CodexResetCreditExpectedScope | null {
   const activeAccountId = getActiveCodexAccountIdForRateLimitTarget(snapshot)
+
   const account = activeAccountId
     ? (snapshot.codex.accounts.find((candidate) => candidate.id === activeAccountId) ?? null)
     : null
+
   const scope = buildCodexResetCreditExpectedScope({
     target: snapshot.rateLimits.codexTarget,
     account,
     limits: snapshot.rateLimits.codex
   })
+
   if (!scope) {
     return null
   }
+
   const parsed = CodexResetCreditExpectedScopeSchema.safeParse(scope)
+
   return parsed.success ? parsed.data : null
 }
 
@@ -159,14 +173,19 @@ function decodeResetResult(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Invalid reset response from host')
   }
+
   const result = value as Record<string, unknown>
   const scope = CodexResetCreditExpectedScopeSchema.safeParse(result.scope)
+
   if (!scope.success || !scopesEqual(scope.data, expectedScope)) {
     throw new Error('Invalid reset response from host')
   }
+
   const snapshot = decodeAccountsSnapshot(result.snapshot)
+
   if (result.status === 'rejectedBeforeProvider') {
     const reason = result.reason
+
     if (
       result.retryDisposition !== 'discardAttempt' ||
       result.outcome !== undefined ||
@@ -179,6 +198,7 @@ function decodeResetResult(
     ) {
       throw new Error('Invalid reset response from host')
     }
+
     return {
       status: 'rejectedBeforeProvider',
       retryDisposition: 'discardAttempt',
@@ -187,7 +207,9 @@ function decodeResetResult(
       snapshot
     }
   }
+
   const outcome = result.outcome
+
   if (
     result.status !== undefined ||
     outcome === undefined ||
@@ -198,9 +220,11 @@ function decodeResetResult(
   ) {
     throw new Error('Invalid reset response from host')
   }
+
   const snapshotAccount = snapshot.codex.accounts.find(
     (account) => account.id === scope.data.accountId
   )
+
   if (
     snapshot.rateLimits.codexTarget.runtime !== scope.data.target.runtime ||
     snapshot.rateLimits.codexTarget.wslDistro !== scope.data.target.wslDistro ||
@@ -209,6 +233,7 @@ function decodeResetResult(
   ) {
     throw new Error('Invalid reset response from host')
   }
+
   return {
     outcome,
     scope: scope.data,
@@ -225,6 +250,7 @@ async function performCodexResetCreditRequest(
   }
 ): Promise<CodexResetCreditRequestResult> {
   const attempt = await getOrCreateCodexResetAttempt(options)
+
   const response = await client.sendRequest(
     'accounts.consumeCodexResetCredit',
     {
@@ -233,11 +259,14 @@ async function performCodexResetCreditRequest(
     },
     { timeoutMs: RESET_RPC_TIMEOUT_MS }
   )
+
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   const result = decodeResetResult(response.result, attempt.expectedScope)
   let attemptJournalRetained = false
+
   try {
     await clearCodexResetAttemptAfterAuthoritativeResponse({
       hostId: options.hostId,
@@ -247,6 +276,7 @@ async function performCodexResetCreditRequest(
   } catch {
     attemptJournalRetained = true
   }
+
   return { ...result, attemptJournalRetained }
 }
 
@@ -260,13 +290,16 @@ export async function requestCodexResetCredit(
 ): Promise<CodexResetCreditRequestResult> {
   const requestKey = getCodexResetAttemptIdentityKey(options)
   const existing = resetRequests.get(requestKey)
+
   if (existing) {
     return existing
   }
+
   // Why: two mounted views can confirm the same offer concurrently. Share the
   // whole attempt so one authoritative response cannot clear the other's retry key.
   const operation = performCodexResetCreditRequest(client, options)
   resetRequests.set(requestKey, operation)
+
   try {
     return await operation
   } finally {

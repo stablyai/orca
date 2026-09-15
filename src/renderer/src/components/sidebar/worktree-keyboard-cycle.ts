@@ -23,6 +23,7 @@ export function getCyclableWorktreeRows(
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): WorktreeRow[] {
   const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
+
   return getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy)
 }
 
@@ -33,14 +34,18 @@ export function resolveActiveCycleIdentity(args: {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }): string | null {
   const { rows, activeWorktreeId, activeWorkspaceExecutionHostId } = args
+
   if (!activeWorktreeId) {
     return null
   }
+
   if (activeWorkspaceExecutionHostId) {
     return composeWorktreeHostIdentity(activeWorkspaceExecutionHostId, activeWorktreeId)
   }
+
   // Host-unqualified activation names no host; the row it landed on does.
   const row = rows.find((candidate) => candidate.worktree.id === activeWorktreeId)
+
   return row ? getCyclableRowIdentity(row) : null
 }
 
@@ -54,14 +59,18 @@ export function getCyclableWorktreeIds(
   // activatable through activateAndRevealWorktree, so cycling has never included them.
   const ids: string[] = []
   const seen = new Set<string>()
+
   for (const row of getCyclableWorktreeRows(rows, pinnedDisplayPolicy)) {
     const identity = getCyclableRowIdentity(row)
+
     if (seen.has(identity)) {
       continue
     }
+
     seen.add(identity)
     ids.push(row.worktree.id)
   }
+
   return ids
 }
 
@@ -80,11 +89,13 @@ export function resolveCycledWorktreeId(args: {
   direction: 'up' | 'down'
 }): string | null {
   const { worktreeIds, direction } = args
+
   if (worktreeIds.length === 0) {
     return null
   }
 
   const currentIndex = args.activeWorktreeId ? worktreeIds.indexOf(args.activeWorktreeId) : -1
+
   if (currentIndex === -1) {
     // Why: the active worktree can sit inside a collapsed group, so it is absent
     // from the cyclable list; enter from the end the keypress points away from.
@@ -93,5 +104,6 @@ export function resolveCycledWorktreeId(args: {
 
   const step = direction === 'down' ? 1 : -1
   const nextIndex = (currentIndex + step + worktreeIds.length) % worktreeIds.length
+
   return worktreeIds[nextIndex] ?? null
 }

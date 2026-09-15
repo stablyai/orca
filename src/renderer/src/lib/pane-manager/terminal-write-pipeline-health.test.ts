@@ -24,12 +24,14 @@ type FakeTerminal = {
 
 function makeTerminal(): FakeTerminal {
   const pendingCallbacks: (() => void)[] = []
+
   const terminal: FakeTerminal = {
     pendingCallbacks,
     write(_data, cb) {
       if (terminal.throwOnWrite) {
         throw new Error('disposed')
       }
+
       if (cb && !terminal.dropCallbacks) {
         pendingCallbacks.push(cb)
       }
@@ -40,6 +42,7 @@ function makeTerminal(): FakeTerminal {
       }
     }
   }
+
   return terminal
 }
 
@@ -175,9 +178,11 @@ describe('terminal write pipeline health', () => {
     const terminal = makeTerminal()
     terminal.dropCallbacks = true
     const handler = vi.fn()
+
     const onCertifiedDead = vi.fn(() => {
       throw new TypeError('window.api is gone')
     })
+
     registerUndeliverableWriteHandler(terminal, handler)
 
     armTerminalWriteStallWatch(terminal, { onCertifiedDead })

@@ -41,7 +41,9 @@ function message(buffer: Buffer): Record<string, unknown> | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
+
   return JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
 }
 
@@ -50,6 +52,7 @@ function responseResult(
   id: number
 ): Record<string, unknown> | undefined {
   const response = writes.map(message).find((entry) => entry?.id === id)
+
   return response?.result as Record<string, unknown> | undefined
 }
 
@@ -68,10 +71,12 @@ describe('relay PTY source recovery interleavings', () => {
   it('retains failed exit delivery for a late ACK and exact sealed recovery', () => {
     const ledger = new RelayPtySourceCreditLedger()
     const oldIdentity = deliveryIdentity('old-token')
+
     const replacement = deliveryIdentity('replacement-token', {
       clientGeneration: 2,
       ownerGeneration: 2
     })
+
     ledger.open(oldIdentity, 4)
     ledger.append(oldIdentity, {
       spanId: 'tail',
@@ -119,20 +124,26 @@ describe('relay PTY source recovery interleavings', () => {
     dispatcher = new RelayDispatcher(
       (data, settle) => {
         primaryWrites.push(Buffer.from(data))
+
         if (message(data)?.method === 'pty.exit') {
           exitSettlement = settle
+
           return true
         }
+
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -152,8 +163,10 @@ describe('relay PTY source recovery interleavings', () => {
     })
     activationSettlements[0]({ ok: true })
     publication.publish('pty-1', { data: 'tail' }, false)
+
     const oldData = primaryWrites.map(message).find((entry) => entry?.method === 'pty.data')!
       .params as Record<string, unknown>
+
     const oldGrant = responseResult(primaryWrites, 1)!
 
     expect(
@@ -174,15 +187,18 @@ describe('relay PTY source recovery interleavings', () => {
     expect(adapter.getDebugSnapshot()).toMatchObject({ deliveryTokens: 1, sourceSu: 4 })
 
     const recoveredWrites: Buffer[] = []
+
     const recoveredClientId = dispatcher.attachClient(
       (data, settle) => {
         recoveredWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -198,6 +214,7 @@ describe('relay PTY source recovery interleavings', () => {
     )
     await flushRequests()
     const recoveredActivationSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const recovered = publication.activate(
       'pty-1',
       'incarnation-1',
@@ -216,6 +233,7 @@ describe('relay PTY source recovery interleavings', () => {
         acceptedSourceEndSu: 4
       }
     )
+
     recoveredActivationSettlements[0]({ ok: true })
 
     expect(recovered).toMatchObject({
@@ -242,15 +260,18 @@ describe('relay PTY source recovery interleavings', () => {
       (data, settle) => {
         primaryWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -272,21 +293,26 @@ describe('relay PTY source recovery interleavings', () => {
     ).toBe('opened')
     activationSettlements[0]({ ok: true })
     expect(publication.publish('pty-1', { data: 'abcdefgh' }, false)).toBe(true)
+
     const oldData = primaryWrites.map(message).find((entry) => entry?.method === 'pty.data')!
       .params as Record<string, unknown>
+
     const oldGrant = responseResult(primaryWrites, 1)!
     dispatcher.invalidateClient()
 
     const recoveredWrites: Buffer[] = []
+
     const recoveredClientId = dispatcher.attachClient(
       (data, settle) => {
         recoveredWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -301,6 +327,7 @@ describe('relay PTY source recovery interleavings', () => {
       })
     )
     await flushRequests()
+
     const recoveryRequest: PtySourceRecoveryRequest = {
       status: 'checkpoint',
       deliveryToken: String(oldData.deliveryToken),
@@ -309,7 +336,9 @@ describe('relay PTY source recovery interleavings', () => {
       ptyIncarnation: 'incarnation-1',
       acceptedSourceEndSu: 4
     }
+
     const firstActivationSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const firstRecovery = publication.activate(
       'pty-1',
       'incarnation-1',
@@ -321,6 +350,7 @@ describe('relay PTY source recovery interleavings', () => {
       },
       recoveryRequest
     )
+
     expect(firstRecovery).toMatchObject({
       status: 'pending',
       checkpointSourceEndSu: 4,
@@ -334,6 +364,7 @@ describe('relay PTY source recovery interleavings', () => {
     expect(recoveredWrites).toHaveLength(writesBeforeRetry)
 
     const retryActivationSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const retriedRecovery = publication.activate(
       'pty-1',
       'incarnation-1',
@@ -357,15 +388,18 @@ describe('relay PTY source recovery interleavings', () => {
       (data, settle) => {
         primaryWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -385,18 +419,22 @@ describe('relay PTY source recovery interleavings', () => {
     })
     firstActivation[0]({ ok: true })
     publication.publish('pty-1', { data: 'abcdefgh' }, false)
+
     const firstData = primaryWrites.map(message).find((entry) => entry?.method === 'pty.data')!
       .params as Record<string, unknown>
+
     const firstGrant = responseResult(primaryWrites, 1)!
     dispatcher.invalidateClient()
 
     const recoveredWrites: Buffer[] = []
     let recoveryDataSettlement: ((result: SinkWriteSettlement) => void) | undefined
     let failedCompletionSettlement: ((result: SinkWriteSettlement) => void) | undefined
+
     const recoveredClientId = dispatcher.attachClient(
       (data, settle) => {
         recoveredWrites.push(Buffer.from(data))
         const method = message(data)?.method
+
         if (method === 'pty.data') {
           recoveryDataSettlement = settle
         } else if (method === 'pty.recoveryComplete') {
@@ -404,11 +442,13 @@ describe('relay PTY source recovery interleavings', () => {
         } else {
           settle({ ok: true })
         }
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       recoveredClientId,
       requestFrame(2, 'pty.openClient', {
@@ -445,28 +485,34 @@ describe('relay PTY source recovery interleavings', () => {
     )
     recoveredActivation[0]({ ok: true })
     recoveryDataSettlement!({ ok: true })
+
     const recoveredData = recoveredWrites
       .map(message)
       .find((entry) => entry?.method === 'pty.data')!.params as Record<string, unknown>
+
     expect(publication.publish('pty-1', { data: 'live' }, false)).toBe(false)
 
     failedCompletionSettlement!({ ok: false, error: new Error('completion write failed') })
 
     const replacementWrites: Buffer[] = []
     let replacementCompletionSettlement: ((result: SinkWriteSettlement) => void) | undefined
+
     const replacementClientId = dispatcher.attachClient(
       (data, settle) => {
         replacementWrites.push(Buffer.from(data))
+
         if (message(data)?.method === 'pty.recoveryComplete') {
           replacementCompletionSettlement = settle
         } else {
           settle({ ok: true })
         }
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       replacementClientId,
       requestFrame(3, 'pty.openClient', {

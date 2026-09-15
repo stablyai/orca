@@ -17,6 +17,7 @@ function Probe(props: { client: RpcClient; query: string }) {
     mrStateFilter: 'opened',
     repos: [{ id: 'repo-1', displayName: 'orca', slug: { owner: 'stablyai', repo: 'orca' } }]
   })
+
   return null
 }
 
@@ -39,11 +40,14 @@ describe('smart source paste lookup concurrency', () => {
 
   it('issues the pasted-number lookup while the fan-out is still in flight', async () => {
     const sent: string[] = []
+
     const sendRequest = vi.fn((method: string) => {
       sent.push(method)
+
       // Nothing ever settles: only requests issued concurrently can be observed.
       return new Promise(() => {})
     })
+
     const client = { sendRequest } as unknown as RpcClient
 
     await act(async () => {

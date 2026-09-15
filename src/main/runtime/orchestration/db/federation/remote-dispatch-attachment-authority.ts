@@ -20,22 +20,28 @@ export function prepareRemoteAttachmentAuthority(
   }
 ): string {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+
     if (!attachment || attachment.state !== 'starting') {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Remote Dispatch ${params.dispatchId} is not starting.`
       )
     }
+
     const active = this.findActiveRemoteAttachmentForPane(params.paneKey)
+
     if (active && active.dispatch_id !== params.dispatchId) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Terminal ${params.terminalHandle} already has active remote Dispatch ${active.dispatch_id}.`
       )
     }
+
     const capability = `dcap_${randomBytes(32).toString('base64url')}`
+
     const result = this.db
       .prepare(
         `UPDATE remote_dispatch_attachments
@@ -65,13 +71,16 @@ export function prepareRemoteAttachmentAuthority(
         ),
         params.dispatchId
       )
+
     if (result.changes !== 1) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Remote Dispatch ${params.dispatchId} is not starting.`
       )
     }
+
     this.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
+
     if (params.terminalOwnership && !this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
       const resource =
         params.terminalOwnership === 'external'
@@ -82,6 +91,7 @@ export function prepareRemoteAttachmentAuthority(
               hostScope: params.hostScope ?? null
             })
           : undefined
+
       if (resource) {
         this.transferWorkerTerminalResourceStatement({
           resourceId: resource.id,
@@ -107,7 +117,9 @@ export function prepareRemoteAttachmentAuthority(
         })
       }
     }
+
     this.db.exec('COMMIT')
+
     return capability
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -128,12 +140,14 @@ export function markRemoteAttachmentReady(
        WHERE dispatch_id = ? AND state = 'starting'`
     )
     .run(effects ? JSON.stringify(effects) : null, dispatchId)
+
   if (result.changes !== 1) {
     throw new OrchestrationError(
       'dispatch_inactive',
       `Remote Dispatch ${dispatchId} is not starting.`
     )
   }
+
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
 }
 
@@ -145,6 +159,7 @@ export function failRemoteAttachment(
   unknown: boolean
 ): RemoteDispatchAttachmentRow {
   const state = unknown ? 'start_unknown' : 'failed'
+
   const result = this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
@@ -153,12 +168,14 @@ export function failRemoteAttachment(
        WHERE dispatch_id = ? AND state = 'starting'`
     )
     .run(state, stage, reason, dispatchId)
+
   if (result.changes !== 1) {
     throw new OrchestrationError(
       'dispatch_inactive',
       `Remote Dispatch ${dispatchId} is not starting.`
     )
   }
+
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow
 }
 
@@ -172,6 +189,7 @@ export function verifyRemoteAttachmentAuthority(
   }
 ): boolean {
   const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+
   if (
     !attachment?.capability_hash ||
     !params.capability ||
@@ -183,8 +201,10 @@ export function verifyRemoteAttachmentAuthority(
   ) {
     return false
   }
+
   const expected = Buffer.from(attachment.capability_hash, 'hex')
   const observed = Buffer.from(hashDispatchCapability(params.capability), 'hex')
+
   return expected.length === observed.length && timingSafeEqual(expected, observed)
 }
 
@@ -197,6 +217,7 @@ export function isRemoteAttachmentProcessCurrent(
   }
 ): boolean {
   const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
+
   return Boolean(
     attachment?.pane_key &&
     params.paneKey &&

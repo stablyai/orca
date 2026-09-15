@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 
 const LEAF_A = 'leaf-a'
+
 const LEAF_B = 'leaf-b'
 
 describe('tabRowPtyIdAfterLeafBinding', () => {

@@ -40,11 +40,13 @@ export function createLinearIssueDetailActions(
       const { contextKey } = scope
       const issueCacheKey = scopedLinearCacheKey(scope, `${workspaceId ?? 'selected'}::${id}`)
       const cached = get().linearIssueCache[issueCacheKey] ?? get().linearIssueCache[id]
+
       if (isFresh(cached)) {
         return cached.data
       }
 
       const inflight = inflightIssueRequests.get(issueCacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -56,9 +58,11 @@ export function createLinearIssueDetailActions(
       let entry: InflightLinearIssueRequest
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearGetIssue(scope.settings, id, workspaceId)
         .then((issue) => {
           const data = issue as LinearIssue | null
+
           if (
             inflightIssueRequests.get(issueCacheKey) === entry &&
             canWriteLinearReadResult(
@@ -76,10 +80,12 @@ export function createLinearIssueDetailActions(
               })
             }))
           }
+
           return data
         })
         .catch((error) => {
           console.warn('[linear] fetchLinearIssue failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -92,12 +98,14 @@ export function createLinearIssueDetailActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           return null
         })
         .finally(() => {
           if (inflightIssueRequests.get(issueCacheKey) === entry) {
             inflightIssueRequests.delete(issueCacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -119,6 +127,7 @@ export function createLinearIssueDetailActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightIssueRequests.set(issueCacheKey, entry)
+
       return promise
     },
 
@@ -133,6 +142,7 @@ export function createLinearIssueDetailActions(
       clearLinearIssueCollectionRequestMaps()
       set((s) => {
         const nextIssueCache = { ...s.linearIssueCache }
+
         for (const [key, entry] of Object.entries(nextIssueCache)) {
           if (
             key === issueCacheKey ||
@@ -143,6 +153,7 @@ export function createLinearIssueDetailActions(
             delete nextIssueCache[key]
           }
         }
+
         return {
           linearIssueCache: nextIssueCache,
           linearSearchCache: {},
@@ -151,6 +162,7 @@ export function createLinearIssueDetailActions(
           linearCustomViewIssueCache: {}
         }
       })
+
       return get().fetchLinearIssue(id, workspaceId, options)
     }
   }

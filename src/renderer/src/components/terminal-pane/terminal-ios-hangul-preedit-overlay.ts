@@ -16,6 +16,7 @@ import type { Terminal } from '@xterm/xterm'
 export function createTerminalIosHangulPreeditRenderer(terminal: Terminal): (text: string) => void {
   const view = terminal.element?.querySelector<HTMLElement>('.composition-view')
   const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
   if (!view || !screen) {
     return () => undefined
   }
@@ -24,17 +25,21 @@ export function createTerminalIosHangulPreeditRenderer(terminal: Terminal): (tex
     if (!text) {
       view.classList.remove('active')
       view.textContent = ''
+
       return
     }
+
     view.textContent = text
     view.classList.add('active')
 
     const rect = screen.getBoundingClientRect()
     const cellWidth = rect.width / terminal.cols
     const cellHeight = rect.height / terminal.rows
+
     if (!(cellWidth > 0) || !(cellHeight > 0)) {
       return
     }
+
     const buffer = terminal.buffer.active
     const left = Math.min(buffer.cursorX, terminal.cols - 1) * cellWidth
     view.style.left = `${left}px`

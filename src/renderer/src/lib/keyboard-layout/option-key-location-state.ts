@@ -18,11 +18,13 @@ function sideBit(location: number): 1 | 2 | null {
 
 export function createOptionKeyLocationTracker(): OptionKeyLocationTracker {
   let held: OptionKeyLocationState = 0
+
   return {
     keyDown: (event) => {
       if (event.key !== 'Alt') {
         return
       }
+
       const side = sideBit(event.location)
       held = side === null ? 0 : ((held | side) as OptionKeyLocationState)
     },
@@ -30,6 +32,7 @@ export function createOptionKeyLocationTracker(): OptionKeyLocationTracker {
       if (event.key !== 'Alt') {
         return
       }
+
       const side = sideBit(event.location)
       held = side === null ? 0 : ((held & ~side) as OptionKeyLocationState)
     },

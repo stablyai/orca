@@ -20,6 +20,7 @@ import {
 } from './codex-structured-journal-limits'
 
 const THREAD = 'thread-parent'
+
 const TURN = 'turn-1'
 
 type Appended = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
@@ -32,30 +33,38 @@ function createHarness(options: { threadId?: string | null } = {}): {
 } {
   const appended: Appended[] = []
   let clock = 1_000
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: () => {},
     appendTombstone: () => {},
     publish: () => {},
     tryAppendItem: (identity, body) => {
       appended.push({ identity, body })
+
       return { accepted: true }
     },
     tryPublish: () => ({ accepted: true })
   }
+
   const roster = new CodexSubagentRoster({
     sink,
     primaryThreadId: () => (options.threadId === undefined ? THREAD : options.threadId),
     activeTurn: () => TURN,
     now: () => (clock += 1)
   })
+
   const agents = (): NativeChatSubagentEntry[] => {
     const body = appended.at(-1)?.body
+
     if (!body || body.kind !== 'message') {
       return []
     }
+
     const block = body.blocks.find(isSubagentGroupBlock)
+
     return block ? block.agents : []
   }
+
   return { roster, appended, agents, latest: () => appended.at(-1) }
 }
 
@@ -92,6 +101,7 @@ function deliver(
         : item.kind === 'interrupted'
           ? 'stopped'
           : null
+
   if (state && typeof item.agentThreadId === 'string') {
     roster.handleTurn({
       threadId: item.agentThreadId,
@@ -99,6 +109,7 @@ function deliver(
       state
     })
   }
+
   // Every activity item reaches the wire twice: item/started, then item/completed.
   roster.handleItem({ threadId: THREAD, turnId, item })
   roster.handleItem({ threadId: THREAD, turnId, item })
@@ -117,32 +128,40 @@ function createCoalescingHarness(): {
   const appended: Appended[] = []
   const queue: { key?: string; run: () => void }[] = []
   let clock = 1_000
+
   const submit = (key: string | undefined, run: () => void): void => {
     const at = key === undefined ? -1 : queue.findIndex((queued) => queued.key === key)
+
     if (at >= 0) {
       queue.splice(at, 1)
     }
+
     queue.push(key === undefined ? { run } : { key, run })
   }
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: () => {},
     appendTombstone: () => {},
     publish: () => {},
     tryAppendItem: (identity, body, options) => {
       submit(options?.coalescingKey, () => appended.push({ identity, body }))
+
       return { accepted: true }
     },
     tryPublish: (options) => {
       submit(options?.coalescingKey ?? 'publish', () => {})
+
       return { accepted: true }
     }
   }
+
   const roster = new CodexSubagentRoster({
     sink,
     primaryThreadId: () => THREAD,
     activeTurn: () => TURN,
     now: () => (clock += 1)
   })
+
   return {
     roster,
     appended,
@@ -549,6 +568,7 @@ describe('CodexSubagentRoster', () => {
     expect(entries).toHaveLength(2)
     expect(new Set(entries.map((agent) => agent.id)).size).toBe(2)
     expect(new Set(entries.map((agent) => agent.label)).size).toBe(2)
+
     for (const agent of entries) {
       expect(agent.id.length).toBeLessThanOrEqual(MAX_SUBAGENT_FIELD_CHARS)
       expect(agent.label.length).toBeLessThanOrEqual(MAX_SUBAGENT_FIELD_CHARS)
@@ -557,12 +577,14 @@ describe('CodexSubagentRoster', () => {
 
   it('caps the children one spawn group admits', () => {
     const { roster, agents, appended } = createHarness()
+
     for (let index = 0; index < MAX_CODEX_SUBAGENTS_PER_GROUP; index++) {
       deliver(
         roster,
         activity({ kind: 'started', agentThreadId: `child-${index}`, agentPath: '/root/read' })
       )
     }
+
     const atCap = appended.length
 
     deliver(
@@ -581,6 +603,7 @@ describe('CodexSubagentRoster', () => {
   // durable row from that one child. Pinned so the boundary cannot move silently.
   it('caps live spawn groups, and an evicted group rebuilds its row from one child', () => {
     const { roster, appended, agents } = createHarness()
+
     for (let index = 0; index <= MAX_CODEX_SUBAGENT_GROUPS; index++) {
       deliver(
         roster,
@@ -588,9 +611,12 @@ describe('CodexSubagentRoster', () => {
         `turn-${index}`
       )
     }
+
     const evicted = codexSubagentGroupIdentity(codexSubagentGroupId(THREAD, 'turn-0'))
+
     const rowsFor = (identity: AgentJournalItemIdentity): Appended[] =>
       appended.filter((entry) => JSON.stringify(entry.identity) === JSON.stringify(identity))
+
     expect(rowsFor(evicted)).toHaveLength(1)
 
     deliver(
@@ -618,6 +644,7 @@ describe('CodexSubagentRoster', () => {
         tokenUsage: { total: { totalTokens: index } }
       })
     }
+
     deliver(
       roster,
       activity({ kind: 'completed', agentThreadId: 'child-1', agentPath: '/root/read' })
@@ -629,6 +656,7 @@ describe('CodexSubagentRoster', () => {
   it('caps retained usage threads, so a frame evicted before its child is dropped', () => {
     const { roster, agents } = createHarness()
     roster.handleTokenUsage({ threadId: 'child-1', tokenUsage: { total: { totalTokens: 900 } } })
+
     for (let index = 0; index < MAX_CODEX_TOKEN_USAGE_THREADS; index++) {
       roster.handleTokenUsage({
         threadId: `other-${index}`,
@@ -667,6 +695,7 @@ describe('CodexSubagentRoster', () => {
       const appended: Appended[] = []
       const published: number[] = []
       const refusal = { accepted: false, reason: 'backpressure' } as const
+
       const roster = new CodexSubagentRoster({
         sink: {
           appendItem: () => {},
@@ -676,14 +705,18 @@ describe('CodexSubagentRoster', () => {
             if (refusing && refuse === 'append') {
               return refusal
             }
+
             appended.push({ identity, body })
+
             return { accepted: true }
           },
           tryPublish: () => {
             if (refusing && refuse === 'publish') {
               return refusal
             }
+
             published.push(1)
+
             return { accepted: true }
           }
         },
@@ -691,6 +724,7 @@ describe('CodexSubagentRoster', () => {
         activeTurn: () => TURN,
         now: () => 1_000
       })
+
       const item = activity({ kind: 'started', agentThreadId: 'child-1', agentPath: '/root/read' })
       roster.handleTurn({ threadId: 'child-1', turnId: 'child-turn', state: 'working' })
 
@@ -720,6 +754,7 @@ describe('CodexSubagentRoster', () => {
     let refusing = false
     const appended: Appended[] = []
     const published: number[] = []
+
     const roster = new CodexSubagentRoster({
       sink: {
         appendItem: () => {},
@@ -727,13 +762,16 @@ describe('CodexSubagentRoster', () => {
         publish: () => {},
         tryAppendItem: (identity, body) => {
           appended.push({ identity, body })
+
           return { accepted: true }
         },
         tryPublish: () => {
           if (refusing) {
             return { accepted: false, reason: 'backpressure' }
           }
+
           published.push(1)
+
           return { accepted: true }
         }
       },
@@ -741,6 +779,7 @@ describe('CodexSubagentRoster', () => {
       activeTurn: () => TURN,
       now: () => 1_000
     })
+
     roster.handleTurn({ threadId: 'child-1', turnId: 'child-turn', state: 'working' })
     roster.handleItem({
       threadId: THREAD,

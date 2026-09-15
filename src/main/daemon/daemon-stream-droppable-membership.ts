@@ -14,8 +14,10 @@ export function evaluateDroppableEnqueue(
   salvageDroppedData: (dropped: string) => string
 ): void {
   let sessionDroppable: boolean
+
   if (queuedBefore <= 0) {
     sessionDroppable = isSessionDroppable(sessionId)
+
     if (queuedAfter > 0 && sessionDroppable) {
       batch.droppableQueuedSessionIds.add(sessionId)
     } else {
@@ -24,6 +26,7 @@ export function evaluateDroppableEnqueue(
   } else {
     sessionDroppable = batch.droppableQueuedSessionIds.has(sessionId)
   }
+
   if (!sessionDroppable) {
     return
   }
@@ -31,9 +34,11 @@ export function evaluateDroppableEnqueue(
   const droppableQueued = batch.droppableQueuedSessionIds.size
   const dropCap = backgroundSessionDropCapChars(droppableQueued)
   const keepTail = backgroundSessionKeepTailChars(droppableQueued)
+
   if (queuedAfter > dropCap) {
     dropOldestQueuedForSession(batch, sessionId, keepTail, salvageDroppedData)
   }
+
   if (droppableQueued > (batch.lastEvaluatedDroppableSessionCount ?? 0)) {
     // Shared budget tightened, so producers that stopped enqueueing must also be re-trimmed.
     for (const [queuedSessionId, queued] of Array.from(batch.queuedCharsBySession)) {
@@ -46,6 +51,7 @@ export function evaluateDroppableEnqueue(
       }
     }
   }
+
   batch.lastEvaluatedDroppableSessionCount = droppableQueued
 }
 

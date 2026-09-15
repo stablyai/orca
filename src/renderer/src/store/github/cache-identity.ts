@@ -29,6 +29,7 @@ export function projectViewCacheKey(
   host?: string
 ): string {
   const projectKey = githubProjectIdentityKey({ ownerType, owner, number: projectNumber, host })
+
   return `github-project:${sourceScope}:${projectKey}:${resolvedViewId}${queryOverrideKeyPart(queryOverride)}`
 }
 
@@ -40,17 +41,20 @@ export function projectViewRequestKey(args: GetProjectViewTableArgs, sourceScope
       : args.viewName
         ? `name:${args.viewName}`
         : 'default'
+
   const projectKey = githubProjectIdentityKey({
     ownerType: args.ownerType,
     owner: args.owner,
     number: args.projectNumber,
     host: args.host
   })
+
   return `${sourceScope}:${projectKey}:${selector}${queryOverrideKeyPart(args.queryOverride)}`
 }
 
 export function projectViewSourceScope(settings: AppState['settings']): string {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
 }
 
@@ -59,6 +63,7 @@ export function settingsForProjectViewCacheKey(
   cacheKey: string
 ): Pick<NonNullable<AppState['settings']>, 'activeRuntimeEnvironmentId'> {
   const runtimeMatch = /^github-project:runtime:([^:]+):/.exec(cacheKey)
+
   return runtimeMatch
     ? { ...settings, activeRuntimeEnvironmentId: runtimeMatch[1] }
     : { ...settings, activeRuntimeEnvironmentId: null }
@@ -73,9 +78,11 @@ export function workItemsCacheKey(
   const scope = executionHostId?.trim() ?? ''
   const hostId = normalizeExecutionHostId(scope)
   const owner = `${repoId}::${limit}::${query}`
+
   if (hostId) {
     return hostId !== LOCAL_EXECUTION_HOST_ID ? `${hostId}::${owner}` : owner
   }
+
   return scope ? `${scope}::${owner}` : owner
 }
 
@@ -85,6 +92,7 @@ export function workItemsInflightRequestKey(
 ): string {
   const targetPart =
     target.kind === 'environment' ? `env:${target.environmentId}:${target.runtimeRepoId}` : 'local'
+
   return `${cacheKey}::${targetPart}`
 }
 
@@ -141,6 +149,7 @@ export function sourceScopedRepoCacheKey(
   if (sourceContext?.provider === 'github') {
     return `${getTaskSourceCacheScope(sourceContext)}::${repoId ?? repoPath}::${suffix}`
   }
+
   return runtimeScopedRepoCacheKey(
     repoPath,
     repoId,
@@ -174,9 +183,11 @@ export function prCacheKey(
 
 export function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
   const prefixes = [`${repoId}::`]
+
   if (repoPath && repoPath !== repoId) {
     prefixes.push(`${repoPath}::`)
   }
+
   return prefixes
 }
 
@@ -189,18 +200,22 @@ export function evictRepoCacheEntries<T>(
   prefixes: readonly string[]
 ): { cache: Record<string, CacheEntry<T>>; evicted: boolean } {
   let next: Record<string, CacheEntry<T>> | null = null
+
   for (const key of Object.keys(cache)) {
     if (!matchesRepoCacheKey(key, prefixes)) {
       continue
     }
+
     next ??= { ...cache }
     delete next[key]
   }
+
   return next ? { cache: next, evicted: true } : { cache, evicted: false }
 }
 
 function normalizedHeadSha(headSha?: string): string | null {
   const trimmed = headSha?.trim()
+
   return trimmed ? trimmed.toLowerCase() : null
 }
 
@@ -210,9 +225,11 @@ export function prChecksCacheSuffix(
   headSha?: string
 ): string {
   const headSuffix = normalizedHeadSha(headSha)
+
   const base = prRepo
     ? `pr-checks::${githubRepoIdentityKey(prRepo)}::${prNumber}`
     : `pr-checks::${prNumber}`
+
   return headSuffix ? `${base}::head::${headSuffix}` : base
 }
 

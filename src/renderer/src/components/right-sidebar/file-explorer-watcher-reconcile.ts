@@ -11,14 +11,18 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/cross-plat
 
 function createSubtreeMatcher(paths: ReadonlySet<string>): (candidatePath: string) => boolean {
   const normalizedRoots = new Set([...paths].map(normalizeRuntimePathForComparison))
+
   return (candidatePath) => {
     const candidate = normalizeRuntimePathForComparison(candidatePath)
+
     if (normalizedRoots.has(candidate)) {
       return true
     }
+
     if (candidate.startsWith('/') && normalizedRoots.has('/')) {
       return true
     }
+
     for (
       let index = candidate.indexOf('/');
       index >= 0;
@@ -31,10 +35,12 @@ function createSubtreeMatcher(paths: ReadonlySet<string>): (candidatePath: strin
       ) {
         return true
       }
+
       if (index > 0 && normalizedRoots.has(candidate.slice(0, index))) {
         return true
       }
     }
+
     return false
   }
 }
@@ -46,10 +52,12 @@ export function purgeDirCacheSubtrees(
   if (deletedPaths.size === 0) {
     return
   }
+
   const shouldPurge = createSubtreeMatcher(deletedPaths)
   setDirCache((prev) => {
     let changed = false
     const next: Record<string, DirCache> = {}
+
     for (const key of Object.keys(prev)) {
       if (shouldPurge(key)) {
         changed = true
@@ -57,6 +65,7 @@ export function purgeDirCacheSubtrees(
         next[key] = prev[key]
       }
     }
+
     return changed ? next : prev
   })
 }
@@ -73,15 +82,18 @@ export function purgeExpandedDirsSubtrees(
   if (deletedPaths.size === 0) {
     return
   }
+
   const shouldPurge = createSubtreeMatcher(deletedPaths)
   useAppStore.setState((state) => {
     const current = state.expandedDirs[worktreeId]
+
     if (!current) {
       return state
     }
 
     const next = new Set<string>()
     let changed = false
+
     for (const dirPath of current) {
       if (shouldPurge(dirPath)) {
         changed = true
@@ -114,6 +126,7 @@ export function clearStalePendingReveal(deletedPath: string): void {
     ) {
       return { pendingExplorerReveal: null }
     }
+
     return state
   })
 }

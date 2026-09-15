@@ -22,11 +22,13 @@ export function rememberPreservedBranchCleanupTarget(
 ): void {
   if (result?.preservedBranch) {
     const head = result.preservedBranch.head ?? fallbackHead
+
     if (!head) {
       throw new Error(
         `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
       )
     }
+
     preservedBranchCleanupByScope.set(preservedBranchCleanupScopeKey({ worktreeId, hostId }), {
       worktreeId,
       hostId,
@@ -34,8 +36,10 @@ export function rememberPreservedBranchCleanupTarget(
       head,
       ...(pushTarget ? { pushTarget } : {})
     })
+
     return
   }
+
   preservedBranchCleanupByScope.delete(preservedBranchCleanupScopeKey({ worktreeId, hostId }))
 }
 
@@ -46,6 +50,7 @@ export function preserveBranchHeadFallback(
   if (!result?.preservedBranch || result.preservedBranch.head || !fallbackHead) {
     return result ?? {}
   }
+
   return {
     ...result,
     preservedBranch: {
@@ -64,6 +69,7 @@ export function getPreservedBranchCleanupTarget(
   const exactTarget = hostId
     ? preservedBranchCleanupByScope.get(preservedBranchCleanupScopeKey({ worktreeId, hostId }))
     : undefined
+
   const legacyMatches = hostId
     ? []
     : [...preservedBranchCleanupByScope.values()].filter(
@@ -72,9 +78,12 @@ export function getPreservedBranchCleanupTarget(
           target.branchName === branchName &&
           target.head === expectedHead
       )
+
   const target = exactTarget ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined)
+
   if (!target || target.branchName !== branchName || target.head !== expectedHead) {
     throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
   }
+
   return target
 }

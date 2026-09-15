@@ -98,18 +98,22 @@ describe('installNativeDeps staged uploads', () => {
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
+
     for (const key of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[key]
     }
+
     for (const key of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[key]
     }
+
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(false)
   })
 
   function feed(execResponses: ExecResponse[]): void {
     const mockExec = vi.mocked(execCommand)
+
     for (const response of execResponses) {
       if (typeof response === 'string') {
         mockExec.mockResolvedValueOnce(response)
@@ -142,12 +146,14 @@ describe('installNativeDeps staged uploads', () => {
     })
 
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
+
     const npmInstallIdx = execCalls.findIndex(
       (command) =>
         command.includes('npm install') &&
         command.includes('node-pty') &&
         command.includes('@parcel/watcher')
     )
+
     expect(npmInstallIdx).toBeGreaterThanOrEqual(0)
     expect(execCalls[npmInstallIdx]).toContain('--ignore-scripts=false')
     const writeObservedAt = sftpCapture.execCallCountAtWrite[pkgPath as string]
@@ -163,6 +169,7 @@ describe('installNativeDeps staged uploads', () => {
 
     const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
     const compiling = ['npm install', 'npm rebuild', 'node-pty-1.1.0-master-cloexec-patch.cjs']
+
     for (const compileStep of compiling) {
       const command = commands.find((candidate) => candidate.includes(compileStep))
       expect(command, compileStep).toBeDefined()
@@ -184,6 +191,7 @@ describe('installNativeDeps staged uploads', () => {
       throw new Error(`Command "${command}" failed (exit 1): ${hostOutput}`)
     })
   }
+
   const HEADERS_REFUSED =
     'npm error gyp http fetch GET https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz attempt 1 failed with ECONNREFUSED\nnpm error gyp ERR! configure error'
 
@@ -236,6 +244,7 @@ describe('installNativeDeps staged uploads', () => {
 
   it('cleans a staged upload when cancellation wins before lock acquisition', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeMockConnection(sftpCapture)
       feed(makeStagedFirstInstallExecPrefix())

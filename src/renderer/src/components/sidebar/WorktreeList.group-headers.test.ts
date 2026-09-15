@@ -27,14 +27,23 @@ import { setLineageFixtureState } from './worktree-list-lineage-store-state'
 import { setPinnedFixtureState } from './worktree-list-pinned-store-state'
 
 vi.mock('@/store', () => createAppStoreModuleMock())
+
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
+
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
+
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
+
 vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
+
 vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+
 vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
+
 vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
+
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
+
 vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
 
 function setProjectGroupWithoutWorktreeRowsState(
@@ -53,6 +62,7 @@ function setProjectGroupWithoutWorktreeRowsState(
     createdAt: 1,
     updatedAt: 1
   }
+
   const repo: Repo = {
     ...makeRepo(),
     projectGroupId: group.id
@@ -178,6 +188,7 @@ describe('WorktreeList lineage child card renderer', () => {
       branch: 'pinned-ssh',
       sortOrder: 1
     })
+
     worktree.isPinned = true
 
     expect(

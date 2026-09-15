@@ -33,12 +33,14 @@ const deniedMicrophoneResult: DeveloperPermissionRequestResult = {
   status: 'denied',
   openedSystemSettings: false
 }
+
 const EMPTY_SPEECH_CATALOG: SpeechModelManifest[] = []
 
 function makeSettings(voiceEnabled?: boolean): GlobalSettings {
   if (voiceEnabled === undefined) {
     return {} as GlobalSettings
   }
+
   return {
     voice: {
       ...getDefaultVoiceSettings(),
@@ -101,6 +103,7 @@ async function renderVoicePane(args: {
   })
 
   const button = container.querySelector<HTMLButtonElement>('button[role="switch"]')
+
   if (!button) {
     throw new Error('Voice Dictation switch was not rendered')
   }
@@ -130,6 +133,7 @@ describe('VoicePane', () => {
 
   it('fetches speech data once across re-renders when voice settings are absent', async () => {
     const updateSettings = vi.fn()
+
     const { root, refreshModelStates } = await renderVoicePane({
       markFeatureTipsSeen: vi.fn(),
       updateSettings
@@ -140,6 +144,7 @@ describe('VoicePane', () => {
         root.render(<VoicePane settings={{} as GlobalSettings} updateSettings={updateSettings} />)
       })
     }
+
     act(() => root.unmount())
 
     expect(window.api.speech.getCatalog).toHaveBeenCalledTimes(1)
@@ -149,6 +154,7 @@ describe('VoicePane', () => {
   it('clicking the switch marks the voice tip seen before disabling voice settings', async () => {
     const calls: string[] = []
     const requestMicrophonePermission = vi.fn()
+
     const updateVoiceSettings = vi.fn((updates: { enabled?: boolean }) => {
       calls.push(`settings:${String(updates.enabled)}`)
     })
@@ -167,9 +173,11 @@ describe('VoicePane', () => {
 
   it('clicking the switch marks the voice tip seen before the disable settings update', async () => {
     const calls: string[] = []
+
     const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => {
       calls.push(`settings:${String(updates.voice?.enabled)}`)
     })
+
     const { button, root } = await renderVoicePane({
       voiceEnabled: true,
       markFeatureTipsSeen: (ids) => calls.push(`seen:${ids.join(',')}`),
@@ -191,15 +199,18 @@ describe('VoicePane', () => {
 
   it('clicking the switch marks the voice tip seen before requesting microphone permission', async () => {
     const calls: string[] = []
+
     const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => {
       calls.push(`settings:${String(updates.voice?.enabled)}`)
     })
+
     const { button, root } = await renderVoicePane({
       voiceEnabled: false,
       markFeatureTipsSeen: (ids) => calls.push(`seen:${ids.join(',')}`),
       updateSettings,
       requestMicrophonePermission: async () => {
         calls.push('permission-request')
+
         return deniedMicrophoneResult
       }
     })
@@ -213,6 +224,7 @@ describe('VoicePane', () => {
 
   it('marks the voice tip seen before requesting microphone permission when enabling is denied', async () => {
     const calls: string[] = []
+
     const updateVoiceSettings = vi.fn((updates: { enabled?: boolean }) => {
       calls.push(`settings:${String(updates.enabled)}`)
     })
@@ -223,6 +235,7 @@ describe('VoicePane', () => {
       updateVoiceSettings,
       requestMicrophonePermission: async () => {
         calls.push('permission-request')
+
         return deniedMicrophoneResult
       },
       setPermissionPending: (pending) => calls.push(`pending:${String(pending)}`),
@@ -241,6 +254,7 @@ describe('VoicePane', () => {
 
   it('does not record voice feature interaction from the settings switch', async () => {
     const recordFeatureInteraction = vi.fn()
+
     const { button, root } = await renderVoicePane({
       voiceEnabled: true,
       markFeatureTipsSeen: vi.fn(),
@@ -257,9 +271,11 @@ describe('VoicePane', () => {
   it('merges an in-flight voice write onto the newest settings, not the render-time snapshot', async () => {
     const updateSettings = vi.fn()
     let resolveClear: () => void = () => {}
+
     const clearing = new Promise<{ configured: boolean }>((resolve) => {
       resolveClear = () => resolve({ configured: false })
     })
+
     useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         modelStates: [],
@@ -294,9 +310,11 @@ describe('VoicePane', () => {
     const disconnect = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Disconnect OpenAI API key"]'
     )
+
     if (!disconnect) {
       throw new Error('Disconnect OpenAI API key button was not rendered')
     }
+
     await act(async () => {
       disconnect.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

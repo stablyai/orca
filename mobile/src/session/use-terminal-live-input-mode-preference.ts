@@ -22,6 +22,7 @@ export function useTerminalLiveInputModePreference({
   const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
   )
+
   const liveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
   const defaultedLiveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
   const disabledLiveInputTerminalHandlesRef = useRef<Set<string>>(new Set())
@@ -36,20 +37,25 @@ export function useTerminalLiveInputModePreference({
       for (const handle of handles) {
         pendingLiveInputDefaultHandlesRef.current.add(handle)
       }
+
       return
     }
+
     const defaultableHandles = filterTerminalLiveInputDefaultCandidates(
       handles,
       disabledLiveInputTerminalHandlesRef.current
     )
+
     const result = defaultTerminalLiveInputHandles(
       liveInputTerminalHandlesRef.current,
       defaultedLiveInputTerminalHandlesRef.current,
       defaultableHandles
     )
+
     if (!result.changed) {
       return
     }
+
     const nextEnabledHandles = new Set(result.enabledHandles)
     const nextDefaultedHandles = new Set(result.defaultedHandles)
     liveInputTerminalHandlesRef.current = nextEnabledHandles
@@ -72,23 +78,31 @@ export function useTerminalLiveInputModePreference({
         defaultedLiveInputTerminalHandlesRef.current,
         liveHandles
       )
+
       let prunedDisabledHandles = false
+
       for (const handle of disabledLiveInputTerminalHandlesRef.current) {
         if (liveHandles.has(handle)) {
           continue
         }
+
         disabledLiveInputTerminalHandlesRef.current.delete(handle)
+
         if (!disabledLiveInputHydratedRef.current) {
           pendingDisabledLiveInputHydrationEditsRef.current.set(handle, false)
         }
+
         prunedDisabledHandles = true
       }
+
       if (prunedDisabledHandles && disabledLiveInputHydratedRef.current) {
         persistDisabledLiveInputHandles()
       }
+
       if (!result.changed) {
         return
       }
+
       const nextEnabledHandles = new Set(result.enabledHandles)
       const nextDefaultedHandles = new Set(result.defaultedHandles)
       liveInputTerminalHandlesRef.current = nextEnabledHandles
@@ -104,15 +118,19 @@ export function useTerminalLiveInputModePreference({
         ...liveInputTerminalHandlesRef.current,
         ...defaultedLiveInputTerminalHandlesRef.current
       ])
+
       liveHandles.delete(handle)
+
       if (!disabledLiveInputHydratedRef.current) {
         pendingDisabledLiveInputHydrationEditsRef.current.set(handle, false)
       }
+
       if (disabledLiveInputTerminalHandlesRef.current.delete(handle)) {
         if (disabledLiveInputHydratedRef.current) {
           persistDisabledLiveInputHandles()
         }
       }
+
       pruneTerminalHandlesFromLiveInput(liveHandles)
     },
     [persistDisabledLiveInputHandles, pruneTerminalHandlesFromLiveInput]
@@ -121,31 +139,39 @@ export function useTerminalLiveInputModePreference({
   const toggleTerminalLiveInput = useCallback(
     (handle: string): boolean => {
       const nextEnabled = !liveInputTerminalHandlesRef.current.has(handle)
+
       if (nextEnabled) {
         disabledLiveInputTerminalHandlesRef.current.delete(handle)
       } else {
         disabledLiveInputTerminalHandlesRef.current.add(handle)
       }
+
       // Why: pre-hydration edits must patch the loaded set per handle; replacing
       // the loaded set would erase other persisted opt-outs for this worktree.
       if (!disabledLiveInputHydratedRef.current) {
         pendingDisabledLiveInputHydrationEditsRef.current.set(handle, !nextEnabled)
       }
+
       // Why: only persist after hydration; an earlier write would use the
       // reset-empty ref and overwrite other handles' opt-outs for the worktree.
       if (disabledLiveInputHydratedRef.current) {
         persistDisabledLiveInputHandles()
       }
+
       setLiveInputTerminalHandles((prev) => {
         const next = new Set(prev)
+
         if (nextEnabled) {
           next.add(handle)
         } else {
           next.delete(handle)
         }
+
         liveInputTerminalHandlesRef.current = next
+
         return next
       })
+
       return nextEnabled
     },
     [persistDisabledLiveInputHandles]
@@ -167,8 +193,10 @@ export function useTerminalLiveInputModePreference({
       if (disposed) {
         return
       }
+
       const pendingEdits = pendingDisabledLiveInputHydrationEditsRef.current
       const hydratedDisabledHandles = new Set(preference.handles)
+
       for (const [handle, disabled] of pendingEdits) {
         if (disabled) {
           hydratedDisabledHandles.add(handle)
@@ -176,17 +204,21 @@ export function useTerminalLiveInputModePreference({
           hydratedDisabledHandles.delete(handle)
         }
       }
+
       disabledLiveInputTerminalHandlesRef.current = hydratedDisabledHandles
       disabledLiveInputHydratedRef.current = true
       pendingDisabledLiveInputHydrationEditsRef.current = new Map()
+
       if (preference.loaded && pendingEdits.size > 0) {
         persistDisabledLiveInputHandles()
       }
+
       const result = applyDisabledTerminalLiveInputHandles(
         liveInputTerminalHandlesRef.current,
         defaultedLiveInputTerminalHandlesRef.current,
         hydratedDisabledHandles
       )
+
       const nextEnabledHandles = new Set(result.enabledHandles)
       const nextDefaultedHandles = new Set(result.defaultedHandles)
       liveInputTerminalHandlesRef.current = nextEnabledHandles
@@ -196,6 +228,7 @@ export function useTerminalLiveInputModePreference({
       pendingLiveInputDefaultHandlesRef.current.clear()
       defaultTerminalHandlesToLiveInput(pendingDefaultHandles)
     })
+
     return () => {
       disposed = true
     }

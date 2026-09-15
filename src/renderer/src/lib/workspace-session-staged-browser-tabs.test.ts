@@ -3,6 +3,7 @@ import type { WorkspaceSessionSnapshot } from './workspace-session'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 
 const WT = 'wt-1'
+
 const GROUP_ID = 'group-1'
 
 function browserRow(suffix: string): { workspaceId: string; pageId: string; tabId: string } {
@@ -14,6 +15,7 @@ function browserRow(suffix: string): { workspaceId: string; pageId: string; tabI
 }
 
 const ADOPTED = browserRow('adopted')
+
 const STAGED = browserRow('staged')
 
 function createSnapshot(): Pick<

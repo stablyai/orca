@@ -19,28 +19,37 @@ vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
   listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
+
 vi.mock('../hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+
 vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
+
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
+
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
+
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
     getBranchConflictKind: vi.fn().mockResolvedValue(null)
   }
 })
+
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
@@ -78,9 +87,11 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     ...store,
     getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs })
   })
+
   const ptySizes = new Map<string, { cols: number; rows: number }>([
     ['pty-1', { cols: 150, rows: 40 }]
   ])
+
   const resizeCalls: { ptyId: string; cols: number; rows: number }[] = []
   const driverEvents: { ptyId: string; driver: { kind: string; clientId?: string } }[] = []
   const fitOverrideEvents: { ptyId: string; mode: string; cols: number; rows: number }[] = []
@@ -94,8 +105,10 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
       if (!resizeSucceeds) {
         return false
       }
+
       resizeCalls.push({ ptyId, cols, rows })
       ptySizes.set(ptyId, { cols, rows })
+
       return true
     },
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null
@@ -117,6 +130,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
       driverEvents.push({ ptyId, driver: { ...driver } })
     }
   })
+
   return {
     runtime,
     driverEvents,
@@ -340,10 +354,12 @@ describe('remote desktop viewer width driver', () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-B', 'viewer-B', 80, 24, false)
+
     const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
       string,
       { running: Promise<unknown>; pending: { target: { ownerSubscriptionKey?: string } }[] }
     >
+
     layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
 
     void runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 90, 28)
@@ -358,10 +374,12 @@ describe('remote desktop viewer width driver', () => {
   it('makes a host claim join a pending disconnect reclaim', async () => {
     const { runtime } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
+
     const layoutQueues = Reflect.get(runtime, 'layoutQueues') as Map<
       string,
       { running: Promise<unknown>; pending: { waiters: unknown[] }[] }
     >
+
     layoutQueues.set('pty-1', { running: new Promise(() => {}), pending: [] })
 
     void runtime.unregisterRemoteDesktopViewer('pty-1', 'sub-A')
@@ -375,11 +393,13 @@ describe('remote desktop viewer width driver', () => {
   it('removes same-PTY viewer floors with one bounded reclaim', async () => {
     const { runtime, resizeCalls } = createRuntime()
     const subscriptionKeys: string[] = []
+
     for (let index = 0; index < 100; index += 1) {
       const key = `sub-${index}`
       subscriptionKeys.push(key)
       await runtime.updateRemoteDesktopViewer('pty-1', key, `viewer-${index}`, 100, 30)
     }
+
     resizeCalls.splice(0)
 
     await runtime.unregisterRemoteDesktopViewers('pty-1', subscriptionKeys)
@@ -441,9 +461,11 @@ describe('remote desktop viewer width driver', () => {
 
   it('keeps the host reclaim target when the reclaim resize fails', async () => {
     const { runtime } = createRuntime()
+
     const ptySizes = new Map<string, { cols: number; rows: number }>([
       ['pty-1', { cols: 150, rows: 40 }]
     ])
+
     let resizeSucceeds = true
     runtime.setPtyController({
       write: () => true,
@@ -453,7 +475,9 @@ describe('remote desktop viewer width driver', () => {
         if (!resizeSucceeds) {
           return false
         }
+
         ptySizes.set(ptyId, { cols, rows })
+
         return true
       },
       getSize: (ptyId) => ptySizes.get(ptyId) ?? null
@@ -481,9 +505,11 @@ describe('remote desktop viewer width driver', () => {
 
   it('supersedes a failed reclaim target when the host later resizes successfully', async () => {
     const { runtime } = createRuntime()
+
     const ptySizes = new Map<string, { cols: number; rows: number }>([
       ['pty-1', { cols: 150, rows: 40 }]
     ])
+
     let resizeSucceeds = true
     runtime.setPtyController({
       write: () => true,
@@ -493,7 +519,9 @@ describe('remote desktop viewer width driver', () => {
         if (!resizeSucceeds) {
           return false
         }
+
         ptySizes.set(ptyId, { cols, rows })
+
         return true
       },
       getSize: (ptyId) => ptySizes.get(ptyId) ?? null

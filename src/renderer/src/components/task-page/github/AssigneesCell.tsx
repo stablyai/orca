@@ -20,6 +20,7 @@ import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
+
 export function GHAssigneesCell({
   item,
   repo,
@@ -34,6 +35,7 @@ export function GHAssigneesCell({
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -44,12 +46,14 @@ export function GHAssigneesCell({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const [open, setOpen] = useState(false)
   const [pendingLogin, setPendingLogin] = useState<string | null>(null)
   const assignees = useMemo(() => item.assignees ?? [], [item.assignees])
   const parsed = useMemo(() => parseGitHubIssueOrPRLink(item.url), [item.url])
   const owner = parsed?.slug.owner ?? null
   const repoName = parsed?.slug.repo ?? null
+
   const seedLogins = useMemo(
     () =>
       assignees
@@ -58,6 +62,7 @@ export function GHAssigneesCell({
         .filter(Boolean),
     [assignees]
   )
+
   const metadata = useRepoAssigneesBySlug(
     open ? owner : null,
     open ? repoName : null,
@@ -65,13 +70,16 @@ export function GHAssigneesCell({
     sourceSettings,
     parsed?.slug.host
   )
+
   const toggleAssignee = useCallback(
     async (user: GitHubAssignableUser): Promise<void> => {
       if (item.type !== 'issue') {
         return
       }
+
       const userLoginKey = user.login.toLowerCase()
       const isOn = assignees.some((a) => a.login.toLowerCase() === userLoginKey)
+
       if (
         workItemMutation.isIntentPending({
           item,
@@ -84,7 +92,9 @@ export function GHAssigneesCell({
       ) {
         return
       }
+
       setPendingLogin(user.login)
+
       try {
         await workItemMutation.run({
           item,
@@ -105,7 +115,9 @@ export function GHAssigneesCell({
               : {
                   addAssignees: [user.login]
                 }
+
             const target = getActiveRuntimeTarget(sourceSettings)
+
             if (owner && repoName) {
               const args = {
                 owner,
@@ -114,6 +126,7 @@ export function GHAssigneesCell({
                 number: item.number,
                 updates
               }
+
               const res =
                 target.kind === 'environment'
                   ? await callRuntimeRpc<
@@ -122,14 +135,18 @@ export function GHAssigneesCell({
                       timeoutMs: 30_000
                     })
                   : await window.api.gh.updateIssueBySlug(args)
+
               if (!res.ok) {
                 throw new Error(res.error.message)
               }
+
               return res
             }
+
             if (repo) {
               const runtimeRepoId =
                 sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+
               const res =
                 target.kind === 'environment'
                   ? await callRuntimeRpc<{
@@ -154,11 +171,14 @@ export function GHAssigneesCell({
                       number: item.number,
                       updates
                     })
+
               if (res && res.ok === false) {
                 throw new Error(res.error)
               }
+
               return res
             }
+
             throw new Error('No GitHub repository context available for this issue.')
           }
         })
@@ -178,6 +198,7 @@ export function GHAssigneesCell({
       workItemMutation
     ]
   )
+
   const triggerContent =
     assignees.length > 0 ? (
       <>
@@ -195,6 +216,7 @@ export function GHAssigneesCell({
     ) : (
       <span className="text-xs text-muted-foreground/60">-</span>
     )
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -248,6 +270,7 @@ export function GHAssigneesCell({
           metadata.data.map((user) => {
             const isOn = assignees.some((a) => a.login.toLowerCase() === user.login.toLowerCase())
             const pending = pendingLogin === user.login
+
             return (
               <button
                 key={user.login}

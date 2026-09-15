@@ -5,6 +5,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const { runtimeCall, subscriptionSendBinary, latestSubscribePayload, resetRemoteRuntimeTransport } =
@@ -51,6 +52,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       if (args.method === 'session.tabs.list') {
         return Promise.resolve({
           ok: true,
@@ -76,9 +78,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -122,6 +126,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (args.method === 'session.tabs.activate') {
         return { ok: false, error: { code: 'runtime_error', message: 'tab_not_found' } }
       }
+
       if (args.method === 'terminal.recoverPane') {
         return {
           ok: true,
@@ -136,9 +141,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       return { ok: true, result: {} }
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -193,6 +200,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       if (args.method === 'session.tabs.list') {
         return Promise.resolve({
           ok: true,
@@ -228,9 +236,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -302,8 +312,10 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       if (args.method === 'session.tabs.list') {
         listCount += 1
+
         return Promise.resolve({
           ok: true,
           result: {
@@ -338,9 +350,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -359,6 +373,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('stops polling when a requested split leaf disappears but siblings remain', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeCall.mockImplementation((args) => {
         if (args.method === 'session.tabs.activate') {
@@ -396,6 +411,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             }
           })
         }
+
         if (args.method === 'session.tabs.list') {
           return Promise.resolve({
             ok: true,
@@ -421,10 +437,12 @@ describe('createRemoteRuntimePtyTransport', () => {
             }
           })
         }
+
         return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -451,6 +469,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('leaves a timed-out pending split untouched without closing its parent', async () => {
     vi.useFakeTimers()
+
     try {
       const splitSnapshot = {
         worktree: 'id:wt-1',
@@ -482,10 +501,12 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         ]
       }
+
       runtimeCall.mockImplementation((args) => {
         if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
           return Promise.resolve({ ok: true, result: splitSnapshot })
         }
+
         return Promise.resolve({
           ok: true,
           result: {
@@ -500,6 +521,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -524,6 +546,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not mutate a mirror whose handle readiness remains unknown', async () => {
     vi.useFakeTimers()
+
     try {
       const pendingSnapshot = {
         worktree: 'id:wt-1',
@@ -545,10 +568,12 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         ]
       }
+
       runtimeCall.mockImplementation((args) => {
         if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
           return Promise.resolve({ ok: true, result: pendingSnapshot })
         }
+
         return Promise.resolve({
           ok: true,
           result: {
@@ -563,6 +588,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
@@ -577,9 +603,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(runtimeCall).toHaveBeenCalledWith(
         expect.objectContaining({ method: 'session.tabs.activate' })
       )
+
       const listCalls = runtimeCall.mock.calls.filter(
         (call) => call[0].method === 'session.tabs.list'
       )
+
       expect(listCalls.length).toBeGreaterThan(0)
       expect(listCalls.length).toBeLessThanOrEqual(101)
       expect(runtimeCall).not.toHaveBeenCalledWith(
@@ -590,9 +618,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({ method: 'terminal.recoverPane' })
       )
+
       const closeCalls = runtimeCall.mock.calls.filter((call) =>
         String(call[0].method).startsWith('session.tabs.close')
       )
+
       expect(closeCalls).toEqual([])
     } finally {
       vi.useRealTimers()

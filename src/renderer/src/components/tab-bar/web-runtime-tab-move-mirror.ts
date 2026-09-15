@@ -12,9 +12,11 @@ export function mirrorWebRuntimeTabMove(
   }
 ): void {
   const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId)
+
   if (!isWebRuntimeSessionActive(environmentId)) {
     return
   }
+
   void moveWebRuntimeSessionTab({
     ...args,
     environmentId

@@ -22,6 +22,7 @@ import {
 
 function normalizedPath(path: string): string {
   const normalized = resolve(path)
+
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
@@ -41,17 +42,21 @@ export function createSkillPlacementTransaction(input: {
   finish(receipt: SkillInstallReceiptV1): Promise<void>
 } {
   const filesystem = input.filesystem ?? nativeSkillInstallFilesystem
+
   const providerRootOverrides =
     input.scope === 'global' &&
     input.providerRootOverrides &&
     Object.keys(input.providerRootOverrides).length > 0
       ? input.providerRootOverrides
       : undefined
+
   let canonicalPath: string | null = null
+
   return {
     async prepare(previous, receipt) {
       canonicalPath = receipt.canonicalPath
       const selected = new Set(input.detectedProviders.filter(isSkillInstallProviderId))
+
       const destinations = resolveSkillProviderDestinations({
         scope: input.scope,
         homeDirectory: input.homeDirectory,
@@ -59,12 +64,14 @@ export function createSkillPlacementTransaction(input: {
         detectedProviders: [...selected],
         providerRootOverrides
       }).filter((destination) => !destination.readsCanonicalRoot)
+
       const desiredPathByProvider = new Map(
         destinations.map((destination) => [
           destination.provider,
           normalizedPath(destination.rootPath)
         ])
       )
+
       for (const placement of previous?.placements ?? []) {
         if (
           !isSkillInstallProviderId(placement.provider) ||
@@ -74,25 +81,32 @@ export function createSkillPlacementTransaction(input: {
         ) {
           continue
         }
+
         const claimedBy = destinations.find(
           (destination) =>
             normalizedPath(destination.rootPath) === normalizedPath(dirname(placement.path))
         )
+
         if (claimedBy && claimedBy.provider !== placement.provider) {
           throw new Error('skill-install-provider-root-ownership-conflict')
         }
       }
+
       const previousDestinationKeys = new Set<string>()
+
       const previousDestinations: SkillProviderDestination[] =
         previous?.placements.flatMap((placement) => {
           if (!isSkillInstallProviderId(placement.provider)) {
             return []
           }
+
           if (placement.status === 'failed' || placement.status === 'skipped') {
             return []
           }
+
           const rootPath = dirname(placement.path)
           const key = `${placement.provider}:${normalizedPath(rootPath)}`
+
           if (
             placement.topology === 'canonical-copy' ||
             desiredPathByProvider.get(placement.provider) === normalizedPath(rootPath) ||
@@ -100,11 +114,15 @@ export function createSkillPlacementTransaction(input: {
           ) {
             return []
           }
+
           previousDestinationKeys.add(key)
+
           return [{ provider: placement.provider, readsCanonicalRoot: false, rootPath }]
         }) ?? []
+
       const id = randomUUID()
       const name = basename(receipt.canonicalPath)
+
       const journal: SkillPlacementJournalV1 = {
         schemaVersion: 1,
         operation: 'place',
@@ -125,6 +143,7 @@ export function createSkillPlacementTransaction(input: {
         ...(providerRootOverrides ? { providerRootOverrides } : {}),
         ...(input.wslDistro ? { wslDistro: input.wslDistro } : {})
       }
+
       await writeSkillStateFile(
         skillPlacementJournalPath(input.stateDirectory, receipt.canonicalPath),
         journal
@@ -134,6 +153,7 @@ export function createSkillPlacementTransaction(input: {
       if (canonicalPath !== receipt.canonicalPath) {
         throw new Error('skill-placement-transaction-not-prepared')
       }
+
       return (
         (await recoverSkillPlacementTransaction(
           input.stateDirectory,

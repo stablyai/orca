@@ -25,6 +25,7 @@ function hasPrintableContent(value: string | undefined): boolean {
   if (!value) {
     return false
   }
+
   return (
     stripAnsiEscapeSequences(value).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '').trim().length >
     0

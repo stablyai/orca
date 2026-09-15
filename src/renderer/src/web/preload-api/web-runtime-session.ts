@@ -35,33 +35,43 @@ export const webRuntimeState: {
 }
 
 const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
+
 export function subscribeWebRuntimeStatus(
   callback: (snapshot: RuntimeHostStatusSnapshot) => void
 ): () => void {
   statusListeners.add(callback)
+
   return () => {
     statusListeners.delete(callback)
   }
 }
+
 export function readWebRuntimeStatusSnapshots(): RuntimeHostStatusSnapshot[] {
   const snapshot = webRuntimeState.activeClient?.statusOwner?.read()
+
   return snapshot ? [snapshot] : []
 }
+
 export async function observeWebRuntimeStatus(
   selector: string,
   timeoutMs?: number
 ): Promise<RuntimeHostStatusResponse> {
   const environment = resolveEnvironment(selector)
+
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
+
   const existing = webRuntimeState.activeClient?.statusOwner
+
   if (existing) {
     return existing.refresh({ timeoutMs, observeOnly: true })
   }
+
   const transient = new WebRuntimeClient(getPreferredWebPairingOffer(environment), {
     reconnect: false
   })
+
   try {
     return (await transient.call('status.get', undefined, {
       timeoutMs
@@ -86,6 +96,7 @@ export function getClientForEnvironment(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     throw new Error('runtime_manually_disconnected')
   }
+
   if (
     !webRuntimeState.activeClient ||
     webRuntimeState.activeClientEnvironmentId !== environment.id
@@ -105,6 +116,7 @@ export function getClientForEnvironment(
     })
     webRuntimeState.activeClientEnvironmentId = environment.id
   }
+
   return webRuntimeState.activeClient
 }
 
@@ -144,27 +156,33 @@ export function manuallyDisconnectedResponse(
 
 export function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {
   const environment = requireActiveEnvironment()
+
   if (selector === environment.id || selector === environment.name || selector === 'active') {
     return environment
   }
+
   if (environment.compatibleEnvironmentIds?.includes(selector)) {
     return environment
   }
+
   throw new Error(`Unknown Orca runtime environment: ${selector}`)
 }
 
 export function requireActiveEnvironment(): StoredWebRuntimeEnvironment {
   webRuntimeState.activeEnvironment =
     webRuntimeState.activeEnvironment ?? readStoredWebRuntimeEnvironment()
+
   if (!webRuntimeState.activeEnvironment) {
     throw new Error('Pair this web client with an Orca server first.')
   }
+
   return webRuntimeState.activeEnvironment
 }
 
 export function requireActiveEnvironmentOrNull(): StoredWebRuntimeEnvironment | null {
   webRuntimeState.activeEnvironment =
     webRuntimeState.activeEnvironment ?? readStoredWebRuntimeEnvironment()
+
   return webRuntimeState.activeEnvironment
 }
 
@@ -181,7 +199,9 @@ export function updateEnvironmentFromResponse(
   if (webRuntimeState.activeEnvironment?.id !== environment.id) {
     return
   }
+
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
+
   const pairedDeviceId =
     response.ok &&
     typeof response.result === 'object' &&
@@ -189,6 +209,7 @@ export function updateEnvironmentFromResponse(
     typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
       ? (response.result as { pairedDeviceId: string }).pairedDeviceId
       : undefined
+
   webRuntimeState.activeEnvironment = updateStoredEnvironmentRuntimeId(
     environment,
     runtimeId,

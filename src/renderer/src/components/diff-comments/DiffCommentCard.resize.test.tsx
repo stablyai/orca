@@ -33,6 +33,7 @@ describe('DiffCommentCard content resize', () => {
       vi.fn((callback: FrameRequestCallback) => {
         const frameId = nextFrameId++
         frameCallbacks.set(frameId, callback)
+
         return frameId
       })
     )
@@ -50,6 +51,7 @@ describe('DiffCommentCard content resize', () => {
 
   it('re-measures after wrapping and coalesces observer notifications', () => {
     const onContentResize = vi.fn()
+
     const view = render(
       <DiffCommentCard
         lineNumber={26}
@@ -109,6 +111,7 @@ describe('DiffCommentCard content resize', () => {
     vi.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get').mockImplementation(
       () => scrollHeight
     )
+
     const view = render(
       <DiffCommentCard
         lineNumber={26}
@@ -129,6 +132,7 @@ describe('DiffCommentCard content resize', () => {
     for (let index = 0; index < 50; index++) {
       fireEvent.change(textarea, { target: { value: `A saved note! ${index}` } })
     }
+
     expect(textarea.style.height).toBe('60px')
     expect(onContentResize).toHaveBeenCalledOnce()
 

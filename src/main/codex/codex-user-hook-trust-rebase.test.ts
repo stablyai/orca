@@ -6,6 +6,7 @@ import type { HookCommandConfig, HookDefinition } from '../agent-hooks/installer
 import type { CodexUserHookTrustRebaseRequest } from './codex-user-hook-trust-rebase-client'
 
 const resolveCodexCommandMock = vi.hoisted(() => vi.fn(() => process.execPath))
+
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
@@ -17,7 +18,9 @@ import {
 } from './codex-user-hook-trust-rebase'
 
 let root: string
+
 let hooksPath: string
+
 let configPath: string
 
 beforeEach(() => {
@@ -72,9 +75,11 @@ describe('real-home user hook trust rebasing', () => {
     const first = command('first-user')
     const second = command('second-user')
     const mixed = command('mixed-user')
+
     const before: Record<string, HookDefinition[]> = {
       Stop: [{ hooks: [orca] }, { hooks: [first] }, { hooks: [second] }, { hooks: [orca, mixed] }]
     }
+
     const after: Record<string, HookDefinition[]> = {
       Stop: [{ hooks: [first] }, { hooks: [second] }, { hooks: [mixed] }]
     }
@@ -109,6 +114,7 @@ describe('real-home user hook trust rebasing', () => {
     const requests: CodexUserHookTrustRebaseRequest[] = []
     _internals.setSessionRunner(async (request) => {
       requests.push(request)
+
       if (request.operation === 'inspect-user-hook-trust') {
         return {
           outcome: 'inspected',
@@ -120,6 +126,7 @@ describe('real-home user hook trust rebasing', () => {
           }))
         }
       }
+
       return { outcome: 'repaired', repaired: 1 }
     })
 
@@ -139,6 +146,7 @@ describe('real-home user hook trust rebasing', () => {
     expect(requests[0]?.invocation.envToDelete).toContain('CODEX_HOME')
     const repair = requests[1]
     expect(repair?.operation).toBe('repair-user-hook-trust')
+
     if (repair?.operation === 'repair-user-hook-trust') {
       expect(repair.moves).toEqual([
         expect.objectContaining({ command: 'trusted-user', wasTrusted: true, enabled: true }),
@@ -158,6 +166,7 @@ describe('real-home user hook trust rebasing', () => {
       sessions += 1
       throw new CodexAppServerUnsupportedError('unrecognized subcommand app-server')
     })
+
     const args = {
       sourcePath: hooksPath,
       runtimeHomePath: root,
@@ -191,6 +200,7 @@ describe('real-home user hook trust rebasing', () => {
       sessions += 1
       throw new Error('pre-mutation hooks/list reported 0 of 1 moved user hooks')
     })
+
     const args = {
       sourcePath: hooksPath,
       runtimeHomePath: root,
@@ -219,8 +229,10 @@ describe('real-home user hook trust rebasing', () => {
     const user = command('user-hook')
     const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
     const after = { Stop: [{ hooks: [user] }] }
+
     const originalHooks =
       '{ "hooks": { "Stop": [{"hooks":[{"type":"command","command":"orca-hook"}]},{"hooks":[{"type":"command","command":"user-hook"}]}] } }\r\n'
+
     const originalConfig = '# user formatting\r\nmodel = "x"\r\n'
     writeFileSync(hooksPath, originalHooks)
     writeFileSync(configPath, originalConfig)
@@ -236,6 +248,7 @@ describe('real-home user hook trust rebasing', () => {
           }))
         }
       }
+
       writeFileSync(configPath, '[hooks.state."partial"]\ntrusted_hash = "bad"\n')
       throw new Error('repair transport failed')
     })

@@ -17,6 +17,7 @@ describe('worktree.listRetiredNames', () => {
       getRuntimeId: () => 'test-runtime',
       listRetiredWorktreeNames: vi.fn().mockResolvedValue(RETIRED)
     } as unknown as OrcaRuntimeService
+
     const request: RpcRequest = {
       id: 'req-1',
       authToken: 'tok',

@@ -7,7 +7,9 @@ import {
 } from '@/lib/text-control-paste'
 
 export const MONACO_PASTE_DIRECT_MAX_BYTES = 64 * 1024
+
 export const MONACO_PASTE_CHUNK_MAX_BYTES = 16 * 1024
+
 export const MONACO_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
 export type MonacoLargeTextPasteResult =
@@ -77,32 +79,41 @@ function getPlainTextFromPasteEvent(event: ClipboardEvent): string {
 function getEndPositionAfterInsert(start: Position, text: string): Position {
   let lineNumber = start.lineNumber
   let column = start.column
+
   for (let index = 0; index < text.length; index += 1) {
     const codeUnit = text.charCodeAt(index)
+
     if (codeUnit === 13) {
       lineNumber += 1
       column = 1
+
       if (text.charCodeAt(index + 1) === 10) {
         index += 1
       }
+
       continue
     }
+
     if (codeUnit === 10) {
       lineNumber += 1
       column = 1
       continue
     }
+
     column += 1
   }
+
   return { lineNumber, column }
 }
 
 function snapshotMonacoPasteTarget(monacoEditor: MonacoPasteEditor): MonacoPasteSnapshot | null {
   const model = monacoEditor.getModel()
   const container = monacoEditor.getContainerDomNode()
+
   if (!model || !container.isConnected || !monacoEditor.hasTextFocus()) {
     return null
   }
+
   return { container, model }
 }
 
@@ -134,6 +145,7 @@ async function insertMonacoTextInChunks(
   options: MonacoLargeTextPasteOptions
 ): Promise<Exclude<MonacoLargeTextPasteResult, { status: 'ignored' | 'handled' }>> {
   const snapshot = snapshotMonacoPasteTarget(monacoEditor)
+
   if (!snapshot) {
     return { status: 'rejected', reason: 'target-unavailable', byteLength, chunksWritten: 0 }
   }
@@ -146,28 +158,36 @@ async function insertMonacoTextInChunks(
   while (textIndex < text.length) {
     if (!isMonacoPasteTargetCurrent(monacoEditor, snapshot)) {
       monacoEditor.pushUndoStop()
+
       return { status: 'cancelled', reason: 'target-unavailable', byteLength, chunksWritten }
     }
 
     const selection = monacoEditor.getSelection()
+
     if (!selection) {
       monacoEditor.pushUndoStop()
+
       return { status: 'cancelled', reason: 'target-unavailable', byteLength, chunksWritten }
     }
 
     const nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
     const chunk = text.slice(textIndex, nextIndex)
+
     const endPosition = getEndPositionAfterInsert(
       { lineNumber: selection.startLineNumber, column: selection.startColumn },
       chunk
     )
+
     const accepted = monacoEditor.executeEdits('orca-large-paste', [
       { range: selection, text: chunk, forceMoveMarkers: true }
     ])
+
     if (!accepted) {
       monacoEditor.pushUndoStop()
+
       return { status: 'cancelled', reason: 'target-unavailable', byteLength, chunksWritten }
     }
+
     setCollapsedSelection(monacoEditor, endPosition)
     textIndex = nextIndex
     chunksWritten += 1
@@ -178,6 +198,7 @@ async function insertMonacoTextInChunks(
   }
 
   monacoEditor.pushUndoStop()
+
   return { status: 'pasted', mode: 'chunked', byteLength, chunksWritten }
 }
 
@@ -191,11 +212,13 @@ export async function executeMonacoLargeTextPaste(
   options: MonacoLargeTextPasteOptions
 ): Promise<Exclude<MonacoLargeTextPasteResult, { status: 'ignored' | 'handled' }>> {
   const maxBytes = options.maxBytes ?? MONACO_PASTE_MAX_BYTES
+
   const byteLengthMeasurement = await measureTextControlPasteByteLengthWithYield(text, {
     stopAfterBytes: maxBytes,
     yieldAfterCodeUnits: options.measureYieldAfterCodeUnits,
     yieldToEventLoop: options.yieldToEventLoop
   })
+
   if (byteLengthMeasurement.exceededLimit) {
     return {
       status: 'rejected',
@@ -204,6 +227,7 @@ export async function executeMonacoLargeTextPaste(
       chunksWritten: 0
     }
   }
+
   return insertMonacoTextInChunks(monacoEditor, text, byteLengthMeasurement.byteLength, options)
 }
 
@@ -215,23 +239,28 @@ export function handleMonacoLargeTextPaste(
   if (event.defaultPrevented) {
     return { status: 'ignored', reason: 'already-handled' }
   }
+
   if (options.readOnly) {
     return { status: 'ignored', reason: 'read-only' }
   }
+
   if (!monacoEditor?.getModel()) {
     return { status: 'ignored', reason: 'no-editor' }
   }
 
   const text = getPlainTextFromPasteEvent(event)
+
   if (!text) {
     return { status: 'ignored', reason: 'empty' }
   }
 
   const directMaxBytes = options.directMaxBytes ?? MONACO_PASTE_DIRECT_MAX_BYTES
   const maxBytes = options.maxBytes ?? MONACO_PASTE_MAX_BYTES
+
   const ownershipMeasurement = measureTextControlPasteByteLength(text, {
     stopAfterBytes: Math.min(directMaxBytes, maxBytes)
   })
+
   if (!ownershipMeasurement.exceededLimit) {
     return { status: 'ignored', reason: 'small' }
   }
@@ -239,13 +268,16 @@ export function handleMonacoLargeTextPaste(
   if (maxBytes <= directMaxBytes) {
     event.preventDefault()
     event.stopPropagation()
+
     const result = {
       status: 'rejected',
       reason: 'too-large',
       byteLength: ownershipMeasurement.byteLength,
       chunksWritten: 0
     } as const
+
     options.onPasteResult?.(result)
+
     return result
   }
 
@@ -254,5 +286,6 @@ export function handleMonacoLargeTextPaste(
 
   options.onPasteStart?.()
   void executeMonacoLargeTextPaste(monacoEditor, text, options).then(options.onPasteResult)
+
   return { status: 'handled' }
 }

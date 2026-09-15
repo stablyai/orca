@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { message: vi.fn() } }))
+
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
+
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, value: string, vars?: Record<string, string>) =>
     value.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => vars?.[name] ?? '')

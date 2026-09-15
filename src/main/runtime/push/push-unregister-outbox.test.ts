@@ -7,6 +7,7 @@ import { PushUnregisterOutbox } from './push-unregister-outbox'
 
 vi.mock('node:fs', async (importOriginal) => {
   const original = await importOriginal<typeof fs>()
+
   return { ...original, readFileSync: vi.fn(original.readFileSync) }
 })
 
@@ -48,10 +49,12 @@ describe('PushUnregisterOutbox', () => {
 
   it('drops malformed rows instead of failing the whole load', () => {
     const dir = userDataDir()
+
     const valid = new PushUnregisterOutbox(dir).enqueue({
       registrationId: 'reg-1',
       deviceId: 'device-1'
     })
+
     const path = join(dir, OUTBOX_FILENAME)
     const stored: unknown[] = JSON.parse(readFileSync(path, 'utf-8'))
     writeFileSync(
@@ -64,10 +67,12 @@ describe('PushUnregisterOutbox', () => {
 
   it('preserves unreadable pending deletes until the outbox can be reloaded', () => {
     const dir = userDataDir()
+
     const pending = new PushUnregisterOutbox(dir).enqueue({
       registrationId: 'reg-1',
       deviceId: 'device-1'
     })
+
     const path = join(dir, OUTBOX_FILENAME)
     const original = readFileSync(path, 'utf-8')
     vi.mocked(readFileSync).mockImplementationOnce(() => {

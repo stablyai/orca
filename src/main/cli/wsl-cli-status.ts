@@ -30,12 +30,15 @@ export async function readWslCliCommandFile(
       'fi'
     ].join('\n')
   )
+
   if (output === '__ORCA_MISSING__') {
     return null
   }
+
   if (output === '__ORCA_NOT_FILE__') {
     return 'not_file'
   }
+
   return output
 }
 
@@ -101,6 +104,7 @@ export async function resolveReadyWslCliState(args: {
       )
     }
   }
+
   if (!args.distro) {
     return {
       status: unsupportedWslCliStatus('platform_not_supported', 'No WSL distribution is available.')
@@ -108,6 +112,7 @@ export async function resolveReadyWslCliState(args: {
   }
 
   const hostStatus = await args.getHostStatus()
+
   if (!hostStatus.launcherPath) {
     return {
       status: unsupportedWslCliStatus(
@@ -118,6 +123,7 @@ export async function resolveReadyWslCliState(args: {
   }
 
   const home = (await args.run(args.distro, 'printf %s "$HOME"')).trim()
+
   if (!home.startsWith('/')) {
     return {
       status: unsupportedWslCliStatus(
@@ -134,6 +140,7 @@ export async function resolveReadyWslCliState(args: {
         '{ command -v powershell.exe >/dev/null 2>&1 || [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; } && command -v wslpath >/dev/null 2>&1 && printf yes || printf no'
       )
     ).trim() === 'yes'
+
   if (!interopReady) {
     return {
       status: unsupportedWslCliStatus(
@@ -145,6 +152,7 @@ export async function resolveReadyWslCliState(args: {
 
   const pathDirectory = `${home}/.local/bin`
   const commandPath = `${pathDirectory}/${WSL_COMMAND_NAME}`
+
   const pathConfigured =
     (
       await args.run(

@@ -60,6 +60,7 @@ describe('applyTerminalGitCredentialPromptGuard', () => {
         GCM_INTERACTIVE: 'auto',
         GIT_ASKPASS: '/usr/local/bin/user-askpass'
       }
+
       const env = { ...original }
 
       expect(

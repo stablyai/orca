@@ -16,8 +16,10 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   Object.assign(settings, overrides)
   const parsed: PersistedState = { ...defaults, settings: settings as GlobalSettings }
   const noop = (): void => {}
+
   const terminal = prepareLoadedTerminalSettings(parsed, noop)
   const profile = prepareLoadedProfileSettings(parsed, defaults, noop)
+
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
@@ -31,6 +33,7 @@ describe('retired Agents sidebar setting', () => {
       experimentalActivity: true,
       showAgentsSidebar: false
     })
+
     expect('showAgentsSidebar' in normalized).toBe(false)
     expect(normalized.agentsSidebarMigratedFromExperimental).toBe(true)
   })

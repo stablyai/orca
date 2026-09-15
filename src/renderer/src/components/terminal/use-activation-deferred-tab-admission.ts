@@ -30,6 +30,7 @@ export function useActivationDeferredTabAdmission(
     renderedActiveWorktreeId,
     setBackgroundMountRevision
   } = controller
+
   // Why the high-water mark rather than the live count: draining must not walk an
   // over-cap worktree down into eligibility and warm up tabs the pre-deferral
   // behaviour left unmounted — but a verdict latched on one reading would never
@@ -40,36 +41,47 @@ export function useActivationDeferredTabAdmission(
 
   useEffect(() => {
     const worktreeId = renderedActiveWorktreeId
+
     if (!worktreeId) {
       return
     }
+
     const deferredTabCount =
       activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)?.size ?? 0
+
     if (deferredTabCount === 0) {
       return
     }
+
     const previous = admissionRef.current
+
     const maxDeferredTabCount =
       previous?.worktreeId === worktreeId
         ? Math.max(previous.maxDeferredTabCount, deferredTabCount)
         : deferredTabCount
+
     admissionRef.current = { worktreeId, maxDeferredTabCount }
+
     if (!isActivationAdmissionEligible(maxDeferredTabCount)) {
       return
     }
+
     return scheduleActivationDeferredAdmission(() => {
       // Why re-read: tabs can be created or closed between the scheduling frame
       // and this one, and admitting a stale id would strand the restriction.
       const allTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(
         (tab) => tab.id
       )
+
       const nextTabId = pickNextActivationDeferredTabId(
         allTabIds,
         activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)
       )
+
       if (!nextTabId) {
         return
       }
+
       revealActivationDeferredTabs({
         restrictions: backgroundMountTabIdsByWorktreeRef.current,
         deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,

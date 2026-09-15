@@ -38,6 +38,7 @@ export const ISSUE_LIST_FIELDS = ISSUE_FIELDS.filter((field) => field !== 'descr
 // Why: detail reads need attachment metadata so inline ADF media can be resolved
 // to downloadable image content; list/search omit this for payload size.
 export const ISSUE_DETAIL_FIELDS = [...ISSUE_FIELDS, 'attachment']
+
 // `created`/`updated` are required: mapJiraIssue falls back to "now" when they're absent,
 // which would silently report the lookup time as the issue's timestamps.
 export const ISSUE_SUMMARY_FIELDS = [
@@ -48,8 +49,10 @@ export const ISSUE_SUMMARY_FIELDS = [
   'created',
   'updated'
 ]
+
 export function avatarUrl(value: unknown): string | undefined {
   const avatars = asRecord(value)
+
   return (
     asString(avatars['48x48']) ||
     asString(avatars['32x32']) ||
@@ -62,9 +65,11 @@ export function mapUser(value: unknown): JiraUser | undefined {
   const user = asRecord(value)
   // Server/DC users have no accountId; name (login) and key are its stable ids.
   const accountId = asString(user.accountId) || asString(user.name) || asString(user.key)
+
   if (!accountId) {
     return undefined
   }
+
   return {
     accountId,
     displayName: asString(user.displayName, 'Unknown'),
@@ -75,6 +80,7 @@ export function mapUser(value: unknown): JiraUser | undefined {
 
 export function mapProject(value: unknown, site?: JiraSite): JiraProject {
   const project = asRecord(value)
+
   return {
     id: asString(project.id),
     key: asString(project.key),
@@ -86,6 +92,7 @@ export function mapProject(value: unknown, site?: JiraSite): JiraProject {
 
 export function mapIssueType(value: unknown): JiraIssueType {
   const issueType = asRecord(value)
+
   return {
     id: asString(issueType.id),
     name: asString(issueType.name, 'Issue'),
@@ -97,6 +104,7 @@ export function mapIssueType(value: unknown): JiraIssueType {
 
 export function mapCreateFieldAllowedValue(value: unknown): JiraCreateFieldAllowedValue {
   const option = asRecord(value)
+
   return {
     id: asString(option.id) || undefined,
     value: asString(option.value) || undefined,
@@ -107,18 +115,22 @@ export function mapCreateFieldAllowedValue(value: unknown): JiraCreateFieldAllow
 export function mapCreateField(value: unknown, fallbackKey = ''): JiraCreateField | null {
   const field = asRecord(value)
   const schema = asRecord(field.schema)
+
   const key =
     asString(field.key) ||
     asString(field.fieldId) ||
     asString(field.id) ||
     asString(field.fieldKey) ||
     fallbackKey
+
   if (!key) {
     return null
   }
+
   const allowedValues = Array.isArray(field.allowedValues)
     ? field.allowedValues.map(mapCreateFieldAllowedValue)
     : undefined
+
   return {
     key,
     name: asString(field.name, key),
@@ -136,24 +148,29 @@ export function getCreateFieldRecords(response: JiraPagedResponse<JiraRecord>): 
   if (Array.isArray(response.values)) {
     return response.values
   }
+
   if (Array.isArray(response.fields)) {
     return response.fields
   }
+
   if (response.fields && typeof response.fields === 'object') {
     return Object.entries(response.fields).map(([key, value]) => ({
       key,
       ...asRecord(value)
     }))
   }
+
   return []
 }
 
 export function mapPriority(value: unknown): JiraPriority | undefined {
   const priority = asRecord(value)
   const id = asString(priority.id)
+
   if (!id) {
     return undefined
   }
+
   return {
     id,
     name: asString(priority.name, 'Priority'),
@@ -164,6 +181,7 @@ export function mapPriority(value: unknown): JiraPriority | undefined {
 export function mapStatus(value: unknown): JiraStatus {
   const status = asRecord(value)
   const category = asRecord(status.statusCategory)
+
   return {
     id: asString(status.id),
     name: asString(status.name, 'Unknown'),
@@ -189,6 +207,7 @@ export function mapJiraIssue(
 ): JiraIssue {
   const fields = asRecord(raw.fields)
   const key = asString(raw.key)
+
   return {
     id: asString(raw.id, key),
     key,

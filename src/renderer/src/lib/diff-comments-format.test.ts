@@ -79,6 +79,7 @@ describe('formatDiffComments', () => {
       makeComment({ id: 'a', lineNumber: 1, body: 'first' }),
       makeComment({ id: 'b', lineNumber: 2, body: 'second' })
     ])
+
     expect(out).toBe(
       [
         'File: src/app.ts',

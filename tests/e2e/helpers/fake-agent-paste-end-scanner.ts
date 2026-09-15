@@ -10,6 +10,7 @@ export function scanFakeAgentPasteEnd(tail: string, input: string): FakeAgentPas
   const candidate = tail + input
   const beginIndex = candidate.indexOf(beginMarker)
   const endIndex = candidate.indexOf(endMarker)
+
   return {
     tail: candidate.slice(1 - endMarker.length),
     pasteBeginOffset: beginIndex === -1 ? null : beginIndex + beginMarker.length - tail.length,

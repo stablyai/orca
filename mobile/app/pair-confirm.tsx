@@ -43,8 +43,10 @@ export default function PairConfirmScreen() {
 
   const routeState = resolvePairConfirmRouteState(params.code)
   const offer = routeState.offer
+
   const resolvedStatus =
     status === 'awaiting-confirm' && routeState.kind === 'error' ? 'error' : status
+
   const resolvedErrorMessage =
     status === 'awaiting-confirm' && routeState.kind === 'error'
       ? routeState.errorMessage
@@ -58,8 +60,10 @@ export default function PairConfirmScreen() {
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
         cancel()
+
         return true
       })
+
       return () => subscription.remove()
     }, [cancel])
   )
@@ -67,8 +71,10 @@ export default function PairConfirmScreen() {
   const setPairConfirmRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
       mountedRef.current = true
+
       return
     }
+
     // Why: pairing attempts can outlive the visible route; dispose them when
     // the confirm screen detaches without a passive cleanup-only Effect.
     mountedRef.current = false
@@ -80,6 +86,7 @@ export default function PairConfirmScreen() {
     if (!offer) {
       return
     }
+
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
@@ -93,42 +100,53 @@ export default function PairConfirmScreen() {
           if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
             return
           }
+
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
       }
     })
+
     activePairingAttemptRef.current = attempt
+
     try {
       const { hostId } = await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
+
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
+
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+
       // Why: re-pairing the same desktop now reuses its existing host id
       // (STA-1840 dedup), so a client cached under that id from an earlier
       // pairing would keep the stale endpoint/relay. Close it so the
       // Refresh any cached client from the newly persisted pairing profile.
       refreshHostClient(hostId)
       const onboardingSteps = await loadMobileOnboardingSteps()
+
       if (!mountedRef.current) {
         return
       }
+
       router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
+
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
+
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
       setErrorMessage(

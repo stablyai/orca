@@ -67,7 +67,9 @@ function serializeThread(group: PRCommentGroup): SerializablePRCommentThread | n
   if (!isResolvablePRCommentGroup(group)) {
     return null
   }
+
   const root = serializeComment(group.root)
+
   return {
     threadId: group.root.threadId,
     author: group.root.author,
@@ -89,6 +91,7 @@ function serializeGroup(group: PRCommentGroup): SerializablePRCommentGroup {
       comment: serializeComment(group.comment)
     }
   }
+
   return {
     kind: 'thread',
     threadId: group.threadId,
@@ -116,8 +119,10 @@ export function buildPRCommentsResolutionPrompt({
   const threads = groups
     .map(serializeThread)
     .filter((thread): thread is SerializablePRCommentThread => thread !== null)
+
   const selectedGroups = groups.map(serializeGroup)
   const reviewLabel = `${reviewKind} ${reviewKind === 'MR' ? '!' : '#'}${reviewNumber}`
+
   const payload = {
     review: {
       kind: reviewKind,

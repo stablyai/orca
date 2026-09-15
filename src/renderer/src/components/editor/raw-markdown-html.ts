@@ -17,19 +17,23 @@ const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)
 
 function isEscaped(content: string, index: number): boolean {
   let backslashCount = 0
+
   for (let i = index - 1; i >= 0 && content[i] === '\\'; i -= 1) {
     backslashCount += 1
   }
+
   return backslashCount % 2 === 1
 }
 
 function findLineEnd(content: string, start: number): number {
   const newlineIndex = content.indexOf('\n', start)
+
   return newlineIndex === -1 ? content.length : newlineIndex
 }
 
 function isLineOnlyHtml(line: string): boolean {
   const trimmed = line.trim()
+
   if (!trimmed.startsWith('<')) {
     return false
   }
@@ -44,6 +48,7 @@ function isLineOnlyHtml(line: string): boolean {
 function matchBlockHtml(content: string, start: number): string | null {
   const lineEnd = findLineEnd(content, start)
   const line = content.slice(start, lineEnd)
+
   if (!isLineOnlyHtml(line)) {
     return null
   }
@@ -78,9 +83,11 @@ export function encodeRawMarkdownHtmlForRichEditor(
         fencePrefix.lastIndex = fenceProbe
         fenceMatch = fencePrefix.exec(normalizedContent)
       }
+
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
+
         if (activeFence === null) {
           activeFence = fenceChar
           activeFenceLength = fenceLength
@@ -101,6 +108,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
 
     if (normalizedContent[index] === '`') {
       let tickCount = 0
+
       while (normalizedContent[index + tickCount] === '`') {
         tickCount += 1
       }
@@ -109,11 +117,14 @@ export function encodeRawMarkdownHtmlForRichEditor(
       // not a longer run. We scan forward to find the first exact match.
       let searchFrom = index + tickCount
       let closingIndex = -1
+
       while (searchFrom < normalizedContent.length) {
         const candidate = normalizedContent.indexOf('`'.repeat(tickCount), searchFrom)
+
         if (candidate === -1) {
           break
         }
+
         // Verify the match is exactly tickCount backticks (no extra backtick before/after)
         if (
           (candidate === 0 || normalizedContent[candidate - 1] !== '`') &&
@@ -122,6 +133,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
           closingIndex = candidate
           break
         }
+
         searchFrom = candidate + 1
       }
 
@@ -136,6 +148,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
 
     if (isLineStart) {
       const detailsHtml = matchDetailsHtmlBlock(normalizedContent, index)
+
       if (detailsHtml && isEditableDetailsHtmlBlock(detailsHtml)) {
         // Why: <details>/<summary> is an editable rich-mode node; raw passthrough
         // would make toggle blocks reopen as inert HTML instead.
@@ -151,6 +164,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
       }
 
       const blockHtml = matchBlockHtml(normalizedContent, index)
+
       if (blockHtml) {
         result += transport.create('block-html', blockHtml)
         index += blockHtml.length
@@ -162,10 +176,12 @@ export function encodeRawMarkdownHtmlForRichEditor(
     // prefix must remain literal even in HTML-free documents and after edits.
     if (normalizedContent.startsWith(transport.authoredPrefix, index)) {
       const authoredEnd = normalizedContent.indexOf(']]', index + transport.authoredPrefix.length)
+
       const authoredOccurrence =
         authoredEnd === -1
           ? transport.authoredPrefix
           : normalizedContent.slice(index, authoredEnd + 2)
+
       result += transport.create('literal', authoredOccurrence)
       index += authoredOccurrence.length
       continue
@@ -174,17 +190,20 @@ export function encodeRawMarkdownHtmlForRichEditor(
     if (normalizedContent[index] === '<' && !isEscaped(normalizedContent, index)) {
       if (htmlSuperscriptLinks) {
         const superscriptLink = matchHtmlSuperscriptLinkSource(normalizedContent, index)
+
         if (superscriptLink) {
           result += transport.create('html-superscript-link', JSON.stringify(superscriptLink.value))
           index = superscriptLink.end
           continue
         }
       }
+
       // An unterminated comment cannot match; later tags must still be encoded.
       const inlineHtml =
         normalizedContent.startsWith('<!--', index) && index + 4 > lastCommentClose
           ? null
           : (normalizedContent.slice(index).match(INLINE_HTML_PATTERN)?.[0] ?? null)
+
       if (inlineHtml) {
         result += transport.create('inline-html', inlineHtml)
         index += inlineHtml.length
@@ -200,9 +219,11 @@ export function encodeRawMarkdownHtmlForRichEditor(
       !isEscaped(normalizedContent, index)
     ) {
       const closingIndex = normalizedContent.indexOf(']]', index + 2)
+
       if (closingIndex !== -1) {
         const rawTarget = normalizedContent.slice(index + 2, closingIndex)
         const link = parseMarkdownDocLink(rawTarget)
+
         if (link && !isReservedRichMarkdownTransportBody(rawTarget)) {
           result += transport.create(
             'document-link',
@@ -285,6 +306,7 @@ function createRawSourceNode({
       start: inline ? skipInlineTransportStartScan : transport.startFor(kind),
       tokenize(src) {
         const matched = transport.match(src, kind)
+
         if (!matched) {
           return undefined
         }
@@ -320,6 +342,7 @@ function createRawSourceNode({
 
     renderHTML({ HTMLAttributes, node }) {
       const value = typeof node.attrs.value === 'string' ? node.attrs.value : ''
+
       return [
         inline ? 'span' : 'div',
         mergeAttributes(HTMLAttributes, {

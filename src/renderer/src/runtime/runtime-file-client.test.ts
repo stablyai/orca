@@ -239,6 +239,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-preview',
         ok: true,
@@ -290,6 +291,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       throw new Error('files.readPreview should not be called')
     })
 
@@ -317,6 +319,7 @@ describe('runtime file client', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: 'rpc-preview',
         ok: false,
@@ -347,6 +350,7 @@ describe('runtime file client', () => {
       if (args.method === 'files.read') {
         return Promise.reject(new Error('binary_file'))
       }
+
       throw new Error('files.readPreview should not be called')
     })
 

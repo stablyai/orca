@@ -61,9 +61,11 @@ function daemonPidPath(userDataDir: string): string {
 function readDaemonPid(userDataDir: string): number {
   const raw = readFileSync(daemonPidPath(userDataDir), 'utf8')
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -75,6 +77,7 @@ function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
   if (hasExited(proc)) {
     return Promise.resolve()
   }
+
   return new Promise((resolve) => {
     const timeout = setTimeout(resolve, timeoutMs)
     timeout.unref?.()
@@ -87,9 +90,11 @@ function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
 
 async function forceKillElectronApp(app: ElectronApplication): Promise<void> {
   const proc = app.process()
+
   if (!proc.pid || hasExited(proc)) {
     return
   }
+
   try {
     if (process.platform === 'win32') {
       execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
@@ -99,6 +104,7 @@ async function forceKillElectronApp(app: ElectronApplication): Promise<void> {
   } catch {
     // Already gone.
   }
+
   await waitForExit(proc)
 }
 
@@ -106,8 +112,10 @@ function killPid(pid: number): void {
   try {
     if (process.platform === 'win32') {
       execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+
       return
     }
+
     process.kill(pid, 'SIGKILL')
   } catch {
     // Already gone.
@@ -117,19 +125,23 @@ function killPid(pid: number): void {
 function stripPersistedPtyOwnership(userDataDir: string): void {
   const data = readPersistedData(userDataDir)
   const session = data.workspaceSession
+
   if (!session) {
     throw new Error('Expected persisted workspace session')
   }
+
   for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
       tab.ptyId = null
     }
   }
+
   // Why: this models the updater/crash artifact from #6370: the UI tab and
   // live resume record survive, but no pane has the old stable leaf key or
   // daemon session to own resume.
   session.terminalLayoutsByTabId = {}
   session.activeWorktreeIdsOnShutdown = []
+
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
     if (record.providerSession?.id === PROVIDER_SESSION_ID) {
       // Why: the e2e proof should verify Orca launches the resumed command,
@@ -137,11 +149,13 @@ function stripPersistedPtyOwnership(userDataDir: string): void {
       record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
     }
   }
+
   writePersistedData(userDataDir, data)
 }
 
 function persistedLiveRecordExists(userDataDir: string): boolean {
   const records = readPersistedData(userDataDir).workspaceSession?.sleepingAgentSessionsByPaneKey
+
   return Object.values(records ?? {}).some(
     (record) => record.providerSession?.id === PROVIDER_SESSION_ID
   )
@@ -152,8 +166,10 @@ test.describe.configure({ mode: 'serial' })
 test('resumes a live agent record after force-exit restart when pane PTY ownership is gone', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -224,17 +240,21 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     // vs disk state to separate a lost write from a merely slow flush.
     const persistDeadline = Date.now() + 30_000
     let persisted = false
+
     while (Date.now() < persistDeadline) {
       if (persistedLiveRecordExists(session.userDataDir)) {
         persisted = true
         break
       }
+
       await page.waitForTimeout(250)
     }
+
     if (!persisted) {
       const storeRecords = await page.evaluate(
         () => window.__store?.getState().sleepingAgentSessionsByPaneKey
       )
+
       throw new Error(
         `Live sleeping-agent record was not persisted before force exit. store=${JSON.stringify(
           storeRecords
@@ -268,14 +288,17 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
       (wtId) => (window.__store?.getState().tabsByWorktree[wtId] ?? []).length,
       worktreeId
     )
+
     expect(terminalTabCount).toBe(2)
   } finally {
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await forceKillElectronApp(firstApp)
     }
+
     await session.dispose()
   }
 })

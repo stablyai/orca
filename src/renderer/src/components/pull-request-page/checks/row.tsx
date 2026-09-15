@@ -28,6 +28,7 @@ export function CheckRow({
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
   const statusLabel = getCheckStatusLabel(check)
   const key = getCheckDetailsKey(check)
+
   return (
     <div key={key} className="min-w-0">
       <button

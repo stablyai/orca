@@ -8,6 +8,7 @@ type StoredOpenAiKey = {
 }
 
 const OPENAI_SPEECH_TOKEN_FILE = 'openai-speech-token.enc'
+
 let cachedOpenAiSpeechApiKey: string | null = null
 
 function getOrcaDir(): string {
@@ -16,6 +17,7 @@ function getOrcaDir(): string {
 
 function ensureOrcaDir(): void {
   const dir = getOrcaDir()
+
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -27,14 +29,18 @@ function getOpenAiKeyPath(): string {
 
 function readLegacyJsonStoredOpenAiKey(): StoredOpenAiKey | null {
   const keyPath = getOpenAiKeyPath()
+
   if (!existsSync(keyPath)) {
     return null
   }
+
   try {
     const parsed = JSON.parse(readFileSync(keyPath, 'utf8')) as Partial<StoredOpenAiKey>
+
     if (typeof parsed.encryptedKeyBase64 !== 'string' || parsed.encryptedKeyBase64 === '') {
       return null
     }
+
     return { encryptedKeyBase64: parsed.encryptedKeyBase64 }
   } catch {
     return null
@@ -49,13 +55,17 @@ export function hasOpenAiSpeechApiKey(): boolean {
 
 export function saveOpenAiSpeechApiKey(apiKey: string): void {
   const trimmed = apiKey.trim()
+
   if (!trimmed) {
     throw new Error('OpenAI API key is required')
   }
+
   ensureOrcaDir()
+
   if (getSecretStore().isEncryptionAvailable()) {
     writeFileSync(getOpenAiKeyPath(), getSecretStore().encryptString(trimmed), { mode: 0o600 })
     cachedOpenAiSpeechApiKey = trimmed
+
     return
   }
 
@@ -70,21 +80,27 @@ export function readOpenAiSpeechApiKey(): string {
   }
 
   const keyPath = getOpenAiKeyPath()
+
   if (!existsSync(keyPath)) {
     throw new Error('OpenAI API key is not configured')
   }
+
   try {
     const raw = readFileSync(keyPath)
     const legacyJson = readLegacyJsonStoredOpenAiKey()
+
     if (legacyJson) {
       cachedOpenAiSpeechApiKey = getSecretStore().decryptString(
         Buffer.from(legacyJson.encryptedKeyBase64, 'base64')
       )
+
       return cachedOpenAiSpeechApiKey
     }
+
     cachedOpenAiSpeechApiKey = getSecretStore().isEncryptionAvailable()
       ? getSecretStore().decryptString(raw)
       : raw.toString('utf8')
+
     return cachedOpenAiSpeechApiKey
   } catch {
     throw new Error('OpenAI API key could not be decrypted')

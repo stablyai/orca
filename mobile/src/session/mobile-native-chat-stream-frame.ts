@@ -39,18 +39,23 @@ function replayRetainedTailStart(
   hasMore: boolean | undefined
 ): number | null {
   const firstIndex = messages[0] ? merger.indexById.get(messages[0].id) : undefined
+
   if (firstIndex === undefined) {
     return null
   }
+
   // `hasMore: false` is authoritative: retained rows before the replay window
   // were removed while disconnected, even when the newest IDs still match.
   if (hasMore === false && firstIndex > 0) {
     return null
   }
+
   let expectedIndex = firstIndex
   let sawNewMessage = false
+
   for (const message of messages) {
     const existingIndex = merger.indexById.get(message.id)
+
     if (existingIndex === undefined) {
       sawNewMessage = true
     } else if (sawNewMessage || existingIndex !== expectedIndex) {
@@ -59,6 +64,7 @@ function replayRetainedTailStart(
       expectedIndex += 1
     }
   }
+
   return expectedIndex === merger.list.length ? firstIndex : null
 }
 
@@ -75,25 +81,33 @@ export function applyMobileNativeChatStreamFrame(args: {
   replaceSnapshot: boolean
 }): AppliedMobileNativeChatFrame {
   const { merger, frame, limit, replaceSnapshot } = args
+
   if (frame.type === 'error') {
     return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
   }
+
   if (frame.type !== 'snapshot' && frame.type !== 'replacement' && frame.type !== 'appended') {
     return { kind: 'ignored' }
   }
+
   if (frame.error) {
     return { kind: 'error', error: frame.error }
   }
+
   if (!Array.isArray(frame.messages)) {
     return { kind: 'ignored' }
   }
+
   const pending = frame.type === 'snapshot' && frame.pending === true
+
   const replayStartIndex =
     frame.type === 'snapshot' && !replaceSnapshot && merger.list.length > 0
       ? replayRetainedTailStart(merger, frame.messages, frame.hasMore)
       : null
+
   if (frame.type === 'replacement' || (frame.type === 'snapshot' && replayStartIndex === null)) {
     replaceList(merger, frame.messages)
+
     return {
       kind: 'messages',
       messages: merger.list,
@@ -103,10 +117,12 @@ export function applyMobileNativeChatStreamFrame(args: {
       ...(frame.beforeOffset == null ? {} : { beforeOffset: frame.beforeOffset })
     }
   }
+
   const previousFirstId = merger.list[0]?.id
   const messages = applyAppend(merger, frame.messages, limit)
   const cursorInvalidated = Boolean(previousFirstId && messages[0]?.id !== previousFirstId)
   const replayStillStartsAtOldest = frame.type === 'snapshot' && replayStartIndex === 0
+
   return {
     kind: 'messages',
     messages,

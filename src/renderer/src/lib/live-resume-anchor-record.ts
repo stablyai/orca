@@ -29,7 +29,9 @@ export function isLiveResumeAnchorForCompletedAgent(
   ) {
     return false
   }
+
   const agent = entry.agentType
+
   return Boolean(
     (!entry.worktreeId || entry.worktreeId === record.worktreeId) &&
     (!worktreeId || worktreeId === record.worktreeId) &&

@@ -10,6 +10,7 @@ export function selectAutomationAgentStatusEntryChange(
   const entry = Object.prototype.propertyIsEnumerable.call(entries, targetPaneKey)
     ? entries[targetPaneKey]
     : undefined
+
   // Why: status writes replace entries; unchanged identity proves an unrelated publication.
   return entry === previousEntry ? UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY : entry
 }

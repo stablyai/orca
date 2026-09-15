@@ -14,11 +14,14 @@ export function useSkillDiscoveryHostLabel(target: RuntimeClientTarget | null): 
           ?.name ?? null)
       : null
   )
+
   if (!target) {
     return null
   }
+
   if (target.kind === 'local') {
     return translate('auto.components.skills.host.local', 'This machine')
   }
+
   return environmentName ?? translate('auto.components.skills.host.remote', 'Connected runtime')
 }

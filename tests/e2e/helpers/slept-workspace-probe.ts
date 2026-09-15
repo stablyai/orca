@@ -30,12 +30,15 @@ export async function readWorkspaceSample(
 ): Promise<WorkspaceSample> {
   return page.evaluate((id) => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('window.__store is not available')
     }
+
     const tabs = state.tabsByWorktree[id] ?? []
     const tabIds = new Set(tabs.map((tab) => tab.id))
     const managers = window.__paneManagers
+
     return {
       livePtyCount: tabs.reduce(
         (count, tab) => count + (state.ptyIdsByTabId[tab.id]?.length ?? 0),
@@ -58,9 +61,11 @@ export async function readHostLiveTerminalCount(page: Page, worktreeId: string):
       method: 'terminal.list',
       params: { worktree: `id:${id}`, requireFreshPtyLiveness: true }
     })
+
     if (!result.ok) {
       throw new Error(result.error.message)
     }
+
     return (result.result as { totalCount: number }).totalCount
   }, worktreeId)) as number
 }
@@ -76,23 +81,31 @@ export async function readConnectDiagnostics(page: Page, worktreeId: string): Pr
     // tab named by the most recent connect line for that same pane id.
     const tabByPaneId = new Map<string, string>()
     const owned: string[] = []
+
     for (const line of diag) {
       const connect = /^pane=(\d+) tab=(\S+) /.exec(line)
+
       if (connect) {
         tabByPaneId.set(connect[1], connect[2])
+
         if (tabIds.has(connect[2])) {
           owned.push(line)
         }
+
         continue
       }
+
       const verdict = /^pane=(\d+) ->/.exec(line)
+
       if (verdict) {
         const tabId = tabByPaneId.get(verdict[1])
+
         if (tabId && tabIds.has(tabId)) {
           owned.push(line)
         }
       }
     }
+
     return owned
   }, worktreeId)
 }
@@ -103,6 +116,7 @@ export async function giveWorkspaceALivePty(page: Page, worktreeId: string): Pro
   }, worktreeId)
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
+
   return waitForActivePanePtyId(page, 30_000)
 }
 

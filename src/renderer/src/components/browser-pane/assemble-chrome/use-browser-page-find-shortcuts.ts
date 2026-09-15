@@ -26,22 +26,28 @@ export function useBrowserPageFindShortcuts({
     if (chromeShortcutScope === 'inactive') {
       return
     }
+
     const shortcutPlatform = getShortcutPlatform()
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
         return
       }
+
       if (
         chromeShortcutScope === 'owned-target' &&
         !browserOverlayOwnsShortcutTarget(e.target, workspaceId)
       ) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
       setFindOpen(true)
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [chromeShortcutScope, keybindings, setFindOpen, workspaceId])
 
@@ -51,6 +57,7 @@ export function useBrowserPageFindShortcuts({
     if (!isActive) {
       return
     }
+
     return window.api.ui.onFindInBrowserPage(
       { browserPageId: browserTabId, browserWorkspaceId: workspaceId },
       () => {

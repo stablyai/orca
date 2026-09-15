@@ -14,6 +14,7 @@ function buildChain(count: number) {
 
 function buildComb(spineCount: number) {
   const worktrees: ReturnType<typeof buildChain> = []
+
   for (let index = 0; index < spineCount; index += 1) {
     const suffix = index.toString().padStart(4, '0')
     worktrees.push({
@@ -23,6 +24,7 @@ function buildComb(spineCount: number) {
       x: 0,
       y: 0
     })
+
     if (index < spineCount - 1) {
       worktrees.push({
         id: `leaf-${suffix}`,
@@ -33,6 +35,7 @@ function buildComb(spineCount: number) {
       })
     }
   }
+
   return worktrees
 }
 
@@ -43,8 +46,10 @@ function layoutWithNumericMapSetCount(worktrees: ReturnType<typeof buildChain>) 
     if (typeof key === 'number') {
       numericMapSets += 1
     }
+
     return Reflect.apply(set, this, [key, value])
   } as typeof Map.prototype.set
+
   try {
     return { layout: layoutAgentMapWorktreeLineage(worktrees), numericMapSets }
   } finally {
@@ -64,8 +69,10 @@ function layoutWithWorktreePushCount(count: number) {
         typeof item.id === 'string' &&
         item.id.startsWith('worktree-')
     ).length
+
     return Reflect.apply(push, this, items)
   }
+
   try {
     return {
       layout: layoutAgentMapWorktreeLineage(buildChain(count)),
@@ -131,6 +138,7 @@ describe('layoutAgentMapWorktreeLineage', () => {
 
     expect(layout).toHaveLength(1_000)
     expect(worktreePushes).toBeLessThan(5_000)
+
     for (let index = 1; index < layout.length; index += 1) {
       expect(layout[index].y).toBeGreaterThan(layout[index - 1].y)
       expect(layout[index].y - layout[index - 1].y).toBeGreaterThanOrEqual(
@@ -166,6 +174,7 @@ describe('layoutAgentMapWorktreeLineage', () => {
           Math.abs(worktree.y) < 1_000_000
       )
     ).toBe(true)
+
     for (const worktree of layout) {
       if (worktree.parentId) {
         expect(worktree.y).toBeGreaterThan(byId.get(worktree.parentId)!.y)
@@ -184,13 +193,17 @@ describe('layoutAgentMapWorktreeLineage', () => {
         radius: 24
       }))
     ])
+
     const parent = layout.find((worktree) => worktree.id === 'parent')!
+
     const children = layout.filter(
       (worktree) => 'parentId' in worktree && worktree.parentId === 'parent'
     )
+
     let minimumGap = Number.POSITIVE_INFINITY
 
     expect(children.every((child) => child.y > parent.y)).toBe(true)
+
     for (const [index, child] of children.entries()) {
       for (const other of children.slice(index + 1)) {
         minimumGap = Math.min(
@@ -199,6 +212,7 @@ describe('layoutAgentMapWorktreeLineage', () => {
         )
       }
     }
+
     expect(minimumGap).toBeGreaterThanOrEqual(AGENT_MAP_WORKTREE_GAP)
   })
 
@@ -213,7 +227,9 @@ describe('layoutAgentMapWorktreeLineage', () => {
         radius: 24
       }))
     ])
+
     const parent = layout.find((worktree) => worktree.id === 'parent')!
+
     const children = layout.filter(
       (worktree) => 'clusterParentId' in worktree && worktree.clusterParentId === 'parent'
     )

@@ -34,10 +34,13 @@ export function isUnattachedAgentSessionReadRefusal(error: unknown): boolean {
   if (typeof error === 'string') {
     return error === AGENT_SESSION_UNATTACHED_REFUSAL_CODE
   }
+
   if (typeof error !== 'object' || error === null) {
     return false
   }
+
   const { code, message } = error as { code?: unknown; message?: unknown }
+
   return (
     code === AGENT_SESSION_UNATTACHED_REFUSAL_CODE ||
     message === AGENT_SESSION_UNATTACHED_REFUSAL_CODE

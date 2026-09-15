@@ -31,6 +31,7 @@ export class CodexSubagentPollScheduler<T> {
     if (!this.entries.delete(key)) {
       return
     }
+
     this.arm()
   }
 
@@ -47,21 +48,27 @@ export class CodexSubagentPollScheduler<T> {
   private arm(): void {
     if (this.entries.size === 0) {
       this.cancelTimer()
+
       return
     }
 
     let nextDueAt = Number.POSITIVE_INFINITY
+
     for (const entry of this.entries.values()) {
       nextDueAt = Math.min(nextDueAt, entry.dueAt)
     }
+
     if (this.timer !== undefined && this.timerDueAt === nextDueAt) {
       return
     }
+
     if (this.timer !== undefined) {
       this.cancelTimer()
     }
+
     const generation = ++this.timerGeneration
     this.timerDueAt = nextDueAt
+
     const timer = setTimeout(
       () => {
         // A cleared/replaced timer can still have its callback queued. It must
@@ -69,13 +76,16 @@ export class CodexSubagentPollScheduler<T> {
         if (this.timerGeneration !== generation || this.timer !== timer) {
           return
         }
+
         this.timer = undefined
         this.timerDueAt = undefined
         this.flush()
       },
       Math.max(0, nextDueAt - this.now())
     )
+
     this.timer = timer
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -86,6 +96,7 @@ export class CodexSubagentPollScheduler<T> {
     this.timer = undefined
     this.timerDueAt = undefined
     this.timerGeneration += 1
+
     if (timer !== undefined) {
       clearTimeout(timer)
     }
@@ -93,20 +104,24 @@ export class CodexSubagentPollScheduler<T> {
 
   private flush(): void {
     const now = this.now()
+
     try {
       // Find one entry at a time so a callback can clear a sibling that has
       // not fired yet, matching independent timer cancellation semantics.
       while (true) {
         let dueEntry: { key: string; value: T } | undefined
+
         for (const [key, entry] of this.entries) {
           if (entry.dueAt <= now) {
             dueEntry = { key, value: entry.value }
             break
           }
         }
+
         if (!dueEntry) {
           break
         }
+
         this.entries.delete(dueEntry.key)
         this.onDue(dueEntry.key, dueEntry.value)
       }

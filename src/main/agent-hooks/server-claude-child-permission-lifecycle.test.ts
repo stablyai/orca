@@ -9,6 +9,7 @@ const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
 beforeEach(() => {
@@ -30,6 +31,7 @@ describe('Claude child permission lifecycle', () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     const env = server.buildPtyEnv()
+
     return {
       server,
       postClaudeHook: (payload) =>
@@ -46,6 +48,7 @@ describe('Claude child permission lifecycle', () => {
 
   it('clears a child permission when that child stops', async () => {
     const { server, postClaudeHook } = await createServer()
+
     try {
       await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
       await postClaudeHook({
@@ -76,6 +79,7 @@ describe('Claude child permission lifecycle', () => {
 
   it('clears a teammate permission when that teammate idles', async () => {
     const { server, postClaudeHook } = await createServer()
+
     try {
       await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
       await postClaudeHook({
@@ -110,6 +114,7 @@ describe('Claude child permission lifecycle', () => {
 
   it('keeps a child permission after unrelated lead progress and teammate idle', async () => {
     const { server, postClaudeHook } = await createServer()
+
     try {
       await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
       await postClaudeHook({
@@ -134,11 +139,14 @@ describe('Claude child permission lifecycle', () => {
 
   it('clears an omitted teammate permission when a full roster excludes its row', async () => {
     const { server, postClaudeHook } = await createServer()
+
     try {
       await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
+
       for (let index = 0; index < AGENT_STATUS_MAX_SUBAGENTS; index += 1) {
         await postClaudeHook({ hook_event_name: 'SubagentStart', agent_id: `acapped${index}` })
       }
+
       await postClaudeHook({
         hook_event_name: 'PermissionRequest',
         agent_id: 'areviewer-6d3cb5b5',

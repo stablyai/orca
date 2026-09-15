@@ -36,18 +36,23 @@ export function planAutomationHostRequests({
   now
 }: AutomationHostRequestPlanOptions): PlannedAutomationHostTarget[] {
   const planned = new Map<string, PlannedAutomationHostTarget>()
+
   for (const target of targets) {
     const stableKey = hostStableKey(target.ref)
     const existing = planned.get(stableKey)
+
     if (existing) {
       existing.priority = existing.priority === true || target.priority === true
       continue
     }
+
     const entry = cache.getByKey(stableKey)
+
     if (force) {
       if (skipKnownFailures && entry?.error && !entry.error.retryable) {
         continue
       }
+
       // Why: a replacement request must outrank the one it replaces, or the older
       // answer lands last and overwrites the fresher rows it was meant to supersede.
       if (entry?.request) {
@@ -57,12 +62,16 @@ export function planAutomationHostRequests({
       if (cache.freshness(target.ref) === 'fresh' || entry?.request) {
         continue
       }
+
       const error = entry?.error
+
       if (error && (!error.retryable || (error.retryAt !== null && error.retryAt > now()))) {
         continue
       }
     }
+
     planned.set(stableKey, { ...target, stableKey, fence: cache.beginRequest(target.ref) })
   }
+
   return [...planned.values()]
 }

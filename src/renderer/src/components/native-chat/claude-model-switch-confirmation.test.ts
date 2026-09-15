@@ -19,12 +19,14 @@ describe('Claude model switch confirmation detection', () => {
   it('reports matching success output split across PTY chunks', async () => {
     const dataObserver = { current: (_data: string): void => {} }
     const unsubscribe = vi.fn(() => {})
+
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
       settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
+
         return unsubscribe
       },
       timeoutMs: 100
@@ -45,12 +47,14 @@ describe('Claude model switch confirmation detection', () => {
     // while discovered picker labels read "Opus (1M context)"; the family word
     // must bridge the two so verified switches do not report as unverifiable.
     const dataObserver = { current: (_data: string): void => {} }
+
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
       settings: {},
       expectedModelLabel: 'Opus (1M context)',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
+
         return vi.fn(() => {})
       },
       timeoutMs: 100
@@ -65,14 +69,17 @@ describe('Claude model switch confirmation detection', () => {
 
   it('does not confirm a different context variant from the same model family', async () => {
     vi.useFakeTimers()
+
     try {
       const dataObserver = { current: (_data: string): void => {} }
+
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
         settings: {},
         expectedModelLabel: 'Opus (1M context)',
         subscribeToData: (watcher) => {
           dataObserver.current = watcher
+
           return vi.fn(() => {})
         },
         timeoutMs: 100
@@ -93,12 +100,14 @@ describe('Claude model switch confirmation detection', () => {
   it('accepts the exact cached-history confirmation once and keeps observing', async () => {
     const dataObserver = { current: (_data: string): void => {} }
     const submitConfirmation = vi.fn()
+
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
       settings: {},
       expectedModelLabel: 'Fable 5',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
+
         return vi.fn(() => {})
       },
       submitConfirmation,
@@ -119,12 +128,14 @@ describe('Claude model switch confirmation detection', () => {
 
   it('reports a canceled model switch without opening an interaction', async () => {
     const dataObserver = { current: (_data: string): void => {} }
+
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
       settings: {},
       expectedModelLabel: 'Haiku',
       subscribeToData: (watcher) => {
         dataObserver.current = watcher
+
         return vi.fn(() => {})
       },
       timeoutMs: 100
@@ -154,6 +165,7 @@ describe('Claude model switch confirmation detection', () => {
 
   it('reports unknown on timeout instead of requesting the terminal', async () => {
     vi.useFakeTimers()
+
     try {
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
@@ -175,8 +187,10 @@ describe('Claude model switch confirmation detection', () => {
 
   it('does not start the detection timeout until startDetection() is called', async () => {
     vi.useFakeTimers()
+
     try {
       let settled = false
+
       const observer = createClaudeModelSwitchConfirmationObserver({
         ptyId: 'pty-1',
         settings: {},
@@ -184,6 +198,7 @@ describe('Claude model switch confirmation detection', () => {
         subscribeToData: () => vi.fn(() => {}),
         timeoutMs: 100
       })
+
       void observer.result.then(() => {
         settled = true
       })

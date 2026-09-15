@@ -7,9 +7,11 @@ import { recordGhPrimaryRateLimit, ghRateLimitScopeKey } from '../git/gh-rate-li
 
 it('coalesces matching searches and batches independent queries in one execution context', async () => {
   const queries = Array.from({ length: 25 }, (_, i) => `repo:fixture/repo-${i} is:issue`)
+
   const counts = await Promise.all(
     queries.flatMap((search) => [searchWorkItemCount(search, {}), searchWorkItemCount(search, {})])
   )
+
   expect(counts).toEqual(Array(50).fill(120))
   expect(api.graphqlCalls).toBe(3)
   expect(api.graphqlFields).toBe(25)
@@ -18,6 +20,7 @@ it('coalesces matching searches and batches independent queries in one execution
 
 it('isolates native cwd, WSL distro, host, admission context and inherited credentials', async () => {
   const search = 'repo:fixture/repo is:issue'
+
   const options = [
     { cwd: 'folder-a' },
     { cwd: 'folder-b' },
@@ -26,6 +29,7 @@ it('isolates native cwd, WSL distro, host, admission context and inherited crede
     { host: 'github.example.com' },
     { admissionTier: 'interactive' as const }
   ]
+
   await Promise.all(options.map((option) => searchWorkItemCount(search, option)))
   expect(api.graphqlCalls).toBe(options.length)
   await searchWorkItemCount(search, { cwd: 'folder-a' })
@@ -42,6 +46,7 @@ it('keeps SSH GitHub execution client-side without passing remote cwd', async ()
       listWorkItems(`/remote/repo-${i}`, 24, 'is:issue', 1, undefined, `ssh-${i}`)
     )
   )
+
   expect(results.every((result) => result.items.length === 24)).toBe(true)
   expect(api.graphqlCalls).toBe(2)
   expect(api.calls.every((call) => call.cwd === undefined)).toBe(true)
@@ -72,11 +77,13 @@ it('leaves GHES on REST and unresolved/non-GitHub sources empty', async () => {
 
 it('preserves successful aliases when one repository needs REST fallback', async () => {
   api.aliasErrorRepo = 'fixture/repo-1'
+
   const results = await Promise.all(
     Array.from({ length: 4 }, (_, i) =>
       listWorkItems(`/remote/repo-${i}`, 24, 'is:issue', 1, undefined, 'ssh')
     )
   )
+
   expect(results.every((result) => result.items.length === 24 && !result.errors)).toBe(true)
   expect(api.graphqlCalls).toBe(1)
   expect(api.restSearches).toBe(1)
@@ -119,6 +126,7 @@ it('splits long search predicates within Windows command-line headroom', async (
     { length: 4 },
     (_, index) => `repo:fixture/repo-${index} is:issue ${'word '.repeat(1400)}`
   )
+
   expect(await Promise.all(queries.map((query) => searchWorkItemCount(query, {})))).toEqual([
     120, 120, 120, 120
   ])

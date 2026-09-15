@@ -28,15 +28,18 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
       requireStructuredCapability(ctx)
       await ensureStructuredHostInstalled(ctx)
       let revealed: StructuredAgentSessionReveal
+
       try {
         revealed = await requireStructuredHost(ctx).revealSession(params.sessionId)
       } catch (error) {
         // The host raises its refusal as the code itself; anything else is a genuine fault and
         // must not be laundered into a tidy "no such chat".
         const code = error instanceof Error ? error.message : ''
+
         if (!isAgentSessionWireRefusalCode(code)) {
           throw error
         }
+
         return refuseAgentSessionMutation({
           code,
           message:
@@ -45,12 +48,14 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
               : 'This chat is no longer on this host.'
         })
       }
+
       await ctx.runtime.publishStructuredAgentSessionTab({
         workspaceId: revealed.workspaceId,
         sessionId: revealed.sessionId,
         agent: revealed.agent,
         activate: true
       })
+
       return { ok: true as const, ...revealed }
     }
   })

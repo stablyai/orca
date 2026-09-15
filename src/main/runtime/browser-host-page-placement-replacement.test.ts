@@ -63,6 +63,7 @@ describe('browser page placement replacement barrier', () => {
       authorityRuntimeId: 'runtime-a',
       authorityEpoch: 'epoch-a'
     })
+
     const original = leases.placeServerPage('page-a')
 
     expect(() => leases.placeClientPage('page-a')).toThrow(

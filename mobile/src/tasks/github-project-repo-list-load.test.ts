@@ -3,18 +3,29 @@ import { describe, expect, it } from 'vitest'
 
 /** Wiring assertions only. Keep these anchored to the modules that own each path. */
 const readSource = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
+
 const taskListSource = readSource('./use-mobile-tasks-task-list-loading.tsx')
+
 const projectProjectionSource = readSource('./use-mobile-tasks-project-projection.tsx')
+
 const projectLoadingSource = readSource('./use-mobile-tasks-project-loading-actions.tsx')
+
 const projectEffectsSource = readSource('./use-mobile-tasks-list-and-detail-effects.tsx')
+
 const projectListSource = readSource('./mobile-tasks-github-project-list.tsx')
+
 const providerItemListSource = readSource('./mobile-tasks-provider-item-list.tsx')
+
 const screenChromeSource = readSource('./mobile-tasks-screen-chrome.tsx')
+
 const routeAndItemStateSource = readSource('./use-mobile-tasks-route-and-item-state.tsx')
+
 const repositoryResolutionSource = readSource(
   './use-mobile-tasks-project-repository-resolution.tsx'
 )
+
 const clientSettingsSource = readSource('./use-mobile-tasks-client-settings-actions.tsx')
+
 const source = [
   taskListSource,
   projectProjectionSource,
@@ -35,6 +46,7 @@ function block(input: string, startMarker: string, endMarker: string): string {
   expect(start, `source must contain ${startMarker}`).toBeGreaterThan(-1)
   const end = input.indexOf(endMarker, start)
   expect(end, `${startMarker} must be followed by ${endMarker}`).toBeGreaterThan(start)
+
   return input.slice(start, end)
 }
 
@@ -90,6 +102,7 @@ describe('mobile GitHub Project readiness and refresh', () => {
       'const githubProjectRepoSlugReady = useMemo(',
       '  )'
     )
+
     expect(body).toContain('hasSettledHostRepoList(repoList.state)')
     expect(body).toContain('[githubRepoSlugCache, hostedRepos, repoList.state]')
   })
@@ -113,6 +126,7 @@ describe('mobile GitHub Project readiness and refresh', () => {
       'const refreshGitHubProject = useCallback(',
       '}, ['
     )
+
     expect(projectBody).toContain('dropFailedGitHubRepoSlugEntries')
     expect(projectBody).toContain('refreshTasks()')
     expect(projectBody).toContain('loadGitHubProjectTable(')

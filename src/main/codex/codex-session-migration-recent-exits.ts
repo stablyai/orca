@@ -1,4 +1,5 @@
 export const CODEX_SESSION_MIGRATION_LEASE_RETENTION_MS = 60_000
+
 const MAX_ENTRIES = 256
 
 type RecentPtyExit = { sequence: number; recordedAt: number }
@@ -13,11 +14,14 @@ export function evictStaleLeaseEntries<T extends { recordedAt: number }>(
       entries.delete(leaseId)
     }
   }
+
   while (entries.size > MAX_ENTRIES) {
     const oldestLeaseId = entries.keys().next().value
+
     if (oldestLeaseId === undefined) {
       break
     }
+
     entries.delete(oldestLeaseId)
   }
 }
@@ -35,6 +39,7 @@ export class CodexSessionMigrationRecentExits {
   consumeAfter(leaseId: string, startedSequence: number | undefined): RecentPtyExit | null {
     const exit = this.exits.get(leaseId)
     this.exits.delete(leaseId)
+
     if (
       !exit ||
       startedSequence === undefined ||
@@ -43,18 +48,23 @@ export class CodexSessionMigrationRecentExits {
     ) {
       return null
     }
+
     return exit
   }
 
   matchesAfter(leaseId: string, startedSequence: number | undefined): boolean {
     const exit = this.exits.get(leaseId)
+
     if (!exit) {
       return false
     }
+
     if (Date.now() - exit.recordedAt > CODEX_SESSION_MIGRATION_LEASE_RETENTION_MS) {
       this.exits.delete(leaseId)
+
       return false
     }
+
     return startedSequence !== undefined && exit.sequence > startedSequence
   }
 }

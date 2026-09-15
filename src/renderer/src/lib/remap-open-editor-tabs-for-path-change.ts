@@ -30,6 +30,7 @@ function stripTrailingSeparators(path: string): string {
   if (path === '/' || /^[A-Za-z]:[\\/]?$/.test(path)) {
     return normalizeRuntimePathSeparators(path)
   }
+
   // Only fold backslashes to `/` for Windows/UNC paths; on POSIX a backslash is
   // legal filename data and must not be treated as a separator.
   return isWindowsAbsolutePathLike(path)
@@ -48,46 +49,61 @@ function foldSeparatorsForFlavor(fragment: string, flavorSource: string): string
 function deriveRelativeRootFromOpenFile(filePath: string, relativePath: string): string {
   const normalizedFilePath = stripTrailingSeparators(filePath)
   const normalizedRelativePath = foldSeparatorsForFlavor(relativePath, filePath).replace(/^\/+/, '')
+
   if (!normalizedRelativePath || isAbsolutePathLike(relativePath)) {
     const separatorIndex = normalizedFilePath.lastIndexOf('/')
+
     return separatorIndex <= 0 ? '/' : normalizedFilePath.slice(0, separatorIndex)
   }
+
   const suffix = `/${normalizedRelativePath}`
+
   if (normalizedFilePath.endsWith(suffix)) {
     return stripTrailingSeparators(normalizedFilePath.slice(0, -suffix.length) || '/')
   }
+
   const base = basename(normalizedFilePath)
+
   if (base && normalizedRelativePath === base) {
     const separatorIndex = normalizedFilePath.lastIndexOf('/')
+
     return separatorIndex <= 0 ? '/' : normalizedFilePath.slice(0, separatorIndex)
   }
+
   const separatorIndex = normalizedFilePath.lastIndexOf('/')
+
   return separatorIndex <= 0 ? '/' : normalizedFilePath.slice(0, separatorIndex)
 }
 
 function splitAbsolutePath(path: string): { prefix: string; segments: string[] } {
   const normalized = stripTrailingSeparators(path)
   const driveMatch = /^([A-Za-z]:)(?:\/(.*))?$/.exec(normalized)
+
   if (driveMatch) {
     return {
       prefix: driveMatch[1].toLowerCase(),
       segments: (driveMatch[2] ?? '').split('/').filter(Boolean)
     }
   }
+
   if (normalized.startsWith('//')) {
     const segments = normalized.slice(2).split('/').filter(Boolean)
     const server = (segments[0] ?? '').toLowerCase()
+
     // Canonicalize the two WSL UNC aliases to one identity (matches the shared
     // normalizer) so `\\wsl$\Distro` and `\\wsl.localhost\Distro` compare equal.
     const prefix =
       server === 'wsl.localhost' || server === 'wsl$'
         ? `//wsl/${(segments[1] ?? '').toLowerCase()}`
         : `//${segments.slice(0, 2).join('/').toLowerCase()}`
+
     return { prefix, segments: segments.slice(2) }
   }
+
   if (normalized.startsWith('/')) {
     return { prefix: '/', segments: normalized.slice(1).split('/').filter(Boolean) }
   }
+
   return { prefix: '', segments: normalized.split('/').filter(Boolean) }
 }
 
@@ -97,31 +113,38 @@ function splitAbsolutePath(path: string): { prefix: string; segments: string[] }
 // `/`-separated suffix (POSIX backslashes preserved) to re-emit in dest flavor.
 function computeMovedPath(fromPath: string, toPath: string, filePath: string): string {
   const suffix = relativePathInsideRoot(fromPath, filePath)
+
   if (suffix === null) {
     // Selection already matched, so this is unreachable; degrade to the raw splice.
     return toPath + filePath.slice(fromPath.length)
   }
+
   if (suffix === '') {
     return toPath
   }
+
   // Flavor by SYNTAX (drive/UNC), never by "contains a backslash": a POSIX/SSH
   // path may hold a legal backslash, so it must keep `/`, never gain one, and
   // never have a trailing backslash stripped as if it were a separator.
   if (isWindowsAbsolutePathLike(toPath)) {
     const separator = toPath.includes('\\') ? '\\' : '/'
+
     return `${toPath.replace(/[\\/]+$/, '')}${separator}${suffix.split('/').join(separator)}`
   }
+
   return `${toPath.replace(/\/+$/, '')}/${suffix}`
 }
 
 function getRelativePathFromRoot(rootPath: string, candidatePath: string): string {
   const insideRoot = relativePathInsideRoot(rootPath, candidatePath)
+
   if (insideRoot !== null) {
     return insideRoot
   }
 
   const root = splitAbsolutePath(rootPath)
   const candidate = splitAbsolutePath(candidatePath)
+
   if (root.prefix !== candidate.prefix) {
     return foldSeparatorsForFlavor(candidatePath, candidatePath)
   }
@@ -132,10 +155,12 @@ function getRelativePathFromRoot(rootPath: string, candidatePath: string): strin
   const foldCase =
     /^[a-z]:$/i.test(root.prefix) ||
     (root.prefix.startsWith('//') && !root.prefix.startsWith('//wsl/'))
+
   const sameSegment = (a: string, b: string): boolean =>
     foldCase ? a.toLowerCase() === b.toLowerCase() : a === b
 
   let commonSegmentCount = 0
+
   while (
     commonSegmentCount < root.segments.length &&
     commonSegmentCount < candidate.segments.length &&
@@ -170,12 +195,14 @@ function getUpdatedRelativePath({
   // comparison stays consistent and a legal POSIX backslash isn't mistaken for a
   // separator.
   const normalizedRelativePath = foldSeparatorsForFlavor(relativePath, filePath).replace(/^\/+/, '')
+
   const usesInitiatingWorktreeRoot =
     initiatingWorktreeId !== undefined
       ? worktreeId === initiatingWorktreeId
       : worktreeId !== FLOATING_TERMINAL_WORKTREE_ID &&
         worktreeRelative !== null &&
         foldSeparatorsForFlavor(worktreeRelative, filePath) === normalizedRelativePath
+
   const relativeRoot = usesInitiatingWorktreeRoot
     ? initiatingWorktreePath
     : deriveRelativeRootFromOpenFile(filePath, relativePath)
@@ -203,11 +230,13 @@ export function remapOpenEditorTabsForPathChange({
   // path can be open on a DIFFERENT host (a second SSH connection, or local vs
   // runtime) as a distinct physical file — never retarget those tabs.
   const initiatingHostId = getExecutionHostIdForWorktree(state, worktreeId)
+
   const filesToMove = state.openFiles.filter(
     (file) =>
       isPathInsideOrEqual(fromPath, file.filePath) &&
       getExecutionHostIdForWorktree(state, file.worktreeId) === initiatingHostId
   )
+
   if (filesToMove.length === 0) {
     return { ok: true }
   }
@@ -217,6 +246,7 @@ export function remapOpenEditorTabsForPathChange({
   // the watcher-race window that close/reopen opened.
   const updatedPathOf = (file: { filePath: string }): string =>
     computeMovedPath(fromPath, toPath, file.filePath)
+
   const relativeOf = (file: {
     filePath: string
     relativePath: string
@@ -238,7 +268,9 @@ export function remapOpenEditorTabsForPathChange({
   // rekey action rejects.
   const ownerKeyOf = (file: { worktreeId: string; runtimeEnvironmentId?: string | null }): string =>
     `${file.worktreeId}::${file.runtimeEnvironmentId?.trim() || ''}`
+
   const plainPathOwner = new Map<string, string>()
+
   const reservedSourceId = (file: {
     filePath: string
     worktreeId: string
@@ -247,12 +279,15 @@ export function remapOpenEditorTabsForPathChange({
     const updatedPath = updatedPathOf(file)
     const ownerKey = ownerKeyOf(file)
     const claimed = plainPathOwner.get(updatedPath)
+
     if (claimed === ownerKey) {
       return updatedPath
     }
+
     if (claimed !== undefined) {
       return buildOwnedEditorFileId(updatedPath, file.worktreeId, file.runtimeEnvironmentId)
     }
+
     const id = resolveEditorFileIdForOwner(
       state,
       updatedPath,
@@ -260,19 +295,23 @@ export function remapOpenEditorTabsForPathChange({
       file.runtimeEnvironmentId,
       ['edit']
     )
+
     if (id === updatedPath) {
       plainPathOwner.set(updatedPath, ownerKey)
     }
+
     return id
   }
 
   const rekeys: OpenFilePathRekey[] = []
   // Edits first so a preview can point its source id at the moved edit's new id.
   const newEditIdByOldId = new Map<string, string>()
+
   for (const file of filesToMove) {
     if (file.mode !== 'edit') {
       continue
     }
+
     const newId = reservedSourceId(file)
     newEditIdByOldId.set(file.id, newId)
     rekeys.push({
@@ -287,14 +326,17 @@ export function remapOpenEditorTabsForPathChange({
       consumeUntitled: file.isUntitled === true && file.filePath === fromPath
     })
   }
+
   for (const file of filesToMove) {
     if (file.mode !== 'markdown-preview') {
       continue
     }
+
     const newSourceFileId =
       (file.markdownPreviewSourceFileId
         ? newEditIdByOldId.get(file.markdownPreviewSourceFileId)
         : undefined) ?? reservedSourceId(file)
+
     rekeys.push({
       oldFileId: file.id,
       newFileId: `markdown-preview::${newSourceFileId}`,
@@ -304,6 +346,7 @@ export function remapOpenEditorTabsForPathChange({
       newMarkdownPreviewSourceFileId: newSourceFileId
     })
   }
+
   // Only single-file staged/unstaged diff ids are purely path-derived, so only
   // they can be retargeted from path. Branch/commit diffs carry extra compare
   // metadata and "Changes" is worktree-rooted — rebuilding those from path alone
@@ -312,6 +355,7 @@ export function remapOpenEditorTabsForPathChange({
     if (file.mode !== 'diff' || (file.diffSource !== 'staged' && file.diffSource !== 'unstaged')) {
       continue
     }
+
     const newRelativePath = relativeOf(file)
     rekeys.push({
       oldFileId: file.id,
@@ -326,8 +370,10 @@ export function remapOpenEditorTabsForPathChange({
       newRelativePath
     })
   }
+
   if (rekeys.length === 0) {
     return { ok: true }
   }
+
   return useAppStore.getState().rekeyOpenFilesForPathChange({ rekeys, moveOperationId })
 }

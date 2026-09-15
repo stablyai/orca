@@ -40,7 +40,9 @@ import { assertPluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
+
 export type { PluginLogLine } from './plugin-log-buffer'
+
 export type { PluginServiceOptions } from './plugin-service-options'
 
 export class PluginService {
@@ -71,6 +73,7 @@ export class PluginService {
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: (pluginKey) => {
         const plugin = this.findValidPlugin(pluginKey)
+
         return plugin && this.isRuntimeApproved(plugin) ? plugin : null
       },
       contentVerifier: this.contentVerifier,
@@ -103,6 +106,7 @@ export class PluginService {
 
   onChanged(listener: (event: PluginChangeEvent) => void): () => void {
     this.changeListeners.add(listener)
+
     return () => this.changeListeners.delete(listener)
   }
 
@@ -114,6 +118,7 @@ export class PluginService {
 
   async initialize(): Promise<void> {
     this.initPromise ??= this.refresh()
+
     return this.initPromise
   }
 
@@ -130,10 +135,13 @@ export class PluginService {
     const enabled = this.options.isPluginSystemEnabled()
     const devPaths = this.options.getDevPluginPaths()
     const consentLists = snapshotPluginConsentLists(this.options)
+
     const refresh = this.refreshChain.then(() =>
       this.performRefresh(enabled, devPaths, consentLists)
     )
+
     this.refreshChain = refresh.catch(() => undefined)
+
     return refresh
   }
 
@@ -145,11 +153,14 @@ export class PluginService {
     if (this.disposed) {
       return
     }
+
     this.contentPacksReady = false
     this.contentVerifier.clear()
+
     if (!enabled) {
       this.panels.revokeAll()
     }
+
     const next = enabled
       ? await discoverPlugins({
           pluginsDir: getUserPluginsDir(this.options.userDataPath),
@@ -157,9 +168,11 @@ export class PluginService {
           hostVersion: this.options.hostVersion
         })
       : []
+
     if (this.disposed) {
       return
     }
+
     // Publish identity before shutdown so triggers cannot restart old code.
     this.discovered = next
     await this.contentPacks.reconcile(
@@ -172,9 +185,11 @@ export class PluginService {
     // Notify before slow shutdown so feature-off unmounts panels immediately.
     this.notifyChanged(true)
     await this.workerController.reconcile(nextSpecs)
+
     if (this.disposed) {
       return
     }
+
     this.housekeeping.sync({
       enabled,
       devPaths,
@@ -198,6 +213,7 @@ export class PluginService {
         return plugin
       }
     }
+
     return null
   }
 
@@ -207,6 +223,7 @@ export class PluginService {
     if (!this.options.isPluginSystemEnabled()) {
       return 'disabled'
     }
+
     return getPluginActivationState(plugin.pluginKey, plugin.consentFingerprint, {
       pluginConsents: this.options.getPluginConsents(),
       disabledPlugins: this.options.getDisabledPlugins()
@@ -228,6 +245,7 @@ export class PluginService {
 
   activationError(pluginKey: string): string | null {
     const blocked = this.options.getPluginKillListEntry?.(pluginKey)
+
     return (
       (blocked ? `Blocked by Orca's plugin safety list: ${blocked.reason}` : null) ??
       this.contentPacks.error(pluginKey) ??
@@ -239,9 +257,11 @@ export class PluginService {
    *  callers deny uniformly (no probe-able distinction). */
   getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
     const plugin = this.findValidPlugin(pluginKey)
+
     if (!plugin || !this.isRuntimeApproved(plugin)) {
       return null
     }
+
     return capabilityKinds(plugin.manifest.capabilities)
   }
 
@@ -273,14 +293,18 @@ export class PluginService {
 
   async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
     const plugin = this.findValidPlugin(pluginKey)
+
     if (!plugin || !this.isRuntimeApproved(plugin)) {
       throw new Error(`plugin ${pluginKey} is not enabled`)
     }
+
     assertPluginWorkerCommand(plugin, commandId)
     const handle = await this.workerController.ensure(plugin)
+
     if (!handle.commands.includes(commandId)) {
       throw new Error(`plugin ${pluginKey} registered no handler for ${commandId}`)
     }
+
     return handle.invokeCommand(commandId, args)
   }
 
@@ -288,6 +312,7 @@ export class PluginService {
     if (!this.options.isPluginSystemEnabled() || this.disposed) {
       return
     }
+
     deliverPluginEvent({
       event,
       payload,
@@ -309,6 +334,7 @@ export class PluginService {
   async reconcileActivationState(): Promise<void> {
     const reconcile = this.refreshChain.then(() => this.performActivationStateReconciliation())
     this.refreshChain = reconcile.catch(() => undefined)
+
     return reconcile
   }
 
@@ -320,9 +346,11 @@ export class PluginService {
       this.options.getKeybindings?.()
     )
     this.contentPacksReady = true
+
     const nextSpecs = collectApprovedWorkerSpecs(this.discovered, (plugin) =>
       this.isRuntimeApproved(plugin)
     )
+
     await this.workerController.reconcile(nextSpecs)
     this.notifyChanged(true)
   }

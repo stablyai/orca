@@ -11,9 +11,11 @@ export function TerminalLegacyEditorSurface({
   controller: TerminalController
 }): React.JSX.Element | null {
   const { activeTabType, renderedActiveWorktreeId, worktreeFiles } = controller
+
   if (!renderedActiveWorktreeId || activeTabType !== 'editor' || worktreeFiles.length === 0) {
     return null
   }
+
   return (
     <Suspense
       fallback={

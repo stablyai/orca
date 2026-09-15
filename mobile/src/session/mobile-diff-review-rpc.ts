@@ -72,12 +72,15 @@ function readUpstreamStatus(value: unknown): MobileGitUpstreamStatus | undefined
   if (!isRecord(value)) {
     return undefined
   }
+
   const hasUpstream = readBoolean(value.hasUpstream)
   const ahead = readNumber(value.ahead)
   const behind = readNumber(value.behind)
+
   if (hasUpstream === undefined || ahead === undefined || behind === undefined) {
     return undefined
   }
+
   return {
     hasUpstream,
     upstreamName: readString(value.upstreamName),
@@ -92,12 +95,15 @@ function readStatusEntry(value: unknown): MobileGitStatusEntry | null {
   if (!isRecord(value)) {
     return null
   }
+
   const path = readString(value.path)
   const status = readFileStatus(value.status)
   const area = readStagingArea(value.area)
+
   if (!path || !status || !area) {
     return null
   }
+
   return {
     path,
     status,
@@ -121,9 +127,11 @@ export function readMobileGitStatusResult(value: unknown): MobileGitStatusResult
   if (!isRecord(value) || !Array.isArray(value.entries)) {
     return null
   }
+
   return {
     entries: value.entries.flatMap((entry): MobileGitStatusEntry[] => {
       const parsed = readStatusEntry(entry)
+
       return parsed ? [parsed] : []
     }),
     conflictOperation: readConflictOperation(value.conflictOperation),
@@ -148,11 +156,14 @@ function readBranchEntry(value: unknown): MobileGitBranchChangeEntry | null {
   if (!isRecord(value)) {
     return null
   }
+
   const path = readString(value.path)
   const status = readFileStatus(value.status)
+
   if (!path || !status || status === 'untracked') {
     return null
   }
+
   return {
     path,
     status,
@@ -166,12 +177,15 @@ export function readMobileBranchCompareResult(value: unknown): MobileGitBranchCo
   if (!isRecord(value) || !isRecord(value.summary) || !Array.isArray(value.entries)) {
     return null
   }
+
   const baseRef = readString(value.summary.baseRef)
   const compareRef = readString(value.summary.compareRef)
   const changedFiles = readNumber(value.summary.changedFiles)
+
   if (!baseRef || !compareRef || changedFiles === undefined) {
     return null
   }
+
   return {
     summary: {
       baseRef,
@@ -186,6 +200,7 @@ export function readMobileBranchCompareResult(value: unknown): MobileGitBranchCo
     },
     entries: value.entries.flatMap((entry): MobileGitBranchChangeEntry[] => {
       const parsed = readBranchEntry(entry)
+
       return parsed ? [parsed] : []
     })
   }
@@ -195,6 +210,7 @@ export function readMobileReviewWorktreeMetadata(value: unknown): MobileReviewWo
   if (!isRecord(value) || !isRecord(value.worktree)) {
     return { diffComments: undefined, mobileDiffReview: undefined }
   }
+
   return {
     diffComments: value.worktree.diffComments,
     mobileDiffReview: value.worktree.mobileDiffReview
@@ -205,6 +221,7 @@ export function readMobileReviewGitDiffResult(value: unknown): MobileReviewGitDi
   if (!isRecord(value)) {
     return null
   }
+
   if (
     value.kind === 'text' &&
     typeof value.originalContent === 'string' &&
@@ -216,12 +233,15 @@ export function readMobileReviewGitDiffResult(value: unknown): MobileReviewGitDi
       modifiedContent: value.modifiedContent
     }
   }
+
   if (value.kind === 'binary') {
     return { kind: 'binary' }
   }
+
   if (value.kind === 'too-large') {
     return { kind: 'too-large', byteLength: readNumber(value.byteLength) }
   }
+
   return null
 }
 
@@ -229,15 +249,19 @@ export function readMobileReviewTerminalTabs(value: unknown): MobileReviewTermin
   if (!isRecord(value) || !Array.isArray(value.tabs)) {
     return []
   }
+
   return value.tabs.flatMap((candidate): MobileReviewTerminalTab[] => {
     if (!isRecord(candidate) || candidate.type !== 'terminal') {
       return []
     }
+
     const id = readString(candidate.id)
     const terminal = readString(candidate.terminal)
+
     if (!id || !terminal) {
       return []
     }
+
     return [
       {
         id,
@@ -252,6 +276,7 @@ export function readMobileReviewCreatedTerminal(value: unknown): MobileReviewTer
   if (!isRecord(value) || !isRecord(value.tab)) {
     return null
   }
+
   return readMobileReviewTerminalTabs({ tabs: [value.tab] })[0] ?? null
 }
 
@@ -259,5 +284,6 @@ export function readMobileReviewTerminalSendAccepted(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.send)) {
     return true
   }
+
   return value.send.accepted !== false
 }

@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { LinearStateCell } from '../../task-page-linear-issue-model'
 import { formatRelativeTime } from '../../task-page-source-context'
+
 export function TaskPageLinearIssueBoardColumns({
   model
 }: {
@@ -33,6 +34,7 @@ export function TaskPageLinearIssueBoardColumns({
     handleLinearBoardDrop,
     handleOpenOrUseLinearItem
   } = model
+
   return (
     <div className="grid min-w-0 gap-3 p-3 md:grid-cols-2 xl:grid-cols-3">
       {linearBoardSections.map((section) => (
@@ -55,17 +57,21 @@ export function TaskPageLinearIssueBoardColumns({
               const labels = issue.labels.slice(0, 2)
               const dragging = linearBoardDraggingIssueId === issue.id
               const updating = linearBoardUpdatingIssueIds.has(issue.id)
+
               const teamLabel =
                 selectedLinearWorkspaceId === 'all' && issue.workspaceName
                   ? `${issue.workspaceName} / ${issue.team.name}`
                   : issue.team.name
+
               const attachedWorkspace = findLinearIssueWorkspaceAttachmentInIndex(
                 linearIssueAttachmentIndex,
                 issue
               )
+
               const attachedWorkspaceLabel = attachedWorkspace
                 ? getWorktreeAttachmentLabel(attachedWorkspace)
                 : null
+
               return (
                 <div
                   key={issue.id}
@@ -85,6 +91,7 @@ export function TaskPageLinearIssueBoardColumns({
                     if (e.target !== e.currentTarget) {
                       return
                     }
+
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
                       openLinearDetailPage(issue)

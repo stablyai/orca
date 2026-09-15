@@ -31,6 +31,7 @@ describe('useIpcEvents browser tab close routing', () => {
   // browser tab, then re-dispatches a typed window event for the mounted panel.
   function dispatchedEventTypes(): string[] {
     const dispatchEvent = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls
+
     return dispatchEvent.map((call) => (call[0] as Event).type)
   }
 
@@ -53,6 +54,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeEvents = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as CustomEvent)
       .filter((event) => event.type === FLOATING_WORKSPACE_GUEST_CLOSE_EVENT)
+
     expect(closeEvents).toHaveLength(1)
     expect(closeEvents[0].detail).toEqual({ sourceId: 'workspace-1' })
   })
@@ -75,6 +77,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeEvents = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as CustomEvent)
       .filter((event) => event.type === FLOATING_WORKSPACE_GUEST_CLOSE_EVENT)
+
     expect(closeEvents).toHaveLength(1)
     expect(closeEvents[0].detail).toEqual({ sourceId: 'workspace-1' })
   })
@@ -112,6 +115,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const selectEvents = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0] as CustomEvent)
       .filter((event) => event.type === FLOATING_WORKSPACE_GUEST_SELECT_INDEX_EVENT)
+
     expect(selectEvents).toHaveLength(1)
     expect(selectEvents[0].detail).toEqual({ index: 2 })
   })

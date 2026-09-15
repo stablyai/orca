@@ -43,9 +43,11 @@ const PARAMS = {
 
 function publishMetadata(args: unknown): Promise<unknown> {
   const handler = mocks.handlers.get('browser:publishClientPageMetadata')
+
   if (!handler) {
     throw new Error('browser:publishClientPageMetadata was never registered')
   }
+
   return Promise.resolve(handler({ sender: { id: 1 } }, args))
 }
 

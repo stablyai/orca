@@ -39,21 +39,26 @@ export type MidlinePreeditOcclusionSample = {
 function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
   const state = window.__store?.getState()
   const worktreeId = state?.activeWorktreeId
+
   const tabId =
     state?.activeTabType === 'terminal'
       ? state.activeTabId
       : worktreeId
         ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
         : null
+
   const manager = tabId ? window.__paneManagers?.get(tabId) : null
   const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
   if (!pane) {
     throw new Error('No active terminal pane to sample')
   }
+
   const terminal = pane.terminal
   const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
   const view = pane.container.querySelector<HTMLElement>('.composition-view')
   const textarea = terminal.textarea
+
   if (!screen || !view || !textarea) {
     throw new Error('Active terminal has no screen, composition view, or helper textarea')
   }
@@ -78,14 +83,18 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
   let first: number | null = null
   let last = -1
   let hiddenByOverlay = ''
+
   if (cellWidth > 0 && overlayRect.width > 0) {
     for (let column = 0; column < terminal.cols; column++) {
       const cellLeft = screenRect.left + column * cellWidth
+
       const overlap =
         Math.min(cellLeft + cellWidth, overlayRect.right) - Math.max(cellLeft, overlayRect.left)
+
       if (overlap <= cellWidth / 2) {
         continue
       }
+
       first ??= column
       last = column
       hiddenByOverlay += line?.getCell(column)?.getChars() ?? ''
@@ -101,7 +110,9 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
         if (!(node instanceof HTMLElement)) {
           return true
         }
+
         const style = getComputedStyle(node)
+
         return style.display !== 'none' && style.visibility !== 'hidden'
       })
       .map((node) => node.textContent ?? '')
@@ -157,17 +168,21 @@ export async function writeToActiveTerminal(page: Page, data: string): Promise<v
   await page.evaluate(async (payload: string) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane to write to')
     }
+
     await new Promise<void>((resolve) => pane.terminal.write(payload, resolve))
   }, data)
 }

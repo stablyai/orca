@@ -63,16 +63,21 @@ const SHIFTED_PUNCTUATION_KEY_TOKENS: Record<string, string> = {
 
 export function logicalKeyTokenFromInput(input: KeybindingInput): string | null {
   const key = input.key ?? ''
+
   if (MODIFIER_KEYS.has(key)) {
     return null
   }
+
   const normalizedKey = normalizeKeyToken(key)
+
   if (normalizedKey) {
     return normalizedKey
   }
+
   if (hasModifier(input, 'shift')) {
     return SHIFTED_PUNCTUATION_KEY_TOKENS[key] ?? null
   }
+
   return null
 }
 
@@ -86,7 +91,9 @@ export function isLatinShortcutKey(key: string): boolean {
   if (key.length !== 1) {
     return false
   }
+
   const upper = key.toUpperCase()
+
   return (upper >= 'A' && upper <= 'Z') || (key >= '0' && key <= '9')
 }
 
@@ -98,18 +105,24 @@ export function shouldUseNonLatinShortcutPhysicalFallback(
   if (getKeybindingPlatform(platform) === 'darwin') {
     return false
   }
+
   const hasPrimaryModifier = hasModifier(input, 'control') || hasModifier(input, 'meta')
+
   if (!hasPrimaryModifier) {
     return false
   }
+
   // AltGr surfaces as Ctrl+Alt on Windows/Linux; treat it as text, not a chord.
   if (hasModifier(input, 'control') && hasModifier(input, 'alt')) {
     return false
   }
+
   if (logicalKeyTokenFromInput(input) !== null) {
     return false
   }
+
   const key = input.key ?? ''
+
   return key !== '' && !MODIFIER_KEYS.has(key) && !isLatinShortcutKey(key)
 }
 
@@ -124,9 +137,11 @@ export function canFallBackToPhysicalCode(
 
 export function physicalCodeKeyTokenFromInput(input: KeybindingInput): string | null {
   const code = input.code ?? ''
+
   if (code.startsWith('Key') && code.length === 4) {
     return code.slice(3).toUpperCase()
   }
+
   if (code.startsWith('Digit') && code.length === 6) {
     return code.slice(5)
   }
@@ -136,6 +151,7 @@ export function physicalCodeKeyTokenFromInput(input: KeybindingInput): string | 
 
 export function numpadCodeKeyTokenFromInput(input: KeybindingInput): string | null {
   const code = input.code ?? ''
+
   return code === 'NumpadAdd' || code === 'NumpadSubtract' ? normalizeKeyToken(code) : null
 }
 
@@ -151,10 +167,13 @@ export function shouldUseMacOptionComposedCaptureFallback(
   ) {
     return false
   }
+
   const physicalToken = physicalCodeKeyTokenFromInput(input)
+
   if (!physicalToken) {
     return false
   }
+
   return (
     (physicalToken.length === 1 && physicalToken >= 'A' && physicalToken <= 'Z') ||
     isPunctuationKeyToken(physicalToken)
@@ -166,13 +185,17 @@ export function keyTokenFromInput(
   platform: NodeJS.Platform
 ): string | null {
   const numpadKey = numpadCodeKeyTokenFromInput(input)
+
   if (numpadKey) {
     return numpadKey
   }
+
   const logicalKey = logicalKeyTokenFromInput(input)
+
   if (logicalKey) {
     return logicalKey
   }
+
   if (
     !canUsePhysicalCodeFallback(input) &&
     !shouldUseMacOptionComposedCaptureFallback(input, platform) &&
@@ -180,6 +203,7 @@ export function keyTokenFromInput(
   ) {
     return null
   }
+
   return physicalCodeKeyTokenFromInput(input)
 }
 
@@ -189,12 +213,15 @@ export function canonicalDoubleTapToken(
   platform: NodeJS.Platform
 ): ModifierToken {
   const isMac = platform === 'darwin'
+
   if (modifier === 'Cmd' && isMac) {
     return 'Mod'
   }
+
   if (modifier === 'Ctrl' && !isMac) {
     return 'Mod'
   }
+
   return modifier
 }
 
@@ -209,7 +236,9 @@ export function keybindingFromInputWithOptions(
       options
     )
   }
+
   const key = keyTokenFromInput(input, platform)
+
   if (!key) {
     return { ok: false, error: 'Press a key, not only a modifier.' }
   }
@@ -217,21 +246,27 @@ export function keybindingFromInputWithOptions(
   const isMac = getKeybindingPlatform(platform) === 'darwin'
   const parts: string[] = []
   const primaryModifierPressed = isMac ? hasModifier(input, 'meta') : hasModifier(input, 'control')
+
   if (primaryModifierPressed) {
     parts.push('Mod')
   }
+
   if (isMac && hasModifier(input, 'control')) {
     parts.push('Ctrl')
   }
+
   if (!isMac && hasModifier(input, 'meta')) {
     parts.push('Cmd')
   }
+
   if (hasModifier(input, 'alt')) {
     parts.push('Alt')
   }
+
   if (hasModifier(input, 'shift')) {
     parts.push('Shift')
   }
+
   parts.push(key)
 
   return normalizeKeybindingWithOptions(parts.join('+'), options)
@@ -254,8 +289,10 @@ export function keybindingFromInputForAction(
     platform,
     normalizeOptionsForAction(actionId)
   )
+
   if (!result.ok || !isDigitIndexActionId(actionId)) {
     return result
   }
+
   return canonicalizeDigitIndexBinding(result.value)
 }

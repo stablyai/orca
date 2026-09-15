@@ -27,6 +27,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         // An abandoned spawn never reaches connect(), so nothing else would ever
         // drain the pre-connect buffer or settle its acknowledged-write promises.
         session.transport.abandonPreconnectInput?.()
+
         try {
           session.deps.onDeferredCwdSpawnFailed?.()
         } catch {
@@ -41,8 +42,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       // removal is about to delete (main fences it anyway), and the pane is
       // about to unmount — so skip the doomed respawn instead of racing it.
       releaseDeferredCwdFence()
+
       return Promise.resolve(null)
     }
+
     session.authoritativeReattachGeneration += 1
     // Every fresh connect creates or rebinds a PTY. Do not let a legacy
     // response that omits `incarnationId` inherit the predecessor's fence.
@@ -58,10 +61,12 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // a restart-in-place would leak the old TUI's flags into a fresh shell.
     session.kittyKeyboardModes.reset()
     session.prepareFreshShellViewportForSpawn(options)
+
     const coldRestoreOverride =
       startupOverride && 'launchConfig' in startupOverride
         ? (startupOverride as ColdRestoreAgentResumeStartup)
         : null
+
     // Why: pre-signal the main process so its cooperation gate suppresses
     // the daemon-snapshot seed for this paneKey. We issue declare and the
     // spawn back-to-back without awaiting, because Electron's
@@ -72,6 +77,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     const preSignalPromise = session.runtimeEnvironmentId
       ? Promise.resolve(null)
       : window.api.pty.declarePendingPaneSerializer(session.cacheKey).catch(() => null)
+
     const clearPreSignaledSerializer = (): void => {
       // A disposed pre-bind connect must not keep a successor behind a slow
       // serializer declaration. Cleanup can finish independently of spawn ownership.
@@ -84,10 +90,12 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
 
     session.transportConnectInFlightSince = Date.now()
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
+
     const outputCallbacks = session.captureTransportOutputCallbacks(
       session.reportError,
       toProcessExitStartup(coldRestoreOverride ?? effectiveStartup)
     )
+
     const spawnedRaw = session.transport.connect({
       url: '',
       cols: session.cols,
@@ -123,62 +131,77 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       .finally(() => {
         session.transportConnectInFlightSince = null
       })
+
     const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
       .then(async (spawnedPtyId) => {
         if (outputCallbacks.generation !== session.transportStreamGeneration) {
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           clearPreSignaledSerializer()
+
           return null
         }
+
         const resolvedPtyId =
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId.id
             : typeof spawnedPtyId === 'string'
               ? spawnedPtyId
               : session.transport.getPtyId()
+
         if (resolvedPtyId && !session.claimCapturedDirectSshRetryPty(resolvedPtyId)) {
           releaseDeferredCwdFence()
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           // Why: an outstanding declare keeps main's cooperation gate suppressing
           // this paneKey's daemon-snapshot seed until something releases it.
           clearPreSignaledSerializer()
+
           return null
         }
+
         const connectResult =
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId
             : null
+
         // Old hosts may return a string or an object without the optional
         // field; either way remote evidence must remain client-only
         // unverifiable until a stamped attach result arrives.
         session.remotePtyIncarnationId = connectResult?.incarnationId ?? null
+
         if (connectResult?.isReattach) {
           session.pendingStartupCommand = null
+
           const accepted = await session.handleReattachResult(
             connectResult,
             null,
             coldRestoreOverride,
             outputCallbacks.generation
           )
+
           session.finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
           const gen = await preSignalPromise
+
           if (accepted && resolvedPtyId && typeof gen === 'number') {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
           } else if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
           }
+
           if (!accepted) {
             // A rejected reattach ends this spawn; nothing later clears the fence.
             releaseDeferredCwdFence()
           }
+
           return accepted ? resolvedPtyId : null
         }
+
         if (spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId) {
           session.registerEffectiveLaunchConfig(spawnedPtyId.launchConfig, {
             ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
             ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {})
           })
         }
+
         if (resolvedPtyId) {
           if (
             spawnedPtyId &&
@@ -189,6 +212,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
               foreground: shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
             })
           }
+
           if (
             spawnedPtyId &&
             typeof spawnedPtyId === 'object' &&
@@ -200,6 +224,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           } else if (coldRestoreOverride?.hasSleepingRecord) {
             session.showSessionRestoredBanner()
           }
+
           session.clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
         } else if (
           session.paneStartup?.launchConfig ||
@@ -210,6 +235,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           // viable delivery target and must not wait for a future pane.
           session.clearRegisteredStartupLaunchConfig()
         }
+
         if (
           resolvedPtyId &&
           spawnedPtyId &&
@@ -225,26 +251,33 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             sampleVisibleForegroundAgent: true
           })
         }
+
         if (resolvedPtyId) {
           session.reconcilePtySizeAfterSpawn(resolvedPtyId, session.cols, session.rows)
         }
+
         if (!resolvedPtyId) {
           releaseDeferredCwdFence()
           clearPreSignaledSerializer()
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+
           return null
         }
+
         const gen = await preSignalPromise
+
         // Why: a bound PTY owns the renderer serializer even when the declare was
         // rejected; the gen token only settles or clears the pending declaration.
         if (resolvedPtyId) {
           if (!isRemoteRuntimePtyId(resolvedPtyId) || !hasPtySerializer(resolvedPtyId)) {
             session.registerPaneSerializerFor(resolvedPtyId)
           }
+
           if (typeof gen === 'number') {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
           }
         }
+
         if (resolvedPtyId && session.connectionId) {
           if (
             session.shouldUseProviderSshStartupDelivery &&
@@ -252,21 +285,27 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           ) {
             session.armStartupDraftReadinessObservation()
           }
+
           session.schedulePendingStartupCommandDelivery()
         }
+
         session.finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
+
         return resolvedPtyId
       })
       .catch(async () => {
         releaseDeferredCwdFence()
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+
         if (
           session.paneStartup?.launchConfig ||
           (startupOverride && 'launchConfig' in startupOverride)
         ) {
           session.clearRegisteredStartupLaunchConfig()
         }
+
         clearPreSignaledSerializer()
+
         return null
       })
       .finally(() => {
@@ -275,6 +314,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           pendingSpawnGenerationByPaneKey.delete(session.pendingSpawnKey)
         }
       })
+
     session.armDirectSshPaneRetryTimeout(trackedPromise, session.directSshRetryAttempt)
     void trackedPromise.then((spawnedPtyId) => {
       if (spawnedPtyId) {
@@ -286,8 +326,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         // recovery. Generation-gated in the store, so a spawn with no recovery
         // attempt in flight writes nothing.
         session.settlePaneAttachAttempt?.(undefined, 'success')
+
         return
       }
+
       queueMicrotask(() => {
         if (
           session.disposed ||
@@ -296,6 +338,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         ) {
           return
         }
+
         settleSpawnThatLeftPaneUnbound(session)
       })
     })
@@ -303,6 +346,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
     pendingSpawnByPaneKey.set(session.pendingSpawnKey, trackedPromise)
     pendingSpawnGenerationByPaneKey.set(session.pendingSpawnKey, session.tabGeneration)
+
     return trackedPromise
   }
 }

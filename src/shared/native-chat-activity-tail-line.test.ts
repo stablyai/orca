@@ -16,6 +16,7 @@ function status(text: string): AgentJournalRenderItem {
 it('does not trim every preceding status line to select the final activity', () => {
   const text = `${'Previous activity\n'.repeat(500)}Preparing the answer`
   const trim = vi.spyOn(String.prototype, 'trim')
+
   try {
     expect(selectStructuredAgentTurnActivity([status(text)], 'turn')).toEqual({
       kind: 'description',
@@ -45,6 +46,7 @@ it('preserves the last nonempty LF-delimited line before prompt normalization', 
     'first\n\0\n',
     'first\n\ufeff\n'
   ]
+
   const alphabet = [
     'a',
     ' ',
@@ -59,24 +61,32 @@ it('preserves the last nonempty LF-delimited line before prompt normalization', 
     '\ud800',
     '\udc00'
   ]
+
   let seed = 57
+
   const next = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
     return seed
   }
+
   for (let index = 0; index < 1000; index++) {
     let text = ''
     const length = next() % 300
+
     for (let offset = 0; offset < length; offset++) {
       text += alphabet[next() % alphabet.length]
     }
+
     texts.push(text)
   }
+
   for (const text of texts) {
     const line = text
       .split('\n')
       .map((part) => part.trim())
       .findLast((part) => part.length > 0)
+
     const normalized = line ? normalizePromptField(line) : ''
     const expected = normalized ? { kind: 'description', text: normalized } : null
     expect(selectStructuredAgentTurnActivity([status(text)], 'turn')).toEqual(expected)

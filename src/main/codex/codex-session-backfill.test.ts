@@ -23,11 +23,13 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('node:fs', async () => {
   const mocks = await import('./codex-session-backfill-fs-mocks')
+
   return mocks.createNodeFsMock(await vi.importActual<typeof NodeFs>('node:fs'))
 })
 
 vi.mock('node:fs/promises', async () => {
   const mocks = await import('./codex-session-backfill-fs-mocks')
+
   return mocks.createNodeFsPromisesMock(
     await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
   )
@@ -35,6 +37,7 @@ vi.mock('node:fs/promises', async () => {
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return {
     ...actual,
     homedir: homedirMock
@@ -57,7 +60,9 @@ import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
 const FIXTURE_LAUNCH_DATE: CodexSessionBackfillDate = ['2026', '05', '26']
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 function getSystemSessionsRoot(): string {
@@ -80,6 +85,7 @@ function writeManagedSession(relativePath: string, contents: string): string {
   const filePath = join(getManagedSessionsRoot(), relativePath)
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, contents, 'utf-8')
+
   return filePath
 }
 
@@ -132,11 +138,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -146,6 +154,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
       join('2026', '05', '26', 'rollout-a.jsonl'),
       '{"type":"session_meta","id":"a"}\n'
     )
+
     writeManagedSession(join('2026', '06', '01', 'rollout-b.jsonl'), '{"id":"b"}\n')
     writeFileSync(join(getManagedSessionsRoot(), '2026', '05', '26', 'notes.txt'), 'skip me\n')
 
@@ -238,6 +247,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), 'managed contents\n')
     const collidingPath = join(getSystemSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
     mkdirSync(dirname(collidingPath), { recursive: true })
+
     try {
       symlinkSync(join(fakeHomeDir, 'missing-target.jsonl'), collidingPath)
     } catch {
@@ -258,6 +268,7 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     writeFileSync(realSource, 'outside contents\n', 'utf-8')
     const managedLinkPath = join(getManagedSessionsRoot(), '2026', '05', '26', 'rollout-a.jsonl')
     mkdirSync(dirname(managedLinkPath), { recursive: true })
+
     try {
       symlinkSync(realSource, managedLinkPath)
     } catch {
@@ -520,6 +531,7 @@ describe('startCodexSessionBackfillInBackground', () => {
           raceStarted = true
           markLaunchPending(['2026', '08', '05'])
         }
+
         return false
       }
     })
@@ -619,6 +631,7 @@ describe('startCodexSessionBackfillInBackground', () => {
       ignoreCompletionMarker: true,
       scanDates: [['2026', '07', '01']]
     })
+
     expect(scheduled).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
   })
 
@@ -631,6 +644,7 @@ describe('startCodexSessionBackfillInBackground', () => {
       ignoreCompletionMarker: true,
       scanDates: [['2026', '08', '05']]
     })
+
     expect(bounded).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
     expect(existsSync(getMarkerPath())).toBe(false)
 
@@ -705,6 +719,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     const fileRecords = readBackfillAuditRecords().filter((record) =>
       ['hardlink', 'existing'].includes(record.action)
     )
+
     expect(fileRecords).toHaveLength(2)
     expect(fileRecords[1]).toMatchObject({ action: 'existing' })
     expect(fileRecords[1]?.fileEventId).not.toBe(firstRecord?.fileEventId)
@@ -732,6 +747,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     const fileRecords = readBackfillAuditRecords().filter((record) =>
       ['hardlink', 'copy', 'existing'].includes(record.action)
     )
+
     expect(fileRecords).toEqual([
       expect.objectContaining({ action: 'hardlink', fileEventId: expect.any(String) })
     ])
@@ -767,9 +783,11 @@ describe('startCodexSessionBackfillInBackground', () => {
       failedHealAuditRecords: 0
     })
     expect(existsSync(getMarkerPath())).toBe(true)
+
     const recoveredFileRecords = readBackfillAuditRecords().filter((record) =>
       ['hardlink', 'copy', 'existing'].includes(record.action)
     )
+
     expect(recoveredFileRecords).toHaveLength(2)
     expect(new Set(recoveredFileRecords.map((record) => record.target))).toEqual(
       new Set([
@@ -896,9 +914,11 @@ describe('startCodexSessionBackfillInBackground', () => {
 
   it('leaves the marker unset when a directory cannot be scanned', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-readable.jsonl'), 'readable\n')
+
     const unreadableDirectory = dirname(
       writeManagedSession(join('2026', '06', '01', 'rollout-unreadable.jsonl'), 'unreadable\n')
     )
+
     fsMockState.failDirectoryPath = unreadableDirectory
 
     const first = await startCodexSessionBackfillInBackground({ yieldMs: 0 })

@@ -12,9 +12,11 @@ export function getExternalEditorOpenCapability(
   if (settings?.activeRuntimeEnvironmentId?.trim()) {
     return { allowed: false, reason: 'remote-runtime' }
   }
+
   if (!context.connectionId?.trim()) {
     return { allowed: true, remote: false }
   }
+
   return isVsCodeRemoteSshCommand(context.command)
     ? { allowed: true, remote: true }
     : { allowed: false, reason: 'local-only-editor' }

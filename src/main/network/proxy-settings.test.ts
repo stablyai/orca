@@ -114,6 +114,7 @@ describe('Electron proxy settings', () => {
       { httpProxyUrl: 'http://old.example:8080' },
       { proxySession, env: {} }
     )
+
     const second = applyElectronProxySettings(
       { httpProxyUrl: 'http://new.example:8080' },
       { proxySession, env: {} }
@@ -132,6 +133,7 @@ describe('Electron proxy settings', () => {
 
   it('keeps credentials out of proxy metadata and answers matching proxy auth challenges', async () => {
     const proxySession = createProxySession()
+
     const result = await applyElectronProxySettings(
       { httpProxyUrl: 'http://alice:s%40fe@proxy.example:8080' },
       { proxySession, env: {} }

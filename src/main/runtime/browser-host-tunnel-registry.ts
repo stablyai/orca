@@ -35,9 +35,11 @@ export class BrowserHostTunnelRegistry {
     const key = `${lease.lease.browserHostClientId}\u0000${executionHostKey}`
     const existing = this.routesByKey.get(key)
     const tunnelGeneration = this.generations.take('tunnel')
+
     if (existing) {
       this.fence(existing, 'replaced')
     }
+
     const state: BrowserHostRouteState = {
       token: Symbol(key),
       lease,
@@ -45,13 +47,16 @@ export class BrowserHostTunnelRegistry {
       tunnelGeneration,
       fence: createBrowserHostFence()
     }
+
     if (options?.requireExecutionHostGrant) {
       state.releaseGrantLink = lease.executionHostGrants.link(executionHostKey, () =>
         this.fence(state, 'released')
       )
     }
+
     lease.routes.add(state)
     this.routesByKey.set(key, state)
+
     return {
       tunnelGeneration: state.tunnelGeneration,
       whenFenced: state.fence.promise,

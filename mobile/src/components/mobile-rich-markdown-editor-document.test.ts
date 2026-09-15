@@ -6,6 +6,7 @@ import { buildMobileRichMarkdownEditorHtml } from './mobile-rich-markdown-editor
 // constants must not move a single byte of what the WebView loads. A hash rather than a
 // checked-in HTML file, because the formatter would rewrite the file and defeat the check.
 const PRE_SPLIT_DOCUMENT_SHA256 = '1ef29c8802170800011e8accf1966bc542cdd7dd5c9600bacb6e0860f77b6df8'
+
 const PRE_SPLIT_DOCUMENT_BYTES = 29852
 
 describe('mobile rich markdown editor document', () => {

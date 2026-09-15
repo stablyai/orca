@@ -1,5 +1,7 @@
 import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
+
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
+
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,6 +26,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: vi.fn(),
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -76,6 +79,7 @@ describe('federated read RPC transport routing', () => {
         launchToken: 'launch-1'
       }
     }
+
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,

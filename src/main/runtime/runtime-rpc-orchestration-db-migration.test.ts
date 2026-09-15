@@ -15,6 +15,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -81,13 +82,16 @@ describe('OrcaRuntimeRpcServer', () => {
       const realPrototype = Database.prototype as unknown as {
         exec: (sql: string) => unknown
       }
+
       const originalExec = realPrototype.exec
       realPrototype.exec = function (sql: string) {
         if (sql.includes('ALTER TABLE messages ADD COLUMN delivered_at')) {
           throw new Error('simulated migration failure')
         }
+
         return originalExec.call(this, sql)
       }
+
       try {
         expect(() => new OrchestrationDb(tmpPath)).toThrow('simulated migration failure')
       } finally {

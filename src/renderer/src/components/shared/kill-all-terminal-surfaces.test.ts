@@ -9,6 +9,7 @@ import {
 } from './kill-all-terminal-surfaces'
 
 type TerminalRow = AppState['tabsByWorktree'][string][number]
+
 type UnifiedRow = AppState['unifiedTabsByWorktree'][string][number]
 
 function terminal(id: string, worktreeId: string): TerminalRow {
@@ -36,11 +37,14 @@ function state(overrides: Partial<KillAllTerminalSurfaceState> = {}): KillAllTer
     pendingReconnectPtyIdByTabId: {},
     ...overrides
   }
+
   const worktreeIds = new Set([
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.unifiedTabsByWorktree)
   ])
+
   const runtimeOwnerEnvironmentId = state.settings?.activeRuntimeEnvironmentId ?? undefined
+
   return {
     ...state,
     repos: [],
@@ -84,10 +88,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -124,6 +130,7 @@ describe('runKillAllTerminalSurfaces', () => {
   it('resolves current bindings and ownership after management settles, then closes active last', async () => {
     const management = deferred<{ killedCount: number; remainingCount: number }>()
     const lastExactKill = deferred<void>()
+
     let current = state({
       activeWorktreeId: 'wt-old-active',
       tabsByWorktree: {
@@ -143,23 +150,30 @@ describe('runKillAllTerminalSurfaces', () => {
         'unified-only-target': ['stale-unified-pty']
       }
     })
+
     const targetIds = snapshotKillAllTerminalSurfaceIds(current)
     const calls: string[] = []
     const killDaemonSessions = vi.fn(() => management.promise)
+
     const closeSurface = vi.fn((targetId: string, _options: unknown) => {
       calls.push(`close:${targetId}`)
       removeSurface(current, targetId)
     })
+
     const killPty = vi.fn((ptyId: string) => {
       calls.push(`kill:${ptyId}`)
+
       if (ptyId === 'pty-unified') {
         return Promise.reject(new Error('provider unavailable'))
       }
+
       if (ptyId === 'ssh:host@@pty-last') {
         return lastExactKill.promise
       }
+
       return Promise.resolve()
     })
+
     const reportSummary = vi.fn()
 
     const completion = runKillAllTerminalSurfaces(targetIds, {
@@ -218,6 +232,7 @@ describe('runKillAllTerminalSurfaces', () => {
       'unified-only-target',
       'moved-target'
     ])
+
     for (const [, options] of closeSurface.mock.calls) {
       expect(options).toEqual(
         expect.objectContaining({
@@ -227,6 +242,7 @@ describe('runKillAllTerminalSurfaces', () => {
         })
       )
     }
+
     expect(calls.indexOf('kill:pty-shared')).toBeLessThan(calls.indexOf('close:moved-target'))
     expect(killPty).toHaveBeenCalledWith('pty-shared')
     expect(killPty).toHaveBeenCalledWith('pty-unified')
@@ -264,6 +280,7 @@ describe('runKillAllTerminalSurfaces', () => {
       tabsByWorktree: { wt: [terminal('target', 'wt'), terminal('later', 'wt')] },
       ptyIdsByTabId: { target: ['local-pty'], later: ['later-pty'] }
     })
+
     const closeSurface = vi.fn((targetId: string) => removeSurface(current, targetId))
     const killPty = vi.fn().mockResolvedValue(undefined)
 
@@ -295,6 +312,7 @@ describe('runKillAllTerminalSurfaces', () => {
       tabsByWorktree: { wt: [terminal('target', 'wt')] },
       ptyIdsByTabId: { target: ['daemon-pty', 'ssh:host@@relay-pty'] }
     })
+
     const killPty = vi.fn().mockResolvedValue(undefined)
 
     await runKillAllTerminalSurfaces(['target'], {
@@ -370,6 +388,7 @@ describe('runKillAllTerminalSurfaces', () => {
         }
       }
     })
+
     try {
       await runKillAllTerminalSurfaces([], {
         getState: () => state(),
@@ -392,6 +411,7 @@ describe('runKillAllTerminalSurfaces', () => {
         wt: [unified('remains-visible', 'remains', 'wt')]
       }
     })
+
     const closeSurface = vi.fn((targetId: string) => {
       if (targetId === 'throws-after-close') {
         removeSurface(current, targetId)
@@ -420,6 +440,7 @@ describe('runKillAllTerminalSurfaces', () => {
       tabsByWorktree: { wt: [terminal('fails', 'wt'), terminal('closes', 'wt')] },
       ptyIdsByTabId: { fails: ['pty-fails'], closes: ['pty-closes'] }
     })
+
     const closeSurface = vi.fn(
       (
         targetId: string,
@@ -428,9 +449,11 @@ describe('runKillAllTerminalSurfaces', () => {
         if (targetId === 'fails') {
           throw new Error('pre-mutation failure')
         }
+
         removeSurface(current, targetId)
       }
     )
+
     const killPty = vi.fn().mockResolvedValue(undefined)
 
     const summary = await runKillAllTerminalSurfaces(['fails', 'closes'], {
@@ -471,6 +494,7 @@ describe('runKillAllTerminalSurfaces', () => {
         third: ['pty-shared-after-yield', 'remote:env-1@@terminal-1']
       }
     })
+
     const closeSurface = vi.fn(
       (
         targetId: string,
@@ -486,13 +510,17 @@ describe('runKillAllTerminalSurfaces', () => {
         }
       ) => {
         removeSurface(current, targetId)
+
         if (targetId === 'second') {
           current = { ...current }
         }
+
         expect(options.precomputedCloseState.terminalCountBeforeClose).toBeGreaterThan(0)
       }
     )
+
     const killPty = vi.fn().mockResolvedValue(undefined)
+
     const yieldToRenderer = vi.fn(async () => {
       current = state({
         activeWorktreeId: 'wt',
@@ -558,12 +586,15 @@ describe('runKillAllTerminalSurfaces', () => {
       ptyIdsByTabId
     })
     let zustandWrites = 0
+
     const unsubscribe = useAppStore.subscribe(() => {
       zustandWrites += 1
     })
+
     const providerKill = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { pty: { kill: providerKill } } })
     let nowMs = 0
+
     try {
       const summary = await runKillAllTerminalSurfaces(snapshotKillAllTerminalSurfaceIds(), {
         killDaemonSessions: vi.fn().mockResolvedValue({

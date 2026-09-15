@@ -48,12 +48,19 @@ import {
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
 
 let tempDir: string
+
 let installDir: string
+
 let userDataDir: string
+
 let localAppDataDir: string
+
 const originalPlatform = process.platform
+
 const originalExecPath = process.execPath
+
 const originalResourcesPath = process.resourcesPath
+
 const originalLocalAppData = process.env.LOCALAPPDATA
 
 function setProcessProp(key: string, value: unknown): void {
@@ -65,9 +72,11 @@ function setProcessProp(key: string, value: unknown): void {
 function buildInstallFixture(root: string): void {
   mkdirSync(root, { recursive: true })
   writeFileSync(join(root, 'Orca.exe'), 'exe-bytes')
+
   for (const name of ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']) {
     writeFileSync(join(root, name), name)
   }
+
   writeFileSync(join(root, 'ffmpeg.dll'), 'dll')
   writeFileSync(join(root, 'libEGL.dll'), 'dll')
   const mainDir = join(root, 'resources', 'app.asar.unpacked', 'out', 'main')
@@ -84,6 +93,7 @@ function buildInstallFixture(root: string): void {
   // Both win32 prebuilds exist in the packaged tree (build-time prune keeps the
   // `win32-` prefix); the copy filter keeps the host arch's and drops the other.
   const prebuildsRoot = join(root, 'resources', 'node_modules', 'node-pty', 'prebuilds')
+
   for (const arch of ['win32-x64', 'win32-arm64']) {
     mkdirSync(join(prebuildsRoot, arch), { recursive: true })
     writeFileSync(join(prebuildsRoot, arch, 'pty.node'), `${arch}-prebuild`)
@@ -92,6 +102,7 @@ function buildInstallFixture(root: string): void {
 
 // The win32 prebuild dir the running host arch loads vs. the one that is pruned.
 const HOST_PREBUILD = `win32-${process.arch}`
+
 const OTHER_PREBUILD = HOST_PREBUILD === 'win32-arm64' ? 'win32-x64' : 'win32-arm64'
 
 beforeEach(() => {
@@ -119,11 +130,13 @@ afterEach(() => {
   setProcessProp('platform', originalPlatform)
   setProcessProp('execPath', originalExecPath)
   setProcessProp('resourcesPath', originalResourcesPath)
+
   if (originalLocalAppData === undefined) {
     delete process.env.LOCALAPPDATA
   } else {
     process.env.LOCALAPPDATA = originalLocalAppData
   }
+
   try {
     rmSync(tempDir, { recursive: true, force: true })
   } catch {
@@ -134,6 +147,7 @@ afterEach(() => {
 describe('buildDaemonHostManifest', () => {
   it('mirrors the win-unpacked layout: exe + data blobs + resources tree, no GPU DLLs', () => {
     const appDir = 'C:\\app'
+
     const ops = buildDaemonHostManifest({
       appDir,
       execPath: 'C:\\app\\Orca.exe',
@@ -141,6 +155,7 @@ describe('buildDaemonHostManifest', () => {
       entrySourcePath: 'C:\\app\\resources\\app.asar.unpacked\\out\\main\\daemon-entry.js',
       entryRelPath: 'resources/app.asar.unpacked/out/main/daemon-entry.js'
     })
+
     const byDest = new Map(ops.map((op) => [op.destRel, op]))
     // The host exe keeps the source basename: a verbatim, signature-preserving copy with no
     // image-name mismatch. What escapes the updater's sweep is the path, not the name.
@@ -300,9 +315,11 @@ function ageRecordPastQuarantineFloor(recordPath: string): void {
 describe('pruneOldDaemonHosts', () => {
   it('removes unpinned non-current version dirs, keeping current and pinned', () => {
     const root = join(localAppDataDir, 'Orca', 'daemon-host')
+
     for (const v of ['9.9.9', '1.0.0', '2.0.0']) {
       mkdirSync(join(root, v), { recursive: true })
     }
+
     pruneOldDaemonHosts({
       status: 'complete',
       versionLiveness: new Map([['2.0.0', { status: 'live' }]])
@@ -321,6 +338,7 @@ describe('pruneOldDaemonHosts', () => {
       join(runtimeDir, 'daemon-v8.pid'),
       JSON.stringify({ pid: 4242, startedAtMs: null, appVersion: '8.0.0' })
     )
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('access denied'), { code: 'EPERM' })
     })
@@ -346,6 +364,7 @@ describe('pruneOldDaemonHosts', () => {
       join(runtimeDir, 'daemon-v7.pid'),
       JSON.stringify({ pid: 4242, startedAtMs: null, appVersion: '7.0.0' })
     )
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
     })
@@ -366,9 +385,11 @@ describe('pruneOldDaemonHosts', () => {
 
   it('prunes nothing and never throws when the evidence is unverifiable', () => {
     const root = join(localAppDataDir, 'Orca', 'daemon-host')
+
     for (const v of ['1.0.0', '2.0.0']) {
       mkdirSync(join(root, v), { recursive: true })
     }
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(() =>
@@ -416,10 +437,12 @@ describe('pruneOldDaemonHosts', () => {
       join(runtimeDir, 'daemon-v8.pid'),
       JSON.stringify({ pid: 5002, startedAtMs: null, appVersion: '7.0.0' })
     )
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid: number) => {
       if (pid === 5001) {
         return true
       }
+
       throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
     })
 
@@ -437,6 +460,7 @@ describe('pruneOldDaemonHosts', () => {
   it('preserves a host dir for any verdict that is not positively exited', () => {
     const root = join(localAppDataDir, 'Orca', 'daemon-host')
     mkdirSync(join(root, '1.0.0'), { recursive: true })
+
     // Why: deliberate out-of-contract cast — deletion must require a positive 'exited' match,
     // so a future verdict status the prune does not know preserves the host dir, not deletes it.
     const futureVerdict = {
@@ -468,9 +492,11 @@ describe('pruneOldDaemonHosts', () => {
     const pidPath = join(runtimeDir, 'daemon-v7.pid')
     writeFileSync(pidPath, '{"pid":123')
     ageRecordPastQuarantineFloor(pidPath)
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
     })
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const evidence = collectPinnedDaemonVersions(runtimeDir)
@@ -496,9 +522,11 @@ describe('pruneOldDaemonHosts', () => {
     const pidPath = join(runtimeDir, 'daemon-v7.pid')
     writeFileSync(pidPath, '{"pid":4')
     ageRecordPastQuarantineFloor(pidPath)
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('access denied'), { code: 'EPERM' })
     })
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const evidence = collectPinnedDaemonVersions(runtimeDir)
@@ -631,6 +659,7 @@ describe('pruneOldDaemonHosts', () => {
     if (originalPlatform === 'win32') {
       return ctx.skip()
     }
+
     const root = join(localAppDataDir, 'Orca', 'daemon-host')
     const runtimeDir = join(userDataDir, 'daemon')
     mkdirSync(join(root, '1.0.0'), { recursive: true })
@@ -638,8 +667,10 @@ describe('pruneOldDaemonHosts', () => {
     const pidPath = join(runtimeDir, 'daemon-v7.pid')
     writeFileSync(pidPath, JSON.stringify({ pid: 4242, startedAtMs: null, appVersion: '1.0.0' }))
     chmodSync(pidPath, 0o000)
+
     try {
       readFileSync(pidPath)
+
       return ctx.skip() // Running as root: the permission bit cannot make the read fail.
     } catch {
       // The read fails as intended.

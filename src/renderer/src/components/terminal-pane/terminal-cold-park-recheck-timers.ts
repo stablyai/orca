@@ -12,6 +12,7 @@
  */
 
 export type TerminalTabColdParkRecheckTimer = { timerId: number; deadlineMs: number }
+
 export type TerminalTabColdParkRecheckTimers = Map<string, TerminalTabColdParkRecheckTimer>
 
 export function clearTerminalTabColdParkRecheckTimers(
@@ -20,6 +21,7 @@ export function clearTerminalTabColdParkRecheckTimers(
   for (const timer of timers.values()) {
     window.clearTimeout(timer.timerId)
   }
+
   timers.clear()
 }
 
@@ -36,14 +38,17 @@ export function reconcileTerminalTabColdParkRecheckTimers(args: {
       args.timers.delete(tabId)
     }
   }
+
   for (const [tabId, deadlineMs] of args.deadlineMsByTabId) {
     if (args.timers.has(tabId)) {
       continue
     }
+
     const timerId = window.setTimeout(() => {
       args.timers.delete(tabId)
       args.onDeadline()
     }, deadlineMs - args.nowMs)
+
     args.timers.set(tabId, { timerId, deadlineMs })
   }
 }

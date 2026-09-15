@@ -12,11 +12,14 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
     if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
       return null
     }
+
     // Why: a manual title is authoritative until explicitly cleared with null.
     const pty = this.ptysById.get(ptyId)
+
     if (pty && pty.title !== null) {
       return null
     }
+
     return this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.getLastNormalizedTitle() ?? null
   }
 
@@ -29,9 +32,11 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
     snapshot: T
   ): T {
     const tracked = this.getTrackedDisplayTitleForPty(ptyId)
+
     if (!tracked) {
       return snapshot
     }
+
     return { ...snapshot, lastTitle: tracked }
   }
 
@@ -40,20 +45,25 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
     // Stable Pi/Gemini/Grok display normalization also defines their semantic gate.
     const normalizedSignature =
       rawTitle === normalizedTitle ? null : getDecorativeAgentTitleSignature(normalizedTitle)
+
     const signature = normalizedSignature ?? getDecorativeAgentTitleSignature(rawTitle)
+
     return signature === null ? `literal\u0000${normalizedTitle}` : `agent\u0000${signature}`
   }
 
   protected getOrCreatePtyTitleTrackerEntry(ptyId: string): RuntimePtyTitleTrackerEntry {
     const existing = this.ptyTitleTrackersByPtyId.get(ptyId)
+
     if (existing) {
       return existing
     }
+
     // Why: trackers are created lazily on the first observed chunk. After an
     // app relaunch the PTY/leaf records can already hold a persisted title; a
     // cold tracker would miss the parked working→idle completion and never
     // arm the stale-title timer for a persisted 'working' title.
     let initialTitle = this.ptysById.get(ptyId)?.lastOscTitle ?? null
+
     if (initialTitle === null) {
       for (const leaf of this.getLeavesForPty(ptyId)) {
         if (leaf.lastOscTitle) {
@@ -62,19 +72,23 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         }
       }
     }
+
     const tracker = createTerminalTitleTracker(
       {
         onTitle: (normalizedTitle, rawTitle, meta) => {
           const live = this.ptyTitleTrackersByPtyId.get(ptyId)
           const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
           const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
+
           if (live) {
             live.lastMobileTitleGateKey = gateKey
           }
+
           // Why: the same gate the mobile fan-out below already uses, applied one hop earlier —
           // a spinner frame the renderer store discards should not cost a pty:sideEffect message
           // at all. See decorative-title-fact-emission.ts for why repeats still heartbeat.
           const nowMs = Date.now()
+
           if (
             shouldEmitTitleFactForFrame({
               decorativeOnly,
@@ -86,6 +100,7 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
             if (live) {
               live.lastTitleFactAtMs = nowMs
             }
+
             this.recordTerminalSideEffectFact(ptyId, {
               kind: 'title',
               normalizedTitle,
@@ -93,11 +108,15 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
               ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
             })
           }
+
           const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
           const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
+
           const tracksReplicatedStatus =
             live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
+
           const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
+
           if (
             tracksReplicatedStatus &&
             decorativeOnly &&
@@ -107,11 +126,13 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
             // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
             this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
           }
+
           // Why: an identity-only cursor title records nothing, but the tracker
           // title is that pane's only Cursor identity and must still fan out (#10258).
           if (!changed && !identityOnlyTitle) {
             return
           }
+
           if (live?.applyingChunk) {
             // Why: synthetic spinner ticks change only the braille glyph
             // ~12.5x/sec; fanning out full mobile session snapshots per frame
@@ -163,7 +184,9 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
       },
       initialTitle !== null ? { initialTitle } : {}
     )
+
     tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
+
     const entry: RuntimePtyTitleTrackerEntry = {
       tracker,
       applyingChunk: false,
@@ -179,7 +202,9 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
         : null
     }
+
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
+
     return entry
   }
 }

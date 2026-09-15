@@ -7,8 +7,11 @@ import {
 } from './client-hosted-page-reconciliation-window'
 
 const OPENED_AT = 1_700_000_000_000
+
 const WINDOW_MS = DEFAULT_CLIENT_HOSTED_RECONCILIATION_WINDOW_MS
+
 const DEVICE_A = 'device-a'
+
 const DEVICE_B = 'device-b'
 
 describe('ClientHostedPageReconciliationWindow', () => {

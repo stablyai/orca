@@ -21,18 +21,21 @@ export async function withGitHubCheckDetailsTimeout<T>(
 ): Promise<T> {
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(translatedTimeoutError())
       controller.abort()
     }, GITHUB_CHECK_DETAILS_TIMEOUT_MS)
   })
+
   try {
     return await Promise.race([operation(controller.signal), timeout])
   } catch (error) {
     if (isGitHubCheckDetailsTimeout(error)) {
       throw translatedTimeoutError()
     }
+
     throw error
   } finally {
     clearTimeout(timer)

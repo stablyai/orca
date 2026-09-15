@@ -13,6 +13,7 @@ import type {
 } from './agent-session-journal-types'
 
 const PAYLOAD = { head: 'x', byteLength: 4, digest: 'd'.repeat(64), truncated: true }
+
 const RESOLUTION = {
   state: 'pending',
   selectedOptionId: null,
@@ -97,7 +98,9 @@ describe('canonical admission', () => {
       observedAt: 1_000,
       recovered: true
     }
+
     expect(isAdmissibleAgentJournalRenderItem(item)).toBe(true)
+
     const submission: AgentJournalSubmission = {
       clientMessageId: 'm-1',
       fence: 1,
@@ -108,6 +111,7 @@ describe('canonical admission', () => {
       submittedAt: 1_000,
       resolvedAt: null
     }
+
     expect(isAdmissibleAgentJournalSubmission(submission)).toBe(true)
   })
 })
@@ -287,6 +291,7 @@ describe('optional tool annotations', () => {
     ).toBe(true)
     const padded = AgentJournalItemBodySchema.safeParse({ ...body, callId: ' call-1 ' })
     expect(padded.success).toBe(true)
+
     if (padded.success && padded.data.kind === 'tool-call') {
       expect(padded.data.callId).toBe(' call-1 ')
     }

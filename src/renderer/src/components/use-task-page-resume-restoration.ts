@@ -4,6 +4,7 @@ import { resolveVisibleTaskProvider } from '../../../shared/task-providers'
 import { normalizeGitHubTaskPreset } from '@/components/task-page-github-task-kind'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { loadLinearIssueView } from './linear-issue-view-storage'
+
 export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) {
   const {
     settings,
@@ -49,10 +50,12 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     setAppliedJiraSearch,
     setActiveJiraPreset
   } = model
+
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
       return
     }
+
     setTaskSource(
       resolveVisibleTaskProvider(
         pageData.taskSource ?? settings.defaultTaskSource,
@@ -63,6 +66,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     const nextGithubMode = taskResumeState?.githubMode ?? 'items'
     setGithubMode(nextGithubMode)
     const preset = taskResumeState?.githubItemsPreset
+
     if (preset === null) {
       const query = taskResumeState?.githubItemsQuery ?? ''
       setTaskSearchInput(query)
@@ -75,6 +79,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
       setAppliedTaskSearch(query)
       setActiveTaskPreset(presetId)
     }
+
     const linearQuery = taskResumeState?.linearQuery ?? ''
     setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setLinearSearchInput(linearQuery)
@@ -125,6 +130,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
   ])
   useEffect(() => {
     const context = taskResumeState?.linearContext
+
     if (
       linearContextResumeAttemptedRef.current ||
       !taskResumeApplied ||
@@ -134,8 +140,10 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     ) {
       return
     }
+
     linearContextResumeAttemptedRef.current = true
     let cancelled = false
+
     if (context.kind === 'project') {
       void fetchLinearProject(context.id, context.workspaceId, {
         force: true,
@@ -145,6 +153,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
           if (cancelled) {
             return
           }
+
           if (!project) {
             setSelectedLinearProject(null)
             setSelectedLinearProjectDetail(null)
@@ -153,8 +162,10 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
             setTaskResumeState({
               linearContext: undefined
             })
+
             return
           }
+
           setSelectedLinearProject(project)
           setSelectedLinearProjectDetail(project)
           setLinearMode('projects')
@@ -170,10 +181,12 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
             })
           }
         })
+
       return () => {
         cancelled = true
       }
     }
+
     if (context.kind === 'view' && context.model) {
       setLinearMode('views')
       setLinearCustomViewsLoading(true)
@@ -186,15 +199,19 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
           if (cancelled) {
             return
           }
+
           setLinearCustomViewsLoading(false)
+
           if (!restoredView) {
             setSelectedLinearCustomView(null)
             setLinearCustomViewsError('Saved Linear view was not found.')
             setTaskResumeState({
               linearContext: undefined
             })
+
             return
           }
+
           setSelectedLinearCustomView(restoredView)
         })
         .catch(() => {
@@ -207,10 +224,12 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
             })
           }
         })
+
       return () => {
         cancelled = true
       }
     }
+
     return undefined
   }, [
     fetchLinearCustomView,
@@ -236,4 +255,5 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
   // Why: fetch the full Linear team list so the selector shows all teams, not just those with issues in the fetch window.
   return model
 }
+
 export type TaskPageResumeRestorationModel = ReturnType<typeof useTaskPageResumeRestoration>

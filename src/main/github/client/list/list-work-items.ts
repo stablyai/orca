@@ -7,6 +7,7 @@ import { resolveIssueGitHubApiRepositorySource } from '../../github-api-reposito
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import { normalizeWorkItemPage, resolvePrWorkItemSource } from './work-item-list-request'
 import { listRecentWorkItems, listQueriedWorkItems } from './work-item-pages'
+
 export async function listWorkItems(
   repoPath: string,
   limit = 24,
@@ -19,6 +20,7 @@ export async function listWorkItems(
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
   const trimmedQuery = query?.trim() ?? ''
   const requestedPage = normalizeWorkItemPage(page)
+
   if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
     return {
       items: [],
@@ -30,13 +32,16 @@ export async function listWorkItems(
       }
     }
   }
+
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueGitHubApiRepositorySource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
   ])
+
   const issueOwnerRepo = issueResolved.source
   const prOwnerRepo = prResolved.source
   await acquire()
+
   try {
     // Why: let errors propagate to IPC — a catch-all would make failure indistinguishable from empty and under-report per-repo failures.
     const partial = !trimmedQuery
@@ -69,6 +74,7 @@ export async function listWorkItems(
             ...(partial.prsError ? { prs: partial.prsError } : {})
           }
         : undefined
+
     return {
       items: partial.items,
       sources: {

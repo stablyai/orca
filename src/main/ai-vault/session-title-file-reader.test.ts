@@ -8,6 +8,7 @@ const parseAgentSessionFileCached = vi.hoisted(() => vi.fn())
 vi.mock('./session-scanner-parse-cache', () => ({ parseAgentSessionFileCached }))
 
 const { readAiVaultSessionTitlesFromFiles } = await import('./session-title-file-reader')
+
 const { resolveHostReadableAiVaultTitleRequests } = await import('./session-title-request-paths')
 
 let temporaryRoots: string[] = []
@@ -25,6 +26,7 @@ async function transcriptPath(): Promise<string> {
   temporaryRoots.push(root)
   const path = join(root, 'session.jsonl')
   await writeFile(path, '{}\n')
+
   return path
 }
 

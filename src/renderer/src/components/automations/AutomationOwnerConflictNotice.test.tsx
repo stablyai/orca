@@ -10,6 +10,7 @@ import {
 } from './AutomationOwnerConflictNotice'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -52,6 +53,7 @@ describe('AutomationOwnerConflictNotice', () => {
 
   it('renders recovery button when onRecover is provided and handles click', () => {
     const onRecover = vi.fn()
+
     const notice = ownerConflictNotice({
       code: 'automation_owner_changed',
       message: 'Host needs update',
@@ -73,6 +75,7 @@ describe('AutomationOwnerConflictNotice', () => {
 
   it('renders dismiss button when onDismiss is provided and handles click', () => {
     const onDismiss = vi.fn()
+
     const notice = actionBlockNotice({
       reason: 'orphan',
       message: 'Action blocked',
@@ -95,6 +98,7 @@ describe('AutomationOwnerConflictNotice', () => {
   it('renders both recovery and dismiss buttons when both are configured', () => {
     const onRecover = vi.fn()
     const onDismiss = vi.fn()
+
     const notice = ownerConflictNotice({
       code: 'automation_owner_changed',
       message: 'Host conflict',

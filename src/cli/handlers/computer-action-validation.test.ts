@@ -14,6 +14,7 @@ vi.mock('../runtime-client', async () => {
   // here would make every CLI error fall through to the generic `runtime_error`
   // shape — mirroring the barrel keeps the mock faithful to production.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+
   return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 
@@ -254,9 +255,11 @@ describe('orca computer action CLI validation', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
+
     const output = JSON.parse(vi.mocked(console.log).mock.calls[0][0]) as {
       error: { code: string; message: string; data?: { nextSteps?: string[] } }
     }
+
     expect(output.error.code).toBe('invalid_argument')
     expect(output.error.message).toContain('Invalid positive integer for --click-count')
     expect(output.error.data?.nextSteps).toEqual([
@@ -362,6 +365,7 @@ describe('orca computer action CLI validation', () => {
 
   it('rejects empty stdin for text actions before calling the runtime', async () => {
     const stdin = mockStdin(false, [])
+
     try {
       await main(['computer', 'paste-text', '--app', 'Finder', '--text-stdin'], '/tmp/repo/src')
     } finally {
@@ -401,6 +405,7 @@ describe('orca computer action CLI validation', () => {
       })
     )
     const stdin = mockStdin(false, [])
+
     try {
       await main(
         [
@@ -437,6 +442,7 @@ function mockStdin(isTTY: boolean, chunks: string[]): { restore: () => void } {
   const stdin = process.stdin as typeof process.stdin & {
     isTTY?: boolean
   }
+
   const previousIsTTY = stdin.isTTY
   const previousAsyncIterator = stdin[Symbol.asyncIterator]
   Object.defineProperty(stdin, 'isTTY', {
@@ -448,12 +454,14 @@ function mockStdin(isTTY: boolean, chunks: string[]): { restore: () => void } {
       yield Buffer.from(chunk)
     }
   }
+
   return {
     restore: () => {
       Object.defineProperty(stdin, 'isTTY', {
         configurable: true,
         value: previousIsTTY
       })
+
       if (previousAsyncIterator) {
         ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = previousAsyncIterator
       } else {

@@ -12,6 +12,7 @@ vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => (
 // Why: tab-wide queries skip leaves whose xterm sits under the native chat portal.
 const TAB_HELPER_SELECTOR =
   '[data-terminal-tab-id="tab-1"] [data-leaf-id]:not(:has(.native-chat-pane-shell)) .xterm-helper-textarea'
+
 const GLOBAL_HELPER_SELECTOR =
   '[data-leaf-id]:not(:has(.native-chat-pane-shell)) .xterm-helper-textarea'
 
@@ -24,6 +25,7 @@ describe('focusTerminalTabSurface', () => {
   function flushAnimationFrames(): void {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -64,12 +66,14 @@ describe('focusTerminalTabSurface', () => {
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frames.push(callback)
+
       return frames.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const textarea = { focus: vi.fn() }
     const body = {}
     const outside = {}
+
     const documentState = {
       activeElement: body as unknown,
       body,
@@ -77,6 +81,7 @@ describe('focusTerminalTabSurface', () => {
         selector === TAB_HELPER_SELECTOR ? textarea : null
       )
     }
+
     vi.stubGlobal('document', documentState)
 
     focusTerminalTabSurface('tab-1', null, { onlyIfFocusUnclaimed: true })
@@ -95,6 +100,7 @@ describe('focusTerminalTabSurface', () => {
         if (selector === '[data-tab-rename-input="true"]') {
           return {}
         }
+
         return selector === TAB_HELPER_SELECTOR ? textarea : null
       })
     })
@@ -114,6 +120,7 @@ describe('focusTerminalTabSurface', () => {
             getAttribute: (name: string) => (name === 'data-terminal-chat-view' ? 'true' : null)
           }
         }
+
         return selector === TAB_HELPER_SELECTOR ? textarea : null
       })
     })
@@ -132,9 +139,11 @@ describe('focusTerminalTabSurface', () => {
         if (selector === '[data-terminal-tab-id="tab-1"]') {
           return { getAttribute: () => null }
         }
+
         if (selector === TAB_HELPER_SELECTOR) {
           return terminalTextarea
         }
+
         return selector === '[data-terminal-tab-id="tab-1"] .xterm-helper-textarea'
           ? coveredTextarea
           : null

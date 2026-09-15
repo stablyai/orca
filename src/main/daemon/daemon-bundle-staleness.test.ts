@@ -27,7 +27,9 @@ async function getStartedAtMs(pid: number | undefined): Promise<number | null> {
   if (!pid) {
     return null
   }
+
   await new Promise((resolve) => setTimeout(resolve, 100))
+
   return getProcessStartedAtMs(pid)
 }
 
@@ -52,8 +54,10 @@ describe('daemon bundle staleness', () => {
     }
 
     const child = spawnDaemonLikeProcess(socketPath, tokenPath)
+
     try {
       const startedAtMs = await getStartedAtMs(child.pid)
+
       if (startedAtMs === null || !child.pid) {
         return
       }
@@ -83,8 +87,10 @@ describe('daemon bundle staleness', () => {
     }
 
     const child = spawnDaemonLikeProcess(socketPath, tokenPath)
+
     try {
       const startedAtMs = await getStartedAtMs(child.pid)
+
       if (startedAtMs === null || !child.pid) {
         return
       }
@@ -114,8 +120,10 @@ describe('daemon bundle staleness', () => {
     }
 
     const child = spawnDaemonLikeProcess(socketPath, tokenPath)
+
     try {
       const startedAtMs = await getStartedAtMs(child.pid)
+
       if (startedAtMs === null || !child.pid) {
         return
       }

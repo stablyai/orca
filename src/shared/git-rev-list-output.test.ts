@@ -7,15 +7,18 @@ import {
 describe('parseGitRevListAheadBehindCounts', () => {
   it('parses rev-list counts without whitespace-regex splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     try {
       expect(parseGitRevListAheadBehindCounts('  12\t3\r\n')).toEqual({
         status: 'ok',
         ahead: 12,
         behind: 3
       })
+
       const usedWhitespaceSplit = splitSpy.mock.calls.some(
         ([separator]) => separator instanceof RegExp && separator.source === '\\s+'
       )
+
       expect(usedWhitespaceSplit).toBe(false)
     } finally {
       splitSpy.mockRestore()

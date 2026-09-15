@@ -99,11 +99,14 @@ describe('daemon process inspection', () => {
 
   it('retries getconf for a runner whose first CLK_TCK read failed', async () => {
     let attempt = 0
+
     const runCommand = vi.fn(async () => {
       attempt += 1
+
       if (attempt === 1) {
         throw new Error('getconf missing')
       }
+
       return '100'
     })
 

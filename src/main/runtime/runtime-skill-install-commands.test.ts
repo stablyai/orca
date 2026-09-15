@@ -90,6 +90,7 @@ describe('RuntimeSkillInstallCommands', () => {
       ...createRequest(),
       destination: { scope: 'workspace' as const, worktreeId: 'repo-1::/workspace/app' }
     }
+
     const host = createHost()
     host.listRepos = () => [
       { id: 'repo-1', path: '/workspace/app' },
@@ -107,6 +108,7 @@ describe('RuntimeSkillInstallCommands', () => {
       ...createRequest(),
       destination: { scope: 'workspace' as const, worktreeId: 'repo-1::/workspace/app' }
     }
+
     const host = createHost()
     host.listRepos = () => [{ id: 'repo-1', path: '/workspace/app', connectionId: 'ssh-1' }]
     host.listResolvedWorktrees = async () => [

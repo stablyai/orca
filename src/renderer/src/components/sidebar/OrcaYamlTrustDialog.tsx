@@ -36,6 +36,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const markOrcaHookRepoAlwaysTrusted = useAppStore((s) => s.markOrcaHookRepoAlwaysTrusted)
 
   const isOpen = activeModal === 'confirm-orca-yaml-hooks'
+
   const [alwaysTrustState, setAlwaysTrustState] = useState(() => ({
     isOpen,
     value: false
@@ -46,13 +47,16 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   if (alwaysTrustState.isOpen !== isOpen) {
     setAlwaysTrustState({ isOpen, value: false })
   }
+
   const alwaysTrust = alwaysTrustState.isOpen === isOpen ? alwaysTrustState.value : false
+
   const setAlwaysTrust = (value: boolean): void => {
     setAlwaysTrustState({ isOpen, value })
   }
 
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const repoName = typeof modalData.repoName === 'string' ? modalData.repoName : 'this repository'
+
   const scriptKind: ScriptKind =
     modalData.scriptKind === 'archive'
       ? 'archive'
@@ -61,9 +65,11 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
         : modalData.scriptKind === 'vmRecipe'
           ? 'vmRecipe'
           : 'setup'
+
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
   const previouslyApproved = modalData.previouslyApproved === true
+
   const onResolve =
     typeof modalData.onResolve === 'function'
       ? (modalData.onResolve as (decision: 'run' | 'skip') => void)
@@ -78,6 +84,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           markOrcaHookScriptConfirmed(repoId, scriptKind, contentHash)
         }
       }
+
       onResolve?.(decision)
       closeModal()
     },

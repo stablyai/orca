@@ -35,6 +35,7 @@ describe('mobile-file-preview-navigation', () => {
 
   it('defers embedded close until after route push', () => {
     const events: string[] = []
+
     const scheduleClose = vi.fn((callback: () => void) => {
       events.push('schedule')
       callback()

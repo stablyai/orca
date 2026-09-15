@@ -28,6 +28,7 @@ vi.mock('@/store', () => ({
     if (!mocks.state) {
       throw new Error('mock app state not initialized')
     }
+
     return selector(mocks.state)
   }
 }))
@@ -69,6 +70,7 @@ vi.mock('./browser-page-pane', () => ({
       isMobileDriven: props.isMobileDriven,
       isRemotelyViewed: props.isRemotelyViewed
     })
+
     return <span data-browser-page-id={props.browserTab.id} />
   }
 }))
@@ -120,9 +122,11 @@ function createWorkspace(): BrowserWorkspace {
 
 function propsFor(pageId: string): (typeof mocks.pageProps)[number] {
   const props = mocks.pageProps.findLast((entry) => entry.id === pageId)
+
   if (!props) {
     throw new Error(`BrowserPagePane never rendered for ${pageId}`)
   }
+
   return props
 }
 
@@ -154,10 +158,12 @@ describe('browser workspace pane retention props', () => {
     mocks.state!.browserPagesByWorkspace[WORKSPACE_ID] = pages
     const workspace = { ...createWorkspace(), activePageId: pages[0].id }
     const view = render(<BrowserPane browserTab={workspace} isActive />)
+
     const renderedIds = (): (string | null)[] =>
       [...view.container.querySelectorAll('[data-browser-page-id]')].map((node) =>
         node.getAttribute('data-browser-page-id')
       )
+
     expect(renderedIds()).toEqual(['page-0'])
 
     view.rerender(<BrowserPane browserTab={{ ...workspace, activePageId: 'page-199' }} isActive />)
@@ -170,14 +176,17 @@ describe('browser workspace pane retention props', () => {
 
   it.each(['automation', 'mobile', 'viewer'])('loads an inactive page for %s only', (consumer) => {
     const token = consumer === 'automation' ? acquireBrowserAutomationVisibility('page-b') : null
+
     if (consumer === 'mobile') {
       hydrateBrowserDrivers([
         { browserPageId: 'page-b', driver: { kind: 'mobile', clientId: 'phone-1' } }
       ])
     }
+
     if (consumer === 'viewer') {
       hydrateBrowserRemoteViewerPages(['page-b'])
     }
+
     try {
       const view = render(<BrowserPane browserTab={createWorkspace()} isActive={false} />)
       expect(view.container.querySelector('[data-browser-page-id="page-a"]')).toBeNull()

@@ -27,7 +27,9 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
  */
 
 export const PRESS_AND_HOLD_KEY = 'ApplePressAndHoldEnabled'
+
 export const PRESS_AND_HOLD_RECORD_FILE = 'macos-press-and-hold-default.json'
+
 export const PRESS_AND_HOLD_RECORD_VERSION = 1
 
 /** Why not `systemPreferences.getUserDefault`: it reads through the whole NSUserDefaults search
@@ -35,10 +37,12 @@ export const PRESS_AND_HOLD_RECORD_VERSION = 1
  *  and the system default is unset, so it reports `false` on a Mac where press-and-hold is on.
  *  `defaults read <domain> <key>` is domain-scoped and exits 1 when the key is absent. */
 const DEFAULTS_BINARY = '/usr/bin/defaults'
+
 /** A hang cutoff, not a latency budget: the probe measures ~6ms, and cutting a slow-but-working
  *  `defaults` short costs the user the feature for that launch. The shared 30s default is what
  *  must not apply — this runs before `ready`, so a 30s block is a hung app. */
 const DEFAULTS_TIMEOUT_MS = 5_000
+
 /** Why: `defaults` exits 1 for "does not exist"; anything else means the probe itself failed. */
 const DEFAULTS_MISSING_STATUS = 1
 
@@ -92,6 +96,7 @@ export function readBundleIdentifierFromExecutablePath(execPath: string): string
     const plist = readFileSync(join(dirname(dirname(execPath)), 'Info.plist'), 'utf8')
     const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(plist)
     const identifier = match?.[1]?.trim()
+
     return identifier ? identifier : null
   } catch {
     return null
@@ -105,19 +110,23 @@ export function readBundleIdentifierFromExecutablePath(execPath: string): string
  */
 export function interpretDefaultsRead(probe: () => ProcessResult): 'set' | 'unset' | 'unknown' {
   let result: ProcessResult
+
   try {
     result = probe()
   } catch {
     // `runProcessSync` throws only when the child never started, which answers nothing at all.
     return 'unknown'
   }
+
   // Why before the code: a timeout kills mid-run, so any exit it leaves behind is not an answer.
   if (result.timedOut) {
     return 'unknown'
   }
+
   if (result.code === 0) {
     return 'set'
   }
+
   return result.code === DEFAULTS_MISSING_STATUS ? 'unset' : 'unknown'
 }
 
@@ -157,9 +166,11 @@ export function pressAndHoldRecordPath(userDataPath: string): string {
 
 function parseRecord(raw: string): PressAndHoldRecord | null {
   const parsed = JSON.parse(raw) as Partial<PressAndHoldRecord>
+
   if (parsed.version !== PRESS_AND_HOLD_RECORD_VERSION || typeof parsed.decision !== 'string') {
     return null
   }
+
   return {
     version: PRESS_AND_HOLD_RECORD_VERSION,
     decision: parsed.decision as PressAndHoldDecision,
@@ -180,6 +191,7 @@ export function ensureMacPressAndHoldDefault(host: PressAndHoldHost): PressAndHo
   }
 
   const previous = host.readRecord()
+
   if (previous && TERMINAL_DECISIONS.has(previous.decision)) {
     return 'already-decided'
   }
@@ -194,24 +206,30 @@ export function ensureMacPressAndHoldDefault(host: PressAndHoldHost): PressAndHo
         decidedAt: host.now()
       })
     }
+
     return decision
   }
 
   const domain = host.resolveBundleIdentifier()
+
   if (!domain || !isOrcaPreferencesDomain(domain)) {
     return record('foreign-bundle', domain)
   }
 
   const existing = host.readDomainPreference(domain)
+
   if (existing === 'unknown') {
     return record('probe-failed', domain)
   }
+
   if (existing === 'set') {
     return record('kept-user-preference', domain)
   }
+
   if (!host.writeDomainPreference(domain, false)) {
     return record('write-failed', domain)
   }
+
   return record('applied', domain)
 }
 
@@ -226,6 +244,7 @@ const REPORTED_DECISIONS: Partial<Record<PressAndHoldDecision, string>> = {
 /** Wires {@link ensureMacPressAndHoldDefault} to the real bundle, `defaults`, and userData. */
 export function applyMacPressAndHoldDefaultAtStartup(userDataPath: string): PressAndHoldDecision {
   const recordPath = pressAndHoldRecordPath(userDataPath)
+
   const decision = ensureMacPressAndHoldDefault({
     platform: process.platform,
     resolveBundleIdentifier: () => readBundleIdentifierFromExecutablePath(process.execPath),
@@ -249,9 +268,12 @@ export function applyMacPressAndHoldDefaultAtStartup(userDataPath: string): Pres
     writeDomainPreference: writeDomainPressAndHoldPreference,
     now: () => new Date().toISOString()
   })
+
   const reported = REPORTED_DECISIONS[decision]
+
   if (reported) {
     console.log(`[press-and-hold] ${reported}`)
   }
+
   return decision
 }

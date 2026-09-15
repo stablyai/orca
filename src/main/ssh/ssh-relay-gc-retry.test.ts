@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => '/mock/app' } }))
+
 vi.mock('fs', () => ({
   existsSync: vi.fn().mockReturnValue(true),
   readFileSync: vi.fn().mockReturnValue('0.1.0+gc-retry')
 }))
+
 vi.mock('./relay-protocol', () => ({
   RELAY_VERSION: '0.1.0',
   RELAY_REMOTE_DIR: '.orca-remote',
@@ -12,6 +14,7 @@ vi.mock('./relay-protocol', () => ({
   RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
   RELAY_SENTINEL_TIMEOUT_MS: 10_000
 }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   uploadDirectory: vi.fn(),
   waitForSentinel: vi.fn().mockResolvedValue({
@@ -22,9 +25,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   isUnconfirmedSshCommandTermination: () => false,
   execCommand: vi.fn()
 }))
+
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
+
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+gc-retry'),
   computeRemoteRelayDir: (home: string, version: string) => `${home}/.orca-remote/relay-${version}`,
@@ -33,18 +38,22 @@ vi.mock('./ssh-relay-versioned-install', () => ({
   abandonInstall: vi.fn(),
   gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('./ssh-relay-install-lock', () => ({
   acquireInstallLock: vi.fn(),
   RELAY_INSTALL_LOCK_NAME: '.install-lock'
 }))
+
 vi.mock('./ssh-relay-repair-lock', () => ({
   tryAcquireRelayRepairLock: vi.fn().mockResolvedValue('acquired')
 }))
+
 vi.mock('./ssh-relay-gc-claim', () => ({
   releaseRelayGcClaimWithRetry: vi.fn().mockResolvedValue('released'),
   tryAcquireRelayGcClaim: vi.fn().mockResolvedValue('launch-token'),
   waitForRelayGcClaimRelease: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (value: string) => `'${value}'`,
   createSshOperationAbortError: () => Object.assign(new Error('cancelled'), { name: 'AbortError' })
@@ -67,6 +76,7 @@ function makeConnection(): SshConnection {
     stderr: { on: vi.fn() },
     close: vi.fn()
   }
+
   return {
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
     exec: vi.fn().mockResolvedValue(channel),
@@ -86,18 +96,23 @@ describe('relay GC deploy retry', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
       }
+
       if (command === 'echo $HOME') {
         return '/home/user'
       }
+
       if (command.includes('node-pty')) {
         return 'ORCA-NATIVE-DEPS-OK'
       }
+
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
       }
+
       if (command.includes('test -S')) {
         return 'DEAD'
       }
+
       return ''
     })
 
@@ -118,18 +133,23 @@ describe('relay GC deploy retry', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
       }
+
       if (command === 'echo $HOME') {
         return '/home/user'
       }
+
       if (command.includes('node-pty')) {
         return 'ORCA-NATIVE-DEPS-OK'
       }
+
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
       }
+
       if (command.includes('test -S')) {
         return 'DEAD'
       }
+
       return ''
     })
 
@@ -155,18 +175,23 @@ describe('relay GC deploy retry', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
       }
+
       if (command === 'echo $HOME') {
         return '/home/user'
       }
+
       if (command.includes('node-pty')) {
         return 'ORCA-NATIVE-DEPS-OK'
       }
+
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
       }
+
       if (command.includes('test -S')) {
         return 'DEAD'
       }
+
       return ''
     })
 
@@ -194,18 +219,23 @@ describe('relay GC deploy retry', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
       }
+
       if (command === 'echo $HOME') {
         return '/home/user'
       }
+
       if (command.includes('node-pty')) {
         return 'ORCA-NATIVE-DEPS-OK'
       }
+
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
       }
+
       if (command.includes('test -S')) {
         return 'DEAD'
       }
+
       return ''
     })
 
@@ -223,18 +253,23 @@ describe('relay GC deploy retry', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
       }
+
       if (command === 'echo $HOME') {
         return '/home/user'
       }
+
       if (command.includes('node-pty')) {
         return 'ORCA-NATIVE-DEPS-OK'
       }
+
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
       }
+
       if (command.includes('test -S')) {
         return 'DEAD'
       }
+
       return ''
     })
 
@@ -255,18 +290,23 @@ describe('relay GC deploy retry', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
       }
+
       if (command === 'echo $HOME') {
         return '/home/user'
       }
+
       if (command.includes('node-pty')) {
         return 'ORCA-NATIVE-DEPS-OK'
       }
+
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
       }
+
       if (command.includes('test -S')) {
         return 'DEAD'
       }
+
       return ''
     })
 

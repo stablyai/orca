@@ -15,6 +15,7 @@ describe('planWorktreeSortOrderUpdates', () => {
       if (id === 'stale') {
         return undefined
       }
+
       return { sortOrder: id === 'a' ? 100 : 200 }
     })
 

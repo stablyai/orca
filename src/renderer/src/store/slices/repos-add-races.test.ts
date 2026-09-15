@@ -33,11 +33,13 @@ describe('repo add/catalog races', () => {
 
   it('appends the same bare ID when add returns a different host identity', async () => {
     reposAdd.mockResolvedValue({ repo: localRepo })
+
     const runtimeSibling: Repo = {
       ...localRepo,
       path: '/runtime/local-repo',
       executionHostId: 'runtime:env-1'
     }
+
     const store = createTestStore()
     store.setState({ repos: [runtimeSibling] })
 

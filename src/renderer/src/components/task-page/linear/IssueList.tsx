@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { TaskPageLinearIssueRows } from './IssueRows'
 import { LinearCollectionNotice } from '@/components/linear-project-view-surfaces'
 import { PaginationBar } from '../PaginationBar'
+
 export function TaskPageLinearIssueList({
   model
 }: {
@@ -29,6 +30,7 @@ export function TaskPageLinearIssueList({
     effectiveLinearDisplayProperties,
     linearIssueGridStyle
   } = model
+
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <TaskPageLinearIssueToolbar model={model} />

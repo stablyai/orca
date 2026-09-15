@@ -17,6 +17,7 @@ type GitHubPRRepo = PRInfo['prRepo']
 // desktop gh IPC only trusts local/SSH repo registrations.
 function getGitHubActionTarget(repo: Repo): RuntimeClientTarget {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   return host?.kind === 'runtime'
     ? { kind: 'environment', environmentId: host.environmentId }
     : { kind: 'local' }
@@ -29,6 +30,7 @@ export async function mergeGitHubHostedReview(args: {
   prRepo?: GitHubPRRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.mergePR>>> {
   const target = getGitHubActionTarget(args.repo)
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.mergePR>>>(
       target,
@@ -43,6 +45,7 @@ export async function mergeGitHubHostedReview(args: {
       { timeoutMs: 4 * 60_000 }
     )
   }
+
   return window.api.gh.mergePR({
     repoPath: args.repo.path,
     repoId: args.repo.id,
@@ -60,6 +63,7 @@ export async function setGitHubHostedReviewAutoMerge(args: {
   prRepo?: GitHubPRRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.setPRAutoMerge>>> {
   const target = getGitHubActionTarget(args.repo)
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.setPRAutoMerge>>>(
       target,
@@ -74,6 +78,7 @@ export async function setGitHubHostedReviewAutoMerge(args: {
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gh.setPRAutoMerge({
     repoPath: args.repo.path,
     repoId: args.repo.id,
@@ -91,6 +96,7 @@ export async function updateGitHubHostedReviewState(args: {
   prRepo?: GitHubPRRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.updatePRState>>> {
   const target = getGitHubActionTarget(args.repo)
+
   if (target.kind === 'environment') {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
       target,
@@ -104,6 +110,7 @@ export async function updateGitHubHostedReviewState(args: {
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gh.updatePRState({
     repoPath: args.repo.path,
     repoId: args.repo.id,
@@ -119,12 +126,14 @@ export async function markGitHubHostedReviewReadyForReview(args: {
   prRepo?: GitHubPRRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.markPRReadyForReview>>> {
   const target = getGitHubActionTarget(args.repo)
+
   if (target.kind === 'environment') {
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
       GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
       GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
     )
+
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.markPRReadyForReview>>>(
       target,
       'github.markPRReadyForReview',
@@ -136,6 +145,7 @@ export async function markGitHubHostedReviewReadyForReview(args: {
       { timeoutMs: 30_000 }
     )
   }
+
   return window.api.gh.markPRReadyForReview({
     repoPath: args.repo.path,
     repoId: args.repo.id,

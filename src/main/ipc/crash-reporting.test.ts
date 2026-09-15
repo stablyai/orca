@@ -14,6 +14,7 @@ const {
   submitFeedbackMock
 } = vi.hoisted(() => {
   const spanEndMock = vi.fn()
+
   return {
     handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
     listeners: new Map<string, (_event: unknown, args?: unknown) => void>(),

@@ -38,6 +38,7 @@ describe('agent prompt submission verification', () => {
   it('accepts an observed working transition', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current,
@@ -53,6 +54,7 @@ describe('agent prompt submission verification', () => {
   it('accepts a completed lifecycle transition between polls', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
@@ -67,10 +69,12 @@ describe('agent prompt submission verification', () => {
   it('does not accept an unrelated transition to a neutral title', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     current = activity({ status: null })
@@ -82,10 +86,12 @@ describe('agent prompt submission verification', () => {
   it('reports stalled when no lifecycle transition occurs', async () => {
     vi.useFakeTimers()
     const current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
@@ -96,6 +102,7 @@ describe('agent prompt submission verification', () => {
   it('accepts a working transition after the former five-second deadline', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
@@ -111,10 +118,12 @@ describe('agent prompt submission verification', () => {
   it('blocks when permission appears after submit', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_blocked')
 
     current = activity({ status: 'permission' })
@@ -126,10 +135,12 @@ describe('agent prompt submission verification', () => {
   it('blocks when permission appears and clears between polls', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_blocked')
 
     current = activity({ permissionSequence: 3 })
@@ -149,10 +160,12 @@ describe('agent prompt submission verification', () => {
   it('does not accept an unchanged working baseline', async () => {
     vi.useFakeTimers()
     const current = activity({ status: 'working' })
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
@@ -163,6 +176,7 @@ describe('agent prompt submission verification', () => {
   it('accepts a hook working status recorded after the baseline', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current,
@@ -180,6 +194,7 @@ describe('agent prompt submission verification', () => {
     vi.useFakeTimers()
     let current = activity()
     const acceptTurnStart = vi.fn(() => false)
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current,
@@ -187,6 +202,7 @@ describe('agent prompt submission verification', () => {
       allowOutputEvidence: false,
       timeoutMs: 50
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
@@ -202,10 +218,12 @@ describe('agent prompt submission verification', () => {
   it('does not accept a hook working status that predates the baseline', async () => {
     vi.useFakeTimers()
     const current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
@@ -218,10 +236,12 @@ describe('agent prompt submission verification', () => {
   it('does not accept a refreshed hook row whose working turn did not restart', async () => {
     vi.useFakeTimers()
     let current = activity({ explicitWorkingStartedAt: 2_000 })
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     current = activity({ explicitWorkingStartedAt: 2_000, outputSequence: 40 })
@@ -233,6 +253,7 @@ describe('agent prompt submission verification', () => {
   it('accepts pane output after Enter when the agent was already working', async () => {
     vi.useFakeTimers()
     let current = activity({ status: 'working' })
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
@@ -247,11 +268,13 @@ describe('agent prompt submission verification', () => {
   it('does not accept existing-turn output as durable submission evidence', async () => {
     vi.useFakeTimers()
     let current = activity({ status: 'working' })
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current,
       allowOutputEvidence: false
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     current = activity({ status: 'working', outputSequence: 8 })
@@ -263,10 +286,12 @@ describe('agent prompt submission verification', () => {
   it('does not accept pane output when the agent was idle at submit', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
     current = activity({ outputSequence: 9 })
@@ -278,6 +303,7 @@ describe('agent prompt submission verification', () => {
   it('holds the extended hook window open past the former hook timeout', async () => {
     vi.useFakeTimers()
     let current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current,
@@ -320,6 +346,7 @@ describe('agent prompt submission verification', () => {
     vi.useFakeTimers()
     const controller = new AbortController()
     const current = activity()
+
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current,

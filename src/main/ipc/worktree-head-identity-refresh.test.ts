@@ -35,6 +35,7 @@ import {
 } from './worktree-head-identity-scope'
 
 const COMMON_DIR = '/repos/project/.git'
+
 const WT_A = '/repos/wt-a'
 
 const windowState = { destroyed: false }
@@ -189,18 +190,21 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, false)
 
     let release: () => void = () => {}
+
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           release = () => resolve({ identities: [], complete: true })
         })
     )
+
     const inFlight = refreshWorktreeHeadIdentities(
       host,
       state,
       true,
       headIdentityScopeForEntry('wt-a')
     )
+
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-b'))
     await refreshWorktreeHeadIdentities(host, state, true, PRIMARY_HEAD_IDENTITY_SCOPE)
     release()
@@ -264,18 +268,21 @@ describe('refreshWorktreeHeadIdentities', () => {
     await refreshWorktreeHeadIdentities(host, state, false)
 
     let release: () => void = () => {}
+
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           release = () => resolve({ identities: [], complete: true })
         })
     )
+
     const inFlight = refreshWorktreeHeadIdentities(
       host,
       state,
       true,
       headIdentityScopeForEntry('wt-a')
     )
+
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-b'))
     // macOS recreates the window while the watch lives on: the queued re-run
     // returns at the teardown guard and must not lose the scope with it.
@@ -304,6 +311,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
       windowState.destroyed = true
+
       return { identities: [identity('bbb')], complete: true }
     })
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))
@@ -401,6 +409,7 @@ describe('refreshWorktreeHeadIdentities', () => {
 
     vi.mocked(readGitCommonHeadIdentities).mockImplementationOnce(async () => {
       host.disposed = true
+
       return { identities: [identity('bbb')], complete: true }
     })
     await refreshWorktreeHeadIdentities(host, state, true, headIdentityScopeForEntry('wt-a'))

@@ -15,6 +15,7 @@ type JiraAdfDocument = {
 }
 
 const LINE_FEED_CODE_UNIT = 10
+
 const CARRIAGE_RETURN_CODE_UNIT = 13
 
 export function buildJiraCreateTextAdf(text: string): JiraAdfDocument {
@@ -25,10 +26,12 @@ export function buildJiraCreateTextAdf(text: string): JiraAdfDocument {
     if (index < text.length && text.charCodeAt(index) !== LINE_FEED_CODE_UNIT) {
       continue
     }
+
     const lineEnd =
       index > lineStart && text.charCodeAt(index - 1) === CARRIAGE_RETURN_CODE_UNIT
         ? index - 1
         : index
+
     const line = text.slice(lineStart, lineEnd)
     // Why: Jira ADF represents each visible text line as its own paragraph;
     // scan line boundaries directly so large pasted textarea values avoid a

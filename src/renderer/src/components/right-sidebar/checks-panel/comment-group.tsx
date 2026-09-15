@@ -97,13 +97,16 @@ export function PRCommentGroupView({
         />
       </div>
     ) : null
+
   const startReply = onStartReply ? (comment: PRComment) => onStartReply(comment.id) : undefined
+
   const surfaceClassName = cn(
     getPRCommentGroupSurfaceClasses(presentation, actionState, {
       queued: isQueued
     }),
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
   )
+
   const sharedRowProps = {
     botAuthorOverrides,
     actionState,
@@ -225,6 +228,7 @@ export function ResolvedCommentGroupsSection({
   if (groups.length === 0) {
     return null
   }
+
   return (
     <div className={presentation.resolvedSection}>
       <Accordion type="single" collapsible>

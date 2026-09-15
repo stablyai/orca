@@ -49,34 +49,43 @@ export function createClaudeTuiResumeLaunchBuilder(
     if (record.provider !== 'claude') {
       throw new Error(`session ${record.sessionId} is a ${record.provider} session`)
     }
+
     if (record.accountHome.variable !== 'CLAUDE_CONFIG_DIR') {
       throw new Error(`claude sessions pin CLAUDE_CONFIG_DIR, not ${record.accountHome.variable}`)
     }
+
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+
     if (head?.handle.provider !== 'claude') {
       throw new Error('claude_tui_resume_handle_required')
     }
 
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
+
     const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [
       ...(record.launchArgs ?? []),
       ...CLAUDE_TUI_RESUME_BASE_ARGS,
       '--resume',
       head.handle.sessionId
     ])
+
     const auth = await deps.resolveAuthPolicy()
     const configuredEnv = deps.resolveEnv?.() ?? {}
+
     if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(configuredEnv)) {
       throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
     }
+
     // The inherited half is always stripped downstream, so a system-auth user's own
     // credential only reaches the resumed TUI if it is carried in the configured half.
     const carriedAuth = auth.stripAuthEnv
       ? {}
       : claudeAuthEnvCarriedForward(deps.inheritedEnv ?? process.env)
+
     // Compared against what the child would otherwise inherit, so the record's account
     // home still wins over a diverging overlay without a needless pin.
     const inheritedEnv = { ...(deps.inheritedEnv ?? process.env), ...configuredEnv }
+
     const env = buildClaudeChildProcessEnv(
       {
         ...carriedAuth,
@@ -87,6 +96,7 @@ export function createClaudeTuiResumeLaunchBuilder(
       },
       { inheritedEnv: deps.inheritedEnv }
     )
+
     const pairedEnv = withCliRuntimeOnPath(command, env, { platform: process.platform })
 
     return {

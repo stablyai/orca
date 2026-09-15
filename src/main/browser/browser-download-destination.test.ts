@@ -41,6 +41,7 @@ describe('BrowserDownloadDestinationReservations', () => {
       path.join(downloadsPath, 'report.csv'),
       path.join(downloadsPath, 'report (1).csv')
     ])
+
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
       pathExists: vi.fn((filePath: string) => existingPaths.has(filePath)),
@@ -74,6 +75,7 @@ describe('BrowserDownloadDestinationReservations', () => {
       pathExists: vi.fn(() => false),
       platform: 'win32'
     })
+
     const macReservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
       pathExists: vi.fn(() => false),

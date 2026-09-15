@@ -7,6 +7,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -46,6 +47,7 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
   chmodSync(fakeAgentPath, 0o755)
 
   let detachedChildPid = 0
+
   try {
     await waitForSessionReady(orcaPage)
     const worktreeId = await waitForActiveWorktree(orcaPage)
@@ -60,10 +62,12 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
           launchAgent: 'claude',
           worktreeId: wt
         })
+
         return result.id
       },
       { command: `'${fakeAgentPath}' '${markerPath}'`, cwd: stage, worktreeId }
     )
+
     expect(ptyId).toBeTruthy()
 
     await expect
@@ -92,6 +96,7 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
         /* already gone */
       }
     }
+
     rmSync(stage, { recursive: true, force: true })
   }
 })

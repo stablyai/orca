@@ -15,10 +15,12 @@ import {
 } from './background-task-roster'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
+
 type RunState = AgentSessionBackgroundTaskRunState
 
 function kindCountLabel(kind: TaskKind, count: number): string {
   const value = { value0: count }
+
   switch (kind) {
     case 'agent':
       return count === 1
@@ -104,6 +106,7 @@ export function backgroundTasksHeaderContent(
   options: { narrow: boolean; now: number }
 ): BackgroundTasksHeaderContent {
   const all = groups.flatMap((group) => group.tasks)
+
   if (all.length === 0) {
     return {
       segments: [],
@@ -113,6 +116,7 @@ export function backgroundTasksHeaderContent(
       )
     }
   }
+
   if (groups.length > HEADER_SEGMENT_CAP || (options.narrow && all.length > 1)) {
     return {
       segments: [
@@ -130,6 +134,7 @@ export function backgroundTasksHeaderContent(
       detail: null
     }
   }
+
   if (groups.length > 1) {
     return {
       segments: groups.map((group) => ({
@@ -139,11 +144,14 @@ export function backgroundTasksHeaderContent(
       detail: null
     }
   }
+
   const group = groups[0]
   const count = group.tasks.length
+
   const uniformState = group.tasks.every((entry) => entry.state === group.tasks[0].state)
     ? group.tasks[0].state
     : null
+
   if (uniformState && ATTENTION_STATES.has(uniformState)) {
     return {
       segments: [
@@ -155,8 +163,10 @@ export function backgroundTasksHeaderContent(
       detail: backgroundTaskStateReason(uniformState)
     }
   }
+
   if (count === 1) {
     const entry = group.tasks[0]
+
     const subject =
       group.kind === 'command'
         ? translate(
@@ -164,20 +174,24 @@ export function backgroundTasksHeaderContent(
             '1 shell command'
           )
         : kindCountLabel(group.kind, 1)
+
     // A still-growing clock on finished work would lie, exactly as on the row.
     const elapsed =
       group.kind === 'command' && !entry.settled
         ? backgroundTaskElapsedLabel(entry.task, options.now)
         : null
+
     return {
       segments: [{ text: subject, kind: group.kind }],
       detail: elapsed ?? backgroundTaskStateWord(entry.state)
     }
   }
+
   const stateCounts = HEADER_STATE_ORDER.map((state) => ({
     state,
     count: group.tasks.filter((entry) => entry.state === state).length
   })).filter((entry) => entry.count > 0)
+
   return {
     segments: [{ text: kindCountLabel(group.kind, count), kind: group.kind }],
     // Done is accounted for in the muted detail but never earns its own emphasised

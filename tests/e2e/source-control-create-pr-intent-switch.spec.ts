@@ -34,9 +34,11 @@ function removeOriginRemoteIfPresent(cwd: string): void {
   })
     .split('\n')
     .map((line) => line.trim())
+
   if (!remotes.includes('origin')) {
     return
   }
+
   execFileSync('git', ['remote', 'remove', 'origin'], { cwd, stdio: 'pipe' })
 }
 
@@ -48,6 +50,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+
     const { primaryWorktreeId, prWorktreeId, prWorktreePath, primaryBranch } =
       await seedCreatePrComposer(orcaPage)
 
@@ -56,6 +59,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
       'validation-screenshots',
       `create-pr-intent-switch-${Date.now()}`
     )
+
     mkdirSync(screenshotDir, { recursive: true })
     await testInfo.attach('validation-screenshot-dir', {
       body: screenshotDir,
@@ -69,17 +73,23 @@ test.describe('Source Control Create PR intent worktree switching', () => {
           (() => {
             throw new Error('window.__store is not available')
           })()
+
         const state = store.getState()
+
         const worktree = Object.values(state.worktreesByRepo)
           .flat()
           .find((entry) => entry.id === prWorktreeId)
+
         if (!worktree) {
           throw new Error('Create PR intent worktree not found')
         }
+
         const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+
         if (!repo) {
           throw new Error('Create PR intent repo not found')
         }
+
         const branch = worktree.branch.replace(/^refs\/heads\//, '')
 
         type CreatePrIntentHostedReviewCall = {
@@ -90,11 +100,13 @@ test.describe('Source Control Create PR intent worktree switching', () => {
             worktreePath?: string
           }
         }
+
         const testWindow = window as unknown as {
           __createPRIntentPayloads: CreatePrIntentHostedReviewCall[]
           __createPRIntentPushStarted: boolean
           __createPRIntentPushFinished: boolean
         }
+
         testWindow.__createPRIntentPayloads = []
         testWindow.__createPRIntentPushStarted = false
         testWindow.__createPRIntentPushFinished = false
@@ -113,6 +125,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
                 head: branch
               }
             }
+
             return {
               provider: 'github' as const,
               review: null,
@@ -131,12 +144,14 @@ test.describe('Source Control Create PR intent worktree switching', () => {
             if (worktreeId !== prWorktreeId) {
               throw new Error(`Create PR intent pushed unexpected worktree ${worktreeId}`)
             }
+
             testWindow.__createPRIntentPushStarted = true
             await new Promise((resolve) => setTimeout(resolve, 1500))
             testWindow.__createPRIntentPushFinished = true
           },
           createHostedReview: async (repoPath, input) => {
             testWindow.__createPRIntentPayloads.push({ repoPath, input })
+
             return {
               ok: true as const,
               number: 74,
@@ -194,15 +209,18 @@ test.describe('Source Control Create PR intent worktree switching', () => {
 
     const completedWhileSwitchedEvidence = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeWorktreeId: state?.activeWorktreeId,
         rightSidebarTab: state?.rightSidebarTab
       }
     })
+
     expect(completedWhileSwitchedEvidence.activeWorktreeId).toBe(primaryWorktreeId)
     expect(completedWhileSwitchedEvidence.rightSidebarTab).toBe('source-control')
 
     await openSourceControl(orcaPage, prWorktreeId)
+
     const payloads = await orcaPage.evaluate(
       () =>
         (
@@ -214,6 +232,7 @@ test.describe('Source Control Create PR intent worktree switching', () => {
           }
         ).__createPRIntentPayloads
     )
+
     expect(payloads).toHaveLength(1)
     expect(payloads[0]).toMatchObject({
       input: {
@@ -260,18 +279,24 @@ test.describe('Source Control Create PR intent worktree switching', () => {
           (() => {
             throw new Error('window.__store is not available')
           })()
+
         const state = store.getState()
+
         const worktree = Object.values(state.worktreesByRepo)
           .flat()
           .find((entry) => entry.id === prWorktreeId)
+
         if (!worktree) {
           throw new Error('Create PR intent worktree not found')
         }
+
         const branch = worktree.branch.replace(/^refs\/heads\//, '')
         const pushBranchAction = state.pushBranch
+
         const testWindow = window as unknown as {
           __unavailableIntentPushFinished: boolean
         }
+
         testWindow.__unavailableIntentPushFinished = false
 
         store.setState((current) => ({
@@ -301,9 +326,11 @@ test.describe('Source Control Create PR intent worktree switching', () => {
           },
           pushBranch: async (...args: Parameters<typeof pushBranchAction>) => {
             const [worktreeId] = args
+
             if (worktreeId !== prWorktreeId) {
               throw new Error(`Create PR intent pushed unexpected worktree ${worktreeId}`)
             }
+
             await pushBranchAction(...args)
             testWindow.__unavailableIntentPushFinished = true
           },

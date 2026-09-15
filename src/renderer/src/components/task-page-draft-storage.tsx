@@ -8,6 +8,7 @@ import {
   type NewJiraIssueDraft
 } from '@/store/slices/task-creation-drafts'
 import { useAppStore } from '@/store'
+
 // Why: hoisted so the type-guard predicate isn't re-allocated on every render.
 export const hasDivergentSources = (
   s: TaskPageRepoSourceState
@@ -30,24 +31,30 @@ export const hasUpstreamCandidateDivergence = (
   !!s.sources?.originCandidate &&
   !!s.sources.upstreamCandidate &&
   !sameGitHubOwnerRepo(s.sources.originCandidate, s.sources.upstreamCandidate)
+
 export function writeNewLinearProjectDraft(draft: NewLinearProjectDraft | null): void {
   const state = useAppStore.getState()
+
   if (draft && isTaskCreationDraftContentful(draft)) {
     state.setNewLinearProjectDraft(draft)
   } else {
     state.clearNewLinearProjectDraft()
   }
 }
+
 export function writeNewLinearIssueDraft(draft: NewLinearIssueDraft | null): void {
   const state = useAppStore.getState()
+
   if (draft && isTaskCreationDraftContentful(draft)) {
     state.setNewLinearIssueDraft(draft)
   } else {
     state.clearNewLinearIssueDraft()
   }
 }
+
 export function writeNewJiraIssueDraft(draft: NewJiraIssueDraft | null): void {
   const state = useAppStore.getState()
+
   if (draft && isTaskCreationDraftContentful(draft)) {
     state.setNewJiraIssueDraft(draft)
   } else {

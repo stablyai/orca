@@ -71,10 +71,12 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
 }: WorktreeJumpPaletteSelectionLifecycleInput) {
   const hasAnyWorktrees = visibleWorktreesForState.length > 0
   const hasAnySearchableWorktrees = hasQuery ? searchScopeWorktrees.length > 0 : hasAnyWorktrees
+
   const hasAnyOpenTabs =
     browserPageEntries.length > 0 ||
     simulatorTabEntries.length > 0 ||
     workspaceTabEntries.length > 0
+
   const hasAnyMiddleResults = middleItems.length > 0
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
@@ -108,15 +110,19 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       selectionMovedByUserRef.current = false
       listRef.current?.scrollTo(0, 0)
     }
+
     if (!visible && wasVisibleRef.current) {
       setExpandedSectionCaps({})
+
       if (preserveCreateLookupOnCloseRef.current) {
         preserveCreateLookupOnCloseRef.current = false
       } else {
         createLookupGuard.invalidate()
       }
+
       activeGroupSnapshotRef.current = null
     }
+
     wasVisibleRef.current = visible
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and state setters are stable.
   }, [
@@ -128,6 +134,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     recordFeatureInteraction,
     visible
   ])
+
   const commandSelectedItemId = getNextWorktreePaletteSelection({
     currentSelectedItemId: selectedItemId,
     queryChanged: false,
@@ -135,12 +142,14 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     showCreateAction,
     autoSelectCreateAction: taskSourceUrl !== null
   })
+
   const handleCommandSelectionChange = useCallback(
     (nextItemId: string) => {
       setSelectedItemId(nextItemId)
     },
     [setSelectedItemId]
   )
+
   // A late cmdk callback can restore the old cursor after handleQueryChange clears it.
   // Commit the new list head explicitly when the deferred query changes.
   useLayoutEffect(() => {
@@ -159,11 +168,14 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     const isCreateWorkspaceHighlighted =
       commandSelectedItemId === CREATE_WORKTREE_ITEM_ID ||
       commandSelectedItemId === CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID
+
     if (!visible || !isCreateWorkspaceHighlighted) {
       return
     }
+
     prefetchCreateWorkspaceBaseForComposer()
   }, [commandSelectedItemId, prefetchCreateWorkspaceBaseForComposer, visible])
+
   const handleQueryChange = useCallback(
     (nextQuery: string) => {
       latestQueryRef.current = nextQuery
@@ -175,18 +187,22 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
     []
   )
+
   const cancelFallbackFocusFrames = useCallback((): void => {
     if (fallbackFocusOuterFrameRef.current !== null) {
       cancelAnimationFrame(fallbackFocusOuterFrameRef.current)
       fallbackFocusOuterFrameRef.current = null
     }
+
     if (fallbackFocusInnerFrameRef.current !== null) {
       cancelAnimationFrame(fallbackFocusInnerFrameRef.current)
       fallbackFocusInnerFrameRef.current = null
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [])
+
   useEffect(() => cancelFallbackFocusFrames, [cancelFallbackFocusFrames])
+
   const focusFallbackSurface = useCallback(
     (preferredTarget?: HTMLElement | null) => {
       cancelFallbackFocusFrames()
@@ -201,6 +217,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
     [cancelFallbackFocusFrames]
   )
+
   const requestBrowserFocus = useCallback(
     (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {
       queueBrowserFocusRequest(detail)
@@ -208,22 +225,28 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     },
     []
   )
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
         return
       }
+
       closeModal()
+
       if (skipRestoreFocusRef.current) {
         return
       }
+
       if (previousActiveTabTypeRef.current === 'browser' && previousBrowserPageIdRef.current) {
         requestBrowserFocus({
           pageId: previousBrowserPageIdRef.current,
           target: previousBrowserFocusTargetRef.current
         })
+
         return
       }
+
       if (previousWorktreeIdRef.current) {
         focusFallbackSurface(previousFocusElementRef.current)
       }
@@ -231,6 +254,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
     [closeModal, focusFallbackSurface, requestBrowserFocus]
   )
+
   return {
     hasAnyWorktrees,
     hasAnySearchableWorktrees,

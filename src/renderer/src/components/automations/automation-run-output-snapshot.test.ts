@@ -89,6 +89,7 @@ describe('automation run output snapshot buffer', () => {
   it('preserves FIFO content through compaction and later partial trimming', () => {
     const buffer = createAutomationRunOutputSnapshotBuffer()
     const chunkCount = (256 * 1024) / 16
+
     const replacementChunks = Array.from({ length: chunkCount }, (_, index) =>
       index.toString(36).padStart(4, '0').repeat(4)
     )
@@ -96,6 +97,7 @@ describe('automation run output snapshot buffer', () => {
     for (let index = 0; index < chunkCount; index += 1) {
       buffer.append('A'.repeat(16))
     }
+
     for (const chunk of replacementChunks) {
       buffer.append(chunk)
     }

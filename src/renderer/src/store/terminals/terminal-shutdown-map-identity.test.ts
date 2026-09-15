@@ -4,6 +4,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { commitTerminalShutdownState } from './terminal-shutdown-state'
 
 const WORKTREE = 'repo::/tmp/app'
+
 const TAB_ID = 'tab-a'
 
 const tab = { id: TAB_ID, worktreeId: WORKTREE } as unknown as TerminalTab
@@ -60,6 +61,7 @@ function commit(state: AppState, exitGuardPtyIds: readonly string[] = []): AppSt
     set: ((update: unknown) => {
       const patch =
         typeof update === 'function' ? (update as (s: AppState) => object)(current) : update
+
       current = { ...current, ...(patch as object) }
     }) as never,
     shutdownReason: 'manual-sleep',
@@ -67,6 +69,7 @@ function commit(state: AppState, exitGuardPtyIds: readonly string[] = []): AppSt
     tabs: [tab],
     worktreeId: WORKTREE
   })
+
   return current
 }
 

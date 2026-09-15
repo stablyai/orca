@@ -18,7 +18,9 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
     tabId: string
     snapshot: TerminalLayoutSnapshot
   } | null = null
+
   let nextAttemptId = 0
+
   return {
     push: ({ worktreeId, tabId, layout }) => {
       if (
@@ -28,6 +30,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
       ) {
         return
       }
+
       const attempt = { id: ++nextAttemptId, worktreeId, tabId, snapshot: layout }
       lastAttempt = attempt
       void updateWebRuntimePaneLayout({

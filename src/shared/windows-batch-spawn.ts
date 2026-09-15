@@ -80,13 +80,16 @@ export function getSpawnArgsForWindows(
       // it to `"\"\""`. (Default ComSpec has no spaces, so the bad form often
       // still "works"; quoted Program Files paths are where it breaks.)
       const cmdExePath = getCmdExePath()
+
       return {
         spawnCmd: cmdExePath,
         spawnArgs: ['/d', '/c', 'start', '', '/B', cmdExePath, '/d', '/c', command, ...args]
       }
     }
+
     return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
   }
+
   return { spawnCmd: command, spawnArgs: args }
 }
 
@@ -101,6 +104,7 @@ export function wrapWindowsStartWait(
   // Why: `start` reparses every target through cmd.exe, including .exe paths.
   assertWindowsCmdSafeTokens([spawnCmd, ...spawnArgs])
   const cmdExePath = getCmdExePath()
+
   return {
     spawnCmd: cmdExePath,
     spawnArgs: ['/d', '/c', 'start', '', '/wait', spawnCmd, ...spawnArgs]

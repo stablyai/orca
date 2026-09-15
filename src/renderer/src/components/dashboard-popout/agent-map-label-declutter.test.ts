@@ -14,6 +14,7 @@ function statusCounts(overrides: Partial<AgentMapStatusCounts> = {}): AgentMapSt
 function worktree(overrides: Partial<AgentMapWorktreeRing> = {}): AgentMapWorktreeRing {
   const counts = overrides.statusCounts ?? statusCounts({ working: 1 })
   const total = Object.values(counts).reduce((sum, value) => sum + value, 0)
+
   return {
     id: 'worktree-a',
     worktreeId: 'worktree-a',
@@ -82,6 +83,7 @@ describe('selectVisibleAgentMapLabels', () => {
 
   it('hides a workspace title that would cover an agent', () => {
     const coveringAgent = { x: 0, y: -48, radius: 20 }
+
     const covered = worktree({
       id: 'covered',
       agents: [coveringAgent] as AgentMapWorktreeRing['agents']

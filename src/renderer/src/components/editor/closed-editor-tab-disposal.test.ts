@@ -14,6 +14,7 @@ import {
 } from './diff-monaco-model-disposal'
 
 const CLOSED_DIFF_TAB_COUNT = 100
+
 const RETAINED_MODEL_COUNT = 320
 
 type FakeModel = {
@@ -33,12 +34,15 @@ type FakeRegistry = MonacoModelRegistry & {
 function createRegistry(models: FakeModel[]): FakeRegistry {
   const counters = { getModelsCalls: 0, uriToStringCalls: 0 }
   const byPath = new Map(models.map((model) => [model.path, model]))
+
   for (const model of models) {
     model.uri.toString = () => {
       counters.uriToStringCalls += 1
+
       return model.path
     }
   }
+
   return {
     models,
     counters,
@@ -47,6 +51,7 @@ function createRegistry(models: FakeModel[]): FakeRegistry {
       getModel: (uri: unknown) => byPath.get(String(uri)) ?? null,
       getModels: () => {
         counters.getModelsCalls += 1
+
         return models
       }
     }
@@ -64,6 +69,7 @@ function createModel(path: string, attached = false): FakeModel {
     isAttachedToEditor: () => model.attached,
     uri: { toString: () => path }
   }
+
   return model
 }
 
@@ -77,6 +83,7 @@ function disposeByPrefixPerTab(registry: FakeRegistry, prefixes: readonly string
     for (const model of registry.editor.getModels()) {
       const uriString = model.uri.toString(true)
       const encodedUriString = model.uri.toString()
+
       if (
         uriString === prefix ||
         uriString.startsWith(`${prefix}:`) ||
@@ -108,13 +115,16 @@ function buildScenario(): {
       modelKey: `tab-${i}`,
       generationSuffix: ''
     })
+
     models.push(createModel(base.originalModelPath, i % 10 === 0))
     models.push(createModel(base.modifiedModelPath))
+
     if (i % 3 === 0) {
       const regenerated = getDiffViewerMonacoModelPaths({
         modelKey: `tab-${i}`,
         generationSuffix: ':large-diff-generation:2'
       })
+
       models.push(createModel(regenerated.originalModelPath))
     }
   }
@@ -125,6 +135,7 @@ function buildScenario(): {
       modelKey: `open-tab-${i}`,
       generationSuffix: ''
     })
+
     models.push(createModel(stillOpen.originalModelPath))
     models.push(createModel(`/repo/src/file-${i}.ts`))
   }
@@ -132,6 +143,7 @@ function buildScenario(): {
   const prefixes = closedTabs.flatMap((tab) => {
     const { originalModelPathPrefix, modifiedModelPathPrefix } =
       getDiffViewerMonacoModelPathPrefixes(tab.id)
+
     return [originalModelPathPrefix, modifiedModelPathPrefix]
   })
 
@@ -233,6 +245,7 @@ describe('disposeClosedEditorTabs', () => {
   it('does not dispose a still-open tab whose id extends a closed tab id', () => {
     const closed = getDiffViewerMonacoModelPaths({ modelKey: 'tab-1', generationSuffix: '' })
     const stillOpen = getDiffViewerMonacoModelPaths({ modelKey: 'tab-10', generationSuffix: '' })
+
     const models = [
       createModel(closed.originalModelPath),
       createModel(closed.modifiedModelPath),

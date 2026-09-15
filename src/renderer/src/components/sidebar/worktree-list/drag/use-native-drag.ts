@@ -25,6 +25,7 @@ export function useWorktreeNativeDrag(args: {
   markScrollMovement: () => void
 }) {
   const { ctx, session, runtime, scrollRef, markScrollMovement } = args
+
   const {
     nativeLatestPointRef,
     clearWorktreeDrag,
@@ -44,17 +45,22 @@ export function useWorktreeNativeDrag(args: {
     (event: React.DragEvent<HTMLDivElement>, worktreeId: string, draggedIds: readonly string[]) => {
       const sourceGroupKey =
         ctx.worktreeDragGroups.find((group) => group.worktreeIds.includes(worktreeId))?.key ?? null
+
       if (!sourceGroupKey) {
         return
       }
+
       const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)
+
       const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
         sourceGroupKey,
         reorderDraggedIds
       )
+
       const rects = scrollRef.current
         ? getWorktreeSidebarDragRectsForGroup(scrollRef.current, sourceGroupKey)
         : []
+
       const sourceRect = event.currentTarget.getBoundingClientRect()
       session.worktreeDragSessionRef.current = {
         draggingWorktreeId: worktreeId,
@@ -85,15 +91,20 @@ export function useWorktreeNativeDrag(args: {
   const handleWorktreeDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       const dragSession = session.worktreeDragSessionRef.current
+
       if (!dragSession) {
         return
       }
+
       nativeLatestPointRef.current = { clientX: event.clientX, clientY: event.clientY }
       startWorktreeNativeAutoscroll()
+
       if (!session.refreshWorktreeDragSession()) {
         clearWorktreeDrag()
+
         return
       }
+
       const target = ctx.getEligibleLineageDropTarget(
         getPointerDropStatusTarget({
           container: event.currentTarget,
@@ -102,16 +113,20 @@ export function useWorktreeNativeDrag(args: {
         }),
         dragSession.draggedIds
       )
+
       if (target.lineageParentId) {
         event.preventDefault()
         event.dataTransfer.dropEffect = 'move'
         setNativeLineageDropTargetId(target.lineageParentId)
         setWorktreeDragState((prev) => clearWorktreeDropPreview(prev, { pointerY: event.clientY }))
+
         return
       }
+
       setNativeLineageDropTargetId(null)
 
       const drop = ctx.computeWorktreeDrop(event.clientY)
+
       if (!drop) {
         const statusDrop = target.status
           ? ctx.computeWorktreeStatusDrop({
@@ -120,17 +135,22 @@ export function useWorktreeNativeDrag(args: {
               draggedIds: dragSession.reorderDraggedIds
             })
           : null
+
         if (statusDrop) {
           event.preventDefault()
           event.dataTransfer.dropEffect = 'move'
           setWorktreeDragState((prev) =>
             applyWorktreeDropPreview(prev, statusDrop, { pointerY: event.clientY })
           )
+
           return
         }
+
         setWorktreeDragState((prev) => clearWorktreeDropPreview(prev, { pointerY: null }))
+
         return
       }
+
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
       setWorktreeDragState((prev) =>
@@ -151,20 +171,27 @@ export function useWorktreeNativeDrag(args: {
   const handleWorktreeDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       const dragSession = session.worktreeDragSessionRef.current
+
       if (!dragSession) {
         return
       }
+
       if (!session.refreshWorktreeDragSession()) {
         clearWorktreeDrag()
+
         return
       }
+
       const boardDropTarget = getWorkspaceKanbanSidebarDropTarget(event.clientX, event.clientY)
+
       if (boardDropTarget.status || boardDropTarget.isPinDrop) {
         clearWorktreeDrag()
+
         return
       }
 
       const container = scrollRef.current
+
       const target = ctx.getEligibleLineageDropTarget(
         container
           ? getPointerDropStatusTarget({
@@ -181,10 +208,12 @@ export function useWorktreeNativeDrag(args: {
         event.stopPropagation()
         ctx.commitWorktreeLineageParentDrop(dragSession.draggedIds, target.lineageParentId)
         clearWorktreeDrag()
+
         return
       }
 
       const drop = ctx.computeWorktreeDrop(event.clientY)
+
       if (!drop) {
         const statusDrop = target.status
           ? ctx.computeWorktreeStatusDrop({
@@ -193,6 +222,7 @@ export function useWorktreeNativeDrag(args: {
               draggedIds: dragSession.reorderDraggedIds
             })
           : null
+
         if (target.status && statusDrop) {
           event.preventDefault()
           event.stopPropagation()
@@ -203,11 +233,15 @@ export function useWorktreeNativeDrag(args: {
             groups: ctx.worktreeDragGroups
           })
           clearWorktreeDrag()
+
           return
         }
+
         clearWorktreeDrag()
+
         return
       }
+
       event.preventDefault()
       ctx.onReorderWorktrees({
         groups: ctx.worktreeDragGroups,

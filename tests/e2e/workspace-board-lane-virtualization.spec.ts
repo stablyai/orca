@@ -2,8 +2,11 @@ import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const SEEDED_WORKSPACE_COUNT = 300
+
 const MARQUEE_WORKSPACE_COUNT = 102
+
 const MANY_LANE_COUNT = 21
+
 const CARDS_PER_LANE = 100
 
 /**
@@ -21,19 +24,24 @@ test.describe('Workspace board lane virtualization', () => {
   test('mounts a window of cards for a large lane and keeps lane indexes', async ({ orcaPage }) => {
     await orcaPage.evaluate((count) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const repo = state.repos[0]
+
       if (!repo) {
         throw new Error('Expected a seeded e2e repo')
       }
 
       const now = Date.now()
       const seeded = state.worktreesByRepo[repo.id] ?? []
+
       const synthetic = Array.from({ length: count }, (_, index) => {
         const suffix = String(index).padStart(3, '0')
+
         return {
           id: `${repo.id}::/virtual-board-${suffix}`,
           instanceId: `virtual-board-${suffix}`,
@@ -80,6 +88,7 @@ test.describe('Workspace board lane virtualization', () => {
         Number((element as HTMLElement).dataset.workspaceBoardCardIndex ?? -1)
       )
     )
+
     expect(indexes.every((index) => Number.isInteger(index) && index >= 0)).toBe(true)
     expect(new Set(indexes).size).toBe(indexes.length)
   })
@@ -87,16 +96,21 @@ test.describe('Workspace board lane virtualization', () => {
   test('renders later lane indexes after the lane scrolls', async ({ orcaPage }) => {
     await orcaPage.evaluate((count) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const repo = state.repos[0]
+
       if (!repo) {
         throw new Error('Expected a seeded e2e repo')
       }
+
       const now = Date.now()
       const seeded = state.worktreesByRepo[repo.id] ?? []
+
       const synthetic = Array.from({ length: count }, (_, index) => ({
         id: `${repo.id}::/virtual-scroll-${index}`,
         instanceId: `virtual-scroll-${index}`,
@@ -118,6 +132,7 @@ test.describe('Workspace board lane virtualization', () => {
         isMainWorktree: false,
         workspaceStatus: 'in-progress'
       }))
+
       state.setSidebarOpen(true)
       state.setShowSleepingWorkspaces(true)
       state.setFilterRepoIds([])
@@ -140,6 +155,7 @@ test.describe('Workspace board lane virtualization', () => {
           )
         )
       )
+
     const before = await readMaxIndex()
 
     await orcaPage
@@ -160,23 +176,30 @@ test.describe('Workspace board lane virtualization', () => {
       { length: MANY_LANE_COUNT },
       (_, index) => `state-${String(index + 1).padStart(2, '0')}`
     )
+
     await orcaPage.evaluate(
       ({ cardsPerLane, ids }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const state = store.getState()
         const repo = state.repos[0]
+
         if (!repo) {
           throw new Error('Expected a seeded e2e repo')
         }
+
         const now = Date.now()
+
         const synthetic = ids.flatMap((status, statusIndex) =>
           Array.from({ length: cardsPerLane }, (_, cardIndex) => {
             const suffix = `${String(statusIndex + 1).padStart(2, '0')}-${String(
               cardIndex + 1
             ).padStart(3, '0')}`
+
             return {
               id: `${repo.id}::/virtual-lane-${suffix}`,
               instanceId: `virtual-lane-${suffix}`,
@@ -232,6 +255,7 @@ test.describe('Workspace board lane virtualization', () => {
     const laneBudget = await scroller.evaluate(
       (element) => Math.ceil(element.clientWidth / 320) + 3
     )
+
     const initialLaneCount = await lanes.count()
     expect(initialLaneCount).toBeLessThanOrEqual(laneBudget)
     expect(await cards.count()).toBeLessThan(initialLaneCount * 40)
@@ -246,9 +270,11 @@ test.describe('Workspace board lane virtualization', () => {
 
     await expect(board.locator('[data-workspace-status="state-21"]')).toBeVisible()
     await expect.poll(() => board.locator('[data-workspace-status="state-01"]').count()).toBe(0)
+
     const finalIds = await lanes.evaluateAll((elements) =>
       elements.map((element) => (element as HTMLElement).dataset.workspaceStatus ?? '')
     )
+
     expect(finalIds).toEqual([...finalIds].sort())
     expect(finalIds).toContain('state-21')
     expect(await lanes.count()).toBeLessThanOrEqual(laneBudget)
@@ -260,9 +286,11 @@ test.describe('Workspace board lane virtualization', () => {
     ).toEqual(statusIds)
 
     const finalLane = board.locator('[data-workspace-status="state-21"]')
+
     const resizeHandle = finalLane.getByRole('separator', {
       name: 'Resize workspace board columns'
     })
+
     await resizeHandle.focus()
     await resizeHandle.press('ArrowRight')
     await expect
@@ -278,15 +306,19 @@ test.describe('Workspace board lane virtualization', () => {
     const sourceCard = board
       .locator('[data-workspace-status="state-20"] [data-workspace-board-card-id]')
       .first()
+
     const sourceId = await sourceCard.getAttribute('data-workspace-board-worktree-id')
     const sourceBox = await sourceCard.boundingBox()
+
     const targetBox = await finalLane
       .locator('[data-workspace-board-lane-scroll]')
       .first()
       .boundingBox()
+
     if (!sourceId || !sourceBox || !targetBox) {
       throw new Error('Expected visible source card and final lane drop target')
     }
+
     await orcaPage.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
     await orcaPage.mouse.down()
     await orcaPage.mouse.move(
@@ -312,16 +344,21 @@ test.describe('Workspace board lane virtualization', () => {
     await orcaPage.evaluate(
       ({ count, emptyStatus, status }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const state = store.getState()
         const repo = state.repos[0]
+
         if (!repo) {
           throw new Error('Expected a seeded e2e repo')
         }
+
         const now = Date.now()
         const seeded = state.worktreesByRepo[repo.id] ?? []
+
         const synthetic = Array.from({ length: count }, (_, index) => ({
           id: `${repo.id}::/virtual-marquee-${index}`,
           instanceId: `virtual-marquee-${index}`,
@@ -370,10 +407,13 @@ test.describe('Workspace board lane virtualization', () => {
     const laneCards = lane.locator('[data-workspace-board-card-id]')
     await expect.poll(() => laneCards.count(), { timeout: 15_000 }).toBeGreaterThan(3)
     const laneScroll = lane.locator('[data-workspace-board-lane-scroll]')
+
     const emptyLaneScroll = orcaPage.locator(
       `[data-workspace-status="${emptyStatusId}"] [data-workspace-board-lane-scroll]`
     )
+
     const box = await laneScroll.boundingBox()
+
     if (!box) {
       throw new Error('Expected the marquee lane to have a bounding box')
     }
@@ -392,10 +432,13 @@ test.describe('Workspace board lane virtualization', () => {
           '[role="menu"]',
           '[role="menuitem"]'
         ].join(',')
+
         const rect = element.getBoundingClientRect()
+
         for (let y = Math.ceil(rect.top) + 6; y <= Math.floor(rect.top) + 40; y += 6) {
           for (let x = Math.ceil(rect.left) + 8; x <= Math.floor(rect.right) - 8; x += 8) {
             const target = document.elementFromPoint(x, y)
+
             if (
               target?.closest('[data-workspace-board-selection-surface]') &&
               !target.closest(ignored)
@@ -404,12 +447,15 @@ test.describe('Workspace board lane virtualization', () => {
             }
           }
         }
+
         return null
       })
+
     // The board's clip animation can expose cards before the empty lane accepts pointer hits.
     await expect.poll(findStartPoint).not.toBeNull()
     const startPoint = await findStartPoint()
     expect(startPoint, 'the empty start lane must expose board-owned space').not.toBeNull()
+
     if (!startPoint) {
       throw new Error('Expected empty board space for the marquee start')
     }
@@ -427,6 +473,7 @@ test.describe('Workspace board lane virtualization', () => {
         timeout: 15_000
       })
       .toBeGreaterThan(0)
+
     // Why: a measured card is much taller than the lane's row estimate, so each
     // jump to the bottom re-measures the window and grows the spacer past the
     // scrollTop the jump just landed on. A fixed pass budget commits the marquee
@@ -435,6 +482,7 @@ test.describe('Workspace board lane virtualization', () => {
     const laneScrollSettle = await laneScroll.evaluate(async (element) => {
       let settledPasses = 0
       let passes = 0
+
       while (settledPasses < 2 && passes < 40) {
         passes += 1
         element.scrollTop = element.scrollHeight
@@ -445,12 +493,14 @@ test.describe('Workspace board lane virtualization', () => {
         const maxScrollTop = element.scrollHeight - element.clientHeight
         settledPasses = element.scrollTop >= maxScrollTop - 1 ? settledPasses + 1 : 0
       }
+
       return {
         passes,
         scrollTop: element.scrollTop,
         maxScrollTop: element.scrollHeight - element.clientHeight
       }
     })
+
     expect(
       laneScrollSettle.scrollTop,
       `lane scroll never settled at its bottom: ${JSON.stringify(laneScrollSettle)}`

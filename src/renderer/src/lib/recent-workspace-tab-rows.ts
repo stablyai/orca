@@ -56,6 +56,7 @@ export function resolveRecentWorkspaceTabAttention(
   if (!row.terminalTab) {
     return IDLE
   }
+
   return resolveAttention(
     collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now),
     now
@@ -71,32 +72,40 @@ export function resolveRecentWorkspaceTabStatus(
   if (!row.terminalTab) {
     return 'inactive'
   }
+
   const panes = collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now)
   const attention = resolveAttention(panes, now)
   const explicit = STATUS_BY_ATTENTION_CLASS[attention.cls]
+
   if (explicit === 'working') {
     const hasForegroundWork = panes.some(
       (pane) =>
         resolveAttention([pane], now).cls === 3 &&
         (pane.kind === 'title' || pane.entry.workingMode !== 'monitoring')
     )
+
     return hasForegroundWork ? 'working' : 'monitoring'
   }
+
   if (explicit === 'permission') {
     return explicit
   }
+
   const hasInterrupted = panes.some(
     (pane) =>
       pane.kind === 'hook' &&
       pane.entry.interrupted === true &&
       isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
   )
+
   if (hasInterrupted) {
     return 'interrupted'
   }
+
   if (explicit === 'done') {
     return explicit
   }
+
   return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'
 }
 
@@ -108,6 +117,7 @@ export function orderRecentWorkspaceTabs({ rows }: RecentWorkspaceTabOrderInputs
     row.lastFocusedAt > 0
       ? row.lastFocusedAt
       : 0
+
   return [...rows]
     .sort((a, b) => visitedAt(b) - visitedAt(a))
     .map((row) => row.occurrenceId ?? row.id)

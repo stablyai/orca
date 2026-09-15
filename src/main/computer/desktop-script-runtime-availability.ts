@@ -15,6 +15,7 @@ import {
  * working throughout, so nothing looks wrong while the MDE signature returns.
  */
 export const MAX_START_ATTEMPTS = 3
+
 export const START_FAILURE_COOLDOWN_MS = 60_000
 
 /**
@@ -81,6 +82,7 @@ export class RuntimeHostAvailability {
     if (this.cooldownStartedAtMs === null) {
       return 0
     }
+
     // Elapsed since the cooldown began, never a stored deadline: a deadline is
     // only as trustworthy as the clock it was computed against.
     return Math.max(0, Math.ceil(this.cooldownMs - (this.now() - this.cooldownStartedAtMs)))
@@ -121,6 +123,7 @@ export class RuntimeHostAvailability {
     if (!this.fallbackPolicyUnproven) {
       return
     }
+
     this.fallbackPolicyUnproven = false
     this.policy = PREFERRED_WINDOWS_EXECUTION_POLICY
     this.warn(
@@ -141,15 +144,18 @@ export class RuntimeHostAvailability {
   recordSuccess(): void {
     this.consecutiveSuccesses++
     this.fallbackPolicyUnproven = false
+
     // Why a clean run and not a single reply: a helper that answers one
     // operation and dies on the next would otherwise reset the count forever,
     // and respawn once per operation — the exact burst the host removes.
     if (this.consecutiveSuccesses >= MAX_START_ATTEMPTS) {
       this.consecutiveFailures = 0
     }
+
     if (this.cooldownStartedAtMs === null) {
       return
     }
+
     this.cooldownStartedAtMs = null
     this.warn('runtime host recovered; operations are served by the persistent helper again')
   }

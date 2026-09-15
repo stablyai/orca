@@ -52,6 +52,7 @@ export function EditorDiffFileSurface({
   }
 
   const isEditable = activeFile.diffSource === 'unstaged'
+
   if (diffContent.kind === 'binary') {
     if (diffContent.isImage) {
       return (
@@ -64,6 +65,7 @@ export function EditorDiffFileSurface({
         />
       )
     }
+
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="space-y-2">
@@ -87,11 +89,13 @@ export function EditorDiffFileSurface({
   }
 
   const modifiedDiffContent = editBuffer ?? diffContent.modifiedContent
+
   const largeDiffSaveContentAvailable = !(
     diffContent.largeDiffRenderLimit?.limited === true &&
     editBuffer === undefined &&
     diffContent.modifiedContent.length === 0
   )
+
   const externalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
       <ExternalFileChangeBanner
@@ -138,6 +142,7 @@ export function EditorDiffFileSurface({
   const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
   const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(diffContent.originalContent)}`
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(diffContent.modifiedContent)}:${diffReloadNonce}`
+
   const diffViewer = (
     <DiffViewer
       // Why: content refreshes via modifiedModelKey; keying off content too would remount Monaco and flash on every save.
@@ -159,9 +164,11 @@ export function EditorDiffFileSurface({
       onSave={isEditable ? (isMarkdown ? markdownDocuments.mdSave : onSave) : undefined}
     />
   )
+
   if (activeFile.externalMutation !== 'changed') {
     return diffViewer
   }
+
   return (
     // Why: parent isn't a flex container, so flex-1 collapses to 0px — use h-full here and a flex column inside.
     <div className="flex h-full min-h-0 flex-col">

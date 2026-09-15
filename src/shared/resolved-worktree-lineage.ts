@@ -53,21 +53,27 @@ export function getCyclicWorktreeLineageChildIds(
     if (processed.has(childId)) {
       continue
     }
+
     const path: string[] = []
     const pathIndexById = new Map<string, number>()
     let currentId: string | undefined = childId
+
     while (currentId && lineageByChildId.has(currentId) && !processed.has(currentId)) {
       const cycleStart = pathIndexById.get(currentId)
+
       if (cycleStart !== undefined) {
         for (let index = cycleStart; index < path.length; index += 1) {
           cyclic.add(path[index])
         }
+
         break
       }
+
       pathIndexById.set(currentId, path.length)
       path.push(currentId)
       currentId = lineageByChildId.get(currentId)?.parentWorktreeId
     }
+
     for (const id of path) {
       processed.add(id)
     }
@@ -87,17 +93,22 @@ export function projectResolvedWorktreeLineage<T extends Worktree>(
   for (const child of worktrees) {
     const childId = child.id
     const lineage = lineageById[childId]
+
     if (!lineage) {
       continue
     }
+
     const parent = worktreeById.get(lineage.parentWorktreeId)
+
     if (!parent || !isValidResolvedWorktreeLineageEdge(child, parent, lineage)) {
       continue
     }
+
     validLineageByChildId.set(childId, lineage)
   }
 
   const cyclicChildIds = getCyclicWorktreeLineageChildIds(validLineageByChildId)
+
   for (const childId of cyclicChildIds) {
     validLineageByChildId.delete(childId)
   }
@@ -110,6 +121,7 @@ export function projectResolvedWorktreeLineage<T extends Worktree>(
 
   return worktrees.map((worktree) => {
     const lineage = validLineageByChildId.get(worktree.id) ?? null
+
     return {
       ...worktree,
       parentWorktreeId: lineage?.parentWorktreeId ?? null,

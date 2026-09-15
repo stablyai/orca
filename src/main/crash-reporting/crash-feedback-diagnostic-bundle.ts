@@ -30,6 +30,7 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
 
 function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
   const status = getDiagnosticsStatus()
+
   if (!status.bundleEnabled) {
     return {
       diagnosticBundle: {
@@ -40,6 +41,7 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
   }
 
   let bundle: ReturnType<typeof collectDiagnosticBundle>
+
   try {
     bundle = collectDiagnosticBundle({
       appVersion: app.getVersion(),
@@ -83,9 +85,11 @@ export function diagnosticBundleForReportOnlyRetry(
   attachment: CrashDiagnosticBundleAttachment
 ): CrashReportDiagnosticBundle | undefined {
   const bundle = attachment.feedbackDiagnosticBundle
+
   if (!bundle) {
     return undefined
   }
+
   return {
     status: 'not_uploaded',
     reason: 'diagnostic log attachment could not be sent; report retried without logs',
@@ -100,15 +104,19 @@ export function resolveSubmittedDiagnosticBundle(
   result: FeedbackSubmitResult
 ): CrashReportDiagnosticBundle {
   const bundle = attachment.feedbackDiagnosticBundle
+
   if (!bundle) {
     return attachment.diagnosticBundle
   }
+
   const failure =
     result.diagnosticBundleFailure ??
     (!result.ok ? { status: result.status, error: result.error } : undefined)
+
   if (!failure) {
     return attachment.diagnosticBundle
   }
+
   return {
     status: 'not_uploaded',
     reason: `diagnostic log attachment failed: ${formatUnknownError(failure.error)}`,

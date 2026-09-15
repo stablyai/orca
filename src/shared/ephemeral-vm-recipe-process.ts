@@ -3,6 +3,7 @@ import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
 import { admitProcessTreeKill } from './child-process/process-tree-kill-gate'
 
 const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
+
 const CANCEL_FORCE_KILL_DELAY_MS = 5_000
 
 export type ProcessRunResult = {
@@ -20,6 +21,7 @@ export function quoteShellToken(value: string): string {
     // must be valid when pasted into cmd.exe.
     return `"${value.replace(/"/g, '""')}"`
   }
+
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
@@ -42,6 +44,7 @@ export async function runRecipeCommand(args: {
 
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams
+
     try {
       child = spawnCommand(args.command, {
         cwd: args.repoPath,
@@ -52,6 +55,7 @@ export async function runRecipeCommand(args: {
       }) as ChildProcessWithoutNullStreams
     } catch (error) {
       reject(error)
+
       return
     }
 
@@ -60,37 +64,48 @@ export async function runRecipeCommand(args: {
     let settled = false
     let aborted = false
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined
+
     const finish = (result: ProcessRunResult): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (forceKillTimer) {
         clearTimeout(forceKillTimer)
       }
+
       args.signal?.removeEventListener('abort', abort)
       resolve(result)
     }
+
     const fail = (error: Error): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (forceKillTimer) {
         clearTimeout(forceKillTimer)
       }
+
       args.signal?.removeEventListener('abort', abort)
       reject(error)
     }
+
     const abort = (): void => {
       if (settled) {
         return
       }
+
       aborted = true
       forceKillTimer = setTimeout(() => {
         if (settled) {
           return
         }
+
         killRecipeProcess(child, true)
         finish({ stdout, stderr, exitCode: null, signal: null, aborted: true })
         child.stdin.destroy()
@@ -136,6 +151,7 @@ export async function runRecipeCommand(args: {
 /** Exported for the refusal-fallback test; the abort path is otherwise unreachable. */
 export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force = false): void {
   const signal = force ? 'SIGKILL' : 'SIGTERM'
+
   if (process.platform === 'win32') {
     // Recipes run through `cmd.exe /c` (shell: true), so child.kill() would only
     // terminate the wrapper and orphan the actual recipe subprocess (e.g. a cloud
@@ -151,27 +167,36 @@ export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force =
         // Refusal blocks the tree walk, not the termination: the root kill is
         // handle-addressed, so it cannot reach the recycled pid we refused.
         child.kill(signal)
+
         return
       }
+
       const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
         windowsHide: true,
         stdio: 'ignore'
       })
+
       killer.on('error', () => child.kill(signal))
+
       return
     }
+
     child.kill(signal)
+
     return
   }
+
   if (child.pid) {
     try {
       // Recipes run through a shell; kill the process group so shell children do not linger.
       process.kill(-child.pid, signal)
+
       return
     } catch {
       // Fall back to killing the direct child if the process group is already gone.
     }
   }
+
   child.kill(signal)
 }
 
@@ -204,21 +229,28 @@ function appendBounded(current: string, chunk: string, maxBytes: number): string
   if (maxBytes <= 0) {
     return ''
   }
+
   const chunkBytes = Buffer.byteLength(chunk, 'utf8')
+
   if (chunkBytes >= maxBytes) {
     return utf8Tail(chunk, maxBytes)
   }
+
   return utf8Tail(current, maxBytes - chunkBytes) + chunk
 }
 
 function utf8Tail(value: string, maxBytes: number): string {
   const bytes = Buffer.from(value, 'utf8')
+
   if (bytes.byteLength <= maxBytes) {
     return value
   }
+
   let start = bytes.byteLength - maxBytes
+
   while (start < bytes.byteLength && (bytes[start]! & 0xc0) === 0x80) {
     start += 1
   }
+
   return bytes.subarray(start).toString('utf8')
 }

@@ -9,11 +9,14 @@ describe('workspace cleanup late settlement tracking', () => {
   it('detaches the batch callback and reports with a compact candidate identity', async () => {
     const candidate = makeCandidate()
     let resolveSettlement: (settlement: WorkspaceCleanupRemovalSettlement) => void = () => {}
+
     const settlement = new Promise<WorkspaceCleanupRemovalSettlement>((resolve) => {
       resolveSettlement = resolve
     })
+
     const reconcileBeforeBatchResult = vi.fn()
     const reportAfterBatchResult = vi.fn()
+
     const tracker = trackWorkspaceCleanupLateSettlement(
       settlement,
       candidate,

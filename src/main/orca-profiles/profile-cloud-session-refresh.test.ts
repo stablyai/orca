@@ -30,6 +30,7 @@ vi.mock('./profile-cloud-session-mutation', () => ({
 
 vi.mock('./profile-cloud-client', async (importOriginal) => {
   const original = await importOriginal<typeof ProfileCloudClient>()
+
   return { ...original, refreshOrcaCloudSession: refreshMock }
 })
 
@@ -41,6 +42,7 @@ import { onOrcaCloudSessionInvalidated } from './profile-cloud-session-invalidat
 import { forgetAmbiguousRefreshAttempt } from './profile-cloud-refresh-replay-guard'
 
 const config = {} as OrcaCloudAuthConfig
+
 const active = {
   profile: {
     id: 'profile-1',
@@ -51,6 +53,7 @@ const active = {
     }
   }
 } as ActiveOrcaProfileState
+
 const staleSession = {
   accessToken: 'old-access',
   refreshToken: 'one-use-refresh',
@@ -163,6 +166,7 @@ describe('profile cloud session refresh', () => {
 describe('refresh-token replay after an ambiguous attempt', () => {
   const timeout = (): Error =>
     Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' })
+
   const rotatedResponse = {
     accessToken: 'new-access',
     refreshToken: 'new-refresh',

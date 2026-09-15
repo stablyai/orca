@@ -41,9 +41,11 @@ export function SshTargetDestructiveActions({
   // Why: confirmed SSH actions keep running after the dialog click, so this
   // state blocks overlapping relay/session teardown for the same target.
   const targetActionsInFlightRef = useRef(new Map<string, SshTargetBusyAction>())
+
   const [targetActionsInFlight, setTargetActionsInFlight] = useState<
     Map<string, SshTargetBusyAction>
   >(new Map())
+
   const connectionStatesRef = useRef(connectionStates)
   connectionStatesRef.current = connectionStates
 
@@ -57,6 +59,7 @@ export function SshTargetDestructiveActions({
       nextActions.set(targetId, action)
       targetActionsInFlightRef.current = nextActions
       setTargetActionsInFlight(nextActions)
+
       return true
     },
     []
@@ -67,6 +70,7 @@ export function SshTargetDestructiveActions({
       const nextActions = new Map(targetActionsInFlightRef.current)
       nextActions.delete(targetId)
       targetActionsInFlightRef.current = nextActions
+
       if (mountedRef.current) {
         setTargetActionsInFlight(nextActions)
       }
@@ -85,8 +89,10 @@ export function SshTargetDestructiveActions({
     }
 
     const targetId = pendingTarget.id
+
     try {
       await operation(targetId)
+
       if (mountedRef.current) {
         clearPendingTarget()
       }
@@ -97,26 +103,33 @@ export function SshTargetDestructiveActions({
 
   const pendingRemoveIsBusy =
     pendingRemove !== null && targetActionsInFlight.get(pendingRemove.id) === 'remove'
+
   const pendingResetIsBusy =
     pendingReset !== null && targetActionsInFlight.get(pendingReset.id) === 'reset'
+
   const pendingResetStatus =
     pendingReset !== null
       ? (connectionStates.get(pendingReset.id)?.status ?? 'disconnected')
       : 'disconnected'
+
   const pendingResetBlockedByConnection =
     pendingReset !== null && isSshTargetConnecting(pendingResetStatus)
+
   const pendingTerminateIsBusy =
     pendingTerminate !== null && targetActionsInFlight.get(pendingTerminate.id) === 'terminate'
+
   const shouldClearReset = shouldClearPendingSshReset({
     pendingTargetId: pendingReset?.id ?? null,
     pendingResetIsBusy,
     connectionStatus: pendingResetStatus
   })
+
   if (shouldClearReset) {
     // Why: a reconnecting target cannot safely reset its relay; clear the
     // pending dialog before it paints stale destructive UI.
     setPendingReset(null)
   }
+
   const dialogPendingReset = shouldClearReset ? null : pendingReset
 
   const confirmResetRelay = async (): Promise<void> => {
@@ -125,8 +138,10 @@ export function SshTargetDestructiveActions({
     }
 
     const latestStatus = connectionStatesRef.current.get(pendingReset.id)?.status ?? 'disconnected'
+
     if (isSshTargetConnecting(latestStatus)) {
       setPendingReset(null)
+
       return
     }
 
@@ -142,6 +157,7 @@ export function SshTargetDestructiveActions({
     },
     requestResetRelay: (target) => {
       const status = connectionStatesRef.current.get(target.id)?.status ?? 'disconnected'
+
       if (!isSshTargetConnecting(status) && !targetActionsInFlightRef.current.has(target.id)) {
         setPendingReset(target)
       }
@@ -175,6 +191,7 @@ export function SshTargetDestructiveActions({
           if (pendingRemoveIsBusy) {
             return
           }
+
           if (!open) {
             setPendingRemove(null)
           }
@@ -202,6 +219,7 @@ export function SshTargetDestructiveActions({
           if (pendingResetIsBusy) {
             return
           }
+
           if (!open) {
             setPendingReset(null)
           }
@@ -227,6 +245,7 @@ export function SshTargetDestructiveActions({
           if (pendingTerminateIsBusy) {
             return
           }
+
           if (!open) {
             setPendingTerminate(null)
           }

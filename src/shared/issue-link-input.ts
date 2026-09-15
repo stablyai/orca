@@ -19,6 +19,7 @@ export function isIssueLinkProvider(value: unknown): value is IssueLinkProvider 
  *  bare `STA-335` can never decide a provider — it would override the chip. */
 export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | null {
   const trimmed = input.trim()
+
   if (!/^https?:\/\//i.test(trimmed)) {
     return null
   }
@@ -29,9 +30,11 @@ export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | 
   if (parseGitHubIssueOrPRLink(trimmed)?.type === 'issue') {
     return 'github'
   }
+
   if (parseLinearIssueInput(trimmed)) {
     return 'linear'
   }
+
   return null
 }
 
@@ -48,16 +51,19 @@ export function parseIssueLinkInput(
   provider: IssueLinkProvider
 ): ParsedIssueLinkInput | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
 
   if (provider === 'linear') {
     const parsed = parseLinearIssueInput(trimmed)
+
     return parsed ? { provider: 'linear', ...parsed } : null
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed)
+
   if (link) {
     // Why: issue and PR numbers live in separate GitHub namespaces for refs; a
     // pull URL pasted here must not silently become an issue link.
@@ -65,10 +71,13 @@ export function parseIssueLinkInput(
   }
 
   const numeric = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
+
   if (!/^\d+$/.test(numeric)) {
     return null
   }
+
   const parsed = Number.parseInt(numeric, 10)
+
   // Why: `/^\d+$/` happily accepts 400 digits, which parseInt turns into
   // Infinity — Save would enable and JSON.stringify would persist `null`.
   return Number.isSafeInteger(parsed) && parsed > 0 ? { provider: 'github', number: parsed } : null

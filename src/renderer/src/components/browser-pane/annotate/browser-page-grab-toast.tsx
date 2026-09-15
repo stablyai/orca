@@ -73,6 +73,7 @@ export function BrowserPageGrabToast({
               <DropdownMenuItem
                 onSelect={() => {
                   const dataUrl = grabToast.payload?.screenshot?.dataUrl
+
                   if (dataUrl?.startsWith('data:image/png;base64,')) {
                     void window.api.ui.writeClipboardImage(dataUrl)
                     setGrabToast((prev) =>

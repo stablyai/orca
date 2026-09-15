@@ -60,6 +60,7 @@ describe('CliInstaller', () => {
     async () => {
       const fixture = await makeFixture()
       const installPath = join(fixture.root, 'bin', 'orca')
+
       const installer = new CliInstaller({
         platform: 'darwin',
         isPackaged: false,
@@ -95,6 +96,7 @@ describe('CliInstaller', () => {
     async () => {
       const fixture = await makeFixture()
       const installPath = join(fixture.root, '.local', 'bin', 'orca-ide')
+
       const installer = new CliInstaller({
         platform: 'linux',
         isPackaged: false,
@@ -128,6 +130,7 @@ describe('CliInstaller', () => {
       const fixture = await makeFixture()
       const homePath = join(fixture.root, 'home')
       const commandDir = join(homePath, '.local', 'bin')
+
       const installer = new CliInstaller({
         platform: 'linux',
         isPackaged: false,
@@ -224,6 +227,7 @@ describe('CliInstaller', () => {
         encoding: 'utf8',
         mode: 0o755
       })
+
       const makeInstaller = (): CliInstaller =>
         new CliInstaller({
           platform: 'linux',
@@ -272,6 +276,7 @@ describe('CliInstaller', () => {
         encoding: 'utf8',
         mode: 0o755
       })
+
       const installer = new CliInstaller({
         platform: 'linux',
         isPackaged: true,
@@ -432,6 +437,7 @@ describe('CliInstaller', () => {
 
       const installPath = join(protectedDir, 'bin', 'orca')
       const privilegedCommands: string[] = []
+
       const installer = new CliInstaller({
         platform: 'darwin',
         isPackaged: false,

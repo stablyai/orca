@@ -42,13 +42,17 @@ function mockGitRemoteCommands(remotes: Record<string, string>): void {
     if (args[0] === 'remote' && args[1] !== 'get-url') {
       return { stdout: `${Object.keys(remotes).join('\n')}\n` }
     }
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const url = remotes[args[2] ?? '']
+
       if (!url) {
         throw new Error(`fatal: No such remote '${args[2]}'`)
       }
+
       return { stdout: url }
     }
+
     throw new Error(`unexpected git ${args.join(' ')}`)
   })
 }
@@ -343,12 +347,15 @@ describe('gitlab project ref resolution', () => {
     for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
       await expect(getProjectRef(repoPath)).resolves.toBeNull()
     }
+
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
 
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
+
     for (const repoPath of ['/repo-a', '/repo-b', '/repo-c']) {
       await expect(getProjectRef(repoPath)).resolves.toBeNull()
     }
+
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
@@ -378,6 +385,7 @@ describe('gitlab project ref resolution', () => {
 describe('GitLab operation admission', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     // Drain any slots held by the saturation test before the next test.
     for (let i = 0; i < 4; i += 1) {
       release()
@@ -389,9 +397,11 @@ describe('GitLab operation admission', () => {
     await Promise.all(Array.from({ length: 4 }, () => acquire()))
 
     const queued = acquire()
+
     const rejection = expect(queued).rejects.toThrow(
       'Timed out waiting for a GitLab operation slot.'
     )
+
     await vi.advanceTimersByTimeAsync(GITLAB_ADMISSION_TIMEOUT_MS)
     await rejection
 
@@ -526,6 +536,7 @@ describe('glab auth status host parsing', () => {
 ✓ Logged in to gitlab.com as user1 (oauth2)
 ✓ Logged in to gitlab.example.com as user2 (token)
     `
+
     expect(parseGlabAuthStatusHosts(out).sort()).toEqual(['gitlab.com', 'gitlab.example.com'])
   })
 
@@ -534,6 +545,7 @@ describe('glab auth status host parsing', () => {
 gitlab.example.com:
   Logged in as user2
     `
+
     expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com')
   })
 
@@ -548,6 +560,7 @@ gitlab.internal
 Self-hosted-git
   ✓ Logged in as user3
     `
+
     expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
       'gitlab.com',
       'gitlab.internal',
@@ -569,6 +582,7 @@ Self-hosted-git
 gitlab.example.com:8080:
   ✓ Logged in as user
     `
+
     expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com:8080')
   })
 
@@ -577,6 +591,7 @@ gitlab.example.com:8080:
 ✓ Logged in to gitlab.example.com:8443 as user (token)
 ✓ Logged in to gitlab.example.com:3030 as user (token)
     `
+
     expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
       'gitlab.example.com:3030',
       'gitlab.example.com:8443'
@@ -631,11 +646,13 @@ describe('classifyListFetchError', () => {
     // Why: the title would otherwise substring-match as a network failure and replace the payload.
     const payload = '{"data":[{"title":"fix network timeout"}]}'
     let thrown: unknown
+
     try {
       parseGlabJsonList(payload)
     } catch (err) {
       thrown = err
     }
+
     expect(thrown).toBeInstanceOf(GlabNonListResponseError)
     const classified = classifyListFetchError(thrown)
     expect(classified.type).toBe('unknown')
@@ -669,9 +686,11 @@ describe('parseGlabApiResponse', () => {
 
     expect(parsed.headers['x-total']).toBe('7')
     expect(parsed.body).toBe(body)
+
     const usedSeparatorMatch = matchSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r?\\n\\r?\\n'
     )
+
     expect(usedSeparatorMatch).toBe(false)
   })
 

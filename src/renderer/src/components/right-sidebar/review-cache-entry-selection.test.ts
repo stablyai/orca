@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { selectReviewCacheData, selectReviewCacheEntry } from './review-cache-entry-selection'
 
 type Review = { id: string }
+
 type ReviewEntry = { data: Review | null; fetchedAt: number }
 
 const ACTIVE_KEY = 'repo-active::feature'
@@ -23,12 +24,15 @@ describe('review cache entry selection', () => {
   it('turns unrelated active-panel cache invalidations into stable selections', () => {
     const activeHostedReview = { id: 'hosted-active' }
     const activePullRequest = { id: 'pr-active' }
+
     let hostedCache: Record<string, ReviewEntry> = {
       [ACTIVE_KEY]: { data: activeHostedReview, fetchedAt: 1 }
     }
+
     let pullRequestCache: Record<string, ReviewEntry> = {
       [ACTIVE_KEY]: { data: activePullRequest, fetchedAt: 1 }
     }
+
     let previousHostedMap = hostedCache
     let previousPullRequestMap = pullRequestCache
     let previousHostedSelection = selectReviewCacheData(hostedCache, ACTIVE_KEY)
@@ -39,18 +43,22 @@ describe('review cache entry selection', () => {
     for (let index = 0; index < 200; index += 1) {
       hostedCache = replaceUnrelatedEntry(hostedCache, index)
       pullRequestCache = replaceUnrelatedEntry(pullRequestCache, index)
+
       if (hostedCache !== previousHostedMap) {
         wholeMapInvalidations += 1
       }
+
       if (pullRequestCache !== previousPullRequestMap) {
         wholeMapInvalidations += 1
       }
 
       const hostedSelection = selectReviewCacheData(hostedCache, ACTIVE_KEY)
       const pullRequestSelection = selectReviewCacheEntry(pullRequestCache, ACTIVE_KEY)
+
       if (hostedSelection !== previousHostedSelection) {
         scopedSelectionInvalidations += 1
       }
+
       if (pullRequestSelection !== previousPullRequestSelection) {
         scopedSelectionInvalidations += 1
       }

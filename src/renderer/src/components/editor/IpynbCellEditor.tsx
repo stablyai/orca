@@ -22,13 +22,16 @@ export function IpynbMarkdownCell({ source }: { source: string }): React.JSX.Ele
     if (theme !== 'system' || typeof window.matchMedia !== 'function') {
       return
     }
+
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const onChange = () => setSystemDark(media.matches)
     onChange()
     media.addEventListener('change', onChange)
+
     return () => media.removeEventListener('change', onChange)
   }, [theme])
   const isDark = theme === 'system' ? systemDark : resolveDocumentTheme(theme)
+
   return (
     <div className={cn('px-4 py-3 text-sm', isDark ? 'markdown-dark' : 'markdown-light')}>
       <div className="markdown-body">
@@ -85,18 +88,23 @@ function IpynbCodeCellEditor({
   const editorHeight = getIpynbCodeCellEditorHeight(source, fontSize)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
+
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
+
     const cleanupSaveShortcut = installEditorSaveShortcut(
       editorInstance.getContainerDomNode(),
       () => {
         void onSaveRequestRef.current()
       }
     )
+
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+
     const blurSub = editorInstance.onDidBlurEditorWidget(() => {
       onDeactivateRef.current()
     })
+
     editorInstance.onDidDispose(() => {
       cleanupSaveShortcut()
       cleanupFindShortcut()

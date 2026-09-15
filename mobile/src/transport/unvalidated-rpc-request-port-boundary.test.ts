@@ -38,8 +38,11 @@ import {
  */
 
 const mobileRoot = fileURLToPath(new URL('../..', import.meta.url))
+
 const scannedRoots = ['app', 'src'].map((directory) => join(mobileRoot, directory))
+
 const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
+
 const portModule = join(mobileRoot, 'src', 'transport', 'unvalidated-rpc-request-port')
 
 /** The port and its own inventory are not offenders; the ratchet does not police itself. */
@@ -54,15 +57,18 @@ const SECOND_SENDER = 'sendSingleFlightRequest'
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name)
+
     if (entry.isDirectory()) {
       return entry.name === 'node_modules' ? [] : sourceFiles(path)
     }
+
     return [path]
   })
 }
 
 function parse(path: string, source: string): ts.SourceFile {
   const extension = extname(path)
+
   return ts.createSourceFile(
     path,
     source,
@@ -76,12 +82,14 @@ function targetsPortModule(path: string, node: ts.Node | undefined): boolean {
   if (!node || !ts.isStringLiteral(node) || !node.text.startsWith('.')) {
     return false
   }
+
   return resolve(path, '..', node.text) === portModule
 }
 
 /** `client['sendRequest']` is one reach, not two: the element access already counted it. */
 function isCountedElementAccessArgument(node: ts.Node): boolean {
   const parent: ts.Node | undefined = node.parent
+
   return (
     parent !== undefined &&
     ts.isElementAccessExpression(parent) &&
@@ -100,13 +108,16 @@ function declaresPortMember(node: ts.Node): boolean {
   ) {
     return false
   }
+
   const name = node.name
+
   return (ts.isIdentifier(name) || ts.isStringLiteral(name)) && name.text === 'sendRequest'
 }
 
 /** How many times this file reaches the raw port directly. Comments never count: this is AST. */
 export function rawRequestPortReferences(path: string, source: string): number {
   let references = 0
+
   const visit = (node: ts.Node): void => {
     if (
       (ts.isPropertyAccessExpression(node) && node.name.text === 'sendRequest') ||
@@ -121,9 +132,11 @@ export function rawRequestPortReferences(path: string, source: string): number {
     ) {
       references += 1
     }
+
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       references += targetsPortModule(path, node.moduleSpecifier) ? 1 : 0
     }
+
     if (
       ts.isCallExpression(node) &&
       (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
@@ -132,9 +145,12 @@ export function rawRequestPortReferences(path: string, source: string): number {
     ) {
       references += 1
     }
+
     ts.forEachChild(node, visit)
   }
+
   visit(parse(path, source))
+
   return references
 }
 
@@ -246,6 +262,7 @@ describe('unvalidated RPC request port boundary', () => {
       .map(
         (entry) => `${entry.file}: listed ${entry.references}, found ${observed.get(entry.file)}`
       )
+
     expect(grown, 'The counts are a ceiling. Send the new call through an RpcOperation.').toEqual(
       []
     )
@@ -259,6 +276,7 @@ describe('unvalidated RPC request port boundary', () => {
       .map(
         (entry) => `${entry.file}: listed ${entry.references}, found ${observed.get(entry.file)}`
       )
+
     expect(
       overstated,
       'Fewer references than listed — lower the count so the ratchet holds.'

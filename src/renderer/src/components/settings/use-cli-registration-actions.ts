@@ -50,21 +50,27 @@ export function useCliRegistrationActions({
 
   const install = useCallback(async (): Promise<void> => {
     setBusyAction('install')
+
     try {
       const next = await window.api.cli.install()
+
       if (!mountedRef.current) {
         return
       }
+
       onStatusChange(next)
       onSettled()
       // Why: `install()` resolves with the post-registration status, so a refusal
       // (conflict, unsupported build, unreadable PATH) arrives as data, not a throw.
       const failure = readCliInstallFailure(next, unknownReason())
       setInstallFailure(failure)
+
       if (failure) {
         toast.error(failedTitle(next.commandName), { description: failure.reason })
+
         return
       }
+
       toast.success(
         translate(
           'auto.components.settings.CliSection.9cbcd31338',
@@ -76,6 +82,7 @@ export function useCliRegistrationActions({
       if (!mountedRef.current) {
         return
       }
+
       const failure = readCliInstallRejection(error, unknownReason())
       setInstallFailure(failure)
       // Why: closing reveals the persistent notice the toast is only a preview of.
@@ -90,8 +97,10 @@ export function useCliRegistrationActions({
 
   const remove = useCallback(async (): Promise<void> => {
     setBusyAction('remove')
+
     try {
       const next = await window.api.cli.remove()
+
       if (mountedRef.current) {
         onStatusChange(next)
         onSettled()

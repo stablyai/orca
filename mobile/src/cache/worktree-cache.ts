@@ -13,6 +13,7 @@ type CachedWorktrees = {
 const cache = new Map<string, CachedWorktrees>()
 
 const MAX_AGE_MS = 30_000
+
 const MAX_ENTRIES = 20
 
 export function setCachedWorktrees(
@@ -25,6 +26,7 @@ export function setCachedWorktrees(
   if (options?.proven !== true && readFreshEntry(hostId)?.proven) {
     return
   }
+
   // Why: Map.set on an existing key does not move it to the end of iteration
   // order. Delete first so the re-inserted key becomes the newest entry,
   // giving us true LRU eviction when the cap is hit.
@@ -32,8 +34,10 @@ export function setCachedWorktrees(
   // Default false: a caller that has not said where the rows came from must never be taken
   // as grounds for redirecting the user away from a workspace.
   cache.set(hostId, { worktrees, at: Date.now(), proven: options?.proven === true })
+
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value
+
     if (oldest) {
       cache.delete(oldest)
     }
@@ -48,17 +52,22 @@ export function getCachedWorktrees(hostId: string): unknown[] | null {
  *  which is every unproven or expired entry. */
 export function getProvenCachedWorktrees(hostId: string): unknown[] | null {
   const entry = readFreshEntry(hostId)
+
   return entry?.proven ? entry.worktrees : null
 }
 
 function readFreshEntry(hostId: string): CachedWorktrees | null {
   const entry = cache.get(hostId)
+
   if (!entry) {
     return null
   }
+
   if (Date.now() - entry.at > MAX_AGE_MS) {
     cache.delete(hostId)
+
     return null
   }
+
   return entry
 }

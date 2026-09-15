@@ -26,7 +26,9 @@ import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 // unit-tested, while this orchestration is exercised live via probes.
 
 const DEVICE_NAME_BYTES = 64
+
 const DUMMY_BYTE = 1
+
 const DYNAMIC_FORWARD_PORT = 0
 
 export type ScrcpyStreamCallbacks = {
@@ -85,6 +87,7 @@ export class ScrcpyStreamSession {
     const port = options.localPort ?? DYNAMIC_FORWARD_PORT
     emulatorProbe('scrcpy.start', { serial: options.serial, port, scid })
     const session = new ScrcpyStreamSession(options, callbacks, scid, port)
+
     try {
       await session.deploy()
       session.spawnServer()
@@ -94,6 +97,7 @@ export class ScrcpyStreamSession {
       session.close()
       throw error
     }
+
     return session
   }
 
@@ -103,15 +107,19 @@ export class ScrcpyStreamSession {
       await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
       'scrcpy server push'
     )
+
     const forward = ensureAdbOk(
       await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid)),
       'scrcpy port forward'
     )
+
     if (this.port === DYNAMIC_FORWARD_PORT) {
       const allocated = Number.parseInt(forward.stdout.trim(), 10)
+
       if (!Number.isFinite(allocated) || allocated <= 0) {
         throw new Error('adb did not return a local scrcpy port')
       }
+
       this.port = allocated
       emulatorProbe('scrcpy.forward.port', { serial, port: this.port })
     }
@@ -125,18 +133,23 @@ export class ScrcpyStreamSession {
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let serverLog = ''
+
     const capture = (chunk: Buffer): void => {
       serverLog += chunk.toString()
     }
+
     this.server.stdout?.on('data', capture)
     this.server.stderr?.on('data', capture)
     this.server.on('error', (error) => this.fail(error.message))
     this.server.on('exit', (code) => {
       emulatorProbe('scrcpy.server.exit', { code, log: serverLog.slice(0, 1000).trim() })
+
       if (!this.metaSeen) {
         this.fail('scrcpy server exited before the video stream started')
+
         return
       }
+
       this.close()
     })
   }
@@ -152,27 +165,35 @@ export class ScrcpyStreamSession {
     if (this.closed) {
       return
     }
+
     const socket = connect(this.port, '127.0.0.1')
     // A failed connect emits both 'error' and 'close'; settle once so retries
     // (and post-delivery close) don't fan out into exponential connection storms.
     let settled = false
+
     const retry = (): void => {
       if (settled || this.closed) {
         return
       }
+
       settled = true
       socket.destroy()
+
       if (attempt >= 100) {
         emulatorProbeError('scrcpy.socket.fail', new Error('no data'), { attempt })
         this.fail('scrcpy video stream did not start')
+
         return
       }
+
       setTimeout(() => this.openVideoSocket(attempt + 1), 100)
     }
+
     socket.once('data', (chunk: Buffer) => {
       if (settled) {
         return
       }
+
       settled = true
       socket.setTimeout(0)
       emulatorProbe('scrcpy.video.connected', { attempt, bytes: chunk.length })
@@ -193,6 +214,7 @@ export class ScrcpyStreamSession {
     if (this.closed) {
       return
     }
+
     const socket = connect(this.port, '127.0.0.1')
     socket.on('error', (error) =>
       emulatorProbeError('scrcpy.control.fail', error, { serial: this.options.serial })
@@ -207,24 +229,31 @@ export class ScrcpyStreamSession {
 
   private handleVideoChunk(chunk: Buffer): void {
     const buffer = this.pendingVideo
+
     if (chunk.length > 0) {
       // Socket chunks and emitted frames must not share mutable pending storage.
       buffer.append(Buffer.from(chunk))
     }
+
     // The first socket carries a 1-byte readiness marker + the 64-byte device name.
     if (!this.headerStripped) {
       const headerLen = DUMMY_BYTE + DEVICE_NAME_BYTES
+
       if (buffer.length < headerLen) {
         return
       }
+
       buffer.discard(headerLen)
       this.headerStripped = true
     }
+
     let shouldResolveReady = false
+
     if (!this.metaSeen) {
       if (buffer.length < 12) {
         return
       }
+
       const meta = parseScrcpyVideoMeta(buffer.peek(12))!
       this.metaSeen = true
       emulatorProbe('scrcpy.meta', meta)
@@ -232,21 +261,26 @@ export class ScrcpyStreamSession {
       shouldResolveReady = true
       buffer.discard(12)
     }
+
     // The parser throws on a desynced stream (e.g. an absurd frame size); catch
     // it here so it fails the session via the normal teardown path rather than
     // surfacing as an unhandled exception in this socket 'data' listener.
     let frames: ScrcpyVideoFrame[]
+
     try {
       frames = parseScrcpyVideoFrames(buffer)
     } catch (error) {
       this.fail(error instanceof Error ? error.message : String(error))
+
       return
     }
+
     if (shouldResolveReady) {
       this.resolveReady?.()
       this.resolveReady = null
       this.rejectReady = null
     }
+
     for (const frame of frames) {
       this.callbacks.onFrame(frame)
     }
@@ -256,6 +290,7 @@ export class ScrcpyStreamSession {
     if (this.closed) {
       return
     }
+
     emulatorProbeError('scrcpy.fail', new Error(message), { serial: this.options.serial })
     this.rejectReady?.(new Error(message))
     this.resolveReady = null
@@ -268,6 +303,7 @@ export class ScrcpyStreamSession {
     if (this.closed) {
       return
     }
+
     this.closed = true
     emulatorProbe('scrcpy.close', { serial: this.options.serial })
     this.videoSocket?.destroy()

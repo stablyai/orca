@@ -46,6 +46,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -93,6 +94,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -168,6 +170,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         reorderUnifiedTabs,
         moveUnifiedTabToGroup: mocks.moveUnifiedTabToGroup
       })
+
       const runtimeCall = vi.fn(async (request: { method: string }) => ({
         id: request.method,
         ok: true,
@@ -176,6 +179,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             ? { tab: { id: 'host-tab-2::leaf-2' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
             : makeSnapshot()
       }))
+
       vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
       await expect(
@@ -203,8 +207,10 @@ describe('createWebRuntimeSessionTerminal', () => {
         state: 'before',
         activeWorktreeId: 'main-worktree'
       })
+
       setStateResults.push(result)
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -265,6 +271,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       if (request.method === 'session.tabs.createTerminal') {
         return {
           id: 'legacy-create',
@@ -276,8 +283,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -329,6 +338,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       if (request.method === 'session.tabs.createTerminal') {
         return {
           id: 'legacy-create',
@@ -336,8 +346,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           result: { tab: { id: 'legacy-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 1 }
         }
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -385,8 +397,10 @@ describe('createWebRuntimeSessionTerminal', () => {
 
   it('uses the exact legacy OMP resume when an older host only advertises base authority', async () => {
     const methods: string[] = []
+
     const runtimeCall = vi.fn(async (request: { method: string }) => {
       methods.push(request.method)
+
       if (request.method === 'status.get') {
         return {
           id: 'status',
@@ -400,6 +414,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       if (request.method === 'terminal.ensureAgentSession') {
         return {
           id: 'ensure',
@@ -410,12 +425,14 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       return {
         id: 'legacy-create',
         ok: true,
         result: { tab: { id: 'legacy-tab-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 1 }
       }
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(

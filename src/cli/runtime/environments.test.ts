@@ -25,6 +25,7 @@ describe('CLI runtime environments', () => {
 
   it('saves, resolves, and removes a paired environment', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+
     const saved = addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode(),
@@ -62,6 +63,7 @@ describe('CLI runtime environments', () => {
 
   it('rejects an environment with the same name', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+
     const first = addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode('ws://127.0.0.1:1111'),

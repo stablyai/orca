@@ -48,6 +48,7 @@ export function resolveMobileNativeChat(
   if (!tab) {
     return null
   }
+
   if (tab.type === 'agent-session') {
     // Structured tabs are journal-backed, so any provider the shared reducer can
     // replay renders here — there is no per-agent transcript layout to know.
@@ -55,21 +56,27 @@ export function resolveMobileNativeChat(
       ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null }
       : null
   }
+
   if (tab.type !== 'terminal') {
     return null
   }
+
   const liveAgent = tab.agentStatus?.agentType ?? null
+
   const agent = liveAgent
     ? isNativeChatSupportedAgent(liveAgent)
       ? liveAgent
       : null
     : tab.launchAgent
+
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
+
   if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
     return null
   }
+
   return {
     agent,
     sessionId: tab.agentStatus?.providerSession?.id ?? null,
@@ -91,8 +98,10 @@ export function resolveMobileNativeChatFileSessionId(
   if (tab?.type === 'agent-session') {
     return tab.sessionId ?? null
   }
+
   if (tab?.type === 'terminal') {
     return tab.agentStatus?.providerSession?.id ?? null
   }
+
   return null
 }

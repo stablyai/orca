@@ -28,6 +28,7 @@ export async function installCopilotHooksRemote(
 
   try {
     const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
     if (!config) {
       return {
         agent: 'copilot',
@@ -46,7 +47,9 @@ export async function installCopilotHooksRemote(
       if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {

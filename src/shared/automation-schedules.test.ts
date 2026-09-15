@@ -22,6 +22,7 @@ import {
 function formatTimeForTest(hour: number, minute: number): string {
   const date = new Date()
   date.setHours(hour, minute, 0, 0)
+
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit'
@@ -35,31 +36,37 @@ afterEach(() => {
 describe('automation schedules', () => {
   it('uses the latest overdue hourly occurrence for missed-run grace decisions', () => {
     const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
+
     const latest = latestAutomationOccurrenceAtOrBefore(
       rrule,
       new Date('2026-05-12T00:00:00').getTime(),
       new Date('2026-05-13T14:20:00').getTime()
     )
+
     expect(latest).toBe(new Date('2026-05-13T14:00:00').getTime())
   })
 
   it('does not return a future hourly dtstart that is off the scheduled minute', () => {
     const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
+
     const next = nextAutomationOccurrenceAfter(
       rrule,
       new Date('2026-05-13T10:30:00').getTime(),
       new Date('2026-05-13T09:00:00').getTime()
     )
+
     expect(next).toBe(new Date('2026-05-13T11:00:00').getTime())
   })
 
   it('computes weekday schedules without returning weekend candidates', () => {
     const rrule = buildAutomationRrule({ preset: 'weekdays', hour: 9, minute: 30 })
+
     const next = nextAutomationOccurrenceAfter(
       rrule,
       new Date('2026-05-01T00:00:00').getTime(),
       new Date('2026-05-15T12:00:00').getTime()
     )
+
     expect(new Date(next).getDay()).toBe(1)
     expect(new Date(next).getHours()).toBe(9)
     expect(new Date(next).getMinutes()).toBe(30)
@@ -119,6 +126,7 @@ describe('automation schedules', () => {
       new Date('2026-05-01T00:00:00').getTime(),
       new Date('2026-05-15T12:00:00').getTime()
     )
+
     expect(next).toBe(new Date('2026-05-18T10:15:00').getTime())
 
     const latest = latestAutomationOccurrenceAtOrBefore(
@@ -126,6 +134,7 @@ describe('automation schedules', () => {
       new Date('2026-05-01T00:00:00').getTime(),
       new Date('2026-05-15T12:00:00').getTime()
     )
+
     expect(latest).toBe(new Date('2026-05-15T10:15:00').getTime())
   })
 
@@ -145,11 +154,13 @@ describe('automation schedules', () => {
   // Why: shared labels feed the CLI, so they must stay English on any OS locale (#14404).
   it('formats schedule labels without reading the OS weekday names', () => {
     const nativeDateTimeFormat = Intl.DateTimeFormat
+
     const dateTimeFormat = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (
       ...args: ConstructorParameters<typeof Intl.DateTimeFormat>
     ) {
       return new nativeDateTimeFormat(...args)
     } as unknown as typeof Intl.DateTimeFormat)
+
     const weeklyRrule = buildAutomationRrule({ preset: 'weekly', hour: 9, minute: 0, dayOfWeek: 5 })
 
     expect(formatAutomationSchedule('30 12 * * 7')).toBe(`Sundays at ${formatTimeForTest(12, 30)}`)
@@ -248,6 +259,7 @@ describe('automation schedules', () => {
       new Date('2026-05-01T00:00:00').getTime(),
       new Date('2026-05-15T12:00:00').getTime()
     )
+
     expect(next).toBe(new Date('2026-05-18T09:00:00').getTime())
     expect(isValidAutomationSchedule('0 9 * * 0-7')).toBe(true)
     expect(isValidAutomationSchedule('0 9 * * 1-7')).toBe(true)
@@ -275,6 +287,7 @@ describe('automation schedules', () => {
       new Date('2026-05-01T00:00:00').getTime(),
       new Date('2026-05-15T12:00:00').getTime()
     )
+
     expect(next).toBe(new Date('2028-02-29T00:00:00').getTime())
   })
 })

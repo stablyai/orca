@@ -23,6 +23,7 @@ export function useBrowserPageDownloadEvents({
       if (event.browserPageId !== browserTabId) {
         return
       }
+
       setDownloadStates((current) => {
         const nextEntry: BrowserDownloadState = {
           browserPageId: event.browserPageId,
@@ -38,14 +39,18 @@ export function useBrowserPageDownloadEvents({
           progressState: null,
           completedAt: null
         }
+
         const existingIndex = current.findIndex(
           (download) => download.downloadId === event.downloadId
         )
+
         if (existingIndex === -1) {
           return [nextEntry, ...current]
         }
+
         const next = [...current]
         next[existingIndex] = { ...next[existingIndex], ...nextEntry }
+
         return next
       })
       setResourceNotice(null)
@@ -74,6 +79,7 @@ export function useBrowserPageDownloadEvents({
       if (event.browserPageId && event.browserPageId !== browserTabId) {
         return
       }
+
       emitBrowserRemoteDownloadToast(event)
       setDownloadStates((current) =>
         current.map((download) =>

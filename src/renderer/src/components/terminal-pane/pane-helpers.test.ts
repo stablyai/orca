@@ -78,11 +78,13 @@ describe('fitAndFocusPanes', () => {
 
   function makeManager(): { manager: PaneManager; terminal: { focus: ReturnType<typeof vi.fn> } } {
     const terminal = { focus: vi.fn() }
+
     const manager = {
       fitAllPanes: vi.fn(),
       getActivePane: () => ({ terminal }),
       getPanes: () => [{ terminal }]
     } as unknown as PaneManager
+
     return { manager, terminal }
   }
 
@@ -125,6 +127,7 @@ describe('fitAndFocusPanes', () => {
       tagName: 'TEXTAREA',
       classNames: ['xterm-helper-textarea']
     }) as unknown as Element
+
     stubDocument(textarea)
     const { manager, terminal } = makeManager()
 

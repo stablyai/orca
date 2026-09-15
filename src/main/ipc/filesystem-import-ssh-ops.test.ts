@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
+
 const {
   handleMock,
   lstatMock,
@@ -22,6 +23,7 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('fs/promises', () => ({
   lstat: lstatMock,
   mkdir: mkdirMock,
@@ -31,6 +33,7 @@ vi.mock('fs/promises', () => ({
   copyFile: copyFileMock,
   readdir: readdirMock
 }))
+
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -55,6 +58,7 @@ const store = {
   ],
   getSettings: () => ({ workspaceDir: path.resolve('/workspace') })
 }
+
 const enoent = (): Error => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 function createProvider(uploadSession: FileUploadSession): IFilesystemProvider {
@@ -86,19 +90,23 @@ describe('fs:importExternalPaths — SSH operations', () => {
   const connId = 'ssh-conn-1'
   let provider: IFilesystemProvider
   let uploadSession: FileUploadSession
+
   const makeConn = () => ({
     getState: () => ({ status: 'connected' }),
     sftp: vi.fn()
   })
+
   const mockDir = (p: string): void => {
     const rp = path.resolve(p)
     lstatMock.mockImplementation(async (x: string) => {
       if (x === rp) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       throw enoent()
     })
   }
+
   const mockFile = (p: string): void => {
     const rp = path.resolve(p)
     lstatMock.mockImplementation(async (x: string) => {
@@ -112,9 +120,11 @@ describe('fs:importExternalPaths — SSH operations', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
   }
+
   const invoke = (args: Record<string, unknown>) =>
     handlers.get('fs:importExternalPaths')!(null, {
       ...args,
@@ -168,8 +178,10 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (candidate !== sourcePath) {
         throw enoent()
       }
+
       resetSshConnectionGenerations(72)
       advanceSshConnectionGeneration(connId)
+
       return {
         size: 12,
         ino: 1,
@@ -201,13 +213,16 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (p === `${destDir}/logo.png`) {
         return { type: 'file', size: 1, mtime: 1 }
       }
+
       throw enoent()
     })
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/logo.png'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({
       status: 'imported',
       destPath: `${destDir}/logo copy.png`,
@@ -221,13 +236,16 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (p === rp) {
         return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true }
       }
+
       throw enoent()
     })
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/link.txt'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({ status: 'skipped', reason: 'symlink' })
   })
 
@@ -245,6 +263,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     vi.mocked(uploadSession.uploadFile).mockImplementation(async (_localPath, remotePath) => {
@@ -288,6 +307,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (p === root) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       if (p === child) {
         return {
           size: 3,
@@ -298,6 +318,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockImplementation(async (p: string) =>
@@ -312,6 +333,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
           ]
         : []
     )
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/assets'],
       destDir,
@@ -328,22 +350,26 @@ describe('fs:importExternalPaths — SSH operations', () => {
   it('reports per-item failure when deconfliction throws', async () => {
     mockFile('/tmp/dropped/file.txt')
     vi.mocked(provider.stat).mockRejectedValue(new Error('Remote connection not found'))
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/file.txt'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({ status: 'failed', reason: 'Remote connection not found' })
   })
 
   it('reports failure when creating a directory rejects', async () => {
     mockDir('/tmp/dropped/mydir')
     vi.mocked(provider.createDirNoClobber).mockRejectedValue(new Error('permission denied'))
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/mydir'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({ status: 'failed', reason: 'permission denied' })
   })
 
@@ -354,6 +380,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (p === root) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
       }
+
       if (p === child) {
         return {
           size: 3,
@@ -364,6 +391,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
           isSymbolicLink: () => false
         }
       }
+
       throw enoent()
     })
     readdirMock.mockImplementation(async (p: string) =>
@@ -397,13 +425,16 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (p === `${destDir}/assets`) {
         return { type: 'directory', size: 1, mtime: 1 }
       }
+
       throw enoent()
     })
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/assets'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({
       status: 'imported',
       destPath: `${destDir}/assets copy`,
@@ -425,13 +456,16 @@ describe('fs:importExternalPaths — SSH operations', () => {
           }
         ]
       }
+
       return []
     })
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/project'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({ status: 'skipped', reason: 'symlink' })
     expect(uploadSession.uploadFile).not.toHaveBeenCalled()
   })
@@ -442,13 +476,16 @@ describe('fs:importExternalPaths — SSH operations', () => {
       if (p === rp) {
         throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
       }
+
       throw enoent()
     })
+
     const { results } = await invoke({
       sourcePaths: ['/tmp/dropped/secret.txt'],
       destDir,
       connectionId: connId
     })
+
     expect(results[0]).toMatchObject({ status: 'skipped', reason: 'permission-denied' })
   })
 })

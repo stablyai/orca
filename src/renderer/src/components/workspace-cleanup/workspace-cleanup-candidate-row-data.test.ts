@@ -25,6 +25,7 @@ describe('workspace cleanup candidate row data', () => {
         checkedAt: null
       }
     })
+
     const unknownBase = makeCandidate({
       blockers: ['unknown-base'],
       git: {

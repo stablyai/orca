@@ -10,7 +10,9 @@ import {
 } from './macos-symbolic-hotkeys'
 
 const CONTROL_MASK = 0x40000
+
 const OPTION_MASK = 0x80000
+
 const SHIFT_MASK = 0x20000
 
 function hotkeyEntry(keycode: number, mask: number, enabled = true): unknown {
@@ -33,6 +35,7 @@ describe('capturedDigitRowChordsFromSymbolicHotkeysJson', () => {
         '120': hotkeyEntry(20, CONTROL_MASK, false)
       }
     })
+
     expect(chords).toEqual([physicalChord('Digit1'), physicalChord('Digit2')])
   })
 
@@ -40,6 +43,7 @@ describe('capturedDigitRowChordsFromSymbolicHotkeysJson', () => {
     const chords = capturedDigitRowChordsFromSymbolicHotkeysJson({
       AppleSymbolicHotKeys: { '118': hotkeyEntry(18, CONTROL_MASK | OPTION_MASK | SHIFT_MASK) }
     })
+
     expect(chords).toEqual([physicalChord('Digit1', { alt: true, shift: true })])
   })
 
@@ -63,6 +67,7 @@ describe('capturedDigitRowChordsFromSymbolicHotkeysJson', () => {
         }
       }
     })
+
     expect(chords).toEqual([])
   })
 
@@ -70,6 +75,7 @@ describe('capturedDigitRowChordsFromSymbolicHotkeysJson', () => {
     const chords = capturedDigitRowChordsFromSymbolicHotkeysJson({
       AppleSymbolicHotKeys: { '118': hotkeyEntry(18, CONTROL_MASK | 0x800000) }
     })
+
     expect(chords).toEqual([])
   })
 
@@ -95,6 +101,7 @@ describe('resolveCapturedDigitChordsForLayout', () => {
       ['Digit1', '1'],
       ['Digit2', '2']
     ])
+
     expect(
       resolveCapturedDigitChordsForLayout(
         [physicalChord('Digit1'), physicalChord('Digit2')],
@@ -114,6 +121,7 @@ describe('findMacSystemHotkeyConflicts', () => {
       chord(1),
       chord(2)
     ])
+
     expect(conflicts).toEqual([
       { actionId: 'tab.selectByIndex', binding: 'Ctrl+1', capturedBindings: ['Ctrl+1', 'Ctrl+2'] }
     ])
@@ -123,6 +131,7 @@ describe('findMacSystemHotkeyConflicts', () => {
     const conflicts = findMacSystemHotkeyConflicts(KEYBINDING_DEFINITIONS, 'darwin', undefined, [
       chord(7)
     ])
+
     expect(conflicts).toEqual([
       { actionId: 'tab.selectByIndex', binding: 'Ctrl+1', capturedBindings: ['Ctrl+7'] }
     ])
@@ -135,6 +144,7 @@ describe('findMacSystemHotkeyConflicts', () => {
       { 'tab.selectByIndex': ['Ctrl+Cmd+1'] },
       [chord(1), chord(2)]
     )
+
     expect(conflicts).toEqual([])
   })
 
@@ -145,6 +155,7 @@ describe('findMacSystemHotkeyConflicts', () => {
       { 'tab.selectByIndex': [], 'workspace.selectByIndex': ['Ctrl+1'] },
       [chord(3)]
     )
+
     expect(conflicts).toEqual([
       { actionId: 'workspace.selectByIndex', binding: 'Ctrl+1', capturedBindings: ['Ctrl+3'] }
     ])

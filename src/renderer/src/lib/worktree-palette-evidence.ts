@@ -27,9 +27,11 @@ function toIsoDate(epochMs: number | undefined): string {
   if (!epochMs || !Number.isFinite(epochMs)) {
     return ''
   }
+
   const date = new Date(epochMs)
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
+
   return `${date.getFullYear()}-${month}-${day}`
 }
 
@@ -50,13 +52,16 @@ export function applyWorktreeCommentSnippet(
   if (!ranges.length) {
     return { text: comment, ranges }
   }
+
   const start = Math.min(...ranges.map((range) => range.start))
   const end = Math.max(...ranges.map((range) => range.end))
   const snippet = extractWorktreePaletteCommentSnippet(comment, start, end)
   const delta = snippet.matchRange.start - start
+
   const shifted = ranges
     .map((range) => ({ start: range.start + delta, end: range.end + delta }))
     .filter((range) => range.start >= 0 && range.end <= snippet.text.length)
+
   return { text: snippet.text, ranges: shifted.length ? shifted : [snippet.matchRange] }
 }
 
@@ -64,9 +69,11 @@ export function buildWorktreeAutomationEvidence(
   worktree: Worktree
 ): PaletteComposedEvidence | null {
   const provenance = worktree.automationProvenance
+
   if (!provenance) {
     return null
   }
+
   return composePaletteEvidence({
     id: `automation:${provenance.automationRunId || provenance.automationId}`,
     kind: 'automation',
@@ -96,15 +103,19 @@ export function buildWorktreeAutomationEvidence(
 
 function resolveLinkedTaskIdentifier(worktree: Worktree): string {
   const item = worktree.linkedWorkItem
+
   if (item?.linearIdentifier) {
     return item.linearIdentifier
   }
+
   if (item?.jiraIdentifier) {
     return item.jiraIdentifier
   }
+
   if (item && item.number > 0) {
     return `#${item.number}`
   }
+
   return worktree.linkedLinearIssue ?? ''
 }
 
@@ -117,9 +128,11 @@ export function buildWorktreeLinkedTaskEvidence(
 ): PaletteComposedEvidence | null {
   const identifier = resolveLinkedTaskIdentifier(worktree)
   const title = worktree.linkedWorkItem?.title ?? ''
+
   if (!identifier && !title) {
     return null
   }
+
   return composePaletteEvidence({
     id: `task:${identifier || title}`,
     kind: 'task',
@@ -142,8 +155,10 @@ export function buildWorktreeReviewEvidence(
   if (!review || !Number.isFinite(review.number)) {
     return null
   }
+
   const isMergeRequest = review.provider === 'gitlab'
   const sigil = isMergeRequest ? '!' : '#'
+
   return composePaletteEvidence({
     id: `review:${review.provider}:${review.number}`,
     kind: isMergeRequest ? 'mr' : 'pr',
@@ -167,6 +182,7 @@ export function buildWorktreeIssueEvidence(args: {
   if (args.number == null || !Number.isFinite(args.number)) {
     return null
   }
+
   return composePaletteEvidence({
     id: `issue:${args.number}`,
     kind: 'issue',

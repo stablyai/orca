@@ -35,7 +35,9 @@ import { delimiter, join, resolve } from 'node:path'
 import { writePersistedStateFixture } from './startup-bench-state-fixture.mjs'
 
 const scriptDir = import.meta.dirname
+
 const repoRoot = resolve(scriptDir, '..', '..', '..')
+
 const require = createRequire(import.meta.url)
 
 function parseArgs(argv) {
@@ -61,8 +63,10 @@ function parseArgs(argv) {
     // complete the way it would in a real session.
     lingerMs: 500
   }
+
   for (let i = 2; i < argv.length; i++) {
     const next = () => argv[++i]
+
     switch (argv[i]) {
       case '--label':
         args.label = next()
@@ -107,6 +111,7 @@ function parseArgs(argv) {
         throw new Error(`Unknown argument: ${argv[i]}`)
     }
   }
+
   return args
 }
 
@@ -118,9 +123,11 @@ function parseArgs(argv) {
 function ensureFixture(fixtureDir, options) {
   const { fileCount, stateProfile, sessionTabs, githubRepos, sshUnreachableTargets } = options
   const manifestPath = join(fixtureDir, 'bench-fixture-manifest.json')
+
   if (existsSync(manifestPath)) {
     try {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+
       if (
         manifest.files === fileCount &&
         manifest.stateProfile === stateProfile &&
@@ -129,13 +136,16 @@ function ensureFixture(fixtureDir, options) {
         (manifest.sshUnreachableTargets ?? 0) === sshUnreachableTargets
       ) {
         console.log(`[fixture] reusing ${fixtureDir} (${fileCount} files, state=${stateProfile})`)
+
         return
       }
     } catch {
       // fall through and rebuild
     }
   }
+
   console.log(`[fixture] creating ${fixtureDir} with ~${fileCount} synthetic files…`)
+
   const buckets = [
     ['Cache', 'Cache_Data'],
     ['Code Cache', 'js'],
@@ -146,24 +156,30 @@ function ensureFixture(fixtureDir, options) {
     ['Service Worker', 'CacheStorage'],
     ['terminal-scrollback-snapshots']
   ]
+
   const payload = 'x'.repeat(1024)
   let written = 0
   const started = Date.now()
+
   for (let b = 0; written < fileCount; b = (b + 1) % buckets.length) {
     const dir = join(fixtureDir, ...buckets[b], `g${Math.floor(written / 512)}`)
     mkdirSync(dir, { recursive: true })
     const batch = Math.min(512, fileCount - written)
+
     for (let i = 0; i < batch; i++) {
       writeFileSync(join(dir, `f_${String(written + i).padStart(6, '0')}`), payload)
     }
+
     written += batch
   }
+
   const persistedStateBytes = writePersistedStateFixture(fixtureDir, {
     stateProfile,
     sessionTabs,
     githubRepos,
     sshUnreachableTargets
   })
+
   writeFileSync(
     manifestPath,
     JSON.stringify({
@@ -190,9 +206,11 @@ function writeGhShim(fixtureDir, ghHangMs) {
   if (!ghHangMs) {
     return null
   }
+
   const shimDir = join(fixtureDir, 'gh-shim')
   mkdirSync(shimDir, { recursive: true })
   const hangSeconds = Math.max(1, Math.ceil(ghHangMs / 1000))
+
   if (process.platform === 'win32') {
     // ping -n K waits K-1 seconds between K probes of localhost.
     writeFileSync(
@@ -204,6 +222,7 @@ function writeGhShim(fixtureDir, ghHangMs) {
     writeFileSync(shimPath, `#!/bin/sh\nsleep ${hangSeconds}\nexit 1\n`)
     spawnSync('chmod', ['+x', shimPath], { stdio: 'ignore' })
   }
+
   return shimDir
 }
 
@@ -212,6 +231,7 @@ function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
   // default-ON rollout from adding unrelated migration work to timings.
   const isolatedHome = join(fixtureDir, 'home')
   mkdirSync(isolatedHome, { recursive: true })
+
   const env = {
     ...process.env,
     ORCA_STARTUP_DIAGNOSTICS: '1',
@@ -221,21 +241,27 @@ function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
     ORCA_E2E_HOME_DIR: isolatedHome,
     ORCA_E2E_HEADLESS: '1'
   }
+
   delete env.CODEX_HOME
   delete env.ORCA_CODEX_HOME
+
   if (ghShimDir) {
     env.PATH = `${ghShimDir}${delimiter}${env.PATH ?? ''}`
   }
+
   if (githubRepos > 0) {
     // Keep the developer's real github.user/user.username out of the run so
     // repo hydration deterministically falls through to the gh probe.
     const emptyGitConfig = join(fixtureDir, 'bench-empty-gitconfig')
+
     if (!existsSync(emptyGitConfig)) {
       writeFileSync(emptyGitConfig, '')
     }
+
     env.GIT_CONFIG_GLOBAL = emptyGitConfig
     env.GIT_CONFIG_NOSYSTEM = '1'
   }
+
   return env
 }
 
@@ -244,8 +270,10 @@ function killProcessTree(proc) {
     if (proc.exitCode === null && proc.signalCode === null) {
       spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
     }
+
     return
   }
+
   // Why the whole group and not just the child: Electron's helper processes
   // inherit the stderr pipe, so killing only the launcher leaves them holding it
   // open — the harness then never sees EOF and never exits after its last run.
@@ -263,24 +291,30 @@ function killProcessTree(proc) {
 
 function parseStartupLine(line) {
   const match = /^\[startup\] (\S+)(.*)$/.exec(line)
+
   if (!match) {
     return null
   }
+
   const details = {}
   const detailText = match[2].trim()
+
   if (detailText) {
     for (const pair of detailText.match(/(\S+?)=("[^"]*"|\S+)/g) ?? []) {
       const eq = pair.indexOf('=')
       const key = pair.slice(0, eq)
       let value = pair.slice(eq + 1)
+
       try {
         value = JSON.parse(value)
       } catch {
         // keep raw string
       }
+
       details[key] = value
     }
   }
+
   return { event: match[1], details }
 }
 
@@ -292,6 +326,7 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
     const commandArgs = exe ? [] : [repoRoot]
     const events = []
     const startedAt = process.hrtime.bigint()
+
     const child = spawn(command, commandArgs, {
       env: launchEnv,
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -299,12 +334,15 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
       // Electron helper it spawned (see killProcessTree).
       detached: process.platform !== 'win32'
     })
+
     let finished = false
     let buffer = ''
+
     const finish = (outcome) => {
       if (finished) {
         return
       }
+
       finished = true
       clearTimeout(timer)
       // Keep the app alive briefly so trailing diagnostic lines (and, with
@@ -314,21 +352,26 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
         resolvePromise({ outcome, events })
       }, lingerMs)
     }
+
     const timer = setTimeout(() => finish('timeout'), timeoutMs)
     child.stderr.setEncoding('utf-8')
     child.stderr.on('data', (chunk) => {
       buffer += chunk
       let newlineIndex = buffer.indexOf('\n')
+
       while (newlineIndex !== -1) {
         const line = buffer.slice(0, newlineIndex).trimEnd()
         buffer = buffer.slice(newlineIndex + 1)
         newlineIndex = buffer.indexOf('\n')
         const parsed = parseStartupLine(line)
+
         if (!parsed) {
           continue
         }
+
         const harnessMs = Number(process.hrtime.bigint() - startedAt) / 1e6
         events.push({ ...parsed, harnessMs: Math.round(harnessMs * 10) / 10 })
+
         if (parsed.event === waitForEvent) {
           finish('ok')
         }
@@ -341,9 +384,11 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
 
 function eventTime(events, name, key) {
   const entry = events.find((event) => event.event === name)
+
   if (!entry) {
     return null
   }
+
   return key === 't'
     ? typeof entry.details.t === 'number'
       ? entry.details.t
@@ -354,6 +399,7 @@ function eventTime(events, name, key) {
 function derivePhases(events) {
   const aclStart = eventTime(events, 'acl-grant-start', 't')
   const aclDone = eventTime(events, 'acl-grant-done', 't')
+
   return {
     startupJsonParseMs: delta(
       events,
@@ -398,35 +444,44 @@ function derivePhases(events) {
 
 function maxEventDetailsNumber(events, name, key) {
   let max = null
+
   for (const event of events) {
     if (event.event !== name) {
       continue
     }
+
     const value = event.details[key]
+
     if (typeof value === 'number' && (max === null || value > max)) {
       max = value
     }
   }
+
   return max
 }
 
 function eventDetailsNumber(events, name, key) {
   const value = events.find((event) => event.event === name)?.details[key]
+
   return typeof value === 'number' ? value : null
 }
 
 function delta(events, from, to) {
   const a = eventTime(events, from, 't')
   const b = eventTime(events, to, 't')
+
   return a !== null && b !== null ? b - a : null
 }
 
 function median(values) {
   const usable = values.filter((value) => typeof value === 'number').sort((a, b) => a - b)
+
   if (usable.length === 0) {
     return null
   }
+
   const mid = Math.floor(usable.length / 2)
+
   return usable.length % 2 ? usable[mid] : (usable[mid - 1] + usable[mid]) / 2
 }
 
@@ -435,7 +490,9 @@ function sanitizeLocalPath(value) {
   if (typeof value !== 'string') {
     return value
   }
+
   const home = os.homedir()
+
   return value.startsWith(home) ? `~${value.slice(home.length)}` : value
 }
 
@@ -443,14 +500,17 @@ function formatMs(value) {
   if (value === null) {
     return 'n/a'
   }
+
   return value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${Math.round(value)}ms`
 }
 
 async function main() {
   const args = parseArgs(process.argv)
+
   if (!['none', 'restored-local-tabs'].includes(args.stateProfile)) {
     throw new Error(`Unknown state profile: ${args.stateProfile}`)
   }
+
   const fixtureDir = resolve(
     args.fixtureDir ??
       join(
@@ -459,6 +519,7 @@ async function main() {
         `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-gh${args.githubRepos}-ssh${args.sshUnreachableTargets}`
       )
   )
+
   mkdirSync(fixtureDir, { recursive: true })
   ensureFixture(fixtureDir, {
     fileCount: args.files,
@@ -468,6 +529,7 @@ async function main() {
     sshUnreachableTargets: args.sshUnreachableTargets
   })
   const ghShimDir = writeGhShim(fixtureDir, args.ghHangMs)
+
   const launchEnv = buildLaunchEnvironment({
     fixtureDir,
     githubRepos: args.githubRepos,
@@ -479,8 +541,10 @@ async function main() {
   }
 
   const iterations = []
+
   for (let i = 0; i < args.iterations; i++) {
     process.stdout.write(`[bench] iteration ${i + 1}/${args.iterations}… `)
+
     const result = await runIteration({
       exe: args.exe,
       timeoutMs: args.timeoutMs,
@@ -488,6 +552,7 @@ async function main() {
       waitForEvent: args.waitForEvent,
       launchEnv
     })
+
     const phases = derivePhases(result.events)
     iterations.push({ ...result, phases })
     console.log(
@@ -499,6 +564,7 @@ async function main() {
 
   const phaseNames = Object.keys(iterations[0]?.phases ?? {})
   const summary = {}
+
   for (const name of phaseNames) {
     summary[name] = median(iterations.map((iteration) => iteration.phases[name]))
   }
@@ -534,9 +600,11 @@ async function main() {
   console.log(`\n[bench] label=${args.label} (medians over ${iterations.length} runs)`)
   console.log('| phase | median |')
   console.log('|---|---|')
+
   for (const name of phaseNames) {
     console.log(`| ${name} | ${formatMs(summary[name])} |`)
   }
+
   console.log(`\n[bench] results written to ${outPath}`)
 }
 

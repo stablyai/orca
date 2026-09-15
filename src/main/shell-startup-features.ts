@@ -61,6 +61,7 @@ export function selectShellStartupFeatures(input: ShellStartupFeatureInput): She
   // Exactly the panes Orca wrapped before history widened wrapping.
   const wrappedBefore = overlay || input.hasStartupCommand
   const ready = input.waitsForShellReady
+
   // Why zsh only: the unguarded HISTFILE assignment lives in the *system zshrc*.
   // bash has no equivalent, and wrapping bash for history alone would swap its
   // login startup-file chain for Orca's approximation of one.
@@ -71,23 +72,29 @@ export function selectShellStartupFeatures(input: ShellStartupFeatureInput): She
     shellName(input.shellPath) === 'zsh' && (Boolean(input.env.ORCA_HISTFILE) || wrappedBefore)
 
   const features: ShellStartupFeature[] = []
+
   if (overlay) {
     features.push('overlay')
   }
+
   if (history) {
     features.push('history')
   }
+
   // Why gated on wrappedBefore: a pane wrapped only for history must stay
   // observably identical to the unwrapped pane it was before this change.
   if (wrappedBefore) {
     features.push('markers')
   }
+
   if (ready) {
     features.push('ready')
   }
+
   if (input.emitsStartupIdentity) {
     features.push('identity')
   }
+
   return features
 }
 

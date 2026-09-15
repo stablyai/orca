@@ -33,6 +33,7 @@ export function InlineInputRow({
   const focusFrame = useRef<number | null>(null)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const refocusFrame = useRef<number | null>(null)
+
   const inlineInputKey = [
     inlineInput.type,
     inlineInput.parentPath,
@@ -61,11 +62,14 @@ export function InlineInputRow({
       cancelAnimationFrame(focusFrame.current)
       focusFrame.current = null
     }
+
     cancelRefocusFrame()
+
     if (blurTimeout.current) {
       clearTimeout(blurTimeout.current)
       blurTimeout.current = null
     }
+
     if (settleTimer.current) {
       clearTimeout(settleTimer.current)
       settleTimer.current = null
@@ -76,6 +80,7 @@ export function InlineInputRow({
     (el: HTMLInputElement | null): void => {
       inputRef.current = el
       clearInlineInputTimers()
+
       if (!el) {
         return
       }
@@ -86,18 +91,23 @@ export function InlineInputRow({
       // Schedule focus after any pending focus-restore from menu close
       focusFrame.current = requestAnimationFrame(() => {
         focusFrame.current = null
+
         if (inputRef.current !== el) {
           return
         }
+
         el.focus()
+
         if (inlineInput.type === 'rename' && inlineInput.existingName) {
           const dotIndex = inlineInput.existingName.lastIndexOf('.')
+
           if (dotIndex > 0) {
             el.setSelectionRange(0, dotIndex)
           } else {
             el.select()
           }
         }
+
         // Allow enough time for the menu close focus management to finish
         // before treating blur events as intentional user actions.
         settleTimer.current = setTimeout(() => {
@@ -121,6 +131,7 @@ export function InlineInputRow({
       if (submitted.current) {
         return
       }
+
       submitted.current = true
       clearBlurTimeout()
       onSubmit(value)
@@ -164,8 +175,10 @@ export function InlineInputRow({
           // relatedTarget can't tell an ordinary row click from Radix cleanup.
           if (!focusSettled.current) {
             scheduleInputRefocus()
+
             return
           }
+
           const value = e.currentTarget.value
           blurTimeout.current = setTimeout(() => {
             blurTimeout.current = null

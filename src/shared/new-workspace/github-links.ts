@@ -24,17 +24,21 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   if (isWorkItemLinkQueryTooLarge(raw)) {
     return { query: '', directNumber: null, tooLarge: true }
   }
+
   const trimmed = raw.trim()
+
   if (!trimmed) {
     return { query: '', directNumber: null }
   }
 
   const direct = parseGitHubIssueOrPRNumber(trimmed)
+
   if (direct !== null && !HTTP_URL_PREFIX_RE.test(trimmed)) {
     return { query: trimmed, directNumber: direct }
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed)
+
   if (!link) {
     return { query: trimmed, directNumber: null }
   }

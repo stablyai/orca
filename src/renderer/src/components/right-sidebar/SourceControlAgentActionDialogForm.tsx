@@ -76,9 +76,11 @@ function sourceControlLaunchSaveTargetFromValue(
   if (value === 'repo' && repo?.id) {
     return { type: 'repo', repoId: repo.id }
   }
+
   if (value === 'global') {
     return { type: 'global' }
   }
+
   return null
 }
 
@@ -115,6 +117,7 @@ export function SourceControlAgentActionDialogForm({
 }: SourceControlAgentActionDialogFormProps): React.JSX.Element {
   const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
   const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
+
   const selectedRecipe = selectedAgent
     ? {
         agentId: selectedAgent,
@@ -122,7 +125,9 @@ export function SourceControlAgentActionDialogForm({
         agentArgs
       }
     : null
+
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
+
   // Why: start/save only writes the selected target, so the dialog copy must not
   // depend on whether other available targets also match.
   const selectedLaunchRecipeAlreadySaved = Boolean(
@@ -136,8 +141,10 @@ export function SourceControlAgentActionDialogForm({
       repo
     })
   )
+
   const showSaveLaunchRecipe = Boolean(canSaveAgentDefault && selectedAgent)
   const saveScopeTargets = saveTargets.filter((target) => target.value !== 'none')
+
   const effectiveStartLabel =
     showSaveLaunchRecipe && saveLaunchRecipe && !selectedLaunchRecipeAlreadySaved
       ? translate(
@@ -260,6 +267,7 @@ export function SourceControlAgentActionDialogForm({
             onInsert={(variable) => {
               const separator =
                 commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
+
               onCommandTemplateChange(`${commandTemplate}${separator}{${variable}}`)
             }}
           />

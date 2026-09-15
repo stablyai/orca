@@ -35,8 +35,11 @@ vi.mock('../pwsh', () => ({
 // tests run on non-Windows CI. The real resolver (which skips the Store App
 // Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -49,6 +52,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -60,6 +64,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -122,11 +127,13 @@ describe('createPtySubprocess', () => {
   it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+
     const saved = {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
       ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
     }
+
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
@@ -152,11 +159,13 @@ describe('createPtySubprocess', () => {
   it('preserves explicit child Orca pane identity over parent env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+
     const saved = {
       ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
       ORCA_TAB_ID: process.env.ORCA_TAB_ID,
       ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
     }
+
     process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
     process.env.ORCA_TAB_ID = 'parent-tab'
     process.env.ORCA_WORKTREE_ID = 'parent-worktree'
@@ -319,12 +328,14 @@ describe('createPtySubprocess', () => {
     // only chance to drop a CONDA_SHLVL sentinel left without a prefix (#14195).
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+
     const saved = {
       CONDA_SHLVL: process.env.CONDA_SHLVL,
       CONDA_PREFIX: process.env.CONDA_PREFIX,
       CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
       CONDA_EXE: process.env.CONDA_EXE
     }
+
     delete process.env.CONDA_PREFIX
     process.env.CONDA_SHLVL = '1'
     process.env.CONDA_DEFAULT_ENV = 'base'
@@ -351,9 +362,11 @@ describe('createPtySubprocess', () => {
   it('does not inherit legacy attribution state from a pre-upgrade daemon', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+
     const saved = Object.fromEntries(
       [...LEGACY_TERMINAL_SHIM_ENV_KEYS, 'PATH'].map((key) => [key, process.env[key]])
     )
+
     process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
     process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
     process.env.PATH = `/tmp/orca-terminal-attribution/posix${delimiter}/usr/bin`
@@ -372,6 +385,7 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.PATH).toBe('/usr/bin')
+
     for (const key of LEGACY_TERMINAL_SHIM_ENV_KEYS) {
       expect(env[key]).toBeUndefined()
     }
@@ -432,6 +446,7 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
     const saved = {
       APPIMAGE: process.env.APPIMAGE,
       APPDIR: process.env.APPDIR,
@@ -441,6 +456,7 @@ describe('createPtySubprocess', () => {
       PATH: process.env.PATH,
       LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
     }
+
     Object.defineProperty(process, 'platform', { value: 'linux' })
     process.env.APPIMAGE = '/data/apps/orca.appimage'
     process.env.APPDIR = '/tmp/.mount_orca123'
@@ -458,6 +474,7 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       for (const [key, value] of Object.entries(saved)) {
         if (value === undefined) {
           delete process.env[key]
@@ -590,6 +607,7 @@ describe('createPtySubprocess', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
+
     try {
       await createPtySubprocess({
         sessionId: 'test',
@@ -621,6 +639,7 @@ describe('createPtySubprocess', () => {
     stripLegacyTerminalShimEnv(expectedEnv, 'win32')
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
+
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24, env: { FOO: 'bar' } })
     } finally {
@@ -639,6 +658,7 @@ describe('createPtySubprocess', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
+
     try {
       await createPtySubprocess({
         sessionId: 'test',

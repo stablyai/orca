@@ -38,15 +38,20 @@ async function resolveThemeSource(
   switch (source.kind) {
     case 'auto': {
       const budget = createPreviewOperationBudget(options)
+
       return { selection: await filesFromAutoDirectories(budget), budget }
     }
+
     case 'chooseFile': {
       const selection = await chooseManualWarpThemeFiles(webContents)
+
       return { selection, budget: createPreviewOperationBudget(options) }
     }
+
     case 'chooseFolder': {
       const folderPath = await chooseManualWarpThemeFolderPath(webContents)
       const budget = createPreviewOperationBudget(options)
+
       return {
         selection: folderPath
           ? await filesFromDirectory(folderPath, undefined, budget)
@@ -64,6 +69,7 @@ export async function previewWarpThemeImport(
   options: WarpThemePreviewOptions = {}
 ): Promise<WarpThemeImportPreview> {
   const validatedSource = validateWarpThemeImportSource(source)
+
   if (!validatedSource) {
     return {
       found: false,
@@ -74,6 +80,7 @@ export async function previewWarpThemeImport(
   }
 
   const { selection, budget } = await resolveThemeSource(validatedSource, webContents, options)
+
   if (selection.canceled) {
     return { found: false, canceled: true, themes: [], skippedFiles: [] }
   }
@@ -92,16 +99,20 @@ export async function previewWarpThemeImport(
       )
       break
     }
+
     let content: string
+
     if (file.content !== undefined) {
       content = file.content
     } else {
       try {
         const info = await stat(file.path)
+
         if (!info.isFile()) {
           skippedFiles.push({ label: file.label, reason: 'Not a file.' })
           continue
         }
+
         if (info.size > MAX_THEME_FILE_BYTES) {
           skippedFiles.push({
             label: file.label,
@@ -109,6 +120,7 @@ export async function previewWarpThemeImport(
           })
           continue
         }
+
         content = await readFile(file.path, 'utf-8')
       } catch {
         skippedFiles.push({
@@ -118,6 +130,7 @@ export async function previewWarpThemeImport(
         continue
       }
     }
+
     if (budget.isExpired()) {
       pushPreviewBudgetSkippedFile(
         skippedFiles,
@@ -143,6 +156,7 @@ export async function previewWarpThemeImport(
         timeoutMs: budget.remainingMs()
       }
     )
+
     if (!parsed.ok) {
       skippedFiles.push({ label: file.label, reason: parsed.reason })
       continue
@@ -150,6 +164,7 @@ export async function previewWarpThemeImport(
 
     const count = idCounts.get(parsed.theme.id) ?? 0
     idCounts.set(parsed.theme.id, count + 1)
+
     if (count > 0) {
       const id = `${parsed.theme.id}-${count + 1}`
       themes.push({
@@ -159,6 +174,7 @@ export async function previewWarpThemeImport(
       })
       continue
     }
+
     themes.push(parsed.theme)
   }
 

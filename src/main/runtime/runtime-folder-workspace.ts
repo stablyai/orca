@@ -15,6 +15,7 @@ export function getRuntimeFolderWorkspaceInstanceId(repo: Repo, instanceId: stri
 
 export function isRuntimeFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
+
   return (
     worktreeId === rootId ||
     worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
@@ -27,6 +28,7 @@ export function mergeRuntimeFolderWorkspace(
   meta: Partial<WorktreeMeta>
 ): Worktree {
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta.creatorProvenance)
+
   return {
     id: worktreeId,
     ...(meta.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),

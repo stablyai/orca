@@ -18,11 +18,14 @@ export function isWindowsUserPathPermissionError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   const stderr =
     'stderr' in error && typeof (error as { stderr?: unknown }).stderr === 'string'
       ? (error as { stderr: string }).stderr
       : ''
+
   const haystack = `${error.message}\n${stderr}`
+
   return (
     haystack.includes('UnauthorizedAccessException') ||
     haystack.includes('SecurityException') ||

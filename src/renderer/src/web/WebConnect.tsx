@@ -34,10 +34,13 @@ export default function WebConnect({
 
   const connect = async (): Promise<void> => {
     setError(null)
+
     if (!parsedOffer) {
       setError('Enter a valid Orca pairing URL or pairing code.')
+
       return
     }
+
     if (parsedOffer.scope === 'mobile') {
       setError(
         translate(
@@ -45,26 +48,35 @@ export default function WebConnect({
           'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.'
         )
       )
+
       return
     }
+
     if (isMixedContentWebSocket(parsedOffer.endpoint)) {
       setError(
         'This HTTPS page cannot connect to a plain ws:// Orca server. Open the web client over HTTP or pair with a wss:// endpoint.'
       )
+
       return
     }
+
     setConnecting(true)
+
     const environment = createStoredWebRuntimeEnvironment({
       name,
       offer: parsedOffer,
       previousEnvironment: existingEnvironment
     })
+
     const client = new WebRuntimeClient(parsedOffer)
+
     try {
       const response = await client.call('status.get', undefined, { timeoutMs: 15_000 })
+
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+
       // Why: older pairing offers may not carry scope metadata. The server
       // stamps it onto status.get so those links still fail before app entry.
       if ((response.result as RuntimeStatus | null)?.deviceScope === 'mobile') {
@@ -74,8 +86,10 @@ export default function WebConnect({
             'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.'
           )
         )
+
         return
       }
+
       saveStoredWebRuntimeEnvironment({
         ...environment,
         runtimeId: response._meta.runtimeId,
@@ -96,6 +110,7 @@ export default function WebConnect({
     if (autoConnectAttempted.current || !initialPairingInput || !parsedOffer) {
       return
     }
+
     autoConnectAttempted.current = true
     void connect()
     // Why: run once for the deep-linked offer; connect() reads current refs/state.

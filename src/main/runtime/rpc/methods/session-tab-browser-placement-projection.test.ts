@@ -193,6 +193,7 @@ function mixedGroupSnapshot(): RuntimeMobileSessionTabsResult {
     status: 'ready' as const,
     terminal: `${parentTabId}-pty`
   })
+
   const browser = (id: string) => ({
     type: 'browser' as const,
     id,
@@ -211,6 +212,7 @@ function mixedGroupSnapshot(): RuntimeMobileSessionTabsResult {
     },
     isActive: false
   })
+
   return {
     worktree: 'wt-1',
     publicationEpoch: 'epoch-1',

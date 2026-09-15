@@ -27,6 +27,7 @@ export function shouldRequestOnboardingSkipConfirmation(event: {
   if (event.button !== 0 || !hasClosest(event.target)) {
     return false
   }
+
   // Why: Radix portals remain inside the React tree, so their clicks bubble to
   // the onboarding overlay even when the DOM target lives outside the modal.
   return !event.target.closest(ONBOARDING_INTERACTIVE_LAYER_SELECTOR)

@@ -20,6 +20,7 @@ describe('workspace cleanup removal and protection', () => {
     let activeDeletes = 0
     let maxActiveDeletes = 0
     const deleteOrder: string[] = []
+
     const candidates = [
       makeCandidate({
         worktreeId: 'repo-a::/repo/parent',
@@ -40,15 +41,19 @@ describe('workspace cleanup removal and protection', () => {
         displayName: 'other'
       })
     ]
+
     const candidateById = new Map(candidates.map((candidate) => [candidate.worktreeId, candidate]))
+
     const scan = vi.fn(async (args?: { worktreeIds?: string[] }) => {
       await new Promise((resolve) => setTimeout(resolve, 5))
+
       return {
         scannedAt: NOW,
         candidates: (args?.worktreeIds ?? []).map((id) => candidateById.get(id)!),
         errors: []
       } satisfies WorkspaceCleanupScanResult
     })
+
     installWorkspaceCleanupApi(scan)
 
     const removeWorktree = vi.fn(async (target: { id: string }) => {
@@ -57,8 +62,10 @@ describe('workspace cleanup removal and protection', () => {
       maxActiveDeletes = Math.max(maxActiveDeletes, activeDeletes)
       await new Promise((resolve) => setTimeout(resolve, 5))
       activeDeletes -= 1
+
       return { ok: true as const }
     })
+
     const store = createCleanupTestStore(removeWorktree)
     store.setState({
       workspaceCleanupScan: { scannedAt: NOW, candidates, errors: [] }
@@ -105,10 +112,12 @@ describe('workspace cleanup removal and protection', () => {
         errors: []
       }))
     )
+
     const removeWorktree = vi.fn().mockResolvedValue({
       ok: true,
       preservedBranch: { branchName: 'feature/cleanup', head: 'saved-head' }
     })
+
     const store = createCleanupTestStore(removeWorktree)
     store.setState({
       workspaceCleanupScan: {
@@ -246,6 +255,7 @@ describe('workspace cleanup removal and protection', () => {
   it('uses current renderer state after async delete preflight scan resolves', async () => {
     let resolveScan: (value: WorkspaceCleanupScanResult) => void
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+
     const store = createCleanupTestStore(removeWorktree)
 
     ;(globalThis as { window: unknown }).window = {
@@ -283,6 +293,7 @@ describe('workspace cleanup removal and protection', () => {
       candidates: [],
       errors: []
     } satisfies WorkspaceCleanupScanResult)
+
     ;(globalThis as { window: unknown }).window = {
       api: {
         workspaceCleanup: {
@@ -322,6 +333,7 @@ describe('workspace cleanup removal and protection', () => {
       candidates: [makeCandidate()],
       errors: []
     } satisfies WorkspaceCleanupScanResult)
+
     ;(globalThis as { window: unknown }).window = {
       api: {
         workspaceCleanup: {
@@ -353,7 +365,9 @@ describe('workspace cleanup removal and protection', () => {
       candidates: [makeCandidate()],
       errors: []
     } satisfies WorkspaceCleanupScanResult)
+
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+
     ;(globalThis as { window: unknown }).window = {
       api: {
         workspaceCleanup: {
@@ -387,6 +401,7 @@ describe('workspace cleanup removal and protection', () => {
 
   it('fails a queued removal that now needs a force the user never approved', async () => {
     const approvedCandidate = makeCandidate({ executionHostId: 'local' })
+
     const dirtySinceConfirmation = makeCandidate({
       executionHostId: 'local',
       tier: 'review',
@@ -398,11 +413,13 @@ describe('workspace cleanup removal and protection', () => {
         checkedAt: NOW
       }
     })
+
     const scan = vi.fn().mockResolvedValue({
       scannedAt: NOW,
       candidates: [dirtySinceConfirmation],
       errors: []
     } satisfies WorkspaceCleanupScanResult)
+
     installWorkspaceCleanupApi(scan)
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
@@ -438,11 +455,13 @@ describe('workspace cleanup removal and protection', () => {
         checkedAt: NOW
       }
     })
+
     const scan = vi.fn().mockResolvedValue({
       scannedAt: NOW,
       candidates: [approvedCandidate],
       errors: []
     } satisfies WorkspaceCleanupScanResult)
+
     installWorkspaceCleanupApi(scan)
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
@@ -477,17 +496,20 @@ describe('workspace cleanup removal and protection', () => {
         checkedAt: null
       }
     })
+
     const nowRevealsUnpushed = makeCandidate({
       executionHostId: 'local',
       tier: 'review',
       blockers: ['unpushed-commits'],
       git: { clean: true, upstreamAhead: 3, upstreamBehind: 0, checkedAt: NOW }
     })
+
     const scan = vi.fn().mockResolvedValue({
       scannedAt: NOW,
       candidates: [nowRevealsUnpushed],
       errors: []
     } satisfies WorkspaceCleanupScanResult)
+
     installWorkspaceCleanupApi(scan)
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)

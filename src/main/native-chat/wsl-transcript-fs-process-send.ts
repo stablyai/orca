@@ -24,6 +24,7 @@ export function sendWslTranscriptFsProcessRequest<T>(args: {
         args.onAbort(args.signal.reason ?? new Error('WSL filesystem process aborted'))
       }
     }
+
     args.slot.active = {
       id: args.id,
       resolve: resolve as (value: unknown) => void,
@@ -35,6 +36,7 @@ export function sendWslTranscriptFsProcessRequest<T>(args: {
       handle: args.handle
     }
     args.signal.addEventListener('abort', onAbort, { once: true })
+
     try {
       args.slot.child.send(
         { ...args.request, id: args.id } as WslTranscriptFsProcessRequest,

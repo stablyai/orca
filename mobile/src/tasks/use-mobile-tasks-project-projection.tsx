@@ -41,6 +41,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     taskStateHydrated,
     tasksSupportState
   } = model
+
   // Why: project detail text inputs rerender this screen while comments stay
   // unchanged; keep grouping out of the typing path.
   const projectDetailCommentGroups = useMemo(
@@ -48,29 +49,37 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       groupDetailComments(projectRowDetail?.provider === 'github' ? projectRowDetail.comments : []),
     [projectRowDetail]
   )
+
   const requestedTaskSource = useMemo(
     () => (isTaskProvider(taskSource) ? taskSource : undefined),
     [taskSource]
   )
+
   const linearMetadataItem = actionItem?.provider === 'linear' ? actionItem : linearStatusPickerItem
+
   const tasksSupported =
     connState === 'connected' &&
     client != null &&
     tasksSupportState.kind === 'supported' &&
     tasksSupportState.client === client
+
   const tasksUnsupported =
     connState === 'connected' &&
     client != null &&
     tasksSupportState.kind === 'unsupported' &&
     tasksSupportState.client === client
+
   const taskUiReady = tasksSupported && taskStateHydrated
   const activeGitHubProject = githubProjectSettings.activeProject
+
   const activeGitHubProjectHost = githubProjectHost(
     githubProjectTable?.project.host ?? activeGitHubProject?.host
   )
+
   const hostedRepos = useMemo(() => repos.filter(isHostedTaskRepo), [repos])
   const workspaceRepos = useMemo(() => repos.filter((repo) => repo.kind !== 'folder'), [repos])
   const reposById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+
   const selectedHostedRepos = useMemo(
     () =>
       selectedRepoIds.size === 0
@@ -78,6 +87,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
         : hostedRepos.filter((repo) => selectedRepoIds.has(repo.id)),
     [hostedRepos, selectedRepoIds]
   )
+
   const findProjectRowRepo = useCallback(
     (row: GitHubProjectRow): RepoSummary | null =>
       findRepoForGitHubProjectRepository(
@@ -88,6 +98,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ) as RepoSummary | null,
     [activeGitHubProjectHost, githubRepoSlugCache, hostedRepos]
   )
+
   // Why: `every` is vacuously true on an empty repo list, so readiness has to ask
   // the resource whether that list is real yet. Otherwise the board renders
   // "No project items" for a board whose repos simply have not arrived.
@@ -96,10 +107,12 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       hasSettledHostRepoList(repoList.state) &&
       hostedRepos.every((repo) => {
         const cached = githubRepoSlugCache[repo.id]
+
         return cached !== undefined && cached.path === repo.path
       }),
     [githubRepoSlugCache, hostedRepos, repoList.state]
   )
+
   const visibleGitHubProjectRows = useMemo(
     () =>
       githubProjectTable
@@ -112,20 +125,26 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
         : [],
     [activeGitHubProjectHost, githubProjectTable, githubRepoSlugCache, hostedRepos]
   )
+
   const visibleGitHubProjectGroups = useMemo<ProjectGroup[]>(() => {
     if (!githubProjectTable) {
       return []
     }
+
     const normalizedTable = normalizeProjectTableForMobileSort(
       githubProjectTable,
       visibleGitHubProjectRows,
       githubProjectSortOverride
     )
+
     const sorted = sortRows(normalizedTable, normalizedTable.rows)
+
     return groupRows(normalizedTable, sorted)
   }, [githubProjectSortOverride, githubProjectTable, visibleGitHubProjectRows])
+
   const githubProjectListEntries = useMemo<ProjectListEntry[]>(() => {
     const grouped = githubProjectTable?.selectedView.groupByFields?.[0] != null
+
     if (!grouped) {
       return visibleGitHubProjectGroups.flatMap((group) =>
         group.rows.map((row) => ({
@@ -134,12 +153,15 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
         }))
       )
     }
+
     return visibleGitHubProjectGroups.flatMap((group) => {
       const collapsed = collapsedGitHubProjectGroups.has(group.key)
       const header: ProjectListEntry = { type: 'group', group, collapsed }
+
       if (collapsed) {
         return [header]
       }
+
       return [
         header,
         ...group.rows.map((row) => ({
@@ -149,11 +171,14 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ]
     })
   }, [collapsedGitHubProjectGroups, githubProjectTable, visibleGitHubProjectGroups])
+
   const githubProjectAvailableSummaryFields = useMemo(
     () => projectSummaryFields(githubProjectTable),
     [githubProjectTable]
   )
+
   const githubProjectFieldVisibilityScope = projectFieldVisibilityKey(githubProjectTable)
+
   const githubProjectHiddenFieldIds = useMemo(
     () =>
       new Set(
@@ -163,6 +188,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ),
     [githubProjectFieldVisibilityScope, githubProjectHiddenFieldIdsByView]
   )
+
   const githubProjectSummaryFields = useMemo(
     () =>
       githubProjectAvailableSummaryFields.filter(
@@ -170,6 +196,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ),
     [githubProjectAvailableSummaryFields, githubProjectHiddenFieldIds]
   )
+
   return Object.assign(model, {
     projectDetailCommentGroups,
     requestedTaskSource,

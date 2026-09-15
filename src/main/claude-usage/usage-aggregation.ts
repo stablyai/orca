@@ -11,6 +11,7 @@ export function mergeClaudeSessions(
 ): void {
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
+
     if (!existing) {
       target.set(session.sessionId, structuredClone(session))
       continue
@@ -19,11 +20,13 @@ export function mergeClaudeSessions(
     if (session.firstTimestamp < existing.firstTimestamp) {
       existing.firstTimestamp = session.firstTimestamp
     }
+
     if (session.lastTimestamp > existing.lastTimestamp) {
       existing.lastTimestamp = session.lastTimestamp
       existing.lastCwd = session.lastCwd
       existing.lastGitBranch = session.lastGitBranch
     }
+
     existing.model = session.model ?? existing.model
     existing.turnCount += session.turnCount
     existing.totalInputTokens += session.totalInputTokens
@@ -36,6 +39,7 @@ export function mergeClaudeSessions(
       const existingLocation =
         existing.locationBreakdown.find((entry) => entry.locationKey === location.locationKey) ??
         null
+
       if (existingLocation) {
         existingLocation.turnCount += location.turnCount
         existingLocation.inputTokens += location.inputTokens
@@ -57,10 +61,12 @@ export function mergeClaudeDailyAggregates(
   for (const aggregate of dailyAggregates) {
     const key = [aggregate.day, aggregate.model ?? 'unknown', aggregate.projectKey].join('::')
     const existing = target.get(key)
+
     if (!existing) {
       target.set(key, { ...aggregate })
       continue
     }
+
     existing.turnCount += aggregate.turnCount
     existing.zeroCacheReadTurnCount += aggregate.zeroCacheReadTurnCount
     existing.inputTokens += aggregate.inputTokens
@@ -78,9 +84,11 @@ export function finalizeClaudeSessions(
     session.locationBreakdown.sort((left, right) => {
       const leftTotal = left.inputTokens + left.outputTokens
       const rightTotal = right.inputTokens + right.outputTokens
+
       return rightTotal - leftTotal
     })
     const primaryLocation = session.locationBreakdown[0] ?? null
+
     if (primaryLocation) {
       session.primaryRepoId = primaryLocation.repoId
       session.primaryWorktreeId = primaryLocation.worktreeId
@@ -101,6 +109,7 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
 
   for (const turn of turns) {
     const existingSession = sessionsById.get(turn.sessionId)
+
     if (!existingSession) {
       sessionsById.set(turn.sessionId, {
         sessionId: turn.sessionId,
@@ -122,14 +131,17 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
     }
 
     const session = sessionsById.get(turn.sessionId)!
+
     if (turn.timestamp < session.firstTimestamp) {
       session.firstTimestamp = turn.timestamp
     }
+
     if (turn.timestamp > session.lastTimestamp) {
       session.lastTimestamp = turn.timestamp
       session.lastCwd = turn.cwd
       session.lastGitBranch = turn.gitBranch
     }
+
     session.model = turn.model ?? session.model
     session.turnCount++
     session.totalInputTokens += turn.inputTokens
@@ -140,6 +152,7 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
 
     const location =
       session.locationBreakdown.find((entry) => entry.locationKey === turn.projectKey) ?? null
+
     if (location) {
       location.turnCount++
       location.inputTokens += turn.inputTokens
@@ -164,11 +177,14 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
 
     const dailyKey = [turn.day, turn.model ?? 'unknown', turn.projectKey].join('::')
     const existingDaily = dailyByKey.get(dailyKey)
+
     if (existingDaily) {
       existingDaily.turnCount++
+
       if (turn.cacheReadTokens === 0) {
         existingDaily.zeroCacheReadTurnCount++
       }
+
       existingDaily.inputTokens += turn.inputTokens
       existingDaily.outputTokens += turn.outputTokens
       existingDaily.cacheReadTokens += turn.cacheReadTokens
@@ -207,8 +223,10 @@ export function getSessionProjectLabel(locationBreakdown: ClaudeUsageLocationBre
   if (locationBreakdown.length === 0) {
     return 'Unknown location'
   }
+
   if (locationBreakdown.length === 1) {
     return locationBreakdown[0].projectLabel
   }
+
   return 'Multiple locations'
 }

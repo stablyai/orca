@@ -14,16 +14,19 @@ function makePasteEvent(text: string, html = ''): ClipboardEvent {
     bubbles: true,
     cancelable: true
   }) as ClipboardEvent
+
   Object.defineProperty(event, 'clipboardData', {
     value: {
       getData: (type: string) => (type === 'text/plain' ? text : type === 'text/html' ? html : '')
     }
   })
+
   return event
 }
 
 function makeEditor(): { editor: Editor; inserted: string[] } {
   const inserted: string[] = []
+
   const editor = {
     get state() {
       return {
@@ -81,6 +84,7 @@ describe('rich markdown terminal path paste', () => {
 
   it('falls through when the HTML link does not target the path basename', () => {
     const { editor, inserted } = makeEditor()
+
     const event = makePasteEvent(
       'C:\\Users\\neil\\.claude\\CLAUDE.md',
       '<a href="https://docs.example.test/config">CLAUDE.md</a>'

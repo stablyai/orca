@@ -11,10 +11,15 @@ import {
 } from '../../lib/agent-hibernation-pane-age'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = `tab-1:${LEAF}`
+
 const DONE_AT = 1_000_000
+
 const NOW = DONE_AT + DEFAULT_AGENT_HIBERNATION_IDLE_MS + 60_000
+
 const ROUTING = { tabId: 'tab-1', worktreeId: 'wt-bg', connectionId: null }
+
 const PROVIDER_SESSION = { key: 'session_id' as const, id: 'claude-session-1' }
 
 function seedWorkspace(store: ReturnType<typeof createTestStore>): void {
@@ -100,6 +105,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
   it('is not restarted by a done→done repaint carrying a fresh updatedAt', () => {
     const store = createTestStore()
     seedWorkspace(store)
+
     for (const timing of [
       { updatedAt: DONE_AT - 5_000, stateStartedAt: DONE_AT - 5_000 },
       { updatedAt: DONE_AT, stateStartedAt: DONE_AT }
@@ -117,6 +123,7 @@ describe('a finished Claude turn reaches the hibernation planner', () => {
         { providerSession: PROVIDER_SESSION }
       )
     }
+
     // A metadata-less redelivery: main resends `done` with a fresh updatedAt and the
     // ORIGINAL stateStartedAt, exactly as an OSC 9999 repaint or reconnect replay does.
     store

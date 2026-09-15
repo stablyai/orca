@@ -38,6 +38,7 @@ export async function prepareChromiumCookieImport(
   // "persist:../.." resolve a Cookies DB outside the Partitions directory and stage a replacement
   // over it; it also drifts whenever Chromium changes how a partition name maps to a directory.
   const partitionDir = targetSession.getStoragePath()
+
   if (!partitionDir) {
     return {
       result: { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
@@ -46,6 +47,7 @@ export async function prepareChromiumCookieImport(
 
   const partitionName = targetPartition.replace('persist:', '')
   let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
+
   // Why: Electron creates the Cookies file only after a cookie is stored; a throwaway set/remove forces DB init for unused profiles.
   // Why (STA-4601): this probe MUTATES the live jar, so it runs under the same per-partition lock as
   // the import itself. An earlier revision left it outside on the argument that no import writes
@@ -62,8 +64,10 @@ export async function prepareChromiumCookieImport(
     } catch {
       // ignore — the set/remove may fail but flushStore should still create the file
     }
+
     liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
   }
+
   if (!liveCookiesPath) {
     return {
       result: { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
@@ -72,13 +76,16 @@ export async function prepareChromiumCookieImport(
 
   const stagingDir = join(app.getPath('userData'), 'cookie-import-staging')
   const partitionSegment = partitionName.replace(/[^a-zA-Z0-9_-]/g, '_')
+
   const stagingCookiesPath = join(
     stagingDir,
     `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
   )
+
   // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
   // import rejects, so losing it must degrade that fallback rather than abort the import.
   let stagingAvailable = false
+
   // Why: a client-hosted route partition is derived at runtime and never reaches the startup
   // replay, so staging it would only leave a plaintext cookie DB nothing ever consumes.
   if (!supportsPendingBrowserCookieImportReplay(targetPartition)) {
@@ -93,6 +100,7 @@ export async function prepareChromiumCookieImport(
       diag(
         `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
       )
+
       // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
       try {
         unlinkSync(stagingCookiesPath)
@@ -103,6 +111,7 @@ export async function prepareChromiumCookieImport(
   }
 
   let sourceSnapshot: ReturnType<typeof createChromiumCookieSnapshot>
+
   try {
     // Why: an open browser may hold cookies in WAL only; snapshot retries avoid pairing the main DB with a racing WAL.
     sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
@@ -112,7 +121,9 @@ export async function prepareChromiumCookieImport(
     } catch {
       /* best-effort */
     }
+
     diag(`  Chromium snapshot failed: ${String(err)}`)
+
     return {
       result: {
         ok: false,
@@ -123,14 +134,17 @@ export async function prepareChromiumCookieImport(
 
   let sourceDb: InstanceType<typeof DatabaseSync> | null = null
   let stagingDb: InstanceType<typeof DatabaseSync> | null = null
+
   const closeStagingDb = (): void => {
     try {
       stagingDb?.close()
     } catch {
       /* best-effort */
     }
+
     stagingDb = null
   }
+
   const discardStagingFile = (): void => {
     // Why: the staged copy holds plaintext cookie values, and SQLite may have left sidecars beside it.
     for (const suffix of ['', '-wal', '-shm']) {
@@ -147,6 +161,7 @@ export async function prepareChromiumCookieImport(
   let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
   let colList: string | null = null
   let placeholders: string | null = null
+
   if (stagingAvailable) {
     // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
     // transient AV handle can make opening it throw — degrade instead of killing the import.
@@ -181,16 +196,20 @@ export async function prepareChromiumCookieImport(
       (column) => column.name
     )
   )
+
   const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
     string,
     unknown
   >[]
+
   sourceDb.close()
   sourceDb = null
   diag(`  source has ${sourceRows.length} cookies`)
+
   if (sourceRows.length === 0) {
     closeStagingDb()
     discardStagingFile()
+
     return { result: { ok: false, reason: `No cookies found in ${browser.label}.` } }
   }
 
@@ -199,20 +218,25 @@ export async function prepareChromiumCookieImport(
   const partitionCandidates = sourceRows.flatMap((sourceRow) => {
     const domain = sourceRow.host_key as string
     const name = sourceRow.name as string
+
     return isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain)
       ? []
       : [{ sourceRow, domain, partition: readChromiumRowPartition(sourceRow, sourceColumns) }]
   })
+
   const nativePlan = planImportWrites(partitionCandidates)
   const plannedSourceRows = new Set(nativePlan.writes.map((candidate) => candidate.sourceRow))
+
   const partitionBySourceRow = new Map(
     partitionCandidates.map((candidate) => [candidate.sourceRow, candidate.partition])
   )
+
   // Why (§4.3c): a family we cannot name is one we cannot exclude from the clear, and clearing a
   // family we cannot protect is the P0. Refuse before the jar is touched.
   if (nativePlan.hasUnrepresentableSkip) {
     closeStagingDb()
     discardStagingFile()
+
     return {
       result: {
         ok: false,
@@ -224,21 +248,26 @@ export async function prepareChromiumCookieImport(
 
   const needsSourceKey = sourceRows.some((sourceRow) => {
     const encrypted = sourceRow.encrypted_value
+
     if (!(encrypted instanceof Uint8Array) || encrypted.length === 0) {
       return false
     }
+
     return (
       !isGoogleSourceBoundCookie(sourceRow.name as string, sourceRow.host_key as string) &&
       !isNonTransplantableCookieDomain(sourceRow.host_key as string)
     )
   })
+
   const sourceKey = needsSourceKey
     ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
     : null
+
   if (needsSourceKey && !sourceKey) {
     closeStagingDb()
     // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
     discardStagingFile()
+
     return {
       result: {
         ok: false,
@@ -250,6 +279,7 @@ export async function prepareChromiumCookieImport(
   // Why: staging only backs the cold-restart replay, so any failure writing it disables that
   // fallback instead of aborting an import whose in-memory half still works.
   let insertStmt: ChromiumImportContext['insertStmt'] = null
+
   const context: ChromiumImportContext = {
     browser,
     targetPartition,
@@ -315,6 +345,7 @@ export async function prepareChromiumCookieImport(
   } else if (context.stagingAvailable) {
     context.disableStaging('staged database exposed no cookies columns')
   }
+
   // Why: keep the existing conservative fallback boundary for family-level omissions. Expanding
   // partial-import restart behavior is separate from narrowing what a staged replay may replace.
   if (context.nativePlan.skippedFamilies.size > 0) {
@@ -322,5 +353,6 @@ export async function prepareChromiumCookieImport(
       `${context.nativePlan.skippedFamilies.size} preserved cookie families cannot be represented in a staged image`
     )
   }
+
   return { context }
 }

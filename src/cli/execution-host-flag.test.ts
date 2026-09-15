@@ -28,6 +28,7 @@ import {
 import { parseExecutionHostId } from '../shared/execution-host'
 
 const listSshTargetsMock = vi.fn(async () => [] as { id: string; label: string }[])
+
 const NO_SELECTION = {
   listSshTargets: listSshTargetsMock,
   pairingCode: null,

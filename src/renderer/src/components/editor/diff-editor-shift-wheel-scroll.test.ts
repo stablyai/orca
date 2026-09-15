@@ -17,12 +17,15 @@ function createPaneFixture(initialScrollLeft = 10, scrollWidth = 1000): PaneFixt
   const container = document.createElement('div')
   const input = document.createElement('div')
   let scrollLeft = initialScrollLeft
+
   const setScrollLeft = vi.fn((value: number) => {
     scrollLeft = value
   })
+
   Object.defineProperty(container, 'clientWidth', { value: 200 })
   container.appendChild(input)
   document.body.appendChild(container)
+
   return {
     container,
     input,
@@ -39,6 +42,7 @@ function dispatchWheel(target: HTMLElement, init: WheelEventInit): WheelEvent {
   // Happy DOM's WheelEvent omits mouse modifier fields.
   Object.defineProperty(event, 'shiftKey', { value: init.shiftKey ?? false })
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -65,6 +69,7 @@ describe('installDiffEditorShiftWheelScroll', () => {
     const modified = createPaneFixture()
     const onDownstreamWheel = vi.fn()
     original.input.addEventListener('wheel', onDownstreamWheel)
+
     const dispose = installDiffEditorShiftWheelScroll({
       getOriginalEditor: () => original,
       getModifiedEditor: () => modified
@@ -84,6 +89,7 @@ describe('installDiffEditorShiftWheelScroll', () => {
     const modified = createPaneFixture()
     const onDownstreamWheel = vi.fn()
     original.input.addEventListener('wheel', onDownstreamWheel)
+
     const dispose = installDiffEditorShiftWheelScroll({
       getOriginalEditor: () => original,
       getModifiedEditor: () => modified
@@ -102,6 +108,7 @@ describe('installDiffEditorShiftWheelScroll', () => {
     const modified = createPaneFixture(0, 200)
     const onDownstreamWheel = vi.fn()
     original.input.addEventListener('wheel', onDownstreamWheel)
+
     const dispose = installDiffEditorShiftWheelScroll({
       getOriginalEditor: () => original,
       getModifiedEditor: () => modified
@@ -119,6 +126,7 @@ describe('installDiffEditorShiftWheelScroll', () => {
   it('routes the wheel event to the pane under the pointer', () => {
     const original = createPaneFixture()
     const modified = createPaneFixture()
+
     const dispose = installDiffEditorShiftWheelScroll({
       getOriginalEditor: () => original,
       getModifiedEditor: () => modified
@@ -135,10 +143,12 @@ describe('installDiffEditorShiftWheelScroll', () => {
   it('removes both pane listeners when disposed', () => {
     const original = createPaneFixture()
     const modified = createPaneFixture()
+
     const dispose = installDiffEditorShiftWheelScroll({
       getOriginalEditor: () => original,
       getModifiedEditor: () => modified
     })
+
     dispose()
 
     const originalEvent = dispatchWheel(original.input, { deltaY: 24, shiftKey: true })

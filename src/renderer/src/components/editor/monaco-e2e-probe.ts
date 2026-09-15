@@ -31,14 +31,17 @@ export function installMonacoE2EProbe(
   if (import.meta.env.MODE !== 'e2e') {
     return () => {}
   }
+
   let legacyControlOriginalValue: string | null = null
   let legacyControlIncomingValue: string | null = null
+
   const probe: MonacoE2EProbe = {
     filePath,
     runLegacySetValueAppend: (suffix: string): void => {
       if (legacyControlOriginalValue !== null) {
         throw new Error('Legacy control must be restored before running again')
       }
+
       legacyControlOriginalValue = editorInstance.getValue()
       // Why: the former controlled wrapper retained a flat IPC-delivered prop
       // while setValue rebuilt the model; preserve that ownership in the control.
@@ -53,6 +56,7 @@ export function installMonacoE2EProbe(
       if (legacyControlOriginalValue === null) {
         return
       }
+
       editorInstance.setValue(legacyControlOriginalValue)
       legacyControlOriginalValue = null
       legacyControlIncomingValue = null
@@ -70,10 +74,12 @@ export function installMonacoE2EProbe(
       const valueLength = model?.getValueLength() ?? 0
       const lastLineNumber = model?.getLineCount() ?? 1
       const lastLine = model?.getLineContent(lastLineNumber) ?? ''
+
       const lastNonEmptyLine =
         lastLine || lastLineNumber === 1
           ? lastLine
           : (model?.getLineContent(lastLineNumber - 1) ?? '')
+
       return {
         canUndo: model?.canUndo() ?? false,
         contentHeight: editorInstance.getContentHeight(),
@@ -92,7 +98,9 @@ export function installMonacoE2EProbe(
       }
     }
   }
+
   window.__monacoEditorE2E = probe
+
   return () => {
     if (window.__monacoEditorE2E === probe) {
       delete window.__monacoEditorE2E

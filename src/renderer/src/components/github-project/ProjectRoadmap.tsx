@@ -24,12 +24,16 @@ import {
 import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 
 const LABEL_WIDTH_PX = 280
+
 const LANE_HEIGHT_PX = 36
+
 const TICK_WIDTH_PX: Record<RoadmapZoom, number> = { month: 148, quarter: 128, year: 160 }
+
 const ZOOMS: RoadmapZoom[] = ['month', 'quarter', 'year']
 
 function localTodayAsUtcMidnightMs(): number {
   const now = new Date()
+
   return Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
 }
 
@@ -57,17 +61,20 @@ export default function ProjectRoadmap({
   // marker; re-arm after each fire so multi-day sessions stay honest.
   useEffect(() => {
     const now = new Date()
+
     const nextLocalMidnight = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate() + 1
     ).getTime()
+
     // Why: the +1s pad absorbs timer drift so the callback lands after the
     // date change, not just before it.
     const timer = setTimeout(
       () => setTodayMs(localTodayAsUtcMidnightMs()),
       nextLocalMidnight - now.getTime() + 1000
     )
+
     return () => clearTimeout(timer)
   }, [todayMs])
   const [zoom, setZoom] = useState<RoadmapZoom>(loadRoadmapZoom)
@@ -76,25 +83,32 @@ export default function ProjectRoadmap({
 
   const source = useMemo(() => resolveRoadmapDateSource(view, table.rows), [view, table.rows])
   const groups = useMemo(() => groupRows(table, sortRows(table, table.rows)), [table])
+
   const spans = useMemo(() => {
     const bySpan = new Map<string, RoadmapSpan>()
+
     if (!source) {
       return bySpan
     }
+
     for (const row of table.rows) {
       const span = getRoadmapSpan(row, source)
+
       if (span) {
         bySpan.set(row.id, span)
       }
     }
+
     return bySpan
   }, [source, table.rows])
 
   const tickWidth = TICK_WIDTH_PX[zoom]
+
   const ticks = useMemo(
     () => buildRoadmapTicks(Array.from(spans.values()), zoom, todayMs),
     [spans, todayMs, zoom]
   )
+
   const timelineWidth = ticks.length * tickWidth
   const todayPx = roadmapOffsetPx(todayMs, ticks, tickWidth)
   const hasTimeline = source !== null && table.rows.length > 0
@@ -103,15 +117,18 @@ export default function ProjectRoadmap({
   // of at the padded left edge, and re-centre when the zoom changes scale.
   const scrollToToday = useCallback(() => {
     const scroller = scrollRef.current
+
     if (!scroller) {
       return
     }
+
     const lead = (scroller.clientWidth - LABEL_WIDTH_PX) / 3
     scroller.scrollTo({
       left: Math.max(0, todayPx - lead),
       behavior: prefersReducedMotion ? 'instant' : 'smooth'
     })
   }, [todayPx, prefersReducedMotion])
+
   const todayPxRef = useRef(todayPx)
   useLayoutEffect(() => {
     todayPxRef.current = todayPx
@@ -119,15 +136,18 @@ export default function ProjectRoadmap({
   // Center when the timeline appears or zoom changes; refetches must preserve user scroll.
   useEffect(() => {
     const scroller = scrollRef.current
+
     if (!scroller) {
       return
     }
+
     const lead = (scroller.clientWidth - LABEL_WIDTH_PX) / 3
     scroller.scrollLeft = Math.max(0, todayPxRef.current - lead)
   }, [zoom, hasTimeline])
 
   const colorFieldId = useMemo(() => {
     const grouped = view.groupByFields.find((field) => field.kind === 'single-select')
+
     return (grouped ?? view.fields.find((field) => field.kind === 'single-select'))?.id ?? null
   }, [view])
 
@@ -151,6 +171,7 @@ export default function ProjectRoadmap({
 
   const undatedCount = table.rows.length - spans.size
   const bandWidth = LABEL_WIDTH_PX + timelineWidth
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <RoadmapControls
@@ -193,6 +214,7 @@ export default function ProjectRoadmap({
             />
             {groups.map((group) => {
               const expanded = !collapsed.has(group.key)
+
               return (
                 <div key={group.key}>
                   {view.groupByFields[0] ? (
@@ -203,9 +225,11 @@ export default function ProjectRoadmap({
                       onToggle={() =>
                         setCollapsed((previous) => {
                           const next = new Set(previous)
+
                           if (!next.delete(group.key)) {
                             next.add(group.key)
                           }
+
                           return next
                         })
                       }
@@ -254,6 +278,7 @@ function RoadmapControls({
     quarter: translate('auto.components.github.project.ProjectRoadmap.f2b1cabef7', 'Quarter'),
     year: translate('auto.components.github.project.ProjectRoadmap.b6afc6fe45', 'Year')
   }
+
   return (
     <div className="flex min-w-0 flex-none flex-wrap items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs text-muted-foreground">
       <span className="truncate">
@@ -331,6 +356,7 @@ function RoadmapHeaderRow({
       <div className="relative flex">
         {ticks.map((tick, index) => {
           const { label, sublabel } = formatRoadmapTick(tick, zoom, index, locale)
+
           return (
             <div
               key={tick.key}
@@ -375,6 +401,7 @@ function RoadmapLane({
   const chipColor = statusValue?.kind === 'single-select' ? statusValue.color : null
   const left = span ? roadmapOffsetPx(span.startMs, ticks, tickWidth) : 0
   const width = span ? roadmapOffsetPx(span.endMs, ticks, tickWidth) - left : 0
+
   return (
     <div
       className="group flex items-stretch border-b border-border/30 hover:bg-accent/40"

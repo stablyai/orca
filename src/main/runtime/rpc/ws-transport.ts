@@ -7,12 +7,17 @@ import { createStaticWebClientHandler } from './static-web-client-handler'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
+
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
 const MAX_WS_CONNECTIONS = 128
+
 // Why: bound pre-upgrade descriptor use above the WS cap so raw sockets can't grow without bound.
 const MAX_TCP_CONNECTIONS = MAX_WS_CONNECTIONS * 2
+
 const PRE_AUTH_TIMEOUT_MS = 10_000
+
 type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
+
 type WebSocketMessageHandler = {
   bivarianceHack(
     msg: WebSocketMessagePayload,
@@ -111,25 +116,30 @@ export class WebSocketTransport implements RpcTransport {
     const sockets = Array.from(this.wsClientIds.entries())
       .filter(([, candidateClientId]) => candidateClientId === clientId)
       .map(([ws]) => ws)
+
     for (const ws of sockets) {
       // Why: revocation is a security boundary; terminate() skips the handshake so a revoked stream stops immediately.
       ws.terminate()
     }
+
     return sockets.length
   }
 
   // Why: with port 0 the OS assigns a random port; callers read the real bound port here for metadata and the mobile QR.
   get resolvedPort(): number {
     const addr = this.httpServer?.address()
+
     if (addr && typeof addr === 'object') {
       return addr.port
     }
+
     return this.port
   }
 
   // Why: the actual OS-reported bind interface, so callers can verify loopback vs all-interfaces (STA-2370).
   get resolvedHost(): string | null {
     const addr = this.httpServer?.address()
+
     return addr && typeof addr === 'object' ? addr.address : null
   }
 
@@ -143,15 +153,18 @@ export class WebSocketTransport implements RpcTransport {
       this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
         ? this.fallbackPort
         : undefined
+
     const candidatePorts =
       persistedFallbackPort === undefined
         ? [this.port]
         : this.preferPinnedPort
           ? [this.port, persistedFallbackPort]
           : [persistedFallbackPort, this.port]
+
     for (const port of candidatePorts) {
       try {
         await this.tryListen(port)
+
         return
       } catch (error: unknown) {
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
@@ -161,11 +174,13 @@ export class WebSocketTransport implements RpcTransport {
         ) {
           throw error
         }
+
         console.warn(
           `[ws-transport] Failed to bind port ${port} (${error instanceof Error ? error.message : String(error)}), trying next candidate`
         )
       }
     }
+
     console.warn('[ws-transport] All configured ports failed to bind, using an OS-assigned port')
     await this.tryListen(0)
   }
@@ -174,6 +189,7 @@ export class WebSocketTransport implements RpcTransport {
     const requestListener = this.staticRoot
       ? createStaticWebClientHandler(this.staticRoot)
       : undefined
+
     return this.tlsCert && this.tlsKey
       ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey }, requestListener)
       : createHttpServer(requestListener)
@@ -202,8 +218,10 @@ export class WebSocketTransport implements RpcTransport {
     wss.on('connection', (ws) => {
       if (wss.clients.size > MAX_WS_CONNECTIONS) {
         this.rejectOverCapacity(ws)
+
         return
       }
+
       this.handleConnection(ws)
     })
 
@@ -233,6 +251,7 @@ export class WebSocketTransport implements RpcTransport {
         // Why: a half-open mobile socket may never answer a close frame, which keeps httpServer.close pending.
         client.terminate()
       }
+
       wss.close()
     }
 
@@ -241,8 +260,10 @@ export class WebSocketTransport implements RpcTransport {
         httpServer.close((error) => {
           if (error) {
             reject(error)
+
             return
           }
+
           resolve()
         })
       })
@@ -252,18 +273,22 @@ export class WebSocketTransport implements RpcTransport {
   // Why: WS connections are long-lived and multiplex many RPCs by `id`; auth and dispatch are delegated to the message handler.
   private handleConnection(ws: WebSocket): void {
     let finalized = false
+
     const onPong = (): void => {
       this.heartbeat.noteAlive(ws)
     }
+
     const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
       // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
       this.heartbeat.noteAlive(ws)
+
       const msg =
         typeof data === 'string'
           ? data
           : isBinary
             ? new Uint8Array(data as Buffer)
             : data.toString()
+
       this.messageHandler?.(
         msg,
         (response) => {
@@ -275,15 +300,18 @@ export class WebSocketTransport implements RpcTransport {
         ws
       )
     }
+
     const onError = (): void => {
       // Why: close isn't guaranteed after every error path; finalize here too so pre-auth E2EE state and connection ids can't leak.
       finalizeConnection()
       ws.close()
     }
+
     const finalizeConnection = (): void => {
       if (finalized) {
         return
       }
+
       finalized = true
       ws.off('pong', onPong)
       ws.off('message', onMessage)
@@ -291,13 +319,17 @@ export class WebSocketTransport implements RpcTransport {
       ws.off('error', onError)
       this.clearPreAuthTimer(ws)
       this.heartbeatConnections.delete(ws)
+
       if (this.heartbeatConnections.size === 0) {
         this.heartbeat.stop()
       }
+
       const clientId = this.wsClientIds.get(ws) ?? null
       this.wsClientIds.delete(ws)
+
       const hasOtherConnections =
         clientId !== null && Array.from(this.wsClientIds.values()).includes(clientId)
+
       this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
     }
 
@@ -307,9 +339,11 @@ export class WebSocketTransport implements RpcTransport {
         ws.terminate()
       }
     }, this.preAuthTimeoutMs)
+
     if (typeof preAuthTimer.unref === 'function') {
       preAuthTimer.unref()
     }
+
     this.preAuthTimers.set(ws, preAuthTimer)
 
     ws.on('pong', onPong)
@@ -322,6 +356,7 @@ export class WebSocketTransport implements RpcTransport {
     // Why: install lifecycle ownership before periodic heartbeat ticks can observe this socket.
     this.heartbeatConnections.add(ws)
     this.heartbeat.noteAlive(ws)
+
     if (this.heartbeatConnections.size === 1) {
       // Unauthenticated sockets are protected by the pre-auth timeout; heartbeat probes begin only
       // after E2EE binds a client id, avoiding control frames during the handshake.
@@ -331,6 +366,7 @@ export class WebSocketTransport implements RpcTransport {
 
   private clearPreAuthTimer(ws: WebSocket): void {
     const timer = this.preAuthTimers.get(ws)
+
     if (timer) {
       clearTimeout(timer)
       this.preAuthTimers.delete(ws)
@@ -342,9 +378,11 @@ function isPortListenFallbackError(error: unknown, port: number): boolean {
   if (!(error instanceof Error) || !('code' in error)) {
     return false
   }
+
   if (error.code === 'EADDRINUSE') {
     return true
   }
+
   return (
     error.code === 'EACCES' &&
     'syscall' in error &&

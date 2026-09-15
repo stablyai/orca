@@ -38,18 +38,23 @@ function wireMobileHomeHostSubscriptions(
   let unsubscribeNotifications: (() => void) | null = null
   let unsubscribeAccounts: (() => void) | null = null
   const refetchGate = createHostConnectRefetchGate()
+
   const wireState = (state: ConnectionState): void => {
     const reconnected = refetchGate.observe(state)
+
     if (state === 'connected') {
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
       unsubscribeAccounts ??= entry.client.subscribe('accounts.subscribe', null, (payload) => {
         if (!payload || typeof payload !== 'object') {
           return
         }
+
         const event = payload as { type?: string; snapshot?: unknown }
+
         if (event.type !== 'ready' && event.type !== 'snapshot') {
           return
         }
+
         try {
           const snapshot = decodeAccountsSnapshot(event.snapshot)
           setters.setAccounts((previous) => ({ ...previous, [entry.hostId]: snapshot }))
@@ -57,6 +62,7 @@ function wireMobileHomeHostSubscriptions(
           // Keep the last proven snapshot when a mixed-version host publishes malformed data.
         }
       })
+
       if (reconnected) {
         fetchMobileHomeStats(entry.client, entry.hostId, setters.setStats, () => false)
         void fetchHomeHostWorktreeInfo(
@@ -72,15 +78,19 @@ function wireMobileHomeHostSubscriptions(
           () => false
         )
       }
+
       return
     }
+
     unsubscribeNotifications?.()
     unsubscribeNotifications = null
     unsubscribeAccounts?.()
     unsubscribeAccounts = null
   }
+
   wireState(entry.state)
   const unsubscribeState = entry.client.onStateChange(wireState)
+
   return () => {
     unsubscribeState()
     unsubscribeNotifications?.()
@@ -98,10 +108,12 @@ export function useMobileHomeHostConnections(
   const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const autoConnectHostIds = useMemo(() => selectHomeAutoConnectHostIds(hosts), [hosts])
+
   const allClients = useAllHostClients(hostIds, {
     autoConnectHostIds,
     closeUnusedOnRelease: true
   })
+
   const primeHosts = usePrimeHosts()
   const subscriptionsRef = useRef(new Map<string, { client: RpcClient; cleanup: () => void }>())
   const { setAccounts, setStats, setTaskProviders, setWorktreeInfo } = setters
@@ -120,13 +132,16 @@ export function useMobileHomeHostConnections(
 
   useEffect(() => {
     const clientsByHostId = new Map(allClients.map((entry) => [entry.hostId, entry.client]))
+
     for (const [hostId, subscription] of subscriptionsRef.current) {
       if (clientsByHostId.get(hostId) !== subscription.client) {
         subscription.cleanup()
         subscriptionsRef.current.delete(hostId)
       }
     }
+
     const activeSetters = { setAccounts, setStats, setTaskProviders, setWorktreeInfo }
+
     for (const entry of allClients) {
       if (!subscriptionsRef.current.has(entry.hostId)) {
         subscriptionsRef.current.set(entry.hostId, {
@@ -139,10 +154,12 @@ export function useMobileHomeHostConnections(
 
   useEffect(() => {
     const subscriptions = subscriptionsRef.current
+
     return () => {
       for (const subscription of subscriptions.values()) {
         subscription.cleanup()
       }
+
       subscriptions.clear()
     }
   }, [])

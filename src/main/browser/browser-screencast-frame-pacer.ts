@@ -38,6 +38,7 @@ export function createBrowserScreencastFramePacer(
     if (sessionId === undefined) {
       return
     }
+
     // Why: CDP only sends the next frame after ACK; delaying ACK for
     // throttled frames applies back-pressure before Chromium/base64 work piles up.
     void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
@@ -46,10 +47,12 @@ export function createBrowserScreencastFramePacer(
   const clearPendingFrameTimer = (ackPending = false): void => {
     const pending = pendingFrame
     pendingFrame = null
+
     if (pendingFrameTimer) {
       clearTimeout(pendingFrameTimer)
       pendingFrameTimer = null
     }
+
     if (ackPending) {
       ackScreencastFrame(pending?.sessionId)
     }
@@ -59,7 +62,9 @@ export function createBrowserScreencastFramePacer(
     if (isClosed() || isStopping()) {
       return false
     }
+
     lastFrameSentAt = Date.now()
+
     const accepted = options.onFrame(
       encodeBrowserScreencastFrame({
         opcode: BrowserScreencastOpcode.Frame,
@@ -71,6 +76,7 @@ export function createBrowserScreencastFramePacer(
         image: frame.image
       })
     )
+
     return accepted !== false
   }
 
@@ -78,13 +84,16 @@ export function createBrowserScreencastFramePacer(
     if (pendingFrameTimer || isClosed() || isStopping()) {
       return
     }
+
     pendingFrameTimer = setTimeout(() => {
       pendingFrameTimer = null
       const latest = pendingFrame
       pendingFrame = null
+
       if (isClosed() || isStopping() || !latest) {
         return
       }
+
       if (emitFrame(latest)) {
         ackScreencastFrame(latest.sessionId)
       } else {
@@ -98,20 +107,24 @@ export function createBrowserScreencastFramePacer(
     if (isClosed() || isStopping()) {
       return
     }
+
     const now = Date.now()
     const elapsed = now - lastFrameSentAt
+
     if (
       options.minFrameIntervalMs <= 0 ||
       lastFrameSentAt === 0 ||
       elapsed >= options.minFrameIntervalMs
     ) {
       clearPendingFrameTimer(true)
+
       if (emitFrame(frame)) {
         ackScreencastFrame(frame.sessionId)
       } else {
         pendingFrame = frame
         schedulePendingFrameRetry()
       }
+
       return
     }
 
@@ -121,18 +134,23 @@ export function createBrowserScreencastFramePacer(
     if (pendingFrame?.sessionId !== frame.sessionId) {
       ackScreencastFrame(pendingFrame?.sessionId)
     }
+
     pendingFrame = frame
+
     if (pendingFrameTimer) {
       return
     }
+
     pendingFrameTimer = setTimeout(
       () => {
         pendingFrameTimer = null
         const latest = pendingFrame
         pendingFrame = null
+
         if (isClosed() || isStopping() || !latest) {
           return
         }
+
         if (emitFrame(latest)) {
           ackScreencastFrame(latest.sessionId)
         } else {

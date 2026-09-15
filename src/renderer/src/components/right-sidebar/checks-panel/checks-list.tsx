@@ -26,6 +26,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     getGitLabProjectRef,
     githubRepository
   } = props
+
   const {
     resolvedWorktreeId,
     checksExpanded,
@@ -43,6 +44,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     toggleCheckExpanded,
     requestCheckDetails
   } = useChecksListState(props)
+
   return (
     <>
       {/* Checks Summary */}
@@ -128,6 +130,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
               const expanded = expandedCheckKeys.has(row.key)
               const openUrl = check.url
+
               return (
                 <div key={row.key} className="min-w-0">
                   <div

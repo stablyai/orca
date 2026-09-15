@@ -39,12 +39,14 @@ export function skillPlacementJournalPath(stateDirectory: string, canonicalPath:
 
 function normalizedPath(path: string): string {
   const normalized = resolve(path)
+
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
 function scopeRoot(canonicalPath: string): string | null {
   const skills = dirname(canonicalPath)
   const agents = dirname(skills)
+
   return basename(skills) === 'skills' && basename(agents) === '.agents' ? dirname(agents) : null
 }
 
@@ -52,9 +54,11 @@ function validFileModes(value: unknown): value is SkillInstalledFileMode[] {
   if (!Array.isArray(value)) {
     return false
   }
+
   const paths = value.map((entry) =>
     entry && typeof entry === 'object' && 'path' in entry ? (entry as { path: unknown }).path : null
   )
+
   return (
     paths.every(
       (path) =>
@@ -79,9 +83,11 @@ function validProviderRootOverrides(value: unknown): value is SkillProviderRootO
   if (value === undefined) {
     return true
   }
+
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   return Object.entries(value).every(
     ([provider, root]) =>
       (provider === 'claude' || provider === 'grok') &&
@@ -97,7 +103,9 @@ function isJournal(value: unknown, canonicalPath: string): value is SkillPlaceme
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const journal = value as Partial<SkillPlacementJournalV1>
+
   if (
     journal.schemaVersion !== 1 ||
     journal.operation !== 'place' ||
@@ -133,10 +141,13 @@ function isJournal(value: unknown, canonicalPath: string): value is SkillPlaceme
   ) {
     return false
   }
+
   const root = scopeRoot(canonicalPath)
+
   if (!root) {
     return false
   }
+
   const destinations = resolveSkillProviderDestinations({
     scope: journal.receipt.scope,
     homeDirectory: root,
@@ -144,23 +155,28 @@ function isJournal(value: unknown, canonicalPath: string): value is SkillPlaceme
     detectedProviders: journal.providers,
     providerRootOverrides: journal.providerRootOverrides
   }).filter((destination) => !destination.readsCanonicalRoot)
+
   const desiredByProvider = new Map(
     destinations.map((destination) => [destination.provider, destination])
   )
+
   const normalizedActionPaths = journal.actions.flatMap((action) => [
     normalizedPath(action.destinationPath),
     normalizedPath(action.stagingPath),
     normalizedPath(action.backupPath)
   ])
+
   return (
     new Set(normalizedActionPaths).size === normalizedActionPaths.length &&
     journal.actions.every((action) => {
       const desiredDestination = desiredByProvider.get(action.provider as never)
+
       const previousPlacement = journal.previousReceipt?.placements.find(
         (placement) =>
           placement.provider === action.provider &&
           normalizedPath(placement.path) === normalizedPath(action.destinationPath)
       )
+
       const destination = action.desired
         ? desiredDestination
         : previousPlacement
@@ -170,7 +186,9 @@ function isJournal(value: unknown, canonicalPath: string): value is SkillPlaceme
               readsCanonicalRoot: false
             }
           : undefined
+
       const name = basename(canonicalPath)
+
       return Boolean(
         destination &&
         action.rootPath === destination.rootPath &&
@@ -206,14 +224,17 @@ export async function readSkillPlacementRecoveryJournal(
         )
       ).buffer.toString('utf8')
     )
+
     if (!isJournal(value, canonicalPath)) {
       throw new Error('skill-placement-journal-invalid')
     }
+
     return value
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
 }

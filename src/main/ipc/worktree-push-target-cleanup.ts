@@ -16,6 +16,7 @@ export type GitRemoteExec = (
   args: string[],
   cwd: string
 ) => Promise<{ stdout: string; stderr?: string }>
+
 // Why: `setWorktreeMeta` is optional so existing narrow test stubs (only
 // `getAllWorktreeMeta`) keep compiling; callers that want materialize-time
 // provenance persistence (worktree-remote.ts) pass a store that has it.
@@ -26,8 +27,10 @@ export function sameGitHubRemoteUrl(left: string, right: string): boolean {
   if (left === right) {
     return true
   }
+
   const parsedLeft = parseGitHubOwnerRepo(left)
   const parsedRight = parseGitHubOwnerRepo(right)
+
   return Boolean(
     parsedLeft &&
     parsedRight &&
@@ -53,8 +56,10 @@ export function findWorktreeMetaReferencingRemote(
       if (getRepoIdFromWorktreeId(worktreeId) !== repoId || !meta.pushTarget) {
         return false
       }
+
       const otherRemoteUrl = meta.pushTarget.remoteUrl
       const targetRemoteUrl = target.remoteUrl
+
       return (
         meta.pushTarget.remoteName === target.remoteName ||
         (typeof otherRemoteUrl === 'string' &&
@@ -71,6 +76,7 @@ function isPushTargetUsedByAnotherWorktree(
   target: GitPushTarget
 ): boolean {
   const removedRepoId = getRepoIdFromWorktreeId(removedWorktreeId)
+
   return findWorktreeMetaReferencingRemote(store, removedRepoId, target).some(
     ({ worktreeId }) => worktreeId !== removedWorktreeId
   )
@@ -87,6 +93,7 @@ export async function hasBranchConfigUsingRemote(
   options: { requireExistingBranch?: boolean } = {}
 ): Promise<boolean> {
   let stdout: string
+
   try {
     ;({ stdout } = await execGit(
       ['config', '--get-regexp', '^branch\\..*\\.(remote|pushRemote)$'],
@@ -95,20 +102,26 @@ export async function hasBranchConfigUsingRemote(
   } catch {
     return false
   }
+
   const matches: BranchConfigMatch[] = []
+
   // Why: git config output can be large; avoid materializing line/split arrays here.
   for (const line of iterateProcessOutputLines(stdout)) {
     const parsed = parseBranchRemoteConfigLine(line)
+
     if (parsed && (parsed.value === target.remoteName || parsed.value === target.remoteUrl)) {
       matches.push({ branchName: parsed.branchName })
     }
   }
+
   if (matches.length === 0) {
     return false
   }
+
   if (!options.requireExistingBranch) {
     return true
   }
+
   return branchesExist(
     execGit,
     repoPath,
@@ -126,7 +139,9 @@ async function branchesExist(
       ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
       repoPath
     )
+
     const existingBranches = new Set(iterateProcessOutputLines(stdout))
+
     return branchNames.some((branchName) => existingBranches.has(branchName))
   } catch {
     return false
@@ -135,30 +150,40 @@ async function branchesExist(
 
 function parseBranchRemoteConfigLine(line: string): { branchName: string; value: string } | null {
   let index = 0
+
   while (index < line.length && isBranchConfigSeparator(line.charCodeAt(index))) {
     index += 1
   }
+
   const keyStart = index
+
   while (index < line.length && !isBranchConfigSeparator(line.charCodeAt(index))) {
     index += 1
   }
+
   const key = line.slice(keyStart, index)
+
   while (index < line.length && isBranchConfigSeparator(line.charCodeAt(index))) {
     index += 1
   }
+
   if (index >= line.length) {
     return null
   }
 
   const valueStart = index
   let valueEnd = line.length
+
   while (valueEnd > valueStart && isBranchConfigSeparator(line.charCodeAt(valueEnd - 1))) {
     valueEnd -= 1
   }
+
   if (valueStart >= valueEnd) {
     return null
   }
+
   const branchName = extractBranchNameFromConfigKey(key)
+
   return branchName ? { branchName, value: line.slice(valueStart, valueEnd) } : null
 }
 
@@ -166,18 +191,24 @@ function parseBranchRemoteConfigLine(line: string): { branchName: string; value:
 // (e.g. `release/1.2.3`), so only the known trailing suffix is stripped.
 function extractBranchNameFromConfigKey(key: string): string | null {
   const prefix = 'branch.'
+
   if (!key.startsWith(prefix)) {
     return null
   }
+
   const rest = key.slice(prefix.length)
   const lastDot = rest.lastIndexOf('.')
+
   if (lastDot <= 0) {
     return null
   }
+
   const suffix = rest.slice(lastDot + 1)
+
   if (suffix !== 'remote' && suffix !== 'pushRemote') {
     return null
   }
+
   return rest.slice(0, lastDot)
 }
 
@@ -199,6 +230,7 @@ async function remoteHasOrcaProvenance(
       ['config', '--get', `remote.${remoteName}.orca-created`],
       repoPath
     )
+
     return stdout.trim() === 'true'
   } catch {
     return false
@@ -217,20 +249,24 @@ export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   if (!target?.remoteUrl || target.remoteName === 'origin' || target.remoteName === 'upstream') {
     return
   }
+
   if (
     !target.remoteCreated &&
     !(await remoteHasOrcaProvenance(execGit, repoPath, target.remoteName))
   ) {
     return
   }
+
   if (isPushTargetUsedByAnotherWorktree(store, removedWorktreeId, target)) {
     return
   }
+
   if (await hasBranchConfigUsingRemote(execGit, repoPath, target)) {
     return
   }
 
   let configuredRemoteUrl: string
+
   try {
     configuredRemoteUrl = (
       await execGit(['remote', 'get-url', target.remoteName], repoPath)
@@ -238,6 +274,7 @@ export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   } catch {
     return
   }
+
   if (!sameGitHubRemoteUrl(configuredRemoteUrl, target.remoteUrl)) {
     return
   }

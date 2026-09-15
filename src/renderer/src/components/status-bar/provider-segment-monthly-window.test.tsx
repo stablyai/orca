@@ -6,9 +6,11 @@ vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string, values?: Record<string, string>) => {
     let result = fallback
+
     for (const [key, value] of Object.entries(values ?? {})) {
       result = result.replace(`{{${key}}}`, value)
     }
+
     return result
   }
 }))
@@ -82,6 +84,7 @@ describe('ProviderSegment monthly window', () => {
       error: null,
       status: 'ok'
     }
+
     const markup = renderToStaticMarkup(
       <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
     )
@@ -93,6 +96,7 @@ describe('ProviderSegment monthly window', () => {
 
   it('selects a named bucket as the tightest provider window', async () => {
     const { ProviderSegment } = await import('./StatusBar')
+
     const limits: ProviderRateLimits = {
       provider: 'gemini',
       session: null,
@@ -131,6 +135,7 @@ describe('ProviderSegment monthly window', () => {
         error: null,
         status: 'ok'
       }
+
       const markup = renderToStaticMarkup(
         <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
       )
@@ -152,6 +157,7 @@ describe('ProviderSegment monthly window', () => {
     const verbose = renderToStaticMarkup(
       <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
     )
+
     const compact = renderToStaticMarkup(
       <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
     )
@@ -162,6 +168,7 @@ describe('ProviderSegment monthly window', () => {
 
   it('restores every inline window in verbose mode', async () => {
     const { ProviderSegment } = await import('./StatusBar')
+
     const limits: ProviderRateLimits = {
       provider: 'claude',
       session: windowOf(10, 300),

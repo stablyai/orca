@@ -19,6 +19,7 @@ import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-go
 import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
 
 const noMinidump = async () => null
+
 const attachDetails = async () => null
 
 function event(overrides: Partial<ProcessGoneCrashEvent> = {}): ProcessGoneCrashEvent {
@@ -38,6 +39,7 @@ const gpuKill = event({
   processType: 'GPU',
   details: { serviceName: 'GPU', type: 'GPU' }
 })
+
 const networkServiceKill = event({
   source: 'child',
   processType: 'Utility',
@@ -47,6 +49,7 @@ const networkServiceKill = event({
     type: 'Utility'
   }
 })
+
 const rendererKill = event()
 
 function currentTeardownScope() {

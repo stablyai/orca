@@ -58,8 +58,10 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       return isGrokEvent(eventName, 'user_prompt_submit')
     case 'copilot': {
       const normalizedEventName = normalizeCopilotEventName(eventName)
+
       return normalizedEventName === 'SessionStart' || normalizedEventName === 'UserPromptSubmit'
     }
+
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     case 'devin':
@@ -84,6 +86,7 @@ export function hasExplicitUserPrompt(
     // Why: Command Code exposes the submitted prompt via its transcript, not direct hook fields; treat the transcript-backed prompt as explicit so telemetry covers real turns.
     return true
   }
+
   if (
     source === 'antigravity' &&
     isNewTurnEvent(source, eventName) &&
@@ -91,20 +94,25 @@ export function hasExplicitUserPrompt(
   ) {
     return true
   }
+
   if (extractedPrompt.source === 'role_user_text') {
     return (source === 'opencode' || source === 'mimo-code') && eventName === 'MessagePart'
   }
+
   if (extractedPrompt.text.length === 0) {
     return false
   }
+
   // Why: harness-injected turns aren't a user submit (no prompt-sent telemetry or permission stickiness); match only KNOWN tags so a real `<my-element>` prompt still counts and survives interrupt recovery.
   if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
+
   // Why: bare `message` fields often carry permission/status copy — may update visible status prompts but aren't proof of a user submit.
   if (extractedPrompt.source === 'message') {
     return false
   }
+
   if (
     extractedPrompt.source === 'user_prompt' ||
     extractedPrompt.source === 'userPrompt' ||
@@ -112,6 +120,7 @@ export function hasExplicitUserPrompt(
   ) {
     return isNewTurnEvent(source, eventName)
   }
+
   return isNewTurnEvent(source, eventName)
 }
 

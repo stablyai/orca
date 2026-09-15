@@ -201,6 +201,7 @@ describe('addWorktree', () => {
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
       ([argv]) => Array.isArray(argv) && argv.includes('worktree') && argv.includes('add')
     )
+
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
   })
@@ -216,6 +217,7 @@ describe('addWorktree', () => {
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
       ([argv]) => Array.isArray(argv) && argv.includes('worktree') && argv.includes('add')
     )
+
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: 600_000 })
   })
 
@@ -540,6 +542,7 @@ describe('addWorktree', () => {
   it('unsets branch base config during sparse setup cleanup after creation succeeds', async () => {
     const beforeRemoval =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
+
     resolveRemoteBase()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()

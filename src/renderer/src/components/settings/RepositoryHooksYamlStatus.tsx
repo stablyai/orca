@@ -143,6 +143,7 @@ export function RepositoryHooksYamlStatus({
 }): React.JSX.Element {
   const copy = getYamlStateCopy(yamlState)
   const parseErrorFixes = getParseErrorFixes()
+
   return (
     <div className={`space-y-3 rounded-xl border p-3 ${YAML_STATE_STYLES[yamlState].card}`}>
       <div className="space-y-1">

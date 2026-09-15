@@ -126,6 +126,7 @@ describe('HistoryReader', () => {
         applicationCursor: true,
         alternateScreen: false
       }
+
       writeSessionWithCheckpoint(dir, 'sess-1', makeMeta(), makeCheckpoint({ modes }))
 
       const info = await reader.detectColdRestore('sess-1')
@@ -241,9 +242,11 @@ describe('HistoryReader', () => {
 
       const detection = await reader.detectColdRestoreState('bad-cp')
       expect(detection.status).toBe('restored')
+
       if (detection.status !== 'restored') {
         throw new Error('expected fallback restore')
       }
+
       expect(detection.restoreInfo.snapshotAnsi).toBe('fallback data\r\n')
       expect(detection.restoreInfo.rehydrateSequences).toBe('')
       expect(detection.hasUnreadableRecovery).toBe(true)
@@ -353,6 +356,7 @@ describe('HistoryReader', () => {
       const detection = await reader.detectColdRestoreState(sessionId)
 
       expect(detection.status).toBe('restored')
+
       if (detection.status === 'restored') {
         expect(detection.restoreInfo).toMatchObject({ cols: 800, rows: 24 })
         expect(detection.restoreInfo.snapshotAnsi).toContain('wide incremental data')
@@ -382,6 +386,7 @@ describe('HistoryReader', () => {
       const detection = await reader.detectColdRestoreState(sessionId)
 
       expect(detection.status).toBe('restored')
+
       if (detection.status === 'restored') {
         expect(detection.restoreInfo.snapshotAnsi).toContain('checkpoint fallback')
         expect(detection.hasUnreadableRecovery).toBe(true)
@@ -396,11 +401,13 @@ describe('HistoryReader', () => {
         makeMeta(),
         makeCheckpoint({ generation: 1, snapshotAnsi: 'checkpoint base\r\n' })
       )
+
       const fullLog = Buffer.concat([
         encodeLogHeader(1),
         encodeLogBatch(1, [{ kind: 'output', data: 'complete prefix\r\n' }]),
         encodeLogBatch(2, [{ kind: 'output', data: 'unique torn tail\r\n' }])
       ])
+
       writeFileSync(
         join(dir, getHistorySessionDirName(sessionId), 'output.log'),
         fullLog.subarray(0, -3)
@@ -409,6 +416,7 @@ describe('HistoryReader', () => {
       const detection = await reader.detectColdRestoreState(sessionId)
 
       expect(detection.status).toBe('restored')
+
       if (detection.status === 'restored') {
         expect(detection.restoreInfo.snapshotAnsi).toContain('complete prefix')
         expect(detection.restoreInfo.snapshotAnsi).not.toContain('unique torn tail')
@@ -436,24 +444,30 @@ describe('HistoryReader', () => {
         writeSessionWithScrollback(dir, 'repeated-switch', makeMeta(), scrollback)
         let searchedCharacters = 0
         const originalIndexOf = String.prototype.indexOf
+
         const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
           this: string,
           search: string,
           position?: number
         ) {
           const found = originalIndexOf.call(this, search, position)
+
           if (search === '\x1b[?1049h' || search === '\x1b[?1049l') {
             searchedCharacters +=
               (found < 0 ? this.length : found + search.length) - (position ?? 0)
           }
+
           return found
         })
+
         let info
+
         try {
           info = await reader.detectColdRestore('repeated-switch')
         } finally {
           spy.mockRestore()
         }
+
         expect(info?.snapshotAnsi).toBe(marker.endsWith('h') ? 'normal\r\noutput' : scrollback)
         expect(searchedCharacters).toBeLessThanOrEqual(2 * scrollback.length)
       }

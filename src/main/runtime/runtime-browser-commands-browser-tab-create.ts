@@ -34,24 +34,29 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
     caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
   ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
+
     const focus = resolveBrowserTabCreateFocus({
       activate: params.activate,
       navigation: params.navigation,
       clientKind: caller?.clientKind
     })
+
     const worktree = params.worktree
       ? params.placement?.kind === 'client'
         ? await this.host.resolveBrowserWorkspace(params.worktree)
         : await this.host.resolveWorktreeSelector(params.worktree)
       : undefined
+
     const worktreeId = worktree?.id
     const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)
+
     if (!sessionPartition) {
       throw new BrowserError(
         'invalid_argument',
         `Browser profile ${params.profileId} was not found`
       )
     }
+
     if (params.placement?.kind === 'client') {
       if (!caller?.pairedDeviceId) {
         throw new BrowserError(
@@ -59,16 +64,19 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
           'Client-hosted browser pages require an authenticated paired runtime.'
         )
       }
+
       if (!worktree) {
         throw new BrowserError(
           'invalid_argument',
           'Client-hosted browser pages require an explicit workspace.'
         )
       }
+
       const browserPageId = params.page ?? randomUUID()
       const executionHost = await this.host.resolveBrowserNetworkExecutionHost(worktree)
       const authority = this.host.getBrowserHostLeaseRegistry()
       const browserProfileId = params.profileId ?? browserSessionRegistry.getDefaultProfile().id
+
       const created = await createRuntimeBrowserClientPage(authority, {
         browserPageId,
         browserHostClientId: params.placement.browserHostClientId,
@@ -77,6 +85,7 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
         executionHost,
         workspaceId: worktree.id
       })
+
       const pages = this.host.getRuntimeBrowserPageRegistry()
       pages.publishClientPage({
         browserPageId,
@@ -97,6 +106,7 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
         clientNavigationId: caller.pairedDeviceId,
         targetGroupId: params.targetGroupId
       })
+
       if (url !== 'about:blank') {
         try {
           await navigateRuntimeBrowserClientPage(authority, {
@@ -108,16 +118,21 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
         } catch {
           pages.updatePage(browserPageId, created.placement, { loading: false })
         }
+
         this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id)
       }
+
       return { browserPageId }
     }
+
     // Why: headless serve has no renderer <webview>, so back the page with a main-process offscreen WebContents instead.
     if (!this.host.getAvailableAuthoritativeWindow()) {
       const offscreen = this.host.getOffscreenBrowserBackend()
+
       if (!offscreen) {
         throw new BrowserError('browser_error', 'This host does not support browser panes.')
       }
+
       // Why: the offscreen backend registers synchronously, so there is no webview-mount wait.
       const created = await offscreen.createTab({
         url,
@@ -125,6 +140,7 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
         profileId: params.profileId,
         ...(params.page ? { browserPageId: params.page } : {})
       })
+
       publishCreatedBrowserSessionTab(this.host, {
         placementKind: 'offscreen',
         browserPageId: created.browserPageId,
@@ -133,8 +149,10 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
         ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
         targetGroupId: params.targetGroupId
       })
+
       return { browserPageId: created.browserPageId }
     }
+
     const { browserPageId } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
@@ -168,14 +186,18 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
       const navigate = async (): Promise<void> => {
         const result = await bridge.goto(url, worktreeId, browserPageId)
         this.notifyRendererNavigation(browserPageId, result.url, result.title)
+
         if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
         }
       }
+
       if (params.waitForRegistration === true) {
         void navigate().catch(() => {})
+
         return { browserPageId }
       }
+
       try {
         await navigate()
       } catch {
@@ -191,15 +213,18 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
     worktree: string
   }): Promise<{ browserPageId: string }> {
     const protocol = new URL(params.url).protocol
+
     if (protocol !== 'http:' && protocol !== 'https:') {
       throw new BrowserError('invalid_argument', 'Only http(s) URLs can be opened on the client.')
     }
+
     const lease = this.host
       .getBrowserHostLeaseRegistry()
       .select(undefined, [
         BROWSER_HOST_WEBVIEW_CAPABILITY,
         BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY
       ])
+
     return this.browserTabCreate(
       {
         url: params.url,

@@ -44,11 +44,13 @@ describe('computeWorktreePath WSL layout', () => {
     expect(getWslHomeMock).not.toHaveBeenCalled()
     resolveHome(home)
     const root = await pendingRoot
+
     for (const name of ['feature', 'feature-2', 'feature-3']) {
       expect(computeWorktreePath(name, repoPath, settings, root)).toBe(
         win32.join(home, 'orca', 'workspaces', 'repo', name)
       )
     }
+
     expect(getWslHomeAsyncMock).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(getWslHomeMock).not.toHaveBeenCalled()
   })
@@ -89,10 +91,12 @@ describe('computeWorktreePath WSL layout', () => {
       linuxPath: '/home/jin/src/repo'
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: '/home/jin/src/.orca-worktrees'
     }
+
     const settings = { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' }
 
     expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
@@ -111,6 +115,7 @@ describe('computeWorktreePath WSL layout', () => {
       linuxPath: '/home/jin/src/repo'
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: '/mnt/d/trees'
@@ -131,6 +136,7 @@ describe('computeWorktreePath WSL layout', () => {
       linuxPath: '/home/jin/src/repo'
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: '/home/jin/src/../trees'
@@ -151,6 +157,7 @@ describe('computeWorktreePath WSL layout', () => {
       linuxPath: '/home/jin/src/repo'
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: 'D:\\trees'
@@ -173,6 +180,7 @@ describe('computeWorktreePath WSL layout', () => {
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
     const settings = { nestWorkspaces: true, workspaceDir: 'C:\\workspaces' }
+
     for (const worktreeBasePath of ['/home/jin/trees', '/home/jin/src/../trees', '/mnt/d/trees']) {
       const repo = {
         id: 'r1',
@@ -183,6 +191,7 @@ describe('computeWorktreePath WSL layout', () => {
         kind: 'git',
         worktreeBasePath
       } as Repo
+
       // Why: the resolver exists so these two layers agree; assert the
       // invariant directly instead of two hardcoded strings that happen to match.
       const createdPath = computeWorktreePath(
@@ -190,6 +199,7 @@ describe('computeWorktreePath WSL layout', () => {
         repo.path,
         getWorktreePathSettings(repo, settings)
       )
+
       const layouts = buildKnownOrcaWorkspaceLayouts({ ...settings, workspaceDirHistory: [] }, repo)
       // Why containment, not just ownership: a regressed resolver lands in the
       // ~/orca/workspaces mirror layout, which also classifies 'external'.
@@ -213,10 +223,12 @@ describe('computeWorktreePath WSL layout', () => {
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
     getWslHomeAsyncMock.mockResolvedValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: '/home/jin/src/.orca-worktrees'
     }
+
     const pathSettings = getWorktreePathSettings(repo, {
       nestWorkspaces: false,
       workspaceDir: 'C:\\workspaces'
@@ -233,6 +245,7 @@ describe('computeWorktreePath WSL layout', () => {
       linuxPath: '/home/jin/src/repo'
     })
     getWslHomeMock.mockReturnValue(null)
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: '/home/jin/trees'
@@ -253,6 +266,7 @@ describe('computeWorktreePath WSL layout', () => {
       linuxPath: '/home/jin/src/repo'
     })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
       worktreeBasePath: '../worktrees'

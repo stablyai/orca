@@ -24,6 +24,7 @@ export function createTabsDropActions(
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, target.groupId)
+
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
           return state
         }
@@ -31,15 +32,19 @@ export function createTabsDropActions(
         const { tab, worktreeId } = foundTab
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
+
         if (!sourceGroup) {
           return state
         }
 
         const isSplitDrop = Boolean(target.splitDirection)
+
         if (!isSplitDrop && tab.groupId === target.groupId) {
           return state
         }
+
         const layout = state.layoutByWorktree[worktreeId]
+
         if (
           isSplitDrop &&
           isPaneColumnSplitDropNoOp({
@@ -63,14 +68,17 @@ export function createTabsDropActions(
 
         if (target.splitDirection) {
           const newGroupId = createBrowserUuid()
+
           const newGroup: TabGroup = {
             id: newGroupId,
             worktreeId,
             activeTabId: null, // Placeholder; properly set in the nextGroups.map() below
             tabOrder: []
           }
+
           const currentLayout =
             nextLayoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: target.groupId } as const)
+
           const replacement = buildSplitNode(
             target.groupId,
             newGroupId,
@@ -94,20 +102,25 @@ export function createTabsDropActions(
 
         const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
         const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
+
         const destinationGroup =
           nextGroups.find((group) => group.id === resolvedTargetGroupId) ?? targetGroup
+
         // Why: target order may already hold this tab id (racey write / same-group split); dedupe first or React hits a duplicate key.
         const targetOrder = dedupeTabOrder(destinationGroup.tabOrder.filter((id) => id !== tabId))
+
         const targetIndex = Math.max(
           0,
           Math.min(target.index ?? targetOrder.length, targetOrder.length)
         )
+
         targetOrder.splice(targetIndex, 0, tabId)
 
         const sourceRecentTabIds = sanitizeRecentTabIds(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
         )
+
         nextGroups = nextGroups.map((group) => {
           if (group.id === sourceGroup.id) {
             return {
@@ -121,6 +134,7 @@ export function createTabsDropActions(
               recentTabIds: sourceRecentTabIds
             }
           }
+
           if (group.id === resolvedTargetGroupId) {
             return {
               ...group,
@@ -132,11 +146,13 @@ export function createTabsDropActions(
               )
             }
           }
+
           return group
         })
 
         if (sourceOrder.length === 0) {
           nextGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+
           const collapsedState = collapseGroupLayout(
             nextLayoutByWorktree,
             nextActiveGroupIdByWorktree,
@@ -144,6 +160,7 @@ export function createTabsDropActions(
             sourceGroup.id,
             resolvedTargetGroupId
           )
+
           nextLayoutByWorktree = collapsedState.layoutByWorktree
           nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
         } else {
@@ -159,6 +176,7 @@ export function createTabsDropActions(
             candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
           )
         }
+
         const nextGroupsByWorktree = {
           ...state.groupsByWorktree,
           [worktreeId]: nextGroups
@@ -184,10 +202,12 @@ export function createTabsDropActions(
             : {})
         }
       })
+
       if (moved) {
         get().recordFeatureInteraction?.('terminal-tabs')
         get().recordFeatureInteraction?.('tab-splits')
       }
+
       return moved
     }
   }

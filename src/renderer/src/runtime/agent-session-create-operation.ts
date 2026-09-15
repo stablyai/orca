@@ -24,20 +24,24 @@ function isAmbiguousCreateFailure(error: unknown): boolean {
 
 export function createAgentSessionCreateOperation(): AgentSessionCreateOperation {
   const clientOperationId = createAgentSessionOperationId()
+
   return {
     clientOperationId,
     async run(invoke) {
       let lastError: unknown
+
       for (let attempt = 0; attempt < MAX_AMBIGUOUS_CREATE_ATTEMPTS; attempt += 1) {
         try {
           return await invoke(clientOperationId)
         } catch (error) {
           lastError = error
+
           if (!isAmbiguousCreateFailure(error)) {
             throw error
           }
         }
       }
+
       throw lastError
     }
   }
@@ -49,18 +53,23 @@ export function toAgentLaunchPreferences(
   if (!sessionOptions) {
     return undefined
   }
+
   const readString = (key: keyof AgentLaunchPreferences): string | undefined => {
     const value = sessionOptions[key]
+
     return typeof value === 'string' && value.trim() ? value.trim() : undefined
   }
+
   const model = readString('model')
   const effort = readString('effort')
   const mode = readString('mode')
+
   const preferences: AgentLaunchPreferences = {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
     ...(mode ? { mode } : {})
   }
+
   return Object.keys(preferences).length > 0 ? preferences : undefined
 }
 

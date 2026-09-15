@@ -17,4 +17,5 @@
 // triggers a hard-block screen for users paired to older servers.
 
 export const MOBILE_PROTOCOL_VERSION = 3
+
 export const MIN_COMPATIBLE_DESKTOP_VERSION = 2

@@ -5,12 +5,15 @@ import type * as RepoIconModule from '../../shared/repo-icon'
 // Counts real sanitizer entries so the icon cache is proven by decode count
 // rather than by wall clock, which is unfalsifiable on a loaded CI box.
 const sanitizeRepoIconCalls = vi.hoisted(() => vi.fn())
+
 vi.mock('../../shared/repo-icon', async (importOriginal) => {
   const actual = await importOriginal<typeof RepoIconModule>()
+
   return {
     ...actual,
     sanitizeRepoIcon: (value: unknown) => {
       sanitizeRepoIconCalls(value)
+
       return actual.sanitizeRepoIcon(value)
     }
   }
@@ -91,7 +94,9 @@ function imageIconSrc(bodyBytes: number, withWhitespace = false): string {
     137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 64, 0, 0, 0, 64, 8, 6, 0,
     0, 0
   ])
+
   const body = Buffer.concat([header, Buffer.alloc(bodyBytes, bodyBytes % 251)]).toString('base64')
+
   // The sanitizer's base64 pattern admits whitespace, so a real src can hold it.
   return `data:image/png;base64,${withWhitespace ? `${body.slice(0, 20)} ${body.slice(20)}` : body}`
 }
@@ -322,12 +327,14 @@ describe('dashboard payload validation', () => {
       ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: false
     }
+
     expect(
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], terminalInput }]
       })
     ).toBe(true)
+
     for (const invalid of [
       { ...terminalInput, hostPlatform: 'windows' },
       { ...terminalInput, localWindowsConpty: 'true' },
@@ -351,6 +358,7 @@ describe('dashboard payload validation', () => {
   // know must cost that preview its card, never the whole board.
   it('drops only the card whose terminal input profile is unusable', () => {
     const good = SNAPSHOT.cards[0]
+
     const bad = {
       ...good,
       paneKey: 'tab-2:leaf-2',
@@ -405,11 +413,13 @@ describe('dashboard payload validation', () => {
     it('drops a card that fails only the search-board fields', () => {
       const good = SNAPSHOT.cards[0]
       const badReview = { ...good, paneKey: 'p2', review: { number: 0, state: 'open' } }
+
       const badSubagent = {
         ...good,
         paneKey: 'p3',
         subagents: [{ id: '', name: 'x', dotState: 'idle' }]
       }
+
       const badBucket = { ...good, paneKey: 'p4', bucket: 'archived' }
 
       const admitted = admitDashboardSnapshot({
@@ -455,6 +465,7 @@ describe('dashboard payload validation', () => {
         null,
         []
       ]
+
       for (const value of cases) {
         expect(isDashboardSnapshot(value)).toBe(false)
         expect(admitDashboardSnapshot(value)).toBeNull()
@@ -466,6 +477,7 @@ describe('dashboard payload validation', () => {
   // header, and the renderer republishes the same icons every 250 ms.
   it('validates a repeated image icon without re-decoding it every publish', () => {
     const src = imageIconSrc(256 * 1024)
+
     const snapshot = {
       ...SNAPSHOT,
       repoIconsByRepoId: Object.fromEntries(
@@ -475,6 +487,7 @@ describe('dashboard payload validation', () => {
         ])
       )
     }
+
     sanitizeRepoIconCalls.mockClear()
 
     for (let publish = 0; publish < 20; publish += 1) {
@@ -506,6 +519,7 @@ describe('dashboard payload validation', () => {
       src: `${imageIconSrc(1_024)}`.replace('png', 'gif'),
       source: 'upload'
     }
+
     sanitizeRepoIconCalls.mockClear()
 
     for (let publish = 0; publish < 5; publish += 1) {
@@ -523,11 +537,13 @@ describe('dashboard payload validation', () => {
     const accepted = { type: 'image', src: imageIconSrc(1_024, true), source: 'upload' }
     const joined = `upload ${accepted.src}`
     const splitAt = joined.indexOf(' ', 'upload '.length)
+
     const forged = {
       type: 'image',
       source: joined.slice(0, splitAt),
       src: joined.slice(splitAt + 1)
     }
+
     sanitizeRepoIconCalls.mockClear()
 
     expect(isDashboardSnapshot({ ...SNAPSHOT, repoIconsByRepoId: { 'repo-1': accepted } })).toBe(

@@ -48,9 +48,11 @@ function deferred<T>(): {
   resolve: (value: T | PromiseLike<T>) => void
 } {
   let resolve: (value: T | PromiseLike<T>) => void = () => {}
+
   const promise = new Promise<T>((r) => {
     resolve = r
   })
+
   return { promise, resolve }
 }
 
@@ -81,6 +83,7 @@ describe('runtime terminal registration ownership', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     const second = registerRuntimeTerminalTab({
       tabId: 'term-replaced',
       worktreeId: 'wt-1',
@@ -101,17 +104,22 @@ describe('runtime terminal registration ownership', () => {
 describe('scheduleRuntimeGraphSync', () => {
   it('coalesces updates that arrive while the runtime graph IPC is in flight', async () => {
     vi.useFakeTimers()
+
     const syncCalls: {
       promise: Promise<void>
       resolve: (value: void | PromiseLike<void>) => void
     }[] = []
+
     const syncWindowGraph = vi.fn(() => {
       const call = deferred<void>()
       syncCalls.push(call)
+
       return call.promise
     })
+
     vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
     vi.stubGlobal('HTMLElement', class HTMLElement {})
+
     const unregister = registerRuntimeTerminalTab({
       tabId: 'term-1',
       worktreeId: 'wt-1',
@@ -120,6 +128,7 @@ describe('scheduleRuntimeGraphSync', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     setRuntimeGraphStoreStateGetter(() =>
       makeState({
         tabsByWorktree: { 'wt-1': [makeTerminalTab()] } as AppState['tabsByWorktree']
@@ -149,6 +158,7 @@ describe('scheduleRuntimeGraphSync', () => {
     const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
     vi.stubGlobal('HTMLElement', class HTMLElement {})
+
     const unregister = registerRuntimeTerminalTab({
       tabId: 'term-1',
       worktreeId: 'wt-1',
@@ -157,6 +167,7 @@ describe('scheduleRuntimeGraphSync', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     setRuntimeGraphStoreStateGetter(() =>
       makeState({
         tabsByWorktree: { 'wt-1': [makeTerminalTab()] } as AppState['tabsByWorktree']
@@ -189,7 +200,9 @@ describe('getRuntimeMobileSessionSyncKey scheduling inputs', () => {
         }
       } as AppState['layoutByWorktree']
     })
+
     const baseKey = getRuntimeMobileSessionSyncKey(base)
+
     const resized = makeState({
       ...base,
       layoutByWorktree: {

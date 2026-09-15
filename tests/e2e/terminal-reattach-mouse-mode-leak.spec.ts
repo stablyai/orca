@@ -55,8 +55,10 @@ test.describe('reattach mouse-mode leak', () => {
     test.skip(process.platform === 'win32', 'Uses a POSIX printf to arm mouse reporting')
 
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
     if (!repoPath || !existsSync(repoPath)) {
       test.skip(true, 'Global setup did not produce a seeded test repo')
+
       return
     }
 
@@ -76,6 +78,7 @@ test.describe('reattach mouse-mode leak', () => {
       const hasPaneManager = await waitForActiveTerminalManager(firstLaunch.page, 30_000)
         .then(() => true)
         .catch(() => false)
+
       test.skip(
         !hasPaneManager,
         'Electron automation in this environment never mounts the TerminalPane manager.'
@@ -89,6 +92,7 @@ test.describe('reattach mouse-mode leak', () => {
       // that echoes input but never execs a shell; skip there rather than fail,
       // matching the pane-manager guard above — there is nothing to arm.
       await execInTerminal(firstLaunch.page, ptyId, 'echo ORCA_MOUSE_READY_$((21+21))')
+
       const shellExecutes = await waitForTerminalOutput(
         firstLaunch.page,
         'ORCA_MOUSE_READY_42',
@@ -96,6 +100,7 @@ test.describe('reattach mouse-mode leak', () => {
       )
         .then(() => true)
         .catch(() => false)
+
       test.skip(!shellExecutes, 'PTY shell does not execute commands in this environment')
 
       // Arm mouse tracking exactly as a TUI would, then let the shell foreground
@@ -116,14 +121,17 @@ test.describe('reattach mouse-mode leak', () => {
             firstLaunch.page.evaluate(() => {
               const state = window.__store?.getState()
               const worktreeId = state?.activeWorktreeId
+
               const tabId =
                 state?.activeTabType === 'terminal'
                   ? state.activeTabId
                   : worktreeId
                     ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                     : null
+
               const manager = tabId ? window.__paneManagers?.get(tabId) : null
               const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
               return pane?.terminal.modes.mouseTrackingMode ?? null
             }),
           {
@@ -161,14 +169,17 @@ test.describe('reattach mouse-mode leak', () => {
             secondLaunch.page.evaluate(() => {
               const state = window.__store?.getState()
               const worktreeId = state?.activeWorktreeId
+
               const tabId =
                 state?.activeTabType === 'terminal'
                   ? state.activeTabId
                   : worktreeId
                     ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                     : null
+
               const manager = tabId ? window.__paneManagers?.get(tabId) : null
               const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
               return pane?.terminal.modes.mouseTrackingMode ?? null
             }),
           {
@@ -187,26 +198,33 @@ test.describe('reattach mouse-mode leak', () => {
         const isMouseReport = (data: string): boolean => data.includes('\x1b[<')
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         if (!pane?.terminal.element) {
           throw new Error('Active terminal pane unavailable')
         }
+
         const screen = pane.terminal.element.querySelector<HTMLElement>('.xterm-screen')
+
         if (!screen) {
           throw new Error('Active terminal screen unavailable')
         }
 
         const reports: string[] = []
         const disposable = pane.terminal.onData((data) => reports.push(data))
+
         const dispatchMotion = async (): Promise<void> => {
           const rect = screen.getBoundingClientRect()
+
           for (const fraction of [0.15, 0.3, 0.45, 0.6, 0.75, 0.9]) {
             screen.dispatchEvent(
               new MouseEvent('mousemove', {
@@ -219,11 +237,13 @@ test.describe('reattach mouse-mode leak', () => {
             await new Promise((resolve) => setTimeout(resolve, 15))
           }
         }
+
         const motionReports = (): string[] => reports.filter(isMouseReport)
 
         try {
           // Phase A: post-reattach, mouse must be disarmed → no reports.
           await dispatchMotion()
+
           const afterReattach = {
             mode: pane.terminal.modes.mouseTrackingMode,
             hasEnableMouseClass: pane.terminal.element.classList.contains('enable-mouse-events'),
@@ -241,6 +261,7 @@ test.describe('reattach mouse-mode leak', () => {
           // rather than reading a single frame that can precede the binding.
           let classAfterArm = false
           let armedReports = 0
+
           for (let attempt = 0; attempt < 40 && armedReports === 0; attempt += 1) {
             await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
             classAfterArm =
@@ -270,9 +291,11 @@ test.describe('reattach mouse-mode leak', () => {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })

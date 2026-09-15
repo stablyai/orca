@@ -16,9 +16,11 @@ export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdi
   if (verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed') {
     return colors.statusRed
   }
+
   if (verdict?.kind === 'warning' || (verdict?.kind === 'normal' && verdict.label.endsWith('…'))) {
     return colors.statusAmber
   }
+
   return stateColors[state] ?? colors.textMuted
 }
 
@@ -35,6 +37,7 @@ export function StatusDot({
   verdict?: ConnectionVerdict
 }) {
   const color = statusDotColor(state, verdict)
+
   return <View style={[styles.dot, { backgroundColor: color }]} />
 }
 

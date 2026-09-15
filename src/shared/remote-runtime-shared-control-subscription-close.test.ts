@@ -10,6 +10,7 @@ import type { SharedControlLogicalSubscription } from './remote-runtime-shared-c
 describe('shared-control subscription retirement', () => {
   it('retires a closed subscription and its cleanup request', () => {
     const subscriptions = new Map<string, SharedControlLogicalSubscription<unknown>>()
+
     const subscription = createSharedControlSubscription({
       requestId: 'request-1',
       method: 'runtime.clientEvents.subscribe',
@@ -17,6 +18,7 @@ describe('shared-control subscription retirement', () => {
       retainedParamsBytes: 0,
       callbacks: { onResponse: vi.fn(), onError: vi.fn() }
     })
+
     subscription.sent = true
     subscription.remoteSubscriptionId = 'subscription-1'
     subscriptions.set(subscription.requestId, subscription)
@@ -30,6 +32,7 @@ describe('shared-control subscription retirement', () => {
       deviceToken: 'device-token',
       send: (payload) => {
         cleanupRequestId = (payload as { id: string }).id
+
         return true
       }
     })
@@ -50,6 +53,7 @@ describe('shared-control subscription retirement', () => {
       params: null,
       send: (payload) => {
         cleanupRequestId = (payload as { id: string }).id
+
         return false
       }
     })

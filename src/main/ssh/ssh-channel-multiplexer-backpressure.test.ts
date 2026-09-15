@@ -19,9 +19,11 @@ type MuxInternals = {
 
 function createTransport(): MockTransport {
   let onData: (chunk: Buffer) => void = () => {}
+
   const written: Buffer[] = []
   const pauseReads = vi.fn()
   const resumeReads = vi.fn()
+
   return {
     write: (data) => {
       written.push(data)
@@ -75,6 +77,7 @@ describe('SshChannelMultiplexer backpressure hardening', () => {
     for (let i = 0; i < 5000; i += 1) {
       mux.notify('bounded')
     }
+
     const state = internals(mux)
 
     expect(state.unackedTimestamps.size).toBe(4095)
@@ -91,6 +94,7 @@ describe('SshChannelMultiplexer backpressure hardening', () => {
     vi.spyOn(globalThis, 'setImmediate').mockImplementation(
       (callback: (...args: never[]) => void) => {
         continuations.push(callback)
+
         return {} as NodeJS.Immediate
       }
     )
@@ -101,6 +105,7 @@ describe('SshChannelMultiplexer backpressure hardening', () => {
     const incoming = Buffer.concat(
       Array.from({ length: 65 }, (_, index) => encodeKeepAliveFrame(index + 1, 0))
     )
+
     transport.data(incoming)
     const state = internals(mux)
 
@@ -122,10 +127,12 @@ describe('SshChannelMultiplexer backpressure hardening', () => {
   it('keeps frame dispatch ordered across a decoder continuation', () => {
     const seen: number[] = []
     mux.onNotification((_method, params) => seen.push(params.index as number))
+
     const frames = Array.from({ length: 65 }, (_, index) => {
       const payload = Buffer.from(
         JSON.stringify({ jsonrpc: '2.0', method: 'ordered', params: { index } })
       )
+
       return encodeFrame(MessageType.Regular, index + 1, 0, payload)
     })
 
@@ -140,10 +147,13 @@ describe('SshChannelMultiplexer backpressure hardening', () => {
     mux.dispose()
     const written: Buffer[] = []
     let drain = (): void => {}
+
     let deliver = (_data: Buffer): void => {}
+
     transport = {
       write: (data) => {
         written.push(data)
+
         return written.length !== 1
       },
       onDrain: (callback) => {
@@ -170,18 +180,22 @@ describe('SshChannelMultiplexer backpressure hardening', () => {
     const request = mux.request('fs.scan', {}, { signal: controller.signal })
     controller.abort()
     mux.notify('pty.exit', { id: 'pty-1', code: 0 })
+
     const remoteRequest = Buffer.from(
       JSON.stringify({ jsonrpc: '2.0', id: 91, method: 'client.control' })
     )
+
     deliver(encodeFrame(MessageType.Regular, 1, 0, remoteRequest))
     await Promise.resolve()
     await Promise.resolve()
 
     expect(written).toHaveLength(1)
     drain()
+
     const payloads = written.map((frame) =>
       JSON.parse(frame.subarray(HEADER_LENGTH, HEADER_LENGTH + frame.readUInt32BE(9)).toString())
     )
+
     expect(
       payloads.map((payload) =>
         payload.method === 'pty.data'

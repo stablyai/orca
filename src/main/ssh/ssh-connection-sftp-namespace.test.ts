@@ -27,6 +27,7 @@ vi.mock('./ssh-system-fallback', () => ({
 }))
 
 vi.mock('./ssh-control-socket', () => ({ removeControlSocketPath: vi.fn() }))
+
 vi.mock('./ssh-config-parser', () => ({ resolveWithSshG: vi.fn().mockResolvedValue(null) }))
 
 import { SshConnection } from './ssh-connection'
@@ -37,9 +38,13 @@ import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './ssh-system
 import type { SshTarget } from '../../shared/ssh-types'
 
 const SHELL_HOME = '/var/services/homes/alice'
+
 const SFTP_HOME = '/homes/alice'
+
 const RELAY_DIR = '.orca-remote/relay-0.1.0+hash'
+
 const MARKER = '.install-lock/.sftp-namespace-cafebabe'
+
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_DIR}`
 
 const namespace: SftpNamespacePathMapping = {
@@ -70,6 +75,7 @@ type FakeSftp = EventEmitter & {
 }
 
 type RealpathCallback = (err: Error | null, resolved?: string) => void
+
 type LstatCallback = (err: Error | null) => void
 
 function createFakeSftp(options?: { pendingRealpath?: boolean; pendingLstat?: boolean }): FakeSftp {
@@ -84,23 +90,31 @@ function createFakeSftp(options?: { pendingRealpath?: boolean; pendingLstat?: bo
   sftp.pendingLstatCallbacks = []
   sftp.realpath = vi.fn((path: string, cb: RealpathCallback) => {
     sftp.realpathCalls.push(path)
+
     if (options?.pendingRealpath) {
       sftp.pendingRealpathCallbacks.push(cb)
+
       return
     }
+
     cb(null, SFTP_HOME)
   })
   // The install-owner marker exists only under the SFTP start directory.
   sftp.lstat = vi.fn((path: string, cb: LstatCallback) => {
     sftp.lstatCalls.push(path)
+
     if (options?.pendingLstat) {
       sftp.pendingLstatCallbacks.push(cb)
+
       return
     }
+
     if (path === `${SFTP_HOME}/${RELAY_DIR}/${MARKER}`) {
       cb(null)
+
       return
     }
+
     cb(Object.assign(new Error('No such file'), { code: 2 }))
   })
   sftp.mkdir = vi.fn((path: string, cb: (err: Error | null) => void) => {
@@ -110,6 +124,7 @@ function createFakeSftp(options?: { pendingRealpath?: boolean; pendingLstat?: bo
   sftp.createWriteStream = vi.fn((path: string) => {
     sftp.writtenPaths.push(path)
     const ws = new EventEmitter()
+
     return Object.assign(ws, {
       end: vi.fn(() => setTimeout(() => ws.emit('close'), 0)),
       destroy: vi.fn(),
@@ -120,10 +135,12 @@ function createFakeSftp(options?: { pendingRealpath?: boolean; pendingLstat?: bo
   })
   sftp.end = vi.fn(() => {
     sftp.endCalls += 1
+
     if (sftp.emitCloseOnEnd) {
       setTimeout(() => sftp.emit('close'), 0)
     }
   })
+
   return sftp
 }
 
@@ -146,21 +163,27 @@ function connectedTo(
     onStateChange: vi.fn(),
     onLog: vi.fn()
   } as never)
+
   let handed = 0
+
   const client = {
     sftp: (cb: (err: Error | undefined, sftp: unknown) => void) => {
       if (options?.sftpError) {
         cb(options.sftpError, undefined)
+
         return
       }
+
       cb(undefined, sftpSessions[handed++] ?? sftpSessions.at(-1))
     }
   }
+
   // Why: the transfer branches are the unit under test; skip the connect handshake.
   Object.assign(conn as unknown as Record<string, unknown>, {
     client,
     useSystemSshTransport: options?.useSystemSsh ?? false
   })
+
   return conn
 }
 
@@ -268,10 +291,12 @@ describe('SshConnection SFTP namespace resolution', () => {
       hostPlatform: linux,
       sftpNamespace: fileNamespace('blob.bin')
     })
+
     const session = await conn.openFileUploadSession({
       hostPlatform: linux,
       sftpNamespace: namespace
     })
+
     session.close()
 
     expect(sftp.realpathCalls).toEqual([])
@@ -297,6 +322,7 @@ describe('SshConnection SFTP namespace resolution', () => {
 
   it('aborts a transfer stuck in discovery and reports a confirmed channel close', async () => {
     vi.useFakeTimers()
+
     try {
       const sftp = createFakeSftp({ pendingRealpath: true })
       const conn = connectedTo([sftp])
@@ -309,6 +335,7 @@ describe('SshConnection SFTP namespace resolution', () => {
           signal: controller.signal
         })
         .catch((err: Error) => err)
+
       await vi.waitFor(() => expect(sftp.realpathCalls).toHaveLength(1))
       controller.abort()
       await vi.advanceTimersByTimeAsync(5_000)
@@ -316,6 +343,7 @@ describe('SshConnection SFTP namespace resolution', () => {
       const error = (await write) as Error & {
         sshChannelCloseConfirmed?: boolean
       }
+
       expect(error.name).toBe('AbortError')
       expect(error.sshChannelCloseConfirmed).toBe(true)
       expect(sftp.endCalls).toBe(1)
@@ -327,6 +355,7 @@ describe('SshConnection SFTP namespace resolution', () => {
 
   it('reports an unconfirmed close when the aborted session never closes', async () => {
     vi.useFakeTimers()
+
     try {
       const sftp = createFakeSftp({ pendingRealpath: true })
       sftp.emitCloseOnEnd = false
@@ -340,6 +369,7 @@ describe('SshConnection SFTP namespace resolution', () => {
           signal: controller.signal
         })
         .catch((err: Error) => err)
+
       await vi.waitFor(() => expect(sftp.realpathCalls).toHaveLength(1))
       controller.abort()
       await vi.advanceTimersByTimeAsync(5_000)
@@ -359,7 +389,9 @@ describe('SshConnection SFTP namespace resolution', () => {
       new Error('Channel open failure: open failed reason 4: MaxSessions'),
       { reason: 4 }
     )
+
     const sftp = createFakeSftp()
+
     const conn = connectedTo([sftp], {
       sftpError: original
     })
@@ -388,6 +420,7 @@ describe('SshConnection SFTP namespace resolution', () => {
       const controller = new AbortController()
       const unhandledRejection = vi.fn()
       process.on('unhandledRejection', unhandledRejection)
+
       try {
         const write = conn
           .writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
@@ -396,6 +429,7 @@ describe('SshConnection SFTP namespace resolution', () => {
             signal: controller.signal
           })
           .catch((err: Error) => err)
+
         await vi.waitFor(() => expect(sftp.pendingRealpathCallbacks).toHaveLength(1))
         vi.useFakeTimers()
         controller.abort()
@@ -434,11 +468,13 @@ describe('SshConnection SFTP namespace resolution', () => {
       vi.useFakeTimers()
       const unhandledRejection = vi.fn()
       process.on('unhandledRejection', unhandledRejection)
+
       try {
         const sftp = createFakeSftp({ pendingLstat: true })
         sftp.emitCloseOnEnd = false
         const conn = connectedTo([sftp])
         const controller = new AbortController()
+
         const write = conn
           .writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
             hostPlatform: linux,
@@ -446,6 +482,7 @@ describe('SshConnection SFTP namespace resolution', () => {
             signal: controller.signal
           })
           .catch((err: Error) => err)
+
         await vi.waitFor(() => expect(sftp.pendingLstatCallbacks).toHaveLength(1))
         controller.abort()
         await vi.advanceTimersByTimeAsync(5_000)

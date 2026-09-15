@@ -7,10 +7,15 @@ import {
 } from './mobile-pairing-protocol-limits'
 
 export const PAIRING_OFFER_VERSION = 2
+
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
+
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
+
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
+
 const MAX_INVITE_TTL_MS = 10 * 60 * 1000
+
 // The cell stamps expiry from its own clock; without leeway, a cell clock
 // even slightly ahead of this machine makes every invite fail validation
 // (same class as the host-proof freshness incident).
@@ -23,8 +28,10 @@ function isCanonicalHttpsOrigin(value: string): boolean {
   ) {
     return false
   }
+
   try {
     const parsed = new URL(value)
+
     return parsed.protocol === 'https:' && value === parsed.origin
   } catch {
     return false
@@ -35,8 +42,10 @@ function isCanonicalBase64Key(value: string): boolean {
   if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) {
     return false
   }
+
   try {
     const decoded = atob(value)
+
     return decoded.length === 32 && btoa(decoded) === value
   } catch {
     return false
@@ -59,6 +68,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       .int()
       .refine((value) => {
         const currentTime = now()
+
         return (
           value > currentTime &&
           value <= currentTime + MAX_INVITE_TTL_MS + INVITE_EXPIRY_CLOCK_SKEW_MS
@@ -89,6 +99,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
           message: 'Relay is invalid for runtime scope'
         })
       }
+
       if (offer.relay && !isCanonicalBase64Key(offer.publicKeyB64)) {
         // Why: relayHostId is derived from the decoded key bytes, so relay
         // offers cannot tolerate the permissive legacy base64 aliases.
@@ -102,5 +113,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
 }
 
 export const PairingOfferSchema = createPairingOfferSchema()
+
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
+
 export type PairingRelay = NonNullable<PairingOffer['relay']>

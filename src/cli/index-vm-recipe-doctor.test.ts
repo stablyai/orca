@@ -23,6 +23,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -40,6 +41,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -59,6 +61,7 @@ describe('orca cli worktree awareness', () => {
 
   it('runs vm recipe doctor locally without contacting the app runtime', async () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-'))
+
     try {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
       const startScript = path.join(repoPath, 'scripts', 'orca-vm', 'start.sh')
@@ -85,9 +88,11 @@ describe('orca cli worktree awareness', () => {
         ok: boolean
         checks: { id: string; status: string }[]
       }
+
       if (!output.ok) {
         throw new Error(JSON.stringify(output))
       }
+
       expect(output.ok).toBe(true)
       expect(output.checks).toEqual(
         expect.arrayContaining([
@@ -105,6 +110,7 @@ describe('orca cli worktree awareness', () => {
 
   it('warns when vm recipe doctor finds no cleanup hook', async () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-'))
+
     try {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
       writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'start.sh'), '#!/bin/sh\n')
@@ -125,9 +131,11 @@ describe('orca cli worktree awareness', () => {
         ok: boolean
         checks: { id: string; status: string; remediation?: string }[]
       }
+
       if (!output.ok) {
         throw new Error(JSON.stringify(output))
       }
+
       expect(output.ok).toBe(true)
       expect(output.checks).toContainEqual(
         expect.objectContaining({
@@ -143,12 +151,14 @@ describe('orca cli worktree awareness', () => {
 
   it('runs vm recipe doctor provision mode and invokes cleanup', async () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-provision-'))
+
     const pairingCode = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint: 'ws://sandbox.example.com:6767',
       deviceToken: 'token',
       publicKeyB64: 'public-key'
     })
+
     try {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
       writeFileSync(
@@ -181,18 +191,21 @@ describe('orca cli worktree awareness', () => {
         ].join('\n')
       )
       const { EventEmitter } = await import('node:events')
+
       const startChild = Object.assign(new EventEmitter(), {
         stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stdin: { write: vi.fn(), end: vi.fn() },
         kill: vi.fn()
       })
+
       const cleanupChild = Object.assign(new EventEmitter(), {
         stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stdin: { write: vi.fn(), end: vi.fn() },
         kill: vi.fn()
       })
+
       spawnMock
         .mockImplementationOnce(() => {
           process.nextTick(() => {
@@ -207,6 +220,7 @@ describe('orca cli worktree awareness', () => {
             startChild.emit('exit', 0, null)
             startChild.emit('close', 0, null)
           })
+
           return startChild
         })
         .mockImplementationOnce(() => {
@@ -214,6 +228,7 @@ describe('orca cli worktree awareness', () => {
             cleanupChild.emit('exit', 0, null)
             cleanupChild.emit('close', 0, null)
           })
+
           return cleanupChild
         })
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -237,9 +252,11 @@ describe('orca cli worktree awareness', () => {
           destroy?: { exitCode: number | null; stdout: string; stderr: string }
         }
       }
+
       if (!output.ok) {
         throw new Error(JSON.stringify(output))
       }
+
       expect(output.ok).toBe(true)
       expect(output.checks).toEqual(
         expect.arrayContaining([
@@ -252,9 +269,11 @@ describe('orca cli worktree awareness', () => {
       // The transcript carries both stages so the agent can self-diagnose.
       expect(output.provisionTranscript?.provision.exitCode).toBe(0)
       expect(output.provisionTranscript?.destroy?.exitCode).toBe(0)
+
       const cleanupPayload = JSON.parse(
         String(vi.mocked(cleanupChild.stdin.end).mock.calls[0]?.[0])
       ) as { recipeId: string; recipeResult: { projectRoot: string } }
+
       expect(cleanupPayload).toMatchObject({
         recipeId: 'cloud-sandbox',
         recipeResult: { projectRoot: '/workspace/repo' }
@@ -266,6 +285,7 @@ describe('orca cli worktree awareness', () => {
 
   it('returns the full create transcript when provision fails so the agent can self-diagnose', async () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'orca-vm-doctor-provision-fail-'))
+
     try {
       mkdirSync(path.join(repoPath, 'scripts', 'orca-vm'), { recursive: true })
       writeFileSync(path.join(repoPath, 'scripts', 'orca-vm', 'start.js'), 'process.exit(0)')
@@ -280,12 +300,14 @@ describe('orca cli worktree awareness', () => {
         ].join('\n')
       )
       const { EventEmitter } = await import('node:events')
+
       const startChild = Object.assign(new EventEmitter(), {
         stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
         stdin: { write: vi.fn(), end: vi.fn() },
         kill: vi.fn()
       })
+
       // create emits a non-JSON line to stdout + a real diagnostic to stderr, then exits 0
       spawnMock.mockImplementationOnce(() => {
         process.nextTick(() => {
@@ -294,6 +316,7 @@ describe('orca cli worktree awareness', () => {
           startChild.emit('exit', 0, null)
           startChild.emit('close', 0, null)
         })
+
         return startChild
       })
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -322,6 +345,7 @@ describe('orca cli worktree awareness', () => {
           }
         }
       }
+
       expect(output.ok).toBe(false)
       expect(output.checks).toEqual(
         expect.arrayContaining([

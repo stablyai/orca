@@ -38,13 +38,16 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountSource
       previousUnreadTerminalTabs === state.unreadTerminalTabs &&
       sameBucketRecords(previousWorktreesByRepo, state.worktreesByRepo, sameBadgeWorktree) &&
       sameBucketRecords(previousTabsByWorktree, state.tabsByWorktree, sameBadgeTab)
+
     if (!unchanged) {
       unreadCount = getUnreadBadgeCount(state)
       previousUnreadTerminalTabs = state.unreadTerminalTabs
       counted = true
     }
+
     previousWorktreesByRepo = state.worktreesByRepo
     previousTabsByWorktree = state.tabsByWorktree
+
     return unreadCount
   }
 }

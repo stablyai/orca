@@ -17,6 +17,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
 const scenarioPath = process.env.ORCA_SDK_CONTRACT_SCENARIO_PATH
+
 const reportPath = process.env.ORCA_SDK_CONTRACT_REPORT_PATH
 
 const report = {
@@ -27,11 +28,13 @@ const report = {
   userMessages: [],
   descendantPid: null
 }
+
 const writeReport = () => {
   if (reportPath) {
     writeFileSync(reportPath, JSON.stringify(report))
   }
 }
+
 // Written immediately so a test can prove which script the SDK executed even if
 // the session dies before the scenario completes.
 writeReport()
@@ -43,10 +46,12 @@ if (process.env.ORCA_SDK_CONTRACT_IGNORE_SIGTERM) {
   process.on('SIGINT', () => {})
   setInterval(() => {}, 1_000_000)
 }
+
 if (process.env.ORCA_SDK_CONTRACT_DESCENDANT) {
   const descendant = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000000)'], {
     stdio: 'ignore'
   })
+
   descendant.unref()
   report.descendantPid = descendant.pid ?? null
   writeReport()
@@ -55,9 +60,11 @@ if (process.env.ORCA_SDK_CONTRACT_DESCENDANT) {
 const emit = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
 
 const waiters = []
+
 const settle = (kind, requestId) => {
   for (let i = waiters.length - 1; i >= 0; i--) {
     const waiter = waiters[i]
+
     if (
       waiter.kind === kind &&
       (waiter.requestId === undefined || waiter.requestId === requestId)
@@ -67,32 +74,39 @@ const settle = (kind, requestId) => {
     }
   }
 }
+
 const waitFor = (kind, requestId) => {
   if (kind === 'user' && report.userMessages.length > 0) {
     return Promise.resolve()
   }
+
   if (
     kind === 'control_response' &&
     report.controlResponses.some((frame) => frame.response?.request_id === requestId)
   ) {
     return Promise.resolve()
   }
+
   return new Promise((resolve) => waiters.push({ kind, requestId, resolve }))
 }
 
 createInterface({ input: process.stdin }).on('line', (line) => {
   let frame
+
   try {
     frame = JSON.parse(line)
   } catch {
     return
   }
+
   if (frame.type === 'control_request') {
     report.controlRequests.push(frame)
     writeReport()
+
     if (process.env.ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS) {
       return
     }
+
     emit({
       type: 'control_response',
       response: {
@@ -104,14 +118,18 @@ createInterface({ input: process.stdin }).on('line', (line) => {
         }
       }
     })
+
     return
   }
+
   if (frame.type === 'control_response') {
     report.controlResponses.push(frame)
     writeReport()
     settle('control_response', frame.response?.request_id)
+
     return
   }
+
   if (frame.type === 'user') {
     report.userMessages.push(frame)
     writeReport()
@@ -140,5 +158,7 @@ for (const step of scenario.steps) {
     process.exit(step.exit)
   }
 }
+
 writeReport()
+
 process.exit(0)

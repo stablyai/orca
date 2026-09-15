@@ -33,15 +33,18 @@ export function useIpynbCellExecution({
   const [pendingRun, setPendingRun] = useState<PendingCellRun | null>(null)
   const [runningCellIndex, setRunningCellIndex] = useState<number | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
+
   const fileRevision =
     trustRef.current.filePath === filePath
       ? trustRef.current.revision
       : trustRef.current.revision + 1
+
   useLayoutEffect(() => {
     if (trustRef.current.filePath !== filePath) {
       trustRef.current = { filePath, revision: fileRevision, trusted: false }
     }
   }, [filePath, fileRevision])
+
   const pendingRunCellIndex =
     pendingRun?.fileRevision === fileRevision ? pendingRun.cellIndex : null
 
@@ -52,20 +55,27 @@ export function useIpynbCellExecution({
     const latestContent = flushSourceDrafts()
     const latestNotebook = parseIpynb(latestContent)
     const cell = latestNotebook.cells[index]
+
     if (!cell || cell.kind !== 'code' || runningCellIndex !== null) {
       return
     }
+
     if (!trustRef.current.trusted && !options.skipTrustPrompt) {
       setPendingRun({ fileRevision, cellIndex: index })
+
       return
     }
+
     setRunError(null)
     setRunningCellIndex(index)
+
     try {
       const didSave = await onSave(latestContent)
+
       if (!didSave) {
         return
       }
+
       const result = await window.api.notebook.runPythonCell({
         filePath,
         code: cell.source,
@@ -76,6 +86,7 @@ export function useIpynbCellExecution({
           .join('\n\n'),
         connectionId: getConnectionId(worktreeId) ?? undefined
       })
+
       applyContent(updateIpynbCellOutputs(latestContent, index, result))
     } catch (error) {
       setRunError(error instanceof Error ? error.message : String(error))
@@ -85,10 +96,12 @@ export function useIpynbCellExecution({
   }
 
   const cancelPendingRun = (): void => setPendingRun(null)
+
   const confirmPendingRun = (): void => {
     const index = pendingRunCellIndex
     trustRef.current.trusted = true
     setPendingRun(null)
+
     if (index !== null) {
       void runCell(index, { skipTrustPrompt: true })
     }

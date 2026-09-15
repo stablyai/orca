@@ -33,6 +33,7 @@ describe('pane terminal output scheduler', () => {
     // shrinks main's in-flight window and wedges the PTY (rc.7.perf).
     function makeCredit(): { fire: () => void; count: () => number } {
       let fired = 0
+
       return { fire: () => (fired += 1), count: () => fired }
     }
 
@@ -72,9 +73,11 @@ describe('pane terminal output scheduler', () => {
         latencySensitive: false,
         ackCredit: credit.fire
       })
+
       for (let index = 0; index < 24; index += 1) {
         vi.advanceTimersByTime(4)
       }
+
       const written = terminal.write.mock.calls.map((call) => String(call[0])).join('')
       expect(written).toContain('q'.repeat(40 * 1024))
       expect(credit.count()).toBe(1)
@@ -127,6 +130,7 @@ describe('pane terminal output scheduler', () => {
           ackCredit: credit.fire
         })
       }
+
       // The cap replacement discards queued chunks — their deliveries still
       // consumed and must credit.
       for (const credit of credits) {
@@ -137,8 +141,10 @@ describe('pane terminal output scheduler', () => {
     it('credits when queued output is discarded', async () => {
       vi.useFakeTimers()
       const { writeTerminalOutput, discardTerminalOutput } = await loadScheduler()
+
       const { captureTerminalParseProgressGeneration, hasTerminalParseProgressSince } =
         await import('./terminal-write-pipeline-health')
+
       const terminal = createTerminal()
       terminal.write.mockImplementation(() => {})
       const credit = makeCredit()
@@ -160,10 +166,13 @@ describe('pane terminal output scheduler', () => {
     it('discards queued output when replay certification precedes the drain', async () => {
       vi.useFakeTimers()
       const { writeTerminalOutput } = await loadScheduler()
+
       const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
         await import('./terminal-write-pipeline-health')
+
       const terminal = createTerminal()
       const credits = [vi.fn(), vi.fn(), vi.fn()]
+
       try {
         for (const [index, credit] of credits.entries()) {
           writeTerminalOutput(terminal, `queued-${index}`, {
@@ -176,6 +185,7 @@ describe('pane terminal output scheduler', () => {
         vi.advanceTimersByTime(100)
 
         expect(terminal.write).not.toHaveBeenCalled()
+
         for (const credit of credits) {
           expect(credit).toHaveBeenCalledTimes(1)
         }
@@ -187,10 +197,13 @@ describe('pane terminal output scheduler', () => {
     it('discards queued output when a certified terminal is flushed', async () => {
       vi.useFakeTimers()
       const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
+
       const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
         await import('./terminal-write-pipeline-health')
+
       const terminal = createTerminal()
       const credit = vi.fn()
+
       try {
         writeTerminalOutput(terminal, 'queued', {
           foreground: false,
@@ -209,9 +222,12 @@ describe('pane terminal output scheduler', () => {
 
     it('does not probe a certified terminal while waiting for parsed output', async () => {
       const { waitForTerminalOutputParsed } = await loadScheduler()
+
       const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
         await import('./terminal-write-pipeline-health')
+
       const terminal = createTerminal()
+
       try {
         notifyUndeliverableWrite(terminal, 'replay-wedged')
 
@@ -225,16 +241,19 @@ describe('pane terminal output scheduler', () => {
 
     it('records parse progress when the parsed-output probe completes', async () => {
       const { waitForTerminalOutputParsed } = await loadScheduler()
+
       const {
         _resetWritePipelineHealthForTests,
         captureTerminalParseProgressGeneration,
         hasTerminalParseProgressSince
       } = await import('./terminal-write-pipeline-health')
+
       const terminal = createTerminal()
       let parsed: (() => void) | undefined
       terminal.write.mockImplementation((_data: string, callback?: () => void) => {
         parsed = callback
       })
+
       try {
         const generation = captureTerminalParseProgressGeneration(terminal)
         const wait = waitForTerminalOutputParsed(terminal)
@@ -250,12 +269,15 @@ describe('pane terminal output scheduler', () => {
 
     it('certifies a terminal whose parsed-output probe throws synchronously', async () => {
       const { waitForTerminalOutputParsed } = await loadScheduler()
+
       const { _resetWritePipelineHealthForTests, isTerminalWritePipelineCertifiedDead } =
         await import('./terminal-write-pipeline-health')
+
       const terminal = createTerminal()
       terminal.write.mockImplementation(() => {
         throw new Error('disposed')
       })
+
       try {
         await waitForTerminalOutputParsed(terminal)
 

@@ -3,6 +3,7 @@ import { getBrowserPlatform } from './web-storage'
 
 export function createEmptyMemorySnapshot(): MemorySnapshot {
   const emptyUsage = { cpu: 0, memory: 0 }
+
   return {
     app: { ...emptyUsage, main: emptyUsage, renderer: emptyUsage, other: emptyUsage, history: [] },
     worktrees: [],

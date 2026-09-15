@@ -25,10 +25,12 @@ import { isLazyChunkLoadError, loadLazyWithRetry } from './lazy-with-retry'
 // corrupt-chunk failure; these tests pin that behavior.
 
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+
 const LANDED_RELOAD_GUARD_VALUE = 'doc-before-the-reload'
 
 // The exact error the renderer received from the corrupt right-sidebar chunk.
 const reportedCrashError = (): SyntaxError => new SyntaxError("Unexpected token ')'")
+
 // An equivalent transient fetch failure, for contrast — this one DOES recover.
 const equivalentFetchError = (): TypeError =>
   new TypeError('Failed to fetch dynamically imported module: file://redacted/SourceControl.js')
@@ -36,6 +38,7 @@ const equivalentFetchError = (): TypeError =>
 function spyOnReload(): ReturnType<typeof vi.fn> {
   const reload = vi.fn()
   vi.spyOn(window.location, 'reload').mockImplementation(reload)
+
   return reload
 }
 
@@ -48,6 +51,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   vi.useRealTimers()
+
   try {
     window.sessionStorage.clear()
   } catch {
@@ -67,11 +71,13 @@ describe('right-sidebar lazy chunk SyntaxError crash (regression)', () => {
     const factory = vi.fn(() => Promise.reject(reportedCrashError()))
 
     const loaded = loadLazyWithRetry(factory, { retries: 2, reloadKey: 'right-sidebar' })
+
     // Drain the retry backoff timers first (fake timers), THEN await the result.
     const settled = loaded.then(
       () => null,
       (error: unknown) => error
     )
+
     await vi.advanceTimersByTimeAsync(5000)
     const caught = await settled
 
@@ -91,8 +97,10 @@ describe('right-sidebar lazy chunk SyntaxError crash (regression)', () => {
       window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
       const factory = vi.fn(() => Promise.reject(makeError()))
       const loaded = loadLazyWithRetry(factory, { retries: 0, reloadKey: 'right-sidebar' })
+
       try {
         await loaded
+
         return null
       } catch (error) {
         return error

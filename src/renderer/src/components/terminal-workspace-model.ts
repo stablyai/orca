@@ -18,11 +18,13 @@ export function haveSameIdSet(left: ReadonlySet<string>, right: ReadonlySet<stri
   if (left.size !== right.size) {
     return false
   }
+
   for (const id of left) {
     if (!right.has(id)) {
       return false
     }
   }
+
   return true
 }
 
@@ -40,13 +42,16 @@ function findUnifiedTabByVisibleId(
 
 function findActiveUnifiedTab(state: TerminalStoreSnapshot, worktreeId: string): Tab | null {
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
   const group =
     (state.groupsByWorktree[worktreeId] ?? []).find(
       (candidate) => candidate.id === activeGroupId
     ) ?? null
+
   if (!group?.activeTabId) {
     return null
   }
+
   return (
     (state.unifiedTabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === group.activeTabId) ??
     null
@@ -71,6 +76,7 @@ export function isPinnedActiveEditorTab(
   fileId: string
 ): boolean {
   const activeTab = findActiveUnifiedTab(state, worktreeId)
+
   if (activeTab) {
     return (
       activeTab.entityId === fileId &&
@@ -78,6 +84,7 @@ export function isPinnedActiveEditorTab(
       activeTab.isPinned === true
     )
   }
+
   return (
     (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>

@@ -20,6 +20,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => ({
 const mockApi = createStoreCascadesMockApi()
 
 const REMOTE_WORKTREE = 'remote-repo::/srv/app'
+
 const LOCAL_WORKTREE = 'local-repo::/tmp/app'
 
 function storeWithBothWorktrees(): ReturnType<typeof createTestStore> {
@@ -40,6 +41,7 @@ function storeWithBothWorktrees(): ReturnType<typeof createTestStore> {
       [LOCAL_WORKTREE]: [makeTab({ id: 'local-tab', worktreeId: LOCAL_WORKTREE })]
     }
   })
+
   return store
 }
 

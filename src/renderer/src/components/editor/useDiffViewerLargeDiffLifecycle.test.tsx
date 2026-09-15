@@ -8,6 +8,7 @@ const monacoFixture = vi.hoisted(() => {
     string,
     { dispose: ReturnType<typeof vi.fn>; isAttachedToEditor: () => boolean }
   >()
+
   return {
     models,
     monaco: {
@@ -39,9 +40,11 @@ function diffEditorFixture(
   setModel: ReturnType<typeof vi.fn>
 } {
   let models = { original, modified }
+
   const setModel = vi.fn((nextModels: typeof models) => {
     models = nextModels
   })
+
   return {
     current: {
       getModel: () => models,
@@ -56,6 +59,7 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
     const modelKey = 'diff-tab'
     const originalModelKey = 'original-v1'
     const onEnterFallback = vi.fn()
+
     const paths = ['modified-v1', 'modified-v2', 'modified-v3'].map((modifiedModelKey) =>
       getDiffViewerMonacoModelPaths({
         modelKey,
@@ -64,6 +68,7 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
         generationSuffix: ''
       })
     )
+
     const firstModel = detachedModel()
     const secondModel = detachedModel()
     const currentModel = detachedModel()
@@ -102,6 +107,7 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
 
   it('resets the owning diff widget before disposing a superseded model', async () => {
     const modelKey = 'diff-tab'
+
     const paths = ['modified-v1', 'modified-v2'].map((modifiedModelKey) =>
       getDiffViewerMonacoModelPaths({
         modelKey,
@@ -109,6 +115,7 @@ describe('useDiffViewerLargeDiffLifecycle', () => {
         generationSuffix: ''
       })
     )
+
     const supersededModel = detachedModel()
     const originalModel = detachedModel()
     const currentModel = detachedModel()

@@ -64,10 +64,12 @@ describe('scanFakeAgentPasteEnd', () => {
 
   it('does not upgrade a paste frame received after submit', () => {
     const timers: (() => void)[] = []
+
     const context = vm.createContext({
       result: null,
       setTimeout: (fn: () => void) => timers.push(fn)
     })
+
     vm.runInContext(
       `${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
        const modes = []

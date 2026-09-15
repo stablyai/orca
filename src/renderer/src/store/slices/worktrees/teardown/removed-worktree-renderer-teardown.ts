@@ -26,6 +26,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
 }): Promise<void> {
   const { set, get, worktreeId, hostId, requiredExecutionHostId, terminalPtyIdsBeforeRemoval } =
     args
+
   // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
   // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
   await get().shutdownWorktreeBrowsers(worktreeId)
@@ -34,6 +35,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
     // The backend removal above already killed the workspace's PTYs.
     backendOwnsPtyTeardown: true
   })
+
   // Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
   const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted(
     requiredExecutionHostId
@@ -44,6 +46,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
         }
       : { workspaceIds: [worktreeId] }
   )
+
   // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
   const tabs = get().tabsByWorktree[worktreeId] ?? []
@@ -63,12 +66,14 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   get().removeWorkspaceSpaceWorktrees?.(
     hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]
   )
+
   // Why: PR/commit-message generation records are keyed by worktree; prune to the surviving set so they don't leak.
   const liveWorktreeKeys = new Set(
     get()
       .allWorktrees()
       .map((w) => w.id)
   )
+
   // Optional-chained: minimal store assemblies (some unit tests) omit the generation slices.
   get().prunePullRequestGenerationRecords?.(liveWorktreeKeys)
   get().pruneCommitMessageGenerationRecords?.(liveWorktreeKeys)

@@ -22,14 +22,17 @@ function isEEXIST(error: unknown): boolean {
 function hasSameIdentity(current: BigIntStats, published: PublishedEntry): boolean {
   const { identity } = published
   const hasStableInode = identity.dev !== 0n || identity.ino !== 0n
+
   if (hasStableInode) {
     return current.dev === identity.dev && current.ino === identity.ino
   }
+
   return identity.birthtimeNs !== 0n && current.birthtimeNs === identity.birthtimeNs
 }
 
 function hasSamePublishedFileState(current: BigIntStats, published: PublishedEntry): boolean {
   const state = published.fileState
+
   return (
     state === undefined ||
     (current.size === state.size &&
@@ -76,6 +79,7 @@ async function copyTrackedLocalDownloadedFileNoClobber(
   let sourceHandle: FileHandle | undefined
   let destinationHandle: FileHandle | undefined
   let record: PublishedEntry | undefined
+
   try {
     sourceHandle = await open(sourcePath, 'r')
     destinationHandle = await open(destinationPath, 'wx')
@@ -87,25 +91,33 @@ async function copyTrackedLocalDownloadedFileNoClobber(
     publishedEntries.push(record)
     const buffer = Buffer.allocUnsafe(LOCAL_COPY_CHUNK_BYTES)
     let position = 0
+
     for (;;) {
       signal?.throwIfAborted()
       const { bytesRead } = await sourceHandle.read(buffer, 0, buffer.length, position)
+
       if (bytesRead === 0) {
         break
       }
+
       let written = 0
+
       while (written < bytesRead) {
         signal?.throwIfAborted()
+
         const result = await destinationHandle.write(
           buffer,
           written,
           bytesRead - written,
           position + written
         )
+
         written += result.bytesWritten
       }
+
       position += bytesRead
     }
+
     updatePublishedFileState(record, await destinationHandle.stat({ bigint: true }))
   } catch (error) {
     if (record && destinationHandle) {
@@ -114,10 +126,12 @@ async function copyTrackedLocalDownloadedFileNoClobber(
         .then((stats) => updatePublishedFileState(record!, stats))
         .catch(() => {})
     }
+
     throw error
   } finally {
     await Promise.all([closeFileHandle(sourceHandle), closeFileHandle(destinationHandle)])
   }
+
   await unlink(sourcePath)
 }
 
@@ -129,20 +143,24 @@ async function publishTrackedFileNoClobber(
 ): Promise<void> {
   const sourceStats = await lstat(sourcePath, { bigint: true })
   const hardLinkRecord = publishedEntryFromStats('file', destinationPath, sourceStats)
+
   try {
     await link(sourcePath, destinationPath)
   } catch (error) {
     if (isEEXIST(error)) {
       throw error
     }
+
     await copyTrackedLocalDownloadedFileNoClobber(
       sourcePath,
       destinationPath,
       publishedEntries,
       signal
     )
+
     return
   }
+
   // Why: hard links preserve dev+ino; register that known ownership first,
   // then synchronously snapshot state without an async third-party window.
   publishedEntries.push(hardLinkRecord)
@@ -157,6 +175,7 @@ export async function copyLocalDownloadedFileNoClobber(
   signal?: AbortSignal
 ): Promise<void> {
   const publishedEntries: PublishedEntry[] = []
+
   try {
     await copyTrackedLocalDownloadedFileNoClobber(
       sourcePath,
@@ -176,6 +195,7 @@ export async function publishLocalDownloadedFileNoClobber(
   signal?: AbortSignal
 ): Promise<void> {
   const publishedEntries: PublishedEntry[] = []
+
   try {
     await publishTrackedFileNoClobber(sourcePath, destinationPath, publishedEntries, signal)
   } catch (error) {
@@ -188,9 +208,11 @@ async function rollbackPublishedEntries(entries: PublishedEntry[]): Promise<void
   for (const entry of entries.toReversed()) {
     try {
       const current = await lstat(entry.path, { bigint: true })
+
       if (!hasSameIdentity(current, entry)) {
         continue
       }
+
       if (entry.kind === 'file') {
         if (hasSamePublishedFileState(current, entry)) {
           await unlink(entry.path)
@@ -217,13 +239,16 @@ async function publishDirectoryNoClobber(
   // claim so no async gap exists before rollback ownership is registered.
   const destinationStats = lstatSync(destinationPath, { bigint: true })
   publishedEntries.push(publishedEntryFromStats('directory', destinationPath, destinationStats))
+
   const entries = (await readdir(sourcePath, { withFileTypes: true })).toSorted((a, b) =>
     a.name.localeCompare(b.name)
   )
+
   for (const entry of entries) {
     signal?.throwIfAborted()
     const sourceEntryPath = join(sourcePath, entry.name)
     const destinationEntryPath = join(destinationPath, entry.name)
+
     if (entry.isDirectory()) {
       await publishDirectoryNoClobber(
         sourceEntryPath,
@@ -241,8 +266,10 @@ async function publishDirectoryNoClobber(
     } else {
       throw new Error(`Unexpected local download entry '${entry.name}'`)
     }
+
     signal?.throwIfAborted()
   }
+
   signal?.throwIfAborted()
 }
 
@@ -253,16 +280,20 @@ export async function promoteLocalDownloadedFolder(
 ): Promise<void> {
   signal?.throwIfAborted()
   const publishedEntries: PublishedEntry[] = []
+
   try {
     // Why: Node has no portable atomic no-replace directory rename. Claiming
     // the destination first preserves no-clobber while promotion stays local.
     await publishDirectoryNoClobber(tempPath, destinationPath, publishedEntries, signal)
   } catch (error) {
     await rollbackPublishedEntries(publishedEntries)
+
     if (isEEXIST(error)) {
       throw new Error('Destination folder already exists')
     }
+
     throw error
   }
+
   await rm(tempPath, { recursive: true, force: true }).catch(() => {})
 }

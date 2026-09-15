@@ -23,9 +23,11 @@ import {
 
 function connectedSession(response?: RpcResponse): FakeSession {
   const session = new FakeSession('connected')
+
   if (response) {
     session.sendRequest.mockResolvedValue(response)
   }
+
   return session
 }
 
@@ -34,6 +36,7 @@ const rows = { worktrees: [{ id: 'w1' }] }
 describe('request classification', () => {
   it('decodes a compatible reply, naming the variant and keeping the raw envelope', async () => {
     const response = rpcSuccess(rows)
+
     const settlement = await captureRpcOperationSettlement(
       connectedSession(response),
       workspaceListOrThrow,
@@ -68,6 +71,7 @@ describe('request classification', () => {
 
   it('classifies a refusal as outer-refused rather than throwing', async () => {
     const response = rpcRefusal('runtime_error', 'boom')
+
     const settlement = await captureRpcOperationSettlement(
       connectedSession(response),
       workspaceListOrThrow,
@@ -86,6 +90,7 @@ describe('request classification', () => {
 
   it('classifies a reply the reader cannot read as incompatible, with bounded issues', async () => {
     const response = rpcSuccess({ worktrees: [{ id: 7 }] })
+
     const settlement = await captureRpcOperationSettlement(
       connectedSession(response),
       workspaceListOrThrow,
@@ -93,9 +98,11 @@ describe('request classification', () => {
     )
 
     expect(settlement.status).toBe('fulfilled')
+
     if (settlement.status !== 'fulfilled' || settlement.outcome.kind !== 'incompatible') {
       throw new Error('expected an incompatible outcome')
     }
+
     expect(settlement.outcome.raw).toBe(response)
     expect(settlement.outcome.issues.map((issue) => issue.path)).toContain('rows.worktrees.0.id')
   })
@@ -117,6 +124,7 @@ describe('request classification', () => {
         throw new Error('reader exploded')
       }
     }
+
     const settlement = await captureRpcOperationSettlement(
       connectedSession(rpcSuccess(rows)),
       exploding,
@@ -153,6 +161,7 @@ describe('transport rejection stays on the promise channel', () => {
   // bundle copies; a clone from another copy must still read as a cutover through the descriptor.
   it('keeps a cutover error from another bundle copy recognisable', async () => {
     class ForeignBundleCutoverError extends Error {}
+
     const error = new ForeignBundleCutoverError('RPC interrupted by connection migration')
     const session = new FakeSession('connected')
     session.sendRequest.mockRejectedValue(error)
@@ -176,6 +185,7 @@ describe('transport rejection stays on the promise channel', () => {
       runRpcOperation(failing, workspaceListOrThrow, {}),
       runRpcOperation(stalled, workspaceListOrThrow, {})
     ])
+
     const raced = await Promise.race([
       group.then(
         () => 'resolved' as const,

@@ -3,6 +3,7 @@ import type { RuntimeTerminalClose } from '../../../shared/runtime-types'
 import type { RpcContext } from './core'
 
 type TerminalCloseMethod = 'terminal.close' | 'terminal.closeTab'
+
 type TerminalCloseTargetKind = 'terminal' | 'terminal-tab'
 
 export function withTerminalCloseAttribution(
@@ -19,14 +20,17 @@ export function withTerminalCloseAttribution(
     method,
     async (span) => {
       span.setAttribute('decision', 'allowed')
+
       try {
         const result = await close()
         span.setAttribute('outcome', 'succeeded')
         span.setAttribute('tabId', result.tabId)
         span.setAttribute('ptyKilled', result.ptyKilled)
+
         if (result.closeMode) {
           span.setAttribute('closeMode', result.closeMode)
         }
+
         return result
       } catch (error) {
         span.setAttribute('outcome', 'failed')

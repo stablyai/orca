@@ -27,13 +27,21 @@ import {
 } from './structured-agent-session-host-test-data'
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
+
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+
 let cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']>
+
 let answerPrompt: Mock<StructuredAgentSessionAdapter['answerPrompt']>
+
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 
 beforeEach(() => {
@@ -61,10 +69,12 @@ describe('attach', () => {
 
   it('refuses a payload the client fingerprinted wrong', async () => {
     const params = attachParams()
+
     const result = await host.attach(CALLER, {
       ...params,
       envelope: { ...params.envelope, payloadFingerprint: 'a'.repeat(64) }
     })
+
     expect(result).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_operation_conflict' }
@@ -128,6 +138,7 @@ describe('attach', () => {
           observedAt: NOW
         }
       }))
+
     host = new StructuredAgentSessionHost({
       store,
       adapter: { ...adapter(), acquire },
@@ -163,20 +174,26 @@ describe('attach', () => {
   it('drains writes captured by the old journal before acquiring its replacement', async () => {
     const record = await attach()
     const events = acquire.mock.calls[0]?.[0].events
+
     const oldJournal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     const appendGate = Promise.withResolvers<void>()
     const originalAppend = oldJournal.appendItem.bind(oldJournal)
+
     const append = vi.spyOn(oldJournal, 'appendItem').mockImplementationOnce(async (...args) => {
       await appendGate.promise
+
       return originalAppend(...args)
     })
+
     events?.appendItem(
       { provider: 'orca', clientMessageId: 'old-journal-write' },
       { kind: 'status', text: 'old journal write' }
     )
     await vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
+
     const released = await store.evictProvenDeadOwner({
       sessionId: SESSION,
       expectedFence: record?.lease.runtimeFence ?? 1,
@@ -197,10 +214,12 @@ describe('attach', () => {
 describe('cancel', () => {
   it('records the request acknowledgement as a status item keyed by the operation id', async () => {
     await attach()
+
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
+
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items[0]?.body).toMatchObject({
@@ -213,19 +232,23 @@ describe('cancel', () => {
   it('reports an unconfirmed cancellation rather than failing the call', async () => {
     await attach()
     cancelTurn.mockRejectedValueOnce(new Error('no answer'))
+
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     })
+
     expect(result).toMatchObject({ ok: true, value: { cancelled: false } })
   })
 
   it('never interrupts twice on a replay', async () => {
     await attach()
+
     const params = {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
       turnId: 'turn-1'
     }
+
     await host.cancel(CALLER, params)
     expect(await host.cancel(CALLER, params)).toMatchObject({
       ok: true,
@@ -241,10 +264,12 @@ describe('cancel', () => {
   ])('refuses %s before interrupting the provider', async (_case, requestedPrompt) => {
     await attach()
     const prompt = await seedApproval()
+
     const strictPrompt = {
       ...requestedPrompt,
       ...(requestedPrompt.itemId === 'seeded' ? { itemId: prompt.itemId } : {})
     }
+
     const fields = { turnId: 'turn-1', prompt: strictPrompt }
 
     expect(
@@ -259,16 +284,19 @@ describe('cancel', () => {
   it('refuses cancellation after an answer has already resolved the prompt', async () => {
     await attach()
     const prompt = await seedApproval()
+
     const answer = {
       itemId: prompt.itemId,
       expectedRevision: prompt.revision,
       optionId: 'allow'
     }
+
     await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', answer),
       kind: 'approval',
       ...answer
     })
+
     const fields = {
       turnId: 'turn-1',
       prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
@@ -290,10 +318,12 @@ describe('cancel', () => {
     await attach()
     const prompt = await seedApproval()
     vi.spyOn(host, 'flushStreamedEvents').mockRejectedValueOnce(new Error('journal drain failed'))
+
     const fields = {
       turnId: 'turn-1',
       prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
     }
+
     const params = {
       envelope: envelope('agentSession.cancel', fields),
       ...fields
@@ -311,10 +341,12 @@ describe('cancel', () => {
     await attach()
     const prompt = await seedApproval()
     cancelTurn.mockRejectedValueOnce(new Error('interrupt receipt lost'))
+
     const fields = {
       turnId: 'turn-1',
       prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
     }
+
     const params = {
       envelope: envelope('agentSession.cancel', fields),
       ...fields
@@ -346,11 +378,13 @@ describe('respondToPrompt', () => {
     await attach()
     const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
+
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
       kind: 'approval',
       ...fields
     })
+
     expect(result).toMatchObject({
       ok: true,
       value: { resolution: { state: 'resolved', selectedOptionId: 'allow' } }
@@ -367,6 +401,7 @@ describe('respondToPrompt', () => {
       kind: 'approval',
       ...fields
     })
+
     const loser = await host.respondToPrompt(
       { callerKey: 'client-2' },
       {
@@ -375,6 +410,7 @@ describe('respondToPrompt', () => {
         ...fields
       }
     )
+
     expect(loser).toMatchObject({
       ok: false,
       refusal: {
@@ -402,16 +438,19 @@ describe('respondToPrompt', () => {
   it("does not turn a recorded refusal into another client's successful answer", async () => {
     await attach()
     const prompt = await seedApproval()
+
     const rejectedFields = {
       itemId: prompt.itemId,
       expectedRevision: prompt.revision,
       optionId: 'deny'
     }
+
     const rejected = {
       envelope: envelope('agentSession.respondTo:approval', rejectedFields),
       kind: 'approval' as const,
       ...rejectedFields
     }
+
     await host.respondToPrompt(CALLER, rejected)
 
     const acceptedFields = { ...rejectedFields, optionId: 'allow' }
@@ -438,17 +477,21 @@ describe('respondToPrompt', () => {
       throw new Error('pipe closed')
     })
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
+
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
       kind: 'approval',
       ...fields
     })
+
     expect(result.ok).toBe(true)
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
+
     const statusId = agentJournalItemKey({
       provider: 'orca',
       clientMessageId: `${prompt.itemId}#delivery`
     })
+
     expect(page.ok && page.page.items.some((entry) => entry.itemId === statusId)).toBe(true)
   })
 })
@@ -458,10 +501,12 @@ describe('setOption', () => {
     await attach()
     setOption.mockResolvedValueOnce({ model: 'gpt-5', effort: 'high' })
     const fields = { key: 'model', value: 'gpt-5' }
+
     const params = {
       envelope: envelope('agentSession.setOption', fields),
       ...fields
     }
+
     const result = await host.setOption(CALLER, params)
     expect(result).toMatchObject({
       ok: true,
@@ -482,6 +527,7 @@ describe('setOption', () => {
     await attach()
     setOption.mockRejectedValueOnce(new Error('reply lost'))
     const fields = { key: 'model', value: 'gpt-5' }
+
     const params = {
       envelope: envelope('agentSession.setOption', fields),
       ...fields
@@ -520,12 +566,15 @@ describe('restart', () => {
    *  fence: stale, with the live fence attached so the retry can succeed. */
   async function staleFenceFrom(held: number): Promise<number> {
     const refused = await host.attach(CALLER, ensureParams(held))
+
     if (refused.ok) {
       throw new Error('a fence from the previous host generation was accepted')
     }
+
     expect(refused.refusal.code).toBe('agent_session_checkpoint_stale')
     const current = refused.refusal.currentFence
     expect(current).toBeGreaterThan(held)
+
     return current ?? 0
   }
 
@@ -607,10 +656,12 @@ describe('restart', () => {
   it('does not remember a failed adjudication as done', async () => {
     const before = await attach()
     const held = before?.lease.runtimeFence ?? 0
+
     const probe = vi
       .fn<(record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>>()
       .mockRejectedValueOnce(new Error('probe exploded'))
       .mockResolvedValue({ outcome: 'pid-absent' })
+
     await reboot(probe)
 
     await expect(host.attach(CALLER, ensureParams(held))).rejects.toThrow('probe exploded')
@@ -624,11 +675,13 @@ describe('subscribe', () => {
   it('opens with a snapshot and then streams cursor-qualified batches', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
+
     const dispose = host.subscribe({
       id: 'sub-1',
       sessionId: SESSION,
       emit: (event) => events.push(event)
     })
+
     const body = hostTestMessage('add a retry')
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
 
@@ -645,10 +698,12 @@ describe('subscribe', () => {
   it('resumes from a client cursor with only the rows it missed', async () => {
     await attach()
     const body = hostTestMessage('add a retry')
+
     const first = await host.send(CALLER, {
       envelope: envelope('agentSession.send', { body }),
       body
     })
+
     if (!first.ok) {
       throw new Error(`expected a send, got ${first.refusal.code}`)
     }
@@ -718,6 +773,7 @@ describe('subscribe', () => {
       sessionId: SESSION,
       emit: (event) => events.push(event)
     })
+
     const released = await store.evictProvenDeadOwner({
       sessionId: SESSION,
       expectedFence: record?.lease.runtimeFence ?? 1,
@@ -726,9 +782,11 @@ describe('subscribe', () => {
     })
 
     const replacement = await host.attach(CALLER, ensureParams(released.lease.runtimeFence))
+
     if (!replacement.ok) {
       throw new Error(`expected replacement owner, got ${replacement.refusal.code}`)
     }
+
     expect(events.at(-1)).toMatchObject({ type: 'snapshot', fence: replacement.fence })
   })
 })

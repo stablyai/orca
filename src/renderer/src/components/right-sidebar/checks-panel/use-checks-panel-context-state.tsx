@@ -107,6 +107,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     titleInputFocusTimerRef,
     gitStatusSnapshotRetryTimerRef
   } = model
+
   const clearTitleInputFocusTimer = useCallback((): void => {
     if (titleInputFocusTimerRef.current !== null) {
       clearTimeout(titleInputFocusTimerRef.current)
@@ -130,6 +131,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   // timers, so the freshness gate needs its own tick. ChecksPanel is unmounted
   // (not hidden) when the panel closes, so the clock needs no visibility gate.
   const panelClockNow = useNow(30_000)
+
   if (panelContextKey !== prevPanelContextKey) {
     setPrevPanelContextKey(panelContextKey)
     setEditingTitle(false)
@@ -148,12 +150,14 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setCreatePrError(null)
     setIsPublishingBranch(false)
     setAgentComposerState(null)
+
     // Why: an accepted launch owns its snapshotted payload; only unaccepted queues drop here.
     // Ref clears run in the panelContextKey effect below (React render must stay pure).
     if (!commentResolutionLaunchAcceptedRef.current) {
       setCommentResolutionAckBusyNow(false)
       clearPendingPRCommentAiAck()
     }
+
     setHostedReviewCreationSnapshot(null)
     setHardRefreshError(null)
     setGitStatusSnapshot(null)
@@ -164,6 +168,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     conflictSummaryRefreshKeyRef.current = null
     refreshInFlightRef.current = false
     refreshRequestKeyRef.current = null
+
     if (gitStatusSnapshotRetryTimerRef.current) {
       clearTimeout(gitStatusSnapshotRetryTimerRef.current)
       gitStatusSnapshotRetryTimerRef.current = null
@@ -171,6 +176,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   }
 
   const isFolder = repo ? isFolderRepo(repo) : false
+
   const prCacheKey =
     repo && branch
       ? getGitHubPRCacheKey(
@@ -183,6 +189,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
           true
         )
       : ''
+
   const hostedReviewCacheKey =
     repo && branch
       ? getHostedReviewCacheKey(
@@ -195,18 +202,23 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
           true
         )
       : ''
+
   const refreshContextKey = `${activeWorktreeId ?? ''}::${prCacheKey}::${branch}`
+
   if (refreshContextKey !== refreshContextKeyRef.current) {
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
   }
+
   // Why: background PR refreshes replace the cache map; Checks only renders the entry for the active repo and branch.
   const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
   const pr: PRInfo | null = prCacheEntry?.data ?? null
   const prCachedHasPR = prCacheEntry ? prCacheEntry.data !== null : null
+
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
+
   const linkedReviewNumber =
     activeWorktree?.linkedPR ??
     activeWorktree?.linkedGitLabMR ??
@@ -214,6 +226,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     activeWorktree?.linkedAzureDevOpsPR ??
     activeWorktree?.linkedGiteaPR ??
     null
+
   // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from metadata or cache whenever we have one.
   const linkedPR = activeWorktree?.linkedPR ?? null
   const suppressedGitHubPR = activeWorktree?.suppressedGitHubPR ?? null
@@ -222,6 +235,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+
   const activeReview: ChecksPanelReview | null = selectChecksPanelReview({
     hostedReview,
     pr,
@@ -232,37 +246,46 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     linkedAzureDevOpsPR,
     linkedGiteaPR
   })
+
   const activeGitLabReview = isGitLabChecksPanelReview(activeReview) ? activeReview : null
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
+
   const prRefreshState = useAppStore((s) =>
     prCacheKey
       ? s.getEffectiveGitHubPRRefreshState(prCacheKey, Math.max(prRefreshStateNow, panelClockNow))
       : undefined
   )
+
   const rawPRRefreshState = useAppStore((s) =>
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
   )
+
   const prNumber = pr?.number ?? null
 
   useEffect(() => {
     const expiryAt = getGitHubPRRefreshStateExpiryAt(rawPRRefreshState)
+
     if (!prCacheKey || expiryAt === null) {
       return
     }
+
     const timeout = window.setTimeout(
       () => {
         setPrRefreshStateNow(Date.now())
         const storeState = useAppStore.getState()
         const rawState = storeState.prRefreshStates[prCacheKey]
+
         const token = buildGitHubPRRefreshStateClearToken(
           rawState,
           storeState.prRefreshSequences,
           prCacheKey
         )
+
         if (!token) {
           return
         }
+
         // Why: time alone doesn't publish Zustand updates; this timeout clears abandoned refresh UI without treating expiry as no-PR evidence.
         recordChecksPanelPRRefreshBreadcrumb({
           event: 'stale_cleared',
@@ -280,6 +303,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
       },
       Math.max(0, expiryAt - Date.now() + 1)
     )
+
     return () => window.clearTimeout(timeout)
   }, [
     activeWorktreeId,
@@ -295,8 +319,10 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   useEffect(() => {
     if (!isPanelVisible) {
       panelVisibleSinceRef.current = null
+
       return
     }
+
     panelVisibleSinceRef.current = Date.now()
   }, [isPanelVisible, panelContextKey, panelVisibleSinceRef])
 
@@ -305,6 +331,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     if (commentResolutionLaunchAcceptedRef.current) {
       return
     }
+
     pendingCommentResolutionRef.current = null
     claimedCommentResolutionRef.current = null
   }, [
@@ -317,18 +344,22 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   // Record the latest hard refresh error, kept sticky so a background auto-retry can't silently re-enable Create while lookup is impossible.
   useEffect(() => {
     const errorType = prRefreshState?.status === 'error' ? prRefreshState.errorType : undefined
+
     if (!isChecksPanelHardRefreshErrorType(errorType)) {
       return
     }
+
     const observedAt = prRefreshState?.updatedAt ?? Date.now()
     const contextKey = panelContextKeyRef.current
     setHardRefreshError((prev) => {
       if (prev && prev.contextKey === contextKey && prev.observedAt >= observedAt) {
         return prev
       }
+
       return { observedAt, errorType: errorType as PRRefreshErrorType, contextKey }
     })
   }, [prRefreshState, setHardRefreshError, panelContextKeyRef])
+
   return {
     clearTitleInputFocusTimer,
     setChecksPanelContentRef,

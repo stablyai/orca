@@ -22,6 +22,7 @@ import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-message-styles'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
+
 const MAX_TOOL_RUN_DIFF_ROWS = 240
 
 function DiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
@@ -60,6 +61,7 @@ function ResultBody({
   if (diff) {
     return <DiffView lines={diff} />
   }
+
   return (
     <View style={[styles.toolResult, isError && styles.toolResultError]}>
       <Text style={styles.mono}>{truncateToolDetail(output)}</Text>
@@ -99,6 +101,7 @@ function ToolLine({
   // tappable link that opens the file, independent of the line's expand tap.
   const filePath = inputDisplay?.filePath ?? null
   const openable = filePath !== null && onOpenFile !== undefined
+
   return (
     <View>
       <Pressable
@@ -154,9 +157,12 @@ function PulsingText({
         Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true })
       ])
     )
+
     animation.start()
+
     return () => animation.stop()
   }, [pulse])
+
   return (
     <Animated.Text style={[style, { opacity: pulse }]} numberOfLines={numberOfLines}>
       {children}
@@ -186,17 +192,20 @@ export function ToolRun({
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
   const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
   let callCount = 0
+
   for (const block of blocks) {
     if (block.type === 'tool-call') {
       callCount++
     }
   }
+
   callCount ||= pairs.length
   const summary = summarizeToolRun(blocks)
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
   const ActiveToolIcon = activeCall && isShellActivityToolCall(activeCall) ? SquareTerminal : Wrench
+
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>

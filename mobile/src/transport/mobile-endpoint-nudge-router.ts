@@ -19,21 +19,27 @@ export class MobileEndpointNudgeRouter {
 
   nudge(reason: ForegroundNudgeReason): void {
     const { args } = this
+
     if (args.isStopped()) {
       return
     }
+
     if (!args.isForeground()) {
       // Why: a background network flap must not re-open a billed relay splice;
       // focus/app-resume imply the app is visible even if AppState lags.
       if (reason === 'network-change') {
         return
       }
+
       args.setForeground(true)
     }
+
     const verdict = args.controller.handleActiveNudge(args.logical, reason)
+
     if (verdict === 'replace') {
       args.replaceRelay()
     }
+
     args.scheduleDirectProbe()
   }
 }

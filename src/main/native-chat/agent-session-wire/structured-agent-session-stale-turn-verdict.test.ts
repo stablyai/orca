@@ -9,6 +9,7 @@ import {
 } from './structured-agent-session-stale-turn-verdict'
 
 const THREAD = 'thread-1'
+
 const RUNNING_IDENTITY = {
   provider: 'codex' as const,
   threadId: THREAD,
@@ -91,6 +92,7 @@ describe('running turn lifecycle revisions', () => {
       // A stray end on a running row is never carried into the verdict.
       lifecycleItem('turn-2', 'running', 2, { startedAt: 30, completedAt: 99 })
     ]
+
     expect(runningTurnLifecycleRevisions(items, { state: 'interrupted', completedAt: 40 })).toEqual(
       [
         {
@@ -134,11 +136,13 @@ describe('running turn lifecycle revisions', () => {
 describe('stale session state on a cold acquire', () => {
   function journalWith(items: AgentJournalRenderItem[]) {
     const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 9 }))
+
     const journal = {
       snapshot: () => ({ items }),
       cursor: () => ({ epoch: 'epoch-1', sequence: 8 }),
       appendLifecycleBatch
     } as unknown as AgentSessionJournal
+
     return { journal, appendLifecycleBatch }
   }
 
@@ -216,6 +220,7 @@ describe('stale session state on a cold acquire', () => {
     const idle = journalWith([
       lifecycleItem('turn-1', 'completed', 1, { startedAt: 10, completedAt: 20 })
     ])
+
     await expect(
       settleStaleSessionStateOnAcquire({
         journal: idle.journal,

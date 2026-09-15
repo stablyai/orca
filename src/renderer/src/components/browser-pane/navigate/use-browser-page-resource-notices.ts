@@ -14,6 +14,7 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
     if (!browserSessionImportState) {
       return
     }
+
     if (browserSessionImportState.status === 'success' && browserSessionImportState.summary) {
       const { importedCookies, domains } = browserSessionImportState.summary
       const domainPreview = domains.slice(0, 3).join(', ')
@@ -32,7 +33,9 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
     if (!resourceNotice) {
       return
     }
+
     const timer = setTimeout(() => setResourceNotice(null), 10_000)
+
     return () => clearTimeout(timer)
   }, [resourceNotice])
 
@@ -41,6 +44,7 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       if (event.browserPageId !== browserTabId) {
         return
       }
+
       setResourceNotice(formatPermissionNotice(event))
     })
   }, [browserTabId])
@@ -50,7 +54,9 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       if (event.browserPageId !== browserTabId) {
         return
       }
+
       const notice = formatPopupNotice(event)
+
       if (notice) {
         setResourceNotice(notice)
       }

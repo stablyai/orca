@@ -17,6 +17,7 @@ export async function requestMobileCommitMessage(
   const reply = await gitGenerateCommitMessageRun.request(client, {
     worktree: `id:${worktreeId}`
   })
+
   try {
     return gitGenerateCommitMessageRun.interpret(reply)
   } catch (error) {
@@ -34,5 +35,6 @@ export async function cancelMobileCommitMessage(
   const reply = await gitCancelGenerateCommitMessageRun.request(client, {
     worktree: `id:${worktreeId}`
   })
+
   gitCancelGenerateCommitMessageRun.interpret(reply)
 }

@@ -12,6 +12,7 @@ import type { ResumeSleepingAgentSessionsOptions } from './resume-sleeping-agent
 const resumeSpy = vi.fn<
   (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
 >(() => 0)
+
 vi.mock('./resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: (
     worktreeId: string,
@@ -22,6 +23,7 @@ vi.mock('./resume-sleeping-agent-session', () => ({
 // Why: control passive-vs-non-passive classification directly so the test asserts
 // the gating, not the predicate internals.
 const isPassiveSpy = vi.fn()
+
 vi.mock('./sleeping-agent-pane-ownership', () => ({
   isPassiveCompletedHibernationEvidence: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
@@ -34,12 +36,15 @@ vi.mock('./sleeping-agent-pane-ownership', () => ({
 }))
 
 let sleepingRecords: Record<string, { worktreeId: string; paneKey: string; tabId?: string }> = {}
+
 let terminalTabsByWorktree: Record<string, { id: string }[]> = {}
+
 const clearSleepingAgentSessionsByPaneKey = vi.fn((paneKeys: readonly string[]) => {
   for (const paneKey of paneKeys) {
     delete sleepingRecords[paneKey]
   }
 })
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
@@ -66,18 +71,22 @@ function recordEvents(): RecordedEvents {
   const events: string[] = []
   const mountDetails: BackgroundMountTerminalWorktreeDetail[] = []
   const wakeDetails: WakeHibernatedAgentsWorktreeDetail[] = []
+
   const onWake = (event: Event): void => {
     const detail = (event as CustomEvent<WakeHibernatedAgentsWorktreeDetail>).detail
     events.push(`wake:${detail.worktreeId}`)
     wakeDetails.push(detail)
   }
+
   const onMount = (event: Event): void => {
     const detail = (event as CustomEvent<BackgroundMountTerminalWorktreeDetail>).detail
     events.push(`mount:${detail.worktreeId}`)
     mountDetails.push(detail)
   }
+
   window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
   window.addEventListener(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, onMount)
+
   return {
     events,
     mountDetails,
@@ -108,10 +117,12 @@ describe('createBackgroundSleepingAgentWakeDispatcher', () => {
     let readinessListener: (() => void) | null = null
     const unsubscribe = vi.fn()
     const wake = vi.fn()
+
     const dispatcher = createBackgroundSleepingAgentWakeDispatcher({
       isWorkspaceSessionReady: () => workspaceSessionReady,
       subscribeToStore: (listener) => {
         readinessListener = listener
+
         return unsubscribe
       },
       wake
@@ -229,6 +240,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     sleepingRecords = Object.fromEntries(
       Array.from({ length: 100 }, (_, index) => {
         const tabId = `tab-${index}`
+
         return [
           `${tabId}:leaf-1`,
           {
@@ -254,6 +266,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     sleepingRecords = Object.fromEntries(
       Array.from({ length: 12 }, (_, index) => {
         const tabId = `tab-${index}`
+
         return [
           `${tabId}:leaf-1`,
           {
@@ -349,6 +362,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     isPassiveSpy.mockReturnValue(false)
     resumeSpy.mockImplementation((_worktreeId, options) => {
       options?.onSessionLaunched?.('tab-new')
+
       return 1
     })
     const rec = recordEvents()
@@ -382,6 +396,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
   it('passes claims consumed by mounted panes to the generic resume as skipClaimKeys', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(false)
+
     // A mounted pane consuming the in-place wake adds its claim key to the
     // event detail — exactly what use-terminal-pane-lifecycle does.
     const onWake = (event: Event): void => {
@@ -389,6 +404,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
         'claim-1'
       )
     }
+
     window.addEventListener(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, onWake)
 
     wakeSleepingAgentsForWorktreeInBackground('wt-1')

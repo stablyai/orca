@@ -33,6 +33,7 @@ type TerminalParkingE2EOverridesModule = {
 
 async function importOverridesModule(): Promise<TerminalParkingE2EOverridesModule> {
   vi.resetModules()
+
   return import('./terminal-parking-e2e-overrides')
 }
 
@@ -111,9 +112,11 @@ describe('getTerminalParkingPolicyOverrides', () => {
 
   it('registers window.__terminalParkingDebug on import under exposeStore', async () => {
     mockE2EConfig = { exposeStore: true, terminalParkingDelayMs: 500, terminalRetentionLimit: null }
+
     const testWindow: {
       __terminalParkingDebug?: { parkDelayMs: number; parkedTabIds: () => string[] }
     } = {}
+
     ;(globalThis as { window?: unknown }).window = testWindow
     await importOverridesModule()
     expect(testWindow.__terminalParkingDebug?.parkDelayMs).toBe(500)
@@ -126,7 +129,9 @@ describe('getTerminalParkingPolicyOverrides', () => {
       terminalParkingDelayMs: null,
       terminalRetentionLimit: null
     }
+
     const testWindow: { __terminalParkingDebug?: unknown } = {}
+
     ;(globalThis as { window?: unknown }).window = testWindow
     await importOverridesModule()
     expect(testWindow.__terminalParkingDebug).toBeUndefined()

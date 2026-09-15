@@ -65,7 +65,9 @@ describe('orchestration.send group addresses', () => {
       if (handle === 'term_coord') {
         return coordinatorPaneKey
       }
+
       const terminal = terminals.find((candidate) => candidate.handle === handle)
+
       return terminal ? `${terminal.tabId}:${terminal.leafId}` : null
     })
     vi.spyOn(runtime, 'getAgentStatusForHandle').mockImplementation(
@@ -76,6 +78,7 @@ describe('orchestration.send group addresses', () => {
   /** A live worker Dispatch in `runId` whose terminal is `handle`. */
   function dispatchWorker(handle: string, runId = activeRunId!): string {
     const task = db.createTask({ spec: `work for ${handle}`, runId })
+
     return createRootDispatch(db, task.id, handle).id
   }
 
@@ -97,11 +100,13 @@ describe('orchestration.send group addresses', () => {
     ])
     const dispatchA = dispatchWorker('term_a')
     const dispatchB = dispatchWorker('term_b')
+
     const otherRun = db.createRun({
       objective: 'Another project',
       coordinatorHandle: 'term_other_coord',
       coordinatorPaneKey: 'tab_other:leaf_other'
     })
+
     dispatchWorker('term_other_project', otherRun.id)
 
     const result = (await call('orchestration.send', {
@@ -136,6 +141,7 @@ describe('orchestration.send group addresses', () => {
   it('reaches a Dispatch whose worker terminal is not attached yet', async () => {
     // Durable delivery: the mailbox exists before the terminal does.
     setupWithTerminals([makeSummary('term_coord')])
+
     const started = db.createStartingWorkerDispatch({
       taskSpec: 'starting worker',
       taskRunId: activeRunId,
@@ -186,11 +192,13 @@ describe('orchestration.send group addresses', () => {
         nestedPane
       )
       const sibling = dispatchWorker('term_sibling')
+
       const childRun = db.createRun({
         objective: 'child Run',
         coordinatorHandle: 'term_nested',
         coordinatorPaneKey: nestedPane
       })
+
       const subWorker = dispatchWorker('term_sub', childRun.id)
 
       const result = (await call('orchestration.send', {
@@ -207,6 +215,7 @@ describe('orchestration.send group addresses', () => {
 
   it('names the remote workers it skipped when every live Dispatch is federated', async () => {
     setupWithTerminals([makeSummary('term_coord')])
+
     const federated = db.createStartingWorkerDispatch({
       taskSpec: 'remote work',
       taskRunId: activeRunId,
@@ -416,11 +425,13 @@ describe('orchestration.send group addresses', () => {
   it.each(['@all', '@idle'])('does not enumerate host terminals for %s', async (to) => {
     setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a')], { term_a: 'idle' })
     const worker = dispatchWorker('term_a')
+
     const result = (await call('orchestration.send', {
       from: 'term_coord',
       to,
       subject: 'guidance'
     })) as GroupReceipt
+
     expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${worker}`])
     expect(runtime.listTerminals).not.toHaveBeenCalled()
   })
@@ -432,8 +443,10 @@ describe('orchestration.send group addresses', () => {
       makeSummary('term_loner')
     ])
     const worker = dispatchWorker('term_a')
+
     const scope =
       source === 'run' ? { run: activeRunId } : { payload: JSON.stringify({ dispatchId: worker }) }
+
     await expect(
       call('orchestration.send', {
         from: 'term_loner',
@@ -449,11 +462,13 @@ describe('orchestration.send group addresses', () => {
   it('rejects an explicit Run that conflicts with the group audience', async () => {
     setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a')])
     dispatchWorker('term_a')
+
     const other = db.createRun({
       objective: 'other',
       coordinatorHandle: 'term_other',
       coordinatorPaneKey: 'tab_other:leaf_other'
     })
+
     dispatchWorker('term_b', other.id)
     await expect(
       call('orchestration.send', {
@@ -486,11 +501,13 @@ describe('orchestration.send group addresses', () => {
       )
       const task = db.createTask({ spec: 'surviving worker', runId: activeRunId })
       const dispatch = createRootDispatch(db, task.id, 'term_old', pane)
+
       const result = (await call('orchestration.send', {
         from: 'term_coord',
         to,
         subject: 'still reachable'
       })) as GroupReceipt
+
       expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${dispatch.id}`])
     }
   )
@@ -501,27 +518,33 @@ describe('orchestration.send group addresses', () => {
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_nested' ? nestedPane : null
     )
+
     const dispatch = createRootDispatch(
       db,
       db.createTask({ spec: 'nested', runId: activeRunId }).id,
       'term_nested',
       nestedPane
     )
+
     const child = db.createRun({
       objective: 'child',
       coordinatorHandle: 'term_nested',
       coordinatorPaneKey: nestedPane
     })
+
     const sent = (await call('orchestration.send', {
       from: 'term_coord',
       to: '@all',
       subject: 'pause all work'
     })) as GroupReceipt
+
     expect(sent.messages.map((m) => m.to_handle)).toEqual([`run:${child.id}`])
+
     const checked = (await call('orchestration.check', {
       terminal: 'term_nested',
       peek: true
     })) as { messages: { subject: string }[] }
+
     expect(checked.messages.map((m) => m.subject)).toEqual(['pause all work'])
     expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toHaveLength(0)
   })
@@ -531,6 +554,7 @@ describe('orchestration.send group addresses', () => {
       { term_codex: 'idle' }
     )
     const local = dispatchWorker('term_codex')
+
     const remote = db.createStartingWorkerDispatch({
       taskSpec: 'remote work',
       taskRunId: activeRunId,
@@ -544,11 +568,13 @@ describe('orchestration.send group addresses', () => {
         protocolVersion: 3
       }
     })
+
     const result = (await call('orchestration.send', {
       from: 'term_coord',
       to,
       subject: 'filtered guidance'
     })) as GroupReceipt
+
     expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${local}`])
     expect(result.warnings).toBeUndefined()
     expect(db.getUnreadMessages(`dispatch:${remote.dispatch.id}`)).toHaveLength(0)
@@ -584,11 +610,13 @@ describe('orchestration.send group addresses', () => {
       )
       dispatchWorker('term_a')
       const sibling = dispatchWorker('term_b')
+
       const result = (await call('orchestration.send', {
         from: 'term_a',
         to,
         subject: 'siblings only'
       })) as GroupReceipt
+
       expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${sibling}`])
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(0)
     }
@@ -598,18 +626,22 @@ describe('orchestration.send group addresses', () => {
     'preserves pane identity across discovery when the recorded handle is %s',
     async (recordedHandle) => {
       const pane = 'tab_worker:11111111-1111-4111-8111-111111111111'
+
       const snapshot = makeSummary('term_snapshot', {
         tabId: 'tab_worker',
         leafId: '11111111-1111-4111-8111-111111111111',
         agentIdentity: 'codex'
       })
+
       setupWithTerminals([makeSummary('term_coord'), snapshot])
+
       const dispatch = createRootDispatch(
         db,
         db.createTask({ spec: 'worker', runId: activeRunId }).id,
         recordedHandle,
         pane
       )
+
       vi.spyOn(runtime, 'getTerminalHandleForPaneKey').mockImplementation((key) =>
         key === pane ? 'term_snapshot' : null
       )
@@ -618,13 +650,16 @@ describe('orchestration.send group addresses', () => {
         vi.mocked(runtime.getTerminalHandleForPaneKey).mockImplementation((key) =>
           key === pane ? 'term_new' : null
         )
+
         return { terminals: [snapshot], totalCount: 1, truncated: false }
       })
+
       const result = (await call('orchestration.send', {
         from: 'term_coord',
         to: '@codex',
         subject: 'codex guidance'
       })) as GroupReceipt
+
       expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${dispatch.id}`])
     }
   )

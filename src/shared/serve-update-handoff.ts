@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
 export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
+
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'
 
 export type ServeUpdateHandoffState =
@@ -42,7 +43,9 @@ export function parseServeUpdateHandoffState(value: unknown): ServeUpdateHandoff
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const state = value as Record<string, unknown>
+
   if (
     state.schemaVersion !== 1 ||
     !['install-requested', 'failed', 'completed'].includes(String(state.phase)) ||
@@ -58,6 +61,7 @@ export function parseServeUpdateHandoffState(value: unknown): ServeUpdateHandoff
   ) {
     return null
   }
+
   return state as ServeUpdateHandoffState
 }
 
@@ -65,7 +69,9 @@ export function parseServeSupervisorMessage(value: unknown): ServeSupervisorMess
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const message = value as Record<string, unknown>
+
   if (
     message.type !== 'orca:serve-ready' ||
     typeof message.version !== 'string' ||
@@ -75,5 +81,6 @@ export function parseServeSupervisorMessage(value: unknown): ServeSupervisorMess
   ) {
     return null
   }
+
   return message as ServeSupervisorMessage
 }

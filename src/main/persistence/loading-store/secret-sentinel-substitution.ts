@@ -33,20 +33,25 @@ export function applySecretSentinelSubstitutions(
   degradedPrefix: string
 ): { payload: Buffer; stateHash: string } {
   const hash = createHash('sha1').update(degradedPrefix)
+
   if (substitutions.length === 0) {
     const payload = Buffer.from(serialized, 'utf8')
+
     return { payload, stateHash: hash.update(payload).digest('hex') }
   }
 
   const replacementBySentinel = new Map<string, { blob: Buffer; hashValue: Buffer }>()
   const alternatives: string[] = []
+
   for (const { sentinel, blob, hashValue } of substitutions) {
     // Preserved from the loop this replaces: both the search key and the replacements are the
     // JSON-escaped forms, because that is what `serialized` actually contains.
     const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
+
     if (replacementBySentinel.has(escapedSentinel)) {
       continue
     }
+
     alternatives.push(escapeRegex(escapedSentinel))
     replacementBySentinel.set(escapedSentinel, {
       blob: Buffer.from(JSON.stringify(blob).slice(1, -1), 'utf8'),
@@ -60,6 +65,7 @@ export function applySecretSentinelSubstitutions(
   const chunks: Buffer[] = []
   let cursor = 0
   let match: RegExpExecArray | null
+
   while ((match = pattern.exec(serialized)) !== null) {
     // Non-null: the alternation is built from exactly the map's keys.
     const replacement = replacementBySentinel.get(match[0])!
@@ -70,6 +76,7 @@ export function applySecretSentinelSubstitutions(
     hash.update(replacement.hashValue)
     cursor = match.index + match[0].length
   }
+
   const tail = Buffer.from(serialized.slice(cursor), 'utf8')
   chunks.push(tail)
   hash.update(tail)

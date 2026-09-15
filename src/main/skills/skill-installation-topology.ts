@@ -23,11 +23,13 @@ export function skillPlacementId(unresolvedPath: string, name: string): string {
 
 export function normalizedSkillIdentityPath(value: string): string {
   const normalized = normalize(value)
+
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
 export function skillPhysicalIdentity(resolvedPath: string, fileStat: Stats): string {
   const inodeIdentity = fileStat.dev || fileStat.ino ? `${fileStat.dev}:${fileStat.ino}` : null
+
   return inodeIdentity ?? normalizedSkillIdentityPath(resolvedPath)
 }
 
@@ -54,6 +56,7 @@ async function writableDestination(path: string): Promise<boolean> {
       access(path, constants.R_OK | constants.W_OK),
       access(dirname(path), constants.W_OK)
     ])
+
     return true
   } catch {
     return false
@@ -63,18 +66,24 @@ async function writableDestination(path: string): Promise<boolean> {
 async function hasSymlinkedAncestor(path: string, boundary: string): Promise<boolean> {
   let current = resolve(path)
   const stop = resolve(boundary)
+
   for (;;) {
     const entry = await lstat(current).catch(() => null)
+
     if (!entry || entry.isSymbolicLink()) {
       return true
     }
+
     const parent = dirname(current)
+
     if (current === stop) {
       return false
     }
+
     if (parent === current) {
       return true
     }
+
     current = parent
   }
 }
@@ -85,6 +94,7 @@ export async function classifyHomeSkillTopology(
   canonicalRootPath: string
 ): Promise<ClassifiedSkillTopology> {
   let logicalStat: Awaited<ReturnType<typeof lstat>>
+
   try {
     logicalStat = await lstat(unresolvedPath)
   } catch (error) {
@@ -96,11 +106,14 @@ export async function classifyHomeSkillTopology(
         errorCategory: 'missing'
       }
     }
+
     throw error
   }
+
   const linked = logicalStat.isSymbolicLink()
   let resolvedPath: string
   let resolvedStat: Awaited<ReturnType<typeof stat>>
+
   try {
     resolvedPath = await realpath(unresolvedPath)
     resolvedStat = await stat(resolvedPath)
@@ -112,6 +125,7 @@ export async function classifyHomeSkillTopology(
       errorCategory: 'dangling-link'
     }
   }
+
   if (!resolvedStat.isDirectory()) {
     return {
       topology: 'broken-link',
@@ -125,10 +139,13 @@ export async function classifyHomeSkillTopology(
   const canonicalRoot = await realpath(canonicalRootPath).catch(() => resolve(canonicalRootPath))
   const homeBoundary = dirname(dirname(canonicalRootPath))
   const rootOrProviderParentLinked = await hasSymlinkedAncestor(root.path, homeBoundary)
+
   const isCanonicalTarget =
     normalizedSkillIdentityPath(dirname(resolvedPath)) ===
     normalizedSkillIdentityPath(canonicalRoot)
+
   let topology: SkillInstallationTopology
+
   if (linked) {
     topology = isCanonicalTarget ? 'provider-alias' : 'external-link'
   } else if (rootOrProviderParentLinked) {
@@ -136,9 +153,11 @@ export async function classifyHomeSkillTopology(
   } else {
     topology = root.id === 'home-agents' ? 'canonical-copy' : 'independent-copy'
   }
+
   if (topology !== 'external-link' && !(await writableDestination(resolvedPath))) {
     topology = 'read-only'
   }
+
   return { topology, resolvedPath, identity, errorCategory: null }
 }
 
@@ -149,9 +168,11 @@ export async function classifyUnsupportedSkillTopology(
   try {
     const resolvedPath = await realpath(directoryPath)
     const resolvedStat = await stat(resolvedPath)
+
     if (!resolvedStat.isDirectory()) {
       throw new Error('not-directory')
     }
+
     return {
       topology: sourceKind === 'repo' ? 'repo-scope' : 'plugin-cache',
       resolvedPath,

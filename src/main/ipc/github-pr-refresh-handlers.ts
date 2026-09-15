@@ -43,6 +43,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
     const repo =
       store.getRepos().find((entry) => entry.id === candidate.repoId) ??
       store.getRepos().find((entry) => resolve(entry.path) === resolve(candidate.repoPath))
+
     if (repo) {
       recordPRIfNeeded(repo, outcome)
     }
@@ -63,27 +64,34 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
       const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
+
       const hostedReviewOptions = localGitOptions
         ? { localGitExecOptions: localGitOptions }
         : undefined
+
       const currentHeadOid =
         typeof args.currentHeadOid === 'string' && args.currentHeadOid.trim().length > 0
           ? args.currentHeadOid.trim()
           : null
+
       const lookupOptions: GitHubPRBranchLookupOptions | undefined = hostedReviewOptions
         ? { ...hostedReviewOptions }
         : args.acceptMergedFallbackPR === true || currentHeadOid !== null
           ? {}
           : undefined
+
       if (lookupOptions && args.acceptMergedFallbackPR === true) {
         lookupOptions.acceptMergedFallbackPR = true
       }
+
       if (lookupOptions && currentHeadOid !== null) {
         lookupOptions.currentHeadOid = currentHeadOid
       }
+
       const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] = lookupOptions
         ? [lookupOptions]
         : []
+
       const pr = await getPRForBranch(
         repo.path,
         args.branch,
@@ -92,6 +100,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
         args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
         ...lookupOptionArgs
       )
+
       if (pr && !stats.hasCountedPR(pr.url)) {
         stats.record({
           type: 'pr_created',
@@ -100,6 +109,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
           meta: { prNumber: pr.number, prUrl: pr.url }
         })
       }
+
       return pr
     }
   )
@@ -111,11 +121,14 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       args: { candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }
     ) => {
       const repo = assertRegisteredGitHubRepo(args.candidate, store)
+
       const outcome = await refreshPRNow(
         applyRegisteredRepoToPRRefreshCandidate(store, repo, args.candidate),
         args.reason
       )
+
       recordPRIfNeeded(repo, outcome)
+
       return outcome
     }
   )
@@ -131,10 +144,13 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
       }
     ): GitHubPRRefreshEnqueueResult => {
       const validation = validateAutomaticPRRefreshCandidate(args.candidate, store)
+
       if (validation.kind === 'skipped') {
         return validation.result
       }
+
       enqueuePRRefresh(validation.candidate, args.reason, args.priority ?? 0, event?.sender?.id)
+
       return { kind: 'queued' }
     }
   )
@@ -143,6 +159,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
     'gh:reportVisiblePRRefreshCandidates',
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
       const senderId = event.sender.id
+
       if (!visibilityCleanupRegistered.has(senderId)) {
         visibilityCleanupRegistered.add(senderId)
         event.sender.once('destroyed', () => {
@@ -150,15 +167,20 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
           clearVisiblePRRefreshWindow(senderId)
         })
       }
+
       const candidates: GitHubPRRefreshCandidate[] = []
       const repos = store.getRepos()
+
       for (const candidate of args.candidates) {
         const validation = validateAutomaticPRRefreshCandidate(candidate, store, repos)
+
         if (validation.kind === 'ok') {
           candidates.push(validation.candidate)
         }
       }
+
       reportVisiblePRRefreshCandidates(candidates, args.generation, senderId)
+
       return true
     }
   )

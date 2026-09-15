@@ -21,6 +21,7 @@ export function formatAnnotationsForClipboard(
       const location = `${annotation.path ?? annotationFallback}${
         annotation.startLine ? `:${annotation.startLine}` : ''
       }`
+
       return [
         location,
         annotation.annotationLevel,
@@ -40,6 +41,7 @@ export function formatJobsForClipboard(jobs: PRCheckJob[], unknownLabel: string)
       const steps = job.steps.map(
         (step) => `${step.name}: ${step.conclusion ?? step.status ?? unknownLabel}`
       )
+
       return [`${job.name}: ${job.conclusion ?? job.status ?? unknownLabel}`, ...steps, job.logTail]
         .filter((value): value is string => Boolean(value))
         .join('\n')

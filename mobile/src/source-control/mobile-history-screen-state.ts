@@ -17,14 +17,18 @@ export function resolveMobileHistoryScreenView(input: {
   error: string | null
 }): MobileHistoryScreenView {
   const { connected, rows, error } = input
+
   if (error) {
     return { kind: 'error', message: error }
   }
+
   if (rows !== null) {
     return rows.length === 0 ? { kind: 'empty' } : { kind: 'rows', rows }
   }
+
   if (!connected) {
     return { kind: 'waiting' }
   }
+
   return { kind: 'loading' }
 }

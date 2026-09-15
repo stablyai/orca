@@ -20,9 +20,11 @@ function seededRepoPath(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   if (!repoPath || !existsSync(repoPath)) {
     throw new Error('Golden restart E2E requires the seeded test repo from global setup')
   }
+
   return repoPath
 }
 
@@ -56,10 +58,12 @@ test('restores the exact file and live extra terminal after quit and relaunch @g
     await waitForTerminalOutput(first.page, preQuitMarker, 20_000)
 
     await openFileExplorer(first.page)
+
     const fileRow = first.page
       .locator('[data-file-explorer-row]')
       .filter({ hasText: 'package.json' })
       .first()
+
     await expect(fileRow).toBeVisible({ timeout: 15_000 })
     await fileRow.click()
     await expect(first.page.locator('.editor-header-path').first()).toContainText('package.json', {
@@ -86,6 +90,7 @@ test('restores the exact file and live extra terminal after quit and relaunch @g
     const restoredExtraTab = second.page.locator(
       `${SORTABLE_TAB}[data-tab-id="${extraTerminalId}"]`
     )
+
     await expect(restoredExtraTab).toBeVisible()
     await restoredExtraTab.click({ force: true })
     await waitForActiveTerminalManager(second.page, 30_000)
@@ -104,6 +109,7 @@ test('restores the exact file and live extra terminal after quit and relaunch @g
         await session.close(app).catch(() => undefined)
       }
     }
+
     await session.dispose()
   }
 })

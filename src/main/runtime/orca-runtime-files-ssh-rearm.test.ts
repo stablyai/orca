@@ -19,21 +19,27 @@ const {
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('fs/promises')
+
   return { ...actual, stat: statMock }
 })
+
 vi.mock('./file-watcher-host', () => ({
   closeFileExplorerWatcherInWatcherProcess: closeWatcherInWatcherProcessMock,
   watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
 }))
+
 vi.mock('../ipc/filesystem-auth', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('../ipc/filesystem-auth')
+
   return { ...actual, resolveAuthorizedPath: resolveAuthorizedPathMock }
 })
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE: 'Remote connection dropped.',
   onSshFilesystemProviderRegistered: (listener: (connectionId: string) => void) => {
     providerRegistrationListeners.add(listener)
+
     return () => providerRegistrationListeners.delete(listener)
   }
 }))
@@ -45,7 +51,9 @@ import {
 } from './orca-runtime-files'
 
 const ROOT_PATH = '/home/me/repo'
+
 const CONNECTION_ID = 'conn-1'
+
 const OVERFLOW_EVENTS: FsChangeEvent[] = [{ kind: 'overflow', absolutePath: ROOT_PATH }]
 
 /** Drive the provider-registration hook the way a relay reconnect would. */

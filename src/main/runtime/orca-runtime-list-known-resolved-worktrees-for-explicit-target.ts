@@ -32,15 +32,19 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     if (!this.store || !targetWorktree) {
       return []
     }
+
     const target = splitWorktreeIdForFilesystem(targetWorktreeId)
+
     if (!target?.repoId || !target.worktreePath) {
       // Folder workspace keys have no repo/path tuple, but the converted row
       // is already authoritative for this explicit target.
       return [targetWorktree]
     }
+
     const worktreeIds = new Set(
       Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
+
         return (
           parsed?.repoId === target.repoId &&
           Boolean(parsed.worktreePath) &&
@@ -49,18 +53,22 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
         )
       })
     )
+
     worktreeIds.add(targetWorktreeId)
 
     const resolved: ResolvedWorktree[] = []
+
     for (const worktreeId of worktreeIds) {
       const worktree =
         worktreeId === targetWorktreeId
           ? targetWorktree
           : this.buildResolvedWorktreeFromId(worktreeId)
+
       if (worktree) {
         resolved.push(worktree)
       }
     }
+
     return resolved
   }
 
@@ -77,6 +85,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
+
     return this.resolvedWorktrees.getSnapshot(
       () => this.computeResolvedWorktrees(),
       RESOLVED_WORKTREE_CACHE_TTL_MS,
@@ -88,31 +97,39 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
+
     const metaById = this.store.getAllWorktreeMeta() ?? {}
     const repos = this.store.getRepos()
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
+
     const platformByRepoId = new Map(
       repos.map((repo) => [
         repo.id,
         getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
       ])
     )
+
     const deps = this.repoWorktreeRowDeps()
+
     const perRepoWorktrees = await Promise.all(
       repos.map(
         async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
       )
     )
+
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
+
     const worktrees = perRepoWorktrees.flatMap((rows) =>
       projectResolvedWorktreeLineage(rows, lineageById)
     )
+
     return { worktrees, platformByRepoId }
   }
 
   /** Bind the runtime-owned scan cache and folder-workspace stamping into the row resolver. */
   protected repoWorktreeRowDeps(): RepoWorktreeRowDeps {
     const store = this.requireStore()
+
     return {
       store,
       scanRepo: (repo, projectRuntimeByRepoId) =>
@@ -129,6 +146,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     if (!this.store) {
       return null
     }
+
     return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
   }
 
@@ -140,11 +158,13 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     // `connectionId` would otherwise get a local project runtime and a `local:default` cache key,
     // so its scan neither routes remotely nor re-runs when the SSH provider is replaced.
     const sshConnectionId = getRepoSshConnectionId(repo)
+
     const projectRuntime = projectRuntimeByRepoId
       ? projectRuntimeByRepoId.get(repo.id)
       : !sshConnectionId
         ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
         : undefined
+
     const runtimeKey = projectRuntime
       ? projectRuntime.status === 'resolved'
         ? projectRuntime.runtime.cacheKey
@@ -152,10 +172,12 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
       : sshConnectionId
         ? `ssh:${sshConnectionId}:${getSshGitProviderGeneration(sshConnectionId)}`
         : 'local:default'
+
     const now = Date.now()
     const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
     const generation = this.worktreeScanGenerations.get(scanScopeKey) ?? 0
     const cached = this.worktreeScanCache.get(scanScopeKey)
+
     if (
       cached?.generation === generation &&
       cached.runtimeKey === runtimeKey &&
@@ -163,23 +185,32 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
     ) {
       return cached.result
     }
+
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)
+
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
       const refresh = await inFlight.promise
+
       if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
         return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
       }
+
       return refresh.result
     }
+
     const reusableCached =
       cached?.generation === generation && cached.runtimeKey === runtimeKey ? cached : null
+
     const promise = this.refreshRepoWorktreeScan(repo, projectRuntime, reusableCached)
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
+
     try {
       const refresh = await promise
+
       if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
         return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
       }
+
       if (
         (refresh.result.ok || !sshConnectionId) &&
         this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise
@@ -192,6 +223,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
           adminFingerprint: refresh.adminFingerprint,
           scannedAt: refresh.scannedAt
         }
+
         this.worktreeScanCache.set(scanScopeKey, entry)
         void refresh.adminFingerprintProbe?.then((fingerprint) => {
           if (this.worktreeScanCache.get(scanScopeKey) === entry) {
@@ -199,6 +231,7 @@ export class OrcaRuntimeWithListKnownResolvedWorktreesForExplicitTarget extends 
           }
         })
       }
+
       return refresh.result
     } finally {
       if (this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise) {

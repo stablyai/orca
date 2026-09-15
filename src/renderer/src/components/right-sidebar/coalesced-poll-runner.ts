@@ -54,12 +54,15 @@ export function createCoalescedPollRunner(
 
   const requiredIdleMsFor = (trigger?: CoalescedPollRunnerTrigger): number => {
     const backoff = options?.slowTaskBackoff
+
     if (!backoff) {
       return minIntervalMs
     }
+
     const multiplier = trigger?.changeSignal
       ? backoff.changeSignalMultiplier
       : backoff.idleMultiplier
+
     return slowTaskRequiredIdleMs(
       lastRunDurationMs,
       multiplier,
@@ -80,21 +83,25 @@ export function createCoalescedPollRunner(
     if (disposed) {
       return
     }
+
     if (inFlight) {
       // Why: keep the strongest pending trigger so a change signal arriving
       // mid-run is not downgraded to tick pacing by a later timer tick.
       rerunTrigger = { changeSignal: rerunTrigger?.changeSignal || trigger?.changeSignal }
+
       return
     }
 
     const now = Date.now()
     const allowedAt = lastRunEndedAt + requiredIdleMsFor(trigger)
+
     if (now < allowedAt) {
       // Why: a change signal may pull an already-scheduled evidence-free run
       // earlier; a weaker trigger must never push a scheduled run later.
       if (allowedAt >= timeoutFiresAt) {
         return
       }
+
       clearScheduledRun()
       timeoutFiresAt = allowedAt
       timeoutId = setTimeout(() => {
@@ -102,6 +109,7 @@ export function createCoalescedPollRunner(
         timeoutFiresAt = Infinity
         run(trigger)
       }, allowedAt - now)
+
       return
     }
 
@@ -118,6 +126,7 @@ export function createCoalescedPollRunner(
         lastRunDurationMs = lastRunEndedAt - now
         const trailingTrigger = disposed ? null : rerunTrigger
         rerunTrigger = null
+
         if (trailingTrigger) {
           run(trailingTrigger)
         }

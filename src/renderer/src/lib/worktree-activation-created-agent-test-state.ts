@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 
 export function makeCreatedAgentWorktree(): Worktree {
   const workspacePath = path.join(path.sep, 'workspace', 'feature')
+
   return {
     id: `repo-1::${workspacePath}`,
     repoId: 'repo-1',
@@ -83,6 +84,7 @@ export function seedEmptyActivatableWorktree(
   // Why: orphan terminals and reconnectable PTYs also feed renderableTabCount, so
   // assert the premise — drift here would make the regression tests pass blind.
   const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktree.id)
+
   if (renderableTabCount !== 0) {
     throw new Error(
       `seedEmptyActivatableWorktree: expected 0 renderable tabs, got ${renderableTabCount}`

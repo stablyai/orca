@@ -36,9 +36,11 @@ export function pairingAuthorizationForContext(
   if (context.transport.transport === 'direct') {
     return { mode: 'authenticated-direct', directAuthId: context.connectionId }
   }
+
   if (context.transport.relayHostId !== relayHostId) {
     throw new Error('stale_relay_connection')
   }
+
   return context.transport.credentialKind === 'invite'
     ? { mode: 'relay-basis', basisConnId: context.transport.basisConnId }
     : null
@@ -61,9 +63,11 @@ export class DesktopRelayService {
   constructor(options: DesktopRelayServiceOptions) {
     const keypair = options.runtimeRpc.getE2EEKeypair()
     const mobileSocketWiring = options.runtimeRpc.getMobileSocketWiring()
+
     if (!keypair || !mobileSocketWiring) {
       throw new Error('mobile_runtime_not_ready')
     }
+
     this.runtimeRpc = options.runtimeRpc
     this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
     this.demandLedger = new RelayDemandLedger({
@@ -93,7 +97,9 @@ export class DesktopRelayService {
           onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
+
         void this.flushRevokeOutbox(broker)
+
         return broker
       },
       onStatus: options.onStatus
@@ -123,6 +129,7 @@ export class DesktopRelayService {
       clearInterval(this.livenessTimer)
       this.livenessTimer = null
     }
+
     this.coordinator.fenceAndCloseNow(hostCloseReason)
   }
 
@@ -132,6 +139,7 @@ export class DesktopRelayService {
     return await this.withTransientDemand(`pairing:${relayDeviceId}`, async () => {
       const broker = await this.requireActiveBroker()
       const relay = await broker.createPairingRelay(relayDeviceId)
+
       return {
         relay,
         binding: {
@@ -147,6 +155,7 @@ export class DesktopRelayService {
   onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void {
     this.refreshDemand()
     const broker = this.coordinator.getActiveBroker()
+
     if (
       broker instanceof RelaySessionBroker &&
       broker.hostId === item.relayHostId &&
@@ -161,25 +170,31 @@ export class DesktopRelayService {
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult> {
     this.requireMobileDevice(context.deviceId)
+
     if (
       this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
       'local-only'
     ) {
       return { v: 1, relay: null }
     }
+
     return await this.withTransientDemand(`endpoints:${context.deviceId}`, async () => {
       const broker = await this.activeBrokerForDemand()
+
       if (!broker?.endpoint) {
         return { v: 1, relay: null }
       }
+
       this.assertRelayHost(context, broker)
       const result: PairingGetEndpointsResult = { v: 1, relay: broker.endpoint }
+
       if (params.installReqId) {
         result.installStatus = await broker.credentialInstallStatus(
           context.deviceId,
           params.installReqId
         )
       }
+
       if (params.resumeConfirmReqId) {
         if (
           context.transport.transport !== 'relay' ||
@@ -187,11 +202,13 @@ export class DesktopRelayService {
         ) {
           throw new Error('resume_confirmation_unavailable')
         }
+
         result.resumeConfirmation = await broker.confirmResume(
           context.transport.basisConnId,
           params.resumeConfirmReqId
         )
       }
+
       return result
     })
   }
@@ -201,24 +218,30 @@ export class DesktopRelayService {
     params: PairingProvisionRelayParams
   ): Promise<DeviceCredentialInstalled> {
     this.requireMobileDevice(context.deviceId)
+
     if (
       this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
       'local-only'
     ) {
       throw new Error('relay_disabled_for_device')
     }
+
     return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
       const broker = await this.requireActiveBroker()
+
       if (!broker.endpoint) {
         throw new Error('relay_control_not_active')
       }
+
       this.assertRelayHost(context, broker)
       const authorization = pairingAuthorizationForContext(context, broker.hostId)
+
       if (!authorization) {
         // Why: a resume splice proves renewal through confirmation; it cannot be
         // repurposed as either of the two initial-install authorization modes.
         throw new Error('relay_provision_authorization_unavailable')
       }
+
       if (
         !this.runtimeRpc.setMobileRelayBinding(context.deviceId, {
           relayHostId: broker.hostId,
@@ -228,7 +251,9 @@ export class DesktopRelayService {
       ) {
         throw new Error('mobile_device_not_found')
       }
+
       this.refreshDemand()
+
       return await broker.installCredential(context.deviceId, params, authorization)
     })
   }
@@ -239,14 +264,17 @@ export class DesktopRelayService {
 
   stop(): void {
     this.stopped = true
+
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
     }
+
     if (this.livenessTimer) {
       clearInterval(this.livenessTimer)
       this.livenessTimer = null
     }
+
     this.coordinator.stop()
   }
 
@@ -291,6 +319,7 @@ export class DesktopRelayService {
   private async withTransientDemand<T>(key: string, operation: () => Promise<T>): Promise<T> {
     const release = this.demandLedger.acquireTransient(key)
     this.refreshDemand()
+
     try {
       return await operation()
     } finally {
@@ -301,14 +330,17 @@ export class DesktopRelayService {
 
   private async activeBrokerForDemand(): Promise<RelaySessionBroker | null> {
     const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker())
+
     return broker instanceof RelaySessionBroker ? broker : null
   }
 
   private async requireActiveBroker(): Promise<RelaySessionBroker> {
     const broker = await this.activeBrokerForDemand()
+
     if (!broker) {
       throw new Error('relay_control_not_active')
     }
+
     return broker
   }
 
@@ -316,15 +348,19 @@ export class DesktopRelayService {
     if (this.stopped) {
       return
     }
+
     if (!this.livenessTimer) {
       this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
     }
+
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
     }
+
     this.coordinator.reconcile()
     const expiresAt = this.demandLedger.nextPendingExpiry()
+
     if (expiresAt !== null) {
       // Why: an unscanned QR must stop holding a standing control when its
       // server invite expires, even if no renderer survives to report closure.

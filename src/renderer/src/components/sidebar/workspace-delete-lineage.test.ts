@@ -112,6 +112,7 @@ describe('getWorkspaceDeleteLineage', () => {
       hostId: LOCAL_EXECUTION_HOST_ID,
       projectId: 'project-1'
     }
+
     const children: Worktree[] = [
       { ...makeWorktree('repo-child', '/workspaces/repo-child'), repoId: 'repo-2' },
       {
@@ -120,6 +121,7 @@ describe('getWorkspaceDeleteLineage', () => {
       },
       { ...makeWorktree('project-child', '/workspaces/project-child'), projectId: 'project-2' }
     ]
+
     const lineageById = Object.fromEntries(
       children.map((child) => [child.id, makeLineage(child, parent)])
     )
@@ -148,10 +150,12 @@ describe('getWorkspaceDeleteLineage', () => {
   // descendant's removal at the other machine's checkout.
   it('resolves a colliding child id to the parent host', () => {
     const parent: Worktree = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
+
     const localChild: Worktree = {
       ...makeWorktree('child', '/workspaces/parent/child'),
       hostId: LOCAL_EXECUTION_HOST_ID
     }
+
     const sshChild: Worktree = { ...localChild, hostId: SSH_HOST }
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, localChild, sshChild], {
@@ -166,10 +170,12 @@ describe('getWorkspaceDeleteLineage', () => {
 
   it('keeps the parent host preference stable regardless of row order', () => {
     const parent: Worktree = { ...makeWorktree('parent', '/workspaces/parent'), hostId: SSH_HOST }
+
     const localChild: Worktree = {
       ...makeWorktree('child', '/workspaces/parent/child'),
       hostId: LOCAL_EXECUTION_HOST_ID
     }
+
     const sshChild: Worktree = { ...localChild, hostId: SSH_HOST }
 
     const lineage = getWorkspaceDeleteLineage(parent, [parent, sshChild, localChild], {
@@ -188,21 +194,25 @@ describe('getWorkspaceDeleteLineage', () => {
       instanceId: 'local-parent',
       hostId: LOCAL_EXECUTION_HOST_ID
     }
+
     const sshParent: Worktree = {
       ...localParent,
       instanceId: 'ssh-parent',
       hostId: SSH_HOST
     }
+
     const localChild: Worktree = {
       ...makeWorktree('child', '/workspaces/parent/child'),
       instanceId: 'local-child',
       hostId: LOCAL_EXECUTION_HOST_ID
     }
+
     const sshChildBase: Worktree = {
       ...localChild,
       instanceId: 'ssh-child',
       hostId: SSH_HOST
     }
+
     const sshChild = {
       ...sshChildBase,
       lineage: makeLineage(sshChildBase, sshParent)

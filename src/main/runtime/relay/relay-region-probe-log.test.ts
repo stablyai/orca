@@ -13,18 +13,24 @@ import {
 } from './relay-region-probe-log'
 
 const DIRECTOR = 'https://relay.example.test'
+
 const US = 'https://us-c1.relay.example.test'
+
 const ASIA = 'https://asia-c1.relay.example.test'
+
 const CELL = 'https://cell-7.relay.example.test'
+
 const BOTH_REGIONS = [
   { region: 'us-central1', probeOrigins: [US] },
   { region: 'asia-east2', probeOrigins: [ASIA] }
 ]
+
 const tempPaths: string[] = []
 
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
+
   for (const path of tempPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -33,6 +39,7 @@ afterEach(() => {
 function userDataPath(): string {
   const path = mkdtempSync(join(tmpdir(), 'orca-relay-region-log-'))
   tempPaths.push(path)
+
   return path
 }
 
@@ -59,6 +66,7 @@ function resolverWithLog(options: {
   now?: () => number
 }) {
   const events: RelayRegionLogEvent[] = []
+
   const resolver = new RelayRegionPreferenceResolver({
     directorUrl: DIRECTOR,
     userDataPath: options.path,
@@ -67,6 +75,7 @@ function resolverWithLog(options: {
     now: options.now ?? (() => 1_000),
     logEvent: (event) => events.push(event)
   })
+
   return { resolver, events }
 }
 
@@ -79,6 +88,7 @@ function probeEvents(events: RelayRegionLogEvent[]): RelayRegionProbeLogEvent[] 
 describe('Relay region probe log', () => {
   it('records every probed origin, the discarded warm-up, and the kept samples', async () => {
     const path = userDataPath()
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: catalogFetch(BOTH_REGIONS),
@@ -121,6 +131,7 @@ describe('Relay region probe log', () => {
 
   it('reports a flapping region as rejected-spread and withholds the hint', async () => {
     const path = userDataPath()
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: catalogFetch(BOTH_REGIONS),
@@ -140,6 +151,7 @@ describe('Relay region probe log', () => {
 
   it('separates an unreachable region from a rejected one', async () => {
     const path = userDataPath()
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: catalogFetch(BOTH_REGIONS),
@@ -175,6 +187,7 @@ describe('Relay region probe log', () => {
   it('names a held incumbent apart from a fresh measurement', async () => {
     const path = userDataPath()
     writeCache(path, 'us-central1', 500)
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: catalogFetch(BOTH_REGIONS),
@@ -224,6 +237,7 @@ describe('Relay region probe log', () => {
   it('logs a diagnostic override without probing', async () => {
     const path = userDataPath()
     const events: RelayRegionLogEvent[] = []
+
     const resolver = new RelayRegionPreferenceResolver({
       directorUrl: DIRECTOR,
       userDataPath: path,
@@ -243,6 +257,7 @@ describe('Relay region probe log', () => {
 
   it('logs a director that cannot list its regions instead of going silent', async () => {
     const path = userDataPath()
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: vi.fn<typeof globalThis.fetch>(async () => new Response('nope', { status: 503 }))
@@ -260,6 +275,7 @@ describe('Relay region probe log', () => {
   it('logs the self-heal decision that deletes a cache pinning a far cell', async () => {
     const path = userDataPath()
     writeCache(path, 'us-central1', 5_000)
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: catalogFetch(BOTH_REGIONS),
@@ -275,6 +291,7 @@ describe('Relay region probe log', () => {
     const selfHeal = events.find(
       (event): event is RelayRegionSelfHealLogEvent => event.event === RELAY_REGION_SELF_HEAL_EVENT
     )
+
     expect(selfHeal).toEqual({
       event: 'relay_region_self_heal',
       directorHost: 'relay.example.test',
@@ -291,6 +308,7 @@ describe('Relay region probe log', () => {
   it('logs a kept cache when the assigned cell is not far from the best region', async () => {
     const path = userDataPath()
     writeCache(path, 'us-central1', 5_000)
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: catalogFetch(BOTH_REGIONS),
@@ -314,6 +332,7 @@ describe('Relay region probe log', () => {
   it('reports a self-heal whose catalog failed as its own outcome, not a withheld hint', async () => {
     const path = userDataPath()
     writeCache(path, 'us-central1', 5_000)
+
     const { resolver, events } = resolverWithLog({
       path,
       fetch: vi.fn<typeof globalThis.fetch>(async () => new Response('nope', { status: 503 }))

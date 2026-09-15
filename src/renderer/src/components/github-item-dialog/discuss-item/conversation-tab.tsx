@@ -107,20 +107,25 @@ export function ConversationTab({
   const [bodySaving, setBodySaving] = useState(false)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const botAuthorOverrides = usePRBotAuthorOverrides()
+
   const commentCounts = useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
     [botAuthorOverrides, comments]
   )
+
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
     [botAuthorOverrides, commentFilter, comments]
   )
+
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const resolvedTimelineItems = timelineItems ?? EMPTY_GITHUB_ISSUE_TIMELINE_ITEMS
+
   const issueConversationEntries = useMemo(
     () => getIssueConversationEntries(comments, resolvedTimelineItems),
     [comments, resolvedTimelineItems]
   )
+
   const replyTargetComments = getCommentReplyTargetCandidates(item.type, comments, visibleComments)
   const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, replyTargetComments)
 
@@ -130,6 +135,7 @@ export function ConversationTab({
   }
 
   const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
+
   if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
     // Why: a background refresh can change the body while the editor is closed; reconcile before paint so reopening never sees a stale draft.
     setBodyDraft(resolvedBodyDraft)
@@ -137,22 +143,28 @@ export function ConversationTab({
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
+
   const markdownGitHubRepo = useMemo(
     () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
     [bodySlug, projectOrigin]
   )
+
   const canEditBody =
     item.type === 'pr'
       ? Boolean(projectOrigin || bodySlug)
       : Boolean(projectOrigin || canUseRepoMutationContext)
+
   const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
     if (bodySaving || !bodyChanged) {
       setBodyEditing(false)
+
       return
     }
+
     setBodySaving(true)
+
     try {
       await runWorkItemBodyUpdate({
         item,
@@ -201,11 +213,14 @@ export function ConversationTab({
             'Unable to reply without a repository path.'
           )
         )
+
         return false
       }
+
       // Why: nest under review threads (path/threadId/discussion_r); never post a
       // separate top-level conversation comment for those.
       const isReviewThreadReply = item.type === 'pr' && canPostPRReviewThreadReply(comment)
+
       const result = isReviewThreadReply
         ? await addPRReviewCommentReplyForRepo({
             repoPath: repoPath ?? '',
@@ -235,13 +250,16 @@ export function ConversationTab({
           result.error ||
             translate('auto.components.GitHubItemDialog.283699bc82', 'Failed to post reply.')
         )
+
         return false
       }
+
       onCommentAdded(
         isReviewThreadReply ? attachPRReviewReplyParent(result.comment, comment) : result.comment
       )
       setReplyingTo(null)
       toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
+
       return true
     },
     [

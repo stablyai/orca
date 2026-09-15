@@ -32,5 +32,6 @@ export function decideExpandedDirLoad(
   if (!cached?.children.length) {
     return 'load'
   }
+
   return stale ? 'reload' : 'skip'
 }

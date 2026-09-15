@@ -91,6 +91,7 @@ describe('Orca cloud auth config', () => {
       },
       true
     )
+
     expect(httpsState.configured).toBe(true)
   })
 

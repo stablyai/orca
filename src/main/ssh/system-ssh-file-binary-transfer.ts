@@ -27,6 +27,7 @@ export {
   WINDOWS_STDIN_WRITE_CHUNK_BYTES,
   WINDOWS_STDIN_WRITE_TIMEOUT_MS
 } from './system-ssh-windows-write-strategy'
+
 export { WINDOWS_STAGED_WRITE_SUFFIX } from './system-ssh-windows-file-write'
 
 type SystemSshOperationOptions = SystemSshBuildArgsOptions & {
@@ -51,14 +52,18 @@ export async function downloadFileViaSystemSsh(
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const isWindows = options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)
+
   const command = isWindows
     ? makeWindowsReadFileCommand(remotePath)
     : `cat ${shellEscape(remotePath)}`
+
   const channel = spawnSystemSshCommand(target, command, {
     wrapCommand: !isWindows,
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
+
   const output = createWriteStream(localPath, { flags: 'wx' })
+
   try {
     await awaitWithSystemSshAbort(
       options?.signal,
@@ -85,6 +90,7 @@ export async function writeBufferViaSystemSsh(
   options?: SystemSshWriteBufferOptions
 ): Promise<void> {
   throwIfAborted(options?.signal)
+
   if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
     await writeWindowsRemoteFile(
       target,
@@ -97,6 +103,7 @@ export async function writeBufferViaSystemSsh(
       },
       options ?? {}
     )
+
     return
   }
 
@@ -105,14 +112,17 @@ export async function writeBufferViaSystemSsh(
     makePosixWriteFileCommand(remotePath, options),
     getSystemSshBuildArgsFromOperationOptions(options)
   )
+
   const closePromise = awaitWithSystemSshAbort(
     options?.signal,
     () => channel.close(),
     waitForChannelClose(channel, `write ${remotePath}`)
   )
+
   if (!options?.signal?.aborted) {
     channel.stdin.end(contents)
   }
+
   await closePromise
 }
 
@@ -124,13 +134,16 @@ export async function uploadFileViaSystemSsh(
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const sourceStat = await lstat(localPath)
+
   if (sourceStat.isSymbolicLink() || !sourceStat.isFile()) {
     throw new Error(`Unsupported upload source: ${localPath}`)
   }
 
   const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+
   try {
     const openedStat = await handle.stat()
+
     if (
       !openedStat.isFile() ||
       openedStat.size !== sourceStat.size ||
@@ -139,6 +152,7 @@ export async function uploadFileViaSystemSsh(
     ) {
       throw new Error(`File changed during upload: ${localPath}`)
     }
+
     throwIfAborted(options?.signal)
 
     if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
@@ -149,12 +163,15 @@ export async function uploadFileViaSystemSsh(
         readChunk: async (offset, maxBytes) => {
           const buffer = Buffer.allocUnsafe(Math.min(maxBytes, openedStat.size - offset))
           const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset)
+
           return buffer.subarray(0, bytesRead)
         },
         // The verified local file is already exactly the payload, so sftp sends it as is.
         withLocalFile: (send) => send(localPath)
       }
+
       await writeWindowsRemoteFile(target, remotePath, source, options ?? {})
+
       return
     }
 
@@ -163,7 +180,9 @@ export async function uploadFileViaSystemSsh(
       makePosixWriteFileCommand(remotePath, options),
       getSystemSshBuildArgsFromOperationOptions(options)
     )
+
     const input = handle.createReadStream({ autoClose: false })
+
     try {
       await awaitWithSystemSshAbort(
         options?.signal,
@@ -228,9 +247,11 @@ async function withTemporaryLocalFile<T>(
 ): Promise<T> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-win-upload-'))
   const localPath = join(directory, 'payload.bin')
+
   try {
     // 0600: the payload can be repository content, and tmpdir is shared on every platform.
     await writeFile(localPath, contents, { mode: 0o600 })
+
     return await send(localPath)
   } finally {
     await rm(directory, { recursive: true, force: true }).catch(() => {})
@@ -243,6 +264,7 @@ function makePosixWriteFileCommand(
 ): string {
   const redirection = options?.append ? '>>' : '>'
   const noclobber = !options?.append && options?.exclusive ? 'set -C; ' : ''
+
   return `${noclobber}cat ${redirection} ${shellEscape(remotePath)}`
 }
 

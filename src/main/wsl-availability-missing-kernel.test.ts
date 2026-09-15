@@ -8,15 +8,18 @@ import {
 } from './wsl-availability'
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
+
 vi.mock('../shared/child-process/run-process', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
 }))
+
 vi.mock('./wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
 }))
 
 const originalPlatform = process.platform
+
 const success: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
 
 beforeEach(() => {
@@ -24,6 +27,7 @@ beforeEach(() => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
   _resetWslAvailabilityCacheForTests()
 })
+
 afterEach(() => {
   Object.defineProperty(process, 'platform', { value: originalPlatform })
   _resetWslAvailabilityCacheForTests()
@@ -41,9 +45,11 @@ for (const mode of ['sync', 'async'] as const) {
       vi.mocked(execFile).mockImplementation((...args: unknown[]) => {
         const callback = args.at(-1) as (error: unknown) => void
         callback({ code })
+
         return {} as ReturnType<typeof execFile>
       })
     }
+
     function guestResult(result: ProcessResult): void {
       vi.mocked(runProcess).mockResolvedValue(result)
       vi.mocked(runProcessSync).mockReturnValue(result)

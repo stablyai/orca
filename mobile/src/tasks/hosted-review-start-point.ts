@@ -7,5 +7,6 @@ export function shouldResolveHostedReviewStartPoint(args: {
   if (args.type !== 'pr' && args.type !== 'mr') {
     return false
   }
+
   return !args.baseBranchOverride?.trim()
 }

@@ -8,7 +8,9 @@ export function beginWebRuntimeWakeTerminalRespawn(worktreeId: string): boolean 
   if (wakeTerminalRespawnInFlightByWorktree.has(worktreeId)) {
     return false
   }
+
   wakeTerminalRespawnInFlightByWorktree.add(worktreeId)
+
   return true
 }
 

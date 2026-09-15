@@ -20,6 +20,7 @@ describe('manual terminal worktree parking requests', () => {
         worktreeId: 'worktree-1'
       })
     })
+
     window.addEventListener(MANUAL_TERMINAL_WORKTREE_PARK_EVENT, listener)
 
     requestManualTerminalWorktreePark('worktree-1')

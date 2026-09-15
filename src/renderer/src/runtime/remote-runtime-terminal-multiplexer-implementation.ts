@@ -26,6 +26,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
     const streamId = this.allocateStreamId()
+
     const state: RemoteRuntimeMultiplexedTerminalState = {
       streamId,
       terminal: args.terminal,
@@ -58,8 +59,10 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
       watchdog: createRemoteTerminalStreamWatchdog((stall) => {
         if (e2eDisableRemoteTerminalStallRecovery) {
           state.watchdog.completeCommandResponseProbe()
+
           return
         }
+
         recordRendererCrashBreadcrumb('remote_terminal_stream_stall_recovery', {
           environmentId: this.environmentId,
           expectedSeq: state.expectedSeq ?? null,
@@ -72,6 +75,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           streamId: state.streamId,
           terminal: state.terminal
         })
+
         if (stall.reason === 'command-response-timeout') {
           this.probeCommandResponse(state)
         } else {
@@ -79,6 +83,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
         }
       })
     }
+
     this.streams.set(streamId, state)
 
     const stream: RemoteRuntimeMultiplexedTerminal = {
@@ -95,11 +100,13 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
         if (!this.isRegisteredStream(state)) {
           return false
         }
+
         const claimed = this.sendFrame(
           streamId,
           TerminalStreamOpcode.ClaimViewport,
           encodeTerminalStreamJson({ cols, rows })
         )
+
         // Why: older runtimes ignore the claim opcode but still understand
         // Resize. Claim first keeps new-runtime ownership precise and leaves a
         // backwards-compatible resize immediately behind it.
@@ -108,6 +115,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           TerminalStreamOpcode.Resize,
           encodeTerminalStreamJson({ cols, rows })
         )
+
         return claimed && resized
       },
       setOutputPaused: (paused) => this.setOutputPaused(state, paused),
@@ -128,9 +136,11 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
 
     try {
       await this.ensureConnected()
+
       if (this.streams.get(streamId) !== state) {
         return stream
       }
+
       const sent = this.sendFrame(
         CONTROL_STREAM_ID,
         TerminalStreamOpcode.Subscribe,
@@ -148,16 +158,20 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
           }
         })
       )
+
       if (!sent) {
         throw new Error('Remote terminal stream is not connected.')
       }
+
       state.subscriptionRequested = true
     } catch (error) {
       const terminalError = error instanceof Error ? error : new Error(String(error))
+
       if (this.streams.get(streamId) === state) {
         this.streams.delete(streamId)
         this.closeIfIdle()
       }
+
       throw terminalError
     }
 

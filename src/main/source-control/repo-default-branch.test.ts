@@ -24,9 +24,11 @@ function primeLocalGitExec(defaultRef = 'refs/remotes/origin/master'): void {
     if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
       return { stdout: `${defaultRef}\n`, stderr: '' }
     }
+
     if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
       return { stdout: 'default-oid\n', stderr: '' }
     }
+
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
 }
@@ -66,12 +68,15 @@ describe('getRepoDefaultBranchName', () => {
     const provider = {
       exec: vi.fn(async (args: string[], repoPath: string) => {
         expect(repoPath).toBe('/remote/repo')
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'refs/remotes/origin/trunk\n' }
         }
+
         return { stdout: 'oid\n' }
       })
     }
+
     getSshGitProviderMock.mockReturnValue(provider)
 
     await expect(getRepoDefaultBranchName('/remote/repo', 'ssh-1')).resolves.toBe('trunk')
@@ -135,17 +140,22 @@ describe('getRepoDefaultBranchName', () => {
 
   it('coalesces concurrent resolutions for the same repo and runtime', async () => {
     let releaseSymbolicRef: (() => void) | undefined
+
     const symbolicRefGate = new Promise<void>((resolve) => {
       releaseSymbolicRef = resolve
     })
+
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
         await symbolicRefGate
+
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: 'default-oid\n', stderr: '' }
       }
+
       throw new Error(`unexpected git call: ${args.join(' ')}`)
     })
 
@@ -188,6 +198,7 @@ describe('shouldHideNonOpenReviewOnDefaultBranch', () => {
         })
       ).resolves.toBe(false)
     }
+
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 

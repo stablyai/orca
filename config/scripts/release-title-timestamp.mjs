@@ -13,6 +13,7 @@ export function formatReleaseTitleTimestamp(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new Error('Release title timestamp is invalid.')
   }
+
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', {
       timeZone: RELEASE_NAME_TIME_ZONE,
@@ -25,6 +26,7 @@ export function formatReleaseTitleTimestamp(date) {
       .formatToParts(date)
       .map((part) => [part.type, part.value])
   )
+
   // Assembled from parts rather than by string-editing the formatted output:
   // recent ICU separates the time from AM/PM with U+202F, not a plain space, so
   // a naive replace(' ', '') leaves the gap on some runtimes and not others.

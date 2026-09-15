@@ -18,15 +18,19 @@ export function buildManagedHookDetectionCommands(
   platform: NodeJS.Platform
 ): TuiAgentDetectionCommand[] {
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
+
   return MANAGED_AGENT_HOOK_TARGETS.filter((target) => !disabled.has(target.tuiAgent)).flatMap(
     (target) => {
       const commands = new Set(target.executableCandidates)
+
       const override = extractExecutableToken(settings?.agentCmdOverrides?.[target.tuiAgent], {
         platform
       })
+
       if (override && isSafeOverrideExecutableToken(override)) {
         commands.add(override)
       }
+
       return [...commands].map((cmd) => ({
         id: target.tuiAgent,
         cmd,
@@ -40,7 +44,9 @@ export function detectedManagedHookAgents(values: unknown): AgentHookTarget[] {
   if (!Array.isArray(values)) {
     return []
   }
+
   const detected = new Set(values.filter((value): value is string => typeof value === 'string'))
+
   return MANAGED_AGENT_HOOK_TARGETS.filter((target) => detected.has(target.tuiAgent)).map(
     (target) => target.agent
   )
@@ -53,10 +59,13 @@ export function readManagedHookDetectionResult(value: unknown): {
   if (value === null || typeof value !== 'object') {
     return { agents: [], claudeVersion: null }
   }
+
   const agents = detectedManagedHookAgents(Reflect.get(value, 'agents'))
   const versions = Reflect.get(value, 'versions')
+
   const rawClaudeVersion =
     versions !== null && typeof versions === 'object' ? Reflect.get(versions, 'claude') : null
+
   return {
     agents,
     claudeVersion: parseClaudeCliVersion(

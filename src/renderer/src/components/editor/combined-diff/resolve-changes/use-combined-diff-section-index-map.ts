@@ -22,8 +22,10 @@ export function useCombinedDiffSectionIndexMap({
   sections: readonly { key: string }[]
 }): Map<string, number> {
   const cacheRef = useRef<CombinedDiffSectionIndexCache | null>(null)
+
   const sectionIndexByKey = useMemo(() => {
     const previous = cacheRef.current
+
     // Section content/loading updates preserve entry order and keys. The entry signature usually
     // changes when the navigable structure changes, but compare keys as a guard for reused
     // signatures (and to keep this cache correct if a caller rebuilds sections).
@@ -40,6 +42,7 @@ export function useCombinedDiffSectionIndexMap({
     ) {
       return previous.map
     }
+
     return createCombinedDiffSectionIndexMap(sections)
   }, [entrySignature, sections])
 

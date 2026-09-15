@@ -19,6 +19,7 @@ export function resolveRepoPathArgument(
   if (!isRemote) {
     return resolvePath(cwd, inputPath)
   }
+
   // Why: the local CLI cwd is unrelated to a paired runtime's filesystem.
   // Relative remote paths would silently target the wrong machine.
   if (!isAbsoluteServerPath(inputPath)) {
@@ -27,5 +28,6 @@ export function resolveRepoPathArgument(
       `${remotePathSubject} requires --path to be an absolute path on the remote server.`
     )
   }
+
   return inputPath
 }

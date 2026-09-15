@@ -6,6 +6,7 @@ export function resolveOpenCodeDataDirectory(
   homeDirectory = homedir()
 ): string {
   const xdgDataHome = environment.XDG_DATA_HOME?.trim()
+
   return join(xdgDataHome || join(homeDirectory, '.local', 'share'), 'opencode')
 }
 

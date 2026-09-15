@@ -16,18 +16,23 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not mutate the wrong PTY's display mode/viewport (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+
       // Why: late-bind viewport for desktop-subscribed callers; otherwise an 'auto' toggle skips phone-fit and nothing resizes.
       if (params.viewport && params.client?.id) {
         runtime.updateMobileSubscriberViewport(leaf.ptyId, params.client.id, params.viewport)
       }
+
       if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
         runtime.markMobileActor(leaf.ptyId, params.client.id)
       }
+
       runtime.setMobileDisplayMode(leaf.ptyId, params.mode)
       await runtime.applyMobileDisplayMode(leaf.ptyId)
+
       return { mode: params.mode, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
@@ -37,9 +42,11 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not reclaim the wrong PTY to desktop dims (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+
       return { restored: await runtime.reclaimTerminalForDesktop(leaf.ptyId) }
     }
   }),
@@ -50,6 +57,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
       const leaf = runtime.resolveLeafForHandle(params.terminal)
       const mode = leaf?.ptyId ? runtime.getMobileDisplayMode(leaf.ptyId) : 'auto'
       const isPhoneFitted = leaf?.ptyId ? runtime.isMobileSubscriberActive(leaf.ptyId) : false
+
       return { mode, isPhoneFitted }
     }
   }),
@@ -59,9 +67,11 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not write viewport state to the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+
       const viewportUpdate = await updateViewportForClient(
         runtime,
         leaf.ptyId,
@@ -73,6 +83,7 @@ export const TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS = [
         'refresh',
         params.claim === true
       )
+
       return { ...viewportUpdate, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   })
@@ -89,6 +100,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
         params.subscriptionId,
         connectionId
       )
+
       // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
       // Why AND over the calls that ran: a clientless stream registers under the bare id
       // and a client-scoped one under the composite, so either call can be the real
@@ -100,6 +112,7 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
             connectionId
           ) && unsubscribed
       }
+
       return { unsubscribed }
     }
   }),

@@ -48,6 +48,7 @@ export function NativeChatQuestionCard({
     setOtherText((prev) => {
       const next = [...prev]
       next[qi] = value
+
       return next
     })
   }
@@ -55,10 +56,13 @@ export function NativeChatQuestionCard({
   // The resolved answer for a question: picked labels plus any typed free-text.
   const answerFor = (qi: number, sel = selections, oth = otherText): string => {
     const question = prompt.questions[qi]
+
     const picked = (sel[qi] ?? [])
       .map((optionIndex) => question?.options[optionIndex]?.label ?? '')
       .filter((label) => label.length > 0)
+
     const other = (oth[qi] ?? '').trim()
+
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
@@ -68,7 +72,9 @@ export function NativeChatQuestionCard({
     const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
       return { indices: [...(sel[i] ?? [])], other: (oth[i] ?? '').trim() }
     })
+
     const anyAnswered = resolved.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
+
     if (anyAnswered) {
       onAnswer(resolved)
     }
@@ -92,6 +98,7 @@ export function NativeChatQuestionCard({
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[index] ?? []
+
       if (q.multiSelect) {
         next[index] = cur.includes(optionIndex)
           ? cur.filter((pickedIndex) => pickedIndex !== optionIndex)
@@ -99,6 +106,7 @@ export function NativeChatQuestionCard({
       } else {
         next[index] = cur.includes(optionIndex) ? [] : [optionIndex]
       }
+
       return next
     })
   }
@@ -112,9 +120,12 @@ export function NativeChatQuestionCard({
   const confirm = (fromKeyboard = false): void => {
     if (!isLast) {
       advanceOrSubmit(selections, otherText)
+
       return
     }
+
     const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0)
+
     if (anyAnswered) {
       submitAll(selections, otherText)
     } else if (!fromKeyboard) {

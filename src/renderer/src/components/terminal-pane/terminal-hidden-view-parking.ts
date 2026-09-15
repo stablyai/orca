@@ -13,11 +13,17 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 // was built for. Reveal cost is a flat ~170ms remount regardless of buffer
 // size, so cutting remount *frequency* beats shaving replay.
 export const TERMINAL_WORKTREE_COLD_PARK_DELAY_MS = 30_000
+
 export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 5 * 60_000
+
 export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 4
+
 export const TERMINAL_WORKTREE_PARK_DELAY_MS = TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
+
 export const TERMINAL_TAB_COLD_PARK_DELAY_MS = 30_000
+
 export const TERMINAL_TAB_HOT_RETAIN_MS = 5 * 60_000
+
 export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 6
 
 // Why: tests override these per call (instead of process.env reads inside the
@@ -57,6 +63,7 @@ function getPendingActivationSpawnCount(value: boolean | number | undefined): nu
   if (value === true) {
     return 1
   }
+
   return typeof value === 'number' && value > 0 ? value : 0
 }
 
@@ -75,13 +82,16 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   if (!ptyId) {
     return false
   }
+
   if (isRemoteExecutionHostPtyId(ptyId)) {
     return false
   }
+
   // Why: separator-less ids come from the daemon-fail-open LocalPtyProvider;
   // they have no daemon session model, so revealing a parked pane would
   // silently respawn a fresh shell instead of restoring the snapshot.
   const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+
   return separatorIdx !== -1 && ptyId.slice(0, separatorIdx) === worktreeId
 }
 
@@ -108,13 +118,16 @@ export function isParkRestorableTerminalPty(
   if (isSnapshotBackedTerminalPty(ptyId, worktreeId)) {
     return true
   }
+
   if (ptyId && isRemoteRuntimePtyId(ptyId)) {
     const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
     return (
       environmentId !== null &&
       policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
     )
   }
+
   return policy?.sshParkingEnabled === true && ptyId !== null && parseAppSshPtyId(ptyId) !== null
 }
 
@@ -144,19 +157,23 @@ export function canParkTerminalWorktreeRenderers(args: {
   ) {
     return false
   }
+
   if (
     args.nowMs - args.hiddenSinceMs <
     (args.coldParkDelayMs ?? TERMINAL_WORKTREE_COLD_PARK_DELAY_MS)
   ) {
     return false
   }
+
   return args.terminalTabs.every((tab) => {
     if (args.pendingStartupByTabId[tab.id] !== undefined) {
       return false
     }
+
     if (hasPendingActivationSpawn(tab)) {
       return false
     }
+
     return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
   })
 }
@@ -173,6 +190,7 @@ export function canParkTerminalTabRenderer(args: {
   restorePolicy?: TerminalParkRestorePolicy
 }): boolean {
   const tab = args.terminalTab
+
   if (
     !args.parkingEnabled ||
     tab.isVisible ||
@@ -182,15 +200,19 @@ export function canParkTerminalTabRenderer(args: {
   ) {
     return false
   }
+
   if (args.nowMs - tab.hiddenSinceMs < (args.coldParkDelayMs ?? TERMINAL_TAB_COLD_PARK_DELAY_MS)) {
     return false
   }
+
   if (args.pendingStartupByTabId[tab.id] !== undefined) {
     return false
   }
+
   if (hasPendingActivationSpawn(tab)) {
     return false
   }
+
   return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
 }
 
@@ -209,7 +231,9 @@ function compareColdParkRecencyDesc(
   if (a.hiddenSinceMs !== b.hiddenSinceMs) {
     return b.hiddenSinceMs - a.hiddenSinceMs
   }
+
   const activationDelta = (b.lastActivatedSeq ?? -1) - (a.lastActivatedSeq ?? -1)
+
   return activationDelta === 0 ? a.id.localeCompare(b.id) : activationDelta
 }
 
@@ -219,11 +243,13 @@ function compareColdParkRecencyDesc(
 // remount cost users actually notice.
 function selectLastActiveRetainedId(candidates: ColdParkRetainCandidate[]): string | null {
   let lastActive: ColdParkRetainCandidate | null = null
+
   for (const candidate of candidates) {
     if (lastActive === null || compareColdParkRecencyDesc(candidate, lastActive) < 0) {
       lastActive = candidate
     }
   }
+
   return lastActive?.id ?? null
 }
 
@@ -237,23 +263,28 @@ export function selectIdsBeyondHotRetain(
   const lastActiveId = selectLastActiveRetainedId(candidates)
   const coldParkedIds = new Set<string>()
   const retainedCandidates: ColdParkRetainCandidate[] = []
+
   for (const candidate of candidates) {
     if (candidate.id === lastActiveId) {
       continue
     }
+
     if (args.nowMs - candidate.hiddenSinceMs >= args.hotRetainMs) {
       coldParkedIds.add(candidate.id)
     } else {
       retainedCandidates.push(candidate)
     }
   }
+
   retainedCandidates.sort(compareColdParkRecencyDesc)
   // Why: the last-active id already holds one slot in the warm working set, so
   // the cap counts it out — the remaining candidates fill hotRetainLimit-1.
   const remainingLimit = lastActiveId === null ? args.hotRetainLimit : args.hotRetainLimit - 1
+
   for (const candidate of retainedCandidates.slice(Math.max(0, remainingLimit))) {
     coldParkedIds.add(candidate.id)
   }
+
   return coldParkedIds
 }
 
@@ -269,8 +300,10 @@ export function selectColdParkedTerminalWorktrees(
   if (!args.parkingEnabled) {
     return new Set()
   }
+
   const coldParkDelayMs = args.coldParkDelayMs ?? TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
   const candidates: ColdParkRetainCandidate[] = []
+
   for (const worktree of args.worktrees) {
     if (
       worktree.hiddenSinceMs === null ||
@@ -285,8 +318,10 @@ export function selectColdParkedTerminalWorktrees(
     ) {
       continue
     }
+
     candidates.push({ id: worktree.worktreeId, hiddenSinceMs: worktree.hiddenSinceMs })
   }
+
   return selectIdsBeyondHotRetain(candidates, {
     nowMs: args.nowMs,
     hotRetainMs: args.hotRetainMs ?? TERMINAL_WORKTREE_HOT_RETAIN_MS,
@@ -308,8 +343,10 @@ export function selectColdParkedTerminalTabs(
   if (!args.parkingEnabled) {
     return new Set()
   }
+
   const coldParkDelayMs = args.coldParkDelayMs ?? TERMINAL_TAB_COLD_PARK_DELAY_MS
   const candidates: ColdParkRetainCandidate[] = []
+
   for (const tab of args.terminalTabs) {
     if (
       tab.hiddenSinceMs === null ||
@@ -326,12 +363,14 @@ export function selectColdParkedTerminalTabs(
     ) {
       continue
     }
+
     candidates.push({
       id: tab.id,
       hiddenSinceMs: tab.hiddenSinceMs,
       lastActivatedSeq: tab.lastActivatedSeq
     })
   }
+
   return selectIdsBeyondHotRetain(candidates, {
     nowMs: args.nowMs,
     hotRetainMs: args.hotRetainMs ?? TERMINAL_TAB_HOT_RETAIN_MS,

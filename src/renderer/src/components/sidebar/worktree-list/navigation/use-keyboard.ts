@@ -59,6 +59,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     activeModal,
     markDirectScrollInput
   } = args
+
   const keybindings = useAppStore((s) => s.keybindings)
 
   const navigateWorktree = useCallback(
@@ -67,6 +68,7 @@ export function useWorktreeListKeyboardNavigation(args: {
       // means "not now", and a rebuilt near-copy would drift from what is on screen
       // (host sections, pinned placement, folder workspaces).
       const worktreeRows = getCyclableWorktreeRows(rows, pinnedDisplayPolicy)
+
       const nextWorktreeIdentity = resolveCycledWorktreeId({
         worktreeIds: worktreeRows.map(getCyclableRowIdentity),
         activeWorktreeId: resolveActiveCycleIdentity({
@@ -76,12 +78,15 @@ export function useWorktreeListKeyboardNavigation(args: {
         }),
         direction
       })
+
       if (nextWorktreeIdentity === null) {
         return
       }
+
       const nextWorktree = worktreeRows.find(
         (row) => getCyclableRowIdentity(row) === nextWorktreeIdentity
       )?.worktree
+
       if (!nextWorktree) {
         return
       }
@@ -97,6 +102,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         nextWorktree,
         pinnedDisplayPolicy
       )
+
       if (rowIndex !== -1) {
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
@@ -118,9 +124,11 @@ export function useWorktreeListKeyboardNavigation(args: {
       }
 
       const platform = getShortcutPlatform()
+
       if (keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings)) {
         scrollRef.current?.focus()
         e.preventDefault()
+
         return
       }
 
@@ -129,6 +137,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
           ? 'down'
           : null
+
       if (direction) {
         markDirectScrollInput()
         navigateWorktree(direction)
@@ -137,6 +146,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree, scrollRef])
 
@@ -146,6 +156,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         if (e.target !== e.currentTarget) {
           return
         }
+
         markDirectScrollInput()
         navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
         e.preventDefault()
@@ -153,9 +164,11 @@ export function useWorktreeListKeyboardNavigation(args: {
         const helper = document.querySelector(
           '.xterm-helper-textarea'
         ) as HTMLTextAreaElement | null
+
         if (helper) {
           helper.focus()
         }
+
         e.preventDefault()
       } else if (['PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
         markDirectScrollInput()

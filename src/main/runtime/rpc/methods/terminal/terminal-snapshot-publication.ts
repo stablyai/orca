@@ -22,19 +22,24 @@ export async function serializeBudgetedRequestedSnapshot(
   scrollbackRows: number | undefined
 ): Promise<SerializedSnapshot> {
   const requestedRows = scrollbackRows ?? 0
+
   for (const rows of requestedSnapshotScrollbackCandidates(scrollbackRows)) {
     const serialized = await runtime.serializeAuthoritativeTerminalBuffer(ptyId, {
       scrollbackRows: rows
     })
+
     if (!serialized) {
       return null
     }
+
     const scrollbackAnsi =
       'scrollbackAnsi' in serialized && typeof serialized.scrollbackAnsi === 'string'
         ? serialized.scrollbackAnsi
         : ''
+
     const data = scrollbackAnsi + serialized.data
     const overByteBudget = terminalStreamByteLengthExceeds(data, REQUESTED_SNAPSHOT_BYTE_BUDGET)
+
     if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
@@ -44,6 +49,7 @@ export async function serializeBudgetedRequestedSnapshot(
       }
     }
   }
+
   return null
 }
 
@@ -97,16 +103,21 @@ export function sendSnapshotFrames(
   ) {
     return { bytes: 0, chunks: 0, published: false }
   }
+
   let chunks = 0
   let bytes = 0
+
   for (const chunk of iterateTerminalStreamTextPayloads(options.data)) {
     if (sendFrame(TerminalStreamOpcode.SnapshotChunk, chunk) === false) {
       return { bytes, chunks, published: false }
     }
+
     chunks++
     bytes += chunk.byteLength
   }
+
   const published = sendFrame(TerminalStreamOpcode.SnapshotEnd) !== false
+
   return { bytes, chunks, published }
 }
 
@@ -117,6 +128,7 @@ export async function serializeBudgetedMobileSnapshot(
 ): Promise<SerializedSnapshot> {
   if (!isMobile) {
     const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 })
+
     return serialized
       ? {
           ...serialized,
@@ -126,14 +138,19 @@ export async function serializeBudgetedMobileSnapshot(
         }
       : null
   }
+
   const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
+
   for (const rows of candidates) {
     const serialized = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: rows })
+
     if (!serialized) {
       return null
     }
+
     const data = (serialized.scrollbackAnsi ?? '') + serialized.data
     const overByteBudget = terminalStreamByteLengthExceeds(data, MOBILE_SNAPSHOT_BYTE_BUDGET)
+
     if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
@@ -143,6 +160,7 @@ export async function serializeBudgetedMobileSnapshot(
       }
     }
   }
+
   return null
 }
 
@@ -152,25 +170,32 @@ export async function serializeStableMobileRendererSnapshot(
 ): Promise<SerializedSnapshot> {
   const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
   let candidateIndex = 0
+
   for (let attempt = 0; attempt < candidates.length; attempt += 1) {
     // Why: advance toward zero scrollback each retry so the final attempt always has a bounded payload.
     candidateIndex = Math.max(candidateIndex, attempt)
     const rows = candidates[candidateIndex]
     const outputSequenceBefore = runtime.getPtyOutputSequence(ptyId)
+
     const serialized = await runtime.serializeRendererTerminalBuffer(ptyId, {
       scrollbackRows: rows
     })
+
     const outputSequenceAfter = runtime.getPtyOutputSequence(ptyId)
+
     if (outputSequenceBefore !== outputSequenceAfter) {
       continue
     }
+
     if (!serialized) {
       return null
     }
+
     const overByteBudget = terminalStreamByteLengthExceeds(
       serialized.data,
       MOBILE_SNAPSHOT_BYTE_BUDGET
     )
+
     if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
@@ -178,8 +203,10 @@ export async function serializeStableMobileRendererSnapshot(
         truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
       }
     }
+
     candidateIndex += 1
   }
+
   return null
 }
 
@@ -195,13 +222,17 @@ export async function sendMobileResizeRestream(
   if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
     return false
   }
+
   const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
+
   if (!serialized) {
     return false
   }
+
   if (shouldSend && !shouldSend()) {
     return true
   }
+
   sendSnapshotFrames(sendFrame, {
     kind: 'resized',
     cols: serialized.cols,
@@ -216,5 +247,6 @@ export async function sendMobileResizeRestream(
     truncatedByByteBudget: serialized.truncatedByByteBudget,
     data: serialized.data
   })
+
   return true
 }

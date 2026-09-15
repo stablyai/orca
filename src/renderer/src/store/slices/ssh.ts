@@ -112,17 +112,21 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set((s) => {
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
+
       if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
+
       advanceLocalSshTargetConnectionGeneration(targetId)
       next.set(targetId, state)
       const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
       let blockedConnections = s.transientClearedAgentStatusConnectionIds
+
       if (didReconnect && targetId in blockedConnections) {
         blockedConnections = { ...blockedConnections }
         delete blockedConnections[targetId]
       }
+
       return {
         sshConnectionStates: next,
         sshConnectedGeneration: didReconnect
@@ -138,6 +142,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   setSshTargetsMetadata: (targets) =>
     set((s) => {
       const sshTargetGenerations = collectSshTargetGenerations(targets)
+
       // Both maps gate the early return: a caller that first hydrated through a
       // generation-less path would otherwise be frozen out by matching labels.
       if (
@@ -148,6 +153,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         // hydration flag must flip on the first fetch of an empty target set.
         return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
+
       return {
         sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
         sshTargetGenerations,
@@ -160,12 +166,14 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set((s) => {
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)
       next.add(targetId)
+
       return { remoteWorkspaceHydratedTargetIds: next }
     }),
   clearRemoteWorkspaceHydrated: (targetId) =>
     set((s) => {
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)
       next.delete(targetId)
+
       return { remoteWorkspaceHydratedTargetIds: next }
     }),
   setRemoteWorkspaceSyncStatus: (targetId, status) =>
@@ -185,28 +193,33 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   setPortForwards: (targetId, forwards) =>
     set((s) => {
       const next = { ...s.portForwardsByConnection }
+
       if (forwards.length > 0) {
         next[targetId] = forwards
       } else {
         delete next[targetId]
       }
+
       return { portForwardsByConnection: next }
     }),
 
   clearPortForwards: (targetId) =>
     set((s) => {
       const { [targetId]: _, ...rest } = s.portForwardsByConnection
+
       return { portForwardsByConnection: rest }
     }),
 
   setDetectedPorts: (targetId, ports) =>
     set((s) => {
       const next = { ...s.detectedPortsByConnection }
+
       if (ports.length > 0) {
         next[targetId] = ports
       } else {
         delete next[targetId]
       }
+
       return { detectedPortsByConnection: next }
     })
 })

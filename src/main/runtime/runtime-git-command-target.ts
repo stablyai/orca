@@ -65,6 +65,7 @@ export type RuntimeGitRoute =
 
 export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRoute {
   const route = resolveGitRouteForHost(target.executionHostId)
+
   switch (route.kind) {
     case 'local':
       return { kind: 'local' }
@@ -81,12 +82,15 @@ export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRo
  */
 export function requireRuntimeGitProvider(target: RuntimeGitTarget): SshGitProvider | null {
   const route = runtimeGitRouteForTarget(target)
+
   if (route.kind === 'local') {
     return null
   }
+
   if (!route.provider) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return route.provider
 }
 
@@ -97,9 +101,11 @@ export function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOp
 
 export function normalizeRuntimeGitRelativePath(filePath: string): string {
   const relativePath = normalizeRuntimeRelativePath(filePath)
+
   if (relativePath === '') {
     // Why: an empty Git pathspec can mutate the whole worktree.
     throw new Error('invalid_relative_path')
   }
+
   return relativePath
 }

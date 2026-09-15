@@ -11,6 +11,7 @@ function makeCountingState(worktreeCount: number): {
 } {
   let reads = 0
   const tabsByWorktree: Record<string, unknown[]> = {}
+
   for (let i = 0; i < worktreeCount; i++) {
     tabsByWorktree[`repo::/wt-${i}`] = [
       { id: `term-${i}`, title: `Agent ${i}`, customTitle: null, type: 'terminal' }
@@ -33,6 +34,7 @@ function makeCountingState(worktreeCount: number): {
     agentStatusByPaneKey: {},
     get browserTabsByWorktree() {
       reads++
+
       return {}
     }
   } as unknown as AppState
@@ -55,20 +57,24 @@ function makeTitleCountingState(worktreeCount: number): {
   withOneAgentStatusChanged: () => AppState
 } {
   let titleReads = 0
+
   const leafIdFor = (index: number): string =>
     `${String(index).padStart(8, '0')}-1111-4111-8111-111111111111`
+
   const makeTab = (index: number, label: string): unknown => ({
     id: `title-term-${index}`,
     customTitle: null,
     ptyId: null,
     get title() {
       titleReads++
+
       return label
     }
   })
 
   const tabsByWorktree: Record<string, unknown[]> = {}
   const terminalLayoutsByTabId: Record<string, unknown> = {}
+
   for (let i = 0; i < worktreeCount; i++) {
     tabsByWorktree[`repo::/title-wt-${i}`] = [makeTab(i, `Agent ${i}`)]
     terminalLayoutsByTabId[`title-term-${i}`] = {
@@ -77,7 +83,9 @@ function makeTitleCountingState(worktreeCount: number): {
       expandedLeafId: null
     }
   }
+
   const changedPaneKey = `title-term-7:${leafIdFor(7)}`
+
   const agentStatusByPaneKey: AppState['agentStatusByPaneKey'] = {
     [changedPaneKey]: {
       state: 'working',
@@ -183,12 +191,14 @@ describe('mobile session publication cost', () => {
 
   it('builds content only for the worktree whose agent status changed', () => {
     const WORKTREES = 300
+
     const { state, titleReads, resetTitleReads, withOneAgentStatusChanged } =
       makeTitleCountingState(WORKTREES)
 
     const beforeByWorktree = new Map(
       buildMobileSessionTabSnapshots(state).map((snapshot) => [snapshot.worktree, snapshot])
     )
+
     const fullBuildReads = titleReads()
     resetTitleReads()
 
@@ -198,6 +208,7 @@ describe('mobile session publication cost', () => {
         snapshot
       ])
     )
+
     const rebuiltWorktrees = [...afterByWorktree]
       .filter(([worktreeId, snapshot]) => snapshot !== beforeByWorktree.get(worktreeId))
       .map(([worktreeId]) => worktreeId)
@@ -210,8 +221,11 @@ describe('mobile session publication cost', () => {
 
 // Distinct ids per test: the snapshot memo is module state shared in this file.
 const MOUNTED_WT = 'repo::/mounted-wt-0'
+
 const CONTROL_WT = 'repo::/mounted-wt-1'
+
 const MOUNTED_LEAF_ID = 'aaaaaaaa-1111-4111-8111-111111111111'
+
 const SPLIT_LEAF_ID = 'bbbbbbbb-1111-4111-8111-111111111111'
 
 function makeMountedState(tabIdPrefix: string): {
@@ -222,6 +236,7 @@ function makeMountedState(tabIdPrefix: string): {
 } {
   let titleReads = 0
   const mountedTabId = `${tabIdPrefix}-term-0`
+
   const state = {
     tabsByWorktree: {
       [MOUNTED_WT]: [
@@ -231,6 +246,7 @@ function makeMountedState(tabIdPrefix: string): {
           ptyId: null,
           get title() {
             titleReads++
+
             return 'Agent mounted'
           }
         }
@@ -260,6 +276,7 @@ function makeMountedState(tabIdPrefix: string): {
     agentStatusByPaneKey: {},
     browserTabsByWorktree: {}
   } as unknown as AppState
+
   return {
     state,
     mountedTabId,
@@ -277,6 +294,7 @@ function makeLiveSurface(tabId: string): {
 } {
   const panes = [{ id: 1, leafId: MOUNTED_LEAF_ID }]
   const ptyIdByPaneId = new Map<number, string | null>([[1, 'pty-live-1']])
+
   const manager = {
     getPanes: () => panes.map((pane) => ({ ...pane })),
     getActivePane: () => panes[0] ?? null,
@@ -284,6 +302,7 @@ function makeLiveSurface(tabId: string): {
     getNumericIdForLeaf: (leafId: string) =>
       panes.find((pane) => pane.leafId === leafId)?.id ?? null
   }
+
   const registration = {
     tabId,
     worktreeId: MOUNTED_WT,
@@ -292,6 +311,7 @@ function makeLiveSurface(tabId: string): {
     getPtyIdForPane: (paneId: number) => ptyIdByPaneId.get(paneId) ?? null,
     getTabWideAgentHintLeafId: () => MOUNTED_LEAF_ID
   } as unknown as Parameters<typeof registerRuntimeTerminalTab>[0]
+
   return {
     registration,
     setPtyId: (paneId, ptyId) => {
@@ -316,6 +336,7 @@ describe('mounted terminal surface memoization', () => {
   it('reuses a mounted worktree snapshot when its live pane state is unchanged', () => {
     const { state, mountedTabId, titleReads, resetTitleReads } = makeMountedState('mounted-a')
     const unregister = registerRuntimeTerminalTab(makeLiveSurface(mountedTabId).registration)
+
     try {
       const before = snapshotsByWorktree(state)
       resetTitleReads()
@@ -333,6 +354,7 @@ describe('mounted terminal surface memoization', () => {
     const { state, mountedTabId } = makeMountedState('mounted-b')
     const surface = makeLiveSurface(mountedTabId)
     const unregister = registerRuntimeTerminalTab(surface.registration)
+
     try {
       const before = snapshotsByWorktree(state)
 
@@ -353,6 +375,7 @@ describe('mounted terminal surface memoization', () => {
     const { state, mountedTabId } = makeMountedState('mounted-c')
     const surface = makeLiveSurface(mountedTabId)
     const unregister = registerRuntimeTerminalTab(surface.registration)
+
     try {
       snapshotsByWorktree(state)
 

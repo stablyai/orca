@@ -15,12 +15,17 @@ import {
 import { escapeRegex } from './string-utils'
 
 type DefinedFeatureInteractionId = (typeof FEATURE_INTERACTIONS)[number]['id']
+
 type MissingFeatureInteractionId = Exclude<FeatureInteractionId, DefinedFeatureInteractionId>
+
 type ExtraFeatureInteractionId = Exclude<DefinedFeatureInteractionId, FeatureInteractionId>
 
 const REPO_ROOT = join(__dirname, '..', '..')
+
 const SOURCE_ROOTS = ['src/main', 'src/renderer/src', 'src/preload']
+
 const PRODUCTION_FILE_PATTERN = /\.(ts|tsx)$/
+
 const TEST_FILE_PATTERN = /(?:^|\.)(test|spec)\.(ts|tsx)$/
 
 describe('feature interactions', () => {
@@ -31,6 +36,7 @@ describe('feature interactions', () => {
     ] extends [never, never]
       ? true
       : never = true
+
     const expectedIds: FeatureInteractionId[] = [
       'workspace-board',
       'workspace-agent-sessions',
@@ -90,6 +96,7 @@ describe('feature interactions', () => {
 
     expect(catalogMatchesPublicUnion).toBe(true)
     expect(FEATURE_INTERACTIONS.map((feature) => feature.id)).toEqual(expectedIds)
+
     for (const feature of FEATURE_INTERACTIONS) {
       expect(feature.interaction.length).toBeGreaterThan(0)
     }
@@ -202,13 +209,17 @@ describe('feature interactions', () => {
 
   it('keeps every catalog id wired to a production writer', () => {
     const productionText = collectProductionSourceText()
+
     const missingWriters = FEATURE_INTERACTIONS.map((feature) => feature.id).filter((id) => {
       const escaped = escapeRegex(id)
+
       const directRecord = new RegExp(
         `recordFeatureInteraction(?:\\?\\.)?\\(\\s*['"]${escaped}['"]`
       )
+
       const contextualTourRecord = new RegExp(`useContextualTour\\(\\s*['"]${escaped}['"]`)
       const runtimeMappingReturn = new RegExp(`return[^\\n]*['"]${escaped}['"]`)
+
       return (
         !directRecord.test(productionText) &&
         !contextualTourRecord.test(productionText) &&
@@ -222,6 +233,7 @@ describe('feature interactions', () => {
 
 function collectProductionSourceText(): string {
   const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(join(REPO_ROOT, root)))
+
   return files
     .sort()
     .map((file) => readFileSync(file, 'utf8'))
@@ -230,25 +242,33 @@ function collectProductionSourceText(): string {
 
 function collectSourceFiles(directory: string): string[] {
   const files: string[] = []
+
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry)
     const stats = statSync(path)
+
     if (stats.isDirectory()) {
       if (entry === 'node_modules' || entry === 'dist' || entry === 'out') {
         continue
       }
+
       files.push(...collectSourceFiles(path))
       continue
     }
+
     const repoRelativePath = relative(REPO_ROOT, path)
+
     if (!PRODUCTION_FILE_PATTERN.test(entry) || TEST_FILE_PATTERN.test(entry)) {
       continue
     }
+
     // Why: the catalog itself proves the id exists, not that runtime code writes it.
     if (repoRelativePath === 'src/shared/feature-interactions.ts') {
       continue
     }
+
     files.push(path)
   }
+
   return files
 }

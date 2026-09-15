@@ -20,14 +20,19 @@ export function useFloatingTerminalOrchestrationVisibility({
   const refreshOrchestrationSetupVisibility = useCallback(async (): Promise<void> => {
     if (isOrchestrationSetupDismissed()) {
       setShowOrchestrationSetup(false)
+
       return
     }
+
     if (!hasOrchestrationSetupMarker()) {
       setShowOrchestrationSetup(true)
+
       return
     }
+
     try {
       const status = await window.api.cli.getInstallStatus()
+
       if (mountedRef.current) {
         setShowOrchestrationSetup(!isOrcaCliAvailableOnPath(status))
       }
@@ -48,7 +53,9 @@ export function useFloatingTerminalOrchestrationVisibility({
     const handleSetupStateChange = (): void => {
       void refreshOrchestrationSetupVisibility()
     }
+
     window.addEventListener(ORCHESTRATION_SETUP_STATE_EVENT, handleSetupStateChange)
+
     return () => {
       window.removeEventListener(ORCHESTRATION_SETUP_STATE_EVENT, handleSetupStateChange)
     }

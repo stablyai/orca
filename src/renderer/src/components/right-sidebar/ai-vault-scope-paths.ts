@@ -26,18 +26,22 @@ function collectWorkspaceScopePaths(
   addAiVaultWorkspaceScopePath(accumulator, activeWorktree.path)
 
   const priorWorktreeIds = activeWorktree.priorWorktreeIds ?? []
+
   // Built once instead of rescanning every live worktree per prior id.
   const claimedComparisonPaths =
     priorWorktreeIds.length > 0 ? buildClaimedComparisonPaths(liveWorktrees, activeWorktree) : null
 
   for (const priorWorktreeId of priorWorktreeIds) {
     const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
+
     if (!parsed || parsed.repoId !== activeWorktree.repoId) {
       continue
     }
+
     if (isAiVaultWorkspaceScopePathClaimed(parsed.worktreePath, claimedComparisonPaths)) {
       continue
     }
+
     addAiVaultWorkspaceScopePath(accumulator, parsed.worktreePath)
   }
 
@@ -64,10 +68,12 @@ export function deriveAiVaultScopeSessionPaths(
   if (!activeWorktree) {
     return []
   }
+
   // Carries the workspace pass's dedupe keys forward, so the project pass does
   // not restart deduplication against a plain array.
   const accumulator = collectWorkspaceScopePaths(activeWorktree, liveWorktrees)
   const setupsByRepoId = buildProjectSetupsByRepoId(options.projectHostSetupProjection)
+
   for (const worktree of liveWorktrees) {
     if (
       worktree.repoId === activeWorktree.repoId ||
@@ -79,11 +85,13 @@ export function deriveAiVaultScopeSessionPaths(
       addAiVaultWorkspaceScopePath(accumulator, worktree.path)
     }
   }
+
   for (const setup of options.projectHostSetupProjection?.setups ?? []) {
     if (worktreeProjectKey(setup, setup) === options.activeProjectKey) {
       addAiVaultWorkspaceScopePath(accumulator, setup.path)
     }
   }
+
   return accumulator.paths
 }
 
@@ -91,11 +99,13 @@ function buildProjectSetupsByRepoId(
   projection?: ProjectHostSetupProjection
 ): Map<string, ProjectHostSetup[]> {
   const setupsByRepoId = new Map<string, ProjectHostSetup[]>()
+
   for (const setup of projection?.setups ?? []) {
     const setups: ProjectHostSetup[] = setupsByRepoId.get(setup.repoId) ?? []
     setups.push(setup)
     setupsByRepoId.set(setup.repoId, setups)
   }
+
   return setupsByRepoId
 }
 
@@ -104,9 +114,11 @@ function worktreeProjectKey(
   setup?: { projectId?: string | null; repoId?: string }
 ): string | null {
   const projectId = entry.projectId ?? setup?.projectId ?? null
+
   if (projectId) {
     return projectId.startsWith('repo:') ? projectId : `project:${projectId}`
   }
+
   return entry.repoId ? `repo:${entry.repoId}` : null
 }
 
@@ -129,13 +141,17 @@ function createScopePathAccumulator(): ScopePathAccumulator {
 
 function addAiVaultWorkspaceScopePath(accumulator: ScopePathAccumulator, pathValue: string): void {
   const trimmedPath = pathValue.trim()
+
   if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
     return
   }
+
   const comparisonPath = normalizeRuntimePathForComparison(trimmedPath)
+
   if (accumulator.comparisonKeys.has(comparisonPath)) {
     return
   }
+
   accumulator.comparisonKeys.add(comparisonPath)
   accumulator.paths.push(trimmedPath)
 }
@@ -154,16 +170,21 @@ function buildClaimedComparisonPaths(
   activeWorktree: Pick<Worktree, 'id'>
 ): Set<string> {
   const claimedPaths = new Set<string>()
+
   for (const worktree of liveWorktrees) {
     if (worktree.id === activeWorktree.id) {
       continue
     }
+
     const trimmedPath = worktree.path.trim()
+
     if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath)) {
       continue
     }
+
     claimedPaths.add(normalizeRuntimePathForComparison(trimmedPath))
   }
+
   return claimedPaths
 }
 
@@ -172,9 +193,11 @@ function isAiVaultWorkspaceScopePathClaimed(
   claimedComparisonPaths: Set<string> | null
 ): boolean {
   const trimmedPath = pathValue.trim()
+
   if (!trimmedPath || !isRuntimePathAbsolute(trimmedPath) || !claimedComparisonPaths) {
     return false
   }
+
   // AI Vault sessions are keyed by cwd only, so any live worktree now owning this path wins.
   return claimedComparisonPaths.has(normalizeRuntimePathForComparison(trimmedPath))
 }

@@ -12,6 +12,7 @@ import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 describe('worker-start prompt budget', () => {
   it('refuses an 8 MiB Task spec whose fake-Windows ingest outlives RPC grace', async () => {
     const spec = 'x'.repeat(8 * 1024 * 1024)
+
     const prompt = buildDispatchPreamble({
       taskId: 'task_test',
       dispatchId: 'ctx_test',

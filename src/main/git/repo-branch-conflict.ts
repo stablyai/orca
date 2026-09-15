@@ -38,6 +38,7 @@ async function probeLocalBranchRef(
   try {
     // Quiet absence avoids retrying the WSL probe through a login shell.
     const { stdout } = await runGit(exec, ['rev-parse', '--verify', '--quiet', ref], options)
+
     return stdout.trim().length > 0 ? 'present' : 'unknown'
   } catch (error) {
     return isShowRefNoMatchError(error) ? 'absent' : 'unknown'
@@ -50,6 +51,7 @@ async function listRemoteNamesViaExec(
 ): Promise<string[]> {
   try {
     const { stdout } = await runGit(exec, ['remote'], options)
+
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -66,11 +68,14 @@ function buildRemoteBranchConflictRefs(
   allowedBaseRef: string | undefined
 ): string[] {
   const refs = new Set<string>()
+
   for (const remoteName of remoteNames) {
     const ref = `refs/remotes/${remoteName}/${branchName}`
+
     if (!isSafeGitRefName(ref)) {
       continue
     }
+
     // Match the conflict policy's longest-remote-prefix interpretation when
     // remote names overlap (for example, `foo` and `foo/bar`).
     if (
@@ -80,6 +85,7 @@ function buildRemoteBranchConflictRefs(
       refs.add(ref)
     }
   }
+
   return [...refs]
 }
 
@@ -94,10 +100,12 @@ async function probeAnyRemoteConflictRef(
   if (batchedExec) {
     // A present ref is always decisive, so `found` never survives with `unknown` set.
     const batched = await probeAnyExactRefBatched(batchedExec, candidateRefs, probeOptions)
+
     if (!batched.unknown) {
       return { found: batched.found }
     }
   }
+
   return probeAnyExactRef(exec, candidateRefs, probeOptions)
 }
 
@@ -113,19 +121,23 @@ export async function getBranchConflictKindViaExec(
   if (!canQueryRemoteBranchName(branchName)) {
     return null
   }
+
   // Preserve the host runner's existing output/timeout contract. Exact probes
   // are quiet, so introducing a smaller implicit cap would only make a large
   // remote configuration look like a missing conflict.
   const probeOptions: ExactRefProbeExecOptions = options
   const localRef = `refs/heads/${branchName}`
   let presence = await probeLocalBranchRef(exec, localRef, probeOptions)
+
   if (allowLocalBranch && presence !== 'absent') {
     if (await allowLocalBranch()) {
       return null
     }
+
     // Adoption can span ref changes; preserve the fresh conflict check after it fails.
     presence = await probeLocalBranchRef(exec, localRef, probeOptions)
   }
+
   if (presence === 'present') {
     return 'local'
   }
@@ -133,6 +145,7 @@ export async function getBranchConflictKindViaExec(
   try {
     const remoteNames = await listRemoteNamesViaExec(exec, probeOptions)
     const candidateRefs = buildRemoteBranchConflictRefs(remoteNames, branchName, allowedBaseRef)
+
     if (candidateRefs.length === 0) {
       return null
     }
@@ -158,6 +171,7 @@ export function getBranchConflictKind(
   allowLocalBranch?: () => Promise<boolean>
 ): Promise<BranchConflictKind | null> {
   const execOptions = gitExecOptions(path, options)
+
   const runLocalGit = (
     argv: string[],
     commandOptions?: ExactRefProbeExecOptions & { stdin?: string },
@@ -170,6 +184,7 @@ export function getBranchConflictKind(
       ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs }),
       ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
     })
+
   return getBranchConflictKindViaExec(
     runLocalGit,
     branchName,
@@ -190,8 +205,10 @@ function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefi
   if (!allowedBaseRef) {
     return false
   }
+
   const normalizedAllowedRef = allowedBaseRef.startsWith('refs/remotes/')
     ? allowedBaseRef
     : `refs/remotes/${allowedBaseRef}`
+
   return refName === normalizedAllowedRef
 }

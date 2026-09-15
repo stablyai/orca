@@ -5,10 +5,12 @@ const { beforeCopyMock } = vi.hoisted(() => ({ beforeCopyMock: vi.fn() }))
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
       beforeCopyMock(...args)
+
       return actual.copyFileSync(...args)
     }
   }
@@ -23,12 +25,15 @@ import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 
 function sourceFiles(databasePath: string): Map<string, Buffer> {
   const files = new Map<string, Buffer>()
+
   for (const suffix of ['', '-wal', '-shm'] as const) {
     const path = databasePath + suffix
+
     if (existsSync(path)) {
       files.set(suffix, readFileSync(path))
     }
   }
+
   return files
 }
 
@@ -166,7 +171,9 @@ describe('createChromiumCookieSnapshot', () => {
       if (source !== sourcePath) {
         return
       }
+
       mainCopyAttempts += 1
+
       if (mainCopyAttempts === 1) {
         throw Object.assign(new Error('EBUSY: resource busy or locked, copyfile'), {
           code: 'EBUSY'

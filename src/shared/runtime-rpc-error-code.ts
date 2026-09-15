@@ -15,24 +15,31 @@ const CODE_TOKEN_BOUNDARY = /(?:: |\n)[ \t]*$/
 
 function endsWithCodeToken(text: string, expectedCode: string): boolean {
   const trimmed = text.trimEnd()
+
   if (!trimmed.endsWith(expectedCode)) {
     return false
   }
+
   const prefix = trimmed.slice(0, -expectedCode.length)
+
   return prefix.trim() === '' || CODE_TOKEN_BOUNDARY.test(prefix)
 }
 
 export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): boolean {
   const seen = new Set<unknown>()
   let current = error
+
   while (!seen.has(current)) {
     if (typeof current === 'string') {
       return endsWithCodeToken(current, expectedCode)
     }
+
     if (!current || typeof current !== 'object') {
       return false
     }
+
     seen.add(current)
+
     const candidate = current as {
       cause?: unknown
       code?: unknown
@@ -40,6 +47,7 @@ export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): bo
       error?: { code?: unknown; message?: unknown }
       response?: { error?: { code?: unknown; message?: unknown } }
     }
+
     // Machine tokens are checked before messages so a subclass with a human-readable message still classifies by code.
     if (
       candidate.code === expectedCode ||
@@ -48,11 +56,13 @@ export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): bo
     ) {
       return true
     }
+
     const messages = [
       candidate.message,
       candidate.error?.message,
       candidate.response?.error?.message
     ]
+
     if (
       messages.some(
         (message) => typeof message === 'string' && endsWithCodeToken(message, expectedCode)
@@ -60,7 +70,9 @@ export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): bo
     ) {
       return true
     }
+
     current = candidate.cause
   }
+
   return false
 }

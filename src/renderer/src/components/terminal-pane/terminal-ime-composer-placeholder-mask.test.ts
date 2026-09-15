@@ -11,6 +11,7 @@ import {
 } from './terminal-ime-composition-route'
 
 const CODEX_PLACEHOLDER = 'Ask Codex to do anything'
+
 const openTerminals: Terminal[] = []
 
 function nextEventLoop(): Promise<void> {
@@ -38,12 +39,16 @@ function openTerminal(): Rig {
   const element = terminal.element
   const textarea = terminal.textarea
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!element || !textarea || !compositionView) {
     throw new Error('xterm did not create its terminal composition elements')
   }
+
   const mask = installTerminalImeComposerPlaceholderMask(terminal)
+
   const write = (data: string): Promise<void> =>
     new Promise((resolve) => terminal.write(data, resolve))
+
   const writeAwaitingRender = async (data: string): Promise<void> => {
     await write(data)
     await new Promise<void>((resolve) => {
@@ -53,6 +58,7 @@ function openTerminal(): Rig {
       })
     })
   }
+
   const compose = (preedit = '아'): void => {
     textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
     textarea.value = preedit
@@ -60,6 +66,7 @@ function openTerminal(): Rig {
     Object.defineProperty(update, 'data', { value: preedit })
     textarea.dispatchEvent(update)
   }
+
   const endComposition = async (commit = '아'): Promise<void> => {
     textarea.value = commit
     const end = new CompositionEvent('compositionend', { bubbles: true })
@@ -68,6 +75,7 @@ function openTerminal(): Rig {
     await nextEventLoop()
     await nextEventLoop()
   }
+
   return {
     compose,
     compositionView,
@@ -108,9 +116,11 @@ describe('terminal IME composer placeholder mask', () => {
   afterEach(async () => {
     await nextEventLoop()
     await nextEventLoop()
+
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
@@ -273,12 +283,15 @@ describe('terminal IME composer placeholder mask', () => {
     await rig.write(codexPlaceholderFrame())
 
     const newestId = 2048
+
     for (let id = 1; id <= newestId; id += 1) {
       dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, id)
     }
+
     for (let id = 1; id < newestId; id += 1) {
       dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, id)
     }
+
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
 
     dispatchSession(rig, XTERM_COMPOSITION_SESSION_END_EVENT, newestId)

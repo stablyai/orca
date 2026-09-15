@@ -25,27 +25,36 @@ export function recordVisibilityResumeInventoryReceipt(args: {
     hostAuthoritative,
     runtimeId
   } = args
+
   if (!isCurrentSessionTabsRuntimeFrame(environmentId, runtimeId)) {
     return []
   }
+
   for (const snapshot of snapshots) {
     omissions.delete(sessionTabsFreshnessKey(environmentId, snapshot.worktree))
   }
+
   if (!batch || batch.visibilityGeneration !== visibilityGeneration) {
     return []
   }
+
   const environment = batch.environments.get(environmentId)
+
   if (!environment) {
     return []
   }
+
   environment.latestInventoryReceivedFrame = Math.max(
     environment.latestInventoryReceivedFrame,
     inventoryReceivedFrame
   )
+
   if (environment.latestInventoryReceivedFrame !== inventoryReceivedFrame) {
     return []
   }
+
   const publishedWorktrees = new Set(snapshots.map((snapshot) => snapshot.worktree))
+
   return buildMissingWebSessionTabsRemovals(
     environmentId,
     environment.trackedWorktrees,
@@ -65,6 +74,7 @@ export function recordVisibilityResumeInventoryReceipt(args: {
       missing.snapshot.worktree,
       inventoryReceivedFrame
     )
+
     return {
       environmentId,
       inventoryReceivedFrame,
@@ -84,22 +94,30 @@ export function recordVisibilityResumeInventory(args: {
 }): void {
   const { batch, environmentId, visibilityGeneration, inventoryReceivedFrame, missingWorktrees } =
     args
+
   if (!batch || visibilityGeneration === 0 || batch.visibilityGeneration !== visibilityGeneration) {
     return
   }
+
   const environment = batch.environments.get(environmentId)
+
   if (!environment || environment.latestInventoryReceivedFrame !== inventoryReceivedFrame) {
     return
   }
+
   const affectedWorktrees = new Set(environment.pendingMissingWorktrees)
+
   for (const worktreeId of environment.pendingMissingWorktrees) {
     const pendingMissing = batch.pendingMissingByWorktree.get(worktreeId)
     pendingMissing?.delete(environmentId)
+
     if (pendingMissing?.size === 0) {
       batch.pendingMissingByWorktree.delete(worktreeId)
     }
   }
+
   environment.pendingMissingWorktrees.clear()
+
   for (const missing of missingWorktrees) {
     const worktreeId = missing.snapshot.worktree
     const pendingMissing = batch.pendingMissingByWorktree.get(worktreeId) ?? new Map()
@@ -108,9 +126,11 @@ export function recordVisibilityResumeInventory(args: {
     environment.pendingMissingWorktrees.add(worktreeId)
     affectedWorktrees.add(worktreeId)
   }
+
   if (!environment.inventoryReceived) {
     environment.inventoryReceived = true
     batch.pendingInventoryCount -= 1
   }
+
   args.reconcileWorktrees(affectedWorktrees)
 }

@@ -43,6 +43,7 @@ describe('PTY provider process inspection', () => {
 
   it('preserves non-stale renderer inspection failures', async () => {
     const failure = new Error('daemon unavailable')
+
     const provider = {
       inspectProcess: vi.fn().mockRejectedValue(failure)
     } as unknown as IPtyProvider
@@ -70,6 +71,7 @@ describe('PTY provider process inspection', () => {
       verdict: 'unverifiable' as const,
       reason: 'transport_loss' as const
     }
+
     const inspectProcess = vi.fn().mockResolvedValue(inspection)
     const provider = { inspectProcess } as unknown as IPtyProvider
 
@@ -79,6 +81,7 @@ describe('PTY provider process inspection', () => {
   it('falls back to the existing provider process APIs', async () => {
     const getForegroundProcess = vi.fn().mockResolvedValue('codex')
     const hasChildProcesses = vi.fn().mockResolvedValue(true)
+
     const provider = {
       getForegroundProcess,
       hasChildProcesses

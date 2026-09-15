@@ -5,9 +5,11 @@ import { SKILL_COMMAND_SPECS } from './skills'
 
 function spec(path: string): (typeof SKILL_COMMAND_SPECS)[number] {
   const found = SKILL_COMMAND_SPECS.find((entry) => entry.path.join(' ') === path)
+
   if (!found) {
     throw new Error(`Missing skill spec: ${path}`)
   }
+
   return found
 }
 

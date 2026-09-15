@@ -48,12 +48,16 @@ function collectSelectItems(
         collectSelectItems(child, found)
       }
     }
+
     return found
   }
+
   const props = node.props as { value?: unknown; children?: React.ReactNode }
+
   if (node.type === SelectItem && typeof props.value === 'string') {
     found.push([props.value, String(props.children)])
   }
+
   return collectSelectItems(props.children ?? null, found)
 }
 
@@ -69,6 +73,7 @@ describe('AutomationSchedulePicker', () => {
       'Custom cron',
       'auto.components.automations.AutomationSchedulePicker.ddba78647e'
     ])
+
     for (const [value, fallbackLabel, labelKey] of AUTOMATION_SCHEDULE_PRESET_OPTIONS) {
       expect(value).not.toBe('')
       expect(fallbackLabel).not.toBe('')
@@ -95,6 +100,7 @@ describe('AutomationSchedulePicker', () => {
     ['es', 'domingo', 'lunes']
   ])('translates every weekday option in %s (#14404)', async (locale, sunday, monday) => {
     await i18n.changeLanguage(locale)
+
     // Radix renders SelectContent only when open, so walk the element tree the picker builds.
     const dayOptions = collectSelectItems(
       AutomationSchedulePicker({

@@ -26,17 +26,22 @@ describe('useMobileNativeChatReadability', () => {
       ok: true,
       result: { repos: [{ id: 'repo', connectionId }] }
     })
+
     const client = {
       sendRequest
     } as unknown as RpcClient
+
     function Harness(): null {
       readable = useMobileNativeChatReadability(client, worktreeId)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()
     })
+
     return sendRequest
   }
 
@@ -64,6 +69,7 @@ describe('useMobileNativeChatReadability', () => {
 
   it('fails closed immediately while a reused route resolves its new worktree', async () => {
     let resolveNext: (response: unknown) => void = () => {}
+
     const client = {
       sendRequest: vi
         .fn()
@@ -73,10 +79,13 @@ describe('useMobileNativeChatReadability', () => {
         })
         .mockImplementationOnce(() => new Promise((resolve) => (resolveNext = resolve)))
     } as unknown as RpcClient
+
     function Harness({ worktreeId }: { worktreeId: string }): null {
       readable = useMobileNativeChatReadability(client, worktreeId)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness, { worktreeId: 'local-repo::/one' }))
       await Promise.resolve()

@@ -29,11 +29,14 @@ export function useActiveSkillDiscoveryRuntimeTarget(): RuntimeClientTarget | nu
     if (!state.runtimeEnvironmentCatalogSettled) {
       return UNRESOLVED
     }
+
     const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
+
     return environmentId
       ? formatOwnerKey(environmentId, getPairingRevision(state.runtimeEnvironments, environmentId))
       : null
   })
+
   return useMemo(
     () =>
       ownerKey === UNRESOLVED
@@ -59,5 +62,6 @@ function getPairingRevision(
   environmentId: string
 ): number | undefined {
   const environment = environments.find((entry) => entry.id === environmentId)
+
   return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
 }

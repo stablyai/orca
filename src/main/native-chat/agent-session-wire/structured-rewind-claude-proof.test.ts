@@ -17,12 +17,15 @@ function setup() {
     phase: 'prepared',
     retained: []
   }
+
   const store: Pick<AgentSessionRecordStore, 'transitionHandoff'> = {
     transitionHandoff: async (_sessionId, transition) => {
       current = transition(current)
+
       return current
     }
   }
+
   return {
     store,
     record: () => current,
@@ -35,12 +38,14 @@ function setup() {
 describe('Claude rewind durable proof checkpoints', () => {
   it('atomically checkpoints the exact target and resumable head before owner publication', async () => {
     const state = setup()
+
     const proofs = claudeRewindAcquisitionProofs({
       store: state.store,
       record: state.record(),
       now: () => 3_000,
       rewind: { previousLeafUuid: 'tip', targetUuid: 'kept' }
     })
+
     await expect(proofs.rewind!.onProved!('wrong')).rejects.toThrow('proof-mismatch')
     expect(state.record().rewind?.phase).toBe('prepared')
     expect(state.record().providerHandleChain.at(-1)?.handle).toMatchObject({ leafUuid: 'tip' })
@@ -61,12 +66,14 @@ describe('Claude rewind durable proof checkpoints', () => {
   })
   it('restores prepared recovery through ordinary proof without carrying rewind authorization', async () => {
     const state = setup()
+
     const proofs = claudeRewindAcquisitionProofs({
       store: state.store,
       record: state.record(),
       now: () => 3_000,
       rewind: undefined
     })
+
     expect(proofs.rewind).toBeUndefined()
     expect(proofs.rewindRecovery?.leafUuid).toBe('tip')
     expect(state.record().rewind?.phase).toBe('prepared')
@@ -76,12 +83,14 @@ describe('Claude rewind durable proof checkpoints', () => {
   })
   it('refuses a proof checkpoint from a superseded acquisition', async () => {
     const state = setup()
+
     const proofs = claudeRewindAcquisitionProofs({
       store: state.store,
       record: state.record(),
       now: () => 3_000,
       rewind: { previousLeafUuid: 'tip', targetUuid: 'kept' }
     })
+
     state.setFence()
     await expect(proofs.rewind!.onProved!('kept')).rejects.toThrow('checkpoint_stale')
     expect(state.record().rewind?.phase).toBe('prepared')

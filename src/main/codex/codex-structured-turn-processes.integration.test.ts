@@ -8,15 +8,19 @@ import {
 function nextLine(child: ChildProcessWithoutNullStreams): Promise<string> {
   return new Promise((resolve, reject) => {
     let buffer = ''
+
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString('utf8')
       const newline = buffer.indexOf('\n')
+
       if (newline === -1) {
         return
       }
+
       child.stdout.off('data', onData)
       resolve(buffer.slice(0, newline))
     }
+
     child.once('error', reject)
     child.stdout.on('data', onData)
   })
@@ -25,6 +29,7 @@ function nextLine(child: ChildProcessWithoutNullStreams): Promise<string> {
 function processExists(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -46,7 +51,9 @@ describe.runIf(process.platform !== 'win32')('Codex structured turn process term
       ],
       { stdio: ['pipe', 'pipe', 'pipe'] }
     )
+
     let commandPid = 0
+
     try {
       const baseline = await captureCodexTurnProcesses(root.pid!)
       root.stdin.write('start\n')
@@ -59,6 +66,7 @@ describe.runIf(process.platform !== 'win32')('Codex structured turn process term
       if (commandPid > 0 && processExists(commandPid)) {
         process.kill(commandPid, 'SIGKILL')
       }
+
       root.kill('SIGKILL')
     }
   }, 15_000)
@@ -79,8 +87,10 @@ describe.runIf(process.platform !== 'win32')('Codex structured turn process term
       ],
       { stdio: ['pipe', 'pipe', 'pipe'] }
     )
+
     let persistentPid = 0
     let commandPid = 0
+
     try {
       persistentPid = Number(await nextLine(root))
       const baseline = await captureCodexTurnProcesses(root.pid!)
@@ -94,9 +104,11 @@ describe.runIf(process.platform !== 'win32')('Codex structured turn process term
       if (persistentPid > 0 && processExists(persistentPid)) {
         process.kill(persistentPid, 'SIGKILL')
       }
+
       if (commandPid > 0 && processExists(commandPid)) {
         process.kill(commandPid, 'SIGKILL')
       }
+
       root.kill('SIGKILL')
     }
   }, 15_000)

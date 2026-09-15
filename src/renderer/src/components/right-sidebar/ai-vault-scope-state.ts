@@ -10,9 +10,11 @@ export function normalizeAiVaultScopeForContext(args: {
   if (args.scope === 'project' && !args.activeProjectKey) {
     return 'all'
   }
+
   if (args.scope === 'workspace' && !args.activeWorktreePath) {
     return 'all'
   }
+
   return args.scope
 }
 

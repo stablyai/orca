@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { RelayRegionSchema } from './relay-region-probe'
 
 const Counter = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+
 export const RelayRegionWindowSchema = z
   .object({
     generation: Counter,
@@ -21,6 +22,7 @@ export const RelayRegionCorrectionResponseSchema = z
   .strict()
 
 export type RelayRegionWindow = z.infer<typeof RelayRegionWindowSchema>
+
 export type RelayRegionDecision =
   | { outcome: 'conclusive'; measurements: Record<z.infer<typeof RelayRegionSchema>, number> }
   | {
@@ -32,6 +34,7 @@ export type RelayRegionDecision =
         | 'insufficient-improvement'
         | 'expired-window'
     }
+
 export type RelayRegionCorrectionRequest =
   | { v: 1; action: 'issue-window' }
   | ({

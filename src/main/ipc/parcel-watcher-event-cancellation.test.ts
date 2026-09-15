@@ -1,19 +1,25 @@
 import { setImmediate } from 'node:timers/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
 const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
+
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
+
 import {
   createWatcherProcessEventDeliveryQueue,
   prepareWatcherProcessEvents
 } from './parcel-watcher-event-delivery'
 
 const delivery = { includeDirectoryMetadata: true, maxEventsPerBatch: 100 }
+
 const directory = { isDirectory: () => true }
+
 const events = (prefix: string, count: number) =>
   Array.from({ length: count }, (_, index) => ({
     type: 'update' as const,
     path: `/${prefix}/${index}`
   }))
+
 beforeEach(() => {
   statMock.mockReset()
 })
@@ -25,6 +31,7 @@ describe('closed watcher metadata work', () => {
       if (path.startsWith('/held/')) {
         await gate.promise
       }
+
       return directory
     })
     const held = prepareWatcherProcessEvents(events('held', 8), delivery)
@@ -34,6 +41,7 @@ describe('closed watcher metadata work', () => {
     const onError = vi.fn()
     const queue = createWatcherProcessEventDeliveryQueue(delivery, deliver, onError)
     let live: ReturnType<typeof prepareWatcherProcessEvents> | undefined
+
     try {
       queue.enqueue(events('closed', 32))
       queue.close()
@@ -60,11 +68,13 @@ describe('closed watcher metadata work', () => {
     const gate = Promise.withResolvers<void>()
     statMock.mockImplementation(async () => {
       await gate.promise
+
       return directory
     })
     const deliver = vi.fn(async () => undefined)
     const onError = vi.fn()
     const queue = createWatcherProcessEventDeliveryQueue(delivery, deliver, onError)
+
     try {
       queue.enqueue(events('active', 32))
       await setImmediate()

@@ -28,13 +28,19 @@ import {
 import { gcRelayNativeDepsCache } from './ssh-relay-native-deps-cache-gc'
 
 const POSIX = getRemoteHostPlatform('linux-x64')
+
 const WINDOWS = getRemoteHostPlatform('win32-x64')
+
 const HOME = '/home/u'
+
 const DEPS = { 'node-pty': '1.1.0', '@parcel/watcher': '2.5.6' } as const
+
 const KEY = computeRelayNativeDepsCacheKey({ platform: 'linux-x64', deps: DEPS })
+
 const RELAY_DIR = `${HOME}/.orca-remote/relay-0.1.0+aaa`
 
 const conn = {} as SshConnection
+
 const mockExec = vi.mocked(execCommand)
 
 function refsOk(...targets: string[]): string {
@@ -71,11 +77,13 @@ describe('computeRelayNativeDepsCacheKey', () => {
       deps: DEPS,
       patchSources: [{ filename: 'node-pty-1.1.0-patch.cjs', contents: 'a' }]
     })
+
     const withChangedPatch = computeRelayNativeDepsCacheKey({
       platform: 'linux-x64',
       deps: DEPS,
       patchSources: [{ filename: 'node-pty-1.1.0-patch.cjs', contents: 'b' }]
     })
+
     expect(withPatch).not.toBe(KEY)
     expect(withChangedPatch).not.toBe(withPatch)
   })
@@ -120,6 +128,7 @@ describe('ensureRelayNativeDepsCacheCommand', () => {
     for (const [name, version] of Object.entries(DEPS)) {
       expect(command).toContain(`grep -F -q '"${name}":"${version}"' "$pj"`)
     }
+
     expect(command).toContain('[ -d "$cand/node-pty" ] || continue')
   })
 })

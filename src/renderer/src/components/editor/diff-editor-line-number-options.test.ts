@@ -38,6 +38,7 @@ function createMockCodeEditor(initialLineNumbers: editor.LineNumbersType = 'on')
     },
     onDidChangeConfiguration: (listener: () => void) => {
       listeners.add(listener)
+
       return {
         dispose: () => {
           listeners.delete(listener)
@@ -59,6 +60,7 @@ describe('applyDiffEditorLineNumberOptions', () => {
   it('reapplies desired line number options after parent option updates and stops after dispose', () => {
     const original = createMockCodeEditor('on')
     const modified = createMockCodeEditor('on')
+
     const diffEditor = {
       getOriginalEditor: () => original.editor,
       getModifiedEditor: () => modified.editor

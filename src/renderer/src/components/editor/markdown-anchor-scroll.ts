@@ -6,17 +6,22 @@ export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string)
   if (!root || !anchor) {
     return
   }
+
   let decoded = anchor
+
   try {
     decoded = decodeURIComponent(anchor)
   } catch {
     // Malformed %-escapes: fall back to the raw fragment.
   }
+
   const headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6')
   const slugger = new MarkdownHeadingSlugger()
+
   for (const heading of headings) {
     if (slugger.slug(heading.textContent ?? '') === decoded) {
       heading.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
       return
     }
   }

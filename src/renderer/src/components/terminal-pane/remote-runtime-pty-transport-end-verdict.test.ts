@@ -5,6 +5,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -33,6 +34,7 @@ describe('remote runtime PTY stream end verdict', () => {
     const onExit = vi.fn()
     const onDisconnect = vi.fn()
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -63,6 +65,7 @@ describe('remote runtime PTY stream end verdict', () => {
     const onExit = vi.fn()
     const onDisconnect = vi.fn()
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',

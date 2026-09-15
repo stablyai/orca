@@ -11,6 +11,7 @@ import {
   type GitHubApiRepository
 } from '../../github-api-repository'
 import { hostedReviewLocalGitOptionArgs, sameOwnerRepo } from './../github-exec-scope'
+
 export async function getRepoSlug(
   repoPath: string,
   connectionId?: string | null,
@@ -36,25 +37,31 @@ export async function getRepoUpstream(
 ): Promise<OwnerRepo | null> {
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
+
   const { ownerRepo: origin, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     undefined,
     connectionId,
     localGitOptions
   )
+
   if (!origin) {
     return null
   }
+
   const upstreamRemote = await getGitHubApiRepositoryForRemote(
     repoPath,
     'upstream',
     connectionId,
     localGitOptions
   )
+
   if (upstreamRemote && !sameOwnerRepo(upstreamRemote, origin)) {
     return upstreamRemote
   }
+
   await acquire()
+
   try {
     // Why: positional slugs bypass the runner's --repo qualifier, so the slug
     // itself must carry the Enterprise host.
@@ -66,12 +73,15 @@ export async function getRepoUpstream(
         timeout: 10_000
       }
     )
+
     const data = JSON.parse(stdout) as {
       isFork?: boolean
       parent?: { name?: string; owner?: { login?: string } } | null
     }
+
     const owner = data.parent?.owner?.login
     const repo = data.parent?.name
+
     // Why: a fork parent lives on the same server as the fork.
     return data.isFork && owner && repo
       ? { owner, repo, ...(origin.host ? { host: origin.host } : {}) }

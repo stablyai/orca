@@ -30,17 +30,23 @@ export function setPaneGpuRenderingState(
   enabled: boolean
 ): void {
   const pane = panes.get(paneId)
+
   if (!pane) {
     return
   }
+
   pane.gpuRenderingEnabled = enabled
+
   if (!enabled) {
     disposeWebgl(pane, { refreshDimensions: true })
+
     return
   }
+
   if (pane.webglAttachmentDeferred || pane.webglDisabledAfterContextLoss) {
     return
   }
+
   if (!pane.webglAddon) {
     attachWebgl(pane)
     safeFit(pane)
@@ -52,6 +58,7 @@ export function markPaneComplexScriptOutput(
   paneId: number
 ): void {
   const pane = panes.get(paneId)
+
   if (pane) {
     markComplexScriptOutput(pane)
   }
@@ -62,6 +69,7 @@ export function suspendPaneRendering(
   retention?: { owner: object; livePanes: () => Iterable<ManagedPaneInternal> }
 ): void {
   const suspended = Array.from(panes)
+
   // Why: both branches must leave a suspended pane in the same state; only the retention
   // branch below used to blur. Defence in depth, not a measured cost — display:none and
   // inert both make Chromium blur the pane itself, and disposeWebgl kills the blink timer
@@ -77,11 +85,13 @@ export function suspendPaneRendering(
     // 5-minute idle timeout. Parking the option makes it unconditional.
     suspendTerminalCursorBlink(pane.terminal)
   }
+
   // Keep recent hidden worktrees on live WebGL so switch-back never presents
   // DOM-fallback frames; evicted/over-cap owners fall back to dispose.
   if (retention && tryRetainHiddenPanesWebgl(retention.owner, retention.livePanes)) {
     return
   }
+
   for (const pane of suspended) {
     disposeWebgl(pane)
   }
@@ -94,6 +104,7 @@ export function resumePaneRendering(
   if (retentionOwner) {
     releaseHiddenWebglRetention(retentionOwner)
   }
+
   for (const pane of panes) {
     clearTerminalWebglAttachBackoff(pane)
     // Before the attach below so a freshly constructed WebglRenderer already samples
@@ -104,13 +115,16 @@ export function resumePaneRendering(
     // Reveal can retry before the next resume, so both paths share the bounded loss policy.
     clearPaneWebglContextLossForRetry(pane)
     pane.webglRebuildDeferred = false
+
     if (pane.webglAddon && isPaneWebglContextLost(pane)) {
       disposeWebgl(pane)
     }
+
     if (rebuildDeferred && pane.webglAddon) {
       rebuildAttachedWebgl(pane)
       continue
     }
+
     reattachWebglIfNeeded(pane)
   }
 }

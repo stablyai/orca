@@ -23,6 +23,7 @@ export function createBrowserCookieImportActions(
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
+
       if (runtimeEnvironmentId) {
         set((state) =>
           browserImportStateForHostUpdate(state, hostId, {
@@ -34,6 +35,7 @@ export function createBrowserCookieImportActions(
         )
         // Why: tracked across the try so a failed fallback RPC still reports the machine it ran on.
         let ranOnClient = false
+
         try {
           // Why: client-hosted pages render on this desktop, so their logins live
           // here -- detecting and importing on the headless remote finds nothing.
@@ -43,7 +45,9 @@ export function createBrowserCookieImportActions(
             browserFamily,
             browserProfile
           })
+
           ranOnClient = clientHostResult != null
+
           const result =
             clientHostResult ??
             (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
@@ -52,6 +56,7 @@ export function createBrowserCookieImportActions(
               { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
               { timeoutMs: 30_000 }
             ))
+
           if (result.ok) {
             set((state) =>
               browserImportStateForHostUpdate(state, hostId, {
@@ -61,6 +66,7 @@ export function createBrowserCookieImportActions(
                 error: null
               })
             )
+
             if (getBrowserSettingsHostId(get()) === hostId) {
               await get()
                 .fetchBrowserSessionProfiles()
@@ -76,6 +82,7 @@ export function createBrowserCookieImportActions(
               })
             )
           }
+
           return retainCookieImportExecutionHost(
             result,
             hostId,
@@ -92,6 +99,7 @@ export function createBrowserCookieImportActions(
               error: reason
             })
           )
+
           return retainCookieImportExecutionHost(
             { ok: false as const, reason },
             hostId,
@@ -100,6 +108,7 @@ export function createBrowserCookieImportActions(
           )
         }
       }
+
       set((state) =>
         browserImportStateForHostUpdate(state, hostId, {
           profileId,
@@ -108,12 +117,14 @@ export function createBrowserCookieImportActions(
           error: null
         })
       )
+
       try {
         const result = (await window.api.browser.sessionImportFromBrowser({
           profileId,
           browserFamily,
           browserProfile
         })) as BrowserCookieImportResult
+
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
@@ -124,6 +135,7 @@ export function createBrowserCookieImportActions(
               error: null
             })
           )
+
           if (getBrowserSettingsHostId(get()) === hostId) {
             await get()
               .fetchBrowserSessionProfiles()
@@ -139,6 +151,7 @@ export function createBrowserCookieImportActions(
             })
           )
         }
+
         return retainCookieImportExecutionHost(result, hostId, executionHostLabel, 'client')
       } catch (err) {
         const reason = String((err as Error)?.message ?? err)
@@ -150,6 +163,7 @@ export function createBrowserCookieImportActions(
             error: reason
           })
         )
+
         return retainCookieImportExecutionHost(
           { ok: false as const, reason },
           hostId,
@@ -162,6 +176,7 @@ export function createBrowserCookieImportActions(
     clearDefaultSessionCookies: async () => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
@@ -170,20 +185,25 @@ export function createBrowserCookieImportActions(
             undefined,
             { timeoutMs: 15_000 }
           )
+
           if (result.cleared && getBrowserSettingsHostId(get()) === hostId) {
             await get().fetchBrowserSessionProfiles()
           }
+
           return result.cleared
         } catch {
           return false
         }
       }
+
       try {
         const ok = await window.api.browser.sessionClearDefaultCookies()
+
         if (ok && getBrowserSettingsHostId(get()) === hostId) {
           get().recordFeatureInteraction?.('cookie-import')
           await get().fetchBrowserSessionProfiles()
         }
+
         return ok
       } catch {
         return false

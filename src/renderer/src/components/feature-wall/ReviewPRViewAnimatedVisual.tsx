@@ -58,6 +58,7 @@ const SIDEBAR_TABS: readonly {
 
 function SidebarTabs(props: { active: SidebarTabId; interactiveChecks?: boolean }): JSX.Element {
   const checksShortcutLabel = useShortcutLabel('sidebar.checks.toggle')
+
   const checksTooltip =
     checksShortcutLabel === 'Unassigned' ? 'Checks' : `Checks (${checksShortcutLabel})`
 
@@ -67,6 +68,7 @@ function SidebarTabs(props: { active: SidebarTabId; interactiveChecks?: boolean 
         const Icon = tab.icon
         const isActive = tab.id === props.active
         const className = ['ravpr-tab', isActive ? 'is-active' : ''].filter(Boolean).join(' ')
+
         return (
           <span
             key={tab.id}

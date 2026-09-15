@@ -8,6 +8,7 @@ describe('mergeCapturedLeafState', () => {
       fresh: {},
       currentLeafIds: new Set(['pane:1', 'pane:2'])
     })
+
     expect(result).toEqual({ 'pane:1': 'old-buf-1', 'pane:2': 'old-buf-2' })
   })
 
@@ -17,6 +18,7 @@ describe('mergeCapturedLeafState', () => {
       fresh: { 'pane:1': 'new-buf-1' },
       currentLeafIds: new Set(['pane:1', 'pane:2'])
     })
+
     expect(result).toEqual({ 'pane:1': 'new-buf-1', 'pane:2': 'old-buf-2' })
   })
 
@@ -26,6 +28,7 @@ describe('mergeCapturedLeafState', () => {
       fresh: { 'pane:1': 'new-buf-1' },
       currentLeafIds: new Set(['pane:1'])
     })
+
     expect(result).toEqual({ 'pane:1': 'new-buf-1' })
     expect(result).not.toHaveProperty('pane:removed')
   })
@@ -36,6 +39,7 @@ describe('mergeCapturedLeafState', () => {
       fresh: {},
       currentLeafIds: new Set(['pane:1'])
     })
+
     expect(result).toEqual({})
   })
 
@@ -45,6 +49,7 @@ describe('mergeCapturedLeafState', () => {
       fresh: { 'pane:1': 'fresh' },
       currentLeafIds: new Set(['pane:1'])
     })
+
     expect(result).toEqual({ 'pane:1': 'fresh' })
   })
 
@@ -54,6 +59,7 @@ describe('mergeCapturedLeafState', () => {
       fresh: { 'pane:1': 'fresh', 'pane:rogue': 'should-be-dropped' },
       currentLeafIds: new Set(['pane:1'])
     })
+
     expect(result).toEqual({ 'pane:1': 'fresh' })
     expect(result).not.toHaveProperty('pane:rogue')
   })

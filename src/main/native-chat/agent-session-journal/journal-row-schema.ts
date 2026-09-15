@@ -45,6 +45,7 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
   'handle_forked',
   'schema_unreadable'
 ] as const
+
 export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[number]
 
 export type JournalItemRow = JournalRowBase & {
@@ -97,6 +98,7 @@ export type JournalLifecycleBatchRow = JournalRowBase & {
 }
 
 export const MAX_JOURNAL_LIFECYCLE_BATCH_BYTES = 1_500_000
+
 export const MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS = 200
 
 export type JournalRow =
@@ -133,23 +135,30 @@ export function serializeJournalRow(row: JournalRow): string {
  */
 export function parseJournalRow(line: string): JournalRowParse {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(line)
   } catch {
     return { ok: false, unreadable: false }
   }
+
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return { ok: false, unreadable: false }
   }
+
   const record = parsed as Record<string, unknown>
   const version = typeof record.v === 'number' ? record.v : null
+
   if (version === null || !Number.isInteger(version) || version < 1) {
     return { ok: false, unreadable: false }
   }
+
   if (version > AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
     return { ok: false, unreadable: true }
   }
+
   const upcast = upcastRow(record, version)
+
   return isJournalRow(upcast) ? { ok: true, row: upcast } : { ok: false, unreadable: false }
 }
 
@@ -157,11 +166,13 @@ export function parseJournalRow(line: string): JournalRowParse {
 function upcastRow(record: Record<string, unknown>, version: number): Record<string, unknown> {
   let current = record
   let at = version
+
   while (at < AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
     // No upcasters yet — v1 is the first shipped schema. New cases go here.
     current = { ...current, v: at + 1 }
     at += 1
   }
+
   return current
 }
 
@@ -179,6 +190,7 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
   if (typeof record.kind !== 'string' || !ROW_KINDS.has(record.kind)) {
     return false
   }
+
   if (
     typeof record.epoch !== 'string' ||
     !record.epoch ||
@@ -189,6 +201,7 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
   ) {
     return false
   }
+
   if (record.kind === 'item') {
     return (
       typeof record.itemId === 'string' &&
@@ -196,9 +209,11 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
       isAdmissibleAgentJournalItemBody(record.body)
     )
   }
+
   if (record.kind === 'tombstone') {
     return typeof record.itemId === 'string' && Number.isInteger(record.revision)
   }
+
   if (record.kind === 'submission') {
     return (
       typeof record.clientMessageId === 'string' &&
@@ -208,6 +223,7 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
       isAdmissibleAgentJournalMessageBody(record.body)
     )
   }
+
   if (record.kind === 'dispatch') {
     return (
       typeof record.clientMessageId === 'string' &&
@@ -218,6 +234,7 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
       (record.reason === null || typeof record.reason === 'string')
     )
   }
+
   if (record.kind === 'lifecycle-batch') {
     return (
       typeof record.settlementId === 'string' &&
@@ -229,6 +246,7 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
       record.mutations.every(isLifecycleMutation)
     )
   }
+
   return typeof record.reason === 'string' && isPlainObject(record.providerHandle)
 }
 
@@ -236,9 +254,11 @@ function isLifecycleMutation(value: unknown): value is JournalLifecycleMutation 
   if (!isPlainObject(value) || typeof value.itemId !== 'string') {
     return false
   }
+
   if (value.kind === 'tombstone') {
     return Number.isInteger(value.revision)
   }
+
   return (
     value.kind === 'item' &&
     Number.isInteger(value.revision) &&

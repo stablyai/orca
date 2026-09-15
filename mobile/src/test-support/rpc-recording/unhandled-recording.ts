@@ -9,13 +9,16 @@ export function recordUnhandledRejections(
   if (active) {
     throw new Error('Recordings must run sequentially in each process')
   }
+
   active = true
   const previous = process.rawListeners('unhandledRejection')
   process.removeAllListeners('unhandledRejection')
   process.on('unhandledRejection', (error) => effect('unhandled-rejection', captureError(error)))
+
   return () => {
     active = false
     process.removeAllListeners('unhandledRejection')
+
     for (const listener of previous) {
       process.on('unhandledRejection', listener)
     }

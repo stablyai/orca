@@ -60,6 +60,7 @@ function asHelperTextarea(target: EventTarget | null): HTMLTextAreaElement | nul
   if (!(target instanceof HTMLTextAreaElement)) {
     return null
   }
+
   return target.classList.contains('xterm-helper-textarea') ? target : null
 }
 
@@ -109,9 +110,11 @@ function normalizeFieldText(value: string): string {
 function diffFieldEdit(prev: string, next: string): FieldEdit {
   const limit = Math.min(prev.length, next.length)
   let start = 0
+
   while (start < limit && prev[start] === next[start]) {
     start += 1
   }
+
   return { start, text: next.slice(start) }
 }
 
@@ -132,6 +135,7 @@ export function installTerminalIosHangulPreedit(
   options: TerminalIosHangulPreeditOptions
 ): TerminalIosHangulPreedit {
   const root = options.terminalElement
+
   if (!root) {
     return NO_OP_PREEDIT
   }
@@ -147,13 +151,17 @@ export function installTerminalIosHangulPreedit(
 
   const commit = (): void => {
     const open = preedit
+
     if (!open) {
       return
     }
+
     // A hold the IME never wrote to still owes the keystroke it swallowed.
     const text =
       open.heldText || (!open.imeWrote && isHangulJamoKeyText(open.openKey) ? open.openKey : '')
+
     close()
+
     if (text) {
       options.sendInput(text)
     }
@@ -161,9 +169,11 @@ export function installTerminalIosHangulPreedit(
 
   const discard = (textarea: HTMLTextAreaElement): void => {
     const open = preedit
+
     if (!open) {
       return
     }
+
     // The cancelled syllable never reached the PTY, so it must not survive in
     // the field either.
     textarea.value = open.baseValue
@@ -181,17 +191,23 @@ export function installTerminalIosHangulPreedit(
    */
   const sync = (textarea: HTMLTextAreaElement): void => {
     const open = preedit
+
     if (!open) {
       return
     }
+
     const value = normalizeFieldText(textarea.value)
+
     if (!value.startsWith(open.baseValue)) {
       // The field was rewritten out from under the hold; commit rather than
       // measure against text that is gone.
       commit()
+
       return
     }
+
     const tail = value.slice(open.baseValue.length)
+
     if (tail.length === 0) {
       // Backspace can decompose as delete-then-insert, so an emptied field is
       // not proof the syllable is gone — only that this half of the rewrite
@@ -200,9 +216,12 @@ export function installTerminalIosHangulPreedit(
       // undoing either way.
       open.heldText = ''
       render('')
+
       return
     }
+
     const edit = diffFieldEdit(open.heldText, tail)
+
     // An edit that wrote nothing settles nothing: a rewrite landing on the same
     // text, or a Backspace shortening the tail, is not the IME deciding.
     if (edit.start > 0 && edit.text.length > 0) {
@@ -210,6 +229,7 @@ export function installTerminalIosHangulPreedit(
       open.baseValue += settled
       options.sendInput(settled)
     }
+
     open.heldText = value.slice(open.baseValue.length)
     render(open.heldText)
   }
@@ -218,39 +238,52 @@ export function installTerminalIosHangulPreedit(
     if (!(event instanceof KeyboardEvent)) {
       return
     }
+
     const textarea = root.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!textarea) {
       return
     }
+
     if (preedit) {
       preedit.editKind = 'compose'
+
       if (event.key === 'Escape' && isUnmodified(event)) {
         // Escape cancels the syllable the way it cancels a composition. Stopped
         // here so xterm cannot also send it; the default action still lets the
         // IME clear its own state.
         event.stopImmediatePropagation()
         discard(textarea)
+
         return
       }
+
       if (event.key === 'Backspace' && isUnmodified(event)) {
         if (!preedit.heldText) {
           // Nothing left to decompose: this erase is the PTY's, and xterm sends it.
           close()
+
           return
         }
+
         // Backspace decomposes the held syllable in the field rather than
         // erasing a written cell, so it must not reach the PTY as DEL.
         preedit.editKind = 'erase'
         event.stopImmediatePropagation()
+
         return
       }
+
       if (isJamoKey(event)) {
         return
       }
+
       // Anything else ends the syllable, and runs before xterm sends the key.
       commit()
+
       return
     }
+
     if (
       isJamoKey(event) &&
       event.isComposing !== true &&
@@ -271,26 +304,33 @@ export function installTerminalIosHangulPreedit(
     if (!preedit) {
       return
     }
+
     const textarea = asHelperTextarea(event.target)
+
     if (!textarea) {
       return
     }
+
     if (isCompositionOwnedInput(event)) {
       // A session took the field over; it owns the commit from here. Read off
       // the event rather than the session state, so this cannot depend on which
       // `input` listener on the pane element happens to run first.
       commit()
+
       return
     }
+
     // Why: the field keeps the syllable so the IME can rewrite it, and xterm
     // must not read that as fresh input.
     event.stopImmediatePropagation()
     preedit.imeWrote = true
+
     if (preedit.editKind === 'compose' && isDeletion(event)) {
       // Half of the delete-then-insert the IME uses to replace a growing
       // syllable. Reading the field between the two would see it emptied.
       return
     }
+
     sync(textarea)
   }
 

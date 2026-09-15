@@ -36,11 +36,13 @@ export async function tryDeleteWslUncPath(
   options: { recursive?: boolean; approvedRoots?: readonly string[] } = {}
 ): Promise<boolean> {
   const info = parseWslPath(targetPath)
+
   if (!info) {
     return false
   }
 
   let command: string[]
+
   if (options.approvedRoots) {
     const contained = containedDeleteCommand(
       info,
@@ -48,18 +50,22 @@ export async function tryDeleteWslUncPath(
       parseWslPath,
       options.recursive === true
     )
+
     if (!contained) {
       throw new WslDeleteValidationError(
         'path-outside-known-roots',
         'Refusing WSL delete outside approved roots'
       )
     }
+
     command = contained
   } else {
     const flags = options.recursive ? '-rf' : '-f'
     command = ['rm', flags, '--', info.linuxPath]
   }
+
   await execFileWsl(info.distro, command)
+
   return true
 }
 
@@ -76,8 +82,10 @@ function execFileWsl(distro: string, command: string[]): Promise<void> {
       (error, _stdout, stderr) => {
         if (error) {
           reject(wslDeleteError(error, stderr))
+
           return
         }
+
         resolve()
       }
     )
@@ -87,11 +95,14 @@ function execFileWsl(distro: string, command: string[]): Promise<void> {
 function wslDeleteError(error: Error, stderr: string): Error {
   const detail = stderr.trim()
   const rejection = rejectionFromWslDeleteStderr(stderr)
+
   if (rejection) {
     return new WslDeleteValidationError(rejection, `Refusing WSL delete: ${detail}`)
   }
+
   if (!detail) {
     return error
   }
+
   return new Error(`Failed to delete WSL path: ${detail}`)
 }

@@ -47,7 +47,9 @@ import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation
 export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
 
 let currentLane: RealHomeCodexHookLane = 'pending'
+
 let installRetryAfterMs = 0
+
 let ensureInFlight: Promise<RealHomeCodexHookLane> = Promise.resolve(currentLane)
 
 export function getRealHomeCodexHookLane(): RealHomeCodexHookLane {
@@ -79,6 +81,7 @@ export function ensureRealHomeCodexHookState(args: {
   if (args.hooksEnabled && currentLane === 'unavailable' && Date.now() < installRetryAfterMs) {
     return Promise.resolve(currentLane)
   }
+
   // Why: this mutates the user's real ~/.codex and the module's lane state.
   // Concurrent pane launches must not interleave two of them, and the shared
   // config.toml lane keeps the rebase + grant pair atomic against the managed
@@ -87,6 +90,7 @@ export function ensureRealHomeCodexHookState(args: {
   // Why both handlers: a rejected predecessor must not poison every later
   // ensure for the process' lifetime.
   ensureInFlight = ensureInFlight.then(run, run)
+
   return ensureInFlight
 }
 
@@ -100,16 +104,19 @@ async function runRealHomeCodexHookEnsure(args: {
     currentLane = await runExclusivelyForCodexTrustConfig(getRealHomeConfigTomlPath(), () =>
       args.hooksEnabled ? installRealHomeCodexHook(args.userDataPath) : sweepRealHomeCodexHook()
     )
+
     if (!args.hooksEnabled || currentLane === 'installed') {
       installRetryAfterMs = 0
     }
   } catch (error) {
     console.warn('[codex-real-home-hooks] ensure failed; staying on managed lane:', error)
     currentLane = 'unavailable'
+
     if (args.hooksEnabled) {
       installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
     }
   }
+
   return currentLane
 }
 
@@ -121,17 +128,21 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
   // separate later read would let a concurrent save land between parse and
   // snapshot and be silently overwritten by the stale parse.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
+
   if (!config) {
     // Why: an unparseable user file must never be clobbered; without a hook
     // entry the managed lane keeps status working for this host.
     console.warn('[codex-real-home-hooks] could not parse', hooksJsonPath, '- managed lane kept')
     installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+
     return 'unavailable'
   }
+
   if (Object.keys(config).some((key) => key !== 'hooks')) {
     // Why: Codex rejects unknown root keys instead of ignoring them. Avoid a
     // transient rewrite of a user-owned file that the trust RPC cannot load.
     installRetryAfterMs = Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
+
     return 'unavailable'
   }
 
@@ -142,6 +153,7 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const nextHooks: Record<string, HookDefinition[]> = { ...config.hooks }
   const managedEntries: CodexTrustEntry[] = []
+
   for (const eventName of material.events) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const reconciled = reconcileManagedHookDefinition(current, isManagedCommand, material.command)
@@ -155,13 +167,16 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
     })
   }
+
   // Why: sweep stale Orca entries out of events the managed lane no longer
   // subscribes to, mirroring the managed installer's upgrade behavior.
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if ((material.events as readonly string[]).includes(eventName) || !Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -171,6 +186,7 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
 
   const previousMode = previousRaw === null ? undefined : statSync(hooksWritePath).mode
   backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
+
   // Why: unknown top-level fields belong to the user (other managers'
   // metadata); unlike the managed-home writer, preserve them verbatim.
   const trustConfigSnapshot = await mutateRealHomeHooksPreservingUserTrust({
@@ -197,6 +213,7 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
     telemetryLane: 'real-home',
     useDefaultCodexHome: true
   })
+
   if (grant.lane === 'rpc') {
     return 'installed'
   }
@@ -214,10 +231,12 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
       restoreCodexTrustConfig(getRealHomeConfigTomlPath(), trustConfigSnapshot)
     }
   }
+
   installRetryAfterMs = getInstallRetryAfterMs(grant.reason)
   console.warn(
     `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, managed lane kept`
   )
+
   return 'unavailable'
 }
 
@@ -232,35 +251,43 @@ async function sweepRealHomeCodexHook(): Promise<RealHomeCodexHookLane> {
   // Why: single read — the pre-write generation guard must compare against
   // the exact bytes this sweep's parse came from.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
+
   if (!config) {
     // Why: a failed or malformed read proves no cleanup; keep the managed lane
     // until a later pass can inspect and remove the real-home entry.
     return 'unavailable'
   }
+
   if (!config.hooks || previousRaw === null) {
     return 'removed'
   }
+
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const material = getCodexManagedHookInstallMaterial()
   const nextHooks: Record<string, HookDefinition[]> = { ...config.hooks }
   let removedAny = false
+
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (
       cleaned.length !== definitions.length ||
       cleaned.some((definition, index) => definition !== definitions[index])
     ) {
       removedAny = true
     }
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
       nextHooks[eventName] = cleaned
     }
   }
+
   if (removedAny) {
     const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
     const previousMode = statSync(hooksWritePath).mode
@@ -283,6 +310,7 @@ async function sweepRealHomeCodexHook(): Promise<RealHomeCodexHookLane> {
       },
       restoreHooks: () => restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
     })
+
     // Why: dead [hooks.state] blocks for a removed hook are Orca-owned records;
     // dropping them keeps the user's config.toml from accumulating orphans.
     // Verify ownership by the expected hash or grant ledger: stale/mixed hook
@@ -300,6 +328,7 @@ async function sweepRealHomeCodexHook(): Promise<RealHomeCodexHookLane> {
       console.warn('[codex-real-home-hooks] failed to drop Orca trust entries:', error)
     }
   }
+
   return 'removed'
 }
 

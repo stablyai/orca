@@ -10,11 +10,13 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
     inner: Map<string, { clientId: string; lastActedAt: number }>
   ): { clientId: string; lastActedAt: number } | null {
     let best: { clientId: string; lastActedAt: number } | null = null
+
     for (const sub of inner.values()) {
       if (best === null || sub.lastActedAt > best.lastActedAt) {
         best = sub
       }
     }
+
     return best
   }
 
@@ -29,10 +31,12 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
     >
   ): { previousCols: number; previousRows: number } | null {
     let best: { subscribedAt: number; previousCols: number; previousRows: number } | null = null
+
     for (const sub of inner.values()) {
       if (sub.previousCols == null || sub.previousRows == null) {
         continue
       }
+
       if (best === null || sub.subscribedAt < best.subscribedAt) {
         best = {
           subscribedAt: sub.subscribedAt,
@@ -41,6 +45,7 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
         }
       }
     }
+
     return best ? { previousCols: best.previousCols, previousRows: best.previousRows } : null
   }
 
@@ -78,22 +83,29 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
   protected resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number } {
     // 1. Earliest-by-subscribedAt subscriber with non-null baseline.
     const inner = this.mobileSubscribers.get(ptyId)
+
     if (inner) {
       const earliest = this.pickEarliestRestoreTarget(inner)
+
       if (earliest) {
         return { cols: earliest.previousCols, rows: earliest.previousRows }
       }
     }
+
     // 2. Most-recent desktop renderer geometry report.
     const renderer = this.lastRendererSizes.get(ptyId)
+
     if (renderer) {
       return { cols: renderer.cols, rows: renderer.rows }
     }
+
     // 3. Current PTY size.
     const size = this.getTerminalSize(ptyId)
+
     if (size) {
       return { cols: size.cols, rows: size.rows }
     }
+
     // 4. Hard default.
     return { cols: 80, rows: 24 }
   }
@@ -106,14 +118,17 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
     if (prev.kind !== next.kind) {
       return false
     }
+
     if (prev.kind === 'phone' && next.kind === 'phone') {
       return prev.ownerClientId === next.ownerClientId
     }
+
     if (prev.kind === 'remote-desktop' && next.kind === 'remote-desktop') {
       // Why: each owner's claim promise gates its following input. Sharing a
       // waiter across owners could release A's input only after B's grid lands.
       return prev.ownerSubscriptionKey === next.ownerSubscriptionKey
     }
+
     return true
   }
 
@@ -125,23 +140,30 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
     }
 
     let entry = this.layoutQueues.get(ptyId)
+
     if (!entry) {
       entry = { running: null, pending: [] }
       this.layoutQueues.set(ptyId, entry)
     }
+
     const queue = entry
 
     return new Promise<ApplyLayoutResult>((resolve) => {
       if (!queue.running) {
         queue.running = this.runLayoutSlot(ptyId, target, [resolve])
+
         return
       }
+
       const tail = queue.pending.at(-1)
+
       if (tail && this.coalescesWith(tail.target, target)) {
         tail.target = target
         tail.waiters.push(resolve)
+
         return
       }
+
       queue.pending.push({ target, waiters: [resolve] })
     })
   }
@@ -152,6 +174,7 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
     waiters: ((r: ApplyLayoutResult) => void)[]
   ): Promise<ApplyLayoutResult> {
     let result: ApplyLayoutResult
+
     try {
       result = await this.applyLayout(ptyId, target)
     } catch (err) {
@@ -161,15 +184,19 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
       console.error('[layout] applyLayout threw', { ptyId, err })
       result = { ok: false, reason: 'resize-failed' }
     }
+
     for (const w of waiters) {
       w(result)
     }
 
     const queue = this.layoutQueues.get(ptyId)
+
     if (!queue) {
       return result
     }
+
     const next = queue.pending.shift()
+
     if (next) {
       queue.running = this.runLayoutSlot(ptyId, next.target, next.waiters)
     } else {
@@ -178,6 +205,7 @@ export class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWithReclaimTe
       // across short-lived PTYs.
       this.layoutQueues.delete(ptyId)
     }
+
     return result
   }
 }

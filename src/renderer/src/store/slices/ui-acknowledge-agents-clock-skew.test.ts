@@ -10,8 +10,11 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 // read and its auto-ack effect re-fired on each new millisecond — the React #185 update loop.
 
 const NOW = new Date('2026-06-02T12:00:00Z').getTime()
+
 const SKEW_MS = 90_000
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 function makeAgentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {

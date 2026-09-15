@@ -87,6 +87,7 @@ describe('hasRenderableUsage', () => {
     const snapshot = makeSnapshot({
       claudeAccounts: [{ id: 'a', email: 'x@y.z' }]
     })
+
     expect(hasRenderableUsage(snapshot, 'claude')).toBe(true)
   })
 
@@ -100,6 +101,7 @@ describe('hasRenderableUsage', () => {
         session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null }
       })
     })
+
     expect(hasRenderableUsage(snapshot, 'codex')).toBe(true)
   })
 
@@ -107,6 +109,7 @@ describe('hasRenderableUsage', () => {
     const snapshot = makeSnapshot({
       claudeLimits: makeLimits({ status: 'unavailable' })
     })
+
     expect(hasRenderableUsage(snapshot, 'claude')).toBe(false)
     expect(hasRenderableUsage(makeSnapshot(), 'claude')).toBe(false)
   })
@@ -118,6 +121,7 @@ describe('getInactiveProviderUsage', () => {
       status: 'ok',
       session: { usedPercent: 52, windowMinutes: 300, resetsAt: null, resetDescription: null }
     })
+
     const snapshot = makeSnapshot({
       inactiveClaudeAccounts: [
         { accountId: 'account-1', rateLimits: limits, updatedAt: 123, isFetching: false }

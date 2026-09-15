@@ -96,6 +96,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/event-race'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const newerReview: HostedReviewInfo = {
       provider: 'github',
       number: 12,
@@ -143,6 +144,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/start-race'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const newerReview: HostedReviewInfo = {
       provider: 'github',
       number: 12,
@@ -153,6 +155,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
     }
+
     const stalePR = makePR({ number: 12, title: 'Stale PR status' })
 
     store.setState({
@@ -245,6 +248,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/event-same-ms'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const existingReview: HostedReviewInfo = {
       provider: 'github',
       number: 12,
@@ -373,6 +377,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/gitlab-review'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const gitlabReview: HostedReviewInfo = {
       provider: 'gitlab',
       number: 5,
@@ -423,6 +428,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const runtimeHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, settings, repoId)
     const localHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
     const localChecksCacheKey = `${repoId}::${prChecksCacheSuffix(12, null, 'head-oid')}`
+
     const runtimeChecksCacheKey = `runtime:env-1::${repoId}::${prChecksCacheSuffix(
       12,
       null,
@@ -559,6 +565,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/github-null-then-gitlab'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const gitlabReview: HostedReviewInfo = {
       provider: 'gitlab',
       number: 5,
@@ -617,6 +624,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/github-hit-then-gitlab'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const gitlabReview: HostedReviewInfo = {
       provider: 'gitlab',
       number: 5,
@@ -698,6 +706,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/gitlab'
     const cacheKey = `${repoId}::${branch}`
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const gitlabReview = {
       provider: 'gitlab' as const,
       number: 5,

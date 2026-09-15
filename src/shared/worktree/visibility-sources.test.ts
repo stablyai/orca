@@ -44,6 +44,7 @@ describe('worktree visibility sources', () => {
       [{ id: 'team', rootPath: 'C:\\Users\\Dev\\Team' }],
       []
     )
+
     expect(windows('c:\\users\\dev\\team\\feature')).toEqual({
       kind: 'custom',
       id: 'team'
@@ -54,6 +55,7 @@ describe('worktree visibility sources', () => {
       [{ id: 'linux', rootPath: '//wsl$/Ubuntu/home/dev/team' }],
       []
     )
+
     expect(wsl('//wsl.localhost/Ubuntu/home/dev/team/feature')).toEqual({
       kind: 'custom',
       id: 'linux'
@@ -67,6 +69,7 @@ describe('worktree visibility sources', () => {
       [],
       ['/repo/.claude/worktrees']
     )
+
     expect(classify('/repo/.claude/worktrees/review')).toBeNull()
     expect(classify('/repo/.gsd-workspaces/phase-1')).toEqual({ kind: 'built-in', id: 'gsd' })
   })
@@ -97,6 +100,7 @@ describe('worktree visibility sources', () => {
       [],
       ['/repo/.claude/worktrees/OrbisCXM']
     )
+
     expect(classify('/repo/.claude/worktrees/Other/agent-1')).toEqual({
       kind: 'built-in',
       id: 'claude'
@@ -110,6 +114,7 @@ describe('worktree visibility sources', () => {
       [{ id: 'overlap', rootPath: '/repo/.claude/worktrees' }],
       ['/repo/.claude/worktrees']
     )
+
     expect(classify('/repo/.claude/worktrees/review')).toEqual({ kind: 'custom', id: 'overlap' })
   })
 
@@ -119,6 +124,7 @@ describe('worktree visibility sources', () => {
       [{ id: 'overlap', rootPath: '/repo/.claude/worktrees' }],
       []
     )
+
     expect(classify('/repo/.claude/worktrees/review')).toEqual({
       kind: 'built-in',
       id: 'claude'
@@ -134,6 +140,7 @@ describe('worktree visibility sources', () => {
       })),
       []
     )
+
     const normalize = vi.spyOn(String.prototype, 'normalize')
 
     classify('/unmatched/worktree')
@@ -148,6 +155,7 @@ describe('worktree visibility sources', () => {
       [],
       ['/repo/.claude/worktrees']
     )
+
     const normalize = vi.spyOn(String.prototype, 'normalize')
 
     classify('/repo/.claude/worktrees/review')
@@ -174,6 +182,7 @@ describe('worktree visibility sources', () => {
         custom: { team: 'show' as const }
       }
     }
+
     const inherited = repo()
 
     expect(effectiveBuiltInWorktreeSourceVisibility(inherited, 'gsd', defaults)).toBe('show')
@@ -192,18 +201,22 @@ describe('worktree visibility sources', () => {
       external: 'hide' as const,
       customSources: [{ id: 'global', rootPath: '/srv/global-worktrees' }]
     }
+
     for (const checkout of ['/repos/alpha', '/repos/beta']) {
       const current = repo({ path: checkout })
+
       const classify = createWorktreeVisibilitySourceMatcher(
         [checkout],
         resolveCustomWorktreeVisibilitySources(current, defaults),
         []
       )
+
       expect(classify('/srv/global-worktrees/feature')).toEqual({
         kind: 'custom',
         id: 'global'
       })
     }
+
     expect(
       buildDefaultWorktreeSourcePreferenceUpdate(defaults, { kind: 'custom', id: 'global' }, 'hide')
     ).toEqual({ custom: { global: 'hide' } })
@@ -231,6 +244,7 @@ describe('worktree visibility sources', () => {
       id: `bad-${index}`,
       rootPath: 'relative'
     }))
+
     expect(
       normalizeCustomWorktreeVisibilitySources([...invalid, { id: 'team', rootPath: '/srv/team' }])
     ).toEqual([{ id: 'team', rootPath: '/srv/team' }])

@@ -59,6 +59,7 @@ function transport(
   overrides: Partial<RemoteServerUpdateTransport> = {}
 ): RemoteServerUpdateTransport {
   let clock = 0
+
   return {
     getRuntimeStatus: vi.fn(async () => status('1.4.0')),
     getUpdaterStatus: vi.fn(async () => availableSnapshot),
@@ -128,6 +129,7 @@ describe('remote server update inventory', () => {
 
   it('checks the explicitly selected prerelease channel on the remote server', async () => {
     const check = vi.fn(async () => availableSnapshot)
+
     const result = await inspectRemoteServerUpdate(environment, '1.4.0', transport({ check }), {
       includePrerelease: false,
       includePerfPrerelease: true
@@ -148,7 +150,9 @@ describe('remote server update execution', () => {
       { ...availableSnapshot, status: { state: 'downloading', percent: 45, version: '1.5.0' } },
       { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
     ] satisfies RemoteServerUpdaterSnapshot[]
+
     const progress: RemoteServerUpdateEntry[] = []
+
     const result = await runRemoteServerUpdate(
       availableEntry(),
       transport({
@@ -172,12 +176,14 @@ describe('remote server update execution', () => {
 
   it('fails when no offered update reaches the requested version', async () => {
     const noUpdate = { ...availableSnapshot, status: { state: 'not-available' } } as const
+
     const result = await runRemoteServerUpdate(
       availableEntry(),
       transport({ getUpdaterStatus: async () => noUpdate }),
       () => undefined,
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
+
     expect(result).toMatchObject({
       phase: 'failed',
       error: 'The server updater did not offer the requested Orca version.'
@@ -250,18 +256,21 @@ describe('remote server update execution', () => {
       ...availableSnapshot,
       status: { state: 'error', message: 'download failed' }
     } as const
+
     const failedDownload = await runRemoteServerUpdate(
       availableEntry(),
       transport({ getUpdaterStatus: async () => updaterError }),
       () => undefined,
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 10, pollIntervalMs: 1 } }
     )
+
     expect(failedDownload).toMatchObject({ phase: 'failed', error: 'download failed' })
 
     const snapshots = [
       availableSnapshot,
       { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
     ] satisfies RemoteServerUpdaterSnapshot[]
+
     const sameRuntime = await runRemoteServerUpdate(
       availableEntry(),
       transport({
@@ -271,6 +280,7 @@ describe('remote server update execution', () => {
       () => undefined,
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 2, pollIntervalMs: 1 } }
     )
+
     expect(sameRuntime).toMatchObject({
       phase: 'failed',
       error: 'The server did not reconnect on the updated version.'
@@ -282,7 +292,9 @@ describe('remote server update execution', () => {
       availableSnapshot,
       { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
     ] satisfies RemoteServerUpdaterSnapshot[]
+
     let installed = false
+
     const result = await runRemoteServerUpdate(
       availableEntry(),
       transport({
@@ -292,6 +304,7 @@ describe('remote server update execution', () => {
             : (snapshots.shift() ?? availableSnapshot),
         install: async (): Promise<RemoteServerUpdateInstallResult> => {
           installed = true
+
           return {
             accepted: true,
             fromVersion: '1.4.0',
@@ -305,6 +318,7 @@ describe('remote server update execution', () => {
       () => undefined,
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 60, pollIntervalMs: 1 } }
     )
+
     expect(result).toMatchObject({ phase: 'failed', error: INSTALL_FAILURE })
   })
 
@@ -313,7 +327,9 @@ describe('remote server update execution', () => {
       availableSnapshot,
       { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
     ] satisfies RemoteServerUpdaterSnapshot[]
+
     let reconnectTicks = 0
+
     const result = await runRemoteServerUpdate(
       availableEntry(),
       transport({
@@ -325,6 +341,7 @@ describe('remote server update execution', () => {
           },
         getRuntimeStatus: async () => {
           reconnectTicks += 1
+
           return reconnectTicks > 1
             ? status('1.5.0', 'runtime-new')
             : status('1.4.0', 'runtime-old')
@@ -333,6 +350,7 @@ describe('remote server update execution', () => {
       () => undefined,
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 60, pollIntervalMs: 1 } }
     )
+
     expect(result).toMatchObject({ phase: 'updated', currentVersion: '1.5.0' })
   })
 
@@ -341,14 +359,17 @@ describe('remote server update execution', () => {
       availableSnapshot,
       { ...availableSnapshot, status: { state: 'downloaded', version: '1.5.0' } }
     ] satisfies RemoteServerUpdaterSnapshot[]
+
     const result = await runRemoteServerUpdate(
       availableEntry(),
       transport({
         getUpdaterStatus: async () => {
           const next = snapshots.shift()
+
           if (!next) {
             throw new Error('connection refused')
           }
+
           return next
         },
         getRuntimeStatus: async () => status('1.4.0', 'runtime-old')
@@ -356,6 +377,7 @@ describe('remote server update execution', () => {
       () => undefined,
       { timing: { operationTimeoutMs: 10, reconnectTimeoutMs: 6, pollIntervalMs: 1 } }
     )
+
     expect(result).toMatchObject({
       phase: 'failed',
       error: 'The server did not reconnect on the updated version.'
@@ -372,6 +394,7 @@ describe('remote server update execution', () => {
       }),
       () => undefined
     )
+
     expect(result).toMatchObject({
       phase: 'failed',
       error: 'This server must be updated manually through its service manager.'
@@ -382,23 +405,28 @@ describe('remote server update execution', () => {
     let active = 0
     let peak = 0
     const release: (() => void)[] = []
+
     const entries = Array.from({ length: 5 }, (_, index) => ({
       ...availableEntry(),
       environmentId: `server-${index}`
     }))
+
     const running = runRemoteServerUpdateBatch(entries, 2, async () => {
       active += 1
       peak = Math.max(peak, active)
       await new Promise<void>((resolve) => release.push(resolve))
       active -= 1
     })
+
     while (release.length < 2) {
       await Promise.resolve()
     }
+
     while (release.length > 0) {
       release.shift()?.()
       await Promise.resolve()
     }
+
     await running
     expect(peak).toBe(2)
   })

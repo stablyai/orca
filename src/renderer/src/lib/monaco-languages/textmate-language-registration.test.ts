@@ -3,6 +3,7 @@ import { registerTextMateLanguage } from './textmate-language-registration'
 
 function createMonacoMock(registeredLanguages: { id: string }[] = []) {
   let tokensProviderFactory: { create: () => unknown } | undefined
+
   const monaco = {
     languages: {
       getLanguages: vi.fn(() => registeredLanguages),
@@ -11,6 +12,7 @@ function createMonacoMock(registeredLanguages: { id: string }[] = []) {
       registerTokensProviderFactory: vi.fn(
         (_languageId: string, factory: { create: () => unknown }) => {
           tokensProviderFactory = factory
+
           return { dispose: vi.fn() }
         }
       )
@@ -23,6 +25,7 @@ function createMonacoMock(registeredLanguages: { id: string }[] = []) {
       if (!tokensProviderFactory) {
         throw new Error('Tokens provider factory was not registered')
       }
+
       return tokensProviderFactory.create()
     }
   }
@@ -31,10 +34,12 @@ function createMonacoMock(registeredLanguages: { id: string }[] = []) {
 describe('registerTextMateLanguage', () => {
   it('registers metadata and lazily installs the TextMate tokens provider', async () => {
     const { monaco, createTokensProvider } = createMonacoMock()
+
     const provider = {
       getInitialState: vi.fn(),
       tokenize: vi.fn()
     }
+
     const createTextMateTokensProvider = vi.fn(async () => provider)
     const loadProviderModule = vi.fn(async () => ({ createTextMateTokensProvider }))
     const loadGrammar = vi.fn()

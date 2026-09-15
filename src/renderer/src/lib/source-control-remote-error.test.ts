@@ -57,13 +57,17 @@ describe('source-control remote error formatting', () => {
     const protectedError = new Error(
       'git push failed: Command failed: git push origin main\nremote: error: GH006 protected branch update failed.\nremote: lint status is required'
     )
+
     const preReceiveError = new Error(
       'git push failed: Command failed: git push origin main\nremote: pre-receive hook declined\nremote: eslint failed'
     )
+
     const authError = new Error(
       'git push failed: Command failed: git push origin main\nremote: Repository not found.\nfatal: Authentication failed'
     )
+
     const nffError = new Error('updates were rejected because the remote contains work')
+
     const submoduleError = new Error(
       "Command failed: git push\nUnable to push submodule 'deps/lib'\nfatal: failed to push all needed submodules"
     )
@@ -89,6 +93,7 @@ describe('source-control remote error formatting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const progress = 'remote: Enumerating objects\r\n'.repeat(10_000)
+
     const error = new Error(
       `${progress}fatal: unable to access https://token:secret@example.com/repo.git\r\n`
     )
@@ -96,15 +101,19 @@ describe('source-control remote error formatting', () => {
     const result = resolveRemoteOperationErrorMessage(error, { publish: true })
 
     expect(result).toContain('Publish Branch failed. unable to access https://example.com/repo.git')
+
     const usedLineSplit = splitSpy.mock.calls.some(([separator]) => {
       if (typeof separator === 'string') {
         return separator === '\n'
       }
+
       return separator instanceof RegExp && separator.source === '\\r?\\n'
     })
+
     const usedCrlfReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
     )
+
     expect(usedLineSplit).toBe(false)
     expect(usedCrlfReplace).toBe(false)
   })

@@ -20,7 +20,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTerminalImeCandidateAnchor } from '@/lib/pane-manager/terminal-ime-candidate-anchor'
 
 const CELL_WIDTH_PX = 8
+
 const CELL_HEIGHT_PX = 16
+
 const THEME = { background: '#112233', cursor: '#ddeeff', foreground: '#aabbcc' }
 
 const openTerminals: Terminal[] = []
@@ -57,9 +59,11 @@ function stubCompositionLayout(preeditWidth: () => number): void {
       if (this.classList.contains('xterm-composition-preedit')) {
         return DOMRect.fromRect({ height: CELL_HEIGHT_PX, width: preeditWidth() })
       }
+
       if (this.classList.contains('xterm-screen')) {
         return DOMRect.fromRect({ height: 24 * CELL_HEIGHT_PX, width: 80 * CELL_WIDTH_PX })
       }
+
       return DOMRect.fromRect({ height: 0, width: 0 })
     }
   )
@@ -68,19 +72,24 @@ function stubCompositionLayout(preeditWidth: () => number): void {
 function openTerminal(options: RigOptions = {}): Rig {
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   const terminal = new Terminal({
     cols: 80,
     rows: 24,
     theme: options.theme ?? THEME,
     cursorWidth: options.cursorWidth
   })
+
   terminal.open(container)
   const textarea = terminal.textarea
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!textarea || !compositionView) {
     throw new Error('xterm did not create the helper textarea and composition view')
   }
+
   openTerminals.push(terminal)
+
   if (options.withCandidateAnchor && !installTerminalImeCandidateAnchor(terminal)) {
     throw new Error('the candidate anchor did not install on an opened terminal')
   }
@@ -92,6 +101,7 @@ function openTerminal(options: RigOptions = {}): Rig {
       }
     }
   )._core._renderService.dimensions.css.cell
+
   cell.width = CELL_WIDTH_PX
   cell.height = CELL_HEIGHT_PX
 
@@ -170,9 +180,11 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     // updateCompositionElements re-arms on a timer; let the pending one run before dispose.
     await nextEventLoop()
     await nextEventLoop()
+
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
@@ -339,6 +351,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const rig = openTerminal({
       theme: { background: '#ffffff', foreground: '#223344' }
     })
+
     await rig.write('안녕')
 
     rig.compose('한')
@@ -443,6 +456,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const rig = openTerminal({
       theme: { background: 'rgba(17, 34, 51, 0.6)', foreground: '#aabbcc' }
     })
+
     await rig.write('안녕하세요\x1b[6D')
 
     rig.compose('가')

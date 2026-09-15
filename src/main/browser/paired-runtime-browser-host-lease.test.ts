@@ -59,6 +59,7 @@ describe('PairedRuntimeBrowserHostLease', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return { requestId: 'browser-host', close, sendBinary: () => false }
       }
     )
@@ -111,6 +112,7 @@ describe('PairedRuntimeBrowserHostLease', () => {
       result: { accepted: true },
       _meta: { runtimeId: 'runtime-a' }
     })
+
     const { callbacks } = await subscribeLease({ sendRequest })
     const lease = createLease()
     const starting = lease.start()
@@ -189,10 +191,12 @@ describe('PairedRuntimeBrowserHostLease', () => {
     const { callbacks } = await subscribeLease()
     const page = inventoryPage()
     const getPageInventory = vi.fn(() => [page])
+
     const lease = createLease({
       pageInventoryProtocolVersion: 1,
       getPageInventory
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
 
@@ -217,17 +221,21 @@ describe('PairedRuntimeBrowserHostLease', () => {
 
   it('omits optional URLs deterministically to keep every page identity within budget', async () => {
     const { callbacks } = await subscribeLease()
+
     const inventory = Array.from({ length: 256 }, (_, index) => ({
       ...inventoryPage(),
       browserPageId: `page-${index.toString().padStart(3, '0')}`,
       currentUrl: `https://remote.internal/${index}/${'x'.repeat(4096)}`
     }))
+
     const lease = createLease({
       pageInventoryProtocolVersion: 1,
       getPageInventory: () => inventory
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+
     const attach = subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2] as {
       pageInventory: BrowserClientHostedPageInventory[]
     }
@@ -245,10 +253,12 @@ describe('PairedRuntimeBrowserHostLease', () => {
 
   it('treats a missing inventory echo as unsupported rather than accepted empty state', async () => {
     const { callbacks } = await subscribeLease()
+
     const lease = createLease({
       pageInventoryProtocolVersion: 1,
       getPageInventory: () => []
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse())
@@ -282,10 +292,12 @@ describe('PairedRuntimeBrowserHostLease', () => {
     ['failed', { status: 'failed', errorCode: 'navigation_failed' } as const]
   ])('submits a validated %s page command result', async (_caseName, result) => {
     const { callbacks, close, sendRequest } = await subscribeLease()
+
     const lease = createLease({
       pageCommandProtocolVersion: 1,
       onPageCommand: () => result
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
@@ -309,10 +321,12 @@ describe('PairedRuntimeBrowserHostLease', () => {
     sendRequest
       .mockResolvedValueOnce(commandResultAck(true))
       .mockResolvedValueOnce(commandResultAck(false))
+
     const lease = createLease({
       pageCommandProtocolVersion: 1,
       onPageCommand: () => ({ status: 'completed' })
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
@@ -331,20 +345,25 @@ describe('PairedRuntimeBrowserHostLease', () => {
     const acknowledgements = Array.from({ length: 8 }, () => deferredCommandResultAck())
     let active = 0
     let peak = 0
+
     const sendRequest = vi.fn().mockImplementation(() => {
       const acknowledgement = acknowledgements[sendRequest.mock.calls.length - 1]
       active += 1
       peak = Math.max(peak, active)
+
       return acknowledgement.promise.finally(() => {
         active -= 1
       })
     })
+
     const { callbacks } = await subscribeLease({ sendRequest })
+
     const lease = createLease({
       maxConcurrentCommandResults: 4,
       pageCommandProtocolVersion: 1,
       onPageCommand: () => ({ status: 'completed' })
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
@@ -370,10 +389,13 @@ describe('PairedRuntimeBrowserHostLease', () => {
 
   it('fails closed when unsettled command results exceed the explicit lease bound', async () => {
     const never = new Promise<never>(() => {})
+
     const { callbacks, close } = await subscribeLease({
       sendRequest: vi.fn(() => never)
     })
+
     const onError = vi.fn()
+
     const lease = createLease({
       maxConcurrentCommandResults: 1,
       maxUnsettledCommandResults: 2,
@@ -381,6 +403,7 @@ describe('PairedRuntimeBrowserHostLease', () => {
       onPageCommand: () => ({ status: 'completed' }),
       onError
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
@@ -436,11 +459,13 @@ describe('PairedRuntimeBrowserHostLease', () => {
   ])('fails closed on %s', async (_caseName, sendRequest, expectedMessage) => {
     const { callbacks, close } = await subscribeLease({ sendRequest })
     const onError = vi.fn()
+
     const lease = createLease({
       pageCommandProtocolVersion: 1,
       onPageCommand: () => ({ status: 'completed' }),
       onError
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
@@ -455,11 +480,13 @@ describe('PairedRuntimeBrowserHostLease', () => {
   it('fails closed when a v1 subscription lacks the same-socket request sender', async () => {
     const { callbacks, close } = await subscribeLease({ sendRequest: undefined })
     const onError = vi.fn()
+
     const lease = createLease({
       pageCommandProtocolVersion: 1,
       onPageCommand: () => ({ status: 'completed' }),
       onError
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse(readyResponse({ pageCommandProtocolVersion: 1 }))
@@ -506,6 +533,7 @@ describe('PairedRuntimeBrowserHostLease', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return { requestId: 'browser-host', close, sendBinary: () => false }
       }
     )
@@ -525,6 +553,7 @@ describe('PairedRuntimeBrowserHostLease', () => {
 
   it('closes a subscription acquired after local teardown', async () => {
     let resolveSubscription = (_subscription: RemoteRuntimeSubscription): void => {}
+
     const close = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -547,6 +576,7 @@ describe('PairedRuntimeBrowserHostLease', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return { requestId: 'browser-host', close, sendBinary: () => false }
       }
     )
@@ -639,12 +669,14 @@ describe('PairedRuntimeBrowserHostLease', () => {
     const lease = createLease({ onError })
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+
     const ready = {
       id: 'browser-host',
       ok: true as const,
       result: { type: 'ready', authorityEpoch: 'epoch-a', browserHostGeneration: 4 },
       _meta: { runtimeId: 'runtime-a' }
     }
+
     callbacks.current!.onResponse(ready)
     await starting
     callbacks.current!.onResponse(ready)
@@ -670,13 +702,16 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
 }> {
   const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
   const close = vi.fn()
+
   const sendRequest =
     options && 'sendRequest' in options
       ? options.sendRequest
       : vi.fn().mockResolvedValue(commandResultAck(true))
+
   subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
       const subscription: RemoteRuntimeSubscription = {
         requestId: 'browser-host',
         close,
@@ -687,9 +722,11 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
             }
           : {})
       }
+
       return subscription
     }
   )
+
   return { callbacks, close, sendRequest: sendRequest ?? vi.fn() }
 }
 
@@ -783,9 +820,11 @@ function deferredCommandResultAck(): {
   resolve: (value: ReturnType<typeof commandResultAck>) => void
 } {
   let resolve = (_value: ReturnType<typeof commandResultAck>): void => {}
+
   const promise = new Promise<ReturnType<typeof commandResultAck>>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 

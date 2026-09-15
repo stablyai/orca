@@ -51,6 +51,7 @@ function appEnvironment(): AppEnvironment {
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -61,16 +62,22 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline && !predicate()) {
     await sleep(100)
   }
+
   return predicate()
 }
 
 let markerDirectory = ''
+
 let markerSequence = 0
+
 const spawnedRoots: ChildProcess[] = []
+
 const spawnedLeaves: number[] = []
+
 const observedSpawns: ChildProcess[] = []
 
 function observeSpawn(message: unknown): void {
@@ -94,10 +101,12 @@ async function spawnLiveTree(): Promise<{
   const leafSource = `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setTimeout(() => {}, 600000)`
   // Non-detached Windows children can die with the root's libuv Job Object.
   const rootSource = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(leafSource)}], { stdio: 'ignore', detached: true, windowsHide: true }); setTimeout(() => {}, 600000)`
+
   const child = spawn(process.execPath, ['-e', rootSource], {
     stdio: 'ignore',
     windowsHide: true
   })
+
   spawnedRoots.push(child)
   const rootPid = child.pid as number
   expect(rootPid).toBeGreaterThan(0)
@@ -105,6 +114,7 @@ async function spawnLiveTree(): Promise<{
   const leafPid = Number(readFileSync(marker, 'utf8'))
   spawnedLeaves.push(leafPid)
   expect(await waitFor(() => isAlive(leafPid))).toBe(true)
+
   return { child, rootPid, leafPid }
 }
 
@@ -122,12 +132,15 @@ describeOnWindows('own-Chromium gate against real Windows process trees', () => 
   afterEach(async () => {
     unsubscribe('child_process', observeSpawn)
     orcaChromiumPids = []
+
     for (const leafPid of spawnedLeaves.splice(0)) {
       await terminateWindowsProcessTree(leafPid, { site: 'live-tree-kill-cleanup' })
     }
+
     for (const root of spawnedRoots.splice(0)) {
       root.kill('SIGKILL')
     }
+
     setProcessTreeKillGate(null)
   })
 

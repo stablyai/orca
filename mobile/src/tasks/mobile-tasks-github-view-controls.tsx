@@ -27,6 +27,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
     taskUiReady,
     visibleGitHubProjectRows
   } = model
+
   return (
     provider === 'github' && (
       <>
@@ -37,6 +38,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowGitHubKindPicker(true)
           }}
         >
@@ -51,6 +53,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 if (!taskUiReady) {
                   return
                 }
+
                 setShowGitHubPresetPicker(true)
               }}
             >
@@ -64,6 +67,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   if (!taskUiReady) {
                     return
                   }
+
                   setShowGitHubIssueSourcePicker(true)
                 }}
               >
@@ -80,6 +84,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 if (!taskUiReady) {
                   return
                 }
+
                 setShowGitHubProjectPicker(true)
               }}
             >
@@ -93,6 +98,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   if (!taskUiReady) {
                     return
                   }
+
                   setShowGitHubProjectViewPicker(true)
                 }}
               >
@@ -107,6 +113,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   if (!taskUiReady) {
                     return
                   }
+
                   setShowGitHubProjectSortPicker(true)
                 }}
               >
@@ -121,6 +128,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   if (!taskUiReady) {
                     return
                   }
+
                   setShowGitHubProjectFieldsPicker(true)
                 }}
               >
@@ -142,6 +150,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   if (!taskUiReady) {
                     return
                   }
+
                   void Linking.openURL(selectedGitHubProjectViewUrl)
                 }}
               >

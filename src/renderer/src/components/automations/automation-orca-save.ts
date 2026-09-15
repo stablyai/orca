@@ -32,6 +32,7 @@ export async function saveOrcaAutomation(
 ): Promise<void> {
   const { store, local, setup, destination, destinationForm, pageRefresh } = context
   const { repos, projectHostSetups } = store
+
   const {
     draft,
     createTarget,
@@ -49,6 +50,7 @@ export async function saveOrcaAutomation(
     setEditorNoticeHost,
     moveCreationKeysRef
   } = local
+
   const {
     automationHostTarget,
     automationDispatchContext,
@@ -57,17 +59,21 @@ export async function saveOrcaAutomation(
     rowRecoveryHost,
     createDestination
   } = destination
+
   const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
 
   // Re-check the destination at the start of the transaction. This keeps all
   // side effects (hook probes and trust prompts) behind the destination fence.
   const createCheck = editingAutomationId === null ? createDestination.check(draft.projectId) : null
+
   if (createCheck && !createCheck.ok) {
     setEditorNotice(createCheck.notice)
+
     return
   }
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
   const rrule =
     draft.preset === 'custom'
       ? draft.customSchedule.trim()
@@ -77,25 +83,30 @@ export async function saveOrcaAutomation(
           minute: time.minute,
           dayOfWeek: Number(draft.dayOfWeek)
         })
+
   const rawGrace = Number(draft.missedRunGraceMinutes)
   const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
   const precheck = buildDraftPrecheck(draft)
   const reposForDraft = editingAutomationId !== null ? dialogRepos : repos
+
   const setupResolution =
     editingAutomationId !== null
       ? editHostResolution
       : createCheck
         ? { status: 'ready' as const, ...createCheck.destination }
         : null
+
   const setupHostId: ExecutionHostId | undefined =
     setupResolution?.status === 'ready' && setupResolution.authority.kind === 'runtime'
       ? (`runtime:${setupResolution.authority.environmentId}` as ExecutionHostId)
       : undefined
+
   const setupProjectHostSetups = setupHostId
     ? projectHostSetups.filter(
         (candidate) => candidate.repoId !== draft.projectId || candidate.hostId === setupHostId
       )
     : projectHostSetups
+
   let setupDecision = resolveAutomationSetupDecisionForSave({
     createTarget,
     workspaceMode: draft.workspaceMode,
@@ -108,6 +119,7 @@ export async function saveOrcaAutomation(
         : null,
     draftSetupDecision: draft.setupDecision
   })
+
   if (setupDecision === 'run') {
     const trustDecision = await ensureHooksConfirmed(
       useAppStore.getState(),
@@ -115,6 +127,7 @@ export async function saveOrcaAutomation(
       'setup',
       setupHostId
     )
+
     if (trustDecision === 'skip') {
       setupDecision = 'skip'
     }
@@ -125,6 +138,7 @@ export async function saveOrcaAutomation(
     repos: reposForDraft,
     projectHostSetups: setupProjectHostSetups
   })
+
   if (!runContext) {
     toast.error(
       translate(
@@ -132,12 +146,14 @@ export async function saveOrcaAutomation(
         'Choose an available workspace before saving.'
       )
     )
+
     return
   }
 
   let currentAutomation = editingAutomationId
     ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
     : null
+
   if (editingAutomationId !== null) {
     const reread = await dispatchAutomationReread(
       automationDispatchContext,
@@ -147,10 +163,13 @@ export async function saveOrcaAutomation(
           (automation) => automation.id === editingAutomationId
         ) ?? null
     )
+
     if (!reread.ok && reread.notice.severity === 'owner') {
       setEditorNotice(reread.notice)
+
       return
     }
+
     currentAutomation = (reread.ok ? reread.value : null) ?? currentAutomation
   }
 
@@ -169,10 +188,12 @@ export async function saveOrcaAutomation(
     timezone,
     missedRunGraceMinutes
   }
+
   if (!currentAutomation || currentAutomation.rrule !== rrule) {
     updates.rrule = rrule
     updates.dtstart = time.now
   }
+
   const createInput: AutomationCreateInput = {
     name: draft.name,
     prompt: draft.prompt,
@@ -201,14 +222,18 @@ export async function saveOrcaAutomation(
     editHostEntries: destinationForm.editHostEntries,
     rowRecoveryHost
   })
+
   if (!destinationResult.ok) {
     setEditorNotice(destinationResult.notice)
+
     return
   }
+
   const { editDestination, moveTarget } = destinationResult
 
   let saved: AutomationDispatchResult<Automation>
   let originalRemoved = true
+
   if (moveTarget) {
     const moved = await moveAutomationToDestination(
       {
@@ -227,6 +252,7 @@ export async function saveOrcaAutomation(
         sourceContext: currentAutomation?.sourceContext ?? null
       }
     )
+
     saved = moved.saved
     originalRemoved = moved.originalRemoved
   } else if (editingAutomationId !== null) {
@@ -247,35 +273,46 @@ export async function saveOrcaAutomation(
       invalidateWrittenHost
     )
   }
+
   if (!saved.ok) {
     setEditorNotice(saved.notice)
     setEditorNoticeHost(moveTarget?.entry ?? null)
+
     return
   }
+
   const automation = saved.value
+
   if (editingAutomationId !== null) {
     invalidateRowHost(editingRowKey, 'definition')
   } else {
     await pageRefresh.hydratePersistedUIState()
   }
+
   setAutomations((current) => {
     const next = current.filter((entry) => entry.id !== automation.id)
+
     return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
   })
   setDraft((current) => ({ ...current, name: '', prompt: '' }))
   await pageRefresh.refresh()
+
   if (editingAutomationId !== null && editingRowKey && !moveTarget) {
     setSelectedAutomationRunPageId(null)
     setSelectedRowKey(editingRowKey)
   }
+
   selectAutomationId(automation.id)
   setCreateOpen(false)
+
   if (editingAutomationId === null) {
     useAppStore.getState().recordFeatureInteraction('automation-created')
   }
+
   if (moveTarget && !originalRemoved) {
     return
   }
+
   toast.success(
     moveTarget
       ? translate(

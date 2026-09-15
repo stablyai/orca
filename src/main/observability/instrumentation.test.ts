@@ -39,12 +39,14 @@ function isSpanRecord(record: unknown): record is SpanRecord {
 
 function makeCapturingSink(): CapturedSink {
   const records: SpanRecord[] = []
+
   return {
     records,
     push(record) {
       if (!isSpanRecord(record)) {
         throw new Error('expected span record')
       }
+
       records.push(record)
     },
     flush() {
@@ -57,6 +59,7 @@ function makeCapturingSink(): CapturedSink {
 }
 
 let sink: CapturedSink
+
 let nowMs = 1_700_000_000_000
 
 async function runGitSpan(
@@ -65,14 +68,19 @@ async function runGitSpan(
   fail = false
 ) {
   vi.setSystemTime(nowMs)
+
   const promise = withGitSpan(meta, async () => {
     vi.setSystemTime(nowMs + durationMs)
+
     if (fail) {
       throw new Error('git failed')
     }
+
     return 'ok'
   })
+
   nowMs += durationMs + 1
+
   return await promise
 }
 
@@ -104,6 +112,7 @@ describe('withGitSpan sampling', () => {
         record.attributes.cwd === '/repo' &&
         record.durationMs < 250
     )
+
     expect(repeatedFastSuccesses.length).toBeGreaterThan(0)
     expect(repeatedFastSuccesses.length).toBeLessThan(200)
 
@@ -175,11 +184,13 @@ describe('addWorktreeCreatePhaseAttributes', () => {
     span: Parameters<typeof addWorktreeCreatePhaseAttributes>[0]
   } {
     const attributes: Record<string, unknown> = {}
+
     const span = {
       setAttribute: (key: string, value: unknown) => {
         attributes[key] = value
       }
     } as unknown as Parameters<typeof addWorktreeCreatePhaseAttributes>[0]
+
     return { attributes, span }
   }
 

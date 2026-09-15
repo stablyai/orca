@@ -9,6 +9,7 @@ import { StructuredAgentSessionHostRuntimeState } from './structured-agent-sessi
 
 function context(): StructuredAgentSessionEvictionContext & { order: string[] } {
   const order: string[] = []
+
   return {
     order,
     sessionId: 'session-1',
@@ -16,6 +17,7 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
       unbind: vi.fn(() => order.push('unbind')),
       drained: vi.fn(async () => {
         order.push('drained')
+
         return { ok: true }
       }),
       close: vi.fn(() => order.push('close'))
@@ -23,6 +25,7 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
     adapter: {
       closeSession: vi.fn(async () => {
         order.push('closeSession')
+
         return true
       })
     } as unknown as StructuredAgentSessionEvictionContext['adapter'],
@@ -64,9 +67,11 @@ describe('structured agent session eviction', () => {
 
   it('uses disposal rather than handoff close when the chat is removed', async () => {
     const ctx = context()
+
     const closeSession = vi.fn(async () => {
       throw new Error('resume cursor unavailable')
     })
+
     const disposeSession = vi.fn(async () => true)
     ctx.adapter = { ...ctx.adapter, closeSession, disposeSession }
 
@@ -93,6 +98,7 @@ describe('structured agent session eviction', () => {
     const ctx = context()
     ctx.eventSink.drained = vi.fn(async () => {
       ctx.order.push('drained')
+
       return { ok: false, error: new Error('append failed') }
     }) as unknown as StructuredAgentSessionEvictionContext['eventSink']['drained']
 
@@ -126,6 +132,7 @@ describe('rows the provider emits while closing', () => {
         closeSession: async () => {
           // What codex-structured-session-close does on its way out.
           sink.sink.publish()
+
           return true
         }
       } as never,

@@ -19,7 +19,9 @@ import {
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
 const WORKSPACE_ID = 'restored-workspace'
+
 const PAGE_ID = 'restored-page'
+
 const REMOTE_PAGE_ID = 'remote-page-1'
 
 const CLIENT_PLACEMENT = {
@@ -161,6 +163,7 @@ function applyToState(
     ENV,
     NOW
   ) as Partial<WebSessionTabsSyncState>
+
   return { ...state, ...patch }
 }
 

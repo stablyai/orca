@@ -23,12 +23,15 @@ const EMPTY_RESULT: AiVaultListResult = {
 const THROTTLE_MS = 30_000
 
 const listSessionsMock = vi.fn<(args: unknown) => Promise<AiVaultListResult>>()
+
 const cancelListSessionsMock = vi.fn<() => Promise<void>>()
 
 // Captures the hook's subscription to the main-process window-focus push.
 let windowFocusCallback: (() => void) | null = null
+
 const onWindowFocusedMock = vi.fn((callback: () => void) => {
   windowFocusCallback = callback
+
   return () => {
     windowFocusCallback = null
   }
@@ -67,6 +70,7 @@ describe('isAiVaultScanCancellation', () => {
 })
 
 const roots: Root[] = []
+
 let latest: ReturnType<typeof useAiVaultSessionRefresh> | null = null
 
 function HookProbe(props: {
@@ -79,6 +83,7 @@ function HookProbe(props: {
     props.executionHostScope ?? 'local',
     props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT
   )
+
   return null
 }
 
@@ -102,9 +107,11 @@ async function rerenderHook(
   sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT
 ): Promise<void> {
   const root = roots.at(-1)
+
   if (!root) {
     throw new Error('renderHook must be called before rerenderHook')
   }
+
   await act(async () => {
     root.render(createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit }))
   })
@@ -146,6 +153,7 @@ function makeAgentEntry(sessionId: string, state = 'working'): AgentStatusEntry 
 function makeVaultSession(index: number): AiVaultSession {
   const id = `session-${index}`
   const timestamp = new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString()
+
   return {
     id,
     executionHostId: 'ssh:dev-box',
@@ -262,6 +270,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       ...EMPTY_RESULT,
       sessions: Array.from({ length: 600 }, (_, index) => makeVaultSession(index))
     }
+
     listSessionsMock.mockResolvedValueOnce(loaded)
     await renderHook([], 'ssh:dev-box', 1000)
     await flushMicrotasks()
@@ -495,11 +504,13 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 
   it('still reuses all-host identity when a repeated stamp carries an unchanged body', async () => {
     const pinned = '2026-07-01T00:00:00.000Z'
+
     const first: AiVaultListResult = {
       sessions: [makeVaultSession(1)],
       issues: [],
       scannedAt: pinned
     }
+
     listSessionsMock.mockResolvedValueOnce(first)
     await renderHook([], 'all')
     await flushMicrotasks()
@@ -518,6 +529,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 
   it('keeps session row identity when a reminted scan is a structuredClone of the same nested rows', async () => {
     const session = makeVaultSession(1)
+
     const first: AiVaultListResult = {
       sessions: [
         {
@@ -546,6 +558,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       issues: [],
       scannedAt: '2026-07-01T00:00:00.000Z'
     }
+
     listSessionsMock.mockResolvedValueOnce(first)
     await renderHook()
     await flushMicrotasks()
@@ -572,6 +585,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
   it('replaces the changed row when a reminted scan edits nested preview text', async () => {
     const session = makeVaultSession(1)
     const sibling = makeVaultSession(2)
+
     const first: AiVaultListResult = {
       sessions: [
         {
@@ -583,6 +597,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       issues: [],
       scannedAt: '2026-07-01T00:00:00.000Z'
     }
+
     listSessionsMock.mockResolvedValueOnce(first)
     await renderHook()
     await flushMicrotasks()
@@ -593,9 +608,11 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     reminted.scannedAt = '2026-07-01T00:00:15.000Z'
     const changed = reminted.sessions[0]
     const preview = changed?.previewMessages[0]
+
     if (!changed || !preview) {
       throw new Error('expected a nested preview message')
     }
+
     reminted.sessions[0] = {
       ...changed,
       previewMessages: [{ ...preview, text: 'follow-up ask' }]
@@ -617,12 +634,14 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
       issues: [],
       scannedAt: '2026-07-01T00:00:00.000Z'
     }
+
     listSessionsMock.mockResolvedValueOnce(first)
     await renderHook()
     await flushMicrotasks()
     const surviving = latest?.sessions[0]
     const previous = first.sessions[0]
     expect(surviving?.id).toBe('session-1')
+
     if (!previous) {
       throw new Error('expected the first scan to include a session')
     }

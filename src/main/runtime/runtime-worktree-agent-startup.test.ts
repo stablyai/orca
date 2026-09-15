@@ -124,6 +124,7 @@ describe('markLocalWorktreeTrusted', () => {
       })
     )
     let settled = false
+
     const marking = markLocalWorktreeTrusted('codex', '/workspace/app').then(() => {
       settled = true
     })

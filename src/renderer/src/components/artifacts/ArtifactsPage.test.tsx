@@ -541,6 +541,7 @@ describe('ArtifactsPage', () => {
     const options = mocks.confirm.mock.calls[0]?.[0] as {
       dontAskAgain?: { onConfirmed: () => void }
     }
+
     expect(mocks.updateSettings).not.toHaveBeenCalled()
     options.dontAskAgain?.onConfirmed()
     expect(mocks.updateSettings).toHaveBeenCalledWith({ skipDeleteArtifactConfirm: true })
@@ -570,9 +571,11 @@ describe('ArtifactsPage', () => {
 /** Opens the drawer from the first rendered row, then deletes through the drawer's action menu. */
 async function deleteFirstArtifactFromDrawerMenu(): Promise<void> {
   const row = document.querySelector('[data-slot="context-menu-trigger"]')
+
   if (!(row instanceof HTMLElement)) {
     throw new Error('Expected an artifact row')
   }
+
   await userEvent.click(row)
   await userEvent.click(screen.getByRole('button', { name: 'More artifact actions' }))
   await userEvent.click(screen.getByRole('menuitem', { name: 'Delete artifact' }))

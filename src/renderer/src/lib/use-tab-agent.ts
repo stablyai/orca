@@ -25,6 +25,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 // A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
   const trimmed = title.trim()
+
   return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
 }
 
@@ -38,6 +39,7 @@ function resolveSignalAgentForLaunchOwner(
   if (!signalAgent) {
     return null
   }
+
   return (resolveCompatibleAgentTypeForOwner(signalAgent, launchAgent) ?? signalAgent) as TuiAgent
 }
 
@@ -60,13 +62,16 @@ export function resolveLaunchedAgentExitEvidence(args: {
   if (args.hookAgent || args.siblingHookAgent || args.processAgent) {
     return false
   }
+
   // Why: OSC 133;D (foreground back at shell) is title-independent exit evidence; local-only — remote panes have no shell-foreground producer.
   if (!args.isRemote && args.processShellForeground && args.hasObservedAgentSignal) {
     return true
   }
+
   if (!titleShowsNoAgent(args.title, args.defaultTitle)) {
     return false
   }
+
   return args.hasCompletedHook || (!args.isRemote && args.hasObservedAgentSignal)
 }
 
@@ -85,6 +90,7 @@ export function resolveTabAgentFromSignals(args: {
   launchAgent?: TuiAgent
 }): TuiAgent | null {
   const launchAgent = args.launchAgent ?? null
+
   // Durable focused-pane owner (launch intent → hook → session); focused-pane-scoped so a sibling can't re-own the focused title (would mislabel a Pi pane as OMP).
   const owner = resolvePaneAgentOwner({
     launchAgent,
@@ -100,16 +106,20 @@ export function resolveTabAgentFromSignals(args: {
   const processProvesShell = !args.isRemote && args.processShellForeground === true
   const hasCompletedHook = (args.focusedCompletedHookAgent ?? null) !== null
   const noAgentTitle = titleShowsNoAgent(args.title, args.defaultTitle)
+
   const idleIdentitySuppressed =
     !args.isRemote && (noAgentTitle || processProvesShell) && hasCompletedHook
+
   const idleFocusedIdentity = idleIdentitySuppressed
     ? null
     : resolveSignalAgentForLaunchOwner(args.focusedCompletedHookAgent, owner)
+
   // Why: idleIdentitySuppressed is the FOCUSED pane's exit evidence, so it must not clear a sibling's idle identity.
   const idleSiblingIdentity = resolveSignalAgentForLaunchOwner(
     args.siblingCompletedHookAgent,
     launchAgent
   )
+
   const sleepingSessionAgent = args.sleepingSessionAgent ?? null
 
   // Title carries identity only as a reuse override (names a DIFFERENT-group agent) or a legacy standalone id when no hook — same-group titles say nothing (OMP wraps Pi), so the record wins.
@@ -117,12 +127,15 @@ export function resolveTabAgentFromSignals(args: {
     resolveExplicitTerminalTitleAgentType(args.title),
     owner
   )
+
   const priorIdentity = idleFocusedIdentity ?? launchAgent
   const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
+
   // Why: a "claude" token in another agent's task text is a mention, not identity, so it must
   // not take a pane from its known owner — only a title that PRESENTS Claude may (#8940).
   const titleClaimsIdentity =
     explicitTitleAgent !== 'claude' || isClaudeIdentityFrameTitle(args.title)
+
   // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
@@ -130,6 +143,7 @@ export function resolveTabAgentFromSignals(args: {
     explicitTitleAgent !== priorIdentity &&
     titleClaimsIdentity &&
     (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
+
   // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
   const titleAgent =
     processProvesShell ||
@@ -153,9 +167,11 @@ export function resolveTabAgentFromSignals(args: {
     processAgent: args.processAgent,
     processShellForeground: args.processShellForeground
   })
+
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.
   const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
+
   // Identity-first precedence (see JSDoc): live hook > process > title > completed > sleeping > launch > sibling.
   return (
     liveFocusedIdentity ??
@@ -187,9 +203,11 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   const focusedHookAgent = useAppStore((s) =>
     resolveFocusedTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
   )
+
   const siblingHookAgent = useAppStore((s) =>
     resolveSiblingTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
   )
+
   const focusedCompletedHookAgent = useAppStore(
     (s) =>
       resolveFocusedCompletedTabAgent(
@@ -203,6 +221,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
         tab.id
       )
   )
+
   const siblingCompletedHookAgent = useAppStore(
     (s) =>
       resolveSiblingCompletedTabAgent(
@@ -216,20 +235,26 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
         tab.id
       )
   )
+
   const hasCompletedHook = focusedCompletedHookAgent !== null
   const clearTabLaunchAgent = useAppStore((s) => s.clearTabLaunchAgent)
+
   const focusedPaneKey = useAppStore((s) => {
     const activeLeafId = s.terminalLayoutsByTabId[tab.id]?.activeLeafId
+
     return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
   })
+
   const processAgent = useAppStore((s) =>
     focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
+
   const processShellForeground = useAppStore((s) =>
     focusedPaneKey
       ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
       : false
   )
+
   // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.
   const sleepingSessionAgent = useAppStore((s) =>
     focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
@@ -240,26 +265,34 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     const layout = s.terminalLayoutsByTabId[tab.id]
     const activeLeafId = layout?.activeLeafId
     const leafPty = activeLeafId ? layout?.ptyIdsByLeafId?.[activeLeafId] : undefined
+
     if (leafPty) {
       return leafPty
     }
+
     const ptyIds = s.ptyIdsByTabId[tab.id] ?? []
+
     return ptyIds.length === 1 ? ptyIds[0]! : null
   })
+
   // Why: with no layout to place a completed row, only a single-pane tab may treat it as focused-pane exit evidence.
   const completedHookScopeKnown = useAppStore((s) => {
     const layout = s.terminalLayoutsByTabId[tab.id]
+
     if (layout?.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
       return true
     }
+
     return (s.ptyIdsByTabId[tab.id] ?? []).length <= 1
   })
+
   const hasRemoteRuntimePty = useAppStore((s) =>
     hasRemoteRuntimePtyForTab(
       s.ptyIdsByTabId[tab.id],
       s.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
     )
   )
+
   const isRemoteWorktree = useAppStore((s) => worktreeUsesRemoteConnection(s, tab.worktreeId))
   const isRemoteLike = isRemoteWorktree || hasRemoteRuntimePty
 
@@ -271,16 +304,20 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
   useEffect(() => {
     // Why: reset+re-seed in one effect so a respawn drops the stale-generation signal yet re-observes a still-live hook, not left stuck false.
     const generation = `${ptyId ?? ''}|${String(isRemoteLike)}`
+
     if (signalGenerationRef.current !== generation) {
       signalGenerationRef.current = generation
       hasObservedAgentSignalRef.current = false
       setHasObservedAgentSignal(false)
     }
+
     const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(tab.title)
+
     // Why: only a title naming the launched agent arms its exit clearing — sibling/other-agent evidence must not.
     const fallbackAgentSignal = tab.launchAgent
       ? explicitTitleAgent === tab.launchAgent
       : Boolean(explicitTitleAgent || siblingHookAgent)
+
     // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
     // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an
     // already-true flag costs SortableTab a second commit each time — and names its fiber
@@ -307,6 +344,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     if (!tab.launchAgent) {
       return
     }
+
     // Why: AND ref with state — the ref is generation-safe this commit while state can lag one render behind a respawn.
     const launchedAgentExited = resolveLaunchedAgentExitEvidence({
       title: tab.title,
@@ -319,6 +357,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       processAgent,
       processShellForeground
     })
+
     if (launchedAgentExited) {
       clearTabLaunchAgent(tab.id)
     }

@@ -54,10 +54,12 @@ describe('createExpandCollapseActions', () => {
       'requestAnimationFrame',
       vi.fn((next: FrameRequestCallback) => {
         callbacks.push(next)
+
         return 7
       })
     )
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
     const state = createState({
       managerRef: ref({
         getPanes: () => [],
@@ -70,9 +72,11 @@ describe('createExpandCollapseActions', () => {
     expect(state.pendingPaneSizeRefreshFrameIdsRef.current).toEqual([7])
 
     const callback = callbacks[0]
+
     if (!callback) {
       throw new Error('expected pane-size refresh frame to be scheduled')
     }
+
     callback(16)
 
     expect(state.pendingPaneSizeRefreshFrameIdsRef.current).toEqual([])
@@ -83,6 +87,7 @@ describe('createExpandCollapseActions', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         callback(16)
+
         return 9
       })
     )

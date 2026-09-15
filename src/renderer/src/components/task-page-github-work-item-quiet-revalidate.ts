@@ -53,6 +53,7 @@ export function isTaskPageQuietRevalidateRunCurrent(
 
 export function getTaskPageQuietRevalidateBackoffAttempt(attempts: Iterable<number>): number {
   const eligible = [...attempts].filter((attempt) => attempt < MAX_LAG_TRAILS)
+
   return eligible.length === 0 ? 0 : Math.max(...eligible)
 }
 
@@ -66,10 +67,12 @@ export function settleQuietSearchRevalidate(args: {
   revalidatedItemKeys?: ReadonlySet<string>
 }): { needTrailing: boolean } {
   let needTrailing = false
+
   for (const serverItem of args.networkItems) {
     const sourceScope =
       args.resolveSourceScope?.(serverItem) ??
       resolveItemSourceScope(serverItem.repoId, serverItem.id)
+
     const result = adoptQuietSearchFieldsForItem({
       item: serverItem,
       serverItem,
@@ -79,16 +82,19 @@ export function settleQuietSearchRevalidate(args: {
       patchWorkItem: args.patchWorkItem,
       sourceContext: args.sourceContextByRepoId?.get(serverItem.repoId)
     })
+
     if (result.needTrailing) {
       needTrailing = true
     }
   }
+
   // Why: do not GC sticky solely because search omitted a row under lag — that
   // would unhide a successful close under Open. Keep sticky for omitted rows
   // that still have pending or confirmed authority.
   const pageKeys = new Set(
     args.networkItems.map((item) => taskPageGitHubItemKey(item.repoId, item.id))
   )
+
   for (const [itemKey, entry] of getAllStickyHideEntries()) {
     if (
       entry.queryKey !== args.queryKey ||
@@ -97,7 +103,9 @@ export function settleQuietSearchRevalidate(args: {
     ) {
       continue
     }
+
     const separator = itemKey.indexOf('\0')
+
     if (
       separator !== -1 &&
       !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
@@ -105,17 +113,23 @@ export function settleQuietSearchRevalidate(args: {
       clearConfirmedAuthorityForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
     }
   }
+
   const safeGcKeys = new Set(pageKeys)
+
   for (const [itemKey] of getAllStickyHideEntries()) {
     if (pageKeys.has(itemKey)) {
       continue
     }
+
     const sep = itemKey.indexOf('\0')
+
     if (sep === -1) {
       continue
     }
+
     const repoId = itemKey.slice(0, sep)
     const itemId = itemKey.slice(sep + 1)
+
     if (
       hasPendingTaskPageGitHubOpsForItem(repoId, itemId) ||
       hasConfirmedAuthorityForItem(repoId, itemId)
@@ -123,20 +137,26 @@ export function settleQuietSearchRevalidate(args: {
       safeGcKeys.add(itemKey)
     }
   }
+
   gcStickyHidesAbsentFromPages(safeGcKeys, args.queryKey)
   const quiet = getOrCreateQuietRevalidateState(args.queryKey)
+
   // Why: lag counters are aggregated with Math.max across the query, so an orphan
   // stuck at MAX (item lagged then left the result set) would disable lag-retry
   // for every row. Drop counters for items fully gone (no page/pending/authority).
   for (const lagKey of quiet.lagSkipAttempts.keys()) {
     const itemKey = lagKey.slice(0, lagKey.lastIndexOf('\0'))
+
     if (safeGcKeys.has(itemKey)) {
       continue
     }
+
     const sep = itemKey.indexOf('\0')
+
     if (sep === -1) {
       continue
     }
+
     if (
       !hasPendingTaskPageGitHubOpsForItem(itemKey.slice(0, sep), itemKey.slice(sep + 1)) &&
       !hasConfirmedAuthorityForItem(itemKey.slice(0, sep), itemKey.slice(sep + 1))
@@ -144,12 +164,16 @@ export function settleQuietSearchRevalidate(args: {
       quiet.lagSkipAttempts.delete(lagKey)
     }
   }
+
   if (quiet.dirtyGeneration > args.fetchStartedAtGeneration) {
     needTrailing = true
   }
+
   notifyTaskPageGitHubMutationRegistry()
+
   return { needTrailing }
 }
+
 export function processTaskPageQuietRevalidateSettle(args: {
   queryKey: string
   networkItems: readonly GitHubWorkItem[]
@@ -159,6 +183,7 @@ export function processTaskPageQuietRevalidateSettle(args: {
   revalidatedItemKeys?: ReadonlySet<string>
 }): { needTrailing: boolean } {
   const state = getOrCreateQuietRevalidateState(args.queryKey)
+
   return settleQuietSearchRevalidate({
     queryKey: args.queryKey,
     networkItems: args.networkItems,

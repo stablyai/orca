@@ -41,6 +41,7 @@ vi.mock('@/components/ui/popover', () => ({
     onOpenChange?: (open: boolean) => void
   }) => {
     mocks.openPopover = onOpenChange ?? null
+
     return <>{children}</>
   },
   PopoverContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -62,9 +63,11 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('./artifact-publish-flow', () => ({
   publishArtifactFromSurface: mocks.publish
 }))
+
 vi.mock('./artifact-published-link-client', () => ({
   getPublishedArtifactLink: mocks.getPublishedLink
 }))
+
 vi.mock('./artifact-link-actions', () => ({
   copyArtifactLink: mocks.copyLink,
   openArtifactInBrowser: mocks.openLink
@@ -191,9 +194,11 @@ describe('ArtifactPublishButton', () => {
       })
     )
     const timeoutSpy = vi.spyOn(window, 'setTimeout')
+
     const view = render(
       <ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />
     )
+
     await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
     await user.click(await screen.findByRole('button', { name: 'Copy link' }))
 

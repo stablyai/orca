@@ -30,38 +30,48 @@ export function synthesizeDisconnectedSshCleanupCandidates(
 ): WorkspaceCleanupCandidate[] {
   const repoWorktreePrefix = `${repo.id}::`
   const executionHostId = getRepoExecutionHostId(repo)
+
   if (targetWorktreeIds) {
     const candidates: WorkspaceCleanupCandidate[] = []
+
     // Why: targeted refreshes name their workspaces already; walking all
     // persisted metadata is unnecessary for disconnected SSH repos.
     for (const worktreeId of targetWorktreeIds) {
       if (!worktreeId.startsWith(repoWorktreePrefix)) {
         continue
       }
+
       const meta =
         readWorktreeMetaForHost(store, worktreeId, executionHostId) ??
         (typeof store.getWorktreeMetaForHost === 'function'
           ? undefined
           : store.getWorktreeMeta(worktreeId))
+
       if (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount)) {
         candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
       }
     }
+
     return candidates
   }
 
   const candidates: WorkspaceCleanupCandidate[] = []
   const allMeta = readAllWorktreeMetaForHost(store, executionHostId)
+
   for (const worktreeId in allMeta) {
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
+
     const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
+
     if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }
+
     candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
   }
+
   return candidates
 }
 
@@ -74,6 +84,7 @@ function createDisconnectedSshCandidate(
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const path = parsed?.worktreePath ?? worktreeId
   const reasons = getWorkspaceCleanupInactivityReasonsForWorkspace(meta, scannedAt)
+
   return applyWorkspaceCleanupPolicy({
     worktreeId,
     repoId: repo.id,

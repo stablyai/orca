@@ -16,13 +16,17 @@ function getUserDataDir(): string {
   if (hasAppEnvironment()) {
     return getAppEnvironment().getPath('userData')
   }
+
   const home = homedir()
+
   if (platform() === 'darwin') {
     return join(home, 'Library', 'Application Support', 'Orca')
   }
+
   if (platform() === 'win32') {
     return join(process.env.APPDATA ?? home, 'Orca')
   }
+
   return join(home, '.config', 'Orca')
 }
 

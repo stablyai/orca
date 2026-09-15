@@ -30,13 +30,17 @@ const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
 function getDataPath(): string {
   const userDataPath = getDefaultUserDataPath()
   const indexPath = join(userDataPath, 'orca-profile-index.json')
+
   for (const candidate of [indexPath, `${indexPath}.bak`]) {
     try {
       const parsed: unknown = JSON.parse(readFileSync(candidate, 'utf-8'))
+
       if (!isRecord(parsed) || !Array.isArray(parsed.profiles)) {
         continue
       }
+
       const profileId = parsed.activeProfileId
+
       if (
         typeof profileId === 'string' &&
         /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(profileId) &&
@@ -48,6 +52,7 @@ function getDataPath(): string {
       // Try the profile-index backup, then the legacy pre-profile path.
     }
   }
+
   return join(userDataPath, 'orca-data.json')
 }
 
@@ -59,11 +64,14 @@ function readPersistedState(dataPath: string): PersistedState {
   if (!existsSync(dataPath)) {
     return getDefaultPersistedState(homedir())
   }
+
   try {
     const parsed = JSON.parse(readFileSync(dataPath, 'utf-8'))
+
     if (!isRecord(parsed)) {
       throw new Error('file does not contain a JSON object')
     }
+
     return parsed as PersistedState
   } catch (error) {
     throw new RuntimeClientError(
@@ -77,6 +85,7 @@ function writePersistedState(dataPath: string, state: PersistedState): void {
   mkdirSync(dirname(dataPath), { recursive: true })
   const tmpPath = join(dirname(dataPath), `.${Date.now()}-${randomUUID()}.tmp`)
   let renamed = false
+
   try {
     writeFileSync(tmpPath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
     renameSync(tmpPath, dataPath)
@@ -97,6 +106,7 @@ function readHookSettingsFromDisk(): Pick<
   'agentStatusHooksEnabled' | 'disabledTuiAgents'
 > {
   const state = readPersistedState(getDataPath())
+
   return {
     agentStatusHooksEnabled: state.settings?.agentStatusHooksEnabled !== false,
     disabledTuiAgents: normalizeDisabledTuiAgents(state.settings?.disabledTuiAgents)
@@ -110,7 +120,9 @@ async function readHookSettings(
     const response = await client.call<{
       settings?: Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
     }>('settings.get', undefined, { timeoutMs: 1_000 })
+
     const settings = response.result.settings
+
     if (settings && typeof settings.agentStatusHooksEnabled === 'boolean') {
       return {
         agentStatusHooksEnabled: settings.agentStatusHooksEnabled,
@@ -120,6 +132,7 @@ async function readHookSettings(
   } catch {
     // The active profile on disk is the offline fallback.
   }
+
   return readHookSettingsFromDisk()
 }
 
@@ -135,6 +148,7 @@ function updateEnabledOnDisk(enabled: boolean): {
     agentStatusHooksEnabled: enabled
   }
   writePersistedState(dataPath, state)
+
   return {
     settingsPath: dataPath,
     settings: {
@@ -147,14 +161,17 @@ function updateEnabledOnDisk(enabled: boolean): {
 async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Promise<boolean> {
   try {
     const status = await client.getCliStatus()
+
     if (!status.result.runtime.reachable) {
       return false
     }
+
     await client.call(
       'settings.update',
       { agentStatusHooksEnabled: enabled },
       { timeoutMs: 10_000 }
     )
+
     return true
   } catch {
     return false
@@ -176,6 +193,7 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => `${status.agent}: ${status.state}`)
     .join('\n')
+
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
     `appliedBy: ${result.appliedBy}`,
@@ -192,12 +210,15 @@ async function setAgentHooksEnabled(
 ): Promise<AgentHookCommandResult> {
   const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
     await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? getDataPath()
+
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
     : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
+
   return {
     enabled,
     settingsPath,
@@ -222,8 +243,10 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       } catch {
         // Best effort: old or unavailable runtimes must not block Codex launch.
       }
+
       return
     }
+
     const settings = await readHookSettings(client)
     await prepareManagedCodexHomeBeforeShellLaunch({
       userDataPath: getDefaultUserDataPath(),
@@ -234,12 +257,14 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks status': async ({ json }) => {
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+
     const result: AgentHookCommandResult = {
       enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
       appliedBy: 'offline',
       statuses: getManagedAgentHookStatuses()
     }
+
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
   'agent hooks off': async ({ client, json }) => {

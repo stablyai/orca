@@ -1,5 +1,6 @@
 export function isTailnetIPv4Address(address: string): boolean {
   const parts = address.split('.')
+
   if (parts.length !== 4) {
     return false
   }
@@ -8,6 +9,7 @@ export function isTailnetIPv4Address(address: string): boolean {
     if (!/^\d+$/.test(part)) {
       return Number.NaN
     }
+
     return Number(part)
   })
 

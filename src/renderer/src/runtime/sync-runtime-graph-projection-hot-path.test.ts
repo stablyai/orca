@@ -7,18 +7,22 @@ import type * as EditorDraftHashModule from './sync-runtime-graph/editor-draft-h
 // regression this file guards is "how many characters were hashed", not "how long did it take".
 // Instrumenting the real function through its own module keeps the counter out of shipped code.
 const draftHashCounter = { calls: 0, chars: 0 }
+
 vi.mock('./sync-runtime-graph/editor-draft-hash', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorDraftHashModule>()
+
   return {
     stableHashString: (value: string): string => {
       draftHashCounter.calls += 1
       draftHashCounter.chars += value.length
+
       return actual.stableHashString(value)
     }
   }
 })
 
 const { stableHashString } = await import('./sync-runtime-graph/editor-draft-hash')
+
 const {
   buildRuntimeMobileAgentStatusProjectionForTests,
   getRuntimeMobileSessionSyncKey,
@@ -26,11 +30,13 @@ const {
   resetRuntimeMobileSyncProjectionCachesForTests,
   runtimeMobileSessionSyncKeysEqual
 } = await import('./sync-runtime-graph')
+
 const {
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
   buildRuntimeMobileOpenFilesProjection
 } = await import('./sync-runtime-graph/sync-projections')
+
 const { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS } = await import('./sync-runtime-graph/graph-state')
 
 // ── Reference implementations: the pre-change bodies, kept verbatim ────────────────────
@@ -129,6 +135,7 @@ function sortedProjectionEntries(projection: string): unknown[] {
   return (JSON.parse(projection) as unknown[]).slice().sort((a, b) => {
     const left = JSON.stringify(a)
     const right = JSON.stringify(b)
+
     return left < right ? -1 : left > right ? 1 : 0
   })
 }
@@ -136,13 +143,16 @@ function sortedProjectionEntries(projection: string): unknown[] {
 // ── Fixtures ──────────────────────────────────────────────────────────────────────────
 
 const DRAFT_FILE_COUNT = 5
+
 const DRAFT_CHARS_PER_FILE = 40_000
 
 function makeDrafts(): Record<string, string> {
   const drafts: Record<string, string> = {}
+
   for (let index = 0; index < DRAFT_FILE_COUNT; index += 1) {
     drafts[`file-${index}`] = 'x'.repeat(DRAFT_CHARS_PER_FILE)
   }
+
   return drafts
 }
 
@@ -193,13 +203,17 @@ function makeBrowserPage(index: number, overrides: Record<string, unknown> = {})
 function countSerializedChars(run: () => void): number {
   const original = JSON.stringify
   let chars = 0
+
   const spy = vi.spyOn(JSON, 'stringify').mockImplementation(((...args: never[]) => {
     const serialized = (original as (...a: never[]) => string)(...args)
     chars += serialized?.length ?? 0
+
     return serialized
   }) as typeof JSON.stringify)
+
   try {
     run()
+
     return chars
   } finally {
     spy.mockRestore()
@@ -223,10 +237,12 @@ describe('editor draft projection on the typing path', () => {
     referenceEditorDraftsProjection(drafts)
     draftHashCounter.calls = 0
     draftHashCounter.chars = 0
+
     for (let keystroke = 0; keystroke < typedCharacters; keystroke += 1) {
       drafts = { ...drafts, 'file-0': `${drafts['file-0']}a` }
       referenceEditorDraftsProjection(drafts)
     }
+
     const before = { calls: draftHashCounter.calls, chars: draftHashCounter.chars }
 
     resetRuntimeMobileSyncProjectionCachesForTests()
@@ -234,10 +250,12 @@ describe('editor draft projection on the typing path', () => {
     buildRuntimeMobileEditorDraftsProjection(memoDrafts)
     draftHashCounter.calls = 0
     draftHashCounter.chars = 0
+
     for (let keystroke = 0; keystroke < typedCharacters; keystroke += 1) {
       memoDrafts = { ...memoDrafts, 'file-0': `${memoDrafts['file-0']}a` }
       buildRuntimeMobileEditorDraftsProjection(memoDrafts)
     }
+
     const after = { calls: draftHashCounter.calls, chars: draftHashCounter.chars }
 
     // Keystroke k has grown file-0 by k characters, so the exact totals are closed form.
@@ -267,6 +285,7 @@ describe('editor draft projection on the typing path', () => {
       { 'file-a': 'hello', 'file-b': 'world', 'file-c': 'third' },
       { 'file-a': 'HELLO', 'file-c': 'third' }
     ]
+
     for (const [index, shape] of shapes.entries()) {
       expect({ index, projection: buildRuntimeMobileEditorDraftsProjection(shape) }).toEqual({
         index,
@@ -282,15 +301,20 @@ describe('agent-status projection sort', () => {
     // `<uuid tab id>:<uuid leaf id>`, so model them as unordered hex rather than a sorted
     // `tab-<n>` run that would let TimSort skip most comparisons.
     let seed = 0x2f6e2b1
+
     const nextHex = (): string => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff
+
       return seed.toString(16).padStart(8, '0')
     }
+
     const paneKeys = Array.from({ length: 500 }, () => `${nextHex()}-${nextHex()}:${nextHex()}`)
     const map: AppState['agentStatusByPaneKey'] = {}
+
     for (const [index, paneKey] of paneKeys.entries()) {
       map[paneKey] = makeAgentStatusEntry({ paneKey, prompt: `prompt ${index}` })
     }
+
     // One ping replaces one entry and re-spreads the map, so the sort runs in full again.
     const pinged = { ...map, [paneKeys[0]]: makeAgentStatusEntry({ paneKey: paneKeys[0] }) }
 
@@ -298,6 +322,7 @@ describe('agent-status projection sort', () => {
     let projection = ''
     let beforeCalls = 0
     let afterCalls = 0
+
     try {
       referenceAgentStatusProjection(map)
       beforeCalls = localeCompareSpy.mock.calls.length
@@ -310,6 +335,7 @@ describe('agent-status projection sort', () => {
       // `mockRestore` clears the recorded calls, so read the counts first.
       localeCompareSpy.mockRestore()
     }
+
     // Before: thousands of ICU collator comparisons for a single ping.
     expect(beforeCalls).toBeGreaterThan(3000)
     expect(afterCalls).toBe(0)
@@ -322,9 +348,11 @@ describe('agent-status projection sort', () => {
 
   it('is deterministic for keys where locale and code-unit order disagree', () => {
     const map: AppState['agentStatusByPaneKey'] = {}
+
     for (const paneKey of ['b:leaf', 'A:leaf', 'a:leaf', 'á:leaf', 'B:leaf']) {
       map[paneKey] = makeAgentStatusEntry({ paneKey })
     }
+
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
     const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
@@ -340,9 +368,11 @@ describe('open-files and browser projections', () => {
   it('re-serializes only the changed entry per store write', () => {
     const files = Array.from({ length: 20 }, (_value, index) => makeOpenFile(index))
     const writes = 50
+
     const driveWrites = (project: (openFiles: AppState['openFiles']) => string): void => {
       let openFiles = files as unknown as AppState['openFiles']
       project(openFiles)
+
       for (let write = 0; write < writes; write += 1) {
         const next = [...openFiles]
         next[0] = makeOpenFile(0, { isDirty: write % 2 === 0 })
@@ -354,10 +384,13 @@ describe('open-files and browser projections', () => {
     const before = countSerializedChars(() => {
       driveWrites(referenceOpenFilesProjection)
     })
+
     resetRuntimeMobileSyncProjectionCachesForTests()
+
     const after = countSerializedChars(() => {
       driveWrites(buildRuntimeMobileOpenFilesProjection)
     })
+
     // Only the flipped file re-serializes; the other 19 are reused by identity.
     expect(before / after).toBeGreaterThan(14)
   })
@@ -365,17 +398,22 @@ describe('open-files and browser projections', () => {
   it('re-serializes only the changed browser bucket per store write', () => {
     const workspaces = Array.from({ length: 8 }, (_value, index) => makeBrowserWorkspace(index))
     const pagesByWorkspace: Record<string, never[]> = {}
+
     for (let index = 0; index < 8; index += 1) {
       pagesByWorkspace[`ws-${index}`] = [makeBrowserPage(index)] as never[]
     }
+
     const initial = makeState({
       browserTabsByWorktree: { 'wt-1': workspaces, 'wt-2': workspaces } as never,
       browserPagesByWorkspace: pagesByWorkspace as never
     })
+
     const writes = 50
+
     const driveWrites = (project: (state: AppState) => string): void => {
       let state = initial
       project(state)
+
       for (let write = 0; write < writes; write += 1) {
         const nextWorkspaces = [...(state.browserTabsByWorktree['wt-1'] ?? [])]
         nextWorkspaces[0] = makeBrowserWorkspace(0, { title: `tab 0 (${write})` })
@@ -393,10 +431,13 @@ describe('open-files and browser projections', () => {
     const before = countSerializedChars(() => {
       driveWrites(referenceBrowserProjection)
     })
+
     resetRuntimeMobileSyncProjectionCachesForTests()
+
     const after = countSerializedChars(() => {
       driveWrites(buildRuntimeMobileBrowserProjection)
     })
+
     // Only the 'wt-1' bucket re-serializes; 'wt-2' and every page bucket are reused.
     expect(before / after).toBeGreaterThan(2.5)
   })
@@ -412,6 +453,7 @@ describe('open-files and browser projections', () => {
         makeOpenFile(2, { isUntitled: true, deleteUntouchedOnClose: true, language: undefined })
       ] as unknown as AppState['openFiles']
     ]
+
     for (const [index, shape] of openFileShapes.entries()) {
       expect({ index, projection: buildRuntimeMobileOpenFilesProjection(shape) }).toEqual({
         index,
@@ -437,6 +479,7 @@ describe('open-files and browser projections', () => {
         browserPagesByWorkspace: { 'ws-9': [makeBrowserPage(9, { url: 'a"b\\c' })] } as never
       })
     ]
+
     for (const [index, shape] of browserShapes.entries()) {
       expect({ index, projection: buildRuntimeMobileBrowserProjection(shape) }).toEqual({
         index,
@@ -451,6 +494,7 @@ describe('sync key transitions', () => {
     const drafts = { 'file-0': 'aaa', 'file-1': 'bbb' }
     const files = [makeOpenFile(0), makeOpenFile(1)] as unknown as AppState['openFiles']
     const workspaces = [makeBrowserWorkspace(0)] as never
+
     const status = {
       'tab-0:leaf-0': makeAgentStatusEntry({ paneKey: 'tab-0:leaf-0' })
     } as AppState['agentStatusByPaneKey']

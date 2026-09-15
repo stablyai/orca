@@ -19,6 +19,7 @@ export const DEFAULT_DICTATION_METER: DictationMeterState = {
 }
 
 const CLIPPING_THRESHOLD = 0.98
+
 const CLIPPING_HOLD_MS = 500
 
 function clamp(value: number, min: number, max: number): number {
@@ -46,11 +47,13 @@ export function measureDictationAudioChunk(samples: Float32Array): {
 
   let sumSquares = 0
   let peak = 0
+
   for (const sample of samples) {
     const absoluteSample = Math.abs(sample)
     sumSquares += sample * sample
     peak = Math.max(peak, absoluteSample)
   }
+
   return {
     rms: Math.sqrt(sumSquares / samples.length),
     peak: clamp(peak, 0, 1)
@@ -63,10 +66,12 @@ export function analyzeDictationAudioChunk(
   previous: DictationMeterAnalyzerState
 ): DictationMeterAnalyzerState {
   const { rms, peak } = measureDictationAudioChunk(samples)
+
   const noiseFloor = Math.max(
     0.004,
     previous.noiseFloor * 0.96 + Math.min(rms, previous.noiseFloor * 2) * 0.04
   )
+
   const rawLevel = clamp((rms - noiseFloor) / 0.16, 0, 1)
   const smoothing = rawLevel > previous.smoothedLevel ? 0.58 : 0.2
   const smoothedLevel = previous.smoothedLevel + (rawLevel - previous.smoothedLevel) * smoothing

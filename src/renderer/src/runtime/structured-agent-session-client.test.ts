@@ -22,6 +22,7 @@ vi.mock('./runtime-rpc-client', () => ({
   callRuntimeRpc: mocks.call,
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
+
 vi.mock('./local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalCapabilities,
   ensureLocalRuntimeCapabilities: mocks.ensureLocalCapabilities

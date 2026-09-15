@@ -13,12 +13,14 @@ function replayDataFor(chunks: readonly string[]): string {
   let state = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
   let seq = 0
   let replay = ''
+
   for (const chunk of chunks) {
     const scan = scanTerminalReplyQuerySequences(chunk, seq, state)
     state = scan.state
     seq += chunk.length
     replay += scan.queries.map((query) => query.data).join('')
   }
+
   return replay
 }
 
@@ -40,6 +42,7 @@ describe('terminal reply query scan', () => {
       20,
       EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
     )
+
     const second = scanTerminalReplyQuerySequences('2026$p', 23, first.state)
 
     expect(first.queries).toEqual([])
@@ -52,6 +55,7 @@ describe('terminal reply query scan', () => {
       20,
       EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
     )
+
     const second = scanTerminalReplyQuerySequences('2026$p', 30, first.state)
 
     expect(second.queries).toEqual([])

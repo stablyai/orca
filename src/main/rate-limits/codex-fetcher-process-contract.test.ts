@@ -92,7 +92,9 @@ process.stdin.on('end', () => process.exit(0))
 `
 
 let tempRoot: string
+
 let stubPath: string
+
 let previousExpectedHome: string | undefined
 
 describe('Codex rate-limit process contract', () => {
@@ -115,6 +117,7 @@ describe('Codex rate-limit process contract', () => {
     } else {
       process.env.ORCA_EXPECTED_CODEX_HOME = previousExpectedHome
     }
+
     rmSync(tempRoot, { recursive: true, force: true })
     vi.clearAllMocks()
   })

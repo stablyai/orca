@@ -32,8 +32,10 @@ export function resolvePtySourceCreditLimits(
     maxRetainedSpans: options.maxRetainedSpans ?? DEFAULT_RETAINED_SPANS,
     maxAggregateRetainedSpans: options.maxAggregateRetainedSpans ?? DEFAULT_AGGREGATE_RETAINED_SPANS
   }
+
   for (const [name, value] of Object.entries(limits)) {
     assertPositiveSafeInteger(value, name)
   }
+
   return Object.freeze(limits)
 }

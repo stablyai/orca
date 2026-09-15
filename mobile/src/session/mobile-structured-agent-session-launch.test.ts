@@ -8,6 +8,7 @@ function clientReturning(
 ): RpcClient & { sendRequest: ReturnType<typeof vi.fn> } {
   let responseIndex = 0
   const sendRequest = vi.fn(async () => responses[responseIndex++])
+
   return { sendRequest } as unknown as RpcClient & { sendRequest: ReturnType<typeof vi.fn> }
 }
 
@@ -34,6 +35,7 @@ const acceptedCreateResult = {
     unconfirmedClientMessageIds: []
   }
 }
+
 const acceptedCreate = { ok: true, result: acceptedCreateResult }
 
 describe('mobile structured agent-session launch', () => {
@@ -60,11 +62,13 @@ describe('mobile structured agent-session launch', () => {
       }),
       expect.objectContaining({ budgetSpansConnect: true })
     )
+
     const params = client.sendRequest.mock.calls[1]?.[1] as {
       envelope: { sessionId: string; payloadFingerprint: string }
       worktree: string
       agent: 'codex'
     }
+
     expect(params.envelope.payloadFingerprint).toMatch(/^[0-9a-f]{64}$/)
     expect(params.envelope.sessionId).toMatch(/^codex_[A-Za-z0-9_]{8,128}$/)
   })
@@ -88,10 +92,12 @@ describe('mobile structured agent-session launch', () => {
       worktree: 'id:workspace-1',
       agent: 'claude'
     })
+
     const params = client.sendRequest.mock.calls[1]?.[1] as {
       envelope: { sessionId: string; payloadFingerprint: string }
       agent: string
     }
+
     expect(params.agent).toBe('claude')
     expect(params.envelope.sessionId).toMatch(/^claude_[A-Za-z0-9_]{8,128}$/)
     expect(params.envelope.payloadFingerprint).toMatch(/^[0-9a-f]{64}$/)
@@ -124,6 +130,7 @@ describe('mobile structured agent-session launch', () => {
 
   it('retries a transient unresolved worktree before deciding structured support', async () => {
     vi.useFakeTimers()
+
     const client = clientReturning(
       { ok: false, error: { code: 'selector_not_found', message: 'Selector not found' } },
       { ok: true, result: { supported: true } },
@@ -231,6 +238,7 @@ describe('mobile structured agent-session launch', () => {
   describe.each(['top-level', 'nested'])('%s refusal messages', (location) => {
     function refusalClient(message: unknown) {
       const refusal = { code: 'method_not_found', ...(message === undefined ? {} : { message }) }
+
       return clientReturning(
         { ok: true, result: { supported: true } },
         location === 'top-level'

@@ -18,6 +18,7 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
     const koKeys = ko.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
     expect(Object.keys(enKeys).length).toBe(16)
     expect(Object.keys(koKeys).length).toBe(16)
+
     for (const [hash, enVal] of Object.entries(enKeys)) {
       expect(typeof enVal).toBe('string')
       expect((koKeys as Record<string, string>)[hash]).toBeTruthy()

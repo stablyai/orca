@@ -4,15 +4,18 @@ import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 
 function getPastePayloadCorpusText(name: string): string {
   const entry = PASTE_PAYLOAD_CORPUS.find((item) => item.name === name)
+
   if (!entry) {
     throw new Error(`Missing paste payload corpus case: ${name}`)
   }
+
   return entry.text
 }
 
 function withWin32Platform<T>(callback: () => T): T {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   try {
     return callback()
   } finally {

@@ -24,8 +24,10 @@ export function addEditorFileIdMigration(
   if (from === to) {
     return
   }
+
   const migrations =
     migrationsByWorktree[worktreeId] ?? (migrationsByWorktree[worktreeId] = new Map())
+
   migrations.set(from, to)
 }
 
@@ -53,10 +55,13 @@ export class LegacyHydratedEditorFileIndex {
   resolve(file: PersistedOpenFile, worktreeId: string): string {
     const owner = this.ownerKey(worktreeId, file.runtimeEnvironmentId)
     const existing = this.filesByPath.get(file.filePath)?.get(owner)
+
     if (existing !== undefined) {
       return existing
     }
+
     const occupied = this.ownersById.get(file.filePath)
+
     return occupied && (occupied.size > 1 || !occupied.has(owner))
       ? buildOwnedEditorFileId(file.filePath, worktreeId, file.runtimeEnvironmentId)
       : file.filePath
@@ -65,14 +70,18 @@ export class LegacyHydratedEditorFileIndex {
   add(file: LegacyHydratedEditorFile): void {
     const owner = this.ownerKey(file.worktreeId, file.runtimeEnvironmentId)
     let files = this.filesByPath.get(file.filePath)
+
     if (!files) {
       files = new Map()
       this.filesByPath.set(file.filePath, files)
     }
+
     if (!files.has(owner)) {
       files.set(owner, file.id)
     }
+
     this.addIdOwner(file.id, owner)
+
     if (file.markdownPreviewSourceFileId !== undefined) {
       this.addIdOwner(file.markdownPreviewSourceFileId, owner)
     }
@@ -80,10 +89,12 @@ export class LegacyHydratedEditorFileIndex {
 
   private addIdOwner(id: string, owner: string): void {
     let owners = this.ownersById.get(id)
+
     if (!owners) {
       owners = new Set()
       this.ownersById.set(id, owners)
     }
+
     owners.add(owner)
   }
 }
@@ -96,19 +107,23 @@ export function migrateEditorFileId(
   if (!fileId) {
     return null
   }
+
   return migrationsByWorktree[worktreeId]?.get(fileId) ?? fileId
 }
 
 export function dedupeEditorTabOrder(tabIds: string[], validTabIds: Set<string>): string[] {
   const seen = new Set<string>()
   const result: string[] = []
+
   for (const tabId of tabIds) {
     if (!validTabIds.has(tabId) || seen.has(tabId)) {
       continue
     }
+
     seen.add(tabId)
     result.push(tabId)
   }
+
   return result
 }
 
@@ -119,9 +134,11 @@ export function areStringArraysEqual(
   if (a === b) {
     return true
   }
+
   if (!a || !b || a.length !== b.length) {
     return false
   }
+
   return a.every((value, index) => value === b[index])
 }
 
@@ -136,54 +153,71 @@ export function migrateHydratedEditorTabsAndGroups(
 
   for (const [worktreeId, idMigrations] of Object.entries(migrationsByWorktree)) {
     const tabs = state.unifiedTabsByWorktree[worktreeId]
+
     if (!tabs) {
       continue
     }
+
     const tabIdMigrations = new Map<string, string>()
+
     const nextTabs = tabs.map((tab) => {
       // Why: widened for the shared live-move rekey — a move retargets every editor-family tab (diff/conflict-review/check-details), not only plain 'editor'.
       if (!isEditorTabContentType(tab.contentType)) {
         return tab
       }
+
       const nextId = idMigrations.get(tab.id) ?? tab.id
       const nextEntityId = idMigrations.get(tab.entityId) ?? tab.entityId
+
       if (nextId === tab.id && nextEntityId === tab.entityId) {
         return tab
       }
+
       tabsChanged = true
+
       if (nextId !== tab.id) {
         tabIdMigrations.set(tab.id, nextId)
       }
+
       return { ...tab, id: nextId, entityId: nextEntityId }
     })
+
     if (tabIdMigrations.size > 0) {
       tabIdMigrationsByWorktree[worktreeId] = tabIdMigrations
     }
+
     nextUnifiedTabsByWorktree[worktreeId] = nextTabs
   }
 
   const nextGroupsByWorktree: Record<string, TabGroup[]> = { ...state.groupsByWorktree }
+
   for (const [worktreeId, tabIdMigrations] of Object.entries(tabIdMigrationsByWorktree)) {
     const groups = state.groupsByWorktree[worktreeId]
+
     if (!groups) {
       continue
     }
+
     const validTabIds = new Set((nextUnifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
     nextGroupsByWorktree[worktreeId] = groups.map((group) => {
       const tabOrder = dedupeEditorTabOrder(
         group.tabOrder.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
         validTabIds
       )
+
       const activeTabId = group.activeTabId
         ? (tabIdMigrations.get(group.activeTabId) ?? group.activeTabId)
         : null
+
       const validActiveTabId = activeTabId && validTabIds.has(activeTabId) ? activeTabId : null
+
       const recentTabIds = group.recentTabIds
         ? dedupeEditorTabOrder(
             group.recentTabIds.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
             validTabIds
           )
         : group.recentTabIds
+
       if (
         validActiveTabId === group.activeTabId &&
         areStringArraysEqual(tabOrder, group.tabOrder) &&
@@ -191,7 +225,9 @@ export function migrateHydratedEditorTabsAndGroups(
       ) {
         return group
       }
+
       groupsChanged = true
+
       return {
         ...group,
         activeTabId: validActiveTabId,

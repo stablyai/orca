@@ -11,6 +11,7 @@ type ExecFileAsync = (
 ) => Promise<{ stdout: string; stderr: string }>
 
 const execFileAsync = promisify(execFile) as ExecFileAsync
+
 // Why: bound the df/diskutil volume probes so a wedged mount can't stall worktree creation.
 const APFS_FILESYSTEM_PROBE_TIMEOUT_MS = 5_000
 
@@ -60,18 +61,23 @@ async function getDarwinFilesystemInfo(
   const { stdout: dfOutput } = await deps.execFileAsync('/bin/df', ['-P', path], {
     timeout: APFS_FILESYSTEM_PROBE_TIMEOUT_MS
   })
+
   const device = dfOutput.trim().split(/\r?\n/)[1]?.trim().split(/\s+/)[0]
+
   if (!device) {
     throw new Error(`Could not resolve filesystem device for ${path}`)
   }
+
   const { stdout: diskutilOutput } = await deps.execFileAsync(
     '/usr/sbin/diskutil',
     ['info', '-plist', device],
     { timeout: APFS_FILESYSTEM_PROBE_TIMEOUT_MS }
   )
+
   const filesystemNameMatch = /<key>FilesystemName<\/key>\s*<string>([^<]+)<\/string>/u.exec(
     diskutilOutput
   )
+
   return {
     device,
     filesystemName: filesystemNameMatch?.[1] ?? ''
@@ -85,13 +91,16 @@ async function getCachedDarwinFilesystemInfo(
 ): Promise<DarwinFilesystemInfo> {
   const deviceId = (await stat(path)).dev
   const cached = cache.get(deviceId)
+
   if (cached) {
     return cached
   }
+
   // Why: cache the pending (or rejected) probe so every path on this volume
   // reuses one df+diskutil pair instead of respawning them per copy.
   const pending = getDarwinFilesystemInfo(path, deps)
   cache.set(deviceId, pending)
+
   return pending
 }
 
@@ -105,6 +114,7 @@ async function isSameApfsVolume(
     getCachedDarwinFilesystemInfo(source, deps, cache),
     getCachedDarwinFilesystemInfo(targetDirectory, deps, cache)
   ])
+
   return (
     sourceInfo.device === targetInfo.device &&
     sourceInfo.filesystemName === 'APFS' &&
@@ -149,8 +159,10 @@ async function cloneFileWithApfs(
   deps: ApfsCloneDeps
 ): Promise<void> {
   const tempTarget = resolve(dirname(target), `.orca-apfs-clone-${deps.randomUUID()}`)
+
   try {
     await deps.execFileAsync('/bin/cp', ['-c', source, tempTarget])
+
     try {
       // Why: link(2) is an atomic no-clobber publish for files; rename(2) can
       // overwrite a target that appeared after the earlier existence check.
@@ -159,6 +171,7 @@ async function cloneFileWithApfs(
       if (isAlreadyExistsError(error)) {
         throw new WorktreeLinkedPathTargetExistsError(target)
       }
+
       throw error
     }
   } finally {
@@ -172,6 +185,7 @@ async function cloneDirectoryWithApfs(
   deps: ApfsCloneDeps
 ): Promise<void> {
   const sourceMode = (await stat(source)).mode & 0o777
+
   try {
     // Why: reserve the final directory path before copying into it so a raced
     // user-created directory cannot be replaced by a final rename.
@@ -180,6 +194,7 @@ async function cloneDirectoryWithApfs(
     if (isAlreadyExistsError(error)) {
       throw new WorktreeLinkedPathTargetExistsError(target)
     }
+
     throw error
   }
 

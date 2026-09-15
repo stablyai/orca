@@ -7,6 +7,7 @@ import { useAppStore } from '../store'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 
 const refresh = vi.fn().mockResolvedValue(undefined)
+
 const invalidate = vi.fn()
 
 const status = (overrides: Partial<PreflightStatus> = {}): PreflightStatus => ({

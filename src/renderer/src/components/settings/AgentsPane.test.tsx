@@ -32,6 +32,7 @@ const detectedAgentsMock = vi.hoisted(() => ({
   refresh: vi.fn(),
   lastTarget: undefined as unknown
 }))
+
 const agentRuntimeSettingMock = vi.hoisted(() => ({
   lastRefresh: null as (() => Promise<unknown>) | null
 }))
@@ -39,6 +40,7 @@ const agentRuntimeSettingMock = vi.hoisted(() => ({
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: (target: unknown) => {
     detectedAgentsMock.lastTarget = target
+
     return {
       detectedIds: detectedAgentsMock.detectedIds,
       isLoading: detectedAgentsMock.isLoading,
@@ -51,10 +53,12 @@ vi.mock('@/hooks/useDetectedAgents', () => ({
 
 vi.mock('./AgentRuntimeSetting', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentRuntimeSettingModule>()
+
   return {
     ...actual,
     AgentRuntimeSetting: (props: React.ComponentProps<typeof actual.AgentRuntimeSetting>) => {
       agentRuntimeSettingMock.lastRefresh = props.refresh
+
       return actual.AgentRuntimeSetting(props)
     }
   }
@@ -72,9 +76,11 @@ type Deferred = {
 
 function createDeferred(): Deferred {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -104,15 +110,20 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
+
   if (element.props?.control) {
     visit(element.props.control, cb)
   }
@@ -129,9 +140,11 @@ function findSwitchRow(node: unknown, ariaLabel: string): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('switch row not found')
   }
+
   return found
 }
 
@@ -142,9 +155,11 @@ function findSegmentedControl(node: unknown, ariaLabel: string): ReactElementLik
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('segmented control not found')
   }
+
   return found
 }
 
@@ -180,6 +195,7 @@ describe('AgentsPane', () => {
     const initialState = useAppStore.getInitialState() as unknown as {
       runtimeEnvironments: unknown
     }
+
     const priorRuntimeEnvironments = initialState.runtimeEnvironments
     initialState.runtimeEnvironments = [{ id: 'env-1', name: 'Coder' }]
 
@@ -253,6 +269,7 @@ describe('AgentsPane', () => {
 
   it('hides desktop-only awake modes in paired web clients', () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
     try {
       expect(renderPane(getDefaultSettings('/tmp'))).not.toContain('Keep computer awake')
       expect(
@@ -294,6 +311,7 @@ describe('AgentsPane', () => {
 
   it('updates the global project runtime when changing agent runtime', async () => {
     const updateSettings = vi.fn()
+
     const element = AgentRuntimeSetting({
       settings: getDefaultSettings('/tmp'),
       updateSettings,
@@ -303,6 +321,7 @@ describe('AgentsPane', () => {
       wslDistros: ['Ubuntu'],
       wslCapabilitiesLoading: false
     })
+
     const control = findSegmentedControl(element, 'Agent runtime')
     const onChange = control.props.onChange as (value: 'windows-host' | 'wsl') => void
 
@@ -323,6 +342,7 @@ describe('AgentsPane', () => {
 
   it('updates the keep-awake mode with its legacy fallback', () => {
     const updateSettings = vi.fn()
+
     const element = AgentAwakeSetting({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -346,6 +366,7 @@ describe('AgentsPane', () => {
 
   it('toggles the agent status hook setting with the next value', () => {
     const updateSettings = vi.fn()
+
     const element = AgentStatusHooksSetting({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -367,6 +388,7 @@ describe('AgentsPane', () => {
 
   it('toggles generated tab titles with the next value', () => {
     const updateSettings = vi.fn()
+
     const element = AgentGeneratedTabTitlesSetting({
       settings: {
         ...getDefaultSettings('/tmp'),
@@ -417,6 +439,7 @@ describe('AgentsPane', () => {
   it('applies the selected agent permission mode from settings without a mixed segment', () => {
     const onChange = vi.fn()
     const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+
     const props = element.props.children.props.action.props as {
       value: 'yolo'
       onChange: (value: 'yolo' | 'manual' | 'mixed') => void
@@ -465,11 +488,13 @@ describe('AgentsPane', () => {
 
   it('only toggles agent availability when the segmented value changes', () => {
     const onSetEnabled = vi.fn()
+
     const control = AgentAvailabilityControl({
       label: 'Claude',
       isEnabled: true,
       onSetEnabled
     })
+
     const props = control.props as {
       value: 'enabled' | 'disabled'
       onChange: (value: 'enabled' | 'disabled') => void
@@ -527,23 +552,29 @@ describe('AgentsPane', () => {
 
   it('serializes rapid availability writes against the latest settings snapshot', async () => {
     const queueAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
+
     const settings: GlobalSettings = {
       ...getDefaultSettings('/tmp'),
       defaultTuiAgent: null,
       disabledTuiAgents: []
     }
+
     const writes: Deferred[] = []
     const updates: Partial<GlobalSettings>[] = []
 
     useAppStore.setState({ settings })
+
     const updateSettings = vi.fn((update: Partial<GlobalSettings>) => {
       updates.push(update)
+
       const nextSettings = {
         ...(useAppStore.getState().settings ?? settings),
         ...update
       }
+
       const write = createDeferred()
       writes.push(write)
+
       return write.promise.then(() => {
         useAppStore.setState({ settings: nextSettings })
       })
@@ -556,6 +587,7 @@ describe('AgentsPane', () => {
       agentId: 'claude',
       enabled: false
     })
+
     const secondWrite = queueAvailabilityUpdate({
       getSettings: () => useAppStore.getState().settings,
       fallbackSettings: settings,
@@ -581,23 +613,29 @@ describe('AgentsPane', () => {
 
   it('keeps repeated queued availability requests idempotent', async () => {
     const queueAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
+
     const settings: GlobalSettings = {
       ...getDefaultSettings('/tmp'),
       defaultTuiAgent: null,
       disabledTuiAgents: []
     }
+
     const writes: Deferred[] = []
     const updates: Partial<GlobalSettings>[] = []
 
     useAppStore.setState({ settings })
+
     const updateSettings = vi.fn((update: Partial<GlobalSettings>) => {
       updates.push(update)
+
       const nextSettings = {
         ...(useAppStore.getState().settings ?? settings),
         ...update
       }
+
       const write = createDeferred()
       writes.push(write)
+
       return write.promise.then(() => {
         useAppStore.setState({ settings: nextSettings })
       })
@@ -610,6 +648,7 @@ describe('AgentsPane', () => {
       agentId: 'claude',
       enabled: false
     })
+
     const secondWrite = queueAvailabilityUpdate({
       getSettings: () => useAppStore.getState().settings,
       fallbackSettings: settings,
@@ -635,6 +674,7 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   const withEmptyDetection = <T,>(run: () => T): T => {
     const previous = detectedAgentsMock.detectedIds
     detectedAgentsMock.detectedIds = []
+
     try {
       return run()
     } finally {
@@ -646,6 +686,7 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
   const pillMarkup = (markup: string, label: string): string => {
     const chunk = markup.split('<button').find((part) => part.includes(label))
     expect(chunk, `no pill labelled ${label}`).toBeDefined()
+
     return String(chunk)
   }
 
@@ -657,6 +698,7 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
     const markup = withEmptyDetection(() =>
       renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
     )
+
     expect(pillMarkup(markup, 'Auto')).toContain('aria-pressed="false"')
   })
 
@@ -666,6 +708,7 @@ describe('empty agent detection must not cost the saved default (#15256)', () =>
     const markup = withEmptyDetection(() =>
       renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
     )
+
     expect(markup).toContain('Saved as your default, but not detected right now')
   })
 

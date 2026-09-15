@@ -7,6 +7,7 @@ import { isLinearMetadataGroupSelectionPartial } from './linear-issue-attribute-
 function randomGroups(rng: () => number): { key: string; ids: string[] }[] {
   const count = 1 + Math.floor(rng() * 8)
   let next = 0
+
   return Array.from({ length: count }, (_unused, group) => ({
     key: `g${group}`,
     ids: Array.from({ length: 1 + Math.floor(rng() * 4) }, () => `id-${next++}`)
@@ -16,8 +17,10 @@ function randomGroups(rng: () => number): { key: string; ids: string[] }[] {
 describe('coverage pill and notice agree', () => {
   it('shows the notice exactly when the pill reads partial', () => {
     let seed = 1337
+
     const rng = (): number => {
       seed = (seed * 1103515245 + 12345) % 2147483648
+
       return seed / 2147483648
     }
 
@@ -27,6 +30,7 @@ describe('coverage pill and notice agree', () => {
       const selected = every.filter(() => rng() < 0.5)
       const truncated = rng() < 0.3
       const partial = isLinearMetadataGroupSelectionPartial(groups, selected, truncated)
+
       const notice = LinearFacetCoverageNotice({
         facet: 'status',
         options: groups,
@@ -34,6 +38,7 @@ describe('coverage pill and notice agree', () => {
         max: 100,
         truncated
       })
+
       expect(notice === null).toBe(!partial)
     }
   })

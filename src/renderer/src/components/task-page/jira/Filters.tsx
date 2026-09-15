@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+
 export function TaskPageJiraFilters({
   model
 }: {
@@ -33,12 +34,14 @@ export function TaskPageJiraFilters({
     setNewJiraIssueTypeId,
     sortedAvailableJiraProjects
   } = model
+
   return (
     <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {jiraPresets.map((preset) => {
             const active = !jiraSearchInput && activeJiraPreset === preset.id
+
             return (
               <button
                 key={preset.id}
@@ -143,6 +146,7 @@ export function TaskPageJiraFilters({
                 ) {
                   return
                 }
+
                 e.preventDefault()
                 const trimmed = jiraSearchInput.trim()
                 setJiraSearchInput(trimmed)

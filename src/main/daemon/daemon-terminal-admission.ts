@@ -51,22 +51,28 @@ export class DaemonTerminalAdmission {
 
   async createOrAttach(clientId: string, request: CreateOrAttachRequest): Promise<unknown> {
     const client = this.options.connections.get(clientId)
+
     if (!this.options.isAcceptingWork()) {
       throw new Error('Daemon temporarily unavailable; reconnect')
     }
+
     if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
       throw new Error('Daemon client connection is incomplete; reconnect')
     }
+
     const payload = request.payload
     const attachOnly = payload.attachOnly === true
+
     if (!attachOnly && this.options.endpoint.hasLostOwnership()) {
       this.options.requestEndpointRetirement()
       throw new Error(DAEMON_ENDPOINT_LOST_MESSAGE)
     }
+
     this.createOrAttachInFlight++
     let routedSessionId = payload.sessionId
     let result: CreateOrAttachResult
     let spawnPreparation: PendingPtySpawnPreparation | null = null
+
     try {
       if (
         payload.agentSessionEnsure !== undefined &&
@@ -75,24 +81,29 @@ export class DaemonTerminalAdmission {
       ) {
         throw new Error('agent_session_identity_required')
       }
+
       spawnPreparation = this.options.preparations.register(
         payload.sessionId,
         clientId,
         request.id,
         payload.cancelAfterMs
       )
+
       if (!attachOnly) {
         await this.options.preparations.prepareUnlessCanceled(payload.sessionId, spawnPreparation)
       }
+
       if (payload.historySeed !== undefined && payload.historySeedTransferId !== undefined) {
         throw new Error('Multiple terminal history seed sources')
       }
+
       const historySeedChunks =
         payload.historySeedTransferId !== undefined
           ? this.options.historySeedTransfers.take(clientId, payload.historySeedTransferId)
           : payload.historySeed !== undefined
             ? [payload.historySeed]
             : undefined
+
       result = await this.options.host.createOrAttach({
         sessionId: payload.sessionId,
         cols: payload.cols,
@@ -125,11 +136,13 @@ export class DaemonTerminalAdmission {
       if (spawnPreparation) {
         this.options.preparations.finish(payload.sessionId, spawnPreparation)
       }
+
       this.createOrAttachInFlight--
       this.options.reevaluateIdleShutdown()
     }
 
     routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? payload.sessionId
+
     if (
       this.options.connections.get(clientId) !== client ||
       !client.authenticatedPairEstablished ||
@@ -138,8 +151,10 @@ export class DaemonTerminalAdmission {
       this.options.host.detach(routedSessionId, result.attachToken)
       throw new TerminalAttachCanceledError(routedSessionId)
     }
+
     this.options.attachments.attach(routedSessionId, clientId, result.attachToken)
     this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
+
     if (this.options.transientFactRelay.isBackgrounded(routedSessionId)) {
       this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
         type: 'event',
@@ -148,10 +163,12 @@ export class DaemonTerminalAdmission {
         payload: { background: true }
       })
     }
+
     this.options.log.log(result.isNew ? 'session-created' : 'session-attached', {
       sessionId: routedSessionId,
       pid: result.pid
     })
+
     return {
       isNew: result.isNew,
       snapshot: result.snapshot,
@@ -177,10 +194,12 @@ export class DaemonTerminalAdmission {
         const routedSessionId = sessionId()
         this.options.transientFactRelay.onSessionData(routedSessionId, data)
         const lastInputAt = this.options.attachments.lastInputAt(routedSessionId)
+
         const isInteractiveOutput =
           data.length <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS &&
           lastInputAt !== undefined &&
           performance.now() - lastInputAt <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_WINDOW_MS
+
         this.options.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
           flushImmediately: isInteractiveOutput,
           flushMaxChars: DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS,

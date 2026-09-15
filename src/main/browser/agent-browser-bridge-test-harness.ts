@@ -24,6 +24,7 @@ export function mockBrowserManager(
           return tabId
         }
       }
+
       return null
     },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
@@ -68,6 +69,7 @@ export function mockWebContents(
   title = 'Example'
 ): MockWebContents {
   let currentUrl = url
+
   return {
     id,
     getURL: () => currentUrl,
@@ -102,6 +104,7 @@ export function overrideBridgeWebContentsLookup(
     id: number
   ) {
     const target = webContentsFromIdMock(id) as { isDestroyed: () => boolean } | null
+
     return target && !target.isDestroyed() ? target : null
   }
 }
@@ -111,6 +114,7 @@ export function createSucceedWith(execFileMock: Mock, stdinWrites: string[]) {
     execFileMock.mockImplementation(
       (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
         cb(null, JSON.stringify({ success: true, data }), '')
+
         return {
           stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
         }

@@ -12,10 +12,12 @@ import { app, type BrowserWindow } from 'electron'
  */
 export function runAfterFirstWindowShown(task: () => void, fallbackMs: number): void {
   let ran = false
+
   const run = (): void => {
     if (ran) {
       return
     }
+
     ran = true
     clearTimeout(fallback)
     // Why setImmediate: keep the work off the event handler that reveals the window, so it paints first.
@@ -29,6 +31,7 @@ export function runAfterFirstWindowShown(task: () => void, fallbackMs: number): 
       }
     })
   }
+
   const fallback = setTimeout(run, fallbackMs)
   fallback.unref?.()
   app.once('browser-window-created', (_event: Electron.Event, window: BrowserWindow) => {

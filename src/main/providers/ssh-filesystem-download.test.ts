@@ -39,12 +39,14 @@ describe('downloadFolderViaSftp', () => {
   async function createDestination(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
     roots.push(root)
+
     return join(root, 'src')
   }
 
   it('uses exclusive local reservations instead of guessing destination case sensitivity', async () => {
     const destination = await createDestination()
     let transferCount = 0
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -54,10 +56,13 @@ describe('downloadFolderViaSftp', () => {
       ),
       fastGet: vi.fn((_source: string, _destination: string, callback: (err?: Error) => void) => {
         transferCount += 1
+
         if (transferCount === 1) {
           void writeFile(join(destination, 'a.txt'), 'claimed').then(() => callback())
+
           return
         }
+
         callback()
       }),
       end: vi.fn()
@@ -71,6 +76,7 @@ describe('downloadFolderViaSftp', () => {
 
   it('rejects special remote entries before SFTP tries to open them', async () => {
     const destination = await createDestination()
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -90,6 +96,7 @@ describe('downloadFolderViaSftp', () => {
 
   it('rejects a file symlink that could escape the selected remote tree', async () => {
     const destination = await createDestination()
+
     const sftp = {
       stat: vi.fn(
         (remotePath: string, callback: (err: Error | undefined, value: unknown) => void) =>
@@ -113,6 +120,7 @@ describe('downloadFolderViaSftp', () => {
 
   it('sanitizes extended Windows device names in nested entries', async () => {
     const destination = await createDestination()
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -133,6 +141,7 @@ describe('downloadFolderViaSftp', () => {
   it('preserves legal POSIX backslashes in opaque SFTP child names', async () => {
     const destination = await createDestination()
     const sourcePath = '/remote/parent\\literal'
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -159,6 +168,7 @@ describe('downloadFolderViaSftp', () => {
 
   it('rejects Windows-path traversal names when the remote host is Windows', async () => {
     const destination = await createDestination()
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -181,6 +191,7 @@ describe('downloadFolderViaSftp', () => {
   it('waits for active SFTP file handles to quiesce when canceled', async () => {
     const destination = await createDestination()
     let fastGetCallback: ((error?: Error) => void) | undefined
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -193,11 +204,13 @@ describe('downloadFolderViaSftp', () => {
       }),
       end: vi.fn()
     }
+
     const controller = new AbortController()
 
     const result = downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination, {
       signal: controller.signal
     })
+
     await vi.waitFor(() => expect(sftp.fastGet).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
 
@@ -222,6 +235,7 @@ describe('downloadFolderViaSftp', () => {
   it('cancels a pending SFTP directory read', async () => {
     const destination = await createDestination()
     let readDirCallback: ((error?: Error) => void) | undefined
+
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
         callback(undefined, sftpStats('directory'))
@@ -232,11 +246,13 @@ describe('downloadFolderViaSftp', () => {
       fastGet: vi.fn(),
       end: vi.fn()
     }
+
     const controller = new AbortController()
 
     const result = downloadFolderViaSftp(async () => sftp as never, '/remote/src', destination, {
       signal: controller.signal
     })
+
     await vi.waitFor(() => expect(sftp.readdir).toHaveBeenCalledTimes(1))
     controller.abort(new Error('renderer closed'))
     readDirCallback?.(new Error('channel closed'))

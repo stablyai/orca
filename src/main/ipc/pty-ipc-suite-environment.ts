@@ -85,6 +85,7 @@ export type PtyIpcSuiteEnvironment = {
 /** Registers the shared beforeEach/afterEach every pty IPC suite file relies on. */
 export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+
   const mainWindow = {
     isDestroyed: () => false,
     isFocused: () => true,
@@ -97,7 +98,9 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       isDestroyed: vi.fn(() => false)
     }
   }
+
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
+
   const foreignWindowIpcEvent = {
     sender: {
       on: vi.fn(),
@@ -106,12 +109,14 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       isDestroyed: vi.fn(() => false)
     }
   }
+
   const envScope = createPtyIpcProcessEnvScope()
 
   beforeEach(() => {
     // Why here: pty.ts registers against injected surfaces now, so the mocked ipcMain
     // must be installed for the shared `handlers` map to keep capturing registrations.
     setPtyHostBindings({ ipc: testPtyIpcSurface() })
+
     // Why here: pty.ts reads app paths and the packaged flag through the AppEnvironment
     // port now, so the shared vi.mock('electron') app object alone is inert. Back the
     // port with the same mocks so every suite's existing expectations still hold.
@@ -123,6 +128,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
         app: { isPackaged: boolean; getPath: (name: string) => string; getVersion: () => string }
       }
     ).app
+
     installFakeAppEnvironment({
       getPath: (name) => electronAppMock.getPath(name),
       isPackaged: () => electronAppMock.isPackaged,
@@ -188,6 +194,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       if (handlers.has(channel)) {
         throw new Error(`Attempted to register a second handler for '${channel}'`)
       }
+
       handlers.set(channel, handler)
     })
     removeHandlerMock.mockImplementation((channel: string) => {
@@ -197,6 +204,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     onMock.mockImplementation((channel: string, listener: (...args: unknown[]) => void) => {
       if (channel === 'pty:rendererDispatcherReady') {
         listener(mainWindowIpcEvent)
+
         // Drain the handshake's empty flush so it can't later perturb send-timing assertions.
         if (vi.isFakeTimers()) {
           vi.advanceTimersByTime(0)
@@ -233,6 +241,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
         options?: { materializeDefaultHome?: boolean }
       ) => {
         const materializeDefaultHome = options?.materializeDefaultHome !== false
+
         if (kind === 'omp') {
           // Why: bare shells no longer create ~/.omp; only a userData status path is set (#10196).
           if (!existingAgentDir && !materializeDefaultHome) {
@@ -241,22 +250,27 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
                 '/tmp/orca-user-data/omp-managed-status-extension/orca-agent-status.ts'
             }
           }
+
           return {
             ORCA_OMP_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-omp-agent',
             ORCA_OMP_STATUS_EXTENSION: `${existingAgentDir ?? '/tmp/default-omp-agent'}/extensions/orca-agent-status.ts`
           }
         }
+
         if (kind === 'prime-agent') {
           if (!existingAgentDir && !materializeDefaultHome) {
             return {}
           }
+
           return {
             ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-prime-agent'
           }
         }
+
         if (!existingAgentDir && !materializeDefaultHome) {
           return {}
         }
+
         return {
           ORCA_PI_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-pi-agent'
         }
@@ -278,6 +292,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     _resetLocalPtyProviderStateForTest()
     _resetWslCachesForTests()
     vi.useRealTimers()
+
     // Why: sshProviders is module-level state; a leftover id leaks into later tests (pty:listSessions sweeps every provider).
     for (const leakedConnectionId of [
       'ssh-1',
@@ -293,6 +308,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     ]) {
       unregisterSshPtyProvider(leakedConnectionId)
     }
+
     setLocalPtyProvider(new LocalPtyProvider())
     envScope.restoreProcessEnv()
   })

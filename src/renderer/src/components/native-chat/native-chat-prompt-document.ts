@@ -43,13 +43,16 @@ export function promptTextMap(doc: ProseMirrorNode): { text: string; positions: 
       text += '\n'
       positions.push(blockOffset + 1)
     }
+
     block.forEach((node, offset) => {
       const start = blockOffset + 1 + offset
+
       const value = node.isText
         ? node.text!
         : node.type.name === 'hardBreak'
           ? '\n'
           : String(node.attrs.token ?? '')
+
       for (let i = 0; i < value.length; i++) {
         text += value[i]
         positions.push(
@@ -58,11 +61,13 @@ export function promptTextMap(doc: ProseMirrorNode): { text: string; positions: 
       }
     })
   })
+
   return { text, positions }
 }
 
 export function promptTextOffset(doc: ProseMirrorNode, position: number): number {
   const { positions } = promptTextMap(doc)
   const index = positions.findIndex((candidate) => candidate >= position)
+
   return index === -1 ? positions.length - 1 : index
 }

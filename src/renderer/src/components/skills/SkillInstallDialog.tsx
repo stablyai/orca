@@ -51,9 +51,11 @@ export function SkillInstallDialog({
   // would freeze the picker on whichever machine was selected first.
   const [providerChoice, setProviderChoice] = useState<Set<SkillInstallProviderId> | null>(null)
   const [workspace, setWorkspace] = useState<string>('')
+
   const [executionTarget, setExecutionTarget] = useState<{ kind: 'wsl'; distro: string } | null>(
     null
   )
+
   const [busy, setBusy] = useState(false)
   const [bundleBusy, setBundleBusy] = useState(false)
   const autoResolved = useRef(false)
@@ -61,10 +63,12 @@ export function SkillInstallDialog({
   const [result, setResult] = useState<SkillInstallResult | null>(null)
   const [destinationPreview, setDestinationPreview] = useState<SkillInstallPreview | null>(null)
   const installProgress = useSkillInstallProgress()
+
   const detectedAgents = useSkillInstallDetectedAgents({
     environmentId,
     wslDistro: executionTarget?.distro ?? null
   })
+
   const providers = providerChoice ?? defaultSelectedSkillProviders(detectedAgents)
   const installRisk = useSkillInstallRisk(preview?.version ?? null)
 
@@ -72,6 +76,7 @@ export function SkillInstallDialog({
     () => skillInstallWorkspaceChoices({ environmentId, folderWorkspaces, repos, worktreesByRepo }),
     [environmentId, folderWorkspaces, repos, worktreesByRepo]
   )
+
   const sshConnections = useMemo(
     () =>
       [...sshTargetLabels.entries()].map(([id, label]) => ({
@@ -84,6 +89,7 @@ export function SkillInstallDialog({
 
   const resolveLink = useCallback(async (value: string): Promise<void> => {
     const shareId = parseSkillShareId(value)
+
     if (!shareId) {
       setError(
         translate(
@@ -91,13 +97,17 @@ export function SkillInstallDialog({
           'Enter an Orca skill share link.'
         )
       )
+
       return
     }
+
     setBusy(true)
     setError(null)
     setResult(null)
+
     try {
       const operation = await resolveSkillShareForInstall(shareId)
+
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'unconfigured'
@@ -107,8 +117,10 @@ export function SkillInstallDialog({
                 'This share is unavailable. The link may be invalid, expired, or revoked.'
               )
         )
+
         return
       }
+
       setPreview({ shareId, version: operation.value.version })
     } catch (cause) {
       console.warn('[skills] share resolution failed:', cause)
@@ -135,6 +147,7 @@ export function SkillInstallDialog({
     if (!open || !initialLink || autoResolved.current) {
       return
     }
+
     autoResolved.current = true
     void resolveLink(initialLink)
   }, [initialLink, open, resolveLink])
@@ -143,13 +156,18 @@ export function SkillInstallDialog({
     if (!preview) {
       return
     }
+
     const choice = workspaceChoices.find((candidate) => candidate.id === workspace)
+
     if (scope === 'workspace' && !choice) {
       setError(translate('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.'))
+
       return
     }
+
     setBusy(true)
     setError(null)
+
     try {
       const destination: SkillInstallDestination =
         scope === 'global'
@@ -165,6 +183,7 @@ export function SkillInstallDialog({
           : choice?.kind === 'worktree'
             ? { scope: 'workspace', worktreeId: choice.id }
             : { scope: 'workspace', folderWorkspaceId: choice!.id }
+
       if (!discardLocal) {
         const checked = await window.api.skills.previewInstall({
           ...(environmentId === 'local' || environmentId.startsWith('ssh:')
@@ -180,11 +199,15 @@ export function SkillInstallDialog({
           },
           destination
         })
+
         if (checked.status === 'unsupported') {
           setError(checked.message)
+
           return
         }
+
         setDestinationPreview(checked.value)
+
         if (
           ['modified', 'unowned', 'external-link', 'name-collision'].includes(
             checked.value.currentState
@@ -193,8 +216,10 @@ export function SkillInstallDialog({
           return
         }
       }
+
       const operationId = crypto.randomUUID()
       installProgress.begin(operationId)
+
       const operation = await window.api.skills.installShare({
         shareId: preview.shareId,
         versionId: preview.version.versionId,
@@ -204,10 +229,13 @@ export function SkillInstallDialog({
         providers: [...providers],
         ...(discardLocal ? { conflictResolution: 'replace-and-discard-local' } : {})
       })
+
       if (operation.status === 'unsupported') {
         setError(operation.message)
+
         return
       }
+
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
@@ -217,9 +245,12 @@ export function SkillInstallDialog({
               )
             : operation.message
         )
+
         return
       }
+
       setResult(operation.value)
+
       if (!['conflict', 'failed', 'cancelled'].includes(operation.value.status)) {
         notifyInstalledAgentSkillsChanged()
       }
@@ -241,10 +272,12 @@ export function SkillInstallDialog({
     if (!installProgress.activeOperationId) {
       return
     }
+
     const cancelled = await window.api.skills.cancelInstall({
       operationId: installProgress.activeOperationId,
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
+
     if (!cancelled.cancelled) {
       setError(
         translate(

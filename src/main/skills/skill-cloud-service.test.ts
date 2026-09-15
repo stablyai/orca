@@ -6,6 +6,7 @@ import type { SkillCloudVersion } from '../../shared/skill-cloud-contract'
 import { SkillCloudService } from './skill-cloud-service'
 
 const { packaged } = vi.hoisted(() => ({ packaged: { value: false } }))
+
 const createdPaths: string[] = []
 
 vi.mock('electron', () => ({
@@ -20,6 +21,7 @@ afterEach(() => {
   for (const path of createdPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
+
   packaged.value = false
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
@@ -28,6 +30,7 @@ afterEach(() => {
 function userDataPath(): string {
   const path = mkdtempSync(join(tmpdir(), 'orca-skill-cloud-service-'))
   createdPaths.push(path)
+
   return path
 }
 
@@ -73,6 +76,7 @@ describe('SkillCloudService bearer links', () => {
       'fetch',
       vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
         requests.push(init ?? {})
+
         return String(input).endsWith('/download-grants')
           ? Response.json({
               grant: { url: 'https://storage.test/package', expiresAt: '2026-08-11T00:05:00Z' },
@@ -90,6 +94,7 @@ describe('SkillCloudService bearer links', () => {
     })
 
     expect(requests).toHaveLength(2)
+
     for (const request of requests) {
       expect(new Headers(request.headers).has('authorization')).toBe(false)
     }
@@ -102,6 +107,7 @@ describe('SkillCloudService bearer links', () => {
       'fetch',
       vi.fn(async (_input: URL | RequestInfo, init?: RequestInit) => {
         requests.push(init ?? {})
+
         return Response.json({ shares: [] })
       })
     )
@@ -139,12 +145,15 @@ describe('SkillCloudService publication retries', () => {
       'fetch',
       vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
         const url = String(input)
+
         if (url.endsWith('/v1/skill-packages/uploads')) {
           createAttempts += 1
           createKeys.push(new Headers(init?.headers).get('idempotency-key') ?? '')
+
           if (createAttempts === 1) {
             throw new Error('create response lost')
           }
+
           return Response.json({
             upload: {
               id: 'upl_retry',
@@ -152,16 +161,21 @@ describe('SkillCloudService publication retries', () => {
             }
           })
         }
+
         if (url === 'https://storage.test/upload') {
           uploads += 1
+
           return new Response(null, { status: 204 })
         }
+
         if (url.endsWith('/v1/skill-packages/pkg_retry')) {
           return new Response(null, { status: 404 })
         }
+
         if (url.endsWith('/v1/skill-packages/uploads/upl_retry/finalize')) {
           return Response.json({ version })
         }
+
         throw new Error(`Unexpected request: ${url}`)
       })
     )
@@ -193,15 +207,18 @@ describe('SkillCloudService publication retries', () => {
       'fetch',
       vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
         const url = String(input)
+
         if (url.endsWith('/v1/skill-packages/uploads')) {
           createAttempts += 1
           createKeys.push(new Headers(init?.headers).get('idempotency-key') ?? '')
+
           if (createAttempts === 2) {
             return Response.json(
               { code: 'skill_upload_not_pending', message: 'Upload is already finalized.' },
               { status: 409 }
             )
           }
+
           return Response.json({
             upload: {
               id: 'upl_retry',
@@ -209,14 +226,18 @@ describe('SkillCloudService publication retries', () => {
             }
           })
         }
+
         if (url === 'https://storage.test/upload') {
           uploads += 1
+
           return new Response(null, { status: 204 })
         }
+
         if (url.endsWith('/v1/skill-packages/uploads/upl_retry/finalize')) {
           finalizations += 1
           throw new Error('finalize response lost')
         }
+
         if (url.endsWith('/v1/skill-packages/pkg_retry')) {
           return Response.json({
             package: {
@@ -229,6 +250,7 @@ describe('SkillCloudService publication retries', () => {
             }
           })
         }
+
         throw new Error(`Unexpected request: ${url}`)
       })
     )

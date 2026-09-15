@@ -17,9 +17,11 @@ afterEach(async () => {
 
 async function readPublishedOwner(lockPath: string): Promise<Record<string, unknown>> {
   const ownerName = (await readdir(lockPath)).find((name) => name.endsWith('.owner'))
+
   if (!ownerName) {
     throw new Error('missing-owner')
   }
+
   return JSON.parse(await readFile(join(lockPath, ownerName), 'utf8')) as Record<string, unknown>
 }
 
@@ -55,6 +57,7 @@ describe('skill install lock', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+
     const release = await acquireSkillInstallLock({
       path: lockPath,
       timeoutMs: 100,
@@ -78,17 +81,23 @@ describe('skill install lock', () => {
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
     let ownerWritten!: () => void
+
     const ownerIsVisible = new Promise<void>((resolve) => {
       ownerWritten = resolve
     })
+
     let finishWrite!: () => void
+
     const mayFinishWrite = new Promise<void>((resolve) => {
       finishWrite = resolve
     })
+
     let contentionObserved!: () => void
+
     const firstContention = new Promise<void>((resolve) => {
       contentionObserved = resolve
     })
+
     const firstAcquire = acquireSkillInstallLock({
       path: lockPath,
       writeOwner: async (handle, value) => {
@@ -111,6 +120,7 @@ describe('skill install lock', () => {
     await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
     const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
     let firstPublished = false
+
     const observedFirstAcquire = firstAcquire.then(
       () => {
         firstPublished = true
@@ -119,6 +129,7 @@ describe('skill install lock', () => {
         firstPublished = true
       }
     )
+
     finishWrite()
     await firstContention
     expect(firstPublished).toBe(false)
@@ -160,12 +171,14 @@ describe('skill install lock', () => {
       timeoutMs: 500,
       publishLock: async (candidatePath, targetPath) => {
         attempts += 1
+
         if (attempts === 1) {
           await firstRelease()
           const error = new Error('injected-contention') as NodeJS.ErrnoException
           error.code = 'ENOTEMPTY'
           throw error
         }
+
         await rename(candidatePath, targetPath)
       }
     })
@@ -260,13 +273,17 @@ describe('skill install lock', () => {
     const stateDirectory = join(root, 'state')
     const lockPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'alpha'))
     let deletionStarted!: () => void
+
     const deletionIsPending = new Promise<void>((resolve) => {
       deletionStarted = resolve
     })
+
     let finishDeletion!: () => void
+
     const mayFinishDeletion = new Promise<void>((resolve) => {
       finishDeletion = resolve
     })
+
     const release = await acquireSkillInstallLock({
       path: lockPath,
       removeLock: async (path) => {
@@ -275,6 +292,7 @@ describe('skill install lock', () => {
         await rmdir(path)
       }
     })
+
     const releasing = release()
     expect(release()).toBe(releasing)
 

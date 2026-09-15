@@ -11,6 +11,7 @@ export function registerBrowserRoutePartitionRetentionProbe(
   probe: (partition: string) => boolean
 ): () => void {
   probes.add(probe)
+
   return () => {
     probes.delete(probe)
   }
@@ -22,5 +23,6 @@ export function isBrowserRoutePartitionRetainedByAnyOwner(partition: string): bo
       return true
     }
   }
+
   return false
 }

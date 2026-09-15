@@ -33,13 +33,17 @@ export function resolveDecayedAgentRowState(
 /** Coarse `34m` / `2h` / `3d` duration, floored so it never overstates the gap. */
 export function formatCompactDuration(deltaMs: number): string {
   const minutes = Math.max(0, Math.floor(deltaMs / 60_000))
+
   if (minutes < 60) {
     return `${minutes}m`
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return `${hours}h`
   }
+
   return `${Math.floor(hours / 24)}d`
 }
 

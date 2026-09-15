@@ -13,19 +13,27 @@ import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-work
 const initialAppState = useAppStore.getInitialState()
 
 const REPO_ID = 'repo1'
+
 const PARENT_PATH = '/repo1'
+
 const CHILD_PATH = '/repo1/packages/app'
+
 const PARENT_ID = `${REPO_ID}::${PARENT_PATH}`
+
 const CHILD_ID = `${REPO_ID}::${CHILD_PATH}`
+
 const TERMINAL_CWD_POLL_MS = 4000
 
 const repo: Repo = { ...TEST_REPO, kind: 'git', connectionId: null }
+
 const parentWorktree: Worktree = makeWorktree({ id: PARENT_ID, repoId: REPO_ID, path: PARENT_PATH })
+
 const childWorktree: Worktree = makeWorktree({ id: CHILD_ID, repoId: REPO_ID, path: CHILD_PATH })
 
 const getCwdMock = vi.fn<(id: string) => Promise<string>>()
 
 const roots: Root[] = []
+
 let latest: ReturnType<typeof useChecksPanelTerminalWorktree> | null = null
 
 function HookProbe(props: {
@@ -36,6 +44,7 @@ function HookProbe(props: {
     defaultActiveWorktree: props.defaultActiveWorktree,
     isPanelVisible: props.isPanelVisible
   })
+
   return null
 }
 
@@ -132,13 +141,16 @@ describe('useChecksPanelTerminalWorktree', () => {
 
   it('does not spawn getCwd while the window is hidden, then refreshes on becoming visible', async () => {
     getCwdMock.mockResolvedValue(`${CHILD_PATH}/src`)
+
     const setVisibility = (state: 'visible' | 'hidden'): void => {
       Object.defineProperty(document, 'visibilityState', {
         configurable: true,
         get: () => state
       })
     }
+
     setVisibility('hidden')
+
     try {
       await renderHook(parentWorktree)
       await flushMicrotasks()
@@ -231,6 +243,7 @@ describe('useChecksPanelTerminalWorktree', () => {
 
   it('follows a local-host worktree that overrides its runtime repo host', async () => {
     const RUNTIME_REPO_ID = 'runtimeRepo'
+
     const runtimeRepo: Repo = {
       ...TEST_REPO,
       id: RUNTIME_REPO_ID,
@@ -239,6 +252,7 @@ describe('useChecksPanelTerminalWorktree', () => {
       connectionId: null,
       executionHostId: 'runtime:env-1'
     }
+
     // hostId 'local' overrides the runtime repo owner for this worktree.
     const localOnRuntime = makeWorktree({
       id: `${RUNTIME_REPO_ID}::/runtime-repo/app`,
@@ -246,6 +260,7 @@ describe('useChecksPanelTerminalWorktree', () => {
       path: '/runtime-repo/app',
       hostId: 'local'
     })
+
     useAppStore.setState({
       worktreesByRepo: { [REPO_ID]: [parentWorktree], [RUNTIME_REPO_ID]: [localOnRuntime] },
       repos: [repo, runtimeRepo]
@@ -265,6 +280,7 @@ describe('useChecksPanelTerminalWorktree', () => {
     // (and this assertion fails if host scoping is removed).
     const SSH_REPO_ID = 'sshRepo'
     const SSH_PATH = '/shared/project'
+
     const sshRepo: Repo = {
       ...TEST_REPO,
       id: SSH_REPO_ID,
@@ -272,11 +288,13 @@ describe('useChecksPanelTerminalWorktree', () => {
       kind: 'git',
       connectionId: 'ssh-target-1'
     }
+
     const sshWorktree = makeWorktree({
       id: `${SSH_REPO_ID}::${SSH_PATH}`,
       repoId: SSH_REPO_ID,
       path: SSH_PATH
     })
+
     useAppStore.setState({
       worktreesByRepo: { [REPO_ID]: [parentWorktree, childWorktree], [SSH_REPO_ID]: [sshWorktree] },
       repos: [repo, sshRepo]

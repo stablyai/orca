@@ -10,9 +10,11 @@ describe('JiraCancellableRequests', () => {
     await expect(
       requests.run('req-1', async (signal) => {
         signals.push(signal)
+
         if (signal.aborted) {
           throw Object.assign(new Error('aborted'), { name: 'AbortError' })
         }
+
         return 'ok'
       })
     ).rejects.toMatchObject({ name: 'AbortError' })
@@ -23,9 +25,11 @@ describe('JiraCancellableRequests', () => {
   it('aborts an in-flight run on cancel', async () => {
     const requests = new JiraCancellableRequests()
     const resolveBox: { current?: (value: string) => void } = {}
+
     const started = new Promise<AbortSignal>((resolve) => {
       void requests.run('req-2', (signal) => {
         resolve(signal)
+
         return new Promise<string>((taskResolve) => {
           resolveBox.current = taskResolve
           signal.addEventListener(

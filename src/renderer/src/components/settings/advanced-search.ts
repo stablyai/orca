@@ -46,9 +46,11 @@ export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsS
 
 function findEntry(title: string): SettingsSearchEntry {
   const entry = getAdvancedPaneSearchEntries().find((e) => e.title === title)
+
   if (!entry) {
     throw new Error(`Missing advanced-pane search entry: "${title}"`)
   }
+
   return entry
 }
 

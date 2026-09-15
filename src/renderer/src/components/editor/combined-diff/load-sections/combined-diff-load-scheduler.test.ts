@@ -3,9 +3,11 @@ import { createCombinedDiffLoadScheduler } from './combined-diff-load-scheduler'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -18,6 +20,7 @@ describe('combined diff load scheduler', () => {
   it('defaults to serial section loads', async () => {
     const blockers = [deferred(), deferred()]
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       schedule: (callback) => callback(),
       loadSection: async (index) => {
@@ -43,6 +46,7 @@ describe('combined diff load scheduler', () => {
     const started: number[] = []
     let active = 0
     let maxActive = 0
+
     const scheduler = createCombinedDiffLoadScheduler({
       maxConcurrent: 2,
       schedule: (callback) => callback(),
@@ -74,14 +78,17 @@ describe('combined diff load scheduler', () => {
     const slow = deferred()
     const fast = deferred()
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       maxConcurrent: 2,
       schedule: (callback) => callback(),
       loadSection: async (index) => {
         started.push(index)
+
         if (index === 1) {
           await slow.promise
         }
+
         if (index === 2) {
           await fast.promise
         }
@@ -103,6 +110,7 @@ describe('combined diff load scheduler', () => {
 
   it('dedupes repeated visibility notifications', async () => {
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       schedule: (callback) => callback(),
       loadSection: async (index) => {
@@ -119,6 +127,7 @@ describe('combined diff load scheduler', () => {
 
   it('allows a section to be requested again after a settled load', async () => {
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       schedule: (callback) => callback(),
       loadSection: async (index) => {
@@ -137,11 +146,13 @@ describe('combined diff load scheduler', () => {
   it('rerequest clears an in-flight queue slot before reloading', async () => {
     const blocker = deferred()
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       maxConcurrent: 1,
       schedule: (callback) => callback(),
       loadSection: async (index) => {
         started.push(index)
+
         if (index === 4) {
           await blocker.promise
         }
@@ -162,11 +173,13 @@ describe('combined diff load scheduler', () => {
   it('drops stale pending work after reset', async () => {
     const blocker = deferred()
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       maxConcurrent: 1,
       schedule: (callback) => callback(),
       loadSection: async (index) => {
         started.push(index)
+
         if (index === 1) {
           await blocker.promise
         }
@@ -185,6 +198,7 @@ describe('combined diff load scheduler', () => {
 
   it('revives after dispose when reset for a StrictMode remount', async () => {
     const started: number[] = []
+
     const scheduler = createCombinedDiffLoadScheduler({
       schedule: (callback) => callback(),
       loadSection: async (index) => {

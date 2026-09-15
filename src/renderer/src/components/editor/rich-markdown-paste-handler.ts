@@ -39,6 +39,7 @@ export function handleRichMarkdownPaste({
   }
 
   const sourceOwningStatus = slice ? inspectRichMarkdownSourceOwningSlice(slice) : null
+
   if (sourceOwningStatus?.containsSourceOwningNode && slice && view) {
     if (sourceOwningStatus.canPreserve) {
       // Why: dispatch directly so the transaction can carry paste/uiEvent
@@ -50,9 +51,12 @@ export function handleRichMarkdownPaste({
           .setMeta('uiEvent', 'paste')
           .scrollIntoView()
       )
+
       return true
     }
+
     const visibleText = getRichMarkdownVisibleText(slice.content)
+
     if (
       handleRichMarkdownLargeTextPaste(editor, event, {
         plainTextOverride: visibleText,
@@ -61,10 +65,12 @@ export function handleRichMarkdownPaste({
     ) {
       return true
     }
+
     if (visibleText && editor) {
       event.preventDefault()
       editor.commands.insertContent(visibleText)
     }
+
     return true
   }
 

@@ -44,6 +44,7 @@ function createLifecycleHarness(
       throw new Error('deterministic full-stage failure')
     }
   })
+
   const persist = createShutdownCheckpointPersist({
     shouldCaptureSession: () => true,
     captureTerminalBuffers: vi.fn(),
@@ -55,6 +56,7 @@ function createLifecycleHarness(
     stageBeforeUnloadSync,
     ...overrides
   })
+
   const guard = createShutdownCheckpointGuard(persist.run, persist.abandonAttempt)
   const checkpoint = createShutdownCheckpointBeforeUnloadHandler(guard)
   const cleanupRestartTracking = registerUpdaterBeforeUnloadBypass()
@@ -65,6 +67,7 @@ function createLifecycleHarness(
   )
   window.addEventListener(abortedEventName, guard.abandonAttempt)
   window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, guard.abandonAttempt)
+
   return {
     stageBeforeUnloadSync,
     prepare: () =>
@@ -126,10 +129,12 @@ describe('shutdown checkpoint restart lifecycle', () => {
 
   it('abandons retry state when a later restart attempt is independently canceled', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const harness = createLifecycleHarness(
       ORCA_APP_RESTART_STARTED_EVENT,
       ORCA_APP_RESTART_ABORTED_EVENT
     )
+
     cleanupFns.push(harness.cleanup)
 
     await expect(harness.prepare()).rejects.toThrow('deterministic full-stage failure')
@@ -145,6 +150,7 @@ describe('shutdown checkpoint restart lifecycle', () => {
   it('names the snapshot-build cause when dirty drafts block the checkpoint', async () => {
     const snapshotFailure = "Cannot read properties of null (reading 'toLowerCase')"
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const harness = createLifecycleHarness(
       ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
       ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
@@ -155,6 +161,7 @@ describe('shutdown checkpoint restart lifecycle', () => {
         hasDirtyOpenFiles: () => true
       }
     )
+
     cleanupFns.push(harness.cleanup)
 
     await expect(harness.prepare()).rejects.toThrow(

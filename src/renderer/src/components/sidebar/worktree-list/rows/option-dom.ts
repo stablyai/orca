@@ -13,6 +13,7 @@ export function getMountedWorktreeOptions(
       result.push(element)
     }
   })
+
   return result
 }
 
@@ -22,16 +23,21 @@ export function markSidebarWorktreeActiveImmediately(
 ): void {
   const sidebar = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
   const matchingIdOptions = getMountedWorktreeOptions(worktreeId, sidebar)
+
   const primaryOption = primaryRowKey
     ? matchingIdOptions.find((option) => option.dataset.worktreeRowKey === primaryRowKey)
     : matchingIdOptions[0]
+
   const primaryHostIdentity = primaryOption?.dataset.worktreeHostIdentity
+
   const nextOptions = primaryHostIdentity
     ? matchingIdOptions.filter(
         (option) => option.dataset.worktreeHostIdentity === primaryHostIdentity
       )
     : matchingIdOptions
+
   const nextOption = nextOptions[0]
+
   if (!nextOption) {
     return
   }
@@ -43,6 +49,7 @@ export function markSidebarWorktreeActiveImmediately(
   for (const option of nextOptions) {
     option.setAttribute('aria-current', 'page')
   }
+
   sidebar
     ?.querySelectorAll<HTMLElement>('[data-worktree-card-surface][data-worktree-card-active]')
     .forEach((surface) => {
@@ -50,6 +57,7 @@ export function markSidebarWorktreeActiveImmediately(
         surface.removeAttribute('data-worktree-card-active')
       }
     })
+
   for (const option of nextOptions) {
     const activeSurfaceVariant =
       primaryRowKey !== undefined
@@ -59,9 +67,11 @@ export function markSidebarWorktreeActiveImmediately(
         : option === nextOption
           ? 'primary'
           : 'secondary'
+
     const surface = option.matches('[data-worktree-card-surface]')
       ? option
       : option.querySelector<HTMLElement>('[data-worktree-card-surface]')
+
     surface?.setAttribute('data-worktree-card-active', activeSurfaceVariant)
   }
 }

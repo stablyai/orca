@@ -10,7 +10,9 @@ import { assertWin32 } from './platform-guard.mjs'
 import { runScriptFileJson, spawnScriptFile, runCommandSync } from './powershell-runner.mjs'
 
 const HERE = import.meta.dirname
+
 const WATCH_SCRIPT = path.join(HERE, 'window-watch.ps1')
+
 const ENUM_SCRIPT = path.join(HERE, 'window-enum.ps1')
 
 /**
@@ -23,6 +25,7 @@ export function captureBaseline(baselinePath) {
   const parsed = runScriptFileJson(ENUM_SCRIPT)
   const windows = normalizeWindows(parsed.windows)
   writeFileSync(baselinePath, JSON.stringify({ windows }, null, 2))
+
   return windows
 }
 
@@ -30,14 +33,17 @@ function normalizeWindows(raw) {
   if (!raw) {
     return []
   }
+
   // PS 5.1 ConvertTo-Json can hand back a single object, a flat array, or (from
   // a stray comma operator) a one-element array wrapping the real array.
   if (Array.isArray(raw)) {
     if (raw.length === 1 && Array.isArray(raw[0])) {
       return raw[0]
     }
+
     return raw
   }
+
   return [raw]
 }
 
@@ -49,6 +55,7 @@ function normalizeWindows(raw) {
 export function startWatch({ baselinePath, outPath, stopFile, durationSec = 600, pollMs = 500 }) {
   assertWin32('window-watch')
   const resolvedStopFile = stopFile ?? `${outPath}.stop`
+
   if (existsSync(resolvedStopFile)) {
     rmSync(resolvedStopFile)
   }
@@ -86,6 +93,7 @@ export function startWatch({ baselinePath, outPath, stopFile, durationSec = 600,
       const timer = setTimeout(() => child.kill(), 5000)
       await exited
       clearTimeout(timer)
+
       return { events: readEvents(outPath), stderr }
     }
   }
@@ -96,6 +104,7 @@ export function readEvents(outPath) {
   if (!existsSync(outPath)) {
     return []
   }
+
   return readFileSync(outPath, 'utf8')
     .split('\n')
     .map((l) => l.trim())
@@ -144,17 +153,21 @@ async function selftest() {
 
   const caught = events.filter((e) => typeof e.title === 'string' && e.title.includes(canary))
   console.log(`[selftest] watch recorded ${events.length} new windows total`)
+
   if (stderr.trim()) {
     console.log(`[selftest] watch stderr:\n${stderr.trim()}`)
   }
+
   if (caught.length === 0) {
     console.error(
       `[selftest] FAIL: watch did not capture a window titled "${canary}". ` +
         `New windows seen: ${JSON.stringify(events.map((e) => e.title))}`
     )
     process.exitCode = 1
+
     return
   }
+
   console.log(`[selftest] PASS: caught canary window: ${JSON.stringify(caught[0])}`)
 }
 

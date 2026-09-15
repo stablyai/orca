@@ -24,12 +24,15 @@ export function requestWorkerTerminalRelease(
       reason: WorkerTerminalRetainedReason
     } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
+
     if (!dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
+
     if (!worker) {
       if (!['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
         throw new OrchestrationError(
@@ -37,9 +40,12 @@ export function requestWorkerTerminalRelease(
           `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can release.`
         )
       }
+
       this.db.exec('COMMIT')
+
       return { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
     }
+
     if (!WORKER_SETTLED_STATES.includes(worker.state)) {
       // Why: release is post-completion cleanup only; recording intent for an unsettled or
       // uncertain worker would let recovery close a terminal the coordinator never reviewed.
@@ -48,30 +54,42 @@ export function requestWorkerTerminalRelease(
         `Dispatch ${dispatchId} is ${worker.state}; only a settled worker can release. Use worker-stop to cancel an active worker.`
       )
     }
+
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
+
     if (!resource) {
       const transferred = this.getWorkerTerminalResourceFormerlyOwnedBy(dispatchId)
       this.db.exec('COMMIT')
+
       return transferred
         ? { disposition: 'retained', resource: transferred, reason: 'ownership_transferred' }
         : { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
     }
+
     const decision = decideWorkerTerminalRelease(resource)
+
     if (decision.action === 'already_released') {
       this.db.exec('COMMIT')
+
       return { disposition: 'already_released', resource }
     }
+
     if (worker.state === 'stopped' || worker.state === 'abandoned') {
       this.db.exec('COMMIT')
+
       return { disposition: 'retained', resource, reason: 'identity_unproven' }
     }
+
     if (decision.action === 'retained') {
       this.db.exec('COMMIT')
+
       return { disposition: 'retained', resource, reason: decision.reason }
     }
+
     if (resource.release_state === 'retained' && resource.retained_reason === 'user_requested') {
       this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)
     }
+
     this.db
       .prepare(
         `UPDATE worker_terminal_resources
@@ -86,6 +104,7 @@ export function requestWorkerTerminalRelease(
       )
       .run(resource.id)
     this.db.exec('COMMIT')
+
     return {
       disposition: 'requested',
       resource: this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
@@ -107,18 +126,23 @@ export function settleDeadWorkerTerminalRelease(
   | { disposition: 'released'; resource: WorkerTerminalResourceRow }
   | { disposition: 'retained'; resource: WorkerTerminalResourceRow } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const resource = this.getWorkerTerminalResource(params.resourceId)
+
     if (!resource) {
       throw new OrchestrationError(
         'dispatch_not_found',
         `Worker terminal resource ${params.resourceId} was not found.`
       )
     }
+
     const priorOwners = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+
     const requesterRelated =
       resource.owner_dispatch_id === params.requestingDispatchId ||
       priorOwners?.includes(params.requestingDispatchId) === true
+
     const requester = this.getWorkerDispatch(params.requestingDispatchId)
     const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
     const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
@@ -129,9 +153,11 @@ export function settleDeadWorkerTerminalRelease(
     // state can never produce one — demanding it retained the pane forever. That one case settles
     // as `unavailable`; wherever the capture is still reachable the archive stays mandatory.
     const archive = this.getWorkerTerminalArchive(resource.owner_dispatch_id)
+
     const archiveUnreachable =
       resource.owner_dispatch_id === params.requestingDispatchId &&
       (resource.release_state === 'not_requested' || resource.release_state === 'retained')
+
     if (
       !priorOwners ||
       !requesterRelated ||
@@ -142,8 +168,10 @@ export function settleDeadWorkerTerminalRelease(
       decideWorkerTerminalRelease(resource).action !== 'proceed'
     ) {
       this.db.exec('COMMIT')
+
       return { disposition: 'retained', resource }
     }
+
     this.db
       .prepare(
         `UPDATE worker_terminal_resources
@@ -161,6 +189,7 @@ export function settleDeadWorkerTerminalRelease(
       )
     const released = this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
     this.db.exec('COMMIT')
+
     return released.release_state === 'released'
       ? { disposition: 'released', resource: released }
       : { disposition: 'retained', resource: released }

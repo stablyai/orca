@@ -24,6 +24,7 @@ export async function buildSubmodulePointerDiff(
 ): Promise<GitDiffResult> {
   let leftOid = ''
   let rightOid = ''
+
   if (staged) {
     leftOid = await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
     rightOid = await readGitlinkOidFromIndex(worktreePath, submodulePath, options)
@@ -36,6 +37,7 @@ export async function buildSubmodulePointerDiff(
       (await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options))
     rightOid = await readWorkingSubmoduleHead(submoduleWorktreePath, options)
   }
+
   return buildDiffResult(
     leftOid ? `Subproject commit ${leftOid}\n` : '',
     rightOid ? `Subproject commit ${rightOid}\n` : '',
@@ -60,6 +62,7 @@ export async function buildSubmoduleInnerCommitRangeDiff(
   let modifiedContent = ''
   let originalIsBinary = false
   let modifiedIsBinary = false
+
   try {
     const left = await readGitBlobAtOidPath(submoduleWorktreePath, fromOid, innerPath, options)
     originalContent = left.content
@@ -70,6 +73,7 @@ export async function buildSubmoduleInnerCommitRangeDiff(
   } catch {
     // Fallback to empty content; a missing blob (add/delete) reads as one side.
   }
+
   return buildDiffResult(
     originalContent,
     modifiedContent,

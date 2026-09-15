@@ -24,12 +24,14 @@ export function registerMacSymbolicHotkeysProbeHandler(readCommandStdout: ReadCo
       if (process.platform !== 'darwin') {
         return []
       }
+
       try {
         const stdout = await readCommandStdout(
           '/bin/sh',
           ['-c', MAC_SYMBOLIC_HOTKEYS_JSON_COMMAND],
           'Symbolic hotkeys probe timed out'
         )
+
         return capturedDigitRowChordsFromSymbolicHotkeysJson(JSON.parse(stdout))
       } catch {
         return []

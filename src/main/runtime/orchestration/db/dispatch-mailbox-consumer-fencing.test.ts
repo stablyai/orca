@@ -5,6 +5,7 @@ import { createRootDispatch } from './root-dispatch-test-fixture'
 import type { DeliveryRow } from '../types'
 
 const PANE_A = 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
 const PANE_B = 'tab_b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 /**
@@ -23,6 +24,7 @@ describe('dispatch mailbox consumer fencing', () => {
   function dispatchWithMail(subjects: string[]): { id: string; runId: string } {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'fenced worker work' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', PANE_A)
+
     for (const subject of subjects) {
       db.insertMessage({
         from: 'term_coord',
@@ -31,6 +33,7 @@ describe('dispatch mailbox consumer fencing', () => {
         runId: dispatch.run_id
       })
     }
+
     return { id: dispatch.id, runId: dispatch.run_id }
   }
 
@@ -125,12 +128,14 @@ describe('dispatch mailbox consumer fencing', () => {
       runId: 'run_legacy_local',
       spec: 'worker-start attach'
     })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
+
     const dispatchId = started.dispatch.id
     db.insertMessage({
       from: 'term_coord',
@@ -200,13 +205,16 @@ describe('dispatch mailbox consumer fencing', () => {
       runId: 'run_legacy_local',
       spec: 'work that fails once'
     })
+
     const first = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     db.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
+
     const retry = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

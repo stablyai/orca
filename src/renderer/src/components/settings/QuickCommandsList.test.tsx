@@ -12,6 +12,7 @@ import { QuickCommandsList } from './QuickCommandsList'
 
 vi.mock('@/i18n/i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof I18nModule>()
+
   return {
     ...actual,
     translate: (_key: string, fallback: string, values?: Record<string, string>) =>
@@ -80,6 +81,7 @@ describe('QuickCommandsList', () => {
       button.focus()
       expect(document.activeElement).toBe(button)
     }
+
     expect(emptyCopy).toBeDisabled()
 
     fireEvent.click(screen.getByText('Build', { exact: true }))

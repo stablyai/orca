@@ -21,16 +21,20 @@ export function gateAndReseedEmptyWorkspace(
   executionHostId?: ExecutionHostId
 ): void {
   const gate = gateWorktreeAgentActivation(workspaceKey)
+
   const intent: GatedEmptyWorkspaceReseedIntent = {
     callerProvidesSurface,
     ...(executionHostId ? { executionHostId } : {})
   }
+
   latestReseedIntentByGate.set(gate, intent)
   void gate.then((outcome) => {
     if (latestReseedIntentByGate.get(gate) !== intent) {
       return
     }
+
     latestReseedIntentByGate.delete(gate)
+
     if (outcome === 'empty') {
       reseedGatedEmptyWorkspace(workspaceKey, intent.callerProvidesSurface, intent.executionHostId)
     }

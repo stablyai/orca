@@ -45,6 +45,7 @@ type PendingRequest = {
 }
 
 const REQUEST_TIMEOUT_MS = 60_000
+
 let sidecar: ComputerSidecarProcess | null = null
 
 // Why: Node treats unhandled child 'error' events as process exceptions, so
@@ -79,9 +80,11 @@ export async function callComputerSidecarAction(
   params: unknown
 ): Promise<ComputerActionResult> {
   const validation = validateComputerSidecarPasteText(method, params)
+
   if (validation) {
     await validation
   }
+
   return normalizeComputerActionResult(
     (await getComputerSidecar().call(method, params)) as ComputerActionResult
   )
@@ -96,6 +99,7 @@ function getComputerSidecar(): ComputerSidecarProcess {
   if (!sidecar) {
     sidecar = new ComputerSidecarProcess(getComputerSidecarEntryPath())
   }
+
   return sidecar
 }
 
@@ -106,6 +110,7 @@ function getComputerSidecarEntryPath(): string {
   // Why: packaged sidecars must be forked from app.asar.unpacked because
   // ELECTRON_RUN_AS_NODE bypasses Electron's asar require integration.
   const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+
   return join(basePath, 'out', 'main', 'computer-sidecar.js')
 }
 
@@ -116,7 +121,9 @@ function loadElectronApp(): { getAppPath(): string; isPackaged: boolean } | null
   if (!hasAppEnvironment()) {
     return null
   }
+
   const environment = getAppEnvironment()
+
   return { getAppPath: () => environment.getAppPath(), isPackaged: environment.isPackaged() }
 }
 
@@ -132,6 +139,7 @@ class ComputerSidecarProcess {
 
   call(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
     const generation = this.queueGeneration
+
     const run = () => {
       if (generation !== this.queueGeneration) {
         throw new RuntimeClientError(
@@ -139,32 +147,41 @@ class ComputerSidecarProcess {
           'computer sidecar queue was invalidated; retry the computer-use request'
         )
       }
+
       return this.send(method, params)
     }
+
     const result = this.queueTail ? this.queueTail.then(run, run) : run()
+
     const tail = result.then(
       () => undefined,
       () => undefined
     )
+
     this.queueTail = tail
     void tail.finally(() => {
       if (this.queueTail === tail) {
         this.queueTail = null
       }
     })
+
     return result
   }
 
   private send(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
     const child = this.ensureStarted()
+
     if (!child.send) {
       const error = new RuntimeClientError(
         'accessibility_error',
         'computer sidecar IPC is unavailable'
       )
+
       this.failActiveChild(child, error)
+
       return Promise.reject(error)
     }
+
     const id = this.nextId++
     const request: ComputerSidecarRequest = { id, method, params }
 
@@ -180,11 +197,15 @@ class ComputerSidecarProcess {
         if (!error) {
           return
         }
+
         const wrapped = new RuntimeClientError('accessibility_error', error.message)
+
         if (this.child === child) {
           this.failActiveChild(child, wrapped)
+
           return
         }
+
         clearTimeout(timer)
         this.pending.delete(id)
         reject(wrapped)
@@ -197,11 +218,13 @@ class ComputerSidecarProcess {
     this.child = null
     this.queueGeneration++
     this.cleanupActiveChildListeners()
+
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
       pending.reject(new RuntimeClientError('accessibility_error', 'computer sidecar shut down'))
       this.pending.delete(id)
     }
+
     child?.kill('SIGTERM')
   }
 
@@ -209,6 +232,7 @@ class ComputerSidecarProcess {
     if (this.child && !this.child.killed) {
       return this.child
     }
+
     this.cleanupActiveChildListeners()
     this.child = null
 
@@ -227,8 +251,10 @@ class ComputerSidecarProcess {
         this.handleMessage(message)
       }
     }
+
     const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
       this.handleExit(child, code, signal)
+
     const onError = (error: Error) => this.handleError(child, error)
 
     child.on('message', onMessage)
@@ -241,7 +267,9 @@ class ComputerSidecarProcess {
       child.off('error', ignoreStaleChildError)
       child.on('error', ignoreStaleChildError)
     }
+
     this.child = child
+
     return child
   }
 
@@ -249,21 +277,29 @@ class ComputerSidecarProcess {
     // The sidecar's stdio is piped and unread, so its warnings arrive here.
     if (isComputerSidecarDiagnostic(message)) {
       logComputerDiagnostic(message.message)
+
       return
     }
+
     if (!isSidecarResponse(message)) {
       return
     }
+
     const pending = this.pending.get(message.id)
+
     if (!pending) {
       return
     }
+
     clearTimeout(pending.timer)
     this.pending.delete(message.id)
+
     if (message.ok) {
       pending.resolve(message.result)
+
       return
     }
+
     pending.reject(new RuntimeClientError(message.error.code, message.error.message))
   }
 
@@ -277,14 +313,17 @@ class ComputerSidecarProcess {
     if (this.child !== child) {
       return
     }
+
     this.cleanupActiveChildListeners()
     this.child = null
     this.queueGeneration++
     const detail = signal ? `signal ${signal}` : `code ${code ?? 'unknown'}`
+
     const error = new RuntimeClientError(
       'accessibility_error',
       `computer sidecar exited with ${detail}`
     )
+
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
       pending.reject(error)
@@ -297,6 +336,7 @@ class ComputerSidecarProcess {
     if (this.child !== child) {
       return
     }
+
     this.cleanupActiveChildListeners()
     // Why: an active process error makes the IPC sidecar unreliable; restart
     // on the next call instead of reusing a broken helper.
@@ -308,6 +348,7 @@ class ComputerSidecarProcess {
     this.child = null
     this.queueGeneration++
     child.kill('SIGTERM')
+
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timer)
       pending.reject(error)
@@ -326,6 +367,8 @@ function isSidecarResponse(message: unknown): message is ComputerSidecarResponse
   if (!message || typeof message !== 'object') {
     return false
   }
+
   const record = message as Record<string, unknown>
+
   return typeof record.id === 'number' && typeof record.ok === 'boolean'
 }

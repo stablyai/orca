@@ -40,10 +40,13 @@ export function prepareCodexResumeHome(
   if (args.connectionId || args.launchAgent !== 'codex' || !prepareCodexSessionResume) {
     return null
   }
+
   const providerSession = normalizeAgentProviderSession(args.providerSession)
+
   if (!providerSession) {
     return null
   }
+
   return {
     providerSession,
     preparation: prepareCodexSessionResume({
@@ -75,6 +78,7 @@ export function resolveCodexResumeLaunch(
 ): Promise<CodexResumeLaunch> {
   return preparation.preparation.then((prepared) => {
     const providerSession = preparation.providerSession
+
     if (prepared?.outcome !== 'fresh') {
       return {
         codexResumeHome: prepared ?? null,
@@ -84,11 +88,13 @@ export function resolveCodexResumeLaunch(
         providerSession
       }
     }
+
     const dropped = dropUnverifiedCodexResumeArgv({
       command,
       providerSession,
       claimedCodexProvenance: prepared.claimedCodexProvenance
     })
+
     return {
       codexResumeHome: null,
       command: dropped.command,
@@ -110,10 +116,13 @@ export async function reconcileSharedRuntimeResumeHome(
   if (!resumeHome.reconcileSharedRuntimeAuth) {
     return resumeHome.codexHomePath
   }
+
   const currentHome = await resolveCurrentHome()
+
   if (!codexHomePathsEqual(currentHome, resumeHome.codexHomePath)) {
     throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
   }
+
   return resumeHome.codexHomePath
 }
 
@@ -124,14 +133,17 @@ export function stripSequencedStartupResumeArgv<T extends Record<string, string>
   launch: CodexResumeLaunch
 ): T {
   const sequenced = env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+
   if (!env || !sequenced || !launch.droppedResumeArgv || !launch.providerSession) {
     return env
   }
+
   const drop = dropAgentResumeArgvFromCommand({
     command: sequenced,
     agent: 'codex',
     providerSession: launch.providerSession
   })
+
   return drop.status === 'dropped'
     ? { ...env, [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: drop.command }
     : env

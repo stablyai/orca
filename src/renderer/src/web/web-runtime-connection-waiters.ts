@@ -17,28 +17,35 @@ export class WebRuntimeConnectionWaiters {
     if (signal?.aborted) {
       return Promise.reject(signal.reason)
     }
+
     if (this.options.getState() === 'connected') {
       return Promise.resolve()
     }
+
     if (this.options.getState() === 'auth-failed') {
       return Promise.reject(createWebRuntimeUnauthorizedError())
     }
+
     if (this.options.isIntentionallyClosed()) {
       return Promise.reject(new Error('Remote Orca runtime connection closed.'))
     }
+
     return new Promise((resolve, reject) => {
       const cleanup = (): void => {
         window.clearTimeout(timeout)
         signal?.removeEventListener('abort', abort)
         const index = this.waiters.indexOf(waiter)
+
         if (index !== -1) {
           this.waiters.splice(index, 1)
         }
       }
+
       const abort = (): void => {
         cleanup()
         reject(signal?.reason)
       }
+
       const timeout = window.setTimeout(() => {
         cleanup()
         reject(
@@ -50,6 +57,7 @@ export class WebRuntimeConnectionWaiters {
           )
         )
       }, timeoutMs)
+
       const waiter = {
         resolve: () => {
           cleanup()
@@ -60,6 +68,7 @@ export class WebRuntimeConnectionWaiters {
           reject(error)
         }
       }
+
       this.waiters.push(waiter)
       signal?.addEventListener('abort', abort, { once: true })
     })

@@ -49,9 +49,11 @@ async function writeClaudeSession(args: {
   const dir = join(args.claudeRoot, args.dirName)
   await mkdir(dir, { recursive: true })
   const records: unknown[] = []
+
   if (args.leadingCwdlessLine) {
     records.push({ type: 'last-prompt', sessionId: args.sessionId })
   }
+
   records.push({
     type: 'user',
     sessionId: args.sessionId,
@@ -88,6 +90,7 @@ describe('scanAiVaultSessions scope inclusion', () => {
       cwd: '/repo/app/packages/ui',
       iso: '2026-01-02T00:00:00.000Z'
     })
+
     // Recent out-of-scope sessions that fill the cap.
     for (let index = 0; index < 4; index++) {
       await writeClaudeSession({
@@ -100,6 +103,7 @@ describe('scanAiVaultSessions scope inclusion', () => {
     }
 
     const withoutScope = await scanAiVaultSessions(scopedScanOptions(claudeRoot, { limit: 2 }))
+
     const withScope = await scanAiVaultSessions(
       scopedScanOptions(claudeRoot, { limit: 2, scopePaths: ['/repo/app'] })
     )
@@ -148,6 +152,7 @@ describe('scanAiVaultSessions scope inclusion', () => {
       cwd: '/home/ada/repo',
       iso: '2026-01-01T00:00:00.000Z'
     })
+
     for (let index = 0; index < 4; index++) {
       await writeClaudeSession({
         claudeRoot,

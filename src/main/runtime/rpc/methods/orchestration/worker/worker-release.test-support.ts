@@ -6,9 +6,11 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 
 export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((promiseResolve) => {
     resolve = promiseResolve
   })
+
   return { promise, resolve }
 }
 
@@ -126,20 +128,24 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       dbOpen = false
       db.close()
     }
+
     vi.restoreAllMocks()
   }
 
   function findMethod(name: string) {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method
   }
 
   async function call(name: string, params: Record<string, unknown>) {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
+
     return method.handler(parsed, ctx)
   }
 
@@ -148,12 +154,15 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     dispatchId: string
   }> {
     const task = db.createTask({ spec: 'release fixture task', runId: activeRunId })
+
     const result = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
       ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
     })) as { dispatchId: string; state: string }
+
     expect(result.state).toBe('ready')
+
     return { taskId: task.id, dispatchId: result.dispatchId }
   }
 
@@ -164,6 +173,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       outcome,
       result: `worker ${outcome}`
     })
+
     expect(settlement.action).toBe('settled')
   }
 
@@ -173,6 +183,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
   ): Promise<{ taskId: string; dispatchId: string }> {
     const worker = await startWorker(options)
     settle(worker.taskId, worker.dispatchId, outcome)
+
     return worker
   }
 

@@ -57,19 +57,24 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
     modes: new Map(),
     failRenameTo: new Set()
   }
+
   const noEntryError = (path: string): { code: number; message: string } => ({
     code: 2,
     message: `ENOENT ${path}`
   })
+
   const fakeStats = (mode: number): { mode: number } => ({ mode })
 
   const sftp = {
     readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
       const v = fs.files.get(path)
+
       if (v === undefined) {
         cb(noEntryError(path))
+
         return
       }
+
       cb(null, v)
     },
     writeFile: (
@@ -79,28 +84,37 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
       cb: (err: unknown) => void
     ): void => {
       fs.files.set(path, content)
+
       if (typeof options !== 'string' && options.mode !== undefined) {
         fs.modes.set(path, options.mode)
       }
+
       cb(null)
     },
     rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
       if (fs.failRenameTo.has(dst)) {
         cb({ code: 4, message: `rename failed ${dst}` })
+
         return
       }
+
       const v = fs.files.get(src)
+
       if (v === undefined) {
         cb(noEntryError(src))
+
         return
       }
+
       fs.files.set(dst, v)
       fs.files.delete(src)
       const mode = fs.modes.get(src)
+
       if (mode !== undefined) {
         fs.modes.set(dst, mode)
         fs.modes.delete(src)
       }
+
       cb(null)
     },
     unlink: (path: string, cb: (err: unknown) => void): void => {
@@ -115,15 +129,19 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
     stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
       if (!fs.files.has(path)) {
         cb(noEntryError(path))
+
         return
       }
+
       cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
       if (fs.dirs.has(path)) {
         cb(null, [])
+
         return
       }
+
       cb(noEntryError(path))
     },
     mkdir: (path: string, cb: (err: unknown) => void): void => {
@@ -131,6 +149,7 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
       cb(null)
     }
   } as unknown as SFTPWrapper
+
   return { sftp, fs }
 }
 
@@ -138,6 +157,7 @@ describe('remote hook service installers', () => {
   it('always writes POSIX scripts for SSH remotes even from a Windows host', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
+
     try {
       const installers = [
         {
@@ -197,12 +217,14 @@ describe('remote hook service installers', () => {
         const status = await install(sftp)
         expect(status.state).toBe('installed')
         const script = fs.files.get(path)
+
         if (path.includes('/.config/amp/plugins/')) {
           expect(script).toContain('/hook/amp')
           expect(script).toContain("amp.on('agent.start'")
         } else {
           expect(script).toMatch(/^#!\/bin\/sh\n/)
         }
+
         expect(script).not.toContain('@echo off')
         expect(script).not.toContain('powershell -NoProfile')
       }
@@ -229,11 +251,14 @@ describe('remote hook service installers', () => {
 
     expect(status.state).toBe('installed')
     expect(status.configPath).toBe('/home/dev/.codex/hooks.json')
+
     const hooks = JSON.parse(fs.files.get('/home/dev/.codex/hooks.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
       _managed?: unknown
     }
+
     expect(hooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
+
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -246,6 +271,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/codex-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
+
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)
     const toml = fs.files.get('/home/dev/.codex/config.toml')
@@ -268,6 +294,7 @@ describe('remote hook service installers', () => {
 
   it('installs Codex hooks into an explicit redirected CODEX_HOME', async () => {
     const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
+
     const { sftp, fs } = createFakeSftp({
       [`${runtimeHome}/config.toml`]: 'model = "gpt-5.2-codex"\n'
     })
@@ -280,9 +307,11 @@ describe('remote hook service installers', () => {
     expect(status.state).toBe('installed')
     expect(status.configPath).toBe(`${runtimeHome}/hooks.json`)
     expect(fs.files.has('/home/dev/.codex/hooks.json')).toBe(false)
+
     const hooks = JSON.parse(fs.files.get(`${runtimeHome}/hooks.json`)!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
+
     expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
       '/home/dev/.local/share/orca/codex-runtime-home/home/.orca/agent-hooks/codex-hook.sh'
     )
@@ -313,6 +342,7 @@ describe('remote hook service installers', () => {
     const cursor = createFakeSftp()
     const commandCode = createFakeSftp()
     const grok = createFakeSftp()
+
     const devin = createFakeSftp({
       '/home/dev/.config/devin/config.json': `{
   // Existing Devin config comment
@@ -333,11 +363,13 @@ describe('remote hook service installers', () => {
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
+
     for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
       const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
+
     expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
     const antigravityConfig = JSON.parse(
@@ -348,11 +380,13 @@ describe('remote hook service installers', () => {
         { matcher?: string; command?: string; hooks?: { command: string }[] }[]
       >
     }
+
     for (const eventName of ['PreInvocation', 'PostInvocation', 'Stop']) {
       const command = antigravityConfig['orca-status'][eventName]?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
+
     for (const eventName of ['PreToolUse', 'PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
@@ -360,6 +394,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
+
     // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
     expect(antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
       `printf '%s\\n' '{"decision":"ask"}'`
@@ -377,7 +412,9 @@ describe('remote hook service installers', () => {
       version: number
       hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
     }
+
     expect(cursorConfig.version).toBe(1)
+
     for (const eventName of CURSOR_EVENTS) {
       const definition = cursorConfig.hooks[eventName]?.[0]
       const command = definition?.command
@@ -393,12 +430,14 @@ describe('remote hook service installers', () => {
     ) as {
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
+
     for (const eventName of ['PreToolUse', 'PostToolUse', 'Stop']) {
       const definition = commandCodeConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
+
     expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.Stop?.[0]?.matcher).toBeUndefined()
@@ -406,6 +445,7 @@ describe('remote hook service installers', () => {
     const grokConfig = JSON.parse(grok.fs.files.get('/home/dev/.grok/hooks/orca-status.json')!) as {
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
+
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -423,6 +463,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
       expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
+
     // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
@@ -432,11 +473,14 @@ describe('remote hook service installers', () => {
     // Why: Devin config.json is JSONC — parse it as such, and assert the user's comment
     // survived. Asserting with JSON.parse would only pass if the install had stripped it.
     expect(devinText).toContain('// Existing Devin config comment')
+
     const devinConfig = parseJsonc(devinText) as {
       permissions: { mode: string }
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
+
     expect(devinConfig.permissions.mode).toBe('normal')
+
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -449,6 +493,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
+
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
@@ -456,6 +501,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
+
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
 
@@ -499,6 +545,7 @@ describe('remote hook service installers', () => {
     // User config above the managed block is preserved.
     expect(config).toContain('default_model = "kimi-k2.6"')
     expect(config).toContain('api_key = "sk-secret"')
+
     for (const eventName of [
       'UserPromptSubmit',
       'PreToolUse',
@@ -510,6 +557,7 @@ describe('remote hook service installers', () => {
     ]) {
       expect(config).toContain(`event = "${eventName}"`)
     }
+
     // The command points at the POSIX managed script via the regular-file guard.
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
     expect(config).toMatch(/command = "if \[ -f /)
@@ -518,10 +566,13 @@ describe('remote hook service installers', () => {
 
   it('does not overwrite malformed remote Devin JSONC', async () => {
     const original = '{"hooks": }'
+
     const { sftp, fs } = createFakeSftp({
       '/home/dev/.config/devin/config.json': original
     })
+
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const status = await new DevinHookService().installRemote(sftp, '/home/dev')
 
@@ -580,15 +631,19 @@ describe('remote hook service installers', () => {
     const config = JSON.parse(fs.files.get('/home/dev/.gemini/config/hooks.json')!) as {
       'orca-status': Record<string, { hooks?: { command: string }[] }[]>
     }
+
     const preToolCommands = config['orca-status'].PreToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
+
     expect(preToolCommands).toHaveLength(1)
     expect(preToolCommands[0]).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
     expect(preToolCommands).not.toContain('/tmp/old/agent-hooks/antigravity-hook.sh')
+
     const postToolCommands = config['orca-status'].PostToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
+
     expect(postToolCommands).toContain('echo user-authored')
     expect(postToolCommands.some((command) => command.includes('antigravity-hook.sh'))).toBe(true)
   })
@@ -631,13 +686,17 @@ describe('remote hook service installers', () => {
     const config = JSON.parse(fs.files.get('/home/dev/.gemini/settings.json')!) as {
       hooks: Record<string, { hooks?: { command: string }[] }[]>
     }
+
     const preToolCommands = config.hooks.PreToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
+
     expect(preToolCommands).toEqual(['echo user-authored'])
+
     const beforeToolCommands = config.hooks.BeforeTool.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
+
     expect(beforeToolCommands.some((command) => command.includes('gemini-hook.sh'))).toBe(true)
   })
 
@@ -658,12 +717,15 @@ describe('remote hook service installers', () => {
 
     expect(status.state).toBe('installed')
     expect(status.configPath).toBe('/home/dev/.copilot/hooks/orca.json')
+
     const config = JSON.parse(fs.files.get('/home/dev/.copilot/hooks/orca.json')!) as {
       version: number
       disableAllHooks?: boolean
       hooks: Record<string, { bash?: string; timeoutSec?: number }[]>
     }
+
     expect(config.version).toBe(1)
+
     for (const eventName of [
       'SessionStart',
       'SessionEnd',
@@ -684,6 +746,7 @@ describe('remote hook service installers', () => {
       expect(definition?.bash).toContain(`ORCA_COPILOT_HOOK_EVENT='${eventName}'`)
       expect(definition?.timeoutSec).toBe(5)
     }
+
     expect(config.disableAllHooks).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
@@ -719,19 +782,23 @@ describe('remote hook service installers', () => {
 
     const registered = new Set<string>(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS)
     const missing: string[] = []
+
     for (const [agent, service] of servicesByAgent) {
       if (typeof service.installRemote === 'function' && !registered.has(agent)) {
         missing.push(agent)
       }
     }
+
     expect(missing).toEqual([])
   })
 
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
     const { sftp } = createFakeSftp()
+
     const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
       agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
     })
+
     const byAgent = new Map(results.map((r) => [r.agent, r.state]))
     expect(byAgent.get('droid')).toBe('installed')
     expect(byAgent.get('copilot')).toBe('installed')
@@ -746,6 +813,7 @@ describe('remote hook service installers', () => {
 
     expect(results.map((result) => result.agent)).toEqual(['codex'])
     const paths = [...fs.files.keys(), ...fs.dirs]
+
     for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
       expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)
     }
@@ -766,10 +834,12 @@ describe('remote hook service installers', () => {
 
   it('stops before the next installer when its relay request is cancelled', async () => {
     const controller = new AbortController()
+
     const claudeInstall = vi
       .spyOn(claudeHookService, 'installRemote')
       .mockImplementation(async () => {
         controller.abort()
+
         return {
           agent: 'claude',
           state: 'installed',
@@ -778,7 +848,9 @@ describe('remote hook service installers', () => {
           detail: null
         }
       })
+
     const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
+
     try {
       const { sftp } = createFakeSftp()
 
@@ -803,9 +875,11 @@ describe('remote hook service installers', () => {
 
     expect(status.state).toBe('installed')
     expect(status.configPath).toBe('/home/dev/.factory/settings.json')
+
     const config = JSON.parse(fs.files.get('/home/dev/.factory/settings.json')!) as {
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
+
     for (const eventName of [
       'SessionStart',
       'UserPromptSubmit',
@@ -821,6 +895,7 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
       expect(command).toMatch(/^if \[ -f /)
     }
+
     // Tool/permission events carry a `*` matcher; lifecycle events do not.
     expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')
     expect(config.hooks.PostToolUse?.[0]?.matcher).toBe('*')
@@ -834,6 +909,7 @@ describe('remote hook service installers', () => {
 
   it('does not overwrite a malformed remote Factory settings.json', async () => {
     const original = '{"hooks": }'
+
     const { sftp, fs } = createFakeSftp({
       '/home/dev/.factory/settings.json': original
     })

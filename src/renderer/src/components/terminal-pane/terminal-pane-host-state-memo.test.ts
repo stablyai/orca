@@ -15,16 +15,19 @@ const connectionIdCalls = vi.hoisted(() => ({ count: 0 }))
 
 vi.mock('@/lib/connection-context', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionContext>()
+
   return {
     ...actual,
     getConnectionIdFromState: (state: AppState, worktreeId: string | null) => {
       connectionIdCalls.count += 1
+
       return actual.getConnectionIdFromState(state, worktreeId)
     }
   }
 })
 
 const LOCAL_WORKTREE = 'repo-1::/repo/worktrees/local'
+
 const OTHER_WORKTREE = 'repo-2::/repo/worktrees/other'
 
 /** Only the fields the resolver touches; the memo key is the whole object. */
@@ -75,6 +78,7 @@ describe('selectTerminalPaneHostState memo', () => {
     for (let index = 0; index < 4; index += 1) {
       selectTerminalPaneHostState(state, LOCAL_WORKTREE)
     }
+
     expect(connectionIdCalls.count).toBe(afterFirstTab)
 
     // A different worktree in the same publication still resolves.
@@ -93,6 +97,7 @@ describe('selectTerminalPaneHostState memo', () => {
         'repo-1': [{ id: LOCAL_WORKTREE, repoId: 'repo-1', path: '/repo/worktrees/local' }]
       }
     })
+
     const after = selectTerminalPaneHostState(remote, LOCAL_WORKTREE)
 
     expect(after).not.toBe(before)
@@ -102,18 +107,21 @@ describe('selectTerminalPaneHostState memo', () => {
   it('allocates nothing across 1,000 publications at 6 worktrees x 5 tabs', () => {
     const worktreeIds = Array.from({ length: 6 }, (_, index) => `repo-${index}::/repo/wt-${index}`)
     const firstState = makeState()
+
     const firstByWorktree = new Map(
       worktreeIds.map((worktreeId) => [
         worktreeId,
         selectTerminalPaneHostState(firstState, worktreeId)
       ])
     )
+
     connectionIdCalls.count = 0
     let allocations = 0
 
     for (let publication = 0; publication < 1_000; publication += 1) {
       // One published state object, then every mounted tab's selector run.
       const state = makeState({ agentStatusEpoch: publication })
+
       for (const worktreeId of worktreeIds) {
         for (let tab = 0; tab < 5; tab += 1) {
           if (selectTerminalPaneHostState(state, worktreeId) !== firstByWorktree.get(worktreeId)) {

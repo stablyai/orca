@@ -172,5 +172,6 @@ describe('extracted orchestration dispatch handlers', () => {
 
 function renderedValue(value: unknown): string {
   const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as (result: unknown) => string
+
   return formatter(value)
 }

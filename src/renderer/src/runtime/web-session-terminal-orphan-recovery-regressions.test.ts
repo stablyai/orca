@@ -16,6 +16,7 @@ import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
+
 describe('web session terminal orphan recovery regressions', () => {
   beforeEach(() => clearWebSessionTerminalOrphanRecoveryForTests())
 
@@ -34,13 +35,16 @@ describe('web session terminal orphan recovery regressions', () => {
   // ptyIdsByTabId and terminalLayoutsByTabId with it — the only surviving record of how to rebind.
   it('rebinds a PTY-mismatched leaf to the handle the host still reports live', async () => {
     const worktree = 'repo::mismatch'
+
     const leaves = [
       { leafId: 'leaf-bad', handle: 'term-bad' },
       { leafId: 'leaf-hold', handle: 'term-hold' }
     ]
+
     const state = makeState(worktree, leaves)
     const tabId = 'host-tab'
     const browser = { type: 'browser', id: 'browser-1', title: 'Docs', isActive: false } as never
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'mismatch-frame', [
         {
@@ -58,6 +62,7 @@ describe('web session terminal orphan recovery regressions', () => {
         pendingSurface(tabId, 'leaf-hold', 'pty-hold')
       ] as never
     }
+
     const call = vi.fn(async () => ({
       ok: true as const,
       result: listResult(worktree, [
@@ -110,15 +115,18 @@ describe('web session terminal orphan recovery regressions', () => {
     }
     const hostTab = 'host-tab'
     const pending = pendingSurface(hostTab, ROOTLESS_ACTIVE_LEAF, 'pty-rootless-active')
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'rootless-active', []),
       tabs: [pending]
     }
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'rootless-active-adopted',
       tabs: [{ ...pending, status: 'ready', terminal: handle }]
     }
+
     const call = vi.fn(async ({ method }: { method: string; params?: Record<string, unknown> }) =>
       method === 'session.tabs.list'
         ? { ok: true as const, result: adopted }
@@ -178,6 +186,7 @@ describe('web session terminal orphan recovery regressions', () => {
     }
     const hostTab = 'host-tab'
     const snapshot = makeSnapshot(worktree, 'rootless-sole', [])
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'rootless-sole-adopted',
@@ -189,6 +198,7 @@ describe('web session terminal orphan recovery regressions', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }: { method: string; params?: Record<string, unknown> }) =>
       method === 'session.tabs.list'
         ? { ok: true as const, result: adopted }
@@ -237,15 +247,18 @@ describe('web session terminal orphan recovery regressions', () => {
     const hostTab = 'host-tab'
     const primary = pendingSurface(hostTab, ROOTLESS_ACTIVE_LEAF, 'pty-rootless-primary')
     const offTree = pendingSurface(hostTab, ROOTLESS_OFF_TREE_LEAF, 'pty-rootless-off-tree')
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'rootless-off-tree', []),
       tabs: [primary, offTree]
     }
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'rootless-off-tree-adopted',
       tabs: [{ ...primary, status: 'ready', terminal: primaryHandle }]
     }
+
     const call = vi.fn(async ({ method }: { method: string; params?: Record<string, unknown> }) =>
       method === 'session.tabs.list'
         ? { ok: true as const, result: adopted }
@@ -288,13 +301,17 @@ describe('web session terminal orphan recovery regressions', () => {
         })
       ])
     )
+
     const listCall = call.mock.calls.find(([args]) => args.method === 'terminal.list')?.[0] as
       | { params?: unknown }
       | undefined
+
     expect(listCall?.params).toEqual(expect.objectContaining({ handles: [primaryHandle] }))
+
     const adoptionCall = call.mock.calls.find(
       ([args]) => args.method === 'terminal.adoptOrphans'
     )?.[0] as { params?: { claims?: unknown } } | undefined
+
     expect(adoptionCall?.params?.claims).toEqual([
       expect.objectContaining({ tabId: hostTab, leafId: ROOTLESS_ACTIVE_LEAF })
     ])
@@ -308,10 +325,12 @@ describe('web session terminal orphan recovery regressions', () => {
     const duplicate = { ...first, title: 'duplicate' }
     const browser = { type: 'browser', id: 'browser-1', title: 'Docs', isActive: false }
     const editor = { type: 'markdown', id: 'editor-1', title: 'Notes', isActive: false }
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'duplicate-surface', leaves),
       tabs: [browser, first, duplicate, editor] as never
     }
+
     const call = vi.fn(async () => {
       throw new Error('inventory unavailable')
     })
@@ -340,6 +359,7 @@ describe('web session terminal orphan recovery regressions', () => {
     const worktree = 'repo::nonterminal-update'
     const leaves = [{ leafId: 'leaf-1', handle: 'term-live' }]
     const state = makeState(worktree, leaves)
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'browser-update', [leaves[0]!]),
       tabs: [
@@ -348,6 +368,7 @@ describe('web session terminal orphan recovery regressions', () => {
         pendingSurface('host-tab', 'leaf-1', 'pty-live')
       ] as never
     }
+
     const call = vi.fn(async () => {
       throw new Error('transport unavailable')
     })
@@ -371,6 +392,7 @@ describe('web session terminal orphan recovery regressions', () => {
     const worktree = 'repo::authoritative-removal'
     const leaves = [{ leafId: 'leaf-1', handle: 'term-live' }]
     const state = makeState(worktree, leaves)
+
     const removed: RuntimeMobileSessionTabsRemovedResult = {
       ...makeSnapshot(worktree, 'removed-frame', leaves),
       removed: true as const,
@@ -379,6 +401,7 @@ describe('web session terminal orphan recovery regressions', () => {
       activeTabType: null,
       tabs: []
     }
+
     const call = vi.fn()
 
     await expect(
@@ -407,16 +430,20 @@ describe('web session terminal orphan recovery regressions', () => {
     }
   ])('retains every unresolved candidate when list $name', async ({ response, throws }) => {
     const worktree = `repo::list-fallback-${String(response?.ok ?? 'throw')}`
+
     const leaves = [
       { leafId: 'leaf-1', handle: 'term-1' },
       { leafId: 'leaf-2', handle: 'term-2' }
     ]
+
     const state = makeState(worktree, leaves)
     const snapshot = makeSnapshot(worktree, 'fallback', leaves)
+
     const effectiveCall = vi.fn(async () => {
       if (throws) {
         throw new Error('list failed')
       }
+
       return response
     })
 
@@ -443,23 +470,28 @@ describe('web session terminal orphan recovery regressions', () => {
     const frames = [1, 2, 3].map((version) => makeSnapshot(worktree, `frame-${version}`, leaves))
     const listOne = deferred<{ ok: true; result: ReturnType<typeof listResult> }>()
     const listTwo = deferred<{ ok: true; result: ReturnType<typeof listResult> }>()
+
     const calls = vi.fn(({ method }: { method: string }) => {
       if (method !== 'terminal.list') {
         throw new Error(`unexpected method ${method}`)
       }
+
       return calls.mock.calls.length === 1 ? listOne.promise : listTwo.promise
     })
 
     const first = recoverWebSessionTerminalOrphansBeforeApply(state, frames[0]!, ENVIRONMENT_ID, {
       call: calls as never
     })
+
     await vi.waitFor(() => expect(calls).toHaveBeenCalledTimes(1))
+
     const superseded = recoverWebSessionTerminalOrphansBeforeApply(
       state,
       frames[1]!,
       ENVIRONMENT_ID,
       { call: calls as never }
     )
+
     const latest = recoverWebSessionTerminalOrphansBeforeApply(state, frames[2]!, ENVIRONMENT_ID, {
       call: calls as never
     })
@@ -483,6 +515,7 @@ describe('web session terminal orphan recovery regressions', () => {
     const leaves = [{ leafId: 'leaf-1', handle: 'term-live' }]
     const state = makeState(worktree, leaves)
     const degraded = makeSnapshot(worktree, 'degraded', leaves)
+
     const ready: RuntimeMobileSessionTabsResult = {
       ...degraded,
       publicationEpoch: 'ready',
@@ -499,11 +532,14 @@ describe('web session terminal orphan recovery regressions', () => {
         }
       ]
     }
+
     const list = deferred<{ ok: true; result: ReturnType<typeof listResult> }>()
     const call = vi.fn(() => list.promise)
+
     const stale = recoverWebSessionTerminalOrphansBeforeApply(state, degraded, ENVIRONMENT_ID, {
       call: call as never
     })
+
     await vi.waitFor(() => expect(call).toHaveBeenCalledOnce())
 
     await expect(
@@ -517,12 +553,15 @@ describe('web session terminal orphan recovery regressions', () => {
 
   it('retains a cached sibling when adoption returns only another sibling', async () => {
     const worktree = 'repo::adoption-sibling'
+
     const leaves = [
       { leafId: 'leaf-claim', handle: 'term-claim' },
       { leafId: 'leaf-hold', handle: 'term-hold' }
     ]
+
     const state = makeState(worktree, leaves)
     const tabId = 'host-tab'
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'adoption-sibling', leaves),
       tabs: [
@@ -530,6 +569,7 @@ describe('web session terminal orphan recovery regressions', () => {
         pendingSurface(tabId, 'leaf-hold', 'pty-hold')
       ]
     }
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'adopted',
@@ -541,6 +581,7 @@ describe('web session terminal orphan recovery regressions', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }: { method: string }) =>
       method === 'session.tabs.list'
         ? { ok: true as const, result: adopted }
@@ -585,6 +626,7 @@ describe('web session terminal orphan recovery regressions', () => {
     const worktree = 'repo::unrelated-topology'
     const claimLocalTab = 'web-terminal-claim-tab'
     const holdLocalTab = 'web-terminal-hold-tab'
+
     const state = {
       tabsByWorktree: {
         [worktree]: [
@@ -620,6 +662,7 @@ describe('web session terminal orphan recovery regressions', () => {
       },
       layoutByWorktree: { [worktree]: { type: 'leaf' as const, groupId: 'group-1' } }
     }
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'unrelated-topology', []),
       tabs: [
@@ -627,6 +670,7 @@ describe('web session terminal orphan recovery regressions', () => {
         pendingSurface('hold-tab', 'leaf-hold', 'pty-hold')
       ]
     }
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'unrelated-adopted',
@@ -638,6 +682,7 @@ describe('web session terminal orphan recovery regressions', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }: { method: string }) =>
       method === 'session.tabs.list'
         ? { ok: true as const, result: adopted }
@@ -688,12 +733,15 @@ describe('web session terminal orphan recovery regressions', () => {
 
   it('lets a post-adoption snapshot replace a stale pre-adoption removal', async () => {
     const worktree = 'repo::adoption-replacement'
+
     const leaves = [
       { leafId: 'leaf-remove', handle: 'term-remove' },
       { leafId: 'leaf-claim', handle: 'term-claim' }
     ]
+
     const state = makeState(worktree, leaves)
     const tabId = 'host-tab'
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'adoption-replacement', leaves),
       tabs: [
@@ -701,6 +749,7 @@ describe('web session terminal orphan recovery regressions', () => {
         pendingSurface(tabId, 'leaf-claim', 'pty-claim')
       ]
     }
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'adopted',
@@ -717,6 +766,7 @@ describe('web session terminal orphan recovery regressions', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }: { method: string }) =>
       method === 'session.tabs.list'
         ? { ok: true as const, result: adopted }
@@ -764,26 +814,33 @@ describe('web session terminal orphan recovery regressions', () => {
     const count = 8
     let active = 0
     let maxActive = 0
+
     const gates = Array.from({ length: count }, () =>
       deferred<{ ok: true; result: ReturnType<typeof listResult> }>()
     )
+
     let callIndex = 0
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method !== 'terminal.list') {
         throw new Error(`unexpected method ${method}`)
       }
+
       const gate = gates[callIndex++]!
       active += 1
       maxActive = Math.max(maxActive, active)
+
       try {
         return await gate.promise
       } finally {
         active -= 1
       }
     })
+
     const recoveries = Array.from({ length: count }, (_, index) => {
       const worktree = `repo::lane-${index}`
       const leaves = [{ leafId: 'leaf-1', handle: `term-${index}` }]
+
       return recoverWebSessionTerminalOrphansBeforeApply(
         makeState(worktree, leaves),
         makeSnapshot(worktree, `lane-${index}`, leaves),
@@ -794,13 +851,17 @@ describe('web session terminal orphan recovery regressions', () => {
 
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(4))
     expect(maxActive).toBe(4)
+
     for (let index = 0; index < 4; index += 1) {
       gates[index]!.resolve({ ok: true, result: listResult(`repo::lane-${index}`, []) })
     }
+
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(count))
+
     for (let index = 4; index < count; index += 1) {
       gates[index]!.resolve({ ok: true, result: listResult(`repo::lane-${index}`, []) })
     }
+
     await Promise.all(recoveries)
     expect(maxActive).toBe(4)
   })

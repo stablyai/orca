@@ -33,8 +33,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
@@ -53,6 +56,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -62,6 +66,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -77,6 +82,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -87,9 +93,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -99,9 +107,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -109,6 +119,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, getEagerPtyBufferHandle: vi.fn(() => undefined) }
 })
 
@@ -155,11 +166,14 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     } as StoreState['settings']
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -172,14 +186,17 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
       }) as never
     )
     await flushAsyncTicks(6)
+
     const transportOptions = createdTransportOptions.at(-1) as {
       onPtySpawn?: (ptyId: string) => void
     }
+
     transportOptions.onPtySpawn?.('pty-id')
 
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       cols: 100,
       rows: 30,
@@ -194,6 +211,7 @@ describe('restored snapshot baseline shortfall (STA-5179)', () => {
     await flushAsyncTicks(20)
     expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
     pane.terminal.write.mockClear()
+
     return {
       pane,
       dataCallback: capturedDataCallback.current!,

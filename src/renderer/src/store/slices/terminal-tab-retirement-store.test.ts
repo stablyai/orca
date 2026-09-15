@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 
 const mockKill = vi.fn().mockResolvedValue(undefined)
+
 const mockRuntimeCall = vi.fn().mockResolvedValue({
   id: 'rpc-1',
   ok: true,
@@ -37,6 +38,7 @@ function createRetirementStore() {
       repo1: [makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/repo/wt-1' })]
     }
   })
+
   return store
 }
 
@@ -199,12 +201,14 @@ describe('terminal tab retirement store boundary', () => {
 
   it('retires a unified-only terminal instead of removing only its wrapper', async () => {
     const store = createRetirementStore()
+
     const unified = makeUnifiedTab({
       id: 'unified-tab-1',
       entityId: 'terminal-tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
+
     seedStore(store, {
       tabsByWorktree: { 'wt-1': [] },
       unifiedTabsByWorktree: { 'wt-1': [unified] },
@@ -247,14 +251,17 @@ describe('terminal tab retirement store boundary', () => {
   it('retires parked ownership before teardown and sweeps published state before unified close', () => {
     const store = createRetirementStore()
     const events: string[] = []
+
     const unified = makeUnifiedTab({
       id: 'unified-tab-1',
       entityId: 'tab-1',
       worktreeId: 'wt-1',
       groupId: 'group-1'
     })
+
     mockKill.mockImplementationOnce(() => {
       events.push('provider-kill')
+
       return Promise.resolve()
     })
     seedStore(store, {
@@ -269,6 +276,7 @@ describe('terminal tab retirement store boundary', () => {
       }),
       closeUnifiedTab: vi.fn(() => {
         events.push('unified-close')
+
         return null
       })
     })
@@ -278,9 +286,11 @@ describe('terminal tab retirement store boundary', () => {
       paneIdByPtyId: new Map([['pty-1', 1]]),
       disposersByPtyId: new Map([['pty-1', () => events.push('parked-retire')]])
     })
+
     const unsubscribe = store.subscribe((state, previous) => {
       const wasPresent = previous.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-1')
       const isPresent = state.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-1')
+
       if (wasPresent && !isPresent) {
         events.push('row-removal')
       }

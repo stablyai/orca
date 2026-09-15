@@ -16,6 +16,7 @@ const REMOTE_PTY_ID = 'remote:remote-host@@term_remote_agent'
 
 describe('remote agent completion authority', () => {
   const runtimeCall = vi.fn()
+
   const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeCall(args)
   })
@@ -45,6 +46,7 @@ describe('remote agent completion authority', () => {
 
   it('keeps an idle remote pane at zero inspection cadence', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-remote:leaf-remote',
       getPtyId: () => REMOTE_PTY_ID,
@@ -87,6 +89,7 @@ describe('remote agent completion authority', () => {
 
   it('does not spin or infer exit from a remote transport failure', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-remote:leaf-partitioned-exit',
       getPtyId: () => REMOTE_PTY_ID,
@@ -111,6 +114,7 @@ describe('remote agent completion authority', () => {
 
   it('accepts only fenced host evidence for an explicit remote title confirmation', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-remote:leaf-confirm',
       getPtyId: () => REMOTE_PTY_ID,
@@ -138,6 +142,7 @@ describe('remote agent completion authority', () => {
 
   it('never recognizes a bare compatibility process name from an old host', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-remote:leaf-legacy',
       getPtyId: () => REMOTE_PTY_ID,
@@ -164,6 +169,7 @@ describe('remote agent completion authority', () => {
 
   it('dispatches process-exit only for a positive host tombstone', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-remote:leaf-exit',
       getPtyId: () => REMOTE_PTY_ID,
@@ -205,6 +211,7 @@ describe('remote agent completion authority', () => {
       | { kind: 'hook'; interrupted: boolean }
       | { kind: 'process-exit'; exitCode: number | null }
     )[] = []
+
     const createHookCoordinator = (paneKey: string) =>
       createAgentCompletionCoordinator({
         paneKey,
@@ -235,6 +242,7 @@ describe('remote agent completion authority', () => {
     const tracker = createTerminalTitleTracker({
       onCommandFinished: (exitCode) => outcomes.push({ kind: 'process-exit', exitCode })
     })
+
     tracker.handleChunk('\u001b]133;D;130\u0007')
 
     const succeeded = createHookCoordinator('tab-remote:leaf-succeeded')

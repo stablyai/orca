@@ -191,7 +191,9 @@ export class PaneManager {
     if (this.activePaneId === null) {
       return null
     }
+
     const pane = this.panes.get(this.activePaneId)
+
     return pane ? toPublicPane(pane) : null
   }
 
@@ -217,17 +219,21 @@ export class PaneManager {
 
   adoptLeafId(numericPaneId: number, leafId: string): boolean {
     const pane = this.panes.get(numericPaneId)
+
     if (!pane) {
       return false
     }
+
     return this.identities.adoptPaneLeafId(numericPaneId, pane, leafId)
   }
 
   setActivePane(paneId: number, opts?: { focus?: boolean }): void {
     const pane = this.panes.get(paneId)
+
     if (!pane) {
       return
     }
+
     const changed = this.activePaneId !== paneId
     this.activePaneId = paneId
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
@@ -250,9 +256,11 @@ export class PaneManager {
 
   setPaneLigaturesEnabled(paneId: number, enabled: boolean): void {
     const pane = this.panes.get(paneId)
+
     if (!pane) {
       return
     }
+
     setLigaturesEnabled(pane, enabled)
   }
 
@@ -270,9 +278,11 @@ export class PaneManager {
 
   rebuildPaneWebgl(paneId: number): void {
     const pane = this.panes.get(paneId)
+
     if (!pane) {
       return
     }
+
     rebuildAttachedWebgl(pane)
   }
 
@@ -344,9 +354,11 @@ export class PaneManager {
     releaseHiddenWebglRetention(this)
     cancelActivePaneDrag(this.dragState)
     this.reparentFrames.cancelPending()
+
     for (const pane of this.panes.values()) {
       disposePane(pane, this.panes)
     }
+
     this.identities.clear()
     disposeDividersIn(this.root)
     this.root.innerHTML = ''

@@ -31,6 +31,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('does not retain a Codex spinner terminal title when the hook reports done', async () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -73,6 +74,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -117,6 +119,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('drops nested child done push events when the parent pane agent is still active', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -163,6 +166,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -192,6 +196,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('keeps OpenClaude hook status distinct when it arrives through Claude-compatible hooks', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -240,6 +245,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -280,6 +286,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('applies ready push events for inactive terminal tabs with empty layout snapshots', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -314,6 +321,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -357,9 +365,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('buffers ready push events until a mounted tab contains the pane leaf', async () => {
     const setAgentStatus = vi.fn()
     const track = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
 
     const storeState: StoreLike = buildStoreState({
@@ -377,6 +387,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
+
     const setAgentStatusBatch = vi.mocked(
       storeState.setAgentStatuses as AppState['setAgentStatuses']
     )
@@ -386,6 +397,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -400,6 +412,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -445,9 +458,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
         expandedLeafId: null
       }
     }
+
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
+
     subscribeListenerRef.current(storeState, previousStoreState)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(2)
@@ -480,6 +495,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('applies remote status snapshots while repo ownership is still hydrating', async () => {
     const setAgentStatus = vi.fn()
+
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {

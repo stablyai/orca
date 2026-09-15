@@ -21,6 +21,7 @@ describe('collectGitStatusLineStatInputs', () => {
   it('reads each of 1,000 untracked entries once', () => {
     let areaReads = 0
     let pathReads = 0
+
     const entries = Array.from({ length: 1_000 }, (_, index) => {
       const entry: { area: unknown; path: unknown } = { area: undefined, path: undefined }
       Object.defineProperties(entry, {
@@ -28,6 +29,7 @@ describe('collectGitStatusLineStatInputs', () => {
           enumerable: true,
           get: () => {
             areaReads += 1
+
             return 'untracked'
           }
         },
@@ -35,10 +37,12 @@ describe('collectGitStatusLineStatInputs', () => {
           enumerable: true,
           get: () => {
             pathReads += 1
+
             return `file-${index}.txt`
           }
         }
       })
+
       return entry
     })
 

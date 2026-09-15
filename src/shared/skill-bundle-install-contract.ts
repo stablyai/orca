@@ -3,7 +3,9 @@ import { SkillInstallDestinationSchema } from './skill-install-contract'
 import { SkillInstallFailureSchema, type SkillInstallFailure } from './skill-install-failure'
 
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/
+
 const ID_SCHEMA = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
+
 const SKILL_NAME_SCHEMA = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
 
 export const SkillBundlePackageIdentitySchema = z
@@ -45,6 +47,7 @@ const SkillBundleConflictDecisionSchema = z
 
 function hasUniqueSkillIds(values: readonly { id?: string; skillId?: string }[]): boolean {
   const ids = values.map((value) => value.id ?? value.skillId)
+
   return new Set(ids).size === ids.length
 }
 
@@ -141,15 +144,23 @@ export const SkillBundleInstallResultSchema = z.object({
 })
 
 export type SkillBundlePackageIdentity = z.infer<typeof SkillBundlePackageIdentitySchema>
+
 export type SkillBundleSelectedSkill = z.infer<typeof SkillBundleSelectedSkillSchema>
+
 export type SkillBundleInstallRequest = z.infer<typeof SkillBundleInstallRequestSchema>
+
 export type SkillBundleInstallPreviewRequest = z.infer<
   typeof SkillBundleInstallPreviewRequestSchema
 >
+
 export type SkillBundleInstallPreview = z.infer<typeof SkillBundleInstallPreviewSchema>
+
 export type SkillBundleInstallResult = z.infer<typeof SkillBundleInstallResultSchema>
+
 export type SkillBundleSkillResult = SkillBundleInstallResult['skills'][number]
+
 export type SkillBundlePlacementResult = SkillBundleSkillResult['placements'][number]
+
 export type SkillBundleInstallFailure = SkillInstallFailure
 
 export const SkillBundleInstallProgressSchema = z

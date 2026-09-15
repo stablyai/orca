@@ -5,6 +5,7 @@ export function getTerminalBufferPositionForMouseEvent(
   event: MouseEvent
 ): { x: number; y: number } | null {
   const screenElement = terminal.element?.querySelector('.xterm-screen')
+
   if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
     return null
   }
@@ -12,12 +13,14 @@ export function getTerminalBufferPositionForMouseEvent(
   const rect = screenElement.getBoundingClientRect()
   const relativeX = event.clientX - rect.left
   const relativeY = event.clientY - rect.top
+
   if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
     return null
   }
 
   const cellWidth = rect.width / terminal.cols
   const cellHeight = rect.height / terminal.rows
+
   if (cellWidth <= 0 || cellHeight <= 0) {
     return null
   }

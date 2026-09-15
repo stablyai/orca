@@ -25,6 +25,7 @@ describe('getDiscardAllPaths', () => {
       entry({ path: 'b.ts', area: 'unstaged' }),
       entry({ path: 'c.ts', area: 'untracked', status: 'untracked' })
     ]
+
     expect(getDiscardAllPaths(entries, 'staged')).toEqual(['a.ts'])
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['b.ts'])
     expect(getDiscardAllPaths(entries, 'untracked')).toEqual(['c.ts'])
@@ -40,6 +41,7 @@ describe('getDiscardAllPaths', () => {
         conflictStatus: 'unresolved'
       })
     ]
+
     // Why: `git restore --worktree --source=HEAD` on an unresolved conflict
     // clears the `u` record silently before the user has reviewed it, which
     // is why the per-row Stage/Discard buttons also suppress this case.
@@ -56,6 +58,7 @@ describe('getDiscardAllPaths', () => {
         conflictStatus: 'resolved_locally'
       })
     ]
+
     // Why: discarding a locally-resolved file loses the resolution. The user
     // would have to re-resolve from scratch — treat it as too dangerous to
     // include in a bulk action.
@@ -75,6 +78,7 @@ describe('getStageAllPaths', () => {
       entry({ path: 'b.ts', area: 'unstaged' }),
       entry({ path: 'c.ts', area: 'untracked', status: 'untracked' })
     ]
+
     expect(getStageAllPaths(entries, 'unstaged')).toEqual(['b.ts'])
     expect(getStageAllPaths(entries, 'untracked')).toEqual(['c.ts'])
   })
@@ -89,6 +93,7 @@ describe('getStageAllPaths', () => {
         conflictStatus: 'unresolved'
       })
     ]
+
     // Why: `git add` on an unresolved conflict silently clears the `u`
     // record before the user has reviewed it — same hazard the per-row
     // Stage button guards against.
@@ -105,6 +110,7 @@ describe('getStageAllPaths', () => {
         conflictStatus: 'resolved_locally'
       })
     ]
+
     // Why: staging a locally-resolved file is the normal resolution
     // workflow — it marks the conflict as finished. Unlike discard, this
     // must NOT be filtered out.
@@ -124,6 +130,7 @@ describe('getStageAllPaths', () => {
         submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: true }
       })
     ]
+
     expect(getStageAllPaths(entries, 'unstaged')).toEqual(['changed-gitlink'])
   })
 
@@ -177,6 +184,7 @@ describe('getUnstageAllPaths', () => {
       entry({ path: 'b.ts', area: 'unstaged' }),
       entry({ path: 'c.ts', area: 'untracked', status: 'untracked' })
     ]
+
     expect(getUnstageAllPaths(entries)).toEqual(['a.ts'])
   })
 
@@ -196,6 +204,7 @@ describe('getUnstageAllPaths', () => {
         conflictStatus: 'resolved_locally'
       })
     ]
+
     // Why: `git reset HEAD` on a staged conflict row is safe and mirrors
     // the per-row Unstage action — no conflict filter here.
     expect(getUnstageAllPaths(entries)).toEqual(['clean.ts', 'conflict.ts', 'resolved.ts'])
@@ -222,25 +231,32 @@ describe('runDiscardAllForArea', () => {
 
     const bulkUnstage = vi.fn(async (paths: string[]) => {
       bulkUnstageCalls.push([...paths])
+
       if (overrides.bulkUnstageError !== undefined) {
         throw overrides.bulkUnstageError
       }
     })
+
     const discardMany = vi.fn(async (paths: string[]) => {
       discardManyCalls.push([...paths])
+
       if (overrides.discardManyError !== undefined) {
         throw overrides.discardManyError
       }
     })
+
     const discardOne = vi.fn(async (path: string) => {
       discardOneCalls.push(path)
+
       if (overrides.discardOneError) {
         const err = overrides.discardOneError(path)
+
         if (err !== undefined) {
           throw err
         }
       }
     })
+
     const onError = vi.fn((error: unknown) => {
       errors.push(error)
     })
@@ -342,9 +358,11 @@ describe('runDiscardAllForArea', () => {
 
   it('continues past a per-file discard failure and records it in `failed`', async () => {
     const error = new Error('EPERM')
+
     const ctx = makeDeps({
       discardOneError: (path) => (path === 'b.ts' ? error : undefined)
     })
+
     const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts', 'c.ts'], ctx.deps)
     // Why: best-effort continuation — one stuck file shouldn't block the
     // rest of a bulk action the user explicitly triggered.
@@ -369,9 +387,11 @@ describe('runDiscardAllForArea', () => {
   it('does not bulk-unstage for non-staged areas even if the dep is provided', async () => {
     const ctx = makeDeps()
     const areas: DiscardAllArea[] = ['unstaged', 'untracked']
+
     for (const area of areas) {
       await runDiscardAllForArea(area, ['x.ts'], ctx.deps)
     }
+
     // Why: the unstage step is specific to the staged area's two-step
     // reset. Accidentally invoking it for unstaged/untracked would be a
     // no-op for unstaged entries but could mask a regression where staged

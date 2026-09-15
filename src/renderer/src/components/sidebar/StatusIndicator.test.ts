@@ -5,6 +5,7 @@ import StatusIndicator, { type Status } from './StatusIndicator'
 
 vi.mock('@/components/StateIndicatorTooltip', async () => {
   const { createElement } = await import('react')
+
   return {
     StateIndicatorTooltip: ({
       label,

@@ -54,17 +54,21 @@ export function buildSidebarHostOptions(args: {
 }): SidebarHostOption[] {
   const configuredSshTargetIds = new Set(args.sshTargetLabels.keys())
   const projectSshTargetIds = new Set<string>()
+
   for (const repo of args.repos) {
     if (repo.connectionId?.trim()) {
       projectSshTargetIds.add(repo.connectionId.trim())
     }
+
     if (repo.executionHostId?.startsWith('ssh:')) {
       projectSshTargetIds.add(decodeURIComponent(repo.executionHostId.slice('ssh:'.length)))
     }
   }
+
   const activeRuntimeHostId = args.settings?.activeRuntimeEnvironmentId?.trim()
     ? (`runtime:${encodeURIComponent(args.settings.activeRuntimeEnvironmentId.trim())}` as const)
     : null
+
   return buildExecutionHostRegistry({
     repos: args.repos,
     settings: args.settings,
@@ -77,8 +81,10 @@ export function buildSidebarHostOptions(args: {
     if (host.kind === 'local') {
       return { ...host, presence: 'local' }
     }
+
     if (host.kind === 'ssh') {
       const targetId = decodeURIComponent(host.id.slice('ssh:'.length))
+
       // Why: configured hosts explain why a disconnected target remains
       // visible; project-only hosts remain because workspaces still point at it.
       return {
@@ -90,6 +96,7 @@ export function buildSidebarHostOptions(args: {
             : 'active'
       }
     }
+
     return {
       ...host,
       presence: host.id === activeRuntimeHostId ? 'active' : 'project'
@@ -127,9 +134,11 @@ export function getSidebarHostVisibilityLabel(
   if (!visibleHostIds || visibleHostIds.length === hosts.length) {
     return translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
+
   if (visibleHostIds.length === 1) {
     return hosts.find((host) => host.id === visibleHostIds[0])?.label ?? 'Hosts'
   }
+
   return translate(
     'auto.components.sidebar.sidebarHostOptions.visibleHostsCount',
     '{{value0}} hosts',

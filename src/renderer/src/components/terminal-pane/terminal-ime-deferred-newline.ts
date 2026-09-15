@@ -27,6 +27,7 @@ export function sendTerminalInputAfterComposition(
 ): () => void {
   if (!terminalElement) {
     const immediateTimer = window.setTimeout(send, 0)
+
     return () => window.clearTimeout(immediateTimer)
   }
 
@@ -34,6 +35,7 @@ export function sendTerminalInputAfterComposition(
     options?.fallbackMs === null
       ? null
       : (options?.fallbackMs ?? TERMINAL_IME_DEFERRED_NEWLINE_FALLBACK_MS)
+
   let done = false
   const capturedSessions = capturePendingTerminalImeCompositionSessions(terminalElement)
 
@@ -41,12 +43,14 @@ export function sendTerminalInputAfterComposition(
     if (done) {
       return
     }
+
     done = true
     terminalElement.removeEventListener('compositionend', onCompositionEnd)
     terminalElement.removeEventListener(
       XTERM_COMPOSITION_SESSION_END_EVENT,
       onCompositionSessionEnd
     )
+
     if (fallbackTimer !== undefined) {
       window.clearTimeout(fallbackTimer)
     }
@@ -56,6 +60,7 @@ export function sendTerminalInputAfterComposition(
     if (done) {
       return
     }
+
     stopWaiting()
     // xterm flushes the committed glyph after compositionend.
     window.setTimeout(send, 0)
@@ -66,6 +71,7 @@ export function sendTerminalInputAfterComposition(
       finish()
     }
   }
+
   const onCompositionEnd = (): void => finishAfterPendingComposition()
   const onCompositionSessionEnd = (): void => finishAfterPendingComposition()
   terminalElement.addEventListener('compositionend', onCompositionEnd)
@@ -115,7 +121,9 @@ export function createTerminalImeModifiedEnterChordOwner(): TerminalImeModifiedE
       if (activeChord !== null) {
         return false
       }
+
       activeChord = chord
+
       return true
     },
     absorb: ({ kind }) => activeChord?.kind === kind,
@@ -124,13 +132,16 @@ export function createTerminalImeModifiedEnterChordOwner(): TerminalImeModifiedE
       if (activeChord?.kind === kind) {
         const releasedChord = activeChord
         activeChord = null
+
         return releasedChord
       }
+
       return null
     },
     releaseForEnterKeyUp: () => {
       const releasedChord = activeChord
       activeChord = null
+
       return releasedChord
     },
     clear: () => {
@@ -145,9 +156,11 @@ export function getTerminalImeModifiedEnterKind(
   if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
     return 'shift'
   }
+
   if (event.ctrlKey && !event.shiftKey && !event.metaKey && !event.altKey) {
     return 'ctrl'
   }
+
   return null
 }
 
@@ -162,6 +175,7 @@ export function isTerminalImeProcessEnter(
   >
 ): boolean {
   const { code } = event
+
   return (
     isTerminalImeConsumedKey(event) &&
     (!code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter') &&
@@ -185,6 +199,7 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
     if (state.inFlightSends <= 0 && state.absorbCredits <= 0) {
       const statesByTimeStamp = statesByEnterCode.get(enter.code)
       statesByTimeStamp?.delete(enter.timeStamp)
+
       if (statesByTimeStamp?.size === 0) {
         statesByEnterCode.delete(enter.code)
       }
@@ -193,9 +208,11 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
 
   const clearCreditsForCode = (enterCode: string): void => {
     const statesByTimeStamp = statesByEnterCode.get(enterCode)
+
     if (!statesByTimeStamp) {
       return
     }
+
     for (const [timeStamp, state] of statesByTimeStamp) {
       state.absorbCredits = 0
       cleanUpIfSettled({ code: enterCode, timeStamp }, state)
@@ -205,10 +222,12 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
   return {
     defer: (enter, terminalElement, send) => {
       const statesByTimeStamp = statesByEnterCode.get(enter.code) ?? new Map()
+
       const state = statesByTimeStamp.get(enter.timeStamp) ?? {
         inFlightSends: 0,
         absorbCredits: 0
       }
+
       state.inFlightSends += 1
       state.absorbCredits += 1
       statesByTimeStamp.set(enter.timeStamp, state)
@@ -221,12 +240,16 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
     },
     absorbRedispatchedEnter: (enter) => {
       const state = statesByEnterCode.get(enter.code)?.get(enter.timeStamp)
+
       if (!state || state.absorbCredits <= 0) {
         clearCreditsForCode(enter.code)
+
         return false
       }
+
       state.absorbCredits -= 1
       cleanUpIfSettled(enter, state)
+
       return true
     },
     releaseRedispatchedEnter: (enter, originatingEnter) => {
@@ -234,25 +257,31 @@ export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNew
         const originatingState = statesByEnterCode
           .get(originatingEnter.code)
           ?.get(originatingEnter.timeStamp)
+
         if (originatingState && originatingState.absorbCredits > 0) {
           originatingState.absorbCredits -= 1
           cleanUpIfSettled(originatingEnter, originatingState)
 
           const statesByTimeStamp = statesByEnterCode.get(enter.code) ?? new Map()
+
           const state = statesByTimeStamp.get(enter.timeStamp) ?? {
             inFlightSends: 0,
             absorbCredits: 0
           }
+
           state.absorbCredits += 1
           statesByTimeStamp.set(enter.timeStamp, state)
           statesByEnterCode.set(enter.code, statesByTimeStamp)
+
           return
         }
       }
+
       if (statesByEnterCode.get(enter.code)?.has(enter.timeStamp)) {
         // Chromium's balancing Process-key keyup is copied from the same native event.
         return
       }
+
       clearCreditsForCode(enter.code)
     },
     clearRedispatchedEnters: () => {

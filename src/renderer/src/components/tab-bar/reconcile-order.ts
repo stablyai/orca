@@ -18,6 +18,7 @@ export function reconcileTabOrder(
     ...simulatorIds,
     ...agentSessionIds
   ])
+
   // Why: storedOrder is persisted group tab order and is mutated by many
   // codepaths (drop/move/reorder/hydrate). A stale or racey write can leave
   // the same tab id twice in the list, which surfaces as React's "two
@@ -26,12 +27,14 @@ export function reconcileTabOrder(
   // the UI never produces duplicate keys regardless of store-side bugs.
   const result: string[] = []
   const inResult = new Set<string>()
+
   for (const id of storedOrder ?? []) {
     if (validIds.has(id) && !inResult.has(id)) {
       result.push(id)
       inResult.add(id)
     }
   }
+
   for (const id of [
     ...terminalIds,
     ...editorIds,
@@ -44,5 +47,6 @@ export function reconcileTabOrder(
       inResult.add(id)
     }
   }
+
   return result
 }

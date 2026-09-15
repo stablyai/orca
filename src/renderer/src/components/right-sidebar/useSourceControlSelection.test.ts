@@ -41,9 +41,11 @@ describe('reconcileSourceControlSelectionState', () => {
   it('returns the same references without scanning rows when nothing is selected', () => {
     const selectedKeys: ReadonlySet<string> = new Set()
     let keyReads = 0
+
     const flatEntries = Array.from({ length: 50 }, (_, index) => ({
       get key() {
         keyReads += 1
+
         return `file-${index}.ts`
       }
     })) as unknown as Parameters<typeof reconcileSourceControlSelectionState>[0]['flatEntries']
@@ -61,6 +63,7 @@ describe('reconcileSourceControlSelectionState', () => {
 
   it('still drops an anchor that is no longer visible when nothing is selected', () => {
     const selectedKeys: ReadonlySet<string> = new Set()
+
     const result = reconcileSourceControlSelectionState({
       selectedKeys,
       anchorKey: 'gone.ts',
@@ -78,6 +81,7 @@ describe('reconcileSourceControlSelectionState', () => {
       makeEntry('unstaged::a.ts', 'unstaged', 'a.ts'),
       makeEntry('staged::b.ts', 'staged', 'b.ts')
     ]
+
     const selectedKeys = new Set(['unstaged::a.ts'])
 
     const result = reconcileSourceControlSelectionState({

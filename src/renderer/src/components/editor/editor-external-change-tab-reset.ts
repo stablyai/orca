@@ -17,18 +17,21 @@ export function createEditorExternalChangeTabReset({
 }: EditorExternalChangeTabResetOptions): (event: Event) => void {
   return (event: Event): void => {
     const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+
     if (!detail) {
       return
     }
 
     const state = store.getState()
     const matchingFiles = getOpenFilesForExternalFileChange(state.openFiles, detail)
+
     if (matchingFiles.length === 0) {
       return
     }
 
     // Why: keep dirty drafts on external writes (data-loss half of #7265); mark changed-on-disk as backstop for tabs turned dirty during the notify debounce.
     const reloadingFiles = matchingFiles.filter((file) => !file.isDirty)
+
     for (const file of matchingFiles) {
       if (file.isDirty) {
         // Why: skip Orca's own-save echo, which routes here bypassing the watch hook's echo verification.
@@ -38,16 +41,20 @@ export function createEditorExternalChangeTabReset({
             origin: 'live'
           })
         }
+
         continue
       }
+
       clearAutoSaveTimer(file.id)
       bumpSaveGeneration(file.id)
       state.markFileDirty(file.id, false)
+
       // Why: about to reload fresh disk content, so a stale changed-on-disk mark is resolved.
       if (file.externalMutation === 'changed') {
         state.setExternalMutation(file.id, null)
       }
     }
+
     state.clearEditorDrafts(reloadingFiles.map((file) => file.id))
   }
 }

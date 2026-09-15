@@ -10,6 +10,7 @@ import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
  * the durable flip then no-ops, and the pane the user closed comes back (#9194).
  */
 const CLOSE_INTENT_ANSWER_GRACE_MS = 5_000
+
 export const WEB_SESSION_CLOSE_INTENT_TTL_MS =
   WEB_SESSION_TAB_RPC_TIMEOUT_MS + CLOSE_INTENT_ANSWER_GRACE_MS
 
@@ -28,15 +29,19 @@ export function recordWebSessionCloseIntent(
   now: number
 ): void {
   const trimmed = hostTabId.trim()
+
   if (!worktreeId || !trimmed) {
     return
   }
+
   const partitionKey = closeIntentPartitionKey(owner, worktreeId)
   let byTab = pendingCloseByOwnerAndWorktree.get(partitionKey)
+
   if (!byTab) {
     byTab = new Map()
     pendingCloseByOwnerAndWorktree.set(partitionKey, byTab)
   }
+
   byTab.set(trimmed, { recordedAt: now, durable: byTab.get(trimmed)?.durable === true })
 }
 
@@ -55,6 +60,7 @@ export function makeWebSessionCloseIntentDurable(
   const intent = pendingCloseByOwnerAndWorktree
     .get(closeIntentPartitionKey(owner, worktreeId))
     ?.get(hostTabId)
+
   if (intent) {
     intent.durable = true
   }
@@ -69,16 +75,21 @@ export function isWebSessionCloseIntentPending(
   const partitionKey = closeIntentPartitionKey(owner, worktreeId)
   const byTab = pendingCloseByOwnerAndWorktree.get(partitionKey)
   const intent = byTab?.get(hostTabId)
+
   if (!intent) {
     return false
   }
+
   if (!intent.durable && now - intent.recordedAt > WEB_SESSION_CLOSE_INTENT_TTL_MS) {
     byTab!.delete(hostTabId)
+
     if (byTab!.size === 0) {
       pendingCloseByOwnerAndWorktree.delete(partitionKey)
     }
+
     return false
   }
+
   return true
 }
 
@@ -89,14 +100,17 @@ export function reconcileWebSessionCloseIntents(
 ): void {
   const partitionKey = closeIntentPartitionKey(owner, worktreeId)
   const byTab = pendingCloseByOwnerAndWorktree.get(partitionKey)
+
   if (!byTab) {
     return
   }
+
   for (const hostTabId of byTab.keys()) {
     if (!presentHostTabIds.has(hostTabId)) {
       byTab.delete(hostTabId)
     }
   }
+
   if (byTab.size === 0) {
     pendingCloseByOwnerAndWorktree.delete(partitionKey)
   }
@@ -110,6 +124,7 @@ export function clearWebSessionCloseIntent(
   const partitionKey = closeIntentPartitionKey(owner, worktreeId)
   const byTab = pendingCloseByOwnerAndWorktree.get(partitionKey)
   byTab?.delete(hostTabId)
+
   if (byTab?.size === 0) {
     pendingCloseByOwnerAndWorktree.delete(partitionKey)
   }
@@ -124,6 +139,7 @@ export function clearWebSessionCloseIntentsForWorktree(
 
 export function clearWebSessionCloseIntentsForOwner(owner: WebSessionIntentOwner): void {
   const prefix = `${webSessionIntentOwnerKey(owner)}\0`
+
   for (const key of pendingCloseByOwnerAndWorktree.keys()) {
     if (key.startsWith(prefix)) {
       pendingCloseByOwnerAndWorktree.delete(key)

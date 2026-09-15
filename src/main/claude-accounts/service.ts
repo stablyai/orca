@@ -116,6 +116,7 @@ export class ClaudeAccountService {
   private serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.mutationQueue.then(operation, operation)
     this.mutationQueue = next.catch(() => {})
+
     return next
   }
 

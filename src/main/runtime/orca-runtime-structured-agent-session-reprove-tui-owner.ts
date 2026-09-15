@@ -14,6 +14,7 @@ export class OrcaRuntimeWithStructuredAgentSessionReproveTuiOwner extends OrcaRu
     return async ({ record, owner }) => {
       const current = this.refreshStructuredTuiOwnerBinding(owner)
       const persisted = record.lease.ownerProcess
+
       if (
         !persisted ||
         persisted.hostId !== current.process.hostId ||
@@ -23,13 +24,17 @@ export class OrcaRuntimeWithStructuredAgentSessionReproveTuiOwner extends OrcaRu
       ) {
         throw new Error('The owning terminal does not match the persisted launch identity.')
       }
+
       const proof = await probeAgentSessionProcessIdentity({ identity: current.process })
+
       if (proof.outcome !== 'identity-matched' || proof.matchedOn.length === 0) {
         throw new Error(
           `The owning ${current.link.handle.provider} child process could not be re-proved.`
         )
       }
+
       const head = record.providerHandleChain.at(-1)
+
       const sameProviderIdentity =
         head &&
         (current.link.handle.provider === 'claude'
@@ -38,9 +43,11 @@ export class OrcaRuntimeWithStructuredAgentSessionReproveTuiOwner extends OrcaRu
           : (record.lease.provenHandleLinkId === null ||
               current.link.linkId === record.lease.provenHandleLinkId) &&
             agentSessionProviderHandlesEqual(current.link.handle, head.handle))
+
       if (!sameProviderIdentity) {
         throw new Error('agent_session_identity_required')
       }
+
       if (current.link.handle.provider === 'claude' && head.handle.provider === 'claude') {
         const proof = await this.waitForStructuredClaudeTuiProof({
           handle: current.terminal.handle,
@@ -49,6 +56,7 @@ export class OrcaRuntimeWithStructuredAgentSessionReproveTuiOwner extends OrcaRu
           previousLeafUuid: head.handle.leafUuid,
           projectsDir: join(record.accountHome.path, 'projects')
         })
+
         return {
           ...current,
           link: claudeProviderHandleLink({
@@ -61,14 +69,18 @@ export class OrcaRuntimeWithStructuredAgentSessionReproveTuiOwner extends OrcaRu
           transcriptPath: proof.transcriptPath
         }
       }
+
       if (current.transcriptPath || current.link.handle.provider !== 'codex') {
         return current
       }
+
       if (head.handle.provider !== 'codex') {
         return current
       }
+
       const threadId = head.handle.threadId
       const transcriptPath = await resolvePinnedCodexRolloutProof(record.accountHome.path, threadId)
+
       return transcriptPath ? { ...current, transcriptPath } : current
     }
   }

@@ -17,48 +17,61 @@ import {
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
+
 vi.mock(
   '../text-generation/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
+
 vi.mock(
   '../source-control/pull-request-template',
   async () => (await import('./filesystem-test-harness')).pullRequestTemplateMock
 )
+
 vi.mock(
   '../source-control/pull-request-linked-issue',
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
@@ -71,6 +84,7 @@ describe('registerFilesystemHandlers', () => {
   const folderDownloadSender = Object.assign(new EventEmitter(), {
     isDestroyed: vi.fn(() => false)
   })
+
   const folderDownloadEvent = { sender: folderDownloadSender }
 
   beforeEach(() => {
@@ -118,6 +132,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFile: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     registerFilesystemHandlers(store as never)
 
@@ -140,6 +155,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showSaveDialogMock.mockResolvedValue({ canceled: true })
     registerFilesystemHandlers(store as never)
@@ -162,10 +178,12 @@ describe('registerFilesystemHandlers', () => {
   it('parents the remote download save dialog and sanitizes reserved filename suggestions', async () => {
     const parentWindow = { id: 7 }
     const sender = { id: 42 }
+
     const provider = {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     fromWebContentsMock.mockReturnValue(parentWindow)
     showSaveDialogMock.mockResolvedValue({ canceled: true })
@@ -187,6 +205,7 @@ describe('registerFilesystemHandlers', () => {
     const provider = {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 })
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     registerFilesystemHandlers(store as never)
 
@@ -208,6 +227,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
     statMock.mockResolvedValue({ isDirectory: () => true })
@@ -231,6 +251,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -265,13 +286,16 @@ describe('registerFilesystemHandlers', () => {
       { sender: {} },
       { suggestedName: 'report.pdf' }
     )
+
     expect(started).toMatchObject({
       canceled: false,
       destinationPath: '/downloads/report.pdf'
     })
+
     if (!started || typeof started !== 'object' || !('transferId' in started)) {
       throw new Error('download did not start')
     }
+
     const transferId = started.transferId
 
     await expect(
@@ -304,9 +328,11 @@ describe('registerFilesystemHandlers', () => {
       { sender: {} },
       { suggestedName: 'report.pdf' }
     )
+
     if (!started || typeof started !== 'object' || !('transferId' in started)) {
       throw new Error('download did not start')
     }
+
     const tempPath = openMock.mock.calls[0][0]
 
     await expect(
@@ -323,6 +349,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn().mockRejectedValue(new Error('transfer failed'))
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -348,6 +375,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
     statMock
@@ -375,6 +403,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 10, type: 'file', mtime: 123 }),
       downloadFile: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showSaveDialogMock.mockResolvedValue({ canceled: false, filePath: '/downloads/report.pdf' })
     statMock.mockResolvedValue({ isDirectory: () => false })
@@ -402,6 +431,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFolder: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -437,6 +467,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFolder: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
     registerFilesystemHandlers(store as never)
@@ -455,6 +486,7 @@ describe('registerFilesystemHandlers', () => {
     const provider = {
       downloadFolder: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     folderDownloadSender.isDestroyed.mockReturnValue(true)
     registerFilesystemHandlers(store as never)
@@ -476,9 +508,11 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFolder: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockImplementation(async () => {
       expect(provider.downloadFolder).not.toHaveBeenCalled()
+
       return { canceled: false, filePaths: ['/downloads'] }
     })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -499,6 +533,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFolder: vi.fn()
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
     statMock.mockResolvedValue({ isDirectory: () => true })
@@ -519,6 +554,7 @@ describe('registerFilesystemHandlers', () => {
     const provider = {
       downloadFolder: vi.fn().mockRejectedValue(new Error('Cannot download a file as a folder'))
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -539,6 +575,7 @@ describe('registerFilesystemHandlers', () => {
     const provider = {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 })
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -560,6 +597,7 @@ describe('registerFilesystemHandlers', () => {
       stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
       downloadFolder: vi.fn().mockRejectedValue(new Error('transfer failed'))
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -581,6 +619,7 @@ describe('registerFilesystemHandlers', () => {
     const provider = {
       downloadFolder: vi.fn().mockRejectedValue(new Error('transfer failed'))
     }
+
     const cleanupError = new Error('cleanup denied')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     getSshFilesystemProviderMock.mockReturnValue(provider)
@@ -618,6 +657,7 @@ describe('registerFilesystemHandlers', () => {
           })
       )
     }
+
     getSshFilesystemProviderMock.mockReturnValue(provider)
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
     statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
@@ -627,6 +667,7 @@ describe('registerFilesystemHandlers', () => {
       dirPath: '/remote/src',
       connectionId: 'ssh-1'
     })
+
     await vi.waitFor(() => expect(provider.downloadFolder).toHaveBeenCalledTimes(1))
     folderDownloadSender.emit('destroyed')
 

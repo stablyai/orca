@@ -20,6 +20,7 @@ export function translateSearchKeyword(
   }
 
   const localized = translate(key, fallback)
+
   return uniqueKeywords([localized, fallback, ...(options?.aliases ?? [])])
 }
 
@@ -29,6 +30,7 @@ export function searchKeywords(terms: (string | SearchKeywordSpec)[]): string[] 
       if (typeof term === 'string') {
         return [term]
       }
+
       return translateSearchKeyword(term.key, term.fallback, term)
     })
   )
@@ -37,13 +39,17 @@ export function searchKeywords(terms: (string | SearchKeywordSpec)[]): string[] 
 export function uniqueKeywords(values: string[]): string[] {
   const seen = new Set<string>()
   const result: string[] = []
+
   for (const value of values) {
     const trimmed = value.trim()
+
     if (!trimmed || seen.has(trimmed)) {
       continue
     }
+
     seen.add(trimmed)
     result.push(trimmed)
   }
+
   return result
 }

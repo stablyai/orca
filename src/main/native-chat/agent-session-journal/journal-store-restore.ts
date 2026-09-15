@@ -21,6 +21,7 @@ export function restoreJournalStore(
     loaded: host.loaded(),
     replay: () => {
       const opened = host.database()
+
       return replayJournal(opened.db, opened.readOnly, host.identity.sessionId)
     },
     deleteSuffix: (fromSeq, contentFrom) =>

@@ -10,16 +10,19 @@ const testState: { executionHostId: ExecutionHostId } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
 
 const { CombinedDiffFileTreeRow } = await import('./combined-diff-file-tree-row')
+
 const { readWorkspaceFileDragSource } = await import('@/lib/workspace-file-drag')
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const roots: Root[] = []
+
 afterEach(() => {
   roots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.replaceChildren()
@@ -55,6 +58,7 @@ function renderRow(sourceWorkspaceId?: string): HTMLDivElement {
       />
     )
   })
+
   return container
 }
 
@@ -65,6 +69,7 @@ function dragRow(container: HTMLDivElement): DataTransfer {
   act(() => {
     container.querySelector('[draggable="true"]')?.dispatchEvent(event)
   })
+
   return transfer
 }
 

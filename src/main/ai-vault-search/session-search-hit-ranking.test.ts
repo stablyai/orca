@@ -34,6 +34,7 @@ describe('order', () => {
       session(1, { updated_at: '2026-09-01T00:00:00.000Z' }),
       session(2, { updated_at: '2026-09-09T00:00:00.000Z' })
     ]
+
     const scores = matches(match(1, 10), match(2, 1))
     expect(rankSessionHits(sessions, scores, 'relevance').map((e) => e.session.id)).toEqual([1, 2])
     expect(rankSessionHits(sessions, scores, 'newest').map((e) => e.session.id)).toEqual([2, 1])
@@ -77,11 +78,13 @@ describe('forks fold into one answer', () => {
       fork(2, '2026-09-09T00:00:00.000Z'),
       fork(3, '2026-09-05T00:00:00.000Z')
     ]
+
     const ranked = rankSessionHits(
       sessions,
       matches(match(1, 9), match(2, 1), match(3, 5)),
       'relevance'
     )
+
     expect(ranked).toHaveLength(1)
     expect(ranked[0]!.session.id).toBe(2)
     expect(ranked[0]!.duplicateCount).toBe(3)

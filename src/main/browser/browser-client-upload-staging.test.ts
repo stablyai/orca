@@ -15,10 +15,12 @@ const nodeRemovals = vi.hoisted(() => ({ rm: [] as { target: unknown; options: u
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     rm: (target: unknown, options: unknown) => {
       nodeRemovals.rm.push({ target, options })
+
       return (actual.rm as (t: unknown, o: unknown) => Promise<void>)(target, options)
     }
   }
@@ -39,6 +41,7 @@ afterEach(async () => {
 async function releaseFailures(release: Promise<unknown>): Promise<string[]> {
   const failure = await release.catch((error: unknown) => error)
   expect(failure).toBeInstanceOf(AggregateError)
+
   return (failure as AggregateError).errors.map((error: Error) => error.message)
 }
 
@@ -59,9 +62,11 @@ describe('BrowserClientUploadStaging', () => {
       'report.pdf',
       'notes.txt'
     ])
+
     for (const file of staged.localFilePaths) {
       expect(await realpath(file)).toContain(stagingRoot)
     }
+
     expect(await readFile(staged.localFilePaths[0], 'utf8')).toBe('one')
     expect(await readFile(staged.localFilePaths[1], 'utf8')).toBe('two')
   })
@@ -81,6 +86,7 @@ describe('BrowserClientUploadStaging', () => {
 
   it('removes the staged directory when the page is released', async () => {
     const staging = new BrowserClientUploadStaging(stagingRoot)
+
     const staged = await staging.stage({
       browserPageId: 'page-1',
       pageHostGeneration: 4,
@@ -114,6 +120,7 @@ describe('BrowserClientUploadStaging', () => {
 
   it('evicts a page oldest-first once its staged bytes exceed the budget', async () => {
     const removed: string[] = []
+
     const staging = new BrowserClientUploadStaging(stagingRoot, {
       mkdir: async () => {},
       writeFile: async () => {},
@@ -122,12 +129,15 @@ describe('BrowserClientUploadStaging', () => {
         removed.push(directory)
       }
     })
+
     const half = BROWSER_CLIENT_UPLOAD_STAGING_MAX_BYTES_PER_PAGE / 2
+
     const first = await staging.stage({
       browserPageId: 'page-1',
       pageHostGeneration: 1,
       files: [{ remotePath: 'a.bin', contents: Buffer.alloc(half) }]
     })
+
     const firstDirectory = staging.stagedDirectory(first.stagingId)
     await staging.stage({
       browserPageId: 'page-1',
@@ -153,6 +163,7 @@ describe('BrowserClientUploadStaging', () => {
       pageHostGeneration: 1,
       files: [{ remotePath: 'keep.txt', contents: Buffer.from('keep') }]
     })
+
     for (let index = 0; index <= BROWSER_CLIENT_UPLOAD_STAGING_MAX_COMMANDS_PER_PAGE; index += 1) {
       await staging.stage({
         browserPageId: 'page-1',
@@ -169,6 +180,7 @@ describe('BrowserClientUploadStaging', () => {
 
   it('cleans up the partial directory when a write fails', async () => {
     let writes = 0
+
     const staging = new BrowserClientUploadStaging(stagingRoot, {
       mkdir: async () => {},
       writeFile: async () => {
@@ -228,22 +240,26 @@ describe('BrowserClientUploadStaging', () => {
 
   it('keeps the staged record when its removal fails so a later release retries it', async () => {
     const attempts: string[] = []
+
     const staging = new BrowserClientUploadStaging(stagingRoot, {
       mkdir: async () => {},
       writeFile: async () => {},
       removeDirectorySync: () => {},
       removeDirectory: async (directory) => {
         attempts.push(directory)
+
         if (attempts.length === 1) {
           throw new Error('EBUSY: resource busy or locked')
         }
       }
     })
+
     const staged = await staging.stage({
       browserPageId: 'page-1',
       pageHostGeneration: 1,
       files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
     })
+
     const directory = staging.stagedDirectory(staged.stagingId)
 
     expect(await releaseFailures(staging.releasePage('page-1'))).toEqual([
@@ -258,27 +274,32 @@ describe('BrowserClientUploadStaging', () => {
 
   it('attempts every staged record even when one removal fails', async () => {
     const attempts: string[] = []
+
     const staging = new BrowserClientUploadStaging(stagingRoot, {
       mkdir: async () => {},
       writeFile: async () => {},
       removeDirectorySync: () => {},
       removeDirectory: async (directory) => {
         attempts.push(directory)
+
         if (attempts.length === 1) {
           throw new Error('EBUSY: resource busy or locked')
         }
       }
     })
+
     const first = await staging.stage({
       browserPageId: 'page-1',
       pageHostGeneration: 1,
       files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
     })
+
     const second = await staging.stage({
       browserPageId: 'page-1',
       pageHostGeneration: 1,
       files: [{ remotePath: 'b.txt', contents: Buffer.from('b') }]
     })
+
     const directories = [first, second].map((staged) => staging.stagedDirectory(staged.stagingId))
 
     expect(await releaseFailures(staging.releasePage('page-1'))).toHaveLength(1)
@@ -312,11 +333,13 @@ describe('BrowserClientUploadStaging', () => {
 
   it('retries the staged removal so a briefly held file is not orphaned', async () => {
     const staging = new BrowserClientUploadStaging(stagingRoot)
+
     const staged = await staging.stage({
       browserPageId: 'page-1',
       pageHostGeneration: 1,
       files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
     })
+
     const directory = staging.stagedDirectory(staged.stagingId)
     nodeRemovals.rm.length = 0
 

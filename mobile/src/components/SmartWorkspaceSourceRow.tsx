@@ -64,6 +64,7 @@ function resolveRowContent(row: SourceRow): RowContent {
 
 export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
   const content = resolveRowContent(row)
+
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}

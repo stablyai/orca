@@ -1,4 +1,5 @@
 import { ghExecFileAsync, acquire, release } from '../../gh-utils'
+
 export const ORCA_REPO = 'stablyai/orca'
 
 /**
@@ -26,6 +27,7 @@ export function checkOrcaStarred(): Promise<boolean | null> {
   inFlightStarCheck ??= runOrcaStarredCheck().finally(() => {
     inFlightStarCheck = null
   })
+
   return inFlightStarCheck
 }
 
@@ -36,22 +38,28 @@ export function __resetOrcaStarCheckForTests(): void {
 
 async function runOrcaStarredCheck(): Promise<boolean | null> {
   await acquire()
+
   try {
     const { stdout, stderr } = await ghExecFileAsync(
       ['api', '--include', `user/starred/${ORCA_REPO}`],
       { encoding: 'utf-8', timeout: STAR_GH_TIMEOUT_MS }
     )
+
     const response = `${stdout ?? ''}\n${stderr ?? ''}`
+
     if (/HTTP\/\S+\s+(?:200|204)\b/.test(response)) {
       return true
     }
+
     return null
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+
     // 404 means the user hasn't starred — the only expected "no" answer
     if (message.includes('HTTP 404')) {
       return false
     }
+
     // Anything else (gh not installed, not authenticated, network issue, timeout)
     return null
   } finally {
@@ -64,11 +72,13 @@ async function runOrcaStarredCheck(): Promise<boolean | null> {
  */
 export async function starOrca(): Promise<boolean> {
   await acquire()
+
   try {
     await ghExecFileAsync(['api', '-X', 'PUT', `user/starred/${ORCA_REPO}`], {
       encoding: 'utf-8',
       timeout: STAR_GH_TIMEOUT_MS
     })
+
     return true
   } catch {
     return false

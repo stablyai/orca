@@ -4,6 +4,7 @@ import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { WslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const DISTRO = process.env.ORCA_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
+
 const RUN_REAL_WSL = process.platform === 'win32' && process.env.ORCA_REAL_WSL_SKILL_TEST === '1'
 
 async function runWsl(...args: string[]): Promise<string> {
@@ -12,10 +13,12 @@ async function runWsl(...args: string[]): Promise<string> {
     args: ['-d', DISTRO, '--exec', ...args],
     timeoutMs: 30_000
   })
+
   // `runProcess` reports a non-zero exit as data; this harness wants it fatal.
   if (result.code !== 0) {
     throw new Error(`wsl ${args.join(' ')} exited ${result.code}: ${result.stderr.trim()}`)
   }
+
   return result.stdout.trim()
 }
 
@@ -34,9 +37,11 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill deletion primitives', () => {
 
   beforeAll(async () => {
     guestRoot = await runWsl('mktemp', '-d', '/tmp/orca-skill-delete.XXXXXX')
+
     if (!guestRoot.startsWith('/tmp/orca-skill-delete.')) {
       throw new Error('unexpected-wsl-integration-root')
     }
+
     skillsRoot = `${guestRoot}/home/.agents/skills`
     await runWsl('mkdir', '-p', `${skillsRoot}/demo`, `${guestRoot}/home/.codex/skills/demo`)
     await runWsl('sh', '-c', `printf '%s' 'x' > ${skillsRoot}/demo/SKILL.md`)
@@ -73,6 +78,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill deletion primitives', () => {
     const filesystem = new WslSkillInstallFilesystem(DISTRO, [
       uncPath(`${guestRoot}/home/.agents/Skills`)
     ])
+
     await expect(filesystem.remove(uncPath(`${skillsRoot}/demo`))).rejects.toThrow(
       'skill-install-wsl-path-outside-root'
     )
@@ -103,10 +109,12 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill deletion primitives', () => {
     const filesystem = new WslSkillInstallFilesystem(DISTRO, [uncPath(`${guestRoot}/home`)])
     const aliasFile = uncPath(`${guestRoot}/home/.codex/skills/demo/SKILL.md`)
     const inspection = (await filesystem.inspectPaths([aliasFile])).get(aliasFile)
+
     const linkSeconds = Number.parseInt(
       await runWsl('stat', '-c', '%Y', '--', `${guestRoot}/home/.codex/skills/demo/SKILL.md`),
       10
     )
+
     expect(inspection?.mtimeMs).toBe(linkSeconds * 1000)
   })
 

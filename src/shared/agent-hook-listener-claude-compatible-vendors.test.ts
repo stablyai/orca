@@ -29,6 +29,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const compacted = normalizeHookPayload(
       state,
       'devin',
@@ -38,6 +39,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const ended = normalizeHookPayload(
       state,
       'devin',
@@ -71,6 +73,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const tool = normalizeHookPayload(
       state,
       'kimi',
@@ -85,6 +88,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const waiting = normalizeHookPayload(
       state,
       'kimi',
@@ -94,6 +98,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const stopped = normalizeHookPayload(
       state,
       'kimi',
@@ -131,6 +136,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const harness = normalizeHookPayload(
       state,
       'kimi',
@@ -144,7 +150,9 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(harness).toBeNull()
+
     const tool = normalizeHookPayload(
       state,
       'kimi',
@@ -158,6 +166,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool).not.toBeNull()
     expect(tool!.payload.state).toBe('working')
     expect(tool!.payload.prompt).toBe('list the files here')
@@ -169,6 +178,7 @@ describe('shared agent-hook-listener', () => {
       hook_event_name: 'PreCompact',
       trigger: 'manual'
     })
+
     const post = normalizeAndAccept(state, 'kimi', {
       hook_event_name: 'PostCompact',
       trigger: 'manual'
@@ -195,6 +205,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const tool = normalizeHookPayload(
       state,
       'mimo-code',
@@ -207,6 +218,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const idle = normalizeHookPayload(
       state,
       'mimo-code',
@@ -216,6 +228,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const sessionStart = normalizeHookPayload(
       state,
       'mimo-code',
@@ -260,6 +273,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const answered = normalizeHookPayload(
       state,
       'kimi',

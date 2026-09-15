@@ -29,6 +29,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('preserves queued set-clear order for working removal and done retention', async () => {
     vi.useFakeTimers()
     let storeState: StoreLike
+
     const applyStatusUpdate = (
       paneKey: string,
       payload: { state: string },
@@ -39,6 +40,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         [paneKey]: { ...payload, updatedAt: timing?.updatedAt }
       }
     }
+
     const setAgentStatus = vi.fn(
       (
         paneKey: string,
@@ -49,23 +51,29 @@ describe('useIpcEvents agent status snapshot integration', () => {
         applyStatusUpdate(paneKey, payload, timing)
       }
     )
+
     const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
       for (const update of updates) {
         applyStatusUpdate(update.paneKey, update.payload, update.timing)
       }
+
       return updates.map(() => true)
     })
+
     const removeAgentStatus = vi.fn((paneKey: string) => {
       const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
       delete next[paneKey]
       storeState.agentStatusByPaneKey = next
     })
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
       current: null
     }
+
     storeState = buildStoreState({
       setAgentStatus,
       setAgentStatuses,
@@ -96,10 +104,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         },
         onClear: (cb) => {
           onClearListenerRef.current = cb as (data: { paneKey: string }) => void
+
           return () => {}
         }
       })
@@ -108,12 +118,14 @@ describe('useIpcEvents agent status snapshot integration', () => {
     try {
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
+
       if (
         typeof onSetListenerRef.current !== 'function' ||
         typeof onClearListenerRef.current !== 'function'
       ) {
         throw new Error('Expected agentStatus listeners to be registered')
       }
+
       const emit = (
         receivedAt: number,
         prompt: string,
@@ -173,16 +185,21 @@ describe('useIpcEvents agent status snapshot integration', () => {
     // event is still queued -> infinite recursion. Model setAgentStatus with a
     // real synchronous notify so the re-entrancy is exercised end to end.
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     let setAgentStatusCalls = 0
+
     const notify = (previousState: StoreLike = storeState): void => {
       const listener = subscribeListenerRef.current
+
       if (listener) {
         listener(storeState, previousState)
       }
     }
+
     const storeState: StoreLike = buildStoreState({
       // Why: mirror Zustand — a state mutation notifies subscribers synchronously.
       setAgentStatus: (paneKey: string, entry: unknown) => {
@@ -205,6 +222,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -218,6 +236,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -230,6 +249,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
+
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
@@ -270,17 +290,22 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('keeps pending statuses queued when the retry fold throws', async () => {
     vi.useFakeTimers()
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     let shouldThrow = true
+
     const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
       if (shouldThrow) {
         shouldThrow = false
         throw new Error('fold blew up')
       }
+
       return updates.map(() => true)
     })
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus: vi.fn(),
       setAgentStatuses,
@@ -290,11 +315,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {}
     })
+
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -308,6 +335,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -316,6 +344,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const { useIpcEvents } = await import('./useIpcEvents')
     useIpcEvents()
     await Promise.resolve()
+
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
@@ -345,14 +374,17 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }
 
     vi.advanceTimersByTime(100)
+
     const replayedAfterThrow = setAgentStatuses.mock.calls
       .slice(1)
       .flatMap((call) => call[0].map((update) => update.payload.prompt))
+
     expect(replayedAfterThrow).toContain('buffered')
   })
 
   it('applies ready push events for an unmounted inactive terminal tab', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -380,6 +412,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -424,11 +457,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
+
     const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
       metadata.launchToken === 'launch-yolo'
         ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
         : undefined
     )
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -469,6 +504,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -507,6 +543,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -546,6 +583,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })

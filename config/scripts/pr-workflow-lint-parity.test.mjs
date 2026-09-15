@@ -9,7 +9,9 @@ import { describe, expect, it } from 'vitest'
 
 // Flags that only change reporting, so they must not split two otherwise identical commands.
 const REPORTING_FLAGS_WITH_VALUE = new Set(['--format', '--reporter'])
+
 const REPORTING_FLAGS = new Set(['--quiet'])
+
 const PACKAGE_RUNNER_TOKENS = new Set(['pnpm', 'npm', 'yarn', 'npx', 'run', 'exec', 'node'])
 
 function splitCommandChain(command) {
@@ -25,16 +27,20 @@ function canonicalize(command) {
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
+
     if (canonical.length === 0 && PACKAGE_RUNNER_TOKENS.has(token)) {
       continue
     }
+
     if (REPORTING_FLAGS.has(token)) {
       continue
     }
+
     if (REPORTING_FLAGS_WITH_VALUE.has(token)) {
       index += 1
       continue
     }
+
     canonical.push(token)
   }
 
@@ -47,12 +53,14 @@ function resolveLeafCommands(command, scripts, seen = new Set()) {
 
   for (const part of splitCommandChain(command)) {
     const scriptName = part.match(/^(?:pnpm|npm|yarn)(?:\s+run)?\s+([\w:-]+)$/)?.[1]
+
     if (scriptName && scripts[scriptName] && !seen.has(scriptName)) {
       leaves.push(
         ...resolveLeafCommands(scripts[scriptName], scripts, new Set([...seen, scriptName]))
       )
       continue
     }
+
     leaves.push(canonicalize(part))
   }
 

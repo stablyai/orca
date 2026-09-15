@@ -61,5 +61,6 @@ export function resolveNewWorkspaceDialogGitRepoId(args: {
 }): string | null {
   const repoId = resolveNewWorkspaceDialogRepoId(args)
   const repo = repoId ? args.eligibleRepos.find((entry) => entry.id === repoId) : null
+
   return repo && isGitRepoKind(repo) ? repo.id : null
 }

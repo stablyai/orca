@@ -74,12 +74,15 @@ export function prepareTerminalPaneMount(
 ): TerminalPaneMountPreparation | null {
   const { containerRef, expandedStyleSnapshotRef, paneTransportsRef, panePtyBindingsRef } = deps
   const container = containerRef.current
+
   if (!container) {
     return null
   }
+
   const expandedStyleSnapshots = expandedStyleSnapshotRef.current
   const paneTransports = paneTransportsRef.current
   const panePtyBindings = panePtyBindingsRef.current
+
   const worktreePath =
     useAppStore
       .getState()
@@ -87,26 +90,34 @@ export function prepareTerminalPaneMount(
       .find((candidate) => candidate.id === deps.worktreeId)?.path ??
     deps.cwd ??
     ''
+
   const defaultTabCwd = deps.cwd ?? worktreePath
+
   const initialCwdResolution = resolveQueuedInitialCwd(
     refs.queuedInitialCwdRef.current,
     () => useAppStore.getState().consumeTabInitialCwd(deps.tabId),
     defaultTabCwd
   )
+
   refs.queuedInitialCwdRef.current = initialCwdResolution.queuedInitialCwd
   const startupCwd = initialCwdResolution.startupCwd
   const terminalHomePath = resolveTerminalHomePathFromEnv(deps.startup?.env)
+
   const wslDistro = getConnectionId(deps.worktreeId)
     ? null
     : resolvePaneWslDistro(useAppStore.getState(), deps.worktreeId, worktreePath)
+
   const getPaneLinkCwd = (paneId: number): string =>
     resolvePaneLinkCwd(deps.paneCwdRef.current, paneId, startupCwd)
+
   const getHttpLinkSourceOwnerForPane = (
     paneId: number
   ): ReturnType<typeof resolveTerminalHttpLinkSourceOwner> =>
     resolveTerminalHttpLinkSourceOwner(paneTransports.get(paneId))
+
   const canOpenOwnedBrowserForPane = (paneId: number): boolean => {
     const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
+
     if (sourceOwner.kind === 'runtime') {
       return canOpenWorkspaceBrowserTabOnRuntime(
         useAppStore.getState(),
@@ -114,6 +125,7 @@ export function prepareTerminalPaneMount(
         sourceOwner.runtimeEnvironmentId
       )
     }
+
     return (
       sourceOwner.kind === 'ssh' &&
       canOpenWorkspaceBrowserTabOnSsh(
@@ -123,23 +135,29 @@ export function prepareTerminalPaneMount(
       )
     )
   }
+
   const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations =>
     httpLinkActionDestinationsFor(
       deps.settingsRef.current,
       getHttpLinkSourceOwnerForPane(paneId),
       canOpenOwnedBrowserForPane(paneId)
     )
+
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     if (deps.settingsRef.current?.terminalLinkActionPopoverEnabled === false) {
       return null
     }
+
     const pane = deps.managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
     const pointerGesture = refs.linkPointerGesturesRef.current.get(paneId)
+
     const suppression =
       refs.httpLinkClickFallbackDisposablesRef.current.get(paneId)?.ptyMouseSuppression
+
     if (!pane || !pointerGesture || !suppression) {
       return null
     }
+
     return {
       paneId,
       pointerGesture,
@@ -148,7 +166,9 @@ export function prepareTerminalPaneMount(
       focusTerminal: () => pane.terminal.focus()
     }
   }
+
   const pathExistsCache = new Map<string, boolean>()
+
   const linkDeps: LinkHandlerDeps = {
     worktreeId: deps.worktreeId,
     worktreePath,
@@ -161,21 +181,27 @@ export function prepareTerminalPaneMount(
     pathExistsCache,
     getRuntimeEnvironmentIdForPane: (paneId) => {
       const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
+
       return sourceOwner.kind === 'runtime' ? sourceOwner.runtimeEnvironmentId : null
     },
     getLinkActionContext
   }
+
   let resizeRaf: number | null = null
+
   const queueResizeAll = (focusActive: boolean): void => {
     if (resizeRaf !== null) {
       cancelAnimationFrame(resizeRaf)
     }
+
     resizeRaf = requestAnimationFrame(() => {
       resizeRaf = null
       const manager = deps.managerRef.current
+
       if (!manager) {
         return
       }
+
       if (focusActive) {
         fitAndFocusPanes(manager)
       } else {
@@ -183,31 +209,40 @@ export function prepareTerminalPaneMount(
       }
     })
   }
+
   const cancelResizeAll = (): void => {
     if (resizeRaf !== null) {
       cancelAnimationFrame(resizeRaf)
       resizeRaf = null
     }
   }
+
   const syncCanExpandState = (): void => {
     deps.setTabCanExpandPane(deps.tabId, (deps.managerRef.current?.getPanes().length ?? 1) > 1)
   }
+
   const syncPaneCount = (): void => {
     deps.setPaneCount(deps.managerRef.current?.getPanes().length ?? 0)
   }
+
   const syncPaneLayoutRevision = (): void => {
     deps.setPaneLayoutRevision((revision) => revision + 1)
   }
+
   const normalizedInitialLayout = normalizeTerminalLayoutSnapshot(deps.initialLayoutRef.current)
+
   if (normalizedInitialLayout.changed) {
     deps.initialLayoutRef.current = normalizedInitialLayout.snapshot
     useAppStore.getState().setTabLayout(deps.tabId, normalizedInitialLayout.snapshot)
   }
+
   const initialLayoutHadBuffers = Boolean(deps.initialLayoutRef.current.buffersByLeafId)
   const hydratedInitialScrollback = hydrateTerminalScrollbackRefs(deps.initialLayoutRef.current)
+
   if (hydratedInitialScrollback.hydrated) {
     deps.initialLayoutRef.current = hydratedInitialScrollback.layout
   }
+
   const startupWithSetupSplitWait =
     deps.startup && deps.setupSplit
       ? {
@@ -215,9 +250,11 @@ export function prepareTerminalPaneMount(
           waitForSetupSplitDirection: deps.setupSplit.direction
         }
       : deps.startup
+
   // Numeric pane ids are mount-local; the handle itself is keyed by the
   // durable tab/leaf identity so a whole-tab remount can reclaim it.
   const deferredSplitHandoffs = new Map<number, DeferredSplitPaneHandoffHandle>()
+
   const ptyDeps = createTerminalPanePtyDeps({
     deps,
     refs,
@@ -227,6 +264,7 @@ export function prepareTerminalPaneMount(
     restoredPtyIdByLeafId: deps.initialLayoutRef.current.ptyIdsByLeafId ?? {},
     deferredSplitHandoffs
   })
+
   const unregisterRuntimeTab = registerRuntimeTerminalTab({
     tabId: deps.tabId,
     worktreeId: deps.worktreeId,
@@ -235,7 +273,9 @@ export function prepareTerminalPaneMount(
     getPtyIdForPane: (paneId) => paneTransports.get(paneId)?.getPtyId() ?? null,
     getTabWideAgentHintLeafId: deps.getTabWideAgentHintLeafId
   })
+
   const fileOpenLinkHint = getTerminalFileOpenHint()
+
   const getUrlOpenLinkHint = (paneId: number): string =>
     getTerminalUrlOpenHint({
       ...terminalUrlOpenHintOptionsFor(
@@ -245,6 +285,7 @@ export function prepareTerminalPaneMount(
       ),
       showActions: deps.settingsRef.current?.terminalLinkActionPopoverEnabled !== false
     })
+
   return {
     container,
     expandedStyleSnapshots,
@@ -275,9 +316,11 @@ export function prepareTerminalPaneMount(
     osc7UncHost: extractUncHost(startupCwd),
     applyAppearance: (manager) => {
       const currentSettings = deps.settingsRef.current
+
       if (!currentSettings) {
         return
       }
+
       applyTerminalAppearance(
         manager,
         currentSettings,

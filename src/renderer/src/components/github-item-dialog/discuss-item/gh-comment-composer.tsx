@@ -41,9 +41,11 @@ export function GHCommentComposer({
 
   const handleSubmit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
+
     if (bodyState.status === 'empty') {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -51,9 +53,12 @@ export function GHCommentComposer({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setSubmitting(true)
+
     try {
       const result = await addIssueCommentForRepo({
         repoPath,
@@ -64,9 +69,11 @@ export function GHCommentComposer({
         type: itemType,
         prRepo
       })
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         setBody('')
         // Why: use GitHub's returned comment so the optimistic row shows the real login/avatar immediately.
@@ -101,6 +108,7 @@ export function GHCommentComposer({
     prRepo,
     onCommentAdded
   ])
+
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (

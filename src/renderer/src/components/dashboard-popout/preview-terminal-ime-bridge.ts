@@ -35,13 +35,16 @@ export function installPreviewImeBridge(
   if (getShortcutPlatform() !== 'darwin') {
     return null
   }
+
   const compositionTracker = installTerminalImeCompositionTracker(terminal.element)
+
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement: terminal.element,
     isComposing: () => compositionTracker?.isActive() ?? false,
     sendInput: (data) => terminal.input(data),
     getKittyKeyboardFlags: options.getKittyKeyboardFlags
   })
+
   return {
     claimKeyEvent: (event) => forwarder?.claimKeyEvent(event) ?? false,
     dispose: () => {

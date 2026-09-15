@@ -34,15 +34,18 @@ export function ColorPicker({
 }: ColorPickerProps): React.JSX.Element {
   const inputId = React.useId()
   const currentColor = resolveRepoBadgeColor(value)
+
   const [draftState, setDraftState] = React.useState(() => ({
     syncedColor: currentColor,
     draft: currentColor,
     isEditing: false
   }))
+
   const draft =
     draftState.isEditing || draftState.syncedColor === currentColor
       ? draftState.draft
       : currentColor
+
   const draftColor = normalizeRepoBadgeColor(draft)
   const swatchColor = draftColor ?? currentColor
   const hasInvalidDraft = draft.trim().length > 0 && !draftColor
@@ -51,6 +54,7 @@ export function ColorPicker({
   const updateDraft = (nextDraft: string): void => {
     const nextColor = normalizeRepoBadgeColor(nextDraft)
     setDraftState({ syncedColor: currentColor, draft: nextDraft, isEditing: true })
+
     if (nextColor && FULL_HEX_COLOR_PATTERN.test(nextDraft.trim())) {
       onChange(nextColor)
     }

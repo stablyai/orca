@@ -28,6 +28,7 @@ export function splitBrowsePath(
       segments: p.slice(2).split(/[\\/]/).filter(Boolean)
     }
   }
+
   return { kind: 'posix', segments: p.split('/').filter(Boolean) }
 }
 
@@ -41,11 +42,15 @@ export function parentOfDrivePath(p: string): string {
   if (isDriveRoot(p)) {
     return '/'
   }
+
   const parts = splitBrowsePath(p, 'win32')
+
   if (parts.kind !== 'drive') {
     return p
   }
+
   const parentSegments = parts.segments.slice(0, -1)
+
   return parentSegments.length === 0
     ? parts.driveRoot
     : `${parts.driveRoot}${parentSegments.join('\\')}`
@@ -57,6 +62,8 @@ export function driveBreadcrumbPath(
   endIndex: number
 ): string {
   const kept = segments.slice(0, endIndex + 1)
+
   return kept.length === 0 ? driveRoot : `${driveRoot}${kept.join('\\')}`
 }
+
 import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'

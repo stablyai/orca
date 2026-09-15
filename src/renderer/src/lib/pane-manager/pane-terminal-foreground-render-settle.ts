@@ -61,22 +61,28 @@ function refreshVisibleRows(
     if (shouldReleaseRenderPause?.() === true && forceRepaintThroughRenderPause(terminal)) {
       return
     }
+
     const lastRow = Math.max(0, terminal.rows - 1)
     // Why not always the whole grid: xterm's render debouncer unions ranges, so a
     // 0..rows-1 repair request turns every frame into a full-viewport cell walk.
     // `span` is the parse's own dirty rows; `null` keeps the whole-grid repaint.
     const start = span ? Math.min(Math.max(span.start, 0), lastRow) : 0
     const end = span ? Math.min(Math.max(span.end, start), lastRow) : lastRow
+
     // Why: DOM-rendered Windows ConPTY rewrites need an immediate repair, while
     // WebGL can merge this request into xterm's already-queued frame.
     if (synchronously && typeof terminal._core?.refresh === 'function') {
       terminal._core.refresh(start, end, true)
+
       return
     }
+
     if (typeof terminal.refresh === 'function') {
       terminal.refresh(start, end)
+
       return
     }
+
     terminal._core?.refresh?.(start, end, false)
   } catch {
     // Ignore disposed terminals; PTY output can race pane teardown.
@@ -85,6 +91,7 @@ function refreshVisibleRows(
 
 function captureViewportSnapshot(terminal: ForegroundTerminalOutputTarget): ViewportSnapshot {
   const active = terminal.buffer?.active
+
   return {
     type: typeof active?.type === 'string' ? active.type : null,
     cursorY: typeof active?.cursorY === 'number' ? active.cursorY : null,
@@ -122,33 +129,44 @@ function repairRowSpan(
   if (beforeWrite.type !== afterWrite.type || viewportChangedDuringWrite(beforeWrite, afterWrite)) {
     return null
   }
+
   const parsed = readParsedDirtyRowSpan(terminal)
+
   if (!parsed) {
     return null
   }
+
   let { start, end } = parsed
+
   for (const cursorY of [beforeWrite.cursorY, afterWrite.cursorY]) {
     if (cursorY === null) {
       return null
     }
+
     start = Math.min(start, cursorY)
     end = Math.max(end, cursorY)
   }
+
   return { start, end }
 }
 
 function cancelScheduledViewportSettleRefresh(terminal: ForegroundTerminalOutputTarget): void {
   const pending = pendingViewportSettleRefreshByTerminal.get(terminal)
+
   if (!pending) {
     return
   }
+
   pendingViewportSettleRefreshByTerminal.delete(terminal)
+
   if (pending.kind === 'raf') {
     if (typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(pending.id)
     }
+
     return
   }
+
   clearTimeout(pending.id)
 }
 
@@ -158,12 +176,15 @@ function scheduleViewportSettleRefresh(
   shouldReleaseRenderPause?: () => boolean
 ): void {
   cancelScheduledViewportSettleRefresh(terminal)
+
   if (typeof requestAnimationFrame === 'function') {
     const id = requestAnimationFrame(() => {
       pendingViewportSettleRefreshByTerminal.delete(terminal)
       refreshVisibleRows(terminal, shouldRefreshSynchronously?.() ?? true, shouldReleaseRenderPause)
     })
+
     pendingViewportSettleRefreshByTerminal.set(terminal, { kind: 'raf', id })
+
     return
   }
 
@@ -171,6 +192,7 @@ function scheduleViewportSettleRefresh(
     pendingViewportSettleRefreshByTerminal.delete(terminal)
     refreshVisibleRows(terminal, shouldRefreshSynchronously?.() ?? true, shouldReleaseRenderPause)
   }, 16)
+
   pendingViewportSettleRefreshByTerminal.set(terminal, { kind: 'timeout', id })
 }
 
@@ -186,6 +208,7 @@ function settleForegroundRender(
     options.shouldReleaseRenderPause,
     repairRowSpan(terminal, beforeWriteViewport, afterWriteViewport)
   )
+
   // Why: when output advances the viewport, Chromium can paint the freshly
   // scrolled top row one frame later than xterm finishes parsing. Repaint once
   // more after the scroll settles so the user doesn't need to jiggle the window.
@@ -209,11 +232,13 @@ export function writeForegroundTerminalChunk(
   const beforeWriteViewport = options.forceViewportRefresh
     ? captureViewportSnapshot(terminal)
     : null
+
   if (beforeWriteViewport) {
     // Why here and not in the callback: the span must cover only this write's
     // parse, and xterm fires its dirty-row request between the two.
     resetParsedDirtyRows(terminal)
   }
+
   // Why guarded steps: this callback runs inside xterm's WriteBuffer loop,
   // where an escaping throw permanently wedges the terminal (see
   // xterm-write-callback-guard.ts). Guard settle and onParsed separately so a
@@ -224,12 +249,15 @@ export function writeForegroundTerminalChunk(
         settleForegroundRender(terminal, beforeWriteViewport, options)
       )
     }
+
     if (options.onParsed) {
       runGuardedWriteCompletionStep('foreground-on-parsed', options.onParsed)
     }
   }
+
   try {
     terminal.write(data, runParsedSteps)
+
     return true
   } catch {
     // Why separate from parse completion: cleanup/recovery must run, but a
@@ -237,6 +265,7 @@ export function writeForegroundTerminalChunk(
     if (options.onWriteFailure) {
       runGuardedWriteCompletionStep('foreground-on-write-failure', options.onWriteFailure)
     }
+
     return false
   }
 }

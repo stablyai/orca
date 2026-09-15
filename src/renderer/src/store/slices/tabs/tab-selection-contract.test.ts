@@ -7,6 +7,7 @@ import { deriveActiveSurfaceForWorktree } from './tabs-surface'
 type SelectionState = Parameters<typeof resolveActivatedWorktreeSurface>[0]
 
 const workspace = 'repo::/workspace'
+
 function selectedTab(contentType: TabContentType): Tab {
   return {
     id: 'selected',
@@ -93,6 +94,7 @@ function activate(state: SelectionState) {
     undefined,
     null
   )
+
   return surface
 }
 
@@ -110,12 +112,14 @@ describe('tab selection and hydration ownership', () => {
     'projects %s selection while retaining other remembered surfaces',
     (kind, visible) => {
       const state = selectionState(selectedTab(kind))
+
       const expected = {
         activeTabType: visible,
         activeTabId: kind === 'terminal' ? 'selected-entity' : 'remembered-terminal',
         activeFileId: visible === 'editor' ? 'selected-entity' : 'remembered-file',
         activeBrowserTabId: kind === 'browser' ? 'selected-entity' : 'remembered-browser'
       }
+
       expect(deriveActiveSurfaceForWorktree(state, workspace)).toEqual(expected)
       expect(activate(state)).toEqual(expected)
     }
@@ -208,6 +212,7 @@ describe('tab selection and hydration ownership', () => {
   it('hydrates unified selection without allowing conflicting legacy memories to choose it', () => {
     const tab = selectedTab('simulator')
     const state = selectionState(tab)
+
     const session = {
       activeRepoId: null,
       activeWorktreeId: workspace,
@@ -220,6 +225,7 @@ describe('tab selection and hydration ownership', () => {
       activeTabTypeByWorktree: { [workspace]: 'browser' as const },
       activeTabIdByWorktree: state.activeTabIdByWorktree
     }
+
     const before = structuredClone(session)
     const hydrated = buildHydratedTabState(session, new Set([workspace]))
     expect(activate({ ...state, ...hydrated }).activeTabType).toBe('simulator')

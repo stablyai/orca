@@ -23,6 +23,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('remaps host agent status onto mirrored terminal pane keys', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([
@@ -73,6 +74,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('clears stale tool-output provenance when a newer host preview is assistant prose', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const initialSnapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -98,12 +100,14 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       }
     ])
+
     const initialPatch = applyWebSessionTabsSnapshot(
       makeState(),
       initialSnapshot,
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const mirroredPaneKey = Object.keys(initialPatch.agentStatusByPaneKey ?? {})[0]!
 
     const prosePatch = applyWebSessionTabsSnapshot(
@@ -150,6 +154,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('applies a marker-only host restart degradation to mirrored agent status', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const snapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -173,13 +178,16 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       }
     ])
+
     const initial = applyWebSessionTabsSnapshot(
       makeState(),
       snapshot,
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+
     const degraded = applyWebSessionTabsSnapshot(
       makeState({ ...initial }),
       {
@@ -205,6 +213,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('repairs mirrored same-state attribution and retains identity from an older snapshot', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const snapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -229,14 +238,17 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       }
     ])
+
     const initial = applyWebSessionTabsSnapshot(
       makeState(),
       snapshot,
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
     const existing = initial.agentStatusByPaneKey![mirroredPaneKey]!
+
     const attributionPatch = applyWebSessionTabsSnapshot(
       makeState({
         ...initial,
@@ -362,6 +374,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([
@@ -405,6 +418,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('bumps sort epoch for mirrored Command Code same-state turn starts', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const initialPatch = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([
@@ -433,6 +447,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const initialState = { ...makeState(), ...initialPatch }
     const mirroredId = initialPatch.tabsByWorktree?.[WT]?.[0]?.id
     const mirroredPaneKey = makePaneKey(mirroredId!, LEAF_ID)
@@ -480,6 +495,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('bumps sort epoch when a mirrored same-state done update becomes a completion', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+
     const initialSnapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -502,12 +518,14 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       }
     ])
+
     const initialPatch = applyWebSessionTabsSnapshot(
       makeState(),
       initialSnapshot,
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const initialState = { ...makeState(), ...initialPatch }
 
     const patch = applyWebSessionTabsSnapshot(

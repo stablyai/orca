@@ -21,6 +21,7 @@ function repoAddonPath() {
   try {
     const entry = require.resolve('@vscode/windows-process-tree')
     const built = join(entry, '..', '..', 'build', 'Release', 'windows_process_tree.node')
+
     return existsSync(built) ? built : null
   } catch {
     return null
@@ -36,6 +37,7 @@ function repoAddonPath() {
  */
 async function stageLoadedStaleAddon(projectDir) {
   const source = repoAddonPath()
+
   const releaseDir = join(
     projectDir,
     'node_modules',
@@ -44,6 +46,7 @@ async function stageLoadedStaleAddon(projectDir) {
     'build',
     'Release'
   )
+
   mkdirSync(releaseDir, { recursive: true })
   const stale = join(releaseDir, 'windows_process_tree.node')
   copyFileSync(source, stale)
@@ -54,10 +57,12 @@ async function stageLoadedStaleAddon(projectDir) {
     ['-e', 'require(process.argv[1]); process.send("held"); setInterval(() => {}, 1000)', stale],
     { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
   )
+
   await new Promise((resolve, reject) => {
     holder.once('message', resolve)
     holder.once('exit', () => reject(new Error('the addon holder exited before loading')))
   })
+
   return holder
 }
 

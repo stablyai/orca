@@ -28,6 +28,7 @@ export function useUntitledFileRename({
 }: UseUntitledFileRenameParams): UseUntitledFileRenameResult {
   const [renameDialogFileId, setRenameDialogFileId] = useState<string | null>(null)
   const [renameError, setRenameError] = useState<string | null>(null)
+
   const renameDialogFile = renameDialogFileId
     ? (openFiles.find((f) => f.id === renameDialogFileId) ?? null)
     : null
@@ -42,9 +43,11 @@ export function useUntitledFileRename({
       if (!renameDialogFile) {
         return
       }
+
       const oldPath = renameDialogFile.filePath
       const worktreeRoot = getUntitledFileRoot(renameDialogFile)
       const newPath = joinPath(worktreeRoot, newRelPath)
+
       const fileContext = getEditorFileOperationContext(
         useAppStore.getState(),
         renameDialogFile,
@@ -53,16 +56,19 @@ export function useUntitledFileRename({
 
       if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
         setRenameError('A file with that name already exists')
+
         return
       }
 
       await requestEditorSaveQuiesce({ fileId: renameDialogFile.id })
       const draft = useAppStore.getState().editorDrafts[renameDialogFile.id]
+
       if (draft !== undefined) {
         try {
           await requestEditorFileSave({ fileId: renameDialogFile.id, fallbackContent: draft })
         } catch {
           setRenameError('Failed to save file')
+
           return
         }
       }
@@ -70,10 +76,12 @@ export function useUntitledFileRename({
       if (newPath === oldPath) {
         clearUntitled(renameDialogFile.id)
         closeRenameDialog()
+
         return
       }
 
       const newDir = dirname(newPath)
+
       if (newDir !== worktreeRoot && !(await runtimePathExists(fileContext, newDir))) {
         await createRuntimePath(fileContext, newDir, 'directory')
       }
@@ -90,8 +98,10 @@ export function useUntitledFileRename({
         })
       } catch (err) {
         setRenameError(err instanceof Error ? err.message : 'Failed to rename file')
+
         return
       }
+
       closeRenameDialog()
     },
     [clearUntitled, closeRenameDialog, renameDialogFile]

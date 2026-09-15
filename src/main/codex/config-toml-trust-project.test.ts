@@ -14,6 +14,7 @@ import {
 } from './config-toml-trust-test-fixtures'
 
 let tmpDir: string
+
 let configPath: string
 
 beforeEach(() => {

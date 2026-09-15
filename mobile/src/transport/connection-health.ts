@@ -20,7 +20,9 @@ import type { ConnectionState } from './types'
 //   spinning, treat the same as never-connected. Catches the case
 //   where the desktop's IP changed mid-session.
 const WARNING_ATTEMPTS = 3
+
 const UNREACHABLE_ATTEMPTS = 12
+
 const STALE_SINCE_LAST_CONNECT_MS = 60_000
 
 // Why: a repeatedly-unreachable 100.x/*.ts.net endpoint almost always means
@@ -97,10 +99,12 @@ export function classifyConnection(args: {
       if (lastConnectedAt == null) {
         return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'never-connected' }
       }
+
       if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
         return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'stale' }
       }
     }
+
     return { kind: 'normal', label: 'Connecting via Relay…' }
   }
 
@@ -121,6 +125,7 @@ export function classifyConnection(args: {
         hint
       }
     }
+
     if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
       return {
         kind: 'unreachable',
@@ -144,5 +149,6 @@ export function verdictDisplayLabel(verdict: ConnectionVerdict): string {
   if ((verdict.kind === 'warning' || verdict.kind === 'unreachable') && verdict.hint) {
     return `${verdict.label} — ${verdict.hint}`
   }
+
   return verdict.label
 }

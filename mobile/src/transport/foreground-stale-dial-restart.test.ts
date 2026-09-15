@@ -61,7 +61,9 @@ class MockWebSocket {
     if (this.readyState === MockWebSocket.CLOSED) {
       return
     }
+
     this.readyState = MockWebSocket.CLOSED
+
     if (this.deliversCloseEvent) {
       this.onclose?.({ code: 1006, wasClean: false })
     }
@@ -80,13 +82,16 @@ class MockWebSocket {
 }
 
 const sockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function latest(): MockWebSocket {
   const socket = sockets[sockets.length - 1]
+
   if (!socket) {
     throw new Error('no socket opened')
   }
+
   return socket
 }
 
@@ -112,6 +117,7 @@ function suspend(backgroundMs: number): void {
     // iOS reclaims a suspended app's sockets without telling JS.
     socket.deliversCloseEvent = false
   }
+
   vi.setSystemTime(Date.now() + backgroundMs)
 }
 
@@ -119,12 +125,15 @@ function suspend(backgroundMs: number): void {
 // on "Connecting…" before the client opens its next socket.
 async function millisecondsUntilNextDial(dialsBefore: number): Promise<number> {
   const limitMs = 180_000
+
   for (let elapsedMs = 0; elapsedMs <= limitMs; elapsedMs += 1_000) {
     if (sockets.length > dialsBefore) {
       return elapsedMs
     }
+
     await vi.advanceTimersByTimeAsync(1_000)
   }
+
   return limitMs
 }
 
@@ -135,8 +144,10 @@ async function advanceUntilDialing(client: ReturnType<typeof connect>): Promise<
     if (client.getState() === 'connecting') {
       return
     }
+
     await vi.advanceTimersByTimeAsync(250)
   }
+
   throw new Error(`client never re-entered connecting (state=${client.getState()})`)
 }
 
@@ -192,6 +203,7 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     for (let dial = 0; dial < 6; dial++) {
       await vi.advanceTimersByTimeAsync(12_000 + 60_000)
     }
+
     expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(6)
     await advanceUntilDialing(client)
 
@@ -215,9 +227,11 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key')
     latest().authenticate()
     latest().close()
+
     for (let dial = 0; dial < 4; dial++) {
       await vi.advanceTimersByTimeAsync(12_000 + 60_000)
     }
+
     // Four failed dials is past WARNING_ATTEMPTS, so the card reads "Can't
     // connect — check Tailscale" rather than a neutral "Connecting…".
     expect(label(client, TAILSCALE_ENDPOINT)).toBe("Can't connect — check Tailscale")

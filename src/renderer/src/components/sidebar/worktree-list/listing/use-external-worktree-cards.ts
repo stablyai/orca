@@ -31,12 +31,15 @@ export function useSidebarExternalWorktreeCards(args: {
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const settings = useAppStore((s) => s.settings)
   const visibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
+
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
   >(new Map())
+
   const [newExternalWorktreeInboxActionState, setNewExternalWorktreeInboxActionState] = useState<
     Map<string, NewExternalWorktreesInboxActionState>
   >(new Map())
+
   const [suppressExternalWorktreeInboxRepoId, setSuppressExternalWorktreeInboxRepoId] = useState<
     string | null
   >(null)
@@ -47,6 +50,7 @@ export function useSidebarExternalWorktreeCards(args: {
         .filter(([, state]) => state.forceVisible)
         .map(([repoId]) => repoId)
     )
+
     return buildImportedWorktreesCardCandidates({
       repos: visibleReposForRows,
       detectedWorktreesByRepo,
@@ -63,6 +67,7 @@ export function useSidebarExternalWorktreeCards(args: {
     visibilityDefaultsByHost,
     visibleReposForRows
   ])
+
   const newExternalWorktreesInboxByRepo = useMemo(
     () =>
       buildNewExternalWorktreesInboxCandidates({
@@ -85,11 +90,13 @@ export function useSidebarExternalWorktreeCards(args: {
     (projectId: string, state: ImportedWorktreeCardActionState | null) => {
       setImportedWorktreeCardActionState((previous) => {
         const next = new Map(previous)
+
         if (state) {
           next.set(projectId, state)
         } else {
           next.delete(projectId)
         }
+
         return next
       })
     },
@@ -113,25 +120,32 @@ export function useSidebarExternalWorktreeCards(args: {
     async (projectId: string) => {
       const repo = repos.find((candidate) => candidate.id === projectId)
       let detected = detectedWorktreesByRepo[projectId]
+
       // Why: baseline seeding needs authoritative hidden paths, so don't dismiss on a stale snapshot.
       if (detected?.authoritative !== true) {
         const refreshed = await fetchWorktrees(projectId, { requireAuthoritative: true })
+
         if (!refreshed) {
           setImportedWorktreeCardState(projectId, {
             pending: false,
             error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
           })
+
           return
         }
+
         detected = useAppStore.getState().detectedWorktreesByRepo[projectId]
       }
+
       if (detected?.authoritative !== true) {
         setImportedWorktreeCardState(projectId, {
           pending: false,
           error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
         })
+
         return
       }
+
       await keepImportedWorktreesHiddenCard({
         projectId,
         updateRepo,
@@ -147,11 +161,13 @@ export function useSidebarExternalWorktreeCards(args: {
     (projectId: string, state: NewExternalWorktreesInboxActionState | null) => {
       setNewExternalWorktreeInboxActionState((previous) => {
         const next = new Map(previous)
+
         if (state) {
           next.set(projectId, state)
         } else {
           next.delete(projectId)
         }
+
         return next
       })
     },
@@ -166,13 +182,18 @@ export function useSidebarExternalWorktreeCards(args: {
     if (!suppressExternalWorktreeInboxRepoId) {
       return
     }
+
     const projectId = suppressExternalWorktreeInboxRepoId
     const repo = repos.find((candidate) => candidate.id === projectId)
+
     if (!repo) {
       setSuppressExternalWorktreeInboxRepoId(null)
+
       return
     }
+
     const inboxWorktrees = newExternalWorktreesInboxByRepo.get(projectId)?.inboxWorktrees ?? []
+
     const suppressed = await suppressNewExternalWorktreeInbox({
       projectId,
       repo,
@@ -180,6 +201,7 @@ export function useSidebarExternalWorktreeCards(args: {
       updateRepo,
       setInboxState: setNewExternalWorktreeInboxState
     })
+
     if (suppressed) {
       setSuppressExternalWorktreeInboxRepoId(null)
     }

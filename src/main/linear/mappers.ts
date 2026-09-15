@@ -49,6 +49,7 @@ export async function mapLinearIssue(
   // in the UI, not critical for identification).
   let labelNames: string[] = []
   let labelIds: string[] = []
+
   if ('labels' in issue && typeof issue.labels === 'function') {
     try {
       const labelsConnection = await (issue as Issue).labels()
@@ -62,6 +63,7 @@ export async function mapLinearIssue(
   }
 
   let subIssues: LinearIssueChildSummary[] | undefined
+
   if (options.includeChildren && 'children' in issue && typeof issue.children === 'function') {
     try {
       const childrenConnection = await (issue as IssueWithChildren).children({ first: 25 })

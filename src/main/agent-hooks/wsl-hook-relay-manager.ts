@@ -74,6 +74,7 @@ export class WslHookRelayManager {
         // Why: identity-guarded — a fresh ensure() may own this key by now;
         // deleting by key alone would orphan its live relay child.
         const key = wslHookRelayStateKey(state.distro)
+
         if (this.states.get(key) === state) {
           this.states.delete(key)
         }
@@ -90,6 +91,7 @@ export class WslHookRelayManager {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
+
     void this.ensureInternal(distro, codexHomePath ?? undefined).catch((err) => {
       const detail = err instanceof Error ? err.message : String(err)
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
@@ -118,14 +120,17 @@ export class WslHookRelayManager {
    *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
     this.disposed ||= permanent
+
     for (const state of this.states.values()) {
       this.recovery.clearTimers(state)
       state.mux?.dispose()
       state.child?.kill()
+
       if (!permanent) {
         this.stoppedByHooksOff.set(state.distro, state.codexHomePath)
       }
     }
+
     this.states.clear()
   }
 
@@ -134,6 +139,7 @@ export class WslHookRelayManager {
   resumeStoppedRelays(): void {
     const distros = [...this.stoppedByHooksOff]
     this.stoppedByHooksOff.clear()
+
     for (const [distro, codexHomePath] of distros) {
       void this.deps
         .isDistroRunning(distro)
@@ -151,14 +157,18 @@ export class WslHookRelayManager {
     requestedCodexHomePath?: string
   ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
+
     if (!distro || this.disposed) {
       return
     }
+
     const key = wslHookRelayStateKey(distro)
     const existing = this.states.get(key)
+
     if (requestedCodexHomePath) {
       recordManagedWslCodexHome(distro, requestedCodexHomePath)
     }
+
     if (existing) {
       if (
         requestedCodexHomePath &&
@@ -167,34 +177,45 @@ export class WslHookRelayManager {
         existing.codexHomePath = requestedCodexHomePath
         existing.lastInstallAt = 0
       }
+
       if (existing.phase === 'running') {
         void maybeRerunWslRelayGuestInstall(this.deps, existing)
+
         return
       }
+
       if (existing.phase !== 'failed' || Date.now() < existing.cooldownUntil) {
         return
       }
     }
+
     const coords = this.deps.hookCoordsEnv()
     const port = Number(coords.ORCA_AGENT_HOOK_PORT ?? '')
+
     if (!Number.isInteger(port) || port <= 0 || !coords.ORCA_AGENT_HOOK_TOKEN) {
       return
     }
+
     const bundle = this.deps.resolveBundle()
+
     if (!bundle) {
       if (!this.warnedBundleMissing) {
         this.warnedBundleMissing = true
         this.deps.warn('[agent-hooks] WSL hook relay bundle not found; run build:relay')
       }
+
       return
     }
+
     // Why: restart-stable instance identity keeps the guest endpoint file at
     // ONE path across restarts so daemon-surviving agents re-coordinate.
     const instanceKey =
       sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined) ?? `port${port}`
+
     if (existing) {
       this.recovery.clearTimers(existing)
     }
+
     const state: DistroState = {
       distro,
       phase: 'starting',
@@ -205,6 +226,7 @@ export class WslHookRelayManager {
       codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0
     }
+
     this.states.set(key, state)
 
     const env = buildWslRelaySpawnEnv(coords, bundle.version, instanceKey)
@@ -239,6 +261,7 @@ export class WslHookRelayManager {
       // count. A request-level error can leave a live child — never leak it.
       state.child?.kill()
       state.mux?.dispose()
+
       if (state.phase !== 'failed') {
         this.markFailed(state, err instanceof Error ? err.message : String(err), {
           cooldownBaseMs: FAILURE_COOLDOWN_BASE_MS
@@ -265,8 +288,10 @@ export class WslHookRelayManager {
         if (this.disposed || state.mux !== mux) {
           return
         }
+
         state.mux = undefined
         const wasRunning = state.phase === 'running'
+
         // Why: only a stable run forgives past failures — a connect-then-die
         // loop must escalate, not retry every 10s.
         if (
@@ -276,6 +301,7 @@ export class WslHookRelayManager {
         ) {
           state.failures = 0
         }
+
         this.markFailed(state, `relay link for '${state.distro}' ${reason}; scheduling restart`, {
           cooldownBaseMs: wasRunning ? RUNNING_TEARDOWN_COOLDOWN_MS : FAILURE_COOLDOWN_BASE_MS
         })
@@ -288,14 +314,17 @@ export class WslHookRelayManager {
       portFallback?: boolean
       boundPort?: number
     }
+
     if (homeResult?.ok !== true || typeof homeResult.home !== 'string') {
       throw new Error(`relay for '${state.distro}' returned no home dir`)
     }
+
     if (homeResult.portFallback === true) {
       this.deps.warn(
         `[agent-hooks] WSL hook relay (${state.distro}): preferred port occupied in guest; bound ${homeResult.boundPort ?? 'unknown'} (endpoint-file re-coordination)`
       )
     }
+
     state.guestHome = homeResult.home
     state.guestEndpointFilePath = wslHookRelayEndpointFilePath(homeResult.home, instanceKey)
     await runWslRelayGuestInstall(this.deps, state, mux, homeResult.home)
@@ -304,6 +333,7 @@ export class WslHookRelayManager {
       // Child died while installing — already recorded; don't revive.
       return
     }
+
     state.phase = 'running'
     state.connectedAt = Date.now()
     // Why: one-shot catch-up so a single-spawn session (no later ensure)
@@ -328,10 +358,12 @@ export class WslHookRelayManager {
     state.failures++
     state.child = undefined
     state.mux = undefined
+
     if (state.reinstallTimer) {
       clearTimeout(state.reinstallTimer)
       state.reinstallTimer = undefined
     }
+
     state.cooldownUntil =
       Date.now() + Math.min(options.cooldownBaseMs * state.failures, FAILURE_COOLDOWN_MAX_MS)
     this.deps.warn(`[agent-hooks] WSL hook relay (${state.distro}): ${message}`)
@@ -342,12 +374,14 @@ export class WslHookRelayManager {
     if (this.defaultDistro) {
       return this.defaultDistro
     }
+
     try {
       const distros = await this.deps.listDistros()
       this.defaultDistro = distros[0] ?? null
     } catch {
       this.defaultDistro = null
     }
+
     return this.defaultDistro
   }
 }

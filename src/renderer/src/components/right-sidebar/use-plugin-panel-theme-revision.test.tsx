@@ -6,18 +6,23 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function renderProbe(): { revisions: number[] } {
   const revisions: number[] = []
+
   function Probe(): null {
     revisions.push(usePluginPanelThemeRevision())
+
     return null
   }
+
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => root!.render(<Probe />))
+
   return { revisions }
 }
 

@@ -3,12 +3,14 @@ export async function sampleCpu(app, cdp, sampleMs) {
     Object.fromEntries(
       (await cdp.send('Performance.getMetrics')).metrics.map(({ name, value }) => [name, value])
     )
+
   const processMetrics = () =>
     app.evaluate(({ app }) =>
       app
         .getAppMetrics()
         .map(({ pid, type, cpu }) => ({ pid, type, seconds: cpu.cumulativeCPUUsage }))
     )
+
   const beforeRenderer = await rendererMetrics()
   const before = await processMetrics()
   const started = performance.now()
@@ -16,10 +18,12 @@ export async function sampleCpu(app, cdp, sampleMs) {
   const after = await processMetrics()
   const elapsedMs = performance.now() - started
   const afterRenderer = await rendererMetrics()
+
   return {
     elapsedMs,
     cpuMsPerSecond: after.map((process) => {
       const previous = before.find((row) => row.pid === process.pid)?.seconds
+
       return {
         pid: process.pid,
         type: process.type,

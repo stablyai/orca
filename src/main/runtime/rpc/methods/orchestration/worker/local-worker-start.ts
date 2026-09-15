@@ -50,9 +50,11 @@ export async function startLocalWorker(args: {
   const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
 
   const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(runtime, params.from)
+
   const creationWorktree = createsWorktree
     ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
     : undefined
+
   if (creationWorktree) {
     await assertOrchestrationWorktreeCreationSupported({
       runtime,
@@ -60,11 +62,13 @@ export async function startLocalWorker(args: {
       existingPlacement: 'current or an exact existing folder workspace'
     })
   }
+
   let resolvedWorktree = creationWorktree
     ? undefined
     : requestedWorktree === 'current'
       ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
       : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+
   if (params.terminal) {
     await assertExplicitWorkerTerminalUsable({
       runtime,
@@ -74,6 +78,7 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
+
   let mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
 
   const startOptions = {
@@ -94,6 +99,7 @@ export async function startLocalWorker(args: {
         : 'orchestration_default'
       : 'existing_worktree'
   }
+
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from),
     maxDepth: runtime.getNestedWorkerMaxDepth(),
@@ -113,17 +119,21 @@ export async function startLocalWorker(args: {
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation
   })
+
   const effects: WorkerEffect[] = []
   const task = started.task
+
   if (resolvedWorktree) {
     effects.push(
       { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
       { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
     )
   }
+
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
+
   try {
     placed = await placeWorkerAgent({
       runtime,
@@ -149,6 +159,7 @@ export async function startLocalWorker(args: {
     terminalHandle = placed.terminalHandle
     const structuredSession = placed.structuredSession
     const setupReceipt = placed.setupReceipt
+
     const setupStage = {
       db,
       dispatchId: started.dispatch.id,
@@ -157,14 +168,18 @@ export async function startLocalWorker(args: {
       setup: setupReceipt,
       effects
     }
+
     recordCreatedWorkerTerminalCustody(runtime, setupStage, !params.terminal && !structuredSession)
+
     if (persistGatedSetupSpawnFailure(setupStage)) {
       failedStage = 'setup_start'
       throw new Error('Setup terminal failed to start before the gated agent launch.')
     }
+
     persistWorkerReadinessStage(setupStage)
 
     failedStage = 'agent_readiness'
+
     // A structured session is ready the moment its attach returns ok: there is no boot-to-idle
     // gap and no terminal title to read an idle edge from. Only the repo's wait-for-setup policy
     // still holds it back, and that gate has to be waited on explicitly here.
@@ -179,12 +194,15 @@ export async function startLocalWorker(args: {
           condition: 'tui-idle',
           timeoutMs: params.timeoutMs ?? 60_000
         })
+
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
+
       if (!wait.satisfied) {
         if (setupReceipt.state === 'failed') {
           failedStage = 'setup_wait'
         }
+
         throw new Error(
           wait.blockedReason
             ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
@@ -194,7 +212,9 @@ export async function startLocalWorker(args: {
         )
       }
     }
+
     const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
+
     const capability = db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
@@ -235,6 +255,7 @@ export async function startLocalWorker(args: {
       structuredSession: placed?.structuredSession ?? null,
       dispatchId: started.dispatch.id
     })
+
     return failWorkerStartWithReceipt({
       db,
       runId: run.id,

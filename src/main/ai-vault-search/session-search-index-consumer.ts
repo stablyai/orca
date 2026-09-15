@@ -31,33 +31,42 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
+
     if (!parserPublishesMessages(candidate)) {
       this.noteUnreachableParser(candidate)
+
       return null
     }
+
     if (start.mode === 'append') {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
+
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
         // This index never saw the span before `previousByteOffset`; appending
         // here would leave a hole no later read can fill. A null cursor is the
         // file a chunked read left half written, which no offset continues.
         // Either way the next pass has to read this file from the start.
         this.store.setFileState(candidate.file.path, 'due')
+
         return null
       }
     }
+
     const write = this.store.beginWrite(
       candidate,
       start.mode,
       start.previousByteOffset,
       start.identity
     )
+
     if (!write) {
       // A closed store, a candidate outside the retention window, or a row that
       // moved under this read. Only a row that exists has anything to record.
       this.store.setFileState(candidate.file.path, 'due')
+
       return null
     }
+
     return new SessionSearchReadConsumer(this.store, start, write)
   }
 
@@ -79,12 +88,14 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
    */
   private noteUnreachableParser(candidate: SessionFileCandidate): void {
     const write = this.store.beginWrite(candidate, 'replace', 0)
+
     const committed =
       write?.commit({
         session: null,
         byteOffset: candidate.file.sizeBytes ?? 0,
         incomplete: false
       }) === true
+
     if (committed) {
       this.store.writeCommitted(candidate)
     }
@@ -104,6 +115,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     if (this.failed) {
       return
     }
+
     try {
       this.write.add(message)
     } catch (error) {
@@ -119,6 +131,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   finish(outcome: TranscriptReadOutcome): void {
     const { candidate } = this.start
     let committed = false
+
     try {
       // An incomplete read's rows are not the whole span, so the cursor must not
       // move past them; the file is re-read whole instead.
@@ -126,10 +139,13 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
     } catch (error) {
       this.store.reportWriteFailure(error)
     }
+
     if (committed) {
       this.store.writeCommitted(candidate)
+
       return
     }
+
     // Counted against the stat it failed at, not merely recorded: a transcript
     // the reader cannot open fails identically on every pass, and only a change
     // to this stat can mean the file itself changed.

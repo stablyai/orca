@@ -4,7 +4,9 @@ import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // NUL can appear in neither a path nor a Git ref, so field boundaries stay unambiguous.
 const FIELD_SEPARATOR = '\u0000'
+
 const MISSING = '-'
+
 // Why: this runs per repo on a polling path, so a repo with hundreds of worktrees must not queue its
 // whole admin dir onto the fs threadpool at once. Mirrors SPARSE_CHECKOUT_DETECTION_CONCURRENCY.
 const LINKED_WORKTREE_PROBE_CONCURRENCY = 8
@@ -23,11 +25,14 @@ const LINKED_WORKTREE_PROBE_CONCURRENCY = 8
 export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promise<string | null> {
   try {
     const commonDir = await resolveGitCommonDir(repoPath)
+
     if (!commonDir) {
       return null
     }
+
     const adminDir = path.join(commonDir, 'worktrees')
     const names = await readLinkedWorktreeNames(adminDir)
+
     const [mainHead, mainExists, packedRefs, reftable] = await Promise.all([
       readHeadStamp(commonDir, commonDir),
       readExistenceStamp(repoPath),
@@ -35,11 +40,13 @@ export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promis
       readFileStamp(path.join(commonDir, 'packed-refs')),
       readFileStamp(path.join(commonDir, 'reftable'))
     ])
+
     const linked = await mapWithConcurrency(
       names,
       LINKED_WORKTREE_PROBE_CONCURRENCY,
       async (name) => await readLinkedWorktreeStamp(commonDir, adminDir, name)
     )
+
     return [mainHead, mainExists, packedRefs, reftable, String(names.length), ...linked].join(
       FIELD_SEPARATOR
     )
@@ -56,12 +63,14 @@ async function readLinkedWorktreeStamp(
   const entryDir = path.join(adminDir, name)
   // `gitdir` holds "<worktree>/.git"; its contents follow `git worktree move` and `git worktree repair`.
   const gitdirTarget = await readTrimmedFile(path.join(entryDir, 'gitdir'))
+
   const [head, locked, worktreeExists] = await Promise.all([
     readHeadStamp(commonDir, entryDir),
     readExistenceStamp(path.join(entryDir, 'locked')),
     // Deleting a worktree directory outside Orca flips its `prunable` row without touching the admin dir.
     gitdirTarget ? readExistenceStamp(path.dirname(gitdirTarget)) : Promise.resolve(MISSING)
   ])
+
   return [name, gitdirTarget ?? MISSING, head, locked, worktreeExists].join(FIELD_SEPARATOR)
 }
 
@@ -72,24 +81,30 @@ async function readLinkedWorktreeStamp(
  */
 async function readHeadStamp(commonDir: string, headDir: string): Promise<string> {
   const head = await readTrimmedFile(path.join(headDir, 'HEAD'))
+
   if (!head) {
     return MISSING
   }
+
   const refName = head.match(/^ref:\s*(.+?)\s*$/)?.[1]
+
   if (!refName || !isSafeRefName(refName)) {
     // Detached HEAD already holds the object id, and an unrecognized HEAD is covered by its own text.
     return head
   }
+
   // Per-worktree refs (`refs/bisect`, `refs/worktree`) live beside the checkout; branches are shared.
   const tip =
     (await readTrimmedFile(path.join(headDir, refName))) ??
     (await readTrimmedFile(path.join(commonDir, refName)))
+
   return [head, tip ?? MISSING].join(FIELD_SEPARATOR)
 }
 
 /** Keep a hand-edited HEAD from steering the probe outside the repo's ref store. */
 function isSafeRefName(refName: string): boolean {
   const segments = refName.split(/[\\/]/)
+
   return (
     segments[0] === 'refs' &&
     segments.length > 1 &&
@@ -101,6 +116,7 @@ function isSafeRefName(refName: string): boolean {
 async function readLinkedWorktreeNames(adminDir: string): Promise<string[]> {
   try {
     const entries = await readdir(adminDir, { withFileTypes: true })
+
     return entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
@@ -110,23 +126,28 @@ async function readLinkedWorktreeNames(adminDir: string): Promise<string[]> {
     if (isMissingEntryError(err)) {
       return []
     }
+
     throw err
   }
 }
 
 async function resolveGitCommonDir(repoPath: string): Promise<string | null> {
   const gitDir = await resolveGitDir(repoPath)
+
   if (!gitDir) {
     return null
   }
+
   // A linked worktree's gitdir points at the shared admin root through `commondir`.
   const commonDir = await readTrimmedFile(path.join(gitDir, 'commondir'))
+
   return commonDir ? path.resolve(gitDir, commonDir) : gitDir
 }
 
 async function resolveGitDir(repoPath: string): Promise<string | null> {
   const dotGitPath = path.join(repoPath, '.git')
   let dotGitStats: Awaited<ReturnType<typeof stat>> | null = null
+
   try {
     dotGitStats = await stat(dotGitPath)
   } catch (err) {
@@ -134,29 +155,36 @@ async function resolveGitDir(repoPath: string): Promise<string | null> {
       throw err
     }
   }
+
   if (!dotGitStats) {
     // Bare repo, or a repo path that already is a gitdir.
     return (await readExistenceStamp(path.join(repoPath, 'HEAD'))) === 'y' ? repoPath : null
   }
+
   if (dotGitStats.isDirectory()) {
     return dotGitPath
   }
+
   if (!dotGitStats.isFile()) {
     return null
   }
+
   const contents = await readTrimmedFile(dotGitPath)
   const match = contents?.match(/^gitdir:\s*(.+?)\s*$/m)
+
   return match ? path.resolve(repoPath, match[1]) : null
 }
 
 async function readTrimmedFile(filePath: string): Promise<string | null> {
   try {
     const trimmed = (await readFile(filePath, 'utf-8')).trim()
+
     return trimmed.length > 0 ? trimmed : null
   } catch (err) {
     if (isMissingEntryError(err)) {
       return null
     }
+
     throw err
   }
 }
@@ -164,11 +192,13 @@ async function readTrimmedFile(filePath: string): Promise<string | null> {
 async function readFileStamp(filePath: string): Promise<string> {
   try {
     const stats = await stat(filePath)
+
     return `${stats.mtimeMs}:${stats.size}`
   } catch (err) {
     if (isMissingEntryError(err)) {
       return MISSING
     }
+
     throw err
   }
 }
@@ -176,16 +206,19 @@ async function readFileStamp(filePath: string): Promise<string> {
 async function readExistenceStamp(targetPath: string): Promise<string> {
   try {
     await stat(targetPath)
+
     return 'y'
   } catch (err) {
     if (isMissingEntryError(err)) {
       return 'n'
     }
+
     throw err
   }
 }
 
 function isMissingEntryError(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException | null)?.code
+
   return code === 'ENOENT' || code === 'ENOTDIR'
 }

@@ -12,6 +12,7 @@ type CapturingSink = TracerSink & { records: unknown[] }
 
 function capturingSink(): CapturingSink {
   const records: unknown[] = []
+
   return {
     records,
     push: (record) => records.push(record),
@@ -68,10 +69,12 @@ describe('runtime close attribution', () => {
     'records %s with the device identity and without the bearer credential',
     async (method, call, targetKind) => {
       const close = vi.fn().mockResolvedValue({ handle: 'term-1', ptyKilled: true })
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         [call]: close
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
       const replies: string[] = []
 
@@ -134,6 +137,7 @@ describe('runtime close attribution', () => {
         listMobileSessionTabs: vi.fn(async () => visibleSessionTab('wt-1', 'tab-1')),
         closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
       await dispatcher.dispatchStreaming(request(method, params), vi.fn(), {

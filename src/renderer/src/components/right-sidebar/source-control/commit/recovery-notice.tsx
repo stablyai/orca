@@ -68,6 +68,7 @@ function syncRecoveryDialogState(
   if (state.worktreeKey === worktreeKey && hasDetails) {
     return state
   }
+
   return { worktreeKey, open: false }
 }
 
@@ -197,29 +198,37 @@ export function SourceControlRecoveryNotice({
   onFixWithAI
 }: SourceControlRecoveryNoticeProps): React.JSX.Element {
   const worktreeKey = getRecoveryDialogKey(recoveryKind, worktreeId)
+
   const [dialogState, setDialogState] = useState<RecoveryDialogState>({
     worktreeKey,
     open: false
   })
+
   const dialogOpen = shouldShowRecoveryDialog(dialogState, worktreeKey, hasDetails)
+
   const setDialogOpen = useCallback(
     (open: boolean) => {
       setDialogState({ worktreeKey, open })
     },
     [worktreeKey]
   )
+
   const copy = useRecoveryCopy(recoveryKind)
   const actionId = getRecoveryActionId(recoveryKind)
+
   const handleFixWithAI = useCallback(
     async (promptOverride?: string): Promise<boolean> => {
       const launched = await onFixWithAI(promptOverride)
+
       if (launched) {
         setDialogOpen(false)
       }
+
       return launched
     },
     [onFixWithAI, setDialogOpen]
   )
+
   const handlePromptDelivered = useCallback(() => {
     setDialogOpen(false)
   }, [setDialogOpen])

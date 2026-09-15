@@ -44,12 +44,14 @@ export function useSourceControlNoteOpening({
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
+
   const setSourceControlRoot = useCallback(
     (node: HTMLDivElement | null) => {
       // Why: markdown-note reveal frames target this surface; cancel them on unmount rather than via a passive Effect.
       if (node === null) {
         cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       }
+
       sourceControlRef.current = node
     },
     [sourceControlRef]
@@ -61,11 +63,13 @@ export function useSourceControlNoteOpening({
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+
       const filePath = comment.filePath
       const commentId = comment.id
       // Clear any dangling prior scroll request; only the diff branches below re-stamp it.
       cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       setScrollToDiffCommentId(null)
+
       if (getDiffCommentSource(comment) === 'markdown') {
         const absPath = joinPath(worktreePath, filePath)
         const language = detectLanguage(filePath)
@@ -90,28 +94,39 @@ export function useSourceControlNoteOpening({
             setScrollToDiffCommentId(commentId)
           })
         })
+
         return
       }
+
       const matches = entries.filter((e) => e.path === filePath)
+
       const uncommitted =
         matches.find((e) => e.area === 'unstaged') ??
         matches.find((e) => e.area === 'untracked') ??
         matches[0]
+
       if (uncommitted) {
         handleOpenDiff(uncommitted)
+
         if (commentId) {
           setScrollToDiffCommentId(commentId)
         }
+
         return
       }
+
       const branchEntry = branchEntries.find((e) => e.path === filePath)
+
       if (branchEntry && branchSummary?.status === 'ready') {
         openCommittedDiff(branchEntry)
+
         if (commentId) {
           setScrollToDiffCommentId(commentId)
         }
+
         return
       }
+
       // Why: neither diff surface has the file (e.g. change committed+merged), so open a plain editor tab in 'changes' mode where DiffViewer picks up the scroll request.
       const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
@@ -122,6 +137,7 @@ export function useSourceControlNoteOpening({
         language,
         mode: 'edit'
       })
+
       if (commentId) {
         setEditorViewMode(absPath, 'changes')
         setScrollToDiffCommentId(commentId)
@@ -142,5 +158,6 @@ export function useSourceControlNoteOpening({
       worktreePath
     ]
   )
+
   return { handleOpenComment, setSourceControlRoot }
 }

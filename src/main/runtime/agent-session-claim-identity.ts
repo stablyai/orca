@@ -22,7 +22,9 @@ import {
 } from '../../shared/agent-session-resume'
 
 const COORDINATION_KEY_BYTES = 32
+
 const COORDINATION_KEY_FILE = 'agent-session-authority.key'
+
 const TRANSCRIPT_PATH_MAX_BYTES = 16 * 1024
 
 export type ProviderExecutionNamespace = {
@@ -39,17 +41,20 @@ export type CanonicalAgentSessionIdentity = {
 
 function encodeFields(fields: readonly string[]): Buffer {
   const chunks: Buffer[] = []
+
   for (const field of fields) {
     const value = Buffer.from(field, 'utf8')
     const length = Buffer.allocUnsafe(4)
     length.writeUInt32BE(value.length)
     chunks.push(length, value)
   }
+
   return Buffer.concat(chunks)
 }
 
 function canonicalPathForPlatform(value: string): string {
   const canonical = normalize(realpathSync(value))
+
   return process.platform === 'win32' ? canonical.toLocaleLowerCase('en-US') : canonical
 }
 
@@ -60,14 +65,19 @@ export function canonicalizeAgentSessionIdentity(
   if (!isResumableTuiAgent(agent)) {
     throw new Error('agent_session_identity_required')
   }
+
   const providerSession = normalizeAgentProviderSession(rawProviderSession)
+
   if (!providerSession || !getAgentResumeArgv(agent, providerSession)) {
     throw new Error('agent_session_identity_required')
   }
+
   if (agent !== 'pi' && agent !== 'prime-agent') {
     return { agent, providerSession }
   }
+
   const transcriptPath = providerSession.transcriptPath
+
   if (
     !transcriptPath ||
     !isAbsolute(transcriptPath) ||
@@ -75,10 +85,13 @@ export function canonicalizeAgentSessionIdentity(
   ) {
     throw new Error('agent_session_identity_required')
   }
+
   const canonicalTranscriptPath = canonicalPathForPlatform(transcriptPath)
+
   if (!statSync(canonicalTranscriptPath).isFile()) {
     throw new Error('agent_session_identity_required')
   }
+
   return {
     agent,
     providerSession: { ...providerSession, transcriptPath: canonicalTranscriptPath }
@@ -95,6 +108,7 @@ export class AgentSessionClaimSigner {
     if (key.length !== COORDINATION_KEY_BYTES) {
       throw new Error('agent_session_ownership_unknown')
     }
+
     this.keyId = createHash('sha256').update(key).digest('base64url').slice(0, 22)
   }
 
@@ -109,6 +123,7 @@ export class AgentSessionClaimSigner {
       args.namespace.container,
       args.namespace.providerRoot
     ]
+
     const identityFields = [
       'orca-agent-session-claim-v1',
       this.authorityDomainId,
@@ -120,12 +135,14 @@ export class AgentSessionClaimSigner {
         ? (args.identity.providerSession.transcriptPath ?? '')
         : ''
     ]
+
     const worktreeFields = [
       'orca-agent-session-worktree-v1',
       this.authorityDomainId,
       ...namespaceFields,
       args.canonicalWorktreeId
     ]
+
     return {
       digestVersion: AGENT_SESSION_CLAIM_DIGEST_VERSION,
       keyId: this.keyId,
@@ -147,11 +164,13 @@ export function loadAgentSessionClaimSigner(
   const keyPath = join(profileDirectory, COORDINATION_KEY_FILE)
   mkdirSync(dirname(keyPath), { recursive: true })
   let key: Buffer
+
   try {
     key = readFileSync(keyPath)
   } catch {
     const candidate = randomBytes(COORDINATION_KEY_BYTES)
     let fd: number | null = null
+
     try {
       fd = openSync(keyPath, 'wx', 0o600)
       writeFileSync(fd, candidate)
@@ -164,11 +183,13 @@ export function loadAgentSessionClaimSigner(
       }
     }
   }
+
   // Why: a replaced/corrupt key could make a surviving owner look absent;
   // refuse authority instead of silently minting an incomparable namespace.
   if (key.length !== COORDINATION_KEY_BYTES) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   return new AgentSessionClaimSigner(authorityDomainId, key)
 }
 

@@ -12,6 +12,7 @@ import {
 } from './terminal-scroll-intent'
 
 const ERASE_IN_DISPLAY_FINAL = 'J'
+
 const ERASE_SCROLLBACK_PARAMETER = 3
 
 // Why a quiet period rather than "the buffer stopped growing": a redraw streams
@@ -24,10 +25,12 @@ const REDRAW_SETTLE_MS = 120
 const MAX_PENDING_RESTORE_MS = 1_000
 
 type CancelScheduled = () => void
+
 type ScheduleSettle = (run: () => void, delayMs: number) => CancelScheduled
 
 const scheduleSettleWithTimeout: ScheduleSettle = (run, delayMs) => {
   const timer = setTimeout(run, delayMs)
+
   return () => clearTimeout(timer)
 }
 
@@ -89,31 +92,41 @@ export function installTerminalLiveScrollbackRestore(
     if (pending !== active) {
       return
     }
+
     const current = readTerminalScrollBufferSnapshot(terminal)
+
     if (!current) {
       disarm()
+
       return
     }
+
     // These two restate guards that restoreTerminalStructuralScrollIntent also
     // enforces, so no test can tell them apart from it — they are kept so this
     // module's own preconditions do not depend on that one staying honest.
     // The reader scrolled again, so their newer intent supersedes the pin.
     if (!isTerminalStructuralScrollIntentCurrent(terminal, active.snapshot)) {
       disarm()
+
       return
     }
+
     // The app switched screens before the redraw finished; the pin no longer
     // refers to the buffer in front of the reader.
     if (current.bufferType !== active.snapshot.bufferType) {
       disarm()
+
       return
     }
+
     // Why keep waiting: a stalled frame mid-redraw would otherwise spend the pin
     // against a half-rebuilt buffer and clamp the reader to the top for good.
     if (current.baseY < active.bottomOffset && now() < active.deadline) {
       armSettle(active)
+
       return
     }
+
     // Single shot: re-applying per write would turn the pin into a follow.
     disarm()
     // Why no retry when a structural rebuild is in flight: the replay
@@ -136,7 +149,9 @@ export function installTerminalLiveScrollbackRestore(
     if (params[0] !== ERASE_SCROLLBACK_PARAMETER) {
       return false
     }
+
     const current = readTerminalScrollBufferSnapshot(terminal)
+
     // Why: on the alternate screen the erase never reaches the scrollback we
     // pinned, so there is nothing to rebuild and nothing to restore. The gate
     // below happens to cover this too (the alt buffer keeps no scrollback, so
@@ -144,28 +159,36 @@ export function installTerminalLiveScrollbackRestore(
     if (!current || current.bufferType !== 'normal') {
       return false
     }
+
     // Why read the live viewport and not just the stored intent: a durable pin
     // kept across a remount still reads pinnedViewport for a reader who has
     // since returned to the bottom, and arming there would stop follow-output.
     if (isTerminalViewportAtBottom(current.viewportY, current.baseY)) {
       return false
     }
+
     const live = pending
+
     // Why reuse the armed pin: a second erase inside the window would otherwise
     // recapture from the buffer the first erase already wiped, pinning the
     // reader to an offset measured against a stub of a screen. Keeping the
     // original deadline also stops a repeating clear from deferring it forever.
     if (live && isTerminalStructuralScrollIntentCurrent(terminal, live.snapshot)) {
       armSettle(live)
+
       return false
     }
+
     const captured = captureTerminalStructuralScrollIntent(terminal)
+
     // Why skip follow-output: xterm already keeps a bottomed viewport at the
     // bottom, and re-latching it would only churn the intent revision.
     if (!captured || captured.kind !== 'pinnedViewport') {
       return false
     }
+
     disarm()
+
     const active: PendingRestore = {
       // Why live coordinates: capture can substitute durable pre-remount ones,
       // which measure the offset against a buffer the reader is not looking at.
@@ -180,8 +203,10 @@ export function installTerminalLiveScrollbackRestore(
       deadline: now() + MAX_PENDING_RESTORE_MS,
       cancelSettle: () => {}
     }
+
     pending = active
     armSettle(active)
+
     // Why false: this observes the erase, it does not implement it — xterm's
     // own handler still has to clear the scrollback.
     return false
@@ -219,6 +244,7 @@ export function installTerminalLiveScrollbackRestore(
     dispose(): void {
       disarm()
       parsedSubscription?.dispose()
+
       for (const registration of registrations) {
         registration?.dispose()
       }

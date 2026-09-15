@@ -33,12 +33,14 @@ async function resolveDefaultBaseRefFromProbes(
       return returnAs
     }
   }
+
   return null
 }
 
 function hasGitRef(path: string, ref: string): boolean {
   try {
     gitExecFileSync(['rev-parse', '--verify', ref], { cwd: path })
+
     return true
   } catch {
     return false
@@ -54,6 +56,7 @@ function getVerifiedOriginHeadBaseRef(path: string): string | null {
     const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
       cwd: path
     }).trim()
+
     return ref && hasGitRef(path, ref) ? gitRefToDefaultBaseRef(ref) : null
   } catch {
     return null
@@ -63,14 +66,17 @@ function getVerifiedOriginHeadBaseRef(path: string): string | null {
 /** Resolve the default base ref without inventing a fallback branch. */
 export function getDefaultBaseRef(path: string): string | null {
   const originHeadBaseRef = getVerifiedOriginHeadBaseRef(path)
+
   if (originHeadBaseRef) {
     return originHeadBaseRef
   }
+
   for (const { ref, returnAs } of DEFAULT_BASE_REF_PROBES) {
     if (hasGitRef(path, ref)) {
       return returnAs
     }
   }
+
   return null
 }
 
@@ -86,6 +92,7 @@ export type GitExec = (argv: string[]) => Promise<{ stdout: string }>
 async function hasGitRefViaExec(exec: GitExec, ref: string): Promise<boolean> {
   try {
     await exec(['rev-parse', '--verify', '--quiet', ref])
+
     return true
   } catch {
     return false
@@ -96,9 +103,11 @@ async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<s
   try {
     const { stdout } = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
     const ref = stdout.trim()
+
     if (!ref || !(await hasGitRefViaExec(exec, ref))) {
       return null
     }
+
     return gitRefToDefaultBaseRef(ref)
   } catch {
     return null
@@ -108,9 +117,11 @@ async function resolveVerifiedOriginHeadBaseRefViaExec(exec: GitExec): Promise<s
 /** Resolve the same default-base ordering through a host-owned Git executor. */
 export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<string | null> {
   const originHeadBaseRef = await resolveVerifiedOriginHeadBaseRefViaExec(exec)
+
   if (originHeadBaseRef) {
     return originHeadBaseRef
   }
+
   return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
 }
 

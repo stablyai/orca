@@ -38,6 +38,7 @@ export async function buildRuntimePtySpawnOptions(
   const authEnvToDelete = ctx.claudeAuth?.stripAuthEnv
     ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
     : undefined
+
   ctx.spawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -46,24 +47,30 @@ export async function buildRuntimePtySpawnOptions(
     historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     ...(ctx.isNewDaemonSession ? { isNewSession: true } : {})
   }
+
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {
     ctx.spawnOptions.codexHomePathOverride = { value: ctx.selectedCodexHomePath }
   }
+
   const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+
   if (startupTerminalColorQueryReplyColors) {
     ctx.spawnOptions.startupIngress = {
       colors: startupTerminalColorQueryReplyColors,
       deadlineMs: 5_000
     }
   }
+
   let ptySpawnCommitReported = false
   ctx.reportPtySpawnCommitted = (): void => {
     if (ptySpawnCommitReported) {
       return
     }
+
     ptySpawnCommitReported = true
     args.onPtySpawnCommitted?.()
   }
+
   ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
     authEnvToDelete,
     args.envToDelete ?? [],
@@ -73,6 +80,7 @@ export async function buildRuntimePtySpawnOptions(
     // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
     getInheritedClaudeSessionStampEnvKeysToDelete(ctx.env)
   )
+
   if (ctx.skipCodexHomeEnv) {
     ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
       ctx.spawnOptions.envToDelete,
@@ -85,32 +93,42 @@ export async function buildRuntimePtySpawnOptions(
       'ORCA_CODEX_HOME'
     ])
   }
+
   if (ctx.codexResumeHomeSelected) {
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
+
   deleteRequestedEnvKeys(ctx.env, ctx.spawnOptions.envToDelete)
   promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
+
   if (ctx.launchCommand !== undefined) {
     ctx.spawnOptions.command = ctx.launchCommand
   }
+
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery
   }
+
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
   }
+
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }
+
   if (args.worktreeId !== undefined) {
     ctx.spawnOptions.worktreeId = args.worktreeId
   }
+
   ctx.hadSessionSizeBeforeAttach =
     ctx.effectiveSessionAppId !== undefined ? ptySizes.has(ctx.effectiveSessionAppId) : false
   ctx.sessionSizeBeforeAttach =
     ctx.effectiveSessionAppId !== undefined ? ptySizes.get(ctx.effectiveSessionAppId) : undefined
+
   if (ctx.sessionId !== undefined) {
     ctx.spawnOptions.sessionId = ctx.sessionId
+
     if (
       shouldSeedPreAttachPtySize({
         isFreshSessionId: ctx.isNewDaemonSession,
@@ -123,6 +141,7 @@ export async function buildRuntimePtySpawnOptions(
       ptySizes.set(ctx.effectiveSessionAppId ?? ctx.sessionId, { cols: args.cols, rows: args.rows })
     }
   }
+
   ctx.materializedPaneKey = ctx.hostSessionBinding
     ? makePaneKey(ctx.hostSessionBinding.tabId, ctx.hostSessionBinding.leafId)
     : null
@@ -136,12 +155,15 @@ export async function buildRuntimePtySpawnOptions(
       ? makePaneKey(args.tabId, ctx.metadataLeafId)
       : null
   ctx.spawnIdentityPaneKey = ctx.materializedPaneKey ?? ctx.metadataPaneKey
+
   if (ctx.spawnIdentityPaneKey) {
     ctx.spawnOptions.paneKey = ctx.spawnIdentityPaneKey
   }
+
   if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
     ctx.spawnOptions.tabId = args.tabId
   }
+
   if (process.platform === 'win32' && !args.connectionId) {
     ctx.spawnOptions.shellOverride = ctx.terminalRuntimeOptions.shellOverride
     ctx.spawnOptions.terminalWindowsWslDistro = ctx.expectedWslDistro
@@ -149,6 +171,7 @@ export async function buildRuntimePtySpawnOptions(
       ? (ctx.deps.getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
       : undefined
   }
+
   if (
     !ctx.preAdoptedStablePane &&
     args.agentSessionEnsure &&
@@ -157,6 +180,7 @@ export async function buildRuntimePtySpawnOptions(
     // Why: runtime routing must select legacy before dispatch; never downgrade here after it began.
     throw new Error('agent_session_claim_unavailable')
   }
+
   if (
     !ctx.preAdoptedStablePane &&
     args.agentSessionCreateOperationId &&
@@ -164,15 +188,19 @@ export async function buildRuntimePtySpawnOptions(
   ) {
     throw new Error('execution_owner_unavailable')
   }
+
   if (!ctx.preAdoptedStablePane && args.agentSessionEnsure) {
     ctx.spawnOptions.agentSessionEnsure = args.agentSessionEnsure
   }
+
   if (!ctx.preAdoptedStablePane && args.agentSessionCreateOperationId) {
     ctx.spawnOptions.agentSessionCreateOperationId = args.agentSessionCreateOperationId
   }
+
   if (args.signal) {
     ctx.spawnOptions.signal = args.signal
   }
+
   if (
     args.onPtySpawnCommitted &&
     (ctx.provider instanceof LocalPtyProvider || routesFreshSpawnsToLocalProvider(ctx.provider))
@@ -186,19 +214,24 @@ export async function buildRuntimePtySpawnOptions(
     args.connectionId,
     ctx.spawnIdentityPaneKey
   )
+
   if (
     ctx.paneSpawnReservationKey &&
     ctx.paneSpawnReservationKey !== resolvedPaneSpawnReservationKey
   ) {
     throw new Error('terminal_pane_identity_changed')
   }
+
   if (!ctx.paneSpawnReservationKey) {
     ctx.paneSpawnReservationKey = resolvedPaneSpawnReservationKey
+
     const existingPaneSpawn = ctx.spawnIdentityPaneKey
       ? paneSpawnReservationsByOwnerKey.get(resolvedPaneSpawnReservationKey!)
       : undefined
+
     if (existingPaneSpawn) {
       const concurrentResult = await existingPaneSpawn.promise
+
       const concurrentOwner = resolveStablePaneOwner(
         ctx.deps.runtime,
         ctx.deps.store,
@@ -206,6 +239,7 @@ export async function buildRuntimePtySpawnOptions(
         args.worktreeId,
         args.connectionId
       )
+
       if (
         !concurrentOwner?.handle ||
         concurrentOwner.ptyId !== concurrentResult.id ||
@@ -215,6 +249,7 @@ export async function buildRuntimePtySpawnOptions(
       ) {
         throw new Error('terminal_pane_owner_unknown')
       }
+
       const reattach = {
         id: concurrentOwner.ptyId,
         ...(concurrentOwner.incarnationId ? { incarnationId: concurrentOwner.incarnationId } : {}),
@@ -224,9 +259,11 @@ export async function buildRuntimePtySpawnOptions(
           leafId: concurrentOwner.leafId
         }
       }
+
       // Why: the winner owns its id's size; only a distinct losing session id remains provisional.
       if (ctx.sessionId !== undefined) {
         const provisionalSizeKey = ctx.effectiveSessionAppId ?? ctx.sessionId
+
         if (provisionalSizeKey !== reattach.id) {
           if (ctx.hadSessionSizeBeforeAttach && ctx.sessionSizeBeforeAttach) {
             ptySizes.set(provisionalSizeKey, ctx.sessionSizeBeforeAttach)
@@ -235,9 +272,11 @@ export async function buildRuntimePtySpawnOptions(
           }
         }
       }
+
       return reattach
     }
   }
+
   ctx.finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, ctx.cwd, args.connectionId)
   ctx.paneSpawnReservation ??= ctx.paneSpawnReservationKey
     ? reservePaneSpawn(ctx.paneSpawnReservationKey)

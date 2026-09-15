@@ -28,6 +28,7 @@ vi.mock('worker_threads', () => ({
 
     once(event: string, listener: (arg?: unknown) => void): this {
       this.listeners.set(event, listener)
+
       return this
     }
 
@@ -37,6 +38,7 @@ vi.mock('worker_threads', () => ({
 
     async terminate(): Promise<number> {
       this.terminated = true
+
       return 0
     }
 
@@ -89,6 +91,7 @@ describe('parseWarpThemeYamlWithTimeout', () => {
         timeoutMs: 25
       }
     )
+
     const worker = workerState.instances[0]
 
     await vi.advanceTimersByTimeAsync(24)

@@ -19,7 +19,9 @@ export function resolveKimiSessionsDir(override?: string): string {
   if (override?.trim()) {
     return override.trim()
   }
+
   const home = resolveAbsoluteDirOverride(process.env.KIMI_CODE_HOME, join(homedir(), '.kimi-code'))
+
   return join(home, 'sessions')
 }
 
@@ -38,6 +40,7 @@ export function kimiSessionIndexPathFromStatePath(statePath: string): string {
   const workspaceDir = dirname(sessionDir) // .../wd_<name>_<hash>
   const sessionsDir = dirname(workspaceDir) // .../sessions
   const home = dirname(sessionsDir) // .../<KIMI_CODE_HOME>
+
   return join(home, 'session_index.jsonl')
 }
 
@@ -51,15 +54,18 @@ export function kimiPrimaryAgentWirePath(
 ): string {
   const agents = asRecord(stateRecord?.agents)
   let primaryId = 'main'
+
   if (agents) {
     for (const [id, value] of Object.entries(agents)) {
       const record = asRecord(value)
+
       if (record?.type === 'main' && record.parentAgentId == null) {
         primaryId = id
         break
       }
     }
   }
+
   return join(dirname(statePath), 'agents', primaryId, 'wire.jsonl')
 }
 
@@ -80,11 +86,13 @@ export function hasKimiSessionIndexCacheEntryForTests(indexPath: string): boolea
 export async function readKimiWorkDirBySessionId(indexPath: string): Promise<Map<string, string>> {
   const generation = workDirCacheByIndexPath.beginRead()
   let identity: Awaited<ReturnType<typeof wslGatedStat>>
+
   try {
     identity = await wslGatedStat(indexPath, 'scan')
   } catch {
     // Missing index (e.g. user deleted it): sessions still list, just without cwd.
     workDirCacheByIndexPath.delete(indexPath, generation)
+
     return new Map()
   }
 
@@ -105,6 +113,7 @@ export async function readKimiWorkDirBySessionId(indexPath: string): Promise<Map
         if (refused) {
           workDirCacheByIndexPath.delete(indexPath, generation)
         }
+
         return map
       })
   )
@@ -114,6 +123,7 @@ async function parseKimiSessionIndex(
   indexPath: string
 ): Promise<{ map: Map<string, string>; refused: boolean }> {
   const map = new Map<string, string>()
+
   // Why: never reject. This promise is memoized and shared by every session
   // under one Kimi home; a mid-read failure (file deleted after stat, EACCES)
   // must degrade to whatever was parsed so the other sessions still list.
@@ -122,18 +132,23 @@ async function parseKimiSessionIndex(
       input: openTranscriptReadStream(indexPath, { encoding: 'utf-8' }, 'scan'),
       crlfDelay: Infinity
     })
+
     for await (const line of lines) {
       if (!line.trim()) {
         continue
       }
+
       let record: Record<string, unknown> | null
+
       try {
         record = asRecord(JSON.parse(line) as unknown)
       } catch {
         continue
       }
+
       const sessionId = extractString(record?.sessionId)
       const workDir = extractString(record?.workDir)
+
       if (sessionId && workDir) {
         // Later lines win so a resumed session reflects its most recent workDir.
         map.set(sessionId, workDir)
@@ -143,5 +158,6 @@ async function parseKimiSessionIndex(
     // Return the partial map gathered before the read error.
     return { map, refused: error instanceof WslTranscriptFsError }
   }
+
   return { map, refused: false }
 }

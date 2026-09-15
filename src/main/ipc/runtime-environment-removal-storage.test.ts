@@ -29,6 +29,7 @@ const environment = { id: 'environment-a', name: 'desk', runtimeId: 'runtime-a',
 function removeHandler(): (event: unknown, args: { selector: string }) => unknown {
   const call = handleMock.mock.calls.find(([channel]) => channel === 'runtimeEnvironments:remove')
   expect(call).toBeTruthy()
+
   return call![1]
 }
 
@@ -42,9 +43,11 @@ beforeEach(() => {
 describe('runtime environment removal storage clearing', () => {
   it('clears client-hosted browser storage after the client host teardown settles', async () => {
     let finishTeardown = (): void => {}
+
     const teardown = new Promise<void>((resolve) => {
       finishTeardown = resolve
     })
+
     clearStorageMock.mockResolvedValue({ clearedPartitions: ['persist:one'], livePartitions: [] })
     registerRuntimeEnvironmentConnectivityHandlers({
       store: { getSettings: () => ({}) } as never,

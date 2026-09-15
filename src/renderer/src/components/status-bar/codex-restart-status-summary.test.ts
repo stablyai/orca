@@ -11,6 +11,7 @@ describe('summarizeCodexRestartStatus', () => {
         }
       }
     ) as Record<string, { id: string }[]>
+
     const throwingPtyIdsByTabId = new Proxy(
       {},
       {

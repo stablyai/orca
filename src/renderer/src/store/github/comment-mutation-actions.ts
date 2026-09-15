@@ -18,12 +18,15 @@ export const createCommentMutationActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -34,6 +37,7 @@ export const createCommentMutationActions = (
       options?.sourceContext,
       repo !== undefined
     )
+
     const requestContext = getGitHubWorkItemRequestContext(
       get(),
       requestSettings,
@@ -41,7 +45,9 @@ export const createCommentMutationActions = (
       repoPath,
       options?.sourceContext
     )
+
     let result: GitHubCommentResult
+
     try {
       result =
         requestContext.target.kind === 'environment'
@@ -74,8 +80,10 @@ export const createCommentMutationActions = (
             })
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to post reply.'
+
       return { ok: false, error }
     }
+
     if (!hasUsableCommentPayload(result)) {
       return result.ok
         ? {
@@ -87,14 +95,17 @@ export const createCommentMutationActions = (
           }
         : result
     }
+
     const comment: PRComment = {
       ...result.comment,
       threadId: result.comment.threadId ?? options?.threadId,
       path: result.comment.path ?? options?.path,
       line: result.comment.line ?? options?.line
     }
+
     set((s) => {
       const entry = s.commentsCache[cacheKey]
+
       return {
         commentsCache: withBoundedCacheEntry(s.commentsCache, cacheKey, {
           data: mergePRCommentIntoList(entry?.data, comment),
@@ -102,6 +113,7 @@ export const createCommentMutationActions = (
         })
       }
     })
+
     return { ok: true, comment }
   },
 
@@ -116,12 +128,15 @@ export const createCommentMutationActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -132,17 +147,22 @@ export const createCommentMutationActions = (
       options?.sourceContext,
       repo !== undefined
     )
+
     const previousComment = get().commentsCache[cacheKey]?.data?.find(
       (comment) => comment.reactionSubjectId === reactionSubjectId
     )
+
     const previousReaction = previousComment?.reactions?.find(
       (reaction) => reaction.content === content
     )
+
     set((state) => {
       const entry = state.commentsCache[cacheKey]
+
       if (!entry?.data) {
         return state
       }
+
       return {
         commentsCache: {
           ...state.commentsCache,
@@ -161,7 +181,9 @@ export const createCommentMutationActions = (
       repoPath,
       options?.sourceContext
     )
+
     let ok = false
+
     try {
       ok =
         requestContext.target.kind === 'environment'
@@ -189,12 +211,15 @@ export const createCommentMutationActions = (
     } catch (err) {
       console.error('Failed to update PR comment reaction:', err)
     }
+
     if (!ok && previousComment) {
       set((state) => {
         const entry = state.commentsCache[cacheKey]
+
         if (!entry?.data) {
           return state
         }
+
         return {
           commentsCache: {
             ...state.commentsCache,
@@ -211,6 +236,7 @@ export const createCommentMutationActions = (
         }
       })
     }
+
     return ok
   }
 })

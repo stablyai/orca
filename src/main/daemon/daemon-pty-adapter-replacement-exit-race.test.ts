@@ -16,8 +16,10 @@ describe('DaemonPtyAdapter replacement exit races', () => {
   beforeEach(async () => {
     const harness = await startDaemonAdapterHarness(() => {
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     adapter = harness.adapter
     server = harness.server
     tempDir = harness.dir
@@ -26,6 +28,7 @@ describe('DaemonPtyAdapter replacement exit races', () => {
   afterEach(async () => {
     adapter?.dispose()
     await server?.shutdown()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -33,6 +36,7 @@ describe('DaemonPtyAdapter replacement exit races', () => {
 
   it('captures a replacement exit while the crashed daemon incarnation is still cached', async () => {
     const sessionId = 'replacement-exit-with-stale-incarnation-cache'
+
     const internals = adapter as unknown as {
       activeSessionIds: Set<string>
       sessionIncarnations: Map<string, string>
@@ -42,12 +46,14 @@ describe('DaemonPtyAdapter replacement exit races', () => {
       >
       client: { request: (type: string, payload?: unknown) => Promise<unknown> }
     }
+
     internals.activeSessionIds.add(sessionId)
     internals.sessionIncarnations.set(sessionId, 'incarnation-from-crashed-daemon')
     const originalRequest = internals.client.request.bind(internals.client)
     vi.spyOn(internals.client, 'request').mockImplementation(
       async (type: string, payload?: unknown) => {
         const response = await originalRequest(type, payload)
+
         if (type === 'createOrAttach') {
           lastSubprocess._simulateExit(19)
           await waitFor(() =>
@@ -56,6 +62,7 @@ describe('DaemonPtyAdapter replacement exit races', () => {
             )
           )
         }
+
         return response
       }
     )

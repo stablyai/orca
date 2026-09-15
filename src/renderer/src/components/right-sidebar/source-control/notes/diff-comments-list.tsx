@@ -16,6 +16,7 @@ function getLocalizedDiffCommentLineLabel(
       'whole file'
     )
   }
+
   if (comment.startLine !== undefined && comment.startLine !== comment.lineNumber) {
     return translate(
       'auto.components.right.sidebar.SourceControl.d97ef8f221',
@@ -26,6 +27,7 @@ function getLocalizedDiffCommentLineLabel(
       }
     )
   }
+
   return translate('auto.components.right.sidebar.SourceControl.6f8bfa0eb9', 'line {{value0}}', {
     value0: comment.lineNumber
   })
@@ -46,14 +48,17 @@ export function DiffCommentsInlineList({
   // Why: group by filePath so the inline list mirrors the Notes tab's per-file sections.
   const groups = useMemo(() => {
     const map = new Map<string, DiffComment[]>()
+
     for (const c of comments) {
       const list = map.get(c.filePath) ?? []
       list.push(c)
       map.set(c.filePath, list)
     }
+
     for (const list of map.values()) {
       list.sort((a, b) => a.lineNumber - b.lineNumber)
     }
+
     return Array.from(map.entries())
   }, [comments])
 
@@ -92,6 +97,7 @@ export function DiffCommentsInlineList({
               className="block min-w-0 flex-1 truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
               onClick={() => {
                 const first = list[0]
+
                 if (first) {
                   onOpen(first)
                 }

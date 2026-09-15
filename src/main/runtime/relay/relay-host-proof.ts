@@ -9,9 +9,12 @@ import {
 } from '../host-challenge-envelope'
 
 const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
+
 const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'
+
 // Covers routine NTP drift without extending the signed challenge window.
 const RELAY_HOST_PROOF_CLOCK_SKEW_MS = 30_000
+
 const MAX_HOST_PROOF_CHALLENGE_WINDOW_MS = 10_000
 
 export type RelayHostChallenge = {
@@ -46,18 +49,23 @@ function validateTranscript(
   nonce: Uint8Array
 ): boolean {
   const fields = parseHostChallengeTranscript(transcript)
+
   if (!fields || fields.size !== 16) {
     context.onInvalid?.('transcript-structure')
+
     return false
   }
+
   const now = (context.now ?? Date.now)()
   const issuedAt = readTranscriptUint64(fields.get('issuedAt'))
   const expiresAt = readTranscriptUint64(fields.get('expiresAt'))
   const previousGeneration = fields.get('previousGeneration')
+
   const expectedPrevious =
     context.previousGeneration === undefined
       ? new Uint8Array()
       : encodeUint64(context.previousGeneration)
+
   // Main's 30s skew bounds with named-check reporting kept from the incident
   // instrumentation; deltas are relative offsets only, never absolute values.
   const checks: [string, boolean][] = [
@@ -100,11 +108,15 @@ function validateTranscript(
       equalBytes(fields.get('resumeRequested'), new Uint8Array([context.resumeRequested ? 1 : 0]))
     ]
   ]
+
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
+
   if (failed.length > 0) {
     context.onInvalid?.(`transcript:${failed.join('+')}`)
+
     return false
   }
+
   return true
 }
 
@@ -120,6 +132,7 @@ export function answerRelayHostChallenge(
     plaintextDomain: HOST_CHALLENGE_PLAINTEXT_DOMAIN,
     onInvalid: context.onInvalid
   })
+
   if (
     !envelope ||
     !validateTranscript(
@@ -132,6 +145,7 @@ export function answerRelayHostChallenge(
   ) {
     return null
   }
+
   return hostChallengeAckProof({
     secret: envelope.secret,
     transcript: envelope.transcript,

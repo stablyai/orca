@@ -9,6 +9,7 @@ export const MOBILE_RELAY_CLOSE_CODE = {
 
 export type MobileRelayCloseCode =
   (typeof MOBILE_RELAY_CLOSE_CODE)[keyof typeof MOBILE_RELAY_CLOSE_CODE]
+
 export type MobileRelayLeg = 'host-control' | 'host-data' | 'phone-invite' | 'phone-resume'
 
 export type MobileRelayRecovery =
@@ -36,6 +37,7 @@ export function mobileRelayRecoveryFor(
       if (leg === 'phone-invite') {
         return { kind: 'resolve-invite-through-director-ws', requireStrictlyNewerEpoch: true }
       }
+
       return leg === 'phone-resume'
         ? { kind: 'resolve-resume-through-director-post' }
         : { kind: 'request-director-assignment' }

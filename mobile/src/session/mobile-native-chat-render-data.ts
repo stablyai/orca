@@ -22,6 +22,7 @@ export function mobileNativeChatEmptyState(
   error?: string
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
+
   switch (status) {
     // A live agent with no transcript yet — an unwritten transcript file, or a
     // loaded-but-empty one — is "start a chat"; invite the first message instead
@@ -32,8 +33,10 @@ export function mobileNativeChatEmptyState(
       return formatNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
       const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
+
       return error ? { ...copy, subtitle: error } : copy
     }
+
     default:
       return null
   }
@@ -75,24 +78,32 @@ export function buildMobileNativeChatTransientData({
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
   const renderedFolded = folded.map((message) => {
     const previews = imagePreviewsByMessageId?.[message.id]
+
     if (message.role !== 'user' || !previews?.length) {
       return message
     }
+
     let previewIndex = 0
+
     const blocks = message.blocks.map((block) => {
       if (!isImageRefBlock(block)) {
         return block
       }
+
       const url = previews[previewIndex]
       previewIndex += 1
+
       return url ? { ...block, url } : block
     })
+
     while (previewIndex < previews.length) {
       blocks.push({ type: 'image-ref', url: previews[previewIndex] })
       previewIndex += 1
     }
+
     return { ...message, blocks }
   })
+
   // Why anchored rather than appended: an echo whose transcript row never
   // arrives — Claude consumes a mid-turn send without writing a user record —
   // used to sit at the tail forever, re-reading below every turn that landed
@@ -104,28 +115,36 @@ export function buildMobileNativeChatTransientData({
   const trailingPending: NativeChatMessage[] = []
   const foldedIds = new Set(renderedFolded.map((message) => message.id))
   const missingBaselineIds = new Set<string>()
+
   for (const item of pending) {
     const baselineId = item.baselineTailMessageId
+
     if (baselineId && !foldedIds.has(baselineId)) {
       missingBaselineIds.add(baselineId)
     }
   }
+
   const foldedAnchorByRawId = new Map<string, string>()
   const leadingBaselineIds = new Set<string>()
+
   if (missingBaselineIds.size > 0) {
     let lastVisibleId: string | null = null
     const forwardImageBaselineIds: string[] = []
+
     for (const message of messages) {
       if (foldedIds.has(message.id)) {
         for (const baselineId of forwardImageBaselineIds) {
           foldedAnchorByRawId.set(baselineId, message.id)
         }
+
         forwardImageBaselineIds.length = 0
         lastVisibleId = message.id
       }
+
       if (!missingBaselineIds.has(message.id)) {
         continue
       }
+
       if (isImageSourceUserTurn(message)) {
         forwardImageBaselineIds.push(message.id)
       } else if (lastVisibleId) {
@@ -135,6 +154,7 @@ export function buildMobileNativeChatTransientData({
       }
     }
   }
+
   for (const item of pending) {
     const bubble: NativeChatMessage = {
       id: item.id,
@@ -148,22 +168,28 @@ export function buildMobileNativeChatTransientData({
       timestamp: null,
       source: 'transcript'
     }
+
     // Tool/noise rows fold backward; image-source rows fold into their following prompt.
     const baselineId = item.baselineTailMessageId
+
     if (baselineId && leadingBaselineIds.has(baselineId)) {
       leadingPending.push(bubble)
       continue
     }
+
     const anchor = baselineId
       ? foldedIds.has(baselineId)
         ? baselineId
         : foldedAnchorByRawId.get(baselineId)
       : undefined
+
     if (!anchor || !foldedIds.has(anchor)) {
       trailingPending.push(bubble)
       continue
     }
+
     const siblings = anchoredPending.get(anchor)
+
     if (siblings) {
       siblings.push(bubble)
     } else {
@@ -172,13 +198,16 @@ export function buildMobileNativeChatTransientData({
   }
 
   const data: NativeChatMessage[] = [...leadingPending]
+
   for (const message of renderedFolded) {
     data.push(message)
     const attached = anchoredPending.get(message.id)
+
     if (attached) {
       data.push(...attached)
     }
   }
+
   if (streaming) {
     data.push({
       id: 'streaming',
@@ -188,6 +217,8 @@ export function buildMobileNativeChatTransientData({
       source: 'hook'
     })
   }
+
   data.push(...trailingPending)
+
   return { folded: renderedFolded, streaming, data }
 }

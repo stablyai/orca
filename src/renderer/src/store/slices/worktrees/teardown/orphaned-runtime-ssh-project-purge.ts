@@ -9,19 +9,25 @@ export async function purgeOrphanedRuntimeSshProjects(
   if (destroyedSshTargetIds.length === 0) {
     return
   }
+
   // Drop blanks once, before both lookups, so a repo with no connectionId never matches below.
   const purgeableSshTargetIds = destroyedSshTargetIds.filter((id) => id !== '')
   const destroyedTargetIds = new Set(purgeableSshTargetIds)
+
   const destroyedHostIds = new Set<ExecutionHostId>(
     purgeableSshTargetIds.map((id) => toSshExecutionHostId(id))
   )
+
   const orphanedSetupIds = get()
     .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
     .map((setup) => setup.id)
+
   const purgedRepoIds = new Set<string>()
+
   for (const setupId of orphanedSetupIds) {
     try {
       const result = await get().deleteProjectHostSetup({ setupId })
+
       if (result?.repo) {
         purgedRepoIds.add(result.repo.id)
       }
@@ -29,12 +35,14 @@ export async function purgeOrphanedRuntimeSshProjects(
       console.error('Failed to purge orphaned per-workspace-env project:', error)
     }
   }
+
   // A repo whose only host was the destroyed runtime can outlive its setup (pruned first by a projection refresh); remove it directly so no dead project lingers.
   const orphanedRepoIds = get()
     .repos.filter(
       (repo) => destroyedTargetIds.has(repo.connectionId ?? '') && !purgedRepoIds.has(repo.id)
     )
     .map((repo) => repo.id)
+
   for (const repoId of orphanedRepoIds) {
     try {
       await get().removeProject(repoId)

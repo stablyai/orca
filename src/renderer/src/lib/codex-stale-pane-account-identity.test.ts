@@ -6,6 +6,7 @@ import { markRestoredStaleCodexSessionsForRestart } from './codex-session-restar
 // Why one shared email: doAddAccount has no duplicate-email check, so one OpenAI
 // login used in two ChatGPT workspaces produces two accounts with equal labels.
 const SHARED_EMAIL = 'shared@example.com'
+
 const FALLBACK_LABEL = 'Codex account'
 
 function seedRoster(

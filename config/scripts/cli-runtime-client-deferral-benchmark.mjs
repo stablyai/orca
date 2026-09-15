@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url'
 const REPO = fileURLToPath(new URL('../..', import.meta.url))
 
 const ROUNDS = Number(process.env.ORCA_CLI_DEFER_BENCH_ROUNDS ?? '30')
+
 const WARMUP = Number(process.env.ORCA_CLI_DEFER_BENCH_WARMUP ?? '3')
 
 for (const [name, value] of [
@@ -38,6 +39,7 @@ for (const [name, value] of [
     throw new Error(`${name} must be a positive integer, received ${value}`)
   }
 }
+
 if (ROUNDS % 2 !== 0) {
   // Why: arms alternate which one leads; an odd count biases one arm.
   throw new Error(`ORCA_CLI_DEFER_BENCH_ROUNDS must be even, received ${ROUNDS}`)
@@ -70,6 +72,7 @@ function assertMarkersFresh() {
     ['src/cli/selectors.ts', "import { RuntimeClientError } from './runtime/types'"],
     ['src/cli/format.ts', "} from './runtime/types'"]
   ]
+
   for (const [file, marker] of checks) {
     if (!readFileSync(join(REPO, file), 'utf8').includes(marker)) {
       throw new Error(
@@ -85,6 +88,7 @@ function buildArm(label, baselineRev) {
   const outDir = join(REPO, `.bench-out-${label}`)
   rmSync(outDir, { recursive: true, force: true })
   const restore = []
+
   try {
     if (baselineRev) {
       for (const file of TOUCHED) {
@@ -99,6 +103,7 @@ function buildArm(label, baselineRev) {
         )
       }
     }
+
     execFileSync(
       'npx',
       [
@@ -119,6 +124,7 @@ function buildArm(label, baselineRev) {
       writeFileSync(path, contents)
     }
   }
+
   return join(outDir, 'cli/index.js')
 }
 
@@ -128,9 +134,11 @@ function run(entry, argv, env) {
     env: { ...process.env, ...env },
     encoding: 'buffer'
   })
+
   if (result.error) {
     throw result.error
   }
+
   return {
     status: result.status,
     stdout: result.stdout.toString('utf8'),
@@ -156,19 +164,24 @@ function countEagerModules(entry) {
       nodeModules: all.filter((p) => p.includes('node_modules')).length
     }))
   `
+
   const result = spawnSync(process.execPath, ['-e', probe], { cwd: REPO, encoding: 'utf8' })
+
   if (result.status !== 0) {
     throw new Error(`module probe failed: ${result.stderr}`)
   }
+
   return JSON.parse(result.stdout)
 }
 
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.floor(sorted.length / 2)]
 }
 
 const baselineIndex = process.argv.indexOf('--baseline')
+
 const baselineRev = baselineIndex === -1 ? 'HEAD' : process.argv[baselineIndex + 1]
 
 assertMarkersFresh()
@@ -187,6 +200,7 @@ try {
     `\nEager modules at process load: ${eagerGraph.total} -> ${deferredGraph.total} ` +
       `(node_modules ${eagerGraph.nodeModules} -> ${deferredGraph.nodeModules})`
   )
+
   if (deferredGraph.total >= eagerGraph.total) {
     throw new Error(
       'deferred arm loads no fewer modules — the fixture does not exercise the change'
@@ -196,6 +210,7 @@ try {
   // Each case is (label, argv, env). The runtime-dependent ones point at an
   // empty user-data dir so both arms get the same deterministic answer.
   const isolated = { ORCA_USER_DATA_PATH: userDataPath }
+
   /** @type {Array<[string, string[], Record<string, string>]>} */
   const cases = [
     ['orca --help', ['--help'], {}],
@@ -213,6 +228,7 @@ try {
   for (const [label, argv, env] of cases) {
     const before = run(eagerEntry, argv, env)
     const after = run(deferredEntry, argv, env)
+
     if (
       before.status !== after.status ||
       before.stdout !== after.stdout ||
@@ -220,6 +236,7 @@ try {
     ) {
       throw new Error(`arms disagree for "${label}" — refusing to report a timing`)
     }
+
     if (before.stdout.length + before.stderr.length === 0) {
       throw new Error(`"${label}" produced no output on either arm; it proves nothing`)
     }
@@ -238,7 +255,9 @@ try {
       consumed += run(eagerEntry, argv, env).stdout.length
       consumed += run(deferredEntry, argv, env).stdout.length
     }
+
     const samples = { eager: [], deferred: [] }
+
     for (let round = 0; round < ROUNDS; round += 1) {
       // Alternate which arm leads so a drifting machine load cannot be
       // attributed to one arm.
@@ -252,6 +271,7 @@ try {
               ['deferred', deferredEntry],
               ['eager', eagerEntry]
             ]
+
       for (const [arm, entry] of order) {
         const started = performance.now()
         const result = run(entry, argv, env)
@@ -259,6 +279,7 @@ try {
         consumed += result.stdout.length
       }
     }
+
     const eagerMs = median(samples.eager)
     const deferredMs = median(samples.deferred)
     console.log(
@@ -269,6 +290,7 @@ try {
   if (consumed === 0) {
     throw new Error('no output consumed — the timing loop was optimised away')
   }
+
   console.log(
     '\nThe help and error rows are the ones the change targets: they return\n' +
       'before any client construction, so they drop the whole graph. `status` and\n' +
@@ -277,6 +299,7 @@ try {
   )
 } finally {
   rmSync(userDataPath, { recursive: true, force: true })
+
   for (const label of ['eager', 'deferred']) {
     rmSync(join(REPO, `.bench-out-${label}`), { recursive: true, force: true })
   }

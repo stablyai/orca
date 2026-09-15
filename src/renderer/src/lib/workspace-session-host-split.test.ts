@@ -13,6 +13,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 const RUNTIME_A: ExecutionHostId = 'runtime:env-a'
+
 const RUNTIME_B: ExecutionHostId = 'runtime:env-b'
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
@@ -69,9 +70,11 @@ function ownerByPrefix(): HostIdByWorktreeId {
     if (worktreeId.startsWith('a-')) {
       return RUNTIME_A
     }
+
     if (worktreeId.startsWith('b-')) {
       return RUNTIME_B
     }
+
     return LOCAL_EXECUTION_HOST_ID
   }
 }
@@ -124,14 +127,17 @@ describe('splitWorkspaceSessionByHost', () => {
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
     expect(Object.keys(slices).sort()).toEqual([LOCAL_EXECUTION_HOST_ID, RUNTIME_A, RUNTIME_B])
+
     for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
       expect(slices[LOCAL_EXECUTION_HOST_ID]?.[field]).toEqual(state[field])
       expect(Object.hasOwn(slices[RUNTIME_A] ?? {}, field)).toBe(false)
       expect(Object.hasOwn(slices[RUNTIME_B] ?? {}, field)).toBe(false)
     }
+
     // The read path is unaffected: local always carries them, so the merge never reaches its
     // fallback to another slice.
     const merged = mergeWorkspaceSessionsFromHosts(slices)
+
     for (const field of HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS) {
       expect(merged[field]).toEqual(state[field])
     }
@@ -350,6 +356,7 @@ describe('mergeWorkspaceSessionsFromHosts', () => {
         activeRepoId: 'runtime-repo'
       }
     })
+
     expect(merged.activeRepoId).toBe('runtime-repo')
   })
 
@@ -419,6 +426,7 @@ describe('split → merge round trip', () => {
       terminalLayoutsByTabId: { orphan: makeLayout() },
       remoteSessionIdsByTabId: { orphan: 'sess' }
     }
+
     const result = roundTrip(state)
     expect(result.terminalLayoutsByTabId).toEqual(state.terminalLayoutsByTabId)
     expect(result.remoteSessionIdsByTabId).toEqual(state.remoteSessionIdsByTabId)
@@ -430,6 +438,7 @@ describe('split → merge round trip', () => {
       tabsByWorktree: { 'a-wt': [makeTab('t-a', 'a-wt')] },
       terminalLayoutsByTabId: { 't-a': makeLayout() }
     }
+
     expect(roundTrip(state)).toEqual(state)
   })
 })
@@ -447,6 +456,7 @@ describe('mergeWorkspaceSessionsFromHosts global-field precedence', () => {
     lastVisitedAt: 2,
     visitCount: 1
   }
+
   const hostEntry = {
     url: 'host',
     normalizedUrl: 'host',
@@ -463,16 +473,19 @@ describe('mergeWorkspaceSessionsFromHosts global-field precedence', () => {
       },
       [RUNTIME_A]: { ...getDefaultWorkspaceSession(), browserUrlHistory: [hostEntry] }
     })
+
     expect(merged.browserUrlHistory).toEqual([localEntry])
   })
 
   it('falls back to another slice only when local does not have the field', () => {
     const local = getDefaultWorkspaceSession()
     delete local.browserUrlHistory
+
     const merged = mergeWorkspaceSessionsFromHosts({
       [LOCAL_EXECUTION_HOST_ID]: local,
       [RUNTIME_A]: { ...getDefaultWorkspaceSession(), browserUrlHistory: [hostEntry] }
     })
+
     expect(merged.browserUrlHistory).toEqual([hostEntry])
   })
 })

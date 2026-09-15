@@ -61,18 +61,23 @@ function indexAfterToken(argv: readonly string[], i: number): number {
 
 function requestsHelp(argv: readonly string[]): boolean {
   let i = 1
+
   while (i < argv.length) {
     const token = argv[i]!
+
     if (token === '--') {
       return false
     }
+
     // Skipping values matters for the bare `help` token: `serve --project-root help` names a
     // directory, it does not ask for help.
     if (HELP_FLAGS.has(token)) {
       return true
     }
+
     i = indexAfterToken(argv, i)
   }
+
   return false
 }
 
@@ -91,17 +96,23 @@ export function findServeSubcommandIndex(argv: readonly string[]): number {
   if (requestsHelp(argv)) {
     return -1
   }
+
   let i = 1
+
   while (i < argv.length) {
     const token = argv[i]
+
     if (token === '--') {
       return -1
     }
+
     if (!isFlagToken(token)) {
       return token === 'serve' ? i : -1
     }
+
     i = indexAfterToken(argv, i)
   }
+
   return -1
 }
 
@@ -121,21 +132,26 @@ export function argvRequestsServeMode(argv: readonly string[]): boolean {
  */
 export function normalizeServeModeArgv(argv: readonly string[]): string[] {
   const serveIndex = findServeSubcommandIndex(argv)
+
   if (serveIndex === -1 && !argv.includes(SERVE_FLAG)) {
     return [...argv]
   }
 
   const next: string[] = []
+
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]!
+
     if (i === serveIndex) {
       next.push(SERVE_FLAG)
       continue
     }
+
     if (token === '--') {
       next.push(...argv.slice(i))
       break
     }
+
     // Why: keep the internal argv shape canonical even though getServeOptions accepts both forms.
     const eq = token.indexOf('=')
     const name = eq === -1 ? token : token.slice(0, eq)
@@ -144,17 +160,22 @@ export function normalizeServeModeArgv(argv: readonly string[]): string[] {
     // anyway dropped the value and disabled pairing for an operator who wrote `=false` — the
     // security-shaped inversion of #12677. Passing it through leaves pairing on, as the CLI does.
     const booleanFlag = eq === -1 ? CLI_TO_SERVE_FLAG.get(name) : undefined
+
     if (booleanFlag) {
       next.push(booleanFlag)
       continue
     }
+
     const valueFlag = CLI_TO_SERVE_VALUE_FLAG.get(name)
+
     if (!valueFlag) {
       next.push(token)
       continue
     }
+
     if (eq !== -1) {
       const value = token.slice(eq + 1)
+
       // Preserve the unambiguous `=` form when its value starts with `--`; splitting
       // it would make the value look like a second option to the direct parser.
       if (value.startsWith('--')) {
@@ -162,14 +183,18 @@ export function normalizeServeModeArgv(argv: readonly string[]): string[] {
       } else {
         next.push(valueFlag, value)
       }
+
       continue
     }
+
     next.push(valueFlag)
     const value = argv[i + 1]
+
     if (value !== undefined && !isFlagToken(value)) {
       next.push(value)
       i += 1
     }
   }
+
   return next
 }

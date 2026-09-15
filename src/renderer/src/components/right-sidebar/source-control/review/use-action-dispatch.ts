@@ -54,27 +54,35 @@ export function useSourceControlActionDispatch({
       if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
         return
       }
+
       switch (kind) {
         case 'commit':
           void handleCommit()
+
           return
         case 'commit_push':
           void runCompoundCommitAction('push')
+
           return
         case 'commit_sync':
           void runCompoundCommitAction('sync')
+
           return
         case 'abort_merge':
           void handleAbortMerge()
+
           return
         case 'abort_rebase':
           void handleAbortRebase()
+
           return
         case 'create_pr':
           void handleCreatePullRequest()
+
           return
         case 'push_create_pr':
           void runCreatePrIntent()
+
           return
         case 'push':
         case 'force_push':
@@ -106,6 +114,7 @@ export function useSourceControlActionDispatch({
     switch (primaryAction.kind) {
       case 'stage':
         void handleStageAllPrimary()
+
         return
       case 'push':
         // Why: primary labels "Force Push" but keeps kind 'push', so invoke the explicit force path when lease force is required.
@@ -114,6 +123,7 @@ export function useSourceControlActionDispatch({
             ? 'force_push'
             : 'push'
         )
+
         return
       case 'commit':
       case 'pull':
@@ -121,6 +131,7 @@ export function useSourceControlActionDispatch({
       case 'publish':
       case 'create_pr':
         handleActionInvoke(primaryAction.kind)
+
         return
       case 'create_pr_intent':
         void runCreatePrIntent()
@@ -145,10 +156,13 @@ export function useSourceControlActionDispatch({
     if (!createPrHeaderAction || createPrHeaderAction.disabled) {
       return
     }
+
     if (createPrHeaderAction.kind === 'create_pr') {
       void handleCreatePullRequest()
+
       return
     }
+
     if (createPrHeaderAction.kind === 'create_pr_intent') {
       void runCreatePrIntent()
     }

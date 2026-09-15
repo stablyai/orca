@@ -22,16 +22,22 @@ type BrowserState = {
 }
 
 const runProcessMock = vi.mocked(runProcess)
+
 const spawnProcessMock = vi.mocked(spawnProcess)
+
 let root: string
+
 let screenshotPath: string
+
 let browserState: BrowserState
 
 function commandFromArgs(args: readonly string[]): string[] {
   let index = 0
+
   while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
     index += 2
   }
+
   return args.slice(index, -1)
 }
 
@@ -48,12 +54,15 @@ function success(data: unknown) {
 function installAgentBrowserMock(): void {
   runProcessMock.mockImplementation(async (spec) => {
     const command = commandFromArgs(spec.args ?? [])
+
     if (command[0] === 'open') {
       const active = browserState.tabs.find((tab) => tab.tabId === browserState.activeTabId)!
       active.url = command[1]
       active.title = command[1] === 'about:blank' ? '' : 'Fixture page'
+
       return success({ url: active.url, title: active.title })
     }
+
     if (command[0] === 'tab' && command.length === 1) {
       return success({
         tabs: browserState.tabs.map((tab) => ({
@@ -62,19 +71,25 @@ function installAgentBrowserMock(): void {
         }))
       })
     }
+
     if (command[0] === 'tab' && command.length === 2) {
       browserState.activeTabId = command[1]
+
       return success({ tabId: command[1] })
     }
+
     if (command[0] === 'eval') {
       return success({ result: 'Fixture page', origin: 'https://fixture.test/' })
     }
+
     if (command[0] === 'screenshot') {
       return success({ path: screenshotPath })
     }
+
     if (command[0] === 'close') {
       return success({ closed: true })
     }
+
     throw new Error(`Unexpected agent-browser command: ${command.join(' ')}`)
   })
 }
@@ -104,7 +119,9 @@ describe('ExternalChromiumBrowserProcess', () => {
       { executablePath: '/operator/chromium', provider: 'chromium' },
       root
     )
+
     await processHandle.start()
+
     const commands = processHandle.createCommands({
       getAgentBrowserBridge: () => null,
       resolveWorktreeSelector: async (selector) => ({ id: selector }),
@@ -200,6 +217,7 @@ describe('resolveOrcadBrowserProvider', () => {
   it('uses ORCA_BROWSER_EXECUTABLE when Electron is absent', async () => {
     const executable = join(root, process.platform === 'win32' ? 'chromium.exe' : 'chromium')
     await writeFile(executable, '')
+
     if (process.platform !== 'win32') {
       await chmod(executable, 0o755)
     }
@@ -231,6 +249,7 @@ describe('resolveOrcadBrowserProvider', () => {
   it('reports a missing driver rather than falling through as unconfigured', async () => {
     const executable = join(root, 'chromium')
     await writeFile(executable, '')
+
     if (process.platform !== 'win32') {
       await chmod(executable, 0o755)
     }
@@ -323,9 +342,11 @@ describe('resolveOrcadBrowserProvider', () => {
   it('reports a failed Chromium launch with the underlying error', async () => {
     const executable = join(root, 'chromium')
     await writeFile(executable, '')
+
     if (process.platform !== 'win32') {
       await chmod(executable, 0o755)
     }
+
     runProcessMock.mockRejectedValue(new Error('spawn EACCES'))
 
     await expect(
@@ -345,9 +366,11 @@ describe('resolveOrcadBrowserProvider', () => {
   it('clears any recorded cause once a provider resolves', async () => {
     const executable = join(root, 'chromium')
     await writeFile(executable, '')
+
     if (process.platform !== 'win32') {
       await chmod(executable, 0o755)
     }
+
     setRuntimeBrowserUnavailableCause({ reason: 'driver_missing' })
 
     const provider = await resolveOrcadBrowserProvider({

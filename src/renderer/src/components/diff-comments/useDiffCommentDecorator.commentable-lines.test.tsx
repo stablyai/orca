@@ -26,20 +26,25 @@ const rootCounts = vi.hoisted(() => ({ created: 0, unmounted: 0 }))
 // Count only roots the decorator creates for its zones — @testing-library/react creates its own.
 vi.mock('react-dom/client', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactDomClientModule>()
+
   return {
     ...actual,
     createRoot: (container: Element, options?: Parameters<typeof actual.createRoot>[1]) => {
       const isZoneRoot = container.classList?.contains('orca-diff-comment-inline') ?? false
+
       if (isZoneRoot) {
         rootCounts.created += 1
       }
+
       const root = actual.createRoot(container, options)
+
       return {
         render: (node: Parameters<typeof root.render>[0]) => root.render(node),
         unmount: () => {
           if (isZoneRoot) {
             rootCounts.unmounted += 1
           }
+
           root.unmount()
         }
       }
@@ -76,6 +81,7 @@ function createFakeEditor(): FakeEditor {
     getTargetAtClientPoint: () => null,
     onMouseMove: (listener: (e: { target: { position: { lineNumber: number } } }) => void) => {
       mouseMoveListeners.push(listener)
+
       return noopDisposable
     },
     onMouseLeave: () => noopDisposable,
@@ -85,6 +91,7 @@ function createFakeEditor(): FakeEditor {
         addZone: (zone: MonacoEditor.IViewZone) => {
           const id = `zone-${(nextZoneId += 1)}`
           zones.set(id, zone)
+
           return id
         },
         removeZone: (id: string) => {
@@ -107,6 +114,7 @@ function createFakeEditor(): FakeEditor {
 }
 
 const FILE_PATH = 'src/index.ts'
+
 const REVIEW_SURFACE_ID = 'pr:acme/widgets:42'
 
 function reviewNote(index: number): DecoratedDiffComment {
@@ -144,6 +152,7 @@ function lifecycleTotals(fake: FakeEditor): Record<string, number> {
 
 function isAddButtonVisible(domNode: HTMLElement): boolean {
   const button = domNode.querySelector<HTMLElement>('.orca-diff-comment-add-btn')
+
   return button != null && button.style.display !== 'none'
 }
 
@@ -188,9 +197,11 @@ function countingCommentableLines(length: number): {
     configurable: true,
     value: (separator?: string) => {
       joins += 1
+
       return Array.prototype.join.call(lines, separator)
     }
   })
+
   return { lines, joins: () => joins }
 }
 
@@ -212,6 +223,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   it('still re-keys on a fresh-but-equal array so the comment set survives a review refresh', () => {
     const fake = createFakeEditor()
     const comments = [reviewNote(1)]
+
     const hook = renderDecorator(fake, {
       commentableLineNumbers: freshCommentableLines(),
       comments
@@ -230,6 +242,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   it('keeps every comment root and view zone alive across value-equal review refreshes', async () => {
     const fake = createFakeEditor()
     const comments = [reviewNote(1), reviewNote(2), reviewNote(3)]
+
     const hook = renderDecorator(fake, {
       commentableLineNumbers: freshCommentableLines(),
       comments
@@ -241,6 +254,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
     for (let refresh = 0; refresh < 5; refresh += 1) {
       hook.rerender({ commentableLineNumbers: freshCommentableLines(), comments })
     }
+
     await flushDeferredUnmounts()
 
     expect(lifecycleTotals(fake)).toEqual({
@@ -257,6 +271,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   it('does not accumulate orphan zones when refreshes interleave with new review comments', async () => {
     const fake = createFakeEditor()
     let comments = [reviewNote(1)]
+
     const hook = renderDecorator(fake, {
       commentableLineNumbers: freshCommentableLines(),
       comments
@@ -266,6 +281,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
       comments = [...comments, reviewNote(refresh)]
       hook.rerender({ commentableLineNumbers: freshCommentableLines(), comments })
     }
+
     await flushDeferredUnmounts()
 
     // 6 live notes => 6 roots, 6 zones, nothing stranded.
@@ -279,6 +295,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   it('rebuilds the add-button overlay when the commentable lines really change', async () => {
     const fake = createFakeEditor()
     const comments = [reviewNote(1)]
+
     const hook = renderDecorator(fake, {
       commentableLineNumbers: [10, 11, 12] as readonly number[],
       comments
@@ -304,6 +321,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
   it('removes its zones from Monaco when the model swaps under a retained editor', async () => {
     const fake = createFakeEditor()
     const comments = [reviewNote(1)]
+
     const hook = renderHook(
       ({ monacoModelIdentity }) =>
         useDiffCommentDecorator({
@@ -318,6 +336,7 @@ describe('useDiffCommentDecorator commentable-line churn', () => {
         }),
       { initialProps: { monacoModelIdentity: 'modified-v1' } }
     )
+
     const firstZoneIds = [...fake.zones.keys()]
 
     hook.rerender({ monacoModelIdentity: 'modified-v2' })

@@ -7,6 +7,7 @@ describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
       hostMaxBytes: 10,
       processMaxBytes: 100
     })
+
     const first = registry.acquire('host-a')!
     const second = registry.acquire('host-a')!
     const releaseApplication = first.claimApplicationBytes(4)
@@ -30,6 +31,7 @@ describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
       hostMaxBytes: 100,
       processMaxBytes: 10
     })
+
     const first = registry.acquire('host-a')!
     const second = registry.acquire('host-b')!
     const releaseFirst = first.claimApplicationBytes(6)
@@ -52,6 +54,7 @@ describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
       hostMaxSocketSources: 1,
       processMaxSocketSources: 2
     })
+
     const first = registry.acquire('host-a')!
     const second = registry.acquire('host-b')!
     const releaseFirst = first.claimApplicationBytes(0)
@@ -101,7 +104,9 @@ describe('BrowserNetworkTunnelOutboundMemoryBudgetRegistry', () => {
       hostMaxBytes: 10,
       processMaxBytes: 10
     })
+
     const lease = registry.acquire('host-a')!
+
     const socket = lease.registerBufferedAmount(() => {
       throw new Error('socket unavailable')
     })!

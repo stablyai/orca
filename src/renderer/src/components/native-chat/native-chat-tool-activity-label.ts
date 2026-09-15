@@ -10,6 +10,7 @@ type ToolCall = Extract<NativeChatBlock, { type: 'tool-call' }>
 export function nativeChatToolActivityLabel(call: ToolCall): string {
   const { key, toolName, preview } = describeActiveToolCall(call)
   const copy = NATIVE_CHAT_TOOL_ACTIVITY_COPY[key]
+
   return key === 'runningPreview'
     ? translate('components.native-chat.tool.runningPreview', copy, { preview })
     : key === 'runningCommand'

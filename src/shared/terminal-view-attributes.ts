@@ -37,6 +37,7 @@ export type TerminalViewAttributes = {
 // Mirror of @xterm XParseColor RGB_REX: r/g/b channels in 1-4 hex digits.
 const X_RGB_SPEC_RE =
   /^([\da-f])\/([\da-f])\/([\da-f])$|^([\da-f]{2})\/([\da-f]{2})\/([\da-f]{2})$|^([\da-f]{3})\/([\da-f]{3})\/([\da-f]{3})$|^([\da-f]{4})\/([\da-f]{4})\/([\da-f]{4})$/
+
 const X_HASH_SPEC_RE = /^[\da-f]+$/
 
 /** Mirror of xterm's XParseColor `parseColor` (the grammar the renderer
@@ -47,38 +48,49 @@ export function parseXColorSpec(spec: string): TerminalViewRgb | null {
   if (!spec) {
     return null
   }
+
   let low = spec.toLowerCase()
+
   if (low.startsWith('rgb:')) {
     low = low.slice(4)
     const m = X_RGB_SPEC_RE.exec(low)
+
     if (m) {
       const base = m[1] ? 15 : m[4] ? 255 : m[7] ? 4095 : 65535
+
       return [
         Math.round((Number.parseInt(m[1] || m[4] || m[7] || m[10], 16) / base) * 255),
         Math.round((Number.parseInt(m[2] || m[5] || m[8] || m[11], 16) / base) * 255),
         Math.round((Number.parseInt(m[3] || m[6] || m[9] || m[12], 16) / base) * 255)
       ]
     }
+
     return null
   }
+
   if (low.startsWith('#')) {
     low = low.slice(1)
+
     if (X_HASH_SPEC_RE.exec(low) && [3, 6, 9, 12].includes(low.length)) {
       const adv = low.length / 3
       const result: TerminalViewRgb = [0, 0, 0]
+
       for (let i = 0; i < 3; ++i) {
         const c = Number.parseInt(low.slice(adv * i, adv * i + adv), 16)
         result[i] = adv === 1 ? c << 4 : adv === 2 ? c : adv === 3 ? c >> 4 : c >> 8
       }
+
       return result
     }
   }
+
   return null
 }
 
 function padChannelTo16Bit(value: number): string {
   const hex = value.toString(16)
   const byte = hex.length < 2 ? `0${hex}` : hex
+
   // Why doubled: xterm reports 16-bit channels by repeating the 8-bit byte
   // (XParseColor.toRgbString with bits=16) — pinned reply-format parity.
   return byte + byte
@@ -104,6 +116,7 @@ export function terminalViewAttributesEqual(
   if (a === b) {
     return true
   }
+
   if (
     !rgbEqual(a.foreground, b.foreground) ||
     !rgbEqual(a.background, b.background) ||
@@ -115,11 +128,13 @@ export function terminalViewAttributesEqual(
   ) {
     return false
   }
+
   for (let i = 0; i < a.ansi.length; i++) {
     if (!rgbEqual(a.ansi[i], b.ansi[i])) {
       return false
     }
   }
+
   return true
 }
 
@@ -131,10 +146,13 @@ function validateRgbTriple(value: unknown): TerminalViewRgb | null {
   if (!Array.isArray(value) || value.length !== 3) {
     return null
   }
+
   const [r, g, b] = value
+
   if (!isRgbChannel(r) || !isRgbChannel(g) || !isRgbChannel(b)) {
     return null
   }
+
   return [r, g, b]
 }
 
@@ -145,27 +163,36 @@ export function validateTerminalViewAttributes(payload: unknown): TerminalViewAt
   if (typeof payload !== 'object' || payload === null) {
     return null
   }
+
   const candidate = payload as Record<string, unknown>
   const foreground = validateRgbTriple(candidate.foreground)
   const background = validateRgbTriple(candidate.background)
   const cursor = validateRgbTriple(candidate.cursor)
+
   if (!foreground || !background || !cursor) {
     return null
   }
+
   if (!Array.isArray(candidate.ansi) || candidate.ansi.length !== TERMINAL_VIEW_ANSI_COLOR_COUNT) {
     return null
   }
+
   const ansi: TerminalViewRgb[] = []
+
   for (const entry of candidate.ansi) {
     const triple = validateRgbTriple(entry)
+
     if (!triple) {
       return null
     }
+
     ansi.push(triple)
   }
+
   if (candidate.colorSchemeMode !== 'dark' && candidate.colorSchemeMode !== 'light') {
     return null
   }
+
   if (
     candidate.cursorStyle !== 'bar' &&
     candidate.cursorStyle !== 'block' &&
@@ -173,9 +200,11 @@ export function validateTerminalViewAttributes(payload: unknown): TerminalViewAt
   ) {
     return null
   }
+
   if (typeof candidate.cursorBlink !== 'boolean') {
     return null
   }
+
   return {
     foreground,
     background,

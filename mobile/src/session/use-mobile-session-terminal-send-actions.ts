@@ -50,6 +50,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     scheduleDelayedAction,
     showToast
   } = scope
+
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
   const dismissSoftwareKeyboard = useCallback(() => {
@@ -60,6 +61,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       liveInput: liveInputRef.current
     })
   }, [])
+
   const dismissKeyboardAfterAgentSend = useAgentSendKeyboardDismissal(
     dismissSoftwareKeyboard,
     getSendCompletionGeneration
@@ -70,19 +72,23 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     if (!client || !activeHandle || sendingRef.current || !canSend) {
       return
     }
+
     sendingRef.current = true
 
     const draft = bufferedTerminalDraftState.input
     const text = normalizeTerminalTextInput(draft)
+
     const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
       activeHandle,
       draft
     )
+
     const sendOrigin = {
       handle: activeHandle,
       tab: activeSessionTab,
       generation: getSendCompletionGeneration()
     }
+
     const restoreRejectedDraft = () =>
       bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
 
@@ -98,15 +104,20 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
+
       const accepted = isTerminalSendRpcAccepted(response)
+
       if (accepted) {
         reportWorkerTerminalUserInput(client, activeHandle)
       }
+
       if (!accepted) {
         restoreRejectedDraft()
       }
+
       const draftUnchanged =
         accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)
+
       dismissKeyboardAfterAgentSend(sendOrigin, accepted && draftUnchanged)
     } catch {
       restoreRejectedDraft()
@@ -120,11 +131,14 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     if (!client || !activeHandle || !canSend) {
       return
     }
+
     const targetHandle = activeHandle
     const accessoryCommit = await handleLiveInputAccessoryBytes(input)
+
     if (accessoryCommit.kind !== 'allow-raw') {
       return
     }
+
     await sendTerminalLiveAccessoryRawBytes({
       client: clientRef.current,
       targetHandle,
@@ -139,15 +153,20 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   const sendLiveTerminalInput = useCallback(
     async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
+
       if (text.length === 0) {
         return false
       }
+
       if (!isTerminalLiveInputWithinByteLimit(text)) {
         triggerError()
         showToast('Input too large (max 256 KiB)', 1500)
+
         return false
       }
+
       const rpc = clientRef.current
+
       // Why: callers suppress follow-up controls/toasts when this live send is stale.
       if (
         !rpc ||
@@ -157,6 +176,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       ) {
         return false
       }
+
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
       return rpc
@@ -173,9 +193,11 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         .then(
           (response) => {
             const accepted = isTerminalSendRpcAccepted(response)
+
             if (accepted) {
               reportWorkerTerminalUserInput(rpc, handle)
             }
+
             return accepted
           },
           () => false
@@ -183,6 +205,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     },
     [showToast]
   )
+
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
   const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
@@ -206,10 +229,12 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       const requestSeq = sessionTabActionSheetRequestSeqRef.current
       clearSessionTabActionSheetKeyboardListener()
       let didOpen = false
+
       const openAfterDismiss = () => {
         if (didOpen || requestSeq !== sessionTabActionSheetRequestSeqRef.current) {
           return
         }
+
         didOpen = true
         clearSessionTabActionSheetKeyboardListener()
         openSessionTabActionSheet(tab)
@@ -221,6 +246,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         liveInputRef.current?.blur()
         Keyboard.dismiss()
         openAfterDismiss()
+
         return
       }
 

@@ -29,28 +29,36 @@ export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfile
 } {
   const ids = new Set<string>()
   const index = readProfileIndex(getOrcaProfileIndexPath(userDataPath))
+
   if (!index) {
     return { ids, unreadableProfiles: 0 }
   }
+
   let unreadableProfiles = 0
+
   for (const profile of index.profiles) {
     if (profile.id === index.activeProfileId) {
       continue
     }
+
     const collected = readProfileWorktreeIds(getOrcaProfileDataFile(profile.id, userDataPath))
+
     if (!collected) {
       unreadableProfiles += 1
       continue
     }
+
     for (const id of collected) {
       ids.add(id)
     }
   }
+
   return { ids, unreadableProfiles }
 }
 
 function readProfileWorktreeIds(dataFile: string): Set<string> | null {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(readFileSync(dataFile, 'utf8'))
   } catch {
@@ -58,23 +66,29 @@ function readProfileWorktreeIds(dataFile: string): Set<string> | null {
     // thing to the caller: this profile's ids are unknown.
     return null
   }
+
   if (!parsed || typeof parsed !== 'object') {
     return null
   }
+
   const state = parsed as { worktreeMeta?: unknown; folderWorkspaces?: unknown }
   const ids = new Set<string>()
+
   if (state.worktreeMeta && typeof state.worktreeMeta === 'object') {
     for (const id of Object.keys(state.worktreeMeta)) {
       ids.add(id)
     }
   }
+
   if (Array.isArray(state.folderWorkspaces)) {
     for (const workspace of state.folderWorkspaces) {
       const id = (workspace as { id?: unknown } | null)?.id
+
       if (typeof id === 'string' && id) {
         ids.add(folderWorkspaceKey(id))
       }
     }
   }
+
   return ids
 }

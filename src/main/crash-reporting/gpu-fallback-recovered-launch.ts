@@ -19,6 +19,7 @@ export async function promptForGpuFallbackRecoveredLaunch(
   const { response } = parentWindow
     ? await dialog.showMessageBox(parentWindow, GPU_FALLBACK_RECOVERED_LAUNCH_OPTIONS)
     : await dialog.showMessageBox(GPU_FALLBACK_RECOVERED_LAUNCH_OPTIONS)
+
   return response === 1 ? 'retry-hardware' : 'keep-safe'
 }
 
@@ -37,20 +38,26 @@ export async function handleGpuFallbackRecoveredLaunch(
   handlers: GpuFallbackRecoveredLaunchHandlers
 ): Promise<void> {
   let decision: GpuFallbackRecoveredLaunchDecision
+
   try {
     decision = await handlers.prompt()
   } catch (error) {
     handlers.onPromptFailed(error)
+
     return
   }
+
   if (handlers.isQuitting()) {
     return
   }
+
   if (decision === 'retry-hardware') {
     handlers.clearSafeGraphics()
     handlers.restartWithHardware()
+
     return
   }
+
   handlers.confirmSafeGraphics()
   handlers.onSafeGraphicsKept()
 }

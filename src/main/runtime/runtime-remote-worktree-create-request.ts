@@ -23,6 +23,7 @@ export async function requestRuntimeRemoteWorktree(
     isDestroyed: () => false,
     webContents: { send: () => undefined }
   } as unknown as BrowserWindow
+
   const result = await createRemoteWorktree(
     {
       repoId: repo.id,
@@ -68,9 +69,11 @@ export async function requestRuntimeRemoteWorktree(
     store as unknown as Store,
     headlessWindow
   )
+
   if (args.comment !== undefined) {
     store.setWorktreeMeta(result.worktree.id, { comment: args.comment })
     result.worktree.comment = args.comment
   }
+
   return result
 }

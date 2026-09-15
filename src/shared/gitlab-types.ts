@@ -14,7 +14,9 @@ export type GitLabProjectRef = { host: string; path: string }
 // Why: preserve native GitLab state strings (`opened`, not gh `open`) so values are never ambiguously mapped.
 
 export type MRState = 'opened' | 'closed' | 'merged' | 'locked' | 'draft'
+
 export type GitLabIssueState = 'opened' | 'closed'
+
 // Why: glab has no structured `mergeable`; we project `detailed_merge_status`/`has_conflicts` onto GitHub's three-value shape.
 export type MRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
@@ -83,6 +85,7 @@ export type MRComment = {
 }
 
 export type GitLabCommentResult = { ok: true; comment: MRComment } | { ok: false; error: string }
+
 export type GitLabDiscussionResolveResult = { ok: true } | { ok: false; error: string }
 
 export type GitLabJobTraceResult = { ok: true; trace: string } | { ok: false; error: string }

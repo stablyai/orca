@@ -67,10 +67,12 @@ describe('a launch that adopts a conversation is its own identity', () => {
       if (method === 'agentSession.create') {
         return new Promise(() => {})
       }
+
       // Both providers now ask the executing host before creating.
       if (method === 'agentSession.createSupport') {
         return { supported: true }
       }
+
       return { ok: true, value: { submission: { dispatchState: 'accepted' } } }
     })
   })
@@ -80,6 +82,7 @@ describe('a launch that adopts a conversation is its own identity', () => {
     // here would silently drop the adoption and open a blank chat instead.
     const worktreeId = 'wt-resume-vs-blank'
     const blank = startStructuredAgentLaunch(worktreeId, 'codex')
+
     const resume = startStructuredAgentLaunch(worktreeId, 'codex', {
       resumeFrom: { providerSessionId: 'thread-1' }
     })
@@ -95,9 +98,11 @@ describe('a launch that adopts a conversation is its own identity', () => {
 
   it('does not hand a blank launch the resume already pending for the same worktree', async () => {
     const worktreeId = 'wt-blank-vs-resume'
+
     const resume = startStructuredAgentLaunch(worktreeId, 'codex', {
       resumeFrom: { providerSessionId: 'thread-1' }
     })
+
     const blank = startStructuredAgentLaunch(worktreeId, 'codex')
 
     await flushLaunchDispatch()
@@ -108,9 +113,11 @@ describe('a launch that adopts a conversation is its own identity', () => {
 
   it('keeps two resumes of different rows apart', async () => {
     const worktreeId = 'wt-two-rows'
+
     const first = startStructuredAgentLaunch(worktreeId, 'codex', {
       resumeFrom: { providerSessionId: 'thread-1' }
     })
+
     const second = startStructuredAgentLaunch(worktreeId, 'codex', {
       resumeFrom: { providerSessionId: 'thread-2' }
     })

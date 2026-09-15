@@ -8,15 +8,21 @@ import {
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 
 const ROOT_PID = 500
+
 const ORCA_PGID = 400
+
 const ROOT_STARTED_AT = 'Thu Sep 3 18:04:50 2026'
+
 /** The second both close-time walks land in. */
 const WALK_SECOND = 'Thu Sep 3 18:05:04 2026'
+
 const WALK_MS = Date.parse(WALK_SECOND)
+
 const EARLIER_SECOND = 'Thu Sep 3 18:05:03 2026'
 
 /** The measured split: `s20` at :03.946 died, `s21` at :04.042 leaked. */
 const EARLIER_BORN = [700, 701, 702]
+
 const WALK_SECOND_BORN = [721, 722, 723, 724]
 
 type Cohort = { pids: number[]; startedAt: string }
@@ -64,9 +70,11 @@ async function sweep(
 ): Promise<[number, NodeJS.Signals][]> {
   const calls: [number, NodeJS.Signals][] = []
   const captureDescendants = vi.fn()
+
   for (const capture of captures) {
     captureDescendants.mockResolvedValueOnce(capture)
   }
+
   const tree = createClaudeChildTreeReaper(
     { pid: ROOT_PID, kill: vi.fn(() => true) },
     {
@@ -83,10 +91,12 @@ async function sweep(
         })
     }
   )
+
   // The close ladder's shape: arm, then re-walk the live root at the boundary.
   await tree.capture()
   await tree.refresh?.()
   await tree.reap()
+
   return calls
 }
 

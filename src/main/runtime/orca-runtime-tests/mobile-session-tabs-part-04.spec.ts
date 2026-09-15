@@ -35,9 +35,11 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-mobile-folder' })
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -51,6 +53,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { cwd?: string; env?: Record<string, string>; worktreeId?: string }
       | undefined
+
     const spawnedEnv = spawnCall?.env ?? {}
     expect(spawnCall).toMatchObject({
       cwd: folderPath,
@@ -71,11 +74,13 @@ describe('OrcaRuntimeService', () => {
 
   it('spawns fresh headless SSH mobile session terminals instead of reattaching synthetic local ids', async () => {
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const remoteStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
     }
+
     const spawn = vi.fn().mockResolvedValue({ id: 'ssh:ssh-1@@remote-pty' })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
@@ -102,6 +107,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       write: () => true,
@@ -153,7 +159,9 @@ describe('OrcaRuntimeService', () => {
         })
       }
     })
+
     const sshPtyId = 'ssh:ssh-1@@remote-pty'
+
     const sshSession = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -173,10 +181,13 @@ describe('OrcaRuntimeService', () => {
         'ssh-host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: sshPtyId })
       }
     })
+
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const getWorkspaceSession = vi.fn((hostId?: string | null) =>
       hostId === 'ssh:ssh-1' ? sshSession : localSession
     )
+
     const runtime = new OrcaRuntimeService({
       ...store,
       flushOrThrow: vi.fn(),
@@ -184,6 +195,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
       getWorkspaceSession
     } as never)
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -204,6 +216,7 @@ describe('OrcaRuntimeService', () => {
   it('closes a headless SSH tab only in its SSH workspace-session partition', async () => {
     const sshPtyId = 'ssh:ssh-1@@remote-pty'
     const localSession = makeWorkspaceSessionWithHeadlessTerminal()
+
     let sshSession = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -223,12 +236,16 @@ describe('OrcaRuntimeService', () => {
         'ssh-host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: sshPtyId })
       }
     })
+
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const setWorkspaceSession = vi.fn((session: WorkspaceSessionState, hostId?: string | null) => {
       expect(hostId).toBe('ssh:ssh-1')
       sshSession = session
     })
+
     const kill = vi.fn(() => true)
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [remoteRepo],
@@ -238,6 +255,7 @@ describe('OrcaRuntimeService', () => {
       setWorkspaceSession,
       flushOrThrow: vi.fn()
     } as never)
+
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -306,6 +324,7 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'runtime-session-tab'
     const leafId = HEADLESS_LEAF_ID
     const kill = vi.fn(() => true)
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       activeRepoId: TEST_REPO_ID,
@@ -329,6 +348,7 @@ describe('OrcaRuntimeService', () => {
         [tabId]: makeHeadlessTerminalLayout({ [leafId]: undefined })
       }
     })
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValueOnce({ id: ptyId }).mockResolvedValueOnce({ id: splitPtyId }),
@@ -350,6 +370,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const publishRendererOmission = (snapshotVersion: number): void => {
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -367,6 +388,7 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     }
+
     runtime.attachWindow(1)
     publishRendererOmission(1)
     electronMocks.BrowserWindow.fromId.mockReturnValue({
@@ -380,6 +402,7 @@ describe('OrcaRuntimeService', () => {
       leafId,
       launchAgent: 'codex'
     })
+
     const split = await runtime.splitTerminal(created.handle, { direction: 'vertical' })
     publishRendererOmission(2)
 
@@ -442,6 +465,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Codex working\x07', Date.now())
     runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', Date.now())
 
@@ -552,6 +576,7 @@ describe('OrcaRuntimeService', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'laptop-created-pty' })
       .mockResolvedValueOnce({ id: 'laptop-split-pty' })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn,
@@ -564,6 +589,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     const split = await runtime.splitTerminal(laptopTerminal.handle, {
       direction: 'vertical'
     })
@@ -606,6 +632,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       leafId: HEADLESS_LEAF_ID
     })
+
     events.length = 0
 
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 123)

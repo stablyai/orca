@@ -7,7 +7,9 @@ function isMarkdownDestinationHostile(char: string): boolean {
   if (MARKDOWN_DESTINATION_HOSTILE.has(char)) {
     return true
   }
+
   const code = char.charCodeAt(0)
+
   return code <= 0x20
 }
 
@@ -25,24 +27,30 @@ export function escapeMarkdownLinkDestination(url: string): string | null {
   }
 
   let encoded = ''
+
   for (let i = 0; i < url.length;) {
     const char = url[i] ?? ''
+
     if (char === '%') {
       const hex = url.slice(i + 1, i + 3)
+
       if (/^[0-9a-fA-F]{2}$/.test(hex)) {
         encoded += `%${hex}`
         i += 3
         continue
       }
+
       encoded += '%25'
       i += 1
       continue
     }
+
     if (isMarkdownDestinationHostile(char)) {
       encoded += percentEncodeUtf8Char(char)
       i += 1
       continue
     }
+
     encoded += char
     i += 1
   }
@@ -52,5 +60,6 @@ export function escapeMarkdownLinkDestination(url: string): string | null {
       return null
     }
   }
+
   return encoded
 }

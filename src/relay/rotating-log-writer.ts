@@ -42,6 +42,7 @@ export class RotatingLogWriter {
       // fallback when a rename cannot succeed — e.g. Windows, where the launch
       // shell's own redirect handle blocks renaming the live file).
       this.fd = openSync(this.logPath, mode)
+
       try {
         this.currentBytes = mode === 'w' ? 0 : statSync(this.logPath).size
       } catch {
@@ -64,17 +65,21 @@ export class RotatingLogWriter {
     if (!this.active || this.fd === null) {
       return
     }
+
     const encoded = typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : Buffer.from(chunk)
+
     // Why: one pathological log write must not bypass the disk cap. Preserve
     // the newest tail because it carries the most useful failure context.
     const buf =
       encoded.length > this.maxBytes ? encoded.subarray(encoded.length - this.maxBytes) : encoded
+
     try {
       // Rotate BEFORE writing when the incoming write would cross the cap, so a
       // single large line still lands wholly in the fresh file.
       if (this.currentBytes > 0 && this.currentBytes + buf.length > this.maxBytes) {
         this.rotate()
       }
+
       writeSync(this.fd, buf)
       this.currentBytes += buf.length
     } catch {
@@ -89,7 +94,9 @@ export class RotatingLogWriter {
       closeSync(this.fd)
       this.fd = null
     }
+
     let renamed = false
+
     try {
       // Preferred path: archive one generation. rename() replaces any existing
       // relay.log.1 atomically on POSIX; the live file is renamed (never
@@ -105,6 +112,7 @@ export class RotatingLogWriter {
       // at its own offset, but the truncation bounds total growth. Trade-off: no
       // archived generation on this platform/path.
     }
+
     // Successful rename → fresh append file (size 0). Failed rename → truncate.
     this.open(renamed ? 'a' : 'w')
   }
@@ -116,6 +124,7 @@ export class RotatingLogWriter {
       } catch {
         // best-effort
       }
+
       this.fd = null
     }
   }
@@ -149,14 +158,17 @@ export function installRelayLogRotation(
       // Why: preserve the Writable.write callback contract so callers awaiting
       // the write (rare, but e.g. flush-before-exit) are not left hanging.
       const callback = typeof encodingOrCb === 'function' ? encodingOrCb : cb
+
       if (typeof callback === 'function') {
         ;(callback as (err?: Error | null) => void)(null)
       }
+
       // If the writer went inactive mid-run (write failure), fall back so logs
       // are not silently dropped for the rest of the session.
       if (!writer.active) {
         return (original as (c: string | Uint8Array) => boolean)(chunk)
       }
+
       return true
     }
 

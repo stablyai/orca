@@ -7,6 +7,7 @@ import {
 import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()
+
 const OBSERVED_AT = NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000
 
 function workingRow(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {

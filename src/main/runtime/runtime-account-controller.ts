@@ -60,6 +60,7 @@ export class RuntimeAccountController {
 
   getSnapshot(): AccountsSnapshot {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
+
     return {
       claude: claudeAccounts.listAccounts(),
       codex: codexAccounts.listAccounts(),
@@ -106,11 +107,13 @@ export class RuntimeAccountController {
   ): Promise<CodexRateLimitResetRpcResult> {
     const { claudeAccounts, codexAccounts } = this.requireServices()
     const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
+
     const snapshot = {
       claude: claudeAccounts.listAccounts(),
       codex: result.codex,
       rateLimits: result.rateLimits
     }
+
     if ('status' in result) {
       return {
         status: result.status,
@@ -120,6 +123,7 @@ export class RuntimeAccountController {
         snapshot
       }
     }
+
     return { outcome: result.outcome, scope: result.scope, snapshot }
   }
 
@@ -151,6 +155,7 @@ export class RuntimeAccountController {
 
   onChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
     const services = this.requireServices()
+
     return services.rateLimits.onStateChange((rateLimits) => {
       listener({
         claude: services.claudeAccounts.listAccounts(),
@@ -164,6 +169,7 @@ export class RuntimeAccountController {
     if (!this.services) {
       throw new Error('Account services are not configured on this runtime')
     }
+
     return this.services
   }
 }

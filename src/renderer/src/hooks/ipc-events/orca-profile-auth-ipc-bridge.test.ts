@@ -45,6 +45,7 @@ describe('orca profile auth IPC bridge', () => {
           authStatus,
           onAuthStatusChanged: (callback: () => void) => {
             listener = callback
+
             return unsubscribe
           }
         }

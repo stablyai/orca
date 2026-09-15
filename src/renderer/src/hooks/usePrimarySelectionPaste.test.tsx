@@ -17,14 +17,18 @@ vi.mock('@/lib/primary-selection', () => ({
 }))
 
 const originalUserAgent = navigator.userAgent
+
 const readPrimarySelectionTextMock = vi.mocked(readPrimarySelectionText)
+
 const consumeNativePasteMock = vi.mocked(consumePrimarySelectionNativePasteSuppression)
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function Probe(): null {
   usePrimarySelectionPaste(true)
+
   return null
 }
 
@@ -39,6 +43,7 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+
   return textarea
 }
 
@@ -50,12 +55,14 @@ function appendXtermHelperTextarea(): HTMLTextAreaElement {
   textarea.className = 'xterm-helper-textarea'
   terminal.appendChild(textarea)
   document.body.appendChild(terminal)
+
   return textarea
 }
 
 function dispatchMiddleMouseDown(target: HTMLElement): MouseEvent {
   const event = new MouseEvent('mousedown', { bubbles: true, button: 1, cancelable: true })
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -67,13 +74,16 @@ function dispatchMiddleMouseUp(target: HTMLElement): MouseEvent {
     clientX: 4,
     clientY: 8
   })
+
   target.dispatchEvent(event)
+
   return event
 }
 
 function dispatchMiddleAuxClick(target: HTMLElement): MouseEvent {
   const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -87,7 +97,9 @@ function dispatchNativePasteBeforeInput(target: HTMLElement): Event {
           inputType: 'insertFromPaste'
         })
       : new Event('beforeinput', { bubbles: true, cancelable: true })
+
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -101,9 +113,11 @@ function createDeferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((nextResolve) => {
     resolve = nextResolve
   })
+
   return { promise, resolve }
 }
 
@@ -132,6 +146,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null

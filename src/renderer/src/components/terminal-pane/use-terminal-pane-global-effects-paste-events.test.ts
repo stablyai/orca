@@ -42,6 +42,7 @@ function resetHookRefs(): void {
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
@@ -51,9 +52,11 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
+
       if (!reactRefState.slots[index]) {
         reactRefState.slots[index] = { current: value }
       }
+
       return reactRefState.slots[index] as { current: T }
     }
   }
@@ -105,9 +108,12 @@ vi.mock('./terminal-input-activity', () => ({
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
+
   const testHook = ((selector?: (state: ReturnType<typeof realHook.getState>) => unknown) =>
     selector ? selector(realHook.getState()) : realHook.getState()) as typeof realHook
+
   Object.assign(testHook, realHook)
+
   return { ...actual, useAppStore: testHook }
 })
 
@@ -133,6 +139,7 @@ describe('useTerminalPaneGlobalEffects', () => {
   it('records terminal input for targeted paste events', async () => {
     const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }
     const pane = { id: 1, leafId: 'leaf-1', terminal }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       resumeRendering: vi.fn(),
@@ -143,6 +150,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => pane)
     }
+
     const transport = {
       getPtyId: vi.fn(() => 'pty-1'),
       isConnected: vi.fn(() => true),
@@ -171,9 +179,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(pasteListener).toBeDefined()
     const listener = pasteListener?.[1]
+
     if (typeof listener !== 'function') {
       throw new Error('expected paste listener')
     }
+
     listener(
       new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: 'git status' } })
     )
@@ -191,6 +201,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     const largePaste = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
     const terminal = { name: 'terminal-a', focus: vi.fn(), modes: { bracketedPasteMode: false } }
     const pane = { id: 1, leafId: 'leaf-1', terminal }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       resumeRendering: vi.fn(),
@@ -201,6 +212,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       fitAllRevealedPanes: vi.fn(),
       getActivePane: vi.fn(() => pane)
     }
+
     const transport = {
       getPtyId: vi.fn(() => 'pty-1'),
       isConnected: vi.fn(() => true),
@@ -229,9 +241,11 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     expect(pasteListener).toBeDefined()
     const listener = pasteListener?.[1]
+
     if (typeof listener !== 'function') {
       throw new Error('expected paste listener')
     }
+
     listener(
       new CustomEvent(PASTE_TERMINAL_TEXT_EVENT, { detail: { tabId: 'tab-1', text: largePaste } })
     )

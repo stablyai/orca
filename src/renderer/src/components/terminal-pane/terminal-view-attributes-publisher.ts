@@ -25,7 +25,9 @@ type ParsedCssColor = {
 // ThemeService defaults for the reply-relevant slots (browser/services/
 // ThemeService.ts): fg #ffffff, bg #000000, cursor #ffffff.
 const DEFAULT_FOREGROUND: ParsedCssColor = { rgb: [0xff, 0xff, 0xff], alpha: 0xff }
+
 const DEFAULT_BACKGROUND: ParsedCssColor = { rgb: [0x00, 0x00, 0x00], alpha: 0xff }
+
 const DEFAULT_CURSOR: ParsedCssColor = { rgb: [0xff, 0xff, 0xff], alpha: 0xff }
 
 // xterm's DEFAULT_ANSI_COLORS first 16 entries (browser/Types.ts).
@@ -72,13 +74,16 @@ function buildDefaultAnsiPalette(): TerminalViewRgb[] {
   // 16-231: the 6x6x6 color cube, 232-255: greys — same generator as xterm's
   // DEFAULT_ANSI_COLORS IIFE so untouched extended slots reply identically.
   const v = [0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff]
+
   for (let i = 0; i < 216; i++) {
     palette.push([v[((i / 36) % 6) | 0], v[((i / 6) % 6) | 0], v[i % 6]])
   }
+
   for (let i = 0; i < 24; i++) {
     const c = 8 + i * 10
     palette.push([c, c, c])
   }
+
   return palette
 }
 
@@ -134,9 +139,11 @@ export function parseCssColor(css: string): ParsedCssColor | null {
         return null
     }
   }
+
   const rgbaMatch = css.match(
     /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(,\s*(0|1|\d?\.(\d+))\s*)?\)/
   )
+
   if (rgbaMatch) {
     return {
       rgb: [
@@ -147,16 +154,19 @@ export function parseCssColor(css: string): ParsedCssColor | null {
       alpha: Math.round((rgbaMatch[5] === undefined ? 1 : Number.parseFloat(rgbaMatch[5])) * 0xff)
     }
   }
+
   return null
 }
 
 function parseThemeColor(css: string | undefined, fallback: ParsedCssColor): ParsedCssColor {
   if (css !== undefined) {
     const parsed = parseCssColor(css)
+
     if (parsed) {
       return parsed
     }
   }
+
   return fallback
 }
 
@@ -167,7 +177,9 @@ function blendOverBackground(background: TerminalViewRgb, color: ParsedCssColor)
   if (color.alpha === 0xff) {
     return color.rgb
   }
+
   const a = color.alpha / 0xff
+
   return [
     background[0] + Math.round((color.rgb[0] - background[0]) * a),
     background[1] + Math.round((color.rgb[1] - background[1]) * a),
@@ -183,13 +195,16 @@ export function composeTerminalViewAttributes(
   const foreground = parseThemeColor(theme?.foreground, DEFAULT_FOREGROUND)
   const background = parseThemeColor(theme?.background, DEFAULT_BACKGROUND)
   const cursor = parseThemeColor(theme?.cursor, DEFAULT_CURSOR)
+
   const ansi: TerminalViewRgb[] = THEME_ANSI_KEYS.map((key, i) => {
     const value = theme?.[key]
+
     return parseThemeColor(typeof value === 'string' ? value : undefined, {
       rgb: DEFAULT_ANSI_PALETTE[i],
       alpha: 0xff
     }).rgb
   })
+
   for (let i = 16; i < DEFAULT_ANSI_PALETTE.length; i++) {
     const extended = theme?.extendedAnsi?.[i - 16]
     ansi.push(
@@ -199,6 +214,7 @@ export function composeTerminalViewAttributes(
       }).rgb
     )
   }
+
   return {
     foreground: foreground.rgb,
     background: background.rgb,
@@ -219,7 +235,9 @@ function sendViaPreload(attributes: TerminalViewAttributes): boolean {
   if (typeof window === 'undefined' || !window.api?.pty?.publishTerminalViewAttributes) {
     return false
   }
+
   window.api.pty.publishTerminalViewAttributes(attributes)
+
   return true
 }
 
@@ -234,14 +252,18 @@ export function publishTerminalViewAttributes(
 ): boolean {
   const attributes = composeTerminalViewAttributes(theme, mode, settings)
   const serialized = JSON.stringify(attributes)
+
   if (serialized === lastPublishedSnapshot) {
     return false
   }
+
   if (!send(attributes)) {
     // Not recorded: a later call with a working bridge must still publish.
     return false
   }
+
   lastPublishedSnapshot = serialized
+
   return true
 }
 

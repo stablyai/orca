@@ -30,15 +30,19 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
     workspaceSurfaceIds,
     workspaceSurfaceIdSet
   } = controller
+
   const parkingTimers = terminalWorktreeParkingTimersRef.current
+
   for (const timer of parkingTimers.values()) {
     window.clearTimeout(timer)
   }
+
   parkingTimers.clear()
 
   const nowMs = Date.now()
   const overrides = getTerminalParkingPolicyOverrides()
   const portalWorktreeIds = new Set(activityTerminalPortals.map((portal) => portal.worktreeId))
+
   for (const worktreeId of Array.from(terminalWorktreeHiddenSinceRef.current.keys())) {
     if (!workspaceSurfaceIdSet.has(worktreeId) || !mountedWorktreeIdsRef.current.has(worktreeId)) {
       terminalWorktreeHiddenSinceRef.current.delete(worktreeId)
@@ -48,6 +52,7 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
   }
 
   const retentionCandidates: TerminalWorktreeColdParkCandidate[] = []
+
   for (const worktreeId of workspaceSurfaceIds) {
     if (!mountedWorktreeIdsRef.current.has(worktreeId)) {
       terminalWorktreeHiddenSinceRef.current.delete(worktreeId)
@@ -55,10 +60,14 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
       terminalWorktreeParkCooldownUntilRef.current.delete(worktreeId)
       continue
     }
+
     const isVisible = activeView === 'terminal' && renderedActiveWorktreeId === worktreeId
+
     const shouldMeasureHiddenWorktree =
       !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktreeId)
+
     const hasActivityTerminalPortal = portalWorktreeIds.has(worktreeId)
+
     if (shouldMeasureHiddenWorktree) {
       measuringTerminalWorktreeIdsRef.current.add(worktreeId)
     } else {
@@ -68,8 +77,10 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
           nowMs + (overrides.coldParkDelayMs ?? TERMINAL_WORKTREE_COLD_PARK_DELAY_MS)
         )
       }
+
       measuringTerminalWorktreeIdsRef.current.delete(worktreeId)
     }
+
     if (isVisible || hasActivityTerminalPortal) {
       terminalWorktreeHiddenSinceRef.current.delete(worktreeId)
       terminalWorktreeParkCooldownUntilRef.current.delete(worktreeId)
@@ -94,6 +105,7 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
     sshParkingEnabled: terminalSshParkingEnabled,
     pairedRuntimeParkingEnvironmentIds
   }
+
   const nextParkedTerminalWorktreeIds = selectColdParkedTerminalWorktrees({
     worktrees: retentionCandidates,
     pendingStartupByTabId,
@@ -102,17 +114,23 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
     restorePolicy,
     ...overrides
   })
+
   const watcherCoverageByTabId = new Map<string, boolean>()
+
   const worktreeTabsAreWatcherCovered = (worktreeId: string, tabs: TerminalTab[]): boolean =>
     tabs.every((tab) => {
       const cached = watcherCoverageByTabId.get(tab.id)
+
       if (cached !== undefined) {
         return cached
       }
+
       const covered = canWatcherCoverParkedTerminalTab(worktreeId, tab)
       watcherCoverageByTabId.set(tab.id, covered)
+
       return covered
     })
+
   for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
     if (!worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])) {
       nextParkedTerminalWorktreeIds.delete(worktreeId)
@@ -136,6 +154,7 @@ export function canOrdinarilyParkRetentionCandidate(
   candidate: TerminalWorktreeColdParkCandidate
 ): boolean {
   const tabs = controller.tabsByWorktree[candidate.worktreeId] ?? []
+
   const parkEligible = canParkTerminalWorktreeRenderers({
     ...candidate,
     parkCooldownUntilMs: null,
@@ -147,5 +166,6 @@ export function canOrdinarilyParkRetentionCandidate(
       ? { coldParkDelayMs: pass.overrides.coldParkDelayMs }
       : {})
   })
+
   return parkEligible && pass.worktreeTabsAreWatcherCovered(candidate.worktreeId, tabs)
 }

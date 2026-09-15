@@ -27,6 +27,7 @@ function canMergeImmediately(item: MobilePRAutoMergeAvailabilityInput): boolean 
   if (item.mergeStateStatus === 'BLOCKED' || item.mergeStateStatus === 'BEHIND') {
     return false
   }
+
   return item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN'
 }
 
@@ -36,9 +37,11 @@ function canRequestWhenReady(item: MobilePRAutoMergeAvailabilityInput): boolean 
   if (item.state !== 'open' || isConflicting(item) || isUnstable(item)) {
     return false
   }
+
   if (item.mergeQueueRequired === true) {
     return true
   }
+
   return (
     item.autoMergeAllowed !== false && (hasReviewRequirement(item) || !canMergeImmediately(item))
   )

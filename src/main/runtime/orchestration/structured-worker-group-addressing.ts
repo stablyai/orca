@@ -54,11 +54,14 @@ export function listAddressableStructuredWorkers(): OrchestrationAddressableAgen
  */
 export function structuredWorkerAgentStatus(sessionId: string): string | null {
   const facts = readStructuredSessionGateFacts(sessionId)
+
   if (!facts) {
     return null
   }
+
   if (facts.awaitingHuman) {
     return 'attention'
   }
+
   return facts.turnRunning ? 'working' : 'idle'
 }

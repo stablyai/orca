@@ -39,26 +39,34 @@ export async function executeWorktreeRemoval(
   removalHostId: ExecutionHostId
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
+
   if (isFolderRepo(repo)) {
     return removeFolderWorkspace(context, args, repo, repoId, removalHostId)
   }
+
   const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
+
   const localWorktreeGitOptions = repo.connectionId
     ? {}
     : getLocalProjectWorktreeGitOptions(store, repo)
+
   const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
+
   const registeredWorktrees = repo.connectionId
     ? await provider!.listWorktrees(repo.path)
     : hasLocalWorktreeGitOptions
       ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
       : await listGitWorktreesStrict(repo.path)
+
   const removedMeta = resolveWorktreeRemovalMetadata(store, repoId, args.worktreeId, removalHostId)
   const removedPushTarget = removedMeta?.pushTarget
+
   const registeredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     worktreePath,
     registeredWorktrees
   )
+
   if (!registeredWorktree) {
     return removeUnregisteredWorktree(
       context,
@@ -74,6 +82,7 @@ export async function executeWorktreeRemoval(
       provider
     )
   }
+
   const canonicalWorktreePath = registeredWorktree.path
 
   const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
@@ -100,6 +109,7 @@ export async function executeWorktreeRemoval(
       registeredWorktree,
       deleteBranch
     })
+
     await cleanupUnusedWorktreePushTargetRemote(
       repo.path,
       args.worktreeId,
@@ -123,6 +133,7 @@ export async function executeWorktreeRemoval(
     )
     invalidateAuthorizedRootsCache()
     notifyWorktreesChanged(mainWindow, repoId)
+
     return removalResult ?? {}
   }
 
@@ -146,6 +157,7 @@ export async function executeWorktreeRemoval(
               undefined,
               localWorktreeGitOptions
             )
+
         if (!result.success) {
           console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
         }
@@ -154,6 +166,7 @@ export async function executeWorktreeRemoval(
   }
 
   const remoteConnectionId = repo.connectionId ?? undefined
+
   if (remoteConnectionId) {
     return removeRegisteredRemoteWorktree(
       context,
@@ -168,6 +181,7 @@ export async function executeWorktreeRemoval(
       deleteBranch
     )
   }
+
   return removeRegisteredLocalWorktree(
     context,
     args,

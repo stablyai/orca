@@ -6,10 +6,12 @@ class FakeEventTarget {
 
   addEventListener(type: string, listener: EventListener): void {
     let listeners = this.listeners.get(type)
+
     if (!listeners) {
       listeners = new Set()
       this.listeners.set(type, listeners)
     }
+
     listeners.add(listener)
   }
 

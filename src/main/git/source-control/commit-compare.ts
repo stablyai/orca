@@ -12,6 +12,7 @@ export async function getCommitCompare(
   options: GitRuntimeOptions = {}
 ): Promise<GitCommitCompareResult> {
   let commitOid = ''
+
   try {
     commitOid = await resolveRefOid(worktreePath, `${commitId}^{commit}`, options)
   } catch {
@@ -43,12 +44,14 @@ export async function getCommitCompare(
       ['rev-list', '--parents', '-n', '1', commitOid],
       gitOptionsForWorktree(worktreePath, options)
     )
+
     const firstParent = parseGitRevListFirstParentOid(stdout)
     summary.parentOid = firstParent
     summary.baseRef = firstParent ? firstParent.slice(0, 7) : 'empty tree'
 
     const entries = await loadCommitChanges(worktreePath, summary.parentOid, commitOid, options)
     summary.changedFiles = entries.length
+
     return { summary, entries }
   } catch (error) {
     return {

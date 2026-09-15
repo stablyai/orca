@@ -7,6 +7,7 @@ import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
 
 type Runtime = ReturnType<typeof createTerminalKeyboardRuntime>
+
 type ReleaseContext = KeyboardHandlersDeps &
   Pick<
     Runtime,
@@ -51,13 +52,18 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
     if (!isTerminalImeEnterKeyUp(e)) {
       reconcileHeldImeEnterModifiers(e)
     }
+
     optionKeyLocations.keyUp(e)
+
     if (optionKittyReleases.settle(e)) {
       e.preventDefault()
       e.stopImmediatePropagation()
+
       return
     }
+
     const releasedModifier = e.key === 'Shift' ? 'shift' : e.key === 'Control' ? 'ctrl' : null
+
     if (releasedModifier) {
       heldImeEnterModifiers.delete(releasedModifier)
       terminalImeEnterModifierKeydowns.delete(releasedModifier)
@@ -67,19 +73,25 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
         timeStamp: e.timeStamp
       })
     }
+
     if (e.key !== 'Enter') {
       return
     }
+
     const observed = observedEnterKeydownTimeStamps.get(e.code)
     const wasObserved = observed !== undefined
+
     if (wasObserved && !observed.includes(e.timeStamp)) {
       observed.shift()
+
       if (observed.length === 0) {
         observedEnterKeydownTimeStamps.delete(e.code)
       }
     }
+
     if (isWindows && isTerminalImeEnterKeyUp(e)) {
       const originatingChord = modifiedEnterChordOwner.releaseForEnterKeyUp()
+
       if (originatingChord) {
         e.preventDefault()
         e.stopImmediatePropagation()
@@ -90,11 +102,14 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
             ? originatingChord
             : undefined
         )
+
         return
       }
+
       const modifiedKind = getImeEnterModifier(e)
       const manager = managerRef.current
       const scope = keyboardScopeRef.current
+
       if (
         modifiedKind &&
         !wasObserved &&
@@ -103,6 +118,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
         (!scope || keyboardEventBelongsToScope(e, scope))
       ) {
         const pane = synchronizeTerminalKeyboardPane(manager, e.target)
+
         if (pane && hasPendingTerminalImeComposition(pane.terminal.element)) {
           const action = resolveShortcutEvent({
             key: 'Enter',
@@ -113,6 +129,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
             shiftKey: modifiedKind === 'shift',
             repeat: false
           })
+
           if (action?.type === 'sendInput') {
             e.preventDefault()
             e.stopImmediatePropagation()
@@ -121,15 +138,19 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
               pane.terminal.element,
               createCapturedInputSender(pane, action.data)
             )
+
             return
           }
         }
       }
     }
+
     const modifiedKind = getImeEnterModifier(e)
+
     if (modifiedKind) {
       modifiedEnterChordOwner.release({ kind: modifiedKind, code: e.code, timeStamp: e.timeStamp })
     }
+
     deferredNewlineSender.releaseRedispatchedEnter(e)
   }
 
@@ -138,6 +159,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
       if (e.type === 'keypress') {
         e.preventDefault()
       }
+
       e.stopImmediatePropagation()
     }
   }
@@ -146,6 +168,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
     if (!(e instanceof InputEvent) || !nativeOnlyShortcutTracker.shouldSuppressBeforeInput(e)) {
       return
     }
+
     e.preventDefault()
     e.stopImmediatePropagation()
   }

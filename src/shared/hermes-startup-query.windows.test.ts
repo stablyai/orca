@@ -11,6 +11,7 @@ windowsIt('preserves the startup query and spaced custom args in native Windows 
   const tempDir = mkdtempSync(join(tmpdir(), 'orca-hermes-startup-query-'))
   const capturePath = join(tempDir, 'argv.json')
   const hermesPath = join(tempDir, 'hermes.exe')
+
   const prompt = [
     'Return the marker with quoted="alpha beta" and unicode=雪🚀.',
     'Keep %PATH% literal.',
@@ -25,6 +26,7 @@ windowsIt('preserves the startup query and spaced custom args in native Windows 
       join(tempDir, 'chat'),
       `require('node:fs').writeFileSync(${JSON.stringify(capturePath)}, JSON.stringify(process.argv.slice(2)))`
     )
+
     const plan = planHermesStartupQuery({
       baseCommand: `"${hermesPath}"`,
       agentArgs: '--yolo --source "Orca automation validation"',
@@ -32,6 +34,7 @@ windowsIt('preserves the startup query and spaced custom args in native Windows 
       platform: 'win32',
       shell: 'powershell'
     })
+
     const encodedCommand = plan?.command.match(/-EncodedCommand\s+(\S+)/)?.[1]
 
     expect(encodedCommand).toBeDefined()

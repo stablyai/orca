@@ -10,14 +10,18 @@ export function captureRuntimeTerminalDropOwner(worktreeId: string):
   | null {
   const state = useAppStore.getState()
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   if (!runtimeEnvironmentId) {
     return null
   }
+
   const expectation = captureWorktreeSshMutationExpectation(state, worktreeId)
+
   const assertCurrent = (): void => {
     const currentState = useAppStore.getState()
     const currentRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(currentState, worktreeId)
     const currentExpectation = captureWorktreeSshMutationExpectation(currentState, worktreeId)
+
     if (
       currentRuntimeEnvironmentId !== runtimeEnvironmentId ||
       currentExpectation.expectedExecutionHostId !== expectation.expectedExecutionHostId ||
@@ -28,5 +32,6 @@ export function captureRuntimeTerminalDropOwner(worktreeId: string):
       throw new Error('Terminal upload host changed; retry the drop.')
     }
   }
+
   return { runtimeEnvironmentId, assertCurrent, ...expectation }
 }

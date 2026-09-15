@@ -23,6 +23,7 @@ function header(type = '0'): Buffer {
   value.write('ustar\0', 257, 'ascii')
   value.write('00', 263, 'ascii')
   refreshChecksum(value)
+
   return value
 }
 
@@ -43,16 +44,22 @@ describe('skill package tar envelope', () => {
 
   it('fuzzes fixed-size headers without unbounded parsing or non-Error failures', () => {
     let state = 0x51a7e
+
     const randomByte = (): number => {
       state = (state * 1664525 + 1013904223) >>> 0
+
       return state & 0xff
     }
+
     for (let sample = 0; sample < 5_000; sample += 1) {
       const value = Buffer.allocUnsafe(SKILL_TAR_BLOCK_BYTES)
+
       for (let index = 0; index < value.length; index += 1) {
         value[index] = randomByte()
       }
+
       refreshChecksum(value)
+
       try {
         const parsed = parseSkillTarHeader(value)
         expect(parsed === null || Buffer.byteLength(parsed.path, 'utf8') <= 256).toBe(true)

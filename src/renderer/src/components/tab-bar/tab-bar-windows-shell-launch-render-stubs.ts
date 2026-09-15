@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 // Headless React: hooks are stubbed so TabBar can be invoked as a plain function.
 export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     memo: <T>(component: T) => component,
@@ -13,6 +14,7 @@ export async function stubHeadlessReact(): Promise<Record<string, unknown>> {
     useRef: <T>(current: T) => ({ current }),
     useState: <T>(initial: T | (() => T)) => {
       const value = typeof initial === 'function' ? (initial as () => T)() : initial
+
       return [value, vi.fn()] as const
     },
     // Why: module-level external stores (client-hosted browser rows) read through this; without a

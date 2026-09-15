@@ -28,7 +28,9 @@ export function getInitialAccountRateLimitTarget(
     if (platform !== 'win32') {
       return { runtime: 'host' }
     }
+
     const configuredTarget = resolveLocalAccountRuntimeTarget(settings, platform)
+
     return {
       runtime: 'wsl',
       wslDistro:
@@ -43,11 +45,13 @@ export function getInitialAccountRateLimitTarget(
 
   // Pre-setting profiles omit the policy and fall back to project/account selection.
   const resolvedTarget = toRateLimitTarget(resolveLocalAccountRuntimeTarget(settings, platform))
+
   if (settings.localAccountRuntime === 'auto' || resolvedTarget.runtime === 'wsl') {
     return resolvedTarget
   }
 
   const selection = provider.normalizeRuntimeSelection(settings)
+
   return selection.host
     ? { runtime: 'host' }
     : (getSingleSelectedWslTarget(selection, provider.getWslSelectionKey) ?? { runtime: 'host' })
@@ -60,11 +64,13 @@ function getSingleSelectedWslTarget(
   const selectedWslEntries = Object.entries(selection.wsl).filter(([, accountId]) =>
     Boolean(accountId)
   )
+
   if (selectedWslEntries.length !== 1) {
     return null
   }
 
   const [distroKey] = selectedWslEntries[0]
+
   return {
     runtime: 'wsl',
     wslDistro: distroKey === getWslSelectionKey(null) ? null : distroKey

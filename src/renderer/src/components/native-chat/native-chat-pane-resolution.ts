@@ -47,9 +47,11 @@ export function resolveNativeChatSession(
   input: NativeChatPaneResolutionInput
 ): NativeChatPaneResolution | null {
   const agent = input.agentStatusEntry?.agentType ?? input.launchAgent ?? input.resolvedAgent
+
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
+
   return {
     agent,
     sessionId: input.agentStatusEntry?.providerSession?.id ?? null,

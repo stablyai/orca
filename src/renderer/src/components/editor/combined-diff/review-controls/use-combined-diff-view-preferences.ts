@@ -34,9 +34,11 @@ export function useCombinedDiffViewPreferences({
   updateSettings: (patch: { diffShowWhitespace?: boolean; diffWordWrap?: boolean }) => unknown
 }): CombinedDiffViewPreferences {
   const { loadSchedulerRef, loadedIndicesRef, sectionsRef } = registry
+
   const [sideBySide, setSideBySide] = useState(
     () => combinedDiffViewPreferences.sideBySide ?? diffDefaultView === 'side-by-side'
   )
+
   const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(
     () =>
       // Why: the tree is opt-in; only an explicit saved setting should open it while settings are still loading.
@@ -68,11 +70,13 @@ export function useCombinedDiffViewPreferences({
     (collapsed: boolean) => {
       combinedDiffViewPreferences.collapsed = collapsed
       setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
+
       if (!collapsed) {
         const initialIndices = getInitialCombinedDiffSectionLoadIndices({
           sectionCount: sectionsRef.current.length,
           loadedIndices: loadedIndicesRef.current
         })
+
         for (const index of initialIndices) {
           loadSchedulerRef.current.request(index)
         }

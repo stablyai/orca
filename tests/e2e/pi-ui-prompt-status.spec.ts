@@ -40,6 +40,7 @@ test('Pi modal hooks show the existing waiting-for-input indicator', async ({
         payload
       })
     })
+
     expect(response.status).toBe(204)
   }
 

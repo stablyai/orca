@@ -5,28 +5,38 @@ import type * as RepoModule from '../git/repo'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
+
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
 )
+
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
+
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
+
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
+
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+
 vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
@@ -94,6 +104,7 @@ describe('repos:addRemote', () => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
       setImmediate(() => proc.emit('close', 0, null))
+
       return proc
     })
     mockWindow.webContents.send.mockReset()
@@ -191,6 +202,7 @@ describe('repos:addRemote', () => {
         options?: { onProgress?: (progress: { phase: string; percent: number }) => void }
       ) => {
         options?.onProgress?.({ phase: 'Receiving objects', percent: 42 })
+
         return { stdout: '', stderr: '' }
       }
     )
@@ -217,6 +229,7 @@ describe('repos:addRemote', () => {
       addedAt: 1000,
       kind: 'git'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
 
     const result = await handlers.get('repos:cloneRemote')!(null, {
@@ -240,6 +253,7 @@ describe('repos:addRemote', () => {
       addedAt: 1000,
       kind: 'folder'
     }
+
     const updated = { ...existing, kind: 'git' }
     mockStore.getRepos.mockReturnValue([existing])
     mockStore.updateRepo.mockReturnValue(updated)
@@ -296,6 +310,7 @@ describe('repos:addRemote', () => {
       url: 'https://github.com/stablyai/orca.git',
       destination: '/home/user'
     })
+
     await waitForAssertion(() => expect(mockGitProvider.clone).toHaveBeenCalledTimes(1))
 
     await expect(
@@ -358,6 +373,7 @@ describe('repos:addRemote', () => {
       url: 'https://github.com/stablyai/orca.git',
       destination: '/home/user'
     })
+
     await waitForAssertion(() => expect(mockGitProvider.clone).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)
@@ -527,6 +543,7 @@ describe('repos:addRemote', () => {
       addedAt: 1000,
       kind: 'git'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
 
     const result = await handlers.get('repos:addRemote')!(null, {
@@ -543,6 +560,7 @@ describe('repos:addRemote', () => {
       connectionId: 'unknown-conn',
       remotePath: '/home/user/project'
     })
+
     expect(result).toEqual({ error: 'SSH connection "unknown-conn" not found or not connected' })
   })
 
@@ -553,6 +571,7 @@ describe('repos:addRemote', () => {
       connectionId: 'conn-1',
       remotePath: '/home/user/documents'
     })
+
     expect(result).toEqual({ error: 'Not a valid git repository: /home/user/documents' })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
@@ -692,6 +711,7 @@ describe('repos:addRemote', () => {
       addedAt: 1000,
       kind: 'git'
     }
+
     mockStore.getRepos.mockReturnValue([existing])
     mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
       isRepo: true,

@@ -42,6 +42,7 @@ export default function CloseTerminalDialog({
   // during render rather than briefly painting it while the dialog opens.
   if (open !== previousOpen) {
     setPreviousOpen(open)
+
     if (open) {
       setDontAskAgain(false)
     }
@@ -52,6 +53,7 @@ export default function CloseTerminalDialog({
   // clearing the tick mid-exit-animation would be visible for no reason.
   if (subjectKey !== previousSubjectKey) {
     setPreviousSubjectKey(subjectKey)
+
     if (subjectKey !== undefined) {
       setDontAskAgain(false)
     }

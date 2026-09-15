@@ -13,9 +13,11 @@ function entry(name: string, isDirectory = false, isSymlink = false): DirEntry {
 function stubReadDir(entriesByPath: Record<string, DirEntry[]>): ReturnType<typeof vi.fn> {
   const readDir = vi.fn(async ({ dirPath }: { dirPath: string }) => {
     const entries = entriesByPath[dirPath]
+
     if (!entries) {
       throw new Error(`ENOENT: no such file or directory, scandir '${dirPath}'`)
     }
+
     return entries
   })
 

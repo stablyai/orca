@@ -24,9 +24,13 @@ vi.mock('electron', () => ({
 const testStateDirRef = vi.hoisted(() => ({ dir: '' }))
 
 const REPO_ID = 'repo-1'
+
 const WT = `${REPO_ID}::/tmp/wt-cli`
+
 const TAB = 'cli-tab-1'
+
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PTY = `${WT}@@a1b2c3d4`
 
 function rendererWriteWithout(
@@ -42,7 +46,9 @@ function rendererWriteWithout(
       [WT]: (session.tabsByWorktree?.[WT] ?? []).filter((tab) => tab.id !== tabId)
     }
   }
+
   delete (next as { terminalTopologyRevisionByRepoId?: unknown }).terminalTopologyRevisionByRepoId
+
   return next
 }
 
@@ -82,10 +88,12 @@ describe('host-created terminal close durability', () => {
     const store = await makeStore()
     store.persistPtyBinding({ worktreeId: WT, tabId: TAB, leafId: LEAF, ptyId: PTY })
     store.setWorkspaceSession(rendererWriteWithout(store.getWorkspaceSession(), TAB))
+
     // Kill-failure shape: no retirement, no exit, just more renderer writes.
     for (let i = 0; i < 3; i += 1) {
       store.setWorkspaceSession({ ...store.getWorkspaceSession() })
     }
+
     expect(store.getWorkspaceSession().tabsByWorktree?.[WT] ?? []).toEqual([])
   })
 

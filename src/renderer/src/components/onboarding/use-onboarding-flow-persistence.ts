@@ -76,6 +76,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
   // idempotent so the first close wins — no double onboarding.update write and
   // no double completed/dismissed telemetry.
   const closedRef = useRef(false)
+
   return useCallback(
     async (
       outcome: 'completed' | 'dismissed',
@@ -86,8 +87,10 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
       if (closedRef.current) {
         return false
       }
+
       closedRef.current = true
       let nextState: OnboardingState
+
       try {
         nextState = await window.api.onboarding.update({
           flowVersion: ONBOARDING_FLOW_VERSION,
@@ -101,9 +104,12 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
         // the latch so the user can retry the close action.
         closedRef.current = false
         setError(err instanceof Error ? err.message : String(err))
+
         return false
       }
+
       onOnboardingChange(nextState)
+
       if (outcome === 'completed' && completedPath) {
         const total = Math.max(0, Date.now() - startTimeRef.current)
         // Why: no `is_git_repo` — project selection now happens in the Add
@@ -114,6 +120,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
           total_duration_ms: total
         })
       }
+
       if (outcome === 'completed') {
         // Why: closeWith updates parent state synchronously from this hook's
         // perspective, but the modal unmounts on the next React commit.
@@ -123,6 +130,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
       } else if (outcome === 'dismissed') {
         trackOnboardingDismissed(lastStepReached, dismissedExtras)
       }
+
       return true
     },
     [onOnboardingChange, startTimeRef, setError]
@@ -160,6 +168,7 @@ export function usePersistCurrentStep({
     if (!settings) {
       return { ok: false }
     }
+
     try {
       if (currentStepId === 'agent') {
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
@@ -178,44 +187,56 @@ export function usePersistCurrentStep({
             checklist: { ...onboardingChecklist, choseAgent }
           })
         )
+
         if (choseAgent && !wasAlreadyChosen) {
           track('activation_checklist_item_completed', {
             item: 'choseAgent',
             time_since_completed_ms: 0
           })
         }
+
         return { ok: true }
       }
+
       if (currentStepId === 'theme') {
         await updateSettings({ theme })
         onOnboardingChange(await persistStep(2))
+
         return { ok: true }
       }
+
       if (currentStepId === 'notifications') {
         await updateSettings({
           notifications: buildCompletedOnboardingNotificationSettings(settings.notifications)
         })
         useAppStore.getState().recordFeatureInteraction('notifications')
         onOnboardingChange(await persistStep(ONBOARDING_FINAL_STEP))
+
         return { ok: true }
       }
+
       if (currentStepId === 'windows_terminal') {
         // Why: the Windows terminal controls persist on selection. Continuing
         // only marks the preference page complete for resume/telemetry state.
         onOnboardingChange(await persistStep(4))
+
         return { ok: true }
       }
+
       if (currentStepId === 'integrations') {
         // Why: GitHub and Linear connections persist through their own
         // store slices when the user actually wires them up. The step itself
         // is a no-op for settings/onboarding state beyond marking it
         // completed.
         onOnboardingChange(await persistStep(3))
+
         return { ok: true }
       }
+
       return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+
       return { ok: false }
     }
   }, [

@@ -14,6 +14,7 @@ export async function submitBrowserHostCommandResult(
   timeoutMs: number
 ): Promise<void> {
   const result = BrowserClientHostCommandResult.parse(candidate)
+
   const response = await sendRequest(
     'browser.clientHost.commandResult',
     {
@@ -33,9 +34,11 @@ export async function submitBrowserHostCommandResult(
     },
     timeoutMs
   )
+
   if (!response.ok) {
     throw new RemoteRuntimeClientError(response.error.code, response.error.message)
   }
+
   if (
     response._meta.runtimeId !== command.authorityRuntimeId ||
     !BrowserClientHostCommandResultAck.safeParse(response.result).success

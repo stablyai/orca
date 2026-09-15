@@ -16,6 +16,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -25,6 +26,7 @@ function createMockSubprocess(): SubprocessHandle & {
 } {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 99999,
     getForegroundProcess: vi.fn(() => null),
@@ -65,16 +67,20 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
     emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
+
     const spawnFn = vi.fn(() => {
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     host = new TerminalHost({ spawnSubprocess: spawnFn })
   })
 
   afterEach(async () => {
     await host.dispose()
     emulatorDispose.mockRestore()
+
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
     }
@@ -106,6 +112,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
 
   it('does not retain dead-session emulators across many create/exit cycles', async () => {
     const CYCLES = 5
+
     for (let i = 0; i < CYCLES; i++) {
       await host.createOrAttach({
         sessionId: `session-${i}`,
@@ -150,8 +157,10 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
 
   it('retains a graceful-timeout session until the forced child physically exits', async () => {
     vi.useFakeTimers()
+
     try {
       let stubbornSubprocess: ReturnType<typeof createMockSubprocess> | undefined
+
       const stubbornHost = new TerminalHost({
         spawnSubprocess: () => {
           const sub = createMockSubprocess()
@@ -160,9 +169,11 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
           sub.kill = vi.fn()
           sub.forceKill = vi.fn()
           stubbornSubprocess = sub
+
           return sub
         }
       })
+
       await stubbornHost.createOrAttach({
         sessionId: 'stubborn',
         cols: 80,

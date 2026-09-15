@@ -44,16 +44,19 @@ function setupsByOwnedExecutionHost(
   selectedSetupId: string
 ): ProjectHostSetup[] {
   const byHost = new Map<string, ProjectHostSetup>()
+
   for (const setup of setups) {
     const key = JSON.stringify([
       setup.hostId,
       setup.executionHostId ?? setup.hostId,
       setup.runtimeOwnerEnvironmentId ?? null
     ])
+
     if (!byHost.has(key) || setup.id === selectedSetupId) {
       byHost.set(key, setup)
     }
   }
+
   return [...byHost.values()]
 }
 
@@ -67,6 +70,7 @@ export function RepositoryHostSetupsSection({
   const setSettingsProjectHostSelection = useAppStore(
     (state) => state.setSettingsProjectHostSelection
   )
+
   const setupProjectExistingFolder = useAppStore((state) => state.setupProjectExistingFolder)
   const setupProjectClone = useAppStore((state) => state.setupProjectClone)
   const createProjectHostSetup = useAppStore((state) => state.createProjectHostSetup)
@@ -81,6 +85,7 @@ export function RepositoryHostSetupsSection({
   const removedSshTargetLabels = useAppStore((state) => state.removedSshTargetLabels)
   const sshTargetsHydrated = useAppStore((state) => state.sshTargetsHydrated)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+
   const hostOptions = useMemo(
     () =>
       buildExecutionHostRegistry({
@@ -103,12 +108,15 @@ export function RepositoryHostSetupsSection({
       hostLabelOverrides
     ]
   )
+
   const projectHostSetupProjection = useAppStore((state) =>
     getProjectHostSetupProjectionFromState(state)
   )
+
   const repoProjectHostSetup = projectHostSetupProjection.setups.find(
     (setup) => setup.repoId === repo.id
   )
+
   const selectedProjectHostSetup =
     projectHostSetupProjection.setups.find(
       (setup) =>
@@ -116,6 +124,7 @@ export function RepositoryHostSetupsSection({
         setup.repoId === repo.id &&
         setup.projectId === repoProjectHostSetup?.projectId
     ) ?? repoProjectHostSetup
+
   const projectHostSetups = selectedProjectHostSetup
     ? setupsByOwnedExecutionHost(
         projectHostSetupProjection.setups.filter(
@@ -124,18 +133,23 @@ export function RepositoryHostSetupsSection({
         selectedProjectHostSetup.id
       )
     : []
+
   const openableProjectHostSetups = projectHostSetups.filter((setup) => setup.repoId.trim())
+
   const switchableProjectHostSetups = setupsByOwnedExecutionHost(
     openableProjectHostSetups,
     selectedProjectHostSetup?.id ?? ''
   )
+
   const setupHostOptions = buildSetupHostOptions({
     projectHostSetups,
     hostOptions
   })
+
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
   const projectId = selectedProjectHostSetup?.projectId
+
   // Why: the single project pane switches host in place — set the ephemeral
   // per-project selection instead of navigating to a separate repo section.
   const selectHost = (hostId: ExecutionHostId) => {
@@ -143,11 +157,13 @@ export function RepositoryHostSetupsSection({
       setSettingsProjectHostSelection(projectId, hostId)
     }
   }
+
   const selectSetup = (setup: ProjectHostSetup) => {
     if (projectId) {
       setSettingsProjectHostSelection(projectId, setup.hostId, setup.id)
     }
   }
+
   if (
     (projectHostSetups.length <= 1 && setupHostOptions.length === 0) ||
     (!forceVisible && !matchesSettingsSearch(searchQuery, searchEntries))
@@ -182,9 +198,11 @@ export function RepositoryHostSetupsSection({
                   if (setupId === selectedProjectHostSetup?.id) {
                     return
                   }
+
                   const setup = switchableProjectHostSetups.find(
                     (candidate) => candidate.id === setupId
                   )
+
                   if (setup) {
                     selectSetup(setup)
                   }
@@ -218,28 +236,36 @@ export function RepositoryHostSetupsSection({
         {projectHostSetups.map((setup) => {
           const executionHost = parseExecutionHostId(setup.executionHostId ?? setup.hostId)
           const transportHost = parseExecutionHostId(setup.hostId)
+
           const runtimeOwnerEnvironmentId =
             setup.runtimeOwnerEnvironmentId?.trim() ||
             (transportHost?.kind === 'runtime' ? transportHost.environmentId : null)
+
           // Why: share one host-health derivation with the status bar so a degraded
           // owner can never read "Ready" here and "Connected"/"Disconnected" there.
           const runtimeOwnerStatusEntry = runtimeOwnerEnvironmentId
             ? runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
             : undefined
+
           const runtimeOwnerState = runtimeOwnerEnvironmentId
             ? runtimeHostConnectionStateForEntry(runtimeOwnerStatusEntry)
             : null
+
           const runtimeOwnerReachable =
             runtimeOwnerState === null || isConnectedRuntimeHostState(runtimeOwnerState)
+
           const runtimeOwnerWorkspaceWindowClosed = runtimeOwnerState === 'workspace-window-closed'
           const runtimeOwnerRuntimeUnavailable = runtimeOwnerState === 'runtime-unavailable'
+
           const runtimeOwnerHostId = runtimeOwnerEnvironmentId
             ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
             : null
+
           const runtimeOwnerHostLabel = runtimeOwnerHostId
             ? (hostOptionById.get(runtimeOwnerHostId)?.label ??
               getExecutionHostLabel(runtimeOwnerHostId))
             : ''
+
           const nestedSshStatus =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? selectRuntimeAwareSshStatus(
@@ -255,12 +281,14 @@ export function RepositoryHostSetupsSection({
                   executionHost.targetId
                 )
               : undefined
+
           const setupReady =
             setup.setupState === 'ready' &&
             runtimeOwnerReachable &&
             !runtimeOwnerWorkspaceWindowClosed &&
             !runtimeOwnerRuntimeUnavailable &&
             (nestedSshStatus === undefined || nestedSshStatus === 'connected')
+
           const setupStateLabel = !runtimeOwnerReachable
             ? translate(
                 'auto.components.settings.RepositoryPane.hostStateDisconnected',
@@ -281,6 +309,7 @@ export function RepositoryHostSetupsSection({
                         'Disconnected'
                       )
                     : getSetupStateLabel(setup.setupState)
+
           const setupHostLabel =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? translate(
@@ -304,9 +333,11 @@ export function RepositoryHostSetupsSection({
                   }
                 )
               : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
+
           const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
           const canOpenSetup = setup.repoId.trim().length > 0
           const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
+
           return (
             <div
               key={setup.id}

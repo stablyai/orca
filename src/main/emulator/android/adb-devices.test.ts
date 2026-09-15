@@ -53,6 +53,7 @@ describe('parseAdbDevices', () => {
     const device = parseAdbDevices(
       'List of devices attached\n????????????           no permissions\n'
     )[0]
+
     expect(device).toEqual({
       serial: '????????????',
       state: 'no permissions',

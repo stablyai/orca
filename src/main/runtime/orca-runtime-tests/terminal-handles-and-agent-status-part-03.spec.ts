@@ -21,6 +21,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude agents',
       title: 'claude agents'
@@ -41,10 +42,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude',
       title: 'Claude working'
     })
+
     runtime.onPtyData('pty-bg', '\x1b]0;Claude working\x07', 100)
     runtime.onPtyData('pty-bg', '\x1b]0;zsh\x07', 101)
 
@@ -61,10 +64,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude',
       title: 'zsh'
     })
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<
@@ -75,10 +80,13 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('pty-bg')
+
     expect(pty).toBeDefined()
+
     if (!pty) {
       throw new Error('expected runtime PTY record')
     }
+
     pty.lastAgentStatus = 'working'
     runtime.setPtyController(null)
 
@@ -95,6 +103,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude agents',
       title: 'claude agents'
@@ -119,6 +128,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
       title: 'worker'
@@ -143,6 +153,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'agy',
       title: 'worker'
@@ -163,6 +174,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'agy',
       title: 'worker'
@@ -218,6 +230,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'agy',
       title: 'worker'
@@ -246,6 +259,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'agy',
       title: 'worker'
@@ -276,6 +290,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'agy',
       title: 'worker'
@@ -306,6 +321,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'agy',
       title: 'worker'
@@ -457,6 +473,7 @@ describe('OrcaRuntimeService', () => {
 
   it('selects a visible active pane when terminal visual layout prunes a stale leaf', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const parentLayout: TerminalLayoutSnapshot = {
       root: {
         type: 'split',
@@ -468,6 +485,7 @@ describe('OrcaRuntimeService', () => {
       expandedLeafId: null,
       ptyIdsByLeafId: { 'pane:2': 'pty-2' }
     }
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -554,6 +572,7 @@ describe('OrcaRuntimeService', () => {
 
   it('omits stale browser session tabs that no longer have live webContents', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const tabList = vi.fn(() => ({
       tabs: [
         {
@@ -565,6 +584,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }))
+
     runtime.setAgentBrowserBridge({ tabList } as never)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {

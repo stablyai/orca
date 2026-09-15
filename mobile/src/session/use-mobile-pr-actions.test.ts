@@ -10,6 +10,7 @@ import {
 } from './github-pr-mutations'
 
 const WORKTREE_ID = 'repo-42::/path/to/wt'
+
 const ENTERPRISE_PR_REPO = { owner: 'fork', repo: 'proj', host: 'github.acme.test' }
 
 function okStatus(): RpcResponse {
@@ -22,20 +23,24 @@ function failStatus(error: string): RpcResponse {
 
 function mockClient(response: RpcResponse) {
   const sendRequest = vi.fn(async (_method: string, _params?: unknown) => response)
+
   return { client: { sendRequest }, sendRequest }
 }
 
 // A controllable deferred so a test can resolve responses out of order.
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((r) => {
     resolve = r
   })
+
   return { promise, resolve }
 }
 
 function fakeMutations(overrides: Partial<PrActionMutations> = {}): PrActionMutations {
   const ok = async () => ({ ok: true as const })
+
   return {
     mergePR: vi.fn(ok),
     setPRAutoMerge: vi.fn(ok),
@@ -53,6 +58,7 @@ function makeEngine(
   prRepo: typeof ENTERPRISE_PR_REPO | null = null
 ) {
   const onChange = vi.fn()
+
   const engine = new PrActionsEngine({
     mutations,
     prNumber: 7,
@@ -61,6 +67,7 @@ function makeEngine(
     refetch,
     onChange
   })
+
   return { engine, onChange, refetch }
 }
 
@@ -171,6 +178,7 @@ describe('PrActionsEngine — merge', () => {
     const mutations = fakeMutations({
       mergePR: vi.fn(async () => ({ ok: false as const, error: 'network timeout' }))
     })
+
     const { engine, refetch } = makeEngine(mutations)
     await engine.merge('squash')
     expect(engine.error).toBe('network timeout')
@@ -184,6 +192,7 @@ describe('PrActionsEngine — auto-merge optimistic revert', () => {
     const mutations = fakeMutations({
       setPRAutoMerge: vi.fn(async () => ({ ok: false as const, error: 'connection lost' }))
     })
+
     const { engine } = makeEngine(mutations, undefined, ENTERPRISE_PR_REPO)
     // authoritative = false; user enables.
     await engine.setAutoMerge(true, 'squash')
@@ -243,6 +252,7 @@ describe('PrActionsEngine — reviewers', () => {
     const mutations = fakeMutations({
       removeReviewers: vi.fn(async () => ({ ok: false as const, error: 'temporary error' }))
     })
+
     const { engine } = makeEngine(mutations)
     // authoritative requested = true; user removes.
     await engine.removeReviewer('bob')
@@ -273,6 +283,7 @@ describe('PrActionsEngine — permanent failure (403)', () => {
     const mutations = fakeMutations({
       setPRAutoMerge: vi.fn(async () => ({ ok: false as const, error: 'HTTP 403: forbidden' }))
     })
+
     const { engine, refetch } = makeEngine(mutations)
     await engine.setAutoMerge(true)
     expect(engine.blocked).toBe('HTTP 403: forbidden')
@@ -289,12 +300,15 @@ describe('PrActionsEngine — last-intent-wins under out-of-order responses', ()
     const dA = deferred<{ ok: true } | { ok: false; error: string }>()
     const dB = deferred<{ ok: true } | { ok: false; error: string }>()
     let call = 0
+
     const mutations = fakeMutations({
       setPRAutoMerge: vi.fn(async () => {
         call += 1
+
         return call === 1 ? dA.promise : dB.promise
       })
     })
+
     const { engine } = makeEngine(mutations)
     // authoritative = false
     const pA = engine.setAutoMerge(true) // intent A: enable
@@ -316,9 +330,11 @@ describe('PrActionsEngine — last-intent-wins under out-of-order responses', ()
 describe('PrActionsEngine — busy targeting', () => {
   it('busy targets only the firing row and clears afterward', async () => {
     const d = deferred<{ ok: true }>()
+
     const mutations = fakeMutations({
       requestReviewers: vi.fn(async () => d.promise)
     })
+
     const { engine } = makeEngine(mutations)
     const p = engine.requestReviewer('alice')
     expect(engine.isBusy({ kind: 'reviewer', login: 'alice' })).toBe(true)

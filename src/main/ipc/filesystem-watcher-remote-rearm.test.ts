@@ -16,13 +16,18 @@ function emitProviderRegistered(connectionId: string): void {
 }
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('fs/promises', () => ({ stat: vi.fn() }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   onSshFilesystemProviderRegistered: (listener: (connectionId: string) => void) => {
     providerRegistrationListeners.add(listener)
+
     return () => providerRegistrationListeners.delete(listener)
   }
 }))
@@ -38,9 +43,11 @@ describe('remote filesystem watcher re-arm', () => {
     vi.useRealTimers()
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -60,9 +67,11 @@ describe('remote filesystem watcher re-arm', () => {
 
     // Hold the reinstall's fs.watch open so a second renderer joins it and claims the retry slot first.
     let failReinstall: (error: Error) => void = () => {}
+
     const heldWatch = new Promise<never>((_resolve, reject) => {
       failReinstall = reject
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: vi.fn().mockReturnValue(heldWatch) })
     senderOne.send.mockClear()
     emitProviderRegistered('conn-1')

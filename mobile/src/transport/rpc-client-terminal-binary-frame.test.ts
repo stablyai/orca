@@ -7,6 +7,7 @@ function encodeFrame(opcode: TerminalStreamOpcode, streamId: number, payload: un
     typeof payload === 'string'
       ? new TextEncoder().encode(payload)
       : new TextEncoder().encode(JSON.stringify(payload))
+
   return encodeTerminalStreamFrame({
     opcode,
     streamId,

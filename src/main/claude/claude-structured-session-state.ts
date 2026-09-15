@@ -209,9 +209,11 @@ export function createClaudeAcquisitionAttempt(
   prompts: ClaudePromptRegistry
 ): ClaudeAcquisitionAttempt {
   let finish = (): void => {}
+
   const finished = new Promise<void>((resolve) => {
     finish = resolve
   })
+
   return {
     connection: null,
     prompts,
@@ -242,9 +244,11 @@ export class ClaudeAcquisitionRegistry {
     if (this.closing) {
       throw new Error('claude structured session adapter is closing')
     }
+
     const previous = this.attempts.get(sessionId)
     const attempt = createClaudeAcquisitionAttempt(prompts)
     this.attempts.set(sessionId, attempt)
+
     return { previous, attempt }
   }
 
@@ -289,6 +293,7 @@ export async function cancelClaudeAcquisitionAttempt(
   if (!attempt) {
     return true
   }
+
   return cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true

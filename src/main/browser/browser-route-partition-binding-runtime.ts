@@ -3,8 +3,11 @@ import { join } from 'node:path'
 import { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
 
 const BINDING_FILE_NAME = 'browser-route-partition-bindings.json'
+
 const PARTITION_DATA_DIRECTORY_NAME = 'Partitions'
+
 let bindingFilePathOverride: string | null = null
+
 let activeOrcaProfileId: string | null = null
 
 export function configureBrowserRoutePartitionBindingsForOrcaProfile(options: {

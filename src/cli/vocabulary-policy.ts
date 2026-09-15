@@ -43,6 +43,7 @@ function terminalVerb(path: string[]): string {
 
 function hasCanonicalAlias(spec: CommandSpec, canonical: string): boolean {
   const expected = [...spec.path.slice(0, -1), canonical]
+
   return (spec.aliases ?? []).some(
     (alias) =>
       alias.length === expected.length && alias.every((part, index) => part === expected[index])
@@ -51,23 +52,29 @@ function hasCanonicalAlias(spec: CommandSpec, canonical: string): boolean {
 
 export function findVocabularyViolations(specs: CommandSpec[]): VocabularyViolation[] {
   const violations: VocabularyViolation[] = []
+
   for (const spec of specs) {
     const command = spec.path.join(' ')
     const verb = terminalVerb(spec.path)
+
     for (const family of FAMILIES) {
       if (!family.offPolicyVerbs.has(verb)) {
         continue
       }
+
       if (family.allowlist.has(command)) {
         continue
       }
+
       // Why: an alias on the canonical verb makes the command reachable the
       // canonical way, which satisfies the policy without a rename.
       if (hasCanonicalAlias(spec, family.canonical)) {
         continue
       }
+
       violations.push({ command, verb, family: family.name, canonical: family.canonical })
     }
   }
+
   return violations
 }

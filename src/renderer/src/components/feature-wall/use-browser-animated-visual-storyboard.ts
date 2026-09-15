@@ -13,6 +13,7 @@ import type {
 } from './browser-animated-visual-phase'
 
 const INITIAL_CURSOR_POSITION: BrowserVisualPoint = { x: 40, y: 18 }
+
 const INITIAL_ANNOTATE_ANCHOR: BrowserVisualAnchor = { left: 116, top: 70 }
 
 export function useBrowserVisualTargetRefs(): BrowserVisualTargetRefs {
@@ -45,15 +46,19 @@ function targetElement(
   if (target === 'newtab-button') {
     return refs.newtabButtonRef.current
   }
+
   if (target === 'newtab-row') {
     return refs.newtabRowRef.current
   }
+
   if (target === 'starter-card') {
     return refs.starterCardRef.current
   }
+
   if (target === 'send-button') {
     return refs.sendButtonRef.current
   }
+
   return refs.ctaRef.current
 }
 
@@ -77,24 +82,31 @@ export function useBrowserAnimatedVisualStoryboard(
     if (reducedMotion) {
       return
     }
+
     let cancelled = false
     const timeouts: number[] = []
+
     const wait = (ms: number): Promise<void> =>
       new Promise((resolve) => {
         const id = window.setTimeout(resolve, ms)
         timeouts.push(id)
       })
+
     const setCursorTo = (position: BrowserVisualPoint): void => {
       cursorPositionRef.current = position
       setCursorPosition(position)
     }
+
     const setCursorToTarget = (target: BrowserVisualTarget, offsetX = 0, offsetY = 0): void => {
       const page = refs.browserPageRef.current
       const element = targetElement(refs, target)
+
       if (!page || !element) {
         setCursorTo(cursorPositionRef.current)
+
         return
       }
+
       const pageRect = page.getBoundingClientRect()
       const elementRect = element.getBoundingClientRect()
       setCursorTo({
@@ -102,14 +114,17 @@ export function useBrowserAnimatedVisualStoryboard(
         y: elementRect.top - pageRect.top + elementRect.height / 2 - 8 + offsetY
       })
     }
+
     const pulseClickRing = (): void => {
       setClickRingKey((key) => key + 1)
       setClickRingVisible(true)
+
       const id = window.setTimeout(() => {
         if (!cancelled) {
           setClickRingVisible(false)
         }
       }, BROWSER_CLICK_RING_MS)
+
       timeouts.push(id)
     }
 
@@ -127,17 +142,21 @@ export function useBrowserAnimatedVisualStoryboard(
       captureMenuOffset: () => {
         const titlebar = refs.titlebarRef.current
         const button = refs.newtabButtonRef.current
+
         if (!titlebar || !button) {
           return
         }
+
         setMenuOffsetX(button.getBoundingClientRect().left - titlebar.getBoundingClientRect().left)
       },
       captureAnnotateAnchor: () => {
         const page = refs.browserPageRef.current
         const card = refs.starterCardRef.current
+
         if (!page || !card) {
           return
         }
+
         const pageRect = page.getBoundingClientRect()
         const cardRect = card.getBoundingClientRect()
         setAnnotateAnchor({

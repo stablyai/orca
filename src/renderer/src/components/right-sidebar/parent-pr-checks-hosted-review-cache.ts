@@ -16,16 +16,21 @@ export function canUseParentPrChecksHostedReviewCacheEntry(
   if (review.provider === 'github' && isGitHubPRSuppressed(worktree, review.number)) {
     return false
   }
+
   if (review.state === 'merged' && !mergedReviewMatchesHead(review, worktree)) {
     return false
   }
+
   const linkedReviewNumber = getLinkedReviewNumberForProvider(worktree, review.provider)
+
   if (hasLinkedReview(worktree)) {
     return linkedReviewNumber === review.number
   }
+
   if ((entry.linkedReviewHintKey ?? '') !== '') {
     return false
   }
+
   const display = getWorktreeCardPrDisplay(
     review,
     worktree.linkedPR,
@@ -38,6 +43,7 @@ export function canUseParentPrChecksHostedReviewCacheEntry(
       suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
     }
   )
+
   return display?.provider === review.provider && display.number === review.number
 }
 

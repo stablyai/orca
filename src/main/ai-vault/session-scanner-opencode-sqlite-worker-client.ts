@@ -18,8 +18,11 @@ import { errorMessage } from './session-scanner-values'
 // session-scanner-opencode-sqlite-worker-spawn.ts.
 
 export const LIST_TIMEOUT_MS = 30_000
+
 export const PARSE_TIMEOUT_MS = 15_000
+
 export const IDLE_TEARDOWN_MS = 30_000
+
 // After this many consecutive worker deaths, fail the remaining queued calls to
 // scan issues instead of respawning so a DB that reliably kills the worker can't
 // spin a crash loop. Reset on any successful response, after draining, and when a
@@ -91,12 +94,15 @@ export class OpenCodeSqliteWorkerClient {
     if (args.dbPaths.length === 0) {
       return []
     }
+
     try {
       const value = (await this.dispatch(
         { kind: 'list', dbPaths: args.dbPaths, limit: args.limit },
         LIST_TIMEOUT_MS
       )) as OpenCodeSqliteListValue
+
       args.issues.push(...value.issues)
+
       return value.candidates
     } catch (err) {
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
@@ -108,8 +114,10 @@ export class OpenCodeSqliteWorkerClient {
           message:
             'OpenCode history was skipped because its background scanner could not start; the app remains responsive.'
         })
+
         return []
       }
+
       // Timeout/crash: this storage dir's SQLite DBs contribute no sessions this
       // scan, surfaced as one scan issue rather than an unbounded stall.
       args.issues.push({
@@ -118,6 +126,7 @@ export class OpenCodeSqliteWorkerClient {
         path: args.dbPaths[0] ?? 'opencode.db',
         message: `OpenCode history scan did not complete: ${errorMessage(err)}`
       })
+
       return []
     }
   }
@@ -140,11 +149,13 @@ export class OpenCodeSqliteWorkerClient {
         { kind: 'parse', dbPath: args.dbPath, sessionId: args.sessionId, platform: args.platform },
         PARSE_TIMEOUT_MS
       )
+
       return value as AiVaultSession | null
     } catch (err) {
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
         throw new Error('OpenCode SQLite background scanner could not start.')
       }
+
       // Reject only this session; the scanner turns the throw into a scan issue.
       throw err instanceof Error ? err : new Error(String(err))
     }
@@ -153,11 +164,13 @@ export class OpenCodeSqliteWorkerClient {
   private dispatch(request: OpenCodeSqliteRequestBody, timeoutMs: number): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++
+
       // A fresh burst from full idle starts a new scan: clear any death count
       // carried from a prior scan so the respawn cap can't drain this scan early.
       if (!this.active && this.queue.length === 0) {
         this.consecutiveDeaths = 0
       }
+
       this.queue.push({
         request: { ...request, id } as OpenCodeSqliteWorkerRequest,
         timeoutMs,
@@ -173,15 +186,21 @@ export class OpenCodeSqliteWorkerClient {
     if (this.active || this.queue.length === 0) {
       return
     }
+
     const worker = this.host.ensure()
+
     if (!worker) {
       this.failQueuedAsUnavailable()
+
       return
     }
+
     const call = this.queue.shift()
+
     if (!call) {
       return
     }
+
     this.active = call
     this.host.clearIdleTimer()
     // Timeout clock starts at dispatch (not enqueue): a batch may enqueue up to
@@ -193,15 +212,19 @@ export class OpenCodeSqliteWorkerClient {
 
   private onMessage(response: OpenCodeSqliteWorkerResponse): void {
     const call = this.active
+
     if (!call || call.request.id !== response.id) {
       return
     }
+
     this.consecutiveDeaths = 0
+
     if (response.ok) {
       this.settle(call, () => call.resolve(response.value))
     } else {
       this.settle(call, () => call.reject(new Error(response.error)))
     }
+
     this.afterSettle()
   }
 
@@ -209,6 +232,7 @@ export class OpenCodeSqliteWorkerClient {
     if (this.active !== call) {
       return
     }
+
     this.onWorkerFault(new Error(`OpenCode SQLite worker timed out after ${call.timeoutMs}ms`))
   }
 
@@ -217,8 +241,10 @@ export class OpenCodeSqliteWorkerClient {
     // or the next dispatch would post into the dead worker and stall to timeout.
     if (code === 0 && !this.active && this.queue.length === 0) {
       this.host.destroy()
+
       return
     }
+
     this.onWorkerFault(new Error(`OpenCode SQLite worker exited with code ${code}`))
   }
 
@@ -226,13 +252,17 @@ export class OpenCodeSqliteWorkerClient {
     const failed = this.active
     this.host.destroy()
     this.consecutiveDeaths++
+
     if (failed) {
       this.settle(failed, () => failed.reject(error))
     }
+
     if (this.consecutiveDeaths >= MAX_CONSECUTIVE_DEATHS) {
       this.drainQueueAfterCrashLoop(error)
+
       return
     }
+
     if (this.queue.length > 0) {
       this.pump()
     }
@@ -242,9 +272,11 @@ export class OpenCodeSqliteWorkerClient {
     const pending = this.queue
     this.queue = []
     this.consecutiveDeaths = 0
+
     const drainError = new Error(
       `OpenCode SQLite worker crashed repeatedly; skipping remaining sessions (${error.message})`
     )
+
     for (const call of pending) {
       this.settle(call, () => call.reject(drainError))
     }
@@ -253,6 +285,7 @@ export class OpenCodeSqliteWorkerClient {
   private failQueuedAsUnavailable(): void {
     const pending = this.queue
     this.queue = []
+
     for (const call of pending) {
       this.settle(call, () =>
         call.reject(new OpenCodeSqliteWorkerUnavailableError('worker spawn failed'))
@@ -265,9 +298,11 @@ export class OpenCodeSqliteWorkerClient {
       clearTimeout(call.timer)
       call.timer = null
     }
+
     if (this.active === call) {
       this.active = null
     }
+
     run()
   }
 

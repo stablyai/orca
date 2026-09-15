@@ -26,6 +26,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     nativeChatSendError,
     fetchSessionTabs
   } = scope
+
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
     client,
@@ -48,15 +49,18 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
   // Capture active tab at tap time; reading it after openDiff would misread a mid-RPC switch and let the retry steal focus.
   const fileOpenStartActiveTabIdRef = useRef<string | null>(null)
+
   const handleFileOpenStart = useCallback(() => {
     fileOpenStartActiveTabIdRef.current = activeSessionTabIdRef.current
   }, [])
+
   const handleOpenedFileDiff = useCallback(
     (relativePath: string) => {
       const activationSeq = ++handleOpenedFileDiffActivationSeqRef.current
       const activeTabIdAtTap = fileOpenStartActiveTabIdRef.current
 
       let activated = false
+
       const activateOpenedTab = async (): Promise<void> => {
         // Route matching through the shared helper so the repro test exercises the same logic production runs.
         const settled = await activateOpenedSourceControlDiffTab<MobileSessionTab>({
@@ -72,6 +76,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
           }),
           switchSessionTab: (tab) => switchSessionTabRef.current?.(tab)
         })
+
         if (settled) {
           activated = true
         }
@@ -89,16 +94,20 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
       if (handle !== activeHandleRef.current) {
         return
       }
+
       // Why: browser.tabCreate resolves a real worktree, which the floating
       // sentinel doesn't have — open taps in the phone browser instead.
       if (terminalLinkOpenMode === 'phone-browser' || isFloatingWorkspaceRoute) {
         void Linking.openURL(url).catch(() => {})
+
         return
       }
+
       void handleCreateBrowserRef.current?.(url)
     },
     [terminalLinkOpenMode, isFloatingWorkspaceRoute]
   )
+
   return {
     handleFileTap,
     handleNativeChatFileTap,

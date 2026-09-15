@@ -42,6 +42,7 @@ function canonicalizeImportPath(path: string): string | null {
   if (!isRuntimePathAbsolute(path)) {
     return null
   }
+
   return resolveRuntimePath(path, path)
 }
 
@@ -49,9 +50,11 @@ function trimPathSeparators(path: string): string {
   if (path === '/' || /^[A-Za-z]:[\\/]?$/.test(path)) {
     return path.replace(/\\/g, '/')
   }
+
   if (/^\/\/[^/]+\/[^/]+\/?$/.test(path.replace(/\\/g, '/'))) {
     return path.replace(/\\/g, '/').replace(/\/$/, '')
   }
+
   return path.replace(/\\/g, '/').replace(/\/+$/g, '')
 }
 
@@ -61,11 +64,14 @@ function normalizeRelativePath(value: string): string {
 
 function getFolderRelativePathForRepo(parentPath: string, repoPath: string): string | null {
   const relativePath = relativePathInsideRoot(parentPath, repoPath)
+
   if (relativePath === null || relativePath === '') {
     return null
   }
+
   const segments = normalizeRelativePath(relativePath).split('/').filter(Boolean)
   segments.pop()
+
   return segments.join('/')
 }
 
@@ -78,12 +84,15 @@ function getNearestScopePath(
   scopePaths: { has: (value: string) => boolean }
 ): string | null {
   const segments = normalizeRelativePath(relativePath).split('/').filter(Boolean)
+
   for (let length = segments.length; length > 0; length -= 1) {
     const candidate = segments.slice(0, length).join('/')
+
     if (scopePaths.has(candidate)) {
       return candidate
     }
   }
+
   return null
 }
 
@@ -94,6 +103,7 @@ function buildSparseFolderScopes(args: {
   // Why: folder-backed workspaces should expose meaningful launch scopes
   // without turning every one-child filesystem segment into sidebar structure.
   const folderStats = new Map<string, { directRepoCount: number; totalRepoCount: number }>()
+
   const noteFolder = (relativePath: string, field: 'directRepoCount' | 'totalRepoCount'): void => {
     const normalized = normalizeRelativePath(relativePath)
     const stats = folderStats.get(normalized) ?? { directRepoCount: 0, totalRepoCount: 0 }
@@ -103,11 +113,14 @@ function buildSparseFolderScopes(args: {
 
   for (const repoPath of args.repoPaths) {
     const folderRelativePath = getFolderRelativePathForRepo(args.parentPath, repoPath)
+
     if (folderRelativePath === null) {
       continue
     }
+
     noteFolder(folderRelativePath, 'directRepoCount')
     const segments = folderRelativePath.split('/').filter(Boolean)
+
     for (let length = 1; length <= segments.length; length += 1) {
       noteFolder(segments.slice(0, length).join('/'), 'totalRepoCount')
     }
@@ -118,6 +131,7 @@ function buildSparseFolderScopes(args: {
       if (!relativePath) {
         return false
       }
+
       return (
         stats.directRepoCount >= 2 ||
         (stats.directRepoCount > 0 && stats.totalRepoCount > stats.directRepoCount)
@@ -127,11 +141,13 @@ function buildSparseFolderScopes(args: {
     .sort(
       (left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right)
     )
+
   const meaningfulPathSet = new Set(meaningfulPaths)
 
   return meaningfulPaths.map((relativePath) => {
     const parentRelativePath =
       getNearestScopePath(relativePath.split('/').slice(0, -1).join('/'), meaningfulPathSet) ?? null
+
     return {
       relativePath,
       name: relativePath,
@@ -153,12 +169,15 @@ export function createNestedProjectGroupResolver(args: {
   // Every folder-scope read sits behind ensureRootGroup, so outside group mode the scopes are
   // unreachable. One flag drives both so the skip can never drift from the guard that justifies it.
   const createsGroups = args.mode === 'group'
+
   const folderScopes = createsGroups
     ? buildSparseFolderScopes({ parentPath: args.parentPath, repoPaths: args.repoPaths ?? [] })
     : []
+
   const folderScopesByRelativePath = new Map(
     folderScopes.map((scope) => [scope.relativePath, scope])
   )
+
   const folderScopeGroups = new Map<string, ProjectGroup>()
   let rootGroup: ProjectGroup | undefined
 
@@ -166,9 +185,11 @@ export function createNestedProjectGroupResolver(args: {
     if (!createsGroups) {
       return undefined
     }
+
     if (rootGroup) {
       return rootGroup
     }
+
     const fallbackName = getRuntimePathBasename(trimPathSeparators(args.parentPath))
     rootGroup = args.createGroup({
       name: args.groupName.trim() || fallbackName,
@@ -178,25 +199,33 @@ export function createNestedProjectGroupResolver(args: {
       createdFrom: 'folder-scan'
     })
     createdGroups.push(rootGroup)
+
     return rootGroup
   }
 
   const ensureFolderScopeGroup = (relativePath: string): ProjectGroup | undefined => {
     const root = ensureRootGroup()
+
     if (!root) {
       return undefined
     }
+
     const existing = folderScopeGroups.get(relativePath)
+
     if (existing) {
       return existing
     }
+
     const scope = folderScopesByRelativePath.get(relativePath)
+
     if (!scope) {
       return root
     }
+
     const parentGroup = scope.parentRelativePath
       ? ensureFolderScopeGroup(scope.parentRelativePath)
       : root
+
     const group = args.createGroup({
       name: scope.name,
       parentPath: scope.folderPath,
@@ -204,21 +233,27 @@ export function createNestedProjectGroupResolver(args: {
       parentGroupId: parentGroup?.id ?? root.id,
       createdFrom: 'folder-scan'
     })
+
     folderScopeGroups.set(relativePath, group)
     createdGroups.push(group)
+
     return group
   }
 
   return {
     getGroupForRepo: (repoPath) => {
       const root = ensureRootGroup()
+
       if (!root) {
         return undefined
       }
+
       const folderRelativePath = getFolderRelativePathForRepo(args.parentPath, repoPath)
+
       const scopePath = folderRelativePath
         ? getNearestScopePath(folderRelativePath, folderScopesByRelativePath)
         : null
+
       return scopePath ? ensureFolderScopeGroup(scopePath) : root
     },
     getRootGroup: () => rootGroup,
@@ -233,17 +268,21 @@ export function resolveNestedRepoSelection(args: {
   const candidatesByPath = new Map(
     args.scan.repos.map((repo) => [normalizeRuntimePathForComparison(repo.path), repo.path])
   )
+
   const selectedPaths: string[] = []
   const rejectedPaths: string[] = []
   const seen = new Set<string>()
 
   for (const repoPath of args.projectPaths) {
     const normalizedPath = normalizeRuntimePathForComparison(repoPath)
+
     if (seen.has(normalizedPath)) {
       continue
     }
+
     seen.add(normalizedPath)
     const canonicalPath = candidatesByPath.get(normalizedPath)
+
     if (canonicalPath) {
       selectedPaths.push(canonicalPath)
     } else {
@@ -268,17 +307,22 @@ export function resolveNestedRepoImportPaths(args: {
   if (!canonicalParentPath) {
     return { selectedPaths, rejectedPaths: [...args.projectPaths] }
   }
+
   const normalizedParentPath = normalizeRuntimePathForComparison(canonicalParentPath)
 
   for (const repoPath of args.projectPaths) {
     const canonicalRepoPath = canonicalizeImportPath(repoPath)
+
     const normalizedPath = canonicalRepoPath
       ? normalizeRuntimePathForComparison(canonicalRepoPath)
       : normalizeRuntimePathForComparison(repoPath)
+
     if (seen.has(normalizedPath)) {
       continue
     }
+
     seen.add(normalizedPath)
+
     if (
       !canonicalRepoPath ||
       normalizedPath === normalizedParentPath ||
@@ -289,6 +333,7 @@ export function resolveNestedRepoImportPaths(args: {
       rejectedPaths.push(repoPath)
       continue
     }
+
     selectedPaths.push(canonicalRepoPath)
   }
 

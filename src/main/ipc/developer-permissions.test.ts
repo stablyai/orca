@@ -13,10 +13,12 @@ const {
   socketState
 } = vi.hoisted(() => {
   const handleMock = vi.fn()
+
   const socketState = {
     sendCallback: null as ((error?: Error | null) => void) | null,
     errorListener: null as ((error: Error) => void) | null
   }
+
   const socketMock = {
     on: vi.fn(),
     removeListener: vi.fn(),
@@ -24,6 +26,7 @@ const {
     send: vi.fn(),
     close: vi.fn()
   }
+
   return {
     handleMock,
     shellOpenExternalMock: vi.fn(),
@@ -85,10 +88,12 @@ describe('registerDeveloperPermissionHandlers', () => {
     execFileMock.mockReset()
     execFileMock.mockImplementation((...args: unknown[]) => {
       const callback = args.at(-1)
+
       if (typeof callback === 'function') {
         const execCallback = callback as () => void
         execCallback()
       }
+
       return { kill: vi.fn() }
     })
     createSocketMock.mockClear()
@@ -129,9 +134,11 @@ describe('registerDeveloperPermissionHandlers', () => {
     const call = handleMock.mock.calls.find(
       (c: unknown[]) => c[0] === 'developerPermissions:request'
     )
+
     if (!call) {
       throw new Error('developerPermissions:request handler not registered')
     }
+
     return call[1] as (_event: unknown, args: { id: string }) => Promise<unknown>
   }
 
@@ -139,9 +146,11 @@ describe('registerDeveloperPermissionHandlers', () => {
     const call = handleMock.mock.calls.find(
       (c: unknown[]) => c[0] === 'developerPermissions:getStatus'
     )
+
     if (!call) {
       throw new Error('developerPermissions:getStatus handler not registered')
     }
+
     return call[1] as () => Promise<DeveloperPermissionState[]>
   }
 
@@ -149,9 +158,11 @@ describe('registerDeveloperPermissionHandlers', () => {
     const call = handleMock.mock.calls.find(
       (c: unknown[]) => c[0] === 'developerPermissions:openSettings'
     )
+
     if (!call) {
       throw new Error('developerPermissions:openSettings handler not registered')
     }
+
     return call[1] as (_event: unknown, args: { id: string }) => Promise<void>
   }
 
@@ -162,6 +173,7 @@ describe('registerDeveloperPermissionHandlers', () => {
     const call = handleMock.mock.calls.find(
       (registration: unknown[]) => registration[0] === 'developerPermissions:getStatus'
     )
+
     const handler = call?.[1] as (() => Promise<unknown>) | undefined
 
     await expect(handler?.()).resolves.toContainEqual({

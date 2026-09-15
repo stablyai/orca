@@ -4,6 +4,7 @@ import { DISPATCH_CONTEXT_CLAIM_SQL, OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const CREATOR_PANE = 'tab-creator:11111111-1111-4111-8111-111111111111'
+
 const CREATOR_PROCESS = 'pty-creator:incarnation-a'
 
 function sqliteFor(db: OrchestrationDb): Database.Database {
@@ -18,6 +19,7 @@ describe('creator authority lookup performance', () => {
   it('uses bounded creator-handle and pane-leaf indexes', () => {
     db = new OrchestrationDb(':memory:')
     const sqlite = sqliteFor(db)
+
     const taskPlan = sqlite
       .prepare(
         `EXPLAIN QUERY PLAN
@@ -34,6 +36,7 @@ describe('creator authority lookup performance', () => {
          WHERE t.id = ?`
       )
       .all('run-owner', 'task-worker') as { detail: string }[]
+
     const panePlan = sqlite
       .prepare(
         `EXPLAIN QUERY PLAN
@@ -43,6 +46,7 @@ describe('creator authority lookup performance', () => {
            AND substr(assignee_pane_key, instr(assignee_pane_key, ':') + 1) = ?`
       )
       .all('11111111-1111-4111-8111-111111111111') as { detail: string }[]
+
     const taskDetails = taskPlan.map((row) => row.detail).join(' | ')
     const paneDetails = panePlan.map((row) => row.detail).join(' | ')
 
@@ -53,6 +57,7 @@ describe('creator authority lookup performance', () => {
 
   it('uses active-assignee indexes for Dispatch occupancy claims', () => {
     db = new OrchestrationDb(':memory:')
+
     const plan = sqliteFor(db)
       .prepare(`EXPLAIN QUERY PLAN ${DISPATCH_CONTEXT_CLAIM_SQL}`)
       .all(
@@ -70,6 +75,7 @@ describe('creator authority lookup performance', () => {
         '33333333-3333-4333-8333-333333333333',
         '33333333-3333-4333-8333-333333333333'
       ) as { detail: string }[]
+
     const details = plan.map((row) => row.detail).join(' | ')
 
     expect(details).toContain('idx_dispatch_active_assignee_handle')
@@ -79,13 +85,16 @@ describe('creator authority lookup performance', () => {
 
   it('keeps 300 Task reads bounded with 50,000 retained Runs', () => {
     db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'owner',
       coordinatorHandle: 'term-coordinator',
       coordinatorPaneKey: 'tab-coordinator:22222222-2222-4222-8222-222222222222'
     })
+
     const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
     createRootDispatch(db, creatorTask.id, 'term-creator', CREATOR_PANE, undefined, CREATOR_PROCESS)
+
     const workerTask = db.createTask({
       spec: 'worker',
       runId: run.id,
@@ -94,6 +103,7 @@ describe('creator authority lookup performance', () => {
       createdByProcessIncarnation: CREATOR_PROCESS,
       createdByRunGeneration: run.consumer_generation
     })
+
     sqliteFor(db)
       .prepare(
         `WITH RECURSIVE run_numbers(value) AS (
@@ -108,10 +118,13 @@ describe('creator authority lookup performance', () => {
     for (let index = 0; index < 10; index += 1) {
       db.getTask(workerTask.id, run.id)
     }
+
     const startedAt = performance.now()
+
     for (let index = 0; index < 300; index += 1) {
       expect(db.getTask(workerTask.id, run.id)?.creator_dispatch_run_id).toBe(run.id)
     }
+
     const elapsedMs = performance.now() - startedAt
 
     expect(elapsedMs).toBeLessThan(200)
@@ -121,11 +134,13 @@ describe('creator authority lookup performance', () => {
     'keeps active creator lookup bounded with %i retained same-handle Dispatches',
     (retainedDispatchCount) => {
       db = new OrchestrationDb(':memory:')
+
       const run = db.createRun({
         objective: 'owner',
         coordinatorHandle: 'term-coordinator',
         coordinatorPaneKey: 'tab-coordinator:22222222-2222-4222-8222-222222222222'
       })
+
       sqliteFor(db)
         .prepare(
           `WITH RECURSIVE dispatch_numbers(value) AS (
@@ -140,6 +155,7 @@ describe('creator authority lookup performance', () => {
         )
         .run(retainedDispatchCount, run.id)
       const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
+
       const creatorDispatch = createRootDispatch(
         db,
         creatorTask.id,
@@ -148,6 +164,7 @@ describe('creator authority lookup performance', () => {
         undefined,
         CREATOR_PROCESS
       )
+
       const workerTask = db.createTask({
         spec: 'worker',
         runId: run.id,
@@ -161,11 +178,14 @@ describe('creator authority lookup performance', () => {
         db.getTask(workerTask.id, run.id)
         db.getActiveDispatchForTerminal('term-creator')
       }
+
       const startedAt = performance.now()
+
       for (let index = 0; index < 300; index += 1) {
         expect(db.getTask(workerTask.id, run.id)?.creator_dispatch_id).toBe(creatorDispatch.id)
         expect(db.getActiveDispatchForTerminal('term-creator')?.id).toBe(creatorDispatch.id)
       }
+
       const elapsedMs = performance.now() - startedAt
 
       const competingTask = db.createTask({ spec: 'competing creator', runId: run.id })

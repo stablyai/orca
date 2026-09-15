@@ -48,12 +48,14 @@ export function retryDirectSshTerminalPanes(
   options: DirectSshTerminalRetryOptions = {}
 ): DirectSshTerminalRetryResult {
   const authorityState = pruneObsoleteAuthorityState(state, authority)
+
   const invalidated = invalidateStaleDirectSshTerminalBindings(
     { ...state, ...authorityState },
     terminalWorkspaceKeys,
     authority,
     options.qualifiedTabIds
   )
+
   const working = { ...state, ...authorityState, ...invalidated.patch }
   let tabsByWorktree = working.tabsByWorktree
   let pending = working.directSshPaneRetryByTabId
@@ -63,11 +65,14 @@ export function retryDirectSshTerminalPanes(
   for (const workspaceKey of terminalWorkspaceKeys) {
     const tabs = working.tabsByWorktree[workspaceKey] ?? []
     let nextTabs = tabs
+
     for (const [index, tab] of tabs.entries()) {
       if (options.qualifiedTabIds && !options.qualifiedTabIds.has(tab.id)) {
         continue
       }
+
       const currentPending = pending[tab.id]
+
       if (
         currentPending &&
         directSshAuthoritiesEqual(currentPending.authority, authority) &&
@@ -75,6 +80,7 @@ export function retryDirectSshTerminalPanes(
       ) {
         continue
       }
+
       if (
         liveBindingMatches(tab, working.directSshLivePtyBindingByTabId[tab.id], authority) ||
         // Why `working` and not `state`: invalidateStaleDirectSshTerminalBindings has already
@@ -91,20 +97,27 @@ export function retryDirectSshTerminalPanes(
       ) {
         continue
       }
+
       const previousHistory = history[tab.id]
+
       const sameAuthorityAttempts =
         previousHistory && directSshAuthoritiesEqual(previousHistory.authority, authority)
           ? previousHistory.attemptedAt
           : []
+
       // Why: a 31s PTY timeout outlives the old rolling window; authority rotation is the reset boundary for this automatic chain.
       const recentAttempts = sameAuthorityAttempts
+
       if (recentAttempts.length >= AUTOMATIC_RETRY_LIMIT) {
         continue
       }
+
       const tabGeneration = (tab.generation ?? 0) + 1
+
       if (nextTabs === tabs) {
         nextTabs = [...tabs]
       }
+
       nextTabs[index] = {
         ...tab,
         generation: tabGeneration,
@@ -112,25 +125,31 @@ export function retryDirectSshTerminalPanes(
           state.terminalLayoutsByTabId?.[tab.id]
         )
       }
+
       if (pending === working.directSshPaneRetryByTabId) {
         pending = { ...working.directSshPaneRetryByTabId }
       }
+
       pending[tab.id] = {
         attemptId: createAttemptId(authority, tab.id, tabGeneration, now),
         authority,
         tabGeneration,
         startedAt: now
       }
+
       if (history === working.directSshPaneRetryHistoryByTabId) {
         history = { ...working.directSshPaneRetryHistoryByTabId }
       }
+
       history[tab.id] = { authority, attemptedAt: [...recentAttempts, now] }
       retriedCount += 1
     }
+
     if (nextTabs !== tabs) {
       if (tabsByWorktree === working.tabsByWorktree) {
         tabsByWorktree = { ...working.tabsByWorktree }
       }
+
       tabsByWorktree[workspaceKey] = nextTabs
     }
   }
@@ -141,9 +160,11 @@ export function retryDirectSshTerminalPanes(
         authorityState[key as keyof typeof authorityState] !==
         state[key as keyof typeof authorityState]
     ) || invalidated.patch != null
+
   if (retriedCount === 0 && !recoveryChanged) {
     return { retriedCount, patch: null }
   }
+
   return {
     retriedCount,
     patch: {

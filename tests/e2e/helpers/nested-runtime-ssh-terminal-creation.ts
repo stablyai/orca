@@ -6,6 +6,7 @@ function terminalMarkerCommand(marker: string): string {
   const encoded = [...marker]
     .map((character) => `\\${character.charCodeAt(0).toString(8).padStart(3, '0')}`)
     .join('')
+
   return `printf '${encoded}\\n'`
 }
 
@@ -16,8 +17,10 @@ export async function assertPairedTerminalCreation(
   const before = await client.page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     return worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id) : []
   })
+
   await client.page.getByRole('button', { name: 'New tab' }).click({ force: true })
   await client.page
     .getByRole('menuitem', { name: /New Terminal/i })
@@ -30,12 +33,14 @@ export async function assertPairedTerminalCreation(
         tabId = await client.page.evaluate((oldIds) => {
           const state = window.__store?.getState()
           const worktreeId = state?.activeWorktreeId
+
           return (
             (worktreeId ? state?.tabsByWorktree[worktreeId] : [])?.find(
               (tab) => !oldIds.includes(tab.id)
             )?.id ?? ''
           )
         }, before)
+
         return tabId
       },
       { timeout: 30_000, message: 'Paired New Terminal did not create a HUB-owned tab' }
@@ -46,5 +51,6 @@ export async function assertPairedTerminalCreation(
   await client.page.keyboard.insertText(terminalMarkerCommand(marker))
   await client.page.keyboard.press('Enter')
   await expect.poll(() => getTerminalContent(client.page), { timeout: 30_000 }).toContain(marker)
+
   return { ptyId, tabId }
 }

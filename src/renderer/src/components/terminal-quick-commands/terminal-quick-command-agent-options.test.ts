@@ -14,6 +14,7 @@ describe('terminal quick command agent options', () => {
   it('keeps unsupported prompt-command agents below supported agents', () => {
     const ids = getTerminalQuickCommandAgentOptions().map((entry) => entry.id)
     const firstUnsupportedIndex = ids.findIndex((id) => !supportsTerminalAgentQuickCommand(id))
+
     const lastSupportedIndex = ids.reduce(
       (lastIndex, id, index) => (supportsTerminalAgentQuickCommand(id) ? index : lastIndex),
       -1

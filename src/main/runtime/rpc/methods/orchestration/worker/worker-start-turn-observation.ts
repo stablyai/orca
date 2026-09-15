@@ -25,12 +25,15 @@ function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTu
   if (prompt.stages.includes('turn_started')) {
     return 'observed'
   }
+
   if (prompt.observation === 'permission') {
     return 'permission'
   }
+
   if (prompt.observation === 'supported') {
     return 'unobserved'
   }
+
   // 'unsupported' (and an old host's missing observation) leaves acceptance as the best receipt.
   return 'unsupported'
 }
@@ -52,11 +55,15 @@ export async function observeWorkerTurnStart(args: {
   if (!args.prompt) {
     return { verdict: 'unsupported' }
   }
+
   const verdict = classifyPromptDelivery(args.prompt)
+
   if (verdict !== 'unobserved') {
     return { verdict, prompt: args.prompt }
   }
+
   let observed: RuntimeTerminalPromptDelivery
+
   try {
     observed = await args.runtime.observeTerminalAgentPrompt(
       args.terminalHandle,
@@ -67,15 +74,18 @@ export async function observeWorkerTurnStart(args: {
     // Observation failure cannot revoke authority for input that was already accepted.
     return { verdict: 'unobserved', prompt: args.prompt }
   }
+
   if (observed.observation === 'incarnation_replaced') {
     // The PTY under this handle changed mid-observation; the accepted write is unproven.
     return { verdict: 'unobserved', prompt: observed }
   }
+
   return { verdict: classifyPromptDelivery(observed), prompt: observed }
 }
 
 export function describeUnobservedWorkerTurnStart(agent: string | null): string {
   const name = agent ?? 'the agent'
+
   return (
     `Dispatch input was written and submitted, but ${name}'s turn start could not be verified ` +
     `during observation (up to ${Math.round(AGENT_PROMPT_EFFECT_TIMEOUT_MS / 1000)}s). This is unverifiable, not proof the ` +

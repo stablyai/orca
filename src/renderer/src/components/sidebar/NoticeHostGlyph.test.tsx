@@ -50,6 +50,7 @@ async function render(
       />
     )
   })
+
   return container
 }
 
@@ -135,12 +136,15 @@ describe('NoticeHostGlyph', () => {
 
     const glyph = (container: HTMLDivElement): string =>
       container.querySelector('svg')?.getAttribute('class') ?? ''
+
     // The same vocabulary the run-target rows use: this computer vs a server.
     expect(glyph(local)).toContain('lucide-monitor')
     expect(glyph(remote)).toContain('lucide-server')
+
     // Same size and tone tokens, so neither row reads as decorated.
     const tokens = (value: string): string[] =>
       value.split(' ').filter((entry) => !entry.startsWith('lucide'))
+
     expect(tokens(glyph(local))).toEqual(tokens(glyph(remote)))
   })
 

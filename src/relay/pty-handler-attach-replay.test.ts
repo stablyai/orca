@@ -88,6 +88,7 @@ describe('PtyHandler', () => {
     expect(onExitCb).toBeDefined()
 
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+
     try {
       await expect(
         dispatcher.callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
@@ -100,6 +101,7 @@ describe('PtyHandler', () => {
     // is freed so a later attach also cleanly reports not-found.
     expect(exits).toEqual([{ id: PTY_1, paneKey: 'tab-dead:0' }])
     expect(handler.activePtyCount).toBe(0)
+
     const unknownId = await dispatcher
       .callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
       .then(
@@ -125,10 +127,13 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {})
 
     let shutdown: Promise<unknown> | undefined
+
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockImplementation(() => {
       shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
+
       return false
     })
+
     try {
       await expect(dispatcher.callRequest('pty.attach', { id: PTY_1 })).rejects.toThrow(
         `PTY "${PTY_1}" not found`
@@ -158,15 +163,18 @@ describe('PtyHandler', () => {
     dataCallback?.('prompt$ ')
 
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
+
     try {
       const result = await attachPty({
         id: PTY_1,
         suppressReplayNotification: true
       })
+
       expect(result).toEqual({ incarnationId: spawn.incarnationId, replay: 'prompt$ ' })
     } finally {
       aliveSpy.mockRestore()
     }
+
     expect(handler.activePtyCount).toBe(1)
   })
 
@@ -223,9 +231,11 @@ describe('PtyHandler', () => {
   it('requires restore when the V1 pending-send recovery fence expires', async () => {
     const spawn = await spawnPty()
     const waitForPendingSend = vi.fn().mockResolvedValue(false)
+
     const activate = vi
       .fn()
       .mockReturnValue({ status: 'restoreRequired', reason: 'checkpointUnavailable' })
+
     handler.setSourcePublication({
       activate,
       accepts: vi.fn(() => true),
@@ -297,6 +307,7 @@ describe('PtyHandler', () => {
     delete process.env.ORCA_PANE_KEY
     delete process.env.ORCA_TAB_ID
     let spawn!: { id: string; incarnationId: string }
+
     try {
       spawn = await spawnPty({
         env: { FOO: 'bar' },
@@ -309,6 +320,7 @@ describe('PtyHandler', () => {
       } else {
         process.env.ORCA_PANE_KEY = oldPaneKey
       }
+
       if (oldTabId === undefined) {
         delete process.env.ORCA_TAB_ID
       } else {
@@ -366,6 +378,7 @@ describe('PtyHandler', () => {
     Object.assign(dispatcher, {
       onLegacyPtyCapacity: vi.fn((listener: () => void) => {
         capacityListener = listener
+
         return vi.fn()
       }),
       tryNotifyPtyData: vi.fn(() => true),
@@ -446,6 +459,7 @@ describe('PtyHandler', () => {
       id: PTY_1,
       suppressReplayNotification: true
     })
+
     expect(r1).toEqual({ incarnationId: spawn.incarnationId, replay: 'initial output' })
 
     dataCallback!(' more')
@@ -454,6 +468,7 @@ describe('PtyHandler', () => {
       id: PTY_1,
       suppressReplayNotification: true
     })
+
     expect(r2).toEqual({ incarnationId: spawn.incarnationId, replay: 'initial output more' })
   })
 
@@ -476,6 +491,7 @@ describe('PtyHandler', () => {
       id: PTY_1,
       suppressReplayNotification: true
     })
+
     expect(firstAttach.incarnationId).toBe(spawn.incarnationId)
 
     dataCallback!('Tue Apr 29\r\n')
@@ -484,6 +500,7 @@ describe('PtyHandler', () => {
       id: PTY_1,
       suppressReplayNotification: true
     })
+
     expect(secondAttach.incarnationId).toBe(spawn.incarnationId)
 
     dataCallback!('Wed Apr 30\r\n')
@@ -492,6 +509,7 @@ describe('PtyHandler', () => {
       id: PTY_1,
       suppressReplayNotification: true
     })
+
     expect(result).toEqual({
       incarnationId: spawn.incarnationId,
       replay: '$ while true; do date; done\r\nMon Apr 28\r\nTue Apr 29\r\nWed Apr 30\r\n'

@@ -45,6 +45,7 @@ export function useSourceControlLinkedReviews({
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+
   const manualReviewUrl = useMemo(
     () =>
       buildSourceControlManualReviewUrlFromContext({
@@ -80,6 +81,7 @@ export function useSourceControlLinkedReviews({
       remoteStatus?.upstreamName
     ]
   )
+
   const hasHostedReviewLink = hasPositiveHostedReviewNumberLink({
     linkedGitHubPR,
     fallbackGitHubPR: fallbackGitHubPRNumber,
@@ -88,24 +90,29 @@ export function useSourceControlLinkedReviews({
     linkedAzureDevOpsPR,
     linkedGiteaPR
   })
+
   // Why: SSH-backed (connectionId) repos never fetch hostedReview, so skip the loading state or it would permanently block Publish Branch.
   const isHostedReviewStateLoading =
     !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
+
   const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
     linkedGitHubPR,
     fallbackGitHubPR: fallbackGitHubPRNumber,
     linkedGitLabMR
   })
+
   const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
     pushTarget: activeWorktree?.pushTarget,
     upstreamStatus: remoteStatus,
     hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink,
     branchName
   })
+
   const hostedReviewStateForActions = resolveHostedReviewStateForActions({
     hostedReviewState: hostedReview?.state ?? null,
     hasResolvableHostedReviewPushTargetLink: hasResolvableReviewPushTargetLink
   })
+
   const remoteStatusForActions: SourceControlWorktreeContext['remoteStatus'] = useMemo(
     () =>
       resolveHostedReviewActionUpstreamStatus({

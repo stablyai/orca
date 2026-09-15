@@ -18,6 +18,7 @@ export function normalizeListAttributeFilter(
   if (!attributeFilter || isEmptyLinearIssueAttributeFilter(attributeFilter)) {
     return undefined
   }
+
   return canonicalizeLinearIssueAttributeFilter(attributeFilter)
 }
 
@@ -61,8 +62,10 @@ export function getLinearReadScope(
       explicitSource: false
     }
   }
+
   const runtimeSettings = getTaskSourceRuntimeSettings(sourceContext)
   const cachePrefix = getTaskSourceCacheScope(sourceContext)
+
   return {
     settings: sourceContext,
     contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${cachePrefix}`,

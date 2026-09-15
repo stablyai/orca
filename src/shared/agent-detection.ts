@@ -9,6 +9,7 @@
  */
 
 export type { AgentStatus } from './agent-title-core'
+
 export {
   isClaudeManagementTitle,
   isCursorAgentTitle,
@@ -19,8 +20,11 @@ export {
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE
 } from './agent-title-core'
+
 export { isOpenCodeNativeTitle, isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
+
 export { getAgentLabel, isClaudeAgent } from './agent-title-identity'
+
 export {
   clearWorkingIndicators,
   createAgentStatusTracker,
@@ -31,10 +35,12 @@ export {
 
 // Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
+
 export {
   extractAllOscTitles,
   extractLastOscTitle,
   MAX_OSC_TITLE_CHARS,
   MAX_OSC_TITLES_PER_CHUNK
 } from './osc-title-extraction'
+
 export { isShellProcess } from './shell-process-detection'

@@ -88,6 +88,7 @@ describe('Jira issue operations', () => {
     getClientsMock.mockImplementation(() => {
       throw error
     })
+
     const { createIssue, getIssue, listIssueTypes, listProjects, searchIssues } =
       await import('./issues')
 
@@ -605,6 +606,7 @@ describe('Jira issue operations', () => {
     })
     jiraRequestMock.mockImplementation(async () => {
       order.push('json')
+
       return {
         id: 'issue-9',
         key: 'CAM-9',
@@ -638,6 +640,7 @@ describe('Jira issue operations', () => {
     })
     jiraRequestBinaryMock.mockImplementation(async () => {
       order.push('binary')
+
       return { data: Uint8Array.from([1]).buffer, contentType: 'image/png' }
     })
     const { getIssue } = await import('./issues')
@@ -688,9 +691,11 @@ describe('Jira issue operations', () => {
     })
     const { getIssueComments } = await import('./issues')
     await getIssueComments('ALP-1', 'server-1')
+
     const attachmentLookup = jiraRequestMock.mock.calls.find((call) =>
       String(call[1]).includes('fields=attachment')
     )
+
     expect(String(attachmentLookup?.[1])).toContain('/rest/api/2/issue/')
     expect(String(attachmentLookup?.[1])).not.toContain('/rest/api/3/issue/')
   })

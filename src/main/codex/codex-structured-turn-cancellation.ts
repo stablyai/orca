@@ -53,6 +53,7 @@ export class CodexStructuredTurnCancellation {
 
   captureBaseline(session: CodexSession): Promise<CodexTurnProcessSnapshot | null> {
     this.refreshBaseline(session)
+
     return this.state(session).baseline
   }
 
@@ -64,15 +65,19 @@ export class CodexStructuredTurnCancellation {
     observedAt?: number
   ): boolean {
     const threadId = readCodexThreadId(params) ?? session.threadId
+
     if (method !== 'turn/completed') {
       return false
     }
+
     const turnId = readCodexTurnId(params)
     const state = this.state(session)
     const key = turnId ? turnKey(threadId, turnId) : null
+
     if (!key || !state.blockedCompletions.has(key)) {
       return false
     }
+
     const event = {
       type: 'notification' as const,
       sessionId,
@@ -81,7 +86,9 @@ export class CodexStructuredTurnCancellation {
       params,
       ...(observedAt !== undefined ? { observedAt } : {})
     }
+
     state.deferredCompletions.set(key, event)
+
     return true
   }
 
@@ -97,49 +104,63 @@ export class CodexStructuredTurnCancellation {
     state.blockedCompletions.add(key)
     const targetsPrimaryTurn = threadId === session.threadId
     const baseline = targetsPrimaryTurn ? await state.baseline : null
+
     if (!isCurrent()) {
       this.releaseCompletion(session, key)
+
       return { cancelled: false }
     }
+
     let requestError: unknown
+
     const interruptReceipt = session.connection
       .request('turn/interrupt', { threadId, turnId }, { timeoutMs: this.deps.requestTimeoutMs })
       .then(
         () => true,
         (error: unknown) => {
           requestError = error
+
           return false
         }
       )
+
     const [acknowledged, terminated] = await Promise.all([
       interruptReceipt,
       targetsPrimaryTurn ? this.terminate(session.connection, baseline) : Promise.resolve(true)
     ])
+
     if (terminated && acknowledged) {
       const completion = state.deferredCompletions.get(key)
       let confirmationError: unknown
       let promptAdmission = ADMITTED
+
       try {
         promptAdmission = onConfirmed?.() ?? ADMITTED
       } catch (error) {
         confirmationError = error
       }
+
       const completionAdmission = this.releaseCompletion(session, key, completion)
+
       if (confirmationError) {
         throw confirmationError
       }
+
       if (!promptAdmission.accepted) {
         throw new Error(
           `Codex prompt cancellation lifecycle was not admitted (${promptAdmission.reason})`
         )
       }
+
       if (onConfirmed && completion && !completionAdmission.accepted) {
         throw new Error(
           `Codex deferred turn completion lifecycle was not admitted (${completionAdmission.reason})`
         )
       }
+
       return { cancelled: true }
     }
+
     if (
       requestError &&
       !isCodexAppServerRequestError(requestError) &&
@@ -148,9 +169,11 @@ export class CodexStructuredTurnCancellation {
       this.releaseCompletion(session, key)
       throw requestError
     }
+
     // A failed cancellation must not permanently divert the provider's later
     // completion for this turn. Let the normal completion path settle it.
     this.releaseCompletion(session, key)
+
     return { cancelled: false }
   }
 
@@ -181,14 +204,17 @@ export class CodexStructuredTurnCancellation {
     const state = this.state(session)
     state.blockedCompletions.delete(key)
     state.deferredCompletions.delete(key)
+
     return completion ? this.deps.emit(session, completion) : ADMITTED
   }
 
   private state(session: CodexSession): TurnProcessState {
     const state = this.states.get(session)
+
     if (!state) {
       throw new Error('codex turn process state is unavailable')
     }
+
     return state
   }
 }

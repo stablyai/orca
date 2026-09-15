@@ -20,10 +20,12 @@ describe('inventory absence confirmed across host republications', () => {
   it('prunes a binding two fresh-liveness inventories omit even when the host re-published between them', async () => {
     const worktree = 'repo::ghost-across-republication'
     const state = makeState(worktree, LEAVES)
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'terminal.list') {
         return { ok: true as const, result: listResult(worktree, []) }
       }
+
       return { ok: false as const, error: { code: 'conflict', message: 'unexpected' } }
     })
 
@@ -34,6 +36,7 @@ describe('inventory absence confirmed across host republications', () => {
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     expect(first?.tabs).toEqual([
       expect.objectContaining({ leafId: 'leaf-1', terminal: 'term-ghost' })
     ])
@@ -52,10 +55,12 @@ describe('inventory absence confirmed across host republications', () => {
     const worktree = 'repo::ghost-relisted'
     const state = makeState(worktree, LEAVES)
     let listedTerminals: readonly Record<string, unknown>[] = []
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'terminal.list') {
         return { ok: true as const, result: listResult(worktree, listedTerminals) }
       }
+
       return { ok: false as const, error: { code: 'conflict', message: 'unexpected' } }
     })
 

@@ -93,6 +93,7 @@ export function useMobileStructuredAgentSession(args: {
     onSendError,
     promptCancelSupported = null
   } = args
+
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
@@ -108,16 +109,20 @@ export function useMobileStructuredAgentSession(args: {
       fields: Record<string, unknown>
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
+
       if (!client || !sessionId || !enabled || current.fence === null) {
         return { status: 'rejected' }
       }
+
       const targetFence = current.fence
       const key = `${sessionKey}:${fingerprintMethod}:${JSON.stringify(fields)}`
+
       const clientOperationId = retainStructuredOpId(
         operationIdsRef.current,
         key,
         operationIdsRef.current.get(key)
       )
+
       const result = await requestStructuredAgentSessionMutation<TValue>({
         client,
         method,
@@ -127,20 +132,26 @@ export function useMobileStructuredAgentSession(args: {
         fields,
         clientOperationId
       })
+
       if (result.status === 'accepted') {
         operationIdsRef.current.delete(key)
+
         return {
           status: 'accepted',
           value: result.value,
           sameFence: stateRef.current.fence === targetFence
         }
       }
+
       if (result.status === 'unknown') {
         operationIdsRef.current.delete(key)
+
         return result
       }
+
       operationIdsRef.current.delete(key)
       onSendError(result.message)
+
       return { status: 'rejected' }
     },
     [client, enabled, onSendError, sessionId, sessionKey]
@@ -154,6 +165,7 @@ export function useMobileStructuredAgentSession(args: {
     fence: state.fence,
     mutate
   })
+
   const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
     options
 
@@ -165,20 +177,29 @@ export function useMobileStructuredAgentSession(args: {
       attachments?: readonly StructuredMobileAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
+
       if (!client || !sessionId || !enabled || currentFence === null) {
         onSendError('Message not sent (disconnected)')
+
         return 'rejected'
       }
+
       const timeoutMs = timeoutForDeadline(deadline)
+
       if (timeoutMs === null) {
         onSendError('Message not sent')
+
         return 'rejected'
       }
+
       if (attachments === undefined && images !== undefined && images.length > 0) {
         onSendError('Message not sent')
+
         return 'rejected'
       }
+
       const sendAttachments = attachments ?? []
+
       const commandOutcome = await dispatchMobileStructuredCommand({
         text,
         hasAttachments: Boolean(sendAttachments.length || images?.length),
@@ -203,13 +224,17 @@ export function useMobileStructuredAgentSession(args: {
         onError: onSendError,
         timeoutMs
       })
+
       if (commandOutcome !== null) {
         return commandOutcome
       }
+
       const body = structuredAgentSessionSendBody(text, sendAttachments)
+
       if (body.blocks.length === 0) {
         return 'rejected'
       }
+
       return sendMobileStructuredAgentSessionMessage({
         client,
         sessionId,
@@ -236,6 +261,7 @@ export function useMobileStructuredAgentSession(args: {
       setStructuredOption
     ]
   )
+
   const { groupedDraft, respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
     sessionKey,
@@ -263,21 +289,27 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
+
   const turnId = activeStructuredAgentSessionTurnId(state.items)
   const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
+
   const activityText =
     selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
+
   const thinking = isStructuredAgentSessionThinking(state.items)
   const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
   const status = state.status === 'idle' ? 'idle' : state.status
+
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,
     [state.items]
   )
+
   const questionPrompt = useMemo(
     () => state.items.find(pendingStructuredQuestion) ?? null,
     [state.items]
   )
+
   return {
     ...options,
     session: {

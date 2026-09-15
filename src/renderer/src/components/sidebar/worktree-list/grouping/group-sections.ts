@@ -75,10 +75,12 @@ export function appendOrderedGroups(
     nestLineage,
     cyclicLineageIds
   } = ctx
+
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
+
     const header =
       groupBy === 'repo'
         ? {
@@ -97,8 +99,10 @@ export function appendOrderedGroups(
                 getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
                 workspaceStatuses[0]?.id ??
                 'in-progress'
+
               const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
               const meta = getWorkspaceStatusVisualMeta(definition ?? workspaceStatus)
+
               return {
                 type: 'header' as const,
                 key,
@@ -124,6 +128,7 @@ export function appendOrderedGroups(
           : (() => {
               const prGroup = key.replace(/^pr:/, '') as PRGroupKey
               const meta = PR_GROUP_META[prGroup]
+
               return {
                 type: 'header' as const,
                 key,
@@ -148,6 +153,7 @@ export function appendOrderedGroups(
             })()
 
     result.push(header)
+
     if (!isCollapsed) {
       if (groupBy === 'repo') {
         const repoIds =
@@ -158,8 +164,10 @@ export function appendOrderedGroups(
               : key.startsWith('repo:')
                 ? [key.slice('repo:'.length)]
                 : []
+
         for (const repoId of repoIds) {
           const candidate = importedWorktreesByRepo.get(repoId)
+
           if (candidate) {
             result.push(
               buildImportedWorktreesCardRow(
@@ -170,8 +178,10 @@ export function appendOrderedGroups(
             )
           }
         }
+
         for (const repoId of repoIds) {
           const candidate = newExternalWorktreesInboxByRepo.get(repoId)
+
           if (candidate) {
             result.push(
               buildNewExternalWorktreesInboxRow(
@@ -181,6 +191,7 @@ export function appendOrderedGroups(
             )
           }
         }
+
         // Why: surface in-progress creates at the top of their own repo so the
         // new workspace appears where it will land, not flashed to the very top
         // of the sidebar.
@@ -190,17 +201,21 @@ export function appendOrderedGroups(
           }
         }
       }
+
       const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
+
       const hostContextLabelByRepoId =
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
           : undefined
+
       // Why (STA-4343): repo grouping normally labels by repo, but one repo id can
       // be registered on two hosts — then every row in the group shares a repo id
       // and the per-repo label cannot tell them apart. Fall back to the per-row
       // host labels, which are keyed by host-qualified identity.
       const hostContextLabelByWorktreeIdentity =
         groupBy === 'repo' && hostContextLabelByRepoId ? undefined : mixedWorktreeHostContextLabels
+
       appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
         nestLineage,
         collapsedGroups,
@@ -210,6 +225,7 @@ export function appendOrderedGroups(
         hostContextLabelByWorktreeIdentity,
         cyclicLineageIds
       })
+
       for (const pair of folderPairs) {
         result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
       }

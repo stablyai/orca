@@ -35,9 +35,11 @@ describe('ArtifactPreview', () => {
 
   it('ignores child-frame failures and aborted navigations', async () => {
     render(<ArtifactPreview shareUrl="https://share.onorca.dev/a/report" />)
+
     const webview = await waitFor(() => {
       const element = document.querySelector('webview')
       expect(element).not.toBeNull()
+
       return element as Element
     })
 

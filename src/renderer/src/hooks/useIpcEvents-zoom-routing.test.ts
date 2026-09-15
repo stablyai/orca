@@ -7,6 +7,7 @@ function makeTarget(args: { hasXtermClass?: boolean; editorClosest?: boolean }):
   closest: (selector: string) => Element | null
 } {
   const { hasXtermClass = false, editorClosest = false } = args
+
   return {
     classList: {
       contains: (token: string) => hasXtermClass && token === 'xterm-helper-textarea'
@@ -107,10 +108,12 @@ describe('useIpcEvents zoom routing', () => {
     const terminalZoomListenerRef: {
       current: ((direction: 'in' | 'out' | 'reset') => void) | null
     } = { current: null }
+
     const setUI = vi.fn()
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -183,9 +186,11 @@ describe('useIpcEvents zoom routing', () => {
           if (prop in namespace) {
             return Reflect.get(namespace, prop)
           }
+
           return () => () => {}
         }
       })
+
     vi.stubGlobal('document', {
       activeElement: makeTarget({ editorClosest: true })
     })
@@ -236,6 +241,7 @@ describe('useIpcEvents zoom routing', () => {
           consumePendingOpenSettings: () => Promise.resolve(false),
           onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
             terminalZoomListenerRef.current = listener
+
             return () => {}
           },
           getZoomLevel: vi.fn(() => 0),
@@ -250,9 +256,11 @@ describe('useIpcEvents zoom routing', () => {
     useIpcEvents()
     expect(terminalZoomListenerRef.current).toBeTypeOf('function')
     const listener = terminalZoomListenerRef.current
+
     if (!listener) {
       throw new Error('Expected terminal zoom listener to be registered')
     }
+
     listener('in')
 
     expect(applyUIZoom).toHaveBeenCalledWith(0.5)
@@ -263,10 +271,12 @@ describe('useIpcEvents zoom routing', () => {
     const terminalZoomListenerRef: {
       current: ((direction: 'in' | 'out' | 'reset') => void) | null
     } = { current: null }
+
     const setUI = vi.fn()
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -329,9 +339,11 @@ describe('useIpcEvents zoom routing', () => {
           if (prop in namespace) {
             return Reflect.get(namespace, prop)
           }
+
           return () => () => {}
         }
       })
+
     vi.stubGlobal('document', {
       activeElement: makeTarget({})
     })
@@ -382,6 +394,7 @@ describe('useIpcEvents zoom routing', () => {
           consumePendingOpenSettings: () => Promise.resolve(false),
           onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
             terminalZoomListenerRef.current = listener
+
             return () => {}
           },
           getZoomLevel: vi.fn(() => 0),
@@ -396,9 +409,11 @@ describe('useIpcEvents zoom routing', () => {
 
     useIpcEvents()
     const listener = terminalZoomListenerRef.current
+
     if (!listener) {
       throw new Error('Expected terminal zoom listener to be registered')
     }
+
     listener('in')
 
     expect(applyUIZoom).toHaveBeenCalledWith(0.5)

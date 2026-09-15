@@ -13,9 +13,13 @@ import {
 import { startSkillPhaseOperation } from './skill-operation-observability'
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+
 const MAX_REDIRECTS = 3
+
 const PROCESS_DOWNLOAD_ROOT_PREFIX = '.orca-skill-download-process-'
+
 const processDownloadRootName = `${PROCESS_DOWNLOAD_ROOT_PREFIX}${process.pid}-${randomUUID()}`
+
 const initializedTemporaryRoots = new Map<string, Promise<string>>()
 
 export type SkillPackageDownloadResult = {
@@ -42,6 +46,7 @@ function validateIdentity(input: SkillPackageDownloadInput): void {
   if (!/^[a-f0-9]{64}$/.test(input.expectedArchiveSha256)) {
     throw new Error('skill-download-archive-identity-invalid')
   }
+
   if (
     !Number.isInteger(input.expectedCompressedBytes) ||
     input.expectedCompressedBytes < 1 ||
@@ -57,12 +62,15 @@ function validateUrl(
   requireHttps: boolean
 ): URL {
   const url = new URL(value)
+
   if (url.username || url.password || (requireHttps && url.protocol !== 'https:')) {
     throw new Error('skill-download-url-rejected')
   }
+
   if (!allowedOrigins.has(url.origin)) {
     throw new Error('skill-download-origin-rejected')
   }
+
   return url
 }
 
@@ -73,6 +81,7 @@ async function fetchWithoutCredentialRedirect(
   signal: AbortSignal
 ): Promise<Response> {
   let url = validateUrl(input.url, allowedOrigins, input.requireHttps)
+
   for (let redirectCount = 0; ; redirectCount += 1) {
     throwIfSkillDownloadUnavailable({
       signal: input.signal,
@@ -80,6 +89,7 @@ async function fetchWithoutCredentialRedirect(
       expiresAt
     })
     let response: Response
+
     try {
       response = await input.fetcher!(url, {
         method: 'GET',
@@ -94,25 +104,34 @@ async function fetchWithoutCredentialRedirect(
           expiresAt
         })
       }
+
       if (isSkillDownloadGrantExpiredAbort(signal)) {
         throw new Error('skill-download-grant-expired')
       }
+
       throw new Error('skill-download-transport-failed')
     }
+
     if (!REDIRECT_STATUSES.has(response.status)) {
       return response
     }
+
     if (redirectCount >= MAX_REDIRECTS) {
       throw new Error('skill-download-redirect-limit')
     }
+
     const location = response.headers.get('location')
+
     if (!location) {
       throw new Error('skill-download-redirect-invalid')
     }
+
     const redirected = validateUrl(new URL(location, url).href, allowedOrigins, input.requireHttps)
+
     if (redirected.origin !== url.origin) {
       throw new Error('skill-download-cross-origin-redirect')
     }
+
     url = redirected
   }
 }
@@ -124,6 +143,7 @@ function hashesEqual(actual: string, expected: string): boolean {
 function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'
@@ -132,19 +152,24 @@ function processIsAlive(pid: number): boolean {
 
 async function prepareTemporaryRoot(path: string): Promise<string> {
   let initialization = initializedTemporaryRoots.get(path)
+
   if (!initialization) {
     initialization = (async () => {
       await mkdir(path, { recursive: true, mode: 0o700 })
+
       if (process.platform !== 'win32') {
         await chmod(path, 0o700)
       }
+
       const entries = await readdir(path, { withFileTypes: true })
       await Promise.all(
         entries.map(async (entry) => {
           const match = entry.isDirectory()
             ? entry.name.match(/^\.orca-skill-download-process-(\d+)-/)
             : null
+
           const pid = Number(match?.[1])
+
           if (match && Number.isSafeInteger(pid) && !processIsAlive(pid)) {
             await rm(join(path, entry.name), { recursive: true, force: true })
           }
@@ -152,16 +177,19 @@ async function prepareTemporaryRoot(path: string): Promise<string> {
       )
       const processRoot = join(path, processDownloadRootName)
       await mkdir(processRoot, { recursive: true, mode: 0o700 })
+
       return processRoot
     })()
     initializedTemporaryRoots.set(path, initialization)
   }
+
   try {
     return await initialization
   } catch (error) {
     if (initializedTemporaryRoots.get(path) === initialization) {
       initializedTemporaryRoots.delete(path)
     }
+
     throw error
   }
 }
@@ -173,20 +201,25 @@ async function downloadSkillPackageGrantUnobserved(
   input.now ??= Date.now
   validateIdentity(input)
   const expiresAt = Date.parse(input.expiresAt)
+
   if (!Number.isFinite(expiresAt)) {
     throw new Error('skill-download-grant-expiry-invalid')
   }
+
   const allowedOrigins = new Set(
     input.allowedOrigins.map(
       (origin) => validateUrl(origin, new Set([new URL(origin).origin]), false).origin
     )
   )
+
   throwIfSkillDownloadUnavailable({ signal: input.signal, now: input.now!, expiresAt })
+
   const availability = createSkillDownloadAvailabilitySignal({
     signal: input.signal,
     now: input.now!,
     expiresAt
   })
+
   try {
     const response = await fetchWithoutCredentialRedirect(
       input,
@@ -194,13 +227,17 @@ async function downloadSkillPackageGrantUnobserved(
       expiresAt,
       availability.signal
     )
+
     if (!response.ok || !response.body) {
       throw new Error('skill-download-transport-failed')
     }
+
     if (response.headers.get('content-type')?.split(';', 1)[0] !== SKILL_PACKAGE_CONTENT_TYPE) {
       throw new Error('skill-download-content-type-invalid')
     }
+
     const contentLength = response.headers.get('content-length')
+
     if (contentLength !== null && Number(contentLength) !== input.expectedCompressedBytes) {
       throw new Error('skill-download-size-mismatch')
     }
@@ -208,11 +245,13 @@ async function downloadSkillPackageGrantUnobserved(
     const processRoot = await prepareTemporaryRoot(input.temporaryRoot)
     const temporaryDirectory = await mkdtemp(join(processRoot, '.orca-skill-download-'))
     const archivePath = join(temporaryDirectory, 'package.tar.gz')
+
     try {
       const handle = await open(archivePath, 'wx', 0o600)
       const reader = response.body.getReader()
       const hash = createHash('sha256')
       let compressedBytes = 0
+
       try {
         for (;;) {
           throwIfSkillDownloadUnavailable({
@@ -221,29 +260,38 @@ async function downloadSkillPackageGrantUnobserved(
             expiresAt
           })
           const chunk = await reader.read()
+
           if (chunk.done) {
             break
           }
+
           compressedBytes += chunk.value.byteLength
+
           if (
             compressedBytes > input.expectedCompressedBytes ||
             compressedBytes > SKILL_PACKAGE_MAX_COMPRESSED_BYTES
           ) {
             throw new Error('skill-download-size-limit')
           }
+
           hash.update(chunk.value)
           let offset = 0
+
           while (offset < chunk.value.byteLength) {
             const written = await handle.write(chunk.value, offset, chunk.value.byteLength - offset)
+
             if (written.bytesWritten === 0) {
               throw new Error('skill-download-write-failed')
             }
+
             offset += written.bytesWritten
           }
         }
+
         await handle.sync()
       } catch (error) {
         await reader.cancel().catch(() => undefined)
+
         if (input.signal?.aborted) {
           throwIfSkillDownloadUnavailable({
             signal: input.signal,
@@ -251,20 +299,26 @@ async function downloadSkillPackageGrantUnobserved(
             expiresAt
           })
         }
+
         if (isSkillDownloadGrantExpiredAbort(availability.signal)) {
           throw new Error('skill-download-grant-expired')
         }
+
         throw error
       } finally {
         await handle.close()
       }
+
       if (compressedBytes !== input.expectedCompressedBytes) {
         throw new Error('skill-download-size-mismatch')
       }
+
       const archiveSha256 = hash.digest('hex')
+
       if (!hashesEqual(archiveSha256, input.expectedArchiveSha256)) {
         throw new Error('skill-download-archive-digest-mismatch')
       }
+
       return {
         archivePath,
         archiveSha256,
@@ -288,9 +342,11 @@ export async function downloadSkillPackageGrant(
     transport: 'download-grant',
     compressedBytes: input.expectedCompressedBytes
   })
+
   try {
     const downloaded = await downloadSkillPackageGrantUnobserved(input)
     operation.complete({ status: 'complete', compressedBytes: downloaded.compressedBytes })
+
     return downloaded
   } catch (error) {
     operation.fail(error)

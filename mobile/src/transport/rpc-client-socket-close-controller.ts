@@ -36,6 +36,7 @@ export class RpcClientSocketCloseController {
 
   forceClose(session: RpcClientSocketSession): void {
     session.close()
+
     if (this.options.getCurrentSession() === session) {
       this.synthesizedCloses.remember(session.socket, this.options.getAuthenticationGeneration())
       this.handle(session)
@@ -53,33 +54,42 @@ export class RpcClientSocketCloseController {
         )
       ) {
         this.options.authenticationRetry.reject('Unauthorized — pairing may be revoked', true)
+
         return
       }
+
       console.log('[net] handleSocketClosed STALE — ignoring (ws already swapped)', {
         state: this.options.connectionState.get(),
         attempt: this.options.reconnect.getAttempt()
       })
+
       return
     }
+
     this.options.socketFactory.noteClosed()
     session.clearTimers()
     session.clearKey()
     this.options.clearCurrentSession()
     this.options.streams.markForReplay()
     this.options.stopLiveness(session)
+
     if (this.options.isIntentionallyClosed()) {
       console.log('[net] handleSocketClosed — intentional close')
       this.options.connectionState.publish('disconnected')
       this.options.requests.rejectAll('Connection closed', { deliveryUnknown: true })
+
       return
     }
+
     if (closeCode === UNAUTHORIZED_CLOSE_CODE) {
       console.log('[net] handleSocketClosed — unauthorized close code', {
         attempt: this.options.reconnect.getAttempt()
       })
       this.options.authenticationRetry.reject('Unauthorized — pairing may be revoked')
+
       return
     }
+
     console.log('[net] handleSocketClosed → reconnect', {
       pendingCount: this.options.requests.size(),
       streamCount: this.options.streams.size(),

@@ -37,36 +37,46 @@ export function useChecksPanelControllerState() {
 
   // Follow the active terminal's cwd so linked-PR/checks track the worktree it's operating in (e.g. across a stack), else the sidebar selection.
   const defaultActiveWorktree = useActiveWorktree()
+
   const { worktree: activeWorktree } = useChecksPanelTerminalWorktree({
     defaultActiveWorktree,
     isPanelVisible
   })
+
   const activeWorktreeId = activeWorktree?.id ?? null
   const repo = useRepoById(activeWorktree?.repoId ?? null)
+
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? repo?.connectionId ?? null)
     : null
+
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const expireGitHubPRRefreshState = useAppStore((s) => s.expireGitHubPRRefreshState)
+
   const getHostedReviewCreationEligibility = useAppStore(
     (s) => s.getHostedReviewCreationEligibility
   )
+
   const createHostedReview = useAppStore((s) => s.createHostedReview)
   const createStackedHostedReview = useAppStore((s) => s.createStackedHostedReview)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
+
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
+
   const gitStatusInvalidation = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusByWorktree[activeWorktreeId] : undefined
   )
+
   const remoteStatusInvalidation = useAppStore((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
+
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const pushBranch = useAppStore((s) => s.pushBranch)
   const syncBranch = useAppStore((s) => s.syncBranch)
@@ -85,6 +95,7 @@ export function useChecksPanelControllerState() {
   const setPRCommentReaction = useAppStore((s) => s.setPRCommentReaction)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
+
   const remoteDetectedAgentIds = useAppStore((s) => {
     return typeof activeConnectionId === 'string'
       ? (s.remoteDetectedAgentIds[activeConnectionId] ?? null)
@@ -96,8 +107,10 @@ export function useChecksPanelControllerState() {
   const [comments, setComments] = useState<PRComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const commentsRef = useRef<PRComment[]>([])
+
   const [commentsSelectionClearRequest, setCommentsSelectionClearRequest] =
     useState<PRCommentsListSelectionClearRequest | null>(null)
+
   const commentsSelectionClearTokenRef = useRef(0)
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -110,41 +123,51 @@ export function useChecksPanelControllerState() {
   const [isSyncingBranch, setIsSyncingBranch] = useState(false)
   const isResolvingConflictsWithAI = false
   const [isFixingChecksWithAI, setIsFixingChecksWithAI] = useState(false)
+
   const [agentComposerState, setAgentComposerState] = useState<ChecksAgentComposerState | null>(
     null
   )
+
   // Why: submit-after-ready outlives dialog close; keep the payload until launch is accepted.
   const pendingCommentResolutionRef = useRef<NonNullable<
     ChecksAgentComposerState['commentResolution']
   > | null>(null)
+
   // Why: an accepted launch parks its payload here so panel churn cannot drop it while
   // submit-after-ready is still running; nothing is posted until delivery succeeds.
   const claimedCommentResolutionRef = useRef<NonNullable<
     ChecksAgentComposerState['commentResolution']
   > | null>(null)
+
   const commentResolutionLaunchAcceptedRef = useRef(false)
   // Why: a second launch while the first ack is still landing would double-post fixing replies.
   const [commentResolutionAckBusy, setCommentResolutionAckBusy] = useState(false)
   const commentResolutionAckBusyRef = useRef(false)
+
   const setCommentResolutionAckBusyNow = useCallback((busy: boolean): void => {
     commentResolutionAckBusyRef.current = busy
     setCommentResolutionAckBusy(busy)
   }, [])
+
   const [hostedReviewCreationSnapshot, setHostedReviewCreationSnapshot] =
     useState<HostedReviewCreationSnapshot | null>(null)
+
   // Sticky record of the latest hard refresh error so Create can't flap back until a qualifying eligibility request clears it.
   const [hardRefreshError, setHardRefreshError] = useState<{
     observedAt: number
     errorType: PRRefreshErrorType
     contextKey: string
   } | null>(null)
+
   const [gitStatusSnapshot, setGitStatusSnapshot] = useState<ChecksPanelGitStatusSnapshot | null>(
     null
   )
+
   // Context key whose git-status probe failed with no snapshot, so the empty state can distinguish "checking branch status" from "could not check".
   const [gitStatusProbeErrorContextKey, setGitStatusProbeErrorContextKey] = useState<string | null>(
     null
   )
+
   const [gitStatusRefreshNonce, setGitStatusRefreshNonce] = useState(0)
   // Bumped by manual Retry/Refresh so eligibility re-runs even when Git state is unchanged (e.g. an auth fix must still clear the hard error).
   const [eligibilityRefreshNonce, setEligibilityRefreshNonce] = useState(0)
@@ -165,9 +188,11 @@ export function useChecksPanelControllerState() {
   const foregroundedUnrenderedReviewKeyRef = useRef<string | null>(null)
   commentsRef.current = comments
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
+
   const allocatePullRequestGenerationRequestId = useAppStore(
     (s) => s.allocatePullRequestGenerationRequestId
   )
+
   const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
   const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
 
@@ -179,13 +204,16 @@ export function useChecksPanelControllerState() {
     ): Promise<void> => {
       const state = useAppStore.getState()
       const latestSettings = state.settings
+
       if (!latestSettings) {
         throw new Error('Settings are not loaded.')
       }
+
       const latestRepo =
         target.type === 'repo'
           ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
           : null
+
       const result = saveSourceControlActionRecipe({
         target,
         settings: latestSettings,
@@ -193,14 +221,18 @@ export function useChecksPanelControllerState() {
         actionId,
         recipe
       })
+
       if ('sourceControlAi' in result) {
         await updateSettings({ sourceControlAi: result.sourceControlAi })
+
         return
       }
+
       await updateRepo(result.target.repoId, result.update)
     },
     [updateRepo, updateSettings]
   )
+
   const asyncResultKeyRef = useRef<string>('')
   const refreshRequestKeyRef = useRef<string | null>(null)
   const refreshContextKeyRef = useRef<string | null>(null)
@@ -210,6 +242,7 @@ export function useChecksPanelControllerState() {
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const activeWorktreePath = activeWorktree?.path ?? null
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
+
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
     worktreePath: activeWorktreePath,
@@ -217,9 +250,11 @@ export function useChecksPanelControllerState() {
       ? undefined
       : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
   })
+
   const runtimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
   )
+
   const ownerSettings = useMemo<AppState['settings']>(
     () =>
       !settings
@@ -229,18 +264,24 @@ export function useChecksPanelControllerState() {
           : { ...settings, activeRuntimeEnvironmentId: null },
     [runtimeEnvironmentId, settings]
   )
+
   const repoConnectionId = repo?.connectionId?.trim() || null
+
   // Local execution host variant (wsl:{distro} vs host); applies only when local — remote contexts are scoped by runtimeEnvironmentId/connectionId.
   const localExecutionScope = useMemo<string | null>(() => {
     if (runtimeEnvironmentId != null || repoConnectionId != null) {
       return null
     }
+
     const localRuntime = normalizeGlobalWindowsRuntimeDefault(settings?.localWindowsRuntimeDefault)
+
     return localRuntime.kind === 'wsl' ? `wsl:${localRuntime.distro ?? ''}` : 'host'
   }, [runtimeEnvironmentId, repoConnectionId, settings?.localWindowsRuntimeDefault])
+
   const sshConnectionStatus = useAppStore((s) =>
     repoConnectionId ? s.sshConnectionStates.get(repoConnectionId)?.status : undefined
   )
+
   const panelContextKey = buildChecksPanelGitStatusContextKey({
     repoId: repo?.id,
     worktreeId: activeWorktreeId,
@@ -256,8 +297,10 @@ export function useChecksPanelControllerState() {
     localExecutionScope,
     pushTarget: activeWorktreePushTarget
   })
+
   const panelContextKeyRef = useRef(panelContextKey)
   panelContextKeyRef.current = panelContextKey
+
   return {
     rightSidebarOpen,
     rightSidebarTab,

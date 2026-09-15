@@ -6,6 +6,7 @@ import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-t
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 
 const PANE_A = 'tab_a:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+
 const PANE_B = 'tab_b:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 type CheckResult = {
@@ -41,6 +42,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
       subject: 'do the work',
       runId: dispatch.run_id
     })
+
     return dispatch.id
   }
 
@@ -145,9 +147,11 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     let resolved = 0
     vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
       resolved += 1
+
       if (resolved === 2) {
         remintOnSamePane(dispatchId)
       }
+
       return identity(handle, paneKey)
     })
 
@@ -162,6 +166,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     const dispatchId = attachedDispatchWithMail()
     vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
       remintOnSamePane(dispatchId)
+
       return 'timed_out'
     })
 
@@ -189,9 +194,11 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     let resolved = 0
     vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
       resolved += 1
+
       if (resolved === 2) {
         reattach(dispatchId)
       }
+
       return identity(handle, paneKey)
     })
 

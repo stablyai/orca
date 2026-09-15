@@ -24,13 +24,16 @@ function run(ticks: { folded: NativeChatMessage[]; text?: string; live?: boolean
 } {
   let gate = createMobileNativeChatStreamingGate()
   const results: (string | null)[] = []
+
   for (const tick of ticks) {
     const step = deriveMobileNativeChatStreaming(gate, tick.folded, tick.text, {
       streamLive: tick.live
     })
+
     gate = step.gate
     results.push(step.streaming)
   }
+
   return { gate, results }
 }
 
@@ -71,46 +74,54 @@ describe('mobileNativeChatStreamPreview', () => {
 describe('deriveMobileNativeChatStreaming', () => {
   it('shows a genuine reply that repeats the previous turn as a prefix', () => {
     const prior = [assistant('a1', 'The tests pass.')]
+
     const { results } = run([
       { folded: prior }, // idle tick anchors the pre-stream tail
       { folded: prior, text: 'The' },
       { folded: prior, text: 'The tests' },
       { folded: prior, text: 'The tests pass.' }
     ])
+
     expect(results).toEqual([null, 'The', 'The tests', 'The tests pass.'])
   })
 
   it('hides the bubble once the real turn lands leading with the streamed text', () => {
     const prior = [assistant('a1', 'earlier turn')]
     const landed = [...prior, assistant('a2', 'fresh answer with a tail')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'fresh answer' },
       { folded: landed, text: 'fresh answer' }
     ])
+
     expect(results).toEqual([null, 'fresh answer', null])
   })
 
   it('suppresses an identical repeated reply once its own turn lands', () => {
     const prior = [assistant('a1', 'Done.')]
     const landed = [...prior, assistant('a2', 'Done.')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'Done.' }, // repeated-prefix reply stays visible
       { folded: landed, text: 'Done.' } // its own turn landed — hide
     ])
+
     expect(results).toEqual([null, 'Done.', null])
   })
 
   it('keeps hiding for the rest of a segment after the turn lands', () => {
     const prior = [assistant('a1', 'earlier')]
     const landed = [...prior, assistant('a2', 'answer body')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'answer' },
       { folded: landed, text: 'answer' },
       { folded: landed, text: 'answer bo' }
     ])
+
     expect(results).toEqual([null, 'answer', null, null])
   })
 
@@ -119,6 +130,7 @@ describe('deriveMobileNativeChatStreaming', () => {
     // stops reaching the gate, but the turn has not ended. Coming back, the
     // stream text returns before the re-read transcript does.
     const prior = [assistant('a1', 'Done.')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'Done.', live: true },
@@ -126,18 +138,21 @@ describe('deriveMobileNativeChatStreaming', () => {
       { folded: [], text: 'Done.', live: true },
       { folded: prior, text: 'Done.', live: true }
     ])
+
     expect(results).toEqual([null, 'Done.', null, 'Done.', 'Done.'])
   })
 
   it('still hides after a hidden gap once the reply landed as its own turn', () => {
     const prior = [assistant('a1', 'Done.')]
     const landed = [...prior, assistant('a2', 'Done.')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'Done.', live: true },
       { folded: [], live: true },
       { folded: landed, text: 'Done.', live: true }
     ])
+
     expect(results).toEqual([null, 'Done.', null, null])
   })
 
@@ -148,12 +163,14 @@ describe('deriveMobileNativeChatStreaming', () => {
     // history and render it a second time as a bubble.
     const prior = [assistant('a1', 'Done.')]
     const landed = [...prior, assistant('a2', 'Done.')]
+
     const { results } = run([
       { folded: prior, live: true },
       { folded: landed, live: true },
       { folded: landed, text: 'Done.', live: true },
       { folded: landed, text: 'Done.', live: true }
     ])
+
     expect(results).toEqual([null, null, null, null])
   })
 
@@ -162,12 +179,14 @@ describe('deriveMobileNativeChatStreaming', () => {
     // empty tail is not history: adopting it strands the baseline and swallows
     // the repeated-prefix reply that arrives next.
     const prior = [assistant('a1', 'Done.')]
+
     const { results } = run([
       { folded: prior },
       { folded: [] },
       { folded: [], live: true },
       { folded: prior, text: 'Done.', live: true }
     ])
+
     expect(results).toEqual([null, null, null, 'Done.'])
   })
 
@@ -175,22 +194,26 @@ describe('deriveMobileNativeChatStreaming', () => {
     // Opening a workspace whose agent is already working: that first textless
     // tick is the only pre-stream history the gate will ever get.
     const prior = [assistant('a1', 'Done.')]
+
     const { results } = run([
       { folded: prior, live: true },
       { folded: prior, text: 'Done.', live: true }
     ])
+
     expect(results).toEqual([null, 'Done.'])
   })
 
   it('anchors on a textless tick once the turn ends', () => {
     const prior = [assistant('a1', 'first answer')]
     const landed = [...prior, assistant('a2', 'second answer')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'second answer', live: true },
       { folded: landed },
       { folded: landed, text: 'second answer', live: true }
     ])
+
     expect(results).toEqual([null, 'second answer', null, 'second answer'])
   })
 
@@ -201,18 +224,21 @@ describe('deriveMobileNativeChatStreaming', () => {
     const prior = [assistant('a1', 'context')]
     const firstLanded = [...prior, assistant('a2', 'Alpha done')]
     const secondLanded = [...firstLanded, assistant('a3', 'Beta reply')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'Alpha', live: true },
       { folded: firstLanded }, // turn ended — re-anchor onto a2
       { folded: secondLanded, text: 'Beta', live: true } // a3 already landed
     ])
+
     expect(results).toEqual([null, 'Alpha', null, null])
   })
 
   it('re-anchors when a new reply part replaces the stream mid-turn', () => {
     const prior = [assistant('a1', 'context')]
     const partOneLanded = [...prior, assistant('a2', 'part one full text')]
+
     const { results } = run([
       { folded: prior },
       { folded: prior, text: 'part one' },
@@ -220,6 +246,7 @@ describe('deriveMobileNativeChatStreaming', () => {
       // Part two is not an extension of part one: new segment, new baseline.
       { folded: partOneLanded, text: 'part' }
     ])
+
     expect(results).toEqual([null, 'part one', null, 'part'])
   })
 
@@ -263,11 +290,13 @@ describe('deriveMobileNativeChatStreaming', () => {
 
   it('shows the first reply of an empty chat and hides it once the turn lands', () => {
     const landed = [assistant('a1', 'Hello there')]
+
     const { results } = run([
       { folded: [] },
       { folded: [], text: 'Hello' },
       { folded: landed, text: 'Hello' }
     ])
+
     expect(results).toEqual([null, 'Hello', null])
   })
 })

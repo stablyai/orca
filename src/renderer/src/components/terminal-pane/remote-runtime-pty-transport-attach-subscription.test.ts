@@ -9,6 +9,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -38,6 +39,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('attaches to an existing remote runtime terminal handle', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -87,6 +89,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onWriteUnavailable = vi.fn()
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -123,11 +126,13 @@ describe('createRemoteRuntimePtyTransport', () => {
         callbacksByAttempt.push(callbacks)
         subscriptionCallbacks = callbacks
         queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onWriteUnavailable = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -197,18 +202,22 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('recovers when the first restored-terminal subscription attempt is offline', async () => {
     vi.useFakeTimers()
+
     try {
       let attempt = 0
       runtimeSubscribe.mockImplementation(
         async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
           attempt += 1
+
           if (attempt === 1) {
             throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
               code: 'remote_runtime_unavailable'
             })
           }
+
           subscriptionCallbacks = callbacks
           queueMicrotask(emitMultiplexReady)
+
           return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
         }
       )
@@ -242,11 +251,13 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(recoveryStates.map((state) => state.phase)).toEqual(
         expect.arrayContaining(['connecting', 'recovering', 'connected'])
       )
+
       const recoveryEpochs = new Set(
         recoveryStates
           .filter((state) => state.phase === 'recovering' || state.phase === 'backoff')
           .map((state) => state.epoch)
       )
+
       expect(recoveryEpochs.size).toBe(1)
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
       transport.destroy?.()
@@ -257,17 +268,20 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('recovers when the runtime closes before a restored subscription becomes ready', async () => {
     vi.useFakeTimers()
+
     try {
       let attempt = 0
       runtimeSubscribe.mockImplementation(
         async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
           attempt += 1
           subscriptionCallbacks = callbacks
+
           if (attempt === 1) {
             queueMicrotask(() => callbacks.onClose?.())
           } else {
             queueMicrotask(emitMultiplexReady)
           }
+
           return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
         }
       )
@@ -305,6 +319,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             message: 'Remote Orca runtime rejected the pairing token.'
           })
         )
+
         return { unsubscribe, sendBinary: subscriptionSendBinary }
       }
     )
@@ -326,6 +341,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('reports viewer disconnect as an unverifiable remote exit', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -351,6 +367,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
         attempt += 1
         subscriptionCallbacks = callbacks
+
         if (attempt <= errors.length) {
           queueMicrotask(() =>
             callbacks.onError?.({
@@ -361,6 +378,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         } else {
           queueMicrotask(emitMultiplexReady)
         }
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )

@@ -13,6 +13,7 @@ import { CodexRuntimeHomeLegacyMigration } from './runtime-home-service-legacy-m
 export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMigration {
   protected readSystemDefaultAuth(): string | null {
     const systemDefaultAuthPath = join(getSystemCodexHomePath(), 'auth.json')
+
     return existsSync(systemDefaultAuthPath) ? readFileSync(systemDefaultAuthPath, 'utf-8') : null
   }
 
@@ -23,12 +24,16 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
   ): boolean {
     // Why: auth.json holds credentials; restrict to owner-only so other users on a shared machine cannot read it.
     const runtimeAuthPath = this.getRuntimeAuthPath()
+
     if (options && !this.fileContentsMatchExpected(runtimeAuthPath, options.expectedContents)) {
       return false
     }
+
     const provenance: CodexSharedRuntimeAuthProvenance =
       owner.owner === 'system-default' ? { owner: 'system-default', authJson: contents } : owner
+
     const runtimeAuthComparison = this.compareFileContents(runtimeAuthPath, contents)
+
     if (runtimeAuthComparison === null) {
       // Why: an unreadable runtime auth.json may hold a token Codex rotated a
       // moment ago. Treating "could not read" as "differs" sent execution to the
@@ -36,7 +41,9 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
       // out for good. Refuse; the next sync retries.
       return false
     }
+
     const runtimeAuthAlreadyMatches = runtimeAuthComparison
+
     if (
       runtimeAuthAlreadyMatches &&
       this.sharedRuntimeAuthProvenanceMatches(
@@ -47,31 +54,39 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
       this.ensureOwnerOnlyMode(runtimeAuthPath)
       this.lastWrittenAuthJson = contents
       this.clearRuntimeLogoutMarker()
+
       return true
     }
+
     this.persistSharedRuntimeAuthProvenance({
       owner: 'pending',
       next: provenance,
       runtimeAuthJson: contents
     })
+
     if (runtimeAuthAlreadyMatches) {
       this.ensureOwnerOnlyMode(runtimeAuthPath)
       this.lastWrittenAuthJson = contents
       this.persistSharedRuntimeAuthProvenance(provenance)
       this.clearRuntimeLogoutMarker()
+
       return true
     }
+
     const replaced = options
       ? writeFileAtomicallyIfUnchanged(runtimeAuthPath, options.expectedContents, contents, {
           mode: 0o600
         })
       : (writeFileAtomically(runtimeAuthPath, contents, { mode: 0o600 }), true)
+
     if (!replaced) {
       return false
     }
+
     this.lastWrittenAuthJson = contents
     this.persistSharedRuntimeAuthProvenance(provenance)
     this.clearRuntimeLogoutMarker()
+
     return true
   }
 
@@ -105,6 +120,7 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
       // test can drive.
       return !existsSync(targetPath)
     }
+
     return this.fileContentsEqual(targetPath, expectedContents)
   }
 
@@ -112,6 +128,7 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     if (process.platform === 'win32') {
       return
     }
+
     try {
       chmodSync(targetPath, 0o600)
     } catch {
@@ -121,14 +138,19 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
 
   protected getRuntimeLogoutMarkerStatus(): CodexRuntimeLogoutMarkerStatus {
     const marker = this.readRuntimeLogoutMarker()
+
     if (!marker) {
       return { kind: 'missing' }
     }
+
     const systemDefaultAuthJson = this.readSystemDefaultAuth()
+
     if (systemDefaultAuthJson === marker.systemDefaultAuthJson) {
       return { kind: 'applies' }
     }
+
     this.clearRuntimeLogoutMarker()
+
     return { kind: 'system-default-changed', systemDefaultAuthJson }
   }
 
@@ -137,6 +159,7 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
       systemDefaultAuthJson,
       loggedOutAt: Date.now()
     }
+
     writeFileAtomically(this.getRuntimeLogoutMarkerPath(), `${JSON.stringify(marker, null, 2)}\n`, {
       mode: 0o600
     })
@@ -144,11 +167,13 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
 
   protected readRuntimeLogoutMarker(): CodexRuntimeLogoutMarker | null {
     let parsed: unknown
+
     try {
       parsed = JSON.parse(readFileSync(this.getRuntimeLogoutMarkerPath(), 'utf-8')) as unknown
     } catch {
       return null
     }
+
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -158,13 +183,16 @@ export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMig
     ) {
       return null
     }
+
     const marker = parsed as { systemDefaultAuthJson: unknown; loggedOutAt: unknown }
+
     if (
       (marker.systemDefaultAuthJson !== null && typeof marker.systemDefaultAuthJson !== 'string') ||
       typeof marker.loggedOutAt !== 'number'
     ) {
       return null
     }
+
     return marker as CodexRuntimeLogoutMarker
   }
 

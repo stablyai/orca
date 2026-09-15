@@ -10,9 +10,13 @@ import {
 } from './terminal-query-reply'
 
 const COLOR_SCHEME_REPLY = mode2031SequenceFor('dark')
+
 const OSC_COLOR_REPLY = '\x1b]11;rgb:00/00/00\x07'
+
 const CPR_REPLY = '\x1b[6;1R'
+
 const DA1_REPLY = '\x1b[?1;2c'
+
 // ECHOCTL carets every C0 control, so an OSC reply's trailing BEL prints as `^G`. This
 // modelled ESC alone, which is not a shape any tty produces — see the live-pty transcript
 // in pty-startup-reply-echo-shapes.test.ts.
@@ -22,6 +26,7 @@ const caretEcho = (reply: string): string =>
       ch.charCodeAt(0) < 0x20 ? `^${String.fromCharCode(ch.charCodeAt(0) + 0x40)}` : ch
     )
     .join('')
+
 const readlineEcho = (reply: string): string =>
   reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
 
@@ -32,11 +37,13 @@ function harness(): {
 } {
   const writes: string[] = []
   const emissions: PtyIngressEmission[] = []
+
   const ingress = new PtyStartupIngress({
     ownerBackend: 'posix-pty',
     write: (data) => void writes.push(data),
     onEmission: (emission) => void emissions.push(emission)
   })
+
   return { ingress, writes, emissions }
 }
 
@@ -96,6 +103,7 @@ describe('live query replies', () => {
   it('never holds a partial verbatim echo, so a torn query is still answered', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       // Query authority open, so a query that survives the read boundary gets answered.
       intent: { colors: { foreground: '#2e3434', background: '#ffffff' }, deadlineMs: 5_000 },
@@ -103,6 +111,7 @@ describe('live query replies', () => {
       write: (data) => void writes.push(data),
       onEmission: (emission) => void emissions.push(emission)
     })
+
     expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
     writes.length = 0
 
@@ -124,6 +133,7 @@ describe('live query replies', () => {
     for (const keystroke of ['y', 'gh auth login\r', '\x1b[A', '\x1b', '\x03']) {
       expect(needsCookedEchoSafeQueryReply(keystroke)).toBe(false)
     }
+
     const { ingress, writes } = harness()
     expect(ingress.answerLiveQueryReply('ls\r')).toBe(false)
     expect(writes).toEqual([])
@@ -144,12 +154,14 @@ describe('live query replies', () => {
 
   it('leaves latency-critical replies on the host path, in call order', () => {
     const { ingress, writes } = harness()
+
     // CPR and DA1 need no echo containment, so the delivery declines them and the host
     // writes them itself — which is what keeps them behind the daemon's post-ready flush
     // gate instead of splicing into a buffered startup command.
     for (const reply of [CPR_REPLY, DA1_REPLY, OSC_COLOR_REPLY + DA1_REPLY]) {
       expect(ingress.answerLiveQueryReply(reply)).toBe(false)
     }
+
     expect(writes).toEqual([])
     ingress.drainAndClose()
   })
@@ -160,16 +172,21 @@ describe('live query replies', () => {
   describe('the short readline needle does not eat ordinary output', () => {
     const armed = (chunks: readonly string[]): string => {
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         ownerBackend: 'posix-pty',
         write: () => {},
         onEmission: (emission) => void emissions.push(emission)
       })
+
       ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)
+
       for (const chunk of chunks) {
         ingress.accept(chunk)
       }
+
       ingress.drainAndClose()
+
       return visible(emissions)
     }
 
@@ -182,6 +199,7 @@ describe('live query replies', () => {
       { name: 'a stack trace carrying 997:1', text: 'Error: boom\n    at f (/a/b.js:997:1)\n' }
     ])('passes $name through untouched', ({ text }) => {
       expect(armed([text])).toBe(text)
+
       // Same, torn at every byte boundary: a partial hold must still release intact.
       for (let split = 1; split < text.length; split += 1) {
         expect(armed([text.slice(0, split), text.slice(split)])).toBe(text)
@@ -197,11 +215,13 @@ describe('live query replies', () => {
 
     it('suppresses nothing when no reply was written', () => {
       const emissions: PtyIngressEmission[] = []
+
       const ingress = new PtyStartupIngress({
         ownerBackend: 'posix-pty',
         write: () => {},
         onEmission: (emission) => void emissions.push(emission)
       })
+
       ingress.accept('\x07997;1n')
       ingress.drainAndClose()
       expect(visible(emissions)).toBe('\x07997;1n')
@@ -210,9 +230,11 @@ describe('live query replies', () => {
 
   it('bounds unmatched echo projections instead of shadowing the session', () => {
     const { ingress, writes, emissions } = harness()
+
     for (let index = 0; index < 200; index += 1) {
       ingress.answerLiveQueryReply(`\x1b]11;rgb:${String(index).padStart(2, '0')}\x07`)
     }
+
     expect(writes).toHaveLength(200)
     // A projection that never lands must age out, or it keeps deleting matching spans
     // out of ordinary output forever.
@@ -230,6 +252,7 @@ describe('live query replies', () => {
   it('passes a duplicate query downstream instead of swallowing it', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
+
     const ingress = new PtyStartupIngress({
       intent: { colors: { foreground: '#2e3434', background: '#ffffff' }, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',

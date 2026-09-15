@@ -42,10 +42,12 @@ export function resolveCodexPaneLaunchAccount(args: {
 }): CodexPaneAccountRecord | null {
   const selectionKey = getCodexSelectionLaneKey(args.target)
   const resolvedHomeRoute = resolveCodexPaneHomeRoute(args)
+
   const homeRoute =
     args.recordComparableHomeRoute === false && resolvedHomeRoute === 'shared-home'
       ? 'custom-home'
       : resolvedHomeRoute
+
   if (!args.pinnedByResume) {
     return {
       selectionKey,
@@ -59,7 +61,9 @@ export function resolveCodexPaneLaunchAccount(args: {
         : {})
     }
   }
+
   const accountId = resolveCodexHomeOwnerAccountId(args)
+
   return accountId === undefined
     ? null
     : {
@@ -88,18 +92,23 @@ function resolveCodexPaneHomeRoute(args: {
   ) {
     return 'real-home'
   }
+
   const launchHomePath = args.launchCodexHomePath
+
   const accountOwnsHome = args.settings.codexManagedAccounts?.some((account) =>
     accountOwnsCodexHome(account, args.target, launchHomePath)
   )
+
   if (accountOwnsHome) {
     return 'account-home'
   }
+
   if (args.target.runtime === 'wsl') {
     return parseWslUncPath(args.launchCodexHomePath)?.linuxPath.endsWith('/.codex')
       ? 'real-home'
       : 'wsl-home'
   }
+
   return 'shared-home'
 }
 
@@ -114,16 +123,20 @@ function resolveCodexHomeOwnerAccountId(args: {
   if (!args.launchCodexHomePath) {
     return null
   }
+
   if (
     normalizeRuntimePathForComparison(args.launchCodexHomePath) ===
     normalizeRuntimePathForComparison(args.systemCodexHomePath)
   ) {
     return null
   }
+
   const launchHomePath = args.launchCodexHomePath
+
   const owner = args.settings.codexManagedAccounts?.find((account) =>
     accountOwnsCodexHome(account, args.target, launchHomePath)
   )
+
   // Why: an unowned home cannot be named, and naming the account a pane is stuck
   // on is the prompt's whole job — so decline rather than guess. A wrong notice
   // silently drops every keystroke in that terminal. Note the shared runtime
@@ -146,15 +159,18 @@ function accountOwnsCodexHome(
   ) {
     return false
   }
+
   if (
     normalizeRuntimePathForComparison(account.managedHomePath) ===
     normalizeRuntimePathForComparison(launchHomePath)
   ) {
     return true
   }
+
   const launchWslHome = target.runtime === 'wsl' ? parseWslUncPath(launchHomePath) : null
   const accountDistro = account.wslDistro?.trim()
   const accountLinuxHome = account.wslLinuxHomePath?.trim()
+
   return Boolean(
     launchWslHome &&
     accountDistro &&

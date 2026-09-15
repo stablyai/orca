@@ -42,6 +42,7 @@ async function loadBranchDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
+
     // Why concurrent: the two sides are independent `git show` spawns, so awaiting
     // them in series doubles the latency of every diff the review panel opens.
     const [leftBlob, rightBlob] = await Promise.all([

@@ -37,8 +37,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -59,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -68,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -88,6 +93,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -98,9 +104,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -110,9 +118,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -121,6 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -154,6 +165,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-local-1'
     })
     transportFactoryQueue.push(transport)
@@ -196,6 +208,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: "command-code --trust 'Fix the status'",
@@ -205,9 +218,11 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
     onPtySpawn?.(sshPtyId)
 
@@ -234,6 +249,7 @@ describe('connectPanePty', () => {
     transport.getConnectionId.mockReturnValue('ssh-a')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return sshPtyId
     })
     transportFactoryQueue.push(transport)
@@ -242,6 +258,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'command-code --trust'
@@ -279,6 +296,7 @@ describe('connectPanePty', () => {
     transport.getConnectionId.mockReturnValue('ssh-a')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return oldPtyId
     })
     transportFactoryQueue.push(transport)
@@ -307,17 +325,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-command-code')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-command-code'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'command-code --trust'
       }
     })
+
     const paneKey = makePaneKey('tab-1', LEAF_1)
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -357,17 +378,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-command-code')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-command-code'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'command-code --trust'
       }
     })
+
     const paneKey = makePaneKey('tab-1', LEAF_1)
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -394,17 +418,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-command-code')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-command-code'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'command-code --trust'
       }
     })
+
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState.agentStatusByPaneKey[paneKey] = {
       paneKey,
@@ -435,17 +462,20 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-command-code')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-command-code'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'command-code --trust'
       }
     })
+
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState.agentStatusByPaneKey[paneKey] = {
       paneKey,
@@ -483,6 +513,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -494,6 +525,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-ssh-paste'
         }
       )
@@ -537,6 +569,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -548,6 +581,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-local-paste'
         }
       )
@@ -591,6 +625,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -605,11 +640,13 @@ describe('connectPanePty', () => {
         if (data !== '\r') {
           livePtyId = 'pty-replaced'
         }
+
         return true
       })
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-local-paste'
         }
       )

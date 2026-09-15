@@ -16,10 +16,12 @@ describe('useChecksPanelCreateReview provider flow', () => {
       number: 42,
       url: 'https://github.com/orca/app/pull/42'
     }
+
     const createHostedReview: CreateInput['createHostedReview'] = vi.fn(async () => createdReview)
     const refreshLinkedGitHubPullRequest: CreateInput['refreshLinkedGitHubPullRequest'] = vi.fn()
     const setIsCreatingPr: CreateInput['setIsCreatingPr'] = vi.fn()
     const createPrInFlightRef = { current: null as string | null }
+
     const input: CreateInput = {
       activePullRequestGenerationKey: null,
       activeWorktreeId: null,
@@ -70,6 +72,7 @@ describe('useChecksPanelCreateReview provider flow', () => {
       updatePullRequestGenerationRecord: vi.fn(),
       updateWorktreeMeta: vi.fn()
     }
+
     const { result } = renderHook(() => useChecksPanelCreateReview(input))
 
     await act(async () => result.current.handleCreatePullRequest(false))

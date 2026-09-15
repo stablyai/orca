@@ -6,8 +6,11 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { eraseRpcMethods } from '../../../core'
 
 const COORDINATOR = 'term_coordinator'
+
 const TARGET = 'term_target'
+
 const OTHER = 'term_other'
+
 const SUPERVISED = 'term_supervised'
 
 describe('manual Dispatch release', () => {
@@ -41,12 +44,14 @@ describe('manual Dispatch release', () => {
     const supervised = createSupervisedWorker()
     const targetTask = createTask('target')
     const targetDispatch = await dispatchTask(targetTask, TARGET)
+
     const question = db.createQuestion({
       runId,
       dispatchId: targetDispatch,
       askerHandle: TARGET,
       question: 'Can this assignment finish?'
     })
+
     expect(db.getWorkerDispatch(targetDispatch)).toBeUndefined()
     await expect(call('orchestration.dispatchShow', { task: targetTask })).resolves.toMatchObject({
       dispatch: { id: targetDispatch, status: 'dispatched' }
@@ -54,17 +59,20 @@ describe('manual Dispatch release', () => {
 
     const notify = vi.spyOn(runtime, 'notifyMessageArrived')
     notify.mockClear()
+
     const released = (await call(method, { dispatch: targetDispatch })) as {
       state: string
       alreadySettled: boolean
       processAction: string
       residualResources?: unknown[]
     }
+
     expect(released).toMatchObject({
       state: expectedState,
       alreadySettled: false,
       processAction: 'none'
     })
+
     if (method === 'orchestration.workerAbandon') {
       expect(released.residualResources).toEqual([])
     }
@@ -90,6 +98,7 @@ describe('manual Dispatch release', () => {
       method === 'orchestration.workerAbandon'
         ? 'orchestration.workerStop'
         : 'orchestration.workerAbandon'
+
     await expect(call(oppositeMethod, { dispatch: targetDispatch })).resolves.toMatchObject({
       state: expectedState,
       alreadySettled: true,
@@ -154,6 +163,7 @@ describe('manual Dispatch release', () => {
       from: COORDINATOR,
       to: handle
     })) as { dispatch: { id: string } }
+
     return result.dispatch.id
   }
 
@@ -164,6 +174,7 @@ describe('manual Dispatch release', () => {
       taskId: createTask('supervised'),
       startOptions: {}
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: SUPERVISED,
@@ -174,6 +185,7 @@ describe('manual Dispatch release', () => {
       effects: []
     })
     db.markWorkerDispatchReady(started.dispatch.id)
+
     return started.dispatch.id
   }
 
@@ -181,9 +193,11 @@ describe('manual Dispatch release', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     return method.handler(method.params!.parse(params), { runtime })
   }
 })

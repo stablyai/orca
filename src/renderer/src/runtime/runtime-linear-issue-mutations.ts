@@ -25,6 +25,7 @@ export async function linearCreateIssue(
   }
 ): Promise<LinearCreateIssueResult> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCreateIssueResult>(target, 'linear.createIssue', args, {
         timeoutMs: 30_000
@@ -52,6 +53,7 @@ export async function linearGetIssue(
   workspaceId?: string | null
 ): Promise<LinearIssue | null> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue | null>(
         target,
@@ -69,6 +71,7 @@ export async function linearUpdateIssue(
   workspaceId?: string | null
 ): Promise<LinearMutationResult> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearMutationResult>(
         target,
@@ -86,6 +89,7 @@ export async function linearAddIssueComment(
   workspaceId?: string | null
 ): Promise<LinearCommentResult> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCommentResult>(
         target,
@@ -102,6 +106,7 @@ export async function linearIssueComments(
   workspaceId?: string | null
 ): Promise<LinearComment[]> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearComment[]>(
         target,

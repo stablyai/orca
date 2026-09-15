@@ -18,15 +18,20 @@ export function addViewportSizeChangeListener(
 ): () => void {
   let lastWidth = target.innerWidth
   let lastHeight = target.innerHeight
+
   const handleResize = (): void => {
     const { innerWidth, innerHeight } = target
+
     if (innerWidth === lastWidth && innerHeight === lastHeight) {
       return
     }
+
     lastWidth = innerWidth
     lastHeight = innerHeight
     onChange()
   }
+
   target.addEventListener('resize', handleResize)
+
   return () => target.removeEventListener('resize', handleResize)
 }

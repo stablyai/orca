@@ -323,11 +323,14 @@ describe('New Markdown — split group targeting', () => {
       label: string
       targetGroupId?: string
     }[] = []
+
     const groups: TabGroup[] = [
       { id: 'group-a', worktreeId: 'wt-1', activeTabId: null, tabOrder: [] },
       { id: 'group-b', worktreeId: 'wt-1', activeTabId: null, tabOrder: [] }
     ]
+
     const existingTabs: Tab[] = []
+
     const store = createEditorStore({
       groupsByWorktree: { 'wt-1': groups },
       unifiedTabsByWorktree: { 'wt-1': existingTabs },
@@ -343,6 +346,7 @@ describe('New Markdown — split group targeting', () => {
           label: init!.label!,
           targetGroupId: init?.targetGroupId
         })
+
         return {
           id: 'tab-1',
           worktreeId,

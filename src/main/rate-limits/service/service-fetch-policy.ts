@@ -53,9 +53,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
     // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
     const current = this.state.claude
+
     if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
       return current
     }
+
     return this.applyStalePolicy(fresh, previous)
   }
 
@@ -71,6 +73,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
+
     this.lastClaudeAuthSnapshot = {
       configDir: normalizeClaudeConfigDir(authPreparation?.envPatch.CLAUDE_CONFIG_DIR),
       provenance: authPreparation?.provenance ?? 'system'
@@ -81,30 +84,38 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
     // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
     const snapshot = this.lastClaudeAuthSnapshot
+
     if (!snapshot) {
       // Why: breadcrumbs make a silently dark live feed diagnosable — dropped posts are otherwise invisible.
       console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
         eventConfigDir: event.configDir
       })
+
       return
     }
+
     // Why: sessions of other accounts (or other runtimes) report their own quota; mixing them into the active account's bar would lie.
     if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
       console.debug('[rate-limits] dropped live Claude usage: configDir mismatch', {
         eventConfigDir: event.configDir,
         snapshotConfigDir: snapshot.configDir
       })
+
       return
     }
+
     const freshSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
     const freshWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+
     if (!freshSession && !freshWeekly) {
       return
     }
+
     const previous = this.state.claude
     // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
     const session = freshSession ?? previous?.session ?? null
     const weekly = freshWeekly ?? previous?.weekly ?? null
+
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
@@ -114,6 +125,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
+
     this.activeFailureStreakByProvider.claude = 0
     this.updateState({
       ...this.state,

@@ -12,7 +12,9 @@ import { GITHUB_TASK_SEARCH_IDLE_MS } from '../../src/renderer/src/components/us
 // Why derived: a fixed 400ms cadence left only ~150ms of margin against the idle window
 // on a loaded runner, so one slow keystroke committed a prefix and failed the assertion.
 const TASK_SEARCH_TYPING_DELAY_MS = Math.round(GITHUB_TASK_SEARCH_IDLE_MS / 6)
+
 const TASK_SEARCH_SETTLE_MS = GITHUB_TASK_SEARCH_IDLE_MS + 50
+
 // Why derived: the probe must outlast the idle window plus a React commit and two
 // store round trips; a flat 2s left ~1.2s of slack on a single-worker runner.
 const TASK_SEARCH_PROBE_TIMEOUT_MS = GITHUB_TASK_SEARCH_IDLE_MS * 6
@@ -37,9 +39,11 @@ const TASK_SOURCE_BY_LABEL: Record<string, string> = {
 async function openTasksPage(page: Parameters<typeof getStoreState>[0]): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     store.getState().openTaskPage()
   })
 }
@@ -54,10 +58,13 @@ async function getRenderedTaskSources(
         const source =
           button.getAttribute('data-task-source') ??
           sourceByLabel[button.getAttribute('aria-label')?.trim() ?? '']
+
         if (!source) {
           return []
         }
+
         const active = button.getAttribute('aria-pressed') === 'true'
+
         return [{ source, active }]
       })
     }, TASK_SOURCE_BY_LABEL)
@@ -68,9 +75,11 @@ async function openMockedPaginatedGitHubTasks(
 ): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const repos = store.getState().repos.map((repo, index) =>
       index === 0
         ? {
@@ -83,6 +92,7 @@ async function openMockedPaginatedGitHubTasks(
           }
         : repo
     )
+
     const makePage = (pageNumber: number) =>
       Array.from({ length: 30 }, (_, index) => ({
         id: `issue-${pageNumber}-${index + 1}`,
@@ -122,21 +132,29 @@ async function openInstrumentedGitHubTasksPage(
 ): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
+
     const activeWorktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === state.activeWorktreeId)
+
     const repo = state.repos.find((candidate) => candidate.id === activeWorktree?.repoId)
+
     if (!repo || !state.settings) {
       throw new Error('GitHub Tasks probe requires a ready repository and settings')
     }
+
     const probe: TaskSearchRequestProbe = { countQueries: [], fetchQueries: [] }
+
     ;(
       window as typeof window & { __taskSearchRequestProbe?: TaskSearchRequestProbe }
     ).__taskSearchRequestProbe = probe
+
     const existingIssue = {
       id: 'issue:999',
       type: 'issue' as const,
@@ -173,10 +191,12 @@ async function openInstrumentedGitHubTasksPage(
       prefetchWorkItems: () => undefined,
       fetchWorkItemsAcrossRepos: async (_repos, _perRepoLimit, _displayLimit, query) => {
         probe.fetchQueries.push(query)
+
         return { items: [existingIssue], failedCount: 0, githubUnavailable: false }
       },
       countWorkItemsAcrossRepos: async (_repos, query) => {
         probe.countQueries.push(query)
+
         return { totalCount: 1, totalPages: 1 }
       }
     })
@@ -195,9 +215,11 @@ async function readTaskSearchRequestProbe(
   return page.evaluate(() => {
     const probe = (window as typeof window & { __taskSearchRequestProbe?: TaskSearchRequestProbe })
       .__taskSearchRequestProbe
+
     if (!probe) {
       throw new Error('Task search request probe is not installed')
     }
+
     return { countQueries: [...probe.countQueries], fetchQueries: [...probe.fetchQueries] }
   })
 }
@@ -208,9 +230,11 @@ async function resetTaskSearchRequestProbe(
   await page.evaluate(() => {
     const probe = (window as typeof window & { __taskSearchRequestProbe?: TaskSearchRequestProbe })
       .__taskSearchRequestProbe
+
     if (!probe) {
       throw new Error('Task search request probe is not installed')
     }
+
     probe.countQueries.length = 0
     probe.fetchQueries.length = 0
   })
@@ -240,6 +264,7 @@ test.describe('Tasks page', () => {
       .poll(
         async () => {
           renderedSources = await getRenderedTaskSources(orcaPage)
+
           return renderedSources.length
         },
         {
@@ -253,6 +278,7 @@ test.describe('Tasks page', () => {
       .poll(
         async () => {
           renderedSources = await getRenderedTaskSources(orcaPage)
+
           return renderedSources.some((source) => source.active)
         },
         {
@@ -261,6 +287,7 @@ test.describe('Tasks page', () => {
         }
       )
       .toBe(true)
+
     if (renderedSources.some((source) => source.source === 'github' && source.active)) {
       await expect(orcaPage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
       await expect(orcaPage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
@@ -292,6 +319,7 @@ test.describe('Tasks page', () => {
     // element must be visible. Tasks-close also hides the "Close tasks"
     // button regardless of previous view, so we assert that too.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toHaveCount(0)
+
     if (previousView === 'terminal') {
       await expect(orcaPage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
     }
@@ -312,10 +340,12 @@ test.describe('Tasks page', () => {
 
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
     await expect(list).toHaveCount(0)
+
     const clampedRowsStyle = await orcaPage.addStyleTag({
       content:
         '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
     })
+
     await openTasksPage(orcaPage)
 
     await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
@@ -335,6 +365,7 @@ test.describe('Tasks page', () => {
     await expect
       .poll(async () => {
         const position = await getStoreState<{ scrollTop: number }>(orcaPage, 'taskListPosition')
+
         return position.scrollTop
       })
       .toBeGreaterThan(300)
@@ -345,10 +376,12 @@ test.describe('Tasks page', () => {
       .toBeGreaterThan(300)
 
     await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
+
     const pendingRestoreStyle = await orcaPage.addStyleTag({
       content:
         '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
     })
+
     await openTasksPage(orcaPage)
     await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
       'aria-current',
@@ -383,6 +416,7 @@ test.describe('Tasks page', () => {
       content:
         '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
     })
+
     await openTasksPage(orcaPage)
     await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
       'aria-current',
@@ -396,6 +430,7 @@ test.describe('Tasks page', () => {
     await expect
       .poll(async () => {
         const position = await getStoreState<{ scrollTop: number }>(orcaPage, 'taskListPosition')
+
         return position.scrollTop
       })
       .toBeGreaterThan(300)

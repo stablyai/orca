@@ -13,12 +13,15 @@ type FixtureArgs = {
 
 function parseFixtureArgs(argv: string[]): FixtureArgs {
   const values = new Map<string, string>()
+
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]
     const value = argv[index + 1]
+
     if (!key || !value) {
       throw new Error('Daemon generation fixture arguments must be key/value pairs')
     }
+
     values.set(key, value)
   }
 
@@ -27,6 +30,7 @@ function parseFixtureArgs(argv: string[]): FixtureArgs {
   const tokenPath = values.get('--token')
   const logPath = values.get('--log')
   const refuseDispose = values.get('--refuse-dispose') === 'true'
+
   if (
     !Number.isInteger(protocolVersion) ||
     protocolVersion < 1 ||
@@ -38,6 +42,7 @@ function parseFixtureArgs(argv: string[]): FixtureArgs {
       'Usage: daemon-generation-entry --protocol <n> --socket <path> --token <path> --log <path>'
     )
   }
+
   return { protocolVersion, socketPath, tokenPath, logPath, refuseDispose }
 }
 
@@ -45,6 +50,7 @@ async function main(): Promise<void> {
   const { protocolVersion, socketPath, tokenPath, logPath, refuseDispose } = parseFixtureArgs(
     process.argv.slice(2)
   )
+
   let daemon: DaemonHandle | null = await startDaemon({
     protocolVersion,
     socketPath,
@@ -52,21 +58,28 @@ async function main(): Promise<void> {
     log: createDaemonFileLog(logPath),
     spawnSubprocess: async (options) => {
       const subprocess = await createPtySubprocess(options)
+
       if (refuseDispose) {
         // Why: models an access-denied/unreapable Windows PTY while keeping the
         // real child and ConPTY handle inside this disposable fixture tree.
         subprocess.kill = () => {}
+
         subprocess.forceKill = () => {}
       }
+
       return subprocess
     }
   })
+
   let shuttingDown = false
+
   const shutdown = async (): Promise<void> => {
     if (shuttingDown) {
       return
     }
+
     shuttingDown = true
+
     try {
       await daemon?.shutdown()
       daemon = null

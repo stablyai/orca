@@ -19,6 +19,7 @@ import { translate } from '@/i18n/i18n'
 
 // Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
 const PREVIEW_COLS = 36
+
 const PREVIEW_ROWS = 15
 
 // Why: color-only stub pane; 40px is wide enough to read inactive-pane opacity dim, narrow enough not to crowd content.
@@ -46,6 +47,7 @@ function resolveAppMode(
   if (settings.theme === 'system') {
     return systemPrefersDark ? 'dark' : 'light'
   }
+
   return settings.theme
 }
 
@@ -71,6 +73,7 @@ export function TerminalSettingsPreview({
   const [togglePreviewMode, setTogglePreviewMode] = useState<PreviewMode>(() =>
     resolveAppMode(settings, systemPrefersDark)
   )
+
   const [previewPaneDividerVisible, setPreviewPaneDividerVisible] = useState(false)
 
   // Why: recomputed each render so plain previews (no override/toggle) track live app-theme changes.
@@ -114,15 +117,19 @@ export function TerminalSettingsPreview({
 
   useEffect(() => {
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     const weights = resolveTerminalFontWeights(
       settings.terminalFontWeight,
       settings.terminalFontWeightBold
     )
+
     skipInitialOptionMutationRef.current = true
     skipInitialThemeRewriteRef.current = true
+
     // Why: DOM renderer only — WebGL contexts are scarce and multiple previews can mount at once.
     // Why disableStdin: read-only; tabIndex/aria-hidden on the wrapper don't reach xterm's internal textarea, but this does.
     const terminal = new Terminal({
@@ -143,6 +150,7 @@ export function TerminalSettingsPreview({
       cols: PREVIEW_COLS,
       rows: PREVIEW_ROWS
     })
+
     terminalRef.current = terminal
 
     try {
@@ -167,17 +175,22 @@ export function TerminalSettingsPreview({
   // Why: mutate options directly so xterm repaints in its normal cycle; no refit needed since cols/rows are pinned.
   useEffect(() => {
     const terminal = terminalRef.current
+
     if (!terminal) {
       return
     }
+
     if (skipInitialOptionMutationRef.current) {
       skipInitialOptionMutationRef.current = false
+
       return
     }
+
     const weights = resolveTerminalFontWeights(
       settings.terminalFontWeight,
       settings.terminalFontWeightBold
     )
+
     terminal.options.fontSize = settings.terminalFontSize
     terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
     terminal.options.fontWeight = weights.fontWeight
@@ -199,9 +212,11 @@ export function TerminalSettingsPreview({
 
   useEffect(() => {
     const terminal = terminalRef.current
+
     if (!terminal || !composedTheme) {
       return
     }
+
     terminal.options.theme = composedTheme
     // Why: share applyTerminalAppearance's gating helper (#7934) so the preview can't drift from live panes.
     terminal.options.minimumContrastRatio = resolveTerminalMinimumContrastRatio(
@@ -212,10 +227,13 @@ export function TerminalSettingsPreview({
     // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
     terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+
     if (skipInitialThemeRewriteRef.current) {
       skipInitialThemeRewriteRef.current = false
+
       return
     }
+
     // Why reset() not clear(): buffer ends mid-line on the prompt, so clear()+write would duplicate the trailing fragment.
     terminal.reset()
     terminal.write(PREVIEW_BUFFER)
@@ -228,13 +246,17 @@ export function TerminalSettingsPreview({
 
   useEffect(() => {
     const terminal = terminalRef.current
+
     if (!terminal) {
       return
     }
+
     const enabled = resolveTerminalLigaturesEnabled(settings.terminalLigatures, effectiveFontFamily)
     const current = ligaturesAddonRef.current
+
     if (enabled && !current) {
       const addon = new LigaturesAddon()
+
       try {
         terminal.loadAddon(addon)
         ligaturesAddonRef.current = addon

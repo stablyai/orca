@@ -23,6 +23,7 @@ function destinationNotes(
   if (!preview) {
     return undefined
   }
+
   return new Map(
     preview.skills.map((skill) => [
       skill.id,
@@ -50,9 +51,11 @@ export function SkillBundleInstallReview(props: {
   children: ReactNode
 }): React.JSX.Element {
   const { manifest } = props.version
+
   const conflicts =
     props.destinationPreview?.skills.filter((skill) => CONFLICT_STATES.has(skill.currentState)) ??
     []
+
   const allSelected = props.selectedSkillIds.size === manifest.skills.length
 
   return (

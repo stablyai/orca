@@ -75,6 +75,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     onShowSessionRestoredBanner,
     ptyStartup
   } = context
+
   const linkPointerGesture = installTerminalLinkPointerGesture(pane.terminal)
   refs.linkPointerGesturesRef.current.set(pane.id, linkPointerGesture)
   refs.linkProviderDisposablesRef.current.set(
@@ -125,12 +126,15 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     pane.terminal.onSelectionChange(() => {
       const shouldWritePrimarySelection = isPrimarySelectionEnabled()
       const shouldWriteClipboard = settingsRef.current?.terminalClipboardOnSelect === true
+
       if (!shouldWritePrimarySelection && !shouldWriteClipboard) {
         return
       }
+
       if (!pane.terminal.hasSelection()) {
         return
       }
+
       if (
         shouldWritePrimarySelection &&
         !shouldWriteClipboard &&
@@ -138,35 +142,46 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       ) {
         return
       }
+
       if (shouldWritePrimarySelection) {
         const existingTimer = refs.selectionCaptureTimersRef.current.get(pane.id)
+
         if (existingTimer !== undefined) {
           window.clearTimeout(existingTimer)
         }
+
         const timer = window.setTimeout(() => {
           refs.selectionCaptureTimersRef.current.delete(pane.id)
+
           if (!isPrimarySelectionEnabled() || !pane.terminal.hasSelection()) {
             return
           }
+
           if (terminalSelectionExceedsPrimaryLimit(pane.terminal)) {
             return
           }
+
           const selection = readTerminalClipboardSelection(pane.terminal)
+
           if (selection) {
             setPrimarySelectionText(selection)
           }
         }, 100)
+
         refs.selectionCaptureTimersRef.current.set(pane.id, timer)
       }
+
       if (!shouldWriteClipboard) {
         return
       }
+
       void copyTerminalSelection({
         terminal: pane.terminal,
         writeClipboardText: window.api.ui.writeTerminalClipboardText
       }).catch(() => {})
     })
   )
+
   if (settingsRef.current?.terminalMouseHideWhileTyping) {
     refs.mouseHideDisposablesRef.current.set(
       pane.id,
@@ -187,6 +202,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         linkActionContext: getLinkActionContext(pane.id),
         actionDestinations: getHttpLinkActionDestinations(pane.id)
       })
+
       if (handled) {
         pane.terminal.clearSelection()
       }

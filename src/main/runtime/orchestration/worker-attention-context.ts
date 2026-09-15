@@ -15,6 +15,7 @@ export function buildWorkerAttentionContext(args: {
 }) {
   const now = args.now ?? Date.now()
   const facts = args.db.getWorkerAttentionFacts(args.dispatch.id, now)
+
   return projectWorkerAttentionContext({
     facts,
     isRoot: facts.isRoot,

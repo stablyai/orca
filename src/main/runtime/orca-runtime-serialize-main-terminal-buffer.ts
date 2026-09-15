@@ -48,34 +48,42 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     terminalOwner?: 'shell'
   } | null> {
     const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
+
     if (restoredSnapshot) {
       return restoredSnapshot
     }
+
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
       ...opts,
       includeEmpty: true
     })
+
     if (headlessSnapshot) {
       return headlessSnapshot
     }
+
     // Why: hidden-output recovery is initiated by the desktop renderer. If the
     // runtime has not built headless state yet, the mounted xterm is still the
     // best available state and avoids a false "snapshot unavailable" result.
     const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+
     return rendererSnapshot ?? this.serializeProviderTerminalBuffer(ptyId, opts)
   }
 
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
     const leaf = this.resolveLeafForHandle(handle)
+
     if (!leaf?.ptyId) {
       throw new Error('terminal_not_found')
     }
+
     // Why: clear is a terminal UI action (Cmd+K on desktop), not shell input.
     // Route through the controller so renderer-owned xterm buffers, daemon
     // sessions, and SSH relay sessions all drop scrollback before the next
     // mobile snapshot.
     await this.ptyController?.clearBuffer?.(leaf.ptyId)
     await this.clearHeadlessTerminalBuffer(leaf.ptyId)
+
     return { handle, cleared: true }
   }
 
@@ -93,6 +101,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     if (this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ?? false
     }
+
     return (
       this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ??
       this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ??
@@ -117,15 +126,19 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     if (!data) {
       return
     }
+
     const existing = this.headlessTerminals.get(ptyId)
+
     if (existing) {
       // Why: emulator already has live data — re-seeding would duplicate
       // every byte. The seed is only valid when the emulator is fresh.
       if (metadata.preferProviderIfExisting) {
         this.providerSnapshotPreferredPtys.add(ptyId)
       }
+
       return
     }
+
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
     state.outputSequence = this.getPtyOutputSequence(ptyId)
@@ -137,6 +150,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
         // Why: seed writes never set forwardQueryReplies — the main-side
         // replay guard. A snapshot containing old queries must answer no one.
         await state.emulator.write(data)
+
         // Why AFTER the seed write: the snapshot payload cannot carry kitty
         // pushes (rehydrateSequences deliberately omits them), but ordering
         // behind it keeps the parse deterministic. Unflagged like the seed —
@@ -144,12 +158,15 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
         if (typeof metadata.kittyKeyboardFlags === 'number') {
           await state.emulator.applyKittyKeyboardFlags(metadata.kittyKeyboardFlags)
         }
+
         if (metadata.cwd !== undefined) {
           state.emulator.setCwd(metadata.cwd)
         }
+
         if (metadata.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(metadata.oscLinks)
         }
+
         // Why derived from the emulator: the seed bytes bypass ownership.scan,
         // so the scanner must inherit the restored alternate-screen state or a
         // pane seeded mid-TUI never arms its recovery trigger.
@@ -172,20 +189,24 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
   // bytes are historical output, not fresh activity.
   seedTerminalRestoreTail(ptyId: string, restore: { text?: string; lastTitle?: string }): void {
     const seed = restore.text ? buildRestoredTerminalTailSeed(restore.text) : null
+
     if (seed) {
       const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+
       // Why: live bytes outrank the seed — only never-written records take it,
       // so a same-run remount reattach cannot re-apply history it already has.
       if (pty && restoredTerminalTailSeedAllowed(pty)) {
         applyRestoredTerminalTailSeed(pty, seed)
         this.primeWaitBlockedBaselineFromSeededTail(ptyId)
       }
+
       for (const leaf of this.getLeavesForPty(ptyId)) {
         if (restoredTerminalTailSeedAllowed(leaf)) {
           applyRestoredTerminalTailSeed(leaf, seed)
         }
       }
     }
+
     if (restore.lastTitle) {
       // Why: mirror renderer hydration — a title main already tracked live outranks the payload's persisted one.
       this.applySeededAgentStatus(ptyId, this.getTrackedRawTitleForPty(ptyId) ?? restore.lastTitle)

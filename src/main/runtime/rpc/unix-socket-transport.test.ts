@@ -16,6 +16,7 @@ class FakeSocket extends EventEmitter {
 
   write(data: string): boolean {
     this.writes.push(data)
+
     return true
   }
 
@@ -25,6 +26,7 @@ class FakeSocket extends EventEmitter {
       this.writable = false
       this.emit('close')
     }
+
     return this
   }
 }
@@ -53,6 +55,7 @@ describe('UnixSocketTransport', () => {
     ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
       socket as unknown as Socket
     )
+
     return { socket, received }
   }
 
@@ -61,9 +64,11 @@ describe('UnixSocketTransport', () => {
     const message = `${'é'.repeat(524287)}a${oversized ? 'x' : ''}`
     const wire = Buffer.from(`${message}\n`)
     const decoder = new StringDecoder('utf8')
+
     for (let offset = 0; offset < wire.length; offset += 4095) {
       socket.emit('data', decoder.write(wire.subarray(offset, offset + 4095)))
     }
+
     expect(received).toEqual([oversized ? '' : message])
   })
 
@@ -89,6 +94,7 @@ describe('UnixSocketTransport', () => {
       kind: 'unix',
       keepaliveIntervalMs: 100
     })
+
     const socket = new FakeSocket()
     let aborted = false
 

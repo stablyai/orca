@@ -29,6 +29,7 @@ export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideLi
     notifyChanged: (ptyId, next) => this.notifier?.terminalDriverChanged(ptyId, next),
     canClaimMobileFloor: (ptyId, clientId) => {
       const softLeaver = this.pendingSoftLeavers.get(ptyId)
+
       return this.mobileSubscribers.get(ptyId)?.has(clientId) || softLeaver?.clientId === clientId
     },
     commitMobileFloor: (ptyId, clientId, previousFloor, isCurrent) =>
@@ -93,6 +94,7 @@ export class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideLi
     resolveHostTarget: (ptyId) => this.resolveDesktopRestoreTarget(ptyId),
     applyLayout: async (ptyId, target) => {
       this.freshSubscribeGuard.add(ptyId)
+
       try {
         return await this.enqueueLayout(ptyId, target)
       } finally {

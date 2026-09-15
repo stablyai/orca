@@ -35,15 +35,19 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
     args.hasExistingProject,
     args.nativeChatTranscriptIsLocalReadable
   )
+
   const agent = startup?.launchAgent ?? null
+
   if (!startup || !agent) {
     return { agent: null, plan: null }
   }
+
   const plan = planAgentSessionLaunch(args.store, {
     agent,
     workspace: { kind: 'folder', executionHostId: args.executionHostId },
     initialSessionOptions: startup.sessionOptions
   })
+
   return {
     agent,
     plan,
@@ -69,17 +73,21 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
       ...(startup ? { startup } : {}),
       ...(providesInitialSurface ? { providesInitialSurface: true } : {})
     })
+
   const { plan } = args.launch
   const structured = plan?.route === 'structured-native-chat'
   reveal(args.launch.startup, structured)
+
   if (!structured) {
     return
   }
+
   // Why: the outcome is not consumed; the workspace is already revealed and the launch layer toasts.
   await plan.launch(
     {
       legacyFallback: async () => {
         const activation = reveal(args.launch.fallbackStartup)
+
         return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
       }
     },

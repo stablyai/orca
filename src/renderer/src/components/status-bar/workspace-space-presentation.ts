@@ -15,7 +15,9 @@ import type {
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
+
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
+
 export const WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES = 2 * 1024
 
 export function isWorkspaceSpaceFilterQueryTooLarge(
@@ -49,6 +51,7 @@ export type WorkspaceSpaceAgentActivityInputs = {
 
 function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
+
   if (parsed) {
     return parsed.tabId
   }
@@ -57,6 +60,7 @@ function getPaneKeyTabId(paneKey: string): string | null {
   // Delete readiness only needs tab ownership, so preserve the conservative
   // "workspace is in use" signal instead of treating the row as deletable.
   const separatorIndex = paneKey.indexOf(':')
+
   if (
     separatorIndex <= 0 ||
     separatorIndex !== paneKey.lastIndexOf(':') ||
@@ -64,6 +68,7 @@ function getPaneKeyTabId(paneKey: string): string | null {
   ) {
     return null
   }
+
   return paneKey.slice(0, separatorIndex)
 }
 
@@ -81,14 +86,17 @@ function countTitleActiveAgentsForTab(
   }
 
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
+
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     return Object.values(paneTitles).filter((title) => {
       const status = classifyTitleActivity(title)
+
       return status === 'working' || status === 'permission'
     }).length
   }
 
   const status = classifyTitleActivity(tab.title)
+
   return status === 'working' || status === 'permission' ? 1 : 0
 }
 
@@ -109,25 +117,32 @@ export function countWorkspaceSpaceActiveAgents({
     if (!isActiveAgentState(entry)) {
       continue
     }
+
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
+
     const tabId = getPaneKeyTabId(entry.paneKey || paneKey)
+
     if (!tabId || !tabIds.has(tabId)) {
       continue
     }
+
     tabsWithActiveHook.add(tabId)
     count += 1
   }
 
   for (const entry of Object.values(migrationUnsupportedByPtyId)) {
     const tabId = entry.tabId ?? (entry.paneKey ? getPaneKeyTabId(entry.paneKey) : null)
+
     if (entry.worktreeId !== worktreeId && (!tabId || !tabIds.has(tabId))) {
       continue
     }
+
     if (tabId) {
       tabsWithActiveHook.add(tabId)
     }
+
     count += 1
   }
 
@@ -135,6 +150,7 @@ export function countWorkspaceSpaceActiveAgents({
     if (tabsWithActiveHook.has(tab.id)) {
       continue
     }
+
     count += countTitleActiveAgentsForTab(tab, runtimePaneTitlesByTabId, ptyIdsByTabId)
   }
 
@@ -157,11 +173,13 @@ export function getLargestWorkspaceSpaceItemSize(
   items: readonly Pick<WorkspaceSpaceItem, 'sizeBytes'>[]
 ): number {
   let maxSize = 0
+
   for (const item of items) {
     if (item.sizeBytes > maxSize) {
       maxSize = item.sizeBytes
     }
   }
+
   return maxSize
 }
 
@@ -169,11 +187,13 @@ export function getLargestWorkspaceSpaceRowSize(
   rows: readonly Pick<WorkspaceSpaceWorktree, 'sizeBytes'>[]
 ): number {
   let maxSize = 0
+
   for (const row of rows) {
     if (row.sizeBytes > maxSize) {
       maxSize = row.sizeBytes
     }
   }
+
   return maxSize
 }
 
@@ -203,8 +223,10 @@ export function sortWorkspaceSpaceRows(
   direction: WorkspaceSpaceSortDirection
 ): WorkspaceSpaceWorktree[] {
   const multiplier = direction === 'asc' ? 1 : -1
+
   return [...rows].sort((left, right) => {
     const primary = compareRows(left, right, sortKey) * multiplier
+
     return (
       primary ||
       right.sizeBytes - left.sizeBytes ||
@@ -221,15 +243,19 @@ export function filterWorkspaceSpaceRows(
   if (isWorkspaceSpaceFilterQueryTooLarge(query)) {
     return []
   }
+
   const trimmedQuery = query.trim()
   const normalizedQuery = trimmedQuery.toLowerCase()
+
   return rows.filter((row) => {
     if (onlyDeletable && !row.canDelete) {
       return false
     }
+
     if (!normalizedQuery) {
       return true
     }
+
     return getWorkspaceSpaceSearchText(row).includes(normalizedQuery)
   })
 }
@@ -265,7 +291,9 @@ export function resolveWorkspaceSpaceInspectedWorktreeId(
   ) {
     return currentIdentity
   }
+
   const firstReady = rows.find((row) => row.status === 'ok')
+
   return firstReady ? getWorkspaceSpaceWorktreeIdentity(firstReady) : null
 }
 
@@ -292,6 +320,7 @@ export function pruneWorkspaceSpaceSelectedIds(
   const validIds = new Set(rows.map(getWorkspaceSpaceWorktreeIdentity))
   let changed = false
   const nextIds = new Set<string>()
+
   for (const id of selectedIds) {
     if (validIds.has(id)) {
       nextIds.add(id)
@@ -299,5 +328,6 @@ export function pruneWorkspaceSpaceSelectedIds(
       changed = true
     }
   }
+
   return changed ? nextIds : selectedIds
 }

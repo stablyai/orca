@@ -10,11 +10,17 @@ import {
 } from './web-session-tabs-sync'
 
 export const WT = 'repo::/worktree'
+
 export const ENV = 'web-env-1'
+
 export const NOW = 1_700_000_000_000
+
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 export const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 export const THIRD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 export const HOST_SURFACE_ID = `host-tab-1::${LEAF_ID}`
 
 /** Drops every module-level intent/freshness record shared across the sync suites. */
@@ -30,9 +36,11 @@ export function layoutHasGroup(layout: TabGroupLayoutNode | undefined, groupId: 
   if (!layout) {
     return false
   }
+
   if (layout.type === 'leaf') {
     return layout.groupId === groupId
   }
+
   return layoutHasGroup(layout.first, groupId) || layoutHasGroup(layout.second, groupId)
 }
 

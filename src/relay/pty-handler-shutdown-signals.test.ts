@@ -64,6 +64,7 @@ describe('PtyHandler', () => {
   it('terminates spawned PTY when request becomes stale before response', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
+
     const term = {
       ...mockPtyInstance,
       kill: killSpy,
@@ -72,6 +73,7 @@ describe('PtyHandler', () => {
         onExitCb = cb
       })
     }
+
     mockPtySpawn.mockReturnValue(term)
 
     await dispatcher.callRequest(
@@ -126,6 +128,7 @@ describe('PtyHandler', () => {
     async function withWindowsPlatform(fn: () => Promise<void>): Promise<void> {
       const originalPlatform = process.platform
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       try {
         await fn()
       } finally {
@@ -144,6 +147,7 @@ describe('PtyHandler', () => {
         onData: vi.fn(),
         onExit: vi.fn()
       })
+
       return mockKill
     }
 
@@ -197,6 +201,7 @@ describe('PtyHandler', () => {
         })
         await dispatcher.callRequest('pty.spawn', {})
         await dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: false })
+
         const immediate = dispatcher.callRequest('pty.shutdown', {
           id: PTY_1,
           immediate: true
@@ -321,11 +326,13 @@ describe('PtyHandler', () => {
   it('retries a rejected graceful SIGKILL fallback while retaining ownership', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     let forceAttempts = 0
+
     const mockKill = vi.fn((signal: string) => {
       if (signal === 'SIGKILL' && forceAttempts++ === 0) {
         throw new Error('transient kill failure')
       }
     })
+
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       kill: mockKill,

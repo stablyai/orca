@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const waitingQuestion = {
   state: 'waiting' as const,
   prompt: 'pick one',
@@ -105,6 +106,7 @@ describe('useNativeChatInteractiveSend', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
       ]
     }
+
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'codex')
     )
@@ -270,6 +272,7 @@ describe('useNativeChatInteractiveSend', () => {
 
   it('reports verified delivery settlement to the question card', () => {
     const onDeliverySettled = vi.fn()
+
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
     )

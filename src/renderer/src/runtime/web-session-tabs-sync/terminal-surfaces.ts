@@ -65,10 +65,12 @@ export function buildMirroredAgentTabs(
   const assignedIds = new Set<string>()
   const replacementTabs = new Map<string, Tab>()
   const replacementIds = new Set<string>()
+
   for (const tab of agentTabs) {
     if (!tab.replacesSessionId) {
       continue
     }
+
     const existing =
       currentUnifiedTabs.find(
         (candidate) =>
@@ -81,11 +83,13 @@ export function buildMirroredAgentTabs(
             (candidate.contentType === 'agent-session' &&
               candidate.entityId === tab.replacesSessionId))
       )
+
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)
       replacementIds.add(existing.id)
     }
   }
+
   return agentTabs.map((tab, index) => {
     const existing =
       replacementTabs.get(tab.sessionId) ??
@@ -95,16 +99,21 @@ export function buildMirroredAgentTabs(
           candidate.contentType === 'agent-session' &&
           candidate.entityId === tab.sessionId
       )
+
     const baseId = structuredAgentSessionTabId(tab.sessionId)
     let localId = existing?.id ?? baseId
+
     if (!existing || assignedIds.has(localId)) {
       let suffix = 0
+
       while (occupiedIds.has(localId)) {
         localId = `${baseId}:history-${++suffix}`
       }
     }
+
     occupiedIds.add(localId)
     assignedIds.add(localId)
+
     return {
       hostTabId: tab.id,
       unifiedTab: {
@@ -133,6 +142,7 @@ export function localEditorFileId(tab: ReadyEditorSurface): string {
   if (tab.type === 'markdown' && tab.mode === 'markdown-preview') {
     return `markdown-preview::${tab.sourceFilePath}`
   }
+
   return tab.filePath
 }
 
@@ -147,6 +157,7 @@ export function isRuntimeTerminalTabForEnvironment(
   if (!tab.ptyId) {
     return false
   }
+
   return getRemoteRuntimePtyEnvironmentId(tab.ptyId) === environmentId
 }
 
@@ -166,11 +177,13 @@ export function chooseRemoteTerminalLayout(
   const leafIds = surfaces.map((surface) => surface.leafId)
   const knownLeafIds = new Set(leafIds)
   const parentLayoutSource = surfaces.find((surface) => surface.parentLayout)
+
   const parentLayout = parentLayoutSource?.parentLayout
     ? sanitizeTerminalLayoutPaneTitlesForLabels(parentLayoutSource.parentLayout, [
         parentLayoutSource.title
       ])
     : undefined
+
   const activeLeafId =
     (requestedActiveLeafId && knownLeafIds.has(requestedActiveLeafId)
       ? requestedActiveLeafId
@@ -185,6 +198,7 @@ export function chooseRemoteTerminalLayout(
     surfaces.find((surface) => surface.isActive)?.leafId ??
     leafIds[0] ??
     null
+
   const expandedLeafId =
     requestedActiveLeafId &&
     (Boolean(existingLayout?.expandedLeafId) || Boolean(parentLayout?.expandedLeafId))
@@ -192,6 +206,7 @@ export function chooseRemoteTerminalLayout(
       : parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
         ? parentLayout.expandedLeafId
         : null
+
   return {
     // Why: host parentLayout is authoritative for split direction; else keep the prior client tree, then degenerate — never re-guess a direction.
     root: resolveTerminalLayoutRoot({
@@ -223,16 +238,20 @@ export function shouldReplaceTerminalTab(
     // whose request or structured response identifies this exact host surface.
     return true
   }
+
   if (isMirroredTerminalSurfaceId(tab.id)) {
     // Why: host snapshots are authoritative for mirrored tabs; replace old mirrors even when the next surface still awaits a stream handle, else parity drifts.
     return true
   }
+
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
     return true
   }
+
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
     return false
   }
+
   // Why: web-created remote tabs use local UUIDs until the host publishes their surface; only retire them once their PTY appears in the snapshot.
   return (
     tab.ptyId !== null &&

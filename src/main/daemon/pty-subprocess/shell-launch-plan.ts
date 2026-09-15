@@ -61,28 +61,34 @@ export function createPtyShellLaunchPlan(
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
+
   if (opts.command && startupAgentRecognition) {
     assertSafeAgentStartupCwd(requestedCwd, opts.command)
   }
+
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
     const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
+
     const resolvedShellFamily: WindowsPowerShellShellFamily =
       normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
         ? normalizedShellFamily
         : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
           ? normalizedShellFamily
           : undefined
+
     const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
       shellFamily: resolvedShellFamily,
       implementation: opts.terminalWindowsPowerShellImplementation
     })
+
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
+
     if (resolvedGitBashPath) {
       shellPath = resolvedGitBashPath
     } else if (shellPath === WINDOWS_GIT_BASH_SHELL) {
@@ -96,12 +102,14 @@ export function createPtyShellLaunchPlan(
           }) ?? shellPath)
         : shellPath
     }
+
     if (
       pathWin32.basename(shellPath).toLowerCase() === 'cmd.exe' &&
       env.ORCA_CODEX_LAUNCH_PREFLIGHT
     ) {
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
+
     windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({
       shellPath,
       cwd: spawnCwd,
@@ -110,6 +118,7 @@ export function createPtyShellLaunchPlan(
       startupCommand: opts.command
     })
     const primaryAttempt = windowsFallbackAttempts[0]
+
     if (primaryAttempt) {
       shellPath = primaryAttempt.shellPath
       shellArgs = primaryAttempt.shellArgs
@@ -125,18 +134,23 @@ export function createPtyShellLaunchPlan(
         opts.command,
         env.ORCA_CODEX_LAUNCH_PREFLIGHT
       )
+
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd
       startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     }
+
     if (isWindowsGitBashShellPath(shellPath)) {
       env.CHERE_INVOKING ??= '1'
     }
+
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
+
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       if (codexHomeWslInfo) {
         const launchWslDistro = resolvedWslContext?.distro
+
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
           delete env.CODEX_HOME
           delete env.ORCA_CODEX_HOME
@@ -144,6 +158,7 @@ export function createPtyShellLaunchPlan(
           env.CODEX_HOME = codexHomeWslInfo.linuxPath
           env.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
           addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+
           if (!launchWslDistro) {
             const resolved = resolveWindowsShellLaunchArgs(
               shellPath,
@@ -153,6 +168,7 @@ export function createPtyShellLaunchPlan(
               opts.command,
               env.ORCA_CODEX_LAUNCH_PREFLIGHT
             )
+
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
             validationCwd = resolved.validationCwd
@@ -166,9 +182,11 @@ export function createPtyShellLaunchPlan(
       } else if (env.CODEX_HOME) {
         addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
       }
+
       if (env.CLAUDE_CONFIG_DIR) {
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
       }
+
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
       }
@@ -176,6 +194,7 @@ export function createPtyShellLaunchPlan(
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME
     }
+
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       addOrcaWslInteropEnv(env)
     }
@@ -183,12 +202,14 @@ export function createPtyShellLaunchPlan(
     rescrubDaemonPtyEnvironment(env, opts)
     const preferredShellPath = shellPath
     shellPath = resolveUnixShellPath(shellPath)
+
     if (shellPath !== preferredShellPath) {
       env.SHELL = shellPath
       console.warn(
         `[daemon/pty] Preferred shell "${preferredShellPath}" is unavailable, fell back to "${shellPath}"`
       )
     }
+
     const waitsForShellReady =
       Boolean(opts.command) &&
       (startupAgentRecognition?.agent !== 'codex' ||
@@ -197,7 +218,9 @@ export function createPtyShellLaunchPlan(
           startupCommandDelivery: opts.startupCommandDelivery,
           shellPath
         }))
+
     delete env.ORCA_SHELL_FEATURES
+
     const shellLaunch = getShellLaunchConfig(
       shellPath,
       selectShellStartupFeatures({
@@ -208,11 +231,13 @@ export function createPtyShellLaunchPlan(
         emitsStartupIdentity: waitsForShellReady
       })
     )
+
     Object.assign(env, shellLaunch.env)
     shellArgs = shellLaunch.args ?? ['-l']
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
+
   if (
     env[POWERLEVEL10K_WIZARD_DISABLE_ENV] !== undefined &&
     process.platform === 'win32' &&
@@ -220,6 +245,7 @@ export function createPtyShellLaunchPlan(
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
+
   finalizeDaemonPtyEnvironment(env, opts.env)
 
   return {

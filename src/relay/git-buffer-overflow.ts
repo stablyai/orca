@@ -4,6 +4,7 @@ export function isGitBufferOverflowError(error: unknown): boolean {
   }
 
   const maybeError = error as { code?: unknown; message?: unknown }
+
   if (maybeError.code === 'ENOBUFS') {
     return true
   }

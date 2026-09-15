@@ -30,6 +30,7 @@ describe('host rename helpers', () => {
         'ssh:box': { displayLabel: 'Box', defaultWorktreeLocation: '/w' }
       }
     }
+
     expect(clearHostRename(settings, 'ssh:box')).toEqual({
       'ssh:box': { defaultWorktreeLocation: '/w' }
     })

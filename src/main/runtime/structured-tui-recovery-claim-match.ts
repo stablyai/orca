@@ -47,36 +47,46 @@ export function evaluateStructuredTuiRecoveryClaim(
   worktreeIdsEqual: (left: string, right: string) => boolean = (left, right) => left === right
 ): StructuredTuiRecoveryClaimEvaluation {
   const mismatchedFields: StructuredTuiRecoveryClaimMismatch[] = []
+
   if (!candidate.pty.connected) {
     mismatchedFields.push('connected')
   }
+
   if (candidate.owner.phase !== 'live') {
     mismatchedFields.push('owner-phase')
   }
+
   if (candidate.owner.ptyId !== candidate.pty.ptyId) {
     mismatchedFields.push('owner-pty-id')
   }
+
   if (!candidate.pty.incarnationId) {
     mismatchedFields.push('presented-incarnation')
   }
+
   if (!worktreeIdsEqual(candidate.pty.worktreeId, candidate.expectedWorkspaceId)) {
     mismatchedFields.push('pty-workspace')
   }
+
   if (!worktreeIdsEqual(candidate.owner.surface.worktreeId, candidate.expectedWorkspaceId)) {
     mismatchedFields.push('surface-workspace')
   }
+
   if (!candidate.claimMatches) {
     mismatchedFields.push('claim')
   }
+
   if (!candidate.persisted.sessionResolved) {
     mismatchedFields.push('persisted-session')
   } else {
     if (!candidate.persisted.tabPresent) {
       mismatchedFields.push('persisted-tab')
     }
+
     if (candidate.persisted.ptyId !== candidate.owner.ptyId) {
       mismatchedFields.push('persisted-pty-id')
     }
+
     // Packaged hydration can omit this binding briefly; daemon incarnation and child proof stay mandatory.
     if (
       candidate.persisted.incarnationId !== null &&
@@ -85,5 +95,6 @@ export function evaluateStructuredTuiRecoveryClaim(
       mismatchedFields.push('persisted-incarnation')
     }
   }
+
   return { matches: mismatchedFields.length === 0, mismatchedFields }
 }

@@ -22,6 +22,7 @@ export type { RuntimeWatcherProcessPoolOptions } from './runtime-watcher-pool-st
 
 // Why: extra ~50 MiB processes are justified only when quarantine isolates a fault.
 const DEFAULT_MAX_SHARED_SUPERVISORS = 1
+
 const DEFAULT_MAX_QUARANTINE_SUPERVISORS = 4
 
 /**
@@ -63,18 +64,23 @@ export class RuntimeWatcherProcessPool {
   ): Promise<WatcherProcessSubscription> {
     this.lifecycle.assertActive()
     const assignmentOrPromise = this.assignmentForRoot(dir, hooks)
+
     const assignment =
       assignmentOrPromise instanceof Promise ? await assignmentOrPromise : assignmentOrPromise
+
     this.lifecycle.assertActive()
     const { slot } = assignment
     let assignmentReleased = false
+
     const releaseAssignment = (): void => {
       if (assignmentReleased) {
         return
       }
+
       assignmentReleased = true
       this.releaseRoot(assignment, dir)
     }
+
     const onTerminalError = (error: Error): void => {
       handleRuntimeWatcherSubscriptionFailure(
         error,
@@ -84,7 +90,9 @@ export class RuntimeWatcherProcessPool {
       )
       hooks.onTerminalError?.(error)
     }
+
     let subscription: WatcherProcessSubscription
+
     try {
       subscription = await slot.supervisor.subscribe(dir, callback, opts, {
         ...hooks,
@@ -101,6 +109,7 @@ export class RuntimeWatcherProcessPool {
     }
 
     let unsubscribePromise: Promise<void> | undefined
+
     return {
       unsubscribe: (): Promise<void> => {
         unsubscribePromise ??= subscription.unsubscribe().then(
@@ -111,9 +120,11 @@ export class RuntimeWatcherProcessPool {
             } else {
               releaseAssignment()
             }
+
             throw error
           }
         )
+
         return unsubscribePromise
       }
     }
@@ -122,6 +133,7 @@ export class RuntimeWatcherProcessPool {
   /** Kill every pooled watcher child (production shutdown or test reset). */
   dispose(): void {
     this.lifecycle.dispose()
+
     // disposeSlot deletes the current slot from allSlots; deleting the
     // in-progress element during Set iteration is safe, so no snapshot needed.
     const disposedError = new WatcherProcessFailure(
@@ -129,10 +141,13 @@ export class RuntimeWatcherProcessPool {
       'supervisor',
       'supervisor_disposed'
     )
+
     this.quarantineQueue.failAll(disposedError)
+
     for (const slot of this.allSlots) {
       this.disposeSlot(slot)
     }
+
     this.activeSlots.clear()
     this.allSlots.clear()
     this.assignments.clear()
@@ -160,6 +175,7 @@ export class RuntimeWatcherProcessPool {
     hooks: WatcherProcessHooks
   ): RuntimeWatcherPoolAssignment | Promise<RuntimeWatcherPoolAssignment> {
     this.predecessorBarriers.throwIfRetained(dir)
+
     if (this.lifecycle.failedQuarantineRoots.has(dir)) {
       throw new WatcherProcessFailure(
         'file watcher process failed again in quarantine',
@@ -167,30 +183,42 @@ export class RuntimeWatcherProcessPool {
         'supervisor_crash_fuse'
       )
     }
+
     const assigned = this.assignments.get(dir)
+
     if (assigned && !assigned.slot.retired) {
       assigned.leases++
+
       return assigned
     }
+
     const pending = this.pendingAssignments.get(dir)
+
     if (pending) {
       return pending.wait(hooks, (assignment) => assignment.leases++)
     }
+
     const slot = this.lifecycle.isIsolated(dir) ? this.quarantineSlot(dir) : this.sharedSlot()
+
     if (slot instanceof Promise) {
       let abandoned = false
       let grantedAssignment: RuntimeWatcherPoolAssignment | undefined
+
       const basePromise = slot.then((resolvedSlot) => {
         grantedAssignment = this.assignRootToSlot(dir, resolvedSlot, 0)
+
         if (abandoned) {
           this.releaseRoot(grantedAssignment, dir, false)
         }
+
         return grantedAssignment
       })
+
       const pendingAssignment = new RuntimeWatcherPendingAssignment(
         basePromise,
         () => {
           abandoned = true
+
           if (grantedAssignment) {
             this.releaseRoot(grantedAssignment, dir, false)
           } else {
@@ -203,9 +231,12 @@ export class RuntimeWatcherProcessPool {
           }
         }
       )
+
       this.pendingAssignments.set(dir, pendingAssignment)
+
       return pendingAssignment.wait(hooks, (assignment) => assignment.leases++)
     }
+
     return this.assignRootToSlot(dir, slot)
   }
 
@@ -217,6 +248,7 @@ export class RuntimeWatcherProcessPool {
     const assignment = { slot, leases }
     slot.roots.add(dir)
     this.assignments.set(dir, assignment)
+
     return assignment
   }
 
@@ -224,9 +256,11 @@ export class RuntimeWatcherProcessPool {
     const sharedSlots = Array.from(this.activeSlots).filter(
       (slot) => !slot.isolated && !slot.retired
     )
+
     if (sharedSlots.length < this.maxSharedSupervisors) {
       return this.createSlot(false)
     }
+
     return sharedSlots.reduce((leastLoaded, candidate) =>
       candidate.roots.size < leastLoaded.roots.size ? candidate : leastLoaded
     )
@@ -236,9 +270,11 @@ export class RuntimeWatcherProcessPool {
     const quarantineSlots = Array.from(this.activeSlots).filter(
       (slot) => slot.isolated && !slot.retired
     )
+
     if (quarantineSlots.length < this.maxQuarantineSupervisors) {
       return this.createSlot(true)
     }
+
     return this.quarantineQueue.wait(dir)
   }
 
@@ -250,8 +286,10 @@ export class RuntimeWatcherProcessPool {
       retired: false,
       disposed: false
     }
+
     this.activeSlots.add(slot)
     this.allSlots.add(slot)
+
     return slot
   }
 
@@ -259,17 +297,21 @@ export class RuntimeWatcherProcessPool {
     if (slot.retired) {
       return
     }
+
     slot.retired = true
     this.activeSlots.delete(slot)
     // Why: a replacement cannot safely reacquire a root while the failed child
     // may still own its native watcher handle (notably on Windows).
     this.predecessorBarriers.retain(slot.roots, error)
+
     for (const root of slot.roots) {
       if (this.assignments.get(root)?.slot === slot) {
         this.assignments.delete(root)
       }
+
       this.lifecycle.quarantineOrFuse(root, slot.isolated)
     }
+
     slot.roots.clear()
     // Why: failAllSubscriptions is still iterating callbacks; defer disposal
     // so every logical root receives the supervisor failure first.
@@ -287,16 +329,20 @@ export class RuntimeWatcherProcessPool {
     if (this.assignments.get(dir) !== assignment) {
       return
     }
+
     if (releaseLease) {
       assignment.leases--
     }
+
     if (assignment.leases > 0) {
       return
     }
+
     const { slot } = assignment
     this.assignments.delete(dir)
     slot.roots.delete(dir)
     this.lifecycle.isolatedRoots.delete(dir)
+
     if (slot.isolated && slot.roots.size === 0 && !slot.retired) {
       if (!this.quarantineQueue.grantNext(slot)) {
         this.activeSlots.delete(slot)
@@ -319,6 +365,7 @@ export class RuntimeWatcherProcessPool {
     if (slot.disposed) {
       return
     }
+
     slot.disposed = true
     slot.supervisor.dispose()
     this.allSlots.delete(slot)

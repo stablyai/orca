@@ -18,5 +18,6 @@ export async function browseRuntimeServerDirectory(
     { path },
     { timeoutMs: 15_000 }
   )
+
   return { ...listing, entries: sortDirEntries(listing.entries) }
 }

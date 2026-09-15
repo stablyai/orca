@@ -29,33 +29,44 @@ function resolveSelectedSkillNames(
 ): string[] {
   const requestedSkills = getRepeatedStringFlag(flags, 'skill')
   const selectAll = flags.get('all') === true
+
   if (flags.has('skill') && requestedSkills.length === 0) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --skill')
   }
+
   if (selectAll && requestedSkills.length > 0) {
     throw new RuntimeClientError('invalid_argument', 'Use either --all or --skill, not both.')
   }
+
   if (!selectAll && requestedSkills.length === 0) {
     return []
   }
+
   if (selectAll) {
     return guides.map((guide) => guide.name)
   }
+
   const availableTopics = guides.map((guide) => guide.name).join(', ')
+
   const guideByTopic = new Map<string, BundledSkillGuide>(
     guides.flatMap((guide) => [guide.name, ...guide.aliases].map((name) => [name, guide]))
   )
+
   const canonicalNames = new Set<string>()
+
   for (const requested of requestedSkills) {
     const guide = guideByTopic.get(requested)
+
     if (!guide) {
       throw new RuntimeClientError(
         'invalid_argument',
         `Unknown skill "${requested}". Available skills: ${availableTopics}`
       )
     }
+
     canonicalNames.add(guide.name)
   }
+
   return [...canonicalNames].sort()
 }
 
@@ -69,6 +80,7 @@ function runNpxSkills(args: string[]): Promise<number> {
     const resolved = resolveCliCommand('npx')
     let spawnCmd: string
     let spawnArgs: string[]
+
     try {
       ;({ spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolved, args))
     } catch (error) {
@@ -76,8 +88,10 @@ function runNpxSkills(args: string[]): Promise<number> {
       // path can carry them here — a username like `A&B` puts them in it.
       if (!(error instanceof UnsafeWindowsBatchArgumentsError)) {
         reject(error)
+
         return
       }
+
       reject(
         new RuntimeClientError(
           'invalid_environment',
@@ -85,8 +99,10 @@ function runNpxSkills(args: string[]): Promise<number> {
             `reinterpret. Install Node.js somewhere without ${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL} in the path.`
         )
       )
+
       return
     }
+
     // Why: npx is an `#!/usr/bin/env node` script, so resolving it off PATH is
     // not enough — without node alongside it the child exits 127 with no
     // 'error' event and the message below never fires.
@@ -97,6 +113,7 @@ function runNpxSkills(args: string[]): Promise<number> {
       // Windows will really read — all of which a local join got wrong.
       env: withCliRuntimeOnPath(resolved, { ...process.env })
     })
+
     // Why: a missing npx/Node on a headless host surfaces as a raw spawn ENOENT;
     // wrap it so the CLI reports an actionable message like every other failure here.
     child.once('error', (error) => {
@@ -120,19 +137,23 @@ type SkillMutationVerb = 'install' | 'update'
 function detectSkillsCliAgentKeys(): string[] {
   const runtime = process.platform
   const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
+
   const detected = resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     detectCommandsInInstallDirs(probes),
     runtime
   )
+
   return detected.length === 0 ? [] : toSkillsCliAgentKeys(detected)
 }
 
 function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[] {
   const requested = flags.get('agent')
+
   if (flags.has('agent') && typeof requested !== 'string') {
     throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
   }
+
   if (typeof requested === 'string') {
     // Why: one comma-separated value rather than a repeatable flag — `agent` is a
     // single-value flag on other commands and the repeatable set is process-wide,
@@ -145,12 +166,15 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
           .filter(Boolean)
       )
     ]
+
     // Why: a value like "," parses to nothing. Falling through to detection would
     // be surprising, and emitting no --agent would restore the all-agents install.
     if (keys.length === 0) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --agent')
     }
+
     const unusable = keys.find((key) => !isSkillsCliAgentKeyShaped(key))
+
     if (unusable !== undefined) {
       // Why: the skills CLI drops a value starting with `-`, which leaves it with
       // no target and installs into every agent it knows.
@@ -160,12 +184,16 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
           'codex, or universal.'
       )
     }
+
     return keys
   }
+
   const detected = detectSkillsCliAgentKeys()
+
   if (detected.length > 0) {
     return detected
   }
+
   // Why: without --agent, `skills add -y` falls into its own zero-detected branch
   // and installs into every agent it knows (~75), creating config directories for
   // agents this host does not have. Say so instead.
@@ -187,6 +215,7 @@ function buildNpxSkillsArgs(
     verb === 'install'
       ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true, agents })
       : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+
   // Why: a cold package cache makes bare `npx` prompt before it will fetch
   // `skills`, which strands an unattended host just like the picker does.
   return ['--yes', ...skillArgs]
@@ -219,6 +248,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
           ? JSON.stringify({ availableSkills: names }, null, 2)
           : formatSkillSelectionHelp(verb, names)
       )
+
       return
     }
 
@@ -247,6 +277,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
           ? JSON.stringify({ command, skills: skillNames, global, executed: false }, null, 2)
           : `${command}\n\nRerun without --dry-run to ${verb} now.`
       )
+
       return
     }
 
@@ -275,6 +306,7 @@ export const SKILL_HANDLERS: Record<string, CommandHandler> = {
       name: guide.name,
       description: guide.description.replace(/\s+/g, ' ').trim()
     }))
+
     writeStdoutLine(
       json
         ? JSON.stringify({ topics }, null, 2)

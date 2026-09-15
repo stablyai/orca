@@ -20,6 +20,7 @@ export function SearchableSetting({
   id
 }: SearchableSettingProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
+
   if (!forceVisible && !matchesSettingsSearch(query, { title, description, keywords })) {
     return null
   }

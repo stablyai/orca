@@ -30,9 +30,11 @@ type HookApi = ReturnType<typeof useNativeChatExternalAttachments>
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve: (value: T) => void = () => undefined
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -58,6 +60,7 @@ function Probe({
       setNotice
     })
   )
+
   return null
 }
 
@@ -79,6 +82,7 @@ async function renderProbe(args: {
   root = createRoot(container)
   let disabled = args.disabled ?? false
   let structuredWorktreeId = args.structuredWorktreeId
+
   const render = async (): Promise<void> => {
     await act(async () => {
       root?.render(
@@ -94,12 +98,15 @@ async function renderProbe(args: {
       )
     })
   }
+
   await render()
+
   return {
     latest: () => {
       if (!api) {
         throw new Error('Probe did not render')
       }
+
       return api
     },
     setDisabled: async (next) => {
@@ -183,6 +190,7 @@ describe('useNativeChatExternalAttachments', () => {
     mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
+
     const probe = await renderProbe({
       attachResolvedPaths,
       setNotice: (notice) => notices.push(notice)
@@ -209,6 +217,7 @@ describe('useNativeChatExternalAttachments', () => {
     mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
+
     const probe = await renderProbe({
       attachResolvedPaths,
       setNotice: (notice) => notices.push(notice)
@@ -232,6 +241,7 @@ describe('useNativeChatExternalAttachments', () => {
     mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
+
     const probe = await renderProbe({
       structuredWorktreeId: 'worktree-1',
       attachResolvedPaths,
@@ -260,11 +270,13 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     } as const
+
     mocks.resolveNativeChatAttachmentOwnerForWorktree.mockReturnValue(sshOwner)
     const upload = deferred<string[]>()
     mocks.uploadNativeChatAttachmentPaths.mockReturnValueOnce(upload.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
+
     const probe = await renderProbe({
       structuredWorktreeId: 'worktree-1',
       attachResolvedPaths,
@@ -389,6 +401,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshConnectionGeneration: 4
     })
     let resolveUpload: (paths: string[]) => void = () => {}
+
     mocks.uploadNativeChatAttachmentPaths.mockReturnValue(
       new Promise<string[]>((resolve) => {
         resolveUpload = resolve
@@ -415,6 +428,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     }
+
     mocks.resolveNativeChatAttachmentOwner
       .mockReturnValueOnce(initialOwner)
       .mockReturnValue({ ...initialOwner, expectedSshConnectionGeneration: 5 })
@@ -422,6 +436,7 @@ describe('useNativeChatExternalAttachments', () => {
     mocks.uploadNativeChatAttachmentPaths.mockReturnValue(upload.promise)
     const attachResolvedPaths = vi.fn()
     const notices: (string | null)[] = []
+
     const probe = await renderProbe({
       attachResolvedPaths,
       setNotice: (notice) => notices.push(notice)

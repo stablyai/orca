@@ -31,6 +31,7 @@ async function claimAdoptedRunAsLegacyCoordinator(
       'legacy-coordinator-run-use'
     )
   )
+
   expect(response).toMatchObject({ ok: true })
   expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('committed')
 }
@@ -44,6 +45,7 @@ async function takeoverAdoptedRun(harness: LegacyCompatibilityDispatcherHarness)
       'current-coordinator-takeover'
     )
   )
+
   expect(response).toMatchObject({ ok: true })
   expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('revoked')
 }
@@ -70,12 +72,14 @@ describe('legacy coordinator fence jurisdiction', () => {
     const harness = createHarness()
     await claimAdoptedRunAsLegacyCoordinator(harness)
     await takeoverAdoptedRun(harness)
+
     // The new owner moves its pane to another Run, which unbinds the adopted Run.
     const elsewhere = harness.db.createRun({
       objective: 'other work',
       coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
       coordinatorPaneKey: CURRENT_COORDINATOR_PANE
     })
+
     expect(elsewhere.id).not.toBe(harness.adoptedRunId)
     expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBeNull()
 
@@ -87,6 +91,7 @@ describe('legacy coordinator fence jurisdiction', () => {
         'unclaimed-revoked-task-create'
       )
     )
+
     expect(fenced).toMatchObject({ ok: false, error: { code: 'run_required' } })
 
     const reclaim = await harness.dispatcher.dispatch(
@@ -97,6 +102,7 @@ describe('legacy coordinator fence jurisdiction', () => {
         'unclaimed-revoked-run-use'
       )
     )
+
     // The Run still holds live legacy work, so the honest downstream error — not a dead-end fence — answers.
     expect(reclaim).toMatchObject({
       ok: false,
@@ -116,6 +122,7 @@ describe('legacy coordinator fence jurisdiction', () => {
         'unclaimed-revoked-run-takeover'
       )
     )
+
     expect(recovered).toMatchObject({ ok: true, result: { run: { id: harness.adoptedRunId } } })
   })
 

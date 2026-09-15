@@ -10,12 +10,16 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight'
 }))
+
 vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
+
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+
 vi.mock('./WorktreeAgentRow', () => ({ WorktreeAgentRow: 'WorktreeAgentRow' }))
 
 function agent(paneKey: string, parentPaneKey: string | null = null): RuntimeWorktreeAgentRow {

@@ -54,6 +54,7 @@ function renderPetOverlay(): { container: HTMLDivElement; root: Root } {
   act(() => {
     root.render(<PetOverlay />)
   })
+
   return { container, root }
 }
 
@@ -83,6 +84,7 @@ describe('PetOverlay sprite keyframes', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null

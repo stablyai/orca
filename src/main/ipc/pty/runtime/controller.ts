@@ -41,6 +41,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
       const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
+
       return ownerKey ? claimRuntimePaneCreate(ownerKey) : () => {}
     },
     adoptStablePane,

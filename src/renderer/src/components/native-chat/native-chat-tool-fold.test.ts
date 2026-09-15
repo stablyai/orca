@@ -28,6 +28,7 @@ describe('foldToolMessages', () => {
       }),
       msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'done' }] })
     ])
+
     expect(folded).toHaveLength(1)
     expect(folded[0]?.id).toBe('a')
     expect(folded[0]?.blocks).toEqual([
@@ -43,6 +44,7 @@ describe('foldToolMessages', () => {
       msg({ id: 'c', role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }] }),
       msg({ id: 'r', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] })
     ])
+
     expect(folded).toHaveLength(1)
     expect(folded[0]?.blocks).toHaveLength(3)
   })
@@ -52,6 +54,7 @@ describe('foldToolMessages', () => {
       msg({ id: 'u', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }),
       msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'x' }] })
     ])
+
     expect(folded.map((m) => m.id)).toEqual(['u'])
   })
 
@@ -61,6 +64,7 @@ describe('foldToolMessages', () => {
       msg({ id: 'u', role: 'user', blocks: [{ type: 'text', text: 'stop' }] }),
       msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'x' }] })
     ])
+
     expect(folded.map((m) => m.id)).toEqual(['c', 'u'])
   })
 
@@ -113,6 +117,7 @@ describe('foldToolMessages', () => {
         ]
       })
     ])
+
     expect(folded.map((m) => m.id)).toEqual(['a', 'b'])
   })
 
@@ -199,6 +204,7 @@ describe('splitNativeChatBlocks', () => {
       { type: 'tool-result', output: 'ok' },
       { type: 'image-ref', path: '/x.png' }
     ])
+
     expect(prose.map((b) => b.type)).toEqual(['text', 'image-ref'])
     expect(tools.map((b) => b.type)).toEqual(['tool-call', 'tool-result'])
   })

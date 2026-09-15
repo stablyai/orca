@@ -16,6 +16,7 @@ export function getShowInTasksLabel(visible: boolean, canHide: boolean): string 
   if (!visible) {
     return translate('auto.components.settings.TaskSourceShowInTasksStep.show', 'Show')
   }
+
   return canHide
     ? translate('auto.components.settings.TaskSourceShowInTasksStep.hide', 'Hide')
     : translate('auto.components.settings.TaskSourceShowInTasksStep.shown', 'Shown')
@@ -40,6 +41,7 @@ export function getShowInTasksActionLabel(
       { provider: providerLabel }
     )
   }
+
   return visible
     ? translate(
         'auto.components.settings.TaskSourceShowInTasksStep.hideProviderAction',

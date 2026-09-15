@@ -1,6 +1,7 @@
 const fs = require('node:fs')
 
 const ESC = '\x1b'
+
 const MOUSE_REPORT_PATTERN = new RegExp(`${ESC}\\[<(64|65);\\d+;\\d+M`, 'g')
 
 // Optional flags:
@@ -11,11 +12,15 @@ const MOUSE_REPORT_PATTERN = new RegExp(`${ESC}\\[<(64|65);\\d+;\\d+M`, 'g')
 //                  volume measured from a real Claude Code session scrolling
 //                  at 120 reports/s) instead of minimal rows.
 const args = process.argv.slice(2)
+
 const logIndex = args.indexOf('--log')
+
 const LOG_PATH = logIndex !== -1 ? args[logIndex + 1] : null
+
 const HEAVY_FRAMES = args.includes('--heavy')
 
 let offset = 0
+
 let pending = ''
 
 function write(data) {
@@ -34,6 +39,7 @@ function heavyRowFiller(row, cols) {
   // ~19 bytes per 8 visible columns of styled filler.
   const unit = `${ESC}[38;5;${((row * 17) % 200) + 16}m········`
   const units = Math.max(0, Math.floor((cols - 24) / 8))
+
   return `${unit.repeat(units)}${ESC}[0m`
 }
 
@@ -42,10 +48,12 @@ function render() {
   const cols = visibleCols()
   let frame = `${ESC}[?2026h${ESC}[H`
   frame += `TUI_SCROLL_READY offset=${offset}${ESC}[K`
+
   for (let row = 1; row < rows; row += 1) {
     const label = `TUI_SCROLL_ROW_${String(offset + row - 1).padStart(4, '0')}`
     frame += `\r\n${label}${HEAVY_FRAMES ? ` ${heavyRowFiller(row, cols)}` : ''}${ESC}[K`
   }
+
   frame += `${ESC}[?2026l`
   write(frame)
 }
@@ -56,12 +64,15 @@ function cleanup() {
 }
 
 process.stdin.setEncoding('utf8')
+
 if (process.stdin.isTTY) {
   process.stdin.setRawMode(true)
 }
+
 process.stdin.resume()
 
 write(`${ESC}[?1049h${ESC}[?1003h${ESC}[?1006h${ESC}[?25l${ESC}[2J`)
+
 render()
 
 process.stdin.on('data', (chunk) => {
@@ -75,6 +86,7 @@ process.stdin.on('data', (chunk) => {
   let reportsInChunk = 0
 
   MOUSE_REPORT_PATTERN.lastIndex = 0
+
   while ((match = MOUSE_REPORT_PATTERN.exec(pending)) !== null) {
     offset = Math.max(0, offset + (match[1] === '65' ? 1 : -1))
     reportsInChunk += 1
@@ -85,8 +97,10 @@ process.stdin.on('data', (chunk) => {
     if (LOG_PATH) {
       fs.appendFileSync(LOG_PATH, `${Date.now()} ${reportsInChunk}\n`)
     }
+
     pending = pending.slice(lastIndex)
     render()
+
     return
   }
 

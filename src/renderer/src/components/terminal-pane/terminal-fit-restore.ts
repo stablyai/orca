@@ -29,9 +29,11 @@ const withRestoreFitTimeout = async (
   timeoutMs: number
 ): Promise<{ restored: boolean }> => {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const timedOut = new Promise<{ restored: boolean }>((resolve) => {
     timer = setTimeout(() => resolve(restoreFailedResult()), timeoutMs)
   })
+
   try {
     return await Promise.race([pending, timedOut])
   } finally {
@@ -45,12 +47,16 @@ async function restoreTerminalFitToDesktopWithinDeadline(
   deadlineAt: number
 ): Promise<boolean> {
   const timeoutMs = Math.max(0, deadlineAt - Date.now())
+
   if (timeoutMs === 0) {
     return false
   }
+
   const remoteHandle = getRemoteRuntimeTerminalHandle(ptyId)
+
   const environmentId =
     getRemoteRuntimePtyEnvironmentId(ptyId) ?? settings?.activeRuntimeEnvironmentId ?? null
+
   const pending =
     remoteHandle && environmentId
       ? callRuntimeRpc<{ restored: boolean }>(
@@ -60,6 +66,7 @@ async function restoreTerminalFitToDesktopWithinDeadline(
           { timeoutMs }
         ).catch(restoreFailedResult)
       : window.api.runtime.restoreTerminalFit(ptyId).catch(restoreFailedResult)
+
   const result = await withRestoreFitTimeout(pending, timeoutMs)
 
   return result.restored
@@ -82,8 +89,10 @@ export async function restoreTerminalFitsToDesktop(
 ): Promise<boolean> {
   const uniquePtyIds = [...new Set(ptyIds)]
   const deadlineAt = Date.now() + TERMINAL_FIT_RESTORE_DEADLINE_MS
+
   const results = await mapWithConcurrency(uniquePtyIds, RESTORE_FIT_CONCURRENCY, (ptyId) =>
     restoreTerminalFitToDesktopWithinDeadline(ptyId, settings, deadlineAt)
   )
+
   return results.some(Boolean)
 }

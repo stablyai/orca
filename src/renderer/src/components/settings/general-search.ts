@@ -7,6 +7,7 @@ import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime
 import { getGeneralSupportSearchEntries } from './general-support-search'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
+
 export { getGeneralSupportSearchEntries } from './general-support-search'
 
 export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [

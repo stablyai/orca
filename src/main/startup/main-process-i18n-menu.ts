@@ -20,9 +20,11 @@ import { logStartupMilestone } from './startup-diagnostics'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
+
   if (!store) {
     throw new Error('Store must be initialized before menu')
   }
+
   await ensureMainI18n()
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
@@ -36,6 +38,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       if (state.mainWindow?.webContents.id === webContentsId) {
         state.expectedRendererReload.mark(webContentsId)
       }
+
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     onOpenSettings: openSettingsFromSystemMenu,
@@ -75,8 +78,10 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       if (key === 'statusBarVisible') {
         // Why: status bar visibility lives in persisted UI state (not settings) and the renderer owns the toggle — forward the event, let it flip + store.
         state.mainWindow?.webContents.send('ui:toggleStatusBar')
+
         return
       }
+
       const current = store.getSettings()
       // Why: these appearance settings are default-on, so a missing persisted value must toggle from visible -> hidden.
       const next = getNextDefaultOnAppearanceSettingValue(current[key])
@@ -86,6 +91,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     getAppearanceState: () => {
       const settings = store.getSettings()
       const ui = store.getUI()
+
       return {
         showTasksButton: settings.showTasksButton !== false,
         showAutomationsButton: settings.showAutomationsButton !== false,

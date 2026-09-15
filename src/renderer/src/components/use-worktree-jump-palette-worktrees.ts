@@ -77,6 +77,7 @@ export function useWorktreeJumpPaletteWorktrees({
 }: WorktreeJumpPaletteWorktreesInput) {
   const hasQuery = paletteSearchQuery.length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
+
   const worktreeIdsWithLiveAgent = useMemo(
     () =>
       new Set(
@@ -87,6 +88,7 @@ export function useWorktreeJumpPaletteWorktrees({
       ),
     [agentStatusByPaneKey, tabsByWorktree]
   )
+
   const pairedDeviceIdsByEnvironment = useMemo(
     () =>
       hideWorkspacesFromOtherDevices
@@ -94,33 +96,41 @@ export function useWorktreeJumpPaletteWorktrees({
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
   )
+
   const emptyQueryVisibleWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {
         if (worktree.isArchived) {
           return false
         }
+
         if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
           return false
         }
+
         if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
           return false
         }
+
         if (hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {
           return false
         }
+
         if (hideCliCreatedWorkspaces && isCliCreatedWorkspace(worktree)) {
           return false
         }
+
         if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
           return false
         }
+
         if (
           hideWorkspacesFromOtherDevices &&
           isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
         ) {
           return false
         }
+
         if (
           !showSleepingWorkspaces &&
           !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
@@ -134,6 +144,7 @@ export function useWorktreeJumpPaletteWorktrees({
         ) {
           return false
         }
+
         return true
       }),
     [
@@ -153,6 +164,7 @@ export function useWorktreeJumpPaletteWorktrees({
       worktreeIdsWithLiveAgent
     ]
   )
+
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
     () =>
       orderEmptyQueryWorktrees({
@@ -168,21 +180,26 @@ export function useWorktreeJumpPaletteWorktrees({
       lastVisitedAtByWorktreeId
     ]
   )
+
   const searchScopeWorktrees = useMemo(() => {
     const scope = getWorktreePaletteSearchScope({
       hasQuery,
       allWorktrees,
       emptyQueryWorktrees: switchableWorktreesForRows
     })
+
     return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
   }, [allWorktrees, filterPredicate, hasQuery, switchableWorktreesForRows])
+
   const browserSortedWorktrees = useMemo(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_SORTED_WORKTREES
     }
+
     const scope = filterPredicate
       ? allWorktrees.filter(filterPredicate.matchesWorktree)
       : allWorktrees
+
     return sortWorktreesSmart(
       scope,
       tabsByWorktree,
@@ -205,6 +222,7 @@ export function useWorktreeJumpPaletteWorktrees({
     migrationUnsupportedByPtyId,
     terminalLayoutsByTabId
   ])
+
   const sortedWorktrees = useMemo(
     () =>
       hasQuery
@@ -212,20 +230,24 @@ export function useWorktreeJumpPaletteWorktrees({
         : searchScopeWorktrees,
     [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
   )
+
   const paletteWorktreeIndex = useMemo(
     () => buildPaletteWorktreeIndex(browserSortedWorktrees),
     [browserSortedWorktrees]
   )
+
   const resolveWorktree = useMemo(
     () =>
       (worktreeId: string, hostId: Worktree['hostId'] | undefined): Worktree | undefined =>
         resolvePaletteWorktree(paletteWorktreeIndex, worktreeId, hostId),
     [paletteWorktreeIndex]
   )
+
   const { worktreeMap, worktreeOrder } = useMemo(
     () => buildWorktreeJumpPaletteWorktreeMaps(browserSortedWorktrees),
     [browserSortedWorktrees]
   )
+
   const checksReviewByWorktree = useMemo(
     () =>
       buildWorktreeChecksReviewIndex({
@@ -237,6 +259,7 @@ export function useWorktreeJumpPaletteWorktrees({
       }),
     [allWorktrees, hostedReviewCache, prCache, repoByHostIdentity, settings]
   )
+
   const worktreeDocuments = useMemo(
     () =>
       buildWorktreeJumpPaletteDocumentIndex({
@@ -262,6 +285,7 @@ export function useWorktreeJumpPaletteWorktrees({
       workspacePortScan
     ]
   )
+
   const worktreeMatches = useMemo(
     () =>
       searchWorktreeDocuments({
@@ -283,6 +307,7 @@ export function useWorktreeJumpPaletteWorktrees({
       worktreeDocuments
     ]
   )
+
   return {
     hasQuery,
     isLoading,

@@ -18,8 +18,10 @@ export function buildWorkspaceDirHistoryForUpdate(
   if (!('workspaceDir' in updates) && !('nestWorkspaces' in updates)) {
     return null
   }
+
   const nextPath = updates.workspaceDir ?? current.workspaceDir
   const nextNestWorkspaces = updates.nestWorkspaces ?? current.nestWorkspaces
+
   if (
     normalizeRuntimePathForComparison(nextPath) ===
       normalizeRuntimePathForComparison(current.workspaceDir) &&
@@ -32,12 +34,15 @@ export function buildWorkspaceDirHistoryForUpdate(
     path: current.workspaceDir,
     nestWorkspaces: current.nestWorkspaces
   }
+
   const existing = current.workspaceDirHistory ?? []
   const next = [...existing]
   const previousKey = getWorkspaceLayoutHistoryKey(previousLayout)
+
   if (!next.some((layout) => getWorkspaceLayoutHistoryKey(layout) === previousKey)) {
     next.push(previousLayout)
   }
+
   return next
 }
 
@@ -71,9 +76,11 @@ export function stripRetiredGlobalSettings(
     showAgentsSidebar: _legacyShowAgentsSidebar,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
+
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution
   void _legacyShowAgentsSidebar
+
   return rest
 }
 
@@ -84,6 +91,7 @@ export function migrateTerminalScrollbackRows(settings: unknown): {
   const legacySettings = readLegacyTerminalScrollbackSettings(settings)
   const hasRows = Object.hasOwn(legacySettings, 'terminalScrollbackRows')
   const hasLegacyBytes = Object.hasOwn(legacySettings, 'terminalScrollbackBytes')
+
   const rows = hasRows
     ? normalizeDesktopTerminalScrollbackRows(legacySettings.terminalScrollbackRows)
     : legacyTerminalScrollbackBytesToRows(legacySettings.terminalScrollbackBytes)
@@ -103,9 +111,11 @@ export function migrateTerminalTuiScrollSensitivityDefault(settings: GlobalSetti
 } {
   const alreadyDefaultedToOne = settings?.terminalTuiScrollSensitivityDefaultedToOne === true
   const current = settings?.terminalTuiScrollSensitivity
+
   const shouldMoveInheritedDefault =
     !alreadyDefaultedToOne &&
     (current === undefined || current === LEGACY_TERMINAL_TUI_SCROLL_SENSITIVITY_DEFAULT)
+
   const terminalTuiScrollSensitivity = shouldMoveInheritedDefault ? 1 : (current ?? 1)
 
   return {
@@ -126,6 +136,7 @@ export function migrateAgentYoloDefaults(
 ): Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'> {
   const existingArgs = normalizeTuiAgentArgsRecord(settings?.agentDefaultArgs)
   const existingEnv = normalizeTuiAgentEnvRecord(settings?.agentDefaultEnv)
+
   if (settings?.agentYoloDefaultsMigrated === true) {
     // Keep newly added agents manual for profiles migrated by an older build.
     // Missing keys otherwise fall through to the current (possibly yolo) defaults.
@@ -134,11 +145,13 @@ export function migrateAgentYoloDefaults(
         existingArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
       }
     }
+
     for (const agent of Object.keys(DEFAULT_TUI_AGENT_ENV)) {
       if (!(agent in existingEnv)) {
         existingEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
       }
     }
+
     return {
       agentDefaultArgs: existingArgs,
       agentDefaultEnv: existingEnv,
@@ -148,26 +161,32 @@ export function migrateAgentYoloDefaults(
 
   const commandOverrides = settings?.agentCmdOverrides ?? {}
   const migratedArgs = { ...existingArgs }
+
   for (const [agent, args] of Object.entries(DEFAULT_TUI_AGENT_ARGS)) {
     if (agent in migratedArgs) {
       continue
     }
+
     if (agent in commandOverrides) {
       migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = ''
       continue
     }
+
     migratedArgs[agent as keyof typeof DEFAULT_TUI_AGENT_ARGS] = args
   }
 
   const migratedEnv = { ...existingEnv }
+
   for (const [agent, env] of Object.entries(DEFAULT_TUI_AGENT_ENV)) {
     if (agent in migratedEnv) {
       continue
     }
+
     if (agent in commandOverrides) {
       migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = {}
       continue
     }
+
     migratedEnv[agent as keyof typeof DEFAULT_TUI_AGENT_ENV] = { ...env }
   }
 

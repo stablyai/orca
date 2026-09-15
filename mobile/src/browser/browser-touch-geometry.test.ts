@@ -37,11 +37,13 @@ describe('browser touch geometry', () => {
     const browserPoint = { x: 960, y: 540 }
     const localX = (browserPoint.x / metadata.deviceWidth) * geometry.renderedWidth
     const localY = (browserPoint.y / metadata.deviceHeight) * geometry.renderedHeight
+
     const screenX =
       geometry.offsetX +
       geometry.renderedWidth / 2 +
       zoom.offsetX +
       (localX - geometry.renderedWidth / 2) * zoom.scale
+
     const screenY =
       geometry.offsetY +
       geometry.renderedHeight / 2 +

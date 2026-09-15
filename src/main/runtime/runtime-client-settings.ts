@@ -90,7 +90,9 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
+
     const settings = this.store.getSettings()
+
     return {
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
@@ -133,13 +135,16 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
+
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
     this.store.updateSettings(updates, { notifyListeners: true })
     const settings = this.store.getSettings()
+
     if (updates.worktreeVisibilityDefaults !== undefined) {
       this.notifyReposChanged?.()
     }
+
     if (
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
@@ -148,6 +153,7 @@ export class RuntimeClientSettingsController {
     ) {
       await this.reconcileManagedAgentHooks()
     }
+
     return this.get()
   }
 
@@ -155,6 +161,7 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store.getSettings().terminalQuickCommands ?? []
   }
 
@@ -162,7 +169,9 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
+
     const current = this.getTerminalQuickCommands()
+
     if (
       mutation.type === 'upsert' &&
       !current.some((command) => command.id === mutation.command.id) &&
@@ -170,8 +179,10 @@ export class RuntimeClientSettingsController {
     ) {
       throw new Error('Quick command limit reached')
     }
+
     const next = applyTerminalQuickCommandMutation(current, mutation)
     this.store.updateSettings({ terminalQuickCommands: next }, { notifyListeners: true })
+
     return this.getTerminalQuickCommands()
   }
 
@@ -179,11 +190,13 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
+
     const current = this.store.getSettings().prBotAuthorOverrides
     this.store.updateSettings(
       { prBotAuthorOverrides: applyPRBotAuthorOverride(current, args.author, args.isBot) },
       { notifyListeners: true }
     )
+
     return this.get()
   }
 
@@ -191,10 +204,12 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
+
     const next = applyNativeChatSessionOptionSettingsMutation(
       this.store.getSettings().nativeChatSessionOptions,
       mutation
     )
+
     if (next) {
       this.store.updateSettings({ nativeChatSessionOptions: next }, { notifyListeners: true })
     }
@@ -202,19 +217,24 @@ export class RuntimeClientSettingsController {
 
   private reconcileManagedAgentHooks(): Promise<void> {
     const generation = ++this.reconciliationGeneration
+
     const reconciliation = this.reconciliationTail.then(async () => {
       if (generation !== this.reconciliationGeneration) {
         return
       }
+
       const settings = this.store?.getSettings()
+
       if (!settings) {
         return
       }
+
       await applyAgentStatusHooksEnabled(settings.agentStatusHooksEnabled !== false, settings, {
         shouldHydrateShellPath: getAppEnvironment().isPackaged(),
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const current = this.store?.getSettings()
+
           return (
             current !== undefined &&
             current.agentStatusHooksEnabled !== false &&
@@ -223,7 +243,9 @@ export class RuntimeClientSettingsController {
         }
       })
     })
+
     this.reconciliationTail = reconciliation.catch(() => {})
+
     return reconciliation
   }
 }

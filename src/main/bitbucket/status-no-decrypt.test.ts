@@ -11,8 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // simulate a cold session (files on disk, memory cache empty).
 
 const decryptSpy = vi.fn((value: Buffer) => value.toString('utf-8'))
+
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
+
 let tempHome = ''
 
 vi.mock('../git/runner', () => ({ gitExecFileAsync: vi.fn() }))
@@ -28,6 +31,7 @@ async function loadModules() {
   })
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')
+
     return { ...actual, homedir: () => tempHome }
   })
   // Stub repo detection so the PR fetch reaches the auth-resolution path.
@@ -37,11 +41,13 @@ async function loadModules() {
   const store = await import('./credential-store')
   const client = await import('./client')
   const connection = await import('./credential-connection')
+
   return { store, client, connection }
 }
 
 beforeEach(() => {
   process.env = { ...OLD_ENV }
+
   for (const key of [
     'ORCA_BITBUCKET_ACCESS_TOKEN',
     'ORCA_BITBUCKET_EMAIL',
@@ -50,6 +56,7 @@ beforeEach(() => {
   ]) {
     delete process.env[key]
   }
+
   tempHome = mkdtempSync(join(tmpdir(), 'orca-bb-nodecrypt-'))
   decryptSpy.mockClear()
 })
@@ -100,6 +107,7 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
       await client.getBitbucketAuthStatus()
       connection.getBitbucketConnectionStatus()
     }
+
     expect(decryptSpy).not.toHaveBeenCalled()
 
     globalThis.fetch = vi.fn(async () => Response.json({ values: [] })) as unknown as typeof fetch

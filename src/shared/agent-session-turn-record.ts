@@ -16,10 +16,13 @@ export function readAgentJournalTurn(
   if (!body) {
     return null
   }
+
   if (body.kind === 'turn') {
     const { kind: _kind, ...turn } = body
+
     return turn
   }
+
   return body.kind === 'status' ? (body.turnLifecycle ?? null) : null
 }
 
@@ -38,5 +41,6 @@ export function legacyAgentJournalTurnStatusBody(
   itemId: string
 ): AgentJournalStatusItem {
   const agent = itemId.startsWith('legacy:claude:') ? 'Claude' : 'Codex'
+
   return { kind: 'status', text: agentTurnLifecycleText(agent, turn.state), turnLifecycle: turn }
 }

@@ -18,14 +18,17 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
     this.bumpSshRelayRecoveryGeneration(targetId)
     this.invalidateSshWorktreeScanCache(targetId)
+
     if (state.status !== 'connected') {
       this.legacyWorkerRecovery.cancelScope(`ssh:${targetId}`)
     }
+
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state: getPublicSshState(state)! })
   }
 
   notifySshRelayReady(targetId: string): void {
     const generation = this.bumpSshRelayRecoveryGeneration(targetId)
+
     const publish = async (): Promise<void> => {
       try {
         await this.publishRecoveredSshMobileSessionTabs(targetId, generation)
@@ -38,6 +41,7 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
         }
       }
     }
+
     const initialPublication = publish()
     void initialPublication
     void this.refreshRestoredOrchestrationAuthority(targetId)
@@ -55,6 +59,7 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
         if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
           return
         }
+
         console.warn('[orchestration] legacy worker reconcile failed on relay ready', {
           targetId,
           error
@@ -65,6 +70,7 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
   protected bumpSshRelayRecoveryGeneration(targetId: string): number {
     const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
     this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
+
     return generation
   }
 
@@ -77,19 +83,24 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
         .filter((repo) => repo.connectionId === targetId)
         .map((repo) => repo.id)
     )
+
     if (repoIds.size === 0) {
       return
     }
+
     const worktreeIds = new Set<string>()
+
     for (const worktreeId of [
       ...this.getKnownWorkspaceSessionWorktreeIds(),
       ...this.mobileSessionTabsByWorktree.keys()
     ]) {
       const parsed = splitWorktreeId(worktreeId)
+
       if (parsed && repoIds.has(parsed.repoId)) {
         worktreeIds.add(worktreeId)
       }
     }
+
     if (worktreeIds.size === 0) {
       return
     }
@@ -101,10 +112,13 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
         onlyRuntimeOwnedTerminals: true
       })
     }
+
     await this.refreshMobileSessionPtyRecords()
+
     if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
       return
     }
+
     for (const worktreeId of worktreeIds) {
       this.notifyMobileSessionTabsChangedNow(worktreeId, ++this.mobileSessionTabsChangeSequence)
     }
@@ -126,9 +140,11 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
   notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
     this.invalidateWorktreeScanCacheForRepo(repoId)
     const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
+
     if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
       return
     }
+
     this.notifyWorktreesChangedForRemoteClients(repoId)
   }
 
@@ -148,9 +164,11 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     navigationTarget?: RuntimeNavigationTarget
   ): void {
     const navigation = navigationTarget ?? 'all'
+
     if (navigationTargetsHost(navigation)) {
       this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
     }
+
     if (navigationTargetsClients(navigation)) {
       this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
     }

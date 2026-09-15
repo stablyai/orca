@@ -1,4 +1,5 @@
 import type { GitHubPRMergeMethodSettings } from '../../../../shared/github/pull-request-types'
+
 export const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 
 export const MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS = 60 * 1000
@@ -22,11 +23,14 @@ export function pruneRepositoryMergeMetadataCache(now = Date.now()): void {
       repositoryMergeMetadataCache.delete(cacheKey)
     }
   }
+
   while (repositoryMergeMetadataCache.size > MERGE_QUEUE_CACHE_MAX_ENTRIES) {
     const oldestKey = repositoryMergeMetadataCache.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     repositoryMergeMetadataCache.delete(oldestKey)
   }
 }

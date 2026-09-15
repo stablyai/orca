@@ -25,6 +25,7 @@ export const AGENT_STATUS_OBSERVATION_ORIGINS = [
   /** Projected by the structured session host from a session's journal; no PTY, no hook. */
   'structured'
 ] as const
+
 export type AgentStatusObservationOrigin = (typeof AGENT_STATUS_OBSERVATION_ORIGINS)[number]
 
 /**
@@ -146,6 +147,7 @@ export class AgentStatusObservationSequencer {
     }
   ): AgentStatusObservation {
     this.revision += 1
+
     return {
       origin: args.origin,
       authorityId: this.authorityId,
@@ -172,20 +174,26 @@ export class AgentStatusObservationSequencer {
 
   private resolveIncarnation(paneKey: string): number {
     const known = this.incarnationByPaneKey.get(paneKey)
+
     if (known !== undefined) {
       return known
     }
+
     this.setIncarnation(paneKey, this.incarnationFloor)
+
     return this.incarnationFloor
   }
 
   private setIncarnation(paneKey: string, incarnation: number): void {
     this.incarnationByPaneKey.set(paneKey, incarnation)
+
     while (this.incarnationByPaneKey.size > OBSERVATION_PANE_STATE_MAX) {
       const oldest = this.incarnationByPaneKey.keys().next().value
+
       if (oldest === undefined) {
         return
       }
+
       this.incarnationByPaneKey.delete(oldest)
     }
   }

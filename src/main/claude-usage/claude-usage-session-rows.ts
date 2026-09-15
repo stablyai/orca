@@ -19,8 +19,10 @@ export function buildRecentSessions(
       const matchingLocations = session.locationBreakdown.filter((entry) =>
         scope === 'all' ? true : entry.worktreeId !== null
       )
+
       const scopedLocations =
         matchingLocations.length > 0 ? matchingLocations : session.locationBreakdown
+
       const totals = scopedLocations.reduce(
         (acc, entry) => {
           acc.turns += entry.turnCount
@@ -28,6 +30,7 @@ export function buildRecentSessions(
           acc.outputTokens += entry.outputTokens
           acc.cacheReadTokens += entry.cacheReadTokens
           acc.cacheWriteTokens += entry.cacheWriteTokens
+
           return acc
         },
         {
@@ -38,6 +41,7 @@ export function buildRecentSessions(
           cacheWriteTokens: 0
         }
       )
+
       const durationMinutes = Math.max(
         0,
         Math.round(
@@ -45,6 +49,7 @@ export function buildRecentSessions(
             60_000
         )
       )
+
       return {
         sessionId: session.sessionId,
         lastActiveAt: session.lastTimestamp,

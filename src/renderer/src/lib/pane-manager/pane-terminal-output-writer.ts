@@ -49,19 +49,24 @@ export function writeTerminalOutputImpl(
   options: WriteTerminalOutputOptions
 ): void {
   exposeDebugApi()
+
   // Why: recovery may be budget-delayed while PTY output keeps flowing; main owns the authoritative buffer, so credit delivery without waking dead xterm.
   if (isTerminalWritePipelineCertifiedDead(terminal)) {
     options.ackCredit?.()
+
     return
   }
+
   if (!data) {
     // Why: an empty write still consumed its delivery — credit or main's in-flight window leaks.
     options.ackCredit?.()
+
     return
   }
 
   if (options.foreground) {
     const entry = queuedByTerminal.get(terminal)
+
     if (entry?.highPriority || options.coalesceForeground || options.holdForeground) {
       const queued = entry ?? createQueueEntry(terminal, options)
       queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
@@ -77,16 +82,20 @@ export function writeTerminalOutputImpl(
         onParsed: options.onParsed,
         ackCredit: options.ackCredit
       })
+
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
       }
+
       // Why: a visible pane's queue was previously uncapped — a flood the drain couldn't keep up with ballooned renderer memory without bound.
       if (queueCapExceeded(queued)) {
         replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
         scheduleDrain(0)
+
         return
       }
+
       if (options.holdForeground) {
         // Why: synchronized-output start/body chunks contain transient cursor moves; holding them prevents Chromium from rasterizing those states.
         if (options.latencySensitive === true) {
@@ -98,15 +107,19 @@ export function writeTerminalOutputImpl(
         } else if (!queued.foregroundHold) {
           queued.foregroundHoldSafetyDelayMs = FOREGROUND_HOLD_SAFETY_DELAY_MS
         }
+
         queued.foregroundHold = true
         clearForegroundCoalesce(queued)
         scheduleForegroundHoldSafety(queued)
+
         return
       }
+
       if (options.coalesceForeground || queued.foregroundCoalesce) {
         queued.foregroundHold = false
         clearForegroundHoldSafety(queued)
         const shouldShortenCoalesceForLatencySensitiveForeground = options.latencySensitive === true
+
         if (shouldShortenCoalesceForLatencySensitiveForeground) {
           // Why: user input echo must not inherit the normal synchronized-frame restore fallback; wait briefly for the restore, then paint.
           queued.foregroundCoalesceDelayMs = Math.min(
@@ -114,25 +127,33 @@ export function writeTerminalOutputImpl(
             LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS
           )
         }
+
         const shouldDrainForLatencySensitiveForeground =
           shouldShortenCoalesceForLatencySensitiveForeground &&
           !coalescedQueuedDataNeedsCursorRestore(queued)
+
         if (containsDrainableCursorRestore(data) || shouldDrainForLatencySensitiveForeground) {
           clearForegroundRelease(queued)
           scheduleDrain(0)
+
           return
         }
+
         // Why: the PTY transport can split TUI synchronized-output end markers from the cursor-restoring bytes; wait for the restore, with the timer as bounded fallback.
         scheduleForegroundCoalesceRelease(queued, {
           rescheduleEarlier: shouldShortenCoalesceForLatencySensitiveForeground
         })
+
         return
       }
+
       queued.foregroundHold = false
       clearForegroundRelease(queued)
       scheduleDrain(0)
+
       return
     }
+
     if (entry && entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS) {
       entry.highPriority = true
       enqueueChunk(entry, data, {
@@ -145,19 +166,25 @@ export function writeTerminalOutputImpl(
         onParsed: options.onParsed,
         ackCredit: options.ackCredit
       })
+
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
       }
+
       if (queueCapExceeded(entry)) {
         replaceBacklogWithWarning(entry, FOREGROUND_BACKLOG_WARNING)
       }
+
       // Why: returning from a hidden window can have megabytes queued — keep byte order but drain async so the first foreground frame isn't pinned behind the whole backlog.
       scheduleDrain(0)
+
       return
     }
+
     if (options.latencySensitive === false) {
       let queued = entry
+
       if (!queued) {
         queued = createQueueEntry(terminal, options)
         queuedByTerminal.set(terminal, queued)
@@ -165,6 +192,7 @@ export function writeTerminalOutputImpl(
         queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
         queued.highPriority = true
       }
+
       enqueueChunk(queued, data, {
         foreground: true,
         forceForegroundRefresh: options.forceForegroundRefresh,
@@ -175,28 +203,37 @@ export function writeTerminalOutputImpl(
         onParsed: options.onParsed,
         ackCredit: options.ackCredit
       })
+
       if (debugEnabled) {
         debugState.foregroundWriteCount++
         debugState.deferredForegroundEnqueueCount++
       }
+
       if (queueCapExceeded(queued)) {
         replaceBacklogWithWarning(queued, FOREGROUND_BACKLOG_WARNING)
       }
+
       // Why: visible command floods are throughput work, not keystroke echo — queue behind a zero-delay drain so one IPC callback can't pin the renderer while input/paint wait.
       scheduleDrain(0)
+
       return
     }
+
     flushTerminalOutputImpl(terminal)
+
     if (debugEnabled) {
       debugState.foregroundWriteCount++
     }
+
     const ackCreditsParsed = registerTerminalOutputAckCredits(
       terminal,
       options.ackCredit ? [options.ackCredit] : []
     )
+
     armTerminalWriteStallWatch(terminal, {
       onCertifiedDead: () => discardTerminalOutput(terminal)
     })
+
     try {
       options.beforeWrite?.(data)
       writeForegroundTerminalChunk(
@@ -217,10 +254,12 @@ export function writeTerminalOutputImpl(
       cancelTerminalWriteStallWatch(terminal)
       throw error
     }
+
     return
   }
 
   let entry = queuedByTerminal.get(terminal)
+
   if (!entry) {
     entry = createQueueEntry(terminal, options)
     entry.highPriority = false
@@ -228,17 +267,21 @@ export function writeTerminalOutputImpl(
   } else {
     entry.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
   }
+
   enqueueChunk(entry, data, {
     beforeWrite: options.beforeWrite,
     onParsed: options.onParsed,
     ackCredit: options.ackCredit
   })
+
   if (queueCapExceeded(entry)) {
     replaceBacklogWithWarning(entry)
   }
+
   if (debugEnabled) {
     debugState.backgroundEnqueueCount++
   }
+
   // Why: letting every non-focused pane call xterm.write immediately spawns a WriteBuffer timer per pane, starving the focused terminal on the shared renderer thread.
   scheduleDrain(
     entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS ? 0 : BACKGROUND_FLUSH_DELAY_MS

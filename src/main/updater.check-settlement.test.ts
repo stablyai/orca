@@ -11,17 +11,29 @@ const {
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 warmUpdaterModule()
@@ -35,11 +47,14 @@ describe('updater', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       autoUpdaterMock.emit('update-available', { version: '2.0.0' })
+
       return Promise.resolve(undefined)
     })
     const send = vi.fn()
+
     const { setupAutoUpdater, checkForUpdatesFromMenu, dismissAvailableUpdate } =
       await loadUpdaterModule()
+
     setupAutoUpdater({ webContents: { send } } as never, {
       getLastUpdateCheckAt: () => Date.now()
     })
@@ -65,6 +80,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', new Error('boom'))
       })
+
       return Promise.reject(new Error('boom'))
     })
 
@@ -79,6 +95,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'error', message: 'boom', userInitiated: true })
     })
 
@@ -96,6 +113,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('error', new Error('net::ERR_FAILED'))
       })
+
       return Promise.reject(new Error('net::ERR_FAILED'))
     })
 
@@ -110,6 +128,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual(
         expect.objectContaining({
           state: 'error',
@@ -132,6 +151,7 @@ describe('updater', () => {
 
   it('shows checking immediately for a user-initiated check while feed pinning is pending', async () => {
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock.mockImplementation(
       () =>
         new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
@@ -140,6 +160,7 @@ describe('updater', () => {
     )
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
@@ -173,6 +194,7 @@ describe('updater', () => {
 
   it('keeps background checks event-driven before checking-for-update fires', async () => {
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock.mockImplementation(
       () =>
         new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
@@ -210,6 +232,7 @@ describe('updater', () => {
 
   it('promotes a pending background check to user-initiated without launching a duplicate check', async () => {
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+
     fetchNewerReleaseTagsMock.mockImplementation(
       () =>
         new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {

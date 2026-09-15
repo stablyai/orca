@@ -60,29 +60,36 @@ export function updatePersistedUI(
   if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
   }
+
   const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
   const { activeView, ...durableUpdates } = sanitizedUpdates
   const activeViewChanged = operations.setActiveView(activeView)
+
   if (Object.keys(durableUpdates).length === 0) {
     if (activeViewChanged) {
       operations.notifyUIChanged()
     }
+
     return
   }
+
   const currentUI = {
     ...getDefaultUIState(),
     ...stripMainOwnedTelemetryMarkerFromUI(operations.state.ui)
   }
+
   const previousUI = {
     ...operations.getUI(),
     // Why: the legacy field stays unchanged as a migration/downgrade
     // fallback; the profile sidecar is authoritative in current builds.
     activeView: currentUI.activeView
   }
+
   const nextRightSidebarTab =
     sanitizedUpdates.rightSidebarTab !== undefined
       ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
       : normalizeRightSidebarTab(operations.state.ui?.rightSidebarTab)
+
   const nextRightSidebarExplorerView =
     sanitizedUpdates.rightSidebarExplorerView !== undefined
       ? normalizeRightSidebarExplorerView(
@@ -95,6 +102,7 @@ export function updatePersistedUI(
             operations.state.ui?.rightSidebarExplorerView,
             nextRightSidebarTab
           )
+
   const nextUI = {
     ...currentUI,
     ...durableUpdates,
@@ -192,12 +200,15 @@ export function updatePersistedUI(
           )
         : normalizeFeatureInteractions(operations.state.ui?.featureInteractions)
   }
+
   if (persistedUIValuesEqual(previousUI, nextUI)) {
     if (activeViewChanged) {
       operations.notifyUIChanged()
     }
+
     return
   }
+
   operations.state.ui = nextUI
   operations.scheduleSave()
   operations.notifyUIChanged()

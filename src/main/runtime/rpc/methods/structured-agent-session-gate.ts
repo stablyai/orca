@@ -34,9 +34,11 @@ export function requireStructuredCapability(ctx: RpcContext): void {
 export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   return host
 }
 
@@ -66,10 +68,13 @@ export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSe
   if (!supportsStructuredAgentSessionCapability(ctx)) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   return host
 }
 
@@ -83,9 +88,11 @@ export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<vo
   if (!supportsStructuredSessions(ctx)) {
     return
   }
+
   if (getStructuredAgentSessionHost()) {
     return
   }
+
   await ctx.runtime.ensureStructuredAgentSessionHost()
 }
 

@@ -33,9 +33,11 @@ export type PluginGateSubject = {
 
 export function gatePluginHostCall(subject: PluginGateSubject, method: string): PluginGateDecision {
   const spec = getPluginHostMethodSpec(method)
+
   if (!spec) {
     return { granted: false, code: 'unknown_method', error: `unknown host method: ${method}` }
   }
+
   if (subject.viaPanel && !isPluginPanelAction(method)) {
     return {
       granted: false,
@@ -43,6 +45,7 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: `method ${method} is not available to sandboxed panels`
     }
   }
+
   // Why: a disabled/unknown/stale-consent plugin must fail exactly like an
   // ungranted capability — no probe-able distinction for plugin code.
   if (subject.grantedCapabilities === null) {
@@ -52,6 +55,7 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: 'plugin is not enabled with current consent'
     }
   }
+
   if (!subject.grantedCapabilities.includes(spec.capability)) {
     return {
       granted: false,
@@ -59,5 +63,6 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: `plugin does not have the "${spec.capability}" capability`
     }
   }
+
   return { granted: true }
 }

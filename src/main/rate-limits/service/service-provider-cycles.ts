@@ -10,9 +10,11 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
+
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
     const codexHome = this.resolveCodexHome(codexTarget)
+
     // Why: return before the "fetching" mark — a skipped cycle never settles it (#STA-4422).
     if (codexHome.skip) {
       if (
@@ -21,8 +23,10 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       ) {
         this.updateState({ ...this.state, codex: null })
       }
+
       return
     }
+
     const codexHomePath = codexHome.homePath
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const previousState = this.state
@@ -35,6 +39,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
+
     const codex = await (
       missingWslCodexHome
         ? Promise.resolve(missingWslCodexHome)
@@ -57,13 +62,16 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     }
 
     const latestCodexHome = this.resolveCodexHome(codexTarget)
+
     if (latestCodexHome.skip && codexGeneration === this.codexFetchGeneration) {
       this.updateState({
         ...this.state,
         codex: previousState.codex?.status === 'fetching' ? null : previousState.codex
       })
+
       return
     }
+
     const shouldApplyCodex =
       !latestCodexHome.skip &&
       codexGeneration === this.codexFetchGeneration &&
@@ -72,6 +80,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
     }
+
     this.updateState({
       ...this.state,
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
@@ -85,17 +94,21 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
+
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
       return
     }
+
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+
     if (signal.aborted) {
       return
     }
+
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const previousState = this.state
@@ -125,10 +138,13 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     }
 
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
+
     if (signal.aborted) {
       return
     }
+
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
+
     const shouldApplyClaude =
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
@@ -137,6 +153,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
     }
+
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
@@ -149,6 +166,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
+
     const previousState = this.state
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'

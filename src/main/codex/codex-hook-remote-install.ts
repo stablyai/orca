@@ -30,17 +30,21 @@ export async function installCodexHooksRemote(
 ): Promise<AgentHookInstallStatus> {
   const codexHomeBase =
     options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
+
   const remoteConfigPath = `${codexHomeBase}/hooks.json`
   const remoteTomlPath = `${codexHomeBase}/config.toml`
   // Redirected WSL homes must use the same script location and command shape
   // as the runtime installer; two representations of one hooks.json race
   // into stale trust keys. Plain SSH keeps its guest-home script contract.
   const redirectedCodexHome = options?.codexHomeDir?.replace(/\/$/, '')
+
   const remoteScriptPath = redirectedCodexHome
     ? `${redirectedCodexHome}/.orca/agent-hooks/codex-hook.sh`
     : `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
+
   try {
     const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+
     if (!config) {
       return {
         agent: 'codex',
@@ -54,6 +58,7 @@ export async function installCodexHooksRemote(
     const command = redirectedCodexHome
       ? wrapReadablePosixHookCommand(remoteScriptPath)
       : wrapPosixHookCommand(remoteScriptPath)
+
     const nextHooks = { ...config.hooks }
     const managedEvents = new Set<string>(CODEX_EVENTS)
     const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
@@ -62,7 +67,9 @@ export async function installCodexHooksRemote(
       if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
         continue
       }
+
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -71,12 +78,15 @@ export async function installCodexHooksRemote(
     }
 
     const trustEntries: CodexTrustEntry[] = []
+
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
+
       const definition: HookDefinition = {
         hooks: [buildManagedCommandHook(command)]
       }
+
       nextHooks[eventName] = redirectedCodexHome
         ? [definition, ...cleaned]
         : [...cleaned, definition]
@@ -96,8 +106,10 @@ export async function installCodexHooksRemote(
     await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
     // Why: SSH edits the user's remote ~/.codex/hooks.json directly, so preserve non-Orca top-level metadata while replacing the hooks tree.
     await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
+
     try {
       const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
+
       if (existingTomlRaw === null && options?.deferTrustUntilConfigToml === true) {
         return {
           agent: 'codex',
@@ -107,8 +119,10 @@ export async function installCodexHooksRemote(
           detail: 'Trust entries deferred until config.toml is seeded by the launch path'
         }
       }
+
       const existingToml = existingTomlRaw ?? ''
       const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
+
       if (updatedToml !== existingToml) {
         await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
       }

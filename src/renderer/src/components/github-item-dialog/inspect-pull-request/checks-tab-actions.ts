@@ -51,15 +51,20 @@ export async function refreshGitHubChecksTab(
         'Unable to refresh checks without a repository path.'
       )
     )
+
     return null
   }
+
   const refreshContextOwner = expectedContextOwner ?? ctx.committedChecksContextOwnerRef.current
+
   if (ctx.committedChecksContextOwnerRef.current !== refreshContextOwner) {
     return null
   }
+
   const refreshRequestId = ++ctx.nextChecksRefreshRequestIdRef.current
   ctx.activeChecksRefreshRequestIdRef.current = refreshRequestId
   ctx.setRefreshingOwner({ contextOwner: refreshContextOwner, requestId: refreshRequestId })
+
   try {
     const nextChecks = (await (ctx.runtimeHost
       ? callRuntimeRpc<PRCheckDetail[]>(
@@ -83,6 +88,7 @@ export async function refreshGitHubChecksTab(
           prRepo: ctx.prRepo,
           noCache: true
         }))) as PRCheckDetail[]
+
     if (
       !ctx.mountedRef.current ||
       ctx.committedChecksContextOwnerRef.current !== refreshContextOwner ||
@@ -90,12 +96,14 @@ export async function refreshGitHubChecksTab(
     ) {
       return null
     }
+
     ctx.setChecksState((current) =>
       current.contextOwner === refreshContextOwner
         ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
         : current
     )
     ctx.onChecksUpdated(nextChecks)
+
     return nextChecks
   } catch (err) {
     if (
@@ -109,11 +117,13 @@ export async function refreshGitHubChecksTab(
           : translate('auto.components.GitHubItemDialog.0bbdc673c1', 'Failed to refresh checks')
       )
     }
+
     return null
   } finally {
     if (ctx.activeChecksRefreshRequestIdRef.current === refreshRequestId) {
       ctx.activeChecksRefreshRequestIdRef.current = null
     }
+
     if (ctx.mountedRef.current) {
       ctx.setRefreshingOwner((current) =>
         current?.requestId === refreshRequestId ? null : current
@@ -130,8 +140,10 @@ export async function rerunGitHubChecksTab(
   if (!ctx.canUseChecksRepoContext || rerunning) {
     return
   }
+
   const rerunContextOwner = ctx.committedChecksContextOwnerRef.current
   ctx.setRerunningOwner(rerunContextOwner)
+
   try {
     const result = ctx.runtimeHost
       ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
@@ -155,16 +167,20 @@ export async function rerunGitHubChecksTab(
           failedOnly,
           prRepo: ctx.prRepo
         })
+
     if (
       !ctx.mountedRef.current ||
       ctx.committedChecksContextOwnerRef.current !== rerunContextOwner
     ) {
       return
     }
+
     if (!result.ok) {
       toast.error(result.error)
+
       return
     }
+
     toast.success(
       result.count === 1
         ? translate('auto.components.GitHubItemDialog.ddafe851e1', 'Check rerun requested')
@@ -205,13 +221,16 @@ export async function fixBrokenGitHubChecks({
   setFixingChecks: (value: boolean) => void
 }): Promise<void> {
   const targetRepoId = repoId ?? item.repoId
+
   if (!targetRepoId || fixingChecks) {
     return
   }
+
   if (failedChecksLength === 0) {
     toast.message(
       translate('auto.components.GitHubItemDialog.1690fd7f4a', 'No broken checks to fix.')
     )
+
     return
   }
 
@@ -222,7 +241,9 @@ export async function fixBrokenGitHubChecks({
     reviewUrl: item.url,
     checks: list
   })
+
   setFixingChecks(true)
+
   try {
     const started = await startFixChecksAgent({
       item,
@@ -239,6 +260,7 @@ export async function fixBrokenGitHubChecks({
         )
       }
     })
+
     if (started) {
       toast.success(
         translate(

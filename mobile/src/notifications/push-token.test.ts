@@ -69,6 +69,7 @@ describe('addPushTokenListener', () => {
     let emit: ((raw: unknown) => void) | null = null
     vi.mocked(Notifications.addPushTokenListener).mockImplementation((listener) => {
       emit = listener as (raw: unknown) => void
+
       return { remove } as never
     })
     const seen: unknown[] = []

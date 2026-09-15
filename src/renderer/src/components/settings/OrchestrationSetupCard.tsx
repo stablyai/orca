@@ -26,12 +26,14 @@ export function OrchestrationSetupCard(props: {
 }): JSX.Element {
   const { compact, terminalHeightPx, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const installCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         ORCHESTRATION_SKILL_INSTALL_COMMAND,
         activeSkillRuntime.agentRuntime
       )
     : ORCHESTRATION_SKILL_INSTALL_COMMAND
+
   const updateCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         ORCHESTRATION_SKILL_UPDATE_COMMAND,
@@ -86,5 +88,6 @@ export function OrchestrationSetupCard(props: {
   if (compact) {
     return <div className="flex min-h-24 flex-1 items-center justify-center">{setupPanel}</div>
   }
+
   return <div className="flex">{setupPanel}</div>
 }

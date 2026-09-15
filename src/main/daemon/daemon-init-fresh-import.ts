@@ -124,6 +124,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     exit: () => {},
     getAppMetrics: () => []
   } as unknown as AppEnvironment)
+
   // Why: import after resetModules so module-level spawner/adapter/restartInFlight start fresh — needed to test first-init and the coalescer.
   return import('./daemon-init')
 }

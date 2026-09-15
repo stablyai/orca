@@ -50,6 +50,7 @@ describe('truncateDiffForPrompt', () => {
     const diff = `${'keep this line\n'.repeat(40)}`
     const result = truncateDiffForPrompt(diff, 95)
     const body = result.split('\n...(diff truncated')[0]
+
     // Every retained line is whole.
     for (const line of body.split('\n').filter(Boolean)) {
       expect(line).toBe('keep this line')
@@ -61,6 +62,7 @@ describe('truncateDiffForPrompt', () => {
       { length: 20 },
       (_, i) => `diff --git a/file-${i}.txt b/file-${i}.txt\n${'+x\n'.repeat(200)}`
     ).join('')
+
     const result = truncateDiffForPrompt(files, 120)
 
     expect(result.length).toBeLessThanOrEqual(120)
@@ -114,12 +116,15 @@ describe('cleanGeneratedCommitMessage', () => {
     expect(result.startsWith('feat: large output\nbody line')).toBe(true)
     expect(result.endsWith('body line')).toBe(true)
     expect(result).not.toContain('\r\n')
+
     const usedCrlfReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
     )
+
     const usedFenceMatch = matchSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
     )
+
     expect(usedCrlfReplace).toBe(false)
     expect(usedFenceMatch).toBe(false)
   })
@@ -140,6 +145,7 @@ describe('excerptAgentFailureOutput', () => {
   // Real Codex failure shape: config preamble first, operative ERROR line last.
   const codexErrorLine =
     'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.3-codex-spark\' model is not supported when using Codex with a ChatGPT account."}}'
+
   const codexStderr = [
     '--------',
     'workdir: C:\\Storage\\Projects\\bagplanner',
@@ -304,6 +310,7 @@ describe('tokenizeCustomCommandTemplate', () => {
         { start: 13, end: 26, divergesFromShell: false }
       ]
     })
+
     if (r.ok) {
       expect(r.spans.map(({ start, end }) => source.slice(start, end))).toEqual([
         'claude',
@@ -316,6 +323,7 @@ describe('tokenizeCustomCommandTemplate', () => {
   it('returns an error for an unclosed quote', () => {
     const r = tokenizeCustomCommandTemplate('claude --msg "no end')
     expect(r.ok).toBe(false)
+
     if (!r.ok) {
       expect(r.error).toMatch(/unclosed/i)
     }
@@ -362,6 +370,7 @@ describe('planCustomCommand', () => {
   it('propagates tokenizer errors', () => {
     const r = planCustomCommand('agent "unclosed', 'PROMPT')
     expect(r.ok).toBe(false)
+
     if (!r.ok) {
       expect(r.error).toMatch(/unclosed/i)
     }

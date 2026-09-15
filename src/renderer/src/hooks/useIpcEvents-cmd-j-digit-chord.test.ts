@@ -27,6 +27,7 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     const harness = await loadIpcEventsHarness(createPaletteState('worktree-palette'))
     harness.useIpcEvents()
     const rowJumps: number[] = []
+
     const unsubscribe = (await loadRowJumpBus()).subscribeCmdJRowIndexJump((index) =>
       rowJumps.push(index)
     )
@@ -41,8 +42,10 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     const harness = await loadIpcEventsHarness(createPaletteState(null), {
       visibleWorktreeIds: ['wt-a', 'wt-b', 'wt-c']
     })
+
     harness.useIpcEvents()
     const rowJumps: number[] = []
+
     const unsubscribe = (await loadRowJumpBus()).subscribeCmdJRowIndexJump((index) =>
       rowJumps.push(index)
     )
@@ -62,6 +65,7 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
         { id: 'repo::path', executionHostId: 'ssh:box' }
       ]
     })
+
     harness.useIpcEvents()
 
     harness.jumpToWorktreeIndex(1)

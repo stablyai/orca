@@ -32,5 +32,6 @@ export async function canonicalizeUsageWorktreePaths<T extends { path: string }>
   }
 
   await Promise.all(Array.from({ length: workerCount }, worker))
+
   return canonicalized.sort((left, right) => right.canonicalPath.length - left.canonicalPath.length)
 }

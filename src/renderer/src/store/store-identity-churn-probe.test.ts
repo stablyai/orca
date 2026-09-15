@@ -105,10 +105,12 @@ describe('store identity churn probe', () => {
 
     store.setState((state) => {
       seen.push(state)
+
       return { counter: state.counter + 1 }
     })
     store.setState((state) => {
       seen.push(state)
+
       return { rows: [{ ...state.rows[0] }] }
     })
 
@@ -130,9 +132,11 @@ describe('store identity churn probe', () => {
   it('passes disarmed writes straight through without reading state', () => {
     const innerSet = vi.fn()
     const innerGet = vi.fn(() => ({ counter: 0 }))
+
     const api = { setState: innerSet, getState: innerGet } as unknown as StoreApi<{
       counter: number
     }>
+
     const creator = withStoreIdentityChurnProbe<{ counter: number }>(() => ({ counter: 0 }))
     creator(innerSet, innerGet, api)
     const updater = (state: { counter: number }) => ({ counter: state.counter + 1 })
@@ -160,12 +164,14 @@ describe('store identity churn probe', () => {
         }))
       )
     )
+
     let updaterCalls = 0
     armStoreIdentityChurnProbe({ captureSites: true })
 
     store.getState().bump()
     store.setState((state) => {
       updaterCalls += 1
+
       return { counter: state.counter + 10 }
     })
     store.getState().refresh([{ id: 'a', label: 'A' }])
@@ -205,6 +211,7 @@ describe('store identity churn probe', () => {
         put: (value) => set({ value })
       }))
     )
+
     armStoreIdentityChurnProbe()
 
     store.getState().put(new Map([['a', 1]]))

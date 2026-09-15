@@ -58,6 +58,7 @@ describe('collectInlineMedia', () => {
       identifier: 'ENG-3',
       description: '![nested](https://uploads.linear.app/w/file/nested?sig=3)'
     })
+
     const child: LinearIssueChildNode = {
       ...summary({
         id: 'child-1',
@@ -66,6 +67,7 @@ describe('collectInlineMedia', () => {
       }),
       children: [nestedChild]
     }
+
     const result = resultWith({
       issue: summary({
         description: '![desc](https://uploads.linear.app/w/file/desc?sig=1)'

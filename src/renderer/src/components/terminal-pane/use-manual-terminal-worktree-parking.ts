@@ -16,6 +16,7 @@ function addWorktreeId(current: ReadonlySet<string>, worktreeId: string): Readon
   if (current.has(worktreeId)) {
     return current
   }
+
   return new Set([...current, worktreeId])
 }
 
@@ -23,8 +24,10 @@ function removeWorktreeId(current: ReadonlySet<string>, worktreeId: string): Rea
   if (!current.has(worktreeId)) {
     return current
   }
+
   const next = new Set(current)
   next.delete(worktreeId)
+
   return next
 }
 
@@ -35,6 +38,7 @@ export function combineTerminalWorktreeParkIds(
   if (manualIds.size === 0) {
     return automaticIds
   }
+
   return new Set([...automaticIds, ...manualIds])
 }
 
@@ -49,6 +53,7 @@ export function useManualTerminalWorktreeParking(args: {
   const parkWorktree = useCallback((worktreeId: string) => {
     const state = useAppStore.getState()
     const terminalTabs = state.tabsByWorktree[worktreeId] ?? []
+
     const canPark =
       canManuallyParkTerminalWorktreeRenderers({
         worktreeId,
@@ -57,6 +62,7 @@ export function useManualTerminalWorktreeParking(args: {
         parkingEnabled: state.settings?.terminalHiddenViewParking !== false,
         hasLivePty: (tabId) => tabHasLivePty(state.ptyIdsByTabId, tabId)
       }) && terminalTabs.every((tab) => canWatcherCoverParkedTerminalTab(worktreeId, tab))
+
     if (!canPark) {
       toast.warning(
         translate(
@@ -64,24 +70,31 @@ export function useManualTerminalWorktreeParking(args: {
           'These terminals cannot be parked safely.'
         )
       )
+
       return
     }
+
     setManuallyParkedWorktreeIds((current) => addWorktreeId(current, worktreeId))
   }, [])
 
   useEffect(() => {
     const handleParkRequest = (event: Event): void => {
       const worktreeId = (event as CustomEvent<ManualTerminalWorktreeParkDetail>).detail?.worktreeId
+
       if (!worktreeId) {
         return
       }
+
       takePendingManualTerminalWorktreePark(worktreeId)
       parkWorktree(worktreeId)
     }
+
     window.addEventListener(MANUAL_TERMINAL_WORKTREE_PARK_EVENT, handleParkRequest as EventListener)
+
     for (const worktreeId of takeAllPendingManualTerminalWorktreeParks()) {
       parkWorktree(worktreeId)
     }
+
     return () =>
       window.removeEventListener(
         MANUAL_TERMINAL_WORKTREE_PARK_EVENT,
@@ -91,9 +104,11 @@ export function useManualTerminalWorktreeParking(args: {
 
   useEffect(() => {
     const revealedWorktreeId = args.renderedActiveWorktreeId
+
     if (args.activeView !== 'terminal' || !revealedWorktreeId) {
       return
     }
+
     setManuallyParkedWorktreeIds((current) => removeWorktreeId(current, revealedWorktreeId))
   }, [args.activeView, args.renderedActiveWorktreeId])
 

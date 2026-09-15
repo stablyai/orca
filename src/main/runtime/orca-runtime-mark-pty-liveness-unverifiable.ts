@@ -25,9 +25,11 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
    */
   markPtyLivenessLive(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
       return
     }
+
     this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
   }
 
@@ -61,12 +63,14 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   protected isPtyKnownExited(ptyId: string): boolean {
     const pty = this.ptysById.get(ptyId)
+
     if (pty) {
       // Why: `!connected` is an inference, not proof. The liveness sweep clears it with no
       // exit code for every PTY of a dropped relay, so reading that as an exit retires the
       // lease of a process still running on the host — 'unknown' must keep watching.
       return getPtyTerminalState(pty) === 'exited'
     }
+
     // Why: leavesByPtyId is rebuilt from the renderer graph independently of ptysById, so a
     // leaf can outlive (or precede) its pty record; without this an already-dead pty never
     // fires and the caller's release waits forever.
@@ -75,27 +79,37 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
 
   subscribeToPtyExit(ptyId: string, listener: () => void): () => void {
     const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+
     if (this.isPtyKnownExited(ptyId)) {
       listener()
+
       return () => {}
     }
+
     let listeners = this.ptyExitListenersByPtyId.get(ptyId)
+
     if (!listeners) {
       listeners = new Set()
       this.ptyExitListenersByPtyId.set(ptyId, listeners)
     }
+
     let active = true
+
     const unsubscribe = (): void => {
       if (!active) {
         return
       }
+
       active = false
       listeners!.delete(listener)
+
       if (listeners!.size === 0 && this.ptyExitListenersByPtyId.get(ptyId) === listeners) {
         this.ptyExitListenersByPtyId.delete(ptyId)
       }
     }
+
     listeners.add(listener)
+
     if (
       this.getPtyLifecycleGeneration(ptyId) !== lifecycleGeneration ||
       this.isPtyKnownExited(ptyId)
@@ -103,6 +117,7 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
       unsubscribe()
       listener()
     }
+
     return unsubscribe
   }
 
@@ -116,8 +131,10 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
       verdict,
       observedAt: this.ptyLivenessObservationSequence
     })
+
     while (this.ptyLivenessVerdictByPtyId.size > MAX_TRACKED_PTY_LIVENESS_VERDICTS) {
       let oldestOrphaned: string | null = null
+
       for (const candidate of this.ptyLivenessVerdictByPtyId.keys()) {
         if (
           !this.ptysById.has(candidate) &&
@@ -128,18 +145,22 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
           break
         }
       }
+
       if (!oldestOrphaned) {
         return
       }
+
       this.ptyLivenessVerdictByPtyId.delete(oldestOrphaned)
     }
   }
 
   protected forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
+
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
       return
     }
+
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
   }
 
@@ -171,6 +192,7 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     if (this.getDriver(ptyId).kind === 'mobile') {
       return true
     }
+
     return this.isRemoteDesktopResizeDriven(ptyId)
   }
 
@@ -252,19 +274,26 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     viewport: { cols: number; rows: number }
   ): Promise<boolean> {
     const { cols, rows } = clampTerminalViewport(viewport.cols, viewport.rows)
+
     if (this.terminalFitOverrides.has(ptyId) || this.getDriver(ptyId).kind === 'mobile') {
       this.recordRendererGeometry(ptyId, cols, rows)
+
       return true
     }
+
     if (this.isResizeSuppressed()) {
       return false
     }
+
     this.freshSubscribeGuard.add(ptyId)
+
     try {
       const result = await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
+
       if (result.ok) {
         this.refreshRendererGeometry(ptyId, cols, rows)
       }
+
       return result.ok
     } finally {
       this.freshSubscribeGuard.delete(ptyId)
@@ -274,9 +303,11 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
   markMobileActor(ptyId: string, clientId: string): void {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
+
     if (sub) {
       sub.lastActedAt = Date.now()
     }
+
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
 

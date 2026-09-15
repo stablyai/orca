@@ -1,4 +1,5 @@
 export const LINEAR_AGENT_SKILL_SETUP_TOAST_LIMIT = 3
+
 export const MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS = 256
 
 type LinearAgentSkillSetupReminderState = {
@@ -10,13 +11,16 @@ type LinearAgentSkillSetupReminderState = {
 }
 
 const reminderStateByRuntimeKey = new Map<string, LinearAgentSkillSetupReminderState>()
+
 let nextActivationId = 0
 
 function evictLinearAgentSkillSetupReminderStateIfAtCapacity(): void {
   if (reminderStateByRuntimeKey.size < MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS) {
     return
   }
+
   let evictionKey = reminderStateByRuntimeKey.keys().next().value
+
   // Why: visible toasts retain their reminder state when an inactive entry can
   // be evicted instead; deterministic toast ids still make fallback cleanup safe.
   for (const [runtimeKey, state] of reminderStateByRuntimeKey) {
@@ -25,6 +29,7 @@ function evictLinearAgentSkillSetupReminderStateIfAtCapacity(): void {
       break
     }
   }
+
   if (evictionKey !== undefined) {
     reminderStateByRuntimeKey.delete(evictionKey)
   }
@@ -33,6 +38,7 @@ function evictLinearAgentSkillSetupReminderStateIfAtCapacity(): void {
 export function createLinearAgentSkillSetupActivationId(): string {
   const activationId = `linear-agent-skill-setup-${nextActivationId}`
   nextActivationId += 1
+
   return activationId
 }
 
@@ -40,20 +46,25 @@ export function getLinearAgentSkillSetupReminderState(
   localDismissStorageKey: string
 ): LinearAgentSkillSetupReminderState {
   const existing = reminderStateByRuntimeKey.get(localDismissStorageKey)
+
   if (existing) {
     reminderStateByRuntimeKey.delete(localDismissStorageKey)
     reminderStateByRuntimeKey.set(localDismissStorageKey, existing)
+
     return existing
   }
+
   const nextState: LinearAgentSkillSetupReminderState = {
     modalShown: false,
     toastCount: 0,
     snoozed: false
   }
+
   // Why: runtime dismiss keys can churn as local/remote targets change; keep
   // recent reminder UX state without retaining stale runtime keys forever.
   evictLinearAgentSkillSetupReminderStateIfAtCapacity()
   reminderStateByRuntimeKey.set(localDismissStorageKey, nextState)
+
   return nextState
 }
 

@@ -36,6 +36,7 @@ const freshRemoteRepo: Repo = {
 }
 
 const runtimeEnvironmentCall = vi.fn()
+
 const reposList = vi.fn()
 
 beforeEach(() => {
@@ -64,17 +65,22 @@ describe('fetchReposForAllHosts generation', () => {
   it('settles startup hydration after the local catalog without waiting for remotes', async () => {
     let resolveRemote!: (value: unknown) => void
     let markRemoteStarted!: () => void
+
     const remote = new Promise((resolve) => {
       resolveRemote = resolve
     })
+
     const remoteStarted = new Promise<void>((resolve) => {
       markRemoteStarted = resolve
     })
+
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         markRemoteStarted()
+
         return remote
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -102,17 +108,21 @@ describe('fetchReposForAllHosts generation', () => {
   it('does not let a remote refresh supersede or delay local startup settlement', async () => {
     let resolveLocal!: (repos: Repo[]) => void
     let resolveRemote!: (value: unknown) => void
+
     const local = new Promise<Repo[]>((resolve) => {
       resolveLocal = resolve
     })
+
     const remote = new Promise((resolve) => {
       resolveRemote = resolve
     })
+
     reposList.mockReturnValueOnce(local)
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         return remote
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -150,17 +160,22 @@ describe('fetchReposForAllHosts generation', () => {
   it('keeps an in-flight all-host remote result across a newer local refresh', async () => {
     let resolveRemote!: (value: unknown) => void
     let markRemoteStarted!: () => void
+
     const remote = new Promise((resolve) => {
       resolveRemote = resolve
     })
+
     const remoteStarted = new Promise<void>((resolve) => {
       markRemoteStarted = resolve
     })
+
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         markRemoteStarted()
+
         return remote
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -188,21 +203,27 @@ describe('fetchReposForAllHosts generation', () => {
     let resolveOlderLocal!: (repos: Repo[]) => void
     let resolveRemote!: (value: unknown) => void
     let markRemoteStarted!: () => void
+
     const olderLocal = new Promise<Repo[]>((resolve) => {
       resolveOlderLocal = resolve
     })
+
     const remote = new Promise((resolve) => {
       resolveRemote = resolve
     })
+
     const remoteStarted = new Promise<void>((resolve) => {
       markRemoteStarted = resolve
     })
+
     reposList.mockReturnValueOnce(olderLocal)
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         markRemoteStarted()
+
         return remote
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -230,12 +251,15 @@ describe('fetchReposForAllHosts generation', () => {
   it('keeps a newer Connect-flow catalog when an older all-host response resolves last', async () => {
     let resolveOlder!: (value: unknown) => void
     let markOlderStarted!: () => void
+
     const older = new Promise((resolve) => {
       resolveOlder = resolve
     })
+
     const olderStarted = new Promise<void>((resolve) => {
       markOlderStarted = resolve
     })
+
     let repoListCalls = 0
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method !== 'repo.list') {
@@ -246,11 +270,15 @@ describe('fetchReposForAllHosts generation', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       repoListCalls++
+
       if (repoListCalls === 1) {
         markOlderStarted()
+
         return older
       }
+
       return {
         id: 'rpc-fresh',
         ok: true,
@@ -279,9 +307,11 @@ describe('fetchReposForAllHosts generation', () => {
 
   it('keeps a newer all-host catalog when an older Connect-flow response resolves last', async () => {
     let resolveOlder!: (value: unknown) => void
+
     const older = new Promise((resolve) => {
       resolveOlder = resolve
     })
+
     let repoListCalls = 0
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method !== 'repo.list') {
@@ -292,7 +322,9 @@ describe('fetchReposForAllHosts generation', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       repoListCalls++
+
       return repoListCalls === 1
         ? older
         : {
@@ -345,8 +377,10 @@ describe('fetchReposForAllHosts generation', () => {
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         markRepoListStarted()
+
         return repoList
       }
+
       return {
         id: `rpc-${args.method}`,
         ok: true,
@@ -385,8 +419,10 @@ describe('fetchReposForAllHosts generation', () => {
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         markRepoListStarted()
+
         return repoList
       }
+
       return {
         id: `rpc-${args.method}`,
         ok: true,
@@ -427,8 +463,10 @@ describe('fetchReposForAllHosts generation', () => {
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         markRepoListStarted()
+
         return repoList
       }
+
       return {
         id: `rpc-${args.method}`,
         ok: true,
@@ -466,18 +504,23 @@ describe('fetchReposForAllHosts generation', () => {
     let resolveNewerRemote!: (value: unknown) => void
     let markOlderRemoteStarted!: () => void
     let markNewerRemoteStarted!: () => void
+
     const olderRemote = new Promise((resolve) => {
       resolveOlderRemote = resolve
     })
+
     const newerRemote = new Promise((resolve) => {
       resolveNewerRemote = resolve
     })
+
     const olderRemoteStarted = new Promise<void>((resolve) => {
       markOlderRemoteStarted = resolve
     })
+
     const newerRemoteStarted = new Promise<void>((resolve) => {
       markNewerRemoteStarted = resolve
     })
+
     let repoListCalls = 0
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method !== 'repo.list') {
@@ -488,12 +531,17 @@ describe('fetchReposForAllHosts generation', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       repoListCalls++
+
       if (repoListCalls === 1) {
         markOlderRemoteStarted()
+
         return olderRemote
       }
+
       markNewerRemoteStarted()
+
       return newerRemote
     })
     const store = createTestStore()
@@ -502,6 +550,7 @@ describe('fetchReposForAllHosts generation', () => {
       filterRepoIds: ['remote-repo'],
       trustedOrcaHooks: { 'remote-repo': { all: { approvedAt: 1 } } }
     })
+
     const response = {
       id: 'rpc-repo-list',
       ok: true,

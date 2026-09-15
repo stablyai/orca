@@ -45,6 +45,7 @@ export async function writeAntigravityTranscript(
 ): Promise<string> {
   const transcriptPath = join(brainDir, sessionId, '.system_generated', 'logs', 'transcript.jsonl')
   await writeJsonlFile(transcriptPath, records)
+
   return transcriptPath
 }
 
@@ -88,6 +89,7 @@ export async function writeOmpScannerFixture(sessionsDir: string): Promise<strin
       }
     }
   ])
+
   return sessionFile
 }
 
@@ -115,6 +117,7 @@ export async function writePrimeAgentScannerFixture(sessionsDir: string): Promis
       message: { role: 'user', content: [{ type: 'text', text: 'Prime Agent title' }] }
     }
   ])
+
   return sessionFile
 }
 

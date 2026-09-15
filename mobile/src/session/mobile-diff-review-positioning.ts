@@ -48,19 +48,24 @@ export function findMobileDiffReviewInitialIndex(
   if (!target || queue.length === 0) {
     return 0
   }
+
   const index = queue.findIndex((item) => {
     if (item.area !== target.area) {
       return false
     }
+
     if (item.filePath === target.filePath) {
       return item.key === reviewInitialTargetKey(target, item.oldPath)
     }
+
     if (item.oldPath === target.filePath) {
       return (
         item.key === reviewInitialTargetKey({ ...target, filePath: item.filePath }, item.oldPath)
       )
     }
+
     return false
   })
+
   return Math.max(index, 0)
 }

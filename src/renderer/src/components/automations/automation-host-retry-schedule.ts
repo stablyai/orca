@@ -43,17 +43,21 @@ export function createAutomationHostRetrySchedule(
     cancel,
     record: (target, error) => {
       const attempt = (options.cache.getByKey(target.stableKey)?.attempt ?? 0) + 1
+
       const queryError = classifyAutomationHostQueryError(error, {
         attempt,
         now: options.now(),
         random: options.random
       })
+
       if (!options.cache.fail(target.fence, queryError)) {
         return false
       }
+
       if (!queryError.retryable || !options.isVisible()) {
         return true
       }
+
       const delay = Math.max(0, (queryError.retryAt ?? options.now()) - options.now())
       cancel(target.stableKey)
       timers.set(
@@ -63,12 +67,14 @@ export function createAutomationHostRetrySchedule(
           options.retry(target)
         }, delay)
       )
+
       return true
     },
     dispose: () => {
       for (const stop of timers.values()) {
         stop()
       }
+
       timers.clear()
     }
   }

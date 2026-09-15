@@ -23,6 +23,7 @@ const TARGET = {
 describe('recordRetirementNamespaceRegistry', () => {
   it('evicts the least recently recorded namespace once the map is full', () => {
     const namespaces: Record<string, RetiredNameRegistry> = {}
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES; index += 1) {
       recordRetirementNamespaceRegistry(namespaces, `local:posix:/w/${index}`, registry('nautilus'))
     }
@@ -37,6 +38,7 @@ describe('recordRetirementNamespaceRegistry', () => {
 
   it('refreshes a namespace it rewrites so an actively used repo is never the eviction victim', () => {
     const namespaces: Record<string, RetiredNameRegistry> = {}
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES; index += 1) {
       recordRetirementNamespaceRegistry(namespaces, `local:posix:/w/${index}`, registry('nautilus'))
     }
@@ -51,6 +53,7 @@ describe('recordRetirementNamespaceRegistry', () => {
 
   it('stays at one entry per namespace no matter how often it is rewritten', () => {
     const namespaces: Record<string, RetiredNameRegistry> = {}
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES * 2; index += 1) {
       recordRetirementNamespaceRegistry(namespaces, 'local:posix:/w/a', registry(`name-${index}`))
     }
@@ -149,6 +152,7 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
       'ssh:old|22|dev:posix:/srv/a': registry('nautilus'),
       'ssh:old|22|dev:posix:/srv/b': registry('manta')
     }
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES - 2; index += 1) {
       namespaces[`local:posix:/w/${index}`] = registry('dolphin')
     }
@@ -179,6 +183,7 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse'),
       'ssh:old|22|dev:posix:/srv/b': registry('nautilus')
     }
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES - 3; index += 1) {
       namespaces[`local:posix:/w/${index}`] = registry('dolphin')
     }
@@ -215,9 +220,11 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse')
     }
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES - 2; index += 1) {
       namespaces[`local:posix:/w/${index}`] = registry('dolphin')
     }
+
     namespaces['ssh:old|22|dev:posix:/srv/a'] = registry('nautilus')
 
     migrateRetirementNamespaceHostIdentity(namespaces, {
@@ -237,9 +244,11 @@ describe('migrateRetirementNamespaceHostIdentity', () => {
     const namespaces: Record<string, RetiredNameRegistry> = {
       'ssh:new|22|dev:posix:/srv/a': registry('seahorse')
     }
+
     for (let index = 0; index < MAX_RETIREMENT_NAMESPACES - 2; index += 1) {
       namespaces[`local:posix:/w/${index}`] = registry('dolphin')
     }
+
     namespaces['ssh:old|22|dev:posix:/srv/a'] = registry('nautilus')
     namespaces['ssh:old|22|dev:posix:/srv/b'] = registry('manta')
 

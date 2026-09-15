@@ -19,6 +19,7 @@ export function createBrowserClientPageInventory(
   if (event.command.type !== 'createPage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   return Object.freeze({
     authorityRuntimeId: event.authorityRuntimeId,
     authorityEpoch: event.authorityEpoch,
@@ -63,6 +64,7 @@ export function snapshotBrowserClientPageInventoryList(
   failedPages: ReadonlyMap<string, BrowserClientHostedPageInventory>
 ): readonly BrowserClientHostedPageInventory[] {
   const inventoryByPageId = new Map(creatingPages)
+
   for (const page of retainedPages) {
     inventoryByPageId.set(
       page.inventory.browserPageId,
@@ -74,9 +76,11 @@ export function snapshotBrowserClientPageInventoryList(
       )
     )
   }
+
   for (const page of failedPages.values()) {
     inventoryByPageId.set(page.browserPageId, page)
   }
+
   return Object.freeze(
     [...inventoryByPageId.values()].sort((left, right) =>
       left.browserPageId < right.browserPageId
@@ -94,25 +98,35 @@ export function prepareBrowserClientPageInventoryForAttach(
   if (pages.length > BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES) {
     return undefined
   }
+
   const inventory: BrowserClientHostedPageInventory[] = []
+
   for (const page of pages) {
     const parsed = BrowserClientHostedPageInventoryList.element.safeParse(page)
+
     if (!parsed.success) {
       return undefined
     }
+
     inventory.push(parsed.data)
   }
+
   let inventoryBytes = browserClientHostedPageInventoryByteLength(inventory)
+
   if (inventoryBytes <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES) {
     const prepared = BrowserClientHostedPageInventoryList.safeParse(inventory)
+
     return prepared.success ? prepared.data : undefined
   }
+
   const optionalUrls = inventory
     .flatMap((page, index) => {
       if (page.currentUrl === undefined) {
         return []
       }
+
       const withoutUrl = omitBrowserClientPageInventoryUrl(page)
+
       return [
         {
           browserPageId: page.browserPageId,
@@ -129,14 +143,18 @@ export function prepareBrowserClientPageInventoryForAttach(
         right.savings - left.savings ||
         compareBrowserPageIds(left.browserPageId, right.browserPageId)
     )
+
   for (const candidate of optionalUrls) {
     if (inventoryBytes <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES) {
       break
     }
+
     inventory[candidate.index] = candidate.withoutUrl
     inventoryBytes -= candidate.savings
   }
+
   const prepared = BrowserClientHostedPageInventoryList.safeParse(inventory)
+
   return prepared.success ? prepared.data : undefined
 }
 
@@ -152,13 +170,17 @@ export function recordBrowserClientPagePublishedUrl(
   params: unknown
 ): void {
   const metadata = BrowserClientPageMetadataParams.safeParse(params)
+
   if (!metadata.success) {
     return
   }
+
   const page = pages.get(metadata.data.browserPageId)
+
   if (!page || page.generation !== metadata.data.pageHostGeneration) {
     return
   }
+
   page.inventory = updateBrowserClientPageInventoryCurrentUrl(page.inventory, metadata.data.url)
 }
 
@@ -169,6 +191,7 @@ export function updateBrowserClientPageInventoryCurrentUrl(
   if (currentUrl.length > BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH) {
     return Object.freeze(omitBrowserClientPageInventoryUrl(inventory))
   }
+
   return Object.freeze({ ...inventory, currentUrl })
 }
 
@@ -177,6 +200,7 @@ function omitBrowserClientPageInventoryUrl(
 ): BrowserClientHostedPageInventory {
   const withoutUrl = { ...inventory }
   delete withoutUrl.currentUrl
+
   return withoutUrl
 }
 

@@ -43,16 +43,20 @@ export function MobileNativeChatSessionOptionPickers({
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
   const [lastRequest, setLastRequest] = useState(controller.optionPickerRequest)
+
   if (controller.optionPickerRequest && lastRequest !== controller.optionPickerRequest) {
     setLastRequest(controller.optionPickerRequest)
     setOpenDescriptorId(controller.optionPickerRequest.id)
   }
+
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const options = sortNativeChatSessionOptions(snapshot)
+
   if (!model) {
     return null
   }
+
   const disabled = isWorking || pendingId !== null || sendInFlight
   const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
   const modelView = activeDescriptor?.id === model.id
@@ -62,6 +66,7 @@ export function MobileNativeChatSessionOptionPickers({
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
 
   const closePicker = (): void => setOpenDescriptorId(null)
+
   const openPicker = (): void => {
     Keyboard.dismiss()
     setOpenDescriptorId(model.id)
@@ -75,14 +80,17 @@ export function MobileNativeChatSessionOptionPickers({
       descriptor.kind.currentValue === value
     ) {
       closePicker()
+
       return
     }
+
     void controller.setOption(descriptor.id, value).then((applied) => {
       if (applied) {
         closePicker()
       }
     })
   }
+
   const invokeAction = (descriptor: SessionOptionDescriptor): void => {
     void controller.invokeAction(descriptor.id).then((invoked) => {
       if (invoked) {

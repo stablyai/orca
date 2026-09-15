@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 // on every store write. Building the key stringifies a map and joins the whole managed-account
 // roster, and its inputs only move when `settings` is replaced.
 const claudeKeyBySettings = new WeakMap<GlobalSettings, string>()
+
 const codexKeyBySettings = new WeakMap<GlobalSettings, string>()
 
 function memoizeSyncKey(
@@ -14,12 +15,16 @@ function memoizeSyncKey(
   if (!settings) {
     return 'no-settings'
   }
+
   const cached = cache.get(settings)
+
   if (cached !== undefined) {
     return cached
   }
+
   const key = build(settings)
   cache.set(settings, key)
+
   return key
 }
 

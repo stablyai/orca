@@ -3,18 +3,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
+
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
     retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
@@ -45,6 +51,7 @@ describe('createMainWindow', () => {
 
   it('does not read destroyed webContents during closed cleanup', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -56,12 +63,15 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     let webContentsDestroyed = false
+
     const browserWindowInstance = {
       get webContents() {
         if (webContentsDestroyed) {
           throw new Error('Object has been destroyed')
         }
+
         return webContents
       },
       on: vi.fn((event, handler) => {
@@ -77,6 +87,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -93,6 +104,7 @@ describe('createMainWindow', () => {
 
   it('retires renderer generations and resets focus on crash, navigation, and destroy', async () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
       isDestroyed: vi.fn(() => false),
@@ -110,6 +122,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -123,6 +136,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -134,6 +148,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setMarkdownEditorFocused')?.[1]
+
     const isDarwin = process.platform === 'darwin'
 
     const cmdBInput = {
@@ -210,6 +225,7 @@ describe('createMainWindow', () => {
 
   it('notifies the caller when the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       id: 142,
       on: vi.fn((event, handler) => {
@@ -221,6 +237,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -234,6 +251,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -251,6 +269,7 @@ describe('createMainWindow', () => {
     vi.useFakeTimers()
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       id: 424,
       on: vi.fn((event, handler) => {
@@ -262,6 +281,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -275,6 +295,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -301,6 +322,7 @@ describe('createMainWindow', () => {
 
   it('forwards expected renderer teardowns so the recorder can diagnose suppression', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       id: 142,
       on: vi.fn((event, handler) => {
@@ -312,6 +334,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -325,6 +348,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -351,6 +375,7 @@ describe('createMainWindow', () => {
 
   const createRendererRecoveryWindowHarness = () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       id: 143,
       getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
@@ -364,6 +389,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -379,6 +405,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -511,6 +538,7 @@ describe('createMainWindow', () => {
       reason: 'crashed',
       exitCode: 5
     } as Electron.RenderProcessGoneDetails
+
     windowHandlers['render-process-gone']?.({} as never, details)
     windowHandlers['render-process-gone']?.({} as never, details)
     vi.advanceTimersByTime(250)
@@ -578,11 +606,13 @@ describe('createMainWindow', () => {
     createMainWindow(null, { onRendererRecoveryExhausted })
 
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+
     // Each cycle: renderer dies, breaker allows the first 3 reloads, then opens.
     const driveCrashCycle = (): void => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
     }
+
     driveCrashCycle()
     driveCrashCycle()
     driveCrashCycle()
@@ -611,10 +641,12 @@ describe('createMainWindow', () => {
     createMainWindow(null, { onRendererRecoveryExhausted })
 
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+
     const driveCrashCycle = (): void => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
     }
+
     driveCrashCycle()
     driveCrashCycle()
     driveCrashCycle()
@@ -656,6 +688,7 @@ describe('createMainWindow', () => {
         reason: 'launch-failed',
         exitCode: 18
       } as Electron.RenderProcessGoneDetails
+
       const driveLaunchFailure = (): void => {
         windowHandlers['render-process-gone']?.({} as never, details)
         vi.advanceTimersByTime(250)

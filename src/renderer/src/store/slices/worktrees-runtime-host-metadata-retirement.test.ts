@@ -15,12 +15,14 @@ import {
 } from './worktrees-slice-test-harness'
 
 const REPO_ID = 'repo-runtime'
+
 const HOST_ID = 'runtime:env-1'
 
 const worktree = (path: string) =>
   makeWorktree({ id: `${REPO_ID}::${path}`, repoId: REPO_ID, path, hostId: HOST_ID })
 
 const live = worktree('/home/orca/live')
+
 const deletedOnHost = worktree('/home/orca/deleted')
 
 function seedClientWithBothRows(): ReturnType<typeof createTestStore> {
@@ -39,6 +41,7 @@ function seedClientWithBothRows(): ReturnType<typeof createTestStore> {
     ],
     worktreesByRepo: { [REPO_ID]: [live, deletedOnHost] }
   } as Partial<AppState>)
+
   return store
 }
 

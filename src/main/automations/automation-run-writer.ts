@@ -22,25 +22,31 @@ export function createAutomationRunWriter(
     if (!publish) {
       return
     }
+
     const selector = store.automationChangeSelector(automationId)
     publish({ reason, ...(selector ? { selector } : {}) })
   }
+
   return {
     createRun: (automation, scheduledFor, trigger): AutomationRun => {
       const run = store.createAutomationRun(automation, scheduledFor, trigger)
       announce(automation.id, 'run')
+
       return run
     },
     updateRun: (result: AutomationDispatchResult): AutomationRun => {
       const run = store.updateAutomationRun(result)
       announce(run.automationId, result.usage ? 'usage' : 'run')
+
       return run
     },
     repeatSkip: (automationId, error, scheduledFor): AutomationRun | null => {
       const run = store.recordRepeatedAutomationSkip(automationId, error, scheduledFor)
+
       if (run) {
         announce(automationId, 'run')
       }
+
       return run
     }
   }

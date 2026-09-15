@@ -48,6 +48,7 @@ async function createStore() {
       if (cipherState.availabilityThrows) {
         throw new Error('safeStorage cannot be used before the app is ready')
       }
+
       return cipherState.encryptionAvailable
     },
     encryptString: (plaintext) => Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8'),
@@ -55,10 +56,13 @@ async function createStore() {
       if (cipherState.decryptAlwaysThrows) {
         throw new Error('keychain access denied')
       }
+
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('enc:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('enc:'.length + 36 + 1)
     },
     describeProtectionGap: () => null
@@ -68,6 +72,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
@@ -76,6 +81,7 @@ function dataFile(): string {
 }
 
 const PROXY_URL = 'http://127.0.0.1:8080'
+
 const BYPASS_RULES = '<local>'
 
 describe('httpProxyUrl secret recovery (STA-3442)', () => {
@@ -97,6 +103,7 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     store.updateSettings({ httpProxyUrl: PROXY_URL, httpProxyBypassRules: BYPASS_RULES })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
+
     return store
   }
 
@@ -106,6 +113,7 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
       settings: { httpProxyUrl: string; httpProxyBypassRules: string }
     }
+
     // On disk the URL is ciphertext (base64 of the mock's enc: payload), never plaintext.
     expect(persisted.settings.httpProxyUrl).not.toBe(PROXY_URL)
     expect(Buffer.from(persisted.settings.httpProxyUrl, 'base64').toString('utf-8')).toMatch(
@@ -119,12 +127,15 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
 
     const { applyElectronProxySettings, resetProxyApplicationForTests } =
       await import('./network/proxy-settings')
+
     resetProxyApplicationForTests()
     const setProxy = vi.fn(async () => {})
+
     const result = await applyElectronProxySettings(reloaded.getSettings(), {
       proxySession: { resolveProxy: async () => 'DIRECT', setProxy },
       env: {}
     })
+
     expect(result).toEqual({
       source: 'settings',
       proxyRules: PROXY_URL,
@@ -153,9 +164,11 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     reloaded.updateSettings({ httpProxyBypassRules: 'localhost' })
     vi.advanceTimersByTime(2000)
     await reloaded.waitForPendingWrite()
+
     const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
       settings: { httpProxyUrl: string }
     }
+
     expect(persisted.settings.httpProxyUrl).toBe(originalCiphertext)
   })
 
@@ -181,9 +194,11 @@ describe('httpProxyUrl secret recovery (STA-3442)', () => {
     await store.waitForPendingWrite()
 
     expect(existsSync(dataFile())).toBe(true)
+
     const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
       settings: { httpProxyUrl: string; httpProxyBypassRules: string }
     }
+
     expect(persisted.settings.httpProxyUrl).toBe('')
     expect(persisted.settings.httpProxyBypassRules).toBe(BYPASS_RULES)
 

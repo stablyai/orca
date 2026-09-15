@@ -26,14 +26,18 @@ export async function searchRuntimeFiles(
   if (getRuntimeFileSearchRejectedField(options)) {
     return createEmptyRuntimeFileSearchResult()
   }
+
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.search({
       ...options,
       connectionId: context.connectionId
     })
   }
+
   const { rootPath: _rootPath, ...runtimeOptions } = options
+
   return callRuntimeRpc<SearchResult>(
     target,
     'files.search',
@@ -56,6 +60,7 @@ export async function listRuntimeFiles(
   }
 ): Promise<string[]> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.listFiles({
       rootPath: args.rootPath,
@@ -65,6 +70,7 @@ export async function listRuntimeFiles(
       ...(args.maxResults === undefined ? {} : { maxResults: args.maxResults })
     })
   }
+
   return callRuntimeRpc<string[]>(
     target,
     'files.listAll',
@@ -89,11 +95,14 @@ export async function searchRuntimeFilePaths(
   }
 ): Promise<{ files: string[]; truncated: boolean }> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment') {
     if (!context.connectionId || !context.worktreePath) {
       return { files: [], truncated: false }
     }
+
     const limit = args.limit ?? 32
+
     const files = await window.api.fs.listFiles({
       rootPath: context.worktreePath,
       connectionId: context.connectionId,
@@ -102,13 +111,17 @@ export async function searchRuntimeFilePaths(
       maxResults: limit + 1,
       searchQuery: args.query
     })
+
     return { files: files.slice(0, limit), truncated: files.length > limit }
   }
+
   if (!context.worktreeId) {
     return { files: [], truncated: false }
   }
+
   const worktreeSelector = toRuntimeWorktreeSelector(context.worktreeId)
   const limit = args.limit ?? 32
+
   if (hasCachedLegacyQuickOpenInventory(target, worktreeSelector, context.worktreePath)) {
     return searchLegacyQuickOpenInventory({
       target,
@@ -120,7 +133,9 @@ export async function searchRuntimeFilePaths(
       signal: args.signal
     })
   }
+
   let result: RuntimeFileListResult
+
   try {
     result = await callRuntimeRpc<RuntimeFileListResult>(
       target,
@@ -150,11 +165,14 @@ export async function searchRuntimeFilePaths(
         if (legacyError instanceof RuntimeRpcCallError && legacyError.code === 'method_not_found') {
           throw new Error(QUICK_OPEN_REMOTE_UPDATE_REQUIRED_MESSAGE)
         }
+
         throw legacyError
       }
     }
+
     throw error
   }
+
   if (
     args.excludePaths?.length &&
     !(typeof result.quickOpenSearchVersion === 'number' && result.quickOpenSearchVersion >= 1)
@@ -173,13 +191,16 @@ export async function searchRuntimeFilePaths(
       if (legacyError instanceof RuntimeRpcCallError && legacyError.code === 'method_not_found') {
         throw new Error(QUICK_OPEN_REMOTE_UPDATE_REQUIRED_MESSAGE)
       }
+
       throw legacyError
     }
   }
+
   const excludePrefixes = buildExcludePathPrefixes(
     context.worktreePath ?? result.rootPath,
     args.excludePaths
   )
+
   return {
     files: result.files
       .map((entry) => entry.relativePath)
@@ -198,6 +219,7 @@ export function cancelRuntimeFileList(
   requestToken: string
 ): void {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment' || !context.worktreeId) {
     void window.api.fs.cancelListFiles({ requestToken }).catch(() => {
       /* cancellation is advisory; the request path has its own timeouts */

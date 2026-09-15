@@ -35,6 +35,7 @@ function hydrationPage(
 ): AgentSessionHistoryPage {
   const oldest = items[0]?.sequence ?? 0
   const newest = items.at(-1)?.sequence ?? 0
+
   return {
     sessionId: 'session-a',
     epoch: 'epoch-a',
@@ -59,6 +60,7 @@ describe('structured agent session reducer', () => {
       state: 'monitoring' as const,
       tasks: [{ id: 'task-1', kind: 'agent' as const }]
     }
+
     const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
       event: {
@@ -68,6 +70,7 @@ describe('structured agent session reducer', () => {
         page: { ...hydrationPage([]), backgroundTasks }
       }
     })
+
     const updated = reduceStructuredAgentSession(initial, {
       type: 'event',
       event: {
@@ -95,6 +98,7 @@ describe('structured agent session reducer', () => {
       supportsTaskStop: true,
       tasks: [{ id: 'task-1', kind: 'agent' as const }]
     }
+
     const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
       event: {
@@ -104,6 +108,7 @@ describe('structured agent session reducer', () => {
         page: { ...hydrationPage([]), backgroundTasks }
       }
     })
+
     const updated = reduceStructuredAgentSession(initial, {
       type: 'event',
       event: {
@@ -155,6 +160,7 @@ describe('structured agent session reducer', () => {
         backgroundTasks: null
       }
     })
+
     const monitoring = reduceStructuredAgentSession(initial, {
       type: 'event',
       event: {
@@ -186,6 +192,7 @@ describe('structured agent session reducer', () => {
         backgroundTasks: { state: 'monitoring' }
       }
     })
+
     const duplicate = reduceStructuredAgentSession(monitoring, {
       type: 'event',
       event: {
@@ -219,6 +226,7 @@ describe('structured agent session reducer', () => {
         }
       }
     })
+
     const changed = reduceStructuredAgentSession(monitoring, {
       type: 'event',
       event: {
@@ -261,6 +269,7 @@ describe('structured agent session reducer', () => {
         }
       }
     })
+
     const batch = (backgroundTasks: NonNullable<typeof monitoring.backgroundTasks>) =>
       reduceStructuredAgentSession(monitoring, {
         type: 'event',
@@ -279,6 +288,7 @@ describe('structured agent session reducer', () => {
         { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'waiting', startedAt: 100 }
       ]
     })
+
     expect(stateOnly).not.toBe(monitoring)
     expect(stateOnly.backgroundTasks?.tasks?.[0]?.state).toBe('waiting')
 
@@ -289,6 +299,7 @@ describe('structured agent session reducer', () => {
       ],
       settledTasks: [{ id: 'task-2', kind: 'agent', state: 'done', startedAt: 50 }]
     })
+
     expect(settledOnly).not.toBe(monitoring)
     expect(settledOnly.backgroundTasks?.settledTasks).toHaveLength(1)
 
@@ -305,6 +316,7 @@ describe('structured agent session reducer', () => {
         }
       ]
     })
+
     expect(tokensOnly.backgroundTasks?.tasks?.[0]?.totalTokens).toBe(18_130)
 
     const unchanged = batch({
@@ -313,6 +325,7 @@ describe('structured agent session reducer', () => {
         { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', startedAt: 100 }
       ]
     })
+
     expect(unchanged).toBe(monitoring)
   })
 
@@ -327,6 +340,7 @@ describe('structured agent session reducer', () => {
         backgroundTasks: { state: 'monitoring' }
       }
     })
+
     const withoutCapability = reduceStructuredAgentSession(monitoring, {
       type: 'event',
       event: {
@@ -350,6 +364,7 @@ describe('structured agent session reducer', () => {
         page: hydrationPage([item('message', 1)])
       }
     })
+
     const active = reduceStructuredAgentSession(initial, {
       type: 'event',
       event: {
@@ -402,6 +417,7 @@ describe('structured agent session reducer', () => {
       },
       9_000
     )
+
     expect(snapshot.hostClock).toEqual({ hostNow: 5_000, receivedAt: 9_000 })
 
     const batch = reduceStructuredAgentSession(
@@ -423,6 +439,7 @@ describe('structured agent session reducer', () => {
       },
       9_400
     )
+
     expect(batch.hostClock).toEqual({ hostNow: 5_400, receivedAt: 9_400 })
 
     // An older host stamps nothing; the last sample stays usable.
@@ -444,6 +461,7 @@ describe('structured agent session reducer', () => {
       },
       9_800
     )
+
     expect(unstamped.hostClock).toEqual({ hostNow: 5_400, receivedAt: 9_400 })
   })
 })
@@ -459,6 +477,7 @@ it('applies catalog-only checkpoints without replacing transcript or submission 
       commands: []
     }
   })
+
   const event = {
     type: 'batch' as const,
     sessionId: 'session-a',
@@ -466,6 +485,7 @@ it('applies catalog-only checkpoints without replacing transcript or submission 
     commands: [{ name: 'loaded', kind: 'skill' as const }],
     batch: { cursor: state.cursor!, items: [], removedItemIds: [], submissions: [] }
   }
+
   const updated = reduceStructuredAgentSession(state, { type: 'event', event })
   expect(updated.commands).toEqual(event.commands)
   expect(updated.items).toBe(state.items)

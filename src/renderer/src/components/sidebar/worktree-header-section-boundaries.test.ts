@@ -8,6 +8,7 @@ import type { RenderRow } from './worktree-list/listing/render-row'
 
 const repoHeader = (id: string): RenderRow =>
   ({ type: 'header', key: `repo:${id}`, label: id, count: 1, tone: '', repo: { id } }) as RenderRow
+
 const groupHeader = (id: string): RenderRow =>
   ({
     type: 'header',
@@ -18,11 +19,14 @@ const groupHeader = (id: string): RenderRow =>
     projectGroup: { id },
     projectGroupDepth: 0
   }) as RenderRow
+
 const item = { type: 'item' } as RenderRow
 
 // Estimated starts: first header 28, later headers 32, items 116.
 const rows = [repoHeader('a'), item, repoHeader('b'), item, repoHeader('c'), item]
+
 const startOfB = 28 + 116
+
 const startOfC = startOfB + 32 + 116
 
 describe('getRepoHeaderSectionEndByRepoId', () => {

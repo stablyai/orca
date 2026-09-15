@@ -1,4 +1,5 @@
 const PI_OVERLAY_HIDE_THINKING_BLOCK = true
+
 const PI_OVERLAY_CLEAR_ON_SHRINK = true
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

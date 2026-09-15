@@ -17,8 +17,11 @@ import {
 } from './helpers/computer-driver'
 
 const isWindows = process.platform === 'win32'
+
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
+
 const editableRolePattern = /^\s*(\d+)\s+(document|edit|text|pane)(?:\s|$)/im
+
 const pasteMutationTimeoutMs = 5_000
 
 // Why: Notepad accessibility text can lag immediately after clipboard paste;
@@ -26,17 +29,21 @@ const pasteMutationTimeoutMs = 5_000
 async function waitForNotepadText(app: string, marker: string): Promise<ComputerSnapshotResult> {
   const deadline = Date.now() + pasteMutationTimeoutMs
   let lastSnapshot: ComputerSnapshotResult | null = null
+
   while (Date.now() < deadline) {
     const snapshot = parseJsonOutput<{ result: ComputerSnapshotResult }>(
       (await runOrcaCli(['computer', 'get-app-state', '--app', app, '--no-screenshot', '--json']))
         .stdout
     ).result
+
     if (snapshot.snapshot.treeText.includes(marker)) {
       return snapshot
     }
+
     lastSnapshot = snapshot
     await new Promise((resolve) => setTimeout(resolve, 150))
   }
+
   throw new Error(
     `Timed out waiting for Notepad text: ${marker}. ` +
       `Last treeText length: ${(lastSnapshot?.snapshot.treeText ?? '').length}`
@@ -57,6 +64,7 @@ async function focusNotepadDocument(app: string): Promise<void> {
       ])
     ).stdout
   )
+
   const documentIndex = findRoleIndex(snapshot.result.snapshot.treeText, editableRolePattern)
   expect(documentIndex).toBeGreaterThanOrEqual(0)
 
@@ -118,6 +126,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       getNotepadAppSelector(),
       '--json'
     ])
+
     const envelope = parseJsonOutput<{ result: ComputerSnapshotResult }>(result.stdout)
 
     expect(envelope.result.snapshot.app.name.toLowerCase()).toBe('notepad')
@@ -136,6 +145,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     const app = getNotepadAppSelector()
     const marker = `orca-windows-paste-${Date.now()}`
     await focusNotepadDocument(app)
+
     const action = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -151,6 +161,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
         ])
       ).stdout
     )
+
     expect(action.result.action?.path).toBe('clipboard')
     expect(action.result.action?.verification).toMatchObject({
       state: 'unverified',
@@ -165,6 +176,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     const app = getNotepadAppSelector()
     const unicode = `orca unicode café Ω 漢字 ${Date.now()}`
     await focusNotepadDocument(app)
+
     const pasted = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -180,6 +192,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
         ])
       ).stdout
     )
+
     expect(pasted.result.snapshot.treeText).toContain(unicode)
   })
 
@@ -214,9 +227,11 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
         ])
       ).stdout
     )
+
     expect(selectAll.result.action?.actionName).toBe('hotkey')
 
     const marker = `orca-windows-replaced-${Date.now()}`
+
     const second = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -232,16 +247,19 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
         ])
       ).stdout
     )
+
     expect(second.result.snapshot.treeText).toContain(marker)
     expect(second.result.snapshot.treeText).not.toContain(first)
   })
 
   test('click and type-text send synthetic input to the document', async () => {
     const app = getNotepadAppSelector()
+
     const before = parseJsonOutput<{ result: ComputerSnapshotResult }>(
       (await runOrcaCli(['computer', 'get-app-state', '--app', app, '--no-screenshot', '--json']))
         .stdout
     )
+
     const documentIndex = findRoleIndex(before.result.snapshot.treeText, editableRolePattern)
     expect(documentIndex).toBeGreaterThanOrEqual(0)
 
@@ -258,6 +276,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     ])
 
     const marker = ` typed-${Date.now()}`
+
     const typed = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -273,6 +292,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
         ])
       ).stdout
     )
+
     expect(typed.result.action?.path).toBe('synthetic')
     expect(typed.result.snapshot.treeText).toContain(marker.trim())
   })

@@ -33,6 +33,7 @@ import {
 const EMPTY_AGENT_ROWS = Object.freeze([]) as unknown as DashboardAgentRow[]
 
 export { buildWorktreeAgentRows } from './worktree-agent-rows'
+
 export {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
@@ -55,7 +56,9 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     () => createWorktreeAgentFreshnessSelector(worktreeId),
     [worktreeId]
   )
+
   const tabs = useAppStore((s) => (active ? s.tabsByWorktree[worktreeId] : EMPTY_TABS))
+
   // Why: narrow the subscriptions to only THIS worktree's entries via
   // useShallow. Subscribing to the whole agentStatusByPaneKey map would make
   // every on-screen card re-render on any agent-status update anywhere —
@@ -66,6 +69,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
       active ? selectLiveAgentStatusEntriesForWorktree(s, worktreeId) : EMPTY_LIVE_ENTRIES
     )
   )
+
   // Why: keep the store selector limited to stable raw records. Converting
   // migration entries creates fresh objects with Date.now(), which breaks
   // useSyncExternalStore's cached-snapshot contract and can blank Electron.
@@ -76,24 +80,29 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         : EMPTY_MIGRATION_UNSUPPORTED_ENTRIES
     )
   )
+
   const retained = useAppStore(
     useShallow((s) =>
       active ? selectRetainedAgentEntriesForWorktree(s, worktreeId) : EMPTY_RETAINED
     )
   )
+
   const runtimePaneTitlesByTabId = useAppStore(
     useShallow((s) =>
       active ? selectRuntimePaneTitlesForWorktree(s, worktreeId) : EMPTY_RUNTIME_PANE_TITLES
     )
   )
+
   const ptyIdsByTabId = useAppStore(
     useShallow((s) => (active ? selectLivePtyIdsForWorktree(s, worktreeId) : EMPTY_LIVE_PTY_IDS))
   )
+
   const terminalLayoutsByTabId = useAppStore(
     useShallow((s) =>
       active ? selectTerminalLayoutsForWorktree(s, worktreeId) : EMPTY_TERMINAL_LAYOUTS
     )
   )
+
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     useShallow((s) =>
       active
@@ -101,6 +110,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         : EMPTY_WORKTREE_AGENT_ORCHESTRATION
     )
   )
+
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
@@ -109,19 +119,23 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     if (!active) {
       return EMPTY_AGENT_ROWS
     }
+
     // Why: Date.now() is read inside the memo so stale-decay recalculates when
     // this worktree's freshness signature changes, even without new PTY data.
     const now = Date.now()
+
     const entries =
       migrationUnsupported.length > 0
         ? [
             ...liveEntries,
             ...migrationUnsupported.flatMap((unsupported) => {
               const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+
               return entry ? [entry] : []
             })
           ]
         : liveEntries
+
     return applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: tabs ?? EMPTY_TABS,

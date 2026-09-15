@@ -192,6 +192,7 @@ describe('buildParentPrChecksProjection', () => {
       repo,
       hostedReviewCache: { [coldNullKey]: { data: null, fetchedAt: 1 } }
     })
+
     expect(coldNull.rows[0]?.status).toBe('notFetched')
     expect(coldNull.summary.noPr).toBe(0)
 
@@ -200,6 +201,7 @@ describe('buildParentPrChecksProjection', () => {
       repo,
       refreshOutcomes: new Map([[identity, { kind: 'no-review' }]])
     })
+
     expect(provenNoReview.rows[0]?.status).toBe('noReview')
     expect(provenNoReview.summary.noPr).toBe(1)
   })
@@ -227,11 +229,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('rejects matching suppressed GitHub cache entries', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: null,
       suppressedGitHubPR: 99
     })
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
@@ -255,11 +259,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('lets explicit GitHub metadata override stale suppression', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: 99,
       suppressedGitHubPR: 99
     })
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
 
     expect(
@@ -275,11 +281,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('falls through a suppressed live outcome to a different cached PR', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: null,
       suppressedGitHubPR: 99
     })
+
     const identity = getParentPrChecksRefreshIdentity(worktree, repo, 'feature')
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
 
@@ -299,12 +307,14 @@ describe('buildParentPrChecksProjection', () => {
 
   it('preserves a non-GitHub hosted review with the suppressed number', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: null,
       suppressedGitHubPR: 99,
       linkedGitLabMR: 99
     })
+
     const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
     expect(
@@ -364,11 +374,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not use stale merged branch PR cache after the worktree advances', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: null,
       head: 'new-head'
     })
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
 
     expect(
@@ -394,11 +406,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not use stale merged linked PR cache after the worktree advances', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: 99,
       head: 'new-head'
     })
+
     const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
 
     expect(
@@ -427,10 +441,12 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not let older linked PR cache override a newer hosted-review miss', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: 99
     })
+
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
     const prKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
 
@@ -461,10 +477,12 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not let mismatched hosted-review cache override linked PR metadata', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: 99
     })
+
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
     expect(
@@ -493,11 +511,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not use stale merged hosted-review cache after the worktree advances', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: null,
       head: 'new-head'
     })
+
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
     expect(
@@ -525,11 +545,13 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not use stale merged non-GitHub hosted-review cache after the worktree advances', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedBitbucketPR: null,
       head: 'new-head'
     })
+
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
     expect(
@@ -558,10 +580,12 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not let same-number hosted-review cache from another provider override linked PR metadata', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedPR: 99
     })
+
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
     expect(
@@ -592,10 +616,12 @@ describe('buildParentPrChecksProjection', () => {
 
   it('does not use linked-hint hosted-review cache after a non-GitHub link is removed', () => {
     const repo = makeRepo()
+
     const worktree = makeWorktree({
       id: 'repo-1::/feature',
       linkedBitbucketPR: null
     })
+
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
 
     expect(
@@ -656,6 +682,7 @@ describe('buildParentPrChecksProjection', () => {
       repo,
       refreshOutcomes: new Map([[identity, { kind: 'error' }]])
     })
+
     expect(refreshError.rows[0]?.status).toBe('refreshError')
     expect(refreshError.summary.noPr).toBe(0)
   })
@@ -692,6 +719,7 @@ describe('buildParentPrChecksProjection', () => {
     const worktree = makeWorktree({ id: 'repo-1::/feature' })
     const githubRepository = { owner: 'upstream', repo: 'project' }
     const review = makeReview({ status: 'failure', headSha: 'abc123', githubRepository })
+
     const hostedKey = getHostedReviewCacheKey(
       repo.path,
       'feature',
@@ -699,6 +727,7 @@ describe('buildParentPrChecksProjection', () => {
       repo.id,
       repo.connectionId
     )
+
     const checksKey = getGitHubRepoCacheKey(
       repo.path,
       repo.id,
@@ -737,6 +766,7 @@ describe('buildParentPrChecksProjection', () => {
     const worktree = makeWorktree({ id: 'repo-1::/feature' })
     const review = makeReview({ status: 'failure', headSha: 'abc123' })
     const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
     const checksKey = getGitHubRepoCacheKey(
       repo.path,
       repo.id,

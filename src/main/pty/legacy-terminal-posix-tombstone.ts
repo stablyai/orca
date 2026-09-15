@@ -18,12 +18,15 @@ function isExecutable(candidate: string): boolean {
   if (/\s/.test(candidate)) {
     return false
   }
+
   try {
     // Why: X_OK alone is true for a directory named `bash`, which cannot be exec'd.
     if (!statSync(candidate).isFile()) {
       return false
     }
+
     accessSync(candidate, constants.X_OK)
+
     return true
   } catch {
     return false
@@ -47,11 +50,13 @@ export function resolvePosixTombstoneInterpreter(
   if (platform === 'win32') {
     return WINDOWS_POSIX_INTERPRETER
   }
+
   for (const candidate of candidates) {
     if (isExecutable(candidate)) {
       return candidate
     }
   }
+
   // Why: distributions that put bash outside the well-known locations (NixOS, Guix) would
   // otherwise fall back to an ambient lookup. Search absolute PATH entries only — a relative or
   // empty one means the current directory, which is the exposure this whole function exists to
@@ -60,11 +65,14 @@ export function resolvePosixTombstoneInterpreter(
     if (!directory.startsWith('/')) {
       continue
     }
+
     const candidate = join(directory, 'bash')
+
     if (isExecutable(candidate)) {
       return candidate
     }
   }
+
   // Why: no absolute interpreter anywhere. Callers must delete the legacy wrapper rather than
   // write one with an ambient shebang, which would resolve bash from the cwd.
   return null
@@ -80,16 +88,20 @@ export function resolvePosixTombstoneInterpreter(
  */
 export function readVerifiedShebangInterpreter(filePath: string): string | null {
   let firstLine: string
+
   try {
     firstLine = readFileSync(filePath, 'utf8').split('\n', 1)[0] ?? ''
   } catch {
     return null
   }
+
   const match = /^#!\s*(\S+)/.exec(firstLine)
   const interpreter = match?.[1]
+
   if (!interpreter?.startsWith('/')) {
     return null
   }
+
   // Why exactly bash: the body below uses BASH_SOURCE, [[, and local, so any other shell fails at
   // runtime -- a #!/bin/zsh wrapper was accepted and then exited 1 on `BASH_SOURCE[0]: parameter
   // not set`. This also rejects `#!/usr/bin/env bash`, which is absolute but defers the real
@@ -97,6 +109,7 @@ export function readVerifiedShebangInterpreter(filePath: string): string | null 
   if (basename(interpreter) !== 'bash') {
     return null
   }
+
   return isExecutable(interpreter) ? interpreter : null
 }
 

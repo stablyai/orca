@@ -26,9 +26,11 @@ const PROBED = [...OWNED, VOCABULARY_SOURCE]
 /** Restore derived objects; a missing source index requires the owner to rebuild. */
 export function ensureSessionSearchQuerySchema(db: SyncDatabase): void {
   const present = presentNames(db)
+
   if (!present.has(VOCABULARY_SOURCE)) {
     throw new Error('Session search index unavailable: missing messages_fts')
   }
+
   if (OWNED.some((name) => !present.has(name))) {
     db.exec(QUERY_SCHEMA_SQL)
   }
@@ -38,5 +40,6 @@ function presentNames(db: SyncDatabase): Set<string> {
   const rows = db
     .prepare(`SELECT name FROM sqlite_master WHERE name IN (${PROBED.map(() => '?').join(',')})`)
     .all(...PROBED) as { name: string }[]
+
   return new Set(rows.map((row) => row.name))
 }

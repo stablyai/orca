@@ -1,5 +1,7 @@
 const POINTER_DRAGGING_ATTR = 'data-worktree-sidebar-pointer-dragging'
+
 const POINTER_DRAG_PREVIEW_ATTR = 'data-worktree-sidebar-drag-preview'
+
 const POINTER_DRAG_COUNT_ATTR = 'data-worktree-sidebar-drag-count'
 
 const INTERACTIVE_DRAG_BLOCKER_SELECTOR = [
@@ -20,15 +22,19 @@ export function isSidebarPointerDragBlocked(target: EventTarget | null, row: HTM
   if (!(target instanceof Node)) {
     return false
   }
+
   // Why: Radix hover cards portal outside the row, but React still bubbles their
   // pointer events through row handlers; text selection there must not drag rows.
   if (!row.contains(target)) {
     return true
   }
+
   if (!(target instanceof Element)) {
     return false
   }
+
   const blocker = target.closest(INTERACTIVE_DRAG_BLOCKER_SELECTOR)
+
   return blocker !== null && row.contains(blocker) && blocker !== row
 }
 
@@ -105,5 +111,6 @@ export function createSidebarDragPreview(args: {
     offsetY
   })
   document.body.appendChild(preview)
+
   return { preview, offsetX, offsetY, height: rect.height }
 }

@@ -6,7 +6,9 @@ import {
 } from './worktree-live-terminal-surface-owners'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 function summary(overrides: Partial<RuntimeTerminalSummary>): RuntimeTerminalSummary {
@@ -50,6 +52,7 @@ describe('live terminal surface owners', () => {
 
   it('leaves an orphaned PTY absent so it stays eligible for a recovery tab', () => {
     const ptyId = `${WORKTREE_ID}@@orphan`
+
     const owners = indexLiveTerminalSurfaceOwners(
       [
         summary({
@@ -86,6 +89,7 @@ describe('live terminal surface owners', () => {
 
   it('reports a PTY claimed by two panes as unverifiable rather than unowned', () => {
     const ptyId = `${WORKTREE_ID}@@live-agent`
+
     const owners = indexLiveTerminalSurfaceOwners(
       [summary({}), summary({ handle: 'term-2', leafId: OTHER_LEAF_ID })],
       WORKTREE_ID

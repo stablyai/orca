@@ -8,6 +8,7 @@ vi.mock('./project-view-config', async (importOriginal) => ({
   ...(await importOriginal<typeof ProjectViewConfig>()),
   fetchProjectViewsPage: vi.fn()
 }))
+
 vi.mock('./project-view-items', () => ({
   fetchAllItems: vi.fn(),
   fetchItemsCountOnly: vi.fn()
@@ -19,6 +20,7 @@ const args = {
   projectNumber: 1,
   host: 'github.acme.test'
 } as const
+
 const view = (id: string, layout: string): RawProjectView => ({
   id,
   number: 1,
@@ -29,6 +31,7 @@ const view = (id: string, layout: string): RawProjectView => ({
   groupByFields: { nodes: [] },
   sortByFields: { nodes: [] }
 })
+
 function page(views: RawProjectView[], hasNextPage = false) {
   return {
     ok: true as const,

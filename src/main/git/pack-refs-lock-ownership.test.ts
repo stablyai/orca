@@ -9,6 +9,7 @@ const roots: string[] = []
 async function gitCommonDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-pack-refs-lock-'))
   roots.push(root)
+
   return root
 }
 
@@ -22,6 +23,7 @@ function paths(commonDir: string): { lock: string; marker: string } {
 async function exists(path: string): Promise<boolean> {
   try {
     await stat(path)
+
     return true
   } catch {
     return false
@@ -30,7 +32,9 @@ async function exists(path: string): Promise<boolean> {
 
 /** A pid that cannot be running: the kernel rejects it outright. */
 const DEAD_PID = 0x7fffffff
+
 const ABANDONED_LOCK_AGE_MS = 15 * 60_000
+
 const PID_REUSE_HORIZON_MS = 24 * 60 * 60_000
 
 /** `claim` takes `now`, so age cases need no sleeping and no mtime forgery. */

@@ -30,5 +30,7 @@ export const SkillUploadCommitRequestSchema = z
   .strict()
 
 export type SkillUploadBeginRequest = z.infer<typeof SkillUploadBeginRequestSchema>
+
 export type SkillUploadBeginResult = z.infer<typeof SkillUploadBeginResultSchema>
+
 export type SkillUploadChunkRequest = z.infer<typeof SkillUploadChunkRequestSchema>

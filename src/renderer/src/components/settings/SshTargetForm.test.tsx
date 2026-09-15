@@ -21,9 +21,11 @@ type RenderProps = {
 
 async function renderForm(props: RenderProps, root?: Root): Promise<Root> {
   const container = root ? null : document.createElement('div')
+
   if (container) {
     document.body.appendChild(container)
   }
+
   const nextRoot = root ?? createRoot(container!)
   await act(async () => {
     nextRoot.render(
@@ -38,6 +40,7 @@ async function renderForm(props: RenderProps, root?: Root): Promise<Root> {
       />
     )
   })
+
   return nextRoot
 }
 
@@ -45,9 +48,11 @@ function button(label: string): HTMLButtonElement {
   const match = Array.from(document.querySelectorAll('button')).find(
     (candidate) => candidate.textContent?.trim() === label
   )
+
   if (!match) {
     throw new Error(`missing ${label} button`)
   }
+
   return match as HTMLButtonElement
 }
 
@@ -70,9 +75,11 @@ describe('SshTargetForm', () => {
     const content = document.querySelector('[data-slot="dialog-content"]')
     const header = document.querySelector('[data-slot="dialog-header"]')
     const footer = document.querySelector('[data-slot="dialog-footer"]')
+
     if (!content || !header || !footer) {
       throw new Error('missing dialog chrome')
     }
+
     expect(content.className).toContain('overflow-hidden')
     expect(content.className).toContain('flex-col')
     expect(header.className).toContain('shrink-0')
@@ -96,6 +103,7 @@ describe('SshTargetForm', () => {
         port: '2222'
       }
     })
+
     expect(document.body.textContent).toContain('Edit SSH host')
     expect(document.body.textContent).toContain('Save Changes')
     expect(document.body.textContent).toContain('Editing')
@@ -130,9 +138,11 @@ describe('SshTargetForm', () => {
 
   it('collapses Advanced again after cancel and reopen', async () => {
     let form: EditingTarget = EMPTY_FORM
+
     const onFormChange = vi.fn((updater: (prev: EditingTarget) => EditingTarget) => {
       form = updater(form)
     })
+
     const root = await renderForm({ form, onFormChange })
 
     await act(async () => {
@@ -194,6 +204,7 @@ describe('SshTargetForm', () => {
         jumpHost: 'jump.example'
       }
     })
+
     expect(button('Advanced').getAttribute('data-state')).toBe('open')
     expect(document.body.textContent).toContain('Jump Host')
     act(() => root.unmount())

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { localDomainSidOf, parseSddlDacl, resolveSddlSid } from './windows-security-descriptor'
 
 const MACHINE_SID = 'S-1-5-21-432636774-4279371817-3971399515'
+
 const USER_SID = `${MACHINE_SID}-1001`
+
 /** The built-in Administrator: the account a CI runner and an Administrator-only box log in as. */
 const LOCAL_ADMIN_SID = `${MACHINE_SID}-500`
 

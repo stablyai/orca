@@ -40,6 +40,7 @@ const TOUCHED = [
 function assertMarkersFresh() {
   const index = readFileSync(join(REPO, 'src/cli/index.ts'), 'utf8')
   const client = readFileSync(join(REPO, 'src/cli/runtime/client.ts'), 'utf8')
+
   const checks = [
     ['src/cli/index.ts', index, 'await loadRuntimeClientClass()'],
     ['src/cli/index.ts', index, "await import('./runtime-client.js')"],
@@ -47,6 +48,7 @@ function assertMarkersFresh() {
     ['src/cli/runtime/client.ts', client, 'await loadSendWebSocketRequest()'],
     ['src/cli/runtime/client.ts', client, "await import('./websocket-transport.js')"]
   ]
+
   for (const [file, source, marker] of checks) {
     // Match the call form, not a bare word: a comment naming the function must
     // not satisfy the check.
@@ -56,9 +58,12 @@ function assertMarkersFresh() {
       )
     }
   }
+
   const repointed = ['src/cli/args.ts', 'src/cli/flags.ts', 'src/cli/dispatch.ts']
+
   for (const file of repointed) {
     const source = readFileSync(join(REPO, file), 'utf8')
+
     if (!source.includes("import { RuntimeClientError } from './runtime/types'")) {
       throw new Error(`${file} no longer repoints RuntimeClientError at ./runtime/types — stale`)
     }
@@ -71,15 +76,18 @@ function buildTree(label, baselineRev) {
   const outDir = join(REPO, `.equiv-out-${label}`)
   rmSync(outDir, { recursive: true, force: true })
   const restored = []
+
   try {
     if (baselineRev) {
       for (const file of TOUCHED) {
         const path = join(REPO, file)
         restored.push([path, existsSync(path) ? readFileSync(path) : null])
+
         const old = spawnSync('git', ['show', `${baselineRev}:${file}`], {
           cwd: REPO,
           maxBuffer: 64 * 1024 * 1024
         })
+
         if (old.status === 0) {
           writeFileSync(path, old.stdout)
         } else {
@@ -87,6 +95,7 @@ function buildTree(label, baselineRev) {
         }
       }
     }
+
     execFileSync(
       'npx',
       [
@@ -111,6 +120,7 @@ function buildTree(label, baselineRev) {
       }
     }
   }
+
   return join(outDir, 'cli/index.js')
 }
 
@@ -127,14 +137,17 @@ function run(entry, argv, env) {
     timeout: RUN_TIMEOUT_MS,
     killSignal: 'SIGKILL'
   })
+
   if (result.error) {
     if (result.error.code === 'ETIMEDOUT') {
       throw new Error(
         `orca ${argv.join(' ')} did not exit within ${RUN_TIMEOUT_MS} ms — it reached a blocking command`
       )
     }
+
     throw result.error
   }
+
   return {
     status: result.status,
     stdout: result.stdout.toString('utf8'),
@@ -148,6 +161,7 @@ function run(entry, argv, env) {
 // happens to be doing.
 function buildCases(isolatedUserData) {
   const isolated = { ORCA_USER_DATA_PATH: isolatedUserData }
+
   const cases = [
     // Paths that must never load the runtime client at all.
     [[], {}],
@@ -197,6 +211,7 @@ function buildCases(isolatedUserData) {
     [['worktree', 'list', '--json'], isolated],
     [['terminal', 'list', '--json'], isolated]
   ]
+
   // Fuzz: random argv drawn from real command tokens, flags and hostile
   // strings. Seeded so a failure is reproducible. Every token here must be
   // safe to actually execute — see UNSAFE_TOKENS, which is cross-checked
@@ -228,29 +243,38 @@ function buildCases(isolatedUserData) {
     '../..',
     'x\ty'
   ]
+
   let seed = 0x9e3779b9
+
   const next = () => {
     seed ^= seed << 13
     seed ^= seed >>> 17
     seed ^= seed << 5
+
     return (seed >>> 0) / 0x100000000
   }
+
   // Why: check the draw POOL, not just the 400 cases it happens to produce.
   // `serve` sat in this array for the whole review because the per-case scan
   // never named it, and the cases that drew it only survived by accident.
   assertTokensSafe(tokens, 'fuzz token pool')
   assertFuzzPoolDeclaredReadOnly(tokens)
+
   for (let index = 0; index < 400; index += 1) {
     const length = 1 + Math.floor(next() * 4)
     const argv = []
+
     for (let part = 0; part < length; part += 1) {
       argv.push(tokens[Math.floor(next() * tokens.length)])
     }
+
     cases.push([argv, isolated])
   }
+
   for (const [argv] of cases) {
     assertTokensSafe(argv, `argv ${JSON.stringify(argv)}`)
   }
+
   return cases
 }
 
@@ -266,6 +290,7 @@ function buildCases(isolatedUserData) {
 // Group tokens whose subcommands split read/write (`capture`, `intercept`,
 // `label`, `relation`) are denied wholesale: the fuzzer cannot tell them apart.
 const FOREGROUND_TOKENS = ['serve', 'open', 'claude-teams', 'exec', 'eval', 'launch', 'attach']
+
 const MUTATING_TOKENS = [
   // persistent config and registry state
   'on',
@@ -416,6 +441,7 @@ const READ_ONLY_FUZZ_TOKENS = new Set([
 function assertTokensSafe(tokens, context) {
   for (const token of tokens) {
     const reason = UNSAFE_TOKENS.get(token)
+
     if (reason) {
       throw new Error(`Refusing to run ${context}: "${token}" ${reason}`)
     }
@@ -432,6 +458,7 @@ function assertFuzzPoolDeclaredReadOnly(tokens) {
       )
     }
   }
+
   for (const token of READ_ONLY_FUZZ_TOKENS) {
     if (UNSAFE_TOKENS.has(token)) {
       throw new Error(
@@ -442,15 +469,19 @@ function assertFuzzPoolDeclaredReadOnly(tokens) {
 }
 
 const baselineIndex = process.argv.indexOf('--baseline')
+
 const baselineRev = baselineIndex === -1 ? 'HEAD' : process.argv[baselineIndex + 1]
 
 assertMarkersFresh()
 
 const isolatedUserData = mkdtempSync(join(REPO, '.equiv-userdata-'))
+
 mkdirSync(join(isolatedUserData, 'empty'), { recursive: true })
 
 let oldEntry
+
 let newEntry
+
 try {
   // Why: build the case list (and run its safety guards) BEFORE the two tsc
   // compiles, so an unsafe token fails in a second instead of two minutes in.
@@ -463,9 +494,11 @@ try {
 
   console.log(`Comparing ${cases.length} invocations byte for byte …`)
   let mismatches = 0
+
   for (const [argv, env] of cases) {
     const before = run(oldEntry, argv, env)
     const after = run(newEntry, argv, env)
+
     if (
       before.status !== after.status ||
       before.stdout !== after.stdout ||
@@ -474,22 +507,27 @@ try {
       mismatches += 1
       console.error(`\nMISMATCH argv=${JSON.stringify(argv)} env=${JSON.stringify(env)}`)
       console.error(`  exit   before=${before.status} after=${after.status}`)
+
       if (before.stdout !== after.stdout) {
         console.error(`  stdout before=${JSON.stringify(before.stdout.slice(0, 400))}`)
         console.error(`         after =${JSON.stringify(after.stdout.slice(0, 400))}`)
       }
+
       if (before.stderr !== after.stderr) {
         console.error(`  stderr before=${JSON.stringify(before.stderr.slice(0, 400))}`)
         console.error(`         after =${JSON.stringify(after.stderr.slice(0, 400))}`)
       }
     }
   }
+
   if (mismatches > 0) {
     throw new Error(`${mismatches} of ${cases.length} invocations differ`)
   }
+
   console.log(`\nAll ${cases.length} invocations byte-identical (stdout, stderr, exit code).`)
 } finally {
   rmSync(isolatedUserData, { recursive: true, force: true })
+
   for (const label of ['old', 'new']) {
     rmSync(resolve(REPO, `.equiv-out-${label}`), { recursive: true, force: true })
   }

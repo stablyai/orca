@@ -13,10 +13,13 @@ const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
@@ -30,6 +33,7 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     isDisposed = vi.fn().mockReturnValue(false)
   }
 }))
+
 vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyNotFoundError: vi.fn(() => false),
   isSshPtyIdentityMismatchError: vi.fn(() => false),
@@ -40,14 +44,17 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -60,11 +67,13 @@ vi.mock('../ipc/pty', () => ({
   restorePtyIncarnation: vi.fn(),
   isCurrentPtyExit: vi.fn(() => true)
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn()
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -89,16 +98,19 @@ describe('SshRelaySession managed hooks', () => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
       }
+
       return method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
         ? { installers: 1, errors: 0 }
         : { ok: true }
     })
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const sftp = vi.fn()
+
     const connection = {
       sftp,
       getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
     } as unknown as SshConnection
+
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(connection)
@@ -112,9 +124,11 @@ describe('SshRelaySession managed hooks', () => {
     const managedIndex = muxRequestMock.mock.calls.findIndex(
       ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
     )
+
     const pluginsIndex = muxRequestMock.mock.calls.findIndex(
       ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
     )
+
     expect(muxRequestMock.mock.calls[pluginsIndex]?.[1]).toMatchObject({
       piExtensionSource: expect.stringContaining('/hook/pi'),
       ompExtensionSource: expect.stringContaining('/hook/omp'),
@@ -137,16 +151,19 @@ describe('SshRelaySession managed hooks', () => {
           versions: { claude: '2.1.261 (Claude Code)' }
         }
       }
+
       return method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
         ? { installers: 1, errors: 0 }
         : { ok: true }
     })
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: establish only reads these mocked connection members in this harness.
     const connection = {
       sftp: vi.fn(),
       getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
     } as unknown as SshConnection
+
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(connection)

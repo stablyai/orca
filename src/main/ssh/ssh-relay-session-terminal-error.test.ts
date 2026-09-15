@@ -99,6 +99,7 @@ function createMockDeps(): {
   getMainWindow: () => BrowserWindow | null
 } {
   const mockConn = {} as SshConnection
+
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
@@ -116,14 +117,18 @@ function createMockDeps(): {
     clearSshRemotePtyKillIntent: vi.fn(),
     noteSshRemotePtyKillReplayAttempt: vi.fn()
   } as unknown as Store
+
   const mockPortForward = {
     removeAllForwards: vi.fn()
   } as unknown as SshPortForwardManager
+
   const mockWindow = {
     isDestroyed: (): boolean => false,
     webContents: { send: vi.fn() }
   } as unknown as BrowserWindow
+
   const getMainWindow = vi.fn().mockReturnValue(mockWindow) as unknown as () => BrowserWindow | null
+
   return { mockConn, mockStore, mockPortForward, getMainWindow }
 }
 
@@ -133,6 +138,7 @@ function mockDeploySuccess(): void {
     onData: vi.fn(),
     onClose: vi.fn()
   }
+
   vi.mocked(deployAndLaunchRelay).mockResolvedValue({
     transport: mockTransport,
     platform: 'linux-x64'
@@ -148,9 +154,11 @@ describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () 
 
   it('omits the SFTP folder factory while retaining raw transfer on system SSH', async () => {
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+
     const mockConn = {
       usesSystemSshTransport: vi.fn(() => true)
     } as unknown as SshConnection
+
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish(mockConn)
@@ -177,6 +185,7 @@ describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () 
       '0.1.0+bbb',
       '[relay-connect] Handshake mismatch...'
     )
+
     vi.mocked(deployAndLaunchRelay).mockRejectedValueOnce(mismatchErr)
 
     await expect(session.establish(mockConn)).rejects.toBe(mismatchErr)
@@ -208,6 +217,7 @@ describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () 
     session.setOnRelayLost(onLost)
 
     await session.establish(mockConn)
+
     const silent = new RelayEndpointUnresponsiveError({
       sockPath: '/home/u/.orca-remote/relay-x/relay.sock',
       verdict: 'live',
@@ -216,6 +226,7 @@ describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () 
       holders: [],
       holdersEnumerable: false
     })
+
     vi.mocked(deployAndLaunchRelay).mockRejectedValueOnce(silent)
 
     await session.reconnect(mockConn)

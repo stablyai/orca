@@ -37,11 +37,14 @@ function openTerminal(): Rig {
   const terminal = new Terminal()
   terminal.open(container)
   const textarea = terminal.textarea
+
   if (!textarea) {
     throw new Error('xterm helper textarea was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, textarea }
 }
 
@@ -56,6 +59,7 @@ function dispatchKey(
     bubbles: true,
     cancelable: true
   })
+
   // happy-dom drops the legacy numeric fields from KeyboardEventInit; xterm's IME paths read them.
   Object.defineProperty(event, 'keyCode', { value: init.keyCode })
   Object.defineProperty(event, 'charCode', { value: init.charCode ?? 0 })
@@ -81,6 +85,7 @@ function dispatchComposition(
   if (type !== 'compositionstart') {
     textarea.value = data
   }
+
   const event = new CompositionEvent(type, { bubbles: true })
   Object.defineProperty(event, 'data', { value: data })
   textarea.dispatchEvent(event)

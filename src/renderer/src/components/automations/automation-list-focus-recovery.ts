@@ -24,29 +24,39 @@ export function resolveAutomationListFocusRecovery(
   input: AutomationListFocusRecoveryInput
 ): AutomationListFocusTarget | null {
   const { focusedRowKey } = input
+
   if (focusedRowKey === null) {
     return null
   }
+
   const surviving = new Set(input.nextRowKeys)
+
   if (surviving.has(focusedRowKey)) {
     return null
   }
+
   const lostIndex = input.previousRowKeys.indexOf(focusedRowKey)
+
   if (lostIndex === -1) {
     // The row was never in this list, so nothing here can be the right neighbor.
     return { kind: 'picker' }
   }
+
   for (let index = lostIndex + 1; index < input.previousRowKeys.length; index += 1) {
     const candidate = input.previousRowKeys[index]
+
     if (surviving.has(candidate)) {
       return { kind: 'row', rowKey: candidate }
     }
   }
+
   for (let index = lostIndex - 1; index >= 0; index -= 1) {
     const candidate = input.previousRowKeys[index]
+
     if (surviving.has(candidate)) {
       return { kind: 'row', rowKey: candidate }
     }
   }
+
   return { kind: 'picker' }
 }

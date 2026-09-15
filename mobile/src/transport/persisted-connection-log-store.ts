@@ -3,17 +3,22 @@ import { createConnectionLogStore } from './connection-log-buffer'
 import type { ConnectionLogEntry } from './types'
 
 const STORAGE_PREFIX = 'orca.mobile.connection-log.v1.'
+
 const clientSessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
 const sessionStartedHosts = new Set<string>()
 
 export const connectionLogStore = createConnectionLogStore(200, {
   async load(hostId) {
     const raw = await AsyncStorage.getItem(storageKey(hostId))
+
     if (!raw) {
       return []
     }
+
     try {
       const parsed: unknown = JSON.parse(raw)
+
       return Array.isArray(parsed) ? parsed.filter(isConnectionLogEntry) : []
     } catch {
       return []
@@ -43,6 +48,7 @@ export function recordConnectionClientSessionStart(hostId: string): void {
   if (sessionStartedHosts.has(hostId)) {
     return
   }
+
   sessionStartedHosts.add(hostId)
   const now = Date.now()
   connectionLogStore.append(hostId, {
@@ -62,7 +68,9 @@ function isConnectionLogEntry(value: unknown): value is ConnectionLogEntry {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const entry = value as Partial<ConnectionLogEntry>
+
   return (
     typeof entry.id === 'string' &&
     typeof entry.ts === 'number' &&

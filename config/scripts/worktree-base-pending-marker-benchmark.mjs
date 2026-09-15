@@ -9,7 +9,9 @@ import { performance } from 'node:perf_hooks'
 import { createJiti } from 'jiti'
 
 const CANDIDATE_COUNT = Number(process.env.ORCA_PENDING_MARKER_BENCH_CANDIDATES ?? '64')
+
 const TOTAL_TICKS = Number(process.env.ORCA_PENDING_MARKER_BENCH_TICKS ?? '900')
+
 const STEADY_TICKS = Number(process.env.ORCA_PENDING_MARKER_BENCH_STEADY_TICKS ?? '300')
 
 for (const [name, value] of [
@@ -21,12 +23,15 @@ for (const [name, value] of [
     throw new Error(`${name} must be a positive integer, received ${value}`)
   }
 }
+
 if (STEADY_TICKS >= TOTAL_TICKS) {
   throw new Error('ORCA_PENDING_MARKER_BENCH_STEADY_TICKS must be smaller than total ticks')
 }
 
 const root = await mkdtemp(join(os.tmpdir(), 'orca-pending-marker-bench-'))
+
 const markerPaths = new Set()
+
 for (let index = 0; index < CANDIDATE_COUNT; index += 1) {
   const candidate = join(root, `ordinary-folder-${index}`)
   await mkdir(candidate)
@@ -34,36 +39,49 @@ for (let index = 0; index < CANDIDATE_COUNT; index += 1) {
 }
 
 const originalStat = fs.promises.stat
+
 let visibleTick = 0
+
 const markerStatTicks = []
+
 fs.promises.stat = async (path, ...args) => {
   if (markerPaths.has(String(path))) {
     markerStatTicks.push(visibleTick)
   }
+
   return originalStat(path, ...args)
 }
+
 syncBuiltinESMExports()
 
 let poller
+
 let timeout
+
 try {
   const jiti = createJiti(import.meta.url)
+
   const { startWorktreeBaseDirectoryPoller } = await jiti.import(
     '../../src/main/ipc/worktree-base-directory-poller.ts'
   )
+
   const repo = { repoId: 'repo-1', repoName: 'repo', nestWorkspaces: false }
+
   const target = {
     key: `base:local:${root}`,
     kind: 'base',
     path: root,
     repos: new Map([[repo.repoId, repo]])
   }
+
   let finish
   let fail
+
   const completed = new Promise((resolve, reject) => {
     finish = resolve
     fail = reject
   })
+
   timeout = setTimeout(() => fail(new Error('poller benchmark timed out')), 30_000)
   const startedAt = performance.now()
   poller = await startWorktreeBaseDirectoryPoller(
@@ -75,10 +93,13 @@ try {
       visibility: {
         isWindowVisible: () => {
           visibleTick += 1
+
           if (visibleTick > TOTAL_TICKS) {
             finish()
+
             return false
           }
+
           return true
         },
         onWindowBecameVisible: () => () => {}

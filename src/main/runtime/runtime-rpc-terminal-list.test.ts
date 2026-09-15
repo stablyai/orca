@@ -18,6 +18,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -32,6 +33,7 @@ describe('OrcaRuntimeRpcServer', () => {
     runtime.setPtyController({
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -65,6 +67,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)
+
     const listResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
       id: 'req_list',
       authToken: metadata!.authToken,
@@ -73,6 +76,7 @@ describe('OrcaRuntimeRpcServer', () => {
         worktree: 'id:repo-1::/tmp/worktree-a'
       }
     })
+
     expect(listResponse).toMatchObject({
       id: 'req_list',
       ok: true,
@@ -90,6 +94,7 @@ describe('OrcaRuntimeRpcServer', () => {
         }
       ).terminals[0] ?? { handle: '' }
     ).handle
+
     expect(handle).toBeTruthy()
 
     const showResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
@@ -100,6 +105,7 @@ describe('OrcaRuntimeRpcServer', () => {
         terminal: handle
       }
     })
+
     expect(showResponse).toMatchObject({
       id: 'req_show',
       ok: true
@@ -113,6 +119,7 @@ describe('OrcaRuntimeRpcServer', () => {
         terminal: handle
       }
     })
+
     expect(readResponse).toMatchObject({
       id: 'req_read',
       ok: true
@@ -128,6 +135,7 @@ describe('OrcaRuntimeRpcServer', () => {
         enter: true
       }
     })
+
     expect(sendResponse).toMatchObject({
       id: 'req_send',
       ok: true
@@ -144,6 +152,7 @@ describe('OrcaRuntimeRpcServer', () => {
         timeoutMs: 1000
       }
     })
+
     runtime.onPtyExit('pty-1', 9)
     const waitResponse = await waitPromise
     expect(waitResponse).toMatchObject({
@@ -307,18 +316,22 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.start()
+
     try {
       const metadata = readRuntimeMetadata(userDataPath)
+
       const listResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
         id: 'req_list_layout',
         authToken: metadata!.authToken,
         method: 'terminal.list',
         params: { worktree: `id:${worktreeId}` }
       })
+
       const result = listResponse.result as {
         visualLayouts?: unknown[]
         terminals: { handle: string; tabId: string; leafId: string }[]
       }
+
       const handleByLeaf = new Map(
         result.terminals.map((terminal) => [terminal.leafId, terminal.handle])
       )
@@ -384,10 +397,12 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'terminal.list',
         params: { worktree: `id:${worktreeId}`, includeVisualLayouts: false }
       })
+
       const optedOut = optedOutResponse.result as {
         visualLayouts?: unknown[]
         terminals: unknown[]
       }
+
       expect(optedOutResponse).toMatchObject({ id: 'req_list_layout_opt_out', ok: true })
       expect(optedOut.visualLayouts).toBeUndefined()
       expect(optedOut.terminals).toHaveLength(result.terminals.length)
@@ -398,6 +413,7 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'terminal.list',
         params: { worktree: `id:${worktreeId}`, includeVisualLayouts: true }
       })
+
       expect(
         (explicitIncludeResponse.result as { visualLayouts?: unknown[] }).visualLayouts
       ).toHaveLength(1)
@@ -408,6 +424,7 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'terminal.resolvePane',
         params: { paneKey: `tab-right:${bottomLeaf}`, worktreeId }
       })
+
       expect(resolvePaneResponse).toMatchObject({
         id: 'req_resolve_pane',
         ok: true,
@@ -428,6 +445,7 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'terminal.resolvePane',
         params: { paneKey: `tab-right:${bottomLeaf}`, worktreeId: 'other-worktree' }
       })
+
       expect(wrongOwnerResponse).toMatchObject({
         id: 'req_resolve_pane_wrong_owner',
         ok: false,

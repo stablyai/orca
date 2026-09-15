@@ -18,6 +18,7 @@ export async function resolveSshReattachModelSnapshotWithTimeout<T>(
   timeoutMs = SSH_REATTACH_MODEL_SNAPSHOT_TIMEOUT_MS
 ): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | null = null
+
   try {
     return await Promise.race([
       snapshot.catch(() => null),
@@ -49,21 +50,26 @@ export function decideSshReattachPaintSource(args: {
   if (!args.sshParkingEnabled || parseAppSshPtyId(args.ptyId) === null) {
     return 'relay-replay'
   }
+
   if (!args.snapshot || args.snapshot.source !== 'headless') {
     return 'relay-replay'
   }
+
   // Why the escape tail is excluded: a dangling mid-escape is not content — a
   // model holding only one paints a blank pane, which this gate forbids.
   // Accepted cost: a session that wrote only control-sequence preamble before
   // parking always falls back to relay; the gate cannot tell it apart from a
   // model that never received content, and relay replays that preamble anyway.
   const contentLength = (args.snapshot.scrollbackAnsi?.length ?? 0) + args.snapshot.data.length
+
   return contentLength === 0 ? 'relay-replay' : 'main-model-snapshot'
 }
 
 const ESCAPE = String.fromCharCode(27)
+
 /** Matches a private-mode set/reset once the leading ESC has been split away. */
 const PRIVATE_MODE_SEQUENCE = /^\[\?([0-9;]*)([hl])/
+
 /** 47 and 1047 count alongside 1049: older apps still use them. */
 const ALTERNATE_SCREEN_MODES = new Set(['47', '1047', '1049'])
 
@@ -81,17 +87,21 @@ export function lastAlternateScreenTransition(
   if (!replay) {
     return null
   }
+
   let transition: 'entered' | 'exited' | null = null
+
   // Split on ESC rather than matching it. Every private-mode sequence begins immediately after one,
   // so the two are equivalent — and no-control-regex forbids the escape inside a pattern, which is
   // worth respecting rather than suppressing when the alternative reads no worse. A tail can begin
   // mid-escape, so the first chunk is ordinary text and simply fails to match.
   for (const chunk of replay.split(ESCAPE)) {
     const match = PRIVATE_MODE_SEQUENCE.exec(chunk)
+
     if (match?.[1].split(';').some((mode) => ALTERNATE_SCREEN_MODES.has(mode))) {
       transition = match[2] === 'h' ? 'entered' : 'exited'
     }
   }
+
   return transition
 }
 
@@ -122,10 +132,12 @@ export function sshReconnectPaintsFromModel(args: {
   if (!args.snapshot?.alternateScreen) {
     return false
   }
+
   if (!args.hasReplay) {
     // Nothing to degrade to, so the vetoes below would only trade a stale frame for a blank one.
     return true
   }
+
   // The alt frame is dropped for a width mismatch, leaving a cleared screen the app must repaint.
   // A park could afford that with no tail to lose; here it would mean discarding a usable one.
   return !args.altFrameWouldBeSkipped && args.replayTransition !== 'exited'
@@ -156,8 +168,10 @@ export function memoizeSshReattachModelSnapshotProbe<T>(
   probe: () => Promise<T | null>
 ): () => Promise<T | null> {
   let inFlight: Promise<T | null> | null = null
+
   return () => {
     inFlight ??= probe()
+
     return inFlight
   }
 }

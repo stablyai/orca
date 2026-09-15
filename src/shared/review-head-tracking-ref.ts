@@ -25,15 +25,18 @@ export function gitlabMergeRequestHeadLocalRef(remoteComponent: string, mrIid: n
 // carries uniqueness, so lossy sanitization here is safe.
 function sanitizeRemoteRefComponent(remote: string): string {
   const cleaned = remote.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^[-.]+|\.+$/g, '')
+
   return cleaned || 'remote'
 }
 
 function fnv1a64Hex(value: string): string {
   let hash = 0xcbf29ce484222325n
+
   for (let index = 0; index < value.length; index++) {
     hash ^= BigInt(value.charCodeAt(index))
     hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn
   }
+
   return hash.toString(16).padStart(16, '0')
 }
 

@@ -26,6 +26,7 @@ export default function CodeBlockCopyButton({
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -53,6 +54,7 @@ export default function CodeBlockCopyButton({
         if (!isMountedRef.current) {
           return
         }
+
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {
@@ -96,11 +98,14 @@ function extractText(node: React.ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(extractText).join('')
   }
+
   if (React.isValidElement(node) && node.props) {
     return extractText((node.props as { children?: React.ReactNode }).children)
   }
+
   return ''
 }

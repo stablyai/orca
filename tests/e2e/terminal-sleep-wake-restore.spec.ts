@@ -40,9 +40,11 @@ type RemoteSleepOracle = {
 async function sleepWorktreeTerminals(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate(async (id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('store unavailable')
     }
+
     const state = store.getState()
     await state.shutdownWorktreeBrowsers(id)
     await state.shutdownWorktreeTerminals(id, { keepIdentifiers: true })
@@ -52,11 +54,14 @@ async function sleepWorktreeTerminals(page: Page, worktreeId: string): Promise<v
 async function readLivePtyCountForWorktree(page: Page, worktreeId: string): Promise<number> {
   return page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       return 0
     }
+
     const state = store.getState()
     const tabs = state.tabsByWorktree[id] ?? []
+
     return tabs.reduce((count, tab) => count + (state.ptyIdsByTabId[tab.id]?.length ?? 0), 0)
   }, worktreeId)
 }
@@ -67,14 +72,19 @@ async function readRemoteSleepOracle(page: Page, worktreeId: string): Promise<Re
       method: 'terminal.list',
       params: { worktree: `id:${id}`, requireFreshPtyLiveness: true }
     })
+
     if (!terminalList.ok) {
       throw new Error(terminalList.error.message)
     }
+
     const worktreePs = await window.api.runtime.call({ method: 'worktree.ps' })
+
     if (!worktreePs.ok) {
       throw new Error(worktreePs.error.message)
     }
+
     const terminalListResult = terminalList.result as { totalCount: number }
+
     const worktreePsResult = worktreePs.result as {
       worktrees: {
         worktreeId: string
@@ -82,10 +92,13 @@ async function readRemoteSleepOracle(page: Page, worktreeId: string): Promise<Re
         hasAttachedPty: boolean
       }[]
     }
+
     const summary = worktreePsResult.worktrees.find((worktree) => worktree.worktreeId === id)
+
     if (!summary) {
       throw new Error(`worktree.ps omitted ${id}`)
     }
+
     return {
       terminalListTotalCount: terminalListResult.totalCount,
       worktreePsLiveTerminalCount: summary.liveTerminalCount,
@@ -100,6 +113,7 @@ async function readSleepWakeTerminalDebug(
 ): Promise<SleepWakeTerminalDebug> {
   return page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       return {
         activeTabId: null,
@@ -109,8 +123,10 @@ async function readSleepWakeTerminalDebug(
         ptyIdsByLeafIdByTabId: {}
       }
     }
+
     const state = store.getState()
     const tabs = state.tabsByWorktree[id] ?? []
+
     return {
       activeTabId: state.activeTabId,
       activeWorktreeId: state.activeWorktreeId,
@@ -136,6 +152,7 @@ async function mainSnapshotContains(page: Page, ptyId: string, text: string): Pr
       const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
         scrollbackRows: 200
       })
+
       return snapshot?.data.includes(expectedText) ?? false
     },
     { targetPtyId: ptyId, expectedText: text }
@@ -144,6 +161,7 @@ async function mainSnapshotContains(page: Page, ptyId: string, text: string): Pr
 
 function richSleepWakePayload(runId: string): string {
   const shortId = runId.slice(0, 8)
+
   return [
     '\x1b[?2026h',
     '\x1b[2J\x1b[H',
@@ -188,10 +206,13 @@ test.describe('Terminal sleep wake restore', () => {
   }) => {
     await waitForSessionReady(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'sleep wake restore needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -206,10 +227,12 @@ test.describe('Terminal sleep wake restore', () => {
     const expectedMarkers = sleepWakeExpectedMarkers(runId)
     const scriptPath = path.join(testRepoPath, `.orca-sleep-wake-restore-${runId}.mjs`)
     writeSleepWakePayloadScript(scriptPath, richSleepWakePayload(runId))
+
     try {
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       await waitForTerminalOutput(orcaPage, restoreMarker, 10_000, 20_000)
       const beforeSleepDebug = await readSleepWakeTerminalDebug(orcaPage, secondWorktreeId)
+
       for (const marker of expectedMarkers) {
         expect(await mainSnapshotContains(orcaPage, ptyId, marker)).toBe(true)
       }
@@ -240,6 +263,7 @@ test.describe('Terminal sleep wake restore', () => {
       const awakePtyId = await waitForActivePanePtyId(orcaPage)
       const afterWakeDebug = await readSleepWakeTerminalDebug(orcaPage, secondWorktreeId)
       const awakeTerminalContent = await getTerminalContent(orcaPage, 20_000)
+
       for (const marker of expectedMarkers) {
         expect
           .soft(awakeTerminalContent.includes(marker), {
@@ -259,6 +283,7 @@ test.describe('Terminal sleep wake restore', () => {
           })
           .toBe(true)
       }
+
       await waitForTerminalOutput(orcaPage, restoreMarker, 15_000, 20_000)
       await sendToTerminal(orcaPage, awakePtyId, `printf '\\n${freshMarker}\\n'\r`)
       await waitForTerminalOutput(orcaPage, freshMarker, 10_000, 20_000)

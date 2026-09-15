@@ -59,6 +59,7 @@ describe('findDuplicateClaudeAccount', () => {
       wslDistro: 'Ubuntu',
       organizationUuid: 'org-A'
     })
+
     expect(
       findDuplicateClaudeAccount(
         [account],
@@ -73,6 +74,7 @@ describe('findDuplicateClaudeAccount', () => {
       wslDistro: 'Ubuntu',
       organizationUuid: 'org-A'
     })
+
     expect(
       findDuplicateClaudeAccount(
         [account],

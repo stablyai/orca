@@ -8,6 +8,7 @@ import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path
 export function encodeClaudeProjectPaths(pathValue: string): string[] {
   const raw = encodeClaudeProjectPath(pathValue)
   const composed = encodeClaudeProjectPath(pathValue.normalize('NFC'))
+
   return raw === composed ? [raw] : [raw, composed]
 }
 
@@ -15,8 +16,10 @@ export function encodeClaudeProjectPaths(pathValue: string): string[] {
  *  `--claude` and `C:\` to `c--`. Anything that collapses runs stops matching real buckets. */
 export function encodeClaudeProjectPath(pathValue: string): string {
   const separated = normalizeRuntimePathSeparators(pathValue)
+
   const trimmed =
     separated === '/' || /^[A-Za-z]:\/$/.test(separated) ? separated : separated.replace(/\/+$/, '')
+
   return trimmed.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
@@ -31,5 +34,6 @@ export function isClaudeProjectDirInScope(
       return true
     }
   }
+
   return false
 }

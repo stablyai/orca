@@ -41,14 +41,21 @@ import {
  * whole story.
  */
 const COOKIE_PAIR = `${SSH_REMOTE_ONLY_COOKIE_NAME}=${SSH_REMOTE_ONLY_COOKIE_VALUE}`
+
 const LOGIN_URL = `${SSH_REMOTE_ONLY_ORIGIN}/login`
+
 const ECHO_URL = `${SSH_REMOTE_ONLY_ORIGIN}/echo/session`
+
 const OPT_OUT_URL = `${SSH_REMOTE_ONLY_ORIGIN}/echo/opt-out`
+
 const ROUTE_PARTITION_RE = /^persist:orca-browser-v1-[a-f0-9]{64}$/
 
 const FORWARDING_BLOCKED_TITLE = 'The SSH server blocks browser traffic'
+
 const SSH_UNAVAILABLE_TITLE = 'SSH connection unavailable'
+
 const BROWSE_LOCALLY_LABEL = 'Browse from this device instead'
+
 const LOCAL_DEVICE_MARKER = 'local-device-marker'
 
 type SshState = {
@@ -80,6 +87,7 @@ test.use({ seedTestRepo: false })
 async function readSshState(page: Page, targetId: string): Promise<SshState> {
   return page.evaluate(async (targetId) => {
     const state = await window.api.ssh.getState({ targetId })
+
     return {
       status: state?.status ?? null,
       connectionGeneration: state?.connectionGeneration ?? null,
@@ -99,9 +107,11 @@ async function reconnectSshTarget(page: Page, targetId: string): Promise<SshStat
         page.evaluate(async (targetId) => {
           try {
             const state = await window.api.ssh.connect({ targetId })
+
             if (state) {
               window.__store?.getState().setSshConnectionState(targetId, state)
             }
+
             return state?.status ?? null
           } catch {
             return null
@@ -114,6 +124,7 @@ async function reconnectSshTarget(page: Page, targetId: string): Promise<SshStat
       }
     )
     .toBe('connected')
+
   return readSshState(page, targetId)
 }
 
@@ -126,14 +137,18 @@ async function createBrowserTab(
   const created = await page.evaluate(
     ({ worktreeId, url, title }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Store unavailable')
       }
+
       const tab = state.createBrowserTab(worktreeId, url, { title, activate: true })
+
       return { id: tab.id, pageId: tab.activePageId ?? null }
     },
     { worktreeId, url, title }
   )
+
   await expect
     .poll(
       () =>
@@ -149,6 +164,7 @@ async function createBrowserTab(
       { timeout: 30_000, message: `browser tab ${title} never landed in the store` }
     )
     .toBe(true)
+
   return created
 }
 
@@ -156,16 +172,21 @@ async function probeTabWebview(page: Page, tabId: string): Promise<WebviewProbe 
   return page.evaluate(async (tabId) => {
     const slot = document.querySelector(`[data-browser-overlay-tab-id="${tabId}"]`)
     const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       return null
     }
+
     let url: string | null = null
+
     try {
       url = webview.getURL()
     } catch {
       url = null
     }
+
     let marker: string | null = null
+
     try {
       marker = (await webview.executeJavaScript(
         'document.querySelector("#marker")?.textContent ?? null'
@@ -173,6 +194,7 @@ async function probeTabWebview(page: Page, tabId: string): Promise<WebviewProbe 
     } catch {
       marker = null
     }
+
     return { partition: webview.getAttribute('partition'), url, marker }
   }, tabId)
 }
@@ -183,44 +205,54 @@ async function reloadTab(page: Page, tabId: string, timeoutMs: number): Promise<
     ({ tabId, timeoutMs }) => {
       const slot = document.querySelector(`[data-browser-overlay-tab-id="${tabId}"]`)
       const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+
       if (!webview) {
         return Promise.resolve({ outcome: 'no-webview' as const })
       }
+
       return new Promise<ReloadOutcome>((resolve) => {
         let settled = false
+
         const cleanup = (): void => {
           window.clearTimeout(timer)
           webview.removeEventListener('did-fail-load', onFail)
           webview.removeEventListener('did-finish-load', onFinish)
         }
+
         const finish = (value: ReloadOutcome): void => {
           if (settled) {
             return
           }
+
           settled = true
           cleanup()
           resolve(value)
         }
+
         const onFail = (event: Event): void => {
           const failure = event as Event & {
             errorCode: number
             errorDescription: string
             isMainFrame?: boolean
           }
+
           // ERR_ABORTED is what a superseded navigation reports; it is not a load failure.
           if (failure.isMainFrame === false || failure.errorCode === -3) {
             return
           }
+
           finish({
             outcome: 'failed',
             errorCode: failure.errorCode,
             errorDescription: failure.errorDescription
           })
         }
+
         const onFinish = (): void => finish({ outcome: 'loaded' })
         const timer = window.setTimeout(() => finish({ outcome: 'timeout' }), timeoutMs)
         webview.addEventListener('did-fail-load', onFail)
         webview.addEventListener('did-finish-load', onFinish)
+
         try {
           webview.reload()
         } catch (error) {
@@ -239,9 +271,11 @@ async function readPageLoadError(
   return page.evaluate((tabId) => {
     const pages = window.__store?.getState().browserPagesByWorkspace[tabId] ?? []
     const failure = pages.find((candidate) => candidate.loadError)?.loadError
+
     if (!failure) {
       return null
     }
+
     return { code: failure.code ?? null, description: failure.description ?? null }
   }, tabId)
 }
@@ -256,9 +290,11 @@ async function waitForTabMarker(page: Page, tabId: string, message: string): Pro
     })
     .not.toBeNull()
   const marker = (await probeTabWebview(page, tabId))?.marker
+
   if (!marker) {
     throw new Error(`Guest for ${tabId} lost its marker`)
   }
+
   return marker
 }
 
@@ -274,6 +310,7 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
 }, testInfo) => {
   test.setTimeout(900_000)
   let target: DockerSshRelayTarget | null = null
+
   try {
     await waitForSessionReady(orcaPage)
 
@@ -307,11 +344,13 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
 
     // (1) Remote-only origin renders -- the causal egress oracle.
     const loginTab = await createBrowserTab(orcaPage, worktreeId, LOGIN_URL, 'SSH login')
+
     const loginMarker = await waitForTabMarker(
       orcaPage,
       loginTab.id,
       'the SSH-routed guest never rendered the container-only origin'
     )
+
     expect(loginMarker, 'the remote-only origin must have served the page itself').toBe(
       'login-marker'
     )
@@ -337,6 +376,7 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
       loginCensus.filter((entry) => entry.kind === 'webview').length,
       'the SSH-routed pane never attached a guest at all'
     ).toBeGreaterThan(0)
+
     for (const entry of loginCensus) {
       if (entry.kind === 'webview') {
         expect(
@@ -359,11 +399,13 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
 
     // A second tab on the same partition proves the cookie jar is shared before the drop.
     const echoTab = await createBrowserTab(orcaPage, worktreeId, ECHO_URL, 'SSH echo')
+
     const echoMarker = await waitForTabMarker(
       orcaPage,
       echoTab.id,
       'the second SSH-routed guest never rendered the container-only origin'
     )
+
     expect(echoMarker, 'the pre-drop request must carry the planted cookie').toContain(COOKIE_PAIR)
     expect(
       (await probeTabWebview(orcaPage, echoTab.id))?.partition,
@@ -386,6 +428,7 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
       .poll(
         async () => {
           dropOutcome = await reloadTab(orcaPage, echoTab.id, 30_000)
+
           return dropOutcome.outcome
         },
         {
@@ -424,6 +467,7 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
       .poll(
         async () => {
           recoveryOutcome = await reloadTab(orcaPage, echoTab.id, 30_000)
+
           return recoveryOutcome.outcome
         },
         {
@@ -433,11 +477,13 @@ test('routes SSH-workspace browsing through the SSH host, fail-closed across a r
         }
       )
       .toBe('loaded')
+
     const recoveredMarker = await waitForTabMarker(
       orcaPage,
       echoTab.id,
       'the reconnected guest never re-rendered the container-only origin'
     )
+
     expect(
       recoveredMarker,
       'the post-reconnect request must still carry the cookie planted before the drop'
@@ -529,8 +575,10 @@ async function startHostPublishedOrigin(): Promise<{ url: string; close: () => P
       `<!doctype html><html><head><title>${LOCAL_DEVICE_MARKER}</title></head><body><h1 id="marker">${LOCAL_DEVICE_MARKER}</h1></body></html>`
     )
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const port = (server.address() as AddressInfo).port
+
   return {
     url: `http://127.0.0.1:${port}/local`,
     close: () =>
@@ -555,6 +603,7 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
   test.setTimeout(900_000)
   let target: DockerSshRelayTarget | null = null
   let hostOrigin: { url: string; close: () => Promise<void> } | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     // Why: the gate's cards are asserted by their user-visible English text.
@@ -588,6 +637,7 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
       hostOrigin.url,
       'SSH unavailable'
     )
+
     const strandedPane = orcaPage.locator(`[data-browser-overlay-tab-id="${strandedTab.id}"]`)
     await expect(
       strandedPane.getByText(SSH_UNAVAILABLE_TITLE),
@@ -644,6 +694,7 @@ test('holds the mount and offers a working local escape hatch when the SSH host 
       escapedPartition,
       'the explicit local-browsing choice must mount off the route partition'
     ).not.toMatch(ROUTE_PARTITION_RE)
+
     for (const entry of censusFor(await readBrowserPaneMountCensus(orcaPage), strandedTab.id)) {
       if (entry.kind === 'webview') {
         expect(
@@ -688,6 +739,7 @@ test('classifies a real AllowTcpForwarding no refusal and keeps Try anyway route
   test.setTimeout(900_000)
   let target: DockerSshRelayTarget | null = null
   let hostOrigin: { url: string; close: () => Promise<void> } | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     // Why: the gate's cards are asserted by their user-visible English text.
@@ -710,12 +762,14 @@ test('classifies a real AllowTcpForwarding no refusal and keeps Try anyway route
     ).toBe('connected')
 
     await installBrowserPaneMountCensus(orcaPage)
+
     const blockedTab = await createBrowserTab(
       orcaPage,
       remote.worktreeId,
       hostOrigin.url,
       'Forwarding blocked'
     )
+
     const blockedPane = orcaPage.locator(`[data-browser-overlay-tab-id="${blockedTab.id}"]`)
 
     // The card: classified from the wire reason code, not from prose.
@@ -727,6 +781,7 @@ test('classifies a real AllowTcpForwarding no refusal and keeps Try anyway route
       blockedPane,
       'the card must name the sshd setting an administrator has to change'
     ).toContainText('AllowTcpForwarding no')
+
     for (const label of ['Retry', 'Try anyway', BROWSE_LOCALLY_LABEL]) {
       await expect(
         blockedPane.getByRole('button', { name: label }),
@@ -777,6 +832,7 @@ test('classifies a real AllowTcpForwarding no refusal and keeps Try anyway route
     const overrideCensus = censusFor(await readBrowserPaneMountCensus(orcaPage), blockedTab.id)
     const overrideWebviews = overrideCensus.filter((entry) => entry.kind === 'webview')
     expect(overrideWebviews.length, '"Try anyway" attached no guest to inspect').toBeGreaterThan(0)
+
     for (const entry of overrideWebviews) {
       if (entry.kind === 'webview') {
         expect(entry.partition, '"Try anyway" must skip the probe, never the routing').toMatch(

@@ -14,6 +14,7 @@ const PREFILL_ENV_VAR_BY_KIND: Record<PrefillAgentKind, string> = {
 
 export function getPiPrefillExtensionSource(kind: PrefillAgentKind): string {
   const envVar = PREFILL_ENV_VAR_BY_KIND[kind]
+
   return [
     'export default function (pi) {',
     "  pi.on('session_start', async (event, ctx) => {",

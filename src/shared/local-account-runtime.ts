@@ -19,6 +19,7 @@ export function resolveLocalAccountRuntimeTarget(
   if (settings.localAccountRuntime === 'host') {
     return { runtime: 'host', wslDistro: null }
   }
+
   if (settings.localAccountRuntime === 'wsl') {
     return { runtime: 'wsl', wslDistro: normalizeDistro(settings.localAccountWslDistro) }
   }
@@ -27,14 +28,18 @@ export function resolveLocalAccountRuntimeTarget(
   if (platform !== 'win32') {
     return { runtime: 'host', wslDistro: null }
   }
+
   const runtimeDefault = normalizeGlobalWindowsRuntimeDefault(settings.localWindowsRuntimeDefault)
+
   if (runtimeDefault.kind === 'wsl') {
     return { runtime: 'wsl', wslDistro: runtimeDefault.distro }
   }
+
   return { runtime: 'host', wslDistro: null }
 }
 
 function normalizeDistro(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }

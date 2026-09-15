@@ -27,6 +27,7 @@ export function requestForward(localPort: number): Promise<string> {
         response.on('end', () => resolve(body))
       }
     )
+
     req.once('error', reject)
     req.once('timeout', () => req.destroy(new Error('Forwarded HTTP request timed out')))
     req.end()
@@ -44,6 +45,7 @@ export function startRemoteHttpListener(
     "const server = http.createServer((_request, response) => response.end(marker + '\\n'))",
     `server.listen(${port}, '127.0.0.1')`
   ].join(';')
+
   execDockerSshRelayTargetCommand(
     target,
     [
@@ -51,6 +53,7 @@ export function startRemoteHttpListener(
       `echo $! >/tmp/orca-http-${port}.pid`
     ].join(' ')
   )
+
   return Number(execDockerSshRelayTargetCommand(target, `cat /tmp/orca-http-${port}.pid`))
 }
 
@@ -59,6 +62,7 @@ export function readRemoteListenerIdentity(
   port: number
 ): { pid: number; executable: string; command: string } {
   const pid = Number(execDockerSshRelayTargetCommand(target, `cat /tmp/orca-http-${port}.pid`))
+
   return {
     pid,
     executable: execDockerSshRelayTargetCommand(target, `readlink /proc/${pid}/exe`),
@@ -74,13 +78,16 @@ export async function installLifecycleWarningCapture(
       __sshPortForwardWarnings?: string[]
       __sshPortForwardOriginalWarn?: typeof console.warn
     }
+
     scope.__sshPortForwardWarnings = []
     scope.__sshPortForwardOriginalWarn = console.warn
     console.warn = (...args: unknown[]) => {
       const message = args.map(String).join(' ')
+
       if (message.includes('[ssh')) {
         scope.__sshPortForwardWarnings?.push(message)
       }
+
       scope.__sshPortForwardOriginalWarn?.(...args)
     }
   })
@@ -91,6 +98,7 @@ export async function readLifecycleWarnings(electronApp: ElectronApplication): P
     const scope = globalThis as typeof globalThis & {
       __sshPortForwardWarnings?: string[]
     }
+
     return scope.__sshPortForwardWarnings ?? []
   })
 }
@@ -103,9 +111,11 @@ export async function restoreLifecycleWarningCapture(
       __sshPortForwardWarnings?: string[]
       __sshPortForwardOriginalWarn?: typeof console.warn
     }
+
     if (scope.__sshPortForwardOriginalWarn) {
       console.warn = scope.__sshPortForwardOriginalWarn
     }
+
     delete scope.__sshPortForwardWarnings
     delete scope.__sshPortForwardOriginalWarn
   })
@@ -117,6 +127,7 @@ export async function installRendererForwardCapture(page: Page): Promise<void> {
       __sshPortForwardEvents?: unknown[]
       __sshPortForwardUnsubscribe?: () => void
     }
+
     scope.__sshPortForwardEvents = []
     scope.__sshPortForwardUnsubscribe?.()
     scope.__sshPortForwardUnsubscribe = window.api.ssh.onPortForwardsChanged((event) => {
@@ -132,13 +143,17 @@ export async function readPortForwardEvidence(
   return page.evaluate(
     async ({ targetId }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const target = (await window.api.ssh.listTargets()).find((entry) => entry.id === targetId)
+
       const scope = window as typeof window & {
         __sshPortForwardEvents?: PortForwardEvidence['events']
       }
+
       return {
         events: scope.__sshPortForwardEvents ?? [],
         rendererForwards: store.getState().portForwardsByConnection[targetId] ?? [],
@@ -204,6 +219,7 @@ export async function expectForwardEvidence(
     .poll(
       async () => {
         const evidence = await readPortForwardEvidence(page, targetId)
+
         return {
           renderer: evidence.rendererForwards.map(({ localPort, remotePort }) => ({
             localPort,

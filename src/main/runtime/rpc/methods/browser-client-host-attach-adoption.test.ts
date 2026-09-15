@@ -9,8 +9,11 @@ import { RpcDispatcher } from '../dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
 
 const RUNTIME_ID = 'runtime-new'
+
 const HOST_CLIENT_ID = 'host-adopt'
+
 const WORKSPACE_ID = 'workspace-a'
+
 const EXECUTION_HOST_KEY = 'native:runtime-new:1'
 
 function orphanedPage(
@@ -49,6 +52,7 @@ function attachHost(
   const cleanups = new Map<string, () => void>()
   const markClientHostedPagesReconciled = vi.fn()
   const notifyMobileSessionTabsChanged = vi.fn()
+
   const hostRuntime = {
     getRuntimeId: () => RUNTIME_ID,
     getStartedAt: () => 1,
@@ -63,12 +67,15 @@ function attachHost(
     notifyMobileSessionTabsChanged,
     registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup)
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({
     runtime: hostRuntime,
     methods: BROWSER_CLIENT_HOST_METHODS
   })
+
   const replies: string[] = []
   const answered = new Set<string>()
+
   const dispatch = dispatcher.dispatchStreaming(
     {
       id: `browser-host:${browserHostClientId}`,
@@ -88,9 +95,11 @@ function attachHost(
     (reply) => {
       replies.push(reply)
       const event = JSON.parse(reply).result
+
       if (event?.type !== 'command' || answered.has(event.commandId)) {
         return
       }
+
       answered.add(event.commandId)
       void dispatcher.dispatchStreaming(
         {
@@ -115,6 +124,7 @@ function attachHost(
       clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
     }
   )
+
   return {
     hostRuntime,
     dispatch,
@@ -185,23 +195,29 @@ describe('browser.clientHost.attach adoption', () => {
 
   it('does not recover a page created after the attach inventory was captured', async () => {
     let releaseAdoption!: (value: BrowserExecutionHostKeyResolution) => void
+
     const route = new Promise<BrowserExecutionHostKeyResolution>((resolve) => {
       releaseAdoption = resolve
     })
+
     const resolveExecutionHostKey = vi.fn(() => route)
     const rig = attachHost([orphanedPage()], { resolveExecutionHostKey })
+
     const settleAttach = async (): Promise<void> => {
       rig.cleanups.get(`browser-client-host:${HOST_CLIENT_ID}`)?.()
       await rig.dispatch
     }
+
     try {
       await vi.waitFor(() => expect(resolveExecutionHostKey).toHaveBeenCalled())
       const authority = getBrowserHostLeaseRegistry(rig.hostRuntime)
       const pages = getRuntimeBrowserPageRegistry(rig.hostRuntime)
       const placement = authority.placeClientPage('page-created-after-attach', HOST_CLIENT_ID)
+
       if (placement.kind !== 'client') {
         throw new Error('expected client placement')
       }
+
       pages.publishClientPage({
         browserPageId: 'page-created-after-attach',
         workspaceId: WORKSPACE_ID,
@@ -231,6 +247,7 @@ describe('browser.clientHost.attach adoption', () => {
 
   it('does not re-enter recovery for a page it just adopted', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const rig = attachHost([orphanedPage({ browserPageId: 'page-d' })], {
       browserHostClientId: 'host-recovery',
       pairedDeviceId: 'device-recovery'

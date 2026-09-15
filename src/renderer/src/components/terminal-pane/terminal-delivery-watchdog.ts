@@ -22,10 +22,12 @@ import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 
 const WATCHDOG_INTERVAL_MS = 15_000
+
 // Why 2 ticks: one silent interval can be a probe racing an in-transit chunk;
 // two full intervals with zero received events while main reports ACK-starved
 // in-flight bytes only occurs in the wedged state.
 const WATCHDOG_STALL_TICKS_TO_HEAL = 2
+
 // Why: a heal that could not revive the push channel must not repaint-storm;
 // pull-restores repeat at most once per cooldown while the wedge persists.
 const WATCHDOG_HEAL_COOLDOWN_MS = 60_000
@@ -44,20 +46,29 @@ type TerminalDeliveryWatchdogDeps = {
 }
 
 const receivedPtyCharTotals = new Map<string, number>()
+
 let receivedPtyDataEventCount = 0
+
 let blackholePtyPushDelivery = false
 
 let watchdogDeps: TerminalDeliveryWatchdogDeps | null = null
+
 let watchdogTimer: ReturnType<typeof setInterval> | null = null
+
 let watchdogConfig: TerminalDeliveryWatchdogConfig = {
   intervalMs: WATCHDOG_INTERVAL_MS,
   stallTicksToHeal: WATCHDOG_STALL_TICKS_TO_HEAL,
   healCooldownMs: WATCHDOG_HEAL_COOLDOWN_MS
 }
+
 let eventCountAtLastTick = 0
+
 let stallStreakTicks = 0
+
 let lastHealAtMs: number | null = null
+
 let healCount = 0
+
 let tickInFlight = false
 
 /** One Map upsert per received chunk — the watchdog's only hot-path cost.
@@ -91,39 +102,52 @@ function isMainDeliveryStalled(health: PtyRendererDeliveryHealthReply): boolean 
 async function runWatchdogTick(): Promise<void> {
   const deps = watchdogDeps
   const report = window.api?.pty?.reportRendererDeliveryState
+
   if (!deps || typeof report !== 'function') {
     stopTerminalDeliveryWatchdog()
+
     return
   }
+
   if (receivedPtyDataEventCount !== eventCountAtLastTick) {
     eventCountAtLastTick = receivedPtyDataEventCount
     stallStreakTicks = 0
+
     return
   }
+
   if (!deps.hasAttachedPtys()) {
     stallStreakTicks = 0
+
     return
   }
+
   const health = await report({
     receivedCharsByPty: Object.fromEntries(receivedPtyCharTotals),
     processedCharsByPty: getProcessedPtyCharTotals()
   })
+
   if (!health || !isMainDeliveryStalled(health)) {
     stallStreakTicks = 0
+
     return
   }
+
   stallStreakTicks += 1
   recordTerminalFreezeBreadcrumb('watchdog-stall', {
     stallStreakTicks,
     inFlightTotalChars: health.inFlightTotalChars,
     msSinceLastAck: health.msSinceLastAck
   })
+
   if (stallStreakTicks < watchdogConfig.stallTicksToHeal) {
     return
   }
+
   if (lastHealAtMs !== null && Date.now() - lastHealAtMs < watchdogConfig.healCooldownMs) {
     return
   }
+
   await healDeadPushDelivery(deps, report, health)
 }
 
@@ -140,13 +164,16 @@ async function healDeadPushDelivery(
   // dead, platform-level). The single most valuable field discriminator.
   const listenerCountBeforeReattach = window.api?.pty?.getPtyDataListenerCount?.() ?? null
   deps.reattachPushListeners()
+
   const healed = await report({
     receivedCharsByPty: Object.fromEntries(receivedPtyCharTotals),
     processedCharsByPty: getProcessedPtyCharTotals(),
     heal: true,
     rendererPtyDataListenerCount: listenerCountBeforeReattach
   })
+
   const writtenOff = healed?.writtenOff ?? []
+
   if (writtenOff.length > 0) {
     deliverPulledPtyModelRestoreMarkers(
       writtenOff.map((entry) => ({
@@ -156,6 +183,7 @@ async function healDeadPushDelivery(
       }))
     )
   }
+
   recordTerminalFreezeBreadcrumb('watchdog-heal', {
     listenerCountBeforeReattach,
     writtenOffPtyCount: writtenOff.length,
@@ -176,12 +204,14 @@ function scheduleWatchdogTimer(): void {
   if (watchdogTimer) {
     clearInterval(watchdogTimer)
   }
+
   watchdogTimer = setInterval(() => {
     // Why serialized: a heal awaits two invokes; overlapping ticks could
     // double-heal inside one cooldown window.
     if (tickInFlight) {
       return
     }
+
     tickInFlight = true
     void runWatchdogTick().finally(() => {
       tickInFlight = false
@@ -193,12 +223,14 @@ export function startTerminalDeliveryWatchdog(deps: TerminalDeliveryWatchdogDeps
   if (watchdogDeps) {
     return
   }
+
   // Why gated on the invoke fn: the web remote client and unit tests expose a
   // partial pty API; without the report lane the watchdog has no safe heal
   // path and must stay off.
   if (typeof window.api?.pty?.reportRendererDeliveryState !== 'function') {
     return
   }
+
   watchdogDeps = deps
   eventCountAtLastTick = receivedPtyDataEventCount
   scheduleWatchdogTimer()
@@ -207,6 +239,7 @@ export function startTerminalDeliveryWatchdog(deps: TerminalDeliveryWatchdogDeps
 
 export function stopTerminalDeliveryWatchdog(): void {
   watchdogDeps = null
+
   if (watchdogTimer) {
     clearInterval(watchdogTimer)
     watchdogTimer = null
@@ -223,9 +256,11 @@ export function getTerminalDeliveryWatchdogDiagnostics(): {
   msSinceLastHeal: number | null
 } {
   const receivedCharsByPty: Record<string, number> = {}
+
   for (const [id, chars] of receivedPtyCharTotals) {
     receivedCharsByPty[redactPtyIdForDiagnostics(id)] = chars
   }
+
   return {
     running: watchdogTimer !== null,
     receivedPtyDataEventCount,
@@ -257,6 +292,7 @@ function exposeE2eTerminalDeliveryWatchdog(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
+
   const target = window as E2eTerminalDeliveryWatchdogWindow
   target.__terminalDeliveryWatchdog ??= {
     blackhole: (on) => {
@@ -264,6 +300,7 @@ function exposeE2eTerminalDeliveryWatchdog(): void {
     },
     configure: (config) => {
       watchdogConfig = { ...watchdogConfig, ...config }
+
       if (watchdogDeps) {
         scheduleWatchdogTimer()
       }

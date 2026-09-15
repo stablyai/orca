@@ -17,11 +17,13 @@ const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[/\\]/
 
 function parseLinkedGitdir(content: string): string | null {
   const firstLine = content.split(/\r?\n/, 1)[0] ?? ''
+
   return firstLine.match(/^gitdir:\s*(\S.*?)\s*$/i)?.[1] ?? null
 }
 
 export function parseWindowsLinkedGitdir(content: string): string | null {
   const gitdir = parseLinkedGitdir(content)
+
   return gitdir !== null && WINDOWS_DRIVE_PATH.test(gitdir) ? gitdir : null
 }
 
@@ -37,29 +39,37 @@ export async function probeWslLinkedWorktreeGitRoute(
 ): Promise<WslLinkedWorktreeGitRouteProbeResult> {
   let candidate = cwd
   const driveRoot = win32.parse(candidate).root
+
   while (true) {
     const markerPath = win32.join(candidate, '.git')
+
     try {
       const marker = await fileSystem.stat(markerPath)
+
       if (!marker.isFile()) {
         // A `.git` directory (or anything that is not a file) is a normal main checkout.
         return { usesHostGit: false, known: true }
       }
+
       const gitdir = parseLinkedGitdir(await fileSystem.readFile(markerPath))
+
       // A POSIX gitdir is a settled answer too: the distro owns this checkout.
       return gitdir === null
         ? { usesHostGit: false, known: false }
         : { usesHostGit: WINDOWS_DRIVE_PATH.test(gitdir), known: true }
     } catch (error) {
       const code = error && typeof error === 'object' ? (error as NodeJS.ErrnoException).code : null
+
       if (code !== 'ENOENT' && code !== 'ENOTDIR') {
         throw error
       }
     }
+
     if (candidate === driveRoot) {
       // No marker up to the drive root: not a worktree at all, and stable enough to cache.
       return { usesHostGit: false, known: true }
     }
+
     candidate = win32.dirname(candidate)
   }
 }

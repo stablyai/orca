@@ -14,13 +14,18 @@ vi.mock('electron', () => ({
 }))
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const TAB_ID = 'tab-1'
+
 const WORKTREE_ID = 'wt-1'
+
 const PTY_ID = 'pty-1'
 
 // Captured from Claude Code 2.1.228 while it read this repository's package.json.
 const SPINNER_ONLY_TITLE = '◑ Check package version in package.json'
+
 const SPINNER_WITH_IDENTITY_TITLE = '◐ Claude Code'
+
 const BRAILLE_SPINNER_ONLY_TITLE = '⠂ Deploying release 4.2'
 
 async function createRuntimeWithTitle(
@@ -34,9 +39,11 @@ async function createRuntimeWithTitle(
   getForegroundProcess: ReturnType<typeof vi.fn>
 }> {
   const runtime = new OrcaRuntimeService(null)
+
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
+
   vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: WORKTREE_ID,
     path: '/repo/app',
@@ -51,6 +58,7 @@ async function createRuntimeWithTitle(
     kill: () => true,
     getForegroundProcess
   })
+
   const terminal = await runtime.createTerminal(`id:${WORKTREE_ID}`, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
@@ -64,6 +72,7 @@ async function createRuntimeWithTitle(
         }
       : {})
   })
+
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
     tabs: [
@@ -86,6 +95,7 @@ async function createRuntimeWithTitle(
       }
     ]
   })
+
   return { runtime, handle: terminal.handle, getForegroundProcess }
 }
 
@@ -94,6 +104,7 @@ const AUTHORIZED = 'authorized'
 async function guardedSendResult(runtime: OrcaRuntimeService, handle: string): Promise<string> {
   try {
     await assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
+
     return AUTHORIZED
   } catch (error) {
     return error instanceof Error ? error.message : String(error)
@@ -134,6 +145,7 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
       null,
       'claude'
     )
+
     expect(
       (
         runtime as unknown as {
@@ -163,6 +175,7 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
 
   it('does not carry managed Claude identity into a replacement PTY incarnation', async () => {
     const { runtime, handle } = await createRuntimeWithTitle(SPINNER_ONLY_TITLE, null, 'claude')
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<
@@ -171,6 +184,7 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
         >
       }
     ).ptysById.get(PTY_ID)
+
     expect(pty).toMatchObject({
       incarnationId: 'initial-incarnation',
       launchIncarnationId: 'initial-incarnation'
@@ -191,9 +205,11 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
       incarnationId: 'replacement-incarnation'
     })
     const replacementHandle = runtime.getTerminalHandleForPaneKey(`${TAB_ID}:${LEAF_ID}`)
+
     if (replacementHandle === null) {
       throw new Error('replacement terminal handle was not registered')
     }
+
     expect(replacementHandle).not.toBe(handle)
     await expect(runtime.getTerminalAgentStatus(replacementHandle)).resolves.toMatchObject({
       isRunningAgent: false

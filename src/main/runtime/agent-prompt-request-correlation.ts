@@ -32,25 +32,32 @@ export class AgentPromptRequestCorrelation {
 
   register(ptyId: string, request: AgentPromptRequestBaseline): void {
     const requests = this.requestsByPty.get(ptyId) ?? []
+
     const existing = requests.findIndex(
       (candidate) =>
         candidate.generation === request.generation && candidate.requestId === request.requestId
     )
+
     if (existing !== -1) {
       requests.splice(existing, 1)
     }
+
     requests.push(request)
+
     if (requests.length > REQUESTS_PER_PTY_LIMIT) {
       requests.splice(0, requests.length - REQUESTS_PER_PTY_LIMIT)
     }
+
     this.requestsByPty.set(ptyId, requests)
   }
 
   forget(ptyId: string, generation: number, requestId: string): void {
     const requests = this.requestsByPty.get(ptyId)
+
     const index = requests?.findIndex(
       (candidate) => candidate.generation === generation && candidate.requestId === requestId
     )
+
     if (requests && index !== undefined && index !== -1) {
       requests.splice(index, 1)
     }
@@ -77,10 +84,13 @@ export class AgentPromptRequestCorrelation {
     ) {
       return false
     }
+
     const requests = this.requestsByPty.get(ptyId) ?? []
+
     const request = requests.find(
       (candidate) => candidate.generation === generation && candidate.requestId === requestId
     )
+
     // A receipt restored after a runtime restart has no in-memory registration;
     // leave it queued rather than attributing an unrelated turn to it.
     if (
@@ -90,7 +100,9 @@ export class AgentPromptRequestCorrelation {
     ) {
       return false
     }
+
     let claim: TurnStartClaim | null
+
     if (evidence.kind === 'lifecycle') {
       this.allocateLifecycleClaims(ptyId, generation, evidence)
       claim = this.findClaim(ptyId, generation, requestId)
@@ -99,20 +111,27 @@ export class AgentPromptRequestCorrelation {
         (candidate) =>
           candidate.generation === generation && isTurnStartAfterBaseline(evidence, candidate)
       )
+
       if (first && first.requestId !== requestId) {
         return false
       }
+
       claim = this.nextFreeClaim(ptyId, generation, baselineWorkingSequence, evidence, requestId)
     }
+
     if (!claim) {
       return false
     }
+
     const owner = this.claimOwner(ptyId, claim)
+
     if (owner && owner !== requestId) {
       return false
     }
+
     this.recordClaim(ptyId, claim)
     this.forget(ptyId, generation, requestId)
+
     return true
   }
 
@@ -129,6 +148,7 @@ export class AgentPromptRequestCorrelation {
       ) {
         continue
       }
+
       // A candidate with a later baseline can run out of free sequences while an
       // earlier-baselined one still has room, so keep scanning the queue.
       const claim = this.nextFreeClaim(
@@ -138,6 +158,7 @@ export class AgentPromptRequestCorrelation {
         evidence,
         candidate.requestId
       )
+
       if (claim) {
         this.recordClaim(ptyId, claim)
       }
@@ -167,20 +188,24 @@ export class AgentPromptRequestCorrelation {
 
   private recordClaim(ptyId: string, claim: TurnStartClaim): void {
     const claims = this.claimsByPty.get(ptyId) ?? []
+
     const existing = claims.findIndex(
       (candidate) =>
         candidate.generation === claim.generation &&
         candidate.kind === claim.kind &&
         candidate.value === claim.value
     )
+
     if (existing === -1) {
       claims.push(claim)
+
       if (claims.length > REQUESTS_PER_PTY_LIMIT) {
         claims.splice(0, claims.length - REQUESTS_PER_PTY_LIMIT)
       }
     } else {
       claims[existing] = claim
     }
+
     this.claimsByPty.set(ptyId, claims)
   }
 
@@ -194,15 +219,19 @@ export class AgentPromptRequestCorrelation {
     if (evidence.kind === 'hook') {
       return { generation, kind: 'hook', value: evidence.workingStartedAt, requestId }
     }
+
     const claimed = new Set(
       (this.claimsByPty.get(ptyId) ?? [])
         .filter((claim) => claim.generation === generation && claim.kind === 'lifecycle')
         .map((claim) => claim.value)
     )
+
     let sequence = baselineWorkingSequence + 1
+
     while (claimed.has(sequence)) {
       sequence += 1
     }
+
     return sequence <= evidence.workingSequence
       ? { generation, kind: 'lifecycle', value: sequence, requestId }
       : null

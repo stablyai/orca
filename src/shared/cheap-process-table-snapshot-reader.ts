@@ -25,16 +25,20 @@ const cheapProcessTableReader = createProcessTableSnapshotReader<CheapProcessTab
       timeoutMs: PS_TIMEOUT_MS,
       maxOutputBytes: PS_MAX_BUFFER_BYTES
     })
+
     // A ceiling hit is truncation, not absence: name it in the domain vocabulary.
     if (result.outputTruncated) {
       throw new ProcessTableCaptureError('capture_truncated')
     }
+
     if (result.timedOut) {
       throw new ProcessTableCaptureError('capture_timeout')
     }
+
     if (result.code !== 0) {
       throw new ProcessTableCaptureError(`ps_exit_${result.code ?? result.signal ?? 'unknown'}`)
     }
+
     return parseCheapProcessTableRows(result.stdout)
   },
   now: () => Date.now()

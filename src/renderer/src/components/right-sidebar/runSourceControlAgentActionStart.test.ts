@@ -76,11 +76,13 @@ describe('runSourceControlAgentActionStart', () => {
       delivered: boolean
       failureNotified: boolean
     }) => void = () => {}
+
     const promptDeliveryResult = new Promise<{ delivered: boolean; failureNotified: boolean }>(
       (resolve) => {
         resolveDelivery = resolve
       }
     )
+
     const onLaunchAccepted = vi.fn()
     const onLaunchAborted = vi.fn()
     mocks.launchAgentInNewTab.mockReturnValue({

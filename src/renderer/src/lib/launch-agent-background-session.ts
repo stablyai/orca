@@ -52,12 +52,15 @@ export async function launchAgentBackgroundSession(
   // Folder workspaces exist only in getKnownWorktreeById (#2989).
   const worktree = store.getKnownWorktreeById(worktreeId)
   const repo = worktree ? store.repos.find((entry) => entry.id === worktree.repoId) : null
+
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
+
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+
   // Folder launch ownership cannot be derived from a repo row (#2989).
   const launchHost = resolveAgentBackgroundLaunchHost({
     store,
@@ -65,7 +68,9 @@ export async function launchAgentBackgroundSession(
     worktreePath: worktree.path,
     repo
   })
+
   const preflight = requireTuiAgentConfig(agent).preflightTrust
+
   if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
@@ -77,17 +82,21 @@ export async function launchAgentBackgroundSession(
       // Best-effort: the user can still accept the trust prompt.
     }
   }
+
   const { platform: launchPlatform, isRemote } = launchHost
+
   const startupShell = resolveLocalWindowsAgentStartupShell({
     platform: launchPlatform,
     isRemote,
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
+
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
 
   const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
+
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
@@ -99,6 +108,7 @@ export async function launchAgentBackgroundSession(
     isRemote,
     allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
   })
+
   if (!startupPlan) {
     return null
   }
@@ -112,49 +122,63 @@ export async function launchAgentBackgroundSession(
       launchConfig: startupPlan.launchConfig,
       env: startupPlan.env
     })
+
   let paneKey = makePaneKey(reservedTabId, leafId)
   const sshConnectionId = launchHost.connectionId
+
   const sshStartupDelivery = createSshBackgroundStartupDelivery({
     command: sshConnectionId ? startupPlan.launchCommand : null,
     waitForShellReady:
       Boolean(sshConnectionId) && sshBackgroundLaunchWaitsForShellReady(startupPlan),
     write: (ptyId, data) => window.api.pty.write(ptyId, data)
   })
+
   // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
   )
+
   let ptyId = '',
     runtimeTerminalHandle: string | null = null
+
   // What the local spawn answered and later steps still need: which lifetime of `ptyId` this launch
   // owns, and the config the host actually launched. Both absent for a runtime terminal.
   let spawned: { incarnationId?: string; launchConfig?: typeof startupPlan.launchConfig } = {}
   let tab: ReturnType<typeof store.createTab> | null = null
+
   let exitHandled = false,
     eagerPtyBuffer: EagerPtyHandle | null = null
+
   let terminalOwnership: ReturnType<typeof bindAutomationTerminal> = null
+
   let unsubscribeExit = (): void => {},
     unsubscribeData = (): void => {}
+
   const handleExit = (exitPtyId: string, code: number): void => {
     if (exitHandled) {
       return
     }
+
     exitHandled = true
     unsubscribeExit()
     unsubscribeData()
     sshStartupDelivery.clear()
+
     if (tab) {
       settleTabPtyBinding(tab.id, exitPtyId, code)
     }
+
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
   }
+
   // Why: local/SSH status facts already pass through main's authoritative
   // scanner; remote-runtime bytes still need this renderer-side store write.
   const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({
     settings: store.settings,
     runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null
   })
+
   const agentStatusConsumer = createBackgroundAgentStatusConsumer({
     paneKey,
     launchToken,
@@ -164,12 +188,14 @@ export async function launchAgentBackgroundSession(
     getPtyId: () => ptyId,
     onAgentStatus
   })
+
   const handleData = (data: string): void => {
     data = sshStartupDelivery.handleData(data)
     onData?.(data)
     sshStartupDelivery.schedule(ptyId)
     agentStatusConsumer.consume(data)
   }
+
   try {
     if (runtimeTarget.kind === 'environment') {
       // Why: runtime environments execute on the server; using local pty.spawn
@@ -193,6 +219,7 @@ export async function launchAgentBackgroundSession(
           ...(title ? { title } : {})
         }
       })
+
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
@@ -219,10 +246,12 @@ export async function launchAgentBackgroundSession(
           request_kind: 'new'
         }
       })
+
       ptyId = result.id
       spawned = result
       sshStartupDelivery.applyHostShellReadyArmed(result.shellReadyArmed)
     }
+
     const adopted = await adoptAgentBackgroundSessionTab({
       store,
       worktreeId,
@@ -240,16 +269,20 @@ export async function launchAgentBackgroundSession(
       },
       ...(title ? { title } : {})
     })
+
     if (!adopted) {
       return null
     }
+
     tab = adopted.tab
     paneKey = adopted.paneKey
     terminalOwnership = adopted.terminalOwnership
+
     if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
       // Why: Command Code does not expose a prompt-start hook; seed working for
       // hidden prompt launches so sidebar/activity surfaces do not stay idle.
       const routing = agentStatusConsumer.resolveRouting()
+
       if (routing) {
         const observation = agentStatusConsumer.observeLaunchIngress()
         store.setAgentStatus(
@@ -267,6 +300,7 @@ export async function launchAgentBackgroundSession(
       if (!runtimeTerminalHandle) {
         throw new Error('Runtime terminal id is invalid.')
       }
+
       unsubscribeData = await subscribeToRuntimeTerminalData(
         store.settings,
         ptyId,
@@ -291,6 +325,7 @@ export async function launchAgentBackgroundSession(
       // alive regardless of whether the tab is hidden or mounted.
       unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
     }
+
     sshStartupDelivery.armFallback(ptyId)
 
     // Why: bind the explicit PTY and ownership before mount; an earlier mount
@@ -311,19 +346,24 @@ export async function launchAgentBackgroundSession(
     runBestEffortAgentBackgroundCleanups(unsubscribeExit, unsubscribeData)
     runBestEffortAgentBackgroundCleanups(() => eagerPtyBuffer?.dispose())
     runBestEffortAgentBackgroundCleanups(() => sshStartupDelivery.clear())
+
     if (createdTab) {
       runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(createdTab.id, ptyId))
     }
+
     runBestEffortAgentBackgroundCleanups(() => store.clearAgentLaunchConfig(paneKey))
+
     if (ptyId) {
       await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle })
     }
+
     if (createdTab) {
       // Cleanup closes must not enter the reopen stack.
       runBestEffortAgentBackgroundCleanups(() =>
         store.closeTab(createdTab.id, { recordInteraction: false, reason: 'cleanup' })
       )
     }
+
     throw error
   }
 }

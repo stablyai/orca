@@ -19,6 +19,7 @@ export async function removeSshTargetWithBestEffortCleanup(
     await api.terminateSessions({ targetId: id })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+
     if (message.includes(SSH_TERMINATE_RECONNECT_REQUIRED)) {
       try {
         await api.connect({ targetId: id })
@@ -33,5 +34,6 @@ export async function removeSshTargetWithBestEffortCleanup(
       console.warn('[ssh] Skipping remote session cleanup during target removal:', message)
     }
   }
+
   await api.removeTarget({ id })
 }

@@ -8,9 +8,13 @@ import { readSkillInstallReceipt } from './skill-install-provenance'
 import { recoverPendingSkillTransactions } from './skill-transaction-startup-recovery'
 
 const RUN_REAL_PROCESS = process.env.ORCA_REAL_PROCESS_SKILL_TEST === '1'
+
 const require = createRequire(import.meta.url)
+
 const vitestBin = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
+
 const childTest = resolve('src/main/skills/skill-process-termination-child.test.ts')
+
 const roots: string[] = []
 
 type CrashCase = {
@@ -40,11 +44,14 @@ const cases: CrashCase[] = [
 
 function boundedOutput(child: ChildProcess): { value: () => string } {
   let output = ''
+
   const append = (chunk: Buffer): void => {
     output = `${output}${chunk.toString('utf8')}`.slice(-8_192)
   }
+
   child.stdout?.on('data', append)
   child.stderr?.on('data', append)
+
   return { value: () => output }
 }
 
@@ -54,15 +61,19 @@ async function waitForMarker(
   output: () => string
 ): Promise<number> {
   const deadline = Date.now() + 15_000
+
   while (Date.now() < deadline) {
     if (await stat(path).catch(() => null)) {
       const marker = await readFile(path, 'utf8').catch(() => '')
+
       try {
         const parsed: unknown = JSON.parse(marker)
+
         const pid =
           parsed && typeof parsed === 'object' && 'pid' in parsed
             ? (parsed as { pid?: unknown }).pid
             : null
+
         if (typeof pid === 'number' && Number.isInteger(pid) && pid > 0) {
           return pid
         }
@@ -70,17 +81,21 @@ async function waitForMarker(
         // The marker may be visible before its synced write completes.
       }
     }
+
     if (child.exitCode !== null) {
       throw new Error(`crash-child-exited-${child.exitCode}: ${output()}`)
     }
+
     await new Promise<void>((resolveWait) => setTimeout(resolveWait, 20))
   }
+
   throw new Error(`crash-child-marker-timeout: ${output()}`)
 }
 
 function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'EPERM'
@@ -89,12 +104,15 @@ function processIsAlive(pid: number): boolean {
 
 async function waitForProcessExit(pid: number): Promise<void> {
   const deadline = Date.now() + 5_000
+
   while (Date.now() < deadline) {
     if (!processIsAlive(pid)) {
       return
     }
+
     await new Promise<void>((resolveWait) => setTimeout(resolveWait, 20))
   }
+
   throw new Error(`crash-transaction-process-still-running-${pid}`)
 }
 
@@ -102,6 +120,7 @@ async function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise
   if (child.exitCode !== null || child.signalCode !== null) {
     return true
   }
+
   return new Promise<boolean>((resolveExit) => {
     const timeout = setTimeout(() => resolveExit(false), timeoutMs)
     child.once('exit', () => {
@@ -113,6 +132,7 @@ async function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise
 
 async function terminateAtBoundary(root: string, crashCase: CrashCase): Promise<void> {
   const marker = join(root, 'crash-ready')
+
   const child = spawn(
     process.execPath,
     [
@@ -141,24 +161,30 @@ async function terminateAtBoundary(root: string, crashCase: CrashCase): Promise<
       windowsHide: true
     }
   )
+
   const output = boundedOutput(child)
   const transactionPid = await waitForMarker(marker, child, output.value)
   let transactionError: unknown = null
+
   try {
     process.kill(transactionPid, 'SIGKILL')
     await waitForProcessExit(transactionPid)
   } catch (error) {
     transactionError = error
   }
+
   if (child.exitCode === null && child.signalCode === null) {
     child.kill('SIGKILL')
   }
+
   if (!(await waitForChildExit(child, 5_000))) {
     throw new Error(`crash-coordinator-kill-failed: ${output.value()}`)
   }
+
   if (transactionError) {
     throw transactionError
   }
+
   if (processIsAlive(transactionPid)) {
     throw new Error(`crash-transaction-kill-failed-${transactionPid}: ${output.value()}`)
   }
@@ -188,12 +214,15 @@ describe.runIf(RUN_REAL_PROCESS)('skill process termination recovery', () => {
 
       expect(report.failures).toEqual([])
       expect(Boolean(receipt)).toBe(Boolean(markdown))
+
       if (markdown) {
         expect(markdown).toContain(receipt?.versionId === 'version_2' ? '# Second' : '# First')
       }
+
       for (const directory of ['journals', 'removal-journals', 'extraction-journals', 'locks']) {
         expect(await directoryIsEmpty(join(stateDirectory, directory)), directory).toBe(true)
       }
+
       expect(
         (await readdir(join(root, 'skills')).catch(() => [])).filter((name) =>
           name.includes('.orca-')

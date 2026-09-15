@@ -63,10 +63,13 @@ describe('installWindowVisibilityInterval', () => {
     let visibilityState: DocumentVisibilityState = 'hidden'
     const documentListeners = new Map<string, () => void>()
     const intervalCallbacks: (() => void)[] = []
+
     const setIntervalMock = vi.fn((callback: () => void) => {
       intervalCallbacks.push(callback)
+
       return 1 as unknown as ReturnType<typeof setInterval>
     })
+
     const run = vi.fn()
     const runOnVisible = vi.fn()
 
@@ -140,6 +143,7 @@ describe('installWindowVisibilityInterval', () => {
       removeEventListener: vi.fn()
     })
     const runs = [vi.fn(), vi.fn(), vi.fn()]
+
     const cleanups = runs.map((run, index) =>
       installWindowVisibilityInterval({
         run,
@@ -208,6 +212,7 @@ describe('installWindowVisibilityInterval', () => {
       jitterOnVisible: true,
       jitterFn: () => 400
     })
+
     visibilityState = 'visible'
     visibilityListener?.()
     cleanup()

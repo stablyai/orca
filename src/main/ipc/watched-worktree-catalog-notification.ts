@@ -21,9 +21,11 @@ export function notifyWatchedWorktreeCatalogChanged(
   connectionId?: string
 ): void {
   notifyWorktreesChanged(mainWindow, repoId)
+
   if (connectionId) {
     return
   }
+
   try {
     remoteClientNotifier?.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   } catch (error) {

@@ -14,6 +14,7 @@ export async function readCodexRolloutSessionMetaId(
   priority: WslTranscriptFsTaskPriority = 'exact'
 ): Promise<string | null> {
   let head: Buffer
+
   try {
     // Gated, not raw fs: AI Vault hands this every scan candidate, including
     // `\\wsl.localhost\...` rollouts, so a stalled distro must fail on the
@@ -27,12 +28,16 @@ export async function readCodexRolloutSessionMetaId(
     if (signal?.aborted) {
       throw error
     }
+
     return null
   }
+
   const firstLine = head.toString('utf8').split(/\r?\n/, 1)[0]?.trim()
+
   if (!firstLine) {
     return null
   }
+
   try {
     const record = JSON.parse(firstLine) as {
       type?: unknown
@@ -41,9 +46,11 @@ export async function readCodexRolloutSessionMetaId(
       thread_id?: unknown
       payload?: { id?: unknown; session_id?: unknown; thread_id?: unknown }
     }
+
     if (record.type !== 'session_meta') {
       return null
     }
+
     const id =
       record.payload?.id ??
       record.payload?.session_id ??
@@ -51,6 +58,7 @@ export async function readCodexRolloutSessionMetaId(
       record.id ??
       record.session_id ??
       record.thread_id
+
     return typeof id === 'string' && id.length > 0 ? id : null
   } catch {
     return null

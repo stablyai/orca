@@ -11,7 +11,9 @@ vi.mock('../../lib/worktree-activation', () => ({
 }))
 
 const reposAdd = vi.fn()
+
 const worktreesList = vi.fn()
+
 const onboardingGet = vi.fn()
 
 beforeEach(() => {

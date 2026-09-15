@@ -35,6 +35,7 @@ type SessionHostPartitionOperationsRuntime = Pick<
 >
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
+
 type SessionHostPartitionOperationsContext = {
   runtime: SessionHostPartitionOperationsRuntime
   scheduling: WriteSchedulingOperations
@@ -54,12 +55,14 @@ export class SessionHostPartitionOperations {
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
     const resolved = resolveHostId(hostId)
+
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       return (
         this[sessionHostPartitionOperationsContext].runtime.state.workspaceSession ??
         getDefaultWorkspaceSession()
       )
     }
+
     return (
       this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[
         resolved
@@ -69,14 +72,17 @@ export class SessionHostPartitionOperations {
 
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+
     for (const key of Object.keys(
       this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId ?? {}
     )) {
       const hostId = normalizeExecutionHostId(key)
+
       if (hostId) {
         hostIds.add(hostId)
       }
     }
+
     return [...hostIds]
   }
 
@@ -127,16 +133,21 @@ export function removeWorkspaceSessionOwnerInPartition(
   if (!hasPersistedWorkspaceSession(owner, resolved)) {
     return
   }
+
   const current = owner.getWorkspaceSession(resolved)
+
   const session = removeWorkspaceSessionOwner(current, worktreeId, {
     advanceTerminalTopologyRevision: options.advanceTerminalTopologyRevision ?? true
   })
+
   if (!session) {
     return
   }
+
   // Why: a session was the last thing pinning some dangling metadata row; releasing it is the
   // evidence the metadata prune waits for, and there is no other signal that it happened (#17775).
   invalidateLocalWorktreeMetadataPruneInputs()
+
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
   } else {
@@ -146,6 +157,7 @@ export function removeWorkspaceSessionOwnerInPartition(
       [resolved]: session
     }
   }
+
   scheduleSave(owner[sessionHostPartitionOperationsContext].scheduling)
 }
 
@@ -164,6 +176,7 @@ export function partitionHasOtherRepoWorktreeTabs(
 ): boolean {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const tabsByWorktree = owner.getWorkspaceSession(hostId).tabsByWorktree ?? {}
+
   return Object.entries(tabsByWorktree).some(
     ([id, tabs]) =>
       id !== worktreeId && getRepoIdFromWorktreeId(id) === repoId && (tabs?.length ?? 0) > 0
@@ -177,6 +190,7 @@ export function setHostWorkspaceSession(
 ): void {
   const prior =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
   // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
   session = preserveRuntimeAuthoredWorkspaceSessionFields(session, prior)
@@ -191,6 +205,7 @@ export function setHostWorkspaceSession(
       executionHostId: hostId
     }
   )
+
   // Why here too: the load-side drop only survives until the next full snapshot write. A renderer
   // or runtime payload that still carries local's globals would re-inject them into this partition.
   const pruned = withoutRedundantGlobalFields(
@@ -202,6 +217,7 @@ export function setHostWorkspaceSession(
     ),
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession
   )
+
   owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
     ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
     [hostId]: pruned

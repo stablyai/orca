@@ -4,6 +4,7 @@ import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutdown-output-queue'
 
 const BYTE_LIMIT = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+
 const CHUNK_SIZE = 64
 
 class ReferenceShutdownOutputQueue {
@@ -15,6 +16,7 @@ class ReferenceShutdownOutputQueue {
     const clamped = clampUtf8Tail(event.data, BYTE_LIMIT)
     this.events.push({ ...event, data: clamped.data })
     this.retainedBytes += clamped.bytes
+
     while (this.retainedBytes > BYTE_LIMIT && this.events.length > 1) {
       this.retainedBytes -= this.encoder.encode(this.events.shift()?.data ?? '').byteLength
     }
@@ -24,37 +26,46 @@ class ReferenceShutdownOutputQueue {
     const events = this.events
     this.events = []
     this.retainedBytes = 0
+
     return events
   }
 }
 
 function createSeededRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state ^= state << 13
     state ^= state >>> 17
     state ^= state << 5
+
     return state >>> 0
   }
 }
 
 function createDifferentialData(value: number): string {
   const bucket = value % 100
+
   if (bucket < 8) {
     return ''
   }
+
   if (bucket < 48) {
     return String.fromCharCode(65 + (value % 26)).repeat(value % 513)
   }
+
   if (bucket < 70) {
     return '界'.repeat(value % 257)
   }
+
   if (bucket < 88) {
     return '😀'.repeat(value % 129)
   }
+
   if (bucket < 96) {
     return `\ud800${'x'.repeat(value % 511)}`
   }
+
   return String.fromCharCode(65 + (value % 26)).repeat(64 * 1024)
 }
 
@@ -83,6 +94,7 @@ describe('PTY shutdown output queue', () => {
           }
         }
       })
+
       for (let index = 0; index < 1_536; index += 1) {
         queue.enqueue({ kind: 'data', data: 'x'.repeat(1_024), meta: { seq: index } })
       }
@@ -147,6 +159,7 @@ describe('PTY shutdown output queue', () => {
 
   it('retains zero-byte event boundaries without imposing a count cap', () => {
     const queue = new PtyShutdownOutputQueue()
+
     for (let index = 0; index < 4_097; index += 1) {
       queue.enqueue({ kind: 'data', data: '', meta: { seq: index, transformed: true } })
     }
@@ -168,6 +181,7 @@ describe('PTY shutdown output queue', () => {
   it('repeatedly compacts cleared prefixes and resets transferred storage', () => {
     const queue = new PtyShutdownOutputQueue()
     const fullEvent = '界'.repeat(Math.floor(BYTE_LIMIT / 3))
+
     for (let index = 0; index < 513; index += 1) {
       queue.enqueue({ kind: 'replay', data: fullEvent })
       const storage = queue.getStorageForTest()
@@ -195,6 +209,7 @@ describe('PTY shutdown output queue', () => {
 
   it('releases dead backing storage under release-scale one-byte churn', () => {
     const queue = new PtyShutdownOutputQueue()
+
     for (let index = 0; index < BYTE_LIMIT + CHUNK_SIZE * 3 + 17; index += 1) {
       queue.enqueue({ kind: 'replay', data: 'x' })
     }
@@ -211,6 +226,7 @@ describe('PTY shutdown output queue', () => {
   it('repeatedly compacts the consumed chunk cursor', () => {
     const queue = new PtyShutdownOutputQueue()
     const data = 'x'.repeat(BYTE_LIMIT / CHUNK_SIZE)
+
     for (let index = 0; index < CHUNK_SIZE; index += 1) {
       queue.enqueue({ kind: 'replay', data })
     }
@@ -219,6 +235,7 @@ describe('PTY shutdown output queue', () => {
       for (let index = 0; index < CHUNK_SIZE * CHUNK_SIZE; index += 1) {
         queue.enqueue({ kind: 'replay', data })
       }
+
       expect(queue.getStorageForTest()).toEqual({
         backingLength: CHUNK_SIZE,
         byteBackingLength: 0,
@@ -239,9 +256,11 @@ describe('PTY shutdown output queue', () => {
     reference.enqueue(unicode)
     const returned = queue.takeAll()[0]
     const referenceReturned = reference.takeAll()[0]
+
     if (!returned || !referenceReturned) {
       throw new Error('Expected queued events')
     }
+
     returned.data = 'x'
     referenceReturned.data = 'x'
     queue.enqueue(returned)
@@ -265,6 +284,7 @@ describe('PTY shutdown output queue', () => {
     for (let index = 0; index < 5_000; index += 1) {
       const value = random()
       const data = createDifferentialData(value)
+
       const event: PtyShutdownOutputEvent =
         value % 3 === 0
           ? { kind: 'replay', data }
@@ -279,6 +299,7 @@ describe('PTY shutdown output queue', () => {
                 ...(value % 97 === 0 ? { droppedOutput: true } : {})
               }
             }
+
       queue.enqueue(event)
       reference.enqueue(event)
 

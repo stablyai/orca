@@ -4,6 +4,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const REPO_ID = 'repo'
 
 function makeSession(worktreeId: string): WorkspaceSessionState {
@@ -52,6 +53,7 @@ describe('headless mobile session hydration repo gate', () => {
 
   it('does not read the repo inventory for an unparseable worktree id', async () => {
     const getRepos = vi.fn(() => [{ id: REPO_ID, path: '/repo', name: 'repo' }])
+
     const runtime = new OrcaRuntimeService({
       getWorkspaceSession: () => makeSession(FLOATING_TERMINAL_WORKTREE_ID),
       // A separator-less id is validated against getRepo (singular) first.

@@ -17,17 +17,23 @@ export function useTerminalPanePasteListeners(controller: TerminalPaneCloseContr
     if (!isActive) {
       return
     }
+
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     const isMac = navigator.userAgent.includes('Mac')
+
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'
       : navigator.userAgent.includes('Windows')
         ? 'win32'
         : 'linux'
+
     const execution = createTerminalPanePasteExecution(controller, shortcutPlatform)
+
     return registerTerminalPanePasteListeners({
       container,
       controller,

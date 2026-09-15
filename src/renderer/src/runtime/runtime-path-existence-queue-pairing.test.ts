@@ -13,6 +13,7 @@ import {
 } from '../../../shared/protocol-version'
 
 installRuntimeFileClientEnvironment()
+
 for (const mode of ['scalar', 'queue', 'legacy', 'missing-method'] as const) {
   it(`${mode} retains the pairing owner when a hover waits for its queued flush`, async () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'owner', createdAt: 10, pairingRevision: 10 }])
@@ -29,31 +30,38 @@ for (const mode of ['scalar', 'queue', 'legacy', 'missing-method'] as const) {
           _meta: { runtimeId: 'owner-runtime' }
         }
       }
+
       return runtimeEnvironmentCall(args)
     })
     runtimeEnvironmentCall.mockImplementation(async (args) => {
       if (mode === 'missing-method' && args.method === 'files.pathsExist') {
         replaceRuntimeEnvironmentRevisions([{ id: 'owner', createdAt: 10, pairingRevision: 30 }])
+
         return {
           id: 'missing',
           ok: false,
           error: { code: 'method_not_found', message: 'Unknown method' }
         }
       }
+
       return { id: 'result', ok: true, result: [{ exists: true }] }
     })
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'owner' },
       worktreeId: 'folder-1',
       worktreePath: '/folder'
     }
+
     const pending =
       mode === 'scalar'
         ? runtimePathExists(context, '/folder/file.ts')
         : createTerminalPathExistenceBatch()(context, '/folder/file.ts', true)
+
     replaceRuntimeEnvironmentRevisions([{ id: 'owner', createdAt: 10, pairingRevision: 20 }])
     await pending
     expect(runtimeEnvironmentCall.mock.calls.length).toBeGreaterThan(0)
+
     for (const [request] of runtimeEnvironmentCall.mock.calls) {
       expect(request.expectedEnvironmentPairingRevision).toBe(10)
     }
@@ -76,11 +84,13 @@ it('keeps two queued hovers on distinct revisions of the same environment', asyn
       : runtimeEnvironmentCall(args)
   )
   runtimeEnvironmentCall.mockResolvedValue({ id: 'result', ok: true, result: [{ exists: true }] })
+
   const context = {
     settings: { activeRuntimeEnvironmentId: 'owner' },
     worktreeId: 'folder-1',
     worktreePath: '/folder'
   }
+
   const enqueue = createTerminalPathExistenceBatch()
   replaceRuntimeEnvironmentRevisions([{ id: 'owner', createdAt: 10, pairingRevision: 10 }])
   const first = enqueue(context, '/folder/file.ts', true)

@@ -6,8 +6,11 @@ import type { AppMemory, UsageValues } from '../../../../shared/process-stats-ty
 import type { Metric } from './resource-usage-merge-types'
 
 export const METRIC_COLUMNS_CLS = 'flex items-center shrink-0 tabular-nums'
+
 export const CPU_COLUMN_CLS = 'w-12 text-right'
+
 export const MEM_COLUMN_CLS = 'w-16 text-right'
+
 // Why: every row and the header reserve this trailing gutter so CPU/Memory columns align whether or not the row has a kill-X.
 export const ROW_TRAILING_GUTTER_CLS = 'w-5 shrink-0 flex items-center justify-end'
 
@@ -17,9 +20,11 @@ export function formatMemory(bytes: number): string {
   if (bytes < 1024 * 1024) {
     return `${Math.round(bytes / 1024)} KB`
   }
+
   if (bytes < 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
+
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
@@ -46,30 +51,37 @@ type SparklineProps = {
 function SparklineImpl({ samples, width = 48, height = 14 }: SparklineProps): React.JSX.Element {
   const points = useMemo(() => {
     const safe = Array.isArray(samples) ? samples : []
+
     if (safe.length < 2) {
       const midY = (height / 2).toFixed(1)
+
       return `0,${midY} ${width},${midY}`
     }
 
     let min = safe[0]
     let max = safe[0]
+
     for (const v of safe) {
       if (v < min) {
         min = v
       }
+
       if (v > max) {
         max = v
       }
     }
+
     const range = max - min || 1
     const stepX = width / (safe.length - 1)
 
     const out: string[] = []
+
     for (let i = 0; i < safe.length; i++) {
       const x = (i * stepX).toFixed(1)
       const y = (height - ((safe[i] - min) / range) * height).toFixed(1)
       out.push(`${x},${y}`)
     }
+
     return out.join(' ')
   }, [samples, width, height])
 
@@ -97,19 +109,24 @@ export const Sparkline = memo(SparklineImpl, (a, b) => {
   if (a.width !== b.width || a.height !== b.height) {
     return false
   }
+
   const sa = Array.isArray(a.samples) ? a.samples : []
   const sb = Array.isArray(b.samples) ? b.samples : []
+
   if (sa === sb) {
     return true
   }
+
   if (sa.length !== sb.length) {
     return false
   }
+
   for (let i = 0; i < sa.length; i++) {
     if (sa[i] !== sb[i]) {
       return false
     }
   }
+
   return true
 })
 
@@ -126,6 +143,7 @@ export function MetricPair({
 }): React.JSX.Element {
   const textCls = size === 'small' ? 'text-[11px]' : 'text-xs'
   const muted = cpu === null && memory === null
+
   return (
     <div
       className={cn(

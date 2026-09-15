@@ -12,23 +12,29 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../browser/browser-manager', () => ({
   browserManager: { attachGuestPolicies: mocks.attachGuestPolicies }
 }))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: { isAllowedPartition: mocks.isAllowedPartition }
 }))
+
 vi.mock('../plugins/plugin-panel-navigation-guard', () => ({
   registerPluginPanelNavigationGuard: mocks.registerPluginGuard
 }))
+
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: mocks.installNavigationPolicy
 }))
+
 vi.mock('../browser/browser-route-session-runtime', () => ({
   browserRouteSessionRegistry: { isAllowedPartition: () => false },
   browserRouteWebContentsRegistry: { attachGuest: mocks.attachRouteGuest }
 }))
+
 vi.mock('../browser/local-ssh-browser-partitions', () => ({
   isLocalSshBrowserPartition: () => false,
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
 }))
+
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
 }))
@@ -50,12 +56,15 @@ function installOnFakeWindow(): {
   webContents: { on: ReturnType<typeof vi.fn> }
 } {
   const handlers: Record<string, (...args: never[]) => void> = {}
+
   const webContents = {
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       handlers[event] = handler
     })
   }
+
   installMainWindowWebviewSecurity({ webContents } as never)
+
   return { handlers, webContents }
 }
 
@@ -94,6 +103,7 @@ describe('main window webview security', () => {
     const { handlers } = installOnFakeWindow()
     mocks.isAllowedPartition.mockReturnValue(true)
     const params = { src: 'https://example.com', preload: 'attacker.js' }
+
     const preferences: Record<string, unknown> = {
       partition: 'persist:orca-browser',
       preload: 'attacker.js',
@@ -134,6 +144,7 @@ describe('orca-preview scheme admission', () => {
     const grant = mintPreviewGrant()
     mocks.isAllowedPartition.mockReturnValue(false)
     const preventDefault = vi.fn()
+
     const preferences: Record<string, unknown> = {
       partition: DOC_PREVIEW_PARTITION,
       preload: 'attacker.js',
@@ -165,6 +176,7 @@ describe('orca-preview scheme admission', () => {
     const grant = mintPreviewGrant()
     mocks.isAllowedPartition.mockReturnValue(false)
     const params = { src: buildDocPreviewUrl(grant.id, 'index.html'), preload: 'attacker.js' }
+
     const preferences: Record<string, unknown> = {
       partition: DOC_PREVIEW_PARTITION,
       preload: 'attacker.js'

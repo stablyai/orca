@@ -15,6 +15,7 @@ export function createAutomationManagementActions({
   pageRefresh
 }: AutomationsPageActionContext) {
   const { updateSettings, openSettingsPage, openSettingsTarget, settings } = store
+
   const {
     selectAutomationId,
     selectedRowKey,
@@ -26,6 +27,7 @@ export function createAutomationManagementActions({
     deleteTarget,
     dontAskDeleteAgain
   } = local
+
   const {
     automationHostTargetFor,
     automationDispatchContext,
@@ -45,10 +47,13 @@ export function createAutomationManagementActions({
           automationHostTargetFor(row)
         )
     )
+
     reportOwnerAction(row.key, result.ok ? null : result.notice)
+
     if (result.ok) {
       invalidateRowHost(row.key, 'definition')
     }
+
     await pageRefresh.refresh()
   }
 
@@ -58,7 +63,9 @@ export function createAutomationManagementActions({
       { rowKey: row.key, automationId: row.automation.id },
       () => deleteAutomationForTarget(row.automation, automationHostTargetFor(row))
     )
+
     reportOwnerAction(row.key, result.ok ? null : result.notice)
+
     if (result.ok) {
       if (selectedRowKey === row.key) {
         selectAutomationId(null)
@@ -66,8 +73,10 @@ export function createAutomationManagementActions({
         setSelectedAutomationRunPageId(null)
         setActivePaneTab('overview')
       }
+
       invalidateRowHost(row.key, 'definition')
     }
+
     await pageRefresh.refresh()
   }
 
@@ -78,18 +87,23 @@ export function createAutomationManagementActions({
   const requestDeleteAutomation = (row: AutomationListRow): void => {
     if (settings?.skipDeleteAutomationConfirm) {
       void deleteAutomation(row)
+
       return
     }
+
     setDontAskDeleteAgain(false)
     setDeleteTarget(row)
   }
+
   const confirmDeleteAutomation = async (): Promise<void> => {
     if (!deleteTarget) {
       return
     }
+
     if (dontAskDeleteAgain) {
       persistDeleteAutomationPreference()
     }
+
     const target = deleteTarget
     setDeleteTarget(null)
     setDontAskDeleteAgain(false)

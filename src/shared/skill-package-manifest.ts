@@ -2,13 +2,19 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 
 export const SKILL_PACKAGE_SCHEMA_VERSION = 1 as const
+
 export const SKILL_PACKAGE_CONTENT_TYPE = 'application/vnd.orca.skill+tar+gzip'
+
 export const SKILL_PACKAGE_MAX_COMPRESSED_BYTES = 40 * 1024 * 1024
+
 export const SKILL_PACKAGE_MAX_MANIFEST_BYTES = 1024 * 1024
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
+
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
+
 const WINDOWS_RESERVED_SEGMENT = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 
 export const SkillPackageFileSchema = z
@@ -53,16 +59,20 @@ export function validateSkillPackagePath(path: string): void {
   if (path !== path.normalize('NFC') || Buffer.byteLength(path, 'utf8') > 1024) {
     throw new Error('skill-package-path-invalid')
   }
+
   if (path.startsWith('/') || path.includes('\\') || path.includes('\0')) {
     throw new Error('skill-package-path-invalid')
   }
+
   const segments = path.split('/')
+
   if (
     segments.length > 16 ||
     segments.some((segment) => segment === '' || segment === '.' || segment === '..')
   ) {
     throw new Error('skill-package-path-invalid')
   }
+
   for (const segment of segments) {
     if (
       Buffer.byteLength(segment, 'utf8') > 255 ||
@@ -93,34 +103,45 @@ export function computeSkillPackageDigest(files: readonly SkillPackageFile[]): s
 
 export function parseSkillPackageManifest(value: unknown): SkillPackageManifestV1 {
   const parsed = SkillPackageManifestV1Schema.safeParse(value)
+
   if (!parsed.success) {
     throw new Error('skill-package-manifest-invalid')
   }
+
   validateSkillPackageName(parsed.data.name)
   let previousPath: string | null = null
   const foldedPaths = new Set<string>()
   let totalBytes = 0
+
   for (const file of parsed.data.files) {
     validateSkillPackagePath(file.path)
+
     if (previousPath !== null && file.path <= previousPath) {
       throw new Error('skill-package-manifest-path-order')
     }
+
     previousPath = file.path
     const folded = file.path.toLocaleLowerCase('en-US')
+
     if (foldedPaths.has(folded)) {
       throw new Error('skill-package-case-collision')
     }
+
     foldedPaths.add(folded)
     totalBytes += file.size
+
     if (totalBytes > 32 * 1024 * 1024) {
       throw new Error('skill-package-total-size-limit')
     }
   }
+
   if (!parsed.data.files.some((file) => file.path === 'SKILL.md')) {
     throw new Error('skill-package-skill-markdown-required')
   }
+
   if (computeSkillPackageDigest(parsed.data.files) !== parsed.data.packageDigest) {
     throw new Error('skill-package-digest-mismatch')
   }
+
   return parsed.data
 }

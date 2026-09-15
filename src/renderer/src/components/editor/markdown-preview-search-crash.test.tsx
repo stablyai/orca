@@ -17,6 +17,7 @@ import {
 } from './markdown-preview-search'
 
 const SEARCH_HIGHLIGHT_NAME = 'markdown-preview-search-match'
+
 const ACTIVE_SEARCH_HIGHLIGHT_NAME = 'markdown-preview-search-active-match'
 
 function MarkdownBody({ parts }: { parts: readonly string[] }): React.JSX.Element {
@@ -48,9 +49,11 @@ describe('markdown preview search highlighting keeps react-owned DOM intact (cra
   function render(parts: readonly string[]): HTMLElement {
     act(() => root.render(<MarkdownBody parts={parts} />))
     const body = container.querySelector<HTMLElement>('.markdown-body')
+
     if (!body) {
       throw new Error('missing markdown body')
     }
+
     return body
   }
 
@@ -118,6 +121,7 @@ describe('markdown preview search painting with the CSS Custom Highlight API', (
     div.className = 'markdown-body'
     div.textContent = text
     document.body.append(div)
+
     return div
   }
 

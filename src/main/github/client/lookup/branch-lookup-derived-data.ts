@@ -22,6 +22,7 @@ export async function derivePRRefreshData(args: {
 }> {
   const { data, dataRepo, repoPath, connectionId, localGitOptions, ghOptions, executionScope } =
     args
+
   if (!data.stackMetadataChecked && dataRepo && args.usedExactNumberLookup) {
     try {
       data.stack = await getCachedGitHubPRStackSummary(
@@ -35,7 +36,9 @@ export async function derivePRRefreshData(args: {
       // Stack metadata is additive; exact PR lookup remains usable without it.
     }
   }
+
   const mergeable = derivePullRequestMergeable(data)
+
   const stack =
     data.stack && dataRepo
       ? await hydrateGitHubPRStack(
@@ -47,6 +50,7 @@ export async function derivePRRefreshData(args: {
           executionScope
         )
       : data.stack
+
   const stackMergeQueueRequired =
     stack && dataRepo
       ? (
@@ -58,6 +62,7 @@ export async function derivePRRefreshData(args: {
           )
         ).mergeQueueRequired
       : undefined
+
   const conflictSummary =
     !connectionId &&
     mergeable === 'CONFLICTING' &&
@@ -72,5 +77,6 @@ export async function derivePRRefreshData(args: {
           localGitOptions
         )
       : undefined
+
   return { mergeable, stack, stackMergeQueueRequired, conflictSummary }
 }

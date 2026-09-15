@@ -18,12 +18,15 @@ vi.mock('electron', () => ({
     }
   }
 }))
+
 vi.mock('./browser-renderer-trust', () => ({
   isTrustedBrowserRenderer: mocks.isTrustedBrowserRenderer
 }))
+
 vi.mock('../browser/doc-preview-guest-policy', () => ({
   reportDocPreviewLinkClick: mocks.reportDocPreviewLinkClick
 }))
+
 vi.mock('../browser/browser-manager', () => ({
   browserManager: { getGuestWebContentsId: mocks.getGuestWebContentsId }
 }))
@@ -56,33 +59,41 @@ const sender = { id: 7 }
 
 function mint(request: DocPreviewGrantRequest = REQUEST): { grantId: string; url: string } {
   const handler = mocks.handlers.get(DOC_PREVIEW_MINT_GRANT_CHANNEL)
+
   if (!handler) {
     throw new Error('mint handler not registered')
   }
+
   return handler({ sender }, request) as { grantId: string; url: string }
 }
 
 function revoke(grantId: string): boolean {
   const handler = mocks.handlers.get(DOC_PREVIEW_REVOKE_GRANT_CHANNEL)
+
   if (!handler) {
     throw new Error('revoke handler not registered')
   }
+
   return handler({ sender }, grantId) as boolean
 }
 
 function authorize(grantId: unknown, relativePath: unknown): boolean {
   const handler = mocks.handlers.get(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL)
+
   if (!handler) {
     throw new Error('authorize handler not registered')
   }
+
   return handler({ sender }, grantId, relativePath) as boolean
 }
 
 function reportLinkClick(url: unknown): void {
   const listener = mocks.listeners.get(DOC_PREVIEW_LINK_CLICK_CHANNEL)
+
   if (!listener) {
     throw new Error('link click listener not registered')
   }
+
   listener({ sender }, url)
 }
 

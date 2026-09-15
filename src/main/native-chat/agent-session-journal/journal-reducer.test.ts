@@ -44,9 +44,11 @@ function base(seq: number): { v: number; epoch: string; seq: number; fence: numb
 
 function fold(rows: JournalRow[]): JournalReducerState {
   const state = createJournalReducerState('session-1', EPOCH)
+
   for (const row of rows) {
     applyJournalRow(state, row)
   }
+
   return state
 }
 
@@ -56,6 +58,7 @@ describe('revisions and tombstones', () => {
       { kind: 'item', itemId: 'a', revision: 1, body: text('first'), ...base(1) },
       { kind: 'item', itemId: 'a', revision: 2, body: text('second'), ...base(2) }
     ])
+
     expect(renderJournalState(state).items[0]?.body).toEqual(text('second'))
   })
 
@@ -64,6 +67,7 @@ describe('revisions and tombstones', () => {
       { kind: 'item', itemId: 'a', revision: 2, body: text('second'), ...base(1) },
       { kind: 'item', itemId: 'a', revision: 1, body: text('first'), ...base(2) }
     ])
+
     expect(renderJournalState(state).items[0]?.body).toEqual(text('second'))
   })
 
@@ -72,6 +76,7 @@ describe('revisions and tombstones', () => {
       { kind: 'item', itemId: 'a', revision: 1, body: text('gone'), ...base(1) },
       { kind: 'tombstone', itemId: 'a', revision: 2, ...base(2) }
     ])
+
     expect(renderJournalState(state).items).toHaveLength(0)
   })
 
@@ -81,6 +86,7 @@ describe('revisions and tombstones', () => {
       { kind: 'tombstone', itemId: 'a', revision: 3, ...base(2) },
       { kind: 'item', itemId: 'a', revision: 2, body: text('stale'), ...base(3) }
     ])
+
     expect(renderJournalState(state).items).toHaveLength(0)
   })
 
@@ -90,6 +96,7 @@ describe('revisions and tombstones', () => {
       { kind: 'tombstone', itemId: 'a', revision: 2, ...base(2) },
       { kind: 'item', itemId: 'a', revision: 3, body: text('back'), ...base(3) }
     ])
+
     expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('back')])
   })
 })
@@ -101,6 +108,7 @@ describe('ordering', () => {
       { kind: 'item', itemId: 'b', revision: 1, body: text('b'), ...base(2) },
       { kind: 'item', itemId: 'a', revision: 2, body: text('a2'), ...base(3) }
     ])
+
     expect(renderJournalState(state).items.map((item) => item.itemId)).toEqual(['a', 'b'])
   })
 
@@ -111,6 +119,7 @@ describe('ordering', () => {
       { kind: 'item', itemId: 'later', revision: 1, body: text('later'), ...base(9) },
       { kind: 'item', itemId: 'earlier', revision: 1, body: text('earlier'), ...base(3) }
     ])
+
     expect(renderJournalState(state).items.map((item) => item.itemId)).toEqual(['earlier', 'later'])
   })
 
@@ -127,6 +136,7 @@ describe('ordering', () => {
         recovered: true
       }
     ])
+
     const items = renderJournalState(state).items
     expect(items.map((item) => item.itemId)).toEqual(['late', 'recovered'])
     expect(items[1]?.recovered).toBe(true)
@@ -141,6 +151,7 @@ describe('ordering', () => {
       { kind: 'item', itemId: 'frame', revision: 1, body: text('warning'), ...base(2) },
       { kind: 'item', itemId: 'send', revision: 1, body: userText('ok thanks'), ...base(3) }
     ])
+
     const items = renderJournalState(state).items
     expect(items.map((item) => item.itemId)).toEqual(['send', 'frame'])
     expect(items.map((item) => item.observedAt)).toEqual([base(1).ts, base(2).ts])
@@ -153,6 +164,7 @@ describe('ordering', () => {
       { kind: 'item', itemId: 'a', revision: 1, body: text('run the tests'), ...base(1) },
       { kind: 'item', itemId: 'b', revision: 1, body: text('run the tests'), ...base(2) }
     ])
+
     expect(renderJournalState(state).items).toHaveLength(2)
   })
 })
@@ -185,6 +197,7 @@ describe('submission and dispatch state machine', () => {
         ...base(2)
       }
     ])
+
     expect(state.receipts.get('cm_1')?.cursor).toEqual({ epoch: EPOCH, sequence: 2 })
     expect(state.submissions.get('cm_1')?.providerItemId).toBe('codex:thread-1:turn-1:0')
   })
@@ -208,6 +221,7 @@ describe('submission and dispatch state machine', () => {
         ...base(3)
       }
     ])
+
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
@@ -218,6 +232,7 @@ describe('submission and dispatch state machine', () => {
 
   it('durably accepts a pending submission from the provider echo row itself', () => {
     const body = userText('hi')
+
     const state = fold([
       { ...submission, payloadFingerprint: sendFingerprint(body) },
       {
@@ -242,6 +257,7 @@ describe('submission and dispatch state machine', () => {
 
   it('does not give a newer identical echo to an older proven-undelivered submission', () => {
     const body = userText('same message')
+
     const state = fold([
       {
         ...submission,
@@ -283,6 +299,7 @@ describe('submission and dispatch state machine', () => {
 
   it('does not give a newer identical echo to a legacy unknown write failure', () => {
     const body = userText('same message')
+
     const state = fold([
       { ...submission, body, payloadFingerprint: sendFingerprint(body) },
       {
@@ -317,6 +334,7 @@ describe('submission and dispatch state machine', () => {
   it('does not accept a submission from a stale provider item behind its tombstone', () => {
     const body = userText('hi')
     const providerItemId = 'claude:session-1:user-1'
+
     const state = fold([
       { ...submission, payloadFingerprint: sendFingerprint(body) },
       { kind: 'tombstone', itemId: providerItemId, revision: 2, ...base(2) },
@@ -331,6 +349,7 @@ describe('submission and dispatch state machine', () => {
   it('does not accept a submission from a stale lifecycle item behind its tombstone', () => {
     const body = userText('hi')
     const providerItemId = 'claude:session-1:user-1'
+
     const state = fold([
       { ...submission, payloadFingerprint: sendFingerprint(body) },
       {
@@ -360,6 +379,7 @@ describe('submission and dispatch state machine', () => {
           { type: 'image-ref', path: '/tmp/original.png' }
         ]
       }
+
       const state = fold([
         { ...submission, body, payloadFingerprint: sendFingerprint(body) },
         {
@@ -378,6 +398,7 @@ describe('submission and dispatch state machine', () => {
           ...base(3)
         }
       ])
+
       expect(renderJournalState(state).items).toEqual([
         expect.objectContaining({ itemId: agentJournalSubmissionKey('cm_1'), body, revision: 1 })
       ])
@@ -386,6 +407,7 @@ describe('submission and dispatch state machine', () => {
 
   it('adopts a provider echo that arrives before dispatch settles', () => {
     const body = userText('early echo')
+
     const state = fold([
       {
         kind: 'submission',
@@ -421,6 +443,7 @@ describe('submission and dispatch state machine', () => {
     'reconciles %i rapid sends across an interleaved cancel when Codex reuses the root turn',
     (count) => {
       const rows: JournalRow[] = []
+
       for (let index = 0; index < count; index += 1) {
         const body = userText(`RAPID_${index + 1}`)
         rows.push(
@@ -442,6 +465,7 @@ describe('submission and dispatch state machine', () => {
           }
         )
       }
+
       rows.push({
         kind: 'item',
         itemId: 'orca:cancel-between-sends',
@@ -449,6 +473,7 @@ describe('submission and dispatch state machine', () => {
         body: { kind: 'status', text: 'Cancelled an earlier turn.' },
         ...base(rows.length + 1)
       })
+
       for (let index = 0; index < count; index += 1) {
         rows.push({
           kind: 'item',
@@ -462,6 +487,7 @@ describe('submission and dispatch state machine', () => {
       const messages = renderJournalState(fold(rows)).items.filter(
         (item) => item.body.kind === 'message' && item.body.role === 'user'
       )
+
       expect(messages).toHaveLength(count)
       expect(messages.map((item) => item.itemId)).toEqual(
         Array.from({ length: count }, (_, index) => agentJournalSubmissionKey(`client-${index}`))
@@ -489,6 +515,7 @@ describe('submission and dispatch state machine', () => {
         ...base(3)
       }
     ])
+
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
     expect(state.submissions.get('cm_1')?.reason).toBe('not_delivered')
   })
@@ -513,6 +540,7 @@ describe('submission and dispatch state machine', () => {
         ...base(3)
       }
     ])
+
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('accepted')
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
@@ -559,6 +587,7 @@ describe('submission and dispatch state machine', () => {
         ...base(1)
       }
     ])
+
     expect(state.submissions.size).toBe(0)
     expect(state.receipts.size).toBe(0)
   })
@@ -567,6 +596,7 @@ describe('submission and dispatch state machine', () => {
 describe('lifecycle settlement deduplication', () => {
   it('retains only the newest bounded settlement ids', () => {
     const state = createJournalReducerState('session-1', EPOCH)
+
     for (let index = 0; index <= MAX_JOURNAL_APPLIED_SETTLEMENT_IDS; index += 1) {
       applyJournalRow(state, {
         kind: 'lifecycle-batch',
@@ -575,6 +605,7 @@ describe('lifecycle settlement deduplication', () => {
         ...base(index + 1)
       })
     }
+
     expect(state.appliedSettlementIds.size).toBe(MAX_JOURNAL_APPLIED_SETTLEMENT_IDS)
     expect(state.appliedSettlementIds.has('settlement-0')).toBe(false)
     expect(state.appliedSettlementIds.has('settlement-1')).toBe(true)
@@ -588,6 +619,7 @@ describe('malformed persisted item keys', () => {
     const state = fold([
       { kind: 'item', itemId: '%', revision: 1, body: userText('hi'), ...base(1) }
     ])
+
     expect(renderJournalState(state).items[0]?.itemId).toBe('%')
   })
 })
@@ -596,8 +628,10 @@ describe('bounded item-key collisions', () => {
   it('keeps an oversized turn and its raw digest-form mimic as separate items', () => {
     const oversizedTurnId = 'a'.repeat(MAX_JOURNAL_KEY_COMPONENT_CHARS + 1)
     const digestFormMimic = boundJournalKeyComponent(oversizedTurnId)
+
     const keyFor = (turnId: string) =>
       agentJournalItemKey({ provider: 'codex', threadId: 'thread-1', turnId, ordinal: 0 })
+
     const oversizedKey = keyFor(oversizedTurnId)
     const mimicKey = keyFor(digestFormMimic)
 

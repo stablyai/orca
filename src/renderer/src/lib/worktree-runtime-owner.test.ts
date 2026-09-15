@@ -121,6 +121,7 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
         'folder:local-folder': 'runtime:stale-env'
       }
     }
+
     expect(getRuntimeEnvironmentIdForWorktree(restoredOwnerState, 'folder:local-folder')).toBeNull()
     expect(getExecutionHostIdForWorktree(restoredOwnerState, 'folder:local-folder')).toBe('local')
   })
@@ -392,21 +393,26 @@ describe('runtime owner identity indexes', () => {
     const targetProjectGroupId = 'project-group-999'
     const repos: NonNullable<WorktreeRuntimeOwnerState['repos']>[number][] = []
     const worktreesByRepo: NonNullable<WorktreeRuntimeOwnerState['worktreesByRepo']> = {}
+
     const folderWorkspaces: NonNullable<WorktreeRuntimeOwnerState['folderWorkspaces']>[number][] =
       []
+
     const projectGroups: NonNullable<WorktreeRuntimeOwnerState['projectGroups']>[number][] = []
 
     for (let repoIndex = 0; repoIndex < 100; repoIndex += 1) {
       const repoId = `repo-${repoIndex}`
+
       const repo: NonNullable<WorktreeRuntimeOwnerState['repos']>[number] = {
         id: repoId,
         connectionId: null,
         executionHostId: repoId === targetRepoId ? 'runtime:repo-owner' : 'local'
       }
+
       Object.defineProperty(repo, 'id', {
         enumerable: true,
         get: () => {
           repoIdReads += 1
+
           return repoId
         }
       })
@@ -418,25 +424,31 @@ describe('runtime owner identity indexes', () => {
           enumerable: true,
           get: () => {
             worktreeIdReads += 1
+
             return worktreeId
           }
         })
+
         return worktree
       })
     }
+
     for (let index = 0; index < 1_000; index += 1) {
       const folderWorkspaceId = `folder-workspace-${index}`
       const projectGroupId = `project-group-${index}`
       const folderWorkspace = { id: folderWorkspaceId, projectGroupId }
+
       const projectGroup: NonNullable<WorktreeRuntimeOwnerState['projectGroups']>[number] = {
         id: projectGroupId,
         connectionId: null,
         executionHostId: projectGroupId === targetProjectGroupId ? 'runtime:folder-owner' : 'local'
       }
+
       Object.defineProperty(folderWorkspace, 'id', {
         enumerable: true,
         get: () => {
           folderWorkspaceIdReads += 1
+
           return folderWorkspaceId
         }
       })
@@ -444,12 +456,14 @@ describe('runtime owner identity indexes', () => {
         enumerable: true,
         get: () => {
           projectGroupIdReads += 1
+
           return projectGroupId
         }
       })
       folderWorkspaces.push(folderWorkspace)
       projectGroups.push(projectGroup)
     }
+
     const indexedState: WorktreeRuntimeOwnerState = {
       settings: { activeRuntimeEnvironmentId: null },
       repos,
@@ -484,6 +498,7 @@ describe('runtime owner identity indexes', () => {
       folderWorkspaces: [{ id: 'folder', projectGroupId: 'group' }],
       projectGroups: [{ id: 'group', connectionId: null, executionHostId: 'runtime:folder-one' }]
     }
+
     expect(getRuntimeEnvironmentIdForWorktree(first, 'worktree')).toBe('repo-one')
     expect(getRuntimeEnvironmentIdForWorktree(first, 'folder:folder')).toBe('folder-one')
 
@@ -495,6 +510,7 @@ describe('runtime owner identity indexes', () => {
       folderWorkspaces: [{ id: 'folder', projectGroupId: 'group' }],
       projectGroups: [{ id: 'group', connectionId: null, executionHostId: 'runtime:folder-two' }]
     }
+
     expect(getRuntimeEnvironmentIdForWorktree(second, 'worktree')).toBe('worktree-two')
     expect(getRuntimeEnvironmentIdForWorktree(second, 'folder:folder')).toBe('folder-two')
   })
@@ -582,6 +598,7 @@ describe('getRuntimeSessionMirrorEnvironmentIds', () => {
 
 describe('active workspace host selection', () => {
   const PAIRED_HUB_WORKTREE_ID = 'hub-repo::wt-paired'
+
   const pairedHubState: WorktreeRuntimeOwnerState = {
     activeWorktreeId: PAIRED_HUB_WORKTREE_ID,
     activeWorkspaceExecutionHostId: 'ssh:hub-private-target',

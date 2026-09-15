@@ -16,6 +16,7 @@ export async function assertWorktreeCleanForRemoval(
 
   const { ignoredUntrackedPaths = [], ...gitOptions } = options
   const useNullTerminatedStatus = ignoredUntrackedPaths.length > 0
+
   const { stdout } = await gitExecFileAsync(
     ['status', '--porcelain', ...(useNullTerminatedStatus ? ['-z'] : []), '--untracked-files=all'],
     {
@@ -23,16 +24,19 @@ export async function assertWorktreeCleanForRemoval(
       timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
     }
   )
+
   // Why one parse feeds both: the clean verdict and the error text must never
   // disagree about which entries block removal.
   const blockingEntries = useNullTerminatedStatus
     ? getBlockingUntrackedStatusEntries(stdout, ignoredUntrackedPaths)
     : null
+
   if (blockingEntries ? blockingEntries.length === 0 : !stdout.trim()) {
     return
   }
 
   const error = new Error('Worktree has uncommitted or untracked changes.')
+
   // Why not the raw stdout: `-z` output is NUL-delimited and `.trim()` leaves
   // interior NULs, so attaching it verbatim put raw control bytes into the
   // user-facing removal error — and listed the tolerated shared link, the one
@@ -59,6 +63,7 @@ function getBlockingUntrackedStatusEntries(
       )
       .filter((entry) => entry && !entry.split('/').includes('..'))
   )
+
   return status
     .split('\0')
     .filter(Boolean)

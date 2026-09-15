@@ -40,6 +40,7 @@ import type {
 } from './source-control-text-generation-types'
 
 export type GenerateCommitMessageParams = ResolvedSourceControlAiGenerationParams
+
 export type {
   CommitMessageGenerationTarget,
   CommitMessageModelDiscoveryLocalOptions,
@@ -49,6 +50,7 @@ export type {
   RemoteCommitMessageExecResult,
   TextGenerationOperation
 }
+
 export type GeneratePullRequestFieldsResult =
   GenericGeneratePullRequestFieldsResult<GeneratedPullRequestFields>
 
@@ -72,6 +74,7 @@ export function resolveCommitMessageSettings(
     operation,
     discoveryHostKey
   })
+
   return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
 }
 

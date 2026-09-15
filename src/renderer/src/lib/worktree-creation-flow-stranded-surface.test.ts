@@ -31,6 +31,7 @@ const store = {
   updatePendingWorktreeCreation: vi.fn(
     (creationId: string, patch: Partial<PendingWorktreeCreation>) => {
       const entry = store.pendingWorktreeCreations[creationId]
+
       if (entry) {
         store.pendingWorktreeCreations[creationId] = { ...entry, ...patch }
       }
@@ -39,6 +40,7 @@ const store = {
   // Mirrors pending-worktree-creation.ts: drop the entry and the active pointer.
   removePendingWorktreeCreation: vi.fn((creationId: string) => {
     delete store.pendingWorktreeCreations[creationId]
+
     if (store.activePendingCreationId === creationId) {
       store.activePendingCreationId = null
     }
@@ -236,6 +238,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
+
     seedPendingCreation(request)
     store.tabsByWorktree = {
       'wt-1': [{ id: 'default-tab' }, { id: 'agent-tab', launchAgent: 'codex' }]

@@ -13,6 +13,7 @@ function renderStatus(body: AgentJournalStatusItem) {
   const [message] = projectStructuredItemsToNativeChat([
     { itemId: 'notice', sequence: 1, revision: 1, observedAt: 1, body }
   ])
+
   return render(
     <MessageRow message={message!} expandSignal={false} onScrollMessageToTop={vi.fn()} />
   )
@@ -91,6 +92,7 @@ describe('old-reader compatibility', () => {
     (schema): schema is (typeof AgentJournalItemBodySchema.options)[5] =>
       schema.shape.kind.value === 'status'
   )!
+
   const oldStatusSchema = statusSchema.omit({ tone: true, presentation: true })
   it.each([
     { presentation: 'compaction' },

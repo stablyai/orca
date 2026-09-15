@@ -28,6 +28,7 @@ describe('listWindowsDrives', () => {
     if (!mounted.includes(p)) {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
+
     return { isDirectory: () => true } as Stats
   }
 
@@ -46,11 +47,14 @@ describe('listWindowsDrives', () => {
       if (p === 'C:\\') {
         return { isDirectory: () => true } as Stats
       }
+
       if (p === 'D:\\') {
         return { isDirectory: () => false } as Stats
       }
+
       throw Object.assign(new Error('EPERM'), { code: 'EPERM' })
     }
+
     const result = await listWindowsDrives(statPath)
     expect(result.entries.map((e) => e.name)).toEqual(['C:\\'])
   })
@@ -58,10 +62,12 @@ describe('listWindowsDrives', () => {
   it('skips an unreadable drive with an unexpected errno and logs it', async () => {
     const error = Object.assign(new Error('EIO'), { code: 'EIO' })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const statPath = async (p: string): Promise<Stats> => {
       if (p === 'D:\\') {
         throw error
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
 
@@ -77,6 +83,7 @@ describe('listWindowsDrives', () => {
 
   it('surfaces programming errors from isDirectory', async () => {
     const error = new TypeError('programmer bug')
+
     const statPath = async (p: string): Promise<Stats> => {
       if (p === 'D:\\') {
         return {
@@ -85,6 +92,7 @@ describe('listWindowsDrives', () => {
           }
         } as unknown as Stats
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
 
@@ -94,13 +102,16 @@ describe('listWindowsDrives', () => {
   it('returns healthy drives among tolerated and unexpected stat failures', async () => {
     const error = Object.assign(new Error('EIO'), { code: 'EIO' })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const statPath = async (p: string): Promise<Stats> => {
       if (p === 'C:\\' || p === 'F:\\') {
         return { isDirectory: () => true } as Stats
       }
+
       if (p === 'E:\\') {
         throw error
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
 

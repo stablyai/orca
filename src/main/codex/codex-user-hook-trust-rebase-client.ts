@@ -14,10 +14,13 @@ function collectCodexHookListings(result: unknown): CodexHookListing[] {
     result && typeof result === 'object' && Array.isArray((result as { data?: unknown }).data)
       ? ((result as { data: unknown[] }).data as { hooks?: unknown }[])
       : []
+
   const listings: CodexHookListing[] = []
   const seenKeys = new Set<string>()
+
   for (const entry of data) {
     const hooks = Array.isArray(entry?.hooks) ? entry.hooks : []
+
     for (const hook of hooks as Record<string, unknown>[]) {
       if (
         typeof hook?.key !== 'string' ||
@@ -26,11 +29,13 @@ function collectCodexHookListings(result: unknown): CodexHookListing[] {
       ) {
         continue
       }
+
       // Why: hooks/list repeats user-scope hooks per requested cwd; trust
       // rebasing must consider each key once.
       if (seenKeys.has(hook.key)) {
         continue
       }
+
       seenKeys.add(hook.key)
       listings.push({
         key: hook.key,
@@ -41,6 +46,7 @@ function collectCodexHookListings(result: unknown): CodexHookListing[] {
       })
     }
   }
+
   return listings
 }
 
@@ -87,6 +93,7 @@ function matchingListings(
   const expected = new Map(
     moves.map((move) => [normalizeHookTrustKeyForLookup(move[key]), move.command])
   )
+
   return new Map(
     listings
       .filter(
@@ -98,6 +105,7 @@ function matchingListings(
 
 function quotedKeyPath(key: string): string {
   const escaped = key.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+
   return `hooks.state."${escaped}"`
 }
 
@@ -107,15 +115,18 @@ async function inspectUserHookTrust(
   return runCodexAppServerSession(request.invocation, async ({ request: requestRpc }) => {
     const result = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
     const byOldKey = matchingListings(collectCodexHookListings(result), request.moves, 'oldKey')
+
     if (byOldKey.size !== request.moves.length) {
       throw new Error(
         `pre-mutation hooks/list reported ${byOldKey.size} of ${request.moves.length} moved user hooks`
       )
     }
+
     return {
       outcome: 'inspected',
       moves: request.moves.map((move) => {
         const listing = byOldKey.get(normalizeHookTrustKeyForLookup(move.oldKey))!
+
         return {
           ...move,
           reportedOldKey: listing.key,
@@ -133,6 +144,7 @@ async function repairUserHookTrust(
   return runCodexAppServerSession(request.invocation, async ({ request: requestRpc }) => {
     const result = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
     const byNewKey = matchingListings(collectCodexHookListings(result), request.moves, 'newKey')
+
     if (byNewKey.size !== request.moves.length) {
       throw new Error(
         `post-mutation hooks/list reported ${byNewKey.size} of ${request.moves.length} moved user hooks`
@@ -143,6 +155,7 @@ async function repairUserHookTrust(
       ...request.moves.map((move) => move.reportedOldKey),
       ...Array.from(byNewKey.values(), (listing) => listing.key)
     ])
+
     const edits: { keyPath: string; value: unknown; mergeStrategy: 'replace' }[] = Array.from(
       keysToClear,
       (key) => ({
@@ -151,8 +164,10 @@ async function repairUserHookTrust(
         mergeStrategy: 'replace' as const
       })
     )
+
     for (const move of request.moves) {
       const listing = byNewKey.get(normalizeHookTrustKeyForLookup(move.newKey))!
+
       if (move.wasTrusted) {
         edits.push({
           keyPath: quotedKeyPath(listing.key),
@@ -170,25 +185,31 @@ async function repairUserHookTrust(
         })
       }
     }
+
     await requestRpc('config/batchWrite', { edits, reloadUserConfig: true })
 
     const verified = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
+
     const verifiedByKey = matchingListings(
       collectCodexHookListings(verified),
       request.moves,
       'newKey'
     )
+
     const invalid = request.moves.find((move) => {
       const listing = verifiedByKey.get(normalizeHookTrustKeyForLookup(move.newKey))
+
       return (
         !listing ||
         (listing.trustStatus === 'trusted') !== move.wasTrusted ||
         listing.enabled !== move.enabled
       )
     })
+
     if (invalid) {
       throw new Error(`post-rebase verify failed for moved user hook ${invalid.newKey}`)
     }
+
     return {
       outcome: 'repaired',
       repaired: request.moves.filter((move) => move.wasTrusted).length

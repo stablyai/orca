@@ -34,12 +34,14 @@ describe('RichMarkdownTableControls', () => {
     const controlsElement = document.createElement('div')
     scrollContainer.append(editorElement, controlsElement)
     document.body.append(scrollContainer)
+
     const editor = new Editor({
       element: editorElement,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
       content: TABLE,
       contentType: 'markdown'
     })
+
     const view = render(
       <TooltipProvider>
         <RichMarkdownTableControls
@@ -49,17 +51,22 @@ describe('RichMarkdownTableControls', () => {
       </TooltipProvider>,
       { container: controlsElement }
     )
+
     try {
       const header = editorElement.querySelector('th')
+
       if (!header) {
         throw new Error('Expected a table header cell')
       }
+
       let headerPosition = 0
       editor.state.doc.descendants((node, position) => {
         if (node.type.spec.tableRole === 'header_cell') {
           headerPosition = position
+
           return false
         }
+
         return true
       })
 
@@ -79,18 +86,22 @@ describe('RichMarkdownTableControls', () => {
     const controlsElement = document.createElement('div')
     scrollContainer.append(editorElement, controlsElement)
     document.body.append(scrollContainer)
+
     const editor = new Editor({
       element: editorElement,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
       content: TABLE,
       contentType: 'markdown'
     })
+
     let bodyCellPosition = 0
     editor.state.doc.descendants((node, position) => {
       if (node.isText && node.text === 'a1') {
         bodyCellPosition = position
+
         return false
       }
+
       return true
     })
     editor.commands.setTextSelection(bodyCellPosition)
@@ -104,15 +115,20 @@ describe('RichMarkdownTableControls', () => {
       </TooltipProvider>,
       { container: controlsElement }
     )
+
     try {
       const cell = editorElement.querySelector('td')
+
       if (!cell) {
         throw new Error('Expected a table body cell')
       }
+
       const table = cell.closest('table')
+
       if (!table) {
         throw new Error('Expected the table body cell to have a table parent')
       }
+
       vi.spyOn(cell, 'getBoundingClientRect').mockReturnValue({
         bottom: 50,
         height: 50,
@@ -193,18 +209,22 @@ describe('RichMarkdownTableControls', () => {
       y: 0,
       toJSON: () => ({})
     })
+
     const editor = new Editor({
       element: editorElement,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
       content: TABLE,
       contentType: 'markdown'
     })
+
     let bodyTextPosition = 0
     editor.state.doc.descendants((node, position) => {
       if (node.isText && node.text === 'a1') {
         bodyTextPosition = position
+
         return false
       }
+
       return true
     })
     editor.commands.setTextSelection(bodyTextPosition)
@@ -244,6 +264,7 @@ describe('RichMarkdownTableControls', () => {
       y: 0,
       toJSON: () => ({})
     }))
+
     const view = render(
       <TooltipProvider>
         <RichMarkdownTableControls
@@ -253,6 +274,7 @@ describe('RichMarkdownTableControls', () => {
       </TooltipProvider>,
       { container: controlsElement }
     )
+
     try {
       fireEvent.pointerMove(cell, { clientX: 20, clientY: 95 })
       await waitFor(() => expect(view.getByLabelText('Add row').style.width).toBe('92px'))

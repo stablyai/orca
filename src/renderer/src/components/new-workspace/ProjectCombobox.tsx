@@ -27,6 +27,7 @@ type ProjectComboboxProps = {
 }
 
 const ADD_PROJECT_KEY = 'add-project'
+
 const ROOT_ATTRIBUTE = 'data-project-combobox-root'
 
 /**
@@ -48,6 +49,7 @@ export default function ProjectCombobox({
   describedBy
 }: ProjectComboboxProps): React.JSX.Element {
   const recentIds = useRecentProjectIds()
+
   // Ranking depends on the query the hook owns, so rows are derived from it and
   // handed back; `matches`/`sections` are recomputed from the same query below.
   // Why sections, not raw rank: sectioning reorders the list (folders sink to
@@ -64,6 +66,7 @@ export default function ProjectCombobox({
     ],
     [onAddProject, options, recentIds]
   )
+
   const {
     query,
     setQuery,
@@ -83,10 +86,12 @@ export default function ProjectCombobox({
     () => rankProjectOptions(options, query, recentIds),
     [options, query, recentIds]
   )
+
   const sections = useMemo(
     () => sectionProjectOptions(matches, query, recentIds),
     [matches, query, recentIds]
   )
+
   const ambiguous = useMemo(() => getAmbiguousProjectOptionIds(options), [options])
   const selected = options.find((option) => option.id === value) ?? null
   // A committed pick shows as the field's own content; typing replaces it.
@@ -97,11 +102,15 @@ export default function ProjectCombobox({
       if (key === null) {
         return
       }
+
       close()
+
       if (key === ADD_PROJECT_KEY) {
         onAddProject?.()
+
         return
       }
+
       onValueChange(key)
       onValueSelected?.(key)
     },
@@ -114,13 +123,17 @@ export default function ProjectCombobox({
         event.preventDefault()
         setOpen(true)
         moveArm(event.key === 'ArrowDown' ? 1 : -1)
+
         return
       }
+
       if (event.key === 'Enter' && open) {
         event.preventDefault()
         commit(armedKey)
+
         return
       }
+
       // Why: not gated on `open` — a leftover query with the list closed would
       // otherwise strand the field showing text that matches nothing and hides
       // the committed project. Escape always restores the committed display,
@@ -129,8 +142,10 @@ export default function ProjectCombobox({
         event.preventDefault()
         event.stopPropagation()
         close()
+
         return
       }
+
       // Backspace on a committed pick unsticks it back into editable text.
       if (event.key === 'Backspace' && committed && selected) {
         event.preventDefault()

@@ -7,7 +7,9 @@ import {
 } from './execution-host'
 
 const SUBJECT_KEY_PREFIX = 'agent-status-subject-v1:'
+
 const MAX_SCOPE_PART_LENGTH = 512
+
 const MAX_PANE_KEY_LENGTH = 512
 
 export type AgentStatusExecutionScope = AgentSessionExecutionLocation
@@ -47,6 +49,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasExactKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
   const actualKeys = Object.keys(record)
+
   return actualKeys.length === keys.length && actualKeys.every((key) => keys.includes(key))
 }
 
@@ -64,13 +67,16 @@ function parseExecutionScope(record: Record<string, unknown>): AgentStatusExecut
   if (!isBoundedIdentity(record.executionHostId, MAX_SCOPE_PART_LENGTH)) {
     return null
   }
+
   const parsedHost = parseExecutionHostId(record.executionHostId)
+
   const canonicalHostId =
     parsedHost?.kind === 'ssh'
       ? toSshExecutionHostId(parsedHost.targetId)
       : parsedHost?.kind === 'runtime'
         ? toRuntimeExecutionHostId(parsedHost.environmentId)
         : parsedHost?.id
+
   if (
     !parsedHost ||
     canonicalHostId !== record.executionHostId ||
@@ -81,6 +87,7 @@ function parseExecutionScope(record: Record<string, unknown>): AgentStatusExecut
   ) {
     return null
   }
+
   return {
     executionHostId: parsedHost.id,
     wslDistro: record.wslDistro,
@@ -96,6 +103,7 @@ export function parseAgentStatusExecutionScope(value: unknown): AgentStatusExecu
   ) {
     return null
   }
+
   return parseExecutionScope(value)
 }
 
@@ -104,10 +112,13 @@ export function parseAgentStatusSubject(value: unknown): AgentStatusSubject | nu
   if (!isRecord(value)) {
     return null
   }
+
   const scope = parseExecutionScope(value)
+
   if (!scope) {
     return null
   }
+
   if (
     value.kind === 'pty-run' &&
     hasExactKeys(value, [
@@ -122,6 +133,7 @@ export function parseAgentStatusSubject(value: unknown): AgentStatusSubject | nu
   ) {
     return { ...scope, kind: 'pty-run', runId: value.runId }
   }
+
   if (
     value.kind === 'pty' &&
     hasExactKeys(value, [
@@ -136,6 +148,7 @@ export function parseAgentStatusSubject(value: unknown): AgentStatusSubject | nu
   ) {
     return { ...scope, kind: 'pty', paneKey: value.paneKey }
   }
+
   if (
     value.kind === 'structured-session' &&
     hasExactKeys(value, [
@@ -150,6 +163,7 @@ export function parseAgentStatusSubject(value: unknown): AgentStatusSubject | nu
   ) {
     return { ...scope, kind: 'structured-session', sessionId: value.sessionId }
   }
+
   return null
 }
 
@@ -164,6 +178,7 @@ function subjectKeyTuple(subject: AgentStatusSubject): AgentStatusSubjectKeyTupl
       : subject.kind === 'pty'
         ? subject.paneKey
         : subject.sessionId
+
   return [
     subject.kind,
     subject.executionHostId,
@@ -177,9 +192,11 @@ function subjectKeyTuple(subject: AgentStatusSubject): AgentStatusSubjectKeyTupl
 /** Stable serialized identity for maps, persistence, and snapshot transport. */
 export function serializeAgentStatusSubject(subject: AgentStatusSubject): string {
   const parsed = parseAgentStatusSubject(subject)
+
   if (!parsed) {
     throw new Error('Invalid agent status subject')
   }
+
   return `${SUBJECT_KEY_PREFIX}${JSON.stringify(subjectKeyTuple(parsed))}`
 }
 
@@ -187,16 +204,21 @@ export function deserializeAgentStatusSubject(value: string): AgentStatusSubject
   if (!value.startsWith(SUBJECT_KEY_PREFIX)) {
     return null
   }
+
   let tuple: unknown
+
   try {
     tuple = JSON.parse(value.slice(SUBJECT_KEY_PREFIX.length))
   } catch {
     return null
   }
+
   if (!Array.isArray(tuple) || tuple.length !== 6) {
     return null
   }
+
   const [kind, executionHostId, wslDistro, workspaceId, workspaceKind, identity] = tuple
+
   if (kind === 'pty-run') {
     return parseAgentStatusSubject({
       kind,
@@ -207,6 +229,7 @@ export function deserializeAgentStatusSubject(value: string): AgentStatusSubject
       runId: identity
     })
   }
+
   if (kind === 'pty') {
     return parseAgentStatusSubject({
       kind,
@@ -217,6 +240,7 @@ export function deserializeAgentStatusSubject(value: string): AgentStatusSubject
       paneKey: identity
     })
   }
+
   if (kind === 'structured-session') {
     return parseAgentStatusSubject({
       kind,
@@ -227,10 +251,12 @@ export function deserializeAgentStatusSubject(value: string): AgentStatusSubject
       sessionId: identity
     })
   }
+
   return null
 }
 
 export const agentStatusSubjectKey = serializeAgentStatusSubject
+
 export const parseAgentStatusSubjectKey = deserializeAgentStatusSubject
 
 export function agentStatusSubjectsEqual(
@@ -245,9 +271,11 @@ export function makePtyRunAgentStatusSubject(
   runId: AgentStatusRunId
 ): AgentStatusPtyRunSubject {
   const subject = parseAgentStatusSubject({ ...scope, kind: 'pty-run', runId })
+
   if (!subject || subject.kind !== 'pty-run') {
     throw new Error('Invalid PTY run agent status subject')
   }
+
   return subject
 }
 
@@ -256,9 +284,11 @@ export function makePtyAgentStatusSubject(
   paneKey: string
 ): AgentStatusPtySubject {
   const subject = parseAgentStatusSubject({ ...scope, kind: 'pty', paneKey })
+
   if (!subject || subject.kind !== 'pty') {
     throw new Error('Invalid PTY fallback agent status subject')
   }
+
   return subject
 }
 
@@ -267,8 +297,10 @@ export function makeStructuredAgentStatusSubject(
   sessionId: string
 ): AgentStatusStructuredSessionSubject {
   const subject = parseAgentStatusSubject({ ...scope, kind: 'structured-session', sessionId })
+
   if (!subject || subject.kind !== 'structured-session') {
     throw new Error('Invalid structured agent status subject')
   }
+
   return subject
 }

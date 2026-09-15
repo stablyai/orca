@@ -41,6 +41,7 @@ export function canAcceptClaudeCompactCompletion(
   if (incoming.source !== 'claude' || incoming.providerPromptId === undefined) {
     return false
   }
+
   // Why: a compact CLEARS a pane, it never creates one. An empty cache means the pane was retired
   // (closed tab, deleted worktree, explicit clear) and a late completion must not resurrect it.
   // The restart case is not this case: hydration restores the stuck row and marks it
@@ -48,9 +49,11 @@ export function canAcceptClaudeCompactCompletion(
   if (previous === undefined) {
     return false
   }
+
   if (previous.source !== 'claude' || previous.payload.agentType !== 'claude') {
     return false
   }
+
   if (previous.restoredUnconfirmed) {
     // Why: a hydrated row keeps the PREVIOUS session's connectionId, and rows predating provider
     // session persistence have none at all; neither can contradict the live event, so neither may
@@ -60,6 +63,7 @@ export function canAcceptClaudeCompactCompletion(
       agentProviderSessionsEqual('claude', previous.providerSession, incoming.providerSession)
     )
   }
+
   return (
     previous.connectionId === incoming.connectionId &&
     agentProviderSessionsEqual('claude', previous.providerSession, incoming.providerSession)
@@ -98,5 +102,6 @@ export function resolveLegacyCompactTrigger(
   if (compactTrigger !== undefined) {
     return compactTrigger
   }
+
   return payloadState === 'done' ? 'manual' : undefined
 }

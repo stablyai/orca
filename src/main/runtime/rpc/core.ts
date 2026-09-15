@@ -234,12 +234,15 @@ export type RpcRegistry = ReadonlyMap<string, RpcAnyMethod>
 
 export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcRegistry {
   const registry = new Map<string, RpcAnyMethod>()
+
   for (const method of eraseRpcMethods(methods)) {
     if (registry.has(method.name)) {
       throw new Error(`duplicate_rpc_method:${method.name}`)
     }
+
     registry.set(method.name, method)
   }
+
   return registry
 }
 
@@ -253,6 +256,7 @@ export class InvalidArgumentError extends Error {
 // Why: CLI surfaces one string; take the first issue's message, which each schema authors as the user-facing phrasing.
 export function formatZodError(error: ZodError): string {
   const first = error.issues[0]
+
   return first?.message ?? 'invalid_argument'
 }
 

@@ -83,6 +83,7 @@ export async function handleMarkdownPreviewLinkClick({
 
   if (href.startsWith('#')) {
     void scrollToAnchor(href.slice(1))
+
     return
   }
 
@@ -91,6 +92,7 @@ export async function handleMarkdownPreviewLinkClick({
   }
 
   const target = resolveMarkdownPreviewHref(href, filePath)
+
   if (!target) {
     return
   }
@@ -100,6 +102,7 @@ export async function handleMarkdownPreviewLinkClick({
       target.toString(),
       resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId, sourceOwner)
     )
+
     return
   }
 
@@ -108,12 +111,16 @@ export async function handleMarkdownPreviewLinkClick({
   }
 
   const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+
   const classifiedFileTarget =
     classified?.kind === 'markdown' || classified?.kind === 'file' ? classified : null
+
   const absolutePath = classifiedFileTarget?.absolutePath ?? fileUrlToAbsolutePath(target)
+
   if (!absolutePath) {
     return
   }
+
   const lineTarget =
     classifiedFileTarget?.line !== undefined
       ? { line: classifiedFileTarget.line, column: classifiedFileTarget.column }
@@ -122,6 +129,7 @@ export async function handleMarkdownPreviewLinkClick({
   // Why: same-file anchors need no ownership resolution.
   if (absolutePath === filePath && target.hash && !lineTarget) {
     void scrollToAnchor(target.hash.slice(1))
+
     return
   }
 
@@ -135,6 +143,7 @@ export async function handleMarkdownPreviewLinkClick({
     sourceWorktree,
     sourceOwner
   )
+
   if (!targetWorktree) {
     if (sourceRoutingWorktreeId && worktreeRoot) {
       void activateMarkdownLink(href, {
@@ -144,8 +153,10 @@ export async function handleMarkdownPreviewLinkClick({
         runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
         sourceOwner
       })
+
       return
     }
+
     if (
       isLocalPathOpenBlocked(
         settingsForRuntimeOwner(
@@ -157,21 +168,28 @@ export async function handleMarkdownPreviewLinkClick({
     ) {
       // Why: an unmatched remote path cannot fall back to the client OS.
       showLocalPathOpenBlockedToast()
+
       return
     }
+
     void window.api.shell.openFileUri(target.toString())
+
     return
   }
 
   const relativePath = relativePathInsideRoot(targetWorktree.path, absolutePath)
+
   if (relativePath === null) {
     return
   }
+
   const language = detectLanguage(absolutePath)
   const targetConnectionId = getConnectionIdForFile(targetWorktree.id, absolutePath)
+
   if (targetConnectionId === undefined) {
     return
   }
+
   try {
     const stats = await statRuntimePath(
       {
@@ -185,6 +203,7 @@ export async function handleMarkdownPreviewLinkClick({
       },
       absolutePath
     )
+
     if (stats.isDirectory) {
       toast.error(
         translate(
@@ -193,6 +212,7 @@ export async function handleMarkdownPreviewLinkClick({
           { value0: relativePath }
         )
       )
+
       return
     }
   } catch {
@@ -201,6 +221,7 @@ export async function handleMarkdownPreviewLinkClick({
         value0: relativePath
       })
     )
+
     return
   }
 
@@ -214,14 +235,17 @@ export async function handleMarkdownPreviewLinkClick({
       mode: 'edit'
     })
     const openedState = useAppStore.getState()
+
     const targetFileId = findMarkdownPreviewOpenedEditFileId(
       openedState.openFiles,
       openedState.activeFileIdByWorktree,
       { filePath: absolutePath, worktreeId: targetWorktree.id }
     )
+
     if (language === 'markdown') {
       setMarkdownViewMode(targetFileId, 'source')
     }
+
     cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
     setPendingEditorReveal(null)
     requestMarkdownPreviewEditorRevealFrame(pendingEditorRevealFrameIdsRef, () => {
@@ -235,6 +259,7 @@ export async function handleMarkdownPreviewLinkClick({
         })
       })
     })
+
     return
   }
 
@@ -249,6 +274,7 @@ export async function handleMarkdownPreviewLinkClick({
       },
       { anchor: target.hash ? target.hash.slice(1) : null }
     )
+
     return
   }
 

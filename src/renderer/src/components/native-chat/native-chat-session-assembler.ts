@@ -48,6 +48,7 @@ function turnKey(message: NativeChatMessage): string {
   if (message.turnId) {
     return `turn:${message.turnId}`
   }
+
   const text = message.blocks
     .filter(isTextBlock)
     .map((block) => block.text)
@@ -55,6 +56,7 @@ function turnKey(message: NativeChatMessage): string {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()
+
   // Why: two same-role messages with no turnId and no text (e.g. distinct
   // tool-call-only turns) would otherwise share `${role}:` and the second would
   // be dropped. Fold a digest of the non-text blocks (tool name+input, result
@@ -64,6 +66,7 @@ function turnKey(message: NativeChatMessage): string {
 
 function nonTextBlockDigest(message: NativeChatMessage): string {
   const parts: string[] = []
+
   for (const block of message.blocks) {
     if (block.type === 'tool-call') {
       parts.push(`call:${block.name}:${stableStringify(block.input)}`)
@@ -73,6 +76,7 @@ function nonTextBlockDigest(message: NativeChatMessage): string {
       parts.push(`image:${block.path ?? block.url ?? block.alt ?? ''}`)
     }
   }
+
   return parts.join('|')
 }
 
@@ -87,6 +91,7 @@ function stableStringify(value: unknown): string {
 function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): boolean {
   const candidateRank = NATIVE_CHAT_SOURCE_PRIORITY[candidate.source]
   const existingRank = NATIVE_CHAT_SOURCE_PRIORITY[existing.source]
+
   return candidateRank > existingRank
 }
 
@@ -98,9 +103,11 @@ function messageSortRank(message: NativeChatMessage): number {
   if (message.id === NATIVE_CHAT_STREAMING_ID) {
     return 1
   }
+
   if (isPendingMessageId(message.id) || isLaunchPromptMessageId(message.id)) {
     return 2
   }
+
   return 0
 }
 
@@ -110,20 +117,26 @@ function messageSortRank(message: NativeChatMessage): number {
 export function compareMessages(a: NativeChatMessage, b: NativeChatMessage): number {
   const ar = messageSortRank(a)
   const br = messageSortRank(b)
+
   if (ar !== br) {
     return ar - br
   }
+
   const at = a.timestamp ?? Number.NEGATIVE_INFINITY
   const bt = b.timestamp ?? Number.NEGATIVE_INFINITY
+
   if (at !== bt) {
     return at - bt
   }
+
   if (a.id < b.id) {
     return -1
   }
+
   if (a.id > b.id) {
     return 1
   }
+
   return 0
 }
 
@@ -180,6 +193,7 @@ export function sortForImageNormalization(
   messages: readonly NativeChatMessage[]
 ): readonly NativeChatMessage[] {
   const units: ImageNormalizationUnit[] = []
+
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index]!
     const companions: NativeChatMessage[] = []
@@ -187,6 +201,7 @@ export function sortForImageNormalization(
 
     if (isImageSourceUserTurn(message)) {
       let nextIndex = index
+
       while (
         nextIndex < messages.length &&
         messages[nextIndex]?.source === message.source &&
@@ -195,7 +210,9 @@ export function sortForImageNormalization(
         companions.push(messages[nextIndex]!)
         nextIndex += 1
       }
+
       const candidate = messages[nextIndex]
+
       if (
         candidate?.role === 'user' &&
         candidate.source === message.source &&
@@ -208,6 +225,7 @@ export function sortForImageNormalization(
       }
     } else {
       const candidate = messages[index + 1]
+
       if (
         message.role === 'user' &&
         hasImagePromptMarker(message) &&
@@ -216,6 +234,7 @@ export function sortForImageNormalization(
         isImageSourceUserTurn(candidate)
       ) {
         let nextIndex = index + 1
+
         while (
           nextIndex < messages.length &&
           messages[nextIndex]?.source === message.source &&
@@ -225,6 +244,7 @@ export function sortForImageNormalization(
           companions.push(messages[nextIndex]!)
           nextIndex += 1
         }
+
         prompt = message
         index = nextIndex - 1
       }
@@ -236,6 +256,7 @@ export function sortForImageNormalization(
 
   units.sort((a, b) => compareMessages(a.sortKey, b.sortKey))
   const sorted = units.flatMap((unit) => unit.messages)
+
   return sorted.every((message, index) => message === messages[index]) ? messages : sorted
 }
 
@@ -254,20 +275,26 @@ export function mergeOne(
   message: NativeChatMessage
 ): void {
   const existingById = byId.get(message.id)
+
   if (existingById) {
     if (supersedes(message, existingById)) {
       replace(byId, byTurn, existingById, message)
     }
+
     return
   }
+
   const key = turnKey(message)
   const existingByTurn = byTurn.get(key)
+
   if (existingByTurn && existingByTurn.source !== message.source) {
     if (supersedes(message, existingByTurn)) {
       replace(byId, byTurn, existingByTurn, message)
     }
+
     return
   }
+
   // No id match and no cross-source turn match: a distinct record. Indexing it
   // under its turnKey may overwrite a same-source entry that shares the key —
   // that's fine, the turn index only needs one representative per key for the

@@ -20,6 +20,7 @@ export function summarizeTerminalColorSnapshot(
   snapshot: TerminalColorSnapshot
 ): Record<string, string | number | null> {
   const data = snapshot.serialized
+
   return {
     label: snapshot.label,
     handle: snapshot.handle,
@@ -44,6 +45,7 @@ export function summarizeTerminalColorSnapshot(
 export function saveTerminalColorSnapshots(snapshots: TerminalColorSnapshot[]): string {
   const dir = join(process.cwd(), 'terminal-color-repro')
   mkdirSync(dir, { recursive: true })
+
   for (const snapshot of snapshots) {
     const base = snapshot.label.replace(/[^a-z0-9_-]/gi, '-')
     writeFileSync(join(dir, `${base}.ansi`), snapshot.serialized || snapshot.lines)
@@ -52,9 +54,11 @@ export function saveTerminalColorSnapshots(snapshots: TerminalColorSnapshot[]): 
       JSON.stringify(snapshot.serialized || snapshot.lines)
     )
   }
+
   writeFileSync(
     join(dir, 'summary.json'),
     JSON.stringify(snapshots.map(summarizeTerminalColorSnapshot), null, 2)
   )
+
   return dir
 }

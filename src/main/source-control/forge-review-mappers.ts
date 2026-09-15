@@ -14,6 +14,7 @@ function mapGitLabReviewState(state: MRInfo['state']): HostedReviewInfo['state']
   if (state === 'opened' || state === 'locked') {
     return 'open'
   }
+
   return state
 }
 

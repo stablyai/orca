@@ -15,6 +15,7 @@ function linearDriftSamples(schedule, trueDuration, driftPerLaunch) {
   schedule.flat().forEach((arm, launchIndex) => {
     samples[arm].push(trueDuration[arm] + launchIndex * driftPerLaunch)
   })
+
   return samples
 }
 

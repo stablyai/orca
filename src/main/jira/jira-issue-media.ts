@@ -24,18 +24,23 @@ export type MediaRequest = {
 export function collectIssueMediaRequest(raw: JiraRecord): MediaRequest | undefined {
   const fields = asRecord(raw.fields)
   const renderedFields = asRecord(raw.renderedFields)
+
   const htmlIds = extractAttachmentContentIdsFromHtml(
     asString(renderedFields.description) || undefined
   )
+
   const mediaAttrs = collectAdfMediaAttrs(fields.description)
+
   const selection = selectPreferredAttachmentIds({
     renderedHtmlIds: htmlIds,
     attachmentField: fields.attachment,
     mediaAttrs
   })
+
   if (selection.needCount === 0 && selection.preferredIds.length === 0) {
     return undefined
   }
+
   return {
     attachmentField: fields.attachment,
     preferredIds: selection.preferredIds,
@@ -65,13 +70,16 @@ export async function prepareMediaResolver(
       resolvedCount: 0,
       fallbackRan: request.fallbackRan
     })
+
     return undefined
   }
+
   const images = await loadIssueImageAttachments(
     client,
     request.attachmentField,
     request.preferredIds
   )
+
   if (images.length === 0) {
     warnIfMediaResolutionIncomplete({
       siteId: client.site.id,
@@ -81,10 +89,13 @@ export async function prepareMediaResolver(
       resolvedCount: 0,
       fallbackRan: request.fallbackRan
     })
+
     return undefined
   }
+
   const stats: MediaResolutionStats = { attachmentResolvedCount: 0 }
   const resolveMedia = createMediaMarkdownResolver(images, request.preferredIds, stats)
+
   return {
     options: { resolveMedia },
     stats,

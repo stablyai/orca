@@ -20,6 +20,7 @@ import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from './markdown-render-mode'
 
 const noopEditorContentChange = (_content: string): void => {}
+
 const noopEditorSave = async (_content: string): Promise<boolean> => false
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
@@ -90,6 +91,7 @@ export function EditorEditFileSurface({
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
+
   if (!fileContent) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -97,6 +99,7 @@ export function EditorEditFileSurface({
       </div>
     )
   }
+
   if (fileContent.loadError) {
     return (
       <EditorFileLoadErrorView
@@ -105,6 +108,7 @@ export function EditorEditFileSurface({
       />
     )
   }
+
   if (fileContent.isBinary) {
     if (fileContent.isImage) {
       return (
@@ -116,6 +120,7 @@ export function EditorEditFileSurface({
         />
       )
     }
+
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
         {translate(
@@ -127,6 +132,7 @@ export function EditorEditFileSurface({
   }
 
   const currentContent = editBuffer ?? fileContent.content
+
   const externalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
       <ExternalFileChangeBanner
@@ -151,9 +157,11 @@ export function EditorEditFileSurface({
         onSave={isMarkdown ? markdownDocuments.mdSave : handleSave}
       />
     )
+
     if (!externalChangeBanner) {
       return changesView
     }
+
     return (
       <div className="flex flex-1 min-h-0 flex-col">
         {externalChangeBanner}
@@ -266,5 +274,6 @@ function matchesPendingEditorReveal(
   if (!reveal) {
     return false
   }
+
   return reveal.fileId ? reveal.fileId === file.id : reveal.filePath === file.filePath
 }

@@ -15,6 +15,7 @@ const collected = vi.hoisted(() => ({
 
 vi.mock('./dashboard-snapshot-workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof DashboardSnapshotWorkspaces>()
+
   return {
     ...actual,
     collectActiveDashboardWorkspaces: (
@@ -23,6 +24,7 @@ vi.mock('./dashboard-snapshot-workspaces', async (importOriginal) => {
       const workspaces = actual.collectActiveDashboardWorkspaces(...args)
       collected.calls += 1
       collected.descriptors += workspaces.length
+
       return workspaces
     }
   }
@@ -30,12 +32,14 @@ vi.mock('./dashboard-snapshot-workspaces', async (importOriginal) => {
 
 vi.mock('./dashboard-row-bucket', async (importOriginal) => {
   const actual = await importOriginal<typeof DashboardRowBucket>()
+
   return {
     ...actual,
     dashboardRowBucketProjection: (
       ...args: Parameters<typeof actual.dashboardRowBucketProjection>
     ) => {
       collected.projections += 1
+
       return actual.dashboardRowBucketProjection(...args)
     }
   }
@@ -48,6 +52,7 @@ import {
 } from './build-dashboard-bucket-counts'
 
 const NOW = 1_700_000_000_000
+
 const WORKSPACE_COUNT = 400
 
 function leafId(index: number): string {
@@ -109,6 +114,7 @@ function largeState(): SnapshotState {
   const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {}
   const terminalLayoutsByTabId: Record<string, unknown> = {}
   const ptyIdsByTabId: Record<string, string[]> = {}
+
   for (let index = 0; index < WORKSPACE_COUNT; index += 1) {
     worktrees.push(worktree(index))
     tabsByWorktree[`w${index}`] = [tab(index)]
@@ -121,6 +127,7 @@ function largeState(): SnapshotState {
     }
     ptyIdsByTabId[`tab${index}`] = [`pty-tab${index}`]
   }
+
   return {
     repos: [
       {
@@ -168,6 +175,7 @@ describe('bucket-count work reuse', () => {
           [makePaneKey('tab0', leafId(0))]: entry(0, `streamed ${pass}`)
         }
       }
+
       buildDashboardBucketCounts(next, NOW + pass, cache, 1)
     }
 
@@ -183,6 +191,7 @@ describe('bucket-count work reuse', () => {
     expect(collected.projections).toBe(WORKSPACE_COUNT)
 
     collected.projections = 0
+
     for (let pass = 0; pass < 5; pass += 1) {
       buildDashboardBucketCounts(
         {
@@ -197,6 +206,7 @@ describe('bucket-count work reuse', () => {
         1
       )
     }
+
     // One rebuilt worktree per pass, not the whole board.
     expect(collected.projections).toBe(5)
   })
@@ -207,10 +217,12 @@ describe('bucket-count work reuse', () => {
     buildDashboardBucketCounts(state, NOW, cache, 1)
 
     collected.projections = 0
+
     const acked: SnapshotState = {
       ...state,
       acknowledgedAgentsByPaneKey: { [makePaneKey('tab0', leafId(0))]: NOW }
     }
+
     buildDashboardBucketCounts(acked, NOW + 1, cache, 1)
     expect(cache.lastComputedWorktreeIds).toEqual([])
     expect(collected.projections).toBe(WORKSPACE_COUNT)
@@ -228,13 +240,17 @@ describe('bucket-count work reuse', () => {
       'folderWorkspaces',
       'projectGroups'
     ]
+
     let previous: Record<string, unknown> = state as unknown as Record<string, unknown>
+
     for (const [index, slice] of slices.entries()) {
       const source = previous[slice]
+
       const next = {
         ...previous,
         [slice]: Array.isArray(source) ? [...source] : { ...(source as object) }
       }
+
       buildDashboardBucketCounts(next as unknown as SnapshotState, NOW, cache, 1)
       expect(collected.calls, `re-collects after ${slice} changes`).toBe(index + 2)
       previous = next

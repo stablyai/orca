@@ -123,6 +123,7 @@ describe('mapGitLabIssueInfo', () => {
       description: 'Steps to reproduce.',
       author: { username: 'bob', avatar_url: 'https://example.com/b.png' }
     })
+
     expect(info.description).toBe('Steps to reproduce.')
     expect(info.author).toBe('bob')
     expect(info.authorAvatarUrl).toBe('https://example.com/b.png')
@@ -170,6 +171,7 @@ describe('mapMRInfo', () => {
       },
       'pending'
     )
+
     expect(info.mergeable).toBe('CONFLICTING')
     expect(info.mergeStateStatus).toBe('conflict')
   })
@@ -179,6 +181,7 @@ describe('mapMRInfo', () => {
       { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'checking' },
       'pending'
     )
+
     expect(info.mergeable).toBe('UNKNOWN')
     expect(info.mergeStateStatus).toBe('checking')
   })
@@ -190,6 +193,7 @@ describe('mapMRInfo', () => {
       { iid: 1, title: 't', state: 'opened', merge_status: 'can_be_merged' },
       'success'
     )
+
     expect(info.mergeable).toBe('MERGEABLE')
   })
 
@@ -204,6 +208,7 @@ describe('mapMRInfo', () => {
       },
       'success'
     )
+
     expect(info.mergeable).toBe('UNKNOWN')
     expect(info.mergeStateStatus).toBe('not_approved')
   })
@@ -213,6 +218,7 @@ describe('mapMRInfo', () => {
       { iid: 1, title: 't', state: 'opened', merge_status: 'cannot_be_merged' },
       'success'
     )
+
     expect(info.mergeable).toBe('UNKNOWN')
   })
 
@@ -232,6 +238,7 @@ describe('mapMRInfo', () => {
       },
       'success'
     )
+
     expect(info.description).toBe('## Body\n\nDetails here.')
     expect(info.author).toBe('alice')
     expect(info.authorAvatarUrl).toBe('https://example.com/a.png')

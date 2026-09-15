@@ -33,6 +33,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event).not.toBeNull()
     expect(event!.paneKey).toBe(PANE_KEY)
     expect(event!.connectionId).toBeNull()
@@ -64,6 +65,7 @@ describe('shared agent-hook-listener', () => {
   it('still rejects a hook payload that is malformed once the BOM is removed', () => {
     const bom = '\uFEFF'
     const body = '{"hook_event_name":"beforeSubmitPrompt"}'
+
     for (const payload of [
       `${bom}${bom}${body}`,
       `${bom}not json`,
@@ -76,6 +78,7 @@ describe('shared agent-hook-listener', () => {
         { paneKey: PANE_KEY, payload },
         'production'
       )
+
       expect(event).toBeNull()
     }
   })
@@ -108,6 +111,7 @@ describe('shared agent-hook-listener', () => {
         options: ['option one', 'option two', 'option three']
       }))
     }
+
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -147,6 +151,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const answered = normalizeHookPayload(
       state,
       'claude',
@@ -187,6 +192,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.state).toBe('working')
     expect(event?.payload.toolName).toBe('Bash')
   })
@@ -205,6 +211,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.toolName).toBe('Edit')
     expect(event?.payload.interactivePrompt).toBeUndefined()
   })
@@ -223,6 +230,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.interactivePrompt).toBe(
       JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
     )
@@ -242,6 +250,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.interactivePrompt).toBe(
       JSON.stringify({ approval: { tool: 'shell', summary: 'git push --force' } })
     )
@@ -261,6 +270,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const next = normalizeHookPayload(
       state,
       'claude',
@@ -274,6 +284,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(next?.payload.toolName).toBe('Bash')
     expect(next?.payload.toolInput).toBe('ls')
     expect(next?.payload.interactivePrompt).toBeUndefined()
@@ -281,6 +292,7 @@ describe('shared agent-hook-listener', () => {
 
   it('keeps AskUserQuestion visible through a late parallel sibling completion', () => {
     const questions = { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+
     const question = normalizeHookPayload(
       state,
       'claude',
@@ -295,6 +307,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     normalizeHookPayload(
       state,
       'claude',
@@ -308,6 +321,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const siblingCompletion = normalizeHookPayload(
       state,
       'claude',
@@ -345,6 +359,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const answered = normalizeHookPayload(
       state,
       'claude',
@@ -379,12 +394,14 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.toolName).toBe('AskUserQuestion')
     expect(event?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('captures interactivePrompt for the OpenCode AskUserQuestion route', () => {
     const properties = { questions: [{ question: 'Choose', options: ['x', 'y'] }] }
+
     const event = normalizeHookPayload(
       state,
       'opencode',
@@ -394,6 +411,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.state).toBe('waiting')
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })

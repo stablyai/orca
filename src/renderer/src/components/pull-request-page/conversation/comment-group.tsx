@@ -65,6 +65,7 @@ export function ConversationCommentGroup({
     onToggleReply,
     onSubmitReply
   }
+
   const cards =
     group.kind === 'thread'
       ? [
@@ -85,6 +86,7 @@ export function ConversationCommentGroup({
 
   const root = getPRCommentGroupRoot(group)
   const count = getPRCommentGroupCount(group)
+
   return (
     <Accordion key={getPRCommentGroupId(group)} type="single" collapsible>
       <AccordionItem

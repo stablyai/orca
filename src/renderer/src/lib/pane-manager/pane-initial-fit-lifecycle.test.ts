@@ -5,6 +5,7 @@ import { restoreScrollStateAfterFit } from './pane-scroll'
 
 function createPane(pendingInitialFitRafId: number | null): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
+
   return {
     id: 1,
     leafId,

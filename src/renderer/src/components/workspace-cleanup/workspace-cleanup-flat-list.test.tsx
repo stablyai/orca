@@ -22,6 +22,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 // One row per bucket the retired tab partition used to hide behind a tab.
@@ -102,6 +103,7 @@ describe('workspace cleanup flat list', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -138,6 +140,7 @@ describe('workspace cleanup flat list', () => {
 
   it('offers local removal for a disconnected SSH row without making it selectable', () => {
     const onForgetLocally = vi.fn()
+
     const disconnected = makeNamedFacets('disconnected', {
       candidate: { blockers: ['ssh-disconnected'] }
     })

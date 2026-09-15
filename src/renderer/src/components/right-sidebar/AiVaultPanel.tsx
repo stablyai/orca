@@ -60,6 +60,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   const repos = useRepos()
   const allWorktrees = useAllWorktrees()
   const projectHostSetupProjection = useProjectHostSetupProjection()
+
   const resumeTargetState = useAppStore(
     useShallow((state) => ({
       folderWorkspaces: state.folderWorkspaces,
@@ -68,14 +69,18 @@ export default function AiVaultPanel(): React.JSX.Element {
       worktreesByRepo: state.worktreesByRepo
     }))
   )
+
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
+
   const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
     useAiVaultOriginalPaneActions()
+
   const [query, setQuery] = useState('')
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
+
   const {
     agents,
     sort,
@@ -90,6 +95,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     setAllAgentsEnabled,
     resetViewOptions
   } = usePersistedAiVaultViewOptions()
+
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const userChangedScopeRef = useRef(false)
   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
@@ -98,16 +104,19 @@ export default function AiVaultPanel(): React.JSX.Element {
     () => buildRuntimeAiVaultHostScopeOptions(runtimeEnvironments),
     [runtimeEnvironments]
   )
+
   const availableExecutionHostScopes = useMemo(
     () => runtimeHostOptions.map((option) => option.id),
     [runtimeHostOptions]
   )
+
   const { executionHostScope, activeExecutionHostScope, onExecutionHostScopeChange } =
     useAiVaultExecutionHostScope({
       activeWorktreeId: activeWorktreeId ?? null,
       resumeTargetState,
       availableExecutionHostScopes
     })
+
   const hostScopeOptions = useMemo(
     () =>
       buildAiVaultHostScopeOptions({
@@ -116,12 +125,15 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [activeExecutionHostScope, runtimeHostOptions]
   )
+
   const activeWorktreePath = activeWorktree?.path ?? null
+
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
     () => deriveAiVaultWorkspaceScopePaths(activeWorktree ?? null, allWorktrees),
     [activeWorktree, allWorktrees]
   )
+
   const projectScopeContext = useMemo(
     () =>
       buildAiVaultProjectContext({
@@ -134,8 +146,10 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [activeRepo, activeWorktree, allWorktrees, projectHostSetupProjection, repos]
   )
+
   const activeProjectKey = projectScopeContext.activeProjectKey
   const projectLabelByKey = projectScopeContext.projectLabelByKey
+
   // Sent to the scanner so scoped views surface sessions older than the global cap.
   const scopePaths = useMemo(
     () =>
@@ -145,11 +159,13 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection]
   )
+
   const { error, loading, refresh, scanResult, sessions } = useAiVaultSessionRefresh(
     scopePaths,
     executionHostScope,
     sessionLimit
   )
+
   // Deliberately blind to the active repo/worktree: rebuilding these session
   // maps on every worktree switch is what made switching visibly slow (#10841 era).
   const sessionProjectById = useMemo(
@@ -162,12 +178,15 @@ export default function AiVaultPanel(): React.JSX.Element {
       }),
     [allWorktrees, projectHostSetupProjection, repos, sessions]
   )
+
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
     sessions,
     repos,
     worktrees: allWorktrees
   })
+
   const effectiveActiveWorktreeId = activeWorktreeId ?? activeWorktree?.id ?? null
+
   // `current` is stamped per row at read time so the map above stays cached.
   const getSessionWorktreeInfo = useCallback(
     (session: AiVaultSession) =>
@@ -177,12 +196,14 @@ export default function AiVaultPanel(): React.JSX.Element {
       ),
     [effectiveActiveWorktreeId, sessionWorktreeById]
   )
+
   const launchActions = useAiVaultSessionLaunchActions({
     activeWorktree: activeWorktree ?? null,
     activeWorktreeId: effectiveActiveWorktreeId,
     targetState: resumeTargetState,
     agentCmdOverrides
   })
+
   const viewAdjustmentCount = countAiVaultViewAdjustments({
     agents,
     sort,
@@ -198,6 +219,7 @@ export default function AiVaultPanel(): React.JSX.Element {
       activeProjectKey,
       activeWorktreePath
     })
+
     if (normalizedScope !== scope) {
       setScope(normalizedScope)
     }
@@ -211,6 +233,7 @@ export default function AiVaultPanel(): React.JSX.Element {
       preferredScope: preferredScopeRef.current,
       userChangedScope: userChangedScopeRef.current
     })
+
     if (restorableScope) {
       setScope(restorableScope)
     }
@@ -313,11 +336,13 @@ export default function AiVaultPanel(): React.JSX.Element {
   const toggleGroup = useCallback((key: string) => {
     setCollapsedGroups((current) => {
       const next = new Set(current)
+
       if (next.has(key)) {
         next.delete(key)
       } else {
         next.add(key)
       }
+
       return next
     })
   }, [])

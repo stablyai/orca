@@ -54,10 +54,12 @@ export function NotificationSoundSection({
     if (customSoundId === 'system') {
       return
     }
+
     const result = await window.api.notifications.playSound({
       force: true,
       volume: volumeDraft
     })
+
     if (!result.played) {
       toast.error(
         translate(
@@ -70,8 +72,10 @@ export function NotificationSoundSection({
 
   const handleChooseCustomSound = async (): Promise<void> => {
     setIsPickingSound(true)
+
     try {
       const soundPath = await window.api.shell.pickAudio()
+
       if (soundPath) {
         await onUpdateNotificationSettings({ customSoundId: 'custom', customSoundPath: soundPath })
         await previewSound('custom')
@@ -86,8 +90,10 @@ export function NotificationSoundSection({
   const handleSoundSelect = async (value: NotificationSoundSelectValue): Promise<void> => {
     if (!isNotificationSoundId(value)) {
       await handleChooseCustomSound()
+
       return
     }
+
     await onUpdateNotificationSettings({ customSoundId: value })
     await previewSound(value)
   }
@@ -130,6 +136,7 @@ export function NotificationSoundSection({
         <SelectContent align="start" className="w-[--radix-select-trigger-width]">
           {soundOptions.map((option) => {
             const OptionIcon = option.icon
+
             return (
               <SelectItem key={option.id} value={option.id}>
                 <OptionIcon className="size-4" />

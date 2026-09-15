@@ -64,6 +64,7 @@ describe('parseUiAutomatorXml', () => {
   it('omits boolean and bounds fields when their attributes are absent', () => {
     const only = parseUiAutomatorXml('<hierarchy><node class="android.view.View" /></hierarchy>')
       .children[0]
+
     expect(only.className).toBe('android.view.View')
     expect('clickable' in only).toBe(false)
     expect('enabled' in only).toBe(false)
@@ -77,12 +78,14 @@ describe('parseUiAutomatorXml', () => {
     const node = parseUiAutomatorXml(
       '<hierarchy><node class="x" text="Tom &amp; Jerry &lt;3&gt;" /></hierarchy>'
     ).children[0]
+
     expect(node.text).toBe('Tom & Jerry <3>')
   })
 
   it('throws EmulatorError(emulator_error) on truncated XML', () => {
     const truncated = '<hierarchy><node class="a"'
     expect(() => parseUiAutomatorXml(truncated)).toThrowError(EmulatorError)
+
     try {
       parseUiAutomatorXml(truncated)
       throw new Error('expected parseUiAutomatorXml to throw')

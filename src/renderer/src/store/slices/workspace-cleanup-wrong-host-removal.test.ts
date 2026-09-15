@@ -28,8 +28,11 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 const NOW = 1_700_000_000_000
+
 const HOST_A_HOST_ID: ExecutionHostId = 'local'
+
 const HOST_B_HOST_ID: ExecutionHostId = 'ssh:ssh-1'
+
 const HOST_B_RUNTIME_HOST_ID: ExecutionHostId = 'runtime:hub-1'
 
 const mockApi = {
@@ -125,6 +128,7 @@ function makeHostCandidate(
 
 function parseIdentityPath(worktreeId: string): string {
   const separatorIndex = worktreeId.indexOf('::')
+
   return worktreeId.slice(separatorIndex + 2)
 }
 
@@ -162,6 +166,7 @@ function createHostDirectories(worktreeId: string): HostDirectories {
   const hostBMarkerPath = path.join(hostBWorktreeDir, 'HOST_B_MARKER')
   fs.writeFileSync(hostAMarkerPath, 'uncommitted-data-on-host-a')
   fs.writeFileSync(hostBMarkerPath, 'uncommitted-data-on-host-b')
+
   return { hostARoot, hostBRoot, hostAMarkerPath, hostBMarkerPath }
 }
 
@@ -178,6 +183,7 @@ function installRemovalTransports(
   const deleteOnHost = (hostId: string | undefined, worktreeId: string): void => {
     routedHostIds.push(hostId ?? '<missing>')
     const hostRoot = hostId ? hostRootsByHostId[hostId] : undefined
+
     if (hostRoot) {
       fs.rmSync(path.join(hostRoot, toHostRelativePath(worktreeId)), {
         recursive: true,
@@ -185,9 +191,11 @@ function installRemovalTransports(
       })
     }
   }
+
   mockApi.worktrees.remove.mockImplementation(
     async (args: { worktreeId: string; hostId?: string }) => {
       deleteOnHost(args.hostId, args.worktreeId)
+
       return options.preservedBranch ? { preservedBranch: options.preservedBranch } : { ok: true }
     }
   )
@@ -196,7 +204,9 @@ function installRemovalTransports(
       if (method !== 'worktree.rm') {
         return { hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
+
       deleteOnHost(params.hostId, parseRuntimeSelector(params.worktree ?? ''))
+
       return { removed: true }
     }
   )
@@ -218,6 +228,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+
   for (const cleanup of hostDirCleanup.splice(0)) {
     cleanup()
   }
@@ -356,18 +367,21 @@ describe('STA-4343 wrong-host cleanup removal (git worktree identity)', () => {
   it('preserves a same-id host row published while removal is in flight', async () => {
     const worktreeId = 'repo1::/shared/workspace/path'
     const worktreePath = '/shared/workspace/path'
+
     const original = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
       path: worktreePath,
       hostId: HOST_A_HOST_ID
     })
+
     const arriving = makeWorktree({
       id: worktreeId,
       repoId: 'repo1',
       path: worktreePath,
       hostId: HOST_B_HOST_ID
     })
+
     const store = createTestStore()
     seedStore(store, {
       worktreesByRepo: { repo1: [original] },
@@ -395,6 +409,7 @@ describe('STA-4343 wrong-host cleanup removal (git worktree identity)', () => {
           }
         }
       })
+
       return { ok: true }
     })
 

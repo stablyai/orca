@@ -52,6 +52,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -89,9 +90,11 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   it('applies an empty host snapshot without retaining delayed browser focus', async () => {
     const snapshot = makeSnapshot()
     let resolveList!: (response: unknown) => void
+
     const listResponse = new Promise((resolve) => {
       resolveList = resolve
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -167,19 +170,25 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   it('does not let a slow browser create replace a newer browser selection', async () => {
     let resolveCreate!: (response: unknown) => void
+
     const createResponse = new Promise((resolve) => {
       resolveCreate = resolve
     })
+
     mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue('newer-host-browser')
+
     const runtimeCall = vi.fn(async (request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
         return createResponse
       }
+
       if (request.method === 'session.tabs.activate') {
         return { id: 'activate', ok: true, result: {} }
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const pendingCreate = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
@@ -206,26 +215,33 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   it('does not focus a slow browser create after an editor A-B-A selection', async () => {
     let resolveCreate!: (response: unknown) => void
+
     const createResponse = new Promise((resolve) => {
       resolveCreate = resolve
     })
+
     let state = mocks.getState()
     let listener: ((next: typeof state, previous: typeof state) => void) | null = null
     mocks.getState.mockImplementation(() => state)
     mocks.subscribe.mockImplementation((nextListener) => {
       listener = nextListener
+
       return vi.fn()
     })
+
     const runtimeCall = vi.fn(async (request: { method: string }) => {
       if (request.method === 'browser.tabCreate') {
         return createResponse
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const pendingCreate = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
     await vi.waitFor(() => expect(listener).not.toBeNull())
+
     const editorBState = {
       ...state,
       activeFileIdByWorktree: { [WORKTREE_ID]: '/worktree/other.html' },
@@ -240,11 +256,14 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ]
       }
     }
+
     listener!(editorBState, state)
+
     const editorAState = {
       ...editorBState,
       activeFileIdByWorktree: { [WORKTREE_ID]: '/worktree/index.html' }
     }
+
     listener!(editorAState, editorBState)
     state = editorAState
     resolveCreate({
@@ -259,16 +278,20 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   it('does not focus a browser after an editor A-B-A selection during reconciliation', async () => {
     let resolveList!: (response: unknown) => void
+
     const listResponse = new Promise((resolve) => {
       resolveList = resolve
     })
+
     let state = mocks.getState()
     let listener: ((next: typeof state, previous: typeof state) => void) | null = null
     mocks.getState.mockImplementation(() => state)
     mocks.subscribe.mockImplementation((nextListener) => {
       listener = nextListener
+
       return vi.fn()
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -277,10 +300,12 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         result: { browserPageId: 'created-host-browser' }
       })
       .mockReturnValueOnce(listResponse)
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const pendingCreate = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+
     const editorBState = {
       ...state,
       activeFileIdByWorktree: { [WORKTREE_ID]: '/worktree/other.html' },
@@ -295,11 +320,14 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ]
       }
     }
+
     listener!(editorBState, state)
+
     const editorAState = {
       ...editorBState,
       activeFileIdByWorktree: { [WORKTREE_ID]: '/worktree/index.html' }
     }
+
     listener!(editorAState, editorBState)
     state = editorAState
     resolveList({ id: 'list', ok: true, result: makeSnapshot() })
@@ -335,16 +363,20 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     'does not focus after leaving and returning to the $label during reconciliation',
     async ({ leave, returnToStart }) => {
       let resolveList!: (response: unknown) => void
+
       const listResponse = new Promise((resolve) => {
         resolveList = resolve
       })
+
       let state = mocks.getState()
       let listener: ((next: typeof state, previous: typeof state) => void) | null = null
       mocks.getState.mockImplementation(() => state)
       mocks.subscribe.mockImplementation((nextListener) => {
         listener = nextListener
+
         return vi.fn()
       })
+
       const runtimeCall = vi
         .fn()
         .mockResolvedValueOnce({
@@ -353,6 +385,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
           result: { browserPageId: 'created-host-browser' }
         })
         .mockReturnValueOnce(listResponse)
+
       vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
       const pendingCreate = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
@@ -372,11 +405,13 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   it('keeps the requested worktree selected while the browser snapshot catches up', async () => {
     const snapshot = makeSnapshot()
     const setStateResults: unknown[] = []
+
     let focusState = {
       ...mocks.getState(),
       activeWorktreeId: 'landing',
       activeWorkspaceExecutionHostId: 'local'
     }
+
     mocks.getState.mockImplementation(() => focusState)
     mocks.setActiveWorktree.mockImplementation((worktreeId, executionHostId) => {
       focusState = {
@@ -389,10 +424,12 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
       const result = updater(mockState)
       setStateResults.push(result)
+
       if (result && result !== mockState) {
         mockState = { ...mockState, ...(result as Record<string, unknown>) }
       }
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -402,6 +439,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       })
       .mockImplementationOnce(async () => {
         mockState = { ...mockState, activeWorktreeId: 'other-worktree' }
+
         return {
           id: 'list',
           ok: true,
@@ -447,6 +485,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
       setActiveWorktree: mocks.setActiveWorktree
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -455,6 +494,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         result: { browserPageId: 'remote-browser-page-1' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -475,8 +515,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         state: 'before-stage',
         activeWorktreeId: 'main-worktree'
       })
+
       setStateResults.push(result)
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -525,10 +567,12 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
       setActiveWorktree: mocks.setActiveWorktree
     }))
+
     const runtimeCall = vi
       .fn()
       .mockImplementationOnce(async () => {
         activeWorktreeId = 'other-worktree'
+
         return {
           id: 'create',
           ok: true,
@@ -559,6 +603,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     mocks.createBrowserTab.mockReturnValue({
       id: 'local-browser-workspace-1'
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({

@@ -8,6 +8,7 @@ import { SourceControlActionRepoOverrideNote } from './SourceControlActionRepoOv
 import type { SourceControlActionRecipeOverrideSummary } from '@/lib/source-control-launch-agent-selection'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {

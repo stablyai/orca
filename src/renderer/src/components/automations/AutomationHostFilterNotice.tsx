@@ -24,6 +24,7 @@ export function automationHostLoadSummaryMessage(
   if (failedHostCount <= 0) {
     return null
   }
+
   return translate(
     'auto.components.automations.hostSummary.partialFailure',
     '{{failed}} of {{total}} hosts could not be loaded',
@@ -69,6 +70,7 @@ function noticeCopy(resolution: AutomationHostFilterResolution): string | null {
   const label =
     resolution.entry?.label ??
     translate('auto.components.automations.emptyState.unknownHost', 'this host')
+
   switch (resolution.status) {
     case 'loading':
       return translate('auto.components.automations.hostNotice.loading', 'Loading host…')

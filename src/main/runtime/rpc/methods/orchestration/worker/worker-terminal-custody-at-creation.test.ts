@@ -29,6 +29,7 @@ describe('worker terminal custody is recorded at terminal creation', () => {
   function holdBootWait(): { finish: (satisfied?: boolean) => void } {
     const gate = h.deferred<unknown>()
     vi.spyOn(h.runtime, 'waitForTerminal').mockReturnValue(gate.promise as never)
+
     return {
       finish: (satisfied = true) =>
         gate.resolve({ ...READY_WAIT, satisfied, status: satisfied ? 'running' : 'exited' })
@@ -51,12 +52,15 @@ describe('worker terminal custody is recorded at terminal creation', () => {
   }> {
     const task = h.db.createTask({ spec: 'custody at creation', runId: h.activeRunId })
     const { finish } = holdBootWait()
+
     const start = h.call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
       ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
     })
+
     await vi.waitFor(() => expect(h.runtime.waitForTerminal).toHaveBeenCalled())
+
     return { dispatchId: startingDispatchId(), taskId: task.id, start, finish }
   }
 
@@ -154,9 +158,11 @@ describe('worker terminal custody is recorded at terminal creation', () => {
   it('promises no cleanup while the start outcome is still unknown', async () => {
     h.setup()
     const task = h.db.createTask({ spec: 'unknown outcome', runId: h.activeRunId })
+
     const unknown = Object.assign(new Error('the execution host went away'), {
       code: 'operation_unknown'
     })
+
     vi.spyOn(h.runtime, 'waitForTerminal').mockRejectedValue(unknown)
 
     const receipt = (await h.call('orchestration.workerStart', {
@@ -193,12 +199,14 @@ describe('custody refuses a dispatch that stopped while its terminal was being c
 
   it('records no owner once the dispatch is no longer starting', () => {
     const d = (db = new OrchestrationDb(':memory:'))
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: d.createTask({ runId: 'run_legacy_local', spec: 'stopped mid-create' }).id,
       startOptions: {}
     })
+
     // Startup reconciliation abandons a `starting` worker whose terminal it cannot find.
     d.reconcileMissingWorkerTerminal(started.dispatch.id, 'runtime restarted')
 

@@ -24,20 +24,26 @@ export function TerminalContrastSetting({ settings, updateSettings }: Props): Re
   const lastCustomValue = useRef(LIGHT_BG_MIN_CONTRAST)
   const [draft, setDraft] = useState(value ?? LIGHT_BG_MIN_CONTRAST)
   const [previousValue, setPreviousValue] = useState(value)
+
   if (value !== previousValue) {
     setPreviousValue(value)
     setDraft(value ?? LIGHT_BG_MIN_CONTRAST)
   }
+
   const title = translate('auto.components.settings.contrast.title', 'Color Contrast')
+
   const description = translate(
     'auto.components.settings.contrast.description',
     'Improve text readability or preserve the colors chosen by terminal programs.'
   )
+
   const ratioLabel = translate('auto.components.settings.contrast.ratio', 'Contrast target')
+
   const selectMode = (next: ContrastMode): void => {
     if (mode === 'custom' && value !== undefined) {
       lastCustomValue.current = value
     }
+
     updateSettings({
       terminalMinimumContrastRatio:
         next === 'auto' ? undefined : next === 'off' ? 1 : lastCustomValue.current

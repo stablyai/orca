@@ -20,20 +20,25 @@ test.describe('paired runtime Windows file browser', () => {
 
     try {
       const driveRoot = path.parse(os.tmpdir()).root.toUpperCase()
+
       const listing = await client.page.evaluate(async () => {
         const [environment] = await window.api.runtimeEnvironments.list()
+
         if (!environment) {
           throw new Error('Paired client runtime environment is unavailable')
         }
+
         const response = await window.api.runtimeEnvironments.call({
           selector: environment.id,
           method: 'files.browseServerDir',
           params: { path: '/' },
           timeoutMs: 15_000
         })
+
         if (!response.ok) {
           throw new Error(response.error.message)
         }
+
         return response.result as {
           pathFlavor: string
           entries: { name: string; isDirectory: boolean }[]

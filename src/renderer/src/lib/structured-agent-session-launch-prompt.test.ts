@@ -52,9 +52,11 @@ describe('settleStructuredAgentLaunchPrompt', () => {
     ).resolves.toEqual({ delivered: true, failureNotified: false })
 
     expect(onPromptDelivered).toHaveBeenCalledOnce()
+
     const persisted = JSON.parse(localStorage.getItem(localStorage.key(0)!) ?? '[]') as {
       state: string
     }[]
+
     expect(persisted).toMatchObject([{ state: 'dispatching' }])
   })
 })

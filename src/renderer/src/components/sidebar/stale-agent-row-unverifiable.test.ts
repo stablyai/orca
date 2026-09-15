@@ -24,14 +24,19 @@ import { getCompactAgentSecondary } from './worktree-card-compact-agent-row'
 import { resolveAttention } from './smart-attention'
 
 const NOW = new Date('2026-05-04T12:00:00.000Z').getTime()
+
 const TAB_ID = 'tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 /** 34 minutes of silence: past the 30-minute window, and a legible elapsed reading. */
 const SILENT_FOR_MS = 34 * 60 * 1000
 
 function entry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   const observedAt = NOW - SILENT_FOR_MS
+
   return {
     paneKey: PANE_KEY,
     state: 'working',
@@ -52,11 +57,14 @@ function rowState(agentEntry: AgentStatusEntry, ptyIdsByTabId: Record<string, st
     ptyIdsByTabId,
     now: NOW
   })
+
   expect(rows).toHaveLength(1)
+
   return rows[0].state
 }
 
 const LIVE = { [TAB_ID]: ['pty-1'] }
+
 const NO_PTY: Record<string, string[]> = {}
 
 describe('a stale entry on a pane Orca still holds', () => {
@@ -72,6 +80,7 @@ describe('a stale entry on a pane Orca still holds', () => {
       ptyIdsByTabId: LIVE,
       now: NOW
     })
+
     expect(rows[0].state).not.toBe('done')
     expect(getAgentDotState(rows[0])).not.toBe('done')
     // Nor the working spinner: Orca has no current evidence of work either.
@@ -87,12 +96,14 @@ describe('a stale entry on a pane Orca still holds', () => {
       ptyIdsByTabId: LIVE,
       now: NOW
     })
+
     expect(getCompactAgentSecondary(rows[0], NOW)).toBe('No update in 34m')
   })
 
   it('measures the gap from the observation clock, not the delivery clock', () => {
     // A relay replay restamps `updatedAt`; the reading must not reset with it.
     const replayed = entry({ updatedAt: NOW, evidenceObservedAt: NOW - SILENT_FOR_MS })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab({ id: TAB_ID, worktreeId: 'wt-1' })],
       entries: [replayed],
@@ -100,6 +111,7 @@ describe('a stale entry on a pane Orca still holds', () => {
       ptyIdsByTabId: LIVE,
       now: NOW
     })
+
     expect(rows[0].state).toBe('unverifiable')
     expect(getCompactAgentSecondary(rows[0], NOW)).toBe('No update in 34m')
   })
@@ -152,6 +164,7 @@ describe('smart-attention ordering', () => {
       ],
       NOW
     )
+
     const louder = resolveAttention([{ kind: 'hook', entry: entry(), hasLivePty: true }], NOW)
     expect(louder.attentionTimestamp).toBeGreaterThan(quieter.attentionTimestamp)
   })

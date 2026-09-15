@@ -40,6 +40,7 @@ function WorkspaceKanbanCard({
   onAssignWorkspaceStatus
 }: WorkspaceKanbanCardProps): React.JSX.Element {
   const worktreeIdentity = getWorktreeHostIdentity(worktree)
+
   const contextWorktrees =
     isSelected && selectedWorktrees && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
 

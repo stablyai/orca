@@ -17,6 +17,7 @@ const APPIMAGE_CLI_SCRIPT = [
 export function extractLegacyAppImageCliWrapperTarget(content: string): string | null {
   const assignment = /^APPIMAGE=([\s\S]+?)\nif \[ ! -f "\$APPIMAGE" \]; then/mu.exec(content)?.[1]
   const appImagePath = assignment ? unquoteShell(assignment) : null
+
   return appImagePath && content === buildLegacyAppImageCliWrapper(appImagePath)
     ? appImagePath
     : null
@@ -44,6 +45,8 @@ function unquoteShell(value: string): string | null {
   if (!value.startsWith("'") || !value.endsWith("'")) {
     return null
   }
+
   const decoded = value.slice(1, -1).split(`'"'"'`).join("'")
+
   return quoteShell(decoded) === value ? decoded : null
 }

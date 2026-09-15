@@ -42,6 +42,7 @@ export async function createRuntimeBrowserClientPage(
     requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY],
     ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
   })
+
   return { browserPageId: input.browserPageId, placement }
 }
 
@@ -60,7 +61,9 @@ export async function navigateRuntimeBrowserClientPage(
     },
     { type: 'navigate', url: input.url }
   )
+
   const result = await issued.result
+
   if (result.status === 'failed') {
     throw new Error(result.errorCode)
   }
@@ -94,10 +97,13 @@ export async function closeRuntimeBrowserClientPage(
       }
     }
   )
+
   const result = await issued.result
+
   if (result.status === 'failed') {
     throw new Error(result.errorCode)
   }
+
   const canonicalPlacement = authority.requireClientPage({
     authorityRuntimeId: authority.authorityRuntimeId,
     authorityEpoch: authority.authorityEpoch,
@@ -106,7 +112,9 @@ export async function closeRuntimeBrowserClientPage(
     browserHostGeneration: input.placement.browserHostGeneration,
     pageHostGeneration: input.placement.pageHostGeneration
   })
+
   const retirement = authority.beginPageRetirement(input.browserPageId, canonicalPlacement)
+
   if (!authority.completePageRetirement(retirement)) {
     throw new Error('browser_page_placement_stale')
   }

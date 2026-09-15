@@ -25,16 +25,20 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('../../shared/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
+
 vi.mock('./runtime-environment-transport-routing', () => ({
   getRuntimeEnvironmentStatus: getRuntimeEnvironmentStatusMock
 }))
+
 vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
   startPairedRuntimeBrowserClientHost: startHostMock,
   closePairedRuntimeBrowserClientHostEnvironment: closeHostMock
 }))
+
 vi.mock('./runtime-environment-connectivity-handlers', () => ({
   isRuntimeEnvironmentManuallyDisconnected: manuallyDisconnectedMock
 }))
@@ -125,6 +129,7 @@ describe('runtime environment browser client host handler', () => {
       getUserDataPath: () => '/profile',
       getSettings: () => ({ browserClientHostedRemoteEnabled: enabled })
     })
+
     const prepare = handler<{ selector: string }, { kind: 'client' | 'server' }>(
       'runtimeEnvironments:prepareBrowserClientHostPlacement'
     )
@@ -149,6 +154,7 @@ describe('runtime environment browser client host handler', () => {
       _meta: { runtimeId: 'runtime-a' }
     })
     register(true)
+
     const prepare = handler<{ selector: string }, { kind: string }>(
       'runtimeEnvironments:prepareBrowserClientHostPlacement'
     )
@@ -165,6 +171,7 @@ describe('runtime environment browser client host handler', () => {
   it('rejects a manual disconnect that lands while the probe is in flight', async () => {
     getRuntimeEnvironmentStatusMock.mockImplementation(async () => {
       manuallyDisconnectedMock.mockReturnValue(true)
+
       return {
         id: 'status.get',
         ok: false,
@@ -173,6 +180,7 @@ describe('runtime environment browser client host handler', () => {
       }
     })
     register(true)
+
     const prepare = handler<{ selector: string }, unknown>(
       'runtimeEnvironments:prepareBrowserClientHostPlacement'
     )
@@ -186,6 +194,7 @@ describe('runtime environment browser client host handler', () => {
   it('rejects manual disconnect before probing or attaching', async () => {
     manuallyDisconnectedMock.mockReturnValue(true)
     register(true)
+
     const prepare = handler<{ selector: string }, unknown>(
       'runtimeEnvironments:prepareBrowserClientHostPlacement'
     )
@@ -199,6 +208,7 @@ describe('runtime environment browser client host handler', () => {
 
   it('rejects malformed requests before resolving stored pairing authority', async () => {
     register(true)
+
     const prepare = handler<unknown, unknown>(
       'runtimeEnvironments:prepareBrowserClientHostPlacement'
     )

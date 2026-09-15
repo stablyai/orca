@@ -8,6 +8,7 @@ const LOCAL_REPO: RepoConnection = {
   connectionId: null,
   executionHostId: 'local'
 }
+
 const SSH_REPO: RepoConnection = {
   id: 'repo',
   connectionId: 'conn-1',

@@ -11,6 +11,7 @@ const secureStoreMock = vi.hoisted(() => ({
   getItemAsync: vi.fn(),
   setItemAsync: vi.fn()
 }))
+
 const platformMock = vi.hoisted(() => ({ OS: 'android' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorageMock }))
@@ -19,6 +20,7 @@ vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
   ...secureStoreMock
 }))
+
 vi.mock('react-native', () => ({ Platform: platformMock }))
 
 import {
@@ -29,7 +31,9 @@ import {
 } from './pairing-keychain'
 
 const GENERATION_KEY = 'orca:pairing-keychain-generation'
+
 const TOKEN_KEY = 'orca.host-token.host-1782629088232'
+
 const TOKEN_PRESENCE_KEY = `orca:pairing-keychain-presence:${TOKEN_KEY}`
 
 // Why: the exact Android failure from #6600 — expo maps a null-message GeneralSecurityException to this.
@@ -158,6 +162,7 @@ describe('pairing keychain', () => {
     const rotatedWrites = secureStoreMock.setItemAsync.mock.calls.filter(
       (call) => serviceOf(call[2] as Options) !== undefined
     )
+
     expect(rotatedWrites).toHaveLength(0)
     expect(generationRecord).toBeNull()
   })
@@ -173,9 +178,11 @@ describe('pairing keychain', () => {
     secureStoreMock.setItemAsync.mockImplementation(
       async (_k: string, _v: string, options: Options) => {
         const service = serviceOf(options)
+
         if (service === undefined) {
           throw ENCRYPT_REJECTION
         }
+
         order.push(`store:${service}`)
       }
     )
@@ -190,9 +197,11 @@ describe('pairing keychain', () => {
       if (key !== GENERATION_KEY) {
         return
       }
+
       if (raw === '1') {
         throw new Error('storage unavailable')
       }
+
       generationRecord = raw
     })
     secureStoreMock.setItemAsync.mockImplementation(
@@ -239,6 +248,7 @@ describe('pairing keychain', () => {
       if (serviceOf(options) === 'orca.pairing.v1') {
         throw currentError
       }
+
       return 'legacy-token'
     })
 
@@ -253,12 +263,14 @@ describe('pairing keychain', () => {
       if (key === GENERATION_KEY) {
         return generationRecord
       }
+
       return key === TOKEN_PRESENCE_KEY ? presenceRecord : null
     })
     asyncStorageMock.setItem.mockImplementation(async (key: string, raw: string) => {
       if (key === GENERATION_KEY) {
         generationRecord = raw
       }
+
       if (key === TOKEN_PRESENCE_KEY) {
         presenceRecord = raw
       }
@@ -305,6 +317,7 @@ describe('pairing keychain', () => {
       if (key === GENERATION_KEY) {
         throw new Error('storage unavailable')
       }
+
       return null
     })
     secureStoreMock.getItemAsync.mockImplementation(async (_k: string, options: Options) =>
@@ -334,6 +347,7 @@ describe('pairing keychain', () => {
     const services = secureStoreMock.deleteItemAsync.mock.calls.map((call) =>
       serviceOf(call[1] as Options)
     )
+
     expect(services).toEqual(['orca.pairing.v2', 'orca.pairing.v1', undefined])
     expect(asyncStorageMock.removeItem).toHaveBeenCalledWith(TOKEN_PRESENCE_KEY)
   })
@@ -354,9 +368,11 @@ describe('pairing keychain', () => {
 
   it('serializes writes that share the global generation', async () => {
     let releaseFirst!: () => void
+
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     secureStoreMock.setItemAsync.mockImplementationOnce(async () => firstWrite)
 
     const first = writePairingKeychainItem(TOKEN_KEY, 'first')

@@ -4,6 +4,7 @@ import { Switch } from '../ui/switch'
 import { SearchableSetting } from './SearchableSetting'
 import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
 import { translate } from '@/i18n/i18n'
+
 export { getInputPaneSearchEntries } from './input-search'
 
 type InputPaneProps = {

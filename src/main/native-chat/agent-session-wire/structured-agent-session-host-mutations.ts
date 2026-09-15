@@ -75,14 +75,18 @@ export function sendStructuredAgentSessionTurn(
   }
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
+
   return mutate(context, caller, params.envelope, {
     ...plan,
     run: (ctx) => {
       const rewind = context.deps.store.getRecord(ctx.sessionId)?.rewind
+
       if (rewind?.phase === 'prepared' || rewind?.phase === 'provider-succeeded') {
         return Promise.resolve(rewindRefusal('outcome-unknown'))
       }
+
       const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
+
       if (
         command &&
         ((command.state === 'unknown' && command.phase === 'prepared') ||
@@ -98,6 +102,7 @@ export function sendStructuredAgentSessionTurn(
           }
         })
       }
+
       return plan.run(ctx)
     }
   })
@@ -115,6 +120,7 @@ export function cancelStructuredAgentSessionTurn(
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   const command = context.deps.store.getRecord(params.envelope.sessionId)?.conversationCommand
+
   // Interrupts must reach a provider while the command awaits its terminal frame.
   const cancellationContext =
     command?.command === 'compact' && command.phase === 'prepared'
@@ -124,6 +130,7 @@ export function cancelStructuredAgentSessionTurn(
             context.serialize(`compact-cancel:${sessionId}`, task)
         }
       : context
+
   return mutate(cancellationContext, caller, params.envelope, cancelPlan(params))
 }
 
@@ -155,10 +162,13 @@ export function readStructuredAgentSessionOptions(
 ): Promise<AgentSessionOptionsResult> {
   return context.serialize(sessionId, async () => {
     const session = context.requireSession(sessionId)
+
     if (!context.deps.adapter.readOptions) {
       throw new Error('structured_agent_session_options_unsupported')
     }
+
     const options = await context.deps.adapter.readOptions({ sessionId, fence: session.fence })
+
     return {
       ...options,
       rewind:
@@ -183,9 +193,11 @@ export async function settleStructuredAgentSessionLateDispatch(
   } & ({ providerIdentity: AgentJournalItemIdentity } | { state: 'rejected'; reason: string })
 ): Promise<void> {
   const session = context.sessions.get(input.sessionId)
+
   if (!session) {
     return
   }
+
   // The journal queue drains before close; the host queue would defer this past teardown.
   await session.journal.resolveDispatch(
     'providerIdentity' in input

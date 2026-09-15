@@ -23,6 +23,7 @@ function item(sequence: number): AgentJournalRenderItem {
 function page(items: AgentJournalRenderItem[], hasOlder: boolean): AgentSessionHistoryPage {
   const oldest = items[0]?.sequence ?? 0
   const newest = items.at(-1)?.sequence ?? 0
+
   return {
     sessionId: 'session-a',
     epoch: 'epoch-a',
@@ -98,6 +99,7 @@ describe('structured agent session item retention', () => {
 
   it('leaves a session under the cap untouched', () => {
     const hydrated = hydrate([item(0)])
+
     const streamed = streamItems(
       hydrated,
       Array.from({ length: 200 }, (_, index) => index + 1)
@@ -112,6 +114,7 @@ describe('structured agent session item retention', () => {
       hydrate([item(1_000)], true),
       Array.from({ length: CAP + 10 }, (_, index) => index + 1_001)
     )
+
     const older = reduceStructuredAgentSession(streamed, {
       type: 'older-page',
       requestedCursor: { epoch: 'epoch-a', sequence: streamed.items[0]?.sequence ?? 0 },
@@ -120,6 +123,7 @@ describe('structured agent session item retention', () => {
         true
       )
     })
+
     expect(older.items).toHaveLength(CAP + 300)
 
     // A live batch slides the widened window by one instead of collapsing it back to the cap.
@@ -135,6 +139,7 @@ describe('structured agent session item retention', () => {
       hydrate([item(0)], false),
       Array.from({ length: CAP + 200 }, (_, index) => index + 1)
     )
+
     // The read captures this cursor, then a live batch trims three items off the head.
     const anchor = oldestStructuredAgentSessionCursor(streamed)
     const slid = streamItems(streamed, [CAP + 201, CAP + 202, CAP + 203])
@@ -158,7 +163,9 @@ describe('structured agent session item retention', () => {
       hydrate([item(0)], false),
       Array.from({ length: CAP + 200 }, (_, index) => index + 1)
     )
+
     const anchor = oldestStructuredAgentSessionCursor(streamed)
+
     const merged = reduceStructuredAgentSession(streamed, {
       type: 'older-page',
       requestedCursor: anchor ?? { epoch: 'epoch-a', sequence: 0 },
@@ -174,6 +181,7 @@ describe('structured agent session item retention', () => {
 
   it('keeps item identity stable when a batch carries no journal change', () => {
     const hydrated = hydrate([item(0)])
+
     const unchanged = reduceStructuredAgentSession(hydrated, {
       type: 'event',
       event: {

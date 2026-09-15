@@ -30,6 +30,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 function isQuietForQuiescence(lastOutputAt: number | null, quiescenceMs: number): boolean {
   return lastOutputAt === null ? true : Date.now() - lastOutputAt >= quiescenceMs
 }
+
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
@@ -82,6 +83,7 @@ export class RuntimeTerminalIdlePolls {
   private start(entry: IdlePollEntry): void {
     this.entries.add(entry)
     entry.waiter.cancelIdlePoll = () => this.stop(entry)
+
     // Why one shared timer for every waiter: a per-waiter interval multiplied idle
     // main-process wakeups by the number of concurrent `wait` calls, independent of
     // whether any terminal produced output. Same shape as the synthetic-title spinner.
@@ -104,6 +106,7 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.has(entry)) {
       return
     }
+
     const { waiter } = entry
     // Why re-read: `syncWindowGraph` rebuilds `this.leaves` with fresh objects on every
     // renderer publish, so the record captured at registration stops advancing. Its
@@ -112,17 +115,21 @@ export class RuntimeTerminalIdlePolls {
     const leaf = this.deps.getLiveLeaf(entry.leaf)
     const agent = this.deps.getPaneAgent(leaf.ptyId)
     let startedForegroundPoll = false
+
     try {
       const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
       const blockedReason = detectTerminalWaitBlockedReason(waitText)
+
       if (blockedReason) {
         this.stop(entry)
         this.deps.resolve(
           waiter,
           buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
         )
+
         return
       }
+
       if (
         isTuiIdleSatisfied({
           record: leaf,
@@ -135,8 +142,10 @@ export class RuntimeTerminalIdlePolls {
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
+
         return
       }
+
       if (
         leaf.lastAgentStatus === null &&
         quietForegroundProcessProvesTuiIdle(agent) &&
@@ -144,13 +153,16 @@ export class RuntimeTerminalIdlePolls {
         !entry.foregroundPollInFlight
       ) {
         const foregroundRead = this.deps.getForegroundProcess(leaf.ptyId)
+
         if (!foregroundRead) {
           return
         }
+
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
         const live = this.deps.getLiveLeaf(entry.leaf)
+
         if (
           foreground &&
           !isShellProcess(foreground) &&
@@ -173,22 +185,27 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.has(entry)) {
       return
     }
+
     const { waiter, pty } = entry
     // Why no re-read here: `ptysById` has a single create-once `set` site, so PTY
     // records are mutated in place rather than swapped, and a capture stays live.
     const agent = this.deps.getPaneAgent(pty.ptyId)
     let startedForegroundPoll = false
+
     try {
       const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
       const blockedReason = detectTerminalWaitBlockedReason(waitText)
+
       if (blockedReason) {
         this.stop(entry)
         this.deps.resolve(
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
         )
+
         return
       }
+
       if (
         isTuiIdleSatisfied({
           record: pty,
@@ -202,20 +219,25 @@ export class RuntimeTerminalIdlePolls {
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+
         return
       }
+
       if (
         pty.lastAgentStatus === null &&
         quietForegroundProcessProvesTuiIdle(agent) &&
         !entry.foregroundPollInFlight
       ) {
         const foregroundRead = this.deps.getForegroundProcess(pty.ptyId)
+
         if (!foregroundRead) {
           return
         }
+
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
+
         if (
           foreground &&
           !isShellProcess(foreground) &&
@@ -238,7 +260,9 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.delete(entry)) {
       return
     }
+
     entry.waiter.cancelIdlePoll = null
+
     if (this.entries.size === 0 && this.sweepTimer) {
       clearInterval(this.sweepTimer)
       this.sweepTimer = null

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-rpc-client', async () => {
   // The real target resolution is the thing under test; only the transport is stubbed.
   const { getActiveRuntimeTarget } = await import('@/runtime/runtime-client-target')
+
   return {
     getActiveRuntimeTarget,
     callRuntimeRpc: mocks.call,
@@ -135,9 +136,11 @@ describe('revealStructuredSession', () => {
 
   it('reads a version block as a host too old, not as a lost connection', async () => {
     mocks.environmentIdFor.mockReturnValue('env-1')
+
     const blocked = Object.assign(new Error('Update the Orca server'), {
       code: RUNTIME_COMPAT_BLOCK_CODE
     })
+
     mocks.supports.mockRejectedValue(blocked)
 
     await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')

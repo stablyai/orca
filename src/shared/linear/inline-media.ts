@@ -10,7 +10,9 @@ export type LinearInlineMedia = {
 }
 
 const MARKDOWN_IMAGE_PATTERN = /!\[([^\]]*)\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+["'][^"']*["'])?\s*\)/g
+
 const HTML_MEDIA_SRC_PATTERN = /<(?:img|video|audio|source)\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi
+
 const LINEAR_UPLOAD_HOST = 'uploads.linear.app'
 
 export function extractLinearInlineMedia(
@@ -21,12 +23,14 @@ export function extractLinearInlineMedia(
   if (!markdown) {
     return []
   }
+
   const media: LinearInlineMedia[] = []
   const seen = new Set<string>()
 
   for (const match of markdown.matchAll(MARKDOWN_IMAGE_PATTERN)) {
     addMedia(media, seen, normalizeMarkdownUrl(match[2] ?? ''), source, sourceId, match[1] ?? null)
   }
+
   for (const match of markdown.matchAll(HTML_MEDIA_SRC_PATTERN)) {
     addMedia(media, seen, match[1] ?? '', source, sourceId, null)
   }
@@ -43,9 +47,11 @@ function addMedia(
   altText: string | null
 ): void {
   const url = rawUrl.trim()
+
   if (!isMediaUrl(url) || seen.has(url)) {
     return
   }
+
   seen.add(url)
   media.push({
     source,
@@ -59,9 +65,11 @@ function addMedia(
 
 function normalizeMarkdownUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim()
+
   if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
     return trimmed.slice(1, -1)
   }
+
   return trimmed
 }
 
@@ -69,11 +77,14 @@ function isMediaUrl(url: string): boolean {
   if (!url) {
     return false
   }
+
   if (url.startsWith('data:image/') || url.startsWith('data:video/')) {
     return true
   }
+
   try {
     const parsed = new URL(url)
+
     return parsed.protocol === 'https:' || parsed.protocol === 'http:'
   } catch {
     return false
@@ -92,9 +103,11 @@ function fileNameFromUrl(url: string): string | null {
   if (url.startsWith('data:')) {
     return null
   }
+
   try {
     const parsed = new URL(url)
     const last = parsed.pathname.split('/').findLast(Boolean)
+
     return last ? decodeURIComponent(last) : null
   } catch {
     return null

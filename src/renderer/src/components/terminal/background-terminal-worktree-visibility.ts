@@ -22,12 +22,14 @@ export function scheduleBackgroundTerminalWorktreeMeasure({
   clearTimeoutFn
 }: ScheduleMeasureArgs): boolean {
   const added = addBackgroundMountedTerminalWorktree(mountedWorktreeIds, worktreeId, onRevision)
+
   if (!worktreeId) {
     return added
   }
 
   measurableBackgroundWorktreeIds.add(worktreeId)
   const existingTimer = timers.get(worktreeId)
+
   if (existingTimer !== undefined) {
     clearTimeoutFn(existingTimer)
   }
@@ -43,5 +45,6 @@ export function scheduleBackgroundTerminalWorktreeMeasure({
 
   timers.set(worktreeId, timer)
   onRevision()
+
   return added
 }

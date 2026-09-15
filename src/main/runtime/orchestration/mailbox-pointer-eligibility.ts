@@ -11,6 +11,7 @@ export function messageTypeHasOrchestrationWaiter(
       return true
     }
   }
+
   return false
 }
 
@@ -22,6 +23,7 @@ export function hasUnfilteredOrchestrationWaiter(
       return true
     }
   }
+
   return false
 }
 
@@ -47,12 +49,15 @@ export function selectOrchestrationPointerBatch(input: {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
     return []
   }
+
   const excludedTypes = new Set(input.reservedTypes)
+
   for (const waiter of input.waiters ?? []) {
     for (const type of waiter.typeFilter ?? []) {
       excludedTypes.add(type)
     }
   }
+
   return input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
     excludeTypes: [...excludedTypes],
     limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
@@ -68,9 +73,11 @@ export function shouldReleaseOrchestrationPointer(
   if (db?.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
     return true
   }
+
   if (messages.some((message) => messageTypeHasOrchestrationWaiter(waiters, message.type))) {
     return true
   }
+
   return !(
     db?.areUnreadMessages?.(
       mailboxHandle,

@@ -64,6 +64,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     taskUiReady,
     trustedOrcaHooks
   } = model
+
   // Why: task-loading effects use this as a stale-client guard, so the ref
   // must be current before those passive effects can run after commit.
   const resetGitHubItemsState = useCallback(() => {
@@ -79,6 +80,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   // render too late and the previous host's rows show under the new one. The
   // repo list resets itself; these are the other client-scoped caches.
   const [boundClient, setBoundClient] = useState(client)
+
   if (boundClient !== client) {
     setBoundClient(client)
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
@@ -100,6 +102,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client || !taskUiReady) {
         return
       }
+
       const next = { ...taskResumeRef.current, ...updates }
       taskResumeRef.current = next
       void taskUiStateWrite.request(client, { taskResumeState: next }).catch(() => {
@@ -114,20 +117,26 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!githubProjectFieldVisibilityScope) {
         return
       }
+
       setGithubProjectHiddenFieldIdsByView((current) => {
         const hidden = new Set(current[githubProjectFieldVisibilityScope] ?? [])
+
         if (hidden.has(fieldId)) {
           hidden.delete(fieldId)
         } else {
           hidden.add(fieldId)
         }
+
         const next = { ...current }
+
         if (hidden.size === 0) {
           delete next[githubProjectFieldVisibilityScope]
         } else {
           next[githubProjectFieldVisibilityScope] = [...hidden]
         }
+
         persistTaskResumeState({ githubProjectHiddenFieldIdsByView: next })
+
         return next
       })
     },
@@ -139,6 +148,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client || !taskUiReady) {
         return
       }
+
       void taskSettingsWrite.request(client, { defaultTaskSource: nextProvider }).catch(() => {
         // Best-effort: a failed settings write should not block switching views.
       })
@@ -151,8 +161,10 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client || !taskUiReady) {
         return
       }
+
       const nextSelection =
         selection.size === 0 || selection.size === allRepos.length ? null : [...selection]
+
       defaultRepoSelectionRef.current = nextSelection
       void taskSettingsWrite.request(client, { defaultRepoSelection: nextSelection }).catch(() => {
         // Best-effort: the in-memory repo picker already reflects the change.
@@ -164,9 +176,11 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   const persistDefaultGitHubPreset = useCallback(
     (preset: GitHubPreset) => {
       setDefaultGitHubPreset(preset)
+
       if (!client || !taskUiReady) {
         return
       }
+
       void taskSettingsWrite.request(client, { defaultTaskViewPreset: preset }).catch(() => {
         // Best-effort: the current session still uses the selected preset.
       })
@@ -177,9 +191,11 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   const persistGitHubProjectSettings = useCallback(
     (nextSettings: GitHubProjectSettings) => {
       setGithubProjectSettings(nextSettings)
+
       if (!client || !taskUiReady) {
         return
       }
+
       void taskSettingsWrite.request(client, { githubProjects: nextSettings }).catch(() => {
         // Best-effort: project selection can still work for the current session.
       })
@@ -192,12 +208,14 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       if (!client) {
         return
       }
+
       const next = trustedOrcaHooksWithSetupApproval({
         trust: trustedOrcaHooks,
         repoId,
         contentHash,
         alwaysTrust
       })
+
       taskUiStateWrite.interpret(await taskUiStateWrite.request(client, { trustedOrcaHooks: next }))
       setTrustedOrcaHooks(next)
     },
@@ -237,6 +255,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setSetupPrompt(null)
     setOrcaYamlTrustPrompt(null)
   }, [])
+
   return Object.assign(model, {
     resetGitHubItemsState,
     boundClient,

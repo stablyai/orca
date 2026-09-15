@@ -28,9 +28,11 @@ vi.mock('@/i18n/i18n', () => ({
 import RecentTabSwitcher from './RecentTabSwitcher'
 
 const WORKTREE_ID = 'wt-1'
+
 const GROUP_ID = 'group-1'
 
 type CtrlTabKeyDownCallback = (data: { shiftKey: boolean }) => void
+
 type CtrlTabKeyUpCallback = () => void
 
 let ctrlTabKeyDownCallback: CtrlTabKeyDownCallback | null = null
@@ -56,6 +58,7 @@ function makeStore(): AppState {
     makeTab('tab-b', 'file-b', 'B'),
     makeTab('tab-c', 'file-c', 'C')
   ]
+
   return {
     activeView: 'terminal',
     activeWorktreeId: WORKTREE_ID,
@@ -95,6 +98,7 @@ function installWindowApi(): void {
       ui: {
         onCtrlTabKeyDown: vi.fn((callback: CtrlTabKeyDownCallback) => {
           ctrlTabKeyDownCallback = callback
+
           return vi.fn()
         }),
         onCtrlTabKeyUp: vi.fn((_callback: CtrlTabKeyUpCallback) => vi.fn())
@@ -110,6 +114,7 @@ async function renderSwitcher(): Promise<{ container: HTMLDivElement; root: Root
   await act(async () => {
     root.render(<RecentTabSwitcher />)
   })
+
   return { container, root }
 }
 
@@ -125,6 +130,7 @@ function appendTerminalTextarea(): {
   input.addEventListener('keydown', keyDown)
   input.addEventListener('keyup', keyUp)
   document.body.appendChild(input)
+
   return { input, keyDown, keyUp }
 }
 
@@ -138,9 +144,11 @@ async function dispatchKeyboard(
     cancelable: true,
     ...init
   })
+
   await act(async () => {
     target.dispatchEvent(event)
   })
+
   return event
 }
 
@@ -171,6 +179,7 @@ describe('RecentTabSwitcher', () => {
     })
 
     const terminal = appendTerminalTextarea()
+
     const event = await dispatchKeyboard(terminal.input, 'keyup', {
       key: 'Control',
       code: 'ControlLeft',

@@ -21,6 +21,7 @@ export function resolveWorkspaceKanbanPointerDragSelection(args: {
       worktreeIdentities: [...args.selectedWorktreeIds]
     }
   }
+
   return {
     worktreeIds: [args.sourceWorktreeId],
     worktreeIdentities: [args.sourceWorktreeIdentity]

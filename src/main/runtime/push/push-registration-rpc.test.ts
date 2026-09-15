@@ -10,9 +10,11 @@ import { OrcaRuntimeService } from '../orca-runtime'
 
 function method(name: string): RpcMethod {
   const found = eraseRpcMethods(NOTIFICATION_METHODS).find((candidate) => candidate.name === name)
+
   if (!found || 'stream' in found) {
     throw new Error(`${name} is not a one-shot RPC method`)
   }
+
   return found
 }
 
@@ -122,11 +124,13 @@ describe('notifications.unregisterPush', () => {
 describe('revokeMobileDevice', () => {
   it('queues the gateway delete before the device row disappears', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-push-revoke-'))
+
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: false
     })
+
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const device = server['deviceRegistry']!.addDevice('phone', 'mobile')
     server['deviceRegistry']!.setPushRegistration(device.deviceId, {
@@ -143,11 +147,13 @@ describe('revokeMobileDevice', () => {
 
   it('queues nothing for a device that never enabled push', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-push-revoke-'))
+
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: false
     })
+
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const device = server['deviceRegistry']!.addDevice('phone', 'mobile')
 

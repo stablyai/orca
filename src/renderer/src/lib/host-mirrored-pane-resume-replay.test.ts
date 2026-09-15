@@ -19,8 +19,11 @@ import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/sl
 const initialAppStoreState = useAppStore.getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
+
 const RUNTIME_ENV_ID = 'env-abfee683'
+
 const WORKTREE_ID = makeCreatedAgentWorktree().id
 
 function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree> {
@@ -99,6 +102,7 @@ function seedState(worktree: ReturnType<typeof makeCreatedAgentWorktree>): void 
     refreshGitHubForWorktreeIfStale: vi.fn(),
     revealWorktreeInSidebar: vi.fn()
   }
+
   useAppStore.setState(state)
 }
 
@@ -122,6 +126,7 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
       }
     }
   }))
+
   return paneKey
 }
 

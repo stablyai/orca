@@ -22,12 +22,14 @@ export async function resolveGitHubPrStartPointForRepo({
   isCrossRepository
 }: GitHubPrStartPointInput): Promise<GitHubPrStartPoint> {
   const target = getActiveRuntimeTarget(settings)
+
   const prFields = {
     prNumber,
     ...(headRefName ? { headRefName } : {}),
     ...(baseRefName ? { baseRefName } : {}),
     ...(isCrossRepository !== undefined ? { isCrossRepository } : {})
   }
+
   const result =
     target.kind === 'local'
       ? await window.api.worktrees.resolvePrBase({ repoId, ...prFields })
@@ -37,8 +39,10 @@ export async function resolveGitHubPrStartPointForRepo({
           { repo: repoId, ...prFields },
           { timeoutMs: 30_000 }
         )
+
   if ('error' in result) {
     throw new Error(result.error)
   }
+
   return result
 }

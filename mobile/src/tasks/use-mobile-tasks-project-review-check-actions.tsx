@@ -24,18 +24,24 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
     setProjectRowDetailError,
     setProjectRowDetailRefreshSeq
   } = model
+
   const requestProjectGitHubReviewers = useCallback(
     async (row: GitHubProjectRow, logins?: string[]): Promise<void> => {
       const repo = findProjectRowRepo(row)
+
       if (!client || projectMutating || row.itemType !== 'PULL_REQUEST' || !repo) {
         return
       }
+
       const reviewers = logins ?? splitReviewerList(projectReviewersDraft)
+
       if (reviewers.length === 0 || !row.content.number) {
         return
       }
+
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.requestPRReviewers',
@@ -47,25 +53,33 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as { ok?: boolean; error?: string }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
         }
+
         const nextReviewRequests = (() => {
           const byLogin = new Map<string, GitHubAssignableUser>()
+
           for (const reviewer of projectRowDetail?.provider === 'github'
             ? projectRowDetail.reviewRequests
             : []) {
             const login = reviewer.login.trim()
+
             if (login) {
               byLogin.set(login.toLowerCase(), reviewer)
             }
           }
+
           for (const login of reviewers) {
             const normalized = login.trim().replace(/^@/, '')
+
             if (normalized && !byLogin.has(normalized.toLowerCase())) {
               byLogin.set(normalized.toLowerCase(), {
                 login: normalized,
@@ -74,13 +88,16 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
               })
             }
           }
+
           return Array.from(byLogin.values())
         })()
+
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? { ...current, reviewRequests: nextReviewRequests }
             : current
         )
+
         if (!logins) {
           setProjectReviewersDraft('')
         }
@@ -103,6 +120,7 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
   const refreshProjectGitHubChecks = useCallback(
     async (row: GitHubProjectRow): Promise<void> => {
       const repo = findProjectRowRepo(row)
+
       if (
         !client ||
         projectMutating ||
@@ -112,8 +130,10 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
       ) {
         return
       }
+
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.prChecks',
@@ -126,12 +146,15 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         if (!Array.isArray(response.result)) {
           throw new Error('Invalid checks response')
         }
+
         const checks = response.result as GitHubDetailCheck[]
         setProjectRowDetail((current) =>
           current?.provider === 'github' ? { ...current, checks } : current
@@ -148,6 +171,7 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
   const rerunProjectGitHubChecks = useCallback(
     async (row: GitHubProjectRow, failedOnly: boolean): Promise<void> => {
       const repo = findProjectRowRepo(row)
+
       if (
         !client ||
         projectMutating ||
@@ -157,8 +181,10 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
       ) {
         return
       }
+
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.rerunPRChecks',
@@ -171,13 +197,17 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 60_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as { ok?: boolean; error?: string }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to rerun checks')
         }
+
         setProjectRowDetailRefreshSeq((current) => current + 1)
       } catch (err) {
         setProjectRowDetailError(err instanceof Error ? err.message : 'Failed to rerun checks')
@@ -191,16 +221,21 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
   const toggleProjectGitHubFileViewed = useCallback(
     async (row: GitHubProjectRow, file: GitHubDetailFile): Promise<void> => {
       const repo = findProjectRowRepo(row)
+
       if (!client || projectMutating || row.itemType !== 'PULL_REQUEST' || !repo) {
         return
       }
+
       if (projectRowDetail?.provider !== 'github' || !projectRowDetail.pullRequestId) {
         setProjectRowDetailError('Unable to sync viewed state for this pull request.')
+
         return
       }
+
       const viewed = file.viewerViewedState !== 'VIEWED'
       setProjectMutating(true)
       setProjectRowDetailError('')
+
       try {
         const response = await client.sendRequest(
           'github.setPRFileViewed',
@@ -213,12 +248,15 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         if (response.result !== true) {
           throw new Error('Failed to sync viewed state with GitHub.')
         }
+
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -241,6 +279,7 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
     },
     [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating, projectRowDetail]
   )
+
   return Object.assign(model, {
     requestProjectGitHubReviewers,
     refreshProjectGitHubChecks,

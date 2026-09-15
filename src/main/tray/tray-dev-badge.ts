@@ -4,8 +4,11 @@ import { nativeImage, type NativeImage } from 'electron'
 // the 14pt menu-bar template; it fills the empty area left of the orca glyph
 // so the status item keeps the exact production footprint.
 const DEV_BADGE_ROWS = ['##..###.#.#', '#.#.#...#.#', '#.#.##..#.#', '#.#.#...#.#', '##..###..#.']
+
 const BADGE_OFFSET_X = 0
+
 const BADGE_OFFSET_Y = 3
+
 // Why: the orca tail's antialiased pixels touch the V's right stroke and make
 // "DEV" read as "DEU"; clearing a margin around the badge keeps it legible.
 const BADGE_CLEAR_MARGIN = 1
@@ -19,6 +22,7 @@ const BADGE_CLEAR_MARGIN = 1
  */
 export function stampTrayDevBadge(base: NativeImage, scaleFactor = 1): NativeImage {
   const { width, height } = base.getSize()
+
   if (width <= 0 || height <= 0) {
     return base
   }
@@ -31,6 +35,7 @@ export function stampTrayDevBadge(base: NativeImage, scaleFactor = 1): NativeIma
   const clearTop = (BADGE_OFFSET_Y - BADGE_CLEAR_MARGIN) * scaleFactor
   const clearRight = (BADGE_OFFSET_X + DEV_BADGE_ROWS[0].length + BADGE_CLEAR_MARGIN) * scaleFactor
   const clearBottom = (BADGE_OFFSET_Y + DEV_BADGE_ROWS.length + BADGE_CLEAR_MARGIN) * scaleFactor
+
   for (let y = Math.max(0, clearTop); y < Math.min(pixelHeight, clearBottom); y++) {
     for (let x = Math.max(0, clearLeft); x < Math.min(pixelWidth, clearRight); x++) {
       bitmap.fill(0x00, (y * pixelWidth + x) * 4, (y * pixelWidth + x) * 4 + 4)
@@ -39,19 +44,23 @@ export function stampTrayDevBadge(base: NativeImage, scaleFactor = 1): NativeIma
 
   for (let row = 0; row < DEV_BADGE_ROWS.length; row++) {
     const pattern = DEV_BADGE_ROWS[row]
+
     for (let col = 0; col < pattern.length; col++) {
       if (pattern[col] !== '#') {
         continue
       }
+
       // Why: replicate each badge pixel scaleFactor times so the Retina
       // representation shows the same physical badge as the 1x one.
       for (let dy = 0; dy < scaleFactor; dy++) {
         for (let dx = 0; dx < scaleFactor; dx++) {
           const x = (BADGE_OFFSET_X + col) * scaleFactor + dx
           const y = (BADGE_OFFSET_Y + row) * scaleFactor + dy
+
           if (x >= pixelWidth || y >= pixelHeight) {
             continue
           }
+
           const offset = (y * pixelWidth + x) * 4
           bitmap[offset] = 0x00
           bitmap[offset + 1] = 0x00

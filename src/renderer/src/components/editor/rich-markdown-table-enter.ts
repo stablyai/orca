@@ -5,6 +5,7 @@ import { isInTable, moveCellForward, nextCell, selectionCell } from '@tiptap/pm/
 function moveToVerticalNeighbor(editor: Editor, direction: 1 | -1): boolean {
   const { state, view } = editor
   const $nextCell = nextCell(selectionCell(state), 'vert', direction)
+
   if (!$nextCell) {
     return false
   }
@@ -14,6 +15,7 @@ function moveToVerticalNeighbor(editor: Editor, direction: 1 | -1): boolean {
       .setSelection(TextSelection.between($nextCell, moveCellForward($nextCell)))
       .scrollIntoView()
   )
+
   return true
 }
 
@@ -40,5 +42,6 @@ export function handleRichMarkdownTableEnter(editor: Editor): boolean {
   editor.commands.addRowAfter()
   // Selection stays in the original row; step down into the new one.
   moveToVerticalNeighbor(editor, 1)
+
   return true
 }

@@ -63,18 +63,22 @@ export function buildMobileSourceControlActions(
   const hasUpstream = upstream?.hasUpstream === true
   const ahead = upstream?.ahead ?? 0
   const behind = upstream?.behind ?? 0
+
   const busy =
     args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+
   const commitHint = !hasStaged
     ? 'Stage at least one file'
     : !hasMessage
       ? 'Enter a commit message'
       : undefined
+
   const remoteHint = !upstreamKnown
     ? 'Checking branch status...'
     : hasUpstream
       ? undefined
       : 'Publish Branch first'
+
   const prHint = !upstreamKnown
     ? 'Checking branch status...'
     : !args.prAvailable

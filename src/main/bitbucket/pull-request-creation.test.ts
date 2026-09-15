@@ -24,6 +24,7 @@ vi.mock('../source-control/pull-request-template', () => ({
 }))
 
 const OLD_ENV = process.env
+
 const OLD_FETCH = globalThis.fetch
 
 const CREATE_INPUT = {
@@ -77,8 +78,10 @@ describe('Bitbucket pull request creation', () => {
         source: { branch: { name: 'feature/login' } },
         destination: { branch: { name: 'main' } }
       })
+
       return createdPullRequestResponse()
     })
+
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
     await expect(createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')).resolves.toEqual({
@@ -123,14 +126,17 @@ describe('Bitbucket pull request creation', () => {
 
   it('maps a duplicate-branch rejection to already_exists with the existing review', async () => {
     let call = 0
+
     const fetchMock = vi.fn(async () => {
       call += 1
+
       if (call === 1) {
         return Response.json(
           { error: { message: 'There is already a pull request for this branch.' } },
           { status: 400 }
         )
       }
+
       return Response.json({
         values: [
           {
@@ -145,6 +151,7 @@ describe('Bitbucket pull request creation', () => {
         ]
       })
     })
+
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
     expect(await createBitbucketPullRequest('/repo', CREATE_INPUT, 'local')).toMatchObject({

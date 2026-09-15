@@ -21,19 +21,25 @@ export function autoFocusRichEditor(
   if (force && !nextEditor.isDestroyed && shouldFocus()) {
     nextEditor.view?.dom?.focus?.({ preventScroll: true })
   }
+
   let frameId: number | null = requestAnimationFrame(() => {
     frameId = null
+
     if (nextEditor.isDestroyed || !shouldFocus()) {
       return
     }
+
     const active = document.activeElement
+
     // Why: explicit file-open requests may hand focus to the editor; ordinary
     // lazy mounts must still leave unrelated fields and dialogs alone.
     const canTakeFocus =
       force || active === null || active === document.body || (rootEl?.contains(active) ?? false)
+
     if (!canTakeFocus) {
       return
     }
+
     // Why: pass 'start' (not null) to resolve to a proper TextSelection at
     // doc position 1. With null, Tiptap keeps whatever the editor's current
     // selection happens to be on mount — for a freshly-created empty doc
@@ -46,6 +52,7 @@ export function autoFocusRichEditor(
     // scroll position on every tab switch.
     nextEditor.commands.focus('start', { scrollIntoView: false })
   })
+
   return () => {
     if (frameId !== null) {
       cancelAnimationFrame(frameId)

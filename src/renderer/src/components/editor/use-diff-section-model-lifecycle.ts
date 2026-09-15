@@ -19,6 +19,7 @@ export function useDiffSectionModelLifecycle(params: {
       ])
     }, 0)
   }, [params.modelPathBase])
+
   const disposeDiffModelsRef = useRef(disposeDiffModels)
   // Keep callback-ref dispose path on the latest disposer without render-time mutation.
   useEffect(() => {
@@ -29,6 +30,7 @@ export function useDiffSectionModelLifecycle(params: {
     if (node) {
       return
     }
+
     disposeDiffModelsRef.current()
   }, [])
 

@@ -25,9 +25,11 @@ describe('ModelManager download failures', () => {
 
   it('rejects failed model downloads so the caller can surface the error', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manifest = SPEECH_MODEL_CATALOG[0]
       const errorHandlers: ((err: Error) => void)[] = []
+
       const request = {
         abort: vi.fn(() => request),
         end: vi.fn(() => {
@@ -36,24 +38,29 @@ describe('ModelManager download failures', () => {
               handler(new Error('network down'))
             }
           })
+
           return request
         }),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
           if (event === 'error') {
             errorHandlers.push(cb)
           }
+
           return request
         }),
         off: vi.fn((event: string, cb: (err: Error) => void) => {
           if (event === 'error') {
             const index = errorHandlers.indexOf(cb)
+
             if (index !== -1) {
               errorHandlers.splice(index, 1)
             }
           }
+
           return request
         })
       }
+
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir)
 

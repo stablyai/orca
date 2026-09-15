@@ -33,6 +33,7 @@ export function FolderWorkspacePrChecksRow({
   const showStatusIcon = row.checkTone !== 'neutral'
   const animateStatusIcon = row.checkTone === 'pending'
   const reviewProviderLabel = row.provider === 'gitlab' ? 'MR' : 'PR'
+
   const toggleDetailsLabel = expanded
     ? translate(
         'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.hideDetails',
@@ -44,11 +45,13 @@ export function FolderWorkspacePrChecksRow({
         'Show {{value0}} PR check details',
         { value0: row.worktree.displayName }
       )
+
   const openExternalLabel = translate(
     'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.openReviewExternally',
     'Open {{value0}} externally',
     { value0: reviewProviderLabel }
   )
+
   return (
     <div
       className={cn(
@@ -65,6 +68,7 @@ export function FolderWorkspacePrChecksRow({
           if (event.key !== 'Enter' && event.key !== ' ') {
             return
           }
+
           event.preventDefault()
           onToggle()
         }}

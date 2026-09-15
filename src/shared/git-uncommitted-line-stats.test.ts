@@ -159,6 +159,7 @@ describe('collectUntrackedAdditions', () => {
     // second pass must be stat-only.
     lstatMock.mockResolvedValue(mockFileStat(5, 7))
     readFileMock.mockResolvedValue(Buffer.from('a\nb\nc'))
+
     const paths = Array.from(
       { length: DEFAULT_GIT_STATUS_LIMIT },
       (_, i) => `poll-scale/file-${i}.ts`

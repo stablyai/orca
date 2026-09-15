@@ -29,13 +29,16 @@ export function omitDisownedPtyIds(
   ptyIds: Iterable<string>
 ): Record<string, true> {
   let next: Record<string, true> | null = null
+
   for (const ptyId of ptyIds) {
     if (!records[ptyId]) {
       continue
     }
+
     next ??= { ...records }
     delete next[ptyId]
   }
+
   return next ?? records
 }
 

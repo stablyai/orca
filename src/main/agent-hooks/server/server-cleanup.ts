@@ -17,7 +17,9 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     ) {
       return null
     }
+
     const { launchToken: _launchToken, ...resumeIdentity } = entry
+
     return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
   }
 
@@ -29,14 +31,18 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     options?: { preserveResumeIdentity?: boolean }
   ): void {
     const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
+
     if (!deleted) {
       return
     }
+
     const retained =
       options?.preserveResumeIdentity === false ? null : this.toRetainedProviderSessionRow(deleted)
+
     if (retained) {
       this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
     }
+
     this.commitStatusRowMutation(deleted, retained)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
@@ -52,11 +58,14 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
    *  pane keys that were actually evicted. */
   dropPersistedStatusEntries(identities: readonly AgentStatusCacheIdentity[]): string[] {
     const evicted: string[] = []
+
     for (const identity of identities) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(identity.paneKey)
+
       const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+
       // Why: stateStartedAt pins the turn; the renderer's updatedAt is stamped at or after this
       // receivedAt (runtime-sync and recovery paths use Date.now()/capturedAt), so a strictly
       // newer cached event is the only replacement worth protecting.
@@ -67,25 +76,34 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       ) {
         continue
       }
+
       const deleted = this.deleteStatusEntry(resolvedPaneKey, { preserveAuthority: true })
+
       if (!deleted) {
         continue
       }
+
       const retained = this.toRetainedProviderSessionRow(deleted)
+
       if (retained) {
         this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
       }
+
       this.commitStatusRowMutation(deleted, retained)
       evicted.push(deleted.paneKey)
     }
+
     if (evicted.length === 0) {
       return evicted
     }
+
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
+
     for (const paneKey of evicted) {
       this.emitStatusDropped(paneKey)
     }
+
     return evicted
   }
 
@@ -109,11 +127,14 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   ): number {
     // A certified PTY exit passes no resume identity; a surviving shell may opt into the remnant.
     let cleared = 0
+
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         continue
       }
+
       const retained = options?.preserveResumeIdentity
         ? this.toRetainedProviderSessionRow(
             this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
@@ -121,18 +142,23 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
               | undefined
           )
         : null
+
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+
       this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
+
       if (retained) {
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, retained)
         this.scheduleStatusPersist()
         this.notifyStatusChangeListeners()
       }
+
       this.commitStatusRowMutation(previous, retained)
       cleared += 1
     }
+
     return cleared
   }
 
@@ -147,25 +173,33 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   /** Clear statuses proven to belong to one lost SSH transport. */
   clearStatusEntriesForConnection(connectionId: string): void {
     const normalizedConnectionId = connectionId.trim()
+
     if (normalizedConnectionId.length === 0) {
       return
     }
+
     const clearedAt = Math.max(
       Date.now(),
       (this.connectionTimestampWatermarkById.get(normalizedConnectionId) ?? -1) + 1
     )
+
     this.connectionTimestampWatermarkById.set(normalizedConnectionId, clearedAt)
     let statusChanged = false
+
     for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
       const entry = rawEntry as EnrichedAgentHookEventPayload
+
       // Why: unstamped rows can't be attributed to one host; leave them for normal pane teardown.
       if (entry.connectionId !== normalizedConnectionId) {
         continue
       }
+
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
+
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
+
         if (deleted.payload.agentType === 'codex') {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -179,16 +213,19 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         }
       }
     }
+
     for (const [paneKey, evidence] of this.currentAuthorityObservations) {
       if (evidence.connectionId === normalizedConnectionId) {
         this.currentAuthorityObservations.delete(paneKey)
       }
     }
+
     if (statusChanged) {
       // Why: persist/notify once — one disconnect can own many panes.
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
+
     // Why: always send the cutoff even with no matched entry — another host may have overwritten this pane's row.
     this.emitPaneStatusCleared({
       transient: true,
@@ -202,25 +239,32 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     options?: { preserveAuthority?: boolean }
   ): EnrichedAgentHookEventPayload | null {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+
     const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     if (!existing) {
       return null
     }
+
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
+
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
     }
+
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
+
     if (existing.payload.state === 'done') {
       this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     }
+
     return existing
   }
 }

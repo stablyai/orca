@@ -15,6 +15,7 @@ export function getBrowserPageRuntimeEnvironmentId(
   if (page.browserRuntimeEnvironmentId !== undefined) {
     return page.browserRuntimeEnvironmentId?.trim() || null
   }
+
   return inferredRuntimeEnvironmentId?.trim() || null
 }
 
@@ -32,6 +33,7 @@ export function getBrowserDisplayTitle(title: string | null | undefined, url: st
   ) {
     return 'New Tab'
   }
+
   return title
 }
 
@@ -41,6 +43,7 @@ export function isChromiumErrorPage(url: string): boolean {
 
 export function getNotebookPathFromBrowserUrl(url: string): string | null {
   const filePath = browserFileUrlToAbsolutePath(url)
+
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
 }
 
@@ -60,6 +63,7 @@ export function retryBrowserTabLoad(
   const retryUrl = normalizeBrowserNavigationUrl(
     browserTab.loadError?.validatedUrl ?? browserTab.url
   )
+
   if (!retryUrl) {
     return
   }

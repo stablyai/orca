@@ -26,7 +26,9 @@ function withoutSettledActivationSpawn(
     if (!tab.pendingActivationSpawn || !hasLivePty(tab.id)) {
       return tab
     }
+
     const { pendingActivationSpawn: _settled, ...rest } = tab
+
     return rest
   })
 }

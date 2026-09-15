@@ -42,6 +42,7 @@ import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
 const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
+
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
@@ -324,6 +325,7 @@ export type ParsedWorkspaceSession =
 export function describeWorkspaceSessionError(error: z.ZodError): string {
   const firstIssue = error.issues[0]
   const path = firstIssue?.path.join('.') || '<root>'
+
   return `${path}: ${firstIssue?.message ?? 'invalid session'}`
 }
 
@@ -349,11 +351,14 @@ export function safeParseWorkspaceSession(
  *  so callers can fall back to defaults on failure without a try/catch. */
 export function parseWorkspaceSession(raw: unknown): ParsedWorkspaceSession {
   const result = safeParseWorkspaceSession(raw)
+
   if (!result) {
     return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
   }
+
   if (result.success) {
     return { ok: true, value: result.data }
   }
+
   return { ok: false, error: describeWorkspaceSessionError(result.error) }
 }

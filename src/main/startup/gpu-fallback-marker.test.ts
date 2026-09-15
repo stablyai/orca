@@ -12,6 +12,7 @@ import {
 
 describe('gpu-fallback-marker', () => {
   let userDataPath: string
+
   const environment = {
     appVersion: '1.2.3',
     electronVersion: '42.3.3',

@@ -32,12 +32,15 @@ function resolveSourceAgent(args: {
 }): TuiAgent | null {
   const state = useAppStore.getState()
   const paneAgent = state.agentStatusByPaneKey[makePaneKey(args.tabId, args.pane.leafId)]?.agentType
+
   if (isTuiAgent(paneAgent)) {
     return paneAgent
   }
+
   const tabAgent = state.tabsByWorktree[args.worktreeId]?.find(
     (tab) => tab.id === args.tabId
   )?.launchAgent
+
   return isTuiAgent(tabAgent) ? tabAgent : null
 }
 
@@ -55,6 +58,7 @@ export function prepareAgentSessionContinuationFromPane({
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
   const transcriptPath = status?.providerSession?.transcriptPath?.trim() || null
   const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
+
   const source = {
     // Why: prefer the same-host transcript so opening the dialog does not serialize large scrollback.
     capturedText,
@@ -65,6 +69,7 @@ export function prepareAgentSessionContinuationFromPane({
     lastPrompt: status?.prompt,
     lastAssistantMessage: status?.lastAssistantMessage
   }
+
   if (!buildAgentSessionContinuationPrompt(source, 'focused')) {
     toast.error(
       translate(
@@ -73,6 +78,7 @@ export function prepareAgentSessionContinuationFromPane({
       )
     )
     pane.terminal.focus()
+
     return null
   }
 

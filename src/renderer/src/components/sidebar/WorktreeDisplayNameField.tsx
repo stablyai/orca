@@ -23,6 +23,7 @@ export function WorktreeDisplayNameField({
   value
 }: WorktreeDisplayNameFieldProps): React.JSX.Element {
   const inputId = useId()
+
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     disabled,
     inputRef,
@@ -47,6 +48,7 @@ export function WorktreeDisplayNameField({
           if (emojiInput.handleKeyDown(event) || event.key !== 'Enter') {
             return
           }
+
           event.preventDefault()
           void onEnter()
         }}

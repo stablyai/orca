@@ -11,6 +11,7 @@ export function docPreviewFailureDetail(reason: DocPreviewFileFailureReason | nu
       'This document is too large to preview. Open it in the editor instead.'
     )
   }
+
   // Why no 'unsupported-asset' sentence here: the entry document is served as text by every owner
   // — only a subresource can be refused for its format, and that failure is a notice, not a panel.
   return translate(
@@ -26,9 +27,11 @@ export function docPreviewFailureDetail(reason: DocPreviewFileFailureReason | nu
  */
 export function docPreviewAssetNotice(failures: DocPreviewFileFailure[]): string | null {
   const [first] = failures
+
   if (!first) {
     return null
   }
+
   if (failures.length > 1) {
     return translate(
       'auto.components.editor.HtmlDocPreview.multipleAssetsFailedNotice',
@@ -36,6 +39,7 @@ export function docPreviewAssetNotice(failures: DocPreviewFileFailure[]): string
       { count: failures.length }
     )
   }
+
   if (first.reason === 'too-large') {
     return translate(
       'auto.components.editor.HtmlDocPreview.assetTooLargeNotice',
@@ -43,6 +47,7 @@ export function docPreviewAssetNotice(failures: DocPreviewFileFailure[]): string
       { path: first.relativePath }
     )
   }
+
   if (first.reason === 'unsupported-asset') {
     return translate(
       'auto.components.editor.HtmlDocPreview.assetUnsupportedNotice',
@@ -50,6 +55,7 @@ export function docPreviewAssetNotice(failures: DocPreviewFileFailure[]): string
       { path: first.relativePath }
     )
   }
+
   return translate(
     'auto.components.editor.HtmlDocPreview.assetUnreadableNotice',
     'Orca could not read {{path}} from the workspace.',

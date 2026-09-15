@@ -1,8 +1,11 @@
 import type { RelayPlatform } from './relay-protocol'
 
 export type RemotePathFlavor = 'posix' | 'windows'
+
 export type RemoteCommandDialect = 'posix' | 'powershell'
+
 export type RemoteOperatingSystem = 'linux' | 'darwin' | 'win32'
+
 export type RemoteArchitecture = 'x64' | 'arm64'
 
 export type RemoteHostPlatform = {
@@ -94,6 +97,7 @@ export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemoteP
   ) {
     throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
   }
+
   if (pathFlavor === 'posix') {
     return
   }
@@ -102,6 +106,7 @@ export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemoteP
   // otherwise ordinary-looking path segments, bypassing no-clobber checks.
   const normalized = normalizeWindowsRemotePath(segment)
   const deviceStem = normalized.split('.')[0]?.toUpperCase()
+
   if (
     normalized.includes('/') ||
     hasUnsafeWindowsPathChar(normalized) ||
@@ -115,25 +120,30 @@ export function assertSafeRemotePathSegment(segment: string, pathFlavor: RemoteP
 function hasUnsafeWindowsPathChar(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const char = value[i]
+
     if (value.charCodeAt(i) <= 31 || (char !== undefined && '<>:"|?*'.includes(char))) {
       return true
     }
   }
+
   return false
 }
 
 export function normalizeRemoteHome(rawHome: string, host: RemoteHostPlatform): string {
   const home = rawHome.trim()
+
   return isWindowsRemoteHost(host) ? normalizeWindowsRemotePath(home).replace(/\/+$/, '') : home
 }
 
 function hasUnsafeRemotePathChar(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i)
+
     if (code === 0 || code === 10 || code === 13) {
       return true
     }
   }
+
   return false
 }
 
@@ -141,35 +151,45 @@ export function validateRemoteHome(home: string, host: RemoteHostPlatform): bool
   if (!home || hasUnsafeRemotePathChar(home)) {
     return false
   }
+
   if (host.pathFlavor === 'windows') {
     return /^[a-zA-Z]:\//.test(home) || home.startsWith('//')
   }
+
   return home.startsWith('/')
 }
 
 export function joinRemotePath(host: RemoteHostPlatform, ...segments: string[]): string {
   const cleaned = segments.filter(Boolean)
+
   if (cleaned.length === 0) {
     return ''
   }
+
   if (host.pathFlavor === 'windows') {
     const [first, ...rest] = cleaned.map((segment) => normalizeWindowsRemotePath(segment))
+
     return rest.reduce((acc, segment) => {
       const left = acc.replace(/\/+$/, '')
       const right = segment.replace(/^\/+/, '')
+
       return `${left}/${right}`
     }, first)
   }
+
   const [first, ...rest] = cleaned
+
   return rest.reduce((acc, segment) => {
     const left = acc.replace(/\/+$/, '')
     const right = segment.replace(/^\/+/, '')
+
     return `${left}/${right}`
   }, first)
 }
 
 export function remoteBasename(path: string, host: RemoteHostPlatform): string {
   const normalized = host.pathFlavor === 'windows' ? normalizeWindowsRemotePath(path) : path
+
   return normalized.split('/').findLast(Boolean) ?? ''
 }
 
@@ -178,8 +198,10 @@ export function remoteDirname(path: string, host: RemoteHostPlatform): string {
   const parts = normalized.split('/')
   parts.pop()
   const joined = parts.join('/')
+
   if (host.pathFlavor === 'windows') {
     return joined
   }
+
   return joined || '/'
 }

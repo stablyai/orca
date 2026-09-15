@@ -6,7 +6,9 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const THIRD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 
 type MockState = {
@@ -209,11 +211,13 @@ describe('useWorktreeActivityStatus', () => {
   it('does not keep the card working when all retained parent agents are done', () => {
     const worktreeId = 'repo1::/path/wt1'
     const tab = makeTab('tab-1', worktreeId)
+
     const paneKeys = [
       makePaneKey('tab-1', LEAF_ID),
       makePaneKey('tab-1', SECOND_LEAF_ID),
       makePaneKey('tab-1', THIRD_LEAF_ID)
     ]
+
     mockState = {
       ...mockState,
       tabsByWorktree: {

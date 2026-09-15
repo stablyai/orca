@@ -7,11 +7,13 @@ import { translate } from '@/i18n/i18n'
 
 function requestedDirectory(relativePath: string): string {
   const separator = relativePath.lastIndexOf('/')
+
   return separator === -1 ? '.' : relativePath.slice(0, separator)
 }
 
 function requestedDirectoryLabel(relativePath: string, worktreeRoot: string | null): string {
   const directory = requestedDirectory(relativePath)
+
   return directory === '.' && worktreeRoot ? worktreeRoot : directory
 }
 
@@ -49,43 +51,55 @@ export function useDocPreviewDirectoryAccess({
   const [, setRequestsVersion] = useState(0)
   const [busy, setBusy] = useState(false)
   const dismissedDirectoriesRef = useRef(new Set<string>())
+
   const offer = useCallback((failure: DocPreviewFileFailure) => {
     const directory = requestedDirectory(failure.relativePath)
+
     if (
       dismissedDirectoriesRef.current.has(directory) ||
       requestsByDirectoryRef.current.has(directory)
     ) {
       return
     }
+
     requestsByDirectoryRef.current.set(directory, failure)
     setRequestsVersion((version) => version + 1)
   }, [])
+
   const reset = useCallback(() => {
     requestsByDirectoryRef.current = new Map()
     dismissedDirectoriesRef.current.clear()
     setBusy(false)
     setRequestsVersion((version) => version + 1)
   }, [])
+
   const dismiss = useCallback(() => {
     for (const directory of requestsByDirectoryRef.current.keys()) {
       dismissedDirectoriesRef.current.add(directory)
     }
+
     requestsByDirectoryRef.current = new Map()
     setRequestsVersion((version) => version + 1)
   }, [])
+
   const allow = useCallback(async () => {
     const pending = [...requestsByDirectoryRef.current.values()]
+
     if (pending.length === 0 || !grantId || busy) {
       return
     }
+
     setBusy(true)
+
     try {
       for (const failure of pending) {
         if (!(await window.api.docPreview.authorizeDirectory(grantId, failure.relativePath))) {
           reportAuthorizationFailure()
+
           return
         }
       }
+
       requestsByDirectoryRef.current = new Map()
       setRequestsVersion((version) => version + 1)
       reloadRef.current?.()
@@ -95,6 +109,7 @@ export function useDocPreviewDirectoryAccess({
       setBusy(false)
     }
   }, [busy, grantId, reloadRef])
+
   return {
     requests: [...requestsByDirectoryRef.current.values()],
     busy,
@@ -115,8 +130,10 @@ function requestedFolderSentence(labels: string[]): string {
       { path: labels[0] }
     )
   }
+
   const named = labels.slice(0, MAX_NAMED_FOLDERS)
   const remainder = labels.length - named.length
+
   const folders =
     remainder > 0
       ? translate(
@@ -125,6 +142,7 @@ function requestedFolderSentence(labels: string[]): string {
           { folders: named.join(', '), count: remainder }
         )
       : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`
+
   return translate(
     'auto.components.editor.HtmlDocPreview.directoryAccessRequestMultiple',
     'This preview wants to read files in {{folders}}.',
@@ -148,6 +166,7 @@ export function DocPreviewDirectoryAccessBanner({
   const labels = requests.map((request) =>
     requestedDirectoryLabel(request.relativePath, worktreeRoot)
   )
+
   return (
     <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1 text-xs" role="status">
       <AlertCircle className="size-3.5 shrink-0 text-muted-foreground" />

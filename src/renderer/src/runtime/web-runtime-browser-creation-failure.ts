@@ -41,18 +41,23 @@ export function prepareWebRuntimeBrowserCreationFailure(
 ): WebRuntimeBrowserCreationFailure {
   const { args, environmentId, guardedPageId } = context
   context.unsubscribeFocusGuard()
+
   // Why: unwind the optimistic tab before the cleanup round-trips below, so a failed create
   // does not leave a dead tab sitting in the strip for the length of browser.tabClose.
   if (context.staged) {
     discardStagedWebRuntimeBrowserTab(context.staged)
   }
+
   const createFailureDefinitive = isDefinitiveBrowserCreateFailure(error)
+
   const cleanupPageId =
     context.createdPageId ??
     (context.createAttempted && !createFailureDefinitive && context.hostSupportsKnownPageId
       ? context.provisionalPageId
       : null)
+
   const createOutcomeUnknown = !cleanupPageId && !createFailureDefinitive
+
   const ownsClientGroupCleanup = args.clientTargetGroupId
     ? releaseWebSessionBrowserPlacementGroup({
         environmentId,
@@ -62,6 +67,7 @@ export function prepareWebRuntimeBrowserCreationFailure(
         callerCreatedGroup: args.clientTargetGroupCreated === true
       })
     : false
+
   if (!args.clientTargetGroupId) {
     forgetWebSessionBrowserPlacement({
       environmentId,
@@ -69,6 +75,7 @@ export function prepareWebRuntimeBrowserCreationFailure(
       remotePageId: guardedPageId
     })
   }
+
   return { cleanupPageId, createOutcomeUnknown, ownsClientGroupCleanup, recoveryError: null }
 }
 
@@ -78,9 +85,11 @@ export function finishWebRuntimeBrowserCreationFailure(
   error: unknown
 ): false {
   const { args, intentOwner, guardedPageId } = context
+
   if (context.shouldFocusOnCreate) {
     clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
   }
+
   if (
     args.clientTargetGroupId &&
     claimWebSessionBrowserPlacementGroupCleanup({
@@ -91,6 +100,7 @@ export function finishWebRuntimeBrowserCreationFailure(
   ) {
     useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
   }
+
   if (error instanceof StagedWebRuntimeBrowserTabCancelledError) {
     console.warn('[web-runtime-session] browser tab was closed before its create finished')
   } else if (args.failureLogMode === 'operation-only') {
@@ -101,18 +111,22 @@ export function finishWebRuntimeBrowserCreationFailure(
       error instanceof Error ? error.message : String(error)
     )
   }
+
   if (failure.recoveryError) {
     throw new Error('The paired runtime could not recover the failed browser creation.', {
       cause: failure.recoveryError
     })
   }
+
   if (!context.createAttempted) {
     throw error
   }
+
   if (failure.createOutcomeUnknown) {
     throw new Error('The paired runtime did not confirm whether the browser tab was created.', {
       cause: error
     })
   }
+
   return false
 }

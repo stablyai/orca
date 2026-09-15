@@ -78,22 +78,27 @@ export function resolveAutomationEditDestination(
     input.editingDestination !== null &&
     input.editingDestination.destination.entry.stableKey !==
       input.rowRecoveryHost(input.rowKey)?.stableKey
+
   const destinationChanged =
     input.currentAutomation !== null &&
     (destinationHostChanged ||
       input.currentAutomation.projectId !== input.draft.projectId ||
       input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
       input.currentAutomation.workspaceMode !== input.draft.workspaceMode)
+
   if (!input.editingAutomationId || !input.currentAutomation || !destinationChanged) {
     return { ok: true, editDestination: undefined, moveTarget: null }
   }
+
   if (!input.editingDestination || input.editingDestination.projectId !== input.draft.projectId) {
     return { ok: false, notice: unavailableDestinationNotice() }
   }
+
   const revalidated = revalidateAutomationCreateDestination(
     input.editingDestination.destination,
     input.editHostEntries
   )
+
   if (revalidated.status === 'stale') {
     return {
       ok: false,
@@ -107,9 +112,11 @@ export function resolveAutomationEditDestination(
       }
     }
   }
+
   if (revalidated.status !== 'ready') {
     return { ok: false, notice: unavailableDestinationNotice() }
   }
+
   const sourceAuthorityKey =
     input.automationDialogTarget.kind === 'environment'
       ? automationAuthorityCatalogKey({
@@ -117,11 +124,13 @@ export function resolveAutomationEditDestination(
           environmentId: input.automationDialogTarget.environmentId
         })
       : automationAuthorityCatalogKey({ kind: 'desktop' })
+
   const targetAuthorityKey = automationAuthorityCatalogKey(
     revalidated.authority.kind === 'runtime'
       ? { kind: 'runtime', environmentId: revalidated.authority.environmentId }
       : { kind: 'desktop' }
   )
+
   return {
     ok: true,
     editDestination: revalidated.destination,
@@ -167,6 +176,7 @@ export async function moveAutomationToDestination(
   const operationKey = `${source.id}:${target.entry.stableKey}`
   const creationKey = context.moveCreationKeysRef.current.get(operationKey) ?? crypto.randomUUID()
   context.moveCreationKeysRef.current.set(operationKey, creationKey)
+
   const created = toDispatchResult(
     await createAutomationAtDestination(
       target.authority,
@@ -174,9 +184,11 @@ export async function moveAutomationToDestination(
       target.destination
     )
   )
+
   if (!created.ok) {
     return { saved: created, originalRemoved: false }
   }
+
   context.invalidateWrittenHost(target.entry.stableRef, 'definition')
 
   const removed = await dispatchAutomationDelete(
@@ -184,8 +196,10 @@ export async function moveAutomationToDestination(
     { rowKey: context.editingRowKey ?? '', automationId: source.id },
     () => deleteAutomationForTarget(source, context.automationDialogTarget)
   )
+
   if (removed.ok) {
     context.moveCreationKeysRef.current.delete(operationKey)
+
     return { saved: created, originalRemoved: true }
   }
 
@@ -198,8 +212,10 @@ export async function moveAutomationToDestination(
         (automation) => automation.id === source.id
       ) ?? null
   )
+
   if (reread.ok && reread.value === null) {
     context.moveCreationKeysRef.current.delete(operationKey)
+
     return { saved: created, originalRemoved: true }
   }
 
@@ -207,6 +223,7 @@ export async function moveAutomationToDestination(
     reread.ok && reread.value
       ? 'Created on {host}, but the original could not be deleted. Remove it on the old host.'
       : 'Created on {host}, but the original deletion could not be verified. Check the old host before retrying.'
+
   toast.error(
     translate(
       reread.ok && reread.value
@@ -215,6 +232,7 @@ export async function moveAutomationToDestination(
       message
     ).replace('{host}', () => target.entry.authorityLabel)
   )
+
   return { saved: created, originalRemoved: false }
 }
 
@@ -228,9 +246,11 @@ export async function createAutomationOnDestination(
   const result = toDispatchResult(
     await createAutomationAtDestination(authority, input, target.destination)
   )
+
   if (result.ok) {
     invalidateWrittenHost(target.entry.stableRef, 'definition')
   }
+
   return result
 }
 
@@ -256,6 +276,7 @@ export async function saveExistingAutomation(
           )
         )
       }
+
       return updateAutomationForTarget(currentAutomation, updates, fallbackTarget)
     },
     'save',

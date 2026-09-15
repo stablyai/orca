@@ -8,11 +8,13 @@ const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(source)) {
     if (value !== undefined) {
       env[key] = value
     }
   }
+
   return env
 }
 
@@ -27,6 +29,7 @@ function stripClaudeChildSessionStamps(
       }
     }
   }
+
   return env
 }
 
@@ -40,6 +43,7 @@ export function buildClaudeChildProcessEnv(
 ): Record<string, string> {
   const inheritedEnv = options.inheritedEnv ?? process.env
   const platform = options.platform ?? process.platform
+
   const env = applyClaudeEnvPatch(
     cloneProcessEnv(inheritedEnv),
     {},
@@ -48,10 +52,13 @@ export function buildClaudeChildProcessEnv(
       platform
     }
   )
+
   if (platform === 'win32') {
     const authKeys = new Set(CLAUDE_AUTH_ENV_VARS.map((key) => key.toUpperCase()))
+
     for (const [key, value] of Object.entries(env)) {
       const normalized = key.toUpperCase()
+
       if (
         authKeys.has(normalized) ||
         (normalized === 'ANTHROPIC_CUSTOM_HEADERS' &&
@@ -61,9 +68,12 @@ export function buildClaudeChildProcessEnv(
       }
     }
   }
+
   if (options.scrubConfiguredChildSessionStamps) {
     return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
   }
+
   stripClaudeChildSessionStamps(env, platform)
+
   return { ...env, ...configuredEnv }
 }

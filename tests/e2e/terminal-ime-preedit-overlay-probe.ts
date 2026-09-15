@@ -28,7 +28,9 @@ export function readPreeditOverlay(): PreeditOverlaySample {
   const textarea =
     document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus') ??
     document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
   const view = textarea?.parentElement?.querySelector<HTMLElement>('.composition-view') ?? null
+
   if (!view) {
     return {
       found: false,
@@ -43,8 +45,10 @@ export function readPreeditOverlay(): PreeditOverlaySample {
       overflow: ''
     }
   }
+
   const style = getComputedStyle(view)
   const rect = view.getBoundingClientRect()
+
   return {
     found: true,
     active: view.classList.contains('active'),
@@ -74,6 +78,7 @@ export async function expectPreeditRendered(
     .toBe(expectedText)
   const sample = await samplePreeditOverlay(page)
   assertPreeditRendered(sample, expectedText, message)
+
   return sample
 }
 

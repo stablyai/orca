@@ -28,6 +28,7 @@ vi.mock('./prompt-cache-timer-selection', () => ({
 
 function AggregateTimerProbe({ active = true }: { active?: boolean }): React.JSX.Element {
   const startedAt = usePromptCacheCountdownStartedAt('wt-1', active)
+
   return <span>{startedAt ?? 'none'}</span>
 }
 

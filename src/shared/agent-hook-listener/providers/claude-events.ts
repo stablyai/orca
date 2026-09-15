@@ -32,6 +32,7 @@ export function normalizeClaudeEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
+
   if (
     eventName === 'SubagentStart' ||
     eventName === 'SubagentStop' ||
@@ -39,13 +40,16 @@ export function normalizeClaudeEvent(
   ) {
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
+
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
+
   if (eventName === 'SessionStart') {
     // Why: SessionStart is the only signal a resumed session emits before its first prompt
     // (STA-3386). Land it as a session-boundary 'done' row: 'working' would show a phantom
     // spinner on an idle TUI (why Devin/Pi/Grok drop the event), and the sessionBoundary
     // flag keeps completion-reactive consumers (notifications, automation runs) out of it.
     const sessionStartSource = hookPayload['source']
+
     if (
       eventAgentId !== undefined ||
       (sessionStartSource !== 'startup' &&
@@ -57,27 +61,32 @@ export function normalizeClaudeEvent(
       // live turn to an idle row.
       return null
     }
+
     // Why: a new process owns the pane; stale children/tasks/crons must not gate the
     // fresh session's idle row back up to 'working' (same reset Codex does on SessionStart).
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
+
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: 'done',
       updateToolSnapshot: true,
       sessionBoundary: true
     })
   }
+
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+
   const interrupted =
     isTurnBoundary &&
     ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
       previousLead?.interrupted === true)
       ? true
       : undefined
+
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
@@ -90,9 +99,11 @@ export function normalizeClaudeEvent(
   // Why: Claude normally emits PreToolUse while AskUserQuestion is blocked; newer builds can also report it as PermissionRequest.
   // Treat the PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
   const eventToolName = readString(hookPayload, 'tool_name')
+
   const isAskUserQuestionWait =
     (eventName === 'PreToolUse' || eventName === 'PermissionRequest') &&
     isAskUserQuestionTool(eventToolName)
+
   const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
   // Why: a manual /compact swallows the turn boundary — it ends at an idle prompt and emits no
   // Stop, so PostCompact is the pane's only clearing signal (STA-2915). An auto compact runs INSIDE
@@ -100,6 +111,7 @@ export function normalizeClaudeEvent(
   // the compact is validated (an aborted compact emits it alone), so it is neither registered nor
   // mapped — see claude-compact-completion.ts.
   const isManualCompactCompletion = eventName === 'PostCompact' && hookPayload.trigger === 'manual'
+
   const reportedStateName =
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||
@@ -115,6 +127,7 @@ export function normalizeClaudeEvent(
   if (!reportedStateName) {
     return null
   }
+
   if (backgroundTasks.present && eventAgentId === undefined) {
     updateClaudeRunningNonAgentTask(
       state,
@@ -123,6 +136,7 @@ export function normalizeClaudeEvent(
       interrupted === true
     )
   }
+
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
     if (hasActiveSessionCron && interrupted !== true) {
       state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -136,6 +150,7 @@ export function normalizeClaudeEvent(
 
   const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
   const previousTool = state.lastToolByPaneKey.get(paneKey)
+
   const isParallelSiblingCompletionDuringQuestion =
     eventAgentId === undefined &&
     previousLead?.state === 'waiting' &&
@@ -144,6 +159,7 @@ export function normalizeClaudeEvent(
     previousLead.waitingToolUseId !== undefined &&
     eventToolUseId !== undefined &&
     eventToolUseId !== previousLead.waitingToolUseId
+
   if (isParallelSiblingCompletionDuringQuestion) {
     return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
   }
@@ -151,6 +167,7 @@ export function normalizeClaudeEvent(
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
   // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
   const isWaitingInducing = reportedStateName === 'waiting'
+
   const subagentOriginId =
     !isWaitingInducing &&
     (eventName === 'PreToolUse' ||
@@ -158,6 +175,7 @@ export function normalizeClaudeEvent(
       eventName === 'PostToolUseFailure')
       ? eventAgentId
       : undefined
+
   if (eventAgentId && (subagentOriginId || isWaitingInducing)) {
     upsertWorkingClaudeSubagent(
       getOrCreateClaudeSubagentRoster(state, paneKey),
@@ -166,27 +184,33 @@ export function normalizeClaudeEvent(
       Date.now()
     )
   }
+
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
       return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
         workingChildEvidence: true
       })
     }
+
     const isParallelSiblingCompletionDuringChildQuestion =
       (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
       lead.waitingToolUseId !== undefined &&
       eventToolUseId !== undefined &&
       eventToolUseId !== lead.waitingToolUseId
+
     if (isParallelSiblingCompletionDuringChildQuestion) {
       return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
         workingChildEvidence: true
       })
     }
+
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
+
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       ...resolveClaudePaneStatus(state, paneKey, restored),
       updateToolSnapshot: true,
@@ -216,6 +240,7 @@ export function normalizeClaudeEvent(
       )
     }
   }
+
   // Why: a child-induced wait displaces the lead state; stash it so clearing restores reality (lead may be done). A 2nd child wait carries the ORIGINAL stash, not the intermediate waiting state.
   const stateBeforeWait =
     isWaitingInducing && eventAgentId && previousLead
@@ -230,6 +255,7 @@ export function normalizeClaudeEvent(
               : {})
           }
       : undefined
+
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
   if (interrupted && eventAgentId === undefined) {
@@ -244,6 +270,7 @@ export function normalizeClaudeEvent(
     // done-gate consults is live evidence (a child observed in this runtime, an unclassifiable
     // running background task, a registered session cron) and still holds the pane.
     const restoredRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+
     if (
       restoredRoster &&
       reapUnconfirmedRestoredClaudeSubagents(restoredRoster) &&
@@ -257,9 +284,11 @@ export function normalizeClaudeEvent(
     state: reportedStateName,
     interrupted
   })
+
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName
+
   // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
   const turnCompletedAt =
     eventAgentId === undefined &&
@@ -280,6 +309,7 @@ export function normalizeClaudeEvent(
   })
 
   const effectiveRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+
   if (
     isTurnBoundary &&
     eventAgentId === undefined &&

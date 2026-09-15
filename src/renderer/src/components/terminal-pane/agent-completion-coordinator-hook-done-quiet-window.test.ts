@@ -12,6 +12,7 @@ describe('agent completion coordinator', () => {
 
   it('cancels a hook completion when the same turn resumes work before the quiet window', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -68,6 +69,7 @@ describe('agent completion coordinator', () => {
 
   it('cancels a hook completion when title tracking observes resumed work before quiet', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -109,6 +111,7 @@ describe('agent completion coordinator', () => {
     'hermes'
   ])('recognizes %s hook agent ids even when the binary name differs', (agentType) => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -131,6 +134,7 @@ describe('agent completion coordinator', () => {
     'defers a %s milestone done without prior working through the quiet window',
     (agentType) => {
       const dispatchCompletion = vi.fn()
+
       const coordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         getPtyId: () => 'pty-1',
@@ -162,6 +166,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses a Pi milestone done when work resumes before the quiet window', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -193,6 +198,7 @@ describe('agent completion coordinator', () => {
 
   it('still dispatches a Codex done-without-prior-working immediately', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -218,6 +224,7 @@ describe('agent completion coordinator', () => {
     // down agent evidence, or the pending hook 'done' would be silently dropped.
     let foregroundProcess: string | null = 'pi'
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -255,6 +262,7 @@ describe('agent completion coordinator', () => {
 
   it('notifies once after a Cursor tool-heavy turn, not on each shell hook', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',

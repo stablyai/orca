@@ -32,6 +32,7 @@ function removeDeletedWorktreesFromAnalysis(
 ): WorkspaceSpaceAnalysis {
   const deletedIds = new Set<string>()
   const deletedIdentities = new Set<string>()
+
   for (const target of deletedWorktreeTargets) {
     if (typeof target === 'string') {
       deletedIds.add(target)
@@ -41,6 +42,7 @@ function removeDeletedWorktreesFromAnalysis(
       )
     }
   }
+
   const worktrees = analysis.worktrees.filter(
     (worktree) =>
       !deletedIds.has(worktree.worktreeId) &&
@@ -48,17 +50,22 @@ function removeDeletedWorktreesFromAnalysis(
         composeWorktreeHostIdentity(worktree.executionHostId, worktree.worktreeId)
       )
   )
+
   if (worktrees.length === analysis.worktrees.length) {
     return analysis
   }
+
   const rowsByRepoId = new Map<string, typeof worktrees>()
+
   for (const worktree of worktrees) {
     const repoRows = rowsByRepoId.get(worktree.repoId) ?? []
     repoRows.push(worktree)
     rowsByRepoId.set(worktree.repoId, repoRows)
   }
+
   const repos = analysis.repos.map((repo) => {
     const repoRows = rowsByRepoId.get(repo.repoId) ?? []
+
     return {
       ...repo,
       worktreeCount: repoRows.length,
@@ -68,6 +75,7 @@ function removeDeletedWorktreesFromAnalysis(
       reclaimableBytes: repoRows.reduce((sum, row) => sum + row.reclaimableBytes, 0)
     }
   })
+
   return {
     ...analysis,
     totalSizeBytes: worktrees.reduce((sum, row) => sum + row.sizeBytes, 0),
@@ -88,6 +96,7 @@ function errorMessage(error: unknown): string {
 
 function isWorkspaceSpaceScanCancelled(error: unknown): boolean {
   const message = errorMessage(error).toLowerCase()
+
   return message.includes('workspace space scan cancelled') || message.includes('was cancelled')
 }
 
@@ -108,8 +117,10 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       ) {
         return state
       }
+
       const sameScan = state.workspaceSpaceScanProgress?.scanId === progress.scanId
       const previousMeasurements = sameScan ? state.workspaceSpaceMeasurements : []
+
       return {
         workspaceSpaceScanProgress: progress,
         workspaceSpaceScanning: true,
@@ -120,9 +131,11 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
     }),
   cancelWorkspaceSpaceScan: async () => {
     const cancelled = await window.api.workspaceSpace.cancel()
+
     if (cancelled) {
       get().recordFeatureInteraction?.('workspace-cleanup')
     }
+
     if (cancelled) {
       set((state) =>
         state.workspaceSpaceScanProgress
@@ -136,31 +149,39 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
           : state
       )
     }
+
     return cancelled
   },
   hydrateWorkspaceSpaceFromCache: async () => {
     const hasLiveAnalysis = (): boolean =>
       get().workspaceSpaceAnalysis !== null || get().workspaceSpaceScanning || inFlightScan !== null
+
     if (hasLiveAnalysis()) {
       return false
     }
+
     let cached: Awaited<ReturnType<typeof window.api.workspaceSpace.getCachedAnalysis>>
+
     try {
       cached = await window.api.workspaceSpace.getCachedAnalysis()
     } catch {
       // Why: hydration is best-effort; a manual scan remains the recovery path.
       return false
     }
+
     if (cached === null || hasLiveAnalysis()) {
       return false
     }
+
     set({ workspaceSpaceAnalysis: cached })
+
     return true
   },
   refreshWorkspaceSpace: async () => {
     if (inFlightScan) {
       return inFlightScan
     }
+
     get().recordFeatureInteraction?.('workspace-cleanup')
     set({
       workspaceSpaceScanning: true,
@@ -176,6 +197,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
         if (!result.ok) {
           throw new Error('Workspace space scan cancelled')
         }
+
         const analysis = result.analysis
         set({
           workspaceSpaceAnalysis: analysis,
@@ -183,6 +205,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
           workspaceSpaceScanProgress: null,
           workspaceSpaceMeasurements: []
         })
+
         return analysis
       })
       .catch((error: unknown) => {
@@ -199,16 +222,19 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       .finally(() => {
         inFlightScan = null
       })
+
     return inFlightScan
   },
   removeWorkspaceSpaceWorktrees: (worktreeTargets) => {
     if (worktreeTargets.length > 0) {
       get().recordFeatureInteraction?.('workspace-cleanup')
     }
+
     set((state) => {
       const deletedIds = new Set(
         worktreeTargets.flatMap((target) => (typeof target === 'string' ? [target] : []))
       )
+
       const deletedIdentities = new Set(
         worktreeTargets.flatMap((target) =>
           typeof target !== 'string'
@@ -216,6 +242,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
             : []
         )
       )
+
       const nextMeasurements = state.workspaceSpaceMeasurements.filter(
         (measurement) =>
           !deletedIds.has(measurement.worktreeId) &&
@@ -223,9 +250,11 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
             composeWorktreeHostIdentity(measurement.executionHostId, measurement.worktreeId)
           )
       )
+
       const nextAnalysis = state.workspaceSpaceAnalysis
         ? removeDeletedWorktreesFromAnalysis(state.workspaceSpaceAnalysis, worktreeTargets)
         : null
+
       // Why: this runs on every worktree removal and list refresh; a no-op
       // must not mint new identities and wake every space subscriber.
       if (
@@ -234,6 +263,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       ) {
         return state
       }
+
       return {
         workspaceSpaceAnalysis: nextAnalysis,
         workspaceSpaceMeasurements:

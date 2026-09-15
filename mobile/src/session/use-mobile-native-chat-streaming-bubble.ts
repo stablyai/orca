@@ -18,14 +18,17 @@ export function useMobileNativeChatStreamingBubble(
   streamLive: boolean
 ): string | null {
   const [gate, setGate] = useState(() => createMobileNativeChatStreamingGate(scopeKey))
+
   const step = deriveMobileNativeChatStreaming(gate, folded, streamingText, {
     scopeKey,
     streamLive
   })
+
   if (step.gate !== gate) {
     // Render-time state adjustment (derived-state pattern): the advance is
     // idempotent for a repeated (text, tail) pair, so this settles in one pass.
     setGate(step.gate)
   }
+
   return step.streaming
 }

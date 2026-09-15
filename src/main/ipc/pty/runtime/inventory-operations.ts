@@ -14,6 +14,7 @@ function markSshInventoryUnverifiable(
   error: unknown
 ): void {
   const reason = error instanceof Error ? error.message : String(error)
+
   for (const [ptyId, ownerConnectionId] of ptyOwnership) {
     if (ownerConnectionId === connectionId) {
       runtime?.markPtyLivenessUnverifiable?.(ptyId, reason)
@@ -30,6 +31,7 @@ export async function listProcessesWithHostScopeFromRuntimeController(
       const hostId: ExecutionHostId = connectionId
         ? toSshExecutionHostId(connectionId)
         : LOCAL_EXECUTION_HOST_ID
+
       try {
         return {
           processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
@@ -39,12 +41,16 @@ export async function listProcessesWithHostScopeFromRuntimeController(
         if (!connectionId) {
           throw error
         }
+
         markSshInventoryUnverifiable(deps.runtime, connectionId, error)
+
         return null
       }
     })
   )
+
   const respondingSessions = providerSessions.filter((session) => session !== null)
+
   return {
     processes: respondingSessions.flatMap((session) => session.processes),
     hostIds: respondingSessions.map((session) => session.hostId)
@@ -59,6 +65,7 @@ export async function listProcessesFromRuntimeController(
   if (connectionId === null) {
     return localProvider.listProcesses()
   }
+
   if (connectionId !== undefined) {
     try {
       return await getProvider(connectionId).listProcesses(opts)
@@ -67,5 +74,6 @@ export async function listProcessesFromRuntimeController(
       throw error
     }
   }
+
   return (await listProcessesWithHostScopeFromRuntimeController(deps, opts)).processes
 }

@@ -16,6 +16,7 @@ export function createFakeSpawnedChild(pid = 4321): ChildProcess {
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -27,9 +28,11 @@ export function completeFakeSpawn(
   if (result.stdout) {
     child.stdout?.emit('data', Buffer.from(result.stdout))
   }
+
   if (result.stderr) {
     child.stderr?.emit('data', Buffer.from(result.stderr))
   }
+
   const code = result.code ?? 0
   child.emit('exit', code, null)
   child.emit('close', code, null)
@@ -45,8 +48,10 @@ function settleFakeSpawn(child: ChildProcess, outcome: FakeSpawnOutcome): void {
     // Why an event and not a throw: an unresolvable program fails asynchronously
     // in libuv, which is what makes ENOENT reach callers as a rejection.
     child.emit('error', outcome.spawnError)
+
     return
   }
+
   completeFakeSpawn(child, outcome)
 }
 
@@ -70,6 +75,7 @@ export function fakeSpawnDispatch(
     const child = createFakeSpawnedChild()
     const outcome = resolve(program, args)
     queueMicrotask(() => settleFakeSpawn(child, outcome))
+
     return child
   }
 }

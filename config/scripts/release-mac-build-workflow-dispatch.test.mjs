@@ -56,6 +56,7 @@ describe('release mac build workflow dispatch', () => {
 
   it('finds the dispatched run by release tag and parent run id when GitHub returns no body', async () => {
     const runTitle = expectedReleaseMacBuildRunTitle(baseOptions)
+
     const { fetch, requests } = createGitHubFetch([
       jsonResponse(204, null),
       jsonResponse(200, {
@@ -135,6 +136,7 @@ describe('release mac build workflow dispatch', () => {
 
 function createGitHubFetch(responses) {
   const requests = []
+
   const fetch = vi.fn(async (rawUrl, init) => {
     const url = new URL(rawUrl)
     const response = responses.shift()

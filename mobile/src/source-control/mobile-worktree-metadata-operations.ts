@@ -22,6 +22,7 @@ const worktreeSummaryReader: RpcCompatibleReader<
   MobileWorktreeSummary | null
 > = (raw) => {
   const worktree = isRecord(raw) ? raw.worktree : undefined
+
   return {
     compatible: true,
     variant: 'worktree-summary',

@@ -11,11 +11,13 @@ describe('skillInstallWorkspaceChoices', () => {
       connectionId: 'ssh_1',
       executionHostId: 'ssh:ssh_1'
     } as unknown as Repo
+
     const worktree = {
       id: 'repo_1::/remote/worktree',
       repoId: repo.id,
       displayName: 'Remote worktree'
     } as Worktree
+
     expect(
       skillInstallWorkspaceChoices({
         environmentId: 'ssh:ssh_1',
@@ -37,6 +39,7 @@ describe('skillInstallWorkspaceChoices', () => {
       },
       { id: 'ssh', name: 'SSH', folderPath: '/ssh', executionHostId: 'ssh:ssh_1' }
     ] as FolderWorkspace[]
+
     const input = { repos: [], worktreesByRepo: {}, folderWorkspaces: folders }
     expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'local' })).toHaveLength(1)
     expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'environment_1' })).toHaveLength(

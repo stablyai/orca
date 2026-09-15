@@ -24,25 +24,36 @@ import {
 // command-line coding agent" also renders on the sign-in screen, and the
 // serialized buffer interleaves ANSI codes through the banner glyphs.
 const CODEX_COMPOSER_READY_RE = /Context \d+% used/i
+
 const CODEX_SIGN_IN_RE = /Sign in with ChatGPT|Sign in to|press Enter to log in/i
+
 const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
+
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
+
 // Why lowercase ASCII only: digits/punctuation trigger the composer's slash and
 // file-mention popups, which redraw the whole pane and skew later keystrokes.
 const TYPING_ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+
 const TOTAL_KEYSTROKES = 60
+
 // Why: the first keystrokes pay one-time costs (composer first-paint, WebGL
 // atlas fill), so they measure startup rather than steady-state typing.
 const WARMUP_KEYSTROKES = 10
+
 const KEYSTROKE_INTERVAL_MS = 60
+
 const TERMINAL_DUMP_CHARS = 4_000
+
 // Why these budgets: ~20 local runs put p50 in a tight 21.5-22.6ms band with a
 // unimodal per-key distribution and rare isolated spikes to ~90ms. p50 gates the
 // steady state at ~1.6x observed; the tail budgets absorb those spikes so only a
 // sustained shift fails. A plain-shell control on this same probe reads p50 2ms,
 // so the ~22ms is Codex composer redraw cost, not harness overhead.
 const MAX_P50_ECHO_LATENCY_MS = 35
+
 const MAX_P95_ECHO_LATENCY_MS = 80
+
 const MAX_WORST_ECHO_LATENCY_MS = 150
 
 type CodexCursorBlinkSample = {
@@ -56,20 +67,25 @@ async function focusActiveTerminalInput(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!pane || !textarea) {
       throw new Error('Active terminal input is unavailable')
     }
+
     pane.terminal.focus()
     textarea.focus()
+
     if (document.activeElement !== textarea) {
       throw new Error(
         'Terminal helper textarea did not take focus; keystrokes would not reach Codex'
@@ -82,17 +98,21 @@ async function forceCursorProbeTheme(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane is unavailable')
     }
+
     pane.terminal.options.cursorStyle = 'block'
     pane.terminal.options.cursorBlink = true
     pane.terminal.options.theme = {
@@ -109,20 +129,25 @@ async function readActiveTerminalRasterTarget(page: Page): Promise<TerminalRaste
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.container.querySelector<HTMLElement>('.xterm-screen')
     const dimensions = pane?.terminal._core?._renderService?.dimensions?.css?.cell
+
     if (!pane || !screen || !dimensions) {
       throw new Error('Active terminal screen is unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
+
     return {
       clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
       cellWidth: dimensions.width,
@@ -138,10 +163,12 @@ async function sampleCursorBlink(page: Page): Promise<CodexCursorBlinkSample[]> 
   const target = await readActiveTerminalRasterTarget(page)
   const viewport = page.viewportSize() ?? undefined
   const start = performance.now()
+
   for (let index = 0; index < 9; index += 1) {
     if (index > 0) {
       await page.waitForTimeout(200)
     }
+
     const screenshot = await page.screenshot()
     const cells = analyzeRasterCursorCells(Buffer.from(screenshot), target, viewport)
     samples.push({
@@ -149,27 +176,33 @@ async function sampleCursorBlink(page: Page): Promise<CodexCursorBlinkSample[]> 
       paintedCursorCellCount: cells.length
     })
   }
+
   return samples
 }
 
 async function dismissCodexPromptsIfPresent(page: Page): Promise<void> {
   const deadline = Date.now() + 20_000
+
   while (Date.now() < deadline) {
     const content = await getTerminalContent(page, TERMINAL_DUMP_CHARS)
+
     if (CODEX_COMPOSER_READY_RE.test(content)) {
       return
     }
+
     if (CODEX_TRUST_PROMPT_RE.test(content)) {
       await page.keyboard.press('Enter')
       await page.waitForTimeout(300)
       continue
     }
+
     if (CODEX_UPDATE_PROMPT_RE.test(content)) {
       await page.keyboard.type('3')
       await page.keyboard.press('Enter')
       await page.waitForTimeout(300)
       continue
     }
+
     await page.waitForTimeout(250)
   }
 }
@@ -179,17 +212,22 @@ async function dismissCodexPromptsIfPresent(page: Page): Promise<void> {
 async function waitForCodexComposer(page: Page): Promise<string> {
   const deadline = Date.now() + 60_000
   let lastContent = ''
+
   while (Date.now() < deadline) {
     lastContent = await getTerminalContent(page, TERMINAL_DUMP_CHARS)
     const readyMarker = CODEX_COMPOSER_READY_RE.exec(lastContent)
+
     if (readyMarker) {
       return readyMarker[0]
     }
+
     await page.waitForTimeout(250)
   }
+
   const reason = CODEX_SIGN_IN_RE.test(lastContent)
     ? 'Codex stopped on the sign-in screen — CODEX_HOME auth was not visible to the TUI'
     : 'Codex never reached the composer'
+
   throw new Error(`${reason}\n--- terminal tail ---\n${lastContent.slice(-1_500)}\n--- end ---`)
 }
 
@@ -218,6 +256,7 @@ test.describe('local Codex terminal typing latency', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const ptyId = await waitForActivePanePtyId(orcaPage)
+
     const launchCommand =
       `cd ${JSON.stringify(codexSource)} && CODEX_HOME=${JSON.stringify(realCodexHome)} ` +
       'codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust\r'
@@ -239,22 +278,27 @@ test.describe('local Codex terminal typing latency', () => {
         { length: TOTAL_KEYSTROKES },
         (_value, index) => TYPING_ALPHABET[index % TYPING_ALPHABET.length]
       ).join('')
+
       await installCodexEchoLatencyProbe(orcaPage, typed)
+
       for (const char of typed) {
         await orcaPage.keyboard.type(char)
         // Why: spacing keys past one frame keeps each sample an isolated echo
         // instead of measuring a burst the scheduler coalesced into one write.
         await orcaPage.waitForTimeout(KEYSTROKE_INTERVAL_MS)
       }
+
       // Why: the last keystroke's echo can still be in flight when typing ends.
       await orcaPage.waitForTimeout(1_000)
       const report = await collectCodexEchoLatencyReport(orcaPage)
 
       const measured = report.samples.filter((sample) => sample.index >= WARMUP_KEYSTROKES)
       const parseLatencies = measured.map((sample) => sample.keyToParseMs)
+
       const renderLatencies = measured
         .map((sample) => sample.keyToRenderMs)
         .filter((value): value is number => value !== null)
+
       const echo = summarizeLatencies(parseLatencies)
       const painted = summarizeLatencies(renderLatencies)
 
@@ -262,6 +306,7 @@ test.describe('local Codex terminal typing latency', () => {
         `${formatDistribution('echo(key->parse)', echo)} | ` +
         `${formatDistribution('paint(key->render)', painted)} | ` +
         `keys=${report.keysObserved} parseEvents=${report.parseEvents}`
+
       testInfo.annotations.push({ type: 'codex-local-typing-latency', description: summary })
       // Why stdout too: annotations are invisible in the default list reporter,
       // and these numbers are the whole point of the run.

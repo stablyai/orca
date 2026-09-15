@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 afterAll(() => {
@@ -239,18 +240,22 @@ async function runFixture(mode: FixtureMode): Promise<FixtureResult> {
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
+
   const args =
     process.platform === 'linux'
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
+
   const run = spawnSync(executable, args, {
     encoding: 'utf8',
     env,
     timeout: 60_000
   })
+
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
   return JSON.parse(fixtureResult) as FixtureResult
 }
 

@@ -15,6 +15,7 @@ export function directSshAuthorityIsComplete(
   ) {
     return false
   }
+
   return true
 }
 
@@ -23,21 +24,27 @@ export function getCurrentDirectSshAuthority(
   hostId: ExecutionHostId
 ): DirectSshAuthority | null {
   const parsedHost = parseExecutionHostId(hostId)
+
   if (parsedHost?.kind !== 'ssh') {
     return null
   }
+
   const connection = state.sshConnectionStates?.get(parsedHost.targetId)
+
   if (connection?.status !== 'connected') {
     return null
   }
+
   const authority = {
     targetId: parsedHost.targetId,
     providerEpoch: connection.providerEpoch,
     connectionGeneration: connection.connectionGeneration
   } as DirectSshAuthority
+
   if (!directSshAuthorityIsComplete(authority, parsedHost.targetId)) {
     return null
   }
+
   return {
     ...authority
   }
@@ -50,6 +57,7 @@ export function directSshAuthoritiesEqual(
   if (!left || !right) {
     return false
   }
+
   return (
     left.targetId === right.targetId &&
     left.providerEpoch === right.providerEpoch &&

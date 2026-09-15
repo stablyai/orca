@@ -14,12 +14,14 @@ const localOwner: AutomationOwnerRef = {
   authority: { kind: 'desktop' },
   selector: { kind: 'self' }
 }
+
 const sshOwner = (targetId = 't1', targetGeneration = 3): AutomationOwnerRef => ({
   authority: { kind: 'desktop' },
   selector: { kind: 'ssh', targetId, targetGeneration }
 })
 
 const local: ExternalAutomationScopeRef = { owner: localOwner, provider: 'hermes' }
+
 const remote: ExternalAutomationScopeRef = { owner: sshOwner(), provider: 'hermes' }
 
 describe('external automation scope keys', () => {
@@ -53,6 +55,7 @@ describe('external automation scope keys', () => {
       externalAutomationActionKey(local, 'x', 'run'),
       externalAutomationDialogKey(local, 'x')
     ])
+
     expect(kinds.size).toBe(6)
   })
 

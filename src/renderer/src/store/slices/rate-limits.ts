@@ -48,9 +48,11 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
 
   refreshClaudeRateLimitsForTarget: async (target) => {
     const current = get().rateLimits
+
     const targetChanged =
       current.claudeTarget.runtime !== target.runtime ||
       current.claudeTarget.wslDistro !== target.wslDistro
+
     set({
       rateLimits: {
         ...current,
@@ -68,6 +70,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
               }
       }
     })
+
     try {
       const state = await window.api.rateLimits.refreshClaudeForTarget(target)
       set({ rateLimits: state })
@@ -78,9 +81,11 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
 
   refreshCodexRateLimitsForTarget: async (target) => {
     const current = get().rateLimits
+
     const targetChanged =
       current.codexTarget.runtime !== target.runtime ||
       current.codexTarget.wslDistro !== target.wslDistro
+
     set({
       rateLimits: {
         ...current,
@@ -98,6 +103,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
               }
       }
     })
+
     try {
       const state = await window.api.rateLimits.refreshCodexForTarget(target)
       set({ rateLimits: state })

@@ -6,17 +6,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
 
 type FrameListener = (data: { streamId: string; bytes: ArrayBuffer }) => void
+
 type ErrorListener = (data: { streamId: string; message: string }) => void
 
 let container: HTMLDivElement
+
 let root: Root
+
 let frameListeners: FrameListener[]
+
 let errorListeners: ErrorListener[]
+
 let startFrameStream: ReturnType<typeof vi.fn>
+
 let stopFrameStream: ReturnType<typeof vi.fn>
+
 let originalCreateObjectURL: typeof URL.createObjectURL | undefined
+
 let originalRevokeObjectURL: typeof URL.revokeObjectURL | undefined
+
 let objectUrlCounter: number
+
 let streamCounter: number
 
 beforeEach(() => {
@@ -47,12 +57,14 @@ beforeEach(() => {
         stopFrameStream,
         onFrameStreamFrame: (listener: FrameListener) => {
           frameListeners.push(listener)
+
           return () => {
             frameListeners = frameListeners.filter((current) => current !== listener)
           }
         },
         onFrameStreamError: (listener: ErrorListener) => {
           errorListeners.push(listener)
+
           return () => {
             errorListeners = errorListeners.filter((current) => current !== listener)
           }
@@ -70,6 +82,7 @@ afterEach(() => {
     root.unmount()
   })
   container.remove()
+
   if (originalCreateObjectURL) {
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
@@ -78,6 +91,7 @@ afterEach(() => {
   } else {
     delete (URL as Partial<typeof URL>).createObjectURL
   }
+
   if (originalRevokeObjectURL) {
     Object.defineProperty(URL, 'revokeObjectURL', {
       configurable: true,
@@ -86,6 +100,7 @@ afterEach(() => {
   } else {
     delete (URL as Partial<typeof URL>).revokeObjectURL
   }
+
   delete (window as { api?: unknown }).api
   vi.restoreAllMocks()
 })

@@ -56,24 +56,30 @@ export function useMobileTasksRouteAndItemState() {
   const clientRef = useRef<RpcClient | null>(null)
   const loadGenerationRef = useRef(0)
   const taskResumeRef = useRef<TaskResumeState>({})
+
   const repoList = useHostRepoList<RepoSummary>(
     client,
     client && connState === 'connected'
       ? async () => {
           const response = await client.sendRequest('repo.list')
+
           if (!isSuccess(response)) {
             throw new Error(response.error.message)
           }
+
           return (response.result as { repos: RepoSummary[] }).repos
         }
       : null
   )
+
   const repos = repoList.state.repos
   const { ensureLoaded: repoListEnsureLoaded, reload: repoListReload } = repoList
   const [provider, setProvider] = useState<TaskProvider>('github')
+
   const [visibleProviders, setVisibleProviders] = useState<TaskProvider[]>(() =>
     normalizeVisibleTaskProviders(undefined)
   )
+
   const [linearConnected, setLinearConnected] = useState(false)
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
   const [githubKind, setGithubKind] = useState<GitHubTaskKind>('issues')
@@ -85,14 +91,18 @@ export function useMobileTasksRouteAndItemState() {
   const [linearViewMode, setLinearViewMode] = useState<LinearViewMode>('list')
   const [linearGroupBy, setLinearGroupBy] = useState<LinearGroupBy>('none')
   const [linearOrderBy, setLinearOrderBy] = useState<LinearOrderBy>('priority')
+
   const [linearDisplayProperties, setLinearDisplayProperties] = useState<
     ReadonlySet<LinearDisplayProperty>
   >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
+
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearWorkspaces, setLinearWorkspaces] = useState<LinearWorkspace[]>([])
+
   const [selectedLinearWorkspaceId, setSelectedLinearWorkspaceId] = useState<string | 'all' | null>(
     null
   )
+
   const [selectedLinearTeamIds, setSelectedLinearTeamIds] = useState<Set<string>>(new Set())
   const defaultRepoSelectionRef = useRef<string[] | null>(null)
   const repoSelectionHydratedRef = useRef(false)
@@ -105,31 +115,39 @@ export function useMobileTasksRouteAndItemState() {
   const [showLinearDisplayPicker, setShowLinearDisplayPicker] = useState(false)
   const [showLinearConnect, setShowLinearConnect] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
+
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
     'idle'
   )
+
   const [linearConnectError, setLinearConnectError] = useState('')
   const [taskSort, setTaskSort] = useState<TaskSort>('updated')
   const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set())
   const [items, setItems] = useState<TaskItem[]>([])
+
   const [githubPages, setGithubPages] = useState<
     Array<Extract<TaskItem, { provider: 'github' }>[]>
   >([])
+
   const [githubCurrentPage, setGithubCurrentPage] = useState(0)
   const [githubTotalCount, setGithubTotalCount] = useState<number | null>(null)
   const [githubPaginationLoading, setGithubPaginationLoading] = useState(false)
   const [githubLoadingTargetPage, setGithubLoadingTargetPage] = useState<number | null>(null)
   const [githubRepoSources, setGithubRepoSources] = useState<Record<string, GitHubRepoSources>>({})
   const [githubSourceErrors, setGithubSourceErrors] = useState<GitHubIssueSourceError[]>([])
+
   const [githubSourceFallbacks, setGithubSourceFallbacks] = useState<GitHubIssueSourceFallback[]>(
     []
   )
+
   const [retryingGithubSourceRepoPaths, setRetryingGithubSourceRepoPaths] = useState<Set<string>>(
     new Set()
   )
+
   const [githubRepoSlugCache, setGithubRepoSlugCache] = useState<
     Record<string, GitHubRepoSlugCacheEntry | undefined>
   >({})
+
   const [query, setQuery] = useState(getTaskPresetQuery('issues'))
   const [appliedQuery, setAppliedQuery] = useState(getTaskPresetQuery('issues'))
   const [showProviderPicker, setShowProviderPicker] = useState(false)
@@ -152,22 +170,30 @@ export function useMobileTasksRouteAndItemState() {
   const [creatingTask, setCreatingTask] = useState(false)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+
   const [tasksSupportState, setTasksSupportState] = useState<TasksSupportState>({
     kind: 'unknown',
     client: null
   })
+
   const [error, setError] = useState('')
   const [actionItem, setActionItem] = useState<ActionableTaskItem | null>(null)
+
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
+
   const [mergeMethodProjectRow, setMergeMethodProjectRow] = useState<GitHubProjectRow | null>(null)
   const [pendingHostedMerge, setPendingHostedMerge] = useState<PendingHostedMerge | null>(null)
+
   const [pendingProjectGitHubMerge, setPendingProjectGitHubMerge] =
     useState<PendingProjectGitHubMerge | null>(null)
+
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
+
   const itemState = useMobileTasksItemState()
+
   return {
     hostId,
     taskSource,

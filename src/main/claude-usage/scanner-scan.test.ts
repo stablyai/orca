@@ -12,6 +12,7 @@ async function makeClaudeProjectsRoot(): Promise<string> {
   tempRoots.push(root)
   await mkdir(join(root, '.claude', 'projects', 'project-a'), { recursive: true })
   await mkdir(join(root, '.claude', 'transcripts'), { recursive: true })
+
   return root
 }
 
@@ -144,6 +145,7 @@ describe('scanClaudeUsageFiles', () => {
       homedir: () => root
     }))
     const { scanClaudeUsageFiles } = await import('./scanner')
+
     const worktrees = [
       {
         repoId: 'repo-1',
@@ -291,6 +293,7 @@ describe('scanClaudeUsageFiles', () => {
     const { scanClaudeUsageFiles } = await import('./scanner')
 
     const result = await scanClaudeUsageFiles([])
+
     const totalInput = result.dailyAggregates.reduce(
       (sum, aggregate) => sum + aggregate.inputTokens,
       0
@@ -347,6 +350,7 @@ describe('scanClaudeUsageFiles', () => {
     )
 
     const second = await scanClaudeUsageFiles([], first.processedFiles)
+
     const totalInput = second.dailyAggregates.reduce(
       (sum, aggregate) => sum + aggregate.inputTokens,
       0
@@ -515,6 +519,7 @@ describe('scanClaudeUsageFiles', () => {
       ...(await vi.importActual<typeof FsPromises>('fs/promises')),
       realpath: vi.fn(async (pathValue: string) => {
         realpathCalls.push(pathValue)
+
         return pathValue
       })
     }))

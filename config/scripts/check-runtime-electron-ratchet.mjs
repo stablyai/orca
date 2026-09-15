@@ -28,6 +28,7 @@ import process from 'node:process'
 // editors do not always, and a cwd-relative miss surfaced as an unhandled ENOENT stack
 // instead of a usable message.
 const ROOT = path.join(import.meta.dirname, '..', '..')
+
 const BASELINE_PATH = path.join(ROOT, 'config', 'runtime-electron-baseline.txt')
 
 // The two module graphs a Node backend would have to boot: the runtime service
@@ -83,7 +84,9 @@ export async function collectElectronImporters(entryPoints = ENTRY_POINTS) {
     logLevel: 'silent',
     plugins: [externalNativeAddons]
   })
+
   const importers = new Set()
+
   for (const [file, info] of Object.entries(result.metafile.inputs)) {
     for (const imported of info.imports ?? []) {
       // Subpaths (electron/main) are as unavailable under plain Node as the bare module.
@@ -92,6 +95,7 @@ export async function collectElectronImporters(entryPoints = ENTRY_POINTS) {
       }
     }
   }
+
   return [...importers].sort()
 }
 
@@ -106,6 +110,7 @@ export function readBaseline(text) {
 export function diffAgainstBaseline(current, baseline) {
   const baselineSet = new Set(baseline)
   const currentSet = new Set(current)
+
   return {
     added: current.filter((file) => !baselineSet.has(file)),
     removed: baseline.filter((file) => !currentSet.has(file))
@@ -131,6 +136,7 @@ async function main() {
   if (write) {
     writeFileSync(BASELINE_PATH, `${renderBaseline(current)}\n`)
     console.log(`[runtime-electron-ratchet] wrote ${current.length} entries to ${BASELINE_PATH}`)
+
     return
   }
 
@@ -147,6 +153,7 @@ src/main/host/ and depend on the port, or move the code out of the runtime's imp
 See docs/design/node-only-runtime-backend.html.`
     )
     process.exitCode = 1
+
     return
   }
 
@@ -159,6 +166,7 @@ ${removed.map((file) => `  - ${file}`).join('\n')}
   node config/scripts/check-runtime-electron-ratchet.mjs --write`
     )
     process.exitCode = 1
+
     return
   }
 

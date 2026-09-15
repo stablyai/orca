@@ -108,8 +108,10 @@ describe('lookupSmartGitHubSubmitItem', () => {
       author: 'octocat',
       repoId: 'repo-1'
     }
+
     const workItemByOwnerRepo = vi.fn().mockResolvedValue(item)
     const workItem = vi.fn()
+
     const intent = {
       kind: 'link' as const,
       owner: 'stablyai',
@@ -125,6 +127,7 @@ describe('lookupSmartGitHubSubmitItem', () => {
       workItem,
       workItemByOwnerRepo
     })
+
     const second = lookupSmartGitHubSubmitItem({
       repoId: 'repo-1',
       repoPath: '/repo',
@@ -147,6 +150,7 @@ describe('lookupSmartGitHubSubmitItem', () => {
       number: 2049,
       type: 'pr' as const
     }
+
     const firstItem = {
       id: 'pr-2049-a',
       type: 'pr' as const,
@@ -159,11 +163,14 @@ describe('lookupSmartGitHubSubmitItem', () => {
       author: 'octocat',
       repoId: 'repo-1'
     }
+
     const secondItem = { ...firstItem, id: 'pr-2049-b', title: 'Second repo path' }
+
     const workItemByOwnerRepo = vi
       .fn()
       .mockResolvedValueOnce(firstItem)
       .mockResolvedValueOnce(secondItem)
+
     const workItem = vi.fn()
 
     await expect(
@@ -210,11 +217,14 @@ describe('lookupSmartGitHubSubmitItem', () => {
       author: 'octocat',
       repoId: 'repo-1'
     }
+
     const workItemByOwnerRepo = vi
       .fn()
       .mockRejectedValueOnce(new Error('temporary GitHub failure'))
       .mockResolvedValueOnce(item)
+
     const workItem = vi.fn()
+
     const intent = {
       kind: 'link' as const,
       owner: 'stablyai',
@@ -222,6 +232,7 @@ describe('lookupSmartGitHubSubmitItem', () => {
       number: 2049,
       type: 'pr' as const
     }
+
     const lookup = () =>
       lookupSmartGitHubSubmitItem({
         repoId: 'repo-1',
@@ -240,6 +251,7 @@ describe('lookupSmartGitHubSubmitItem', () => {
   it('prunes expired distinct lookup entries on later lookups', async () => {
     const nowSpy = vi.spyOn(Date, 'now')
     const workItemByOwnerRepo = vi.fn()
+
     const workItem = vi.fn().mockImplementation(({ number }) =>
       Promise.resolve({
         id: `issue-${number}`,

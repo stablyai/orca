@@ -15,6 +15,7 @@ export type PreparationDiscardTarget = {
 }
 
 const pendingDiscards = new Map<string, PreparationDiscardTarget & { attempts: number }>()
+
 const inFlightDiscards = new Set<Promise<unknown>>()
 
 /** Keeps a fire-and-forget discard settleable by the test reset, which would otherwise race it. */
@@ -37,14 +38,17 @@ async function runDiscard(target: PreparationDiscardTarget, attempts: number): P
     if (isOrphanedWorktreeError(error)) {
       return
     }
+
     // Bounded: a path that never becomes removable must not tax every later preparation.
     if (attempts >= PREPARATION_DISCARD_ATTEMPT_LIMIT) {
       console.warn(
         `[worktree-create] prepared checkout could not be discarded in ${attempts} attempts; ${target.preparedPath} stays registered until this process exits`,
         error
       )
+
       return
     }
+
     pendingDiscards.set(pendingKey(target), { ...target, attempts })
   }
 }
@@ -58,11 +62,13 @@ export function discardPreparationWithRetry(
   pendingDiscards.delete(pendingKey(target))
   const discard = runDiscard(target, attempts)
   trackPreparationDiscard(discard)
+
   return discard
 }
 
 export function retryPendingPreparationDiscards(hostKey: string): Promise<void> {
   const pending = [...pendingDiscards.values()].filter((target) => target.hostKey === hostKey)
+
   return Promise.all(
     pending.map(({ attempts, ...target }) => discardPreparationWithRetry(target, attempts + 1))
   ).then(() => undefined)
@@ -73,5 +79,6 @@ export async function resetPendingPreparationDiscardsForTests(): Promise<void> {
   while (inFlightDiscards.size > 0) {
     await Promise.all(inFlightDiscards)
   }
+
   pendingDiscards.clear()
 }

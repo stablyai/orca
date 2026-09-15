@@ -38,10 +38,12 @@ export function clearRuntimeEnvironmentCapabilityEvidence(environmentId: string)
 
 function stateFor(environmentId: string): EvidenceState {
   let state = evidenceByEnvironment.get(environmentId)
+
   if (!state) {
     state = { epoch: 0, nextSequence: 0, accepted: null }
     evidenceByEnvironment.set(environmentId, state)
   }
+
   return state
 }
 
@@ -50,6 +52,7 @@ export function captureRuntimeEnvironmentCapabilityEvidence(
   pairing: PairingOffer
 ): RuntimeEnvironmentCapabilityEvidence {
   const state = stateFor(environmentId)
+
   return {
     environmentId,
     pairingKey: pairingKey(pairing),
@@ -70,17 +73,20 @@ export function applyRuntimeEnvironmentCapabilityVerdict(args: {
   runtimeId: string
 }): boolean {
   const state = stateFor(args.evidence.environmentId)
+
   if (
     args.evidence.epoch !== state.epoch ||
     (state.accepted !== null && args.evidence.sequence <= state.accepted.evidence.sequence)
   ) {
     return false
   }
+
   state.accepted = {
     evidence: args.evidence,
     verdict: args.verdict,
     runtimeId: args.runtimeId
   }
+
   return true
 }
 
@@ -102,6 +108,7 @@ export function getAcceptedRuntimeEnvironmentCapabilityOutcome(
   runtimeId: string | null
 ): RuntimeEnvironmentCapabilityOutcome | null {
   const accepted = stateFor(environmentId).accepted
+
   if (
     !accepted ||
     accepted.evidence.pairingKey !== pairingKey(pairing) ||
@@ -109,6 +116,7 @@ export function getAcceptedRuntimeEnvironmentCapabilityOutcome(
   ) {
     return null
   }
+
   return runtimeEnvironmentCapabilityOutcome(
     accepted.evidence,
     accepted.verdict,
@@ -122,14 +130,19 @@ export function isRuntimeEnvironmentCapabilityOutcomeCurrent(
   if (outcome.kind === 'stale_incarnation') {
     return false
   }
+
   const state = stateFor(outcome.evidence.environmentId)
+
   if (outcome.evidence.epoch !== state.epoch) {
     return false
   }
+
   const accepted = state.accepted
+
   if (!accepted || accepted.evidence.sequence <= outcome.evidence.sequence) {
     return true
   }
+
   return (
     ((outcome.kind === 'supported' && accepted.verdict === 'capable') ||
       (outcome.kind === 'unsupported' && accepted.verdict === 'absent')) &&

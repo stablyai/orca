@@ -20,6 +20,7 @@ export function describeReadDirPathShape(
   // \\wsl$\ and \\wsl.localhost\ (either slash direction) are WSL UNC roots.
   const isWsl = isUNC && (lower.includes('wsl$') || lower.includes('wsl.localhost'))
   const driveLetterMatch = /^([a-zA-Z]):[\\/]/.exec(dirPath)
+
   return {
     hasConnectionId: Boolean(connectionId),
     isUNC,
@@ -31,10 +32,12 @@ export function describeReadDirPathShape(
 function errorCode(error: unknown): string | undefined {
   if (error && typeof error === 'object' && 'code' in error) {
     const code = (error as { code?: unknown }).code
+
     if (typeof code === 'string') {
       return code
     }
   }
+
   return undefined
 }
 

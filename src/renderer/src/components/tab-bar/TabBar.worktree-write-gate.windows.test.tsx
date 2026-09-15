@@ -20,27 +20,45 @@ import {
 import type { TabBarProps } from './tab-bar-props'
 
 vi.mock('@/store', async () => ({ useAppStore: await createTabBarProbeStore() }))
+
 vi.mock('../../store', async () => ({ useAppStore: await createTabBarProbeStore() }))
+
 vi.mock('@/hooks/useShortcutLabel', () => tabBarRuntimeModelStubs().shortcutLabels())
+
 vi.mock('@/hooks/useDetectedAgents', () => tabBarRuntimeModelStubs().detectedAgents())
+
 vi.mock('@/hooks/useAgentDetectionTarget', () => tabBarRuntimeModelStubs().detectionTarget())
+
 vi.mock('@/lib/connection-context', () => tabBarRuntimeModelStubs().connectionContext())
+
 vi.mock('@/lib/worktree-runtime-owner', () => tabBarRuntimeModelStubs().runtimeOwner())
+
 vi.mock('@/runtime/runtime-rpc-client', () => tabBarRuntimeModelStubs().runtimeRpcClient())
+
 vi.mock('@/lib/native-chat-transcript-readability', () =>
   tabBarRuntimeModelStubs().nativeChatReadability()
 )
+
 vi.mock('@/lib/client-creation-action-policy', () => tabBarRuntimeModelStubs().creationPolicy())
+
 vi.mock('./tab-agent-types-by-tab-id', () => tabBarRuntimeModelStubs().agentProjections())
+
 vi.mock('@/lib/local-preflight-context', () => tabBarRuntimeModelStubs().localPreflight())
+
 vi.mock('@/lib/windows-terminal-capabilities', () =>
   tabBarRuntimeModelStubs().windowsCapabilities()
 )
+
 vi.mock('./tab-bar-surface', () => tabBarShellStubs().surface())
+
 vi.mock('./use-tab-bar-create-menu-controller', () => tabBarShellStubs().createMenuController())
+
 vi.mock('./use-tab-bar-item-projection', () => tabBarShellStubs().itemProjection())
+
 vi.mock('./tab-strip-overflow-navigation', () => tabBarShellStubs().overflowNavigation())
+
 vi.mock('./tab-strip-drag-scroll', () => tabBarShellStubs().dragScroll())
+
 vi.mock('@/lib/pane-manager/client-hosted-browser-row-state', () =>
   tabBarShellStubs().clientHostedBrowserRows()
 )

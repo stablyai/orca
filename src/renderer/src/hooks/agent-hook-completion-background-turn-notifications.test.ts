@@ -5,11 +5,15 @@ import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const dispatchTerminalNotification = vi.fn()
+
 const dispatchAgentHookTerminalLifecycle = vi.fn()
 
 const HOOK_DONE_QUIET_MS = 1_500
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
 const WORKTREE_ID = 'wt-1'
 
 type MockStoreState = {
@@ -99,9 +103,11 @@ describe('Claude background-turn completion notifications', () => {
   }> {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
+
     const listener = createHookListenerState()
     const rows: HookRow[] = []
     let previous: HookRow | undefined
+
     const banners: {
       at: number
       body: string | undefined
@@ -118,15 +124,18 @@ describe('Claude background-turn completion notifications', () => {
 
     for (const event of events) {
       vi.setSystemTime(event.at)
+
       const normalized = normalizeHookPayload(
         listener,
         'claude',
         { paneKey: PANE_KEY, payload: event.payload },
         'production'
       )
+
       if (!normalized) {
         continue
       }
+
       const row = pinStateStartedAt(previous, normalized.payload, event.at)
       previous = row
       rows.push(row)
@@ -222,6 +231,7 @@ describe('Claude background-turn completion notifications', () => {
 
   it('notifies every turn under a persistent session cron with distinct ids', async () => {
     const cron = [{ id: 'cron-1' }]
+
     const { banners } = await play([
       {
         at: 1_700_000_000_000,
